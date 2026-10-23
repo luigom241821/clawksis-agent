@@ -22,6 +22,7 @@ from tests.agent.test_turn_context import _FakeAgent
 # Unit tests for ContextCompressor.should_compress_info
 # ---------------------------------------------------------------------------
 
+
 def _make_compressor(**kwargs) -> ContextCompressor:
     defaults = dict(
         model="test-model",
@@ -41,8 +42,6 @@ def _make_compressor(**kwargs) -> ContextCompressor:
 
 
 class TestShouldCompressInfo:
-
-
     def test_cooldown_reports_reason(self):
         comp = _make_compressor()
         comp.last_prompt_tokens = comp.last_real_prompt_tokens = 73_000
@@ -51,8 +50,6 @@ class TestShouldCompressInfo:
         assert should is False
         assert reason is not None
         assert reason.startswith("cooldown:")
-
-
 
     def test_should_compress_bool_shim_unchanged(self):
         """should_compress() must still return a bare bool for existing
@@ -68,6 +65,7 @@ class TestShouldCompressInfo:
 # ---------------------------------------------------------------------------
 # Integration tests: build_turn_context surfaces the warning
 # ---------------------------------------------------------------------------
+
 
 class _WarnAgent(_FakeAgent):
     """_FakeAgent already covers the prologue; we just enable compression and
@@ -99,9 +97,11 @@ def _run_build(agent):
     branch must run without tripping the over-window fail-closed (a no-progress pass on a request
     above the window ends the turn; that path is covered by
     ``tests/agent/test_over_window_compression_fail_closed.py``)."""
-    with patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None), \
-         patch("agent.turn_context._should_run_preflight_estimate", return_value=True), \
-         patch("agent.turn_context.estimate_request_tokens_rough", return_value=80_000):
+    with (
+        patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None),
+        patch("agent.turn_context._should_run_preflight_estimate", return_value=True),
+        patch("agent.turn_context.estimate_request_tokens_rough", return_value=80_000),
+    ):
         return build_turn_context(
             agent=agent,
             user_message="hello",
@@ -129,11 +129,6 @@ class TestTurnContextOverflowWarning:
         _run_build(agent)
         assert len(agent._warnings) == 1
         assert "cooldown" in agent._warnings[0]
-
-
-
-
-
 
     def test_dedup_resets_when_block_clears_while_over_threshold(self):
         """The dedup reset must fire when the block clears while pressure is
@@ -169,9 +164,15 @@ class TestTurnContextOverflowWarning:
         comp.last_prompt_tokens = 10_000
         comp._summary_failure_cooldown_until = time.monotonic() + 30
         agent = _build_warn_agent(comp)
-        with patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None), \
-             patch("agent.turn_context._should_run_preflight_estimate", return_value=True), \
-             patch("agent.turn_context.estimate_request_tokens_rough", return_value=10_000):
+        with (
+            patch("agent.auxiliary_client.set_runtime_main", lambda *a, **k: None),
+            patch(
+                "agent.turn_context._should_run_preflight_estimate", return_value=True
+            ),
+            patch(
+                "agent.turn_context.estimate_request_tokens_rough", return_value=10_000
+            ),
+        ):
             build_turn_context(
                 agent=agent,
                 user_message="hello",
@@ -194,6 +195,7 @@ class TestTurnContextOverflowWarning:
 # ---------------------------------------------------------------------------
 # Plugin context engines: backward-compatible should_compress_info default
 # ---------------------------------------------------------------------------
+
 
 class TestPluginEngineDefault:
     def test_abc_default_returns_tuple(self):
@@ -231,6 +233,7 @@ class TestPluginEngineDefault:
 # Gateway noise filter: the warning is FAILURE-CLASS and must survive
 # ---------------------------------------------------------------------------
 
+
 class TestWarningSurvivesNoiseFilter:
     """The blocked-overflow warning is a deliberate carve-out from
     routine-compression silence (#16775 class). The gateway noise regex
@@ -254,7 +257,6 @@ class TestWarningSurvivesNoiseFilter:
         assert not _TELEGRAM_NOISY_STATUS_RE.search(
             self._emitted_warning("cooldown:30")
         )
-
 
     def test_warning_delivered_on_chat_platform(self):
         """End-to-end through the fail-closed gateway status preparer."""

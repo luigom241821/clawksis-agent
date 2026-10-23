@@ -1,6 +1,5 @@
 """Tests for acp_adapter.tools — tool kind mapping and ACP content building."""
 
-
 import pytest
 
 from acp_adapter.edit_approval import EditProposal
@@ -26,20 +25,17 @@ from acp.schema import (
 # ---------------------------------------------------------------------------
 
 
-COMMON_CLAWK_TOOLS = ["read_file", "search_files", "terminal", "patch", "write_file", "process"]
+COMMON_CLAWK_TOOLS = [
+    "read_file",
+    "search_files",
+    "terminal",
+    "patch",
+    "write_file",
+    "process",
+]
 
 
 class TestToolKindMap:
-
-
-
-
-
-
-
-
-
-
     def test_unknown_tool_returns_other_kind(self):
         assert get_tool_kind("nonexistent_tool_xyz") == "other"
 
@@ -50,8 +46,6 @@ class TestToolKindMap:
 
 
 class TestMakeToolCallId:
-
-
     def test_ids_are_unique(self):
         ids = {make_tool_call_id() for _ in range(100)}
         assert len(ids) == 100
@@ -63,16 +57,11 @@ class TestMakeToolCallId:
 
 
 class TestBuildToolTitle:
-
     def test_terminal_title_truncates_long_command(self):
         long_cmd = "x" * 200
         title = build_tool_title("terminal", {"command": long_cmd})
         assert len(title) < 120
         assert "..." in title
-
-
-
-
 
     def test_unknown_tool_uses_name(self):
         title = build_tool_title("some_new_tool", {"foo": "bar"})
@@ -85,7 +74,10 @@ class TestBuildToolTitle:
             ("read_file", {"path": "/etc/hosts", "offset": 10}),
             ("search_files", {"pattern": "TODO", "path": "src"}),
             ("web_search", {"query": "clawk agent acp"}),
-            ("execute_code", {"code": "\nfrom clawk_tools import terminal\nprint('done')"}),
+            (
+                "execute_code",
+                {"code": "\nfrom clawk_tools import terminal\nprint('done')"},
+            ),
             ("skill_view", {"name": "github", "file_path": "references/x.md"}),
         ],
     )
@@ -93,7 +85,9 @@ class TestBuildToolTitle:
         """ACP titles are the shared agent.display preview, not a parallel per-tool table."""
         from agent.display import build_tool_preview
 
-        assert build_tool_preview(tool_name, args, max_len=80) in build_tool_title(tool_name, args)
+        assert build_tool_preview(tool_name, args, max_len=80) in build_tool_title(
+            tool_name, args
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +111,6 @@ class TestBuildToolStart:
         assert isinstance(item, ContentToolCallContent)
         assert "src/main.py" in item.content.text
 
-
     def test_auto_approved_edit_start_shows_diff_content(self):
         """Auto-approved edit starts need the diff because no approval card exists."""
         args = {"path": "/tmp/acp.txt", "old_string": "old", "new_string": "new"}
@@ -137,12 +130,6 @@ class TestBuildToolStart:
         assert item.old_text == "old\n"
         assert item.new_text == "new\n"
 
-
-
-
-
-
-
     def test_build_tool_start_for_browser_navigate(self):
         """browser_navigate should emit a polished start event."""
         args = {"url": "https://x.com"}
@@ -154,12 +141,6 @@ class TestBuildToolStart:
         assert result.raw_input is None
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # build_tool_complete
 # ---------------------------------------------------------------------------
@@ -168,7 +149,9 @@ class TestBuildToolStart:
 class TestBuildToolComplete:
     def test_build_tool_complete_for_terminal(self):
         """Completed terminal call should include output text."""
-        result = build_tool_complete("tc-2", "terminal", "total 42\ndrwxr-xr-x 2 root root 4096 ...")
+        result = build_tool_complete(
+            "tc-2", "terminal", "total 42\ndrwxr-xr-x 2 root root 4096 ..."
+        )
         assert isinstance(result, ToolCallProgress)
         assert result.status == "completed"
         assert len(result.content) >= 1
@@ -177,23 +160,11 @@ class TestBuildToolComplete:
         assert "total 42" in content_item.content.text
         assert result.raw_output is None
 
-
-
-
-
-
-
-
     def test_build_tool_complete_marks_returncode_nonzero_as_failed(self):
-        result = build_tool_complete("tc-fail", "execute_code", '{"output": "bad", "returncode": 2}')
+        result = build_tool_complete(
+            "tc-fail", "execute_code", '{"output": "bad", "returncode": 2}'
+        )
         assert result.status == "failed"
-
-
-
-
-
-
-
 
     def test_build_tool_complete_for_search_files_formats_matches(self):
         result = build_tool_complete(
@@ -207,13 +178,9 @@ class TestBuildToolComplete:
         assert "Results truncated" in text
         assert result.raw_output is None
 
-
-
-
-
-
-
-    def test_build_tool_complete_generically_formats_unknown_json_dict_without_raw_output(self):
+    def test_build_tool_complete_generically_formats_unknown_json_dict_without_raw_output(
+        self,
+    ):
         result = build_tool_complete(
             "tc-recall-search",
             "memory_archive_search",
@@ -222,15 +189,8 @@ class TestBuildToolComplete:
         text = result.content[0].content.text
         assert "lower-trust archive evidence" in text
         assert "Recall should render as a readable summary" in text
-        assert "{\"results\"" not in text
+        assert '{"results"' not in text
         assert result.raw_output is None
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------

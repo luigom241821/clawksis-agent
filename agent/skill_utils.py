@@ -21,21 +21,39 @@ logger = logging.getLogger(__name__)
 
 PLATFORM_MAP = {"macos": "darwin", "linux": "linux", "windows": "win32"}
 
-EXCLUDED_SKILL_DIRS = frozenset((
-    ".git", ".github", ".hub", ".archive", ".curator_backups", ".locks",
-    ".venv", "venv", "node_modules", "site-packages", "__pycache__",
-    ".tox", ".nox", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-))
+EXCLUDED_SKILL_DIRS = frozenset(
+    (
+        ".git",
+        ".github",
+        ".hub",
+        ".archive",
+        ".curator_backups",
+        ".locks",
+        ".venv",
+        "venv",
+        "node_modules",
+        "site-packages",
+        "__pycache__",
+        ".tox",
+        ".nox",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+    )
+)
 
 # Progressive-disclosure support dirs inside a skill package: loaded explicitly
 # via skill_view(skill, file_path=...), never scanned as standalone skills.
 SKILL_SUPPORT_DIRS = frozenset(("references", "templates", "assets", "scripts"))
 
+
 def is_excluded_skill_path(path, *, root: Optional[Path] = None) -> bool:
     """True if *path* should be skipped by skill scanners (VCS/dependency/cache
     dirs + support packages). Apply to every SKILL.md from a direct ``rglob``."""
     parts = PurePath(str(path)).parts
-    return any(part in EXCLUDED_SKILL_DIRS for part in parts) or is_skill_support_path(path, root=root)
+    return any(part in EXCLUDED_SKILL_DIRS for part in parts) or is_skill_support_path(
+        path, root=root
+    )
 
 
 def is_skill_support_path(path, *, root: Optional[Path] = None) -> bool:
@@ -60,6 +78,7 @@ def yaml_load(content: str):
     global _yaml_load_fn
     if _yaml_load_fn is None:
         from clawk_yaml import safe_load
+
         _yaml_load_fn = safe_load
     return _yaml_load_fn(content)
 
@@ -69,7 +88,9 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     Malformed YAML falls back to key:value line splitting. A leading UTF-8 BOM
     (Windows editors) is stripped first or it would defeat the ``---`` fence check."""
     content = content.removeprefix("\ufeff")
-    end_match = re.search(r"\n---\s*\n", content[3:]) if content.startswith("---") else None
+    end_match = (
+        re.search(r"\n---\s*\n", content[3:]) if content.startswith("---") else None
+    )
     if not end_match:
         return {}, content
     yaml_content = content[3 : end_match.start() + 3]
@@ -121,6 +142,7 @@ def _detect_kanban() -> bool:
     if os.getenv("CLAWK_KANBAN_TASK") or os.getenv("CLAWK_KANBAN_BOARD"):
         try:
             from agent.delegation_context import is_dispatcher_owned_worker_context
+
             owned = is_dispatcher_owned_worker_context()
         except Exception:
             owned = True
@@ -128,6 +150,7 @@ def _detect_kanban() -> bool:
             return True
     try:
         from tools.kanban_tools import _profile_has_kanban_toolset
+
         return bool(_profile_has_kanban_toolset())
     except Exception:
         return False
@@ -136,14 +159,18 @@ def _detect_kanban() -> bool:
 def _detect_docker() -> bool:
     try:
         from clawk_constants import is_container
+
         return is_container()
     except Exception:
         return False
 
 
 _ENV_DETECTORS: dict[str, Callable[[], bool]] = {
-    "kanban": _detect_kanban, "docker": _detect_docker,
-    "s6": lambda: os.path.isdir("/run/s6") or os.path.isdir("/package/admin/s6-overlay"),  # s6-overlay is PID 1 in the image
+    "kanban": _detect_kanban,
+    "docker": _detect_docker,
+    "s6": lambda: (
+        os.path.isdir("/run/s6") or os.path.isdir("/package/admin/s6-overlay")
+    ),  # s6-overlay is PID 1 in the image
 }
 
 
@@ -166,7 +193,10 @@ def skill_matches_environment(frontmatter: dict[str, Any]) -> bool:
     environments = frontmatter.get("environments")
     if not environments:
         return True
-    tags = [str(env).lower().strip() for env in (environments if isinstance(environments, list) else [environments])]
+    tags = [
+        str(env).lower().strip()
+        for env in (environments if isinstance(environments, list) else [environments])
+    ]
     return any(_detect_environment(tag) for tag in tags if tag)
 
 
@@ -212,6 +242,7 @@ def _config_cache_key(config_path: Path) -> Optional[tuple[str, int, int, int, i
     """``(path, *file_signature)`` identity of config.yaml, or None when unreadable/absent."""
     try:
         from utils import file_signature
+
         return (str(config_path), *file_signature(config_path.stat()))
     except OSError:
         return None
@@ -267,6 +298,7 @@ def _expand_path(entry: str) -> Path:
 def _home_relative(p: Path) -> Path:
     """Anchor a relative config path at CLAWK_HOME; absolute paths pass through."""
     from clawk_constants import get_clawk_home
+
     return p if p.is_absolute() else get_clawk_home() / p
 
 
@@ -282,9 +314,18 @@ def get_disabled_skill_names(platform: str | None = None) -> set[str]:
     if skills_cfg is None:
         return set()
     from gateway.session_context import get_session_env
-    resolved_platform = platform or os.getenv("CLAWK_PLATFORM") or get_session_env("CLAWK_SESSION_PLATFORM")
+
+    resolved_platform = (
+        platform
+        or os.getenv("CLAWK_PLATFORM")
+        or get_session_env("CLAWK_SESSION_PLATFORM")
+    )
     disabled = _normalize_string_set(skills_cfg.get("disabled"))
-    platform_disabled = (skills_cfg.get("platform_disabled") or {}).get(resolved_platform) if resolved_platform else None
+    platform_disabled = (
+        (skills_cfg.get("platform_disabled") or {}).get(resolved_platform)
+        if resolved_platform
+        else None
+    )
     if platform_disabled is not None:
         disabled |= _normalize_string_set(platform_disabled)
     return disabled - ESSENTIAL_SKILLS
@@ -307,7 +348,11 @@ def parse_config_string_list(value) -> list[str]:
             if isinstance(parsed, list):
                 return [str(item) for item in parsed]
         return [value]
-    return [str(item) for item in value] if isinstance(value, (list, tuple, set, frozenset)) else []
+    return (
+        [str(item) for item in value]
+        if isinstance(value, (list, tuple, set, frozenset))
+        else []
+    )
 
 
 def _normalize_string_set(values) -> set[str]:
@@ -387,6 +432,7 @@ def display_skill_create_dir() -> str:
     """User-facing path where new skills are created (``~/`` shorthand when
     possible); tool schema descriptions and prompts follow ``skills.create_dir``."""
     from clawk_constants import display_clawk_home
+
     create_dir = get_skill_create_dir()
     if create_dir is None:
         return f"{display_clawk_home()}/skills/"
@@ -406,11 +452,17 @@ AMBIGUOUS_SKILL_PREFIX = "Ambiguous skill name "
 _SHADOW_CHECKED: set[tuple[str, ...]] = set()
 
 
-def get_skill_search_roots(local: Optional[Path] = None, *, include_project: bool = True) -> list[tuple[int, Path]]:
+def get_skill_search_roots(
+    local: Optional[Path] = None, *, include_project: bool = True
+) -> list[tuple[int, Path]]:
     """``(tier, dir)`` for every skill root in precedence order — the ONE ordering the skills list,
     prompt index, slash commands, skill_view, preload and cron share. *local* overrides the profile
     skills dir (skills_tool passes its live root); that entry is kept even when missing."""
-    roots = [(TIER_PROJECT, d) for d in get_project_skills_dirs()] if include_project else []
+    roots = (
+        [(TIER_PROJECT, d) for d in get_project_skills_dirs()]
+        if include_project
+        else []
+    )
     roots.append((TIER_LOCAL, Path(local) if local is not None else get_skills_dir()))
     create_dir = get_skill_create_dir()
     if create_dir is not None and create_dir.is_dir():
@@ -433,7 +485,10 @@ def provably_same_skill(skill_mds) -> bool:
     try:
         if len({os.path.realpath(p) for p in skill_mds}) == 1:
             return True
-        return len({hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in skill_mds}) == 1
+        return (
+            len({hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in skill_mds})
+            == 1
+        )
     except OSError:
         return False
 
@@ -451,8 +506,11 @@ def pick_skill_candidate(candidates) -> tuple[Optional[int], list[int]]:
     copies under one root resolve to the strictly best ``rank``, anything else is ambiguous (None)."""
     top = min(c[0] for c in candidates)
     contenders = [i for i, c in enumerate(candidates) if c[0] == top]
-    if len(contenders) > 1 and len({candidates[i][1] for i in contenders}) == 1 and provably_same_skill(
-            [candidates[i][3] for i in contenders]):
+    if (
+        len(contenders) > 1
+        and len({candidates[i][1] for i in contenders}) == 1
+        and provably_same_skill([candidates[i][3] for i in contenders])
+    ):
         ranked = sorted(contenders, key=lambda i: candidates[i][2])
         if candidates[ranked[0]][2] != candidates[ranked[1]][2]:
             return ranked[0], contenders
@@ -463,7 +521,9 @@ def is_disabled_entry(entry: dict[str, Any], disabled: set[str]) -> bool:
     """``skills.disabled`` matches a resolved catalog entry by its declared name OR its ``load_name`` —
     the exact path a same-tier duplicate's list/config/web row shows (``a/one``) and saves. A unique
     copy elsewhere that merely sits at the same relative path is not matched."""
-    return not disabled.isdisjoint({str(entry["name"]), entry.get("load_name")} - {None})
+    return not disabled.isdisjoint(
+        {str(entry["name"]), entry.get("load_name")} - {None}
+    )
 
 
 def resolve_skill_catalog(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -481,22 +541,39 @@ def resolve_skill_catalog(entries: list[dict[str, Any]]) -> list[dict[str, Any]]
             owners.setdefault(alias, []).append(i)
     winner: dict[str, Optional[int]] = {}
     for alias, idxs in owners.items():
-        won, _ = pick_skill_candidate([
-            (out[j]["tier"], str(out[j]["root"]), skill_candidate_rank(out[j]["path"], out[j]["root"]), out[j]["path"])
-            for j in idxs])
+        won, _ = pick_skill_candidate(
+            [
+                (
+                    out[j]["tier"],
+                    str(out[j]["root"]),
+                    skill_candidate_rank(out[j]["path"], out[j]["root"]),
+                    out[j]["path"],
+                )
+                for j in idxs
+            ]
+        )
         winner[alias] = None if won is None else idxs[won]
     for i, e in enumerate(out):
         name, rel = str(e["name"]), e["relative_path"]
         higher = [j for j in owners[name] if out[j]["tier"] < e["tier"]]
-        if higher or winner[name] not in (None, i):  # lower tier, or an identical same-root copy
+        if higher or winner[name] not in (
+            None,
+            i,
+        ):  # lower tier, or an identical same-root copy
             e.update(status="shadowed", load_name=None)
             # A symlink view or byte-identical copy of the winner hides nothing worth a warning.
             key = (str(e["path"]), *sorted(str(out[j]["path"]) for j in higher))
             if higher and key not in _SHADOW_CHECKED:
                 _SHADOW_CHECKED.add(key)
-                if not any(provably_same_skill([e["path"], out[j]["path"]]) for j in higher):
-                    logger.warning("Skill '%s' at %s is shadowed by a higher-precedence copy "
-                                   "(project > local > create_dir > external_dirs)", name, e["path"])
+                if not any(
+                    provably_same_skill([e["path"], out[j]["path"]]) for j in higher
+                ):
+                    logger.warning(
+                        "Skill '%s' at %s is shadowed by a higher-precedence copy "
+                        "(project > local > create_dir > external_dirs)",
+                        name,
+                        e["path"],
+                    )
         elif winner[name] == i:
             e.update(status="unique", load_name=name)
         else:
@@ -510,7 +587,10 @@ def resolve_skill_catalog(entries: list[dict[str, Any]]) -> list[dict[str, Any]]
 # override same-named profile/bundled skills. cwd + trust list are session-fixed
 # so the skills index stays byte-stable.
 
-PROJECT_SKILLS_SUBDIRS = (os.path.join(".clawk", "skills"), os.path.join(".agents", "skills"))
+PROJECT_SKILLS_SUBDIRS = (
+    os.path.join(".clawk", "skills"),
+    os.path.join(".agents", "skills"),
+)
 
 _PROJECT_ROOT_MAX_DEPTH = 64  # walk-up bound for pathological cwds
 
@@ -530,6 +610,7 @@ def find_project_root(start: Optional[Path] = None) -> Optional[Path]:
     try:
         if start is None:
             from agent.runtime_cwd import resolve_agent_cwd
+
             start = resolve_agent_cwd()
         cur = Path(start).resolve()
     except OSError:
@@ -587,7 +668,9 @@ def _current_project_root(trusted: bool) -> Optional[Path]:
     if _skills_cfg_get("project_discovery") is False:
         return None
     root = find_project_root()
-    return root if root is not None and is_project_root_trusted(root) == trusted else None
+    return (
+        root if root is not None and is_project_root_trusted(root) == trusted else None
+    )
 
 
 def get_project_skills_dirs() -> list[Path]:
@@ -642,13 +725,24 @@ def is_quarantined_project_skill(skill_md) -> bool:
     try:
         from tools.skills_guard import scan_skill_cached
         from clawk_constants import get_clawk_home
+
         cache_dir = get_clawk_home() / "cache" / "project_skill_scans"
-        result, _prov = scan_skill_cached(skill_dir, source=_PROJECT_SCAN_SOURCE, cache_dir=cache_dir)
+        result, _prov = scan_skill_cached(
+            skill_dir, source=_PROJECT_SCAN_SOURCE, cache_dir=cache_dir
+        )
         quarantined = result.verdict == "dangerous"
         if quarantined:
-            logger.warning("Project skill quarantined (verdict=dangerous): %s — %s", skill_dir, result.summary)
+            logger.warning(
+                "Project skill quarantined (verdict=dangerous): %s — %s",
+                skill_dir,
+                result.summary,
+            )
     except Exception:
-        logger.warning("Project skill scan failed — quarantining (fail closed): %s", skill_dir, exc_info=True)
+        logger.warning(
+            "Project skill scan failed — quarantining (fail closed): %s",
+            skill_dir,
+            exc_info=True,
+        )
         quarantined = True
     _PROJECT_QUARANTINE_CACHE[key] = quarantined
     return quarantined
@@ -658,7 +752,11 @@ def iter_project_skill_files(project_dir: Path):
     """Yield non-quarantined SKILL.md files under a trusted project dir — the
     single iteration chokepoint for the project tier, so the quarantine cannot
     be bypassed by a call site forgetting the check."""
-    yield from (p for p in iter_skill_index_files(project_dir, "SKILL.md") if not is_quarantined_project_skill(p))
+    yield from (
+        p
+        for p in iter_skill_index_files(project_dir, "SKILL.md")
+        if not is_quarantined_project_skill(p)
+    )
 
 
 def normalize_skill_lookup_name(identifier: str) -> str:
@@ -677,6 +775,7 @@ def normalize_skill_lookup_name(identifier: str) -> str:
     try:
         # See #67277.
         from tools import skills_tool as _skills_tool
+
         primary_root = _skills_tool._skills_dir()
     except Exception:
         primary_root = get_skills_dir()
@@ -695,8 +794,11 @@ def normalize_skill_lookup_name(identifier: str) -> str:
     try:
         return str(identifier_path.resolve().relative_to(primary_root.resolve()))
     except Exception:
-        logger.debug("Skill identifier %r is an absolute path outside trusted skills "
-                     "roots — passing through unchanged (skill_view will reject it)", raw_identifier)
+        logger.debug(
+            "Skill identifier %r is an absolute path outside trusted skills "
+            "roots — passing through unchanged (skill_view will reject it)",
+            raw_identifier,
+        )
         return raw_identifier
 
 
@@ -718,7 +820,9 @@ def is_external_skill_path(path) -> bool:
         roots.extend(get_project_skills_dirs())
     except Exception:
         pass
-    return any(candidate.is_relative_to(_resolve_for_skill_ownership(root)) for root in roots)
+    return any(
+        candidate.is_relative_to(_resolve_for_skill_ownership(root)) for root in roots
+    )
 
 
 def _clawk_metadata(frontmatter: dict[str, Any]) -> dict[str, Any]:
@@ -730,7 +834,13 @@ def _clawk_metadata(frontmatter: dict[str, Any]) -> dict[str, Any]:
 
 # ``session_platforms`` is the gateway-channel gate: session platforms the skill
 # is FOR (hidden from the index elsewhere), unlike ``platforms:`` (host OS).
-_CONDITION_KEYS = ("fallback_for_toolsets", "requires_toolsets", "fallback_for_tools", "requires_tools", "session_platforms")
+_CONDITION_KEYS = (
+    "fallback_for_toolsets",
+    "requires_toolsets",
+    "fallback_for_tools",
+    "requires_tools",
+    "session_platforms",
+)
 
 
 def extract_skill_conditions(frontmatter: dict[str, Any]) -> dict[str, list]:
@@ -759,7 +869,11 @@ def extract_skill_config_vars(frontmatter: dict[str, Any]) -> list[dict[str, Any
         if item.get("default") is not None:
             entry["default"] = item["default"]
         prompt_text = item.get("prompt")
-        entry["prompt"] = prompt_text.strip() if isinstance(prompt_text, str) and prompt_text.strip() else desc
+        entry["prompt"] = (
+            prompt_text.strip()
+            if isinstance(prompt_text, str) and prompt_text.strip()
+            else desc
+        )
         result[key] = entry
     return list(result.values())
 
@@ -774,7 +888,9 @@ def discover_all_skill_config_vars() -> list[dict[str, Any]]:
             continue
         for skill_file in iter_skill_index_files(skills_dir, "SKILL.md"):
             try:
-                frontmatter, _ = parse_frontmatter(skill_file.read_text(encoding="utf-8-sig"))
+                frontmatter, _ = parse_frontmatter(
+                    skill_file.read_text(encoding="utf-8-sig")
+                )
             except Exception:
                 continue
             skill_name = str(frontmatter.get("name") or skill_file.parent.name)
@@ -848,7 +964,11 @@ def _normalize_skill_description(frontmatter: dict[str, Any]) -> str:
 def extract_skill_description(frontmatter: dict[str, Any]) -> str:
     """Extract a system-prompt-length description from parsed frontmatter."""
     desc = _normalize_skill_description(frontmatter)
-    return desc[:SKILL_PROMPT_DESC_LIMIT - 3] + "..." if len(desc) > SKILL_PROMPT_DESC_LIMIT else desc
+    return (
+        desc[: SKILL_PROMPT_DESC_LIMIT - 3] + "..."
+        if len(desc) > SKILL_PROMPT_DESC_LIMIT
+        else desc
+    )
 
 
 def is_skill_description_truncated_for_prompt(frontmatter: dict[str, Any]) -> bool:
@@ -862,7 +982,12 @@ def iter_skill_index_files(skills_dir: Path, filename: str):
     matches: list[str] = []
     for root, dirs, files in os.walk(str(skills_dir), followlinks=True):
         has_skill_md = "SKILL.md" in files
-        dirs[:] = [d for d in dirs if d not in EXCLUDED_SKILL_DIRS and not (has_skill_md and d in SKILL_SUPPORT_DIRS)]
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in EXCLUDED_SKILL_DIRS
+            and not (has_skill_md and d in SKILL_SUPPORT_DIRS)
+        ]
         if filename in files:
             matches.append(os.path.join(root, filename))
     yield from map(Path, sorted(matches))

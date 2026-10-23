@@ -56,9 +56,12 @@ class TestLoadResumeTarget:
 
     def test_returns_history_for_stored_session(self, tmp_path):
         db = _db_with_session(
-            tmp_path, "s1",
-            messages=[("user", "Remember the secret word ZEBRA42"),
-                      ("assistant", "I've noted the secret word: ZEBRA42.")],
+            tmp_path,
+            "s1",
+            messages=[
+                ("user", "Remember the secret word ZEBRA42"),
+                ("assistant", "I've noted the secret word: ZEBRA42."),
+            ],
         )
         try:
             sid, history, meta = _load_resume_target(db, "s1")
@@ -114,13 +117,16 @@ class TestLoadResumeTarget:
         finally:
             db.close()
 
+
 class TestApplyStoredSessionRuntime:
     """A resumed one-shot must run on the session's stored runtime, not the ambient
     config (review on #105957): with ambient ``openrouter/ambient-model`` and a stored
     ``custom:stored/stored-model`` session, the agent previously received the ambient
     model/provider on the wire."""
 
-    _AMBIENT_KEY = object()  # sentinel: any non-None token; resume must drop it when the provider changes
+    _AMBIENT_KEY = (
+        object()
+    )  # sentinel: any non-None token; resume must drop it when the provider changes
 
     @staticmethod
     def _stored_db(tmp_path, *, model="stored-model", route=None):
@@ -137,10 +143,19 @@ class TestApplyStoredSessionRuntime:
         return meta
 
     def test_stored_runtime_replaces_ambient_choice(self, tmp_path):
-        meta = self._stored_db(tmp_path, route={"provider": "custom:stored", "base_url": "http://stored:9", "api_mode": "responses"})
+        meta = self._stored_db(
+            tmp_path,
+            route={
+                "provider": "custom:stored",
+                "base_url": "http://stored:9",
+                "api_mode": "responses",
+            },
+        )
         choice = _apply_stored_session_runtime(
             _ModelChoice("ambient-model", "openrouter", api_key=self._AMBIENT_KEY),
-            meta, explicit_model=False)
+            meta,
+            explicit_model=False,
+        )
         assert choice.model == "stored-model"
         assert choice.provider == "custom:stored"
         assert choice.base_url == "http://stored:9"
@@ -152,7 +167,9 @@ class TestApplyStoredSessionRuntime:
         meta = self._stored_db(tmp_path, route={"provider": "custom:stored"})
         choice = _apply_stored_session_runtime(
             _ModelChoice("explicit-model", "openrouter", api_key=self._AMBIENT_KEY),
-            meta, explicit_model=True)
+            meta,
+            explicit_model=True,
+        )
         assert choice.model == "explicit-model"
         assert choice.provider == "openrouter"
         assert choice.api_key is self._AMBIENT_KEY
@@ -160,8 +177,12 @@ class TestApplyStoredSessionRuntime:
     def test_matching_route_is_noop_and_keeps_credentials(self, tmp_path):
         meta = self._stored_db(tmp_path, route={"provider": "openrouter"})
         choice = _apply_stored_session_runtime(
-            _ModelChoice("stored-model", "openrouter", base_url=None, api_key=self._AMBIENT_KEY),
-            meta, explicit_model=False)
+            _ModelChoice(
+                "stored-model", "openrouter", base_url=None, api_key=self._AMBIENT_KEY
+            ),
+            meta,
+            explicit_model=False,
+        )
         assert choice.api_key is self._AMBIENT_KEY
         assert choice.api_mode is None
 
@@ -169,12 +190,29 @@ class TestApplyStoredSessionRuntime:
         """A row persisted while an opencode-go session ran an anthropic_messages model (MiniMax) must
         not pin that wire onto a chat_completions model on ``--resume``: api_mode and the relay URL
         follow the stored model (#96066), the oneshot twin of ``_restore_session_model``."""
-        meta = self._stored_db(tmp_path, model="deepseek-v4-flash-vision-exp", route={
-            "provider": "opencode-go", "base_url": "https://opencode.ai/zen/go", "api_mode": "anthropic_messages"})
+        meta = self._stored_db(
+            tmp_path,
+            model="deepseek-v4-flash-vision-exp",
+            route={
+                "provider": "opencode-go",
+                "base_url": "https://opencode.ai/zen/go",
+                "api_mode": "anthropic_messages",
+            },
+        )
         choice = _apply_stored_session_runtime(
-            _ModelChoice("ambient-model", "openrouter", api_key=self._AMBIENT_KEY), meta, explicit_model=False)
-        assert (choice.model, choice.provider) == ("deepseek-v4-flash-vision-exp", "opencode-go")
-        assert (choice.api_mode, choice.base_url) == ("chat_completions", "https://opencode.ai/zen/go/v1")
+            _ModelChoice("ambient-model", "openrouter", api_key=self._AMBIENT_KEY),
+            meta,
+            explicit_model=False,
+        )
+        assert (choice.model, choice.provider) == (
+            "deepseek-v4-flash-vision-exp",
+            "opencode-go",
+        )
+        assert (choice.api_mode, choice.base_url) == (
+            "chat_completions",
+            "https://opencode.ai/zen/go/v1",
+        )
+
 
 class TestRunAgentResumeRuntime:
     """End-to-end wiring: ``_run_agent`` must hand AIAgent the session's stored runtime
@@ -188,8 +226,16 @@ class TestRunAgentResumeRuntime:
         db.append_message("s1", "user", content="hi")
         db.update_session_model("s1", "stored-model")
         db.patch_session_model_config(
-            "s1", {"gateway_runtime": {"provider": "custom:stored", "base_url": "http://stored:9"},
-                   "provider": "custom:stored", "base_url": "http://stored:9"})
+            "s1",
+            {
+                "gateway_runtime": {
+                    "provider": "custom:stored",
+                    "base_url": "http://stored:9",
+                },
+                "provider": "custom:stored",
+                "base_url": "http://stored:9",
+            },
+        )
         db.end_session("s1", "agent_close")
 
         captured = {}
@@ -197,22 +243,40 @@ class TestRunAgentResumeRuntime:
         class _FakeAgent:
             def __init__(self, **kwargs):
                 captured.update(kwargs)
+
             def __setattr__(self, name, _value):
                 pass
+
             def run_conversation(self, _prompt, conversation_history=None):
                 captured["history"] = conversation_history
                 return {"final_response": "ok", "session_id": "s1"}
+
             def close(self):
                 pass
 
         monkeypatch.setattr(oneshot_mod, "_create_session_db_for_oneshot", lambda: db)
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "ambient-model", "provider": "openrouter"}})
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"default": "ambient-model", "provider": "openrouter"}},
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
-            lambda **_kw: {"api_key": "resolved", "base_url": None, "provider": "custom:stored",
-                          "requested_provider": "custom:stored", "api_mode": "chat", "credential_pool": None})
-        monkeypatch.setattr("clawk_cli.tools_config._get_platform_tools", lambda _cfg, _p: [])
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
+            lambda **_kw: {
+                "api_key": "resolved",
+                "base_url": None,
+                "provider": "custom:stored",
+                "requested_provider": "custom:stored",
+                "api_mode": "chat",
+                "credential_pool": None,
+            },
+        )
+        monkeypatch.setattr(
+            "clawk_cli.tools_config._get_platform_tools", lambda _cfg, _p: []
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
         monkeypatch.setattr("run_agent.AIAgent", _FakeAgent)
 
         try:
@@ -239,25 +303,45 @@ class TestRunAgentResumeRuntime:
         class _FakeAgent:
             def __init__(self, **kwargs):
                 captured.update(kwargs)
+
             def __setattr__(self, name, _value):
                 pass
+
             def run_conversation(self, _prompt, conversation_history=None):
                 return {"final_response": "ok"}
+
             def close(self):
                 pass
 
         monkeypatch.setattr(oneshot_mod, "_create_session_db_for_oneshot", lambda: db)
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "ambient-model", "provider": "openrouter"}})
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"default": "ambient-model", "provider": "openrouter"}},
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
-            lambda **_kw: {"api_key": "resolved", "base_url": None, "provider": "openrouter",
-                          "requested_provider": "openrouter", "api_mode": "chat", "credential_pool": None})
-        monkeypatch.setattr("clawk_cli.tools_config._get_platform_tools", lambda _cfg, _p: [])
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
+            lambda **_kw: {
+                "api_key": "resolved",
+                "base_url": None,
+                "provider": "openrouter",
+                "requested_provider": "openrouter",
+                "api_mode": "chat",
+                "credential_pool": None,
+            },
+        )
+        monkeypatch.setattr(
+            "clawk_cli.tools_config._get_platform_tools", lambda _cfg, _p: []
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
         monkeypatch.setattr("run_agent.AIAgent", _FakeAgent)
 
         try:
-            oneshot_mod._run_agent("hello", model="explicit-model", provider="openrouter", resume="s1")
+            oneshot_mod._run_agent(
+                "hello", model="explicit-model", provider="openrouter", resume="s1"
+            )
             assert captured["model"] == "explicit-model"
             assert captured["provider"] == "openrouter"
         finally:

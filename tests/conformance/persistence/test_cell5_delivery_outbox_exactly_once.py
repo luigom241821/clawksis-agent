@@ -78,7 +78,9 @@ from tests.conformance.persistence._harness import (
 
 SESSION_KEY = "agent:main:telegram:dm:cell5"
 CHAT_ID = "4242"
-N_OBLIGATIONS = 3  # crash-window obligations per kill point (plus one delivered control)
+N_OBLIGATIONS = (
+    3  # crash-window obligations per kill point (plus one delivered control)
+)
 N_CONCURRENT_OBLIGATIONS = 12
 N_REBOOTERS = 3
 
@@ -143,7 +145,9 @@ def body(tag):
 
 # The gateway turn: one fully delivered control reply, then N replies driven to
 # the kill point, then park for SIGKILL.
-SEEDER = PRELUDE + r'''
+SEEDER = (
+    PRELUDE
+    + r"""
 import gateway.delivery_ledger as dl
 from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
@@ -186,10 +190,13 @@ async def main():
 
 
 asyncio.run(main())
-'''
+"""
+)
 
 # A gateway boot: the real startup claim half, then the real redelivery half.
-REBOOTER = PRELUDE + r'''
+REBOOTER = (
+    PRELUDE
+    + r"""
 import gateway.delivery_ledger as dl
 from gateway.config import GatewayConfig
 from gateway.run import GatewayRunner
@@ -237,7 +244,8 @@ async def main():
 
 
 asyncio.run(main())
-'''
+"""
+)
 
 
 # --------------------------------------------------------------------------- harness
@@ -245,11 +253,15 @@ asyncio.run(main())
 
 def _strip_marker(content: str) -> tuple[str, bool]:
     """(reply body, carried a recovery marker?) for one journaled send."""
-    from gateway.delivery_ledger import FLOOD_MARKER, RECONNECTED_MARKER, RECOVERED_MARKER
+    from gateway.delivery_ledger import (
+        FLOOD_MARKER,
+        RECONNECTED_MARKER,
+        RECOVERED_MARKER,
+    )
 
     for marker in (RECOVERED_MARKER, RECONNECTED_MARKER, FLOOD_MARKER):
         if content.startswith(marker):
-            return content[len(marker):], True
+            return content[len(marker) :], True
     return content, False
 
 
@@ -270,37 +282,54 @@ class Cell:
         (tmp_path / "tmp").mkdir()
         self._boots = 0
 
-    def spawn(self, script: str, role: str, extra: dict | None = None) -> subprocess.Popen:
-        env = {k: v for k, v in os.environ.items()
-               if not (k.endswith("_API_KEY") or k.endswith("_BOT_TOKEN"))}
+    def spawn(
+        self, script: str, role: str, extra: dict | None = None
+    ) -> subprocess.Popen:
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not (k.endswith("_API_KEY") or k.endswith("_BOT_TOKEN"))
+        }
         inherited = env.get("PYTHONPATH")
-        env.update({
-            "PYTHONPATH": f"{REPO_ROOT}{os.pathsep}{inherited}" if inherited else str(REPO_ROOT),
-            "PYTHONUNBUFFERED": "1",
-            "HOME": str(self.home),
-            "CLAWK_HOME": str(self.clawk_home),
-            "TMPDIR": str(self.root / "tmp"),
-            # HOME/.clawk IS the temp home here, so the live-system guard would
-            # read it as production; bypass it in the CHILD only.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-            "CELL5_JOURNAL": str(self.journal),
-            "CELL5_ROLE": role,
-            "CELL5_CHAT_ID": CHAT_ID,
-            "CELL5_SESSION_KEY": SESSION_KEY,
-        })
+        env.update(
+            {
+                "PYTHONPATH": f"{REPO_ROOT}{os.pathsep}{inherited}"
+                if inherited
+                else str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "TMPDIR": str(self.root / "tmp"),
+                # HOME/.clawk IS the temp home here, so the live-system guard would
+                # read it as production; bypass it in the CHILD only.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+                "CELL5_JOURNAL": str(self.journal),
+                "CELL5_ROLE": role,
+                "CELL5_CHAT_ID": CHAT_ID,
+                "CELL5_SESSION_KEY": SESSION_KEY,
+            }
+        )
         env.pop("CELL5_HANG_AFTER_SEND", None)
         env.update(extra or {})
         return subprocess.Popen(
-            [sys.executable, "-c", script], cwd=str(REPO_ROOT), env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            [sys.executable, "-c", script],
+            cwd=str(REPO_ROOT),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
 
     def seed_and_crash(self, kinds: list[str]) -> dict:
         ready = self.root / "seed-ready"
-        child = self.spawn(SEEDER, "turn", {
-            "CELL5_KINDS": json.dumps(kinds), "CELL5_IDS": str(self.ids_file),
-            "CELL5_READY": str(ready),
-        })
+        child = self.spawn(
+            SEEDER,
+            "turn",
+            {
+                "CELL5_KINDS": json.dumps(kinds),
+                "CELL5_IDS": str(self.ids_file),
+                "CELL5_READY": str(ready),
+            },
+        )
         self._kill_at(child, ready, "turn process at its kill point")
         return json.loads(self.ids_file.read_text())
 
@@ -308,7 +337,9 @@ class Cell:
         """A boot whose redelivery send is accepted, then SIGKILL before mark_delivered."""
         self._boots += 1
         sent = self.root / f"boot{self._boots}-sent"
-        child = self.spawn(REBOOTER, f"boot-{self._boots}", {"CELL5_HANG_AFTER_SEND": str(sent)})
+        child = self.spawn(
+            REBOOTER, f"boot-{self._boots}", {"CELL5_HANG_AFTER_SEND": str(sent)}
+        )
         self._kill_at(child, sent, f"boot {self._boots} inside its redelivery send")
 
     def boot(self) -> dict:
@@ -340,7 +371,9 @@ class Cell:
         out = {v["id"]: {"unmarked": 0, "marked": 0, "roles": []} for v in ids.values()}
         for entry in self.journal_entries():
             content, marked = _strip_marker(entry["content"])
-            assert content in by_body, f"transport received an unknown payload: {entry!r}"
+            assert content in by_body, (
+                f"transport received an unknown payload: {entry!r}"
+            )
             c = out[by_body[content]]
             c["marked" if marked else "unmarked"] += 1
             c["roles"].append(entry["role"])
@@ -349,8 +382,12 @@ class Cell:
     def ledger(self) -> dict[str, tuple[str, int]]:
         conn = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
         try:
-            return {oid: (state, attempts) for oid, state, attempts in conn.execute(
-                "SELECT obligation_id, state, attempts FROM delivery_obligations")}
+            return {
+                oid: (state, attempts)
+                for oid, state, attempts in conn.execute(
+                    "SELECT obligation_id, state, attempts FROM delivery_obligations"
+                )
+            }
         finally:
             conn.close()
 
@@ -364,7 +401,9 @@ def _assert_effect_exactly_once(cell: Cell, ids: dict, label: str) -> dict:
             f"[{label}] {body!r} ({meta['kind']}): {c['unmarked']} UNMARKED copies reached the "
             f"platform — a silent duplicate (roles={c['roles']})"
         )
-        assert c["unmarked"] + c["marked"] >= 1, f"[{label}] {body!r}: reply lost (0 copies)"
+        assert c["unmarked"] + c["marked"] >= 1, (
+            f"[{label}] {body!r}: reply lost (0 copies)"
+        )
         assert oid in ledger, f"[{label}] {body!r}: ledger row vanished before terminal"
         state, attempts = ledger[oid]
         assert state in ("delivered", "abandoned"), (
@@ -383,7 +422,9 @@ def _assert_reboots_are_noops(cell: Cell, ids: dict, label: str, n: int = 2) -> 
             f"[{label}] a later reboot re-claimed/re-sent settled obligations: {result}"
         )
     assert cell.journal_entries() == before, f"[{label}] a later reboot re-sent a reply"
-    assert cell.ledger() == ledger_before, f"[{label}] a later reboot mutated settled rows"
+    assert cell.ledger() == ledger_before, (
+        f"[{label}] a later reboot mutated settled rows"
+    )
 
 
 # Kill point -> (kinds seeded by the turn process, reboot #1 crashes inside its resend?)
@@ -400,10 +441,10 @@ KILL_POINTS = {
 
 # Expected copies per kind after the first clean sweep (deterministic).
 EXPECTED = {
-    "delivered": (1, 0),   # control: sent + marked delivered, never resent
-    "pending": (1, 0),     # never sent -> one plain redelivery
+    "delivered": (1, 0),  # control: sent + marked delivered, never resent
+    "pending": (1, 0),  # never sent -> one plain redelivery
     "attempting": (0, 1),  # may have landed -> one marked redelivery
-    "sent": (1, 1),        # landed unmarked -> one marked (honest) duplicate
+    "sent": (1, 1),  # landed unmarked -> one marked (honest) duplicate
 }
 
 
@@ -469,12 +510,23 @@ def test_concurrent_reboots_claim_each_obligation_once(tmp_path):
     for i in range(N_REBOOTERS):
         ready = tmp_path / f"reboot-ready-{i}"
         readies.append(ready)
-        children.append(cell.spawn(REBOOTER, f"concurrent-{i}", {
-            "CELL5_GO": str(go), "CELL5_READY": str(ready),
-            "CELL5_SWEEP_BARRIER": str(barrier), "CELL5_SWEEP_PARTIES": str(N_REBOOTERS),
-        }))
+        children.append(
+            cell.spawn(
+                REBOOTER,
+                f"concurrent-{i}",
+                {
+                    "CELL5_GO": str(go),
+                    "CELL5_READY": str(ready),
+                    "CELL5_SWEEP_BARRIER": str(barrier),
+                    "CELL5_SWEEP_PARTIES": str(N_REBOOTERS),
+                },
+            )
+        )
     try:
-        wait_for(lambda: all(r.exists() for r in readies), what="all rebooters at the barrier")
+        wait_for(
+            lambda: all(r.exists() for r in readies),
+            what="all rebooters at the barrier",
+        )
     except BaseException:
         for c in children:
             kill9_and_reap(c)
@@ -486,7 +538,9 @@ def test_concurrent_reboots_claim_each_obligation_once(tmp_path):
     )
     # Worst-case interleave actually happened: every sweeper SELECTed the same
     # stale rows before any of them claimed one.
-    assert len(list(barrier.glob("selected-*"))) == N_REBOOTERS, "sweep barrier not reached by all"
+    assert len(list(barrier.glob("selected-*"))) == N_REBOOTERS, (
+        "sweep barrier not reached by all"
+    )
 
     outs = [json.loads(o.strip().splitlines()[-1]) for _, o, _ in results]
     claims = [oid for out in outs for oid in out["claimed"]]

@@ -9,6 +9,7 @@ Runs each scenario N_REPS times in each mode (on/off). Output:
   scripts/out2/<scenario>__<mode>__rep<k>.json
   scripts/out2/_bench_summary.json
 """
+
 from __future__ import annotations
 
 import json, os, shutil, sys, tempfile, time, traceback
@@ -51,15 +52,23 @@ SCENARIOS: list[dict[str, Any]] = base.SCENARIOS + [
             "event called 'Picnic' tomorrow at noon if you can see any forecast at all, "
             "and post 'Picnic is on!' to the #random Slack channel. Then say done."
         ),
-        "expected_underlying_tools": ["weather_get", "evt_create", "slack_send_message"],
+        "expected_underlying_tools": [
+            "weather_get",
+            "evt_create",
+            "slack_send_message",
+        ],
     },
 ]
 
 
-def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dict[str, Any]:
+def run_one(
+    scenario: dict[str, Any], mode: str, rep: int, out_dir: Path
+) -> dict[str, Any]:
     """mode: 'enabled' (bare bridge) | 'listing' (bridge + catalog listing) | 'disabled' (eager)."""
     enabled = mode in ("enabled", "listing")
-    clawk_home = base.setup_isolated_home(enabled, listing=("auto" if mode == "listing" else "off"))
+    clawk_home = base.setup_isolated_home(
+        enabled, listing=("auto" if mode == "listing" else "off")
+    )
     os.environ["CLAWK_HOME"] = str(clawk_home)
     base.reset_module_state()
     base.register_fake_tools()
@@ -68,12 +77,15 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
     base.FIXTURE_NOTES.write_text("Hello from the test fixture.\n", encoding="utf-8")
 
     from tools.registry import registry
+
     original_dispatch = registry.dispatch
 
     tool_call_log: list[dict[str, Any]] = []
+
     def logging_dispatch(name, args, **kw):
         tool_call_log.append({"name": name})
         return original_dispatch(name, args, **kw)
+
     registry.dispatch = logging_dispatch
 
     # Capture REAL per-call usage via the post_api_request plugin hook —
@@ -81,14 +93,19 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
     # usage. NOTE: registered AFTER AIAgent construction because plugin
     # discovery during init calls _hooks.clear().
     usage_log: list[dict[str, Any]] = []
+
     def usage_hook(**kw):
         u = kw.get("usage") or {}
         if u:
-            usage_log.append({
-                "prompt_tokens": u.get("prompt_tokens"),
-                "completion_tokens": u.get("completion_tokens"),
-                "cached_tokens": u.get("cached_tokens") or u.get("cache_read_input_tokens") or 0,
-            })
+            usage_log.append(
+                {
+                    "prompt_tokens": u.get("prompt_tokens"),
+                    "completion_tokens": u.get("completion_tokens"),
+                    "cached_tokens": u.get("cached_tokens")
+                    or u.get("cache_read_input_tokens")
+                    or 0,
+                }
+            )
 
     started = time.time()
     error = None
@@ -97,13 +114,19 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
     pm = None
     try:
         from run_agent import AIAgent
+
         agent = AIAgent(
-            provider="openrouter", model="anthropic/claude-haiku-4.5",
-            quiet_mode=True, save_trajectories=False,
-            skip_context_files=True, skip_memory=True,
-            platform="cli", max_iterations=15,
+            provider="openrouter",
+            model="anthropic/claude-haiku-4.5",
+            quiet_mode=True,
+            save_trajectories=False,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="cli",
+            max_iterations=15,
         )
         from clawk_cli.plugins import get_plugin_manager, discover_plugins
+
         discover_plugins()  # idempotent; ensures no later clear wipes our hook
         pm = get_plugin_manager()
         pm._hooks.setdefault("post_api_request", []).append(usage_hook)
@@ -111,24 +134,31 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
         # exactly once per API response (streaming AND non-streaming). Wrap it
         # to capture canonical usage the hook path may miss.
         import agent.turn_usage as _cl
+
         _orig_norm = _cl.normalize_usage
+
         def _norm_spy(raw, **kw):
             cu = _orig_norm(raw, **kw)
             try:
-                usage_log.append({
-                    "prompt_tokens": cu.prompt_tokens,
-                    "completion_tokens": getattr(cu, "output_tokens", 0) or 0,
-                    "cached_tokens": getattr(cu, "cache_read_tokens", 0) or 0,
-                    "src": "norm",
-                })
+                usage_log.append(
+                    {
+                        "prompt_tokens": cu.prompt_tokens,
+                        "completion_tokens": getattr(cu, "output_tokens", 0) or 0,
+                        "cached_tokens": getattr(cu, "cache_read_tokens", 0) or 0,
+                        "src": "norm",
+                    }
+                )
             except Exception:
                 pass
             return cu
+
         _cl.normalize_usage = _norm_spy
         result = agent.run_conversation(
             user_message=scenario["prompt"],
-            system_message=("You are a test agent. Complete the user's task using available "
-                            "tools. Be concise; don't add commentary beyond what's needed."),
+            system_message=(
+                "You are a test agent. Complete the user's task using available "
+                "tools. Be concise; don't add commentary beyond what's needed."
+            ),
         )
         if isinstance(result, dict):
             final_response = result.get("final_response") or ""
@@ -141,6 +171,7 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
         registry.dispatch = original_dispatch
         try:
             import agent.turn_usage as _cl2
+
             if "_orig_norm" in dir() or True:
                 try:
                     _cl2.normalize_usage = _orig_norm  # type: ignore[name-defined]
@@ -174,19 +205,28 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
     success = all(e in called_names for e in expected) if expected else (error is None)
 
     rec = {
-        "scenario_id": scenario["id"], "mode": mode,
-        "rep": rep, "elapsed_seconds": round(elapsed, 2),
+        "scenario_id": scenario["id"],
+        "mode": mode,
+        "rep": rep,
+        "elapsed_seconds": round(elapsed, 2),
         "api_calls": len(usage_log),
         "prompt_tokens_total": sum(u.get("prompt_tokens") or 0 for u in usage_log),
-        "completion_tokens_total": sum(u.get("completion_tokens") or 0 for u in usage_log),
+        "completion_tokens_total": sum(
+            u.get("completion_tokens") or 0 for u in usage_log
+        ),
         "cached_tokens_total": sum(u.get("cached_tokens") or 0 for u in usage_log),
         "per_call_usage": usage_log,
         "bridge_calls": bridge_call_log,
         "underlying_tools_called": called_names,
-        "expected": expected, "success": bool(success), "error": error,
+        "expected": expected,
+        "success": bool(success),
+        "error": error,
         "final_response": base._redact_secrets(final_response)[:500],
     }
-    out_path = out_dir / f"{scenario['id']}__{'enabled' if enabled else 'disabled'}__rep{rep}.json"
+    out_path = (
+        out_dir
+        / f"{scenario['id']}__{'enabled' if enabled else 'disabled'}__rep{rep}.json"
+    )
     out_path.write_text(json.dumps(rec, indent=1), encoding="utf-8")
     shutil.rmtree(Path(os.environ["CLAWK_HOME"]).parent, ignore_errors=True)
     return rec
@@ -195,22 +235,39 @@ def run_one(scenario: dict[str, Any], mode: str, rep: int, out_dir: Path) -> dic
 def main():
     out_dir = _THIS_DIR / "out2"
     out_dir.mkdir(exist_ok=True)
-    modes = [m for m in os.environ.get("TS_BENCH_MODES", "enabled,listing,disabled").split(",") if m]
+    modes = [
+        m
+        for m in os.environ.get("TS_BENCH_MODES", "enabled,listing,disabled").split(",")
+        if m
+    ]
     rows = []
     for scenario in SCENARIOS:
         for mode in modes:
             for rep in range(1, N_REPS + 1):
                 rec = run_one(scenario, mode, rep, out_dir)
-                print(f"{scenario['id']:24} {mode:8} rep{rep}: "
-                      f"api={rec['api_calls']} in={rec['prompt_tokens_total']:>7} "
-                      f"out={rec['completion_tokens_total']:>5} cached={rec['cached_tokens_total']:>7} "
-                      f"t={rec['elapsed_seconds']:>5}s ok={rec['success']} err={bool(rec['error'])}",
-                      flush=True)
+                print(
+                    f"{scenario['id']:24} {mode:8} rep{rep}: "
+                    f"api={rec['api_calls']} in={rec['prompt_tokens_total']:>7} "
+                    f"out={rec['completion_tokens_total']:>5} cached={rec['cached_tokens_total']:>7} "
+                    f"t={rec['elapsed_seconds']:>5}s ok={rec['success']} err={bool(rec['error'])}",
+                    flush=True,
+                )
                 rows.append(rec)
     summary_name = os.environ.get("TS_BENCH_SUMMARY", "_bench_summary.json")
-    (out_dir / summary_name).write_text(json.dumps(
-        [{k: v for k, v in r.items() if k not in ("per_call_usage", "bridge_calls", "final_response")} for r in rows],
-        indent=1), encoding="utf-8")
+    (out_dir / summary_name).write_text(
+        json.dumps(
+            [
+                {
+                    k: v
+                    for k, v in r.items()
+                    if k not in ("per_call_usage", "bridge_calls", "final_response")
+                }
+                for r in rows
+            ],
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
     print("done ->", out_dir / summary_name)
 
 

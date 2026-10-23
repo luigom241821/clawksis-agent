@@ -7,6 +7,7 @@ under its own id, to the target profile's live owner through the canonical
 never deleted: they keep their final status as evidence, exactly as the old drain did.
 A ``claimed`` record was an uncertain CLI turn and is never resent.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,13 +25,27 @@ _warned: set[Path] = set()
 def defer(key: str, job: dict, content: str, home: Path, *, for_failure: bool) -> None:
     """Park one never-admitted output under its delivery id; a later tick hands it to the owner."""
     import time
+
     root = get_clawk_home().resolve() / "cron" / "bot_chat_pending"
     make_user_dir(root, parents=True, exist_ok=True, mode=0o700)
     path = root / f"{key}.json"
-    if not path.exists():  # an existing record (queued or already transferred) keeps its status
-        atomic_json_write(path, dict(
-            id=key, status="queued", job={k: job[k] for k in ("id", "name") if k in job}, content=content,
-            home=str(home), for_failure=for_failure, sequence=time.time_ns()), fsync_dir=True, mode=0o600)
+    if (
+        not path.exists()
+    ):  # an existing record (queued or already transferred) keeps its status
+        atomic_json_write(
+            path,
+            dict(
+                id=key,
+                status="queued",
+                job={k: job[k] for k in ("id", "name") if k in job},
+                content=content,
+                home=str(home),
+                for_failure=for_failure,
+                sequence=time.time_ns(),
+            ),
+            fsync_dir=True,
+            mode=0o600,
+        )
 
 
 def _queued(root: Path) -> list[tuple[Path, dict]]:
@@ -43,7 +58,11 @@ def _queued(root: Path) -> list[tuple[Path, dict]]:
         except (OSError, ValueError) as exc:
             if path not in _warned:
                 _warned.add(path)
-                logger.error("Unreadable legacy Bot Chat pending record %s kept as evidence: %s", path, exc)
+                logger.error(
+                    "Unreadable legacy Bot Chat pending record %s kept as evidence: %s",
+                    path,
+                    exc,
+                )
             continue
         if record.get("status") == "queued":
             found.append((path, record))
@@ -52,8 +71,11 @@ def _queued(root: Path) -> list[tuple[Path, dict]]:
 
 def _malformed(record: dict) -> str:
     """Why *record* can never be handed off (empty when its required fields are usable)."""
-    missing = [key for key in ("id", "home", "content")
-               if not isinstance(record.get(key), str) or not record.get(key)]
+    missing = [
+        key
+        for key in ("id", "home", "content")
+        if not isinstance(record.get(key), str) or not record.get(key)
+    ]
     if missing:
         return f"malformed legacy bot-chat record (missing {', '.join(missing)}); not delivered"
     if not isinstance(record.get("job") or {}, dict):
@@ -74,9 +96,13 @@ def _dispose(path: Path, record: dict) -> bool:
     home = Path(record["home"]).resolve()
     for_failure = bool(record.get("for_failure"))
     if not (home / "state.db").is_file():
-        record.update(status="ambiguous", error=f"bot-chat delivery target no longer exists: {home}")
+        record.update(
+            status="ambiguous",
+            error=f"bot-chat delivery target no longer exists: {home}",
+        )
     elif for_failure and not warning_notifications_enabled(
-            BOT_CHAT_POLICY_PLATFORM, load_user_config_effective(home / "config.yaml")):
+        BOT_CHAT_POLICY_PLATFORM, load_user_config_effective(home / "config.yaml")
+    ):
         record.update(status="suppressed", error=None)
     else:
         try:
@@ -87,13 +113,22 @@ def _dispose(path: Path, record: dict) -> bool:
             return False
         try:
             receipt = deliver_to_live_owner(
-                home, owner, bot_chat_message(record.get("job") or {}, record["content"]),
-                delivery_id=record["id"], notification_category="diagnostic" if for_failure else "result")
+                home,
+                owner,
+                bot_chat_message(record.get("job") or {}, record["content"]),
+                delivery_id=record["id"],
+                notification_category="diagnostic" if for_failure else "result",
+            )
         except Exception as exc:
             # The door is idempotent per id (a replay returns the existing receipt), so the
             # record stays queued for the next tick; log loudly once, quietly after.
-            logger.log(logging.DEBUG if path in _warned else logging.WARNING,
-                       "Legacy Bot Chat pending record %s not handed off yet: %s", path, exc, exc_info=True)
+            logger.log(
+                logging.DEBUG if path in _warned else logging.WARNING,
+                "Legacy Bot Chat pending record %s not handed off yet: %s",
+                path,
+                exc,
+                exc_info=True,
+            )
             _warned.add(path)
             return False
         receipt_status = receipt.get("status") if isinstance(receipt, dict) else None
@@ -116,8 +151,15 @@ def drain_legacy_pending() -> None:
                 continue
             atomic_json_write(path, record, fsync_dir=True, mode=0o600)
         except Exception as exc:
-            logger.log(logging.DEBUG if path in _warned else logging.WARNING,
-                       "Legacy Bot Chat pending record %s left queued: %s", path, exc, exc_info=True)
+            logger.log(
+                logging.DEBUG if path in _warned else logging.WARNING,
+                "Legacy Bot Chat pending record %s left queued: %s",
+                path,
+                exc,
+                exc_info=True,
+            )
             _warned.add(path)
             continue
-        logger.info("Legacy Bot Chat pending record %s -> %s", path.name, record["status"])
+        logger.info(
+            "Legacy Bot Chat pending record %s -> %s", path.name, record["status"]
+        )

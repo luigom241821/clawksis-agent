@@ -1,4 +1,5 @@
 """First-run guidance on the real CLI without a configured executor."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -15,11 +16,22 @@ def test_headless_first_run_exits_with_setup_guidance_before_gateway(tmp_path, a
     user.mkdir()
     root = Path(__file__).resolve().parents[2]
     env = {k: os.environ[k] for k in ("PATH", "LANG", "TZ") if k in os.environ}
-    env.update(HOME=str(user), USERPROFILE=str(user), CLAWK_HOME=str(home),
-               PYTHONPATH=str(root), PYTHONUNBUFFERED="1")
+    env.update(
+        HOME=str(user),
+        USERPROFILE=str(user),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(root),
+        PYTHONUNBUFFERED="1",
+    )
     result = subprocess.run(
-        [sys.executable, "-m", "clawk_cli.main", *argv], cwd=tmp_path, env=env,
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=40, check=False
+        [sys.executable, "-m", "clawk_cli.main", *argv],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=40,
+        check=False,
     )
     assert result.returncode == 1, (result.stdout, result.stderr)
     assert "clawk config set model.provider custom" in result.stdout

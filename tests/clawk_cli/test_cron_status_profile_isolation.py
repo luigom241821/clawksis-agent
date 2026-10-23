@@ -35,10 +35,6 @@ def tmp_cron_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
-
-
-
-
 class TestGetServicePidsProfileScope:
     """systemd branch must honor ``all_profiles`` and filter by profile."""
 
@@ -71,7 +67,10 @@ class TestGetServicePidsProfileScope:
         with (
             patch("clawk_cli.gateway.is_macos", return_value=False),
             patch("clawk_cli.gateway.supports_systemd_services", return_value=True),
-            patch("clawk_cli.gateway.get_service_name", return_value="clawk-gateway-jarvis"),
+            patch(
+                "clawk_cli.gateway.get_service_name",
+                return_value="clawk-gateway-jarvis",
+            ),
             patch("subprocess.run", side_effect=_run_side_effect),
         ):
             pids = gateway_mod._get_service_pids()
@@ -113,8 +112,9 @@ class TestGetServicePidsProfileScope:
 class TestCronStatusMissingHeartbeat:
     """Missing ticker heartbeat must be reported honestly, not as healthy."""
 
-
-    def test_missing_heartbeat_green_when_gateway_just_started(self, tmp_cron_dir, capsys, monkeypatch):
+    def test_missing_heartbeat_green_when_gateway_just_started(
+        self, tmp_cron_dir, capsys, monkeypatch
+    ):
         import io
         from contextlib import redirect_stdout
         import clawk_cli.cron as cron_cli
@@ -133,7 +133,10 @@ class TestCronStatusMissingHeartbeat:
             patch("cron.jobs.get_ticker_success_age", return_value=None),
             patch("cron.jobs.TICKER_INTERVAL_SECONDS", 60),
             # Gateway started a few seconds ago, ticker hasn't had its first tick yet
-            patch("gateway.status._read_pid_record", return_value={"pid": 4242, "start_time": int(now)}),
+            patch(
+                "gateway.status._read_pid_record",
+                return_value={"pid": 4242, "start_time": int(now)},
+            ),
             patch("gateway.status._get_process_start_time", return_value=int(now)),
             patch("time.time", return_value=now + 5),
             redirect_stdout(out),

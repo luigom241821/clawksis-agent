@@ -40,7 +40,9 @@ _last_try: dict[tuple[str, str, str, str], float] = {}
 _inflight: set[tuple[str, str, str, str]] = set()
 
 
-def _key(provider: str, identity_id: Optional[str] = None, base_url: Optional[str] = None) -> tuple[str, str, str, str]:
+def _key(
+    provider: str, identity_id: Optional[str] = None, base_url: Optional[str] = None
+) -> tuple[str, str, str, str]:
     from clawk_constants import clawk_home_key
 
     return (
@@ -61,7 +63,10 @@ def has_account_usage(provider: str) -> bool:
     if slug in _USAGE_FETCHERS:
         return True
     profile = get_provider_profile(slug) if slug else None
-    return profile is not None and type(profile).fetch_account_usage is not ProviderProfile.fetch_account_usage
+    return (
+        profile is not None
+        and type(profile).fetch_account_usage is not ProviderProfile.fetch_account_usage
+    )
 
 
 def _identity_id_for(provider: str, entry: Any) -> str:
@@ -87,8 +92,11 @@ def _identity_id_for(provider: str, entry: Any) -> str:
 
 
 def remember_account_usage(
-    provider: Optional[str], snapshot: Optional[AccountUsageSnapshot],
-    *, identity_id: Optional[str] = None, base_url: Optional[str] = None,
+    provider: Optional[str],
+    snapshot: Optional[AccountUsageSnapshot],
+    *,
+    identity_id: Optional[str] = None,
+    base_url: Optional[str] = None,
     started_monotonic: Optional[float] = None,
 ) -> None:
     """Land one fetch result.
@@ -126,7 +134,10 @@ def remember_account_usage(
 
 
 def cached_account_usage(
-    provider: str, *, identity_id: Optional[str] = None, base_url: Optional[str] = None,
+    provider: str,
+    *,
+    identity_id: Optional[str] = None,
+    base_url: Optional[str] = None,
 ) -> Optional[AccountUsageSnapshot]:
     with _lock:
         return _snapshots.get(_key(provider, identity_id, base_url))
@@ -152,7 +163,10 @@ def _claim_refresh(key: tuple[str, str, str, str], now: float) -> bool:
     A failed or empty fetch still counts as a try, so a dead credential (or a provider with no
     usage API) isn't re-asked on every picker open."""
     with _lock:
-        if key in _inflight or now - _last_try.get(key, float("-inf")) < REFRESH_AFTER_S:
+        if (
+            key in _inflight
+            or now - _last_try.get(key, float("-inf")) < REFRESH_AFTER_S
+        ):
             return False
         _inflight.add(key)
         _last_try[key] = now
@@ -174,8 +188,11 @@ def refresh_account_usage_async(providers: Iterable[str]) -> list[threading.Thre
         if not _claim_refresh(key, now):
             continue
         thread = threading.Thread(
-            target=copy_context().run, args=(_refresh_legacy, provider, key),
-            name="clawk-account-usage-refresh", daemon=True)
+            target=copy_context().run,
+            args=(_refresh_legacy, provider, key),
+            name="clawk-account-usage-refresh",
+            daemon=True,
+        )
         thread.start()
         started.append(thread)
     return started
@@ -190,7 +207,9 @@ def _refresh_legacy(provider: str, key: tuple[str, str, str, str]) -> None:
         _release_refresh(key)
 
 
-def refresh_account_usage_entries_async(requests: Iterable[dict]) -> list[threading.Thread]:
+def refresh_account_usage_entries_async(
+    requests: Iterable[dict],
+) -> list[threading.Thread]:
     """Background-refresh per-credential usage slots. *requests* entries are
     ``{"provider", "identity_id", "base_url", "api_key"}`` — the live credentials to read.
 
@@ -202,7 +221,11 @@ def refresh_account_usage_entries_async(requests: Iterable[dict]) -> list[thread
     for request in requests:
         provider = str(request.get("provider") or "").strip().lower()
         identity_id = str(request.get("identity_id") or "").strip()
-        if not provider or not identity_id or not str(request.get("api_key") or "").strip():
+        if (
+            not provider
+            or not identity_id
+            or not str(request.get("api_key") or "").strip()
+        ):
             continue
         if not _claim_refresh(_key(provider, identity_id), now):
             continue
@@ -210,8 +233,11 @@ def refresh_account_usage_entries_async(requests: Iterable[dict]) -> list[thread
     if not due:
         return []
     thread = threading.Thread(
-        target=copy_context().run, args=(_refresh_entries, list(due)),
-        name="clawk-account-usage-refresh", daemon=True)
+        target=copy_context().run,
+        args=(_refresh_entries, list(due)),
+        name="clawk-account-usage-refresh",
+        daemon=True,
+    )
     thread.start()
     return [thread]
 
@@ -224,8 +250,11 @@ def _refresh_entries(requests: list[dict]) -> None:
         key = _key(provider, request["identity_id"])
         try:
             fetch_account_usage(
-                provider, base_url=request.get("base_url"), api_key=request.get("api_key"),
-                read_only=True, identity_id=request["identity_id"],
+                provider,
+                base_url=request.get("base_url"),
+                api_key=request.get("api_key"),
+                read_only=True,
+                identity_id=request["identity_id"],
             )
         finally:
             _release_refresh(key)

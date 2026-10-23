@@ -67,7 +67,7 @@ class _HealthyLibproc:
         struct.pack_into("<I", blob, _DARWIN_FD_DEV_OFFSET, self._identity[0])
         struct.pack_into("<Q", blob, _DARWIN_FD_INO_OFFSET, self._identity[1])
         encoded = self._target.encode("utf-8")
-        blob[_DARWIN_FD_PATH_OFFSET:_DARWIN_FD_PATH_OFFSET + len(encoded)] = encoded
+        blob[_DARWIN_FD_PATH_OFFSET : _DARWIN_FD_PATH_OFFSET + len(encoded)] = encoded
         ctypes.memmove(record, bytes(blob), len(blob))
         return 1
 
@@ -94,9 +94,9 @@ def test_hung_vnode_scan_fails_open_within_budget(monkeypatch, tmp_path, caplog)
     assert not worker.is_alive(), "scan blocked past the hang guard: no deadline"
     assert elapsed < HANG_GUARD
     assert outcome == [[]], "a timed-out scan must fail open (no holders, no refusal)"
-    assert any(
-        "timed out" in record.getMessage() for record in caplog.records
-    ), "deadline expiry must log a visible warning"
+    assert any("timed out" in record.getMessage() for record in caplog.records), (
+        "deadline expiry must log a visible warning"
+    )
 
 
 def test_healthy_scan_still_reports_holder(monkeypatch, tmp_path, caplog):
@@ -116,6 +116,6 @@ def test_healthy_scan_still_reports_holder(monkeypatch, tmp_path, caplog):
     assert not worker.is_alive()
     assert elapsed < BUDGET, "a fast scan must not wait out the budget"
     assert outcome == [[(4242, watched)]]
-    assert not any(
-        "timed out" in record.getMessage() for record in caplog.records
-    ), "a successful scan must not log a timeout warning"
+    assert not any("timed out" in record.getMessage() for record in caplog.records), (
+        "a successful scan must not log a timeout warning"
+    )

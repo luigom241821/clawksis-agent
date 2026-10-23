@@ -12,8 +12,10 @@ from tools.bot_desktop import runtime, thumbnail
 
 
 def test_concurrent_grabs_each_see_their_own_xauthority(monkeypatch):
-    envs = {"a": {"DISPLAY": ":91", "XAUTHORITY": "/tmp/xauth-a"},
-            "b": {"DISPLAY": ":92", "XAUTHORITY": "/tmp/xauth-b"}}
+    envs = {
+        "a": {"DISPLAY": ":91", "XAUTHORITY": "/tmp/xauth-a"},
+        "b": {"DISPLAY": ":92", "XAUTHORITY": "/tmp/xauth-b"},
+    }
     local = threading.local()
     monkeypatch.setattr(runtime, "published_env", lambda: envs[local.profile])
     monkeypatch.setattr(runtime, "_launcher_pid", lambda: 4242)
@@ -23,8 +25,11 @@ def test_concurrent_grabs_each_see_their_own_xauthority(monkeypatch):
 
     def fake_grab(xdisplay=None):
         seen[xdisplay] = os.environ.get("XAUTHORITY")
-        threading.Event().wait(0.05)  # hold the env long enough for the other thread to collide
+        threading.Event().wait(
+            0.05
+        )  # hold the env long enough for the other thread to collide
         return Image.new("RGB", (8, 8))
+
     monkeypatch.setattr(ImageGrab, "grab", fake_grab)
 
     def worker(profile):

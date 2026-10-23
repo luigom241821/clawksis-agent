@@ -57,7 +57,9 @@ class TestBlocksMutationsInSourceRepo:
         assert hit is True
 
     def test_cd_into_repo_then_checkout(self, repo, tmp_path):
-        hit, _ = _detect(f"cd {repo.as_posix()} && git checkout pr-51020", tmp_path, repo)
+        hit, _ = _detect(
+            f"cd {repo.as_posix()} && git checkout pr-51020", tmp_path, repo
+        )
         assert hit is True
 
     def test_relative_cd_into_repo(self, repo):
@@ -340,7 +342,11 @@ class TestWorktreeTargetingSourceRoot:
         assert hit is True
 
     def test_blocks_dash_c_worktree_remove(self, repo, tmp_path):
-        hit, _ = _detect(f"git -C {tmp_path.as_posix()} worktree remove {repo.as_posix()}", tmp_path, repo)
+        hit, _ = _detect(
+            f"git -C {tmp_path.as_posix()} worktree remove {repo.as_posix()}",
+            tmp_path,
+            repo,
+        )
         assert hit is True
 
     def test_blocks_parent_relative_target_from_subdirectory(self, repo):
@@ -377,7 +383,6 @@ class TestWorktreeTargetingSourceRoot:
 
 
 class TestSourceRootResolution:
-
     def test_worktree_git_file_counts(self, tmp_path, monkeypatch):
         import tools.self_repo_guard as mod
 
@@ -406,8 +411,6 @@ class TestBlockMessageGuidance:
     not a bare "temporary clone" (agents defaulted to /tmp, which is tmpfs
     on most distros — parallel salvage clones running npm ci filled a 32GB
     tmpfs to 97% in one campaign)."""
-
-
 
     def test_scratch_hint_honors_clawk_home(self, repo, monkeypatch, tmp_path):
         home = tmp_path / "custom" / "clawk-home"

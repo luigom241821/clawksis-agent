@@ -72,11 +72,15 @@ def _call(server, method, **params):
 # ── command.dispatch /loop ────────────────────────────────────────────
 
 
-
-
 def test_loop_set_persists(server, session):
     sid, session_key, _ = session
-    r = _call(server, "command.dispatch", name="loop", arg="5m check the deploy", session_id=sid)
+    r = _call(
+        server,
+        "command.dispatch",
+        name="loop",
+        arg="5m check the deploy",
+        session_id=sid,
+    )
     result = r["result"]
     assert result["type"] == "exec"
 
@@ -87,8 +91,6 @@ def test_loop_set_persists(server, session):
     assert mgr.state.prompt == "check the deploy"
     assert mgr.state.status == "active"
     assert mgr.state.interval_seconds == 300.0
-
-
 
 
 def test_loop_pause_resume_stop(server, session):
@@ -132,8 +134,10 @@ def test_tui_tick_fires_when_idle_and_due(server, session):
     def fake_submit(rid, sid_, session_, text, **kwargs):
         fired["text"] = text
 
-    with patch.object(server, "_run_prompt_submit", fake_submit), \
-         patch.object(server, "_emit"):
+    with (
+        patch.object(server, "_run_prompt_submit", fake_submit),
+        patch.object(server, "_emit"),
+    ):
         server._maybe_fire_tui_loop_tick(sid, s)
 
     assert "poll the build" in fired.get("text", "")
@@ -151,8 +155,10 @@ def test_tui_tick_defers_when_running(server, session):
     save_loop(session_key, mgr.state)
     s["running"] = True
 
-    with patch.object(server, "_run_prompt_submit") as submit, \
-         patch.object(server, "_emit"):
+    with (
+        patch.object(server, "_run_prompt_submit") as submit,
+        patch.object(server, "_emit"),
+    ):
         server._maybe_fire_tui_loop_tick(sid, s)
 
     submit.assert_not_called()
@@ -167,18 +173,26 @@ def test_tui_tick_leaves_gateway_routed_loop_for_gateway(server, session):
     from clawk_cli.loops import LoopManager, save_loop
 
     mgr = LoopManager(session_key)
-    mgr.set("poll", interval_seconds=60, route={"platform": "telegram", "chat_id": "42"})
+    mgr.set(
+        "poll", interval_seconds=60, route={"platform": "telegram", "chat_id": "42"}
+    )
     mgr.state.next_due_at = time.time() - 1
     save_loop(session_key, mgr.state)
 
-    with patch.object(server, "_run_prompt_submit") as submit, \
-         patch.object(server, "_emit"):
+    with (
+        patch.object(server, "_run_prompt_submit") as submit,
+        patch.object(server, "_emit"),
+    ):
         server._maybe_fire_tui_loop_tick(sid, s)
 
     submit.assert_not_called()
     assert s["running"] is False
     state = LoopManager(session_key).state
-    assert state.ticks_fired == 0 and not state.awaiting_response and state.next_due_at <= time.time()
+    assert (
+        state.ticks_fired == 0
+        and not state.awaiting_response
+        and state.next_due_at <= time.time()
+    )
 
 
 def test_tui_tick_defers_to_active_goal(server, session):
@@ -192,8 +206,10 @@ def test_tui_tick_defers_to_active_goal(server, session):
     mgr.state.next_due_at = time.time() - 1
     save_loop(session_key, mgr.state)
 
-    with patch.object(server, "_run_prompt_submit") as submit, \
-         patch.object(server, "_emit"):
+    with (
+        patch.object(server, "_run_prompt_submit") as submit,
+        patch.object(server, "_emit"),
+    ):
         server._maybe_fire_tui_loop_tick(sid, s)
 
     submit.assert_not_called()
@@ -208,11 +224,14 @@ def test_tui_tick_noop_when_not_due(server, session):
     mgr.set("poll", interval_seconds=300)
     # New loops are due immediately; push the wakeup out to model "not due".
     from clawk_cli.loops import save_loop
+
     mgr.state.next_due_at = time.time() + 300
     save_loop(session_key, mgr.state)
 
-    with patch.object(server, "_run_prompt_submit") as submit, \
-         patch.object(server, "_emit"):
+    with (
+        patch.object(server, "_run_prompt_submit") as submit,
+        patch.object(server, "_emit"),
+    ):
         server._maybe_fire_tui_loop_tick(sid, s)
 
     submit.assert_not_called()

@@ -7,6 +7,7 @@ may hold uncheckpointed WAL commits). Before this command the only escape hatch 
 ANY foreign process holds the file or a sidecar (``foreign_state_db_holders``), flip without waiting out openers
 (``_set_journal_mode_no_wait``), then verify the header bytes 18/19 SQLite writes for the mode.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -24,26 +25,36 @@ def _header_mode(db_path: Path) -> str:
         head = fh.read(20)
     if len(head) < 20 or head[:16] != b"SQLite format 3\x00":
         return "not-a-database"
-    return _MODE_BY_HEADER_VERSION.get((head[18], head[19]), f"unknown({head[18]}/{head[19]})")
+    return _MODE_BY_HEADER_VERSION.get(
+        (head[18], head[19]), f"unknown({head[18]}/{head[19]})"
+    )
 
 
 def _refusal(target: str, current: str, *, on_cross_vm_fs: bool) -> Optional[str]:
     """Admission checks independent of holder discovery, which is enforced for every platform."""
     if current == "not-a-database" or current.startswith("unknown("):
-        return (f"its file header reads {current}, so it is not a Clawksis SQLite store this command can convert "
-                "(pass --db PATH to point at one).")
+        return (
+            f"its file header reads {current}, so it is not a Clawksis SQLite store this command can convert "
+            "(pass --db PATH to point at one)."
+        )
     if target == "wal" and on_cross_vm_fs:
-        return ("WAL shared memory silently corrupts on cross-VM filesystems (virtiofs/9p — Docker Desktop, "
-                "OrbStack, Lima bind mounts). Keep this store on journal_mode=delete or move it to a native "
-                "filesystem.")
+        return (
+            "WAL shared memory silently corrupts on cross-VM filesystems (virtiofs/9p — Docker Desktop, "
+            "OrbStack, Lima bind mounts). Keep this store on journal_mode=delete or move it to a native "
+            "filesystem."
+        )
     return None
 
 
 def cmd_set_journal_mode(args) -> int:
     from clawk_state import _default_db_path
     from clawk_state_holders import describe_holder_pid, foreign_state_db_holders
-    from clawk_state_wal import (_path_on_cross_vm_fs, _set_journal_mode_no_wait, is_sqlite_wal_reset_vulnerable,
-                                  resolve_journal_mode)
+    from clawk_state_wal import (
+        _path_on_cross_vm_fs,
+        _set_journal_mode_no_wait,
+        is_sqlite_wal_reset_vulnerable,
+        resolve_journal_mode,
+    )
 
     target = args.mode
     db_path = Path(getattr(args, "db", None) or _default_db_path())
@@ -59,14 +70,18 @@ def cmd_set_journal_mode(args) -> int:
         print(f"✓ {db_path} is already journal_mode={target}.")
         return 0
     refusal = _refusal(
-        target, current, on_cross_vm_fs=target == "wal" and _path_on_cross_vm_fs(str(db_path))
+        target,
+        current,
+        on_cross_vm_fs=target == "wal" and _path_on_cross_vm_fs(str(db_path)),
     )
     if refusal:
         print(f"✗ Refusing to change the journal mode of {db_path}: {refusal}")
         return 1
     if target == "wal" and is_sqlite_wal_reset_vulnerable():
-        print(f"✗ Refusing to enable WAL: the linked SQLite {sqlite3.sqlite_version} has the WAL-reset bug "
-              "(https://sqlite.org/wal.html#walresetbug). Upgrade to 3.51.3+ first.")
+        print(
+            f"✗ Refusing to enable WAL: the linked SQLite {sqlite3.sqlite_version} has the WAL-reset bug "
+            "(https://sqlite.org/wal.html#walresetbug). Upgrade to 3.51.3+ first."
+        )
         return 1
     holders = foreign_state_db_holders(db_path)
     if getattr(args, "force", False):
@@ -74,10 +89,14 @@ def cmd_set_journal_mode(args) -> int:
         # scan (the pid <= 0 sentinel), never a process the scan actually found.
         holders = [holder for holder in holders if holder[0] > 0]
     if holders:
-        print(f"✗ Refusing to change the journal mode of {db_path}: other processes hold it open "
-              "(a live switch would destroy their uncheckpointed commits). Stop them and re-run:")
+        print(
+            f"✗ Refusing to change the journal mode of {db_path}: other processes hold it open "
+            "(a live switch would destroy their uncheckpointed commits). Stop them and re-run:"
+        )
         for pid, target_path in holders:
-            print(f"    pid {pid} — {describe_holder_pid(pid) if pid > 0 else 'scan'}: {target_path}")
+            print(
+                f"    pid {pid} — {describe_holder_pid(pid) if pid > 0 else 'scan'}: {target_path}"
+            )
         return 1
     # timeout=0: any opener that appeared between the scan and the flip makes the pragma fail with
     # 'database is locked' instead of sneaking the switch between a writer's transactions.
@@ -90,7 +109,9 @@ def cmd_set_journal_mode(args) -> int:
         try:
             reported = _set_journal_mode_no_wait(conn, target.upper())
         except sqlite3.OperationalError as exc:
-            print(f"✗ journal_mode={target.upper()} refused: {exc} (another opener appeared; nothing was changed)")
+            print(
+                f"✗ journal_mode={target.upper()} refused: {exc} (another opener appeared; nothing was changed)"
+            )
             return 1
     finally:
         conn.close()
@@ -100,11 +121,15 @@ def cmd_set_journal_mode(args) -> int:
         print(f"✗ Cannot re-read {db_path} after the switch: {exc}")
         return 1
     if after != target:
-        print(f"✗ SQLite reported journal_mode={reported or '?'} but the file header reads {after}; not converted.")
+        print(
+            f"✗ SQLite reported journal_mode={reported or '?'} but the file header reads {after}; not converted."
+        )
         return 1
     print(f"✓ {db_path}: journal_mode {current} → {after} (header verified).")
     configured = resolve_journal_mode()
     if configured != target:
-        print(f"  Note: config.yaml has database.journal_mode: {configured} — the next open would switch the file "
-              f"back. Set `database.journal_mode: {target}` in config.yaml to keep it.")
+        print(
+            f"  Note: config.yaml has database.journal_mode: {configured} — the next open would switch the file "
+            f"back. Set `database.journal_mode: {target}` in config.yaml to keep it."
+        )
     return 0

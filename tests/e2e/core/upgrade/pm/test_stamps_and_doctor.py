@@ -37,7 +37,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -70,7 +72,9 @@ def updated(tmp_path_factory, provider):
     target = P.publish_dependency_release(origin, root, 1)
     up = P.update(sb)
     P.ok(up, "clawk update failed")
-    assert P.selected_generation(sb) != installed_gen, "harness: update did not select a new generation"
+    assert P.selected_generation(sb) != installed_gen, (
+        "harness: update did not select a new generation"
+    )
     assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == target
     return {"sb": sb, "target": target, "update": up, "origin": origin, "root": root}
 
@@ -82,11 +86,16 @@ def _venv_clawk(sb: I.Sandbox) -> str:
 def test_managed_env_clawk_can_check_for_updates(updated):
     sb = updated["sb"]
     exe = _venv_clawk(sb)
-    assert Path(exe).is_file(), f"harness: selected generation ships no clawk console script: {exe}"
+    assert Path(exe).is_file(), (
+        f"harness: selected generation ships no clawk console script: {exe}"
+    )
     cp = sb.run([exe, "update", "--check"], timeout=300)
     assert cp.returncode == 0 and "Not a git repository" not in cp.stdout + cp.stderr, (
-        "`clawk update --check` from the managed environment: " + (cp.stdout + cp.stderr).strip()[-400:]
-        + "\n" + I.describe(cp))
+        "`clawk update --check` from the managed environment: "
+        + (cp.stdout + cp.stderr).strip()[-400:]
+        + "\n"
+        + I.describe(cp)
+    )
 
 
 def test_managed_env_clawk_reports_the_checkout_as_the_install(updated):
@@ -94,22 +103,37 @@ def test_managed_env_clawk_reports_the_checkout_as_the_install(updated):
     cp = P.ok(sb.run([_venv_clawk(sb), "--version"], timeout=300))
     shown = re.search(r"Install directory: (.+)", cp.stdout)
     method = re.search(r"Install method: (.+)", cp.stdout)
-    with known_failure(r"managed-environment clawk reports install .*/environments/[0-9a-f]+/workspace",
-                       "gated on #122425: the workspace copy carries no install metadata"):
-        assert shown and shown.group(1).strip() == str(sb.checkout) and method and method.group(1).strip() == "git", (
+    with known_failure(
+        r"managed-environment clawk reports install .*/environments/[0-9a-f]+/workspace",
+        "gated on #122425: the workspace copy carries no install metadata",
+    ):
+        assert (
+            shown
+            and shown.group(1).strip() == str(sb.checkout)
+            and method
+            and method.group(1).strip() == "git"
+        ), (
             f"managed-environment clawk reports install {shown and shown.group(1)} "
-            f"(method {method and method.group(1)}), not the checkout {sb.checkout}:\n{cp.stdout}")
+            f"(method {method and method.group(1)}), not the checkout {sb.checkout}:\n{cp.stdout}"
+        )
 
 
-def test_doctor_on_a_healthy_pm_install_reports_no_command_installation_problem(updated):
+def test_doctor_on_a_healthy_pm_install_reports_no_command_installation_problem(
+    updated,
+):
     sb = updated["sb"]
     cp = sb.cli("doctor", timeout=300)
     assert I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
     section = _section(cp.stdout, "Command Installation")
     assert section, "doctor printed no Command Installation section:\n" + I.describe(cp)
     bad = [line for line in section if line.lstrip().startswith(("⚠", "✗"))]
-    assert not bad, f"clawk doctor reports a launcher problem on a healthy PM install: {bad}\n" + I.describe(cp)
-    assert f"Clawksis entry point exists ({sb.checkout / 'clawk'})" in cp.stdout, "\n".join(section)
+    assert not bad, (
+        f"clawk doctor reports a launcher problem on a healthy PM install: {bad}\n"
+        + I.describe(cp)
+    )
+    assert f"Clawksis entry point exists ({sb.checkout / 'clawk'})" in cp.stdout, (
+        "\n".join(section)
+    )
 
 
 def test_pm_status_receipt_reports_the_successful_update(updated):
@@ -117,17 +141,25 @@ def test_pm_status_receipt_reports_the_successful_update(updated):
     receipt = json.loads(P.ok(sb.cli("pm", "status")).stdout)
     code = receipt.get("exit_code", receipt.get("pm_exit_code"))
     assert code == 0 and receipt.get("outcome") in ("ok", "success"), (
-        f"`clawk pm status` does not report the last (successful) update as a success: {receipt}")
+        f"`clawk pm status` does not report the last (successful) update as a success: {receipt}"
+    )
 
 
 @pytest.fixture(scope="module")
 def drifted(updated):
     """The user removes fastapi (the ``web`` extra) from the selected environment by hand."""
     sb = updated["sb"]
-    assert P.managed_imports(sb, "fastapi")["fastapi"] == "ok", "harness: fastapi not installed to begin with"
+    assert P.managed_imports(sb, "fastapi")["fastapi"] == "ok", (
+        "harness: fastapi not installed to begin with"
+    )
     uv = next((sb.clawk_home / "tools").glob("uv-*/uv"), None) or I.real_uv()
-    P.ok(sb.run([str(uv), "pip", "uninstall", "--python", sb.python, "fastapi"]), "harness: uninstall failed")
-    assert P.managed_imports(sb, "fastapi")["fastapi"] != "ok", "harness: fastapi still importable"
+    P.ok(
+        sb.run([str(uv), "pip", "uninstall", "--python", sb.python, "fastapi"]),
+        "harness: uninstall failed",
+    )
+    assert P.managed_imports(sb, "fastapi")["fastapi"] != "ok", (
+        "harness: fastapi still importable"
+    )
     doctor = sb.cli("doctor", timeout=300)
     repair = sb.cli("pm", "repair")
     return {"sb": sb, "doctor": doctor, "repair": repair}
@@ -136,19 +168,30 @@ def drifted(updated):
 def test_doctor_reports_web_extra_drift(drifted):
     cp = drifted["doctor"]
     assert I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
-    flagged = [line for line in cp.stdout.splitlines()
-               if re.search(r"(?i)fastapi|dashboard|web extra|\bweb\b.*(missing|not installed)", line)
-               and line.lstrip().startswith(("⚠", "✗"))]
-    assert flagged, ("clawk doctor is silent about fastapi missing from the selected environment "
-                     f"(rc={cp.returncode})\n" + I.describe(cp))
+    flagged = [
+        line
+        for line in cp.stdout.splitlines()
+        if re.search(
+            r"(?i)fastapi|dashboard|web extra|\bweb\b.*(missing|not installed)", line
+        )
+        and line.lstrip().startswith(("⚠", "✗"))
+    ]
+    assert flagged, (
+        "clawk doctor is silent about fastapi missing from the selected environment "
+        f"(rc={cp.returncode})\n" + I.describe(cp)
+    )
 
 
 def test_pm_repair_heals_the_drift(drifted):
     sb, rp = drifted["sb"], drifted["repair"]
-    assert rp.returncode == 0, "clawk pm repair failed on a drifted environment:\n" + P.diagnostics(sb, rp)
+    assert rp.returncode == 0, (
+        "clawk pm repair failed on a drifted environment:\n" + P.diagnostics(sb, rp)
+    )
     imports = P.managed_imports(sb, "fastapi", "clawk_cli.web_server")
     assert set(imports.values()) == {"ok"}, (
-        f"`clawk pm repair` exited 0 but the dashboard still cannot import: {imports}\n" + P.diagnostics(sb, rp))
+        f"`clawk pm repair` exited 0 but the dashboard still cannot import: {imports}\n"
+        + P.diagnostics(sb, rp)
+    )
 
 
 def test_failed_dependency_update_is_an_owed_followup(updated):
@@ -159,22 +202,43 @@ def test_failed_dependency_update_is_an_owed_followup(updated):
     sb = updated["sb"]
     before = P.selected_generation(sb)
     origin, scratch = updated["origin"], updated["root"]
-    lock = I.git("show", "main:uv.lock", cwd=origin) + '\n[[package]]\nname = "e2e-broken"\n'
-    target = I.publish_commit(origin, scratch, "release: e2e broken lockfile", {"uv.lock": lock})
+    lock = (
+        I.git("show", "main:uv.lock", cwd=origin)
+        + '\n[[package]]\nname = "e2e-broken"\n'
+    )
+    target = I.publish_commit(
+        origin, scratch, "release: e2e broken lockfile", {"uv.lock": lock}
+    )
     up = P.update(sb)
     receipt = json.loads(P.ok(sb.cli("pm", "status")).stdout)
     assert up.returncode == 0, (
         "`clawk update` failed although the code committed; a dependency sync after the tree moved "
-        "is an owed follow-up (A6)\n" + P.diagnostics(sb, up))
-    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == target, "the code update did not land\n" + P.diagnostics(sb, up)
-    assert re.search(r"⚠ Update follow-up 'dependencies' did not finish: .*dependencies not installed yet",
-                     up.stdout + up.stderr), "the owed dependency sync is not reported loudly\n" + P.diagnostics(sb, up)
+        "is an owed follow-up (A6)\n" + P.diagnostics(sb, up)
+    )
+    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == target, (
+        "the code update did not land\n" + P.diagnostics(sb, up)
+    )
+    assert re.search(
+        r"⚠ Update follow-up 'dependencies' did not finish: .*dependencies not installed yet",
+        up.stdout + up.stderr,
+    ), "the owed dependency sync is not reported loudly\n" + P.diagnostics(sb, up)
     assert receipt.get("outcome") == "success" and "dependencies" in [
-        f.get("step") for f in receipt.get("followups") or []], (
-        f"the receipt does not name the owed dependency sync: {receipt}\n" + P.diagnostics(sb, up))
-    assert P.pending_marker(sb).exists(), "the owed source-update tail is not armed for the next launch"
-    assert P.selected_generation(sb) == before, "a failed dependency sync switched the selected generation"
+        f.get("step") for f in receipt.get("followups") or []
+    ], (
+        f"the receipt does not name the owed dependency sync: {receipt}\n"
+        + P.diagnostics(sb, up)
+    )
+    assert P.pending_marker(sb).exists(), (
+        "the owed source-update tail is not armed for the next launch"
+    )
+    assert P.selected_generation(sb) == before, (
+        "a failed dependency sync switched the selected generation"
+    )
     imports = P.managed_imports(sb, "pydantic", "openai")
-    assert set(imports.values()) == {"ok"}, f"the install no longer works after a failed update: {imports}"
+    assert set(imports.values()) == {"ok"}, (
+        f"the install no longer works after a failed update: {imports}"
+    )
     cp = sb.cli("--version")
-    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
+    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(
+        cp
+    )

@@ -28,6 +28,7 @@ def ensure_install_id(config: dict[str, Any]) -> str:
     minted = str(uuid.uuid4())
     try:
         from clawk_cli.config import load_config, save_config
+
         fresh = load_config()
         if isinstance(fresh, dict):
             slot = fresh.setdefault("monitoring", {})

@@ -115,7 +115,9 @@ async def test_without_since_the_stream_starts_at_the_boards_tail(monkeypatch):
     mod = _load_plugin_module()
     conn, ws = _Conn(), _Ws({})
     await _drive(monkeypatch, mod, ws, conn, polls=2)
-    assert _poll_cursors(conn)[0] == (450,), "the first poll must start at the tail, not at 0"
+    assert _poll_cursors(conn)[0] == (450,), (
+        "the first poll must start at the tail, not at 0"
+    )
     assert [event["id"] for frame in ws.sent for event in frame["events"]] == [451]
     assert ws.sent[-1]["cursor"] == 451
     assert len(set(conn.thread_ids)) == 1

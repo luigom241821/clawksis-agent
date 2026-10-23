@@ -11,10 +11,20 @@ import os
 from typing import Any, Dict, List, Optional
 
 from agent.secret_scope import get_secret
-from agent.image_gen_provider import DEFAULT_ASPECT_RATIO, resolve_aspect_ratio, success_response
+from agent.image_gen_provider import (
+    DEFAULT_ASPECT_RATIO,
+    resolve_aspect_ratio,
+    success_response,
+)
 from plugins.image_gen._common import (
-    StaticImageGenProvider, error_factory, import_openai, load_image_gen_config, materialize_image,
-    prompt_required_error, size_for)
+    StaticImageGenProvider,
+    error_factory,
+    import_openai,
+    load_image_gen_config,
+    materialize_image,
+    prompt_required_error,
+    size_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +45,9 @@ def _format_catalog_row(item: dict[str, Any]) -> dict[str, Any]:
     metadata = item.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
     row: dict[str, Any] = {
-        "id": mid, "display": mid.split("/", 1)[-1], "strengths": metadata.get("description", ""),
+        "id": mid,
+        "display": mid.split("/", 1)[-1],
+        "strengths": metadata.get("description", ""),
     }
     pricing = metadata.get("pricing")
     if isinstance(pricing, dict) and pricing.get("per_image_unit") is not None:
@@ -67,8 +79,12 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
     provider_id = "deepinfra"
     label = "DeepInfra"
     setup = dict(
-        name="DeepInfra", badge="paid", tag="FLUX, Qwen-Image, … — live catalog from api.deepinfra.com",
-        key="DEEPINFRA_API_KEY", prompt="DeepInfra API key", url="https://deepinfra.com/dash/api_keys",
+        name="DeepInfra",
+        badge="paid",
+        tag="FLUX, Qwen-Image, … — live catalog from api.deepinfra.com",
+        key="DEEPINFRA_API_KEY",
+        prompt="DeepInfra API key",
+        url="https://deepinfra.com/dash/api_keys",
     )
 
     def is_available(self) -> bool:
@@ -85,7 +101,9 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
         """DeepInfra's OpenAI-compatible generation surface is text-only."""
         return {"modalities": ["text"], "max_reference_images": 0}
 
-    def generate(self, prompt: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, **kwargs: Any) -> dict[str, Any]:
+    def generate(
+        self, prompt: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, **kwargs: Any
+    ) -> dict[str, Any]:
         prompt = (prompt or "").strip()
         aspect = resolve_aspect_ratio(aspect_ratio)
         fail = error_factory("deepinfra", aspect)
@@ -93,7 +111,9 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
             return fail(
                 "DeepInfra image generation is text-to-image only in this "
                 "backend; image_url and reference_image_urls are unsupported.",
-                "modality_unsupported", prompt=prompt)
+                "modality_unsupported",
+                prompt=prompt,
+            )
         if not prompt:
             return prompt_required_error("deepinfra", aspect)
         api_key = (get_secret("DEEPINFRA_API_KEY", "") or "").strip()
@@ -102,7 +122,8 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
                 "DEEPINFRA_API_KEY not set. Run `clawk tools` → Image "
                 "Generation → DeepInfra to configure, or `clawk setup` "
                 "to add the key.",
-                "auth_required")
+                "auth_required",
+            )
         di_cfg = load_image_gen_config("deepinfra")
         model_id = _resolve_model(_live_models() or [], di_cfg)
         if not model_id:
@@ -111,7 +132,9 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
                 "config.yaml under image_gen.deepinfra.model, set "
                 "DEEPINFRA_IMAGE_MODEL, or check connectivity to "
                 "api.deepinfra.com so the live catalog can be fetched.",
-                "no_model_available", prompt=prompt)
+                "no_model_available",
+                prompt=prompt,
+            )
         size = size_for(aspect)
         from clawk_cli.models import deepinfra_base_url
 
@@ -122,7 +145,9 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
         fail = error_factory("deepinfra", aspect, model=model_id, prompt=prompt)
         client = openai.OpenAI(api_key=api_key, base_url=deepinfra_base_url(di_cfg))
         try:
-            response = client.images.generate(model=model_id, prompt=prompt, size=size, n=1)
+            response = client.images.generate(
+                model=model_id, prompt=prompt, size=size, n=1
+            )
         except Exception as exc:
             logger.debug("DeepInfra image generation failed", exc_info=True)
             return fail(f"DeepInfra image generation failed: {exc}", "api_error")
@@ -138,16 +163,28 @@ class DeepInfraImageGenProvider(StaticImageGenProvider):
         # Prefix drops ``vendor/`` and colons (single path component on every OS); delivery URLs
         # are short-lived, so materialise locally best-effort.
         image_ref, err = materialize_image(
-            getattr(first, "b64_json", None), getattr(first, "url", None),
-            prefix=f"deepinfra_{model_id.split('/', 1)[-1].replace(':', '_')}", label="DeepInfra",
-            provider="deepinfra", model=model_id, prompt=prompt, aspect=aspect,
+            getattr(first, "b64_json", None),
+            getattr(first, "url", None),
+            prefix=f"deepinfra_{model_id.split('/', 1)[-1].replace(':', '_')}",
+            label="DeepInfra",
+            provider="deepinfra",
+            model=model_id,
+            prompt=prompt,
+            aspect=aspect,
             on_url_fail=lambda exc: logger.debug(
-                "DeepInfra: caching delivery URL failed (%s); returning URL", exc))
+                "DeepInfra: caching delivery URL failed (%s); returning URL", exc
+            ),
+        )
         if err:
             return err
         return success_response(
-            image=image_ref, model=model_id, prompt=prompt, aspect_ratio=aspect, provider="deepinfra",
-            extra={"size": size})
+            image=image_ref,
+            model=model_id,
+            prompt=prompt,
+            aspect_ratio=aspect,
+            provider="deepinfra",
+            extra={"size": size},
+        )
 
 
 def register(ctx) -> None:

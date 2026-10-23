@@ -32,8 +32,6 @@ def _reset_registry():
 
 
 class TestRegisterProvider:
-
-
     def test_rejects_empty_name(self):
         class Empty(VideoGenProvider):
             @property
@@ -46,7 +44,6 @@ class TestRegisterProvider:
         with pytest.raises(ValueError):
             video_gen_registry.register_provider(Empty())
 
-
     def test_list_is_sorted(self):
         video_gen_registry.register_provider(_FakeProvider("zeta"))
         video_gen_registry.register_provider(_FakeProvider("alpha"))
@@ -55,9 +52,6 @@ class TestRegisterProvider:
 
 
 class TestGetActiveProvider:
-
-
-
     def test_single_available_among_many_autoresolves(self, tmp_path, monkeypatch):
         """When several providers are registered but only one has credentials
         (is_available()), that one is auto-selected without config. This is the
@@ -70,7 +64,6 @@ class TestGetActiveProvider:
         video_gen_registry.register_provider(_FakeProvider("deepinfra", available=True))
         active = video_gen_registry.get_active_provider()
         assert active is not None and active.name == "deepinfra"
-
 
     def test_unknown_explicit_config_fails_closed(self, tmp_path, monkeypatch):
         """A typo must not silently route a paid request to another backend."""

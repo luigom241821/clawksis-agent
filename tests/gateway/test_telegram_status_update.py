@@ -38,8 +38,10 @@ def _install_fake_telegram(monkeypatch):
     fake_constants = types.ModuleType("telegram.constants")
     fake_constants.ParseMode = SimpleNamespace(MARKDOWN_V2="MarkdownV2")
     fake_constants.ChatType = SimpleNamespace(
-        GROUP="group", SUPERGROUP="supergroup",
-        CHANNEL="channel", PRIVATE="private",
+        GROUP="group",
+        SUPERGROUP="supergroup",
+        CHANNEL="channel",
+        PRIVATE="private",
     )
     fake_telegram.constants = fake_constants
 
@@ -104,5 +106,3 @@ async def test_distinct_status_keys_do_not_collide(adapter):
     adapter.edit_message.assert_not_awaited()
     assert adapter._status_message_ids[("chat-1", "lifecycle")] == "100"
     assert adapter._status_message_ids[("chat-1", "model-switch")] == "200"
-
-

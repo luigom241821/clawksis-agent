@@ -158,11 +158,20 @@ class TestPruneSkipsLiveTurns:
         _insert(db, "live-junk", age_days=45)
         _insert(db, "dead-junk", age_days=45)
         _insert(db, "gone-junk", age_days=45)
-        for sid, scope in (("live-junk", "/tmp/pytest-live"), ("gone-junk", "/tmp/pytest-gone")):
+        for sid, scope in (
+            ("live-junk", "/tmp/pytest-live"),
+            ("gone-junk", "/tmp/pytest-gone"),
+        ):
             db.save_gateway_routing_entry(
-                f"agent:main:telegram:dm:{sid}", json.dumps({"session_id": sid}), scope=scope)
+                f"agent:main:telegram:dm:{sid}",
+                json.dumps({"session_id": sid}),
+                scope=scope,
+            )
         holder = f"pid={os.getpid()}:turn=1"
-        assert db.try_acquire_session_turn_lease("live-junk", holder, ttl_seconds=300.0) is True
+        assert (
+            db.try_acquire_session_turn_lease("live-junk", holder, ttl_seconds=300.0)
+            is True
+        )
 
         # gone-junk vanishes between listing and the sweep (a concurrent delete): it is not
         # counted as deleted or skipped, but its routing entry must still go — a stale entry
@@ -182,7 +191,9 @@ class TestPruneSkipsLiveTurns:
         assert db.get_session("live-junk") is not None
         remaining = {
             r[0]
-            for r in db._conn.execute("SELECT session_key FROM gateway_routing").fetchall()
+            for r in db._conn.execute(
+                "SELECT session_key FROM gateway_routing"
+            ).fetchall()
         }
         assert remaining == {"agent:main:telegram:dm:live-junk"}
 

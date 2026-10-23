@@ -45,7 +45,10 @@ from pm.network import edge_block, is_transient, retry_network
 # TUR's pool 302s to) 403s unknown tool UAs from CI runner IP ranges --
 # their docs require a real User-Agent. A browser-shaped one is the
 # least-privileged string every asset CDN accepts.
-_UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) clawk-pm/1.0", "Accept-Encoding": "identity"}
+_UA = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) clawk-pm/1.0",
+    "Accept-Encoding": "identity",
+}
 _LOOPBACK = ("http://127.0.0.1:", "http://localhost:", "http://[::1]:")
 _CHUNK = 1 << 20  # read/write block, also the minimum range size
 
@@ -87,17 +90,27 @@ class DownloadError(RuntimeError):
 
 def _validate_range(response, start: int, end: int, total: int | None = None) -> int:
     """A range body is useful only for the exact requested interval."""
-    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("Content-Range", ""))
+    match = re.fullmatch(
+        r"bytes (\d+)-(\d+)/(\d+)", response.headers.get("Content-Range", "")
+    )
     if response.status != 206 or match is None:
         raise _RangeError("server did not honor the requested byte range")
     first, last, size = map(int, match.groups())
-    if (first, last) != (start, end - 1) or size < end or (total is not None and size != total):
-        raise _RangeError("server returned a different byte range or representation size")
+    if (
+        (first, last) != (start, end - 1)
+        or size < end
+        or (total is not None and size != total)
+    ):
+        raise _RangeError(
+            "server returned a different byte range or representation size"
+        )
     length = response.headers.get("Content-Length")
     if length is not None and (not length.isdecimal() or int(length) != end - start):
         raise _RangeError("range Content-Length does not match its bounds")
     if response.headers.get("Content-Encoding", "identity").lower() != "identity":
-        raise _RangeError("encoded response cannot be written into an identity byte range")
+        raise _RangeError(
+            "encoded response cannot be written into an identity byte range"
+        )
     return size
 
 
@@ -137,10 +150,14 @@ class DownloadTransportError(DownloadError):
         # Any 5xx is the upstream host failing, not its bytes changing: a CDN's
         # origin-down codes (520-527) are what a dead third-party host returns.
         self.fallback_allowed = (
-            self.status in (401, 403, 404, 410) or (self.status or 0) >= 500
-            or unresolved or is_transient(cause)
+            self.status in (401, 403, 404, 410)
+            or (self.status or 0) >= 500
+            or unresolved
+            or is_transient(cause)
         )
-        refused = edge_block(cause) or ("the host refused access" if self.status in (401, 403) else None)
+        refused = edge_block(cause) or (
+            "the host refused access" if self.status in (401, 403) else None
+        )
         reason = f"{cause}; {refused}" if refused else str(cause)
         super().__init__(f"download failed from {url}: {reason}")
 
@@ -200,7 +217,9 @@ def _sha256_file(path: Path) -> str:
 _RELEASE_WAIT_SECONDS = 60.0
 
 
-def replace_when_released(tmp: Path, dest: Path, *, timeout: float = _RELEASE_WAIT_SECONDS) -> None:
+def replace_when_released(
+    tmp: Path, dest: Path, *, timeout: float = _RELEASE_WAIT_SECONDS
+) -> None:
     """Rename a finished download into place, waiting out a transient hold on the file.
 
     On Windows a multi-gigabyte file whose last write handle just closed is often still open
@@ -220,7 +239,8 @@ def replace_when_released(tmp: Path, dest: Path, *, timeout: float = _RELEASE_WA
             if time.monotonic() >= deadline:
                 raise RuntimeError(
                     f"The download finished, but another program (usually an antivirus scan) kept "
-                    f"{tmp.name} open and it could not be renamed into place. Please try again.") from exc
+                    f"{tmp.name} open and it could not be renamed into place. Please try again."
+                ) from exc
             time.sleep(delay)
             delay = min(delay * 2, 2.0)
 
@@ -268,7 +288,9 @@ class Download:
         partials_dir: Optional[Path] = None,
         pause_event: Optional[threading.Event] = None,
     ):
-        self.sources = [Source(s.url, Path(s.dest), s.sha256, tuple(s.fallbacks)) for s in sources]
+        self.sources = [
+            Source(s.url, Path(s.dest), s.sha256, tuple(s.fallbacks)) for s in sources
+        ]
         self.resume = resume
         self.connections = max(1, int(connections))
         if partials_dir:
@@ -314,9 +336,13 @@ class Download:
                 remote = _Remote(source.dest.stat().st_size, False)
                 covered = [(0, remote.total)]
             else:
-                source, remote = self._try_sources(source, lambda candidate: self._probe(candidate.url), failures[key])
+                source, remote = self._try_sources(
+                    source, lambda candidate: self._probe(candidate.url), failures[key]
+                )
                 covered = []
-                with partial_lock(self.partials_dir, self._key(source.url), wait=False) as acquired:
+                with partial_lock(
+                    self.partials_dir, self._key(source.url), wait=False
+                ) as acquired:
                     if acquired and remote.ranged:
                         covered = self._partial_ranges(source, remote)
                 if not remote.total:
@@ -325,7 +351,9 @@ class Download:
             totals[key] = remote.total
             coverage[key] = covered
 
-        def report(key: str, written: _Ranges, total: int, *, complete: bool = False) -> None:
+        def report(
+            key: str, written: _Ranges, total: int, *, complete: bool = False
+        ) -> None:
             totals[key] = total
             if total or complete:
                 unknown.discard(key)
@@ -344,15 +372,19 @@ class Download:
             def tick(written: _Ranges, total: int) -> None:
                 report(key, written, total)
 
-            _, size = self._try_sources(source, lambda candidate: self._transfer(candidate, tick), failures[key])
+            _, size = self._try_sources(
+                source, lambda candidate: self._transfer(candidate, tick), failures[key]
+            )
             report(key, [(0, size)], size, complete=True)
         return [source.dest for source in self.sources]
 
-    def _try_sources(self, source: Source, operation, failures: list[DownloadTransportError]):
+    def _try_sources(
+        self, source: Source, operation, failures: list[DownloadTransportError]
+    ):
         urls = tuple(dict.fromkeys((source.url, *source.fallbacks)))
         for index, url in enumerate(urls):
             self._check_pause()
-            candidate = Source(url, source.dest, source.sha256, urls[index + 1:])
+            candidate = Source(url, source.dest, source.sha256, urls[index + 1 :])
             try:
                 return candidate, operation(candidate)
             except DownloadTransportError as exc:
@@ -360,13 +392,19 @@ class Download:
                 if not exc.fallback_allowed or index == len(urls) - 1:
                     if len(failures) == 1:
                         raise
-                    raise DownloadError("\n".join(str(error) for error in failures)) from exc
-                logging.getLogger(__name__).debug("%s; trying pinned mirror %s", exc, urls[index + 1])
+                    raise DownloadError(
+                        "\n".join(str(error) for error in failures)
+                    ) from exc
+                logging.getLogger(__name__).debug(
+                    "%s; trying pinned mirror %s", exc, urls[index + 1]
+                )
 
     def _transfer(self, source: Source, tick) -> int:
         from pm.download_state import partial_lock
 
-        with partial_lock(self.partials_dir, self._key(source.url), cancelled=self._paused.is_set) as acquired:
+        with partial_lock(
+            self.partials_dir, self._key(source.url), cancelled=self._paused.is_set
+        ) as acquired:
             if not acquired:
                 raise DownloadPaused(source.url)
             self._check_pause()
@@ -374,7 +412,10 @@ class Download:
                 return source.dest.stat().st_size
             # Recheck identity after waiting for another process's partial.
             remote = self._probe(source.url)
-            tick(self._partial_ranges(source, remote) if remote.ranged else [], remote.total)
+            tick(
+                self._partial_ranges(source, remote) if remote.ranged else [],
+                remote.total,
+            )
 
             def report(written: _Ranges) -> None:
                 tick(written, remote.total)
@@ -395,8 +436,11 @@ class Download:
             finally:
                 self.connections = configured_connections
             partial_key = self._key(source.url)
-            self._finalize(source, self.partials_dir / f"{partial_key}.part",
-                           self.partials_dir / f"{partial_key}.ranges")
+            self._finalize(
+                source,
+                self.partials_dir / f"{partial_key}.part",
+                self.partials_dir / f"{partial_key}.ranges",
+            )
             return size
 
     # ── internals ─────────────────────────────────────────────
@@ -424,8 +468,13 @@ class Download:
                         raise _RangeError("range probe returned the wrong byte count")
                     return _Remote(total, True, etag)
                 if response.status != 200:
-                    raise DownloadError(f"unexpected download probe status: {response.status}")
-                return _Remote(int(response.headers.get("Content-Length") or 0), False, etag)
+                    raise DownloadError(
+                        f"unexpected download probe status: {response.status}"
+                    )
+                return _Remote(
+                    int(response.headers.get("Content-Length") or 0), False, etag
+                )
+
         try:
             return retry_network(request, wait=self._wait_retry)
         except (OSError, http.client.HTTPException) as exc:
@@ -438,17 +487,24 @@ class Download:
     def _key(self, url: str) -> str:
         return hashlib.sha256(url.encode("utf-8")).hexdigest()
 
-    def _load_sidecar(self, side: Path, part: Path, remote: _Remote, sha256: str) -> _Ranges:
+    def _load_sidecar(
+        self, side: Path, part: Path, remote: _Remote, sha256: str
+    ) -> _Ranges:
         if not self.resume or not (sha256 or remote.etag):
             return []
         try:
             data = json.loads(side.read_text(encoding="utf-8"))
-            if (data["total"], data["etag"], data["sha256"]) != (remote.total, remote.etag, sha256):
+            if (data["total"], data["etag"], data["sha256"]) != (
+                remote.total,
+                remote.etag,
+                sha256,
+            ):
                 return []
             size = part.stat().st_size
             ranges = data["ranges"]
             if not isinstance(ranges, list) or any(
-                not isinstance(row, list) or len(row) != 2
+                not isinstance(row, list)
+                or len(row) != 2
                 or any(type(value) is not int for value in row)
                 or not 0 <= row[0] < row[1] <= min(size, remote.total)
                 for row in ranges
@@ -460,18 +516,29 @@ class Download:
 
     def _partial_ranges(self, source: Source, remote: _Remote) -> _Ranges:
         key = self._key(source.url)
-        return self._load_sidecar(self.partials_dir / f"{key}.ranges",
-                                  self.partials_dir / f"{key}.part", remote, source.sha256)
+        return self._load_sidecar(
+            self.partials_dir / f"{key}.ranges",
+            self.partials_dir / f"{key}.part",
+            remote,
+            source.sha256,
+        )
 
     @staticmethod
-    def _write_sidecar(side: Path, part: Path, covered: _Ranges, remote: _Remote, sha256: str) -> None:
+    def _write_sidecar(
+        side: Path, part: Path, covered: _Ranges, remote: _Remote, sha256: str
+    ) -> None:
         from pm.filesystem import durable_write_bytes
 
         # All writers have closed before coverage is persisted. A sidecar can
         # describe durable bytes, never data still buffered in a worker.
         with part.open("r+b") as stream:
             os.fsync(stream.fileno())
-        record = {"total": remote.total, "etag": remote.etag, "sha256": sha256, "ranges": covered}
+        record = {
+            "total": remote.total,
+            "etag": remote.etag,
+            "sha256": sha256,
+            "ranges": covered,
+        }
         durable_write_bytes(side, json.dumps(record).encode("utf-8"))
 
     def _fetch_ranged(self, source: Source, remote: _Remote, tick) -> int:
@@ -482,10 +549,18 @@ class Download:
         with part.open("r+b" if covered else "w+b") as stream:
             stream.truncate(remote.total)
         while True:
-            gap_count = len(_missing(remote.total, covered)) if covered else (remote.total + _CHUNK - 1) // _CHUNK
+            gap_count = (
+                len(_missing(remote.total, covered))
+                if covered
+                else (remote.total + _CHUNK - 1) // _CHUNK
+            )
             connections = max(1, min(self.connections, gap_count))
-            covered, errors = self._ranged_attempt(source, remote, part, covered, connections, tick)
-            protocol_error = next((error for error in errors if isinstance(error, _RangeError)), None)
+            covered, errors = self._ranged_attempt(
+                source, remote, part, covered, connections, tick
+            )
+            protocol_error = next(
+                (error for error in errors if isinstance(error, _RangeError)), None
+            )
             if protocol_error is not None:
                 part.unlink(missing_ok=True)
                 side.unlink(missing_ok=True)
@@ -495,29 +570,42 @@ class Download:
                 raise DownloadPaused(source.url)
             if errors:
                 if self.connections > 1 and all(
-                    isinstance(error, urllib.error.HTTPError) and error.code in (403, 404)
+                    isinstance(error, urllib.error.HTTPError)
+                    and error.code in (403, 404)
                     for error in errors
                 ):
                     logging.getLogger(__name__).warning(
-                        "parallel range fetch refused for %s; retrying with one connection", source.url,
+                        "parallel range fetch refused for %s; retrying with one connection",
+                        source.url,
                     )
                     self.connections = 1
                     continue
-                raise next((error for error in errors if not is_transient(error)), errors[0])
+                raise next(
+                    (error for error in errors if not is_transient(error)), errors[0]
+                )
             written = sum(end - start for start, end in covered)
             if written != remote.total:
                 raise http.client.IncompleteRead(b"", remote.total - written)
             return written
 
-    def _ranged_attempt(self, source: Source, remote: _Remote, part: Path,
-                        covered: _Ranges, connections: int, tick) -> tuple[_Ranges, list[Exception]]:
+    def _ranged_attempt(
+        self,
+        source: Source,
+        remote: _Remote,
+        part: Path,
+        covered: _Ranges,
+        connections: int,
+        tick,
+    ) -> tuple[_Ranges, list[Exception]]:
         from concurrent.futures import ThreadPoolExecutor
 
         ranges = _missing(remote.total, covered)
         if not covered:
             count = max(1, min(connections, (remote.total + _CHUNK - 1) // _CHUNK))
-            ranges = [(index * remote.total // count, (index + 1) * remote.total // count)
-                      for index in range(count)]
+            ranges = [
+                (index * remote.total // count, (index + 1) * remote.total // count)
+                for index in range(count)
+            ]
         lock = threading.Lock()
         errors: list[Exception] = []
         stop = threading.Event()
@@ -535,10 +623,15 @@ class Download:
                 if remote.etag:
                     headers["If-Range"] = remote.etag
                 request = urllib.request.Request(source.url, headers=headers)
-                with _OPENER.open(request, timeout=120) as response, part.open("r+b") as stream:
+                with (
+                    _OPENER.open(request, timeout=120) as response,
+                    part.open("r+b") as stream,
+                ):
                     _validate_range(response, start, end, remote.total)
                     if remote.etag and _strong_etag(response) != remote.etag:
-                        raise _RangeError("remote representation changed during download")
+                        raise _RangeError(
+                            "remote representation changed during download"
+                        )
                     stream.seek(start)
                     position = start
                     while position < end:
@@ -565,7 +658,9 @@ class Download:
                     pending -= 1
                     updated.set()
 
-        with ThreadPoolExecutor(max_workers=connections, thread_name_prefix="clawk-download") as pool:
+        with ThreadPoolExecutor(
+            max_workers=connections, thread_name_prefix="clawk-download"
+        ) as pool:
             futures = [pool.submit(worker, start, end) for start, end in ranges]
             observer_failed = False
             finished = not ranges
@@ -602,13 +697,23 @@ class Download:
         covered: _Ranges = []
         request = urllib.request.Request(source.url, headers=_UA)
         try:
-            with _OPENER.open(request, timeout=120) as response, part.open("wb") as stream:
+            with (
+                _OPENER.open(request, timeout=120) as response,
+                part.open("wb") as stream,
+            ):
                 if response.status != 200:
-                    raise DownloadError(f"unexpected download status: {response.status}")
+                    raise DownloadError(
+                        f"unexpected download status: {response.status}"
+                    )
                 if remote.etag and _strong_etag(response) != remote.etag:
                     raise _RangeError("remote representation changed during download")
-                if response.headers.get("Content-Encoding", "identity").lower() != "identity":
-                    raise DownloadError("encoded response cannot be used as an identity download")
+                if (
+                    response.headers.get("Content-Encoding", "identity").lower()
+                    != "identity"
+                ):
+                    raise DownloadError(
+                        "encoded response cannot be used as an identity download"
+                    )
                 declared = int(response.headers.get("Content-Length") or 0)
                 position = 0
                 while True:
@@ -624,9 +729,15 @@ class Download:
                 if self._paused.is_set():
                     raise DownloadPaused(source.url)
                 if position < (declared or remote.total):
-                    raise http.client.IncompleteRead(b"", (declared or remote.total) - position)
-                if (declared and position != declared) or (remote.total and position != remote.total):
-                    raise DownloadError(f"download incomplete ({position} bytes, expected {declared or remote.total})")
+                    raise http.client.IncompleteRead(
+                        b"", (declared or remote.total) - position
+                    )
+                if (declared and position != declared) or (
+                    remote.total and position != remote.total
+                ):
+                    raise DownloadError(
+                        f"download incomplete ({position} bytes, expected {declared or remote.total})"
+                    )
         except BaseException:
             if part.exists():
                 self._write_sidecar(side, part, covered, remote, source.sha256)
@@ -645,12 +756,15 @@ class Download:
                     side.unlink(missing_ok=True)
                 raise HashError(
                     f"sha256 mismatch for {source.url}: pinned "
-                    f"{source.sha256}, got {actual}")
+                    f"{source.sha256}, got {actual}"
+                )
         import tempfile
 
         self._check_pause()
         source.dest.parent.mkdir(parents=True, exist_ok=True)
-        fd, name = tempfile.mkstemp(prefix=f".{source.dest.name}-", suffix=".download", dir=source.dest.parent)
+        fd, name = tempfile.mkstemp(
+            prefix=f".{source.dest.name}-", suffix=".download", dir=source.dest.parent
+        )
         staged = Path(name)
         try:
             with os.fdopen(fd, "wb") as target, part.open("rb") as incoming:
@@ -658,7 +772,9 @@ class Download:
                 target.flush()
                 os.fsync(target.fileno())
             if staged.stat().st_size != part.stat().st_size:
-                raise DownloadError("destination copy did not preserve the complete download")
+                raise DownloadError(
+                    "destination copy did not preserve the complete download"
+                )
             self._check_pause()
             replace_when_released(staged, source.dest)
         finally:

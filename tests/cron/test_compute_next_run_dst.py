@@ -33,7 +33,8 @@ def toronto(monkeypatch):
 
 def _next_local(last_run_at: str) -> datetime:
     return datetime.fromisoformat(
-        compute_next_run(MORNING, last_run_at=last_run_at)).astimezone(TORONTO)
+        compute_next_run(MORNING, last_run_at=last_run_at)
+    ).astimezone(TORONTO)
 
 
 class TestCronNextRunHoldsConfiguredWallClock:
@@ -49,10 +50,12 @@ class TestCronNextRunHoldsConfiguredWallClock:
         last = datetime(2026, 1, 1, 9, 0, tzinfo=TORONTO)
         for _ in range(365):
             nxt = datetime.fromisoformat(
-                compute_next_run(MORNING, last_run_at=last.isoformat()))
+                compute_next_run(MORNING, last_run_at=last.isoformat())
+            )
             wall = nxt.astimezone(TORONTO)
-            assert (wall.hour, wall.minute) == (9, 0), \
+            assert (wall.hour, wall.minute) == (9, 0), (
                 f"drift at {last.isoformat()}: {wall.isoformat()}"
+            )
             last = nxt
 
 
@@ -64,8 +67,10 @@ class TestFallBackStrictlyAfterContract:
     def test_base_in_second_occurrence_gets_future_instant(self, toronto):
         base = datetime(2026, 11, 1, 1, 15, tzinfo=TORONTO, fold=1)  # 01:15 EST
         nxt = datetime.fromisoformat(
-            compute_next_run({"kind": "cron", "expr": "30 1 * * *"},
-                             last_run_at=base.isoformat()))
+            compute_next_run(
+                {"kind": "cron", "expr": "30 1 * * *"}, last_run_at=base.isoformat()
+            )
+        )
         assert nxt.timestamp() > base.timestamp()
         wall = nxt.astimezone(TORONTO)
         assert (wall.hour, wall.minute) == (1, 30)
@@ -73,6 +78,8 @@ class TestFallBackStrictlyAfterContract:
     def test_every_minute_never_returns_past(self, toronto):
         base = datetime(2026, 11, 1, 1, 59, tzinfo=TORONTO, fold=0)  # last EDT minute
         nxt = datetime.fromisoformat(
-            compute_next_run({"kind": "cron", "expr": "* * * * *"},
-                             last_run_at=base.isoformat()))
+            compute_next_run(
+                {"kind": "cron", "expr": "* * * * *"}, last_run_at=base.isoformat()
+            )
+        )
         assert nxt.timestamp() > base.timestamp()

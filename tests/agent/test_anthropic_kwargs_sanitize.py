@@ -10,20 +10,31 @@ from agent.anthropic_adapter import (
     sanitize_anthropic_kwargs,
 )
 
+
 def _fake_anthropic_call(**kwargs):
     """Mimic the Anthropic SDK's strict kwarg signature."""
     allowed = {
-        "model", "messages", "max_tokens", "system", "tools", "tool_choice",
-        "extra_body", "extra_headers", "temperature", "top_p", "top_k",
-        "thinking", "timeout",
+        "model",
+        "messages",
+        "max_tokens",
+        "system",
+        "tools",
+        "tool_choice",
+        "extra_body",
+        "extra_headers",
+        "temperature",
+        "top_p",
+        "top_k",
+        "thinking",
+        "timeout",
     }
     bad = set(kwargs) - allowed
     if bad:
         raise TypeError(
-            "Messages.stream() got an unexpected keyword argument "
-            f"{min(bad)!r}"
+            f"Messages.stream() got an unexpected keyword argument {min(bad)!r}"
         )
     return "OK"
+
 
 def test_strips_all_responses_only_keys():
     payload = {

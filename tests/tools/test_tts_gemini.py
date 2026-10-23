@@ -70,7 +70,6 @@ class TestWrapPcmAsWav:
         assert wav[44:] == pcm
 
 
-
 class TestGenerateGeminiTts:
     def test_missing_api_key_raises_value_error(self, tmp_path):
         from tools.tts_tool import _generate_gemini_tts
@@ -92,7 +91,9 @@ class TestGenerateGeminiTts:
         _, kwargs = mock_post.call_args
         assert kwargs["headers"]["x-goog-api-key"] == "from-google-env"
 
-    def test_api_key_rides_in_header_not_url(self, tmp_path, monkeypatch, mock_gemini_response):
+    def test_api_key_rides_in_header_not_url(
+        self, tmp_path, monkeypatch, mock_gemini_response
+    ):
         """The key must not be a query parameter: ``requests`` echoes the
         full prepared URL (query string included) into HTTPError messages,
         so a ``key=`` param would land in logs on any 4xx/5xx."""
@@ -109,7 +110,9 @@ class TestGenerateGeminiTts:
         assert "key" not in (kwargs.get("params") or {})
         assert "test-key" not in mock_post.call_args[0][0]
 
-    def test_wav_output_fast_path(self, tmp_path, monkeypatch, mock_gemini_response, fake_pcm_bytes):
+    def test_wav_output_fast_path(
+        self, tmp_path, monkeypatch, mock_gemini_response, fake_pcm_bytes
+    ):
         from tools.tts_tool import _generate_gemini_tts
 
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -125,7 +128,9 @@ class TestGenerateGeminiTts:
         # Audio payload should match the PCM we put in
         assert data[44:] == fake_pcm_bytes
 
-    def test_x_goog_api_client_header_is_set(self, tmp_path, monkeypatch, mock_gemini_response):
+    def test_x_goog_api_client_header_is_set(
+        self, tmp_path, monkeypatch, mock_gemini_response
+    ):
         """Gemini TTS requests should include Clawksis client context."""
         from clawk_cli.version_info import get_version_info
         from tools.tts_tool import _generate_gemini_tts
@@ -136,11 +141,17 @@ class TestGenerateGeminiTts:
             _generate_gemini_tts("Hi", str(tmp_path / "test.wav"), {})
 
         headers = mock_post.call_args[1]["headers"]
-        assert headers["X-Goog-Api-Client"] == f"clawksis-agent/{get_version_info().base_version}"
+        assert (
+            headers["X-Goog-Api-Client"]
+            == f"clawksis-agent/{get_version_info().base_version}"
+        )
 
     def test_default_voice_and_model(self, tmp_path, monkeypatch, mock_gemini_response):
         from tools.tts_tool import _generate_gemini_tts
-        from tools.tts_tool_providers import DEFAULT_GEMINI_TTS_MODEL, DEFAULT_GEMINI_TTS_VOICE
+        from tools.tts_tool_providers import (
+            DEFAULT_GEMINI_TTS_MODEL,
+            DEFAULT_GEMINI_TTS_VOICE,
+        )
 
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
@@ -150,10 +161,9 @@ class TestGenerateGeminiTts:
         args, kwargs = mock_post.call_args
         assert DEFAULT_GEMINI_TTS_MODEL in args[0]
         payload = kwargs["json"]
-        voice = (
-            payload["generationConfig"]["speechConfig"]["voiceConfig"]
-            ["prebuiltVoiceConfig"]["voiceName"]
-        )
+        voice = payload["generationConfig"]["speechConfig"]["voiceConfig"][
+            "prebuiltVoiceConfig"
+        ]["voiceName"]
         assert voice == DEFAULT_GEMINI_TTS_VOICE
 
     def test_custom_voice(self, tmp_path, monkeypatch, mock_gemini_response):
@@ -166,12 +176,10 @@ class TestGenerateGeminiTts:
             _generate_gemini_tts("Hi", str(tmp_path / "test.wav"), config)
 
         payload = mock_post.call_args[1]["json"]
-        voice = (
-            payload["generationConfig"]["speechConfig"]["voiceConfig"]
-            ["prebuiltVoiceConfig"]["voiceName"]
-        )
+        voice = payload["generationConfig"]["speechConfig"]["voiceConfig"][
+            "prebuiltVoiceConfig"
+        ]["voiceName"]
         assert voice == "Puck"
-
 
     def test_audio_tag_rewrite_failure_falls_back_to_original_text(
         self, tmp_path, monkeypatch, mock_gemini_response, caplog
@@ -186,8 +194,10 @@ class TestGenerateGeminiTts:
         }
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
-        with patch("agent.auxiliary_client.call_llm", side_effect=RuntimeError("boom")), \
-             patch("requests.post", return_value=mock_gemini_response) as mock_post:
+        with (
+            patch("agent.auxiliary_client.call_llm", side_effect=RuntimeError("boom")),
+            patch("requests.post", return_value=mock_gemini_response) as mock_post,
+        ):
             _generate_gemini_tts("Hi there.", str(tmp_path / "test.wav"), config)
 
         prompt_text = mock_post.call_args[1]["json"]["contents"][0]["parts"][0]["text"]
@@ -222,8 +232,11 @@ class TestGeminiInCheckRequirements:
                 raise ImportError("simulated")
             return real_import(name, *args, **kwargs)
 
-        with patch(
-            "tools.tts_tool._load_tts_config",
-            return_value={"provider": "gemini"},
-        ), patch("builtins.__import__", side_effect=fake_import):
+        with (
+            patch(
+                "tools.tts_tool._load_tts_config",
+                return_value={"provider": "gemini"},
+            ),
+            patch("builtins.__import__", side_effect=fake_import),
+        ):
             assert check_tts_requirements() is True

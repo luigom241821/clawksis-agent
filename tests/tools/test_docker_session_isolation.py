@@ -135,13 +135,17 @@ class TestRoutedScopeQualification:
     two profiles, one colliding session id (header-less API fingerprint, shared DM chat id)
     → distinct sandboxes and cwd records. No routed home → historical raw key."""
 
-    def test_colliding_session_id_is_isolated_per_routed_profile(self, monkeypatch, tmp_path):
+    def test_colliding_session_id_is_isolated_per_routed_profile(
+        self, monkeypatch, tmp_path
+    ):
         from agent import secret_scope
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
         _enable_isolation(monkeypatch)
         raw = "api-9a5f7809eec0aac1"
-        assert terminal_tool._resolve_container_task_id(raw) == raw  # CLI / standalone: unchanged
+        assert (
+            terminal_tool._resolve_container_task_id(raw) == raw
+        )  # CLI / standalone: unchanged
         homes = {}
         for name in ("research", "default"):
             homes[name] = tmp_path / "profiles" / name
@@ -154,7 +158,10 @@ class TestRoutedScopeQualification:
                 try:
                     keys[name] = terminal_tool._resolve_container_task_id(raw)
                     terminal_tool.register_container_alias(f"child-{name}", raw)
-                    assert terminal_tool._resolve_container_task_id(f"child-{name}") == keys[name]
+                    assert (
+                        terminal_tool._resolve_container_task_id(f"child-{name}")
+                        == keys[name]
+                    )
                     if name not in cwds:
                         assert terminal_tool.get_session_cwd(raw) is None
                         terminal_tool.record_session_cwd(raw, f"/workspace/{name}")
@@ -163,7 +170,10 @@ class TestRoutedScopeQualification:
                     reset_clawk_home_override(token)
             assert keys["research"] == f"profile:research:{raw}"
             assert keys["default"] == f"default:{raw}"
-            assert cwds == {"research": "/workspace/research", "default": "/workspace/default"}
+            assert cwds == {
+                "research": "/workspace/research",
+                "default": "/workspace/default",
+            }
             token = set_clawk_home_override(str(homes["default"]))
             try:
                 terminal_tool.clear_session_cwd(raw)
@@ -256,8 +266,7 @@ class TestSessionScopedMountResolution:
         _enable_isolation(monkeypatch)
         cfg = self._config()
         assert (
-            terminal_tool._resolve_task_host_cwd(cfg, None)
-            == "/Users/prev/dev/oldrepo"
+            terminal_tool._resolve_task_host_cwd(cfg, None) == "/Users/prev/dev/oldrepo"
         )
 
     def test_non_docker_backend_never_mounts(self, monkeypatch):
@@ -278,8 +287,10 @@ class TestRecordedHostCwdDiscardedOnContainers:
     def test_host_record_discarded_for_docker(self):
         terminal_tool.record_session_cwd("sess-1", "/Users/me/dev/repo")
         cwd = terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="/workspace",
-            session_key="sess-1", env_type="docker",
+            workdir=None,
+            default_cwd="/workspace",
+            session_key="sess-1",
+            env_type="docker",
         )
         assert cwd == "/workspace"
 
@@ -287,24 +298,30 @@ class TestRecordedHostCwdDiscardedOnContainers:
         """A legitimate in-container cd is the session's state — keep it."""
         terminal_tool.record_session_cwd("sess-1", "/workspace/subdir")
         cwd = terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="/workspace",
-            session_key="sess-1", env_type="docker",
+            workdir=None,
+            default_cwd="/workspace",
+            session_key="sess-1",
+            env_type="docker",
         )
         assert cwd == "/workspace/subdir"
 
     def test_host_record_kept_for_local_backend(self):
         terminal_tool.record_session_cwd("sess-1", "/home/me/project")
         cwd = terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="/anything",
-            session_key="sess-1", env_type="local",
+            workdir=None,
+            default_cwd="/anything",
+            session_key="sess-1",
+            env_type="local",
         )
         assert cwd == "/home/me/project"
 
     def test_explicit_workdir_still_wins(self):
         terminal_tool.record_session_cwd("sess-1", "/workspace/a")
         cwd = terminal_tool._resolve_command_cwd(
-            workdir="/workspace/b", default_cwd="/workspace",
-            session_key="sess-1", env_type="docker",
+            workdir="/workspace/b",
+            default_cwd="/workspace",
+            session_key="sess-1",
+            env_type="docker",
         )
         assert cwd == "/workspace/b"
 
@@ -312,7 +329,9 @@ class TestRecordedHostCwdDiscardedOnContainers:
         """Callers that don't pass env_type (legacy sites) are unchanged."""
         terminal_tool.record_session_cwd("sess-1", "/home/me/project")
         cwd = terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="/fallback", session_key="sess-1",
+            workdir=None,
+            default_cwd="/fallback",
+            session_key="sess-1",
         )
         assert cwd == "/home/me/project"
 
@@ -345,11 +364,18 @@ class TestSessionScopedContainerLifecycle:
             def __init__(self, **kwargs):
                 captured.update(kwargs)
 
-        monkeypatch.setattr(terminal_tool_backends, "_DockerEnvironment", _FakeDockerEnv)
-        monkeypatch.setattr(terminal_tool, "_maybe_reap_docker_orphans", lambda cc: None)
+        monkeypatch.setattr(
+            terminal_tool_backends, "_DockerEnvironment", _FakeDockerEnv
+        )
+        monkeypatch.setattr(
+            terminal_tool, "_maybe_reap_docker_orphans", lambda cc: None
+        )
 
         env = terminal_tool_backends._create_environment(
-            env_type="docker", image="img:1", cwd="/workspace", timeout=60,
+            env_type="docker",
+            image="img:1",
+            cwd="/workspace",
+            timeout=60,
             container_config={"docker_persist_across_processes": True},
             task_id="tui:sess-1",
         )
@@ -364,11 +390,18 @@ class TestSessionScopedContainerLifecycle:
             def __init__(self, **kwargs):
                 captured.update(kwargs)
 
-        monkeypatch.setattr(terminal_tool_backends, "_DockerEnvironment", _FakeDockerEnv)
-        monkeypatch.setattr(terminal_tool, "_maybe_reap_docker_orphans", lambda cc: None)
+        monkeypatch.setattr(
+            terminal_tool_backends, "_DockerEnvironment", _FakeDockerEnv
+        )
+        monkeypatch.setattr(
+            terminal_tool, "_maybe_reap_docker_orphans", lambda cc: None
+        )
 
         env = terminal_tool_backends._create_environment(
-            env_type="docker", image="img:1", cwd="/workspace", timeout=60,
+            env_type="docker",
+            image="img:1",
+            cwd="/workspace",
+            timeout=60,
             container_config={"docker_persist_across_processes": True},
             task_id="default",
         )

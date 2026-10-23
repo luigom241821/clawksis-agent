@@ -29,8 +29,12 @@ from tests.e2e.core.windows_update._machine import (
 )
 from tests.fakes.fake_llm_provider import FakeLLMServer
 
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration,
-              pytest.mark.live_system_guard_bypass, REQUIRES_OPT_IN]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+    REQUIRES_OPT_IN,
+]
 
 PERSON = "Jörg Ñúñez"  # the profile is "Jörg Ñúñez clawk-e2e-<id>"
 _TOOL_NAMES = {"python.exe", "node.exe", "git.exe", "uv.exe", "rg.exe"}
@@ -52,34 +56,69 @@ def standard_user_access(paths: list[Path]) -> dict[Path, str]:
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
     class GENERIC_MAPPING(ctypes.Structure):
-        _fields_ = [("GenericRead", wintypes.DWORD), ("GenericWrite", wintypes.DWORD),
-                    ("GenericExecute", wintypes.DWORD), ("GenericAll", wintypes.DWORD)]
+        _fields_ = [
+            ("GenericRead", wintypes.DWORD),
+            ("GenericWrite", wintypes.DWORD),
+            ("GenericExecute", wintypes.DWORD),
+            ("GenericAll", wintypes.DWORD),
+        ]
 
     handle = wintypes.HANDLE
-    advapi32.SaferCreateLevel.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
-                                          ctypes.POINTER(handle), ctypes.c_void_p]
-    advapi32.SaferComputeTokenFromLevel.argtypes = [handle, handle, ctypes.POINTER(handle),
-                                                    wintypes.DWORD, ctypes.c_void_p]
+    advapi32.SaferCreateLevel.argtypes = [
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(handle),
+        ctypes.c_void_p,
+    ]
+    advapi32.SaferComputeTokenFromLevel.argtypes = [
+        handle,
+        handle,
+        ctypes.POINTER(handle),
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    ]
     advapi32.SaferCloseLevel.argtypes = [handle]
     advapi32.DuplicateToken.argtypes = [handle, ctypes.c_int, ctypes.POINTER(handle)]
-    advapi32.GetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p,
-                                          wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
-    advapi32.AccessCheck.argtypes = [ctypes.c_void_p, handle, wintypes.DWORD, ctypes.POINTER(GENERIC_MAPPING),
-                                     ctypes.c_void_p, ctypes.POINTER(wintypes.DWORD),
-                                     ctypes.POINTER(wintypes.DWORD), ctypes.POINTER(wintypes.BOOL)]
+    advapi32.GetFileSecurityW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    advapi32.AccessCheck.argtypes = [
+        ctypes.c_void_p,
+        handle,
+        wintypes.DWORD,
+        ctypes.POINTER(GENERIC_MAPPING),
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.DWORD),
+        ctypes.POINTER(wintypes.BOOL),
+    ]
     kernel32.CloseHandle.argtypes = [handle]
 
     def check(ok: int, what: str) -> None:
         if not ok:
             err = ctypes.get_last_error()
-            raise OSError(err, f"{what}: WinError {err} {ctypes.FormatError(err).strip()}")
+            raise OSError(
+                err, f"{what}: WinError {err} {ctypes.FormatError(err).strip()}"
+            )
 
     level, primary, imp = handle(), handle(), handle()
     # SAFER_SCOPEID_USER=2, SAFER_LEVELID_NORMALUSER=0x20000, SAFER_LEVEL_OPEN=1
-    check(advapi32.SaferCreateLevel(2, 0x20000, 1, ctypes.byref(level), None), "SaferCreateLevel")
+    check(
+        advapi32.SaferCreateLevel(2, 0x20000, 1, ctypes.byref(level), None),
+        "SaferCreateLevel",
+    )
     try:
-        check(advapi32.SaferComputeTokenFromLevel(level, None, ctypes.byref(primary), 0, None),
-              "SaferComputeTokenFromLevel")
+        check(
+            advapi32.SaferComputeTokenFromLevel(
+                level, None, ctypes.byref(primary), 0, None
+            ),
+            "SaferComputeTokenFromLevel",
+        )
     finally:
         advapi32.SaferCloseLevel(level)
     try:
@@ -89,7 +128,9 @@ def standard_user_access(paths: list[Path]) -> dict[Path, str]:
         restricted = _without_administrators(advapi32, kernel32, primary, check)
         kernel32.CloseHandle(primary)
         primary = restricted
-        check(advapi32.DuplicateToken(primary, 2, ctypes.byref(imp)), "DuplicateToken")  # SecurityImpersonation
+        check(
+            advapi32.DuplicateToken(primary, 2, ctypes.byref(imp)), "DuplicateToken"
+        )  # SecurityImpersonation
         mapping = GENERIC_MAPPING(0x120089, 0x120116, 0x1200A0, 0x1F01FF)
         verdicts: dict[Path, str] = {}
         for path in paths:
@@ -98,14 +139,33 @@ def standard_user_access(paths: list[Path]) -> dict[Path, str]:
             advapi32.GetFileSecurityW(str(path), info, None, 0, ctypes.byref(needed))
             sd = ctypes.create_string_buffer(max(needed.value, 1))
             try:
-                check(advapi32.GetFileSecurityW(str(path), info, sd, needed, ctypes.byref(needed)),
-                      "GetFileSecurityW")
-                privs, privs_len = ctypes.create_string_buffer(1024), wintypes.DWORD(1024)
+                check(
+                    advapi32.GetFileSecurityW(
+                        str(path), info, sd, needed, ctypes.byref(needed)
+                    ),
+                    "GetFileSecurityW",
+                )
+                privs, privs_len = (
+                    ctypes.create_string_buffer(1024),
+                    wintypes.DWORD(1024),
+                )
                 granted, status = wintypes.DWORD(), wintypes.BOOL()
-                check(advapi32.AccessCheck(sd, imp, _FILE_READ_EXECUTE, ctypes.byref(mapping), privs,
-                                           ctypes.byref(privs_len), ctypes.byref(granted), ctypes.byref(status)),
-                      "AccessCheck")
-                verdicts[path] = "" if status.value else "access denied to a standard-user token"
+                check(
+                    advapi32.AccessCheck(
+                        sd,
+                        imp,
+                        _FILE_READ_EXECUTE,
+                        ctypes.byref(mapping),
+                        privs,
+                        ctypes.byref(privs_len),
+                        ctypes.byref(granted),
+                        ctypes.byref(status),
+                    ),
+                    "AccessCheck",
+                )
+                verdicts[path] = (
+                    "" if status.value else "access denied to a standard-user token"
+                )
             except OSError as exc:
                 verdicts[path] = str(exc)
         return verdicts
@@ -124,19 +184,37 @@ def _without_administrators(advapi32, kernel32, token, check):
         _fields_ = [("Sid", ctypes.c_void_p), ("Attributes", wintypes.DWORD)]
 
     handle = wintypes.HANDLE
-    advapi32.ConvertStringSidToSidW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p)]
-    advapi32.CreateRestrictedToken.argtypes = [handle, wintypes.DWORD, wintypes.DWORD,
-                                               ctypes.POINTER(SID_AND_ATTRIBUTES), wintypes.DWORD, ctypes.c_void_p,
-                                               wintypes.DWORD, ctypes.c_void_p, ctypes.POINTER(handle)]
+    advapi32.ConvertStringSidToSidW.argtypes = [
+        wintypes.LPCWSTR,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
+    advapi32.CreateRestrictedToken.argtypes = [
+        handle,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(SID_AND_ATTRIBUTES),
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.POINTER(handle),
+    ]
     kernel32.LocalFree.argtypes = [ctypes.c_void_p]
     sid = ctypes.c_void_p()
-    check(advapi32.ConvertStringSidToSidW("S-1-5-32-544", ctypes.byref(sid)), "ConvertStringSidToSidW")
+    check(
+        advapi32.ConvertStringSidToSidW("S-1-5-32-544", ctypes.byref(sid)),
+        "ConvertStringSidToSidW",
+    )
     try:
         disable = (SID_AND_ATTRIBUTES * 1)(SID_AND_ATTRIBUTES(sid, 0))
         out = handle()
         # DISABLE_MAX_PRIVILEGE=0x1: drop every privilege but SeChangeNotify, as a standard user has.
-        check(advapi32.CreateRestrictedToken(token, 0x1, 1, disable, 0, None, 0, None, ctypes.byref(out)),
-              "CreateRestrictedToken")
+        check(
+            advapi32.CreateRestrictedToken(
+                token, 0x1, 1, disable, 0, None, 0, None, ctypes.byref(out)
+            ),
+            "CreateRestrictedToken",
+        )
         return out
     finally:
         kernel32.LocalFree(sid)
@@ -146,12 +224,27 @@ def _standard_user_token_is_really_restricted(scratch: Path) -> str:
     """Harness control: the token reads System32 but not an Administrators+SYSTEM-only file."""
     admin_only = scratch / "admin-only.txt"
     admin_only.write_text("x", encoding="utf-8")
-    subprocess.run(["icacls", str(admin_only), "/inheritance:r", "/grant:r", "*S-1-5-32-544:F", "*S-1-5-18:F"],
-                   capture_output=True, check=True, timeout=60)
+    subprocess.run(
+        [
+            "icacls",
+            str(admin_only),
+            "/inheritance:r",
+            "/grant:r",
+            "*S-1-5-32-544:F",
+            "*S-1-5-18:F",
+        ],
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
     cmd = Path(r"C:\Windows\System32\cmd.exe")
     verdicts = standard_user_access([cmd, admin_only])
-    assert verdicts[cmd] == "", f"harness: the standard-user token cannot even run cmd.exe: {verdicts[cmd]}"
-    assert verdicts[admin_only], "harness: the standard-user token still reads an Administrators-only file"
+    assert verdicts[cmd] == "", (
+        f"harness: the standard-user token cannot even run cmd.exe: {verdicts[cmd]}"
+    )
+    assert verdicts[admin_only], (
+        "harness: the standard-user token still reads an Administrators-only file"
+    )
     return "ok"
 
 
@@ -170,17 +263,27 @@ def _tool_access(clawk_home: Path) -> dict[Path, str]:
 @pytest.fixture(scope="module")
 def journey(tmp_path_factory):
     with FakeLLMServer() as srv:
-        machine = new_machine(tmp_path_factory.mktemp("paths"), srv.base_url, label="paths",
-                              person=PERSON, system_git=True)
+        machine = new_machine(
+            tmp_path_factory.mktemp("paths"),
+            srv.base_url,
+            label="paths",
+            person=PERSON,
+            system_git=True,
+        )
         j = Journey(machine)
         try:
             install = j.step("install", machine.install)
             if j.ok("install") and install.returncode == 0:
                 j.step("version", lambda: machine.clawk("--version"))
-                j.step("turn", lambda: one_shot_turn(machine, srv, "turn-unicode-profile"))
+                j.step(
+                    "turn", lambda: one_shot_turn(machine, srv, "turn-unicode-profile")
+                )
                 machine.advance()
                 j.step("update", machine.update)
-                j.step("control", lambda: _standard_user_token_is_really_restricted(machine.root))
+                j.step(
+                    "control",
+                    lambda: _standard_user_token_is_really_restricted(machine.root),
+                )
                 j.step("tool_access", lambda: _tool_access(machine.clawk_home))
             yield j
         finally:
@@ -189,22 +292,34 @@ def journey(tmp_path_factory):
 
 def test_install_from_non_ascii_profile_with_spaces(journey: Journey) -> None:
     m, run = journey.machine, journey["install"]
-    first_error = next((ln.strip() for ln in run.stdout.splitlines() if "[X]" in ln or "✗" in ln), "<none>")
+    first_error = next(
+        (ln.strip() for ln in run.stdout.splitlines() if "[X]" in ln or "✗" in ln),
+        "<none>",
+    )
     assert run.returncode == 0, fail_with(
-        m, f"install.ps1 failed for a profile path with non-ASCII characters and spaces: {first_error}", run)
+        m,
+        f"install.ps1 failed for a profile path with non-ASCII characters and spaces: {first_error}",
+        run,
+    )
 
 
 def test_clawk_works_and_updates_from_that_profile(journey: Journey) -> None:
     m = journey.machine
     version, turn, update = journey["version"], journey["turn"], journey["update"]
     assert version.returncode == 0 and "Clawksis v" in version.stdout, fail_with(
-        m, "clawk --version fails from a non-ASCII profile", version)
+        m, "clawk --version fails from a non-ASCII profile", version
+    )
     assert turn.ok, fail_with(
-        m, f"a turn fails from a non-ASCII profile (reply printed={turn.reply_id in turn.run.stdout}, "
-           f"prompt reached provider={turn.reached_wire})", turn.run)
+        m,
+        f"a turn fails from a non-ASCII profile (reply printed={turn.reply_id in turn.run.stdout}, "
+        f"prompt reached provider={turn.reached_wire})",
+        turn.run,
+    )
     assert update.returncode == 0 and m.installed_head() == m.next, fail_with(
-        m, f"clawk update from a non-ASCII profile exited {update.returncode}, checkout at {m.installed_head()}",
-        update)
+        m,
+        f"clawk update from a non-ASCII profile exited {update.returncode}, checkout at {m.installed_head()}",
+        update,
+    )
 
 
 def test_managed_tools_stay_executable_for_standard_user(journey: Journey) -> None:
@@ -212,7 +327,15 @@ def test_managed_tools_stay_executable_for_standard_user(journey: Journey) -> No
     journey["control"]
     journey["update"]
     assert any(exe.name.lower() == "python.exe" for exe in verdicts), fail_with(
-        m, f"no managed python.exe under {m.clawk_home / 'tools'}: {[str(e) for e in verdicts]}")
-    broken = [f"{exe.relative_to(m.clawk_home)}: {why}" for exe, why in verdicts.items() if why]
+        m,
+        f"no managed python.exe under {m.clawk_home / 'tools'}: {[str(e) for e in verdicts]}",
+    )
+    broken = [
+        f"{exe.relative_to(m.clawk_home)}: {why}"
+        for exe, why in verdicts.items()
+        if why
+    ]
     assert not broken, fail_with(
-        m, f"managed tools are not executable by a non-elevated process after update: {'; '.join(broken)}")
+        m,
+        f"managed tools are not executable by a non-elevated process after update: {'; '.join(broken)}",
+    )

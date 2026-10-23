@@ -15,15 +15,25 @@ from clawk_cli.observability.shared_metrics import SharedMetricsStore
 from clawk_cli.observability.shared_metrics_fields import compression_fields
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parents[2] / "clawk_cli" / "observability" / "schemas"
+    Path(__file__).resolve().parents[2]
+    / "clawk_cli"
+    / "observability"
+    / "schemas"
     / "clawk.shared_metrics.v4.schema.json"
 )
-RESOURCE = {"architecture": "x86_64", "clawk_version": "test", "install_method": "git", "os_family": "linux"}
+RESOURCE = {
+    "architecture": "x86_64",
+    "clawk_version": "test",
+    "install_method": "git",
+    "os_family": "linux",
+}
 
 
 def _finish(monkeypatch, commit_status, failure_class):
     rows = []
-    monkeypatch.setattr(events, "record_compression", lambda **kw: rows.append(compression_fields(**kw)))
+    monkeypatch.setattr(
+        events, "record_compression", lambda **kw: rows.append(compression_fields(**kw))
+    )
     events.begin_compression_attempt("auto", 80_000)
     events.finish_compression_attempt(commit_status, failure_class, 100_000)
     return [(row["outcome"], row["failure_class"]) for row in rows]
@@ -44,30 +54,43 @@ def _finish(monkeypatch, commit_status, failure_class):
         ("plugin_specific_fallback", ("success", "other")),
     ],
 )
-def test_committed_attempt_keeps_its_fallback_class(monkeypatch, failure_class, expected):
+def test_committed_attempt_keeps_its_fallback_class(
+    monkeypatch, failure_class, expected
+):
     assert _finish(monkeypatch, "committed", failure_class) == [expected]
 
 
 def test_aborted_attempts_keep_their_skip_and_failure_verdicts(monkeypatch):
-    assert _finish(monkeypatch, "aborted", "lock_contended") == [("skipped", "lock_contended")]
-    assert _finish(monkeypatch, "aborted", "summary_auth_failure") == [("failed", "summary_auth_failure")]
+    assert _finish(monkeypatch, "aborted", "lock_contended") == [
+        ("skipped", "lock_contended")
+    ]
+    assert _finish(monkeypatch, "aborted", "summary_auth_failure") == [
+        ("failed", "summary_auth_failure")
+    ]
 
 
 def test_benched_attempt_when_aborted_keeps_failed_other_class(monkeypatch):
-    assert _finish(monkeypatch, "aborted", "summary_model_benched") == [("failed", "other")]
+    assert _finish(monkeypatch, "aborted", "summary_model_benched") == [
+        ("failed", "other")
+    ]
 
 
 def test_committed_fallback_row_validates_against_the_package_schema(tmp_path):
     jsonschema = pytest.importorskip("jsonschema")
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
     fields = compression_fields(
-        trigger="auto", outcome="success", tokens_before=80_000, context_length=100_000,
+        trigger="auto",
+        outcome="success",
+        tokens_before=80_000,
+        context_length=100_000,
         failure_class="summary_generation_failed",
     )
     store.record_counter("clawk.compression.count", fields, RESOURCE)
 
     [package_path] = store.create_and_export_package()
     package = json.loads(package_path.read_text(encoding="utf-8"))
-    jsonschema.Draft202012Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))).validate(package)
+    jsonschema.Draft202012Validator(
+        json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    ).validate(package)
     [row] = [m for m in package["metrics"] if m["name"] == "clawk.compression.count"]
     assert row["dimensions"]["failure_class"] == "summary_generation_failed"

@@ -13,6 +13,7 @@ The fix wraps every ``start_polling()`` await in the wall-deadline helper with
 feeds the existing retry ladder. These tests patch the timeout down to keep the
 suite fast.
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -58,11 +59,17 @@ async def test_network_ladder_start_polling_hang_does_not_wedge(monkeypatch):
     app.updater.running = False
     a._app = app
 
-    with patch.object(a, "_drain_polling_connections", new=AsyncMock()), \
-         patch.object(
-             tg_adapter.asyncio, "ensure_future",
-             side_effect=lambda coro: (coro.close(), asyncio.get_event_loop().create_future())[1],
-         ):
+    with (
+        patch.object(a, "_drain_polling_connections", new=AsyncMock()),
+        patch.object(
+            tg_adapter.asyncio,
+            "ensure_future",
+            side_effect=lambda coro: (
+                coro.close(),
+                asyncio.get_event_loop().create_future(),
+            )[1],
+        ),
+    ):
         # Unbounded, this await hangs past the 30s wait_for and fails the
         # test; bounded, the handler waits its 5s backoff, times out the hung
         # start_polling() in 0.2s, schedules the chained retry (captured by
@@ -150,5 +157,3 @@ async def test_initial_connect_polling_error_fails_fast_not_background(monkeypat
     with pytest.raises(OSError, match="errored before first getUpdates"):
         await asyncio.wait_for(task, timeout=5)
     assert recovery_scheduled == []
-
-

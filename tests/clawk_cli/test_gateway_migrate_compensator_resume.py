@@ -23,7 +23,9 @@ def _write_live_gateway(home: Path, served: list[str] | None = None) -> None:
     record = {"pid": os.getpid(), "clawk_home": str(home), "gateway_state": "running"}
     if served is not None:
         record["served_profiles"] = served
-    (home / "gateway.pid").write_text(json.dumps({"pid": os.getpid(), "clawk_home": str(home)}))
+    (home / "gateway.pid").write_text(
+        json.dumps({"pid": os.getpid(), "clawk_home": str(home)})
+    )
     (home / "gateway_state.json").write_text(json.dumps(record))
 
 
@@ -35,27 +37,51 @@ def stranded(tmp_path, monkeypatch):
     for sub in ("profiles/coder", "profiles/ops"):
         (root / sub).mkdir(parents=True)
         (root / sub / "SOUL.md").write_text("x\n", encoding="utf-8")
-    (root / "config.yaml").write_text("gateway:\n  multiplex_profiles: true\n", encoding="utf-8")
+    (root / "config.yaml").write_text(
+        "gateway:\n  multiplex_profiles: true\n", encoding="utf-8"
+    )
     (root / ".env").write_text("TELEGRAM_BOT_TOKEN=111111:shared\n", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
-    for name in ("TELEGRAM_BOT_TOKEN", "DISCORD_BOT_TOKEN", "GATEWAY_MULTIPLEX_PROFILES"):
+    for name in (
+        "TELEGRAM_BOT_TOKEN",
+        "DISCORD_BOT_TOKEN",
+        "GATEWAY_MULTIPLEX_PROFILES",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     assert str(clawk_constants.get_default_clawk_root()).startswith(str(tmp_path))
 
-    (root / gm.MANIFEST_NAME).write_text(json.dumps({
-        "version": 1, "flag_was": False,
-        "default": {"profile": "default", "home": str(root), "pid": None, "services": []},
-        "secondaries": [
-            {"profile": "coder", "home": str(root / "profiles/coder"), "pid": 4101,
-             "services": [{"kind": "systemd", "system": False}]},
-            {"profile": "ops", "home": str(root / "profiles/ops"), "pid": 4102,
-             "services": [{"kind": "systemd", "system": False}]},
-        ],
-    }))
+    (root / gm.MANIFEST_NAME).write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "flag_was": False,
+                "default": {
+                    "profile": "default",
+                    "home": str(root),
+                    "pid": None,
+                    "services": [],
+                },
+                "secondaries": [
+                    {
+                        "profile": "coder",
+                        "home": str(root / "profiles/coder"),
+                        "pid": 4101,
+                        "services": [{"kind": "systemd", "system": False}],
+                    },
+                    {
+                        "profile": "ops",
+                        "home": str(root / "profiles/ops"),
+                        "pid": 4102,
+                        "services": [{"kind": "systemd", "system": False}],
+                    },
+                ],
+            }
+        )
+    )
 
     ops: list[tuple[str, str]] = []
     state = SimpleNamespace(root=root, ops=ops, start_succeeds=True)
@@ -67,7 +93,10 @@ def stranded(tmp_path, monkeypatch):
             _write_live_gateway(root, ["default", "coder", "ops"])
 
     from gateway import status
-    monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: "clawk gateway run")
+
+    monkeypatch.setattr(
+        status, "_read_process_cmdline", lambda pid: "clawk gateway run"
+    )
     monkeypatch.setattr(gm, "_installed_services", lambda home: [])
     monkeypatch.setattr(gm, "_service_op", _service_op)
     monkeypatch.setattr(gm, "_host_supports_migration", lambda: None)
@@ -77,15 +106,23 @@ def stranded(tmp_path, monkeypatch):
     return state
 
 
-def test_the_compensator_restores_one_gateway_and_never_rebuilds_the_fleet(stranded, capsys):
+def test_the_compensator_restores_one_gateway_and_never_rebuilds_the_fleet(
+    stranded, capsys
+):
     """Design (a): the flipped host lock forbids N per-profile gateways, and the compensator
     clears the served record first — so every secondary it used to start would lose the flock
     race and respawn at exit 75 forever. It restores the ONE gateway the topology allows."""
     assert gm.rollback_migration(stranded.root) is True
     out = capsys.readouterr().out
 
-    started = [(name, verb) for name, verb in stranded.ops if verb in ("install", "start", "restart")]
-    assert all(name == "default" for name, _ in started), f"a secondary gateway was rebuilt: {started}"
+    started = [
+        (name, verb)
+        for name, verb in stranded.ops
+        if verb in ("install", "start", "restart")
+    ]
+    assert all(name == "default" for name, _ in started), (
+        f"a secondary gateway was rebuilt: {started}"
+    )
     assert "Restored the per-profile gateways" not in out
     assert "coder, ops" in out and "NOT reinstalled" in out
     assert not (stranded.root / gm.MANIFEST_NAME).exists()
@@ -99,24 +136,35 @@ def test_the_compensator_reports_failure_when_no_gateway_comes_up(stranded, caps
     out = capsys.readouterr().out
     assert "no gateway confirmed serving this host" in out
     assert "Compensation incomplete" in out
-    assert (stranded.root / gm.MANIFEST_NAME).exists(), "the manifest must survive for the next resume"
+    assert (stranded.root / gm.MANIFEST_NAME).exists(), (
+        "the manifest must survive for the next resume"
+    )
 
 
-def test_a_preflight_blocker_can_no_longer_trap_a_host_that_is_mid_migration(stranded, capsys):
+def test_a_preflight_blocker_can_no_longer_trap_a_host_that_is_mid_migration(
+    stranded, capsys
+):
     """BLOCKER 3: the only documented recovery is 're-run, it resumes'. A blocker that appears
     AFTER the units are gone (here: both profiles ending up on one bot token) used to make that
     re-run exit 1 forever, with --standalone gone and no rollback command left."""
     for name in ("coder", "ops"):
         (stranded.root / "profiles" / name / ".env").write_text(
-            "TELEGRAM_BOT_TOKEN=111111:shared\n", encoding="utf-8")
+            "TELEGRAM_BOT_TOKEN=111111:shared\n", encoding="utf-8"
+        )
     plan = gm.build_migration_plan()
-    assert plan.blocked and plan.manifest is not None, "the premise: blocked AND mid-migration"
+    assert plan.blocked and plan.manifest is not None, (
+        "the premise: blocked AND mid-migration"
+    )
 
     with pytest.raises(SystemExit) as exc:
         gm.cmd_migrate(SimpleNamespace(multiplex=True, dry_run=False, yes=True))
-    assert exc.value.code == 0, "the blocked gate must not refuse a host that is already mid-migration"
+    assert exc.value.code == 0, (
+        "the blocked gate must not refuse a host that is already mid-migration"
+    )
     out = capsys.readouterr().out
     assert "resuming the migration recorded in" in out
     assert "Preflight findings" in out, "the checks still RUN and are reported"
     assert str(stranded.root / gm.MANIFEST_NAME) in out
-    assert "serves 3 profiles" in out and not (stranded.root / gm.MANIFEST_NAME).exists()
+    assert (
+        "serves 3 profiles" in out and not (stranded.root / gm.MANIFEST_NAME).exists()
+    )

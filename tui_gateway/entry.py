@@ -60,7 +60,10 @@ def _install_sidecar_publisher() -> None:
     if not url:
         return
     from tui_gateway.event_publisher import WsPublisherTransport
-    server._stdio_transport = TeeTransport(server._stdio_transport, WsPublisherTransport(url))
+
+    server._stdio_transport = TeeTransport(
+        server._stdio_transport, WsPublisherTransport(url)
+    )
 
 
 # Grace for orderly shutdown before ``os._exit(0)`` so a worker wedged mid-flush can't
@@ -78,6 +81,7 @@ def _mcp_startup_call(name: str, *args, default=None, log=None, **kwargs):
     optionally logged as ``(level, message)``."""
     try:
         from clawk_cli import mcp_startup
+
         return getattr(mcp_startup, name)(*args, **kwargs)
     except Exception:
         if log:
@@ -87,7 +91,11 @@ def _mcp_startup_call(name: str, *args, default=None, log=None, **kwargs):
 
 def _spawn_discovery(log: tuple) -> None:
     _mcp_startup_call(
-        "start_background_mcp_discovery", logger=logger, thread_name="tui-mcp-discovery", log=log)
+        "start_background_mcp_discovery",
+        logger=logger,
+        thread_name="tui-mcp-discovery",
+        log=log,
+    )
 
 
 def _append_crash_log(header: str, dump=None) -> None:
@@ -104,11 +112,15 @@ def _hard_exit() -> None:
     """The grace timer's ``os._exit``. The flush runs first and the graceful foreground kill
     (TERM, wait, KILL) after it, so a SIGTERM-ignoring command is usually still alive here:
     SIGKILL its tree now or it outlives us, reparented to init."""
-    with suppress(Exception):  # only armed by a termination signal (a requested stop); os._exit skips atexit
+    with suppress(
+        Exception
+    ):  # only armed by a termination signal (a requested stop); os._exit skips atexit
         from clawk_cli.observability.shared_metrics_process import stamp_exit
+
         stamp_exit("clean")
     with suppress(Exception):
         from tools.environments.base import kill_live_foreground_processes
+
         kill_live_foreground_processes(now=True)
     os._exit(0)
 
@@ -118,8 +130,11 @@ def _log_signal(signum: int, frame) -> None:
     alone raced the worker pool (a thread holding ``_stdout_lock`` mid-flush blocks interpreter
     shutdown), so: log all thread stacks, give the configured grace to drain, then ``os._exit``."""
     # SIGPIPE/SIGHUP don't exist on Windows — only look up attributes present.
-    names = {int(sig): attr for attr in ("SIGPIPE", "SIGTERM", "SIGHUP", "SIGINT", "SIGBREAK")
-             if (sig := getattr(signal, attr, None)) is not None}
+    names = {
+        int(sig): attr
+        for attr in ("SIGPIPE", "SIGTERM", "SIGHUP", "SIGINT", "SIGBREAK")
+        if (sig := getattr(signal, attr, None)) is not None
+    }
     name = names.get(signum, f"signal {signum}")
 
     def _dump(f):
@@ -141,6 +156,7 @@ def _log_signal(signum: int, frame) -> None:
     # the GIL/_stdout_lock; finalize explicitly so unpersisted messages reach state.db first.
     with suppress(Exception):
         from tui_gateway.server import _shutdown_sessions
+
         _shutdown_sessions()
     # Unwind the main thread so atexit + finalisers run; the daemon timer is the safety net.
     sys.exit(0)
@@ -171,7 +187,9 @@ _install_signal("SIGINT", signal.SIG_IGN)
 
 def _log_exit(reason: str) -> None:
     """Record why the gateway exits (every path is a silent sys.exit(0) otherwise)."""
-    _append_crash_log(f"gateway exit · {time.strftime('%Y-%m-%d %H:%M:%S')} · reason={reason}")
+    _append_crash_log(
+        f"gateway exit · {time.strftime('%Y-%m-%d %H:%M:%S')} · reason={reason}"
+    )
     print(f"[gateway-exit] {reason}", file=sys.stderr, flush=True)
 
 
@@ -182,7 +200,9 @@ def wait_for_mcp_discovery(timeout: float | None = None) -> None:
     thread = _mcp_discovery_thread
     if thread is not None and thread.is_alive():
         fallback = timeout if timeout is not None else 0.75
-        bound = _mcp_startup_call("_resolve_discovery_timeout", timeout, default=fallback)
+        bound = _mcp_startup_call(
+            "_resolve_discovery_timeout", timeout, default=fallback
+        )
         thread.join(timeout=bound)
         return
     # Shared-owner path: re-invoke the idempotent spawn first so a zero-connected run gets
@@ -232,7 +252,9 @@ def join_mcp_discovery(timeout: float | None = None) -> bool:
     if thread is not None:
         thread.join(timeout=timeout)
         entry_done = not thread.is_alive()
-    return entry_done and _mcp_startup_call("join_mcp_discovery", timeout=timeout, default=True)
+    return entry_done and _mcp_startup_call(
+        "join_mcp_discovery", timeout=timeout, default=True
+    )
 
 
 # Spurious stdin-EOF recovery tracker (shared open-file-description O_NONBLOCK flip).
@@ -242,6 +264,7 @@ _recovery_times: list[float] = []
 def _has_configured_mcp_servers() -> bool:
     """Delegate to the shared native and portable MCP startup gate."""
     from clawk_cli.mcp_startup import _has_configured_mcp_servers as configured
+
     return configured()
 
 
@@ -280,6 +303,7 @@ def _claim_launch_home():
     ``gateway.lock`` reservation refuses it beside a live gateway (or a second entry), and holding
     that lock keeps a gateway from starting on the home while this process writes."""
     from gateway.runtime_ownership import OwnershipConflict, process_ownership
+
     home = server._launch_home()
     try:
         process_ownership.reserve([home])
@@ -291,12 +315,15 @@ def _claim_launch_home():
 def main():
     home = _claim_launch_home()
     if home is None:
-        _log_exit(f"refused: {server._launch_home()} is owned by a running gateway; attach to it instead")
+        _log_exit(
+            f"refused: {server._launch_home()} is owned by a running gateway; attach to it instead"
+        )
         sys.exit(1)
     try:
         _serve()
     finally:
         from gateway.runtime_ownership import process_ownership
+
         process_ownership.release(home)
 
 
@@ -313,6 +340,7 @@ def _serve():
 
     begin_process("tui")
     from clawk_cli.observability.shared_metrics_disabled import set_process_surface
+
     set_process_surface("tui_gateway")
 
     # One TLS authority: trust the OS store process-wide before any
@@ -327,8 +355,12 @@ def _serve():
     # The heartbeat row lets the orphan sweep tell "live but idle" from "truly orphaned",
     # so it must start BEFORE the sweep.
     for start, what in (
-            (server._start_backend_heartbeat_refresher, "backend heartbeat refresher start"),
-            (server._schedule_startup_orphan_sweep, "startup orphan sweep scheduling")):
+        (
+            server._start_backend_heartbeat_refresher,
+            "backend heartbeat refresher start",
+        ),
+        (server._schedule_startup_orphan_sweep, "startup orphan sweep scheduling"),
+    ):
         try:
             start()
         except Exception:
@@ -338,11 +370,21 @@ def _serve():
     ensure_mcp_discovery_started()
 
     # change_events: clients demote legacy polls; replay_epoch: WS restart detection.
-    _write_or_exit({
-        "jsonrpc": "2.0", "method": "event",
-        "params": {"type": "gateway.ready", "payload": {
-            "skin": resolve_skin(), "change_events": True, "replay_epoch": replay_epoch()}}},
-        "startup write failed (broken stdout pipe before first event)")
+    _write_or_exit(
+        {
+            "jsonrpc": "2.0",
+            "method": "event",
+            "params": {
+                "type": "gateway.ready",
+                "payload": {
+                    "skin": resolve_skin(),
+                    "change_events": True,
+                    "replay_epoch": replay_epoch(),
+                },
+            },
+        },
+        "startup write failed (broken stdout pipe before first event)",
+    )
 
     # Live-apply skins Clawksis activates mid-conversation.
     server._ensure_skin_watcher()
@@ -350,6 +392,7 @@ def _serve():
     # Warm the /model picker's provider-models cache in this idle window (fire-and-forget).
     try:
         from clawk_cli.model_switch_providers import prewarm_picker_cache_async
+
         prewarm_picker_cache_async()
     except Exception:
         logger.debug("picker cache prewarm (tui) failed to start", exc_info=True)
@@ -368,8 +411,13 @@ def _serve():
             req = json.loads(line)
         except json.JSONDecodeError:
             _write_or_exit(
-                {"jsonrpc": "2.0", "error": {"code": -32700, "message": "parse error"}, "id": None},
-                "parse-error-response write failed (broken stdout pipe)")
+                {
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "parse error"},
+                    "id": None,
+                },
+                "parse-error-response write failed (broken stdout pipe)",
+            )
             continue
 
         method = req.get("method") if isinstance(req, dict) else None
@@ -379,16 +427,21 @@ def _serve():
             # Pool-routed handlers already turn failures into this response; keep an
             # inline handler from taking down the stdio reader before it can reply.
             rid = req.get("id") if isinstance(req, dict) else None
-            logger.exception("inline RPC handler failed for method=%r id=%r", method, rid)
+            logger.exception(
+                "inline RPC handler failed for method=%r id=%r", method, rid
+            )
             # The crash log is where "gateway exited" forensics start; a survived crash
             # must leave the same trail or the degraded reply looks like a client bug.
             _append_crash_log(
                 f"inline dispatch crash · {time.strftime('%Y-%m-%d %H:%M:%S')} · method={method!r}",
-                lambda f: f.write(traceback.format_exc()))
+                lambda f: f.write(traceback.format_exc()),
+            )
             resp = _err(rid, -32000, f"handler error: {exc}")
         if resp is not None:
             _write_or_exit(
-                resp, f"response write failed for method={method!r} (broken stdout pipe)")
+                resp,
+                f"response write failed for method={method!r} (broken stdout pipe)",
+            )
 
 
 if __name__ == "__main__":

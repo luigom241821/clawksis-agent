@@ -44,7 +44,8 @@ _ACCESS_DENIED_WORDS = (
     r"액세스가 거부되었습니다"
 )
 _FALLBACK_PATTERNS = re.compile(
-    rf"({_ACCESS_DENIED_WORDS}|schtasks timed out|schtasks produced no output)", re.IGNORECASE
+    rf"({_ACCESS_DENIED_WORDS}|schtasks timed out|schtasks produced no output)",
+    re.IGNORECASE,
 )
 _ACCESS_DENIED_PATTERN = re.compile(rf"({_ACCESS_DENIED_WORDS})", re.IGNORECASE)
 
@@ -59,7 +60,11 @@ _TASK_LOGON_DELAY = "PT30S"
 _TASK_RESTART_INTERVAL = "PT1M"
 _TASK_RESTART_COUNT = 999
 
-_GATEWAY_ENV = (("PYTHONIOENCODING", "utf-8"), ("CLAWK_GATEWAY_DETACHED", "1"), ("CLAWK_SUPERVISED_CHILD", "1"))
+_GATEWAY_ENV = (
+    ("PYTHONIOENCODING", "utf-8"),
+    ("CLAWK_GATEWAY_DETACHED", "1"),
+    ("CLAWK_SUPERVISED_CHILD", "1"),
+)
 
 
 def _schtasks_encoding() -> str:
@@ -99,7 +104,9 @@ def _decode_schtasks_output(data: bytes) -> str:
     fallback so a reader thread never raises."""
     if data[:2] in (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE):
         try:
-            return data.decode("utf-16")  # a genuine UTF-16 write (BOM) decodes as such, never as a code page
+            return data.decode(
+                "utf-16"
+            )  # a genuine UTF-16 write (BOM) decodes as such, never as a code page
         except UnicodeDecodeError:
             pass  # malformed UTF-16 falls through to the same fallbacks as any other bytes
     for encoding in ("utf-8", *_windows_console_encodings()):
@@ -125,14 +132,20 @@ def clawk_service_roots() -> tuple[str, ...]:
     """Directories a Clawksis-owned SCM service binary lives under: the checkout (its ``venv`` included),
     the running interpreter's ``Scripts`` dir (``clawk.exe`` shim) and the ``gateway-service`` launcher dir."""
     project_root = Path(__file__).resolve().parent.parent
-    return (str(project_root), str(Path(sys.executable).parent), str(_clawk_home() / "gateway-service"))
+    return (
+        str(project_root),
+        str(Path(sys.executable).parent),
+        str(_clawk_home() / "gateway-service"),
+    )
 
 
 def _normalize_windows_path(value: str) -> str:
     return value.strip().lstrip('"').replace("\\", "/").rstrip("/").casefold()
 
 
-def clawk_owns_windows_service(name: str, binpath: str, clawk_roots: tuple[str, ...]) -> bool:
+def clawk_owns_windows_service(
+    name: str, binpath: str, clawk_roots: tuple[str, ...]
+) -> bool:
     """Positive ownership of an SCM service: Clawksis-named (``clawk*``) or its binary path starts under a
     Clawksis root. Pure so it is testable off-Windows. A Scheduled-Task-launched gateway descends from
     ``svchost.exe`` hosting ``Schedule``; without this gate the updater took Task Scheduler for the
@@ -141,7 +154,11 @@ def clawk_owns_windows_service(name: str, binpath: str, clawk_roots: tuple[str, 
     if normalized_name.startswith("clawk"):
         return True
     candidate = _normalize_windows_path(binpath)
-    return any(candidate.startswith(_normalize_windows_path(root) + "/") for root in clawk_roots if root)
+    return any(
+        candidate.startswith(_normalize_windows_path(root) + "/")
+        for root in clawk_roots
+        if root
+    )
 
 
 def _preserve_clawk_home_path(path: str | Path) -> str:
@@ -158,7 +175,9 @@ def _preserve_clawk_home_path(path: str | Path) -> str:
         home_key = os.path.normcase(str(resolved_home))
         candidate_key = os.path.normcase(str(resolved_candidate))
         if os.path.commonpath([home_key, candidate_key]) == home_key:
-            return str(home / os.path.relpath(str(resolved_candidate), str(resolved_home)))
+            return str(
+                home / os.path.relpath(str(resolved_candidate), str(resolved_home))
+            )
     except Exception:
         pass
     return str(candidate)
@@ -166,6 +185,7 @@ def _preserve_clawk_home_path(path: str | Path) -> str:
 
 # ── Quoting helpers. cmd.exe (.cmd body), VBScript literals and schtasks /TR are three DIFFERENT
 # parsers — never reuse one helper for another. The task XML path avoids /TR quoting entirely.
+
 
 def _quote_cmd_script_arg(value: str) -> str:
     """Quote one argument INSIDE a .cmd file for cmd.exe: split on spaces/tabs outside double quotes,
@@ -182,13 +202,18 @@ def _quote_cmd_script_arg(value: str) -> str:
 def _quote_vbs_string(value: str) -> str:
     """VBScript double-quoted literal (embedded quote doubled; newline refused)."""
     if "\r" in value or "\n" in value:
-        raise ValueError(f"refusing to quote VBScript value containing newline: {value!r}")
+        raise ValueError(
+            f"refusing to quote VBScript value containing newline: {value!r}"
+        )
     return '"' + value.replace('"', '""') + '"'
 
 
 # ── schtasks.exe wrapper
 
-def _exec_schtasks(args: list[str], timeout: float = _SCHTASKS_TIMEOUT_S) -> tuple[int, str, str]:
+
+def _exec_schtasks(
+    args: list[str], timeout: float = _SCHTASKS_TIMEOUT_S
+) -> tuple[int, str, str]:
     """Run ``schtasks.exe`` with a hard timeout. Return (code, stdout, stderr); a wedge returns
     code=124 with a synthetic stderr so the fallback regex matches."""
     _assert_windows()
@@ -199,8 +224,11 @@ def _exec_schtasks(args: list[str], timeout: float = _SCHTASKS_TIMEOUT_S) -> tup
         # Bytes, decoded by _decode_schtasks_output: a non-UTF-8 status line must never surface a
         # UnicodeDecodeError from subprocess' reader threads. CREATE_NO_WINDOW: no flashing console under a TUI.
         proc = subprocess.run(
-            [schtasks, *args], capture_output=True, text=False,
-            timeout=timeout, creationflags=windows_hide_flags(),
+            [schtasks, *args],
+            capture_output=True,
+            text=False,
+            timeout=timeout,
+            creationflags=windows_hide_flags(),
             check=False,
         )
         return (
@@ -227,6 +255,7 @@ def _is_running_as_admin() -> bool:
     probe; ``IsUserAnAdmin`` is deprecated and answered the same question a second way)."""
     _assert_windows()
     from clawk_dir_acl import process_is_elevated
+
     return process_is_elevated()
 
 
@@ -238,7 +267,9 @@ def _current_profile_cli_args() -> list[str]:
     return shlex.split(profile_arg) if profile_arg else []
 
 
-def _launch_elevated_gateway_command(command: str, extra_args: list[str] | None = None) -> bool:
+def _launch_elevated_gateway_command(
+    command: str, extra_args: list[str] | None = None
+) -> bool:
     """Launch an elevated gateway subcommand via UAC and return True on handoff. The child is console
     ``python.exe`` with ``SW_HIDE``: it owns one hidden console its subprocesses (schtasks, taskkill)
     inherit — no visible window and no per-descendant conhost flashes (the console-less pythonw.exe
@@ -247,21 +278,37 @@ def _launch_elevated_gateway_command(command: str, extra_args: list[str] | None 
     All operator decisions are already collected in the parent shell before this point. See #54220, #56747.
     """
     _assert_windows()
-    args = ["-m", "clawk_cli.main", *_current_profile_cli_args(), "gateway", command, *(extra_args or [])]
+    args = [
+        "-m",
+        "clawk_cli.main",
+        *_current_profile_cli_args(),
+        "gateway",
+        command,
+        *(extra_args or []),
+    ]
     params = subprocess.list2cmdline(args)
     cwd = str(Path(__file__).resolve().parent.parent)
     try:
-        result = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, cwd, 0)  # 0 = SW_HIDE
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, params, cwd, 0
+        )  # 0 = SW_HIDE
     except Exception as exc:
         print(f"⚠ Could not launch elevated gateway {command} prompt: {exc}")
         return False
     if result <= 32:
-        print(f"⚠ Elevated gateway {command} prompt was not started (ShellExecuteW={result})")
+        print(
+            f"⚠ Elevated gateway {command} prompt was not started (ShellExecuteW={result})"
+        )
         return False
     return True
 
 
-def _launch_elevated_install(force: bool = False, *, start_now: bool | None = None, start_on_login: bool | None = None) -> bool:
+def _launch_elevated_install(
+    force: bool = False,
+    *,
+    start_now: bool | None = None,
+    start_on_login: bool | None = None,
+) -> bool:
     """Launch an elevated gateway install via UAC and return True on handoff."""
     overrides = {"CLAWK_GATEWAY_ELEVATED_HANDOFF": "1"}
     extra_args = ["--elevated-handoff"]
@@ -288,10 +335,13 @@ def _launch_elevated_install(force: bool = False, *, start_now: bool | None = No
 
 # ── Paths: where we stash our task script and where Startup lives
 
+
 def get_task_name() -> str:
     """Scheduled Task name, scoped per profile."""
     _assert_windows()
-    from clawk_cli.gateway import _profile_suffix  # local: avoids circular init during boot
+    from clawk_cli.gateway import (
+        _profile_suffix,
+    )  # local: avoids circular init during boot
 
     suffix = _profile_suffix()
     return f"{_TASK_NAME_DEFAULT}_{suffix}" if suffix else _TASK_NAME_DEFAULT
@@ -314,11 +364,30 @@ def get_task_script_path() -> Path:
 def _startup_dir() -> Path:
     appdata = os.environ.get("APPDATA", "").strip()
     if appdata:
-        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    userprofile = os.environ.get("USERPROFILE", "").strip() or os.environ.get("HOME", "").strip()
+        return (
+            Path(appdata)
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+        )
+    userprofile = (
+        os.environ.get("USERPROFILE", "").strip() or os.environ.get("HOME", "").strip()
+    )
     if not userprofile:
-        raise RuntimeError("neither APPDATA nor USERPROFILE is set — cannot resolve Startup folder")
-    return Path(userprofile).joinpath("AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+        raise RuntimeError(
+            "neither APPDATA nor USERPROFILE is set — cannot resolve Startup folder"
+        )
+    return Path(userprofile).joinpath(
+        "AppData",
+        "Roaming",
+        "Microsoft",
+        "Windows",
+        "Start Menu",
+        "Programs",
+        "Startup",
+    )
 
 
 def get_startup_entry_path() -> Path:
@@ -352,6 +421,7 @@ def _stable_gateway_working_dir(project_root: Path) -> str:
 
 # ── Script rendering
 
+
 def _gateway_run_argv(python_exe: str, profile_arg: str) -> list[str]:
     """``python -m clawk_cli.main [--profile X] gateway run`` — shared by every launcher renderer."""
     argv = [python_exe, "-m", "clawk_cli.main"]
@@ -364,7 +434,11 @@ def _gateway_run_argv(python_exe: str, profile_arg: str) -> list[str]:
 def _launcher_settings(home: Path | None = None) -> tuple[str, str, str, str]:
     """Return (python_path, working_dir, clawk_home, profile_arg) for generated launchers.
     ``home`` targets another profile's CLAWK_HOME (per-profile cold-start, #110959)."""
-    from clawk_cli.gateway import PROJECT_ROOT, _profile_arg, get_python_path  # avoid circular init
+    from clawk_cli.gateway import (
+        PROJECT_ROOT,
+        _profile_arg,
+        get_python_path,
+    )  # avoid circular init
 
     clawk_home = str(home if home is not None else _clawk_home())
     return (
@@ -382,12 +456,16 @@ def _launcher_pythonpath_entries(extra_pythonpath: list[str]) -> list[str]:
     ]
 
 
-def _build_gateway_cmd_script(python_path: str, working_dir: str, clawk_home: str, profile_arg: str) -> str:
+def _build_gateway_cmd_script(
+    python_path: str, working_dir: str, clawk_home: str, profile_arg: str
+) -> str:
     """Build the ``gateway.cmd`` wrapper (CRLF-terminated). No PATH overrides (rewriting PATH breaks
     Homebrew/nvm-style installs), no ``start`` (extra wrapper process muddles lifecycle/status), no
     ``--replace`` (repeated /Run calls must be idempotent, not takeover loops)."""
     python_exe_path, venv_dir, extra_pythonpath = _resolve_detached_python(python_path)
-    pythonpath = ";".join([*_launcher_pythonpath_entries(extra_pythonpath), "%PYTHONPATH%"])
+    pythonpath = ";".join(
+        [*_launcher_pythonpath_entries(extra_pythonpath), "%PYTHONPATH%"]
+    )
     lines = [
         "@echo off",
         f"rem {_TASK_DESCRIPTION}",
@@ -397,13 +475,18 @@ def _build_gateway_cmd_script(python_path: str, working_dir: str, clawk_home: st
         # VIRTUAL_ENV lets the gateway's own python detection find the venv.
         f'set "VIRTUAL_ENV={_preserve_clawk_home_path(venv_dir)}"',
         f'set "PYTHONPATH={pythonpath}"',
-        " ".join(_quote_cmd_script_arg(a) for a in _gateway_run_argv(python_exe_path, profile_arg)),
+        " ".join(
+            _quote_cmd_script_arg(a)
+            for a in _gateway_run_argv(python_exe_path, profile_arg)
+        ),
         "exit /b 0",
     ]
     return "\r\n".join(lines) + "\r\n"
 
 
-def _build_gateway_vbs_script(python_path: str, working_dir: str, clawk_home: str, profile_arg: str) -> str:
+def _build_gateway_vbs_script(
+    python_path: str, working_dir: str, clawk_home: str, profile_arg: str
+) -> str:
     """Build the hidden-console ``gateway.vbs`` launcher (CRLF-terminated).
 
     Run via ``wscript.exe``, not ``cmd.exe``: at logon Windows broadcasts CTRL_CLOSE_EVENT to console
@@ -422,7 +505,9 @@ def _build_gateway_vbs_script(python_path: str, working_dir: str, clawk_home: st
     """
     python_exe_path, venv_dir, extra_pythonpath = _resolve_detached_python(python_path)
     # list2cmdline gives CreateProcess-correct quoting for WScript.Shell.Run.
-    command_line = subprocess.list2cmdline(_gateway_run_argv(python_exe_path, profile_arg))
+    command_line = subprocess.list2cmdline(
+        _gateway_run_argv(python_exe_path, profile_arg)
+    )
     static_pythonpath = os.pathsep.join(_launcher_pythonpath_entries(extra_pythonpath))
     q = _quote_vbs_string
     lines = [
@@ -472,11 +557,19 @@ def _write_task_script() -> Path:
     _assert_windows()
     settings = _launcher_settings()
     script_path = get_task_script_path()
-    _atomic_write(script_path, _build_gateway_cmd_script(*settings), script_path.with_suffix(".tmp"))
+    _atomic_write(
+        script_path,
+        _build_gateway_cmd_script(*settings),
+        script_path.with_suffix(".tmp"),
+    )
     # Also render the console-less .vbs launcher used by Scheduled Task and the Startup-folder fallback via
     # wscript.exe (issue #45599 fix A). The .cmd wrapper stays as a generated helper/compatibility artifact.
     vbs_path = script_path.with_suffix(".vbs")
-    _atomic_write(vbs_path, _build_gateway_vbs_script(*settings), vbs_path.with_name(vbs_path.name + ".tmp"))
+    _atomic_write(
+        vbs_path,
+        _build_gateway_vbs_script(*settings),
+        vbs_path.with_name(vbs_path.name + ".tmp"),
+    )
     return script_path
 
 
@@ -499,9 +592,14 @@ def _atomic_write(path: Path, content: str, tmp: Path) -> None:
 
 # ── Install / uninstall
 
+
 def _resolve_task_user() -> str | None:
     """Return ``DOMAIN\\USER`` if available, else bare USERNAME, else None."""
-    username = os.environ.get("USERNAME") or os.environ.get("USER") or os.environ.get("LOGNAME")
+    username = (
+        os.environ.get("USERNAME")
+        or os.environ.get("USER")
+        or os.environ.get("LOGNAME")
+    )
     if not username:
         return None
     if "\\" in username:
@@ -510,7 +608,9 @@ def _resolve_task_user() -> str | None:
     return f"{domain}\\{username}" if domain else username
 
 
-def _build_scheduled_task_xml(task_name: str, launcher_path: Path, user: str | None) -> str:
+def _build_scheduled_task_xml(
+    task_name: str, launcher_path: Path, user: str | None
+) -> str:
     """Task Scheduler XML with safe long-running defaults. ``launcher_path`` is the console-less
     ``.vbs`` run via ``wscript.exe`` (see ``_build_gateway_vbs_script`` for why not cmd.exe).
 
@@ -570,7 +670,9 @@ def _build_scheduled_task_xml(task_name: str, launcher_path: Path, user: str | N
 def _install_scheduled_task(task_name: str, script_path: Path) -> tuple[bool, str]:
     """Create or replace the Scheduled Task. Returns (success, detail). Always delete+create, never
     ``/Change``: it preserves stale repeat/restart settings that relaunch the gateway every minute."""
-    delete_code, delete_out, delete_err = _exec_schtasks(["/Delete", "/F", "/TN", task_name])
+    delete_code, delete_out, delete_err = _exec_schtasks(
+        ["/Delete", "/F", "/TN", task_name]
+    )
     delete_detail = (delete_err or delete_out or "").strip()
     if "cannot find" in delete_detail.lower():
         delete_detail = ""
@@ -578,9 +680,15 @@ def _install_scheduled_task(task_name: str, script_path: Path) -> tuple[bool, st
         return (False, f"schtasks /Delete failed (code {delete_code}): {delete_detail}")
     # Other /Delete failures are non-fatal: /Create /F may still replace it; keep the detail.
     user = _resolve_task_user()
-    launcher_path = script_path.with_suffix(".vbs")   # the task launches the console-less .vbs
+    launcher_path = script_path.with_suffix(
+        ".vbs"
+    )  # the task launches the console-less .vbs
     xml_path = launcher_path.with_suffix(".task.xml")
-    xml_path.write_text(_build_scheduled_task_xml(task_name, launcher_path, user), encoding="utf-16", newline="")
+    xml_path.write_text(
+        _build_scheduled_task_xml(task_name, launcher_path, user),
+        encoding="utf-16",
+        newline="",
+    )
     # Immediate manual starts use _spawn_detached(). See #45599.
     base = ["/Create", "/F", "/TN", task_name, "/XML", str(xml_path)]
     variants = [[*base, "/RU", user, "/NP", "/IT"], base] if user else [base]
@@ -630,14 +738,20 @@ def _remove_startup_entries() -> tuple[list[str], list[str]]:
         except FileNotFoundError:
             pass
         except OSError:
-            warnings.append(f"Could not remove redundant Windows login item: {path} (locked or access denied; it still fires at logon)")
+            warnings.append(
+                f"Could not remove redundant Windows login item: {path} (locked or access denied; it still fires at logon)"
+            )
     return done, warnings
 
 
 def redundant_autostart_entries() -> list[Path]:
     """Startup-folder entries that fire the gateway a second time at logon: every entry beside a
     registered Scheduled Task, or a legacy ``.cmd`` beside the ``.vbs`` fallback."""
-    entries = [p for p in (get_startup_entry_path(), _legacy_startup_entry_path()) if p.exists()]
+    entries = [
+        p
+        for p in (get_startup_entry_path(), _legacy_startup_entry_path())
+        if p.exists()
+    ]
     if is_task_registered():
         return entries
     return entries[1:]
@@ -658,7 +772,9 @@ def reconcile_autostart_launchers() -> tuple[list[str], list[str]]:
     if legacy.exists():
         entry = _install_startup_entry(_write_task_script())
         if legacy.exists():  # _install_startup_entry swallows the unlink failure; both would fire at logon
-            return [], [f"Could not remove legacy Windows login item: {legacy} (locked or access denied; it still fires at logon beside {entry})"]
+            return [], [
+                f"Could not remove legacy Windows login item: {legacy} (locked or access denied; it still fires at logon beside {entry})"
+            ]
         return [f"Migrated legacy Windows login item to: {entry}"], []
     return [], []
 
@@ -710,7 +826,9 @@ def _prepend_pythonpath(env_overlay: dict[str, str], entries: list[str]) -> None
     env_overlay["PYTHONPATH"] = os.pathsep.join(clean_entries)
 
 
-def _build_gateway_argv(home: Path | None = None) -> tuple[list[str], str, dict[str, str]]:
+def _build_gateway_argv(
+    home: Path | None = None,
+) -> tuple[list[str], str, dict[str, str]]:
     """Build (argv, working_dir, env_overlay) for the gateway subprocess — the same logical command
     as gateway.cmd, assembled as a native argv so no cmd.exe layer sits in between."""
     _assert_windows()
@@ -718,12 +836,21 @@ def _build_gateway_argv(home: Path | None = None) -> tuple[list[str], str, dict[
 
     python_path, working_dir, clawk_home, profile_arg = _launcher_settings(home)
     python_exe, venv_dir, extra_pythonpath = _resolve_detached_python(python_path)
-    env_overlay = {"CLAWK_HOME": clawk_home, **dict(_GATEWAY_ENV), "VIRTUAL_ENV": _preserve_clawk_home_path(venv_dir)}
-    _prepend_pythonpath(env_overlay, [_preserve_clawk_home_path(p) for p in (PROJECT_ROOT, *extra_pythonpath)])
+    env_overlay = {
+        "CLAWK_HOME": clawk_home,
+        **dict(_GATEWAY_ENV),
+        "VIRTUAL_ENV": _preserve_clawk_home_path(venv_dir),
+    }
+    _prepend_pythonpath(
+        env_overlay,
+        [_preserve_clawk_home_path(p) for p in (PROJECT_ROOT, *extra_pythonpath)],
+    )
     return _gateway_run_argv(python_exe, profile_arg), working_dir, env_overlay
 
 
-def windowless_gateway_restart_spec(run_argv: list[str], home: str | None = None) -> tuple[list[str], str, dict[str, str]]:
+def windowless_gateway_restart_spec(
+    run_argv: list[str], home: str | None = None
+) -> tuple[list[str], str, dict[str, str]]:
     """(argv, cwd, env overlay) for a hidden-console gateway respawn; arguments after the interpreter
     are preserved verbatim. Non-Windows or a non-python argv[0] → argv unchanged, empty overlay.
 
@@ -742,7 +869,9 @@ def windowless_gateway_restart_spec(run_argv: list[str], home: str | None = None
     from clawk_cli.gateway import PROJECT_ROOT
 
     try:
-        hidden_console_python, venv_dir, extra_pythonpath = _resolve_detached_python(run_argv[0])
+        hidden_console_python, venv_dir, extra_pythonpath = _resolve_detached_python(
+            run_argv[0]
+        )
     except Exception:
         return run_argv, "", {}
 
@@ -750,11 +879,19 @@ def windowless_gateway_restart_spec(run_argv: list[str], home: str | None = None
         clawk_home = str(Path(home or _clawk_home()).resolve())
     except Exception:
         clawk_home = ""
-    env_overlay: dict[str, str] = {"PYTHONIOENCODING": "utf-8", "CLAWK_GATEWAY_DETACHED": "1", "VIRTUAL_ENV": str(venv_dir)}
+    env_overlay: dict[str, str] = {
+        "PYTHONIOENCODING": "utf-8",
+        "CLAWK_GATEWAY_DETACHED": "1",
+        "VIRTUAL_ENV": str(venv_dir),
+    }
     if clawk_home:
         env_overlay["CLAWK_HOME"] = clawk_home
     _prepend_pythonpath(env_overlay, [str(PROJECT_ROOT), *extra_pythonpath])
-    return [hidden_console_python, *run_argv[1:]], _stable_gateway_working_dir(PROJECT_ROOT), env_overlay
+    return (
+        [hidden_console_python, *run_argv[1:]],
+        _stable_gateway_working_dir(PROJECT_ROOT),
+        env_overlay,
+    )
 
 
 def _spawn_detached(script_path: Path | None = None, home: Path | None = None) -> int:
@@ -774,10 +911,14 @@ def _spawn_detached(script_path: Path | None = None, home: Path | None = None) -
     _assert_windows()
     argv, working_dir, env_overlay = _build_gateway_argv(home)
     from tools.environments.local import served_profile_child_env
+
     # home=None is this process's own gateway, not a forced jump to the default root.
     # served_profile_child_env overlays that home's secrets instead of os.environ.copy().
     target = home if home is not None else _clawk_home()
-    env = {**served_profile_child_env(target_home=target, inherit_credentials=True), **env_overlay}
+    env = {
+        **served_profile_child_env(target_home=target, inherit_credentials=True),
+        **env_overlay,
+    }
 
     # Stray print()/native stderr goes to a sidecar log; real gateway logs still land in gateway.log
     # via the logging FileHandler.
@@ -788,8 +929,14 @@ def _spawn_detached(script_path: Path | None = None, home: Path | None = None) -
     def _popen(breakaway: str, flags: int):
         with open(stray_log, "ab", buffering=0) as log_fh:
             return subprocess.Popen(
-                argv, cwd=working_dir, env={**env, _WINDOWS_GATEWAY_BREAKAWAY_ENV: breakaway}, creationflags=flags,
-                close_fds=True, stdin=subprocess.DEVNULL, stdout=log_fh, stderr=log_fh,
+                argv,
+                cwd=working_dir,
+                env={**env, _WINDOWS_GATEWAY_BREAKAWAY_ENV: breakaway},
+                creationflags=flags,
+                close_fds=True,
+                stdin=subprocess.DEVNULL,
+                stdout=log_fh,
+                stderr=log_fh,
             )
 
     try:
@@ -802,7 +949,10 @@ def _spawn_detached(script_path: Path | None = None, home: Path | None = None) -
         error_code = getattr(exc, "winerror", None)
         if error_code is None:
             error_code = exc.errno
-        logger.warning("Gateway breakaway spawn failed (error=%s); retrying without CREATE_BREAKAWAY_FROM_JOB", error_code)
+        logger.warning(
+            "Gateway breakaway spawn failed (error=%s); retrying without CREATE_BREAKAWAY_FROM_JOB",
+            error_code,
+        )
         proc = _popen("0", windows_detach_flags_without_breakaway())
         _LAST_SPAWN_BREAKAWAY_FALLBACK["fallback"] = True
     return proc.pid
@@ -843,12 +993,16 @@ def _install_choice_from_env(name: str) -> bool | None:
     return None
 
 
-def _prompt_install_choices(start_now: bool | None = None, start_on_login: bool | None = None) -> tuple[bool, bool]:
+def _prompt_install_choices(
+    start_now: bool | None = None, start_on_login: bool | None = None
+) -> tuple[bool, bool]:
     """Return (start_now, start_on_login), asking before any UAC escalation."""
     if start_now is None:
         start_now = _install_choice_from_env("CLAWK_GATEWAY_INSTALL_START_NOW")
     if start_on_login is None:
-        start_on_login = _install_choice_from_env("CLAWK_GATEWAY_INSTALL_START_ON_LOGIN")
+        start_on_login = _install_choice_from_env(
+            "CLAWK_GATEWAY_INSTALL_START_ON_LOGIN"
+        )
     if start_now is not None and start_on_login is not None:
         return start_now, start_on_login
 
@@ -857,7 +1011,10 @@ def _prompt_install_choices(start_now: bool | None = None, start_on_login: bool 
     if start_now is None:
         start_now = prompt_yes_no("Start the gateway now after install?", True)
     if start_on_login is None:
-        start_on_login = prompt_yes_no("Start the gateway automatically on Windows login with a Scheduled Task?", True)
+        start_on_login = prompt_yes_no(
+            "Start the gateway automatically on Windows login with a Scheduled Task?",
+            True,
+        )
     return start_now, start_on_login
 
 
@@ -878,12 +1035,18 @@ def _start_or_report_running(running_pids: list[int] | None = None) -> None:
 
 def _install_startup_fallback(script_path: Path, start_now: bool, detail: str) -> None:
     """Install the Startup-folder fallback and optionally start once."""
-    print(f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback")
+    print(
+        f"↻ Scheduled Task install blocked ({detail.splitlines()[0]}) — using Startup folder fallback"
+    )
     if is_task_registered():
         # An earlier task survives (UAC declined, access denied on re-create) and still fires at
         # logon; adding the fallback beside it would start the gateway twice (#80569).
-        print("⚠ Scheduled Task is still registered — skipped the Startup fallback to avoid a duplicate autostart.")
-        print("  If that task is disabled or broken, run 'clawk gateway uninstall', then install again.")
+        print(
+            "⚠ Scheduled Task is still registered — skipped the Startup fallback to avoid a duplicate autostart."
+        )
+        print(
+            "  If that task is disabled or broken, run 'clawk gateway uninstall', then install again."
+        )
     else:
         entry = _install_startup_entry(script_path)
         print(f"✓ Installed Windows login item: {entry}")
@@ -898,34 +1061,53 @@ def _install_startup_fallback(script_path: Path, start_now: bool, detail: str) -
         from clawk_cli.gateway import _profile_arg
 
         profile_arg = _profile_arg()
-        start_cmd = f"clawk {profile_arg} gateway start" if profile_arg else "clawk gateway start"
+        start_cmd = (
+            f"clawk {profile_arg} gateway start"
+            if profile_arg
+            else "clawk gateway start"
+        )
         print("ℹ Startup fallback installed; gateway not started now.")
         print(f"  Start manually with: {start_cmd}")
     _print_next_steps()
 
 
-def _offer_elevated_install(headline: str, force: bool, start_now: bool, start_on_login: bool) -> bool:
+def _offer_elevated_install(
+    headline: str, force: bool, start_now: bool, start_on_login: bool
+) -> bool:
     """Offer the UAC prompt for a Scheduled Task install. True when handed off to an elevated child."""
     from clawk_cli.setup import prompt_yes_no
 
     print(headline)
-    print("  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task.")
+    print(
+        "  UAC is Windows' admin approval prompt; it is needed to create/update the Scheduled Task."
+    )
     if prompt_yes_no("  Open the UAC prompt now?", False):
-        if _launch_elevated_install(force=force, start_now=start_now, start_on_login=start_on_login):
+        if _launch_elevated_install(
+            force=force, start_now=start_now, start_on_login=start_on_login
+        ):
             print("✓ Launched elevated Clawksis gateway install prompt.")
             if start_now:
-                print("  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards.")
+                print(
+                    "  Approve the Windows UAC prompt; the elevated install will start the gateway afterwards."
+                )
             else:
-                print("  Approve the Windows UAC prompt, then run: clawk gateway status")
+                print(
+                    "  Approve the Windows UAC prompt, then run: clawk gateway status"
+                )
             return True
-        print("⚠ Falling back to Startup folder because elevation was unavailable or cancelled.")
+        print(
+            "⚠ Falling back to Startup folder because elevation was unavailable or cancelled."
+        )
     else:
         print("  Skipped elevation. Falling back to Startup folder.")
     return False
 
 
 def install(
-    force: bool = False, *, start_now: bool | None = None, start_on_login: bool | None = None,
+    force: bool = False,
+    *,
+    start_now: bool | None = None,
+    start_on_login: bool | None = None,
     elevated_handoff: bool = False,
 ) -> None:
     """Install the gateway as a Windows Scheduled Task (with Startup fallback). Idempotent — we
@@ -954,6 +1136,7 @@ def install(
         # Pre-suffix strays (task ``Clawksis_Gateway``, Startup ``Clawksis_Gateway.vbs``) are unreachable by
         # the current names, so a plain reconcile never heals them (#116157).
         from clawk_cli.gateway_windows_legacy import remove_legacy_launchers
+
         remove_legacy_launchers()
 
     # On locked-down accounts schtasks can sit for the full timeout before returning Access Denied.
@@ -961,10 +1144,14 @@ def install(
     if not _is_running_as_admin() and not elevated_handoff:
         if _offer_elevated_install(
             "↻ Scheduled Task install may need administrator approval on this Windows account.",
-            force, start_now, start_on_login,
+            force,
+            start_now,
+            start_on_login,
         ):
             return
-        _install_startup_fallback(script_path, start_now, "administrator approval was not used")
+        _install_startup_fallback(
+            script_path, start_now, "administrator approval was not used"
+        )
         return
 
     ok, detail = _install_scheduled_task(task_name, script_path)
@@ -987,9 +1174,15 @@ def install(
         return
 
     # Prefer a real Scheduled Task over the Startup fallback when elevation is the only blocker.
-    if _is_access_denied(detail) and not _is_running_as_admin() and _offer_elevated_install(
-        f"↻ Scheduled Task install needs administrator approval ({detail.splitlines()[0]})",
-        force, start_now, start_on_login,
+    if (
+        _is_access_denied(detail)
+        and not _is_running_as_admin()
+        and _offer_elevated_install(
+            f"↻ Scheduled Task install needs administrator approval ({detail.splitlines()[0]})",
+            force,
+            start_now,
+            start_on_login,
+        )
     ):
         return
 
@@ -1013,13 +1206,18 @@ def _live_gateway_pids(
         pids = [pid] if pid else []
     else:
         from clawk_cli.gateway import find_gateway_pids
+
         pids = list(find_gateway_pids(all_profiles=all_profiles))
     return list(pid_filter(pids)) if pid_filter is not None else pids
 
 
 def _confirm_gateway_stable(
-    initial_pids: list[int], confirm_s: float, interval_s: float, all_profiles: bool = False,
-    home: Path | None = None, pid_filter=None,
+    initial_pids: list[int],
+    confirm_s: float,
+    interval_s: float,
+    all_profiles: bool = False,
+    home: Path | None = None,
+    pid_filter=None,
 ) -> list[int]:
     """Re-check a freshly detected gateway for ``confirm_s`` seconds: one process-table hit proves
     the child was *created*, not that it survived startup (or a parent Job Object teardown).
@@ -1043,8 +1241,12 @@ def _confirm_gateway_stable(
 
 
 def _wait_for_gateway_ready(
-    timeout_s: float = 6.0, interval_s: float = 0.4, confirm_s: float = 2.0, all_profiles: bool = False,
-    home: Path | None = None, pid_filter=None,
+    timeout_s: float = 6.0,
+    interval_s: float = 0.4,
+    confirm_s: float = 2.0,
+    all_profiles: bool = False,
+    home: Path | None = None,
+    pid_filter=None,
 ) -> list[int]:
     """Poll for a live gateway for up to ``timeout_s``; a first hit is provisional until the gateway
     stays visible for ``confirm_s`` more seconds (a child that dies right after spawn earns no ✓)."""
@@ -1053,7 +1255,12 @@ def _wait_for_gateway_ready(
         pids = _live_gateway_pids(all_profiles, home, pid_filter)
         if pids:
             confirmed = _confirm_gateway_stable(
-                pids, confirm_s, interval_s, all_profiles=all_profiles, home=home, pid_filter=pid_filter
+                pids,
+                confirm_s,
+                interval_s,
+                all_profiles=all_profiles,
+                home=home,
+                pid_filter=pid_filter,
             )
             if confirmed:
                 return confirmed
@@ -1076,10 +1283,14 @@ _START_ATTESTATION_RELATIVE = ("state", "gateway.start-attestation.json")
 
 def _start_attestation_path(home: Path | None = None) -> Path:
     """Marker path; ``home`` addresses another profile's marker (per-profile cold-start, #110959)."""
-    return (home if home is not None else _clawk_home()).joinpath(*_START_ATTESTATION_RELATIVE)
+    return (home if home is not None else _clawk_home()).joinpath(
+        *_START_ATTESTATION_RELATIVE
+    )
 
 
-def _write_start_attestation(pids: list[int], via: str, home: Path | None = None) -> None:
+def _write_start_attestation(
+    pids: list[int], via: str, home: Path | None = None
+) -> None:
     """Persist the PIDs a ✓ vouched for. Best-effort, never raises.
 
     ``generation`` identifies this marker instance: the update resume token records the generation
@@ -1091,13 +1302,17 @@ def _write_start_attestation(pids: list[int], via: str, home: Path | None = None
         from clawk_cli.process_identity import _process_create_time
 
         payload = {
-            "pids": [int(p) for p in pids], "via": via, "ts": datetime.now(UTC).isoformat(),
+            "pids": [int(p) for p in pids],
+            "via": via,
+            "ts": datetime.now(UTC).isoformat(),
             "generation": uuid.uuid4().hex,
         }
         # Bind each PID to its incarnation (#110020 review): the ledger sentinel is matched by PID
         # only otherwise, so a stale marker would be re-read against whatever lifecycle wrote last.
         create_times = {str(int(p)): _process_create_time(int(p)) for p in pids}
-        payload["create_times"] = {k: v for k, v in create_times.items() if v is not None}
+        payload["create_times"] = {
+            k: v for k, v in create_times.items() if v is not None
+        }
         tmp = path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(payload), encoding="utf-8")
         tmp.replace(path)
@@ -1138,7 +1353,11 @@ def _attestation_within_horizon(data: object) -> bool:
 
 def _attestation_generation(data: object) -> str | None:
     """The marker instance identity, or ``None`` for a marker that carries none."""
-    return str(data["generation"]) if isinstance(data, dict) and data.get("generation") else None
+    return (
+        str(data["generation"])
+        if isinstance(data, dict) and data.get("generation")
+        else None
+    )
 
 
 def _consume_start_attestation(generation: str, home: Path | None = None) -> None:
@@ -1177,7 +1396,9 @@ def _attested_create_time(data: object, pid: int) -> float | None:
     return float(value) if type(value) in (int, float) else None
 
 
-def _attested_pid_exited_cleanly(pid: int, create_time: float | None = None, home: Path | None = None) -> bool:
+def _attested_pid_exited_cleanly(
+    pid: int, create_time: float | None = None, home: Path | None = None
+) -> bool:
     """True when the lifecycle ledger shows a clean exit for ``pid`` — or, for a marker that bound
     ``pid`` to a ``create_time``, whenever the sentinel cannot be shown to describe THAT incarnation
     (#110020 review): a sentinel for another PID or another start time means an unrelated lifecycle
@@ -1186,7 +1407,9 @@ def _attested_pid_exited_cleanly(pid: int, create_time: float | None = None, hom
     try:
         from gateway.lifecycle_ledger import get_lifecycle_sentinel_path
 
-        sentinel = get_lifecycle_sentinel_path(home if home is not None else _clawk_home())
+        sentinel = get_lifecycle_sentinel_path(
+            home if home is not None else _clawk_home()
+        )
         data = json.loads(sentinel.read_text(encoding="utf-8-sig"))
     except OSError:
         return False
@@ -1199,22 +1422,31 @@ def _attested_pid_exited_cleanly(pid: int, create_time: float | None = None, hom
             return True
         sentinel_birth = data.get("create_time")
         # A sentinel from a gateway older than the identity stamp cannot be told apart: PID-only rule.
-        if type(sentinel_birth) in (int, float) and abs(float(sentinel_birth) - create_time) > _CREATE_TIME_TOLERANCE_S:
+        if (
+            type(sentinel_birth) in (int, float)
+            and abs(float(sentinel_birth) - create_time) > _CREATE_TIME_TOLERANCE_S
+        ):
             return True
     return data.get("phase") == "exited" and data.get("pid") == pid
 
 
 def _attested_dead(
-    attested: list[int], current_pids: list[int], data: object = None, home: Path | None = None
+    attested: list[int],
+    current_pids: list[int],
+    data: object = None,
+    home: Path | None = None,
 ) -> bool:
     """The liveness rule shared by the consuming and read-only probes: attested PIDs are dead when
     no gateway runs now and the lifecycle ledger shows no clean exit for any of them."""
     return not current_pids and not any(
-        _attested_pid_exited_cleanly(pid, _attested_create_time(data, pid), home) for pid in attested
+        _attested_pid_exited_cleanly(pid, _attested_create_time(data, pid), home)
+        for pid in attested
     )
 
 
-def attested_death_generation(current_pids: list[int], home: Path | None = None) -> str | None:
+def attested_death_generation(
+    current_pids: list[int], home: Path | None = None
+) -> str | None:
     """The generation of a start attestation that vouches for gateway PID(s) gone without a clean exit,
     or ``None``.
 
@@ -1228,7 +1460,11 @@ def attested_death_generation(current_pids: list[int], home: Path | None = None)
     (the updater evaluates every profile that is not running, #110959)."""
     data = _read_start_attestation(home)
     attested = _attested_pids_from(data)
-    if not attested or not _attestation_within_horizon(data) or not _attested_dead(attested, current_pids, data, home):
+    if (
+        not attested
+        or not _attestation_within_horizon(data)
+        or not _attested_dead(attested, current_pids, data, home)
+    ):
         return None
     return _attestation_generation(data)
 
@@ -1268,7 +1504,9 @@ def _format_attestation_warning(attested: list[int], data: dict) -> str:
         "  This usually means the shell that ran `clawk gateway start` was inside "
         "a Windows Job Object that killed the gateway on exit (#91675).",
     ]
-    hint = _task_run_hint("  Recovery: schtasks /Run /TN {}   (Task Scheduler starts the gateway outside any Job Object)")
+    hint = _task_run_hint(
+        "  Recovery: schtasks /Run /TN {}   (Task Scheduler starts the gateway outside any Job Object)"
+    )
     if hint:
         lines.append(hint)
     return "\n".join(lines)
@@ -1305,14 +1543,24 @@ def _report_gateway_start(via: str) -> None:
     if pids:
         print(f"✓ Gateway started via {via} (PID: {', '.join(map(str, pids))})")
         if _LAST_SPAWN_BREAKAWAY_FALLBACK.get("fallback"):
-            print("⚠ The gateway could not break away from this shell's Job Object; it may be killed when this shell exits.")
+            print(
+                "⚠ The gateway could not break away from this shell's Job Object; it may be killed when this shell exits."
+            )
             _print_task_run_hint("  If it dies, start it with: schtasks /Run /TN {}")
         _write_start_attestation(pids, via)
     else:
-        print(f"✗ Gateway start via {via} FAILED — no stable gateway process detected within the verification window.")
-        print("  (The process may have been created and then killed — e.g. by a parent Job Object, #91675.)")
-        print(f"  Check the log for startup errors:\n    type {_clawk_home()}\\logs\\gateway.log\n    type {_clawk_home()}\\logs\\gateway-stdio.log")
-        _print_task_run_hint("  Recovery: schtasks /Run /TN {}   (starts the gateway outside any Job Object)")
+        print(
+            f"✗ Gateway start via {via} FAILED — no stable gateway process detected within the verification window."
+        )
+        print(
+            "  (The process may have been created and then killed — e.g. by a parent Job Object, #91675.)"
+        )
+        print(
+            f"  Check the log for startup errors:\n    type {_clawk_home()}\\logs\\gateway.log\n    type {_clawk_home()}\\logs\\gateway-stdio.log"
+        )
+        _print_task_run_hint(
+            "  Recovery: schtasks /Run /TN {}   (starts the gateway outside any Job Object)"
+        )
 
 
 def _print_next_steps() -> None:
@@ -1336,12 +1584,18 @@ def uninstall() -> None:
         elif _is_access_denied(detail) and not _is_running_as_admin():
             from clawk_cli.setup import prompt_yes_no
 
-            print(f"↻ Scheduled Task uninstall needs administrator approval ({detail or 'access denied'})")
-            print("  UAC is Windows' admin approval prompt; it is needed to remove the Scheduled Task.")
+            print(
+                f"↻ Scheduled Task uninstall needs administrator approval ({detail or 'access denied'})"
+            )
+            print(
+                "  UAC is Windows' admin approval prompt; it is needed to remove the Scheduled Task."
+            )
             if prompt_yes_no("  Open the UAC prompt now?", False):
                 if _launch_elevated_gateway_command("uninstall"):
                     print("✓ Launched elevated Clawksis gateway uninstall prompt.")
-                    print("  Approve the Windows UAC prompt, then run: clawk gateway status")
+                    print(
+                        "  Approve the Windows UAC prompt, then run: clawk gateway status"
+                    )
                     return
                 print("⚠ Elevated uninstall prompt was unavailable or cancelled.")
             else:
@@ -1350,9 +1604,11 @@ def uninstall() -> None:
             print(f"⚠ schtasks /Delete returned code {code}: {detail}")
 
     for path, label in (
-        (get_startup_entry_path(), "Windows login item"), (_legacy_startup_entry_path(), "legacy Windows login item"),
+        (get_startup_entry_path(), "Windows login item"),
+        (_legacy_startup_entry_path(), "legacy Windows login item"),
         (_startup_staging_path(), "Windows login item staging file"),
-        (script_path, "Task script"), (script_path.with_suffix(".vbs"), "Task launcher"),
+        (script_path, "Task script"),
+        (script_path.with_suffix(".vbs"), "Task launcher"),
     ):
         try:
             path.unlink()
@@ -1361,6 +1617,7 @@ def uninstall() -> None:
             pass
 
     from clawk_cli.gateway_windows_legacy import remove_legacy_launchers
+
     remove_legacy_launchers()
 
     if is_task_registered() and not scheduled_task_removed:
@@ -1368,6 +1625,7 @@ def uninstall() -> None:
 
 
 # ── Status / start / stop / restart
+
 
 def is_task_registered() -> bool:
     code, _out, _err = _exec_schtasks(["/Query", "/TN", get_task_name()])
@@ -1383,7 +1641,11 @@ def _query_scheduled_task_xml(task_name: str) -> str | None:
     localized ``schtasks`` failure is not evidence about an otherwise working task)."""
     code, out, err = _exec_schtasks(["/Query", "/TN", task_name, "/XML"])
     if code != 0 or not out.strip():
-        logger.debug("Could not query Scheduled Task XML for %r: %s", task_name, (err or out).strip())
+        logger.debug(
+            "Could not query Scheduled Task XML for %r: %s",
+            task_name,
+            (err or out).strip(),
+        )
         return None
     return out
 
@@ -1400,14 +1662,24 @@ def registered_task_launchers() -> list[str]:
         return []
     from clawk_cli.gateway_service_owner import service_definition_launchers
 
-    code, listing, _err = _exec_schtasks(["/Query", "/FO", "CSV", "/NH"], timeout=_TASK_PROBE_TIMEOUT_S)
-    names = re.findall(rf'^"\\({_TASK_NAME_DEFAULT}[^"\\]*)"', listing, flags=re.MULTILINE) if code == 0 else []
+    code, listing, _err = _exec_schtasks(
+        ["/Query", "/FO", "CSV", "/NH"], timeout=_TASK_PROBE_TIMEOUT_S
+    )
+    names = (
+        re.findall(rf'^"\\({_TASK_NAME_DEFAULT}[^"\\]*)"', listing, flags=re.MULTILINE)
+        if code == 0
+        else []
+    )
     launchers: list[str] = []
     for name in dict.fromkeys(names):
-        code, xml, _err = _exec_schtasks(["/Query", "/TN", name, "/XML"], timeout=_TASK_PROBE_TIMEOUT_S)
+        code, xml, _err = _exec_schtasks(
+            ["/Query", "/TN", name, "/XML"], timeout=_TASK_PROBE_TIMEOUT_S
+        )
         leaves = (_task_xml_leaf_values(xml) if code == 0 else None) or {}
         command = leaves.get("Task/Actions/Exec/Command", "").strip('"')
-        launchers += service_definition_launchers(f'"{command}" {leaves.get("Task/Actions/Exec/Arguments", "")}')
+        launchers += service_definition_launchers(
+            f'"{command}" {leaves.get("Task/Actions/Exec/Arguments", "")}'
+        )
     return launchers
 
 
@@ -1450,8 +1722,16 @@ def compare_scheduled_task_drift(registered_xml: str, template_xml: str) -> list
     want = _task_xml_leaf_values(template_xml)
     if live is None or want is None:
         return []
-    missing = [label for path, label in _TASK_DRIFT_LEAVES.items() if path in want and path not in live]
-    differs = [label for path, label in _TASK_DRIFT_LEAVES.items() if path in want and path in live and live[path] != want[path]]
+    missing = [
+        label
+        for path, label in _TASK_DRIFT_LEAVES.items()
+        if path in want and path not in live
+    ]
+    differs = [
+        label
+        for path, label in _TASK_DRIFT_LEAVES.items()
+        if path in want and path in live and live[path] != want[path]
+    ]
     drift = []
     if missing:
         drift.append(f"missing: {', '.join(missing)}")
@@ -1467,7 +1747,9 @@ def scheduled_task_drift(task_name: str) -> list[str]:
     registered = _query_scheduled_task_xml(task_name)
     if registered is None:
         return []
-    template = _build_scheduled_task_xml(task_name, get_task_script_path().with_suffix(".vbs"), _resolve_task_user())
+    template = _build_scheduled_task_xml(
+        task_name, get_task_script_path().with_suffix(".vbs"), _resolve_task_user()
+    )
     return compare_scheduled_task_drift(registered, template)
 
 
@@ -1476,7 +1758,9 @@ def _print_scheduled_task_drift(task_name: str) -> None:
     repair runs from ``start()`` / ``clawk update`` via ``reconcile_scheduled_task``)."""
     drift = scheduled_task_drift(task_name)
     if drift:
-        print(f"⚠ Scheduled Task registration predates the current template ({'; '.join(drift)})")
+        print(
+            f"⚠ Scheduled Task registration predates the current template ({'; '.join(drift)})"
+        )
         print("  Repair: clawk gateway start  (or: clawk gateway install)")
 
 
@@ -1503,7 +1787,9 @@ def is_installed() -> bool:
 
 def query_task_status() -> dict[str, str]:
     """Parse ``schtasks /Query /V /FO LIST`` and pull the interesting keys."""
-    code, out, _err = _exec_schtasks(["/Query", "/TN", get_task_name(), "/V", "/FO", "LIST"])
+    code, out, _err = _exec_schtasks(
+        ["/Query", "/TN", get_task_name(), "/V", "/FO", "LIST"]
+    )
     if code != 0:
         return {}
     info: dict[str, str] = {}
@@ -1559,7 +1845,11 @@ def _probe_lock_file(lock_path: Path) -> None:
     try:
         from gateway.status import is_gateway_runtime_lock_active
 
-        _probe(2, is_gateway_runtime_lock_active(lock_path), f"Lock file held by a live process: {lock_path}")
+        _probe(
+            2,
+            is_gateway_runtime_lock_active(lock_path),
+            f"Lock file held by a live process: {lock_path}",
+        )
     except Exception as exc:
         _probe(2, False, f"Could not probe lock: {exc}")
 
@@ -1604,7 +1894,11 @@ def _probe_state_file(state_path: Path) -> None:
                 age_str = f" (updated {age_seconds}s ago)"
             except Exception:
                 pass
-        _probe(5, gateway_state in ("running", "degraded"), f"gateway_state.json state={gateway_state!r}{age_str}")
+        _probe(
+            5,
+            gateway_state in ("running", "degraded"),
+            f"gateway_state.json state={gateway_state!r}{age_str}",
+        )
     except Exception as exc:
         _probe(5, False, f"gateway_state.json present but unreadable: {exc}")
 
@@ -1614,7 +1908,7 @@ def _probe_exit_diag(diag_path: Path) -> None:
         return
     try:
         with open(diag_path, "rb") as fh:
-            fh.seek(0, 2)   # last ~4KB; one event is well under 500 bytes
+            fh.seek(0, 2)  # last ~4KB; one event is well under 500 bytes
             size = fh.tell()
             fh.seek(max(0, size - 4096))
             tail = fh.read().decode("utf-8", errors="replace").splitlines()
@@ -1625,7 +1919,11 @@ def _probe_exit_diag(diag_path: Path) -> None:
         try:
             event = json.loads(last_event)
             tag = event.get("tag", "?")
-            _probe(6, tag in ("gateway.start",), f"Last lifecycle event: tag={tag} pid={event.get('pid', '?')} ts={event.get('ts', '?')}")
+            _probe(
+                6,
+                tag in ("gateway.start",),
+                f"Last lifecycle event: tag={tag} pid={event.get('pid', '?')} ts={event.get('ts', '?')}",
+            )
         except Exception:
             _probe(6, False, f"Last lifecycle line not JSON: {last_event[:120]}")
     except Exception as exc:
@@ -1648,7 +1946,7 @@ def _print_deep_probes() -> None:
 def status(deep: bool = False) -> None:
     """Print a status report for the Windows gateway service."""
     _assert_windows()
-    _print_start_attestation_warning()   # once: a gateway that died after a previous ✓
+    _print_start_attestation_warning()  # once: a gateway that died after a previous ✓
     task_name = get_task_name()
     task_installed = is_task_registered()
     startup_installed = is_startup_entry_installed()
@@ -1663,13 +1961,20 @@ def status(deep: bool = False) -> None:
         _print_scheduled_task_drift(task_name)
     elif startup_installed:
         entry = get_startup_entry_path()
-        print(f"✓ Windows login item installed: {entry if entry.exists() else _legacy_startup_entry_path()}")
+        print(
+            f"✓ Windows login item installed: {entry if entry.exists() else _legacy_startup_entry_path()}"
+        )
     else:
         print("✗ Gateway service not installed")
     from clawk_cli.gateway_windows_legacy import warn_legacy_launchers
+
     warn_legacy_launchers()
 
-    print(f"✓ Gateway process running (PID: {', '.join(map(str, pids))})" if pids else "✗ No gateway process detected")
+    print(
+        f"✓ Gateway process running (PID: {', '.join(map(str, pids))})"
+        if pids
+        else "✗ No gateway process detected"
+    )
 
     if deep:
         print()
@@ -1685,7 +1990,7 @@ def status(deep: bool = False) -> None:
 def start() -> None:
     """Start the gateway using the canonical detached Windows launch path."""
     _assert_windows()
-    _print_start_attestation_warning()   # once: the LAST start's ✓ turned out to be false
+    _print_start_attestation_warning()  # once: the LAST start's ✓ turned out to be false
     running_pids = _gateway_pids()
     if running_pids:
         _report_already_running(running_pids)
@@ -1695,25 +2000,42 @@ def start() -> None:
         # Login persistence is a lasting system change: a bare ``start`` installs it only on an explicit
         # answer — the CLAWK_GATEWAY_INSTALL_START_ON_LOGIN override or a real TTY prompt — never on a
         # non-TTY default (#113977). Declining still starts the gateway; the command is ``start``.
-        start_on_login = _install_choice_from_env("CLAWK_GATEWAY_INSTALL_START_ON_LOGIN")
+        start_on_login = _install_choice_from_env(
+            "CLAWK_GATEWAY_INSTALL_START_ON_LOGIN"
+        )
         if start_on_login is None:
-            from clawk_cli.setup import is_interactive_stdin, is_noninteractive, prompt_yes_no
+            from clawk_cli.setup import (
+                is_interactive_stdin,
+                is_noninteractive,
+                prompt_yes_no,
+            )
 
             print("✗ Gateway service is not installed")
-            if is_noninteractive() or not _stdout_isatty() or not _stdin_is_interactive(
-                isatty=is_interactive_stdin(), console_mode_ok=_stdin_console_mode_ok()
+            if (
+                is_noninteractive()
+                or not _stdout_isatty()
+                or not _stdin_is_interactive(
+                    isatty=is_interactive_stdin(),
+                    console_mode_ok=_stdin_console_mode_ok(),
+                )
             ):
                 start_on_login = False
             else:
-                start_on_login = prompt_yes_no("  Install it now so the gateway starts on login?", True)
+                start_on_login = prompt_yes_no(
+                    "  Install it now so the gateway starts on login?", True
+                )
         if start_on_login:
             # install() starts the gateway itself (start_now) and reports the outcome — including a UAC
             # hand-off to an elevated child — so there is nothing left to spawn or to warn about here.
             install(force=False, start_now=True, start_on_login=True)
             return
-        print("ℹ Login auto-start not installed; add it later with: clawk gateway install")
+        print(
+            "ℹ Login auto-start not installed; add it later with: clawk gateway install"
+        )
     elif is_task_registered():
-        reconcile_scheduled_task(get_task_name())   # like systemd's regenerate-on-stale before a start
+        reconcile_scheduled_task(
+            get_task_name()
+        )  # like systemd's regenerate-on-stale before a start
 
     # Manual starts use the same console-less direct spawn as restart() and install --start-now;
     # Scheduled Task / Startup entries are only login persistence.
@@ -1734,7 +2056,7 @@ def _drain_gateway_pid(pid: int, drain_timeout: float) -> bool:
     try:
         write_planned_stop_marker(pid)
     except Exception:
-        pass   # best-effort; caller escalates to a hard kill
+        pass  # best-effort; caller escalates to a hard kill
 
     deadline = time.monotonic() + max(drain_timeout, 1.0)
     while time.monotonic() < deadline:
@@ -1871,8 +2193,12 @@ def restart() -> None:
     stop()
 
     if not _wait_for_gateway_absent(timeout_s=30.0):
-        print("⚠ Gateway still present after stop; forcing termination before restart...")
-        _force_terminate_known_gateway_pids(_gateway_pid_identities(_collect_gateway_stop_pids()))
+        print(
+            "⚠ Gateway still present after stop; forcing termination before restart..."
+        )
+        _force_terminate_known_gateway_pids(
+            _gateway_pid_identities(_collect_gateway_stop_pids())
+        )
         if not _wait_for_gateway_absent(timeout_s=10.0):
             raise RuntimeError(
                 "Gateway process still detected after force kill; refusing to "

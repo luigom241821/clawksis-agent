@@ -1,4 +1,5 @@
 """A fresh launch finishes a source update using PM's success record, not a marker."""
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ def completion_tail(monkeypatch):
     scratch tree here — building products with the selected interpreter; the tests below
     cover the sync decision, not the build.
     """
+
     class Spawned(list):
         exit_code = 0
         kwargs: dict = {}
@@ -72,22 +74,30 @@ def _committed_checkout(tmp_path, monkeypatch):
     root.mkdir()
     (root / "pyproject.toml").write_text("[project]\nname='example'\n")
     (root / ".gitignore").write_text("install-stamp.json\n")
-    for args in (["init"], ["config", "user.email", "test@example.com"],
-                  ["config", "user.name", "test"], ["add", "-A"],
-                  ["commit", "-m", "init"]):
-        subprocess.run(["git", *args], cwd=root, check=True,
-                         capture_output=True, timeout=30)
+    for args in (
+        ["init"],
+        ["config", "user.email", "test@example.com"],
+        ["config", "user.name", "test"],
+        ["add", "-A"],
+        ["commit", "-m", "init"],
+    ):
+        subprocess.run(
+            ["git", *args], cwd=root, check=True, capture_output=True, timeout=30
+        )
     assert write_source_stamp(root)["dirty"] is False
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     return root
 
 
 @pytest.mark.parametrize("marker_age, owed", [(-60, False), (60, True)])
 def test_completed_tree_discharges_only_a_marker_older_than_its_stamp(
-        tmp_path, monkeypatch, completion_tail, marker_age, owed):
+    tmp_path, monkeypatch, completion_tail, marker_age, owed
+):
     """Fresh install under a preserved home (#123314): a marker armed before the stamp
     owes no rebuild of the same SHA. One armed after it (a same-commit `clawk update`
     that failed or was killed) is newer debt and the launch still finishes it."""
@@ -104,7 +114,9 @@ def test_completed_tree_discharges_only_a_marker_older_than_its_stamp(
 
 
 @pytest.mark.parametrize("edited", [False, True])
-def test_pristine_home_provisions_dependencies_without_rebuild(tmp_path, monkeypatch, completion_tail, edited):
+def test_pristine_home_provisions_dependencies_without_rebuild(
+    tmp_path, monkeypatch, completion_tail, edited
+):
     """Pristine CLAWK_HOME on a freshly installed tree (#123314): with no facts the venv
     needs provisioning, but the stamp names a clean HEAD so no product rebuild is owed.
     Local edits since the stamp void that proof: the tail runs as before."""
@@ -116,14 +128,18 @@ def test_pristine_home_provisions_dependencies_without_rebuild(tmp_path, monkeyp
     assert not venv_sync.completion_pending_path(root).exists()
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
     syncs = []
-    monkeypatch.setattr(pm, "sync_venv", lambda *args, **kwargs: syncs.append((args, kwargs)))
+    monkeypatch.setattr(
+        pm, "sync_venv", lambda *args, **kwargs: syncs.append((args, kwargs))
+    )
     assert venv_sync.prepare_launch(root, []) == Path(sys.executable)
     assert len(syncs) == 1
     assert len(completion_tail) == (1 if edited else 0)
     assert not venv_sync.completion_pending_path(root).exists()
 
 
-def test_adoption_stamp_never_discharges_an_owed_tail(tmp_path, monkeypatch, completion_tail):
+def test_adoption_stamp_never_discharges_an_owed_tail(
+    tmp_path, monkeypatch, completion_tail
+):
     """Boot-time adoption stamps HEAD but builds nothing: an unstamped blessed root with a
     pending marker still owes its tail, on this launch and on every later one."""
     import pm
@@ -144,17 +160,23 @@ def test_adoption_stamp_never_discharges_an_owed_tail(tmp_path, monkeypatch, com
     assert pending.exists()
 
 
-@pytest.mark.parametrize("argv", [["--version"], ["-V"], ["--help"], ["-p", "work", "-h"]])
+@pytest.mark.parametrize(
+    "argv", [["--version"], ["-V"], ["--help"], ["-p", "work", "-h"]]
+)
 def test_metadata_query_never_waits_on_source_completion(tmp_path, monkeypatch, argv):
     """`clawk --version` offline must answer from the tree, not run a network-bound sync."""
     import pm
 
     root = _self_checkout(tmp_path, monkeypatch)
-    monkeypatch.setattr(pm, "venv_is_current", lambda **kw: pytest.fail("metadata query reached PM"))
+    monkeypatch.setattr(
+        pm, "venv_is_current", lambda **kw: pytest.fail("metadata query reached PM")
+    )
     assert venv_sync.prepare_launch(root, argv) is None
 
 
-def test_failed_completion_tail_is_retried_without_rebuilding_dependencies(tmp_path, monkeypatch, completion_tail):
+def test_failed_completion_tail_is_retried_without_rebuilding_dependencies(
+    tmp_path, monkeypatch, completion_tail
+):
     """Dependencies committed, tail failed: the next launch owes the tail only."""
     import pm
     from clawk_cli import _launchers
@@ -163,12 +185,16 @@ def test_failed_completion_tail_is_retried_without_rebuilding_dependencies(tmp_p
     fact = runtime_facts_path(root)
     syncs = []
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: fact.is_file())
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
 
     def sync(extras=None, **kwargs):
         syncs.append(extras)
         fact.parent.mkdir(parents=True, exist_ok=True)
-        fact.write_text(json.dumps({"packages": {"venv": {"stamp": "complete", "extras": ["all"]}}}))
+        fact.write_text(
+            json.dumps({"packages": {"venv": {"stamp": "complete", "extras": ["all"]}}})
+        )
 
     monkeypatch.setattr(pm, "sync_venv", sync)
     completion_tail.exit_code = 1
@@ -197,7 +223,9 @@ def test_failed_completion_tail_is_retried_without_rebuilding_dependencies(tmp_p
 
 
 @pytest.mark.parametrize("script", ["source_completion.py", "update_completion.py"])
-def test_prepared_completion_import_does_not_start_another_tail(tmp_path, monkeypatch, completion_tail, script):
+def test_prepared_completion_import_does_not_start_another_tail(
+    tmp_path, monkeypatch, completion_tail, script
+):
     """Maintenance imports the CLI while its own completion marker is still present."""
     import pm
     from clawk_cli import _launchers
@@ -208,15 +236,23 @@ def test_prepared_completion_import_does_not_start_another_tail(tmp_path, monkey
     worker.touch()
     venv_sync.arm_completion(root)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
-    monkeypatch.setattr(sys, "argv", [str(worker), "--source", str(root), "--finish-update", "--prepared"])
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(worker), "--source", str(root), "--finish-update", "--prepared"],
+    )
 
     assert venv_sync.prepare_launch(root, sys.argv[1:]) is None
     assert not completion_tail
     assert venv_sync.completion_pending_path(root).is_file()
 
 
-def test_same_named_script_outside_the_checkout_still_repairs(tmp_path, monkeypatch, completion_tail):
+def test_same_named_script_outside_the_checkout_still_repairs(
+    tmp_path, monkeypatch, completion_tail
+):
     """Only this checkout's own tail is exempt: another tree's worker still owes this one's repair."""
     import pm
     from clawk_cli import _launchers
@@ -227,7 +263,9 @@ def test_same_named_script_outside_the_checkout_still_repairs(tmp_path, monkeypa
     foreign.touch()
     venv_sync.arm_completion(root)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     monkeypatch.setattr(sys, "argv", [str(foreign), "--prepared"])
 
     assert venv_sync.prepare_launch(root, sys.argv[1:]) is None
@@ -235,7 +273,9 @@ def test_same_named_script_outside_the_checkout_still_repairs(tmp_path, monkeypa
     assert not venv_sync.completion_pending_path(root).is_file()
 
 
-def test_completion_tail_output_stays_off_stdout(tmp_path, monkeypatch, completion_tail):
+def test_completion_tail_output_stays_off_stdout(
+    tmp_path, monkeypatch, completion_tail
+):
     """The automatic tail runs in front of the user's command, which may be piping JSON."""
     import pm
     from clawk_cli import _launchers
@@ -243,12 +283,16 @@ def test_completion_tail_output_stays_off_stdout(tmp_path, monkeypatch, completi
     root = _self_checkout(tmp_path, monkeypatch)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
     monkeypatch.setattr(pm, "sync_venv", lambda *a, **kw: None)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     venv_sync.prepare_launch(root, [])
     assert completion_tail.kwargs["stdout"] is sys.__stderr__
 
 
-def test_first_launch_syncs_without_marker_then_uses_completion_fact(tmp_path, monkeypatch, completion_tail):
+def test_first_launch_syncs_without_marker_then_uses_completion_fact(
+    tmp_path, monkeypatch, completion_tail
+):
     import pm
     from clawk_cli import _launchers
 
@@ -264,21 +308,36 @@ def test_first_launch_syncs_without_marker_then_uses_completion_fact(tmp_path, m
     fact = runtime_facts_path(root)
     calls = []
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: fact.is_file())
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
 
     def sync(extras=None, **kwargs):
         calls.append((extras, kwargs))
         fact.parent.mkdir(parents=True, exist_ok=True)
-        fact.write_text(json.dumps({"packages": {"venv": {"stamp": "complete", "extras": ["all"]}}}))
+        fact.write_text(
+            json.dumps({"packages": {"venv": {"stamp": "complete", "extras": ["all"]}}})
+        )
 
     monkeypatch.setattr(pm, "sync_venv", sync)
     # A shipped updater may have written this before it reaches an inert shim.
     # It is obsolete after successful sync, not the trigger for that sync.
     (root / ".update-incomplete").write_text("pid=-1\n")
     assert venv_sync.prepare_launch(root, []) == Path(sys.executable)
-    assert calls == [(["all"], {"explicit": True, "project_root": root, "evict_incompatible_plugins": True})]
+    assert calls == [
+        (
+            ["all"],
+            {
+                "explicit": True,
+                "project_root": root,
+                "evict_incompatible_plugins": True,
+            },
+        )
+    ]
     assert not (root / ".update-incomplete").exists()
-    assert any("source_completion.py" in str(part) for cmd in completion_tail for part in cmd)
+    assert any(
+        "source_completion.py" in str(part) for cmd in completion_tail for part in cmd
+    )
     assert venv_sync.prepare_launch(root, []) is None
     assert len(calls) == 1
 
@@ -289,7 +348,9 @@ def test_relaunch_keeps_invocation_and_checkout_imports(tmp_path, mode):
     root.mkdir()
     (root / "checkout_only.py").write_text("value = 'from checkout'\n")
     script = root / "entry.py"
-    script.write_text("import checkout_only, json, sys\nprint(json.dumps([checkout_only.value, sys.argv[1:]]))\n")
+    script.write_text(
+        "import checkout_only, json, sys\nprint(json.dumps([checkout_only.value, sys.argv[1:]]))\n"
+    )
     argv = [str(script), "--profile", "name with spaces", "-c", "session"]
     orig = [sys.executable, *argv]
     module = None
@@ -300,14 +361,27 @@ def test_relaunch_keeps_invocation_and_checkout_imports(tmp_path, mode):
         argv[0] = "-c"
         orig = [sys.executable, "-c", "import entry", *argv[1:]]
     command = venv_sync.relaunch_command(Path(sys.executable), root, argv, orig, module)
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == ["from checkout", argv[1:]]
 
 
-@pytest.mark.parametrize("owner,argv", [(None, []), ("external", []), ("electron-updater", []), ("self", ["-p", "coder", "pm", "repair"])])
-def test_non_self_or_pm_launch_cannot_trigger_update(tmp_path, monkeypatch, owner, argv):
+@pytest.mark.parametrize(
+    "owner,argv",
+    [
+        (None, []),
+        ("external", []),
+        ("electron-updater", []),
+        ("self", ["-p", "coder", "pm", "repair"]),
+    ],
+)
+def test_non_self_or_pm_launch_cannot_trigger_update(
+    tmp_path, monkeypatch, owner, argv
+):
     import pm
+
     root = tmp_path / "checkout"
     root.mkdir()
     (root / ".git").mkdir()
@@ -317,12 +391,15 @@ def test_non_self_or_pm_launch_cannot_trigger_update(tmp_path, monkeypatch, owne
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr(pm, "venv_is_current", lambda **kw: pytest.fail("unowned launch reached PM"))
+    monkeypatch.setattr(
+        pm, "venv_is_current", lambda **kw: pytest.fail("unowned launch reached PM")
+    )
     assert venv_sync.prepare_launch(root, argv) is None
 
 
 def test_failed_launch_keeps_previous_completion_and_retries(tmp_path, monkeypatch):
     import pm
+
     root = tmp_path / "checkout"
     root.mkdir()
     (root / ".git").mkdir()
@@ -337,9 +414,11 @@ def test_failed_launch_keeps_previous_completion_and_retries(tmp_path, monkeypat
     fact.write_text(previous)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
     calls = []
+
     def fail(extras, **kwargs):
         calls.append(extras)
         raise RuntimeError("network unavailable")
+
     monkeypatch.setattr(pm, "sync_venv", fail)
     for _ in range(2):
         with pytest.raises(RuntimeError, match="network unavailable"):
@@ -349,9 +428,12 @@ def test_failed_launch_keeps_previous_completion_and_retries(tmp_path, monkeypat
     assert not (root / ".update-incomplete").exists()
 
 
-def test_blessed_legacy_install_is_adopted_before_sync(tmp_path, monkeypatch, completion_tail):
+def test_blessed_legacy_install_is_adopted_before_sync(
+    tmp_path, monkeypatch, completion_tail
+):
     import pm
     from clawk_cli import _launchers
+
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     home = tmp_path / "home"
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -363,7 +445,9 @@ def test_blessed_legacy_install_is_adopted_before_sync(tmp_path, monkeypatch, co
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
     calls = []
     monkeypatch.setattr(pm, "sync_venv", lambda *args, **kw: calls.append(args))
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     assert venv_sync.prepare_launch(root, []) == Path(sys.executable)
     assert json.loads((root / "install-stamp.json").read_text())["source"] == "adoption"
     assert calls == [(["all"],)]
@@ -371,18 +455,31 @@ def test_blessed_legacy_install_is_adopted_before_sync(tmp_path, monkeypatch, co
 
 def test_relaunch_runs_zip_launchers_and_preserves_interpreter_options(tmp_path):
     import zipfile
+
     launcher = tmp_path / "clawk.exe"
     with zipfile.ZipFile(launcher, "w") as archive:
-        archive.writestr("__main__.py", "import json,sys; print(json.dumps([sys.argv[1:], sys.stdout.write_through, sys.flags.utf8_mode]))")
+        archive.writestr(
+            "__main__.py",
+            "import json,sys; print(json.dumps([sys.argv[1:], sys.stdout.write_through, sys.flags.utf8_mode]))",
+        )
     original = [sys.executable, "-u", "-X", "utf8", str(launcher), "arg with spaces"]
-    command = venv_sync.relaunch_command(Path(sys.executable), tmp_path, [str(launcher), "arg with spaces"], original, "__main__")
-    result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=False)
+    command = venv_sync.relaunch_command(
+        Path(sys.executable),
+        tmp_path,
+        [str(launcher), "arg with spaces"],
+        original,
+        "__main__",
+    )
+    result = subprocess.run(
+        command, capture_output=True, text=True, timeout=30, check=False
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [["arg with spaces"], True, 1]
 
 
 def test_live_old_update_blocks_launch_sync(tmp_path, monkeypatch):
     import pm
+
     root = tmp_path / "checkout"
     root.mkdir()
     (root / ".git").mkdir()
@@ -392,19 +489,26 @@ def test_live_old_update_blocks_launch_sync(tmp_path, monkeypatch):
     marker.write_text(f"pid={os.getpid()}\n")
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
-    monkeypatch.setattr(pm, "sync_venv", lambda *a, **kw: pytest.fail("raced old updater"))
+    monkeypatch.setattr(
+        pm, "sync_venv", lambda *a, **kw: pytest.fail("raced old updater")
+    )
     with pytest.raises(RuntimeError, match="still running"):
         venv_sync.prepare_launch(root, [])
     assert marker.is_file()
     # Fresh post-sync verification children may boot under a live updater.
     from clawk_cli import _launchers
+
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     assert venv_sync.prepare_launch(root, []) is None
     assert marker.is_file()
 
 
-def test_launch_under_the_owning_update_does_not_run_the_tail_again(tmp_path, monkeypatch, completion_tail):
+def test_launch_under_the_owning_update_does_not_run_the_tail_again(
+    tmp_path, monkeypatch, completion_tail
+):
     """The tail imports the application, whose entry point runs prepare_launch: inside the
     process tree of the update that owns the pending tail it must be a no-op, not recurse."""
     import time
@@ -418,32 +522,47 @@ def test_launch_under_the_owning_update_does_not_run_the_tail_again(tmp_path, mo
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
     marker = update_marker_path()
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(f"{os.getppid()}\n{int(time.time())}\n")  # an ancestor holds the update
+    marker.write_text(
+        f"{os.getppid()}\n{int(time.time())}\n"
+    )  # an ancestor holds the update
 
     assert venv_sync.prepare_launch(root, []) is None
     assert completion_tail == []
-    assert pending.is_file(), "the owning update's obligation was discharged by its own tail"
+    assert pending.is_file(), (
+        "the owning update's obligation was discharged by its own tail"
+    )
 
 
-def test_gateway_status_skips_pending_source_update_completion(tmp_path, monkeypatch, completion_tail):
+def test_gateway_status_skips_pending_source_update_completion(
+    tmp_path, monkeypatch, completion_tail
+):
     """`gateway status` remains a read-only recovery diagnostic while a tail is owed (#139133)."""
     import pm
 
     root = _self_checkout(tmp_path, monkeypatch)
     pending = venv_sync.arm_completion(root)
-    monkeypatch.setattr(pm, "venv_is_current", lambda **_kw: pytest.fail("status started a dependency sync"))
+    monkeypatch.setattr(
+        pm,
+        "venv_is_current",
+        lambda **_kw: pytest.fail("status started a dependency sync"),
+    )
 
     assert venv_sync.prepare_launch(root, ["gateway", "status"]) is None
     assert completion_tail == []
-    assert pending.is_file(), "a status query must leave the update tail for `clawk gateway restart`"
+    assert pending.is_file(), (
+        "a status query must leave the update tail for `clawk gateway restart`"
+    )
 
 
-@pytest.mark.parametrize("marker,value,owed_by_cli", [
-    ("CLAWK_SUPERVISED_CHILD", "1", True),
-    ("CLAWK_S6_SUPERVISED_CHILD", "true", True),
-    ("CLAWK_SUPERVISED_CHILD", "0", False),
-    ("CLAWK_SUPERVISED_CHILD", "false", False),
-])
+@pytest.mark.parametrize(
+    "marker,value,owed_by_cli",
+    [
+        ("CLAWK_SUPERVISED_CHILD", "1", True),
+        ("CLAWK_S6_SUPERVISED_CHILD", "true", True),
+        ("CLAWK_SUPERVISED_CHILD", "0", False),
+        ("CLAWK_SUPERVISED_CHILD", "false", False),
+    ],
+)
 def test_supervised_launch_leaves_a_pending_tail_to_the_cli(
     tmp_path, monkeypatch, capsys, completion_tail, marker, value, owed_by_cli
 ):
@@ -462,7 +581,9 @@ def test_supervised_launch_leaves_a_pending_tail_to_the_cli(
     pending.parent.mkdir(parents=True)
     pending.write_text("owed\n")
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     monkeypatch.delenv("CLAWK_SUPERVISED_CHILD", raising=False)
     monkeypatch.delenv("CLAWK_S6_SUPERVISED_CHILD", raising=False)
     monkeypatch.setenv(marker, value)
@@ -470,7 +591,9 @@ def test_supervised_launch_leaves_a_pending_tail_to_the_cli(
     assert venv_sync.prepare_launch(root, ["gateway", "run"]) is None
     if owed_by_cli:
         assert completion_tail == []
-        assert pending.is_file(), "a supervised child discharged an obligation the CLI still owes"
+        assert pending.is_file(), (
+            "a supervised child discharged an obligation the CLI still owes"
+        )
         out, err = capsys.readouterr()
         assert out == "" and err.count("run `clawk update`") == 1
     else:
@@ -496,10 +619,14 @@ def test_supervised_launch_with_stale_dependencies_still_syncs(
     syncs = []
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: False)
     monkeypatch.setattr(pm, "sync_venv", lambda *a, **kw: syncs.append(a))
-    monkeypatch.setattr(_launchers, "resolve_store_python", lambda _, **__: Path(sys.executable))
+    monkeypatch.setattr(
+        _launchers, "resolve_store_python", lambda _, **__: Path(sys.executable)
+    )
     monkeypatch.setenv("CLAWK_SUPERVISED_CHILD", "1")
 
     venv_sync.prepare_launch(root, ["gateway", "run"])
-    assert syncs, "a supervised child booted on a stale dependency graph without syncing"
+    assert syncs, (
+        "a supervised child booted on a stale dependency graph without syncing"
+    )
     assert completion_tail, "the tail armed by that sync was never finished"
     assert not venv_sync.completion_pending_path(root).is_file()

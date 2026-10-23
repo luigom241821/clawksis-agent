@@ -35,14 +35,9 @@ def _wire_event(**src_overrides):
 
 
 class TestUserIdentityEnrichment:
-
-
     def test_handle_is_last_resort(self):
-        ev = _event_from_wire(
-            _wire_event(user_name=None, user_handle="ben#1234")
-        )
+        ev = _event_from_wire(_wire_event(user_name=None, user_handle="ben#1234"))
         assert ev.source.user_name == "ben#1234"
-
 
     def test_session_key_is_stable_across_name_shapes(self):
         """user_name is presentation-only: the same user_id keys the same

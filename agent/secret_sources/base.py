@@ -66,15 +66,15 @@ class ErrorKind(str, Enum):
     """Failure taxonomy for :class:`FetchResult.error`; lets the orchestrator apply
     kind-dependent policy once (stale-cache fallback on NETWORK/TIMEOUT, never AUTH_FAILED)."""
 
-    NOT_CONFIGURED = "not_configured"    # enabled but missing token/project/map
-    BINARY_MISSING = "binary_missing"    # helper CLI not found / not installed
-    AUTH_FAILED = "auth_failed"          # bad credentials
-    AUTH_EXPIRED = "auth_expired"        # credentials were valid, aren't now
-    REF_INVALID = "ref_invalid"          # a secret reference failed validation
-    NETWORK = "network"                  # transport-level failure
-    EMPTY_VALUE = "empty_value"          # backend returned nothing for a ref
-    TIMEOUT = "timeout"                  # fetch exceeded its wall-clock budget
-    INTERNAL = "internal"                # anything else (bug, unexpected shape)
+    NOT_CONFIGURED = "not_configured"  # enabled but missing token/project/map
+    BINARY_MISSING = "binary_missing"  # helper CLI not found / not installed
+    AUTH_FAILED = "auth_failed"  # bad credentials
+    AUTH_EXPIRED = "auth_expired"  # credentials were valid, aren't now
+    REF_INVALID = "ref_invalid"  # a secret reference failed validation
+    NETWORK = "network"  # transport-level failure
+    EMPTY_VALUE = "empty_value"  # backend returned nothing for a ref
+    TIMEOUT = "timeout"  # fetch exceeded its wall-clock budget
+    INTERNAL = "internal"  # anything else (bug, unexpected shape)
 
 
 # Ordered (kind, substrings) rules for mapping CLI failure text onto ErrorKind;
@@ -168,8 +168,10 @@ class SecretSource(ABC):
     def override_existing(self, cfg: dict) -> bool:
         """May this source overwrite vars .env / the shell already set? Never extends
         to vars claimed by another source (a config error the orchestrator warns about)."""
-        return bool(isinstance(cfg, dict)
-                    and cfg.get("override_existing", self.override_existing_default))
+        return bool(
+            isinstance(cfg, dict)
+            and cfg.get("override_existing", self.override_existing_default)
+        )
 
     def token_env(self, cfg: dict) -> str:
         """Name of the env var holding this source's bootstrap credential."""
@@ -183,8 +185,10 @@ class SecretSource(ABC):
 
     def fetch_timeout_seconds(self, cfg: dict) -> float:
         """Wall-clock budget the orchestrator enforces around fetch()."""
-        val = coerce_float((cfg or {}).get("timeout_seconds", DEFAULT_FETCH_TIMEOUT_SECONDS),
-                           DEFAULT_FETCH_TIMEOUT_SECONDS)
+        val = coerce_float(
+            (cfg or {}).get("timeout_seconds", DEFAULT_FETCH_TIMEOUT_SECONDS),
+            DEFAULT_FETCH_TIMEOUT_SECONDS,
+        )
         return val if val > 0 else DEFAULT_FETCH_TIMEOUT_SECONDS
 
     def config_schema(self) -> dict:
@@ -195,7 +199,9 @@ class SecretSource(ABC):
         """One-line actionable next step for a failed fetch (pure); "" suppresses the hint."""
         if kind is None:
             return ""
-        template = self.remediation_hints.get(kind) or _GENERIC_REMEDIATION.get(kind, "")
+        template = self.remediation_hints.get(kind) or _GENERIC_REMEDIATION.get(
+            kind, ""
+        )
         return template.format(name=self.name, token_env=self.token_env(cfg))
 
 
@@ -219,14 +225,27 @@ def scrub_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text or "")
 
 
-def run_cli(argv: Sequence[str], *, env: dict[str, str], timeout: float, label: str,
-            timeout_message: str, stdin: Any = subprocess.DEVNULL) -> subprocess.CompletedProcess:
+def run_cli(
+    argv: Sequence[str],
+    *,
+    env: dict[str, str],
+    timeout: float,
+    label: str,
+    timeout_message: str,
+    stdin: Any = subprocess.DEVNULL,
+) -> subprocess.CompletedProcess:
     """``subprocess.run`` an argv list (never a shell), capturing utf-8 text; timeout
     and spawn failure become ``RuntimeError``. Callers own returncode interpretation."""
     try:
         return subprocess.run(
-            list(argv), env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=timeout, stdin=stdin,
+            list(argv),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            stdin=stdin,
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
@@ -235,22 +254,42 @@ def run_cli(argv: Sequence[str], *, env: dict[str, str], timeout: float, label: 
         raise RuntimeError(f"failed to invoke {label}: {exc}") from exc
 
 
-def run_secret_cli(argv: Sequence[str], *, allow_env: Sequence[str] = (), extra_env: Optional[dict[str, str]] = None,
-                   timeout: float = DEFAULT_CLI_TIMEOUT_SECONDS) -> subprocess.CompletedProcess:
+def run_secret_cli(
+    argv: Sequence[str],
+    *,
+    allow_env: Sequence[str] = (),
+    extra_env: Optional[dict[str, str]] = None,
+    timeout: float = DEFAULT_CLI_TIMEOUT_SECONDS,
+) -> subprocess.CompletedProcess:
     """Run a secret-manager helper CLI with a minimal, allowlisted env (never the
     full post-dotenv ``os.environ``): PATH/HOME/locale basics plus ``allow_env``
     and ``extra_env``. ``NO_COLOR=1`` + ANSI-scrubbed stderr; stdin is /dev/null so
     a prompting helper fails fast. Pass user refs AFTER a ``--`` terminator."""
-    base_keep = ("PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "TMPDIR", "TEMP",
-                 "LANG", "LC_ALL", "XDG_CONFIG_HOME", "XDG_DATA_HOME")
+    base_keep = (
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "TMPDIR",
+        "TEMP",
+        "LANG",
+        "LC_ALL",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+    )
     env = {k: os.environ[k] for k in (*base_keep, *allow_env) if k in os.environ}
     if extra_env:
         env.update(extra_env)
     env.setdefault("NO_COLOR", "1")
 
     name = Path(str(argv[0])).name
-    proc = run_cli(argv, env=env, timeout=timeout, label=name,
-                   timeout_message=f"{name} timed out after {timeout:.0f}s")
+    proc = run_cli(
+        argv,
+        env=env,
+        timeout=timeout,
+        label=name,
+        timeout_message=f"{name} timed out after {timeout:.0f}s",
+    )
     proc.stdout = proc.stdout or ""
     proc.stderr = scrub_ansi(proc.stderr or "")
     return proc

@@ -93,4 +93,3 @@ class TestAutoResetLoadsCleanContext:
         )
         # The old transcript is still searchable, not destroyed.
         assert len(store.load_transcript(bloated_sid)) == 120
-

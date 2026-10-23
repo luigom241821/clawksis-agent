@@ -15,12 +15,23 @@ from typing import Any, Dict, List
 
 # Values are maps of name → schema: recurse into the values, but the map itself
 # is not a schema and gets no repairs.
-_SCHEMA_MAP_KEYS = frozenset({"properties", "patternProperties", "$defs", "definitions"})
+_SCHEMA_MAP_KEYS = frozenset(
+    {"properties", "patternProperties", "$defs", "definitions"}
+)
 # Values are lists of schemas.
 _SCHEMA_LIST_KEYS = frozenset({"anyOf", "oneOf", "allOf", "prefixItems"})
 # Values are a single nested schema (additionalProperties may also be a bool).
 _SCHEMA_NODE_KEYS = frozenset(
-    {"items", "contains", "not", "additionalProperties", "propertyNames", "if", "then", "else"}
+    {
+        "items",
+        "contains",
+        "not",
+        "additionalProperties",
+        "propertyNames",
+        "if",
+        "then",
+        "else",
+    }
 )
 
 _SCALAR_TYPES = frozenset({"string", "integer", "number", "boolean"})
@@ -42,7 +53,9 @@ def _repair_schema(node: Any) -> Any:
     repaired: dict[str, Any] = {}
     for key, value in node.items():
         if key in _SCHEMA_MAP_KEYS and isinstance(value, dict):
-            repaired[key] = {sub_key: _repair_schema(sub_val) for sub_key, sub_val in value.items()}
+            repaired[key] = {
+                sub_key: _repair_schema(sub_val) for sub_key, sub_val in value.items()
+            }
         elif (key in _SCHEMA_LIST_KEYS and isinstance(value, list)) or (
             key in _SCHEMA_NODE_KEYS and isinstance(value, dict)
         ):
@@ -55,13 +68,20 @@ def _repair_schema(node: Any) -> Any:
     # through to rules 1/3/4, otherwise the pruned anyOf is returned as-is.
     if "anyOf" in repaired and isinstance(repaired["anyOf"], list):
         repaired.pop("type", None)
-        non_null = [b for b in repaired["anyOf"] if isinstance(b, dict) and b.get("type") != "null"]
+        non_null = [
+            b
+            for b in repaired["anyOf"]
+            if isinstance(b, dict) and b.get("type") != "null"
+        ]
         if not non_null or len(non_null) == len(repaired["anyOf"]):
             return repaired
         if len(non_null) > 1:
             repaired["anyOf"] = non_null
             return repaired
-        repaired = {**{k: v for k, v in repaired.items() if k != "anyOf"}, **non_null[0]}
+        repaired = {
+            **{k: v for k, v in repaired.items() if k != "anyOf"},
+            **non_null[0],
+        }
 
     # Moonshot also rejects the non-standard ``nullable`` keyword.
     repaired.pop("nullable", None)
@@ -111,7 +131,10 @@ def _fill_missing_type(node: dict[str, Any]) -> dict[str, Any]:
     """
     node_type = node.get("type")
     if isinstance(node_type, list):
-        concrete = next((t for t in node_type if isinstance(t, str) and t not in {"", "null"}), "string")
+        concrete = next(
+            (t for t in node_type if isinstance(t, str) and t not in {"", "null"}),
+            "string",
+        )
         return {**node, "type": concrete}
     if "type" in node and node_type not in {None, ""}:
         return node
@@ -122,7 +145,9 @@ def _fill_missing_type(node: dict[str, Any]) -> dict[str, Any]:
         inferred = "array"
     elif isinstance(node.get("enum"), list) and node["enum"]:
         sample = node["enum"][0]
-        inferred = next((t for cls, t in _ENUM_SAMPLE_TYPES if isinstance(sample, cls)), "string")
+        inferred = next(
+            (t for cls, t in _ENUM_SAMPLE_TYPES if isinstance(sample, cls)), "string"
+        )
     elif "if" in node or "then" in node or "else" in node:
         return node
     else:

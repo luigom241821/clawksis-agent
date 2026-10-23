@@ -105,11 +105,16 @@ def _stamp_event(obj: dict) -> None:
         buf.append((seq, payload, size))
         _replay_buffer_bytes[sid] += size
         _replay_total_bytes += size
-        while len(buf) > _REPLAY_BUFFER_MAX or _replay_buffer_bytes[sid] > _REPLAY_BUFFER_BYTES_MAX:
+        while (
+            len(buf) > _REPLAY_BUFFER_MAX
+            or _replay_buffer_bytes[sid] > _REPLAY_BUFFER_BYTES_MAX
+        ):
             evicted_seq, _event, evicted_size = buf.popleft()
             _replay_buffer_bytes[sid] -= evicted_size
             _replay_total_bytes -= evicted_size
-            _replay_evicted_through[sid] = max(_replay_evicted_through.get(sid, 0), evicted_seq)
+            _replay_evicted_through[sid] = max(
+                _replay_evicted_through.get(sid, 0), evicted_seq
+            )
         while _replay_total_bytes > _REPLAY_PROCESS_BYTES_MAX:
             for evict_sid, evict_buf in _replay_buffers.items():
                 if evict_buf:
@@ -134,7 +139,9 @@ def _drop_ring_locked(sid: str) -> None:
     if _replay_buffers.pop(sid, None) is None:
         return
     _replay_total_bytes -= _replay_buffer_bytes.pop(sid, 0)
-    _replay_evicted_through[sid] = max(_replay_evicted_through.get(sid, 0), _replay_next_seq.get(sid, 0))
+    _replay_evicted_through[sid] = max(
+        _replay_evicted_through.get(sid, 0), _replay_next_seq.get(sid, 0)
+    )
 
 
 def forget_session(sid: str) -> None:
@@ -156,7 +163,11 @@ def events_since(sid: str, last_seen: int) -> list[dict]:
     """
     with _replay_lock:
         buf = _replay_buffers.get(sid or "")
-        snapshots = [(seq, payload) for seq, payload, _size in buf if seq > last_seen] if buf else []
+        snapshots = (
+            [(seq, payload) for seq, payload, _size in buf if seq > last_seen]
+            if buf
+            else []
+        )
     return [_thaw_params(payload, seq) for seq, payload in snapshots]
 
 

@@ -17,6 +17,7 @@ from unittest.mock import patch
 # Test: _flush_messages_to_session_db only writes new messages
 # ---------------------------------------------------------------------------
 
+
 class TestFlushDeduplication:
     """Verify _flush_messages_to_session_db tracks what it already wrote."""
 
@@ -24,6 +25,7 @@ class TestFlushDeduplication:
         """Create a minimal AIAgent with a real session DB."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
@@ -66,7 +68,9 @@ class TestFlushDeduplication:
                 agent._flush_messages_to_session_db(messages, conversation_history)
 
                 rows = db.get_messages(agent.session_id)
-                assert len(rows) == 2, f"Expected still 2 messages after second flush, got {len(rows)}"
+                assert len(rows) == 2, (
+                    f"Expected still 2 messages after second flush, got {len(rows)}"
+                )
             finally:
                 db.close()
 
@@ -74,6 +78,7 @@ class TestFlushDeduplication:
 # ---------------------------------------------------------------------------
 # Test: append_to_transcript skip_db parameter
 # ---------------------------------------------------------------------------
+
 
 class TestAppendToTranscriptSkipDb:
     """Verify skip_db=True skips the SQLite write."""

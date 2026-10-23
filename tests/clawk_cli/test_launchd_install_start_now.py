@@ -3,6 +3,7 @@
 The plist carries RunAtLoad, so loading it (`launchctl bootstrap`) starts the gateway on the spot. A
 no-start install must therefore write the plist without loading it; `clawk gateway start` loads it later.
 """
+
 import argparse
 import plistlib
 import subprocess
@@ -22,7 +23,9 @@ def _parse(*argv):
     parser = argparse.ArgumentParser()
     build_gateway_parser(
         parser.add_subparsers(dest="command"),
-        cmd_gateway=lambda a: None, cmd_proxy=lambda a: None, cmd_gateway_enroll=lambda a: None,
+        cmd_gateway=lambda a: None,
+        cmd_proxy=lambda a: None,
+        cmd_gateway_enroll=lambda a: None,
     )
     return parser.parse_args(["gateway", *argv])
 
@@ -32,21 +35,39 @@ def launchd(tmp_path, monkeypatch):
     """launchd backend with every launchctl call recorded instead of run."""
     state = SimpleNamespace(
         plist=tmp_path / "LaunchAgents" / f"{LABEL}.plist",
-        supervised_pid=None, bootstraps=[], launchctl=[], refreshes=[], starts=[],
+        supervised_pid=None,
+        bootstraps=[],
+        launchctl=[],
+        refreshes=[],
+        starts=[],
     )
     monkeypatch.setattr(gateway_cli, "_service_backend", lambda *a, **k: "launchd")
     monkeypatch.setattr(gateway_cli, "is_managed", lambda: False)
     monkeypatch.setattr(gateway_cli, "is_termux", lambda: False)
-    monkeypatch.setattr(gateway_cli, "_guard_named_profile_under_multiplexer", lambda **k: None)
+    monkeypatch.setattr(
+        gateway_cli, "_guard_named_profile_under_multiplexer", lambda **k: None
+    )
     monkeypatch.setattr(gateway_cli, "get_launchd_plist_path", lambda: state.plist)
     monkeypatch.setattr(gateway_cli, "get_launchd_label", lambda: LABEL)
     monkeypatch.setattr(gateway_cli, "_launchd_domain", lambda: DOMAIN)
-    monkeypatch.setattr(gateway_service_owner, "refuse_temp_home_service_write", lambda *a: False)
+    monkeypatch.setattr(
+        gateway_service_owner, "refuse_temp_home_service_write", lambda *a: False
+    )
     monkeypatch.setattr(gateway_cli, "_clear_launchd_unsupported_marker", lambda: None)
-    monkeypatch.setattr(gateway_cli, "_launchctl_supervised_pid", lambda label: state.supervised_pid)
-    monkeypatch.setattr(gateway_cli, "_launchctl_bootstrap", lambda *a, **k: state.bootstraps.append(a))
-    monkeypatch.setattr(gateway_cli, "refresh_launchd_plist_if_needed", lambda: state.refreshes.append(1) or True)
-    monkeypatch.setattr(gateway_cli, "_setup_service_action", lambda *a, **k: state.starts.append(a))
+    monkeypatch.setattr(
+        gateway_cli, "_launchctl_supervised_pid", lambda label: state.supervised_pid
+    )
+    monkeypatch.setattr(
+        gateway_cli, "_launchctl_bootstrap", lambda *a, **k: state.bootstraps.append(a)
+    )
+    monkeypatch.setattr(
+        gateway_cli,
+        "refresh_launchd_plist_if_needed",
+        lambda: state.refreshes.append(1) or True,
+    )
+    monkeypatch.setattr(
+        gateway_cli, "_setup_service_action", lambda *a, **k: state.starts.append(a)
+    )
 
     def fake_run(cmd, *a, **k):
         state.launchctl.append(cmd)
@@ -65,7 +86,11 @@ BOOTOUT = ["launchctl", "bootout", f"{DOMAIN}/{LABEL}"]
     ids=["fresh-install", "repair-stopped-gateway", "repair-running-gateway"],
 )
 def test_cli_no_start_now_loads_only_a_gateway_launchd_already_runs(
-    launchd, capsys, stale_plist, supervised_pid, reloads,
+    launchd,
+    capsys,
+    stale_plist,
+    supervised_pid,
+    reloads,
 ):
     """Nothing running: the plist is written, never loaded, and an idle registration left from before
     (a parked clean exit) is booted out, since that is what `gateway start` would kickstart. A gateway

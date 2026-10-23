@@ -79,8 +79,12 @@ def _cgroup_limit_bytes() -> Optional[int]:
         own = _own_cgroup_path()
     except Exception:
         own = None
-    roots = ([f"/sys/fs/cgroup{own}"] if own and own != "/" else []) + ["/sys/fs/cgroup"]
-    for candidate in [f"{r}/memory.{f}" for r in roots for f in ("high", "max")] + ["/sys/fs/cgroup/memory/memory.limit_in_bytes"]:
+    roots = ([f"/sys/fs/cgroup{own}"] if own and own != "/" else []) + [
+        "/sys/fs/cgroup"
+    ]
+    for candidate in [f"{r}/memory.{f}" for r in roots for f in ("high", "max")] + [
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+    ]:
         limit = _finite_limit(Path(candidate))
         if limit is not None:
             return limit
@@ -121,7 +125,11 @@ def resolve_memory_high_mb(setting: Any) -> Optional[int]:
 def resolve_agent_cache_bounds(config: Any) -> AgentCacheBounds:
     """Read ``agent.agent_cache`` from the *raw* config: the gateway loader does not
     deep-merge ``DEFAULT_CONFIG``, so callers can tell "operator chose 128" from "unset"."""
-    section = (config.get("agent") or {}).get("agent_cache") if isinstance(config, dict) else None
+    section = (
+        (config.get("agent") or {}).get("agent_cache")
+        if isinstance(config, dict)
+        else None
+    )
     if not isinstance(section, dict):
         section = {}
     protect_recent = section.get("protect_recent")
@@ -134,8 +142,11 @@ def resolve_agent_cache_bounds(config: Any) -> AgentCacheBounds:
         max_size=_positive(section.get("max_size")),
         idle_ttl_secs=_positive(section.get("idle_ttl_secs"), float),
         memory_high_mb=resolve_memory_high_mb(section.get("memory_high_mb", "auto")),
-        max_evictions_per_pass=_positive(section.get("max_evictions_per_pass")) or _DEFAULT_MAX_EVICTIONS_PER_PASS,
-        protect_recent=_DEFAULT_PROTECT_RECENT if protect_parsed is None else protect_parsed,
+        max_evictions_per_pass=_positive(section.get("max_evictions_per_pass"))
+        or _DEFAULT_MAX_EVICTIONS_PER_PASS,
+        protect_recent=_DEFAULT_PROTECT_RECENT
+        if protect_parsed is None
+        else protect_parsed,
     )
 
 
@@ -159,7 +170,11 @@ def _cgroup_anon_bytes() -> Optional[int]:
             return None
         root = Path(f"/sys/fs/cgroup{own}")
         capped = any(_finite_limit(root / f"memory.{f}") for f in ("high", "max"))
-        text = root.joinpath("memory.stat").read_text(encoding="utf-8-sig") if capped else ""
+        text = (
+            root.joinpath("memory.stat").read_text(encoding="utf-8-sig")
+            if capped
+            else ""
+        )
     except (OSError, ValueError, ImportError):
         return None
     for line in text.splitlines():
@@ -203,13 +218,19 @@ def transcript_persistence_caught_up(agent: Any) -> bool:
     up.  Unknown shapes are *not* caught up: a skipped eviction costs memory, a
     wrong one costs the conversation.
     """
-    messages, flushed = getattr(agent, "_session_messages", None), getattr(agent, "_last_flushed_db_idx", None)
+    messages, flushed = (
+        getattr(agent, "_session_messages", None),
+        getattr(agent, "_last_flushed_db_idx", None),
+    )
     return isinstance(messages, list) and _is_int(flushed) and flushed >= len(messages)
 
 
 def plan_pressure_evictions(
-    ordered_entries: Iterable[tuple[str, Any]], *, is_evictable: Callable[[str, Any], bool],
-    max_evictions: int, protect_recent: int = 0,
+    ordered_entries: Iterable[tuple[str, Any]],
+    *,
+    is_evictable: Callable[[str, Any], bool],
+    max_evictions: int,
+    protect_recent: int = 0,
 ) -> list[tuple[str, Any]]:
     """Choose which cached sessions to shed, least-recently-used first.
 

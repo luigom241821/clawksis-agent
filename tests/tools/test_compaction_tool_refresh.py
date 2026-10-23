@@ -7,6 +7,7 @@ one sanctioned point for a tool-snapshot rebuild. These tests pin:
   a stable name set (the dynamic-schema case its name-only diff missed)
 - preserve_prefix=True keeps the schema already sent (between-turns refresh)
 """
+
 import os
 import sys
 import unittest
@@ -22,10 +23,16 @@ class _Agent:
 
 
 def _defs(desc):
-    return [{"type": "function", "function": {
-        "name": "image_generate", "description": desc,
-        "parameters": {"type": "object", "properties": {}},
-    }}]
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "image_generate",
+                "description": desc,
+                "parameters": {"type": "object", "properties": {}},
+            },
+        }
+    ]
 
 
 class TestContentAwareRefresh(unittest.TestCase):
@@ -39,32 +46,30 @@ class TestContentAwareRefresh(unittest.TestCase):
     def _refresh(self, agent, new_desc, **kw):
         from tools.mcp_tool_agent import refresh_agent_mcp_tools
 
-        with patch("model_tools.get_tool_definitions",
-                   return_value=_defs(new_desc)), \
-             patch("tools.mcp_tool_agent._reinject_post_build_tools",
-                   return_value=set()):
+        with (
+            patch("model_tools.get_tool_definitions", return_value=_defs(new_desc)),
+            patch(
+                "tools.mcp_tool_agent._reinject_post_build_tools", return_value=set()
+            ),
+        ):
             return refresh_agent_mcp_tools(agent, **kw)
 
     def test_content_change_swaps_when_content_aware(self):
         agent = self._agent_with("old capabilities text")
         self._refresh(agent, "new capabilities text", content_aware=True)
-        self.assertIn("new capabilities",
-                      agent.tools[0]["function"]["description"])
+        self.assertIn("new capabilities", agent.tools[0]["function"]["description"])
 
     def test_content_change_ignored_when_prefix_preserved(self):
         """Between-turns refresh keeps the schema already sent."""
         agent = self._agent_with("old capabilities text")
         self._refresh(agent, "new capabilities text", preserve_prefix=True)
-        self.assertIn("old capabilities",
-                      agent.tools[0]["function"]["description"])
+        self.assertIn("old capabilities", agent.tools[0]["function"]["description"])
 
     def test_identical_content_keeps_identity(self):
         agent = self._agent_with("same text")
         before = agent.tools
         self._refresh(agent, "same text", content_aware=True)
         self.assertIs(agent.tools, before)
-
-
 
 
 if __name__ == "__main__":

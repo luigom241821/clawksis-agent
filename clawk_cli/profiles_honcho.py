@@ -11,6 +11,7 @@ from pathlib import Path
 def _atomic_write_json(path: Path, data: dict) -> bool:
     """Atomic rewrite of a third-party JSON config; False on OSError (nothing partially written)."""
     from utils import atomic_json_write
+
     try:
         atomic_json_write(path, data)
         return True
@@ -26,7 +27,9 @@ def migrate_honcho_profile_host(old_name: str, new_name: str, new_dir: Path) -> 
     legacy_old_host = f"clawk.{old_name}"
     new_host = f"clawk_{new_name}"
     candidates = [
-        new_dir / "honcho.json", _get_default_clawk_home() / "honcho.json", Path.home() / ".honcho" / "config.json"
+        new_dir / "honcho.json",
+        _get_default_clawk_home() / "honcho.json",
+        Path.home() / ".honcho" / "config.json",
     ]
     seen: set[Path] = set()
     for path in candidates:
@@ -48,11 +51,15 @@ def migrate_honcho_profile_host(old_name: str, new_name: str, new_dir: Path) -> 
         if source_host not in hosts:
             continue
         if new_host in hosts:
-            print(f"⚠ Honcho host block not migrated: {new_host} already exists in {path}")
+            print(
+                f"⚠ Honcho host block not migrated: {new_host} already exists in {path}"
+            )
             continue
         block = hosts[source_host]
         if isinstance(block, dict) and "aiPeer" not in block:
-            block["aiPeer"] = old_name  # source_host is ``clawk_<old>`` or legacy ``clawk.<old>``
+            block["aiPeer"] = (
+                old_name  # source_host is ``clawk_<old>`` or legacy ``clawk.<old>``
+            )
         hosts[new_host] = hosts.pop(source_host)
         if _atomic_write_json(path, raw):
             print(f"✓ Honcho host updated: {source_host} → {new_host}")

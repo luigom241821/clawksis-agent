@@ -91,5 +91,3 @@ def test_from_owner_does_not_double_prefix_when_already_tagged():
     assert event is not None
     assert event.metadata.get("whatsapp_from_owner") is True
     assert event.text == "[owner reply] already tagged"
-
-

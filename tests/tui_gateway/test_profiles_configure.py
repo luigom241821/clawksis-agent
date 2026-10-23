@@ -27,11 +27,15 @@ def profile_dir(tmp_path, monkeypatch) -> Path:
 
 
 def _write_mcp(profile_dir: Path, servers: dict) -> None:
-    (profile_dir / "config.yaml").write_text(yaml.safe_dump({"mcp_servers": servers}), encoding="utf-8")
+    (profile_dir / "config.yaml").write_text(
+        yaml.safe_dump({"mcp_servers": servers}), encoding="utf-8"
+    )
 
 
 def _read_mcp(profile_dir: Path) -> dict:
-    return yaml.safe_load((profile_dir / "config.yaml").read_text(encoding="utf-8"))["mcp_servers"]
+    return yaml.safe_load((profile_dir / "config.yaml").read_text(encoding="utf-8"))[
+        "mcp_servers"
+    ]
 
 
 def _call(method: str, params: dict) -> dict:
@@ -41,7 +45,9 @@ def _call(method: str, params: dict) -> dict:
 
 
 def _described() -> dict:
-    return {s["name"]: s["enabled"] for s in _call("profiles.describe", {})["mcp_servers"]}
+    return {
+        s["name"]: s["enabled"] for s in _call("profiles.describe", {})["mcp_servers"]
+    }
 
 
 def test_describe_matches_the_runtime_once_legacy_disabled_is_migrated(profile_dir):
@@ -51,19 +57,24 @@ def test_describe_matches_the_runtime_once_legacy_disabled_is_migrated(profile_d
     from clawk_cli.tools_config import enabled_mcp_server_names
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
-    _write_mcp(profile_dir, {
-        "on": {"command": "on", "enabled": True},
-        "off": {"command": "off", "enabled": False},
-        # `clawk mcp add` writes `enabled: true`; the old editor then only added `disabled: true`.
-        "legacy-off": {"command": "legacy", "enabled": True, "disabled": True},
-        "implicit-on": {"command": "implicit"},
-    })
+    _write_mcp(
+        profile_dir,
+        {
+            "on": {"command": "on", "enabled": True},
+            "off": {"command": "off", "enabled": False},
+            # `clawk mcp add` writes `enabled: true`; the old editor then only added `disabled: true`.
+            "legacy-off": {"command": "legacy", "enabled": True, "disabled": True},
+            "implicit-on": {"command": "implicit"},
+        },
+    )
     expected = {"on": True, "off": False, "legacy-off": False, "implicit-on": True}
     assert _described() == expected
 
     token = set_clawk_home_override(profile_dir)
     try:
-        run_migrations(45, {"env_added": [], "config_added": [], "warnings": []}, quiet=True)
+        run_migrations(
+            45, {"env_added": [], "config_added": [], "warnings": []}, quiet=True
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -74,11 +85,14 @@ def test_describe_matches_the_runtime_once_legacy_disabled_is_migrated(profile_d
 def test_configure_toggle_is_what_the_runtime_resolver_and_describe_see(profile_dir):
     from clawk_cli.tools_config import enabled_mcp_server_names
 
-    _write_mcp(profile_dir, {
-        "keep": {"command": "keep", "enabled": False},
-        "drop": {"command": "drop"},
-        "legacy": {"command": "legacy", "disabled": True},
-    })
+    _write_mcp(
+        profile_dir,
+        {
+            "keep": {"command": "keep", "enabled": False},
+            "drop": {"command": "drop"},
+            "legacy": {"command": "legacy", "disabled": True},
+        },
+    )
 
     _call("profiles.configure", {"enabled_mcp_servers": ["keep", "legacy"]})
 

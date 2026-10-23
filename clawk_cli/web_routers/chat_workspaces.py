@@ -20,7 +20,9 @@ from clawk_cli.web_routers._common import http_failure, scoped_to_thread
 
 router = APIRouter()
 
-_open_session_db_for_profile = late("_open_session_db_for_profile", "clawk_cli.web_server_sessions")
+_open_session_db_for_profile = late(
+    "_open_session_db_for_profile", "clawk_cli.web_server_sessions"
+)
 
 
 def resolve_chat_cwd(raw: Optional[str]) -> Optional[str]:
@@ -34,7 +36,9 @@ def resolve_chat_cwd(raw: Optional[str]) -> Optional[str]:
         return None
     resolved = os.path.abspath(os.path.expanduser(text))
     if not os.path.isdir(resolved):
-        raise HTTPException(status_code=400, detail=f"Working directory does not exist: {text}")
+        raise HTTPException(
+            status_code=400, detail=f"Working directory does not exist: {text}"
+        )
     return resolved
 
 
@@ -59,19 +63,28 @@ def _collect_workspaces(profile: Optional[str], scan: bool) -> dict:
                 gateway._scan_discovered_repos_remote(conn, policy)
             projects = [p.to_dict() for p in pdb.list_projects(conn)]
             repos = gateway._discover_repos_payload(
-                db, conn=conn, backfill=False, include_cached=policy["enabled"])
+                db, conn=conn, backfill=False, include_cached=policy["enabled"]
+            )
     finally:
         if db is not None:
             db.close()
     default_cwd = gateway._completion_cwd({"profile": profile} if profile else {})
     return {
-        "projects": projects, "repos": repos, "default_cwd": default_cwd,
-        "home": str(Path.home()), "scan_enabled": bool(policy["enabled"])}
+        "projects": projects,
+        "repos": repos,
+        "default_cwd": default_cwd,
+        "home": str(Path.home()),
+        "scan_enabled": bool(policy["enabled"]),
+    }
 
 
 @router.get("/api/chat/workspaces")
 async def get_chat_workspaces(profile: Optional[str] = None, scan: bool = False):
     """Projects + discovered repos a fresh chat may start in; ``scan=1`` rescans the
     configured discovery roots on the host first (headless installs have no Desktop to do it)."""
-    with http_failure("GET /api/chat/workspaces failed", 500, "Failed to list workspaces"):
-        return await scoped_to_thread(profile, lambda: _collect_workspaces(profile, scan))
+    with http_failure(
+        "GET /api/chat/workspaces failed", 500, "Failed to list workspaces"
+    ):
+        return await scoped_to_thread(
+            profile, lambda: _collect_workspaces(profile, scan)
+        )

@@ -11,6 +11,7 @@ and skips with the runner's identity when it is not (the arm64 hosted runner onc
 The parent needs an elevated token (the hosted runner has one) to stand in for the elevated
 install; ``make_user_dir`` only grants when the creating process is elevated.
 """
+
 import json
 import subprocess
 import sys
@@ -103,18 +104,30 @@ _FILTERED_TOKEN = _DROP_PRIVILEGES + textwrap.dedent(r"""
         return who + "\n" + acl
 """)
 
-_REPORTERS_DACL = ["/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F"]
+_REPORTERS_DACL = [
+    "/inheritance:r",
+    "/grant:r",
+    "*S-1-5-18:(OI)(CI)F",
+    "*S-1-5-32-544:(OI)(CI)F",
+]
 
 
 def _elevated() -> bool:
     sys.path.insert(0, str(_REPO))
     from clawk_dir_acl import process_is_elevated
+
     return process_is_elevated()
 
 
 def _child(code: str, *args: str, prelude: str = _FILTERED_TOKEN) -> dict:
-    child = subprocess.run([sys.executable, "-c", prelude + textwrap.dedent(code), *args], cwd=_REPO,
-                           capture_output=True, text=True, check=False, timeout=180)
+    child = subprocess.run(
+        [sys.executable, "-c", prelude + textwrap.dedent(code), *args],
+        cwd=_REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
     assert child.returncode == 0, child.stderr
     return json.loads(child.stdout.strip().splitlines()[-1])
 
@@ -125,9 +138,15 @@ def reporters_parent(tmp_path):
         pytest.skip("needs an elevated token to stand in for the elevated install")
     parent = tmp_path / "clawk"
     parent.mkdir()
-    subprocess.run(["icacls", str(parent), *_REPORTERS_DACL], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(parent), *_REPORTERS_DACL], check=True, capture_output=True
+    )
     yield parent
-    subprocess.run(["icacls", str(parent), "/reset", "/t", "/c", "/q"], check=False, capture_output=True)
+    subprocess.run(
+        ["icacls", str(parent), "/reset", "/t", "/c", "/q"],
+        check=False,
+        capture_output=True,
+    )
 
 
 def _require_faithful_probe(reporters_parent: Path, reporters_dir: Path) -> None:
@@ -140,22 +159,38 @@ def _require_faithful_probe(reporters_parent: Path, reporters_dir: Path) -> None
     """
     denied = reporters_parent.parent / "everyone-denied"
     denied.mkdir()
-    subprocess.run(["icacls", str(denied), "/deny", "*S-1-1-0:(F)"], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(denied), "/deny", "*S-1-1-0:(F)"],
+        check=True,
+        capture_output=True,
+    )
     try:
-        probe = _child("""
+        probe = _child(
+            """
             plain = usable(sys.argv[2])
             print(json.dumps({"denied": usable(sys.argv[1]), "plain": plain,
                               "identity": runner_identity(sys.argv[2]) if plain else ""}))
-        """, str(denied), str(reporters_dir))
+        """,
+            str(denied),
+            str(reporters_dir),
+        )
     finally:
-        subprocess.run(["icacls", str(denied), "/remove:d", "*S-1-1-0"], check=False, capture_output=True)
+        subprocess.run(
+            ["icacls", str(denied), "/remove:d", "*S-1-1-0"],
+            check=False,
+            capture_output=True,
+        )
     if probe["denied"]:
-        pytest.skip("precondition failed: the filtered child still opens a dir an Everyone:(DENY)(F) ACE "
-                    "refuses, so it bypasses ACLs on this runner and cannot judge the fix")
+        pytest.skip(
+            "precondition failed: the filtered child still opens a dir an Everyone:(DENY)(F) ACE "
+            "refuses, so it bypasses ACLs on this runner and cannot judge the fix"
+        )
     if probe["plain"]:
-        pytest.skip("precondition failed: this runner's filtered token is still granted by the reporters' "
-                    "SYSTEM + Administrators DACL, so a dir without the fix is not unusable here:\n"
-                    + probe["identity"])
+        pytest.skip(
+            "precondition failed: this runner's filtered token is still granted by the reporters' "
+            "SYSTEM + Administrators DACL, so a dir without the fix is not unusable here:\n"
+            + probe["identity"]
+        )
 
 
 def test_dir_made_while_elevated_stays_usable_by_the_filtered_token(reporters_parent):
@@ -165,10 +200,16 @@ def test_dir_made_while_elevated_stays_usable_by_the_filtered_token(reporters_pa
     plain.mkdir()  # inherits the reporters' SYSTEM + Administrators DACL
     _require_faithful_probe(reporters_parent, plain)
     granted = make_user_dir(reporters_parent / "gateway-locks", 0o700)
-    result = _child("""
+    result = _child(
+        """
         print(json.dumps({"plain": usable(sys.argv[1]), "granted": usable(sys.argv[2])}))
-    """, str(plain), str(granted))
-    assert result["plain"] is False, "the filtered token could use the reporters' DACL: the probe is not faithful"
+    """,
+        str(plain),
+        str(granted),
+    )
+    assert result["plain"] is False, (
+        "the filtered token could use the reporters' DACL: the probe is not faithful"
+    )
     assert result["granted"] is True
 
 
@@ -178,14 +219,20 @@ def test_elevated_rerun_repairs_a_dir_an_earlier_elevated_run_left(reporters_par
     left = reporters_parent / "state"
     left.mkdir()
     _require_faithful_probe(reporters_parent, left)
-    make_user_dir(left, parents=True, exist_ok=True)  # how every production caller re-enters
+    make_user_dir(
+        left, parents=True, exist_ok=True
+    )  # how every production caller re-enters
     make_user_dir(left, parents=True, exist_ok=True)  # idempotent: no second ACE
     after = _child("print(json.dumps({'usable': usable(sys.argv[1])}))", str(left))
-    acl = subprocess.run(["icacls", str(left)], capture_output=True, text=True, check=True).stdout
+    acl = subprocess.run(
+        ["icacls", str(left)], capture_output=True, text=True, check=True
+    ).stdout
     assert after["usable"] is True, acl
 
 
-def test_elevated_repair_also_reaches_an_old_lock_already_inside_the_dir(reporters_parent):
+def test_elevated_repair_also_reaches_an_old_lock_already_inside_the_dir(
+    reporters_parent,
+):
     """Review #140490: the pywin32 write does not propagate, so a token lock an earlier elevated run
     left INSIDE the dir kept the reporters' DACL after the dir itself was repaired."""
     from clawk_dir_acl import make_user_dir
@@ -196,7 +243,8 @@ def test_elevated_repair_also_reaches_an_old_lock_already_inside_the_dir(reporte
     old.write_text("{}")  # inherits SYSTEM + Administrators only
     _require_faithful_probe(reporters_parent, left)
     make_user_dir(left, parents=True, exist_ok=True)
-    after = _child("""
+    after = _child(
+        """
         try:
             with open(sys.argv[1], "r+", encoding="utf-8") as handle:
                 handle.write("{}")
@@ -204,12 +252,18 @@ def test_elevated_repair_also_reaches_an_old_lock_already_inside_the_dir(reporte
         except PermissionError:
             ok = False
         print(json.dumps({"old_lock_writable": ok}))
-    """, str(old))
-    acl = subprocess.run(["icacls", str(old)], capture_output=True, text=True, check=True).stdout
+    """,
+        str(old),
+    )
+    acl = subprocess.run(
+        ["icacls", str(old)], capture_output=True, text=True, check=True
+    ).stdout
     assert after["old_lock_writable"] is True, acl
 
 
-def test_elevated_update_step_makes_a_stranded_home_usable(reporters_parent, monkeypatch):
+def test_elevated_update_step_makes_a_stranded_home_usable(
+    reporters_parent, monkeypatch
+):
     """alt-glitch on #140490: the owed ``windows_home_acl`` step had unit tests only. Here the real
     step runs from this elevated runner over a home whose nested dirs and files carry the reporters'
     Administrators-only DACL, with real grants; the filtered token must use every one afterwards.
@@ -224,10 +278,15 @@ def test_elevated_update_step_makes_a_stranded_home_usable(reporters_parent, mon
     _require_faithful_probe(reporters_parent, nested)
     monkeypatch.setenv("CLAWK_HOME", str(reporters_parent))
     update_windows_acl.repair_windows_home_acl()
-    after = _child("""
+    after = _child(
+        """
         print(json.dumps({"nested": usable(sys.argv[1]), "locks": usable(sys.argv[2]),
                           "home": usable(sys.argv[3])}))
-    """, str(nested), str(old), str(reporters_parent))
+    """,
+        str(nested),
+        str(old),
+        str(reporters_parent),
+    )
     assert after == {"nested": True, "locks": True, "home": True}, after
 
 
@@ -239,15 +298,24 @@ def test_token_lock_on_an_unusable_lock_dir_parks_with_one_named_warning(tmp_pat
     removed so ``os.open`` has no bypass. Needs no elevation."""
     lock_dir = tmp_path / "gateway-locks"
     lock_dir.mkdir()
-    subprocess.run(["icacls", str(lock_dir), "/deny", "*S-1-1-0:(F)"], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(lock_dir), "/deny", "*S-1-1-0:(F)"],
+        check=True,
+        capture_output=True,
+    )
     try:
         _w2(lock_dir)
     finally:
-        subprocess.run(["icacls", str(lock_dir), "/remove:d", "*S-1-1-0"], check=False, capture_output=True)
+        subprocess.run(
+            ["icacls", str(lock_dir), "/remove:d", "*S-1-1-0"],
+            check=False,
+            capture_output=True,
+        )
 
 
 def _w2(lock_dir):
-    result = _child(r"""
+    result = _child(
+        r"""
         import logging
         from unittest.mock import MagicMock
         os.environ["CLAWK_GATEWAY_LOCK_DIR"] = sys.argv[1]
@@ -278,7 +346,10 @@ def _w2(lock_dir):
             codes.append([ok, a._fatal_error_code, a._fatal_error_retryable, a._fatal_error_message])
         print(json.dumps({"codes": codes, "warnings": [m for lvl, m in records
                                                       if lvl == "WARNING" and "not usable" in m]}))
-    """, str(lock_dir), prelude=_DROP_PRIVILEGES)
+    """,
+        str(lock_dir),
+        prelude=_DROP_PRIVILEGES,
+    )
     for ok, code, retryable, message in result["codes"]:
         assert (ok, code, retryable) == (False, "lock_dir_unusable", True)
         assert "icacls" in message and "/reset" in message and str(lock_dir) in message
@@ -301,22 +372,34 @@ def home_with_junction_out(tmp_path, monkeypatch):
     outside = tmp_path / "Program Files" / "App"
     (outside / "bin").mkdir(parents=True)
     (outside / "bin" / "app.exe").write_text("x")
-    subprocess.run(["icacls", str(outside), *_REPORTERS_DACL], check=True, capture_output=True)
+    subprocess.run(
+        ["icacls", str(outside), *_REPORTERS_DACL], check=True, capture_output=True
+    )
     junction = home / "cache" / "images"
     _winapi.CreateJunction(str(outside), str(junction))
     monkeypatch.setenv("CLAWK_HOME", str(home))
     yield home, outside, junction
     junction.rmdir()  # removes the junction itself, not the target
-    subprocess.run(["icacls", str(outside), "/reset", "/t", "/c", "/q"], check=False, capture_output=True)
+    subprocess.run(
+        ["icacls", str(outside), "/reset", "/t", "/c", "/q"],
+        check=False,
+        capture_output=True,
+    )
 
 
 def _dacls(paths):
     """icacls text of each of *paths*, path-normalized for comparison."""
-    return [subprocess.run(["icacls", str(path)], capture_output=True, text=True, check=True).stdout
-            .replace(str(path), "<p>") for path in paths]
+    return [
+        subprocess.run(
+            ["icacls", str(path)], capture_output=True, text=True, check=True
+        ).stdout.replace(str(path), "<p>")
+        for path in paths
+    ]
 
 
-def test_elevated_grants_never_reach_a_junction_target_outside_the_home(home_with_junction_out):
+def test_elevated_grants_never_reach_a_junction_target_outside_the_home(
+    home_with_junction_out,
+):
     import clawk_dir_acl
     from clawk_cli import update_windows_acl
 
@@ -325,16 +408,31 @@ def test_elevated_grants_never_reach_a_junction_target_outside_the_home(home_wit
     watched = [outside, *sorted(outside.rglob("*"))]
     before = _dacls(watched)
     clawk_dir_acl._granted.clear()
-    clawk_dir_acl.make_user_dir(junction, parents=True, exist_ok=True)  # the existing-leaf "repair" case
-    clawk_dir_acl.make_user_dir(junction / "thumbs", parents=True, exist_ok=True)  # through the junction
+    clawk_dir_acl.make_user_dir(
+        junction, parents=True, exist_ok=True
+    )  # the existing-leaf "repair" case
+    clawk_dir_acl.make_user_dir(
+        junction / "thumbs", parents=True, exist_ok=True
+    )  # through the junction
     assert clawk_dir_acl.grant_user_access(junction) is False
     granted, skipped, failed = clawk_dir_acl.grant_tree_user_access(home)
     update_windows_acl.repair_windows_home_acl()  # the post-update repair that used icacls /T
     assert junction in skipped and not failed and granted >= 2
-    assert _dacls(watched) == before, "an elevated grant followed the junction out of the home"
+    assert _dacls(watched) == before, (
+        "an elevated grant followed the junction out of the home"
+    )
     # The real entries in the home still got the grant.
-    whoami = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, check=True)
+    whoami = subprocess.run(
+        ["whoami", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     sid = whoami.stdout.strip().rsplit(",", 1)[-1].strip().strip('"')
-    home_acl = subprocess.run(["icacls", str(home / "cache")], capture_output=True, text=True, check=True).stdout
-    user = subprocess.run(["whoami"], capture_output=True, text=True, check=True).stdout.strip()
+    home_acl = subprocess.run(
+        ["icacls", str(home / "cache")], capture_output=True, text=True, check=True
+    ).stdout
+    user = subprocess.run(
+        ["whoami"], capture_output=True, text=True, check=True
+    ).stdout.strip()
     assert sid in home_acl or user.lower() in home_acl.lower(), home_acl

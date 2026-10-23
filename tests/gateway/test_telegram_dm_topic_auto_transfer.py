@@ -39,9 +39,13 @@ NEW_TOPIC_ID = 777
 def _fake_bot(*, create_fails: bool = False) -> MagicMock:
     bot = MagicMock()
     if create_fails:
-        bot.create_forum_topic = AsyncMock(side_effect=RuntimeError("Bad Request: chat is not a forum"))
+        bot.create_forum_topic = AsyncMock(
+            side_effect=RuntimeError("Bad Request: chat is not a forum")
+        )
     else:
-        bot.create_forum_topic = AsyncMock(return_value=SimpleNamespace(message_thread_id=NEW_TOPIC_ID))
+        bot.create_forum_topic = AsyncMock(
+            return_value=SimpleNamespace(message_thread_id=NEW_TOPIC_ID)
+        )
     bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=9001))
     bot.send_chat_action = AsyncMock(return_value=True)
     return bot
@@ -51,7 +55,9 @@ def _rig(tmp_path, monkeypatch, *, extra: dict, create_fails: bool = False):
     import gateway.run as gateway_run
 
     db = SessionDB(db_path=tmp_path / "state.db")
-    _seed_two_topic_bindings(db)  # topic mode on; topic "222" is the most recently bound
+    _seed_two_topic_bindings(
+        db
+    )  # topic mode on; topic "222" is the most recently bound
     # The stub session store names every topic-lane session "sess-topic"; the binding FK needs its row.
     db.create_session(session_id="sess-topic", source="telegram", user_id="208214988")
     runner = _make_runner(session_db=db)
@@ -60,49 +66,78 @@ def _rig(tmp_path, monkeypatch, *, extra: dict, create_fails: bool = False):
 
     async def fake_run_agent(*args, **kwargs):
         runs.append(kwargs)
-        return {"success": True, "final_response": "agent reply", "session_id": kwargs.get("session_id"),
-                "messages": []}
+        return {
+            "success": True,
+            "final_response": "agent reply",
+            "session_id": kwargs.get("session_id"),
+            "messages": [],
+        }
 
     runner._run_agent = AsyncMock(side_effect=fake_run_agent)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
 
-    adapter = TelegramAdapter(PlatformConfig(enabled=True, token="***", extra=dict(extra)))
+    adapter = TelegramAdapter(
+        PlatformConfig(enabled=True, token="***", extra=dict(extra))
+    )
     adapter._bot = _fake_bot(create_fails=create_fails)
     runner.adapters[Platform.TELEGRAM] = adapter
     # The production wiring: every callback GatewayRunner installs on an adapter (topic recovery and,
     # where it exists, the topic-transfer hook), with the message handler pointed at the real runner.
     runner._busy_text_mode = "interrupt"
     runner._wire_adapter_handlers(
-        adapter, message_handler=runner._handle_message,
-        authorization_check=lambda *_a, **_k: True, platform_event_handler=AsyncMock())
+        adapter,
+        message_handler=runner._handle_message,
+        authorization_check=lambda *_a, **_k: True,
+        platform_event_handler=AsyncMock(),
+    )
     return runner, adapter, db, runs
 
 
-async def _deliver_root_dm(adapter: TelegramAdapter, text: str = "plan the migration") -> MessageEvent:
+async def _deliver_root_dm(
+    adapter: TelegramAdapter, text: str = "plan the migration"
+) -> MessageEvent:
     """Plain text takes the adapter's real text-batching ingress (``_enqueue_text_event``, whose batch
     key already runs topic recovery) before ``handle_message``; commands dispatch directly."""
-    event = MessageEvent(text=text, source=_make_source(thread_id=None), message_id="4242")
+    event = MessageEvent(
+        text=text, source=_make_source(thread_id=None), message_id="4242"
+    )
     if event.get_command():
         await adapter.handle_message(event)
     else:
-        adapter._text_batch_delay_seconds = adapter._text_batch_split_delay_seconds = 0.0
+        adapter._text_batch_delay_seconds = adapter._text_batch_split_delay_seconds = (
+            0.0
+        )
         adapter._enqueue_text_event(event)
-        await async_wait_until(lambda: not adapter._pending_text_batches and adapter._session_tasks,
-                               what="text batch flushed into a session task")
+        await async_wait_until(
+            lambda: not adapter._pending_text_batches and adapter._session_tasks,
+            what="text batch flushed into a session task",
+        )
     await async_wait_until(
-        lambda: adapter._bot.send_message.await_count and all(t.done() for t in adapter._session_tasks.values()),
-        what="session tasks done and a reply sent")
+        lambda: (
+            adapter._bot.send_message.await_count
+            and all(t.done() for t in adapter._session_tasks.values())
+        ),
+        what="session tasks done and a reply sent",
+    )
     await asyncio.gather(*adapter._session_tasks.values(), return_exceptions=True)
     return event
 
 
 def _reply_calls(adapter: TelegramAdapter) -> list:
     """The agent's final reply sends (not the one-off "no home channel" onboarding notice)."""
-    return [c for c in adapter._bot.send_message.await_args_list if "agent reply" in str(c.kwargs.get("text"))]
+    return [
+        c
+        for c in adapter._bot.send_message.await_args_list
+        if "agent reply" in str(c.kwargs.get("text"))
+    ]
 
 
 @pytest.mark.asyncio
-async def test_default_root_dm_keeps_lobby_recovery_to_last_bound_topic(tmp_path, monkeypatch):
+async def test_default_root_dm_keeps_lobby_recovery_to_last_bound_topic(
+    tmp_path, monkeypatch
+):
     """Key unset: no topic is created; the turn and its reply go to the last bound topic (#136567)."""
     _runner, adapter, db, runs = _rig(tmp_path, monkeypatch, extra={})
 
@@ -117,29 +152,40 @@ async def test_default_root_dm_keeps_lobby_recovery_to_last_bound_topic(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_opt_in_root_dm_opens_new_topic_and_reply_lands_there(tmp_path, monkeypatch):
-    _runner, adapter, db, runs = _rig(tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True})
+async def test_opt_in_root_dm_opens_new_topic_and_reply_lands_there(
+    tmp_path, monkeypatch
+):
+    _runner, adapter, db, runs = _rig(
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}
+    )
 
     event = await _deliver_root_dm(adapter)
 
     adapter._bot.create_forum_topic.assert_awaited_once()
     assert adapter._bot.create_forum_topic.await_args.kwargs["chat_id"] == 208214988
     assert event.source.thread_id == str(NEW_TOPIC_ID)
-    assert len(runs) == 1, "the root-DM message must run as a turn, not get the lobby reminder"
+    assert len(runs) == 1, (
+        "the root-DM message must run as a turn, not get the lobby reminder"
+    )
     (reply,) = _reply_calls(adapter)
     assert reply.kwargs.get("message_thread_id") == NEW_TOPIC_ID
     # The root-DM message lives outside the new topic: it can't be the reply anchor there.
     assert reply.kwargs.get("reply_to_message_id") is None
     # The new topic is a bound session lane, so the next message inside it continues this session.
-    binding = db.get_telegram_topic_binding(chat_id="208214988", thread_id=str(NEW_TOPIC_ID))
+    binding = db.get_telegram_topic_binding(
+        chat_id="208214988", thread_id=str(NEW_TOPIC_ID)
+    )
     assert binding is not None and binding["user_id"] == "208214988"
     db.close()
 
 
 @pytest.mark.asyncio
-async def test_opt_in_topic_create_failure_falls_back_to_lobby_recovery(tmp_path, monkeypatch):
+async def test_opt_in_topic_create_failure_falls_back_to_lobby_recovery(
+    tmp_path, monkeypatch
+):
     _runner, adapter, db, runs = _rig(
-        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}, create_fails=True)
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}, create_fails=True
+    )
 
     event = await _deliver_root_dm(adapter)
 
@@ -154,7 +200,9 @@ async def test_opt_in_topic_create_failure_falls_back_to_lobby_recovery(tmp_path
 @pytest.mark.asyncio
 async def test_opt_in_root_dm_command_stays_in_the_lobby(tmp_path, monkeypatch):
     """``/topic`` (and every other command) typed in the root DM is a lobby command: no topic."""
-    _runner, adapter, db, runs = _rig(tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True})
+    _runner, adapter, db, runs = _rig(
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}
+    )
 
     await _deliver_root_dm(adapter, text="/topic help")
 
@@ -173,37 +221,66 @@ def test_top_level_telegram_yaml_key_reaches_extra(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("launch,secondary", [(False, True), (True, False), (False, False), (True, True)])
-async def test_receiving_secondary_bot_controls_opt_in(tmp_path, monkeypatch, launch, secondary):
+@pytest.mark.parametrize(
+    "launch,secondary", [(False, True), (True, False), (False, False), (True, True)]
+)
+async def test_receiving_secondary_bot_controls_opt_in(
+    tmp_path, monkeypatch, launch, secondary
+):
     """Multiplexed: the bot that RECEIVED the root DM owns ``dm_topic_auto_transfer``, not the launch bot."""
-    runner, primary, db, _runs = _rig(tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": launch})
+    runner, primary, db, _runs = _rig(
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": launch}
+    )
     runner.config.multiplex_profiles = True
     runner._primary_profile_name = "default"
-    second = TelegramAdapter(PlatformConfig(enabled=True, token="***", extra={"dm_topic_auto_transfer": secondary}))
+    second = TelegramAdapter(
+        PlatformConfig(
+            enabled=True, token="***", extra={"dm_topic_auto_transfer": secondary}
+        )
+    )
     second._bot = _fake_bot()
     second.gateway_runner = runner
     second.set_owner_profile("probe-secondary")
     runner._profile_adapters = {"probe-secondary": {Platform.TELEGRAM: second}}
-    db.enable_telegram_topic_mode(chat_id="208214988", user_id="208214988", profile_name="probe-secondary")
-    db.create_session(session_id="secondary-old", source="telegram", user_id="208214988",
-                      profile_name="probe-secondary")
-    db.bind_telegram_topic(chat_id="208214988", thread_id="333", user_id="208214988",
-                           profile_name="probe-secondary", session_key="secondary-old-route",
-                           session_id="secondary-old")
+    db.enable_telegram_topic_mode(
+        chat_id="208214988", user_id="208214988", profile_name="probe-secondary"
+    )
+    db.create_session(
+        session_id="secondary-old",
+        source="telegram",
+        user_id="208214988",
+        profile_name="probe-secondary",
+    )
+    db.bind_telegram_topic(
+        chat_id="208214988",
+        thread_id="333",
+        user_id="208214988",
+        profile_name="probe-secondary",
+        session_key="secondary-old-route",
+        session_id="secondary-old",
+    )
     done = asyncio.Event()
 
     async def capture(_event):
         done.set()
 
-    runner._wire_adapter_handlers(second, message_handler=capture, authorization_check=lambda *_a, **_k: True,
-                                  platform_event_handler=AsyncMock())
-    source = second.build_source(chat_id="208214988", user_id="208214988", chat_type="dm", message_id="4242")
+    runner._wire_adapter_handlers(
+        second,
+        message_handler=capture,
+        authorization_check=lambda *_a, **_k: True,
+        platform_event_handler=AsyncMock(),
+    )
+    source = second.build_source(
+        chat_id="208214988", user_id="208214988", chat_type="dm", message_id="4242"
+    )
     event = MessageEvent(text="root prompt", source=source, message_id="4242")
     second._text_batch_delay_seconds = second._text_batch_split_delay_seconds = 0
     second._enqueue_text_event(event)
     await asyncio.wait_for(done.wait(), 10)
-    await async_wait_until(lambda: not second._session_tasks and not second._pending_text_batch_tasks,
-                           what="secondary batch settles")
+    await async_wait_until(
+        lambda: not second._session_tasks and not second._pending_text_batch_tasks,
+        what="secondary batch settles",
+    )
     db.close()
     assert second._bot.create_forum_topic.await_count == int(secondary)
     assert event.source.thread_id == (str(NEW_TOPIC_ID) if secondary else "333")
@@ -215,9 +292,13 @@ async def test_new_topic_reply_anchor_survives_native_codec(tmp_path, monkeypatc
     """A durably admitted (snapshot -> restore) transferred event still sends without quoting the root DM."""
     from gateway.session_envelope import restore_native, snapshot_native
     from gateway.session_ingress import deliver_response
-    from plugins.platforms.telegram.telegram_topic_transfer import apply_root_dm_topic_transfer
+    from plugins.platforms.telegram.telegram_topic_transfer import (
+        apply_root_dm_topic_transfer,
+    )
 
-    runner, adapter, db, _runs = _rig(tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True})
+    runner, adapter, db, _runs = _rig(
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}
+    )
     runner.config.multiplex_profiles = False
     runner._is_user_authorized = lambda _source, **_kwargs: True
     event = MessageEvent(text="root prompt", source=_make_source(), message_id="4242")
@@ -226,22 +307,31 @@ async def test_new_topic_reply_anchor_survives_native_codec(tmp_path, monkeypatc
     payload = snapshot_native(runner, event)
     restored = restore_native(payload, runner)
     assert restored.message_id == "4242"  # inbound identity is kept
-    await deliver_response(adapter, restored, payload["native_text_v1"]["route"], "restored reply")
+    await deliver_response(
+        adapter, restored, payload["native_text_v1"]["route"], "restored reply"
+    )
     send = adapter._bot.send_message.await_args.kwargs
     db.close()
     assert send.get("message_thread_id") == NEW_TOPIC_ID
     assert send.get("reply_to_message_id") is None
     # The default (None) override stays out of the envelope, so older retries keep their fingerprint.
     plain = MessageEvent(text="x", source=_make_source(), message_id="4243")
-    assert "reply_anchor_override" not in snapshot_native(runner, plain)["native_text_v1"]["event"]
+    assert (
+        "reply_anchor_override"
+        not in snapshot_native(runner, plain)["native_text_v1"]["event"]
+    )
 
 
 @pytest.mark.asyncio
-async def test_second_root_dm_does_not_cancel_an_in_flight_topic_transfer(tmp_path, monkeypatch):
+async def test_second_root_dm_does_not_cancel_an_in_flight_topic_transfer(
+    tmp_path, monkeypatch
+):
     """A second root-DM chunk arriving while ``createForumTopic`` for the first is still in flight must
     not cancel the committed flush: the first message keeps its topic (no hold + replay into a second
     topic) and every created topic receives its message."""
-    _runner, adapter, db, runs = _rig(tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True})
+    _runner, adapter, db, runs = _rig(
+        tmp_path, monkeypatch, extra={"dm_topic_auto_transfer": True}
+    )
     adapter._text_batch_delay_seconds = adapter._text_batch_split_delay_seconds = 0.0
     release = asyncio.Event()
     ids = iter(range(NEW_TOPIC_ID, NEW_TOPIC_ID + 10))
@@ -251,20 +341,41 @@ async def test_second_root_dm_does_not_cancel_an_in_flight_topic_transfer(tmp_pa
         return SimpleNamespace(message_thread_id=next(ids))
 
     adapter._bot.create_forum_topic = AsyncMock(side_effect=paused_create)
-    first = MessageEvent(text="plan the migration", source=_make_source(thread_id=None), message_id="4242")
-    second = MessageEvent(text="and the rollback", source=_make_source(thread_id=None), message_id="4243")
+    first = MessageEvent(
+        text="plan the migration",
+        source=_make_source(thread_id=None),
+        message_id="4242",
+    )
+    second = MessageEvent(
+        text="and the rollback", source=_make_source(thread_id=None), message_id="4243"
+    )
     adapter._enqueue_text_event(first)
-    await async_wait_until(lambda: adapter._bot.create_forum_topic.await_count == 1, what="first create in flight")
+    await async_wait_until(
+        lambda: adapter._bot.create_forum_topic.await_count == 1,
+        what="first create in flight",
+    )
     adapter._enqueue_text_event(second)
-    await async_wait_until(lambda: not adapter._pending_text_batches, what="second chunk's flush popped it")
+    await async_wait_until(
+        lambda: not adapter._pending_text_batches, what="second chunk's flush popped it"
+    )
     release.set()
-    await async_wait_until(lambda: len(runs) >= 2 and not adapter._pending_text_batches
-                           and all(t.done() for t in adapter._session_tasks.values()), what="both turns ran")
+    await async_wait_until(
+        lambda: (
+            len(runs) >= 2
+            and not adapter._pending_text_batches
+            and all(t.done() for t in adapter._session_tasks.values())
+        ),
+        what="both turns ran",
+    )
     await asyncio.gather(*adapter._session_tasks.values(), return_exceptions=True)
     db.close()
-    assert not getattr(adapter, "_held_inbound_events", None), "the first message was held for replay"
+    assert not getattr(adapter, "_held_inbound_events", None), (
+        "the first message was held for replay"
+    )
     created = adapter._bot.create_forum_topic.await_count
     assert first.source.thread_id == str(NEW_TOPIC_ID)
     landed = {first.source.thread_id, second.source.thread_id}
-    assert landed == {str(NEW_TOPIC_ID + i) for i in range(created)}, "a created topic was left empty"
+    assert landed == {str(NEW_TOPIC_ID + i) for i in range(created)}, (
+        "a created topic was left empty"
+    )
     assert len(runs) == 2

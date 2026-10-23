@@ -29,15 +29,27 @@ from clawk_cli.web_deps import LateState, late
 from clawk_cli.web_server_gateway import _restart_gateway_after
 from clawk_cli.web_whatsapp_session import _backup_whatsapp_session
 from clawk_cli.web_server_messaging import (
-    _TelegramOnboardingPairing, _WhatsAppOnboardingSession, _messaging_platform_catalog, _telegram_onboarding_error_message, _telegram_onboarding_lock, _telegram_onboarding_pairings, _whatsapp_onboarding_payload, _whatsapp_onboarding_sessions,
+    _TelegramOnboardingPairing,
+    _WhatsAppOnboardingSession,
+    _messaging_platform_catalog,
+    _telegram_onboarding_error_message,
+    _telegram_onboarding_lock,
+    _telegram_onboarding_pairings,
+    _whatsapp_onboarding_payload,
+    _whatsapp_onboarding_sessions,
 )
 from clawk_cli.web_routers._common import (
-    REDACTED_CREDENTIAL_WRITE_DETAIL, http_failure, is_redacted_credential_preview,
+    REDACTED_CREDENTIAL_WRITE_DETAIL,
+    http_failure,
+    is_redacted_credential_preview,
     redacted_credential_preview,
 )
 from clawk_cli.web_models import (
-    MessagingPlatformUpdate, TelegramOnboardingApply, TelegramOnboardingStart,
-    WhatsAppOnboardingApply, WhatsAppOnboardingStart,
+    MessagingPlatformUpdate,
+    TelegramOnboardingApply,
+    TelegramOnboardingStart,
+    WhatsAppOnboardingApply,
+    WhatsAppOnboardingStart,
 )
 
 _log = logging.getLogger("clawk_cli.web_server")
@@ -47,10 +59,18 @@ router = APIRouter()
 _config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_profiles")
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
-_restart_gateway_after_whatsapp_onboarding = late("_restart_gateway_after_whatsapp_onboarding", "clawk_cli.web_server_messaging")
-_telegram_onboarding_request_sync = late("_telegram_onboarding_request_sync", "clawk_cli.web_server_messaging")
-_whatsapp_session_path = late("_whatsapp_session_path", "clawk_cli.web_server_messaging")
-_write_platform_enabled = late("_write_platform_enabled", "clawk_cli.web_server_messaging")
+_restart_gateway_after_whatsapp_onboarding = late(
+    "_restart_gateway_after_whatsapp_onboarding", "clawk_cli.web_server_messaging"
+)
+_telegram_onboarding_request_sync = late(
+    "_telegram_onboarding_request_sync", "clawk_cli.web_server_messaging"
+)
+_whatsapp_session_path = late(
+    "_whatsapp_session_path", "clawk_cli.web_server_messaging"
+)
+_write_platform_enabled = late(
+    "_write_platform_enabled", "clawk_cli.web_server_messaging"
+)
 load_env = late("load_env", "clawk_cli.config")
 load_config = late("load_config", "clawk_cli.config")
 read_runtime_status = late("read_runtime_status", "gateway.status")
@@ -59,7 +79,9 @@ save_env_value = late("save_env_value", "clawk_cli.config")
 _gateway_subcommand = late("_gateway_subcommand", "clawk_cli.web_server_gateway")
 _probe_gateway_health = late("_probe_gateway_health", "clawk_cli.web_server_gateway")
 get_running_pid_cached = late("get_running_pid_cached", "gateway.status")
-get_runtime_status_running_pid = late("get_runtime_status_running_pid", "gateway.status")
+get_runtime_status_running_pid = late(
+    "get_runtime_status_running_pid", "gateway.status"
+)
 served_profile_runtime = late("served_profile_runtime", "gateway.status_served")
 _GATEWAY_HEALTH_URL = LateState("_GATEWAY_HEALTH_URL")
 # Display labels for env vars not in OPTIONAL_ENV_VARS (bridge toggles, Twilio, Email, ...)
@@ -67,35 +89,135 @@ _GATEWAY_HEALTH_URL = LateState("_GATEWAY_HEALTH_URL")
 _MESSAGING_ENV_FALLBACKS: dict[str, dict[str, Any]] = {
     key: {"description": description, "prompt": prompt, **extra}
     for key, description, prompt, extra in (
-        ("SIGNAL_HTTP_URL", "signal-cli REST API base URL, e.g. http://127.0.0.1:8080", "Signal bridge URL", {"url": "https://github.com/bbernhard/signal-cli-rest-api"}),
-        ("SIGNAL_ACCOUNT", "Signal account phone number registered with the bridge", "Signal account", {}),
-        ("SIGNAL_ALLOWED_USERS", "Comma-separated Signal users allowed to use the bot", "Allowed Signal users", {}),
-        ("WHATSAPP_ENABLED", "Enable the WhatsApp gateway adapter", "Enable WhatsApp", {"advanced": True}),
+        (
+            "SIGNAL_HTTP_URL",
+            "signal-cli REST API base URL, e.g. http://127.0.0.1:8080",
+            "Signal bridge URL",
+            {"url": "https://github.com/bbernhard/signal-cli-rest-api"},
+        ),
+        (
+            "SIGNAL_ACCOUNT",
+            "Signal account phone number registered with the bridge",
+            "Signal account",
+            {},
+        ),
+        (
+            "SIGNAL_ALLOWED_USERS",
+            "Comma-separated Signal users allowed to use the bot",
+            "Allowed Signal users",
+            {},
+        ),
+        (
+            "WHATSAPP_ENABLED",
+            "Enable the WhatsApp gateway adapter",
+            "Enable WhatsApp",
+            {"advanced": True},
+        ),
         ("WHATSAPP_MODE", "WhatsApp bridge mode", "WhatsApp mode", {"advanced": True}),
-        ("WHATSAPP_DM_POLICY", "How WhatsApp direct messages are authorized", "WhatsApp DM policy", {"advanced": True}),
-        ("WHATSAPP_ALLOWED_USERS", "Comma-separated WhatsApp users allowed to use the bot", "Allowed WhatsApp users", {}),
-        ("EMAIL_ADDRESS", "Email address to send and receive from", "Email address", {}),
-        ("EMAIL_PASSWORD", "Email account password or app password", "Email password", {"password": True}),
+        (
+            "WHATSAPP_DM_POLICY",
+            "How WhatsApp direct messages are authorized",
+            "WhatsApp DM policy",
+            {"advanced": True},
+        ),
+        (
+            "WHATSAPP_ALLOWED_USERS",
+            "Comma-separated WhatsApp users allowed to use the bot",
+            "Allowed WhatsApp users",
+            {},
+        ),
+        (
+            "EMAIL_ADDRESS",
+            "Email address to send and receive from",
+            "Email address",
+            {},
+        ),
+        (
+            "EMAIL_PASSWORD",
+            "Email account password or app password",
+            "Email password",
+            {"password": True},
+        ),
         ("EMAIL_IMAP_HOST", "IMAP server host (e.g. imap.gmail.com)", "IMAP host", {}),
         ("EMAIL_SMTP_HOST", "SMTP server host (e.g. smtp.gmail.com)", "SMTP host", {}),
-        ("TWILIO_ACCOUNT_SID", "Twilio Account SID", "Twilio Account SID", {"url": "https://www.twilio.com/console"}),
-        ("TWILIO_AUTH_TOKEN", "Twilio Auth Token", "Twilio Auth Token", {"password": True}),
+        (
+            "TWILIO_ACCOUNT_SID",
+            "Twilio Account SID",
+            "Twilio Account SID",
+            {"url": "https://www.twilio.com/console"},
+        ),
+        (
+            "TWILIO_AUTH_TOKEN",
+            "Twilio Auth Token",
+            "Twilio Auth Token",
+            {"password": True},
+        ),
         ("WECOM_BOT_ID", "WeCom group bot ID", "WeCom Bot ID", {}),
         ("WECOM_SECRET", "WeCom group bot secret", "WeCom Secret", {"password": True}),
         ("WECOM_CALLBACK_CORP_ID", "WeCom corp ID", "WeCom Corp ID", {}),
-        ("WECOM_CALLBACK_CORP_SECRET", "WeCom app corp secret", "WeCom Corp Secret", {"password": True}),
+        (
+            "WECOM_CALLBACK_CORP_SECRET",
+            "WeCom app corp secret",
+            "WeCom Corp Secret",
+            {"password": True},
+        ),
         ("WECOM_CALLBACK_AGENT_ID", "WeCom app agent ID", "WeCom Agent ID", {}),
-        ("WECOM_CALLBACK_TOKEN", "WeCom callback verification token", "WeCom Token", {}),
-        ("WECOM_CALLBACK_ENCODING_AES_KEY", "WeCom callback AES encoding key", "WeCom AES Key", {"password": True}),
-        ("WEIXIN_ACCOUNT_ID", "iLink Bot account ID obtained through QR login in clawk gateway setup", "iLink Bot account ID", {}),
-        ("WEIXIN_TOKEN", "iLink Bot token obtained through QR login in clawk gateway setup", "iLink Bot token", {"password": True}),
-        ("WEIXIN_BASE_URL", "iLink API base URL saved by QR login (default: https://ilinkai.weixin.qq.com)", "iLink API base URL", {}),
+        (
+            "WECOM_CALLBACK_TOKEN",
+            "WeCom callback verification token",
+            "WeCom Token",
+            {},
+        ),
+        (
+            "WECOM_CALLBACK_ENCODING_AES_KEY",
+            "WeCom callback AES encoding key",
+            "WeCom AES Key",
+            {"password": True},
+        ),
+        (
+            "WEIXIN_ACCOUNT_ID",
+            "iLink Bot account ID obtained through QR login in clawk gateway setup",
+            "iLink Bot account ID",
+            {},
+        ),
+        (
+            "WEIXIN_TOKEN",
+            "iLink Bot token obtained through QR login in clawk gateway setup",
+            "iLink Bot token",
+            {"password": True},
+        ),
+        (
+            "WEIXIN_BASE_URL",
+            "iLink API base URL saved by QR login (default: https://ilinkai.weixin.qq.com)",
+            "iLink API base URL",
+            {},
+        ),
         ("FEISHU_APP_ID", "Feishu / Lark app ID", "App ID", {}),
-        ("FEISHU_APP_SECRET", "Feishu / Lark app secret", "App secret", {"password": True}),
-        ("FEISHU_ENCRYPT_KEY", "Feishu / Lark encrypt key", "Encrypt key", {"password": True}),
-        ("FEISHU_VERIFICATION_TOKEN", "Feishu / Lark verification token", "Verification token", {"password": True}),
+        (
+            "FEISHU_APP_SECRET",
+            "Feishu / Lark app secret",
+            "App secret",
+            {"password": True},
+        ),
+        (
+            "FEISHU_ENCRYPT_KEY",
+            "Feishu / Lark encrypt key",
+            "Encrypt key",
+            {"password": True},
+        ),
+        (
+            "FEISHU_VERIFICATION_TOKEN",
+            "Feishu / Lark verification token",
+            "Verification token",
+            {"password": True},
+        ),
         ("DINGTALK_CLIENT_ID", "DingTalk client ID (App key)", "Client ID", {}),
-        ("DINGTALK_CLIENT_SECRET", "DingTalk client secret (App secret)", "Client secret", {"password": True}),
+        (
+            "DINGTALK_CLIENT_SECRET",
+            "DingTalk client secret (App secret)",
+            "Client secret",
+            {"password": True},
+        ),
     )
 }
 
@@ -112,14 +234,20 @@ def _env_value_rules(platform_id: str) -> dict[str, tuple[Any, str]]:
     its file: the rules guard the edited profile's values whatever the dashboard's profile loads."""
     from gateway.platform_env import bundled_sibling
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform_id)
     if entry is not None and entry.env_value_rules:
         return dict(entry.env_value_rules)
-    card = getattr(bundled_sibling(platform_id, "dashboard_card"), "DASHBOARD_CARD", None) or {}
+    card = (
+        getattr(bundled_sibling(platform_id, "dashboard_card"), "DASHBOARD_CARD", None)
+        or {}
+    )
     return dict(card.get("env_value_rules") or {})
 
 
-def _validate_messaging_env_value(rules: dict[str, tuple[Any, str]], key: str, value: str) -> None:
+def _validate_messaging_env_value(
+    rules: dict[str, tuple[Any, str]], key: str, value: str
+) -> None:
     rule = rules.get(key)
     if value and rule and not rule[0](value):
         raise HTTPException(status_code=400, detail=rule[1])
@@ -146,13 +274,17 @@ def _messaging_env_info(key: str) -> dict[str, Any]:
 
 
 def _catalog_lookup(platform_id: str) -> dict[str, Any] | None:
-    return next((e for e in _messaging_platform_catalog() if e["id"] == platform_id), None)
+    return next(
+        (e for e in _messaging_platform_catalog() if e["id"] == platform_id), None
+    )
 
 
 def _require_platform(platform_id: str) -> dict[str, Any]:
     entry = _catalog_lookup(platform_id)
     if not entry:
-        raise HTTPException(status_code=404, detail=f"Unknown messaging platform: {platform_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Unknown messaging platform: {platform_id}"
+        )
     return entry
 
 
@@ -183,8 +315,15 @@ def _platform_enablement(
         platform = Platform(platform_id)
         platform_config = gateway_config.platforms.get(platform)
         enabled = bool(platform_config and platform_config.enabled)
-        configured = bool(platform_config and gateway_config._is_platform_connected(platform, platform_config))
-        home_channel = platform_config.home_channel.to_dict() if platform_config and platform_config.home_channel else None
+        configured = bool(
+            platform_config
+            and gateway_config._is_platform_connected(platform, platform_config)
+        )
+        home_channel = (
+            platform_config.home_channel.to_dict()
+            if platform_config and platform_config.home_channel
+            else None
+        )
     except Exception:
         enabled, home_channel = False, None
         configured = all(env_on_disk.get(key) or os.getenv(key, "") for key in required)
@@ -192,13 +331,20 @@ def _platform_enablement(
 
 
 def _messaging_platform_payload(
-    entry: dict[str, Any], env_on_disk: dict[str, str], runtime: dict | None,
-    scoped: bool = False, profile_home: Optional[Path] = None,
+    entry: dict[str, Any],
+    env_on_disk: dict[str, str],
+    runtime: dict | None,
+    scoped: bool = False,
+    profile_home: Optional[Path] = None,
 ) -> dict[str, Any]:
     platform_id = entry["id"]
     rt = runtime if isinstance(runtime, dict) else {}
     runtime_platforms = rt.get("platforms")
-    runtime_platform = runtime_platforms.get(platform_id, {}) if isinstance(runtime_platforms, dict) else {}
+    runtime_platform = (
+        runtime_platforms.get(platform_id, {})
+        if isinstance(runtime_platforms, dict)
+        else {}
+    )
     if not isinstance(runtime_platform, dict):
         runtime_platform = {}
     # Same shared liveness ladder /api/status uses, so the sidebar strip and the
@@ -207,9 +353,11 @@ def _messaging_platform_payload(
     # and do NOT follow the CLAWK_HOME contextvar override, so without it messaging
     # silently reports another profile's gateway.
     gateway_running = resolve_gateway_liveness(
-        profile_dir=profile_home, runtime=runtime,
+        profile_dir=profile_home,
+        runtime=runtime,
         health_probe=_probe_gateway_health if _GATEWAY_HEALTH_URL else None,
-        pid_probe=get_running_pid_cached, runtime_reader=read_runtime_status,
+        pid_probe=get_running_pid_cached,
+        runtime_reader=read_runtime_status,
         runtime_pid_probe=get_runtime_status_running_pid,
     ).running
     if not gateway_running:
@@ -227,13 +375,20 @@ def _messaging_platform_payload(
     env_vars = []
     for key in entry["env_vars"]:
         value, info = env_value(key), _messaging_env_info(key)
-        env_vars.append({
-            "key": key, "required": key in entry["required_env"], "is_set": bool(value),
-            "redacted_value": redacted_credential_preview(value),
-            "value": value if info["is_list"] else None, **info,
-        })
+        env_vars.append(
+            {
+                "key": key,
+                "required": key in entry["required_env"],
+                "is_set": bool(value),
+                "redacted_value": redacted_credential_preview(value),
+                "value": value if info["is_list"] else None,
+                **info,
+            }
+        )
 
-    enabled, configured, home_channel = _platform_enablement(platform_id, entry, env_on_disk, scoped)
+    enabled, configured, home_channel = _platform_enablement(
+        platform_id, entry, env_on_disk, scoped
+    )
     if gateway_running and runtime_platform.get("mirrored_from"):
         # Served secondary: the default's shared listener already answers this platform at
         # /p/<profile>/... (enabling it locally 409s), so the secondary's own empty config
@@ -250,7 +405,11 @@ def _messaging_platform_payload(
     elif not gateway_running and not state:
         # Same verdict /api/status gives: ``clawk gateway stop`` keeps the last failure on disk,
         # and a profile the operator stopped must not wear a "Start failed" badge for it.
-        state = "startup_failed" if retained_gateway_state(rt) == "startup_failed" else "gateway_stopped"
+        state = (
+            "startup_failed"
+            if retained_gateway_state(rt) == "startup_failed"
+            else "gateway_stopped"
+        )
 
     error_code = runtime_platform.get("error_code")
     error_message = runtime_platform.get("error_message")
@@ -259,11 +418,19 @@ def _messaging_platform_payload(
         error_message = error_message or rt.get("exit_reason")
 
     payload = {
-        "id": platform_id, "name": entry["name"], "description": entry["description"],
-        "docs_url": entry["docs_url"], "enabled": enabled, "configured": configured,
-        "gateway_running": gateway_running, "state": state, "error_code": error_code,
-        "error_message": error_message, "updated_at": runtime_platform.get("updated_at"),
-        "home_channel": home_channel, "env_vars": env_vars,
+        "id": platform_id,
+        "name": entry["name"],
+        "description": entry["description"],
+        "docs_url": entry["docs_url"],
+        "enabled": enabled,
+        "configured": configured,
+        "gateway_running": gateway_running,
+        "state": state,
+        "error_code": error_code,
+        "error_message": error_message,
+        "updated_at": runtime_platform.get("updated_at"),
+        "home_channel": home_channel,
+        "env_vars": env_vars,
         # Multiplex secondary served on the default's shared listener: the vendor callback URL.
         "ingress_url": runtime_platform.get("ingress_url") if gateway_running else None,
     }
@@ -281,7 +448,11 @@ def _platform_payloads(scoped_dir: Optional[Path], entries) -> list[dict[str, An
     """Payloads for ``entries``; call inside ``_profile_scope`` (load_env honors the
     CLAWK_HOME contextvar; the gateway status readers do not, hence the explicit path)."""
     env_on_disk = load_env()
-    runtime = read_runtime_status(path=scoped_dir / "gateway_state.json") if scoped_dir is not None else read_runtime_status()
+    runtime = (
+        read_runtime_status(path=scoped_dir / "gateway_state.json")
+        if scoped_dir is not None
+        else read_runtime_status()
+    )
     # A profile served by the multiplexer writes no live record of its own; its adapters live in the
     # multiplexer's record under ``<profile>:<platform>``. A leftover ``gateway_state.json`` from the
     # profile's standalone days outranks nothing: only a record proving a live own gateway does —
@@ -290,8 +461,16 @@ def _platform_payloads(scoped_dir: Optional[Path], entries) -> list[dict[str, An
     # ``clawk --profile X serve``).
     own_home = scoped_dir if scoped_dir is not None else get_process_clawk_home()
     runtime = served_profile_runtime(own_home, runtime) or runtime
-    return [_messaging_platform_payload(entry, env_on_disk, runtime, scoped=scoped_dir is not None, profile_home=scoped_dir)
-            for entry in entries]
+    return [
+        _messaging_platform_payload(
+            entry,
+            env_on_disk,
+            runtime,
+            scoped=scoped_dir is not None,
+            profile_home=scoped_dir,
+        )
+        for entry in entries
+    ]
 
 
 @contextlib.contextmanager
@@ -320,7 +499,9 @@ _whatsapp_onboarding_lock = threading.RLock()
 def _normalize_whatsapp_onboarding_mode(value: Any) -> str:
     mode = str(value or "bot").strip().lower()
     if mode not in {"bot", "self-chat"}:
-        raise HTTPException(status_code=400, detail="WhatsApp mode must be 'bot' or 'self-chat'.")
+        raise HTTPException(
+            status_code=400, detail="WhatsApp mode must be 'bot' or 'self-chat'."
+        )
     return mode
 
 
@@ -342,17 +523,36 @@ def _whatsapp_phone_from_identifier(value: Any) -> str | None:
 def _first_str(candidate: Any, keys: tuple[str, ...]) -> str | None:
     if not isinstance(candidate, dict):
         return None
-    return next((v for v in (str(candidate.get(k) or "").strip() for k in keys) if v), None)
+    return next(
+        (v for v in (str(candidate.get(k) or "").strip() for k in keys) if v), None
+    )
 
 
-def _whatsapp_linked_account_from_session(session_path: Path) -> tuple[str | None, str | None, str | None]:
+def _whatsapp_linked_account_from_session(
+    session_path: Path,
+) -> tuple[str | None, str | None, str | None]:
     try:
-        payload = json.loads((session_path / "creds.json").read_text(encoding="utf-8-sig"))
+        payload = json.loads(
+            (session_path / "creds.json").read_text(encoding="utf-8-sig")
+        )
     except Exception:
         return None, None, None
     candidates = (payload.get("me"), payload.get("account"), payload)
-    account_id = next((v for v in (_first_str(c, ("id", "jid", "lid")) for c in candidates) if v), None)
-    account_name = next((v for v in (_first_str(c, ("name", "verifiedName", "notify", "pushName")) for c in candidates) if v), None)
+    account_id = next(
+        (v for v in (_first_str(c, ("id", "jid", "lid")) for c in candidates) if v),
+        None,
+    )
+    account_name = next(
+        (
+            v
+            for v in (
+                _first_str(c, ("name", "verifiedName", "notify", "pushName"))
+                for c in candidates
+            )
+            if v
+        ),
+        None,
+    )
     return account_id, account_name, _whatsapp_phone_from_identifier(account_id)
 
 
@@ -378,19 +578,35 @@ def _ensure_whatsapp_bridge_dependencies(bridge_dir: Path) -> None:
         # npm output is UTF-8; encoding= guards the Windows ANSI-code-page
         # default against undefined bytes crashing the reader thread.
         result = subprocess.run(
-            [npm, "install", "--silent"], cwd=str(bridge_dir), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=env_int("WHATSAPP_NPM_INSTALL_TIMEOUT", 300),
-            env=env, creationflags=windows_hide_flags(),
+            [npm, "install", "--silent"],
+            cwd=str(bridge_dir),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=env_int("WHATSAPP_NPM_INSTALL_TIMEOUT", 300),
+            env=env,
+            creationflags=windows_hide_flags(),
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise HTTPException(status_code=500, detail="Installing WhatsApp bridge dependencies timed out.") from exc
+        raise HTTPException(
+            status_code=500, detail="Installing WhatsApp bridge dependencies timed out."
+        ) from exc
     except (pm.InstallError, OSError) as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to install WhatsApp bridge dependencies: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to install WhatsApp bridge dependencies: {exc}",
+        ) from exc
 
     if result.returncode != 0:
-        detail = "\n".join((result.stderr or result.stdout or "").strip().splitlines()[-10:])
-        raise HTTPException(status_code=500, detail=f"npm install failed for WhatsApp bridge: {detail or 'no output'}")
+        detail = "\n".join(
+            (result.stderr or result.stdout or "").strip().splitlines()[-10:]
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"npm install failed for WhatsApp bridge: {detail or 'no output'}",
+        )
 
 
 def _spawn_whatsapp_pairing_process(session_path: Path, mode: str) -> subprocess.Popen:
@@ -400,7 +616,10 @@ def _spawn_whatsapp_pairing_process(session_path: Path, mode: str) -> subprocess
     bridge_dir = resolve_whatsapp_bridge_dir()
     bridge_script = bridge_dir / "bridge.js"
     if not bridge_script.exists():
-        raise HTTPException(status_code=500, detail=f"WhatsApp bridge script was not found at {bridge_script}.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"WhatsApp bridge script was not found at {bridge_script}.",
+        )
     _ensure_whatsapp_bridge_dependencies(bridge_dir)
     node = find_node_executable("node")
     if not node:
@@ -410,19 +629,36 @@ def _spawn_whatsapp_pairing_process(session_path: Path, mode: str) -> subprocess
             pm.ensure("node", explicit=True)
             installed = pm.installed_package("node")
             if installed is None or installed.binary is None:
-                raise pm.InstallError("node", "Node.js binary is missing after preparation")
+                raise pm.InstallError(
+                    "node", "Node.js binary is missing after preparation"
+                )
             node = str(installed.binary)
         except pm.InstallError as exc:
-            raise HTTPException(status_code=500, detail=f"Node.js preparation failed: {exc}") from exc
+            raise HTTPException(
+                status_code=500, detail=f"Node.js preparation failed: {exc}"
+            ) from exc
     session_path.mkdir(parents=True, exist_ok=True)
 
     env = with_clawk_node_path()
     env["WHATSAPP_MODE"] = mode
     env["WHATSAPP_DM_POLICY"] = "pairing"
     return subprocess.Popen(
-        [node, str(bridge_script), "--pair-only", "--pair-json", "--session", str(session_path)],
-        cwd=str(bridge_dir), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        encoding="utf-8", errors="replace", start_new_session=True, env=env,
+        [
+            node,
+            str(bridge_script),
+            "--pair-only",
+            "--pair-json",
+            "--session",
+            str(session_path),
+        ],
+        cwd=str(bridge_dir),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        start_new_session=True,
+        env=env,
         creationflags=windows_hide_flags(),
     )
 
@@ -439,12 +675,22 @@ def _terminate_whatsapp_pairing(proc: subprocess.Popen | None) -> None:
             proc.wait(timeout=3)
 
 
-def _fail_whatsapp_pairing(pairing_id: str, error: str, *, proc=None, unless=_WHATSAPP_ONBOARDING_TERMINAL_STATUSES) -> None:
+def _fail_whatsapp_pairing(
+    pairing_id: str,
+    error: str,
+    *,
+    proc=None,
+    unless=_WHATSAPP_ONBOARDING_TERMINAL_STATUSES,
+) -> None:
     """Mark the session errored unless its status is in ``unless`` (or, when
     ``proc`` is given, it has since been superseded by another process)."""
     with _whatsapp_onboarding_lock:
         record = _whatsapp_onboarding_sessions.get(pairing_id)
-        if record and (proc is None or record.proc is proc) and record.status not in unless:
+        if (
+            record
+            and (proc is None or record.proc is proc)
+            and record.status not in unless
+        ):
             record.status = "error"
             record.error = error
 
@@ -495,9 +741,13 @@ def _watch_whatsapp_pairing(pairing_id: str, proc: subprocess.Popen) -> None:
         return
     # An "error" status from the stream may be overwritten by the exit reason.
     _fail_whatsapp_pairing(
-        pairing_id, "WhatsApp pairing process exited before pairing completed." if returncode == 0
+        pairing_id,
+        "WhatsApp pairing process exited before pairing completed."
+        if returncode == 0
         else f"WhatsApp pairing process exited with code {returncode}.",
-        proc=proc, unless={"connected", "cancelled", "expired"})
+        proc=proc,
+        unless={"connected", "cancelled", "expired"},
+    )
 
 
 def _run_whatsapp_pairing(pairing_id: str, session_path: Path, mode: str) -> None:
@@ -536,7 +786,10 @@ def _release_whatsapp_reservation(record: _WhatsAppOnboardingSession) -> None:
     """Call under the onboarding lock. A live writer keeps its reservation."""
     if not record.session_reserved or record.starting_process:
         return
-    if record.proc is None and record.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES:
+    if (
+        record.proc is None
+        and record.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES
+    ):
         return  # A queued worker has not entered its startup section yet.
     if record.proc is not None and record.proc.poll() is None:
         return
@@ -550,7 +803,10 @@ def _release_whatsapp_reservation(record: _WhatsAppOnboardingSession) -> None:
 
 def _expire_whatsapp_pairing(record: _WhatsAppOnboardingSession) -> None:
     with _whatsapp_onboarding_lock:
-        if record.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES or record.session_reserved:
+        if (
+            record.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES
+            or record.session_reserved
+        ):
             record.status = "expired"
             record.error = "WhatsApp QR setup expired. Start a new setup."
             _terminate_whatsapp_pairing(record.proc)
@@ -568,7 +824,11 @@ def _prune_whatsapp_onboarding_sessions() -> None:
             record.error = "WhatsApp pairing process exited before pairing completed."
         if record.expires_at_ts <= now:
             _expire_whatsapp_pairing(record)
-        if record.status in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES and not record.session_reserved and record.expires_at_ts + 300 <= now:
+        if (
+            record.status in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES
+            and not record.session_reserved
+            and record.expires_at_ts + 300 <= now
+        ):
             remove_ids.append(pairing_id)
     for pairing_id in remove_ids:
         _whatsapp_onboarding_sessions.pop(pairing_id, None)
@@ -581,7 +841,10 @@ def _register_whatsapp_session(session_path: Path, record) -> str:
     with _whatsapp_onboarding_lock:
         _prune_whatsapp_onboarding_sessions()
         for existing in _whatsapp_onboarding_sessions.values():
-            if existing.session_path == str(session_path) and existing.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES:
+            if (
+                existing.session_path == str(session_path)
+                and existing.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES
+            ):
                 existing.status = "cancelled"
                 existing.error = "Superseded by a newer WhatsApp setup session."
                 _terminate_whatsapp_pairing(existing.proc)
@@ -597,11 +860,17 @@ def _reserve_whatsapp_session(record: _WhatsAppOnboardingSession) -> None:
     for existing in _whatsapp_onboarding_sessions.values():
         if existing.session_path == record.session_path and (
             existing.status not in _WHATSAPP_ONBOARDING_TERMINAL_STATUSES
-            or existing.session_reserved or existing.starting_process
+            or existing.session_reserved
+            or existing.starting_process
             or (existing.proc is not None and existing.proc.poll() is None)
         ):
-            raise HTTPException(status_code=409, detail="Another WhatsApp QR setup is still active. Cancel it or wait for it to stop before re-pairing.")
-    acquired, previous = acquire_scoped_lock("whatsapp-session", record.session_path, metadata={"owner_kind": "process"})
+            raise HTTPException(
+                status_code=409,
+                detail="Another WhatsApp QR setup is still active. Cancel it or wait for it to stop before re-pairing.",
+            )
+    acquired, previous = acquire_scoped_lock(
+        "whatsapp-session", record.session_path, metadata={"owner_kind": "process"}
+    )
     if not acquired or previous and previous.get("pid") == os.getpid():
         # Self-reacquisition is allowed for gateway reconnects. Reset must not
         # borrow or release a lock already held by this process.
@@ -609,16 +878,23 @@ def _reserve_whatsapp_session(record: _WhatsAppOnboardingSession) -> None:
     record.session_reserved = True
 
 
-def _launch_whatsapp_pairing(pairing_id: str, record: _WhatsAppOnboardingSession, session_path: Path) -> None:
+def _launch_whatsapp_pairing(
+    pairing_id: str, record: _WhatsAppOnboardingSession, session_path: Path
+) -> None:
     from agent.memory_provider import spawn_context_thread
 
-    record.expiry_timer = threading.Timer(_WHATSAPP_ONBOARDING_TTL_SECONDS, _expire_whatsapp_pairing, args=(record,))
+    record.expiry_timer = threading.Timer(
+        _WHATSAPP_ONBOARDING_TTL_SECONDS, _expire_whatsapp_pairing, args=(record,)
+    )
     record.expiry_timer.daemon = True
     launched = False
     try:
         record.expiry_timer.start()
-        spawn_context_thread(_run_whatsapp_pairing, name="whatsapp-pairing",
-                             args=(pairing_id, session_path, record.mode)).start()
+        spawn_context_thread(
+            _run_whatsapp_pairing,
+            name="whatsapp-pairing",
+            args=(pairing_id, session_path, record.mode),
+        ).start()
         launched = True
     finally:
         if not launched:
@@ -627,7 +903,9 @@ def _launch_whatsapp_pairing(pairing_id: str, record: _WhatsAppOnboardingSession
 
 
 @router.post("/api/messaging/whatsapp/onboarding/start")
-async def start_whatsapp_onboarding(body: WhatsAppOnboardingStart, profile: Optional[str] = None):
+async def start_whatsapp_onboarding(
+    body: WhatsAppOnboardingStart, profile: Optional[str] = None
+):
     mode = _normalize_whatsapp_onboarding_mode(body.mode)
     allowed_users = _normalize_whatsapp_allowed_users(body.allowed_users)
 
@@ -635,18 +913,39 @@ async def start_whatsapp_onboarding(body: WhatsAppOnboardingStart, profile: Opti
     with _config_profile_scope(target_profile), _whatsapp_onboarding_lock:
         _prune_whatsapp_onboarding_sessions()
         session_path = _whatsapp_session_path()
-        if any(r.session_path == str(session_path) and r.session_reserved for r in _whatsapp_onboarding_sessions.values()):
-            raise HTTPException(status_code=409, detail="Another WhatsApp QR setup is still active. Cancel it or wait for it to stop before re-pairing.")
+        if any(
+            r.session_path == str(session_path) and r.session_reserved
+            for r in _whatsapp_onboarding_sessions.values()
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Another WhatsApp QR setup is still active. Cancel it or wait for it to stop before re-pairing.",
+            )
         expires_at_ts = time.time() + _WHATSAPP_ONBOARDING_TTL_SECONDS
         fields: dict[str, Any] = dict(
-            proc=None, mode=mode, allowed_users=allowed_users, session_path=str(session_path),
-            expires_at=datetime.fromtimestamp(expires_at_ts, UTC).isoformat().replace("+00:00", "Z"),
-            expires_at_ts=expires_at_ts, profile=target_profile,
+            proc=None,
+            mode=mode,
+            allowed_users=allowed_users,
+            session_path=str(session_path),
+            expires_at=datetime.fromtimestamp(expires_at_ts, UTC)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            expires_at_ts=expires_at_ts,
+            profile=target_profile,
         )
-        already_linked = not body.reset_session and (session_path / "creds.json").exists()
+        already_linked = (
+            not body.reset_session and (session_path / "creds.json").exists()
+        )
         if already_linked:  # creds on disk: report connected without pairing
-            account_id, account_name, account_phone = _whatsapp_linked_account_from_session(session_path)
-            fields.update(status="connected", account_id=account_id, account_name=account_name, account_phone=account_phone)
+            account_id, account_name, account_phone = (
+                _whatsapp_linked_account_from_session(session_path)
+            )
+            fields.update(
+                status="connected",
+                account_id=account_id,
+                account_name=account_name,
+                account_phone=account_phone,
+            )
 
         record = _WhatsAppOnboardingSession(**fields)
         if already_linked:
@@ -681,25 +980,35 @@ async def get_whatsapp_onboarding_status(pairing_id: str):
     with _whatsapp_onboarding_lock:
         record = _whatsapp_record_or_404(pairing_id)
         if record.status == "expired":
-            raise HTTPException(status_code=410, detail=record.error or "WhatsApp setup expired.")
+            raise HTTPException(
+                status_code=410, detail=record.error or "WhatsApp setup expired."
+            )
         return _whatsapp_onboarding_payload(pairing_id, record)
 
 
 @router.post("/api/messaging/whatsapp/onboarding/{pairing_id}/apply")
-async def apply_whatsapp_onboarding(pairing_id: str, body: WhatsAppOnboardingApply, profile: Optional[str] = None):
+async def apply_whatsapp_onboarding(
+    pairing_id: str, body: WhatsAppOnboardingApply, profile: Optional[str] = None
+):
     await _wait_whatsapp_pairing_flush(pairing_id)
     with _whatsapp_onboarding_lock:
         record = _whatsapp_record_or_404(pairing_id)
         if record.status != "connected":
-            raise HTTPException(status_code=409, detail="WhatsApp setup is not connected yet.")
+            raise HTTPException(
+                status_code=409, detail="WhatsApp setup is not connected yet."
+            )
         mode = _normalize_whatsapp_onboarding_mode(body.mode or record.mode)
-        allowed_users = _normalize_whatsapp_allowed_users(record.allowed_users if body.allowed_users is None else body.allowed_users)
+        allowed_users = _normalize_whatsapp_allowed_users(
+            record.allowed_users if body.allowed_users is None else body.allowed_users
+        )
         if mode == "self-chat" and not allowed_users:
             allowed_users = record.account_phone or record.account_id or ""
         record_profile = record.profile
 
     effective_profile = body.profile or profile or record_profile
-    with _onboarding_save_errors("WhatsApp onboarding apply failed", "Failed to save WhatsApp setup."):
+    with _onboarding_save_errors(
+        "WhatsApp onboarding apply failed", "Failed to save WhatsApp setup."
+    ):
         with _config_profile_scope(effective_profile):
             save_env_value("WHATSAPP_MODE", mode)
             save_env_value("WHATSAPP_DM_POLICY", "pairing")
@@ -717,23 +1026,36 @@ async def apply_whatsapp_onboarding(pairing_id: str, body: WhatsAppOnboardingApp
             _whatsapp_onboarding_sessions.pop(pairing_id, None)
 
     restart_result = _restart_gateway_after_whatsapp_onboarding(effective_profile)
-    return {"ok": True, "platform": "whatsapp", "needs_restart": not restart_result["restart_started"], **restart_result}
+    return {
+        "ok": True,
+        "platform": "whatsapp",
+        "needs_restart": not restart_result["restart_started"],
+        **restart_result,
+    }
 
 
 async def _wait_whatsapp_pairing_flush(pairing_id: str) -> None:
     with _whatsapp_onboarding_lock:
         record = _whatsapp_record_or_404(pairing_id)
         if record.status != "connected":
-            raise HTTPException(status_code=409, detail="WhatsApp setup is not connected yet.")
+            raise HTTPException(
+                status_code=409, detail="WhatsApp setup is not connected yet."
+            )
     if record.session_reserved and record.proc is not None:
         try:
             await asyncio.to_thread(record.proc.wait, timeout=3)
         except subprocess.TimeoutExpired as exc:
-            raise HTTPException(status_code=409, detail="WhatsApp is still saving its linked device. Wait a moment and try Save and restart again.") from exc
+            raise HTTPException(
+                status_code=409,
+                detail="WhatsApp is still saving its linked device. Wait a moment and try Save and restart again.",
+            ) from exc
     with _whatsapp_onboarding_lock:
         _release_whatsapp_reservation(record)
         if record.session_reserved:
-            raise HTTPException(status_code=409, detail="WhatsApp is still finishing pairing. Wait a moment and try Save and restart again.")
+            raise HTTPException(
+                status_code=409,
+                detail="WhatsApp is still finishing pairing. Wait a moment and try Save and restart again.",
+            )
 
 
 @router.delete("/api/messaging/whatsapp/onboarding/{pairing_id}")
@@ -746,7 +1068,9 @@ async def cancel_whatsapp_onboarding(pairing_id: str):
             _release_whatsapp_reservation(record)
             # Keep a cancelled worker visible until its process launch has
             # finished. It may still be opening the session directory.
-            if not record.starting_process and (record.proc is None or record.proc.poll() is not None):
+            if not record.starting_process and (
+                record.proc is None or record.proc.poll() is not None
+            ):
                 _whatsapp_onboarding_sessions.pop(pairing_id, None)
     return {"ok": True}
 
@@ -754,7 +1078,9 @@ async def cancel_whatsapp_onboarding(pairing_id: str):
 # ── Telegram QR onboarding ─────────────────────────────────────
 
 _TELEGRAM_SESSION_NOT_FOUND = "Telegram setup session was not found. Start a new setup."
-_TELEGRAM_INCOMPLETE_RESPONSE = "Telegram setup service returned an incomplete response."
+_TELEGRAM_INCOMPLETE_RESPONSE = (
+    "Telegram setup service returned an incomplete response."
+)
 
 
 def _parse_expiry_ts(value: str) -> float:
@@ -769,7 +1095,11 @@ def _parse_expiry_ts(value: str) -> float:
 
 def _prune_telegram_onboarding_pairings() -> None:
     now = time.time()
-    for pairing_id in [pid for pid, record in _telegram_onboarding_pairings.items() if record.expires_at_ts <= now]:
+    for pairing_id in [
+        pid
+        for pid, record in _telegram_onboarding_pairings.items()
+        if record.expires_at_ts <= now
+    ]:
         _telegram_onboarding_pairings.pop(pairing_id, None)
 
 
@@ -792,35 +1122,55 @@ def _telegram_record_or_404(pairing_id: str):
 
 def _telegram_ready_payload(record) -> dict[str, Any]:
     return {
-        "status": "ready", "bot_username": record.bot_username,
-        "owner_user_id": record.owner_user_id, "expires_at": record.expires_at,
+        "status": "ready",
+        "bot_username": record.bot_username,
+        "owner_user_id": record.owner_user_id,
+        "expires_at": record.expires_at,
     }
 
 
-async def _telegram_onboarding_request(method: str, path: str, *, body=None, bearer_token=None) -> dict[str, Any]:
-    return await asyncio.to_thread(_telegram_onboarding_request_sync, method, path, body=body, bearer_token=bearer_token)
+async def _telegram_onboarding_request(
+    method: str, path: str, *, body=None, bearer_token=None
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        _telegram_onboarding_request_sync,
+        method,
+        path,
+        body=body,
+        bearer_token=bearer_token,
+    )
 
 
 @router.post("/api/messaging/telegram/onboarding/start")
 async def start_telegram_onboarding(body: TelegramOnboardingStart):
     bot_name = (body.bot_name or "Clawksis").strip() or "Clawksis"
-    payload = await _telegram_onboarding_request("POST", "/v1/telegram/pairings", body={"bot_name": bot_name})
+    payload = await _telegram_onboarding_request(
+        "POST", "/v1/telegram/pairings", body={"bot_name": bot_name}
+    )
 
     def field(key: str) -> str:
         return str(payload.get(key) or "").strip()
 
-    pairing_id, poll_token, expires_at, deep_link = map(field, ("pairing_id", "poll_token", "expires_at", "deep_link"))
+    pairing_id, poll_token, expires_at, deep_link = map(
+        field, ("pairing_id", "poll_token", "expires_at", "deep_link")
+    )
     if not pairing_id or not poll_token or not expires_at or not deep_link:
         raise HTTPException(status_code=502, detail=_TELEGRAM_INCOMPLETE_RESPONSE)
 
     with _telegram_onboarding_lock:
         _prune_telegram_onboarding_pairings()
         _telegram_onboarding_pairings[pairing_id] = _TelegramOnboardingPairing(
-            poll_token=poll_token, expires_at=expires_at, expires_at_ts=_parse_expiry_ts(expires_at))
+            poll_token=poll_token,
+            expires_at=expires_at,
+            expires_at_ts=_parse_expiry_ts(expires_at),
+        )
 
     return {
-        "pairing_id": pairing_id, "suggested_username": field("suggested_username"), "deep_link": deep_link,
-        "qr_payload": str(payload.get("qr_payload") or deep_link).strip(), "expires_at": expires_at,
+        "pairing_id": pairing_id,
+        "suggested_username": field("suggested_username"),
+        "deep_link": deep_link,
+        "qr_payload": str(payload.get("qr_payload") or deep_link).strip(),
+        "expires_at": expires_at,
     }
 
 
@@ -833,7 +1183,10 @@ async def get_telegram_onboarding_status(pairing_id: str):
         poll_token = record.poll_token
 
     payload = await _telegram_onboarding_request(
-        "GET", f"/v1/telegram/pairings/{urllib.parse.quote(pairing_id, safe='')}", bearer_token=poll_token)
+        "GET",
+        f"/v1/telegram/pairings/{urllib.parse.quote(pairing_id, safe='')}",
+        bearer_token=poll_token,
+    )
     status = str(payload.get("status") or "").strip()
     if status == "waiting":
         with _telegram_onboarding_lock:
@@ -851,33 +1204,51 @@ async def get_telegram_onboarding_status(pairing_id: str):
                 raise HTTPException(status_code=404, detail=_TELEGRAM_SESSION_NOT_FOUND)
             record.bot_token = bot_token
             record.bot_username = str(payload.get("bot_username") or "").strip() or None
-            record.owner_user_id = _normalize_telegram_user_id(payload.get("owner_user_id"))
+            record.owner_user_id = _normalize_telegram_user_id(
+                payload.get("owner_user_id")
+            )
             return _telegram_ready_payload(record)
 
     if status in {"expired", "claimed"}:
         with _telegram_onboarding_lock:
             _telegram_onboarding_pairings.pop(pairing_id, None)
-        raise HTTPException(status_code=410, detail=_telegram_onboarding_error_message(
-            status, "Telegram setup is no longer available. Start a new setup."))
+        raise HTTPException(
+            status_code=410,
+            detail=_telegram_onboarding_error_message(
+                status, "Telegram setup is no longer available. Start a new setup."
+            ),
+        )
 
-    raise HTTPException(status_code=502, detail="Telegram setup service returned an unknown status.")
+    raise HTTPException(
+        status_code=502, detail="Telegram setup service returned an unknown status."
+    )
 
 
 @router.post("/api/messaging/telegram/onboarding/{pairing_id}/apply")
-async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApply, profile: Optional[str] = None):
-    normalized_ids = [_normalize_telegram_user_id(raw_id) for raw_id in body.allowed_user_ids]
+async def apply_telegram_onboarding(
+    pairing_id: str, body: TelegramOnboardingApply, profile: Optional[str] = None
+):
+    normalized_ids = [
+        _normalize_telegram_user_id(raw_id) for raw_id in body.allowed_user_ids
+    ]
     if not all(normalized_ids):
-        raise HTTPException(status_code=400, detail="Allowed Telegram user IDs must be numeric.")
+        raise HTTPException(
+            status_code=400, detail="Allowed Telegram user IDs must be numeric."
+        )
     allowed_user_ids = list(dict.fromkeys(normalized_ids))
     if not allowed_user_ids:
-        raise HTTPException(status_code=400, detail="Add at least one allowed Telegram user ID.")
+        raise HTTPException(
+            status_code=400, detail="Add at least one allowed Telegram user ID."
+        )
 
     with _telegram_onboarding_lock:
         record = _telegram_record_or_404(pairing_id)
         bot_token = record.bot_token
         bot_username = record.bot_username
         if not bot_token:
-            raise HTTPException(status_code=409, detail="Telegram setup is not ready yet.")
+            raise HTTPException(
+                status_code=409, detail="Telegram setup is not ready yet."
+            )
 
     effective_profile = body.profile or profile
 
@@ -887,7 +1258,9 @@ async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApp
             save_env_value("TELEGRAM_ALLOWED_USERS", ",".join(allowed_user_ids))
             _write_platform_enabled("telegram", True)
 
-    with _onboarding_save_errors("Telegram onboarding apply failed", "Failed to save Telegram setup."):
+    with _onboarding_save_errors(
+        "Telegram onboarding apply failed", "Failed to save Telegram setup."
+    ):
         await asyncio.to_thread(_apply)
 
     with _telegram_onboarding_lock:
@@ -896,10 +1269,15 @@ async def apply_telegram_onboarding(pairing_id: str, body: TelegramOnboardingApp
     # Best-effort restart: the QR flow pulls users into Telegram on another device, so a
     # saved token waiting on a manual restart click reads as "Clawksis is broken" from the
     # chat side. The save stays authoritative; a failed restart is reported for the UI banner.
-    restart_result = _restart_gateway_after(effective_profile, what="Telegram onboarding", label="Telegram onboarding")
+    restart_result = _restart_gateway_after(
+        effective_profile, what="Telegram onboarding", label="Telegram onboarding"
+    )
     return {
-        "ok": True, "platform": "telegram", "bot_username": bot_username,
-        "needs_restart": not restart_result["restart_started"], **restart_result,
+        "ok": True,
+        "platform": "telegram",
+        "bot_username": bot_username,
+        "needs_restart": not restart_result["restart_started"],
+        **restart_result,
     }
 
 
@@ -924,14 +1302,20 @@ async def get_messaging_platforms(profile: Optional[str] = None):
         with _profile_scope(profile) as scoped_dir:
             return {
                 "env_path": str(get_env_path()),
-                "gateway_start_command": " ".join(["clawk", *_gateway_subcommand(profile, "start")]),
-                "platforms": _platform_payloads(scoped_dir, _messaging_platform_catalog()),
+                "gateway_start_command": " ".join(
+                    ["clawk", *_gateway_subcommand(profile, "start")]
+                ),
+                "platforms": _platform_payloads(
+                    scoped_dir, _messaging_platform_catalog()
+                ),
             }
 
     return await asyncio.to_thread(_run)
 
 
-def _multiplex_port_binding_conflict(platform_id: str, requested_profile: Optional[str]) -> Optional[str]:
+def _multiplex_port_binding_conflict(
+    platform_id: str, requested_profile: Optional[str]
+) -> Optional[str]:
     """Reason enabling ``platform_id`` on the target profile is pointless under a multiplexed
     gateway, or ``None`` when allowed.
 
@@ -962,6 +1346,7 @@ def _multiplex_port_binding_conflict(platform_id: str, requested_profile: Option
     # it runs, else the DEFAULT profile's explicit config (plus the process-wide
     # GATEWAY_MULTIPLEX_PROFILES override). An unset flag is decided by the gateway, not guessed here.
     from clawk_cli.gateway_multiplex_mode import default_gateway_multiplexes
+
     if not default_gateway_multiplexes():
         return None
 
@@ -973,7 +1358,9 @@ def _multiplex_port_binding_conflict(platform_id: str, requested_profile: Option
 
 
 @router.put("/api/messaging/platforms/{platform_id}")
-async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpdate, profile: Optional[str] = None):
+async def update_messaging_platform(
+    platform_id: str, body: MessagingPlatformUpdate, profile: Optional[str] = None
+):
     target_profile = body.profile or profile
 
     def _resolve():
@@ -984,13 +1371,17 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
 
     entry, env_value_rules = await asyncio.to_thread(_resolve)
     if body.enabled:
-        conflict = await asyncio.to_thread(_multiplex_port_binding_conflict, platform_id, target_profile)
+        conflict = await asyncio.to_thread(
+            _multiplex_port_binding_conflict, platform_id, target_profile
+        )
         if conflict:
             # Reject BEFORE any .env/config.yaml write so the profile stays
             # loadable by the multiplexed gateway.
             _log.info(
                 "Rejected messaging platform update: platform=%s profile=%s "
-                "(multiplex port-binding conflict)", platform_id, target_profile or "current",
+                "(multiplex port-binding conflict)",
+                platform_id,
+                target_profile or "current",
             )
             raise HTTPException(status_code=409, detail=conflict)
 
@@ -998,7 +1389,9 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
 
     def _check_allowed(key: str) -> None:
         if key not in allowed_env:
-            raise HTTPException(status_code=400, detail=f"{key} is not configurable for {entry['name']}")
+            raise HTTPException(
+                status_code=400, detail=f"{key} is not configurable for {entry['name']}"
+            )
 
     def _apply():
         with _profile_scope(target_profile):
@@ -1013,7 +1406,9 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
                 if not trimmed:
                     continue
                 if is_redacted_credential_preview(trimmed):
-                    raise HTTPException(status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL)
+                    raise HTTPException(
+                        status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL
+                    )
                 _validate_messaging_env_value(env_value_rules, key, trimmed)
                 updates[key] = trimmed
 
@@ -1025,18 +1420,28 @@ async def update_messaging_platform(platform_id: str, body: MessagingPlatformUpd
             if body.enabled is not None:
                 _write_platform_enabled(platform_id, body.enabled)
 
-    with http_failure(f"PUT /api/messaging/platforms/{platform_id} failed", 500, detail="Internal server error"):
+    with http_failure(
+        f"PUT /api/messaging/platforms/{platform_id} failed",
+        500,
+        detail="Internal server error",
+    ):
         await asyncio.to_thread(_apply)
 
         # Audit trail for channel config mutations: names only, never values.
         _log.info(
             "Messaging platform updated: platform=%s profile=%s enabled=%s "
             "env_keys=%s cleared_keys=%s",
-            platform_id, target_profile or "current", body.enabled, sorted(body.env), sorted(body.clear_env),
+            platform_id,
+            target_profile or "current",
+            body.enabled,
+            sorted(body.env),
+            sorted(body.clear_env),
         )
         # A live multiplexer serving this named profile builds the adapter from the new token now
         # (its periodic rescan would otherwise pick it up within a cycle); no gateway restart.
-        hot_served = await asyncio.to_thread(_notify_multiplexer_hot_serve, target_profile)
+        hot_served = await asyncio.to_thread(
+            _notify_multiplexer_hot_serve, target_profile
+        )
         return {"ok": True, "platform": platform_id, "hot_served": hot_served}
 
 
@@ -1044,10 +1449,18 @@ def _notify_multiplexer_hot_serve(profile: Optional[str]) -> bool:
     """True when a live multiplexer serves the written profile and was told to rebuild its adapters.
     Unscoped (no ``?profile=``) means THIS process's profile: Desktop routes a pooled
     ``clawk --profile X serve`` without the query (#109088), so X must resolve here too."""
-    from clawk_cli.gateway import _current_profile_name, named_profile_served_by_running_multiplexer
+    from clawk_cli.gateway import (
+        _current_profile_name,
+        named_profile_served_by_running_multiplexer,
+    )
     from clawk_cli.gateway_multiplex_served import notify_multiplexer_profiles_changed
+
     name = (profile or "").strip() or _current_profile_name()
-    if not name or name == "default" or not named_profile_served_by_running_multiplexer(name):
+    if (
+        not name
+        or name == "default"
+        or not named_profile_served_by_running_multiplexer(name)
+    ):
         return False
     return notify_multiplexer_profiles_changed(name) is not None
 
@@ -1085,7 +1498,9 @@ def _platform_dm_policy(platform_id: str) -> str:
     with contextlib.suppress(Exception):
         plat_cfg = (load_config().get("platforms") or {}).get(platform_id)
         if isinstance(plat_cfg, dict):
-            policy = str(plat_cfg.get("extra", {}).get("dm_policy") or "").strip().lower()
+            policy = (
+                str(plat_cfg.get("extra", {}).get("dm_policy") or "").strip().lower()
+            )
             if policy:
                 return policy
     return ""
@@ -1133,15 +1548,25 @@ def _messaging_platform_posture(
         return _gate_env(name)
 
     if allow_all_env and gate_env(allow_all_env).lower() in ("true", "1", "yes"):
-        return {"posture": "open", "message": f"{entry['name']} is open: {allow_all_env} is set."}
+        return {
+            "posture": "open",
+            "message": f"{entry['name']} is open: {allow_all_env} is set.",
+        }
     if gate_env("GATEWAY_ALLOW_ALL_USERS").lower() in ("true", "1", "yes"):
-        return {"posture": "open", "message": "Gateway is open: GATEWAY_ALLOW_ALL_USERS is set."}
+        return {
+            "posture": "open",
+            "message": "Gateway is open: GATEWAY_ALLOW_ALL_USERS is set.",
+        }
 
     allowlists = {
         allowed_env: gate_env(allowed_env),
         "GATEWAY_ALLOWED_USERS": gate_env("GATEWAY_ALLOWED_USERS"),
-        "TELEGRAM_GROUP_ALLOWED_USERS": gate_env("TELEGRAM_GROUP_ALLOWED_USERS") if platform_id == "telegram" else "",
-        "TELEGRAM_GROUP_ALLOWED_CHATS": gate_env("TELEGRAM_GROUP_ALLOWED_CHATS") if platform_id == "telegram" else "",
+        "TELEGRAM_GROUP_ALLOWED_USERS": gate_env("TELEGRAM_GROUP_ALLOWED_USERS")
+        if platform_id == "telegram"
+        else "",
+        "TELEGRAM_GROUP_ALLOWED_CHATS": gate_env("TELEGRAM_GROUP_ALLOWED_CHATS")
+        if platform_id == "telegram"
+        else "",
     }
     for env_name, value in allowlists.items():
         if value.strip():
@@ -1152,7 +1577,10 @@ def _messaging_platform_posture(
             }
 
     if _platform_dm_policy(platform_id) == "allowlist":
-        return {"posture": "allowlist", "message": "Connected. Access restricted by the configured allow_from policy."}
+        return {
+            "posture": "allowlist",
+            "message": "Connected. Access restricted by the configured allow_from policy.",
+        }
 
     # Pairing grants: the profile's approved users (the gateway honors the store as a
     # union with any allowlist, gateway/authz_mixin.py `_pairing_store_for`).
@@ -1174,7 +1602,9 @@ def _messaging_platform_posture(
         f"set {allowed_env}, approve a pairing request, or enable pairing for new users."
     )
     if pending:
-        base += f" {pending} pairing request{'s' if pending != 1 else ''} pending approval."
+        base += (
+            f" {pending} pairing request{'s' if pending != 1 else ''} pending approval."
+        )
     return {"posture": "deny_all", "message": base}
 
 
@@ -1190,7 +1620,9 @@ async def test_messaging_platform(platform_id: str, profile: Optional[str] = Non
                 # Still inside the profile scope: load_env()/load_config()/PairingStore
                 # must resolve the ACTIVE profile's env/config/pairing store, not the
                 # dashboard process's root home.
-                posture = _messaging_platform_posture(platform_id, entry, scoped_dir is not None, authz_env)
+                posture = _messaging_platform_posture(
+                    platform_id, entry, scoped_dir is not None, authz_env
+                )
             return entry, payload, posture
 
     entry, payload, posture = await asyncio.to_thread(_run)
@@ -1199,12 +1631,26 @@ async def test_messaging_platform(platform_id: str, profile: Optional[str] = Non
         return {"ok": ok, "state": payload["state"], "message": message}
 
     if not payload["enabled"]:
-        return result(False, f"{entry['name']} is disabled. Enable it, then restart the gateway.")
+        return result(
+            False, f"{entry['name']} is disabled. Enable it, then restart the gateway."
+        )
     if not payload["configured"]:
-        missing = [field["key"] for field in payload["env_vars"] if field["required"] and not field["is_set"]]
-        return result(False, f"Missing required setup: {', '.join(missing)}" if missing else "Platform setup is incomplete.")
+        missing = [
+            field["key"]
+            for field in payload["env_vars"]
+            if field["required"] and not field["is_set"]
+        ]
+        return result(
+            False,
+            f"Missing required setup: {', '.join(missing)}"
+            if missing
+            else "Platform setup is incomplete.",
+        )
     if not payload["gateway_running"]:
-        return result(False, "Gateway is not running. Restart the gateway to connect this platform.")
+        return result(
+            False,
+            "Gateway is not running. Restart the gateway to connect this platform.",
+        )
     if payload["state"] == "connected":
         # Non-breaking extension (#66030): keep ok=True (the connection is genuinely up)
         # but surface the platform's auth posture so the UI can render yellow on
@@ -1219,4 +1665,7 @@ async def test_messaging_platform(platform_id: str, profile: Optional[str] = Non
         }
     if payload.get("error_message"):
         return result(False, payload["error_message"])
-    return result(False, "Setup looks complete, but the gateway has not reported a connection yet. Restart the gateway.")
+    return result(
+        False,
+        "Setup looks complete, but the gateway has not reported a connection yet. Restart the gateway.",
+    )

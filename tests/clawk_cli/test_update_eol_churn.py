@@ -107,7 +107,11 @@ def test_churn_invisible_under_autocrlf_true_is_still_found(tmp_path: Path) -> N
     """
     repo = _managed_repo(tmp_path, {"a.py": b"x = 1\ny = 2\n"})
     as_git_sees_it = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True
+        ["git", "status", "--porcelain"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert as_git_sees_it.stdout.strip() == ""
     assert b"\r\n" in (repo / "a.py").read_bytes()

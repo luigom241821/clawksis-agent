@@ -40,6 +40,7 @@ def _interrupt_agent_for_signal(agent, signum) -> None:
     main thread unwinds (else an orphan child). Never raises.
     """
     from cli import _float_env
+
     try:
         if agent is not None:
             request_hard_interrupt(agent, f"received signal {signum}")
@@ -50,7 +51,9 @@ def _interrupt_agent_for_signal(agent, signum) -> None:
         pass  # never block signal handling
 
 
-def _run_kanban_goal_loop_q(cli: ClawksisCLI, first_response: str, run_turn=None, log=None) -> None:
+def _run_kanban_goal_loop_q(
+    cli: ClawksisCLI, first_response: str, run_turn=None, log=None
+) -> None:
     """Drive a kanban goal_mode worker through ``goals.run_kanban_goal_loop`` after its first turn.
 
     ``run_turn`` defaults to the bare ``-Q`` turn (final answer only). The ``-q`` worker path
@@ -58,6 +61,7 @@ def _run_kanban_goal_loop_q(cli: ClawksisCLI, first_response: str, run_turn=None
     worker log is made of. The caller swallows all errors: a broken loop must never wedge a worker.
     """
     from cli import _int_or, _sync_cli_session_id_from_agent
+
     task_id = (os.environ.get("CLAWK_KANBAN_TASK") or "").strip()
     if not task_id:
         return
@@ -68,7 +72,10 @@ def _run_kanban_goal_loop_q(cli: ClawksisCLI, first_response: str, run_turn=None
 
     from clawk_cli import kanban_db as _kb
     from clawk_cli import kanban_db_connect as _kbc
-    from clawk_cli.goals import run_kanban_goal_loop as _run_loop, DEFAULT_MAX_TURNS as _DEF_TURNS
+    from clawk_cli.goals import (
+        run_kanban_goal_loop as _run_loop,
+        DEFAULT_MAX_TURNS as _DEF_TURNS,
+    )
 
     # Goal text = title + body (the acceptance criteria the judge evaluates against).
     with _kbc.connect_closing() as conn:
@@ -81,17 +88,27 @@ def _run_kanban_goal_loop_q(cli: ClawksisCLI, first_response: str, run_turn=None
         return
 
     def _quiet_turn(prompt: str) -> dict:
-        result = cli.agent.run_conversation(user_message=prompt, conversation_history=cli.conversation_history)
+        result = cli.agent.run_conversation(
+            user_message=prompt, conversation_history=cli.conversation_history
+        )
         _sync_cli_session_id_from_agent(cli)
-        resp = result.get("final_response", "") if isinstance(result, dict) else str(result)
+        resp = (
+            result.get("final_response", "")
+            if isinstance(result, dict)
+            else str(result)
+        )
         if resp:
             print(resp)
         # Carry failed/failure_reason so run_kanban_goal_loop can stop on a failed
         # worker turn instead of grinding out empty continuation turns (#91264).
         return {
             "response": resp or "",
-            "failed": result.get("failed", False) if isinstance(result, dict) else False,
-            "failure_reason": result.get("failure_reason") if isinstance(result, dict) else None,
+            "failed": result.get("failed", False)
+            if isinstance(result, dict)
+            else False,
+            "failure_reason": result.get("failure_reason")
+            if isinstance(result, dict)
+            else None,
         }
 
     def _task_status() -> str | None:
@@ -103,9 +120,13 @@ def _run_kanban_goal_loop_q(cli: ClawksisCLI, first_response: str, run_turn=None
             _kb.block_task(c, task_id, reason=reason, expected_run_id=worker_run_id)
 
     _run_loop(
-        task_id=task_id, goal_text=goal_text, run_turn=run_turn or _quiet_turn,
-        task_status_fn=_task_status, block_fn=_block,
-        max_turns=task.goal_max_turns or _DEF_TURNS, first_response=first_response or "",
+        task_id=task_id,
+        goal_text=goal_text,
+        run_turn=run_turn or _quiet_turn,
+        task_status_fn=_task_status,
+        block_fn=_block,
+        max_turns=task.goal_max_turns or _DEF_TURNS,
+        first_response=first_response or "",
         log=log or (lambda m: logger.info("%s", m)),
     )
 
@@ -120,19 +141,26 @@ def _run_kanban_goal_loop_chat(cli: ClawksisCLI, first_response: str) -> None:
         logger.info("%s", msg)
         print(msg, flush=True)
 
-    _run_kanban_goal_loop_q(cli, first_response, run_turn=lambda p: cli.chat(p) or "", log=_log)
+    _run_kanban_goal_loop_q(
+        cli, first_response, run_turn=lambda p: cli.chat(p) or "", log=_log
+    )
 
 
 def _sync_cli_session_id_from_agent(cli) -> None:
     """Keep ``cli.session_id`` in sync when mid-run compression rotated the agent's session."""
-    if getattr(cli.agent, "session_id", None) and cli.agent.session_id != cli.session_id:
+    if (
+        getattr(cli.agent, "session_id", None)
+        and cli.agent.session_id != cli.session_id
+    ):
         cli.session_id = cli.agent.session_id
 
 
 # ``failure_reason`` values that say nothing about the task itself: the provider is walled,
 # down or unreachable, or the account is out of credit, so a Kanban worker signals "try
 # later" instead of "I failed" and the dispatcher does not spend the task's retry budget on it.
-from clawk_cli.turn_exit import TRANSIENT_PROVIDER_REASONS as _TRANSIENT_PROVIDER_REASONS
+from clawk_cli.turn_exit import (
+    TRANSIENT_PROVIDER_REASONS as _TRANSIENT_PROVIDER_REASONS,
+)
 
 
 # ``failure_reason`` values a retry can never heal: the credential was rejected, the model does
@@ -145,8 +173,12 @@ from clawk_cli.turn_exit import TRANSIENT_PROVIDER_REASONS as _TRANSIENT_PROVIDE
 from clawk_cli.turn_exit import TERMINAL_PROVIDER_REASONS as _TERMINAL_PROVIDER_REASONS
 
 
-def _single_query_exit_code(result, *, credentials_rate_limited: bool = False,
-                            credentials_terminal: bool = False) -> int:
+def _single_query_exit_code(
+    result,
+    *,
+    credentials_rate_limited: bool = False,
+    credentials_terminal: bool = False,
+) -> int:
     """Map a one-shot turn result onto a process exit code, for both `-q` and `-Q`.
 
     0 only when the turn completed; 130 when it was interrupted; 1 when it failed, stopped
@@ -171,8 +203,10 @@ def _single_query_exit_code(result, *, credentials_rate_limited: bool = False,
     from cli import _TRANSIENT_PROVIDER_REASONS as transient_reasons
     from agent.kanban_turn_recovery import kanban_task_id
     from clawk_cli.turn_exit import turn_exit_code
+
     return turn_exit_code(
-        result, kanban_worker=kanban_task_id() is not None,
+        result,
+        kanban_worker=kanban_task_id() is not None,
         credentials_rate_limited=credentials_rate_limited,
         credentials_terminal=credentials_terminal,
         transient_reasons=transient_reasons,
@@ -187,27 +221,50 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
     Nested Bot Mode notifies bind this session's key (not the dispatcher's) and resume in-process
     before stdout is printed, so a teammate reply is the quiet run's final answer rather than a
     stranded receipt."""
-    from cli import _emit_interrupted_session_end, _run_kanban_goal_loop_q, _single_query_exit_code, _sync_cli_session_id_from_agent
+    from cli import (
+        _emit_interrupted_session_end,
+        _run_kanban_goal_loop_q,
+        _single_query_exit_code,
+        _sync_cli_session_id_from_agent,
+    )
     from agent.interrupt_compat import _accepts_keyword
     from agent.turn_author import take_turn_author_from_env
     from clawk_cli.quiet_single_query import (
-        bind_quiet_session_key, continue_quiet_notify_completions, exit_single_query, quiet_notify_linger_seconds, take_turn_report_path, write_turn_report,
+        bind_quiet_session_key,
+        continue_quiet_notify_completions,
+        exit_single_query,
+        quiet_notify_linger_seconds,
+        take_turn_report_path,
+        write_turn_report,
     )
 
     author = take_turn_author_from_env()
     # A spawner that bounds only the turn (cron Bot Chat lane) learns the outcome from this
     # report, written before the linger below; popped so tool subprocesses do not inherit it.
     turn_report_path = take_turn_report_path()
-    author_kwargs = {"turn_author": author} if author is not None and _accepts_keyword(cli.agent.run_conversation, "turn_author") else {}
+    author_kwargs = (
+        {"turn_author": author}
+        if author is not None
+        and _accepts_keyword(cli.agent.run_conversation, "turn_author")
+        else {}
+    )
     with bind_quiet_session_key(getattr(cli, "session_id", "") or "default"):
         try:
             result = cli.agent.run_conversation(
-                user_message=effective_query, conversation_history=cli.conversation_history, **author_kwargs,
+                user_message=effective_query,
+                conversation_history=cli.conversation_history,
+                **author_kwargs,
             )
         except KeyboardInterrupt:
             _emit_interrupted_session_end(cli, reason="keyboard_interrupt")
             if emitter is not None:
-                exit_single_query(emitter.emit_result({"failed": True, "error": "Interrupted"}, session_id=cli.session_id or "", exit_code=130))
+                exit_single_query(
+                    emitter.emit_result(
+                        {"failed": True, "error": "Interrupted"},
+                        session_id=cli.session_id or "",
+                        exit_code=130,
+                    )
+                )
             print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
             exit_single_query(130)
         # The exit line below reports session_id to stderr for automation wrappers;
@@ -219,7 +276,9 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
         # live run/claim proof live in agent/kanban_turn_recovery.py. Runs BEFORE the turn
         # report so everything downstream — report, follow-ups, response, goal gate, exit —
         # sees the post-recovery disposition.
-        from agent.kanban_turn_recovery import recover_failed_kanban_turns as _recover_turns
+        from agent.kanban_turn_recovery import (
+            recover_failed_kanban_turns as _recover_turns,
+        )
 
         def _quiet_recover_turn(nudge):
             nonlocal result
@@ -236,15 +295,21 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
             lambda: result,
             emit=lambda msg: print(msg, file=sys.stderr, flush=True),
         )
+
         # The turn is over and persisted: the one-shot exit linger that follows protects nested
         # notify_on_complete replies and is NOT part of the spawner's delivery (#113608). The
         # report carries what this run will print, so a spawner booking a child still lingering
         # at its cap relays the answer instead of a timeout (#114980).
         def _report_turn(res) -> None:
             write_turn_report(
-                turn_report_path, exit_code=_single_query_exit_code(res),
-                error=str(res.get("error") or "") if isinstance(res, dict) else "agent turn did not run",
-                reply=res.get("final_response", "") if isinstance(res, dict) else str(res),
+                turn_report_path,
+                exit_code=_single_query_exit_code(res),
+                error=str(res.get("error") or "")
+                if isinstance(res, dict)
+                else "agent turn did not run",
+                reply=res.get("final_response", "")
+                if isinstance(res, dict)
+                else str(res),
             )
 
         _report_turn(result)
@@ -254,7 +319,9 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
             def _follow_up(text):
                 nonlocal history
                 follow = cli.agent.run_conversation(
-                    user_message=text, conversation_history=history, **author_kwargs,
+                    user_message=text,
+                    conversation_history=history,
+                    **author_kwargs,
                 )
                 if isinstance(follow, dict) and follow.get("messages"):
                     history = follow["messages"]
@@ -282,13 +349,19 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
                 result = continued
                 # A teammate's reply displaced the answer this run prints; tell the spawner.
                 _report_turn(result)
-        response = result.get("final_response", "") if isinstance(result, dict) else str(result)
+        response = (
+            result.get("final_response", "")
+            if isinstance(result, dict)
+            else str(result)
+        )
     # Surface backend errors that produced no visible output (e.g. invalid model slug
     # -> provider 4xx) on stderr so piped stdout stays clean.
     if emitter is not None:
         pass  # the result record below carries text/error; nothing else may touch stdout
     elif (
-        not response and isinstance(result, dict) and result.get("error")
+        not response
+        and isinstance(result, dict)
+        and result.get("error")
         and (result.get("failed") or result.get("partial"))
     ):
         print(t("gateway.model.error_prefix", error=result["error"]), file=sys.stderr)
@@ -322,11 +395,15 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
         print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
 
     if emitter is not None:
-        _exit_code = emitter.emit_result(result, session_id=cli.session_id or "", exit_code=_exit_code)
+        _exit_code = emitter.emit_result(
+            result, session_id=cli.session_id or "", exit_code=_exit_code
+        )
     exit_single_query(_exit_code)
 
 
-def _route_single_query_images(cli, query, effective_query, single_query_images, single_query_image_urls):
+def _route_single_query_images(
+    cli, query, effective_query, single_query_images, single_query_image_urls
+):
     """Attach one-shot images natively when the model supports vision, else pre-describe them as text."""
     if not (single_query_images or single_query_image_urls):
         return effective_query
@@ -342,7 +419,9 @@ def _route_single_query_images(cli, query, effective_query, single_query_images,
         from clawk_cli.config import load_config
 
         _img_mode = decide_image_input_mode(
-            (cli.provider or "").strip(), (cli.model or "").strip(), load_config(),
+            (cli.provider or "").strip(),
+            (cli.model or "").strip(),
+            load_config(),
             requested_provider=(cli.requested_provider or "").strip(),
         )
     except Exception:
@@ -352,7 +431,9 @@ def _route_single_query_images(cli, query, effective_query, single_query_images,
         # ``_preprocess_images_with_vision`` only knows local files; when only URLs
         # were supplied keep the original query text intact.
         if single_query_images:
-            return cli._preprocess_images_with_vision(query, single_query_images, announce=False)
+            return cli._preprocess_images_with_vision(
+                query, single_query_images, announce=False
+            )
         return effective_query
 
     if _img_mode != "native" or _build_parts is None:
@@ -405,13 +486,19 @@ def _install_single_query_signal_handlers(cli):
     A plain KeyboardInterrupt only unwinds the main thread, so tool worker threads
     would orphan the setsid child; the interrupt + grace window lets them kill it.
     """
-    from cli import _arm_exit_watchdog_on_shutdown_signal, _flush_logging_and_stdio, _flush_one_shot_session_store, _interrupt_agent_for_signal
+    from cli import (
+        _arm_exit_watchdog_on_shutdown_signal,
+        _flush_logging_and_stdio,
+        _flush_one_shot_session_store,
+        _interrupt_agent_for_signal,
+    )
     import signal as _signal
 
     def _kill_foreground_and_exit(*_):
         # The worker's command runs in its own process group: SIGKILL it or it outlives os._exit.
         with suppress(Exception):
             from tools.environments.base import kill_live_foreground_processes
+
             kill_live_foreground_processes(now=True)
         os._exit(0)
 
@@ -446,6 +533,7 @@ def _install_single_query_signal_handlers(cli):
             _flush_logging_and_stdio()
             _kill_foreground_and_exit()
         raise KeyboardInterrupt()
+
     with suppress(Exception):  # restricted environments
         for _name in ("SIGINT", "SIGTERM", "SIGHUP"):
             if hasattr(_signal, _name):
@@ -467,19 +555,36 @@ def _configure_quiet_agent(agent) -> None:
     agent.tool_progress_mode = "off"
 
 
-def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool = False):
+def _run_single_query_mode(
+    cli, query, image, quiet, oneshot, stream_json: bool = False
+):
     """``-q``/``--image`` entry: seed an interactive session on a TTY, else run the one-shot turn and exit.
     ``stream_json`` (implies quiet) swaps the plain-text final answer for the JSONL event protocol."""
-    from cli import _SeededQueryMessage, _collect_kanban_task_images, _collect_query_images, _configure_quiet_agent, _finalize_single_query, _route_single_query_images, _run_kanban_goal_loop_chat, _run_quiet_single_query, _should_seed_interactive, _single_query_exit_code
+    from cli import (
+        _SeededQueryMessage,
+        _collect_kanban_task_images,
+        _collect_query_images,
+        _configure_quiet_agent,
+        _finalize_single_query,
+        _route_single_query_images,
+        _run_kanban_goal_loop_chat,
+        _run_quiet_single_query,
+        _should_seed_interactive,
+        _single_query_exit_code,
+    )
+
     if _should_seed_interactive(query, image, quiet, oneshot):
         seeded_query, seeded_images = _collect_query_images(query, image)
         logger.info(
             "Seeding interactive session with -q prompt (%d chars, %d images)",
-            len(seeded_query or ""), len(seeded_images),
+            len(seeded_query or ""),
+            len(seeded_images),
         )
         cli._seeded_first_message = _SeededQueryMessage(seeded_query, seeded_images)
         return cli.run()
-    cli._single_query_mode = True  # agent waits the full MCP cold-start before its only tool snapshot
+    cli._single_query_mode = (
+        True  # agent waits the full MCP cold-start before its only tool snapshot
+    )
     # No PluginManager._cli_ref (#67597): the turn's plugin tools run in the gateway, and this process
     # loads no plugins (PLG-7).
     # No user can answer approval prompts: the approval gate takes the deterministic path.
@@ -492,8 +597,10 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
     # full timeout. See #86878.
     os.environ["CLAWK_SINGLE_QUERY_SESSION"] = "1"
     from clawk_cli.quiet_single_query import exit_single_query
+
     if os.environ.get("CLAWK_KANBAN_TASK"):
         from tools.kanban_tools import register_current_worker_from_env
+
         if not register_current_worker_from_env():
             # No exit trailer: the task log now belongs to the run that replaced this one.
             print(t("cli.single_query.kanban_run_reclaimed"), file=sys.stderr)
@@ -503,7 +610,10 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
     try:
         query, single_query_images = _collect_query_images(query, image)
         single_query_image_urls = _collect_kanban_task_images(single_query_images)
-        from clawk_cli.observability.shared_metrics_startup import record_cli_one_shot_ready
+        from clawk_cli.observability.shared_metrics_startup import (
+            record_cli_one_shot_ready,
+        )
+
         record_cli_one_shot_ready()
         if quiet:
             # Quiet mode: suppress banner, spinner, tool previews.
@@ -513,7 +623,11 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
                 # Built BEFORE credentials/agent init so a failed start still closes the protocol
                 # (init + result) instead of exiting 1 with an empty stdout.
                 from clawk_cli.stream_json import StreamJsonEmitter
-                emitter = StreamJsonEmitter(model=getattr(cli, "model", "") or "", session_id=cli.session_id or "")
+
+                emitter = StreamJsonEmitter(
+                    model=getattr(cli, "model", "") or "",
+                    session_id=cli.session_id or "",
+                )
             if cli._ensure_runtime_credentials():
                 effective_query: Any = _route_single_query_images(
                     cli, query, query, single_query_images, single_query_image_urls
@@ -532,16 +646,25 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
                     _run_quiet_single_query(cli, effective_query, emitter=emitter)
 
             fail_code = _single_query_exit_code(
-                None, credentials_rate_limited=getattr(cli, "_credentials_rate_limited", False),
-                credentials_terminal=getattr(cli, "_credentials_terminal", False))
+                None,
+                credentials_rate_limited=getattr(
+                    cli, "_credentials_rate_limited", False
+                ),
+                credentials_terminal=getattr(cli, "_credentials_terminal", False),
+            )
             if emitter is not None:
-                emitter.emit_result({"failed": True, "error": "credentials or agent init failed"},
-                                    session_id=cli.session_id or "", exit_code=fail_code)
+                emitter.emit_result(
+                    {"failed": True, "error": "credentials or agent init failed"},
+                    session_id=cli.session_id or "",
+                    exit_code=fail_code,
+                )
             exit_single_query(fail_code)  # credentials or agent init failed
         # No welcome banner (~420 ms cold); session id / resume hint come from _print_exit_summary().
         _query_label = query or ("[image attached]" if single_query_images else "")
         if _query_label:
-            cli.console.print(f"[bold blue]{t('cli.single_query.query_label')}[/] {_query_label}")
+            cli.console.print(
+                f"[bold blue]{t('cli.single_query.query_label')}[/] {_query_label}"
+            )
         cli._show_security_advisories()
         response = cli.chat(query, images=single_query_images or None)
         # Kanban worker: a failed-silently turn used to end the run as rc=0 with no
@@ -570,7 +693,10 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
         # interrupt, terminal settlement) — must reach the shared exit path below with zero
         # further model entry, because goal_run_status() checks run identity only and would
         # otherwise continue under an authority this process can no longer prove.
-        if os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1" and _single_query_exit_code(cli._last_turn_result) == 0:
+        if (
+            os.environ.get("CLAWK_KANBAN_GOAL_MODE") == "1"
+            and _single_query_exit_code(cli._last_turn_result) == 0
+        ):
             try:
                 _run_kanban_goal_loop_chat(cli, response or "")
             except Exception as _goal_exc:
@@ -578,9 +704,14 @@ def _run_single_query_mode(cli, query, image, quiet, oneshot, stream_json: bool 
         cli._print_exit_summary(clear_screen=False)
         # Same exit contract as `-Q`: scripts and the Kanban dispatcher read the outcome from
         # the exit code. This path used to fall through to an implicit 0 for every outcome.
-        exit_single_query(_single_query_exit_code(
-            cli._last_turn_result,
-            credentials_rate_limited=getattr(cli, "_credentials_rate_limited", False),
-            credentials_terminal=getattr(cli, "_credentials_terminal", False)))
+        exit_single_query(
+            _single_query_exit_code(
+                cli._last_turn_result,
+                credentials_rate_limited=getattr(
+                    cli, "_credentials_rate_limited", False
+                ),
+                credentials_terminal=getattr(cli, "_credentials_terminal", False),
+            )
+        )
     finally:
         _finalize_single_query(cli)

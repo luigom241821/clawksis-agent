@@ -17,6 +17,7 @@ These tests exercise the helper directly on a bare ``AIAgent`` built
 via ``__new__`` so the full ``run_conversation`` machinery isn't needed
 — the method is pure logic and three state arguments.
 """
+
 from unittest.mock import MagicMock
 
 
@@ -59,9 +60,15 @@ class TestSyncExternalMemoryForTurn:
         agent._turn_author = {"id": "bot:alpha", "name": "Alpha", "is_bot": True}
 
         agent._sync_external_memory_for_turn(
-            original_user_message="Message from Alpha: status?", final_response="All green.", interrupted=False,
+            original_user_message="Message from Alpha: status?",
+            final_response="All green.",
+            interrupted=False,
         )
 
         kwargs = agent._memory_manager.sync_all.call_args.kwargs
-        assert kwargs["turn_author"] == {"id": "bot:alpha", "name": "Alpha", "is_bot": True}
+        assert kwargs["turn_author"] == {
+            "id": "bot:alpha",
+            "name": "Alpha",
+            "is_bot": True,
+        }
         assert kwargs["session_id"] == "test_session_001"

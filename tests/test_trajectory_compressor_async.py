@@ -19,8 +19,6 @@ import pytest
 class TestAsyncClientLazyCreation:
     """trajectory_compressor.py — _get_async_client()"""
 
-
-
     def test_get_async_client_creates_fresh_each_call(self):
         """Each call to _get_async_client() creates a NEW client instance,
         so it binds to the current event loop."""
@@ -51,12 +49,14 @@ class TestAsyncClientLazyCreation:
         assert instances[0] is not instances[1]
 
 
-
-
 @pytest.mark.asyncio
 async def test_generate_summary_async_kimi_omits_temperature():
     """Kimi models should have temperature omitted — server manages it."""
-    from trajectory_compressor import CompressionConfig, TrajectoryCompressor, TrajectoryMetrics
+    from trajectory_compressor import (
+        CompressionConfig,
+        TrajectoryCompressor,
+        TrajectoryMetrics,
+    )
 
     config = CompressionConfig(
         summarization_model="kimi-for-coding",
@@ -69,9 +69,15 @@ async def test_generate_summary_async_kimi_omits_temperature():
     compressor.logger = MagicMock()
     compressor._use_call_llm = False
     async_client = MagicMock()
-    async_client.chat.completions.create = MagicMock(return_value=SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary"))]
-    ))
+    async_client.chat.completions.create = MagicMock(
+        return_value=SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="[CONTEXT SUMMARY]: summary")
+                )
+            ]
+        )
+    )
     compressor._get_async_client = MagicMock(return_value=async_client)
 
     metrics = TrajectoryMetrics()
@@ -79,10 +85,6 @@ async def test_generate_summary_async_kimi_omits_temperature():
 
     assert result.startswith("[CONTEXT SUMMARY]:")
     assert "temperature" not in async_client.chat.completions.create.call_args.kwargs
-
-
-
-
 
 
 @pytest.mark.asyncio

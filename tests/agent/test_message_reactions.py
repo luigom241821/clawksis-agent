@@ -21,7 +21,9 @@ def session(db):
     key = db.create_session("react-test", "test")
     db.append_message(key, "user", "how do i center a div")
     db.append_message(key, "assistant", "use flexbox")
-    rows = [m["_row_id"] for m in db.get_messages_as_conversation(key, include_row_ids=True)]
+    rows = [
+        m["_row_id"] for m in db.get_messages_as_conversation(key, include_row_ids=True)
+    ]
 
     return key, rows
 
@@ -96,7 +98,9 @@ def test_reactions_survive_reload(session, db):
     db.set_message_reaction(key, rows[1], "\U0001f525", author="agent")
 
     reopened = SessionDB(db_path=db.db_path)
-    assert [r["emoji"] for r in reopened.get_message_reactions(key, rows[1])] == ["\U0001f525"]
+    assert [r["emoji"] for r in reopened.get_message_reactions(key, rows[1])] == [
+        "\U0001f525"
+    ]
 
 
 def test_unseen_reactions_are_taken_exactly_once(session, db):
@@ -120,7 +124,9 @@ def test_a_new_reaction_becomes_unseen_again(session, db):
 
     db.set_message_reaction(key, rows[1], "\U0001f525", author="user")
 
-    assert [e["emoji"] for e in db.take_unseen_reactions(key, author="user")] == ["\U0001f525"]
+    assert [e["emoji"] for e in db.take_unseen_reactions(key, author="user")] == [
+        "\U0001f525"
+    ]
 
 
 def test_take_unseen_filters_by_author(session, db):
@@ -184,8 +190,7 @@ def test_row_id_is_opt_in_and_never_reaches_the_provider(session, db):
     for message in db.get_messages_as_conversation(key, include_row_ids=True):
         assert "_row_id" in message
         assert all(
-            not k.startswith("_") or k in {"_row_id", "_db_persisted"}
-            for k in message
+            not k.startswith("_") or k in {"_row_id", "_db_persisted"} for k in message
         )
 
 
@@ -194,8 +199,13 @@ def compacted(session, db):
     """The parent segment ended by compaction; ``react-tip`` is the continuation the client now holds."""
     parent, rows = session
     assert db.try_acquire_compression_lock(parent, "w", ttl_seconds=60)
-    db.publish_compression_child(parent_session_id=parent, child_session_id="react-tip", source="test",
-                                 messages=[{"role": "user", "content": "summary"}], compression_lock_holder="w")
+    db.publish_compression_child(
+        parent_session_id=parent,
+        child_session_id="react-tip",
+        source="test",
+        messages=[{"role": "user", "content": "summary"}],
+        compression_lock_holder="w",
+    )
     return parent, rows, "react-tip"
 
 
@@ -205,7 +215,9 @@ def test_ancestor_rows_react_through_the_continuation_key(compacted, db):
     _parent, rows, tip = compacted
     assert rows[1] in [m["_row_id"] for m in db.get_resume_conversations(tip)[1]]
 
-    assert db.set_message_reaction(tip, rows[1], "👍") == db.get_message_reactions(tip, rows[1])
+    assert db.set_message_reaction(tip, rows[1], "👍") == db.get_message_reactions(
+        tip, rows[1]
+    )
     assert db.get_message_reactions(tip, rows[1])[0]["emoji"] == "👍"
     assert [p["row_id"] for p in db.take_unseen_reactions(tip)] == [rows[1]]
 
@@ -216,7 +228,12 @@ def test_lineage_scope_still_rejects_foreign_and_branch_rows(compacted, db):
     parent, rows, tip = compacted
     other = db.create_session("elsewhere", "test")
     foreign = db.append_message(other, "user", "other conversation")
-    branch = db.create_session("branch", "test", parent_session_id=parent, model_config={"_branched_from": parent})
+    branch = db.create_session(
+        "branch",
+        "test",
+        parent_session_id=parent,
+        model_config={"_branched_from": parent},
+    )
 
     assert db.set_message_reaction(tip, foreign, "👍") is None
     assert db.set_message_reaction(branch, rows[0], "👍") is None

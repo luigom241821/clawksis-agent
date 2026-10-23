@@ -24,8 +24,12 @@ def normalize_tool_schema(schema: Any) -> Optional[dict[str, Any]]:
     return schema if name and isinstance(name, str) else None
 
 
-def memory_provider_tools_enabled(enabled_toolsets: Optional[list[str]], disabled_toolsets: Optional[list[str]] = None,
-                                  *, memory_tool_present: bool = False) -> bool:
+def memory_provider_tools_enabled(
+    enabled_toolsets: Optional[list[str]],
+    disabled_toolsets: Optional[list[str]] = None,
+    *,
+    memory_tool_present: bool = False,
+) -> bool:
     """Return whether external memory-provider tools should be exposed."""
     if disabled_toolsets and "memory" in disabled_toolsets:
         return False
@@ -40,7 +44,10 @@ def memory_provider_tools_enabled(enabled_toolsets: Optional[list[str]], disable
 
         return any("memory" in resolve_toolset(name) for name in enabled_toolsets)
     except Exception:
-        logger.debug("Failed to resolve enabled toolsets for memory-provider tools", exc_info=True)
+        logger.debug(
+            "Failed to resolve enabled toolsets for memory-provider tools",
+            exc_info=True,
+        )
         return False
 
 
@@ -55,8 +62,13 @@ def memory_provider_tools_exposed(agent: Any) -> bool:
     never advertises tools absent from the tool surface.
     """
     tools = getattr(agent, "tools", None)
-    present = isinstance(tools, (list, tuple)) and any(_tool_name(t) == "memory" for t in tools)
-    enabled, disabled = getattr(agent, "enabled_toolsets", None), getattr(agent, "disabled_toolsets", None)
+    present = isinstance(tools, (list, tuple)) and any(
+        _tool_name(t) == "memory" for t in tools
+    )
+    enabled, disabled = (
+        getattr(agent, "enabled_toolsets", None),
+        getattr(agent, "disabled_toolsets", None),
+    )
     return memory_provider_tools_enabled(enabled, disabled, memory_tool_present=present)
 
 
@@ -71,8 +83,11 @@ def inject_memory_provider_tools(agent: Any) -> int:
         # Say so once: a silent 0 leaves the provider looking "half on" with no clue which
         # config key (platform_toolsets / disabled_toolsets) gated it.
         # See #81014.
-        _providers = [p for p in getattr(memory_manager, "providers", None) or []
-                      if getattr(p, "name", "") != "builtin"]
+        _providers = [
+            p
+            for p in getattr(memory_manager, "providers", None) or []
+            if getattr(p, "name", "") != "builtin"
+        ]
         if _providers:
             logger.info(
                 "Memory provider(s) %s configured but the 'memory' toolset is "
@@ -96,7 +111,8 @@ def inject_memory_provider_tools(agent: Any) -> int:
         if schema is None:
             logger.warning(
                 "Memory provider returned a tool schema with no resolvable "
-                "name; skipping to avoid poisoning the request (%r)", raw_schema,
+                "name; skipping to avoid poisoning the request (%r)",
+                raw_schema,
             )
         elif schema["name"] not in existing_tool_names:
             tools.append({"type": "function", "function": schema})

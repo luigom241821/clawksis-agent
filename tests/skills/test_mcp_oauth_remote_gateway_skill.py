@@ -5,6 +5,7 @@ SESSION_REVOKED / REFRESH_DEAD), the CLAWK_HOME resolution fallback, the
 and the atomic --write persistence path.
 No live network calls — urllib is mocked throughout.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -23,6 +24,7 @@ SKILL_DIR = (
 )
 SCRIPT_PATH = SKILL_DIR / "scripts" / "diagnose-oauth-mcp.py"
 
+
 def load_module():
     spec = importlib.util.spec_from_file_location("diagnose_oauth_mcp", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
@@ -30,6 +32,7 @@ def load_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
 
 class FakeResponse:
     def __init__(self, status=200, body=b"{}", headers=None):
@@ -40,8 +43,13 @@ class FakeResponse:
     def read(self):
         return self._body
 
-def _write_token_files(tokens_dir: Path, server="stripe", resource="https://mcp.example.com",
-                       refresh_token="rt-1"):
+
+def _write_token_files(
+    tokens_dir: Path,
+    server="stripe",
+    resource="https://mcp.example.com",
+    refresh_token="rt-1",
+):
     tokens_dir.mkdir(parents=True, exist_ok=True)
     tok = {
         "access_token": "at-stored",
@@ -60,6 +68,7 @@ def _write_token_files(tokens_dir: Path, server="stripe", resource="https://mcp.
     )
     return tok
 
+
 def _run_main(mod, tokens_dir, argv, responses):
     """Run mod.main() with urlopen mocked; returns captured stdout.
 
@@ -75,34 +84,61 @@ def _run_main(mod, tokens_dir, argv, responses):
             raise item
         return item
 
-    with patch.object(mod.os, "environ", dict(mod.os.environ, CLAWK_HOME=str(tokens_dir.parent))), \
-         patch.object(mod.urllib.request, "urlopen", side_effect=fake_urlopen), \
-         patch.object(sys, "argv", ["diagnose-oauth-mcp.py", *argv]):
+    with (
+        patch.object(
+            mod.os, "environ", dict(mod.os.environ, CLAWK_HOME=str(tokens_dir.parent))
+        ),
+        patch.object(mod.urllib.request, "urlopen", side_effect=fake_urlopen),
+        patch.object(sys, "argv", ["diagnose-oauth-mcp.py", *argv]),
+    ):
         # Force the env-var fallback path (ignore any importable clawk_constants).
         with patch.object(mod, "_clawk_home", lambda: str(tokens_dir.parent)):
             buf = io.StringIO()
             from contextlib import redirect_stdout
+
             with redirect_stdout(buf):
                 mod.main()
     return buf.getvalue(), calls
 
+
 def _init_ok_body():
-    return json.dumps({"jsonrpc": "2.0", "id": 1,
-                       "result": {"serverInfo": {"name": "x"}, "capabilities": {}}}).encode()
+    return json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {"serverInfo": {"name": "x"}, "capabilities": {}},
+        }
+    ).encode()
+
 
 def _init_revoked_error(code=401):
-    body = json.dumps({"error": {"code": -32002, "message": "Session expired. Please re-authenticate."}}).encode()
-    return urllib.error.HTTPError("https://mcp.example.com", code, "Unauthorized",
-                                  {"WWW-Authenticate": 'Bearer error="invalid_token"'},
-                                  io.BytesIO(body))
+    body = json.dumps(
+        {
+            "error": {
+                "code": -32002,
+                "message": "Session expired. Please re-authenticate.",
+            }
+        }
+    ).encode()
+    return urllib.error.HTTPError(
+        "https://mcp.example.com",
+        code,
+        "Unauthorized",
+        {"WWW-Authenticate": 'Bearer error="invalid_token"'},
+        io.BytesIO(body),
+    )
+
 
 def test_token_ok_branch(tmp_path):
     mod = load_module()
     tokens_dir = tmp_path / "mcp-tokens"
     _write_token_files(tokens_dir)
-    out, calls = _run_main(mod, tokens_dir, ["stripe"], [FakeResponse(200, _init_ok_body())])
+    out, calls = _run_main(
+        mod, tokens_dir, ["stripe"], [FakeResponse(200, _init_ok_body())]
+    )
     assert "BRANCH=TOKEN_OK" in out
     assert len(calls) == 1  # never touched the token endpoint
+
 
 def test_refresh_dead_no_refresh_token(tmp_path):
     mod = load_module()
@@ -111,11 +147,14 @@ def test_refresh_dead_no_refresh_token(tmp_path):
     out, _ = _run_main(mod, tokens_dir, ["stripe"], [_init_revoked_error()])
     assert "BRANCH=REFRESH_DEAD" in out
 
+
 def test_requests_send_httpx_user_agent(tmp_path):
     """Cloudflare 403s bare urllib UAs — every request must carry the httpx UA."""
     mod = load_module()
     tokens_dir = tmp_path / "mcp-tokens"
     _write_token_files(tokens_dir)
-    _, calls = _run_main(mod, tokens_dir, ["stripe"], [FakeResponse(200, _init_ok_body())])
+    _, calls = _run_main(
+        mod, tokens_dir, ["stripe"], [FakeResponse(200, _init_ok_body())]
+    )
     for req in calls:
         assert req.get_header("User-agent") == mod.UA

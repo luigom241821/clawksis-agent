@@ -20,34 +20,46 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"
 
 _SELECT_BY_KEY = (
     "SELECT fingerprint, run_id, status_json, owner_pid, owner_started, updated_at "
-    "FROM run_idempotency WHERE scope=? AND idempotency_key=?")
+    "FROM run_idempotency WHERE scope=? AND idempotency_key=?"
+)
 _EXTEND_RETENTION_BY_KEY = (
     "UPDATE run_idempotency SET retention_until=MAX(retention_until, ?) "
-    "WHERE scope=? AND idempotency_key=? AND fingerprint=?")
+    "WHERE scope=? AND idempotency_key=? AND fingerprint=?"
+)
 _EXTEND_RETENTION_BY_RUN = (
     "UPDATE run_idempotency SET retention_until=MAX(retention_until, ?) "
-    "WHERE scope=? AND run_id=?")
+    "WHERE scope=? AND run_id=?"
+)
 # Columns added after the first schema shipped; applied when missing.
 _MIGRATIONS = {
     "owner_pid": "INTEGER NOT NULL DEFAULT 0",
     "owner_started": "INTEGER NOT NULL DEFAULT 0",
     "retention_until": "REAL NOT NULL DEFAULT 0",
-    "acknowledged_at": "REAL"}
+    "acknowledged_at": "REAL",
+}
 
 
 def _encode_status(status: dict[str, Any]) -> str:
     return json.dumps(status, sort_keys=True, separators=(",", ":"))
 
 
-def _record(run_id, status_json, owner_pid, owner_started, updated_at) -> dict[str, Any]:
+def _record(
+    run_id, status_json, owner_pid, owner_started, updated_at
+) -> dict[str, Any]:
     return {
-        "run_id": run_id, "status": json.loads(status_json), "owner_pid": int(owner_pid or 0),
-        "owner_started": int(owner_started or 0), "updated_at": float(updated_at or 0)}
+        "run_id": run_id,
+        "status": json.loads(status_json),
+        "owner_pid": int(owner_pid or 0),
+        "owner_started": int(owner_started or 0),
+        "updated_at": float(updated_at or 0),
+    }
 
 
 def _outcome(row, fingerprint):
     """Classify a stored ``(scope, key)`` row against the caller's fingerprint."""
-    return ("reused" if hmac.compare_digest(row[0], fingerprint) else "conflict"), _record(*row[1:])
+    return (
+        "reused" if hmac.compare_digest(row[0], fingerprint) else "conflict"
+    ), _record(*row[1:])
 
 
 class RunIdempotencyStore:
@@ -62,10 +74,12 @@ class RunIdempotencyStore:
     def durable(self) -> bool:
         """Whether reservations survive this process."""
         return self._db_path is not None
+
     def __init__(self, db_path: str | None = None):
         if db_path is None:
             try:
                 from clawk_cli.config import get_clawk_home
+
                 db_path = str(get_clawk_home() / "runs_idempotency.db")
             except Exception:
                 db_path = ":memory:"
@@ -79,10 +93,13 @@ class RunIdempotencyStore:
             # catches, so it leaks permanently. Remove it by its known name before re-raising. See #7439.
             logger.warning(
                 "Run idempotency storage is unavailable; falling back to "
-                "process memory, so replay will not survive a restart: %s", exc)
+                "process memory, so replay will not survive a restart: %s",
+                exc,
+            )
             self._conn = sqlite3.connect(":memory:", check_same_thread=False)
             self._db_path = None
         from clawk_state_wal import apply_wal_with_fallback
+
         apply_wal_with_fallback(self._conn, db_label="runs_idempotency.db")
         self._conn.execute(
             """CREATE TABLE IF NOT EXISTS run_idempotency (
@@ -100,12 +117,18 @@ class RunIdempotencyStore:
                 PRIMARY KEY (scope, idempotency_key)
             )"""
         )
-        columns = {str(row[1]) for row in self._conn.execute("PRAGMA table_info(run_idempotency)")}
+        columns = {
+            str(row[1])
+            for row in self._conn.execute("PRAGMA table_info(run_idempotency)")
+        }
         for column, ddl in _MIGRATIONS.items():
             if column not in columns:
-                add_column_if_missing(self._conn, "run_idempotency", column, f"{column} {ddl}")
+                add_column_if_missing(
+                    self._conn, "run_idempotency", column, f"{column} {ddl}"
+                )
         self._conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS run_idempotency_run_id ON run_idempotency(run_id)")
+            "CREATE UNIQUE INDEX IF NOT EXISTS run_idempotency_run_id ON run_idempotency(run_id)"
+        )
         self._conn.commit()
         self._lock = threading.Lock()
         self._tighten_permissions()
@@ -117,7 +140,10 @@ class RunIdempotencyStore:
                 if candidate.exists():
                     candidate.chmod(0o600)
             except OSError:
-                logger.debug("Failed to restrict run idempotency store permissions", exc_info=True)
+                logger.debug(
+                    "Failed to restrict run idempotency store permissions",
+                    exc_info=True,
+                )
 
     @contextmanager
     def _immediate_txn(self):
@@ -130,8 +156,18 @@ class RunIdempotencyStore:
                 self._conn.rollback()
                 raise
 
-    def reserve(self, scope: str, key: str, fingerprint: str, run_id: str, status: dict[str, Any], *,
-                owner_pid: int = 0, owner_started: int = 0, retention_until: float = 0):
+    def reserve(
+        self,
+        scope: str,
+        key: str,
+        fingerprint: str,
+        run_id: str,
+        status: dict[str, Any],
+        *,
+        owner_pid: int = 0,
+        owner_started: int = 0,
+        retention_until: float = 0,
+    ):
         """Atomically reserve a key; return ``(outcome, stored_record)``."""
         now = time.time()
         retention_until = max(0.0, float(retention_until or 0))
@@ -141,7 +177,10 @@ class RunIdempotencyStore:
             row = self._conn.execute(_SELECT_BY_KEY, (scope, key)).fetchone()
             if row is not None:
                 if retention_until:
-                    self._conn.execute(_EXTEND_RETENTION_BY_KEY, (retention_until, scope, key, fingerprint))
+                    self._conn.execute(
+                        _EXTEND_RETENTION_BY_KEY,
+                        (retention_until, scope, key, fingerprint),
+                    )
                 self._conn.commit()
                 return _outcome(row, fingerprint)
             self._conn.execute(
@@ -149,18 +188,35 @@ class RunIdempotencyStore:
                 "scope,idempotency_key,fingerprint,run_id,status_json,"
                 "owner_pid,owner_started,retention_until,created_at,updated_at"
                 ") VALUES(?,?,?,?,?,?,?,?,?,?)",
-                (scope, key, fingerprint, run_id, encoded, int(owner_pid or 0), int(owner_started or 0),
-                 retention_until, now, now))
+                (
+                    scope,
+                    key,
+                    fingerprint,
+                    run_id,
+                    encoded,
+                    int(owner_pid or 0),
+                    int(owner_started or 0),
+                    retention_until,
+                    now,
+                    now,
+                ),
+            )
             self._conn.commit()
-            return "created", _record(run_id, encoded, owner_pid, owner_started, now) | {"status": status}
+            return "created", _record(
+                run_id, encoded, owner_pid, owner_started, now
+            ) | {"status": status}
 
-    def lookup(self, scope: str, key: str, fingerprint: str, *, retention_until: float = 0):
+    def lookup(
+        self, scope: str, key: str, fingerprint: str, *, retention_until: float = 0
+    ):
         """Return ``missing``, ``reused`` or ``conflict`` without reserving."""
         now = time.time()
         retention_until = max(0.0, float(retention_until or 0))
         with self._immediate_txn():
             if retention_until:
-                self._conn.execute(_EXTEND_RETENTION_BY_KEY, (retention_until, scope, key, fingerprint))
+                self._conn.execute(
+                    _EXTEND_RETENTION_BY_KEY, (retention_until, scope, key, fingerprint)
+                )
             self._prune_stale_terminal_locked(now)
             row = self._conn.execute(_SELECT_BY_KEY, (scope, key)).fetchone()
             self._conn.commit()
@@ -175,7 +231,11 @@ class RunIdempotencyStore:
                 WHERE acknowledged_at <= ?
                    OR (retention_until > 0 AND retention_until <= ?)
                    OR (retention_until <= 0 AND updated_at < ?)""",
-            (now - self.ACKNOWLEDGED_RETENTION_SECONDS, now, now - self.RETENTION_SECONDS),
+            (
+                now - self.ACKNOWLEDGED_RETENTION_SECONDS,
+                now,
+                now - self.RETENTION_SECONDS,
+            ),
         ).fetchall()
         for stale_scope, stale_key, stale_status in stale:
             try:
@@ -184,19 +244,26 @@ class RunIdempotencyStore:
                 terminal = False
             if terminal:
                 self._conn.execute(
-                    "DELETE FROM run_idempotency WHERE scope=? AND idempotency_key=?", (stale_scope, stale_key))
+                    "DELETE FROM run_idempotency WHERE scope=? AND idempotency_key=?",
+                    (stale_scope, stale_key),
+                )
 
-    def status_for_run(self, scope: str, run_id: str, *, retention_until: float = 0) -> dict[str, Any] | None:
+    def status_for_run(
+        self, scope: str, run_id: str, *, retention_until: float = 0
+    ) -> dict[str, Any] | None:
         """Load one durable run status inside its authenticated scope."""
         retention_until = max(0.0, float(retention_until or 0))
         with self._lock:
             if retention_until:
-                self._conn.execute(_EXTEND_RETENTION_BY_RUN, (retention_until, scope, run_id))
+                self._conn.execute(
+                    _EXTEND_RETENTION_BY_RUN, (retention_until, scope, run_id)
+                )
                 self._conn.commit()
             row = self._conn.execute(
                 "SELECT status_json, owner_pid, owner_started, updated_at "
                 "FROM run_idempotency WHERE scope=? AND run_id=?",
-                (scope, run_id)).fetchone()
+                (scope, run_id),
+            ).fetchone()
         if row is None:
             return None
         return {k: v for k, v in _record(None, *row).items() if k != "run_id"}
@@ -207,27 +274,35 @@ class RunIdempotencyStore:
         if not checked_until:
             return False
         with self._lock:
-            changed = self._conn.execute(_EXTEND_RETENTION_BY_RUN, (checked_until, scope, run_id)).rowcount
+            changed = self._conn.execute(
+                _EXTEND_RETENTION_BY_RUN, (checked_until, scope, run_id)
+            ).rowcount
             self._conn.commit()
         return changed == 1
 
     def owns_run(self, scope: str, run_id: str) -> bool:
         with self._lock:
             row = self._conn.execute(
-                "SELECT 1 FROM run_idempotency WHERE scope=? AND run_id=?", (scope, run_id)).fetchone()
+                "SELECT 1 FROM run_idempotency WHERE scope=? AND run_id=?",
+                (scope, run_id),
+            ).fetchone()
         return row is not None
 
     def update_status(self, run_id: str, status: dict[str, Any]) -> None:
         with self._lock:
             self._conn.execute(
                 "UPDATE run_idempotency SET status_json=?, updated_at=? WHERE run_id=?",
-                (_encode_status(status), time.time(), run_id))
+                (_encode_status(status), time.time(), run_id),
+            )
             self._conn.commit()
 
     def forget(self, scope: str, key: str) -> None:
         """Release a reservation whose run was refused before it existed."""
         with self._lock:
-            self._conn.execute("DELETE FROM run_idempotency WHERE scope=? AND idempotency_key=?", (scope, key))
+            self._conn.execute(
+                "DELETE FROM run_idempotency WHERE scope=? AND idempotency_key=?",
+                (scope, key),
+            )
             self._conn.commit()
 
     def close(self) -> None:

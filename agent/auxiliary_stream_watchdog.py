@@ -21,6 +21,7 @@ from agent.sleep_clock import awake_seconds
 def _stream_socket(stream: Any) -> Any:
     """The raw socket under an SDK chunk stream (``stream.response`` is the ``httpx.Response``)."""
     from agent.agent_runtime_helpers import _socket_from_response
+
     response = getattr(stream, "response", None)
     return _socket_from_response(response) if response is not None else None
 
@@ -28,7 +29,8 @@ def _stream_socket(stream: Any) -> Any:
 def _close_chunk_stream(chunks: Any, *, allow_aclose: bool = False) -> Any:
     """Best-effort ``close()`` (or ``aclose()``); returns a pending awaitable or None."""
     close_fn = getattr(chunks, "close", None) or (
-        getattr(chunks, "aclose", None) if allow_aclose else None)
+        getattr(chunks, "aclose", None) if allow_aclose else None
+    )
     if not callable(close_fn):
         return None
     try:
@@ -44,7 +46,9 @@ class ChatStreamWatchdog:
     minutes); ``None`` leaves it to the request timeout (a local server's silent prefill).
     Windows run on the awake clock, so time the computer spends asleep doesn't count."""
 
-    def __init__(self, stream: Any, window: float, *, first_token_window: Optional[float] = None):
+    def __init__(
+        self, stream: Any, window: float, *, first_token_window: Optional[float] = None
+    ):
         self.window = window
         self.first_token_window = first_token_window
         self._started = awake_seconds()
@@ -89,7 +93,9 @@ class ChatStreamWatchdog:
 
     def _schedule(self, delay: float) -> None:
         self._generation += 1
-        self._timer = threading.Timer(max(delay, 0.0), self._fire, args=(self._generation,))
+        self._timer = threading.Timer(
+            max(delay, 0.0), self._fire, args=(self._generation,)
+        )
         self._timer.daemon = True
         self._timer.start()
 
@@ -112,6 +118,7 @@ class ChatStreamWatchdog:
             self.fired = True
             if self._sock is not None:
                 from agent.agent_runtime_helpers import _shutdown_socket
+
                 _shutdown_socket(self._sock)
 
     def finish(self) -> None:
@@ -128,13 +135,17 @@ class ChatStreamWatchdog:
         if not self.saw_progress:
             return TimeoutError(
                 f"Auxiliary chat stream produced no output within {self.first_token_window or 0:.1f}s "
-                f"(no-progress timeout, {elapsed:.1f}s elapsed)")
+                f"(no-progress timeout, {elapsed:.1f}s elapsed)"
+            )
         return TimeoutError(
             f"Auxiliary chat stream stalled: no new output for {self.window:.1f}s "
-            f"({elapsed:.1f}s elapsed, timed out)")
+            f"({elapsed:.1f}s elapsed, timed out)"
+        )
 
 
-def chat_stream_windows(client: Any, kwargs: dict, task: Optional[str]) -> tuple[float, Optional[float]]:
+def chat_stream_windows(
+    client: Any, kwargs: dict, task: Optional[str]
+) -> tuple[float, Optional[float]]:
     """(inter-chunk window, first-token window) for a streamed chat-completions attempt. Between
     chunks: the Codex guard's window (``auxiliary.<task>.no_progress_timeout``, 60s default). Before
     the first token: the main loop's cloud stale patience for the routed provider (its explicit
@@ -142,14 +153,23 @@ def chat_stream_windows(client: Any, kwargs: dict, task: Optional[str]) -> tuple
     a model thinking silently on a large prompt is not cut; local servers keep their silent prefill
     on the request timeout (None). Both are capped at the request timeout."""
     from agent.auxiliary_client import (
-        _AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS, _RELAY_AUX_CALL_CONTEXT, _get_task_no_progress_timeout)
+        _AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS,
+        _RELAY_AUX_CALL_CONTEXT,
+        _get_task_no_progress_timeout,
+    )
     from agent.chat_completion_helpers import _cloud_stale_timeout_for
     from agent.model_metadata import is_local_endpoint
-    window = _get_task_no_progress_timeout(task or "") or _AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS
+
+    window = (
+        _get_task_no_progress_timeout(task or "")
+        or _AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS
+    )
     first = None
     if not is_local_endpoint(str(getattr(client, "base_url", "") or "")):
-        route = SimpleNamespace(provider=(_RELAY_AUX_CALL_CONTEXT.get() or {}).get("stream_provider") or "",
-                                model=kwargs.get("model"))
+        route = SimpleNamespace(
+            provider=(_RELAY_AUX_CALL_CONTEXT.get() or {}).get("stream_provider") or "",
+            model=kwargs.get("model"),
+        )
         first = max(window, _cloud_stale_timeout_for(route, kwargs))
     timeout = kwargs.get("timeout")
     if isinstance(timeout, (int, float)) and timeout > 0:
@@ -158,7 +178,9 @@ def chat_stream_windows(client: Any, kwargs: dict, task: Optional[str]) -> tuple
     return window, first
 
 
-def consume_chat_stream(chunks: Any, acc: Any, no_progress: Optional[tuple[float, Optional[float]]]) -> None:
+def consume_chat_stream(
+    chunks: Any, acc: Any, no_progress: Optional[tuple[float, Optional[float]]]
+) -> None:
     """Feed *chunks* into the accumulator *acc*. Under a ``(window, first_token_window)`` watchdog a
     silent stream raises TimeoutError, except after the terminal chunk: with finish_reason (and any
     usage) in hand a stall is teardown, so the completed response and its billed usage are kept."""
@@ -166,7 +188,9 @@ def consume_chat_stream(chunks: Any, acc: Any, no_progress: Optional[tuple[float
         for chunk in chunks:
             acc.feed(chunk)
         return
-    watchdog = ChatStreamWatchdog(chunks, no_progress[0], first_token_window=no_progress[1])
+    watchdog = ChatStreamWatchdog(
+        chunks, no_progress[0], first_token_window=no_progress[1]
+    )
     try:
         for chunk in chunks:
             if acc.feed(chunk):

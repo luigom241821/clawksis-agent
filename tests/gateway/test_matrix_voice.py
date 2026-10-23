@@ -2,6 +2,7 @@
 
 Updated for the mautrix-python SDK (no more matrix-nio / nio imports).
 """
+
 import os
 import tempfile
 import types
@@ -13,8 +14,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Try importing mautrix; skip entire file if not available.
 try:
     import mautrix as _mautrix_probe
-    if not isinstance(_mautrix_probe, types.ModuleType) or not hasattr(_mautrix_probe, "__file__"):
-        pytest.skip("mautrix in sys.modules is a mock, not the real package", allow_module_level=True)
+
+    if not isinstance(_mautrix_probe, types.ModuleType) or not hasattr(
+        _mautrix_probe, "__file__"
+    ):
+        pytest.skip(
+            "mautrix in sys.modules is a mock, not the real package",
+            allow_module_level=True,
+        )
 except ImportError:
     pytest.skip("mautrix not installed", allow_module_level=True)
 
@@ -24,6 +31,7 @@ from gateway.platforms.event import MessageType
 # ---------------------------------------------------------------------------
 # Adapter helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_adapter():
     """Create a MatrixAdapter with mocked config.
@@ -111,6 +119,7 @@ def _make_state_store(member_count: int = 2):
 # Tests: MSC3245 Voice Detection
 # ---------------------------------------------------------------------------
 
+
 class TestMatrixVoiceMessageDetection:
     """Test that MSC3245 voice messages are detected and tagged correctly."""
 
@@ -121,13 +130,14 @@ class TestMatrixVoiceMessageDetection:
         self.adapter._dm_rooms = {}
         self.adapter._message_handler = AsyncMock()
         # Mock _mxc_to_http to return a fake HTTP URL
-        self.adapter._mxc_to_http = lambda url: f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
+        self.adapter._mxc_to_http = lambda url: (
+            f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
+        )
         # Mock client for authenticated download — download_media returns bytes directly
         self.adapter._client = MagicMock()
         self.adapter._client.download_media = AsyncMock(return_value=b"fake audio data")
         # State store for DM detection
         self.adapter._client.state_store = _make_state_store()
-
 
     @pytest.mark.asyncio
     async def test_voice_message_has_local_path(self):
@@ -148,8 +158,9 @@ class TestMatrixVoiceMessageDetection:
         assert captured_event.media_urls is not None
         assert len(captured_event.media_urls) > 0
         # Should be a local path, not an HTTP URL
-        assert not captured_event.media_urls[0].startswith("http"), \
+        assert not captured_event.media_urls[0].startswith("http"), (
             f"media_urls should contain local path, got {captured_event.media_urls[0]}"
+        )
         # download_media is called with a ContentURI wrapping the mxc URL
         self.adapter._client.download_media.assert_awaited_once()
         assert captured_event.media_types == ["audio/ogg"]
@@ -164,7 +175,9 @@ class TestMatrixVoiceCacheFallback:
         self.adapter._startup_ts = 0.0
         self.adapter._dm_rooms = {}
         self.adapter._message_handler = AsyncMock()
-        self.adapter._mxc_to_http = lambda url: f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
+        self.adapter._mxc_to_http = lambda url: (
+            f"https://matrix.example.org/_matrix/media/v3/download/{url[6:]}"
+        )
         self.adapter._client = MagicMock()
         self.adapter._client.state_store = _make_state_store()
 
@@ -189,13 +202,15 @@ class TestMatrixVoiceCacheFallback:
         assert captured_event is not None
         assert captured_event.media_urls is not None
         # Should fall back to HTTP URL
-        assert captured_event.media_urls[0].startswith("http"), \
+        assert captured_event.media_urls[0].startswith("http"), (
             f"Should fall back to HTTP URL on cache failure, got {captured_event.media_urls[0]}"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Tests: send_voice includes MSC3245 field
 # ---------------------------------------------------------------------------
+
 
 class TestMatrixSendVoiceMSC3245:
     """Test that send_voice includes MSC3245 field for native voice rendering."""
@@ -208,11 +223,14 @@ class TestMatrixSendVoiceMSC3245:
         self.upload_call = None
 
         async def mock_upload_media(data, mime_type=None, filename=None, **kwargs):
-            self.upload_call = {"data": data, "mime_type": mime_type, "filename": filename}
+            self.upload_call = {
+                "data": data,
+                "mime_type": mime_type,
+                "filename": filename,
+            }
             return "mxc://example.org/uploaded"
 
         self.adapter._client.upload_media = mock_upload_media
-
 
     @pytest.mark.asyncio
     async def test_send_voice_transcodes_non_ogg_to_opus(self):
@@ -235,12 +253,15 @@ class TestMatrixSendVoiceMSC3245:
 
             self.adapter._client.send_message_event = mock_send_message_event
 
-            with patch(
-                "plugins.platforms.matrix.adapter.transcode_to_ogg_opus",
-                return_value=converted_path,
-            ) as mock_transcode, patch(
-                "plugins.platforms.matrix.adapter._matrix_voice_metadata_for_file",
-                return_value={"duration": 1234, "waveform": [0, 512, 1024]},
+            with (
+                patch(
+                    "plugins.platforms.matrix.adapter.transcode_to_ogg_opus",
+                    return_value=converted_path,
+                ) as mock_transcode,
+                patch(
+                    "plugins.platforms.matrix.adapter._matrix_voice_metadata_for_file",
+                    return_value={"duration": 1234, "waveform": [0, 512, 1024]},
+                ),
             ):
                 await self.adapter.send_voice(
                     chat_id="!room:example.org",
@@ -263,4 +284,3 @@ class TestMatrixSendVoiceMSC3245:
             os.unlink(temp_path)
             if os.path.exists(converted_path):
                 os.unlink(converted_path)
-

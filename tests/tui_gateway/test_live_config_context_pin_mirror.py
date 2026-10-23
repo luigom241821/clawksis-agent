@@ -18,7 +18,9 @@ PIN = 249_000
 
 def _session(config_context_length=PIN):
     compressor = ContextCompressor(
-        model="model-a", threshold_percent=0.50, config_context_length=config_context_length,
+        model="model-a",
+        threshold_percent=0.50,
+        config_context_length=config_context_length,
         quiet_mode=True,
     )
     agent = SimpleNamespace(
@@ -56,8 +58,18 @@ def test_changed_context_length_refreshes_the_agent_pin_too(monkeypatch):
     """A new ``model.context_length`` must land on both cached copies."""
     session, compressor = _session()
 
-    _sync(monkeypatch, session, {"model": {"default": "model-a", "provider": "custom:acme",
-                                           "context_length": 400_000}, "compression": {}})
+    _sync(
+        monkeypatch,
+        session,
+        {
+            "model": {
+                "default": "model-a",
+                "provider": "custom:acme",
+                "context_length": 400_000,
+            },
+            "compression": {},
+        },
+    )
 
     assert compressor._config_context_length == 400_000
     assert compressor.context_length == 400_000
@@ -72,12 +84,22 @@ def test_hot_reload_does_not_pin_a_session_on_another_route(monkeypatch):
     session["agent"].provider = "openrouter"
     monkeypatch.setattr(cc_mod, "get_model_context_length", lambda *a, **k: 256_000)
 
-    _sync(monkeypatch, session, {
-        "model": {"default": "model-b", "provider": "custom:acme", "base_url": "http://127.0.0.1:8123/v1",
-                  "context_length": PIN},
-        "custom_providers": [{"name": "acme", "base_url": "http://127.0.0.1:8123/v1", "models": {}}],
-        "compression": {},
-    })
+    _sync(
+        monkeypatch,
+        session,
+        {
+            "model": {
+                "default": "model-b",
+                "provider": "custom:acme",
+                "base_url": "http://127.0.0.1:8123/v1",
+                "context_length": PIN,
+            },
+            "custom_providers": [
+                {"name": "acme", "base_url": "http://127.0.0.1:8123/v1", "models": {}}
+            ],
+            "compression": {},
+        },
+    )
 
     assert compressor._config_context_length is None
     assert session["agent"]._config_context_length is None

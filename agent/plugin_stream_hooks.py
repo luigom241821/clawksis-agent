@@ -78,7 +78,9 @@ def _worker(dispatcher: _ConsumerDispatcher) -> None:
                 # time, so it goes through the manager's warn-once reporter (#111922).
                 from clawk_cli.plugins import get_plugin_manager
 
-                get_plugin_manager()._report_hook_failure(dispatcher.hook_name, dispatcher.callback, payload, exc)
+                get_plugin_manager()._report_hook_failure(
+                    dispatcher.hook_name, dispatcher.callback, payload, exc
+                )
         finally:
             dispatcher.events.task_done()
 
@@ -86,9 +88,12 @@ def _worker(dispatcher: _ConsumerDispatcher) -> None:
 def _registered_callbacks(hook_name: str) -> tuple[Callable[..., Any], ...]:
     try:
         from clawk_cli import plugins
+
         return plugins.iter_hook_callbacks(hook_name)
     except Exception:
-        logger.debug("plugin stream hook callback lookup failed: %s", hook_name, exc_info=True)
+        logger.debug(
+            "plugin stream hook callback lookup failed: %s", hook_name, exc_info=True
+        )
         return ()
 
 
@@ -98,10 +103,17 @@ def _stop_dispatcher(dispatcher: _ConsumerDispatcher, timeout: float = 1.0) -> N
         dispatcher.thread.join(timeout=timeout)
 
 
-def _start_dispatcher(hook_name: str, callback: Callable[..., Any]) -> _ConsumerDispatcher:
-    dispatcher = _ConsumerDispatcher(hook_name=hook_name, callback=callback, events=queue.Queue(maxsize=_QUEUE_SIZE))
+def _start_dispatcher(
+    hook_name: str, callback: Callable[..., Any]
+) -> _ConsumerDispatcher:
+    dispatcher = _ConsumerDispatcher(
+        hook_name=hook_name, callback=callback, events=queue.Queue(maxsize=_QUEUE_SIZE)
+    )
     dispatcher.thread = threading.Thread(
-        target=_worker, args=(dispatcher,), daemon=True, name=f"plugin-stream-hook:{hook_name}"
+        target=_worker,
+        args=(dispatcher,),
+        daemon=True,
+        name=f"plugin-stream-hook:{hook_name}",
     )
     dispatcher.thread.start()
     return dispatcher
@@ -117,11 +129,19 @@ def _dispatchers_for(hook_name: str) -> list[_ConsumerDispatcher]:
     callback_ids = {id(callback) for callback in callbacks}
     ready: list[_ConsumerDispatcher] = []
     with _dispatcher_lock:
-        stale = [_dispatchers.pop(key) for key in list(_dispatchers) if key[0] == hook_name and key[1] not in callback_ids]
+        stale = [
+            _dispatchers.pop(key)
+            for key in list(_dispatchers)
+            if key[0] == hook_name and key[1] not in callback_ids
+        ]
         for callback in callbacks:
             key = (hook_name, id(callback))
             dispatcher = _dispatchers.get(key)
-            if dispatcher is None or dispatcher.thread is None or not dispatcher.thread.is_alive():
+            if (
+                dispatcher is None
+                or dispatcher.thread is None
+                or not dispatcher.thread.is_alive()
+            ):
                 dispatcher = _dispatchers[key] = _start_dispatcher(hook_name, callback)
             ready.append(dispatcher)
 
@@ -140,17 +160,23 @@ def enqueue_plugin_stream_hook(hook_name: str, **payload: Any) -> bool:
         else:
             logger.debug(
                 "plugin stream hook queue full after drop-oldest: %s callback=%s",
-                hook_name, _callback_name(dispatcher.callback),
+                hook_name,
+                _callback_name(dispatcher.callback),
             )
     return queued
 
 
 def has_stream_observer_hooks() -> bool:
-    return any(_registered_callbacks(name) for name in ("on_stream_start", "on_stream_delta", "on_stream_end"))
+    return any(
+        _registered_callbacks(name)
+        for name in ("on_stream_start", "on_stream_delta", "on_stream_end")
+    )
 
 
 def has_reasoning_stream_observer_hooks() -> bool:
-    return stream_reasoning_deltas_enabled() and bool(_registered_callbacks("on_stream_delta"))
+    return stream_reasoning_deltas_enabled() and bool(
+        _registered_callbacks("on_stream_delta")
+    )
 
 
 def stream_reasoning_deltas_enabled() -> bool:
@@ -160,8 +186,13 @@ def stream_reasoning_deltas_enabled() -> bool:
     should still cache the result per stream (``_fire_reasoning_delta`` does)."""
     try:
         from clawk_cli import config as config_mod
+
         config = config_mod.load_config_readonly()
-        return bool(config_mod.cfg_get(config, "plugins", "stream_reasoning_deltas", default=False))
+        return bool(
+            config_mod.cfg_get(
+                config, "plugins", "stream_reasoning_deltas", default=False
+            )
+        )
     except Exception:
         logger.debug("failed to read plugins.stream_reasoning_deltas", exc_info=True)
         return False

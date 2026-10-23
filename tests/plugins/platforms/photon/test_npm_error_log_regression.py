@@ -11,6 +11,7 @@ Each test covers a specific failure vector introduced by the Risk 3 solution:
 7. check_requirements() with no _NPM_ERROR_LOG — debug log still emitted without error detail
 8. proc.stderr is None (edge case on some platforms) — no AttributeError, no crash
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,14 +25,13 @@ from plugins.platforms.photon import cli as cli_mod
 from plugins.platforms.photon import sidecar_paths
 
 _NODE_ON_PATH = __import__("shutil").which("node") is not None
-_requires_node = pytest.mark.skipif(
-    not _NODE_ON_PATH, reason="requires node on PATH"
-)
+_requires_node = pytest.mark.skipif(not _NODE_ON_PATH, reason="requires node on PATH")
 
 
 # ---------------------------------------------------------------------------
 # 1. Return code contract unchanged
 # ---------------------------------------------------------------------------
+
 
 def test_regression_return_code_zero_on_success(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -39,10 +39,13 @@ def test_regression_return_code_zero_on_success(
     """_install_sidecar() must still return 0 on npm success."""
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=0, stderr=""),
     )
-    monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log")
+    monkeypatch.setattr(
+        sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log"
+    )
     assert cli_mod._install_sidecar() == 0
 
 
@@ -50,28 +53,34 @@ def test_regression_return_code_zero_on_success(
 # 2. OSError on log write — silently swallowed, no crash
 # ---------------------------------------------------------------------------
 
+
 def test_regression_oserror_on_log_write_does_not_propagate(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """If writing _NPM_ERROR_LOG raises OSError (read-only fs, permission denied),
     _install_sidecar() must NOT propagate the exception — it still returns the
     npm exit code."""
+
     def _bad_log_write(*args, **kwargs):
         raise OSError("read-only file system")
 
     error_log = tmp_path / ".photon-npm-error.log"
+
     # Monkey-patch write_text on the Path object via a subclass
     class _UnwritablePath(type(error_log)):
         def write_text(self, *a, **kw):
             raise OSError("read-only file system")
+
         def unlink(self, *a, **kw):
             raise OSError("read-only file system")
+
         def exists(self):
             return False
 
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=1, stderr="npm ERR!"),
     )
     monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", _UnwritablePath(error_log))
@@ -89,6 +98,7 @@ def test_regression_oserror_on_log_write_does_not_propagate(
 # 4. Empty stderr — log file NOT written
 # ---------------------------------------------------------------------------
 
+
 def test_regression_empty_stderr_does_not_write_log(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -97,7 +107,8 @@ def test_regression_empty_stderr_does_not_write_log(
     error_log = tmp_path / ".photon-npm-error.log"
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=1, stderr=""),
     )
     monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", error_log)
@@ -113,6 +124,7 @@ def test_regression_empty_stderr_does_not_write_log(
 # 5. proc.stderr is None — no AttributeError
 # ---------------------------------------------------------------------------
 
+
 def test_regression_permissionerror_on_success_unlink_does_not_propagate(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -127,7 +139,8 @@ def test_regression_permissionerror_on_success_unlink_does_not_propagate(
 
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=0, stderr=""),
     )
     monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", _UnremovablePath(error_log))
@@ -147,7 +160,8 @@ def test_regression_long_stderr_truncated_before_write(
 
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=1, stderr=huge_stderr),
     )
     monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", error_log)
@@ -165,10 +179,13 @@ def test_regression_none_stderr_does_not_crash(
     stderr=PIPE (e.g. encoding errors).  _install_sidecar() must handle this."""
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=1, stderr=None),
     )
-    monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log")
+    monkeypatch.setattr(
+        sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log"
+    )
 
     rc = cli_mod._install_sidecar()
     assert rc == 1  # must not raise AttributeError
@@ -177,6 +194,7 @@ def test_regression_none_stderr_does_not_crash(
 # ---------------------------------------------------------------------------
 # 6. Stale log cleared on success — no phantom errors after reinstall
 # ---------------------------------------------------------------------------
+
 
 def test_regression_stale_log_not_surfaced_after_successful_reinstall(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -190,7 +208,8 @@ def test_regression_stale_log_not_surfaced_after_successful_reinstall(
     # Successful reinstall clears the log
     monkeypatch.setattr(cli_mod, "find_node_executable", lambda _: "/usr/bin/npm")
     monkeypatch.setattr(
-        cli_mod.subprocess, "run",
+        cli_mod.subprocess,
+        "run",
         lambda cmd, **kw: types.SimpleNamespace(returncode=0, stderr=""),
     )
     monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", error_log)
@@ -216,6 +235,7 @@ def test_regression_stale_log_not_surfaced_after_successful_reinstall(
 # 7. check_requirements() without error log — debug log still emitted
 # ---------------------------------------------------------------------------
 
+
 @_requires_node
 def test_regression_debug_log_emitted_even_without_error_log(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -226,7 +246,9 @@ def test_regression_debug_log_emitted_even_without_error_log(
     monkeypatch.setattr(adapter_mod, "HTTPX_AVAILABLE", True)
     monkeypatch.setattr(adapter_mod, "find_node_executable", lambda _name: "/pm/node")
     monkeypatch.setattr(sidecar_paths, "_SIDECAR_DIR", tmp_path)
-    monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log")
+    monkeypatch.setattr(
+        sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log"
+    )
     # NS-606: disable self-heal so the debug-log branch is reached.
     monkeypatch.setattr(adapter_mod, "_dir_writable", lambda _p: False)
     # node_modules NOT created, error log NOT created

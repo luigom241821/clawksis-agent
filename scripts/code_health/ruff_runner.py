@@ -34,14 +34,20 @@ def pinned_version(repo: Path) -> str:
     for spec in data.get("dependency-groups", {}).get("dev", []):
         if isinstance(spec, str) and spec.startswith("ruff=="):
             return spec.split("==", 1)[1].strip()
-    raise RuntimeError("pyproject.toml [dependency-groups].dev has no ruff==<version> pin")
+    raise RuntimeError(
+        "pyproject.toml [dependency-groups].dev has no ruff==<version> pin"
+    )
 
 
 def _version_of(cmd: list[str]) -> str | None:
     try:
         out = subprocess.run(
-            [*cmd, "--version"], capture_output=True, text=True, timeout=60,
-            stdin=subprocess.DEVNULL, check=False,
+            [*cmd, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            stdin=subprocess.DEVNULL,
+            check=False,
         ).stdout
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -52,7 +58,10 @@ def _version_of(cmd: list[str]) -> str | None:
 def resolve_ruff(repo: Path) -> list[str]:
     """Command prefix for the pinned ruff: a matching install, else ``uvx ruff@<pin>``."""
     pin = pinned_version(repo)
-    candidates = [Path(sys.prefix) / "bin" / "ruff", Path(sys.prefix) / "Scripts" / "ruff.exe"]
+    candidates = [
+        Path(sys.prefix) / "bin" / "ruff",
+        Path(sys.prefix) / "Scripts" / "ruff.exe",
+    ]
     on_path = shutil.which("ruff")
     if on_path:
         candidates.insert(0, Path(on_path))
@@ -76,12 +85,31 @@ def run_ruff(ruff: list[str], root: Path, paths: list[str]) -> dict[str, RuffFil
     for start in range(0, len(paths), _CHUNK):
         chunk = paths[start : start + _CHUNK]
         proc = subprocess.run(
-            [*ruff, "check", "--isolated", "--ignore-noqa", "--no-cache", "--preview",
-             "--target-version", "py311", "--select", select,
-             "--config", "lint.mccabe.max-complexity=0",
-             "--output-format", "json", "--exit-zero", *chunk],
-            cwd=root, capture_output=True, text=True, encoding="utf-8", timeout=600,
-            stdin=subprocess.DEVNULL, check=False,
+            [
+                *ruff,
+                "check",
+                "--isolated",
+                "--ignore-noqa",
+                "--no-cache",
+                "--preview",
+                "--target-version",
+                "py311",
+                "--select",
+                select,
+                "--config",
+                "lint.mccabe.max-complexity=0",
+                "--output-format",
+                "json",
+                "--exit-zero",
+                *chunk,
+            ],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=600,
+            stdin=subprocess.DEVNULL,
+            check=False,
         )
         if proc.returncode != 0:
             raise RuntimeError(f"ruff failed: {proc.stderr.strip()[:2000]}")

@@ -40,10 +40,17 @@ def _active_rows(store, sid):
     [(False, "after repair", 42), (True, "before repair", 42)],
     ids=["unaddressed", "row-addressed"],
 )
-def test_mutated_replay_rewrites_its_original_row(db, include_row_ids, content, token_count):
+def test_mutated_replay_rewrites_its_original_row(
+    db, include_row_ids, content, token_count
+):
     sid = "mutated-replay"
     db.create_session(sid, "desktop")
-    original = {"role": "assistant", "content": "before repair", "timestamp": 1000.0, "token_count": 42}
+    original = {
+        "role": "assistant",
+        "content": "before repair",
+        "timestamp": 1000.0,
+        "token_count": 42,
+    }
     assert db.append_messages_batch(sid, [original]) == 1
     before = _active_rows(db, sid)
 
@@ -51,7 +58,9 @@ def test_mutated_replay_rewrites_its_original_row(db, include_row_ids, content, 
     # handoffs). It still carries logical identity and, for a writable replay, the CAS version.
     # Row-addressed resume loaders keep the legacy (no-digest) path: the projection never decodes
     # token_count, so a digest-matched rewrite of a resumed row would null it.
-    restored = db.get_messages_as_conversation(sid, repair_alternation=True, include_row_ids=include_row_ids)
+    restored = db.get_messages_as_conversation(
+        sid, repair_alternation=True, include_row_ids=include_row_ids
+    )
     assert restored[0][MESSAGE_UID] == before[0]["message_uid"]
     assert (DB_ROW_SNAPSHOT in restored[0]) is not include_row_ids
 
@@ -79,7 +88,12 @@ def test_fresh_identical_message_is_never_adopted_by_payload(db):
     assert db.append_messages_batch(sid, [first]) == 1
     first_uid = _active_rows(db, sid)[0]["message_uid"]
 
-    second = {"role": "user", "content": "same", "timestamp": 3000.0, MESSAGE_UID: first_uid}
+    second = {
+        "role": "user",
+        "content": "same",
+        "timestamp": 3000.0,
+        MESSAGE_UID: first_uid,
+    }
     assert db.append_messages_batch(sid, [second]) == 1
 
     assert len(_active_rows(db, sid)) == 2

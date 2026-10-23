@@ -62,7 +62,11 @@ class TestCheckpointReadopt:
             start = ProcessRegistry._safe_host_start_time(proc.pid)
             assert start is not None
             session = _detach(registry, proc, sid="proc_live_probe", start=start)
-            monkeypatch.setattr(ProcessRegistry, "_safe_host_start_time", staticmethod(lambda _pid: None))
+            monkeypatch.setattr(
+                ProcessRegistry,
+                "_safe_host_start_time",
+                staticmethod(lambda _pid: None),
+            )
 
             polled = registry.poll(session.id)
 
@@ -110,7 +114,11 @@ class TestCheckpointReadopt:
             start = ProcessRegistry._safe_host_start_time(proc.pid)
             assert start is not None
             session = _detach(registry, proc, sid="proc_kill_probe", start=start)
-            monkeypatch.setattr(ProcessRegistry, "_safe_host_start_time", staticmethod(lambda _pid: None))
+            monkeypatch.setattr(
+                ProcessRegistry,
+                "_safe_host_start_time",
+                staticmethod(lambda _pid: None),
+            )
 
             result = registry.kill_process(session.id)
 
@@ -152,20 +160,26 @@ class TestCheckpointReadopt:
             start = ProcessRegistry._safe_host_start_time(proc.pid)
             assert start is not None
             checkpoint = tmp_path / "procs.json"
-            checkpoint.write_text(json.dumps([{
-                "session_id": "proc_recover_live",
-                "command": "sleep-for-readopt",
-                "pid": proc.pid,
-                "pid_scope": "host",
-                "host_start_time": start,
-                "task_id": "t1",
-                "notify_on_complete": True,
-            }]))
-            monkeypatch.setattr(
-                "tools.process_registry.CHECKPOINT_PATH", checkpoint
+            checkpoint.write_text(
+                json.dumps(
+                    [
+                        {
+                            "session_id": "proc_recover_live",
+                            "command": "sleep-for-readopt",
+                            "pid": proc.pid,
+                            "pid_scope": "host",
+                            "host_start_time": start,
+                            "task_id": "t1",
+                            "notify_on_complete": True,
+                        }
+                    ]
+                )
             )
+            monkeypatch.setattr("tools.process_registry.CHECKPOINT_PATH", checkpoint)
             monkeypatch.setattr(
-                ProcessRegistry, "_safe_host_start_time", staticmethod(lambda _pid: None)
+                ProcessRegistry,
+                "_safe_host_start_time",
+                staticmethod(lambda _pid: None),
             )
 
             recovered = registry.recover_from_checkpoint()
@@ -186,20 +200,24 @@ class TestCheckpointReadopt:
             real = ProcessRegistry._safe_host_start_time(proc.pid)
             assert real is not None
             checkpoint = tmp_path / "procs.json"
-            checkpoint.write_text(json.dumps([{
-                "session_id": "proc_recover_reused",
-                "command": "sleep-for-readopt",
-                "pid": proc.pid,
-                "pid_scope": "host",
-                "host_start_time": real + 1,
-                "task_id": "t1",
-                "notify_on_complete": True,
-                "systemd_unit": "clawk-worker-proc_recover_reused.scope",
-            }]))
-            stopped = []
-            monkeypatch.setattr(
-                "tools.process_registry.CHECKPOINT_PATH", checkpoint
+            checkpoint.write_text(
+                json.dumps(
+                    [
+                        {
+                            "session_id": "proc_recover_reused",
+                            "command": "sleep-for-readopt",
+                            "pid": proc.pid,
+                            "pid_scope": "host",
+                            "host_start_time": real + 1,
+                            "task_id": "t1",
+                            "notify_on_complete": True,
+                            "systemd_unit": "clawk-worker-proc_recover_reused.scope",
+                        }
+                    ]
+                )
             )
+            stopped = []
+            monkeypatch.setattr("tools.process_registry.CHECKPOINT_PATH", checkpoint)
             monkeypatch.setattr(
                 "tools.process_registry._stop_systemd_unit",
                 lambda unit: stopped.append(unit) or True,

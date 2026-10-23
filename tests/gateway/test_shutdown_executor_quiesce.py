@@ -24,6 +24,7 @@ import pytest
 
 import gateway.run as gw_mod
 
+
 class _FakeSessionDB:
     """Records when the gateway closed it, on a shared event log."""
 
@@ -33,6 +34,7 @@ class _FakeSessionDB:
 
     def close(self):
         self._events.append(f"close:{self._name}")
+
 
 class _FakeGateway:
     """Minimal stand-in with just enough state for ``stop()`` to run."""
@@ -79,10 +81,14 @@ class _FakeGateway:
 
     # Real hook + counter: 0 while ``adapters`` is empty, the API-server count once a fake adapter is in.
     _api_server_hook = gw_mod.GatewayShutdownMixin._api_server_hook
-    _mark_api_runs_shutdown_requested = gw_mod.GatewayShutdownMixin._mark_api_runs_shutdown_requested
+    _mark_api_runs_shutdown_requested = (
+        gw_mod.GatewayShutdownMixin._mark_api_runs_shutdown_requested
+    )
     _active_api_run_count = gw_mod.GatewayShutdownMixin._active_api_run_count
     _active_api_worker_count = gw_mod.GatewayShutdownMixin._active_api_worker_count
-    _active_deferred_agent_worker_count = gw_mod.GatewayShutdownMixin._active_deferred_agent_worker_count
+    _active_deferred_agent_worker_count = (
+        gw_mod.GatewayShutdownMixin._active_deferred_agent_worker_count
+    )
 
     def _update_runtime_status(self, *_a, **_kw):
         pass
@@ -122,6 +128,7 @@ class _FakeGateway:
     def close_all_session_db_handles(self):
         pass
 
+
 @pytest.mark.asyncio
 async def test_running_executor_work_finishes_before_session_db_close():
     """A future already running when stop() begins writes before the close."""
@@ -148,6 +155,7 @@ async def test_running_executor_work_finishes_before_session_db_close():
         f"state.db was closed while a worker was still writing: {events}"
     )
 
+
 @pytest.mark.asyncio
 async def test_executor_refuses_new_work_before_session_db_close():
     """``_executor_closing`` is set before the close, so no fresh pool is minted."""
@@ -170,6 +178,7 @@ async def test_executor_refuses_new_work_before_session_db_close():
     assert "closing_flag:True" in events, events
     with pytest.raises(RuntimeError):
         gw_mod.GatewayRunner._get_executor(gw)
+
 
 @pytest.mark.asyncio
 async def test_stuck_worker_skips_the_session_db_close():
@@ -212,8 +221,10 @@ async def test_stuck_worker_skips_the_session_db_close():
     future.result(timeout=5)
     assert "worker_write" in events, "worker never finished"
 
+
 def _arm_cron(gw):
     gw._active_cron_job_count = lambda: 1
+
 
 def _arm_api(gw):
     # Through the real hook: the adapter map is cleared one phase before the close gate, so the
@@ -230,13 +241,19 @@ def _arm_api(gw):
     gw.adapters[Platform.API_SERVER] = _ApiAdapter()
     gw._bounded_adapter_teardown = _teardown
 
+
 def _arm_deferred(gw):
     # A hygiene worker on the loop's default executor, never finished.
     gw._deferred_agent_workers = {asyncio.get_event_loop().create_future(): object()}
 
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("arm", [_arm_cron, _arm_api, _arm_deferred], ids=["cron", "api", "deferred"])
-async def test_live_writer_outside_the_executor_skips_the_session_db_close(monkeypatch, arm):
+@pytest.mark.parametrize(
+    "arm", [_arm_cron, _arm_api, _arm_deferred], ids=["cron", "api", "deferred"]
+)
+async def test_live_writer_outside_the_executor_skips_the_session_db_close(
+    monkeypatch, arm
+):
     """A cron job, API-server run or deferred worker that outlived the drain must not have state.db
     closed under it (#102198).
 
@@ -258,7 +275,10 @@ async def test_live_writer_outside_the_executor_skips_the_session_db_close(monke
     assert "close:session_db" not in events and "close_all" not in events, (
         f"SessionDB closed despite a live {arm.__name__[5:]} writer: {events}"
     )
-    assert gw._executor_closing is True, "executor left unsealed on the outside-writer path"
+    assert gw._executor_closing is True, (
+        "executor left unsealed on the outside-writer path"
+    )
+
 
 @pytest.mark.asyncio
 async def test_cancelled_api_handler_worker_still_blocks_session_db_close(monkeypatch):
@@ -296,7 +316,9 @@ async def test_cancelled_api_handler_worker_still_blocks_session_db_close(monkey
         return await api_runs._submit_api_worker(loop, _blocked_turn)
 
     task = asyncio.ensure_future(_handler())
-    assert await loop.run_in_executor(None, worker_started.wait, 5.0), "worker never started"
+    assert await loop.run_in_executor(None, worker_started.wait, 5.0), (
+        "worker never started"
+    )
     task.cancel()
     with suppress(asyncio.CancelledError):
         await task
@@ -316,7 +338,10 @@ async def test_cancelled_api_handler_worker_still_blocks_session_db_close(monkey
             break
         await asyncio.sleep(0.05)
     assert "worker_done" in events, "worker never finished"
-    assert api_runs.api_worker_live_count() == 0, "worker exit did not release the count"
+    assert api_runs.api_worker_live_count() == 0, (
+        "worker exit did not release the count"
+    )
+
 
 def test_shutdown_executor_defaults_to_no_wait():
     """The no-argument call keeps the historical fire-and-forget contract."""
@@ -339,6 +364,7 @@ def test_shutdown_executor_defaults_to_no_wait():
     assert still_live == 1
     release.set()
     future.result(timeout=5)
+
 
 def test_shutdown_executor_reports_a_stuck_worker():
     """A worker that outlives the budget is reported, not waited on forever."""
@@ -413,10 +439,22 @@ async def test_default_executor_worker_is_seen_by_the_close_guard():
     attempt = gw_mod.GatewayRunner._HygieneAttempt(agent=None, meta=None)
     hs = SimpleNamespace(total_ceiling_seconds=60.0)
     plan = SimpleNamespace(approx_tokens=100)
-    turn = asyncio.create_task(gw._hmwa_hygiene_detached_attempt(
-        attempt, hs, plan, [], [{"role": "user", "content": "x"}] * 4, "m", {},
-        None, SimpleNamespace(session_id="sess-1"), "sk", "qk", 0,
-    ))
+    turn = asyncio.create_task(
+        gw._hmwa_hygiene_detached_attempt(
+            attempt,
+            hs,
+            plan,
+            [],
+            [{"role": "user", "content": "x"}] * 4,
+            "m",
+            {},
+            None,
+            SimpleNamespace(session_id="sess-1"),
+            "sk",
+            "qk",
+            0,
+        )
+    )
     await asyncio.wait_for(turn_waiting.wait(), 2.0)
     assert await asyncio.to_thread(started.wait, 2.0), "hygiene worker never started"
 
@@ -433,4 +471,6 @@ async def test_default_executor_worker_is_seen_by_the_close_guard():
     assert "close:session_db" not in events, (
         f"SessionDB was closed/checkpointed while the detached hygiene worker was still alive: {events}"
     )
-    assert gw._active_deferred_agent_worker_count() == 0, "finished worker left registered"
+    assert gw._active_deferred_agent_worker_count() == 0, (
+        "finished worker left registered"
+    )

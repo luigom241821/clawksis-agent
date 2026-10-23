@@ -43,7 +43,9 @@ class TestCwdEcho:
         assert "cwd" not in r
 
     @pytest.mark.platforms("linux")
-    def test_cwd_persists_and_stops_reporting_when_stable(self, isolated_home, tmp_path):
+    def test_cwd_persists_and_stops_reporting_when_stable(
+        self, isolated_home, tmp_path
+    ):
         target = tmp_path / "stable"
         target.mkdir()
         r1 = json.loads(terminal_tool(f"cd {target}", task_id="t-cwd-3"))
@@ -57,8 +59,11 @@ class TestCwdEcho:
     def test_cd_within_chain_reports_final_dir(self, isolated_home, tmp_path):
         a = tmp_path / "a"
         b = tmp_path / "b"
-        a.mkdir(); b.mkdir()
-        r = json.loads(terminal_tool(f"cd {a} && cd {b} && echo done", task_id="t-cwd-4"))
+        a.mkdir()
+        b.mkdir()
+        r = json.loads(
+            terminal_tool(f"cd {a} && cd {b} && echo done", task_id="t-cwd-4")
+        )
         assert r["exit_code"] == 0
         assert os.path.realpath(r.get("cwd", "")) == os.path.realpath(str(b))
 

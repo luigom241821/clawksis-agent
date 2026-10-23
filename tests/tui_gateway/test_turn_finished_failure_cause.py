@@ -75,11 +75,15 @@ def turn_env(monkeypatch, tmp_path):
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    monkeypatch.setattr(server, "_sync_agent_model_with_config", lambda sid, session: None)
+    monkeypatch.setattr(
+        server, "_sync_agent_model_with_config", lambda sid, session: None
+    )
     monkeypatch.setattr(server, "_session_cwd", lambda session: str(tmp_path))
     monkeypatch.setattr(server, "_register_session_cwd", lambda session: None)
     monkeypatch.setattr(server, "_tts_stream_begin", lambda: None)
-    monkeypatch.setattr(server, "_sync_session_key_after_compress", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_sync_session_key_after_compress", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_get_usage", lambda agent: {})
 
 
@@ -102,14 +106,17 @@ def _agent_returning(result):
 
 
 class TestTheReportedRecordNowNamesItsCause:
-
     def test_returned_error_carries_the_provider_message(self, turn_env, caplog):
         """The reporter's exact line shape, with the missing half filled in."""
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": "Error code: 402 - {'error': {'message': 'insufficient credits'}}",
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": "Error code: 402 - {'error': {'message': 'insufficient credits'}}",
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -128,12 +135,16 @@ class TestTheReportedRecordNowNamesItsCause:
         recovery surface from, so it is the one field guaranteed to be stable
         enough to grep a log for across releases.
         """
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": "payment required",
-            "failure_reason": "billing_wall",
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": "payment required",
+                    "failure_reason": "billing_wall",
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -142,14 +153,17 @@ class TestTheReportedRecordNowNamesItsCause:
 
     def test_exception_path_carries_the_exception(self, turn_env, caplog):
         """The other failure path, so one grep covers both."""
+
         def _boom(*a, **k):
             raise RuntimeError("connection reset mid-stream")
 
-        session = _session(agent=types.SimpleNamespace(
-            session_id="agent-sid-1",
-            run_conversation=_boom,
-            clear_interrupt=lambda: None,
-        ))
+        session = _session(
+            agent=types.SimpleNamespace(
+                session_id="agent-sid-1",
+                run_conversation=_boom,
+                clear_interrupt=lambda: None,
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -160,18 +174,21 @@ class TestTheReportedRecordNowNamesItsCause:
         assert "connection reset mid-stream" in msg
 
 
-
 class TestContentDiscipline:
     """#86865's rule — the record logs identities, never content."""
 
     SECRETISH_PROMPT = "please rotate QDRANT_API_KEY=hunter2-super-secret now"
 
     def test_prompt_is_never_logged_even_when_the_turn_fails(self, turn_env, caplog):
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": "provider rejected the request",
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": "provider rejected the request",
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session, self.SECRETISH_PROMPT)
@@ -189,14 +206,18 @@ class TestContentDiscipline:
         leak. This is why the cause goes through ``redact_sensitive_text`` and
         not ``str()``.
         """
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": (
-                "400 from provider; request headers were "
-                "Authorization: Bearer sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"
-            ),
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": (
+                        "400 from provider; request headers were "
+                        "Authorization: Bearer sk-proj-abcdefghijklmnopqrstuvwxyz0123456789"
+                    ),
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -220,14 +241,18 @@ class TestContentDiscipline:
         deliberately kept out of it. The sentinel here is deliberately benign
         for that reason: nothing about it looks like a secret.
         """
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": (
-                "400 Bad Request from provider: messages[0].content was "
-                "rejected: '" + self.SENTINEL + "'"
-            ),
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": (
+                        "400 Bad Request from provider: messages[0].content was "
+                        "rejected: '" + self.SENTINEL + "'"
+                    ),
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session, "Summarise this: " + self.SENTINEL)
@@ -243,11 +268,15 @@ class TestContentDiscipline:
         self, turn_env, caplog
     ):
         """The echo strip must not eat diagnostics that merely sit near a prompt."""
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": "429 rate limited; retry after 30s",
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": "429 rate limited; retry after 30s",
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session, "Summarise this: " + self.SENTINEL)
@@ -258,11 +287,15 @@ class TestContentDiscipline:
 
     def test_a_huge_provider_body_cannot_flood_the_log(self, turn_env, caplog):
         """An HTML error page or a full request echo is a log-volume problem."""
-        session = _session(agent=_agent_returning({
-            "final_response": "",
-            "error": "upstream said: " + ("x" * 9000),
-            "failed": True,
-        }))
+        session = _session(
+            agent=_agent_returning(
+                {
+                    "final_response": "",
+                    "error": "upstream said: " + ("x" * 9000),
+                    "failed": True,
+                }
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -279,14 +312,17 @@ class TestContentDiscipline:
         bookend as a single greppable line, which is the only reason it is
         useful for an intermittent bug like this one.
         """
+
         def _boom(*a, **k):
             raise RuntimeError("first line\nsecond line\n\tthird")
 
-        session = _session(agent=types.SimpleNamespace(
-            session_id="agent-sid-1",
-            run_conversation=_boom,
-            clear_interrupt=lambda: None,
-        ))
+        session = _session(
+            agent=types.SimpleNamespace(
+                session_id="agent-sid-1",
+                run_conversation=_boom,
+                clear_interrupt=lambda: None,
+            )
+        )
 
         with caplog.at_level(logging.INFO, logger="tui_gateway.server"):
             _run(session)
@@ -302,7 +338,6 @@ class TestDetailHelperDirectly:
     def test_nothing_to_say_produces_nothing(self):
         assert server._turn_failure_detail("", None) == ""
         assert server._turn_failure_detail(None) == ""
-
 
     def test_an_exception_with_no_message_still_names_its_type(self):
         assert "KeyError" in server._turn_failure_detail(KeyError())
@@ -363,8 +398,7 @@ class TestPromptEchoStripping:
         """Both sides are collapsed, so a re-wrapped quote still matches."""
         prompt = "the marmalade inventory for Q3 was discontinued in March"
         error = (
-            "rejected:    the marmalade inventory\n"
-            " for Q3 was discontinued in March"
+            "rejected:    the marmalade inventory\n for Q3 was discontinued in March"
         )
         out = server._turn_failure_detail(error, None, prompt)
         assert "marmalade" not in out

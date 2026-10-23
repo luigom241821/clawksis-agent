@@ -11,16 +11,18 @@ import re
 from typing import Any
 
 # Structured catalog types that mean "this row is not a chat completion".
-_GENERATION_TYPES = frozenset({
-    "image",
-    "image_generation",
-    "image-generation",
-    "image-gen",
-    "video",
-    "video_generation",
-    "video-generation",
-    "video-gen",
-})
+_GENERATION_TYPES = frozenset(
+    {
+        "image",
+        "image_generation",
+        "image-generation",
+        "image-gen",
+        "video",
+        "video_generation",
+        "video-generation",
+        "video-gen",
+    }
+)
 
 _GENERATION_OUTPUTS = frozenset({"image", "video"})
 _CHAT_OUTPUTS = frozenset({"text", "chat"})
@@ -63,7 +65,9 @@ def _tag_list_is_generation(tags: Any) -> bool:
 def _output_modalities_are_generation(outputs: Any) -> bool:
     if not isinstance(outputs, list) or not outputs:
         return False
-    kinds = {str(item or "").strip().lower() for item in outputs if str(item or "").strip()}
+    kinds = {
+        str(item or "").strip().lower() for item in outputs if str(item or "").strip()
+    }
     return bool(kinds & _GENERATION_OUTPUTS) and not bool(kinds & _CHAT_OUTPUTS)
 
 
@@ -86,7 +90,9 @@ def catalog_item_is_generation(item: Any) -> bool:
     if _tag_list_is_generation(item.get("tags")):
         return True
     architecture = item.get("architecture")
-    if isinstance(architecture, dict) and _output_modalities_are_generation(architecture.get("output_modalities")):
+    if isinstance(architecture, dict) and _output_modalities_are_generation(
+        architecture.get("output_modalities")
+    ):
         return True
     metadata = item.get("metadata")
     if isinstance(metadata, dict) and _tag_list_is_generation(metadata.get("tags")):

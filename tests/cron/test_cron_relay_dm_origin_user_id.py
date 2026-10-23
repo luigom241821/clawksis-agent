@@ -41,29 +41,56 @@ class _Native(_Relay):
 
 def _target(origin, *, deliver_to=None, adapters=None, loop=None):
     """The ``_TargetDelivery`` the real per-target prologue builds for ``deliver_to`` (default: the origin)."""
-    deliver_to = deliver_to or {"platform": origin["platform"], "chat_id": origin["chat_id"]}
+    deliver_to = deliver_to or {
+        "platform": origin["platform"],
+        "chat_id": origin["chat_id"],
+    }
     t = sd._prepare_target_delivery(
-        {"id": "job-1", "origin": origin}, deliver_to, adapters=adapters or {Platform.RELAY: _Relay()},
-        loop=loop, config=GatewayConfig(), notify_delivery=True, mirror_enabled=False, mirror_text="",
-        delivery_errors=[])
+        {"id": "job-1", "origin": origin},
+        deliver_to,
+        adapters=adapters or {Platform.RELAY: _Relay()},
+        loop=loop,
+        config=GatewayConfig(),
+        notify_delivery=True,
+        mirror_enabled=False,
+        mirror_text="",
+        delivery_errors=[],
+    )
     assert t is not None
     return t
 
 
 def test_origin_discriminators_ride_relay_route_and_media_metadata():
-    t = _target({"platform": "slack", "chat_id": "C123", "user_id": DM_USER, "scope_id": "T0AAAA111"})
+    t = _target(
+        {
+            "platform": "slack",
+            "chat_id": "C123",
+            "user_id": DM_USER,
+            "scope_id": "T0AAAA111",
+        }
+    )
     _thread, route_metadata, media_metadata = sd._live_route_metadata(t)
     for metadata in (route_metadata, media_metadata):
         assert (metadata["user_id"], metadata["scope_id"]) == (DM_USER, "T0AAAA111")
 
 
-@pytest.mark.parametrize("native, deliver_to", [
-    (True, None),  # a native adapter never reads it
-    (False, {"platform": "telegram", "chat_id": "555"}),  # a fan-out recipient is not the origin's author
-])
+@pytest.mark.parametrize(
+    "native, deliver_to",
+    [
+        (True, None),  # a native adapter never reads it
+        (
+            False,
+            {"platform": "telegram", "chat_id": "555"},
+        ),  # a fan-out recipient is not the origin's author
+    ],
+)
 def test_no_user_id_off_the_relay_or_for_fan_out_targets(native, deliver_to):
     adapters = {Platform.TELEGRAM: _Native()} if native else None
-    t = _target({"platform": "telegram", "chat_id": DM_USER, "user_id": DM_USER}, deliver_to=deliver_to, adapters=adapters)
+    t = _target(
+        {"platform": "telegram", "chat_id": DM_USER, "user_id": DM_USER},
+        deliver_to=deliver_to,
+        adapters=adapters,
+    )
     assert t.is_relay is not native
     _thread, route_metadata, media_metadata = sd._live_route_metadata(t)
     assert "user_id" not in route_metadata and "user_id" not in media_metadata
@@ -78,11 +105,19 @@ def test_cold_adapter_send_reaches_the_transport_with_user_id(monkeypatch):
     try:
         relay = _Relay()
         t = _target(
-            {"platform": "telegram", "chat_id": DM_USER, "user_id": DM_USER}, adapters={Platform.RELAY: relay},
-            loop=loop)
+            {"platform": "telegram", "chat_id": DM_USER, "user_id": DM_USER},
+            adapters={Platform.RELAY: relay},
+            loop=loop,
+        )
         target_errors, delivery_errors = [], []
         sd._deliver_via_live_adapter(
-            t, "hi", [], target_errors=target_errors, delivery_errors=delivery_errors, unverified_targets=[])
+            t,
+            "hi",
+            [],
+            target_errors=target_errors,
+            delivery_errors=delivery_errors,
+            unverified_targets=[],
+        )
     finally:
         loop.call_soon_threadsafe(loop.stop)
         th.join(5)

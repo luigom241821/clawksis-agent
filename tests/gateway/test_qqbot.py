@@ -15,6 +15,7 @@ from gateway.config import PlatformConfig
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(**extra):
     """Build a PlatformConfig(enabled=True, extra=extra) for testing."""
     return PlatformConfig(enabled=True, extra=extra)
@@ -25,44 +26,45 @@ def _make_config(**extra):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # QQAdapter.__init__
 # ---------------------------------------------------------------------------
 
+
 class TestQQAdapterInit:
     def _make(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
-
     def test_env_fallback(self):
-        with mock.patch.dict(os.environ, {"QQ_APP_ID": "env_id", "QQ_CLIENT_SECRET": "env_sec"}, clear=False):
+        with mock.patch.dict(
+            os.environ,
+            {"QQ_APP_ID": "env_id", "QQ_CLIENT_SECRET": "env_sec"},
+            clear=False,
+        ):
             adapter = self._make()
             assert adapter._app_id == "env_id"
             assert adapter._client_secret == "env_sec"
 
-
     def test_dm_policy_default(self):
         adapter = self._make(app_id="a", client_secret="b")
         assert adapter._dm_policy == "pairing"
-
-
 
     def test_allow_from_parsing_string(self):
         adapter = self._make(app_id="a", client_secret="b", allow_from="x, y , z")
         assert adapter._allow_from == ["x", "y", "z"]
 
 
-
-
 # ---------------------------------------------------------------------------
 # _coerce_list
 # ---------------------------------------------------------------------------
 
+
 class TestCoerceList:
     def _fn(self, value):
         from plugins.platforms.qqbot.utils import coerce_list as _coerce_list
+
         return _coerce_list(value)
 
     def test_none(self):
@@ -76,37 +78,41 @@ class TestCoerceList:
 # _is_voice_content_type
 # ---------------------------------------------------------------------------
 
+
 class TestIsVoiceContentType:
     def _fn(self, content_type, filename):
         from plugins.platforms.qqbot.adapter import QQAdapter
-        return QQAdapter._is_voice_content_type(content_type, filename)
 
+        return QQAdapter._is_voice_content_type(content_type, filename)
 
     def test_voice_extension_fallback_when_content_type_empty(self):
         """content_type='' with audio extension → True (extension fallback)."""
         assert self._fn("", "file.silk") is True
 
 
-
-
 # ---------------------------------------------------------------------------
 # Voice attachment SSRF protection
 # ---------------------------------------------------------------------------
 
+
 class TestVoiceAttachmentSSRFProtection:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
-        return QQAdapter(_make_config(**extra))
 
+        return QQAdapter(_make_config(**extra))
 
     def test_connect_uses_redirect_guard_hook(self):
         from gateway.platforms.base import ssrf_redirect_guard
         from plugins.platforms.qqbot.adapter import QQAdapter
 
         client = mock.AsyncMock()
-        with mock.patch("plugins.platforms.qqbot.adapter.httpx.AsyncClient", return_value=client) as async_client_cls:
+        with mock.patch(
+            "plugins.platforms.qqbot.adapter.httpx.AsyncClient", return_value=client
+        ) as async_client_cls:
             adapter = QQAdapter(_make_config(app_id="a", client_secret="b"))
-            adapter._ensure_token = mock.AsyncMock(side_effect=RuntimeError("stop after client creation"))
+            adapter._ensure_token = mock.AsyncMock(
+                side_effect=RuntimeError("stop after client creation")
+            )
 
             connected = asyncio.run(adapter.connect())
 
@@ -121,9 +127,11 @@ class TestVoiceAttachmentSSRFProtection:
 # Voice attachment temp-file cleanup
 # ---------------------------------------------------------------------------
 
+
 class TestVoiceAttachmentTempCleanup:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
     def _setup_download_mocks(self, adapter, content=b"RIFFmock-wav-audio-data"):
@@ -164,6 +172,7 @@ class TestVoiceAttachmentTempCleanup:
 # WebSocket proxy handling
 # ---------------------------------------------------------------------------
 
+
 class TestQQWebSocketProxy:
     @pytest.mark.asyncio
     async def test_open_ws_honors_proxy_env(self, monkeypatch):
@@ -197,19 +206,25 @@ class TestQQWebSocketProxy:
                 seen_ws_kwargs.update(kwargs)
                 return mock.AsyncMock(closed=False)
 
-        with mock.patch("plugins.platforms.qqbot.adapter.aiohttp.ClientSession", side_effect=FakeSession):
+        with mock.patch(
+            "plugins.platforms.qqbot.adapter.aiohttp.ClientSession",
+            side_effect=FakeSession,
+        ):
             await adapter._open_ws("wss://api.sgroup.qq.com/websocket")
 
         assert seen_session_kwargs.get("trust_env") is True
         assert seen_ws_kwargs.get("proxy") == "http://127.0.0.1:7897"
 
+
 # ---------------------------------------------------------------------------
 # _strip_at_mention
 # ---------------------------------------------------------------------------
 
+
 class TestStripAtMention:
     def _fn(self, content):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter._strip_at_mention(content)
 
     def test_removes_mention(self):
@@ -221,11 +236,12 @@ class TestStripAtMention:
 # _is_dm_allowed
 # ---------------------------------------------------------------------------
 
+
 class TestDmAllowed:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
-        return QQAdapter(_make_config(**extra))
 
+        return QQAdapter(_make_config(**extra))
 
     def test_open_policy_with_opt_in(self, monkeypatch):
         monkeypatch.setenv("GATEWAY_ALLOW_ALL_USERS", "true")
@@ -233,9 +249,13 @@ class TestDmAllowed:
         assert adapter._is_dm_allowed("any_user") is True
         assert adapter._is_dm_intake_allowed("any_user") is True
 
-
     def test_allowlist_match(self):
-        adapter = self._make_adapter(app_id="a", client_secret="b", dm_policy="allowlist", allow_from="user1,user2")
+        adapter = self._make_adapter(
+            app_id="a",
+            client_secret="b",
+            dm_policy="allowlist",
+            allow_from="user1,user2",
+        )
         assert adapter._is_dm_allowed("user1") is True
 
 
@@ -243,16 +263,21 @@ class TestDmAllowed:
 # _is_group_allowed
 # ---------------------------------------------------------------------------
 
+
 class TestGroupAllowed:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
-
     def test_allowlist_match(self):
-        adapter = self._make_adapter(app_id="a", client_secret="b", group_policy="allowlist", group_allow_from="grp1")
+        adapter = self._make_adapter(
+            app_id="a",
+            client_secret="b",
+            group_policy="allowlist",
+            group_allow_from="grp1",
+        )
         assert adapter._is_group_allowed("grp1", "user1") is True
-
 
     def test_pairing_default_blocks_groups(self):
         adapter = self._make_adapter(app_id="a", client_secret="b")
@@ -264,9 +289,11 @@ class TestGroupAllowed:
 # _resolve_stt_config
 # ---------------------------------------------------------------------------
 
+
 class TestResolveSTTConfig:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
     def test_no_config(self):
@@ -284,11 +311,15 @@ class TestResolveSTTConfig:
         class _FakeClient:
             async def post(self, url, **kwargs):
                 posted.append(kwargs)
-                return httpx.Response(200, json={"text": "hi"}, request=httpx.Request("POST", url))
+                return httpx.Response(
+                    200, json={"text": "hi"}, request=httpx.Request("POST", url)
+                )
 
         with mock.patch.dict(os.environ, {}, clear=True):
-            for stt, expected in (({"apiKey": "k", "provider": "zai"}, 60.0),
-                                  ({"apiKey": "k", "provider": "zai", "timeout": "95"}, 95.0)):
+            for stt, expected in (
+                ({"apiKey": "k", "provider": "zai"}, 60.0),
+                ({"apiKey": "k", "provider": "zai", "timeout": "95"}, 95.0),
+            ):
                 adapter = self._make_adapter(app_id="a", client_secret="b", stt=stt)
                 adapter._http_client = _FakeClient()
                 assert asyncio.run(adapter._call_stt(str(wav))) == "hi"
@@ -300,20 +331,20 @@ class TestResolveSTTConfig:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # QQCloseError
 # ---------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------
 # _dispatch_payload
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchPayload:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         adapter = QQAdapter(_make_config(**extra))
         return adapter
 
@@ -323,7 +354,6 @@ class TestDispatchPayload:
         adapter._dispatch_payload({"op": 99, "d": {}})
         # last_seq should remain None
         assert adapter._last_seq is None
-
 
     def test_seq_increments(self):
         adapter = self._make_adapter(app_id="a", client_secret="b")
@@ -336,18 +366,23 @@ class TestDispatchPayload:
 # READY / RESUMED handling
 # ---------------------------------------------------------------------------
 
+
 class TestReadyHandling:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
     def test_ready_stores_session(self):
         adapter = self._make_adapter(app_id="a", client_secret="b")
-        adapter._dispatch_payload({
-            "op": 0, "t": "READY",
-            "s": 1,
-            "d": {"session_id": "sess_abc123"},
-        })
+        adapter._dispatch_payload(
+            {
+                "op": 0,
+                "t": "READY",
+                "s": 1,
+                "d": {"session_id": "sess_abc123"},
+            }
+        )
         assert adapter._session_id == "sess_abc123"
 
 
@@ -355,11 +390,12 @@ class TestReadyHandling:
 # _parse_json
 # ---------------------------------------------------------------------------
 
+
 class TestParseJson:
     def _fn(self, raw):
         from plugins.platforms.qqbot.adapter import QQAdapter
-        return QQAdapter._parse_json(raw)
 
+        return QQAdapter._parse_json(raw)
 
     def test_invalid_json(self):
         result = self._fn("not json")
@@ -370,19 +406,25 @@ class TestParseJson:
 # _build_text_body
 # ---------------------------------------------------------------------------
 
+
 class TestBuildTextBody:
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
     def test_plain_text(self):
-        adapter = self._make_adapter(app_id="a", client_secret="b", markdown_support=False)
+        adapter = self._make_adapter(
+            app_id="a", client_secret="b", markdown_support=False
+        )
         body = adapter._build_text_body("hello world")
         assert body["msg_type"] == 0  # MSG_TYPE_TEXT
         assert body["content"] == "hello world"
 
     def test_markdown_text(self):
-        adapter = self._make_adapter(app_id="a", client_secret="b", markdown_support=True)
+        adapter = self._make_adapter(
+            app_id="a", client_secret="b", markdown_support=True
+        )
         body = adapter._build_text_body("**bold** text")
         assert body["msg_type"] == 2  # MSG_TYPE_MARKDOWN
         assert body["markdown"]["content"] == "**bold** text"
@@ -392,11 +434,13 @@ class TestBuildTextBody:
 # _wait_for_reconnection / send reconnection wait
 # ---------------------------------------------------------------------------
 
+
 class TestWaitForReconnection:
     """Test that send() waits for reconnection instead of silently dropping."""
 
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(**extra))
 
     @pytest.mark.asyncio
@@ -433,6 +477,7 @@ class TestWaitForReconnection:
 # Regression for #78183: httpx timeout empty-string defeats _is_timeout_error
 # ---------------------------------------------------------------------------
 
+
 class TestQQTimeoutErrorNormalization:
     """When an httpx timeout has an empty string representation, qqbot's send
     paths must preserve the exception type name so the base-layer timeout guard
@@ -441,6 +486,7 @@ class TestQQTimeoutErrorNormalization:
 
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b", **extra))
 
     @pytest.mark.asyncio
@@ -466,33 +512,33 @@ class TestQQTimeoutErrorNormalization:
         )
 
 
-
 # ---------------------------------------------------------------------------
 # ChunkedUploader
 # ---------------------------------------------------------------------------
 
 
-
-
-
 class TestChunkedUploadHelpers:
-
     def test_read_chunk_short_read_raises(self, tmp_path):
         from plugins.platforms.qqbot.chunked_upload import _read_file_chunk
+
         f = tmp_path / "x.bin"
         f.write_bytes(b"hi")
         with pytest.raises(IOError):
             _read_file_chunk(str(f), 0, 100)
 
-
     def test_parse_prepare_response_wrapped_in_data(self):
         from plugins.platforms.qqbot.chunked_upload import _parse_prepare_response
+
         raw = {
             "data": {
                 "upload_id": "uid-42",
                 "block_size": 4096,
                 "parts": [
-                    {"part_index": 1, "presigned_url": "https://cos/1", "block_size": 4096},
+                    {
+                        "part_index": 1,
+                        "presigned_url": "https://cos/1",
+                        "block_size": 4096,
+                    },
                     {"index": 2, "url": "https://cos/2"},
                 ],
                 "concurrency": 3,
@@ -627,15 +673,19 @@ class TestChunkedUploaderFlow:
 # Inline keyboards — approval + update-prompt flows
 # ---------------------------------------------------------------------------
 
+
 class TestApprovalButtonData:
     def test_parse_allow_once(self):
         from plugins.platforms.qqbot.keyboards import parse_approval_button_data
-        result = parse_approval_button_data("approve:agent:main:qqbot:c2c:UID:allow-once")
-        assert result == ("agent:main:qqbot:c2c:UID", "allow-once")
 
+        result = parse_approval_button_data(
+            "approve:agent:main:qqbot:c2c:UID:allow-once"
+        )
+        assert result == ("agent:main:qqbot:c2c:UID", "allow-once")
 
     def test_parse_empty_returns_none(self):
         from plugins.platforms.qqbot.keyboards import parse_approval_button_data
+
         assert parse_approval_button_data("") is None
         assert parse_approval_button_data(None) is None  # type: ignore[arg-type]
 
@@ -643,13 +693,14 @@ class TestApprovalButtonData:
 class TestUpdatePromptButtonData:
     def test_parse_yes(self):
         from plugins.platforms.qqbot.keyboards import parse_update_prompt_button_data
+
         assert parse_update_prompt_button_data("update_prompt:y") == "y"
 
 
 class TestBuildApprovalKeyboard:
-
     def test_button_data_embeds_session_key(self):
         from plugins.platforms.qqbot.keyboards import build_approval_keyboard
+
         kb = build_approval_keyboard("agent:main:qqbot:c2c:UID")
         datas = [b.action.data for b in kb.content.rows[0].buttons]
         assert datas[0] == "approve:agent:main:qqbot:c2c:UID:allow-once"
@@ -657,30 +708,34 @@ class TestBuildApprovalKeyboard:
         assert datas[2] == "approve:agent:main:qqbot:c2c:UID:deny"
 
 
-
-
 class TestBuildApprovalText:
-
-
     def test_truncates_long_commands(self):
         from plugins.platforms.qqbot.keyboards import (
-            ApprovalRequest, build_approval_text,
+            ApprovalRequest,
+            build_approval_text,
         )
+
         long = "x" * 1000
         req = ApprovalRequest(
-            session_key="s", title="t", command_preview=long, cwd="/x",
+            session_key="s",
+            title="t",
+            command_preview=long,
+            cwd="/x",
         )
         text = build_approval_text(req)
         # Preview is truncated to 300 chars; 1000 "x"s would still push the
         # body past 300, but the inline preview specifically must be capped.
         # 2 backtick fences; the content line in between is separate.
-        xs_in_preview = sum(line.count("x") for line in text.split("\n") if line and "```" not in line)
+        xs_in_preview = sum(
+            line.count("x") for line in text.split("\n") if line and "```" not in line
+        )
         assert xs_in_preview <= 301  # 300 xs + one-off tolerance
 
 
 class TestInteractionEventParsing:
     def test_parse_c2c_interaction(self):
         from plugins.platforms.qqbot.keyboards import parse_interaction_event
+
         raw = {
             "id": "interaction-42",
             "chat_type": 2,
@@ -708,6 +763,7 @@ class TestAdapterInteractionDispatch:
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
@@ -728,15 +784,20 @@ class TestAdapterInteractionDispatch:
             received.append(event)
 
         adapter.set_interaction_callback(cb)
-        await adapter._on_interaction({
-            "id": "i-1",
-            "chat_type": 2,
-            "user_openid": "user-1",
-            "data": {
-                "type": 11,
-                "resolved": {"button_data": "approve:agent:main:qqbot:c2c:u:deny", "button_id": "deny"},
-            },
-        })
+        await adapter._on_interaction(
+            {
+                "id": "i-1",
+                "chat_type": 2,
+                "user_openid": "user-1",
+                "data": {
+                    "type": 11,
+                    "resolved": {
+                        "button_data": "approve:agent:main:qqbot:c2c:u:deny",
+                        "button_id": "deny",
+                    },
+                },
+            }
+        )
 
         assert len(ack_calls) == 1
         assert ack_calls[0][0] == "i-1"
@@ -749,11 +810,13 @@ class TestAdapterInteractionDispatch:
 # Quoted-message handling (message_type=103 → msg_elements)
 # ---------------------------------------------------------------------------
 
+
 class TestProcessQuotedContext:
     """Verify the quoted-message pipeline: text + voice STT + images + files."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
@@ -762,7 +825,6 @@ class TestProcessQuotedContext:
         d = {"message_type": 0, "content": "hi"}
         out = await adapter._process_quoted_context(d)
         assert out == {"quote_block": "", "image_urls": [], "image_media_types": []}
-
 
     @pytest.mark.asyncio
     async def test_quote_with_voice_attachment_runs_stt(self):
@@ -784,14 +846,18 @@ class TestProcessQuotedContext:
 
         d = {
             "message_type": 103,
-            "msg_elements": [{
-                "content": "",
-                "attachments": [
-                    {"content_type": "audio/silk",
-                     "url": "https://qq-cdn/x.silk",
-                     "filename": "rec.silk"}
-                ],
-            }],
+            "msg_elements": [
+                {
+                    "content": "",
+                    "attachments": [
+                        {
+                            "content_type": "audio/silk",
+                            "url": "https://qq-cdn/x.silk",
+                            "filename": "rec.silk",
+                        }
+                    ],
+                }
+            ],
         }
         out = await adapter._process_quoted_context(d)
 
@@ -801,7 +867,6 @@ class TestProcessQuotedContext:
         assert "[Quoted message]:" in out["quote_block"]
         assert "hello from the quoted audio" in out["quote_block"]
 
-
     @pytest.mark.asyncio
     async def test_multiple_elements_concatenated(self):
         adapter = self._make_adapter()
@@ -809,8 +874,10 @@ class TestProcessQuotedContext:
         async def fake_process(atts):
             assert len(atts) == 2
             return {
-                "image_urls": [], "image_media_types": [],
-                "voice_transcripts": [], "attachment_info": "",
+                "image_urls": [],
+                "image_media_types": [],
+                "voice_transcripts": [],
+                "attachment_info": "",
             }
 
         adapter._process_attachments = fake_process  # type: ignore[assignment]
@@ -818,8 +885,14 @@ class TestProcessQuotedContext:
         d = {
             "message_type": 103,
             "msg_elements": [
-                {"content": "first", "attachments": [{"content_type": "image/png", "url": "a"}]},
-                {"content": "second", "attachments": [{"content_type": "image/png", "url": "b"}]},
+                {
+                    "content": "first",
+                    "attachments": [{"content_type": "image/png", "url": "a"}],
+                },
+                {
+                    "content": "second",
+                    "attachments": [{"content_type": "image/png", "url": "b"}],
+                },
             ],
         }
         out = await adapter._process_quoted_context(d)
@@ -827,17 +900,17 @@ class TestProcessQuotedContext:
         assert "second" in out["quote_block"]
 
 
-
-
 # ---------------------------------------------------------------------------
 # Gateway-contract approval UX — send_exec_approval + default dispatcher
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultInteractionDispatch:
     """Verify the adapter's default INTERACTION_CREATE router."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     def test_default_callback_installed_on_init(self):
@@ -845,7 +918,6 @@ class TestDefaultInteractionDispatch:
         adapter = self._make_adapter()
         assert adapter._interaction_callback is not None
         assert adapter._interaction_callback == adapter._default_interaction_dispatch
-
 
     @pytest.mark.asyncio
     async def test_approval_click_once_maps_to_once(self):
@@ -861,22 +933,29 @@ class TestDefaultInteractionDispatch:
         # Patch the *module-level* function that _default_interaction_dispatch
         # imports lazily.
         import tools.approval
+
         orig = tools.approval.resolve_gateway_approval
         tools.approval.resolve_gateway_approval = fake_resolve
         try:
             from plugins.platforms.qqbot.keyboards import parse_interaction_event
-            event = parse_interaction_event({
-                "id": "i",
-                "chat_type": 2,
-                "user_openid": "u-42",
-                "data": {"resolved": {"button_data": "approve:agent:main:qqbot:dm:u-42:allow-once"}},
-            })
+
+            event = parse_interaction_event(
+                {
+                    "id": "i",
+                    "chat_type": 2,
+                    "user_openid": "u-42",
+                    "data": {
+                        "resolved": {
+                            "button_data": "approve:agent:main:qqbot:dm:u-42:allow-once"
+                        }
+                    },
+                }
+            )
             await adapter._default_interaction_dispatch(event)
         finally:
             tools.approval.resolve_gateway_approval = orig
 
         assert resolve_calls == [("agent:main:qqbot:dm:u-42", "once", False)]
-
 
     @pytest.mark.asyncio
     async def test_approval_click_rejects_unauthorized_operator(self):
@@ -888,16 +967,25 @@ class TestDefaultInteractionDispatch:
             return 1
 
         import tools.approval
+
         orig = tools.approval.resolve_gateway_approval
         tools.approval.resolve_gateway_approval = fake_resolve
         try:
             from plugins.platforms.qqbot.keyboards import parse_interaction_event
-            event = parse_interaction_event({
-                "id": "i", "chat_type": 1,
-                "group_openid": "g-1",
-                "group_member_openid": "attacker",
-                "data": {"resolved": {"button_data": "approve:agent:main:qqbot:group:g-1:owner:allow-once"}},
-            })
+
+            event = parse_interaction_event(
+                {
+                    "id": "i",
+                    "chat_type": 1,
+                    "group_openid": "g-1",
+                    "group_member_openid": "attacker",
+                    "data": {
+                        "resolved": {
+                            "button_data": "approve:agent:main:qqbot:group:g-1:owner:allow-once"
+                        }
+                    },
+                }
+            )
             await adapter._default_interaction_dispatch(event)
         finally:
             tools.approval.resolve_gateway_approval = orig
@@ -905,7 +993,9 @@ class TestDefaultInteractionDispatch:
         assert resolve_calls == []
 
     @pytest.mark.asyncio
-    async def test_update_prompt_click_writes_response_file(self, tmp_path, monkeypatch):
+    async def test_update_prompt_click_writes_response_file(
+        self, tmp_path, monkeypatch
+    ):
         """update_prompt:y click writes 'y' to ~/.clawksis/.update_response."""
         adapter = self._make_adapter()
         clawk_home = tmp_path / "clawk_home"
@@ -916,10 +1006,15 @@ class TestDefaultInteractionDispatch:
         )
 
         from plugins.platforms.qqbot.keyboards import parse_interaction_event
-        event = parse_interaction_event({
-            "id": "i", "chat_type": 2, "user_openid": "u-1",
-            "data": {"resolved": {"button_data": "update_prompt:y"}},
-        })
+
+        event = parse_interaction_event(
+            {
+                "id": "i",
+                "chat_type": 2,
+                "user_openid": "u-1",
+                "data": {"resolved": {"button_data": "update_prompt:y"}},
+            }
+        )
         await adapter._default_interaction_dispatch(event)
 
         response = clawk_home / ".update_response"
@@ -940,11 +1035,13 @@ class TestProfileNamespaceApprovalAuthz:
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @staticmethod
     def _parse(key):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter._parse_gateway_session_key(key)
 
     def test_parse_accepts_named_profile_namespace(self):
@@ -980,16 +1077,24 @@ class TestProfileNamespaceApprovalAuthz:
             return 1
 
         import tools.approval
+
         orig = tools.approval.resolve_gateway_approval
         tools.approval.resolve_gateway_approval = fake_resolve
         try:
             from plugins.platforms.qqbot.keyboards import parse_interaction_event
-            event = parse_interaction_event({
-                "id": "i",
-                "chat_type": 2,
-                "user_openid": "u-42",
-                "data": {"resolved": {"button_data": "approve:agent:coder:qqbot:c2c:u-42:allow-once"}},
-            })
+
+            event = parse_interaction_event(
+                {
+                    "id": "i",
+                    "chat_type": 2,
+                    "user_openid": "u-42",
+                    "data": {
+                        "resolved": {
+                            "button_data": "approve:agent:coder:qqbot:c2c:u-42:allow-once"
+                        }
+                    },
+                }
+            )
             await adapter._default_interaction_dispatch(event)
         finally:
             tools.approval.resolve_gateway_approval = orig
@@ -1008,16 +1113,25 @@ class TestProfileNamespaceApprovalAuthz:
             return 1
 
         import tools.approval
+
         orig = tools.approval.resolve_gateway_approval
         tools.approval.resolve_gateway_approval = fake_resolve
         try:
             from plugins.platforms.qqbot.keyboards import parse_interaction_event
-            event = parse_interaction_event({
-                "id": "i", "chat_type": 1,
-                "group_openid": "g-1",
-                "group_member_openid": "owner",
-                "data": {"resolved": {"button_data": "approve:agent:coder:qqbot:group:g-1:owner:allow-once"}},
-            })
+
+            event = parse_interaction_event(
+                {
+                    "id": "i",
+                    "chat_type": 1,
+                    "group_openid": "g-1",
+                    "group_member_openid": "owner",
+                    "data": {
+                        "resolved": {
+                            "button_data": "approve:agent:coder:qqbot:group:g-1:owner:allow-once"
+                        }
+                    },
+                }
+            )
             await adapter._default_interaction_dispatch(event)
         finally:
             tools.approval.resolve_gateway_approval = orig
@@ -1036,16 +1150,25 @@ class TestProfileNamespaceApprovalAuthz:
             return 1
 
         import tools.approval
+
         orig = tools.approval.resolve_gateway_approval
         tools.approval.resolve_gateway_approval = fake_resolve
         try:
             from plugins.platforms.qqbot.keyboards import parse_interaction_event
-            event = parse_interaction_event({
-                "id": "i", "chat_type": 1,
-                "group_openid": "g-1",
-                "group_member_openid": "attacker",
-                "data": {"resolved": {"button_data": "approve:agent:coder:qqbot:group:g-1:owner:allow-once"}},
-            })
+
+            event = parse_interaction_event(
+                {
+                    "id": "i",
+                    "chat_type": 1,
+                    "group_openid": "g-1",
+                    "group_member_openid": "attacker",
+                    "data": {
+                        "resolved": {
+                            "button_data": "approve:agent:coder:qqbot:group:g-1:owner:allow-once"
+                        }
+                    },
+                }
+            )
             await adapter._default_interaction_dispatch(event)
         finally:
             tools.approval.resolve_gateway_approval = orig
@@ -1053,13 +1176,12 @@ class TestProfileNamespaceApprovalAuthz:
         assert resolve_calls == []
 
 
-
-
 class TestSendUpdatePrompt:
     """Verify the cross-adapter send_update_prompt signature + behaviour."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
@@ -1070,6 +1192,7 @@ class TestSendUpdatePrompt:
 
         async def fake_swk(chat_id, content, keyboard, reply_to=None):
             from gateway.platforms.base import SendResult
+
             captured["chat_id"] = chat_id
             captured["content"] = content
             captured["keyboard"] = keyboard
@@ -1080,8 +1203,11 @@ class TestSendUpdatePrompt:
         adapter._last_msg_id["u1"] = "prev-msg"
 
         result = await adapter.send_update_prompt(
-            chat_id="u1", prompt="Continue with update?",
-            default="y", session_key="ignored", metadata={"x": 1},
+            chat_id="u1",
+            prompt="Continue with update?",
+            default="y",
+            session_key="ignored",
+            metadata={"x": 1},
         )
         assert result.success
         assert "Continue with update?" in captured["content"]
@@ -1096,11 +1222,13 @@ class TestSendUpdatePrompt:
 # _send_identify includes INTERACTION intent
 # ---------------------------------------------------------------------------
 
+
 class TestIdentifyIntents:
     """Verify the WebSocket identify payload includes the INTERACTION intent bit."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
@@ -1136,11 +1264,13 @@ class TestIdentifyIntents:
 # _process_attachments: video/file path exposure
 # ---------------------------------------------------------------------------
 
+
 class TestProcessAttachmentsPathExposure:
     """Verify that video and file attachments include the cached local path."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
@@ -1169,17 +1299,17 @@ class TestProcessAttachmentsPathExposure:
         assert "/tmp/cache/video_abc123.mp4" in info
 
 
-
-
 # ---------------------------------------------------------------------------
 # WebSocket op 7 (Server Reconnect) and op 9 (Invalid Session)
 # ---------------------------------------------------------------------------
+
 
 class TestOp7ServerReconnect:
     """Verify op 7 triggers WS close (which triggers reconnect in outer loop)."""
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     def test_op7_closes_websocket(self):
@@ -1208,8 +1338,8 @@ class TestOp9InvalidSession:
 
     def _make_adapter(self):
         from plugins.platforms.qqbot.adapter import QQAdapter
-        return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
+        return QQAdapter(_make_config(app_id="a", client_secret="b"))
 
     @pytest.mark.asyncio
     async def test_op9_non_resumable_triggers_ws_close(self):
@@ -1237,7 +1367,6 @@ class TestOp9InvalidSession:
 # ---------------------------------------------------------------------------
 
 
-
 class TestReadEventsClosedWsGuard:
     """Regression: a closed-but-non-None ws must raise on entry, not return
     normally, so _listen_loop goes through reconnect/backoff instead of
@@ -1245,6 +1374,7 @@ class TestReadEventsClosedWsGuard:
 
     def _make_adapter(self, **extra):
         from plugins.platforms.qqbot.adapter import QQAdapter
+
         return QQAdapter(_make_config(app_id="a", client_secret="b", **extra))
 
     def test_read_events_raises_when_ws_closed_on_entry(self):
@@ -1253,4 +1383,3 @@ class TestReadEventsClosedWsGuard:
         adapter._ws = SimpleNamespace(closed=True)
         with pytest.raises(RuntimeError):
             asyncio.run(adapter._read_events())
-

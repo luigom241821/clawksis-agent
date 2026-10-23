@@ -26,7 +26,12 @@ class FakeGraphClient:
 
 
 async def _transcript_meeting_resolver(
-    client, *, meeting_id=None, join_web_url=None, tenant_id=None, organizer_user_id=None
+    client,
+    *,
+    meeting_id=None,
+    join_web_url=None,
+    tenant_id=None,
+    organizer_user_id=None,
 ):
     from plugins.teams_pipeline.models import TeamsMeetingRef
 
@@ -94,14 +99,20 @@ async def test_bind_gateway_runtime_attaches_scheduler(monkeypatch, tmp_path):
             self.release = asyncio.Event()
 
         def create_job_from_notification(self, notification):
-            return SimpleNamespace(job_id=f"job-{notification['id']}", status="received")
+            return SimpleNamespace(
+                job_id=f"job-{notification['id']}", status="received"
+            )
 
         async def run_job(self, job_id):
             await self.release.wait()
             self.notifications.append({"id": job_id.removeprefix("job-")})
 
-        async def run_notification(self, notification):  # TeamsMeetingPipeline: accept, then run inline
-            return await self.run_job(self.create_job_from_notification(notification).job_id)
+        async def run_notification(
+            self, notification
+        ):  # TeamsMeetingPipeline: accept, then run inline
+            return await self.run_job(
+                self.create_job_from_notification(notification).job_id
+            )
 
     adapter = FakeAdapter()
     pipeline = FakePipeline()
@@ -112,7 +123,9 @@ async def test_bind_gateway_runtime_attaches_scheduler(monkeypatch, tmp_path):
         _teams_pipeline_runtime_error=None,
     )
 
-    monkeypatch.setattr(runtime_module, "build_pipeline_runtime", lambda gateway_runner: pipeline)
+    monkeypatch.setattr(
+        runtime_module, "build_pipeline_runtime", lambda gateway_runner: pipeline
+    )
 
     bound = runtime_module.bind_gateway_runtime(gateway)
 
@@ -155,18 +168,28 @@ def test_store_persists_subscription_event_and_job_state(tmp_path):
 
 @pytest.mark.anyio
 class TestTeamsMeetingPipeline:
-    async def test_transcript_first_path_persists_state_and_skips_recording(self, tmp_path, monkeypatch):
+    async def test_transcript_first_path_persists_state_and_skips_recording(
+        self, tmp_path, monkeypatch
+    ):
         from plugins.teams_pipeline import pipeline as pipeline_module
 
-        monkeypatch.setattr(pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver)
+        monkeypatch.setattr(
+            pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver
+        )
 
         async def _fetch_transcript(client, meeting_ref):
             return (
-                MeetingArtifact(artifact_type="transcript", artifact_id="tx-1", display_name="meeting.vtt"),
+                MeetingArtifact(
+                    artifact_type="transcript",
+                    artifact_id="tx-1",
+                    display_name="meeting.vtt",
+                ),
                 "Action: Send draft by Friday.\nDecision: Ship the transcript-first path.\nDetailed transcript content.",
             )
 
-        async def _call_record(client, meeting_ref, *, call_record_id=None, allow_permission_errors=True):
+        async def _call_record(
+            client, meeting_ref, *, call_record_id=None, allow_permission_errors=True
+        ):
             return MeetingArtifact(
                 artifact_type="call_record",
                 artifact_id="call-1",
@@ -187,8 +210,12 @@ class TestTeamsMeetingPipeline:
                 source_artifacts=kwargs["artifacts"],
             )
 
-        monkeypatch.setattr(pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript)
-        monkeypatch.setattr(pipeline_module, "enrich_meeting_with_call_record", _call_record)
+        monkeypatch.setattr(
+            pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript
+        )
+        monkeypatch.setattr(
+            pipeline_module, "enrich_meeting_with_call_record", _call_record
+        )
 
         store = TeamsPipelineStore(tmp_path / "teams-store.json")
         pipeline = TeamsMeetingPipeline(
@@ -215,10 +242,14 @@ class TestTeamsMeetingPipeline:
         assert stored is not None
         assert stored["status"] == "completed"
 
-    async def test_recording_fallback_uses_stt_and_updates_sink_records(self, tmp_path, monkeypatch):
+    async def test_recording_fallback_uses_stt_and_updates_sink_records(
+        self, tmp_path, monkeypatch
+    ):
         from plugins.teams_pipeline import pipeline as pipeline_module
 
-        monkeypatch.setattr(pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver)
+        monkeypatch.setattr(
+            pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver
+        )
 
         async def _no_transcript(client, meeting_ref):
             return None, None
@@ -247,7 +278,11 @@ class TestTeamsMeetingPipeline:
             return audio_path
 
         def _transcribe(file_path, model):
-            return {"success": True, "transcript": "Action: Follow up with Legal.\nRisk: Budget approval pending.", "provider": "local"}
+            return {
+                "success": True,
+                "transcript": "Action: Follow up with Legal.\nRisk: Budget approval pending.",
+                "provider": "local",
+            }
 
         async def _summarize(**kwargs):
             return pipeline_module.TeamsMeetingSummaryPayload(
@@ -265,16 +300,31 @@ class TestTeamsMeetingPipeline:
 
         class FakeNotionWriter:
             async def write_summary(self, payload, config, existing_record=None):
-                return {"page_id": existing_record.get("page_id") if existing_record else "page-1", "url": "https://notion.so/page-1"}
+                return {
+                    "page_id": existing_record.get("page_id")
+                    if existing_record
+                    else "page-1",
+                    "url": "https://notion.so/page-1",
+                }
 
         async def _teams_sender(payload, config, existing_record=None):
-            return {"message_id": existing_record.get("message_id") if existing_record else "msg-1"}
+            return {
+                "message_id": existing_record.get("message_id")
+                if existing_record
+                else "msg-1"
+            }
 
-        monkeypatch.setattr(pipeline_module, "fetch_preferred_transcript_text", _no_transcript)
+        monkeypatch.setattr(
+            pipeline_module, "fetch_preferred_transcript_text", _no_transcript
+        )
         monkeypatch.setattr(pipeline_module, "list_recording_artifacts", _recordings)
         monkeypatch.setattr(pipeline_module, "download_recording_artifact", _download)
-        monkeypatch.setattr(pipeline_module.TeamsMeetingPipeline, "_prepare_audio_path", _prepare_audio)
-        monkeypatch.setattr(pipeline_module, "enrich_meeting_with_call_record", _no_call_record)
+        monkeypatch.setattr(
+            pipeline_module.TeamsMeetingPipeline, "_prepare_audio_path", _prepare_audio
+        )
+        monkeypatch.setattr(
+            pipeline_module, "enrich_meeting_with_call_record", _no_call_record
+        )
 
         store = TeamsPipelineStore(tmp_path / "teams-store.json")
         pipeline = TeamsMeetingPipeline(
@@ -313,13 +363,24 @@ class TestTeamsMeetingPipeline:
         assert teams_record is not None
         assert teams_record["message_id"] == "msg-1"
 
-
-    async def test_missing_transcript_and_recording_schedules_retry(self, tmp_path, monkeypatch):
+    async def test_missing_transcript_and_recording_schedules_retry(
+        self, tmp_path, monkeypatch
+    ):
         from plugins.teams_pipeline import pipeline as pipeline_module
 
-        monkeypatch.setattr(pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver)
-        monkeypatch.setattr(pipeline_module, "fetch_preferred_transcript_text", lambda *a, **kw: asyncio.sleep(0, result=(None, None)))
-        monkeypatch.setattr(pipeline_module, "list_recording_artifacts", lambda *a, **kw: asyncio.sleep(0, result=[]))
+        monkeypatch.setattr(
+            pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver
+        )
+        monkeypatch.setattr(
+            pipeline_module,
+            "fetch_preferred_transcript_text",
+            lambda *a, **kw: asyncio.sleep(0, result=(None, None)),
+        )
+        monkeypatch.setattr(
+            pipeline_module,
+            "list_recording_artifacts",
+            lambda *a, **kw: asyncio.sleep(0, result=[]),
+        )
 
         store = TeamsPipelineStore(tmp_path / "teams-store.json")
         pipeline = TeamsMeetingPipeline(
@@ -342,14 +403,22 @@ class TestTeamsMeetingPipeline:
         assert job.error_info["retryable"] is True
         assert "Recording unavailable" in job.error_info["message"]
 
-    async def test_duplicate_notification_reuses_completed_job(self, tmp_path, monkeypatch):
+    async def test_duplicate_notification_reuses_completed_job(
+        self, tmp_path, monkeypatch
+    ):
         from plugins.teams_pipeline import pipeline as pipeline_module
 
-        monkeypatch.setattr(pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver)
+        monkeypatch.setattr(
+            pipeline_module, "resolve_meeting_reference", _transcript_meeting_resolver
+        )
 
         async def _fetch_transcript(client, meeting_ref):
             return (
-                MeetingArtifact(artifact_type="transcript", artifact_id="tx-dup", display_name="meeting.vtt"),
+                MeetingArtifact(
+                    artifact_type="transcript",
+                    artifact_id="tx-dup",
+                    display_name="meeting.vtt",
+                ),
                 "Decision: Keep duplicate notifications idempotent.\nAction: Verify the cached job is reused.",
             )
 
@@ -370,8 +439,12 @@ class TestTeamsMeetingPipeline:
                 source_artifacts=kwargs["artifacts"],
             )
 
-        monkeypatch.setattr(pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript)
-        monkeypatch.setattr(pipeline_module, "enrich_meeting_with_call_record", _no_call_record)
+        monkeypatch.setattr(
+            pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript
+        )
+        monkeypatch.setattr(
+            pipeline_module, "enrich_meeting_with_call_record", _no_call_record
+        )
 
         store = TeamsPipelineStore(tmp_path / "teams-store.json")
         pipeline = TeamsMeetingPipeline(
@@ -433,7 +506,9 @@ def test_parse_graph_meeting_resource_reads_graph_url_quoted_user_key():
 
 
 def test_parse_graph_meeting_resource_ignores_get_all_transcripts_sentinel():
-    parsed = parse_graph_meeting_resource("communications/onlineMeetings/getAllTranscripts")
+    parsed = parse_graph_meeting_resource(
+        "communications/onlineMeetings/getAllTranscripts"
+    )
 
     assert parsed["meeting_id"] is None
     assert parsed["organizer_user_id"] is None
@@ -455,9 +530,14 @@ def test_looks_like_transcript_id_detects_base64_encoded_marker():
     # readable marker (from a field report, Aug 2026).
     import base64
 
-    encoded = base64.urlsafe_b64encode(
-        b"...meeting_ABC@thread.v2#55d6e479-2db7-4297-8590-98f6011a9613-1787004872-TranscriptV2"
-    ).decode().rstrip("=") + "="
+    encoded = (
+        base64.urlsafe_b64encode(
+            b"...meeting_ABC@thread.v2#55d6e479-2db7-4297-8590-98f6011a9613-1787004872-TranscriptV2"
+        )
+        .decode()
+        .rstrip("=")
+        + "="
+    )
     assert "transcript" not in encoded.lower()
     assert looks_like_transcript_id(encoded)
     # Meeting ids (base64 of "0#...#0**19:meeting_...@thread.v2") must NOT match.
@@ -467,7 +547,9 @@ def test_looks_like_transcript_id_detects_base64_encoded_marker():
     assert not looks_like_transcript_id(meeting_encoded)
 
 
-def test_create_job_from_get_all_transcripts_uses_meeting_id_not_transcript_id(tmp_path):
+def test_create_job_from_get_all_transcripts_uses_meeting_id_not_transcript_id(
+    tmp_path,
+):
     store = TeamsPipelineStore(tmp_path / "teams-store.json")
     pipeline = TeamsMeetingPipeline(graph_client=FakeGraphClient(), store=store)
     transcript_id = "ktVizInGAAAAi_B6lATZRTE5Om1lZXRpbmdfTranscriptV2="
@@ -496,7 +578,9 @@ def test_create_job_from_get_all_transcripts_uses_meeting_id_not_transcript_id(t
     assert job.meeting_ref.metadata.get("transcript_id") == transcript_id
 
 
-def test_create_job_from_quoted_user_odata_id_uses_meeting_id_not_transcript_id(tmp_path):
+def test_create_job_from_quoted_user_odata_id_uses_meeting_id_not_transcript_id(
+    tmp_path,
+):
     store = TeamsPipelineStore(tmp_path / "teams-store.json")
     pipeline = TeamsMeetingPipeline(graph_client=FakeGraphClient(), store=store)
     transcript_id = "ktVizInGAAAAi_B6lATZRTE5Om1lZXRpbmdfTranscriptV2="
@@ -534,7 +618,14 @@ async def test_run_job_reparses_quoted_user_odata_id_when_stored_meeting_id_is_t
 
     captured: dict[str, str | None] = {}
 
-    async def _resolve(client, *, meeting_id=None, join_web_url=None, tenant_id=None, organizer_user_id=None):
+    async def _resolve(
+        client,
+        *,
+        meeting_id=None,
+        join_web_url=None,
+        tenant_id=None,
+        organizer_user_id=None,
+    ):
         captured["meeting_id"] = meeting_id
         captured["organizer_user_id"] = organizer_user_id
         return TeamsMeetingRef(
@@ -546,7 +637,11 @@ async def test_run_job_reparses_quoted_user_odata_id_when_stored_meeting_id_is_t
 
     async def _fetch_transcript(client, meeting_ref):
         return (
-            MeetingArtifact(artifact_type="transcript", artifact_id="tx-1", display_name="meeting.vtt"),
+            MeetingArtifact(
+                artifact_type="transcript",
+                artifact_id="tx-1",
+                display_name="meeting.vtt",
+            ),
             "Decision: Re-parse stored Graph notifications on replay.\nAction: Confirm the meeting id is used.",
         )
 
@@ -560,8 +655,12 @@ async def test_run_job_reparses_quoted_user_odata_id_when_stored_meeting_id_is_t
         )
 
     monkeypatch.setattr(pipeline_module, "resolve_meeting_reference", _resolve)
-    monkeypatch.setattr(pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript)
-    monkeypatch.setattr(pipeline_module, "enrich_meeting_with_call_record", _no_call_record)
+    monkeypatch.setattr(
+        pipeline_module, "fetch_preferred_transcript_text", _fetch_transcript
+    )
+    monkeypatch.setattr(
+        pipeline_module, "enrich_meeting_with_call_record", _no_call_record
+    )
 
     store = TeamsPipelineStore(tmp_path / "teams-store.json")
     pipeline = TeamsMeetingPipeline(

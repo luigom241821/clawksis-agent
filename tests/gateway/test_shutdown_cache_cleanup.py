@@ -24,6 +24,7 @@ import gateway.run as gw_mod
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeGateway:
     """Minimal stand-in with just enough state for ``stop()`` to run."""
 
@@ -85,7 +86,9 @@ class _FakeGateway:
         # inline in tests so the bounded-cleanup path is exercised.
         return func(*args)
 
-    async def _cleanup_agent_resources_off_loop(self, agent, *, context="", session_key=None):
+    async def _cleanup_agent_resources_off_loop(
+        self, agent, *, context="", session_key=None
+    ):
         # Mirror the real bounded helper, inline (no executor/timeout) so the
         # fake exercises the same call shape stop() now uses.
         self._cleanup_agent_resources(agent)
@@ -138,6 +141,7 @@ def _make_mock_agent():
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestCachedAgentCleanupOnShutdown:
     """Verify that ``stop()`` calls ``_cleanup_agent_resources`` on idle
     cached agents, triggering ``shutdown_memory_provider()`` (which calls
@@ -154,7 +158,6 @@ class TestCachedAgentCleanupOnShutdown:
         await gw_mod.GatewayRunner.stop(gw)
 
         agent.shutdown_memory_provider.assert_called_once()
-
 
 
 class TestRunningAgentsNotDoubleCleaned:

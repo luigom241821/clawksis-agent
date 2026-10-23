@@ -42,36 +42,55 @@ def _stash_texts(w: G.World, rel: str) -> list[str]:
 def test_non_conflicting_edits_and_untracked_files_are_restored(w):
     w.reset_clean()
     readme = w.checkout / "README.md"
-    readme.write_text(readme.read_text(encoding="utf-8") + "\n" + USER_LINE, encoding="utf-8")
+    readme.write_text(
+        readme.read_text(encoding="utf-8") + "\n" + USER_LINE, encoding="utf-8"
+    )
     notes = w.checkout / "my_notes.txt"
     notes.write_text("my own notes\n", encoding="utf-8")
-    target = w.publish("release: e2e localmods clean", {"e2e-localmods-clean.txt": "release\n"})
+    target = w.publish(
+        "release: e2e localmods clean", {"e2e-localmods-clean.txt": "release\n"}
+    )
 
     cp = w.update()
 
-    assert cp.returncode == 0 and w.head() == target, f"update did not land on {target}:\n{w.diag(cp)}"
-    assert USER_LINE in readme.read_text(encoding="utf-8"), f"tracked edit not restored:\n{w.diag(cp)}"
-    assert notes.is_file() and notes.read_text(encoding="utf-8") == "my own notes\n", \
+    assert cp.returncode == 0 and w.head() == target, (
+        f"update did not land on {target}:\n{w.diag(cp)}"
+    )
+    assert USER_LINE in readme.read_text(encoding="utf-8"), (
+        f"tracked edit not restored:\n{w.diag(cp)}"
+    )
+    assert notes.is_file() and notes.read_text(encoding="utf-8") == "my own notes\n", (
         f"untracked file not restored:\n{w.diag(cp)}"
-    assert not w.git("stash", "list"), f"restored changes still parked in a stash:\n{w.diag(cp)}"
+    )
+    assert not w.git("stash", "list"), (
+        f"restored changes still parked in a stash:\n{w.diag(cp)}"
+    )
 
 
 def test_conflicting_patch_is_recoverable_and_never_reported_complete(w):
     w.reset_clean()
     readme = w.checkout / "README.md"
-    readme.write_text(readme.read_text(encoding="utf-8") + "\n" + USER_LINE, encoding="utf-8")
-    target = w.publish("release: e2e localmods conflict", {"README.md": "# upstream rewrote the README\n"})
+    readme.write_text(
+        readme.read_text(encoding="utf-8") + "\n" + USER_LINE, encoding="utf-8"
+    )
+    target = w.publish(
+        "release: e2e localmods conflict",
+        {"README.md": "# upstream rewrote the README\n"},
+    )
 
     cp = w.update()
 
     assert w.head() == target, f"code update did not land:\n{w.diag(cp)}"
     in_tree = USER_LINE in readme.read_text(encoding="utf-8")
     parked = any(USER_LINE.strip() in t for t in _stash_texts(w, "README.md"))
-    assert in_tree or parked, f"the user's patch is neither in the tree nor in any stash:\n{w.diag(cp)}"
+    assert in_tree or parked, (
+        f"the user's patch is neither in the tree nor in any stash:\n{w.diag(cp)}"
+    )
     if parked and not in_tree:
         assert not G.reported_success(cp), (
             f"reported 'Update complete' (rc={cp.returncode}) while the user's patch is parked in a stash:\n"
-            f"{w.diag(cp)}")
+            f"{w.diag(cp)}"
+        )
 
 
 def test_untracked_file_colliding_with_a_new_upstream_file_is_not_lost(w):
@@ -79,7 +98,9 @@ def test_untracked_file_colliding_with_a_new_upstream_file_is_not_lost(w):
     rel = "e2e-localmods-collide.txt"
     mine = "USER PRIVATE CONTENT that upstream never saw\n"
     (w.checkout / rel).write_text(mine, encoding="utf-8")
-    target = w.publish("release: e2e localmods collide", {rel: "upstream adds this path\n"})
+    target = w.publish(
+        "release: e2e localmods collide", {rel: "upstream adds this path\n"}
+    )
 
     cp = w.update()
 
@@ -88,23 +109,37 @@ def test_untracked_file_colliding_with_a_new_upstream_file_is_not_lost(w):
     parked = any(t == mine.strip() for t in _stash_texts(w, rel))
     assert in_tree or parked, (
         f"the user's untracked file {rel} is gone: the tree has upstream's copy and no stash keeps it:\n"
-        f"{w.diag(cp)}")
+        f"{w.diag(cp)}"
+    )
 
 
 def test_local_commit_on_main_is_kept_behind_a_named_ref(w):
     w.reset_clean()
-    (w.checkout / "e2e-local-patch.txt").write_text("my local commit\n", encoding="utf-8")
+    (w.checkout / "e2e-local-patch.txt").write_text(
+        "my local commit\n", encoding="utf-8"
+    )
     w.git("add", "-A")
     w.git("commit", "-q", "-m", "my local patch")
     local = w.head()
-    target = w.publish("release: e2e localmods diverged", {"e2e-localmods-diverged.txt": "release\n"})
+    target = w.publish(
+        "release: e2e localmods diverged", {"e2e-localmods-diverged.txt": "release\n"}
+    )
 
     cp = w.update()
 
-    assert cp.returncode == 0 and w.head() == target, f"update did not land on {target}:\n{w.diag(cp)}"
+    assert cp.returncode == 0 and w.head() == target, (
+        f"update did not land on {target}:\n{w.diag(cp)}"
+    )
     keepers = [r for r in w.refs_containing(local) if r != "refs/heads/main"]
-    assert keepers, f"local commit {local[:12]} is reachable only from the reflog:\n{w.diag(cp)}"
-    assert any(r.removeprefix("refs/") in G.output(cp) or r in G.output(cp) for r in keepers), (
-        f"local commit {local[:12]} is kept by {keepers}, but the output never names that ref:\n{w.diag(cp)}")
+    assert keepers, (
+        f"local commit {local[:12]} is reachable only from the reflog:\n{w.diag(cp)}"
+    )
+    assert any(
+        r.removeprefix("refs/") in G.output(cp) or r in G.output(cp) for r in keepers
+    ), (
+        f"local commit {local[:12]} is kept by {keepers}, but the output never names that ref:\n{w.diag(cp)}"
+    )
     version = w.version()
-    assert version.returncode == 0 and G.TRACEBACK not in G.output(version), w.diag(version)
+    assert version.returncode == 0 and G.TRACEBACK not in G.output(version), w.diag(
+        version
+    )

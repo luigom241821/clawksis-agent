@@ -88,12 +88,16 @@ def _live_listing(provider: str, runtime: dict) -> list[str]:
     if provider == "nous":
         from clawk_cli.auth import fetch_nous_models
 
-        return list(fetch_nous_models(inference_base_url=base_url, api_key=api_key) or [])
+        return list(
+            fetch_nous_models(inference_base_url=base_url, api_key=api_key) or []
+        )
     from providers import get_provider_profile
 
     profile = get_provider_profile(provider)
     assert profile is not None, f"no provider profile registered for {provider!r}"
-    return list(profile.fetch_models(api_key=api_key, base_url=base_url, timeout=20.0) or [])
+    return list(
+        profile.fetch_models(api_key=api_key, base_url=base_url, timeout=20.0) or []
+    )
 
 
 def _normalize_id(model_id: str) -> str:
@@ -103,7 +107,9 @@ def _normalize_id(model_id: str) -> str:
 def _listing(provider: str) -> list[str]:
     if provider not in _LISTING_CACHE:
         runtime = _resolve(provider, None)
-        _LISTING_CACHE[provider] = [_normalize_id(str(m)) for m in _live_listing(provider, runtime)]
+        _LISTING_CACHE[provider] = [
+            _normalize_id(str(m)) for m in _live_listing(provider, runtime)
+        ]
     return _LISTING_CACHE[provider]
 
 
@@ -136,13 +142,17 @@ def _host_ok(host: str, allowed: tuple[str, ...]) -> bool:
 _KNOWN_LISTING_BUGS = {
     # Native /v1beta/models rejects a Bearer AI-Studio key (401), so the live fetcher returns nothing
     # and the picker silently falls back to the curated list.
-    "gemini": (r"^gemini: live /models returned nothing \(.*/models -> 401",
-               "#62259 Gemini live model discovery sends Bearer auth (fix PRs #62267/#116509)"),
+    "gemini": (
+        r"^gemini: live /models returned nothing \(.*/models -> 401",
+        "#62259 Gemini live model discovery sends Bearer auth (fix PRs #62267/#116509)",
+    ),
 }
 
 
 @pytest.mark.parametrize("provider", sorted(LISTING_PROVIDERS))
-def test_models_listing_parses(provider: str, live_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_models_listing_parses(
+    provider: str, live_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     key_env = LISTING_PROVIDERS[provider]
     secret = live_key(key_env)
     monkeypatch.setenv(key_env, secret)
@@ -151,18 +161,32 @@ def test_models_listing_parses(provider: str, live_home: Path, monkeypatch: pyte
     write_live_home(live_home, provider, case.model_prefs[0])
 
     runtime = _resolve(provider, None)
-    assert runtime.get("api_key") == secret, f"{provider}: resolver did not pick the {key_env} credential"
-    assert _host_ok(urlparse(runtime["base_url"]).hostname or "", case.hosts), runtime["base_url"]
+    assert runtime.get("api_key") == secret, (
+        f"{provider}: resolver did not pick the {key_env} credential"
+    )
+    assert _host_ok(urlparse(runtime["base_url"]).hostname or "", case.hosts), runtime[
+        "base_url"
+    ]
 
     models = [_normalize_id(str(m)) for m in _live_listing(provider, runtime)]
     known = _KNOWN_LISTING_BUGS.get(provider)
     with known_failure(*known) if known else contextlib.nullcontext():
-        assert models, f"{provider}: live /models returned nothing ({wire.describe(wire.records)})"
+        assert models, (
+            f"{provider}: live /models returned nothing ({wire.describe(wire.records)})"
+        )
     assert all(isinstance(m, str) and m.strip() for m in models)
-    wanted = {pref for c in LIVE_CASES if c.provider == provider for pref in c.model_prefs}
-    assert wanted & set(models), f"{provider}: none of the canary models {sorted(wanted)} are listed"
-    leaks = [r for r in wire.records if r.carries_key and not _host_ok(r.host, case.hosts)]
-    assert not leaks, f"{provider}: credential sent to a foreign host: {wire.describe(leaks)}"
+    wanted = {
+        pref for c in LIVE_CASES if c.provider == provider for pref in c.model_prefs
+    }
+    assert wanted & set(models), (
+        f"{provider}: none of the canary models {sorted(wanted)} are listed"
+    )
+    leaks = [
+        r for r in wire.records if r.carries_key and not _host_ok(r.host, case.hosts)
+    ]
+    assert not leaks, (
+        f"{provider}: credential sent to a foreign host: {wire.describe(leaks)}"
+    )
     print(f"LIVE-MODELS provider={provider} count={len(models)}", flush=True)
 
 
@@ -174,22 +198,34 @@ def _run_turn(agent, text: str, history, wire, label: str):
     result = agent.run_conversation(text, conversation_history=history)
     calls = wire.inference(start)
     main = wire.main_turn(start)
-    assert main, f"{label}: no agent-loop request carried the test tool ({wire.describe(calls)})"
+    assert main, (
+        f"{label}: no agent-loop request carried the test tool ({wire.describe(calls)})"
+    )
     # Agent-loop requests must never be rejected: a 4xx (other than 429) is wire drift.
     # Auxiliary calls (title generation) may take a designed 400->adapt retry (e.g.
     # "reasoning is mandatory"); the test end asserts the last aux attempt succeeded.
     bad = [r for r in main if 400 <= r.status < 500 and r.status != 429]
-    assert not bad, f"{label}: provider rejected the request (wire drift): {wire.describe(bad)}"
-    assert not result.get("failed"), f"{label}: turn failed: {result.get('error')} ({wire.describe(calls)})"
-    assert main[-1].status == 200, f"{label}: final request did not succeed: {wire.describe(main)}"
+    assert not bad, (
+        f"{label}: provider rejected the request (wire drift): {wire.describe(bad)}"
+    )
+    assert not result.get("failed"), (
+        f"{label}: turn failed: {result.get('error')} ({wire.describe(calls)})"
+    )
+    assert main[-1].status == 200, (
+        f"{label}: final request did not succeed: {wire.describe(main)}"
+    )
     final = result.get("final_response") or ""
     assert final.strip(), f"{label}: empty final response"
-    assert not leaked_markers(final), f"{label}: markup leaked into final text: {leaked_markers(final)} in {final!r}"
+    assert not leaked_markers(final), (
+        f"{label}: markup leaked into final text: {leaked_markers(final)} in {final!r}"
+    )
     return result, main
 
 
 @pytest.mark.parametrize("case", LIVE_CASES, ids=[c.id for c in LIVE_CASES])
-def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_three_turn_tool_conversation(
+    case: LiveCase, live_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     secret = live_key(case.key_env)
     monkeypatch.setenv(case.key_env, secret)
     wire = install_wire_recorder(monkeypatch, secret)
@@ -197,7 +233,9 @@ def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypat
     write_live_home(live_home, case.provider, model)
 
     runtime = _resolve(case.provider, model)
-    assert runtime.get("api_key") == secret, f"{case.id}: resolver did not pick the {case.key_env} credential"
+    assert runtime.get("api_key") == secret, (
+        f"{case.id}: resolver did not pick the {case.key_env} credential"
+    )
 
     from clawk_constants import parse_reasoning_effort
     from clawk_state import SessionDB
@@ -205,18 +243,31 @@ def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypat
 
     db = SessionDB(live_home / "state.db")
     agent = AIAgent(
-        provider=runtime.get("provider"), api_mode=runtime.get("api_mode"),
-        base_url=runtime.get("base_url"), api_key=runtime.get("api_key"),
-        credential_pool=runtime.get("credential_pool"), model=model,
-        session_db=db, session_id=f"live-{case.id}", quiet_mode=True, platform="cli",
-        enabled_toolsets=["live_probe"], skip_context_files=True, skip_memory=True,
-        skip_background_review=True, max_tokens=2048, max_iterations=6,
-        reasoning_config=parse_reasoning_effort("low"), run_budget_seconds=240,
+        provider=runtime.get("provider"),
+        api_mode=runtime.get("api_mode"),
+        base_url=runtime.get("base_url"),
+        api_key=runtime.get("api_key"),
+        credential_pool=runtime.get("credential_pool"),
+        model=model,
+        session_db=db,
+        session_id=f"live-{case.id}",
+        quiet_mode=True,
+        platform="cli",
+        enabled_toolsets=["live_probe"],
+        skip_context_files=True,
+        skip_memory=True,
+        skip_background_review=True,
+        max_tokens=2048,
+        max_iterations=6,
+        reasoning_config=parse_reasoning_effort("low"),
+        run_budget_seconds=240,
     )
     usage: dict = {}
     try:
         # Turn 1: one forced tool call; the tool result must round-trip into the answer.
-        r1, _ = _run_turn(agent, TURN1 + pad_text(case.pad_tokens), None, wire, f"{case.id} turn1")
+        r1, _ = _run_turn(
+            agent, TURN1 + pad_text(case.pad_tokens), None, wire, f"{case.id} turn1"
+        )
         groups = assistant_tool_calls(r1["messages"])
         assert groups, f"{case.id} turn1: model made no tool call"
         args = [parse_tool_args(c) for g in groups for c in g]
@@ -233,7 +284,8 @@ def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypat
         keys = {parse_tool_args(c).get("key") for g in new_groups for c in g}
         assert {"beta", "gamma"} <= keys, f"{case.id} turn2: tool calls {new_groups}"
         assert any(len(g) >= 2 for g in new_groups), (
-            f"{case.id} turn2: expected parallel tool calls in one message, got {[len(g) for g in new_groups]}")
+            f"{case.id} turn2: expected parallel tool calls in one message, got {[len(g) for g in new_groups]}"
+        )
         for key in ("beta", "gamma"):
             assert LOOKUP_VALUES[key] in r2["final_response"], r2["final_response"]
 
@@ -243,41 +295,62 @@ def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypat
         first3 = calls3[0].body
         sent = str(first3)
         for value in LOOKUP_VALUES.values():
-            assert value in sent, f"{case.id} turn3: tool result {value} missing from replayed history"
-            assert value in r3["final_response"], f"{case.id} turn3: {r3['final_response']!r}"
+            assert value in sent, (
+                f"{case.id} turn3: tool result {value} missing from replayed history"
+            )
+            assert value in r3["final_response"], (
+                f"{case.id} turn3: {r3['final_response']!r}"
+            )
         replay = sorted(reasoning_replay_keys(first3))
         cache_read_turn3 = agent.session_cache_read_tokens - cache_before
 
         if case.cache_expected:
             markers = cache_markers(first3)
-            assert 1 <= len(markers) <= 4, f"{case.id} turn3: cache breakpoints {markers}"
-            for m in (first3.get("messages") or []):
+            assert 1 <= len(markers) <= 4, (
+                f"{case.id} turn3: cache breakpoints {markers}"
+            )
+            for m in first3.get("messages") or []:
                 if m.get("role") == "tool" and not case.native_anthropic:
-                    assert "cache_control" not in m, "top-level cache_control on role:tool (OpenRouter hangs)"
+                    assert "cache_control" not in m, (
+                        "top-level cache_control on role:tool (OpenRouter hangs)"
+                    )
                 content = m.get("content")
                 for part in content if isinstance(content, list) else []:
                     if isinstance(part, dict) and part.get("type") == "tool_result":
                         inner = part.get("content")
                         assert not (isinstance(inner, list) and cache_markers(inner)), (
-                            "cache_control inside tool_result.content[] (#89886: non-retryable 400)")
+                            "cache_control inside tool_result.content[] (#89886: non-retryable 400)"
+                        )
             if cache_read_turn3 <= 0:
                 # Retry-tolerant: the first write can land on another replica; warm once.
                 cache_before = agent.session_cache_read_tokens
                 _run_turn(agent, TURN3, r3["messages"], wire, f"{case.id} turn3-warm")
                 cache_read_turn3 = agent.session_cache_read_tokens - cache_before
-            assert cache_read_turn3 > 0, f"{case.id}: no prompt-cache read on the follow-up turn"
+            assert cache_read_turn3 > 0, (
+                f"{case.id}: no prompt-cache read on the follow-up turn"
+            )
 
         # Persisted == sent: the three tool results are in state.db for this session.
         rows = db.get_messages(agent.session_id)
-        persisted = " ".join(str(r.get("content")) for r in rows if r.get("role") == "tool")
+        persisted = " ".join(
+            str(r.get("content")) for r in rows if r.get("role") == "tool"
+        )
         for value in LOOKUP_VALUES.values():
             assert value in persisted, f"{case.id}: tool result {value} not persisted"
 
-        leaks = [r for r in wire.records if r.carries_key and not _host_ok(r.host, case.hosts)]
-        assert not leaks, f"{case.id}: credential sent to a foreign host: {wire.describe(leaks)}"
+        leaks = [
+            r
+            for r in wire.records
+            if r.carries_key and not _host_ok(r.host, case.hosts)
+        ]
+        assert not leaks, (
+            f"{case.id}: credential sent to a foreign host: {wire.describe(leaks)}"
+        )
         main_ids = {id(r) for r in wire.main_turn()}
         aux = [r for r in wire.inference() if id(r) not in main_ids]
-        assert not aux or 200 <= aux[-1].status < 300, f"{case.id}: auxiliary call never recovered: {wire.describe(aux)}"
+        assert not aux or 200 <= aux[-1].status < 300, (
+            f"{case.id}: auxiliary call never recovered: {wire.describe(aux)}"
+        )
         usage = {"turn3_cache_read": cache_read_turn3, "turn3_replay_keys": replay}
     finally:
         line = usage_line(case, model, agent, wire) | usage
@@ -285,5 +358,9 @@ def test_three_turn_tool_conversation(case: LiveCase, live_home: Path, monkeypat
         if hasattr(agent, "close"):
             agent.close()
     total = line["input"] + line["output"] + line["cache_read"] + line["cache_write"]
-    assert total <= MAX_TOKENS_PER_TEST, f"{case.id}: spend guard tripped ({total} tokens)"
-    assert line["list_price_ceiling_usd"] <= MAX_USD_PER_TEST, f"{case.id}: spend guard tripped {line}"
+    assert total <= MAX_TOKENS_PER_TEST, (
+        f"{case.id}: spend guard tripped ({total} tokens)"
+    )
+    assert line["list_price_ceiling_usd"] <= MAX_USD_PER_TEST, (
+        f"{case.id}: spend guard tripped {line}"
+    )

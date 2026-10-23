@@ -14,6 +14,7 @@ CLI ran in-process, mapped onto what the owner serves -- the mapping Ink uses
 - every other registry command -> ``slash.exec``: the owner runs its reviewed reads and
   refuses the rest, which prints where the command stands (the parity table below).
 """
+
 import contextlib
 import sys
 import uuid
@@ -26,11 +27,20 @@ PARITY_DOC = "https://samuelgradientai-sys.github.io/clawksis-agent/developer-gu
 # registry command goes to the owner through ``slash.exec``. Read by the parity inventory
 # (scripts/gen_gateway_command_parity.py).
 VIEW_ROUTES = {
-    "quit": "detach", "stop": "session.interrupt", "approve": "approval.respond (prompt id)",
-    "branch": "session.mutate branch", "model": "session.mutate model", "compress": "session.mutate compress",
-    "yolo": "config.set yolo", "help": "local",
-    "title": "session.mutate rename", "undo": "session.mutate rewind", "retry": "session.mutate rewind + resubmit",
-    "new": "session.create", "clear": "session.create", "usage": "slash.exec + last-turn receipt",
+    "quit": "detach",
+    "stop": "session.interrupt",
+    "approve": "approval.respond (prompt id)",
+    "branch": "session.mutate branch",
+    "model": "session.mutate model",
+    "compress": "session.mutate compress",
+    "yolo": "config.set yolo",
+    "help": "local",
+    "title": "session.mutate rename",
+    "undo": "session.mutate rewind",
+    "retry": "session.mutate rewind + resubmit",
+    "new": "session.create",
+    "clear": "session.create",
+    "usage": "slash.exec + last-turn receipt",
     "tools": "session.info launch toolsets",
 }
 
@@ -44,9 +54,15 @@ def _user_turns(snapshot):
     kind other than a typed /steer, never a compaction handoff carrier, never a row a compression
     archived (shown in the snapshot's history, not a turn to rewind to)."""
     from agent.context_compressor import is_user_originated_turn
-    return [row for row in snapshot.get("messages", [])
-            if type(row.get("row_id")) is int and row.get("display_kind") in (None, "", "steer")
-            and not row.get("archived") and is_user_originated_turn(row)]
+
+    return [
+        row
+        for row in snapshot.get("messages", [])
+        if type(row.get("row_id")) is int
+        and row.get("display_kind") in (None, "", "steer")
+        and not row.get("archived")
+        and is_user_originated_turn(row)
+    ]
 
 
 def _rewind_to(turns_back, *, retry=False):
@@ -58,17 +74,26 @@ def _rewind_to(turns_back, *, retry=False):
         if retry:
             # Main's retry_last order: a turn that cannot be resent losslessly as text (an image
             # turn) is refused on the CAS snapshot, before session.mutate archives it.
-            from agent.context_compressor import retryable_user_text, user_originated_turn_view
+            from agent.context_compressor import (
+                retryable_user_text,
+                user_originated_turn_view,
+            )
+
             try:
-                retryable_user_text((user_originated_turn_view(target) or {}).get("content"))
+                retryable_user_text(
+                    (user_originated_turn_view(target) or {}).get("content")
+                )
             except ValueError as exc:
                 raise GatewayClientError(f"/retry: {exc}") from exc
         return {"target_message_id": target["row_id"]}
+
     return payload
 
 
 async def _mutate(view, operation, payload):
-    result = await view.mutations.apply(view.client, view.session_id, operation, payload)
+    result = await view.mutations.apply(
+        view.client, view.session_id, operation, payload
+    )
     view.mutations.acknowledge(view.session_id, operation, payload)
     return result
 
@@ -89,6 +114,7 @@ async def _rewind(view, turns_back, *, retry=False):
     content = (result.get("target_message") or {}).get("content")
     if retry:
         from agent.context_compressor import retryable_user_text
+
         with contextlib.suppress(ValueError):
             return retryable_user_text(content), result["rewound_count"]
     return content if isinstance(content, str) else "", result["rewound_count"]
@@ -103,6 +129,7 @@ async def _title(view, rest):
 
 async def _undo(view, rest):
     from agent.i18n import t
+
     if rest and not (rest.isdigit() and int(rest) > 0):
         raise GatewayClientError("Usage: /undo [N]")
     turns = int(rest or 1)
@@ -111,12 +138,15 @@ async def _undo(view, rest):
         print(t("cli.session.undo_no_user_message"))
         return
     text, count = rewound
-    print(f"Undid {turns} turn{'s' if turns != 1 else ''} ({count} message(s)); the removed message is in the composer.")
+    print(
+        f"Undid {turns} turn{'s' if turns != 1 else ''} ({count} message(s)); the removed message is in the composer."
+    )
     view.prefill = text
 
 
 async def _retry(view, rest):
     from agent.i18n import t
+
     rewound = await _rewind(view, 1, retry=True)
     if rewound is None or not rewound[0].strip():
         print(t("cli.session.retry_no_user_message"))
@@ -130,18 +160,31 @@ async def _new(view, rest):
     session stays resumable by its id. A title is a separate rename so an existing title is a
     conflict, never a silent attach to that other session."""
     from agent.i18n import t
+
     info = await view.client.rpc("session.info", session_id=view.session_id)
-    accepted = set((await view.client.rpc("runtime.describe")).get("session_create", {}).get("parameters", []))
-    request = {key: value for key, value in (info.get("launch_request") or {}).items()
-               if key in accepted and key not in {"request_id", "title"}}
+    accepted = set(
+        (await view.client.rpc("runtime.describe"))
+        .get("session_create", {})
+        .get("parameters", [])
+    )
+    request = {
+        key: value
+        for key, value in (info.get("launch_request") or {}).items()
+        if key in accepted and key not in {"request_id", "title"}
+    }
     if info.get("cwd") and "cwd" in accepted:
         request["cwd"] = info["cwd"]
     # The frozen request never holds the launch key; the one this terminal supplied rides along.
     if getattr(view, "launch_api_key", None) and "api_key" in accepted:
         request["api_key"] = view.launch_api_key
     from clawk_cli.gateway_chat import client_env_policy
-    request.update(client_env_policy(accepted))  # never in launch_request: this shell's, sent afresh
-    snapshot = await view.client.rpc("session.create", request_id=uuid.uuid4().hex, **request)
+
+    request.update(
+        client_env_policy(accepted)
+    )  # never in launch_request: this shell's, sent afresh
+    snapshot = await view.client.rpc(
+        "session.create", request_id=uuid.uuid4().hex, **request
+    )
     await view.adopt(snapshot)
     print(t("cli.session.new_session"))
     print(f"Session: {view.session_id}", file=sys.stderr, flush=True)
@@ -156,14 +199,22 @@ async def _usage(view, rest):
     admission = next(reversed(view.completions), None)
     if admission is None:
         return
-    receipt = await view.client.rpc("prompt.receipt", session_id=view.session_id,
-                                    admission_id=admission, include_result=True)
+    receipt = await view.client.rpc(
+        "prompt.receipt",
+        session_id=view.session_id,
+        admission_id=admission,
+        include_result=True,
+    )
     result = receipt.get("result") or {}
     if not isinstance(result, dict) or not result:
         return
     lines = ["", "Last turn:", f"  Model: {result.get('model') or view.model}"]
-    for label, key in (("Input tokens", "input_tokens"), ("Output tokens", "output_tokens"),
-                       ("Total tokens", "total_tokens"), ("API calls", "api_calls")):
+    for label, key in (
+        ("Input tokens", "input_tokens"),
+        ("Output tokens", "output_tokens"),
+        ("Total tokens", "total_tokens"),
+        ("API calls", "api_calls"),
+    ):
         lines.append(f"  {label}: {int(result.get(key) or 0):,}")
     if isinstance(result.get("estimated_cost_usd"), (int, float)):
         lines.append(f"  Cost: ${result['estimated_cost_usd']:.4f}")
@@ -176,21 +227,35 @@ async def _tools(view, rest):
     if isinstance(toolsets, list) and toolsets:
         print("Toolsets frozen at launch: " + ", ".join(map(str, toolsets)))
     else:
-        print("This session runs the profile's CLI toolsets as they were at launch (`clawk tools list`).")
-    print("Changing toolsets mid-session (/tools enable|disable) " + refusal("tools").split(" ", 1)[1])
+        print(
+            "This session runs the profile's CLI toolsets as they were at launch (`clawk tools list`)."
+        )
+    print(
+        "Changing toolsets mid-session (/tools enable|disable) "
+        + refusal("tools").split(" ", 1)[1]
+    )
 
 
 async def forward(view, name, rest):
     """Run a registry command (or a skill) on the owner; its refusal names where the command stands."""
     from clawk_cli.gateway_client import GatewayRPCError
+
     try:
-        reply = await view.client.rpc("slash.exec", session_id=view.session_id,
-                                      command=name + (" " + rest if rest else ""))
+        reply = await view.client.rpc(
+            "slash.exec",
+            session_id=view.session_id,
+            command=name + (" " + rest if rest else ""),
+        )
     except GatewayRPCError as exc:
         if str(exc) != "unsupported_command":
             raise
         from clawk_cli.commands import resolve_command
-        print(refusal(name) if resolve_command(name) else f"Unknown command: /{name} (use /help)")
+
+        print(
+            refusal(name)
+            if resolve_command(name)
+            else f"Unknown command: /{name} (use /help)"
+        )
         return
     if reply.get("type") in ("skill", "send"):
         # A prompt directive is the client's durable submit (same contract as Ink and Desktop):
@@ -203,15 +268,25 @@ async def forward(view, name, rest):
         print(reply.get("output") or f"/{name}: no output")
 
 
-_VIEW_CONTROLS = frozenset({"quit", "stop", "approve", "branch", "model", "compress", "yolo", "help"})
+_VIEW_CONTROLS = frozenset(
+    {"quit", "stop", "approve", "branch", "model", "compress", "yolo", "help"}
+)
 # /clear is main's "new session + clear screen"; the gateway view keeps scrollback and starts fresh.
-_HANDLERS = {"title": _title, "undo": _undo, "retry": _retry, "new": _new, "clear": _new, "usage": _usage,
-             "tools": _tools}
+_HANDLERS = {
+    "title": _title,
+    "undo": _undo,
+    "retry": _retry,
+    "new": _new,
+    "clear": _new,
+    "usage": _usage,
+    "tools": _tools,
+}
 
 
 async def run_command(view, command, rest):
     """Any slash command the view's own controls did not take."""
     from clawk_cli.commands import resolve_command
+
     name = command.lstrip("/")
     definition = resolve_command(name)
     canonical = definition.name if definition else name
@@ -228,8 +303,11 @@ async def run_command(view, command, rest):
 
 def help_text():
     from gateway.session_commands import _READ_COMMANDS
+
     reports = " ".join(f"/{name}" for name in sorted(_READ_COMMANDS - {"help"}))
-    return ("/stop, /approve <id> <choice>, /answer <id> <text>, /discard <admission_id> (turn lost during "
-            "restart), /yolo [on|off], /quit (detach). /branch [title], /model <model> [--provider name], "
-            "/compress [here [N] | <focus>] [--preview]. /title [name], /undo [N], /retry, /new [title] "
-            f"(/reset), /usage, /tools.\nReports run by the gateway: {reports}.\nParity table: {PARITY_DOC}")
+    return (
+        "/stop, /approve <id> <choice>, /answer <id> <text>, /discard <admission_id> (turn lost during "
+        "restart), /yolo [on|off], /quit (detach). /branch [title], /model <model> [--provider name], "
+        "/compress [here [N] | <focus>] [--preview]. /title [name], /undo [N], /retry, /new [title] "
+        f"(/reset), /usage, /tools.\nReports run by the gateway: {reports}.\nParity table: {PARITY_DOC}"
+    )

@@ -23,7 +23,9 @@ ONLINE_NOTICE = "♻️ Gateway online — Clawksis is back and ready."
 def _adapter():
     return SimpleNamespace(
         send_path_degraded=False,
-        send=AsyncMock(return_value=SendResult(success=True, message_id="unit-test-notice")),
+        send=AsyncMock(
+            return_value=SendResult(success=True, message_id="unit-test-notice")
+        ),
     )
 
 
@@ -33,7 +35,9 @@ def _home_config(platform: Platform, chat_id: str) -> GatewayConfig:
             platform: PlatformConfig(
                 enabled=True,
                 gateway_restart_notification=True,
-                home_channel=HomeChannel(platform=platform, chat_id=chat_id, name=chat_id),
+                home_channel=HomeChannel(
+                    platform=platform, chat_id=chat_id, name=chat_id
+                ),
             )
         }
     )
@@ -66,9 +70,14 @@ async def test_planned_restart_notifies_every_served_profile(multiplex_runner):
     await runner._replay_pending_planned_restart_notification()
 
     launch.send.assert_awaited_once()
-    coder.send.assert_awaited_once(), "a served profile's home channel is owed the restart notice"
+    (
+        coder.send.assert_awaited_once(),
+        "a served profile's home channel is owed the restart notice",
+    )
     assert coder.send.await_args.args[:2] == ("coder-home", ONLINE_NOTICE)
-    assert not marker.exists(), "every owed target was notified — the obligation is discharged"
+    assert not marker.exists(), (
+        "every owed target was notified — the obligation is discharged"
+    )
 
 
 @pytest.mark.asyncio
@@ -81,9 +90,13 @@ async def test_marker_survives_until_a_served_profile_is_reachable(multiplex_run
     await runner._replay_pending_planned_restart_notification()
 
     launch.send.assert_awaited_once()
-    assert marker.exists(), "coder's channel was never notified; the marker must not be consumed"
+    assert marker.exists(), (
+        "coder's channel was never notified; the marker must not be consumed"
+    )
     delivered = json.loads(marker.read_text(encoding="utf-8"))["delivered_targets"]
-    assert [target for target in delivered if target[0] == "discord"], "the reached target is recorded"
+    assert [target for target in delivered if target[0] == "discord"], (
+        "the reached target is recorded"
+    )
 
     coder = _adapter()
     runner._profile_adapters["coder"][Platform.TELEGRAM] = coder
@@ -151,12 +164,18 @@ async def test_profiles_sharing_one_home_chat_get_one_notice(tmp_path, monkeypat
 
     await runner._replay_pending_planned_restart_notification()
 
-    assert launch.send.await_count + coder.send.await_count == 1, "one chat, one restart, one notice"
-    assert not marker.exists(), "the shared chat was reached, so every owed profile is discharged"
+    assert launch.send.await_count + coder.send.await_count == 1, (
+        "one chat, one restart, one notice"
+    )
+    assert not marker.exists(), (
+        "the shared chat was reached, so every owed profile is discharged"
+    )
 
 
 @pytest.mark.asyncio
-async def test_one_broken_profile_does_not_starve_the_rest(multiplex_runner, monkeypatch):
+async def test_one_broken_profile_does_not_starve_the_rest(
+    multiplex_runner, monkeypatch
+):
     """A profile whose transport resolution raises is skipped; the fan-out continues."""
     runner, _marker = multiplex_runner
     runner.adapters[Platform.DISCORD] = _adapter()
@@ -165,7 +184,10 @@ async def test_one_broken_profile_does_not_starve_the_rest(multiplex_runner, mon
         "b": _home_config(Platform.TELEGRAM, "b-home"),
         "c": _home_config(Platform.SLACK, "c-home"),
     }
-    runner._profile_adapters = {"b": {Platform.TELEGRAM: _adapter()}, "c": {Platform.SLACK: ok}}
+    runner._profile_adapters = {
+        "b": {Platform.TELEGRAM: _adapter()},
+        "c": {Platform.SLACK: ok},
+    }
     real = gateway_delivery.resolve_delivery_transport
 
     def resolve(platform, config, adapters):
@@ -181,7 +203,9 @@ async def test_one_broken_profile_does_not_starve_the_rest(multiplex_runner, mon
 
 
 @pytest.mark.asyncio
-async def test_unserved_profile_config_is_pruned_from_the_fan_out(tmp_path, monkeypatch):
+async def test_unserved_profile_config_is_pruned_from_the_fan_out(
+    tmp_path, monkeypatch
+):
     """A profile whose adapters failed keeps no cached config, or it is owed a notice forever.
 
     ``owed`` is built from ``_profile_configs`` while delivery needs a live transport, so a stale
@@ -196,17 +220,25 @@ async def test_unserved_profile_config_is_pruned_from_the_fan_out(tmp_path, monk
     runner._primary_resource_claims = Mock(return_value={})
     runner._record_served_profiles = Mock()
     runner._restore_secondary_completion_ledgers = Mock()
-    runner._start_one_profile_adapters = AsyncMock(side_effect=RuntimeError("adapters failed"))
-    monkeypatch.setattr(gateway_run, "_multiplex_profile_homes", lambda cfg: [("ghost", tmp_path / "ghost")])
+    runner._start_one_profile_adapters = AsyncMock(
+        side_effect=RuntimeError("adapters failed")
+    )
+    monkeypatch.setattr(
+        gateway_run,
+        "_multiplex_profile_homes",
+        lambda cfg: [("ghost", tmp_path / "ghost")],
+    )
     monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "default")
     monkeypatch.setattr(
-        "gateway.run_profile_reconcile.profile_serve_signature", lambda home: ("sig",))
+        "gateway.run_profile_reconcile.profile_serve_signature", lambda home: ("sig",)
+    )
 
     await runner._start_secondary_profile_adapters()
 
     assert "ghost" not in runner._profile_configs
     assert list(runner._served_home_channel_configs()) == [
-        (None, Platform.DISCORD, runner.config.platforms[Platform.DISCORD])]
+        (None, Platform.DISCORD, runner.config.platforms[Platform.DISCORD])
+    ]
 
 
 @pytest.mark.asyncio
@@ -217,11 +249,17 @@ async def test_a_served_profiles_reconnect_replays_the_owed_notice(multiplex_run
 
     runner, marker = multiplex_runner
     runner.adapters[Platform.DISCORD] = _adapter()
-    await runner._replay_pending_planned_restart_notification()  # boot: coder's Telegram is down
+    await (
+        runner._replay_pending_planned_restart_notification()
+    )  # boot: coder's Telegram is down
     assert marker.exists()
 
-    coder = SimpleNamespace(send_path_degraded=False, has_fatal_error=False, fatal_error_retryable=True,
-                            send=AsyncMock(return_value=SendResult(success=True, message_id="n")))
+    coder = SimpleNamespace(
+        send_path_degraded=False,
+        has_fatal_error=False,
+        fatal_error_retryable=True,
+        send=AsyncMock(return_value=SendResult(success=True, message_id="n")),
+    )
     runner._running = True
     runner._background_tasks = set()
     runner._profile_failed_platforms = {}
@@ -238,4 +276,6 @@ async def test_a_served_profiles_reconnect_replays_the_owed_notice(multiplex_run
     assert runner._profile_adapters["coder"][Platform.TELEGRAM] is coder
     coder.send.assert_awaited_once()
     assert coder.send.await_args.args[:2] == ("coder-home", ONLINE_NOTICE)
-    assert not marker.exists(), "the owed target was reached on reconnect: the obligation is discharged"
+    assert not marker.exists(), (
+        "the owed target was reached on reconnect: the obligation is discharged"
+    )

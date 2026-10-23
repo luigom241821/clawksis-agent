@@ -59,13 +59,21 @@ def _read_battery_uncached() -> BatteryStatus:
         except (TypeError, ValueError):
             percent = None
     plugged = getattr(batt, "power_plugged", None)
-    return BatteryStatus(available=True, percent=percent, plugged=None if plugged is None else bool(plugged))
+    return BatteryStatus(
+        available=True,
+        percent=percent,
+        plugged=None if plugged is None else bool(plugged),
+    )
 
 
 def read_battery(use_cache: bool = True) -> BatteryStatus:
     """Return the current battery status (cached for a few seconds)."""
     global _cache
-    if use_cache and _cache is not None and time.monotonic() - _cache[0] < _CACHE_TTL_SECONDS:
+    if (
+        use_cache
+        and _cache is not None
+        and time.monotonic() - _cache[0] < _CACHE_TTL_SECONDS
+    ):
         return _cache[1]
     status = _read_battery_uncached()
     _cache = (time.monotonic(), status)

@@ -8,6 +8,7 @@ instead of rebinding the type globals or returning False with the install hint.
 Tests run through the real ``ensure_and_bind`` boundary with the install seam
 (``pm.extras.ensure_import``) no-op'd — no network, no live Matrix.
 """
+
 import sys
 import types
 
@@ -22,8 +23,16 @@ def _fake_mautrix_types():
     """Minimal mautrix.types with the 8 names the adapter imports/binds."""
     mod = types.ModuleType("mautrix.types")
 
-    for name in ("EventType", "UserID", "RoomID", "EventID", "ContentURI",
-                 "RoomCreatePreset", "PresenceState", "TrustState"):
+    for name in (
+        "EventType",
+        "UserID",
+        "RoomID",
+        "EventID",
+        "ContentURI",
+        "RoomCreatePreset",
+        "PresenceState",
+        "TrustState",
+    ):
         setattr(mod, name, object())
     return mod
 
@@ -35,7 +44,16 @@ def fresh_dependency_boundary(monkeypatch):
     monkeypatch.delenv("MATRIX_E2EE_MODE", raising=False)
     monkeypatch.delenv("MATRIX_ENCRYPTION", raising=False)
     # ensure_and_bind writes module globals; isolate even successful rebinding.
-    for name in ("EventType", "UserID", "RoomID", "EventID", "ContentURI", "RoomCreatePreset", "PresenceState", "TrustState"):
+    for name in (
+        "EventType",
+        "UserID",
+        "RoomID",
+        "EventID",
+        "ContentURI",
+        "RoomCreatePreset",
+        "PresenceState",
+        "TrustState",
+    ):
         monkeypatch.setattr(matrix_adapter, name, getattr(matrix_adapter, name))
     fake_types = _fake_mautrix_types()
     mautrix = types.ModuleType("mautrix")
@@ -44,7 +62,9 @@ def fresh_dependency_boundary(monkeypatch):
         yield fake_types
 
 
-def test_fresh_install_rebinds_type_globals_without_nameerror(fresh_dependency_boundary):
+def test_fresh_install_rebinds_type_globals_without_nameerror(
+    fresh_dependency_boundary,
+):
     assert matrix_adapter.ensure_matrix_deps() is True
     # The rebind actually landed on the adapter module globals.
     assert matrix_adapter.EventType is fresh_dependency_boundary.EventType
@@ -68,14 +88,28 @@ def test_interactive_setup_explicitly_syncs_matrix(tmp_path, monkeypatch):
     import pm
     from clawk_cli import cli_output, config
 
-    answers = iter(["https://matrix.example.test", "test-token", "@bot:example.test", "@owner:example.test", "!home:example.test"])
+    answers = iter(
+        [
+            "https://matrix.example.test",
+            "test-token",
+            "@bot:example.test",
+            "@owner:example.test",
+            "!home:example.test",
+        ]
+    )
     monkeypatch.setattr(cli_output, "prompt", lambda *args, **kwargs: next(answers))
     monkeypatch.setattr(cli_output, "prompt_yes_no", lambda *args, **kwargs: False)
     monkeypatch.setattr(config, "get_env_value", lambda key: None)
     monkeypatch.setattr(config, "save_env_value", lambda *args: None)
     calls = []
-    monkeypatch.setattr(pm, "sync_venv", lambda extras, **kwargs: calls.append((extras, kwargs)))
-    monkeypatch.setattr(pm, "ensure_import", lambda *args: pytest.fail("setup used implicit installation"))
+    monkeypatch.setattr(
+        pm, "sync_venv", lambda extras, **kwargs: calls.append((extras, kwargs))
+    )
+    monkeypatch.setattr(
+        pm,
+        "ensure_import",
+        lambda *args: pytest.fail("setup used implicit installation"),
+    )
     monkeypatch.setattr(pm_extras, "missing", lambda extra: ("asyncpg",))
     matrix_adapter.interactive_setup()
     assert calls == [(["matrix"], {"explicit": True})]

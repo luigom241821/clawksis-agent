@@ -41,7 +41,9 @@ def _spawn(fn, name):
 
 
 def _call():
-    return json.loads(registry.dispatch("computer_use", {"action": "list_apps"}, session_id="shared"))
+    return json.loads(
+        registry.dispatch("computer_use", {"action": "list_apps"}, session_id="shared")
+    )
 
 
 @pytest.fixture
@@ -49,8 +51,12 @@ def runtime(tmp_path, monkeypatch):
     homes = [tmp_path / "a", tmp_path / "b"]
     for home, display in zip(homes, (":37", ":38")):
         (home / "bot-desktop").mkdir(parents=True)
-        (home / "bot-desktop" / "env").write_text(f"DISPLAY={display}\n", encoding="utf-8")
-        (home / "config.yaml").write_text("computer_use:\n  permission_mode: standard\n", encoding="utf-8")
+        (home / "bot-desktop" / "env").write_text(
+            f"DISPLAY={display}\n", encoding="utf-8"
+        )
+        (home / "config.yaml").write_text(
+            "computer_use:\n  permission_mode: standard\n", encoding="utf-8"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(homes[0]))
     # Fake the device boundary only. Profile env publication, spawn identity,
     # config, backend caches, dispatch and persisted human leases stay real.
@@ -122,9 +128,13 @@ def test_dispatch_rechecks_admission(runtime, monkeypatch, pause_at, change):
             assert cu.release_computer_use_session("shared")
         else:
             if change == "mode":
-                (homes[0] / "config.yaml").write_text("computer_use:\n  permission_mode: bounded\n", encoding="utf-8")
+                (homes[0] / "config.yaml").write_text(
+                    "computer_use:\n  permission_mode: bounded\n", encoding="utf-8"
+                )
             else:
-                (homes[0] / "bot-desktop" / "env").write_text("DISPLAY=:39\n", encoding="utf-8")
+                (homes[0] / "bot-desktop" / "env").write_text(
+                    "DISPLAY=:39\n", encoding="utf-8"
+                )
             if change != "queued_display":
                 assert real_get("shared") is not old
         if change != "queued_display":
@@ -142,9 +152,13 @@ def test_dispatch_rechecks_admission(runtime, monkeypatch, pause_at, change):
 
 
 @pytest.mark.parametrize("fail_action", [False, True])
-def test_release_waits_without_blocking_another_profile_or_replaying(runtime, monkeypatch, fail_action):
+def test_release_waits_without_blocking_another_profile_or_replaying(
+    runtime, monkeypatch, fail_action
+):
     homes, _created = runtime
-    action_entered, finish_action, stop_attempted = (threading.Event() for _ in range(3))
+    action_entered, finish_action, stop_attempted = (
+        threading.Event() for _ in range(3)
+    )
     threads = []
     with _profile(homes[0]):
         old = cu._get_backend("shared")
@@ -168,7 +182,9 @@ def test_release_waits_without_blocking_another_profile_or_replaying(runtime, mo
             thread, result = _spawn(_call, "admitted-call")
             threads.append(thread)
             assert action_entered.wait(10)
-            thread, released = _spawn(lambda: cu.release_computer_use_session("shared"), "release")
+            thread, released = _spawn(
+                lambda: cu.release_computer_use_session("shared"), "release"
+            )
             threads.append(thread)
             assert stop_attempted.wait(10)
             assert not old.stopped and not released.done()
@@ -195,7 +211,9 @@ def test_release_waits_without_blocking_another_profile_or_replaying(runtime, mo
 
 
 @pytest.mark.parametrize("hand_back", [False, True])
-def test_backend_retry_preserves_the_original_human_lease_epoch(runtime, monkeypatch, hand_back):
+def test_backend_retry_preserves_the_original_human_lease_epoch(
+    runtime, monkeypatch, hand_back
+):
     _, created = runtime
     paused, resume = threading.Event(), threading.Event()
     real_get = cu._get_backend

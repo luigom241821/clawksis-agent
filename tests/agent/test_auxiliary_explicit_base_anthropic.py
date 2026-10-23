@@ -27,8 +27,10 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     for key in (
-        "OPENAI_API_KEY", "OPENAI_BASE_URL",
-        "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
     ):
         monkeypatch.delenv(key, raising=False)
 

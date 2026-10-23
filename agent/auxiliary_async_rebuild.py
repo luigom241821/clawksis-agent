@@ -23,7 +23,11 @@ def async_api_key(sync_client: Any) -> Any:
     The sync provider is ``Callable[[], str]``; ``AsyncOpenAI`` awaits its provider before every request,
     so the callable is run off-loop (it may shell out to a ``key_cmd``).
     """
-    provider = getattr(sync_client, "_api_key_provider", None) if isinstance(sync_client, OpenAI) else None
+    provider = (
+        getattr(sync_client, "_api_key_provider", None)
+        if isinstance(sync_client, OpenAI)
+        else None
+    )
     if not callable(provider):
         return sync_client.api_key
 
@@ -38,5 +42,9 @@ def configured_default_headers(sync_client: Any) -> dict[str, str]:
 
     SECURITY: values may carry credentials — never log them.
     """
-    configured = getattr(sync_client, "_custom_headers", None) if isinstance(sync_client, OpenAI) else None
+    configured = (
+        getattr(sync_client, "_custom_headers", None)
+        if isinstance(sync_client, OpenAI)
+        else None
+    )
     return dict(configured) if isinstance(configured, Mapping) else {}

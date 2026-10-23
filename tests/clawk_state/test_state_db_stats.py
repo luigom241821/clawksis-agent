@@ -97,11 +97,11 @@ def test_collect_and_render_stale_fts_holder_deferral(populated_db):
 
     rendered = _render_state_db_stats(stats)
     warnings = [
-        " ".join((text, detail))
-        for kind, text, detail in rendered
-        if kind == "warn"
+        " ".join((text, detail)) for kind, text, detail in rendered if kind == "warn"
     ]
-    assert any("4242" in warning and "optimize-storage" in warning for warning in warnings)
+    assert any(
+        "4242" in warning and "optimize-storage" in warning for warning in warnings
+    )
 
 
 def test_collect_stats_missing_file_never_raises(tmp_path):
@@ -232,15 +232,15 @@ def test_render_large_db_legacy_trigram_suggests_optimize():
 
     big = STATE_DB_SIZE_WARN_BYTES + 1
     lines = _render_state_db_stats(
-        _base_stats(logical_size_bytes=big, fts_storage_version=None, fts_storage_upgrade_needed=True),
+        _base_stats(
+            logical_size_bytes=big,
+            fts_storage_version=None,
+            fts_storage_upgrade_needed=True,
+        ),
         holders=None,
     )
     blob = " ".join(" ".join(str(p) for p in line) for line in lines)
     assert "optimize-storage" in blob
-
-
-
-
 
 
 def test_render_handles_all_none_stats():

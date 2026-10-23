@@ -17,9 +17,7 @@ def test_hidden_excluded_by_default_included_on_request(db):
     db.create_session("secret", source="cli")
     # Give both a message so the default min_message_count filter keeps them.
     for sid in ("visible", "secret"):
-        db._conn.execute(
-            "UPDATE sessions SET message_count = 1 WHERE id = ?", (sid,)
-        )
+        db._conn.execute("UPDATE sessions SET message_count = 1 WHERE id = ?", (sid,))
     db._conn.commit()
 
     # Flip the hidden flag on one session.
@@ -32,8 +30,7 @@ def test_hidden_excluded_by_default_included_on_request(db):
     assert default_ids == {"visible"}
 
     all_ids = {
-        s["id"]
-        for s in db.list_sessions_rich(min_message_count=1, include_hidden=True)
+        s["id"] for s in db.list_sessions_rich(min_message_count=1, include_hidden=True)
     }
     assert all_ids == {"visible", "secret"}
 

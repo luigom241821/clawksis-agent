@@ -58,7 +58,10 @@ class DummyAgent:
                 new_session_id=self.session_id,
                 old_session_id="old-session",
             )
-        return ([{"role": "user", "content": "[CONTEXT SUMMARY]: compacted"}], "new system prompt")
+        return (
+            [{"role": "user", "content": "[CONTEXT SUMMARY]: compacted"}],
+            "new system prompt",
+        )
 
 
 def test_manual_compress_does_not_pass_cached_system_prompt(monkeypatch):

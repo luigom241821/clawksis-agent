@@ -5,6 +5,7 @@ gate has to consult the operator's setting itself; and ``named_profile_has_ident
 empty ``.env``, which is all a crashed ``clawk profile create`` leaves behind. Both made a host
 arm a one-way, process-wide guard it was never meant to arm.
 """
+
 import pytest
 
 from agent import secret_scope
@@ -22,6 +23,7 @@ def two_profile_host(tmp_path, monkeypatch):
     monkeypatch.setattr(launch_profile_policy, "_snapshot", None)
     monkeypatch.delenv("GATEWAY_MULTIPLEX_PROFILES", raising=False)
     from clawk_cli.profiles import _get_profiles_root
+
     assert str(_get_profiles_root()).startswith(str(tmp_path))
     return home / "profiles" / "b"
 
@@ -39,12 +41,18 @@ def test_activation_routes_logs_per_profile_home(two_profile_host, monkeypatch):
     import clawk_logging
 
     routed = []
-    monkeypatch.setattr(clawk_logging, "enable_profile_log_routing", lambda homes: routed.append(set(homes)))
+    monkeypatch.setattr(
+        clawk_logging,
+        "enable_profile_log_routing",
+        lambda homes: routed.append(set(homes)),
+    )
     assert launch_profile_policy.activate_multi_profile_hosting_eagerly() is True
     assert routed and two_profile_host.resolve() in routed[0] and len(routed[0]) == 2
 
 
-def test_the_retired_opt_out_no_longer_disarms_the_credential_guard(two_profile_host, monkeypatch):
+def test_the_retired_opt_out_no_longer_disarms_the_credential_guard(
+    two_profile_host, monkeypatch
+):
     """``gateway.multiplex_profiles: false`` is retired as a topology opt-out, so it must not
     disarm this guard: a multi-home host that skipped activation because of a stale ``false``
     would serve the second profile with the LAUNCH profile's credentials -- the exact fail-open
@@ -52,7 +60,11 @@ def test_the_retired_opt_out_no_longer_disarms_the_credential_guard(two_profile_
     (two_profile_host / "config.yaml").write_text("{}\n", encoding="utf-8")
     from clawk_cli import config as cfg_mod
 
-    monkeypatch.setattr(cfg_mod, "load_config", lambda *a, **k: {"gateway": {"multiplex_profiles": False}})
+    monkeypatch.setattr(
+        cfg_mod,
+        "load_config",
+        lambda *a, **k: {"gateway": {"multiplex_profiles": False}},
+    )
 
     assert launch_profile_policy.activate_multi_profile_hosting_eagerly() is True
     assert secret_scope.is_multiplex_active()
@@ -65,7 +77,9 @@ def test_a_crashed_profile_create_shell_is_not_a_second_tenant(two_profile_host)
     assert not secret_scope.is_multiplex_active()
 
 
-def test_unreadable_profiles_dir_fails_closed_and_says_so(two_profile_host, monkeypatch):
+def test_unreadable_profiles_dir_fails_closed_and_says_so(
+    two_profile_host, monkeypatch
+):
     """Silently returning False left the guard off for the process lifetime with zero log lines."""
     from clawk_cli import profiles as profiles_mod
 

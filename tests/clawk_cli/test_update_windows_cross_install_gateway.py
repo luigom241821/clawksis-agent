@@ -29,14 +29,23 @@ def host_gateways(tmp_path):
         "own": {"CLAWK_HOME": os.environ["CLAWK_HOME"]},
         "foreign": {"CLAWK_HOME": str(other / ".clawk")},
         # Another install at its platform default home: no CLAWK_HOME in its environment.
-        "foreign_default": {"HOME": str(other), "USERPROFILE": str(other),
-                            "LOCALAPPDATA": str(other / "AppData" / "Local")},
+        "foreign_default": {
+            "HOME": str(other),
+            "USERPROFILE": str(other),
+            "LOCALAPPDATA": str(other / "AppData" / "Local"),
+        },
     }
-    base = {k: v for k, v in os.environ.items()
-            if k not in ("CLAWK_HOME", "HOME", "USERPROFILE", "LOCALAPPDATA")}
+    base = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("CLAWK_HOME", "HOME", "USERPROFILE", "LOCALAPPDATA")
+    }
     procs = {
-        name: subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
-                               env={**base, **extra}, stdin=subprocess.DEVNULL)
+        name: subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(120)"],
+            env={**base, **extra},
+            stdin=subprocess.DEVNULL,
+        )
         for name, extra in installs.items()
     }
     try:
@@ -50,7 +59,9 @@ def host_gateways(tmp_path):
 def test_update_pause_takes_only_this_installs_gateways(monkeypatch, host_gateways):
     monkeypatch.setattr(gateway_mod, "find_profile_gateway_processes", lambda **_kw: [])
     monkeypatch.setattr(gateway_mod, "find_windows_gateway_services", lambda **_kw: [])
-    monkeypatch.setattr(gateway_mod, "find_gateway_pids", lambda **_kw: list(host_gateways.values()))
+    monkeypatch.setattr(
+        gateway_mod, "find_gateway_pids", lambda **_kw: list(host_gateways.values())
+    )
 
     running_pids = update_cmd_windows._discover_windows_gateways()[3]
 
@@ -61,12 +72,23 @@ def test_foreign_gateways_do_not_suppress_cold_start(monkeypatch, host_gateways)
     monkeypatch.setattr(cli_main, "_is_windows", lambda: True)
     monkeypatch.setattr(main_install_repair, "_is_windows", lambda: True)
     monkeypatch.setattr(update_cmd, "_desktop_owns_gateway_lifecycle", lambda: False)
-    monkeypatch.setattr(gateway_mod, "find_gateway_pids",
-                        lambda **_kw: [host_gateways["foreign"], host_gateways["foreign_default"]])
+    monkeypatch.setattr(
+        gateway_mod,
+        "find_gateway_pids",
+        lambda **_kw: [host_gateways["foreign"], host_gateways["foreign_default"]],
+    )
     spawned = []
-    monkeypatch.setattr(gateway_windows, "_spawn_detached", lambda: spawned.append(4242) or 4242)
-    monkeypatch.setattr(gateway_windows, "_wait_for_gateway_ready", lambda *_a, **_kw: [4242])
-    monkeypatch.setattr(gateway_windows, "_write_start_attestation", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        gateway_windows, "_spawn_detached", lambda: spawned.append(4242) or 4242
+    )
+    monkeypatch.setattr(
+        gateway_windows, "_wait_for_gateway_ready", lambda *_a, **_kw: [4242]
+    )
+    monkeypatch.setattr(
+        gateway_windows, "_write_start_attestation", lambda *_a, **_kw: None
+    )
 
-    assert update_cmd_windows._cold_start_windows_gateway_after_update({"attested_generation": None})
+    assert update_cmd_windows._cold_start_windows_gateway_after_update(
+        {"attested_generation": None}
+    )
     assert spawned == [4242]

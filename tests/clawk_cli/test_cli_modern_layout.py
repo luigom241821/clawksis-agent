@@ -1,5 +1,6 @@
 """The glyph CLI layout (``display.cli_layout: modern``): scrollback rows never depend on the
 terminal width, and the status line renders under the composer instead of above it."""
+
 import re
 
 import pytest
@@ -30,7 +31,10 @@ def _run_turn(monkeypatch, width: int, *, modern: bool) -> list[str]:
 
 @pytest.mark.parametrize("modern", [True, False])
 def test_glyph_layout_scrollback_is_width_independent(monkeypatch, modern):
-    narrow, wide = _run_turn(monkeypatch, 60, modern=modern), _run_turn(monkeypatch, 120, modern=modern)
+    narrow, wide = (
+        _run_turn(monkeypatch, 60, modern=modern),
+        _run_turn(monkeypatch, 120, modern=modern),
+    )
     boxed = any(ch in line for line in wide for ch in "╭╮╰╯┌┐└┘")
     if not modern:  # control: the classic layout's frames are sized to the terminal
         assert boxed and narrow != wide
@@ -42,17 +46,25 @@ def test_glyph_layout_scrollback_is_width_independent(monkeypatch, modern):
     # Reasoning streams in full like classic, under a fixed-width dim bar (never re-wraps on resize)
     # and closed by the ∴ summary; the answer opens under its own bar.
     start = rows.index("**Planning the change**")
-    assert rows[start - 1] == "─" * 40 and rows[start + 1] == "I will read calc.py first.", rows
+    assert (
+        rows[start - 1] == "─" * 40 and rows[start + 1] == "I will read calc.py first."
+    ), rows
     assert rows[start + 2] == thought[0], rows
-    assert rows[next(i for i, r in enumerate(rows) if r.startswith("∇ Clawksis")) - 1] == "─" * 40, rows
+    assert (
+        rows[next(i for i, r in enumerate(rows) if r.startswith("∇ Clawksis")) - 1]
+        == "─" * 40
+    ), rows
     assert any("Added multiply to calc.py." in line for line in rows)
 
 
-@pytest.mark.parametrize("reasoning", [
-    "scripted reasoning about gamma zeta-reason",
-    # Longer than the 72-char title cap: a shortened title would still repeat it.
-    "scripted reasoning about gamma zeta-reason that keeps going well past the title length cap here",
-])
+@pytest.mark.parametrize(
+    "reasoning",
+    [
+        "scripted reasoning about gamma zeta-reason",
+        # Longer than the 72-char title cap: a shortened title would still repeat it.
+        "scripted reasoning about gamma zeta-reason that keeps going well past the title length cap here",
+    ],
+)
 def test_one_line_reasoning_is_shown_once(monkeypatch, reasoning):
     """Reasoning streams above its ∴ summary, so a one-sentence block must not reappear as the title."""
     from cli import ClawksisCLI
@@ -82,8 +94,20 @@ def test_status_line_sits_under_the_composer_only_in_the_glyph_layout(modern):
 
     cli = ClawksisCLI.__new__(ClawksisCLI)
     cli._modern_layout = modern
-    names = ("sudo_widget", "secret_widget", "approval_widget", "clarify_widget", "spacer", "status_bar",
-             "input_rule_top", "image_bar", "input_area", "input_rule_bot", "voice_status_bar", "completions_menu")
+    names = (
+        "sudo_widget",
+        "secret_widget",
+        "approval_widget",
+        "clarify_widget",
+        "spacer",
+        "status_bar",
+        "input_rule_top",
+        "image_bar",
+        "input_area",
+        "input_rule_bot",
+        "voice_status_bar",
+        "completions_menu",
+    )
     order = cli._build_tui_layout_children(**{name: name for name in names})
     if modern:
         assert order.index("status_bar") > order.index("input_rule_bot")
@@ -101,22 +125,32 @@ def test_panel_rows_never_carry_a_newline():
     assert rows == ["python3 - <<'PY'", "print(sum(range(10)))", "PY"]
 
 
-@pytest.mark.parametrize("display, modern, busy", [
-    ({}, True, "interrupt"),
-    ({"cli_layout": "classic"}, False, "interrupt"),
-    ({"busy_input_mode": "queue"}, True, "queue"),
-    ({"cli_layout": "classic", "busy_input_mode": "steer"}, False, "steer"),
-])
-def test_layout_and_busy_default_through_the_config_loader(tmp_path, monkeypatch, display, modern, busy):
+@pytest.mark.parametrize(
+    "display, modern, busy",
+    [
+        ({}, True, "interrupt"),
+        ({"cli_layout": "classic"}, False, "interrupt"),
+        ({"busy_input_mode": "queue"}, True, "queue"),
+        ({"cli_layout": "classic", "busy_input_mode": "steer"}, False, "steer"),
+    ],
+)
+def test_layout_and_busy_default_through_the_config_loader(
+    tmp_path, monkeypatch, display, modern, busy
+):
     import clawk_yaml as yaml
     import cli
-    from clawk_cli.cli_modern_layout import busy_input_mode_from_config, layout_from_config
+    from clawk_cli.cli_modern_layout import (
+        busy_input_mode_from_config,
+        layout_from_config,
+    )
 
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(cli, "_clawk_home", home)
-    (home / "config.yaml").write_text(yaml.safe_dump({"display": display} if display else {"model": {}}))
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"display": display} if display else {"model": {}})
+    )
     loaded = cli.load_cli_config()["display"]
     assert layout_from_config(loaded) is modern
     assert busy_input_mode_from_config(loaded) == busy
@@ -129,24 +163,50 @@ def test_status_line_keeps_every_classic_status_bar_field(monkeypatch):
 
     cli = ClawksisCLI.__new__(ClawksisCLI)
     cli._modern_layout, cli._status_bar_visible = True, True
-    snapshot = {"model_short": "m", "duration": "6h 43m", "context_percent": 7, "context_length": 1_000_000,
-                "context_tokens": 73_200, "context_estimated": True, "avg_latency_label": "9.0s",
-                "avg_velocity_label": "61 t/s", "cache_hit_rate": 28.9, "cache_read_tokens": 1, "prompt_tokens": 1,
-                "active_background_subagents": 3, "prompt_elapsed": "⏱ 10s"}
+    snapshot = {
+        "model_short": "m",
+        "duration": "6h 43m",
+        "context_percent": 7,
+        "context_length": 1_000_000,
+        "context_tokens": 73_200,
+        "context_estimated": True,
+        "avg_latency_label": "9.0s",
+        "avg_velocity_label": "61 t/s",
+        "cache_hit_rate": 28.9,
+        "cache_read_tokens": 1,
+        "prompt_tokens": 1,
+        "active_background_subagents": 3,
+        "prompt_elapsed": "⏱ 10s",
+    }
     monkeypatch.setattr(ClawksisCLI, "_get_status_bar_snapshot", lambda self: snapshot)
     monkeypatch.setattr(ClawksisCLI, "_get_tui_terminal_width", lambda self: 400)
     monkeypatch.setattr(ClawksisCLI, "_get_status_bar_field_set", lambda self: None)
     monkeypatch.setattr(ClawksisCLI, "_is_session_yolo_active", lambda self: False)
     monkeypatch.setattr(ClawksisCLI, "_vim_mode_label", lambda self: "")
-    monkeypatch.setattr(ClawksisCLI, "_cache_hit_rate", lambda self, snap, precision=1: (28.9, "◎ 28.9%"))
+    monkeypatch.setattr(
+        ClawksisCLI,
+        "_cache_hit_rate",
+        lambda self, snap, precision=1: (28.9, "◎ 28.9%"),
+    )
     monkeypatch.setattr("clawk_cli.cli_modern_layout.hint_pairs", lambda cli: [])
     monkeypatch.setattr("clawk_cli.cli_modern_layout._cwd_label", lambda: "~")
     line = "".join(text for _, text in cli._get_status_bar_fragments())
-    for piece in ("73.2K/1M", "7%", "◎ 28.9%", "◷ 9.0s", "↑ 61 t/s", "⛓ 3", "6h 43m", "⏱ 10s"):
+    for piece in (
+        "73.2K/1M",
+        "7%",
+        "◎ 28.9%",
+        "◷ 9.0s",
+        "↑ 61 t/s",
+        "⛓ 3",
+        "6h 43m",
+        "⏱ 10s",
+    ):
         assert piece in line, (piece, line)
 
 
-@pytest.mark.parametrize("prompt", ["_connection_state", "_secret_state", "_sudo_state", "_clarify_state"])
+@pytest.mark.parametrize(
+    "prompt", ["_connection_state", "_secret_state", "_sudo_state", "_clarify_state"]
+)
 def test_tab_never_queues_what_a_prompt_owns(prompt):
     """A connection form's masked field (or any prompt) owns the composer while a turn runs: Tab must
     not queue its text as a chat message, which would print and save a secret in plain text."""
@@ -187,11 +247,20 @@ def test_long_user_message_soft_wraps_so_a_resize_reflows_it(monkeypatch):
         for width in (60, 140):
             emitted: list[str] = []
             monkeypatch.setattr(climod, "_cprint", lambda s: emitted.append(_plain(s)))
-            monkeypatch.setattr(shutil, "get_terminal_size", lambda *_a, w=width: __import__("os").terminal_size((w, 40)))
+            monkeypatch.setattr(
+                shutil,
+                "get_terminal_size",
+                lambda *_a, w=width: __import__("os").terminal_size((w, 40)),
+            )
             cli._print_user_message_preview(text)
-            out[width] = [line for line in "\n".join(emitted).split("\n") if line.strip()]
+            out[width] = [
+                line for line in "\n".join(emitted).split("\n") if line.strip()
+            ]
         assert out[60] == out[140], out
-        assert any(line.rstrip().endswith("word") and line.count("word") == 60 for line in out[60]), out[60]
+        assert any(
+            line.rstrip().endswith("word") and line.count("word") == 60
+            for line in out[60]
+        ), out[60]
 
 
 def test_tool_rows_keep_the_classic_tool_emoji():
@@ -201,11 +270,25 @@ def test_tool_rows_keep_the_classic_tool_emoji():
     from clawk_cli.cli_modern_layout import tool_row
 
     # clarify has no dedicated renderer: both layouts take its registered emoji from one source.
-    for name, args in (("read_file", {"path": "/etc/hostname"}), ("terminal", {"command": "echo ok"}),
-                       ("execute_code", {"code": "import math"}), ("clarify", {"question": "Which?"})):
+    for name, args in (
+        ("read_file", {"path": "/etc/hostname"}),
+        ("terminal", {"command": "echo ok"}),
+        ("execute_code", {"code": "import math"}),
+        ("clarify", {"question": "Which?"}),
+    ):
         classic_emoji = get_cute_tool_message(name, args, 0.2).split()[1]
-        assert _plain(tool_row(name, args, 0.2)).startswith(classic_emoji + " "), (name, classic_emoji)
-    failed = _plain(tool_row("terminal", {"command": "false"}, 0.2, result='{"exit_code": 1, "output": ""}'))
+        assert _plain(tool_row(name, args, 0.2)).startswith(classic_emoji + " "), (
+            name,
+            classic_emoji,
+        )
+    failed = _plain(
+        tool_row(
+            "terminal",
+            {"command": "false"},
+            0.2,
+            result='{"exit_code": 1, "output": ""}',
+        )
+    )
     assert failed.startswith("✗ ") and "[exit 1]" in failed, failed
 
 
@@ -215,15 +298,27 @@ def test_refused_skill_write_reads_neutral_not_failed():
     from agent.display import get_tool_emoji
     from clawk_cli.cli_modern_layout import _RED, tool_row
 
-    refused = ('{"success": false, "error": "operations[0] (patch on \'clawksis-agent-dev\') failed: '
-               'SKILL.md content is 100,193 characters (limit: 100,000).", '
-               '"file_preview": "Never ignore a ROLLBACK FAILED note."}')
-    row = tool_row("skill_manage", {"operations": [{"action": "patch", "name": "clawksis-agent-dev"}]}, 1.1, refused)
+    refused = (
+        '{"success": false, "error": "operations[0] (patch on \'clawksis-agent-dev\') failed: '
+        'SKILL.md content is 100,193 characters (limit: 100,000).", '
+        '"file_preview": "Never ignore a ROLLBACK FAILED note."}'
+    )
+    row = tool_row(
+        "skill_manage",
+        {"operations": [{"action": "patch", "name": "clawksis-agent-dev"}]},
+        1.1,
+        refused,
+    )
     assert _plain(row).startswith(get_tool_emoji("skill_manage") + " "), row
     assert "[operations[0]" in _plain(row) and _RED not in row, row
     # A failed rollback left partial changes on disk: that one stays a red failure.
-    broken = refused.replace('(limit: 100,000)."', '(limit: 100,000). — batch aborted, ROLLBACK FAILED for demo."')
-    assert _plain(tool_row("skill_manage", {"operations": []}, 1.1, broken)).startswith("✗ ")
+    broken = refused.replace(
+        '(limit: 100,000)."',
+        '(limit: 100,000). — batch aborted, ROLLBACK FAILED for demo."',
+    )
+    assert _plain(tool_row("skill_manage", {"operations": []}, 1.1, broken)).startswith(
+        "✗ "
+    )
 
 
 def test_every_block_is_framed_by_bars_and_blank_lines(monkeypatch):
@@ -244,8 +339,12 @@ def test_every_block_is_framed_by_bars_and_blank_lines(monkeypatch):
     cli._print_user_message_preview("read the hostname")
     for row in layout.thought_rows(2.0, "Plan the read.", full=True):
         climod._cprint(row)
-    climod._cprint(layout.completed_tool_line(cli, "read_file", {"path": "/etc/hostname"}, 0.2))
-    climod._cprint(layout.completed_tool_line(cli, "terminal", {"command": "echo hi"}, 0.1))
+    climod._cprint(
+        layout.completed_tool_line(cli, "read_file", {"path": "/etc/hostname"}, 0.2)
+    )
+    climod._cprint(
+        layout.completed_tool_line(cli, "terminal", {"command": "echo hi"}, 0.1)
+    )
     climod._cprint(layout.answer_label())
     climod._cprint("It is LINUX.")
     climod._cprint(layout.closing_separator(True))
@@ -253,9 +352,28 @@ def test_every_block_is_framed_by_bars_and_blank_lines(monkeypatch):
 
     rows = [r.rstrip() for r in out]
     start = rows.index("❯ read the hostname") - 1
-    got = ["BAR" if r == bar else ("" if not r else r.split()[0]) for r in rows[start - 1:]]
-    assert got == ["", "BAR", "❯", "BAR",          # user message
-                   "", "BAR", "Plan", "∴", "BAR",  # reasoning
-                   "", "📖", "💻",                  # tool rows, tight
-                   "", "BAR", "∇", "It", "BAR",    # answer
-                   "", "─"], got                   # footer
+    got = [
+        "BAR" if r == bar else ("" if not r else r.split()[0])
+        for r in rows[start - 1 :]
+    ]
+    assert got == [
+        "",
+        "BAR",
+        "❯",
+        "BAR",  # user message
+        "",
+        "BAR",
+        "Plan",
+        "∴",
+        "BAR",  # reasoning
+        "",
+        "📖",
+        "💻",  # tool rows, tight
+        "",
+        "BAR",
+        "∇",
+        "It",
+        "BAR",  # answer
+        "",
+        "─",
+    ], got  # footer

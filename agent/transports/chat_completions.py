@@ -12,11 +12,21 @@ from typing import Any
 from urllib.parse import urlparse
 
 from agent.reasoning_effort import (
-    GEMINI4_THINKING_LEVELS, KIMI_K3_EFFORTS, KIMI_K3_OVERRIDES, OPENAI_COMPAT_WIRE_EFFORTS, clamp_effort,
-    clamp_reasoning_config, kimi_supported_efforts, requested_effort, tokenhub_effort,
+    GEMINI4_THINKING_LEVELS,
+    KIMI_K3_EFFORTS,
+    KIMI_K3_OVERRIDES,
+    OPENAI_COMPAT_WIRE_EFFORTS,
+    clamp_effort,
+    clamp_reasoning_config,
+    kimi_supported_efforts,
+    requested_effort,
+    tokenhub_effort,
 )
 from agent.message_metadata import DATA_USE, MESSAGE_UID, data_use_requirement
-from agent.message_sanitization import coalesce_tool_call_id, normalize_finish_reason as _normalize_finish_reason
+from agent.message_sanitization import (
+    coalesce_tool_call_id,
+    normalize_finish_reason as _normalize_finish_reason,
+)
 from agent.moonshot_schema import is_moonshot_model, sanitize_moonshot_tools
 from agent.prompt_builder import DEVELOPER_ROLE_MODELS
 from agent.transports.base import ProviderTransport
@@ -37,17 +47,28 @@ _XAI_TOOL_SEARCH_ALIAS = "clawk_tool_search"
 # Persistence-only / cross-transport message keys that strict OpenAI-compatible
 # providers reject with HTTP 400 ("Extra inputs are not permitted").
 _STRIP_MSG_KEYS = (
-    "codex_reasoning_items", "codex_message_items", "tool_name", "effect_disposition", "timestamp",
+    "codex_reasoning_items",
+    "codex_message_items",
+    "tool_name",
+    "effect_disposition",
+    "timestamp",
     # ``platform_message_id`` is persisted as-is and comes back from replay as ``message_id``
     # (JSONL transcript compat); both are delivery bookkeeping, never model input.
-    "platform_message_id", "message_id", "api_content", "anthropic_content_blocks", "bedrock_content_blocks",
-    MESSAGE_UID, DATA_USE,
+    "platform_message_id",
+    "message_id",
+    "api_content",
+    "anthropic_content_blocks",
+    "bedrock_content_blocks",
+    MESSAGE_UID,
+    DATA_USE,
 )
 _STRIP_TC_KEYS = ("call_id", "response_item_id")
 _HIGH_EFFORTS = {"high", "xhigh", "max", "ultra"}
 
 
-def _rename_tool_search_bridge_for_xai(tools: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, str]]:
+def _rename_tool_search_bridge_for_xai(
+    tools: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
     """Alias the client ``tool_search`` declaration for xAI; returns ``(tools, {alias: "tool_search"})``.
 
     If a real tool already holds ``clawk_tool_search``, the bridge takes a ``_2``/``_3`` suffix.
@@ -55,7 +76,9 @@ def _rename_tool_search_bridge_for_xai(tools: list[dict[str, Any]]) -> tuple[lis
     from agent.transports.codex import _alias_reserved_tools
 
     return _alias_reserved_tools(
-        tools, ("tool_search",), name_of=lambda t: (t.get("function") or {}).get("name"),
+        tools,
+        ("tool_search",),
+        name_of=lambda t: (t.get("function") or {}).get("name"),
         rename=lambda t, alias: {**t, "function": {**t["function"], "name": alias}},
     )
 
@@ -69,15 +92,21 @@ def _static_prompt_instructions(messages: list[dict[str, Any]]) -> str:
     if isinstance(content, str):
         return content
     try:
-        return json.dumps(content, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return json.dumps(
+            content, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
     except (TypeError, ValueError):
         return str(content or "")
 
 
 def _add_prompt_cache_key(
-    api_kwargs: dict[str, Any], *, messages: list[dict[str, Any]],
-    tools: list[dict[str, Any]] | None, supports_prompt_cache_key: bool,
-    session_id: str | None = None, cache_scope_id: str | None = None,
+    api_kwargs: dict[str, Any],
+    *,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None,
+    supports_prompt_cache_key: bool,
+    session_id: str | None = None,
+    cache_scope_id: str | None = None,
 ) -> None:
     """Add a content-addressed ``prompt_cache_key`` only for a capable endpoint.
 
@@ -99,10 +128,16 @@ def _add_prompt_cache_key(
     # key in extra_body (not top-level) and GitHub/Copilot Responses opts out of cache-key routing entirely
     # — for those hosts, skip it here.
     from agent.transports.codex import (
-        _bound_prompt_cache_key_field, _cache_scope_from_session_id, _content_cache_key
+        _bound_prompt_cache_key_field,
+        _cache_scope_from_session_id,
+        _content_cache_key,
     )
 
-    containers = [c for c in (api_kwargs, api_kwargs.get("extra_body")) if isinstance(c, dict) and "prompt_cache_key" in c]
+    containers = [
+        c
+        for c in (api_kwargs, api_kwargs.get("extra_body"))
+        if isinstance(c, dict) and "prompt_cache_key" in c
+    ]
     if containers:
         for c in containers:
             _bound_prompt_cache_key_field(c)
@@ -110,7 +145,9 @@ def _add_prompt_cache_key(
     if not supports_prompt_cache_key:
         return
     cache_key = _content_cache_key(
-        _static_prompt_instructions(messages), tools, _cache_scope_from_session_id(cache_scope_id or session_id),
+        _static_prompt_instructions(messages),
+        tools,
+        _cache_scope_from_session_id(cache_scope_id or session_id),
     )
     if cache_key:
         api_kwargs["prompt_cache_key"] = cache_key
@@ -122,8 +159,14 @@ _ROUTER_TIMEOUT_SHIM = "Connect timeout, please try again later."
 def _has_positive_completion_tokens(usage: Any) -> bool:
     """Return whether a response usage object proves text was generated."""
     for field in ("completion_tokens", "output_tokens"):
-        value = usage.get(field) if isinstance(usage, dict) else getattr(usage, field, None)
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+        value = (
+            usage.get(field) if isinstance(usage, dict) else getattr(usage, field, None)
+        )
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value > 0
+        ):
             return True
     return False
 
@@ -155,7 +198,9 @@ def is_router_timeout_shim(response: Any) -> bool:
     return not _has_positive_completion_tokens(getattr(response, "usage", None))
 
 
-def _reasoning_config_for_model(model: str, reasoning_config: dict | None) -> dict | None:
+def _reasoning_config_for_model(
+    model: str, reasoning_config: dict | None
+) -> dict | None:
     """Clamp Clawksis' extended effort set (``ultra``) to the OpenAI-compat wire vocabulary.
 
     Clawksis' internal effort set extends the wire vocabulary with ``ultra`` (the /reasoning command documents
@@ -167,7 +212,9 @@ def _reasoning_config_for_model(model: str, reasoning_config: dict | None) -> di
     return clamp_reasoning_config(reasoning_config, OPENAI_COMPAT_WIRE_EFFORTS)
 
 
-def _build_gemini_thinking_config(model: str, reasoning_config: dict | None) -> dict | None:
+def _build_gemini_thinking_config(
+    model: str, reasoning_config: dict | None
+) -> dict | None:
     """Translate Clawksis/OpenRouter-style reasoning config to Gemini thinkingConfig."""
     from agent.gemini_native_adapter import gemini_uses_thinking_level
 
@@ -186,7 +233,10 @@ def _build_gemini_thinking_config(model: str, reasoning_config: dict | None) -> 
         # Gemini 4 always thinks: a disable request gets the floor level with thoughts hidden.
         disabled = reasoning_config.get("enabled") is False or effort == "none"
         level = "low" if disabled else clamp_effort(effort, GEMINI4_THINKING_LEVELS)
-        return {"includeThoughts": not disabled, "thinkingLevel": level if level in GEMINI4_THINKING_LEVELS else "medium"}
+        return {
+            "includeThoughts": not disabled,
+            "thinkingLevel": level if level in GEMINI4_THINKING_LEVELS else "medium",
+        }
     if reasoning_config.get("enabled") is False or effort == "none":
         # ``includeThoughts: False`` only omits thought parts from the returned
         # response; the model may still reason internally and bill thought
@@ -215,10 +265,16 @@ def _build_gemini_thinking_config(model: str, reasoning_config: dict | None) -> 
     # effort set to what each family accepts so we never forward an undocumented level verbatim.
     if gemini_uses_thinking_level(normalized_model):
         if "pro" in normalized_model:
-            thinking_config["thinkingLevel"] = "high" if effort in _HIGH_EFFORTS else "low"
+            thinking_config["thinkingLevel"] = (
+                "high" if effort in _HIGH_EFFORTS else "low"
+            )
         else:
             thinking_config["thinkingLevel"] = (
-                "low" if effort in {"minimal", "low"} else "high" if effort in _HIGH_EFFORTS else "medium"
+                "low"
+                if effort in {"minimal", "low"}
+                else "high"
+                if effort in _HIGH_EFFORTS
+                else "medium"
             )
     return thinking_config
 
@@ -228,7 +284,11 @@ def _snake_case_gemini_thinking_config(config: dict | None) -> dict | None:
     if not isinstance(config, dict) or not config:
         return None
     translated: dict[str, Any] = {}
-    include, level, budget = config.get("includeThoughts"), config.get("thinkingLevel"), config.get("thinkingBudget")
+    include, level, budget = (
+        config.get("includeThoughts"),
+        config.get("thinkingLevel"),
+        config.get("thinkingBudget"),
+    )
     if isinstance(include, bool):
         translated["include_thoughts"] = include
     if isinstance(level, str) and level.strip():
@@ -238,7 +298,9 @@ def _snake_case_gemini_thinking_config(config: dict | None) -> dict | None:
     return translated or None
 
 
-def _raise_gemini_thinking_max_tokens(model: str, reasoning_config: dict | None, requested: Any) -> Any:
+def _raise_gemini_thinking_max_tokens(
+    model: str, reasoning_config: dict | None, requested: Any
+) -> Any:
     """Raise Gemini output caps that thinking tokens (billed against max_tokens) would otherwise exhaust."""
     thinking_config = _build_gemini_thinking_config(model, reasoning_config)
     if not thinking_config:
@@ -250,7 +312,11 @@ def _raise_gemini_thinking_max_tokens(model: str, reasoning_config: dict | None,
 
 def _is_gemini_openai_compat_base_url(base_url: Any) -> bool:
     normalized = str(base_url or "").strip().rstrip("/").lower()
-    return bool(normalized) and "generativelanguage.googleapis.com" in normalized and normalized.endswith("/openai")
+    return (
+        bool(normalized)
+        and "generativelanguage.googleapis.com" in normalized
+        and normalized.endswith("/openai")
+    )
 
 
 def _is_openai_api_base_url(base_url: Any) -> bool:
@@ -259,16 +325,23 @@ def _is_openai_api_base_url(base_url: Any) -> bool:
     Not a substring match: Azure / strict compat endpoints stay opt-in via ``supports_prompt_cache_key``.
     """
     try:
-        return (urlparse(str(base_url or "").strip()).hostname or "").lower() == "api.openai.com"
+        return (
+            urlparse(str(base_url or "").strip()).hostname or ""
+        ).lower() == "api.openai.com"
     except Exception:
         return False
 
 
-_GEMINI_SIGNATURE_HOSTS = ("generativelanguage.googleapis.com", "aiplatform.googleapis.com")
+_GEMINI_SIGNATURE_HOSTS = (
+    "generativelanguage.googleapis.com",
+    "aiplatform.googleapis.com",
+)
 _GEMINI_SIGNATURE_PROVIDERS = frozenset({"gemini", "vertex", "copilot"})
 
 
-def _model_consumes_thought_signature(model: Any, base_url: Any = None, provider: Any = None) -> bool:
+def _model_consumes_thought_signature(
+    model: Any, base_url: Any = None, provider: Any = None
+) -> bool:
     """True for Gemini routes, which require tool-call ``extra_content`` (thought_signature) replay.
 
     A Gemini host or provider counts even when the model id is an alias without "gemini" in it;
@@ -278,9 +351,12 @@ def _model_consumes_thought_signature(model: Any, base_url: Any = None, provider
 
     m = str(model or "").lower()
     return (
-        "gemini" in m or "gemma" in m
+        "gemini" in m
+        or "gemma" in m
         or (provider or "").strip().lower() in _GEMINI_SIGNATURE_PROVIDERS
-        or any(base_url_host_matches(base_url, host) for host in _GEMINI_SIGNATURE_HOSTS)
+        or any(
+            base_url_host_matches(base_url, host) for host in _GEMINI_SIGNATURE_HOSTS
+        )
     )
 
 
@@ -354,26 +430,48 @@ def _pareto_score(raw: Any) -> float | None:
 def _swap_developer_role(sanitized: list, model_lower: str) -> list:
     """GPT-5/Codex models take a ``developer`` role instead of ``system``."""
     if (
-        sanitized and isinstance(sanitized[0], dict) and sanitized[0].get("role") == "system"
+        sanitized
+        and isinstance(sanitized[0], dict)
+        and sanitized[0].get("role") == "system"
         and any(p in model_lower for p in DEVELOPER_ROLE_MODELS)
     ):
         return [{**sanitized[0], "role": "developer"}, *sanitized[1:]]
     return sanitized
 
 
-def _apply_max_tokens(api_kwargs: dict, model: str, reasoning_config: Any, params: dict, profile_max: Any = None) -> None:
+def _apply_max_tokens(
+    api_kwargs: dict,
+    model: str,
+    reasoning_config: Any,
+    params: dict,
+    profile_max: Any = None,
+) -> None:
     """Preserve internal task/recovery budgets and provider protocol exceptions."""
     max_tokens_fn = params.get("max_tokens_param_fn")
-    for candidate in (params.get("ephemeral_max_output_tokens"), params.get("max_tokens")):
+    for candidate in (
+        params.get("ephemeral_max_output_tokens"),
+        params.get("max_tokens"),
+    ):
         if candidate is not None and max_tokens_fn:
-            api_kwargs.update(max_tokens_fn(_raise_gemini_thinking_max_tokens(model, reasoning_config, candidate)))
+            api_kwargs.update(
+                max_tokens_fn(
+                    _raise_gemini_thinking_max_tokens(
+                        model, reasoning_config, candidate
+                    )
+                )
+            )
             return
     if profile_max and max_tokens_fn:
-        api_kwargs.update(max_tokens_fn(_raise_gemini_thinking_max_tokens(model, reasoning_config, profile_max)))
+        api_kwargs.update(
+            max_tokens_fn(
+                _raise_gemini_thinking_max_tokens(model, reasoning_config, profile_max)
+            )
+        )
 
 
-
-def _base_kwargs(model: str, sanitized: list, tools: Any, params: dict, profile: Any = None) -> dict[str, Any]:
+def _base_kwargs(
+    model: str, sanitized: list, tools: Any, params: dict, profile: Any = None
+) -> dict[str, Any]:
     """Shared ``{model, messages[, temperature][, timeout][, tools]}`` scaffold for both build paths.
 
     ``temperature`` is profile-path only: ``fixed_temperature`` beats the caller's; ``OMIT_TEMPERATURE`` sends none.
@@ -392,15 +490,27 @@ def _base_kwargs(model: str, sanitized: list, tools: Any, params: dict, profile:
         api_kwargs["timeout"] = params["timeout"]
     if tools:
         # Moonshot/Kimi uses a stricter JSON Schema flavor; rewriting here also covers aggregator routes.
-        api_kwargs["tools"] = sanitize_moonshot_tools(tools) if is_moonshot_model(model) else tools
+        api_kwargs["tools"] = (
+            sanitize_moonshot_tools(tools) if is_moonshot_model(model) else tools
+        )
     return api_kwargs
 
 
-def _finish_kwargs(api_kwargs: dict[str, Any], sanitized: list, params: dict, *, supports_prompt_cache_key: bool) -> dict[str, Any]:
+def _finish_kwargs(
+    api_kwargs: dict[str, Any],
+    sanitized: list,
+    params: dict,
+    *,
+    supports_prompt_cache_key: bool,
+) -> dict[str, Any]:
     """Tail shared by both build paths: content-addressed prompt_cache_key, then return."""
     _add_prompt_cache_key(
-        api_kwargs, messages=sanitized, tools=api_kwargs.get("tools"), supports_prompt_cache_key=supports_prompt_cache_key,
-        session_id=params.get("session_id"), cache_scope_id=params.get("cache_scope_id"),
+        api_kwargs,
+        messages=sanitized,
+        tools=api_kwargs.get("tools"),
+        supports_prompt_cache_key=supports_prompt_cache_key,
+        session_id=params.get("session_id"),
+        cache_scope_id=params.get("cache_scope_id"),
     )
     return api_kwargs
 
@@ -414,14 +524,25 @@ _MISTRAL_ID_ALPHABET = string.digits + string.ascii_uppercase + string.ascii_low
 # Hosts/providers mirror the Mistral row of message_sanitization._REASONING_CARRIER_ROUTES; the
 # model markers catch Mistral models served elsewhere (Ollama Cloud, vLLM, NIM, LM Studio).
 _MISTRAL_MODEL_MARKERS = (
-    "mistral", "magistral", "mixtral", "devstral", "codestral", "ministral", "pixtral", "voxtral",
+    "mistral",
+    "magistral",
+    "mixtral",
+    "devstral",
+    "codestral",
+    "ministral",
+    "pixtral",
+    "voxtral",
 )
 
 
-def _route_requires_mistral_tool_ids(provider: str | None, model: str | None, base_url: str | None) -> bool:
+def _route_requires_mistral_tool_ids(
+    provider: str | None, model: str | None, base_url: str | None
+) -> bool:
     from utils import base_url_host_matches
 
-    if (provider or "").strip().lower() == "mistral" or base_url_host_matches(str(base_url or ""), "mistral.ai"):
+    if (provider or "").strip().lower() == "mistral" or base_url_host_matches(
+        str(base_url or ""), "mistral.ai"
+    ):
         return True
     model_lower = (model or "").lower()
     return any(marker in model_lower for marker in _MISTRAL_MODEL_MARKERS)
@@ -431,7 +552,9 @@ def _mistral_tool_id(key: str) -> str:
     """``key`` when already 9 alphanumeric characters, else a stable base62 digest of it."""
     if _MISTRAL_TOOL_ID_RE.fullmatch(key):
         return key
-    number = int.from_bytes(hashlib.sha256(key.encode("utf-8", "surrogatepass")).digest()[:8], "big")
+    number = int.from_bytes(
+        hashlib.sha256(key.encode("utf-8", "surrogatepass")).digest()[:8], "big"
+    )
     chars = []
     for _ in range(9):
         number, rem = divmod(number, 62)
@@ -440,8 +563,12 @@ def _mistral_tool_id(key: str) -> str:
 
 
 def _sanitize_message(
-    msg: Any, strip_extra_content: bool, strip_reasoning: frozenset = frozenset(),
-    native_reasoning_details_type: str | None = None, *, mistral_tool_ids: bool = False,
+    msg: Any,
+    strip_extra_content: bool,
+    strip_reasoning: frozenset = frozenset(),
+    native_reasoning_details_type: str | None = None,
+    *,
+    mistral_tool_ids: bool = False,
 ) -> dict | None:
     """Sanitized copy of ``msg``, or None when nothing needs stripping.
 
@@ -460,15 +587,28 @@ def _sanitize_message(
     """
     if not isinstance(msg, dict):
         return None
-    strip_keys = [k for k in msg if k in _STRIP_MSG_KEYS or (isinstance(k, str) and k.startswith("_"))]
+    strip_keys = [
+        k
+        for k in msg
+        if k in _STRIP_MSG_KEYS or (isinstance(k, str) and k.startswith("_"))
+    ]
     if msg.get("role") == "assistant":
         strip_keys += [k for k in strip_reasoning if k in msg]
     kept_details = None
-    if "reasoning_details" not in strip_keys and isinstance(msg.get("reasoning_details"), list):
+    if "reasoning_details" not in strip_keys and isinstance(
+        msg.get("reasoning_details"), list
+    ):
         details = msg["reasoning_details"]
-        kept = [d for d in details if not (
-            isinstance(d, dict) and isinstance(d.get("type"), str)
-            and d["type"].endswith(".native_assistant") and d["type"] != native_reasoning_details_type)]
+        kept = [
+            d
+            for d in details
+            if not (
+                isinstance(d, dict)
+                and isinstance(d.get("type"), str)
+                and d["type"].endswith(".native_assistant")
+                and d["type"] != native_reasoning_details_type
+            )
+        ]
         if len(kept) != len(details):
             strip_keys.append("reasoning_details")
             kept_details = kept
@@ -481,14 +621,21 @@ def _sanitize_message(
     remapped = False
     if mistral_tool_ids and msg.get("role") == "tool":
         result_key = coalesce_tool_call_id({"id": msg.get("tool_call_id")})
-        if result_key and (mapped := _mistral_tool_id(result_key)) != msg["tool_call_id"]:
+        if (
+            result_key
+            and (mapped := _mistral_tool_id(result_key)) != msg["tool_call_id"]
+        ):
             out_msg["tool_call_id"] = mapped
             remapped = True
     if kept_details:
         out_msg["reasoning_details"] = kept_details
     tool_calls = msg.get("tool_calls")
     copied_tool_calls = None
-    if msg.get("role") == "assistant" and "tool_calls" in msg and (tool_calls is None or (isinstance(tool_calls, list) and not tool_calls)):
+    if (
+        msg.get("role") == "assistant"
+        and "tool_calls" in msg
+        and (tool_calls is None or (isinstance(tool_calls, list) and not tool_calls))
+    ):
         out_msg.pop("tool_calls", None)
         strip_keys.append("tool_calls")
     elif isinstance(tool_calls, list):
@@ -497,7 +644,8 @@ def _sanitize_message(
                 continue
             keys = [k for k in _STRIP_TC_KEYS if k in tc]
             if "extra_content" in tc and (
-                strip_extra_content or not _has_replayable_thought_signature(tc["extra_content"])
+                strip_extra_content
+                or not _has_replayable_thought_signature(tc["extra_content"])
             ):
                 keys.append("extra_content")
             key = coalesce_tool_call_id(tc) if mistral_tool_ids else ""
@@ -505,7 +653,9 @@ def _sanitize_message(
             if keys or (mapped is not None and mapped != tc.get("id")):
                 if copied_tool_calls is None:
                     copied_tool_calls = list(tool_calls)
-                copied_tool_calls[tc_idx] = {k: v for k, v in tc.items() if k not in keys}
+                copied_tool_calls[tc_idx] = {
+                    k: v for k, v in tc.items() if k not in keys
+                }
                 if mapped is not None:
                     copied_tool_calls[tc_idx]["id"] = mapped
         if copied_tool_calls is not None:
@@ -524,24 +674,43 @@ class ChatCompletionsTransport(ProviderTransport):
     def api_mode(self) -> str:
         return "chat_completions"
 
-    def convert_messages(self, messages: list[dict[str, Any]], **kwargs) -> list[dict[str, Any]]:
+    def convert_messages(
+        self, messages: list[dict[str, Any]], **kwargs
+    ) -> list[dict[str, Any]]:
         """Strip internal fields that strict chat-completions providers reject (HTTP 400/422).
 
         Returns the input list unchanged when nothing needs sanitizing.
         """
         profile = kwargs.get("provider_profile")
         provider = getattr(profile, "name", None) or kwargs.get("provider")
-        strip_extra_content = not _model_consumes_thought_signature(kwargs.get("model"), kwargs.get("base_url"), provider)
+        strip_extra_content = not _model_consumes_thought_signature(
+            kwargs.get("model"), kwargs.get("base_url"), provider
+        )
         native_type = getattr(profile, "native_reasoning_details_type", None) or None
         carriers = _wire_reasoning_carriers(provider, kwargs.get("base_url"))
         if native_type and carriers:
             # A profile declaring a native carrier type consumes replayed details by contract.
             carriers = carriers | {"reasoning_details"}
-        strip_reasoning = frozenset({"reasoning_content", "reasoning", "reasoning_details"}) - carriers
-        mistral_ids = _route_requires_mistral_tool_ids(provider, kwargs.get("model"), kwargs.get("base_url"))
-        sanitized_pairs = [(m, _sanitize_message(m, strip_extra_content, strip_reasoning, native_type,
-                                                 mistral_tool_ids=mistral_ids))
-                           for m in messages]
+        strip_reasoning = (
+            frozenset({"reasoning_content", "reasoning", "reasoning_details"})
+            - carriers
+        )
+        mistral_ids = _route_requires_mistral_tool_ids(
+            provider, kwargs.get("model"), kwargs.get("base_url")
+        )
+        sanitized_pairs = [
+            (
+                m,
+                _sanitize_message(
+                    m,
+                    strip_extra_content,
+                    strip_reasoning,
+                    native_type,
+                    mistral_tool_ids=mistral_ids,
+                ),
+            )
+            for m in messages
+        ]
         if all(s is None for _, s in sanitized_pairs):
             return messages
         return [m if s is None else s for m, s in sanitized_pairs]
@@ -551,7 +720,11 @@ class ChatCompletionsTransport(ProviderTransport):
         return tools
 
     def build_kwargs(
-        self, model: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None, **params,
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        **params,
     ) -> dict[str, Any]:
         """Build chat.completions.create() kwargs.
 
@@ -562,29 +735,42 @@ class ChatCompletionsTransport(ProviderTransport):
         # Read before convert_messages strips the key; only a profile that asks for it consumes it.
         params["data_use"] = data_use_requirement(messages)
         sanitized = self.convert_messages(
-            messages, model=model, base_url=params.get("base_url"), provider_profile=_profile,
+            messages,
+            model=model,
+            base_url=params.get("base_url"),
+            provider_profile=_profile,
             provider=params.get("provider_name"),
         )
         if _profile:
-            return self._build_kwargs_from_profile(_profile, model, sanitized, tools, params)
+            return self._build_kwargs_from_profile(
+                _profile, model, sanitized, tools, params
+            )
 
-        sanitized = _swap_developer_role(sanitized, params.get("model_lower", (model or "").lower()))
+        sanitized = _swap_developer_role(
+            sanitized, params.get("model_lower", (model or "").lower())
+        )
         api_kwargs = _base_kwargs(model, sanitized, tools, params)
 
         is_kimi = params.get("is_kimi", False)
         supports_reasoning = params.get("supports_reasoning", False)
-        reasoning_config = _reasoning_config_for_model(model, params.get("reasoning_config"))
+        reasoning_config = _reasoning_config_for_model(
+            model, params.get("reasoning_config")
+        )
         _apply_max_tokens(api_kwargs, model, reasoning_config, params)
 
         # Kimi / TokenHub by host (agents with no registered profile): top-level reasoning_effort (unless thinking disabled).
-        thinking_off = isinstance(reasoning_config, dict) and reasoning_config.get("enabled") is False
+        thinking_off = (
+            isinstance(reasoning_config, dict)
+            and reasoning_config.get("enabled") is False
+        )
         _e = requested_effort(reasoning_config)
         if is_kimi and not thinking_off:
             # K3 = low/high/max (server default high), K2-era = low/medium/high (default medium).
             _supported = kimi_supported_efforts(model)
             is_k3 = _supported is KIMI_K3_EFFORTS
             api_kwargs["reasoning_effort"] = (
-                ("high" if is_k3 else "medium") if _e is None
+                ("high" if is_k3 else "medium")
+                if _e is None
                 else clamp_effort(_e, _supported, KIMI_K3_OVERRIDES if is_k3 else None)
             )
         if params.get("is_tokenhub", False) and not thinking_off:
@@ -599,7 +785,9 @@ class ChatCompletionsTransport(ProviderTransport):
         if is_openrouter and model == "openrouter/pareto-code":
             _pareto_score_f = _pareto_score(params.get("openrouter_min_coding_score"))
             if _pareto_score_f is not None:
-                extra_body["plugins"] = [{"id": "pareto-router", "min_coding_score": _pareto_score_f}]
+                extra_body["plugins"] = [
+                    {"id": "pareto-router", "min_coding_score": _pareto_score_f}
+                ]
         if is_kimi:
             extra_body["thinking"] = {"type": "disabled" if thinking_off else "enabled"}
 
@@ -608,18 +796,30 @@ class ChatCompletionsTransport(ProviderTransport):
                 if params.get("github_reasoning_extra") is not None:
                     extra_body["reasoning"] = params["github_reasoning_extra"]
             else:
-                _effort = (reasoning_config.get("effort", "medium") or "medium") if reasoning_config and isinstance(reasoning_config, dict) else "medium"
+                _effort = (
+                    (reasoning_config.get("effort", "medium") or "medium")
+                    if reasoning_config and isinstance(reasoning_config, dict)
+                    else "medium"
+                )
                 # Honor explicit "thinking off" like the profile path — never re-enable it.
                 off = thinking_off or _effort == "none"
-                extra_body["reasoning"] = {"enabled": not off, "effort": "none" if off else _effort}
+                extra_body["reasoning"] = {
+                    "enabled": not off,
+                    "effort": "none" if off else _effort,
+                }
 
         if str(params.get("provider_name") or "").strip().lower() == "gemini":
             raw_thinking_config = _build_gemini_thinking_config(model, reasoning_config)
             if _is_gemini_openai_compat_base_url(base_url):
-                thinking_config = _snake_case_gemini_thinking_config(raw_thinking_config)
+                thinking_config = _snake_case_gemini_thinking_config(
+                    raw_thinking_config
+                )
                 if thinking_config:
                     openai_compat_extra = extra_body.get("extra_body", {})
-                    openai_compat_extra["google"] = {**openai_compat_extra.get("google", {}), "thinking_config": thinking_config}
+                    openai_compat_extra["google"] = {
+                        **openai_compat_extra.get("google", {}),
+                        "thinking_config": thinking_config,
+                    }
                     extra_body["extra_body"] = openai_compat_extra
             elif raw_thinking_config:
                 extra_body["thinking_config"] = raw_thinking_config
@@ -631,38 +831,69 @@ class ChatCompletionsTransport(ProviderTransport):
         if params.get("request_overrides"):
             api_kwargs.update(params["request_overrides"])
         return _finish_kwargs(
-            api_kwargs, sanitized, params,
-            supports_prompt_cache_key=bool(params.get("supports_prompt_cache_key")) or _is_openai_api_base_url(base_url),
+            api_kwargs,
+            sanitized,
+            params,
+            supports_prompt_cache_key=bool(params.get("supports_prompt_cache_key"))
+            or _is_openai_api_base_url(base_url),
         )
 
     def _build_kwargs_from_profile(self, profile, model, sanitized, tools, params):
         """Build API kwargs from a ProviderProfile — every quirk comes from the profile object."""
-        sanitized = _swap_developer_role(profile.prepare_messages(sanitized), (model or "").lower())
+        sanitized = _swap_developer_role(
+            profile.prepare_messages(sanitized), (model or "").lower()
+        )
         api_kwargs = _base_kwargs(model, sanitized, tools, params, profile=profile)
 
-        reasoning_config = _reasoning_config_for_model(model, params.get("reasoning_config"))
+        reasoning_config = _reasoning_config_for_model(
+            model, params.get("reasoning_config")
+        )
         # Profiles fronting several backends override get_max_tokens() per model.
-        _apply_max_tokens(api_kwargs, model, reasoning_config, params, profile_max=profile.get_max_tokens(model))
+        _apply_max_tokens(
+            api_kwargs,
+            model,
+            reasoning_config,
+            params,
+            profile_max=profile.get_max_tokens(model),
+        )
 
         # LM Studio's probed allowed_options ride only when present, so plugin hooks written
         # against the older keyword set (no ``**context``) keep working.
         _lm_options = params.get("lmstudio_reasoning_options")
-        extra_body_from_profile, top_level_from_profile = profile.build_api_kwargs_extras(
-            reasoning_config=reasoning_config, supports_reasoning=params.get("supports_reasoning", False),
-            qwen_session_metadata=params.get("qwen_session_metadata"), model=model,
-            base_url=params.get("base_url"), ollama_num_ctx=params.get("ollama_num_ctx"),
-            session_id=params.get("session_id"), cache_scope_id=params.get("cache_scope_id"),
-            **({"lmstudio_reasoning_options": _lm_options} if _lm_options is not None else {}),
+        extra_body_from_profile, top_level_from_profile = (
+            profile.build_api_kwargs_extras(
+                reasoning_config=reasoning_config,
+                supports_reasoning=params.get("supports_reasoning", False),
+                qwen_session_metadata=params.get("qwen_session_metadata"),
+                model=model,
+                base_url=params.get("base_url"),
+                ollama_num_ctx=params.get("ollama_num_ctx"),
+                session_id=params.get("session_id"),
+                cache_scope_id=params.get("cache_scope_id"),
+                **(
+                    {"lmstudio_reasoning_options": _lm_options}
+                    if _lm_options is not None
+                    else {}
+                ),
+            )
         )
         api_kwargs.update(top_level_from_profile)
 
         extra_body: dict[str, Any] = {}
         profile_body = profile.build_extra_body(
-            session_id=params.get("session_id"), provider_preferences=params.get("provider_preferences"), model=model,
-            base_url=params.get("base_url"), reasoning_config=reasoning_config,
-            openrouter_min_coding_score=params.get("openrouter_min_coding_score"), data_use=params.get("data_use"),
+            session_id=params.get("session_id"),
+            provider_preferences=params.get("provider_preferences"),
+            model=model,
+            base_url=params.get("base_url"),
+            reasoning_config=reasoning_config,
+            openrouter_min_coding_score=params.get("openrouter_min_coding_score"),
+            data_use=params.get("data_use"),
         )
-        for part in (profile_body, extra_body_from_profile, params.get("extra_body_additions")):
+        for part in (
+            profile_body,
+            extra_body_from_profile,
+            params.get("extra_body_additions"),
+        ):
             if part:
                 extra_body.update(part)
         for k, v in (params.get("request_overrides") or {}).items():
@@ -677,15 +908,25 @@ class ChatCompletionsTransport(ProviderTransport):
             # The native client reads only thinking_config and the long-decode budget.
             try:
                 from agent.gemini_native_adapter import is_native_gemini_base_url
+
                 _native_gemini = is_native_gemini_base_url(params.get("base_url"))
             except Exception:
                 _native_gemini = False
             if _native_gemini:
-                extra_body = {k: v for k, v in extra_body.items() if k in ("thinking_config", "thinkingConfig", "max_output_tokens")}
+                extra_body = {
+                    k: v
+                    for k, v in extra_body.items()
+                    if k in ("thinking_config", "thinkingConfig", "max_output_tokens")
+                }
             if extra_body:
                 api_kwargs["extra_body"] = extra_body
         return _finish_kwargs(
-            api_kwargs, sanitized, params, supports_prompt_cache_key=bool(getattr(profile, "supports_prompt_cache_key", False)),
+            api_kwargs,
+            sanitized,
+            params,
+            supports_prompt_cache_key=bool(
+                getattr(profile, "supports_prompt_cache_key", False)
+            ),
         )
 
     def normalize_response(self, response: Any, **kwargs) -> NormalizedResponse:
@@ -699,13 +940,24 @@ class ChatCompletionsTransport(ProviderTransport):
         _fr = getattr(choice, "finish_reason", None)
         # Poolside returns int finish_reason; Gemini-fronting gateways return
         # uppercase STOP / MAX_TOKENS — fold to the OpenAI contract here.
-        finish_reason = _normalize_finish_reason(str(_fr) if isinstance(_fr, int) else _fr) or "stop"
+        finish_reason = (
+            _normalize_finish_reason(str(_fr) if isinstance(_fr, int) else _fr)
+            or "stop"
+        )
 
         tool_calls = None
         if getattr(msg, "tool_calls", None):
-            tool_calls = [tc for tc in (self._normalize_tool_call(tc) for tc in msg.tool_calls) if tc is not None]
+            tool_calls = [
+                tc
+                for tc in (self._normalize_tool_call(tc) for tc in msg.tool_calls)
+                if tc is not None
+            ]
 
-        usage = Usage.from_openai(response.usage) if hasattr(response, "usage") and response.usage else None
+        usage = (
+            Usage.from_openai(response.usage)
+            if hasattr(response, "usage") and response.usage
+            else None
+        )
 
         # Fields some SDKs park in pydantic ``model_extra`` rather than as attributes.
         reasoning_content = _attr_or_model_extra(msg, "reasoning_content")
@@ -732,9 +984,13 @@ class ChatCompletionsTransport(ProviderTransport):
                     finish_reason = "content_filter"
 
         return NormalizedResponse(
-            content=content, tool_calls=tool_calls, finish_reason=finish_reason,
+            content=content,
+            tool_calls=tool_calls,
+            finish_reason=finish_reason,
             # Copilot /chat/completions names its readable reasoning ``reasoning_text``.
-            reasoning=getattr(msg, "reasoning", None) or provider_data.get("reasoning_text"), usage=usage,
+            reasoning=getattr(msg, "reasoning", None)
+            or provider_data.get("reasoning_text"),
+            usage=usage,
             provider_data=provider_data or None,
         )
 
@@ -752,11 +1008,24 @@ class ChatCompletionsTransport(ProviderTransport):
             name = alias_map.get(name, name)
         arguments = getattr(tc_function, "arguments", None)
         extra = _attr_or_model_extra(tc, "extra_content")
-        fn_sig = _attr_or_model_extra(tc_function, "thought_signature")  # Copilot's Gemini 3 variant
-        provider_data = {k: v for k, v in (("extra_content", None if extra is None else _dump_extra_content(extra)),
-                                            ("thought_signature", fn_sig)) if v is not None}
+        fn_sig = _attr_or_model_extra(
+            tc_function, "thought_signature"
+        )  # Copilot's Gemini 3 variant
+        provider_data = {
+            k: v
+            for k, v in (
+                (
+                    "extra_content",
+                    None if extra is None else _dump_extra_content(extra),
+                ),
+                ("thought_signature", fn_sig),
+            )
+            if v is not None
+        }
         call = ToolCall(
-            id=getattr(tc, "id", None), name=name, arguments="{}" if arguments is None else arguments,
+            id=getattr(tc, "id", None),
+            name=name,
+            arguments="{}" if arguments is None else arguments,
             provider_data=provider_data or None,
         )
         if getattr(tc_function, "args_repaired", False) is True:
@@ -777,8 +1046,14 @@ class ChatCompletionsTransport(ProviderTransport):
         details = getattr(usage, "prompt_tokens_details", None)
         cached = getattr(details, "cached_tokens", 0) or 0 if details else 0
         written = getattr(details, "cache_write_tokens", 0) or 0 if details else 0
-        cached = cached or getattr(usage, "prompt_cache_hit_tokens", 0) or 0  # DeepSeek native
-        return {"cached_tokens": cached, "creation_tokens": written} if cached or written else None
+        cached = (
+            cached or getattr(usage, "prompt_cache_hit_tokens", 0) or 0
+        )  # DeepSeek native
+        return (
+            {"cached_tokens": cached, "creation_tokens": written}
+            if cached or written
+            else None
+        )
 
 
 from agent.transports import register_transport

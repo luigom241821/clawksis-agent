@@ -71,7 +71,6 @@ class TestSingleUse:
 
 
 class TestTTL:
-
     def test_expired_ticket_rejected(self, monkeypatch):
         # Mock time inside the ws_tickets module so mint and consume see
         # different clocks. We have to patch the symbol the module actually
@@ -149,9 +148,6 @@ class TestConcurrency:
 
 
 class TestInternalCredential:
-
-
-
     def test_reset_clears_and_remints(self):
         first = ws_tickets.internal_ws_credential()
         _reset_for_tests()

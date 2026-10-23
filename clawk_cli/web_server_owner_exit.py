@@ -24,20 +24,32 @@ from clawk_cli.web_server_skew_exit import _run_retirement_watchdog
 DEFAULT_OWNER_POLL_S = 15.0
 
 
-def should_retire_superseded(*, lock: Optional[dict], my_nonce: str, age_s: float) -> bool:
+def should_retire_superseded(
+    *, lock: Optional[dict], my_nonce: str, age_s: float
+) -> bool:
     """Retire only when a valid lock provably names another spawn of this ownership slot. A young
     process may still see the previous spawn's lock, so it must first outlive the same settle window
     the orphan reaper gives the Desktop to write the lock."""
     from clawk_cli.dashboard_procs import _REAP_MIN_AGE_SECONDS
 
-    return lock is not None and lock["spawnNonce"] != my_nonce and age_s >= _REAP_MIN_AGE_SECONDS
+    return (
+        lock is not None
+        and lock["spawnNonce"] != my_nonce
+        and age_s >= _REAP_MIN_AGE_SECONDS
+    )
 
 
-def start_owner_watchdog(server, *, lock_path: Path, nonce: str,
-                         read_lock: Optional[Callable[[Path], Optional[dict]]] = None,
-                         fence=None, poll_s: float = DEFAULT_OWNER_POLL_S,
-                         now: Callable[[], float] = time.monotonic,
-                         max_polls: Optional[int] = None) -> threading.Thread:
+def start_owner_watchdog(
+    server,
+    *,
+    lock_path: Path,
+    nonce: str,
+    read_lock: Optional[Callable[[Path], Optional[dict]]] = None,
+    fence=None,
+    poll_s: float = DEFAULT_OWNER_POLL_S,
+    now: Callable[[], float] = time.monotonic,
+    max_polls: Optional[int] = None,
+) -> threading.Thread:
     """Daemon thread that sets ``server.should_exit`` once this backend is provably superseded and
     provably idle. ``max_polls`` bounds the loop for tests only."""
     if read_lock is None:
@@ -49,9 +61,17 @@ def start_owner_watchdog(server, *, lock_path: Path, nonce: str,
 
     def _observe() -> Optional[str]:
         lock = reader(lock_path)
-        if lock is None or not should_retire_superseded(lock=lock, my_nonce=nonce, age_s=now() - started):
+        if lock is None or not should_retire_superseded(
+            lock=lock, my_nonce=nonce, age_s=now() - started
+        ):
             return None
         return f"SSH-isolated backend {nonce} was superseded by spawn {lock['spawnNonce']}; retiring."
 
-    return _run_retirement_watchdog(server, observe=_observe, fence=fence, poll_s=poll_s,
-                                    max_polls=max_polls, thread_name="ssh-isolated-owner-watchdog")
+    return _run_retirement_watchdog(
+        server,
+        observe=_observe,
+        fence=fence,
+        poll_s=poll_s,
+        max_polls=max_polls,
+        thread_name="ssh-isolated-owner-watchdog",
+    )

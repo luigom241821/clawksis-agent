@@ -285,11 +285,9 @@ class TestReactiveOverflowDetection:
 
 
 class TestLengthOverflowDetector:
-
     def test_ignores_non_length_50035(self):
         err = RuntimeError("error code: 50035: Cannot reply to a system message")
         assert DiscordAdapter._is_length_overflow_error(err) is False
-
 
 
 class TestPartialMessageContinuationReferences:
@@ -311,4 +309,5 @@ class TestPartialMessageContinuationReferences:
         for call in sends:
             assert call["reference"] is not None, (
                 "continuation lost its reply reference — the ids-built "
-                "fallback for PartialMessage regressed")
+                "fallback for PartialMessage regressed"
+            )

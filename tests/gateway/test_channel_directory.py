@@ -51,9 +51,9 @@ class TestLoadDirectory:
 
 class TestBuildChannelDirectoryWrites:
     def test_failed_write_preserves_previous_cache(self, tmp_path, monkeypatch):
-        cache_file = _write_directory(tmp_path, {
-            "telegram": [{"id": "123", "name": "Alice", "type": "dm"}]
-        })
+        cache_file = _write_directory(
+            tmp_path, {"telegram": [{"id": "123", "name": "Alice", "type": "dm"}]}
+        )
         previous = json.loads(cache_file.read_text())
 
         import utils
@@ -85,7 +85,9 @@ class TestBuildChannelDirectoryWrites:
 
         cache_file = tmp_path / "channel_directory.json"
         with patch("gateway.channel_directory.DIRECTORY_PATH", cache_file):
-            directory = asyncio.run(build_channel_directory({Platform.TELEGRAM: AdapterWithChannels()}))
+            directory = asyncio.run(
+                build_channel_directory({Platform.TELEGRAM: AdapterWithChannels()})
+            )
 
         assert directory["platforms"]["telegram"] == [
             {"id": "default", "name": "主对话", "type": "dm"},
@@ -105,8 +107,13 @@ class TestBuildChannelDirectoryOffload:
             builder_threads.append(threading.get_ident())
             return []
 
-        with patch("gateway.channel_directory._build_discord", side_effect=fake_build_discord), \
-             patch("gateway.channel_directory.DIRECTORY_PATH", cache_file):
+        with (
+            patch(
+                "gateway.channel_directory._build_discord",
+                side_effect=fake_build_discord,
+            ),
+            patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+        ):
             asyncio.run(build_channel_directory({Platform.DISCORD: object()}))
 
         assert builder_threads
@@ -125,9 +132,13 @@ class TestBuildChannelDirectoryOffload:
         def fake_write(path, data, *args, **kwargs):
             write_threads.append(threading.get_ident())
 
-        with patch("gateway.channel_directory.atomic_json_write", side_effect=fake_write), \
-             patch("gateway.channel_directory._build_discord", return_value=[]), \
-             patch("gateway.channel_directory.DIRECTORY_PATH", cache_file):
+        with (
+            patch(
+                "gateway.channel_directory.atomic_json_write", side_effect=fake_write
+            ),
+            patch("gateway.channel_directory._build_discord", return_value=[]),
+            patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+        ):
             asyncio.run(build_channel_directory({Platform.DISCORD: object()}))
 
         assert write_threads
@@ -142,8 +153,18 @@ class TestResolveChannelName:
     def test_exact_match(self, tmp_path):
         platforms = {
             "discord": [
-                {"id": "111", "name": "bot-home", "guild": "MyServer", "type": "channel"},
-                {"id": "222", "name": "general", "guild": "MyServer", "type": "channel"},
+                {
+                    "id": "111",
+                    "name": "bot-home",
+                    "guild": "MyServer",
+                    "type": "channel",
+                },
+                {
+                    "id": "222",
+                    "name": "general",
+                    "guild": "MyServer",
+                    "type": "channel",
+                },
             ]
         }
         with self._setup(tmp_path, platforms):
@@ -151,13 +172,10 @@ class TestResolveChannelName:
             assert resolve_channel_name("discord", "#bot-home") == "111"
 
     def test_case_insensitive(self, tmp_path):
-        platforms = {
-            "slack": [{"id": "C01", "name": "Engineering", "type": "channel"}]
-        }
+        platforms = {"slack": [{"id": "C01", "name": "Engineering", "type": "channel"}]}
         with self._setup(tmp_path, platforms):
             assert resolve_channel_name("slack", "engineering") == "C01"
             assert resolve_channel_name("slack", "ENGINEERING") == "C01"
-
 
     def test_prefix_match_unambiguous(self, tmp_path):
         platforms = {
@@ -170,11 +188,8 @@ class TestResolveChannelName:
             # "engineering" prefix matches only one channel
             assert resolve_channel_name("slack", "engineering") == "C01"
 
-
     def test_no_match_returns_none(self, tmp_path):
-        platforms = {
-            "telegram": [{"id": "123", "name": "John", "type": "dm"}]
-        }
+        platforms = {"telegram": [{"id": "123", "name": "John", "type": "dm"}]}
         with self._setup(tmp_path, platforms):
             assert resolve_channel_name("telegram", "nonexistent") is None
 
@@ -187,30 +202,33 @@ class TestBuildFromSessions:
         sessions_path.write_text(json.dumps(sessions_data))
 
     def test_builds_from_sessions_json(self, tmp_path):
-        self._write_sessions(tmp_path, {
-            "session_1": {
-                "origin": {
-                    "platform": "telegram",
-                    "chat_id": "12345",
-                    "chat_name": "Alice",
+        self._write_sessions(
+            tmp_path,
+            {
+                "session_1": {
+                    "origin": {
+                        "platform": "telegram",
+                        "chat_id": "12345",
+                        "chat_name": "Alice",
+                    },
+                    "chat_type": "dm",
                 },
-                "chat_type": "dm",
-            },
-            "session_2": {
-                "origin": {
-                    "platform": "telegram",
-                    "chat_id": "67890",
-                    "user_name": "Bob",
+                "session_2": {
+                    "origin": {
+                        "platform": "telegram",
+                        "chat_id": "67890",
+                        "user_name": "Bob",
+                    },
+                    "chat_type": "group",
                 },
-                "chat_type": "group",
-            },
-            "session_3": {
-                "origin": {
-                    "platform": "discord",
-                    "chat_id": "99999",
+                "session_3": {
+                    "origin": {
+                        "platform": "discord",
+                        "chat_id": "99999",
+                    },
                 },
             },
-        })
+        )
 
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             entries = _build_from_sessions("telegram")
@@ -222,14 +240,15 @@ class TestBuildFromSessions:
 
 
 class TestFormatDirectoryForDisplay:
-
     def test_platform_with_no_channels_gets_hint(self):
         """A configured platform with zero discovered channels is shown with
         a hint instead of being hidden entirely."""
-        result = format_directory_for_display({
-            "simplex": [],
-            "telegram": [{"id": "1", "name": "home", "type": "dm"}],
-        })
+        result = format_directory_for_display(
+            {
+                "simplex": [],
+                "telegram": [{"id": "1", "name": "home", "type": "dm"}],
+            }
+        )
         assert "Simplex:" in result
         assert "telegram:home" in result
 
@@ -254,7 +273,6 @@ class TestLookupChannelType:
         }
         with self._setup(tmp_path, platforms):
             assert lookup_channel_type("discord", "100") == "forum"
-
 
     def test_unknown_chat_id_returns_none(self, tmp_path):
         platforms = {
@@ -284,9 +302,19 @@ class TestBuildSlack:
     def test_no_team_clients_falls_back_to_sessions(self, tmp_path):
         sessions_path = tmp_path / "sessions" / "sessions.json"
         sessions_path.parent.mkdir(parents=True)
-        sessions_path.write_text(json.dumps({
-            "s1": {"origin": {"platform": "slack", "chat_id": "D123", "chat_name": "Alice"}},
-        }))
+        sessions_path.write_text(
+            json.dumps(
+                {
+                    "s1": {
+                        "origin": {
+                            "platform": "slack",
+                            "chat_id": "D123",
+                            "chat_name": "Alice",
+                        }
+                    },
+                }
+            )
+        )
 
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             entries = asyncio.run(_build_slack(_make_slack_adapter({})))
@@ -295,16 +323,22 @@ class TestBuildSlack:
         assert entries[0]["id"] == "D123"
 
     def test_lists_channels_from_users_conversations(self, tmp_path):
-        client = _make_slack_client([
-            {
-                "ok": True,
-                "channels": [
-                    {"id": "C0B0QV5434G", "name": "engineering", "is_private": False},
-                    {"id": "G123ABCDEF", "name": "secret-chat", "is_private": True},
-                ],
-                "response_metadata": {},
-            },
-        ])
+        client = _make_slack_client(
+            [
+                {
+                    "ok": True,
+                    "channels": [
+                        {
+                            "id": "C0B0QV5434G",
+                            "name": "engineering",
+                            "is_private": False,
+                        },
+                        {"id": "G123ABCDEF", "name": "secret-chat", "is_private": True},
+                    ],
+                    "response_metadata": {},
+                },
+            ]
+        )
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             entries = asyncio.run(_build_slack(_make_slack_adapter({"T1": client})))
 
@@ -316,30 +350,38 @@ class TestBuildSlack:
         client.users_conversations.assert_awaited_once()
 
     def test_paginates_via_response_metadata_cursor(self, tmp_path):
-        client = _make_slack_client([
-            {
-                "ok": True,
-                "channels": [{"id": "C001", "name": "first", "is_private": False}],
-                "response_metadata": {"next_cursor": "cur1"},
-            },
-            {
-                "ok": True,
-                "channels": [{"id": "C002", "name": "second", "is_private": False}],
-                "response_metadata": {"next_cursor": ""},
-            },
-        ])
+        client = _make_slack_client(
+            [
+                {
+                    "ok": True,
+                    "channels": [{"id": "C001", "name": "first", "is_private": False}],
+                    "response_metadata": {"next_cursor": "cur1"},
+                },
+                {
+                    "ok": True,
+                    "channels": [{"id": "C002", "name": "second", "is_private": False}],
+                    "response_metadata": {"next_cursor": ""},
+                },
+            ]
+        )
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             entries = asyncio.run(_build_slack(_make_slack_adapter({"T1": client})))
 
         assert {e["id"] for e in entries} == {"C001", "C002"}
         assert client.users_conversations.await_count == 2
 
-    def test_thread_ids_use_base_conversation_and_dedupe_info_calls(self, tmp_path, monkeypatch):
-        client = _make_slack_client([{"ok": True, "channels": [], "response_metadata": {}}])
-        client.conversations_info = AsyncMock(side_effect=[
-            {"ok": True, "channel": {"name": "engineering"}},
-            {"ok": True, "channel": {"name": "support"}},
-        ])
+    def test_thread_ids_use_base_conversation_and_dedupe_info_calls(
+        self, tmp_path, monkeypatch
+    ):
+        client = _make_slack_client(
+            [{"ok": True, "channels": [], "response_metadata": {}}]
+        )
+        client.conversations_info = AsyncMock(
+            side_effect=[
+                {"ok": True, "channel": {"name": "engineering"}},
+                {"ok": True, "channel": {"name": "support"}},
+            ]
+        )
         monkeypatch.setattr(
             "gateway.channel_directory._build_from_sessions",
             lambda platform: [
@@ -354,7 +396,9 @@ class TestBuildSlack:
 
         assert {entry["name"] for entry in entries} == {"engineering", "support"}
         assert client.conversations_info.await_count == 2
-        assert [call.kwargs["channel"] for call in client.conversations_info.await_args_list] == ["C001", "C002"]
+        assert [
+            call.kwargs["channel"] for call in client.conversations_info.await_args_list
+        ] == ["C001", "C002"]
 
 
 class TestChannelAliases:
@@ -366,32 +410,47 @@ class TestChannelAliases:
         alias_file.write_text(json.dumps(aliases))
         return patch("gateway.channel_directory.CHANNEL_ALIASES_PATH", alias_file)
 
-
     def test_alias_injects_undiscovered_group(self, tmp_path):
         """A group named in the alias file but not yet seen in any session is
         still addressable by name (pre-naming before first traffic)."""
         cache_file = _write_directory(tmp_path, {"whatsapp": []})
-        with patch("gateway.channel_directory.DIRECTORY_PATH", cache_file), \
-             self._setup_aliases(tmp_path, {"whatsapp": {"999@g.us": "marketing"}}):
+        with (
+            patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+            self._setup_aliases(tmp_path, {"whatsapp": {"999@g.us": "marketing"}}),
+        ):
             assert resolve_channel_name("whatsapp", "marketing") == "999@g.us"
             entries = load_directory()["platforms"]["whatsapp"]
             injected = [e for e in entries if e["id"] == "999@g.us"]
             assert injected and injected[0]["type"] == "group"
 
-
     def test_alias_persists_through_rebuild(self, tmp_path, monkeypatch):
         """build_channel_directory must bake aliases into the written file so
         they survive the periodic regeneration, not just live reads."""
         cache_file = tmp_path / "channel_directory.json"
-        monkeypatch.setattr("gateway.channel_directory._build_from_sessions",
-                            lambda plat: [{"id": "120363@g.us", "name": "120363",
-                                           "type": "group", "thread_id": None}]
-                            if plat == "whatsapp" else [])
-        with patch("gateway.channel_directory.DIRECTORY_PATH", cache_file), \
-             self._setup_aliases(tmp_path, {"whatsapp": {"120363@g.us": "general"}}):
+        monkeypatch.setattr(
+            "gateway.channel_directory._build_from_sessions",
+            lambda plat: (
+                [
+                    {
+                        "id": "120363@g.us",
+                        "name": "120363",
+                        "type": "group",
+                        "thread_id": None,
+                    }
+                ]
+                if plat == "whatsapp"
+                else []
+            ),
+        )
+        with (
+            patch("gateway.channel_directory.DIRECTORY_PATH", cache_file),
+            self._setup_aliases(tmp_path, {"whatsapp": {"120363@g.us": "general"}}),
+        ):
             asyncio.run(build_channel_directory({}))
             on_disk = json.loads(cache_file.read_text())
-        names = [e["name"] for e in on_disk["platforms"]["whatsapp"]
-                 if e["id"] == "120363@g.us"]
+        names = [
+            e["name"]
+            for e in on_disk["platforms"]["whatsapp"]
+            if e["id"] == "120363@g.us"
+        ]
         assert names == ["general"]
-

@@ -39,11 +39,23 @@ def _load(tmp_path, *, config_yaml="", env=None, dotenv=""):
     (home / ".env").write_text(dotenv, encoding="utf-8")
     # A clean child: the suite process has already imported adapters, and the developer's shell
     # may carry platform env vars that are genuine activation evidence.
-    child_env = {k: v for k, v in os.environ.items()
-                 if k in {"PATH", "LANG", "TZ", "CLAWK_RUNTIME_DIR", "TMPDIR", "SYSTEMROOT"}}
-    child_env.update(HOME=str(tmp_path), CLAWK_HOME=str(home), PYTHONPATH=str(REPO), **(env or {}))
-    out = subprocess.run([sys.executable, "-c", _PROBE], cwd=str(REPO), env=child_env,
-                         capture_output=True, text=True, timeout=120, check=False)
+    child_env = {
+        k: v
+        for k, v in os.environ.items()
+        if k in {"PATH", "LANG", "TZ", "CLAWK_RUNTIME_DIR", "TMPDIR", "SYSTEMROOT"}
+    }
+    child_env.update(
+        HOME=str(tmp_path), CLAWK_HOME=str(home), PYTHONPATH=str(REPO), **(env or {})
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", _PROBE],
+        cwd=str(REPO),
+        env=child_env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert out.returncode == 0, out.stderr[-2000:]
     return json.loads(out.stdout.strip().splitlines()[-1])
 
@@ -51,7 +63,9 @@ def _load(tmp_path, *, config_yaml="", env=None, dotenv=""):
 def test_unconfigured_profile_imports_no_platform_adapter(tmp_path):
     result = _load(tmp_path)
     assert result["enabled"] == []
-    assert result["adapters"] == [], f"unconfigured adapters imported at config load: {result['adapters']}"
+    assert result["adapters"] == [], (
+        f"unconfigured adapters imported at config load: {result['adapters']}"
+    )
     # Still registered (deferred): a later lookup by name imports it on demand.
     assert {"discord", "telegram", "google_chat", "slack"} <= set(result["registered"])
 
@@ -59,14 +73,37 @@ def test_unconfigured_profile_imports_no_platform_adapter(tmp_path):
 @pytest.mark.parametrize("case", ["env", "dotenv", "manifest_env", "yaml_sibling"])
 def test_configured_platform_still_enabled_and_only_it_is_imported(tmp_path, case):
     kwargs, want, module = {
-        "env": ({"env": {"TELEGRAM_BOT_TOKEN": "123456:fake-token-abcdef"}}, "telegram", "telegram"),
-        "dotenv": ({"dotenv": "TELEGRAM_BOT_TOKEN=123456:fake-token-abcdef\n"}, "telegram", "telegram"),
+        "env": (
+            {"env": {"TELEGRAM_BOT_TOKEN": "123456:fake-token-abcdef"}},
+            "telegram",
+            "telegram",
+        ),
+        "dotenv": (
+            {"dotenv": "TELEGRAM_BOT_TOKEN=123456:fake-token-abcdef\n"},
+            "telegram",
+            "telegram",
+        ),
         # sms is enabled by TWILIO_* (its manifest requires_env), not an SMS_ prefix.
-        "manifest_env": ({"env": {"TWILIO_ACCOUNT_SID": "ACfake", "TWILIO_AUTH_TOKEN": "x",
-                                  "TWILIO_PHONE_NUMBER": "+15550000000"}}, "sms", "sms"),
+        "manifest_env": (
+            {
+                "env": {
+                    "TWILIO_ACCOUNT_SID": "ACfake",
+                    "TWILIO_AUTH_TOKEN": "x",
+                    "TWILIO_PHONE_NUMBER": "+15550000000",
+                }
+            },
+            "sms",
+            "sms",
+        ),
         # wecom_callback is registered by the wecom plugin.
-        "yaml_sibling": ({"config_yaml": "platforms:\n  wecom_callback:\n    enabled: true\n    extra:\n"
-                                         "      corp_id: c\n      corp_secret: s\n"}, "wecom_callback", "wecom"),
+        "yaml_sibling": (
+            {
+                "config_yaml": "platforms:\n  wecom_callback:\n    enabled: true\n    extra:\n"
+                "      corp_id: c\n      corp_secret: s\n"
+            },
+            "wecom_callback",
+            "wecom",
+        ),
     }[case]
     result = _load(tmp_path, **kwargs)
     assert want in result["enabled"]

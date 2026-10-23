@@ -12,16 +12,33 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from agent.session_activity import (
-    ActivityProvenance, bound_activity_description, normalize_activity_provenance,
+    ActivityProvenance,
+    bound_activity_description,
+    normalize_activity_provenance,
 )
 from clawk_state_errors import SessionActiveWriteGuardError
 from clawk_state_common import (
-    _LISTABLE_CHILD_SQL, _RECOVERABLE_END_REASONS,
-    _RECOVERABLE_END_REASONS_SQL, _RESET_CHILD_SQL, _RESET_END_REASONS, _legacy_reset_child_sql, _non_continuation_child_sql,
-    _shape_preview, _sql_preview_raw, QUEUED_PROMPT_METADATA_KEY,
-    _sql_in_window, _sql_json_extract, _sql_session_last_active, _sql_session_last_active_by_id,
-    escape_like as _escape_like, _SQL_IN_CHUNK, _id_chunks, _placeholders as _session_ids_placeholders,
-    _source_match_clause, emit_session_deleted, launch_stub_filter_sql,
+    _LISTABLE_CHILD_SQL,
+    _RECOVERABLE_END_REASONS,
+    _RECOVERABLE_END_REASONS_SQL,
+    _RESET_CHILD_SQL,
+    _RESET_END_REASONS,
+    _legacy_reset_child_sql,
+    _non_continuation_child_sql,
+    _shape_preview,
+    _sql_preview_raw,
+    QUEUED_PROMPT_METADATA_KEY,
+    _sql_in_window,
+    _sql_json_extract,
+    _sql_session_last_active,
+    _sql_session_last_active_by_id,
+    escape_like as _escape_like,
+    _SQL_IN_CHUNK,
+    _id_chunks,
+    _placeholders as _session_ids_placeholders,
+    _source_match_clause,
+    emit_session_deleted,
+    launch_stub_filter_sql,
 )
 from clawk_state_compression import _CHAIN_CAP, _UNSET_CREATED_SQL
 
@@ -32,7 +49,11 @@ logger = logging.getLogger("clawk_state")
 def workspace_key(row: dict[str, Any]) -> Optional[str]:
     """Workspace grouping key: git repo root, else cwd, else None (branch excluded: a checkout must not
     fragment history)."""
-    return (row.get("git_repo_root") or "").strip() or (row.get("cwd") or "").strip() or None
+    return (
+        (row.get("git_repo_root") or "").strip()
+        or (row.get("cwd") or "").strip()
+        or None
+    )
 
 
 def _delegate_from_json(col: str = "model_config") -> str:
@@ -110,10 +131,18 @@ def _where_sql(clauses: list[str], lead: str = "") -> str:
 
 
 def _session_filter_where(
-    *, exclude_children: bool = False, source: str | None = None, sources: list[str] | None = None,
-    session_key: str | None = None, exclude_sources: list[str] | None = None, cwd_prefix: str | None = None,
-    min_message_count: int = 0, archived_only: bool = False, include_archived: bool = False,
-    include_subagents: bool = False, local_created_sources: Sequence[str] | None = None,
+    *,
+    exclude_children: bool = False,
+    source: str | None = None,
+    sources: list[str] | None = None,
+    session_key: str | None = None,
+    exclude_sources: list[str] | None = None,
+    cwd_prefix: str | None = None,
+    min_message_count: int = 0,
+    archived_only: bool = False,
+    include_archived: bool = False,
+    include_subagents: bool = False,
+    local_created_sources: Sequence[str] | None = None,
 ) -> tuple[list[str], list[Any]]:
     """Shared ``sessions s`` WHERE builder so counts line up with listed rows. ``exclude_children``
     hides sub-agent runs and compression continuations but keeps branch/reset children
@@ -122,9 +151,14 @@ def _session_filter_where(
     where: list[str] = []
     params: list[Any] = []
     if exclude_children and include_subagents:
-        where.append(f"({_LISTABLE_CHILD_SQL} OR {_delegate_from_json('s.model_config')} IS NOT NULL)")
+        where.append(
+            f"({_LISTABLE_CHILD_SQL} OR {_delegate_from_json('s.model_config')} IS NOT NULL)"
+        )
     elif exclude_children:
-        where += [_LISTABLE_CHILD_SQL, f"{_delegate_from_json('s.model_config')} IS NULL"]
+        where += [
+            _LISTABLE_CHILD_SQL,
+            f"{_delegate_from_json('s.model_config')} IS NULL",
+        ]
     # Show roots and user-visible branch/reset sessions, while still hiding sub-agent runs and compression
     # continuations. All four carry parent_session_id, so the shared predicate classifies the edge from
     # stable markers plus legacy-compatible parent metadata. Branch sessions are identified two ways, OR'd
@@ -134,11 +168,16 @@ def _session_filter_where(
     # legacy heuristic (parent ended with 'branched' before the child started), covering branch sessions
     # created before the marker existed.
     include_sources = [source] if source else list(sources or [])
-    source_clause, source_params = _source_match_clause(include_sources, local_created_sources)
+    source_clause, source_params = _source_match_clause(
+        include_sources, local_created_sources
+    )
     for clause, values in (
         (source_clause, source_params),
         ("s.session_key = ?", [session_key] if session_key else []),
-        (f"s.source NOT IN ({_session_ids_placeholders(exclude_sources or ())})", exclude_sources or []),
+        (
+            f"s.source NOT IN ({_session_ids_placeholders(exclude_sources or ())})",
+            exclude_sources or [],
+        ),
         (_cwd_prefix_clause(cwd_prefix) if cwd_prefix else ("", [])),
         ("s.message_count >= ?", [min_message_count] if min_message_count > 0 else []),
     ):
@@ -170,21 +209,27 @@ def _expand_compression_lineage_ids(conn, frontier: list[str]) -> list[str]:
             f"AND NOT ({_RESET_CHILD_SQL.format(a='child')}) "
             "AND COALESCE(child.source, '') != 'tool'"
         )
-        out.extend(row["id"] for row in conn.execute(
-            # forward: every continuation of a compression-ended frontier row
-            f"SELECT child.id FROM sessions parent "
-            f"JOIN sessions child ON child.parent_session_id = parent.id "
-            f"WHERE parent.id IN ({ph}) AND parent.end_reason = 'compression' AND {child_filter}",
-            chunk,
-        ).fetchall())
-        out.extend(row["id"] for row in conn.execute(
-            # backward: the compression parent of a frontier row
-            f"SELECT parent.id FROM sessions child "
-            f"JOIN sessions parent ON parent.id = child.parent_session_id "
-            f"WHERE child.id IN ({ph}) AND parent.end_reason = 'compression' "
-            f"AND {child_filter}",
-            chunk,
-        ).fetchall())
+        out.extend(
+            row["id"]
+            for row in conn.execute(
+                # forward: every continuation of a compression-ended frontier row
+                f"SELECT child.id FROM sessions parent "
+                f"JOIN sessions child ON child.parent_session_id = parent.id "
+                f"WHERE parent.id IN ({ph}) AND parent.end_reason = 'compression' AND {child_filter}",
+                chunk,
+            ).fetchall()
+        )
+        out.extend(
+            row["id"]
+            for row in conn.execute(
+                # backward: the compression parent of a frontier row
+                f"SELECT parent.id FROM sessions child "
+                f"JOIN sessions parent ON parent.id = child.parent_session_id "
+                f"WHERE child.id IN ({ph}) AND parent.end_reason = 'compression' "
+                f"AND {child_filter}",
+                chunk,
+            ).fetchall()
+        )
     return out
 
 
@@ -204,11 +249,14 @@ def _collect_delegate_child_ids(conn, parent_ids: list[str]) -> list[str]:
     frontier = list(seeds)
     while frontier:
         next_frontier: list[str] = []
-        for chunk in _id_chunks(frontier, _SQL_IN_CHUNK // 2):  # each id is bound twice below
+        for chunk in _id_chunks(
+            frontier, _SQL_IN_CHUNK // 2
+        ):  # each id is bound twice below
             ph = _session_ids_placeholders(chunk)
             cursor = conn.execute(
                 f"SELECT id FROM sessions WHERE {df} IN ({ph}) "
-                f"OR (parent_session_id IN ({ph}) AND {df} IS NOT NULL)", chunk + chunk,
+                f"OR (parent_session_id IN ({ph}) AND {df} IS NOT NULL)",
+                chunk + chunk,
             )
             for row in cursor.fetchall():
                 if row["id"] not in found:
@@ -221,12 +269,16 @@ def _collect_delegate_child_ids(conn, parent_ids: list[str]) -> list[str]:
 def _delete_delegate_children(conn, parent_ids: list[str]) -> list[str]:
     ids = _collect_delegate_child_ids(conn, parent_ids)
     from clawk_state_mutation_retirement import retire_sessions
+
     retire_sessions(conn, ids)
     for chunk in _id_chunks(ids):
         ph = _session_ids_placeholders(chunk)
         conn.execute(f"DELETE FROM messages WHERE session_id IN ({ph})", chunk)
         # FK safety: orphan any untagged stragglers pointing at a doomed row.
-        conn.execute(f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})", chunk)
+        conn.execute(
+            f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})",
+            chunk,
+        )
         conn.execute(f"DELETE FROM sessions WHERE id IN ({ph})", chunk)
     return ids
 
@@ -247,7 +299,9 @@ SESSION_STATUS_EMPTY = "empty"
 _ERROR_FINISH_REASONS = frozenset({"error", "agent_error", "content_filter"})
 
 
-def classify_session_status(role: Optional[str], has_tool_calls: bool, finish_reason: Optional[str]) -> str:
+def classify_session_status(
+    role: Optional[str], has_tool_calls: bool, finish_reason: Optional[str]
+) -> str:
     """Error finish → ``error``; assistant with pending tool_calls or a trailing user/tool row →
     ``interrupted``; otherwise ``complete`` (benign default: pickers must not alarm on unknown shapes)."""
     if (finish_reason or "").strip().lower() in _ERROR_FINISH_REASONS:
@@ -273,19 +327,33 @@ _SAME_KEY_NAMESPACE_SQL = (
 
 # Upsert tail of _insert_session_row: every routing/metadata column keeps the value an
 # earlier writer set (whitespace is part of the SQL text).
-_UPSERT_KEEP_EXISTING_SQL = ",\n".join(
-    f"                       {col} = COALESCE(sessions.{col}, excluded.{col})" for col in (
-        "session_key", "chat_id", "chat_type", "thread_id", "parent_session_id", "cwd", "profile_name",
-        "transport_profile", "git_repo_root", "origin_json", "display_name",
+_UPSERT_KEEP_EXISTING_SQL = (
+    ",\n".join(
+        f"                       {col} = COALESCE(sessions.{col}, excluded.{col})"
+        for col in (
+            "session_key",
+            "chat_id",
+            "chat_type",
+            "thread_id",
+            "parent_session_id",
+            "cwd",
+            "profile_name",
+            "transport_profile",
+            "git_repo_root",
+            "origin_json",
+            "display_name",
+        )
     )
-) + ",\n" + (
-    # Accounting may insert before the creator ('unknown') and a routing write carries 'local':
-    # neither is creation provenance (_UNSET_CREATED_SQL), so a later creator replaces them and
-    # 'local' never replaces anything. A real source, once stamped, is preserved (#56439).
-    "                       created_source = CASE WHEN "
-    + _UNSET_CREATED_SQL.format(col="sessions.created_source")
-    + " THEN COALESCE(NULLIF(excluded.created_source, 'local'), sessions.created_source)"
-    " ELSE sessions.created_source END"
+    + ",\n"
+    + (
+        # Accounting may insert before the creator ('unknown') and a routing write carries 'local':
+        # neither is creation provenance (_UNSET_CREATED_SQL), so a later creator replaces them and
+        # 'local' never replaces anything. A real source, once stamped, is preserved (#56439).
+        "                       created_source = CASE WHEN "
+        + _UNSET_CREATED_SQL.format(col="sessions.created_source")
+        + " THEN COALESCE(NULLIF(excluded.created_source, 'local'), sessions.created_source)"
+        " ELSE sessions.created_source END"
+    )
 )
 
 
@@ -301,10 +369,14 @@ def _inherit_col_sql(col: str, extra: str = "") -> str:
 _INHERIT_SEP = ",\n" + " " * 27
 _INHERIT_PARENT_META_SQL = (
     "UPDATE sessions\n                       SET "
-    + _INHERIT_SEP.join((
-        *(_inherit_col_sql(c) for c in ("cwd", "git_repo_root", "git_branch")),
-        _inherit_col_sql("profile_name", "\n" + " " * 46 + f"AND ({_SAME_KEY_NAMESPACE_SQL})"),
-    ))
+    + _INHERIT_SEP.join(
+        (
+            *(_inherit_col_sql(c) for c in ("cwd", "git_repo_root", "git_branch")),
+            _inherit_col_sql(
+                "profile_name", "\n" + " " * 46 + f"AND ({_SAME_KEY_NAMESPACE_SQL})"
+            ),
+        )
+    )
     + "\n                     WHERE id = ? AND parent_session_id IS NOT NULL"
 )
 # A delegate/branch fork of a row that happens to have ended on compression is still not that
@@ -318,17 +390,25 @@ _FORK_EDGE_EXCLUSION_SQL = "".join(
 )
 _INHERIT_PARENT_ROUTING_SQL = (
     "UPDATE sessions\n                       SET "
-    + _INHERIT_SEP.join(_inherit_col_sql(c) for c in (
-        "user_id", "session_key", "chat_id", "chat_type", "thread_id", "display_name", "origin_json",
-        "transport_profile",
-    ))
+    + _INHERIT_SEP.join(
+        _inherit_col_sql(c)
+        for c in (
+            "user_id",
+            "session_key",
+            "chat_id",
+            "chat_type",
+            "thread_id",
+            "display_name",
+            "origin_json",
+            "transport_profile",
+        )
+    )
     + "\n                     WHERE id = ? AND parent_session_id IS NOT NULL\n"
     "                       AND EXISTS (\n"
     "                           SELECT 1 FROM sessions p\n"
     "                           WHERE p.id = sessions.parent_session_id\n"
     "                             AND p.end_reason = 'compression'\n"
-    "                       )"
-    + _FORK_EDGE_EXCLUSION_SQL
+    "                       )" + _FORK_EDGE_EXCLUSION_SQL
 )
 
 
@@ -341,12 +421,15 @@ class SessionSessionsMixin:
         profile's store. None outside the profile tree — NULL beats a fabricated owner."""
         try:
             from clawk_constants import get_default_clawk_root
+
             root = get_default_clawk_root().resolve()
             parent = Path(self.db_path).resolve().parent
             if parent == root:
                 return "default"
             is_profile_dir = parent.parent == root / "profiles"
-            if is_profile_dir and re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", parent.name):
+            if is_profile_dir and re.fullmatch(
+                r"[a-z0-9][a-z0-9_-]{0,63}", parent.name
+            ):
                 return parent.name
         except Exception:
             logger.debug("own-profile derivation failed", exc_info=True)
@@ -365,11 +448,23 @@ class SessionSessionsMixin:
         conn.execute(_INHERIT_PARENT_ROUTING_SQL, (session_id,))
 
     def _insert_session_row(
-        self, session_id: str, source: str, model: str | None = None, model_config: dict[str, Any] | None = None,
-        system_prompt: str | None = None, user_id: str | None = None, session_key: Optional[str] = None,
-        chat_id: str | None = None, chat_type: str | None = None, thread_id: str | None = None,
-        parent_session_id: str | None = None, cwd: str | None = None, profile_name: Optional[str] = None,
-        git_repo_root: str | None = None, origin_json: str | None = None, display_name: str | None = None,
+        self,
+        session_id: str,
+        source: str,
+        model: str | None = None,
+        model_config: dict[str, Any] | None = None,
+        system_prompt: str | None = None,
+        user_id: str | None = None,
+        session_key: Optional[str] = None,
+        chat_id: str | None = None,
+        chat_type: str | None = None,
+        thread_id: str | None = None,
+        parent_session_id: str | None = None,
+        cwd: str | None = None,
+        profile_name: Optional[str] = None,
+        git_repo_root: str | None = None,
+        origin_json: str | None = None,
+        display_name: str | None = None,
         transport_profile: Optional[str] = None,
     ) -> None:
         """Upsert a session row, never overwriting what an earlier writer set (the gateway creates a
@@ -402,21 +497,43 @@ class SessionSessionsMixin:
         ``db_path`` in tests, ad-hoc copies) derive nothing and keep NULL — never guess.
         """
         from clawk_state_worker_lifecycle import insert_session_row_in_transaction
-        params = dict(session_id=session_id, source=source, model=model, model_config=model_config,
-                      system_prompt=system_prompt, user_id=user_id, session_key=session_key,
-                      chat_id=chat_id, chat_type=chat_type, thread_id=thread_id,
-                      parent_session_id=parent_session_id, cwd=cwd, profile_name=profile_name,
-                      git_repo_root=git_repo_root, origin_json=origin_json, display_name=display_name,
-                      transport_profile=transport_profile)
-        self._execute_write(lambda conn: insert_session_row_in_transaction(self, conn, **params),
-                            patience_s=self._TRANSCRIPT_WRITE_PATIENCE_S)
+
+        params = dict(
+            session_id=session_id,
+            source=source,
+            model=model,
+            model_config=model_config,
+            system_prompt=system_prompt,
+            user_id=user_id,
+            session_key=session_key,
+            chat_id=chat_id,
+            chat_type=chat_type,
+            thread_id=thread_id,
+            parent_session_id=parent_session_id,
+            cwd=cwd,
+            profile_name=profile_name,
+            git_repo_root=git_repo_root,
+            origin_json=origin_json,
+            display_name=display_name,
+            transport_profile=transport_profile,
+        )
+        self._execute_write(
+            lambda conn: insert_session_row_in_transaction(self, conn, **params),
+            patience_s=self._TRANSCRIPT_WRITE_PATIENCE_S,
+        )
 
     def create_session(self, session_id: str, source: str, **kwargs) -> str:
         """Create (upsert) a session record. Returns the session_id."""
         self._insert_session_row(session_id, source, **kwargs)
         return session_id
 
-    def ensure_session(self, session_id: str, source: str = "unknown", model: str | None = None, **kwargs) -> str:
+    def ensure_session(
+        self,
+        session_id: str,
+        source: str = "unknown",
+        model: str | None = None,
+        **kwargs,
+    ) -> str:
         """Ensure a session row exists (upsert). Accepts optional kwargs."""
         self._insert_session_row(session_id, source, model=model, **kwargs)
         return session_id
@@ -429,11 +546,16 @@ class SessionSessionsMixin:
         if not session_id:
             return
         self._write_sql(
-            "UPDATE sessions SET expiry_finalized = ? WHERE id = ?", (1 if finalized else 0, session_id),
+            "UPDATE sessions SET expiry_finalized = ? WHERE id = ?",
+            (1 if finalized else 0, session_id),
         )
 
     def find_session_by_origin(
-        self, *, platform: str, chat_id: str, thread_id: Optional[str] = None,
+        self,
+        *,
+        platform: str,
+        chat_id: str,
+        thread_id: Optional[str] = None,
         user_id: Optional[str] = None,
     ) -> Optional[str]:
         """Most recent live session_id for source + chat_id (+ thread_id). With ``user_id`` exact sender
@@ -451,7 +573,9 @@ class SessionSessionsMixin:
         if thread_id is not None:
             query += " AND COALESCE(thread_id, '') = ?"
             params.append(str(thread_id))
-        rows = [dict(r) for r in self._read_all(query + " ORDER BY started_at DESC", params)]
+        rows = [
+            dict(r) for r in self._read_all(query + " ORDER BY started_at DESC", params)
+        ]
         if not rows:
             return None
         if user_id:
@@ -460,7 +584,10 @@ class SessionSessionsMixin:
                 return str(exact[0]["id"])
             if len(rows) > 1:
                 return None
-        elif len({u for u in (str(r.get("user_id") or "").strip() for r in rows) if u}) > 1:
+        elif (
+            len({u for u in (str(r.get("user_id") or "").strip() for r in rows) if u})
+            > 1
+        ):
             return None
         return str(rows[0]["id"])
 
@@ -475,12 +602,19 @@ class SessionSessionsMixin:
     def end_session(self, session_id: str, end_reason: str) -> None:
         """Mark a session ended; the first end_reason wins (a compression split must keep
         ``'compression'`` even if a stale end_session() lands later); reopen_session() to re-end."""
-        self._execute_write(lambda conn: self._end_and_bump(
-            conn, "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
-            (time.time(), end_reason, session_id), session_id, end_reason,
-        ))
+        self._execute_write(
+            lambda conn: self._end_and_bump(
+                conn,
+                "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
+                (time.time(), end_reason, session_id),
+                session_id,
+                end_reason,
+            )
+        )
 
-    def _end_and_bump(self, conn, sql: str, params: tuple, session_id: str, reason: str) -> int:
+    def _end_and_bump(
+        self, conn, sql: str, params: tuple, session_id: str, reason: str
+    ) -> int:
         """Run an end-stamp UPDATE; only a boundary this call actually wrote advances the
         conversation generation (a no-op must not rotate the peer). Returns rowcount."""
         changed = conn.execute(sql, params).rowcount
@@ -512,13 +646,15 @@ class SessionSessionsMixin:
         mount until the next send. Idempotent; returns the number of rows retired.
         """
         return self._execute_write(
-            lambda conn: self._retire_undrained_queue_rows_conn(conn, session_id))
+            lambda conn: self._retire_undrained_queue_rows_conn(conn, session_id)
+        )
 
     def reopen_session(self, session_id: str) -> None:
         """Clear ended_at/end_reason so a session can be resumed; first freeze markerless legacy reset
         children, skipping explicit fork/delegate provenance and children that predate the parent itself.
         The guard compares against the parent's started_at, not its current ended_at: a parent that was
         reopened and re-ended later still owns reset children from its earlier boundaries."""
+
         def _do(conn):
             self._retire_undrained_queue_rows_conn(conn, session_id)
             conn.execute(
@@ -533,13 +669,17 @@ class SessionSessionsMixin:
                 (session_id, *_RESET_END_REASONS),
             )
             conn.execute(
-                "UPDATE sessions SET ended_at = NULL, end_reason = NULL WHERE id = ?", (session_id,),
+                "UPDATE sessions SET ended_at = NULL, end_reason = NULL WHERE id = ?",
+                (session_id,),
             )
             # Resuming re-activates the chat: drop the idle sweep's archive (never a manual one).
             self._unarchive_auto_archived_lineage(conn, session_id)
+
         self._execute_write(_do)
 
-    def promote_to_session_reset(self, session_id: str, reason: str = "session_reset") -> bool:
+    def promote_to_session_reset(
+        self, session_id: str, reason: str = "session_reset"
+    ) -> bool:
         """Durably mark an intentional reset boundary on live rows or rows with a *recoverable* accidental
         end_reason (explicit boundaries are preserved): an ``agent_close`` row left recoverable would be
         resurrected by stale-route recovery. Keep in sync with find_latest_gateway_session_for_peer.
@@ -554,17 +694,28 @@ class SessionSessionsMixin:
         # /new and policy auto-resets promote rather than end_session, so the
         # generation advances here too — same transaction, only when written.
         try:
-            return bool(self._execute_write(lambda conn: self._end_and_bump(
-                conn, "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND (ended_at IS NULL "
-                f"OR end_reason IN ({_RECOVERABLE_END_REASONS_SQL}))",
-                (now, reason, session_id), session_id, reason,
-            )))
+            return bool(
+                self._execute_write(
+                    lambda conn: self._end_and_bump(
+                        conn,
+                        "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND (ended_at IS NULL "
+                        f"OR end_reason IN ({_RECOVERABLE_END_REASONS_SQL}))",
+                        (now, reason, session_id),
+                        session_id,
+                        reason,
+                    )
+                )
+            )
         except Exception:
             return False
 
     def update_session_cwd(
-        self, session_id: str, cwd: str, git_branch: Optional[str] = None,
-        git_repo_root: Optional[str] = None, replace_git_meta: bool = False,
+        self,
+        session_id: str,
+        cwd: str,
+        git_branch: Optional[str] = None,
+        git_repo_root: Optional[str] = None,
+        replace_git_meta: bool = False,
     ) -> Optional[int]:
         """Persist the authoritative cwd and claim a Git metadata generation. git fields are written
         only when non-empty (a probe failure never clobbers a value) except under ``replace_git_meta``
@@ -574,11 +725,17 @@ class SessionSessionsMixin:
             return None
         branch = (git_branch or "").strip()
         repo_root = (git_repo_root or "").strip()
+
         def _do(conn):
-            current = conn.execute("SELECT cwd FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            current = conn.execute(
+                "SELECT cwd FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
             if current is None:
                 return None
-            sets = ["cwd = ?", "git_metadata_generation = COALESCE(git_metadata_generation, 0) + 1"]
+            sets = [
+                "cwd = ?",
+                "git_metadata_generation = COALESCE(git_metadata_generation, 0) + 1",
+            ]
             params: list[Any] = [cwd]
             if current[0] != cwd or replace_git_meta:
                 sets.extend(("git_branch = ?", "git_repo_root = ?"))
@@ -588,33 +745,52 @@ class SessionSessionsMixin:
                     if val:
                         sets.append(f"{col} = ?")
                         params.append(val)
-            conn.execute(f"UPDATE sessions SET {', '.join(sets)} WHERE id = ?", [*params, session_id])
+            conn.execute(
+                f"UPDATE sessions SET {', '.join(sets)} WHERE id = ?",
+                [*params, session_id],
+            )
             row = conn.execute(
-                "SELECT git_metadata_generation FROM sessions WHERE id = ?", (session_id,),
+                "SELECT git_metadata_generation FROM sessions WHERE id = ?",
+                (session_id,),
             ).fetchone()
             return None if row is None else int(row[0])
+
         return self._execute_write(_do)
 
     def publish_session_git_metadata(
-        self, session_id: str, cwd: str, generation: int, git_branch: Optional[str] = None,
+        self,
+        session_id: str,
+        cwd: str,
+        generation: int,
+        git_branch: Optional[str] = None,
         git_repo_root: Optional[str] = None,
     ) -> bool:
         """Publish async Git enrichment only while its cwd claim is current."""
-        valid_generation = isinstance(generation, int) and not isinstance(generation, bool) and generation >= 1
+        valid_generation = (
+            isinstance(generation, int)
+            and not isinstance(generation, bool)
+            and generation >= 1
+        )
         if not session_id or not cwd or not valid_generation:
             return False
         fields = [
-            (col, val) for col, val in (
-                ("git_branch", (git_branch or "").strip()), ("git_repo_root", (git_repo_root or "").strip()),
-            ) if val
+            (col, val)
+            for col, val in (
+                ("git_branch", (git_branch or "").strip()),
+                ("git_repo_root", (git_repo_root or "").strip()),
+            )
+            if val
         ]
         if not fields:
             return False
-        return self._write_rowcount(
-            f"UPDATE sessions SET {', '.join(f'{col} = ?' for col, _ in fields)} "
-            "WHERE id = ? AND cwd = ? AND git_metadata_generation = ?",
-            [val for _, val in fields] + [session_id, cwd, generation],
-        ) == 1
+        return (
+            self._write_rowcount(
+                f"UPDATE sessions SET {', '.join(f'{col} = ?' for col, _ in fields)} "
+                "WHERE id = ? AND cwd = ? AND git_metadata_generation = ?",
+                [val for _, val in fields] + [session_id, cwd, generation],
+            )
+            == 1
+        )
 
     def backfill_repo_roots(self, cwd_to_root: dict[str, str]) -> None:
         """Backfill git repo roots for cwds without one; never clobbers a recorded root."""
@@ -622,11 +798,16 @@ class SessionSessionsMixin:
         if pairs:
             self._write_sql(
                 "UPDATE sessions SET git_repo_root = ? WHERE cwd = ? AND COALESCE(git_repo_root, '') = ''",
-                pairs, many=True,
+                pairs,
+                many=True,
             )
 
     def touch_session_activity(
-        self, session_id: str, ts: Optional[float] = None, *, description: Optional[str] = None,
+        self,
+        session_id: str,
+        ts: Optional[float] = None,
+        *,
+        description: Optional[str] = None,
         provenance: Optional[ActivityProvenance] = None,
     ) -> None:
         """Stamp durable mid-turn activity (observation-only; rate-limited by the caller) so surfaces see
@@ -644,8 +825,11 @@ class SessionSessionsMixin:
             "last_activity_description = ?, last_activity_provenance = ? "
             "WHERE id = ? AND (last_activity_at IS NULL OR last_activity_at < ?)",
             (
-                when, bound_activity_description(description),
-                normalize_activity_provenance(provenance).value, session_id, when,
+                when,
+                bound_activity_description(description),
+                normalize_activity_provenance(provenance).value,
+                session_id,
+                when,
             ),
             patience_s=self._ACTIVITY_WRITE_PATIENCE_S,
         )
@@ -673,15 +857,23 @@ class SessionSessionsMixin:
             )
         except sqlite3.Error:
             row = None
-        if row is not None and not row[0] and (not row[1] or row[1] == ActivityProvenance.UNKNOWN.value):
+        if (
+            row is not None
+            and not row[0]
+            and (not row[1] or row[1] == ActivityProvenance.UNKNOWN.value)
+        ):
             return
         self._write_sql(
             "UPDATE sessions SET last_activity_description = ?, last_activity_provenance = ? WHERE id = ?",
-            ("", ActivityProvenance.UNKNOWN.value, session_id), patience_s=self._ACTIVITY_WRITE_PATIENCE_S,
+            ("", ActivityProvenance.UNKNOWN.value, session_id),
+            patience_s=self._ACTIVITY_WRITE_PATIENCE_S,
         )
 
     def update_session_meta(
-        self, session_id: str, model_config_json: str, model: Optional[str] = None,
+        self,
+        session_id: str,
+        model_config_json: str,
+        model: Optional[str] = None,
     ) -> None:
         """Update model_config and (COALESCE) optionally model."""
         self.flush_token_counts()  # barrier against queued token deltas — see update_session_model
@@ -690,14 +882,18 @@ class SessionSessionsMixin:
             (model_config_json, model, session_id),
         )
 
-    def update_system_prompt(self, session_id: str, system_prompt: Optional[str]) -> None:
+    def update_system_prompt(
+        self, session_id: str, system_prompt: Optional[str]
+    ) -> None:
         """Store the full assembled system prompt snapshot."""
+
         def _do(conn):
             conn.execute(
                 "UPDATE sessions SET system_prompt_hash = ?, system_prompt = NULL WHERE id = ?",
                 (self._store_system_prompt(conn, system_prompt), session_id),
             )
             self._delete_unreferenced_system_prompts(conn)
+
         self._execute_write(_do)
 
     def update_session_tool_names(self, session_id: str, pin: Any) -> None:
@@ -706,15 +902,24 @@ class SessionSessionsMixin:
         is stored in the same content-addressed ``system_prompts`` table and the column holds its hash
         (legacy rows: an inline JSON name list); ``get_session`` resolves either."""
         payload = json.dumps(pin) if pin is not None else None
+
         def _do(conn):
-            conn.execute("UPDATE sessions SET tool_names = ? WHERE id = ?",
-                         (self._store_system_prompt(conn, payload), session_id))
+            conn.execute(
+                "UPDATE sessions SET tool_names = ? WHERE id = ?",
+                (self._store_system_prompt(conn, payload), session_id),
+            )
             self._delete_unreferenced_system_prompts(conn)
+
         self._execute_write(_do)
 
     def update_session_model(
-        self, session_id: str, model: str, provider: Optional[str] = None, *,
-        base_url: Optional[str] = None, api_mode: Optional[str] = None,
+        self,
+        session_id: str,
+        model: str,
+        provider: Optional[str] = None,
+        *,
+        base_url: Optional[str] = None,
+        api_mode: Optional[str] = None,
     ) -> None:
         """Set the model after a mid-session /model switch (unconditionally) and drop any Browser
         runtime lock (lineage markers survive).
@@ -735,34 +940,51 @@ class SessionSessionsMixin:
         if model:
             patch["model"] = model
         if provider:
-            route = {"provider": provider, "base_url": base_url or None, "api_mode": api_mode or None}
+            route = {
+                "provider": provider,
+                "base_url": base_url or None,
+                "api_mode": api_mode or None,
+            }
             patch.update(route, gateway_runtime=route)
         self._write_model_config_patch(
-            session_id, patch, "UPDATE sessions SET model = ?, model_config = ? WHERE id = ?",
+            session_id,
+            patch,
+            "UPDATE sessions SET model = ?, model_config = ? WHERE id = ?",
             lambda merged: (model, merged, session_id),
         )
 
     def _write_model_config_patch(
-        self, session_id: str, patch: dict[str, Any],
+        self,
+        session_id: str,
+        patch: dict[str, Any],
         sql: str = "UPDATE sessions SET model_config = ? WHERE id = ?",
         params: Optional[Callable[[Optional[str]], tuple]] = None,
     ) -> None:
         """Merge ``patch`` into model_config then run ``sql`` with ``params(merged)`` in one write
         transaction; no-op when the row doesn't exist."""
+
         def _do(conn):
             merged = self._merge_model_config_json(conn, session_id, patch)
             if merged is _MODEL_CONFIG_ROW_MISSING:
                 return
             conn.execute(sql, params(merged) if params else (merged, session_id))
+
         self._execute_write(_do)
 
     def _merge_model_config_json(
-        self, conn, session_id: str, patch: dict[str, Any], *, on_missing: str = "skip",
+        self,
+        conn,
+        session_id: str,
+        patch: dict[str, Any],
+        *,
+        on_missing: str = "skip",
     ):
         """SELECT + tolerant-parse + merge ``patch`` into model_config (the one place that keeps
         ``_branched_from``/``_delegate_from`` alive); ``None`` deletes a key. Returns serialized JSON
         (``None`` when empty) or ``_MODEL_CONFIG_ROW_MISSING`` (``on_missing="raise"`` → ValueError)."""
-        row = conn.execute("SELECT model_config FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT model_config FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
         if row is None:
             if on_missing == "raise":
                 raise ValueError(f"Session not found: {session_id}")
@@ -775,42 +997,61 @@ class SessionSessionsMixin:
                 config[key] = value
         return json.dumps(config) if config else None
 
-    def patch_session_model_config(self, session_id: str, patch: dict[str, Any]) -> None:
+    def patch_session_model_config(
+        self, session_id: str, patch: dict[str, Any]
+    ) -> None:
         """Merge ``patch`` into model_config atomically (``None`` removes a key);
         no-op when the row or patch is empty."""
         if not session_id or not patch:
             return
         self._write_model_config_patch(session_id, patch)
 
-    def get_session_model_config_value(self, session_id: str, key: str, default: Any = None) -> Any:
+    def get_session_model_config_value(
+        self, session_id: str, key: str, default: Any = None
+    ) -> Any:
         """Read one key out of a session's model_config JSON (tolerant parse)."""
         session = self.get_session(session_id) or {}
         return _parse_model_config(session.get("model_config")).get(key, default)
 
-    def update_conversation_model_config_value(self, session_id: str, key: str,
-                                               update: Callable[[Any], Any]) -> Optional[str]:
+    def update_conversation_model_config_value(
+        self, session_id: str, key: str, update: Callable[[Any], Any]
+    ) -> Optional[str]:
         """Write ``update(value)`` of a conversation-wide key at the compression tip (one transaction)."""
-        from clawk_state_sessions_model_config import update_conversation_model_config_value
+        from clawk_state_sessions_model_config import (
+            update_conversation_model_config_value,
+        )
+
         return update_conversation_model_config_value(self, session_id, key, update)
 
     def session_ids_with_model_config_key(self, key: str) -> list[str]:
         """Ids of the sessions whose model_config carries ``key``, newest first."""
         from clawk_state_sessions_model_config import session_ids_with_model_config_key
+
         return session_ids_with_model_config_key(self, key)
 
     def update_session_runtime_lock(
-        self, session_id: str, *, model: Optional[str] = None, provider: Optional[str] = None,
-        model_options: Optional[dict[str, Any]] = None, route_source: Optional[str] = None,
+        self,
+        session_id: str,
+        *,
+        model: Optional[str] = None,
+        provider: Optional[str] = None,
+        model_options: Optional[dict[str, Any]] = None,
+        route_source: Optional[str] = None,
         confirmed: bool = False,
     ) -> None:
         """Persist a Browser / API-client runtime lock into model_config (lineage markers survive).
         Route writers never touch the stored prompt; ``_stored_prompt_matches_runtime`` decides staleness."""
         lock = {
-            "provider": provider or "", "model": model or "", "model_options": model_options or {},
-            "route_source": route_source or "", "confirmed": bool(confirmed), "updated_at": time.time(),
+            "provider": provider or "",
+            "model": model or "",
+            "model_options": model_options or {},
+            "route_source": route_source or "",
+            "confirmed": bool(confirmed),
+            "updated_at": time.time(),
         }
         self._write_model_config_patch(
-            session_id, {"browser_model_lock": lock},
+            session_id,
+            {"browser_model_lock": lock},
             """UPDATE sessions SET
                    model_config = ?,
                    model = COALESCE(?, model)
@@ -827,7 +1068,11 @@ class SessionSessionsMixin:
     @staticmethod
     def session_yolo_enabled(session_meta: Optional[dict[str, Any]]) -> bool:
         """Persisted YOLO flag; False on any parse failure (resume must never enable the bypass)."""
-        return bool(_parse_model_config((session_meta or {}).get("model_config")).get("yolo_mode"))
+        return bool(
+            _parse_model_config((session_meta or {}).get("model_config")).get(
+                "yolo_mode"
+            )
+        )
 
     def get_session(self, session_id: str) -> Optional[dict[str, Any]]:
         """Get a session by ID (drains queued token deltas first so cost readers see exact totals)."""
@@ -850,7 +1095,9 @@ class SessionSessionsMixin:
         )
         return dict(row) if row else None
 
-    def get_recent_session_model_route(self, session_id: str) -> Optional[dict[str, Any]]:
+    def get_recent_session_model_route(
+        self, session_id: str
+    ) -> Optional[dict[str, Any]]:
         """Most recently used main-loop model route as one coherent per-call tuple
         (``session_model_usage`` keeps model+provider together; ``sessions`` mixes route changes).
         Recency, not lifetime call count: on a long session a route retired weeks ago can hold the
@@ -895,12 +1142,15 @@ class SessionSessionsMixin:
         stamp = (profile_name or "").strip()
         if not stamp:
             return 0
-        return int(self._write_rowcount(
-            """UPDATE sessions
+        return int(
+            self._write_rowcount(
+                """UPDATE sessions
                SET profile_name = ?
              WHERE profile_name IS NULL OR TRIM(profile_name) = ''""",
-            (stamp,),
-        ) or 0)
+                (stamp,),
+            )
+            or 0
+        )
 
     def backfill_acp_session_cwd(self) -> int:
         """Promote ``model_config.cwd`` into the cwd column for ACP rows lacking one.
@@ -911,54 +1161,77 @@ class SessionSessionsMixin:
         Only fills NULL/empty; an explicit column value always wins. Returns the
         number of rows changed.
         """
-        return int(self._write_rowcount(
-            """UPDATE sessions
+        return int(
+            self._write_rowcount(
+                """UPDATE sessions
                   SET cwd = json_extract(model_config, '$.cwd')
                 WHERE source = 'acp'
                   AND COALESCE(cwd, '') = ''
                   AND json_valid(model_config)
                   AND COALESCE(json_extract(model_config, '$.cwd'), '') != ''""",
-            (),
-        ) or 0)
+                (),
+            )
+            or 0
+        )
 
-    def _set_lineage_column(self, column: str, session_id: str, value: Any, *,
-                            extra_set_sql: str = "") -> bool:
+    def _set_lineage_column(
+        self, column: str, session_id: str, value: Any, *, extra_set_sql: str = ""
+    ) -> bool:
         """Set one ``sessions`` column across a whole compression lineage: Desktop projects roots
         forward to their tip, so updating only the tip would let the root resurrect it on refresh.
         *extra_set_sql* (trusted literal, ``, col = expr``) rides the same UPDATE."""
-        return bool(self._execute_write(
-            lambda conn: self._set_lineage_column_in_transaction(
-                conn, column, session_id, value, extra_set_sql=extra_set_sql)
-        ))
+        return bool(
+            self._execute_write(
+                lambda conn: self._set_lineage_column_in_transaction(
+                    conn, column, session_id, value, extra_set_sql=extra_set_sql
+                )
+            )
+        )
 
-    def _set_lineage_column_in_transaction(self, conn, column: str, session_id: str, value: Any, *,
-                                           extra_set_sql: str = ""):
+    def _set_lineage_column_in_transaction(
+        self, conn, column: str, session_id: str, value: Any, *, extra_set_sql: str = ""
+    ):
         """Return affected IDs so authority revisions share this exact lineage selector. A plain
         ``archived`` write (canonical mutation, user/CLI/API) is the DELIBERATE archive and clears
         the idle sweep's ``auto_archived`` provenance, same as :meth:`set_session_archived`."""
         if column == "archived" and not extra_set_sql:
             extra_set_sql = ", auto_archived = 0"
-        return [row[0] for row in conn.execute(
-            _LINEAGE_CTE_SQL + f"""
+        return [
+            row[0]
+            for row in conn.execute(
+                _LINEAGE_CTE_SQL
+                + f"""
             UPDATE sessions
             SET {column} = ?{extra_set_sql}
             WHERE id IN (SELECT id FROM lineage)
             RETURNING id
             """,
-            (session_id, session_id, value),
-        ).fetchall()]
+                (session_id, session_id, value),
+            ).fetchall()
+        ]
 
-    def set_session_archived(self, session_id: str, archived: bool, *, notify: bool = True) -> bool:
+    def set_session_archived(
+        self, session_id: str, archived: bool, *, notify: bool = True
+    ) -> bool:
         """Soft-hide (or unhide) a session and its compression lineage; messages are kept.
         This is the DELIBERATE archive (user, CLI, API): it clears the ``auto_archived``
         provenance, so re-activation never un-hides it on the user's behalf. A real
         unarchived -> archived flip fires ``on_session_delete`` (``reason="archive"``) after commit;
         ``notify=False`` is for housekeeping that hides a row whose session lives on elsewhere."""
+
         def _do(conn):
-            row = conn.execute("SELECT archived FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            row = conn.execute(
+                "SELECT archived FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
             ids = self._set_lineage_column_in_transaction(
-                conn, "archived", session_id, int(archived), extra_set_sql=", auto_archived = 0")
+                conn,
+                "archived",
+                session_id,
+                int(archived),
+                extra_set_sql=", auto_archived = 0",
+            )
             return ids, bool(archived and ids and row is not None and not row[0])
+
         ids, newly_archived = self._execute_write(_do)
         if newly_archived and notify:
             emit_session_deleted(self, ids, reason="archive", primary=session_id)
@@ -970,8 +1243,11 @@ class SessionSessionsMixin:
         deliberately archived ancestor is never relabelled as sweep-owned (SQLite evaluates every
         SET expression against the pre-update row)."""
         return self._set_lineage_column(
-            "archived", session_id, 1,
-            extra_set_sql=", auto_archived = CASE WHEN archived = 0 THEN 1 ELSE auto_archived END")
+            "archived",
+            session_id,
+            1,
+            extra_set_sql=", auto_archived = CASE WHEN archived = 0 THEN 1 ELSE auto_archived END",
+        )
 
     @staticmethod
     def _unarchive_auto_archived_lineage(conn, session_id: str) -> bool:
@@ -982,18 +1258,27 @@ class SessionSessionsMixin:
         alone: a manual archive stays until the user un-archives it. True when rows were un-hidden."""
         params = (session_id, session_id)
         manual = conn.execute(
-            _LINEAGE_CTE_SQL + """
+            _LINEAGE_CTE_SQL
+            + """
             SELECT 1 FROM sessions
             WHERE id IN (SELECT id FROM lineage) AND archived <> 0 AND COALESCE(auto_archived, 0) = 0
             LIMIT 1
-            """, params).fetchone()
+            """,
+            params,
+        ).fetchone()
         if manual is not None:
             return False
-        return conn.execute(
-            _LINEAGE_CTE_SQL + """
+        return (
+            conn.execute(
+                _LINEAGE_CTE_SQL
+                + """
             UPDATE sessions SET archived = 0, auto_archived = 0
             WHERE id IN (SELECT id FROM lineage) AND archived <> 0
-            """, params).rowcount > 0
+            """,
+                params,
+            ).rowcount
+            > 0
+        )
 
     # Accidental end reasons recovery treats as resumable (also interpolated into
     # the recovery/promotion SQL so literals cannot drift).
@@ -1034,7 +1319,8 @@ class SessionSessionsMixin:
         # Clear the accidental end stamp, or a LATER deliberate archive (which never
         # writes end_reason) would auto-resurrect on the next lookup.
         self._write_sql(
-            "UPDATE sessions SET ended_at = NULL, end_reason = NULL WHERE id = ?", (tip["id"],),
+            "UPDATE sessions SET ended_at = NULL, end_reason = NULL WHERE id = ?",
+            (tip["id"],),
         )
         return True
 
@@ -1048,8 +1334,10 @@ class SessionSessionsMixin:
         result = self._set_lineage_column("pinned", session_id, int(pinned))
         if pinned:
             row = self.get_session(session_id)
-            is_canonical_bot_chat = bool(row) and bool(row.get("hidden")) and (
-                (row.get("title") or "") == self.CANONICAL_BOT_CHAT_TITLE
+            is_canonical_bot_chat = (
+                bool(row)
+                and bool(row.get("hidden"))
+                and ((row.get("title") or "") == self.CANONICAL_BOT_CHAT_TITLE)
             )
             if not is_canonical_bot_chat:
                 self._set_lineage_column("hidden", session_id, 0)
@@ -1062,7 +1350,9 @@ class SessionSessionsMixin:
     def set_session_read(self, session_id: str, read: bool = True) -> bool:
         """Mark read/unread across the compression lineage. ``last_read_at`` is a watermark: unread when
         activity postdates it (no write on the message path). NULL = never tracked = read; 0 = unread."""
-        return self._set_lineage_column("last_read_at", session_id, time.time() if read else 0.0)
+        return self._set_lineage_column(
+            "last_read_at", session_id, time.time() if read else 0.0
+        )
 
     @staticmethod
     def session_unread(session_row: dict[str, Any]) -> bool:
@@ -1080,14 +1370,18 @@ class SessionSessionsMixin:
     _session_compact_cols_sql: Optional[str] = None
 
     @staticmethod
-    def _chain_search_where(where_sql: str, id_needle: str, search_needle: str) -> tuple[str, list[Any]]:
+    def _chain_search_where(
+        where_sql: str, id_needle: str, search_needle: str
+    ) -> tuple[str, list[Any]]:
         """Extend ``where_sql`` with the id_query / search_query filters: a row is admitted when its own
         id or any id in its forward compression chain matches (search also matches titles and a
         punctuation-stripped form so ``an94`` finds ``AN-94``); chain membership bounds the LIKE."""
         params: list[Any] = []
         clauses: list[str] = []
+
         def like(needle: str) -> str:
             return f"%{_escape_like(needle)}%"
+
         if id_needle:
             clauses.append(
                 "EXISTS (SELECT 1 FROM chain cq        WHERE cq.root_id = s.id"
@@ -1112,13 +1406,19 @@ class SessionSessionsMixin:
         if not clauses:
             return where_sql, params
         combined = " AND ".join(clauses)
-        return (f"{where_sql} AND {combined}" if where_sql else f"WHERE {combined}"), params
+        return (
+            f"{where_sql} AND {combined}" if where_sql else f"WHERE {combined}"
+        ), params
 
-    def _project_compression_tips(self, sessions: list[dict[str, Any]], compact_rows: bool) -> list[dict[str, Any]]:
+    def _project_compression_tips(
+        self, sessions: list[dict[str, Any]], compact_rows: bool
+    ) -> list[dict[str, Any]]:
         """Replace each compression root's surfaced fields with its live tip's (root ``started_at`` kept
         for stable ordering), one batched query. ``_lineage_ids`` carries every chain id (a tile may
         hold a MIDDLE segment's id)."""
-        chain_by_root: dict[str, list[str]] = {}  # only roots whose tip differs from themselves
+        chain_by_root: dict[
+            str, list[str]
+        ] = {}  # only roots whose tip differs from themselves
         for s in sessions:
             if s.get("end_reason") == "compression":
                 chain = self.get_compression_chain(s["id"])
@@ -1126,8 +1426,11 @@ class SessionSessionsMixin:
                     chain_by_root[s["id"]] = chain
         tip_rows = (
             self._get_session_rich_rows_batch(
-                {chain[-1] for chain in chain_by_root.values()}, compact_rows=compact_rows,
-            ) if chain_by_root else {}
+                {chain[-1] for chain in chain_by_root.values()},
+                compact_rows=compact_rows,
+            )
+            if chain_by_root
+            else {}
         )
         projected = []
         for s in sessions:
@@ -1138,8 +1441,19 @@ class SessionSessionsMixin:
                 continue
             merged = dict(s)
             for key in (
-                "id", "ended_at", "end_reason", "message_count", "tool_call_count", "title", "last_active",
-                "preview", "model", "system_prompt", "cwd", "git_branch", "git_repo_root",
+                "id",
+                "ended_at",
+                "end_reason",
+                "message_count",
+                "tool_call_count",
+                "title",
+                "last_active",
+                "preview",
+                "model",
+                "system_prompt",
+                "cwd",
+                "git_branch",
+                "git_repo_root",
             ):
                 if key in tip_row:
                     merged[key] = tip_row[key]
@@ -1207,7 +1521,7 @@ class SessionSessionsMixin:
             AND json_extract(
                 COALESCE(child.model_config, '{{}}'), '$._branched_from'
             ) IS NULL
-            AND {_delegate_from_json('child.model_config')} IS NULL
+            AND {_delegate_from_json("child.model_config")} IS NULL
             AND COALESCE(child.source, '') != 'tool'
         """
 
@@ -1253,7 +1567,7 @@ class SessionSessionsMixin:
                 SELECT
                     c.root_id,
                     c.cur_id,
-                    {_sql_session_last_active_by_id('c.cur_id')} AS activity,
+                    {_sql_session_last_active_by_id("c.cur_id")} AS activity,
                     CASE WHEN EXISTS (
                         SELECT 1
                         FROM sessions parent
@@ -1282,7 +1596,7 @@ class SessionSessionsMixin:
                 tip.message_count,
                 tip.tool_call_count,
                 rt.activity AS last_active,
-                {_sql_preview_raw('tip.id')},
+                {_sql_preview_raw("tip.id")},
                 CASE WHEN s.id != tip.id THEN s.id ELSE NULL END
                     AS _lineage_root_id
             FROM ranked_tips rt
@@ -1292,7 +1606,7 @@ class SessionSessionsMixin:
               AND s.archived = 0
               AND s.hidden = 0
               AND {_LISTABLE_CHILD_SQL}
-              AND {_delegate_from_json('s.model_config')} IS NULL
+              AND {_delegate_from_json("s.model_config")} IS NULL
             ORDER BY rt.activity DESC, s.started_at DESC, tip.id DESC
             LIMIT ?
         """
@@ -1343,13 +1657,27 @@ class SessionSessionsMixin:
         return s
 
     def list_sessions_rich(
-        self, source: str | None = None, sources: list[str] | None = None, exclude_sources: list[str] | None = None,
-        cwd_prefix: str | None = None, limit: int = 20, offset: int = 0, include_children: bool = False,
-        min_message_count: int = 0, project_compression_tips: bool = True,
-        order_by_last_active: bool = False, include_archived: bool = False, archived_only: bool = False,
-        id_query: str | None = None, search_query: str | None = None, compact_rows: bool = False,
-        include_pinned: bool = False, session_key: str | None = None, include_hidden: bool = False,
-        include_subagents: bool = False, local_created_sources: Sequence[str] | None = None,
+        self,
+        source: str | None = None,
+        sources: list[str] | None = None,
+        exclude_sources: list[str] | None = None,
+        cwd_prefix: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        include_children: bool = False,
+        min_message_count: int = 0,
+        project_compression_tips: bool = True,
+        order_by_last_active: bool = False,
+        include_archived: bool = False,
+        archived_only: bool = False,
+        id_query: str | None = None,
+        search_query: str | None = None,
+        compact_rows: bool = False,
+        include_pinned: bool = False,
+        session_key: str | None = None,
+        include_hidden: bool = False,
+        include_subagents: bool = False,
+        local_created_sources: Sequence[str] | None = None,
     ) -> list[dict[str, Any]]:
         """List sessions with preview and ``last_active`` in one query. ``order_by_last_active`` sorts
         by the chain TIP via a recursive CTE (the only path honouring ``id_query`` / ``search_query``);
@@ -1359,9 +1687,16 @@ class SessionSessionsMixin:
         rows to those surfaces before LIMIT/OFFSET."""
         self.flush_token_counts()  # rows carry token/cost totals
         where_clauses, params = _session_filter_where(
-            exclude_children=not include_children, source=source, sources=sources, session_key=session_key,
-            exclude_sources=exclude_sources, cwd_prefix=cwd_prefix, min_message_count=min_message_count,
-            archived_only=archived_only, include_archived=include_archived, include_subagents=include_subagents,
+            exclude_children=not include_children,
+            source=source,
+            sources=sources,
+            session_key=session_key,
+            exclude_sources=exclude_sources,
+            cwd_prefix=cwd_prefix,
+            min_message_count=min_message_count,
+            archived_only=archived_only,
+            include_archived=include_archived,
+            include_subagents=include_subagents,
             local_created_sources=local_created_sources,
         )
         # The archived-only view is the recovery surface for rows that dropped out of every
@@ -1372,6 +1707,7 @@ class SessionSessionsMixin:
             where_clauses.append("s.hidden = 0")
         heads = {}
         from clawk_state_local import exclude_superseded_segments
+
         if not include_children:
             # A local reset lineage is one conversation (clawk_state_local.local_lineage_index):
             # earlier segments leave the page in SQL, before LIMIT/OFFSET, not after it.
@@ -1380,11 +1716,17 @@ class SessionSessionsMixin:
         # Shared projection head of the three list queries (whitespace is part of the SQL text).
         select_head = (
             f"SELECT {self._compact_session_cols() if compact_rows else 's.*'}"
-            + ("" if compact_rows else ", COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved")
+            + (
+                ""
+                if compact_rows
+                else ", COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved"
+            )
             + f",\n                    {_sql_preview_raw()},\n                    "
         )
         prompt_join = (
-            "" if compact_rows else "LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash"
+            ""
+            if compact_rows
+            else "LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash"
         )
         from_sessions = f"FROM sessions s\n                {prompt_join}"
         if order_by_last_active:
@@ -1393,7 +1735,9 @@ class SessionSessionsMixin:
             # require child.started_at >= parent.ended_at: races insert the
             # continuation before ended_at is written.
             outer_where, id_params = self._chain_search_where(
-                where_sql, (id_query or "").strip().lower(), (search_query or "").strip().lower(),
+                where_sql,
+                (id_query or "").strip().lower(),
+                (search_query or "").strip().lower(),
             )
             query = f"""
                 WITH RECURSIVE chain(root_id, cur_id) AS (
@@ -1404,9 +1748,9 @@ class SessionSessionsMixin:
                     JOIN sessions parent ON parent.id = c.cur_id
                     JOIN sessions child ON child.parent_session_id = c.cur_id
                     WHERE parent.end_reason = 'compression'
-                      AND {_sql_json_extract('child.model_config', '$._branched_from')} IS NULL
-                      AND {_sql_json_extract('child.model_config', '$._delegate_from')} IS NULL
-                      AND NOT ({_RESET_CHILD_SQL.format(a='child')})
+                      AND {_sql_json_extract("child.model_config", "$._branched_from")} IS NULL
+                      AND {_sql_json_extract("child.model_config", "$._delegate_from")} IS NULL
+                      AND NOT ({_RESET_CHILD_SQL.format(a="child")})
                       AND COALESCE(child.source, '') != 'tool'
                 ),
                 chain_max AS (
@@ -1425,7 +1769,9 @@ class SessionSessionsMixin:
                 ORDER BY _effective_last_active DESC, s.started_at DESC, s.id DESC
                 LIMIT ? OFFSET ?
             """
-            params = params + params + id_params + [limit, offset]  # WHERE binds twice (seed + outer)
+            params = (
+                params + params + id_params + [limit, offset]
+            )  # WHERE binds twice (seed + outer)
         else:
             query = f"""
                 {select_head}{_sql_session_last_active("s")} AS last_active
@@ -1443,10 +1789,17 @@ class SessionSessionsMixin:
         if include_pinned:
             seen_ids = {s["id"] for s in sessions}
             pinned_clauses, pinned_params = _session_filter_where(
-                exclude_children=not include_children, source=source, sources=sources,
-                session_key=session_key, exclude_sources=exclude_sources, cwd_prefix=cwd_prefix,
-                min_message_count=min_message_count, archived_only=False, include_archived=True,
-                include_subagents=include_subagents, local_created_sources=local_created_sources,
+                exclude_children=not include_children,
+                source=source,
+                sources=sources,
+                session_key=session_key,
+                exclude_sources=exclude_sources,
+                cwd_prefix=cwd_prefix,
+                min_message_count=min_message_count,
+                archived_only=False,
+                include_archived=True,
+                include_subagents=include_subagents,
+                local_created_sources=local_created_sources,
             )
             if not include_hidden and not archived_only:
                 pinned_clauses.append("s.hidden = 0")
@@ -1469,6 +1822,7 @@ class SessionSessionsMixin:
             sessions = self._project_compression_tips(sessions, compact_rows)
         if heads:
             from clawk_state_local import annotate_local_lineages
+
             sessions = annotate_local_lineages(sessions, heads)
         # last_read_at is lineage-stamped, so root and tip watermarks agree.
         for s in sessions:
@@ -1482,7 +1836,8 @@ class SessionSessionsMixin:
         if not ids:
             return {}
         statuses: dict[str, str] = {sid: "empty" for sid in ids}
-        rows = self._read_all(f"""
+        rows = self._read_all(
+            f"""
             SELECT m.session_id, m.role,
                    m.tool_calls IS NOT NULL AS has_tool_calls,
                    m.finish_reason
@@ -1493,20 +1848,26 @@ class SessionSessionsMixin:
                 WHERE session_id IN ({_session_ids_placeholders(ids)})
                 GROUP BY session_id
             ) latest ON m.id = latest.max_id
-        """, ids)
+        """,
+            ids,
+        )
         for row in rows:
             statuses[row["session_id"]] = classify_session_status(
-                role=row["role"], has_tool_calls=bool(row["has_tool_calls"]),
+                role=row["role"],
+                has_tool_calls=bool(row["has_tool_calls"]),
                 finish_reason=row["finish_reason"],
             )
         return statuses
 
-    def assert_export_safe(self, session_id: str, max_messages: Optional[int] = None) -> int:
+    def assert_export_safe(
+        self, session_id: str, max_messages: Optional[int] = None
+    ) -> int:
         """Row count of this segment — every row, archived included, as the transfer export materializes
         it — or raise SessionExportTooLargeError (the LIMITed subquery
         stops once the bound is exceeded). ``None`` resolves ``sessions.max_export_messages``; 0 disables
         the guard."""
         from clawk_state import SessionExportTooLargeError, resolved_max_export_messages
+
         if max_messages is None:
             max_messages = resolved_max_export_messages()
         if max_messages < 0:
@@ -1522,9 +1883,12 @@ class SessionSessionsMixin:
             raise SessionExportTooLargeError(session_id, message_count, max_messages)
         return message_count
 
-    def assert_exports_safe(self, session_ids, max_messages: Optional[int] = None) -> None:
+    def assert_exports_safe(
+        self, session_ids, max_messages: Optional[int] = None
+    ) -> None:
         """assert_export_safe for each id with the limit resolved once; 0 disables (no queries)."""
         from clawk_state import resolved_max_export_messages
+
         if max_messages is None:
             max_messages = resolved_max_export_messages()
         if max_messages == 0:
@@ -1537,8 +1901,12 @@ class SessionSessionsMixin:
         compression continuations need the parent's archived rows."""
         if not session_id:
             return False
-        row = self._read_one("SELECT model_config FROM sessions WHERE id = ?", (session_id,))
-        return row is not None and bool(_parse_model_config(row[0]).get("_branched_from"))
+        row = self._read_one(
+            "SELECT model_config FROM sessions WHERE id = ?", (session_id,)
+        )
+        return row is not None and bool(
+            _parse_model_config(row[0]).get("_branched_from")
+        )
 
     def _session_lineage_root_to_tip(self, session_id: str) -> list[str]:
         if not session_id:
@@ -1549,7 +1917,8 @@ class SessionSessionsMixin:
             while current and current not in chain and len(chain) < 100:
                 chain.append(current)
                 row = conn.execute(
-                    "SELECT parent_session_id FROM sessions WHERE id = ?", (current,),
+                    "SELECT parent_session_id FROM sessions WHERE id = ?",
+                    (current,),
                 ).fetchone()
                 if row is None:
                     break
@@ -1557,8 +1926,12 @@ class SessionSessionsMixin:
         return list(reversed(chain)) or [session_id]
 
     def search_sessions(
-        self, source: str | Sequence[str] | None = None, limit: int = 20, offset: int = 0,
-        workspace_key: str | None = None, local_created_sources: Sequence[str] | None = None,
+        self,
+        source: str | Sequence[str] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        workspace_key: str | None = None,
+        local_created_sources: Sequence[str] | None = None,
         skip_launch_stubs: bool = False,
     ) -> list[dict[str, Any]]:
         """Sessions MRU-first with a computed ``last_active``; ``workspace_key`` scopes to one workspace
@@ -1576,48 +1949,72 @@ class SessionSessionsMixin:
             ws_clause, ws_params = _workspace_key_clause(workspace_key)
             where_clauses.append(ws_clause)
             params.extend(ws_params)
-        return [self._session_row_dict(row) for row in self._read_all(
-            "SELECT s.*, COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved, "
-            f"{_sql_session_last_active('s')} AS last_active "
-            "FROM sessions s LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash "
-            f"{_where_sql(where_clauses, ' ')} "
-            "ORDER BY last_active DESC, s.started_at DESC, s.id DESC LIMIT ? OFFSET ?",
-            [*params, limit, offset],
-        )]
+        return [
+            self._session_row_dict(row)
+            for row in self._read_all(
+                "SELECT s.*, COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved, "
+                f"{_sql_session_last_active('s')} AS last_active "
+                "FROM sessions s LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash "
+                f"{_where_sql(where_clauses, ' ')} "
+                "ORDER BY last_active DESC, s.started_at DESC, s.id DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            )
+        ]
 
     def session_count(
-        self, source: str | None = None, sources: list[str] | None = None, cwd_prefix: str | None = None,
-        min_message_count: int = 0, include_archived: bool = False, archived_only: bool = False,
-        exclude_children: bool = False, exclude_sources: list[str] | None = None, include_subagents: bool = False,
+        self,
+        source: str | None = None,
+        sources: list[str] | None = None,
+        cwd_prefix: str | None = None,
+        min_message_count: int = 0,
+        include_archived: bool = False,
+        archived_only: bool = False,
+        exclude_children: bool = False,
+        exclude_sources: list[str] | None = None,
+        include_subagents: bool = False,
         local_created_sources: Sequence[str] | None = None,
     ) -> int:
         """Count sessions with list_sessions_rich's filters so a paired "load more" total matches."""
         where_clauses, params = _session_filter_where(
-            exclude_children=exclude_children, source=source, sources=sources,
-            exclude_sources=exclude_sources, cwd_prefix=cwd_prefix, min_message_count=min_message_count,
-            archived_only=archived_only, include_archived=include_archived, include_subagents=include_subagents,
+            exclude_children=exclude_children,
+            source=source,
+            sources=sources,
+            exclude_sources=exclude_sources,
+            cwd_prefix=cwd_prefix,
+            min_message_count=min_message_count,
+            archived_only=archived_only,
+            include_archived=include_archived,
+            include_subagents=include_subagents,
             local_created_sources=local_created_sources,
         )
         if exclude_children:
             from clawk_state_local import exclude_superseded_segments
+
             exclude_superseded_segments(self, where_clauses, params)
-        return self._read_one(f"SELECT COUNT(*) FROM sessions s{_where_sql(where_clauses, ' ')}", params)[0]
+        return self._read_one(
+            f"SELECT COUNT(*) FROM sessions s{_where_sql(where_clauses, ' ')}", params
+        )[0]
 
     def session_count_ge(self, n: int = 1) -> bool:
         """At least N sessions exist (archived included); LIMIT short-circuits session_count()'s scan."""
         return len(self._read_all("SELECT 1 FROM sessions LIMIT ?", (n,))) >= n
 
     def session_count_by_source(
-        self, *, include_archived: bool = False, archived_only: bool = False,
+        self,
+        *,
+        include_archived: bool = False,
+        archived_only: bool = False,
         exclude_children: bool = False,
     ) -> dict[str, int]:
         """``{source: count}`` via one GROUP BY; ``exclude_children`` mirrors listing visibility."""
         where_clauses, params = _session_filter_where(
-            exclude_children=exclude_children, archived_only=archived_only,
+            exclude_children=exclude_children,
+            archived_only=archived_only,
             include_archived=include_archived,
         )
         if exclude_children:
             from clawk_state_local import exclude_superseded_segments
+
             exclude_superseded_segments(self, where_clauses, params)
         with self._read_ctx() as conn:
             if self._conn is None:
@@ -1625,7 +2022,8 @@ class SessionSessionsMixin:
             rows = conn.execute(
                 "SELECT COALESCE(NULLIF(s.source, ''), 'cli') AS source, COUNT(*) AS count "
                 f"FROM sessions s{_where_sql(where_clauses, ' ')} "
-                "GROUP BY COALESCE(NULLIF(s.source, ''), 'cli') ORDER BY count DESC", params,
+                "GROUP BY COALESCE(NULLIF(s.source, ''), 'cli') ORDER BY count DESC",
+                params,
             ).fetchall()
         return {str(row["source"]): int(row["count"] or 0) for row in rows}
 
@@ -1641,7 +2039,9 @@ class SessionSessionsMixin:
         session = self.get_session(session_id)
         if not session:
             return False, ""
-        return self._is_explicit_fork_child_row(session), str(session.get("source") or "").strip()
+        return self._is_explicit_fork_child_row(session), str(
+            session.get("source") or ""
+        ).strip()
 
     @staticmethod
     def _remove_session_files(sessions_dir: Optional[Path], session_id: str) -> None:
@@ -1651,12 +2051,16 @@ class SessionSessionsMixin:
         can carry plaintext secrets (#20334, #60207)."""
         if sessions_dir is None:
             return
-        targets = [sessions_dir / f"{session_id}{suffix}" for suffix in (".json", ".jsonl")]
+        targets = [
+            sessions_dir / f"{session_id}{suffix}" for suffix in (".json", ".jsonl")
+        ]
         targets.append(sessions_dir / f"session_{session_id}.json")
         try:
             # glob.escape: a session id carrying ``[`` / ``?`` / ``*`` is a PATTERN otherwise, so the
             # dump sweep either matches nothing or matches another session's files.
-            targets.extend(sessions_dir.glob(f"request_dump_{glob.escape(session_id)}_*.json"))
+            targets.extend(
+                sessions_dir.glob(f"request_dump_{glob.escape(session_id)}_*.json")
+            )
         except OSError:
             pass
         for p in targets:
@@ -1669,12 +2073,15 @@ class SessionSessionsMixin:
         """Rows :meth:`delete_session` would remove: the session, then its recursive delegate children
         (branch/compression children are orphaned, not deleted)."""
         with self._read_ctx() as conn:
-            if not conn.execute("SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)).fetchone():
+            if not conn.execute(
+                "SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)
+            ).fetchone():
                 return []
             # Use the borrowed read connection, never self._conn: handing the shared writer connection to a
             # helper here executes on it without self._lock — the same unsynchronized-read class as
             # #99349/#90734.
             from clawk_state_local import owned_lineage_ids
+
             scope = owned_lineage_ids(conn, session_id)
             delegate_ids = _collect_delegate_child_ids(conn, scope)
         return [session_id, *sorted(set(scope) - {session_id}), *sorted(delegate_ids)]
@@ -1712,12 +2119,15 @@ class SessionSessionsMixin:
         # A local reset lineage (creation id + every segment, compression children included) is one
         # listed conversation: deleting any segment must not strand the others without an owner.
         from clawk_state_local import local_conversation_ids
+
         for sid in list(seen):
             seen.update(local_conversation_ids(conn, sid))
         return list(seen)
 
     def delete_session(
-        self, session_id: str, sessions_dir: Optional[Path] = None,
+        self,
+        session_id: str,
+        sessions_dir: Optional[Path] = None,
         expected_delete_ids: Optional[list[str]] = None,
         expected_display_messages: Optional[dict[str, list[dict[str, Any]]]] = None,
         exclude_active_write_guards: bool = False,
@@ -1738,23 +2148,37 @@ class SessionSessionsMixin:
         place; its return value counts the *requested* ids that existed, so ``> 0`` is exactly
         "the session was found"."""
         if include_compression_chain:
-            return self.delete_sessions(
-                [session_id], sessions_dir=sessions_dir,
-                exclude_active_write_guards=exclude_active_write_guards,
-                include_compression_chain=True,
-            ) > 0
+            return (
+                self.delete_sessions(
+                    [session_id],
+                    sessions_dir=sessions_dir,
+                    exclude_active_write_guards=exclude_active_write_guards,
+                    include_compression_chain=True,
+                )
+                > 0
+            )
         removed_ids: list[str] = []
-        expected_ids = set(expected_delete_ids) if expected_delete_ids is not None else None
+        expected_ids = (
+            set(expected_delete_ids) if expected_delete_ids is not None else None
+        )
+
         def _do(conn):
-            if conn.execute("SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)).fetchone() is None:
+            if (
+                conn.execute(
+                    "SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)
+                ).fetchone()
+                is None
+            ):
                 return False
             # A local reset/compression conversation deletes whole from any segment: the listed row
             # is its latest segment, and a lone segment delete strands the owner's policy and FIFO.
             from clawk_state_local import owned_lineage_ids
+
             scope = owned_lineage_ids(conn, session_id)
             target_ids = (
                 [*scope, *_collect_delegate_child_ids(conn, scope)]
-                if exclude_active_write_guards or expected_ids is not None else None
+                if exclude_active_write_guards or expected_ids is not None
+                else None
             )
             if exclude_active_write_guards and self._guarded_ids(conn, target_ids):
                 # Delegate children cascade with the root, so a guard on any of them refuses too.
@@ -1769,19 +2193,33 @@ class SessionSessionsMixin:
             ):
                 return False
             from clawk_state_mutation_retirement import retire_sessions
+
             retire_sessions(conn, scope)
             removed_ids.extend(_delete_delegate_children(conn, scope))
             for sid in scope:  # orphan remaining children (branches) so FK is satisfied
-                conn.execute("UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = ?", (sid,))
+                conn.execute(
+                    "UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = ?",
+                    (sid,),
+                )
                 conn.execute("DELETE FROM messages WHERE session_id = ?", (sid,))
-            conn.executemany("DELETE FROM sessions WHERE id = ?", [(sid,) for sid in scope])
+            conn.executemany(
+                "DELETE FROM sessions WHERE id = ?", [(sid,) for sid in scope]
+            )
             self._delete_unreferenced_system_prompts(conn)
             removed_ids.extend(scope)
             return True
+
         deleted = self._execute_write(_do)
         if deleted:
-            emit_session_deleted(self, removed_ids, reason="delete", primary=session_id, sessions_dir=sessions_dir)
+            emit_session_deleted(
+                self,
+                removed_ids,
+                reason="delete",
+                primary=session_id,
+                sessions_dir=sessions_dir,
+            )
         from clawk_state_media import collect_retired_media
+
         collect_retired_media(self)
         for sid in removed_ids:
             self._remove_session_files(sessions_dir, sid)
@@ -1792,28 +2230,38 @@ class SessionSessionsMixin:
         compensation): remove it WITHOUT the retirement fence so the id can be lazily recreated.
         A row with any admission or worker receipt is a real session and takes the fenced
         :meth:`delete_session` path instead."""
+
         def _do(conn):
             if conn.execute(
                 "SELECT 1 FROM session_admissions WHERE target_session_id=? UNION ALL "
-                "SELECT 1 FROM worker_executions WHERE session_id=? LIMIT 1", (session_id, session_id)).fetchone():
+                "SELECT 1 FROM worker_executions WHERE session_id=? LIMIT 1",
+                (session_id, session_id),
+            ).fetchone():
                 return None
             conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             return cur.rowcount > 0
+
         result = self._execute_write(_do)
         if result is None:
             return self.delete_session(session_id)
         return bool(result)
 
-    def delete_session_if_empty(self, session_id: str, sessions_dir: Optional[Path] = None) -> bool:
+    def delete_session_if_empty(
+        self, session_id: str, sessions_dir: Optional[Path] = None
+    ) -> bool:
         """Delete *session_id* only if it has no messages, no title and no children; check and delete
         share one transaction so a concurrent flush can't be lost. A row under an active turn lease
         or compression lock is never a candidate: the emptiness predicate reads committed state, so a
         row whose first turn is already leased but not yet flushed would be deleted mid-turn
         (#123583). A guarded row is simply not deleted (returns ``False``), like any non-empty row."""
+
         def _do(conn):
             from clawk_state_local import owned_lineage_ids
-            if self._guarded_ids(conn, [session_id]) or owned_lineage_ids(conn, session_id) != [session_id]:
+
+            if self._guarded_ids(conn, [session_id]) or owned_lineage_ids(
+                conn, session_id
+            ) != [session_id]:
                 return False  # an empty reset tip is still its conversation's current target
             eligible = conn.execute(
                 """
@@ -1836,22 +2284,30 @@ class SessionSessionsMixin:
             # (ON DELETE RESTRICT) and delete without re-evaluating eligibility. Housekeeping, not
             # a user delete: its fence ages out at the horizon (an untitled row is never a Bot Chat).
             from clawk_state_mutation_retirement import retire_sessions
+
             retire_sessions(conn, [session_id], expiring=[session_id])
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             self._delete_unreferenced_system_prompts(conn)
             return True
+
         deleted = self._execute_write(_do)
         if deleted:
-            emit_session_deleted(self, [session_id], reason="empty_sweep", sessions_dir=sessions_dir)
+            emit_session_deleted(
+                self, [session_id], reason="empty_sweep", sessions_dir=sessions_dir
+            )
         from clawk_state_media import collect_retired_media
+
         collect_retired_media(self)
         if deleted:
             self._remove_session_files(sessions_dir, session_id)
         return deleted
 
     def delete_sessions(
-        self, session_ids: list[str], sessions_dir: Optional[Path] = None,
-        exclude_active_write_guards: bool = False, skipped_ids: Optional[list[str]] = None,
+        self,
+        session_ids: list[str],
+        sessions_dir: Optional[Path] = None,
+        exclude_active_write_guards: bool = False,
+        skipped_ids: Optional[list[str]] = None,
         include_compression_chain: bool = False,
     ) -> int:
         """Bulk delete with :meth:`delete_session` semantics per row, in ONE transaction. Unknown ids
@@ -1865,14 +2321,22 @@ class SessionSessionsMixin:
         without the expansion a "deleted" conversation resurfaces as the previous chain link on
         the next list reload (#57543). The returned count still reflects the *requested* rows,
         not the expanded chain links, so the caller's toast matches the user's selection."""
-        unique_ids = list({sid for sid in session_ids or () if isinstance(sid, str) and sid})
+        unique_ids = list(
+            {sid for sid in session_ids or () if isinstance(sid, str) and sid}
+        )
         if not unique_ids:
             return 0
         removed_ids: list[str] = []
+
         def _do(conn):
-            existing = [row["id"] for chunk in _id_chunks(unique_ids) for row in conn.execute(
-                f"SELECT id FROM sessions WHERE id IN ({_session_ids_placeholders(chunk)})", chunk,
-            ).fetchall()]
+            existing = [
+                row["id"]
+                for chunk in _id_chunks(unique_ids)
+                for row in conn.execute(
+                    f"SELECT id FROM sessions WHERE id IN ({_session_ids_placeholders(chunk)})",
+                    chunk,
+                ).fetchall()
+            ]
             if not existing:
                 return 0
             from clawk_state_local import owned_lineage_ids
@@ -1881,7 +2345,12 @@ class SessionSessionsMixin:
                 # A local reset/compression segment deletes as its whole conversation (delete_session).
                 if include_compression_chain:
                     return self._expand_compression_lineage(conn, ids)
-                return list(dict.fromkeys(x for sid in ids for x in owned_lineage_ids(conn, sid)))
+                return list(
+                    dict.fromkeys(
+                        x for sid in ids for x in owned_lineage_ids(conn, sid)
+                    )
+                )
+
             # Expand BEFORE the guard pass so a guarded lineage member (active turn lease /
             # compression lock anywhere in it) keeps its selected root listed too.
             expanded = expand(existing)
@@ -1896,16 +2365,31 @@ class SessionSessionsMixin:
                 if self._guarded_ids(conn, guard_pool):
                     if include_compression_chain:
                         for sid in existing:
-                            member_lineage = set(self._expand_compression_lineage(conn, [sid]))
+                            member_lineage = set(
+                                self._expand_compression_lineage(conn, [sid])
+                            )
                             member_lineage.add(sid)
-                            if self._guarded_ids(conn, [*member_lineage,
-                                    *_collect_delegate_child_ids(conn, list(member_lineage))]):
+                            if self._guarded_ids(
+                                conn,
+                                [
+                                    *member_lineage,
+                                    *_collect_delegate_child_ids(
+                                        conn, list(member_lineage)
+                                    ),
+                                ],
+                            ):
                                 active_ids.add(sid)
                     else:
                         active_ids = {
-                            sid for sid in existing
-                            if self._guarded_ids(conn, [*(members := expand([sid])),
-                                                        *_collect_delegate_child_ids(conn, members)])
+                            sid
+                            for sid in existing
+                            if self._guarded_ids(
+                                conn,
+                                [
+                                    *(members := expand([sid])),
+                                    *_collect_delegate_child_ids(conn, members),
+                                ],
+                            )
                         }
                 existing = [sid for sid in existing if sid not in active_ids]
                 if skipped_ids is not None:
@@ -1914,12 +2398,14 @@ class SessionSessionsMixin:
                     return 0
                 expanded = expand(existing)
             from clawk_state_mutation_retirement import retire_sessions
+
             retire_sessions(conn, expanded)
             removed_ids.extend(_delete_delegate_children(conn, expanded))
             for chunk in _id_chunks(expanded):
                 ph = _session_ids_placeholders(chunk)
                 conn.execute(  # orphan children whose parent is in the kill list (FK)
-                    f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})", chunk,
+                    f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})",
+                    chunk,
                 )
                 conn.execute(f"DELETE FROM messages WHERE session_id IN ({ph})", chunk)
                 conn.execute(f"DELETE FROM sessions WHERE id IN ({ph})", chunk)
@@ -1929,11 +2415,18 @@ class SessionSessionsMixin:
             # the dashboard toast should say "3 deleted" when the user selected
             # 3 rows, however many physical links those rows had.
             return len(existing)
+
         count = self._execute_write(_do)
         if count:
-            emit_session_deleted(self, removed_ids, reason="delete", primary=unique_ids[0] if len(unique_ids) == 1 else None,
-                                 sessions_dir=sessions_dir)
+            emit_session_deleted(
+                self,
+                removed_ids,
+                reason="delete",
+                primary=unique_ids[0] if len(unique_ids) == 1 else None,
+                sessions_dir=sessions_dir,
+            )
         from clawk_state_media import collect_retired_media
+
         collect_retired_media(self)
         for sid in removed_ids:
             self._remove_session_files(sessions_dir, sid)
@@ -1950,23 +2443,33 @@ class SessionSessionsMixin:
 
     def count_empty_sessions(self) -> int:
         """Count of empty, ended, non-archived sessions; ended_at guards a fresh session's first message."""
-        return self._read_one(f"SELECT COUNT(*) FROM sessions WHERE {self._EMPTY_SESSION_WHERE}")[0]
+        return self._read_one(
+            f"SELECT COUNT(*) FROM sessions WHERE {self._EMPTY_SESSION_WHERE}"
+        )[0]
 
     def delete_empty_sessions(self, sessions_dir: Optional[Path] = None) -> int:
         """Delete every empty, ended, non-archived session in one transaction, orphaning (not cascading)
         children; transcript files are swept too."""
         removed_ids: list[str] = []
+
         def _do(conn):
-            session_ids = {row["id"] for row in conn.execute(
-                f"SELECT id FROM sessions WHERE {self._EMPTY_SESSION_WHERE}"
-            ).fetchall()}
+            session_ids = {
+                row["id"]
+                for row in conn.execute(
+                    f"SELECT id FROM sessions WHERE {self._EMPTY_SESSION_WHERE}"
+                ).fetchall()
+            }
             from clawk_state_mutation_retirement import retire_prunable
+
             session_ids = retire_prunable(conn, sorted(session_ids))
             if not session_ids:
                 return 0
             for chunk in _id_chunks(session_ids):
                 ph = _session_ids_placeholders(chunk)
-                conn.execute(f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})", chunk)
+                conn.execute(
+                    f"UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id IN ({ph})",
+                    chunk,
+                )
                 # DELETE FROM messages: a row inserted between the SELECT and here
                 # would otherwise dangle (clean FK state).
                 conn.execute(f"DELETE FROM messages WHERE session_id IN ({ph})", chunk)
@@ -1974,17 +2477,24 @@ class SessionSessionsMixin:
                 removed_ids.extend(chunk)
             self._delete_unreferenced_system_prompts(conn)
             return len(session_ids)
+
         count = self._execute_write(_do)
         if count:
-            emit_session_deleted(self, removed_ids, reason="empty_sweep", sessions_dir=sessions_dir)
+            emit_session_deleted(
+                self, removed_ids, reason="empty_sweep", sessions_dir=sessions_dir
+            )
         from clawk_state_media import collect_retired_media
+
         collect_retired_media(self)
         for sid in removed_ids:
             self._remove_session_files(sessions_dir, sid)
         return count
 
     def archive_sessions(
-        self, older_than_days: Optional[float] = None, source: str | None = None, **filters,
+        self,
+        older_than_days: Optional[float] = None,
+        source: str | None = None,
+        **filters,
     ) -> int:
         """Bulk soft-hide with prune_sessions' filter surface, via set_session_archived so each lineage
         flips as a unit; idempotent. Returns matches. A lineage is matched through its TIP only: an
@@ -1992,7 +2502,9 @@ class SessionSessionsMixin:
         recently active continuation (#115489)."""
         filters.setdefault("archived", False)
         filters["lineage_tips_only"] = True
-        rows = self.list_prune_candidates(older_than_days=older_than_days, source=source, **filters)
+        rows = self.list_prune_candidates(
+            older_than_days=older_than_days, source=source, **filters
+        )
         for row in rows:
             self.set_session_archived(row["id"], True)
         return len(rows)

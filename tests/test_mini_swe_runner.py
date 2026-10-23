@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+
 def test_run_task_kimi_omits_temperature():
     """Kimi models should NOT have client-side temperature overrides.
 
@@ -9,7 +10,9 @@ def test_run_task_kimi_omits_temperature():
     with patch("openai.OpenAI") as mock_openai:
         client = MagicMock()
         client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))]
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=[]))
+            ]
         )
         mock_openai.return_value = client
 

@@ -112,9 +112,7 @@ def test_cli_export_default_does_not_write_into_the_current_checkout(
     checkout.mkdir()
     monkeypatch.chdir(checkout)
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: default_home)
-    monkeypatch.setattr(
-        "clawk_constants.get_default_clawk_root", lambda: default_home
-    )
+    monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: default_home)
 
     profile_cmd.cmd_profile(
         Namespace(
@@ -152,8 +150,6 @@ def test_slash_export_uses_the_same_managed_destination(
     assert calls[0][0] == "default"
     assert Path(calls[0][1]).parent == default_home / "profile-exports"
     assert not (tmp_path / "default.tar.gz").exists()
-
-
 
 
 def test_cwd_in_unrelated_checkout_does_not_prove_safety(

@@ -10,6 +10,7 @@ native bearer route (``routes.auth_native_refresh``) share this one flight table
 A provider hint only orders discovery: it must neither split one rotating credential's lock
 nor let an unrelated provider reuse its result. Raw refresh tokens are never keys.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +20,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from clawk_cli.dashboard_auth.base import DashboardAuthProvider, RefreshExpiredError, Session
+from clawk_cli.dashboard_auth.base import (
+    DashboardAuthProvider,
+    RefreshExpiredError,
+    Session,
+)
 from clawk_cli.dashboard_auth.request_utils import scan_session_providers
 
 # The success TTL covers the window between the winning response and the siblings' arrival
@@ -39,7 +44,9 @@ class _Flight:
 
 # Hold the provider itself while caching: replacement (including same-name scoped
 # registrations) invalidates identity, and Python cannot recycle its id under a live entry.
-_cache: dict[tuple[int, bytes], tuple[float, DashboardAuthProvider, Session | None]] = {}
+_cache: dict[
+    tuple[int, bytes], tuple[float, DashboardAuthProvider, Session | None]
+] = {}
 _flights: dict[tuple[int, bytes], _Flight] = {}
 
 
@@ -73,7 +80,11 @@ def _refresh_provider(provider: DashboardAuthProvider, token: str) -> Session | 
             # ProviderError and unexpected execution failures are deliberately not cached.
             with _guard:
                 now = time.monotonic()
-                _cache[key] = (now + (_SUCCESS_TTL if session is not None else _FAILURE_TTL), provider, session)
+                _cache[key] = (
+                    now + (_SUCCESS_TTL if session is not None else _FAILURE_TTL),
+                    provider,
+                    session,
+                )
                 _prune(now)
             return session
     finally:
@@ -84,7 +95,11 @@ def _refresh_provider(provider: DashboardAuthProvider, token: str) -> Session | 
 
 
 def refresh_session_coalesced(
-    token: str, provider_hint: str, *, phase: str, log: logging.Logger,
+    token: str,
+    provider_hint: str,
+    *,
+    phase: str,
+    log: logging.Logger,
     on_rejected: Optional[Callable[[DashboardAuthProvider], None]] = None,
     on_unreachable: Optional[Callable[[DashboardAuthProvider], None]] = None,
 ) -> Optional[tuple[Session, str]]:
@@ -95,6 +110,7 @@ def refresh_session_coalesced(
     (``scan_session_providers`` semantics, so callers keep their 503-not-relogin handling).
     Synchronous and network-bound: async callers run it in a threadpool.
     """
+
     def _call(provider: DashboardAuthProvider):
         session = _refresh_provider(provider, token)
         if session is None:
@@ -104,4 +120,5 @@ def refresh_session_coalesced(
         return session, provider.name
 
     return scan_session_providers(
-        provider_hint, _call, phase=phase, log=log, on_unreachable=on_unreachable)
+        provider_hint, _call, phase=phase, log=log, on_unreachable=on_unreachable
+    )

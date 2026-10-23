@@ -27,11 +27,16 @@ def show_subagent_sessions(clawk_home: str | Path) -> bool:
         return False
     finally:
         reset_clawk_home_override(token)
-    return isinstance(sessions_cfg, dict) and is_truthy_value(sessions_cfg.get("show_subagents"))
+    return isinstance(sessions_cfg, dict) and is_truthy_value(
+        sessions_cfg.get("show_subagents")
+    )
 
 
 def subagent_listing_scope(
-    clawk_home: str | Path, *, source: str | None = None, sources: list[str] | None = None,
+    clawk_home: str | Path,
+    *,
+    source: str | None = None,
+    sources: list[str] | None = None,
     exclude_sources: list[str] | None = None,
 ) -> tuple[bool, list[str] | None]:
     """``(include_subagents, exclude_sources)`` for one human-facing session list (#97202).
@@ -69,7 +74,7 @@ def parse_session_listing_args(raw_args: str) -> tuple[bool, bool, str, str | No
                 flags[lower.lstrip("-")] = True
                 continue
             if lower in _SEARCH_WORDS:
-                return flags["all"], flags["full"], "", " ".join(parts[i + 1:]).strip()
+                return flags["all"], flags["full"], "", " ".join(parts[i + 1 :]).strip()
         target_parts.append(part)
     return flags["all"], flags["full"], " ".join(target_parts).strip(), None
 
@@ -108,7 +113,10 @@ def query_session_listing(
     for row in rows:
         is_current = bool(current_session_id and row.get("id") == current_session_id)
         if (is_current and not include_current_session) or (
-            not include_unnamed and not row.get("title") and not search and not is_current
+            not include_unnamed
+            and not row.get("title")
+            and not search
+            and not is_current
         ):
             continue
         result.append({**row, "is_current_session": True} if is_current else row)
@@ -130,12 +138,14 @@ def format_gateway_session_listing(
     (``all``) was declined, so the caller isn't left guessing why sessions are missing.
     """
     if not rows:
-        return "\n".join([
-            "No sessions found.\n"
-            "Use `/title My Session` to name this chat, or `/sessions full` "
-            "to include unnamed sessions.",
-            *([notice] if notice else []),
-        ])
+        return "\n".join(
+            [
+                "No sessions found.\n"
+                "Use `/title My Session` to name this chat, or `/sessions full` "
+                "to include unnamed sessions.",
+                *([notice] if notice else []),
+            ]
+        )
     lines = [f"📋 **{title}**", ""]
     for idx, row in enumerate(rows, start=1):
         current_part = " (current)" if row.get("is_current_session") else ""
@@ -147,8 +157,12 @@ def format_gateway_session_listing(
             f"{idx}. **{row.get('title') or '—'}**{current_part}{source_part}"
             f" — `{row.get('id') or ''}`{preview_part}"
         )
-    return "\n".join([
-        *lines, "", *([notice] if notice else []),
-        "Resume: `/resume <session id>` or `/resume <number>` from `/resume`.",
-        "More: `/sessions all`, `/sessions full`, `/sessions search <query>`.",
-    ])
+    return "\n".join(
+        [
+            *lines,
+            "",
+            *([notice] if notice else []),
+            "Resume: `/resume <session id>` or `/resume <number>` from `/resume`.",
+            "More: `/sessions all`, `/sessions full`, `/sessions search <query>`.",
+        ]
+    )

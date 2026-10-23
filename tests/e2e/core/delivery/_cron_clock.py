@@ -56,10 +56,13 @@ DEADLINE_SECONDS = 120.0
 HOLD_DEADLINE_SECONDS = 300.0
 
 _CURRENT_EXECUTION: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "c13_current_execution", default=None)
+    "c13_current_execution", default=None
+)
 
 
-def wait_until(predicate: Callable[[], Any], what: str, timeout: float = DEADLINE_SECONDS):
+def wait_until(
+    predicate: Callable[[], Any], what: str, timeout: float = DEADLINE_SECONDS
+):
     """Poll ``predicate`` until truthy (returned) or raise after a generous real deadline."""
     deadline = _real_time.monotonic() + timeout
     delay = POLL_SECONDS / 8
@@ -124,7 +127,9 @@ class Control:
 
     def behavior(self, name: str) -> dict:
         try:
-            return json.loads(self.behaviors.read_text(encoding="utf-8")).get(name) or {}
+            return (
+                json.loads(self.behaviors.read_text(encoding="utf-8")).get(name) or {}
+            )
         except (OSError, ValueError):
             return {}
 
@@ -183,8 +188,12 @@ class FakeAgent:
         name = job.get("name") or job["id"]
         _CURRENT_EXECUTION.set(execution_id)
         record = {
-            "event": "start", "exec": execution_id, "job_id": job["id"], "name": name,
-            "instant": job.get("_scheduled_instant"), "fired_at": self.clock.now_ts(),
+            "event": "start",
+            "exec": execution_id,
+            "job_id": job["id"],
+            "name": name,
+            "instant": job.get("_scheduled_instant"),
+            "fired_at": self.clock.now_ts(),
             "pid": os.getpid(),
         }
         _append_jsonl(self.control.runs, record)
@@ -195,7 +204,9 @@ class FakeAgent:
             deadline = _real_time.monotonic() + HOLD_DEADLINE_SECONDS
             while hold.exists() and _real_time.monotonic() < deadline:
                 _real_time.sleep(POLL_SECONDS)
-        _append_jsonl(self.control.runs, dict(record, event="end", ended_at=self.clock.now_ts()))
+        _append_jsonl(
+            self.control.runs, dict(record, event="end", ended_at=self.clock.now_ts())
+        )
         output = f"# {name}\n\nexec={execution_id}\n"
         if behavior.get("agent") == "fail":
             return False, output, "", f"simulated provider outage exec={execution_id}"
@@ -219,8 +230,16 @@ class FakeSink:
                 return behavior or {}
         return {}
 
-    async def __call__(self, platform, pconfig, chat_id, message, thread_id=None,
-                       media_files=None, **_kwargs):
+    async def __call__(
+        self,
+        platform,
+        pconfig,
+        chat_id,
+        message,
+        thread_id=None,
+        media_files=None,
+        **_kwargs,
+    ):
         import asyncio
 
         execution_id = _CURRENT_EXECUTION.get()
@@ -228,12 +247,19 @@ class FakeSink:
         if behavior.get("delivery") == "slow":
             await asyncio.sleep(0.25)
         ok = behavior.get("delivery") != "fail"
-        _append_jsonl(self.control.sink, {
-            "exec": execution_id, "ok": ok, "chat_id": str(chat_id),
-            "platform": getattr(platform, "value", str(platform)),
-            "exec_in_text": bool(execution_id) and f"exec={execution_id}" in message,
-            "at": self.clock.now_ts(), "pid": os.getpid(),
-        })
+        _append_jsonl(
+            self.control.sink,
+            {
+                "exec": execution_id,
+                "ok": ok,
+                "chat_id": str(chat_id),
+                "platform": getattr(platform, "value", str(platform)),
+                "exec_in_text": bool(execution_id)
+                and f"exec={execution_id}" in message,
+                "at": self.clock.now_ts(),
+                "pid": os.getpid(),
+            },
+        )
         if not ok:
             return {"error": "simulated 502 from platform"}
         return {"success": True, "message_id": f"m-{execution_id}"}
@@ -259,7 +285,9 @@ def install(clock: VirtualClock, control: Control, setattr_fn=setattr) -> None:
     real_deliver_result = scheduler._deliver_result
 
     def deliver_result(job, content, *args, **kwargs):
-        token = _CURRENT_EXECUTION.set(job.get("execution_id") or _CURRENT_EXECUTION.get())
+        token = _CURRENT_EXECUTION.set(
+            job.get("execution_id") or _CURRENT_EXECUTION.get()
+        )
         try:
             return real_deliver_result(job, content, *args, **kwargs)
         finally:
@@ -273,10 +301,14 @@ def install(clock: VirtualClock, control: Control, setattr_fn=setattr) -> None:
 
     real_open_db = sqlite_util.open_db
 
-    def open_db_no_full_sync(*args, **kwargs):  # same connection, WAL, schema; no per-commit fsync
+    def open_db_no_full_sync(
+        *args, **kwargs
+    ):  # same connection, WAL, schema; no per-commit fsync
         kwargs["synchronous_full"] = False
         conn = real_open_db(*args, **kwargs)
-        conn.execute("PRAGMA synchronous=OFF")  # also skips the checkpoint-on-close fsync
+        conn.execute(
+            "PRAGMA synchronous=OFF"
+        )  # also skips the checkpoint-on-close fsync
         return conn
 
     setattr_fn(sqlite_util, "open_db", open_db_no_full_sync)
@@ -286,6 +318,7 @@ def install(clock: VirtualClock, control: Control, setattr_fn=setattr) -> None:
 
 
 # --- stepping ticker hosts -------------------------------------------------------------------
+
 
 class _StepGate:
     """``stop_event`` for ``InProcessCronScheduler.start``: each ``wait()`` parks the real ticker
@@ -441,8 +474,12 @@ class ChildHost:
         log = open(self.control.child / "stderr.log", "a", encoding="utf-8")
         self.proc = subprocess.Popen(
             [sys.executable, str(Path(__file__).resolve()), str(self.control.root)],
-            cwd=str(self.repo_root), env=self.env, stdin=subprocess.DEVNULL,
-            stdout=log, stderr=log)
+            cwd=str(self.repo_root),
+            env=self.env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+        )
         log.close()
         self.wait_idle(timeout=180.0)
 
@@ -453,8 +490,12 @@ class ChildHost:
     def wait_idle(self, timeout: float = DEADLINE_SECONDS) -> None:
         def _idle():
             if self.proc.poll() is not None:
-                tail = (self.control.child / "stderr.log").read_text(encoding="utf-8")[-4000:]
-                raise AssertionError(f"child ticker exited rc={self.proc.returncode}:\n{tail}")
+                tail = (self.control.child / "stderr.log").read_text(encoding="utf-8")[
+                    -4000:
+                ]
+                raise AssertionError(
+                    f"child ticker exited rc={self.proc.returncode}:\n{tail}"
+                )
             return self._idle() >= self.go + 1
 
         wait_until(_idle, "child ticker iteration", timeout=timeout)
@@ -466,7 +507,9 @@ class ChildHost:
     def kill(self) -> None:
         """SIGKILL: the process dies with whatever it had in flight (a crash, not a drain)."""
         if self.proc is not None and self.proc.poll() is None:
-            os.kill(self.proc.pid, signal.SIGKILL)  # windows-footgun: ok (POSIX-only harness)
+            os.kill(
+                self.proc.pid, signal.SIGKILL
+            )  # windows-footgun: ok (POSIX-only harness)
             self.proc.wait(timeout=DEADLINE_SECONDS)
 
     def stop(self) -> None:
@@ -510,7 +553,9 @@ def replica_scheduler():
     return ReplicaScheduler()
 
 
-def install_claim_barrier(control: Control, setattr_fn=setattr, parties: int = 2) -> None:
+def install_claim_barrier(
+    control: Control, setattr_fn=setattr, parties: int = 2
+) -> None:
     """Wrap ``cron.jobs.claim_job_for_fire`` (``claim_fire`` imports it at call time): each call
     waits until ``parties`` replicas have entered the claim for the current round, then runs the
     REAL claim and logs who won. It only delays, never changes a decision."""
@@ -521,11 +566,15 @@ def install_claim_barrier(control: Control, setattr_fn=setattr, parties: int = 2
     def claim(job_id, **kwargs):
         rnd = _CLAIM_ROUND[0]
         (control.replica / f"arrived-{rnd}-{os.getpid()}").touch()
-        wait_until(lambda: len(list(control.replica.glob(f"arrived-{rnd}-*"))) >= parties,
-                   f"{parties} replicas inside the fire claim of round {rnd}")
+        wait_until(
+            lambda: len(list(control.replica.glob(f"arrived-{rnd}-*"))) >= parties,
+            f"{parties} replicas inside the fire claim of round {rnd}",
+        )
         result = real(job_id, **kwargs)
-        _append_jsonl(control.claims, {"round": rnd, "pid": os.getpid(), "job_id": job_id,
-                                       "won": bool(result)})
+        _append_jsonl(
+            control.claims,
+            {"round": rnd, "pid": os.getpid(), "job_id": job_id, "won": bool(result)},
+        )
         return result
 
     setattr_fn(jobs, "claim_job_for_fire", claim)
@@ -550,14 +599,26 @@ class ReplicaHost:
 
     def _check(self) -> None:
         if self.proc.poll() is not None:
-            tail = (self.control.replica / "stderr.log").read_text(encoding="utf-8")[-4000:]
+            tail = (self.control.replica / "stderr.log").read_text(encoding="utf-8")[
+                -4000:
+            ]
             raise AssertionError(f"replica exited rc={self.proc.returncode}:\n{tail}")
 
     def start(self) -> None:
         log = open(self.control.replica / "stderr.log", "a", encoding="utf-8")
         self.proc = subprocess.Popen(
-            [sys.executable, str(Path(__file__).resolve()), str(self.control.root), "replica"],
-            cwd=str(self.repo_root), env=self.env, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+            [
+                sys.executable,
+                str(Path(__file__).resolve()),
+                str(self.control.root),
+                "replica",
+            ],
+            cwd=str(self.repo_root),
+            env=self.env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+        )
         log.close()
 
         def ready():
@@ -567,7 +628,9 @@ class ReplicaHost:
         wait_until(ready, "replica process ready", timeout=180.0)
 
     def request(self, rnd: int, job_id: str) -> None:
-        _atomic_write(self.control.replica / f"req-{rnd}.json", json.dumps({"job_id": job_id}))
+        _atomic_write(
+            self.control.replica / f"req-{rnd}.json", json.dumps({"job_id": job_id})
+        )
 
     def result(self, rnd: int) -> bool:
         path = self.control.replica / f"res-{rnd}.json"
@@ -600,14 +663,19 @@ def _replica_main(control: Control) -> None:
         req = control.replica / f"req-{rnd}.json"
         deadline = _real_time.monotonic() + HOLD_DEADLINE_SECONDS
         while not req.exists():
-            if (control.replica / "stop").exists() or _real_time.monotonic() >= deadline:
+            if (
+                control.replica / "stop"
+            ).exists() or _real_time.monotonic() >= deadline:
                 return
             _real_time.sleep(POLL_SECONDS)
-        won = fire_as_replica(provider, json.loads(req.read_text(encoding="utf-8"))["job_id"], rnd)
+        won = fire_as_replica(
+            provider, json.loads(req.read_text(encoding="utf-8"))["job_id"], rnd
+        )
         _atomic_write(control.replica / f"res-{rnd}.json", json.dumps({"won": won}))
 
 
 # --- gateway drain / ledger / store readers ---------------------------------------------------
+
 
 def drain_deliveries() -> int:
     """The live gateway's housekeeping drain of the durable delivery queue. No live adapters
@@ -631,9 +699,18 @@ def delivery_status(home: Path) -> dict[str, str]:
         return {}
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
     try:
-        out = {r[0]: r[1] for r in conn.execute(
-            "SELECT execution_id, terminal_status FROM delivery_tombstones")}
-        out.update({r[0]: r[1] for r in conn.execute("SELECT execution_id, status FROM deliveries")})
+        out = {
+            r[0]: r[1]
+            for r in conn.execute(
+                "SELECT execution_id, terminal_status FROM delivery_tombstones"
+            )
+        }
+        out.update(
+            {
+                r[0]: r[1]
+                for r in conn.execute("SELECT execution_id, status FROM deliveries")
+            }
+        )
         return out
     finally:
         conn.close()
@@ -663,8 +740,11 @@ def ledger_rows(home: Path, where: str = "") -> list[dict]:
 
 def non_terminal(home: Path, ignore: Iterable[str] = ()) -> list[dict]:
     ignore = set(ignore)
-    return [r for r in ledger_rows(home, "status IN ('claimed', 'running')")
-            if r["id"] not in ignore]
+    return [
+        r
+        for r in ledger_rows(home, "status IN ('claimed', 'running')")
+        if r["id"] not in ignore
+    ]
 
 
 def store_jobs(home: Path) -> list[dict]:

@@ -21,6 +21,7 @@ interface, the registry, and the plugin glue layer simultaneously.
 Mirrors ``tests/plugins/web/test_web_search_provider_plugins.py`` from
 PR #25182.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -71,9 +72,6 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # is_available() behavior
 # ---------------------------------------------------------------------------
@@ -99,7 +97,6 @@ class TestIsAvailable:
         # Both env vars set → available.
         monkeypatch.setenv("BROWSERBASE_PROJECT_ID", "proj")
         assert p.is_available() is True
-
 
     def test_browser_use_satisfied_by_api_key(
         self, monkeypatch: pytest.MonkeyPatch
@@ -146,7 +143,6 @@ class TestRegistryResolution:
 
         assert _resolve("local") is None
 
-
     def test_legacy_walk_prefers_browser_use_over_browserbase(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -185,5 +181,3 @@ class TestPickerIntegration:
             p.name for p in list_providers() if p.get_setup_schema() is not None
         )
         assert names and names == expected
-
-

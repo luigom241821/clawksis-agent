@@ -1,4 +1,5 @@
 """Live output must reach disk before exit, without concealing silence."""
+
 import io
 import os
 from pathlib import Path
@@ -31,10 +32,15 @@ def test_child_progress_reaches_log_before_exit(tmp_path, monkeypatch, gateway):
         "os.write(2, bytes([0xac, 0xff]))\n"
         f"while not pathlib.Path({str(release)!r}).exists(): time.sleep(.02)\n"
         "print(' done', flush=True)\n"
-        "sys.exit(7)\n", encoding="utf-8")
+        "sys.exit(7)\n",
+        encoding="utf-8",
+    )
     results = []
-    worker = threading.Thread(target=lambda: results.append(
-        update_cmd._run_logged_subprocess([sys.executable, str(script)])))
+    worker = threading.Thread(
+        target=lambda: results.append(
+            update_cmd._run_logged_subprocess([sys.executable, str(script)])
+        )
+    )
     try:
         worker.start()
         deadline = time.monotonic() + 10
@@ -42,12 +48,12 @@ def test_child_progress_reaches_log_before_exit(tmp_path, monkeypatch, gateway):
             text = log.read_text(encoding="utf-8") if log.exists() else ""
             if "progress: €�" in text:
                 break
-            time.sleep(.02)
+            time.sleep(0.02)
         assert ready.exists(), "child fixture never started"
         assert "progress: €�" in text, "output withheld while child waits for release"
         assert worker.is_alive()
         size = log.stat().st_size
-        time.sleep(.3)
+        time.sleep(0.3)
         assert log.stat().st_size == size, "silence must not manufacture progress"
         assert terminal.getvalue() == ""
         if gateway is not None:
@@ -71,16 +77,21 @@ def test_cancelled_output_reader_reaps_child(tmp_path, monkeypatch):
         "import os, pathlib, time\n"
         f"pathlib.Path({str(pidfile)!r}).write_text(str(os.getpid()), encoding='utf-8')\n"
         "print('started', flush=True)\n"
-        "time.sleep(30)\n", encoding="utf-8")
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
 
     class CancelLog:
         def write(self, text):
             raise KeyboardInterrupt
 
-    monkeypatch.setattr(sys, "stdout", output._UpdateOutputStream(io.StringIO(), CancelLog()))
+    monkeypatch.setattr(
+        sys, "stdout", output._UpdateOutputStream(io.StringIO(), CancelLog())
+    )
     started = time.monotonic()
     with pytest.raises(KeyboardInterrupt):
         update_cmd._run_logged_subprocess([sys.executable, str(child)])
     assert time.monotonic() - started < 10
     import psutil
+
     assert not psutil.pid_exists(int(pidfile.read_text(encoding="utf-8")))

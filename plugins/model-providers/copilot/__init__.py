@@ -15,13 +15,20 @@ class CopilotProfile(ProviderProfile):
     """GitHub Copilot / GitHub Models — editor headers + reasoning."""
 
     def build_api_kwargs_extras(
-        self, *, model: str | None = None, reasoning_config: dict | None = None,
-        supports_reasoning: bool = False, **ctx,
+        self,
+        *,
+        model: str | None = None,
+        reasoning_config: dict | None = None,
+        supports_reasoning: bool = False,
+        **ctx,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         if not (supports_reasoning and model):
             return {}, {}
         try:
-            from clawk_cli.models import clamp_github_reasoning_effort, github_model_reasoning_efforts
+            from clawk_cli.models import (
+                clamp_github_reasoning_effort,
+                github_model_reasoning_efforts,
+            )
 
             supported = github_model_reasoning_efforts(model)
             if not supported:
@@ -29,15 +36,19 @@ class CopilotProfile(ProviderProfile):
             if not reasoning_config:
                 return {"reasoning": {"effort": "medium"}}, {}
             # Never drop straight to medium, which inverted the ladder (ultra < high). See #74295.
-            effort = clamp_github_reasoning_effort(reasoning_config.get("effort"), supported)
+            effort = clamp_github_reasoning_effort(
+                reasoning_config.get("effort"), supported
+            )
             return {"reasoning": {"effort": effort}}, {}
         except Exception:
             return {}, {}
 
 
 copilot = CopilotProfile(
-    name="copilot", aliases=("github-copilot", "github-models", "github-model", "github"),
-    env_vars=("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"), base_url="https://api.githubcopilot.com",
+    name="copilot",
+    aliases=("github-copilot", "github-models", "github-model", "github"),
+    env_vars=("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"),
+    base_url="https://api.githubcopilot.com",
     auth_type="copilot",
 )
 

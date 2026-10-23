@@ -23,7 +23,9 @@ import cli
 
 
 def _run(args, cwd):
-    return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=30, check=False)
+    return subprocess.run(
+        args, cwd=cwd, capture_output=True, text=True, timeout=30, check=False
+    )
 
 
 def _commit(repo, name, msg):
@@ -87,20 +89,38 @@ class TestResolveWorktreeBase:
         assert resolved == remote_head
         assert resolved != stale_local_head
 
-    def test_resolves_remote_tip_on_tag_pinned_narrow_clone(self, remote_and_clone, tmp_path):
+    def test_resolves_remote_tip_on_tag_pinned_narrow_clone(
+        self, remote_and_clone, tmp_path
+    ):
         """`--single-branch --branch <tag>` maps remote.origin.fetch to the tag only, so a
         by-name fetch writes FETCH_HEAD and never creates origin/main (#125686)."""
         clone, remote_head, _ = remote_and_clone
-        _run(["git", "tag", "v0"], clone)  # the clone's stale HEAD; origin/main is past it
+        _run(
+            ["git", "tag", "v0"], clone
+        )  # the clone's stale HEAD; origin/main is past it
         _run(["git", "push", "origin", "v0"], clone)
         remote = _run(["git", "remote", "get-url", "origin"], clone).stdout.strip()
         narrow = tmp_path / "narrow"
-        _run(["git", "clone", "-q", "--single-branch", "--branch", "v0", remote, str(narrow)], tmp_path)
+        _run(
+            [
+                "git",
+                "clone",
+                "-q",
+                "--single-branch",
+                "--branch",
+                "v0",
+                remote,
+                str(narrow),
+            ],
+            tmp_path,
+        )
 
         base_ref, label = worktree_ops._resolve_worktree_base(str(narrow))
 
         assert (base_ref, label) == ("origin/main", "origin/main (fetched)")
-        assert _run(["git", "rev-parse", base_ref], narrow).stdout.strip() == remote_head
+        assert (
+            _run(["git", "rev-parse", base_ref], narrow).stdout.strip() == remote_head
+        )
 
     def test_falls_back_to_head_without_remote(self, tmp_path):
         repo = tmp_path / "no-remote"
@@ -155,7 +175,9 @@ class TestResolveWorktreeBaseStartupCost:
         assert base_ref == "origin/main"
         assert label == "origin/main (fetched)"
 
-    def test_fetch_timeout_falls_back_to_cached_ref(self, remote_and_clone, monkeypatch):
+    def test_fetch_timeout_falls_back_to_cached_ref(
+        self, remote_and_clone, monkeypatch
+    ):
         """A stalled fetch must yield the locally-cached tracking ref, fast —
         not cascade into a second fetch or blow up."""
         clone, _remote_head, stale_local_head = remote_and_clone
@@ -195,13 +217,11 @@ class TestResolveWorktreeBaseStartupCost:
         _run(["git", "config", "user.name", "T"], repo)
         _run(["git", "checkout", "-b", "main"], repo)
         _commit(repo, "README.md", "base")
-        _run(["git", "remote", "add", "origin", str(tmp_path / "nonexistent.git")], repo)
         _run(
-            ["git", "config", "branch.main.remote", "origin"], repo
+            ["git", "remote", "add", "origin", str(tmp_path / "nonexistent.git")], repo
         )
-        _run(
-            ["git", "config", "branch.main.merge", "refs/heads/main"], repo
-        )
+        _run(["git", "config", "branch.main.remote", "origin"], repo)
+        _run(["git", "config", "branch.main.merge", "refs/heads/main"], repo)
         base_ref, label = worktree_ops._resolve_worktree_base(str(repo))
         assert base_ref == "HEAD"
         assert "HEAD" in label
@@ -214,7 +234,9 @@ class TestSetupWorktreeSyncBase:
         assert info is not None
         # The new worktree's HEAD must be the REMOTE tip, not the stale local one.
         wt_head = _head(info["path"])
-        assert wt_head == remote_head, "worktree should start from the fetched remote tip"
+        assert wt_head == remote_head, (
+            "worktree should start from the fetched remote tip"
+        )
         assert wt_head != stale_local_head
         # And it must contain the remote-only file.
         assert (Path(info["path"]) / "feature.txt").exists()

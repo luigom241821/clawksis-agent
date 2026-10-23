@@ -10,12 +10,14 @@ This file tests that the tool surfaces:
   4. skill_manage's "not found" error names other profiles where the
      skill exists.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
+
 
 @pytest.fixture
 def fake_clawk(tmp_path, monkeypatch):
@@ -37,9 +39,11 @@ def fake_clawk(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(sec_home))
 
     import clawk_constants
+
     monkeypatch.setattr(clawk_constants, "get_default_clawk_root", lambda: root)
 
     import agent.file_safety as fs
+
     monkeypatch.setattr(fs, "_clawk_home_path", lambda: sec_home)
     monkeypatch.setattr(fs, "_clawk_root_path", lambda: root)
 
@@ -49,18 +53,20 @@ def fake_clawk(tmp_path, monkeypatch):
         "coder_home": coder_home,
     }
 
+
 # ---------------------------------------------------------------------------
 # write_file
 # ---------------------------------------------------------------------------
 
-class TestWriteFileCrossProfileGuard:
 
+class TestWriteFileCrossProfileGuard:
     def test_cross_profile_write_allowed_guard_retired(self, fake_clawk):
         """Guard RETIRED (maintainer decision): profiles are not isolated —
         the same OS user owns every profile dir and the terminal tool
         always could write them. Cross-profile writes now succeed; the
         system prompt's profile hint is the only steering."""
         from tools.file_tools import read_file_tool, write_file_tool
+
         target = fake_clawk["root"] / "skills" / "shared-skill" / "SKILL.md"
         assert not json.loads(read_file_tool(str(target))).get("error")
         result_json = write_file_tool(str(target), "cross-profile write, allowed")
@@ -68,14 +74,16 @@ class TestWriteFileCrossProfileGuard:
         assert not result.get("error"), f"guard retired; write must succeed: {result}"
         assert target.read_text() == "cross-profile write, allowed"
 
+
 # ---------------------------------------------------------------------------
 # patch
 # ---------------------------------------------------------------------------
 
-class TestPatchCrossProfileGuard:
 
+class TestPatchCrossProfileGuard:
     def test_cross_profile_patch_bypass(self, fake_clawk):
         from tools.file_tools import patch_tool
+
         target = fake_clawk["root"] / "skills" / "shared-skill" / "SKILL.md"
         result_json = patch_tool(
             mode="replace",
@@ -85,7 +93,9 @@ class TestPatchCrossProfileGuard:
             cross_profile=True,
         )
         result = json.loads(result_json)
-        assert not result.get("error"), f"cross_profile still handler-accepted (compat): {result}"
+        assert not result.get("error"), (
+            f"cross_profile still handler-accepted (compat): {result}"
+        )
         assert "user-directed update." in target.read_text()
 
     def test_v4a_patch_writes_through_guard_retired(self, fake_clawk):
@@ -94,6 +104,7 @@ class TestPatchCrossProfileGuard:
         for the surviving mirror guards still runs, but cross-profile
         targets are no longer refused."""
         from tools.file_tools import patch_tool
+
         target = fake_clawk["root"] / "skills" / "shared-skill" / "SKILL.md"
         v4a = (
             "*** Begin Patch\n"
@@ -108,17 +119,17 @@ class TestPatchCrossProfileGuard:
         assert not result.get("error"), f"guard retired; V4A must succeed: {result}"
         assert "v4a cross-profile write, allowed." in target.read_text()
 
+
 # ---------------------------------------------------------------------------
 # skill_manage — error message naming other profile (item D)
 # ---------------------------------------------------------------------------
+
 
 class TestSkillManageCrossProfileErrorUX:
     def _make_skill_in_profile(self, profile_dir: Path, name: str):
         d = profile_dir / "skills" / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: a skill.\n---\n"
-        )
+        (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: a skill.\n---\n")
 
     def test_error_names_other_profile_when_skill_lives_there(
         self, fake_clawk, monkeypatch
@@ -131,6 +142,7 @@ class TestSkillManageCrossProfileErrorUX:
         # the fixture). Skill_manager_tool computes SKILLS_DIR at import.
         import importlib
         import tools.skill_manager_tool
+
         importlib.reload(tools.skill_manager_tool)
         from tools.skill_manager_tool import _skill_not_found_error
 
@@ -138,18 +150,18 @@ class TestSkillManageCrossProfileErrorUX:
         assert "not found in active profile 'clawk-security'" in err
         assert "default" in err
 
-    def test_genuinely_missing_skill_keeps_helpful_hint(
-        self, fake_clawk, monkeypatch
-    ):
+    def test_genuinely_missing_skill_keeps_helpful_hint(self, fake_clawk, monkeypatch):
         """When no profile has the skill, error falls back to skills_list hint."""
         import importlib
         import tools.skill_manager_tool
+
         importlib.reload(tools.skill_manager_tool)
         from tools.skill_manager_tool import _skill_not_found_error
 
         err = _skill_not_found_error("totally-imaginary-skill")
         assert "not found in active profile 'clawk-security'" in err
         assert "skills_list" in err
+
 
 # ---------------------------------------------------------------------------
 # System prompt active-profile line (item B)

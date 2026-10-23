@@ -162,8 +162,16 @@ class TestFallbackMirrorEndToEnd:
 
         send_calls = []
 
-        async def fake_sender(pconfig, chat_id, message, *, thread_id=None,
-                              media_files=None, force_document=False, caption=None):
+        async def fake_sender(
+            pconfig,
+            chat_id,
+            message,
+            *,
+            thread_id=None,
+            media_files=None,
+            force_document=False,
+            caption=None,
+        ):
             send_calls.append({"chat_id": chat_id, "thread_id": thread_id})
             return {"success": True, "chat_id": chat_id, "message_id": "1.2"}
 
@@ -181,20 +189,36 @@ class TestFallbackMirrorEndToEnd:
 
         mirror_calls = []
 
-
-        def fake_mirror(platform, chat_id, text, source_label="cli",
-                        thread_id=None, user_id=None, role="assistant"):
-            mirror_calls.append({
-                "platform": platform, "chat_id": chat_id,
-                "thread_id": thread_id, "user_id": user_id, "role": role,
-            })
+        def fake_mirror(
+            platform,
+            chat_id,
+            text,
+            source_label="cli",
+            thread_id=None,
+            user_id=None,
+            role="assistant",
+        ):
+            mirror_calls.append(
+                {
+                    "platform": platform,
+                    "chat_id": chat_id,
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "role": role,
+                }
+            )
             return True
 
         import gateway.mirror as mirror_mod
 
         real_mirror = mirror_mod.mirror_to_session
         monkeypatch.setattr(mirror_mod, "mirror_to_session", fake_mirror)
-        return {"send": send_calls, "mirror": mirror_calls, "real_mirror": real_mirror, "home": home}
+        return {
+            "send": send_calls,
+            "mirror": mirror_calls,
+            "real_mirror": real_mirror,
+            "home": home,
+        }
 
     def test_origin_fallback_job_mirrors_brief(self, slack_env):
         """The field repro: managed cron, deliver=origin, no origin captured.
@@ -225,7 +249,9 @@ class TestFallbackMirrorEndToEnd:
 
         monkeypatch.setattr(mirror_mod, "mirror_to_session", slack_env["real_mirror"])
         store = SessionStore(slack_env["home"] / "sessions", GatewayConfig())
-        source = SessionSource(platform=Platform.SLACK, chat_id="D0HOME", chat_type="dm")
+        source = SessionSource(
+            platform=Platform.SLACK, chat_id="D0HOME", chat_type="dm"
+        )
         session = store.get_or_create_session(source)
         job = {"id": "h1", "name": "managed", "deliver": "slack", "origin": None}
         err = _deliver_result(job, "morning brief", adapters=None, loop=None)
@@ -239,8 +265,11 @@ class TestFallbackMirrorEndToEnd:
 
     def test_explicit_target_with_attach_mirrors(self, slack_env):
         job = {
-            "id": "j3", "name": "managed-dm", "deliver": "slack:D0USER7",
-            "origin": None, "attach_to_session": True,
+            "id": "j3",
+            "name": "managed-dm",
+            "deliver": "slack:D0USER7",
+            "origin": None,
+            "attach_to_session": True,
         }
         err = _deliver_result(job, "managed brief", adapters=None, loop=None)
         assert err is None
@@ -249,7 +278,9 @@ class TestFallbackMirrorEndToEnd:
 
     def test_explicit_target_without_attach_does_not_mirror(self, slack_env):
         job = {
-            "id": "j4", "name": "plain-explicit", "deliver": "slack:D0USER8",
+            "id": "j4",
+            "name": "plain-explicit",
+            "deliver": "slack:D0USER8",
             "origin": None,
         }
         err = _deliver_result(job, "plain text", adapters=None, loop=None)
@@ -259,7 +290,9 @@ class TestFallbackMirrorEndToEnd:
     def test_origin_job_still_mirrors_unchanged(self, slack_env):
         """Regression control: the June origin-scoped behavior is untouched."""
         job = {
-            "id": "j5", "name": "origin-job", "deliver": "origin",
+            "id": "j5",
+            "name": "origin-job",
+            "deliver": "origin",
             "origin": {"platform": "slack", "chat_id": "D0AAA", "chat_type": "dm"},
         }
         err = _deliver_result(job, "origin brief", adapters=None, loop=None)

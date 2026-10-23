@@ -33,8 +33,6 @@ def archive(files: dict[str, bytes]) -> bytes:
     return output.getvalue()
 
 
-
-
 @pytest.fixture(params=["install", "stage"])
 def realize(request):
     if request.param == "install":
@@ -43,20 +41,27 @@ def realize(request):
 
 
 @pytest.mark.parametrize("cached", [False, True])
-def test_install_pause_preserves_archives_and_resumes_the_same_pin(tmp_path, monkeypatch, dl_server, realize, cached):
+def test_install_pause_preserves_archives_and_resumes_the_same_pin(
+    tmp_path, monkeypatch, dl_server, realize, cached
+):
     root = tmp_path / "store"
     lock_path = tmp_path / "lock.json"
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.setattr(paths, "store_root", lambda: root)
     monkeypatch.setattr(paths, "lockfile_path", lambda: lock_path)
     monkeypatch.setitem(registry._packages, ComponentPackage.name, ComponentPackage())
-    contents = {"engine.dat": b"engine component", "runtime.dll": bytes(range(256)) * (64 * 1024)}
+    contents = {
+        "engine.dat": b"engine component",
+        "runtime.dll": bytes(range(256)) * (64 * 1024),
+    }
     payloads = [archive({name: body}) for name, body in contents.items()]
     pins = []
     for index, payload in enumerate(payloads):
         path = f"/component-{index}.zip"
         RangeHandler.payloads[path] = payload
-        pins.append({"url": url(dl_server, path), "sha256": hashlib.sha256(payload).hexdigest()})
+        pins.append(
+            {"url": url(dl_server, path), "sha256": hashlib.sha256(payload).hexdigest()}
+        )
     lock = Lockfile(lock_path)
     lock.set_pin(ComponentPackage.name, "1", {"any": pins})
     lock.save()
@@ -78,31 +83,49 @@ def test_install_pause_preserves_archives_and_resumes_the_same_pin(tmp_path, mon
             pause.set()
 
     with pytest.raises(DownloadPaused):
-        realize(ComponentPackage.name, progress=progress, pause_event=pause,
-                download_progress=lambda done, total, ranges: ticks.append((done, total, ranges)))
+        realize(
+            ComponentPackage.name,
+            progress=progress,
+            pause_event=pause,
+            download_progress=lambda done, total, ranges: ticks.append(
+                (done, total, ranges)
+            ),
+        )
     expected = sum(map(len, payloads))
     assert ticks and all(total == expected for _, total, _ in ticks)
     assert ticks[0][0] == (len(payloads[0]) if cached else 0)
-    assert all(sum(end - start for rows in ranges.values() for start, end in rows) == done
-               for done, _, ranges in ticks)
+    assert all(
+        sum(end - start for rows in ranges.values() for start, end in rows) == done
+        for done, _, ranges in ticks
+    )
     assert [done for done, _, _ in ticks] == sorted(done for done, _, _ in ticks)
     assert Facts(paths.facts_path()).get(ComponentPackage.name) is None
     assert list(paths.partials_root().glob("*.ranges"))
-    first_requests = [request for request in RangeHandler.ranges_seen if request[0] == "/component-0.zip"]
+    first_requests = [
+        request
+        for request in RangeHandler.ranges_seen
+        if request[0] == "/component-0.zip"
+    ]
     assert first_requests
     assert (root / f"fetch-{pins[0]['sha256']}").is_dir()
 
     pause.clear()
     stages.clear()
-    result = realize(ComponentPackage.name, pause_event=pause,
-                     progress=lambda *args: stages.append(args),
-                     download_progress=lambda done, total, ranges: ticks.append((done, total, ranges)))
+    result = realize(
+        ComponentPackage.name,
+        pause_event=pause,
+        progress=lambda *args: stages.append(args),
+        download_progress=lambda done, total, ranges: ticks.append(
+            (done, total, ranges)
+        ),
+    )
     assert ticks[-1][:2] == (expected, expected)
     fact = Facts(paths.facts_path()).get(ComponentPackage.name)
     if fact is None:
         entry = result
         assert json.loads((entry / ".pm-stage-pin.json").read_text()) == {
-            "target": "linux-arm64-bionic", "sha256": [pin["sha256"] for pin in pins],
+            "target": "linux-arm64-bionic",
+            "sha256": [pin["sha256"] for pin in pins],
         }
         assert not paths.facts_path().exists()
     else:
@@ -112,8 +135,15 @@ def test_install_pause_preserves_archives_and_resumes_the_same_pin(tmp_path, mon
         assert not (entry / ".pm-stage-pin.json").exists()
     for name, body in contents.items():
         assert (entry / name).read_bytes() == body
-    assert [request for request in RangeHandler.ranges_seen if request[0] == "/component-0.zip"] == first_requests
-    assert [label for stage, _, _, label in stages if stage == "unpack"] == ["1/2", "2/2"]
+    assert [
+        request
+        for request in RangeHandler.ranges_seen
+        if request[0] == "/component-0.zip"
+    ] == first_requests
+    assert [label for stage, _, _, label in stages if stage == "unpack"] == [
+        "1/2",
+        "2/2",
+    ]
     assert {stage for stage, *_ in stages} >= {"download", "unpack", "verify"}
     assert list(paths.partials_root().glob("*.part")) == [unrelated]
     assert list(root.glob("fetch-*")) == [other.parent]

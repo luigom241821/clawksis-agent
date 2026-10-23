@@ -29,13 +29,24 @@ def _run_owned_job(job, tmp_path):
     db.create_session(ref.session_id, source="cron")
     authority = SimpleNamespace(
         db=db,
-        sessions={ref.session_id: SimpleNamespace(source=SimpleNamespace(user_id="cron-owner"))},
+        sessions={
+            ref.session_id: SimpleNamespace(
+                source=SimpleNamespace(user_id="cron-owner")
+            )
+        },
         pending_results={},
     )
-    row = {"admission_id": admission_id, "request_id": request_id,
-           "principal_id": "cron-owner", "payload": {"text": ""}}
-    policy = SimpleNamespace(request_json=json.dumps({
-        "cron_job": job, "extra_prompt": None, "request_id": request_id}))
+    row = {
+        "admission_id": admission_id,
+        "request_id": request_id,
+        "principal_id": "cron-owner",
+        "payload": {"text": ""},
+    }
+    policy = SimpleNamespace(
+        request_json=json.dumps(
+            {"cron_job": job, "extra_prompt": None, "request_id": request_id}
+        )
+    )
 
     async def run():
         previous = current_execution()
@@ -54,47 +65,81 @@ def _run_owned_job(job, tmp_path):
     finally:
         release(db)
 
-_RUNTIME = {"api_key": "k", "base_url": "https://example.invalid/v1", "provider": "openrouter",
-            "api_mode": "chat_completions"}
+
+_RUNTIME = {
+    "api_key": "k",
+    "base_url": "https://example.invalid/v1",
+    "provider": "openrouter",
+    "api_mode": "chat_completions",
+}
+
 
 def _job(**overrides):
     job = {
-        "id": "mcpjob", "name": "mcp job", "prompt": "hello", "enabled": True, "state": "scheduled",
-        "schedule": {"kind": "interval", "minutes": 5, "display": "every 5m"}, "deliver": "local",
-        "model": None, "provider": None, "base_url": None,
+        "id": "mcpjob",
+        "name": "mcp job",
+        "prompt": "hello",
+        "enabled": True,
+        "state": "scheduled",
+        "schedule": {"kind": "interval", "minutes": 5, "display": "every 5m"},
+        "deliver": "local",
+        "model": None,
+        "provider": None,
+        "base_url": None,
     }
     job.update(overrides)
     return job
 
+
 def _run(job, tmp_path):
     (tmp_path / "config.yaml").write_text(
-        "model:\n  default: test-model\nmcp_servers:\n  notion:\n    url: https://mcp.invalid\n", encoding="utf-8")
-    with patch("run_agent.AIAgent") as agent_cls, \
-         patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value=dict(_RUNTIME)):
+        "model:\n  default: test-model\nmcp_servers:\n  notion:\n    url: https://mcp.invalid\n",
+        encoding="utf-8",
+    )
+    with (
+        patch("run_agent.AIAgent") as agent_cls,
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value=dict(_RUNTIME),
+        ),
+    ):
         agent_cls.return_value.run_conversation.return_value = {"final_response": "ok"}
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
             result = _run_owned_job(job, tmp_path)
         return result, agent_cls.called
 
+
 def _register_notion_in_scope(scope):
     from tools.registry import registry
+
     registry.register(
-        name="mcp__notion__search", toolset="mcp-notion",
-        schema={"name": "mcp__notion__search", "description": "x",
-                "parameters": {"type": "object", "properties": {}}},
-        handler=lambda a, **k: "{}", scope=scope)
+        name="mcp__notion__search",
+        toolset="mcp-notion",
+        schema={
+            "name": "mcp__notion__search",
+            "description": "x",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        handler=lambda a, **k: "{}",
+        scope=scope,
+    )
     registry.register_toolset_alias("notion", "mcp-notion")
     return lambda: registry.deregister("mcp__notion__search", scope=scope)
 
+
 def test_requested_mcp_server_owned_by_other_profile_blocks_run(tmp_path):
     from agent.secret_scope import set_multiplex_active
-    from clawk_constants import clawk_home_key, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        clawk_home_key,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     set_multiplex_active(True)
     token = set_clawk_home_override(tmp_path / "other")
@@ -104,7 +149,8 @@ def test_requested_mcp_server_owned_by_other_profile_blocks_run(tmp_path):
         reset_clawk_home_override(token)
     try:
         (success, _output, _final, error), agent_built = _run(
-            _job(enabled_toolsets=["terminal", "notion"]), tmp_path)
+            _job(enabled_toolsets=["terminal", "notion"]), tmp_path
+        )
     finally:
         undo()
         set_multiplex_active(False)
@@ -113,11 +159,13 @@ def test_requested_mcp_server_owned_by_other_profile_blocks_run(tmp_path):
     assert success is False
     assert error is not None and "[blocked_config]" in error and "notion" in error
 
+
 def test_requested_mcp_server_with_tools_runs(tmp_path):
     undo = _register_notion_in_scope(None)
     try:
         (success, _output, _final, error), agent_built = _run(
-            _job(enabled_toolsets=["terminal", "notion"]), tmp_path)
+            _job(enabled_toolsets=["terminal", "notion"]), tmp_path
+        )
     finally:
         undo()
 
@@ -146,25 +194,29 @@ def _park_notion(home, *, ever_connected: bool, park_reason=None):
     core._servers[key] = server
     return lambda: core._servers.pop(key, None)
 
+
 def test_requested_mcp_server_reconnecting_runs_without_its_tools(tmp_path):
     """A server that connected in this process and is parked/self-probing after a network blip
     is recoverable: the job runs with the tools that did resolve instead of blocking (#112871)."""
     undo = _park_notion(tmp_path, ever_connected=True)
     try:
         (success, _output, _final, error), agent_built = _run(
-            _job(enabled_toolsets=["terminal", "notion"]), tmp_path)
+            _job(enabled_toolsets=["terminal", "notion"]), tmp_path
+        )
     finally:
         undo()
 
     assert agent_built is True
     assert success is True and error is None
 
+
 def test_requested_mcp_server_never_connected_still_blocks(tmp_path):
     """A parked server that never connected here (bad URL, wrong credentials) keeps the block."""
     undo = _park_notion(tmp_path, ever_connected=False)
     try:
         (success, _output, _final, error), agent_built = _run(
-            _job(enabled_toolsets=["terminal", "notion"]), tmp_path)
+            _job(enabled_toolsets=["terminal", "notion"]), tmp_path
+        )
     finally:
         undo()
 
@@ -172,14 +224,18 @@ def test_requested_mcp_server_never_connected_still_blocks(tmp_path):
     assert success is False
     assert error is not None and "[blocked_config]" in error and "notion" in error
 
+
 def test_requested_mcp_server_parked_on_permanent_error_blocks(tmp_path):
     """A server that connected once and then parked on a PERMANENT error (revoked credentials,
     endpoint gone) is not recovering: its self-probe fails identically every time, so the job must
     take the one-shot blocked_config path instead of silently running tool-less forever."""
-    undo = _park_notion(tmp_path, ever_connected=True, park_reason="from parked state (permanent error)")
+    undo = _park_notion(
+        tmp_path, ever_connected=True, park_reason="from parked state (permanent error)"
+    )
     try:
         (success, _output, _final, error), agent_built = _run(
-            _job(enabled_toolsets=["terminal", "notion"]), tmp_path)
+            _job(enabled_toolsets=["terminal", "notion"]), tmp_path
+        )
     finally:
         undo()
 

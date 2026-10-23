@@ -62,8 +62,13 @@ def test_persist_session_strips_trailing_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_1"},
         {
@@ -105,8 +110,6 @@ def test_persist_session_keeps_unmarked_terminal_empty_response():
     assert agent.flushed_session_db_messages[-1] == messages
 
 
-
-
 def test_flush_never_writes_buried_empty_recovery_scaffolding():
     """When an empty-after-tools nudge is followed by a tool-calling response,
     the synthetic ``(empty)`` + nudge pair stays buried in the live message
@@ -121,8 +124,13 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_1"},
         # Synthetic recovery scaffolding, now buried because the model answered
@@ -136,8 +144,13 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "call_2", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "call_2",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "{}", "tool_call_id": "call_2"},
         {"role": "assistant", "content": "All done."},
@@ -150,7 +163,12 @@ def test_flush_never_writes_buried_empty_recovery_scaffolding():
     assert all("empty response" not in (row["content"] or "") for row in persisted)
     # Only the genuine turns reach the store, in order.
     assert [r["role"] for r in persisted] == [
-        "user", "assistant", "tool", "assistant", "tool", "assistant",
+        "user",
+        "assistant",
+        "tool",
+        "assistant",
+        "tool",
+        "assistant",
     ]
     assert persisted[-1]["content"] == "All done."
 
@@ -175,36 +193,64 @@ _DEAD_LOCAL = "http://127.0.0.1:9"
 def _response(content="", finish_reason="stop", tool_calls=None):
     choice = SimpleNamespace(
         message=SimpleNamespace(content=content, tool_calls=tool_calls),
-        finish_reason=finish_reason, index=0,
+        finish_reason=finish_reason,
+        index=0,
     )
-    return SimpleNamespace(id="chatcmpl-test", choices=[choice], model="test/model", usage=None)
+    return SimpleNamespace(
+        id="chatcmpl-test", choices=[choice], model="test/model", usage=None
+    )
 
 
 def _call(name, args, call_id):
-    return SimpleNamespace(id=call_id, type="function", function=SimpleNamespace(name=name, arguments=json.dumps(args)))
+    return SimpleNamespace(
+        id=call_id,
+        type="function",
+        function=SimpleNamespace(name=name, arguments=json.dumps(args)),
+    )
 
 
 def _write_file_call(path):
-    return _call("write_file", {"path": str(path), "content": "PAYMENT #1 SENT\n"}, "call_write")
+    return _call(
+        "write_file", {"path": str(path), "content": "PAYMENT #1 SENT\n"}, "call_write"
+    )
 
 
 @pytest.fixture
 def real_loop(tmp_path, monkeypatch):
     """A real AIAgent on the real ``file`` toolset and a real SessionDB; only the provider is scripted.
     Any request that would still leave the process dies on a dead local address."""
-    for var in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy", "ALL_PROXY", "all_proxy"):
+    for var in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+    ):
         monkeypatch.setenv(var, _DEAD_LOCAL)
     monkeypatch.setenv("NO_PROXY", "")
     monkeypatch.setenv("no_proxy", "")
     monkeypatch.setattr("agent.title_generator.maybe_auto_title", lambda *a, **k: None)
-    monkeypatch.setattr("agent.title_generator.start_title_upgrade", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "agent.title_generator.start_title_upgrade", lambda *a, **k: None
+    )
     monkeypatch.chdir(tmp_path)
     db = SessionDB(db_path=tmp_path / "state.db")
     sid = "sess-empty-exit"
-    with patch("agent.process_bootstrap.OpenAI"), patch("agent.model_metadata.fetch_model_metadata", return_value={}):
+    with (
+        patch("agent.process_bootstrap.OpenAI"),
+        patch("agent.model_metadata.fetch_model_metadata", return_value={}),
+    ):
         agent = AIAgent(
-            api_key="test-key", base_url=f"{_DEAD_LOCAL}/v1", model="test/model", quiet_mode=True,
-            skip_context_files=True, skip_memory=True, enabled_toolsets=["file"], session_db=db, session_id=sid,
+            api_key="test-key",
+            base_url=f"{_DEAD_LOCAL}/v1",
+            model="test/model",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            enabled_toolsets=["file"],
+            session_db=db,
+            session_id=sid,
         )
 
     def _no_real_client(*_a, **_k):
@@ -222,13 +268,20 @@ def real_loop(tmp_path, monkeypatch):
         agent.client.chat.completions.create.side_effect = lambda **_kw: pending.pop(0)
         return agent.run_conversation(user_message)
 
-    yield SimpleNamespace(agent=agent, db=db, sid=sid, ledger=tmp_path / "ledger.txt", run=run)
+    yield SimpleNamespace(
+        agent=agent, db=db, sid=sid, ledger=tmp_path / "ledger.txt", run=run
+    )
     db.close()
 
 
 def _assert_saved_tool_pairs_stay_live(result, db, sid):
     def ids(rows):
-        calls = {tc["id"] for m in rows if m.get("role") == "assistant" for tc in (m.get("tool_calls") or [])}
+        calls = {
+            tc["id"]
+            for m in rows
+            if m.get("role") == "assistant"
+            for tc in (m.get("tool_calls") or [])
+        }
         return calls, {m.get("tool_call_id") for m in rows if m.get("role") == "tool"}
 
     saved = db.get_messages_as_conversation(sid)
@@ -242,7 +295,12 @@ def _assert_saved_tool_pairs_stay_live(result, db, sid):
 
 def test_empty_response_give_up_keeps_the_executed_tool_call_live(real_loop):
     result = real_loop.run(
-        [_response(finish_reason="tool_calls", tool_calls=[_write_file_call(real_loop.ledger)])]
+        [
+            _response(
+                finish_reason="tool_calls",
+                tool_calls=[_write_file_call(real_loop.ledger)],
+            )
+        ]
         + [_response() for _ in range(8)],
         "record the payment in ledger.txt",
     )
@@ -252,7 +310,9 @@ def test_empty_response_give_up_keeps_the_executed_tool_call_live(real_loop):
     _assert_saved_tool_pairs_stay_live(result, real_loop.db, real_loop.sid)
 
 
-def test_stop_during_empty_response_recovery_keeps_the_executed_tool_call_live(real_loop, monkeypatch):
+def test_stop_during_empty_response_recovery_keeps_the_executed_tool_call_live(
+    real_loop, monkeypatch
+):
     agent = real_loop.agent
 
     def stop_during_backoff(*_a, **_k):
@@ -260,7 +320,13 @@ def test_stop_during_empty_response_recovery_keeps_the_executed_tool_call_live(r
         return 5.0
 
     monkeypatch.setattr("agent.retry_utils.jittered_backoff", stop_during_backoff)
-    script = [_response(finish_reason="tool_calls", tool_calls=[_write_file_call(real_loop.ledger)]), _response(), _response()]
+    script = [
+        _response(
+            finish_reason="tool_calls", tool_calls=[_write_file_call(real_loop.ledger)]
+        ),
+        _response(),
+        _response(),
+    ]
     result = real_loop.run(script, "record the payment in ledger.txt")
 
     assert real_loop.ledger.read_text() == "PAYMENT #1 SENT\n"
@@ -275,11 +341,16 @@ def test_housekeeping_fallback_names_its_final_a_reused_response(real_loop):
     BEFORE that tool. The result says so, so a client settles the answer it already shows
     instead of painting it a second time in the same bubble."""
     real_loop.agent.valid_tool_names.add("todo_list")
-    real_loop.agent.tools.append({"type": "function", "function": {"name": "todo_list", "parameters": {}}})
+    real_loop.agent.tools.append(
+        {"type": "function", "function": {"name": "todo_list", "parameters": {}}}
+    )
     result = real_loop.run(
         [
-            _response("Here is the answer.", finish_reason="tool_calls",
-                      tool_calls=[_call("todo_list", {"todos": []}, "call_todo")]),
+            _response(
+                "Here is the answer.",
+                finish_reason="tool_calls",
+                tool_calls=[_call("todo_list", {"todos": []}, "call_todo")],
+            ),
             _response(),
         ],
         "answer, then tidy",
@@ -294,8 +365,11 @@ def test_same_words_in_a_second_response_are_not_a_reused_response(real_loop):
     """Two real responses with the same words: the final is new output, never a reuse."""
     result = real_loop.run(
         [
-            _response("Done.", finish_reason="tool_calls",
-                      tool_calls=[_call("read_file", {"path": "missing.txt"}, "call_read")]),
+            _response(
+                "Done.",
+                finish_reason="tool_calls",
+                tool_calls=[_call("read_file", {"path": "missing.txt"}, "call_read")],
+            ),
             _response("Done."),
         ],
         "say it twice",

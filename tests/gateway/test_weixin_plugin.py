@@ -24,22 +24,15 @@ def _make_adapter() -> WeixinAdapter:
     )
 
 
-
-
 class TestWeixinFormatting:
-
     def test_format_message_preserves_markdown_tables(self):
         adapter = _make_adapter()
 
         content = (
-            "| Setting | Value |\n"
-            "| --- | --- |\n"
-            "| Timeout | 30s |\n"
-            "| Retries | 3 |\n"
+            "| Setting | Value |\n| --- | --- |\n| Timeout | 30s |\n| Retries | 3 |\n"
         )
 
         assert adapter.format_message(content) == content.strip()
-
 
     def test_format_message_wraps_long_plain_lines_for_copying(self):
         adapter = _make_adapter()
@@ -52,26 +45,25 @@ class TestWeixinFormatting:
         formatted = adapter.format_message(content)
 
         assert "\n" in formatted
-        assert all(len(line) <= weixin.WEIXIN_COPY_LINE_WIDTH for line in formatted.splitlines())
+        assert all(
+            len(line) <= weixin.WEIXIN_COPY_LINE_WIDTH
+            for line in formatted.splitlines()
+        )
         assert " ".join(formatted.split()) == " ".join(content.split())
 
 
 class TestWeixinChunking:
-
-
     def test_split_text_keeps_four_line_structured_blocks_together(self):
         adapter = _make_adapter()
 
         content = adapter.format_message(
-            "今天结论：\n"
-            "- 留存下降 3%\n"
-            "- 转化上涨 8%\n"
-            "- 主要问题在首日激活"
+            "今天结论：\n- 留存下降 3%\n- 转化上涨 8%\n- 主要问题在首日激活"
         )
         chunks = adapter._split_text(content)
 
-        assert chunks == ["今天结论：\n- 留存下降 3%\n- 转化上涨 8%\n- 主要问题在首日激活"]
-
+        assert chunks == [
+            "今天结论：\n- 留存下降 3%\n- 转化上涨 8%\n- 主要问题在首日激活"
+        ]
 
     def test_split_text_keeps_complete_code_block_together_when_possible(self):
         adapter = _make_adapter()
@@ -88,7 +80,6 @@ class TestWeixinChunking:
             for chunk in chunks
         )
         assert all(chunk.count("```") % 2 == 0 for chunk in chunks)
-
 
     def test_split_text_can_restore_legacy_multiline_splitting_via_config(self):
         adapter = WeixinAdapter(
@@ -109,7 +100,6 @@ class TestWeixinChunking:
 
 
 class TestWeixinConfig:
-
     def test_get_connected_platforms_includes_weixin_with_token(self):
         config = GatewayConfig(
             platforms={
@@ -125,7 +115,9 @@ class TestWeixinConfig:
 
 
 class TestWeixinStatePersistence:
-    def test_save_weixin_account_preserves_existing_file_on_replace_failure(self, tmp_path, monkeypatch):
+    def test_save_weixin_account_preserves_existing_file_on_replace_failure(
+        self, tmp_path, monkeypatch
+    ):
         account_path = tmp_path / "weixin" / "accounts" / "acct.json"
         account_path.parent.mkdir(parents=True, exist_ok=True)
         original = {"token": "old-token", "base_url": "https://old.example.com"}
@@ -147,7 +139,9 @@ class TestWeixinStatePersistence:
         except OSError:
             pass
         else:
-            raise AssertionError("expected save_weixin_account to propagate replace failure")
+            raise AssertionError(
+                "expected save_weixin_account to propagate replace failure"
+            )
 
         assert json.loads(account_path.read_text(encoding="utf-8")) == original
 
@@ -168,7 +162,9 @@ class TestWeixinStatePersistence:
         def fake_write(path, data, *args, **kwargs):
             write_threads.append(threading.get_ident())
 
-        with patch("plugins.platforms.weixin.adapter.atomic_json_write", side_effect=fake_write):
+        with patch(
+            "plugins.platforms.weixin.adapter.atomic_json_write", side_effect=fake_write
+        ):
             await store.set("acct-1", "user-1", "ctx-token-abc")
 
         assert store.get("acct-1", "user-1") == "ctx-token-abc"
@@ -194,7 +190,10 @@ class TestWeixinStatePersistence:
                 time.sleep(0.05)
             writes.append(dict(data))
 
-        with patch("plugins.platforms.weixin.adapter.atomic_json_write", side_effect=slow_first_write):
+        with patch(
+            "plugins.platforms.weixin.adapter.atomic_json_write",
+            side_effect=slow_first_write,
+        ):
             first = _asyncio.create_task(store.set("acct-1", "user-1", "t1"))
             await _asyncio.sleep(0.005)
             second = _asyncio.create_task(store.set("acct-1", "user-2", "t2"))
@@ -203,13 +202,19 @@ class TestWeixinStatePersistence:
         assert writes[-1] == {"user-1": "t1", "user-2": "t2"}
 
 
-
-
 class TestWeixinSendMessageIntegration:
     def test_parse_target_ref_accepts_weixin_ids(self):
-        assert _parse_target_ref("weixin", "wxid_test123") == ("wxid_test123", None, True)
+        assert _parse_target_ref("weixin", "wxid_test123") == (
+            "wxid_test123",
+            None,
+            True,
+        )
         assert _parse_target_ref("weixin", "filehelper") == ("filehelper", None, True)
-        assert _parse_target_ref("weixin", "group@chatroom") == ("group@chatroom", None, True)
+        assert _parse_target_ref("weixin", "group@chatroom") == (
+            "group@chatroom",
+            None,
+            True,
+        )
 
 
 class TestWeixinChunkDelivery:
@@ -222,10 +227,11 @@ class TestWeixinChunkDelivery:
         adapter._token_store.get = lambda account_id, chat_id: context_token
         return adapter
 
-
     @patch("plugins.platforms.weixin.adapter.asyncio.sleep", new_callable=AsyncMock)
     @patch("plugins.platforms.weixin.adapter._send_message", new_callable=AsyncMock)
-    def test_send_retries_failed_chunk_before_continuing(self, send_message_mock, sleep_mock):
+    def test_send_retries_failed_chunk_before_continuing(
+        self, send_message_mock, sleep_mock
+    ):
         adapter = self._connected_adapter()
         adapter.MAX_MESSAGE_LENGTH = 12
         calls = {"count": 0}
@@ -251,7 +257,9 @@ class TestWeixinChunkDelivery:
 
     @patch("plugins.platforms.weixin.adapter.asyncio.sleep", new_callable=AsyncMock)
     @patch("plugins.platforms.weixin.adapter._send_message", new_callable=AsyncMock)
-    def test_repeated_rate_limits_open_circuit_for_followup_sends(self, send_message_mock, sleep_mock):
+    def test_repeated_rate_limits_open_circuit_for_followup_sends(
+        self, send_message_mock, sleep_mock
+    ):
         adapter = self._connected_adapter()
         adapter._send_chunk_retries = 3
         adapter._send_chunk_retry_delay_seconds = 0
@@ -280,39 +288,56 @@ class TestWeixinChunkDelivery:
 
     @pytest.mark.parametrize("error_field", ["ret", "errcode"])
     @patch("plugins.platforms.weixin.adapter._send_message", new_callable=AsyncMock)
-    def test_prepare_failed_retries_without_context_token(self, send_message_mock, error_field):
+    def test_prepare_failed_retries_without_context_token(
+        self, send_message_mock, error_field
+    ):
         adapter = self._connected_adapter()
         adapter._rate_limit_circuit_threshold = 1
-        adapter._token_store._cache[adapter._token_store._key(adapter._account_id, "wxid_test123")] = "ctx-token"
-        prepare_failed = {error_field: weixin.RATE_LIMIT_ERRCODE, "errmsg": "prepare failed"}
+        adapter._token_store._cache[
+            adapter._token_store._key(adapter._account_id, "wxid_test123")
+        ] = "ctx-token"
+        prepare_failed = {
+            error_field: weixin.RATE_LIMIT_ERRCODE,
+            "errmsg": "prepare failed",
+        }
         send_message_mock.side_effect = [prepare_failed, {"ret": 0}]
 
         result = asyncio.run(adapter.send("wxid_test123", "hello"))
 
         assert result.success is True
-        assert [call.kwargs["context_token"] for call in send_message_mock.await_args_list] == ["ctx-token", None]
+        assert [
+            call.kwargs["context_token"] for call in send_message_mock.await_args_list
+        ] == ["ctx-token", None]
         assert adapter._rate_limit_circuit_until == 0.0
 
     @pytest.mark.parametrize("stored_token", [None, "ctx-token"])
     @patch("plugins.platforms.weixin.adapter._send_message", new_callable=AsyncMock)
-    def test_prepare_failed_without_recovery_is_not_a_rate_limit(self, send_message_mock, stored_token):
+    def test_prepare_failed_without_recovery_is_not_a_rate_limit(
+        self, send_message_mock, stored_token
+    ):
         """No token to drop (fresh pairing, #80125) or a tokenless re-send that still fails: the error names the
         real cause and the rate-limit breaker stays closed, instead of "rate limited; cooldown active" for 30s."""
         from gateway.platforms.base import classify_send_error
 
         adapter = self._connected_adapter(context_token=stored_token)
         adapter._rate_limit_circuit_threshold = 1
-        send_message_mock.return_value = {"ret": weixin.RATE_LIMIT_ERRCODE, "errmsg": "prepare failed"}
+        send_message_mock.return_value = {
+            "ret": weixin.RATE_LIMIT_ERRCODE,
+            "errmsg": "prepare failed",
+        }
 
         result = asyncio.run(adapter.send("wxid_test123", "hello"))
 
         assert result.success is False
-        assert "prepare failed" in (result.error or "") and "cooldown" not in (result.error or "")
+        assert "prepare failed" in (result.error or "") and "cooldown" not in (
+            result.error or ""
+        )
         # The platform-neutral classifier must not route it back into the rate-limited redelivery lane either.
         assert classify_send_error(None, result.error or "") != "rate_limited"
         assert adapter._rate_limit_cooldown_remaining() == 0.0
-        assert [call.kwargs["context_token"] for call in send_message_mock.await_args_list] == (
-            [None] if stored_token is None else ["ctx-token", None])
+        assert [
+            call.kwargs["context_token"] for call in send_message_mock.await_args_list
+        ] == ([None] if stored_token is None else ["ctx-token", None])
 
     @patch("plugins.platforms.weixin.adapter._send_message", new_callable=AsyncMock)
     def test_tokenless_resend_does_not_consume_retry_budget(self, send_message_mock):
@@ -320,17 +345,30 @@ class TestWeixinChunkDelivery:
         not a failed attempt, so it must not eat the (only) retry slot and fall out of the loop (#112709)."""
         adapter = self._connected_adapter()
         adapter._send_chunk_retries = 0
-        send_message_mock.side_effect = [{"ret": weixin.SESSION_EXPIRED_ERRCODE, "errmsg": "session expired"}, {"ret": 0}]
+        send_message_mock.side_effect = [
+            {"ret": weixin.SESSION_EXPIRED_ERRCODE, "errmsg": "session expired"},
+            {"ret": 0},
+        ]
 
         result = asyncio.run(adapter.send("wxid_test123", "hello"))
 
         assert result.success is True
-        assert [call.kwargs["context_token"] for call in send_message_mock.await_args_list] == ["ctx-token", None]
+        assert [
+            call.kwargs["context_token"] for call in send_message_mock.await_args_list
+        ] == ["ctx-token", None]
 
     @patch.object(weixin, "_send_items", new_callable=AsyncMock)
     @patch.object(weixin, "_upload_ciphertext", new=AsyncMock(return_value="enc-q"))
-    @patch.object(weixin, "_get_upload_url", new=AsyncMock(return_value={"upload_full_url": "https://cdn.example.com/upload"}))
-    def test_media_send_reads_ret_and_resends_without_token_on_stale_session(self, send_items_mock, tmp_path):
+    @patch.object(
+        weixin,
+        "_get_upload_url",
+        new=AsyncMock(
+            return_value={"upload_full_url": "https://cdn.example.com/upload"}
+        ),
+    )
+    def test_media_send_reads_ret_and_resends_without_token_on_stale_session(
+        self, send_items_mock, tmp_path
+    ):
         """The media leg (cron media_files / send_document) must honour iLink ret like _send_text_chunk: a stale-token
         ``ret=-2 prepare failed`` gets one tokenless re-send, and a persistent error is a failure, not success (#112709)."""
         adapter = self._connected_adapter()
@@ -341,14 +379,18 @@ class TestWeixinChunkDelivery:
         result = asyncio.run(adapter.send_document("wxid_test123", str(doc)))
 
         assert result.success is False
-        assert "session not ready" in (result.error or "") and "prepare failed" in (result.error or "")
-        assert [call.kwargs["context_token"] for call in send_items_mock.await_args_list] == ["ctx-token", None]
+        assert "session not ready" in (result.error or "") and "prepare failed" in (
+            result.error or ""
+        )
+        assert [
+            call.kwargs["context_token"] for call in send_items_mock.await_args_list
+        ] == ["ctx-token", None]
 
 
 class TestWeixinOutboundMedia:
-
-
-    def test_send_file_uses_post_for_upload_full_url_and_hex_encoded_aes_key(self, tmp_path):
+    def test_send_file_uses_post_for_upload_full_url_and_hex_encoded_aes_key(
+        self, tmp_path
+    ):
         class _UploadResponse:
             def __init__(self):
                 self.status = 200
@@ -390,13 +432,32 @@ class TestWeixinOutboundMedia:
         adapter._token_store.get = lambda account_id, chat_id: None
 
         aes_key = bytes(range(16))
-        expected_aes_key = base64.b64encode(aes_key.hex().encode("ascii")).decode("ascii")
+        expected_aes_key = base64.b64encode(aes_key.hex().encode("ascii")).decode(
+            "ascii"
+        )
 
-        with patch("plugins.platforms.weixin.adapter._get_upload_url", new=AsyncMock(return_value={"upload_full_url": "https://upload.example.com/media"})), \
-             patch("plugins.platforms.weixin.adapter._api_post", new_callable=AsyncMock) as api_post_mock, \
-             patch("plugins.platforms.weixin.adapter.secrets.token_hex", return_value="filekey-123"), \
-             patch("plugins.platforms.weixin.adapter.secrets.token_bytes", return_value=aes_key):
-            message_id = asyncio.run(adapter._send_file("wxid_test123", str(image_path), ""))
+        with (
+            patch(
+                "plugins.platforms.weixin.adapter._get_upload_url",
+                new=AsyncMock(
+                    return_value={"upload_full_url": "https://upload.example.com/media"}
+                ),
+            ),
+            patch(
+                "plugins.platforms.weixin.adapter._api_post", new_callable=AsyncMock
+            ) as api_post_mock,
+            patch(
+                "plugins.platforms.weixin.adapter.secrets.token_hex",
+                return_value="filekey-123",
+            ),
+            patch(
+                "plugins.platforms.weixin.adapter.secrets.token_bytes",
+                return_value=aes_key,
+            ),
+        ):
+            message_id = asyncio.run(
+                adapter._send_file("wxid_test123", str(image_path), "")
+            )
 
         assert message_id.startswith("clawk-weixin-")
         assert len(session.post_calls) == 1
@@ -416,7 +477,9 @@ class TestWeixinRemoteMediaSafety:
 
         with patch("tools.url_safety.is_safe_url", return_value=False):
             try:
-                asyncio.run(adapter._download_remote_media("http://127.0.0.1/private.png"))
+                asyncio.run(
+                    adapter._download_remote_media("http://127.0.0.1/private.png")
+                )
             except ValueError as exc:
                 assert "Blocked unsafe URL" in str(exc)
             else:
@@ -425,7 +488,6 @@ class TestWeixinRemoteMediaSafety:
 
 class TestWeixinMarkdownLinks:
     """Markdown links should be preserved so WeChat can render them natively."""
-
 
     def test_format_message_preserves_links_inside_code_blocks(self):
         adapter = _make_adapter()
@@ -448,7 +510,6 @@ class TestWeixinBlankMessagePrevention:
        safety net.
     """
 
-
     def test_split_text_returns_empty_list_for_empty_string_split_per_line(self):
         adapter = WeixinAdapter(
             PlatformConfig(
@@ -463,11 +524,8 @@ class TestWeixinBlankMessagePrevention:
         assert adapter._split_text("") == []
 
 
-
-
 class TestWeixinMediaBuilder:
     """Media builder uses base64(hex_key), not base64(raw_bytes) for aes_key."""
-
 
     def test_voice_builder_for_audio_files_uses_file_attachment_type(self):
         adapter = _make_adapter()
@@ -502,7 +560,9 @@ class TestWeixinSendImageFileParameterName:
         adapter._send_session = adapter._session
         adapter._token = "test-token"
 
-        send_document_mock.return_value = weixin.SendResult(success=True, message_id="test-id")
+        send_document_mock.return_value = weixin.SendResult(
+            success=True, message_id="test-id"
+        )
 
         # This is the call pattern used by gateway/run.py extract_media
         result = asyncio.run(
@@ -533,7 +593,6 @@ class TestWeixinVoiceSending:
         adapter._token_store.get = lambda account_id, chat_id: "ctx-token"
         return adapter
 
-
     @patch.object(weixin, "_api_post", new_callable=AsyncMock)
     @patch.object(weixin, "_upload_ciphertext", new_callable=AsyncMock)
     @patch.object(weixin, "_get_upload_url", new_callable=AsyncMock)
@@ -547,7 +606,9 @@ class TestWeixinVoiceSending:
         adapter = self._connected_adapter()
         silk = tmp_path / "voice.silk"
         silk.write_bytes(b"\x02#!SILK_V3\x01\x00")
-        get_upload_url_mock.return_value = {"upload_full_url": "https://cdn.example.com/upload"}
+        get_upload_url_mock.return_value = {
+            "upload_full_url": "https://cdn.example.com/upload"
+        }
         upload_ciphertext_mock.return_value = "enc-q"
         api_post_mock.return_value = {"success": True}
 
@@ -564,12 +625,9 @@ class TestWeixinVoiceSending:
 class TestIsStaleSessionRet:
     """Regression test for #17228: distinguish stale-session ret=-2 from rate-limit ret=-2."""
 
-
     def test_ret_minus_2_with_freq_limit_is_not_stale(self):
         # Genuine rate limit — must NOT be treated as stale session.
         assert weixin._is_stale_session_ret(-2, None, "freq limit") is False
-
-
 
 
 class TestWeixinContentDedup:
@@ -612,7 +670,6 @@ class TestWeixinTextDebounce:
 
     Delays are read from ``config.extra`` (config.yaml), not env vars.
     """
-
 
     def test_batch_delays_overridden_via_config_extra(self):
         adapter = WeixinAdapter(
@@ -672,8 +729,6 @@ class _StubSession:
 
 
 class TestWeixinApiTimeout:
-
-
     def test_get_updates_returns_empty_sentinel_on_timeout(self):
         # wait_for raises asyncio.TimeoutError, which _get_updates swallows into
         # an empty long-poll batch rather than propagating.
@@ -761,11 +816,10 @@ class TestWeixinVoiceAlwaysDownloaded:
             },
         }
 
-
-
-
     @pytest.mark.asyncio
-    async def test_collect_media_includes_voice_when_tencent_text_set(self, tmp_path, monkeypatch):
+    async def test_collect_media_includes_voice_when_tencent_text_set(
+        self, tmp_path, monkeypatch
+    ):
         """#27300 INTEGRATION: ``_collect_media`` should add a ``.silk``
         path to ``media_paths`` even when Tencent returned text, so the
         central STT pipeline can re-transcribe. Currently the
@@ -777,11 +831,23 @@ class TestWeixinVoiceAlwaysDownloaded:
         adapter._cdn_base_url = "https://example.invalid"
         adapter._poll_session = Mock()
 
-        monkeypatch.setattr(weixin, "cache_audio_from_bytes_async",
-                            AsyncMock(side_effect=lambda data, ext: str(tmp_path / f"voice.{ext.lstrip('.')}")))
+        monkeypatch.setattr(
+            weixin,
+            "cache_audio_from_bytes_async",
+            AsyncMock(
+                side_effect=lambda data, ext: str(tmp_path / f"voice.{ext.lstrip('.')}")
+            ),
+        )
 
-        async def _fake_download(session, *, cdn_base_url, encrypted_query_param,
-                                 aes_key_b64, full_url, timeout_seconds):
+        async def _fake_download(
+            session,
+            *,
+            cdn_base_url,
+            encrypted_query_param,
+            aes_key_b64,
+            full_url,
+            timeout_seconds,
+        ):
             return b"\\x00FAKE"
 
         monkeypatch.setattr(weixin, "_download_and_decrypt_media", _fake_download)
@@ -830,7 +896,6 @@ class TestWeixinVoiceGatewayHandoff:
             ],
         }
 
-
     @pytest.mark.asyncio
     async def test_voice_event_body_is_not_tencent_text(self, tmp_path, monkeypatch):
         """The VOICE event handed to the runner must NOT carry Tencent's STT
@@ -841,10 +906,17 @@ class TestWeixinVoiceGatewayHandoff:
         adapter._token = None
         adapter._cdn_base_url = "https://example.invalid"
 
-        monkeypatch.setattr(weixin, "cache_audio_from_bytes_async",
-                            AsyncMock(side_effect=lambda data, ext: str(tmp_path / f"voice.{ext.lstrip('.')}")))
+        monkeypatch.setattr(
+            weixin,
+            "cache_audio_from_bytes_async",
+            AsyncMock(
+                side_effect=lambda data, ext: str(tmp_path / f"voice.{ext.lstrip('.')}")
+            ),
+        )
+
         async def _fake_download(*a, **k):
             return b"\x00\x01FAKE_SILK"
+
         monkeypatch.setattr(weixin, "_download_and_decrypt_media", _fake_download)
 
         captured = {}
@@ -877,22 +949,36 @@ def test_register_declares_weixin_platform_entry():
             captured.update(kwargs)
 
     weixin.register(_Ctx())
-    assert captured["name"] == "weixin" and captured["label"] == "Weixin / WeChat" and captured["emoji"] == "💬"
+    assert (
+        captured["name"] == "weixin"
+        and captured["label"] == "Weixin / WeChat"
+        and captured["emoji"] == "💬"
+    )
     assert captured["adapter_factory"] is WeixinAdapter
     assert captured["check_fn"] is weixin.check_weixin_requirements
     assert captured["setup_fn"] is weixin.interactive_setup
     assert captured["standalone_sender_fn"] is weixin._standalone_send
     assert captured["required_env"] == ["WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"]
-    assert (captured["allowed_users_env"], captured["allow_all_env"], captured["cron_deliver_env_var"]) == (
-        "WEIXIN_ALLOWED_USERS", "WEIXIN_ALLOW_ALL_USERS", "WEIXIN_HOME_CHANNEL")
+    assert (
+        captured["allowed_users_env"],
+        captured["allow_all_env"],
+        captured["cron_deliver_env_var"],
+    ) == ("WEIXIN_ALLOWED_USERS", "WEIXIN_ALLOW_ALL_USERS", "WEIXIN_HOME_CHANNEL")
     assert captured["install_hint"] == "Weixin: aiohttp/cryptography not installed"
-    assert captured["max_message_length"] == 0 and captured["allow_update_command"] is True
+    assert (
+        captured["max_message_length"] == 0 and captured["allow_update_command"] is True
+    )
 
 
 def test_is_connected_requires_account_and_token(monkeypatch):
     for name in ("WEIXIN_ACCOUNT_ID", "WEIXIN_TOKEN"):
         monkeypatch.delenv(name, raising=False)
     from gateway.config import PlatformConfig
-    assert weixin._is_connected(PlatformConfig(enabled=True, token="t", extra={"account_id": "a"}))
+
+    assert weixin._is_connected(
+        PlatformConfig(enabled=True, token="t", extra={"account_id": "a"})
+    )
     assert not weixin._is_connected(PlatformConfig(enabled=True, token="t"))
-    assert not weixin._is_connected(PlatformConfig(enabled=True, extra={"account_id": "a"}))
+    assert not weixin._is_connected(
+        PlatformConfig(enabled=True, extra={"account_id": "a"})
+    )

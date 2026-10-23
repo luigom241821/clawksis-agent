@@ -84,7 +84,6 @@ class TestResolveClientCert:
         result = _resolve_client_cert("srv", {"client_cert": str(pem)})
         assert result == str(pem)
 
-
     def test_list_form_two_elements(self, tmp_path):
         from tools.mcp_tool_errors import _resolve_client_cert
 
@@ -93,11 +92,13 @@ class TestResolveClientCert:
         cert.write_text("cert")
         key.write_text("key")
 
-        result = _resolve_client_cert("srv", {
-            "client_cert": [str(cert), str(key)],
-        })
+        result = _resolve_client_cert(
+            "srv",
+            {
+                "client_cert": [str(cert), str(key)],
+            },
+        )
         assert result == (str(cert), str(key))
-
 
     def test_password_must_be_string(self, tmp_path):
         from tools.mcp_tool_errors import _resolve_client_cert
@@ -108,9 +109,12 @@ class TestResolveClientCert:
         key.write_text("key")
 
         with pytest.raises(ValueError, match=r"key passphrase.*must be a string"):
-            _resolve_client_cert("srv", {
-                "client_cert": [str(cert), str(key), 42],
-            })
+            _resolve_client_cert(
+                "srv",
+                {
+                    "client_cert": [str(cert), str(key), 42],
+                },
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -164,18 +168,24 @@ class TestHTTPClientCert:
             self._shutdown_event.set()
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-                 _patch_sdk_async_client(DummyAsyncClient), \
-                 _patch_sdk_transport(_DummyTransport), \
-                 patch("tools.mcp_tool.streamable_http_client",
-                       return_value=DummyTransportCtx()), \
-                 patch("tools.mcp_tool.ClientSession", DummySession), \
-                 patch.object(MCPServerTask, "_discover_tools", _discover_tools):
-                await server._run_http({
-                    "url": "https://example.com/mcp",
-                    "client_cert": str(cert),
-                })
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+                _patch_sdk_async_client(DummyAsyncClient),
+                _patch_sdk_transport(_DummyTransport),
+                patch(
+                    "tools.mcp_tool.streamable_http_client",
+                    return_value=DummyTransportCtx(),
+                ),
+                patch("tools.mcp_tool.ClientSession", DummySession),
+                patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+            ):
+                await server._run_http(
+                    {
+                        "url": "https://example.com/mcp",
+                        "client_cert": str(cert),
+                    }
+                )
 
         asyncio.run(_drive())
         # cert/verify live on the inner transport (client-level TLS kwargs
@@ -186,7 +196,6 @@ class TestHTTPClientCert:
         assert "cert" not in captured
         assert "transport" in captured
 
-
     def test_missing_cert_file_surfaces_clear_error(self, tmp_path):
         """A missing cert file fails fast with a server-scoped error message."""
         from tools.mcp_tool import MCPServerTask
@@ -194,12 +203,16 @@ class TestHTTPClientCert:
         server = MCPServerTask("remote")
 
         async def _drive():
-            with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-                 patch("tools.mcp_tool._MCP_NEW_HTTP", True):
-                await server._run_http({
-                    "url": "https://example.com/mcp",
-                    "client_cert": str(tmp_path / "nope.pem"),
-                })
+            with (
+                patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+                patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            ):
+                await server._run_http(
+                    {
+                        "url": "https://example.com/mcp",
+                        "client_cert": str(tmp_path / "nope.pem"),
+                    }
+                )
 
         with pytest.raises(FileNotFoundError, match=r"remote.*client_cert.*not found"):
             asyncio.run(_drive())
@@ -247,8 +260,10 @@ def patch_sse_client():
         async def __aexit__(self, *a):
             return False
 
-    with patch("tools.mcp_tool.sse_client", new=fake_sse_client), \
-         patch("tools.mcp_tool.ClientSession", new=_FakeSession):
+    with (
+        patch("tools.mcp_tool.sse_client", new=fake_sse_client),
+        patch("tools.mcp_tool.ClientSession", new=_FakeSession),
+    ):
         yield captured_kwargs
 
 
@@ -264,15 +279,22 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
-                        server._run_http({
-                            "url": "https://example.com/mcp/sse",
-                            "transport": "sse",
-                        }),
+                        server._run_http(
+                            {
+                                "url": "https://example.com/mcp/sse",
+                                "transport": "sse",
+                            }
+                        ),
                         timeout=2.0,
                     )
                 except (TimeoutError, StopAsyncIteration, Exception):
@@ -288,8 +310,10 @@ class TestSSEClientCert:
             def __init__(self, **kwargs):
                 captured_client_kwargs.update(kwargs)
 
-        with _patch_sdk_async_client(DummyAsyncClient), \
-             _patch_sdk_transport(_DummyTransport):
+        with (
+            _patch_sdk_async_client(DummyAsyncClient),
+            _patch_sdk_transport(_DummyTransport),
+        ):
             factory(headers=None, timeout=None, auth=None)
 
         assert _DummyTransport.captured.get("verify") is True
@@ -309,16 +333,23 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
-                        server._run_http({
-                            "url": "https://example.com/mcp/sse",
-                            "transport": "sse",
-                            "client_cert": str(cert),
-                        }),
+                        server._run_http(
+                            {
+                                "url": "https://example.com/mcp/sse",
+                                "transport": "sse",
+                                "client_cert": str(cert),
+                            }
+                        ),
                         timeout=2.0,
                     )
                 except (TimeoutError, StopAsyncIteration, Exception):
@@ -338,8 +369,11 @@ class TestSSEClientCert:
                 captured_client_kwargs.update(kwargs)
 
         from tools.mcp_tool import sdk_httpx
-        with _patch_sdk_async_client(DummyAsyncClient), \
-             _patch_sdk_transport(_DummyTransport):
+
+        with (
+            _patch_sdk_async_client(DummyAsyncClient),
+            _patch_sdk_transport(_DummyTransport),
+        ):
             factory(headers={"x": "y"}, timeout=sdk_httpx().Timeout(30.0), auth=None)
 
         assert _DummyTransport.captured["cert"] == str(cert)
@@ -360,16 +394,23 @@ class TestSSEClientCert:
         server._sampling = None
 
         async def drive():
-            with patch.object(MCPServerTask, "_wait_for_lifecycle_event",
-                              new=AsyncMock(return_value="shutdown")), \
-                 patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()):
+            with (
+                patch.object(
+                    MCPServerTask,
+                    "_wait_for_lifecycle_event",
+                    new=AsyncMock(return_value="shutdown"),
+                ),
+                patch.object(MCPServerTask, "_discover_tools", new=AsyncMock()),
+            ):
                 try:
                     await asyncio.wait_for(
-                        server._run_http({
-                            "url": "https://example.com/mcp/sse",
-                            "transport": "sse",
-                            "ssl_verify": str(ca_bundle),
-                        }),
+                        server._run_http(
+                            {
+                                "url": "https://example.com/mcp/sse",
+                                "transport": "sse",
+                                "ssl_verify": str(ca_bundle),
+                            }
+                        ),
                         timeout=2.0,
                     )
                 except (TimeoutError, StopAsyncIteration, Exception):
@@ -386,8 +427,10 @@ class TestSSEClientCert:
             def __init__(self, **kwargs):
                 captured_client_kwargs.update(kwargs)
 
-        with _patch_sdk_async_client(DummyAsyncClient), \
-             _patch_sdk_transport(_DummyTransport):
+        with (
+            _patch_sdk_async_client(DummyAsyncClient),
+            _patch_sdk_transport(_DummyTransport),
+        ):
             factory(headers=None, timeout=None, auth=None)
 
         assert _DummyTransport.captured["verify"] == str(ca_bundle)

@@ -25,10 +25,17 @@ def _params(level="info", data="hello", logger_name=None):
 class TestLogLevelMap:
     def test_all_mcp_levels_mapped(self):
         # MCP spec (RFC 5424) defines these eight levels.
-        for lvl in ("debug", "info", "notice", "warning",
-                    "error", "critical", "alert", "emergency"):
+        for lvl in (
+            "debug",
+            "info",
+            "notice",
+            "warning",
+            "error",
+            "critical",
+            "alert",
+            "emergency",
+        ):
             assert lvl in _MCP_LOG_LEVEL_MAP
-
 
 
 class TestLoggingCallback:
@@ -48,14 +55,15 @@ class TestLoggingCallback:
         server = MCPServerTask("log_srv")
         callback = server._make_logging_callback()
         with caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
-            await callback(_params(level="warning", data="rate limited",
-                                   logger_name="http"))
+            await callback(
+                _params(level="warning", data="rate limited", logger_name="http")
+            )
         assert any(
-            "log_srv/http" in rec.getMessage() and "rate limited" in rec.getMessage()
+            "log_srv/http" in rec.getMessage()
+            and "rate limited" in rec.getMessage()
             and rec.levelno == logging.WARNING
             for rec in caplog.records
         )
-
 
     @pytest.mark.asyncio
     async def test_handler_never_raises(self):
@@ -79,6 +87,7 @@ class TestSDKSupportGate:
         import inspect
         from mcp import ClientSession
         from tools import mcp_tool
+
         mcp_tool._ensure_mcp_sdk()
         expected = "logging_callback" in inspect.signature(ClientSession).parameters
         assert mcp_tool._MCP_LOGGING_CALLBACK_SUPPORTED == expected

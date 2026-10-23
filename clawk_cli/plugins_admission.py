@@ -1,4 +1,5 @@
 """Submit proposed plugin selections to the independent PM publisher."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,7 +23,8 @@ class DependencyConflict(AdmissionRefused):
         who = f"Plugin '{plugin}'" if plugin else "The plugin selection"
         super().__init__(
             f"{who} conflicts with the dependencies pinned by Clawksis core or an enabled plugin, "
-            f"so it was not admitted. Resolver: {cause}")
+            f"so it was not admitted. Resolver: {cause}"
+        )
 
 
 def candidate_member_dirs(
@@ -65,13 +67,28 @@ def admit_plugin_set_change(
     from pm.client import sync_venv
     from pm.plugin_inputs import Selection
 
-    home = Path(active_plugins_dir).parent if active_plugins_dir is not None else get_clawk_home()
+    home = (
+        Path(active_plugins_dir).parent
+        if active_plugins_dir is not None
+        else get_clawk_home()
+    )
     try:
-        sync_venv(explicit=True, plugins=Selection({
-            "home": str(home.resolve()), "enabled": sorted(candidate_enabled),
-            "disabled": sorted(candidate_disabled), "extra_dirs": [str(Path(d).resolve()) for d in extra_dirs],
-            **({"expected_config": expected_config} if expected_config is not None else {}),
-        }))
+        sync_venv(
+            explicit=True,
+            plugins=Selection(
+                {
+                    "home": str(home.resolve()),
+                    "enabled": sorted(candidate_enabled),
+                    "disabled": sorted(candidate_disabled),
+                    "extra_dirs": [str(Path(d).resolve()) for d in extra_dirs],
+                    **(
+                        {"expected_config": expected_config}
+                        if expected_config is not None
+                        else {}
+                    ),
+                }
+            ),
+        )
     except Exception as exc:
         from pm.workspace import ResolutionConflict
 

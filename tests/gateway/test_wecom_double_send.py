@@ -79,7 +79,9 @@ def _gateway_suppresses_normal_send(consumer, final_text: str) -> bool:
     )
 
 
-async def _gateway_join_and_cancel(stream_task: asyncio.Task, join_timeout: float) -> None:
+async def _gateway_join_and_cancel(
+    stream_task: asyncio.Task, join_timeout: float
+) -> None:
     """Faithful copy of gateway/run.py:20748-20755 finally-block join.
 
     Joins the stream task with a bounded timeout; on timeout it cancels the
@@ -159,7 +161,9 @@ def _finalize_frames_on_wire(adapter) -> list[dict]:
 
 async def _cleanup_adapter(adapter) -> None:
     """Cancel any lingering control/normal workers so the event loop is clean."""
-    for task in list(adapter._control_workers.values()) + list(adapter._chat_workers.values()):
+    for task in list(adapter._control_workers.values()) + list(
+        adapter._chat_workers.values()
+    ):
         task.cancel()
         try:
             await task
@@ -203,7 +207,10 @@ class TestTimeoutInversionDoubleSend:
         join_timeout = 0.1
 
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, CHAT_ID, cfg)
 
@@ -265,7 +272,10 @@ class TestTimeoutInversionDoubleSend:
         join_timeout = 0.5
 
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, CHAT_ID, cfg)
 
@@ -339,19 +349,29 @@ class TestOrphanQueueAckRouting:
         # 1) Fire an intermediate frame (skip_if_pending) — occupies pending_ack.
         await adapter._send_reply_queued(
             REQ_ID,
-            {"msgtype": "stream", "stream": {"id": "s1", "finish": False, "content": "hi"}},
-            is_final=False, skip_if_pending=True,
+            {
+                "msgtype": "stream",
+                "stream": {"id": "s1", "finish": False, "content": "hi"},
+            },
+            is_final=False,
+            skip_if_pending=True,
         )
         inter_queue = adapter._reply_queues[REQ_ID]
         assert inter_queue.pending_ack is not None
 
         # 2) Start the finalize: it enters the is_final drain branch and yields
         #    at `await shield(pending_frame.future)`.
-        fin_task = asyncio.create_task(adapter._send_reply_queued(
-            REQ_ID,
-            {"msgtype": "stream", "stream": {"id": "s1", "finish": True, "content": "done"}},
-            is_final=True, skip_if_pending=False,
-        ))
+        fin_task = asyncio.create_task(
+            adapter._send_reply_queued(
+                REQ_ID,
+                {
+                    "msgtype": "stream",
+                    "stream": {"id": "s1", "finish": True, "content": "done"},
+                },
+                is_final=True,
+                skip_if_pending=False,
+            )
+        )
         await asyncio.sleep(0)  # let finalize reach the drain await
 
         # 3) Deliver the intermediate ack MID-DRAIN. _resolve_reply_ack resolves

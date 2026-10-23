@@ -73,7 +73,11 @@ def _thumb_path(slug: str) -> Path:
 def _read_pet_json(directory: Path) -> dict:
     pet_json = directory / "pet.json"
     try:
-        return json.loads(pet_json.read_text(encoding="utf-8-sig")) if pet_json.is_file() else {}
+        return (
+            json.loads(pet_json.read_text(encoding="utf-8-sig"))
+            if pet_json.is_file()
+            else {}
+        )
     except (OSError, ValueError) as exc:
         logger.debug("unreadable pet.json in %s: %s", directory, exc)
         return {}
@@ -86,8 +90,16 @@ def _write_pet_json(directory: Path, meta: dict) -> None:
 def _resolve_spritesheet(directory: Path, meta: dict) -> Path:
     """Honor ``spritesheetPath``, else probe conventional names (incl. petdex R2's ``sprite.webp``)."""
     declared = str(meta.get("spritesheetPath", "") or "").strip()
-    names = ([declared] if declared else []) + ["spritesheet.webp", "spritesheet.png", "sprite.webp", "sprite.png"]
-    return next((directory / n for n in names if (directory / n).is_file()), directory / "spritesheet.webp")  # stable default
+    names = ([declared] if declared else []) + [
+        "spritesheet.webp",
+        "spritesheet.png",
+        "sprite.webp",
+        "sprite.png",
+    ]
+    return next(
+        (directory / n for n in names if (directory / n).is_file()),
+        directory / "spritesheet.webp",
+    )  # stable default
 
 
 def _safe_slug(slug: str) -> str:
@@ -101,8 +113,13 @@ def load_pet(slug: str) -> InstalledPet | None:
     if not (slug := _safe_slug(slug)) or not (directory := pets_dir() / slug).is_dir():
         return None
     meta = _read_pet_json(directory)
-    name, desc, by = (str(meta.get(k, "") or d) for k, d in (("displayName", slug), ("description", ""), ("createdBy", "")))
-    return InstalledPet(slug, name, desc, directory, _resolve_spritesheet(directory, meta), by)
+    name, desc, by = (
+        str(meta.get(k, "") or d)
+        for k, d in (("displayName", slug), ("description", ""), ("createdBy", ""))
+    )
+    return InstalledPet(
+        slug, name, desc, directory, _resolve_spritesheet(directory, meta), by
+    )
 
 
 def _usable_pet(slug: str, error: str = "") -> InstalledPet | None:
@@ -116,7 +133,11 @@ def _usable_pet(slug: str, error: str = "") -> InstalledPet | None:
 
 def installed_pets() -> list[InstalledPet]:
     """Return every installed pet (dirs containing a usable spritesheet)."""
-    return [pet for child in sorted(pets_dir().iterdir()) if child.is_dir() and (pet := _usable_pet(child.name))]
+    return [
+        pet
+        for child in sorted(pets_dir().iterdir())
+        if child.is_dir() and (pet := _usable_pet(child.name))
+    ]
 
 
 def resolve_active_pet(configured_slug: str | None = None) -> InstalledPet | None:
@@ -126,7 +147,9 @@ def resolve_active_pet(configured_slug: str | None = None) -> InstalledPet | Non
     return next(iter(installed_pets()), None)
 
 
-def install_pet(slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TIMEOUT) -> InstalledPet:
+def install_pet(
+    slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TIMEOUT
+) -> InstalledPet:
     """Download *slug* from the manifest; idempotent unless *force*. Raises :class:`PetStoreError` / ``ManifestError``."""
     from agent.pet.manifest import find_entry
 
@@ -144,7 +167,11 @@ def install_pet(slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TI
         raise PetStoreError(f"refusing non-petdex spritesheet host for '{slug}'")
 
     directory = _ensure_dir(pets_dir() / slug)
-    sprite_ext = ".png" if entry.spritesheet_url.lower().split("?")[0].endswith(".png") else ".webp"
+    sprite_ext = (
+        ".png"
+        if entry.spritesheet_url.lower().split("?")[0].endswith(".png")
+        else ".webp"
+    )
     sprite_path = directory / f"spritesheet{sprite_ext}"
     _download(entry.spritesheet_url, sprite_path, timeout=timeout)
 
@@ -152,11 +179,19 @@ def install_pet(slug: str, *, force: bool = False, timeout: float = _DOWNLOAD_TI
     meta: dict = {}
     if entry.pet_json_url and _is_petdex_host(entry.pet_json_url):
         try:
-            meta = data if isinstance(data := _http_get(entry.pet_json_url, timeout).json(), dict) else {}
+            meta = (
+                data
+                if isinstance(
+                    data := _http_get(entry.pet_json_url, timeout).json(), dict
+                )
+                else {}
+            )
         except Exception as exc:
             logger.debug("pet.json fetch failed for %s: %s", slug, exc)
     meta = meta or {"id": slug, "displayName": entry.display_name, "description": ""}
-    meta["spritesheetPath"] = sprite_path.name  # key order matters: pet.json is written verbatim
+    meta["spritesheetPath"] = (
+        sprite_path.name
+    )  # key order matters: pet.json is written verbatim
     meta.setdefault("id", slug)
     meta.setdefault("displayName", entry.display_name)
     _write_pet_json(directory, meta)
@@ -175,7 +210,9 @@ def unique_slug(name: str) -> str:
     return next(slug for slug in candidates if not (pets_dir() / slug).exists())
 
 
-def register_local_pet(spritesheet, *, slug: str, display_name: str = "", description: str = "") -> InstalledPet:
+def register_local_pet(
+    spritesheet, *, slug: str, display_name: str = "", description: str = ""
+) -> InstalledPet:
     """Write a locally-generated pet (PIL image, WebP/PNG bytes, or path) into the store as lossless WebP.
 
     Appears in :func:`installed_pets` immediately (no manifest entry needed).
@@ -189,12 +226,26 @@ def register_local_pet(spritesheet, *, slug: str, display_name: str = "", descri
         else:
             from agent.pet.generate.atlas import _load_rgba
 
-            _load_rgba(spritesheet).save(sprite_path, format="WEBP", lossless=True, quality=100, method=6, exact=True)
+            _load_rgba(spritesheet).save(
+                sprite_path,
+                format="WEBP",
+                lossless=True,
+                quality=100,
+                method=6,
+                exact=True,
+            )
     except Exception as exc:
         raise PetStoreError(f"could not write spritesheet for '{slug}': {exc}") from exc
-    meta = {"id": slug, "displayName": display_name or slug, "description": description or "", "spritesheetPath": sprite_path.name}
+    meta = {
+        "id": slug,
+        "displayName": display_name or slug,
+        "description": description or "",
+        "spritesheetPath": sprite_path.name,
+    }
     _write_pet_json(directory, {**meta, "createdBy": "generator"})
-    return _usable_pet(slug, f"register of generated pet '{slug}' did not produce a spritesheet")
+    return _usable_pet(
+        slug, f"register of generated pet '{slug}' did not produce a spritesheet"
+    )
 
 
 def export_pet(slug: str) -> tuple[str, bytes]:
@@ -221,7 +272,9 @@ def _is_petdex_host(url: str) -> bool:
     return host == "petdex.dev" or host.endswith(".petdex.dev")
 
 
-def thumbnail_png(slug: str, *, source_url: str = "", timeout: float = 30.0) -> bytes | None:
+def thumbnail_png(
+    slug: str, *, source_url: str = "", timeout: float = 30.0
+) -> bytes | None:
     """Small idle-frame (top-left cell) PNG for *slug*, cached on disk; ``None`` on any failure.
 
     Source: the installed sheet, else *source_url* only when petdex-hosted (the gateway
@@ -248,8 +301,12 @@ def thumbnail_png(slug: str, *, source_url: str = "", timeout: float = 30.0) -> 
         from PIL import Image
 
         with Image.open(io.BytesIO(sheet_bytes)) as im:
-            frame = im.convert("RGBA").crop((0, 0, min(_THUMB_FRAME_W, im.width), min(_THUMB_FRAME_H, im.height)))
-        frame = frame.resize((_THUMB_W, round(_THUMB_W * _THUMB_FRAME_H / _THUMB_FRAME_W)), Image.NEAREST)
+            frame = im.convert("RGBA").crop(
+                (0, 0, min(_THUMB_FRAME_W, im.width), min(_THUMB_FRAME_H, im.height))
+            )
+        frame = frame.resize(
+            (_THUMB_W, round(_THUMB_W * _THUMB_FRAME_H / _THUMB_FRAME_W)), Image.NEAREST
+        )
         buf = io.BytesIO()
         frame.save(buf, format="PNG")
     except Exception as exc:
@@ -290,7 +347,9 @@ def rename_pet(slug: str, display_name: str) -> str | None:
     new_slug = slug
     desired = slugify(display_name)
     if desired and desired != slug and not (pets_dir() / desired).exists():
-        with contextlib.suppress(OSError):  # keep the provisional slug if the move fails
+        with contextlib.suppress(
+            OSError
+        ):  # keep the provisional slug if the move fails
             directory.rename(pets_dir() / desired)
             with contextlib.suppress(OSError):
                 _thumb_path(slug).rename(_thumb_path(desired))
@@ -325,8 +384,10 @@ def _download(url: str, dest: Path, *, timeout: float) -> None:
 
         if not is_safe_url(url):
             raise ValueError(f"Pet store URL failed the SSRF safety check: {url}")
-        with create_ssrf_safe_client(timeout=timeout, follow_redirects=True) as client, \
-                client.stream("GET", url, headers=_HTTP_HEADERS) as resp:
+        with (
+            create_ssrf_safe_client(timeout=timeout, follow_redirects=True) as client,
+            client.stream("GET", url, headers=_HTTP_HEADERS) as resp,
+        ):
             resp.raise_for_status()
             tmp = dest.with_suffix(dest.suffix + ".part")
             with tmp.open("wb") as fh:

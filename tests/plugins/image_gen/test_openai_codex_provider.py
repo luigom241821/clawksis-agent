@@ -58,15 +58,29 @@ def codex_backend(monkeypatch):
     # Seed the auth.json token below the credential/base resolver so generate() exercises the real
     # (token, base_url) binding; no pool present.
     from agent import auxiliary_client
-    monkeypatch.setattr(auxiliary_client, "_select_pool_entry", lambda provider: (False, None))
-    monkeypatch.setattr(auxiliary_client, "_read_codex_singleton_token", lambda: "codex-token")
+
+    monkeypatch.setattr(
+        auxiliary_client, "_select_pool_entry", lambda provider: (False, None)
+    )
+    monkeypatch.setattr(
+        auxiliary_client, "_read_codex_singleton_token", lambda: "codex-token"
+    )
     state = {"requests": [], "respond": None}
 
     def _default(request):
-        return httpx.Response(200, json={
-            "created": 1, "data": [{"b64_json": _b64_png(), "generation_id": "gen_1"}],
-            "background": "opaque", "output_format": "png", "quality": "low", "size": "1254x1254",
-        }, headers={"x-codex-imagegen-request-id": "req_abc"}, request=request)
+        return httpx.Response(
+            200,
+            json={
+                "created": 1,
+                "data": [{"b64_json": _b64_png(), "generation_id": "gen_1"}],
+                "background": "opaque",
+                "output_format": "png",
+                "quality": "low",
+                "size": "1254x1254",
+            },
+            headers={"x-codex-imagegen-request-id": "req_abc"},
+            request=request,
+        )
 
     def _handler(request):
         state["requests"].append(request)
@@ -74,10 +88,13 @@ def codex_backend(monkeypatch):
 
     real_client = httpx.Client
     monkeypatch.setattr(
-        httpx, "Client",
+        httpx,
+        "Client",
         lambda *args, **kwargs: real_client(
-            transport=httpx.MockTransport(_handler), headers=kwargs.get("headers"),
-            timeout=kwargs.get("timeout")),
+            transport=httpx.MockTransport(_handler),
+            headers=kwargs.get("headers"),
+            timeout=kwargs.get("timeout"),
+        ),
     )
     return state
 
@@ -86,10 +103,6 @@ def codex_backend(monkeypatch):
 
 
 class TestMetadata:
-
-
-
-
     def test_setup_schema_has_no_required_env_vars(self, provider):
         """#102144: the keyless row must declare the shared Codex OAuth bootstrap hook (otherwise setup
         saves the backend without ever signing in) and its hint must name a command that exists."""
@@ -105,16 +118,24 @@ class TestMetadata:
 
 class TestAvailability:
     def test_unavailable_without_codex_token(self, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_credential", lambda: (None, None))
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_credential", lambda: (None, None)
+        )
         assert codex_plugin.OpenAICodexImageGenProvider().is_available() is False
 
     def test_available_with_codex_token(self, monkeypatch):
-        monkeypatch.setattr(codex_plugin, "_read_codex_credential", lambda: ("tok", "https://chatgpt.com/backend-api/codex"))
+        monkeypatch.setattr(
+            codex_plugin,
+            "_read_codex_credential",
+            lambda: ("tok", "https://chatgpt.com/backend-api/codex"),
+        )
         assert codex_plugin.OpenAICodexImageGenProvider().is_available() is True
 
     def test_openai_api_key_alone_is_not_enough(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        monkeypatch.setattr(codex_plugin, "_read_codex_credential", lambda: (None, None))
+        monkeypatch.setattr(
+            codex_plugin, "_read_codex_credential", lambda: (None, None)
+        )
         assert codex_plugin.OpenAICodexImageGenProvider().is_available() is False
 
 
@@ -124,7 +145,11 @@ class TestAvailability:
 class TestGenerate:
     @pytest.mark.parametrize("edit", [False, True])
     def test_custom_codex_route_keeps_image_request_on_configured_host(
-        self, provider, codex_backend, monkeypatch, edit,
+        self,
+        provider,
+        codex_backend,
+        monkeypatch,
+        edit,
     ):
         monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://images.example.test/codex/")
         kwargs = {"image_url": "data:image/png;base64," + _b64_png()} if edit else {}
@@ -138,25 +163,39 @@ class TestGenerate:
 
     @pytest.mark.parametrize("override", ["", "   "])
     def test_blank_override_preserves_official_route(
-        self, provider, codex_backend, monkeypatch, override,
+        self,
+        provider,
+        codex_backend,
+        monkeypatch,
+        override,
     ):
         monkeypatch.setenv("CLAWK_CODEX_BASE_URL", override)
         assert provider.generate("a cat")["success"] is True
         (request,) = codex_backend["requests"]
-        assert str(request.url) == "https://chatgpt.com/backend-api/codex/images/generations"
+        assert (
+            str(request.url)
+            == "https://chatgpt.com/backend-api/codex/images/generations"
+        )
         assert request.headers["originator"] == "clawksis-agent"
 
     def test_profile_scope_routes_each_request_without_borrowing_process_override(
-        self, provider, codex_backend, monkeypatch,
+        self,
+        provider,
+        codex_backend,
+        monkeypatch,
     ):
         from agent import secret_scope
         from agent.secret_scope import reset_secret_scope, set_secret_scope
 
         monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", True)
-        monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://other-profile.example.test/codex")
+        monkeypatch.setenv(
+            "CLAWK_CODEX_BASE_URL", "https://other-profile.example.test/codex"
+        )
         for scope, expected in [
-            ({"CLAWK_CODEX_BASE_URL": "https://profile.example.test/images-api/"},
-             "https://profile.example.test/images-api/images/generations"),
+            (
+                {"CLAWK_CODEX_BASE_URL": "https://profile.example.test/images-api/"},
+                "https://profile.example.test/images-api/images/generations",
+            ),
             ({}, "https://chatgpt.com/backend-api/codex/images/generations"),
         ]:
             token = set_secret_scope(scope)
@@ -168,7 +207,11 @@ class TestGenerate:
 
     @pytest.mark.parametrize("failure", ["http", "empty", "exception"])
     def test_custom_route_failure_never_retries_on_official_host(
-        self, provider, codex_backend, monkeypatch, failure,
+        self,
+        provider,
+        codex_backend,
+        monkeypatch,
+        failure,
     ):
         monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://images.example.test/codex")
 
@@ -186,13 +229,20 @@ class TestGenerate:
 
     def test_returns_auth_error_without_codex_token(self, provider, monkeypatch):
         from agent import auxiliary_client
-        monkeypatch.setattr(auxiliary_client, "_select_pool_entry", lambda provider: (False, None))
-        monkeypatch.setattr(auxiliary_client, "_read_codex_singleton_token", lambda: None)
+
+        monkeypatch.setattr(
+            auxiliary_client, "_select_pool_entry", lambda provider: (False, None)
+        )
+        monkeypatch.setattr(
+            auxiliary_client, "_read_codex_singleton_token", lambda: None
+        )
         result = provider.generate("a cat")
         assert result["success"] is False
         assert result["error_type"] == "auth_required"
 
-    def test_text_to_image_posts_generations_with_no_host_model(self, provider, codex_backend, tmp_path):
+    def test_text_to_image_posts_generations_with_no_host_model(
+        self, provider, codex_backend, tmp_path
+    ):
         result = provider.generate("a cat", aspect_ratio="portrait")
 
         assert result["success"] is True
@@ -205,7 +255,10 @@ class TestGenerate:
         assert result["reported_size"] == "1254x1254"
         assert result["imagegen_request_id"] == "req_abc"
         saved = Path(result["image"])
-        assert saved.exists() and saved.parent == tmp_path / "cache" / "generated" / "images"
+        assert (
+            saved.exists()
+            and saved.parent == tmp_path / "cache" / "generated" / "images"
+        )
         assert saved.name.startswith("openai_codex_")
 
         (request,) = codex_backend["requests"]
@@ -214,16 +267,24 @@ class TestGenerate:
         assert request.headers["x-codex-image-turn-id"]
         body = json.loads(request.content)
         assert body == {
-            "prompt": "a cat", "model": "gpt-image-2", "n": 1, "quality": "medium",
-            "size": "1024x1536", "background": "opaque",
+            "prompt": "a cat",
+            "model": "gpt-image-2",
+            "n": 1,
+            "quality": "medium",
+            "size": "1024x1536",
+            "background": "opaque",
         }
         # The whole point of the native route: nothing about a chat model in the request.
         assert not any(key in body for key in ("tools", "input", "instructions"))
 
-    def test_custom_codex_base_receives_the_image_request(self, provider, codex_backend, tmp_path, monkeypatch):
+    def test_custom_codex_base_receives_the_image_request(
+        self, provider, codex_backend, tmp_path, monkeypatch
+    ):
         """With ``CLAWK_CODEX_BASE_URL`` set, image requests go to the gateway's base instead of
         the hard-coded chatgpt.com host (#121486) — the text client honours the same override."""
-        monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://codex-gw.example/backend-api/codex")
+        monkeypatch.setenv(
+            "CLAWK_CODEX_BASE_URL", "https://codex-gw.example/backend-api/codex"
+        )
 
         result = provider.generate("a cat")
 
@@ -232,12 +293,16 @@ class TestGenerate:
         assert request.url.host == "codex-gw.example"
         assert request.url.path.endswith("/backend-api/codex/images/generations")
 
-    def test_source_images_post_edits_with_inline_data_urls(self, provider, codex_backend, tmp_path):
+    def test_source_images_post_edits_with_inline_data_urls(
+        self, provider, codex_backend, tmp_path
+    ):
         local = tmp_path / "ref.png"
         local.write_bytes(_png_bytes())
         data_url = "data:image/png;base64," + _b64_png()
 
-        result = provider.generate("edit these", image_url=str(local), reference_image_urls=[data_url])
+        result = provider.generate(
+            "edit these", image_url=str(local), reference_image_urls=[data_url]
+        )
 
         assert result["success"] is True
         assert result["modality"] == "image"
@@ -247,7 +312,9 @@ class TestGenerate:
         body = json.loads(request.content)
         assert [img["image_url"] for img in body["images"]] == [data_url, data_url]
 
-    def test_remote_source_url_is_fetched_and_inlined(self, provider, codex_backend, monkeypatch):
+    def test_remote_source_url_is_fetched_and_inlined(
+        self, provider, codex_backend, monkeypatch
+    ):
         # The backend's own URL downloader 400s on ordinary public images; we fetch client-side.
         monkeypatch.setattr("tools.url_safety.is_safe_url", lambda url: True)
         # codex_backend monkeypatches httpx.Client; build the fetch client from
@@ -257,15 +324,19 @@ class TestGenerate:
             "tools.url_safety.create_ssrf_safe_client",
             lambda **kw: real_client(
                 transport=httpx.MockTransport(
-                    lambda request: httpx.Response(200, content=_png_bytes(), request=request)),
-                **kw))
+                    lambda request: httpx.Response(
+                        200, content=_png_bytes(), request=request
+                    )
+                ),
+                **kw,
+            ),
+        )
 
         result = provider.generate("edit", image_url="https://example.com/ref.png")
 
         assert result["success"] is True
         body = json.loads(codex_backend["requests"][0].content)
         assert body["images"] == [{"image_url": "data:image/png;base64," + _b64_png()}]
-
 
     def test_rejects_non_image_local_source(self, provider, codex_backend, tmp_path):
         text_path = tmp_path / "not-image.txt"
@@ -278,12 +349,21 @@ class TestGenerate:
         assert "not a supported image" in result["error"]
         assert codex_backend["requests"] == []
 
-    def test_http_error_message_surfaces_verbatim_and_bounded(self, provider, codex_backend):
-        body = json.dumps({
-            "metadata": "x" * 600,
-            "error": {"message": "Missing required parameter: 'prompt'.", "type": "invalid_request_error"},
-        })
-        codex_backend["respond"] = lambda request: httpx.Response(400, text=body, request=request)
+    def test_http_error_message_surfaces_verbatim_and_bounded(
+        self, provider, codex_backend
+    ):
+        body = json.dumps(
+            {
+                "metadata": "x" * 600,
+                "error": {
+                    "message": "Missing required parameter: 'prompt'.",
+                    "type": "invalid_request_error",
+                },
+            }
+        )
+        codex_backend["respond"] = lambda request: httpx.Response(
+            400, text=body, request=request
+        )
 
         result = provider.generate("a cat")
 
@@ -295,7 +375,8 @@ class TestGenerate:
 
     def test_missing_image_data_is_empty_response(self, provider, codex_backend):
         codex_backend["respond"] = lambda request: httpx.Response(
-            200, json={"created": 1, "data": []}, request=request)
+            200, json={"created": 1, "data": []}, request=request
+        )
 
         result = provider.generate("a cat")
 

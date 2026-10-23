@@ -14,11 +14,16 @@ accepts extra_headers).
 
 from run_agent import AIAgent
 
+
 def _tool_defs(*names):
     return [
-        {"type": "function", "function": {"name": n, "description": n, "parameters": {}}}
+        {
+            "type": "function",
+            "function": {"name": n, "description": n, "parameters": {}},
+        }
         for n in names
     ]
+
 
 class _FakeOpenAI:
     def __init__(self, **kw):
@@ -28,9 +33,12 @@ class _FakeOpenAI:
     def close(self):
         pass
 
+
 def _make_agent(monkeypatch, base_url, api_mode="chat_completions"):
     """Create an AIAgent pointing at the given base_url."""
-    monkeypatch.setattr("model_tools.get_tool_definitions", lambda **kw: _tool_defs("web_search"))
+    monkeypatch.setattr(
+        "model_tools.get_tool_definitions", lambda **kw: _tool_defs("web_search")
+    )
     monkeypatch.setattr("model_tools.check_toolset_requirements", dict)
     monkeypatch.setattr("agent.process_bootstrap.OpenAI", _FakeOpenAI)
     return AIAgent(
@@ -43,6 +51,7 @@ def _make_agent(monkeypatch, base_url, api_mode="chat_completions"):
         skip_context_files=True,
         skip_memory=True,
     )
+
 
 class TestIsCopilotUrl:
     """_is_copilot_url() detects GitHub Copilot endpoints."""
@@ -59,6 +68,7 @@ class TestIsCopilotUrl:
         agent = _make_agent(monkeypatch, "https://openrouter.ai/api/v1")
         assert agent._is_copilot_url() is False
 
+
 class TestUserInitiatedTurnFlag:
     """_is_user_initiated_turn lifecycle."""
 
@@ -68,13 +78,16 @@ class TestUserInitiatedTurnFlag:
         agent.reset_session_state()
         assert agent._is_user_initiated_turn is False
 
+
 class TestHeaderValues:
     """copilot_default_headers(is_agent_turn=...) sets x-initiator correctly."""
 
     def test_default_is_agent(self):
         from clawk_cli.models import copilot_default_headers
+
         assert copilot_default_headers()["x-initiator"] == "agent"
 
     def test_user_turn(self):
         from clawk_cli.models import copilot_default_headers
+
         assert copilot_default_headers(is_agent_turn=False)["x-initiator"] == "user"

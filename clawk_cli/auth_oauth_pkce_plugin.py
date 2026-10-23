@@ -45,7 +45,9 @@ class OAuthPKCEConfig:
     authorize_url: str
     token_url: str
     scopes: tuple[str, ...] = ()
-    redirect_port: int = 0  # 0 = OS-assigned; pin it when the IdP allowlists an exact redirect URI
+    redirect_port: int = (
+        0  # 0 = OS-assigned; pin it when the IdP allowlists an exact redirect URI
+    )
     redirect_path: str = "/callback"
     audience: Optional[str] = None
     extra_authorize_params: Mapping[str, str] = field(default_factory=dict)
@@ -76,7 +78,9 @@ def _endpoint_host(provider: str, name: str, url: str) -> str:
     host = (parsed.hostname or "").lower()
     if not host:
         raise _err(provider, f"OAuth {name} has no host.", "oauth_endpoint_invalid")
-    if parsed.scheme != "https" and not (parsed.scheme == "http" and host in _LOOPBACK_LITERALS):
+    if parsed.scheme != "https" and not (
+        parsed.scheme == "http" and host in _LOOPBACK_LITERALS
+    ):
         raise _err(provider, f"OAuth {name} must use HTTPS.", "oauth_endpoint_invalid")
     return host
 
@@ -91,13 +95,23 @@ def validate_config(provider: str, cfg: OAuthPKCEConfig) -> None:
     token_host = _endpoint_host(provider, "token_url", cfg.token_url)
     allowlist = tuple(h.lower() for h in cfg.allowed_hosts) or (authorize_host,)
     if not _host_allowed(token_host, allowlist):
-        raise _err(provider, f"OAuth token_url host {token_host!r} is not on the allowlist "
-                   f"{sorted(allowlist)}.", "oauth_token_host_rejected")
+        raise _err(
+            provider,
+            f"OAuth token_url host {token_host!r} is not on the allowlist "
+            f"{sorted(allowlist)}.",
+            "oauth_token_host_rejected",
+        )
     if not 0 <= int(cfg.redirect_port) <= 65535:
-        raise _err(provider, "OAuth redirect_port must be within 0..65535.", "oauth_redirect_invalid")
+        raise _err(
+            provider,
+            "OAuth redirect_port must be within 0..65535.",
+            "oauth_redirect_invalid",
+        )
 
 
-def _post_token(provider: str, cfg: OAuthPKCEConfig, data: dict[str, str], *, code: str) -> dict[str, Any]:
+def _post_token(
+    provider: str, cfg: OAuthPKCEConfig, data: dict[str, str], *, code: str
+) -> dict[str, Any]:
     """POST the token endpoint (or the plugin's broker) and return the rotated pool fields; the payload
     is never logged."""
     from clawk_cli.auth import _default_verify
@@ -109,16 +123,25 @@ def _post_token(provider: str, cfg: OAuthPKCEConfig, data: dict[str, str], *, co
     if cfg.audience:
         body.setdefault("audience", cfg.audience)
     try:
-        response = httpx.post(cfg.token_url, data=body, headers={"Accept": "application/json"},
-                              timeout=30.0, verify=_default_verify())
+        response = httpx.post(
+            cfg.token_url,
+            data=body,
+            headers={"Accept": "application/json"},
+            timeout=30.0,
+            verify=_default_verify(),
+        )
     except Exception as exc:
-        raise _err(provider, f"OAuth token request failed: {type(exc).__name__}", code) from exc
+        raise _err(
+            provider, f"OAuth token request failed: {type(exc).__name__}", code
+        ) from exc
     if response.status_code >= 400:
         raise _token_http_error(provider, response, code)
     return _token_fields(provider, response.json(), data, code)
 
 
-def _token_fields(provider: str, payload: Mapping[str, Any], data: dict[str, str], code: str) -> dict[str, Any]:
+def _token_fields(
+    provider: str, payload: Mapping[str, Any], data: dict[str, str], code: str
+) -> dict[str, Any]:
     """Pool fields from a token-endpoint payload; a response without ``refresh_token`` keeps the old one."""
     from clawk_cli.auth import _coerce_ttl_seconds, _utc_now_z
 
@@ -128,7 +151,10 @@ def _token_fields(provider: str, payload: Mapping[str, Any], data: dict[str, str
     ttl = _coerce_ttl_seconds(payload.get("expires_in", 0))
     return {
         "access_token": access_token,
-        "refresh_token": str(payload.get("refresh_token") or data.get("refresh_token") or "").strip() or None,
+        "refresh_token": str(
+            payload.get("refresh_token") or data.get("refresh_token") or ""
+        ).strip()
+        or None,
         "expires_at_ms": int(time.time() * 1000) + ttl * 1000 if ttl else None,
         "last_refresh": _utc_now_z(),
     }
@@ -148,45 +174,82 @@ def _token_http_error(provider: str, response: Any, fallback_code: str):
     except Exception:
         error = ""
     if error in _OAUTH_GRANT_DEAD_CODES:
-        return _err(provider, f"OAuth token request failed with HTTP {response.status_code} ({error}).", error)
-    return _err(provider, f"OAuth token request failed with HTTP {response.status_code}.", fallback_code)
+        return _err(
+            provider,
+            f"OAuth token request failed with HTTP {response.status_code} ({error}).",
+            error,
+        )
+    return _err(
+        provider,
+        f"OAuth token request failed with HTTP {response.status_code}.",
+        fallback_code,
+    )
 
 
 def _pool_provider(args: Any) -> str:
     """Canonical profile name for the credential pool. ``args.provider`` may be an alias."""
     raw = str(getattr(args, "provider", "") or "").strip().lower()
     from providers import get_provider_profile
+
     profile = get_provider_profile(raw)
     return profile.name if profile is not None else raw
 
 
-def login(provider: str, cfg: OAuthPKCEConfig, *, open_browser: bool = True) -> dict[str, Any]:
+def login(
+    provider: str, cfg: OAuthPKCEConfig, *, open_browser: bool = True
+) -> dict[str, Any]:
     """Run the browser Authorization-Code + PKCE flow; returns the pool fields for the new grant."""
     from clawk_cli.auth_device_flow import (
-        _bind_loopback_callback_server, _can_open_graphical_browser, _make_loopback_callback_handler,
-        _pkce_code_challenge, _pkce_code_verifier, _print_loopback_ssh_hint, _serve_loopback_callback)
+        _bind_loopback_callback_server,
+        _can_open_graphical_browser,
+        _make_loopback_callback_handler,
+        _pkce_code_challenge,
+        _pkce_code_verifier,
+        _print_loopback_ssh_hint,
+        _serve_loopback_callback,
+    )
 
     validate_config(provider, cfg)
-    path = cfg.redirect_path if cfg.redirect_path.startswith("/") else f"/{cfg.redirect_path}"
+    path = (
+        cfg.redirect_path
+        if cfg.redirect_path.startswith("/")
+        else f"/{cfg.redirect_path}"
+    )
     err = lambda message, code: _err(provider, message, code)
-    handler_cls, result = _make_loopback_callback_handler(path, display_name=cfg.label or provider)
+    handler_cls, result = _make_loopback_callback_handler(
+        path, display_name=cfg.label or provider
+    )
     server = _bind_loopback_callback_server(
-        "127.0.0.1", int(cfg.redirect_port), handler_cls, err=err, bind_failed_code="oauth_callback_bind_failed")
+        "127.0.0.1",
+        int(cfg.redirect_port),
+        handler_cls,
+        err=err,
+        bind_failed_code="oauth_callback_bind_failed",
+    )
     redirect_uri = f"http://127.0.0.1:{server.server_address[1]}{path}"
     verifier = _pkce_code_verifier()
     state = secrets.token_urlsafe(32)
     params = {
-        **cfg.extra_authorize_params, "client_id": cfg.client_id, "response_type": "code",
-        "redirect_uri": redirect_uri, "state": state, "code_challenge": _pkce_code_challenge(verifier),
-        "code_challenge_method": "S256"}
+        **cfg.extra_authorize_params,
+        "client_id": cfg.client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "code_challenge": _pkce_code_challenge(verifier),
+        "code_challenge_method": "S256",
+    }
     if cfg.scopes:
         params["scope"] = " ".join(cfg.scopes)
     if cfg.audience:
         params["audience"] = cfg.audience
     authorize_url = f"{cfg.authorize_url}{'&' if urlparse(cfg.authorize_url).query else '?'}{urlencode(params)}"
 
-    print(f"\nOpen this URL to authorize Clawksis with {cfg.label or provider}:\n  {authorize_url}\n")
-    print(f"Waiting for callback on {redirect_uri} (timeout {int(cfg.timeout_seconds)}s, Ctrl+C to cancel)...")
+    print(
+        f"\nOpen this URL to authorize Clawksis with {cfg.label or provider}:\n  {authorize_url}\n"
+    )
+    print(
+        f"Waiting for callback on {redirect_uri} (timeout {int(cfg.timeout_seconds)}s, Ctrl+C to cancel)..."
+    )
     _print_loopback_ssh_hint(redirect_uri)
     if open_browser and _can_open_graphical_browser():
         try:
@@ -195,27 +258,46 @@ def login(provider: str, cfg: OAuthPKCEConfig, *, open_browser: bool = True) -> 
             print("Could not open the browser automatically; use the URL above.")
     try:
         callback = _serve_loopback_callback(
-            server, result, timeout_seconds=cfg.timeout_seconds, err=err, timeout_code="oauth_callback_timeout")
+            server,
+            result,
+            timeout_seconds=cfg.timeout_seconds,
+            err=err,
+            timeout_code="oauth_callback_timeout",
+        )
     except KeyboardInterrupt:
         print("\nLogin cancelled.")
         raise SystemExit(130)
 
     if callback.get("error"):
-        raise err(f"authorization failed: {callback.get('error_description') or callback['error']}",
-                  "oauth_authorization_denied")
+        raise err(
+            f"authorization failed: {callback.get('error_description') or callback['error']}",
+            "oauth_authorization_denied",
+        )
     if not hmac.compare_digest(str(callback.get("state") or ""), state):
-        raise err("callback state mismatch — the redirect did not come from this login. Aborting.",
-                  "oauth_state_mismatch")
+        raise err(
+            "callback state mismatch — the redirect did not come from this login. Aborting.",
+            "oauth_state_mismatch",
+        )
     code = str(callback.get("code") or "").strip()
     if not code:
         raise err("callback carried no authorization code.", "oauth_no_code")
-    return _post_token(provider, cfg, {
-        "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri, "code_verifier": verifier,
-    }, code="oauth_token_exchange_failed")
+    return _post_token(
+        provider,
+        cfg,
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": verifier,
+        },
+        code="oauth_token_exchange_failed",
+    )
 
 
 def _is_usable(access_token: Any, expires_at_ms: Any, now_ms: int) -> bool:
-    return bool(str(access_token or "").strip()) and (expires_at_ms is None or int(expires_at_ms) > now_ms)
+    return bool(str(access_token or "").strip()) and (
+        expires_at_ms is None or int(expires_at_ms) > now_ms
+    )
 
 
 def pkce_auth_handler(cfg: OAuthPKCEConfig) -> Callable[[str, Any], bool]:
@@ -227,22 +309,45 @@ def pkce_auth_handler(cfg: OAuthPKCEConfig) -> Callable[[str, Any], bool]:
 
         provider = _pool_provider(args)
         if action == "add":
-            tokens = login(provider, cfg, open_browser=not getattr(args, "no_browser", False))
-            entry = load_pool(provider).add_entry(PooledCredential(
-                provider=provider, id=uuid.uuid4().hex[:6], label=cfg.label or provider,
-                auth_type=AUTH_TYPE_OAUTH, priority=0, source=POOL_SOURCE, **tokens,
-                extra={"oauth_pkce": {"client_id": cfg.client_id, "scope": " ".join(cfg.scopes)}}))
-            print(f"Signed in to {cfg.label or provider}; credential {entry.id} added to the pool.")
+            tokens = login(
+                provider, cfg, open_browser=not getattr(args, "no_browser", False)
+            )
+            entry = load_pool(provider).add_entry(
+                PooledCredential(
+                    provider=provider,
+                    id=uuid.uuid4().hex[:6],
+                    label=cfg.label or provider,
+                    auth_type=AUTH_TYPE_OAUTH,
+                    priority=0,
+                    source=POOL_SOURCE,
+                    **tokens,
+                    extra={
+                        "oauth_pkce": {
+                            "client_id": cfg.client_id,
+                            "scope": " ".join(cfg.scopes),
+                        }
+                    },
+                )
+            )
+            print(
+                f"Signed in to {cfg.label or provider}; credential {entry.id} added to the pool."
+            )
             return True
         if action == "status":
             entries = load_pool(provider).entries()
             now_ms = int(time.time() * 1000)
             if not entries:
                 print(f"{provider}: logged out")
-            elif any(_is_usable(e.access_token, e.expires_at_ms, now_ms) for e in entries):
-                print(f"{provider}: logged in\n  auth_type: oauth (pkce)\n  credentials: {len(entries)}")
+            elif any(
+                _is_usable(e.access_token, e.expires_at_ms, now_ms) for e in entries
+            ):
+                print(
+                    f"{provider}: logged in\n  auth_type: oauth (pkce)\n  credentials: {len(entries)}"
+                )
             else:
-                print(f"{provider}: expired (needs refresh) — run `clawk auth refresh {provider}`")
+                print(
+                    f"{provider}: expired (needs refresh) — run `clawk auth refresh {provider}`"
+                )
             return True
         if action == "logout":
             pool = load_pool(provider)
@@ -269,16 +374,48 @@ def pkce_refresh_credential(cfg: OAuthPKCEConfig) -> Callable[[Any], Mapping[str
         provider = str(entry.provider)
         validate_config(provider, cfg)
         with _auth_store_lock():
-            on_disk = next((row for row in read_credential_pool(provider)
-                            if isinstance(row, dict) and row.get("id") == entry.id), None) or {}
+            on_disk = (
+                next(
+                    (
+                        row
+                        for row in read_credential_pool(provider)
+                        if isinstance(row, dict) and row.get("id") == entry.id
+                    ),
+                    None,
+                )
+                or {}
+            )
             disk_refresh = str(on_disk.get("refresh_token") or "").strip()
-            if disk_refresh and disk_refresh != (entry.refresh_token or "") and _is_usable(
-                    on_disk.get("access_token"), on_disk.get("expires_at_ms"), int(time.time() * 1000)):
-                logger.debug("%s entry %s: adopting a peer's rotation, refresh token not spent", provider, entry.id)
-                return {k: on_disk.get(k) for k in ("access_token", "refresh_token", "expires_at_ms", "last_refresh")}
+            if (
+                disk_refresh
+                and disk_refresh != (entry.refresh_token or "")
+                and _is_usable(
+                    on_disk.get("access_token"),
+                    on_disk.get("expires_at_ms"),
+                    int(time.time() * 1000),
+                )
+            ):
+                logger.debug(
+                    "%s entry %s: adopting a peer's rotation, refresh token not spent",
+                    provider,
+                    entry.id,
+                )
+                return {
+                    k: on_disk.get(k)
+                    for k in (
+                        "access_token",
+                        "refresh_token",
+                        "expires_at_ms",
+                        "last_refresh",
+                    )
+                }
             refresh_token = disk_refresh or str(entry.refresh_token or "").strip()
             if not refresh_token:
-                raise _err(provider, "no refresh_token on the pooled credential.", "oauth_refresh_no_token")
+                raise _err(
+                    provider,
+                    "no refresh_token on the pooled credential.",
+                    "oauth_refresh_no_token",
+                )
             data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
             if cfg.scopes:
                 data["scope"] = " ".join(cfg.scopes)

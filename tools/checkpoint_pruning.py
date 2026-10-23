@@ -1,4 +1,5 @@
 """Checked history rewrites shared by snapshot limits and store maintenance."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -79,7 +80,9 @@ class Pruner:
             raise PruneError(f"checkpoint ref has no readable history: {ref}")
         return commits
 
-    def _rewrite(self, ref: str, original: list[str], keep: list[str], *, gc: bool) -> None:
+    def _rewrite(
+        self, ref: str, original: list[str], keep: list[str], *, gc: bool
+    ) -> None:
         parent = None
         for sha in keep:
             metadata = self._git(["log", "-1", "--format=%T%x00%aI%x00%cI%x00%s", sha])
@@ -90,7 +93,13 @@ class Pruner:
             args = ["commit-tree", tree, "--no-gpg-sign", "-m", message]
             if parent is not None:
                 args += ["-p", parent]
-            parent = self._git(args, extra_env={"GIT_AUTHOR_DATE": author_date, "GIT_COMMITTER_DATE": committer_date})
+            parent = self._git(
+                args,
+                extra_env={
+                    "GIT_AUTHOR_DATE": author_date,
+                    "GIT_COMMITTER_DATE": committer_date,
+                },
+            )
             if not parent:
                 raise PruneError("commit-tree returned no checkpoint identity")
         if parent is None:
@@ -116,7 +125,9 @@ class Pruner:
         if cap_bytes <= 0 or self.dir_size(self.store) <= cap_bytes:
             return False
         changed = False
-        for ref in self._git(["for-each-ref", "--format=%(refname)", self.refs_prefix]).splitlines():
+        for ref in self._git(
+            ["for-each-ref", "--format=%(refname)", self.refs_prefix]
+        ).splitlines():
             commits = self._commits(ref)
             if len(commits) > 1:
                 self._rewrite(ref, commits, commits[1:], gc=False)
@@ -131,7 +142,9 @@ class Pruner:
         self.reclaim()
         if self.dir_size(self.store) <= cap_bytes:
             return True
-        refs = self._git(["for-each-ref", "--format=%(refname)", self.refs_prefix]).splitlines()
+        refs = self._git(
+            ["for-each-ref", "--format=%(refname)", self.refs_prefix]
+        ).splitlines()
         # Keep the existing round-robin policy, remeasure after EACH rewrite.
         # Twenty rounds bound maintenance when many large histories remain.
         for _ in range(20):

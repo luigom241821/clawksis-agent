@@ -16,7 +16,12 @@ from typing import List
 
 from wcwidth import wcswidth
 
-__all__ = ["is_table_divider", "looks_like_table_row", "realign_markdown_tables", "split_table_row"]
+__all__ = [
+    "is_table_divider",
+    "looks_like_table_row",
+    "realign_markdown_tables",
+    "split_table_row",
+]
 
 
 _DIVIDER_CELL_RE = re.compile(r"^\s*:?-{3,}:?\s*$")
@@ -30,7 +35,9 @@ def _disp_width(s: str) -> int:
 
 def split_table_row(row: str) -> list[str]:
     """Split ``| a | b | c |`` into ``["a", "b", "c"]`` with trims."""
-    return [c.strip() for c in row.strip().removeprefix("|").removesuffix("|").split("|")]
+    return [
+        c.strip() for c in row.strip().removeprefix("|").removesuffix("|").split("|")
+    ]
 
 
 def is_table_divider(row: str) -> bool:
@@ -51,7 +58,9 @@ def looks_like_table_row(row: str) -> bool:
     return bool(stripped) and (stripped.startswith("|") or stripped.count("|") >= 2)
 
 
-def _render_block(rows: list[list[str]], available_width: int | None = None) -> list[str]:
+def _render_block(
+    rows: list[list[str]], available_width: int | None = None
+) -> list[str]:
     """Render ``rows`` (header + body, divider implied) at uniform widths.
 
     When the horizontal table would exceed ``available_width`` fall back to a
@@ -60,13 +69,24 @@ def _render_block(rows: list[list[str]], available_width: int | None = None) -> 
     """
     ncols = max(len(r) for r in rows)
     rows = [r + [""] * (ncols - len(r)) for r in rows]
-    widths = [max(_MIN_COL_WIDTH, *(_disp_width(r[c]) for r in rows)) for c in range(ncols)]
+    widths = [
+        max(_MIN_COL_WIDTH, *(_disp_width(r[c]) for r in rows)) for c in range(ncols)
+    ]
     # `| ` + cell + ` ` per column, plus the closing `|`.
-    if available_width is not None and sum(widths) + 3 * ncols + 1 > max(available_width, 20):
+    if available_width is not None and sum(widths) + 3 * ncols + 1 > max(
+        available_width, 20
+    ):
         return _render_vertical(rows, ncols, available_width)
 
     def _row(cells: list[str]) -> str:
-        return "| " + " | ".join(c + " " * max(0, widths[k] - _disp_width(c)) for k, c in enumerate(cells)) + " |"
+        return (
+            "| "
+            + " | ".join(
+                c + " " * max(0, widths[k] - _disp_width(c))
+                for k, c in enumerate(cells)
+            )
+            + " |"
+        )
 
     out = [_row(rows[0]), "|" + "|".join("-" * (w + 2) for w in widths) + "|"]
     out.extend(_row(r) for r in rows[1:])
@@ -126,7 +146,9 @@ def _wrap_to_width(text: str, width: int) -> list[str]:
     return lines or [""]
 
 
-def _render_vertical(rows: list[list[str]], ncols: int, available_width: int) -> list[str]:
+def _render_vertical(
+    rows: list[list[str]], ncols: int, available_width: int
+) -> list[str]:
     """Render a too-wide table as ``Header: value`` blocks (Claude Code's narrow fallback).
 
     Each body row becomes one block with continuation lines indented two spaces,
@@ -134,9 +156,14 @@ def _render_vertical(rows: list[list[str]], ncols: int, available_width: int) ->
     """
     if not rows:
         return []
-    labels = [h or f"Column {i + 1}" for i, h in enumerate(rows[0] + [""] * (ncols - len(rows[0])))]
+    labels = [
+        h or f"Column {i + 1}"
+        for i, h in enumerate(rows[0] + [""] * (ncols - len(rows[0])))
+    ]
     separator = "─" * (max(20, min(40, available_width - 2)) if available_width else 30)
-    cont_budget = max(10, available_width - 2)  # continuation lines are indented two spaces
+    cont_budget = max(
+        10, available_width - 2
+    )  # continuation lines are indented two spaces
     out: list[str] = []
     for ri, row in enumerate(rows[1:]):
         if ri > 0:
@@ -146,10 +173,16 @@ def _render_vertical(rows: list[list[str]], ncols: int, available_width: int) ->
             if not value:
                 out.append(f"{label}:")
                 continue
-            wrapped = _wrap_to_width(value, max(10, available_width - _disp_width(label) - 2))
+            wrapped = _wrap_to_width(
+                value, max(10, available_width - _disp_width(label) - 2)
+            )
             out.append(f"{label}: {wrapped[0]}")
             # Re-flow continuation text at the wider continuation budget.
-            for cl in _wrap_to_width(" ".join(wrapped[1:]), cont_budget) if len(wrapped) > 1 else ():
+            for cl in (
+                _wrap_to_width(" ".join(wrapped[1:]), cont_budget)
+                if len(wrapped) > 1
+                else ()
+            ):
                 if cl.strip():
                     out.append(f"  {cl}")
     return out

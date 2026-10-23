@@ -25,7 +25,9 @@ from tests.e2e.core.dashboard._helpers import Sandbox, make_sandbox
 from tests.e2e.core._pending_fixes import known_gate
 from tests.e2e.core.dashboard._issue_helpers import GatewayApiServer, Issue120937
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="reaper reads /proc")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="reaper reads /proc"
+)
 TURN_TIMEOUT = 90.0
 
 # test name -> (the bug's own failure signature, "#issue reason"); see _pending_fixes.known_failure.
@@ -33,12 +35,15 @@ KNOWN: dict[str, tuple[str, str]] = {
     "test_session_chat_100k_message_reaches_model_whole_or_is_rejected": (
         r"^#120937 /api/sessions/\{id\}/chat answered 200 but the model received 65536 of 100000 chars",
         "#120937 POST /api/sessions/{id}/chat silently truncates a string message to 65,536 chars "
-        "(200, no error, no flag)"),
+        "(200, no error, no flag)",
+    ),
 }
 
 
 @pytest.fixture(scope="module")
-def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Sandbox, GatewayApiServer]]:
+def gateway(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[tuple[Sandbox, GatewayApiServer]]:
     root = tmp_path_factory.mktemp("gw120937")
     sb = make_sandbox(root)
     gw = None
@@ -53,7 +58,10 @@ def gateway(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Sandbox,
 
 def _long_message(n: int) -> tuple[str, str, str]:
     """``(message, head, tail)``: exactly ``n`` chars, a unique head marker and a unique tail canary."""
-    head, tail = f"HEAD-{secrets.token_hex(6)}::", f"::TAIL-CANARY-{secrets.token_hex(8)}"
+    head, tail = (
+        f"HEAD-{secrets.token_hex(6)}::",
+        f"::TAIL-CANARY-{secrets.token_hex(8)}",
+    )
     body = ("lorem ipsum dolor sit amet " * (n // 27 + 1))[: n - len(head) - len(tail)]
     msg = head + body + tail
     assert len(msg) == n
@@ -100,10 +108,14 @@ def _stored_user_len(gw: GatewayApiServer, sid: str, head: str) -> int | None:
 
 
 def _chat(gw: GatewayApiServer, sid: str, message: str) -> tuple[int, Any]:
-    return gw.call("POST", f"/api/sessions/{sid}/chat", {"message": message}, timeout=TURN_TIMEOUT)
+    return gw.call(
+        "POST", f"/api/sessions/{sid}/chat", {"message": message}, timeout=TURN_TIMEOUT
+    )
 
 
-def test_session_chat_60k_and_runs_100k_reach_model_whole(gateway: tuple[Sandbox, GatewayApiServer]) -> None:
+def test_session_chat_60k_and_runs_100k_reach_model_whole(
+    gateway: tuple[Sandbox, GatewayApiServer],
+) -> None:
     """Controls (enforced): under the session-chat cap, and on /v1/runs above it, nothing is cut."""
     sb, gw = gateway
     msg, head, tail = _long_message(60_000)
@@ -113,17 +125,21 @@ def test_session_chat_60k_and_runs_100k_reach_model_whole(gateway: tuple[Sandbox
     seen = _model_saw(sb, head)
     assert len(seen) >= len(msg) and tail in seen, (
         f"/api/sessions/{{id}}/chat delivered {len(seen)} of {len(msg)} chars (tail canary "
-        f"{'present' if tail in seen else 'MISSING'})")
+        f"{'present' if tail in seen else 'MISSING'})"
+    )
 
     msg, head, tail = _long_message(100_000)
     status, body = gw.call("POST", "/v1/runs", {"input": msg}, timeout=TURN_TIMEOUT)
     assert status == 202, f"/v1/runs -> {status}: {str(body)[:500]}"
     seen = _model_saw(sb, head)
     assert len(seen) >= len(msg) and tail in seen, (
-        f"/v1/runs delivered {len(seen)} of {len(msg)} chars (tail canary {'present' if tail in seen else 'MISSING'})")
+        f"/v1/runs delivered {len(seen)} of {len(msg)} chars (tail canary {'present' if tail in seen else 'MISSING'})"
+    )
     run_id = body["run_id"]
     deadline, run = time.monotonic() + TURN_TIMEOUT, {}
-    while time.monotonic() < deadline:  # settle the run so the module teardown stops an idle gateway
+    while (
+        time.monotonic() < deadline
+    ):  # settle the run so the module teardown stops an idle gateway
         st, run = gw.call("GET", f"/v1/runs/{run_id}")
         if st == 200 and run.get("status") in {"completed", "failed", "cancelled"}:
             break
@@ -132,19 +148,27 @@ def test_session_chat_60k_and_runs_100k_reach_model_whole(gateway: tuple[Sandbox
 
 
 def test_session_chat_100k_message_reaches_model_whole_or_is_rejected(
-        gateway: tuple[Sandbox, GatewayApiServer]) -> None:
+    gateway: tuple[Sandbox, GatewayApiServer],
+) -> None:
     sb, gw = gateway
     msg, head, tail = _long_message(100_000)
     sid = _new_session(gw)
     status, body = _chat(gw, sid, msg)
     if 400 <= status < 500:  # an explicit rejection honours the contract
-        assert isinstance(body, dict) and body.get("error"), f"{status} without an error body: {body}"
+        assert isinstance(body, dict) and body.get("error"), (
+            f"{status} without an error body: {body}"
+        )
         return
     assert status == 200, f"/chat 100k -> {status}: {str(body)[:500]}\n{gw.log_tail()}"
     seen = _model_saw(sb, head)
-    with known_gate(KNOWN, "test_session_chat_100k_message_reaches_model_whole_or_is_rejected", raises=Issue120937):
+    with known_gate(
+        KNOWN,
+        "test_session_chat_100k_message_reaches_model_whole_or_is_rejected",
+        raises=Issue120937,
+    ):
         if len(seen) < len(msg) or tail not in seen:
             raise Issue120937(
                 f"#120937 /api/sessions/{{id}}/chat answered 200 but the model received {len(seen)} of "
                 f"{len(msg)} chars (tail canary {'present' if tail in seen else 'MISSING'}; stored user "
-                f"message length {_stored_user_len(gw, sid, head)}; response keys {sorted(body)[:12]})")
+                f"message length {_stored_user_len(gw, sid, head)}; response keys {sorted(body)[:12]})"
+            )

@@ -29,7 +29,9 @@ def test_registration_validates_stable_id_position_budget_and_duplicates():
             ctx.register_system_prompt_section(invalid_id, "content")
 
     with pytest.raises(ValueError):
-        ctx.register_system_prompt_section("example.rules", "content", position="priority-17")
+        ctx.register_system_prompt_section(
+            "example.rules", "content", position="priority-17"
+        )
     with pytest.raises(ValueError):
         ctx.register_system_prompt_section("example.rules", "content", max_chars=0)
 

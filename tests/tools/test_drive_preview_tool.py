@@ -5,8 +5,6 @@ import json
 from tools import drive_preview_tool as ap
 
 
-
-
 def test_requires_callback():
     """Outside the desktop GUI there is no bridge — a clear error, no crash."""
     result = json.loads(ap.drive_preview_tool(action="elements", callback=None))
@@ -14,14 +12,20 @@ def test_requires_callback():
 
 
 def test_rejects_an_unknown_action():
-    result = json.loads(ap.drive_preview_tool(action="teleport", callback=lambda _p: "{}"))
+    result = json.loads(
+        ap.drive_preview_tool(action="teleport", callback=lambda _p: "{}")
+    )
     assert "action must be one of" in result["error"]
 
 
 def test_interaction_verbs_need_a_target():
     """A click with nowhere to land is a mistake worth naming before the bridge."""
     for verb in ("click", "type", "press"):
-        result = json.loads(ap.drive_preview_tool(action=verb, text="x", key="Enter", callback=lambda _p: "{}"))
+        result = json.loads(
+            ap.drive_preview_tool(
+                action=verb, text="x", key="Enter", callback=lambda _p: "{}"
+            )
+        )
         assert "ref" in result["error"], verb
 
 
@@ -32,15 +36,27 @@ def test_type_needs_text_and_press_needs_a_key():
         calls.append(payload)
         return json.dumps({"success": True})
 
-    assert "text" in json.loads(ap.drive_preview_tool(action="type", ref="@e1", callback=cb))["error"]
-    assert "key" in json.loads(ap.drive_preview_tool(action="press", ref="@e1", callback=cb))["error"]
+    assert (
+        "text"
+        in json.loads(ap.drive_preview_tool(action="type", ref="@e1", callback=cb))[
+            "error"
+        ]
+    )
+    assert (
+        "key"
+        in json.loads(ap.drive_preview_tool(action="press", ref="@e1", callback=cb))[
+            "error"
+        ]
+    )
     assert calls == []
 
 
 def test_typing_an_empty_string_is_allowed():
     """Clearing a field is a real intent — only a missing `text` is an error."""
     seen = {}
-    ap.drive_preview_tool(action="type", ref="@e1", text="", callback=lambda p: seen.update(p) or "{}")
+    ap.drive_preview_tool(
+        action="type", ref="@e1", text="", callback=lambda p: seen.update(p) or "{}"
+    )
 
     assert seen["text"] == ""
 
@@ -56,7 +72,9 @@ def test_scroll_needs_no_target_and_validates_its_destination():
     ap.drive_preview_tool(action="scroll", callback=cb)
     assert seen == {"action": "scroll"}
 
-    result = json.loads(ap.drive_preview_tool(action="scroll", to="sideways", callback=cb))
+    result = json.loads(
+        ap.drive_preview_tool(action="scroll", to="sideways", callback=cb)
+    )
     assert "to must be one of" in result["error"]
 
 
@@ -70,18 +88,25 @@ def test_payload_forwards_only_what_was_given():
         callback=lambda p: seen.update(p) or json.dumps({"success": True}),
     )
 
-    assert seen == {"action": "type", "ref": "inp-password", "text": "hunter2", "submit": True}
-
-
+    assert seen == {
+        "action": "type",
+        "ref": "inp-password",
+        "text": "hunter2",
+        "submit": True,
+    }
 
 
 def test_numeric_arguments_are_validated():
-    result = json.loads(ap.drive_preview_tool(action="scroll", amount="lots", callback=lambda _p: "{}"))
+    result = json.loads(
+        ap.drive_preview_tool(action="scroll", amount="lots", callback=lambda _p: "{}")
+    )
     assert "integers" in result["error"]
 
 
 def test_empty_answer_means_nothing_open():
-    result = json.loads(ap.drive_preview_tool(action="elements", callback=lambda _p: ""))
+    result = json.loads(
+        ap.drive_preview_tool(action="elements", callback=lambda _p: "")
+    )
     assert "open_preview" in result["error"]
 
 
@@ -90,15 +115,23 @@ def test_passes_the_renderer_answer_through():
         "success": True,
         "acted": 'clicked button "Sign in"',
         "url": "https://example.com/app",
-        "elements": [{"ref": "@e1", "role": "button", "label": "Log out", "selector": "#out"}],
+        "elements": [
+            {"ref": "@e1", "role": "button", "label": "Log out", "selector": "#out"}
+        ],
     }
-    result = json.loads(ap.drive_preview_tool(action="click", ref="@e2", callback=lambda _p: json.dumps(payload)))
+    result = json.loads(
+        ap.drive_preview_tool(
+            action="click", ref="@e2", callback=lambda _p: json.dumps(payload)
+        )
+    )
 
     assert result == payload
 
 
 def test_wraps_non_json_text():
-    result = json.loads(ap.drive_preview_tool(action="elements", callback=lambda _p: "plain words"))
+    result = json.loads(
+        ap.drive_preview_tool(action="elements", callback=lambda _p: "plain words")
+    )
     assert result == {"text": "plain words"}
 
 
@@ -115,7 +148,9 @@ def test_empty_answer_distinguishes_no_tab_from_a_stale_app():
     answered" string that blamed a closed tab even when the pane was open on an
     app older than this backend (#94272): the two cases need different next
     steps (open a tab vs update the app)."""
-    result = json.loads(ap.drive_preview_tool(action="elements", callback=lambda _p: ""))
+    result = json.loads(
+        ap.drive_preview_tool(action="elements", callback=lambda _p: "")
+    )
 
     assert "no preview tab is open" in result["error"]
     assert "older than this backend" in result["error"]

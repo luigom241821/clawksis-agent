@@ -65,9 +65,9 @@ def _ensure_discord_mock():
                 self.default_permissions = None
 
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
-            autocomplete=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
+            autocomplete=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
             Group=_FakeGroup,
             Command=_FakeCommand,
@@ -121,7 +121,9 @@ def _stub_discord_permissions(monkeypatch):
 def adapter():
     config = PlatformConfig(enabled=True, token="***")
     a = DiscordAdapter(config)
-    a._client = SimpleNamespace(user=SimpleNamespace(id=99999, name="ClawksisBot"), guilds=[])
+    a._client = SimpleNamespace(
+        user=SimpleNamespace(id=99999, name="ClawksisBot"), guilds=[]
+    )
     return a
 
 
@@ -129,8 +131,15 @@ _SENTINEL = object()
 
 
 def _make_interaction(
-    user_id, *, channel_id=12345, guild_id=42, in_dm=False, in_thread=False,
-    parent_channel_id=None, user=_SENTINEL, channel_name=None,
+    user_id,
+    *,
+    channel_id=12345,
+    guild_id=42,
+    in_dm=False,
+    in_thread=False,
+    parent_channel_id=None,
+    user=_SENTINEL,
+    channel_name=None,
 ):
     """Build a mock Discord Interaction with a still-unresponded response.
 
@@ -217,16 +226,21 @@ async def test_allowed_user_passes(adapter):
     interaction.response.send_message.assert_not_awaited()
 
 
-def test_pairing_approved_user_passes_message_gate_without_allowlist(adapter, monkeypatch):
+def test_pairing_approved_user_passes_message_gate_without_allowlist(
+    adapter, monkeypatch
+):
     """Pairing grants must be honored before on_message drops guild mentions."""
     _stub_pairing_store(monkeypatch, {"100200300"})
-    assert adapter._is_allowed_user(
-        "100200300",
-        author=SimpleNamespace(id=100200300),
-        guild=SimpleNamespace(id=42, get_member=lambda _uid: None),
-        is_dm=False,
-        channel_ids={"12345"},
-    ) is True
+    assert (
+        adapter._is_allowed_user(
+            "100200300",
+            author=SimpleNamespace(id=100200300),
+            guild=SimpleNamespace(id=42, get_member=lambda _uid: None),
+            is_dm=False,
+            channel_ids={"12345"},
+        )
+        is True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,11 +266,19 @@ def _gateway_authorizes(source):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("builder", ["slash", "thread_starter"])
-@pytest.mark.parametrize("actor_roles,gateway_admits", [
-    ([1234], True),   # role-only member the slash gate admits
-    ([7], False),     # unrelated role: the builder must not mint a grant for this actor
-])
-async def test_native_event_carries_this_actors_role_grant(adapter, builder, actor_roles, gateway_admits):
+@pytest.mark.parametrize(
+    "actor_roles,gateway_admits",
+    [
+        ([1234], True),  # role-only member the slash gate admits
+        (
+            [7],
+            False,
+        ),  # unrelated role: the builder must not mint a grant for this actor
+    ],
+)
+async def test_native_event_carries_this_actors_role_grant(
+    adapter, builder, actor_roles, gateway_admits
+):
     """Regression for #118958: a role-only member passes the slash gate, and the event a native
     builder dispatches must carry that verdict, or the gateway answers with a pairing code."""
     adapter._allowed_role_ids = {1234}
@@ -270,11 +292,18 @@ async def test_native_event_carries_this_actors_role_grant(adapter, builder, act
     if builder == "slash":
         dispatched.append(adapter._build_slash_event(interaction, "/reset"))
     else:
-        thread = SimpleNamespace(id=555, name="topic", guild=interaction.guild, topic=None,
-                                 parent=SimpleNamespace(id=100, name="general", guild=interaction.guild))
+        thread = SimpleNamespace(
+            id=555,
+            name="topic",
+            guild=interaction.guild,
+            topic=None,
+            parent=SimpleNamespace(id=100, name="general", guild=interaction.guild),
+        )
         await adapter._dispatch_thread_session(interaction, thread, "hello")
 
-    assert [_gateway_authorizes(event.source) for event in dispatched] == [gateway_admits]
+    assert [_gateway_authorizes(event.source) for event in dispatched] == [
+        gateway_admits
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +341,9 @@ async def test_unauthorized_attempt_notifies_telegram(adapter):
     home = SimpleNamespace(chat_id="987654321")
     runner = SimpleNamespace(
         adapters={Platform.TELEGRAM: telegram_adapter},
-        config=SimpleNamespace(get_home_channel=lambda p: home if p is Platform.TELEGRAM else None),
+        config=SimpleNamespace(
+            get_home_channel=lambda p: home if p is Platform.TELEGRAM else None
+        ),
     )
     adapter.gateway_runner = runner
     adapter._allowed_user_ids = {"100200300"}
@@ -338,13 +369,14 @@ async def test_unauthorized_attempt_notifies_telegram(adapter):
 # ---------------------------------------------------------------------------
 
 
-    # When called directly the helper applies — env gating is at the call site,
-    # which we exercise in an integration-style test below.
+# When called directly the helper applies — env gating is at the call site,
+# which we exercise in an integration-style test below.
 
 
 def test_visibility_hide_tolerates_unsetable_command(adapter, caplog):
     class _Frozen:
         __slots__ = ("name",)
+
         def __init__(self, name):
             self.name = name
 
@@ -394,7 +426,10 @@ async def test_thread_parent_in_allowlist_passes(adapter, monkeypatch):
     even though the thread id itself isn't on the list."""
     monkeypatch.setenv("DISCORD_ALLOWED_CHANNELS", "5555")
     interaction = _make_interaction(
-        "100200300", channel_id=9999, in_thread=True, parent_channel_id=5555,
+        "100200300",
+        channel_id=9999,
+        in_thread=True,
+        parent_channel_id=5555,
     )
     assert await adapter._check_slash_authorization(interaction, "/help") is True
 
@@ -467,8 +502,11 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
         return ({}, list(entries), 0)
 
     import clawk_cli.commands_platforms as _hc
+
     monkeypatch.setattr(
-        _hc, "discord_skill_commands_by_category", fake_categories,
+        _hc,
+        "discord_skill_commands_by_category",
+        fake_categories,
     )
 
     def capture_autocomplete(**kwargs):
@@ -481,7 +519,9 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
         return _passthrough
 
     monkeypatch.setattr(
-        discord.app_commands, "autocomplete", capture_autocomplete,
+        discord.app_commands,
+        "autocomplete",
+        capture_autocomplete,
         raising=False,
     )
 
@@ -501,7 +541,8 @@ def _capture_skill_registration(adapter, monkeypatch, entries):
 
 @pytest.mark.asyncio
 async def test_skill_autocomplete_returns_empty_for_unauthorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """Autocomplete must not leak the installed skill catalog to users
     who can't run /skill. With DISCORD_ALLOWED_USERS configured and the
@@ -512,7 +553,9 @@ async def test_skill_autocomplete_returns_empty_for_unauthorized(
         ("beta", "Second skill", "/beta"),
     ]
     _handler, autocomplete = _capture_skill_registration(
-        adapter, monkeypatch, entries,
+        adapter,
+        monkeypatch,
+        entries,
     )
 
     interaction = _make_interaction("999999999")
@@ -522,7 +565,8 @@ async def test_skill_autocomplete_returns_empty_for_unauthorized(
 
 @pytest.mark.asyncio
 async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """The /skill handler must call _check_slash_authorization BEFORE
     skill_lookup. Otherwise unknown vs known names produce divergent
@@ -531,7 +575,9 @@ async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
     adapter._allowed_user_ids = {"100200300"}
     entries = [("alpha", "First skill", "/alpha")]
     handler, _autocomplete = _capture_skill_registration(
-        adapter, monkeypatch, entries,
+        adapter,
+        monkeypatch,
+        entries,
     )
 
     # Patch _run_simple_slash so we can detect any leak through it.
@@ -558,7 +604,8 @@ async def test_skill_handler_rejects_before_dispatch_for_unauthorized(
 
 @pytest.mark.asyncio
 async def test_skill_handler_known_and_unknown_produce_same_rejection(
-    adapter, monkeypatch,
+    adapter,
+    monkeypatch,
 ):
     """An unauthorized user probing for valid skill names must see the
     same rejection text regardless of whether the name they tried is
@@ -577,10 +624,6 @@ async def test_skill_handler_known_and_unknown_produce_same_rejection(
     known_interaction.response.send_message.assert_awaited_once()
     unknown_interaction.response.send_message.assert_awaited_once()
     known_args, known_kwargs = known_interaction.response.send_message.call_args
-    unknown_args, unknown_kwargs = (
-        unknown_interaction.response.send_message.call_args
-    )
+    unknown_args, unknown_kwargs = unknown_interaction.response.send_message.call_args
     assert known_args == unknown_args
     assert known_kwargs == unknown_kwargs
-
-

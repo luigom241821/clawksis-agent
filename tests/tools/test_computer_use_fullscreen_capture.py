@@ -55,8 +55,12 @@ class _FakeSession:
             }
         if name == "set_config":
             self._scope = args["value"]
-            return {"data": "ok", "images": [], "structuredContent": None,
-                    "isError": False}
+            return {
+                "data": "ok",
+                "images": [],
+                "structuredContent": None,
+                "isError": False,
+            }
         if name == "get_desktop_state":
             images = [self._desktop_image] if self._desktop_image else []
             return {
@@ -97,8 +101,9 @@ def _make_backend(session: _FakeSession):
 
 
 class TestFullScreenLane:
-    @pytest.mark.parametrize("sentinel", ["screen", "Screen", "fullscreen",
-                                          "full screen", "all"])
+    @pytest.mark.parametrize(
+        "sentinel", ["screen", "Screen", "fullscreen", "full screen", "all"]
+    )
     def test_screen_sentinels_route_to_get_desktop_state(self, sentinel):
         session = _FakeSession()
         backend = _make_backend(session)
@@ -116,7 +121,6 @@ class TestFullScreenLane:
         assert cap.elements == []
         assert cap.app == "screen"
 
-
     def test_capture_scope_switched_and_restored(self):
         session = _FakeSession(capture_scope="window")
         backend = _make_backend(session)
@@ -124,10 +128,16 @@ class TestFullScreenLane:
         backend.capture(mode="vision", app="screen")
 
         set_calls = session.called("set_config")
-        assert {"key": "capture_scope", "value": "desktop",
-                "session": "test-session"} in set_calls
-        assert {"key": "capture_scope", "value": "window",
-                "session": "test-session"} in set_calls
+        assert {
+            "key": "capture_scope",
+            "value": "desktop",
+            "session": "test-session",
+        } in set_calls
+        assert {
+            "key": "capture_scope",
+            "value": "window",
+            "session": "test-session",
+        } in set_calls
         assert session._scope == "window", "prior scope must be restored"
 
     def test_scope_untouched_when_already_desktop(self):
@@ -193,10 +203,18 @@ class TestDesktopShellLane:
         assert cap.note == ""
 
     def test_desktop_sentinel_without_shell_window_fails_with_guidance(self):
-        session = _FakeSession(windows=[{
-            "app_name": "Notepad", "title": "Untitled", "pid": 7,
-            "window_id": 9, "off_screen": False, "z_index": 1,
-        }])
+        session = _FakeSession(
+            windows=[
+                {
+                    "app_name": "Notepad",
+                    "title": "Untitled",
+                    "pid": 7,
+                    "window_id": 9,
+                    "off_screen": False,
+                    "z_index": 1,
+                }
+            ]
+        )
         backend = _make_backend(session)
 
         cap = backend.capture(mode="vision", app="desktop")
@@ -211,18 +229,20 @@ class TestNoteInSummary:
         from tools.computer_use.backend import CaptureResult
         from tools.computer_use import tool as cu_tool
 
-        monkeypatch.setattr(clawk_constants, "get_clawk_dir",
-                            lambda *a, **k: tmp_path)
-        monkeypatch.setattr(cu_tool, "_should_route_through_aux_vision",
-                            lambda: False)
+        monkeypatch.setattr(clawk_constants, "get_clawk_dir", lambda *a, **k: tmp_path)
+        monkeypatch.setattr(cu_tool, "_should_route_through_aux_vision", lambda: False)
 
         cap = CaptureResult(
-            mode="vision", width=8, height=8, png_b64=_PNG_B64,
-            elements=[], app="screen",
+            mode="vision",
+            width=8,
+            height=8,
+            png_b64=_PNG_B64,
+            elements=[],
+            app="screen",
             window_title="Full screen (composited)",
             png_bytes_len=len(base64.b64decode(_PNG_B64)),
             note="full-screen capture has no interactable elements; "
-                 "call capture(app='desktop') for the desktop shell",
+            "call capture(app='desktop') for the desktop shell",
         )
         result = cu_tool._capture_response(cap)
 

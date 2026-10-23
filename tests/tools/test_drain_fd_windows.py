@@ -24,7 +24,9 @@ def test_drain_fd_windows_returns_promptly_when_writer_remains_open():
     try:
         os.write(w, b"hello from child process\n")
         proc = MagicMock()
-        proc.poll.return_value = 0  # bash exited; ``w`` (the grandchild's copy) is still open
+        proc.poll.return_value = (
+            0  # bash exited; ``w`` (the grandchild's copy) is still open
+        )
 
         output = _BoundedOutputCollector(1000)
         decoder = codecs.getincrementaldecoder("utf-8")("replace")
@@ -34,7 +36,9 @@ def test_drain_fd_windows_returns_promptly_when_writer_remains_open():
         elapsed = time.monotonic() - t0
 
         assert "hello from child process" in output.render()
-        assert elapsed < 2.0, f"drain hung for {elapsed:.2f}s instead of bounding after exit"
+        assert elapsed < 2.0, (
+            f"drain hung for {elapsed:.2f}s instead of bounding after exit"
+        )
     finally:
         os.close(r)
         os.close(w)
@@ -54,7 +58,9 @@ def test_local_environment_returns_while_background_grandchild_holds_pipe(tmp_pa
         result = env.execute(cmd, timeout=15)
         elapsed = time.monotonic() - t0
 
-        assert elapsed < 10.0, f"LocalEnvironment.execute hung for {elapsed:.2f}s on Windows"
+        assert elapsed < 10.0, (
+            f"LocalEnvironment.execute hung for {elapsed:.2f}s on Windows"
+        )
         assert result["returncode"] == 0
         assert marker in result["output"]
     finally:

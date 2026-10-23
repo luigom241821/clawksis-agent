@@ -35,7 +35,9 @@ def small_tts_body_cap(monkeypatch):
 
 def test_xai_tts_rejects_oversized_audio_response(tmp_path, monkeypatch):
     monkeypatch.setenv("XAI_API_KEY", "test-xai-key")
-    response = StreamingResponse([b"12345", b"6789"], headers={"Content-Type": "audio/mpeg"})
+    response = StreamingResponse(
+        [b"12345", b"6789"], headers={"Content-Type": "audio/mpeg"}
+    )
     output_path = tmp_path / "out.mp3"
 
     with patch("requests.post", return_value=response) as post:
@@ -49,7 +51,9 @@ def test_xai_tts_rejects_oversized_audio_response(tmp_path, monkeypatch):
 
 def test_gemini_tts_rejects_oversized_json_response(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
-    response = StreamingResponse([b'{"candidates":', b"[{}]}"], headers={"Content-Type": "application/json"})
+    response = StreamingResponse(
+        [b'{"candidates":', b"[{}]}"], headers={"Content-Type": "application/json"}
+    )
 
     with patch("requests.post", return_value=response) as post:
         with pytest.raises(RuntimeError, match="Gemini TTS response exceeds 8 bytes"):

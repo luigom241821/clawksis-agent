@@ -32,16 +32,37 @@ def unit(tmp_path, monkeypatch):
     path.write_text(UNIT.format(home=real), encoding="utf-8")
     calls = []
     # The temp-root guard only sees homes under a temp dir; scratch homes elsewhere are what slipped past.
-    monkeypatch.setattr(gateway_service_owner, "refuse_temp_home_service_write", lambda definition, kind: False)
+    monkeypatch.setattr(
+        gateway_service_owner,
+        "refuse_temp_home_service_write",
+        lambda definition, kind: False,
+    )
     monkeypatch.setattr(gw, "get_systemd_unit_path", lambda system=False: path)
     monkeypatch.setattr(gw, "systemd_unit_is_current", lambda system=False: False)
     monkeypatch.setattr(gw, "_retire_clawk_replace_dropin", lambda system=False: False)
-    monkeypatch.setattr(gw, "_prepare_service_launcher", lambda system=False, run_as_user=None: None)
-    monkeypatch.setattr(gw, "generate_systemd_unit", lambda system=False, run_as_user=None: "ExecStart=new\n")
-    monkeypatch.setattr(gw, "_run_systemctl", lambda args, **kw: calls.append(tuple(args)) or
-                        SimpleNamespace(returncode=0, stdout="", stderr=""))
-    return SimpleNamespace(path=path, real=real, scratch=scratch, calls=calls,
-                           original=path.read_text(encoding="utf-8"))
+    monkeypatch.setattr(
+        gw, "_prepare_service_launcher", lambda system=False, run_as_user=None: None
+    )
+    monkeypatch.setattr(
+        gw,
+        "generate_systemd_unit",
+        lambda system=False, run_as_user=None: "ExecStart=new\n",
+    )
+    monkeypatch.setattr(
+        gw,
+        "_run_systemctl",
+        lambda args, **kw: (
+            calls.append(tuple(args))
+            or SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
+    )
+    return SimpleNamespace(
+        path=path,
+        real=real,
+        scratch=scratch,
+        calls=calls,
+        original=path.read_text(encoding="utf-8"),
+    )
 
 
 def test_refresh_from_another_home_leaves_the_unit_untouched(unit, monkeypatch, capsys):

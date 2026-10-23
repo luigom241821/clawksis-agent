@@ -164,7 +164,10 @@ async def _run_streaming_turn(monkeypatch, tmp_path, agent_cls, session_id):
     (tmp_path / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "display": {"tool_progress": "off", "interim_assistant_messages": False},
+                "display": {
+                    "tool_progress": "off",
+                    "interim_assistant_messages": False,
+                },
                 "streaming": {
                     "enabled": True,
                     "edit_interval": 0.01,
@@ -294,7 +297,10 @@ async def test_payload_less_split_does_not_suppress_complete_response(
     (tmp_path / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "display": {"tool_progress": "off", "interim_assistant_messages": False},
+                "display": {
+                    "tool_progress": "off",
+                    "interim_assistant_messages": False,
+                },
                 "streaming": {
                     "enabled": True,
                     "edit_interval": 0.01,
@@ -367,9 +373,7 @@ async def test_payload_less_split_does_not_suppress_complete_response(
 
 def _consumer():
     adapter = FinalizeCaptureAdapter()
-    return GatewayStreamConsumer(
-        adapter, "chat-1", StreamConsumerConfig(cursor=" ▉")
-    )
+    return GatewayStreamConsumer(adapter, "chat-1", StreamConsumerConfig(cursor=" ▉"))
 
 
 class TestDeliveredFinalMatches:
@@ -500,7 +504,9 @@ def _split_consumer():
         adapter,
         "chat-split",
         StreamConsumerConfig(
-            edit_interval=0.0, buffer_threshold=1, cursor="",
+            edit_interval=0.0,
+            buffer_threshold=1,
+            cursor="",
             fresh_final_after_seconds=0.0,
         ),
     )
@@ -575,7 +581,9 @@ async def test_failed_final_edit_after_split_records_visible_payload():
         adapter,
         "chat-split",
         StreamConsumerConfig(
-            edit_interval=0.0, buffer_threshold=1, cursor=cursor,
+            edit_interval=0.0,
+            buffer_threshold=1,
+            cursor=cursor,
             fresh_final_after_seconds=0.0,
         ),
     )
@@ -610,7 +618,9 @@ async def test_empty_fallback_final_after_split_records_only_what_survives():
         adapter,
         "chat-split",
         StreamConsumerConfig(
-            edit_interval=0.0, buffer_threshold=1, cursor="",
+            edit_interval=0.0,
+            buffer_threshold=1,
+            cursor="",
             fresh_final_after_seconds=0.0,
         ),
     )
@@ -634,7 +644,9 @@ async def test_empty_fallback_final_after_split_records_only_what_survives():
 
 
 @pytest.mark.asyncio
-async def test_flood_retry_never_resends_full_payload_after_partial_split_delivery(monkeypatch):
+async def test_flood_retry_never_resends_full_payload_after_partial_split_delivery(
+    monkeypatch,
+):
     """A short-wait flood result that carries ``partial_overflow`` means the head of a split
     payload is already on screen: the fallback flood retry must NOT sleep and re-send the whole
     content (that duplicates the head); it returns the partial failure to the caller."""
@@ -644,8 +656,13 @@ async def test_flood_retry_never_resends_full_payload_after_partial_split_delive
     async def partial_flood_send(chat_id, content, reply_to=None, metadata=None):
         calls.append(content)
         return SendResult(
-            success=False, error="Flood control exceeded. Retry after 2 seconds",
-            raw_response={"partial_overflow": True, "delivered_chunks": 1, "total_chunks": 3},
+            success=False,
+            error="Flood control exceeded. Retry after 2 seconds",
+            raw_response={
+                "partial_overflow": True,
+                "delivered_chunks": 1,
+                "total_chunks": 3,
+            },
         )
 
     monkeypatch.setattr(consumer.adapter, "send", partial_flood_send)
@@ -657,8 +674,12 @@ async def test_flood_retry_never_resends_full_payload_after_partial_split_delive
 
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
-    result = await consumer._send_with_flood_retry(content="HEAD TAIL", retry_log="retry %.1fs")
+    result = await consumer._send_with_flood_retry(
+        content="HEAD TAIL", retry_log="retry %.1fs"
+    )
 
     assert result.success is False and result.raw_response["partial_overflow"] is True
-    assert calls == ["HEAD TAIL"], f"full payload re-sent after partial delivery: {calls}"
+    assert calls == ["HEAD TAIL"], (
+        f"full payload re-sent after partial delivery: {calls}"
+    )
     assert slept == []

@@ -21,15 +21,9 @@ class TestSummarizeUserMessageForLog:
     def test_plain_string_passthrough(self):
         assert _summarize_user_message_for_log("hello world") == "hello world"
 
-
     def test_text_only_list(self):
         content = [{"type": "text", "text": "hi"}, {"type": "text", "text": "there"}]
         assert _summarize_user_message_for_log(content) == "hi there"
-
-
-
-
-
 
 
 class TestChatContentToResponsesParts:
@@ -39,9 +33,6 @@ class TestChatContentToResponsesParts:
 
     def test_text_parts_become_input_text(self):
         content = [{"type": "text", "text": "hello"}]
-        assert _chat_content_to_responses_parts(content) == [{"type": "input_text", "text": "hello"}]
-
-
-
-
-
+        assert _chat_content_to_responses_parts(content) == [
+            {"type": "input_text", "text": "hello"}
+        ]

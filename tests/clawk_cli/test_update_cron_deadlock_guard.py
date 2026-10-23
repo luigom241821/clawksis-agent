@@ -75,11 +75,15 @@ class TestSelfRestartFireAndForget:
         def _fake_kill(pid, sig):
             sent.append((pid, sig))
 
-        with patch.object(gw.os, "kill", side_effect=_fake_kill), patch.object(
-            gw, "_wait_for_pid_exit",
-            side_effect=AssertionError(
-                "fire-and-forget must NOT wait for the gateway to exit — "
-                "that wait is the #100179 deadlock"
+        with (
+            patch.object(gw.os, "kill", side_effect=_fake_kill),
+            patch.object(
+                gw,
+                "_wait_for_pid_exit",
+                side_effect=AssertionError(
+                    "fire-and-forget must NOT wait for the gateway to exit — "
+                    "that wait is the #100179 deadlock"
+                ),
             ),
         ):
             ok = gw._request_gateway_self_restart(os.getpid())
@@ -95,9 +99,13 @@ class TestSelfRestartFireAndForget:
 
         waited = []
 
-        with patch.object(gw.os, "kill"), patch.object(
-            gw, "_wait_for_pid_exit",
-            side_effect=lambda pid, t, **_: waited.append((pid, t)) or True,
+        with (
+            patch.object(gw.os, "kill"),
+            patch.object(
+                gw,
+                "_wait_for_pid_exit",
+                side_effect=lambda pid, t, **_: waited.append((pid, t)) or True,
+            ),
         ):
             ok = gw._graceful_restart_via_sigusr1(4242, drain_timeout=7.0)
 
@@ -131,8 +139,9 @@ class TestDrainOrSignalTriage:
         monkeypatch.setattr(
             gw,
             "_graceful_restart_via_sigusr1",
-            lambda pid, drain_timeout, **_: calls["drain"].append((pid, drain_timeout))
-            or True,
+            lambda pid, drain_timeout, **_: (
+                calls["drain"].append((pid, drain_timeout)) or True
+            ),
         )
         return calls
 

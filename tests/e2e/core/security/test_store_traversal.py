@@ -33,7 +33,9 @@ from tests.e2e.core.security._traversal import digest, result_json, tool_text
 from tests.e2e.core.tenancy._helpers import TuiBackend
 from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall
 
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX absolute-path spellings and process groups")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX absolute-path spellings and process groups"
+)
 
 _ISSUE_STORE = "#119997 pending id is used as a path: ../ or absolute ids reach files outside pending/<subsystem>/"
 _ISSUE_DELETE = "#120528 skill_manage delete skips the pin/essential guard for a category/name spelling"
@@ -49,9 +51,14 @@ TRAVERSALS: dict[str, tuple[str, str]] = {
     "skills_diff_dotdot": ("skills diff", "home"),
     "skills_diff_absolute": ("skills diff", "outside"),
 }
-DELETES: dict[str, tuple[str, str]] = {  # scenario -> (name given to skill_manage, skill dir under skills/)
+DELETES: dict[
+    str, tuple[str, str]
+] = {  # scenario -> (name given to skill_manage, skill dir under skills/)
     "pinned_by_category": ("research/my-skill", "research/my-skill"),
-    "essential_by_category": ("autonomous-ai-agents/clawksis-agent", "autonomous-ai-agents/clawksis-agent"),
+    "essential_by_category": (
+        "autonomous-ai-agents/clawksis-agent",
+        "autonomous-ai-agents/clawksis-agent",
+    ),
 }
 
 
@@ -61,15 +68,22 @@ def _store_signature(command: str, where: str) -> str:
         spelled, victim = re.escape("../../auth"), "auth.json"
     else:
         spelled, victim = r"/[^']+/outside/victim", "victim.json"
-    return (rf"^/{command} '{spelled}': "
-            rf"(?:{re.escape(victim)} was deleted or rewritten|the command output carries the victim's content)")
+    return (
+        rf"^/{command} '{spelled}': "
+        rf"(?:{re.escape(victim)} was deleted or rewritten|the command output carries the victim's content)"
+    )
 
 
 # scenario -> (pattern, "#issue symptom"), gated with ``known_gate(..., raises=H.BoundaryBreach)``
 KNOWN: dict[str, tuple[str, str]] = {
     **{n: (_store_signature(*TRAVERSALS[n]), _ISSUE_STORE) for n in TRAVERSALS},
-    **{n: (rf"^skill_manage delete {re.escape(repr(name))} removed skills/{re.escape(rel)}: \{{'success': True",
-           _ISSUE_DELETE) for n, (name, rel) in DELETES.items()},
+    **{
+        n: (
+            rf"^skill_manage delete {re.escape(repr(name))} removed skills/{re.escape(rel)}: \{{'success': True",
+            _ISSUE_DELETE,
+        )
+        for n, (name, rel) in DELETES.items()
+    },
 }
 
 _STORE_CONFIG = "memory:\n  memory_enabled: true\n  write_approval: true\nskills:\n  write_approval: true\n"
@@ -81,8 +95,11 @@ def _skill_md(name: str, body: str = "Body.") -> str:
 
 
 def _tool_results(srv: FakeLLMServer) -> list[dict[str, Any]]:
-    return [result_json(tool_text(m.get("content")))
-            for m in srv.main_requests()[-1]["messages"] if m.get("role") == "tool"]
+    return [
+        result_json(tool_text(m.get("content")))
+        for m in srv.main_requests()[-1]["messages"]
+        if m.get("role") == "tool"
+    ]
 
 
 def _slash(b: TuiBackend, sid: str, command: str) -> str:
@@ -111,7 +128,13 @@ class Store:
 
     def memory_blob(self) -> str:
         d = self.clawk_home / "memories"
-        return "".join(p.read_text(encoding="utf-8", errors="replace") for p in d.glob("*")) if d.is_dir() else ""
+        return (
+            "".join(
+                p.read_text(encoding="utf-8", errors="replace") for p in d.glob("*")
+            )
+            if d.is_dir()
+            else ""
+        )
 
 
 @pytest.fixture(scope="module")
@@ -122,22 +145,49 @@ def store(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Store]:
     key = H.canary("sk-store")
     memory_texts = [H.canary(f"staged-memory-{i}") for i in range(3)]
     skill_texts = [H.canary(f"staged-skill-{i}") for i in range(2)]
-    script: list[Any] = [ToolCall("memory", {"action": "add", "target": "memory", "content": t}) for t in memory_texts]
-    script += [ToolCall("skill_manage", {"action": "create", "name": f"staged-skill-{i}",
-                                         "content": _skill_md(f"staged-skill-{i}", t)})
-               for i, t in enumerate(skill_texts)]
+    script: list[Any] = [
+        ToolCall("memory", {"action": "add", "target": "memory", "content": t})
+        for t in memory_texts
+    ]
+    script += [
+        ToolCall(
+            "skill_manage",
+            {
+                "action": "create",
+                "name": f"staged-skill-{i}",
+                "content": _skill_md(f"staged-skill-{i}", t),
+            },
+        )
+        for i, t in enumerate(skill_texts)
+    ]
     with FakeLLMServer([*script, Text("staged")], api_key=key) as srv:
-        H.write_home(home / ".clawksis", srv.base_url, api_key=key, config=_STORE_CONFIG)
+        H.write_home(
+            home / ".clawksis", srv.base_url, api_key=key, config=_STORE_CONFIG
+        )
         b = TuiBackend(home, root / "tui.log")
         try:
             sid = b.ok("session.create", {})["session_id"]
             b.turn(sid, "stage five writes")
             staged = _tool_results(srv)
-            assert len(staged) == 5 and all(r.get("staged") for r in staged), f"writes were not staged: {staged}"
+            assert len(staged) == 5 and all(r.get("staged") for r in staged), (
+                f"writes were not staged: {staged}"
+            )
             ids = [r["pending_id"] for r in staged]
-            s = Store(b, sid, home / ".clawksis", outside, ids[:3], memory_texts, ids[3:], skill_texts)
-            assert s.pending_ids("memory") == set(ids[:3]) and s.pending_ids("skills") == set(ids[3:]), \
+            s = Store(
+                b,
+                sid,
+                home / ".clawksis",
+                outside,
+                ids[:3],
+                memory_texts,
+                ids[3:],
+                skill_texts,
+            )
+            assert s.pending_ids("memory") == set(ids[:3]) and s.pending_ids(
+                "skills"
+            ) == set(ids[3:]), (
                 f"pending store on disk does not match the staged ids: {sorted((s.clawk_home / 'pending').rglob('*'))}"
+            )
             yield s
         finally:
             b.close()
@@ -147,12 +197,25 @@ def _plant_victim(s: Store, where: str) -> tuple[Path, str, str]:
     """A record-shaped JSON file outside the store: ``(path, id spelling, canary)``. Record-shaped so a
     traversal that reaches it is observable on every verb (reject deletes it, approve applies its payload,
     diff prints its summary)."""
-    victim, spelled = ((s.clawk_home / "auth.json", "../../auth") if where == "home"
-                       else (s.outside / "victim.json", str(s.outside / "victim")))
+    victim, spelled = (
+        (s.clawk_home / "auth.json", "../../auth")
+        if where == "home"
+        else (s.outside / "victim.json", str(s.outside / "victim"))
+    )
     mark = H.canary("victim")
-    victim.write_text(json.dumps({"id": spelled, "subsystem": "memory", "summary": mark, "origin": "foreground",
-                                  "created_at": 0, "payload": {"action": "add", "target": "memory", "content": mark}}),
-                      encoding="utf-8")
+    victim.write_text(
+        json.dumps(
+            {
+                "id": spelled,
+                "subsystem": "memory",
+                "summary": mark,
+                "origin": "foreground",
+                "created_at": 0,
+                "payload": {"action": "add", "target": "memory", "content": mark},
+            }
+        ),
+        encoding="utf-8",
+    )
     return victim, spelled, mark
 
 
@@ -160,41 +223,65 @@ def _plant_victim(s: Store, where: str) -> tuple[Path, str, str]:
 def test_pending_id_never_leaves_the_store(store: Store, scenario: str) -> None:
     command, where = TRAVERSALS[scenario]
     victim, spelled, mark = _plant_victim(store, where)
-    before, pending_before = victim.read_bytes(), {k: store.pending_ids(k) for k in ("memory", "skills")}
+    before, pending_before = (
+        victim.read_bytes(),
+        {k: store.pending_ids(k) for k in ("memory", "skills")},
+    )
 
     out = _slash(store.b, store.sid, f"/{command} {spelled}")
 
     assert out.strip(), f"/{command} returned no output"
     pending_after = {k: store.pending_ids(k) for k in ("memory", "skills")}
     checks = (
-        (not victim.exists() or victim.read_bytes() != before, f"{victim.name} was deleted or rewritten"),
+        (
+            not victim.exists() or victim.read_bytes() != before,
+            f"{victim.name} was deleted or rewritten",
+        ),
         (mark in out, "the command output carries the victim's content"),
-        (mark in store.memory_blob(), "the victim's payload was applied to the memory store"),
-        (pending_after != pending_before, f"real staged records changed: {pending_before} -> {pending_after}"),
+        (
+            mark in store.memory_blob(),
+            "the victim's payload was applied to the memory store",
+        ),
+        (
+            pending_after != pending_before,
+            f"real staged records changed: {pending_before} -> {pending_after}",
+        ),
     )
     with known_gate(KNOWN, scenario, raises=H.BoundaryBreach):
         if breaches := [msg for failed, msg in checks if failed]:
-            raise H.BoundaryBreach(f"/{command} {spelled!r}: " + "; ".join(breaches) + f"\noutput: {out[:400]}")
+            raise H.BoundaryBreach(
+                f"/{command} {spelled!r}: "
+                + "; ".join(breaches)
+                + f"\noutput: {out[:400]}"
+            )
 
 
 def test_control_valid_reject_drops_only_that_record(store: Store) -> None:
     target, keep = store.memory_ids[0], set(store.memory_ids[2:])
     out = _slash(store.b, store.sid, f"/memory reject {target}")
-    assert target in out and target not in store.pending_ids("memory"), f"valid reject did not drop {target}: {out}"
+    assert target in out and target not in store.pending_ids("memory"), (
+        f"valid reject did not drop {target}: {out}"
+    )
     assert keep <= store.pending_ids("memory"), "rejecting one record dropped another"
-    assert store.memory_texts[0] not in store.memory_blob(), "a rejected write reached the memory store"
+    assert store.memory_texts[0] not in store.memory_blob(), (
+        "a rejected write reached the memory store"
+    )
 
 
 def test_control_valid_approve_applies_the_staged_write(store: Store) -> None:
     target = store.memory_ids[1]
     out = _slash(store.b, store.sid, f"/memory approve {target}")
-    assert store.memory_texts[1] in store.memory_blob(), f"approved write missing from MEMORY.md; output: {out}"
+    assert store.memory_texts[1] in store.memory_blob(), (
+        f"approved write missing from MEMORY.md; output: {out}"
+    )
     assert target not in store.pending_ids("memory"), "an applied record stayed pending"
 
 
 def test_control_valid_diff_shows_the_staged_skill(store: Store) -> None:
     out = _slash(store.b, store.sid, f"/skills diff {store.skill_ids[0]}")
-    assert store.skill_texts[0] in out, f"/skills diff did not render the staged content: {out[:400]}"
+    assert store.skill_texts[0] in out, (
+        f"/skills diff did not render the staged content: {out[:400]}"
+    )
 
 
 # ── skill delete guard (#120528) ────────────────────────────────────────────
@@ -202,8 +289,12 @@ def test_control_valid_diff_shows_the_staged_skill(store: Store) -> None:
 
 @dataclass
 class DeleteRun:
-    results: dict[str, dict[str, Any]] = field(default_factory=dict)  # scenario -> tool result
-    survived: dict[str, bool] = field(default_factory=dict)  # scenario -> skill dir present right after
+    results: dict[str, dict[str, Any]] = field(
+        default_factory=dict
+    )  # scenario -> tool result
+    survived: dict[str, bool] = field(
+        default_factory=dict
+    )  # scenario -> skill dir present right after
 
 
 # Executed in this order, one agent turn each, so a later delete can never mask an earlier outcome.
@@ -222,23 +313,39 @@ def deletes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[DeleteRun]:
     root = tmp_path_factory.mktemp("deletes")
     home = root / "home"
     skills = home / ".clawksis" / "skills"
-    for rel in ("research/my-skill", "research/free-skill", "research/spare-skill", "autonomous-ai-agents/clawksis-agent"):
+    for rel in (
+        "research/my-skill",
+        "research/free-skill",
+        "research/spare-skill",
+        "autonomous-ai-agents/clawksis-agent",
+    ):
         (skills / rel).mkdir(parents=True)
-        (skills / rel / "SKILL.md").write_text(_skill_md(rel.rsplit("/", 1)[1]), encoding="utf-8")
+        (skills / rel / "SKILL.md").write_text(
+            _skill_md(rel.rsplit("/", 1)[1]), encoding="utf-8"
+        )
     key = H.canary("sk-delete")
     run = DeleteRun()
     with FakeLLMServer([], api_key=key) as srv:
         H.write_home(home / ".clawksis", srv.base_url, api_key=key)
         pin = H.run_clawk(["curator", "pin", "my-skill"], home, timeout=90)
-        assert pin.returncode == 0, f"clawk curator pin failed: {pin.stdout}\n{pin.stderr[-2000:]}"
+        assert pin.returncode == 0, (
+            f"clawk curator pin failed: {pin.stdout}\n{pin.stderr[-2000:]}"
+        )
         b = TuiBackend(home, root / "tui.log")
         try:
             sid = b.ok("session.create", {})["session_id"]
             for step, (scenario, name, rel) in enumerate(_DELETE_STEPS, start=1):
-                srv.push(ToolCall("skill_manage", {"action": "delete", "name": name}), Text("ok"))
+                srv.push(
+                    ToolCall("skill_manage", {"action": "delete", "name": name}),
+                    Text("ok"),
+                )
                 b.turn(sid, f"delete {name}")
-                results = _tool_results(srv)  # the session history carries every earlier step's result too
-                assert len(results) == step, f"{scenario}: expected {step} tool results, got {results}"
+                results = _tool_results(
+                    srv
+                )  # the session history carries every earlier step's result too
+                assert len(results) == step, (
+                    f"{scenario}: expected {step} tool results, got {results}"
+                )
                 run.results[scenario] = results[-1]
                 run.survived[scenario] = (skills / rel / "SKILL.md").exists()
         finally:
@@ -247,11 +354,15 @@ def deletes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[DeleteRun]:
 
 
 @pytest.mark.parametrize("scenario", list(DELETES))
-def test_delete_refuses_pinned_and_essential_by_category(deletes: DeleteRun, scenario: str) -> None:
+def test_delete_refuses_pinned_and_essential_by_category(
+    deletes: DeleteRun, scenario: str
+) -> None:
     name, rel = DELETES[scenario]
     with known_gate(KNOWN, scenario, raises=H.BoundaryBreach):
         if not deletes.survived[scenario]:
-            raise H.BoundaryBreach(f"skill_manage delete {name!r} removed skills/{rel}: {deletes.results[scenario]}")
+            raise H.BoundaryBreach(
+                f"skill_manage delete {name!r} removed skills/{rel}: {deletes.results[scenario]}"
+            )
     assert deletes.results[scenario].get("success") is False, deletes.results[scenario]
 
 
@@ -262,7 +373,9 @@ def test_control_bare_name_delete_is_refused(deletes: DeleteRun, scenario: str) 
     assert res.get("success") is False and res.get("error"), res
 
 
-@pytest.mark.parametrize("scenario", ["control_unpinned_category", "control_unpinned_bare"])
+@pytest.mark.parametrize(
+    "scenario", ["control_unpinned_category", "control_unpinned_bare"]
+)
 def test_control_unpinned_delete_succeeds(deletes: DeleteRun, scenario: str) -> None:
     res = deletes.results[scenario]
     assert res.get("success") is True and not deletes.survived[scenario], res

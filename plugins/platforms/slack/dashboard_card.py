@@ -9,14 +9,20 @@ _MEMBER_ID_RE = re.compile(r"[UW][A-Z0-9]{2,}")
 _ENV_VALUE_RULES = {
     "SLACK_BOT_TOKEN": (
         lambda v: v.startswith("xoxb-"),
-        "Slack Bot Token must start with xoxb-. Paste the bot token from OAuth & Permissions."),
+        "Slack Bot Token must start with xoxb-. Paste the bot token from OAuth & Permissions.",
+    ),
     "SLACK_APP_TOKEN": (
         lambda v: v.startswith("xapp-"),
-        "Slack App Token must start with xapp-. Paste the app-level token from Basic Information > App-Level Tokens."),
+        "Slack App Token must start with xapp-. Paste the app-level token from Basic Information > App-Level Tokens.",
+    ),
     "SLACK_ALLOWED_USERS": (
-        lambda v: all(u == "*" or _MEMBER_ID_RE.fullmatch(u)
-                      for u in (p.strip() for p in v.split(",")) if u),
-        "Slack allowed user IDs must be comma-separated member IDs like U01ABC2DEF3."),
+        lambda v: all(
+            u == "*" or _MEMBER_ID_RE.fullmatch(u)
+            for u in (p.strip() for p in v.split(","))
+            if u
+        ),
+        "Slack allowed user IDs must be comma-separated member IDs like U01ABC2DEF3.",
+    ),
 }
 
 DASHBOARD_CARD = dict(

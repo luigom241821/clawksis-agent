@@ -22,24 +22,17 @@ def _tree():
     return parser, parser.add_subparsers(dest="command")
 
 
-
-
-
-
 def test_worktree_aliases_normalize_to_list(monkeypatch):
     parser, sub = _tree()
     build_worktree_parser(sub)
     seen = {}
-    monkeypatch.setattr("clawk_cli.worktree_cmd.cmd_worktree", lambda a: seen.setdefault("action", a.worktree_action))
+    monkeypatch.setattr(
+        "clawk_cli.worktree_cmd.cmd_worktree",
+        lambda a: seen.setdefault("action", a.worktree_action),
+    )
     ns = parser.parse_args(["worktree", "audit"])
     ns.func(ns)
     assert seen["action"] == "list"
-
-
-
-
-
-
 
 
 def test_computer_use_no_action_prints_help(capsys):

@@ -37,7 +37,14 @@ from typing import Any, Iterator, Optional
 
 logger = logging.getLogger("clawk_cli.auth")
 
-IDLE, PENDING, RETRYING, CLAIMED, GONE, FAILED = "idle", "pending", "retrying", "claimed", "gone", "failed"
+IDLE, PENDING, RETRYING, CLAIMED, GONE, FAILED = (
+    "idle",
+    "pending",
+    "retrying",
+    "claimed",
+    "gone",
+    "failed",
+)
 # Read side only: an active record bound to an account this profile no longer holds.
 PAUSED = "paused"
 _ACTIVE = frozenset({PENDING, RETRYING})
@@ -55,7 +62,9 @@ _FORCE_REFRESH_SKEW = 10**9
 _CLAIMED, _GONE, _RETRY, _FAIL, _REAUTH = "claimed", "gone", "retry", "fail", "reauth"
 # Codes no later attempt can change. Every other refusal, unknown codes included, retries: a wrong
 # "final" loses the apps for good, a wrong retry costs one request an hour.
-_FINAL_CODES = frozenset({"client_not_allowed", "account_locked", "invalid_request", "retry_window_ended"})
+_FINAL_CODES = frozenset(
+    {"client_not_allowed", "account_locked", "invalid_request", "retry_window_ended"}
+)
 # A plain reason per final code; any other code shows only the generic sentence, never the code.
 _FAILURE_COPY = {
     "client_not_allowed": "This sign-in can't receive them. Sign in again with `clawk auth add nous`.",
@@ -64,7 +73,8 @@ _FAILURE_COPY = {
 }
 # The service's refusal codes; anything unlisted retries (``_classify``).
 _REFUSALS = {
-    "unknown_token": _GONE, "already_retired": _GONE,
+    "unknown_token": _GONE,
+    "already_retired": _GONE,
     **{code: _FAIL for code in _FINAL_CODES},
 }
 
@@ -82,7 +92,9 @@ class HandoffBatch:
 
     @property
     def account_email(self) -> Optional[str]:
-        return next((r["account_email"] for r in self.results if r.get("account_email")), None)
+        return next(
+            (r["account_email"] for r in self.results if r.get("account_email")), None
+        )
 
 
 def _now() -> float:
@@ -99,18 +111,25 @@ def _token_key(anon_token: str) -> str:
 
 def _home_key() -> str:
     from clawk_constants import clawk_home_key
+
     return clawk_home_key()
 
 
 def _records_path() -> Path:
     from clawk_cli.auth_nous import _nous_shared_store_path
+
     return _nous_shared_store_path().with_name(HANDOFF_FILENAME)
 
 
 @contextmanager
-def _lock(path: Path, holder: threading.local, timeout_seconds: float) -> Iterator[None]:
+def _lock(
+    path: Path, holder: threading.local, timeout_seconds: float
+) -> Iterator[None]:
     from clawk_cli.auth import _file_lock
-    with _file_lock(path, holder, timeout_seconds, f"Timed out waiting for {path.name}"):
+
+    with _file_lock(
+        path, holder, timeout_seconds, f"Timed out waiting for {path.name}"
+    ):
         yield
 
 
@@ -122,8 +141,11 @@ def _load(path: Path, *, heal: bool = False) -> dict[str, Any]:
     except FileNotFoundError:
         data = {}
     except ValueError:
-        logger.warning("Free-tier handoff records at %s are unreadable%s", path,
-                       "; moved aside to .corrupt" if heal else "")
+        logger.warning(
+            "Free-tier handoff records at %s are unreadable%s",
+            path,
+            "; moved aside to .corrupt" if heal else "",
+        )
         if heal:
             path.replace(path.with_suffix(".json.corrupt"))
         data = {}
@@ -133,6 +155,7 @@ def _load(path: Path, *, heal: bool = False) -> dict[str, Any]:
 
 def _save(path: Path, data: dict[str, Any]) -> None:
     from clawk_cli.auth import _save_private_json
+
     _save_private_json(path, data, sort_keys=True)
 
 
@@ -152,17 +175,20 @@ def _update(path: Path, key: str, change) -> Optional[dict[str, Any]]:
 
 def _subject(access_token: Any) -> Optional[str]:
     from clawk_cli.auth_constants import _decode_jwt_claims
+
     sub = _decode_jwt_claims(access_token).get("sub")
     return str(sub) if sub else None
 
 
 # --- The hook: no network, runs under the writer's locks ------------------------------------------
 
+
 def note_store_write(auth_store: dict[str, Any], provider_id: str, state: Any) -> None:
     """``auth._store_provider_state``'s hook: the Nous state the store holds now is the one replaced
     (the profile's own, else the root store's it falls back to)."""
     if provider_id == "nous":
         from clawk_cli.auth import _load_provider_state
+
         note_replacement(_load_provider_state(auth_store, "nous"), state)
 
 
@@ -172,9 +198,13 @@ def note_replacement(previous: Any, new: Any) -> None:
     not yet attempted follows the newest destination, one already attempted keeps its own (a lost
     answer may have moved the apps there)."""
     from clawk_cli.anon_auth import is_guest_state
+
     if not is_guest_state(previous) or is_guest_state(new) or not isinstance(new, dict):
         return
-    anon_token, destination = previous.get("anon_token"), _subject(new.get("access_token"))
+    anon_token, destination = (
+        previous.get("anon_token"),
+        _subject(new.get("access_token")),
+    )
     if not isinstance(anon_token, str) or not anon_token or not destination:
         return  # no account subject: nothing a claim could ever be proven to land in
     try:
@@ -185,8 +215,14 @@ def note_replacement(previous: Any, new: Any) -> None:
 
     def change(record: Optional[dict[str, Any]]) -> dict[str, Any]:
         if record is None:
-            record = {"state": PENDING, "anon_token": anon_token, "destination": destination,
-                      "attempts": 0, "profiles": [], "created_at": _iso(_now())}
+            record = {
+                "state": PENDING,
+                "anon_token": anon_token,
+                "destination": destination,
+                "attempts": 0,
+                "profiles": [],
+                "created_at": _iso(_now()),
+            }
         elif record["state"] in _ACTIVE and not record.get("attempts"):
             record["destination"] = destination
         if home not in record["profiles"]:
@@ -194,14 +230,19 @@ def note_replacement(previous: Any, new: Any) -> None:
         return record
 
     record = _update(path, _token_key(anon_token), change)
-    logger.info("Nous sign-in replaced the free tier; handoff %s (%s)", record["state"],
-                _token_key(anon_token)[:8])
+    logger.info(
+        "Nous sign-in replaced the free tier; handoff %s (%s)",
+        record["state"],
+        _token_key(anon_token)[:8],
+    )
 
 
 # --- The runner: outside every lock ---------------------------------------------------------------
 
+
 def _holds_auth_locks() -> bool:
     from clawk_cli import auth, auth_nous
+
     if getattr(auth_nous._nous_shared_lock_holder, "depth", 0):
         return True
     with auth._auth_target_lock_holders_guard:
@@ -227,7 +268,11 @@ def deferred() -> Iterator[HandoffBatch]:
 def drain() -> Optional[HandoffBatch]:
     """Run this profile's due records now. None when a lock or a :func:`deferred` block on this
     thread holds it back."""
-    if getattr(_local, "holds", 0) or getattr(_local, "running", False) or _holds_auth_locks():
+    if (
+        getattr(_local, "holds", 0)
+        or getattr(_local, "running", False)
+        or _holds_auth_locks()
+    ):
         return None
     _local.running = True
     try:
@@ -246,8 +291,11 @@ def _retryable(record: dict[str, Any]) -> bool:
     ``clawk auth status``, ``clawk auth upgrade``, the retry worker). The retry window is checked
     when the attempt is reserved, so a record past it is closed, not silently skipped."""
     state = record.get("state")
-    return state in _ACTIVE or (state == FAILED and record.get("error") not in _FINAL_CODES
-                                and bool(record.get("anon_token")))
+    return state in _ACTIVE or (
+        state == FAILED
+        and record.get("error") not in _FINAL_CODES
+        and bool(record.get("anon_token"))
+    )
 
 
 def _due(record: dict[str, Any], now: float) -> bool:
@@ -281,7 +329,9 @@ def start_worker() -> threading.Thread:
             return _worker_thread
         _worker_stop.clear()
         # health: allow HX012 -- process-wide worker that binds each record's own profile scope per run; it must not inherit the starter's
-        _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="nous-guest-handoff")
+        _worker_thread = threading.Thread(
+            target=_worker_loop, daemon=True, name="nous-guest-handoff"
+        )
         _worker_thread.start()
         return _worker_thread
 
@@ -304,7 +354,10 @@ def _worker_loop() -> None:
         try:
             retry_all_profiles()
         except Exception:
-            logger.warning("Free-tier handoff retry tick failed; the records stay for the next one", exc_info=True)
+            logger.warning(
+                "Free-tier handoff retry tick failed; the records stay for the next one",
+                exc_info=True,
+            )
         wait = _WORKER_INTERVAL_SECONDS
 
 
@@ -317,7 +370,14 @@ def retry_all_profiles() -> list[dict[str, Any]]:
     except RuntimeError:
         return []
     now = _now()
-    homes = sorted({home for record in records if _due(record, now) for home in record.get("profiles", ())})
+    homes = sorted(
+        {
+            home
+            for record in records
+            if _due(record, now)
+            for home in record.get("profiles", ())
+        }
+    )
     results: list[dict[str, Any]] = []
     for home in homes:
         if not Path(home).is_dir():
@@ -332,12 +392,19 @@ def retry_all_profiles() -> list[dict[str, Any]]:
 def _profile_scope(home: str) -> Iterator[None]:
     """The owning profile's home and secrets for one drain (the cron ticker binds a profile the same
     way); no terminal scope: nothing here runs a command."""
-    from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        build_profile_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
     from clawk_constants import get_routing_process_clawk_home, clawk_home_key
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     foreign = clawk_home_key(get_routing_process_clawk_home()) != home
     home_token = set_clawk_home_override(home)
-    secret_token = set_secret_scope(build_profile_secret_scope(Path(home)), profile_home=home if foreign else None)
+    secret_token = set_secret_scope(
+        build_profile_secret_scope(Path(home)), profile_home=home if foreign else None
+    )
     try:
         yield
     finally:
@@ -353,8 +420,11 @@ def run_due(*, budget_seconds: float = SYNC_BUDGET_SECONDS) -> list[dict[str, An
     except RuntimeError:
         return []
     home, now = _home_key(), _now()
-    due = [key for key, record in _load(path)["records"].items()
-           if home in record.get("profiles", ()) and _due(record, now)]
+    due = [
+        key
+        for key, record in _load(path)["records"].items()
+        if home in record.get("profiles", ()) and _due(record, now)
+    ]
     deadline = time.monotonic() + budget_seconds
     results = []
     for key in due:
@@ -370,11 +440,20 @@ def _account_bound_to(record: dict[str, Any]) -> Optional[dict[str, Any]]:
     a guest (the save never landed) or holds another account (retries bind to the destination)."""
     from clawk_cli.anon_auth import is_guest_state
     from clawk_cli.auth import get_provider_auth_state
+
     account = get_provider_auth_state("nous")
-    if not isinstance(account, dict) or is_guest_state(account) or not account.get("access_token"):
+    if (
+        not isinstance(account, dict)
+        or is_guest_state(account)
+        or not account.get("access_token")
+    ):
         return None
     destination = record.get("destination")
-    return account if destination and _subject(account["access_token"]) == destination else None
+    return (
+        account
+        if destination and _subject(account["access_token"]) == destination
+        else None
+    )
 
 
 def _run_one(path: Path, key: str, deadline: float) -> Optional[dict[str, Any]]:
@@ -385,14 +464,19 @@ def _run_one(path: Path, key: str, deadline: float) -> Optional[dict[str, Any]]:
     # Order: claim lock, then the auth-store locks (token refresh), then the records lock. A lock
     # timeout anywhere in here is contention, not a verdict: the record stays as it is for a later run.
     try:
-        with _lock(path.with_name(HANDOFF_FILENAME + ".claim.lock"), _claim_lock_holder,
-                   max(0.1, _remaining(deadline))):
+        with _lock(
+            path.with_name(HANDOFF_FILENAME + ".claim.lock"),
+            _claim_lock_holder,
+            max(0.1, _remaining(deadline)),
+        ):
             return _claim_locked(path, key, deadline)
     except TimeoutError:
         return None
 
 
-def _reserve(path: Path, key: str, bearer_subject: Optional[str]) -> Optional[tuple[dict[str, Any], int]]:
+def _reserve(
+    path: Path, key: str, bearer_subject: Optional[str]
+) -> Optional[tuple[dict[str, Any], int]]:
     """Reserve one attempt in a single locked read-modify-write: the record is still retryable and
     due, inside its retry window, and bound to the very account whose Bearer is about to be sent.
     Returns ``(record, attempts before this one)``, or None when nothing may be sent now. A record
@@ -401,16 +485,24 @@ def _reserve(path: Path, key: str, bearer_subject: Optional[str]) -> Optional[tu
 
     def change(record: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
         now = _now()
-        if (record is None or not _due(record, now)
-                or not bearer_subject or record.get("destination") != bearer_subject):
+        if (
+            record is None
+            or not _due(record, now)
+            or not bearer_subject
+            or record.get("destination") != bearer_subject
+        ):
             return None
         if _window_ended(record, now):
             return {**record, "state": FAILED, "error": "retry_window_ended"}
         prior = int(record.get("attempts") or 0)
         reserved.append(prior)
         # Counted before the request leaves: an answer lost to a crash still counts as an attempt.
-        return {**record, "state": RETRYING if record["state"] == FAILED else record["state"],
-                "attempts": prior + 1, "last_attempt_at": _iso(now)}
+        return {
+            **record,
+            "state": RETRYING if record["state"] == FAILED else record["state"],
+            "attempts": prior + 1,
+            "last_attempt_at": _iso(now),
+        }
 
     record = _update(path, key, change)
     return (record, reserved[0]) if reserved else None
@@ -419,6 +511,7 @@ def _reserve(path: Path, key: str, bearer_subject: Optional[str]) -> Optional[tu
 def _claim_locked(path: Path, key: str, deadline: float) -> Optional[dict[str, Any]]:
     from clawk_cli.auth import get_provider_auth_state
     from clawk_cli.auth_constants import AuthError
+
     force = False
     while True:
         current = _load(path)["records"].get(key)
@@ -427,7 +520,11 @@ def _claim_locked(path: Path, key: str, deadline: float) -> Optional[dict[str, A
         try:
             bearer = _bearer(force=force, timeout=_remaining(deadline))
         except AuthError as exc:
-            logger.info("Free-tier handoff (%s): account token unavailable (%s)", key[:8], exc.code)
+            logger.info(
+                "Free-tier handoff (%s): account token unavailable (%s)",
+                key[:8],
+                exc.code,
+            )
             return public_view(current)
         if _remaining(deadline) <= 0:
             return public_view(current)
@@ -436,15 +533,31 @@ def _claim_locked(path: Path, key: str, deadline: float) -> Optional[dict[str, A
             return public_view(_load(path)["records"].get(key) or current)
         record, prior = reservation
         outcome, payload, retry_after = _post(
-            record["anon_token"], bearer, get_provider_auth_state("nous") or {},
-            timeout=min(CLAIM_TIMEOUT_SECONDS, max(0.1, _remaining(deadline))))
-        logger.info("Free-tier handoff attempt %d (%s): %s", prior + 1, key[:8], payload.get("error") or outcome)
+            record["anon_token"],
+            bearer,
+            get_provider_auth_state("nous") or {},
+            timeout=min(CLAIM_TIMEOUT_SECONDS, max(0.1, _remaining(deadline))),
+        )
+        logger.info(
+            "Free-tier handoff attempt %d (%s): %s",
+            prior + 1,
+            key[:8],
+            payload.get("error") or outcome,
+        )
         if outcome == _REAUTH and not force:
             # A refused bearer never reached the claim, so it is not an attempt.
-            _update(path, key, lambda r: {**r, "attempts": prior} if r.get("attempts") == prior + 1 else None)
+            _update(
+                path,
+                key,
+                lambda r: (
+                    {**r, "attempts": prior} if r.get("attempts") == prior + 1 else None
+                ),
+            )
             force = True
             continue
-        record = _update(path, key, lambda r: _apply(r, outcome, payload, retry_after, prior))
+        record = _update(
+            path, key, lambda r: _apply(r, outcome, payload, retry_after, prior)
+        )
         if outcome == _CLAIMED and payload.get("cohort_carried") is True:
             _refresh_account_token(timeout=max(1.0, _remaining(deadline)))
         wait = max(0.0, float(record.get("next_attempt_at") or 0) - _now())
@@ -456,40 +569,53 @@ def _claim_locked(path: Path, key: str, deadline: float) -> Optional[dict[str, A
 def _bearer(*, force: bool, timeout: float) -> str:
     from clawk_cli import auth
     from clawk_cli.auth_nous import _nous_shared_store_lock
+
     # The resolver's 5 s memo can still hold the guest's token from just before the save.
     with auth._RESOLVE_TOKEN_CACHE_LOCK:
         auth._RESOLVE_TOKEN_CACHE.pop(_home_key(), None)
     # The resolver waits its own, longer floors for these locks. Taking them first within the
     # budget (same order: auth, then shared) makes its acquisitions reentrant, so a held lock costs
     # the budget, not 15 s; a timeout leaves the record for a later run.
-    with auth._auth_store_lock(timeout), _nous_shared_store_lock(timeout_seconds=timeout):
+    with (
+        auth._auth_store_lock(timeout),
+        _nous_shared_store_lock(timeout_seconds=timeout),
+    ):
         if force:
-            return auth.resolve_nous_access_token(timeout_seconds=timeout, refresh_skew_seconds=_FORCE_REFRESH_SKEW)
+            return auth.resolve_nous_access_token(
+                timeout_seconds=timeout, refresh_skew_seconds=_FORCE_REFRESH_SKEW
+            )
         return auth.resolve_nous_access_token(timeout_seconds=timeout)
 
 
 def _refresh_account_token(*, timeout: float) -> None:
     """The account's token picks up the carried cohort only on its next mint, so mint it now."""
     from clawk_cli.auth_constants import AuthError
+
     try:
         _bearer(force=True, timeout=timeout)
     except AuthError as exc:
-        logger.info("Free-tier handoff: account token refresh after the move failed: %s", exc)
+        logger.info(
+            "Free-tier handoff: account token refresh after the move failed: %s", exc
+        )
 
 
-def _post(anon_token: str, bearer: str, account: dict[str, Any], *,
-          timeout: float) -> tuple[str, dict[str, Any], Optional[float]]:
+def _post(
+    anon_token: str, bearer: str, account: dict[str, Any], *, timeout: float
+) -> tuple[str, dict[str, Any], Optional[float]]:
     from agent.retry_utils import parse_retry_after_seconds
     from clawk_cli.anon_auth import _anon_headers
     from clawk_cli.auth import _nous_portal_base_url, _resolve_verify
     from clawk_cli.auth_constants import httpx
     from clawk_cli.auth_nous import _nous_http_client
+
     verify = _resolve_verify(insecure=None, ca_bundle=None, auth_state=account)
     try:
         with _nous_http_client(timeout, verify) as client:
             response = client.post(
                 f"{_nous_portal_base_url(account).rstrip('/')}/api/anonymous/claim",
-                headers={**_anon_headers(), "authorization": f"Bearer {bearer}"}, json={"token": anon_token})
+                headers={**_anon_headers(), "authorization": f"Bearer {bearer}"},
+                json={"token": anon_token},
+            )
     except httpx.HTTPError as exc:
         return _RETRY, {"error": "unreachable", "detail": type(exc).__name__}, None
     try:
@@ -497,7 +623,11 @@ def _post(anon_token: str, bearer: str, account: dict[str, Any], *,
     except ValueError:
         payload = {}
     payload = payload if isinstance(payload, dict) else {}
-    return _classify(response.status_code, payload), payload, parse_retry_after_seconds(response.headers)
+    return (
+        _classify(response.status_code, payload),
+        payload,
+        parse_retry_after_seconds(response.headers),
+    )
 
 
 def _classify(status: int, payload: dict[str, Any]) -> str:
@@ -508,29 +638,52 @@ def _classify(status: int, payload: dict[str, Any]) -> str:
     return _REFUSALS.get(str(payload.get("error") or ""), _RETRY)
 
 
-def _apply(record: dict[str, Any], outcome: str, payload: dict[str, Any], retry_after: Optional[float],
-           prior_attempts: int) -> dict[str, Any]:
+def _apply(
+    record: dict[str, Any],
+    outcome: str,
+    payload: dict[str, Any],
+    retry_after: Optional[float],
+    prior_attempts: int,
+) -> dict[str, Any]:
     if record["state"] == CLAIMED:
         return record  # never overwritten, whatever a racing attempt heard
     record = {**record, "error": payload.get("error"), "next_attempt_at": None}
     if outcome == _CLAIMED:
-        connectors = payload.get("connectors") if isinstance(payload.get("connectors"), dict) else None
-        record.update(state=CLAIMED, error=None, result={
-            "account_email": payload.get("account_email"),
-            "destination_org_id": payload.get("destination_org_id"),
-            # A service that does not report what moved (an older one) reads as unknown, never "none".
-            "connectors_kind": (connectors or {}).get("kind") or "unknown",
-            "moved_toolkits": list((connectors or {}).get("moved_toolkits") or []),
-            "dropped_toolkits": list((connectors or {}).get("dropped_toolkits") or []),
-            "cohort_carried": payload.get("cohort_carried") is True})
+        connectors = (
+            payload.get("connectors")
+            if isinstance(payload.get("connectors"), dict)
+            else None
+        )
+        record.update(
+            state=CLAIMED,
+            error=None,
+            result={
+                "account_email": payload.get("account_email"),
+                "destination_org_id": payload.get("destination_org_id"),
+                # A service that does not report what moved (an older one) reads as unknown, never "none".
+                "connectors_kind": (connectors or {}).get("kind") or "unknown",
+                "moved_toolkits": list((connectors or {}).get("moved_toolkits") or []),
+                "dropped_toolkits": list(
+                    (connectors or {}).get("dropped_toolkits") or []
+                ),
+                "cohort_carried": payload.get("cohort_carried") is True,
+            },
+        )
     elif outcome == _GONE:
         # Gone after an earlier attempt is most likely that attempt's lost success.
-        record.update(state=GONE, probably_moved=payload.get("error") == "already_retired" or prior_attempts > 0)
+        record.update(
+            state=GONE,
+            probably_moved=payload.get("error") == "already_retired"
+            or prior_attempts > 0,
+        )
     elif outcome == _FAIL:
         record.update(state=FAILED)
     else:
         ladder = _BACKOFF_SECONDS[min(prior_attempts, len(_BACKOFF_SECONDS) - 1)]
-        record.update(state=RETRYING, next_attempt_at=_now() + (retry_after if retry_after else ladder))
+        record.update(
+            state=RETRYING,
+            next_attempt_at=_now() + (retry_after if retry_after else ladder),
+        )
     if record["state"] in (CLAIMED, GONE):
         record.pop("anon_token", None)  # retired credential: nothing left to retry with
     return record
@@ -538,17 +691,22 @@ def _apply(record: dict[str, Any], outcome: str, payload: dict[str, Any], retry_
 
 # --- Read side: status for the surfaces -----------------------------------------------------------
 
+
 def public_view(record: dict[str, Any]) -> dict[str, Any]:
     """The wire shape the surfaces read; never the credential."""
     result = record.get("result") or {}
     next_at = record.get("next_attempt_at")
     return {
-        "state": record.get("state", IDLE), "account_email": result.get("account_email"),
+        "state": record.get("state", IDLE),
+        "account_email": result.get("account_email"),
         "connectors_kind": result.get("connectors_kind"),
-        "moved_toolkits": result.get("moved_toolkits", []), "dropped_toolkits": result.get("dropped_toolkits", []),
-        "probably_moved": bool(record.get("probably_moved")), "error": record.get("error"),
+        "moved_toolkits": result.get("moved_toolkits", []),
+        "dropped_toolkits": result.get("dropped_toolkits", []),
+        "probably_moved": bool(record.get("probably_moved")),
+        "error": record.get("error"),
         "retry_after": max(0, int(float(next_at) - _now())) if next_at else 0,
-        "updated_at": record.get("updated_at")}
+        "updated_at": record.get("updated_at"),
+    }
 
 
 def _status_of(record: dict[str, Any]) -> dict[str, Any]:
@@ -594,7 +752,9 @@ def status_lines(status: dict[str, Any]) -> list[str]:
     kind = status.get("connectors_kind")
     moved_some = kind in ("moved", "swapped") and status.get("moved_toolkits")
     if status.get("state") == CLAIMED and not moved_some and kind != "conflict":
-        lines[0] = f"Signed in as {status.get('account_email') or 'your account'}. {lines[0]}"
+        lines[0] = (
+            f"Signed in as {status.get('account_email') or 'your account'}. {lines[0]}"
+        )
     return lines
 
 
@@ -603,18 +763,30 @@ def result_lines(status: dict[str, Any]) -> list[str]:
     :func:`status_lines`."""
     state = status.get("state")
     where = status.get("account_email") or "your account"
-    moved, dropped = status.get("moved_toolkits") or [], status.get("dropped_toolkits") or []
+    moved, dropped = (
+        status.get("moved_toolkits") or [],
+        status.get("dropped_toolkits") or [],
+    )
     if state in _ACTIVE:
-        return ["Moving your free-tier apps to this account; Clawksis keeps trying in the background."]
+        return [
+            "Moving your free-tier apps to this account; Clawksis keeps trying in the background."
+        ]
     if state == PAUSED:
-        return ["Your free-tier apps are set to move to another Nous account. Sign in to that account "
-                "to finish moving them."]
+        return [
+            "Your free-tier apps are set to move to another Nous account. Sign in to that account "
+            "to finish moving them."
+        ]
     if state == FAILED:
         reason = _FAILURE_COPY.get(str(status.get("error") or ""))
-        return ["Your free-tier apps could not be moved." + (f" {reason}" if reason else "")]
+        return [
+            "Your free-tier apps could not be moved." + (f" {reason}" if reason else "")
+        ]
     if state == GONE:
-        return ["Your free-tier apps were probably moved already." if status.get("probably_moved")
-                else "Nothing left to move from the free tier."]
+        return [
+            "Your free-tier apps were probably moved already."
+            if status.get("probably_moved")
+            else "Nothing left to move from the free tier."
+        ]
     if state != CLAIMED:
         return []
     kind = status.get("connectors_kind")
@@ -623,7 +795,9 @@ def result_lines(status: dict[str, Any]) -> list[str]:
     if kind in ("moved", "swapped") and moved:
         lines = [f"Your apps moved to {where}: {', '.join(moved)}."]
     elif kind == "conflict":
-        lines = [f"{where} already had its own apps, so the free-tier apps stayed behind."]
+        lines = [
+            f"{where} already had its own apps, so the free-tier apps stayed behind."
+        ]
     elif kind in ("none", "moved", "swapped"):
         lines = ["There were no free-tier apps to move."]
     else:

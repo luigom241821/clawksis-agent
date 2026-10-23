@@ -1,4 +1,5 @@
 """A desktop check must not reinterpret unreadable channel config as main."""
+
 from pathlib import Path
 import os
 import subprocess
@@ -15,12 +16,25 @@ def test_invalid_config_refuses_desktop_channel_probe(tmp_path, content):
     config.write_bytes(content.encode() if isinstance(content, str) else content)
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
-        [sys.executable, "-m", "clawk_cli.source_check", "--install-root", str(root), "--home", str(home)],
-        cwd=root, env={**os.environ, "CLAWK_HOME": str(home), "CLAWK_IGNORE_USER_CONFIG": "0"},
-        capture_output=True, text=True, timeout=30,
+        [
+            sys.executable,
+            "-m",
+            "clawk_cli.source_check",
+            "--install-root",
+            str(root),
+            "--home",
+            str(home),
+        ],
+        cwd=root,
+        env={**os.environ, "CLAWK_HOME": str(home), "CLAWK_IGNORE_USER_CONFIG": "0"},
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode != 0, result.stdout + result.stderr
     assert '"channel": "main"' not in result.stdout
     assert "config" in result.stderr
-    assert config.read_bytes() == (content.encode() if isinstance(content, str) else content)
+    assert config.read_bytes() == (
+        content.encode() if isinstance(content, str) else content
+    )

@@ -8,7 +8,6 @@ from tests.gateway.test_whatsapp_formatting import _AsyncCM, _make_adapter
 
 
 class TestWhatsAppNativeFormatting:
-
     def test_invisible_unicode_prefixes_are_sanitized(self):
         adapter = _make_adapter()
 
@@ -41,5 +40,3 @@ async def test_send_location_posts_to_bridge_location_endpoint():
         "name": "HQ",
         "address": "Example Street",
     }
-
-

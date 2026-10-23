@@ -62,7 +62,10 @@ def _revive_entry(pool, entry):
 def _mark(pool, credential_id: str):
     return pool.mark_exhausted_and_rotate(
         status_code=429,
-        error_context={"reason": "usage_limit_reached", "reset_at": time.time() + 95.5 * 3600},
+        error_context={
+            "reason": "usage_limit_reached",
+            "reset_at": time.time() + 95.5 * 3600,
+        },
         credential_id=credential_id,
     )
 
@@ -76,8 +79,12 @@ def test_revived_sole_entry_is_no_recovery(tmp_path, monkeypatch):
 
 def test_multi_entry_pool_still_rotates_to_healthy_sibling(tmp_path, monkeypatch):
     pool = _load(
-        tmp_path, monkeypatch,
-        [_entry(1, token="tok-a", refresh="rf-a"), _entry(2, token="tok-b", refresh="rf-b")],
+        tmp_path,
+        monkeypatch,
+        [
+            _entry(1, token="tok-a", refresh="rf-a"),
+            _entry(2, token="tok-b", refresh="rf-b"),
+        ],
     )
     pool._sync_entry_from_auth_store = lambda entry: entry
 

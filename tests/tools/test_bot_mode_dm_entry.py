@@ -44,11 +44,14 @@ def committed_home(tmp_path, monkeypatch):
     venv = install_state_dir(REPO) / "environments" / "gen" / "venv"
     venv.mkdir(parents=True)
     (venv / "pyvenv.cfg").write_text(
-        "version = {}.{}.{}\n".format(*sys.version_info[:3]), encoding="utf-8")
+        "version = {}.{}.{}\n".format(*sys.version_info[:3]), encoding="utf-8"
+    )
     packages = site_packages(venv)
     packages.mkdir(parents=True)
     dirs = [p for p in sys.path if p and Path(p).is_dir() and Path(p).resolve() != REPO]
-    (packages / "clawk-test-deps.pth").write_text("\n".join(dirs) + "\n", encoding="utf-8")
+    (packages / "clawk-test-deps.pth").write_text(
+        "\n".join(dirs) + "\n", encoding="utf-8"
+    )
     return home, _commit(home, venv)
 
 
@@ -59,23 +62,41 @@ def uncommittable_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     install_state_dir(REPO).mkdir(parents=True)
-    return home, _commit(home, install_state_dir(REPO) / "environments" / "missing" / "venv")
+    return home, _commit(
+        home, install_state_dir(REPO) / "environments" / "missing" / "venv"
+    )
 
 
 def _commit(home, venv):
     runtime_facts_path(REPO).write_text(
-        json.dumps({"packages": {"venv": {"environment": str(venv)}}}), encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV")}
+        json.dumps({"packages": {"venv": {"environment": str(venv)}}}), encoding="utf-8"
+    )
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV")
+    }
     env["CLAWK_HOME"] = str(home)
     return env
 
 
 def _run(argv, env):
-    return subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          env=env, cwd=str(REPO.parent), timeout=120, check=False)
+    return subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        cwd=str(REPO.parent),
+        timeout=120,
+        check=False,
+    )
 
 
-def test_delivery_runner_admits_through_dependencies_it_activates(tmp_path, committed_home):
+def test_delivery_runner_admits_through_dependencies_it_activates(
+    tmp_path, committed_home
+):
     """Live admission (``_admit_live_dm``) imports Clawksis' third-party graph. Launched bare, the
     runner must activate the committed environment and find no live owner — never report an
     ``ambiguous`` import failure. With no owner the local CLI transport fallback is retired: the
@@ -87,10 +108,27 @@ def test_delivery_runner_admits_through_dependencies_it_activates(tmp_path, comm
     dm_file = tmp_path / "dm.txt"
     dm_file.write_text("hello teammate", encoding="utf-8")
     # The transport echoes the DM file it receives via --query-file.
-    transport = [sys.executable, "-I", "-S", "-c", "import sys; print(open(sys.argv[2], encoding='utf-8').read())"]
+    transport = [
+        sys.executable,
+        "-I",
+        "-S",
+        "-c",
+        "import sys; print(open(sys.argv[2], encoding='utf-8').read())",
+    ]
 
-    result = _run([*BARE, str(RUNNER), "--run-delivery", "query-file", str(dm_file),
-                   "--profile-home", str(profile_home), *transport], env)
+    result = _run(
+        [
+            *BARE,
+            str(RUNNER),
+            "--run-delivery",
+            "query-file",
+            str(dm_file),
+            "--profile-home",
+            str(profile_home),
+            *transport,
+        ],
+        env,
+    )
 
     assert "No module named" not in result.stdout + result.stderr, result
     assert result.returncode == 1, result
@@ -101,7 +139,9 @@ def test_delivery_runner_admits_through_dependencies_it_activates(tmp_path, comm
     assert dm_file.read_text(encoding="utf-8") == "hello teammate"
 
 
-def test_delivery_runner_that_cannot_activate_names_the_repair_remedy(tmp_path, uncommittable_home):
+def test_delivery_runner_that_cannot_activate_names_the_repair_remedy(
+    tmp_path, uncommittable_home
+):
     """When the committed environment cannot be activated, the runner exits with PM's
     ``clawk pm repair`` remedy before touching the DM, instead of an ambiguous
     ``No module named …`` outcome the sender is told not to resend."""
@@ -109,8 +149,19 @@ def test_delivery_runner_that_cannot_activate_names_the_repair_remedy(tmp_path, 
     dm_file = tmp_path / "dm.txt"
     dm_file.write_text("hello teammate", encoding="utf-8")
 
-    result = _run([*BARE, str(RUNNER), "--run-delivery", "query-file", str(dm_file),
-                   sys.executable, "-c", "pass"], env)
+    result = _run(
+        [
+            *BARE,
+            str(RUNNER),
+            "--run-delivery",
+            "query-file",
+            str(dm_file),
+            sys.executable,
+            "-c",
+            "pass",
+        ],
+        env,
+    )
 
     assert result.returncode == 1, result
     assert "clawk pm repair" in result.stderr
@@ -119,7 +170,9 @@ def test_delivery_runner_that_cannot_activate_names_the_repair_remedy(tmp_path, 
     assert dm_file.read_text(encoding="utf-8") == "hello teammate"
 
 
-def test_delivery_runner_that_cannot_activate_after_live_admission_stays_ambiguous(tmp_path, uncommittable_home):
+def test_delivery_runner_that_cannot_activate_after_live_admission_stays_ambiguous(
+    tmp_path, uncommittable_home
+):
     """The sender may already have admitted this DM to the live owner (its pinned intent exists)
     and was told not to resend. A runner that then cannot activate must keep that outcome
     unknown, with the same delivery id, instead of a bare repair hint that reads as a failure."""
@@ -129,8 +182,21 @@ def test_delivery_runner_that_cannot_activate_after_live_admission_stays_ambiguo
     intent = Path(str(dm_file) + ".live.json")
     intent.write_text("{}", encoding="utf-8")
 
-    result = _run([*BARE, str(RUNNER), "--run-delivery", "query-file", str(dm_file),
-                   "--profile-home", str(tmp_path), sys.executable, "-c", "pass"], env)
+    result = _run(
+        [
+            *BARE,
+            str(RUNNER),
+            "--run-delivery",
+            "query-file",
+            str(dm_file),
+            "--profile-home",
+            str(tmp_path),
+            sys.executable,
+            "-c",
+            "pass",
+        ],
+        env,
+    )
 
     assert result.returncode == 1, result
     assert "clawk pm repair" in result.stderr
@@ -142,14 +208,22 @@ def test_delivery_runner_that_cannot_activate_after_live_admission_stays_ambiguo
 
 
 @pytest.mark.parametrize("home", ["committed_home", "uncommittable_home"])
-def test_reply_waiter_prints_the_reply_whatever_the_dependency_state(tmp_path, request, home):
+def test_reply_waiter_prints_the_reply_whatever_the_dependency_state(
+    tmp_path, request, home
+):
     """The relay's reply waiter shares the entry but is stdlib only, and its stdout is the
     sender's wake-up: its argv, exactly as ``waiter_command`` builds it, must print the reply
     whether or not the committed environment can be activated."""
     _home, env = request.getfixturevalue(home)
     root = tmp_path / "root"
-    envelope = {"id": "e" * 32, "target_handle": "researcher", "target_connection": "ssh-vps"}
-    reply_path = bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{envelope['id']}.json"
+    envelope = {
+        "id": "e" * 32,
+        "target_handle": "researcher",
+        "target_connection": "ssh-vps",
+    }
+    reply_path = (
+        bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{envelope['id']}.json"
+    )
     reply_path.parent.mkdir(parents=True)
     reply_path.write_text(json.dumps({"reply": "pong"}), encoding="utf-8")
     argv = shlex.split(bot_relay.waiter_command(root, envelope))

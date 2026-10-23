@@ -24,7 +24,11 @@ def empty_allowlist_drop_warning(
     A per-chat ``group_rules`` entry, a non-``allowlist`` policy or a populated allowlist
     means the operator configured the deny; only the untouched default is surfaced.
     """
-    if chat_id in group_rules or default_group_policy != "allowlist" or allowed_group_users:
+    if (
+        chat_id in group_rules
+        or default_group_policy != "allowlist"
+        or allowed_group_users
+    ):
         return None
     return (
         f"[Feishu] Dropped a group message in chat {chat_id}: group policy is 'allowlist' and "

@@ -1,4 +1,5 @@
 """Exercise the passive checker with real linked worktrees and loopback HTTP."""
+
 import json
 import shutil
 import subprocess
@@ -17,13 +18,23 @@ MAIN_CHANNEL = "/releases/channels/main.json"
 
 
 def source_channel(name, repository, branch="main"):
-    return {"schema": 1, "name": name, "repository": repository, "policy": "source-branch",
-            "state": "active", "revision": 1, "nextSequence": 1, "identity": None, "head": None,
-            "delivery": {"kind": "source-branch", "branch": branch}}
+    return {
+        "schema": 1,
+        "name": name,
+        "repository": repository,
+        "policy": "source-branch",
+        "state": "active",
+        "revision": 1,
+        "nextSequence": 1,
+        "identity": None,
+        "head": None,
+        "delivery": {"kind": "source-branch", "branch": branch},
+    }
 
 
 class Installation(tuple):
     """The 8-tuple every test unpacks, plus the GitHub probe's request/response hooks."""
+
     authorizations: list
     response_headers: dict
 
@@ -43,10 +54,20 @@ def installation(tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "file")
 
     def git(*args, cwd=root):
-        return subprocess.check_output([
-            "git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
-            "-c", "commit.gpgsign=false", *args,
-        ], cwd=cwd, text=True).strip()
+        return subprocess.check_output(
+            [
+                "git",
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                *args,
+            ],
+            cwd=cwd,
+            text=True,
+        ).strip()
 
     git("init", "-b", "main")
     git("commit", "--allow-empty", "-m", "base")
@@ -56,8 +77,14 @@ def installation(tmp_path, monkeypatch):
     git("remote", "add", "origin", "https://github.com/fixture/fork.git")
     linked = tmp_path / "linked"
     git("worktree", "add", "-b", "feature/gui", str(linked))
-    responses = {MAIN_CHANNEL: (200, lambda: source_channel(
-        "main", source_releases.source_repository(["git"], root)))}
+    responses = {
+        MAIN_CHANNEL: (
+            200,
+            lambda: source_channel(
+                "main", source_releases.source_repository(["git"], root)
+            ),
+        )
+    }
     requests = []
     # Authorization header of every api.github.com call, in request order (None when anonymous).
     authorizations = []
@@ -77,7 +104,9 @@ def installation(tmp_path, monkeypatch):
             for name, value in response_headers.get(self.path, {}).items():
                 self.send_header(name, value)
             self.end_headers()
-            self.wfile.write((body if isinstance(body, str) else json.dumps(body)).encode())
+            self.wfile.write(
+                (body if isinstance(body, str) else json.dumps(body)).encode()
+            )
 
         def log_message(self, *args):
             pass
@@ -85,15 +114,23 @@ def installation(tmp_path, monkeypatch):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    monkeypatch.setattr(source_releases, "_PUBLIC_BASE", f"http://127.0.0.1:{server.server_port}")
+    monkeypatch.setattr(
+        source_releases, "_PUBLIC_BASE", f"http://127.0.0.1:{server.server_port}"
+    )
     original = urllib.request.urlopen
 
     def local(request, *args, **kwargs):
         url = urlsplit(request.full_url)
-        assert url.hostname in {"api.github.com", "clawk-assets.nousresearch.com", "raw.githubusercontent.com"}
+        assert url.hostname in {
+            "api.github.com",
+            "clawk-assets.nousresearch.com",
+            "raw.githubusercontent.com",
+        }
         rewritten = urllib.request.Request(
-            f"http://127.0.0.1:{server.server_port}{url.path}" + (f"?{url.query}" if url.query else ""),
-            headers=dict(request.header_items()))
+            f"http://127.0.0.1:{server.server_port}{url.path}"
+            + (f"?{url.query}" if url.query else ""),
+            headers=dict(request.header_items()),
+        )
         return original(rewritten, *args, **kwargs)
 
     monkeypatch.setattr(urllib.request, "urlopen", local)
@@ -101,6 +138,7 @@ def installation(tmp_path, monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     from clawk_cli import github_api
+
     monkeypatch.setattr(github_api, "_gh_cli_token", lambda: None)
     fixture = Installation((root, linked, home, base, head, responses, requests, git))
     fixture.authorizations = authorizations
@@ -115,12 +153,17 @@ def test_target_worktree_owns_admission_and_fork_comparison(installation, monkey
     from clawk_cli.source_check import check_for_updates
 
     root, linked, home, _base, head, responses, requests, git = installation
-    (root / "install-stamp.json").write_text(json.dumps({"updateMechanism": "external"}))
+    (root / "install-stamp.json").write_text(
+        json.dumps({"updateMechanism": "external"})
+    )
     (linked / "install-stamp.json").write_text(json.dumps({"updateMechanism": "self"}))
     cache = home / "shared-cache.json"
     target = "a" * 40
     responses["/repos/fixture/fork/commits/feature%2Fgui"] = (200, target)
-    responses[f"/repos/fixture/fork/compare/{head}...{target}"] = (200, {"ahead_by": 3, "commits": []})
+    responses[f"/repos/fixture/fork/compare/{head}...{target}"] = (
+        200,
+        {"ahead_by": 3, "commits": []},
+    )
     commands = []
     original = subprocess.run
 
@@ -128,22 +171,42 @@ def test_target_worktree_owns_admission_and_fork_comparison(installation, monkey
         commands.append(args)
         return original(args, **kwargs)
 
-    before = {str(p.relative_to(root)): p.read_bytes() for p in (root / ".git").rglob("*") if p.is_file()}
+    before = {
+        str(p.relative_to(root)): p.read_bytes()
+        for p in (root / ".git").rglob("*")
+        if p.is_file()
+    }
     monkeypatch.setattr(subprocess, "run", record)
     status = check_for_updates(install_root=linked, home=home, cache_path=cache)
     assert status["supported"] is True
     assert status["branch"] == "feature/gui"
     assert status["behind"] == 3
     assert status["clawkRoot"] == str(linked)
-    assert check_for_updates(install_root=root, home=home, cache_path=cache)["supported"] is False
-    assert requests == ["/repos/fixture/fork/commits/feature%2Fgui",
-                        f"/repos/fixture/fork/compare/{head}...{target}"]
-    assert all(not any(arg in {"fetch", "checkout", "reset", "update-ref", "stash"} for arg in cmd) for cmd in commands)
+    assert (
+        check_for_updates(install_root=root, home=home, cache_path=cache)["supported"]
+        is False
+    )
+    assert requests == [
+        "/repos/fixture/fork/commits/feature%2Fgui",
+        f"/repos/fixture/fork/compare/{head}...{target}",
+    ]
+    assert all(
+        not any(
+            arg in {"fetch", "checkout", "reset", "update-ref", "stash"} for arg in cmd
+        )
+        for cmd in commands
+    )
     assert git("rev-parse", "HEAD", cwd=linked) == head
-    assert {str(p.relative_to(root)): p.read_bytes() for p in (root / ".git").rglob("*") if p.is_file()} == before
+    assert {
+        str(p.relative_to(root)): p.read_bytes()
+        for p in (root / ".git").rglob("*")
+        if p.is_file()
+    } == before
 
 
-def test_bare_git_off_path_reads_through_the_updaters_git(installation, monkeypatch, tmp_path):
+def test_bare_git_off_path_reads_through_the_updaters_git(
+    installation, monkeypatch, tmp_path
+):
     """Desktop passes a bare ``git`` when it found none; a Windows install's only git is PM's
     store copy, off PATH outside ``clawk update``. The check must read HEAD through that git."""
     import shutil
@@ -164,18 +227,28 @@ def test_bare_git_off_path_reads_through_the_updaters_git(installation, monkeypa
     assert status["behind"] == 0
 
 
-@pytest.mark.parametrize("tip_kind,compare,expected", [
-    ("head", None, 0), ("base", None, 0),
-    ("unknown", {"ahead_by": 61}, 61), ("unknown", {"ahead_by": 0}, 0),
-    ("unknown", None, -1), ("unknown", {"ahead_by": True}, -1),
-])
+@pytest.mark.parametrize(
+    "tip_kind,compare,expected",
+    [
+        ("head", None, 0),
+        ("base", None, 0),
+        ("unknown", {"ahead_by": 61}, 61),
+        ("unknown", {"ahead_by": 0}, 0),
+        ("unknown", None, -1),
+        ("unknown", {"ahead_by": True}, -1),
+    ],
+)
 def test_counts_are_honest_without_fetch(installation, tip_kind, compare, expected):
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, base, head, responses, requests, _git = installation
     target = {"head": head, "base": base, "unknown": "a" * 40}[tip_kind]
     responses["/repos/fixture/fork/commits/main"] = (200, "\ufeff" + target)
     if compare is not None:
-        responses[f"/repos/fixture/fork/compare/{head}...{target}"] = (200, "\ufeff" + json.dumps(compare))
+        responses[f"/repos/fixture/fork/compare/{head}...{target}"] = (
+            200,
+            "\ufeff" + json.dumps(compare),
+        )
     status = check_for_updates(install_root=root, home=home)
     assert status["behind"] == expected
     assert status["updateAvailable"] is (expected != 0)
@@ -185,12 +258,15 @@ def test_counts_are_honest_without_fetch(installation, tip_kind, compare, expect
 
 def test_cache_force_expiry_and_passive_opt_out(installation, monkeypatch):
     from clawk_cli import source_check
+
     root, _linked, home, _base, head, responses, requests, git = installation
     clock = [1000000.0]
     monkeypatch.setattr(source_check.time, "time", lambda: clock[0])
     url = "/repos/fixture/fork/commits/main"
     responses[url] = (200, head)
-    check = lambda **kw: source_check.check_for_updates(install_root=root, home=home, **kw)
+    check = lambda **kw: source_check.check_for_updates(
+        install_root=root, home=home, **kw
+    )
     assert check()["behind"] == 0
     cache = next((home / "source-checks").glob("*.json"))
     raw = cache.read_bytes()
@@ -221,16 +297,27 @@ def test_cache_force_expiry_and_passive_opt_out(installation, monkeypatch):
     assert requests.count(url) == 5
 
 
-def test_explicit_and_current_branch_heal_only_after_confirmed_absence(installation, monkeypatch):
+def test_explicit_and_current_branch_heal_only_after_confirmed_absence(
+    installation, monkeypatch
+):
     from clawk_cli.source_check import check_for_updates
+
     root, linked, home, _base, _head, _responses, requests, git = installation
     git("remote", "set-url", "origin", str(root))
     # Use the same real linked worktree with a local origin. No GitHub fallback is involved.
     assert check_for_updates(install_root=linked, home=home)["branch"] == "feature/gui"
-    assert check_for_updates(install_root=linked, home=home, branch="main")["branch"] == "main"
-    assert check_for_updates(install_root=linked, home=home, branch="deleted")["branch"] == "main"
+    assert (
+        check_for_updates(install_root=linked, home=home, branch="main")["branch"]
+        == "main"
+    )
+    assert (
+        check_for_updates(install_root=linked, home=home, branch="deleted")["branch"]
+        == "main"
+    )
     git("remote", "set-url", "origin", str(home / "unreachable"))
-    failed = check_for_updates(install_root=linked, home=home, branch="deleted", force=True)
+    failed = check_for_updates(
+        install_root=linked, home=home, branch="deleted", force=True
+    )
     assert failed["branch"] == "deleted"
     assert failed["error"] == "fetch-failed"
     assert git("branch", "--show-current", cwd=linked) == "feature/gui"
@@ -244,33 +331,52 @@ def test_dynamic_source_channel_preserves_branch_precedence(installation, select
     _root, linked, home, _base, head, responses, requests, git = installation
     name = "branch-" + uuid4().hex[:12]
     channel_path = f"/releases/channels/{name}.json"
-    responses[channel_path] = (200, source_channel(name, "fixture/fork", "channel-default"))
+    responses[channel_path] = (
+        200,
+        source_channel(name, "fixture/fork", "channel-default"),
+    )
     branch_file = home / "desktop-update.json"
     if selection in {"explicit", "configured"}:
         branch_file.write_text(json.dumps({"branch": "desktop-choice"}))
     if selection == "detached":
         git("checkout", "--detach", cwd=linked)
-    expected = {"explicit": "explicit-choice", "configured": "desktop-choice",
-                "current": "feature/gui", "detached": "channel-default"}[selection]
+    expected = {
+        "explicit": "explicit-choice",
+        "configured": "desktop-choice",
+        "current": "feature/gui",
+        "detached": "channel-default",
+    }[selection]
     branch_path = f"/repos/fixture/fork/commits/{expected.replace('/', '%2F')}"
     responses[branch_path] = (200, head)
 
-    status = check_for_updates(install_root=linked, home=home, channel=name,
-                              branch="explicit-choice" if selection == "explicit" else None,
-                              branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked,
+        home=home,
+        channel=name,
+        branch="explicit-choice" if selection == "explicit" else None,
+        branch_config_path=branch_file,
+    )
     assert status.get("branch") == expected, status
     assert status.get("targetSha") == head, status
     assert status["behind"] == 0
-    assert requests == ([] if selection == "explicit" else [channel_path]) + [branch_path]
+    assert requests == ([] if selection == "explicit" else [channel_path]) + [
+        branch_path
+    ]
 
 
 # An unpublished ``main`` record is not a channel failure: main IS the source
 # branch, so the check keeps following a branch via git, with the usual branch
 # precedence (test_unpublished_main_record_follows_the_branch below).
-@pytest.mark.parametrize("name,failure", [
-    ("canary", "missing"),
-    (None, "missing"), (None, "malformed"), (None, "foreign"), (None, "unpublished"),
-])
+@pytest.mark.parametrize(
+    "name,failure",
+    [
+        ("canary", "missing"),
+        (None, "missing"),
+        (None, "malformed"),
+        (None, "foreign"),
+        (None, "unpublished"),
+    ],
+)
 def test_channel_failure_never_probes_or_heals_a_branch(installation, name, failure):
     from clawk_cli.source_check import check_for_updates
 
@@ -289,17 +395,22 @@ def test_channel_failure_never_probes_or_heals_a_branch(installation, name, fail
         body["policy"] = "preview"
         del body["delivery"]
         body["identity"] = {
-            "token": "a" * 16, "displayName": "Fixture", "appNamePascal": "Fixture",
-            "artifactNamePascal": "Fixture", "appId": "ai.fixture.preview",
-            "msixAppIdWithOrg": "Fixture.Preview", "cliName": "fixture-preview",
+            "token": "a" * 16,
+            "displayName": "Fixture",
+            "appNamePascal": "Fixture",
+            "artifactNamePascal": "Fixture",
+            "appId": "ai.fixture.preview",
+            "msixAppIdWithOrg": "Fixture.Preview",
+            "cliName": "fixture-preview",
             "windowsExecutableName": "Fixture",
         }
     responses[channel_path] = (code, body)
     responses["/repos/fixture/fork/commits/main"] = (200, head)
     branch_file = home / "desktop-update.json"
     branch_file.write_text(json.dumps({"branch": "deleted"}))
-    status = check_for_updates(install_root=linked, home=home, channel=name,
-                              branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked, home=home, channel=name, branch_config_path=branch_file
+    )
     assert status.get("error") == "release-unavailable", status
     assert "targetSha" not in status
     assert status["behind"] is None
@@ -319,8 +430,9 @@ def test_main_follows_the_branch_without_reading_a_channel_record(installation):
     responses[branch_path] = (200, head)
     branch_file = home / "desktop-update.json"
     branch_file.write_text(json.dumps({"branch": "desktop-choice"}))
-    status = check_for_updates(install_root=linked, home=home, channel="main",
-                               branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked, home=home, channel="main", branch_config_path=branch_file
+    )
     assert "error" not in status, status
     assert status.get("branch") == "desktop-choice", status
     assert status.get("targetSha") == head, status
@@ -329,8 +441,11 @@ def test_main_follows_the_branch_without_reading_a_channel_record(installation):
     assert json.loads(branch_file.read_text())["branch"] == "desktop-choice"
 
 
-def test_running_revision_is_not_applied_to_an_explicit_target(installation, monkeypatch):
+def test_running_revision_is_not_applied_to_an_explicit_target(
+    installation, monkeypatch
+):
     from clawk_cli.source_check import check_for_updates
+
     root, linked, home, _base, head, responses, _requests, _git = installation
     monkeypatch.setenv("CLAWK_REVISION", "e" * 40)
     monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(root))
@@ -338,25 +453,41 @@ def test_running_revision_is_not_applied_to_an_explicit_target(installation, mon
     assert check_for_updates(install_root=linked, home=home)["currentSha"] == head
     # Default invocation retains the Nix revision probe even without a Git checkout.
     monkeypatch.setattr("clawk_cli.config.get_project_root", lambda: home)
-    responses[MAIN_CHANNEL] = (200, source_channel("main", "samuelgradientai-sys/clawksis-agent"))
-    responses["/repos/samuelgradientai-sys/clawksis-agent/commits/main"] = (200, "e" * 40)
+    responses[MAIN_CHANNEL] = (
+        200,
+        source_channel("main", "samuelgradientai-sys/clawksis-agent"),
+    )
+    responses["/repos/samuelgradientai-sys/clawksis-agent/commits/main"] = (
+        200,
+        "e" * 40,
+    )
     assert check_for_updates(home=home)["behind"] == 0
 
 
 def test_deleted_desktop_branch_is_persisted_only_after_definitive_probe(installation):
     from clawk_cli.source_check import check_for_updates
+
     root, linked, home, _base, _head, _responses, _requests, git = installation
     branch_file = home / "desktop-update.json"
-    branch_file.write_text(json.dumps({"branch": "deleted", "other": "café"}, ensure_ascii=False),
-                           encoding="utf-8-sig")
+    branch_file.write_text(
+        json.dumps({"branch": "deleted", "other": "café"}, ensure_ascii=False),
+        encoding="utf-8-sig",
+    )
     git("remote", "set-url", "origin", str(home / "unreachable"))
-    status = check_for_updates(install_root=linked, home=home, branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked, home=home, branch_config_path=branch_file
+    )
     assert status["branch"] == "deleted"
     assert json.loads(branch_file.read_bytes())["branch"] == "deleted"
     git("remote", "set-url", "origin", str(root))
-    status = check_for_updates(install_root=linked, home=home, branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked, home=home, branch_config_path=branch_file
+    )
     assert status["branch"] == "main"
-    assert json.loads(branch_file.read_text(encoding="utf-8")) == {"branch": "main", "other": "café"}
+    assert json.loads(branch_file.read_text(encoding="utf-8")) == {
+        "branch": "main",
+        "other": "café",
+    }
     assert not branch_file.read_bytes().startswith(b"\xef\xbb\xbf")
 
 
@@ -382,6 +513,7 @@ def _commit_on(git, branch, message):
 def test_never_pushed_branch_keeps_its_pin(installation, pinned_by):
     """#105042: an empty advertisement for a branch that was never pushed is not a deletion."""
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, _base, _head, _responses, requests, git = installation
     _bare_origin(installation)
     git("branch", "local-work")
@@ -391,7 +523,9 @@ def test_never_pushed_branch_keeps_its_pin(installation, pinned_by):
         branch_file.write_text(json.dumps({"branch": "local-work"}))
     else:
         git("checkout", "-q", "local-work")
-    status = check_for_updates(install_root=root, home=home, branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=root, home=home, branch_config_path=branch_file
+    )
     assert status["branch"] == "local-work", status
     assert status["error"] == "branch-local-only"
     assert status["localOnly"] is True
@@ -405,8 +539,11 @@ def test_never_pushed_branch_keeps_its_pin(installation, pinned_by):
 
 
 @pytest.mark.parametrize("merge", ["fast-forward", "rebase", "unmerged"])
-def test_deleted_remote_branch_heals_only_when_its_commits_are_in_main(installation, merge):
+def test_deleted_remote_branch_heals_only_when_its_commits_are_in_main(
+    installation, merge
+):
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, _base, _head, _responses, _requests, git = installation
     _bare_origin(installation)
     git("branch", "pushed")
@@ -425,7 +562,9 @@ def test_deleted_remote_branch_heals_only_when_its_commits_are_in_main(installat
     assert git("for-each-ref", "refs/remotes/origin/pushed") == ""
     branch_file = home / "desktop-update.json"
     branch_file.write_text(json.dumps({"branch": "pushed"}))
-    status = check_for_updates(install_root=root, home=home, branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=root, home=home, branch_config_path=branch_file
+    )
     if merge == "unmerged":
         assert status["branch"] == "pushed", status
         assert status["error"] == "branch-local-only"
@@ -438,8 +577,11 @@ def test_deleted_remote_branch_heals_only_when_its_commits_are_in_main(installat
         assert json.loads(branch_file.read_text())["branch"] == "main"
 
 
-def test_inherited_git_target_cannot_redirect_an_explicit_install(installation, monkeypatch):
+def test_inherited_git_target_cannot_redirect_an_explicit_install(
+    installation, monkeypatch
+):
     from clawk_cli.source_check import check_for_updates
+
     root, linked, home, _base, head, responses, _requests, _git = installation
     responses["/repos/fixture/fork/commits/feature%2Fgui"] = (200, head)
     monkeypatch.setenv("GIT_DIR", str(root / ".git"))
@@ -449,37 +591,67 @@ def test_inherited_git_target_cannot_redirect_an_explicit_install(installation, 
     assert status["behind"] == 0
 
 
-@pytest.mark.parametrize("mechanism", ["external", "electron-updater", "app-installer", "microsoft-store", "self", None])
+@pytest.mark.parametrize(
+    "mechanism",
+    ["external", "electron-updater", "app-installer", "microsoft-store", "self", None],
+)
 def test_source_admission_is_stamp_owned_not_path_owned(installation, mechanism):
     from clawk_cli.source_check import check_for_updates
+
     _root, linked, home, _base, head, responses, requests, _git = installation
     if mechanism:
-        (linked / "install-stamp.json").write_text(json.dumps({"updateMechanism": mechanism, "distribution": "nix" if mechanism == "external" else "source"}))
+        (linked / "install-stamp.json").write_text(
+            json.dumps(
+                {
+                    "updateMechanism": mechanism,
+                    "distribution": "nix" if mechanism == "external" else "source",
+                }
+            )
+        )
     responses["/repos/fixture/fork/commits/feature%2Fgui"] = (200, head)
     status = check_for_updates(install_root=linked, home=home)
     assert status["supported"] is (mechanism in ("self", None))
-    assert requests == (["/repos/fixture/fork/commits/feature%2Fgui"]
-                        if status["supported"] else [])
+    assert requests == (
+        ["/repos/fixture/fork/commits/feature%2Fgui"] if status["supported"] else []
+    )
     empty = home / "no-source"
     empty.mkdir()
-    (empty / "install-stamp.json").write_text(json.dumps({"updateMechanism": mechanism, "distribution": "nix" if mechanism == "external" else "source"}))
-    assert check_for_updates(install_root=empty, home=home)["reason"] == "not-a-git-checkout"
+    (empty / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "updateMechanism": mechanism,
+                "distribution": "nix" if mechanism == "external" else "source",
+            }
+        )
+    )
+    assert (
+        check_for_updates(install_root=empty, home=home)["reason"]
+        == "not-a-git-checkout"
+    )
 
 
-def test_embedded_revision_keeps_https_ref_advertisement_recovery(installation, monkeypatch):
+def test_embedded_revision_keeps_https_ref_advertisement_recovery(
+    installation, monkeypatch
+):
     from clawk_cli.source_check import check_for_updates
+
     _root, _linked, home, _base, head, responses, _requests, _git = installation
     monkeypatch.setenv("CLAWK_REVISION", head)
     monkeypatch.setattr("clawk_cli.config.get_project_root", lambda: home)
     monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda root: "nix")
-    responses[MAIN_CHANNEL] = (200, source_channel("main", "samuelgradientai-sys/clawksis-agent"))
+    responses[MAIN_CHANNEL] = (
+        200,
+        source_channel("main", "samuelgradientai-sys/clawksis-agent"),
+    )
     original = subprocess.run
     probes = []
 
     def advertise(args, **kwargs):
         if "ls-remote" in args:
             probes.append((args, kwargs))
-            return subprocess.CompletedProcess(args, 0, head + "\trefs/heads/main\n", "")
+            return subprocess.CompletedProcess(
+                args, 0, head + "\trefs/heads/main\n", ""
+            )
         return original(args, **kwargs)
 
     monkeypatch.setattr(subprocess, "run", advertise)
@@ -492,37 +664,62 @@ def test_embedded_revision_keeps_https_ref_advertisement_recovery(installation, 
 
 def test_malformed_optional_changelog_and_cache_do_not_hide_the_update(installation):
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, _base, head, responses, requests, _git = installation
     cache = home / "cache.json"
     responses["/repos/fixture/fork/commits/main"] = (200, "a" * 40)
-    responses[f"/repos/fixture/fork/compare/{head}...{'a' * 40}"] = (200, {
-        "ahead_by": 2, "commits": [{"sha": "b" * 40, "commit": 42}],
-    })
+    responses[f"/repos/fixture/fork/compare/{head}...{'a' * 40}"] = (
+        200,
+        {
+            "ahead_by": 2,
+            "commits": [{"sha": "b" * 40, "commit": 42}],
+        },
+    )
     status = check_for_updates(install_root=root, home=home, cache_path=cache)
     assert status["behind"] == 2
     assert status["updateAvailable"] is True
     data = json.loads(cache.read_text())
     data["status"] = None
     cache.write_text(json.dumps(data))
-    assert check_for_updates(install_root=root, home=home, cache_path=cache)["behind"] == 2
-    assert requests == ["/repos/fixture/fork/commits/main",
-                        f"/repos/fixture/fork/compare/{head}...{'a' * 40}"] * 2
+    assert (
+        check_for_updates(install_root=root, home=home, cache_path=cache)["behind"] == 2
+    )
+    assert (
+        requests
+        == [
+            "/repos/fixture/fork/commits/main",
+            f"/repos/fixture/fork/compare/{head}...{'a' * 40}",
+        ]
+        * 2
+    )
 
 
-@pytest.mark.parametrize("repository,heals", [("samuelgradientai-sys/clawksis-agent", True), ("fixture/fork", False)])
-def test_official_ssh_healing_uses_public_https_without_retargeting_forks(installation, monkeypatch, repository, heals):
+@pytest.mark.parametrize(
+    "repository,heals",
+    [("samuelgradientai-sys/clawksis-agent", True), ("fixture/fork", False)],
+)
+def test_official_ssh_healing_uses_public_https_without_retargeting_forks(
+    installation, monkeypatch, repository, heals
+):
     from clawk_cli.source_check import check_for_updates
     from clawk_cli.update_channel import set_install_channel
+
     root, linked, home, _base, head, responses, _requests, git = installation
     git("remote", "set-url", "origin", f"git@github.com:{repository}.git")
-    git("config", f"url.{root.as_uri()}.insteadOf", "https://github.com/samuelgradientai-sys/clawksis-agent.git")
+    git(
+        "config",
+        f"url.{root.as_uri()}.insteadOf",
+        "https://github.com/samuelgradientai-sys/clawksis-agent.git",
+    )
     # The branch heal is a main-channel concern; an official checkout's default is stable.
     set_install_channel("main", linked)
     monkeypatch.setenv("GIT_SSH_COMMAND", "false")
     branch_file = home / "desktop-update.json"
     branch_file.write_text(json.dumps({"branch": "deleted"}))
     responses[f"/repos/{repository}/commits/main"] = (200, head)
-    status = check_for_updates(install_root=linked, home=home, branch_config_path=branch_file)
+    status = check_for_updates(
+        install_root=linked, home=home, branch_config_path=branch_file
+    )
     assert status["branch"] == ("main" if heals else "deleted")
     assert json.loads(branch_file.read_text())["branch"] == status["branch"]
     if heals:
@@ -533,11 +730,18 @@ def test_official_ssh_healing_uses_public_https_without_retargeting_forks(instal
 
 def github_authorizations(installation, path):
     """Authorization header of each api.github.com call to ``path``, in order."""
-    return [auth for seen, auth in zip(installation[6], installation.authorizations) if seen == path]
+    return [
+        auth
+        for seen, auth in zip(installation[6], installation.authorizations)
+        if seen == path
+    ]
 
 
-def test_github_calls_carry_the_configured_token_and_retry_anonymously_on_401(installation, monkeypatch):
+def test_github_calls_carry_the_configured_token_and_retry_anonymously_on_401(
+    installation, monkeypatch
+):
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, _base, head, responses, _requests, _git = installation
     url = "/repos/fixture/fork/commits/main"
     responses[url] = (200, head)
@@ -546,17 +750,23 @@ def test_github_calls_carry_the_configured_token_and_retry_anonymously_on_401(in
     assert github_authorizations(installation, url) == ["Bearer ghp_fixture"]
 
     # A rejected token is not a failed check: the same request is retried without it.
-    responses[url] = lambda handler: (401, {}) if handler.headers.get("Authorization") else (200, head)
+    responses[url] = lambda handler: (
+        (401, {}) if handler.headers.get("Authorization") else (200, head)
+    )
     assert check_for_updates(install_root=root, home=home, force=True)["behind"] == 0
     assert github_authorizations(installation, url)[-2:] == ["Bearer ghp_fixture", None]
 
 
 def test_branch_tip_failure_names_the_cause(installation):
     from clawk_cli.source_check import check_for_updates
+
     root, _linked, home, _base, _head, responses, _requests, _git = installation
     url = "/repos/fixture/fork/commits/main"
     responses[url] = (403, {})
-    installation.response_headers[url] = {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "4102444800"}
+    installation.response_headers[url] = {
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "4102444800",
+    }
     status = check_for_updates(install_root=root, home=home)
     assert status["error"] == "fetch-failed"
     assert "rate limit" in status["message"] and "GITHUB_TOKEN" in status["message"]
@@ -569,8 +779,12 @@ def test_branch_tip_failure_names_the_cause(installation):
     assert "HTTP 503" in status["message"]
 
 
-@pytest.mark.parametrize("on,release,rollback", [("head", "base", True), ("base", "head", False)])
-def test_stable_release_the_checkout_already_contains_is_a_rollback(installation, tmp_path, on, release, rollback):
+@pytest.mark.parametrize(
+    "on,release,rollback", [("head", "base", True), ("base", "head", False)]
+)
+def test_stable_release_the_checkout_already_contains_is_a_rollback(
+    installation, tmp_path, on, release, rollback
+):
     """A release HEAD contains is a move back (#137714); an older checkout is a real update."""
     from clawk_cli.source_check import check_for_updates
 
@@ -582,10 +796,15 @@ def test_stable_release_the_checkout_already_contains_is_a_rollback(installation
     git("remote", "set-url", "origin", str(bare))
     git("checkout", "-q", "--detach", shas[on])
     api = "/repos/samuelgradientai-sys/clawksis-agent"
-    responses[f"{api}/releases/latest"] = (200, {"draft": False, "prerelease": False, "tag_name": "v1.2.3"})
+    responses[f"{api}/releases/latest"] = (
+        200,
+        {"draft": False, "prerelease": False, "tag_name": "v1.2.3"},
+    )
     responses[f"{api}/commits/v1.2.3"] = (200, {"sha": shas[release]})
 
-    status = check_for_updates(install_root=root, home=home, channel="stable", force=True)
+    status = check_for_updates(
+        install_root=root, home=home, channel="stable", force=True
+    )
 
     assert status.get("targetSha") == shas[release], status
     assert status["updateAvailable"] is True
@@ -593,9 +812,12 @@ def test_stable_release_the_checkout_already_contains_is_a_rollback(installation
 
 
 @pytest.mark.parametrize("ledgered", [True, False])
-@pytest.mark.parametrize("divergent", [True, False], ids=["beside-history", "in-history"])
+@pytest.mark.parametrize(
+    "divergent", [True, False], ids=["beside-history", "in-history"]
+)
 def test_stable_release_the_updater_refuses_is_held_not_offered(
-        installation, tmp_path, monkeypatch, capsys, ledgered, divergent):
+    installation, tmp_path, monkeypatch, capsys, ledgered, divergent
+):
     """A pre-runtime release is held while a store has runtime history (#139099), even when the
     checkout already contains it: neither an update offer nor a rollback promise is valid."""
     from clawk_cli import _startup_fast
@@ -604,16 +826,22 @@ def test_stable_release_the_updater_refuses_is_held_not_offered(
 
     root, _linked, home, base, _head, responses, requests, git = installation
     sibling = tmp_path / "sibling"
-    monkeypatch.setattr("clawk_cli.backup._sibling_profile_homes", lambda h: [("sibling", sibling)])
+    monkeypatch.setattr(
+        "clawk_cli.backup._sibling_profile_homes", lambda h: [("sibling", sibling)]
+    )
     git("checkout", "-q", "-b", "release-line", base)
-    (root / "clawk_state_common.py").write_text("SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS sessions (id)'\n")
+    (root / "clawk_state_common.py").write_text(
+        "SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS sessions (id)'\n"
+    )
     git("add", "clawk_state_common.py")
     git("commit", "-q", "-m", "release from the older line")
     release = git("rev-parse", "HEAD")
     git("checkout", "-q", "main")
     if not divergent:
         git("merge", "--no-ff", "-qm", "release on main's history", "release-line")
-    (root / "clawk_state_common.py").write_text("SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS session_admissions (seq)'\n")
+    (root / "clawk_state_common.py").write_text(
+        "SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS session_admissions (seq)'\n"
+    )
     git("add", "clawk_state_common.py")
     git("commit", "-q", "-m", "gateway runtime")
     bare = tmp_path / "origin.git"
@@ -624,10 +852,15 @@ def test_stable_release_the_updater_refuses_is_held_not_offered(
     if ledgered:
         _ledgered_store(sibling)
     api = "/repos/samuelgradientai-sys/clawksis-agent"
-    responses[f"{api}/releases/latest"] = (200, {"draft": False, "prerelease": False, "tag_name": "v1.2.3"})
+    responses[f"{api}/releases/latest"] = (
+        200,
+        {"draft": False, "prerelease": False, "tag_name": "v1.2.3"},
+    )
     responses[f"{api}/commits/v1.2.3"] = (200, {"sha": release})
 
-    status = check_for_updates(install_root=root, home=home, channel="stable", force=True)
+    status = check_for_updates(
+        install_root=root, home=home, channel="stable", force=True
+    )
 
     assert status.get("targetSha") == release, status
     assert status["updateAvailable"] is not ledgered
@@ -638,11 +871,16 @@ def test_stable_release_the_updater_refuses_is_held_not_offered(
         # The first runtime turn lands after an offer was cached: the next passive check holds it.
         _ledgered_store(sibling)
         held_status = check_for_updates(install_root=root, home=home, channel="stable")
-        assert held_status["updateAvailable"] is False and held_status.get("held") == "downgrade", held_status
+        assert (
+            held_status["updateAvailable"] is False
+            and held_status.get("held") == "downgrade"
+        ), held_status
 
     # --version consumes this status too, and checks rollback before the behind count.
     with monkeypatch.context() as version:
-        version.setattr("clawk_cli.source_check.check_for_updates", lambda **kw: held_status)
+        version.setattr(
+            "clawk_cli.source_check.check_for_updates", lambda **kw: held_status
+        )
         _startup_fast.print_fast_version_info()
     assert "moves back to it" not in capsys.readouterr().out
     assert held_status["rollback"] is False
@@ -658,7 +896,9 @@ def test_stable_release_the_updater_refuses_is_held_not_offered(
 
 
 @pytest.mark.parametrize("ledgered", [True, False])
-def test_an_unfetched_release_is_judged_from_github(installation, tmp_path, monkeypatch, ledgered):
+def test_an_unfetched_release_is_judged_from_github(
+    installation, tmp_path, monkeypatch, ledgered
+):
     """The usual install tracks only ``main``, so a release cut beside it is absent until `clawk
     update` fetches it, and a local probe proves nothing. The check reads the release's state modules
     from GitHub instead, so it still holds what the update would refuse (#140215 review)."""
@@ -677,22 +917,49 @@ def test_an_unfetched_release_is_judged_from_github(installation, tmp_path, monk
     git("tag", "v1.2.3", release, cwd=cut)
     git("push", "-q", "origin", "v1.2.3", cwd=cut)
     git("remote", "set-url", "origin", str(bare))
-    assert subprocess.run(["git", "cat-file", "-e", f"{release}^{{commit}}"], cwd=root,
-                          stderr=subprocess.DEVNULL, check=False).returncode != 0
+    assert (
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{release}^{{commit}}"],
+            cwd=root,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        != 0
+    )
     api = "/repos/samuelgradientai-sys/clawksis-agent"
-    responses[f"{api}/releases/latest"] = (200, {"draft": False, "prerelease": False, "tag_name": "v1.2.3"})
+    responses[f"{api}/releases/latest"] = (
+        200,
+        {"draft": False, "prerelease": False, "tag_name": "v1.2.3"},
+    )
     responses[f"{api}/commits/v1.2.3"] = (200, {"sha": release})
-    responses[f"{api}/compare/{git('rev-parse', 'HEAD')}...{release}"] = (200, {"status": "diverged"})
-    responses[f"{api}/git/trees/{release}"] = (200, {"truncated": False, "tree": [
-        {"path": "clawk_state.py", "type": "blob"}, {"path": "clawk_state_common.py", "type": "blob"},
-        {"path": "run_agent.py", "type": "blob"}]})
-    responses[f"/samuelgradientai-sys/clawksis-agent/{release}/clawk_state.py"] = (200, "from clawk_state_common import *\n")
-    responses[f"/samuelgradientai-sys/clawksis-agent/{release}/clawk_state_common.py"] = (
-        200, "SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS sessions (id)'\n")
+    responses[f"{api}/compare/{git('rev-parse', 'HEAD')}...{release}"] = (
+        200,
+        {"status": "diverged"},
+    )
+    responses[f"{api}/git/trees/{release}"] = (
+        200,
+        {
+            "truncated": False,
+            "tree": [
+                {"path": "clawk_state.py", "type": "blob"},
+                {"path": "clawk_state_common.py", "type": "blob"},
+                {"path": "run_agent.py", "type": "blob"},
+            ],
+        },
+    )
+    responses[f"/samuelgradientai-sys/clawksis-agent/{release}/clawk_state.py"] = (
+        200,
+        "from clawk_state_common import *\n",
+    )
+    responses[
+        f"/samuelgradientai-sys/clawksis-agent/{release}/clawk_state_common.py"
+    ] = (200, "SCHEMA_SQL = 'CREATE TABLE IF NOT EXISTS sessions (id)'\n")
     if ledgered:
         _ledgered_store(home)
 
-    status = check_for_updates(install_root=root, home=home, channel="stable", force=True)
+    status = check_for_updates(
+        install_root=root, home=home, channel="stable", force=True
+    )
 
     assert status.get("targetSha") == release, status
     assert status["updateAvailable"] is not ledgered
@@ -706,13 +973,18 @@ def test_an_unfetched_release_is_judged_from_github(installation, tmp_path, monk
 
 
 @pytest.mark.parametrize("blocked", ["tree", "modules"])
-def test_runtime_lookup_has_one_deadline_with_bounded_parallel_reads(installation, monkeypatch, blocked):
+def test_runtime_lookup_has_one_deadline_with_bounded_parallel_reads(
+    installation, monkeypatch, blocked
+):
     from clawk_cli import source_check
 
     _root, _linked, home, _base, sha, responses, _requests, _git = installation
     tree = f"/repos/fixture/fork/git/trees/{sha}"
     paths = [f"clawk_state_{i}.py" for i in range(12)]
-    responses[tree] = (200, {"tree": [{"path": path, "type": "blob"} for path in paths]})
+    responses[tree] = (
+        200,
+        {"tree": [{"path": path, "type": "blob"} for path in paths]},
+    )
     release = threading.Event()
     overlapped = threading.Event()
     finished = threading.Event()
@@ -743,7 +1015,11 @@ def test_runtime_lookup_has_one_deadline_with_bounded_parallel_reads(installatio
 
     def check():
         try:
-            verdicts.append(source_check._github_predates_runtime("fixture/fork", sha, home / "runtime.json"))
+            verdicts.append(
+                source_check._github_predates_runtime(
+                    "fixture/fork", sha, home / "runtime.json"
+                )
+            )
         finally:
             finished.set()
 
@@ -752,7 +1028,9 @@ def test_runtime_lookup_has_one_deadline_with_bounded_parallel_reads(installatio
     try:
         if blocked == "modules":
             assert overlapped.wait(5), "independent schema reads must overlap"
-        assert finished.wait(5), "a slow successful response must not extend the whole lookup deadline"
+        assert finished.wait(5), (
+            "a slow successful response must not extend the whole lookup deadline"
+        )
         assert verdicts == [None]
         assert peak <= 4
     finally:
@@ -762,7 +1040,9 @@ def test_runtime_lookup_has_one_deadline_with_bounded_parallel_reads(installatio
 
 @pytest.mark.parametrize("failure", ["tree", "module"])
 @pytest.mark.parametrize("runtime", [True, False])
-def test_unknown_runtime_verdict_expires_but_definite_verdict_does_not(installation, monkeypatch, failure, runtime):
+def test_unknown_runtime_verdict_expires_but_definite_verdict_does_not(
+    installation, monkeypatch, failure, runtime
+):
     from clawk_cli import source_check
 
     _root, _linked, home, _base, sha, responses, requests, _git = installation
@@ -770,13 +1050,19 @@ def test_unknown_runtime_verdict_expires_but_definite_verdict_does_not(installat
     monkeypatch.setattr(source_check.time, "time", lambda: clock[0])
     tree = f"/repos/fixture/fork/git/trees/{sha}"
     module = f"/fixture/fork/{sha}/clawk_state_common.py"
-    responses[tree] = (200, {"tree": [{"path": "clawk_state_common.py", "type": "blob"}]})
+    responses[tree] = (
+        200,
+        {"tree": [{"path": "clawk_state_common.py", "type": "blob"}]},
+    )
     from clawk_state_common import SCHEMA_SQL
+
     responses[module] = (200, SCHEMA_SQL if runtime else "SCHEMA_SQL = 'old schema'")
     failed_path = tree if failure == "tree" else module
     good = responses[failed_path]
     responses[failed_path] = (503, {})
-    check = lambda: source_check._github_predates_runtime("fixture/fork", sha, home / "runtime.json")
+    check = lambda: source_check._github_predates_runtime(
+        "fixture/fork", sha, home / "runtime.json"
+    )
 
     assert check() is None
     seen = list(requests)

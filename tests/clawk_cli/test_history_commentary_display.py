@@ -425,12 +425,14 @@ def test_mixed_canonical_preserves_final_repetition_of_a_commentary_phrase(monke
             assert projected["display_content"] == row["content"]
             assert projected["display_commentary"] == []
 
-    row["codex_message_items"].append({
-        "type": "message",
-        "role": "assistant",
-        "phase": "commentary",
-        "content": [{"type": "output_text", "text": "Second update"}],
-    })
+    row["codex_message_items"].append(
+        {
+            "type": "message",
+            "role": "assistant",
+            "phase": "commentary",
+            "content": [{"type": "output_text", "text": "Second update"}],
+        }
+    )
     row["content"] = "Checking\n\nSecond update\n\nFinal: Checking completed."
     monkeypatch.setattr(
         config_mod, "load_config", lambda: {"display": {"show_commentary": True}}

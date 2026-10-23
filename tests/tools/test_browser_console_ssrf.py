@@ -28,28 +28,25 @@ def _mock_run_success(monkeypatch):
             return {
                 "success": True,
                 "data": {
-                    "messages": [
-                        {"type": "log", "text": "secret internal message"}
-                    ]
-                }
+                    "messages": [{"type": "log", "text": "secret internal message"}]
+                },
             }
         elif command == "errors":
             return {
                 "success": True,
-                "data": {
-                    "errors": [
-                        {"message": "internal exception info"}
-                    ]
-                }
+                "data": {"errors": [{"message": "internal exception info"}]},
             }
         return {"success": True, "data": {}}
+
     monkeypatch.setattr(bt_session, "_run_browser_command", _run)
 
 
 def test_blocks_console_on_private_page(monkeypatch):
     _mock_run_success(monkeypatch)
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda tid: True)
-    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda tid: PRIVATE_URL)
+    monkeypatch.setattr(
+        bt_eval_policy, "_current_page_private_url", lambda tid: PRIVATE_URL
+    )
 
     result = json.loads(browser_tool.browser_console(task_id="test"))
     assert result["success"] is False
@@ -79,11 +76,15 @@ def test_skips_guard_for_local_backend(monkeypatch):
 
 def test_guard_does_not_block_on_failed_console_command(monkeypatch):
     """If the console command itself fails, browser_console returns the error naturally."""
+
     def _run(task_id, command, args=None, **kwargs):
         return {"success": False, "error": "console fetch failed"}
+
     monkeypatch.setattr(bt_session, "_run_browser_command", _run)
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda tid: True)
-    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda tid: PRIVATE_URL)
+    monkeypatch.setattr(
+        bt_eval_policy, "_current_page_private_url", lambda tid: PRIVATE_URL
+    )
 
     result = json.loads(browser_tool.browser_console(task_id="test"))
     # When the page is private, the guard checks _current_page_private_url first.

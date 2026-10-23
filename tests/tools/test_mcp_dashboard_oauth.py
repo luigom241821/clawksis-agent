@@ -30,7 +30,9 @@ def test_dashboard_flow_exposes_authorization_url_and_accepts_callback():
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-1",
     )
 
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=s1"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=s1")
+    )
     assert flow.snapshot() == {
         "flow_id": "flow-1",
         "server_name": "reports",
@@ -55,10 +57,18 @@ def test_dashboard_flow_preserves_rfc9207_iss():
         clawk_home="/tmp/clawk-test",
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-iss",
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=s1"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=s1")
+    )
 
-    flow.deliver_callback(code="code-1", state="s1", error=None, iss="https://mcp.cloudflare.com")
-    assert asyncio.run(flow.wait_for_callback()) == ("code-1", "s1", "https://mcp.cloudflare.com")
+    flow.deliver_callback(
+        code="code-1", state="s1", error=None, iss="https://mcp.cloudflare.com"
+    )
+    assert asyncio.run(flow.wait_for_callback()) == (
+        "code-1",
+        "s1",
+        "https://mcp.cloudflare.com",
+    )
 
 
 def test_dashboard_flow_accepts_only_one_concurrent_callback():
@@ -71,7 +81,9 @@ def test_dashboard_flow_accepts_only_one_concurrent_callback():
         clawk_home="/tmp/clawk-test",
         redirect_uri="https://agent.example/mcp/oauth/callback/flow-race",
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=state"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=state")
+    )
 
     start = threading.Barrier(3)
     outcomes: list[str] = []
@@ -84,7 +96,9 @@ def test_dashboard_flow_accepts_only_one_concurrent_callback():
         except ValueError:
             outcomes.append("rejected")
 
-    workers = [threading.Thread(target=deliver, args=(code,)) for code in ("one", "two")]
+    workers = [
+        threading.Thread(target=deliver, args=(code,)) for code in ("one", "two")
+    ]
     for worker in workers:
         worker.start()
     start.wait()
@@ -121,9 +135,7 @@ def test_mcp_oauth_helpers_use_dashboard_flow_without_loopback_port():
         assert str(metadata.redirect_uris[0]) == flow.redirect_uri
 
         asyncio.run(
-            _make_redirect_handler(0)(
-                "https://idp.example/authorize?state=state-4"
-            )
+            _make_redirect_handler(0)("https://idp.example/authorize?state=state-4")
         )
         flow.deliver_callback(code="code-4", state="state-4", error=None)
         # mcp 2.0's callback_handler contract returns an
@@ -147,7 +159,9 @@ def test_first_mark_error_reason_reaches_callback_waiter_and_is_never_clobbered(
     assert flow.snapshot()["error"] == "OAuth cancelled by user"
 
     delivered = _flow("flow-late")
-    asyncio.run(delivered.publish_authorization_url("https://idp.example/authorize?state=s9"))
+    asyncio.run(
+        delivered.publish_authorization_url("https://idp.example/authorize?state=s9")
+    )
     delivered.deliver_callback(code="code-9", state="s9", error=None)
     delivered.mark_error("worker crashed after the browser redirected")
     assert asyncio.run(delivered.wait_for_callback())[:2] == ("code-9", "s9")
@@ -184,7 +198,9 @@ def test_failed_reauth_rollback_preserves_newer_oauth_state(tmp_path, monkeypatc
     assert storage._tokens_path().read_text(encoding="utf-8") == "FRESH"
 
 
-def test_preregistered_pinned_redirect_port_keeps_loopback_listener_under_dashboard_flow(tmp_path, monkeypatch):
+def test_preregistered_pinned_redirect_port_keeps_loopback_listener_under_dashboard_flow(
+    tmp_path, monkeypatch
+):
     """A no-DCR entry (``client_id`` + ``redirect_port``, e.g. the shipped Asana manifest) registered
     ``http://localhost:<port>/callback`` with the vendor, which matches redirect URLs exactly. The
     dashboard/Desktop Authorize button must therefore keep that loopback URI and listener — the
@@ -206,20 +222,41 @@ def test_preregistered_pinned_redirect_port_keeps_loopback_listener_under_dashbo
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    flow = DashboardOAuthFlow(flow_id="flow-5", server_name="asana", profile=None, clawk_home=str(tmp_path),
-                              redirect_uri="https://agent.example/mcp/oauth/callback/flow-5")
-    cfg = {"client_id": "pre-registered", "client_secret": "s", "redirect_host": "localhost", "redirect_port": port}
+    flow = DashboardOAuthFlow(
+        flow_id="flow-5",
+        server_name="asana",
+        profile=None,
+        clawk_home=str(tmp_path),
+        redirect_uri="https://agent.example/mcp/oauth/callback/flow-5",
+    )
+    cfg = {
+        "client_id": "pre-registered",
+        "client_secret": "s",
+        "redirect_host": "localhost",
+        "redirect_port": port,
+    }
     with dashboard_oauth_flow(flow), force_interactive_oauth():
         assert _configure_callback_port(cfg, ClawksisTokenStorage("asana")) == port
-        assert str(_build_client_metadata(cfg).redirect_uris[0]) == f"http://localhost:{port}/callback"
-        asyncio.run(_make_redirect_handler(port)("https://idp.example/authorize?state=state-5"))
-        assert flow.authorization_url == "https://idp.example/authorize?state=state-5"  # dashboard shows the URL
+        assert (
+            str(_build_client_metadata(cfg).redirect_uris[0])
+            == f"http://localhost:{port}/callback"
+        )
+        asyncio.run(
+            _make_redirect_handler(port)("https://idp.example/authorize?state=state-5")
+        )
+        assert (
+            flow.authorization_url == "https://idp.example/authorize?state=state-5"
+        )  # dashboard shows the URL
 
         async def _authorize():
             waiter = asyncio.ensure_future(_make_callback_waiter(port, timeout=10)())
             await asyncio.sleep(0.3)  # listener bound
             await asyncio.to_thread(
-                lambda: urllib.request.urlopen(f"http://127.0.0.1:{port}/callback?code=code-5&state=state-5", timeout=5).read())
+                lambda: urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/callback?code=code-5&state=state-5",
+                    timeout=5,
+                ).read()
+            )
             return await waiter
 
         result = asyncio.run(_authorize())
@@ -254,7 +291,9 @@ def test_server_task_does_not_park_on_an_ended_dashboard_flow(
     monkeypatch.setattr(mcp_tool.asyncio, "sleep", _fast_sleep)
 
     flow = _flow("flow-stale", "asana")
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=spent"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=spent")
+    )
     if ended_by == "approved":
         flow.mark_approved()
     else:
@@ -274,7 +313,9 @@ def test_server_task_does_not_park_on_an_ended_dashboard_flow(
             # The SDK's auth flow sits inside the transport and calls the redirect handler.
             with dashboard_oauth_flow(flow):
                 await handler("https://idp.example/authorize?state=fresh")
-            raise TimeoutError("OAuth callback timed out — the consent screen was never completed")
+            raise TimeoutError(
+                "OAuth callback timed out — the consent screen was never completed"
+            )
 
     async def _scenario():
         task = _Task("asana")
@@ -290,10 +331,12 @@ def test_server_task_does_not_park_on_an_ended_dashboard_flow(
     with caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
         failure, parked, run_task = asyncio.run(_scenario())
 
-    assert failure is not None, "the transport never failed, so the ladder was not exercised"
-    assert not (isinstance(failure, RuntimeError) and "already ended" in str(failure)), (
-        "an ended dashboard flow handle reached the connect ladder"
+    assert failure is not None, (
+        "the transport never failed, so the ladder was not exercised"
     )
+    assert not (
+        isinstance(failure, RuntimeError) and "already ended" in str(failure)
+    ), "an ended dashboard flow handle reached the connect ladder"
     assert parked, "the ladder should end in a park, not a silent exit"
     assert run_task.done(), "run task must be reaped by shutdown()"
     assert any("parking" in record.getMessage() for record in caplog.records)

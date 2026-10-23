@@ -97,7 +97,9 @@ def test_inherit_launch_model_carries_a_custom_provider_gateway(
 
 
 @pytest.mark.parametrize("written", ["http://127.0.0.1:11434/v1", "${LAB_URL}"])
-def test_inherit_launch_model_pins_a_bare_custom_endpoint(monkeypatch, tmp_path, written):
+def test_inherit_launch_model_pins_a_bare_custom_endpoint(
+    monkeypatch, tmp_path, written
+):
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -106,7 +108,9 @@ def test_inherit_launch_model_pins_a_bare_custom_endpoint(monkeypatch, tmp_path,
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("LAB_URL", "http://127.0.0.1:11434/v1")
     # Hermetic: the pin probes the endpoint's /models.
-    monkeypatch.setattr("clawk_cli.models.probe_api_models", lambda *a, **k: {"models": ["llama3"]})
+    monkeypatch.setattr(
+        "clawk_cli.models.probe_api_models", lambda *a, **k: {"models": ["llama3"]}
+    )
     atomic_config_write(
         home / "config.yaml",
         {
@@ -119,14 +123,21 @@ def test_inherit_launch_model_pins_a_bare_custom_endpoint(monkeypatch, tmp_path,
     # Voice mirroring writes config.yaml before inheritance runs (#85755).
     atomic_config_write(
         profile / "config.yaml",
-        {"tts": {"provider": "edge"}, "_config_version": DEFAULT_CONFIG["_config_version"]},
+        {
+            "tts": {"provider": "edge"},
+            "_config_version": DEFAULT_CONFIG["_config_version"],
+        },
     )
 
     assert srv._inherit_launch_model(profile) is True
 
     model = read_user_config_raw(profile / "config.yaml")["model"]
     # The launch file's spelling travels: a ${VAR} URL stays a ref, never the launch value.
-    assert (model["provider"], model["default"], model["base_url"]) == ("custom", "llama3", written)
+    assert (model["provider"], model["default"], model["base_url"]) == (
+        "custom",
+        "llama3",
+        written,
+    )
 
 
 def test_inherit_launch_model_preserves_explicit_profile_selection(

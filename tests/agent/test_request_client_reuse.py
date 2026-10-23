@@ -32,7 +32,9 @@ class _StubClient:
         self.is_closed = True
 
 
-def _make_agent(provider="openai", base_url="https://api.openai.com/v1", model="gpt-5.4"):
+def _make_agent(
+    provider="openai", base_url="https://api.openai.com/v1", model="gpt-5.4"
+):
     with patch("agent.process_bootstrap.OpenAI") as mock_openai:
         mock_openai.return_value = MagicMock()
         agent = AIAgent(
@@ -54,7 +56,7 @@ class _Harness:
 
     def __init__(self, agent):
         self.agent = agent
-        self.built = []   # (kwargs_copy, reason)
+        self.built = []  # (kwargs_copy, reason)
         self.closed = []  # (client, reason)
         self._patchers = []
 
@@ -100,8 +102,6 @@ def test_reuse_on_identical_kwargs_same_object():
         assert len(h.built) == 1
 
 
-
-
 def test_rebuild_on_client_kwargs_change():
     agent = _make_agent()
     with _Harness(agent) as h:
@@ -122,16 +122,6 @@ def test_rebuild_on_client_kwargs_change():
         assert c is b
 
 
-
-
-
-
-
-
-
-
-
-
 def test_agent_close_closes_cached_request_client():
     agent = _make_agent()
     with _Harness(agent) as h:
@@ -147,10 +137,6 @@ def test_agent_close_closes_cached_request_client():
         assert len(h.closed) == before
 
 
-
-
-
-
 def test_moa_passthrough_unaffected():
     agent = _make_agent()
     agent.provider = "moa"
@@ -163,5 +149,3 @@ def test_moa_passthrough_unaffected():
         # Close behaves exactly as before the cache existed.
         agent._close_request_openai_client(facade, reason="request_complete")
         assert facade in h.closed_clients()
-
-

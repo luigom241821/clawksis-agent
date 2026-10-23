@@ -470,7 +470,9 @@ class TestCacheDirectoryMounts:
         paste.write_text("pasted body", encoding="utf-8")
 
         mounts = get_cache_directory_mounts()
-        assert "/root/.clawksis/composer-pastes" in {m["container_path"] for m in mounts}
+        assert "/root/.clawksis/composer-pastes" in {
+            m["container_path"] for m in mounts
+        }
 
         synced = {Path(host) for host, _ in iter_sync_files("~/.clawksis")}
         assert paste in synced
@@ -541,7 +543,8 @@ class TestToAgentVisiblePathPerBackend:
         from tools.credential_files import to_agent_visible_cache_path
 
         assert (
-            to_agent_visible_cache_path(staged) == "/root/.clawksis/attachments/drop.zip"
+            to_agent_visible_cache_path(staged)
+            == "/root/.clawksis/attachments/drop.zip"
         )
 
     def test_ssh_maps_to_tilde_clawk(self, tmp_path, monkeypatch):

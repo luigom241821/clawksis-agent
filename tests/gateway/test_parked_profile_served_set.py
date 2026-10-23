@@ -2,6 +2,7 @@
 refuses every admission: it must leave the published served set and the ticket store at once,
 so discovery stops reporting it ready (and reads its parked verdict) instead of handing clients
 a profile whose every submit answers runtime_draining."""
+
 import asyncio
 from types import SimpleNamespace
 
@@ -18,31 +19,47 @@ from tests.waiting import async_wait_until
 @pytest.mark.asyncio
 async def test_still_retiring_profile_leaves_the_served_set(tmp_path, monkeypatch):
     from gateway import session_finite
+
     agent = _Agent(honours_stop=False)
     db, authority, execute, returned = _authority(tmp_path, agent)
-    monkeypatch.setattr(session_finite, 'execute_finite_admission', execute)
-    monkeypatch.setattr('gateway.session_cron.unbind_owner', lambda authority: None)
-    launch = SimpleNamespace(profile_id=str(tmp_path / 'launch'), retiring=False)
+    monkeypatch.setattr(session_finite, "execute_finite_admission", execute)
+    monkeypatch.setattr("gateway.session_cron.unbind_owner", lambda authority: None)
+    launch = SimpleNamespace(profile_id=str(tmp_path / "launch"), retiring=False)
     registry = SessionAuthorities(launch.profile_id)
     registry.add(launch.profile_id, launch)
-    registry.add(authority.profile_id, authority, name='owned')
+    registry.add(authority.profile_id, authority, name="owned")
     runner = authority.runner
     runner.session_authorities = registry
-    runner.session_runtime_descriptor = {'served_profiles': registry.served_profiles()}
-    runner.session_ticket_store = TicketStore('owner', registry.profile_ids())
+    runner.session_runtime_descriptor = {"served_profiles": registry.served_profiles()}
+    runner.session_ticket_store = TicketStore("owner", registry.profile_ids())
     try:
         with db:
-            await authority.submit(ACTOR, Submission(request_id='running', ref=REF, payload={'text': 'a'}, intent='queue'))
+            await authority.submit(
+                ACTOR,
+                Submission(
+                    request_id="running", ref=REF, payload={"text": "a"}, intent="queue"
+                ),
+            )
             await asyncio.wait_for(asyncio.to_thread(agent.started.wait, 5), 6)
-            assert await run_runtime._retire_profile_authority(authority, timeout=0.2) is False
-            assert runner.session_runtime_descriptor['served_profiles'] == [
-                {'profile_id': launch.profile_id, 'home': launch.profile_id}]
+            assert (
+                await run_runtime._retire_profile_authority(authority, timeout=0.2)
+                is False
+            )
+            assert runner.session_runtime_descriptor["served_profiles"] == [
+                {"profile_id": launch.profile_id, "home": launch.profile_id}
+            ]
             with pytest.raises(PermissionError):
-                runner.session_ticket_store.mint(profile_id='owned', subject='u', purpose='interactive')
+                runner.session_ticket_store.mint(
+                    profile_id="owned", subject="u", purpose="interactive"
+                )
     finally:
         agent.release.set()
         # The turn thread returns, then its session task settles; only then may the store close.
-        assert await asyncio.to_thread(returned.wait, 10), 'released turn thread never returned'
-        task = authority.sessions['s'].task
-        await async_wait_until(lambda: task is None or task.done(), what='the released turn to settle')
+        assert await asyncio.to_thread(returned.wait, 10), (
+            "released turn thread never returned"
+        )
+        task = authority.sessions["s"].task
+        await async_wait_until(
+            lambda: task is None or task.done(), what="the released turn to settle"
+        )
         db.close()

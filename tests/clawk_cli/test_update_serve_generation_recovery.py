@@ -83,15 +83,33 @@ def test_desktop_owned_serve_survivor_does_not_hold_the_flag():
     """#111494: the recovery pass may not restart a Desktop-supervised serve, so it
     cannot be the reason recovery stays incomplete; an operator-owned survivor
     alongside it still blocks."""
-    desktop = {"pid": 6161, "kind": "serve", "profile": "default", "supervisor": "desktop"}
-    manual = {"pid": 4242, "kind": "serve", "profile": "default", "supervisor": "manual-serve"}
+    desktop = {
+        "pid": 6161,
+        "kind": "serve",
+        "profile": "default",
+        "supervisor": "desktop",
+    }
+    manual = {
+        "pid": 4242,
+        "kind": "serve",
+        "profile": "default",
+        "supervisor": "manual-serve",
+    }
     kwargs = dict(
         planned_gateway_profiles={"default"},
         covered_gateway_profiles={"default"},
         recovery_result=_gateway_only_success(),
     )
-    assert update_cmd._abort_recovery_is_complete(stale_runtime_rows=[desktop], **kwargs) is True
-    assert update_cmd._abort_recovery_is_complete(stale_runtime_rows=[desktop, manual], **kwargs) is False
+    assert (
+        update_cmd._abort_recovery_is_complete(stale_runtime_rows=[desktop], **kwargs)
+        is True
+    )
+    assert (
+        update_cmd._abort_recovery_is_complete(
+            stale_runtime_rows=[desktop, manual], **kwargs
+        )
+        is False
+    )
 
 
 def test_full_gateway_recovery_does_not_clear_the_flag_while_serve_is_stale():
@@ -237,8 +255,6 @@ def test_restarted_serve_leaves_no_survivor(monkeypatch):
         )
         == []
     )
-
-
 
 
 def test_dashboard_survivors_count_too(monkeypatch):
@@ -513,8 +529,6 @@ def test_no_systemctl_means_no_serve_pass(monkeypatch):
     }
 
 
-
-
 def test_active_unit_with_no_readable_main_pid_is_failed(linux_systemctl):
     """No observable main process means no observable replacement."""
     fake = _Systemctl(
@@ -679,10 +693,6 @@ def test_serve_only_fleet_still_spawns_the_recovery_child(monkeypatch):
     assert payload["profiles"] == []
     assert payload["serve_units"]["recover"] is True
     assert result["serve_units"] == {"verified": ["clawk-serve"], "failed": []}
-
-
-
-
 
 
 def test_no_serve_authority_and_no_gateway_profile_spawns_nothing(monkeypatch):
@@ -864,8 +874,6 @@ def test_serve_coverage_reaches_the_persisted_receipt(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_no_survivors_prints_nothing(capsys):
     update_cmd._warn_stale_serve_runtimes([])
     assert capsys.readouterr().out == ""
@@ -921,7 +929,9 @@ def test_recovery_module_reports_serve_units_in_a_real_process(tmp_path):
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["serve_units"] == {"verified": ["user/clawk-serve"], "failed": []}
-    restarts = [line for line in log.read_text().splitlines() if " restart " in f" {line} "]
+    restarts = [
+        line for line in log.read_text().splitlines() if " restart " in f" {line} "
+    ]
     assert restarts == ["--user --no-ask-password restart clawk-serve.service"]
 
 
@@ -972,9 +982,7 @@ def test_restarted_dashboard_unit_is_not_killed_by_the_continued_scan(monkeypatc
     )
     monkeypatch.setattr(dashboard_procs, "_lock_owned_serve_pids", lambda: set())
     monkeypatch.setattr(dashboard_procs.sys, "platform", "linux")
-    monkeypatch.setattr(
-        dashboard_procs.os, "kill", lambda pid, sig: killed.append(pid)
-    )
+    monkeypatch.setattr(dashboard_procs.os, "kill", lambda pid, sig: killed.append(pid))
 
     result = dashboard_procs._kill_stale_dashboard_processes(restart_managed=True)
 
@@ -1079,10 +1087,6 @@ def test_settled_system_scope_does_not_suppress_the_stale_user_scope(
     restarted_scopes = [scope for scope, argv in calls if "restart" in argv]
     assert restarted_scopes == ["user"]
     assert out == {"verified": ["user/clawk-serve"], "failed": []}
-
-
-
-
 
 
 def test_legacy_unqualified_skip_is_honoured_in_both_scopes(linux_systemctl):

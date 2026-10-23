@@ -6,6 +6,7 @@ the service keys such clients by ``server_id`` alone and attaches each
 new root via ``workspace/didChangeWorkspaceFolders``.  Single-root
 servers keep the one-client-per-root behaviour.
 """
+
 from __future__ import annotations
 
 import json
@@ -79,7 +80,9 @@ def _service() -> LSPService:
     )
 
 
-def test_multi_root_server_shares_one_client_across_roots(two_repos, mock_pyright, monkeypatch):
+def test_multi_root_server_shares_one_client_across_roots(
+    two_repos, mock_pyright, monkeypatch
+):
     repo_a, repo_b = two_repos
     spawns, folders_log, install = mock_pyright
     install(multi_root=True)
@@ -95,7 +98,10 @@ def test_multi_root_server_shares_one_client_across_roots(two_repos, mock_pyrigh
         assert len(svc._clients) == 1
         client = next(iter(svc._clients.values()))
         assert client.workspace_folders == [str(repo_a), str(repo_b)]
-        events = [json.loads(line) for line in folders_log.read_text(encoding="utf-8").splitlines()]
+        events = [
+            json.loads(line)
+            for line in folders_log.read_text(encoding="utf-8").splitlines()
+        ]
         assert [f["uri"] for e in events for f in e["event"]["added"]] == [
             Path(repo_b).as_uri()
         ]

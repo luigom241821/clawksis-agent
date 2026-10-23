@@ -28,7 +28,6 @@ class TestGatewayPerModelReasoningConfig:
         assert result["enabled"] is True
         assert result["effort"] == "xhigh"
 
-
     def test_global_fallback_with_yaml_false(self, monkeypatch):
         """YAML boolean False must reach parse_reasoning_effort uncoerced.
 
@@ -83,7 +82,6 @@ class TestGatewaySessionEffectiveModel:
         assert result_default["effort"] == "low"
 
 
-
 class TestApiServerPerModelReasoning:
     """The OpenAI-compatible surface must resolve reasoning for the model the
     request actually runs, not ``model.default``.
@@ -111,18 +109,26 @@ class TestApiServerPerModelReasoning:
         from gateway.platforms.api_server import APIServerAdapter
 
         monkeypatch.setattr(
-            gateway_run, "_load_gateway_config", lambda: self._cfg(),
+            gateway_run,
+            "_load_gateway_config",
+            lambda: self._cfg(),
         )
         adapter = APIServerAdapter(PlatformConfig())
 
-        with patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", True), \
-             patch("gateway.run._resolve_runtime_agent_kwargs") as kwargs_mock, \
-             patch("gateway.run._resolve_gateway_model") as model_mock, \
-             patch("gateway.run._load_gateway_config") as cfg_mock, \
-             patch("run_agent.AIAgent") as agent_cls:
+        with (
+            patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", True),
+            patch("gateway.run._resolve_runtime_agent_kwargs") as kwargs_mock,
+            patch("gateway.run._resolve_gateway_model") as model_mock,
+            patch("gateway.run._load_gateway_config") as cfg_mock,
+            patch("run_agent.AIAgent") as agent_cls,
+        ):
             kwargs_mock.return_value = {
-                "api_key": "k", "base_url": None, "provider": None,
-                "api_mode": None, "command": None, "args": [],
+                "api_key": "k",
+                "base_url": None,
+                "provider": None,
+                "api_mode": None,
+                "command": None,
+                "args": [],
             }
             model_mock.return_value = effective_model
             cfg_mock.return_value = self._cfg()

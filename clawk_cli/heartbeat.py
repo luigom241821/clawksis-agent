@@ -26,7 +26,9 @@ HEARTBEAT_PROMPT_TEMPLATE = (
 )
 
 _INTERVAL_RE = re.compile(
-    r"^\s*(?:every\s+)?(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)\s*$", re.IGNORECASE)
+    r"^\s*(?:every\s+)?(\d+(?:\.\d+)?)\s*(s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hours?|d|days?)\s*$",
+    re.IGNORECASE,
+)
 
 _UNIT_SECONDS = {
     **dict.fromkeys(("s", "sec", "secs", "second", "seconds"), 1),
@@ -37,8 +39,12 @@ _UNIT_SECONDS = {
 
 # field -> (coercer, default used when the stored value is missing/falsy)
 _STATE_FIELDS = {
-    "prompt": (str, ""), "interval_seconds": (int, 0), "status": (str, "active"),
-    "created_at": (float, 0.0), "last_fired_at": (float, 0.0), "fire_count": (int, 0),
+    "prompt": (str, ""),
+    "interval_seconds": (int, 0),
+    "status": (str, "active"),
+    "created_at": (float, 0.0),
+    "last_fired_at": (float, 0.0),
+    "fire_count": (int, 0),
 }
 
 
@@ -58,7 +64,10 @@ def format_interval(seconds: int) -> str:
     """Human-readable interval (``600`` → ``10m``)."""
     seconds = int(seconds)
     units = ((86400, "d"), (3600, "h"), (60, "m"))
-    return next((f"{seconds // unit}{suffix}" for unit, suffix in units if seconds % unit == 0), f"{seconds}s")
+    return next(
+        (f"{seconds // unit}{suffix}" for unit, suffix in units if seconds % unit == 0),
+        f"{seconds}s",
+    )
 
 
 @dataclass
@@ -67,7 +76,7 @@ class HeartbeatState:
 
     prompt: str
     interval_seconds: int
-    status: str = "active"          # active | paused | cleared
+    status: str = "active"  # active | paused | cleared
     created_at: float = 0.0
     last_fired_at: float = 0.0
     fire_count: int = 0
@@ -78,21 +87,31 @@ class HeartbeatState:
     @classmethod
     def from_json(cls, raw: str) -> HeartbeatState:
         data = json.loads(raw)
-        return cls(**{name: coerce(data.get(name) or default) for name, (coerce, default) in _STATE_FIELDS.items()})
+        return cls(
+            **{
+                name: coerce(data.get(name) or default)
+                for name, (coerce, default) in _STATE_FIELDS.items()
+            }
+        )
 
     def is_due(self, now: Optional[float] = None) -> bool:
         if self.status != "active" or not self.prompt or self.interval_seconds <= 0:
             return False
-        return (time.time() if now is None else now) - (self.last_fired_at or self.created_at) >= self.interval_seconds
+        return (time.time() if now is None else now) - (
+            self.last_fired_at or self.created_at
+        ) >= self.interval_seconds
 
     def render_prompt(self) -> str:
-        return HEARTBEAT_PROMPT_TEMPLATE.format(interval=format_interval(self.interval_seconds), prompt=self.prompt)
+        return HEARTBEAT_PROMPT_TEMPLATE.format(
+            interval=format_interval(self.interval_seconds), prompt=self.prompt
+        )
 
 
 def _get_session_db() -> Optional[Any]:
     """Persistence goes through the goals module's per-CLAWK_HOME cached SessionDB (one shared connection)."""
     try:
         from clawk_cli.goals import _get_session_db as _goals_db
+
         return _goals_db()
     except Exception as exc:  # pragma: no cover
         logger.debug("HeartbeatManager: SessionDB bootstrap failed (%s)", exc)
@@ -114,7 +133,11 @@ def load_heartbeat(session_id: str) -> Optional[HeartbeatState]:
     try:
         state = HeartbeatState.from_json(raw) if raw else None
     except Exception as exc:
-        logger.warning("HeartbeatManager: could not parse stored heartbeat for %s: %s", session_id, exc)
+        logger.warning(
+            "HeartbeatManager: could not parse stored heartbeat for %s: %s",
+            session_id,
+            exc,
+        )
         return None
     return None if state is None or state.status == "cleared" else state
 
@@ -138,6 +161,7 @@ def save_heartbeat(session_id: str, state: HeartbeatState) -> None:
     db = _get_session_db()
     if db is None:
         from clawk_cli.goals import _warn_dropped_write
+
         _warn_dropped_write("HeartbeatManager", "heartbeat", session_id)
         return
     try:
@@ -156,7 +180,9 @@ class HeartbeatManager:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self._state: Optional[HeartbeatState] = load_heartbeat(session_id)
-        self._last_claim: Optional[tuple[float, int]] = None  # (last_fired_at, fire_count) before the last due_prompt
+        self._last_claim: Optional[tuple[float, int]] = (
+            None  # (last_fired_at, fire_count) before the last due_prompt
+        )
 
     @property
     def state(self) -> Optional[HeartbeatState]:
@@ -175,8 +201,15 @@ class HeartbeatManager:
         every = format_interval(s.interval_seconds)
         fired = f", fired {s.fire_count}×" if s.fire_count else ""
         if s.status == "active":
-            next_in = max(0, int((s.last_fired_at or s.created_at) + s.interval_seconds - time.time()))
-            return f"♥ Heartbeat (every {every}, next in ~{next_in}s{fired}): {s.prompt}"
+            next_in = max(
+                0,
+                int(
+                    (s.last_fired_at or s.created_at) + s.interval_seconds - time.time()
+                ),
+            )
+            return (
+                f"♥ Heartbeat (every {every}, next in ~{next_in}s{fired}): {s.prompt}"
+            )
         icon = "⏸ " if s.status == "paused" else ""
         return f"{icon}Heartbeat ({s.status}, every {every}{fired}): {s.prompt}"
 
@@ -187,12 +220,18 @@ class HeartbeatManager:
         interval_seconds = int(interval_seconds)
         if interval_seconds < MIN_INTERVAL_SECONDS:
             raise ValueError(f"interval must be at least {MIN_INTERVAL_SECONDS}s")
-        self._state = HeartbeatState(prompt=prompt, interval_seconds=interval_seconds, status="active",
-                                     created_at=time.time())
+        self._state = HeartbeatState(
+            prompt=prompt,
+            interval_seconds=interval_seconds,
+            status="active",
+            created_at=time.time(),
+        )
         save_heartbeat(self.session_id, self._state)
         return self._state
 
-    def _set_status(self, status: str, *, reanchor: bool = False) -> Optional[HeartbeatState]:
+    def _set_status(
+        self, status: str, *, reanchor: bool = False
+    ) -> Optional[HeartbeatState]:
         if not self._state:
             return None
         self._state.status = status
@@ -237,8 +276,12 @@ class HeartbeatManager:
         if claim is None or s is None:
             return False
         current = load_heartbeat(self.session_id)
-        if current is None or current.status != "active" or (current.last_fired_at, current.fire_count) != (
-                s.last_fired_at, s.fire_count):
+        if (
+            current is None
+            or current.status != "active"
+            or (current.last_fired_at, current.fire_count)
+            != (s.last_fired_at, s.fire_count)
+        ):
             return False
         s.last_fired_at, s.fire_count = claim
         self._last_claim = None

@@ -15,13 +15,13 @@ from clawk_cli.webhook import (
     _subscriptions_path,
 )
 
+
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Default: webhooks enabled (most tests need this)
-    monkeypatch.setattr(
-        "clawk_cli.webhook._is_webhook_enabled", lambda: True
-    )
+    monkeypatch.setattr("clawk_cli.webhook._is_webhook_enabled", lambda: True)
+
 
 def _make_args(**kwargs):
     defaults = {
@@ -41,6 +41,7 @@ def _make_args(**kwargs):
     defaults.update(kwargs)
     return Namespace(**defaults)
 
+
 @pytest.mark.parametrize("host", [None, "", "0.0.0.0", "::"])
 def test_webhook_base_url_maps_wildcard_hosts_to_localhost(monkeypatch, host):
     monkeypatch.setattr(
@@ -49,12 +50,12 @@ def test_webhook_base_url_maps_wildcard_hosts_to_localhost(monkeypatch, host):
     )
     assert _get_webhook_base_url() == "http://localhost:9123"
 
-class TestSubscribe:
 
+class TestSubscribe:
     def test_custom_secret(self):
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="s", secret="my-secret"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="s", secret="my-secret")
+        )
         assert _load_subscriptions()["s"]["secret"] == "my-secret"
 
     def test_auto_secret(self):
@@ -67,37 +68,45 @@ class TestSubscribe:
         profile_dir.mkdir(parents=True)
         (profile_dir / "config.yaml").write_text("{}\n")  # identity marker
 
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", route_profile="compta"
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe", name="notifier", route_profile="compta"
+            )
+        )
         created = _load_subscriptions()["notifier"]
         first_secret = created["secret"]
         assert created["profile"] == "compta"
         assert "/p/compta/webhooks/notifier" in capsys.readouterr().out
 
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", description="updated"
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe", name="notifier", description="updated"
+            )
+        )
         updated = _load_subscriptions()["notifier"]
         assert updated["profile"] == "compta"
         assert updated["secret"] == first_secret
 
     def test_rejects_unknown_profile_without_replacing_subscription(self, capsys):
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", secret="original"
-        ))
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", route_profile="missing"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="notifier", secret="original")
+        )
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe", name="notifier", route_profile="missing"
+            )
+        )
 
         assert _load_subscriptions()["notifier"]["secret"] == "original"
 
-    def test_stale_update_cannot_restore_concurrently_removed_or_disabled_route(self, monkeypatch):
+    def test_stale_update_cannot_restore_concurrently_removed_or_disabled_route(
+        self, monkeypatch
+    ):
         import clawk_cli.webhook as webhook_module
 
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", secret="original"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="notifier", secret="original")
+        )
         original_load = _load_subscriptions
         pause = {"loaded": threading.Event(), "allow": threading.Event()}
         errors = []
@@ -110,13 +119,19 @@ class TestSubscribe:
                     raise AssertionError("timed out waiting to resume stale update")
             return subscriptions
 
-        monkeypatch.setattr("clawk_cli.webhook._load_subscriptions", load_with_paused_update)
+        monkeypatch.setattr(
+            "clawk_cli.webhook._load_subscriptions", load_with_paused_update
+        )
 
         def update_route():
             try:
-                webhook_command(_make_args(
-                    webhook_action="subscribe", name="notifier", description="stale update"
-                ))
+                webhook_command(
+                    _make_args(
+                        webhook_action="subscribe",
+                        name="notifier",
+                        description="stale update",
+                    )
+                )
             except BaseException as exc:  # surfaced in the test thread below
                 errors.append(exc)
 
@@ -135,9 +150,11 @@ class TestSubscribe:
         assert errors == []
         assert "notifier" not in original_load()
 
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", secret="replacement"
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe", name="notifier", secret="replacement"
+            )
+        )
         pause = {"loaded": threading.Event(), "allow": threading.Event()}
         worker = start_stale_update()
 
@@ -161,20 +178,33 @@ class TestSubscribe:
         profile_dir = tmp_path / "profiles" / "compta"
         profile_dir.mkdir(parents=True)
         (profile_dir / "config.yaml").write_text("{}\n")  # identity marker
-        monkeypatch.setattr("clawk_cli.webhook.time.strftime", lambda *_a: "2026-01-01T00:00:00Z")
+        monkeypatch.setattr(
+            "clawk_cli.webhook.time.strftime", lambda *_a: "2026-01-01T00:00:00Z"
+        )
         # One char shorter than the rotated secret: "default" -> "compta" then keeps the file size equal.
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", secret="old-profile-secret-ab"
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe",
+                name="notifier",
+                secret="old-profile-secret-ab",
+            )
+        )
 
         old_record = _load_subscriptions()["notifier"]
-        adapter = WebhookAdapter(PlatformConfig(enabled=True, extra={"secret": "global"}))
+        adapter = WebhookAdapter(
+            PlatformConfig(enabled=True, extra={"secret": "global"})
+        )
         adapter._reload_dynamic_routes()
         initial_stat = _subscriptions_path().stat()
-        monkeypatch.setattr("clawk_cli.webhook.secrets.token_urlsafe", lambda _n: "rotated-profile-secret")
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="notifier", route_profile="compta"
-        ))
+        monkeypatch.setattr(
+            "clawk_cli.webhook.secrets.token_urlsafe",
+            lambda _n: "rotated-profile-secret",
+        )
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe", name="notifier", route_profile="compta"
+            )
+        )
 
         new_record = _load_subscriptions()["notifier"]
         new_state = (new_record["profile"], new_record["secret"])
@@ -185,7 +215,9 @@ class TestSubscribe:
         )
         assert _subscriptions_path().stat().st_size == initial_stat.st_size
         adapter._reload_dynamic_routes()
-        _subscriptions_path().write_text("{torn")  # unreadable file must keep the last good routes
+        _subscriptions_path().write_text(
+            "{torn"
+        )  # unreadable file must keep the last good routes
         adapter._reload_dynamic_routes()
         assert new_state == ("compta", "rotated-profile-secret")
         assert new_record["secret"] != old_record["secret"]
@@ -193,6 +225,7 @@ class TestSubscribe:
             adapter._routes["notifier"]["profile"],
             adapter._routes["notifier"]["secret"],
         ) == new_state
+
 
 class TestCronJobSubscribe:
     """--cron-job: event-triggered cron jobs."""
@@ -202,35 +235,38 @@ class TestCronJobSubscribe:
         import cron.jobs as jobs_mod
 
         monkeypatch.setattr(
-            jobs_mod, "resolve_job_ref",
+            jobs_mod,
+            "resolve_job_ref",
             lambda ref: {"id": "job-abc123", "name": ref},
         )
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="ev", cron_job="sweeper"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="ev", cron_job="sweeper")
+        )
         assert _load_subscriptions()["ev"]["cron_job"] == "job-abc123"
 
     def test_unknown_job_rejected(self, monkeypatch, capsys):
         import cron.jobs as jobs_mod
 
         monkeypatch.setattr(jobs_mod, "resolve_job_ref", lambda ref: None)
-        webhook_command(_make_args(
-            webhook_action="subscribe", name="ev", cron_job="nope"
-        ))
+        webhook_command(
+            _make_args(webhook_action="subscribe", name="ev", cron_job="nope")
+        )
         assert "ev" not in _load_subscriptions()
 
     def test_cron_job_plus_deliver_only_rejected(self, capsys):
-        webhook_command(_make_args(
-            webhook_action="subscribe",
-            name="ev",
-            cron_job="sweeper",
-            deliver_only=True,
-            deliver="telegram",
-        ))
+        webhook_command(
+            _make_args(
+                webhook_action="subscribe",
+                name="ev",
+                cron_job="sweeper",
+                deliver_only=True,
+                deliver="telegram",
+            )
+        )
         assert "ev" not in _load_subscriptions()
 
-class TestRemove:
 
+class TestRemove:
     def test_selective_remove(self):
         webhook_command(_make_args(webhook_action="subscribe", name="keep"))
         webhook_command(_make_args(webhook_action="subscribe", name="drop"))
@@ -239,8 +275,8 @@ class TestRemove:
         assert "keep" in subs
         assert "drop" not in subs
 
-class TestPersistence:
 
+class TestPersistence:
     def test_corrupted_file(self):
         path = _subscriptions_path()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,7 +287,9 @@ class TestPersistence:
     def test_save_creates_secret_file_owner_only_under_permissive_umask(self):
         old_umask = os.umask(0o022)
         try:
-            _mutate_subscriptions(lambda s: s.update(demo={"secret": "TOPSECRET", "prompt": "x"}))
+            _mutate_subscriptions(
+                lambda s: s.update(demo={"secret": "TOPSECRET", "prompt": "x"})
+            )
         finally:
             os.umask(old_umask)
 
@@ -267,13 +305,15 @@ class TestPersistence:
         path.write_text(json.dumps({"old": {"secret": "stale", "prompt": "x"}}))
         path.chmod(0o644)
 
-        _mutate_subscriptions(lambda s: s.update(demo={"secret": "FRESH", "prompt": "x"}))
+        _mutate_subscriptions(
+            lambda s: s.update(demo={"secret": "FRESH", "prompt": "x"})
+        )
 
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         assert "FRESH" in path.read_text(encoding="utf-8")
 
-class TestWebhookEnabledGate:
 
+class TestWebhookEnabledGate:
     def test_blocks_list_when_disabled(self, capsys, monkeypatch):
         monkeypatch.setattr("clawk_cli.webhook._is_webhook_enabled", lambda: False)
         webhook_command(_make_args(webhook_action="list"))

@@ -1,4 +1,5 @@
 """Managed FAL adapter against the installed SDK; only HTTP leaves are replaced."""
+
 import json
 from types import SimpleNamespace
 
@@ -7,8 +8,11 @@ import httpx
 import pytest
 
 from tools.fal_common import (
-    _ManagedFalSyncClient, _extract_http_status, _managed_fal_billing_error,
-    _normalize_fal_queue_url_format, import_fal_client,
+    _ManagedFalSyncClient,
+    _extract_http_status,
+    _managed_fal_billing_error,
+    _normalize_fal_queue_url_format,
+    import_fal_client,
 )
 
 
@@ -41,8 +45,10 @@ def transport(monkeypatch):
 
 def accepted():
     return 200, {
-        "request_id": "r1", "response_url": "https://queue.test/result",
-        "status_url": "https://queue.test/status", "cancel_url": "https://queue.test/cancel",
+        "request_id": "r1",
+        "response_url": "https://queue.test/result",
+        "status_url": "https://queue.test/status",
+        "cancel_url": "https://queue.test/cancel",
     }
 
 
@@ -50,28 +56,53 @@ def accepted():
 def test_sdk_submit_preserves_wire_contract(transport, path):
     requests, replies = transport
     replies.append(accepted())
-    client = _ManagedFalSyncClient(fal_client, key="test-token", queue_run_origin="  https://queue.test///  ")
+    client = _ManagedFalSyncClient(
+        fal_client, key="test-token", queue_run_origin="  https://queue.test///  "
+    )
     assert isinstance(client._sync_client, fal_client.SyncClient)
     object.__setattr__(client._sync_client, "default_timeout", 37)
     headers = {"X-Custom": "kept", "X-Idempotency-Key": "one-operation"}
-    handle = client.submit("app", {"prompt": "local fixture"}, path=path, hint="runner",
-                           webhook_url="https://hook.test/cb?a=1", priority="low",
-                           start_timeout=60, headers=headers)
+    handle = client.submit(
+        "app",
+        {"prompt": "local fixture"},
+        path=path,
+        hint="runner",
+        webhook_url="https://hook.test/cb?a=1",
+        priority="low",
+        start_timeout=60,
+        headers=headers,
+    )
     assert len(requests) == 1
     request = requests[0]
     assert request.method == "POST"
-    assert str(request.url) == "https://queue.test/app/sub/path?fal_webhook=https%3A%2F%2Fhook.test%2Fcb%3Fa%3D1"
+    assert (
+        str(request.url)
+        == "https://queue.test/app/sub/path?fal_webhook=https%3A%2F%2Fhook.test%2Fcb%3Fa%3D1"
+    )
     assert json.loads(request.content) == {"prompt": "local fixture"}
     for key, value in {
-        "authorization": "Key test-token", "x-custom": "kept", "x-idempotency-key": "one-operation",
-        "x-fal-runner-hint": "runner", "x-fal-queue-priority": "low", "x-fal-request-timeout": "60.0",
+        "authorization": "Key test-token",
+        "x-custom": "kept",
+        "x-idempotency-key": "one-operation",
+        "x-fal-runner-hint": "runner",
+        "x-fal-queue-priority": "low",
+        "x-fal-request-timeout": "60.0",
     }.items():
         assert request.headers[key] == value
     assert request.extensions["timeout"]["read"] == 37
     assert headers == {"X-Custom": "kept", "X-Idempotency-Key": "one-operation"}
     assert isinstance(handle, fal_client.client.SyncRequestHandle)
-    assert (handle.request_id, handle.response_url, handle.status_url, handle.cancel_url) == (
-        "r1", "https://queue.test/result", "https://queue.test/status", "https://queue.test/cancel")
+    assert (
+        handle.request_id,
+        handle.response_url,
+        handle.status_url,
+        handle.cancel_url,
+    ) == (
+        "r1",
+        "https://queue.test/result",
+        "https://queue.test/status",
+        "https://queue.test/cancel",
+    )
     assert handle.client is client._http_client
 
 
@@ -79,14 +110,34 @@ def test_sdk_submit_preserves_wire_contract(transport, path):
 @pytest.mark.parametrize("keyed", [True, False])
 def test_keyed_errors_survive_without_duplicate_submission(transport, status, keyed):
     requests, replies = transport
-    body = {"error": {"code": "BILLING_ERROR", "message": "meter disabled",
-                       "details": {"upstreamPayload": {"code": "meter_missing", "error": "not configured"}}}}
-    replies.extend([httpx.ConnectError("connection lost") if status == "transport" else (status, body), accepted()])
-    client = _ManagedFalSyncClient(fal_client, key="token", queue_run_origin="https://queue.test")
+    body = {
+        "error": {
+            "code": "BILLING_ERROR",
+            "message": "meter disabled",
+            "details": {
+                "upstreamPayload": {"code": "meter_missing", "error": "not configured"}
+            },
+        }
+    }
+    replies.extend(
+        [
+            httpx.ConnectError("connection lost")
+            if status == "transport"
+            else (status, body),
+            accepted(),
+        ]
+    )
+    client = _ManagedFalSyncClient(
+        fal_client, key="token", queue_run_origin="https://queue.test"
+    )
     headers = {"x-IDEMPOTENCY-key": "operation"} if keyed else None
     # A JSON 503 is an application error, not the SDK's retryable ingress 503.
     if keyed or status in (402, 503):
-        error = httpx.ConnectError if status == "transport" else fal_client.client.FalClientHTTPError
+        error = (
+            httpx.ConnectError
+            if status == "transport"
+            else fal_client.client.FalClientHTTPError
+        )
         with pytest.raises(error) as caught:
             client.submit("app", {}, headers=headers)
         assert len(requests) == 1
@@ -107,45 +158,74 @@ def test_empty_origin_refused(origin):
         _normalize_fal_queue_url_format(origin)
 
 
-@pytest.mark.parametrize("response_status,status,expected", [
-    (404, None, 404), (None, 500, 500), (None, None, None),
-    ("bad", None, None), (None, "bad", None), (200, 500, 200), ("bad", 503, 503),
-])
+@pytest.mark.parametrize(
+    "response_status,status,expected",
+    [
+        (404, None, 404),
+        (None, 500, 500),
+        (None, None, None),
+        ("bad", None, None),
+        (None, "bad", None),
+        (200, 500, 200),
+        ("bad", 503, 503),
+    ],
+)
 def test_exception_status_shapes(response_status, status, expected):
-    exc = SimpleNamespace(response=SimpleNamespace(status_code=response_status), status_code=status)
+    exc = SimpleNamespace(
+        response=SimpleNamespace(status_code=response_status), status_code=status
+    )
     assert _extract_http_status(exc) == expected
     assert _extract_http_status(Exception("plain")) is None
 
 
-@pytest.mark.parametrize("missing,message", [
-    ("SyncClient", "fal_client.SyncClient"), ("client", "fal_client.client"),
-    ("_client", "SyncClient._client"), ("_maybe_retry_request", "request helpers"),
-    ("_raise_for_status", "request helpers"), ("SyncRequestHandle", "SyncRequestHandle"),
-])
+@pytest.mark.parametrize(
+    "missing,message",
+    [
+        ("SyncClient", "fal_client.SyncClient"),
+        ("client", "fal_client.client"),
+        ("_client", "SyncClient._client"),
+        ("_maybe_retry_request", "request helpers"),
+        ("_raise_for_status", "request helpers"),
+        ("SyncRequestHandle", "SyncRequestHandle"),
+    ],
+)
 def test_missing_sdk_surface_is_actionable(transport, monkeypatch, missing, message):
     owner = fal_client if missing in {"SyncClient", "client"} else fal_client.client
     if missing == "_client":
         owner = fal_client.SyncClient
     monkeypatch.setattr(owner, missing, None)
     with pytest.raises(RuntimeError, match=message):
-        _ManagedFalSyncClient(fal_client, key="token", queue_run_origin="https://queue.test")
+        _ManagedFalSyncClient(
+            fal_client, key="token", queue_run_origin="https://queue.test"
+        )
 
 
-@pytest.mark.parametrize("helper,options,message", [
-    ("add_priority_header", {"priority": "low"}, "add_priority_header"),
-    ("add_timeout_header", {"start_timeout": 60}, "add_timeout_header"),
-])
-def test_optional_sdk_surface_refused_before_http(transport, monkeypatch, helper, options, message):
+@pytest.mark.parametrize(
+    "helper,options,message",
+    [
+        ("add_priority_header", {"priority": "low"}, "add_priority_header"),
+        ("add_timeout_header", {"start_timeout": 60}, "add_timeout_header"),
+    ],
+)
+def test_optional_sdk_surface_refused_before_http(
+    transport, monkeypatch, helper, options, message
+):
     monkeypatch.setattr(fal_client.client, helper, None)
-    client = _ManagedFalSyncClient(fal_client, key="token", queue_run_origin="https://queue.test")
+    client = _ManagedFalSyncClient(
+        fal_client, key="token", queue_run_origin="https://queue.test"
+    )
     with pytest.raises(RuntimeError, match=message):
         client.submit("app", {}, **options)
     assert transport[0] == []
 
 
-@pytest.mark.parametrize("failure", [None, ImportError("external SDK"), RuntimeError("PM acquisition failed")])
+@pytest.mark.parametrize(
+    "failure",
+    [None, ImportError("external SDK"), RuntimeError("PM acquisition failed")],
+)
 def test_import_adapter_keeps_pm_failure_policy(monkeypatch, failure):
     import pm
+
     calls = []
 
     def ensure(feature):
@@ -164,22 +244,34 @@ def test_import_adapter_keeps_pm_failure_policy(monkeypatch, failure):
 
 def test_import_adapter_runs_real_pm_availability_without_install(monkeypatch):
     import pm.client
-    monkeypatch.setattr(pm.client, "sync_venv", lambda *a, **kw: pytest.fail("available SDK must not install"))
+
+    monkeypatch.setattr(
+        pm.client,
+        "sync_venv",
+        lambda *a, **kw: pytest.fail("available SDK must not install"),
+    )
     assert import_fal_client() is fal_client
 
 
 def test_external_sdk_remains_importable_without_pm(monkeypatch):
     import sys
+
     monkeypatch.setitem(sys.modules, "pm", None)
     assert import_fal_client() is fal_client
 
 
 @pytest.mark.parametrize("timeout,expected", [(None, 120.0), (300.0, 300.0)])
-def test_older_sdk_timeout_default_and_optional_hint(transport, monkeypatch, timeout, expected):
+def test_older_sdk_timeout_default_and_optional_hint(
+    transport, monkeypatch, timeout, expected
+):
     monkeypatch.setattr(fal_client.client, "add_hint_header", None)
-    client = _ManagedFalSyncClient(fal_client, key="token", queue_run_origin="https://queue.test")
+    client = _ManagedFalSyncClient(
+        fal_client, key="token", queue_run_origin="https://queue.test"
+    )
     # Keep its real HTTP client and request helpers, vary only older SDK metadata.
-    client._sync_client = SimpleNamespace(**({} if timeout is None else {"default_timeout": timeout}))
+    client._sync_client = SimpleNamespace(
+        **({} if timeout is None else {"default_timeout": timeout})
+    )
     transport[1].append(accepted())
     assert client.submit("app", {}, hint="ignored-on-old-sdk").request_id == "r1"
     assert transport[0][0].extensions["timeout"]["read"] == expected
@@ -194,10 +286,25 @@ def test_image_wait_polls_queue_status_at_gateway_cadence(transport, monkeypatch
     requests, replies = transport
     sleeps = []
     monkeypatch.setattr(fal_client.client.time, "sleep", sleeps.append)
-    replies.extend([accepted(), (200, {"status": "IN_QUEUE", "queue_position": 0}),
-                    (200, {"status": "IN_PROGRESS", "logs": None}),
-                    *[(200, {"status": "COMPLETED", "logs": None})] * 2, (200, {"images": ["done"]})])
-    handle = _ManagedFalSyncClient(fal_client, key="token", queue_run_origin="https://queue.test").submit("app", {})
+    replies.extend(
+        [
+            accepted(),
+            (200, {"status": "IN_QUEUE", "queue_position": 0}),
+            (200, {"status": "IN_PROGRESS", "logs": None}),
+            *[(200, {"status": "COMPLETED", "logs": None})] * 2,
+            (200, {"images": ["done"]}),
+        ]
+    )
+    handle = _ManagedFalSyncClient(
+        fal_client, key="token", queue_run_origin="https://queue.test"
+    ).submit("app", {})
     assert image_tool._wait_fal_result(handle) == {"images": ["done"]}
     assert sleeps == [FAL_QUEUE_POLL_SECONDS] * 2
-    assert [r.url.path for r in requests] == ["/app", "/status", "/status", "/status", "/status", "/result"]
+    assert [r.url.path for r in requests] == [
+        "/app",
+        "/status",
+        "/status",
+        "/status",
+        "/status",
+        "/result",
+    ]

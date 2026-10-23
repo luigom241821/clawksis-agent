@@ -68,8 +68,14 @@ class ChaosFakeAdapter(BasePlatformAdapter):
             last = now
             ticks += 1
             if now - last_report >= HEARTBEAT_REPORT_S:
-                self._emit({"ev": "hb", "max_gap": round(window_max, 3), "ticks": ticks,
-                            "busy": sorted(self._active_sessions)})
+                self._emit(
+                    {
+                        "ev": "hb",
+                        "max_gap": round(window_max, 3),
+                        "ticks": ticks,
+                        "busy": sorted(self._active_sessions),
+                    }
+                )
                 window_max = 0.0
                 last_report = now
 
@@ -90,11 +96,19 @@ class ChaosFakeAdapter(BasePlatformAdapter):
         chat = str(cmd.get("chat") or "chaos-chat")
         msg_id = str(cmd.get("id") or uuid.uuid4().hex)
         source = self.build_source(
-            chat_id=chat, chat_name=chat, chat_type="dm",
-            user_id="chaos-user", user_name="chaos-user", message_id=msg_id)
+            chat_id=chat,
+            chat_name=chat,
+            chat_type="dm",
+            user_id="chaos-user",
+            user_name="chaos-user",
+            message_id=msg_id,
+        )
         event = MessageEvent(
-            text=str(cmd.get("text") or ""), message_type=MessageType.TEXT,
-            source=source, message_id=msg_id)
+            text=str(cmd.get("text") or ""),
+            message_type=MessageType.TEXT,
+            source=source,
+            message_id=msg_id,
+        )
         await self.handle_message(event)
 
     # -- BasePlatformAdapter -------------------------------------------------
@@ -129,15 +143,32 @@ class ChaosFakeAdapter(BasePlatformAdapter):
                 pass
             self._writer = None
 
-    async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None,
-                   metadata: Optional[dict[str, Any]] = None) -> SendResult:
+    async def send(
+        self,
+        chat_id: str,
+        content: str,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> SendResult:
         self._seq += 1
         message_id = f"chaos-out-{self._seq}"
-        self._emit({"ev": "send", "chat": str(chat_id), "text": content, "id": message_id})
+        self._emit(
+            {"ev": "send", "chat": str(chat_id), "text": content, "id": message_id}
+        )
         return SendResult(success=True, message_id=message_id)
 
-    async def edit_message(self, chat_id: str, message_id: str, content: str, **_kw: Any) -> SendResult:
-        self._emit({"ev": "send", "chat": str(chat_id), "text": content, "id": message_id, "edit": True})
+    async def edit_message(
+        self, chat_id: str, message_id: str, content: str, **_kw: Any
+    ) -> SendResult:
+        self._emit(
+            {
+                "ev": "send",
+                "chat": str(chat_id),
+                "text": content,
+                "id": message_id,
+                "edit": True,
+            }
+        )
         return SendResult(success=True, message_id=message_id)
 
     async def on_processing_start(self, event: MessageEvent) -> None:

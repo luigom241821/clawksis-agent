@@ -18,7 +18,15 @@ from __future__ import annotations
 from pydantic import Field
 
 from .base import JsonValue, Payload, WireEnum
-from .common import MessageReaction, PlanGauge, SessionLiveInfo, SubagentStatus, ToolLabel, ToolLabelKind, Usage
+from .common import (
+    MessageReaction,
+    PlanGauge,
+    SessionLiveInfo,
+    SubagentStatus,
+    ToolLabel,
+    ToolLabelKind,
+    Usage,
+)
 from .config_free_tier_control import FreeTierChallengePayload, SessionControlSnapshot
 from .registry import event
 
@@ -60,10 +68,16 @@ class GatewayReadyPayload(Payload):
     session_authority: bool | None = None
 
 
-event("gateway.ready", GatewayReadyPayload,
-      doc="First frame of a connection: the resolved skin, the change-event capability and the replay epoch.")
-event("skin.changed", SkinPayload,
-      doc="The active skin moved (name switch or live colour edit); repaint from this palette.")
+event(
+    "gateway.ready",
+    GatewayReadyPayload,
+    doc="First frame of a connection: the resolved skin, the change-event capability and the replay epoch.",
+)
+event(
+    "skin.changed",
+    SkinPayload,
+    doc="The active skin moved (name switch or live colour edit); repaint from this palette.",
+)
 
 
 class SetupReadyPayload(OpenPayload):
@@ -100,15 +114,24 @@ class OnboardingEndedPayload(Payload):
     outcome: OnboardingOutcome
 
 
-event("onboarding.ended", OnboardingEndedPayload,
-      doc="A first-run onboarding run ended; sent to every connected window.")
-event("setup.ready", SetupReadyPayload,
-      doc="The free-tier bootstrap finished (broadcast); the desktop's setup gate reads the record.")
+event(
+    "onboarding.ended",
+    OnboardingEndedPayload,
+    doc="A first-run onboarding run ended; sent to every connected window.",
+)
+event(
+    "setup.ready",
+    SetupReadyPayload,
+    doc="The free-tier bootstrap finished (broadcast); the desktop's setup gate reads the record.",
+)
 
 
-event("free_tier.challenge", FreeTierChallengePayload,
-      doc="The account service wants a browser challenge cleared before the free-tier token exchange "
-          "(broadcast); the desktop loads ``url`` in a hidden window.")
+event(
+    "free_tier.challenge",
+    FreeTierChallengePayload,
+    doc="The account service wants a browser challenge cleared before the free-tier token exchange "
+    "(broadcast); the desktop loads ``url`` in a hidden window.",
+)
 
 
 class ErrorPayload(Payload):
@@ -117,7 +140,11 @@ class ErrorPayload(Payload):
     message: str
 
 
-event("error", ErrorPayload, doc="A session-level failure outside a turn (agent init, model switch, compression, resume).")
+event(
+    "error",
+    ErrorPayload,
+    doc="A session-level failure outside a turn (agent init, model switch, compression, resume).",
+)
 
 
 class NoticePayload(Payload):
@@ -126,7 +153,11 @@ class NoticePayload(Payload):
     message: str
 
 
-event("notice", NoticePayload, doc="Informational one-liner for the session (capabilities refreshed).")
+event(
+    "notice",
+    NoticePayload,
+    doc="Informational one-liner for the session (capabilities refreshed).",
+)
 
 
 # ── turn stream ───────────────────────────────────────────────────────────────────────────────
@@ -144,8 +175,11 @@ class MessageStartPayload(Payload):
     text: str | None = None
 
 
-event("message.start", MessageStartPayload,
-      doc="A turn began streaming; an automation turn carries its async-result card.")
+event(
+    "message.start",
+    MessageStartPayload,
+    doc="A turn began streaming; an automation turn carries its async-result card.",
+)
 
 
 class StreamDeltaPayload(Payload):
@@ -166,10 +200,26 @@ class MessageDeltaPayload(StreamDeltaPayload):
     text: str | None
 
 
-event("message.delta", MessageDeltaPayload, doc="One streamed chunk of the assistant reply (null text: segment boundary).")
-event("reasoning.delta", StreamDeltaPayload, doc="One streamed chunk of the model's reasoning.")
-event("reasoning.available", StreamDeltaPayload, doc="A completed reasoning block (non-streaming providers).")
-event("thinking.delta", StreamDeltaPayload, doc="Legacy thinking-text chunk (thinking_callback).")
+event(
+    "message.delta",
+    MessageDeltaPayload,
+    doc="One streamed chunk of the assistant reply (null text: segment boundary).",
+)
+event(
+    "reasoning.delta",
+    StreamDeltaPayload,
+    doc="One streamed chunk of the model's reasoning.",
+)
+event(
+    "reasoning.available",
+    StreamDeltaPayload,
+    doc="A completed reasoning block (non-streaming providers).",
+)
+event(
+    "thinking.delta",
+    StreamDeltaPayload,
+    doc="Legacy thinking-text chunk (thinking_callback).",
+)
 
 
 class MessageInterimPayload(Payload):
@@ -179,8 +229,11 @@ class MessageInterimPayload(Payload):
     already_streamed: bool
 
 
-event("message.interim", MessageInterimPayload,
-      doc="Interim assistant commentary (text beside tool calls) sealed as its own segment.")
+event(
+    "message.interim",
+    MessageInterimPayload,
+    doc="Interim assistant commentary (text beside tool calls) sealed as its own segment.",
+)
 
 
 class TurnStatus(WireEnum):
@@ -196,7 +249,7 @@ class UsageLimitSuggestion(Payload):
 
     model: str
     label: str
-    note: str                    # "free" | "included"
+    note: str  # "free" | "included"
     provider: str = "nous"
 
 
@@ -290,7 +343,11 @@ class MessageCompletePayload(Payload):
     persisted_turn: PersistedTurn | None = None
 
 
-event("message.complete", MessageCompletePayload, doc="The turn ended: final text, usage and outcome.")
+event(
+    "message.complete",
+    MessageCompletePayload,
+    doc="The turn ended: final text, usage and outcome.",
+)
 
 
 class StatusUpdatePayload(Payload):
@@ -300,7 +357,11 @@ class StatusUpdatePayload(Payload):
     text: str
 
 
-event("status.update", StatusUpdatePayload, doc="Transient status line (kind: status, lifecycle, compacting, goal, loop, heartbeat, process, …).")
+event(
+    "status.update",
+    StatusUpdatePayload,
+    doc="Transient status line (kind: status, lifecycle, compacting, goal, loop, heartbeat, process, …).",
+)
 
 
 class SessionUsagePayload(Payload):
@@ -339,7 +400,11 @@ class SessionUsagePayload(Payload):
     plan_gauge: PlanGauge | None = None
 
 
-event("session.usage", SessionUsagePayload, doc="Mid-turn usage tick; message.complete carries the authoritative final usage.")
+event(
+    "session.usage",
+    SessionUsagePayload,
+    doc="Mid-turn usage tick; message.complete carries the authoritative final usage.",
+)
 
 
 class SessionTitlePayload(Payload):
@@ -349,7 +414,11 @@ class SessionTitlePayload(Payload):
     title: str
 
 
-event("session.title", SessionTitlePayload, doc="Auto-titling renamed the session (``session_id`` is the stored key).")
+event(
+    "session.title",
+    SessionTitlePayload,
+    doc="Auto-titling renamed the session (``session_id`` is the stored key).",
+)
 
 
 class ReactionPayload(Payload):
@@ -358,7 +427,11 @@ class ReactionPayload(Payload):
     kind: str
 
 
-event("reaction", ReactionPayload, doc="Affection reaction detected in the user's message (hearts etc.).")
+event(
+    "reaction",
+    ReactionPayload,
+    doc="Affection reaction detected in the user's message (hearts etc.).",
+)
 
 
 class ReviewSummaryPayload(Payload):
@@ -367,7 +440,11 @@ class ReviewSummaryPayload(Payload):
     text: str
 
 
-event("review.summary", ReviewSummaryPayload, doc="Background review of the last turn finished.")
+event(
+    "review.summary",
+    ReviewSummaryPayload,
+    doc="Background review of the last turn finished.",
+)
 
 
 class AgentPrintPayload(Payload):
@@ -378,7 +455,11 @@ class AgentPrintPayload(Payload):
     text: str
 
 
-event("agent.print", AgentPrintPayload, doc="A status line the agent printed during a local viewer's turn.")
+event(
+    "agent.print",
+    AgentPrintPayload,
+    doc="A status line the agent printed during a local viewer's turn.",
+)
 
 
 # ── tools ─────────────────────────────────────────────────────────────────────────────────────
@@ -406,7 +487,9 @@ class ToolCompletePayload(Payload):
 
     tool_id: str
     name: str
-    args: dict[str, JsonValue] | None = None  # mirrored child rows / room relays omit it
+    args: dict[str, JsonValue] | None = (
+        None  # mirrored child rows / room relays omit it
+    )
     duration_s: float | None = None
     result: JsonValue = None
     summary: str | None = None
@@ -417,7 +500,11 @@ class ToolCompletePayload(Payload):
     labels: list[ToolLabel] | None = None
 
 
-event("tool.complete", ToolCompletePayload, doc="A tool call finished: parsed result, summary, optional diff / todo snapshot.")
+event(
+    "tool.complete",
+    ToolCompletePayload,
+    doc="A tool call finished: parsed result, summary, optional diff / todo snapshot.",
+)
 
 
 class ToolGeneratingPayload(Payload):
@@ -426,7 +513,11 @@ class ToolGeneratingPayload(Payload):
     name: str
 
 
-event("tool.generating", ToolGeneratingPayload, doc="The model is emitting a tool call's arguments.")
+event(
+    "tool.generating",
+    ToolGeneratingPayload,
+    doc="The model is emitting a tool call's arguments.",
+)
 
 
 class ToolOutputRiskPayload(Payload):
@@ -439,7 +530,11 @@ class ToolOutputRiskPayload(Payload):
     redacted: bool
 
 
-event("tool.output_risk", ToolOutputRiskPayload, doc="Tool output was classified as risky (prompt-injection / secret findings).")
+event(
+    "tool.output_risk",
+    ToolOutputRiskPayload,
+    doc="Tool output was classified as risky (prompt-injection / secret findings).",
+)
 
 
 class ToolProgressPayload(Payload):
@@ -454,7 +549,11 @@ class ToolProgressPayload(Payload):
     message: str | None = None
 
 
-event("tool.progress", ToolProgressPayload, doc="Live progress of a running tool call (MCP notifications/progress).")
+event(
+    "tool.progress",
+    ToolProgressPayload,
+    doc="Live progress of a running tool call (MCP notifications/progress).",
+)
 
 
 class TodoUpdatedPayload(Payload):
@@ -464,7 +563,9 @@ class TodoUpdatedPayload(Payload):
     revision: int
 
 
-event("todo.updated", TodoUpdatedPayload, doc="Full todo snapshot after a todo tool ran.")
+event(
+    "todo.updated", TodoUpdatedPayload, doc="Full todo snapshot after a todo tool ran."
+)
 
 
 # ── notifications ─────────────────────────────────────────────────────────────────────────────
@@ -489,8 +590,16 @@ class NotificationClearPayload(Payload):
     key: str
 
 
-event("notification.show", NotificationShowPayload, doc="Show / replace a keyed out-of-band notice (toast or status bar).")
-event("notification.clear", NotificationClearPayload, doc="Withdraw the notice with this key.")
+event(
+    "notification.show",
+    NotificationShowPayload,
+    doc="Show / replace a keyed out-of-band notice (toast or status bar).",
+)
+event(
+    "notification.clear",
+    NotificationClearPayload,
+    doc="Withdraw the notice with this key.",
+)
 
 
 class TipShowPayload(Payload):
@@ -502,7 +611,11 @@ class TipShowPayload(Payload):
     side: str | None = None
 
 
-event("tip.show", TipShowPayload, doc="Point at a desktop element with a one-line tip bubble.")
+event(
+    "tip.show",
+    TipShowPayload,
+    doc="Point at a desktop element with a one-line tip bubble.",
+)
 
 
 # ── session lifecycle ─────────────────────────────────────────────────────────────────────────
@@ -510,8 +623,11 @@ event("tip.show", TipShowPayload, doc="Point at a desktop element with a one-lin
 
 # SessionLiveInfo is a Result (it is also the ``info`` of create/resume/activate); the registry only
 # needs ``model_validate`` and the generator renders one TS type either way.
-event("session.info", SessionLiveInfo,  # type: ignore[arg-type]
-      doc="Live session settings snapshot (``server._session_info``); also the ``info`` of create/resume/activate.")
+event(
+    "session.info",
+    SessionLiveInfo,  # type: ignore[arg-type]
+    doc="Live session settings snapshot (``server._session_info``); also the ``info`` of create/resume/activate.",
+)
 
 
 class ResumePhaseStatus(WireEnum):
@@ -529,7 +645,11 @@ class SessionResumeProgressPayload(Payload):
     message: str | None = None
 
 
-event("session.resume_progress", SessionResumeProgressPayload, doc="Deferred resume hydration progress.")
+event(
+    "session.resume_progress",
+    SessionResumeProgressPayload,
+    doc="Deferred resume hydration progress.",
+)
 
 
 class SessionReclaimedPayload(Payload):
@@ -540,7 +660,11 @@ class SessionReclaimedPayload(Payload):
     reason: str  # idle_timeout | lru_evict | ws_orphan_reap
 
 
-event("session.reclaimed", SessionReclaimedPayload, doc="The backend reclaimed a live session out from under its clients.")
+event(
+    "session.reclaimed",
+    SessionReclaimedPayload,
+    doc="The backend reclaimed a live session out from under its clients.",
+)
 
 
 class ApprovalCancelledPayload(Payload):
@@ -554,20 +678,29 @@ class ApprovalCancelledPayload(Payload):
 
     session_id: str
     stored_session_id: str
-    reason: str  # interrupt | ws_orphan_reap | idle_timeout | lru_evict | tui_close | ...
+    reason: (
+        str  # interrupt | ws_orphan_reap | idle_timeout | lru_evict | tui_close | ...
+    )
     cancelled_count: int
     request_ids: list[str]
 
 
-event("approval.cancelled", ApprovalCancelledPayload,
-      doc="Pending gateway approvals were dropped by interrupt/reap/teardown; the wait resolved as deny (not a user refusal).")
+event(
+    "approval.cancelled",
+    ApprovalCancelledPayload,
+    doc="Pending gateway approvals were dropped by interrupt/reap/teardown; the wait resolved as deny (not a user refusal).",
+)
 
 
 class SessionControlUpdatePayload(Payload):
     control: SessionControlSnapshot
 
 
-event("session.control.update", SessionControlUpdatePayload, doc="Persisted goal / loop / heartbeat state changed.")
+event(
+    "session.control.update",
+    SessionControlUpdatePayload,
+    doc="Persisted goal / loop / heartbeat state changed.",
+)
 
 
 class BillingStepUpVerificationPayload(Payload):
@@ -577,8 +710,11 @@ class BillingStepUpVerificationPayload(Payload):
     user_code: str
 
 
-event("billing.step_up.verification", BillingStepUpVerificationPayload,
-      doc="Device-flow URL + code for the billing scope step-up; the client opens the browser.")
+event(
+    "billing.step_up.verification",
+    BillingStepUpVerificationPayload,
+    doc="Device-flow URL + code for the billing scope step-up; the client opens the browser.",
+)
 
 
 # ── side agents (methods_prompt._spawn_side_agent) ────────────────────────────────────────────
@@ -592,9 +728,19 @@ class SideAgentCompletePayload(Payload):
     question: str | None = None
 
 
-event("background.complete", SideAgentCompletePayload, doc="A /background side agent finished.")
-event("btw.complete", SideAgentCompletePayload, doc="A /btw side question was answered.")
-event("preview.restart.complete", SideAgentCompletePayload, doc="The hidden preview-restart agent finished.")
+event(
+    "background.complete",
+    SideAgentCompletePayload,
+    doc="A /background side agent finished.",
+)
+event(
+    "btw.complete", SideAgentCompletePayload, doc="A /btw side question was answered."
+)
+event(
+    "preview.restart.complete",
+    SideAgentCompletePayload,
+    doc="The hidden preview-restart agent finished.",
+)
 
 
 class PreviewRestartProgressPayload(Payload):
@@ -605,7 +751,11 @@ class PreviewRestartProgressPayload(Payload):
     level: str | None = None
 
 
-event("preview.restart.progress", PreviewRestartProgressPayload, doc="Progress line from the preview-restart agent.")
+event(
+    "preview.restart.progress",
+    PreviewRestartProgressPayload,
+    doc="Progress line from the preview-restart agent.",
+)
 
 
 # ── subagents (tool_progress._progress_subagent) ──────────────────────────────────────────────
@@ -650,7 +800,10 @@ class SubagentEventPayload(Payload):
 
 
 for _name, _doc in (
-    ("subagent.spawn_requested", "delegate_task accepted a child goal (before the child starts)."),
+    (
+        "subagent.spawn_requested",
+        "delegate_task accepted a child goal (before the child starts).",
+    ),
     ("subagent.start", "A delegated child started running."),
     ("subagent.progress", "Batched tool-name progress from a child."),
     ("subagent.thinking", "A child's reasoning chunk."),
@@ -691,8 +844,14 @@ class MoaPhasePayload(Payload):
 
 event("moa.reference", MoaReferencePayload, doc="One MoA reference model's output.")
 event("moa.aggregating", MoaAggregatingPayload, doc="The MoA aggregator started.")
-event("moa.progress", MoaProgressPayload, doc="MoA reference fan-out progress (n/total).")
-event("moa.phase", MoaPhasePayload, doc="MoA phase transition (currently only ``aggregator``).")
+event(
+    "moa.progress", MoaProgressPayload, doc="MoA reference fan-out progress (n/total)."
+)
+event(
+    "moa.phase",
+    MoaPhasePayload,
+    doc="MoA phase transition (currently only ``aggregator``).",
+)
 
 
 # ── desktop GUI (tools/desktop_ui emitters) ──────────────────────────────────────────────────
@@ -711,7 +870,11 @@ class PreviewClosePayload(Payload):
     url: str = ""
 
 
-event("preview.open", PreviewOpenPayload, doc="Open a URL / file in the desktop preview pane.")
+event(
+    "preview.open",
+    PreviewOpenPayload,
+    doc="Open a URL / file in the desktop preview pane.",
+)
 event("preview.close", PreviewClosePayload, doc="Close the preview pane or one tab.")
 
 
@@ -732,7 +895,11 @@ class MessageReactionPayload(Payload):
     role: str
 
 
-event("message.reaction", MessageReactionPayload, doc="The agent reacted to a message; paint it live.")
+event(
+    "message.reaction",
+    MessageReactionPayload,
+    doc="The agent reacted to a message; paint it live.",
+)
 
 
 class TerminalOutputPayload(Payload):
@@ -746,8 +913,16 @@ class TerminalClosePayload(Payload):
     process_id: str
 
 
-event("agent.terminal.output", TerminalOutputPayload, doc="Output chunk from an agent-owned background process.")
-event("terminal.close", TerminalClosePayload, doc="An agent-owned background process closed.")
+event(
+    "agent.terminal.output",
+    TerminalOutputPayload,
+    doc="Output chunk from an agent-owned background process.",
+)
+event(
+    "terminal.close",
+    TerminalClosePayload,
+    doc="An agent-owned background process closed.",
+)
 
 
 class BrowserProgressPayload(Payload):
@@ -757,7 +932,11 @@ class BrowserProgressPayload(Payload):
     level: str
 
 
-event("browser.progress", BrowserProgressPayload, doc="Browser (CDP) connect / install progress line.")
+event(
+    "browser.progress",
+    BrowserProgressPayload,
+    doc="Browser (CDP) connect / install progress line.",
+)
 
 
 # ── browser controller (gateway/browser_control_broker frames re-enveloped as events) ─────────
@@ -781,14 +960,26 @@ class BrowserControllerCancelPayload(Payload):
     tool_call_id: str | None = None
 
 
-event("browser.controller.command", BrowserControllerCommandPayload, doc="Dispatch one browser action to the attached controller.")
-event("browser.controller.cancel", BrowserControllerCancelPayload, doc="Withdraw a pending controller command.")
+event(
+    "browser.controller.command",
+    BrowserControllerCommandPayload,
+    doc="Dispatch one browser action to the attached controller.",
+)
+event(
+    "browser.controller.cancel",
+    BrowserControllerCancelPayload,
+    doc="Withdraw a pending controller command.",
+)
 
 
 # ── voice ─────────────────────────────────────────────────────────────────────────────────────
 
 
-event("voice.interrupted", None, doc="Barge-in: the spoken interjection interrupted the turn; no payload.")
+event(
+    "voice.interrupted",
+    None,
+    doc="Barge-in: the spoken interjection interrupted the turn; no payload.",
+)
 
 
 class VoiceStatusPayload(Payload):
@@ -821,8 +1012,16 @@ class WakeDetectedPayload(Payload):
 
 
 event("voice.status", VoiceStatusPayload, doc="Voice recorder state changed.")
-event("voice.partial", VoicePartialPayload, doc="Live STT text so far while the user is still speaking.")
-event("voice.transcript", VoiceTranscriptPayload, doc="A voice capture produced text (or a stop phrase / silence limit).")
+event(
+    "voice.partial",
+    VoicePartialPayload,
+    doc="Live STT text so far while the user is still speaking.",
+)
+event(
+    "voice.transcript",
+    VoiceTranscriptPayload,
+    doc="A voice capture produced text (or a stop phrase / silence limit).",
+)
 event("wake.detected", WakeDetectedPayload, doc="A wake phrase fired.")
 
 
@@ -858,9 +1057,21 @@ class PetHatchProgressPayload(OpenPayload):
     total: str | None = None
 
 
-event("pet.changed", PetChangedPayload, doc="The active pet / its spritesheet changed (watcher).")
-event("pet.generate.progress", PetGenerateProgressPayload, doc="Pet base-draft generation progress.")
-event("pet.hatch.progress", PetHatchProgressPayload, doc="Pet hatch (row drawing) progress.")
+event(
+    "pet.changed",
+    PetChangedPayload,
+    doc="The active pet / its spritesheet changed (watcher).",
+)
+event(
+    "pet.generate.progress",
+    PetGenerateProgressPayload,
+    doc="Pet base-draft generation progress.",
+)
+event(
+    "pet.hatch.progress",
+    PetHatchProgressPayload,
+    doc="Pet hatch (row drawing) progress.",
+)
 
 
 # ── change watcher signals (payload is {} today) ─────────────────────────────────────────────
@@ -870,32 +1081,101 @@ class ChangeSignalPayload(OpenPayload):
     """``change_watcher._CHANGE_WATCHES`` payload fn — ``{}`` for every watch except pet.changed."""
 
 
-event("cron.changed", ChangeSignalPayload, doc="cron/jobs.json moved; refetch the cron list.")
-event("sessions.changed", ChangeSignalPayload, doc="state.db moved; refetch the session list.")
-event("platforms.changed", ChangeSignalPayload, doc="gateway_state.json moved; refetch platform status.")
-event("projects.changed", ChangeSignalPayload, doc="projects.db moved; refetch the project list + tree.")
-event("pairing.changed", ChangeSignalPayload, doc="Pairing state moved; refetch pairing.")
-event("skills.changed", ChangeSignalPayload,
-      doc="A skill root moved (installed/removed elsewhere); refetch commands.catalog from the gateway.")
-event("bot_relay.outbox.pending", ChangeSignalPayload, doc="A bot-relay outbox envelope is queued; drain it.")
+event(
+    "cron.changed",
+    ChangeSignalPayload,
+    doc="cron/jobs.json moved; refetch the cron list.",
+)
+event(
+    "sessions.changed",
+    ChangeSignalPayload,
+    doc="state.db moved; refetch the session list.",
+)
+event(
+    "platforms.changed",
+    ChangeSignalPayload,
+    doc="gateway_state.json moved; refetch platform status.",
+)
+event(
+    "projects.changed",
+    ChangeSignalPayload,
+    doc="projects.db moved; refetch the project list + tree.",
+)
+event(
+    "pairing.changed", ChangeSignalPayload, doc="Pairing state moved; refetch pairing."
+)
+event(
+    "skills.changed",
+    ChangeSignalPayload,
+    doc="A skill root moved (installed/removed elsewhere); refetch commands.catalog from the gateway.",
+)
+event(
+    "bot_relay.outbox.pending",
+    ChangeSignalPayload,
+    doc="A bot-relay outbox envelope is queued; drain it.",
+)
 
 
 __all__ = [
-    "BillingBlock", "BillingStepUpVerificationPayload", "BrowserControllerCancelPayload",
-    "BrowserControllerCommandPayload", "BrowserProgressPayload", "ChangeSignalPayload", "ErrorPayload",
-    "ErrorSurface", "FreeTierChallengePayload", "GatewayReadyPayload",
-    "MessageCompletePayload", "MessageInterimPayload", "MessageReaction", "MessageReactionPayload", "MoaAggregatingPayload",
-    "MoaPhasePayload", "MoaProgressPayload", "MoaReferencePayload", "NoticePayload",
-    "NotificationClearPayload", "NotificationShowPayload", "OpenPayload", "PaneRevealPayload",
-    "PetChangedPayload", "PetGenerateProgressPayload", "PetHatchProgressPayload", "PreviewClosePayload",
-    "PreviewOpenPayload", "PreviewRestartProgressPayload", "ReactionPayload", "ResumePhaseStatus",
-    "ReviewSummaryPayload", "SessionControlSnapshot", "SessionControlUpdatePayload",
-    "SessionReclaimedPayload", "SessionResumeProgressPayload", "SessionTitlePayload", "SessionUsagePayload",
-    "SetupReadyPayload", "SideAgentCompletePayload", "SkinPayload", "StatusUpdatePayload",
-    "StreamDeltaPayload", "SubagentEventPayload", "SubagentOutputTailEntry", "TerminalClosePayload",
-    "TerminalOutputPayload", "TipShowPayload", "TodoUpdatedPayload", "ToolCompletePayload",
-    "ToolGeneratingPayload", "ToolLabel", "ToolLabelKind", "ToolOutputRiskPayload", "ToolProgressPayload",
+    "BillingBlock",
+    "BillingStepUpVerificationPayload",
+    "BrowserControllerCancelPayload",
+    "BrowserControllerCommandPayload",
+    "BrowserProgressPayload",
+    "ChangeSignalPayload",
+    "ErrorPayload",
+    "ErrorSurface",
+    "FreeTierChallengePayload",
+    "GatewayReadyPayload",
+    "MessageCompletePayload",
+    "MessageInterimPayload",
+    "MessageReaction",
+    "MessageReactionPayload",
+    "MoaAggregatingPayload",
+    "MoaPhasePayload",
+    "MoaProgressPayload",
+    "MoaReferencePayload",
+    "NoticePayload",
+    "NotificationClearPayload",
+    "NotificationShowPayload",
+    "OpenPayload",
+    "PaneRevealPayload",
+    "PetChangedPayload",
+    "PetGenerateProgressPayload",
+    "PetHatchProgressPayload",
+    "PreviewClosePayload",
+    "PreviewOpenPayload",
+    "PreviewRestartProgressPayload",
+    "ReactionPayload",
+    "ResumePhaseStatus",
+    "ReviewSummaryPayload",
+    "SessionControlSnapshot",
+    "SessionControlUpdatePayload",
+    "SessionReclaimedPayload",
+    "SessionResumeProgressPayload",
+    "SessionTitlePayload",
+    "SessionUsagePayload",
+    "SetupReadyPayload",
+    "SideAgentCompletePayload",
+    "SkinPayload",
+    "StatusUpdatePayload",
+    "StreamDeltaPayload",
+    "SubagentEventPayload",
+    "SubagentOutputTailEntry",
+    "TerminalClosePayload",
+    "TerminalOutputPayload",
+    "TipShowPayload",
+    "TodoUpdatedPayload",
+    "ToolCompletePayload",
+    "ToolGeneratingPayload",
+    "ToolLabel",
+    "ToolLabelKind",
+    "ToolOutputRiskPayload",
+    "ToolProgressPayload",
     "ToolStartPayload",
-    "TurnStatus", "VoicePartialPayload", "VoiceStatusPayload",
-    "VoiceTranscriptPayload", "WakeDetectedPayload",
+    "TurnStatus",
+    "VoicePartialPayload",
+    "VoiceStatusPayload",
+    "VoiceTranscriptPayload",
+    "WakeDetectedPayload",
 ]

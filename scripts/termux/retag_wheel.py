@@ -76,9 +76,9 @@ def _read_metadata(archive: zipfile.ZipFile) -> tuple[str, str]:
     version = None
     for line in text.splitlines():
         if line.startswith("Name:"):
-            name = line[len("Name:"):].strip()
+            name = line[len("Name:") :].strip()
         elif line.startswith("Version:"):
-            version = line[len("Version:"):].strip()
+            version = line[len("Version:") :].strip()
         if name is not None and version is not None:
             break
     if not name or not version:
@@ -94,6 +94,7 @@ def _validate(archive: zipfile.ZipFile, filename: str, new_platform: str) -> str
         raise RetagError(f"{filename} is already an android-tagged wheel")
 
     name, meta_version = _read_metadata(archive)
+
     # PEP 503-normalized comparison: setuptools writes canonical lowercase
     # filenames while METADATA carries the display name (markupsafe vs
     # MarkupSafe). Case is not identity for package names.
@@ -126,7 +127,7 @@ def _validate(archive: zipfile.ZipFile, filename: str, new_platform: str) -> str
     if wheel_member not in archive.namelist():
         raise RetagError(f"missing {wheel_member}")
     tags = [
-        line[len("Tag:"):].strip()
+        line[len("Tag:") :].strip()
         for line in archive.read(wheel_member).decode("utf-8").splitlines()
         if line.startswith("Tag:")
     ]
@@ -153,9 +154,9 @@ def retag_wheel(wheel_path: str, new_platform: str) -> str:
     wheel_path = os.path.abspath(wheel_path)
     wheel_name = os.path.basename(wheel_path)
     distribution, version, python_tag, abi_tag, _ = parse_wheel_filename(wheel_name)
-    new_wheel_name = "-".join(
-        (distribution, version, python_tag, abi_tag, new_platform)
-    ) + ".whl"
+    new_wheel_name = (
+        "-".join((distribution, version, python_tag, abi_tag, new_platform)) + ".whl"
+    )
 
     with zipfile.ZipFile(wheel_path, "r") as archive:
         dist_info_prefix = _validate(archive, wheel_name, new_platform)
@@ -166,7 +167,7 @@ def retag_wheel(wheel_path: str, new_platform: str) -> str:
         new_wheel_lines = []
         for line in old_wheel_text.splitlines():
             if line.startswith("Tag:"):
-                fields = line[len("Tag:"):].strip().split("-")
+                fields = line[len("Tag:") :].strip().split("-")
                 new_tag = "-".join((fields[0], fields[1], new_platform))
                 new_wheel_lines.append("Tag: " + new_tag)
             else:

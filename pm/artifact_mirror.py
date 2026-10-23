@@ -1,4 +1,5 @@
 """Public, content-addressed copies of reviewed binary inputs."""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +10,9 @@ import re
 from pm.downloader import Source
 from pm.index_config import npm_registry_url
 
-_LAYOUT = json.loads(Path(__file__).with_name("artifact-mirror.json").read_text(encoding="utf-8-sig"))
+_LAYOUT = json.loads(
+    Path(__file__).with_name("artifact-mirror.json").read_text(encoding="utf-8-sig")
+)
 KEY_PREFIX = _LAYOUT["prefix"]
 PUBLIC_PREFIX = _LAYOUT["origin"] + "/" + KEY_PREFIX
 

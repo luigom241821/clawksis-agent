@@ -10,9 +10,20 @@ import subprocess
 import sys
 from pathlib import Path
 from clawk_cli.colors import Colors, color
-from clawk_cli.config import is_nix_install_method, recommended_update_command_for_method
+from clawk_cli.config import (
+    is_nix_install_method,
+    recommended_update_command_for_method,
+)
 from clawk_cli.doctor_report import (
-    Finding, _fail_and_issue, _section, check_bool, check_fail, check_info, check_ok, check_warn, doctor_check,
+    Finding,
+    _fail_and_issue,
+    _section,
+    check_bool,
+    check_fail,
+    check_info,
+    check_ok,
+    check_warn,
+    doctor_check,
     warn_on_error,
 )
 from clawk_constants import is_termux as _is_termux
@@ -27,7 +38,9 @@ def _python_repair_hint() -> str:
         return recommended_update_command_for_method(method)
     if method in ("docker", "apt"):
         command = recommended_update_command_for_method(method)
-        return f"Run `{command}`" + (", then recreate the Clawksis container" if method == "docker" else "")
+        return f"Run `{command}`" + (
+            ", then recreate the Clawksis container" if method == "docker" else ""
+        )
     return "Run `clawk pm repair`, then restart Clawksis"
 
 
@@ -39,17 +52,27 @@ def _sqlite_upgrade_hint(install_method: str | None = None) -> str:
     """Return an actionable SQLite upgrade hint for this install layout."""
     from clawk_cli.doctor import PROJECT_ROOT
     from clawk_cli.config import detect_install_method
+
     method = install_method or detect_install_method(PROJECT_ROOT)
     cmd = recommended_update_command_for_method(method)
-    action = cmd if is_nix_install_method(method) else {  # nix: prose guidance, not a shell command
-        "docker": f"run `{cmd}`, then recreate all Clawksis containers", "apt": f"run `{cmd}`"}.get(method, "run `clawk update`")
+    action = (
+        cmd
+        if is_nix_install_method(method)
+        else {  # nix: prose guidance, not a shell command
+            "docker": f"run `{cmd}`, then recreate all Clawksis containers",
+            "apt": f"run `{cmd}`",
+        }.get(method, "run `clawk update`")
+    )
     return f"({action}; fixed versions: 3.51.3+ / 3.50.7 / 3.44.6 — see https://sqlite.org/wal.html#walresetbug)"
 
 
 def _clawk_database_paths(clawk_home: Path) -> list[tuple[str, Path]]:
     """(display name, path) pairs for Clawksis-managed SQLite databases: backup.py's per-profile store list + per-board kanban.db."""
     from clawk_cli.backup import _QUICK_STATE_FILES
-    entries = [(name, clawk_home / name) for name in _QUICK_STATE_FILES if name.endswith(".db")]
+
+    entries = [
+        (name, clawk_home / name) for name in _QUICK_STATE_FILES if name.endswith(".db")
+    ]
     for board_db in sorted((clawk_home / "kanban" / "boards").glob("*/kanban.db")):
         entries.append((str(board_db.relative_to(clawk_home)), board_db))
     return entries
@@ -68,7 +91,11 @@ def _unreadable_reason(db_path: Path) -> str:
         db_path.stat()
     except OSError as exc:
         return str(exc)
-    return "file could not be read" if os.access(db_path, os.R_OK) else f"permission denied: {db_path}"
+    return (
+        "file could not be read"
+        if os.access(db_path, os.R_OK)
+        else f"permission denied: {db_path}"
+    )
 
 
 def _read_journal_mode(db_path: Path) -> tuple[str | None, str | None]:
@@ -79,20 +106,31 @@ def _read_journal_mode(db_path: Path) -> tuple[str | None, str | None]:
     process's POSIX advisory locks (see ``clawk_cli.sqlite_safe_read``), and the dashboard console runs
     ``run_doctor`` in-process with live ``SessionDB`` connections — the helper refuses then (unreadable).
     """
-    from clawk_cli.sqlite_safe_read import has_live_connection, read_header_bytes_preopen
+    from clawk_cli.sqlite_safe_read import (
+        has_live_connection,
+        read_header_bytes_preopen,
+    )
+
     header = read_header_bytes_preopen(db_path, length=20)
     if header is None:
-        return None, "database is open in this process" if has_live_connection(db_path) else _unreadable_reason(db_path)
+        return None, "database is open in this process" if has_live_connection(
+            db_path
+        ) else _unreadable_reason(db_path)
     if len(header) == 0:
         return None, "file is empty"
     if len(header) < 20 or not header.startswith(_SQLITE_HEADER_MAGIC):
         return None, "file is not a database"
     mode = {2: "wal", 1: "rollback"}.get(header[18])
-    return (mode, None) if mode else (None, f"unrecognized file-format version {header[18]}")
+    return (
+        (mode, None)
+        if mode
+        else (None, f"unrecognized file-format version {header[18]}")
+    )
 
 
 def _format_db_size(db_path: Path) -> str:
     from clawk_cli.sizefmt import format_bytes as _format_size
+
     try:
         return _format_size(db_path.stat().st_size)
     except OSError:
@@ -104,33 +142,52 @@ def _report_database_holders(name: str, db_path: Path) -> None:
     offline journal-mode conversion; a partial or unavailable scan is reported as "cannot prove quiet", never as
     an all-clear (the scan is the same fail-closed authority repair/VACUUM/checkpoint admission uses)."""
     from clawk_state_holders import describe_holder_pid, foreign_state_db_holders
+
     unknown: list[str] = []
     by_pid: dict[int, set[str]] = {}
     for pid, target in foreign_state_db_holders(db_path):
         if pid <= 0 or target.startswith("uninspectable"):
             unknown.append(target)
         else:
-            by_pid.setdefault(pid, set()).add(Path(target.removesuffix(" (deleted)")).name)
+            by_pid.setdefault(pid, set()).add(
+                Path(target.removesuffix(" (deleted)")).name
+            )
     for pid in sorted(by_pid):
-        check_info(f"{name} is held by {describe_holder_pid(pid)}: {', '.join(sorted(by_pid[pid]))}")
+        check_info(
+            f"{name} is held by {describe_holder_pid(pid)}: {', '.join(sorted(by_pid[pid]))}"
+        )
     if unknown:
-        check_warn(f"{name}: cannot prove the database is quiet",
-                   f"(holder scan incomplete: {unknown[0][:120]}" + (f"; +{len(unknown) - 1} more" if len(unknown) > 1 else "") + ")")
+        check_warn(
+            f"{name}: cannot prove the database is quiet",
+            f"(holder scan incomplete: {unknown[0][:120]}"
+            + (f"; +{len(unknown) - 1} more" if len(unknown) > 1 else "")
+            + ")",
+        )
     elif not by_pid:
-        check_info(f"{name}: no other process holds it right now — the offline conversion can run")
+        check_info(
+            f"{name}: no other process holds it right now — the offline conversion can run"
+        )
 
 
-def _report_database_journal_modes(clawk_home: Path | None = None, version_info: tuple[int, ...] | None = None) -> None:
+def _report_database_journal_modes(
+    clawk_home: Path | None = None, version_info: tuple[int, ...] | None = None
+) -> None:
     """List each database's journal mode; warn on WAL under a vulnerable SQLite, and on a configured
     ``database.journal_mode: delete`` that never took effect."""
     from clawk_cli.doctor import CLAWK_HOME
     from clawk_state_wal import (
-        _path_on_cross_vm_fs, _wal_reset_repair_hint, is_sqlite_wal_reset_vulnerable, resolve_journal_mode,
+        _path_on_cross_vm_fs,
+        _wal_reset_repair_hint,
+        is_sqlite_wal_reset_vulnerable,
+        resolve_journal_mode,
     )
+
     vulnerable = is_sqlite_wal_reset_vulnerable(version_info)
     configured = resolve_journal_mode()
     try:
-        databases = _clawk_database_paths(clawk_home if clawk_home is not None else CLAWK_HOME)
+        databases = _clawk_database_paths(
+            clawk_home if clawk_home is not None else CLAWK_HOME
+        )
     except Exception as exc:
         check_warn(f"Could not list Clawksis databases: {exc}")
         return
@@ -148,15 +205,20 @@ def _report_database_journal_modes(clawk_home: Path | None = None, version_info:
             # cross-VM hint's remedy ("set journal_mode: delete") is already applied.
             if vulnerable:
                 exposed.append(name)
-            check_warn(f"{name} is in WAL mode ({size}) despite database.journal_mode=delete",
-                       "(the setting never applied: an existing WAL database is never live-downgraded"
-                       + ("; also exposed to the WAL-reset bug" if vulnerable else "")
-                       + ". Stop every Clawksis process for this profile, then run "
-                       f"`clawk sessions set-journal-mode delete{'' if name == 'state.db' else f' --db {path}'}`)")
+            check_warn(
+                f"{name} is in WAL mode ({size}) despite database.journal_mode=delete",
+                "(the setting never applied: an existing WAL database is never live-downgraded"
+                + ("; also exposed to the WAL-reset bug" if vulnerable else "")
+                + ". Stop every Clawksis process for this profile, then run "
+                f"`clawk sessions set-journal-mode delete{'' if name == 'state.db' else f' --db {path}'}`)",
+            )
             _report_database_holders(name, path)
         elif error is not None:
             if vulnerable:
-                check_warn(f"{name}: journal mode could not be read", f"({error}; cannot rule out WAL exposure)")
+                check_warn(
+                    f"{name}: journal mode could not be read",
+                    f"({error}; cannot rule out WAL exposure)",
+                )
             else:
                 check_info(f"{name}: journal mode could not be read ({error})")
         elif mode == "wal" and _path_on_cross_vm_fs(str(path)):
@@ -165,17 +227,24 @@ def _report_database_journal_modes(clawk_home: Path | None = None, version_info:
             # Checked before the WAL-reset exposure: active cross-VM corruption outranks a latent bug class.
             if vulnerable:
                 exposed.append(name)
-            check_warn(f"{name} is in WAL mode on a cross-VM filesystem (virtiofs/9p, {size})",
-                       "(WAL can silently corrupt across the VM boundary; stop every Clawksis process and run "
-                       f"`clawk sessions set-journal-mode delete{'' if name == 'state.db' else f' --db {path}'}`, then "
-                       "set `database.journal_mode: delete` — or move the database onto a native/named volume)")
+            check_warn(
+                f"{name} is in WAL mode on a cross-VM filesystem (virtiofs/9p, {size})",
+                "(WAL can silently corrupt across the VM boundary; stop every Clawksis process and run "
+                f"`clawk sessions set-journal-mode delete{'' if name == 'state.db' else f' --db {path}'}`, then "
+                "set `database.journal_mode: delete` — or move the database onto a native/named volume)",
+            )
         elif mode == "wal" and vulnerable:
             exposed.append(name)
-            check_warn(f"{name} is in WAL mode ({size})", "(exposed to the WAL-reset bug until SQLite is upgraded)")
+            check_warn(
+                f"{name} is in WAL mode ({size})",
+                "(exposed to the WAL-reset bug until SQLite is upgraded)",
+            )
         elif mode == "wal":
             check_info(f"{name}: WAL journal mode ({size})")
         else:
-            check_info(f"{name}: rollback journal mode ({size}{', not exposed' if vulnerable else ''})")
+            check_info(
+                f"{name}: rollback journal mode ({size}{', not exposed' if vulnerable else ''})"
+            )
     if exposed:
         check_info(f"To clear the exposure: {_wal_reset_repair_hint()}")
 
@@ -191,9 +260,16 @@ def _check_s6_supervision(issues: list[str]) -> None:
         return
     _section("s6 Supervision")
     mgr = S6ServiceManager()
-    for static in ("main-clawk", "dashboard"):  # s6-rc symlinks under /run/service/, same s6-svstat probe
+    for static in (
+        "main-clawk",
+        "dashboard",
+    ):  # s6-rc symlinks under /run/service/, same s6-svstat probe
         up = mgr.is_running(static)
-        (check_ok if up else check_info)(f"{static}: up" if up else f"{static}: down (expected if not enabled via env)")
+        (check_ok if up else check_info)(
+            f"{static}: up"
+            if up
+            else f"{static}: down (expected if not enabled via env)"
+        )
     _report_host_gateway_slot(mgr, issues)
 
 
@@ -202,23 +278,35 @@ def _report_host_gateway_slot(mgr, issues: list[str]) -> None:
     roster. The old ``Per-profile gateways: up/total`` line described a topology we no longer
     run — it counted supervision slots and never said which profiles were actually served."""
     from gateway.host_topology import host_gateway_topology
+
     slots = sorted(mgr.list_profile_gateways())
     topology = host_gateway_topology()
     if topology is None:
         if not slots:
             return check_info("No gateway registered yet — run `clawk gateway install`")
         up = [p for p in slots if mgr.is_running(f"gateway-{p}")]
-        issues.append("No host gateway owns the gateway role — start the ONE host multiplexer: "
-                      "clawk --profile default gateway start")
-        return check_warn(f"No host gateway owns the gateway role ({len(up)}/{len(slots)} supervision "
-                          f"slots up: {', '.join(slots)})", "(nothing is serving these profiles)")
+        issues.append(
+            "No host gateway owns the gateway role — start the ONE host multiplexer: "
+            "clawk --profile default gateway start"
+        )
+        return check_warn(
+            f"No host gateway owns the gateway role ({len(up)}/{len(slots)} supervision "
+            f"slots up: {', '.join(slots)})",
+            "(nothing is serving these profiles)",
+        )
     check_ok(f"Host gateway: {topology.describe()}")
-    legacy_up = sorted(p for p in slots if p != "default" and mgr.is_running(f"gateway-{p}"))
+    legacy_up = sorted(
+        p for p in slots if p != "default" and mgr.is_running(f"gateway-{p}")
+    )
     if legacy_up:
-        check_warn(f"LEGACY per-profile gateway slots still supervised: {', '.join(legacy_up)}",
-                   "(multiplex-only: the host gateway already serves every profile from one process)")
-        issues.append("Fold the legacy per-profile gateways into the host gateway: "
-                      "clawk --profile default gateway migrate --multiplex")
+        check_warn(
+            f"LEGACY per-profile gateway slots still supervised: {', '.join(legacy_up)}",
+            "(multiplex-only: the host gateway already serves every profile from one process)",
+        )
+        issues.append(
+            "Fold the legacy per-profile gateways into the host gateway: "
+            "clawk --profile default gateway migrate --multiplex"
+        )
 
 
 def check_certificates(should_fix: bool = False, issues: list | None = None) -> None:
@@ -237,13 +325,20 @@ def check_certificates(should_fix: bool = False, issues: list | None = None) -> 
         issues = []
     platform_store = install_truststore()
     if not platform_store:
-        check_warn("TLS platform trust store unavailable",
-                   "OpenSSL default trust paths are in use; certificates trusted only by the OS store (a corporate root) will not verify")
+        check_warn(
+            "TLS platform trust store unavailable",
+            "OpenSSL default trust paths are in use; certificates trusted only by the OS store (a corporate root) will not verify",
+        )
     try:
         ssl.create_default_context()
     except Exception as e:
-        _fail_and_issue("TLS default SSL context cannot be constructed", str(e),
-                        _python_repair_hint() + "; if TLS still fails, repair Python through the installation owner.", issues)
+        _fail_and_issue(
+            "TLS default SSL context cannot be constructed",
+            str(e),
+            _python_repair_hint()
+            + "; if TLS still fails, repair Python through the installation owner.",
+            issues,
+        )
         return
     if platform_store:
         check_ok("TLS platform trust store configured; default SSL context available")
@@ -260,11 +355,17 @@ def _check_gateway_service_linger(issues: list[str]) -> None:
     """
     try:
         from clawk_cli.gateway import (
-            _SERVICE_BASE, get_systemd_linger_status, get_systemd_unit_path, is_linux,
-            user_systemd_unit_dir)
+            _SERVICE_BASE,
+            get_systemd_linger_status,
+            get_systemd_unit_path,
+            is_linux,
+            user_systemd_unit_dir,
+        )
         from clawk_cli.service_manager import detect_service_manager
     except Exception as e:
-        return check_warn("Gateway service linger", f"(could not import gateway helpers: {e})")
+        return check_warn(
+            "Gateway service linger", f"(could not import gateway helpers: {e})"
+        )
     if not is_linux() or detect_service_manager() == "s6":
         return
     host_unit = user_systemd_unit_dir() / f"{_SERVICE_BASE}.service"
@@ -274,16 +375,22 @@ def _check_gateway_service_linger(issues: list[str]) -> None:
     linger_enabled, linger_detail = get_systemd_linger_status()
     if linger_enabled is None:
         return check_warn("Could not verify systemd linger", f"({linger_detail})")
-    if not check_bool(linger_enabled, ("Systemd linger enabled", "(gateway service survives logout)"),
-                      ("Systemd linger disabled", "(gateway may stop after logout)")):
+    if not check_bool(
+        linger_enabled,
+        ("Systemd linger enabled", "(gateway service survives logout)"),
+        ("Systemd linger disabled", "(gateway may stop after logout)"),
+    ):
         check_info("Run: sudo loginctl enable-linger $USER")
-        issues.append("Enable linger for the gateway user service: sudo loginctl enable-linger $USER")
+        issues.append(
+            "Enable linger for the gateway user service: sudo loginctl enable-linger $USER"
+        )
 
 
 _TCC_CDHASH_DETAIL = (
     "the desktop bundle's designated requirement is cdhash-pinned (pre-#73681 build) — rebuilds invalidate "
     "all permission grants. Run `clawk update` to get the stable identifier-pinned signing identity, "
-    "then re-grant permissions once.")
+    "then re-grant permissions once."
+)
 _TCC_STABLE_DETAIL = {
     True: "(certificate-anchored DR; grants survive rebuilds)",
     False: "(identifier-pinned DR; grants survive rebuilds — for the strongest anchor, see `clawk desktop --setup-tcc-identity`)",
@@ -305,14 +412,24 @@ def check_macos_tcc_grants() -> None:
         return
     dr = _macos_desktop_dr(app)
     if not dr:
-        return check_warn("macOS TCC grant check", "(could not read code-signing requirement of the desktop bundle)")
+        return check_warn(
+            "macOS TCC grant check",
+            "(could not read code-signing requirement of the desktop bundle)",
+        )
     if "cdhash" in dr.lower():
-        return check_warn("macOS TCC grants will reset after every update", _TCC_CDHASH_DETAIL)
+        return check_warn(
+            "macOS TCC grants will reset after every update", _TCC_CDHASH_DETAIL
+        )
     # --setup-tcc-identity or notarized build (certificate-anchored) is the strongest anchor.
-    check_ok("macOS TCC signing identity is stable", _TCC_STABLE_DETAIL["certificate" in dr.lower()])
-    check_info("If macOS still re-prompts for permissions (toggle shows ON): the stored grant is stale — run "
-               "`tccutil reset ScreenCapture com.nousresearch.clawk` (repeat per affected service), toggle it ON in "
-               "System Settings, then fully quit & relaunch Clawksis once.")
+    check_ok(
+        "macOS TCC signing identity is stable",
+        _TCC_STABLE_DETAIL["certificate" in dr.lower()],
+    )
+    check_info(
+        "If macOS still re-prompts for permissions (toggle shows ON): the stored grant is stale — run "
+        "`tccutil reset ScreenCapture com.nousresearch.clawk` (repeat per affected service), toggle it ON in "
+        "System Settings, then fully quit & relaunch Clawksis once."
+    )
 
 
 def _desktop_app_bundle() -> Path | None:
@@ -330,10 +447,26 @@ def _macos_desktop_dr(app: Path) -> str | None:
     """Return the bundle's designated requirement string, or None on failure (a hanging codesign must never abort doctor)."""
     codesign = shutil.which("codesign")
     try:
-        proc = subprocess.run([codesign, "-d", "--requirements", "-", str(app)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15, check=False) if codesign else None
+        proc = (
+            subprocess.run(
+                [codesign, "-d", "--requirements", "-", str(app)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+                check=False,
+            )
+            if codesign
+            else None
+        )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
-    return None if proc is None or proc.returncode != 0 else (proc.stdout or "") + (proc.stderr or "")
+    return (
+        None
+        if proc is None or proc.returncode != 0
+        else (proc.stdout or "") + (proc.stderr or "")
+    )
 
 
 def check_macos_tcc_anchor(should_fix: bool = False) -> None:
@@ -344,6 +477,7 @@ def check_macos_tcc_anchor(should_fix: bool = False) -> None:
     """
     with warn_on_error("macOS TCC anchor check failed"):
         from clawk_cli import macos_tcc_anchor as tcc
+
         status, detail = tcc.tcc_anchor_state()
         if status == "skip":
             return
@@ -352,7 +486,12 @@ def check_macos_tcc_anchor(should_fix: bool = False) -> None:
         anchored = tcc.ensure_tcc_anchor() if should_fix else None
         if anchored is not None:
             return check_ok("macOS TCC anchor installed", f"({anchored})")
-        check_warn("macOS TCC anchor missing" if status == "missing" else "macOS TCC anchor stale", f"({detail})")
+        check_warn(
+            "macOS TCC anchor missing"
+            if status == "missing"
+            else "macOS TCC anchor stale",
+            f"({detail})",
+        )
 
 
 def check_macos_full_disk_access() -> None:
@@ -372,37 +511,54 @@ def check_macos_full_disk_access() -> None:
     try:
         os.listdir(Path.home() / "Library" / "Application Support" / "com.apple.TCC")
     except PermissionError:
-        check_info("One switch silences all macOS folder prompts: grant your terminal app Full Disk Access and Clawksis "
-                   "will never trip per-folder dialogs (Desktop/Downloads/Documents/...) again. Open: System Settings → "
-                   "Privacy & Security → Full Disk Access — or run:\n"
-                   "      open \"x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles\"\n"
-                   "    then enable your terminal (and Clawksis.app if you use Desktop), and restart them once. "
-                   "With Clawksis' stable signing identities the grant survives every update.")
+        check_info(
+            "One switch silences all macOS folder prompts: grant your terminal app Full Disk Access and Clawksis "
+            "will never trip per-folder dialogs (Desktop/Downloads/Documents/...) again. Open: System Settings → "
+            "Privacy & Security → Full Disk Access — or run:\n"
+            '      open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"\n'
+            "    then enable your terminal (and Clawksis.app if you use Desktop), and restart them once. "
+            "With Clawksis' stable signing identities the grant survives every update."
+        )
     except OSError:
         pass  # missing dir / other error: indeterminate, stay silent
     else:
-        check_ok("macOS Full Disk Access granted", "(no per-folder permission prompts will occur)")
+        check_ok(
+            "macOS Full Disk Access granted",
+            "(no per-folder permission prompts will occur)",
+        )
 
 
 @doctor_check("Security advisory check failed: {e}")
 def _check_security_advisories(should_fix: bool, f: Finding) -> None:
     """Compromised-package advisories, funnelled into manual issues; a bug here must never block the rest of doctor."""
-    from clawk_cli.security_advisories import detect_compromised, filter_unacked, full_remediation_text, get_acked_ids
+    from clawk_cli.security_advisories import (
+        detect_compromised,
+        filter_unacked,
+        full_remediation_text,
+        get_acked_ids,
+    )
+
     all_hits = detect_compromised()
     fresh_hits = filter_unacked(all_hits)
     if not fresh_hits:
         return check_ok("No active security advisories")
     for hit in fresh_hits:
         # Fail row + remediation text indented under it as one section; also into the summary action list.
-        _fail_and_issue(f"{hit.advisory.title}", f"({hit.package}=={hit.installed_version})",
-                        f"Resolve security advisory {hit.advisory.id}: uninstall {hit.package}=={hit.installed_version} "
-                        f"and rotate credentials, then run `clawk doctor --ack {hit.advisory.id}`.", f.manual_issues)
+        _fail_and_issue(
+            f"{hit.advisory.title}",
+            f"({hit.package}=={hit.installed_version})",
+            f"Resolve security advisory {hit.advisory.id}: uninstall {hit.package}=={hit.installed_version} "
+            f"and rotate credentials, then run `clawk doctor --ack {hit.advisory.id}`.",
+            f.manual_issues,
+        )
         for line in full_remediation_text(hit):
             print(f"    {color(line, Colors.YELLOW)}" if line else "")
     acked_ids = get_acked_ids()  # acked-but-still-installed stays visible
     for h in all_hits:
         if h.advisory.id in acked_ids:
-            check_warn(f"{h.package}=={h.installed_version} still installed (advisory {h.advisory.id} acknowledged)")
+            check_warn(
+                f"{h.package}=={h.installed_version} still installed (advisory {h.advisory.id} acknowledged)"
+            )
 
 
 def _staged_venv_dir() -> Path | None:
@@ -433,19 +589,33 @@ def _check_python_environment(should_fix: bool, f: Finding) -> None:
     v, label = sys.version_info, f"Python {'.'.join(map(str, sys.version_info[:3]))}"
     if v < (3, 8):
         _fail_and_issue(label, "(3.10+ required)", "Upgrade Python to 3.10+", f.issues)
-    elif check_bool(v >= (3, 10), label, (label, "(3.10+ recommended)")) and v < (3, 11):
-        check_warn("Python 3.11+ recommended for RL Training tools (tinker requires >= 3.11)")
+    elif check_bool(v >= (3, 10), label, (label, "(3.10+ recommended)")) and v < (
+        3,
+        11,
+    ):
+        check_warn(
+            "Python 3.11+ recommended for RL Training tools (tinker requires >= 3.11)"
+        )
     # Linked SQLite: version + source id matter independently of the Python minor (uv's
     # python-build-standalone can keep a vulnerable SQLite across upgrades).
     with warn_on_error("SQLite version probe failed: {e}", ""):
         import sqlite3
         from clawk_state_wal import is_sqlite_wal_reset_vulnerable, sqlite_source_id
+
         src = sqlite_source_id()
         # Warn-only: Clawksis already refuses WAL on fresh DBs and runtime repair is best-effort.
-        check_bool(not is_sqlite_wal_reset_vulnerable(), f"SQLite {sqlite3.sqlite_version}",
-                   (f"SQLite {sqlite3.sqlite_version} (WAL-reset bug)", _sqlite_upgrade_hint()))
+        check_bool(
+            not is_sqlite_wal_reset_vulnerable(),
+            f"SQLite {sqlite3.sqlite_version}",
+            (
+                f"SQLite {sqlite3.sqlite_version} (WAL-reset bug)",
+                _sqlite_upgrade_hint(),
+            ),
+        )
         if src:
-            check_info(f"SQLite source id: {(src[:48] + '…') if len(src) > 48 else src}")
+            check_info(
+                f"SQLite source id: {(src[:48] + '…') if len(src) > 48 else src}"
+            )
         _report_database_journal_modes()
     # PM launchers run base Python with the selected dependency tree on
     # sys.path. Neither sys.prefix nor a stale PYTHONPATH proves activation.
@@ -454,12 +624,21 @@ def _check_python_environment(should_fix: bool, f: Finding) -> None:
         from pm.environments import site_packages
 
         selected_site = site_packages(staged).resolve()
-        running_here = selected_site.is_dir() and any(Path(entry).resolve() == selected_site for entry in sys.path)
-        check_ok(f"Runtime venv staged ({staged})",
-                 "(active in this process)" if running_here else "(this process runs outside it)")
+        running_here = selected_site.is_dir() and any(
+            Path(entry).resolve() == selected_site for entry in sys.path
+        )
+        check_ok(
+            f"Runtime venv staged ({staged})",
+            "(active in this process)"
+            if running_here
+            else "(this process runs outside it)",
+        )
     else:
-        check_bool(sys.prefix != sys.base_prefix, "Virtual environment active",
-                   ("Not in virtual environment", "(recommended)"))
+        check_bool(
+            sys.prefix != sys.base_prefix,
+            "Virtual environment active",
+            ("Not in virtual environment", "(recommended)"),
+        )
     # macOS TCC interpreter anchor (#95596): dylib-complete re-land of the mechanism reverted in #95563.
     # Silent on non-macOS.
     check_macos_tcc_anchor(should_fix=should_fix)
@@ -480,9 +659,14 @@ def _check_certificates(should_fix: bool, f: Finding) -> None:
 
 # (import name, display name, optional)
 _PACKAGES = (
-    ("openai", "OpenAI SDK", False), ("rich", "Rich (terminal UI)", False), ("dotenv", "python-dotenv", False),
-    ("ruamel.yaml", "ruamel.yaml", False), ("httpx", "HTTPX", False),
-    ("croniter", "Croniter (cron expressions)", True), ("telegram", "python-telegram-bot", True), ("discord", "discord.py", True),
+    ("openai", "OpenAI SDK", False),
+    ("rich", "Rich (terminal UI)", False),
+    ("dotenv", "python-dotenv", False),
+    ("ruamel.yaml", "ruamel.yaml", False),
+    ("httpx", "HTTPX", False),
+    ("croniter", "Croniter (cron expressions)", True),
+    ("telegram", "python-telegram-bot", True),
+    ("discord", "discord.py", True),
 )
 
 
@@ -496,7 +680,12 @@ def _check_required_packages(should_fix: bool, f: Finding) -> None:
             if optional:
                 check_warn(name, "(optional, not installed)")
             else:
-                _fail_and_issue(name, "(missing)", f"Repair {name}: {_python_repair_hint()}", f.issues)
+                _fail_and_issue(
+                    name,
+                    "(missing)",
+                    f"Repair {name}: {_python_repair_hint()}",
+                    f.issues,
+                )
 
 
 def _check_windows_gateway_autostart(should_fix: bool, f: Finding) -> None:
@@ -505,6 +694,7 @@ def _check_windows_gateway_autostart(should_fix: bool, f: Finding) -> None:
     if sys.platform != "win32":
         return
     from clawk_cli import gateway_windows
+
     redundant = gateway_windows.redundant_autostart_entries()
     if not redundant:
         return
@@ -512,7 +702,9 @@ def _check_windows_gateway_autostart(should_fix: bool, f: Finding) -> None:
     if not should_fix:
         for path in redundant:
             check_warn("Redundant gateway login item", f"({path})")
-        f.issues.append("Remove duplicate Windows gateway autostart entries: clawk doctor --fix")
+        f.issues.append(
+            "Remove duplicate Windows gateway autostart entries: clawk doctor --fix"
+        )
         return
     done, warnings = gateway_windows.reconcile_autostart_launchers()
     for message in done:
@@ -588,6 +780,7 @@ def _check_gateway_supervision(should_fix: bool, f: Finding) -> None:
 def _check_command_installation(should_fix: bool, f: Finding) -> None:
     """Check the install-owned launch contract without replacing custom commands."""
     from clawk_cli.doctor import PROJECT_ROOT
+
     if sys.platform == "win32":
         return
     _section("Command Installation")
@@ -610,34 +803,60 @@ def _check_command_installation(should_fix: bool, f: Finding) -> None:
     except (OSError, ValueError, RuntimeError) as exc:
         check_fail("Cannot resolve selected dependencies", str(exc))
         return f.manual_issues.append(_python_repair_hint())
-    pm_launcher = selected != base_venv(PROJECT_ROOT) or resolve_store_python(PROJECT_ROOT) is not None
+    pm_launcher = (
+        selected != base_venv(PROJECT_ROOT)
+        or resolve_store_python(PROJECT_ROOT) is not None
+    )
     venv_bin = PROJECT_ROOT / "clawk" if pm_launcher else selected / "bin" / "clawk"
     if not venv_bin.is_file():
         check_warn("Clawksis entry point not found", f"({venv_bin})")
-        return f.manual_issues.append("Repair or reinstall the Clawksis launcher through the installation owner")
+        return f.manual_issues.append(
+            "Repair or reinstall the Clawksis launcher through the installation owner"
+        )
     check_ok(f"Clawksis entry point exists ({venv_bin})")
     # Expected command link directory (mirrors install.sh logic).
     prefix = os.environ.get("PREFIX", "")
-    termux = prefix and (os.environ.get("TERMUX_VERSION") or "com.termux/files/usr" in prefix)
-    link_dir, display = (Path(prefix) / "bin", "$PREFIX/bin") if termux else (Path.home() / ".local" / "bin", "~/.local/bin")
+    termux = prefix and (
+        os.environ.get("TERMUX_VERSION") or "com.termux/files/usr" in prefix
+    )
+    link_dir, display = (
+        (Path(prefix) / "bin", "$PREFIX/bin")
+        if termux
+        else (Path.home() / ".local" / "bin", "~/.local/bin")
+    )
     link = link_dir / "clawk"
     if link.is_symlink():
         target, expected = link.resolve(), venv_bin.resolve()
         if target == expected:
             return check_ok(f"{display}/clawk → correct target")
-        check_warn(f"{display}/clawk points to wrong target", f"(→ {target}, expected → {expected})")
-        owned_targets = {(PROJECT_ROOT / name / "bin" / "clawk").resolve() for name in ("venv", ".venv")}
+        check_warn(
+            f"{display}/clawk points to wrong target",
+            f"(→ {target}, expected → {expected})",
+        )
+        owned_targets = {
+            (PROJECT_ROOT / name / "bin" / "clawk").resolve()
+            for name in ("venv", ".venv")
+        }
         if target not in owned_targets:
-            return f.manual_issues.append(f"Review {display}/clawk manually; its target is user-managed and was not changed")
+            return f.manual_issues.append(
+                f"Review {display}/clawk manually; its target is user-managed and was not changed"
+            )
         if not should_fix:
-            return f.issues.append(f"Broken symlink at {display}/clawk — run 'clawk doctor --fix'")
+            return f.issues.append(
+                f"Broken symlink at {display}/clawk — run 'clawk doctor --fix'"
+            )
         verb = "Fixed"
     elif link.exists():  # regular file (wrapper script), not a symlink
         return check_ok(f"{display}/clawk exists (non-symlink)")
     else:
-        check_fail(f"{display}/clawk not found", "(clawk command may not work outside the venv)")
+        check_fail(
+            f"{display}/clawk not found",
+            "(clawk command may not work outside the venv)",
+        )
         if not should_fix:
-            return f.issues.append(f"Missing {display}/clawk symlink — run 'clawk doctor --fix'")
+            return f.issues.append(
+                f"Missing {display}/clawk symlink — run 'clawk doctor --fix'"
+            )
         link_dir.mkdir(parents=True, exist_ok=True)
         verb = "Created"
     if pm_launcher:
@@ -645,7 +864,9 @@ def _check_command_installation(should_fix: bool, f: Finding) -> None:
 
         if stage_launcher("clawk", PROJECT_ROOT, link_dir) is None:
             check_fail("Could not publish Clawksis launcher")
-            return f.manual_issues.append("Repair the PM store interpreter through the installation owner, then rerun 'clawk doctor --fix'")
+            return f.manual_issues.append(
+                "Repair the PM store interpreter through the installation owner, then rerun 'clawk doctor --fix'"
+            )
         check_ok(f"{verb} PM launcher: {display}/clawk")
     else:
         if link.is_symlink():
@@ -653,6 +874,11 @@ def _check_command_installation(should_fix: bool, f: Finding) -> None:
         link.symlink_to(venv_bin)
         check_ok(f"{verb} symlink: {display}/clawk → {venv_bin}")
     f.fixed += 1
-    if verb == "Created" and str(link_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-        check_warn(f"{display} is not on your PATH", "(add it to your shell config: export PATH=\"$HOME/.local/bin:$PATH\")")
+    if verb == "Created" and str(link_dir) not in os.environ.get("PATH", "").split(
+        os.pathsep
+    ):
+        check_warn(
+            f"{display} is not on your PATH",
+            '(add it to your shell config: export PATH="$HOME/.local/bin:$PATH")',
+        )
         f.manual_issues.append(f"Add {display} to your PATH")

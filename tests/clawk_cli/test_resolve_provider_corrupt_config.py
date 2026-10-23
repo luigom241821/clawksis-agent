@@ -34,7 +34,9 @@ def _clean_inference_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-CORRUPT_YAML = "model:\n  provider: openai-codex\n  default: gpt-5.5\n broken: [unterminated\n"
+CORRUPT_YAML = (
+    "model:\n  provider: openai-codex\n  default: gpt-5.5\n broken: [unterminated\n"
+)
 VALID_YAML = "gateway:\n  enabled: false\n"
 
 

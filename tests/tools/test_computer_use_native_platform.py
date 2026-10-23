@@ -20,17 +20,25 @@ def backend(monkeypatch):
     tool.reset_backend_for_tests()
 
 
-@pytest.mark.parametrize("host_platform", [
-    pytest.param("win32", marks=pytest.mark.platforms("windows")),
-    pytest.param("darwin", marks=pytest.mark.platforms("macos")),
-])
-@pytest.mark.parametrize("args, expected_call", [
-    ({"action": "capture", "mode": "ax"}, "capture"),
-    ({"action": "click", "coordinate": [10, 10]}, "click"),
-    ({"action": "type", "text": "test input"}, "type"),
-    ({"action": "list_windows"}, "list_windows"),
-])
-def test_native_computer_use_dispatches_to_backend(backend, args, expected_call, host_platform):
+@pytest.mark.parametrize(
+    "host_platform",
+    [
+        pytest.param("win32", marks=pytest.mark.platforms("windows")),
+        pytest.param("darwin", marks=pytest.mark.platforms("macos")),
+    ],
+)
+@pytest.mark.parametrize(
+    "args, expected_call",
+    [
+        ({"action": "capture", "mode": "ax"}, "capture"),
+        ({"action": "click", "coordinate": [10, 10]}, "click"),
+        ({"action": "type", "text": "test input"}, "type"),
+        ({"action": "list_windows"}, "list_windows"),
+    ],
+)
+def test_native_computer_use_dispatches_to_backend(
+    backend, args, expected_call, host_platform
+):
     import tools.computer_use_tool
     from tools.registry import registry
 

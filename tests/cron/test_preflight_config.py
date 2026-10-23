@@ -115,8 +115,9 @@ class TestMissingProviderKeyBlocks:
         job = _job()
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, output, _final_response, error, agent_constructed = \
+            success, output, _final_response, error, agent_constructed = (
                 _run_job_patched(job, tmp_path, resolve=_AuthErrorFactory())
+            )
 
         assert agent_constructed is False
         assert success is False
@@ -138,15 +139,21 @@ class TestMissingProviderKeyBlocks:
             cron_jobs.save_jobs([job])
             for _tick in range(2):
                 fresh = next(j for j in cron_jobs.load_jobs() if j["id"] == job["id"])
-                with patch("cron.scheduler._clawk_home", tmp_path), \
-                     patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-                     patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-                     patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-                     patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-                     patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                           side_effect=_AuthErrorFactory()), \
-                     patch("cron.delivery_queue.enqueue", side_effect=fake_deliver), \
-                     patch("run_agent.AIAgent") as mock_agent_cls:
+                with (
+                    patch("cron.scheduler._clawk_home", tmp_path),
+                    patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+                    patch("clawk_cli.env_loader.load_clawk_dotenv"),
+                    patch("clawk_cli.env_loader.reset_secret_source_cache"),
+                    patch(
+                        "tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]
+                    ),
+                    patch(
+                        "clawk_cli.runtime_provider.resolve_runtime_provider",
+                        side_effect=_AuthErrorFactory(),
+                    ),
+                    patch("cron.delivery_queue.enqueue", side_effect=fake_deliver),
+                    patch("run_agent.AIAgent") as mock_agent_cls,
+                ):
                     ok = sched.run_one_job(fresh)
                     assert ok is True
                     assert mock_agent_cls.called is False
@@ -163,9 +170,7 @@ class TestMissingProviderKeyBlocks:
         """A configured fallback chain means a missing primary key does NOT
         block — the existing auth-fallback path handles it."""
         (tmp_path / "config.yaml").write_text(
-            "fallback_providers:\n"
-            "  - provider: openrouter\n"
-            "    model: z-ai/glm-5.2\n",
+            "fallback_providers:\n  - provider: openrouter\n    model: z-ai/glm-5.2\n",
             encoding="utf-8",
         )
         calls = []
@@ -182,8 +187,9 @@ class TestMissingProviderKeyBlocks:
         job = _job(model=None)
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, _output, _final_response, error, agent_constructed = \
+            success, _output, _final_response, error, agent_constructed = (
                 _run_job_patched(job, tmp_path, resolve=resolve)
+            )
 
         assert agent_constructed is True
         assert success is True
@@ -193,9 +199,7 @@ class TestMissingProviderKeyBlocks:
         """A pinned job never walks the global chain (#100437), so the chain must not skip the
         missing-key check for it either: block before the agent is built."""
         (tmp_path / "config.yaml").write_text(
-            "fallback_providers:\n"
-            "  - provider: openrouter\n"
-            "    model: z-ai/glm-5.2\n",
+            "fallback_providers:\n  - provider: openrouter\n    model: z-ai/glm-5.2\n",
             encoding="utf-8",
         )
         calls = []
@@ -211,8 +215,9 @@ class TestMissingProviderKeyBlocks:
         job = _job(provider="anthropic", model="claude-sonnet-5")
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, _output, _final_response, error, agent_constructed = \
+            success, _output, _final_response, error, agent_constructed = (
                 _run_job_patched(job, tmp_path, resolve=resolve)
+            )
 
         assert agent_constructed is False
         assert success is False
@@ -225,8 +230,9 @@ class TestHealthyJobUnaffected:
         job = _job()
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, _output, final_response, error, agent_constructed = \
+            success, _output, final_response, error, agent_constructed = (
                 _run_job_patched(job, tmp_path)
+            )
 
         assert success is True
         assert error is None
@@ -270,15 +276,21 @@ class TestOptOut:
             cron_jobs.save_jobs([job])
             for _tick in range(2):
                 fresh = next(j for j in cron_jobs.load_jobs() if j["id"] == job["id"])
-                with patch("cron.scheduler._clawk_home", tmp_path), \
-                     patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-                     patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-                     patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-                     patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-                     patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                           side_effect=_AuthErrorFactory()), \
-                     patch("cron.delivery_queue.enqueue", side_effect=fake_deliver), \
-                     patch("run_agent.AIAgent") as mock_agent_cls:
+                with (
+                    patch("cron.scheduler._clawk_home", tmp_path),
+                    patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+                    patch("clawk_cli.env_loader.load_clawk_dotenv"),
+                    patch("clawk_cli.env_loader.reset_secret_source_cache"),
+                    patch(
+                        "tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]
+                    ),
+                    patch(
+                        "clawk_cli.runtime_provider.resolve_runtime_provider",
+                        side_effect=_AuthErrorFactory(),
+                    ),
+                    patch("cron.delivery_queue.enqueue", side_effect=fake_deliver),
+                    patch("run_agent.AIAgent") as mock_agent_cls,
+                ):
                     sched.run_one_job(fresh)
                     assert mock_agent_cls.called is False
 
@@ -309,8 +321,9 @@ class TestSkillReadiness:
         job = _job(skills=["needy-skill"])
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, output, _final_response, error, agent_constructed = \
+            success, output, _final_response, error, agent_constructed = (
                 _run_job_patched(job, tmp_path, skill_view=fake_skill_view)
+            )
 
         assert agent_constructed is False
         assert success is False
@@ -334,8 +347,9 @@ class TestSkillReadiness:
         job = _job(skills=["ready-skill"])
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            success, _output, _final_response, _error, agent_constructed = \
+            success, _output, _final_response, _error, agent_constructed = (
                 _run_job_patched(job, tmp_path, skill_view=fake_skill_view)
+            )
 
         assert success is True
         assert agent_constructed is True
@@ -346,10 +360,13 @@ class TestDeliveryPlatform:
         job = _job(deliver="notaplatform")
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            with patch("cron.scheduler_delivery._is_known_delivery_platform",
-                       return_value=False):
-                success, output, _final_response, error, agent_constructed = \
+            with patch(
+                "cron.scheduler_delivery._is_known_delivery_platform",
+                return_value=False,
+            ):
+                success, output, _final_response, error, agent_constructed = (
                     _run_job_patched(job, tmp_path)
+                )
 
         assert agent_constructed is False
         assert success is False
@@ -361,8 +378,10 @@ class TestDeliveryPlatform:
         job = _job(deliver="local")
         with cron_jobs.use_cron_store(tmp_path):
             cron_jobs.save_jobs([job])
-            with patch("gateway.config.load_gateway_config",
-                       side_effect=AssertionError("gateway config loaded")):
+            with patch(
+                "gateway.config.load_gateway_config",
+                side_effect=AssertionError("gateway config loaded"),
+            ):
                 success, *_rest, agent_constructed = _run_job_patched(job, tmp_path)
 
         assert success is True

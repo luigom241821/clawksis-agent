@@ -30,7 +30,9 @@ def _make_event():
     return MessageEvent(
         text="/model",
         message_type=MessageType.TEXT,
-        source=SessionSource(platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"),
+        source=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="12345", chat_type="dm"
+        ),
     )
 
 
@@ -42,7 +44,10 @@ def _isolated_config(tmp_path, monkeypatch):
 
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
-    (clawk_home / "config.yaml").write_text("model:\n  default: gpt-x\n  provider: openrouter\nproviders: {}\n", encoding="utf-8")
+    (clawk_home / "config.yaml").write_text(
+        "model:\n  default: gpt-x\n  provider: openrouter\nproviders: {}\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
     return clawk_home
@@ -71,24 +76,38 @@ class _FakePickerAdapter:
         return None
 
 
-
-
 @pytest.mark.asyncio
-async def test_picker_path_runs_provider_listing_off_the_event_loop(_isolated_config, monkeypatch):
+async def test_picker_path_runs_provider_listing_off_the_event_loop(
+    _isolated_config, monkeypatch
+):
     """#41289/#41304: ``list_picker_providers`` can fall through to a blocking HTTP fetch, so the
     picker branch must run it on a worker thread — never on the gateway's event-loop thread."""
     listing_threads: list[int] = []
 
     def _fake_list_picker_providers(**kwargs):
         listing_threads.append(threading.get_ident())
-        return [{"slug": "openrouter", "name": "OpenRouter", "is_current": True,
-                 "models": ["gpt-x"], "total_models": 1}]
+        return [
+            {
+                "slug": "openrouter",
+                "name": "OpenRouter",
+                "is_current": True,
+                "models": ["gpt-x"],
+                "total_models": 1,
+            }
+        ]
 
-    monkeypatch.setattr("clawk_cli.model_switch_providers.list_picker_providers", _fake_list_picker_providers)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch_providers.list_picker_providers",
+        _fake_list_picker_providers,
+    )
     runner = _make_runner()
     runner.adapters = {Platform.TELEGRAM: _FakePickerAdapter()}
-    monkeypatch.setattr(runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False
+    )
+    monkeypatch.setattr(
+        runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False
+    )
 
     # Picker "sent" => handler returns None, proving it got past the listing call.
     assert await runner._handle_model_command(_make_event()) is None
@@ -99,24 +118,50 @@ async def test_picker_path_runs_provider_listing_off_the_event_loop(_isolated_co
 
 
 @pytest.mark.asyncio
-async def test_picker_path_lists_cache_only_and_probes_only_the_current_custom_endpoint(_isolated_config, monkeypatch):
+async def test_picker_path_lists_cache_only_and_probes_only_the_current_custom_endpoint(
+    _isolated_config, monkeypatch
+):
     """#74003: the chat ``/model`` reply is a read path. The listing must ask for cache-only catalogs
     and must not live-probe every saved custom endpoint (only the selected one), matching the GUI."""
     seen: list[dict] = []
 
     def _fake_list_picker_providers(**kwargs):
         seen.append(kwargs)
-        return [{"slug": "openrouter", "name": "OpenRouter", "is_current": True,
-                 "models": ["gpt-x"], "total_models": 1}]
+        return [
+            {
+                "slug": "openrouter",
+                "name": "OpenRouter",
+                "is_current": True,
+                "models": ["gpt-x"],
+                "total_models": 1,
+            }
+        ]
 
-    monkeypatch.setattr("clawk_cli.model_switch_providers.list_picker_providers", _fake_list_picker_providers)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch_providers.list_picker_providers",
+        _fake_list_picker_providers,
+    )
     runner = _make_runner()
     runner.adapters = {Platform.TELEGRAM: _FakePickerAdapter()}
-    monkeypatch.setattr(runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(
+        runner, "_thread_metadata_for_source", lambda *a, **k: None, raising=False
+    )
+    monkeypatch.setattr(
+        runner, "_reply_anchor_for_event", lambda *a, **k: None, raising=False
+    )
 
     assert await runner._handle_model_command(_make_event()) is None
     assert seen, "listing never ran"
-    flags = {k: seen[0].get(k) for k in ("non_blocking_catalogs", "probe_custom_providers", "probe_current_custom_provider")}
-    assert flags == {"non_blocking_catalogs": True, "probe_custom_providers": False,
-                     "probe_current_custom_provider": True}, flags
+    flags = {
+        k: seen[0].get(k)
+        for k in (
+            "non_blocking_catalogs",
+            "probe_custom_providers",
+            "probe_current_custom_provider",
+        )
+    }
+    assert flags == {
+        "non_blocking_catalogs": True,
+        "probe_custom_providers": False,
+        "probe_current_custom_provider": True,
+    }, flags

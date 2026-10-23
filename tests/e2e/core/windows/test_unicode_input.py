@@ -50,7 +50,9 @@ def test_chat_q_argv_non_ascii_reaches_wire_and_state_db(tmp_path: Path) -> None
         user = last_user(srv.main_requests()[0])
     assert f"{TEXT} {tag}" in user, f"prompt altered before the wire: {user!r}"
     stored = [r["content"] for r in persisted_messages(home) if r["role"] == "user"]
-    assert any(f"{TEXT} {tag}" in (c or "") for c in stored), f"prompt altered in state.db: {stored!r}"
+    assert any(f"{TEXT} {tag}" in (c or "") for c in stored), (
+        f"prompt altered in state.db: {stored!r}"
+    )
 
 
 def test_chat_q_non_ascii_reply_printed_intact(tmp_path: Path) -> None:
@@ -60,7 +62,9 @@ def test_chat_q_non_ascii_reply_printed_intact(tmp_path: Path) -> None:
         res = clawk(home, "chat", "-q", "Reply with the code.", "-Q")
     assert res.returncode == 0, res.tail()
     assert tag in res.stdout, f"reply not printed at all:\n{res.tail()}"
-    assert f"{REPLY} {tag}" in res.stdout, f"reply printed with its non-ASCII mangled: {res.stdout[-500:]!r}"
+    assert f"{REPLY} {tag}" in res.stdout, (
+        f"reply printed with its non-ASCII mangled: {res.stdout[-500:]!r}"
+    )
 
 
 def test_tui_gateway_utf8_frames_reach_wire(tmp_path: Path) -> None:
@@ -74,8 +78,12 @@ def test_tui_gateway_utf8_frames_reach_wire(tmp_path: Path) -> None:
             gw.close()
         user = last_user(srv.main_requests()[0])
     assert tag in user, f"prompt never reached the provider: {user!r}"
-    assert f"{TEXT} {tag}" in user, f"TUI gateway altered the prompt before the wire: {user!r}"
-    assert f"{REPLY} {tag}" in answer, f"reply altered on the way back to the TUI: {answer!r}"
+    assert f"{TEXT} {tag}" in user, (
+        f"TUI gateway altered the prompt before the wire: {user!r}"
+    )
+    assert f"{REPLY} {tag}" in answer, (
+        f"reply altered on the way back to the TUI: {answer!r}"
+    )
 
 
 class _Console:
@@ -84,8 +92,9 @@ class _Console:
     def __init__(self, argv: list[str], cwd: Path, env: dict[str, str]) -> None:
         from winpty import PtyProcess
 
-        self.proc = PtyProcess.spawn(subprocess.list2cmdline(argv), cwd=str(cwd), env=env,
-                                     dimensions=(50, 200))
+        self.proc = PtyProcess.spawn(
+            subprocess.list2cmdline(argv), cwd=str(cwd), env=env, dimensions=(50, 200)
+        )
         self._chunks: list[str] = []
         self._last = time.monotonic()
         threading.Thread(target=self._pump, daemon=True).start()
@@ -131,25 +140,46 @@ def test_classic_cli_console_non_ascii_reaches_wire(tmp_path: Path) -> None:
     tag = nonce("CONPTY")
     with FakeLLMServer([Text(f"ack {tag}")]) as srv:
         home = make_home(tmp_path, srv.base_url)
-        console = _Console(clawk_argv("chat"), home.project, home.env({"TERM": "xterm-256color"}))
+        console = _Console(
+            clawk_argv("chat"), home.project, home.env({"TERM": "xterm-256color"})
+        )
         try:
-            wait_until(lambda: console.quiet_for(3.0), 120, "the classic CLI to finish painting its prompt")
+            wait_until(
+                lambda: console.quiet_for(3.0),
+                120,
+                "the classic CLI to finish painting its prompt",
+            )
             console.proc.write(f"{BMP} {tag}")
-            wait_until(lambda: tag in console.screen, 30, "the composer to echo the typed text")
+            wait_until(
+                lambda: tag in console.screen, 30, "the composer to echo the typed text"
+            )
             echoed = _plain(console.screen)
             # An Enter within 50 ms of the last composer change is read as a pasted newline, and the
             # echo can paint inside that window: submit only once the typed echo has gone quiet.
-            wait_until(lambda: console.quiet_for(0.2), 30, "the typed composer to settle before Enter")
+            wait_until(
+                lambda: console.quiet_for(0.2),
+                30,
+                "the typed composer to settle before Enter",
+            )
             console.proc.write("\r")
             try:
-                wait_until(lambda: srv.main_requests(), 90, "the typed turn to reach the provider")
+                wait_until(
+                    lambda: srv.main_requests(),
+                    90,
+                    "the typed turn to reach the provider",
+                )
             except AssertionError as exc:
-                raise AssertionError(f"{exc}; console tail: {_plain(console.screen)[-600:]!a}") from exc
+                raise AssertionError(
+                    f"{exc}; console tail: {_plain(console.screen)[-600:]!a}"
+                ) from exc
             user = last_user(srv.main_requests()[0])
         finally:
             screen = console.screen
             console.close()
-    assert tag in user, f"typed text never reached the provider: {user!r}\n{_plain(screen)[-2000:]}"
+    assert tag in user, (
+        f"typed text never reached the provider: {user!r}\n{_plain(screen)[-2000:]}"
+    )
     assert f"{BMP} {tag}" in user, (
         f"non-ASCII lost between the console and the wire: {user!a}\n"
-        f"composer echoed it before Enter: {BMP in echoed}\nconsole tail:\n{_plain(screen)[-600:]!a}")
+        f"composer echoed it before Enter: {BMP in echoed}\nconsole tail:\n{_plain(screen)[-600:]!a}"
+    )

@@ -29,6 +29,7 @@ from tui_gateway import server
 GUARDED_MODEL = "muse-spark-1.2-contributor"
 UNGUARDED_MODEL = "anthropic/claude-sonnet-4.6"
 
+
 def _session(**extra):
     return {
         "agent": types.SimpleNamespace(),
@@ -46,11 +47,13 @@ def _session(**extra):
         **extra,
     }
 
+
 def _config_set_model(value, **extra_params):
     params = {"session_id": "sid", "key": "model", "value": value}
     params.update(extra_params)
 
     return server.handle_request({"id": "1", "method": "config.set", "params": params})
+
 
 @pytest.fixture
 def running_session(monkeypatch):
@@ -68,6 +71,7 @@ def running_session(monkeypatch):
         yield server._sessions["sid"]
     finally:
         server._sessions.pop("sid", None)
+
 
 class TestGuardedPickAsksBeforeStashing:
     def test_reports_confirm_required_instead_of_deferring(self, running_session):
@@ -105,6 +109,7 @@ class TestGuardedPickAsksBeforeStashing:
             "re-runs the guard at turn start and drops the confirmed pick"
         )
 
+
 class TestUnguardedPickStillDefers:
     """The queue-don't-race behaviour is the whole point of this branch."""
 
@@ -129,8 +134,11 @@ class TestUnguardedPickStillDefers:
         pending = running_session["pending_model_switch"]
         assert pending["display_provider"] == "anthropic"
 
+
 class TestGuardFailureIsNotFatal:
-    def test_a_raising_guard_falls_back_to_deferring(self, running_session, monkeypatch):
+    def test_a_raising_guard_falls_back_to_deferring(
+        self, running_session, monkeypatch
+    ):
         """A broken guard must never cost the user their model pick.
 
         The apply-time check in ``_apply_pending_model_switch`` is still there,
@@ -150,18 +158,24 @@ class TestGuardFailureIsNotFatal:
         assert result["deferred"] is True
         assert running_session["pending_model_switch"]["raw"] == GUARDED_MODEL
 
+
 @pytest.fixture
 def threshold():
     from clawk_cli.model_selection_guards import _context_cache_threshold
 
     return _context_cache_threshold()
 
+
 def _live_agent(session, tokens, model="deepseek/deepseek-v4.1-flash"):
     session["agent"] = types.SimpleNamespace(
-        model=model, context_compressor=types.SimpleNamespace(last_prompt_tokens=tokens))
+        model=model, context_compressor=types.SimpleNamespace(last_prompt_tokens=tokens)
+    )
+
 
 class TestLargeContextPickAsksBeforeStashing:
-    def test_session_at_the_threshold_is_asked_at_pick_time(self, running_session, threshold):
+    def test_session_at_the_threshold_is_asked_at_pick_time(
+        self, running_session, threshold
+    ):
         _live_agent(running_session, threshold)
 
         result = _config_set_model(UNGUARDED_MODEL)["result"]
@@ -177,12 +191,18 @@ class TestLargeContextPickAsksBeforeStashing:
     def test_confirming_queues_the_pick(self, running_session, threshold):
         _live_agent(running_session, threshold)
 
-        result = _config_set_model(UNGUARDED_MODEL, confirm_expensive_model=True)["result"]
+        result = _config_set_model(UNGUARDED_MODEL, confirm_expensive_model=True)[
+            "result"
+        ]
 
         assert result["deferred"] is True
-        assert running_session["pending_model_switch"]["confirm_expensive_model"] is True
+        assert (
+            running_session["pending_model_switch"]["confirm_expensive_model"] is True
+        )
 
-    def test_session_under_the_threshold_defers_without_asking(self, running_session, threshold):
+    def test_session_under_the_threshold_defers_without_asking(
+        self, running_session, threshold
+    ):
         _live_agent(running_session, threshold - 1)
 
         result = _config_set_model(UNGUARDED_MODEL)["result"]
@@ -190,7 +210,9 @@ class TestLargeContextPickAsksBeforeStashing:
         assert result["deferred"] is True
         assert result["confirm_required"] is False
 
-    def test_reselecting_the_live_model_is_not_a_switch(self, running_session, threshold):
+    def test_reselecting_the_live_model_is_not_a_switch(
+        self, running_session, threshold
+    ):
         _live_agent(running_session, threshold, model=UNGUARDED_MODEL)
 
         result = _config_set_model(UNGUARDED_MODEL)["result"]
@@ -206,28 +228,46 @@ class TestLargeContextPickAsksBeforeStashing:
         assert result["confirm_required"] is False
         assert running_session["pending_model_switch"]["raw"] == UNGUARDED_MODEL
 
+
 def test_bare_pick_is_guarded_against_the_live_provider(running_session, monkeypatch):
     """A pick without --provider resolves against the live provider at turn start, so a
     provider-keyed price check must see that provider at pick time or it drops the pick later."""
     from clawk_cli import model_cost_guard
 
-    monkeypatch.setattr(model_cost_guard, "expensive_model_warning", lambda model, provider=None, **_kw: (
-        types.SimpleNamespace(message="pricey") if provider == "openai-api" else None))
-    running_session["agent"] = types.SimpleNamespace(model="gpt-4.1-nano", provider="openai-api")
+    monkeypatch.setattr(
+        model_cost_guard,
+        "expensive_model_warning",
+        lambda model, provider=None, **_kw: (
+            types.SimpleNamespace(message="pricey")
+            if provider == "openai-api"
+            else None
+        ),
+    )
+    running_session["agent"] = types.SimpleNamespace(
+        model="gpt-4.1-nano", provider="openai-api"
+    )
 
     result = _config_set_model("o1-pro")["result"]
 
     assert result["confirm_required"] is True and result["deferred"] is False
     assert "pending_model_switch" not in running_session
 
+
 class TestDroppedQueuedPickIsLogged:
     def test_turn_start_drop_leaves_a_server_log_line(self, monkeypatch, caplog):
-        session = _session(pending_model_switch={
-            "raw": UNGUARDED_MODEL, "confirm_expensive_model": False,
-            "display_model": UNGUARDED_MODEL, "display_provider": ""})
+        session = _session(
+            pending_model_switch={
+                "raw": UNGUARDED_MODEL,
+                "confirm_expensive_model": False,
+                "display_model": UNGUARDED_MODEL,
+                "display_provider": "",
+            }
+        )
         monkeypatch.setattr(
-            server, "_apply_model_switch",
-            lambda *_a, **_kw: {"confirm_required": True, "confirm_message": "guarded"})
+            server,
+            "_apply_model_switch",
+            lambda *_a, **_kw: {"confirm_required": True, "confirm_message": "guarded"},
+        )
         emitted = []
         monkeypatch.setattr(server, "_emit", lambda *a, **_kw: emitted.append(a))
 
@@ -245,9 +285,14 @@ class TestDroppedQueuedPickIsNotATurnError:
     under the user's message, while the turn itself runs on the old model."""
 
     def _run(self, monkeypatch, apply):
-        session = _session(pending_model_switch={
-            "raw": UNGUARDED_MODEL, "confirm_expensive_model": False,
-            "display_model": UNGUARDED_MODEL, "display_provider": ""})
+        session = _session(
+            pending_model_switch={
+                "raw": UNGUARDED_MODEL,
+                "confirm_expensive_model": False,
+                "display_model": UNGUARDED_MODEL,
+                "display_provider": "",
+            }
+        )
         session["agent"] = types.SimpleNamespace(model="deepseek/deepseek-v4.1-flash")
         monkeypatch.setattr(server, "_apply_model_switch", apply)
         emitted = []
@@ -257,12 +302,16 @@ class TestDroppedQueuedPickIsNotATurnError:
 
     def test_guarded_drop_is_a_warning_and_resyncs_the_pill(self, monkeypatch):
         kinds, emitted = self._run(
-            monkeypatch, lambda *_a, **_kw: {"confirm_required": True, "confirm_message": "guarded"})
+            monkeypatch,
+            lambda *_a, **_kw: {"confirm_required": True, "confirm_message": "guarded"},
+        )
 
         assert "error" not in kinds
         notice = next(a[2] for a in emitted if a[0] == "notification.show")
         assert notice["level"] == "warn" and UNGUARDED_MODEL in notice["text"]
-        assert "\n" not in notice["text"], "the guard banner belongs in the re-pick confirm, not the toast"
+        assert "\n" not in notice["text"], (
+            "the guard banner belongs in the re-pick confirm, not the toast"
+        )
         assert "session.info" in kinds
 
     def test_failed_switch_is_a_warning(self, monkeypatch):

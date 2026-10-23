@@ -18,11 +18,25 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from clawk_cli.web_deps import late
-from clawk_cli.web_server_mcp import _mcp_oauth_flows, _mcp_server_summary, _normalize_mcp_server_create
-from clawk_cli.web_models import MCPCatalogInstall, MCPEnabledToggle, MCPServerCreate, MCPServersReplace
+from clawk_cli.web_server_mcp import (
+    _mcp_oauth_flows,
+    _mcp_server_summary,
+    _normalize_mcp_server_create,
+)
+from clawk_cli.web_models import (
+    MCPCatalogInstall,
+    MCPEnabledToggle,
+    MCPServerCreate,
+    MCPServersReplace,
+)
 from clawk_cli.web_routers._common import (
-    _profile_cli_args, _profile_scope, _spawn_clawk_action, config_write_scope, http_failure,
-    log as _log, scoped_to_thread,
+    _profile_cli_args,
+    _profile_scope,
+    _spawn_clawk_action,
+    config_write_scope,
+    http_failure,
+    log as _log,
+    scoped_to_thread,
 )
 
 router = APIRouter()
@@ -53,13 +67,18 @@ def _secret_scoped(profile: Optional[str], fn):
     def _run():
         with _profile_secret_scope(profile):
             return fn()
+
     return _run
 
 
 def _gc_mcp_oauth_flows() -> None:
     cutoff = time.time() - _MCP_DASHBOARD_OAUTH_TTL
     with _mcp_oauth_flows_lock:
-        stale = [fid for fid, flow in _mcp_oauth_flows.items() if getattr(flow, "created_at", 0) < cutoff]
+        stale = [
+            fid
+            for fid, flow in _mcp_oauth_flows.items()
+            if getattr(flow, "created_at", 0) < cutoff
+        ]
         for flow_id in stale:
             _mcp_oauth_flows.pop(flow_id, None)
 
@@ -76,7 +95,9 @@ def _mcp_oauth_callback_url(request: Request, server_name: str) -> str:
         return f"{public_url}{suffix}"
     base = urlparse(str(request.base_url))
     prefix = prefix_from_request(request)
-    return urlunparse(base._replace(path=f"{prefix}{suffix}", params="", query="", fragment=""))
+    return urlunparse(
+        base._replace(path=f"{prefix}{suffix}", params="", query="", fragment="")
+    )
 
 
 def _mcp_install_action_name(name: str) -> str:
@@ -84,6 +105,7 @@ def _mcp_install_action_name(name: str) -> str:
     re-click or a second catalog install doesn't overwrite the first's tracked
     process/log while its git clone is still running."""
     from clawk_cli.web_server_gateway import _ACTION_LOG_FILES
+
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:48] or "server"
     digest = hashlib.sha1(name.encode()).hexdigest()[:8]
     action = f"mcp-install-{slug}-{digest}"
@@ -102,15 +124,22 @@ async def list_mcp_servers(profile: Optional[str] = None):
         return server_configs_with_sources(config_servers)
 
     servers, plugins = await asyncio.to_thread(_secret_scoped(profile, _read))
-    return {"servers": [
-        _mcp_server_summary(name, cfg, plugins[name]) for name, cfg in sorted(servers.items())
-    ]}
+    return {
+        "servers": [
+            _mcp_server_summary(name, cfg, plugins[name])
+            for name, cfg in sorted(servers.items())
+        ]
+    }
 
 
 @router.post("/api/mcp/servers")
 async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
     from clawk_cli.mcp_catalog import record_mcp_install
-    from clawk_cli.mcp_config import _get_mcp_servers, _save_bearer_auth_token, _save_mcp_server
+    from clawk_cli.mcp_config import (
+        _get_mcp_servers,
+        _save_bearer_auth_token,
+        _save_mcp_server,
+    )
 
     try:
         name, server_config, bearer_token = _normalize_mcp_server_create(body)
@@ -128,10 +157,13 @@ async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
             servers, plugins = server_configs_with_sources(config_servers)
             if plugin := plugins.get(name):
                 raise HTTPException(
-                    status_code=409, detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
+                    status_code=409,
+                    detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
                 )
             if name in servers:
-                raise HTTPException(status_code=409, detail=f"Server '{name}' already exists")
+                raise HTTPException(
+                    status_code=409, detail=f"Server '{name}' already exists"
+                )
             if bearer_token is not None:
                 server_config["headers"] = _save_bearer_auth_token(name, bearer_token)
             return _save_mcp_server(name, server_config)
@@ -140,11 +172,16 @@ async def add_mcp_server(body: MCPServerCreate, profile: Optional[str] = None):
         saved = _save()
         # Outside the config mutation lock: a cold first metric call costs imports + catalog loads.
         with _profile_scope(body.profile or profile):
-            record_mcp_install("url" if server_config.get("url") else "local", None,
-                               "success" if saved else "failed", failure_class=None if saved else "config_rejected")
+            record_mcp_install(
+                "url" if server_config.get("url") else "local",
+                None,
+                "success" if saved else "failed",
+                failure_class=None if saved else "config_rejected",
+            )
         if not saved:
             raise HTTPException(
-                status_code=400, detail=f"Server '{name}' rejected: suspicious command/args configuration",
+                status_code=400,
+                detail=f"Server '{name}' rejected: suspicious command/args configuration",
             )
 
     try:
@@ -171,7 +208,9 @@ async def replace_mcp_servers(body: MCPServersReplace, profile: Optional[str] = 
             _servers, plugins = server_configs_with_sources({})
             for name in body.servers:
                 if plugin := plugins.get(name):
-                    return False, [f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified"]
+                    return False, [
+                        f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified"
+                    ]
             return _replace_mcp_servers(body.servers)
 
     ok, issues = await asyncio.to_thread(_run)
@@ -192,7 +231,8 @@ async def remove_mcp_server(name: str, profile: Optional[str] = None):
             _servers, plugins = server_configs_with_sources(config_servers)
             if plugin := plugins.get(name):
                 raise HTTPException(
-                    status_code=409, detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
+                    status_code=409,
+                    detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
                 )
             return _remove_mcp_server(name)
 
@@ -204,7 +244,11 @@ async def remove_mcp_server(name: str, profile: Optional[str] = None):
 @router.post("/api/mcp/servers/{name}/test")
 async def test_mcp_server(name: str, profile: Optional[str] = None):
     """Connect to the server, list its tools, disconnect."""
-    from clawk_cli.mcp_config import _get_mcp_servers, _oauth_tokens_present, _probe_single_server
+    from clawk_cli.mcp_config import (
+        _get_mcp_servers,
+        _oauth_tokens_present,
+        _probe_single_server,
+    )
 
     def _read():
         config_servers = _get_mcp_servers()
@@ -232,7 +276,11 @@ async def test_mcp_server(name: str, profile: Optional[str] = None):
 
         return {"ok": False, "error": redact_mcp_probe_text(exc), "tools": []}
     if not token_present:
-        return {"ok": False, "error": "OAuth authentication required — no token found.", "tools": []}
+        return {
+            "ok": False,
+            "error": "OAuth authentication required — no token found.",
+            "tools": [],
+        }
     # Optional per-tool schema size (chars) for the desktop's cost overlay;
     # failed probes simply omit it.
     schema_chars = details.get("schema_chars") or {}
@@ -242,7 +290,11 @@ async def test_mcp_server(name: str, profile: Optional[str] = None):
             {
                 "name": t,
                 "description": d,
-                **({"schema_chars": schema_chars[t]} if isinstance(schema_chars.get(t), int) else {}),
+                **(
+                    {"schema_chars": schema_chars[t]}
+                    if isinstance(schema_chars.get(t), int)
+                    else {}
+                ),
             }
             for t, d in tools
         ],
@@ -278,12 +330,19 @@ async def auth_mcp_server(name: str, request: Request, profile: Optional[str] = 
     if name not in servers:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
     if plugin := plugins.get(name):
-        raise HTTPException(status_code=409, detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
+        )
     cfg = dict(servers[name])
     if not cfg.get("url"):
-        raise HTTPException(status_code=400, detail="stdio servers authenticate via env keys, not OAuth")
+        raise HTTPException(
+            status_code=400, detail="stdio servers authenticate via env keys, not OAuth"
+        )
     if cfg.get("headers") and cfg.get("auth") != "oauth":
-        raise HTTPException(status_code=400, detail="This server uses header/API-key auth, not OAuth")
+        raise HTTPException(
+            status_code=400, detail="This server uses header/API-key auth, not OAuth"
+        )
     cfg["auth"] = "oauth"
 
     flow_id = secrets.token_urlsafe(24)
@@ -292,17 +351,28 @@ async def auth_mcp_server(name: str, request: Request, profile: Optional[str] = 
         server_name=name,
         profile=profile,
         clawk_home=flow_home,
-        redirect_uri=(cfg.get("oauth") or {}).get("redirect_uri") or _mcp_oauth_callback_url(request, name),
+        redirect_uri=(cfg.get("oauth") or {}).get("redirect_uri")
+        or _mcp_oauth_callback_url(request, name),
         reconnect_live=flow_home == process_home,
     )
     with _mcp_oauth_flows_lock:
         live = [f for f in _mcp_oauth_flows.values() if not f.worker_done]
         if len(live) >= _MAX_PENDING_MCP_OAUTH_FLOWS:
-            raise HTTPException(status_code=429, detail="Too many MCP OAuth flows are already in progress")
+            raise HTTPException(
+                status_code=429,
+                detail="Too many MCP OAuth flows are already in progress",
+            )
         if any(f.server_name == name and f.clawk_home == flow_home for f in live):
-            raise HTTPException(status_code=409, detail=f"MCP OAuth for '{name}' is already in progress")
+            raise HTTPException(
+                status_code=409, detail=f"MCP OAuth for '{name}' is already in progress"
+            )
         _mcp_oauth_flows[flow_id] = flow
-    threading.Thread(target=_run_dashboard_mcp_oauth, args=(flow, cfg), daemon=True, name=f"mcp-oauth-{name}").start()
+    threading.Thread(
+        target=_run_dashboard_mcp_oauth,
+        args=(flow, cfg),
+        daemon=True,
+        name=f"mcp-oauth-{name}",
+    ).start()
     try:
         await flow.wait_for_authorization_url(timeout=30)
     except Exception as exc:
@@ -347,16 +417,26 @@ async def mcp_oauth_callback(
     _gc_mcp_oauth_flows()
     with _mcp_oauth_flows_lock:
         candidates = [
-            flow for flow in _mcp_oauth_flows.values()
-            if flow.server_name == server_name and flow.status == "authorization_required"
+            flow
+            for flow in _mcp_oauth_flows.values()
+            if flow.server_name == server_name
+            and flow.status == "authorization_required"
         ]
     flow = next(
-        (c for c in candidates
-         if c.expected_state is not None and state is not None and secrets.compare_digest(c.expected_state, state)),
+        (
+            c
+            for c in candidates
+            if c.expected_state is not None
+            and state is not None
+            and secrets.compare_digest(c.expected_state, state)
+        ),
         None,
     )
     if flow is None:
-        return HTMLResponse("<h1>OAuth flow expired</h1><p>Return to Clawksis and try again.</p>", status_code=404)
+        return HTMLResponse(
+            "<h1>OAuth flow expired</h1><p>Return to Clawksis and try again.</p>",
+            status_code=404,
+        )
     try:
         flow.deliver_callback(code=code, state=state, error=error, iss=iss)
     except ValueError as exc:
@@ -365,27 +445,40 @@ async def mcp_oauth_callback(
             status_code=409 if "already received" in str(exc) else 400,
         )
     if error:
-        return HTMLResponse("<h1>Authorization failed</h1><p>Return to Clawksis for details.</p>", status_code=400)
-    return HTMLResponse("<h1>Authorization received</h1><p>You can close this tab and return to Clawksis.</p>")
+        return HTMLResponse(
+            "<h1>Authorization failed</h1><p>Return to Clawksis for details.</p>",
+            status_code=400,
+        )
+    return HTMLResponse(
+        "<h1>Authorization received</h1><p>You can close this tab and return to Clawksis.</p>"
+    )
 
 
 @router.put("/api/mcp/servers/{name}/enabled")
-async def set_mcp_server_enabled(name: str, body: MCPEnabledToggle, profile: Optional[str] = None):
+async def set_mcp_server_enabled(
+    name: str, body: MCPEnabledToggle, profile: Optional[str] = None
+):
     """Toggle ``enabled`` (takes effect on next session/gateway); disabled
     servers stay in config so they can be re-enabled without re-entry."""
+
     def _run():
         with config_write_scope(body.profile or profile):
             cfg = load_config()
             from tui_gateway.mcp_rpc_helpers import server_configs_with_sources
 
-            _servers, plugins = server_configs_with_sources(cfg.get("mcp_servers") or {})
+            _servers, plugins = server_configs_with_sources(
+                cfg.get("mcp_servers") or {}
+            )
             if plugin := plugins.get(name):
                 raise HTTPException(
-                    status_code=409, detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
+                    status_code=409,
+                    detail=f"Server '{name}' is provided by plugin '{plugin}' and cannot be modified",
                 )
             servers = cfg.get("mcp_servers")
             if not isinstance(servers, dict) or name not in servers:
-                raise HTTPException(status_code=404, detail=f"Server '{name}' not found")
+                raise HTTPException(
+                    status_code=404, detail=f"Server '{name}' not found"
+                )
             if not isinstance(servers[name], dict):
                 raise HTTPException(status_code=400, detail="Malformed server config")
             servers[name]["enabled"] = bool(body.enabled)
@@ -420,16 +513,21 @@ def _catalog_entry_json(entry: Any, installed: bool, enabled: bool) -> dict[str,
         "install_url": install.url if install else None,
         "install_ref": install.ref if install else None,
         "bootstrap": list(install.bootstrap) if install else [],
-        "default_enabled": list(entry.tools.default_enabled) if entry.tools.default_enabled is not None else None,
+        "default_enabled": list(entry.tools.default_enabled)
+        if entry.tools.default_enabled is not None
+        else None,
         "post_install": entry.post_install or "",
         # Composer-suggestion triggers (desktop brand pills), only when the
         # manifest declares a `suggest` block.
         "suggest": {
-            "keywords": list(entry.suggest.keywords), "hosts": list(entry.suggest.hosts),
+            "keywords": list(entry.suggest.keywords),
+            "hosts": list(entry.suggest.hosts),
             "applications": list(getattr(entry.suggest, "applications", [])),
             "examples": list(getattr(entry.suggest, "examples", [])),
             "requires_app": getattr(entry.suggest, "requires_app", False),
-        } if entry.suggest else None,
+        }
+        if entry.suggest
+        else None,
         "needs_install": install is not None,
         "installed": installed,
         "enabled": enabled,
@@ -445,10 +543,17 @@ async def list_mcp_catalog(profile: Optional[str] = None):
 
     entries = []
     try:
+
         def _read():
             with _profile_scope(profile):
                 catalog = list(mcp_catalog.list_catalog())
-                state = {e.name: (mcp_catalog.is_installed(e.name), mcp_catalog.is_enabled(e.name)) for e in catalog}
+                state = {
+                    e.name: (
+                        mcp_catalog.is_installed(e.name),
+                        mcp_catalog.is_enabled(e.name),
+                    )
+                    for e in catalog
+                }
             return catalog, state
 
         catalog_entries, installed_state = await asyncio.to_thread(_read)
@@ -462,14 +567,19 @@ async def list_mcp_catalog(profile: Optional[str] = None):
 
     diagnostics = []
     try:
-        diagnostics = [{"name": n, "kind": k, "message": m} for (n, k, m) in mcp_catalog.catalog_diagnostics()]
+        diagnostics = [
+            {"name": n, "kind": k, "message": m}
+            for (n, k, m) in mcp_catalog.catalog_diagnostics()
+        ]
     except Exception:
         pass
     return {"entries": entries, "diagnostics": diagnostics}
 
 
 @router.post("/api/mcp/catalog/install")
-async def install_mcp_catalog_entry(body: MCPCatalogInstall, profile: Optional[str] = None):
+async def install_mcp_catalog_entry(
+    body: MCPCatalogInstall, profile: Optional[str] = None
+):
     """Install a catalog MCP into config.yaml (declared env vars go to .env
     first; git-bootstrap entries run via the background CLI action path)."""
     from clawk_cli import mcp_catalog
@@ -502,6 +612,7 @@ async def install_mcp_catalog_entry(body: MCPCatalogInstall, profile: Optional[s
     # values ride preloaded_env into install_entry → config.yaml, so .env stays
     # secrets-only and nothing re-prompts on a non-TTY server.
     if body.env:
+
         def _write_env():
             with _profile_scope(effective_profile):
                 for spec in entry.auth.env or []:
@@ -516,7 +627,9 @@ async def install_mcp_catalog_entry(body: MCPCatalogInstall, profile: Optional[s
     if entry.install is not None:
         action = _mcp_install_action_name(name)
         try:
-            _spawn_clawk_action(_profile_cli_args(effective_profile) + ["mcp", "install", name], action)
+            _spawn_clawk_action(
+                _profile_cli_args(effective_profile) + ["mcp", "install", name], action
+            )
         except HTTPException:
             raise
         except Exception as exc:
@@ -528,7 +641,9 @@ async def install_mcp_catalog_entry(body: MCPCatalogInstall, profile: Optional[s
     try:
         await scoped_to_thread(
             effective_profile,
-            lambda: mcp_catalog.install_entry(entry, enable=body.enable, preloaded_env=body.env or None),
+            lambda: mcp_catalog.install_entry(
+                entry, enable=body.enable, preloaded_env=body.env or None
+            ),
         )
     except HTTPException:
         raise

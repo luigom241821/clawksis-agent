@@ -71,8 +71,17 @@ def _gh_cli_token() -> Optional[str]:
         for var in ("GH_TOKEN", "GITHUB_TOKEN"):
             env.pop(var, None)
         result = subprocess.run(
-            [gh, "auth", "token"], capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=10, stdin=subprocess.DEVNULL, env=env, creationflags=windows_hide_flags(), check=False)
+            [gh, "auth", "token"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            env=env,
+            creationflags=windows_hide_flags(),
+            check=False,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         logger.debug("gh auth token lookup failed: %s", exc)
         return None
@@ -100,15 +109,25 @@ def _credential_fill(origin: str) -> Optional[tuple[str, str]]:
     request = f"protocol=https\nhost={parsed.netloc}\n\n"
     try:
         result = subprocess.run(
-            [git, "-c", "core.askPass=", "credential", "fill"], input=request, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=15, env=env,
-            creationflags=windows_hide_flags(), check=False)
+            [git, "-c", "core.askPass=", "credential", "fill"],
+            input=request,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            env=env,
+            creationflags=windows_hide_flags(),
+            check=False,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         logger.debug("git credential fill failed for %s: %s", origin, exc)
         return None
     if result.returncode != 0:
         return None
-    fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    fields = dict(
+        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+    )
     if fields.get("password"):
         return fields.get("username", ""), fields["password"]
     return None
@@ -124,8 +143,10 @@ def iter_git_basic_auth(url: str) -> Iterator[tuple[str, tuple[str, str]]]:
     seen: set[tuple[str, str]] = set()
     sources = []
     if urllib.parse.urlsplit(origin).hostname in _GITHUB_HOSTS:
-        sources += [("GITHUB_TOKEN/GH_TOKEN", lambda: _token_pair(_env_github_token())),
-                    ("gh auth token", lambda: _token_pair(_gh_cli_token()))]
+        sources += [
+            ("GITHUB_TOKEN/GH_TOKEN", lambda: _token_pair(_env_github_token())),
+            ("gh auth token", lambda: _token_pair(_gh_cli_token())),
+        ]
     sources.append(("git credential helper", lambda: _credential_fill(origin)))
     for source, lookup in sources:
         auth = lookup()
@@ -143,8 +164,9 @@ def resolve_git_basic_auth(url: str) -> Optional[tuple[str, str]]:
     return next((auth for _source, auth in iter_git_basic_auth(url)), None)
 
 
-def with_git_auth(env: Mapping[str, str], url: str,
-                  auth: Optional[tuple[str, str]] = None) -> dict[str, str]:
+def with_git_auth(
+    env: Mapping[str, str], url: str, auth: Optional[tuple[str, str]] = None
+) -> dict[str, str]:
     """Copy of *env* (a :func:`noninteractive_git_env` result) that authenticates HTTPS requests to
     *url*'s origin via a ``GIT_CONFIG_*`` ``http.<origin>/.extraheader`` entry when a credential is
     available (*auth*, else the first stored one); unchanged otherwise. The header lives only in
@@ -166,7 +188,11 @@ def with_git_auth(env: Mapping[str, str], url: str,
 
 
 def _auth_headers(env: Mapping[str, str]) -> set[str]:
-    return {v for k, v in env.items() if k.startswith("GIT_CONFIG_VALUE_") and v.startswith("Authorization:")}
+    return {
+        v
+        for k, v in env.items()
+        if k.startswith("GIT_CONFIG_VALUE_") and v.startswith("Authorization:")
+    }
 
 
 # What git prints when the remote wants a credential it could not obtain: the prompt that
@@ -190,7 +216,11 @@ def is_credential_required_error(result: subprocess.CompletedProcess) -> bool:
 
 
 def run_git_with_credential_fallback(
-    argv: list[str], url: str, *, env: Mapping[str, str], **run_kwargs,
+    argv: list[str],
+    url: str,
+    *,
+    env: Mapping[str, str],
+    **run_kwargs,
 ) -> subprocess.CompletedProcess:
     """Run the git network verb *argv* against *url* anonymously; when the remote refuses with
     the credential-required class, rerun with each credential the user owns for that host, in
@@ -224,12 +254,22 @@ def run_git_with_credential_fallback(
             rejected.append(source)
             continue
         sent |= headers
-        logger.warning("%s rejected the credential from %s; retrying with %s",
-                       _https_origin(url), ", ".join(rejected) or "the stored credential", source)
+        logger.warning(
+            "%s rejected the credential from %s; retrying with %s",
+            _https_origin(url),
+            ", ".join(rejected) or "the stored credential",
+            source,
+        )
         result = subprocess.run(argv, env=candidate_env, **run_kwargs)  # noqa: PLW1510 -- forwarding wrapper: callers pass subprocess kwargs via **kwargs (check may arrive through it); an explicit check=False would raise TypeError
         if result.returncode != 0 and is_credential_required_error(result):
             rejected.append(source)
-    if result.returncode != 0 and "GITHUB_TOKEN/GH_TOKEN" in rejected and isinstance(result.stderr, str):
-        result.stderr += ("\nhint: the GITHUB_TOKEN/GH_TOKEN in your .env was rejected by GitHub;"
-                          " replace it or remove it (gh auth login is used when it is absent).")
+    if (
+        result.returncode != 0
+        and "GITHUB_TOKEN/GH_TOKEN" in rejected
+        and isinstance(result.stderr, str)
+    ):
+        result.stderr += (
+            "\nhint: the GITHUB_TOKEN/GH_TOKEN in your .env was rejected by GitHub;"
+            " replace it or remove it (gh auth login is used when it is absent)."
+        )
     return result

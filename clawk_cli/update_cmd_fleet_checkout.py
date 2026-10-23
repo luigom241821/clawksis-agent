@@ -29,16 +29,25 @@ def checkout_contains(sha: str) -> bool:
     """
     from clawk_cli.build_info import get_code_identity
     from clawk_cli.update_cmd import _m
+
     identity = get_code_identity() or {}
     if identity.get("source") == "build-file":
         stamped = str(identity.get("sha") or "")
-        return bool(stamped) and (stamped == sha or stamped.startswith(sha) or sha.startswith(stamped))
+        return bool(stamped) and (
+            stamped == sha or stamped.startswith(sha) or sha.startswith(stamped)
+        )
     try:
         from clawk_cli.update_custody import run_git
 
         result = run_git(
-            ["git"], ["merge-base", "--is-ancestor", sha, "HEAD"],
-            cwd=_m().PROJECT_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+            ["git"],
+            ["merge-base", "--is-ancestor", sha, "HEAD"],
+            cwd=_m().PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
             # A SHA this checkout lacks is not contained; asking the promisor remote for it would
             # download that commit's entire history (on-demand fetches send no "have" lines).
             env={**noninteractive_git_env(), **NO_LAZY_FETCH_ENV},

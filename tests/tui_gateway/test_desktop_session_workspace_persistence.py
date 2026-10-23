@@ -24,14 +24,19 @@ def _gateway_with_db(monkeypatch, tmp_path):
 
 def _create_desktop_session(params):
     response = server.handle_request(
-        {"id": "create", "method": "session.create",
-         "params": {"source": "desktop", **params}}
+        {
+            "id": "create",
+            "method": "session.create",
+            "params": {"source": "desktop", **params},
+        }
     )
     assert "result" in response, response
     return response["result"]
 
 
-def test_desktop_explicit_cwd_persists_when_local_probe_cannot_see_it(monkeypatch, tmp_path):
+def test_desktop_explicit_cwd_persists_when_local_probe_cannot_see_it(
+    monkeypatch, tmp_path
+):
     db = _gateway_with_db(monkeypatch, tmp_path)
     workspace = tmp_path / "desktop-only-workspace"
     assert not workspace.exists()

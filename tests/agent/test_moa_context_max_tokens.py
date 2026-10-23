@@ -21,10 +21,12 @@ from types import SimpleNamespace
 
 import pytest
 
+
 def _response(content: str = "ok"):
     message = SimpleNamespace(content=content, tool_calls=[])
     choice = SimpleNamespace(message=message, finish_reason="stop")
     return SimpleNamespace(choices=[choice], usage=None, model="fake")
+
 
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
@@ -32,6 +34,7 @@ def clawk_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     return home
+
 
 def test_aggregator_call_never_receives_reference_max_tokens(clawk_home, monkeypatch):
     """reference_max_tokens must cap only the reference fan-out — the
@@ -43,7 +46,9 @@ def test_aggregator_call_never_receives_reference_max_tokens(clawk_home, monkeyp
 
     def fake_call_llm(**kwargs):
         calls.append(kwargs)
-        return _response("advice" if kwargs.get("task") == "moa_reference" else "synthesis")
+        return _response(
+            "advice" if kwargs.get("task") == "moa_reference" else "synthesis"
+        )
 
     monkeypatch.setattr("agent.moa_loop.call_llm", fake_call_llm)
 

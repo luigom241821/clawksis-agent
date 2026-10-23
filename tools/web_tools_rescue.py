@@ -12,18 +12,22 @@ logger = logging.getLogger("tools.web_tools")
 
 # Ring vendor -> env var holding its paid key (keyed mode ⇒ eligible for rescue).
 _RING_KEY_VARS = {
-    "exa": "EXA_API_KEY", "parallel": "PARALLEL_API_KEY",
-    "firecrawl": "FIRECRAWL_API_KEY", "keenable": "KEENABLE_API_KEY",
+    "exa": "EXA_API_KEY",
+    "parallel": "PARALLEL_API_KEY",
+    "firecrawl": "FIRECRAWL_API_KEY",
+    "keenable": "KEENABLE_API_KEY",
 }
 
 
 def _keyless_rescue_enabled() -> bool:
     """``web.keyless_rescue`` (default on), implicitly off when the keyless tier is disabled."""
     from tools.web_tools import _load_web_config
+
     if not _load_web_config().get("keyless_rescue", True):
         return False
     try:
         from agent.web_search_registry import _keyless_tier_enabled
+
         return _keyless_tier_enabled()
     except Exception as exc:
         logger.debug("keyless rescue tier check failed: %s", exc)
@@ -40,9 +44,11 @@ def _ring_vendor_keyless(name: str) -> bool:
     """
     if name == "firecrawl":
         from plugins.web.firecrawl.provider import _use_keyless_ring
+
         return _use_keyless_ring()
     from agent.web_search_provider import get_provider_env
     from plugins.web.keyless_mcp import use_keyless
+
     key_var = _RING_KEY_VARS.get(name, "")
     return use_keyless(name, get_provider_env(key_var) if key_var else "")
 
@@ -52,22 +58,34 @@ def _managed_search_fallback(provider, original_error: str, query: str, limit: i
     Managed Firecrawl is billed, so a caller on free fast search alone never reaches it."""
     from agent.web_search_provider import get_provider_env
     from tools import web_tools as _wt
-    if (getattr(provider, "name", "") != "perplexity"
-            or get_provider_env("PERPLEXITY_API_KEY") or not _wt._managed_web_search() or not _wt._is_tool_gateway_ready()):
+
+    if (
+        getattr(provider, "name", "") != "perplexity"
+        or get_provider_env("PERPLEXITY_API_KEY")
+        or not _wt._managed_web_search()
+        or not _wt._is_tool_gateway_ready()
+    ):
         return None
-    logger.warning("web_search managed Perplexity failed (%s); serving this call from managed Firecrawl", (original_error or "")[:200])
+    logger.warning(
+        "web_search managed Perplexity failed (%s); serving this call from managed Firecrawl",
+        (original_error or "")[:200],
+    )
     try:
         from agent.web_search_registry import get_provider
+
         resp = get_provider("firecrawl").search(query, limit)
     except Exception as exc:
         resp = {"success": False, "error": str(exc)}
     if not resp.get("success"):
-        logger.warning("managed Firecrawl fallback failed too: %s", str(resp.get("error", ""))[:200])
+        logger.warning(
+            "managed Firecrawl fallback failed too: %s",
+            str(resp.get("error", ""))[:200],
+        )
         return None
     resp.setdefault("data", {}).update(
         fallback_from="managed_primary",
         backend_error=f"Primary managed search failed this call ({(original_error or 'unknown error')[:300]}); "
-                      "result served by the managed fallback. The next call will use the primary again.",
+        "result served by the managed fallback. The next call will use the primary again.",
     )
     return resp
 
@@ -83,6 +101,7 @@ def _rescue_eligible(provider) -> bool:
         return False
     try:
         from plugins.web.keyless_mcp import _KEYLESS_RING
+
         name = getattr(provider, "name", "")
         return name not in _KEYLESS_RING or not _ring_vendor_keyless(name)
     except Exception as exc:
@@ -90,12 +109,16 @@ def _rescue_eligible(provider) -> bool:
         return False
 
 
-def _rescue_search(provider_name: str, original_error: str, query: str, limit: int) -> dict:
+def _rescue_search(
+    provider_name: str, original_error: str, query: str, limit: int
+) -> dict:
     """Rescue a failed search via the ring; annotate the result with the original failure."""
     from plugins.web.keyless_mcp import search_with_failover
+
     logger.warning(
         "web_search backend '%s' failed (%s); one-shot keyless rescue",
-        provider_name, (original_error or "")[:200],
+        provider_name,
+        (original_error or "")[:200],
     )
     rescued = search_with_failover(provider_name, query, limit)
     if rescued.get("success"):
@@ -134,7 +157,9 @@ def _rescue_extract(provider_name: str, urls: list, results: list) -> list:
     from plugins.web.keyless_mcp import extract_with_failover
 
     parity = len(results) == len(urls)
-    rescue_idx = [i for i, r in enumerate(results) if not parity or not _policy_blocked_result(r)]
+    rescue_idx = [
+        i for i, r in enumerate(results) if not parity or not _policy_blocked_result(r)
+    ]
     if not rescue_idx:
         return results  # every failure is an intentional policy block
 
@@ -143,7 +168,9 @@ def _rescue_extract(provider_name: str, urls: list, results: list) -> list:
     original_error = next(errors, "extract failed")
     logger.warning(
         "web_extract backend '%s' failed all %d URL(s) (%s); one-shot keyless rescue",
-        provider_name, len(rescue_urls), (original_error or "")[:200],
+        provider_name,
+        len(rescue_urls),
+        (original_error or "")[:200],
     )
     rescued = extract_with_failover(provider_name, list(rescue_urls))
     if rescued and all(r.get("error", "") for r in rescued):

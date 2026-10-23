@@ -58,7 +58,10 @@ def _localize(dt: datetime, tz) -> Optional[float]:
 
 def _parse_iso(text: str, tz=None) -> Optional[float]:
     """Parse an ISO-8601 string (incl. ``+0200`` offsets fromisoformat rejects)."""
-    for parse in (datetime.fromisoformat, lambda t: datetime.strptime(t, "%Y-%m-%dT%H:%M:%S%z")):
+    for parse in (
+        datetime.fromisoformat,
+        lambda t: datetime.strptime(t, "%Y-%m-%dT%H:%M:%S%z"),
+    ):
         try:
             return _localize(parse(text), tz)
         except (TypeError, ValueError):
@@ -70,7 +73,9 @@ def _parse_timestamp_match(match: re.Match, tz=None) -> Optional[float]:
     if match.group("iso"):
         return _parse_iso(match.group("iso"), tz)
     try:
-        dt = datetime.strptime(f"{match.group('date')} {match.group('time')}", "%Y-%m-%d %H:%M:%S")
+        dt = datetime.strptime(
+            f"{match.group('date')} {match.group('time')}", "%Y-%m-%d %H:%M:%S"
+        )
     except ValueError:
         return None
     return _localize(dt, tz)
@@ -107,13 +112,19 @@ def format_message_timestamp(ts_value: Any, tz=None) -> str:
     try:
         # An early positive epoch can fall in 1969 locally. Starting from aware
         # UTC avoids Windows' negative-time fold probe in naive astimezone().
-        dt = datetime.fromtimestamp(epoch, tz=tz) if tz is not None else datetime.fromtimestamp(epoch, tz=UTC).astimezone()
+        dt = (
+            datetime.fromtimestamp(epoch, tz=tz)
+            if tz is not None
+            else datetime.fromtimestamp(epoch, tz=UTC).astimezone()
+        )
     except (OSError, OverflowError, ValueError):
         return ""
     return f"[{safe_strftime(dt, '%a %Y-%m-%d %H:%M:%S %Z')}]"
 
 
-def strip_leading_message_timestamps(content: str, tz=None) -> tuple[str, Optional[float]]:
+def strip_leading_message_timestamps(
+    content: str, tz=None
+) -> tuple[str, Optional[float]]:
     """Strip leading gateway timestamp prefixes → ``(clean_content, embedded_epoch)``.
     With several prefixes the one closest to the text wins, preserving the platform-send
     time of legacy rows like ``[processing time] [platform time] [sender] message``."""
@@ -124,13 +135,21 @@ def strip_leading_message_timestamps(content: str, tz=None) -> tuple[str, Option
         parsed = _parse_timestamp_match(match, tz=tz)
         if parsed is not None:
             embedded_epoch = parsed
-        text = text[match.end():]
+        text = text[match.end() :]
     return text, embedded_epoch
 
 
-def render_user_content_with_timestamp(content: str, ts_value: Any = None, tz=None) -> str:
+def render_user_content_with_timestamp(
+    content: str, ts_value: Any = None, tz=None
+) -> str:
     """Render a user message for LLM context with exactly one timestamp prefix; an
     existing prefix is stripped and its parsed time wins over ``ts_value``."""
     clean_content, embedded_epoch = strip_leading_message_timestamps(content, tz=tz)
-    prefix = format_message_timestamp(ts_value if embedded_epoch is None else embedded_epoch, tz=tz)
-    return f"{prefix} {clean_content}" if prefix and clean_content else (prefix or clean_content)
+    prefix = format_message_timestamp(
+        ts_value if embedded_epoch is None else embedded_epoch, tz=tz
+    )
+    return (
+        f"{prefix} {clean_content}"
+        if prefix and clean_content
+        else (prefix or clean_content)
+    )

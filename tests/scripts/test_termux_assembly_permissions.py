@@ -1,4 +1,5 @@
 """Exercise the build mount's real Linux UID permissions, not Android binaries."""
+
 import json
 import os
 from pathlib import Path
@@ -16,20 +17,26 @@ IMAGE = "python@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c220
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("build_exit", [0, 23], ids=["success", "failed-build"])
-def test_assembly_publishes_facts_as_termux_uid_and_returns_host_owned_output(tmp_path, build_exit):
+def test_assembly_publishes_facts_as_termux_uid_and_returns_host_owned_output(
+    tmp_path, build_exit
+):
     if not shutil.which("docker"):
         pytest.skip("Docker is required for the bind-mount ownership regression")
     # A daemon that hangs past the probe timeout is as unavailable as one that refuses
     # (CI runner daemons do both); only the assembly run below may fail this test.
     try:
         available = subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=15,
+            ["docker", "info"],
+            capture_output=True,
+            timeout=15,
             check=False,
         )
         if available.returncode:
             pytest.skip("Docker daemon is unavailable")
         image = subprocess.run(
-            ["docker", "image", "inspect", IMAGE], capture_output=True, timeout=15,
+            ["docker", "image", "inspect", IMAGE],
+            capture_output=True,
+            timeout=15,
             check=False,
         )
         if image.returncode:
@@ -43,10 +50,15 @@ def test_assembly_publishes_facts_as_termux_uid_and_returns_host_owned_output(tm
         entry = payload / name
         entry.mkdir()
         (entry / "bytes").write_bytes(b"read-only staged tool bytes")
-    before = {path: (path.stat().st_uid, path.stat().st_gid, path.stat().st_mode)
-              for path in payload.rglob("*")}
+    before = {
+        path: (path.stat().st_uid, path.stat().st_gid, path.stat().st_mode)
+        for path in payload.rglob("*")
+    }
     result = subprocess.run(
-        ["bash", "-c", r'''
+        [
+            "bash",
+            "-c",
+            r"""
 set -euo pipefail
 IMAGE="$1"; PAYLOAD_ABS="$2"; REPO="$3"
 source "$REPO/scripts/termux/assembly_permissions.sh"
@@ -67,12 +79,21 @@ docker run --rm --user 1000:1000 --network none \
         stat -c "%u:%g" /assembly/tools/facts.json > /assembly/writer
         exit "$1"
     ' sh "$4"
-''', "assembly-permissions-test", IMAGE, str(payload), str(ROOT), str(build_exit)],
-        cwd=ROOT, capture_output=True, text=True, timeout=90,
+""",
+            "assembly-permissions-test",
+            IMAGE,
+            str(payload),
+            str(ROOT),
+            str(build_exit),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=90,
         check=False,
     )
     assert result.returncode == build_exit, result.stdout + result.stderr
-    assembly, = payload.glob(".environments-*")
+    (assembly,) = payload.glob(".environments-*")
     facts = json.loads((assembly / "tools/facts.json").read_text())
     assert set(facts["packages"]) == {"python", "uv"}
     assert (assembly / "writer").read_text().strip() == "1000:1000"
@@ -81,6 +102,8 @@ docker run --rm --user 1000:1000 --network none \
         info = path.stat()
         assert (info.st_uid, info.st_gid) == (os.getuid(), os.getgid()), path
         assert not info.st_mode & 0o022, path
-    assert {path: (path.stat().st_uid, path.stat().st_gid, path.stat().st_mode)
-            for path in before} == before
+    assert {
+        path: (path.stat().st_uid, path.stat().st_gid, path.stat().st_mode)
+        for path in before
+    } == before
     shutil.rmtree(assembly)

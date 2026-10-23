@@ -19,8 +19,12 @@ class _RecordingProfile:
         return ["relay-only-model"]
 
 
-@pytest.mark.parametrize("provider", ["openai-codex", "copilot", "nous", "opencode-zen", "openrouter"])
-def test_canonical_url_preserves_native_catalog_but_other_paths_stay_relays(monkeypatch, provider):
+@pytest.mark.parametrize(
+    "provider", ["openai-codex", "copilot", "nous", "opencode-zen", "openrouter"]
+)
+def test_canonical_url_preserves_native_catalog_but_other_paths_stay_relays(
+    monkeypatch, provider
+):
     from clawk_cli.config import atomic_config_write
     from clawk_constants import get_clawk_home
     from providers import get_provider_profile
@@ -39,15 +43,23 @@ def test_canonical_url_preserves_native_catalog_but_other_paths_stay_relays(monk
     host, _, path = rest.partition("/")
     # Same route spelled differently: scheme/host case, explicit default port, trailing slash.
     shouted = f"{scheme.upper()}://{host.upper()}:443{'/' + path if path else ''}/"
-    for base_url, expected in [(canonical, [provider]), (shouted, [provider]), (canonical + "/relay", [])]:
+    for base_url, expected in [
+        (canonical, [provider]),
+        (shouted, [provider]),
+        (canonical + "/relay", []),
+    ]:
         calls.clear()
-        atomic_config_write(config_path, {"model": {"provider": provider, "base_url": base_url}})
+        atomic_config_write(
+            config_path, {"model": {"provider": provider, "base_url": base_url}}
+        )
         catalog = models.provider_model_ids(provider, force_refresh=True)
         assert calls == expected
         assert ("native-catalog-model" in catalog) == bool(expected)
 
 
-def test_registry_endpoint_is_canonical_when_the_profile_leaves_base_url_empty(monkeypatch):
+def test_registry_endpoint_is_canonical_when_the_profile_leaves_base_url_empty(
+    monkeypatch,
+):
     """TokenHub's profile leaves ``base_url`` to its auth-registry row. A ``model.base_url`` that
     ``clawk model`` saved as that endpoint is not a relay: the picker keeps the curated Hy list
     instead of replacing it with a live probe of the same host."""
@@ -56,11 +68,17 @@ def test_registry_endpoint_is_canonical_when_the_profile_leaves_base_url_empty(m
 
     assert get_provider_profile("tencent-tokenhub").base_url == ""
     endpoint = PROVIDER_REGISTRY["tencent-tokenhub"].inference_base_url
-    monkeypatch.setattr(models, "_get_model_config_dict",
-                        lambda: {"provider": "tencent-tokenhub", "base_url": endpoint + "/"})
+    monkeypatch.setattr(
+        models,
+        "_get_model_config_dict",
+        lambda: {"provider": "tencent-tokenhub", "base_url": endpoint + "/"},
+    )
     assert models._configured_relay_base_url("tencent-tokenhub") == ""
-    monkeypatch.setattr(models, "_get_model_config_dict",
-                        lambda: {"provider": "tencent-tokenhub", "base_url": endpoint + "/relay"})
+    monkeypatch.setattr(
+        models,
+        "_get_model_config_dict",
+        lambda: {"provider": "tencent-tokenhub", "base_url": endpoint + "/relay"},
+    )
     assert models._configured_relay_base_url("tencent-tokenhub") == endpoint + "/relay"
 
 
@@ -113,7 +131,9 @@ def test_base_url_for_a_different_provider_is_ignored(monkeypatch):
         pytest.param([], id="relay-404-empty-catalog"),
     ],
 )
-def test_a_failed_relay_probe_never_falls_back_to_the_vendor_host(monkeypatch, probe_result):
+def test_a_failed_relay_probe_never_falls_back_to_the_vendor_host(
+    monkeypatch, probe_result
+):
     """Egress sentinel: a configured relay is TERMINAL for live catalog egress.
 
     A relay that 404s, hangs or returns nothing must degrade to the LOCAL curated list.

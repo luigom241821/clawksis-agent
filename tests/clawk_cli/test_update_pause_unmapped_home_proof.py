@@ -23,16 +23,23 @@ import pytest
 from gateway.status import get_process_start_time
 from clawk_cli import dashboard_procs, gateway, process_identity, update_cmd_windows
 from clawk_cli import update_pause_record as pause_record
-from clawk_cli.update_cmd_windows import _pause_windows_gateways_for_update, _unmapped_ready_filter
+from clawk_cli.update_cmd_windows import (
+    _pause_windows_gateways_for_update,
+    _unmapped_ready_filter,
+)
 
 
 @pytest.fixture
 def homes_and_spawn(tmp_path):
-    entry = tmp_path / "bin" / "clawk"  # a ``clawk`` entry token: the cmdline reads as a gateway
+    entry = (
+        tmp_path / "bin" / "clawk"
+    )  # a ``clawk`` entry token: the cmdline reads as a gateway
     entry.parent.mkdir()
     entry.write_text("import time\ntime.sleep(60)\n", encoding="utf-8")
     argv = [sys.executable, str(entry), "gateway", "run"]
-    root = os.environ["CLAWK_HOME"]  # the sandboxed home this update owns, with two profiles
+    root = os.environ[
+        "CLAWK_HOME"
+    ]  # the sandboxed home this update owns, with two profiles
     home_a, home_b = (os.path.join(root, "profiles", name) for name in ("a", "b"))
     os.makedirs(home_a)
     os.makedirs(home_b)
@@ -51,23 +58,53 @@ def homes_and_spawn(tmp_path):
 
 @pytest.mark.platforms("linux")
 @pytest.mark.spawns_gateway_lookalike  # stub children that sleep; the fixture reaps them
-def test_a_ledger_proven_unmapped_gateway_is_recorded_with_its_home(homes_and_spawn, monkeypatch):
+def test_a_ledger_proven_unmapped_gateway_is_recorded_with_its_home(
+    homes_and_spawn, monkeypatch
+):
     home_a, home_b, spawn = homes_and_spawn
     a = spawn(home_a)
     time.sleep(0.05)
     ct = process_identity._process_create_time(a.pid)
-    assert process_identity._append_entry(process_identity.LedgerEntry(
-        a.pid, ct, "gateway", process_identity.install_id(), None, None, time.time(), "", clawk_home=home_a))
+    assert process_identity._append_entry(
+        process_identity.LedgerEntry(
+            a.pid,
+            ct,
+            "gateway",
+            process_identity.install_id(),
+            None,
+            None,
+            time.time(),
+            "",
+            clawk_home=home_a,
+        )
+    )
     real_environ = dashboard_procs._pid_environ
-    monkeypatch.setattr(dashboard_procs, "_pid_environ", lambda pid: None if pid == a.pid else real_environ(pid))
+    monkeypatch.setattr(
+        dashboard_procs,
+        "_pid_environ",
+        lambda pid: None if pid == a.pid else real_environ(pid),
+    )
     from clawk_cli import main
+
     monkeypatch.setattr(main, "_is_windows", lambda: True)
-    monkeypatch.setattr(gateway, "find_gateway_pids", lambda all_profiles=False: [a.pid])
-    monkeypatch.setattr(gateway, "find_profile_gateway_processes", lambda strict=False: [])
-    monkeypatch.setattr(gateway, "find_windows_gateway_services", lambda profile_processes=(): [])
+    monkeypatch.setattr(
+        gateway, "find_gateway_pids", lambda all_profiles=False: [a.pid]
+    )
+    monkeypatch.setattr(
+        gateway, "find_profile_gateway_processes", lambda strict=False: []
+    )
+    monkeypatch.setattr(
+        gateway, "find_windows_gateway_services", lambda profile_processes=(): []
+    )
     stopped = []
-    monkeypatch.setattr(update_cmd_windows, "_stop_windows_gateways", lambda *a, **k: stopped.append(a[0]) or {})
-    monkeypatch.setattr(update_cmd_windows, "_record_attested_cold_start_profiles", lambda *a: None)
+    monkeypatch.setattr(
+        update_cmd_windows,
+        "_stop_windows_gateways",
+        lambda *a, **k: stopped.append(a[0]) or {},
+    )
+    monkeypatch.setattr(
+        update_cmd_windows, "_record_attested_cold_start_profiles", lambda *a: None
+    )
 
     _pause_windows_gateways_for_update()
     assert stopped == [[a.pid]]
@@ -76,17 +113,24 @@ def test_a_ledger_proven_unmapped_gateway_is_recorded_with_its_home(homes_and_sp
 
     a.kill()
     a.wait(timeout=10)
-    time.sleep(0.05)  # a later clock tick: a replacement is born after the process it replaces
+    time.sleep(
+        0.05
+    )  # a later clock tick: a replacement is born after the process it replaces
     sibling = spawn(home_b)
-    assert _unmapped_ready_filter(entry, set())([sibling.pid]) == [], \
+    assert _unmapped_ready_filter(entry, set())([sibling.pid]) == [], (
         "home B's gateway with A's argv retired A's restart debt"
+    )
     replacement = spawn(home_a)
-    assert _unmapped_ready_filter(entry, set())([sibling.pid, replacement.pid]) == [replacement.pid]
+    assert _unmapped_ready_filter(entry, set())([sibling.pid, replacement.pid]) == [
+        replacement.pid
+    ]
 
 
 @pytest.mark.platforms("linux")
 @pytest.mark.spawns_gateway_lookalike
-def test_a_recorded_but_empty_home_is_never_matched_only_a_pre_home_entry_is(homes_and_spawn):
+def test_a_recorded_but_empty_home_is_never_matched_only_a_pre_home_entry_is(
+    homes_and_spawn,
+):
     home_a, home_b, spawn = homes_and_spawn
     old = spawn(home_a)
     argv = list(psutil.Process(old.pid).cmdline())
@@ -95,7 +139,13 @@ def test_a_recorded_but_empty_home_is_never_matched_only_a_pre_home_entry_is(hom
     old.wait(timeout=10)
     time.sleep(0.05)
     sibling = spawn(home_b)
-    assert _unmapped_ready_filter({"pid": old.pid, "argv": argv, "home": None, "ct": born}, set())([sibling.pid]) == [], \
-        "a newly incomplete record took the legacy argv-only match"
+    assert (
+        _unmapped_ready_filter(
+            {"pid": old.pid, "argv": argv, "home": None, "ct": born}, set()
+        )([sibling.pid])
+        == []
+    ), "a newly incomplete record took the legacy argv-only match"
     # A token from an updater that predates the home field has nothing else to match on.
-    assert _unmapped_ready_filter({"pid": old.pid, "argv": argv}, set())([sibling.pid]) == [sibling.pid]
+    assert _unmapped_ready_filter({"pid": old.pid, "argv": argv}, set())(
+        [sibling.pid]
+    ) == [sibling.pid]

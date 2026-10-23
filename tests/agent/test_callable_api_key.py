@@ -32,6 +32,7 @@ from unittest.mock import MagicMock
 # OpenAI SDK construction preserves the callable
 # ---------------------------------------------------------------------------
 
+
 class TestCreateOpenAIClientCallable:
     """``AIAgent._create_openai_client`` must pass the callable through
     to ``openai.OpenAI(...)`` without coercion."""
@@ -77,9 +78,11 @@ class TestCreateOpenAIClientCallable:
         )
         assert client is not None
 
+
 # ---------------------------------------------------------------------------
 # Auxiliary runtime preserves the callable
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeMainRuntimePreservesCallable:
     """The aux client orchestrator must keep the callable on the
@@ -92,28 +95,35 @@ class TestNormalizeMainRuntimePreservesCallable:
         def provider():
             return "jwt"
 
-        normalized = _normalize_main_runtime({
-            "provider": "azure-foundry",
-            "model": "gpt-4o",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_key": provider,
-            "api_mode": "chat_completions",
-            "auth_mode": "entra_id",
-        })
+        normalized = _normalize_main_runtime(
+            {
+                "provider": "azure-foundry",
+                "model": "gpt-4o",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_key": provider,
+                "api_mode": "chat_completions",
+                "auth_mode": "entra_id",
+            }
+        )
         assert normalized["api_key"] is provider
         assert normalized["auth_mode"] == "entra_id"
 
     def test_string_api_key_still_works(self):
         from agent.auxiliary_client import _normalize_main_runtime
-        normalized = _normalize_main_runtime({
-            "provider": "azure-foundry",
-            "api_key": "sk-static",
-        })
+
+        normalized = _normalize_main_runtime(
+            {
+                "provider": "azure-foundry",
+                "api_key": "sk-static",
+            }
+        )
         assert normalized["api_key"] == "sk-static"
+
 
 # ---------------------------------------------------------------------------
 # Display surfaces never invoke the callable
 # ---------------------------------------------------------------------------
+
 
 class TestTruncateTokenCallable:
     def test_callable_returns_placeholder(self):
@@ -134,14 +144,17 @@ class TestTruncateTokenCallable:
 
     def test_string_jwt_still_truncated_to_signature_tail(self):
         from clawk_cli.web_server_oauth import _truncate_token
+
         # JWT shape: header.payload.signature → only signature tail shown.
         out = _truncate_token("aaaa.bbbb.cccccccsig", visible=4)
         assert out == "…csig"
 
     def test_empty_returns_empty(self):
         from clawk_cli.web_server_oauth import _truncate_token
+
         assert _truncate_token(None) == ""
         assert _truncate_token("") == ""
+
 
 # ---------------------------------------------------------------------------
 # Serialization scrub — runtime dicts with callables must NOT silently

@@ -27,7 +27,9 @@ def _adapter():
 async def test_thread_create_slash_survives_expired_defer(tmp_path, monkeypatch):
     adapter = _adapter()
     interaction = SimpleNamespace(
-        response=SimpleNamespace(defer=AsyncMock(side_effect=_UnknownInteraction("Unknown interaction"))),
+        response=SimpleNamespace(
+            defer=AsyncMock(side_effect=_UnknownInteraction("Unknown interaction"))
+        ),
         followup=SimpleNamespace(send=AsyncMock()),
     )
     adapter._create_thread = AsyncMock(

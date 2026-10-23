@@ -30,8 +30,14 @@ class _FakeCLI:
 
 
 def _live_session():
-    return {"session_key": "seed-key", "running": False, "history": [],
-            "history_lock": threading.Lock(), "agent": None, "cwd": ""}
+    return {
+        "session_key": "seed-key",
+        "running": False,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "agent": None,
+        "cwd": "",
+    }
 
 
 def test_run_harvests_pending_agent_seed():
@@ -89,7 +95,9 @@ def test_slash_exec_routes_seed_as_send_dispatch(monkeypatch):
     server._sessions[sid] = session
     monkeypatch.setattr(server, "_SlashWorker", _SeedingWorker)
     try:
-        resp = server._methods["slash.exec"](1, {"session_id": sid, "command": "/prompt"})
+        resp = server._methods["slash.exec"](
+            1, {"session_id": sid, "command": "/prompt"}
+        )
     finally:
         server._sessions.pop(sid, None)
 
@@ -115,7 +123,9 @@ def test_slash_exec_plain_output_unchanged_when_no_seed(monkeypatch):
 
     monkeypatch.setattr(server, "_SlashWorker", _PlainWorker)
     try:
-        resp = server._methods["slash.exec"](1, {"session_id": sid, "command": "/journey"})
+        resp = server._methods["slash.exec"](
+            1, {"session_id": sid, "command": "/journey"}
+        )
     finally:
         server._sessions.pop(sid, None)
 

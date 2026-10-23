@@ -45,8 +45,11 @@ class _Adapter(BasePlatformAdapter):
 
 
 def _event(text: str) -> MessageEvent:
-    return MessageEvent(text=text, message_type=MessageType.TEXT,
-                        source=SessionSource(platform=Platform.TELEGRAM, chat_id="c", chat_type="dm"))
+    return MessageEvent(
+        text=text,
+        message_type=MessageType.TEXT,
+        source=SessionSource(platform=Platform.TELEGRAM, chat_id="c", chat_type="dm"),
+    )
 
 
 @pytest.mark.asyncio
@@ -92,4 +95,6 @@ async def test_enqueue_then_flush_delivers_merged_text_once():
     adapter._enqueue_text_event(_event("part two"))
     await asyncio.gather(*adapter._pending_text_batch_tasks.values())
     assert [e.text for e in adapter.dispatched] == ["part one\npart two"]
-    assert adapter._pending_text_batches == {} and adapter._pending_text_batch_tasks == {}
+    assert (
+        adapter._pending_text_batches == {} and adapter._pending_text_batch_tasks == {}
+    )

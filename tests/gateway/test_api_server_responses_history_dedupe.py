@@ -21,7 +21,15 @@ def _agent_turn(history, user_message, answer):
     messages = list(history)
     append_message(messages, {"role": "user", "content": user_message})
     repair_message_sequence(_Agent(), messages)
-    append_message(messages, {"role": "assistant", "content": answer, "reasoning": "r", "finish_reason": "stop"})
+    append_message(
+        messages,
+        {
+            "role": "assistant",
+            "content": answer,
+            "reasoning": "r",
+            "finish_reason": "stop",
+        },
+    )
     return {"messages": messages}
 
 

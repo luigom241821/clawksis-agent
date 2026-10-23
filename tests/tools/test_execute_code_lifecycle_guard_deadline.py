@@ -20,9 +20,16 @@ def test_wedged_lifecycle_probe_returns_bounded_error_without_running(monkeypatc
     monkeypatch.setattr(cet, "SANDBOX_AVAILABLE", True)
     monkeypatch.setattr(cet, "_load_config", lambda: {"timeout": 0.05})
     monkeypatch.setattr(terminal_module, "_PRE_EXEC_GUARD_MIN_TIMEOUT_S", 0)
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: time.sleep(1))
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: time.sleep(1)
+    )
     ran: list[str] = []
-    monkeypatch.setattr(cet, "_get_env_config", lambda: ran.append("env") or {"env_type": "local"}, raising=False)
+    monkeypatch.setattr(
+        cet,
+        "_get_env_config",
+        lambda: ran.append("env") or {"env_type": "local"},
+        raising=False,
+    )
 
     start = time.monotonic()
     result = json.loads(cet.execute_code("print('hi')"))
@@ -38,8 +45,19 @@ def test_interpreter_kill_in_execute_code_names_the_owned_process_route(monkeypa
     proc_* / explicit-PID rejection, not the generic lifecycle text."""
     from tools import process_registry
 
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: True)
-    result = json.loads(cet.execute_code('import subprocess; subprocess.run(["pkill", "-9", "python3"])'))
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: True
+    )
+    result = json.loads(
+        cet.execute_code(
+            'import subprocess; subprocess.run(["pkill", "-9", "python3"])'
+        )
+    )
     assert "proc_" in result["error"] and "explicit PID" in result["error"]
-    generic = json.loads(cet.execute_code('import os; os.system("clawk gateway restart")'))
-    assert "proc_" not in generic["error"] and "cannot restart or stop the gateway" in generic["error"]
+    generic = json.loads(
+        cet.execute_code('import os; os.system("clawk gateway restart")')
+    )
+    assert (
+        "proc_" not in generic["error"]
+        and "cannot restart or stop the gateway" in generic["error"]
+    )

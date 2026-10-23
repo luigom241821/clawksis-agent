@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 from tools.delegate_tool import _strip_blocked_tools, _emit_parent_console
 
+
 class TestToolsetIntersection:
     """Subagent toolsets must be a subset of parent's enabled_toolsets."""
 
@@ -20,6 +21,7 @@ class TestToolsetIntersection:
         assert "clarify" not in child
         assert "memory" not in child
         assert "terminal" in child
+
 
 class TestEmitParentConsole:
     """Progress lines (e.g. ``✓ [N/M] …``) must route through the parent's

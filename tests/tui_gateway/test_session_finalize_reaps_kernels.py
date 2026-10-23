@@ -21,8 +21,16 @@ SESSION_KEY = "20260907_120000_abcdef"
 
 
 def _session() -> dict:
-    return {"active_session_lease": None, "agent": None, "history": [], "history_lock": threading.Lock(),
-            "profile_home": None, "session_key": SESSION_KEY, "slash_worker": None, "source": "desktop"}
+    return {
+        "active_session_lease": None,
+        "agent": None,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "profile_home": None,
+        "session_key": SESSION_KEY,
+        "slash_worker": None,
+        "source": "desktop",
+    }
 
 
 @pytest.fixture
@@ -53,9 +61,13 @@ def _stored_source(monkeypatch, source):
     monkeypatch.setattr(server, "_session_db", _profile_db)
 
 
-@pytest.mark.parametrize("source, end_reason", [
-    ("desktop", "tui_close"), ("desktop", "ws_orphan_reap"), (None, "idle_timeout")])
-def test_tui_owned_finalize_disposes_the_sessions_kernels(monkeypatch, live_kernel, source, end_reason):
+@pytest.mark.parametrize(
+    "source, end_reason",
+    [("desktop", "tui_close"), ("desktop", "ws_orphan_reap"), (None, "idle_timeout")],
+)
+def test_tui_owned_finalize_disposes_the_sessions_kernels(
+    monkeypatch, live_kernel, source, end_reason
+):
     _stored_source(monkeypatch, source)
 
     server._finalize_session(_session(), end_reason=end_reason)
@@ -65,7 +77,9 @@ def test_tui_owned_finalize_disposes_the_sessions_kernels(monkeypatch, live_kern
     assert not approval.is_session_yolo_enabled(SESSION_KEY)
 
 
-def test_viewer_finalize_keeps_a_gateway_owned_sessions_kernels(monkeypatch, live_kernel):
+def test_viewer_finalize_keeps_a_gateway_owned_sessions_kernels(
+    monkeypatch, live_kernel
+):
     _stored_source(monkeypatch, "telegram")
 
     server._finalize_session(_session(), end_reason="tui_shutdown")

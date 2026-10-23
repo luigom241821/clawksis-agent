@@ -30,6 +30,7 @@ Invariants pinned here:
    request-client identity rather than masking the signal used to poison the
    slot.
 """
+
 from contextlib import contextmanager
 import threading
 import time
@@ -148,15 +149,18 @@ def test_worker_interrupt_break_closes_stream():
 
     stream = _FakeStream(chunks)
 
-    with patch.object(
-        agent, "_create_request_openai_client", return_value=_mock_wire_client(stream)
-    ), patch.object(agent, "_close_request_openai_client"):
+    with (
+        patch.object(
+            agent,
+            "_create_request_openai_client",
+            return_value=_mock_wire_client(stream),
+        ),
+        patch.object(agent, "_close_request_openai_client"),
+    ):
         with pytest.raises(InterruptedError):
             agent._interruptible_streaming_api_call({})
 
     assert stream.close_calls == 1
-
-
 
 
 def test_relay_managed_close_failure_poisons_request_client(tmp_path, monkeypatch):
@@ -172,13 +176,18 @@ def test_relay_managed_close_failure_poisons_request_client(tmp_path, monkeypatc
     request_client = _mock_wire_client(stream)
     abort_reasons = []
 
-    with _managed_relay_turn(agent, tmp_path, monkeypatch), patch.object(
-        agent, "_create_request_openai_client", return_value=request_client
-    ), patch.object(agent, "_close_request_openai_client"), patch.object(
-        agent,
-        "_abort_request_openai_client",
-        side_effect=lambda client, *, reason: abort_reasons.append(
-            (client, reason)
+    with (
+        _managed_relay_turn(agent, tmp_path, monkeypatch),
+        patch.object(
+            agent, "_create_request_openai_client", return_value=request_client
+        ),
+        patch.object(agent, "_close_request_openai_client"),
+        patch.object(
+            agent,
+            "_abort_request_openai_client",
+            side_effect=lambda client, *, reason: abort_reasons.append(
+                (client, reason)
+            ),
         ),
     ):
         with pytest.raises(InterruptedError):
@@ -235,16 +244,19 @@ def test_stale_abort_is_atomic_with_holder_read(monkeypatch):
             time.sleep(0.02)
         observed["worker_finished_during_abort"] = bool(worker_close_reasons)
 
-    with patch.object(
-        agent, "_create_request_openai_client", return_value=_mock_wire_client(stream)
-    ), patch.object(
-        agent,
-        "_close_request_openai_client",
-        side_effect=lambda client, *, reason: worker_close_reasons.append(reason),
-    ), patch.object(
-        agent, "_abort_request_openai_client", side_effect=fake_abort
-    ), patch.object(
-        agent, "_replace_primary_openai_client"
+    with (
+        patch.object(
+            agent,
+            "_create_request_openai_client",
+            return_value=_mock_wire_client(stream),
+        ),
+        patch.object(
+            agent,
+            "_close_request_openai_client",
+            side_effect=lambda client, *, reason: worker_close_reasons.append(reason),
+        ),
+        patch.object(agent, "_abort_request_openai_client", side_effect=fake_abort),
+        patch.object(agent, "_replace_primary_openai_client"),
     ):
         response = agent._interruptible_streaming_api_call({})
 
@@ -296,14 +308,14 @@ def test_direct_api_call_abort_is_atomic_with_holder_read():
             time.sleep(0.02)
         observed["close_during_abort"] = bool(close_reasons)
 
-    with patch.object(
-        agent, "_create_request_openai_client", return_value=client
-    ), patch.object(
-        agent,
-        "_close_request_openai_client",
-        side_effect=lambda c, *, reason: close_reasons.append(reason),
-    ), patch.object(
-        agent, "_abort_request_openai_client", side_effect=fake_abort
+    with (
+        patch.object(agent, "_create_request_openai_client", return_value=client),
+        patch.object(
+            agent,
+            "_close_request_openai_client",
+            side_effect=lambda c, *, reason: close_reasons.append(reason),
+        ),
+        patch.object(agent, "_abort_request_openai_client", side_effect=fake_abort),
     ):
         result = {}
 
@@ -313,7 +325,10 @@ def test_direct_api_call_abort_is_atomic_with_holder_read():
         owner_thread = threading.Thread(target=owner, daemon=True)
         owner_thread.start()
         deadline = time.time() + 5.0
-        while time.time() < deadline and getattr(agent, "_active_request_abort", None) is None:
+        while (
+            time.time() < deadline
+            and getattr(agent, "_active_request_abort", None) is None
+        ):
             time.sleep(0.01)
         abort_fn = getattr(agent, "_active_request_abort", None)
         assert abort_fn is not None
@@ -402,9 +417,10 @@ def test_codex_stream_close_failure_on_primary_client_does_not_abort():
     primary = MagicMock()
     primary.responses.create.return_value = stream
 
-    with patch.object(
-        agent, "_ensure_primary_openai_client", return_value=primary
-    ), patch.object(agent, "_abort_request_openai_client") as abort_mock:
+    with (
+        patch.object(agent, "_ensure_primary_openai_client", return_value=primary),
+        patch.object(agent, "_abort_request_openai_client") as abort_mock,
+    ):
         final = run_codex_stream(agent, {"model": "test/model"}, client=None)
 
     assert final.output_text == "hello"

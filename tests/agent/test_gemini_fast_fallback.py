@@ -6,6 +6,7 @@ when the pool exists, has an available entry, and has more than one entry to
 rotate to; otherwise we should fall back to the configured fallback provider
 immediately.
 """
+
 import inspect
 from unittest.mock import MagicMock
 
@@ -24,13 +25,7 @@ def test_multi_entry_pool_recovers():
     assert _pool_may_recover_from_rate_limit(_pool(entries=3)) is True
 
 
-
-
 def test_exhausted_pool_skips_rotation():
     p = MagicMock()
     p.has_available.return_value = False
     assert _pool_may_recover_from_rate_limit(p) is False
-
-
-
-

@@ -30,7 +30,14 @@ from tools.tts_streaming import SentenceChunker
 class FakeStreamer:
     """Fake streaming provider that yields deterministic PCM chunks."""
 
-    def __init__(self, chunks_per_clause=3, fail_on_clause=None, sample_rate=24000, channels=1, sample_width=2):
+    def __init__(
+        self,
+        chunks_per_clause=3,
+        fail_on_clause=None,
+        sample_rate=24000,
+        channels=1,
+        sample_width=2,
+    ):
         self.chunks_per_clause = chunks_per_clause
         self.fail_on_clause = fail_on_clause
         self.sample_rate = sample_rate
@@ -117,9 +124,13 @@ def _make_consumer(adapter, chat_id, loop, streamer):
     consumer._loop = loop
     consumer._metadata = None
     consumer._audio_format = AudioFormat(
-        sample_rate=int(getattr(streamer, "sample_rate", 24000)) if streamer is not None else 24000,
+        sample_rate=int(getattr(streamer, "sample_rate", 24000))
+        if streamer is not None
+        else 24000,
         channels=int(getattr(streamer, "channels", 1)) if streamer is not None else 1,
-        sample_width=int(getattr(streamer, "sample_width", 2)) if streamer is not None else 2,
+        sample_width=int(getattr(streamer, "sample_width", 2))
+        if streamer is not None
+        else 2,
     )
     consumer._streamer = streamer  # type: ignore[assignment]
     consumer._chunker = SentenceChunker()
@@ -184,33 +195,52 @@ def gateway_tts_turn(monkeypatch, tmp_path):
 
     def make(loop):
         streamer, adapter = Streamer(), Adapter()
-        monkeypatch.setattr("tools.tts_streaming.resolve_streaming_provider", lambda cfg: streamer)
+        monkeypatch.setattr(
+            "tools.tts_streaming.resolve_streaming_provider", lambda cfg: streamer
+        )
         tts = StreamingTTSConsumer(adapter, "voice", {}, loop)
         ctx = TurnContext(
-            streaming_tts_consumer_holder=[tts], user_config={},
-            resolve_display_setting=lambda *args: True, interim_assistant_messages_enabled=True,
-            source=SimpleNamespace(platform=SimpleNamespace(value="realtime"), chat_id="voice"),
+            streaming_tts_consumer_holder=[tts],
+            user_config={},
+            resolve_display_setting=lambda *args: True,
+            interim_assistant_messages_enabled=True,
+            source=SimpleNamespace(
+                platform=SimpleNamespace(value="realtime"), chat_id="voice"
+            ),
             _run_still_current=lambda: True,
         )
         runner = SimpleNamespace(
             config=SimpleNamespace(streaming=StreamingConfig()),
             _delivery_adapter_for=lambda source: adapter,
-            _build_stream_consumer_config=lambda *args, **kwargs: (StreamConsumerConfig(), None),
+            _build_stream_consumer_config=lambda *args, **kwargs: (
+                StreamConsumerConfig(),
+                None,
+            ),
         )
-        _, delta, interim, _ = TurnRunner(runner, ctx)._setup_stream_consumer("realtime")
+        _, delta, interim, _ = TurnRunner(runner, ctx)._setup_stream_consumer(
+            "realtime"
+        )
         agent = Agent()
-        agent.stream_delta_callback, agent._stream_callback, agent.interim_assistant_callback = delta, None, interim
+        (
+            agent.stream_delta_callback,
+            agent._stream_callback,
+            agent.interim_assistant_callback,
+        ) = delta, None, interim
         return agent, tts, adapter, streamer
 
     return make
 
 
-async def _speak_then_tool_result(agent, tts, adapter, streamer, before_tool, acknowledgment, result):
+async def _speak_then_tool_result(
+    agent, tts, adapter, streamer, before_tool, acknowledgment, result
+):
     """Invariant: the acknowledgment reaches PCM before the tool result exists, then the result follows once."""
     tts.start()
     try:
         await asyncio.to_thread(before_tool)
-        await asyncio.wait_for(adapter.heard.get(), timeout=3)  # spoken during the tool pause, not after
+        await asyncio.wait_for(
+            adapter.heard.get(), timeout=3
+        )  # spoken during the tool pause, not after
         assert streamer.clauses == [acknowledgment]
         assert adapter.finish_count == 0 and not tts.done
         await asyncio.to_thread(agent.stream_delta_callback, None)
@@ -226,6 +256,7 @@ async def _speak_then_tool_result(agent, tts, adapter, streamer, before_tool, ac
 
 def test_tool_boundary_none_flushes_streamed_acknowledgment(gateway_tts_turn):
     """The ``None`` tool-boundary delta releases already-streamed speech without ending the audio stream."""
+
     async def run():
         agent, tts, adapter, streamer = gateway_tts_turn(asyncio.get_running_loop())
         acknowledgment, result = "I will check that.", "The result is available."
@@ -233,29 +264,47 @@ def test_tool_boundary_none_flushes_streamed_acknowledgment(gateway_tts_turn):
         def before_tool():
             assert agent._deliver_to_stream_callbacks(acknowledgment)
             agent._record_streamed_assistant_text(acknowledgment)
-            agent._emit_interim_assistant_message({"role": "assistant", "content": acknowledgment})
+            agent._emit_interim_assistant_message(
+                {"role": "assistant", "content": acknowledgment}
+            )
             agent.stream_delta_callback(None)
 
-        await _speak_then_tool_result(agent, tts, adapter, streamer, before_tool, acknowledgment, result)
+        await _speak_then_tool_result(
+            agent, tts, adapter, streamer, before_tool, acknowledgment, result
+        )
 
     asyncio.run(run())
 
 
 def test_completed_commentary_is_spoken_exactly_once(gateway_tts_turn):
     """Completed commentary (no text delta exists for it) reaches TTS once; the later interim dedupes."""
+
     async def run():
         agent, tts, adapter, streamer = gateway_tts_turn(asyncio.get_running_loop())
         acknowledgment, result = "I will check that.", "The result is available."
 
         def before_tool():
             agent._fire_streamed_codex_commentary(acknowledgment)
-            agent._emit_interim_assistant_message({"role": "assistant", "content": "", "codex_message_items": [{
-                "type": "message", "phase": "commentary",
-                "content": [{"type": "output_text", "text": acknowledgment}],
-            }]})
+            agent._emit_interim_assistant_message(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "codex_message_items": [
+                        {
+                            "type": "message",
+                            "phase": "commentary",
+                            "content": [
+                                {"type": "output_text", "text": acknowledgment}
+                            ],
+                        }
+                    ],
+                }
+            )
             agent.stream_delta_callback(None)
 
-        await _speak_then_tool_result(agent, tts, adapter, streamer, before_tool, acknowledgment, result)
+        await _speak_then_tool_result(
+            agent, tts, adapter, streamer, before_tool, acknowledgment, result
+        )
 
     asyncio.run(run())
 
@@ -298,7 +347,6 @@ class TestAdapterContractDefaults:
         assert adapter.supports_streaming_tts("chat1", AudioFormat()) is False
 
 
-
 # ---------------------------------------------------------------------------
 # StreamingTTSConsumer lifecycle
 # ---------------------------------------------------------------------------
@@ -334,14 +382,15 @@ class TestConsumerLifecycle:
         _run_test(run)
 
 
-
-
 class TestStreamerFormatAndLooping:
     """Constructor wiring should derive format and keep provider I/O off-loop."""
 
     def test_audio_format_tracks_resolved_streamer(self):
-        streamer = FakeStreamer(chunks_per_clause=1, sample_rate=48000, channels=2, sample_width=4)
+        streamer = FakeStreamer(
+            chunks_per_clause=1, sample_rate=48000, channels=2, sample_width=4
+        )
         from tools import tts_streaming
+
         original_resolve = tts_streaming.resolve_streaming_provider
         tts_streaming.resolve_streaming_provider = lambda *_args, **_kwargs: streamer
         loop = asyncio.new_event_loop()
@@ -357,11 +406,14 @@ class TestStreamerFormatAndLooping:
     def test_chunker_min_len_comes_from_tts_streaming_config(self):
         """The gateway consumer honours tts.streaming.min_len (#96927) instead of the class default."""
         from tools import tts_streaming
+
         original_resolve = tts_streaming.resolve_streaming_provider
         tts_streaming.resolve_streaming_provider = lambda *_args, **_kwargs: None
         loop = asyncio.new_event_loop()
         try:
-            consumer = StreamingTTSConsumer(FakeVoiceAdapter(), "chat1", {"streaming": {"min_len": 6}}, loop)
+            consumer = StreamingTTSConsumer(
+                FakeVoiceAdapter(), "chat1", {"streaming": {"min_len": 6}}, loop
+            )
             assert consumer._chunker.min_len == 6
         finally:
             tts_streaming.resolve_streaming_provider = original_resolve
@@ -380,16 +432,22 @@ class TestGatewayIntegrationSeam:
         assert turn_one != turn_two
 
         adapter._mark_streaming_tts_completed_turn("chat-1", 101)
-        assert streaming_tts_should_skip_whole_file(
-            adapter._streaming_tts_completed_turns,
-            "chat-1",
-            101,
-        ) is True
-        assert streaming_tts_should_skip_whole_file(
-            adapter._streaming_tts_completed_turns,
-            "chat-1",
-            102,
-        ) is False
+        assert (
+            streaming_tts_should_skip_whole_file(
+                adapter._streaming_tts_completed_turns,
+                "chat-1",
+                101,
+            )
+            is True
+        )
+        assert (
+            streaming_tts_should_skip_whole_file(
+                adapter._streaming_tts_completed_turns,
+                "chat-1",
+                102,
+            )
+            is False
+        )
         assert adapter._streaming_tts_turn_completed("chat-1", 101) is True
         assert adapter._streaming_tts_turn_completed("chat-1", 102) is False
         assert adapter._streaming_tts_turn_completed("chat-2", 101) is False
@@ -485,7 +543,9 @@ class TestThinkBlockSuppression:
         # 20 chars (after strip) are merged into the next one.
         assert c.feed("\x3cthink\x3esecret reasoning") == []
         # Feed a long enough sentence after the think block closes.
-        result = c.feed(" about the answer.\x3c/think\x3e This is the actual spoken answer that is long enough. ")
+        result = c.feed(
+            " about the answer.\x3c/think\x3e This is the actual spoken answer that is long enough. "
+        )
         assert len(result) == 1
         assert "This is the actual spoken answer that is long enough." in result[0]
         assert c.flush() == []
@@ -665,8 +725,6 @@ class TestPostAudioTimeoutAbort:
 # ---------------------------------------------------------------------------
 
 
-
-
 class TestEndpointReportedRate:
     """Issue #76466: the adapter handle opens with the rate the provider learned from the
     endpoint's response, not the construction-time default."""
@@ -679,7 +737,9 @@ class TestEndpointReportedRate:
 
         async def run(loop):
             adapter = FakeVoiceAdapter()
-            consumer = _make_consumer(adapter, "chat1", loop, _Learns(chunks_per_clause=2))
+            consumer = _make_consumer(
+                adapter, "chat1", loop, _Learns(chunks_per_clause=2)
+            )
             assert consumer._audio_format.sample_rate == 24000  # provisional
             consumer.start()
             consumer.on_delta("A sentence. ")

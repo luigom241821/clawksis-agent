@@ -8,7 +8,6 @@ mirrors the Telegram/WeCom/Feishu pattern.
 Batch delays are read from ``config.extra`` (config.yaml), not env vars.
 """
 
-
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms.event import MessageEvent, MessageType
 from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
@@ -48,6 +47,7 @@ def test_invalid_config_value_falls_back_to_default():
     )
     default = _make_adapter()
     assert adapter._text_batch_delay_seconds == default._text_batch_delay_seconds
-    assert adapter._text_batch_split_delay_seconds == default._text_batch_split_delay_seconds
-
-
+    assert (
+        adapter._text_batch_split_delay_seconds
+        == default._text_batch_split_delay_seconds
+    )

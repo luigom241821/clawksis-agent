@@ -4,6 +4,7 @@ Extracted from ``clawk_cli/gateway.py``. Bodies read facade helpers through ``_g
 binding on ``clawk_cli.gateway``) so the seams tests and callers patch on the facade keep
 intercepting the moved code.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,6 +23,7 @@ from clawk_cli import gateway_service_owner
 
 def _gw():
     from clawk_cli import gateway  # late: the facade imports this module
+
     return gateway
 
 
@@ -35,13 +37,24 @@ def _probe_launchd_domain_for_label(label: str) -> str:
     """Launchd domain managing ``label`` (uncached): ``gui/<uid>`` (Aqua), then ``user/<uid>``
     (Background/SSH), else the ``launchctl managername`` heuristic. Sibling profiles may live in
     different domains, so never reuse the cached ``_launchd_domain()`` for another label."""
-    uid = os.getuid()  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
+    uid = (
+        os.getuid()
+    )  # windows-footgun: ok — POSIX launchd (macOS) helper, never invoked on Windows
     gui_domain, user_domain = f"gui/{uid}", f"user/{uid}"
 
-    launchctl_errors = (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError)
+    launchctl_errors = (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    )
     for domain in (gui_domain, user_domain):
         try:
-            subprocess.run(["launchctl", "print", f"{domain}/{label}"], check=True, timeout=5, capture_output=True)
+            subprocess.run(
+                ["launchctl", "print", f"{domain}/{label}"],
+                check=True,
+                timeout=5,
+                capture_output=True,
+            )
             return domain
         except launchctl_errors:
             pass
@@ -49,7 +62,9 @@ def _probe_launchd_domain_for_label(label: str) -> str:
     # Not loaded anywhere: Aqua → gui/<uid>; anything else (Background, loginwindow) → user/<uid>,
     # the pre-probing default and the recommended domain on macOS 26+.
     try:
-        result = subprocess.run(["launchctl", "managername"], timeout=5, **_gw()._CAPTURE_TEXT, check=False)
+        result = subprocess.run(
+            ["launchctl", "managername"], timeout=5, **_gw()._CAPTURE_TEXT, check=False
+        )
         if "Aqua" in (result.stdout or ""):
             return gui_domain
     except launchctl_errors:
@@ -65,7 +80,9 @@ def _launchd_domain() -> str:
     # The cache lives on the facade: tests and callers reset ``clawk_cli.gateway._resolved_launchd_domain``.
     gw = _gw()
     if gw._resolved_launchd_domain is None:
-        gw._resolved_launchd_domain = _probe_launchd_domain_for_label(gw.get_launchd_label())
+        gw._resolved_launchd_domain = _probe_launchd_domain_for_label(
+            gw.get_launchd_label()
+        )
     return gw._resolved_launchd_domain
 
 
@@ -98,7 +115,9 @@ def _launchctl_domain_unsupported(returncode: int) -> bool:
 _LAUNCHCTL_BOOTSTRAP_EIO = 5
 
 
-def _launchctl_bootstrap(domain: str, plist_path, label: str, *, timeout: int = 30) -> None:
+def _launchctl_bootstrap(
+    domain: str, plist_path, label: str, *, timeout: int = 30
+) -> None:
     """Bootstrap a launchd job, recovering from a stale still-registered label (EIO 5). Without the
     bootout + retry that case is misread as an unmanageable domain and degrades to detached, silently
     losing auto-start and crash-restart."""
@@ -113,7 +132,10 @@ def _launchctl_bootstrap(domain: str, plist_path, label: str, *, timeout: int = 
         # unloaded), so its expected 3/113/125 stderr must not leak to the terminal.
         subprocess.run(
             ["launchctl", "bootout", f"{domain}/{label}"],
-            check=False, timeout=timeout, **_gw()._CAPTURE_TEXT)
+            check=False,
+            timeout=timeout,
+            **_gw()._CAPTURE_TEXT,
+        )
         subprocess.run(bootstrap, check=True, timeout=timeout)
 
 
@@ -128,6 +150,7 @@ def _append_launchd_reload_log(message: str) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         from datetime import datetime as _dt
+
         stamp = _dt.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
         with path.open("a", encoding="utf-8") as fh:
             fh.write(f"[{stamp}] {message}\n")
@@ -147,7 +170,9 @@ def _launchctl_supervised_pid(label: str) -> int | None:
     the answer. Domain-agnostic on purpose: ``launchctl print`` domain probes fail on macOS-26 per-user
     domains, which is why the invoking profile verifies through this and not ``_launchd_print_service_pid``."""
     try:
-        result = subprocess.run(["launchctl", "list", label], check=False, timeout=10, **_gw()._CAPTURE_TEXT)
+        result = subprocess.run(
+            ["launchctl", "list", label], check=False, timeout=10, **_gw()._CAPTURE_TEXT
+        )
     except (subprocess.TimeoutExpired, OSError):
         return None
     if result.returncode != 0:
@@ -177,7 +202,9 @@ def _retry_launchctl_bootstrap_until_registered(
             outcome = f"failed (rc={exc.returncode}) for {domain}/{label}"
         except subprocess.TimeoutExpired:
             outcome = f"timed out for {domain}/{label}"
-        _gw()._append_launchd_reload_log(f"bootstrap attempt {attempt} {outcome} — retrying")
+        _gw()._append_launchd_reload_log(
+            f"bootstrap attempt {attempt} {outcome} — retrying"
+        )
         if time.monotonic() >= deadline:
             return False
         time.sleep(2)
@@ -192,12 +219,15 @@ def _launchd_unsupported_marker_path() -> Path:
 def _write_launchd_unsupported_marker() -> None:
     """Persist that launchd cannot supervise the gateway on this host."""
     from datetime import datetime, timezone
+
     payload = {
         "written_at": datetime.now(UTC).isoformat(),
         "reason": "launchd domain unsupported (exit 5/125)",
     }
     with contextlib.suppress(OSError):
-        _launchd_unsupported_marker_path().write_text(json.dumps(payload), encoding="utf-8")
+        _launchd_unsupported_marker_path().write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
 
 
 def _clear_launchd_unsupported_marker() -> None:
@@ -213,16 +243,25 @@ def _launchd_unsupported_marker_exists() -> bool:
 def _gateway_run_command() -> list[str]:
     from clawk_cli._launchers import runtime_command
     from clawk_constants import get_default_clawk_root
+
     # Every caller spawns an UNSUPERVISED child, which follows the sticky active_profile unless a
     # selector pins it (main._apply_profile_override): the root's replacement booted that profile.
     selector = shlex.split(_gw()._profile_arg())
-    if not selector and _gw().get_clawk_home().resolve() == get_default_clawk_root().resolve():
+    if (
+        not selector
+        and _gw().get_clawk_home().resolve() == get_default_clawk_root().resolve()
+    ):
         selector = ["--profile", "default"]
-    return runtime_command(_gw().PROJECT_ROOT, [*selector, "gateway", "run", "--replace"],
-                           python=_gw().get_python_path())
+    return runtime_command(
+        _gw().PROJECT_ROOT,
+        [*selector, "gateway", "run", "--replace"],
+        python=_gw().get_python_path(),
+    )
 
 
-def launchd_program_arguments(command: list[str], stdout_log: Path, stderr_log: Path) -> list[str]:
+def launchd_program_arguments(
+    command: list[str], stdout_log: Path, stderr_log: Path
+) -> list[str]:
     """launchd ``ProgramArguments`` that run ``command`` with a Local Network identity macOS accepts (#71206).
 
     macOS Local Network Privacy attributes a socket to the process launchd spawned for the job. A bare
@@ -253,7 +292,9 @@ def launchd_program_arguments(command: list[str], stdout_log: Path, stderr_log: 
     return ["/usr/bin/osascript", "-l", "JavaScript", "-e", javascript]
 
 
-def _timestamped_stderr_gateway_command(error_log: Path, *, external_supervisor: bool = False) -> list[str]:
+def _timestamped_stderr_gateway_command(
+    error_log: Path, *, external_supervisor: bool = False
+) -> list[str]:
     """Wrap gateway run so raw stderr lines are timestamped before file write. ``external_supervisor``
     (launchd ProgramArguments only) adds ``--external-supervisor`` so ``clawk update`` hands back to
     launchd, and drops ``--replace``: KeepAlive respawns would re-arm takeover, so two profiles sharing
@@ -271,16 +312,24 @@ def _timestamped_stderr_gateway_command(error_log: Path, *, external_supervisor:
     ``generate_systemd_unit``, whose ExecStart also runs ``gateway run`` without ``--replace``.
     """
     from clawk_cli._launchers import installation_command, runtime_command
+
     inner = _gw()._gateway_run_command()
     if external_supervisor:
-        inner = installation_command(_gw().PROJECT_ROOT, [*shlex.split(_gw()._profile_arg()), "gateway", "run"],
-                                     python=_gw().get_python_path())
+        inner = installation_command(
+            _gw().PROJECT_ROOT,
+            [*shlex.split(_gw()._profile_arg()), "gateway", "run"],
+            python=_gw().get_python_path(),
+        )
         inner = [part for part in inner if part != "--replace"]
         if "--external-supervisor" not in inner:
             inner.append("--external-supervisor")
     command = installation_command if external_supervisor else runtime_command
-    return command(_gw().PROJECT_ROOT, ["--error-log", str(error_log), "--", *inner],
-                   module="clawk_cli.stderr_timestamp", python=_gw().get_python_path())
+    return command(
+        _gw().PROJECT_ROOT,
+        ["--error-log", str(error_log), "--", *inner],
+        module="clawk_cli.stderr_timestamp",
+        python=_gw().get_python_path(),
+    )
 
 
 def _spawn_detached_gateway() -> bool:
@@ -295,17 +344,21 @@ def _spawn_detached_gateway() -> bool:
     from clawk_cli._subprocess_compat import windows_detach_popen_kwargs
     from clawk_constants import get_clawk_home
     from tools.environments.local import served_profile_child_env
+
     log_dir = _gw().get_clawk_home() / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     child_env = served_profile_child_env(
-        target_home=get_clawk_home(), inherit_credentials=True,
+        target_home=get_clawk_home(),
+        inherit_credentials=True,
     )
     child_env.pop("_CLAWK_GATEWAY", None)
     try:
         with open(log_dir / "gateway.log", "ab") as out:
             subprocess.Popen(
                 _timestamped_stderr_gateway_command(log_dir / "gateway.error.log"),
-                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=subprocess.DEVNULL,
                 env=child_env,
                 **windows_detach_popen_kwargs(),
             )
@@ -318,6 +371,7 @@ def _launchd_fallback_to_detached(reason: str, *, exit_on_failure: bool = True) 
     """Start the gateway detached when launchd can't manage it; on failure print the manual workaround
     and (by default) exit 1."""
     from clawk_constants import display_clawk_home as _dhh
+
     _gw()._write_launchd_unsupported_marker()
     print(f"⚠ launchd cannot manage the gateway on this macOS version ({reason}).")
     if _gw()._spawn_detached_gateway():
@@ -327,7 +381,9 @@ def _launchd_fallback_to_detached(reason: str, *, exit_on_failure: bool = True) 
         print("  Stop it with: clawk gateway stop")
         return True
     _gw().print_error("Failed to start the gateway as a background process.")
-    print(f"  Try manually: nohup clawk gateway run --replace > {_dhh()}/logs/gateway.log 2>&1 &")
+    print(
+        f"  Try manually: nohup clawk gateway run --replace > {_dhh()}/logs/gateway.log 2>&1 &"
+    )
     if exit_on_failure:
         sys.exit(1)
     return False
@@ -349,15 +405,20 @@ def _launchd_degrade_or_raise(exc: subprocess.CalledProcessError, what: str) -> 
         raise exc
     label = _gw().get_launchd_label()
     if _gw()._launchctl_label_supervising_process(label):
-        print(f"⚠ {what} failed (exit {exc.returncode}), but launchd still supervises {label}")
+        print(
+            f"⚠ {what} failed (exit {exc.returncode}), but launchd still supervises {label}"
+        )
         print("  Not switching to the detached fallback — this host manages the job.")
-        print("  Apply the definition with: clawk gateway stop && clawk gateway install --force")
+        print(
+            "  Apply the definition with: clawk gateway stop && clawk gateway install --force"
+        )
         raise exc
     _launchd_fallback_to_detached(f"{what} exit {exc.returncode}")
 
 
 def generate_launchd_plist() -> str:
     from html import escape
+
     # Stable cwd anchor — never the volatile source checkout (same rot risk as systemd's WorkingDirectory).
     working_dir = _gw()._stable_service_working_dir()
     clawk_home = str(_gw().get_clawk_home().resolve())
@@ -369,14 +430,19 @@ def generate_launchd_plist() -> str:
     # systemd unit) so node stays resolvable even if the shell PATH changes, then the shell PATH.
     priority_dirs = _gw()._build_service_path_dirs()
     _gw()._append_node_dir_for_service(priority_dirs)
-    sane_path = ":".join(dict.fromkeys(priority_dirs + [p for p in os.environ.get("PATH", "").split(":") if p]))
+    sane_path = ":".join(
+        dict.fromkeys(
+            priority_dirs + [p for p in os.environ.get("PATH", "").split(":") if p]
+        )
+    )
 
     # ProgramArguments (incl. --profile); the stderr wrapper keeps launchd restart semantics while timestamping
     # stderr; the osascript wrapper gives the job a Local Network identity (see launchd_program_arguments).
     stdout_log, stderr_log = log_dir / "gateway.log", log_dir / "gateway.error.log"
     command = _timestamped_stderr_gateway_command(stderr_log, external_supervisor=True)
     prog_args_xml = "\n        ".join(
-        f"<string>{escape(part)}</string>" for part in launchd_program_arguments(command, stdout_log, stderr_log)
+        f"<string>{escape(part)}</string>"
+        for part in launchd_program_arguments(command, stdout_log, stderr_log)
     )
 
     # Persist the configured RLIMIT_NOFILE floor: launchd defaults to soft 256, and every plist
@@ -384,6 +450,7 @@ def generate_launchd_plist() -> str:
     nofile_block = ""
     try:
         from clawk_cli.resource_limits import configured_nofile_soft_limit
+
         nofile_target = configured_nofile_soft_limit()
     except Exception:
         nofile_target = None
@@ -489,7 +556,11 @@ def _spawn_deferred_launchd_reload(
     _gw()._append_launchd_reload_log(f"Launchd reload helper started for {target}")
 
     _reload_budget = int(_launchd_reload_budget())
-    q_target, q_label, q_log = shlex.quote(target), shlex.quote(label), shlex.quote(str(reload_log_path))
+    q_target, q_label, q_log = (
+        shlex.quote(target),
+        shlex.quote(label),
+        shlex.quote(str(reload_log_path)),
+    )
     stamp = "$(date '+%Y-%m-%d %H:%M:%S %z')"
     # Require a POSITIVE PID: `launchctl list` also exits 0 for a registered-but-not-running
     # definition, and a crashed job reports `"PID" = -1` (mirrors _parse_launchd_pid_from_list_output).
@@ -502,16 +573,16 @@ def _spawn_deferred_launchd_reload(
         # Wait for the OLD gateway to exit: bootout only SIGTERMs and every bootstrap during the drain fails EIO.
         f"_wait_deadline=$(($(date +%s) + {_reload_budget})); "
         f"while kill -0 {gateway_pid} 2>/dev/null; do   if [ $(date +%s) -ge $_wait_deadline ]; then "
-        f"    echo \"[{stamp}] old gateway pid {gateway_pid} still alive after {_reload_budget}s drain wait — bootstrapping anyway\" >> {q_log}; "
+        f'    echo "[{stamp}] old gateway pid {gateway_pid} still alive after {_reload_budget}s drain wait — bootstrapping anyway" >> {q_log}; '
         f"    break;   fi;   sleep 1; done; "
         # Let launchd finish unregistering the label after the process exits.
         f"sleep 1; _deadline=$(($(date +%s) + {_reload_budget})); while :; do "
         f"  launchctl bootstrap {shlex.quote(domain)} {shlex.quote(str(plist_path))} 2>/dev/null; "
         f"  if {listed}; then break; fi; "
-        f"  echo \"[{stamp}] bootstrap not yet registered for {q_target} — retrying\" >> {q_log}; "
+        f'  echo "[{stamp}] bootstrap not yet registered for {q_target} — retrying" >> {q_log}; '
         f"  if [ $(date +%s) -ge $_deadline ]; then break; fi;   sleep 2; done; "
         f"if ! {listed}; then "
-        f"  echo \"[{stamp}] FAILED launchd reload for {q_target} — service NOT registered after {_reload_budget}s of retries\" >> {q_log}; "
+        f'  echo "[{stamp}] FAILED launchd reload for {q_target} — service NOT registered after {_reload_budget}s of retries" >> {q_log}; '
         f"fi; "
         # Submitted jobs stay registered after the script exits; removing our own label ends the one-shot job.
         f"launchctl remove {shlex.quote(submit_label)} 2>/dev/null"
@@ -527,8 +598,18 @@ def _spawn_deferred_launchd_reload(
         # job cannot reach the helper.
         subprocess.Popen(
             [
-                "launchctl", "submit", "-l", submit_label, "-o", str(reload_log_path), "-e", str(reload_log_path),
-                "--", "/bin/bash", "-c", reload_script,
+                "launchctl",
+                "submit",
+                "-l",
+                submit_label,
+                "-o",
+                str(reload_log_path),
+                "-e",
+                str(reload_log_path),
+                "--",
+                "/bin/bash",
+                "-c",
+                reload_script,
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -551,6 +632,7 @@ def refresh_launchd_plist_if_needed() -> bool:
         return False
     # Runs on every gateway start/restart: a plist pinning another home is another install's gateway.
     from clawk_cli.gateway_service_owner import definition_belongs_to_home
+
     if not definition_belongs_to_home(plist_path, _gw().get_clawk_home(), "rewrite"):
         return False
 
@@ -568,6 +650,7 @@ def refresh_launchd_plist_if_needed() -> bool:
     # before bootstrap runs, leaving the job unloaded with no KeepAlive.
     try:
         from gateway.status import get_running_pid
+
         gateway_pid = get_running_pid()
     except Exception:
         gateway_pid = None
@@ -578,7 +661,11 @@ def refresh_launchd_plist_if_needed() -> bool:
         gateway_pid is not None
         and hasattr(os, "setsid")  # POSIX-only; launchd is macOS so always true here
     ) and _spawn_deferred_launchd_reload(
-        domain=domain, label=label, target=target, plist_path=plist_path, gateway_pid=gateway_pid
+        domain=domain,
+        label=label,
+        target=target,
+        plist_path=plist_path,
+        gateway_pid=gateway_pid,
     ):
         print(
             "↻ Updated gateway launchd service definition; reload deferred to "
@@ -589,35 +676,50 @@ def refresh_launchd_plist_if_needed() -> bool:
     # Bootout/bootstrap so launchd reads the new definition; bootstrap can fail silently under load
     # during a drain, and KeepAlive can't revive an unregistered job.
     # Captured: best-effort (the job may already be unloaded), keep expected noise off the terminal.
-    subprocess.run(["launchctl", "bootout", target], check=False, timeout=90, **_gw()._CAPTURE_TEXT)
+    subprocess.run(
+        ["launchctl", "bootout", target], check=False, timeout=90, **_gw()._CAPTURE_TEXT
+    )
     _reload_budget = _launchd_reload_budget()
     # Wait out the old gateway's drain first so the budget isn't burned on guaranteed EIO ("already loaded").
-    if gateway_pid is not None and not _gw()._wait_for_pid_exit(gateway_pid, _reload_budget):
+    if gateway_pid is not None and not _gw()._wait_for_pid_exit(
+        gateway_pid, _reload_budget
+    ):
         _gw()._append_launchd_reload_log(
             f"old gateway pid {gateway_pid} still alive after "
             f"{int(_reload_budget)}s drain wait — bootstrapping {target} anyway"
         )
     _deadline = time.monotonic() + _reload_budget
-    if not _gw()._retry_launchctl_bootstrap_until_registered(domain, plist_path, label, deadline=_deadline):
+    if not _gw()._retry_launchctl_bootstrap_until_registered(
+        domain, plist_path, label, deadline=_deadline
+    ):
         _gw()._append_launchd_reload_log(
             f"FAILED launchd reload of {target} — service NOT registered after "
             f"retrying for {int(_reload_budget)}s (in-process fallback path)"
         )
         _gw().logger.error(
             "launchd reload of %s failed — service not registered after %ds of retries; see %s",
-            target, int(_reload_budget), _launchd_reload_log_path(),
+            target,
+            int(_reload_budget),
+            _launchd_reload_log_path(),
         )
         return False
-    print("↻ Updated gateway launchd service definition to match the current Clawksis install")
+    print(
+        "↻ Updated gateway launchd service definition to match the current Clawksis install"
+    )
     return True
 
 
-def launchd_install(force: bool = False, *, start_now: bool = True, force_unit_path: bool = False):
+def launchd_install(
+    force: bool = False, *, start_now: bool = True, force_unit_path: bool = False
+):
     plist_path = _gw().get_launchd_plist_path()
     label = _gw().get_launchd_label()
     # A plist pinning another home is another install's gateway, --force included; --force-unit-path repoints.
     from clawk_cli.gateway_service_owner import definition_belongs_to_home
-    if not force_unit_path and not definition_belongs_to_home(plist_path, _gw().get_clawk_home(), "overwrite"):
+
+    if not force_unit_path and not definition_belongs_to_home(
+        plist_path, _gw().get_clawk_home(), "overwrite"
+    ):
         sys.exit(1)
     # Loading the plist starts the gateway (RunAtLoad), so a no-start install writes it without
     # loading it. A gateway that launchd already runs is still reloaded; this install did not start it.
@@ -636,6 +738,7 @@ def launchd_install(force: bool = False, *, start_now: bool = True, force_unit_p
                 # The plist was rewritten but launchd never registered it (or the write was refused):
                 # a success line here would hide an unloaded service with no KeepAlive.
                 from clawk_constants import display_clawk_home
+
                 print(
                     "⚠ Service definition could not be reloaded with launchd. "
                     "Run 'clawk gateway install --force' or check "
@@ -656,7 +759,10 @@ def launchd_install(force: bool = False, *, start_now: bool = True, force_unit_p
         # what `clawk gateway start` would kickstart instead of loading this plist.
         subprocess.run(
             ["launchctl", "bootout", f"{_gw()._launchd_domain()}/{label}"],
-            check=False, timeout=90, **_gw()._CAPTURE_TEXT)
+            check=False,
+            timeout=90,
+            **_gw()._CAPTURE_TEXT,
+        )
         print()
         print("✓ Service installed, not started (launchd starts it at your next login)")
         print()
@@ -666,7 +772,9 @@ def launchd_install(force: bool = False, *, start_now: bool = True, force_unit_p
         return
 
     try:
-        _gw()._launchctl_bootstrap(_gw()._launchd_domain(), plist_path, label, timeout=30)
+        _gw()._launchctl_bootstrap(
+            _gw()._launchd_domain(), plist_path, label, timeout=30
+        )
     except subprocess.CalledProcessError as e:
         _gw()._launchd_degrade_or_raise(e, "launchctl bootstrap")
         return
@@ -678,6 +786,7 @@ def launchd_install(force: bool = False, *, start_now: bool = True, force_unit_p
     print("Next steps:")
     print("  clawk gateway status             # Check status")
     from clawk_constants import display_clawk_home as _dhh
+
     print(f"  tail -f {_dhh()}/logs/gateway.log  # View logs")
 
 
@@ -687,7 +796,10 @@ def launchd_uninstall():
     # Captured: uninstalling an already-unloaded job is fine — don't print Boot-out failed: 3.
     subprocess.run(
         ["launchctl", "bootout", f"{_launchd_domain()}/{get_launchd_label()}"],
-        check=False, timeout=90, **_gw()._CAPTURE_TEXT)
+        check=False,
+        timeout=90,
+        **_gw()._CAPTURE_TEXT,
+    )
     if plist_path.exists():
         plist_path.unlink()
         print(f"✓ Removed {plist_path}")
@@ -702,7 +814,9 @@ def launchd_start():
     # Self-heal if the plist is missing entirely (e.g., manual cleanup, failed upgrade)
     if not plist_path.exists():
         new_plist = _gw().generate_launchd_plist()
-        if gateway_service_owner.refuse_temp_home_service_write(new_plist, "launchd plist"):
+        if gateway_service_owner.refuse_temp_home_service_write(
+            new_plist, "launchd plist"
+        ):
             sys.exit(1)
         print("↻ launchd plist missing; regenerating service definition")
         plist_path.parent.mkdir(parents=True, exist_ok=True)
@@ -726,13 +840,19 @@ def launchd_start():
 
 
 def _launchctl_kickstart_current(label: str) -> None:
-    subprocess.run(["launchctl", "kickstart", f"{_launchd_domain()}/{label}"], check=True, timeout=30)
+    subprocess.run(
+        ["launchctl", "kickstart", f"{_launchd_domain()}/{label}"],
+        check=True,
+        timeout=30,
+    )
 
 
 def _launchd_bootstrap_and_kickstart(plist_path: Path, label: str) -> bool:
     """Bootstrap then kickstart; False after degrading to detached (domain unsupported). Other errors propagate."""
     try:
-        _gw()._launchctl_bootstrap(_gw()._launchd_domain(), plist_path, label, timeout=30)
+        _gw()._launchctl_bootstrap(
+            _gw()._launchd_domain(), plist_path, label, timeout=30
+        )
         _launchctl_kickstart_current(label)
     except subprocess.CalledProcessError as e:
         _gw()._launchd_degrade_or_raise(e, "launchctl")
@@ -754,12 +874,20 @@ def launchd_stop():
     try:
         # Captured: an already-unloaded job (3/113/125) is handled below, so launchctl's own
         # "Boot-out failed: 3" must not print around the ✓ line; e.stderr stays on the raised error.
-        subprocess.run(["launchctl", "bootout", target], check=True, timeout=90, **_gw()._CAPTURE_TEXT)
+        subprocess.run(
+            ["launchctl", "bootout", target],
+            check=True,
+            timeout=90,
+            **_gw()._CAPTURE_TEXT,
+        )
     except subprocess.CalledProcessError as e:
         # Job already unloaded (3/113/125), or the domain can't be managed at all (5/125, macOS 26+
         # detached-fallback process, issue #23387) — in both cases just fall through to the PID-based kill
         # below.
-        if not (_launchd_error_indicates_unloaded(e) or _launchctl_domain_unsupported(e.returncode)):
+        if not (
+            _launchd_error_indicates_unloaded(e)
+            or _launchctl_domain_unsupported(e.returncode)
+        ):
             raise
     _gw()._wait_for_gateway_exit(timeout=10.0, force_after=5.0)
     print("✓ Service stopped")
@@ -767,7 +895,12 @@ def launchd_stop():
 
 def _launchd_kickstart(label: str, domain: str) -> None:
     """``launchctl kickstart -k domain/label``; raises so callers own per-label failure accounting."""
-    subprocess.run(["launchctl", "kickstart", "-k", f"{domain}/{label}"], check=True, timeout=90, **_gw()._CAPTURE_TEXT)
+    subprocess.run(
+        ["launchctl", "kickstart", "-k", f"{domain}/{label}"],
+        check=True,
+        timeout=90,
+        **_gw()._CAPTURE_TEXT,
+    )
 
 
 def _wait_for_launchd_service_pid(
@@ -801,15 +934,22 @@ def launchd_restart():
     # failure instead of stalling the update for 90s.
     refresh_ok = _gw().refresh_launchd_plist_if_needed()
     from gateway.status import get_running_pid
+
     try:
         pid = get_running_pid()
         if pid is not None and _gw()._request_gateway_self_restart(pid):
             _launchd_ok("✓ Service restart requested")
             return
-        if pid is not None and _gw().probe_gateway_loop_liveness(pid) == _gw().GATEWAY_LOOP_WEDGED:
+        if (
+            pid is not None
+            and _gw().probe_gateway_loop_liveness(pid) == _gw().GATEWAY_LOOP_WEDGED
+        ):
             # Event loop provably dead: it can't process a graceful shutdown, so a full drain wait
             # only stalls the restart (and `clawk update`). Bounded SIGTERM → SIGKILL, ~10s.
-            print(f"⚠ Gateway PID {pid} event loop is unresponsive — " "skipping drain and forcing a bounded stop...")
+            print(
+                f"⚠ Gateway PID {pid} event loop is unresponsive — "
+                "skipping drain and forcing a bounded stop..."
+            )
             _gw()._escalate_wedged_gateway(pid)
             pid = None
         if pid is not None:
@@ -817,18 +957,35 @@ def launchd_restart():
             # and the drain. A bare SIGTERM would lose the resume_pending handoff. Announce BEFORE waiting:
             # surfaces with no other feedback (desktop updater) read silence as "update stuck".
             wait_budget = _gw()._get_restart_exit_wait_budget()
-            print(f"→ Stopping gateway (PID {pid}) — draining in-flight runs (up to {wait_budget:.0f}s)...")
+            print(
+                f"→ Stopping gateway (PID {pid}) — draining in-flight runs (up to {wait_budget:.0f}s)..."
+            )
             from clawk_cli.update_cmd_drain_report import drain_progress_reporter
-            if _gw()._graceful_restart_via_sigusr1(pid, wait_budget, on_progress=drain_progress_reporter(budget_s=wait_budget)):
+
+            if _gw()._graceful_restart_via_sigusr1(
+                pid,
+                wait_budget,
+                on_progress=drain_progress_reporter(budget_s=wait_budget),
+            ):
                 # KeepAlive revives a planned exit, so do NOT kickstart (-k would kill the replacement) —
                 # but a clean exit doesn't prove supervision, so verify a replacement PID appears first.
-                if _gw()._wait_for_launchd_service_pid(label, pid, timeout=15.0, domain=domain):
+                if _gw()._wait_for_launchd_service_pid(
+                    label, pid, timeout=15.0, domain=domain
+                ):
                     _launchd_ok("✓ Service restart requested")
                     return
-                print("⚠ launchd did not revive the gateway after its graceful exit — forcing restart")
+                print(
+                    "⚠ launchd did not revive the gateway after its graceful exit — forcing restart"
+                )
             else:
-                print(f"⚠ Gateway drain timed out after {wait_budget:.0f}s — forcing launchd restart")
-        if not refresh_ok and _gw().get_launchd_plist_path().exists() and not _gw().launchd_plist_is_current():
+                print(
+                    f"⚠ Gateway drain timed out after {wait_budget:.0f}s — forcing launchd restart"
+                )
+        if (
+            not refresh_ok
+            and _gw().get_launchd_plist_path().exists()
+            and not _gw().launchd_plist_is_current()
+        ):
             # The refresh attempted a reload and launchd never re-registered
             # the (rewritten) job: kickstart would hang on the same wall. The
             # bootout already happened inside the refresh — bootstrap is the
@@ -837,14 +994,23 @@ def launchd_restart():
             # the ordinary kickstart flow.)
             print("↻ launchd job was not re-registered by the plist refresh; reloading")
             plist_path = str(_gw().get_launchd_plist_path())
-            subprocess.run(["launchctl", "bootstrap", _gw()._launchd_domain(), plist_path], check=True, timeout=30)
+            subprocess.run(
+                ["launchctl", "bootstrap", _gw()._launchd_domain(), plist_path],
+                check=True,
+                timeout=30,
+            )
             subprocess.run(["launchctl", "kickstart", target], check=True, timeout=30)
             _launchd_ok("✓ Service restarted")
             return
         # Captured: an unloaded job (3/113/125) is the expected case below, which
         # prints its own ↻ line — and e.stderr feeds the update_cmd failure diagnostic.
         _gw()._wait_for_api_server_port_free()
-        subprocess.run(["launchctl", "kickstart", "-k", target], check=True, timeout=90, **_gw()._CAPTURE_TEXT)
+        subprocess.run(
+            ["launchctl", "kickstart", "-k", target],
+            check=True,
+            timeout=90,
+            **_gw()._CAPTURE_TEXT,
+        )
         _launchd_ok("✓ Service restarted")
     except subprocess.CalledProcessError as e:
         if not _launchd_error_indicates_unloaded(e):
@@ -856,9 +1022,18 @@ def launchd_restart():
             # After a drain the job is usually still registered (bootstrap would hit EIO): boot it out first.
             # Captured: best-effort (the job may already be unloaded after the drain),
             # so an expected Boot-out failed: 3 must not leak past the ↻ line below.
-            subprocess.run(["launchctl", "bootout", target], check=False, timeout=90, **_gw()._CAPTURE_TEXT)
+            subprocess.run(
+                ["launchctl", "bootout", target],
+                check=False,
+                timeout=90,
+                **_gw()._CAPTURE_TEXT,
+            )
             plist_path = str(_gw().get_launchd_plist_path())
-            subprocess.run(["launchctl", "bootstrap", _gw()._launchd_domain(), plist_path], check=True, timeout=30)
+            subprocess.run(
+                ["launchctl", "bootstrap", _gw()._launchd_domain(), plist_path],
+                check=True,
+                timeout=30,
+            )
             subprocess.run(["launchctl", "kickstart", target], check=True, timeout=30)
         except subprocess.CalledProcessError as e2:
             _gw()._launchd_degrade_or_raise(e2, "launchctl")
@@ -912,7 +1087,9 @@ def launchd_status(deep: bool = False):
     plist_path = _gw().get_launchd_plist_path()
     label = _gw().get_launchd_label()
     try:
-        result = subprocess.run(["launchctl", "list", label], timeout=10, **_gw()._CAPTURE_TEXT, check=False)
+        result = subprocess.run(
+            ["launchctl", "list", label], timeout=10, **_gw()._CAPTURE_TEXT, check=False
+        )
         service_listed = result.returncode == 0
         list_output = result.stdout
     except subprocess.TimeoutExpired:
@@ -920,10 +1097,15 @@ def launchd_status(deep: bool = False):
         list_output = ""
 
     # `launchctl list` exits 0 for any registered definition (even `state = not running`); only a PID proves a process.
-    launchd_pid = _gw()._parse_launchd_pid_from_list_output(list_output) if service_listed else None
+    launchd_pid = (
+        _gw()._parse_launchd_pid_from_list_output(list_output)
+        if service_listed
+        else None
+    )
 
     # Clawksis PID may be a detached fallback process; when launchd IS supervising both PIDs match — don't double-count.
     from gateway.status import get_running_pid
+
     fallback_pid = get_running_pid(cleanup_stale=False)
     if launchd_pid is not None and fallback_pid == launchd_pid:
         fallback_pid = None

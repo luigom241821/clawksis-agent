@@ -4,6 +4,7 @@ Covers the fix for #15779 — mid-session /model switch to a named custom
 provider must honor ``custom_providers[].models.<id>.context_length`` the
 same way startup already does.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -15,7 +16,6 @@ from clawk_cli.config import (
 
 
 class TestGetCustomProviderContextLength:
-
     def test_trailing_slash_insensitive(self):
         custom = [
             {
@@ -44,10 +44,21 @@ class TestGetCustomProviderContextLength:
             == 500_000
         )
 
-
     def test_empty_inputs_return_none(self):
-        assert get_custom_provider_context_length("", "http://x", [{"base_url": "http://x", "models": {"": {"context_length": 1}}}]) is None
-        assert get_custom_provider_context_length("m", "", [{"base_url": "", "models": {"m": {"context_length": 1}}}]) is None
+        assert (
+            get_custom_provider_context_length(
+                "",
+                "http://x",
+                [{"base_url": "http://x", "models": {"": {"context_length": 1}}}],
+            )
+            is None
+        )
+        assert (
+            get_custom_provider_context_length(
+                "m", "", [{"base_url": "", "models": {"m": {"context_length": 1}}}]
+            )
+            is None
+        )
         assert get_custom_provider_context_length("m", "http://x", None) is None
         assert get_custom_provider_context_length("m", "http://x", []) is None
 
@@ -61,18 +72,24 @@ class TestGetCustomProviderModelCapability:
             }
         ]
 
-        assert get_custom_provider_model_capability(
-            "fable",
-            "https://example.invalid/anthropic",
-            "prompt_caching",
-            custom,
-        ) is True
-        assert get_custom_provider_model_capability(
-            "opus",
-            "https://example.invalid/anthropic",
-            "prompt_caching",
-            custom,
-        ) is None
+        assert (
+            get_custom_provider_model_capability(
+                "fable",
+                "https://example.invalid/anthropic",
+                "prompt_caching",
+                custom,
+            )
+            is True
+        )
+        assert (
+            get_custom_provider_model_capability(
+                "opus",
+                "https://example.invalid/anthropic",
+                "prompt_caching",
+                custom,
+            )
+            is None
+        )
 
     def test_false_is_preserved_and_non_boolean_is_ignored(self):
         custom = [
@@ -85,18 +102,24 @@ class TestGetCustomProviderModelCapability:
             }
         ]
 
-        assert get_custom_provider_model_capability(
-            "disabled",
-            "https://example.invalid/anthropic",
-            "prompt_caching",
-            custom,
-        ) is False
-        assert get_custom_provider_model_capability(
-            "invalid",
-            "https://example.invalid/anthropic",
-            "prompt_caching",
-            custom,
-        ) is None
+        assert (
+            get_custom_provider_model_capability(
+                "disabled",
+                "https://example.invalid/anthropic",
+                "prompt_caching",
+                custom,
+            )
+            is False
+        )
+        assert (
+            get_custom_provider_model_capability(
+                "invalid",
+                "https://example.invalid/anthropic",
+                "prompt_caching",
+                custom,
+            )
+            is None
+        )
 
     def test_capability_is_route_isolated(self):
         """A declaration for one route must not apply to another route.
@@ -112,13 +135,15 @@ class TestGetCustomProviderModelCapability:
             }
         ]
 
-        assert get_custom_provider_model_capability(
-            "fable",
-            "https://example.invalid/anthropic",
-            "prompt_caching",
-            custom,
-        ) is None
-
+        assert (
+            get_custom_provider_model_capability(
+                "fable",
+                "https://example.invalid/anthropic",
+                "prompt_caching",
+                custom,
+            )
+            is None
+        )
 
 
 class TestGetModelContextLengthHonorsOverride:
@@ -130,6 +155,7 @@ class TestGetModelContextLengthHonorsOverride:
     def _mock_all_probes(self):
         """Context manager that disables every downstream resolution step."""
         from agent import model_metadata as _mm
+
         return [
             patch.object(_mm, "get_cached_context_length", return_value=None),
             patch.object(_mm, "fetch_endpoint_model_metadata", return_value={}),
@@ -140,6 +166,7 @@ class TestGetModelContextLengthHonorsOverride:
 
     def test_custom_providers_override_wins_over_default_fallback(self):
         from agent.model_metadata import get_model_context_length
+
         custom = [
             {
                 "base_url": "https://example.invalid/v1",
@@ -168,6 +195,7 @@ class TestGetModelContextLengthHonorsOverride:
         documented precedence and matches the long-standing step-0 behavior.
         """
         from agent.model_metadata import get_model_context_length
+
         custom = [
             {
                 "base_url": "https://example.invalid/v1",
@@ -187,7 +215,11 @@ class TestGetModelContextLengthHonorsOverride:
         """With custom_providers=None and all probes disabled, resolver
         returns DEFAULT_FALLBACK_CONTEXT (256K after the stepdown bump).
         """
-        from agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
+        from agent.model_metadata import (
+            get_model_context_length,
+            DEFAULT_FALLBACK_CONTEXT,
+        )
+
         patches = self._mock_all_probes()
         for p in patches:
             p.start()
@@ -204,14 +236,16 @@ class TestGetModelContextLengthHonorsOverride:
         assert ctx == DEFAULT_FALLBACK_CONTEXT
 
 
-
-
 def test_override_honored_when_caller_passes_no_custom_providers(tmp_path, monkeypatch):
     """Step 0c must not be gated on the caller having loaded the route list: aux fallback screening,
     CLI/TUI context estimators and gateway /status pass ``custom_providers=None`` (#69807)."""
     from pathlib import Path
 
-    base_url, model, override = "https://cp-ctx-selfresolve.invalid/v1", "router/auto", 999_999
+    base_url, model, override = (
+        "https://cp-ctx-selfresolve.invalid/v1",
+        "router/auto",
+        999_999,
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     (tmp_path / "config.yaml").write_text(
@@ -228,4 +262,9 @@ def test_override_honored_when_caller_passes_no_custom_providers(tmp_path, monke
     )
     from agent.model_metadata import get_model_context_length
 
-    assert get_model_context_length(model, base_url=base_url, api_key="", provider="custom") == override
+    assert (
+        get_model_context_length(
+            model, base_url=base_url, api_key="", provider="custom"
+        )
+        == override
+    )

@@ -7,6 +7,7 @@ profile-bound caller seats its own profile plus the profiles its entries name, a
 answers to one name. An entry that would break a rule is ignored and logged once, and only a new
 member naming it is refused, so one bad entry never takes the rest of the roster down.
 """
+
 import logging
 from pathlib import Path
 
@@ -30,19 +31,23 @@ def member_roster(authority, *, siblings=True):
     room that already seats it keeps running its other members (its own turns fail, as before).
     """
     from clawk_constants import clawk_home_key
+
     own, served, refused = _served(authority)
     blocked = set(refused)
     homes = dict(served)
     if not siblings:
         for name in [name for name in homes if name != own]:
             del homes[name]
-            refused[name] = ('permission_denied', 'members',
-                             'only a host-scoped connection seats a served profile without an entry')
+            refused[name] = (
+                "permission_denied",
+                "members",
+                "only a host-scoped connection seats a served profile without an entry",
+            )
     seated = {clawk_home_key(home): name for name, home in served.items()}
     for name, value in _configured(authority, own).items():
         if name in blocked:
             continue
-        field = f'hosted_rooms.profiles.{name}'
+        field = f"hosted_rooms.profiles.{name}"
         home, reason, detail = _config_entry(name, value, served, seated)
         if siblings and name in served:
             # Served: it needs no entry, and the served home wins over whatever this one says.
@@ -66,13 +71,17 @@ def refuse_unseatable(members, refused):
     """Raise the named refusal for the first local member whose profile *refused* names;
     ``validate_roster`` names every other roster problem."""
     for index, raw in enumerate(members if isinstance(members, list) else ()):
-        target = raw.get('target') if isinstance(raw, dict) else None
-        profile = raw.get('profile') if isinstance(raw, dict) else None
-        if isinstance(target, dict) and target.get('kind', 'local') != 'local':
+        target = raw.get("target") if isinstance(raw, dict) else None
+        profile = raw.get("profile") if isinstance(raw, dict) else None
+        if isinstance(target, dict) and target.get("kind", "local") != "local":
             continue
         if isinstance(profile, str) and profile in refused:
             reason, field, detail = refused[profile]
-            raise RuntimeStoreError(reason, field=field, detail=f"member {index} profile '{profile}': {detail}")
+            raise RuntimeStoreError(
+                reason,
+                field=field,
+                detail=f"member {index} profile '{profile}': {detail}",
+            )
 
 
 def _served(authority):
@@ -80,7 +89,8 @@ def _served(authority):
     (``session_authorities.local_bots``). A bot its clients cannot address by name is refused,
     never bound; a retiring one is not seated in a new group."""
     from gateway.session_authorities import local_bots, served_profile_name
-    bots = local_bots(getattr(authority, 'runner', None))
+
+    bots = local_bots(getattr(authority, "runner", None))
     own = next((bot.name for bot in bots if bot.authority is authority), None)
     if own is None:
         # A bare authority (no registry): it still owns its own rooms.
@@ -88,7 +98,11 @@ def _served(authority):
     served, refused = {}, {}
     for bot in bots:
         if bot.problem is not None:
-            refused[bot.name] = ('invalid_params', 'members', bot.problem.replace(' yet', ' in groups yet'))
+            refused[bot.name] = (
+                "invalid_params",
+                "members",
+                bot.problem.replace(" yet", " in groups yet"),
+            )
         elif bot.retiring and bot.authority is not authority:
             continue
         else:
@@ -102,13 +116,19 @@ def _configured(authority, own):
     """The ``hosted_rooms.profiles`` mapping; a section left with no entries is empty."""
     from gateway.run import _load_gateway_config
     from gateway.session_authorities import owner_scope
+
     # The coordinator's own threads do not inherit the caller's ContextVars.
     with owner_scope(authority):
-        section = _load_gateway_config().get('hosted_rooms')
-    profiles = section.get('profiles') if isinstance(section, dict) else section
+        section = _load_gateway_config().get("hosted_rooms")
+    profiles = section.get("profiles") if isinstance(section, dict) else section
     if profiles is None or isinstance(profiles, dict):
         return profiles or {}
-    _report(own, 'hosted_rooms.profiles', profiles, 'must map profile names to profile homes')
+    _report(
+        own,
+        "hosted_rooms.profiles",
+        profiles,
+        "must map profile names to profile homes",
+    )
     return {}
 
 
@@ -117,17 +137,30 @@ def _config_entry(name, value, served, seated):
     is refused, and a ``home`` it still carries is an alias that existing rooms keep."""
     from gateway.hosted_rooms_common import IDENTIFIER_RE
     from clawk_constants import clawk_home_key
-    if not isinstance(name, str) or not IDENTIFIER_RE.fullmatch(name) or not isinstance(value, str):
-        return None, 'invalid_params', 'must map a profile name to a home'
+
+    if (
+        not isinstance(name, str)
+        or not IDENTIFIER_RE.fullmatch(name)
+        or not isinstance(value, str)
+    ):
+        return None, "invalid_params", "must map a profile name to a home"
     target = Path(value)
     if not target.is_absolute() or target != target.resolve():
-        return None, 'invalid_params', 'must be an absolute, resolved home'
+        return None, "invalid_params", "must be an absolute, resolved home"
     key = clawk_home_key(target)
     if name in served and clawk_home_key(served[name]) != key:
-        return None, 'permission_denied', 'this gateway serves that profile from another home'
+        return (
+            None,
+            "permission_denied",
+            "this gateway serves that profile from another home",
+        )
     if seated.get(key, name) != name:
         # Its turns reach that profile under the wrong name and fail every time.
-        return target, 'invalid_params', f"names the home already seated as '{seated[key]}'"
+        return (
+            target,
+            "invalid_params",
+            f"names the home already seated as '{seated[key]}'",
+        )
     return served.get(name, target), None, None
 
 
@@ -136,4 +169,4 @@ def _report(own, field, value, detail):
     key = (own, field, repr(value)[:200], detail)
     if key not in _REPORTED:
         _REPORTED.add(key)
-        logger.warning('Ignoring %s for profile=%s: %s', field, own, detail)
+        logger.warning("Ignoring %s for profile=%s: %s", field, own, detail)

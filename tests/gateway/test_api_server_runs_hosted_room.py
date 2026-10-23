@@ -34,10 +34,12 @@ class TestHostedRoomRuns:
         self, auth_adapter
     ):
         run_id = "run-room-approval"
-        current = approval_gateway_wait._ApprovalEntry({
-            "request_id": "approval-B",
-            "command": "rm -rf build-B",
-        })
+        current = approval_gateway_wait._ApprovalEntry(
+            {
+                "request_id": "approval-B",
+                "command": "rm -rf build-B",
+            }
+        )
         auth_adapter._run_approval_sessions[run_id] = run_id
         auth_adapter._run_statuses[run_id] = {
             "run_id": run_id,
@@ -122,9 +124,7 @@ class TestHostedRoomRuns:
         self, auth_adapter, monkeypatch
     ):
         monkeypatch.setenv("CLAWK_DESKTOP", "1")
-        monkeypatch.setenv(
-            "CLAWK_ROOM_LINK_URL", "https://peer.example.test/clawk"
-        )
+        monkeypatch.setenv("CLAWK_ROOM_LINK_URL", "https://peer.example.test/clawk")
         app = _create_runs_app(auth_adapter)
         async with TestClient(TestServer(app)) as cli:
             invitation = await cli.post(
@@ -515,15 +515,14 @@ class TestHostedRoomRuns:
         assert denied.status == 403
         assert denied_body["error"]["code"] == "room_reauthorization_required"
         assert denied_run.status == 403
-        assert (
-            denied_run_body["error"]["code"]
-            == "room_reauthorization_required"
-        )
+        assert denied_run_body["error"]["code"] == "room_reauthorization_required"
         assert auth_adapter._pending_agent_requests == 0
         assert repaired.status == 200
 
     @pytest.mark.asyncio
-    async def test_status_room_grant_opens_the_run_event_stream(self, auth_adapter, tmp_path):
+    async def test_status_room_grant_opens_the_run_event_stream(
+        self, auth_adapter, tmp_path
+    ):
         """A grant that may poll a room-scoped run may also read its /events stream, with no
         gateway API key; revoking the grant closes that door again."""
         adapter = auth_adapter
@@ -558,14 +557,20 @@ class TestHostedRoomRuns:
             stream = await cli.get(f"/v1/runs/{run_id}/events", headers=room_headers)
             assert stream.status == 200
             adapter._run_streams[run_id].put_nowait(None)
-            assert b"stream closed" in await asyncio.wait_for(stream.content.read(), timeout=5.0)
+            assert b"stream closed" in await asyncio.wait_for(
+                stream.content.read(), timeout=5.0
+            )
 
-            revoked = await cli.post("/v1/room-members/grants/revoke", json={}, headers=room_headers)
+            revoked = await cli.post(
+                "/v1/room-members/grants/revoke", json={}, headers=room_headers
+            )
             assert revoked.status == 200
             adapter._run_streams[run_id] = _RunStream()
             denied = await cli.get(f"/v1/runs/{run_id}/events", headers=room_headers)
             assert denied.status == 403
-            assert (await denied.json())["error"]["code"] == "room_reauthorization_required"
+            assert (await denied.json())["error"][
+                "code"
+            ] == "room_reauthorization_required"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -654,9 +659,7 @@ class TestHostedRoomRuns:
                 "prompt": prompt,
                 "prompt_digest": hashlib.sha256(prompt.encode()).hexdigest(),
                 "capability_digest": catalog["catalog_digest"],
-                "execution_policy_digest": catalog["execution_policy"][
-                    "policy_digest"
-                ],
+                "execution_policy_digest": catalog["execution_policy"]["policy_digest"],
                 "trace_id": "trace-room-1",
             }
             with patch.object(adapter, "_create_agent") as create:

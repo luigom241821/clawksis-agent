@@ -5,6 +5,7 @@ os.environ. In-process delegate_task children and cron jobs fired via
 ``cronjob(action="run")`` are NOT dispatcher-owned, so identity gates must fail
 closed for them without mutating the process-global environment.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,16 +13,23 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import Iterator, Mapping, MutableMapping, overload
 
-_DELEGATED_CHILD_CONTEXT: ContextVar[bool] = ContextVar("clawk_delegated_child_context", default=False)
+_DELEGATED_CHILD_CONTEXT: ContextVar[bool] = ContextVar(
+    "clawk_delegated_child_context", default=False
+)
 # Any in-process execution that is NOT the dispatcher-owned worker (cron jobs). Kept separate
 # so delegate_task-specific behaviour (subprocess env scrubbing, its error strings) is unchanged.
-_NON_DISPATCHER_OWNED_CONTEXT: ContextVar[bool] = ContextVar("clawk_non_dispatcher_owned_context", default=False)
+_NON_DISPATCHER_OWNED_CONTEXT: ContextVar[bool] = ContextVar(
+    "clawk_non_dispatcher_owned_context", default=False
+)
 
 DELEGATED_CHILD_ENV_MARKER = "CLAWK_DELEGATED_CHILD_CONTEXT"
 
 KANBAN_ENV_KEYS: tuple[str, ...] = (
-    "CLAWK_KANBAN_TASK", "CLAWK_KANBAN_RUN_ID", "CLAWK_KANBAN_CLAIM_LOCK",
-    "CLAWK_KANBAN_GOAL_MODE", "CLAWK_KANBAN_GOAL_MAX_TURNS",
+    "CLAWK_KANBAN_TASK",
+    "CLAWK_KANBAN_RUN_ID",
+    "CLAWK_KANBAN_CLAIM_LOCK",
+    "CLAWK_KANBAN_GOAL_MODE",
+    "CLAWK_KANBAN_GOAL_MAX_TURNS",
 )
 
 
@@ -32,7 +40,9 @@ def delegated_child_context(session_id: str | None = None) -> Iterator[None]:
     construction calls ``set_current_session_id``)."""
     token = _DELEGATED_CHILD_CONTEXT.set(True)
     try:
-        from gateway.session_context import scoped_current_session_id  # lazy: it calls is_delegated_child_context()
+        from gateway.session_context import (
+            scoped_current_session_id,
+        )  # lazy: it calls is_delegated_child_context()
 
         with scoped_current_session_id(session_id):
             yield
@@ -70,7 +80,9 @@ def non_dispatcher_owned_context() -> Iterator[None]:
 
 def is_dispatcher_owned_worker_context() -> bool:
     """The single predicate every ``CLAWK_KANBAN_*`` identity gate should use."""
-    return not (is_delegated_child_process_context() or _NON_DISPATCHER_OWNED_CONTEXT.get())
+    return not (
+        is_delegated_child_process_context() or _NON_DISPATCHER_OWNED_CONTEXT.get()
+    )
 
 
 def explicit_board_intent_is_pinned() -> bool:
@@ -106,7 +118,9 @@ def owned_kanban_task() -> str:
 
 def is_delegated_child_process_context() -> bool:
     """Return True in this process or a subprocess spawned by a child."""
-    return bool(_DELEGATED_CHILD_CONTEXT.get()) or bool(os.environ.get(DELEGATED_CHILD_ENV_MARKER))
+    return bool(_DELEGATED_CHILD_CONTEXT.get()) or bool(
+        os.environ.get(DELEGATED_CHILD_ENV_MARKER)
+    )
 
 
 def _fenced_kanban_root() -> str:
@@ -114,12 +128,15 @@ def _fenced_kanban_root() -> str:
     cannot be resolved, which readers treat as "fence every board" (the pre-path marker)."""
     try:
         from clawk_cli.kanban_db import kanban_home
+
         return str(kanban_home())
     except Exception:
         return "1"
 
 
-def scrub_kanban_env(env: Mapping[str, str] | MutableMapping[str, str]) -> dict[str, str]:
+def scrub_kanban_env(
+    env: Mapping[str, str] | MutableMapping[str, str],
+) -> dict[str, str]:
     """Remove worker identity, retaining board/location and an inherited write fence.
 
     TASK absence alone would promote a descendant to an orchestrator. The marker
@@ -134,7 +151,9 @@ def scrub_kanban_env(env: Mapping[str, str] | MutableMapping[str, str]) -> dict[
     """
     cleaned = {k: v for k, v in env.items() if k not in KANBAN_ENV_KEYS}
     inherited = str(env.get(DELEGATED_CHILD_ENV_MARKER) or "")
-    cleaned[DELEGATED_CHILD_ENV_MARKER] = inherited if inherited and inherited != "1" else _fenced_kanban_root()
+    cleaned[DELEGATED_CHILD_ENV_MARKER] = (
+        inherited if inherited and inherited != "1" else _fenced_kanban_root()
+    )
     return cleaned
 
 
@@ -151,6 +170,7 @@ def kanban_path_is_fenced(path: os.PathLike[str] | str) -> bool:
     if marker == "1":
         return True
     from pathlib import Path
+
     target = Path(path).expanduser().resolve()
     pinned = os.environ.get("CLAWK_KANBAN_DB", "").strip()
     if pinned and target == Path(pinned).expanduser().resolve():
@@ -178,7 +198,13 @@ def delegated_child_subprocess_env(
     Location and credentials are untouched; callers retain their existing secret policy.
     Dispatcher workers and supervised tool transports grant their own explicit scope.
     """
-    if not (is_delegated_child_process_context() or os.environ.get("CLAWK_KANBAN_TASK")
-            or (env and (env.get("CLAWK_KANBAN_TASK") or env.get(DELEGATED_CHILD_ENV_MARKER)))):
+    if not (
+        is_delegated_child_process_context()
+        or os.environ.get("CLAWK_KANBAN_TASK")
+        or (
+            env
+            and (env.get("CLAWK_KANBAN_TASK") or env.get(DELEGATED_CHILD_ENV_MARKER))
+        )
+    ):
         return None if env is None else dict(env)
     return scrub_kanban_env(os.environ if env is None else env)

@@ -25,7 +25,10 @@ def _init_repo(root):
 
 def _head(git, root):
     return subprocess.run(
-        git + ["rev-parse", "HEAD"], cwd=root, capture_output=True, text=True,
+        git + ["rev-parse", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
         check=False,
     ).stdout.strip()
 

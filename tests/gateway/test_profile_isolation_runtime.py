@@ -51,6 +51,7 @@ def _under_override(home: Path, fn):
 # M1 — import-time path globals / direct os.environ reads
 # ---------------------------------------------------------------------------
 
+
 class TestSkillsHubPathResolution:
     """tools/skills_hub.py path constants must reflect the active profile."""
 
@@ -79,7 +80,6 @@ class TestSkillsHubPathResolution:
         assert b_index == prof_b / "skills" / ".hub" / "index-cache"
 
 
-
 class TestGatewayCacheDirResolution:
     """gateway/platforms/base.py cache getters must follow the active profile."""
 
@@ -93,8 +93,6 @@ class TestGatewayCacheDirResolution:
         assert str(a_seen).startswith(str(prof_a))
         assert str(b_seen).startswith(str(prof_b))
         assert a_seen != b_seen
-
-
 
 
 class TestRichSentStorePathResolution:
@@ -138,10 +136,12 @@ class TestGatewayHooksDirResolution:
         b_hook_dir = prof_b / "hooks" / "only-in-b"
         b_hook_dir.mkdir(parents=True)
         (b_hook_dir / "HOOK.yaml").write_text(
-            "name: only-in-b\nevents: [\"agent:start\"]\n", encoding="utf-8",
+            'name: only-in-b\nevents: ["agent:start"]\n',
+            encoding="utf-8",
         )
         (b_hook_dir / "handler.py").write_text(
-            "async def handle(event_type, context):\n    pass\n", encoding="utf-8",
+            "async def handle(event_type, context):\n    pass\n",
+            encoding="utf-8",
         )
 
         def _load_and_names():
@@ -202,10 +202,9 @@ class TestStickerCachePathResolution:
 # M2 — thread / executor context propagation
 # ---------------------------------------------------------------------------
 
+
 class TestThreadContextPropagation:
     """Worker threads must inherit the spawning turn's profile override."""
-
-
 
     def test_run_async_worker_preserves_override(self, two_profiles):
         """model_tools._run_async's worker-thread branch must keep the override.

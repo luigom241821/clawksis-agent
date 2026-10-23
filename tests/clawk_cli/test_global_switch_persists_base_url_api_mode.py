@@ -34,10 +34,18 @@ def model_config(tmp_path, monkeypatch):
 
 def _saved_model():
     from clawk_cli.config import read_user_config_raw
-    return {f"model.{key}": value for key, value in read_user_config_raw()["model"].items()}
+
+    return {
+        f"model.{key}": value for key, value in read_user_config_raw()["model"].items()
+    }
 
 
-def _make_result(*, base_url="https://api.minimax.io/v1", api_mode="chat_completions", provider_changed=True):
+def _make_result(
+    *,
+    base_url="https://api.minimax.io/v1",
+    api_mode="chat_completions",
+    provider_changed=True,
+):
     return ModelSwitchResult(
         success=True,
         new_model="MiniMax-M3",
@@ -57,11 +65,12 @@ def _make_result(*, base_url="https://api.minimax.io/v1", api_mode="chat_complet
 
 class _StubCLI:
     """Minimum attrs/methods `_handle_model_switch` reads or calls on self."""
+
     def _stage_and_swap_model(self, result, old_model):
         # Staging + in-place swap lives in a helper; run the real one on this stub.
         import cli as _cli_mod
-        return _cli_mod.ClawksisCLI._stage_and_swap_model(self, result, old_model)
 
+        return _cli_mod.ClawksisCLI._stage_and_swap_model(self, result, old_model)
 
     agent = None
     model = "old-model"
@@ -122,7 +131,9 @@ def test_session_only_switch_does_not_touch_config(monkeypatch, model_config):
 
     monkeypatch.setattr(cli_mod, "_cprint", lambda *a, **k: None)
     original = model_config.read_bytes()
-    monkeypatch.setattr("clawk_cli.model_switch.switch_model", lambda **kw: _make_result())
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.switch_model", lambda **kw: _make_result()
+    )
     monkeypatch.setattr(
         "clawk_cli.inventory.load_picker_context",
         lambda: (_ for _ in ()).throw(RuntimeError("no picker context in test")),
@@ -152,7 +163,3 @@ def test_picker_global_switch_persists_base_url_and_api_mode(monkeypatch):
     assert saved["model.provider"] == "custom:minimax"
     assert saved["model.base_url"] == "https://api.minimax.io/v1"
     assert saved["model.api_mode"] == "chat_completions"
-
-
-
-

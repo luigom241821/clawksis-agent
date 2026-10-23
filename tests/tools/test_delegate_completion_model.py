@@ -18,7 +18,13 @@ def _unit(configured_model):
 
 def test_completion_model_falls_back_to_inherited_child_model(monkeypatch):
     seen = []
-    monkeypatch.setattr(async_delegation, "dispatch_async_delegation_batch", lambda **kw: seen.append(kw["model"]))
-    _dispatch_unit(_unit(None), None, None, {})  # delegation.model blank: children inherit the parent's model
+    monkeypatch.setattr(
+        async_delegation,
+        "dispatch_async_delegation_batch",
+        lambda **kw: seen.append(kw["model"]),
+    )
+    _dispatch_unit(
+        _unit(None), None, None, {}
+    )  # delegation.model blank: children inherit the parent's model
     _dispatch_unit(_unit("configured/model"), None, None, {})
     assert seen == ["inherited/model", "configured/model"]

@@ -44,5 +44,3 @@ def test_xai_video_image_input_blocks_credential_store_symlink(tmp_path, monkeyp
 
     with pytest.raises(ValueError, match="credential store"):
         _image_ref_to_xai_input(str(image_link))
-
-

@@ -4,6 +4,7 @@ Entitlement-failure detection, xAI subscription decoration, structured-detail co
 redaction of provider error payloads.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import json
 import re
 from typing import Any, Dict, Optional
@@ -35,8 +36,13 @@ PROVIDER_STREAM_PARSE_MARKERS = (
 
 def is_provider_stream_parse_error(error: BaseException) -> bool:
     """True for a provider stream-parse ``ValueError`` (see ``PROVIDER_STREAM_PARSE_MARKERS``)."""
-    return (isinstance(error, ValueError) and not isinstance(error, (UnicodeEncodeError, json.JSONDecodeError))
-            and any(marker in str(error).lower() for marker in PROVIDER_STREAM_PARSE_MARKERS))
+    return (
+        isinstance(error, ValueError)
+        and not isinstance(error, (UnicodeEncodeError, json.JSONDecodeError))
+        and any(
+            marker in str(error).lower() for marker in PROVIDER_STREAM_PARSE_MARKERS
+        )
+    )
 
 
 # Offline DNS failures are wrapped in a generic "Connection error" by SDKs — inspect the chain.
@@ -102,11 +108,15 @@ class ApiErrorSummaryMixin:
             return False
         # Single lowercase haystack over every field shape (message/reason and raw code/error).
         haystack = " ".join(
-            str(error_context.get(k) or "").lower() for k in ("message", "reason", "code", "error")
+            str(error_context.get(k) or "").lower()
+            for k in ("message", "reason", "code", "error")
         )
         if not haystack.strip():
             return False
-        if "[wke=unauthenticated:" in haystack or "oauth2 access token could not be validated" in haystack:
+        if (
+            "[wke=unauthenticated:" in haystack
+            or "oauth2 access token could not be validated" in haystack
+        ):
             return False
         return _is_xai_entitlement_text(haystack)
 
@@ -137,7 +147,9 @@ class ApiErrorSummaryMixin:
                     return nested
             for key in _ERROR_DETAIL_KEYS:
                 if key in value:
-                    nested_detail = ApiErrorSummaryMixin._coerce_api_error_detail(value[key])
+                    nested_detail = ApiErrorSummaryMixin._coerce_api_error_detail(
+                        value[key]
+                    )
                     if nested_detail:
                         return nested_detail
             try:
@@ -145,7 +157,9 @@ class ApiErrorSummaryMixin:
             except TypeError:
                 return str(value)
         if isinstance(value, (list, tuple)):
-            parts = [ApiErrorSummaryMixin._coerce_api_error_detail(item) for item in value]
+            parts = [
+                ApiErrorSummaryMixin._coerce_api_error_detail(item) for item in value
+            ]
             return "; ".join(part for part in parts if part)
         if value is None:
             return ""
@@ -164,7 +178,9 @@ class ApiErrorSummaryMixin:
         seen: set[int] = set()
         while current is not None and id(current) not in seen:
             seen.add(id(current))
-            if any(marker in str(current).lower() for marker in _NETWORK_RESOLUTION_MARKERS):
+            if any(
+                marker in str(current).lower() for marker in _NETWORK_RESOLUTION_MARKERS
+            ):
                 return (
                     "Clawksis can't reach the model provider. You may be offline. "
                     "Check your internet connection and try again."
@@ -193,10 +209,16 @@ class ApiErrorSummaryMixin:
         # JSON body errors from OpenAI/Anthropic SDKs
         body = getattr(error, "body", None)
         if isinstance(body, dict):
-            msg = body.get("error", {}).get("message") if isinstance(body.get("error"), dict) else body.get("message")
+            msg = (
+                body.get("error", {}).get("message")
+                if isinstance(body.get("error"), dict)
+                else body.get("message")
+            )
             if msg:
                 msg = ApiErrorSummaryMixin._coerce_api_error_detail(msg)
-                return ApiErrorSummaryMixin._decorate_xai_entitlement_error(f"{prefix}{msg[:300]}")
+                return ApiErrorSummaryMixin._decorate_xai_entitlement_error(
+                    f"{prefix}{msg[:300]}"
+                )
 
         # SDK may leave body empty while httpx has the payload. Redact: the body is attacker-influenced
         # and may echo Authorization / x-api-key / request JSON.
@@ -217,13 +239,19 @@ class ApiErrorSummaryMixin:
                 if isinstance(payload, dict):
                     err = payload.get("error")
                     if isinstance(err, dict) and err.get("message"):
-                        return redact_sensitive_text(f"{prefix}{str(err['message'])[:300]}")
+                        return redact_sensitive_text(
+                            f"{prefix}{str(err['message'])[:300]}"
+                        )
                     if payload.get("message"):
-                        return redact_sensitive_text(f"{prefix}{str(payload['message'])[:300]}")
+                        return redact_sensitive_text(
+                            f"{prefix}{str(payload['message'])[:300]}"
+                        )
                 return redact_sensitive_text(f"{prefix}{snippet[:300]}")
 
         # Fallback: truncate the raw string but give more room than 200 chars
-        return ApiErrorSummaryMixin._decorate_xai_entitlement_error(f"{prefix}{raw[:500]}")
+        return ApiErrorSummaryMixin._decorate_xai_entitlement_error(
+            f"{prefix}{raw[:500]}"
+        )
 
     def _mask_api_key_for_logs(self, key: Any) -> Optional[str]:
         # Azure Foundry Entra ID bearer providers are callables — never invoke them in log
@@ -241,9 +269,9 @@ class ApiErrorSummaryMixin:
         if not error_msg:
             return "Unknown error"
         # HTML content is common with CloudFlare and gateway error pages
-        if error_msg.strip().startswith('<!DOCTYPE html') or '<html' in error_msg:
+        if error_msg.strip().startswith("<!DOCTYPE html") or "<html" in error_msg:
             return "Service temporarily unavailable (HTML error page returned)"
-        cleaned = ' '.join(error_msg.split())
+        cleaned = " ".join(error_msg.split())
         if len(cleaned) > 150:
             cleaned = cleaned[:150] + "..."
         return cleaned

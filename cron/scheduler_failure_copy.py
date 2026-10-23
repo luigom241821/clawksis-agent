@@ -19,8 +19,13 @@ def cron_output_dir_display(job_id: str) -> str:
     return f"{display_clawk_home()}/cron/output/{job_id}/"
 
 
-_HTTP_STATUS_IN_TEXT = re.compile(r"(?:\bHTTP\b|\bError code\b|\bstatus(?: code)?\b)\W{0,3}(\b[45]\d\d\b)", re.IGNORECASE)
-_LEADING_EXC_TYPE = re.compile(r"^(?:[\w.]+\.)?([A-Z]\w*(?:Error|Timeout|Exception))\s*:")
+_HTTP_STATUS_IN_TEXT = re.compile(
+    r"(?:\bHTTP\b|\bError code\b|\bstatus(?: code)?\b)\W{0,3}(\b[45]\d\d\b)",
+    re.IGNORECASE,
+)
+_LEADING_EXC_TYPE = re.compile(
+    r"^(?:[\w.]+\.)?([A-Z]\w*(?:Error|Timeout|Exception))\s*:"
+)
 
 
 def classify_cron_failure_reason(text: str) -> str:
@@ -49,7 +54,9 @@ def _provider_failure_cause(reason: str) -> Optional[str]:
     return failure_cause_gloss(reason, subject="this job", possessive="the job's")
 
 
-_TRANSIENT_REASONS = frozenset({"timeout", "rate_limit", "upstream_rate_limit", "overloaded", "server_error"})
+_TRANSIENT_REASONS = frozenset(
+    {"timeout", "rate_limit", "upstream_rate_limit", "overloaded", "server_error"}
+)
 
 # Reason -> what to do. Transient reasons get the backup-provider clause from the scheduler
 # (it knows whether a fallback chain is configured) instead of a fixed sentence.
@@ -73,7 +80,9 @@ _PROVIDER_FAILURE_ACTION: dict[str, str] = {
 }
 _PROVIDER_FAILURE_ACTION["auth_permanent"] = _PROVIDER_FAILURE_ACTION["auth"]
 _PROVIDER_FAILURE_ACTION["billing_unverified"] = _PROVIDER_FAILURE_ACTION["billing"]
-_PROVIDER_FAILURE_ACTION["payload_too_large"] = _PROVIDER_FAILURE_ACTION["context_overflow"]
+_PROVIDER_FAILURE_ACTION["payload_too_large"] = _PROVIDER_FAILURE_ACTION[
+    "context_overflow"
+]
 _PROVIDER_FAILURE_ACTION["content_policy_blocked"] = (
     "Reword the job's prompt with `clawk cron edit {job_id} --prompt <text>`, or pick another "
     "model with `clawk cron edit {job_id} --model <name>`."
@@ -86,7 +95,12 @@ _DEFAULT_FAILURE_ACTION = "Run it again with `clawk cron run {job_id}`, or edit 
 
 
 def provider_failure_notice(
-    job_name: str, job_id: str, reason: str, *, backup_provider_phrase: str, provider: Any = None,
+    job_name: str,
+    job_id: str,
+    reason: str,
+    *,
+    backup_provider_phrase: str,
+    provider: Any = None,
 ) -> Optional[str]:
     """The notice for a provider-shaped ``reason``, or None when the reason is not one.
     ``provider`` is the job's pinned slug (if any) so the auth action names its exact sign-in."""
@@ -102,7 +116,8 @@ def provider_failure_notice(
         from agent.turn_failure_copy import relogin_command_hint
 
         action = _PROVIDER_FAILURE_ACTION.get(reason, _DEFAULT_FAILURE_ACTION).format(
-            job_id=job_id, relogin=relogin_command_hint(provider))
+            job_id=job_id, relogin=relogin_command_hint(provider)
+        )
     return (
         f"⚠️ Cron '{job_name}' failed: {cause}. {action} "
         f"Run log: `clawk cron runs {job_id}`."

@@ -45,7 +45,9 @@ def flag(name: str, help_text: str) -> tuple:
     return arg(name, help_text, action="store_true")
 
 
-def register_subcommands(parent: argparse.ArgumentParser, dest: str, commands: Iterable) -> None:
+def register_subcommands(
+    parent: argparse.ArgumentParser, dest: str, commands: Iterable
+) -> None:
     """Attach ``(name, help, handler, [arg(...), ...])`` subcommands to ``parent``."""
     sub = parent.add_subparsers(dest=dest)
     for name, help_text, func, arguments in commands:
@@ -59,8 +61,10 @@ def require_enabled(console: Console, cfg: dict, product: str, command: str) -> 
     """Print the "integration is disabled" hint and return False unless ``cfg["enabled"]``."""
     if cfg.get("enabled"):
         return True
-    console.print(f"[yellow]{product} integration is disabled.  Run "
-                  f"`clawk secrets {command} setup` first.[/yellow]")
+    console.print(
+        f"[yellow]{product} integration is disabled.  Run "
+        f"`clawk secrets {command} setup` first.[/yellow]"
+    )
     return False
 
 
@@ -74,8 +78,13 @@ def print_status_panel(console: Console, title: str, rows: Iterable) -> None:
     console.print(Panel(table, title=title, border_style="cyan"))
 
 
-def print_table(console: Console, columns: Sequence, rows: Iterable,
-                warnings: Iterable[str] = (), indent: str = "") -> None:
+def print_table(
+    console: Console,
+    columns: Sequence,
+    rows: Iterable,
+    warnings: Iterable[str] = (),
+    indent: str = "",
+) -> None:
     """Headed table; ``columns`` entries are ``header`` or ``(header, add_column kwargs)``.
 
     ``warnings`` are echoed after the table, one ``warning:`` line each.
@@ -94,8 +103,15 @@ def print_table(console: Console, columns: Sequence, rows: Iterable,
 def cli_version(binary: Path) -> str:
     """Return the first line of ``<binary> --version`` or ``"version unknown"``."""
     try:
-        res = subprocess.run([str(binary), "--version"], capture_output=True, text=True, encoding='utf-8',
-                             errors='replace', timeout=5, check=False)
+        res = subprocess.run(
+            [str(binary), "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            check=False,
+        )
         if res.returncode == 0:
             return (res.stdout or res.stderr).strip().splitlines()[0]
     except (OSError, subprocess.TimeoutExpired):
@@ -117,9 +133,17 @@ def secret_cli_env() -> dict:
 
 
 def rotate_token(
-    console: Console, given: Optional[str], token_env: str, *, flag: str, intro: str, prompt: str,
-    verify: Optional[Callable[[str], bool]], save: Callable[[str, str], object],
-    env_path: Callable[[], object], clear_caches: Callable[[], object],
+    console: Console,
+    given: Optional[str],
+    token_env: str,
+    *,
+    flag: str,
+    intro: str,
+    prompt: str,
+    verify: Optional[Callable[[str], bool]],
+    save: Callable[[str, str], object],
+    env_path: Callable[[], object],
+    clear_caches: Callable[[], object],
     disabled_note: Optional[str],
 ) -> int:
     """Shared ``token`` subcommand: prompt, optionally verify, then persist. Returns the exit code.
@@ -146,15 +170,23 @@ def rotate_token(
     save(token_env, token)
     os.environ[token_env] = token
     clear_caches()
-    console.print(f"[green]✓[/green] stored in {env_path()} as {token_env}.  "
-                  "Takes effect on the next Clawksis invocation.")
+    console.print(
+        f"[green]✓[/green] stored in {env_path()} as {token_env}.  "
+        "Takes effect on the next Clawksis invocation."
+    )
     if disabled_note:
         console.print(disabled_note)
     return 0
 
 
-def prompt_index(console: Console, prompt: str, count: int, *,
-                 allow_empty: bool = False, empty_message: Optional[str] = None) -> int:
+def prompt_index(
+    console: Console,
+    prompt: str,
+    count: int,
+    *,
+    allow_empty: bool = False,
+    empty_message: Optional[str] = None,
+) -> int:
     """Loop until the user enters an integer in ``1..count``; return it.
 
     Blank input returns 0 when ``allow_empty``; otherwise ``empty_message`` (if any)

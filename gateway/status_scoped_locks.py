@@ -3,6 +3,7 @@
 Helpers read status through the module at call time, preserving its patch seams.
 The acquire path imports the ownership check lazily to avoid an import cycle.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -12,7 +13,9 @@ from typing import Any, Optional
 from gateway import status as _status
 
 
-def _scoped_lock_record_is_stale(existing: dict[str, Any], existing_pid: Optional[int]) -> bool:
+def _scoped_lock_record_is_stale(
+    existing: dict[str, Any], existing_pid: Optional[int]
+) -> bool:
     """Recover dead/reused/stopped owners. Gateway locks also validate gateway argv.
 
     An explicitly process-owned reservation can belong to a dashboard or setup
@@ -25,11 +28,16 @@ def _scoped_lock_record_is_stale(existing: dict[str, Any], existing_pid: Optiona
     if _status._start_times_conflict(recorded_start, current_start):
         return True
     metadata = existing.get("metadata")
-    process_owner = isinstance(metadata, dict) and metadata.get("owner_kind") == "process"
+    process_owner = (
+        isinstance(metadata, dict) and metadata.get("owner_kind") == "process"
+    )
     if not process_owner and not _status._looks_like_gateway_process(existing_pid):
         if _status._read_process_cmdline(existing_pid) is not None:
             return True
-        if None in (recorded_start, current_start) and not _status._record_looks_like_gateway(existing):
+        if None in (
+            recorded_start,
+            current_start,
+        ) and not _status._record_looks_like_gateway(existing):
             return True
     return _status._process_is_stopped(existing_pid)
 
@@ -55,7 +63,8 @@ def release_all_scoped_locks(
         if owner_pid is not None:
             record = _status._read_json_file(lock_file) or {}
             if _status._pid_from_record(record) != owner_pid or (
-                owner_start_time is not None and record.get("start_time") != owner_start_time
+                owner_start_time is not None
+                and record.get("start_time") != owner_start_time
             ):
                 continue
         with contextlib.suppress(OSError):

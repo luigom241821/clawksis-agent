@@ -2,6 +2,7 @@
 
 The implementation moved to ``pm.environments``; in-tree code imports it from there.
 """
+
 from pm.environments import (
     activation_environment,
     dependency_home_root,

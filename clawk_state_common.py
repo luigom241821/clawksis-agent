@@ -13,9 +13,19 @@ from typing import Any
 from clawk_cli.timefmt import EPOCH_MAX, EPOCH_MIN
 from clawk_state_keys import CRON_PRINCIPAL_ID
 from clawk_state_pidns import persistent_record_pidns_checkable, pid_namespace_id
-from agent.skill_commands import AUTO_LOAD_SCAFFOLD_SQL_LIKE, SKILL_EXCERPT_JOINT, SKILL_SCAFFOLD_SQL_LIKE, describe_skill_invocation
-from agent.context_compressor import (LEGACY_SUMMARY_PREFIX, SUMMARY_PREFIX, _MERGED_PRIOR_CONTEXT_HEADER,
-    _MERGED_SUMMARY_DELIMITER, _SUMMARY_END_MARKER)
+from agent.skill_commands import (
+    AUTO_LOAD_SCAFFOLD_SQL_LIKE,
+    SKILL_EXCERPT_JOINT,
+    SKILL_SCAFFOLD_SQL_LIKE,
+    describe_skill_invocation,
+)
+from agent.context_compressor import (
+    LEGACY_SUMMARY_PREFIX,
+    SUMMARY_PREFIX,
+    _MERGED_PRIOR_CONTEXT_HEADER,
+    _MERGED_SUMMARY_DELIMITER,
+    _SUMMARY_END_MARKER,
+)
 
 
 # Persisted title provenance: automatic display labels are not user-selected identities.
@@ -46,6 +56,7 @@ def routed_sessions_setting(key: str, env_var: str) -> Any:
     if get_clawk_home_override():
         try:
             from clawk_cli.config import load_config_readonly
+
             return (load_config_readonly().get("sessions") or {}).get(key)
         except Exception:
             return None
@@ -64,7 +75,8 @@ _PREVIEW_CONTENT_SQL = "REPLACE(REPLACE(m.content, X'0A', ' '), X'0D', ' ')"
 # No LIKE wildcards in either prefix, so no ESCAPE clause is needed.
 _PREVIEW_SCAFFOLDED_SQL = (
     f"(m.content LIKE '{SKILL_SCAFFOLD_SQL_LIKE}'"
-    f" OR m.content LIKE '{AUTO_LOAD_SCAFFOLD_SQL_LIKE}')")
+    f" OR m.content LIKE '{AUTO_LOAD_SCAFFOLD_SQL_LIKE}')"
+)
 _SQL_WHITESPACE = "CHAR(9) || CHAR(10) || CHAR(13) || CHAR(32)"
 
 
@@ -85,8 +97,7 @@ def _sql_json_extract(expression: str, path: str) -> str:
     """Build a non-throwing JSON marker lookup for a JSON TEXT column."""
 
     safe_json = (
-        f"(CASE WHEN json_valid({expression}) "
-        f"THEN {expression} ELSE json_object() END)"
+        f"(CASE WHEN json_valid({expression}) THEN {expression} ELSE json_object() END)"
     )
     return f"json_extract({safe_json}, {_sql_literal(path)})"
 
@@ -101,39 +112,56 @@ def _sql_trim_whitespace(expression: str) -> str:
 
 def _sql_starts_with(expression: str, prefixes: tuple[str, ...]) -> str:
     trimmed = _sql_ltrim_whitespace(expression)
-    return "(" + " OR ".join(f"SUBSTR({trimmed}, 1, {len(p)}) = {_sql_literal(p)}" for p in prefixes) + ")"
+    return (
+        "("
+        + " OR ".join(
+            f"SUBSTR({trimmed}, 1, {len(p)}) = {_sql_literal(p)}" for p in prefixes
+        )
+        + ")"
+    )
 
 
 def _sql_after_marker(marker: str) -> str:
     """``m.content`` after the first occurrence of *marker*."""
-    return f"SUBSTR(m.content, INSTR(m.content, {_sql_literal(marker)}) + {len(marker)})"
+    return (
+        f"SUBSTR(m.content, INSTR(m.content, {_sql_literal(marker)}) + {len(marker)})"
+    )
 
 
 # Match the whole introduction shared by current and legacy prefixes, so a message that merely starts with the
 # bracketed label is not a compaction carrier.
 _PREVIEW_LONG_FORM_PREFIX = SUMMARY_PREFIX.split("Do NOT answer", 1)[0]
 _PREVIEW_SUMMARY_PREFIXES = (_PREVIEW_LONG_FORM_PREFIX, LEGACY_SUMMARY_PREFIX)
-_PREVIEW_STANDALONE_SUMMARY_SQL = _sql_starts_with("m.content", _PREVIEW_SUMMARY_PREFIXES)
+_PREVIEW_STANDALONE_SUMMARY_SQL = _sql_starts_with(
+    "m.content", _PREVIEW_SUMMARY_PREFIXES
+)
 _PREVIEW_MERGED_AFTER_SQL = _sql_after_marker(_MERGED_SUMMARY_DELIMITER)
-_PREVIEW_MERGED_SUMMARY_SQL = (f"(INSTR(m.content, {_sql_literal(_MERGED_SUMMARY_DELIMITER)}) > 0"
-    f" AND {_sql_starts_with(_PREVIEW_MERGED_AFTER_SQL, _PREVIEW_SUMMARY_PREFIXES)})")
+_PREVIEW_MERGED_SUMMARY_SQL = (
+    f"(INSTR(m.content, {_sql_literal(_MERGED_SUMMARY_DELIMITER)}) > 0"
+    f" AND {_sql_starts_with(_PREVIEW_MERGED_AFTER_SQL, _PREVIEW_SUMMARY_PREFIXES)})"
+)
 _PREVIEW_MERGED_PRIOR_SQL = _sql_trim_whitespace(
-    f"SUBSTR(m.content, 1, INSTR(m.content, {_sql_literal(_MERGED_SUMMARY_DELIMITER)}) - 1)")
+    f"SUBSTR(m.content, 1, INSTR(m.content, {_sql_literal(_MERGED_SUMMARY_DELIMITER)}) - 1)"
+)
 _PREVIEW_MERGED_PRIOR_LTRIMMED_SQL = _sql_ltrim_whitespace(_PREVIEW_MERGED_PRIOR_SQL)
-_PREVIEW_MERGED_PRIOR_UNWRAPPED_SQL = (f"CASE WHEN SUBSTR({_PREVIEW_MERGED_PRIOR_LTRIMMED_SQL}, 1,"
+_PREVIEW_MERGED_PRIOR_UNWRAPPED_SQL = (
+    f"CASE WHEN SUBSTR({_PREVIEW_MERGED_PRIOR_LTRIMMED_SQL}, 1,"
     f" {len(_MERGED_PRIOR_CONTEXT_HEADER)}) = {_sql_literal(_MERGED_PRIOR_CONTEXT_HEADER)}"
     f" THEN {_sql_ltrim_whitespace(f'SUBSTR({_PREVIEW_MERGED_PRIOR_LTRIMMED_SQL}, {len(_MERGED_PRIOR_CONTEXT_HEADER) + 1})')}"
-    f" ELSE {_PREVIEW_MERGED_PRIOR_SQL} END")
+    f" ELSE {_PREVIEW_MERGED_PRIOR_SQL} END"
+)
 _PREVIEW_FORCE_USER_REMAINDER_SQL = _sql_after_marker(_SUMMARY_END_MARKER)
 
 # Pure compaction rows are ineligible; force-user-leading and merged carriers only when authentic content survives.
 # A display_kind="hidden" row is model-facing scaffolding the gateway never paints; the preview must not paint it either.
-_PREVIEW_ELIGIBLE_SQL = (f"(COALESCE(m.display_kind, '') <> 'hidden'"
+_PREVIEW_ELIGIBLE_SQL = (
+    f"(COALESCE(m.display_kind, '') <> 'hidden'"
     f" AND ((NOT {_PREVIEW_STANDALONE_SUMMARY_SQL} AND NOT {_PREVIEW_MERGED_SUMMARY_SQL})"
     f" OR ({_PREVIEW_STANDALONE_SUMMARY_SQL} AND INSTR(m.content, {_sql_literal(_SUMMARY_END_MARKER)}) > 0"
     f" AND LENGTH({_sql_trim_whitespace(_PREVIEW_FORCE_USER_REMAINDER_SQL)}) > 0)"
     f" OR ({_PREVIEW_MERGED_SUMMARY_SQL}"
-    f" AND LENGTH({_sql_trim_whitespace(_PREVIEW_MERGED_PRIOR_UNWRAPPED_SQL)}) > 0)))")
+    f" AND LENGTH({_sql_trim_whitespace(_PREVIEW_MERGED_PRIOR_UNWRAPPED_SQL)}) > 0)))"
+)
 
 # ``_preview_raw`` SELECT for every listing query (scaffolded rows: head + tail around SKILL_EXCERPT_JOINT).
 _PREVIEW_RAW_SELECT = (
@@ -143,7 +171,8 @@ _PREVIEW_RAW_SELECT = (
     f" THEN SUBSTR({_PREVIEW_CONTENT_SQL}, 1, {_PREVIEW_SCAFFOLD_WINDOW}) || '{SKILL_EXCERPT_JOINT}'"
     f" || SUBSTR({_PREVIEW_CONTENT_SQL}, -{_PREVIEW_SCAFFOLD_WINDOW})"
     f" WHEN {_PREVIEW_SCAFFOLDED_SQL} THEN SUBSTR({_PREVIEW_CONTENT_SQL}, 1, {_PREVIEW_SCAFFOLD_WINDOW * 2})"
-    f" ELSE SUBSTR({_PREVIEW_CONTENT_SQL}, 1, {_PREVIEW_HEAD_CHARS}) END")
+    f" ELSE SUBSTR({_PREVIEW_CONTENT_SQL}, 1, {_PREVIEW_HEAD_CHARS}) END"
+)
 
 
 def _shape_preview(raw: Any) -> str:
@@ -161,22 +190,36 @@ def _sql_preview_raw(session_id_expr: str = "s.id") -> str:
     """Correlated ``_preview_raw`` column: the first eligible user message of *session_id_expr*.
     ``INDEXED BY`` walks the session in timestamp order and stops at the first eligible row; with planner
     stats older than idx_messages_session_id, SQLite otherwise reads and sorts the whole session (#119403)."""
-    return (f"COALESCE((SELECT {_PREVIEW_RAW_SELECT} FROM messages m INDEXED BY idx_messages_session"
+    return (
+        f"COALESCE((SELECT {_PREVIEW_RAW_SELECT} FROM messages m INDEXED BY idx_messages_session"
         f" WHERE m.session_id = {session_id_expr} AND m.role = 'user' AND m.content IS NOT NULL"
-        f" AND {_PREVIEW_ELIGIBLE_SQL} ORDER BY m.timestamp, m.id LIMIT 1), '') AS _preview_raw")
+        f" AND {_PREVIEW_ELIGIBLE_SQL} ORDER BY m.timestamp, m.id LIMIT 1), '') AS _preview_raw"
+    )
+
 
 # ── Session lineage predicates ({a} = sessions alias) ───────────────────────
 
 # /branch child (kept visible, never cascade-deleted): stable marker OR legacy end_reason heuristic.
-_BRANCH_CHILD_SQL = (f"{_sql_json_extract('{a}.model_config', '$._branched_from')} IS NOT NULL"
+_BRANCH_CHILD_SQL = (
+    f"{_sql_json_extract('{a}.model_config', '$._branched_from')} IS NOT NULL"
     " OR EXISTS (SELECT 1 FROM sessions p            WHERE p.id = {a}.parent_session_id"
-    "            AND p.end_reason = 'branched'            AND {a}.started_at >= p.ended_at)")
-_COMPRESSION_CHILD_SQL = ("EXISTS (SELECT 1 FROM sessions p        WHERE p.id = {a}.parent_session_id"
-    "        AND p.end_reason = 'compression')")
+    "            AND p.end_reason = 'branched'            AND {a}.started_at >= p.ended_at)"
+)
+_COMPRESSION_CHILD_SQL = (
+    "EXISTS (SELECT 1 FROM sessions p        WHERE p.id = {a}.parent_session_id"
+    "        AND p.end_reason = 'compression')"
+)
 
 # 'session_switch' creates no child row today, but pre-marker DBs hold legacy reset children whose parent
 # ended that way.  Must stay identical to the recovery fence in find_latest_gateway_session_for_peer.
-_RESET_END_REASONS = ("session_reset", "session_switch", "idle", "daily", "suspended", "resume_pending_expired")
+_RESET_END_REASONS = (
+    "session_reset",
+    "session_switch",
+    "idle",
+    "daily",
+    "suspended",
+    "resume_pending_expired",
+)
 _RESET_END_REASONS_SQL = ", ".join(f"'{reason}'" for reason in _RESET_END_REASONS)
 # Deliberate conversation boundaries: the reset set plus CLI /new, which ends the predecessor as
 # 'new_session' (clawk_cli/cli_session_mixin.py) without a reset child row.  A compression rotation must
@@ -187,10 +230,17 @@ _BOUNDARY_END_REASONS = frozenset(_RESET_END_REASONS) | {"new_session"}
 # recovery SQL and SessionDB.RECOVERABLE_END_REASONS.  superseded_by_resume = sentinel-parked runtime replaced
 # by a fresh session.resume; startup_orphan_reap = dead-gateway sweep, same class as ws_orphan_reap but kept
 # distinct for forensics.
-_RECOVERABLE_END_REASONS = ("agent_close", "ws_orphan_reap", "superseded_by_resume", "startup_orphan_reap")
+_RECOVERABLE_END_REASONS = (
+    "agent_close",
+    "ws_orphan_reap",
+    "superseded_by_resume",
+    "startup_orphan_reap",
+)
 # Startup sweep of rows orphaned by a dead gateway process (#65194): the in-process ws-orphan grace timer
 # died with the process, so the row was closed at the next boot instead.
-_RECOVERABLE_END_REASONS_SQL = ", ".join(f"'{reason}'" for reason in _RECOVERABLE_END_REASONS)
+_RECOVERABLE_END_REASONS_SQL = ", ".join(
+    f"'{reason}'" for reason in _RECOVERABLE_END_REASONS
+)
 
 # End reasons written by AUTOMATIC cleanup (shutdown, orphan reapers, idle/LRU eviction), not a deliberate
 # conversation boundary: "some runtime went away", so a writer that can prove liveness (e.g. a compression
@@ -199,7 +249,11 @@ _RECOVERABLE_END_REASONS_SQL = ", ".join(f"'{reason}'" for reason in _RECOVERABL
 # accident class but were historically only known to tui_gateway's _AUTOMATIC_SESSION_END_REASONS. See
 # #88197.
 _AUTOMATIC_END_REASONS = frozenset(_RECOVERABLE_END_REASONS) | {
-    "tui_shutdown", "ws_disconnect", "idle_timeout", "lru_evict"}
+    "tui_shutdown",
+    "ws_disconnect",
+    "idle_timeout",
+    "lru_evict",
+}
 
 
 def is_automatic_end_reason(reason) -> bool:
@@ -215,9 +269,11 @@ def _legacy_reset_child_sql(alias: str, reasons_sql: str) -> str:
     """Pre-marker reset-continuation heuristic: child rides its parent's exact non-empty routing key and the
     parent ended at a reset boundary.  Shared by ``_RESET_CHILD_SQL`` and ``reopen_session()`` so the two
     cannot drift; ``reasons_sql`` is a literal or placeholder list."""
-    return (f"EXISTS (SELECT 1 FROM sessions p            WHERE p.id = {alias}.parent_session_id"
+    return (
+        f"EXISTS (SELECT 1 FROM sessions p            WHERE p.id = {alias}.parent_session_id"
         f"            AND p.end_reason IN ({reasons_sql})            AND {alias}.session_key IS NOT NULL"
-        f"            AND {alias}.session_key != ''            AND {alias}.session_key = p.session_key)")
+        f"            AND {alias}.session_key != ''            AND {alias}.session_key = p.session_key)"
+    )
 
 
 def _non_continuation_child_sql(child: str = "", parent: str = "?") -> str:
@@ -225,26 +281,35 @@ def _non_continuation_child_sql(child: str = "", parent: str = "?") -> str:
     (branch/delegate/reset forks, tool sessions).  Markers are bound to the parent id: continuations
     inherit ``model_config`` verbatim, so a marker naming another row is inherited, not a fork.
     ``child`` is the column prefix (``""``, ``"c."``); single owner so prune and compression agree."""
-    return "".join(
-        f"  AND COALESCE({_sql_json_extract(f'{child}model_config', f'$.{marker}')}, '') != {parent}\n"
-        for marker in ("_branched_from", "_delegate_from", "_reset_from")
-    ) + f"  AND COALESCE({child}source, '') != 'tool'\n"
+    return (
+        "".join(
+            f"  AND COALESCE({_sql_json_extract(f'{child}model_config', f'$.{marker}')}, '') != {parent}\n"
+            for marker in ("_branched_from", "_delegate_from", "_reset_from")
+        )
+        + f"  AND COALESCE({child}source, '') != 'tool'\n"
+    )
 
 
 # A reset starts a separate user-visible conversation though rows keep parent_session_id for lineage.
 # Stable marker, or the same-key fallback for pre-marker rows (exact key keeps subagent children out).
-_RESET_CHILD_SQL = (f"{_sql_json_extract('{a}.model_config', '$._reset_from')} IS NOT NULL"
-    " OR " + _legacy_reset_child_sql("{a}", _RESET_END_REASONS_SQL))
+_RESET_CHILD_SQL = (
+    f"{_sql_json_extract('{a}.model_config', '$._reset_from')} IS NOT NULL"
+    " OR " + _legacy_reset_child_sql("{a}", _RESET_END_REASONS_SQL)
+)
 
 # Picker-visible rows: roots + branch/reset children (not subagent runs or compression continuations).
-_LISTABLE_CHILD_SQL = (f"(s.parent_session_id IS NULL OR {_BRANCH_CHILD_SQL.format(a='s')}"
-    f" OR {_RESET_CHILD_SQL.format(a='s')})")
+_LISTABLE_CHILD_SQL = (
+    f"(s.parent_session_id IS NULL OR {_BRANCH_CHILD_SQL.format(a='s')}"
+    f" OR {_RESET_CHILD_SQL.format(a='s')})"
+)
 
 
 def _ephemeral_child_sql(alias: str = "s") -> str:
     """Subagent runs, not branch, reset, or compression children."""
-    return (f"({alias}.parent_session_id IS NOT NULL AND NOT ({_BRANCH_CHILD_SQL.format(a=alias)})"
-        f" AND NOT ({_COMPRESSION_CHILD_SQL.format(a=alias)}) AND NOT ({_RESET_CHILD_SQL.format(a=alias)}))")
+    return (
+        f"({alias}.parent_session_id IS NOT NULL AND NOT ({_BRANCH_CHILD_SQL.format(a=alias)})"
+        f" AND NOT ({_COMPRESSION_CHILD_SQL.format(a=alias)}) AND NOT ({_RESET_CHILD_SQL.format(a=alias)}))"
+    )
 
 
 _SQL_IN_WINDOW = f"BETWEEN {EPOCH_MIN!r} AND {EPOCH_MAX!r}"
@@ -252,7 +317,9 @@ _SQL_IN_WINDOW = f"BETWEEN {EPOCH_MIN!r} AND {EPOCH_MAX!r}"
 
 def _sql_in_window(expr: str) -> str:
     """*expr* when it is inside the ``coerce_epoch`` window, else NULL."""
-    return f"(SELECT _win.v FROM (SELECT {expr} AS v) _win WHERE _win.v {_SQL_IN_WINDOW})"
+    return (
+        f"(SELECT _win.v FROM (SELECT {expr} AS v) _win WHERE _win.v {_SQL_IN_WINDOW})"
+    )
 
 
 def _sql_freshest_of(activity: str, session_id_expr: str, started: str) -> str:
@@ -262,23 +329,31 @@ def _sql_freshest_of(activity: str, session_id_expr: str, started: str) -> str:
     skipped, fallback included, or one bad row pins the session's recency to ``5e+246`` (#91536); a
     session with no trusted cell at all is NULL."""
     # Pinned for the same reason as _sql_preview_raw (#119403).
-    msg_max = (f"(SELECT MAX(_act_m.timestamp) FROM messages _act_m INDEXED BY idx_messages_session"
+    msg_max = (
+        f"(SELECT MAX(_act_m.timestamp) FROM messages _act_m INDEXED BY idx_messages_session"
         f" WHERE _act_m.session_id = {session_id_expr}"
-        f" AND _act_m.timestamp {_SQL_IN_WINDOW})")
-    return (f"COALESCE((SELECT MAX(_act_v.v) FROM (SELECT {activity} AS v UNION ALL SELECT {msg_max}) _act_v"
-        f" WHERE _act_v.v {_SQL_IN_WINDOW}), {_sql_in_window(started)})")
+        f" AND _act_m.timestamp {_SQL_IN_WINDOW})"
+    )
+    return (
+        f"COALESCE((SELECT MAX(_act_v.v) FROM (SELECT {activity} AS v UNION ALL SELECT {msg_max}) _act_v"
+        f" WHERE _act_v.v {_SQL_IN_WINDOW}), {_sql_in_window(started)})"
+    )
 
 
 def _sql_session_last_active(alias: str = "s") -> str:
     """Session recency expression for a ``sessions {alias}`` row."""
-    return _sql_freshest_of(f"{alias}.last_activity_at", f"{alias}.id", f"{alias}.started_at")
+    return _sql_freshest_of(
+        f"{alias}.last_activity_at", f"{alias}.id", f"{alias}.started_at"
+    )
 
 
 def _sql_session_last_active_by_id(session_id_expr: str) -> str:
     """Same freshest-of expression keyed by a session-id SQL expression."""
     return _sql_freshest_of(
-        f"(SELECT last_activity_at FROM sessions _act_s WHERE _act_s.id = {session_id_expr})", session_id_expr,
-        f"(SELECT started_at FROM sessions _act_s WHERE _act_s.id = {session_id_expr})")
+        f"(SELECT last_activity_at FROM sessions _act_s WHERE _act_s.id = {session_id_expr})",
+        session_id_expr,
+        f"(SELECT started_at FROM sessions _act_s WHERE _act_s.id = {session_id_expr})",
+    )
 
 
 # v32 (#140315): no data migration. #106742 added runtime_epoch, session_admissions, worker_executions,
@@ -347,11 +422,17 @@ def stat_db_file_identity(path) -> tuple[int, int] | None:
 
 # Row probes shared by the messages / compression mixins.
 _ENDED_ROW_SQL = "SELECT ended_at, end_reason FROM sessions WHERE id = ?"
-_COMPRESSION_LOCK_ROW_SQL = "SELECT holder, expires_at FROM compression_locks WHERE session_id = ?"
+_COMPRESSION_LOCK_ROW_SQL = (
+    "SELECT holder, expires_at FROM compression_locks WHERE session_id = ?"
+)
 
 
 def _ended_by_compression(row) -> bool:
-    return row is not None and row["ended_at"] is not None and row["end_reason"] == "compression"
+    return (
+        row is not None
+        and row["ended_at"] is not None
+        and row["end_reason"] == "compression"
+    )
 
 
 def _placeholders(items) -> str:
@@ -362,15 +443,16 @@ def _placeholders(items) -> str:
 # A first prompt is durable in ``session_admissions`` from admission on, while its transcript row lands
 # only at turn start; a restart in between leaves the admission ``unknown`` and the session at 0
 # messages. Only a session with neither messages nor an admission is an empty launch stub.
-_NOT_A_LAUNCH_STUB_SQL = (
-    "(s.message_count > 0 OR EXISTS (SELECT 1 FROM session_admissions a WHERE a.target_session_id = s.id))")
+_NOT_A_LAUNCH_STUB_SQL = "(s.message_count > 0 OR EXISTS (SELECT 1 FROM session_admissions a WHERE a.target_session_id = s.id))"
 
 
 def launch_stub_filter_sql(db) -> str:
     """``sessions s`` predicate that drops empty launch stubs (the CLI crashed or a resume failed before
     the first turn). A read-only open does not migrate, so a store from before the runtime tables may
     lack ``session_admissions``; messages alone decide there."""
-    if db._read_all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_admissions'"):
+    if db._read_all(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_admissions'"
+    ):
         return _NOT_A_LAUNCH_STUB_SQL
     return "s.message_count > 0"
 
@@ -386,7 +468,9 @@ def _source_match_clause(sources, local_created_sources=None) -> tuple[str, list
     if not surfaces:
         return f"s.source IN ({_placeholders(labels)})", labels
     non_local = [item for item in labels if item != "local"]
-    local_sql = f"(s.source = 'local' AND s.created_source IN ({_placeholders(surfaces)}))"
+    local_sql = (
+        f"(s.source = 'local' AND s.created_source IN ({_placeholders(surfaces)}))"
+    )
     if not non_local:
         return local_sql, list(surfaces)
     return (
@@ -405,7 +489,7 @@ def _id_chunks(ids, size: int = _SQL_IN_CHUNK):
     """Yield *ids* (any iterable) as lists of at most *size* elements."""
     ids = list(ids)
     for start in range(0, len(ids), size):
-        yield ids[start:start + size]
+        yield ids[start : start + size]
 
 
 def emit_session_deleted(db, deleted_ids, *, reason, primary=None, sessions_dir=None):
@@ -424,17 +508,26 @@ def emit_session_deleted(db, deleted_ids, *, reason, primary=None, sessions_dir=
     try:
         from clawk_cli.lifecycle import invoke_hook
         from clawk_constants import (
-            get_clawk_home, profile_name_for_home, reset_clawk_home_override, set_clawk_home_override,
+            get_clawk_home,
+            profile_name_for_home,
+            reset_clawk_home_override,
+            set_clawk_home_override,
         )
 
         home = os.path.dirname(os.path.abspath(os.fspath(db.db_path)))
         profile = profile_name_for_home(home)
-        payload: dict = {"session_id": primary if primary in ids else ids[0], "reason": reason, "profile": profile}
+        payload: dict = {
+            "session_id": primary if primary in ids else ids[0],
+            "reason": reason,
+            "profile": profile,
+        }
         if len(ids) > 1:
             payload["deleted_ids"] = ids
         if sessions_dir is not None:
             payload["sessions_dir"] = str(sessions_dir)
-        rebind = profile is not None and os.path.realpath(home) != os.path.realpath(get_clawk_home())
+        rebind = profile is not None and os.path.realpath(home) != os.path.realpath(
+            get_clawk_home()
+        )
         token = set_clawk_home_override(home) if rebind else None
         try:
             invoke_hook("on_session_delete", **payload)
@@ -445,10 +538,17 @@ def emit_session_deleted(db, deleted_ids, *, reason, primary=None, sessions_dir=
         logger.warning("on_session_delete dispatch failed", exc_info=True)
 
 
-_FTS_TRIGGERS = ("messages_fts_insert", "messages_fts_delete", "messages_fts_update",
-                 "messages_fts_trigram_insert", "messages_fts_trigram_delete", "messages_fts_trigram_update")
+_FTS_TRIGGERS = (
+    "messages_fts_insert",
+    "messages_fts_delete",
+    "messages_fts_update",
+    "messages_fts_trigram_insert",
+    "messages_fts_trigram_delete",
+    "messages_fts_trigram_update",
+)
 
-SCHEMA_SQL = """
+SCHEMA_SQL = (
+    """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
@@ -614,7 +714,9 @@ CREATE INDEX IF NOT EXISTS session_admissions_pending
 -- index, so it beats the UNIQUE autoindex's bare principal_id prefix even without ANALYZE stats.
 -- The WHERE is built from CRON_PRINCIPAL_ID, the literal the run queries inline, so they cannot drift.
 CREATE INDEX IF NOT EXISTS idx_session_admissions_cron_request
-    ON session_admissions(principal_id, request_id, target_session_id) WHERE principal_id = '""" + CRON_PRINCIPAL_ID + """';
+    ON session_admissions(principal_id, request_id, target_session_id) WHERE principal_id = '"""
+    + CRON_PRINCIPAL_ID
+    + """';
 CREATE TABLE IF NOT EXISTS worker_executions (
     execution_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE RESTRICT,
@@ -768,6 +870,7 @@ CREATE INDEX IF NOT EXISTS idx_session_model_usage_model ON session_model_usage(
 CREATE INDEX IF NOT EXISTS idx_async_delegations_delivery
     ON async_delegations(delivery_state, completed_at);
 """
+)
 
 # Indexes on later-added columns must run AFTER _reconcile_columns(), or executescript fails on legacy DBs.
 # sessions_runtime_ledger_delete_guard: every delete path in this release retires a session's ledger rows
@@ -1047,6 +1150,7 @@ END;
 # ``parent_session_id`` but NOT the marker, so they stay trigram-indexed.
 FTS_TRIGRAM_EXCLUDED_SOURCES = ("cron", "subagent")
 
+
 def fts_trigram_session_sql(alias: str = "") -> str:
     """Predicate over a ``sessions`` row selecting sessions whose rows belong in
     the trigram index; ``alias`` qualifies every column for joins. Shared by the
@@ -1068,7 +1172,7 @@ CREATE VIEW IF NOT EXISTS messages_fts_trigram_src AS
     SELECT m.id, m.role, m.content, m.tool_name
     FROM messages AS m
     JOIN sessions AS s ON s.id = m.session_id
-    WHERE m.role <> 'tool' AND {fts_trigram_session_sql('s')};
+    WHERE m.role <> 'tool' AND {fts_trigram_session_sql("s")};
 
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts_trigram USING fts5(
     content,
@@ -1127,7 +1231,11 @@ BEGIN
 END;
 """
 
-_FTS_CJK_TRIGGERS = ("messages_fts_cjk_insert", "messages_fts_cjk_delete", "messages_fts_cjk_update")
+_FTS_CJK_TRIGGERS = (
+    "messages_fts_cjk_insert",
+    "messages_fts_cjk_delete",
+    "messages_fts_cjk_update",
+)
 
 # Set when a tokenizer-less process dropped the cjk triggers to keep writes alive: the cjk index is missing rows
 # and must not serve reads until `clawk sessions optimize-storage` rebuilds it on a capable host.
@@ -1256,7 +1364,9 @@ _LOCK_CONTENTION_ERRNOS = {errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK, errno.
 
 def is_advisory_lock_contention(exc: BaseException) -> bool:
     """True when *exc* means another process holds the lock; on any other ``OSError`` fail closed at once."""
-    return isinstance(exc, BlockingIOError) or (isinstance(exc, OSError) and exc.errno in _LOCK_CONTENTION_ERRNOS)
+    return isinstance(exc, BlockingIOError) or (
+        isinstance(exc, OSError) and exc.errno in _LOCK_CONTENTION_ERRNOS
+    )
 
 
 def _proc_start_ticks(pid: int):
@@ -1299,8 +1409,12 @@ def _write_lock_holder_record(handle) -> None:
     dead, flock inherited by a forked child — issue #100108) from a live wedged holder.  ``pidns``: see
     ``clawk_state_pidns``.
     """
-    record = {"pid": os.getpid(), "pidns": pid_namespace_id(),
-              "start_ticks": _proc_start_ticks(os.getpid()), "acquired_at": time.time()}
+    record = {
+        "pid": os.getpid(),
+        "pidns": pid_namespace_id(),
+        "start_ticks": _proc_start_ticks(os.getpid()),
+        "acquired_at": time.time(),
+    }
     _rewrite_lock_file(handle, json.dumps(record, sort_keys=True).encode("utf-8"))
 
 
@@ -1331,7 +1445,9 @@ def _lock_holder_provably_dead(record) -> bool:
     if recorded_ticks is None:
         return False
     current_ticks = _proc_start_ticks(pid)
-    return current_ticks is not None and current_ticks != recorded_ticks  # different start time: PID recycled
+    return (
+        current_ticks is not None and current_ticks != recorded_ticks
+    )  # different start time: PID recycled
 
 
 def _acquire_db_flock(lock_path, handle, timeout_seconds, poll_seconds, description):
@@ -1348,6 +1464,7 @@ def _acquire_db_flock(lock_path, handle, timeout_seconds, poll_seconds, descript
     defers forever. Indeterminate liveness always defers (fail closed). See #100108.
     """
     import fcntl
+
     deadline = time.monotonic() + timeout_seconds
     broke_lock = False
     while True:
@@ -1355,9 +1472,14 @@ def _acquire_db_flock(lock_path, handle, timeout_seconds, poll_seconds, descript
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (BlockingIOError, OSError) as exc:
             if not is_advisory_lock_contention(exc):
-                logger.warning("Could not acquire %s %s (%s) — deferring rather than "
-                               "waiting out the %.0fs holder timeout on a non-contention error.",
-                               description, lock_path, exc, timeout_seconds)
+                logger.warning(
+                    "Could not acquire %s %s (%s) — deferring rather than "
+                    "waiting out the %.0fs holder timeout on a non-contention error.",
+                    description,
+                    lock_path,
+                    exc,
+                    timeout_seconds,
+                )
                 return None, handle
             if time.monotonic() < deadline:
                 time.sleep(poll_seconds)
@@ -1367,15 +1489,25 @@ def _acquire_db_flock(lock_path, handle, timeout_seconds, poll_seconds, descript
             record = _read_lock_holder_record(handle)
             if not _lock_holder_provably_dead(record):
                 return False, handle
-            logger.warning("%s %s is held by an orphaned file descriptor (recorded holder pid %s is dead — a "
-                           "forked child inherited the lock fd); breaking the stale lock and retaking it on a "
-                           "fresh file.", description, lock_path, (record or {}).get("pid"))
+            logger.warning(
+                "%s %s is held by an orphaned file descriptor (recorded holder pid %s is dead — a "
+                "forked child inherited the lock fd); breaking the stale lock and retaking it on a "
+                "fresh file.",
+                description,
+                lock_path,
+                (record or {}).get("pid"),
+            )
             try:
                 os.unlink(lock_path)
                 handle.close()
                 handle = open(lock_path, "a+b")
             except OSError as exc:
-                logger.warning("Could not break stale %s %s (%s) — deferring.", description, lock_path, exc)
+                logger.warning(
+                    "Could not break stale %s %s (%s) — deferring.",
+                    description,
+                    lock_path,
+                    exc,
+                )
                 return False, handle
             broke_lock = True
             deadline = time.monotonic() + _LOCK_BREAK_REACQUIRE_SECONDS
@@ -1383,7 +1515,10 @@ def _acquire_db_flock(lock_path, handle, timeout_seconds, poll_seconds, descript
         # A breaker may have replaced the file while we waited; a lock on a dead inode excludes nobody.
         try:
             fd_stat, path_stat = os.fstat(handle.fileno()), os.stat(lock_path)
-            same_file = fd_stat.st_dev == path_stat.st_dev and fd_stat.st_ino == path_stat.st_ino
+            same_file = (
+                fd_stat.st_dev == path_stat.st_dev
+                and fd_stat.st_ino == path_stat.st_ino
+            )
         except OSError:
             same_file = False
         if same_file:
@@ -1412,6 +1547,7 @@ def _describe_lock_holder(record) -> str:
 def _acquire_msvcrt_lock(lock_path, handle, timeout):
     """Windows counterpart of ``_acquire_db_flock`` (no orphan break); same True / False / None contract."""
     import msvcrt
+
     deadline = time.monotonic() + timeout
     while True:
         try:
@@ -1420,8 +1556,11 @@ def _acquire_msvcrt_lock(lock_path, handle, timeout):
             return True
         except (BlockingIOError, OSError) as exc:
             if not is_advisory_lock_contention(exc):
-                logger.warning("Could not acquire FTS rebuild lock %s (%s) — deferring on a non-contention error.",
-                               lock_path, exc)
+                logger.warning(
+                    "Could not acquire FTS rebuild lock %s (%s) — deferring on a non-contention error.",
+                    lock_path,
+                    exc,
+                )
                 return None
             if time.monotonic() >= deadline:
                 return False
@@ -1438,7 +1577,11 @@ def fts_rebuild_admission(db_path, *, timeout_seconds=None):
     if db_path is None:
         yield True
         return
-    timeout = _FTS_REBUILD_LOCK_TIMEOUT_SECONDS if timeout_seconds is None else max(float(timeout_seconds), 0.0)
+    timeout = (
+        _FTS_REBUILD_LOCK_TIMEOUT_SECONDS
+        if timeout_seconds is None
+        else max(float(timeout_seconds), 0.0)
+    )
     lock_path = f"{db_path}.fts_rebuild.lock"
     try:
         handle = open(lock_path, "a+b")
@@ -1446,8 +1589,12 @@ def fts_rebuild_admission(db_path, *, timeout_seconds=None):
         # Fail closed like a timed-out acquire: an unopenable lock file means the FS is out of
         # space/inodes/descriptors and a sibling that opened earlier may still be rebuilding — yielding True
         # gave every process on a full disk a concurrent rebuild.  Deferring is free: the breadcrumb retries.
-        logger.warning("Could not open FTS rebuild lock %s (%s) — deferring this rebuild "
-                       "rather than running it without cross-process authority.", lock_path, exc)
+        logger.warning(
+            "Could not open FTS rebuild lock %s (%s) — deferring this rebuild "
+            "rather than running it without cross-process authority.",
+            lock_path,
+            exc,
+        )
         yield False
         return
     acquired = False
@@ -1456,7 +1603,12 @@ def fts_rebuild_admission(db_path, *, timeout_seconds=None):
             acquired = _acquire_msvcrt_lock(lock_path, handle, timeout)
         else:
             acquired, handle = _acquire_db_flock(
-                lock_path, handle, timeout, _FTS_REBUILD_LOCK_POLL_SECONDS, "FTS rebuild lock")
+                lock_path,
+                handle,
+                timeout,
+                _FTS_REBUILD_LOCK_POLL_SECONDS,
+                "FTS rebuild lock",
+            )
         if acquired is None:
             # Already logged with the real errno; "held by another process" would be a lie.
             acquired = False
@@ -1464,23 +1616,33 @@ def fts_rebuild_admission(db_path, *, timeout_seconds=None):
             record = None if _IS_WINDOWS else _read_lock_holder_record(handle)
             if timeout <= 0:
                 # Non-blocking probe from an in-process retry: keep it quiet.
-                logger.info("FTS rebuild lock %s is busy — deferring this retry "
-                            "(the stale-FTS breadcrumb keeps it retryable). Recorded holder: %s.",
-                            lock_path, _describe_lock_holder(record))
+                logger.info(
+                    "FTS rebuild lock %s is busy — deferring this retry "
+                    "(the stale-FTS breadcrumb keeps it retryable). Recorded holder: %s.",
+                    lock_path,
+                    _describe_lock_holder(record),
+                )
             else:
-                logger.warning("FTS rebuild lock %s held by another process for more than %.0fs — deferring "
-                               "this rebuild to avoid racing the holder (the stale-FTS breadcrumb keeps it "
-                               "retryable). Recorded holder: %s.", lock_path, timeout, _describe_lock_holder(record))
+                logger.warning(
+                    "FTS rebuild lock %s held by another process for more than %.0fs — deferring "
+                    "this rebuild to avoid racing the holder (the stale-FTS breadcrumb keeps it "
+                    "retryable). Recorded holder: %s.",
+                    lock_path,
+                    timeout,
+                    _describe_lock_holder(record),
+                )
         yield acquired
     finally:
         try:
             with contextlib.suppress(OSError):  # best-effort release
                 if acquired and _IS_WINDOWS:
                     import msvcrt
+
                     handle.seek(0)
                     msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
                 elif acquired:
                     import fcntl
+
                     _clear_lock_holder_record(handle)
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         finally:

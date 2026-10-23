@@ -1,4 +1,5 @@
 """Exercise probe transport redirects, proxies, and early response closure."""
+
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -52,8 +53,15 @@ def test_redirect_credentials_and_proxy_routing_are_preserved(servers, monkeypat
     source_url = servers(Handler)
     sink_url = servers(Handler)
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
-    headers = {"Authorization": "Bearer dummy", "X-Custom-Auth": "dummy", "Accept": "application/json"}
-    assert model_metadata_http.get(source_url + "/redirect", headers=headers).status_code == 200
+    headers = {
+        "Authorization": "Bearer dummy",
+        "X-Custom-Auth": "dummy",
+        "Accept": "application/json",
+    }
+    assert (
+        model_metadata_http.get(source_url + "/redirect", headers=headers).status_code
+        == 200
+    )
     assert seen[0][1]["Authorization"] == "Bearer dummy"
     redirected = {key.lower(): value for key, value in seen[-1][1].items()}
     assert "authorization" not in redirected and "x-custom-auth" not in redirected
@@ -68,7 +76,9 @@ def test_redirect_credentials_and_proxy_routing_are_preserved(servers, monkeypat
 
 
 @pytest.mark.parametrize("status", [401, 403, 404])
-def test_metadata_auth_failure_closes_without_reading_body(servers, monkeypatch, status):
+def test_metadata_auth_failure_closes_without_reading_body(
+    servers, monkeypatch, status
+):
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -94,7 +104,9 @@ def test_metadata_auth_failure_closes_without_reading_body(servers, monkeypatch,
 
     url = servers(Handler)
     monkeypatch.setenv("NO_PROXY", "127.0.0.1")
-    monkeypatch.setattr(model_metadata, "detect_local_server_type", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        model_metadata, "detect_local_server_type", lambda *args, **kwargs: None
+    )
     import httpx
 
     responses = []

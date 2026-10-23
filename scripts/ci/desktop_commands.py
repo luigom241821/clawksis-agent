@@ -1,4 +1,5 @@
 """Expose already-prepared tools to later CI audit/upload steps; never install."""
+
 from __future__ import annotations
 
 import argparse
@@ -24,14 +25,17 @@ def export_commands(path: Path) -> None:
         alias.unlink(missing_ok=True)
         alias.symlink_to(prepared.python)
         directories.insert(0, str(commands))
-    file_commands("GITHUB_ENV", {
-        "CLAWK_PYTHON": prepared.python,
-        "CLAWK_NODE": prepared.node,
-        "CLAWK_HOME": prepared.request.work / "clawk-home",
-        "CLAWK_RUNTIME_DIR": prepared.request.cache / "tools",
-        "PYTHONUTF8": "1",
-        "PYTHONDONTWRITEBYTECODE": "1",
-    })
+    file_commands(
+        "GITHUB_ENV",
+        {
+            "CLAWK_PYTHON": prepared.python,
+            "CLAWK_NODE": prepared.node,
+            "CLAWK_HOME": prepared.request.work / "clawk-home",
+            "CLAWK_RUNTIME_DIR": prepared.request.cache / "tools",
+            "PYTHONUTF8": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+    )
     add_path(directories)
 
 

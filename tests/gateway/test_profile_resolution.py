@@ -20,8 +20,12 @@ def mock_runner():
     runner = MagicMock(spec=GatewayRunner)
     runner.config = MagicMock(profile_routes=[], _runtime_profile_homes=None)
     # Bind the actual methods to the mock
-    runner._profile_name_for_source = GatewayRunner._profile_name_for_source.__get__(runner)
-    runner._resolve_profile_home_for_source = GatewayRunner._resolve_profile_home_for_source.__get__(runner)
+    runner._profile_name_for_source = GatewayRunner._profile_name_for_source.__get__(
+        runner
+    )
+    runner._resolve_profile_home_for_source = (
+        GatewayRunner._resolve_profile_home_for_source.__get__(runner)
+    )
     # _handle_message's ingress gates (profile route rejection) live in this helper.
     runner._hm_admit_event = GatewayRunner._hm_admit_event.__get__(runner)
     # The identity seam the gate canonicalizes through; a hand-built source has no transport owner.
@@ -61,38 +65,41 @@ def telegram_source():
 
 class TestResolutionOrder:
     """Tests that profile resolution follows the correct priority order."""
-    
+
     def test_source_profile_wins_over_routing(self, mock_runner, discord_source):
         """source.profile should be used even if routing would match."""
         discord_source.profile = "from-source"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 with patch("clawk_cli.profiles.profile_exists", return_value=True):
                     mock_get_dir.return_value = Path("/clawk/profiles/from-source")
-                    result = mock_runner._resolve_profile_home_for_source(discord_source)
-                    
+                    result = mock_runner._resolve_profile_home_for_source(
+                        discord_source
+                    )
+
                     assert result == Path("/clawk/profiles/from-source")
                     mock_get_dir.assert_called_once_with("from-source")
-    
-    
-    
 
 
 class TestMissingProfileWarning:
     """Tests for warning when a profile doesn't exist on disk."""
-    
+
     def test_nonexistent_profile_warning(self, mock_runner, discord_source, caplog):
         """When source.profile points to a nonexistent profile, log a WARNING."""
         discord_source.profile = "nonexistent"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
             with patch("clawk_cli.profiles.get_profile_dir") as mock_get_dir:
                 mock_get_dir.return_value = Path("/clawk/profiles/nonexistent")
                 with patch("clawk_cli.profiles.profile_exists", return_value=False):
-                    with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+                    with patch(
+                        "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                    ):
                         with caplog.at_level(logging.WARNING):
-                            result = mock_runner._resolve_profile_home_for_source(discord_source)
+                            result = mock_runner._resolve_profile_home_for_source(
+                                discord_source
+                            )
 
                             # Should fall back to global CLAWK_HOME
                             assert result == Path("/clawk")
@@ -103,35 +110,37 @@ class TestMissingProfileWarning:
                             assert "nonexistent" in caplog.records[0].message
                             assert "discord" in caplog.records[0].message
                             assert "123456" in caplog.records[0].message
-    
-    
-    
 
 
 class TestExceptionHandling:
     """Tests for exception handling in profile resolution."""
-    
-    def test_get_profile_dir_exception_logs_warning(self, mock_runner, discord_source, caplog):
+
+    def test_get_profile_dir_exception_logs_warning(
+        self, mock_runner, discord_source, caplog
+    ):
         """When get_profile_dir raises an exception, log a WARNING with context."""
         discord_source.profile = "bad-profile"
-        
+
         with patch("clawk_cli.profiles.get_active_profile_name", return_value="active"):
-            with patch("clawk_cli.profiles.get_profile_dir", side_effect=ValueError("Invalid profile name")):
-                with patch("clawk_constants.get_clawk_home", return_value=Path("/clawk")):
+            with patch(
+                "clawk_cli.profiles.get_profile_dir",
+                side_effect=ValueError("Invalid profile name"),
+            ):
+                with patch(
+                    "clawk_constants.get_clawk_home", return_value=Path("/clawk")
+                ):
                     with caplog.at_level(logging.WARNING):
-                        result = mock_runner._resolve_profile_home_for_source(discord_source)
-                        
+                        result = mock_runner._resolve_profile_home_for_source(
+                            discord_source
+                        )
+
                         # Should fall back to global CLAWK_HOME
                         assert result == Path("/clawk")
-                        
+
                         # Should have logged a warning with exception info
                         assert len(caplog.records) == 1
                         assert caplog.records[0].levelname == "WARNING"
                         assert "bad-profile" in caplog.records[0].message
-    
-
-
-    
 
 
 class TestNonDiscordProfileRouting:
@@ -148,15 +157,21 @@ class TestNonDiscordProfileRouting:
         """A configured Telegram route resolves to its profile via the real
         ``_profile_name_for_source`` (bound onto the mock runner)."""
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="tg", platform="telegram", profile="tg-profile",
-                         chat_id="-1001234567890"),
+            ProfileRoute(
+                name="tg",
+                platform="telegram",
+                profile="tg-profile",
+                chat_id="-1001234567890",
+            ),
         ]
         telegram_source.profile = None
 
         with patch(
             "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")),
-                          ("tg-profile", Path("/profiles/tg-profile"))],
+            return_value=[
+                ("default", Path("/profiles/default")),
+                ("tg-profile", Path("/profiles/tg-profile")),
+            ],
         ):
             assert mock_runner._profile_name_for_source(telegram_source) == "tg-profile"
 
@@ -173,14 +188,18 @@ class TestNonDiscordProfileRouting:
 
         with patch(
             "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")),
-                          ("worker", Path("/profiles/worker"))],
+            return_value=[
+                ("default", Path("/profiles/default")),
+                ("worker", Path("/profiles/worker")),
+            ],
         ) as enumerate_profiles:
             assert mock_runner._profile_name_for_source(telegram_source) == "worker"
 
         enumerate_profiles.assert_called_once_with(multiplex=True)
 
-    def test_route_to_unserved_profile_rejects(self, mock_runner, telegram_source, caplog):
+    def test_route_to_unserved_profile_rejects(
+        self, mock_runner, telegram_source, caplog
+    ):
         mock_runner.config.profile_routes = [
             ProfileRoute(
                 name="restricted-route",
@@ -191,17 +210,24 @@ class TestNonDiscordProfileRouting:
         ]
         telegram_source.chat_id = "route-chat"
 
-        with patch(
-            "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")),
-                          ("worker", Path("/profiles/worker"))],
-        ), caplog.at_level(logging.WARNING, logger="gateway.run"):
+        with (
+            patch(
+                "clawk_cli.profiles.profiles_to_serve",
+                return_value=[
+                    ("default", Path("/profiles/default")),
+                    ("worker", Path("/profiles/worker")),
+                ],
+            ),
+            caplog.at_level(logging.WARNING, logger="gateway.run"),
+        ):
             with pytest.raises(ProfileRouteRejected):
                 mock_runner._profile_name_for_source(telegram_source)
 
         assert "target profile 'restricted' is not served" in caplog.text
 
-    def test_no_route_match_preserves_default_sentinel(self, mock_runner, telegram_source):
+    def test_no_route_match_preserves_default_sentinel(
+        self, mock_runner, telegram_source
+    ):
         mock_runner.config.profile_routes = [
             ProfileRoute(
                 name="other-chat",
@@ -224,7 +250,6 @@ class TestGatewayRunnerInjection:
     that makes the routing in TestNonDiscordProfileRouting reachable at runtime.
     """
 
-
     def test_factory_binds_every_adapter_to_runner(self, monkeypatch):
         """``_create_adapter`` binds the runner regardless of which branch
         built the adapter (plugin registry OR built-in if/elif) — every
@@ -235,11 +260,21 @@ class TestGatewayRunnerInjection:
 
         runner = object.__new__(GatewayRunner)
         adapter = MagicMock(spec=BasePlatformAdapter)
-        monkeypatch.setattr(runner, "_instantiate_adapter", lambda platform, config: adapter)
-        assert runner._create_adapter(Platform.SIGNAL, PlatformConfig(enabled=True)) is adapter
+        monkeypatch.setattr(
+            runner, "_instantiate_adapter", lambda platform, config: adapter
+        )
+        assert (
+            runner._create_adapter(Platform.SIGNAL, PlatformConfig(enabled=True))
+            is adapter
+        )
         assert adapter.gateway_runner is runner
-        monkeypatch.setattr(runner, "_instantiate_adapter", lambda platform, config: None)
-        assert runner._create_adapter(Platform.SIGNAL, PlatformConfig(enabled=True)) is None
+        monkeypatch.setattr(
+            runner, "_instantiate_adapter", lambda platform, config: None
+        )
+        assert (
+            runner._create_adapter(Platform.SIGNAL, PlatformConfig(enabled=True))
+            is None
+        )
 
     @pytest.mark.asyncio
     async def test_real_signal_factory_routes_inbound_group_event(self, monkeypatch):
@@ -257,12 +292,20 @@ class TestGatewayRunnerInjection:
         runner.config = GatewayConfig(
             multiplex_profiles=True,
             profile_routes=[
-                ProfileRoute(name="signal", platform="signal", profile="ops", chat_id=f"group:{group_id}"),
+                ProfileRoute(
+                    name="signal",
+                    platform="signal",
+                    profile="ops",
+                    chat_id=f"group:{group_id}",
+                ),
             ],
         )
         adapter = runner._create_adapter(
             Platform.SIGNAL,
-            PlatformConfig(enabled=True, extra={"http_url": "http://127.0.0.1:18080", "account": "+15555550123"}),
+            PlatformConfig(
+                enabled=True,
+                extra={"http_url": "http://127.0.0.1:18080", "account": "+15555550123"},
+            ),
         )
         assert adapter is not None and adapter.gateway_runner is runner
 
@@ -274,22 +317,32 @@ class TestGatewayRunnerInjection:
         adapter.handle_message = capture_event
         with patch(
             "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")), ("ops", Path("/profiles/ops"))],
+            return_value=[
+                ("default", Path("/profiles/default")),
+                ("ops", Path("/profiles/ops")),
+            ],
         ):
-            await adapter._handle_envelope({
-                "envelope": {
-                    "sourceNumber": "+15555550124",
-                    "sourceName": "Test Operator",
-                    "timestamp": 1700000000000,
-                    "dataMessage": {
-                        "message": "diagnose the cluster",
-                        "groupInfo": {"groupId": group_id, "groupName": "US East 7"},
+            await adapter._handle_envelope(
+                {
+                    "envelope": {
+                        "sourceNumber": "+15555550124",
+                        "sourceName": "Test Operator",
+                        "timestamp": 1700000000000,
+                        "dataMessage": {
+                            "message": "diagnose the cluster",
+                            "groupInfo": {
+                                "groupId": group_id,
+                                "groupName": "US East 7",
+                            },
+                        },
                     },
-                },
-            })
+                }
+            )
         source = captured["event"].source
         assert source.profile == "ops"
-        assert build_session_key(source, profile=source.profile).startswith("agent:ops:")
+        assert build_session_key(source, profile=source.profile).startswith(
+            "agent:ops:"
+        )
 
 
 # A concrete adapter we can instantiate without the full platform stack.
@@ -326,10 +379,16 @@ class TestAdapterToSessionKeyIntegration:
     @staticmethod
     def _routes():
         return [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="111", chat_id="222"),
-            ProfileRoute(name="tg", platform="telegram", profile="ops",
-                         chat_id="-1001234567890"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="111",
+                chat_id="222",
+            ),
+            ProfileRoute(
+                name="tg", platform="telegram", profile="ops", chat_id="-1001234567890"
+            ),
         ]
 
     def test_discord_adapter_stamps_profile_and_scopes_key(self, mock_runner):
@@ -338,11 +397,16 @@ class TestAdapterToSessionKeyIntegration:
 
         with patch(
             "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")),
-                          ("coder", Path("/profiles/coder"))],
+            return_value=[
+                ("default", Path("/profiles/default")),
+                ("coder", Path("/profiles/coder")),
+            ],
         ):
             source = adapter.build_source(
-                chat_id="222", chat_type="group", guild_id="111", user_id="u1",
+                chat_id="222",
+                chat_type="group",
+                guild_id="111",
+                user_id="u1",
             )
         assert source.profile == "coder"
 
@@ -359,7 +423,10 @@ class TestAdapterToSessionKeyIntegration:
 
         with patch(
             "clawk_cli.profiles.profiles_to_serve",
-            return_value=[("default", Path("/profiles/default")), ("zero", Path("/profiles/zero"))],
+            return_value=[
+                ("default", Path("/profiles/default")),
+                ("zero", Path("/profiles/zero")),
+            ],
         ):
             source = adapter.build_source(chat_id="channel", user_id=0)
 
@@ -394,12 +461,17 @@ class TestAdapterToSessionKeyIntegration:
         )
         assert result is None
 
-    def test_matcher_failure_rejects_instead_of_serving_the_default_profile(self, mock_runner):
+    def test_matcher_failure_rejects_instead_of_serving_the_default_profile(
+        self, mock_runner
+    ):
         mock_runner.config.multiplex_profiles = True
         mock_runner.config.profile_routes = [
             ProfileRoute(name="r", platform="discord", profile="routed", chat_id="c")
         ]
-        with patch("gateway.profile_routing.match_profile_route", side_effect=RuntimeError("boom")):
+        with patch(
+            "gateway.profile_routing.match_profile_route",
+            side_effect=RuntimeError("boom"),
+        ):
             with pytest.raises(ProfileRouteRejected):
                 mock_runner._profile_name_for_source(
                     SessionSource(platform=Platform.DISCORD, chat_id="c")
@@ -409,7 +481,9 @@ class TestAdapterToSessionKeyIntegration:
         # Only failures fail closed; an ordinary unrouted sender keeps the historical behaviour.
         mock_runner.config.multiplex_profiles = True
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="r", platform="discord", profile="routed", chat_id="other")
+            ProfileRoute(
+                name="r", platform="discord", profile="routed", chat_id="other"
+            )
         ]
         source = SessionSource(platform=Platform.DISCORD, chat_id="c", user_id="nobody")
         assert mock_runner._profile_name_for_source(source) is None
@@ -455,11 +529,14 @@ class TestMultiplexGate:
     def test_routes_ignored_when_multiplex_off(self, mock_runner, discord_source):
         mock_runner.config.multiplex_profiles = False
         mock_runner.config.profile_routes = [
-            ProfileRoute(name="dc", platform="discord", profile="coder",
-                         guild_id="789", chat_id="123456"),
+            ProfileRoute(
+                name="dc",
+                platform="discord",
+                profile="coder",
+                guild_id="789",
+                chat_id="123456",
+            ),
         ]
         discord_source.profile = None
 
         assert mock_runner._profile_name_for_source(discord_source) is None
-
-

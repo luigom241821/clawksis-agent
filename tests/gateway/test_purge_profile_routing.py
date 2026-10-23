@@ -12,12 +12,16 @@ from __future__ import annotations
 def _make_store(tmp_path):
     from gateway.config import GatewayConfig
     from gateway.session import SessionStore
+
     sessions_dir = tmp_path / "sessions"
     sessions_dir.mkdir(exist_ok=True)
     store = SessionStore(
         sessions_dir,
-        GatewayConfig(sessions_dir=sessions_dir, write_sessions_json=False,
-                      multiplex_profiles=True),
+        GatewayConfig(
+            sessions_dir=sessions_dir,
+            write_sessions_json=False,
+            multiplex_profiles=True,
+        ),
     )
     store._ensure_loaded()
     return store
@@ -26,11 +30,18 @@ def _make_store(tmp_path):
 def _entry(session_key, chat_id, profile):
     from gateway.session import SessionEntry, SessionSource, Platform
     from gateway.session_lifecycle import _now
+
     now = _now()
     return SessionEntry(
-        session_key=session_key, session_id=f"sid-{chat_id}",
-        platform=Platform.FEISHU, chat_type="dm", created_at=now, updated_at=now,
-        origin=SessionSource(platform=Platform.FEISHU, chat_id=chat_id, profile=profile),
+        session_key=session_key,
+        session_id=f"sid-{chat_id}",
+        platform=Platform.FEISHU,
+        chat_type="dm",
+        created_at=now,
+        updated_at=now,
+        origin=SessionSource(
+            platform=Platform.FEISHU, chat_id=chat_id, profile=profile
+        ),
     )
 
 
@@ -38,9 +49,11 @@ def test_purges_deleted_namespace_and_persists_the_drop(tmp_path):
     store = _make_store(tmp_path)
     with store._lock:
         store._entries["agent:gone:feishu:dm:chatA"] = _entry(
-            "agent:gone:feishu:dm:chatA", "chatA", "gone")
+            "agent:gone:feishu:dm:chatA", "chatA", "gone"
+        )
         store._entries["agent:keepme:feishu:dm:chatB"] = _entry(
-            "agent:keepme:feishu:dm:chatB", "chatB", "keepme")
+            "agent:keepme:feishu:dm:chatB", "chatB", "keepme"
+        )
     store._save()
 
     dropped = store.purge_profile_routing("gone")
@@ -58,9 +71,11 @@ def test_namespace_scoped_and_idempotent(tmp_path):
     store = _make_store(tmp_path)
     with store._lock:
         store._entries["agent:foo_bar:feishu:dm:chatA"] = _entry(
-            "agent:foo_bar:feishu:dm:chatA", "chatA", "foo_bar")
+            "agent:foo_bar:feishu:dm:chatA", "chatA", "foo_bar"
+        )
         store._entries["agent:fooXbar:feishu:dm:chatB"] = _entry(
-            "agent:fooXbar:feishu:dm:chatB", "chatB", "fooXbar")
+            "agent:fooXbar:feishu:dm:chatB", "chatB", "fooXbar"
+        )
 
     assert store.purge_profile_routing("foo_bar") == 1
     assert store.purge_profile_routing("foo_bar") == 0

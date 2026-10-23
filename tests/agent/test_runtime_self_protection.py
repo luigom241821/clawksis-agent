@@ -38,7 +38,9 @@ def fake_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     uv_base.mkdir(parents=True)
     base_exe_dir = uv_base / ("Scripts" if sys.platform == "win32" else "bin")
     base_exe_dir.mkdir()
-    (base_exe_dir / ("python.exe" if sys.platform == "win32" else "python")).write_text("", encoding="utf-8")
+    (base_exe_dir / ("python.exe" if sys.platform == "win32" else "python")).write_text(
+        "", encoding="utf-8"
+    )
 
     home_dir = str(base_exe_dir)
     (venv / "pyvenv.cfg").write_text(
@@ -49,7 +51,12 @@ def fake_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(sys, "executable", str(exe))
     monkeypatch.setattr(sys, "prefix", str(venv))
     rsp._protected_snapshot.cache_clear()
-    yield {"exe": str(exe), "venv": str(venv), "uv_base": str(uv_base), "base_dir": home_dir}
+    yield {
+        "exe": str(exe),
+        "venv": str(venv),
+        "uv_base": str(uv_base),
+        "base_dir": home_dir,
+    }
     rsp._protected_snapshot.cache_clear()
 
 
@@ -66,7 +73,9 @@ def test_rm_rf_of_own_venv_is_detected(fake_runtime):
 
 
 def test_rm_of_base_interpreter_is_detected(fake_runtime):
-    base_exe = os.path.join(fake_runtime["base_dir"], os.listdir(fake_runtime["base_dir"])[0])
+    base_exe = os.path.join(
+        fake_runtime["base_dir"], os.listdir(fake_runtime["base_dir"])[0]
+    )
     assert rsp.command_deletes_runtime(f"sudo rm -f '{base_exe}'") is not None
 
 
@@ -89,8 +98,16 @@ def test_uv_python_uninstall_of_other_version_is_allowed(fake_runtime):
 def test_find_delete_over_own_venv_is_detected(fake_runtime):
     # Both are deletes under the protected root: an unfiltered -delete removes
     # the interpreter itself, and a filtered one still deletes protected files.
-    assert rsp.command_deletes_runtime(f"find '{fake_runtime['venv']}' -delete") is not None
-    assert rsp.command_deletes_runtime(f"find '{fake_runtime['venv']}' -name __pycache__ -delete") is not None
+    assert (
+        rsp.command_deletes_runtime(f"find '{fake_runtime['venv']}' -delete")
+        is not None
+    )
+    assert (
+        rsp.command_deletes_runtime(
+            f"find '{fake_runtime['venv']}' -name __pycache__ -delete"
+        )
+        is not None
+    )
     assert rsp.command_deletes_runtime("find /tmp -name __pycache__ -delete") is None
 
 
@@ -104,8 +121,13 @@ def test_windows_del_and_powershell_spellings(fake_runtime, monkeypatch):
     with mock.patch.object(os, "name", "nt"):
         exe = fake_runtime["exe"]
         assert rsp.command_deletes_runtime(f'del "{exe}"') is not None
-        assert rsp.command_deletes_runtime(f'Remove-Item -Recurse -Force "{exe}"') is not None
-        assert rsp.command_deletes_runtime(f"rd /s /q {fake_runtime['venv']}") is not None
+        assert (
+            rsp.command_deletes_runtime(f'Remove-Item -Recurse -Force "{exe}"')
+            is not None
+        )
+        assert (
+            rsp.command_deletes_runtime(f"rd /s /q {fake_runtime['venv']}") is not None
+        )
 
 
 def test_mkdir_over_protected_path_not_flagged_as_delete(fake_runtime):
@@ -125,7 +147,10 @@ def test_file_safety_denies_write_to_running_interpreter(fake_runtime):
     from agent.file_safety import _classify_write_denial
 
     assert _classify_write_denial(fake_runtime["exe"]) == "credential"
-    assert _classify_write_denial(os.path.join(fake_runtime["venv"], "pyvenv.cfg")) == "credential"
+    assert (
+        _classify_write_denial(os.path.join(fake_runtime["venv"], "pyvenv.cfg"))
+        == "credential"
+    )
 
 
 def test_file_safety_allows_unrelated_paths(fake_runtime, tmp_path):
@@ -135,7 +160,9 @@ def test_file_safety_allows_unrelated_paths(fake_runtime, tmp_path):
     assert _classify_write_denial(str(scratch)) is None
 
 
-def test_approval_floor_blocks_runtime_delete_even_under_yolo(fake_runtime, monkeypatch):
+def test_approval_floor_blocks_runtime_delete_even_under_yolo(
+    fake_runtime, monkeypatch
+):
     from tools import approval
 
     monkeypatch.setattr(approval, "_yolo_active", lambda: True)

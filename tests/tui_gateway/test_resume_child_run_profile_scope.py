@@ -66,9 +66,13 @@ def two_profiles(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_profile_home", lambda profile: homes.get(profile))
     monkeypatch.setattr(server, "_profile_configured_cwd", lambda _home: str(tmp_path))
     monkeypatch.setattr("clawk_state_registry.acquire", _EmptyDB)
-    monkeypatch.setattr(server, "_find_live_session_by_key", lambda _key, *_a, **_k: None)
+    monkeypatch.setattr(
+        server, "_find_live_session_by_key", lambda _key, *_a, **_k: None
+    )
     monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *a, **k: None)
     monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
     monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
@@ -90,8 +94,13 @@ def _seed_active_run(server, profile_home, child_key):
     """Register an in-flight child run the way the delegate relay does — a ``subagent.*``
     progress event on a live PARENT sid owned by ``profile_home`` — so the read side is
     exercised against the registry's real key form."""
-    server._sessions["parent-a"] = {"session_key": "parent-a", "profile_home": profile_home}
-    server._on_tool_progress("parent-a", "subagent.tool", "terminal", "ls", child_session_id=child_key)
+    server._sessions["parent-a"] = {
+        "session_key": "parent-a",
+        "profile_home": profile_home,
+    }
+    server._on_tool_progress(
+        "parent-a", "subagent.tool", "terminal", "ls", child_session_id=child_key
+    )
 
 
 def test_lazy_resume_refuses_child_id_active_under_another_profile(two_profiles):

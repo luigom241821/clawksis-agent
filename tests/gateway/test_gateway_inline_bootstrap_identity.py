@@ -20,7 +20,10 @@ from pathlib import Path
 import pytest
 
 from gateway import status
-from gateway.status import looks_like_gateway_command_line, looks_like_gateway_runtime_command_line
+from gateway.status import (
+    looks_like_gateway_command_line,
+    looks_like_gateway_runtime_command_line,
+)
 from gateway.status_inline_source import inline_bootstrap_argv
 from clawk_cli import _launchers, venv_sync
 from clawk_cli.update_cmd_windows import _clawk_holder_subcommand
@@ -35,8 +38,14 @@ def _payload_launcher(argv: list[str]) -> list[str]:
     """The payload ``bin/clawk`` exec line, rendered by the real payload builder."""
     from scripts.build.launchers import posix_launcher
 
-    script = posix_launcher("clawk", "clawk_cli.main:main", python="tools/python/bin/python3",
-                            repo="clawksis-agent", site="venv/lib/python3.14/site-packages", target="linux-x64")
+    script = posix_launcher(
+        "clawk",
+        "clawk_cli.main:main",
+        python="tools/python/bin/python3",
+        repo="clawksis-agent",
+        site="venv/lib/python3.14/site-packages",
+        target="linux-x64",
+    )
     exec_line = next(line for line in script.splitlines() if line.startswith("exec "))
     _, _python, *launch, _args = shlex.split(exec_line)
     return [PY, *launch, *argv]
@@ -46,35 +55,67 @@ def _forms(argv: list[str]) -> dict[str, list[str]]:
     forms = {
         "store-launcher": _launchers.runtime_command(ROOT, argv, python=Path(PY)),
         "launcher-script": [PY, "-I", "-c", _SCRIPT, *argv],
-        "cmd-launcher": [PY, "-I", "-c", f"import base64; exec(base64.b64decode('{base64.b64encode(_SCRIPT.encode()).decode()}'))", *argv],
+        "cmd-launcher": [
+            PY,
+            "-I",
+            "-c",
+            f"import base64; exec(base64.b64decode('{base64.b64encode(_SCRIPT.encode()).decode()}'))",
+            *argv,
+        ],
         "venv-reentry": venv_sync.relaunch_command(
-            Path(PY), ROOT, [str(ROOT / "clawk_cli" / "main.py"), *argv], ["/old/python", "-m", "clawk_cli.main", *argv],
-            "clawk_cli.main"),
+            Path(PY),
+            ROOT,
+            [str(ROOT / "clawk_cli" / "main.py"), *argv],
+            ["/old/python", "-m", "clawk_cli.main", *argv],
+            "clawk_cli.main",
+        ),
         "payload-launcher": _payload_launcher(argv),
     }
     # A launch through a published launcher that synced dependencies first re-enters it via exec().
     for name in ("launcher-script", "cmd-launcher"):
         forms[f"venv-reentry-{name}"] = venv_sync.relaunch_command(
-            Path(PY), ROOT, ["-c", *argv], ["/old/python", *forms[name][1:]], None)
+            Path(PY), ROOT, ["-c", *argv], ["/old/python", *forms[name][1:]], None
+        )
     return forms
 
 
 @pytest.mark.parametrize("join", _JOINS)
 @pytest.mark.parametrize("form", _forms([]))
 def test_bootstrap_launched_gateway_is_a_gateway(form: str, join: str) -> None:
-    command_line = _JOINS[join]([str(t) for t in _forms(["gateway", "run", "--replace"])[form]])
+    command_line = _JOINS[join](
+        [str(t) for t in _forms(["gateway", "run", "--replace"])[form]]
+    )
     assert looks_like_gateway_command_line(command_line)
     assert _clawk_holder_subcommand(command_line) == "gateway"
 
 
 @pytest.mark.parametrize("join", _JOINS)
 def test_bootstrap_argv_is_identity_only_for_the_process_running_it(join: str) -> None:
-    store = [str(t) for t in _launchers.runtime_command(ROOT, ["gateway", "run"], python=Path(PY))]
-    chat = _JOINS[join]([str(t) for t in _launchers.runtime_command(ROOT, ["chat"], python=Path(PY))])
+    store = [
+        str(t)
+        for t in _launchers.runtime_command(ROOT, ["gateway", "run"], python=Path(PY))
+    ]
+    chat = _JOINS[join](
+        [str(t) for t in _launchers.runtime_command(ROOT, ["chat"], python=Path(PY))]
+    )
     # The restart watcher CARRIES a store-launcher gateway command it spawns later (#107002).
-    watcher = _JOINS[join]([PY, "-c", "import os, sys, time\npid = int(sys.argv[1]); cmd = sys.argv[2:]\n", "1234", *store])
-    assert not looks_like_gateway_command_line(chat) and _clawk_holder_subcommand(chat) == "chat"
-    assert not looks_like_gateway_command_line(watcher) and _clawk_holder_subcommand(watcher) is None
+    watcher = _JOINS[join](
+        [
+            PY,
+            "-c",
+            "import os, sys, time\npid = int(sys.argv[1]); cmd = sys.argv[2:]\n",
+            "1234",
+            *store,
+        ]
+    )
+    assert (
+        not looks_like_gateway_command_line(chat)
+        and _clawk_holder_subcommand(chat) == "chat"
+    )
+    assert (
+        not looks_like_gateway_command_line(watcher)
+        and _clawk_holder_subcommand(watcher) is None
+    )
 
 
 def test_bundled_posix_launcher_bootstrap_is_a_gateway() -> None:
@@ -87,33 +128,57 @@ def test_bundled_posix_launcher_bootstrap_is_a_gateway() -> None:
     assert looks_like_gateway_command_line(command_line)
 
 
-
-_GATEWAY = (["gateway", "run"], ["gateway", "run", "--replace"], ["--profile", "work", "gateway", "run"],
-            ["-p", "work", "gateway", "run"], ["gateway", "run", "-p", "work"])
+_GATEWAY = (
+    ["gateway", "run"],
+    ["gateway", "run", "--replace"],
+    ["--profile", "work", "gateway", "run"],
+    ["-p", "work", "gateway", "run"],
+    ["gateway", "run", "-p", "work"],
+)
 _NOT_GATEWAY = (["gateway", "status"], ["gateway", "stop"], ["status"], ["chat"])
 
 
 @pytest.mark.parametrize("join", _JOINS)
-@pytest.mark.parametrize("argv", [*_GATEWAY, ["gateway", "restart"], *_NOT_GATEWAY], ids=" ".join)
-def test_payload_launcher_reads_as_the_clawk_command_it_runs(argv: list[str], join: str) -> None:
+@pytest.mark.parametrize(
+    "argv", [*_GATEWAY, ["gateway", "restart"], *_NOT_GATEWAY], ids=" ".join
+)
+def test_payload_launcher_reads_as_the_clawk_command_it_runs(
+    argv: list[str], join: str
+) -> None:
     command_line = _JOINS[join](_payload_launcher(argv))
     # ``gateway restart`` hosts the runtime in-process without a service manager, but is no ``run``.
     assert looks_like_gateway_command_line(command_line) is (argv in _GATEWAY)
-    assert looks_like_gateway_runtime_command_line(command_line) is (argv in (*_GATEWAY, ["gateway", "restart"]))
+    assert looks_like_gateway_runtime_command_line(command_line) is (
+        argv in (*_GATEWAY, ["gateway", "restart"])
+    )
 
 
-@pytest.mark.parametrize("split", [list, lambda argv: " ".join(argv).split(" ")], ids=["argv", "space-split"])
+@pytest.mark.parametrize(
+    "split", [list, lambda argv: " ".join(argv).split(" ")], ids=["argv", "space-split"]
+)
 def test_payload_launcher_maps_to_the_module_spelling(split) -> None:
     tokens = split(_payload_launcher(["gateway", "run", "--replace"]))
-    assert inline_bootstrap_argv(tokens) == [PY, "-m", "clawk_cli.main", "gateway", "run", "--replace"]
+    assert inline_bootstrap_argv(tokens) == [
+        PY,
+        "-m",
+        "clawk_cli.main",
+        "gateway",
+        "run",
+        "--replace",
+    ]
 
 
 @pytest.mark.parametrize("join", _JOINS)
-@pytest.mark.parametrize("module", ["not_clawk_cli.main", "foreign.clawk_cli.main", "clawk_cli.main_x"])
-def test_payload_launcher_shape_with_another_entry_module_is_not_clawk(module: str, join: str) -> None:
+@pytest.mark.parametrize(
+    "module", ["not_clawk_cli.main", "foreign.clawk_cli.main", "clawk_cli.main_x"]
+)
+def test_payload_launcher_shape_with_another_entry_module_is_not_clawk(
+    module: str, join: str
+) -> None:
     launch = _payload_launcher(["gateway", "run"])
     launch[launch.index("-c") + 1] = launch[launch.index("-c") + 1].replace(
-        "from clawk_cli.main import", f"from {module} import")
+        "from clawk_cli.main import", f"from {module} import"
+    )
     command_line = _JOINS[join](launch)
     assert inline_bootstrap_argv(launch) is None
     assert not looks_like_gateway_command_line(command_line)
@@ -121,11 +186,17 @@ def test_payload_launcher_shape_with_another_entry_module_is_not_clawk(module: s
 
 
 @pytest.mark.parametrize("join", _JOINS)
-@pytest.mark.parametrize("carrier", [
-    "import os, sys, time\npid = int(sys.argv[1]); cmd = sys.argv[2:]\n",  # the restart watcher (#107002)
-    "import os, site, sys; cmd = sys.argv[2:]",  # opens like the payload bootstrap, runs no entry point
-], ids=["restart-watcher", "payload-lookalike"])
-def test_a_program_carrying_the_payload_launcher_is_not_a_gateway(carrier: str, join: str) -> None:
+@pytest.mark.parametrize(
+    "carrier",
+    [
+        "import os, sys, time\npid = int(sys.argv[1]); cmd = sys.argv[2:]\n",  # the restart watcher (#107002)
+        "import os, site, sys; cmd = sys.argv[2:]",  # opens like the payload bootstrap, runs no entry point
+    ],
+    ids=["restart-watcher", "payload-lookalike"],
+)
+def test_a_program_carrying_the_payload_launcher_is_not_a_gateway(
+    carrier: str, join: str
+) -> None:
     carried = [PY, "-c", carrier, "1234", *_payload_launcher(["gateway", "run"])]
     command_line = _JOINS[join](carried)
     assert inline_bootstrap_argv(carried) is None
@@ -133,22 +204,39 @@ def test_a_program_carrying_the_payload_launcher_is_not_a_gateway(carrier: str, 
     assert _clawk_holder_subcommand(command_line) is None
 
 
-@pytest.mark.parametrize("argv,expected", [
-    ([], None), (["gateway", "run"], None), (["-p", "work", "gateway", "run"], "work"),
-    (["gateway", "run", "--profile=Work"], "work"),
-])
-def test_payload_launcher_profile_is_read_from_the_clawk_argv(argv: list[str], expected: str | None) -> None:
+@pytest.mark.parametrize(
+    "argv,expected",
+    [
+        ([], None),
+        (["gateway", "run"], None),
+        (["-p", "work", "gateway", "run"], "work"),
+        (["gateway", "run", "--profile=Work"], "work"),
+    ],
+)
+def test_payload_launcher_profile_is_read_from_the_clawk_argv(
+    argv: list[str], expected: str | None
+) -> None:
     # ``/proc`` space-joins argv; the interpreter's ``-P`` before ``-c`` is no ``-p`` (#127865).
     assert status.profile_flag_value(" ".join(_payload_launcher(argv))) == expected
 
 
-@pytest.mark.parametrize("argv,profile,found", [
-    (["gateway", "run"], None, True),
-    (["-p", "work", "gateway", "run"], "work", True),
-    (["-p", "work", "gateway", "run"], None, False),  # another profile's gateway is not the default's
-    (["chat"], None, False),
-], ids=["default", "named", "other-profile", "chat"])
-def test_live_payload_launched_gateway_is_found_for_its_home(argv, profile, found, tmp_path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "argv,profile,found",
+    [
+        (["gateway", "run"], None, True),
+        (["-p", "work", "gateway", "run"], "work", True),
+        (
+            ["-p", "work", "gateway", "run"],
+            None,
+            False,
+        ),  # another profile's gateway is not the default's
+        (["chat"], None, False),
+    ],
+    ids=["default", "named", "other-profile", "chat"],
+)
+def test_live_payload_launched_gateway_is_found_for_its_home(
+    argv, profile, found, tmp_path, monkeypatch
+) -> None:
     """The dashboard / ``gateway stop`` / ``restart`` lookup: the live ``/proc`` cmdline of a gateway
     started through the payload ``bin/clawk`` proves its home's runtime record (#127865)."""
     import clawk_constants
@@ -158,14 +246,22 @@ def test_live_payload_launched_gateway_is_found_for_its_home(argv, profile, foun
     home.mkdir(parents=True)
     monkeypatch.setattr(clawk_constants.Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None, raising=False)
+    monkeypatch.setattr(
+        clawk_constants, "_default_clawk_root_memo", None, raising=False
+    )
     record = {
-        "pid": 4242, "kind": "clawk-gateway", "gateway_state": "running", "start_time": 1000,
-        "argv": ["/opt/clawksis/clawksis-agent/clawk_cli/main.py", *argv], "clawk_home": str(home),
+        "pid": 4242,
+        "kind": "clawk-gateway",
+        "gateway_state": "running",
+        "start_time": 1000,
+        "argv": ["/opt/clawksis/clawksis-agent/clawk_cli/main.py", *argv],
+        "clawk_home": str(home),
     }
     (home / "gateway_state.json").write_text(json.dumps(record), encoding="utf-8")
     monkeypatch.setattr(status, "_pid_exists", lambda pid: pid == 4242)
     monkeypatch.setattr(status, "_get_process_start_time", lambda pid: 1000)
-    monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: " ".join(_payload_launcher(argv)))
+    monkeypatch.setattr(
+        status, "_read_process_cmdline", lambda pid: " ".join(_payload_launcher(argv))
+    )
 
     assert status.live_gateway_pid_for_home(home) == (4242 if found else None)

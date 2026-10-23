@@ -5,6 +5,7 @@ subagent rows from the same snapshot the ``process_manage`` tool reads, so a
 ``terminal(background=true)`` spawn is visible the moment it starts instead of only
 when its completion notification lands.
 """
+
 from __future__ import annotations
 
 import time
@@ -44,6 +45,7 @@ def process_rows(now: float | None = None) -> list:
     by session key in ``tui_gateway`` instead.
     """
     from clawk_cli.gateway_tools import process_registry as _registry
+
     process_registry = _registry()  # the gateway session's processes (rewired CLI)
 
     now = time.time() if now is None else now
@@ -57,25 +59,37 @@ def process_rows(now: float | None = None) -> list:
         if status != "running" and now - exited_at > RETAIN_SECONDS:
             continue
         end = exited_at or now
-        rows.append({
-            "kind": "process",
-            "key": proc.id,
-            "id": proc.id,
-            "command": " ".join((proc.command or "").split()) or t("cli.dock.process_goal_label"),
-            "status": status,
-            "exit_code": proc.exit_code,
-            "elapsed": max(0, int(end - proc.started_at)),
-            "since_exit": max(0, int(now - exited_at)) if exited_at else 0,
-            "detail": _last_output_line(proc.output_buffer),
-        })
-    rows.sort(key=lambda r: (r["status"] != "running", -r["elapsed"] if r["status"] == "running" else r["since_exit"]))
+        rows.append(
+            {
+                "kind": "process",
+                "key": proc.id,
+                "id": proc.id,
+                "command": " ".join((proc.command or "").split())
+                or t("cli.dock.process_goal_label"),
+                "status": status,
+                "exit_code": proc.exit_code,
+                "elapsed": max(0, int(end - proc.started_at)),
+                "since_exit": max(0, int(now - exited_at)) if exited_at else 0,
+                "detail": _last_output_line(proc.output_buffer),
+            }
+        )
+    rows.sort(
+        key=lambda r: (
+            r["status"] != "running",
+            -r["elapsed"] if r["status"] == "running" else r["since_exit"],
+        )
+    )
     return rows
 
 
 _GLYPH = {"running": "⚙", "done": "✔", "failed": "✘", "killed": "✘", "lost": "?"}
 # Finished-status id → catalog key of the exit verdict (looked up at paint time).
-_VERDICT_KEYS = {"done": "cli.dock.exit_code", "failed": "cli.dock.exit_code",
-                 "killed": "cli.dock.verdict_killed", "lost": "cli.dock.verdict_lost"}
+_VERDICT_KEYS = {
+    "done": "cli.dock.exit_code",
+    "failed": "cli.dock.exit_code",
+    "killed": "cli.dock.verdict_killed",
+    "lost": "cli.dock.verdict_lost",
+}
 
 
 def process_activity(row: dict) -> str:
@@ -83,7 +97,10 @@ def process_activity(row: dict) -> str:
     verdict + age once finished."""
     if row["status"] == "running":
         return f"{row['elapsed']}s · " + (
-            t("cli.dock.last_output", detail=row["detail"]) if row["detail"] else t("cli.dock.starting"))
+            t("cli.dock.last_output", detail=row["detail"])
+            if row["detail"]
+            else t("cli.dock.starting")
+        )
     verdict = _VERDICT_KEYS[row["status"]]
     verdict = t(verdict, code=row["exit_code"])
     return t("cli.dock.verdict_ago", verdict=verdict, seconds=row["since_exit"])
@@ -95,6 +112,7 @@ def process_glyph(row: dict) -> str:
 
 def process_tail(process_id: str) -> str:
     from clawk_cli.gateway_tools import process_registry as _registry
+
     process_registry = _registry()  # the gateway session's processes (rewired CLI)
 
     proc = process_registry.get(process_id)
@@ -107,6 +125,7 @@ def process_tail(process_id: str) -> str:
 
 def kill(process_id: str) -> dict:
     from clawk_cli.gateway_tools import process_registry as _registry
+
     process_registry = _registry()  # the gateway session's processes (rewired CLI)
 
     return process_registry.kill_process(process_id)

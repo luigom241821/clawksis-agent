@@ -18,26 +18,41 @@ from typing import List, Tuple
 # no regex could tell those from patching a renderer global without misfiring on minified names.
 # Catalog review reads them by hand.
 _FORBIDDEN: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("dynamic code evaluation",
-     re.compile(r"(?<![\w$.])eval\(|\bnew\s+Function\(")),
-    ("dynamic import outside the SDK",
-     re.compile(r"\bimport\(\s*(?!['\"](?:@clawk/plugin-sdk|react)(?:/[\w/-]*)?['\"]\s*\))")),
+    ("dynamic code evaluation", re.compile(r"(?<![\w$.])eval\(|\bnew\s+Function\(")),
+    (
+        "dynamic import outside the SDK",
+        re.compile(
+            r"\bimport\(\s*(?!['\"](?:@clawk/plugin-sdk|react)(?:/[\w/-]*)?['\"]\s*\))"
+        ),
+    ),
     # A static `import 'https://…'` / `import x from 'file:…'` is the same second stage as the
     # dynamic form above (the renderer would fetch and evaluate it); the loader refuses every
     # URL-scheme specifier too (runtime-loader.ts::unsupportedImports) — this keeps admission and
     # the loader in agreement instead of letting review wave through what the app rejects.
-    ("remote import outside the SDK",
-     re.compile(r"\bimport\s+(?:[^;'\"]*?\bfrom\s*)?['\"][a-zA-Z][\w+.-]*:")),
-    ("script injection",
-     re.compile(r"createElement\(\s*['\"]script['\"]\s*\)|<script\b")),
+    (
+        "remote import outside the SDK",
+        re.compile(r"\bimport\s+(?:[^;'\"]*?\bfrom\s*)?['\"][a-zA-Z][\w+.-]*:"),
+    ),
+    (
+        "script injection",
+        re.compile(r"createElement\(\s*['\"]script['\"]\s*\)|<script\b"),
+    ),
     # The app's own markup (`data-slot` / `data-tour` / `data-sidebar` / `data-testid`) is not plugin
     # surface: a plugin that queries it to restyle, hide, click or rewrite core UI collides with every
     # other plugin doing the same and breaks on any Desktop release. Use a slot, route or SDK hook.
-    ("app DOM reach",
-     re.compile(r"\bdocument\.(?:querySelector(?:All)?|getElementsBy\w+|getElementById)\(\s*[`'\"][^`'\"]*"
-                r"\[data-(?:slot|tour|sidebar|testid)\b")),
-    ("app DOM reach",
-     re.compile(r"\.observe\(\s*document\.body\s*,\s*\{[^}]*\b(?:childList|subtree)\b")),
+    (
+        "app DOM reach",
+        re.compile(
+            r"\bdocument\.(?:querySelector(?:All)?|getElementsBy\w+|getElementById)\(\s*[`'\"][^`'\"]*"
+            r"\[data-(?:slot|tour|sidebar|testid)\b"
+        ),
+    ),
+    (
+        "app DOM reach",
+        re.compile(
+            r"\.observe\(\s*document\.body\s*,\s*\{[^}]*\b(?:childList|subtree)\b"
+        ),
+    ),
 )
 
 # String literals are matched first and kept, so a ``/*`` or ``//`` INSIDE a string (a glob such as
@@ -53,6 +68,7 @@ _COMMENT = re.compile(
 def _strip_comments(source: str) -> str:
     return _COMMENT.sub(lambda m: m.group(1) or "\n" * m.group(0).count("\n"), source)
 
+
 # A JS regex literal (``/<script[\s\S]*?<\/script>/gi``) matches markup, it cannot inject any: a
 # feed sanitiser that STRIPS script tags is the opposite of the move the rule refuses. Regex
 # literals are masked for the markup-shaped rules only; a ``<script`` inside a string literal is
@@ -63,11 +79,17 @@ def _strip_comments(source: str) -> str:
 # method (``html.replace(new RegExp("<script…", flags), '')``) or the receiver of ``.test``/``.exec``.
 # Anywhere else (``el.innerHTML = new RegExp("<script src=x></script>").source``) the constructor is
 # a string-builder and its literal keeps firing.
-_REGEX_LITERAL = re.compile(r"(?<![\w)\]])/(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+/[a-z]*")
+_REGEX_LITERAL = re.compile(
+    r"(?<![\w)\]])/(?:[^/\\\n\[]|\\.|\[(?:[^\]\\\n]|\\.)*\])+/[a-z]*"
+)
 _JS_STRING = r"(?:\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*')"
 _REGEXP_CTOR_MATCHER = re.compile(
-    r"\.(?:replace|replaceAll|split|match|matchAll|search)\(\s*new\s+RegExp\(\s*" + _JS_STRING
-    + r"|\bnew\s+RegExp\(\s*" + _JS_STRING + r"(?=[^()\n]*\)\s*\.\s*(?:test|exec)\()")
+    r"\.(?:replace|replaceAll|split|match|matchAll|search)\(\s*new\s+RegExp\(\s*"
+    + _JS_STRING
+    + r"|\bnew\s+RegExp\(\s*"
+    + _JS_STRING
+    + r"(?=[^()\n]*\)\s*\.\s*(?:test|exec)\()"
+)
 _MARKUP_RULES = frozenset({"script injection"})
 
 
@@ -126,8 +148,10 @@ def _desktop_surface_files(plugin_dir: Path) -> list[Path]:
     if desktop.is_dir():
         candidates.extend(desktop.rglob("*.js"))
     return sorted(
-        f for f in candidates
-        if f.is_file() and is_desktop_surface(f.relative_to(plugin_dir).as_posix(), root_entry)
+        f
+        for f in candidates
+        if f.is_file()
+        and is_desktop_surface(f.relative_to(plugin_dir).as_posix(), root_entry)
     )
 
 
@@ -141,7 +165,9 @@ def desktop_surface_hits(plugin_dir: Path) -> list[str]:
             source = js.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        hits.extend(f"{rule} ({rel}:{line})" for rule, line in desktop_surface_findings(source))
+        hits.extend(
+            f"{rule} ({rel}:{line})" for rule, line in desktop_surface_findings(source)
+        )
     return hits
 
 
@@ -152,7 +178,9 @@ def check_desktop_surface(report, plugin_dir: Path) -> None:
         return
     hits = desktop_surface_hits(plugin_dir)
     report.add(
-        "desktop surface", not hits,
+        "desktop surface",
+        not hits,
         "; ".join(hits[:8]) + (f" (+{len(hits) - 8} more)" if len(hits) > 8 else "")
-        if hits else "stays inside the plugin SDK surface",
+        if hits
+        else "stays inside the plugin SDK surface",
     )

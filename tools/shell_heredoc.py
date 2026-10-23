@@ -16,7 +16,8 @@ import re
 _INERT_HEREDOC_CONSUMER_RE = re.compile(
     r"^\s*(?:[A-Z_][A-Z0-9_]*=\S+\s+)*(?:env\s+)?(?:[A-Za-z0-9_./-]+/)?"
     r"(?:python(?:3(?:\.\d+)*)?|osascript|cat)(?=\s|$)",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def _span_end(command: str, cursor: int, closer: str) -> int:
@@ -35,9 +36,14 @@ def _mask_simple_quotes(command: str) -> str:
     cursor = 0
     while cursor < len(command):
         char = command[cursor]
-        if char in "'\"":  # single quotes have no escapes; double quotes are backslash-aware
-            end = (command.find("'", cursor + 1) + 1 if char == "'"
-                   else _span_end(command, cursor, '"'))
+        if (
+            char in "'\""
+        ):  # single quotes have no escapes; double quotes are backslash-aware
+            end = (
+                command.find("'", cursor + 1) + 1
+                if char == "'"
+                else _span_end(command, cursor, '"')
+            )
             segment = command[cursor:end]
             if not segment.endswith(char):
                 result.append(command[cursor:])
@@ -67,7 +73,9 @@ def _parse_heredoc_operator(command: str, index: int):
         return None
     delimiter: list[str] = []
     quoted = False
-    while cursor < len(command) and not (command[cursor].isspace() or command[cursor] in ";&|<>()"):
+    while cursor < len(command) and not (
+        command[cursor].isspace() or command[cursor] in ";&|<>()"
+    ):
         char = command[cursor]
         if char == "\\":  # backslash-escaped char: quoted, literal
             if cursor + 1 >= len(command) or command[cursor + 1] in "\r\n":
@@ -85,7 +93,9 @@ def _parse_heredoc_operator(command: str, index: int):
                 if char == '"' and current == "\\":
                     if cursor + 1 >= len(command):
                         return None
-                    if command[cursor + 1] in '$`"\\\n':  # else backslash is literal in dquotes
+                    if (
+                        command[cursor + 1] in '$`"\\\n'
+                    ):  # else backslash is literal in dquotes
                         cursor += 1
                         current = command[cursor]
                 delimiter.append(current)
@@ -127,7 +137,9 @@ def _scan_heredoc_command_unit(command: str, start: int):
         if char == "\n" and (comment or quote is None):
             break
         # Backslash escapes (incl. line continuations) outside single quotes skip the next char.
-        escaped = char == "\\" and quote != "'" and not comment and cursor + 1 < len(command)
+        escaped = (
+            char == "\\" and quote != "'" and not comment and cursor + 1 < len(command)
+        )
         if comment or quote is not None or escaped:
             if char == quote:
                 quote = None
@@ -135,8 +147,11 @@ def _scan_heredoc_command_unit(command: str, start: int):
         elif char in "'\"`":
             quote = char
             cursor += 1
-        elif char == "#" and (cursor == start or command[cursor - 1].isspace()
-                              or command[cursor - 1] in ";&|()"):
+        elif char == "#" and (
+            cursor == start
+            or command[cursor - 1].isspace()
+            or command[cursor - 1] in ";&|()"
+        ):
             comment = True
             cursor += 1
         elif command.startswith("<<<", cursor):
@@ -162,7 +177,8 @@ def _scan_heredoc_command_unit(command: str, start: int):
 
 
 def _find_heredoc_close(
-        command: str, body_start: int, delimiter: str, strip_tabs: bool) -> int | None:
+    command: str, body_start: int, delimiter: str, strip_tabs: bool
+) -> int | None:
     """Return the position after an exact shell heredoc terminator line."""
     cursor = body_start
     while True:

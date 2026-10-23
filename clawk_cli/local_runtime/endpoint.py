@@ -28,6 +28,7 @@ def child_query(model_id: str) -> str:
 
     return f"model={quote(model_id)}&autoload=false"
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,14 +81,16 @@ def managed_root() -> tuple[str, str] | None:
 
 def managed_get_json(base: str, api_key: str, route: str, timeout_s: float) -> object:
     """Authenticated GET against the managed router; raises on any transport/decode failure."""
-    req = urllib.request.Request(f"{base}{route}",
-                                 headers={"Authorization": f"Bearer {api_key}"})
+    req = urllib.request.Request(
+        f"{base}{route}", headers={"Authorization": f"Bearer {api_key}"}
+    )
     with urllib.request.urlopen(req, timeout=timeout_s) as r:
         return json.loads(r.read())
 
 
-def resolve_llamacpp_endpoint(config: dict | None = None,
-                              wait_for_boot_s: float = 8.0) -> dict | None:
+def resolve_llamacpp_endpoint(
+    config: dict | None = None, wait_for_boot_s: float = 8.0
+) -> dict | None:
     """Managed-first, detection-second endpoint for llamacpp aliases.
 
     Boot-race rung: on a fresh backend start there is NO state file yet — the lifespan boot thread

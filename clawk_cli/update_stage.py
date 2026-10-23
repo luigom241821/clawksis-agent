@@ -38,6 +38,7 @@ def _process_home() -> Path:
     the shim resolved ``$CLAWK_HOME`` or the platform default, never a profile override, and
     the platform default (sudo invoker, data-dir suffix) is not ``~/.clawksis`` everywhere."""
     from clawk_constants import get_process_clawk_home
+
     return get_process_clawk_home()
 
 
@@ -58,8 +59,12 @@ def _status_from_marker() -> Path | None:
     update) or no matching file → no UI.
     """
     try:
-        pid = int((_process_home() / MARKER_NAME).read_text(encoding="utf-8-sig")
-                  .splitlines()[0].strip())
+        pid = int(
+            (_process_home() / MARKER_NAME)
+            .read_text(encoding="utf-8-sig")
+            .splitlines()[0]
+            .strip()
+        )
     except (OSError, ValueError, IndexError):
         return None
     if pid <= 0:
@@ -112,7 +117,11 @@ def ensure_panel(update_root: Path) -> None:
     start it against the discovered status file. Best-effort end to end: any
     failure leaves the update running exactly as UI-less as before.
     """
-    if os.environ.get(UI_SPAWNED_ENV) or os.name != "posix" or os.uname().sysname != "Darwin":
+    if (
+        os.environ.get(UI_SPAWNED_ENV)
+        or os.name != "posix"
+        or os.uname().sysname != "Darwin"
+    ):
         return
     if status_file() is None:
         return
@@ -121,7 +130,9 @@ def ensure_panel(update_root: Path) -> None:
         return
     try:
         log = _process_home() / "logs" / "desktop-update-handoff.log"
-        if log.is_file() and _ui_present_in_log(log.read_text(encoding="utf-8-sig", errors="replace")[-8000:]):
+        if log.is_file() and _ui_present_in_log(
+            log.read_text(encoding="utf-8-sig", errors="replace")[-8000:]
+        ):
             return
         import subprocess
 
@@ -130,8 +141,10 @@ def ensure_panel(update_root: Path) -> None:
         # self-exits when the shim publishes a terminal state.
         subprocess.Popen(
             ["/usr/bin/osascript", "-l", "JavaScript", str(panel), str(status_file())],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         os.environ[UI_SPAWNED_ENV] = "1"  # inherited: never spawn twice per chain
     except OSError:

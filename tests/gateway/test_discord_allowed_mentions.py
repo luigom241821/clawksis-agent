@@ -52,14 +52,27 @@ def _ensure_discord_mock():
         discord_mod.DMChannel = type("DMChannel", (), {})
         discord_mod.Thread = type("Thread", (), {})
         discord_mod.ForumChannel = type("ForumChannel", (), {})
-        discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-        discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, danger=3, green=1, blurple=2, red=3, grey=4, secondary=5)
-        discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4)
+        discord_mod.ui = SimpleNamespace(
+            View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+        )
+        discord_mod.ButtonStyle = SimpleNamespace(
+            success=1,
+            primary=2,
+            danger=3,
+            green=1,
+            blurple=2,
+            red=3,
+            grey=4,
+            secondary=5,
+        )
+        discord_mod.Color = SimpleNamespace(
+            orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4
+        )
         discord_mod.Interaction = object
         discord_mod.Embed = MagicMock
         discord_mod.app_commands = SimpleNamespace(
-            describe=lambda **kwargs: (lambda fn: fn),
-            choices=lambda **kwargs: (lambda fn: fn),
+            describe=lambda **kwargs: lambda fn: fn,
+            choices=lambda **kwargs: lambda fn: fn,
             Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         )
         discord_mod.opus = SimpleNamespace(is_loaded=lambda: True)
@@ -116,5 +129,3 @@ def test_env_var_opts_back_into_everyone(monkeypatch):
     assert am.roles is False
     assert am.users is True
     assert am.replied_user is True
-
-

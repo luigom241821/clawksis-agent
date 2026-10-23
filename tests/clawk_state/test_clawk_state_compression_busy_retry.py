@@ -52,9 +52,12 @@ def test_append_is_never_blocked_by_a_foreign_compression_lock(db: SessionDB) ->
 
 def test_append_is_never_blocked_by_a_stale_dead_pid_lock(db: SessionDB) -> None:
     """A crashed compressor's unexpired lock must not fence writes (#74568)."""
-    assert db.try_acquire_compression_lock(
-        "sess1", "pid-9999999-long-gone", ttl_seconds=3600
-    ) is True
+    assert (
+        db.try_acquire_compression_lock(
+            "sess1", "pid-9999999-long-gone", ttl_seconds=3600
+        )
+        is True
+    )
     started = time.monotonic()
     db.append_message("sess1", role="user", content="lands despite stale lock")
     assert time.monotonic() - started < 0.5
@@ -72,10 +75,6 @@ def test_the_lock_owner_append_still_works(db: SessionDB) -> None:
     )
     rows = db.get_messages("sess1")
     assert any(r["content"] == "written by the compressor" for r in rows)
-
-
-
-
 
 
 def test_a_lost_compression_lease_still_fails_fast(db: SessionDB) -> None:

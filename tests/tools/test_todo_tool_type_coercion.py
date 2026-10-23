@@ -18,13 +18,18 @@ class TestJsonStringCoercion:
 
     def test_json_string_is_parsed_into_list(self):
         store = TodoStore()
-        todos_str = json.dumps([
-            {"id": "t1", "content": "Do A", "status": "pending"},
-            {"id": "t2", "content": "Do B", "status": "in_progress"},
-        ])
+        todos_str = json.dumps(
+            [
+                {"id": "t1", "content": "Do A", "status": "pending"},
+                {"id": "t2", "content": "Do B", "status": "in_progress"},
+            ]
+        )
         agent = SimpleNamespace(_todo_store=store)
-        result = json.loads(INLINE_TOOL_EXECUTORS["todo_list"](
-            agent, {"todos": todos_str}, InlineToolContext(effective_task_id="t")))
+        result = json.loads(
+            INLINE_TOOL_EXECUTORS["todo_list"](
+                agent, {"todos": todos_str}, InlineToolContext(effective_task_id="t")
+            )
+        )
         assert "error" not in result
         assert result["summary"]["total"] == 2
         # Order-agnostic: TodoStore._normalize_order may lift the in_progress
@@ -33,7 +38,6 @@ class TestJsonStringCoercion:
         by_id = {t["id"]: t for t in result["todos"]}
         assert set(by_id) == {"t1", "t2"}
         assert by_id["t2"]["status"] == "in_progress"
-
 
     def test_non_list_non_string_returns_error(self):
         store = TodoStore()
@@ -51,7 +55,6 @@ class TestNonDictListItems:
         assert result[0]["id"] == "?"
         assert result[0]["content"] == "(invalid item)"
         assert result[0]["status"] == "pending"
-
 
     def test_non_dict_items_via_todo_tool(self):
         """End-to-end: non-dict list items produce valid output, not a crash."""
@@ -76,12 +79,13 @@ class TestWellFormedInputUnchanged:
         assert result["summary"]["pending"] == 1
         assert result["summary"]["in_progress"] == 1
 
-
     def test_dedup_still_works(self):
         store = TodoStore()
-        result = store.write([
-            {"id": "1", "content": "v1", "status": "pending"},
-            {"id": "1", "content": "v2", "status": "in_progress"},
-        ])
+        result = store.write(
+            [
+                {"id": "1", "content": "v1", "status": "pending"},
+                {"id": "1", "content": "v2", "status": "in_progress"},
+            ]
+        )
         assert len(result) == 1
         assert result[0]["content"] == "v2"

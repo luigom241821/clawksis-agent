@@ -6,6 +6,7 @@ the message must be spooled to the on-disk pending spool (the same machinery
 ``flush_pending_to_file`` uses at shutdown) and replayed on the next
 successful transcript flush — not silently discarded (#78182, #82616).
 """
+
 import json
 import logging
 import threading
@@ -26,7 +27,7 @@ def _make_store(db):
     store._fts_rebuild_last_attempt_at = time.monotonic()
     # These tests exercise the cap-eviction spool path; keep the stalled-session spool (which
     # normally fires first, at the escalation threshold) out of the way.
-    store._TRANSCRIPT_APPEND_FAILURE_ESCALATION_THRESHOLD = 10 ** 6
+    store._TRANSCRIPT_APPEND_FAILURE_ESCALATION_THRESHOLD = 10**6
     return store
 
 
@@ -48,6 +49,7 @@ def spool_home(tmp_path, monkeypatch):
     """Point the pending spool at an isolated CLAWK_HOME."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import clawk_constants
+
     monkeypatch.setattr(
         clawk_constants, "get_clawk_home", lambda: tmp_path, raising=True
     )
@@ -78,18 +80,17 @@ class TestSpoolOnDrop:
         assert len(files) == n_extra
         payloads = [json.loads(p.read_text()) for p in files]
         assert all(
-            p["reason"] == shutdown_flush.TRANSCRIPT_CAP_DROP_REASON
-            for p in payloads
+            p["reason"] == shutdown_flush.TRANSCRIPT_CAP_DROP_REASON for p in payloads
         )
-        spooled_contents = sorted(
-            p["data"]["message"]["content"] for p in payloads
-        )
+        spooled_contents = sorted(p["data"]["message"]["content"] for p in payloads)
         assert spooled_contents == ["msg0", "msg1", "msg2"]
 
         # Drop log escalated to WARNING and includes the spool path.
         drop_warnings = [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING and "spooled oldest message" in r.getMessage()
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+            and "spooled oldest message" in r.getMessage()
         ]
         assert len(drop_warnings) == n_extra
         assert str(spool_home / "pending_messages") in drop_warnings[0].getMessage()
@@ -129,9 +130,7 @@ class TestSpoolOnDrop:
         store.append_to_transcript("sess-a", {"role": "user", "content": "go-a"})
 
         # Only sess-a's spooled drop was replayed; sess-b's remains on disk.
-        remaining = [
-            json.loads(p.read_text()) for p in _spool_files(spool_home)
-        ]
+        remaining = [json.loads(p.read_text()) for p in _spool_files(spool_home)]
         assert len(remaining) == 1
         assert remaining[0]["session_key"] == "sess-b"
         a_rows = [r["content"] for r in db.rows if r["session_id"] == "sess-a"]
@@ -162,7 +161,8 @@ class TestSpoolOnDrop:
         assert len(pending) <= SessionStore._MAX_PENDING_PER_SESSION
         assert _spool_files(spool_home) == []
         degraded = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.WARNING
             and "on-disk spool unavailable" in r.getMessage()
         ]

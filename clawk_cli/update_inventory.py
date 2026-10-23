@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 class RuntimeRecord:
     """One running (or expected) Clawksis runtime on this machine."""
 
-    kind: str                     # gateway | dashboard | serve
+    kind: str  # gateway | dashboard | serve
     profile: str
     pid: Optional[int] = None
-    supervisor: str = "manual"    # systemd | launchd | desktop | windows-service | service | manual | manual-serve
-    code_sha: Optional[str] = None       # stamped running-code sha
+    supervisor: str = "manual"  # systemd | launchd | desktop | windows-service | service | manual | manual-serve
+    code_sha: Optional[str] = None  # stamped running-code sha
     # See #91283.
     code_version: Optional[str] = None
-    restart_via: str = ""         # mechanism id, see _RESTART_MECHANISMS
+    restart_via: str = ""  # mechanism id, see _RESTART_MECHANISMS
     detail: dict = field(default_factory=dict)
 
 
@@ -36,10 +36,10 @@ class RuntimeRecord:
 class UpdatePlan:
     """The full pre-update picture: install shape + runtimes + actions."""
 
-    install_method: str = "unknown"       # git | docker | nix | apt | ...
+    install_method: str = "unknown"  # git | docker | nix | apt | ...
     updatable_in_place: bool = True
     update_mechanism: str = "clawk update"
-    expected_sha: Optional[str] = None    # current checkout HEAD (pre-pull)
+    expected_sha: Optional[str] = None  # current checkout HEAD (pre-pull)
     expected_version: Optional[str] = None
     profiles: list = field(default_factory=list)
     runtimes: list = field(default_factory=list)  # list[RuntimeRecord]
@@ -51,16 +51,21 @@ class UpdatePlan:
     def from_dict(cls, data: dict[str, Any]) -> UpdatePlan:
         """Inverse of :meth:`to_dict` (the plan crosses the post-swap hand-off as JSON)."""
         fields_ = {f.name for f in dataclass_fields(cls)}
-        plan = cls(**{k: v for k, v in data.items() if k in fields_ and k != "runtimes"})
+        plan = cls(
+            **{k: v for k, v in data.items() if k in fields_ and k != "runtimes"}
+        )
         record_fields = {f.name for f in dataclass_fields(RuntimeRecord)}
         plan.runtimes = [
             RuntimeRecord(**{k: v for k, v in r.items() if k in record_fields})
-            for r in data.get("runtimes") or [] if isinstance(r, dict)
+            for r in data.get("runtimes") or []
+            if isinstance(r, dict)
         ]
         return plan
 
 
-def _detect_supervisor_for_pid(pid: int, service_pids: set, windows_service_pids: set | None = None) -> str:
+def _detect_supervisor_for_pid(
+    pid: int, service_pids: set, windows_service_pids: set | None = None
+) -> str:
     """Classify how a live gateway PID is supervised."""
     if windows_service_pids and pid in windows_service_pids:
         # SCM-supervised Windows gateway: the update pause machinery stops the SERVICE via sc.exe
@@ -83,8 +88,11 @@ def _detect_supervisor_for_pid(pid: int, service_pids: set, windows_service_pids
 # update's restart phase, and the receipt records per-runtime outcomes against them. Display
 # strings are derived by describe_restart_mechanism — never the other way around.
 _RESTART_MECHANISMS = {
-    "systemd": "systemd", "launchd": "launchd", "desktop": "desktop",
-    "windows-service": "windows-service", "manual-serve": "respawn-argv",
+    "systemd": "systemd",
+    "launchd": "launchd",
+    "desktop": "desktop",
+    "windows-service": "windows-service",
+    "manual-serve": "respawn-argv",
     "desktop-ssh": "desktop-ssh",
 }
 
@@ -118,19 +126,31 @@ def _restart_mechanism(supervisor: str, profile: str) -> str:
 def describe_restart_mechanism(mechanism: str, profile: str) -> str:
     """Human-readable description of a restart mechanism id."""
     return _MECHANISM_DESCRIPTIONS.get(mechanism) or (
-        f"clawk -p {profile} gateway restart" if profile != "default" else "clawk gateway restart"
+        f"clawk -p {profile} gateway restart"
+        if profile != "default"
+        else "clawk gateway restart"
     )
 
 
 def _runtime(
-    kind: str, profile: str, pid: Optional[int], supervisor: str,
-    code_sha: Any = None, code_version: Any = None, **extra: Any,
+    kind: str,
+    profile: str,
+    pid: Optional[int],
+    supervisor: str,
+    code_sha: Any = None,
+    code_version: Any = None,
+    **extra: Any,
 ) -> RuntimeRecord:
     """A :class:`RuntimeRecord` with ``restart_via`` derived from its supervisor."""
     return RuntimeRecord(
-        kind=kind, profile=profile, pid=pid, supervisor=supervisor,
-        code_sha=str(code_sha) if code_sha else None, code_version=code_version,
-        restart_via=_restart_mechanism(supervisor, profile), **extra,
+        kind=kind,
+        profile=profile,
+        pid=pid,
+        supervisor=supervisor,
+        code_sha=str(code_sha) if code_sha else None,
+        code_version=code_version,
+        restart_via=_restart_mechanism(supervisor, profile),
+        **extra,
     )
 
 
@@ -145,7 +165,11 @@ def _probe(label: str):
 
 def _collect_install_shape(plan: UpdatePlan) -> None:
     with _probe("Install-method probe"):
-        from clawk_cli.config import detect_install_method, get_managed_system, recommended_update_command_for_method
+        from clawk_cli.config import (
+            detect_install_method,
+            get_managed_system,
+            recommended_update_command_for_method,
+        )
 
         method = detect_install_method()
         managed = get_managed_system()
@@ -182,11 +206,17 @@ def _supervisor_classifier() -> Callable[[int], str]:
     with _probe("Windows SCM service-ownership probe"):
         from clawk_cli.gateway import find_windows_gateway_services
 
-        windows_service_pids = {int(service.gateway_pid) for service in find_windows_gateway_services()}
-    return lambda pid: _detect_supervisor_for_pid(pid, service_pids, windows_service_pids)
+        windows_service_pids = {
+            int(service.gateway_pid) for service in find_windows_gateway_services()
+        }
+    return lambda pid: _detect_supervisor_for_pid(
+        pid, service_pids, windows_service_pids
+    )
 
 
-def _collect_gateway_runtimes(plan: UpdatePlan, profile_homes: list, seen: set[int]) -> None:
+def _collect_gateway_runtimes(
+    plan: UpdatePlan, profile_homes: list, seen: set[int]
+) -> None:
     """Per-profile gateways: control-socket identity first (declared by the process itself, including
     supervisor provenance — no argv/PID inference), ``gateway_state.json`` fallback, then PID-file
     mapped gateways no status record covers."""
@@ -217,14 +247,25 @@ def _collect_gateway_runtimes(plan: UpdatePlan, profile_homes: list, seen: set[i
                 record = read_runtime_status(home / "gateway_state.json") or {}
                 seen.add(pid)
                 sup = supervisor(pid)
-            plan.runtimes.append(_runtime("gateway", profile, pid, sup, record.get("code_sha"), record.get("code_version")))
+            plan.runtimes.append(
+                _runtime(
+                    "gateway",
+                    profile,
+                    pid,
+                    sup,
+                    record.get("code_sha"),
+                    record.get("code_version"),
+                )
+            )
     with _probe("PID-file gateway inventory"):
         from clawk_cli.gateway import find_profile_gateway_processes
 
         for proc in find_profile_gateway_processes():
             if proc.pid not in seen:
                 seen.add(proc.pid)
-                plan.runtimes.append(_runtime("gateway", proc.profile, proc.pid, supervisor(proc.pid)))
+                plan.runtimes.append(
+                    _runtime("gateway", proc.profile, proc.pid, supervisor(proc.pid))
+                )
 
 
 def _loaded_backend_launchd_jobs() -> list:
@@ -240,7 +281,9 @@ def _loaded_backend_launchd_jobs() -> list:
     return []
 
 
-def _launchd_owner_for_ledger_entry(entry: dict, pid: int, jobs: list) -> tuple[str, str, int | None] | None:
+def _launchd_owner_for_ledger_entry(
+    entry: dict, pid: int, jobs: list
+) -> tuple[str, str, int | None] | None:
     """``(domain, label, live_pid)`` of the loaded launchd job owning this ledger row, if any.
 
     A KeepAlive LaunchAgent backend's recorded spawner (the bootstrap shell) is long dead, so the
@@ -255,7 +298,9 @@ def _launchd_owner_for_ledger_entry(entry: dict, pid: int, jobs: list) -> tuple[
             cmdline = shlex.split(str(entry.get("argv") or "")) or None
         except ValueError:
             cmdline = None
-        return _dash._launchd_job_owning_backend(pid, cmdline, jobs, ancestors=_process_ancestors(pid))
+        return _dash._launchd_job_owning_backend(
+            pid, cmdline, jobs, ancestors=_process_ancestors(pid)
+        )
     return None
 
 
@@ -306,12 +351,22 @@ def _collect_ledger_runtimes(plan: UpdatePlan, seen: set[int]) -> None:
             # detail.create_time: process incarnation, not just the numeric PID — a post-update
             # survivor probe comparing PIDs alone calls a NEW serve that reused the number a survivor.
             detail = {
-                "argv": entry.get("argv") or "", "host": entry.get("host") or "",
-                "port": entry.get("port"), "create_time": entry.get("create_time"),
+                "argv": entry.get("argv") or "",
+                "host": entry.get("host") or "",
+                "port": entry.get("port"),
+                "create_time": entry.get("create_time"),
             }
-            job = _launchd_owner_for_ledger_entry(entry, pid, launchd_jobs) if launchd_jobs else None
+            job = (
+                _launchd_owner_for_ledger_entry(entry, pid, launchd_jobs)
+                if launchd_jobs
+                else None
+            )
             if job:
-                supervisor, detail["launchd_domain"], detail["launchd_label"] = "launchd", job[0], job[1]
+                supervisor, detail["launchd_domain"], detail["launchd_label"] = (
+                    "launchd",
+                    job[0],
+                    job[1],
+                )
             elif _is_desktop_ssh_ledger_entry(entry):
                 # No local spawner, so the probe below would read manual-serve and file a reminder
                 # nobody here can discharge; its token file and owner nonce belong to the client.
@@ -319,12 +374,22 @@ def _collect_ledger_runtimes(plan: UpdatePlan, seen: set[int]) -> None:
             elif spawner_is_dead(entry) is False:
                 supervisor = "desktop"
             elif unit := _systemd_owner_for_ledger_pid(pid):
-                supervisor, detail["systemd_unit"], detail["systemd_scope"] = "systemd", unit[0], unit[1]
+                supervisor, detail["systemd_unit"], detail["systemd_scope"] = (
+                    "systemd",
+                    unit[0],
+                    unit[1],
+                )
             else:
                 supervisor = "manual-serve"
-            plan.runtimes.append(_runtime(
-                str(purpose), str(entry.get("profile") or "default"), pid, supervisor, detail=detail,
-            ))
+            plan.runtimes.append(
+                _runtime(
+                    str(purpose),
+                    str(entry.get("profile") or "default"),
+                    pid,
+                    supervisor,
+                    detail=detail,
+                )
+            )
 
 
 def collect_runtime_inventory() -> UpdatePlan:
@@ -357,20 +422,30 @@ def print_update_plan(plan: UpdatePlan) -> None:
     print("Update plan:")
     install = f"  Install: {plan.install_method}"
     if plan.expected_version:
-        install += f" (v{plan.expected_version}" + (f" @ {plan.expected_sha[:8]}" if plan.expected_sha else "") + ")"
+        install += (
+            f" (v{plan.expected_version}"
+            + (f" @ {plan.expected_sha[:8]}" if plan.expected_sha else "")
+            + ")"
+        )
     print(install)
     if not plan.updatable_in_place:
         print("  ⚠ This install is NOT updatable in place.")
         print(f"    Update via: {plan.update_mechanism}")
-    print(f"  Profiles: {', '.join(plan.profiles) if plan.profiles else '(none found)'}")
+    print(
+        f"  Profiles: {', '.join(plan.profiles) if plan.profiles else '(none found)'}"
+    )
     if not plan.runtimes:
         print("  Running Clawksis services: none detected — code swap only.")
         return
     print(f"  Running services to restart ({len(plan.runtimes)}):")
     for runtime in plan.runtimes:
         sha = f" @ {runtime.code_sha[:8]}" if runtime.code_sha else ""
-        print(f"    • {runtime.kind} [{runtime.profile}] pid {runtime.pid} — {runtime.supervisor}{sha}")
-        print(f"      restart: {describe_restart_mechanism(runtime.restart_via, runtime.profile)}")
+        print(
+            f"    • {runtime.kind} [{runtime.profile}] pid {runtime.pid} — {runtime.supervisor}{sha}"
+        )
+        print(
+            f"      restart: {describe_restart_mechanism(runtime.restart_via, runtime.profile)}"
+        )
 
 
 def _serve_unit_matches_profile(profile: str, unit: object) -> bool:
@@ -397,8 +472,17 @@ def _gateway_service_matches_profile(profile: str, service: object) -> bool:
     """
     name = str(service).removesuffix(".service").rsplit("/", 1)[-1]
     if profile == "default":
-        return name in {"clawk-gateway", "ai.clawk.gateway", "gateway", "gateway-default"}
-    return name in {f"clawk-gateway-{profile}", f"ai.clawk.gateway-{profile}", f"gateway-{profile}"}
+        return name in {
+            "clawk-gateway",
+            "ai.clawk.gateway",
+            "gateway",
+            "gateway-default",
+        }
+    return name in {
+        f"clawk-gateway-{profile}",
+        f"ai.clawk.gateway-{profile}",
+        f"gateway-{profile}",
+    }
 
 
 def _gateway_named_in(r: RuntimeRecord, names: set) -> bool:
@@ -408,9 +492,15 @@ def _gateway_named_in(r: RuntimeRecord, names: set) -> bool:
 
 
 def match_runtime_outcomes(
-    plan: UpdatePlan, *, restarted_services: list, relaunched_profiles: list,
-    externally_supervised_profiles: list, killed_pids: set, failed_units: list,
-    stale_serve_pids: set | None = None, failed_respawn_pids: set | None = None,
+    plan: UpdatePlan,
+    *,
+    restarted_services: list,
+    relaunched_profiles: list,
+    externally_supervised_profiles: list,
+    killed_pids: set,
+    failed_units: list,
+    stale_serve_pids: set | None = None,
+    failed_respawn_pids: set | None = None,
     external_gateway_pids: set | None = None,
     live_gateway_pids: dict[str, set[int]] | None = None,
 ) -> list[dict[str, Any]]:
@@ -468,23 +558,33 @@ def match_runtime_outcomes(
     try:
         failed_set = {str(u) for u in (failed_units or [])}
         restarted_set = {str(s) for s in (restarted_services or [])}
-        relaunched = set(relaunched_profiles or []) | set(externally_supervised_profiles or [])
+        relaunched = set(relaunched_profiles or []) | set(
+            externally_supervised_profiles or []
+        )
         killed = {int(p) for p in (killed_pids or set())}
-        stale_serves = {int(p) for p in stale_serve_pids} if stale_serve_pids is not None else None
+        stale_serves = (
+            {int(p) for p in stale_serve_pids} if stale_serve_pids is not None else None
+        )
         failed_respawns = {int(p) for p in (failed_respawn_pids or set())}
         external = {p for p in (external_gateway_pids or ()) if isinstance(p, int)}
         successors = (
-            {str(profile): {p for p in pids if isinstance(p, int)} for profile, pids in live_gateway_pids.items()}
+            {
+                str(profile): {p for p in pids if isinstance(p, int)}
+                for profile, pids in live_gateway_pids.items()
+            }
             if live_gateway_pids is not None
             else None
         )
+
         def _bookkeeping_resolves(r: RuntimeRecord) -> bool:
             """Terminal verdict already available from the restart phase's bookkeeping."""
             if r.pid is not None and r.pid in killed:
                 return True
             if r.profile in relaunched:
                 return True
-            return _gateway_named_in(r, failed_set) or _gateway_named_in(r, restarted_set)
+            return _gateway_named_in(r, failed_set) or _gateway_named_in(
+                r, restarted_set
+            )
 
         # Baseline identity: the fleet probe publishes at most one row per profile, so successor
         # evidence is only attributable when ONE planned gateway for that profile still needs a
@@ -493,16 +593,23 @@ def match_runtime_outcomes(
         # make its surviving sibling's successor look ambiguous.
         pending_gateways: dict[str, int] = {}
         for _planned in plan.runtimes:
-            if (isinstance(_planned, RuntimeRecord) and _planned.kind == "gateway"
-                    and not _bookkeeping_resolves(_planned)):
-                pending_gateways[_planned.profile] = pending_gateways.get(_planned.profile, 0) + 1
+            if (
+                isinstance(_planned, RuntimeRecord)
+                and _planned.kind == "gateway"
+                and not _bookkeeping_resolves(_planned)
+            ):
+                pending_gateways[_planned.profile] = (
+                    pending_gateways.get(_planned.profile, 0) + 1
+                )
 
         def _outcome(r: RuntimeRecord) -> str:
             killed_here = r.pid is not None and r.pid in killed
             if r.kind in _SERVE_KINDS:
                 if killed_here:
                     return "stopped"
-                if r.pid in failed_respawns or any(_serve_unit_matches_profile(r.profile, u) for u in failed_set):
+                if r.pid in failed_respawns or any(
+                    _serve_unit_matches_profile(r.profile, u) for u in failed_set
+                ):
                     return "failed"
                 if stale_serves is not None and r.pid not in stale_serves:
                     # Incarnation-verified: the pre-update process is gone (replaced by its unit / the
@@ -516,7 +623,13 @@ def match_runtime_outcomes(
                     return "unaccounted"
                 if stale_serves is not None:
                     return "unaccounted"
-                return "restarted" if any(_serve_unit_matches_profile(r.profile, s) for s in restarted_set) else "unaccounted"
+                return (
+                    "restarted"
+                    if any(
+                        _serve_unit_matches_profile(r.profile, s) for s in restarted_set
+                    )
+                    else "unaccounted"
+                )
             if r.profile in relaunched:
                 return "restarted"
             if killed_here:
@@ -538,7 +651,9 @@ def match_runtime_outcomes(
                     logger.debug(
                         "%s planned gateway runtimes for profile %r still need a verdict — successor "
                         "evidence cannot attribute the restart, leaving pid %s on the name path",
-                        pending_gateways[r.profile], r.profile, r.pid,
+                        pending_gateways[r.profile],
+                        r.profile,
+                        r.pid,
                     )
                 elif not live:
                     # No row for this profile: the fallback has nothing to work with and reconciliation
@@ -547,15 +662,27 @@ def match_runtime_outcomes(
                     logger.debug(
                         "No post-restart gateway evidence for profile %r (planned pid %s via %s) — "
                         "reconciling on restart bookkeeping alone",
-                        r.profile, r.pid, r.restart_via,
+                        r.profile,
+                        r.pid,
+                        r.restart_via,
                     )
             return "external" if r.pid in external else "unaccounted"
 
         for r in plan.runtimes:
             if isinstance(r, RuntimeRecord):
                 outcomes.append(
-                    {"kind": r.kind, "profile": r.profile, "pid": r.pid, "mechanism": r.restart_via, "outcome": _outcome(r),
-                     **{k: r.detail[k] for k in ("systemd_unit", "systemd_scope") if k in (r.detail or {})}}
+                    {
+                        "kind": r.kind,
+                        "profile": r.profile,
+                        "pid": r.pid,
+                        "mechanism": r.restart_via,
+                        "outcome": _outcome(r),
+                        **{
+                            k: r.detail[k]
+                            for k in ("systemd_unit", "systemd_scope")
+                            if k in (r.detail or {})
+                        },
+                    }
                 )
     except Exception as exc:
         logger.debug("Runtime-outcome reconciliation failed: %s", exc)
@@ -569,27 +696,46 @@ def report_unaccounted_runtimes(outcomes: list[dict[str, Any]]) -> bool:
     STALE/DOWN fleet row (an owed ``gateway_restart`` follow-up) — a promised restart silently missed is the class this phase
     exists to kill.
     """
-    manual = [o for o in outcomes if o.get("outcome") == "deferred" and o.get("mechanism") == "respawn-argv"]
+    manual = [
+        o
+        for o in outcomes
+        if o.get("outcome") == "deferred" and o.get("mechanism") == "respawn-argv"
+    ]
     if manual:
         print()
-        print("  ⚠ Manual serve restarts deferred to their owner (reminders retained until the old processes exit):")
+        print(
+            "  ⚠ Manual serve restarts deferred to their owner (reminders retained until the old processes exit):"
+        )
         for o in manual:
-            print(f"    • {o['kind']} [{o['profile']}] pid {o['pid']}: relaunch `clawk serve` / `clawk dashboard`, or reconnect Desktop for an SSH backend")
-    deferred = [o for o in outcomes if o.get("outcome") == "deferred" and o.get("mechanism") != "respawn-argv"]
+            print(
+                f"    • {o['kind']} [{o['profile']}] pid {o['pid']}: relaunch `clawk serve` / `clawk dashboard`, or reconnect Desktop for an SSH backend"
+            )
+    deferred = [
+        o
+        for o in outcomes
+        if o.get("outcome") == "deferred" and o.get("mechanism") != "respawn-argv"
+    ]
     if deferred:
         # Surfaced but not escalated: the updater has no authority over these, so holding
         # ``fleet_restart_pending`` for them would never be discharged. See #111494.
         print()
-        print("  ℹ Left to the Desktop app (still on pre-update code until it is relaunched):")
+        print(
+            "  ℹ Left to the Desktop app (still on pre-update code until it is relaunched):"
+        )
         for o in deferred:
-            action = ("owned by a Desktop connected over SSH; it picks up the update when that Desktop reconnects"
-                      if o.get("mechanism") == "desktop-ssh" else "relaunch the Desktop app to pick up the update")
+            action = (
+                "owned by a Desktop connected over SSH; it picks up the update when that Desktop reconnects"
+                if o.get("mechanism") == "desktop-ssh"
+                else "relaunch the Desktop app to pick up the update"
+            )
             print(f"    • {o['kind']} [{o['profile']}] pid {o['pid']} — {action}")
     external = [o for o in outcomes if o.get("outcome") == "external"]
     if external:
         # Surfaced but not escalated: another install's updater owns these restarts. See #120240.
         print()
-        print("  ℹ Left to their own install (separate checkout, not restarted by this update):")
+        print(
+            "  ℹ Left to their own install (separate checkout, not restarted by this update):"
+        )
         for o in external:
             print(f"    • {o['kind']} [{o['profile']}] pid {o['pid']}")
     missed = [o for o in outcomes if o.get("outcome") == "unaccounted"]
@@ -598,7 +744,9 @@ def report_unaccounted_runtimes(outcomes: list[dict[str, Any]]) -> bool:
     print()
     print("  ⚠ Planned runtimes the restart phase never touched:")
     for o in missed:
-        print(f"    ✗ {o['kind']} [{o['profile']}] pid {o['pid']} — planned mechanism: {o['mechanism']}")
+        print(
+            f"    ✗ {o['kind']} [{o['profile']}] pid {o['pid']} — planned mechanism: {o['mechanism']}"
+        )
     print("    Restart them manually, then verify:")
     if any(o.get("kind") not in _SERVE_KINDS for o in missed):
         print("      clawk gateway restart                # active profile")
@@ -611,11 +759,17 @@ def report_unaccounted_runtimes(outcomes: list[dict[str, Any]]) -> bool:
         for o in missed:
             if o.get("kind") in _SERVE_KINDS and o.get("systemd_unit"):
                 # The owning unit and scope are known: name its exact command (#141021).
-                for command in _systemd_restart_commands(o["systemd_unit"], o.get("systemd_scope")):
+                for command in _systemd_restart_commands(
+                    o["systemd_unit"], o.get("systemd_scope")
+                ):
                     print(f"      {command}   # pid {o['pid']}")
-        if any(o.get("kind") in _SERVE_KINDS and not o.get("systemd_unit") for o in missed):
+        if any(
+            o.get("kind") in _SERVE_KINDS and not o.get("systemd_unit") for o in missed
+        ):
             if sys.platform == "linux":
-                print("      systemctl --user restart clawk-serve.service   # unit-managed serve")
+                print(
+                    "      systemctl --user restart clawk-serve.service   # unit-managed serve"
+                )
             print("      relaunch `clawk serve` / `clawk dashboard`")
     return True
 

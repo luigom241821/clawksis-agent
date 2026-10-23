@@ -55,6 +55,7 @@ def _coerce_float(value: Any, default: float, floor: float = 0.0) -> float:
 
 class _LoopFloorTimerHandle:
     """Cancelable owner for the currently scheduled selector floor timer."""
+
     def __init__(self, loop: asyncio.AbstractEventLoop, interval: float):
         self._loop, self._interval, self._cancelled = loop, interval, False
         self._timer: Optional[asyncio.TimerHandle] = None
@@ -73,19 +74,28 @@ class _LoopFloorTimerHandle:
 class _LoopLivenessWatchdogHandle:
     def __init__(self, stop_event: threading.Event, thread: threading.Thread):
         self._stop_event = stop_event
-        self.stop, self.join, self.is_alive = stop_event.set, thread.join, thread.is_alive
+        self.stop, self.join, self.is_alive = (
+            stop_event.set,
+            thread.join,
+            thread.is_alive,
+        )
 
 
 def _arm_loop_floor_timer(
-    loop: asyncio.AbstractEventLoop, interval: float = DEFAULT_LOOP_FLOOR_TIMER_INTERVAL_S
+    loop: asyncio.AbstractEventLoop,
+    interval: float = DEFAULT_LOOP_FLOOR_TIMER_INTERVAL_S,
 ) -> _LoopFloorTimerHandle:
     """Keep at least one timer pending so selector waits remain bounded."""
     iv = _coerce_float(interval, 0.0)
-    return _LoopFloorTimerHandle(loop, iv if iv > 0 else DEFAULT_LOOP_FLOOR_TIMER_INTERVAL_S)
+    return _LoopFloorTimerHandle(
+        loop, iv if iv > 0 else DEFAULT_LOOP_FLOOR_TIMER_INTERVAL_S
+    )
 
 
 def start_loop_liveness_watchdog(
-    loop: asyncio.AbstractEventLoop, *, probe_interval: float = DEFAULT_LOOP_WATCHDOG_INTERVAL_S,
+    loop: asyncio.AbstractEventLoop,
+    *,
+    probe_interval: float = DEFAULT_LOOP_WATCHDOG_INTERVAL_S,
     probe_timeout: float = DEFAULT_LOOP_WATCHDOG_TIMEOUT_S,
     max_strikes: int = DEFAULT_LOOP_WATCHDOG_MAX_STRIKES,
     exit_code: int = GATEWAY_SERVICE_RESTART_EXIT_CODE,
@@ -104,10 +114,14 @@ def start_loop_liveness_watchdog(
             except RuntimeError:  # normally closed loop: nothing left to backstop
                 return
             except Exception:
-                logger.debug("Failed to schedule gateway loop liveness probe", exc_info=True)
+                logger.debug(
+                    "Failed to schedule gateway loop liveness probe", exc_info=True
+                )
                 return
             deadline = time.monotonic() + probe_timeout
-            while not stop_event.is_set():  # poll so a stop() mid-wait is honoured within ~50ms
+            while (
+                not stop_event.is_set()
+            ):  # poll so a stop() mid-wait is honoured within ~50ms
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or probe_event.wait(timeout=min(remaining, 0.05)):
                     break
@@ -116,7 +130,9 @@ def start_loop_liveness_watchdog(
             if probe_event.is_set():
                 strikes = 0
                 continue
-            if stop_event.is_set():  # re-checked before each irreversible step: a late stop() wins
+            if (
+                stop_event.is_set()
+            ):  # re-checked before each irreversible step: a late stop() wins
                 return
             strikes += 1
             if strikes < max_strikes:
@@ -127,18 +143,25 @@ def start_loop_liveness_watchdog(
                 logger.critical(
                     "Gateway event loop missed %d consecutive liveness probes; dumping all thread "
                     "stacks and exiting with code %d so the service supervisor can restart it.",
-                    strikes, exit_code)
+                    strikes,
+                    exit_code,
+                )
             # File + stderr: a console-less launcher (Windows .vbs login item) discards stderr, so a
             # liveness death used to leave no stack anywhere (#120356, #91097).
             _write_watchdog_dump(
-                get_shutdown_watchdog_dump_path(), delay_s=probe_timeout * strikes,
+                get_shutdown_watchdog_dump_path(),
+                delay_s=probe_timeout * strikes,
                 snapshot={"strikes": strikes, "probe_interval_s": probe_interval},
-                event="loop_liveness_watchdog_fired")
+                event="loop_liveness_watchdog_fired",
+            )
             if stop_event.is_set():
                 return
             _mark_exited_quietly(exit_code, "loop_liveness_watchdog")
             _hard_exit(exit_code)
-    thread = threading.Thread(target=_watchdog, daemon=True, name="gateway-loop-liveness-watchdog")
+
+    thread = threading.Thread(
+        target=_watchdog, daemon=True, name="gateway-loop-liveness-watchdog"
+    )
     try:
         thread.start()
     except Exception:
@@ -152,6 +175,7 @@ def _hard_exit(exit_code: int) -> None:
     own process group and would outlive the gateway, reparented to init."""
     with contextlib.suppress(Exception):
         from tools.environments.base import kill_live_foreground_processes
+
         kill_live_foreground_processes(now=True)
     os._exit(exit_code)
 
@@ -164,22 +188,36 @@ def _mark_exited_quietly(exit_code: int, reason: str) -> None:
     LAST: it is the record housekeeping refreshes, so nothing may overwrite it after we stamp it."""
     with contextlib.suppress(Exception):
         from gateway.lifecycle_ledger import mark_exited
+
         mark_exited(exit_code, reason=reason)
-    with contextlib.suppress(Exception):  # os._exit skips atexit: stamp the exit-metrics marker now
+    with contextlib.suppress(
+        Exception
+    ):  # os._exit skips atexit: stamp the exit-metrics marker now
         from clawk_cli.observability.shared_metrics_process import stamp_exit
+
         stamp_exit("watchdog")
     with contextlib.suppress(Exception):
         from gateway.status import write_runtime_status
+
         # Only the supervisor-restart code asserts a restart; other codes leave the recorded
         # operator intent (a restart-drain that wedged is still a requested restart) untouched.
-        restart = {"restart_requested": True} if exit_code == GATEWAY_SERVICE_RESTART_EXIT_CODE else {}
+        restart = (
+            {"restart_requested": True}
+            if exit_code == GATEWAY_SERVICE_RESTART_EXIT_CODE
+            else {}
+        )
         write_runtime_status(
-            gateway_state="degraded", exit_reason=reason, wait_timeout=0.25, **restart)
+            gateway_state="degraded", exit_reason=reason, wait_timeout=0.25, **restart
+        )
 
 
 def _process_clawk_home() -> Path:
     """CLAWK_HOME for process-level identity files (ignore profile overrides)."""
-    return get_process_clawk_home() if os.environ.get("CLAWK_HOME", "").strip() else get_clawk_home()
+    return (
+        get_process_clawk_home()
+        if os.environ.get("CLAWK_HOME", "").strip()
+        else get_clawk_home()
+    )
 
 
 def _home(home: Optional[Path]) -> Path:
@@ -190,7 +228,9 @@ def get_loop_heartbeat_path(home: Optional[Path] = None) -> Path:
     return _home(home).joinpath(*_HEARTBEAT_RELATIVE)
 
 
-def get_loop_tick_socket_path(home: Optional[Path] = None, pid: Optional[int] = None) -> Path:
+def get_loop_tick_socket_path(
+    home: Optional[Path] = None, pid: Optional[int] = None
+) -> Path:
     """``<CLAWK_HOME>/state/gateway.loop-tick.<pid>.sock`` — PID-suffixed so a stale node from a
     dead process is never mistaken for this gateway's witness. Served by the loop itself
     (``_tick_socket_handler``), so an answer proves the loop dispatches; the heartbeat cannot.
@@ -208,18 +248,27 @@ def get_shutdown_watchdog_dump_path(home: Optional[Path] = None) -> Path:
 
 
 def write_loop_heartbeat(
-    *, pid: Optional[int] = None, start_time: Optional[float] = None,
-    home: Optional[Path] = None, extra: Optional[dict[str, Any]] = None) -> Path:
+    *,
+    pid: Optional[int] = None,
+    start_time: Optional[float] = None,
+    home: Optional[Path] = None,
+    extra: Optional[dict[str, Any]] = None,
+) -> Path:
     """Atomically rewrite the loop-liveness heartbeat file; never raises.
     ``start_time`` (process start, epoch seconds) lets supervisors detect PID reuse."""
     path = get_loop_heartbeat_path(home)
-    payload: dict[str, Any] = {"pid": int(pid if pid is not None else os.getpid()),
-                               "updated_at": datetime.now(UTC).isoformat(),
-                               "monotonic": time.monotonic()}
+    payload: dict[str, Any] = {
+        "pid": int(pid if pid is not None else os.getpid()),
+        "updated_at": datetime.now(UTC).isoformat(),
+        "monotonic": time.monotonic(),
+    }
     if start_time is not None:
         payload["start_time"] = float(start_time)
-    with contextlib.suppress(Exception):  # after an unclean death this is the last memory record
+    with contextlib.suppress(
+        Exception
+    ):  # after an unclean death this is the last memory record
         from gateway.lifecycle_ledger import sample_memory
+
         if mem := sample_memory():
             payload["mem"] = mem
     if extra:
@@ -232,21 +281,37 @@ def write_loop_heartbeat(
 
 
 def resolve_shutdown_watchdog_delay(
-    drain_timeout: float, *, grace_s: float = DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S) -> float:
+    drain_timeout: float, *, grace_s: float = DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
+) -> float:
     """Return the wall-clock leash for the shutdown watchdog thread."""
     grace = _coerce_float(grace_s, DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S)
     return _coerce_float(drain_timeout, 0.0) + grace
 
 
-def _write_watchdog_dump(dump_path: Path, *, delay_s: float, snapshot: Optional[dict[str, Any]],
-                         event: str = "shutdown_watchdog_fired") -> None:
+def _write_watchdog_dump(
+    dump_path: Path,
+    *,
+    delay_s: float,
+    snapshot: Optional[dict[str, Any]],
+    event: str = "shutdown_watchdog_fired",
+) -> None:
     """Best-effort faulthandler + metadata dump before hard-exit (file, then stderr)."""
-    header = {"event": event, "pid": os.getpid(), "delay_s": delay_s,
-              "fired_at": datetime.now(UTC).isoformat(), "snapshot": snapshot or {}}
-    with contextlib.suppress(OSError):  # unwritable dir: skip only the file copy, stderr still runs
+    header = {
+        "event": event,
+        "pid": os.getpid(),
+        "delay_s": delay_s,
+        "fired_at": datetime.now(UTC).isoformat(),
+        "snapshot": snapshot or {},
+    }
+    with contextlib.suppress(
+        OSError
+    ):  # unwritable dir: skip only the file copy, stderr still runs
         dump_path.parent.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(Exception), open(dump_path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(header, default=str) + "\n--- faulthandler dump (all threads) ---\n")
+        fh.write(
+            json.dumps(header, default=str)
+            + "\n--- faulthandler dump (all threads) ---\n"
+        )
         fh.flush()
         try:
             faulthandler.dump_traceback(file=fh, all_threads=True)
@@ -254,17 +319,26 @@ def _write_watchdog_dump(dump_path: Path, *, delay_s: float, snapshot: Optional[
             fh.write("(faulthandler.dump_traceback failed)\n")
         fh.write("--- end dump ---\n")
         fh.flush()
-    with contextlib.suppress(Exception):  # stderr too: journald/launchd get it if disk is wedged
-        sys.stderr.write(f"Gateway {event.replace('_', ' ')} after {delay_s:.0f}s "
-                         f"(pid={os.getpid()}); dumping all thread stacks.\n")
+    with contextlib.suppress(
+        Exception
+    ):  # stderr too: journald/launchd get it if disk is wedged
+        sys.stderr.write(
+            f"Gateway {event.replace('_', ' ')} after {delay_s:.0f}s "
+            f"(pid={os.getpid()}); dumping all thread stacks.\n"
+        )
         sys.stderr.flush()
         faulthandler.dump_traceback(all_threads=True)
 
 
 def arm_shutdown_watchdog(
-    delay_s: float, *, done_event: Optional[threading.Event] = None,
-    snapshot_fn: Optional[Callable[[], dict[str, Any]]] = None, exit_code: int = 1,
-    dump_path: Optional[Path] = None, name: str = "gateway-shutdown-watchdog") -> threading.Event:
+    delay_s: float,
+    *,
+    done_event: Optional[threading.Event] = None,
+    snapshot_fn: Optional[Callable[[], dict[str, Any]]] = None,
+    exit_code: int = 1,
+    dump_path: Optional[Path] = None,
+    name: str = "gateway-shutdown-watchdog",
+) -> threading.Event:
     """Arm a daemon-thread hard-exit backstop for a wedged shutdown path: exits quietly if
     ``done_event`` is set within ``delay_s``, else dumps diagnostics and ``os._exit(exit_code)``.
     Never raises; returns ``done_event`` for disarming."""
@@ -274,7 +348,9 @@ def arm_shutdown_watchdog(
         return done
 
     def _watchdog() -> None:
-        deadline = time.monotonic() + delay  # chunked wait so a late disarm is observed within ~1s
+        deadline = (
+            time.monotonic() + delay
+        )  # chunked wait so a late disarm is observed within ~1s
         while time.monotonic() < deadline:
             if done.wait(timeout=min(deadline - time.monotonic(), 1.0)):
                 return
@@ -284,11 +360,17 @@ def arm_shutdown_watchdog(
             snapshot = snapshot_fn() if snapshot_fn is not None else None
         except Exception as exc:
             snapshot = {"snapshot_error": repr(exc)}
-        target = dump_path if dump_path is not None else get_shutdown_watchdog_dump_path()
+        target = (
+            dump_path if dump_path is not None else get_shutdown_watchdog_dump_path()
+        )
         _write_watchdog_dump(target, delay_s=delay, snapshot=snapshot)
         with contextlib.suppress(Exception):
-            logger.critical("Shutdown watchdog fired after %.0fs — forcing process exit "
-                            "(asyncio drain path appears wedged; see %s)", delay, target)
+            logger.critical(
+                "Shutdown watchdog fired after %.0fs — forcing process exit "
+                "(asyncio drain path appears wedged; see %s)",
+                delay,
+                target,
+            )
         for stream in (sys.stdout, sys.stderr):
             with contextlib.suppress(Exception):
                 stream.flush()
@@ -299,13 +381,16 @@ def arm_shutdown_watchdog(
             # (locks must never be stranded), then drain the async log queue so the logger.critical above
             # actually reaches the file before os._exit bypasses atexit. (#66892)
             from gateway.status import remove_pid_file, release_gateway_runtime_lock
+
             remove_pid_file()
             release_gateway_runtime_lock()
         with contextlib.suppress(Exception):
             from clawk_logging import drain_log_queue
+
             drain_log_queue(timeout=1.0)
         _mark_exited_quietly(exit_code, "shutdown_watchdog")
         _hard_exit(exit_code)
+
     try:
         threading.Thread(target=_watchdog, daemon=True, name=name).start()
     except Exception:
@@ -313,7 +398,9 @@ def arm_shutdown_watchdog(
     return done
 
 
-async def _tick_socket_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+async def _tick_socket_handler(
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+) -> None:
     """Answer a liveness ping with one byte; never raises. Runs on the gateway loop, so a reply
     witnesses loop schedulability; the write is a socket-buffer copy (no fsync), immune to the
     stalls that age the heartbeat."""
@@ -333,9 +420,13 @@ def _sweep_stale_tick_sockets(own_path: Path) -> None:
     finally-unlink) but not SIBLING nodes from other dead PIDs. os.kill(pid, 0) is a liveness
     probe only on POSIX (Windows would TerminateProcess)."""
     try:
-        for stale in (p for p in own_path.parent.glob("gateway.loop-tick.*.sock") if p != own_path):
+        for stale in (
+            p for p in own_path.parent.glob("gateway.loop-tick.*.sock") if p != own_path
+        ):
             try:
-                os.kill(int(stale.name.split(".")[-2]), 0)  # windows-footgun: ok — POSIX-only
+                os.kill(
+                    int(stale.name.split(".")[-2]), 0
+                )  # windows-footgun: ok — POSIX-only
             except (ValueError, IndexError, OSError):
                 stale.unlink(missing_ok=True)
     except Exception:
@@ -343,8 +434,12 @@ def _sweep_stale_tick_sockets(own_path: Path) -> None:
 
 
 async def loop_heartbeat_forever(
-    *, interval_s: float = DEFAULT_HEARTBEAT_INTERVAL_S, start_time: Optional[float] = None,
-    home: Optional[Path] = None, should_continue: Optional[Callable[[], bool]] = None) -> None:
+    *,
+    interval_s: float = DEFAULT_HEARTBEAT_INTERVAL_S,
+    start_time: Optional[float] = None,
+    home: Optional[Path] = None,
+    should_continue: Optional[Callable[[], bool]] = None,
+) -> None:
     """Rewrite the loop heartbeat file on a cadence until cancelled / gated off. Runs on the
     gateway loop so a frozen loop lets the file age for monitors. The fsync write goes to a thread
     (inline, a stalled filesystem blocked the loop inside its own heartbeat and the liveness
@@ -359,6 +454,7 @@ async def loop_heartbeat_forever(
     # loopback transport when AF_UNIX is unavailable or the encoded address will not fit;
     # consumers already discover this port in the heartbeat, independent of their TMPDIR.
     from gateway.control_socket import _fits_sun_path
+
     tick_server = tick_socket_path = tick_tcp_port = None
     try:
         unix_path = get_loop_tick_socket_path(home) if os.name == "posix" else None
@@ -366,27 +462,41 @@ async def loop_heartbeat_forever(
             tick_socket_path = unix_path
             tick_socket_path.parent.mkdir(parents=True, exist_ok=True)
             _sweep_stale_tick_sockets(tick_socket_path)
-            tick_server = await asyncio.start_unix_server(_tick_socket_handler,
-                                                          path=str(tick_socket_path))
+            tick_server = await asyncio.start_unix_server(
+                _tick_socket_handler, path=str(tick_socket_path)
+            )
         else:
-            tick_server = await asyncio.start_server(_tick_socket_handler, host="127.0.0.1", port=0)
+            tick_server = await asyncio.start_server(
+                _tick_socket_handler, host="127.0.0.1", port=0
+            )
             for _s in tick_server.sockets or []:
                 with contextlib.suppress(Exception):
-                    if isinstance(_sname := _s.getsockname(), tuple) and len(_sname) >= 2:
+                    if (
+                        isinstance(_sname := _s.getsockname(), tuple)
+                        and len(_sname) >= 2
+                    ):
                         tick_tcp_port = int(_sname[1])
                         break
     except Exception:
         tick_server = tick_tcp_port = None
-        logger.warning("Loop tick socket unavailable — liveness probes will have no "
-                       "loop-scheduling witness and will not escalate on a stale heartbeat",
-                       exc_info=True)
-    extra = {"loop_tick_socket": tick_server is not None, "loop_tick_tcp_port": tick_tcp_port}
+        logger.warning(
+            "Loop tick socket unavailable — liveness probes will have no "
+            "loop-scheduling witness and will not escalate on a stale heartbeat",
+            exc_info=True,
+        )
+    extra = {
+        "loop_tick_socket": tick_server is not None,
+        "loop_tick_tcp_port": tick_tcp_port,
+    }
     try:
         while True:  # first write is immediate so monitors see a fresh file at once
             try:
-                await asyncio.to_thread(write_loop_heartbeat, start_time=start_time, home=home,
-                                        extra=extra)
-            except Exception:  # write_loop_heartbeat never raises: executor problem, keep the task
+                await asyncio.to_thread(
+                    write_loop_heartbeat, start_time=start_time, home=home, extra=extra
+                )
+            except (
+                Exception
+            ):  # write_loop_heartbeat never raises: executor problem, keep the task
                 logger.debug("Loop heartbeat write failed off-loop", exc_info=True)
             if should_continue is not None and not should_continue():
                 return

@@ -21,7 +21,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from clawk_constants import get_clawk_home
-from clawk_cli.relay_plugin_cutover import (RELAY_PLUGINS_CONFIG_ENV, configured_legacy_relay_env_vars)
+from clawk_cli.relay_plugin_cutover import (
+    RELAY_PLUGINS_CONFIG_ENV,
+    configured_legacy_relay_env_vars,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,6 @@ _PROFILE_KEY_CACHE: dict[str, str] = {}
 # Bound for native scope ops gating turn/session completion: a wedged pipeline costs one
 # lost span, never a blocked agent.
 SCOPE_OP_TIMEOUT = 10.0
-
 
 
 class _Lazy:
@@ -61,6 +63,7 @@ def _new_scope_op_executor() -> Any:
     # Daemon workers: a wedged call abandoned at timeout cannot block interpreter exit;
     # ``Future.result(timeout=...)`` still bounds callers when every worker is wedged.
     from tools.daemon_pool import DaemonThreadPoolExecutor
+
     return DaemonThreadPoolExecutor(max_workers=8, thread_name_prefix="relay-scope-op")
 
 
@@ -70,7 +73,11 @@ _scope_op_executor = _SCOPE_OP_EXECUTOR.get
 
 def runtime_metadata(runtime_id: str, **extra: Any) -> dict[str, Any]:
     """Return the scope metadata that stamps every Clawksis-owned Relay scope."""
-    return {RUNTIME_SCHEMA_KEY: RUNTIME_SCHEMA_VERSION, RUNTIME_INSTANCE_KEY: runtime_id, **extra}
+    return {
+        RUNTIME_SCHEMA_KEY: RUNTIME_SCHEMA_VERSION,
+        RUNTIME_INSTANCE_KEY: runtime_id,
+        **extra,
+    }
 
 
 def _scope_input(cwd: Any = None) -> dict[str, str]:
@@ -79,7 +86,11 @@ def _scope_input(cwd: Any = None) -> dict[str, str]:
 
 
 def _run_on_daemon_thread(
-    fn: Callable[[], Any], *, name: str, timeout: float | None = None, timeout_message: str = ""
+    fn: Callable[[], Any],
+    *,
+    name: str,
+    timeout: float | None = None,
+    timeout_message: str = "",
 ) -> Any:
     """Run ``fn`` on a fresh daemon thread; re-raise its error or return its result.
     With ``timeout`` a still-running worker is abandoned with ``TimeoutError`` (daemon: cannot block exit)."""
@@ -101,21 +112,40 @@ def _run_on_daemon_thread(
     return outcome.get("result")
 
 
-def pop_relay_scope(relay: Any, handle: Any, *, output: Any = None, metadata: Any = None, timestamp: Any = None) -> Any:
+def pop_relay_scope(
+    relay: Any,
+    handle: Any,
+    *,
+    output: Any = None,
+    metadata: Any = None,
+    timestamp: Any = None,
+) -> Any:
     """Pop a Relay scope, forwarding only the kwargs the live binding accepts.
     ``scope.pop`` gained ``metadata`` in nemo-relay 0.4+; older wheels raise TypeError."""
     pop = relay.scope.pop
-    kwargs = {k: v for k, v in (("output", output), ("metadata", metadata), ("timestamp", timestamp)) if v is not None}
+    kwargs = {
+        k: v
+        for k, v in (
+            ("output", output),
+            ("metadata", metadata),
+            ("timestamp", timestamp),
+        )
+        if v is not None
+    }
     try:
         params = inspect.signature(pop).parameters
     except (TypeError, ValueError):
         params = {}
-    if params and not any(param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values()):
+    if params and not any(
+        param.kind == inspect.Parameter.VAR_KEYWORD for param in params.values()
+    ):
         kwargs = {key: value for key, value in kwargs.items() if key in params}
     return pop(handle, **kwargs)
 
 
-def pop_relay_scope_if_top(relay: Any, handle: Any, *, output: Any = None, metadata: Any = None) -> bool:
+def pop_relay_scope_if_top(
+    relay: Any, handle: Any, *, output: Any = None, metadata: Any = None
+) -> bool:
     """Pop ``handle`` only while it is the top of the scope stack; return whether it was popped.
 
     Two concurrent Clawksis turns in one session share a physical stack, so the first turn to
@@ -148,7 +178,9 @@ def _same_handle(a: Any, b: Any) -> bool:
     if a is None or b is None:
         return a is b
     a_uuid = getattr(a, "uuid", None)
-    return a is b or a == b or (a_uuid is not None and a_uuid == getattr(b, "uuid", None))
+    return (
+        a is b or a == b or (a_uuid is not None and a_uuid == getattr(b, "uuid", None))
+    )
 
 
 # Process-wide plugin-configuration result shared by every currently hosted profile.
@@ -236,8 +268,12 @@ class RelaySession:
     segment: int = 0  # index of the CURRENT session scope (0 = first)
     segment_turns: int = 0  # turns completed within the current segment
     rotate_pending: bool = False  # consumed at next begin_turn
-    close_pending: bool = False  # rotating compaction hit a live turn; end_turn consumes it
-    cwd: str = ""  # latest logical working directory; reused when a session segment rotates
+    close_pending: bool = (
+        False  # rotating compaction hit a live turn; end_turn consumes it
+    )
+    cwd: str = (
+        ""  # latest logical working directory; reused when a session segment rotates
+    )
 
 
 def _load_segments_config() -> dict[str, Any]:
@@ -250,7 +286,9 @@ def _load_segments_config() -> dict[str, Any]:
         # running in $HOME without the launch dir's AGENTS.md (#95577). Same reader it delegates to.
         from clawk_cli.config_effective import load_user_config_effective
 
-        telemetry = (load_user_config_effective().get("gateway") or {}).get("telemetry") or {}
+        telemetry = (load_user_config_effective().get("gateway") or {}).get(
+            "telemetry"
+        ) or {}
         segments = telemetry.get("session_segments") or {}
         on_compaction = bool(segments.get("on_compaction", False))
         try:
@@ -273,12 +311,20 @@ class RelayOperationLease:
     def __init__(self, runtime: RelayRuntime) -> None:
         self._lock, self._runtime = threading.Lock(), runtime
 
-    def run_in_session(self, session: RelaySession, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    def run_in_session(
+        self,
+        session: RelaySession,
+        callback: Callable[..., Any],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
         """Run cleanup while this lease still owns the runtime lifetime."""
         with self._lock:
             if self._runtime is None:
                 raise RuntimeError("Clawksis Relay operation lease is released")
-            return self._runtime._run_in_session_untracked(session, callback, *args, **kwargs)
+            return self._runtime._run_in_session_untracked(
+                session, callback, *args, **kwargs
+            )
 
     def release(self) -> None:
         """Release this lease exactly once."""
@@ -308,7 +354,8 @@ class _ProcessRelayPluginConfiguration:
                     logger.info(
                         "The Relay plugin host is active process-wide and applies to all profiles hosted by this "
                         "Clawksis process. Configuration files: %s",
-                        "; ".join(_activation_config_paths(self._activation)) or "none reported",
+                        "; ".join(_activation_config_paths(self._activation))
+                        or "none reported",
                     )
             self._owners.add(id(owner))
             return self._state
@@ -325,7 +372,9 @@ class _ProcessRelayPluginConfiguration:
                     "ownership; leaving it unchanged and disabling Clawksis-managed Relay middleware for this process"
                 )
                 return _RelayPluginConfigurationState.FOREIGN
-            logger.warning("Clawksis Relay plugin initialization failed: %s", exc, exc_info=True)
+            logger.warning(
+                "Clawksis Relay plugin initialization failed: %s", exc, exc_info=True
+            )
             return _RelayPluginConfigurationState.FAILED
         self._relay = relay
         return _RelayPluginConfigurationState.ACTIVE
@@ -343,9 +392,13 @@ class _ProcessRelayPluginConfiguration:
         """Initialize Relay and report whether the resolved configuration needs managed execution."""
         config_path = _configured_plugin_inputs()
         # An explicit file replaces Relay's user file; its system file always remains above either source.
-        activation = _resolve_plugin_awaitable(relay.plugin.initialize({}, additional_plugins_toml=config_path))
+        activation = _resolve_plugin_awaitable(
+            relay.plugin.initialize({}, additional_plugins_toml=config_path)
+        )
         if activation is None:
-            raise RuntimeError("NeMo Relay plugin initialization returned no activation handle")
+            raise RuntimeError(
+                "NeMo Relay plugin initialization returned no activation handle"
+            )
         self._activation = activation
         self._relay = relay
         return _activation_requires_managed_execution(activation)
@@ -380,7 +433,10 @@ class _ProcessRelayPluginConfiguration:
             raise RuntimeError("NeMo Relay plugin activation has no close method")
 
         for what, step in (
-            ("subscriber flush", lambda: _resolve_plugin_awaitable(relay.subscribers.flush_async())),
+            (
+                "subscriber flush",
+                lambda: _resolve_plugin_awaitable(relay.subscribers.flush_async()),
+            ),
             ("configuration cleanup", close_configuration),
         ):
             try:
@@ -403,7 +459,10 @@ class RelayRuntime:
         self.relay = relay or _load_nemo_relay()
         self.profile_key = profile_key or current_profile_key()
         self.runtime_id = uuid.uuid4().hex
-        self._sessions_lock, self._execution_consumers_lock = threading.RLock(), threading.RLock()
+        self._sessions_lock, self._execution_consumers_lock = (
+            threading.RLock(),
+            threading.RLock(),
+        )
         self._sessions: dict[str, RelaySession] = {}
         self._subagent_parents: dict[str, str] = {}
         self._subagent_parent_handles: dict[str, Any] = {}
@@ -413,10 +472,15 @@ class RelayRuntime:
         self._deferred_scope_outputs: dict[str, dict[str, Any]] = {}
         self._deferred_scope_outputs_lock = threading.Lock()
         self._closing = self._shutdown_started = False
-        self._shutdown_complete, self._operations_idle = threading.Event(), threading.Event()
+        self._shutdown_complete, self._operations_idle = (
+            threading.Event(),
+            threading.Event(),
+        )
         self._operations_idle.set()
         self._active_operations = 0
-        self._plugin_configuration_state = _PLUGIN_CONFIGURATION.acquire(self, self.relay)
+        self._plugin_configuration_state = _PLUGIN_CONFIGURATION.acquire(
+            self, self.relay
+        )
         # Cleared (with the atexit hook) by the first successful _finish_shutdown.
         self._plugin_configuration_registered = True
         if self._plugins_active():
@@ -459,8 +523,13 @@ class RelayRuntime:
             return bool(self._execution_consumers)
 
     def _open_session_scope(
-        self, session: RelaySession, scope_metadata: dict[str, Any], *, resolve_parent: bool,
-        exit_fallback: bool = False, **push_kwargs: Any,
+        self,
+        session: RelaySession,
+        scope_metadata: dict[str, Any],
+        *,
+        resolve_parent: bool,
+        exit_fallback: bool = False,
+        **push_kwargs: Any,
     ) -> None:
         """Push a fresh SESSION_SCOPE for ``session`` (bounded by ``SCOPE_OP_TIMEOUT``); record handle + context.
         Subagents parent under their spawning turn/session handle (``resolve_parent`` creates the parent when
@@ -476,7 +545,11 @@ class RelayRuntime:
             scope_metadata["nemo_relay_scope_role"] = "subagent"
         context = contextvars.Context()
         args = (self.relay.scope.push, SESSION_SCOPE, self.relay.ScopeType.Agent)
-        push_kwargs.update(handle=parent_handle, metadata=scope_metadata, input=_scope_input(session.cwd))
+        push_kwargs.update(
+            handle=parent_handle,
+            metadata=scope_metadata,
+            input=_scope_input(session.cwd),
+        )
         try:
             future = _scope_op_executor().submit(context.run, *args, **push_kwargs)
         except RuntimeError:
@@ -507,7 +580,8 @@ class RelayRuntime:
             session = self._sessions.get(session_id)
             if session is None:
                 session = self._sessions[session_id] = RelaySession(
-                    session_id=session_id, parent_session_id=self._subagent_parents.get(session_id, "")
+                    session_id=session_id,
+                    parent_session_id=self._subagent_parents.get(session_id, ""),
                 )
         with session.lock:
             if session.closing:
@@ -516,8 +590,11 @@ class RelayRuntime:
                 session.cwd = _scope_input(cwd).get("cwd", "")
             if session.handle is None:
                 self._open_session_scope(
-                    session, {**(metadata or {}), **runtime_metadata(self.runtime_id)},
-                    resolve_parent=True, data=data, exit_fallback=True,
+                    session,
+                    {**(metadata or {}), **runtime_metadata(self.runtime_id)},
+                    resolve_parent=True,
+                    data=data,
+                    exit_fallback=True,
                 )
         return session
 
@@ -534,37 +611,58 @@ class RelayRuntime:
             session.rotate_pending = False
             try:
                 self.run_in_session(
-                    session, self.relay.scope.pop, old_handle, output={"clawk.session.segment_reason": reason},
-                    metadata=runtime_metadata(self.runtime_id), timeout=SCOPE_OP_TIMEOUT,
+                    session,
+                    self.relay.scope.pop,
+                    old_handle,
+                    output={"clawk.session.segment_reason": reason},
+                    metadata=runtime_metadata(self.runtime_id),
+                    timeout=SCOPE_OP_TIMEOUT,
                 )
             except Exception:
                 logger.warning(
                     "Clawksis Relay segment close failed (session=%s segment=%d); abandoning the old segment span",
-                    session.session_id, session.segment - 1, exc_info=True,
+                    session.session_id,
+                    session.segment - 1,
+                    exc_info=True,
                 )
             scope_metadata = runtime_metadata(
-                self.runtime_id, **{"clawk.session.segment": session.segment, "clawk.session.segment_reason": reason},
+                self.runtime_id,
+                **{
+                    "clawk.session.segment": session.segment,
+                    "clawk.session.segment_reason": reason,
+                },
             )
             try:
                 self._open_session_scope(session, scope_metadata, resolve_parent=False)
             except Exception:
                 logger.warning(
                     "Clawksis Relay segment open failed (session=%s segment=%d); keeping the prior scope handle",
-                    session.session_id, session.segment, exc_info=True,
+                    session.session_id,
+                    session.segment,
+                    exc_info=True,
                 )
 
     def register_subagent(
-        self, event: dict[str, Any], *, metadata: dict[str, Any] | None = None,
+        self,
+        event: dict[str, Any],
+        *,
+        metadata: dict[str, Any] | None = None,
         cwd: str | None = None,
     ) -> RelaySession | None:
         """Open a child Agent scope under its spawning turn when available."""
         parent_session_id = str(event.get("parent_session_id") or "")
         child_session_id = str(event.get("child_session_id") or "")
-        if not parent_session_id or not child_session_id or parent_session_id == child_session_id:
+        if (
+            not parent_session_id
+            or not child_session_id
+            or parent_session_id == child_session_id
+        ):
             return None
         parent = self.ensure_session({"session_id": parent_session_id})
         parent_handle = None if parent is None else parent.handle
-        turn = active_turn(parent_session_id)  # already proved liveness and (RelayRuntime host) an open session
+        turn = active_turn(
+            parent_session_id
+        )  # already proved liveness and (RelayRuntime host) an open session
         if turn is not None and turn.handle is not None and turn.lease.host is self:
             parent_handle = turn.handle
         with self._sessions_lock:
@@ -573,7 +671,9 @@ class RelayRuntime:
             self._subagent_parents[child_session_id] = parent_session_id
             if parent_handle is not None:
                 self._subagent_parent_handles[child_session_id] = parent_handle
-        return self.ensure_session({"session_id": child_session_id}, metadata=metadata, cwd=cwd)
+        return self.ensure_session(
+            {"session_id": child_session_id}, metadata=metadata, cwd=cwd
+        )
 
     def unregister_subagent(self, event: dict[str, Any]) -> None:
         """Close a delegated session and forget its parent relationship."""
@@ -595,13 +695,17 @@ class RelayRuntime:
     def get_session(self, session_id: str) -> RelaySession | None:
         """Return an active Clawksis Relay session without creating one."""
         with self._sessions_lock:
-            session = None if self._closing else self._sessions.get(str(session_id or ""))
+            session = (
+                None if self._closing else self._sessions.get(str(session_id or ""))
+            )
         if session is None:
             return None
         with session.lock:
             return None if session.closing else session
 
-    def _session_context(self, session: RelaySession, *, allow_closing: bool) -> contextvars.Context:
+    def _session_context(
+        self, session: RelaySession, *, allow_closing: bool
+    ) -> contextvars.Context:
         """Copy the current context and overlay the session's saved Relay vars (a copy: re-entrant from callbacks)."""
         with session.lock:
             if session.closing and not allow_closing:
@@ -615,20 +719,35 @@ class RelayRuntime:
         return context
 
     def run_in_session(
-        self, session: RelaySession, callback: Callable[..., Any], *args: Any,
-        allow_closing: bool = False, timeout: float | None = None, **kwargs: Any,
+        self,
+        session: RelaySession,
+        callback: Callable[..., Any],
+        *args: Any,
+        allow_closing: bool = False,
+        timeout: float | None = None,
+        **kwargs: Any,
     ) -> Any:
         """Run a Relay operation against a session's isolated scope stack.
         ``timeout`` bounds the native call on the daemon executor (``TimeoutError`` on breach); ``None``
         runs synchronously. Lifecycle ops pass ``SCOPE_OP_TIMEOUT``: a wedged pipeline costs one span."""
         with self._operation():
             return self._run_in_session_untracked(
-                session, callback, *args, allow_closing=allow_closing, timeout=timeout, **kwargs
+                session,
+                callback,
+                *args,
+                allow_closing=allow_closing,
+                timeout=timeout,
+                **kwargs,
             )
 
     def _run_in_session_untracked(
-        self, session: RelaySession, callback: Callable[..., Any], *args: Any,
-        allow_closing: bool = False, timeout: float | None = None, **kwargs: Any,
+        self,
+        session: RelaySession,
+        callback: Callable[..., Any],
+        *args: Any,
+        allow_closing: bool = False,
+        timeout: float | None = None,
+        **kwargs: Any,
     ) -> Any:
         """Run inside a session whose host-level lifetime is already held."""
         context = self._session_context(session, allow_closing=allow_closing)
@@ -646,7 +765,9 @@ class RelayRuntime:
             # Interpreter shutdown: the executor refuses futures but the atexit close path must
             # still flush — still bounded so a wedged call cannot block exit.
             return _run_on_daemon_thread(
-                lambda: context.run(invoke), name="relay-scope-op-exit", timeout=timeout,
+                lambda: context.run(invoke),
+                name="relay-scope-op-exit",
+                timeout=timeout,
                 timeout_message=f"{exceeded} during interpreter shutdown; abandoning the native "
                 "call so process exit can proceed",
             )
@@ -659,8 +780,12 @@ class RelayRuntime:
             ) from exc
 
     async def run_in_session_async(
-        self, session: RelaySession, callback: Callable[..., Any], *args: Any,
-        allow_closing: bool = False, **kwargs: Any,
+        self,
+        session: RelaySession,
+        callback: Callable[..., Any],
+        *args: Any,
+        allow_closing: bool = False,
+        **kwargs: Any,
     ) -> Any:
         """Create and await an operation inside the session's saved context."""
         with self._operation():
@@ -701,9 +826,13 @@ class RelayRuntime:
         self._begin_operation()
         return RelayOperationLease(self)
 
-    def apply_tool_request_intercepts(self, *, session_id: str, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    def apply_tool_request_intercepts(
+        self, *, session_id: str, tool_name: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         """Apply Relay request rewriting before Clawksis authorizes a tool call."""
-        request_intercepts = getattr(getattr(self.relay, "tools", None), "request_intercepts", None)
+        request_intercepts = getattr(
+            getattr(self.relay, "tools", None), "request_intercepts", None
+        )
         managed = self.managed_execution_enabled() and callable(request_intercepts)
         session = self.ensure_session({"session_id": session_id}) if managed else None
         if session is None:
@@ -712,7 +841,13 @@ class RelayRuntime:
         return result if isinstance(result, dict) else args
 
     def _pop_with_drain(
-        self, handle: Any, *, output: dict[str, Any], metadata: dict[str, Any], session_root: Any, drain_limit: int,
+        self,
+        handle: Any,
+        *,
+        output: dict[str, Any],
+        metadata: dict[str, Any],
+        session_root: Any,
+        drain_limit: int,
     ) -> BaseException | None:
         """Pop ``handle``; if that fails, drain orphans above it and retry once; return the retry's error.
         Must run inside ONE ``run_in_session`` callback so ContextVar stack views stay consistent."""
@@ -725,19 +860,32 @@ class RelayRuntime:
             if top is None or _same_handle(top, handle):
                 break
             # Never pop the session root while draining for a nested handle.
-            if session_root is not None and _same_handle(top, session_root) and handle is not session_root:
+            if (
+                session_root is not None
+                and _same_handle(top, session_root)
+                and handle is not session_root
+            ):
                 break
             try:
                 orphan_output = self._take_deferred_scope_output(top) or {
-                    "outcome": "cancelled", "clawk.orphan_drain": True,
+                    "outcome": "cancelled",
+                    "clawk.orphan_drain": True,
                 }
-                pop_relay_scope(self.relay, top, output=orphan_output, metadata=metadata)
+                pop_relay_scope(
+                    self.relay, top, output=orphan_output, metadata=metadata
+                )
                 drained += 1
             except Exception:
-                logger.warning("Clawksis Relay orphaned scope drain failed", exc_info=True)
+                logger.warning(
+                    "Clawksis Relay orphaned scope drain failed", exc_info=True
+                )
                 break
         if drained:
-            logger.warning("Clawksis Relay drained %d orphaned scope(s) before closing %s", drained, handle)
+            logger.warning(
+                "Clawksis Relay drained %d orphaned scope(s) before closing %s",
+                drained,
+                handle,
+            )
         try:
             pop_relay_scope(self.relay, handle, output=output, metadata=metadata)
             return None
@@ -745,20 +893,37 @@ class RelayRuntime:
             return retry_exc
 
     def _close_scope_handle(
-        self, session: RelaySession, handle: Any, *, output: dict[str, Any] | None = None, allow_closing: bool = False,
-        failure_label: str = "scope close failed", drain_limit: int = 32, operation_already_held: bool = False,
+        self,
+        session: RelaySession,
+        handle: Any,
+        *,
+        output: dict[str, Any] | None = None,
+        allow_closing: bool = False,
+        failure_label: str = "scope close failed",
+        drain_limit: int = 32,
+        operation_already_held: bool = False,
     ) -> str | None:
         """Pop ``handle``, draining orphaned children in the same session context; failure string or None.
         Relay scopes are strict LIFO; empty-stream retries + interrupt can abandon a physical LLM scope
         above TURN/SESSION. Drain+close is bounded so a wedged pipeline never blocks completion."""
         if handle is None:
             return None
-        run_in_session = (self._run_in_session_untracked if operation_already_held else self.run_in_session)
+        run_in_session = (
+            self._run_in_session_untracked
+            if operation_already_held
+            else self.run_in_session
+        )
         try:
             failure = run_in_session(
-                session, self._pop_with_drain, handle, output=output or {},
-                metadata=runtime_metadata(self.runtime_id), session_root=session.handle,
-                drain_limit=drain_limit, allow_closing=allow_closing, timeout=SCOPE_OP_TIMEOUT,
+                session,
+                self._pop_with_drain,
+                handle,
+                output=output or {},
+                metadata=runtime_metadata(self.runtime_id),
+                session_root=session.handle,
+                drain_limit=drain_limit,
+                allow_closing=allow_closing,
+                timeout=SCOPE_OP_TIMEOUT,
             )
         except Exception as exc:
             failure = exc
@@ -766,7 +931,10 @@ class RelayRuntime:
 
     def close_session(self, event: dict[str, Any]) -> None:
         """Close one session scope and remove it from the core registry (no-op once shutting down)."""
-        with contextlib.suppress(RuntimeError), self._operation():  # _close_session itself never raises
+        with (
+            contextlib.suppress(RuntimeError),
+            self._operation(),
+        ):  # _close_session itself never raises
             self._close_session(event)
 
     def _close_session(self, event: dict[str, Any]) -> None:
@@ -783,8 +951,12 @@ class RelayRuntime:
             session.closing = True
             if session.handle is not None:
                 failure = self._close_scope_handle(
-                    session, session.handle, output={}, allow_closing=True,
-                    failure_label="session scope close failed", operation_already_held=True,
+                    session,
+                    session.handle,
+                    output={},
+                    allow_closing=True,
+                    failure_label="session scope close failed",
+                    operation_already_held=True,
                 )
         # No subscriber flush here: process-wide, may wait on other sessions and deadlock an asyncio
         # loop; final plugin teardown flushes once.
@@ -793,7 +965,9 @@ class RelayRuntime:
                 del self._sessions[session_id]
             self._forget_subagent(session_id)
         if failure:
-            logger.warning("Clawksis Relay session %s closed with errors: %s", session_id, failure)
+            logger.warning(
+                "Clawksis Relay session %s closed with errors: %s", session_id, failure
+            )
 
     def shutdown(self) -> None:
         """Close core scopes and release process plugin configuration."""
@@ -807,21 +981,26 @@ class RelayRuntime:
             return
         thread = threading.Thread(
             target=lambda: (self._operations_idle.wait(), self._finish_shutdown()),
-            name=f"clawk-nemo-relay-shutdown-{self.runtime_id[:8]}", daemon=True,
+            name=f"clawk-nemo-relay-shutdown-{self.runtime_id[:8]}",
+            daemon=True,
         )
         try:
             thread.start()
         except Exception:
             with self._sessions_lock:
                 self._shutdown_started = False
-            logger.warning("Clawksis Relay deferred shutdown could not start", exc_info=True)
+            logger.warning(
+                "Clawksis Relay deferred shutdown could not start", exc_info=True
+            )
 
     def _finish_shutdown(self) -> None:
         try:
             with self._sessions_lock:
                 session_ids = list(self._sessions)
             for session_id in session_ids:
-                _warn_on_error("runtime operation", self._close_session, {"session_id": session_id})
+                _warn_on_error(
+                    "runtime operation", self._close_session, {"session_id": session_id}
+                )
             if self._plugin_configuration_registered:
                 if self._plugins_active():
                     self.release_managed_execution(RELAY_PLUGINS_EXECUTION_CONSUMER)
@@ -845,7 +1024,9 @@ class NoopRelayRuntime:
     profile_key: str
     reason: str
 
-    def apply_tool_request_intercepts(self, *, session_id: str, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    def apply_tool_request_intercepts(
+        self, *, session_id: str, tool_name: str, args: dict[str, Any]
+    ) -> dict[str, Any]:
         return args
 
     @staticmethod
@@ -854,7 +1035,9 @@ class NoopRelayRuntime:
 
     release_managed_execution = retain_managed_execution
     managed_execution_enabled = staticmethod(lambda: False)
-    shutdown = staticmethod(lambda: None)  # no resources are allocated on unsupported platforms
+    shutdown = staticmethod(
+        lambda: None
+    )  # no resources are allocated on unsupported platforms
 
 
 RelayHost = RelayRuntime | NoopRelayRuntime
@@ -867,7 +1050,9 @@ class RelayHostRegistry:
         self._lock = threading.RLock()
         self._hosts: dict[str, RelayHost] = {}
 
-    def for_profile(self, profile_key: str | None = None, *, create: bool = True) -> RelayHost | None:
+    def for_profile(
+        self, profile_key: str | None = None, *, create: bool = True
+    ) -> RelayHost | None:
         key = profile_key or current_profile_key()
         with self._lock:
             host = self._hosts.get(key)
@@ -876,7 +1061,9 @@ class RelayHostRegistry:
             try:
                 host = RelayRuntime(profile_key=key)
             except Exception as exc:
-                logger.warning("Clawksis Relay runtime initialization failed", exc_info=True)
+                logger.warning(
+                    "Clawksis Relay runtime initialization failed", exc_info=True
+                )
                 host = NoopRelayRuntime(profile_key=key, reason=str(exc))
             self._hosts[key] = host
             return host
@@ -906,7 +1093,11 @@ class ConversationLease:
 
     def live_runtime(self) -> RelayRuntime | None:
         """Return the real Relay host when this lease owns an open session."""
-        return self.host if isinstance(self.host, RelayRuntime) and self.session is not None else None
+        return (
+            self.host
+            if isinstance(self.host, RelayRuntime) and self.session is not None
+            else None
+        )
 
 
 @dataclass
@@ -918,7 +1109,9 @@ class RelayTurnContext:
     task_id: str
     handle: Any = None
     logical_llm_calls: dict[str, Any] = field(default_factory=dict, repr=False)
-    logical_llm_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    logical_llm_lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False
+    )
     finalize_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _previous_turn: RelayTurnContext | None = field(default=None, repr=False)
     _active_registered: bool = field(default=False, repr=False)
@@ -950,7 +1143,9 @@ def managed_callback_guard():
         _MANAGED_CALLBACK_DEPTH.reset(token)
 
 
-def _warn_on_error(what: str, callback: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+def _warn_on_error(
+    what: str, callback: Callable[..., Any], *args: Any, **kwargs: Any
+) -> Any:
     """Run fail-open telemetry work: log ``Clawksis Relay <what> failed`` and return None on error."""
     try:
         return callback(*args, **kwargs)
@@ -961,11 +1156,14 @@ def _warn_on_error(what: str, callback: Callable[..., Any], *args: Any, **kwargs
 
 def _fail_open(what: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator form of ``_warn_on_error`` for telemetry hooks that must never block the caller."""
+
     def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
         def guarded(*args: Any, **kwargs: Any) -> Any:
             return _warn_on_error(what, fn, *args, **kwargs)
+
         return guarded
+
     return wrap
 
 
@@ -982,11 +1180,15 @@ class RelaySessionCoordinator:
     def __init__(self, registry: RelayHostRegistry = HOST_REGISTRY) -> None:
         self.registry = registry
         self._initializer_lock = threading.RLock()
-        self._session_initializers: dict[str, Callable[[RelayRuntime, dict[str, Any]], None]] = {}
+        self._session_initializers: dict[
+            str, Callable[[RelayRuntime, dict[str, Any]], None]
+        ] = {}
         self._active_turns_lock = threading.RLock()
         self._active_turns: dict[tuple[str, str], set[int]] = {}
 
-    def register_session_initializer(self, name: str, callback: Callable[[RelayRuntime, dict[str, Any]], None]) -> None:
+    def register_session_initializer(
+        self, name: str, callback: Callable[[RelayRuntime, dict[str, Any]], None]
+    ) -> None:
         """Register idempotent profile/session preparation before scope creation."""
         with self._initializer_lock:
             self._session_initializers[name] = callback
@@ -998,7 +1200,9 @@ class RelaySessionCoordinator:
             try:
                 callback(host, context)
             except Exception:
-                logger.warning("Clawksis Relay session initializer failed: %s", name, exc_info=True)
+                logger.warning(
+                    "Clawksis Relay session initializer failed: %s", name, exc_info=True
+                )
 
     def acquire_conversation(
         self,
@@ -1011,14 +1215,25 @@ class RelaySessionCoordinator:
         session_cwd: str | None = None,
         turn_cwd: str | None = None,
     ) -> ConversationLease:
-        host = self.registry.for_profile(profile_key) or NoopRelayRuntime(profile_key, "Relay host creation was disabled")
+        host = self.registry.for_profile(profile_key) or NoopRelayRuntime(
+            profile_key, "Relay host creation was disabled"
+        )
         session = None
         if isinstance(host, RelayRuntime):
             context = {
-                "profile_key": profile_key, "session_id": session_id, "platform": platform,
-                "parent_session_id": parent_session_id, "model": model, "cwd": session_cwd,
+                "profile_key": profile_key,
+                "session_id": session_id,
+                "platform": platform,
+                "parent_session_id": parent_session_id,
+                "model": model,
+                "cwd": session_cwd,
             }
-            session = _warn_on_error("conversation initialization", self._open_conversation_session, host, context)
+            session = _warn_on_error(
+                "conversation initialization",
+                self._open_conversation_session,
+                host,
+                context,
+            )
         if turn_cwd is not None:
             effective_turn_cwd = _scope_input(turn_cwd).get("cwd", "")
         elif session_cwd is not None:
@@ -1029,19 +1244,34 @@ class RelaySessionCoordinator:
         else:
             effective_turn_cwd = ""
         return ConversationLease(
-            profile_key=profile_key, session_id=session_id, platform=platform, host=host,
-            session=session, parent_session_id=parent_session_id, turn_cwd=effective_turn_cwd,
+            profile_key=profile_key,
+            session_id=session_id,
+            platform=platform,
+            host=host,
+            session=session,
+            parent_session_id=parent_session_id,
+            turn_cwd=effective_turn_cwd,
         )
 
-    def _open_conversation_session(self, host: RelayRuntime, context: dict[str, Any]) -> RelaySession | None:
+    def _open_conversation_session(
+        self, host: RelayRuntime, context: dict[str, Any]
+    ) -> RelaySession | None:
         self._prepare_session(host, context)
-        session_id, parent_session_id = context["session_id"], context["parent_session_id"]
+        session_id, parent_session_id = (
+            context["session_id"],
+            context["parent_session_id"],
+        )
         metadata = {"clawk.execution_surface": context["platform"] or "unknown"}
         cwd = context.get("cwd")
         if parent_session_id and parent_session_id != session_id:
-            event = {"parent_session_id": parent_session_id, "child_session_id": session_id}
+            event = {
+                "parent_session_id": parent_session_id,
+                "child_session_id": session_id,
+            }
             return host.register_subagent(event, metadata=metadata, cwd=cwd)
-        return host.ensure_session({"session_id": session_id}, metadata=metadata, cwd=cwd)
+        return host.ensure_session(
+            {"session_id": session_id}, metadata=metadata, cwd=cwd
+        )
 
     def begin_turn(
         self,
@@ -1061,7 +1291,8 @@ class RelaySessionCoordinator:
                 turn.relay_enabled = False
                 logger.warning(
                     "Skipping Relay instrumentation for concurrent Clawksis turn %s in session %s",
-                    turn_id, lease.session_id,
+                    turn_id,
+                    lease.session_id,
                 )
             else:
                 self._active_turns[key] = {id(turn)}
@@ -1069,7 +1300,9 @@ class RelaySessionCoordinator:
         host = lease.live_runtime() if turn.relay_enabled else None
         if host is not None:
             # Rotation happens HERE: no live turn scope on the stack, so the session scope can close/reopen LIFO.
-            _warn_on_error("segment rotation", self._maybe_rotate_segment, host, lease.session)
+            _warn_on_error(
+                "segment rotation", self._maybe_rotate_segment, host, lease.session
+            )
             turn_metadata = dict(metadata or {})
             turn_metadata.update(
                 runtime_metadata(
@@ -1078,8 +1311,13 @@ class RelaySessionCoordinator:
                 )
             )
             turn.handle = _warn_on_error(
-                "turn initialization", host.run_in_session, lease.session, host.relay.scope.push,
-                TURN_SCOPE, host.relay.ScopeType.Function, handle=lease.session.handle,
+                "turn initialization",
+                host.run_in_session,
+                lease.session,
+                host.relay.scope.push,
+                TURN_SCOPE,
+                host.relay.ScopeType.Function,
+                handle=lease.session.handle,
                 input=_scope_input(lease.turn_cwd),
                 metadata=turn_metadata,
                 timeout=SCOPE_OP_TIMEOUT,
@@ -1095,7 +1333,9 @@ class RelaySessionCoordinator:
         cap = config["max_turns"]
         compaction = config["on_compaction"] and session.rotate_pending
         if compaction or (cap > 0 and session.segment_turns >= cap):
-            host.rotate_session_scope(session, reason="compaction" if compaction else "max_turns")
+            host.rotate_session_scope(
+                session, reason="compaction" if compaction else "max_turns"
+            )
 
     def end_turn(self, turn: RelayTurnContext, *, outcome: str) -> None:
         with turn.finalize_lock:
@@ -1110,14 +1350,18 @@ class RelaySessionCoordinator:
                     self._close_turn_scope(host, turn, outcome=outcome)
             finally:
                 if turn._active_registered and host is not None:
-                    with contextlib.suppress(Exception), lease.session.lock:  # accounting never blocks
+                    with (
+                        contextlib.suppress(Exception),
+                        lease.session.lock,
+                    ):  # accounting never blocks
                         lease.session.segment_turns += 1  # max_turns rotation trigger
                 try:
                     # Delegated agents own one turn: close their conversation while the active-turn
                     # guard is held so a parent timeout fallback cannot race it.
                     if lease.parent_session_id and isinstance(lease.host, RelayRuntime):
                         _warn_on_error(
-                            "child conversation finalization", lease.host.unregister_subagent,
+                            "child conversation finalization",
+                            lease.host.unregister_subagent,
                             {"child_session_id": lease.session_id},
                         )
                 finally:
@@ -1125,11 +1369,16 @@ class RelaySessionCoordinator:
                     self._reset_turn_context(turn)
                 self._consume_deferred_close(lease)
 
-    def _close_turn_scope(self, host: RelayRuntime, turn: RelayTurnContext, *, outcome: str) -> None:
+    def _close_turn_scope(
+        self, host: RelayRuntime, turn: RelayTurnContext, *, outcome: str
+    ) -> None:
         """Pop the turn's logical LLM children, then the turn scope itself (LIFO)."""
         self._finish_logical_calls(turn, outcome=outcome)
         failure = host._close_scope_handle(
-            turn.lease.session, turn.handle, output={"outcome": outcome}, failure_label="turn scope close failed",
+            turn.lease.session,
+            turn.handle,
+            output={"outcome": outcome},
+            failure_label="turn scope close failed",
         )
         if failure:
             logger.warning("Clawksis Relay turn finalization failed: %s", failure)
@@ -1143,11 +1392,15 @@ class RelaySessionCoordinator:
             return
         with lease.session.lock:
             pending = lease.session.close_pending and not lease.session.closing
-        if pending and not self.has_active_turn(profile_key=lease.profile_key, session_id=lease.session_id):
+        if pending and not self.has_active_turn(
+            profile_key=lease.profile_key, session_id=lease.session_id
+        ):
             host.close_session({"session_id": lease.session_id})
 
     @_fail_open("compaction notification")
-    def notify_session_compacted(self, *, profile_key: str, session_id: str, old_session_id: str = "") -> None:
+    def notify_session_compacted(
+        self, *, profile_key: str, session_id: str, old_session_id: str = ""
+    ) -> None:
         """React to a completed compaction, per compaction mode; unknown sessions / disabled config are no-ops.
         In-place (``old_session_id`` empty/equal): flag rotation for the next turn boundary — never rotate
         immediately, a live turn under it breaks LIFO. Rotating (ids differ): the next turn gets a fresh
@@ -1160,7 +1413,9 @@ class RelaySessionCoordinator:
         if old_session_id and old_session_id != session_id:
             # A LIVE turn on the old session: closing now would pop under it (LIFO).
             old_session = host._lookup(old_session_id)
-            if old_session is not None and self.has_active_turn(profile_key=profile_key, session_id=old_session_id):
+            if old_session is not None and self.has_active_turn(
+                profile_key=profile_key, session_id=old_session_id
+            ):
                 _flag_open_session(old_session, "close_pending")
             else:
                 host.close_session({"session_id": old_session_id})
@@ -1204,7 +1459,9 @@ class RelaySessionCoordinator:
         while logical_calls:
             _request_id, logical_handle = logical_calls[-1]
             failure = host._close_scope_handle(
-                lease.session, logical_handle, output={"outcome": outcome},
+                lease.session,
+                logical_handle,
+                output={"outcome": outcome},
                 failure_label="logical LLM scope close failed",
             )
             if failure is None:
@@ -1213,8 +1470,12 @@ class RelaySessionCoordinator:
             with turn.logical_llm_lock:
                 # Stack-owned: if the newest handle cannot close even after drain, older ones cannot either.
                 for pending_request_id, pending_handle in logical_calls:
-                    turn.logical_llm_calls.setdefault(pending_request_id, pending_handle)
-            logger.warning("Clawksis Relay logical LLM finalization failed: %s", failure)
+                    turn.logical_llm_calls.setdefault(
+                        pending_request_id, pending_handle
+                    )
+            logger.warning(
+                "Clawksis Relay logical LLM finalization failed: %s", failure
+            )
             break
 
     @staticmethod
@@ -1261,16 +1522,21 @@ def active_turn(session_id: str | None = None) -> RelayTurnContext | None:
     if turn is None or not turn.relay_enabled or turn.closed or turn.lease.released:
         return None
     lease = turn.lease
-    if lease.profile_key != current_profile_key() or (session_id is not None and lease.session_id != session_id):
+    if lease.profile_key != current_profile_key() or (
+        session_id is not None and lease.session_id != session_id
+    ):
         return None
     if isinstance(lease.host, RelayRuntime) and (
-        lease.session is None or lease.host.get_session(lease.session_id) is not lease.session
+        lease.session is None
+        or lease.host.get_session(lease.session_id) is not lease.session
     ):
         return None
     return turn
 
 
-def resolve_execution_context(session_id: str) -> tuple[RelayRuntime | None, RelaySession | None, Any]:
+def resolve_execution_context(
+    session_id: str,
+) -> tuple[RelayRuntime | None, RelaySession | None, Any]:
     """Resolve one active turn/session parent for managed Relay execution."""
     # Nested managed execution is impossible (see _MANAGED_CALLBACK_DEPTH); the outer scope
     # still records the tool-level event.
@@ -1293,30 +1559,47 @@ def resolve_execution_context(session_id: str) -> tuple[RelayRuntime | None, Rel
     runtime = get_runtime(create=False)
     if runtime is None or not runtime.managed_execution_enabled():
         return None, None, None
-    session = runtime.get_session(session_id) or runtime.ensure_session({"session_id": session_id})
+    session = runtime.get_session(session_id) or runtime.ensure_session(
+        {"session_id": session_id}
+    )
     return runtime, session, None if session is None else session.handle
 
 
-def apply_tool_request_intercepts(*, session_id: str, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+def apply_tool_request_intercepts(
+    *, session_id: str, tool_name: str, args: dict[str, Any]
+) -> dict[str, Any]:
     """Return Relay-rewritten arguments at Clawksis's authorization boundary."""
     runtime = get_runtime(create=False) if session_id else None
     if runtime is None:
         return args
-    return runtime.apply_tool_request_intercepts(session_id=session_id, tool_name=tool_name, args=args)
+    return runtime.apply_tool_request_intercepts(
+        session_id=session_id, tool_name=tool_name, args=args
+    )
 
 
-def _is_relay_wrapped_callback_error(relay_error: BaseException, callback_error: BaseException) -> bool:
+def _is_relay_wrapped_callback_error(
+    relay_error: BaseException, callback_error: BaseException
+) -> bool:
     """Match Relay's native callback wrapper without masking policy errors."""
     if relay_error is callback_error:
         return True
     if not isinstance(relay_error, RuntimeError):
         return False
     kind = type(callback_error)
-    type_names = {kind.__name__, kind.__qualname__, f"{kind.__module__}.{kind.__qualname__}"}
-    return any(str(relay_error).startswith(f"internal error: {name}: {callback_error}") for name in type_names)
+    type_names = {
+        kind.__name__,
+        kind.__qualname__,
+        f"{kind.__module__}.{kind.__qualname__}",
+    }
+    return any(
+        str(relay_error).startswith(f"internal error: {name}: {callback_error}")
+        for name in type_names
+    )
 
 
-def get_runtime(*, create: bool = True, profile_key: str | None = None) -> RelayRuntime | None:
+def get_runtime(
+    *, create: bool = True, profile_key: str | None = None
+) -> RelayRuntime | None:
     """Return the Relay host for the active Clawksis profile."""
     host = HOST_REGISTRY.for_profile(profile_key, create=create)
     return host if isinstance(host, RelayRuntime) else None
@@ -1327,7 +1610,9 @@ def current_profile_key() -> str:
     home = get_clawk_home().expanduser()
     if not home.is_absolute():
         return str(home.resolve())
-    return _PROFILE_KEY_CACHE.get(str(home)) or _PROFILE_KEY_CACHE.setdefault(str(home), str(home.resolve()))
+    return _PROFILE_KEY_CACHE.get(str(home)) or _PROFILE_KEY_CACHE.setdefault(
+        str(home), str(home.resolve())
+    )
 
 
 def _load_nemo_relay() -> Any:
@@ -1338,7 +1623,9 @@ def _load_nemo_relay() -> Any:
 def _configured_plugin_inputs() -> Path | None:
     """Return the parseable explicit override, or ``None`` to use Relay discovery."""
     config_path = _explicit_plugins_toml()
-    if config_path is None and (legacy_vars := configured_legacy_relay_env_vars(os.environ)):
+    if config_path is None and (
+        legacy_vars := configured_legacy_relay_env_vars(os.environ)
+    ):
         logger.warning(
             "Legacy NeMo Relay exporter variables are set but no %s was provided. %s no longer configure "
             "Relay exporters; any standard user or system plugins.toml still applies. Run `clawk migrate "
@@ -1360,7 +1647,9 @@ def _explicit_plugins_toml() -> Path | None:
         with config_path.open("rb") as config_file:
             config = tomllib.load(config_file)
         if "dynamic_plugins" in config:
-            raise ValueError("Clawksis [[dynamic_plugins]] records are unsupported; use Relay [[plugins.dynamic]] records")
+            raise ValueError(
+                "Clawksis [[dynamic_plugins]] records are unsupported; use Relay [[plugins.dynamic]] records"
+            )
         return config_path
     except Exception as exc:
         raise _RelayPluginConfigurationLoadError(
@@ -1386,15 +1675,23 @@ def resolve_plugin_sources(relay: Any = None) -> RelayPluginSources:
     """
     relay = relay or _load_nemo_relay()
     report = relay.plugin.validate({}, additional_plugins_toml=_explicit_plugins_toml())
-    diagnostics = [d for d in (report.get("config") or {}).get("diagnostics") or [] if isinstance(d, dict)]
+    diagnostics = [
+        d
+        for d in (report.get("config") or {}).get("diagnostics") or []
+        if isinstance(d, dict)
+    ]
     return RelayPluginSources(
         config_paths=tuple(str(path) for path in report.get("config_paths") or []),
         enabled=_report_requires_managed_execution(report),
-        errors=tuple(str(d.get("message")) for d in diagnostics if d.get("level") == "error"),
+        errors=tuple(
+            str(d.get("message")) for d in diagnostics if d.get("level") == "error"
+        ),
         # Relay adds one "configuration_inherited" note per discovered file; config_paths already names them.
         warnings=tuple(
-            str(d.get("message")) for d in diagnostics
-            if d.get("level") == "warning" and d.get("code") != "plugin.configuration_inherited"
+            str(d.get("message"))
+            for d in diagnostics
+            if d.get("level") == "warning"
+            and d.get("code") != "plugin.configuration_inherited"
         ),
     )
 
@@ -1424,7 +1721,9 @@ def _resolve_plugin_awaitable(value: Any) -> Any:
         asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(value)
-    return _run_on_daemon_thread(lambda: asyncio.run(value), name="clawk-nemo-relay-plugin-lifecycle")
+    return _run_on_daemon_thread(
+        lambda: asyncio.run(value), name="clawk-nemo-relay-plugin-lifecycle"
+    )
 
 
 def _session_id(event: dict[str, Any]) -> str:

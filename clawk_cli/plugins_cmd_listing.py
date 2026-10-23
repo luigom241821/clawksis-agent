@@ -14,27 +14,39 @@ from typing import Any
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
-def _filter_plugin_entries(entries: list, args: Any, enabled: set, disabled: set) -> list:
+def _filter_plugin_entries(
+    entries: list, args: Any, enabled: set, disabled: set
+) -> list:
     """Apply ``clawk plugins list`` CLI filters."""
     filtered = entries
     if getattr(args, "no_bundled", False) or getattr(args, "user", False):
         filtered = [entry for entry in filtered if entry[3] != "bundled"]
     if getattr(args, "enabled", False):
         active = _pc()._category_active_names()
-        filtered = [entry for entry in filtered if _entry_status(entry, enabled, disabled, active) == "enabled"]
+        filtered = [
+            entry
+            for entry in filtered
+            if _entry_status(entry, enabled, disabled, active) == "enabled"
+        ]
     return filtered
 
 
 def _entry_status(entry: tuple, enabled: set, disabled: set, active: set) -> str:
     """``_plugin_status`` for one ``_discover_all_plugins`` row."""
     name, _version, _description, source, dir_path, key = entry
-    return _pc()._plugin_status(name, enabled, disabled, key, source=source, dir_path=dir_path, active=active)
+    return _pc()._plugin_status(
+        name, enabled, disabled, key, source=source, dir_path=dir_path, active=active
+    )
 
 
-_STATUS_MARKUP = {"disabled": "[red]disabled[/red]", "enabled": "[green]enabled[/green]"}
+_STATUS_MARKUP = {
+    "disabled": "[red]disabled[/red]",
+    "enabled": "[green]enabled[/green]",
+}
 
 
 def cmd_list(args: Any | None = None) -> None:
@@ -50,6 +62,7 @@ def cmd_list(args: Any | None = None) -> None:
     disabled = _pc()._get_disabled_set()
     entries = _filter_plugin_entries(entries, args, enabled, disabled)
     from clawk_cli import plugins_cmd_catalog as catalog
+
     # Source shows catalog provenance (``catalog:<tier>@<sha8>``) or a ``--ref`` pin
     # (``git pinned@<sha8>``) so a team can eyeball that everyone runs the same commit.
     pins = _pc()._read_install_metadata()
@@ -58,10 +71,24 @@ def cmd_list(args: Any | None = None) -> None:
     removed_entries = catalog.resolved_removed_entries()
     active = _pc()._category_active_names()
     rows = [
-        (name, _pc()._plugin_status(name, enabled, disabled, key=key, source=source, dir_path=_dir, active=active),
-         str(version), description,
-         catalog.catalog_annotation(_dir) or _pc()._pin_annotation(name, pins) or source,
-         catalog.removed_annotation(name, _dir, removed_entries))
+        (
+            name,
+            _pc()._plugin_status(
+                name,
+                enabled,
+                disabled,
+                key=key,
+                source=source,
+                dir_path=_dir,
+                active=active,
+            ),
+            str(version),
+            description,
+            catalog.catalog_annotation(_dir)
+            or _pc()._pin_annotation(name, pins)
+            or source,
+            catalog.removed_annotation(name, _dir, removed_entries),
+        )
         for name, version, description, source, _dir, key in entries
     ]
 
@@ -80,8 +107,16 @@ def cmd_list(args: Any | None = None) -> None:
         return
 
     table = _pc()._table(
-        (("Name", "bold"), ("Status", None), ("Version", "dim"), ("Description", None), ("Source", "dim")),
-        title="Plugins", show_lines=False)
+        (
+            ("Name", "bold"),
+            ("Status", None),
+            ("Version", "dim"),
+            ("Description", None),
+            ("Source", "dim"),
+        ),
+        title="Plugins",
+        show_lines=False,
+    )
     # provenance class per user-installed dir (bundled entries show '-')
     from clawk_cli.plugins_provenance import plugins_provenance
 
@@ -95,14 +130,14 @@ def cmd_list(args: Any | None = None) -> None:
         status = _STATUS_MARKUP.get(status_name, "[yellow]not enabled[/yellow]")
         if removed:
             name = f"[red]{name} ✗[/red]"
-            removed_lines.append(f"[red]✗ {name}[/red] was removed from the plugin catalog: {removed}")
+            removed_lines.append(
+                f"[red]✗ {name}[/red] was removed from the plugin catalog: {removed}"
+            )
         table.add_row(name, status, version, description, source)
         # class line rides the Source column for user plugins
         if source in {"user", "git"}:
             if klass and klass != "git":
-                table.add_row(
-                    "", "", "", f"[dim]provenance: {klass}[/dim]", ""
-                )
+                table.add_row("", "", "", f"[dim]provenance: {klass}[/dim]", "")
     console.print()
     console.print(table)
     for line in removed_lines:
@@ -111,7 +146,9 @@ def cmd_list(args: Any | None = None) -> None:
     console.print("[dim]Compact view:[/dim] clawk plugins list --plain --no-bundled")
     console.print("[dim]Interactive toggle:[/dim] clawk plugins")
     console.print("[dim]Enable/disable:[/dim] clawk plugins enable/disable <name>")
-    console.print("[dim]Plugins are opt-in by default — only 'enabled' plugins load.[/dim]")
+    console.print(
+        "[dim]Plugins are opt-in by default — only 'enabled' plugins load.[/dim]"
+    )
 
 
 def cmd_show(name: str) -> None:
@@ -126,9 +163,13 @@ def cmd_show(name: str) -> None:
     manifest = _pc()._read_manifest(Path(dir_path)) if dir_path else {}
     emits = manifest.get("emits") or []
     listens = manifest.get("listens") or []
-    status = _pc()._plugin_status(pname, _pc()._get_enabled_set(), _pc()._get_disabled_set(), key=key)
+    status = _pc()._plugin_status(
+        pname, _pc()._get_enabled_set(), _pc()._get_disabled_set(), key=key
+    )
     console.print()
-    console.print(f"[bold]{pname}[/bold]" + (f" [dim]v{version}[/dim]" if version else ""))
+    console.print(
+        f"[bold]{pname}[/bold]" + (f" [dim]v{version}[/dim]" if version else "")
+    )
     if description:
         console.print(description)
     console.print(f"[dim]Status:[/dim] {status}")
@@ -137,14 +178,25 @@ def cmd_show(name: str) -> None:
     if dir_path and source != "bundled":
         from clawk_cli.plugin_isolation import ISOLATION_HOST, isolation_mode
         from clawk_cli.plugin_isolation_audit import audit_plugin_dir
+
         audit = audit_plugin_dir(Path(dir_path), manifest)
-        runs_in = ("plugin host" if isolation_mode() == ISOLATION_HOST and audit.host_ready
-                   else "refused (plugins.isolation: host)" if isolation_mode() == ISOLATION_HOST
-                   else "Clawksis process")
+        runs_in = (
+            "plugin host"
+            if isolation_mode() == ISOLATION_HOST and audit.host_ready
+            else "refused (plugins.isolation: host)"
+            if isolation_mode() == ISOLATION_HOST
+            else "Clawksis process"
+        )
         console.print(f"[dim]Runs in:[/dim] {runs_in} [dim]— {audit.summary()}[/dim]")
     from clawk_cli.plugin_provider_requests import requires_auth_notice
+
     if notice := requires_auth_notice(manifest):
         console.print(f"[dim]Sign-in:[/dim] {notice}")
-    console.print("[dim]Emits:[/dim] " + (", ".join(emits) if emits else "[dim](none)[/dim]"))
-    console.print("[dim]Listens:[/dim] " + (", ".join(listens) if listens else "[dim](none)[/dim]"))
+    console.print(
+        "[dim]Emits:[/dim] " + (", ".join(emits) if emits else "[dim](none)[/dim]")
+    )
+    console.print(
+        "[dim]Listens:[/dim] "
+        + (", ".join(listens) if listens else "[dim](none)[/dim]")
+    )
     console.print()

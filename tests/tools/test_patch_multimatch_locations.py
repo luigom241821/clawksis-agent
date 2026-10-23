@@ -2,8 +2,8 @@
 
 from tools.fuzzy_match import fuzzy_find_and_replace, _format_match_locations
 
-class TestFormatMatchLocations:
 
+class TestFormatMatchLocations:
     def test_caps_at_five_with_overflow_note(self):
         line = "x = do_thing()\n"
         content = line * 9
@@ -21,6 +21,7 @@ class TestFormatMatchLocations:
         out = _format_match_locations(content, [(0, 5)])
         assert "..." in out
         assert len(out.splitlines()[0]) < 100
+
 
 class TestMultiMatchErrorIncludesLocations:
     def test_ambiguous_replace_lists_locations(self):

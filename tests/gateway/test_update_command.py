@@ -17,8 +17,13 @@ from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(text="/update", platform=Platform.TELEGRAM,
-                user_id="12345", chat_id="67890", thread_id=None):
+def _make_event(
+    text="/update",
+    platform=Platform.TELEGRAM,
+    user_id="12345",
+    chat_id="67890",
+    thread_id=None,
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -33,6 +38,7 @@ def _make_event(text="/update", platform=Platform.TELEGRAM,
 def _make_runner():
     """Create a bare GatewayRunner without calling __init__."""
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -56,8 +62,10 @@ class TestHandleUpdateCommand:
         # Point _clawk_home to tmp_path and project_root to a dir without .git
         fake_root = tmp_path / "project"
         fake_root.mkdir()
-        with patch("gateway.run._clawk_home", tmp_path), \
-             patch("gateway.run.Path") as MockPath:
+        with (
+            patch("gateway.run._clawk_home", tmp_path),
+            patch("gateway.run.Path") as MockPath,
+        ):
             # Path(__file__).parent.parent.resolve() -> fake_root
             MockPath.return_value = MagicMock()
             MockPath.__truediv__ = Path.__truediv__
@@ -89,7 +97,6 @@ class TestHandleUpdateCommand:
 
         assert "Not a git repository" in result
 
-
     @pytest.mark.asyncio
     async def test_resolve_clawk_bin_module_argv(self):
         """_resolve_clawk_bin uses the running interpreter's module argv when clawk_cli is
@@ -99,8 +106,10 @@ class TestHandleUpdateCommand:
         from gateway.run import _resolve_clawk_bin
 
         fake_spec = MagicMock()
-        with patch("shutil.which", return_value="/tmp/attacker/clawk"), \
-             patch("importlib.util.find_spec", return_value=fake_spec):
+        with (
+            patch("shutil.which", return_value="/tmp/attacker/clawk"),
+            patch("importlib.util.find_spec", return_value=fake_spec),
+        ):
             result = _resolve_clawk_bin()
 
         assert result == [sys.executable, "-m", "clawk_cli.main"]
@@ -111,14 +120,17 @@ class TestHandleUpdateCommand:
         bare ``clawk`` string that a hostile PATH entry could shadow."""
         from gateway.run import _resolve_clawk_bin
 
-        with patch("shutil.which", return_value="/usr/local/bin/clawk"), \
-             patch("importlib.util.find_spec", return_value=None):
+        with (
+            patch("shutil.which", return_value="/usr/local/bin/clawk"),
+            patch("importlib.util.find_spec", return_value=None),
+        ):
             assert _resolve_clawk_bin() == ["/usr/local/bin/clawk"]
 
-        with patch("shutil.which", return_value=None), \
-             patch("importlib.util.find_spec", side_effect=ImportError):
+        with (
+            patch("shutil.which", return_value=None),
+            patch("importlib.util.find_spec", side_effect=ImportError),
+        ):
             assert _resolve_clawk_bin() is None
-
 
     @pytest.mark.asyncio
     async def test_writes_pending_marker(self, tmp_path):
@@ -136,11 +148,18 @@ class TestHandleUpdateCommand:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("clawk_cli.config.detect_install_method", return_value="git"), \
-             patch("shutil.which", side_effect=lambda x: "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"), \
-             patch("subprocess.Popen"):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("clawk_cli.config.detect_install_method", return_value="git"),
+            patch(
+                "shutil.which",
+                side_effect=lambda x: (
+                    "/usr/bin/clawk" if x == "clawk" else "/usr/bin/setsid"
+                ),
+            ),
+            patch("subprocess.Popen"),
+        ):
             await runner._handle_update_command(event)
 
         pending_path = clawk_home / ".update_pending.json"
@@ -152,7 +171,6 @@ class TestHandleUpdateCommand:
         assert data["message_id"] == "m-update"
         assert "timestamp" in data
         assert not (clawk_home / ".update_exit_code").exists()
-
 
     @pytest.mark.asyncio
     @pytest.mark.platforms("linux")
@@ -179,11 +197,13 @@ class TestHandleUpdateCommand:
                 return None
             return None
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("gateway.run.__file__", fake_file), \
-             patch("clawk_cli.config.detect_install_method", return_value="git"), \
-             patch("shutil.which", side_effect=which_no_setsid), \
-             patch("subprocess.Popen", mock_popen):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("gateway.run.__file__", fake_file),
+            patch("clawk_cli.config.detect_install_method", return_value="git"),
+            patch("shutil.which", side_effect=which_no_setsid),
+            patch("subprocess.Popen", mock_popen),
+        ):
             await runner._handle_update_command(event)
 
         # Verify plain bash -c fallback (no nohup, no setsid)
@@ -210,7 +230,6 @@ class TestUpdateCommandPlatformGate:
     interfaces (ACP, API server, webhooks) must be blocked.
     """
 
-
     @pytest.mark.asyncio
     async def test_allows_plugin_platform_via_registry_fallback(self, monkeypatch):
         """A plugin-migrated platform (DISCORD) is no longer in
@@ -224,8 +243,10 @@ class TestUpdateCommandPlatformGate:
 
         # Make sure the plugin registry is populated so the fallback fires.
         from clawk_cli.plugins import PluginManager
+
         PluginManager().discover_and_load(force=True)
         from gateway.platform_registry import platform_registry
+
         discord_entry = platform_registry.get("discord")
         assert discord_entry is not None
         assert discord_entry.allow_update_command is True
@@ -244,8 +265,6 @@ class TestUpdateCommandPlatformGate:
         assert "only available from messaging platforms" not in result
 
 
-
-
 # ---------------------------------------------------------------------------
 # _send_update_notification
 # ---------------------------------------------------------------------------
@@ -253,7 +272,6 @@ class TestUpdateCommandPlatformGate:
 
 class TestSendUpdateNotification:
     """Tests for GatewayRunner._send_update_notification."""
-
 
     @pytest.mark.asyncio
     async def test_defers_notification_while_update_still_running(self, tmp_path):
@@ -263,9 +281,15 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         pending_path = clawk_home / ".update_pending.json"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "67890", "user_id": "12345",
-        }))
+        pending_path.write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "67890",
+                    "user_id": "12345",
+                }
+            )
+        )
         (clawk_home / ".update_output.txt").write_text("still running")
 
         mock_adapter = AsyncMock()
@@ -286,9 +310,15 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         claimed_path = clawk_home / ".update_pending.claimed.json"
-        claimed_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "67890", "user_id": "12345",
-        }))
+        claimed_path.write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "67890",
+                    "user_id": "12345",
+                }
+            )
+        )
         (clawk_home / ".update_output.txt").write_text("done")
         (clawk_home / ".update_exit_code").write_text("0")
 
@@ -333,11 +363,15 @@ class TestSendUpdateNotification:
         mock_adapter.send.assert_called_once()
         call_args = mock_adapter.send.call_args
         assert call_args[0][0] == "67890"  # chat_id
-        assert "Update complete" in call_args[0][1] or "update finished" in call_args[0][1].lower()
-
+        assert (
+            "Update complete" in call_args[0][1]
+            or "update finished" in call_args[0][1].lower()
+        )
 
     @pytest.mark.asyncio
-    async def test_drops_stale_marker_when_the_platform_never_connects(self, tmp_path, caplog):
+    async def test_drops_stale_marker_when_the_platform_never_connects(
+        self, tmp_path, caplog
+    ):
         """A marker past the wait cap is abandoned instead of deferred forever.
 
         Regression: an update notice addressed to a platform that has no adapter —
@@ -351,12 +385,16 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         pending_path = clawk_home / ".update_pending.json"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram",
-            "chat_id": "67890",
-            "user_id": "12345",
-            "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
-        }))
+        pending_path.write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "67890",
+                    "user_id": "12345",
+                    "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(),
+                }
+            )
+        )
         (clawk_home / ".update_exit_code").write_text("0")
         # runner.adapters stays empty: no adapter for the target platform, ever.
 
@@ -383,12 +421,16 @@ class TestSendUpdateNotification:
         clawk_home.mkdir()
 
         pending_path = clawk_home / ".update_pending.json"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram",
-            "chat_id": "67890",
-            "user_id": "12345",
-            "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
-        }))
+        pending_path.write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "67890",
+                    "user_id": "12345",
+                    "timestamp": (datetime.now() - timedelta(minutes=5)).isoformat(),
+                }
+            )
+        )
         (clawk_home / ".update_exit_code").write_text("0")
 
         with patch("gateway.run._clawk_home", clawk_home):
@@ -396,7 +438,6 @@ class TestSendUpdateNotification:
 
         assert result is False
         assert pending_path.exists(), "marker kept so a later poll can still deliver it"
-
 
     @pytest.mark.asyncio
     async def test_cleans_up_on_error(self, tmp_path):
@@ -408,9 +449,15 @@ class TestSendUpdateNotification:
         pending_path = clawk_home / ".update_pending.json"
         output_path = clawk_home / ".update_output.txt"
         exit_code_path = clawk_home / ".update_exit_code"
-        pending_path.write_text(json.dumps({
-            "platform": "telegram", "chat_id": "111", "user_id": "222",
-        }))
+        pending_path.write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "111",
+                    "user_id": "222",
+                }
+            )
+        )
         output_path.write_text("✓ Done")
         exit_code_path.write_text("0")
 
@@ -426,7 +473,6 @@ class TestSendUpdateNotification:
         assert not pending_path.exists()
         assert not output_path.exists()
         assert not exit_code_path.exists()
-
 
     @pytest.mark.asyncio
     async def test_no_adapter_for_platform_preserves_markers(self, tmp_path):
@@ -512,7 +558,9 @@ class TestSendUpdateNotification:
         assert not (clawk_home / ".update_pending.claimed.json").exists()
 
     @pytest.mark.asyncio
-    async def test_completion_notification_tolerates_invalid_utf8_output(self, tmp_path):
+    async def test_completion_notification_tolerates_invalid_utf8_output(
+        self, tmp_path
+    ):
         """Completion-only update notifications must not crash on bad bytes."""
         runner = _make_runner()
         clawk_home = tmp_path / "clawk"
@@ -543,17 +591,21 @@ class TestSendUpdateNotification:
         assert not output_path.exists()
         assert not exit_code_path.exists()
 
-
     @pytest.mark.asyncio
-    async def test_failed_update_notice_says_still_running_and_trims_log(self, tmp_path):
+    async def test_failed_update_notice_says_still_running_and_trims_log(
+        self, tmp_path
+    ):
         """A failed update must tell the chat the old version still runs and where to see the
         full error; the raw log is quoted only as a short tail, never the whole 3500-char dump."""
         runner = _make_runner()
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
         (clawk_home / ".update_pending.json").write_text(
-            json.dumps({"platform": "discord", "chat_id": "111", "user_id": "222"}))
-        (clawk_home / ".update_output.txt").write_text("x" * 3000 + "\nERROR: pip failed\n")
+            json.dumps({"platform": "discord", "chat_id": "111", "user_id": "222"})
+        )
+        (clawk_home / ".update_output.txt").write_text(
+            "x" * 3000 + "\nERROR: pip failed\n"
+        )
         (clawk_home / ".update_exit_code").write_text("1")
         mock_adapter = AsyncMock()
         runner.adapters = {Platform.DISCORD: mock_adapter}
@@ -571,7 +623,6 @@ class TestSendUpdateNotification:
 # ---------------------------------------------------------------------------
 
 
-
 class TestWatchUpdateProgress:
     @pytest.mark.asyncio
     async def test_invalid_utf8_update_output_does_not_crash_watcher(self, tmp_path):
@@ -579,11 +630,15 @@ class TestWatchUpdateProgress:
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
 
-        (clawk_home / ".update_pending.json").write_text(json.dumps({
-            "platform": "telegram",
-            "chat_id": "67890",
-            "user_id": "12345",
-        }))
+        (clawk_home / ".update_pending.json").write_text(
+            json.dumps(
+                {
+                    "platform": "telegram",
+                    "chat_id": "67890",
+                    "user_id": "12345",
+                }
+            )
+        )
         (clawk_home / ".update_output.txt").write_bytes(
             b"ok before\n\xe2\x9c invalid-continuation: \x96\ncontinued after\n"
         )
@@ -593,13 +648,17 @@ class TestWatchUpdateProgress:
         runner.adapters = {Platform.TELEGRAM: mock_adapter}
 
         with patch("gateway.run._clawk_home", clawk_home):
-            await runner._watch_update_progress(poll_interval=0.01, stream_interval=0.01, timeout=1.0)
+            await runner._watch_update_progress(
+                poll_interval=0.01, stream_interval=0.01, timeout=1.0
+            )
 
         sent = "\n".join(call.args[1] for call in mock_adapter.send.call_args_list)
         assert "ok before" in sent
         assert "continued after" in sent
         assert "Clawksis update finished" in sent
         assert not (clawk_home / ".update_pending.json").exists()
+
+
 # ---------------------------------------------------------------------------
 # Install-method refusal gate
 # ---------------------------------------------------------------------------
@@ -618,12 +677,15 @@ class TestUpdateCommandInstallMethodRefusal:
         clawk_home.mkdir()
         mock_popen = MagicMock()
 
-        with patch("gateway.run._clawk_home", clawk_home), \
-             patch("clawk_cli.config.detect_install_method",
-                   return_value=method), \
-             patch("clawk_cli.config.recommended_update_command_for_method",
-                   return_value=f"steward-update --{method}"), \
-             patch("subprocess.Popen", mock_popen):
+        with (
+            patch("gateway.run._clawk_home", clawk_home),
+            patch("clawk_cli.config.detect_install_method", return_value=method),
+            patch(
+                "clawk_cli.config.recommended_update_command_for_method",
+                return_value=f"steward-update --{method}",
+            ),
+            patch("subprocess.Popen", mock_popen),
+        ):
             result = await runner._handle_update_command(event)
 
         assert f"does not apply to this install ({method})" in result
@@ -647,30 +709,62 @@ class TestDetachedUpdateExitCodePublication:
         import subprocess
         from gateway.slash_commands import _spawn_detached_update
 
-        output, marker, seen = tmp_path / "out.log", tmp_path / ".update_exit_code", tmp_path / "seen.log"
+        output, marker, seen = (
+            tmp_path / "out.log",
+            tmp_path / ".update_exit_code",
+            tmp_path / "seen.log",
+        )
         spawned = MagicMock()
-        with patch("shutil.which", return_value=None), patch("subprocess.Popen", spawned):
+        with (
+            patch("shutil.which", return_value=None),
+            patch("subprocess.Popen", spawned),
+        ):
             _spawn_detached_update(["sh", "-c", "exit 3"], output, marker)
         # Poll the marker at the instant the wrapper's printf runs: a `printf > marker` redirect has
         # already truncated it by then (bash applies redirections before running the command).
         hook = tmp_path / "bash_env.sh"
-        hook.write_text('printf() { [ -e "$MARKER" ] && echo "exists:$(cat "$MARKER")" >> "$SEEN"; '
-                        'builtin printf "$@"; }\n', encoding="utf-8")
-        env = {**os.environ, "BASH_ENV": str(hook), "MARKER": str(marker), "SEEN": str(seen)}
+        hook.write_text(
+            'printf() { [ -e "$MARKER" ] && echo "exists:$(cat "$MARKER")" >> "$SEEN"; '
+            'builtin printf "$@"; }\n',
+            encoding="utf-8",
+        )
+        env = {
+            **os.environ,
+            "BASH_ENV": str(hook),
+            "MARKER": str(marker),
+            "SEEN": str(seen),
+        }
         subprocess.run(spawned.call_args[0][0], env=env, check=True, timeout=60)
         assert not seen.exists() or "exists:\n" not in seen.read_text(encoding="utf-8")
         assert marker.read_text(encoding="utf-8") == "3"
 
-    def test_windows_helper_never_exposes_an_empty_exit_code(self, tmp_path, monkeypatch):
+    def test_windows_helper_never_exposes_an_empty_exit_code(
+        self, tmp_path, monkeypatch
+    ):
         import sys
         from gateway.slash_commands import _WINDOWS_UPDATE_HELPER
         from tests.file_write_observer import observe_file_writes
 
         output, marker = tmp_path / "out.log", tmp_path / ".update_exit_code"
         seen = []
-        monkeypatch.setattr(sys, "argv", ["-c", str(output), str(marker),
-                                          sys.executable, "-c", "raise SystemExit(4)"])
-        with observe_file_writes(lambda: seen.append(marker.read_text() if marker.exists() else None)):
-            exec(compile(_WINDOWS_UPDATE_HELPER, "<update-helper>", "exec"), {"__name__": "__main__"})
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "-c",
+                str(output),
+                str(marker),
+                sys.executable,
+                "-c",
+                "raise SystemExit(4)",
+            ],
+        )
+        with observe_file_writes(
+            lambda: seen.append(marker.read_text() if marker.exists() else None)
+        ):
+            exec(
+                compile(_WINDOWS_UPDATE_HELPER, "<update-helper>", "exec"),
+                {"__name__": "__main__"},
+            )
         assert "" not in seen
         assert marker.read_text(encoding="utf-8") == "4"

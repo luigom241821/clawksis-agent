@@ -11,6 +11,7 @@ import clawk_yaml as yaml
 
 from clawk_cli.cli_commands_mixin import CLICommandsMixin
 
+
 class _Stub(CLICommandsMixin):
     """Minimal carrier for the attributes `_handle_reasoning_command` reads."""
 
@@ -23,6 +24,7 @@ class _Stub(CLICommandsMixin):
     def _current_reasoning_callback(self):
         return None
 
+
 def _seed_config(tmp_path, monkeypatch):
     hh = tmp_path / ".clawk"
     hh.mkdir()
@@ -33,6 +35,7 @@ def _seed_config(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cli, "_clawk_home", hh, raising=False)
     return hh
+
 
 def test_reasoning_full_sets_and_persists(tmp_path, monkeypatch):
     hh = _seed_config(tmp_path, monkeypatch)

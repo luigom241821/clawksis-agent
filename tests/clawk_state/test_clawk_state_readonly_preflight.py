@@ -95,7 +95,6 @@ class TestRepairScope:
         assert os.access(db, os.W_OK)
         assert os.access(wal, os.W_OK)
 
-
     def test_repairs_readonly_parent_directory(self, clawk_home):
         sub = clawk_home / "kanban"
         sub.mkdir()
@@ -143,7 +142,9 @@ class TestRefusalOutsideScope:
 
 
 class TestSkips:
-    @pytest.mark.parametrize("next_opener_recreates", [False, True], ids=["vanished", "recreated"])
+    @pytest.mark.parametrize(
+        "next_opener_recreates", [False, True], ids=["vanished", "recreated"]
+    )
     def test_sidecars_unlinked_by_sibling_close_mid_preflight_are_not_readonly(
         self, clawk_home, tmp_path, monkeypatch, next_opener_recreates
     ):
@@ -197,7 +198,9 @@ class TestSessionDBIntegration:
         sub.mkdir(parents=True)
         os.chmod(sub, 0o555)
         try:
-            db = SessionDB(sub / "state.db")  # absent DB: the quarantine lock lives in this dir
+            db = SessionDB(
+                sub / "state.db"
+            )  # absent DB: the quarantine lock lives in this dir
             db.close()
             assert os.access(sub, os.W_OK)
         finally:
@@ -218,9 +221,7 @@ class TestSessionDBIntegration:
         finally:
             db.close()
 
-    def test_sessiondb_actionable_error_outside_home(
-        self, clawk_home, tmp_path
-    ):
+    def test_sessiondb_actionable_error_outside_home(self, clawk_home, tmp_path):
         outside = tmp_path / "custom-loc"
         outside.mkdir()
         db_path = outside / "state.db"

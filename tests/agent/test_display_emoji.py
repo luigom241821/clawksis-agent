@@ -8,16 +8,13 @@ from agent.display import get_tool_emoji
 class TestGetToolEmoji:
     """Verify the skin → registry → fallback resolution chain."""
 
-
-
-
-
     def test_custom_default(self):
         """Custom default is returned when nothing matches."""
         with mock_patch("agent.display._get_skin", return_value=None):
             mock_reg = MagicMock()
             mock_reg.get_emoji.return_value = ""
             import sys
+
             mock_module = MagicMock()
             mock_module.registry = mock_reg
             with mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
@@ -31,10 +28,13 @@ class TestGetToolEmoji:
         mock_reg = MagicMock()
         mock_reg.get_emoji.return_value = "🔍"
         import sys
+
         mock_module = MagicMock()
         mock_module.registry = mock_reg
-        with mock_patch("agent.display._get_skin", return_value=skin), \
-             mock_patch.dict(sys.modules, {"tools.registry": mock_module}):
+        with (
+            mock_patch("agent.display._get_skin", return_value=skin),
+            mock_patch.dict(sys.modules, {"tools.registry": mock_module}),
+        ):
             assert get_tool_emoji("terminal") == "⚔"  # skin override
             assert get_tool_emoji("web_search") == "🔍"  # registry fallback
 
@@ -42,14 +42,12 @@ class TestGetToolEmoji:
 class TestSkinConfigToolEmojis:
     """Verify SkinConfig handles tool_emojis field correctly."""
 
-
-
     def test_build_skin_config_includes_tool_emojis(self):
         from clawk_cli.skin_engine import _build_skin_config
+
         data = {
             "name": "custom",
             "tool_emojis": {"terminal": "🗡️", "patch": "⚒️"},
         }
         skin = _build_skin_config(data)
         assert skin.tool_emojis == {"terminal": "🗡️", "patch": "⚒️"}
-

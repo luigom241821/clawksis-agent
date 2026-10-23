@@ -59,8 +59,7 @@ def _events(conn, tid, kind=None):
         (tid,),
     ).fetchall()
     out = [
-        (r["kind"], json.loads(r["payload"]) if r["payload"] else None)
-        for r in rows
+        (r["kind"], json.loads(r["payload"]) if r["payload"] else None) for r in rows
     ]
     if kind is not None:
         out = [e for e in out if e[0] == kind]
@@ -88,7 +87,8 @@ def test_request_review_transitions_running_to_review(kanban_home: Path) -> None
         assert run_id is not None
 
         ok = kb.request_review(
-            conn, tid,
+            conn,
+            tid,
             summary="Implementation complete\nfull details below",
             reviewer="reviewer",
             expected_run_id=run_id,
@@ -147,7 +147,8 @@ def test_repeated_review_requests_never_triage(kanban_home: Path) -> None:
 
             run_id = kb.get_task(conn, tid).current_run_id
             ok = kb.request_review(
-                conn, tid,
+                conn,
+                tid,
                 summary="pass complete",
                 expected_run_id=run_id,
             )
@@ -219,9 +220,15 @@ def test_request_review_refuses_to_clear_live_claim_without_ownership(
         assert kb.request_review(conn, tid) is False
 
         # 2) Worker path: proving ownership via expected_run_id works.
-        assert kb.request_review(
-            conn, tid, summary="done", expected_run_id=claimed.current_run_id,
-        ) is True
+        assert (
+            kb.request_review(
+                conn,
+                tid,
+                summary="done",
+                expected_run_id=claimed.current_run_id,
+            )
+            is True
+        )
         assert kb.get_task(conn, tid).status == "review"
 
     # 3) force=True: explicit human override on a fresh live-claimed task.
@@ -241,13 +248,19 @@ def test_request_review_malformed_provenance_gets_distinct_reason(
         tid = kb.create_task(conn, title="provenance", assignee="builder")
         claimed = kb.claim_task(conn, tid)
         assert kb.request_review(
-            conn, tid, summary="v1", reviewer="reviewer",
+            conn,
+            tid,
+            summary="v1",
+            reviewer="reviewer",
             expected_run_id=claimed.current_run_id,
         )
         review = kb.claim_review_task(conn, tid)
         assert review is not None
         assert kb.request_changes(
-            conn, tid, reason="fix", expected_run_id=review.current_run_id,
+            conn,
+            tid,
+            reason="fix",
+            expected_run_id=review.current_run_id,
         ) == (True, "builder")
         # Corrupt the changes_requested payload so re-review cannot recover
         # the prior reviewer.
@@ -260,16 +273,25 @@ def test_request_review_malformed_provenance_gets_distinct_reason(
         retry = kb.claim_task(conn, tid, claimer="builder:retry")
         assert retry is not None
         ok, reason = kb.request_review(
-            conn, tid, summary="v2",
-            expected_run_id=retry.current_run_id, with_reason=True,
+            conn,
+            tid,
+            summary="v2",
+            expected_run_id=retry.current_run_id,
+            with_reason=True,
         )
         assert ok is False
         assert reason is not None and "provenance" in reason
         # Passing reviewer explicitly recovers, as the reason instructs.
-        assert kb.request_review(
-            conn, tid, summary="v2", reviewer="reviewer",
-            expected_run_id=retry.current_run_id,
-        ) is True
+        assert (
+            kb.request_review(
+                conn,
+                tid,
+                summary="v2",
+                reviewer="reviewer",
+                expected_run_id=retry.current_run_id,
+            )
+            is True
+        )
 
 
 @pytest.mark.parametrize("blank", ["   ", "\n", "\t\n  "])
@@ -315,7 +337,9 @@ def test_complete_task_closes_review_to_done(kanban_home: Path) -> None:
         tid = kb.create_task(conn, title="approve me", assignee="worker")
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="ready",
+            conn,
+            tid,
+            summary="ready",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
         assert kb.get_task(conn, tid).status == "review"
@@ -351,13 +375,19 @@ def test_review_requested_event_is_claimable_for_wake(kanban_home: Path) -> None
         )
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="please review",
+            conn,
+            tid,
+            summary="please review",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
 
         # Same terminal set the notifier now uses (incl. review_requested).
         terminal_kinds = (
-            "completed", "blocked", "gave_up", "crashed", "timed_out",
+            "completed",
+            "blocked",
+            "gave_up",
+            "crashed",
+            "timed_out",
             "review_requested",
         )
         _old, _new, events = kbn.claim_unseen_events_for_sub(
@@ -394,7 +424,9 @@ def test_review_dispatch_gate_prevents_phantom_reviewer(
         tid = kb.create_task(conn, title="park", assignee="worker")
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="done",
+            conn,
+            tid,
+            summary="done",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
         assert kb.get_task(conn, tid).status == "review"
@@ -405,7 +437,8 @@ def test_review_dispatch_gate_prevents_phantom_reviewer(
 
         # Gate OFF -> review task is left alone.
         monkeypatch.setattr(
-            cfgmod, "load_config",
+            cfgmod,
+            "load_config",
             lambda *a, **k: {"kanban": {"review_dispatch": False}},
         )
         res_off = kbd.dispatch_once(conn, dry_run=True)
@@ -415,7 +448,8 @@ def test_review_dispatch_gate_prevents_phantom_reviewer(
         # Gate ON (the default; sdlc-review is bundled) -> the review task is
         # picked up by the dispatcher.
         monkeypatch.setattr(
-            cfgmod, "load_config",
+            cfgmod,
+            "load_config",
             lambda *a, **k: {"kanban": {"review_dispatch": True}},
         )
         res_on = kbd.dispatch_once(conn, dry_run=True)
@@ -438,7 +472,8 @@ def test_active_pr_guard_skipped_for_review_lane_but_defers_ready_lane(
 
     monkeypatch.setattr(profmod, "profile_exists", lambda name: True)
     monkeypatch.setattr(
-        cfgmod, "load_config",
+        cfgmod,
+        "load_config",
         lambda *a, **k: {"kanban": {"review_dispatch": True}},
     )
     pr_comment = "Opened https://github.com/example/repo/pull/123 for review."
@@ -450,7 +485,9 @@ def test_active_pr_guard_skipped_for_review_lane_but_defers_ready_lane(
         assert claimed is not None
         kb.add_comment(conn, review_id, author="worker", body=pr_comment)
         assert kb.request_review(
-            conn, review_id, summary="PR ready",
+            conn,
+            review_id,
+            summary="PR ready",
             expected_run_id=claimed.current_run_id,
         )
         # Ready-lane task with the same fresh PR comment.
@@ -478,9 +515,10 @@ def test_active_pr_guard_skipped_for_review_lane_but_defers_ready_lane(
                 # "latest run" query deterministically picks this one.
                 (review_id, _now, _now + 5),
             )
-        assert kbd.check_respawn_guard(
-            conn, review_id, lane="review"
-        ) == "rate_limit_cooldown"
+        assert (
+            kbd.check_respawn_guard(conn, review_id, lane="review")
+            == "rate_limit_cooldown"
+        )
 
 
 def _backdate_comments(conn, tid, seconds=60):
@@ -509,7 +547,9 @@ def test_active_pr_guard_lifts_for_profile_handed_the_card_after_the_pr(
 
     monkeypatch.setattr(profmod, "profile_exists", lambda name: True)
     monkeypatch.setattr(
-        cfgmod, "load_config", lambda *a, **k: {"kanban": {"review_dispatch": True}},
+        cfgmod,
+        "load_config",
+        lambda *a, **k: {"kanban": {"review_dispatch": True}},
     )
     pr_comment = "Opened https://github.com/example/repo/pull/44 for review."
 
@@ -529,14 +569,17 @@ def test_active_pr_guard_lifts_for_profile_handed_the_card_after_the_pr(
         assert dict(res.respawn_guarded).get(dev_id) == "active_pr"
 
         kb.add_comment(
-            conn, closer_id, author="closer",
+            conn,
+            closer_id,
+            author="closer",
             body="Pushed to https://github.com/example/repo/pull/44",
         )
         assert kbd.check_respawn_guard(conn, closer_id) == "active_pr"
 
 
 def test_active_pr_guard_holds_through_same_profile_reassign_and_unassign(
-    kanban_home: Path, monkeypatch: pytest.MonkeyPatch,
+    kanban_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Only a handoff to a DIFFERENT profile lifts ``active_pr``.
 
@@ -586,12 +629,18 @@ def test_active_pr_guard_lifts_for_implementer_after_changes_requested(
         kb.add_comment(conn, tid, author="dev", body=pr_comment)
         _backdate_comments(conn, tid)
         assert kb.request_review(
-            conn, tid, summary="PR ready", reviewer="reviewer",
+            conn,
+            tid,
+            summary="PR ready",
+            reviewer="reviewer",
             expected_run_id=claimed.current_run_id,
         )
         rclaim = kb.claim_review_task(conn, tid)
         ok, implementer = kb.request_changes(
-            conn, tid, reason="fix tests", expected_run_id=rclaim.current_run_id,
+            conn,
+            tid,
+            reason="fix tests",
+            expected_run_id=rclaim.current_run_id,
         )
         assert (ok, implementer) == (True, "dev")
         assert kb.get_task(conn, tid).status == "ready"
@@ -606,7 +655,9 @@ def test_active_pr_guard_lifts_for_implementer_after_changes_requested(
 
 
 def test_dispatch_json_exposes_suppression_reasons(
-    kanban_home: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    kanban_home: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Operators can distinguish an active PR, quota cooldown, lock, and pressure."""
     monkeypatch.setattr(
@@ -620,17 +671,25 @@ def test_dispatch_json_exposes_suppression_reasons(
         ),
     )
 
-    assert kanban_ops._cmd_dispatch(
-        SimpleNamespace(dry_run=True, max=None, failure_limit=kbd.DEFAULT_FAILURE_LIMIT, json=True)
-    ) == 0
+    assert (
+        kanban_ops._cmd_dispatch(
+            SimpleNamespace(
+                dry_run=True,
+                max=None,
+                failure_limit=kbd.DEFAULT_FAILURE_LIMIT,
+                json=True,
+            )
+        )
+        == 0
+    )
 
     payload = json.loads(capsys.readouterr().out)
-    assert payload["respawn_guarded"] == [{"task_id": "active-pr-task", "reason": "active_pr"}]
+    assert payload["respawn_guarded"] == [
+        {"task_id": "active-pr-task", "reason": "active_pr"}
+    ]
     assert payload["rate_limited"] == ["quota-task"]
     assert payload["skipped_locked"] is True
     assert payload["memory_pressure"] == "elevated"
-
-
 
 
 def test_review_dispatch_preserves_task_skills_and_adds_reviewer_skill(
@@ -677,7 +736,9 @@ def test_review_dispatch_preserves_task_skills_and_adds_reviewer_skill(
         assert guarded_task is not None
         assert guarded_task.status == "review"
 
-        monkeypatch.setattr(kbd, "check_respawn_guard", lambda _conn, _task_id, **_kw: None)
+        monkeypatch.setattr(
+            kbd, "check_respawn_guard", lambda _conn, _task_id, **_kw: None
+        )
         result = kbd.dispatch_once(conn, spawn_fn=spawn)
 
     assert task_id in [task[0] for task in result.spawned]
@@ -721,9 +782,7 @@ def test_review_dispatch_honors_global_and_per_profile_caps(
             dry_run=True,
             max_in_progress=1,
         )
-        assert not [
-            task for task in globally_capped.spawned if task[0] in review_ids
-        ]
+        assert not [task for task in globally_capped.spawned if task[0] in review_ids]
 
         assert kb.complete_task(
             conn,
@@ -736,9 +795,9 @@ def test_review_dispatch_honors_global_and_per_profile_caps(
             dry_run=True,
             max_in_progress=1,
         )
-        assert len([
-            task for task in global_dry_run.spawned if task[0] in review_ids
-        ]) == 1
+        assert (
+            len([task for task in global_dry_run.spawned if task[0] in review_ids]) == 1
+        )
 
         per_profile_capped = kbd.dispatch_once(
             conn,
@@ -767,7 +826,10 @@ def test_reopen_review_task_returns_to_ready(kanban_home: Path) -> None:
         tid = kb.create_task(conn, title="reopen me", assignee="worker")
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="v1", reviewer="reviewer",
+            conn,
+            tid,
+            summary="v1",
+            reviewer="reviewer",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
         reviewing = kb.get_task(conn, tid)
@@ -800,7 +862,9 @@ def test_review_cycle_end_to_end(kanban_home: Path) -> None:
         # Pass 1: implement -> review.
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="v1",
+            conn,
+            tid,
+            summary="v1",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
         assert kb.get_task(conn, tid).status == "review"
@@ -810,7 +874,9 @@ def test_review_cycle_end_to_end(kanban_home: Path) -> None:
         assert kb.get_task(conn, tid).status == "ready"
         kb.claim_task(conn, tid)
         kb.request_review(
-            conn, tid, summary="v2",
+            conn,
+            tid,
+            summary="v2",
             expected_run_id=kb.get_task(conn, tid).current_run_id,
         )
         assert kb.get_task(conn, tid).status == "review"
@@ -858,7 +924,10 @@ def test_reviewer_reassigns_for_autonomous_dispatch(kanban_home: Path) -> None:
         claimed = kb.claim_task(conn, tid)
         assert claimed is not None
         ok = kb.request_review(
-            conn, tid, summary="v1", reviewer="lead-reviewer",
+            conn,
+            tid,
+            summary="v1",
+            reviewer="lead-reviewer",
             expected_run_id=claimed.current_run_id,
         )
         assert ok is True
@@ -868,14 +937,19 @@ def test_reviewer_reassigns_for_autonomous_dispatch(kanban_home: Path) -> None:
         assert ev["implementer"] == "worker"
 
 
-def test_review_handoff_without_live_run_attributes_run_to_implementer(kanban_home: Path) -> None:
+def test_review_handoff_without_live_run_attributes_run_to_implementer(
+    kanban_home: Path,
+) -> None:
     """#111064: ``request_review`` reassigns the card to the reviewer in the same
     UPDATE that flips the status, so the zero-duration run synthesized for a
     never-claimed card must be stamped with the implementer captured before
     the rewrite, not the reviewer read back off the mutated row."""
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="handoff attribution", assignee="worker")
-        assert kb.request_review(conn, tid, summary="ready", reviewer="lead-reviewer") is True
+        assert (
+            kb.request_review(conn, tid, summary="ready", reviewer="lead-reviewer")
+            is True
+        )
         assert kb.get_task(conn, tid).assignee == "lead-reviewer"
         run = conn.execute(
             "SELECT profile, outcome, step_key FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1",
@@ -883,7 +957,9 @@ def test_review_handoff_without_live_run_attributes_run_to_implementer(kanban_ho
         ).fetchone()
         assert (run["outcome"], run["profile"]) == ("review_requested", "worker")
         assert run["step_key"] == kb.get_task(conn, tid).current_step_key
-        assert _events(conn, tid, kind="review_requested")[0][1]["implementer"] == "worker"
+        assert (
+            _events(conn, tid, kind="review_requested")[0][1]["implementer"] == "worker"
+        )
 
 
 def test_review_handoff_of_card_assigned_to_its_reviewer_records_no_implementer(
@@ -897,16 +973,23 @@ def test_review_handoff_of_card_assigned_to_its_reviewer_records_no_implementer(
     *none*, and the rejection must refuse rather than misroute."""
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="already applied", assignee="reviewer-a")
-        assert kb.request_review(
-            conn, tid, summary="review this", reviewer="reviewer-a",
-        ) is True
+        assert (
+            kb.request_review(
+                conn,
+                tid,
+                summary="review this",
+                reviewer="reviewer-a",
+            )
+            is True
+        )
 
         ev = _events(conn, tid, kind="review_requested")[0][1]
         assert ev["reviewer"] == "reviewer-a"
         assert ev["implementer"] is None
         run = conn.execute(
             "SELECT profile, outcome FROM task_runs WHERE task_id = ? "
-            "ORDER BY id DESC LIMIT 1", (tid,),
+            "ORDER BY id DESC LIMIT 1",
+            (tid,),
         ).fetchone()
         assert (run["outcome"], run["profile"]) == ("review_requested", None)
 
@@ -917,7 +1000,9 @@ def test_review_handoff_of_card_assigned_to_its_reviewer_records_no_implementer(
         assert "implementer provenance" in (reason or "")
 
 
-def test_synthesized_run_for_unassigned_card_keeps_null_profile(kanban_home: Path) -> None:
+def test_synthesized_run_for_unassigned_card_keeps_null_profile(
+    kanban_home: Path,
+) -> None:
     """A transition that does not name an actor still reads the card: an
     unassigned card's synthesized run carries ``profile=NULL`` (the actor
     sentinel must not turn "unassigned" into a re-read of the row)."""
@@ -925,6 +1010,7 @@ def test_synthesized_run_for_unassigned_card_keeps_null_profile(kanban_home: Pat
         tid = kb.create_task(conn, title="unassigned handoff")
         assert kb.block_task(conn, tid, reason="waiting on upstream") is True
         run = conn.execute(
-            "SELECT profile, outcome FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1", (tid,),
+            "SELECT profile, outcome FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1",
+            (tid,),
         ).fetchone()
         assert (run["outcome"], run["profile"]) == ("blocked", None)

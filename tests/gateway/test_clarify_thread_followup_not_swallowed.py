@@ -113,8 +113,10 @@ async def _dispatch(runner, event):
     def _tripwire(_key):
         raise _FellThroughIntercept()
 
-    with patch("clawk_cli.plugins.invoke_hook", return_value=[]), \
-            patch.object(slash_confirm_mod, "get_pending", _tripwire):
+    with (
+        patch("clawk_cli.plugins.invoke_hook", return_value=[]),
+        patch.object(slash_confirm_mod, "get_pending", _tripwire),
+    ):
         return await runner._handle_message(event)
 
 
@@ -127,11 +129,15 @@ async def test_thread_prose_not_swallowed_by_native_multi_choice_clarify():
     adapter = _StubAdapter()
     runner = _make_runner(adapter)
     # Native interactive multi-choice prompt: awaiting_text stays False.
-    entry = cm.register("cl-native", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"])
+    entry = cm.register(
+        "cl-native", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"]
+    )
     assert entry.awaiting_text is False
 
     with pytest.raises(_FellThroughIntercept):
-        await _dispatch(runner, _event("just checking the visual UI, no need to pass any data"))
+        await _dispatch(
+            runner, _event("just checking the visual UI, no need to pass any data")
+        )
 
     # The prose is not accepted as the answer, but the clarify must be
     # released before normal busy routing so redirect-to-steer can drain.
@@ -151,10 +157,14 @@ async def test_thread_prose_retires_the_native_card_before_falling_through():
 
     adapter = _CardAdapter()
     runner = _make_runner(adapter)
-    cm.register("cl-slack-card", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"])
+    cm.register(
+        "cl-slack-card", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"]
+    )
 
     with pytest.raises(_FellThroughIntercept):
-        await _dispatch(runner, _event("just checking the visual UI, no need to pass any data"))
+        await _dispatch(
+            runner, _event("just checking the visual UI, no need to pass any data")
+        )
 
     assert [cid for cid, _ in adapter.retired] == ["cl-slack-card"]
     assert "cancelled" in adapter.retired[0][1].lower()
@@ -169,7 +179,9 @@ async def test_typed_selection_retires_the_native_card_with_the_answer():
 
     adapter = _CardAdapter()
     runner = _make_runner(adapter)
-    entry = cm.register("cl-typed-card", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"])
+    entry = cm.register(
+        "cl-typed-card", SESSION_KEY, "Pick a UI variant", ["buttons", "dropdown"]
+    )
 
     assert await _dispatch(runner, _event("2")) == ""
 

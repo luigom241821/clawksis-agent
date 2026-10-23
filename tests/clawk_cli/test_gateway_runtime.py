@@ -55,14 +55,20 @@ def test_live_discovery_does_not_treat_an_unusable_owner_as_absent(tmp_path):
                 ("runtime_protocol", True, "incompatible"),
                 ("served_profiles", [], "inaccessible"),
                 ("state", "draining", "draining"),
-                ("api_origin", "http://secret:credential@127.0.0.1:41817", "inaccessible"),
+                (
+                    "api_origin",
+                    "http://secret:credential@127.0.0.1:41817",
+                    "inaccessible",
+                ),
                 ("api_origin", "http://example.com:41817", "inaccessible"),
                 ("authority_epoch", True, "inaccessible"),
                 ("capabilities", [], "incompatible"),
             ]:
                 old = payload[key]
                 payload[key] = value
-                observed = await asyncio.to_thread(discover_gateway_endpoint, home, timeout=1)
+                observed = await asyncio.to_thread(
+                    discover_gateway_endpoint, home, timeout=1
+                )
                 assert observed.state == expected, (key, observed)
                 assert "credential" not in repr(observed)
                 payload[key] = old
@@ -81,25 +87,29 @@ def test_fifo_control_pointer_is_rejected_without_a_writer(tmp_path):
     import subprocess
     import sys
 
-    home = tmp_path / 'fifo-profile'
+    home = tmp_path / "fifo-profile"
     home.mkdir(mode=0o700)
-    os.mkfifo(home / 'gateway.sock.path', 0o600)
+    os.mkfifo(home / "gateway.sock.path", 0o600)
     code = (
-        'import sys; from pathlib import Path; '
-        'from clawk_cli.gateway_runtime import discover_gateway_endpoint; '
-        'r = discover_gateway_endpoint(Path(sys.argv[1]), timeout=0.1); '
-        'print(r.state, r.reason_code)'
+        "import sys; from pathlib import Path; "
+        "from clawk_cli.gateway_runtime import discover_gateway_endpoint; "
+        "r = discover_gateway_endpoint(Path(sys.argv[1]), timeout=0.1); "
+        "print(r.state, r.reason_code)"
     )
     try:
         result = subprocess.run(
-            [sys.executable, '-c', code, str(home)],
-            cwd=Path(__file__).resolve().parents[2], stdin=subprocess.DEVNULL,
-            capture_output=True, text=True, timeout=3, check=False
+            [sys.executable, "-c", code, str(home)],
+            cwd=Path(__file__).resolve().parents[2],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
         )
     except subprocess.TimeoutExpired:
-        pytest.fail('discovery blocked on a FIFO instead of rejecting its file type')
+        pytest.fail("discovery blocked on a FIFO instead of rejecting its file type")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == 'inaccessible unsafe_control_pointer'
+    assert result.stdout.strip() == "inaccessible unsafe_control_pointer"
 
 
 def test_start_decisions_do_not_turn_uncertainty_into_another_owner():

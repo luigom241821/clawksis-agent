@@ -29,7 +29,9 @@ def _make_draft_adapter():
     """BasePlatformAdapter subclass with stream-is-the-message drafts."""
     from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-    A = type("StreamIsMsgAdapter", (BasePlatformAdapter,), {"MAX_MESSAGE_LENGTH": 39000})
+    A = type(
+        "StreamIsMsgAdapter", (BasePlatformAdapter,), {"MAX_MESSAGE_LENGTH": 39000}
+    )
     A.__abstractmethods__ = frozenset()
     a = A.__new__(A)
     a._typing_paused = set()
@@ -41,21 +43,25 @@ def _make_draft_adapter():
 
     def _supports(chat_type=None, metadata=None):
         return True
+
     a.supports_draft_streaming = _supports
 
     async def _send_draft(*, chat_id, draft_id, content, metadata=None):
         a.draft_calls.append({"draft_id": draft_id, "content": content})
         return SendResult(success=True, message_id=None)
+
     a.send_draft = _send_draft
 
     async def _send(chat_id, content, reply_to=None, metadata=None, **kw):
         a.send_calls.append({"content": content, "metadata": dict(metadata or {})})
         return SendResult(success=True, message_id="sealed_ts_1")
+
     a.send = _send
 
     async def _edit(chat_id, message_id, content, **kw):
         a.edit_calls.append({"message_id": message_id, "content": content})
         return SendResult(success=True, message_id=message_id)
+
     a.edit_message = _edit
     return a
 
@@ -67,8 +73,11 @@ class TestConsumerDeclaredFinal:
         one message, no separate corrective send needed."""
         adapter = _make_draft_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=1, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=1,
+            cursor="",
         )
         sc = GatewayStreamConsumer(adapter, "D1", cfg)
 
@@ -93,8 +102,11 @@ class TestConsumerDeclaredFinal:
     async def test_finish_bare_keeps_legacy_behavior(self):
         adapter = _make_draft_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=1, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=1,
+            cursor="",
         )
         sc = GatewayStreamConsumer(adapter, "D1", cfg)
         task = asyncio.create_task(sc.run())
@@ -110,8 +122,11 @@ class TestInterimSendContract:
     async def test_commentary_is_marked_interim(self):
         adapter = _make_draft_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=1, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=1,
+            cursor="",
         )
         sc = GatewayStreamConsumer(adapter, "D1", cfg)
         ok = await sc._send_commentary("Using the browser tool…")
@@ -130,6 +145,7 @@ class TestInterimSendContract:
         class _T:
             def __init__(self):
                 self.ops = []
+
             async def send_outbound(self, payload, platform=None):
                 self.ops.append(dict(payload))
                 return {"success": True, "message_id": "111.222"}
@@ -143,11 +159,14 @@ class TestInterimSendContract:
 
         # Interim commentary while the stream is open: must NOT seal.
         res = await adapter.send(
-            "C1", "delegation dispatched, continuing…",
+            "C1",
+            "delegation dispatched, continuing…",
             metadata={**md, "_interim_send": True},
         )
         assert res.success
-        assert adapter._open_draft_by_chat.get(key) == 5, "interim send sealed the stream"
+        assert adapter._open_draft_by_chat.get(key) == 5, (
+            "interim send sealed the stream"
+        )
         sent_ops = [o for o in t.ops if o["op"] == "send"]
         assert len(sent_ops) == 1
         # Marker never leaks to the wire.
@@ -180,6 +199,7 @@ class TestInterimSendContract:
                 # fronts_platform reads the handshake identity set off the
                 # transport; advertise slack so send_for_platform proceeds.
                 self._identities = [("slack", "U-bot")]
+
             async def send_outbound(self, payload, platform=None):
                 self.ops.append(dict(payload))
                 return {"success": True, "message_id": "111.333"}
@@ -192,10 +212,15 @@ class TestInterimSendContract:
         assert adapter._open_draft_by_chat.get(key) == 9
 
         res = await adapter.send_for_platform(
-            "slack", "C2", "interim status", metadata={**md, "_interim_send": True},
+            "slack",
+            "C2",
+            "interim status",
+            metadata={**md, "_interim_send": True},
         )
         assert res.success
-        assert adapter._open_draft_by_chat.get(key) == 9, "interim send_for_platform sealed the stream"
+        assert adapter._open_draft_by_chat.get(key) == 9, (
+            "interim send_for_platform sealed the stream"
+        )
         sent_ops = [o for o in t.ops if o["op"] == "send"]
         assert len(sent_ops) == 1
         assert "_interim_send" not in (sent_ops[0].get("metadata") or {})
@@ -209,15 +234,20 @@ class TestFinalAdoptionGuards:
         send path owns those turns (non-streaming models, tool-only turns)."""
         adapter = _make_draft_adapter()
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=1, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=1,
+            cursor="",
         )
         sc = GatewayStreamConsumer(adapter, "D1", cfg)
         task = asyncio.create_task(sc.run())
         # No on_delta at all — straight to completion with a payload.
         sc.finish("the final answer from a non-streaming turn")
         await task
-        assert adapter.send_calls == [], "no-stream turn must not deliver via the consumer"
+        assert adapter.send_calls == [], (
+            "no-stream turn must not deliver via the consumer"
+        )
         assert adapter.draft_calls == []
 
 

@@ -27,13 +27,18 @@ def _startup_env(name: str) -> str:
     profile's scope a miss yields "" and never falls through to the default profile's env."""
     if _profile_scoped():
         from agent.secret_scope import get_secret
+
         return (get_secret(name) or "").strip()
     return os.getenv(name, "").strip()
 
 
 def _parse_peer_tokens(raw: str) -> dict[str, str]:
-    """"alice:tok1,bob:tok2" -> {token: peer_name}."""
-    pairs = [tuple(s.strip() for s in pair.split(":", 1)) for pair in raw.split(",") if ":" in pair]
+    """ "alice:tok1,bob:tok2" -> {token: peer_name}."""
+    pairs = [
+        tuple(s.strip() for s in pair.split(":", 1))
+        for pair in raw.split(",")
+        if ":" in pair
+    ]
     return {token: name for name, token in pairs if name and token}
 
 
@@ -43,6 +48,7 @@ def _configured_trusted_peers() -> frozenset[str]:
         return frozenset(p.strip() for p in raw.split(",") if p.strip())
     try:
         from clawk_cli.config import load_config
+
         peers = ((load_config() or {}).get("a2a") or {}).get("trusted_peers", [])
         if isinstance(peers, list):
             return frozenset(str(peer).strip() for peer in peers if str(peer).strip())
@@ -71,10 +77,17 @@ class A2ASecurityContext:
     @classmethod
     def capture(cls) -> A2ASecurityContext:
         bearer_token = _startup_env("A2A_BEARER_TOKEN")
-        return cls(bearer_token=bearer_token, peer_tokens=tuple(_parse_peer_tokens(_startup_env("A2A_PEER_TOKENS")).items()),
-                   trusted_peers=_configured_trusted_peers(),
-                   allow_all_users=_startup_env("A2A_ALLOW_ALL_USERS").lower() in {"1", "true", "yes"},
-                   requested_host=_unbracket(_startup_env("A2A_HOST")) or "127.0.0.1", push_secret=_startup_env("A2A_PUSH_SECRET") or bearer_token)
+        return cls(
+            bearer_token=bearer_token,
+            peer_tokens=tuple(
+                _parse_peer_tokens(_startup_env("A2A_PEER_TOKENS")).items()
+            ),
+            trusted_peers=_configured_trusted_peers(),
+            allow_all_users=_startup_env("A2A_ALLOW_ALL_USERS").lower()
+            in {"1", "true", "yes"},
+            requested_host=_unbracket(_startup_env("A2A_HOST")) or "127.0.0.1",
+            push_secret=_startup_env("A2A_PUSH_SECRET") or bearer_token,
+        )
 
     def localhost_only(self) -> bool:
         return not (self.bearer_token or self.peer_tokens)
@@ -84,12 +97,17 @@ class A2ASecurityContext:
         if self.requested_host in {"127.0.0.1", "localhost", "::1"}:
             return self.requested_host
         if self.localhost_only():
-            logger.warning("A2A: A2A_HOST=%s ignored — no A2A_BEARER_TOKEN or A2A_PEER_TOKENS set; "
-                           "binding to 127.0.0.1. Configure a token to expose A2A remotely.", self.requested_host)
+            logger.warning(
+                "A2A: A2A_HOST=%s ignored — no A2A_BEARER_TOKEN or A2A_PEER_TOKENS set; "
+                "binding to 127.0.0.1. Configure a token to expose A2A remotely.",
+                self.requested_host,
+            )
             return "127.0.0.1"
         return self.requested_host
 
-    def authenticate(self, auth_header: Optional[str], client_ip: str = "") -> Optional[str]:
+    def authenticate(
+        self, auth_header: Optional[str], client_ip: str = ""
+    ) -> Optional[str]:
         """Peer identity or None (401). Localhost-only: ``ip:<addr>``; per-peer token: that
         peer's name; shared token: ``ip:<addr>``. Constant-time comparisons."""
         if self.localhost_only():
@@ -110,21 +128,33 @@ class A2ASecurityContext:
 
     def dispatch_fails_closed(self) -> bool:
         """Network-exposed token bind with no allow-list and no allow-all: refuse every peer."""
-        return not (self.allow_all_users or self.localhost_only() or self.trusted_peers or self.is_loopback_bind())
+        return not (
+            self.allow_all_users
+            or self.localhost_only()
+            or self.trusted_peers
+            or self.is_loopback_bind()
+        )
 
     def is_trusted_peer(self, identity: str) -> bool:
         """Fail closed on network-exposed binds with no allow-list; loopback
         binds without an allow-list stay open for backward compatibility."""
         if self.dispatch_fails_closed():
             return False  # the misconfiguration is logged once in A2AAdapter.connect()
-        return self.allow_all_users or self.localhost_only() or not self.trusted_peers or identity in self.trusted_peers
+        return (
+            self.allow_all_users
+            or self.localhost_only()
+            or not self.trusted_peers
+            or identity in self.trusted_peers
+        )
 
     def sign_push_payload(self, payload: dict) -> str:
         """HMAC-SHA256 hex over the sorted-key JSON body; "" when no secret."""
         if not self.push_secret:
             return ""
         body = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        return hmac.new(self.push_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        return hmac.new(
+            self.push_secret.encode("utf-8"), body, hashlib.sha256
+        ).hexdigest()
 
 
 def localhost_only() -> bool:
@@ -138,7 +168,9 @@ _INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"<\|(system|user|assistant|end|endoftext)\|>", re.IGNORECASE),
     re.compile(r"\[/?(?:INST|SYS|SYSTEM)\]", re.IGNORECASE),
     re.compile(r"(?m)^\s*(system|assistant|developer)\s*:\s*", re.IGNORECASE),
-    re.compile(r"ignore (?:all|any|the) (?:previous|prior|above) instructions", re.IGNORECASE),
+    re.compile(
+        r"ignore (?:all|any|the) (?:previous|prior|above) instructions", re.IGNORECASE
+    ),
     re.compile(r"disregard (?:all|any|the) (?:previous|prior|above)", re.IGNORECASE),
     re.compile(r"you are now (?:a|an|in) ", re.IGNORECASE),
     re.compile(r"</?(?:system|assistant|tool)[^>]*>", re.IGNORECASE),
@@ -167,7 +199,9 @@ def filter_inbound(text: str) -> str:
 def wrap_inbound(peer: str, text: str) -> str:
     """Filter + frame inbound task text. EVERY message is framed — including "/..." text:
     remote peers must never reach the gateway's operator slash commands."""
-    return PRIVACY_PREFIX.format(peer=peer or "unknown") + filter_inbound((text or "").strip())
+    return PRIVACY_PREFIX.format(peer=peer or "unknown") + filter_inbound(
+        (text or "").strip()
+    )
 
 
 def redact_outbound(text: str) -> str:
@@ -182,8 +216,18 @@ def redact_outbound(text: str) -> str:
 
 # Blocked even in localhost-only mode — a remote peer must not make us probe internal services
 # (link-local/AWS metadata, RFC1918, unspecified, IPv6 link-local/ULA). Loopback only in localhost mode.
-_BLOCKED_PREFIXES = ("169.254.", "127.", "10.", *(f"172.{i}." for i in range(16, 32)), "192.168.",
-                     "0.0.0.0", "::1", "fe80:", "fc00:", "fd00:")
+_BLOCKED_PREFIXES = (
+    "169.254.",
+    "127.",
+    "10.",
+    *(f"172.{i}." for i in range(16, 32)),
+    "192.168.",
+    "0.0.0.0",
+    "::1",
+    "fe80:",
+    "fc00:",
+    "fd00:",
+)
 
 
 def is_safe_callback_url(url: str, *, localhost_mode: Optional[bool] = None) -> bool:
@@ -194,7 +238,9 @@ def is_safe_callback_url(url: str, *, localhost_mode: Optional[bool] = None) -> 
         parsed = urllib.parse.urlparse(url) if url and isinstance(url, str) else None
     except Exception:
         return False
-    hostname = (parsed.hostname or "") if parsed and parsed.scheme in ("http", "https") else ""
+    hostname = (
+        (parsed.hostname or "") if parsed and parsed.scheme in ("http", "https") else ""
+    )
     if not hostname:
         return False
     hostname_lower = hostname.lower()
@@ -216,7 +262,14 @@ def audit(direction: str, peer: str, task_id: str, summary: str) -> None:
     """Append an audit record (direction: inbound | outbound | push). Never raises."""
     try:
         from clawk_constants import get_clawk_home
-        rec = {"ts": time.time(), "direction": direction, "peer": peer, "task_id": task_id, "summary": (summary or "")[:500]}
+
+        rec = {
+            "ts": time.time(),
+            "direction": direction,
+            "peer": peer,
+            "task_id": task_id,
+            "summary": (summary or "")[:500],
+        }
         get_clawk_home().mkdir(parents=True, exist_ok=True)
         with (get_clawk_home() / "a2a_audit.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")

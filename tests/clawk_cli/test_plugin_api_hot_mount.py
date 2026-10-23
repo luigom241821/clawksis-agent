@@ -28,12 +28,15 @@ def client(_isolate_clawk_home):
 def _install_late_plugin(home, *, enabled: bool) -> None:
     dash = home / "plugins" / "late-probe" / "dashboard"
     dash.mkdir(parents=True)
-    (dash / "manifest.json").write_text(json.dumps({"name": "late-probe", "api": "plugin_api.py"}))
+    (dash / "manifest.json").write_text(
+        json.dumps({"name": "late-probe", "api": "plugin_api.py"})
+    )
     (dash / "plugin_api.py").write_text(
         "from fastapi import APIRouter\nrouter = APIRouter()\n"
         "@router.get('/ping')\nasync def ping():\n    return {'pong': True}\n"
     )
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     cfg.setdefault("plugins", {})["enabled"] = ["late-probe"] if enabled else []
     save_config(cfg)
@@ -50,6 +53,7 @@ def test_plugin_enabled_after_startup_serves_without_restart(client):
     assert client.get("/api/plugins/late-probe/missing").status_code == 404
 
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     cfg["plugins"]["enabled"], cfg["plugins"]["disabled"] = [], ["late-probe"]
     save_config(cfg)
@@ -60,6 +64,7 @@ def test_installed_but_not_enabled_plugin_is_never_imported(client):
     from clawk_constants import get_clawk_home
 
     _install_late_plugin(get_clawk_home(), enabled=False)
-    (get_clawk_home() / "plugins" / "late-probe" / "dashboard" / "plugin_api.py").write_text(
-        "raise SystemExit('imported a not-enabled plugin')\n")
+    (
+        get_clawk_home() / "plugins" / "late-probe" / "dashboard" / "plugin_api.py"
+    ).write_text("raise SystemExit('imported a not-enabled plugin')\n")
     assert client.get("/api/plugins/late-probe/ping").status_code == 404

@@ -90,9 +90,7 @@ def test_rotation_is_atomic_under_sigkill(tmp_path, requested_mode):
         # apply_wal_with_fallback(), which upgrades a non-WAL file to WAL
         # whenever the configured mode says so (the resolver's downgrade
         # gates may still refuse; effective_mode_or_skip audits post-run).
-        child_env["CLAWK_HOME"] = str(
-            make_clawk_home(tmp_path, requested_mode.lower())
-        )
+        child_env["CLAWK_HOME"] = str(make_clawk_home(tmp_path, requested_mode.lower()))
 
     child = spawn_child(
         ROTATOR.format(db_path=str(db_path), journal=str(journal)), env=child_env

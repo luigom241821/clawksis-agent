@@ -84,7 +84,11 @@ def test_nebius_model_catalog_falls_back_to_profile_models(monkeypatch):
             "source": "NEBIUS_API_KEY",
         },
     )
-    monkeypatch.setattr(profile, "fetch_models", lambda *, api_key=None, base_url=None, timeout=8.0: None)
+    monkeypatch.setattr(
+        profile,
+        "fetch_models",
+        lambda *, api_key=None, base_url=None, timeout=8.0: None,
+    )
 
     assert provider_model_ids("nebius") == list(profile.fallback_models)
 
@@ -177,11 +181,17 @@ def test_nebius_transport_emits_top_level_reasoning_effort():
 
 def test_nebius_model_normalization_strips_canonical_and_alias_prefixes():
     model = "Qwen/Qwen3.5-397B-A17B-fast"
-    assert normalize_model_for_provider(
-        f"nebius-token-factory/{model}", "nebius-token-factory"
-    ) == model
-    assert normalize_model_for_provider(f"nebius/{model}", "nebius-token-factory") == model
+    assert (
+        normalize_model_for_provider(
+            f"nebius-token-factory/{model}", "nebius-token-factory"
+        )
+        == model
+    )
+    assert (
+        normalize_model_for_provider(f"nebius/{model}", "nebius-token-factory") == model
+    )
     assert normalize_model_for_provider(f"nebius/{model}", "nebius") == model
-    assert normalize_model_for_provider(
-        "openai/gpt-oss-120b-fast", "nebius-token-factory"
-    ) == "openai/gpt-oss-120b-fast"
+    assert (
+        normalize_model_for_provider("openai/gpt-oss-120b-fast", "nebius-token-factory")
+        == "openai/gpt-oss-120b-fast"
+    )

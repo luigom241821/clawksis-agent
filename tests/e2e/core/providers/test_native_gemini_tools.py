@@ -62,9 +62,16 @@ def run(tmp_path_factory: pytest.TempPathFactory) -> Run:
     with GeminiFake(root / "fake", script) as fake:
         # No asserts here: a failing turn must show up as the specific test assertion (a rejected
         # request, a missing signature), not as a fixture error that hides which contract broke.
-        first = nh.run_chat(home, "Read seed.txt and tell me what it says.", env=fake.child_env())
+        first = nh.run_chat(
+            home, "Read seed.txt and tell me what it says.", env=fake.child_env()
+        )
         sid = nh.latest_session(home)
-        second = nh.run_chat(home, "Now echo the marker in the terminal.", env=fake.child_env(), resume=sid)
+        second = nh.run_chat(
+            home,
+            "Now echo the marker in the terminal.",
+            env=fake.child_env(),
+            resume=sid,
+        )
     return Run(home, fake, [first, second], sid)
 
 
@@ -74,7 +81,10 @@ def _call_parts(rec: Recorded) -> dict[str, dict]:
 
 
 def _responses(rec: Recorded) -> dict[str, dict]:
-    return {p["functionResponse"].get("id"): p["functionResponse"] for p in rec.parts("functionResponse")}
+    return {
+        p["functionResponse"].get("id"): p["functionResponse"]
+        for p in rec.parts("functionResponse")
+    }
 
 
 def test_function_call_round_trip_pairs_response_and_persists(run: Run) -> None:
@@ -86,18 +96,31 @@ def test_function_call_round_trip_pairs_response_and_persists(run: Run) -> None:
     (call_id,) = list(run.fake.call_signatures)[:1]
     follow_up = main[1]
     resp = _responses(follow_up).get(call_id)
-    assert resp is not None, f"no functionResponse for {call_id}: {follow_up.parts('functionResponse')}"
+    assert resp is not None, (
+        f"no functionResponse for {call_id}: {follow_up.parts('functionResponse')}"
+    )
     assert resp["name"] == "read_file"
     assert SEED in json.dumps(resp["response"]), resp
     part = _call_parts(follow_up)[call_id]
     assert part.get("thoughtSignature") == run.fake.call_signatures[call_id], part
-    assert run.turns[0].returncode == 0 and ANSWER_1 in run.turns[0].stdout, run.turns[0].describe()
+    assert run.turns[0].returncode == 0 and ANSWER_1 in run.turns[0].stdout, run.turns[
+        0
+    ].describe()
 
     rows = nh.messages(run.home, run.session_id)
-    ids = [tc.get("id") for r in rows if r["role"] == "assistant" for tc in nh.tool_calls_of(r)]
+    ids = [
+        tc.get("id")
+        for r in rows
+        if r["role"] == "assistant"
+        for tc in nh.tool_calls_of(r)
+    ]
     assert call_id in ids, ids
-    tool_rows = [r for r in rows if r["role"] == "tool" and r.get("tool_call_id") == call_id]
-    assert len(tool_rows) == 1 and SEED in (tool_rows[0].get("content") or ""), tool_rows
+    tool_rows = [
+        r for r in rows if r["role"] == "tool" and r.get("tool_call_id") == call_id
+    ]
+    assert len(tool_rows) == 1 and SEED in (tool_rows[0].get("content") or ""), (
+        tool_rows
+    )
     nh.assert_no_duplicate_assistant_text(rows, ANSWER_1)
 
 
@@ -109,15 +132,26 @@ def test_resume_replays_thought_signatures_verbatim(run: Run) -> None:
     first_id, second_id = list(run.fake.call_signatures)
     resumed = run.main()[2]
     replayed = _call_parts(resumed).get(first_id)
-    assert replayed is not None, f"turn-1 functionCall {first_id} missing after resume: {resumed.contents}"
-    assert replayed.get("thoughtSignature") == run.fake.call_signatures[first_id], replayed
-    assert SEED in json.dumps(_responses(resumed).get(first_id)), resumed.parts("functionResponse")
+    assert replayed is not None, (
+        f"turn-1 functionCall {first_id} missing after resume: {resumed.contents}"
+    )
+    assert replayed.get("thoughtSignature") == run.fake.call_signatures[first_id], (
+        replayed
+    )
+    assert SEED in json.dumps(_responses(resumed).get(first_id)), resumed.parts(
+        "functionResponse"
+    )
     assert ANSWER_1 in resumed.all_text()
 
     final = run.main()[3]
-    assert _call_parts(final)[second_id].get("thoughtSignature") == run.fake.call_signatures[second_id]
+    assert (
+        _call_parts(final)[second_id].get("thoughtSignature")
+        == run.fake.call_signatures[second_id]
+    )
     assert ECHO in json.dumps(_responses(final).get(second_id))
-    assert run.turns[1].returncode == 0 and ANSWER_2 in run.turns[1].stdout, run.turns[1].describe()
+    assert run.turns[1].returncode == 0 and ANSWER_2 in run.turns[1].stdout, run.turns[
+        1
+    ].describe()
     nh.assert_no_duplicate_assistant_text(nh.messages(run.home), ANSWER_2)
 
 
@@ -128,6 +162,8 @@ def test_every_request_authenticates_and_targets_the_configured_model(run: Run) 
     assert calls
     for rec in calls:
         key = rec.headers.get("x-goog-api-key") or (rec.query.get("key") or [""])[0]
-        assert key == API_KEY, f"generate call without the configured API key: {rec.headers}"
+        assert key == API_KEY, (
+            f"generate call without the configured API key: {rec.headers}"
+        )
         assert (rec.version, rec.model) == ("v1beta", MODEL_ID), rec.path
     assert [r.path for r in run.fake.requests if not r.rpc] == []

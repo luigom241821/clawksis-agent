@@ -32,8 +32,6 @@ class TestPathExistsSafe:
         assert gateway_cli._path_exists_safe(Path("/run/user/0/bus")) is False
 
 
-
-
 class TestRuntimeDirIsOurs:
     """_runtime_dir_is_ours() separates our runtime dir from a leaked foreign one."""
 
@@ -79,10 +77,14 @@ class TestEnsureUserSystemdEnvForeignRuntime:
         monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
         monkeypatch.setattr(os, "getuid", lambda: 1001)
         monkeypatch.setattr(
-            gateway_cli, "_runtime_dir_is_ours", lambda d: d == "/run/user/1001",
+            gateway_cli,
+            "_runtime_dir_is_ours",
+            lambda d: d == "/run/user/1001",
         )
         monkeypatch.setattr(
-            gateway_cli, "_path_exists_safe", lambda p: str(p) == "/run/user/1001/bus",
+            gateway_cli,
+            "_path_exists_safe",
+            lambda p: str(p) == "/run/user/1001/bus",
         )
 
         gateway_cli._ensure_user_systemd_env()
@@ -118,12 +120,16 @@ class TestEnsureUserSystemdEnvForeignRuntime:
 class TestPreflightForeignRuntimeNoLeak:
     """#86558: preflight surfaces a remediable error, not a raw PermissionError."""
 
-    def test_foreign_xdg_runtime_dir_raises_unavailable_not_permission_error(self, monkeypatch):
+    def test_foreign_xdg_runtime_dir_raises_unavailable_not_permission_error(
+        self, monkeypatch
+    ):
         # runuser -u user -- clawk gateway restart, from a root shell.
         monkeypatch.setattr(gateway_cli, "_ensure_user_systemd_env", lambda: None)
         # Both socket paths resolve under the leaked /run/user/0 and are 0700 root.
         monkeypatch.setattr(Path, "exists", _eacces)
-        monkeypatch.setattr(gateway_cli, "get_systemd_linger_status", lambda username=None: (False, ""))
+        monkeypatch.setattr(
+            gateway_cli, "get_systemd_linger_status", lambda username=None: (False, "")
+        )
         monkeypatch.setattr(gateway_cli.shutil, "which", lambda _: "/usr/bin/loginctl")
 
         class _Denied:

@@ -4,6 +4,7 @@ The model sees a compact, severity-filtered, line-bounded ``<diagnostics>``
 block (1-indexed line/column, capped at ``MAX_PER_FILE``) for diagnostics
 introduced by the latest edit.
 """
+
 from __future__ import annotations
 
 import html
@@ -69,7 +70,7 @@ def report_for_file(
     # quote=True also escapes ``"`` so a crafted file name can't break out of
     # the ``file="..."`` attribute and synthesize new tags.
     safe_path = html.escape(file_path, quote=True)
-    return f"<diagnostics file=\"{safe_path}\">\n{body}\n</diagnostics>"
+    return f'<diagnostics file="{safe_path}">\n{body}\n</diagnostics>'
 
 
 def truncate(s: str, *, limit: int = MAX_TOTAL_CHARS) -> str:
@@ -77,4 +78,11 @@ def truncate(s: str, *, limit: int = MAX_TOTAL_CHARS) -> str:
     return elide(s, limit)
 
 
-__all__ = ["DEFAULT_SEVERITIES", "MAX_PER_FILE", "SEVERITY_NAMES", "format_diagnostic", "report_for_file", "truncate"]
+__all__ = [
+    "DEFAULT_SEVERITIES",
+    "MAX_PER_FILE",
+    "SEVERITY_NAMES",
+    "format_diagnostic",
+    "report_for_file",
+    "truncate",
+]

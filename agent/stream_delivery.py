@@ -3,6 +3,7 @@
 Single-writer stream ownership, delta/reasoning hook fan-out, and interim assistant text dedup.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import logging
 import re
 import threading
@@ -32,15 +33,22 @@ class StreamDeliveryMixin:
 
     def _deliver_to_stream_callbacks(self, text: str) -> bool:
         """Send ``text`` to the display + TTS delta callbacks; True if at least one accepted it."""
-        results = [self._call_quietly(cb, text) for cb in (self.stream_delta_callback, self._stream_callback)]
+        results = [
+            self._call_quietly(cb, text)
+            for cb in (self.stream_delta_callback, self._stream_callback)
+        ]
         return any(results)
 
-    def _enqueue_stream_hook(self, event: str, *, label: str | None = None, **fields: Any) -> None:
+    def _enqueue_stream_hook(
+        self, event: str, *, label: str | None = None, **fields: Any
+    ) -> None:
         """Best-effort plugin stream hook enqueue; never raises into the stream path."""
         try:
             from agent.plugin_stream_hooks import enqueue_plugin_stream_hook
 
-            enqueue_plugin_stream_hook(event, **self._stream_hook_base_payload(), **fields)
+            enqueue_plugin_stream_hook(
+                event, **self._stream_hook_base_payload(), **fields
+            )
         except Exception:
             logger.debug("%s plugin hook enqueue failed", label or event, exc_info=True)
 
@@ -74,7 +82,11 @@ class StreamDeliveryMixin:
         # reasoning content as regular response text).
         if think_scrubber is not None:
             think_tail = think_scrubber.flush()
-            deliver(ctx_scrubber.feed(think_tail) if think_tail and ctx_scrubber is not None else think_tail)
+            deliver(
+                ctx_scrubber.feed(think_tail)
+                if think_tail and ctx_scrubber is not None
+                else think_tail
+            )
         if ctx_scrubber is not None:
             deliver(ctx_scrubber.flush())
         self._current_streamed_assistant_text = ""
@@ -107,7 +119,9 @@ class StreamDeliveryMixin:
         """(visible content, streamed text), both think-stripped and whitespace-normalized."""
         normalize = self._normalize_interim_visible_text
         streamed = getattr(self, "_current_streamed_assistant_text", "") or ""
-        return normalize(self._strip_think_blocks(content or "")), normalize(self._strip_think_blocks(streamed))
+        return normalize(self._strip_think_blocks(content or "")), normalize(
+            self._strip_think_blocks(streamed)
+        )
 
     def _interim_content_was_streamed(self, content: str) -> bool:
         # Prefix match, not equality: the final may be streamed text plus a trailing delta. The
@@ -121,24 +135,37 @@ class StreamDeliveryMixin:
         visible, streamed = self._interim_visible_and_streamed(content)
         return bool(visible) and visible == streamed
 
-    def _extract_codex_interim_visible_parts(self, assistant_msg: dict[str, Any]) -> list[str]:
+    def _extract_codex_interim_visible_parts(
+        self, assistant_msg: dict[str, Any]
+    ) -> list[str]:
         """Visible Codex commentary (``phase=commentary`` items), one string per message item.
 
         ``phase=analysis`` stays hidden (scratchpad); with ``display.show_commentary=false``
         commentary stays on the reasoning channel.
         """
-        items = assistant_msg.get("codex_message_items") if getattr(self, "show_commentary", True) else None
+        items = (
+            assistant_msg.get("codex_message_items")
+            if getattr(self, "show_commentary", True)
+            else None
+        )
         messages: list[str] = []
         for item in items if isinstance(items, list) else ():
             if not isinstance(item, dict) or item.get("type") != "message":
                 continue
             phase, content_parts = item.get("phase"), item.get("content")
-            if not isinstance(phase, str) or phase.strip().lower() != "commentary" or not isinstance(content_parts, list):
+            if (
+                not isinstance(phase, str)
+                or phase.strip().lower() != "commentary"
+                or not isinstance(content_parts, list)
+            ):
                 continue
             visible = "".join(
-                part["text"] for part in content_parts
-                if isinstance(part, dict) and part.get("type") == "output_text"
-                and isinstance(part.get("text"), str) and part["text"].strip()
+                part["text"]
+                for part in content_parts
+                if isinstance(part, dict)
+                and part.get("type") == "output_text"
+                and isinstance(part.get("text"), str)
+                and part["text"].strip()
             ).strip()
             visible = self._visible_commentary(visible)
             if visible:
@@ -151,7 +178,9 @@ class StreamDeliveryMixin:
 
     def _extract_codex_interim_visible_text(self, assistant_msg: dict[str, Any]) -> str:
         """All visible Codex commentary joined, for comparison/fallback."""
-        return "\n\n".join(self._extract_codex_interim_visible_parts(assistant_msg)).strip()
+        return "\n\n".join(
+            self._extract_codex_interim_visible_parts(assistant_msg)
+        ).strip()
 
     def _interim_assistant_visible_text(self, assistant_msg: dict[str, Any]) -> str:
         """Assistant text eligible for interim delivery: structured Codex commentary first — a response can
@@ -159,12 +188,16 @@ class StreamDeliveryMixin:
         progress leaks the answer early — else top-level content (may be a parts list)."""
         return (
             self._extract_codex_interim_visible_text(assistant_msg)
-            or self._strip_think_blocks(flatten_message_text(assistant_msg.get("content"))).strip()
+            or self._strip_think_blocks(
+                flatten_message_text(assistant_msg.get("content"))
+            ).strip()
         )
 
     def _interim_text_was_delivered(self, text: str) -> bool:
         normalized = self._normalize_interim_visible_text(text)
-        return bool(normalized) and normalized in getattr(self, "_delivered_interim_texts", set())
+        return bool(normalized) and normalized in getattr(
+            self, "_delivered_interim_texts", set()
+        )
 
     def _record_delivered_interim_text(self, text: str) -> None:
         normalized = self._normalize_interim_visible_text(text)
@@ -173,7 +206,9 @@ class StreamDeliveryMixin:
                 self._delivered_interim_texts = set()
             self._delivered_interim_texts.add(normalized)
 
-    def _deliver_interim(self, visible: str, *, already_streamed: bool, record: list[str]) -> None:
+    def _deliver_interim(
+        self, visible: str, *, already_streamed: bool, record: list[str]
+    ) -> None:
         """Hand ``visible`` to ``interim_assistant_callback`` and mark ``record`` delivered; swallows callback errors."""
         cb = getattr(self, "interim_assistant_callback", None)
         if cb is None:
@@ -187,10 +222,16 @@ class StreamDeliveryMixin:
 
     def _fire_streamed_codex_commentary(self, text: str) -> None:
         """Deliver a completed live Codex commentary message immediately."""
-        if getattr(self, "interim_assistant_callback", None) is None or not isinstance(text, str):
+        if getattr(self, "interim_assistant_callback", None) is None or not isinstance(
+            text, str
+        ):
             return
         visible = self._visible_commentary(text)
-        if not visible or visible == "(empty)" or self._interim_text_was_delivered(visible):
+        if (
+            not visible
+            or visible == "(empty)"
+            or self._interim_text_was_delivered(visible)
+        ):
             return
         self._deliver_interim(visible, already_streamed=False, record=[visible])
 
@@ -205,15 +246,33 @@ class StreamDeliveryMixin:
         pending: dict[str, str] = {}
         for part in commentary_parts:
             key = self._normalize_interim_visible_text(part)
-            if key and key not in pending and not self._interim_text_was_delivered(part):
+            if (
+                key
+                and key not in pending
+                and not self._interim_text_was_delivered(part)
+            ):
                 pending[key] = part
         undelivered_parts = list(pending.values())
-        visible = "\n\n".join(undelivered_parts).strip() if commentary_parts else self._interim_assistant_visible_text(assistant_msg)
-        if not visible or visible == "(empty)" or self._interim_text_was_delivered(visible):
+        visible = (
+            "\n\n".join(undelivered_parts).strip()
+            if commentary_parts
+            else self._interim_assistant_visible_text(assistant_msg)
+        )
+        if (
+            not visible
+            or visible == "(empty)"
+            or self._interim_text_was_delivered(visible)
+        ):
             return
         already_streamed = self._interim_content_fully_streamed(visible)
-        self._enqueue_stream_hook("on_interim_message", text=visible, already_streamed=already_streamed)
-        self._deliver_interim(visible, already_streamed=already_streamed, record=undelivered_parts or [visible])
+        self._enqueue_stream_hook(
+            "on_interim_message", text=visible, already_streamed=already_streamed
+        )
+        self._deliver_interim(
+            visible,
+            already_streamed=already_streamed,
+            record=undelivered_parts or [visible],
+        )
 
     def _ensure_stream_writer_state(self) -> None:
         """Lazily create the single-writer guard fields (#65991).
@@ -261,12 +320,16 @@ class StreamDeliveryMixin:
         dropped (#65991).
         """
         token = getattr(getattr(self, "_stream_writer_tls", None), "token", None)
-        return token is not None and token != getattr(self, "_stream_writer_token", token)
+        return token is not None and token != getattr(
+            self, "_stream_writer_token", token
+        )
 
     def _note_dropped_stream_writer(self, where: str) -> None:
         """Record + log that a superseded stream's delta was discarded."""
         try:
-            self._stream_writer_dropped = int(getattr(self, "_stream_writer_dropped", 0)) + 1
+            self._stream_writer_dropped = (
+                int(getattr(self, "_stream_writer_dropped", 0)) + 1
+            )
         except Exception:
             self._stream_writer_dropped = 1
         # Log sparsely (first drop, then powers of two) so a chatty superseded stream can't flood the log.
@@ -276,7 +339,8 @@ class StreamDeliveryMixin:
                 "Dropped delta from a superseded stream writer at %s "
                 "(discarded=%d this turn) — a stale stream tried to write into "
                 "the turn after a retry superseded it.",
-                where, _n,
+                where,
+                _n,
             )
 
     def _stream_hook_base_payload(self) -> dict[str, Any]:
@@ -292,8 +356,12 @@ class StreamDeliveryMixin:
     def _emit_stream_start(self) -> None:
         self._enqueue_stream_hook("on_stream_start")
 
-    def _emit_stream_end(self, *, final_text: str, finished: bool, error: str | None) -> None:
-        self._enqueue_stream_hook("on_stream_end", final_text=final_text, finished=finished, error=error)
+    def _emit_stream_end(
+        self, *, final_text: str, finished: bool, error: str | None
+    ) -> None:
+        self._enqueue_stream_hook(
+            "on_stream_end", final_text=final_text, finished=finished, error=error
+        )
 
     def _fire_stream_delta(self, text: str) -> None:
         """Fire all registered stream delta callbacks (display + TTS)."""
@@ -304,7 +372,9 @@ class StreamDeliveryMixin:
             return
         # One paragraph break before the first text delta after a tool iteration, without
         # stacking blank lines across back-to-back tool iterations.
-        prepended_break = bool(getattr(self, "_stream_needs_break", False) and text and text.strip())
+        prepended_break = bool(
+            getattr(self, "_stream_needs_break", False) and text and text.strip()
+        )
         if prepended_break:
             self._stream_needs_break = False
             text = "\n\n" + text
@@ -315,16 +385,24 @@ class StreamDeliveryMixin:
             think_scrubber = getattr(self, "_stream_think_scrubber", None)
             # See #5719.
             scrubber = getattr(self, "_stream_context_scrubber", None)
-            text = think_scrubber.feed(text) if think_scrubber is not None else self._strip_think_blocks(text)
+            text = (
+                think_scrubber.feed(text)
+                if think_scrubber is not None
+                else self._strip_think_blocks(text)
+            )
             # Providers that inline reasoning (MiniMax-M3 <think>…</think>) send no reasoning delta, so the
             # live reasoning pane would stay empty; forward what the scrubber stripped instead (#89647).
             hidden = think_scrubber.last_hidden if think_scrubber is not None else ""
             if hidden and not getattr(self, "_native_reasoning_streamed", False):
                 self._fire_reasoning_delta(hidden, inline=True)
-            text = scrubber.feed(text) if scrubber is not None else sanitize_context(text)
+            text = (
+                scrubber.feed(text) if scrubber is not None else sanitize_context(text)
+            )
             # Only strip leading newlines on the first delta — mid-stream "\n" is legitimate markdown.
             # Check the parts list, not the joined property (joining per token copies the whole reply).
-            if not prepended_break and not getattr(self, "_streamed_assistant_text_parts", None):
+            if not prepended_break and not getattr(
+                self, "_streamed_assistant_text_parts", None
+            ):
                 text = text.lstrip("\n")
         if not text:
             return
@@ -355,11 +433,19 @@ class StreamDeliveryMixin:
 
                 enabled = stream_reasoning_deltas_enabled()
             except Exception:
-                logger.debug("reasoning on_stream_delta plugin hook enqueue failed", exc_info=True)
+                logger.debug(
+                    "reasoning on_stream_delta plugin hook enqueue failed",
+                    exc_info=True,
+                )
                 return
             self._stream_reasoning_hooks_enabled = enabled
         if enabled:
-            self._enqueue_stream_hook("on_stream_delta", label="reasoning on_stream_delta", delta=text, kind="reasoning")
+            self._enqueue_stream_hook(
+                "on_stream_delta",
+                label="reasoning on_stream_delta",
+                delta=text,
+                kind="reasoning",
+            )
 
     def _fire_tool_gen_started(self, tool_name: str) -> None:
         """Notify the display layer that the model is generating tool call arguments (spinner for large payloads)."""
@@ -374,4 +460,7 @@ class StreamDeliveryMixin:
                 return True
         except Exception:
             logger.debug("plugin stream hook consumer check failed", exc_info=True)
-        return self.stream_delta_callback is not None or getattr(self, "_stream_callback", None) is not None
+        return (
+            self.stream_delta_callback is not None
+            or getattr(self, "_stream_callback", None) is not None
+        )

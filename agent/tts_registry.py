@@ -22,24 +22,40 @@ logger = logging.getLogger(__name__)
 # ``BUILTIN_TTS_PROVIDERS`` in :mod:`tools.tts_tool`** (``TestBuiltinSync`` in
 # ``tests/agent/test_tts_registry.py`` fails on drift); importing it directly
 # would be a circular import.
-_BUILTIN_NAMES = frozenset({
-    "edge", "elevenlabs", "openai", "minimax", "xai", "mistral", "gemini", "neutts", "kittentts",
-    "piper", "deepinfra",
-})
+_BUILTIN_NAMES = frozenset(
+    {
+        "edge",
+        "elevenlabs",
+        "openai",
+        "minimax",
+        "xai",
+        "mistral",
+        "gemini",
+        "neutts",
+        "kittentts",
+        "piper",
+        "deepinfra",
+    }
+)
 
 
 def _warn_builtin_collision(key: str) -> None:
     logger.warning(
         "TTS provider '%s' shadows a built-in name; registration ignored. "
         "Built-in TTS providers (%s) always win — pick a different name.",
-        key, ", ".join(sorted(_BUILTIN_NAMES)),
+        key,
+        ", ".join(sorted(_BUILTIN_NAMES)),
     )
 
 
 # Case-insensitive, whitespace-tolerant keys mirror how
 # ``tools.tts_tool._get_provider`` normalizes the configured ``tts.provider``.
 _registry: ProviderRegistry[TTSProvider] = ProviderRegistry(
-    label="TTS", provider_cls=TTSProvider, logger=logger, normalize=lower_key,
-    builtin_names=_BUILTIN_NAMES, on_builtin_collision=_warn_builtin_collision,
+    label="TTS",
+    provider_cls=TTSProvider,
+    logger=logger,
+    normalize=lower_key,
+    builtin_names=_BUILTIN_NAMES,
+    on_builtin_collision=_warn_builtin_collision,
 )
 _registry.export(globals())

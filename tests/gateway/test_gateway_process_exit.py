@@ -23,6 +23,7 @@ def test_main_terminates_via_os_exit_not_systemexit(monkeypatch):
     propagate instead of our os._exit sentinel and this test would fail.
 
     Test contributed by @AgenticSpark (PR #53122, duplicate of #53121)."""
+
     async def fake_start_gateway(config=None):
         return False
 
@@ -47,6 +48,7 @@ def test_main_routes_systemexit_through_os_exit(monkeypatch):
     (#53107) — a SystemExit propagating to interpreter finalization would join a
     stuck non-daemon worker and hang. Verifies the explicit code (e.g. 78) is
     preserved through the os._exit backstop."""
+
     async def fake_start_gateway(config=None):
         raise SystemExit(78)
 

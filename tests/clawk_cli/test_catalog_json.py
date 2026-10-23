@@ -34,8 +34,11 @@ def _doc_from(entries):
     """A fetchable catalog document built by mutating the packaged JSON."""
     from importlib.resources import files
 
-    doc = json.loads(files("clawk_cli.local_runtime")
-                     .joinpath("catalog.json").read_text(encoding="utf-8"))
+    doc = json.loads(
+        files("clawk_cli.local_runtime")
+        .joinpath("catalog.json")
+        .read_text(encoding="utf-8")
+    )
     doc["models"] = entries(doc["models"])
     return doc
 
@@ -50,8 +53,7 @@ def _fetch_returns(monkeypatch, doc):
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(urllib.request, "urlopen",
-                        lambda *a, **k: R(body))
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: R(body))
 
 
 def test_packaged_json_round_trips_the_catalog():
@@ -76,8 +78,12 @@ def test_refresh_swaps_in_memory_only(monkeypatch, tmp_path):
 
     def add_day0(models):
         day0 = dict(models[0])
-        day0.update(id="day0-model", display_name="Day 0",
-                    description="new", min_engine="b99999")
+        day0.update(
+            id="day0-model",
+            display_name="Day 0",
+            description="new",
+            min_engine="b99999",
+        )
         return models + [day0]
 
     _fetch_returns(monkeypatch, _doc_from(add_day0))
@@ -119,8 +125,10 @@ def test_min_engine_gate(monkeypatch):
     from clawk_cli.local_runtime.binaries import Engine
     from pathlib import Path
 
-    monkeypatch.setattr("clawk_cli.local_runtime.binaries.installed_engine",
-                        lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")))
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.binaries.installed_engine",
+        lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")),
+    )
     assert _engine_too_old("") is False, "no requirement, no gate"
     assert _engine_too_old("b10000") is False, "installed engine suffices"
     assert _engine_too_old("b10363") is True, "newer requirement gates"

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from cli import ClawksisCLI
 
+
 class TestCLILoadingIndicator:
     def _make_cli(self):
         cli_obj = ClawksisCLI.__new__(ClawksisCLI)
@@ -23,8 +24,10 @@ class TestCLILoadingIndicator:
             seen["status"] = cli_obj._command_status
             print("skills done")
 
-        with patch.object(cli_obj, "_handle_skills_command", side_effect=fake_handle), \
-             patch.object(cli_obj, "_invalidate"):
+        with (
+            patch.object(cli_obj, "_handle_skills_command", side_effect=fake_handle),
+            patch.object(cli_obj, "_invalidate"),
+        ):
             assert cli_obj.process_command("/skills search kubernetes")
 
         output = capsys.readouterr().out

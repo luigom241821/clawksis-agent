@@ -236,7 +236,6 @@ def test_grandchild_leak_is_killed_by_runner(tmp_path: Path) -> None:
         )
 
 
-
 @pytest.mark.platforms("linux")
 @pytest.mark.live_system_guard_bypass
 def test_detached_grandchild_is_killed_by_runner(tmp_path: Path) -> None:
@@ -246,7 +245,8 @@ def test_detached_grandchild_is_killed_by_runner(tmp_path: Path) -> None:
     probe_dir = tmp_path / "probe"
     probe_dir.mkdir()
     handoff = tmp_path / "detached.json"
-    (probe_dir / "test_probe_detached.py").write_text(textwrap.dedent(f"""
+    (probe_dir / "test_probe_detached.py").write_text(
+        textwrap.dedent(f"""
         import json, os, subprocess, sys
         from pathlib import Path
 
@@ -257,12 +257,27 @@ def test_detached_grandchild_is_killed_by_runner(tmp_path: Path) -> None:
                 start_new_session=True,
             )
             Path({str(handoff)!r}).write_text(json.dumps({{"pid": child.pid}}), encoding="utf-8")
-    """).lstrip(), encoding="utf-8")
+    """).lstrip(),
+        encoding="utf-8",
+    )
     proc = subprocess.run(
-        [sys.executable, str(repo_root / "scripts" / "run_tests_parallel.py"),
-         "--paths", str(probe_dir), "-j", "1", "--file-timeout", "30"],
-        cwd=probe_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        encoding="utf-8", errors="replace", timeout=60, check=False,
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "run_tests_parallel.py"),
+            "--paths",
+            str(probe_dir),
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+        ],
+        cwd=probe_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
     )
     pid = json.loads(handoff.read_text(encoding="utf-8-sig"))["pid"]
     deadline = time.monotonic() + 5.0
@@ -272,6 +287,7 @@ def test_detached_grandchild_is_killed_by_runner(tmp_path: Path) -> None:
         os.kill(pid, 9)
         pytest.fail(f"detached child {pid} survived the runner; output:\n{proc.stdout}")
     assert proc.returncode == 0, proc.stdout
+
 
 # ── Bare pytest-flag passthrough ─────────────────────────────────────────────
 #
@@ -292,8 +308,7 @@ def _make_probe_dir(tmp_path: Path) -> Path:
     probe_dir = tmp_path / "probe"
     probe_dir.mkdir()
     (probe_dir / "test_flagprobe.py").write_text(
-        "def test_alpha():\n    assert True\n\n"
-        "def test_beta():\n    assert True\n"
+        "def test_alpha():\n    assert True\n\ndef test_beta():\n    assert True\n"
     )
     return probe_dir
 
@@ -302,8 +317,17 @@ def _run_runner(probe_dir: Path, *extra: str) -> subprocess.CompletedProcess:
     repo_root = _probe_root(probe_dir.parent)
     runner = repo_root / "scripts" / "run_tests_parallel.py"
     return subprocess.run(
-        [sys.executable, str(runner), "--paths", str(probe_dir),
-         "-j", "1", "--file-timeout", "30", *extra],
+        [
+            sys.executable,
+            str(runner),
+            "--paths",
+            str(probe_dir),
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+            *extra,
+        ],
         cwd=probe_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -341,7 +365,9 @@ def test_help_prints_usage_without_discovering_or_running_tests(
     assert "Discovered" not in proc.stdout
 
 
-def test_unknown_bare_flag_errors_with_usage_instead_of_sweeping(tmp_path: Path) -> None:
+def test_unknown_bare_flag_errors_with_usage_instead_of_sweeping(
+    tmp_path: Path,
+) -> None:
     """A typo'd flag fails once, up front, and never reaches a per-file pytest.
 
     Bare tokens are checked against pytest's own option set, so real pytest
@@ -425,8 +451,6 @@ def test_file_retry_self_heals_and_prints_both_attempts(tmp_path: Path) -> None:
     assert "retry output" in proc.stdout
 
 
-
-
 # ---------------------------------------------------------------------------
 # Zero-collection is not a pass; node ids are translated, not dropped.
 #
@@ -445,9 +469,9 @@ def test_zero_collected_across_run_fails_and_says_so(tmp_path: Path) -> None:
     assert "NOT a pass" in proc.stdout
 
 
-
-
-def test_fail_on_skip_fails_a_run_with_any_skip_even_beside_an_xfail(tmp_path: Path) -> None:
+def test_fail_on_skip_fails_a_run_with_any_skip_even_beside_an_xfail(
+    tmp_path: Path,
+) -> None:
     """--fail-on-skip reads the parsed skip count, not the progress line.
 
     The remote-backends lane once grepped the line for an ``<n>s,`` suffix,
@@ -477,11 +501,16 @@ def test_fail_on_skip_passes_a_run_without_skips(tmp_path: Path) -> None:
     assert "SKIPPED" not in proc.stdout
 
 
-@pytest.mark.parametrize("form,expected", [
-    ("positional", ["alpha", "beta"]), ("bare-k", ["alpha"]),
-    ("node-id", ["alpha"]), ("explicit-k", ["beta"]),
-    ("pathsep", ["alpha", "beta", "gamma"]),
-])
+@pytest.mark.parametrize(
+    "form,expected",
+    [
+        ("positional", ["alpha", "beta"]),
+        ("bare-k", ["alpha"]),
+        ("node-id", ["alpha"]),
+        ("explicit-k", ["beta"]),
+        ("pathsep", ["alpha", "beta", "gamma"]),
+    ],
+)
 def test_runner_selection_records_actual_test_identity(tmp_path, form, expected):
     probe = tmp_path / "probe"
     other = tmp_path / "other"
@@ -489,11 +518,18 @@ def test_runner_selection_records_actual_test_identity(tmp_path, form, expected)
     other.mkdir()
     receipt = tmp_path / "witnesses"
     receipt.mkdir()
-    for directory, filename, names in ((probe, "test_flags.py", ["alpha", "beta"]),
-                                       (other, "test_other.py", ["gamma"])):
-        (directory / filename).write_text("from pathlib import Path\n" + "".join(
-            f"def test_{name}():\n    Path({str(receipt / name)!r}).touch()\n" for name in names
-        ), encoding="utf-8")
+    for directory, filename, names in (
+        (probe, "test_flags.py", ["alpha", "beta"]),
+        (other, "test_other.py", ["gamma"]),
+    ):
+        (directory / filename).write_text(
+            "from pathlib import Path\n"
+            + "".join(
+                f"def test_{name}():\n    Path({str(receipt / name)!r}).touch()\n"
+                for name in names
+            ),
+            encoding="utf-8",
+        )
     target = str(probe / "test_flags.py")
     arguments = {
         "positional": [str(probe), "-q"],
@@ -503,8 +539,15 @@ def test_runner_selection_records_actual_test_identity(tmp_path, form, expected)
         "pathsep": ["--paths", os.pathsep.join([str(probe), str(other)])],
     }[form]
     runner = _probe_root(tmp_path) / "scripts/run_tests_parallel.py"
-    result = subprocess.run([sys.executable, str(runner), *arguments, "-j", "1", "--file-timeout", "30"],
-                            cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    result = subprocess.run(
+        [sys.executable, str(runner), *arguments, "-j", "1", "--file-timeout", "30"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert sorted(path.name for path in receipt.iterdir()) == expected
 
@@ -512,13 +555,17 @@ def test_runner_selection_records_actual_test_identity(tmp_path, form, expected)
 @pytest.mark.parametrize("selector", ["files", "discovery"])
 @pytest.mark.parametrize("ignore", ["glob", "glob-spaced", "path"])
 def test_passthrough_ignore_drops_files_the_runner_hands_pytest_explicitly(
-    tmp_path, selector, ignore,
+    tmp_path,
+    selector,
+    ignore,
 ):
     """Each file reaches its own pytest as an explicit argument, which pytest's
     --ignore/--ignore-glob never filter; the runner must apply them itself. The
     Windows lane's ``--ignore-glob='*test_desktop_update_windows_*.py'`` gate was a
     no-op, so those files ran (and hit the per-file cap) on PRs it meant to spare."""
-    root = _probe_root(tmp_path)   # relative globs anchor at the repo root (per-file pytest's cwd)
+    root = _probe_root(
+        tmp_path
+    )  # relative globs anchor at the repo root (per-file pytest's cwd)
     probe = root / "tests" / "probe"
     probe.mkdir(parents=True)
     receipt = tmp_path / "witnesses"
@@ -526,24 +573,52 @@ def test_passthrough_ignore_drops_files_the_runner_hands_pytest_explicitly(
     for name in ("keep", "gated_skipme"):
         (probe / f"test_{name}.py").write_text(
             f"from pathlib import Path\ndef test_{name}():\n    Path({str(receipt / name)!r}).touch()\n",
-            encoding="utf-8")
-    pick = (["--files", os.pathsep.join(f"tests/probe/test_{n}.py" for n in ("keep", "gated_skipme"))]
-            if selector == "files" else ["--paths", str(probe)])
-    flag = {"glob": ["--ignore-glob=*test_gated_*.py"],
-            "glob-spaced": ["--ignore-glob", "*test_gated_*.py"],
-            "path": ["--ignore=tests/probe/test_gated_skipme.py"]}[ignore]
+            encoding="utf-8",
+        )
+    pick = (
+        [
+            "--files",
+            os.pathsep.join(
+                f"tests/probe/test_{n}.py" for n in ("keep", "gated_skipme")
+            ),
+        ]
+        if selector == "files"
+        else ["--paths", str(probe)]
+    )
+    flag = {
+        "glob": ["--ignore-glob=*test_gated_*.py"],
+        "glob-spaced": ["--ignore-glob", "*test_gated_*.py"],
+        "path": ["--ignore=tests/probe/test_gated_skipme.py"],
+    }[ignore]
     runner = root / "scripts/run_tests_parallel.py"
-    result = subprocess.run([sys.executable, str(runner), *pick, "-j", "1", "--file-timeout", "30", "--", *flag],
-                            cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(runner),
+            *pick,
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+            "--",
+            *flag,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert sorted(path.name for path in receipt.iterdir()) == ["keep"], result.stdout
     assert "excluded 1 test file" in result.stdout, result.stdout
 
 
-
-
 @pytest.mark.platforms("posix")  # POSIX signal death; Windows has no SIGSEGV exit
-def test_interpreter_crash_is_reported_as_a_crash_not_as_no_tests_ran(tmp_path: Path) -> None:
+def test_interpreter_crash_is_reported_as_a_crash_not_as_no_tests_ran(
+    tmp_path: Path,
+) -> None:
     """A file whose interpreter dies by signal is classified as CRASHED (#113186).
 
     A native fault after some tests passed leaves no pytest summary line, so
@@ -615,11 +690,24 @@ def test_files_from_dash_reads_the_list_from_stdin(tmp_path: Path) -> None:
     repo_root = Path(__file__).resolve().parent.parent.parent
     runner = repo_root / "scripts" / "run_tests_parallel.py"
     proc = subprocess.run(
-        [sys.executable, str(runner), "--files-from", "-",
-         "-j", "1", "--file-timeout", "30", "-q"],
+        [
+            sys.executable,
+            str(runner),
+            "--files-from",
+            "-",
+            "-j",
+            "1",
+            "--file-timeout",
+            "30",
+            "-q",
+        ],
         input=f"{probe_dir / 'test_flagprobe.py'}\n",
-        cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        encoding="utf-8", errors="replace", timeout=60,
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
         check=False,
     )
     assert proc.returncode == 0, proc.stdout
@@ -644,8 +732,11 @@ def test_scratch_root_is_per_user(tmp_path: Path, monkeypatch) -> None:
     # (Narrow: on 3.14 ``Path.is_dir()`` itself goes through ``os.path.isdir``.)
     monkeypatch.setattr(runner.tempfile, "gettempdir", lambda: str(tmp_path))
     real_isdir = os.path.isdir
-    monkeypatch.setattr(runner.os.path, "isdir",
-                        lambda path: False if str(path) == "/var/tmp" else real_isdir(path))
+    monkeypatch.setattr(
+        runner.os.path,
+        "isdir",
+        lambda path: False if str(path) == "/var/tmp" else real_isdir(path),
+    )
 
     monkeypatch.setattr(runner.os, "getuid", lambda: 1000)
     mine = Path(runner._runner_scratch_root())
@@ -657,7 +748,9 @@ def test_scratch_root_is_per_user(tmp_path: Path, monkeypatch) -> None:
     assert mine.parent == tmp_path and theirs.parent == tmp_path
 
 
-def test_off_host_note_names_platforms_specs_that_exclude_this_host(tmp_path: Path) -> None:
+def test_off_host_note_names_platforms_specs_that_exclude_this_host(
+    tmp_path: Path,
+) -> None:
     """A green local run must say which platforms() tests were skipped and where
     they run; specs are resolved (posix is not off-host on Linux or macOS)."""
     probe_dir = _make_probe_dir(tmp_path)
@@ -669,28 +762,44 @@ def test_off_host_note_names_platforms_specs_that_exclude_this_host(tmp_path: Pa
         encoding="utf-8",
     )
     proc = _run_runner(probe_dir)
-    notes = [line for line in proc.stdout.splitlines() if "SKIPPED on this host" in line]
+    notes = [
+        line for line in proc.stdout.splitlines() if "SKIPPED on this host" in line
+    ]
     host = {"linux": "linux", "darwin": "macos", "win32": "windows"}[sys.platform]
     off_host = {"windows"} - {host}
     if host == "linux":
         off_host.add("not linux")
     if host == "windows":
         off_host.add("posix")
-    assert {n.split("platforms(")[1].split(")")[0].strip("'") for n in notes} == off_host, proc.stdout
+    assert {
+        n.split("platforms(")[1].split(")")[0].strip("'") for n in notes
+    } == off_host, proc.stdout
     assert all("they run on the" in n for n in notes), proc.stdout
 
 
-def test_slices_partition_the_suite_exactly_even_with_different_duration_caches(capsys) -> None:
+def test_slices_partition_the_suite_exactly_even_with_different_duration_caches(
+    capsys,
+) -> None:
     """Each CI slice job restores its own duration cache; the slices must still cover every file once."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "rtp_slices", Path(__file__).resolve().parents[2] / "scripts" / "run_tests_parallel.py")
+        "rtp_slices",
+        Path(__file__).resolve().parents[2] / "scripts" / "run_tests_parallel.py",
+    )
     rtp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rtp)
     root = Path("/repo")
     files = [root / f"tests/t_{i:03d}.py" for i in range(101)]
-    caches = [{f"tests/t_{i:03d}.py": float(i) for i in range(101)}, {"tests/t_000.py": 500.0}, {}]
-    slices = [rtp._slice_files(list(reversed(files)) if i % 2 else files, i % 3 + 1, 3, caches[i % 3], root)
-              for i in range(3)]
+    caches = [
+        {f"tests/t_{i:03d}.py": float(i) for i in range(101)},
+        {"tests/t_000.py": 500.0},
+        {},
+    ]
+    slices = [
+        rtp._slice_files(
+            list(reversed(files)) if i % 2 else files, i % 3 + 1, 3, caches[i % 3], root
+        )
+        for i in range(3)
+    ]
     assert sorted(f for s in slices for f in s) == sorted(files)

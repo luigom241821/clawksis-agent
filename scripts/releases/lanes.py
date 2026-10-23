@@ -12,6 +12,7 @@ Lanes are independent switches, but a job runs only when every lane it needs
 is on (JOB_LANES), so a test lane for something that is not built is inert:
 ``upgrade`` with ``macos-arm64`` off runs no macOS upgrade arm.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,10 +28,22 @@ class Lane:
 
 LANES = (
     Lane("docker", True, "build and publish the Docker image"),
-    Lane("windows", True, "signed Windows x64 + arm64 MSIX and the universal bundle (the update channel's package)"),
-    Lane("windows-store", True, "unsigned Microsoft Store bundle, submitted to Partner Center (needs no signing)"),
+    Lane(
+        "windows",
+        True,
+        "signed Windows x64 + arm64 MSIX and the universal bundle (the update channel's package)",
+    ),
+    Lane(
+        "windows-store",
+        True,
+        "unsigned Microsoft Store bundle, submitted to Partner Center (needs no signing)",
+    ),
     Lane("macos-arm64", True, "macOS Apple Silicon DMG + ZIP"),
-    Lane("macos-intel", False, "macOS Intel DMG + ZIP (unsupported on main; its runner adds over an hour)"),
+    Lane(
+        "macos-intel",
+        False,
+        "macOS Intel DMG + ZIP (unsupported on main; its runner adds over an hour)",
+    ),
     Lane("termux", False, "Termux (Android aarch64) APT package"),
     Lane("ci", True, "the full CI pipeline"),
     Lane("nix", True, "Nix checks"),
@@ -41,7 +54,11 @@ LANES = (
     Lane("bootstrap-version", True, "bootstrap installer release identity check"),
     Lane("termux-checks", True, "Termux verification (runs only with termux)"),
     Lane("smoke", True, "native install + chat smoke of each built desktop package"),
-    Lane("upgrade", True, "signed-package upgrade acceptance (OLD to NEW) of each built desktop package"),
+    Lane(
+        "upgrade",
+        True,
+        "signed-package upgrade acceptance (OLD to NEW) of each built desktop package",
+    ),
 )
 NAMES = tuple(lane.name for lane in LANES)
 DEFAULT = frozenset(lane.name for lane in LANES if lane.default)
@@ -60,39 +77,53 @@ DERIVED = ("bundles", "desktop-channel", "windows-build")
 # names are computed from the lanes: "bundles" is any build lane except docker, "desktop-channel"
 # is the full desktop set the protected channel serves, "windows-build" is either Windows lane (the
 # per-arch builds and the bundle assembly are shared, each lane only picks which package they make).
-JOB_LANES: dict[str, frozenset[str]] = {name: frozenset(needs) for name, needs in {
-    "ci": ("ci",),
-    "nix": ("nix",),
-    "docker": ("docker",),
-    "publish-docker": ("docker",),
-    "pm-bundle": ("pm-bundle",),
-    "termux-checks": ("termux-checks", "termux"),
-    "windows-live": ("windows-live",),
-    "install-e2e": ("install-e2e",),
-    "bootstrap-version": ("bootstrap-version",),
-    "candidates-darwin-arm64": ("macos-arm64",),
-    "candidates-darwin-x64": ("macos-intel",),
-    "candidates-win32-arm64": ("windows-build",),
-    "candidates-win32-x64": ("windows-build",),
-    "candidates-win32-bundle": ("windows-build",),
-    "candidates-termux": ("termux",),
-    "candidate-manifest": ("bundles",),
-    "publish-bundles": ("bundles",),
-    "transitions-darwin-arm64": ("macos-arm64", "upgrade"),
-    "transitions-darwin-x64": ("macos-intel", "upgrade"),
-    "transitions-win32": ("windows", "upgrade"),
-    "macos-packaged-arm64": ("macos-arm64", "upgrade"),
-    "macos-packaged-x64": ("macos-intel", "upgrade"),
-    "windows-packaged": ("windows", "upgrade"),
-}.items()}
+JOB_LANES: dict[str, frozenset[str]] = {
+    name: frozenset(needs)
+    for name, needs in {
+        "ci": ("ci",),
+        "nix": ("nix",),
+        "docker": ("docker",),
+        "publish-docker": ("docker",),
+        "pm-bundle": ("pm-bundle",),
+        "termux-checks": ("termux-checks", "termux"),
+        "windows-live": ("windows-live",),
+        "install-e2e": ("install-e2e",),
+        "bootstrap-version": ("bootstrap-version",),
+        "candidates-darwin-arm64": ("macos-arm64",),
+        "candidates-darwin-x64": ("macos-intel",),
+        "candidates-win32-arm64": ("windows-build",),
+        "candidates-win32-x64": ("windows-build",),
+        "candidates-win32-bundle": ("windows-build",),
+        "candidates-termux": ("termux",),
+        "candidate-manifest": ("bundles",),
+        "publish-bundles": ("bundles",),
+        "transitions-darwin-arm64": ("macos-arm64", "upgrade"),
+        "transitions-darwin-x64": ("macos-intel", "upgrade"),
+        "transitions-win32": ("windows", "upgrade"),
+        "macos-packaged-arm64": ("macos-arm64", "upgrade"),
+        "macos-packaged-x64": ("macos-intel", "upgrade"),
+        "windows-packaged": ("windows", "upgrade"),
+    }.items()
+}
 
 CANDIDATE_CALLS = tuple(job for job in JOB_LANES if job.startswith("candidates-"))
 
 # Candidate handoff group and manifest target, each with the lane that builds it.
-HANDOFF_LANE = {"win32-x64": "windows-build", "win32-arm64": "windows-build", "windows-universal": "windows-build",
-                "darwin-arm64": "macos-arm64", "darwin-x64": "macos-intel", "termux": "termux"}
-TARGET_LANE = {"windows/x64": "windows", "windows/arm64": "windows", "macos/arm64": "macos-arm64",
-               "macos/x64": "macos-intel", "termux/aarch64": "termux"}
+HANDOFF_LANE = {
+    "win32-x64": "windows-build",
+    "win32-arm64": "windows-build",
+    "windows-universal": "windows-build",
+    "darwin-arm64": "macos-arm64",
+    "darwin-x64": "macos-intel",
+    "termux": "termux",
+}
+TARGET_LANE = {
+    "windows/x64": "windows",
+    "windows/arm64": "windows",
+    "macos/arm64": "macos-arm64",
+    "macos/x64": "macos-intel",
+    "termux/aarch64": "termux",
+}
 LEFT_OUT = {
     "docker": "the Docker image keeps its previous stable tag",
     "windows": "no signed Windows packages: the Windows update channel stays on its previous release",
@@ -103,12 +134,20 @@ LEFT_OUT = {
 }
 
 
-def select(*, only: Iterable[str] | None = None, with_: Iterable[str] = (),
-           without: Iterable[str] = ()) -> frozenset[str]:
+def select(
+    *,
+    only: Iterable[str] | None = None,
+    with_: Iterable[str] = (),
+    without: Iterable[str] = (),
+) -> frozenset[str]:
     """The lane set a ``release`` command asks for. ``only`` replaces DEFAULT as the base."""
-    base, added, removed = (_known(group) for group in (DEFAULT if only is None else only, with_, without))
+    base, added, removed = (
+        _known(group) for group in (DEFAULT if only is None else only, with_, without)
+    )
     if added & removed:
-        raise ValueError(f"--with and --without both name {', '.join(sorted(added & removed))}")
+        raise ValueError(
+            f"--with and --without both name {', '.join(sorted(added & removed))}"
+        )
     return frozenset((base | added) - removed)
 
 
@@ -116,7 +155,9 @@ def _known(names: Iterable[str]) -> frozenset[str]:
     names = frozenset(names)
     unknown = names - set(NAMES)
     if unknown:
-        raise ValueError(f"unknown lane {', '.join(sorted(unknown))}; lanes are {', '.join(NAMES)}")
+        raise ValueError(
+            f"unknown lane {', '.join(sorted(unknown))}; lanes are {', '.join(NAMES)}"
+        )
     return names
 
 
@@ -124,14 +165,22 @@ def parse_list(values: Iterable[str] | None) -> list[str] | None:
     """Flatten repeated comma-separated option values; None when the option was not given."""
     if values is None:
         return None
-    return [name.strip() for value in values for name in value.split(",") if name.strip()]
+    return [
+        name.strip() for value in values for name in value.split(",") if name.strip()
+    ]
 
 
 def effective(lanes: Iterable[str]) -> frozenset[str]:
     lanes = frozenset(lanes)
-    return lanes | {name for name, derived in (("bundles", has_bundles(lanes)),
-                                               ("desktop-channel", advances_desktop(lanes)),
-                                               ("windows-build", bool(lanes & set(WINDOWS)))) if derived}
+    return lanes | {
+        name
+        for name, derived in (
+            ("bundles", has_bundles(lanes)),
+            ("desktop-channel", advances_desktop(lanes)),
+            ("windows-build", bool(lanes & set(WINDOWS))),
+        )
+        if derived
+    }
 
 
 def flags(lanes: Iterable[str]) -> dict[str, bool]:
@@ -142,8 +191,11 @@ def flags(lanes: Iterable[str]) -> dict[str, bool]:
 
 def from_flags(raw: object) -> frozenset[str]:
     """The lane set of a ``flags`` mapping; refuses anything but a boolean for every lane."""
-    if not isinstance(raw, Mapping) or set(raw) != {*NAMES, *DERIVED} \
-            or any(not isinstance(value, bool) for value in raw.values()):
+    if (
+        not isinstance(raw, Mapping)
+        or set(raw) != {*NAMES, *DERIVED}
+        or any(not isinstance(value, bool) for value in raw.values())
+    ):
         raise ValueError("lanes must be a boolean for every lane")
     return frozenset(name for name in NAMES if raw[name])
 
@@ -192,8 +244,20 @@ def moves_channels(lanes: Iterable[str]) -> bool:
 LANES_REVISION = 2
 _LEGACY_OPTIONAL = ("includeMacosIntel", "includeTermux")
 _LEGACY_BUNDLE_LANES = frozenset({*BUNDLES, "pm-bundle", "upgrade", "smoke"})
-_TEST_LANES = frozenset({"ci", "nix", "docker-tests", "pm-bundle", "windows-live", "install-e2e",
-                         "bootstrap-version", "termux-checks", "smoke", "upgrade"})
+_TEST_LANES = frozenset(
+    {
+        "ci",
+        "nix",
+        "docker-tests",
+        "pm-bundle",
+        "windows-live",
+        "install-e2e",
+        "bootstrap-version",
+        "termux-checks",
+        "smoke",
+        "upgrade",
+    }
+)
 
 
 def claim_lanes(metadata: Mapping) -> frozenset[str]:
@@ -206,8 +270,11 @@ def claim_lanes(metadata: Mapping) -> frozenset[str]:
     """
     if "lanes" in metadata:
         lanes = metadata["lanes"]
-        if (not isinstance(lanes, list) or any(not isinstance(name, str) for name in lanes)
-                or lanes != sorted(set(lanes))):
+        if (
+            not isinstance(lanes, list)
+            or any(not isinstance(name, str) for name in lanes)
+            or lanes != sorted(set(lanes))
+        ):
             raise ValueError("Stable claim metadata is invalid")
         if metadata.get("lanesRevision", 1) not in (1, LANES_REVISION):
             raise ValueError("Stable claim metadata is invalid")
@@ -218,11 +285,21 @@ def claim_lanes(metadata: Mapping) -> frozenset[str]:
         if "lanesRevision" not in metadata and "windows" in known:
             known |= {"windows-store"}
         return known
-    if any(not isinstance(metadata.get(key), bool)
-           for key in ("skipBundles", "skipTests", *(k for k in _LEGACY_OPTIONAL if k in metadata))):
+    if any(
+        not isinstance(metadata.get(key), bool)
+        for key in (
+            "skipBundles",
+            "skipTests",
+            *(k for k in _LEGACY_OPTIONAL if k in metadata),
+        )
+    ):
         raise ValueError("Stable claim metadata is invalid")
     lanes = set(NAMES) - {"macos-intel", "termux"}
-    lanes |= {lane for key, lane in zip(_LEGACY_OPTIONAL, ("macos-intel", "termux")) if metadata.get(key)}
+    lanes |= {
+        lane
+        for key, lane in zip(_LEGACY_OPTIONAL, ("macos-intel", "termux"))
+        if metadata.get(key)
+    }
     if metadata["skipBundles"]:
         lanes -= _LEGACY_BUNDLE_LANES
     if metadata["skipTests"]:

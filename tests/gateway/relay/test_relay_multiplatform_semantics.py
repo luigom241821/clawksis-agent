@@ -47,9 +47,14 @@ class RecordingTransport:
 
 def _multi_adapter(primary="slack", others=("telegram",)):
     """Adapter with a primary descriptor + per-platform secondaries."""
-    adapter, _ = _connected_adapter() if primary == "slack" else _connected_adapter(
-        platform=primary, markdown_dialect="markdown_v2",
-        supported_ops=("send", "edit", "typing", "draft"),
+    adapter, _ = (
+        _connected_adapter()
+        if primary == "slack"
+        else _connected_adapter(
+            platform=primary,
+            markdown_dialect="markdown_v2",
+            supported_ops=("send", "edit", "typing", "draft"),
+        )
     )
     descs = {p: _desc_for(p) for p in (primary, *others)}
     t = RecordingTransport(descs)

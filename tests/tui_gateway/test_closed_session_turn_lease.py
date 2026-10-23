@@ -23,20 +23,36 @@ SID = "closing-sid"
 
 def _session(**extra) -> dict:
     return {
-        "agent": None, "session_key": "closing-session-key", "history": [],
-        "history_lock": threading.Lock(), "history_version": 0, "running": False,
-        "attached_images": [], "image_counter": 0, "cols": 80, "slash_worker": None,
-        "show_reasoning": False, "tool_progress_mode": "all", **extra}
+        "agent": None,
+        "session_key": "closing-session-key",
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "running": False,
+        "attached_images": [],
+        "image_counter": 0,
+        "cols": 80,
+        "slash_worker": None,
+        "show_reasoning": False,
+        "tool_progress_mode": "all",
+        **extra,
+    }
 
 
 def _built_agent(turns_run: list) -> types.SimpleNamespace:
     return types.SimpleNamespace(
-        session_id="closing-session-key", clear_interrupt=lambda: None,
-        run_conversation=lambda *a, **k: turns_run.append(a) or {"final_response": "done"})
+        session_id="closing-session-key",
+        clear_interrupt=lambda: None,
+        run_conversation=lambda *a, **k: (
+            turns_run.append(a) or {"final_response": "done"}
+        ),
+    )
 
 
 def _rpc(method: str, **params) -> dict:
-    return server.handle_request({"id": method, "method": method, "params": {"session_id": SID, **params}})
+    return server.handle_request(
+        {"id": method, "method": method, "params": {"session_id": SID, **params}}
+    )
 
 
 def _registry_session_ids() -> list:
@@ -91,8 +107,10 @@ def test_close_while_first_prompt_waits_for_build_leaves_no_lease(turn_env):
     _join_turn(session)
 
     assert {
-        "leases": _registry_session_ids(), "reopen_refusal": _reopen_refusal(),
-        "running": session["running"], "turns_run": turns_run,
+        "leases": _registry_session_ids(),
+        "reopen_refusal": _reopen_refusal(),
+        "running": session["running"],
+        "turns_run": turns_run,
     } == {"leases": [], "reopen_refusal": None, "running": False, "turns_run": []}
 
 
@@ -108,7 +126,9 @@ def test_close_landing_while_turn_claims_lease_leaves_no_lease(turn_env, monkeyp
     at_claim: dict = {}
 
     def _claim_after_close(sid, claiming):
-        if threading.current_thread() is claiming.get("_run_thread") and not claiming.get("_closing"):
+        if threading.current_thread() is claiming.get(
+            "_run_thread"
+        ) and not claiming.get("_closing"):
             at_claim["closed"] = _rpc("session.close")["result"]["closed"]
             at_claim["leases"] = _registry_session_ids()
         return claim(sid, claiming)
@@ -122,8 +142,10 @@ def test_close_landing_while_turn_claims_lease_leaves_no_lease(turn_env, monkeyp
     monkeypatch.setattr(server, "_ensure_active_session_slot", claim)
     assert at_claim == {"closed": True, "leases": []}
     assert {
-        "leases": _registry_session_ids(), "reopen_refusal": _reopen_refusal(),
-        "running": session["running"], "turns_run": turns_run,
+        "leases": _registry_session_ids(),
+        "reopen_refusal": _reopen_refusal(),
+        "running": session["running"],
+        "turns_run": turns_run,
     } == {"leases": [], "reopen_refusal": None, "running": False, "turns_run": []}
 
 
@@ -136,7 +158,9 @@ def test_closing_refusal_keeps_a_lease_the_session_already_held(turn_env):
     held = session["active_session_lease"]
     session["_closing"] = True
 
-    assert server._admit_prompt_turn(SID, session, "hello", None, None, None, None) is None
+    assert (
+        server._admit_prompt_turn(SID, session, "hello", None, None, None, None) is None
+    )
 
     assert session.get("active_session_lease") is held
     assert _registry_session_ids() == ["closing-session-key"]

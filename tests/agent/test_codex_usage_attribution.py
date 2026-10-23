@@ -21,9 +21,11 @@ MODEL = "gpt-5.4"
 
 
 def _jwt(account_id="acct-attribution-test"):
-    payload = json.dumps({
-        "https://api.openai.com/auth": {"chatgpt_account_id": account_id},
-    }).encode()
+    payload = json.dumps(
+        {
+            "https://api.openai.com/auth": {"chatgpt_account_id": account_id},
+        }
+    ).encode()
     encoded = base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
     return f"e30.{encoded}.test-signature"
 
@@ -45,9 +47,11 @@ def _set_legacy_attribution(profile, enabled):
     """Old draft settings must not disable required harness identification."""
     if enabled is not None:
         (profile / "config.yaml").write_text(
-            yaml.safe_dump({
-                "telemetry": {"usage_attribution": {"enabled": enabled}},
-            }),
+            yaml.safe_dump(
+                {
+                    "telemetry": {"usage_attribution": {"enabled": enabled}},
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -65,13 +69,15 @@ def wire(profile, monkeypatch):
         "created_at": 0,
         "status": "completed",
         "model": MODEL,
-        "output": [{
-            "type": "message",
-            "id": "msg_test",
-            "role": "assistant",
-            "status": "completed",
-            "content": [{"type": "output_text", "text": "ok", "annotations": []}],
-        }],
+        "output": [
+            {
+                "type": "message",
+                "id": "msg_test",
+                "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": "ok", "annotations": []}],
+            }
+        ],
     }
 
     def respond(request):
@@ -98,22 +104,26 @@ def wire(profile, monkeypatch):
         return cls(transport=httpx.MockTransport(respond))
 
     monkeypatch.setattr(
-        auxiliary_client, "_openai_http_client_kwargs",
+        auxiliary_client,
+        "_openai_http_client_kwargs",
         lambda _url, *, async_mode=False: {
             "http_client": http_client(async_mode=async_mode),
         },
     )
-    monkeypatch.setattr(AIAgent, "_build_keepalive_http_client", staticmethod(http_client))
+    monkeypatch.setattr(
+        AIAgent, "_build_keepalive_http_client", staticmethod(http_client)
+    )
     return requests
 
 
 def _assert_identity(request, account_id="acct-attribution-test"):
     assert request.headers["originator"] == "clawksis-agent"
-    assert request.headers["user-agent"] == f"ClawksisAgent/{get_version_info().base_version}"
+    assert (
+        request.headers["user-agent"]
+        == f"ClawksisAgent/{get_version_info().base_version}"
+    )
     assert request.headers["chatgpt-account-id"] == account_id
     assert "extra_headers" not in json.loads(request.content)
-
-
 
 
 @pytest.mark.parametrize(
@@ -142,12 +152,14 @@ def test_new_identity_is_limited_to_the_official_endpoint(base_url, attributed):
     assert headers["originator"] == ("clawksis-agent" if attributed else "codex_cli_rs")
     assert headers["User-Agent"] == (
         f"ClawksisAgent/{get_version_info().base_version}"
-        if attributed else "codex_cli_rs/0.0.0 (Clawksis)"
+        if attributed
+        else "codex_cli_rs/0.0.0 (Clawksis)"
     )
 
 
 def test_primary_client_and_credential_rebuild_send_expected_headers(
-    profile, wire,
+    profile,
+    wire,
 ):
     from run_agent import AIAgent
 
@@ -187,20 +199,27 @@ def test_primary_client_and_credential_rebuild_send_expected_headers(
 
 
 def test_auxiliary_raw_and_async_clients_send_expected_headers(
-    profile, wire, monkeypatch,
+    profile,
+    wire,
+    monkeypatch,
 ):
     from agent import auxiliary_client
 
-    monkeypatch.setattr(auxiliary_client, "_select_pool_entry", lambda _p: (False, None))
+    monkeypatch.setattr(
+        auxiliary_client, "_select_pool_entry", lambda _p: (False, None)
+    )
     monkeypatch.setattr(auxiliary_client, "_read_codex_singleton_token", _jwt)
 
     wrapped, model = auxiliary_client._build_codex_client(MODEL)
     raw, raw_model = auxiliary_client.resolve_provider_client(
-        "openai-codex", model=MODEL, raw_codex=True,
+        "openai-codex",
+        model=MODEL,
+        raw_codex=True,
     )
     try:
         result = wrapped.chat.completions.create(
-            model=model, messages=[{"role": "user", "content": "test"}],
+            model=model,
+            messages=[{"role": "user", "content": "test"}],
         )
         assert result.choices[0].message.content == "ok"
         _assert_identity(wire[-1])
@@ -211,7 +230,8 @@ def test_auxiliary_raw_and_async_clients_send_expected_headers(
         async def send_async():
             async_wrapped, _ = auxiliary_client._to_async_client(wrapped, model)
             result = await async_wrapped.chat.completions.create(
-                model=model, messages=[{"role": "user", "content": "test"}],
+                model=model,
+                messages=[{"role": "user", "content": "test"}],
             )
             assert result.choices[0].message.content == "ok"
             _assert_identity(wire[-1])
@@ -230,7 +250,8 @@ def test_auxiliary_raw_and_async_clients_send_expected_headers(
 
 
 def test_credential_pool_custom_endpoint_keeps_existing_identity(
-    wire, monkeypatch,
+    wire,
+    monkeypatch,
 ):
     from agent import auxiliary_client
 
@@ -238,12 +259,15 @@ def test_credential_pool_custom_endpoint_keeps_existing_identity(
         runtime_api_key=_jwt(),
         runtime_base_url="https://proxy.example/backend-api/codex",
     )
-    monkeypatch.setattr(auxiliary_client, "_select_pool_entry", lambda _p: (True, entry))
+    monkeypatch.setattr(
+        auxiliary_client, "_select_pool_entry", lambda _p: (True, entry)
+    )
 
     client, model = auxiliary_client._build_codex_client(MODEL)
     try:
         client.chat.completions.create(
-            model=model, messages=[{"role": "user", "content": "test"}],
+            model=model,
+            messages=[{"role": "user", "content": "test"}],
         )
         assert wire[-1].url.host == "proxy.example"
         assert wire[-1].headers["originator"] == "codex_cli_rs"
@@ -254,19 +278,27 @@ def test_credential_pool_custom_endpoint_keeps_existing_identity(
 
 
 def test_legacy_disabled_setting_cannot_disable_attribution_for_new_clients(
-    profile, wire, monkeypatch,
+    profile,
+    wire,
+    monkeypatch,
 ):
     from agent import auxiliary_client
 
-    monkeypatch.setattr(auxiliary_client, "_select_pool_entry", lambda _p: (False, None))
+    monkeypatch.setattr(
+        auxiliary_client, "_select_pool_entry", lambda _p: (False, None)
+    )
     monkeypatch.setattr(auxiliary_client, "_read_codex_singleton_token", _jwt)
     _set_legacy_attribution(profile, True)
     old, _ = auxiliary_client.resolve_provider_client(
-        "openai-codex", model=MODEL, raw_codex=True,
+        "openai-codex",
+        model=MODEL,
+        raw_codex=True,
     )
     _set_legacy_attribution(profile, False)
     new, _ = auxiliary_client.resolve_provider_client(
-        "openai-codex", model=MODEL, raw_codex=True,
+        "openai-codex",
+        model=MODEL,
+        raw_codex=True,
     )
     try:
         old.responses.create(model=MODEL, input="test")
@@ -279,7 +311,8 @@ def test_legacy_disabled_setting_cannot_disable_attribution_for_new_clients(
 
 
 def test_required_identity_wins_over_configured_header_defaults(
-    profile, wire,
+    profile,
+    wire,
 ):
     from agent import auxiliary_client
     from run_agent import AIAgent
@@ -303,7 +336,9 @@ def test_required_identity_wins_over_configured_header_defaults(
         skip_memory=True,
     )
     raw = auxiliary_client._create_openai_client(
-        api_key=_jwt(), base_url=CODEX_URL, default_headers=overrides,
+        api_key=_jwt(),
+        base_url=CODEX_URL,
+        default_headers=overrides,
     )
     proxy = auxiliary_client._create_openai_client(
         api_key="test-proxy-key",

@@ -15,7 +15,7 @@ def _hintprinted(output: str | None) -> bool:
 
 def test_diagnose_triggers_on_missing_esbuild_binary() -> None:
     output = (
-        "Error: The package \"@esbuild/darwin-arm64\" could not be found, "
+        'Error: The package "@esbuild/darwin-arm64" could not be found, '
         "and is needed by esbuild."
     )
     assert _hintprinted(output)

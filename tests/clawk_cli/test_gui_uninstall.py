@@ -67,7 +67,9 @@ def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypa
 
     refreshed: list[Path] = []
     monkeypatch.setattr(
-        lde, "refresh_desktop_databases", lambda d: refreshed.append(d) or ["kbuildsycoca6"]
+        lde,
+        "refresh_desktop_databases",
+        lambda d: refreshed.append(d) or ["kbuildsycoca6"],
     )
 
     clawk_home = tmp_path / ".clawk"
@@ -112,4 +114,3 @@ def test_uninstall_args_namespace_mode_mapping():
 
     full = uninstall._UninstallArgs(mode="full")
     assert full.gui is False and full.full is True and full.yes is True
-

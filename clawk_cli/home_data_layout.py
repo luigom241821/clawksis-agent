@@ -1,4 +1,5 @@
 """Machine-specific state excluded from portable home transfers."""
+
 from __future__ import annotations
 
 

@@ -40,10 +40,15 @@ def _row(model="glm-4.7", model_config=None):
 
 
 def test_session_gateway_runtime_prefers_nested_key():
-    meta = _row(model_config={
-        "gateway_runtime": {"provider": "custom:feather", "base_url": "https://f/v1"},
-        "provider": "openrouter",
-    })
+    meta = _row(
+        model_config={
+            "gateway_runtime": {
+                "provider": "custom:feather",
+                "base_url": "https://f/v1",
+            },
+            "provider": "openrouter",
+        }
+    )
     runtime = SessionDB.session_gateway_runtime(meta)
     assert runtime["provider"] == "custom:feather"
     assert runtime["base_url"] == "https://f/v1"
@@ -68,9 +73,16 @@ def test_session_gateway_runtime_tolerates_garbage():
 
 def test_restore_session_model_restores_model_and_provider():
     stub = _make_stub()
-    stub._restore_session_model(_row(model_config={
-        "gateway_runtime": {"provider": "custom:feather", "base_url": "https://f/v1"},
-    }))
+    stub._restore_session_model(
+        _row(
+            model_config={
+                "gateway_runtime": {
+                    "provider": "custom:feather",
+                    "base_url": "https://f/v1",
+                },
+            }
+        )
+    )
     assert stub.model == "glm-4.7"
     assert stub.provider == "custom:feather"
     assert stub.requested_provider == "custom:feather"
@@ -91,16 +103,19 @@ def test_restore_llamacpp_session_follows_live_managed_endpoint(monkeypatch):
         "api_mode": "chat_completions",
     }
     monkeypatch.setattr(
-        "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda **_kw: live)
+        "clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: live
+    )
     stub = _make_stub()
-    stub._restore_session_model(_row(
-        model="Qwen3.8-27B-UD-IQ3_XXS",
-        model_config={
-            "provider": "llamacpp",
-            "base_url": "http://127.0.0.1:51489/v1",
-            "api_mode": "chat_completions",
-        }))
+    stub._restore_session_model(
+        _row(
+            model="Qwen3.8-27B-UD-IQ3_XXS",
+            model_config={
+                "provider": "llamacpp",
+                "base_url": "http://127.0.0.1:51489/v1",
+                "api_mode": "chat_completions",
+            },
+        )
+    )
     assert stub.provider == "llamacpp"
     assert stub.requested_provider == "llamacpp"
     assert stub.base_url == live["base_url"]
@@ -114,13 +129,24 @@ def test_restore_llamacpp_session_keeps_launch_base_url_for_same_provider(monkey
     calls = []
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda **kw: calls.append(kw) or {"base_url": "http://127.0.0.1:18434/v1"})
+        lambda **kw: calls.append(kw) or {"base_url": "http://127.0.0.1:18434/v1"},
+    )
     user_url = "http://gpu-box:8080/v1"
-    stub = _make_stub(provider="llamacpp", requested_provider="llamacpp", base_url=user_url,
-                      _explicit_base_url=user_url)
-    stub._restore_session_model(_row(
-        model="Qwen3.8-27B-UD-IQ3_XXS",
-        model_config={"provider": "llamacpp", "base_url": "http://127.0.0.1:51489/v1"}))
+    stub = _make_stub(
+        provider="llamacpp",
+        requested_provider="llamacpp",
+        base_url=user_url,
+        _explicit_base_url=user_url,
+    )
+    stub._restore_session_model(
+        _row(
+            model="Qwen3.8-27B-UD-IQ3_XXS",
+            model_config={
+                "provider": "llamacpp",
+                "base_url": "http://127.0.0.1:51489/v1",
+            },
+        )
+    )
     assert stub.model == "Qwen3.8-27B-UD-IQ3_XXS"
     assert stub.base_url == user_url
     assert stub._explicit_base_url == user_url
@@ -142,12 +168,19 @@ def test_restore_session_model_no_stored_model_is_noop():
 
 def test_restore_session_model_matching_state_is_silent_noop():
     notes = []
-    stub = _make_stub(model="glm-4.7", provider="custom:feather",
-                      requested_provider="custom:feather",
-                      _console_print=lambda s: notes.append(s))
-    stub._restore_session_model(_row(model_config={
-        "gateway_runtime": {"provider": "custom:feather"},
-    }))
+    stub = _make_stub(
+        model="glm-4.7",
+        provider="custom:feather",
+        requested_provider="custom:feather",
+        _console_print=lambda s: notes.append(s),
+    )
+    stub._restore_session_model(
+        _row(
+            model_config={
+                "gateway_runtime": {"provider": "custom:feather"},
+            }
+        )
+    )
     assert not notes
 
 
@@ -244,8 +277,6 @@ def test_persist_model_switch_clears_stale_route_keys(tmp_path, monkeypatch):
     assert "api_mode" not in runtime
 
 
-
-
 def test_persist_model_switch_swallows_db_errors():
     class _DB:
         def update_session_model(self, *a):
@@ -273,16 +304,21 @@ def test_persist_model_switch_heals_bare_custom(monkeypatch):
         api_mode = ""
 
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "canonical_custom_identity",
-                        lambda base_url=None, model=None: "custom:myendpoint")
+
+    monkeypatch.setattr(
+        rp,
+        "canonical_custom_identity",
+        lambda base_url=None, model=None: "custom:myendpoint",
+    )
     stub = _make_stub(_session_db=_DB(), session_id="s1")
     stub._persist_model_switch_to_session(_BareResult())
     assert written["patch"]["provider"] == "custom:myendpoint"
 
     # Healing fails -> provider dropped (explicit None deletes any stale
     # persisted provider), never persisted bare.
-    monkeypatch.setattr(rp, "canonical_custom_identity",
-                        lambda base_url=None, model=None: None)
+    monkeypatch.setattr(
+        rp, "canonical_custom_identity", lambda base_url=None, model=None: None
+    )
     written.clear()
     stub._persist_model_switch_to_session(_BareResult())
     assert written["patch"]["provider"] is None
@@ -292,12 +328,18 @@ def test_persist_model_switch_heals_bare_custom(monkeypatch):
 def test_restore_session_model_heals_bare_custom_stored_rows(monkeypatch):
     """Rows persisted by older builds may carry bare 'custom' — heal or drop."""
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "canonical_custom_identity",
-                        lambda base_url=None, model=None: None)
+
+    monkeypatch.setattr(
+        rp, "canonical_custom_identity", lambda base_url=None, model=None: None
+    )
     stub = _make_stub()
-    stub._restore_session_model(_row(model_config={
-        "gateway_runtime": {"provider": "custom"},
-    }))
+    stub._restore_session_model(
+        _row(
+            model_config={
+                "gateway_runtime": {"provider": "custom"},
+            }
+        )
+    )
     # Provider dropped -> model restored but provider stays ambient.
     assert stub.model == "glm-4.7"
     assert stub.provider == "openrouter"
@@ -308,11 +350,14 @@ def test_restore_session_model_recovers_route_from_billing_columns(monkeypatch):
     billing class/endpoint. Resume must run it on the custom entry that endpoint belongs to, not
     the ambient default."""
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "canonical_custom_identity",
-                        lambda base_url=None, model=None: "custom:glm")
+
+    monkeypatch.setattr(
+        rp, "canonical_custom_identity", lambda base_url=None, model=None: "custom:glm"
+    )
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda **kw: {"base_url": "http://127.0.0.1:1234/v1", "api_key": "sk-glm"})
+        lambda **kw: {"base_url": "http://127.0.0.1:1234/v1", "api_key": "sk-glm"},
+    )
     meta = _row(model="GLM-5.3")
     meta["billing_provider"] = "custom"
     meta["billing_base_url"] = "http://127.0.0.1:1234/v1"
@@ -325,12 +370,16 @@ def test_restore_session_model_recovers_route_from_billing_columns(monkeypatch):
     assert stub.api_key == "sk-glm"
 
 
-def test_restore_session_model_billing_custom_without_configured_entry_keeps_ambient(monkeypatch):
+def test_restore_session_model_billing_custom_without_configured_entry_keeps_ambient(
+    monkeypatch,
+):
     """The billing endpoint no longer matches any configured entry — the heal resolves nothing, so
     the stored model is restored but the route stays ambient (the first turn surfaces the error)."""
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "canonical_custom_identity",
-                        lambda base_url=None, model=None: None)
+
+    monkeypatch.setattr(
+        rp, "canonical_custom_identity", lambda base_url=None, model=None: None
+    )
     meta = _row(model="GLM-5.3")
     meta["billing_provider"] = "custom"
     meta["billing_base_url"] = "http://gone-endpoint/v1"
@@ -346,19 +395,50 @@ def test_restore_session_model_rederives_per_model_wire_for_opencode_rows(monkey
     pin that wire onto a chat_completions model on resume — api_mode and the relay URL follow the
     stored model, and a fixed-wire provider's row is still honored verbatim (#96066)."""
     import clawk_cli.runtime_provider as rp
-    monkeypatch.setattr(rp, "resolve_runtime_provider", lambda **kw: {"api_key": "go-key"})
-    stub = _make_stub(provider="opencode-go", requested_provider="opencode-go",
-                      base_url="https://opencode.ai/zen/go/v1", api_mode="chat_completions")
-    stub._restore_session_model(_row(model="deepseek-v4-flash-vision-exp", model_config={
-        "gateway_runtime": {"provider": "opencode-go", "base_url": "https://opencode.ai/zen/go",
-                            "api_mode": "anthropic_messages"}}))
-    assert (stub.api_mode, stub.base_url) == ("chat_completions", "https://opencode.ai/zen/go/v1")
+
+    monkeypatch.setattr(
+        rp, "resolve_runtime_provider", lambda **kw: {"api_key": "go-key"}
+    )
+    stub = _make_stub(
+        provider="opencode-go",
+        requested_provider="opencode-go",
+        base_url="https://opencode.ai/zen/go/v1",
+        api_mode="chat_completions",
+    )
+    stub._restore_session_model(
+        _row(
+            model="deepseek-v4-flash-vision-exp",
+            model_config={
+                "gateway_runtime": {
+                    "provider": "opencode-go",
+                    "base_url": "https://opencode.ai/zen/go",
+                    "api_mode": "anthropic_messages",
+                }
+            },
+        )
+    )
+    assert (stub.api_mode, stub.base_url) == (
+        "chat_completions",
+        "https://opencode.ai/zen/go/v1",
+    )
 
     stub = _make_stub()
-    stub._restore_session_model(_row(model="MiniMax-M2.5", model_config={
-        "gateway_runtime": {"provider": "minimax", "base_url": "https://api.minimax.io/anthropic",
-                            "api_mode": "anthropic_messages"}}))
-    assert (stub.api_mode, stub.base_url) == ("anthropic_messages", "https://api.minimax.io/anthropic")
+    stub._restore_session_model(
+        _row(
+            model="MiniMax-M2.5",
+            model_config={
+                "gateway_runtime": {
+                    "provider": "minimax",
+                    "base_url": "https://api.minimax.io/anthropic",
+                    "api_mode": "anthropic_messages",
+                }
+            },
+        )
+    )
+    assert (stub.api_mode, stub.base_url) == (
+        "anthropic_messages",
+        "https://api.minimax.io/anthropic",
+    )
 
 
 # ── round trip: persist → get_session shape → restore ───────────────
@@ -396,7 +476,9 @@ def test_update_session_model_persists_provider(tmp_path, monkeypatch):
     assert config["provider"] == "custom:feather"
 
 
-def test_update_session_model_without_provider_preserves_existing(tmp_path, monkeypatch):
+def test_update_session_model_without_provider_preserves_existing(
+    tmp_path, monkeypatch
+):
     """Without provider, existing $.provider is left untouched."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     db = SessionDB(db_path=tmp_path / "state.db")
@@ -459,12 +541,20 @@ def test_session_gateway_runtime_billing_provider_fills_top_level_route_without_
     """A TUI row with top-level base_url/api_mode but no provider keeps that endpoint AND takes the
     provider the session was billed to — the same merge the TUI gateway always did (#125942); a bare
     bucket still contributes nothing."""
-    meta = _row(model_config={"base_url": "https://f/v1", "api_mode": "chat_completions"})
+    meta = _row(
+        model_config={"base_url": "https://f/v1", "api_mode": "chat_completions"}
+    )
     meta["billing_provider"] = "minimax"
     assert SessionDB.session_gateway_runtime(meta) == {
-        "provider": "minimax", "base_url": "https://f/v1", "api_mode": "chat_completions"}
+        "provider": "minimax",
+        "base_url": "https://f/v1",
+        "api_mode": "chat_completions",
+    }
     meta["billing_provider"] = "custom"
-    assert SessionDB.session_gateway_runtime(meta) == {"base_url": "https://f/v1", "api_mode": "chat_completions"}
+    assert SessionDB.session_gateway_runtime(meta) == {
+        "base_url": "https://f/v1",
+        "api_mode": "chat_completions",
+    }
 
 
 def test_session_gateway_runtime_bare_custom_falls_back_to_billing_base_url():
@@ -475,7 +565,9 @@ def test_session_gateway_runtime_bare_custom_falls_back_to_billing_base_url():
     meta["billing_provider"] = "custom"
     meta["billing_base_url"] = "http://127.0.0.1:1234/v1"
     assert SessionDB.session_gateway_runtime(meta) == {
-        "provider": "custom", "base_url": "http://127.0.0.1:1234/v1"}
+        "provider": "custom",
+        "base_url": "http://127.0.0.1:1234/v1",
+    }
     # Without an endpoint there is nothing to attribute — stays filtered (ambient resume).
     del meta["billing_base_url"]
     assert SessionDB.session_gateway_runtime(meta) == {}
@@ -493,7 +585,11 @@ def _billing_only_meta():
 
 def _custom_config(monkeypatch, *entries):
     import clawk_cli.runtime_provider as rp
-    config = {"model": {"provider": "anthropic", "default": "claude-opus-5-5"}, "custom_providers": list(entries)}
+
+    config = {
+        "model": {"provider": "anthropic", "default": "claude-opus-5-5"},
+        "custom_providers": list(entries),
+    }
     monkeypatch.setattr(rp, "load_config", lambda: config)
     monkeypatch.setattr(rp, "_get_model_config", lambda: config["model"])
 
@@ -502,9 +598,17 @@ def test_stored_session_route_follows_a_custom_entry_that_moved(monkeypatch):
     """The entry serving the chat's model now lives at a new URL: resume runs on the entry, which
     resolves its own endpoint, not on the URL the chat last billed."""
     from clawk_cli.cli_model_switch_mixin import stored_session_route
-    _custom_config(monkeypatch, {"name": "glm", "base_url": GLM_NEW, "api_key": "glm-key", "model": "GLM-5.3"})
 
-    route = stored_session_route(_billing_only_meta(), current_model="claude-opus-5-5", current_provider="anthropic")
+    _custom_config(
+        monkeypatch,
+        {"name": "glm", "base_url": GLM_NEW, "api_key": "glm-key", "model": "GLM-5.3"},
+    )
+
+    route = stored_session_route(
+        _billing_only_meta(),
+        current_model="claude-opus-5-5",
+        current_provider="anthropic",
+    )
 
     assert route[:3] == ("GLM-5.3", "custom:glm", None)
     assert route[4] is True
@@ -512,9 +616,14 @@ def test_stored_session_route_follows_a_custom_entry_that_moved(monkeypatch):
 
 def test_stored_session_route_drops_an_endpoint_no_entry_serves(monkeypatch):
     from clawk_cli.cli_model_switch_mixin import stored_session_route
+
     _custom_config(monkeypatch)
 
-    route = stored_session_route(_billing_only_meta(), current_model="claude-opus-5-5", current_provider="anthropic")
+    route = stored_session_route(
+        _billing_only_meta(),
+        current_model="claude-opus-5-5",
+        current_provider="anthropic",
+    )
 
     assert route == ("GLM-5.3", None, None, None, False)
 
@@ -530,10 +639,12 @@ def test_session_gateway_runtime_bare_auto_ignores_billing_base_url():
 def test_restore_session_model_restores_billing_provider_fallback():
     """End-to-end: _restore_session_model uses billing_provider fallback."""
     stub = _make_stub()
-    stub._restore_session_model({
-        "model": "glm-4.7",
-        "model_config": None,
-        "billing_provider": "minimax",
-    })
+    stub._restore_session_model(
+        {
+            "model": "glm-4.7",
+            "model_config": None,
+            "billing_provider": "minimax",
+        }
+    )
     assert stub.model == "glm-4.7"
     assert stub.provider == "minimax"

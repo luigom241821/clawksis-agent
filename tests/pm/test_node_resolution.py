@@ -21,8 +21,17 @@ _REAL_CLAWK_HOME = Path.home() / ".clawksis"  # Captured before per-test HOME is
 
 def _register_installed_tool(name, executable, companions=()):
     executable = Path(executable)
-    version = subprocess.run([str(executable), "--version"], capture_output=True, text=True,
-                             check=True, timeout=10).stdout.strip().removeprefix("v")
+    version = (
+        subprocess.run(
+            [str(executable), "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+        .stdout.strip()
+        .removeprefix("v")
+    )
     package, target, store = get_package(name), current_target(), paths.store_root()
     entry = store / package.store_entry(version, target)
     binary = package.binary(entry, target)
@@ -33,10 +42,20 @@ def _register_installed_tool(name, executable, companions=()):
         binary.with_name(companion.name).symlink_to(companion)
     digest = hashlib.sha256(executable.read_bytes()).hexdigest()
     lock = Lockfile(paths.lockfile_path())
-    lock.set_pin(name, version, {target: {"url": executable.as_uri(), "sha256": digest}})
+    lock.set_pin(
+        name, version, {target: {"url": executable.as_uri(), "sha256": digest}}
+    )
     lock.save()
-    Facts(paths.facts_path()).record(name, version, entry.name, package.env(entry, target), store,
-                                    target=target, artifacts=[digest], digest=tree_digest(entry))
+    Facts(paths.facts_path()).record(
+        name,
+        version,
+        entry.name,
+        package.env(entry, target),
+        store,
+        target=target,
+        artifacts=[digest],
+        digest=tree_digest(entry),
+    )
     return binary
 
 
@@ -63,7 +82,9 @@ def node_store(tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-def test_pm_node_wins_over_legacy_tree_and_composes_child_environment(node_store, monkeypatch):
+def test_pm_node_wins_over_legacy_tree_and_composes_child_environment(
+    node_store, monkeypatch
+):
     home, binary, external = node_store
     legacy = home / "node" / "bin" / "node"
     legacy.parent.mkdir(parents=True)
@@ -81,7 +102,11 @@ def test_pm_node_wins_over_legacy_tree_and_composes_child_environment(node_store
     assert shutil.which("node", path=environment["PATH"]) == str(binary)
     child = subprocess.run(
         [resolved, "-p", "process.version"],
-        env=environment, capture_output=True, text=True, check=True, timeout=10,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
     )
     assert child.stdout.strip().removeprefix("v") == selected.version
     assert paths.facts_path().read_bytes() == before
@@ -90,7 +115,9 @@ def test_pm_node_wins_over_legacy_tree_and_composes_child_environment(node_store
 
 
 @pytest.mark.platforms("posix")
-def test_passive_discovery_never_installs_or_repairs_a_legacy_tree(tmp_path, monkeypatch):
+def test_passive_discovery_never_installs_or_repairs_a_legacy_tree(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     legacy = home / "node" / "bin" / "node"
     legacy.parent.mkdir(parents=True)
@@ -100,7 +127,9 @@ def test_passive_discovery_never_installs_or_repairs_a_legacy_tree(tmp_path, mon
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(home / "tools"))
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
     monkeypatch.setenv("PATH", "")
-    before = {p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()}
+    before = {
+        p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()
+    }
     attempts = []
 
     def forbidden_install(*args, **kwargs):
@@ -112,7 +141,9 @@ def test_passive_discovery_never_installs_or_repairs_a_legacy_tree(tmp_path, mon
     assert clawk_constants.find_node_executable("npm") is None
     assert clawk_constants.with_clawk_node_path({"PATH": ""}) == {"PATH": ""}
     assert attempts == []
-    assert {p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()} == before
+    assert {
+        p.relative_to(home): p.read_bytes() for p in home.rglob("*") if p.is_file()
+    } == before
     assert not (home / "tools").exists()
 
     # A user-owned PATH toolchain is never selected: Clawksis runs only PM's copy.
@@ -131,7 +162,12 @@ def test_passive_discovery_never_installs_or_repairs_a_legacy_tree(tmp_path, mon
 def test_explicit_node_path_is_not_replaced_by_managed_name(node_store):
     _home, _binary, external = node_store
     assert clawk_constants.find_node_executable(external) == external
-    assert clawk_constants.find_node_executable(str(Path(external).with_name("missing-node"))) is None
+    assert (
+        clawk_constants.find_node_executable(
+            str(Path(external).with_name("missing-node"))
+        )
+        is None
+    )
     assert clawk_constants.find_node_executable("not-a-node-command") is None
 
 
@@ -159,8 +195,12 @@ def test_npm_and_npx_use_the_paired_pm_entry(node_store, monkeypatch):
         resolved = clawk_constants.find_node_executable(command)
         assert resolved is not None
         result = subprocess.run(
-            [resolved, "--version"], env=environment,
-            capture_output=True, text=True, check=True, timeout=10,
+            [resolved, "--version"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
         )
         assert result.stdout.strip() == Lockfile(paths.lockfile_path()).version("npm")
     assert paths.facts_path().read_bytes() == before
@@ -169,7 +209,9 @@ def test_npm_and_npx_use_the_paired_pm_entry(node_store, monkeypatch):
 
 
 @pytest.mark.platforms("windows")
-def test_windows_path_prefers_launchable_cmd_but_never_for_pm_tools(tmp_path, monkeypatch):
+def test_windows_path_prefers_launchable_cmd_but_never_for_pm_tools(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "absent-store"))
     monkeypatch.setenv("PATH", str(tmp_path))
     for tool in ("npm", "pnpm"):
@@ -191,10 +233,10 @@ def npm_probe(node_store, monkeypatch):
     assert binary is not None
     binary.parent.mkdir(parents=True)
     binary.write_text(
-        '#!/usr/bin/env node\n'
+        "#!/usr/bin/env node\n"
         'const fs = require("fs"); const path = require("path");\n'
         'const i = process.argv.indexOf("--prefix");\n'
-        'const root = i < 0 ? process.cwd() : process.argv[i + 1];\n'
+        "const root = i < 0 ? process.cwd() : process.argv[i + 1];\n"
         'fs.mkdirSync(path.join(root, "node_modules/.bin"), {recursive:true});\n'
         'fs.writeFileSync(path.join(root, "node_modules/.bin/test-server"), "ready");\n'
         'fs.writeFileSync(path.join(root, "called.json"), JSON.stringify({argv: process.argv, env: process.env}));\n',
@@ -207,7 +249,11 @@ def npm_probe(node_store, monkeypatch):
 
     def publish():
         Facts(paths.facts_path()).record(
-            "npm", "1.0.0", entry.name, package.env(entry, target), store,
+            "npm",
+            "1.0.0",
+            entry.name,
+            package.env(entry, target),
+            store,
         )
         return Runner("npm", pm.env_for("npm"))
 
@@ -228,7 +274,9 @@ def npm_consumers(npm_probe, tmp_path, monkeypatch):
     bridge = tmp_path / "bridge"
     bridge.mkdir()
     (bridge / "package.json").write_text('{"name":"test-bridge"}', encoding="utf-8")
-    adapter = WhatsAppAdapter(PlatformConfig(extra={"bridge_script": str(bridge / "bridge.js")}))
+    adapter = WhatsAppAdapter(
+        PlatformConfig(extra={"bridge_script": str(bridge / "bridge.js")})
+    )
     monkeypatch.setattr(photon, "_sidecar_dir", lambda: bridge)
     monkeypatch.setattr(cli, "_sidecar_dir", lambda: bridge)
     return {
@@ -242,7 +290,9 @@ def npm_consumers(npm_probe, tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("consumer", ["lsp", "whatsapp", "photon", "photon-cli", "cli", "dashboard"])
+@pytest.mark.parametrize(
+    "consumer", ["lsp", "whatsapp", "photon", "photon-cli", "cli", "dashboard"]
+)
 def test_npm_consumers_execute_with_pm_node(npm_probe, npm_consumers, consumer):
     _home, node, binary, publish = npm_probe
     publish()
@@ -253,13 +303,23 @@ def test_npm_consumers_execute_with_pm_node(npm_probe, npm_consumers, consumer):
     assert shutil.which("node", path=result["env"]["PATH"]) == str(node)
     if consumer == "lsp":
         assert result["argv"][2:] == [
-            "install", "--prefix", str(output_dir), "--silent", "--no-fund", "--no-audit", "test-pkg",
+            "install",
+            "--prefix",
+            str(output_dir),
+            "--silent",
+            "--no-fund",
+            "--no-audit",
+            "test-pkg",
         ]
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("surface", ["cli", "dashboard", "whatsapp", "photon", "photon-cli"])
-def test_missing_npm_acquires_npm_closure_at_install_boundary(npm_probe, npm_consumers, monkeypatch, surface):
+@pytest.mark.parametrize(
+    "surface", ["cli", "dashboard", "whatsapp", "photon", "photon-cli"]
+)
+def test_missing_npm_acquires_npm_closure_at_install_boundary(
+    npm_probe, npm_consumers, monkeypatch, surface
+):
     _home, node, binary, publish = npm_probe
     calls = []
 
@@ -279,7 +339,9 @@ def test_missing_npm_acquires_npm_closure_at_install_boundary(npm_probe, npm_con
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("surface", ["whatsapp", "photon"])
-def test_runtime_npm_refusal_never_falls_back_to_literal_npm(npm_probe, npm_consumers, monkeypatch, surface):
+def test_runtime_npm_refusal_never_falls_back_to_literal_npm(
+    npm_probe, npm_consumers, monkeypatch, surface
+):
     call, bridge = npm_consumers[surface]
     spawns = []
     run = subprocess.run
@@ -298,7 +360,9 @@ def test_runtime_npm_refusal_never_falls_back_to_literal_npm(npm_probe, npm_cons
 
 
 @pytest.mark.parametrize("allowed", [False, True])
-def test_adapter_availability_never_provisions_missing_node(tmp_path, monkeypatch, allowed):
+def test_adapter_availability_never_provisions_missing_node(
+    tmp_path, monkeypatch, allowed
+):
     from plugins.platforms.photon import adapter as photon
     from plugins.platforms.whatsapp import adapter as whatsapp
 
@@ -323,7 +387,9 @@ def test_adapter_availability_never_provisions_missing_node(tmp_path, monkeypatc
 
 
 @pytest.mark.platforms("posix")
-def test_dashboard_pairing_prepares_npm_before_node_lookup(npm_probe, tmp_path, monkeypatch):
+def test_dashboard_pairing_prepares_npm_before_node_lookup(
+    npm_probe, tmp_path, monkeypatch
+):
     from gateway.platforms import whatsapp_common
     from clawk_cli.web_routers.messaging import _spawn_whatsapp_pairing_process
 
@@ -332,7 +398,9 @@ def test_dashboard_pairing_prepares_npm_before_node_lookup(npm_probe, tmp_path, 
     paths.facts_path().unlink()
     bridge = tmp_path / "bridge"
     bridge.mkdir()
-    (bridge / "bridge.js").write_text('console.log(JSON.stringify({argv:process.argv, path:process.env.PATH}));\n')
+    (bridge / "bridge.js").write_text(
+        "console.log(JSON.stringify({argv:process.argv, path:process.env.PATH}));\n"
+    )
     monkeypatch.setattr(whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge)
     installs = []
 
@@ -357,16 +425,22 @@ def test_dashboard_pairing_prepares_npm_before_node_lookup(npm_probe, tmp_path, 
 
 
 @pytest.mark.platforms("posix")
-def test_lsp_node_server_inherits_pm_runtime_and_preserves_overrides(node_store, tmp_path, monkeypatch):
+def test_lsp_node_server_inherits_pm_runtime_and_preserves_overrides(
+    node_store, tmp_path, monkeypatch
+):
     from agent.lsp.servers import ServerContext, find_server_for_file
 
     _home, node, _external = node_store
     script = tmp_path / "language-server"
-    script.write_text('#!/usr/bin/env node\nconsole.log(JSON.stringify({path:process.env.PATH, flag:process.env.LSP_FLAG}));\n')
+    script.write_text(
+        "#!/usr/bin/env node\nconsole.log(JSON.stringify({path:process.env.PATH, flag:process.env.LSP_FLAG}));\n"
+    )
     script.chmod(0o755)
     monkeypatch.setenv("PATH", "")
     ctx = ServerContext(
-        workspace_root=str(tmp_path), install_strategy="off", trusted=True,
+        workspace_root=str(tmp_path),
+        install_strategy="off",
+        trusted=True,
         binary_overrides={"typescript": [str(script)]},
         env_overrides={"typescript": {"LSP_FLAG": "project-value"}},
     )
@@ -374,7 +448,14 @@ def test_lsp_node_server_inherits_pm_runtime_and_preserves_overrides(node_store,
     assert server is not None
     spec = server.build_spawn(str(tmp_path), ctx)
     assert spec is not None
-    child = subprocess.run(spec.command, env=spec.env, capture_output=True, text=True, timeout=10, check=False)
+    child = subprocess.run(
+        spec.command,
+        env=spec.env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
     assert child.returncode == 0, child.stderr
     observed = json.loads(child.stdout)
     assert shutil.which("node", path=observed["path"]) == str(node)

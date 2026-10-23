@@ -8,6 +8,7 @@ session, so the canonical TUI refused them. Each verb reuses main's helpers rath
 them. ``dispatch`` already runs every handler under the owning profile's scope (``owner_scope``) and
 ``asyncio.to_thread`` carries that context into the worker thread.
 """
+
 import asyncio
 from datetime import datetime
 import json
@@ -22,16 +23,18 @@ from clawk_state_runtime import RuntimeStoreError
 
 
 def handlers(connection):
-    return {'session.save': partial(save_session, connection),
-            'session.export': partial(export_session, connection),
-            'reload.env': partial(reload_env, connection),
-            'delegation.pause': partial(pause_delegation, connection),
-            'rollback.list': partial(rollback, connection, kind='list'),
-            'rollback.diff': partial(rollback, connection, kind='diff'),
-            'rollback.restore': partial(rollback, connection, kind='restore'),
-            'rollback.session_diff': partial(rollback, connection, kind='session_diff'),
-            'session.context_breakdown': partial(context_breakdown, connection),
-            'session.history': partial(session_history, connection)}
+    return {
+        "session.save": partial(save_session, connection),
+        "session.export": partial(export_session, connection),
+        "reload.env": partial(reload_env, connection),
+        "delegation.pause": partial(pause_delegation, connection),
+        "rollback.list": partial(rollback, connection, kind="list"),
+        "rollback.diff": partial(rollback, connection, kind="diff"),
+        "rollback.restore": partial(rollback, connection, kind="restore"),
+        "rollback.session_diff": partial(rollback, connection, kind="session_diff"),
+        "session.context_breakdown": partial(context_breakdown, connection),
+        "session.history": partial(session_history, connection),
+    }
 
 
 def _profile_home(authority):
@@ -40,17 +43,24 @@ def _profile_home(authority):
     if home.is_absolute() and home.is_dir():
         return home
     from clawk_constants import get_clawk_home
+
     return get_clawk_home()
 
 
 def _multiplexed(authority):
     """Every turn runs under a per-profile secret scope (``owner_scope``'s own predicate)."""
-    return bool(getattr(getattr(authority.runner, 'config', None), 'multiplex_profiles', False))
+    return bool(
+        getattr(getattr(authority.runner, "config", None), "multiplex_profiles", False)
+    )
 
 
 def _live_ref(connection, ref, params, fields, capability):
-    if set(params) - fields or not isinstance(ref.session_id, str) or not ref.session_id:
-        raise RuntimeStoreError('invalid_params')
+    if (
+        set(params) - fields
+        or not isinstance(ref.session_id, str)
+        or not ref.session_id
+    ):
+        raise RuntimeStoreError("invalid_params")
     authorize(connection, ref, params, capability)
     return connection.authority.sessions[ref.session_id]
 
@@ -59,28 +69,35 @@ async def save_session(connection, ref, params):
     """``/save``: main's ``session.save`` — the stored transcript as a ``/save json`` snapshot in the
     profile's ``sessions/saved/``. Reads the conversation's CURRENT physical row (a local session's
     reset/compression child), like main's ``_submit_row_target_key``."""
-    _live_ref(connection, ref, params, {'session_id', 'profile'}, 'session:read')
+    _live_ref(connection, ref, params, {"session_id", "profile"}, "session:read")
     authority = connection.authority
     from gateway.session_ancillary import physical_target
+
     target = physical_target(authority, ref)
 
     def write():
         from clawk_cli.session_export import load_save_snapshot, render_session_for_save
         from clawk_state import SessionExportTooLargeError
+
         try:
-            data = load_save_snapshot(authority.db, target, 'json')
+            data = load_save_snapshot(authority.db, target, "json")
         except SessionExportTooLargeError as exc:
-            raise RuntimeStoreError('export_too_large') from exc
+            raise RuntimeStoreError("export_too_large") from exc
         if not data:
-            raise RuntimeStoreError('not_found')
-        path = (_profile_home(authority) / 'sessions' / 'saved'
-                / f'clawk_conversation_{datetime.now():%Y%m%d_%H%M%S}.json')
+            raise RuntimeStoreError("not_found")
+        path = (
+            _profile_home(authority)
+            / "sessions"
+            / "saved"
+            / f"clawk_conversation_{datetime.now():%Y%m%d_%H%M%S}.json"
+        )
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(render_session_for_save(data, 'json'), encoding='utf-8')
+            path.write_text(render_session_for_save(data, "json"), encoding="utf-8")
         except OSError as exc:
-            raise RuntimeStoreError('storage_unavailable') from exc
-        return {'file': str(path)}
+            raise RuntimeStoreError("storage_unavailable") from exc
+        return {"file": str(path)}
+
     return await asyncio.to_thread(write)
 
 
@@ -88,48 +105,71 @@ async def export_session(connection, ref, params):
     """``session.export``: the ``/save`` transcript rendered for the CLIENT to write (json/md/html,
     optional force-redaction). Nothing is written on the gateway host, so a remote Desktop and a
     local Ink both save to the user's own disk (T10/T11)."""
-    _live_ref(connection, ref, params, {'session_id', 'profile', 'format', 'redact'}, 'session:read')
-    fmt, redact = params.get('format', 'json'), params.get('redact', False)
+    _live_ref(
+        connection,
+        ref,
+        params,
+        {"session_id", "profile", "format", "redact"},
+        "session:read",
+    )
+    fmt, redact = params.get("format", "json"), params.get("redact", False)
     if not isinstance(fmt, str) or not isinstance(redact, bool):
-        raise RuntimeStoreError('invalid_params')
+        raise RuntimeStoreError("invalid_params")
     from clawk_cli.session_export import default_save_filename, normalize_save_format
+
     try:
         fmt = normalize_save_format(fmt)
     except ValueError:
-        raise RuntimeStoreError('invalid_params') from None
+        raise RuntimeStoreError("invalid_params") from None
     authority = connection.authority
     from gateway.session_ancillary import physical_target
+
     target = physical_target(authority, ref)
 
     def render():
         from clawk_cli.session_export import load_save_snapshot, render_session_for_save
         from clawk_state import SessionExportTooLargeError
+
         try:
             data = load_save_snapshot(authority.db, target, fmt)
         except SessionExportTooLargeError as exc:
-            raise RuntimeStoreError('export_too_large') from exc
+            raise RuntimeStoreError("export_too_large") from exc
         if not data:
-            raise RuntimeStoreError('not_found')
+            raise RuntimeStoreError("not_found")
         if redact:
             from clawk_cli.session_export_md import redact_session_data
+
             data = redact_session_data(data)
         return render_session_for_save(data, fmt)
+
     content = await asyncio.to_thread(render)
-    return {'format': fmt, 'filename': default_save_filename(target, fmt), 'content': content}
+    return {
+        "format": fmt,
+        "filename": default_save_filename(target, fmt),
+        "content": content,
+    }
 
 
 async def session_history(connection, ref, params):
     """Main's ``session.history``: the display transcript of the conversation's current physical row (compression tip or local receipt entry), ancestors included, each row with its durable ``row_id``; Desktop's edit resolves its turn by it."""
-    _live_ref(connection, ref, params, {'session_id', 'profile'}, 'session:read')
+    _live_ref(connection, ref, params, {"session_id", "profile"}, "session:read")
     authority = connection.authority
     from gateway.session_local_recovery import transcript_target
+
     # On the loop, as ``attach`` resolves it: a local restore publishes the live entry.
     target = transcript_target(authority, ref)
 
     def read():
         from gateway.session_controls import display_projection
-        rows = authority.db.get_messages_as_conversation(target, include_ancestors=True, include_row_ids=True)
-        return {'count': len(rows), 'messages': display_projection(rows, authority.profile_id)}
+
+        rows = authority.db.get_messages_as_conversation(
+            target, include_ancestors=True, include_row_ids=True
+        )
+        return {
+            "count": len(rows),
+            "messages": display_projection(rows, authority.profile_id),
+        }
+
     return await asyncio.to_thread(read)
 
 
@@ -147,23 +187,34 @@ async def reload_env(connection, ref, params):
     """
     # Addressed at one session the caller controls: a sessionless frame stays refused, as it was
     # before this verb existed (a bare grant must not rewrite the owner's environment).
-    _live_ref(connection, ref, params, {'session_id', 'profile'}, 'session:control')
+    _live_ref(connection, ref, params, {"session_id", "profile"}, "session:control")
     authority = connection.authority
 
     def reload():
         if not _multiplexed(authority):
             from clawk_cli.config import reload_env as reload_process_env
+
             return reload_process_env()
-        from agent.secret_scope import build_profile_secret_scope, invalidate_env_file_cache
-        from clawk_cli.env_loader import hydrate_profile_secret_sources, reset_secret_source_cache
+        from agent.secret_scope import (
+            build_profile_secret_scope,
+            invalidate_env_file_cache,
+        )
+        from clawk_cli.env_loader import (
+            hydrate_profile_secret_sources,
+            reset_secret_source_cache,
+        )
+
         home = _profile_home(authority)
         before = build_profile_secret_scope(home)
-        invalidate_env_file_cache(home / '.env')
+        invalidate_env_file_cache(home / ".env")
         reset_secret_source_cache(home)
         hydrate_profile_secret_sources(home)
         after = build_profile_secret_scope(home)
-        return sum(before.get(key) != after.get(key) for key in before.keys() | after.keys())
-    return {'updated': int(await asyncio.to_thread(reload))}
+        return sum(
+            before.get(key) != after.get(key) for key in before.keys() | after.keys()
+        )
+
+    return {"updated": int(await asyncio.to_thread(reload))}
 
 
 async def pause_delegation(connection, ref, params):
@@ -174,28 +225,33 @@ async def pause_delegation(connection, ref, params):
     TUI's sidecar served one TUI, but its gate covered every agent in that process). On the shared
     owner it therefore covers every chat this gateway runs, which is what an operator's kill switch
     is for; ``delegation.status`` reports the same flag to every client."""
-    paused = params.get('paused', True)
-    if set(params) - {'paused', 'profile', 'session_id'} or type(paused) is not bool:
-        raise RuntimeStoreError('invalid_params')
+    paused = params.get("paused", True)
+    if set(params) - {"paused", "profile", "session_id"} or type(paused) is not bool:
+        raise RuntimeStoreError("invalid_params")
     if ref.session_id:
-        authorize(connection, ref, params, 'session:control')
+        authorize(connection, ref, params, "session:control")
     else:
-        if 'session:control' not in connection.actor.capabilities:
-            raise RuntimeStoreError('permission_denied')
-        profile = params.get('profile')
+        if "session:control" not in connection.actor.capabilities:
+            raise RuntimeStoreError("permission_denied")
+        profile = params.get("profile")
         if profile is not None and not isinstance(profile, str):
-            raise RuntimeStoreError('invalid_params')
+            raise RuntimeStoreError("invalid_params")
         if profile:
             from clawk_cli.profiles import profile_matches_home
+
             if not profile_matches_home(profile, Path(connection.authority.profile_id)):
-                raise RuntimeStoreError('profile_mismatch')
+                raise RuntimeStoreError("profile_mismatch")
     from tools.delegate_tool_registry import set_spawn_paused
-    return {'paused': set_spawn_paused(paused)}
+
+    return {"paused": set_spawn_paused(paused)}
 
 
-_ROLLBACK_FIELDS = {'list': {'session_id', 'profile'}, 'diff': {'session_id', 'profile', 'hash'},
-                    'restore': {'session_id', 'profile', 'hash', 'file_path', 'all'},
-                    'session_diff': {'session_id', 'profile'}}
+_ROLLBACK_FIELDS = {
+    "list": {"session_id", "profile"},
+    "diff": {"session_id", "profile", "hash"},
+    "restore": {"session_id", "profile", "hash", "file_path", "all"},
+    "session_diff": {"session_id", "profile"},
+}
 # ``rollback.session_diff`` stat + body bound, in bytes on the wire: half the 8 MiB frame every client
 # accepts (``clawk_cli/gateway_client.py``). Counted JSON-escaped, since a control character is one
 # character but six bytes (``\u0001``); the classic CLI shows 400 lines either way.
@@ -212,73 +268,120 @@ async def rollback(connection, ref, params, *, kind):
     resident agent. A whole-tree restore also rewinds the transcript to before the newest user turn
     (main's ``_rewind_active_session_history``) through the owner's fenced ``rewind`` mutation."""
     fields = _ROLLBACK_FIELDS[kind]
-    if any(key in params and (not isinstance(params[key], str) or (key == 'hash' and not params[key]))
-           for key in ('hash', 'file_path')) or (kind in ('diff', 'restore') and 'hash' not in params) or (
-               params.get('all') is not None and not isinstance(params['all'], bool)):  # nullable: null is omitted
-        raise RuntimeStoreError('invalid_params')
-    live = _live_ref(connection, ref, params, fields, 'session:read' if kind != 'restore' else 'session:control')
+    if (
+        any(
+            key in params
+            and (
+                not isinstance(params[key], str) or (key == "hash" and not params[key])
+            )
+            for key in ("hash", "file_path")
+        )
+        or (kind in ("diff", "restore") and "hash" not in params)
+        or (params.get("all") is not None and not isinstance(params["all"], bool))
+    ):  # nullable: null is omitted
+        raise RuntimeStoreError("invalid_params")
+    live = _live_ref(
+        connection,
+        ref,
+        params,
+        fields,
+        "session:read" if kind != "restore" else "session:control",
+    )
     authority = connection.authority
     from gateway.session_policy import policy_for_source
+
     policy = policy_for_source(authority.runner, live.source)
     if policy is None:
-        raise RuntimeStoreError('permission_denied')
-    file_path = params.get('file_path') or ''
-    if kind == 'restore' and not file_path and authority._handle(ref).execution_state != 'idle':
+        raise RuntimeStoreError("permission_denied")
+    file_path = params.get("file_path") or ""
+    if (
+        kind == "restore"
+        and not file_path
+        and authority._handle(ref).execution_state != "idle"
+    ):
         # Main refuses a full-history rollback mid-turn; a file-scoped restore only touches disk.
-        raise RuntimeStoreError('session_busy')
+        raise RuntimeStoreError("session_busy")
     from gateway.session_ancillary import physical_target
+
     task_id = physical_target(authority, ref)
     from gateway.run import _checkpoint_agent_kwargs
+
     kwargs = _checkpoint_agent_kwargs(policy.config(authority, secrets=False))
     terminal = json.loads(policy.terminal_json)
 
     def run() -> dict:
         from tools.checkpoint_manager import CheckpointManager
         from tui_gateway.checkpoints import _resolve_checkpoint_hash
-        mgr = CheckpointManager(enabled=bool(kwargs['checkpoints_enabled']), **{
-            key[len('checkpoint_'):]: value for key, value in kwargs.items() if key.startswith('checkpoint_')})
+
+        mgr = CheckpointManager(
+            enabled=bool(kwargs["checkpoints_enabled"]),
+            **{
+                key[len("checkpoint_") :]: value
+                for key, value in kwargs.items()
+                if key.startswith("checkpoint_")
+            },
+        )
         cwd = policy.cwd
-        if not mgr.enabled and kind in ('list', 'session_diff'):
-            return {'enabled': False, 'checkpoints': []} if kind == 'list' else {'enabled': False}
-        if kind == 'list':
+        if not mgr.enabled and kind in ("list", "session_diff"):
+            return (
+                {"enabled": False, "checkpoints": []}
+                if kind == "list"
+                else {"enabled": False}
+            )
+        if kind == "list":
             # The TUI renders ``message``; the manager calls it ``reason``.
-            return {'enabled': True, 'checkpoints': [
-                {'hash': c.get('hash', ''), 'timestamp': c.get('timestamp', ''), 'message': c.get('reason', '')}
-                for c in mgr.list_checkpoints(cwd)]}
+            return {
+                "enabled": True,
+                "checkpoints": [
+                    {
+                        "hash": c.get("hash", ""),
+                        "timestamp": c.get("timestamp", ""),
+                        "message": c.get("reason", ""),
+                    }
+                    for c in mgr.list_checkpoints(cwd)
+                ],
+            }
         # Host checkpoints are not a container-backed session's tree (main's _container_checkpoint_refusal),
         # classified under the session's frozen terminal policy, not the owner's ambient one.
         from tools.terminal_scope import reset_terminal_scope, set_terminal_scope
+
         token = set_terminal_scope(terminal)
         try:
             refusal = mgr.unsupported_backend_reason(task_id)
         finally:
             reset_terminal_scope(token)
-        if kind == 'session_diff':
+        if kind == "session_diff":
             return _session_diff(mgr, cwd, refusal)
         try:
-            target = _resolve_checkpoint_hash(mgr, cwd, params['hash'])
+            target = _resolve_checkpoint_hash(mgr, cwd, params["hash"])
         except ValueError as exc:
-            if kind == 'diff':
-                raise RuntimeStoreError('invalid_checkpoint') from exc
-            return {'success': False, 'error': str(exc)}
-        if kind == 'diff':
+            if kind == "diff":
+                raise RuntimeStoreError("invalid_checkpoint") from exc
+            return {"success": False, "error": str(exc)}
+        if kind == "diff":
             if refusal:
-                raise RuntimeStoreError('unsupported_terminal_backend')
+                raise RuntimeStoreError("unsupported_terminal_backend")
             from tui_gateway.render import render_diff
+
             result = mgr.diff(cwd, target)
-            raw = result.get('diff', '')[:4000]
-            payload = {'stat': result.get('stat', ''), 'diff': raw}
+            raw = result.get("diff", "")[:4000]
+            payload = {"stat": result.get("stat", ""), "diff": raw}
             if rendered := render_diff(raw, 80):
-                payload['rendered'] = rendered
+                payload["rendered"] = rendered
             return payload
         if refusal:
-            return {'success': False, 'error': refusal}
+            return {"success": False, "error": refusal}
         # Main's whole-tree /rollback keeps the user's hand-edits unless ``--all`` (``all``) says otherwise.
-        return mgr.restore(cwd, target, file_path=file_path or None,
-                           safe=not file_path and not params.get('all'))
+        return mgr.restore(
+            cwd,
+            target,
+            file_path=file_path or None,
+            safe=not file_path and not params.get("all"),
+        )
+
     result = await asyncio.to_thread(run)
-    if kind == 'restore' and result.get('success') and not file_path:
-        result['history_removed'] = await _rewind_last_turn(connection, ref)
+    if kind == "restore" and result.get("success") and not file_path:
+        result["history_removed"] = await _rewind_last_turn(connection, ref)
     return result
 
 
@@ -286,20 +389,32 @@ def _session_diff(mgr, cwd, refusal):
     """``/diff session``: main's ``session_diff`` (earliest retained checkpoint vs the tree) as data,
     so the classic CLI renders it with its own terminal renderer instead of chat-sized text."""
     if refusal:
-        return {'enabled': True, 'success': False, 'error': refusal}
+        return {"enabled": True, "success": False, "error": refusal}
     result = mgr.session_diff(cwd)
-    if not result.get('success'):
-        return {'enabled': True, 'success': False, 'error': str(result.get('error') or '')}
-    diff = result.get('diff', '')
-    stat = _fit_frame(result.get('stat', ''), _SESSION_DIFF_BYTES)
+    if not result.get("success"):
+        return {
+            "enabled": True,
+            "success": False,
+            "error": str(result.get("error") or ""),
+        }
+    diff = result.get("diff", "")
+    stat = _fit_frame(result.get("stat", ""), _SESSION_DIFF_BYTES)
     body = _fit_frame(diff, _SESSION_DIFF_BYTES - _wire_bytes(stat))
-    return {'enabled': True, 'success': True, 'stat': stat, 'diff': body,
-            'diff_lines': len(diff.splitlines()), 'empty': bool(result.get('empty'))}
+    return {
+        "enabled": True,
+        "success": True,
+        "stat": stat,
+        "diff": body,
+        "diff_lines": len(diff.splitlines()),
+        "empty": bool(result.get("empty")),
+    }
 
 
 def _wire_bytes(text):
     """Bytes ``text`` takes inside a frame: JSON-escaped as ``serialize_frame`` writes it, then UTF-8."""
-    return len(json.dumps(text, ensure_ascii=False).encode('utf-8', 'surrogatepass')) - 2
+    return (
+        len(json.dumps(text, ensure_ascii=False).encode("utf-8", "surrogatepass")) - 2
+    )
 
 
 def _fit_frame(text, budget):
@@ -309,12 +424,14 @@ def _fit_frame(text, budget):
         return text
     kept, used = [], 0
     # Lines end at ``\n`` only (``splitlines`` would also cut at ``\r``, ``\f``, U+2028 inside a diff line).
-    for line in re.split(r'(?<=\n)', text[:budget + 1]):  # chars cost >= 1 byte; +1 keeps a cut line over
+    for line in re.split(
+        r"(?<=\n)", text[: budget + 1]
+    ):  # chars cost >= 1 byte; +1 keeps a cut line over
         used += _wire_bytes(line)
         if used > budget:
             break
         kept.append(line)
-    return ''.join(kept).removesuffix('\n')
+    return "".join(kept).removesuffix("\n")
 
 
 async def _rewind_last_turn(connection, ref):
@@ -323,19 +440,38 @@ async def _rewind_last_turn(connection, ref):
     authority = connection.authority
     from agent.context_compressor import user_originated_turn_view
     from gateway.session_local_recovery import local_history
+
     rows = await asyncio.to_thread(local_history, authority, ref)
-    target = next((row['row_id'] for row in reversed(rows) if isinstance(row.get('row_id'), int)
-                   and not row.get('archived') and user_originated_turn_view(row) is not None), None)
+    target = next(
+        (
+            row["row_id"]
+            for row in reversed(rows)
+            if isinstance(row.get("row_id"), int)
+            and not row.get("archived")
+            and user_originated_turn_view(row) is not None
+        ),
+        None,
+    )
     if target is None:
         return 0
     from gateway.session_mutations import mutate_session
     from clawk_state_mutation_guards import MUTATION_GUARD_REFUSALS
+
     handle = authority._handle(ref)
     try:
-        result = await mutate_session(authority, connection.actor, ref, {
-            'session_id': ref.session_id, 'request_id': f'rollback:{uuid.uuid4().hex}',
-            'expected_revision': handle.revision, 'expected_generation': handle.execution_generation,
-            'operation': 'rewind', 'payload': {'target_message_id': target}})
+        result = await mutate_session(
+            authority,
+            connection.actor,
+            ref,
+            {
+                "session_id": ref.session_id,
+                "request_id": f"rollback:{uuid.uuid4().hex}",
+                "expected_revision": handle.revision,
+                "expected_generation": handle.execution_generation,
+                "operation": "rewind",
+                "payload": {"target_message_id": target},
+            },
+        )
     except MUTATION_GUARD_REFUSALS as exc:
-        raise RuntimeStoreError('session_busy') from exc
-    return int(result.get('rewound_count') or 0)
+        raise RuntimeStoreError("session_busy") from exc
+    return int(result.get("rewound_count") or 0)

@@ -241,14 +241,14 @@ class TestRunBoundedSync:
 
         assert t.ident is not None
         ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_ulong(t.ident), ctypes.py_object(KeyboardInterrupt),
+            ctypes.c_ulong(t.ident),
+            ctypes.py_object(KeyboardInterrupt),
         )
         assert ret == 1
         t.join(timeout=2.0)
         release.set()
         assert not t.is_alive()
         assert holder.get("exc") == "KeyboardInterrupt"
-
 
     def test_worker_inherits_caller_contextvars(self):
         """Profile secret scope / session id must survive the thread hop."""
@@ -441,7 +441,10 @@ class TestKillProcessTree:
             [sys.executable, str(parent_py)], start_new_session=True
         )
         deadline = time.monotonic() + 10
-        while not (started.exists() and started.read_text()) and time.monotonic() < deadline:
+        while (
+            not (started.exists() and started.read_text())
+            and time.monotonic() < deadline
+        ):
             time.sleep(0.05)
         assert started.exists(), "grandchild never spawned — test harness broken"
         assert kill_process_tree(proc.pid) is True
@@ -474,7 +477,10 @@ class TestKillProcessTree:
             [sys.executable, str(parent_py)], start_new_session=True
         )
         deadline = time.monotonic() + 10
-        while not (started.exists() and started.read_text()) and time.monotonic() < deadline:
+        while (
+            not (started.exists() and started.read_text())
+            and time.monotonic() < deadline
+        ):
             time.sleep(0.05)
         assert started.exists(), "grandchild never spawned — test harness broken"
         assert kill_process_tree(proc.pid) is True
@@ -512,7 +518,6 @@ class TestConcurrentToolTimeoutMigration:
 
         return tool_executor._resolve_concurrent_tool_timeout
 
-
     def test_env_var_still_works(self, monkeypatch):
         monkeypatch.setattr("agent.deadline._timeouts_section", dict)
         monkeypatch.setenv("CLAWK_CONCURRENT_TOOL_TIMEOUT_S", "60")
@@ -522,7 +527,6 @@ class TestConcurrentToolTimeoutMigration:
         monkeypatch.setattr("agent.deadline._timeouts_section", dict)
         monkeypatch.setenv("CLAWK_CONCURRENT_TOOL_TIMEOUT_S", "0")
         assert self._resolver()() is None
-
 
     def test_new_config_key_wins(self, monkeypatch):
         monkeypatch.setattr(
@@ -581,8 +585,6 @@ class TestSequentialToolTimeoutResolver:
 # ---------------------------------------------------------------------------
 # Phase 3a (#85125): SuspectableBackend — poisoned-state contract.
 # ---------------------------------------------------------------------------
-
-
 
 
 class _RecordingBackend:
@@ -745,8 +747,11 @@ def test_async_mark_happens_before_on_abandon_cleanup():
 
     async def drive():
         result = await run_bounded_async(
-            never(), 0.05, label="phase3a-order-async",
-            on_abandon=_cleanup, backend=backend,
+            never(),
+            0.05,
+            label="phase3a-order-async",
+            on_abandon=_cleanup,
+            backend=backend,
         )
         await asyncio.wait_for(cleaned.wait(), timeout=5.0)
         return result

@@ -29,16 +29,45 @@ from typing import Iterable, Iterator, Optional
 # one manual config edit; a destructive class accidentally proposed costs them data.
 _UNSAFE_CLASS_PATTERNS = [
     # deletion / destruction: recursive delete, find -delete, xargs rm, git reset --hard, mkfs, dd
-    r"delete", r"\brm\b", r"destro", r"wipe", r"format", r"\bdisk\b", r"block device", r"\bdd\b",
+    r"delete",
+    r"\brm\b",
+    r"destro",
+    r"wipe",
+    r"format",
+    r"\bdisk\b",
+    r"block device",
+    r"\bdd\b",
     # process / host: fork bomb, force/regex/all kills, self-termination, shutdown
-    r"fork bomb", r"kill (?:all )?process", r"kill all", r"self-termination", r"shutdown", r"reboot",
+    r"fork bomb",
+    r"kill (?:all )?process",
+    r"kill all",
+    r"self-termination",
+    r"shutdown",
+    r"reboot",
     # privilege / credentials / system files
-    r"\bsudo\b", r"privilege", r"credential", r"\bssh\b", r"shell.rc", r"system config", r"system file",
+    r"\bsudo\b",
+    r"privilege",
+    r"credential",
+    r"\bssh\b",
+    r"shell.rc",
+    r"system config",
+    r"system file",
     # data & permissions: SQL DROP/TRUNCATE/DELETE-without-WHERE, chown/chmod, world-writable, overwrite
-    r"\bsql\b", r"\bchown\b", r"\bchmod\b", r"writable", r"overwrite", r"in-place edit",
+    r"\bsql\b",
+    r"\bchown\b",
+    r"\bchmod\b",
+    r"writable",
+    r"overwrite",
+    r"in-place edit",
     # remote/obfuscated execution: pipe-to-shell, encoded PowerShell, heredoc, substitutions
-    r"pipe", r"obfuscation", r"remote content", r"remote script", r"heredoc", r"encoded",
-    r"command substitution", r"process substitution",
+    r"pipe",
+    r"obfuscation",
+    r"remote content",
+    r"remote script",
+    r"heredoc",
+    r"encoded",
+    r"command substitution",
+    r"process substitution",
     r"hardline",
 ]
 _UNSAFE_CLASS_RE = re.compile("|".join(_UNSAFE_CLASS_PATTERNS), re.IGNORECASE)
@@ -46,21 +75,48 @@ _UNSAFE_CLASS_RE = re.compile("|".join(_UNSAFE_CLASS_PATTERNS), re.IGNORECASE)
 # Root binaries that must never anchor a proposed command glob, even if the class survived the
 # description filter. Prefix match for the mkfs family.
 _UNSAFE_ROOT_BINARIES = {
-    "rm", "rmdir", "unlink", "shred", "dd", "fdisk", "parted", "wipefs",
-    "sudo", "doas", "su", "chmod", "chown", "chgrp",
-    "kill", "killall", "pkill",
-    "halt", "shutdown", "reboot", "poweroff", "init",
-    "del", "format", "truncate", "mkswap",
+    "rm",
+    "rmdir",
+    "unlink",
+    "shred",
+    "dd",
+    "fdisk",
+    "parted",
+    "wipefs",
+    "sudo",
+    "doas",
+    "su",
+    "chmod",
+    "chown",
+    "chgrp",
+    "kill",
+    "killall",
+    "pkill",
+    "halt",
+    "shutdown",
+    "reboot",
+    "poweroff",
+    "init",
+    "del",
+    "format",
+    "truncate",
+    "mkswap",
 }
 _UNSAFE_ROOT_PREFIXES = ("mkfs",)
 
 # Substrings in a role='tool' result that mean the command did NOT execute with user consent
 # (blocked, denied, timed out, or still pending). Kept in sync with tools/approval.py templates.
 _BLOCK_MARKERS = (
-    "BLOCKED (hardline)", "BLOCKED: User denied", "BLOCKED: Action ",
-    "BLOCKED: Command flagged as dangerous", "BLOCKED: approval required",
-    "BLOCKED: Failed to send approval request", "The user has NOT consented",
-    "Asking the user for approval", "approval_required", "BLOCKED by user deny rule",
+    "BLOCKED (hardline)",
+    "BLOCKED: User denied",
+    "BLOCKED: Action ",
+    "BLOCKED: Command flagged as dangerous",
+    "BLOCKED: approval required",
+    "BLOCKED: Failed to send approval request",
+    "The user has NOT consented",
+    "Asking the user for approval",
+    "approval_required",
+    "BLOCKED by user deny rule",
 )
 
 
@@ -68,8 +124,8 @@ _BLOCK_MARKERS = (
 class Proposal:
     """One ranked allowlist proposal."""
 
-    pattern: str            # command glob ("git push *") or class key
-    kind: str               # "glob" | "class"
+    pattern: str  # command glob ("git push *") or class key
+    kind: str  # "glob" | "class"
     count: int = 0
     classes: set = field(default_factory=set)
     examples: list = field(default_factory=list)
@@ -86,8 +142,10 @@ class Proposal:
 # Scan: session DB -> (command, class description) records
 # ---------------------------------------------------------------------------
 
+
 def default_db_path() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "state.db"
 
 
@@ -108,7 +166,9 @@ def _json_or_none(raw):
         return None
 
 
-def _iter_terminal_calls(con: sqlite3.Connection, since_ts: float) -> Iterator[tuple[str, str]]:
+def _iter_terminal_calls(
+    con: sqlite3.Connection, since_ts: float
+) -> Iterator[tuple[str, str]]:
     """Yield ``(tool_call_id, command)`` for every terminal tool call."""
     cur = con.execute(
         "SELECT tool_calls FROM messages WHERE role='assistant' AND tool_calls IS NOT NULL "
@@ -144,11 +204,17 @@ def _blocked_tool_call_ids(con: sqlite3.Connection, since_ts: float) -> set:
     }
 
 
-def scan_approval_history(db_path: Optional[Path] = None, days: int = 90) -> list[tuple[str, str]]:
+def scan_approval_history(
+    db_path: Optional[Path] = None, days: int = 90
+) -> list[tuple[str, str]]:
     """``(command, dangerous_class_description)`` records for dangerous-classified terminal commands
     that actually executed (i.e. carried an implied user approval).
     """
-    from tools.approval_detection import detect_dangerous_command, detect_hardline_command
+    from tools.approval_detection import (
+        detect_dangerous_command,
+        detect_hardline_command,
+    )
+
     path = Path(db_path) if db_path else default_db_path()
     if not path.exists():
         return []
@@ -178,10 +244,17 @@ def scan_approval_history(db_path: Optional[Path] = None, days: int = 90) -> lis
 # Normalize -> aggregate -> rank -> exclude
 # ---------------------------------------------------------------------------
 
+
 def normalize_command(command: str) -> str:
     """Fold user/clawk home prefixes and collapse whitespace."""
-    from tools.approval_detection import _rewrite_resolved_clawk_home, _rewrite_resolved_user_home
-    return " ".join(_rewrite_resolved_user_home(_rewrite_resolved_clawk_home(command)).split())
+    from tools.approval_detection import (
+        _rewrite_resolved_clawk_home,
+        _rewrite_resolved_user_home,
+    )
+
+    return " ".join(
+        _rewrite_resolved_user_home(_rewrite_resolved_clawk_home(command)).split()
+    )
 
 
 def is_unsafe_class(description: str) -> bool:
@@ -201,8 +274,13 @@ def derive_glob(normalized: str) -> Optional[str]:
     those anyway) and for commands anchored on an unsafe root binary.
     """
     from tools.approval_floors import _has_allowlist_shell_operator
+
     tokens = normalized.split()
-    if _has_allowlist_shell_operator(normalized) or not tokens or _unsafe_root_binary(tokens[0]):
+    if (
+        _has_allowlist_shell_operator(normalized)
+        or not tokens
+        or _unsafe_root_binary(tokens[0])
+    ):
         return None
     if len(tokens) == 1:
         return tokens[0]
@@ -213,7 +291,9 @@ def derive_glob(normalized: str) -> Optional[str]:
 
 
 def build_proposals(
-    records: Iterable[tuple[str, str]], existing: Optional[set] = None, min_count: int = 2,
+    records: Iterable[tuple[str, str]],
+    existing: Optional[set] = None,
+    min_count: int = 2,
     limit: int = 20,
 ) -> list[Proposal]:
     """Aggregate scan records into a ranked, safety-filtered proposal list.
@@ -245,18 +325,24 @@ def build_proposals(
         pattern, kind = (glob, "glob") if glob is not None else (description, "class")
         if pattern in existing:
             continue
-        proposal = by_pattern.setdefault((pattern, kind), Proposal(pattern=pattern, kind=kind))
+        proposal = by_pattern.setdefault(
+            (pattern, kind), Proposal(pattern=pattern, kind=kind)
+        )
         proposal.count += 1
         proposal.classes.add(description)
         proposal.add_example(normalized)
 
-    ranked = sorted((p for p in by_pattern.values() if p.count >= max(min_count, 1)), key=lambda p: (-p.count, p.pattern))
+    ranked = sorted(
+        (p for p in by_pattern.values() if p.count >= max(min_count, 1)),
+        key=lambda p: (-p.count, p.pattern),
+    )
     return ranked[: max(limit, 1)]
 
 
 # ---------------------------------------------------------------------------
 # Apply / render
 # ---------------------------------------------------------------------------
+
 
 def parse_apply_indices(spec: str, total: int) -> list[int]:
     """Parse ``"1,3"`` into validated zero-based indices."""
@@ -281,7 +367,10 @@ def parse_apply_indices(spec: str, total: int) -> list[int]:
 def apply_proposals(proposals: list[Proposal], indices: list[int]) -> set:
     """Merge chosen proposal patterns into command_allowlist and persist."""
     import tools.approval as approval_module
-    merged = set(approval_module.load_permanent_allowlist()) | {proposals[idx].pattern for idx in indices}
+
+    merged = set(approval_module.load_permanent_allowlist()) | {
+        proposals[idx].pattern for idx in indices
+    }
     approval_module.save_permanent_allowlist(merged)
     # Keep the in-process allowlist consistent so a long-lived process sees the new entries
     # immediately (mirrors the interactive 'always' path).
@@ -322,10 +411,13 @@ def suggest_command(args) -> int:
         return 1
 
     import tools.approval as approval_module
+
     existing = set(approval_module.load_permanent_allowlist())
     proposals = build_proposals(
-        scan_approval_history(db_path, days=days), existing=existing,
-        min_count=getattr(args, "min_count", 2), limit=getattr(args, "limit", 20),
+        scan_approval_history(db_path, days=days),
+        existing=existing,
+        min_count=getattr(args, "min_count", 2),
+        limit=getattr(args, "limit", 20),
     )
     as_json = getattr(args, "json", False)
 
@@ -344,7 +436,9 @@ def suggest_command(args) -> int:
             print("Added to command_allowlist:")
             for pattern in applied:
                 print(f"  + {pattern}")
-            print(f"\ncommand_allowlist now has {len(merged)} entries (~/.clawksis/config.yaml).")
+            print(
+                f"\ncommand_allowlist now has {len(merged)} entries (~/.clawksis/config.yaml)."
+            )
         return 0
 
     if as_json:
@@ -353,8 +447,12 @@ def suggest_command(args) -> int:
             "days": days,
             "proposals": [
                 {
-                    "n": i, "pattern": p.pattern, "kind": p.kind, "count": p.count,
-                    "classes": sorted(p.classes), "examples": p.examples,
+                    "n": i,
+                    "pattern": p.pattern,
+                    "kind": p.kind,
+                    "count": p.count,
+                    "classes": sorted(p.classes),
+                    "examples": p.examples,
                 }
                 for i, p in enumerate(proposals, 1)
             ],
@@ -373,6 +471,7 @@ def approvals_command(args) -> int:
         return suggest_command(args)
     if sub == "test":
         from clawk_cli.approvals_test import approvals_test_command
+
         return approvals_test_command(args)
     print(
         "usage: clawk approvals <subcommand>\n"

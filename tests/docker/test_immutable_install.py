@@ -9,6 +9,7 @@ The hosted write-policy env (PYTHONDONTWRITEBYTECODE,
 CLAWK_WRITE_SAFE_ROOT, ...) is covered by
 test_immutable_install_permissions.py.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -23,7 +24,9 @@ from tests.docker.conftest import (
 
 @pytest.mark.parametrize("uid", [10000, 23456])
 def test_install_tree_not_writable_by_clawk(
-    built_image: str, container_name: str, uid: int,
+    built_image: str,
+    container_name: str,
+    uid: int,
 ) -> None:
     """The clawk user must not be able to modify /opt/clawksis.
 
@@ -35,7 +38,11 @@ def test_install_tree_not_writable_by_clawk(
     identity = docker_exec(container_name, "id", "-u")
     assert identity.returncode == 0 and identity.stdout.strip() == str(uid)
 
-    probe = docker_exec(container_name, "/opt/clawksis/.venv/bin/python", "-c", """
+    probe = docker_exec(
+        container_name,
+        "/opt/clawksis/.venv/bin/python",
+        "-c",
+        """
 import os
 from pathlib import Path
 from clawk_cli.config import detect_install_method
@@ -62,7 +69,8 @@ for relative in ('pm-runtime/pm-runtime.json', 'tools/facts.json', 'manifest.jso
 for relative in ('.venv/.lock', 'pm-runtime/.lock'):
     path = Path('/opt/clawksis') / relative
     assert not path.exists() or not os.access(path, os.W_OK), path
-""")
+""",
+    )
     assert probe.returncode == 0, probe.stdout + probe.stderr
 
     r = docker_exec_sh(
@@ -89,12 +97,9 @@ for relative in ('.venv/.lock', 'pm-runtime/.lock'):
     )
 
 
-
-
-
-
 def test_stale_docker_stamp_in_home_is_healed_on_boot(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """A stale 'docker' stamp left in $CLAWK_HOME by an older image
     must be removed on boot so shared homes self-heal."""
@@ -103,9 +108,12 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
 
     # Write a stale 'docker' stamp as root
     docker_exec(
-        container_name, "sh", "-c",
+        container_name,
+        "sh",
+        "-c",
         "printf 'docker\\n' > /opt/data/.install_method",
-        user="root", timeout=5,
+        user="root",
+        timeout=5,
     )
     # Verify it exists
     r = docker_exec_sh(container_name, "cat /opt/data/.install_method", timeout=5)
@@ -122,6 +130,5 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
         timeout=10,
     )
     assert "HEALED" in r.stdout or r.stdout.strip() != "docker", (
-        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: "
-        f"{r.stdout}"
+        f"stale 'docker' stamp in $CLAWK_HOME was not healed on boot: {r.stdout}"
     )

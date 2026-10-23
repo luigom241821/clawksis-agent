@@ -85,10 +85,6 @@ def clean_registry():
         mod._live_connections.clear()
 
 
-
-
-
-
 def test_preopen_read_refused_while_connection_is_live(tmp_path, clean_registry):
     """The byte-level probe is allowed pre-open and refused once connected."""
     db = tmp_path / "state.db"
@@ -268,8 +264,6 @@ def test_probe_and_connect_do_not_race(tmp_path, clean_registry, monkeypatch):
     assert not failures, failures[0]
 
 
-
-
 def test_session_db_read_only_is_tracked(tmp_path, clean_registry, monkeypatch):
     """End-to-end: a real read-only SessionDB blocks byte-probes."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -291,7 +285,9 @@ def test_session_db_read_only_is_tracked(tmp_path, clean_registry, monkeypatch):
     assert read_header_bytes_preopen(db_path, length=16) is not None
 
 
-def test_repair_connections_are_tracked_for_byte_probe_safety(tmp_path, clean_registry, monkeypatch):
+def test_repair_connections_are_tracked_for_byte_probe_safety(
+    tmp_path, clean_registry, monkeypatch
+):
     """End-to-end: live repair/probe connections block byte-level reads (#63386).
 
     The repair paths never go through ``SessionDB`` and they hold the strongest
@@ -351,12 +347,6 @@ def test_byte_probe_never_cancels_the_repair_exclusion(tmp_path, clean_registry)
         )
     finally:
         guard.close()
-
-
-
-
-
-
 
 
 def test_page_count_bytes_matches_on_disk_size(tmp_path):

@@ -20,8 +20,15 @@ def _raw(text: str) -> dict:
 
 
 def _rich(text: str) -> dict:
-    return {"type": "rich_text", "elements": [
-        {"type": "rich_text_section", "elements": [{"type": "text", "text": text, "style": {"bold": True}}]}]}
+    return {
+        "type": "rich_text",
+        "elements": [
+            {
+                "type": "rich_text_section",
+                "elements": [{"type": "text", "text": text, "style": {"bold": True}}],
+            }
+        ],
+    }
 
 
 def _table(rows) -> dict:
@@ -29,12 +36,14 @@ def _table(rows) -> dict:
 
 
 def test_render_handles_raw_rich_ragged_and_malformed_cells():
-    block = _table([
-        [_raw("Name"), _rich("Status")],
-        "not-a-row",
-        [_raw(""), None],
-        [_raw("Clawksis"), _rich("ok"), {"type": "mystery"}],
-    ])
+    block = _table(
+        [
+            [_raw("Name"), _rich("Status")],
+            "not-a-row",
+            [_raw(""), None],
+            [_raw("Clawksis"), _rich("ok"), {"type": "mystery"}],
+        ]
+    )
     assert _render_slack_table_block(block) == "Name | Status\nClawksis | ok | "
     assert _render_slack_table_block({"type": "table"}) == ""
     assert _render_slack_table_block({"type": "table", "rows": "bad"}) == ""
@@ -49,7 +58,8 @@ def test_render_caps_huge_tables_with_visible_marker():
 def test_top_level_table_survives_inbound_dedupe():
     # The live inbound path routes top-level blocks through the dedupe-against-flat-text helper.
     out = _extract_additional_text_from_slack_blocks(
-        [_table([[_raw("col1"), _raw("col2")]])], "intro sentence")
+        [_table([[_raw("col1"), _raw("col2")]])], "intro sentence"
+    )
     assert "col1 | col2" in out
 
 
@@ -60,7 +70,10 @@ def test_attachment_nested_table_reaches_live_and_history_paths():
 
 
 def test_serializer_skips_table_husk_but_keeps_other_blocks():
-    blocks = [_table([[_raw("a")]]), {"type": "section", "text": {"type": "mrkdwn", "text": "hello"}}]
+    blocks = [
+        _table([[_raw("a")]]),
+        {"type": "section", "text": {"type": "mrkdwn", "text": "hello"}},
+    ]
     assert _serialize_slack_blocks_for_agent([blocks[0]]) == ""
     out = _serialize_slack_blocks_for_agent(blocks)
     assert "section" in out and '"table"' not in out

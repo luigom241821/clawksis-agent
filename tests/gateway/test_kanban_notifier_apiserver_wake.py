@@ -78,7 +78,10 @@ def _create_completed_subscription(platform, chat_id, session_id=None):
     conn = kbc.connect()
     try:
         tid = kb.create_task(
-            conn, title="notify once", assignee="worker", session_id=session_id,
+            conn,
+            title="notify once",
+            assignee="worker",
+            session_id=session_id,
         )
         kbn.add_notify_sub(conn, task_id=tid, platform=platform, chat_id=chat_id)
         kb.complete_task(conn, tid, summary="done once")
@@ -102,13 +105,17 @@ def _unseen_terminal_events(tid, platform, chat_id):
         conn.close()
 
 
-def test_apiserver_sub_wakes_subscription_destination_via_self_post(tmp_path, monkeypatch):
+def test_apiserver_sub_wakes_subscription_destination_via_self_post(
+    tmp_path, monkeypatch
+):
     """An api_server subscription wakes its chat_id destination, not the
     task's worker-session provenance or a build_session_key()-derived session."""
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "apiserver.db"))
     kb.init_db()
     tid = _create_completed_subscription(
-        "api_server", "origin-session", session_id="worker-session",
+        "api_server",
+        "origin-session",
+        session_id="worker-session",
     )
 
     posts = []
@@ -145,7 +152,8 @@ def test_apiserver_sub_wakes_subscription_destination_via_self_post(tmp_path, mo
 
 
 def test_apiserver_subscriptions_have_independent_wake_destinations(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "apiserver-multi.db"))
     kb.init_db()
@@ -186,12 +194,15 @@ def test_apiserver_subscriptions_have_independent_wake_destinations(
 
 
 def test_apiserver_wake_failure_rewinds_then_retries_destination(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "apiserver-retry.db"))
     kb.init_db()
     tid = _create_completed_subscription(
-        "api_server", "origin-session", session_id="worker-session",
+        "api_server",
+        "origin-session",
+        session_id="worker-session",
     )
     attempted_sessions = []
 
@@ -218,4 +229,3 @@ def test_apiserver_wake_failure_rewinds_then_retries_destination(
     assert attempted_sessions == ["origin-session", "origin-session"]
     assert "worker-session" not in attempted_sessions
     assert _unseen_terminal_events(tid, "api_server", "origin-session") == []
-

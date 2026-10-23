@@ -58,7 +58,10 @@ def _macos(facts: Facts, picks: Mapping[str, Any]) -> bool:
 
 FIRST_TASKS: tuple[FirstTask, ...] = (
     FirstTask(
-        "clawk", "Explain how Clawksis works", lambda facts, picks: False, ("clawksis-agent", "claude-design", "p5js"),
+        "clawk",
+        "Explain how Clawksis works",
+        lambda facts, picks: False,
+        ("clawksis-agent", "claude-design", "p5js"),
         goal="build a living page that shows how Clawksis works, from the real docs and this install",
         steps=(
             "Read https://samuelgradientai-sys.github.io/clawksis-agent/llms.txt once with web_extract. Open a page only to "
@@ -74,11 +77,15 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
             "Screen 3, out in the world: cron jobs, connectors and messaging, one example each built on their apps.",
         ),
         output="One HTML file in ~/clawk-first-task/, three screens that each fill the pane with one animated "
-               "graphic; open in the preview pane.",
+        "graphic; open in the preview pane.",
         quality="Every name and number comes from the docs or this install. A few short lines per screen.",
-        done="All three screens move and show real facts, and you said where the file is."),
+        done="All three screens move and show real facts, and you said where the file is.",
+    ),
     FirstTask(
-        "games", "Tune my games for this PC", _plugin("nvidia-app"), ("nvidia-app:nvidia-app",),
+        "games",
+        "Tune my games for this PC",
+        _plugin("nvidia-app"),
+        ("nvidia-app:nvidia-app",),
         goal="optimise the games on this PC with NVIDIA App and show what changed",
         steps=(
             "Its tools are mcp__nvidia_app__nvapp_*. If none are listed, check without changing anything whether "
@@ -92,9 +99,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="A before and after table in chat: one row per game, what changed.",
         quality="Only settings NVIDIA App reports and really changed. Never guess a value.",
-        done="The changes are read back and in the table. Next-step idea: launch one of the games."),
+        done="The changes are read back and in the table. Next-step idea: launch one of the games.",
+    ),
     FirstTask(
-        "broadcast", "Make my mic and camera pro", _plugin("nvidia-broadcast"), ("nvidia-broadcast:nvidia-broadcast",),
+        "broadcast",
+        "Make my mic and camera pro",
+        _plugin("nvidia-broadcast"),
+        ("nvidia-broadcast:nvidia-broadcast",),
         goal="set up NVIDIA Broadcast so their mic and camera are ready for a call",
         steps=(
             "Its tools are mcp__nvidia_broadcast__*. If none are listed, check without changing anything whether "
@@ -108,9 +119,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="A short list in chat: each effect, its device, before and after.",
         quality="Only effects Broadcast reports on this machine.",
-        done="The effects are on and read back, and they know how to turn each one off."),
+        done="The effects are on and read back, and they know how to turn each one off.",
+    ),
     FirstTask(
-        "blender", "Build a 3D scene in Blender", _plugin("blender"), ("blender:blender",),
+        "blender",
+        "Build a 3D scene in Blender",
+        _plugin("blender"),
+        ("blender:blender",),
         goal="build a small 3D scene live in their open Blender, one visible step at a time",
         steps=(
             "Drive the open Blender with its mcp__blender__* tools. Never run Blender from the terminal.",
@@ -131,36 +146,48 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
             "Save only the new scene with bpy.data.libraries.write as scene.blend, and the code as scene.py.",
         ),
         output="scene.blend, scene.py, preview.png and render.png in ~/clawk-first-task/; the render open in the "
-               "preview pane.",
+        "preview pane.",
         quality="Made in their open Blender, never headless, never a placeholder.",
         done="The final still is shown and you named the files. Next-step idea: a turntable video or a GPU Cycles "
-             "render."),
+        "render.",
+    ),
     FirstTask(
-        "brief", "Brief me on today", _connected, ("claude-design",),
+        "brief",
+        "Brief me on today",
+        _connected,
+        ("claude-design",),
         goal="write today's brief from their connected apps",
         steps=(
-            "Check the connected apps with manage_connections(action=\"status\").",
+            'Check the connected apps with manage_connections(action="status").',
             "Read today from them: mail, calendar, messages, tasks. Read only.",
             "Show a first version early, then fill it in: what needs attention, what changed, what is next.",
             "Offer a morning cron job that sends the brief. Schedule it only on yes.",
         ),
         output="One designed HTML page in ~/clawk-first-task/, open in the preview pane.",
         quality="Every item comes from a connected app and says which one. Nothing invented.",
-        done="The brief is shown and the morning job is set up or declined."),
+        done="The brief is shown and the morning job is set up or declined.",
+    ),
     FirstTask(
-        "week", "Recap my week on one page", _connected, ("weekly-review-planning", "claude-design"),
+        "week",
+        "Recap my week on one page",
+        _connected,
+        ("weekly-review-planning", "claude-design"),
         goal="make one page that recaps their past seven days from the connected apps",
         steps=(
-            "Check the connected apps with manage_connections(action=\"status\").",
+            'Check the connected apps with manage_connections(action="status").',
             "Read the past seven days from them. Read only.",
             "Show a first version early, then fill it in: meetings, threads, work shipped, open loops.",
             "End with a short plan for next week built from the open loops.",
         ),
         output="One designed HTML page in ~/clawk-first-task/, open in the preview pane.",
         quality="Every item comes from a connected app and says which one. Nothing invented.",
-        done="The page is shown with all five parts filled from real data."),
+        done="The page is shown with all five parts filled from real data.",
+    ),
     FirstTask(
-        "mac", "Set up my Mac helpers", _macos, ("apple-reminders", "apple-notes", "clawksis-agent"),
+        "mac",
+        "Set up my Mac helpers",
+        _macos,
+        ("apple-reminders", "apple-notes", "clawksis-agent"),
         goal="set up their Mac helpers: one real reminder, one real note and a morning routine",
         steps=(
             "Ask in one clarify what the reminder and the note should be, with three concrete suggestions.",
@@ -169,9 +196,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="The reminder and note in their apps and the cron job, each named in chat.",
         quality="Real items they asked for. No test items.",
-        done="The reminder and note exist, and the morning job is set up or declined."),
+        done="The reminder and note exist, and the morning job is set up or declined.",
+    ),
     FirstTask(
-        "notes", "Turn my notes into a wiki", _always, ("obsidian", "llm-wiki"),
+        "notes",
+        "Turn my notes into a wiki",
+        _always,
+        ("obsidian", "llm-wiki"),
         goal="turn their notes into a small linked wiki",
         steps=(
             "Ask which folder holds their notes. Never search the disk for it.",
@@ -181,9 +212,12 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="Four Markdown pages in ~/clawk-first-task/wiki/, unless they ask for their notes folder.",
         quality="Only what their notes say. Every link resolves.",
-        done="The four pages exist, the links work and the index is shown."),
+        done="The four pages exist, the links work and the index is shown.",
+    ),
     FirstTask(
-        "explain", "Explain a topic I care about", _always,
+        "explain",
+        "Explain a topic I care about",
+        _always,
         ("grounded-citations", "claude-design", "p5js", "blocked-page-recovery"),
         goal="explain a topic they care about on one page built around a figure they can play with",
         steps=(
@@ -196,9 +230,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="One HTML file in ~/clawk-first-task/, open in the preview pane, sources at the end.",
         quality="Every claim and every number in the figure is cited. Under 400 words of text.",
-        done="The figure responds to input and every source is listed."),
+        done="The figure responds to input and every source is listed.",
+    ),
     FirstTask(
-        "youtube", "Turn a video into a page", _always, ("youtube-content", "claude-design", "p5js"),
+        "youtube",
+        "Turn a video into a page",
+        _always,
+        ("youtube-content", "claude-design", "p5js"),
         goal="turn one video into a page that lays its ideas out visually",
         steps=(
             "Ask for the video link.",
@@ -207,11 +245,14 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
             "Show a first version early, then lay the ideas out visually, with one figure where it helps.",
         ),
         output="One self-contained HTML file in ~/clawk-first-task/, open in the preview pane; each "
-               "timestamp links to that moment in the video.",
+        "timestamp links to that moment in the video.",
         quality="Designed with claude-design. Quotes are exact words from the transcript.",
-        done="The page is shown and every idea has its timestamp and quote."),
+        done="The page is shown and every idea has its timestamp and quote.",
+    ),
     FirstTask(
-        "watch", "Watch something for me daily", _always,
+        "watch",
+        "Watch something for me daily",
+        _always,
         ("competitor-news-monitor|product-price-monitor", "grounded-citations"),
         goal="watch something for them every day and report here",
         steps=(
@@ -221,9 +262,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="The first report in chat, and the daily cron job.",
         quality="Every finding has a source link. Nothing invented.",
-        done="The first report is shown and the daily job is set up or declined."),
+        done="The first report is shown and the daily job is set up or declined.",
+    ),
     FirstTask(
-        "site", "Design a page for me", _always, ("claude-design", "popular-web-designs", "design-md", "p5js"),
+        "site",
+        "Design a page for me",
+        _always,
+        ("claude-design", "popular-web-designs", "design-md", "p5js"),
         goal="design one web page for them",
         steps=(
             "If you do not know what the page is for, ask in one line.",
@@ -233,9 +278,13 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="One self-contained HTML file in ~/clawk-first-task/, open in the preview pane.",
         quality="Designed with the skills. Real content they gave you, never filler text.",
-        done="The page is shown and a variation is offered."),
+        done="The page is shown and a variation is offered.",
+    ),
     FirstTask(
-        "repo", "Map one of my repos", _always, ("codebase-inspection", "architecture-diagram", "github"),
+        "repo",
+        "Map one of my repos",
+        _always,
+        ("codebase-inspection", "architecture-diagram", "github"),
         goal="map one of their code repositories on an architecture page",
         steps=(
             "Ask which repo, as a path or a URL, and ask before reading it.",
@@ -245,11 +294,15 @@ FIRST_TASKS: tuple[FirstTask, ...] = (
         ),
         output="One self-contained HTML file in ~/clawk-first-task/, open in the preview pane.",
         quality="Only modules that are really in the repo, named by their paths.",
-        done="The page is shown and every box on it maps to a real path."),
+        done="The page is shown and every box on it maps to a real path.",
+    ),
 )
 # A task the user names in words: the same prompt shape, without a catalog row.
 OWN_TASK = FirstTask(
-    OWN_ID, "", lambda facts, picks: False, ("clawksis-agent",),
+    OWN_ID,
+    "",
+    lambda facts, picks: False,
+    ("clawksis-agent",),
     goal="build the task they named in their own words",
     steps=(
         "Also load the skills that fit what they asked.",
@@ -260,19 +313,25 @@ OWN_TASK = FirstTask(
     ),
     output="Whatever fits the task; a page is one self-contained HTML file, open in the preview pane.",
     quality="Real data only, designed with the skills when it is a page.",
-    done="The first slice is shown and you said where its files are.")
+    done="The first slice is shown and you said where its files are.",
+)
 TASK_BY_ID = {task.id: task for task in FIRST_TASKS}
 EVERY_TASK_SKILL = "humanizer"
 
 
 def eligible_tasks(facts: Facts, picks: Mapping[str, Any]) -> tuple[FirstTask, ...]:
     """The rows the model may pick from on this machine and run, in catalog order."""
-    return tuple(task for task in FIRST_TASKS if task.id != FIXED_ID and task.gate(facts, picks))
+    return tuple(
+        task for task in FIRST_TASKS if task.id != FIXED_ID and task.gate(facts, picks)
+    )
 
 
 def card_options(chosen: Any) -> list[dict]:
     """The build card: the model's picks as given, then the fixed row."""
-    return [*(dict(option) for option in chosen or ()), {"id": FIXED_ID, "label": TASK_BY_ID[FIXED_ID].label}]
+    return [
+        *(dict(option) for option in chosen or ()),
+        {"id": FIXED_ID, "label": TASK_BY_ID[FIXED_ID].label},
+    ]
 
 
 def _option_error(option: Any, eligible: set[str], seen: set[str]) -> str | None:
@@ -311,8 +370,10 @@ def pick_error(options: Any, facts: Facts, picks: Mapping[str, Any]) -> str | No
     if not problems:
         return None
     problem = "; ".join(problems)
-    return (f'{problem}. Call setup_beat(beat="build", options=[{{"id": ..., "label": ...}}]) with up to '
-            f"{MAX_PICKS} of these ids: {', '.join(eligible)}.")
+    return (
+        f'{problem}. Call setup_beat(beat="build", options=[{{"id": ..., "label": ...}}]) with up to '
+        f"{MAX_PICKS} of these ids: {', '.join(eligible)}."
+    )
 
 
 def task_skills(option: str, resolve_skill: Callable[[str], str | None]) -> list[str]:
@@ -322,7 +383,9 @@ def task_skills(option: str, resolve_skill: Callable[[str], str | None]) -> list
     names = [*TASK_BY_ID.get(option, OWN_TASK).skills, EVERY_TASK_SKILL]
     kept = []
     for entry in names:
-        found = [resolved for name in entry.split("|") if (resolved := resolve_skill(name))]
+        found = [
+            resolved for name in entry.split("|") if (resolved := resolve_skill(name))
+        ]
         if found:
             kept.append(" or ".join(found))
     return kept

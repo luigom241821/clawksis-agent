@@ -88,7 +88,9 @@ class TestAllProfileSnapshots:
             if clawk_home == profiles["work"]:
                 raise OSError("disk full")
             return real(
-                label=label, clawk_home=clawk_home, keep=keep,
+                label=label,
+                clawk_home=clawk_home,
+                keep=keep,
                 max_file_size=max_file_size,
             )
 
@@ -121,9 +123,12 @@ class TestPerProfileCronRestore:
         snaps = backup.create_pre_update_snapshots_all_profiles(
             invoking_home=profiles["default"], keep=1
         )
-        assert backup.restore_cron_jobs_all_profiles(
-            snaps, invoking_home=profiles["default"]
-        ) == []
+        assert (
+            backup.restore_cron_jobs_all_profiles(
+                snaps, invoking_home=profiles["default"]
+            )
+            == []
+        )
 
     def test_empty_map_is_noop(self, profiles):
         assert backup.restore_cron_jobs_all_profiles({}) == []

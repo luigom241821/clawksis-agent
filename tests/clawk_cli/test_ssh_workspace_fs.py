@@ -62,8 +62,8 @@ def test_ssh_workspace_fs_lists_and_reads_remote_paths():
         ]
     }
     assert (data, size, path) == (b"hello", 5, "/srv/repos/README.md")
-    assert 'p=/srv/repos' in env.calls[0][0]
-    assert 'p=/srv/repos/README.md' in env.calls[1][0]
+    assert "p=/srv/repos" in env.calls[0][0]
+    assert "p=/srv/repos/README.md" in env.calls[1][0]
     assert 'if [ "$size" -gt 100 ]' in env.calls[1][0]
     assert 'set -o pipefail; head -c 50 < "$p" | base64' in env.calls[1][0]
 
@@ -82,14 +82,19 @@ def test_ssh_workspace_fs_inspects_resolved_file_before_streaming(monkeypatch):
     resolved = "/srv/repos/.env"
     encoded = base64.b64encode(resolved.encode()).decode()
     env = FakeEnv(
-        [{"returncode": 0, "output": f"__CLAWK_FS_TARGET__:{encoded}\n__CLAWK_FS_SIZE__:6\n"}]
+        [
+            {
+                "returncode": 0,
+                "output": f"__CLAWK_FS_TARGET__:{encoded}\n__CLAWK_FS_SIZE__:6\n",
+            }
+        ]
     )
     backend = SshWorkspaceFs(env)
 
     target, size = backend.inspect_file("safe-link")
 
     assert (target, size) == (resolved, 6)
-    assert "realpath \"$p\"" in env.calls[0][0]
+    assert 'realpath "$p"' in env.calls[0][0]
 
     class FakeProcess:
         def __init__(self):
@@ -103,7 +108,9 @@ def test_ssh_workspace_fs_inspects_resolved_file_before_streaming(monkeypatch):
 
     process = FakeProcess()
     env._build_ssh_command = lambda: ["ssh", "dev@example.com"]
-    monkeypatch.setattr(ssh_workspace_fs.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(
+        ssh_workspace_fs.subprocess, "Popen", lambda *args, **kwargs: process
+    )
 
     assert b"".join(backend.stream_file(target, chunk_size=3)) == b"streamed"
 

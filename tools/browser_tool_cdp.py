@@ -27,25 +27,46 @@ def _resolve_cdp_override(cdp_url: str) -> str:
 
     discovery_url = raw
     if lowered.startswith(("ws://", "wss://")):
-        if not (raw.count(":") == 2 and raw.rstrip("/").rsplit(":", 1)[-1].isdigit() and "/" not in raw.split(":", 2)[-1]):
+        if not (
+            raw.count(":") == 2
+            and raw.rstrip("/").rsplit(":", 1)[-1].isdigit()
+            and "/" not in raw.split(":", 2)[-1]
+        ):
             return raw
-        discovery_url = ("http://" if lowered.startswith("ws://") else "https://") + raw.split("://", 1)[1]
-    version_url = discovery_url if discovery_url.lower().endswith("/json/version") else discovery_url.rstrip("/") + "/json/version"
+        discovery_url = (
+            "http://" if lowered.startswith("ws://") else "https://"
+        ) + raw.split("://", 1)[1]
+    version_url = (
+        discovery_url
+        if discovery_url.lower().endswith("/json/version")
+        else discovery_url.rstrip("/") + "/json/version"
+    )
 
     san = _bt._sanitize_url_for_logs
     try:
         import requests  # lazy — shared module object, test patches still apply
-        response = requests.get(version_url, timeout=10, **loopback_request_kwargs(version_url))
+
+        response = requests.get(
+            version_url, timeout=10, **loopback_request_kwargs(version_url)
+        )
         response.raise_for_status()
         payload = response.json()
     except Exception as exc:
-        _bt.logger.warning("Failed to resolve CDP endpoint %s via %s: %s", san(raw), san(version_url), san(exc))
+        _bt.logger.warning(
+            "Failed to resolve CDP endpoint %s via %s: %s",
+            san(raw),
+            san(version_url),
+            san(exc),
+        )
         return raw
     ws_url = str(payload.get("webSocketDebuggerUrl") or "").strip()
     if ws_url:
         _bt.logger.info("Resolved CDP endpoint %s -> %s", san(raw), san(ws_url))
         return ws_url
-    _bt.logger.warning("CDP discovery at %s did not return webSocketDebuggerUrl; using raw endpoint", san(version_url))
+    _bt.logger.warning(
+        "CDP discovery at %s did not return webSocketDebuggerUrl; using raw endpoint",
+        san(version_url),
+    )
     return raw
 
 
@@ -63,6 +84,7 @@ def live_cdp_override() -> str:
     endpoint, the way ``get_secret`` fails closed. Single-profile processes are unchanged."""
     from agent.secret_scope import is_multiplex_active
     from clawk_constants import get_clawk_home_override, clawk_home_key
+
     if get_clawk_home_override() is None and is_multiplex_active():
         return ""
     with _live_overrides_lock:
@@ -72,6 +94,7 @@ def live_cdp_override() -> str:
 def set_live_cdp_override(url: Optional[str]) -> None:
     """Set (or with a falsy ``url`` clear) the current profile's live endpoint and bump its generation."""
     from clawk_constants import clawk_home_key
+
     key = clawk_home_key()
     with _live_overrides_lock:
         if url:
@@ -90,6 +113,7 @@ _live_generations: dict[str, int] = {}
 def live_cdp_generation(home_key: Optional[str] = None) -> int:
     """The current (or ``home_key``'s) profile's live-endpoint generation."""
     from clawk_constants import clawk_home_key
+
     with _live_overrides_lock:
         return _live_generations.get(home_key or clawk_home_key(), 0)
 
@@ -98,7 +122,12 @@ def env_cdp_url() -> str:
     """``BROWSER_CDP_URL`` from this profile's secret scope. A routed profile (multiplex, or a scope
     bound for another home) reads only its own ``.env``: ``os.environ`` holds the launch profile's
     value. Single-profile reads fall through to ``os.environ`` as before (``get_secret``)."""
-    from agent.secret_scope import current_secret_scope, get_secret, serves_routed_profile
+    from agent.secret_scope import (
+        current_secret_scope,
+        get_secret,
+        serves_routed_profile,
+    )
+
     if serves_routed_profile():
         value = (current_secret_scope() or {}).get("BROWSER_CDP_URL")
     else:
@@ -116,7 +145,9 @@ def _get_cdp_override_raw() -> str:
     schema build with no error.
     """
     env_override = live_cdp_override() or env_cdp_url()
-    return env_override or _origin()._browser_cfg("cdp_url", "", lambda v: str(v or "").strip(), "browser.cdp_url from config")
+    return env_override or _origin()._browser_cfg(
+        "cdp_url", "", lambda v: str(v or "").strip(), "browser.cdp_url from config"
+    )
 
 
 def _get_cdp_override() -> str:
@@ -133,10 +164,16 @@ def _get_dialog_policy_config() -> tuple[str, float]:
     """Read ``browser.dialog_policy`` + ``browser.dialog_timeout_s``; supervisor defaults when absent/invalid."""
     _bt = _origin()
     # Deferred so browser_tool imports in minimal environments.
-    from tools.browser_supervisor_dialogs import DEFAULT_DIALOG_POLICY, DEFAULT_DIALOG_TIMEOUT_S, _VALID_POLICIES
+    from tools.browser_supervisor_dialogs import (
+        DEFAULT_DIALOG_POLICY,
+        DEFAULT_DIALOG_TIMEOUT_S,
+        _VALID_POLICIES,
+    )
+
     policy, timeout_s = DEFAULT_DIALOG_POLICY, DEFAULT_DIALOG_TIMEOUT_S
     try:
         from clawk_cli.config import read_raw_config
+
         cfg = read_raw_config()
         browser_cfg = cfg.get("browser", {}) if isinstance(cfg, dict) else {}
         if not isinstance(browser_cfg, dict):
@@ -145,10 +182,16 @@ def _get_dialog_policy_config() -> tuple[str, float]:
         if candidate in _VALID_POLICIES:
             policy = candidate
         else:
-            _bt.logger.debug("Invalid browser.dialog_policy=%r; using default", candidate)
+            _bt.logger.debug(
+                "Invalid browser.dialog_policy=%r; using default", candidate
+            )
         timeout_raw = browser_cfg.get("dialog_timeout_s")
         try:
-            timeout_s = float(timeout_raw) if timeout_raw is not None else DEFAULT_DIALOG_TIMEOUT_S
+            timeout_s = (
+                float(timeout_raw)
+                if timeout_raw is not None
+                else DEFAULT_DIALOG_TIMEOUT_S
+            )
             if timeout_s <= 0:
                 timeout_s = DEFAULT_DIALOG_TIMEOUT_S
         except (TypeError, ValueError):
@@ -178,16 +221,27 @@ def _ensure_cdp_supervisor(task_id: str) -> None:
         return
     try:
         from tools.browser_supervisor import SUPERVISOR_REGISTRY  # type: ignore[import-not-found]
+
         policy, timeout_s = _get_dialog_policy_config()
-        SUPERVISOR_REGISTRY.get_or_start(task_id=task_id, cdp_url=cdp_url, dialog_policy=policy, dialog_timeout_s=timeout_s)
+        SUPERVISOR_REGISTRY.get_or_start(
+            task_id=task_id,
+            cdp_url=cdp_url,
+            dialog_policy=policy,
+            dialog_timeout_s=timeout_s,
+        )
     except Exception as exc:
-        _bt.logger.debug("CDP supervisor attach for task=%s failed (non-fatal): %s", task_id, exc)
+        _bt.logger.debug(
+            "CDP supervisor attach for task=%s failed (non-fatal): %s", task_id, exc
+        )
 
 
 def _stop_cdp_supervisor(task_id: str) -> None:
     """Stop the CDP supervisor for ``task_id`` if one exists. No-op otherwise."""
     try:
         from tools.browser_supervisor import SUPERVISOR_REGISTRY  # type: ignore[import-not-found]
+
         SUPERVISOR_REGISTRY.stop(task_id)
     except Exception as exc:
-        _origin().logger.debug("CDP supervisor stop for task=%s failed (non-fatal): %s", task_id, exc)
+        _origin().logger.debug(
+            "CDP supervisor stop for task=%s failed (non-fatal): %s", task_id, exc
+        )

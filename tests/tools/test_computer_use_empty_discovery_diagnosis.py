@@ -19,8 +19,13 @@ from tools.computer_use import cua_backend_driver as cb_driver
 def test_locked_probe_fails_safe(monkeypatch):
     def _boom(*a, **kw):
         raise OSError("no loginctl")
+
     monkeypatch.setattr(cb.subprocess, "run", _boom)
-    assert cb._linux_session_locked() in (None, False) if cb.sys.platform != "linux" else cb._linux_session_locked() is None
+    assert (
+        cb._linux_session_locked() in (None, False)
+        if cb.sys.platform != "linux"
+        else cb._linux_session_locked() is None
+    )
 
 
 def test_empty_capture_carries_reason(monkeypatch):
@@ -32,8 +37,9 @@ def test_empty_capture_carries_reason(monkeypatch):
     backend._last_target = None
     backend._snapshot_tokens = {}
     monkeypatch.setattr(backend, "list_windows", list, raising=False)
-    monkeypatch.setattr(cb, "_empty_discovery_reason",
-                        lambda: "the desktop session is LOCKED (test)")
+    monkeypatch.setattr(
+        cb, "_empty_discovery_reason", lambda: "the desktop session is LOCKED (test)"
+    )
     cap = backend.capture(mode="ax")
     assert cap.width == 0 and cap.height == 0
     assert "LOCKED" in cap.window_title
@@ -62,11 +68,16 @@ def test_cli_fallback_fails_fast_on_daemon_not_running(monkeypatch):
 
     def _fake_run(cmd, **kw):
         calls["n"] += 1
-        return _Proc(stdout="Cua Driver daemon is not running on /x.sock.\nStart it first with: cua-driver serve")
+        return _Proc(
+            stdout="Cua Driver daemon is not running on /x.sock.\nStart it first with: cua-driver serve"
+        )
 
-    monkeypatch.setattr(cb_driver, "resolve_cua_driver_cmd", lambda override=None: "cua-driver")
+    monkeypatch.setattr(
+        cb_driver, "resolve_cua_driver_cmd", lambda override=None: "cua-driver"
+    )
     import subprocess as _sp
     import time as _time
+
     monkeypatch.setattr(_sp, "run", _fake_run)
     monkeypatch.setattr(_time, "sleep", lambda s: sleeps.append(s))
 
@@ -88,9 +99,12 @@ def test_cli_fallback_still_retries_transient_empty(monkeypatch):
             return _Proc(stdout="")
         return _Proc(stdout='{"windows": []}')
 
-    monkeypatch.setattr(cb_driver, "resolve_cua_driver_cmd", lambda override=None: "cua-driver")
+    monkeypatch.setattr(
+        cb_driver, "resolve_cua_driver_cmd", lambda override=None: "cua-driver"
+    )
     import subprocess as _sp
     import time as _time
+
     monkeypatch.setattr(_sp, "run", _fake_run)
     monkeypatch.setattr(_time, "sleep", lambda s: None)
 

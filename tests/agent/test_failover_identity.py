@@ -81,7 +81,6 @@ def _cache_agent(
 
 
 class TestRewritePromptModelIdentity:
-
     def test_only_last_occurrence_is_rewritten(self):
         agent = _agent()
         rewrite_prompt_model_identity(agent, "gemma4:e2b-mlx", "custom")
@@ -89,13 +88,11 @@ class TestRewritePromptModelIdentity:
         # context files) and must survive untouched.
         assert "Model: decoy-from-memory" in agent._cached_system_prompt
 
-
     def test_noop_when_prompt_missing_or_empty(self):
         for prompt in (None, ""):
             agent = _agent(prompt=prompt)
             rewrite_prompt_model_identity(agent, "m", "p")
             assert agent._cached_system_prompt == prompt
-
 
 
 class TestSyncFailoverSystemMessage:
@@ -110,14 +107,12 @@ class TestSyncFailoverSystemMessage:
         assert "Model: gemma4:e2b-mlx" in api_messages[0]["content"]
         assert result == agent._cached_system_prompt
 
-
     def test_noop_without_cached_prompt(self):
         agent = _agent(prompt=None)
         api_messages = [{"role": "system", "content": "original"}]
         result = _sync_failover_system_message(agent, api_messages, "active")
         assert api_messages[0]["content"] == "original"
         assert result == "active"
-
 
 
 class TestSyncFailoverPreservesCacheDecoration:
@@ -187,8 +182,6 @@ class TestSyncFailoverPreservesCacheDecoration:
         assert "Model: gemma4:e2b-mlx" in content[0]["text"]
 
 
-
-
 class TestRedecoratePromptCacheOnPolicyChange:
     """#72626: failover must re-render breakpoints for the *new* cache policy.
 
@@ -210,7 +203,10 @@ class TestRedecoratePromptCacheOnPolicyChange:
     ):
         prompt = self._STATIC + "volatile"
         messages = apply_anthropic_cache_control(
-            [{"role": "system", "content": prompt}, {"role": "user", "content": "hello"}],
+            [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "hello"},
+            ],
             native_anthropic=True,
             static_system_prefix=self._STATIC,
         )
@@ -236,7 +232,9 @@ class TestRedecoratePromptCacheOnPolicyChange:
             agent, messages
         )
 
-        assert [t["function"] for t in planned_tools] == [t["function"] for t in registered_tools]
+        assert [t["function"] for t in planned_tools] == [
+            t["function"] for t in registered_tools
+        ]
         assert (_count_cache_markers(decorated) > 0) == use_caching
         assert any("cache_control" in t for t in planned_tools) == native
         assert (messages, registered_tools) == before
@@ -267,7 +265,15 @@ class TestRedecoratePromptCacheOnPolicyChange:
     def test_replans_tools_for_the_active_destination(self):
         from agent.prompt_caching import build_prompt_cache_plan
 
-        tools = [{"type": "function", "function": {"name": "lookup", "parameters": {"type": "object", "properties": {}}}}]
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
         messages = [
             {"role": "system", "content": self._STATIC + "volatile"},
             {"role": "user", "content": "lookup"},
@@ -304,9 +310,6 @@ class TestRedecoratePromptCacheOnPolicyChange:
             if isinstance(part, dict)
         )
 
-
-
-
     def test_moa_guidance_stays_outside_last_breakpoint(self):
         prompt = "sys"
         guidance = (
@@ -330,7 +333,9 @@ class TestRedecoratePromptCacheOnPolicyChange:
                 _attach_reference_guidance(out, prepared["guidance"])
                 return {**prepared, "messages": out}
 
-        agent = _cache_agent(use_caching=True, native=True, prompt=prompt, provider="moa")
+        agent = _cache_agent(
+            use_caching=True, native=True, prompt=prompt, provider="moa"
+        )
         agent.client = SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
         prepared = {"guidance": guidance, "messages": decorated}
         out, new_prepared, planned_tools = _redecorate_prompt_cache_for_provider(
@@ -344,9 +349,12 @@ class TestRedecoratePromptCacheOnPolicyChange:
         assert last.get("role") == "user"
         content = last["content"]
         if isinstance(content, list):
-            marked = [p for p in content if isinstance(p, dict) and "cache_control" in p]
+            marked = [
+                p for p in content if isinstance(p, dict) and "cache_control" in p
+            ]
             guidance_parts = [
-                p for p in content
+                p
+                for p in content
                 if isinstance(p, dict) and guidance in (p.get("text") or "")
             ]
             assert marked, "base transcript should still carry breakpoints"
@@ -355,8 +363,6 @@ class TestRedecoratePromptCacheOnPolicyChange:
             assert all(guidance not in (p.get("text") or "") for p in marked)
         else:
             assert guidance in content
-
-
 
 
 class TestPeelReferenceGuidanceRoundTrip:
@@ -375,17 +381,21 @@ class TestPeelReferenceGuidanceRoundTrip:
         assert attached != base, "attach must change the transcript"
         return peel_reference_guidance(attached, self._GUIDANCE)
 
-
     def test_list_part_shape(self):
         base = [
             {"role": "system", "content": "sys"},
             {
                 "role": "user",
-                "content": [{"type": "text", "text": "task", "cache_control": {"type": "ephemeral"}}],
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "task",
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
             },
         ]
         assert self._round_trip(base) == base
-
 
     def test_guidance_only_part_drops_message_not_empty_residue(self):
         # If the guidance part is the only content left after peeling, the

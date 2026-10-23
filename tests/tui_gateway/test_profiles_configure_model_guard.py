@@ -38,10 +38,13 @@ def home(tmp_path, monkeypatch):
     # The profile write now validates through ``switch_model`` (catalog + credentials); these
     # tests pin the guard handshake, so echo the pick back as an accepted route.
     from clawk_cli.model_switch import ModelSwitchResult
+
     monkeypatch.setattr(
         "clawk_cli.model_switch.switch_model",
         lambda *, raw_input, explicit_provider, **_kw: ModelSwitchResult(
-            success=True, new_model=raw_input, target_provider=explicit_provider))
+            success=True, new_model=raw_input, target_provider=explicit_provider
+        ),
+    )
     return clawk_home
 
 
@@ -55,11 +58,15 @@ def contributor_guard(monkeypatch):
             return SimpleNamespace(message=GUARD_MESSAGE, kind="data_policy")
         return None
 
-    monkeypatch.setattr(guards, "combined_selection_warning", fake_combined_selection_warning)
+    monkeypatch.setattr(
+        guards, "combined_selection_warning", fake_combined_selection_warning
+    )
 
 
 def _configure(params):
-    return srv._methods["profiles.configure"]("configure", {"name": "default", **params})["result"]
+    return srv._methods["profiles.configure"](
+        "configure", {"name": "default", **params}
+    )["result"]
 
 
 def _profile_model(home: Path):
@@ -71,7 +78,9 @@ def _profile_model(home: Path):
     return model_cfg.get("default")
 
 
-def test_guarded_model_answers_confirm_required_and_writes_nothing(home, contributor_guard):
+def test_guarded_model_answers_confirm_required_and_writes_nothing(
+    home, contributor_guard
+):
     result = _configure({"model": GUARDED_MODEL, "provider": "opencode-go"})
 
     assert result.get("confirm_required") is True
@@ -104,7 +113,9 @@ def test_unguarded_model_still_writes_without_confirmation(home, contributor_gua
     assert _profile_model(home) == "hermes-4.5-405b"
 
 
-def test_other_sections_still_apply_while_model_awaits_confirmation(home, contributor_guard):
+def test_other_sections_still_apply_while_model_awaits_confirmation(
+    home, contributor_guard
+):
     result = _configure(
         {
             "model": GUARDED_MODEL,

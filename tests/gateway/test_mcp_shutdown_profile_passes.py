@@ -40,20 +40,28 @@ async def test_every_pass_shares_the_callers_budget(homes, monkeypatch):
 
     monkeypatch.setattr(lifecycle, "shutdown_mcp_servers", _fake)
 
-    assert await gateway_run._shutdown_mcp_servers_nonblocking(timeout=8.0, config=_Cfg())
+    assert await gateway_run._shutdown_mcp_servers_nonblocking(
+        timeout=8.0, config=_Cfg()
+    )
 
     assert len(seen) == 4, f"the wildcard pass did not run: {seen}"
     assert seen[-1][0] is None, "the last pass must be the process-wide wildcard"
     budget_per_pass = 8.0 / 4
     assert all(t <= budget_per_pass + 0.01 for _scope, t in seen), (
-        f"a pass could outlive the caller's whole budget: {seen}")
+        f"a pass could outlive the caller's whole budget: {seen}"
+    )
 
 
 @pytest.mark.asyncio
-async def test_teardown_thread_does_not_inherit_the_callers_home_override(tmp_path, monkeypatch):
+async def test_teardown_thread_does_not_inherit_the_callers_home_override(
+    tmp_path, monkeypatch
+):
     import tools.mcp_tool_lifecycle as lifecycle
     from clawk_constants import (
-        get_clawk_home_override, reset_clawk_home_override, set_clawk_home_override)
+        get_clawk_home_override,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     launch = tmp_path / "launch"
     poison = tmp_path / "profiles" / "poison"
@@ -63,8 +71,10 @@ async def test_teardown_thread_does_not_inherit_the_callers_home_override(tmp_pa
 
     seen: list = []
     monkeypatch.setattr(
-        lifecycle, "shutdown_mcp_servers",
-        lambda **_kw: seen.append(get_clawk_home_override()))
+        lifecycle,
+        "shutdown_mcp_servers",
+        lambda **_kw: seen.append(get_clawk_home_override()),
+    )
 
     token = set_clawk_home_override(str(poison))
     try:
@@ -72,4 +82,6 @@ async def test_teardown_thread_does_not_inherit_the_callers_home_override(tmp_pa
     finally:
         reset_clawk_home_override(token)
 
-    assert seen == [None], f"the wildcard teardown ran inside {seen} instead of a fresh context"
+    assert seen == [None], (
+        f"the wildcard teardown ran inside {seen} instead of a fresh context"
+    )

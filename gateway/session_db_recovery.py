@@ -35,10 +35,15 @@ def _publish_health(source: _HealthSource, path: Path, state: str) -> None:
     """Publish one privacy-safe aggregate (no paths, no errors) across all live caches."""
     with _health_lock:
         _health_states.setdefault(source, {})[path] = state
-        all_states = {value for item in _health_states.values() for value in item.values()}
-        aggregate = next((s for s in ("retrying", "unavailable") if s in all_states), "ok")
+        all_states = {
+            value for item in _health_states.values() for value in item.values()
+        }
+        aggregate = next(
+            (s for s in ("retrying", "unavailable") if s in all_states), "ok"
+        )
     try:
         from gateway.status import publish_runtime_status
+
         publish_runtime_status(session_store={"status": aggregate})
     except Exception:
         pass  # Runtime health is diagnostic only; persistence must not depend on it.
@@ -60,7 +65,10 @@ class RecoverableHandleCache:
     """
 
     def __init__(
-        self, *, handles: dict[Path, Any] | None = None, lock: threading.Lock | None = None,
+        self,
+        *,
+        handles: dict[Path, Any] | None = None,
+        lock: threading.Lock | None = None,
         clock: Callable[[], float] = time.monotonic,
         initial_retry_delay: float = _INITIAL_RETRY_DELAY_SECONDS,
         max_retry_delay: float = _MAX_RETRY_DELAY_SECONDS,
@@ -80,10 +88,17 @@ class RecoverableHandleCache:
 
     def _is_stale(self, path: Path, unavailable: _Unavailable, generation: int) -> bool:
         """Caller holds ``lock``: True when close_all ran or the slot was replaced mid-open."""
-        return generation != self._generation or self._unavailable.get(path) is not unavailable
+        return (
+            generation != self._generation
+            or self._unavailable.get(path) is not unavailable
+        )
 
     def get(
-        self, path: Path, opener: Callable[[], Any], *, raise_on_error: bool = False,
+        self,
+        path: Path,
+        opener: Callable[[], Any],
+        *,
+        raise_on_error: bool = False,
         on_recovered: Callable[[], None] | None = None,
         non_cacheable: Callable[[Exception], bool] | None = None,
     ) -> Any:
@@ -123,8 +138,12 @@ class RecoverableHandleCache:
                 if not stale:
                     unavailable.failures += 1
                     unavailable.error = f"{type(exc).__name__}: {exc}"
-                    backoff = self._initial_retry_delay * (2 ** min(unavailable.failures - 1, 30))
-                    unavailable.next_retry_at = self._clock() + min(backoff, self._max_retry_delay)
+                    backoff = self._initial_retry_delay * (
+                        2 ** min(unavailable.failures - 1, 30)
+                    )
+                    unavailable.next_retry_at = self._clock() + min(
+                        backoff, self._max_retry_delay
+                    )
                     unavailable.in_flight = False
             if not stale:
                 _publish_health(self._health_source, path, "unavailable")
@@ -156,7 +175,14 @@ class RecoverableHandleCache:
         """The exception the latest failed open of *path* raised (``''`` when none is recorded)."""
         target = Path(path).resolve()
         with self.lock:
-            return next((u.error for key, u in self._unavailable.items() if key.resolve() == target), "")
+            return next(
+                (
+                    u.error
+                    for key, u in self._unavailable.items()
+                    if key.resolve() == target
+                ),
+                "",
+            )
 
     def close_all(self, close: Callable[[Any], None]) -> None:
         """Drain cached handles under the lock and close them outside it."""

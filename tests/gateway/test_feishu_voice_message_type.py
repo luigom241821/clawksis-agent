@@ -32,5 +32,3 @@ def _resolve(preferred: str, media_types):
 def test_native_voice_audio_is_classified_as_voice():
     """Lark audio msg_type (voice recording) → VOICE, so it gets transcribed."""
     assert _resolve("audio", ["audio/opus"]) is MessageType.VOICE
-
-

@@ -11,6 +11,7 @@ from .method_ctx import HandlerRegistry, bind_module
 _registry = HandlerRegistry()
 method = _registry.method
 
+
 def _resume_wake_after_interrupt() -> None:
     """Re-arm a wake lease held by the interrupt caller or a voice capture.
 
@@ -38,7 +39,9 @@ def _note_user_input(session: dict) -> None:
             session["_turn_user_input"] = True
 
 
-def _recover_unreachable_compute_host_turn(sid: str, session: dict, inflight_at_interrupt) -> None:
+def _recover_unreachable_compute_host_turn(
+    sid: str, session: dict, inflight_at_interrupt
+) -> None:
     """Stop on a compute host that is gone (broken pipe, respawn exhausted, #82603).
 
     The failed dial raised before ``_interrupt_session_turn`` purged the queue, and no ``turn.end`` will ever
@@ -49,21 +52,33 @@ def _recover_unreachable_compute_host_turn(sid: str, session: dict, inflight_at_
     try:
         pending = _get_compute_host_supervisor().has_pending_turn(sid)
     except Exception as exc:  # health: allow BLE001 -- an unreadable supervisor is not proof the turn ended; fail closed
-        logger.warning("session.interrupt: compute-host pending-turn probe failed for %s: %s", sid, exc)
+        logger.warning(
+            "session.interrupt: compute-host pending-turn probe failed for %s: %s",
+            sid,
+            exc,
+        )
         pending = True
     with session["history_lock"]:
         session["_turn_cancel_requested"] = True
         session["queued_prompt"] = None
         session.pop("queued_prompts", None)
-        session["_queued_prompt_generation"] = int(session.get("_queued_prompt_generation", 0)) + 1
+        session["_queued_prompt_generation"] = (
+            int(session.get("_queued_prompt_generation", 0)) + 1
+        )
         inflight_now = session.get("inflight_turn")
-        if not pending and session.get("running") and inflight_now is not None and inflight_now is inflight_at_interrupt:
+        if (
+            not pending
+            and session.get("running")
+            and inflight_now is not None
+            and inflight_now is inflight_at_interrupt
+        ):
             session["running"] = False
             _clear_inflight_turn(session)
     _clear_pending(sid)
     with contextlib.suppress(Exception):
         _announce_cancelled_gateway_approvals(session, "interrupt", session_id=sid)
         from tools.approval import resolve_gateway_approval
+
         resolve_gateway_approval(session["session_key"], "deny", resolve_all=True)
 
 
@@ -78,7 +93,11 @@ def _(rid, params: dict) -> dict:
         if expected := _str_param(params, "expected_hosted_task_id"):
             with session["history_lock"]:
                 task = session.get("_hosted_room_task")
-                if not (session.get("running") and isinstance(task, dict) and task.get("task_id") == expected):
+                if not (
+                    session.get("running")
+                    and isinstance(task, dict)
+                    and task.get("task_id") == expected
+                ):
                     resume_wake = False
                     return _ok(rid, {"status": "not_interrupted", "interrupted": False})
         sid = str(params.get("session_id") or "")
@@ -89,8 +108,14 @@ def _(rid, params: dict) -> dict:
             try:
                 _interrupt_session_turn(sid, session, request_id=f"interrupt-{rid}")
             except Exception as exc:  # health: allow BLE001 -- the bridge raises transport-specific errors unknown here; logged, and Stop recovers the session instead of failing
-                logger.warning("session.interrupt: compute-host interrupt failed for %s: %s", sid, exc)
-                _recover_unreachable_compute_host_turn(sid, session, inflight_at_interrupt)
+                logger.warning(
+                    "session.interrupt: compute-host interrupt failed for %s: %s",
+                    sid,
+                    exc,
+                )
+                _recover_unreachable_compute_host_turn(
+                    sid, session, inflight_at_interrupt
+                )
             return _ok(rid, {"status": "interrupted", "turn_isolation": True})
         # No agent wait: a turn parked on the deferred build already honors _turn_cancel_requested. Waiting here
         # failed Stop with 5032 once the build failed or outlived 30s (and started a build for a lazy session), so
@@ -111,7 +136,9 @@ def _(rid, params: dict) -> dict:
                 logger.debug("session.interrupt wake resume failed", exc_info=True)
 
 
-def _apply_correction(rid, session: dict, verb: str, text: str, accepted_status: str) -> dict:
+def _apply_correction(
+    rid, session: dict, verb: str, text: str, accepted_status: str
+) -> dict:
     """``agent.<verb>(text)``; on acceptance record it on the live turn (mid-turn resume rebuilds the bubble)
     and purge queued self-copies so post-turn drain cannot re-fire the old prompt."""
     try:
@@ -127,12 +154,17 @@ def _apply_correction(rid, session: dict, verb: str, text: str, accepted_status:
             # restart the pre-correction prompt.
             _drop_queued_duplicates_of_inflight_user(session)
             session["last_active"] = time.time()
-    return _ok(rid, {"status": accepted_status if accepted else "rejected", "text": text})
+    return _ok(
+        rid, {"status": accepted_status if accepted else "rejected", "text": text}
+    )
 
 
-def _correction_method(name: str, verb: str, accepted_status: str, supported, unsupported: str):
+def _correction_method(
+    name: str, verb: str, accepted_status: str, supported, unsupported: str
+):
     """steer/redirect RPC: ``params.text`` (4002, checked before the session) into a live session;
     ``supported(agent)`` gates 4010."""
+
     @method(name)
     def _(rid, params: dict) -> dict:
         if not (text := (params.get("text") or "").strip()):
@@ -168,12 +200,24 @@ def _correction_method(name: str, verb: str, accepted_status: str, supported, un
 
 # Inject text into the next tool result without interrupting (AIAgent.steer(): no new user turn, no role
 # alternation violation).
-_correction_method("session.steer", "steer", "queued", lambda agent: hasattr(agent, "steer"),
-                   "agent does not support steer")
+_correction_method(
+    "session.steer",
+    "steer",
+    "queued",
+    lambda agent: hasattr(agent, "steer"),
+    "agent does not support steer",
+)
 # Redirect the active model turn while preserving valid work/context.
-_correction_method("session.redirect", "redirect", "redirected",
-                   lambda agent: getattr(agent, "_supports_active_turn_redirect", False) is True
-                   and hasattr(agent, "redirect"), "agent does not support active-turn redirect")
+_correction_method(
+    "session.redirect",
+    "redirect",
+    "redirected",
+    lambda agent: (
+        getattr(agent, "_supports_active_turn_redirect", False) is True
+        and hasattr(agent, "redirect")
+    ),
+    "agent does not support active-turn redirect",
+)
 
 
 def register(server) -> None:

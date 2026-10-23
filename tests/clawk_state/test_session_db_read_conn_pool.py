@@ -209,8 +209,6 @@ def test_read_open_failure_backs_off_but_recovers(db):
     db._close_read_conn(recovered)
 
 
-
-
 def test_fallback_to_locked_writer_when_read_conn_unavailable(db, monkeypatch):
     """With no read connection available, reads still work under self._lock.
 
@@ -255,7 +253,7 @@ def test_peak_live_connections_bounded_under_simultaneous_burst(db):
         conn = db._checkout_read_conn()
         with lock:
             (checked_out if conn is not None else fell_back).append(conn)
-        ready.wait(timeout=30)      # everyone is now holding whatever they got
+        ready.wait(timeout=30)  # everyone is now holding whatever they got
         release.wait(timeout=30)
         if conn is not None:
             db._close_read_conn(conn)
@@ -330,7 +328,7 @@ def test_permits_are_not_stranded_by_a_failed_open(db, monkeypatch):
     monkeypatch.setattr(_hs, "_connect_tracked_db", boom)
     for _ in range(_READ_POOL_MAX * 3):
         assert db._get_read_conn() is None
-        db._read_open_failed_at = 0.0    # defeat the backoff so every call opens
+        db._read_open_failed_at = 0.0  # defeat the backoff so every call opens
     monkeypatch.undo()
 
     db._read_open_failed_at = 0.0
@@ -645,12 +643,20 @@ def test_duplicate_handles_on_one_path_are_reported(db, caplog):
         ]
         assert len(warnings) == 1
         warning = warnings[0]
-        assert f"{_HANDLES_PER_PATH_WARN + 1} live SessionDB handles on {db.db_path}" in warning
+        assert (
+            f"{_HANDLES_PER_PATH_WARN + 1} live SessionDB handles on {db.db_path}"
+            in warning
+        )
         # The fixture returned before any duplicate was opened. Its creation
         # site must still be available when another caller triggers the warning.
         assert re.search(rf"{re.escape(__name__)}\.db:\d+", warning)
-        assert len(re.findall(rf"{re.escape(__name__)}\.open_extra_handle:\d+", warning)) == _HANDLES_PER_PATH_WARN
-        assert "open_read_only_attach" not in warning, "listed a holder the count excludes"
+        assert (
+            len(re.findall(rf"{re.escape(__name__)}\.open_extra_handle:\d+", warning))
+            == _HANDLES_PER_PATH_WARN
+        )
+        assert "open_read_only_attach" not in warning, (
+            "listed a holder the count excludes"
+        )
     finally:
         for d in extra:
             d.close()
@@ -735,13 +741,16 @@ def test_closed_handles_do_not_count_toward_duplicate_writer_warning(db, caplog)
         survivor = SessionDB(db_path=db.db_path)
     try:
         assert not any(
-            "live SessionDB handles on" in record.getMessage() for record in caplog.records
+            "live SessionDB handles on" in record.getMessage()
+            for record in caplog.records
         ), "closed writers were retained as live duplicate handles"
     finally:
         survivor.close()
 
 
-def test_failed_initialization_does_not_register_duplicate_writer_handle(db, monkeypatch):
+def test_failed_initialization_does_not_register_duplicate_writer_handle(
+    db, monkeypatch
+):
     """A constructor that raises before opening must never join the handle budget."""
     budget = clawk_state_readpool._read_budget_for(db.db_path)
     registered = []
@@ -757,7 +766,9 @@ def test_failed_initialization_does_not_register_duplicate_writer_handle(db, mon
     monkeypatch.setattr(budget, "register", remember_register)
     monkeypatch.setattr(SessionDB, "_open_writer", fail_open_writer)
 
-    with pytest.raises(sqlite3.OperationalError, match="injected initialization failure"):
+    with pytest.raises(
+        sqlite3.OperationalError, match="injected initialization failure"
+    ):
         SessionDB(db_path=db.db_path)
 
     assert registered == []

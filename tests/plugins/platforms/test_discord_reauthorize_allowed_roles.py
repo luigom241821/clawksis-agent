@@ -59,7 +59,9 @@ def _adapter(role_id, connect_extra=None):
 
     guild = SimpleNamespace(id=GUILD_ID, fetch_member=fetch_member)
     member.guild = guild
-    adapter._client = SimpleNamespace(get_guild=lambda gid: guild if gid == GUILD_ID else None)
+    adapter._client = SimpleNamespace(
+        get_guild=lambda gid: guild if gid == GUILD_ID else None
+    )
     return adapter
 
 
@@ -68,26 +70,46 @@ def _reauthorize(adapter):
 
 
 def test_flat_platforms_allowed_roles_authorize(_home):
-    _write_config(_home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}})
+    _write_config(
+        _home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}}
+    )
     assert _reauthorize(_adapter(2)) is True
 
 
 def test_platforms_extra_allowed_roles_authorize(_home):
-    _write_config(_home, {"platforms": {"discord": {"enabled": True, "extra": {"allowed_roles": ["2"]}}}})
+    _write_config(
+        _home,
+        {
+            "platforms": {
+                "discord": {"enabled": True, "extra": {"allowed_roles": ["2"]}}
+            }
+        },
+    )
     assert _reauthorize(_adapter(2)) is True
 
 
 @pytest.mark.parametrize("role_id, expected", [(2, True), (3, False)])
 def test_platforms_extra_beats_top_level_block_like_ingress(_home, role_id, expected):
-    _write_config(_home, {
-        "discord": {"allowed_roles": ["3"]},
-        "platforms": {"discord": {"enabled": True, "extra": {"allowed_roles": ["2"]}}},
-    })
+    _write_config(
+        _home,
+        {
+            "discord": {"allowed_roles": ["3"]},
+            "platforms": {
+                "discord": {"enabled": True, "extra": {"allowed_roles": ["2"]}}
+            },
+        },
+    )
     assert _reauthorize(_adapter(role_id)) is expected
 
 
 def test_legacy_top_level_allowed_roles_still_authorize(_home):
-    _write_config(_home, {"discord": {"allowed_roles": ["2"]}, "platforms": {"discord": {"enabled": True}}})
+    _write_config(
+        _home,
+        {
+            "discord": {"allowed_roles": ["2"]},
+            "platforms": {"discord": {"enabled": True}},
+        },
+    )
     assert _reauthorize(_adapter(2)) is True
 
 
@@ -96,6 +118,7 @@ def _multiplexed_profile(home):
     """The scope the gateway loads and serves a multiplexed profile in: its own secret scope."""
     from agent.secret_scope import reset_multiplex_context, set_multiplex_context
     from gateway.run import _profile_runtime_scope
+
     token = set_multiplex_context(True)
     try:
         with _profile_runtime_scope(home):
@@ -104,22 +127,32 @@ def _multiplexed_profile(home):
         reset_multiplex_context(token)
 
 
-@pytest.mark.parametrize("multiplexed, granted_after_removal", [(True, False), (False, True)])
-def test_role_removed_from_yaml_after_the_first_reauthorization(_home, multiplexed, granted_after_removal):
+@pytest.mark.parametrize(
+    "multiplexed, granted_after_removal", [(True, False), (False, True)]
+)
+def test_role_removed_from_yaml_after_the_first_reauthorization(
+    _home, multiplexed, granted_after_removal
+):
     """Both loads go through the real ``load_gateway_config()``. A multiplexed profile's load never
     copies YAML into process env, so the current YAML (not the connect-time extra) revokes at once.
     A single-profile load copies ``allowed_roles`` into ``DISCORD_ALLOWED_ROLES`` the first time and
     that env value keeps precedence, so the removal takes effect at restart (unchanged from main)."""
     connect_extra = {"allowed_roles": "2"}
-    _write_config(_home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}})
+    _write_config(
+        _home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}}
+    )
     with _multiplexed_profile(_home) if multiplexed else contextlib.nullcontext():
         assert _reauthorize(_adapter(2, connect_extra)) is True
-        _write_config(_home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["9"]}}})
+        _write_config(
+            _home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["9"]}}}
+        )
         assert _reauthorize(_adapter(2, connect_extra)) is granted_after_removal
     assert os.environ.get("DISCORD_ALLOWED_ROLES") == (None if multiplexed else "2")
 
 
 def test_scoped_env_allowlist_wins_over_config(_home, monkeypatch):
-    _write_config(_home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}})
+    _write_config(
+        _home, {"platforms": {"discord": {"enabled": True, "allowed_roles": ["2"]}}}
+    )
     monkeypatch.setenv("DISCORD_ALLOWED_ROLES", "9")
     assert _reauthorize(_adapter(2)) is False

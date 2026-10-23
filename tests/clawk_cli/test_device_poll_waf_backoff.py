@@ -26,7 +26,9 @@ def _ok(payload=None):
 
 
 def _non_json(status, headers=None):
-    return httpx.Response(status, request=_REQ, headers=headers or {}, text="edge mitigation")
+    return httpx.Response(
+        status, request=_REQ, headers=headers or {}, text="edge mitigation"
+    )
 
 
 def _post_returning(*responses):
@@ -40,11 +42,16 @@ def _post_returning(*responses):
 
 def _poll(post, *, expires_in=600, poll_interval=5):
     return adf._poll_device_token_generic(
-        post, expires_in=expires_in, poll_interval=poll_interval,
+        post,
+        expires_in=expires_in,
+        poll_interval=poll_interval,
         validate_success=lambda payload: None,
         on_non_json_error=lambda response: RuntimeError("non-JSON error response"),
-        on_error=lambda response, payload: RuntimeError(f"oauth:{payload.get('error')}"),
-        on_timeout=lambda: TimeoutError("device code expired"))
+        on_error=lambda response, payload: RuntimeError(
+            f"oauth:{payload.get('error')}"
+        ),
+        on_timeout=lambda: TimeoutError("device code expired"),
+    )
 
 
 def _fake_clock(monkeypatch):
@@ -67,8 +74,10 @@ def test_recovers_after_edge_blocked_responses(monkeypatch):
         _non_json(403, headers={"x-vercel-mitigated": "deny"}),
         _non_json(429, headers={"retry-after": "3600"}),
         _non_json(503),
-        pending, pending,
-        _ok({"access_token": "late-token"}))
+        pending,
+        pending,
+        _ok({"access_token": "late-token"}),
+    )
 
     result = _poll(post, poll_interval=5)
 

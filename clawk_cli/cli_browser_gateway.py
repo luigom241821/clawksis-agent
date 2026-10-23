@@ -1,5 +1,6 @@
 """Classic CLI ``/browser`` on the shared gateway (#134889 CLI-9): ``browser.manage``, as Ink and
 Desktop send it. Split from ``cli_commands_mixin`` (the file is over its size target)."""
+
 from __future__ import annotations
 
 import os
@@ -26,6 +27,7 @@ def gateway_browser(cli, connection, word: str, rest: str) -> None:
     browser on the gateway HOST: only against a local gateway (Desktop's rule). The gateway scopes
     them to this session's profile."""
     from clawk_cli.gateway_client import GatewayClientError
+
     if word in {"connect", "disconnect"} and _gateway_is_remote():
         return _say_block(_t("browser.remote_gateway"))
     params = {"action": word, "session_id": cli.session_id}
@@ -40,7 +42,9 @@ def gateway_browser(cli, connection, word: str, rest: str) -> None:
         if mode not in {"on", "off"}:
             return _say_block(
                 _t("browser.use_usage"),
-                f"   {_t('browser.use_on_hint')}", f"   {_t('browser.use_off_hint')}")
+                f"   {_t('browser.use_on_hint')}",
+                f"   {_t('browser.use_off_hint')}",
+            )
         params["enabled"] = mode == "on"
     try:
         result = connection.call("browser.manage", **params) or {}
@@ -49,20 +53,33 @@ def gateway_browser(cli, connection, word: str, rest: str) -> None:
     for message in result.get("messages") or ():
         print(f"   {message}")
     if word == "use":
-        return _say_block(_t("browser.use_enabled" if params["enabled"] else "browser.use_disabled"),
-                          f"   {_t('browser.new_sessions_only')}")
+        return _say_block(
+            _t("browser.use_enabled" if params["enabled"] else "browser.use_disabled"),
+            f"   {_t('browser.new_sessions_only')}",
+        )
     if word == "disconnect":
         return _say_block(_t("browser.disconnected"), f"   {_t('browser.reverted')}")
     if word == "connect":
         if not result.get("connected"):
             return _say_block(_t("browser.not_connected"))
-        return _say_block(_t("browser.connected"), f"   {_t('browser.endpoint', url=result.get('url') or '')}")
+        return _say_block(
+            _t("browser.connected"),
+            f"   {_t('browser.endpoint', url=result.get('url') or '')}",
+        )
     if result.get("browser_use"):
-        return _say_block(_t("browser.status_browser_use"), f"   {_t('browser.status_use_off_hint')}")
+        return _say_block(
+            _t("browser.status_browser_use"), f"   {_t('browser.status_use_off_hint')}"
+        )
     if result.get("connected"):
-        return _say_block(_t("browser.status_connected"), f"   {_t('browser.endpoint', url=result.get('url') or '')}")
-    _say_block(_t("browser.status_gateway_default"),
-               f"   {_t('browser.status_connect_hint')}", f"   {_t('browser.status_disconnect_hint')}")
+        return _say_block(
+            _t("browser.status_connected"),
+            f"   {_t('browser.endpoint', url=result.get('url') or '')}",
+        )
+    _say_block(
+        _t("browser.status_gateway_default"),
+        f"   {_t('browser.status_connect_hint')}",
+        f"   {_t('browser.status_disconnect_hint')}",
+    )
 
 
 def _normalize_cdp_url(cdp_url: str):
@@ -70,7 +87,9 @@ def _normalize_cdp_url(cdp_url: str):
     A ``/devtools/browser/<id>`` path is kept verbatim; anything else is reduced to the origin."""
     parsed = urlparse(cdp_url if "://" in cdp_url else f"http://{cdp_url}")
     if parsed.scheme not in {"http", "https", "ws", "wss"}:
-        _say_block(f"   {_t('browser.unsupported_scheme', scheme=parsed.scheme or _t('browser.scheme_missing'))}")
+        _say_block(
+            f"   {_t('browser.unsupported_scheme', scheme=parsed.scheme or _t('browser.scheme_missing'))}"
+        )
         return None
     try:
         port = parsed.port or (443 if parsed.scheme in {"https", "wss"} else 80)
@@ -83,4 +102,3 @@ def _normalize_cdp_url(cdp_url: str):
     if parsed.path.startswith("/devtools/browser/"):
         return parsed.geturl(), port
     return parsed._replace(path="", params="", query="", fragment="").geturl(), port
-

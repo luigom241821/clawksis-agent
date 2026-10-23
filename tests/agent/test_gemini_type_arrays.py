@@ -1,4 +1,5 @@
 """Native tool translation must preserve union alternatives at every depth."""
+
 import copy
 
 import pytest
@@ -6,25 +7,57 @@ import pytest
 from agent.gemini_native_adapter import _translate_tools_to_gemini
 
 
-@pytest.mark.parametrize("types", [["string", "null"], ["integer", "null"], ["string", "integer"], ["string", "integer", "boolean", "null"], ["array", "object", "string"], ["null"], [], "string"])
+@pytest.mark.parametrize(
+    "types",
+    [
+        ["string", "null"],
+        ["integer", "null"],
+        ["string", "integer"],
+        ["string", "integer", "boolean", "null"],
+        ["array", "object", "string"],
+        ["null"],
+        [],
+        "string",
+    ],
+)
 @pytest.mark.parametrize("location", ["properties", "items", "anyOf"])
 @pytest.mark.parametrize("nullable_first", [False, True])
 @pytest.mark.parametrize("constrained", [False, True])
-def test_native_type_arrays_preserve_alternatives(types, location, nullable_first, constrained):
-    node = {"nullable": False, "type": types} if nullable_first else {"type": types, "nullable": False}
+def test_native_type_arrays_preserve_alternatives(
+    types, location, nullable_first, constrained
+):
+    node = (
+        {"nullable": False, "type": types}
+        if nullable_first
+        else {"type": types, "nullable": False}
+    )
     node["description"] = "Keep this guidance"
     if "array" in types:
         node.update(items={"type": "integer"}, minItems=1)
     if "object" in types:
-        node.update(properties={"name": {"type": "string"}}, required=["name", "undefined"])
+        node.update(
+            properties={"name": {"type": "string"}}, required=["name", "undefined"]
+        )
     if constrained:
         node["anyOf"] = [{"enum": ["one"]}, {"enum": ["two"]}]
-    wrapper = {"properties": {"value": node}} if location == "properties" else {location: node if location == "items" else [node]}
+    wrapper = (
+        {"properties": {"value": node}}
+        if location == "properties"
+        else {location: node if location == "items" else [node]}
+    )
     params = {"type": "object", "properties": {"nested": wrapper}}
     original = copy.deepcopy(params)
     tools = [{"type": "function", "function": {"name": "probe", "parameters": params}}]
-    out = _translate_tools_to_gemini(tools)[0]["functionDeclarations"][0]["parameters"]["properties"]["nested"][location]
-    out = out["value"] if location == "properties" else out[0] if location == "anyOf" else out
+    out = _translate_tools_to_gemini(tools)[0]["functionDeclarations"][0]["parameters"][
+        "properties"
+    ]["nested"][location]
+    out = (
+        out["value"]
+        if location == "properties"
+        else out[0]
+        if location == "anyOf"
+        else out
+    )
     expected = {t for t in types if t != "null"} if isinstance(types, list) else {types}
     branches = out["anyOf"] if "type" not in out else [out]
     actual = {branch["type"] for branch in branches}
@@ -47,9 +80,20 @@ def test_native_type_arrays_preserve_alternatives(types, location, nullable_firs
     assert params == original
 
 
-@pytest.mark.parametrize("types,enum", [(["integer", "null"], [1, 2]), (["string", "integer"], ["one", 2]), (["boolean", "string"], [True, "other"])])
+@pytest.mark.parametrize(
+    "types,enum",
+    [
+        (["integer", "null"], [1, 2]),
+        (["string", "integer"], ["one", 2]),
+        (["boolean", "string"], [True, "other"]),
+    ],
+)
 def test_native_type_array_enums_remain_wire_strings(types, enum):
     params = {"type": "object", "properties": {"value": {"type": types, "enum": enum}}}
     tools = [{"type": "function", "function": {"name": "probe", "parameters": params}}]
-    node = _translate_tools_to_gemini(tools)[0]["functionDeclarations"][0]["parameters"]["properties"]["value"]
-    assert node["enum"] == [str(v).lower() if isinstance(v, bool) else str(v) for v in enum]
+    node = _translate_tools_to_gemini(tools)[0]["functionDeclarations"][0][
+        "parameters"
+    ]["properties"]["value"]
+    assert node["enum"] == [
+        str(v).lower() if isinstance(v, bool) else str(v) for v in enum
+    ]

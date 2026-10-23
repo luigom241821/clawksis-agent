@@ -19,7 +19,10 @@ from clawk_state_lockowners import parse_proc_locks, state_db_write_lock_holders
 
 
 def test_parse_proc_locks_keeps_only_write_locks_on_our_inodes_and_decodes_the_wal_write_byte():
-    inodes = {(os.makedev(0x103, 0x02), 4194737): "-shm", (os.makedev(0x103, 0x02), 4228330): ""}
+    inodes = {
+        (os.makedev(0x103, 0x02), 4194737): "-shm",
+        (os.makedev(0x103, 0x02), 4228330): "",
+    }
     text = textwrap.dedent("""\
         1: POSIX  ADVISORY  WRITE 594094 103:02:4194737 120 120
         2: POSIX  ADVISORY  READ 594094 103:02:4194737 125 125
@@ -42,12 +45,21 @@ def test_holder_skipped_by_one_proc_locks_pass_is_still_named(tmp_path, monkeypa
     db = tmp_path / "state.db"
     db.write_bytes(b"")
     st = os.stat(db)
-    held = (f"1: POSIX  ADVISORY  WRITE {os.getpid()} "
-            f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 1073741825 1073741825\n")
+    held = (
+        f"1: POSIX  ADVISORY  WRITE {os.getpid()} "
+        f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 1073741825 1073741825\n"
+    )
     passes = iter(["", held, ""])
-    monkeypatch.setattr(clawk_state_lockowners, "open", lambda *a, **k: io.StringIO(next(passes)), raising=False)
+    monkeypatch.setattr(
+        clawk_state_lockowners,
+        "open",
+        lambda *a, **k: io.StringIO(next(passes)),
+        raising=False,
+    )
     lines = state_db_write_lock_holders(db)
-    assert len(lines) == 1 and f"PID {os.getpid()} " in lines[0] and "RESERVED" in lines[0], lines
+    assert (
+        len(lines) == 1 and f"PID {os.getpid()} " in lines[0] and "RESERVED" in lines[0]
+    ), lines
 
 
 @pytest.mark.platforms("linux")
@@ -60,15 +72,20 @@ def test_live_writer_in_another_process_is_named_by_pid(tmp_path):
     conn.close()
 
     holder = subprocess.Popen(
-        [sys.executable, "-c", textwrap.dedent(f"""
+        [
+            sys.executable,
+            "-c",
+            textwrap.dedent(f"""
             import sqlite3, sys, time
             c = sqlite3.connect({str(db)!r}, isolation_level=None)
             c.execute("BEGIN IMMEDIATE")
             c.execute("INSERT INTO t VALUES (1)")
             print("held", flush=True)
             time.sleep(30)
-        """)],
-        stdout=subprocess.PIPE, text=True,
+        """),
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
     )
     try:
         assert holder.stdout.readline().strip() == "held"
@@ -79,7 +96,9 @@ def test_live_writer_in_another_process_is_named_by_pid(tmp_path):
             if lines:
                 break
             time.sleep(0.05)
-        assert any(f"PID {holder.pid} " in line and "WAL write" in line for line in lines), lines
+        assert any(
+            f"PID {holder.pid} " in line and "WAL write" in line for line in lines
+        ), lines
     finally:
         holder.kill()
         holder.wait()

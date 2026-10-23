@@ -5,6 +5,7 @@ the ``~/.local/bin`` shims. Rewriting them to the launching root's store
 Python bricks ``clawk`` once that root is deleted. The launching process must
 still relaunch into its own root's Python.
 """
+
 import json
 import os
 from pathlib import Path
@@ -25,10 +26,15 @@ def _make_home(base: Path, name: str) -> tuple[Path, Path]:
     python.touch()
     exe = entry / "python.exe"
     exe.touch()
-    (store / "facts.json").write_text(json.dumps({
-        "schema": 1,
-        "packages": {"python": {"version": "fixture", "entry": entry.name}},
-    }), encoding="utf-8")
+    (store / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {"python": {"version": "fixture", "entry": entry.name}},
+            }
+        ),
+        encoding="utf-8",
+    )
     # resolve_store_python answers entry/bin/python3 on POSIX, entry/python.exe on Windows.
     return home, exe if os.name == "nt" else python
 
@@ -42,18 +48,27 @@ def _repoint_store(home: Path, name: str) -> Path:
     python.touch()
     exe = entry / "python.exe"
     exe.touch()
-    (store / "facts.json").write_text(json.dumps({
-        "schema": 1,
-        "packages": {"python": {"version": "fixture", "entry": entry.name}},
-    }), encoding="utf-8")
+    (store / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {"python": {"version": "fixture", "entry": entry.name}},
+            }
+        ),
+        encoding="utf-8",
+    )
     return exe if os.name == "nt" else python
 
 
 def _make_repo(base: Path) -> Path:
     repo = base / "checkout"
     (repo / ".git").mkdir(parents=True)
-    (repo / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0"\n', encoding="utf-8")
-    (repo / "install-stamp.json").write_text(json.dumps({"updateMechanism": "self"}), encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0"\n', encoding="utf-8"
+    )
+    (repo / "install-stamp.json").write_text(
+        json.dumps({"updateMechanism": "self"}), encoding="utf-8"
+    )
     return repo
 
 
@@ -107,14 +122,20 @@ def test_missing_dead_and_same_store_launchers_still_publish(tmp_path, monkeypat
     repinned = _repoint_store(default_home, "repin")
     after = _publish(repo)
     assert after != before
-    assert all(_launchers._launcher_python(repo / ".clawk" / "bin" / name) == repinned for name in after)
+    assert all(
+        _launchers._launcher_python(repo / ".clawk" / "bin" / name) == repinned
+        for name in after
+    )
 
     # A launcher whose interpreter died with its root is repaired, not kept: the bricked
     # state of #123238 heals on the next launch from any live root.
     repinned.unlink()
     _isolate(tmp_path, monkeypatch, temp_home)
     healed = _publish(repo)
-    assert all(_launchers._launcher_python(repo / ".clawk" / "bin" / name) == temp_python for name in healed)
+    assert all(
+        _launchers._launcher_python(repo / ".clawk" / "bin" / name) == temp_python
+        for name in healed
+    )
 
 
 def _write_dead_exe(target: Path, missing_python: Path) -> None:
@@ -125,8 +146,14 @@ def _write_dead_exe(target: Path, missing_python: Path) -> None:
     payload = io.BytesIO()
     with zipfile.ZipFile(payload, "w") as archive:
         archive.writestr("__main__.py", "raise SystemExit(0)\n")
-    target.write_bytes(b"MZ" + b"\x00" * 64 + b"#!" + str(missing_python).encode()
-                       + b" -I" + payload.getvalue())
+    target.write_bytes(
+        b"MZ"
+        + b"\x00" * 64
+        + b"#!"
+        + str(missing_python).encode()
+        + b" -I"
+        + payload.getvalue()
+    )
 
 
 @pytest.mark.platforms("windows")  # PATHEXT picks .exe before .cmd on Windows only
@@ -138,8 +165,12 @@ def test_dead_exe_never_shadows_kept_cmd(tmp_path, monkeypatch):
     local.mkdir(parents=True)
     _write_dead_exe(local / "clawk.exe", tmp_path / "gone" / "python.exe")
     (local / "clawk.cmd").write_text(
-        f'@echo off\r\n"{default_python}" -I -c "eA==" %*\r\n', encoding="utf-8")
-    assert _launchers._launcher_python(local / "clawk.exe") == tmp_path / "gone" / "python.exe"
+        f'@echo off\r\n"{default_python}" -I -c "eA==" %*\r\n', encoding="utf-8"
+    )
+    assert (
+        _launchers._launcher_python(local / "clawk.exe")
+        == tmp_path / "gone" / "python.exe"
+    )
 
     _isolate(tmp_path, monkeypatch, temp_home)
     written = [Path(path) for path in _launchers.ensure_install_launchers(repo, local)]

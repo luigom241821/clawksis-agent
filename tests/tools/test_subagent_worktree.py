@@ -88,7 +88,8 @@ class SubagentWorktreeTests(unittest.TestCase):
         self.assertTrue((Path(info["path"]) / "README.md").exists())
         # .gitignore gained the .worktrees/ entry
         self.assertIn(
-            ".worktrees/", (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+            ".worktrees/",
+            (repo / ".gitignore").read_text(encoding="utf-8").splitlines(),
         )
         # A write in the worktree does not touch the parent checkout
         (Path(info["path"]) / "child.txt").write_text("x", encoding="utf-8")
@@ -131,8 +132,10 @@ class SubagentWorktreeTests(unittest.TestCase):
         self.assertTrue(payload["pruned"])
         self.assertEqual(payload["commits"], 1)
         self.assertFalse(os.path.isdir(info["path"]))
-        self.assertEqual(_git(["rev-parse", payload["archive"] + "^1"], repo).stdout,
-                         _git(["rev-parse", info["branch"]], repo).stdout)
+        self.assertEqual(
+            _git(["rev-parse", payload["archive"] + "^1"], repo).stdout,
+            _git(["rev-parse", info["branch"]], repo).stdout,
+        )
 
     def test_finalize_archives_dirty_worktree(self):
         repo = _make_repo(self.tmp)
@@ -145,7 +148,10 @@ class SubagentWorktreeTests(unittest.TestCase):
         self.assertTrue(payload["pruned"])
         self.assertTrue(payload["dirty"])
         self.assertFalse(os.path.isdir(info["path"]))
-        self.assertEqual(_git(["show", payload["archive"] + ":wip.txt"], repo).stdout, "uncommitted\n")
+        self.assertEqual(
+            _git(["show", payload["archive"] + ":wip.txt"], repo).stdout,
+            "uncommitted\n",
+        )
 
     def test_finalize_keeps_worktree_when_git_inspection_fails(self):
         """#88113: a non-zero git status exit must not be read as "clean".
@@ -159,9 +165,7 @@ class SubagentWorktreeTests(unittest.TestCase):
         info = sw.create_subagent_worktree(str(repo), "inspect-fail1")
         assert info is not None
         wt = Path(info["path"])
-        (wt / "UNCOMMITTED-WORK.txt").write_text(
-            "irreplaceable\n", encoding="utf-8"
-        )
+        (wt / "UNCOMMITTED-WORK.txt").write_text("irreplaceable\n", encoding="utf-8")
 
         _break_git_index(wt)
         # Sanity: the probe really fails now.
@@ -255,9 +259,7 @@ class SubagentWorktreeTests(unittest.TestCase):
         wt = Path(info["path"])
         (wt / "UNTRACKED.txt").write_text("dirty!\n", encoding="utf-8")
 
-        payload = sw.finalize_subagent_worktree(
-            {**info, "base_commit": "deadbeef" * 5}
-        )
+        payload = sw.finalize_subagent_worktree({**info, "base_commit": "deadbeef" * 5})
 
         # status succeeded, so dirty is trustworthy and reported as such.
         self.assertTrue(payload["dirty"])
@@ -291,14 +293,16 @@ class SubagentWorktreeTests(unittest.TestCase):
 
     def test_finalize_missing_path_reports_pruned(self):
         payload = sw.finalize_subagent_worktree(
-            {"path": str(self.tmp / "gone"), "branch": "b", "repo_root": "",
-             "base_commit": ""}
+            {
+                "path": str(self.tmp / "gone"),
+                "branch": "b",
+                "repo_root": "",
+                "base_commit": "",
+            }
         )
         self.assertTrue(payload["pruned"])
 
     # ── local_backend_active ───────────────────────────────────────────
-
-
 
     # ── context note ───────────────────────────────────────────────────
 
@@ -333,9 +337,7 @@ class WorktreePayloadSchemaTests(unittest.TestCase):
 
         # Superset: every happy-path key, plus exactly the two unproven keys.
         self.assertTrue(set(happy).issubset(set(unproven)))
-        self.assertEqual(
-            set(unproven) - set(happy), {"inspection_failed", "note"}
-        )
+        self.assertEqual(set(unproven) - set(happy), {"inspection_failed", "note"})
         # Must NOT leak the creation-side internals the parent has no use for
         # (the pre-fix fallback emitted these instead of the real schema).
         for leaked in ("repo_root", "base_commit"):
@@ -344,9 +346,6 @@ class WorktreePayloadSchemaTests(unittest.TestCase):
         self.assertTrue(unproven["inspection_failed"])
         self.assertIn(info["path"], unproven["note"])
         self.assertIn(info["branch"], unproven["note"])
-
-
-
 
 
 if __name__ == "__main__":

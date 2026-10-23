@@ -22,18 +22,27 @@ def _tool(name: str, parameters: dict) -> dict:
 def test_object_without_properties_gets_empty_properties():
     tools = [_tool("t", {"type": "object"})]
     out = sanitize_tool_schemas(tools)
-    assert out[0]["function"]["parameters"] == {"type": "object", "properties": {}, "required": []}
+    assert out[0]["function"]["parameters"] == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
 
 
 def test_nested_object_without_properties_gets_empty_properties():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string"},
-            "arguments": {"type": "object", "description": "free-form"},
-        },
-        "required": ["name"],
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "arguments": {"type": "object", "description": "free-form"},
+                },
+                "required": ["name"],
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     args = out[0]["function"]["parameters"]["properties"]["arguments"]
     assert args["type"] == "object"
@@ -44,12 +53,17 @@ def test_nested_object_without_properties_gets_empty_properties():
 def test_bare_string_object_value_replaced_with_schema_dict():
     # Malformed: a property's schema value is the bare string "object".
     # This is the exact shape llama.cpp reports as `Unrecognized schema: "object"`.
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "payload": "object",  # <-- invalid, should be {"type": "object"}
-        },
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "payload": "object",  # <-- invalid, should be {"type": "object"}
+                },
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     payload = out[0]["function"]["parameters"]["properties"]["payload"]
     assert isinstance(payload, dict)
@@ -58,12 +72,17 @@ def test_bare_string_object_value_replaced_with_schema_dict():
 
 
 def test_nullable_type_array_collapsed_to_single_string():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "maybe_name": {"type": ["string", "null"]},
-        },
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "maybe_name": {"type": ["string", "null"]},
+                },
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["maybe_name"]
     assert prop["type"] == "string"
@@ -75,12 +94,20 @@ def test_multitype_array_becomes_anyof_no_branch_dropped():
     # ["number", "string"] (common in MCP tool schemas) must keep BOTH branches
     # as an anyOf, not silently drop all but the first. Several backends
     # (llama.cpp, Gemini via OpenAI-compatible transports) reject the array form.
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "status": {"type": ["number", "string"], "description": "status filter"},
-        },
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": ["number", "string"],
+                        "description": "status filter",
+                    },
+                },
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["status"]
     assert "type" not in prop
@@ -91,24 +118,34 @@ def test_multitype_array_becomes_anyof_no_branch_dropped():
 
 
 def test_all_null_type_array_becomes_null_type():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "n": {"type": ["null"]},
-        },
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "n": {"type": ["null"]},
+                },
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["n"]
     assert prop["type"] == "null"
 
 
 def test_single_element_type_array_unwrapped():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "s": {"type": ["string"]},
-        },
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "s": {"type": ["string"]},
+                },
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     prop = out[0]["function"]["parameters"]["properties"]["s"]
     assert prop["type"] == "string"
@@ -116,17 +153,22 @@ def test_single_element_type_array_unwrapped():
 
 
 def test_anyof_nested_objects_sanitized():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "opt": {
-                "anyOf": [
-                    {"type": "object"},               # bare object
-                    {"type": "string"},
-                ],
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "opt": {
+                        "anyOf": [
+                            {"type": "object"},  # bare object
+                            {"type": "string"},
+                        ],
+                    },
+                },
             },
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     variants = out[0]["function"]["parameters"]["properties"]["opt"]["anyOf"]
     assert variants[0] == {"type": "object", "properties": {}, "required": []}
@@ -136,21 +178,34 @@ def test_anyof_nested_objects_sanitized():
 def test_missing_parameters_gets_default_object_schema():
     tools = [{"type": "function", "function": {"name": "t"}}]
     out = sanitize_tool_schemas(tools)
-    assert out[0]["function"]["parameters"] == {"type": "object", "properties": {}, "required": []}
+    assert out[0]["function"]["parameters"] == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
 
 
 def test_non_dict_parameters_gets_default_object_schema():
     tools = [_tool("t", "object")]  # pathological
     out = sanitize_tool_schemas(tools)
-    assert out[0]["function"]["parameters"] == {"type": "object", "properties": {}, "required": []}
+    assert out[0]["function"]["parameters"] == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
 
 
 def test_required_pruned_to_existing_properties():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {"name": {"type": "string"}},
-        "required": ["name", "missing_field"],
-    })]
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name", "missing_field"],
+            },
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     assert out[0]["function"]["parameters"]["required"] == ["name"]
 
@@ -159,11 +214,14 @@ def test_empty_required_key_survives_sanitization():
     """A ``required`` list that is empty (or emptied by pruning) is kept as ``[]`` — strict
     OpenAI-compatible proxies read a missing key as ``null`` and 400 the whole request."""
     declared_empty = _tool("t", {"type": "object", "properties": {}, "required": []})
-    all_pruned = _tool("u", {
-        "type": "object",
-        "properties": {"name": {"type": "string"}},
-        "required": ["missing_field"],
-    })
+    all_pruned = _tool(
+        "u",
+        {
+            "type": "object",
+            "properties": {"name": {"type": "string"}},
+            "required": ["missing_field"],
+        },
+    )
     out = sanitize_tool_schemas([declared_empty, all_pruned])
     assert out[0]["function"]["parameters"]["required"] == []
     assert out[1]["function"]["parameters"]["required"] == []
@@ -184,30 +242,46 @@ def test_well_formed_schema_unchanged():
 
 
 def test_additional_properties_schema_sanitized():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "dict_field": {
+    tools = [
+        _tool(
+            "t",
+            {
                 "type": "object",
-                "additionalProperties": {"type": "object"},  # bare object schema
+                "properties": {
+                    "dict_field": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object"
+                        },  # bare object schema
+                    },
+                },
             },
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     field = out[0]["function"]["parameters"]["properties"]["dict_field"]
-    assert field["additionalProperties"] == {"type": "object", "properties": {}, "required": []}
+    assert field["additionalProperties"] == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }
 
 
 def test_items_sanitized_in_array_schema():
-    tools = [_tool("t", {
-        "type": "object",
-        "properties": {
-            "bag": {
-                "type": "array",
-                "items": {"type": "object"},  # bare object items
+    tools = [
+        _tool(
+            "t",
+            {
+                "type": "object",
+                "properties": {
+                    "bag": {
+                        "type": "array",
+                        "items": {"type": "object"},  # bare object items
+                    },
+                },
             },
-        },
-    })]
+        )
+    ]
     out = sanitize_tool_schemas(tools)
     items = out[0]["function"]["parameters"]["properties"]["bag"]["items"]
     assert items == {"type": "object", "properties": {}, "required": []}
@@ -231,23 +305,19 @@ def test_strip_responses_mixed_formats():
                 "name": "search",
                 "parameters": {
                     "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "pattern": "^[a-z]+$"}
-                    }
-                }
-            }
+                    "properties": {"query": {"type": "string", "pattern": "^[a-z]+$"}},
+                },
+            },
         },
         # Responses-format: {"name": "...", "parameters": {...}}
         {
             "name": "get_time",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "tz": {"type": "string", "format": "date-time"}
-                }
+                "properties": {"tz": {"type": "string", "format": "date-time"}},
             },
-            "type": "function"
-        }
+            "type": "function",
+        },
     ]
 
     result, stripped = strip_pattern_and_format(tools)
@@ -255,7 +325,9 @@ def test_strip_responses_mixed_formats():
 
     # OpenAI-format tool: pattern stripped from parameters
     openai_params = result[0]["function"]["parameters"]["properties"]["query"]
-    assert "pattern" not in openai_params, f"pattern should be stripped: {openai_params}"
+    assert "pattern" not in openai_params, (
+        f"pattern should be stripped: {openai_params}"
+    )
 
     # Responses-format tool: format stripped
     resp_params = result[1]["parameters"]["properties"]["tz"]
@@ -355,9 +427,11 @@ def test_dependent_schemas_still_recursively_sanitized():
     tools = [_tool("t", copy.deepcopy(schema))]
     out = sanitize_tool_schemas(tools)
     dep_schemas = out[0]["function"]["parameters"]["dependentSchemas"]
-    assert dep_schemas["owner"] == {"type": "object", "properties": {}, "required": []}, (
-        f"dependentSchemas['owner'] was not fully sanitized: {dep_schemas['owner']!r}"
-    )
+    assert dep_schemas["owner"] == {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    }, f"dependentSchemas['owner'] was not fully sanitized: {dep_schemas['owner']!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -534,23 +608,43 @@ def test_normalize_mcp_input_schema_preserves_constraint_fragments():
     registered with "never effects" instead of "action OR effects" and every ``effects`` call
     failed client-side validation while the MCP server was healthy.
     """
-    from jsonschema.validators import Draft202012Validator  # what tool_search_validation selects
+    from jsonschema.validators import (
+        Draft202012Validator,
+    )  # what tool_search_validation selects
     from tools.mcp_tool_schema import _normalize_mcp_input_schema
 
-    out = _normalize_mcp_input_schema({
-        "type": "object",
-        "properties": {"action": {"type": "string"}, "effects": {"type": "array"},
-                       "chain": {"type": "string"}, "chainId": {"type": "integer"}},
-        "if": {"required": ["action"]},
-        "then": {"properties": {"effects": False}},
-        "else": {"required": ["effects"]},
-        "allOf": [{"oneOf": [{"required": ["chain"], "not": {"required": ["chainId"]}},
-                             {"required": ["chainId"], "not": {"required": ["chain"]}}]}],
-    })
+    out = _normalize_mcp_input_schema(
+        {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string"},
+                "effects": {"type": "array"},
+                "chain": {"type": "string"},
+                "chainId": {"type": "integer"},
+            },
+            "if": {"required": ["action"]},
+            "then": {"properties": {"effects": False}},
+            "else": {"required": ["effects"]},
+            "allOf": [
+                {
+                    "oneOf": [
+                        {"required": ["chain"], "not": {"required": ["chainId"]}},
+                        {"required": ["chainId"], "not": {"required": ["chain"]}},
+                    ]
+                }
+            ],
+        }
+    )
     assert out["if"] == {"required": ["action"]}
     assert out["else"] == {"required": ["effects"]}
-    assert out["allOf"] == [{"oneOf": [{"required": ["chain"], "not": {"required": ["chainId"]}},
-                                       {"required": ["chainId"], "not": {"required": ["chain"]}}]}]
+    assert out["allOf"] == [
+        {
+            "oneOf": [
+                {"required": ["chain"], "not": {"required": ["chainId"]}},
+                {"required": ["chainId"], "not": {"required": ["chain"]}},
+            ]
+        }
+    ]
 
     valid = Draft202012Validator(out).is_valid
     assert valid({"action": "enable", "chain": "eth"})
@@ -565,17 +659,24 @@ def test_normalize_mcp_input_schema_still_repairs_declared_objects():
     root and on nested nodes that declare ``properties``/``type`` — only bare fragments are exempt."""
     from tools.mcp_tool_schema import _normalize_mcp_input_schema
 
-    out = _normalize_mcp_input_schema({
-        "type": "object",
-        "properties": {"a": {"type": "string"}, "opts": {"properties": {"x": {"type": "string"}}}},
-        "required": ["a", "ghost"],
-    })
+    out = _normalize_mcp_input_schema(
+        {
+            "type": "object",
+            "properties": {
+                "a": {"type": "string"},
+                "opts": {"properties": {"x": {"type": "string"}}},
+            },
+            "required": ["a", "ghost"],
+        }
+    )
     assert out["required"] == ["a"]
-    assert out["properties"]["opts"] == {"type": "object", "properties": {"x": {"type": "string"}}, "required": []}
+    assert out["properties"]["opts"] == {
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "required": [],
+    }
     bare = _normalize_mcp_input_schema({"type": "object", "required": ["a"]})
     assert bare["properties"] == {} and bare["required"] == []
-
-
 
 
 def test_builtin_tool_without_required_gets_empty_required_list():
@@ -586,10 +687,22 @@ def test_builtin_tool_without_required_gets_empty_required_list():
     tools = [{"type": "function", "function": copy.deepcopy(READ_WINDOW_BELOW_SCHEMA)}]
     params = sanitize_tool_schemas(tools)[0]["function"]["parameters"]
     assert params["required"] == []
-    nested = sanitize_tool_schemas([_tool("t", {
-        "type": "object",
-        "properties": {"opts": {"type": "object", "properties": {"k": {"type": "string"}}}},
-    })])[0]["function"]["parameters"]
+    nested = sanitize_tool_schemas(
+        [
+            _tool(
+                "t",
+                {
+                    "type": "object",
+                    "properties": {
+                        "opts": {
+                            "type": "object",
+                            "properties": {"k": {"type": "string"}},
+                        }
+                    },
+                },
+            )
+        ]
+    )[0]["function"]["parameters"]
     assert nested["properties"]["opts"]["required"] == []
 
 
@@ -611,15 +724,19 @@ def _walk_schema(node):
 def test_clarify_schema_has_no_unbounded_repetition_keyword():
     """The clarify schema must not carry a length bound llama.cpp's grammar converter rejects."""
     from tools.clarify_tool import CLARIFY_SCHEMA
+
     for node in _walk_schema(CLARIFY_SCHEMA["parameters"]):
         for key in ("maxLength", "minLength"):
-            assert node.get(key, 0) < 2000, f"{key}={node[key]} breaks llama.cpp grammar parsing"
+            assert node.get(key, 0) < 2000, (
+                f"{key}={node[key]} breaks llama.cpp grammar parsing"
+            )
 
 
 def test_registered_tool_schemas_stay_inside_llama_cpp_repetition_limit():
     """No built-in tool may ship a length/count bound of 2000+ (llama.cpp rejects the whole request)."""
     import model_tools
     from tools.registry import registry
+
     offenders = []
     for name in registry.get_all_tool_names():
         entry = registry.get_entry(name)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 
-
 def test_pets_cli_quoted_false_disables_and_toggle_enables(tmp_path, monkeypatch):
     """Quoted `display.pet.enabled: "false"` must read as disabled.
 
@@ -55,5 +54,3 @@ def test_set_pet_scale_writes_clamped_value(empty_home):
     # Out-of-range values clamp to the bounds rather than erroring.
     assert set_pet_scale(99) == (MAX_SCALE, None)
     assert set_pet_scale(0) == (MIN_SCALE, None)
-
-

@@ -3,11 +3,17 @@
 Derivation reads the published stable head, or the seed ``0.21.5`` before one
 exists. Attempt refs number attempts within a version and never move the line.
 """
+
 import json
 
 import pytest
 
-from scripts.releases.versioning import derive_next_version, next_attempt, tag_record, version_from_tag
+from scripts.releases.versioning import (
+    derive_next_version,
+    next_attempt,
+    tag_record,
+    version_from_tag,
+)
 
 SEED = "0.21.5"
 
@@ -16,14 +22,17 @@ def test_final_tag_is_its_version():
     assert version_from_tag("v0.21.5") == "0.21.5"
 
 
-@pytest.mark.parametrize("ref", [
-    "v0.21.5-rc",
-    "v0.21.4+canary.20260922T001400Z",
-    "v2026.9.21",
-    "canary-0.21.4+canary.20260922T001400Z",
-    "v0.0.7+channel.20260922T001400Z.98765",
-    "v0.0.0+commit.20260922T001400Z.98766",
-])
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "v0.21.5-rc",
+        "v0.21.4+canary.20260922T001400Z",
+        "v2026.9.21",
+        "canary-0.21.4+canary.20260922T001400Z",
+        "v0.0.7+channel.20260922T001400Z.98765",
+        "v0.0.0+commit.20260922T001400Z.98766",
+    ],
+)
 def test_non_final_refs_are_not_versions(ref):
     assert version_from_tag(ref) is None
 
@@ -42,11 +51,21 @@ def test_marker_ref_names_the_attempt_it_clears():
     assert parse_marker_ref("rc.1-v0.21.5") is None
 
 
-@pytest.mark.parametrize("ref", [
-    "v0.21.5-rc", "v0.21.5-rc.1", "rc.01-v0.21.5", "rc.0-v0.21.5",
-    "rc.1-v2026.9.21", "v0.21.5", "abandoned-rc.1-v0.21.5",
-    "rc.1-v0.21.5+canary.20260922T001400Z", "rc.1-v0.21", "rc.-v0.21.5",
-])
+@pytest.mark.parametrize(
+    "ref",
+    [
+        "v0.21.5-rc",
+        "v0.21.5-rc.1",
+        "rc.01-v0.21.5",
+        "rc.0-v0.21.5",
+        "rc.1-v2026.9.21",
+        "v0.21.5",
+        "abandoned-rc.1-v0.21.5",
+        "rc.1-v0.21.5+canary.20260922T001400Z",
+        "rc.1-v0.21",
+        "rc.-v0.21.5",
+    ],
+)
 def test_attempt_ref_rejects_other_shapes(ref):
     from scripts.releases.versioning import parse_attempt_ref
 
@@ -54,13 +73,20 @@ def test_attempt_ref_rejects_other_shapes(ref):
 
 
 def test_attempt_and_marker_refs_round_trip():
-    from scripts.releases.versioning import attempt_ref, marker_ref, parse_attempt_ref, parse_marker_ref
+    from scripts.releases.versioning import (
+        attempt_ref,
+        marker_ref,
+        parse_attempt_ref,
+        parse_marker_ref,
+    )
 
     assert parse_attempt_ref(attempt_ref("0.21.5", 3)) == ("0.21.5", 3)
     assert parse_marker_ref(marker_ref("0.21.5", 3)) == ("0.21.5", 3)
 
 
-@pytest.mark.parametrize("version, attempt", [("2026.9.21", 1), ("0.21.5", 0), ("0.21", 1)])
+@pytest.mark.parametrize(
+    "version, attempt", [("2026.9.21", 1), ("0.21.5", 0), ("0.21", 1)]
+)
 def test_attempt_ref_refuses_what_it_could_not_parse(version, attempt):
     from scripts.releases.versioning import attempt_ref
 
@@ -69,8 +95,14 @@ def test_attempt_ref_refuses_what_it_could_not_parse(version, attempt):
 
 
 def test_next_attempt_counts_cleared_attempts_and_skips_other_shapes():
-    refs = ["rc.1-v0.21.5", "abandoned-rc.1-v0.21.5", "rc.2-v0.21.6",
-            "v0.21.5-rc", "v2026.9.21", "abandoned-rc.4-v0.21.5"]
+    refs = [
+        "rc.1-v0.21.5",
+        "abandoned-rc.1-v0.21.5",
+        "rc.2-v0.21.6",
+        "v0.21.5-rc",
+        "v2026.9.21",
+        "abandoned-rc.4-v0.21.5",
+    ]
     assert next_attempt("0.21.5", refs) == 2
     assert next_attempt("0.21.6", refs) == 3
     assert next_attempt("0.21.7", refs) == 1
@@ -78,6 +110,7 @@ def test_next_attempt_counts_cleared_attempts_and_skips_other_shapes():
 
 def test_canary_compares_equal_to_its_stable():
     from scripts.releases.semver import compare, is_canary_version
+
     assert is_canary_version("0.21.4+canary.20260922T001400Z")
     assert compare("0.21.4+canary.20260922T001400Z", "0.21.4") == 0
 
@@ -102,15 +135,24 @@ def test_canary_base_comes_from_the_validated_protected_stable_head():
 
         def resolve(self, name):
             assert name == "stable"
-            return type("Resolution", (), {
-                "terminal": {"policy": "stable-release"},
-                "manifest": {"request": {"version": "0.21.7", "commit": "a" * 40}},
-            })()
+            return type(
+                "Resolution",
+                (),
+                {
+                    "terminal": {"policy": "stable-release"},
+                    "manifest": {"request": {"version": "0.21.7", "commit": "a" * 40}},
+                },
+            )()
 
-    assert published_stable_version(
-        "example/clawksis-agent", base_url="https://assets.example", reader_type=Reader,
-        run=lambda argv: "[[]]",
-    ) == "0.21.7"
+    assert (
+        published_stable_version(
+            "example/clawksis-agent",
+            base_url="https://assets.example",
+            reader_type=Reader,
+            run=lambda argv: "[[]]",
+        )
+        == "0.21.7"
+    )
 
 
 def test_a_newer_published_release_outranks_the_protected_head():
@@ -122,16 +164,24 @@ def test_a_newer_published_release_outranks_the_protected_head():
             pass
 
         def resolve(self, name):
-            return type("Resolution", (), {
-                "terminal": {"policy": "stable-release"},
-                "manifest": {"request": {"version": "0.21.7", "commit": "a" * 40}},
-            })()
+            return type(
+                "Resolution",
+                (),
+                {
+                    "terminal": {"policy": "stable-release"},
+                    "manifest": {"request": {"version": "0.21.7", "commit": "a" * 40}},
+                },
+            )()
 
     releases = [
         {"tag_name": "v0.21.8", "draft": False, "prerelease": False},
         # Drafts, prereleases and CalVer labels are not published stable releases.
         {"tag_name": "v0.21.9", "draft": True, "prerelease": False},
-        {"tag_name": "v0.21.8+canary.20260924T000000Z", "draft": False, "prerelease": True},
+        {
+            "tag_name": "v0.21.8+canary.20260924T000000Z",
+            "draft": False,
+            "prerelease": True,
+        },
         {"tag_name": "v2026.9.24", "draft": False, "prerelease": False},
     ]
 
@@ -139,23 +189,37 @@ def test_a_newer_published_release_outranks_the_protected_head():
         if argv[:4] == ["gh", "api", "--paginate", "--slurp"]:
             return json.dumps([releases])
         assert argv[:2] == ["gh", "api"] and argv[3:] == ["--jq", ".sha"]
-        return {"repos/example/clawksis-agent/commits/v0.21.8": "b" * 40,
-                "repos/example/clawksis-agent/commits/v0.21.6": "c" * 40}[argv[2]]
+        return {
+            "repos/example/clawksis-agent/commits/v0.21.8": "b" * 40,
+            "repos/example/clawksis-agent/commits/v0.21.6": "c" * 40,
+        }[argv[2]]
 
     assert published_stable_identity(
-        "example/clawksis-agent", base_url="https://assets.example", reader_type=Reader, run=run,
+        "example/clawksis-agent",
+        base_url="https://assets.example",
+        reader_type=Reader,
+        run=run,
     ) == ("0.21.8", "b" * 40)
     releases[0]["tag_name"] = "v0.21.6"
     assert published_stable_identity(
-        "example/clawksis-agent", base_url="https://assets.example", reader_type=Reader, run=run,
+        "example/clawksis-agent",
+        base_url="https://assets.example",
+        reader_type=Reader,
+        run=run,
     ) == ("0.21.7", "a" * 40)
 
 
 def test_outstanding_attempts_is_the_one_shared_predicate():
     from scripts.releases.versioning import outstanding_attempts
 
-    refs = ["rc.1-v0.21.5", "abandoned-rc.1-v0.21.5", "rc.2-v0.21.5",
-            "rc.1-v0.21.6", "v0.21.5", "rc.1-v0.21.7"]
+    refs = [
+        "rc.1-v0.21.5",
+        "abandoned-rc.1-v0.21.5",
+        "rc.2-v0.21.5",
+        "rc.1-v0.21.6",
+        "v0.21.5",
+        "rc.1-v0.21.7",
+    ]
     published = {"0.21.6", "0.21.7"}
 
     def is_published(version):
@@ -167,9 +231,16 @@ def test_outstanding_attempts_is_the_one_shared_predicate():
 def test_tag_record_reads_the_record_a_signature_is_appended_to():
     """git keeps a tag signature inside the message body, so ``%(contents)`` is
     the record followed by the armor. The record is what precedes it."""
-    record = {"attempt": 19, "autopublish": False, "claimEpoch": 1790701941,
-              "commit": "3" * 40, "schema": 1, "skipBundles": False, "skipTests": True,
-              "version": "0.21.5"}
+    record = {
+        "attempt": 19,
+        "autopublish": False,
+        "claimEpoch": 1790701941,
+        "commit": "3" * 40,
+        "schema": 1,
+        "skipBundles": False,
+        "skipTests": True,
+        "version": "0.21.5",
+    }
     record_text = json.dumps(record, sort_keys=True, separators=(",", ":"))
 
     assert tag_record(record_text) == record

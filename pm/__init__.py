@@ -21,13 +21,32 @@ import sys
 
 _EXPORTS = {
     "pm.install": (
-        "activate", "check", "drift", "enabled_extras", "env_for", "is_installed",
-        "installed_package", "lazy_installs_allowed", "store_first_path", "uv_launcher",
+        "activate",
+        "check",
+        "drift",
+        "enabled_extras",
+        "env_for",
+        "is_installed",
+        "installed_package",
+        "lazy_installs_allowed",
+        "store_first_path",
+        "uv_launcher",
     ),
     "pm.client": (
-        "ensure", "sync_venv", "build_environment", "lock_project", "stage_manager_runtime",
-        "ensure_environment", "ensure_project_environment", "ensure_python_tool", "venv_is_current", "check_project_lock",
-        "export_requirements", "build_requirements_environment", "prune_cache", "stage_tools",
+        "ensure",
+        "sync_venv",
+        "build_environment",
+        "lock_project",
+        "stage_manager_runtime",
+        "ensure_environment",
+        "ensure_project_environment",
+        "ensure_python_tool",
+        "venv_is_current",
+        "check_project_lock",
+        "export_requirements",
+        "build_requirements_environment",
+        "prune_cache",
+        "stage_tools",
         "prepare_tools",
     ),
     "pm.operations": ("environment_python", "python_tool"),
@@ -55,4 +74,3 @@ def __getattr__(name: str):
 
 def __dir__():
     return sorted(set(globals()) | set(_HOME))
-

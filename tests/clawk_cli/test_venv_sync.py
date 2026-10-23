@@ -23,9 +23,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _run_bare(snippet: str) -> subprocess.CompletedProcess:
-    program = f"import sys\nsys.path.insert(0, {str(REPO_ROOT)!r})\n" + textwrap.dedent(snippet)
-    return subprocess.run([sys.executable, '-I', '-S', '-c', program],
-                          capture_output=True, text=True, cwd=REPO_ROOT, timeout=120, check=False)
+    program = f"import sys\nsys.path.insert(0, {str(REPO_ROOT)!r})\n" + textwrap.dedent(
+        snippet
+    )
+    return subprocess.run(
+        [sys.executable, "-I", "-S", "-c", program],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        timeout=120,
+        check=False,
+    )
 
 
 def test_bare_import_and_passive_paths(tmp_path):
@@ -44,8 +52,8 @@ def test_bare_import_and_passive_paths(tmp_path):
 
 
 def test_bare_harness_rejects_third_party_import():
-    result = _run_bare('import requests')
-    assert result.returncode != 0 and 'ModuleNotFoundError' in result.stderr
+    result = _run_bare("import requests")
+    assert result.returncode != 0 and "ModuleNotFoundError" in result.stderr
 
 
 def _checkout(tmp_path: Path, name: str = "co") -> Path:
@@ -63,7 +71,9 @@ def _wire_pm(monkeypatch, *, current=False, error=None):
     monkeypatch.setattr(pm, "venv_is_current", lambda *, project_root: current)
 
     def sync(*, explicit, project_root, evict_incompatible_plugins):
-        assert evict_incompatible_plugins, "an update sync must disable misfit plugins, not fail"
+        assert evict_incompatible_plugins, (
+            "an update sync must disable misfit plugins, not fail"
+        )
         calls.append((project_root, explicit))
         if error:
             raise pm.InstallError("venv", error)
@@ -74,13 +84,17 @@ def _wire_pm(monkeypatch, *, current=False, error=None):
 
 class TestCheckoutSync:
     @pytest.mark.parametrize("foreign", [False, True])
-    def test_each_root_uses_the_public_pm_transaction(self, tmp_path, monkeypatch, foreign):
+    def test_each_root_uses_the_public_pm_transaction(
+        self, tmp_path, monkeypatch, foreign
+    ):
         root = _checkout(tmp_path)
         monkeypatch.setattr(venv_sync, "_project_root", lambda: root)
         calls = _wire_pm(monkeypatch)
-        assert venv_sync.sync(root if foreign else None) == {"state": "synced", "ok": True}
+        assert venv_sync.sync(root if foreign else None) == {
+            "state": "synced",
+            "ok": True,
+        }
         assert calls == [(root, True)]
-
 
     def test_check_is_passive(self, tmp_path, monkeypatch):
         root = _checkout(tmp_path)
@@ -106,7 +120,13 @@ class TestSealedTrees:
         root = tmp_path / "sealed"
         root.mkdir()
         (root / "install-stamp.json").write_text(
-            json.dumps({"commit": "abc123", "payload": "full", "updateMechanism": "electron-updater"})
+            json.dumps(
+                {
+                    "commit": "abc123",
+                    "payload": "full",
+                    "updateMechanism": "electron-updater",
+                }
+            )
         )
         calls = _wire_pm(monkeypatch)
 

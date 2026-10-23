@@ -114,8 +114,6 @@ def _capture_initialized_client(monkeypatch, tmp_path):
     return retaindb_module, captured
 
 
-
-
 def test_initialize_reads_real_dashboard_config_file(tmp_path, monkeypatch):
     for var in ("RETAINDB_API_KEY", "RETAINDB_BASE_URL", "RETAINDB_PROJECT"):
         monkeypatch.delenv(var, raising=False)
@@ -136,8 +134,6 @@ memory:
 
     assert captured["base_url"] == "https://retaindb.saved.example"
     assert captured["project"] == "dashboard-project"
-
-
 
 
 def test_initialize_env_overrides_config_yaml(tmp_path, monkeypatch):
@@ -172,7 +168,10 @@ def test_initialize_combines_scoped_secret_with_dashboard_config(tmp_path, monke
     monkeypatch.setattr(
         retaindb_module,
         "_load_retaindb_config",
-        lambda: {"base_url": "https://dashboard.example.com/", "project": "dashboard-project"},
+        lambda: {
+            "base_url": "https://dashboard.example.com/",
+            "project": "dashboard-project",
+        },
     )
 
     previous_multiplex_state = is_multiplex_active()

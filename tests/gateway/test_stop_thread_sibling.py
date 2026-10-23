@@ -52,14 +52,20 @@ def test_sibling_returns_empty_for_non_thread_source():
     )
     grp_b = build_session_key(
         SessionSource(
-            platform=Platform.DISCORD, chat_type="group", chat_id="chan1", user_id="userB"
+            platform=Platform.DISCORD,
+            chat_type="group",
+            chat_id="chan1",
+            user_id="userB",
         )
     )
     runner._running_agents = {grp_b: _FakeAgent()}
     own_key = "agent:main:discord:group:chan1:userA"
-    assert runner._sibling_thread_run_keys(
-        nonthread, runner._same_chat_runs(nonthread, own_key)
-    ) == []
+    assert (
+        runner._sibling_thread_run_keys(
+            nonthread, runner._same_chat_runs(nonthread, own_key)
+        )
+        == []
+    )
 
 
 def test_sibling_matches_named_profile_runs():
@@ -73,7 +79,9 @@ def test_sibling_matches_named_profile_runs():
     )
     runner._running_agents = {key_b: _FakeAgent()}
     own_key = "agent:work:discord:forum:chan1:thr1:userA"
-    assert runner._sibling_thread_run_keys(source, runner._same_chat_runs(source, own_key)) == [key_b]
+    assert runner._sibling_thread_run_keys(
+        source, runner._same_chat_runs(source, own_key)
+    ) == [key_b]
 
 
 def test_sibling_does_not_cross_profiles():
@@ -84,7 +92,10 @@ def test_sibling_does_not_cross_profiles():
     main_key = build_session_key(_thread_source("userB"), thread_sessions_per_user=True)
     runner._running_agents = {main_key: _FakeAgent()}
     own_key = "agent:work:discord:forum:chan1:thr1:userA"
-    assert runner._sibling_thread_run_keys(source, runner._same_chat_runs(source, own_key)) == []
+    assert (
+        runner._sibling_thread_run_keys(source, runner._same_chat_runs(source, own_key))
+        == []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +126,9 @@ async def test_stop_does_not_interrupt_sibling_when_unauthorized(monkeypatch):
 
     interrupted = []
 
-    async def _fake_interrupt(session_key, source, *, interrupt_reason, invalidation_reason):
+    async def _fake_interrupt(
+        session_key, source, *, interrupt_reason, invalidation_reason
+    ):
         interrupted.append(session_key)
 
     runner._interrupt_and_clear_session = _fake_interrupt
@@ -157,9 +170,7 @@ async def test_stop_no_active_agent_survives_status_clear_failure():
             raise RuntimeError("boom")
 
     runner.adapters = {Platform.DISCORD: _BoomAdapter()}
-    runner._thread_metadata_for_source = (
-        lambda source, reply_to_message_id=None: None
-    )
+    runner._thread_metadata_for_source = lambda source, reply_to_message_id=None: None
     runner._reply_anchor_for_event = lambda event: None
 
     event = MessageEvent(

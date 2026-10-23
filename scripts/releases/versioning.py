@@ -4,6 +4,7 @@ A version is spent only by publication. Attempt refs (``rc.<N>-vX.Y.Z``) and
 their abandon markers number attempts within one version; they never move the
 line. CalVer tags, canary identities and receipt namespaces are not versions.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,8 +21,9 @@ SEED = "0.21.5"
 BUMPS = ("major", "minor", "patch")
 
 
-def published_channel_identity(repository: str, channel: str, *, base_url: str | None = None,
-                               reader_type=None) -> tuple[str, str] | None:
+def published_channel_identity(
+    repository: str, channel: str, *, base_url: str | None = None, reader_type=None
+) -> tuple[str, str] | None:
     """Resolve one validated protected channel's payload version and commit."""
     from clawk_cli.release_channels import ChannelNotFound, ChannelReader
     from scripts.releases.r2 import public_base_url
@@ -30,7 +32,9 @@ def published_channel_identity(repository: str, channel: str, *, base_url: str |
         raise ValueError("Expected a protected release channel")
     reader_type = reader_type or ChannelReader
     try:
-        resolved = reader_type(base_url or public_base_url(), repository=repository).resolve(channel)
+        resolved = reader_type(
+            base_url or public_base_url(), repository=repository
+        ).resolve(channel)
     except ChannelNotFound:
         return None
     if resolved.manifest is None:
@@ -39,7 +43,11 @@ def published_channel_identity(repository: str, channel: str, *, base_url: str |
         raise ValueError(f"{channel.title()} channel has the wrong publication policy")
     request = resolved.manifest["request"]
     version, commit = request.get("version"), request.get("commit")
-    if not isinstance(version, str) or not isinstance(commit, str) or not re.fullmatch(r"[a-f0-9]{40}", commit):
+    if (
+        not isinstance(version, str)
+        or not isinstance(commit, str)
+        or not re.fullmatch(r"[a-f0-9]{40}", commit)
+    ):
         raise ValueError(f"{channel.title()} channel has an invalid published identity")
     return version, commit
 
@@ -53,44 +61,69 @@ def published_release_identity(repository: str, run=None) -> tuple[str, str] | N
     ``vX.Y.Z`` tag without a published release does not count.
     """
     run = run or _gh
-    pages = json.loads(run(["gh", "api", "--paginate", "--slurp",
-                            f"repos/{repository}/releases?per_page=100"]))
-    versions = [version for page in pages for row in page
-                if isinstance(row, dict) and row.get("draft") is False
-                and row.get("prerelease") is False
-                and (version := version_from_tag(row.get("tag_name")))]
+    pages = json.loads(
+        run(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/releases?per_page=100",
+            ]
+        )
+    )
+    versions = [
+        version
+        for page in pages
+        for row in page
+        if isinstance(row, dict)
+        and row.get("draft") is False
+        and row.get("prerelease") is False
+        and (version := version_from_tag(row.get("tag_name")))
+    ]
     if not versions:
         return None
     newest = max(versions, key=cmp_to_key(compare))
-    commit = run(["gh", "api", f"repos/{repository}/commits/v{newest}", "--jq", ".sha"]).strip()
+    commit = run(
+        ["gh", "api", f"repos/{repository}/commits/v{newest}", "--jq", ".sha"]
+    ).strip()
     if not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError(f"v{newest} has no valid release commit")
     return newest, commit
 
 
-def published_stable_identity(repository: str, *, base_url: str | None = None,
-                              reader_type=None, run=None) -> tuple[str, str | None]:
+def published_stable_identity(
+    repository: str, *, base_url: str | None = None, reader_type=None, run=None
+) -> tuple[str, str | None]:
     """The newest published stable ``(version, commit)``, or the seed before one exists.
 
     The protected channel names the newest release that shipped bundles. The
     GitHub releases also name one that skipped them. The newer of the two wins.
     """
     found = published_channel_identity(
-        repository, "stable", base_url=base_url, reader_type=reader_type,
+        repository,
+        "stable",
+        base_url=base_url,
+        reader_type=reader_type,
     )
     if found is not None and version_from_tag("v" + found[0]) is None:
         raise ValueError("Stable channel has an invalid source version")
-    candidates = [identity for identity in (found, published_release_identity(repository, run))
-                  if identity is not None]
+    candidates = [
+        identity
+        for identity in (found, published_release_identity(repository, run))
+        if identity is not None
+    ]
     if not candidates:
         return SEED, None
     return max(candidates, key=cmp_to_key(lambda a, b: compare(a[0], b[0])))
 
 
-def published_stable_version(repository: str, *, base_url: str | None = None, reader_type=None,
-                             run=None) -> str:
-    return published_stable_identity(repository, base_url=base_url, reader_type=reader_type,
-                                     run=run)[0]
+def published_stable_version(
+    repository: str, *, base_url: str | None = None, reader_type=None, run=None
+) -> str:
+    return published_stable_identity(
+        repository, base_url=base_url, reader_type=reader_type, run=run
+    )[0]
 
 
 def _gh(argv: list[str]) -> str:
@@ -144,7 +177,7 @@ def parse_marker_ref(ref: str) -> tuple[str, int] | None:
     """``abandoned-rc.<N>-vX.Y.Z``, the record that clears one attempt."""
     if not isinstance(ref, str) or not ref.startswith(_MARKER_PREFIX):
         return None
-    return parse_attempt_ref(ref[len(_MARKER_PREFIX):])
+    return parse_attempt_ref(ref[len(_MARKER_PREFIX) :])
 
 
 def attempt_ref(version: str, attempt: int) -> str:
@@ -184,8 +217,11 @@ def next_attempt(version: str, refs: list[str]) -> int:
     Marker refs do not count and do not free a number: an abandoned attempt
     keeps its ref, so its number is never cut again.
     """
-    attempts = [parsed[1] for parsed in map(parse_attempt_ref, refs)
-                if parsed and parsed[0] == version]
+    attempts = [
+        parsed[1]
+        for parsed in map(parse_attempt_ref, refs)
+        if parsed and parsed[0] == version
+    ]
     return max(attempts, default=0) + 1
 
 

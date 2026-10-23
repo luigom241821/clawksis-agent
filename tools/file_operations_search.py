@@ -20,12 +20,22 @@ from tools import interrupt as tool_interrupt
 from tools.file_operations_common import ExecuteResult, SearchMatch, SearchResult
 
 _MACOS_TCC_PROTECTED_HOME_DIRS = (
-    "Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures",
+    "Desktop",
+    "Documents",
+    "Downloads",
+    "Library",
+    "Movies",
+    "Music",
+    "Pictures",
 )
 
 
 def _macos_protected_search_exclusions(
-    path: str, *, cwd: Optional[str] = None, home: Optional[str] = None, platform: Optional[str] = None,
+    path: str,
+    *,
+    cwd: Optional[str] = None,
+    home: Optional[str] = None,
+    platform: Optional[str] = None,
 ) -> list[str]:
     """Protected home dirs (relative to ``path``) below a broad macOS search root.
 
@@ -60,7 +70,11 @@ _FILENAME_SEARCH_WAIT_SECONDS = 0.05
 
 def _normalized_filename_search_root(env: Any, root: str, fallback_cwd: str) -> str:
     """Normalize a filename-walk root without resolving remote paths locally."""
-    from tools.environments.local import LocalEnvironment, _IS_WINDOWS, _msys_to_windows_path
+    from tools.environments.local import (
+        LocalEnvironment,
+        _IS_WINDOWS,
+        _msys_to_windows_path,
+    )
 
     cwd = getattr(env, "cwd", None) or fallback_cwd
     if isinstance(env, LocalEnvironment):
@@ -75,12 +89,23 @@ def _normalized_filename_search_root(env: Any, root: str, fallback_cwd: str) -> 
     return posixpath.normpath(root)
 
 
-def _filename_search_root_keys(env: Any, roots: list[str], fallback_cwd: str) -> tuple[tuple[str, str, str], ...]:
+def _filename_search_root_keys(
+    env: Any, roots: list[str], fallback_cwd: str
+) -> tuple[tuple[str, str, str], ...]:
     """Unique backend/root admission keys in deterministic order."""
     env_type = type(env)
-    return tuple(sorted({
-        (env_type.__module__, env_type.__qualname__, _normalized_filename_search_root(env, root, fallback_cwd))
-        for root in roots}))
+    return tuple(
+        sorted(
+            {
+                (
+                    env_type.__module__,
+                    env_type.__qualname__,
+                    _normalized_filename_search_root(env, root, fallback_cwd),
+                )
+                for root in roots
+            }
+        )
+    )
 
 
 def _acquire_filename_search_roots(keys: tuple[tuple[str, str, str], ...]) -> bool:
@@ -94,7 +119,9 @@ def _acquire_filename_search_roots(keys: tuple[tuple[str, str, str], ...]) -> bo
                 return False
         if tool_interrupt.is_interrupted():
             return False
-        return tool_interrupt.run_if_not_interrupted(lambda: _ACTIVE_FILENAME_SEARCH_ROOTS.update(keys))
+        return tool_interrupt.run_if_not_interrupted(
+            lambda: _ACTIVE_FILENAME_SEARCH_ROOTS.update(keys)
+        )
 
 
 def _release_filename_search_roots(keys: tuple[tuple[str, str, str], ...]) -> None:
@@ -106,7 +133,8 @@ def _release_filename_search_roots(keys: tuple[tuple[str, str, str], ...]) -> No
 
 _ADMISSION_INTERRUPTED_ERROR = (
     "File search was interrupted while waiting for another filename "
-    "search on the same root. Retry when ready.")
+    "search on the same root. Retry when ready."
+)
 
 _SEARCH_TIMEOUT_MARKER_RE = re.compile(r"\n?\[Command timed out after \d+s\]\s*$")
 
@@ -127,13 +155,17 @@ def _bundled_rg() -> Optional[str]:
     except (OSError, RuntimeError, ValueError):
         return None
     binary = installed.binary if installed is not None else None
-    return str(binary).replace("\\", "/") if binary is not None and binary.is_file() else None
+    return (
+        str(binary).replace("\\", "/")
+        if binary is not None and binary.is_file()
+        else None
+    )
 
 
 # A real rg/grep output line is a whitespace-free path token followed by ``:``
 # (match/count), ``-`` (context), or nothing (files_only); tool diagnostics
 # ("rg: ...", indented carets) never match.
-_SEARCH_OUTPUT_RE = re.compile(r'^([A-Za-z]:)?[^\s:][^\n]*?[:\-]\d|^[^\s:][^\s]*$')
+_SEARCH_OUTPUT_RE = re.compile(r"^([A-Za-z]:)?[^\s:][^\n]*?[:\-]\d|^[^\s:][^\s]*$")
 
 
 def _split_tool_diagnostics(output: str) -> tuple[str, str]:
@@ -143,7 +175,7 @@ def _split_tool_diagnostics(output: str) -> tuple[str, str]:
     matched) and guarantees error text is never parsed as a match."""
     diagnostics: list[str] = []
     payload: list[str] = []
-    for line in output.split('\n'):
+    for line in output.split("\n"):
         if not line.strip():
             continue
         # Prefix check first: a match path can contain "-<digit>" (".../pytest-686/...").
@@ -153,7 +185,7 @@ def _split_tool_diagnostics(output: str) -> tuple[str, str]:
             payload.append(line)
         else:
             diagnostics.append(line)
-    return '\n'.join(diagnostics), '\n'.join(payload)
+    return "\n".join(diagnostics), "\n".join(payload)
 
 
 def _parse_search_context_line(line: str) -> tuple[str, int, str] | None:
@@ -163,11 +195,11 @@ def _parse_search_context_line(line: str) -> tuple[str, int, str] | None:
     if not line or line == "--":
         return None
     match = None
-    for candidate in re.finditer(r'-(\d+)-', line):
+    for candidate in re.finditer(r"-(\d+)-", line):
         match = candidate
     if match is None or match.start() == 0:
         return None
-    return line[:match.start()], int(match.group(1)), line[match.end():]
+    return line[: match.start()], int(match.group(1)), line[match.end() :]
 
 
 _REGEX_NEWLINE_ESCAPE_RE = re.compile(r"(?<!\\)(?:\\\\)*\\n")
@@ -182,10 +214,16 @@ def _pattern_has_regex_newline(pattern: str) -> bool:
 
 def _is_line_oriented_newline_error(error: Optional[str]) -> bool:
     """Return True for rg's hard error when multiline mode is required."""
-    return bool(error) and "literal \"\\n\" is not allowed" in error and "--multiline" in error
+    return (
+        bool(error)
+        and 'literal "\\n" is not allowed' in error
+        and "--multiline" in error
+    )
 
 
-def _maybe_warn_line_oriented_newline_pattern(result: SearchResult, pattern: str) -> SearchResult:
+def _maybe_warn_line_oriented_newline_pattern(
+    result: SearchResult, pattern: str
+) -> SearchResult:
     """Attach a newline-regex warning only when search found no usable results."""
     if result.total_count != 0 or not _pattern_has_regex_newline(pattern):
         return result
@@ -196,20 +234,27 @@ def _maybe_warn_line_oriented_newline_pattern(result: SearchResult, pattern: str
         "0 results found. Note: search_files content search is line-oriented "
         "and does not run ripgrep with -U/--multiline, so `\\n` in the regex "
         "does not match line breaks. Use context=N to inspect neighboring "
-        "lines, or escape as `\\\\n` when searching for a literal backslash+n.")
+        "lines, or escape as `\\\\n` when searching for a literal backslash+n."
+    )
     return result
 
 
 # Match lines are "file:lineno:content". Windows paths carry a drive letter
 # ("C:\path"), so a naive split(":") breaks — the regex handles both.
-_MATCH_LINE_RE = re.compile(r'^([A-Za-z]:)?(.*?):(\d+):(.*)$')
+_MATCH_LINE_RE = re.compile(r"^([A-Za-z]:)?(.*?):(\d+):(.*)$")
 
 # Output-mode → engine flag (identical for rg and grep).
 _OUTPUT_MODE_FLAGS = {"files_only": "-l", "count": "-c"}
 
 
-def _parse_search_output(result, output_mode: str, limit: int, offset: int,
-                         context: int, warning: Optional[str] = None) -> SearchResult:
+def _parse_search_output(
+    result,
+    output_mode: str,
+    limit: int,
+    offset: int,
+    context: int,
+    warning: Optional[str] = None,
+) -> SearchResult:
     """Parse rg/grep ``| head`` output into a SearchResult (shared by both engines).
     Exit codes: 0=matches, 1=none, 2=error — but both tools return 2 on PARTIAL
     errors (one unreadable file), so an error is surfaced only when exit==2 AND no
@@ -219,49 +264,68 @@ def _parse_search_output(result, output_mode: str, limit: int, offset: int,
     if result.exit_code == 2 and not payload.strip():
         error_msg = diagnostics.strip() or result.stdout.strip() or "Search error"
         return SearchResult(error=f"Search failed: {error_msg}", total_count=0)
-    lines = [ln for ln in payload.strip().split('\n') if ln]
+    lines = [ln for ln in payload.strip().split("\n") if ln]
     if output_mode == "files_only":
         return SearchResult(
-            files=lines[offset:offset + limit], total_count=len(lines),
-            truncated=bool(limit_reason), limit_reason=limit_reason, warning=warning)
+            files=lines[offset : offset + limit],
+            total_count=len(lines),
+            truncated=bool(limit_reason),
+            limit_reason=limit_reason,
+            warning=warning,
+        )
     if output_mode == "count":
         counts = {}
         for line in lines:
-            if ':' in line:
-                path, n = line.rsplit(':', 1)
+            if ":" in line:
+                path, n = line.rsplit(":", 1)
                 try:
                     counts[path] = int(n)
                 except ValueError:
                     pass
         return SearchResult(
-            counts=counts, total_count=sum(counts.values()),
-            truncated=bool(limit_reason), limit_reason=limit_reason)
+            counts=counts,
+            total_count=sum(counts.values()),
+            truncated=bool(limit_reason),
+            limit_reason=limit_reason,
+        )
     matches = []
     for line in lines:
         if line == "--":
             continue
         m = _MATCH_LINE_RE.match(line)
         if m:
-            matches.append(SearchMatch(
-                path=(m.group(1) or '') + m.group(2), line_number=int(m.group(3)), content=m.group(4)[:500],
-            ))
+            matches.append(
+                SearchMatch(
+                    path=(m.group(1) or "") + m.group(2),
+                    line_number=int(m.group(3)),
+                    content=m.group(4)[:500],
+                )
+            )
             continue
         # Context lines only when requested, to avoid false positives on dashy paths.
         if context > 0:
             parsed = _parse_search_context_line(line)
             if parsed:
-                matches.append(SearchMatch(path=parsed[0], line_number=parsed[1], content=parsed[2][:500]))
+                matches.append(
+                    SearchMatch(
+                        path=parsed[0], line_number=parsed[1], content=parsed[2][:500]
+                    )
+                )
     total = len(matches)
     return SearchResult(
-        matches=matches[offset:offset + limit], total_count=total,
-        truncated=total > offset + limit or bool(limit_reason), limit_reason=limit_reason, warning=warning,
+        matches=matches[offset : offset + limit],
+        total_count=total,
+        truncated=total > offset + limit or bool(limit_reason),
+        limit_reason=limit_reason,
+        warning=warning,
     )
 
 
 def _posix_roots(roots: list[str]) -> bool:
     """Darwin-only: every root is POSIX-shaped (no drive letter / backslash)."""
     return sys.platform == "darwin" and all(
-        not re.match(r"^[A-Za-z]:[\\/]", root) and "\\" not in root for root in roots)
+        not re.match(r"^[A-Za-z]:[\\/]", root) and "\\" not in root for root in roots
+    )
 
 
 def _find_literal_path_expressions(roots: list[str]) -> list[str]:
@@ -318,7 +382,11 @@ class SearchMixin:
                 os.path.join(scoop, "shims", "rg.exe"),
             ]
             if local_app_data:
-                candidates.append(os.path.join(local_app_data, "Microsoft", "WinGet", "Links", "rg.exe"))
+                candidates.append(
+                    os.path.join(
+                        local_app_data, "Microsoft", "WinGet", "Links", "rg.exe"
+                    )
+                )
             for candidate in candidates:
                 if os.path.isfile(candidate):
                     resolved = candidate.replace("\\", "/")
@@ -333,26 +401,36 @@ class SearchMixin:
         r"[0-9A-Za-z-]*))(?:\.(?:(?:0|[1-9]\d*)|"
         r"(?:[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)))*)?"
         r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
-        r"(?:\s+\(rev [^)]+\))?\s*$")
+        r"(?:\s+\(rev [^)]+\))?\s*$"
+    )
 
     def _modified_rg_capability_error(self, executable: str) -> Optional[str]:
         """Cached actionable error unless rg can sort exactly (full SemVer, >= 14)."""
         if executable in self._rg_modified_capability:
             return self._rg_modified_capability[executable]
-        result = self._exec(f"{self._quote_executable(executable)} --version", timeout=10)
+        result = self._exec(
+            f"{self._quote_executable(executable)} --version", timeout=10
+        )
         match = self._RG_VERSION_RE.search(result.stdout or "")
         if result.exit_code == 0 and match and int(match.group(1)) >= 14:
             error = None
         else:
-            error = ("Exact modification-time order requires ripgrep 14 or newer; "
-                     "upgrade ripgrep or use order='discovery'.")
+            error = (
+                "Exact modification-time order requires ripgrep 14 or newer; "
+                "upgrade ripgrep or use order='discovery'."
+            )
         self._rg_modified_capability[executable] = error
         return error
 
     # --- native rg transport (local POSIX) --------------------------------------
 
-    def _run_rg_native(self, argv: list[str], fetch_limit: int, timeout: int,
-                       merge_stderr: bool = False) -> ExecuteResult:
+    def _run_rg_native(
+        self,
+        argv: list[str],
+        fetch_limit: int,
+        timeout: int,
+        merge_stderr: bool = False,
+    ) -> ExecuteResult:
         """Run ``argv`` (shell-quoted rg words) natively and stop reading after
         ``fetch_limit`` lines — the ``| head -n`` of the shell pipeline without the
         two bash spawns. ``shlex.split`` undoes the escaping the builders apply for
@@ -364,13 +442,19 @@ class SearchMixin:
         search (diagnostics feed the error message), discarded (``2>/dev/null``) for
         file lists and probes."""
         from tools.environments.local import _kill_process_group_posix, _make_run_env
+
         cwd = getattr(self.env, "cwd", None) or self.cwd
         args = shlex.split(" ".join(argv))
         try:
             proc = subprocess.Popen(
-                args, cwd=cwd, env=_make_run_env(self.env.env), stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
-                start_new_session=True)
+                args,
+                cwd=cwd,
+                env=_make_run_env(self.env.env),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT if merge_stderr else subprocess.DEVNULL,
+                start_new_session=True,
+            )
         except OSError as exc:
             return ExecuteResult(stdout=f"rg: {exc}", exit_code=2)
 
@@ -407,24 +491,42 @@ class SearchMixin:
         proc.stdout.close()
         stdout = b"".join(lines).decode("utf-8", errors="replace")
         if exit_code == 124:
-            return ExecuteResult(stdout=stdout + f"\n[Command timed out after {timeout}s]", exit_code=124)
+            return ExecuteResult(
+                stdout=stdout + f"\n[Command timed out after {timeout}s]", exit_code=124
+            )
         if exit_code == 130:
-            return ExecuteResult(stdout=stdout + "\n[Command interrupted]", exit_code=130)
+            return ExecuteResult(
+                stdout=stdout + "\n[Command interrupted]", exit_code=130
+            )
         # A killed-at-bound rg reports a signal (negative returncode); head would have
         # left the pipeline at 0 unless rg itself already failed.
-        return ExecuteResult(stdout=stdout, exit_code=0 if bounded.is_set() else proc.returncode)
+        return ExecuteResult(
+            stdout=stdout, exit_code=0 if bounded.is_set() else proc.returncode
+        )
 
-    def _run_rg_bounded(self, words: list[str], fetch_limit: int, timeout: int, *,
-                        merge_stderr: bool = False, native_ok: bool = True,
-                        shell_prefix: str = "") -> ExecuteResult:
+    def _run_rg_bounded(
+        self,
+        words: list[str],
+        fetch_limit: int,
+        timeout: int,
+        *,
+        merge_stderr: bool = False,
+        native_ok: bool = True,
+        shell_prefix: str = "",
+    ) -> ExecuteResult:
         """Run an rg command (shell-quoted words) and keep the first ``fetch_limit``
-        lines: natively on a local POSIX host, else through the backend shell as
-        ``<prefix><words> | head -n N``. ``native_ok=False`` keeps a form the native
- lane cannot express (the multi-root ``cd`` prefix); ``shell_prefix`` is shell-only."""
+               lines: natively on a local POSIX host, else through the backend shell as
+               ``<prefix><words> | head -n N``. ``native_ok=False`` keeps a form the native
+        lane cannot express (the multi-root ``cd`` prefix); ``shell_prefix`` is shell-only."""
         if native_ok and self._native_read_enabled():
-            return self._run_rg_native(words, fetch_limit, timeout, merge_stderr=merge_stderr)
+            return self._run_rg_native(
+                words, fetch_limit, timeout, merge_stderr=merge_stderr
+            )
         stderr = "" if merge_stderr else " 2>/dev/null"
-        return self._exec(f"{shell_prefix}{' '.join(words)}{stderr} | head -n {fetch_limit}", timeout=timeout)
+        return self._exec(
+            f"{shell_prefix}{' '.join(words)}{stderr} | head -n {fetch_limit}",
+            timeout=timeout,
+        )
 
     def _quote_executable(self, executable: str) -> str:
         """Quote an executable without leaking controller path semantics."""
@@ -447,14 +549,22 @@ class SearchMixin:
         if env is not None and getattr(env, "is_local", True) is False:
             return []
         from tools import file_operations as _fo  # lazy: _HOME is monkeypatched there
+
         cwd = getattr(self.env, "cwd", None) or self.cwd
-        return _macos_protected_search_exclusions(path, cwd=cwd, home=_fo._HOME, platform=sys.platform)
+        return _macos_protected_search_exclusions(
+            path, cwd=cwd, home=_fo._HOME, platform=sys.platform
+        )
 
     def _protected_prune_paths(self, path: str) -> list[str]:
         """Absolute-ish protected paths for find's ``-path ... -prune``."""
-        return [os.path.normpath(os.path.join(path, item)) for item in self._macos_search_exclusions(path)]
+        return [
+            os.path.normpath(os.path.join(path, item))
+            for item in self._macos_search_exclusions(path)
+        ]
 
-    def _effective_macos_search_exclusions(self, roots: list[str]) -> list[tuple[str, str, str]]:
+    def _effective_macos_search_exclusions(
+        self, roots: list[str]
+    ) -> list[tuple[str, str, str]]:
         """Unique ``(root, relative, absolute)`` exclusions across ``roots``, never
         pruning a root the caller chose explicitly."""
         cwd = getattr(self.env, "cwd", None) or self.cwd
@@ -462,7 +572,9 @@ class SearchMixin:
 
         def normalized(root: str) -> str:
             if use_posix_paths:
-                return posixpath.normpath(root if posixpath.isabs(root) else posixpath.join(cwd, root))
+                return posixpath.normpath(
+                    root if posixpath.isabs(root) else posixpath.join(cwd, root)
+                )
             return os.path.normcase(os.path.abspath(os.path.normpath(root)))
 
         normalized_roots = [normalized(root) for root in roots]
@@ -472,7 +584,9 @@ class SearchMixin:
         for root, normalized_root in zip(roots, normalized_roots):
             for relative in self._macos_search_exclusions(root):
                 if use_posix_paths:
-                    absolute = key = posixpath.normpath(posixpath.join(normalized_root, relative))
+                    absolute = key = posixpath.normpath(
+                        posixpath.join(normalized_root, relative)
+                    )
                 else:
                     absolute = os.path.normpath(os.path.join(root, relative))
                     key = os.path.normcase(os.path.abspath(absolute))
@@ -485,9 +599,11 @@ class SearchMixin:
     @staticmethod
     def _macos_protected_search_warning(paths: list[str]) -> str:
         skipped = ", ".join(os.path.basename(item) for item in paths)
-        return ("Skipped macOS protected folders during broad search to avoid "
-                f"an unattended privacy prompt: {skipped}. Search a protected "
-                "folder directly when access is intentional.")
+        return (
+            "Skipped macOS protected folders during broad search to avoid "
+            f"an unattended privacy prompt: {skipped}. Search a protected "
+            "folder directly when access is intentional."
+        )
 
     @staticmethod
     def _hidden_prune_expr(q_roots: list[str]) -> str:
@@ -498,13 +614,18 @@ class SearchMixin:
 
     def _prune_expr(self, protected_paths: list[str]) -> str:
         """find ``\\( -path A -o -path B \\) -prune`` clause for the protected dirs."""
-        terms = " -o ".join(f"-path {self._escape_shell_arg(item)}" for item in protected_paths)
+        terms = " -o ".join(
+            f"-path {self._escape_shell_arg(item)}" for item in protected_paths
+        )
         return f"\\( {terms} \\) -prune"
 
     def _root_under_hidden_dir(self, path: str) -> bool:
         """True when the search root or any ancestor is dot-named (``~/.clawksis/skills``)."""
         root = _normalized_filename_search_root(self.env, path or ".", self.cwd)
-        return any(part.startswith(".") and part not in (".", "..") for part in root.replace("\\", "/").split("/"))
+        return any(
+            part.startswith(".") and part not in (".", "..")
+            for part in root.replace("\\", "/").split("/")
+        )
 
     def _rg_exclusion_globs(self, path: str) -> list[str]:
         """``--glob '!<dir>/**'`` pairs excluding protected dirs from an rg run."""
@@ -517,38 +638,76 @@ class SearchMixin:
         """Existence probe; stdout contains "exists" or "not_found" (or the probe's
         ``cwd_error`` when the exec wrapper itself failed)."""
         if self._native_read_enabled():
-            full = path if os.path.isabs(path) else os.path.join(getattr(self.env, "cwd", None) or self.cwd, path)
-            return ExecuteResult(stdout="exists" if os.path.exists(full) else "not_found")
-        return self._exec(f"test -e {self._escape_shell_arg(path)} && echo exists || echo not_found")
+            full = (
+                path
+                if os.path.isabs(path)
+                else os.path.join(getattr(self.env, "cwd", None) or self.cwd, path)
+            )
+            return ExecuteResult(
+                stdout="exists" if os.path.exists(full) else "not_found"
+            )
+        return self._exec(
+            f"test -e {self._escape_shell_arg(path)} && echo exists || echo not_found"
+        )
 
-    def _dispatch_search(self, pattern: str, path: str, target: str,
-                         file_glob: Optional[str], limit: int, offset: int,
-                         output_mode: str, context: int, order: str = "discovery") -> SearchResult:
+    def _dispatch_search(
+        self,
+        pattern: str,
+        path: str,
+        target: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+        order: str = "discovery",
+    ) -> SearchResult:
         if target == "files":
             return self._search_files(pattern, path, limit, offset, order)
-        return self._search_content(pattern, path, file_glob, limit, offset, output_mode, context)
+        return self._search_content(
+            pattern, path, file_glob, limit, offset, output_mode, context
+        )
 
     def _path_not_found_result(self, path: str) -> SearchResult:
         """Error result for a missing search root, with nearby-entry suggestions."""
         parent = os.path.dirname(path) or "."
         basename_query = os.path.basename(path)
         hint_parts = [f"Path not found: {path}"]
-        parent_check = self._exec(f"test -d {self._escape_shell_arg(parent)} && echo yes || echo no")
+        parent_check = self._exec(
+            f"test -d {self._escape_shell_arg(parent)} && echo yes || echo no"
+        )
         if "yes" in parent_check.stdout and basename_query:
-            ls_result = self._exec(f"ls -1 {self._escape_shell_arg(parent)} 2>/dev/null | head -20")
+            ls_result = self._exec(
+                f"ls -1 {self._escape_shell_arg(parent)} 2>/dev/null | head -20"
+            )
             if ls_result.exit_code == 0 and ls_result.stdout.strip():
                 lq = basename_query.lower()
                 candidates = [
-                    os.path.join(parent, e) for e in ls_result.stdout.strip().split('\n')
-                    if e and (lq in e.lower() or e.lower() in lq or e.lower().startswith(lq[:3]))]
+                    os.path.join(parent, e)
+                    for e in ls_result.stdout.strip().split("\n")
+                    if e
+                    and (
+                        lq in e.lower()
+                        or e.lower() in lq
+                        or e.lower().startswith(lq[:3])
+                    )
+                ]
                 if candidates:
                     hint_parts.append("Similar paths: " + ", ".join(candidates[:5]))
         return SearchResult(error=". ".join(hint_parts), total_count=0)
 
-    def _try_multi_path_search(self, pattern: str, path: str, target: str,
-                               file_glob: Optional[str], limit: int, offset: int,
-                               output_mode: str, context: int,
-                               order: str = "discovery") -> Optional[SearchResult]:
+    def _try_multi_path_search(
+        self,
+        pattern: str,
+        path: str,
+        target: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+        order: str = "discovery",
+    ) -> Optional[SearchResult]:
         """Recover a not-found ``path`` that is really several paths in one string.
         Commas explicitly delimit paths (internal spaces preserved); without commas
         split on whitespace. Search every existing part, merge, and note skipped
@@ -562,7 +721,11 @@ class SearchMixin:
         existing, missing = [], []
         for p in parts:
             expanded = self._expand_path(p)
-            (existing if "exists" in self._path_exists_probe(expanded).stdout else missing).append(expanded)
+            (
+                existing
+                if "exists" in self._path_exists_probe(expanded).stdout
+                else missing
+            ).append(expanded)
         if not existing:
             return None
         if target == "files":
@@ -572,7 +735,9 @@ class SearchMixin:
         else:
             merged = SearchResult()
             for root in existing:
-                sub = self._search_content(pattern, root, file_glob, limit, offset, output_mode, context)
+                sub = self._search_content(
+                    pattern, root, file_glob, limit, offset, output_mode, context
+                )
                 if sub.error:
                     return sub
                 merged.matches.extend(sub.matches)
@@ -582,16 +747,25 @@ class SearchMixin:
                 merged.truncated = merged.truncated or sub.truncated
             merged.matches = merged.matches[:limit]
             merged.files = merged.files[:limit]
-        note = f"path contained {len(parts)} entries; searched {len(existing)} that exist"
+        note = (
+            f"path contained {len(parts)} entries; searched {len(existing)} that exist"
+        )
         if missing:
             note += "; skipped missing: " + ", ".join(missing[:3])
             if len(missing) > 3:
                 note += f" (+{len(missing) - 3} more)"
         warning_parts = [note]
         if not merged.error:
-            protected_paths = [absolute for _r, _rel, absolute in self._effective_macos_search_exclusions(existing)]
+            protected_paths = [
+                absolute
+                for _r, _rel, absolute in self._effective_macos_search_exclusions(
+                    existing
+                )
+            ]
             if protected_paths:
-                warning_parts.append(self._macos_protected_search_warning(protected_paths))
+                warning_parts.append(
+                    self._macos_protected_search_warning(protected_paths)
+                )
         merged.warning = " ".join(warning_parts)
         return merged
 
@@ -603,27 +777,40 @@ class SearchMixin:
         globs = []
         for dirname in sorted(SEARCH_PRUNE_DIR_NAMES):
             for prefix in ("", "**/"):
-                globs.extend(("--glob", self._escape_shell_arg(f"!{prefix}{dirname}/**")))
+                globs.extend(
+                    ("--glob", self._escape_shell_arg(f"!{prefix}{dirname}/**"))
+                )
         return " ".join(globs)
 
     # (rg flags, message template) probes for a 0-match content search, in order.
     # The fixed-string probe only runs when the pattern has regex metacharacters.
     _ZERO_MATCH_PROBES = (
-        ("-i", "0 exact matches, but {total} case-insensitive match(es) in {n} file(s): "
-               "{paths} — the pattern's casing may be wrong."),
+        (
+            "-i",
+            "0 exact matches, but {total} case-insensitive match(es) in {n} file(s): "
+            "{paths} — the pattern's casing may be wrong.",
+        ),
         # rg skips dotdirs and .gitignore'd files by default; say so instead of a bare zero.
-        ("--hidden --no-ignore", "0 matches in visible files, but {total} match(es) in {n} "
-                                 "hidden or gitignored file(s): {paths} — these are excluded by default."),
-        ("-F", "0 regex matches, but {total} literal match(es) in {n} file(s): {paths} — the "
-               "pattern contains regex metacharacters that likely need escaping "
-               "(or pass a simpler substring)."),
+        (
+            "--hidden --no-ignore",
+            "0 matches in visible files, but {total} match(es) in {n} "
+            "hidden or gitignored file(s): {paths} — these are excluded by default.",
+        ),
+        (
+            "-F",
+            "0 regex matches, but {total} literal match(es) in {n} file(s): {paths} — the "
+            "pattern contains regex metacharacters that likely need escaping "
+            "(or pass a simpler substring).",
+        ),
     )
 
-    def _zero_match_probe(self, pattern: str, path: str, file_glob: Optional[str]) -> Optional[str]:
+    def _zero_match_probe(
+        self, pattern: str, path: str, file_glob: Optional[str]
+    ) -> Optional[str]:
         """Steering hint for a 0-match content search, or None: a bare zero gives the
         model nothing to act on, so run cheap count-only rg probes (case-insensitive,
         hidden/ignored, fixed-string) and report the first that hits."""
-        rg_executable = self._resolve_command('rg')
+        rg_executable = self._resolve_command("rg")
         if not rg_executable:
             return None
         rg = self._quote_executable(rg_executable)
@@ -638,8 +825,14 @@ class SearchMixin:
                 glob_expr_probe = f"{glob_expr} {self._search_prune_glob_args()}"
             else:
                 glob_expr_probe = glob_expr
-            probe_words = [rg, flags, "--count-matches", glob_expr_probe,
-                           self._escape_shell_arg(pattern, translate_path=False), self._escape_native_tool_arg(path)]
+            probe_words = [
+                rg,
+                flags,
+                "--count-matches",
+                glob_expr_probe,
+                self._escape_shell_arg(pattern, translate_path=False),
+                self._escape_native_tool_arg(path),
+            ]
             probe = self._run_rg_bounded(probe_words, 50, timeout=30)
             total, per_file = 0, []
             for line in (probe.stdout or "").strip().splitlines():
@@ -649,14 +842,20 @@ class SearchMixin:
                     per_file.append(p)
             if total > 0:
                 extra = len(per_file) - 5
-                paths = ", ".join(per_file[:5]) + (f" (+{extra} more)" if extra > 0 else "")
+                paths = ", ".join(per_file[:5]) + (
+                    f" (+{extra} more)" if extra > 0 else ""
+                )
                 return template.format(total=total, n=len(per_file), paths=paths)
         return None
 
     def _is_broad_local_search_root(self, path: str) -> bool:
         """Whether a no-rg LOCAL root (filesystem root, $HOME or an ancestor of it) is
         unsafe for recursive find. Controller paths never classify remotes."""
-        from tools.environments.local import LocalEnvironment, _IS_WINDOWS, _msys_to_windows_path
+        from tools.environments.local import (
+            LocalEnvironment,
+            _IS_WINDOWS,
+            _msys_to_windows_path,
+        )
 
         if not isinstance(self.env, LocalEnvironment):
             return False
@@ -673,6 +872,7 @@ class SearchMixin:
             return os.path.normcase(os.path.realpath(value))
 
         from tools import file_operations as _fo  # lazy: _HOME is monkeypatched there
+
         root = normalized(path)
         home = normalized(_fo._HOME)
         drive = os.path.splitdrive(root)[0]
@@ -694,7 +894,9 @@ class SearchMixin:
                 rel_parts = Path(item_path).resolve().relative_to(normalized_root).parts
             except ValueError:
                 rel_parts = Path(item_path).parts
-            if any(part not in {".", ".."} and part.startswith(".") for part in rel_parts):
+            if any(
+                part not in {".", ".."} and part.startswith(".") for part in rel_parts
+            ):
                 continue
             filtered.append(item_path)
         return filtered
@@ -735,7 +937,7 @@ class SearchMixin:
         result = self._exec(script, timeout=60, stdin_data="\n".join(paths))
 
         mtimes = []
-        for line in result.stdout.splitlines()[:len(paths)]:
+        for line in result.stdout.splitlines()[: len(paths)]:
             try:
                 mtimes.append(float(line))
             except ValueError:
@@ -786,11 +988,11 @@ class SearchMixin:
             stdout, limit_reason = _search_stdout_and_limit(result)
 
         dirs = []
-        for line in stdout.strip().split('\n'):
+        for line in stdout.strip().split("\n"):
             if not line:
                 continue
-            parts = line.split(' ', 1)
-            if len(parts) == 2 and parts[0].replace('.', '').isdigit():
+            parts = line.split(" ", 1)
+            if len(parts) == 2 and parts[0].replace(".", "").isdigit():
                 dirs.append(parts[1])
             else:
                 dirs.append(line)
@@ -803,16 +1005,27 @@ class SearchMixin:
             dirs = self._filter_gitignored_paths(dirs, path)
         return self._sort_paths_by_mtime(dirs)[:fetch_limit], limit_reason
 
-    def _search_files(self, pattern: str, path: str | list[str], limit: int, offset: int,
-                      order: str = "discovery") -> SearchResult:
+    def _search_files(
+        self,
+        pattern: str,
+        path: str | list[str],
+        limit: int,
+        offset: int,
+        order: str = "discovery",
+    ) -> SearchResult:
         """Search for files by name (glob-like) across one or more roots: rg --files,
         else a bounded find. ``order``: "discovery" (fast, bounded) or "modified"
         (exact global newest-first; needs rg 14+ or GNU find)."""
-        search_pattern = pattern if (not pattern.startswith('**/') and '/' not in pattern) \
-            else pattern.split('/')[-1]
+        search_pattern = (
+            pattern
+            if (not pattern.startswith("**/") and "/" not in pattern)
+            else pattern.split("/")[-1]
+        )
         roots = [path] if isinstance(path, str) else path
         if not roots:
-            return SearchResult(error="File search requires at least one search root in 'path'.")
+            return SearchResult(
+                error="File search requires at least one search root in 'path'."
+            )
 
         # Prefer ripgrep: bounded parallel traversal with ignore semantics. Resolve
         # the engine and exact-order capability BEFORE admission so a queued request
@@ -827,23 +1040,33 @@ class SearchMixin:
             if not _acquire_filename_search_roots(keys):
                 return SearchResult(error=_ADMISSION_INTERRUPTED_ERROR)
             try:
-                return self._search_files_rg(search_pattern, path, limit, offset, order,
-                                             rg_executable=rg_executable)
+                return self._search_files_rg(
+                    search_pattern,
+                    path,
+                    limit,
+                    offset,
+                    order,
+                    rg_executable=rg_executable,
+                )
             finally:
                 _release_filename_search_roots(keys)
 
         # A local find rooted at/above $HOME or a filesystem root can take minutes and
         # prompt on protected paths: refuse before invoking find.
         if any(self._is_broad_local_search_root(root) for root in roots):
-            return SearchResult(error=(
-                "Broad local file search without ripgrep is disabled because "
-                "find cannot keep this traversal safely bounded. Install "
-                "ripgrep or search a narrower directory."))
+            return SearchResult(
+                error=(
+                    "Broad local file search without ripgrep is disabled because "
+                    "find cannot keep this traversal safely bounded. Install "
+                    "ripgrep or search a narrower directory."
+                )
+            )
         if not self._has_command("find"):
             return SearchResult(
                 error="File search requires 'rg' (ripgrep) or 'find'. "
-                      "Install ripgrep for best results: "
-                      "https://github.com/BurntSushi/ripgrep#installation")
+                "Install ripgrep for best results: "
+                "https://github.com/BurntSushi/ripgrep#installation"
+            )
 
         # Prune hidden descendant dirs (and hidden files, matching rg's default) while
         # still allowing an explicitly selected hidden root; dash-prefixed roots get
@@ -851,8 +1074,13 @@ class SearchMixin:
         find_roots = [f"./{root}" if root.startswith("-") else root for root in roots]
         q_roots = [self._escape_shell_arg(root) for root in find_roots]
         hidden_prune = f" {self._hidden_prune_expr(q_roots)} -o"
-        protected_paths = [absolute for _r, _rel, absolute in self._effective_macos_search_exclusions(roots)]
-        protected_prune = f" {self._prune_expr(protected_paths)} -o" if protected_paths else ""
+        protected_paths = [
+            absolute
+            for _r, _rel, absolute in self._effective_macos_search_exclusions(roots)
+        ]
+        protected_prune = (
+            f" {self._prune_expr(protected_paths)} -o" if protected_paths else ""
+        )
         fetch_limit = offset + limit + 1
         # ``-H`` follows a symlink handed in as an OPERAND, and only an operand: without
         # it ``find <link> -type f`` tests the link itself, so ``target="files"`` listed
@@ -871,13 +1099,23 @@ class SearchMixin:
             f" ! -path {self._escape_shell_arg(root)}"
             for root in _find_literal_path_expressions(find_roots)
         )
-        base = (f"find -H {' '.join(q_roots)}{protected_prune}{hidden_prune} "
-                f"\\( -type f -o \\( -type d{root_exemptions} \\) \\) "
-                f"! -name '.*' -name {self._escape_shell_arg(search_pattern)}")
+        base = (
+            f"find -H {' '.join(q_roots)}{protected_prune}{hidden_prune} "
+            f"\\( -type f -o \\( -type d{root_exemptions} \\) \\) "
+            f"! -name '.*' -name {self._escape_shell_arg(search_pattern)}"
+        )
         if order == "modified":
-            cmd = "set -o pipefail; " + base + f" -printf '%T@ %p\\n' 2>/dev/null | sort -rn | head -n {fetch_limit}"
+            cmd = (
+                "set -o pipefail; "
+                + base
+                + f" -printf '%T@ %p\\n' 2>/dev/null | sort -rn | head -n {fetch_limit}"
+            )
         else:
-            cmd = "set -o pipefail; " + base + f" -print 2>/dev/null | head -n {fetch_limit}"
+            cmd = (
+                "set -o pipefail; "
+                + base
+                + f" -print 2>/dev/null | head -n {fetch_limit}"
+            )
 
         keys = _filename_search_root_keys(self.env, roots, self.cwd)
         if not _acquire_filename_search_roots(keys):
@@ -903,25 +1141,49 @@ class SearchMixin:
         bounded_sigpipe = result.exit_code == 141 and len(raw_files) >= fetch_limit
         if result.exit_code not in {0, 124} and not bounded_sigpipe:
             if order == "modified":
-                return SearchResult(error=(
-                    "Exact modification-time order requires GNU find with "
-                    "-printf support; install ripgrep 14+ or use order='discovery'."))
-            return SearchResult(error="File search failed while running bounded find traversal.")
+                return SearchResult(
+                    error=(
+                        "Exact modification-time order requires GNU find with "
+                        "-printf support; install ripgrep 14+ or use order='discovery'."
+                    )
+                )
+            return SearchResult(
+                error="File search failed while running bounded find traversal."
+            )
 
-        from tools.environments.local import LocalEnvironment, _IS_WINDOWS, _msys_to_windows_path
+        from tools.environments.local import (
+            LocalEnvironment,
+            _IS_WINDOWS,
+            _msys_to_windows_path,
+        )
+
         if _IS_WINDOWS and isinstance(self.env, LocalEnvironment):
             raw_files = [_msys_to_windows_path(file_path) for file_path in raw_files]
         return SearchResult(
-            files=raw_files[offset:offset + limit], total_count=len(raw_files),
-            truncated=len(raw_files) > offset + limit or bool(limit_reason), limit_reason=limit_reason)
+            files=raw_files[offset : offset + limit],
+            total_count=len(raw_files),
+            truncated=len(raw_files) > offset + limit or bool(limit_reason),
+            limit_reason=limit_reason,
+        )
 
-    def _search_files_rg(self, pattern: str, path: str | list[str], limit: int, offset: int,
-                         order: str = "discovery", rg_executable: Optional[str] = None) -> SearchResult:
+    def _search_files_rg(
+        self,
+        pattern: str,
+        path: str | list[str],
+        limit: int,
+        offset: int,
+        order: str = "discovery",
+        rg_executable: Optional[str] = None,
+    ) -> SearchResult:
         """File-name search via ``rg --files`` (respects .gitignore, skips hidden dirs,
         parallel walk). Discovery order stays bounded and fast; exact modification-time
         ordering is explicit because it scans globally."""
         # Wrap bare names so -g matches at any depth (equivalent to find -name).
-        glob_pattern = f"*{pattern}" if ('/' not in pattern and not pattern.startswith('*')) else pattern
+        glob_pattern = (
+            f"*{pattern}"
+            if ("/" not in pattern and not pattern.startswith("*"))
+            else pattern
+        )
         roots = [path] if isinstance(path, str) else path
         fetch_limit = limit + offset + 1
         effective_exclusions = self._effective_macos_search_exclusions(roots)
@@ -932,17 +1194,24 @@ class SearchMixin:
             # and express roots + exclusions relative to it.
             cwd = getattr(self.env, "cwd", None) or self.cwd
             absolute_roots = [
-                posixpath.normpath(root if posixpath.isabs(root) else posixpath.join(cwd, root))
-                for root in roots]
+                posixpath.normpath(
+                    root if posixpath.isabs(root) else posixpath.join(cwd, root)
+                )
+                for root in roots
+            ]
             scoped_common = posixpath.commonpath(absolute_roots)
-            command_roots = [posixpath.relpath(root, scoped_common) for root in absolute_roots]
+            command_roots = [
+                posixpath.relpath(root, scoped_common) for root in absolute_roots
+            ]
             exclusion_terms = [
                 f"--glob {self._escape_shell_arg(f'!{posixpath.relpath(absolute, scoped_common)}/**')}"
-                for _r, _rel, absolute in effective_exclusions]
+                for _r, _rel, absolute in effective_exclusions
+            ]
         else:
             exclusion_terms = [
                 f"--glob {self._escape_shell_arg(f'!{relative}/**')}"
-                for _r, relative, _abs in effective_exclusions]
+                for _r, relative, _abs in effective_exclusions
+            ]
         exclusion_globs = " ".join(dict.fromkeys(exclusion_terms))
         exclusion_args = f" {exclusion_globs}" if exclusion_globs else ""
         rg_executable = rg_executable or self._resolve_command("rg")
@@ -954,75 +1223,135 @@ class SearchMixin:
                 return SearchResult(error=capability_error)
         rg = self._quote_executable(rg_executable)
         sort_arg = " --sortr=modified" if order == "modified" else ""
-        root_args = " ".join(self._escape_native_tool_arg(root) for root in command_roots)
-        cd_prefix = f"cd {self._escape_shell_arg(scoped_common)} && " if scoped_common else ""
+        root_args = " ".join(
+            self._escape_native_tool_arg(root) for root in command_roots
+        )
+        cd_prefix = (
+            f"cd {self._escape_shell_arg(scoped_common)} && " if scoped_common else ""
+        )
         # ``--`` terminates options so a dash-prefixed root is never parsed as a flag.
-        rg_cmd = (f"{rg} --files{sort_arg} -g {self._escape_shell_arg(glob_pattern)}"
-                  f"{exclusion_args} -- {root_args}")
-        result = self._run_rg_bounded([rg_cmd], fetch_limit, timeout=60, native_ok=not scoped_common,
-                                      shell_prefix=f"set -o pipefail; {cd_prefix}")
+        rg_cmd = (
+            f"{rg} --files{sort_arg} -g {self._escape_shell_arg(glob_pattern)}"
+            f"{exclusion_args} -- {root_args}"
+        )
+        result = self._run_rg_bounded(
+            [rg_cmd],
+            fetch_limit,
+            timeout=60,
+            native_ok=not scoped_common,
+            shell_prefix=f"set -o pipefail; {cd_prefix}",
+        )
         stdout, limit_reason = _search_stdout_and_limit(result)
         all_files = [f for f in stdout.splitlines() if f]
         if scoped_common:
             all_files = [
-                f if posixpath.isabs(f) else posixpath.normpath(posixpath.join(scoped_common, f))
-                for f in all_files]
+                f
+                if posixpath.isabs(f)
+                else posixpath.normpath(posixpath.join(scoped_common, f))
+                for f in all_files
+            ]
         bounded_sigpipe = result.exit_code == 141 and len(all_files) >= fetch_limit
         if result.exit_code not in {0, 1, 124} and not bounded_sigpipe:
             if order == "modified":
-                return SearchResult(error=(
-                    "Exact modification-time order failed; ripgrep 14+ is "
-                    "required. Upgrade ripgrep or use order='discovery'."))
+                return SearchResult(
+                    error=(
+                        "Exact modification-time order failed; ripgrep 14+ is "
+                        "required. Upgrade ripgrep or use order='discovery'."
+                    )
+                )
             return SearchResult(error="File search failed while running ripgrep.")
         # rg --files lists files only; supplement with matching directories so
         # empty directories stay discoverable (#54347). Skip the extra traversal
         # when rg already timed out — partial file results must not be presented
         # as a coherent page. Only the single-root path supplements (a multi-root
         # walk is already the merged view across roots).
-        if limit_reason != "search_timeout" and isinstance(path, str) and self._has_command("find"):
-            dirs, directory_limit_reason = self._search_directories_with_find(glob_pattern, path, fetch_limit)
+        if (
+            limit_reason != "search_timeout"
+            and isinstance(path, str)
+            and self._has_command("find")
+        ):
+            dirs, directory_limit_reason = self._search_directories_with_find(
+                glob_pattern, path, fetch_limit
+            )
             if dirs:
                 existing = set(all_files)
                 merged_entries = self._sort_paths_by_mtime(
-                    all_files + [d for d in dirs if d not in existing])
+                    all_files + [d for d in dirs if d not in existing]
+                )
                 # Under exact modified order rg is authoritative for files;
                 # the merged view keeps the newest-first contract globally.
                 all_files = merged_entries
                 limit_reason = limit_reason or directory_limit_reason
         return SearchResult(
-            files=all_files[offset:offset + limit], total_count=len(all_files),
-            truncated=len(all_files) > offset + limit or bool(limit_reason), limit_reason=limit_reason)
+            files=all_files[offset : offset + limit],
+            total_count=len(all_files),
+            truncated=len(all_files) > offset + limit or bool(limit_reason),
+            limit_reason=limit_reason,
+        )
 
-    def _search_content(self, pattern: str, path: str, file_glob: Optional[str],
-                        limit: int, offset: int, output_mode: str, context: int) -> SearchResult:
+    def _search_content(
+        self,
+        pattern: str,
+        path: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+    ) -> SearchResult:
         """Content search: rg, else grep; attaches zero-match steering hints."""
-        used_rg = self._has_command('rg')
+        used_rg = self._has_command("rg")
         if used_rg:
-            result = self._search_with_rg(pattern, path, file_glob, limit, offset, output_mode, context,
-                                          rg_executable=self._resolve_command("rg") or "rg")
-        elif self._has_command('grep'):
-            result = self._search_with_grep(pattern, path, file_glob, limit, offset, output_mode, context)
+            result = self._search_with_rg(
+                pattern,
+                path,
+                file_glob,
+                limit,
+                offset,
+                output_mode,
+                context,
+                rg_executable=self._resolve_command("rg") or "rg",
+            )
+        elif self._has_command("grep"):
+            result = self._search_with_grep(
+                pattern, path, file_glob, limit, offset, output_mode, context
+            )
         else:
             return SearchResult(
                 error="Content search requires ripgrep (rg) or grep. "
-                      "Install ripgrep: https://github.com/BurntSushi/ripgrep#installation")
-        if (not result.error and result.total_count == 0
-                and not result.matches and not result.files and not result.counts):
+                "Install ripgrep: https://github.com/BurntSushi/ripgrep#installation"
+            )
+        if (
+            not result.error
+            and result.total_count == 0
+            and not result.matches
+            and not result.files
+            and not result.counts
+        ):
             try:
                 hint = self._zero_match_probe(pattern, path, file_glob)
             except Exception:
                 hint = None
             if hint:
-                result.warning = hint if not result.warning else f"{result.warning} {hint}"
+                result.warning = (
+                    hint if not result.warning else f"{result.warning} {hint}"
+                )
         # rg auto-enables --multiline for \n patterns, so the line-oriented
         # explanation only applies to the grep fallback.
         if used_rg:
             return result
         return _maybe_warn_line_oriented_newline_pattern(result, pattern)
 
-    def _run_search_pipeline(self, cmd_parts: list[str], output_mode: str, limit: int,
-                             offset: int, context: int, warning: Optional[str] = None,
-                             line_cap: bool = False) -> SearchResult:
+    def _run_search_pipeline(
+        self,
+        cmd_parts: list[str],
+        output_mode: str,
+        limit: int,
+        offset: int,
+        context: int,
+        warning: Optional[str] = None,
+        line_cap: bool = False,
+    ) -> SearchResult:
         """Run ``cmd_parts | head -n <fetch_limit>`` under pipefail and parse. Extra
         rows report the true total (context mode also emits "--" separators, so
         grab 200 more). pipefail keeps the engine's exit 2 alive across ``| head``
@@ -1037,18 +1366,38 @@ class SearchMixin:
                 parts += ["|", "cut", "-c1-2000"]
             result = self._exec("set -o pipefail; " + " ".join(parts), timeout=60)
         else:
-            result = self._run_rg_bounded(cmd_parts, fetch_limit, timeout=60, merge_stderr=True,
-                                          shell_prefix="set -o pipefail; ")
-        return _parse_search_output(result, output_mode, limit, offset, context, warning=warning)
+            result = self._run_rg_bounded(
+                cmd_parts,
+                fetch_limit,
+                timeout=60,
+                merge_stderr=True,
+                shell_prefix="set -o pipefail; ",
+            )
+        return _parse_search_output(
+            result, output_mode, limit, offset, context, warning=warning
+        )
 
-    def _search_with_rg(self, pattern: str, path: str, file_glob: Optional[str],
-                        limit: int, offset: int, output_mode: str, context: int,
-                        rg_executable: Optional[str] = None) -> SearchResult:
+    def _search_with_rg(
+        self,
+        pattern: str,
+        path: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+        rg_executable: Optional[str] = None,
+    ) -> SearchResult:
         """Search using ripgrep."""
         rg_executable = rg_executable or self._resolve_command("rg")
         if not rg_executable:
             return SearchResult(error="Content search requires ripgrep (rg).")
-        cmd_parts = [self._quote_executable(rg_executable), "--line-number", "--no-heading", "--with-filename"]
+        cmd_parts = [
+            self._quote_executable(rg_executable),
+            "--line-number",
+            "--no-heading",
+            "--with-filename",
+        ]
         # Giant-single-line containment (cline#13525): a match inside a multi-MB
         # single-line dump makes rg emit the ENTIRE line (``head -n`` counts lines).
         # --max-columns bounds each printed line at the rg layer; --max-columns-preview
@@ -1071,13 +1420,25 @@ class SearchMixin:
         # rg is a native Windows binary (winget/cargo/choco): needs C:/... not MSYS /c/...
         cmd_parts.append(self._escape_native_tool_arg(path))
         ml_note = (
-            "Pattern contains \\n — multiline mode (-U) was enabled automatically "
-            "so the regex can match across line boundaries."
-        ) if multiline else None
-        return self._run_search_pipeline(cmd_parts, output_mode, limit, offset, context, warning=ml_note)
+            (
+                "Pattern contains \\n — multiline mode (-U) was enabled automatically "
+                "so the regex can match across line boundaries."
+            )
+            if multiline
+            else None
+        )
+        return self._run_search_pipeline(
+            cmd_parts, output_mode, limit, offset, context, warning=ml_note
+        )
 
-    def _grep_cmd(self, head: list[str], pattern: str, output_mode: str, context: int,
-                  file_glob: Optional[str] = None) -> list[str]:
+    def _grep_cmd(
+        self,
+        head: list[str],
+        pattern: str,
+        output_mode: str,
+        context: int,
+        file_glob: Optional[str] = None,
+    ) -> list[str]:
         """``head`` + context/include/mode flags + quoted pattern (argument order is fixed)."""
         parts = list(head)
         if context > 0:
@@ -1089,8 +1450,16 @@ class SearchMixin:
         parts.append(self._escape_shell_arg(pattern, translate_path=False))
         return parts
 
-    def _search_with_grep(self, pattern: str, path: str, file_glob: Optional[str],
-                          limit: int, offset: int, output_mode: str, context: int) -> SearchResult:
+    def _search_with_grep(
+        self,
+        pattern: str,
+        path: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+    ) -> SearchResult:
         """Fallback search using grep."""
         # grep's --exclude-dir matches BASENAMES anywhere, so it can't express "only
         # the home-level Downloads"; route pruning through find's path-scoped -prune.
@@ -1100,13 +1469,29 @@ class SearchMixin:
         # ~/.clawksis returns nothing (#18473); find's -prune only sees descendants.
         if protected_paths or self._root_under_hidden_dir(path):
             return self._search_with_grep_pruned(
-                pattern, path, file_glob, limit, offset, output_mode, context, protected_paths)
+                pattern,
+                path,
+                file_glob,
+                limit,
+                offset,
+                output_mode,
+                context,
+                protected_paths,
+            )
         # -H forces filenames; -E matches rg regex behavior; --exclude-dir='.*'
         # mirrors rg's hidden-dir default (.git/, .hub/index-cache/, ...).
-        cmd_parts = self._grep_cmd(["grep", "-rnHE", "--exclude-dir='.*'"], pattern, output_mode, context, file_glob)
+        cmd_parts = self._grep_cmd(
+            ["grep", "-rnHE", "--exclude-dir='.*'"],
+            pattern,
+            output_mode,
+            context,
+            file_glob,
+        )
         # --exclude-dir applies to the root too, so "." would be excluded by '.*';
         # anchor relative paths at the shell's live $PWD.
-        is_absolute = path.startswith(("/", "\\\\")) or bool(re.match(r"^[A-Za-z]:[\\/]", path))
+        is_absolute = path.startswith(("/", "\\\\")) or bool(
+            re.match(r"^[A-Za-z]:[\\/]", path)
+        )
         if is_absolute:
             search_root = self._escape_shell_arg(path)
         else:
@@ -1115,11 +1500,21 @@ class SearchMixin:
             if relative_path not in {"", "."}:
                 search_root += f"/{self._escape_shell_arg(relative_path)}"
         cmd_parts.append(search_root)
-        return self._run_search_pipeline(cmd_parts, output_mode, limit, offset, context, line_cap=True)
+        return self._run_search_pipeline(
+            cmd_parts, output_mode, limit, offset, context, line_cap=True
+        )
 
-    def _search_with_grep_pruned(self, pattern: str, path: str, file_glob: Optional[str],
-                                 limit: int, offset: int, output_mode: str, context: int,
-                                 protected_paths: list[str]) -> SearchResult:
+    def _search_with_grep_pruned(
+        self,
+        pattern: str,
+        path: str,
+        file_glob: Optional[str],
+        limit: int,
+        offset: int,
+        output_mode: str,
+        context: int,
+        protected_paths: list[str],
+    ) -> SearchResult:
         """grep fallback via ``find ... -prune -exec grep {} +``, used when the root needs
         path-scoped pruning (macOS protected dirs) or is itself under a dot-directory
         (#18473: grep's ``--exclude-dir='.*'`` would drop the root). Trade-off: find folds
@@ -1136,4 +1531,6 @@ class SearchMixin:
         if file_glob:
             find_parts.extend(["-name", self._escape_shell_arg(file_glob)])
         find_parts.extend(["-exec", *grep_parts, "{}", "+", "2>/dev/null"])
-        return self._run_search_pipeline(find_parts, output_mode, limit, offset, context, line_cap=True)
+        return self._run_search_pipeline(
+            find_parts, output_mode, limit, offset, context, line_cap=True
+        )

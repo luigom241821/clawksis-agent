@@ -8,6 +8,7 @@ def _write_config(tmp_path, config: dict) -> None:
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
     import clawk_yaml as yaml
+
     (clawk_home / "config.yaml").write_text(yaml.safe_dump(config))
 
 
@@ -24,31 +25,33 @@ def _clean_anthropic_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-
-
-
-
 def test_ambient_pool_source_does_not_count_as_explicit(tmp_path, monkeypatch):
     """gh_cli-seeded Copilot pool entries are ambient, not explicit config (#56974)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "copilot": [{
-                "id": "abc123",
-                "source": "gh_cli",
-                "auth_type": "api_key",
-                "access_token": "ghu_sometoken",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "copilot": [
+                    {
+                        "id": "abc123",
+                        "source": "gh_cli",
+                        "auth_type": "api_key",
+                        "access_token": "ghu_sometoken",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("copilot") is False
 
 
@@ -58,33 +61,50 @@ def test_vertex_adc_counts_as_explicit_when_config_present(tmp_path, monkeypatch
     even when it is NOT the current provider — otherwise it silently vanishes
     from explicit-only pickers (desktop chat model menu) unless already selected."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    for var in ("VERTEX_PROJECT_ID", "VERTEX_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS"):
+    for var in (
+        "VERTEX_PROJECT_ID",
+        "VERTEX_CREDENTIALS_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+    ):
         monkeypatch.delenv(var, raising=False)
-    _write_auth_store(tmp_path, {"version": 1, "providers": {}, "active_provider": None})
+    _write_auth_store(
+        tmp_path, {"version": 1, "providers": {}, "active_provider": None}
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
 
     # vertex.project_id in config.yaml is a deliberate, Clawksis-scoped signal.
-    _write_config(tmp_path, {
-        "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
-        "vertex": {"project_id": "my-gcp-project"},
-    })
+    _write_config(
+        tmp_path,
+        {
+            "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
+            "vertex": {"project_id": "my-gcp-project"},
+        },
+    )
     assert is_provider_explicitly_configured("vertex") is True
 
     # No Clawksis-scoped Vertex config at all → stays hidden.
-    _write_config(tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}})
+    _write_config(
+        tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}}
+    )
     assert is_provider_explicitly_configured("vertex") is False
 
 
-def test_vertex_ambient_google_creds_env_does_not_count_as_explicit(tmp_path, monkeypatch):
+def test_vertex_ambient_google_creds_env_does_not_count_as_explicit(
+    tmp_path, monkeypatch
+):
     """An ambient GOOGLE_APPLICATION_CREDENTIALS path (commonly set globally for
     unrelated GCP work) must NOT mark Vertex explicit — only Clawksis-scoped
     signals do. Regression guard for the picker gate (PR review feedback)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("VERTEX_PROJECT_ID", raising=False)
     monkeypatch.delenv("VERTEX_CREDENTIALS_PATH", raising=False)
-    _write_config(tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}})
-    _write_auth_store(tmp_path, {"version": 1, "providers": {}, "active_provider": None})
+    _write_config(
+        tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}}
+    )
+    _write_auth_store(
+        tmp_path, {"version": 1, "providers": {}, "active_provider": None}
+    )
 
     # A real, existing SA file pointed to ONLY by the ambient Google var.
     sa = tmp_path / "adc.json"
@@ -92,6 +112,7 @@ def test_vertex_ambient_google_creds_env_does_not_count_as_explicit(tmp_path, mo
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(sa))
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("vertex") is False
 
 
@@ -101,8 +122,12 @@ def test_vertex_credentials_path_must_be_readable_file(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("VERTEX_PROJECT_ID", raising=False)
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
-    _write_config(tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}})
-    _write_auth_store(tmp_path, {"version": 1, "providers": {}, "active_provider": None})
+    _write_config(
+        tmp_path, {"model": {"provider": "anthropic", "default": "claude-opus-4-8"}}
+    )
+    _write_auth_store(
+        tmp_path, {"version": 1, "providers": {}, "active_provider": None}
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
 
@@ -127,43 +152,57 @@ def test_bedrock_region_counts_as_explicit(tmp_path, monkeypatch):
     """Bedrock (AWS SDK auth, no API key) is explicitly configured once the
     user pins a region in config.yaml, mirroring the Vertex keyless case."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_auth_store(tmp_path, {"version": 1, "providers": {}, "active_provider": None})
+    _write_auth_store(
+        tmp_path, {"version": 1, "providers": {}, "active_provider": None}
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
 
-    _write_config(tmp_path, {
-        "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
-        "bedrock": {"region": "us-east-1"},
-    })
+    _write_config(
+        tmp_path,
+        {
+            "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
+            "bedrock": {"region": "us-east-1"},
+        },
+    )
     assert is_provider_explicitly_configured("bedrock") is True
 
-    _write_config(tmp_path, {
-        "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
-        "bedrock": {"region": ""},
-    })
+    _write_config(
+        tmp_path,
+        {
+            "model": {"provider": "anthropic", "default": "claude-opus-4-8"},
+            "bedrock": {"region": ""},
+        },
+    )
     assert is_provider_explicitly_configured("bedrock") is False
 
 
 def test_returns_true_when_moa_reference_slot_uses_provider(tmp_path, monkeypatch):
     """MoA advisor slots are explicit provider selections for auth gating."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    _write_config(tmp_path, {
-        "model": {"provider": "openai-codex", "default": "gpt-5.5"},
-        "moa": {
-            "presets": {
-                "default": {
-                    "reference_models": [
-                        {"provider": "anthropic", "model": "claude-opus-4-8"},
-                        {"provider": "opencode-go", "model": "glm-5.2"},
-                    ],
-                    "aggregator": {"provider": "openai-codex", "model": "gpt-5.5"},
+    _write_config(
+        tmp_path,
+        {
+            "model": {"provider": "openai-codex", "default": "gpt-5.5"},
+            "moa": {
+                "presets": {
+                    "default": {
+                        "reference_models": [
+                            {"provider": "anthropic", "model": "claude-opus-4-8"},
+                            {"provider": "opencode-go", "model": "glm-5.2"},
+                        ],
+                        "aggregator": {"provider": "openai-codex", "model": "gpt-5.5"},
+                    }
                 }
-            }
+            },
         },
-    })
-    _write_auth_store(tmp_path, {"version": 1, "providers": {}, "active_provider": "openai-codex"})
+    )
+    _write_auth_store(
+        tmp_path, {"version": 1, "providers": {}, "active_provider": "openai-codex"}
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is True
 
 
@@ -173,24 +212,32 @@ def test_stale_env_pool_entry_does_not_count_when_var_unset(tmp_path, monkeypatc
     providers forever because the record existed even though no secret resolves."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
-    _write_auth_store(tmp_path, {
-        "version": 1,
-        "providers": {},
-        "active_provider": None,
-        "credential_pool": {
-            "deepseek": [{
-                "id": "aaa111",
-                "source": "env:DEEPSEEK_API_KEY",
-                "auth_type": "api_key",
-            }],
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "providers": {},
+            "active_provider": None,
+            "credential_pool": {
+                "deepseek": [
+                    {
+                        "id": "aaa111",
+                        "source": "env:DEEPSEEK_API_KEY",
+                        "auth_type": "api_key",
+                    }
+                ],
+            },
         },
-    })
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("deepseek") is False
 
 
-def test_profile_dotenv_key_counts_as_explicit_when_process_env_lacks_it(tmp_path, monkeypatch):
+def test_profile_dotenv_key_counts_as_explicit_when_process_env_lacks_it(
+    tmp_path, monkeypatch
+):
     """A DeepSeek key in a named profile's .env must count under that profile's
     secret scope even when os.environ (the launch profile) has no DeepSeek var.
 
@@ -209,6 +256,7 @@ def test_profile_dotenv_key_counts_as_explicit_when_process_env_lacks_it(tmp_pat
 
     from agent import secret_scope
     from tui_gateway import launch_profile_policy as lpp
+
     monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", False)
     monkeypatch.setattr(lpp, "_snapshot", None)
 
@@ -233,8 +281,15 @@ def test_dotenv_key_counts_when_shell_exports_the_var_empty(tmp_path, monkeypatc
     _write_config(tmp_path, {"model": {}})
     (tmp_path / "clawk" / ".env").write_text("DEEPSEEK_API_KEY=sk-dotenv-only-secret\n")
 
-    from clawk_cli.auth import is_provider_explicitly_configured, resolve_api_key_provider_credentials
-    assert resolve_api_key_provider_credentials("deepseek").get("api_key") == "sk-dotenv-only-secret"
+    from clawk_cli.auth import (
+        is_provider_explicitly_configured,
+        resolve_api_key_provider_credentials,
+    )
+
+    assert (
+        resolve_api_key_provider_credentials("deepseek").get("api_key")
+        == "sk-dotenv-only-secret"
+    )
     assert is_provider_explicitly_configured("deepseek") is True
 
 
@@ -272,6 +327,7 @@ def test_bedrock_not_explicit_without_aws_env(tmp_path, monkeypatch, _clean_aws_
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("bedrock") is False
 
 
@@ -283,30 +339,41 @@ def test_bedrock_bearer_token_counts_as_explicit(tmp_path, monkeypatch, _clean_a
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "ABSKexample-bearer-token-value")
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("bedrock") is True
 
 
-def test_bedrock_access_key_pair_counts_as_explicit(tmp_path, monkeypatch, _clean_aws_env):
+def test_bedrock_access_key_pair_counts_as_explicit(
+    tmp_path, monkeypatch, _clean_aws_env
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE1234567890")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "examplesecretexamplesecretexample0000000")
+    monkeypatch.setenv(
+        "AWS_SECRET_ACCESS_KEY", "examplesecretexamplesecretexample0000000"
+    )
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("bedrock") is True
 
 
-def test_bedrock_access_key_without_secret_is_not_explicit(tmp_path, monkeypatch, _clean_aws_env):
+def test_bedrock_access_key_without_secret_is_not_explicit(
+    tmp_path, monkeypatch, _clean_aws_env
+):
     """A lone AWS_ACCESS_KEY_ID can't authenticate anything — require the pair."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     (tmp_path / "clawk").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE1234567890")
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("bedrock") is False
 
 
-def test_bedrock_ambient_aws_profile_is_not_explicit(tmp_path, monkeypatch, _clean_aws_env):
+def test_bedrock_ambient_aws_profile_is_not_explicit(
+    tmp_path, monkeypatch, _clean_aws_env
+):
     """AWS_PROFILE is ambient machine state (SSO / shared credentials file),
     not an explicit Clawksis provider choice — same principle as gh_cli-seeded
     Copilot pool entries (#56974)."""
@@ -315,10 +382,13 @@ def test_bedrock_ambient_aws_profile_is_not_explicit(tmp_path, monkeypatch, _cle
     monkeypatch.setenv("AWS_PROFILE", "default")
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("bedrock") is False
 
 
-def test_aws_env_does_not_leak_into_other_providers(tmp_path, monkeypatch, _clean_aws_env):
+def test_aws_env_does_not_leak_into_other_providers(
+    tmp_path, monkeypatch, _clean_aws_env
+):
     """The aws_sdk env check must key on the provider's auth_type, not fire
     for every provider whenever AWS credentials happen to be present."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
@@ -326,4 +396,5 @@ def test_aws_env_does_not_leak_into_other_providers(tmp_path, monkeypatch, _clea
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "ABSKexample-bearer-token-value")
 
     from clawk_cli.auth import is_provider_explicitly_configured
+
     assert is_provider_explicitly_configured("anthropic") is False

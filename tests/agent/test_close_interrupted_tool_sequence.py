@@ -21,7 +21,9 @@ def _tool_tail():
         {
             "role": "assistant",
             "content": "",
-            "tool_calls": [{"id": "c1", "function": {"name": "patch", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "patch", "arguments": "{}"}}
+            ],
         },
         {"role": "tool", "tool_call_id": "c1", "content": "ok edited"},
     ]
@@ -33,12 +35,6 @@ def _assert_no_tool_then_user(messages):
             assert messages[i + 1].get("role") != "user", (
                 f"role-alternation violation: tool → user at index {i}"
             )
-
-
-
-
-
-
 
 
 def test_closing_makes_next_user_message_alternation_safe():
@@ -70,4 +66,3 @@ def test_user_tail_is_left_untouched():
     messages = [{"role": "user", "content": "hi"}]
     assert close_interrupted_tool_sequence(messages, None) is False
     assert len(messages) == 1
-

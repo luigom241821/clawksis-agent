@@ -61,8 +61,8 @@ _current: contextvars.ContextVar[Optional[UpdateReceipt]] = contextvars.ContextV
 )
 #: The terminal outcome of the run the enclosing command scope finalized or adopted (from a
 #: completion child): ``committed_success`` answers the command boundary's gateway status from it.
-_scope_terminal: contextvars.ContextVar[Optional[dict[str, Any]]] = contextvars.ContextVar(
-    "update_receipt_scope_terminal", default=None
+_scope_terminal: contextvars.ContextVar[Optional[dict[str, Any]]] = (
+    contextvars.ContextVar("update_receipt_scope_terminal", default=None)
 )
 
 
@@ -120,7 +120,9 @@ def _code_identity(refresh: bool = False) -> dict[str, Any]:
     return {}
 
 
-def _str_records(entries: Any, keys: tuple[str, ...], *, pid: bool = False) -> list[dict[str, Any]]:
+def _str_records(
+    entries: Any, keys: tuple[str, ...], *, pid: bool = False
+) -> list[dict[str, Any]]:
     """Dict entries reduced to stringified ``keys`` (plus an int ``pid`` first when requested)."""
     records = []
     for entry in entries:
@@ -146,11 +148,18 @@ class UpdateReceipt:
 
     def __init__(self) -> None:
         self.data: dict[str, Any] = {
-            "schema": 1, "started_at": _utc_now_iso(), "finished_at": None,
-            "argv": list(sys.argv), "pid": os.getpid(),
+            "schema": 1,
+            "started_at": _utc_now_iso(),
+            "finished_at": None,
+            "argv": list(sys.argv),
+            "pid": os.getpid(),
             "outcome": "running",  # running | success | partial | failed
-            "pre_update": _code_identity(), "post_update": {},
-            "steps": [], "skips": [], "gateway_restart": {}, "fleet": [],
+            "pre_update": _code_identity(),
+            "post_update": {},
+            "steps": [],
+            "skips": [],
+            "gateway_restart": {},
+            "fleet": [],
         }
         # The id binds this update to the pm sync receipts begun under it
         # (pm.receipt captures it via the _correlation ContextVar).
@@ -162,31 +171,47 @@ class UpdateReceipt:
         self.data["action_id"] = os.environ.get("CLAWK_ACTION_ID", "").strip() or None
 
     def step(self, name: str, ok: bool, detail: str = "") -> None:
-        self.data["steps"].append({"name": name, "ok": bool(ok), "detail": detail, "at": _utc_now_iso()})
+        self.data["steps"].append(
+            {"name": name, "ok": bool(ok), "detail": detail, "at": _utc_now_iso()}
+        )
 
     def skip(self, name: str, reason: str) -> None:
-        self.data["skips"].append({"name": name, "reason": reason, "at": _utc_now_iso()})
+        self.data["skips"].append(
+            {"name": name, "reason": reason, "at": _utc_now_iso()}
+        )
 
     def stage(self, name: str, outcome: str, **facts: str) -> None:
         # Stage END marks: a stage's duration is the gap since the previous mark (or started_at).
-        self.data.setdefault("stages", []).append({"name": name, "outcome": outcome, "at": _utc_now_iso(), **facts})
+        self.data.setdefault("stages", []).append(
+            {"name": name, "outcome": outcome, "at": _utc_now_iso(), **facts}
+        )
 
     def fact(self, key: str, value: Any) -> None:
         self.data[key] = value
 
     def followup(self, step: str, reason: str) -> None:
-        self.data.setdefault("followups", []).append({"step": step, "reason": reason, "at": _utc_now_iso()})
+        self.data.setdefault("followups", []).append(
+            {"step": step, "reason": reason, "at": _utc_now_iso()}
+        )
 
     def gateway_restart_result(
-        self, *, restarted_services: list | None = None, relaunched_profiles: list | None = None,
-        externally_supervised_profiles: list | None = None, killed_pids: list | None = None,
-        failed_units: list | None = None, incomplete: bool = False, phase_error: str = "",
+        self,
+        *,
+        restarted_services: list | None = None,
+        relaunched_profiles: list | None = None,
+        externally_supervised_profiles: list | None = None,
+        killed_pids: list | None = None,
+        failed_units: list | None = None,
+        incomplete: bool = False,
+        phase_error: str = "",
         fresh_recovery: dict[str, Any] | None = None,
     ) -> None:
         result: dict[str, Any] = {
             "restarted_services": list(restarted_services or []),
             "relaunched_profiles": list(relaunched_profiles or []),
-            "externally_supervised_profiles": list(externally_supervised_profiles or []),
+            "externally_supervised_profiles": list(
+                externally_supervised_profiles or []
+            ),
             "killed_pids": [int(p) for p in (killed_pids or [])],
             "failed_units": [str(u) for u in (failed_units or [])],
             "incomplete": bool(incomplete),
@@ -202,7 +227,8 @@ class UpdateReceipt:
                 for key in ("requested", "verified", "relaunch_attempted", "failed")
             }
             persisted["skipped"] = _str_records(
-                fresh_recovery.get("skipped", []), ("profile", "kind", "supervisor", "reason")
+                fresh_recovery.get("skipped", []),
+                ("profile", "kind", "supervisor", "reason"),
             )
             # ``clawk serve`` hosts tui_gateway and is not a gateway profile, so neither the
             # per-profile buckets above nor the fleet-version matrix can describe it. Persist its
@@ -210,10 +236,13 @@ class UpdateReceipt:
             # receipt keeps claiming a clean recovery the operator's box contradicts.
             serve_units = fresh_recovery.get("serve_units") or {}
             persisted["serve_units"] = {
-                key: [str(unit) for unit in (serve_units.get(key) or [])] for key in ("verified", "failed")
+                key: [str(unit) for unit in (serve_units.get(key) or [])]
+                for key in ("verified", "failed")
             }
             persisted["stale_runtimes"] = _str_records(
-                fresh_recovery.get("stale_runtimes", []), ("kind", "profile", "supervisor"), pid=True
+                fresh_recovery.get("stale_runtimes", []),
+                ("kind", "profile", "supervisor"),
+                pid=True,
             )
             result["fresh_recovery"] = persisted
         self.data["gateway_restart"] = result
@@ -258,8 +287,13 @@ def _write_latest(payload: bytes) -> None:
 
 def _run_file(directory: Path, data: dict[str, Any]) -> Path:
     """One archive file per run, named at begin so the running and terminal records coincide."""
-    stamp = re.sub(r"[^0-9]", "", str(data.get("started_at") or ""))[:14] or time.strftime("%Y%m%d%H%M%S")
-    return directory / f"update_{stamp[:8]}_{stamp[8:]}_{data.get('pid') or os.getpid()}_{data.get('update_id')}.json"
+    stamp = re.sub(r"[^0-9]", "", str(data.get("started_at") or ""))[
+        :14
+    ] or time.strftime("%Y%m%d%H%M%S")
+    return (
+        directory
+        / f"update_{stamp[:8]}_{stamp[8:]}_{data.get('pid') or os.getpid()}_{data.get('update_id')}.json"
+    )
 
 
 def read_run_record(update_id: str) -> Optional[tuple[Path, dict[str, Any]]]:
@@ -294,9 +328,18 @@ def _persist_running(data: dict[str, Any]) -> None:
             return
         from clawk_cli.process_identity import _process_create_time
 
-        payload = (json.dumps({**data, "writer_pid": os.getpid(),
-                               "writer_create_time": _process_create_time(os.getpid())},
-                              indent=2, default=str) + "\n").encode("utf-8")
+        payload = (
+            json.dumps(
+                {
+                    **data,
+                    "writer_pid": os.getpid(),
+                    "writer_create_time": _process_create_time(os.getpid()),
+                },
+                indent=2,
+                default=str,
+            )
+            + "\n"
+        ).encode("utf-8")
         _atomic_bytes(path, payload)
         _write_latest(payload)
 
@@ -305,7 +348,10 @@ def _owner_alive(record: dict[str, Any]) -> bool:
     from clawk_cli.process_identity import _pid_alive_matches
 
     identities = {}
-    for key, time_key in (("pid", "pid_create_time"), ("writer_pid", "writer_create_time")):
+    for key, time_key in (
+        ("pid", "pid_create_time"),
+        ("writer_pid", "writer_create_time"),
+    ):
         pid = record.get(key)
         if isinstance(pid, int) and pid > 0:
             # Older receipts recorded no writer incarnation. Do not let a duplicate
@@ -313,8 +359,10 @@ def _owner_alive(record: dict[str, Any]) -> bool:
             create_time = record.get(time_key)
             if pid not in identities or identities[pid] is None:
                 identities[pid] = create_time
-    return any(_pid_alive_matches(pid, create_time) is not False
-               for pid, create_time in identities.items())
+    return any(
+        _pid_alive_matches(pid, create_time) is not False
+        for pid, create_time in identities.items()
+    )
 
 
 def reconcile_interrupted_runs() -> list[dict[str, Any]]:
@@ -330,27 +378,46 @@ def reconcile_interrupted_runs() -> list[dict[str, Any]]:
 
         directory = _receipt_dir()
         latest = read_latest_receipt() or {}
-        for path in sorted(directory.glob("update_*.json"), key=lambda p: p.stat().st_mtime)[-_RECEIPT_KEEP:]:
+        for path in sorted(
+            directory.glob("update_*.json"), key=lambda p: p.stat().st_mtime
+        )[-_RECEIPT_KEEP:]:
             with suppress(Exception):
                 record = json.loads(path.read_text(encoding="utf-8-sig"))
-                if not isinstance(record, dict) or record.get("outcome") != "running" or _owner_alive(record):
+                if (
+                    not isinstance(record, dict)
+                    or record.get("outcome") != "running"
+                    or _owner_alive(record)
+                ):
                     continue
                 stages = record.get("stages") or []
-                last = stages[-1].get("name") if stages and isinstance(stages[-1], dict) else None
-                record.update(outcome="interrupted", interrupted_detected_at=_utc_now_iso(),
-                              stop_reason=f"process exited during the update (last stage: {last or 'start'})")
-                payload = (json.dumps(record, indent=2, default=str) + "\n").encode("utf-8")
+                last = (
+                    stages[-1].get("name")
+                    if stages and isinstance(stages[-1], dict)
+                    else None
+                )
+                record.update(
+                    outcome="interrupted",
+                    interrupted_detected_at=_utc_now_iso(),
+                    stop_reason=f"process exited during the update (last stage: {last or 'start'})",
+                )
+                payload = (json.dumps(record, indent=2, default=str) + "\n").encode(
+                    "utf-8"
+                )
                 _atomic_bytes(path, payload)
                 if latest.get("update_id") == record.get("update_id"):
                     _write_latest(payload)
                 interrupted.append(record)
     for record in interrupted:
-        print(f"⚠ The previous update ({record.get('started_at')}) was interrupted before it finished "
-              f"({record.get('stop_reason')}); this update completes the work it still owed.")
+        print(
+            f"⚠ The previous update ({record.get('started_at')}) was interrupted before it finished "
+            f"({record.get('stop_reason')}); this update completes the work it still owed."
+        )
     return interrupted
 
 
-def begin_update_receipt(*, previous: dict | None = None, correlation_id: str | None = None) -> None:
+def begin_update_receipt(
+    *, previous: dict | None = None, correlation_id: str | None = None
+) -> None:
     """Start recording a new update receipt, durably ``running`` until it finalizes.
 
     Nested updates are safe: the previous receipt (if any) is preserved
@@ -362,13 +429,19 @@ def begin_update_receipt(*, previous: dict | None = None, correlation_id: str | 
         if previous:
             receipt.data.update(copy.deepcopy(previous))
         receipt.correlation_id = correlation_id or receipt.correlation_id
-        receipt.data.update(update_id=receipt.correlation_id, outcome="running", finished_at=None)
+        receipt.data.update(
+            update_id=receipt.correlation_id, outcome="running", finished_at=None
+        )
         # A handoff receipt from an older interpreter may predate the field.
-        receipt.data["correlation_id"] = receipt.data.get("correlation_id") or _launcher_correlation_id()
+        receipt.data["correlation_id"] = (
+            receipt.data.get("correlation_id") or _launcher_correlation_id()
+        )
         with suppress(Exception):
             from clawk_cli.process_identity import _process_create_time
 
-            receipt.data.setdefault("pid_create_time", _process_create_time(receipt.data["pid"]))
+            receipt.data.setdefault(
+                "pid_create_time", _process_create_time(receipt.data["pid"])
+            )
         if not previous:
             reconcile_interrupted_runs()
         # The running record is about to replace latest.json: snapshot the previous record's
@@ -379,10 +452,14 @@ def begin_update_receipt(*, previous: dict | None = None, correlation_id: str | 
                 prior = read_latest_receipt() or {}
                 rows = list((prior.get("plan") or {}).get("runtimes") or [])
                 rows += list(prior.get("pending_manual_serves") or [])
-                rows += list(prior.get("carried_manual_serves") or [])  # a run killed before finalize
+                rows += list(
+                    prior.get("carried_manual_serves") or []
+                )  # a run killed before finalize
                 from clawk_cli.update_serve_obligations import is_reminder_row
 
-                receipt.data["carried_manual_serves"] = [row for row in rows if is_reminder_row(row)]
+                receipt.data["carried_manual_serves"] = [
+                    row for row in rows if is_reminder_row(row)
+                ]
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Could not start update receipt: %s", exc)
         return
@@ -398,8 +475,17 @@ def persist_running_receipt() -> None:
 
 
 #: Follow-up steps whose failure leaves the source-update tail owed (``source-completion-pending``).
-TAIL_FOLLOWUPS = frozenset({"dependencies", "launchers", "build", "maintenance", "profile_sync",
-                            "config_migration", "completion"})
+TAIL_FOLLOWUPS = frozenset(
+    {
+        "dependencies",
+        "launchers",
+        "build",
+        "maintenance",
+        "profile_sync",
+        "config_migration",
+        "completion",
+    }
+)
 
 #: Follow-ups that mean the BUILD stage did not succeed (C3: the receipt names what actually failed):
 #: the products or the launchers the build publishes failed, or the tail raised before proving them.
@@ -410,10 +496,20 @@ BUILD_FOLLOWUPS = frozenset({"launchers", "build", "completion"})
 
 def record_build_stage(followups) -> None:
     """Mark the build stage from the owed ``(step, reason)`` follow-ups: failed only for a build one."""
-    record_stage("build", "failed" if any(step in BUILD_FOLLOWUPS for step, _ in followups) else "success")
+    record_stage(
+        "build",
+        "failed"
+        if any(step in BUILD_FOLLOWUPS for step, _ in followups)
+        else "success",
+    )
 
 
-def record_followup(step: str, reason: str, *, retry: str = "the next launch or `clawk update` retries it") -> None:
+def record_followup(
+    step: str,
+    reason: str,
+    *,
+    retry: str = "the next launch or `clawk update` retries it",
+) -> None:
     """A post-commit step failed: print ⚠, keep the run a success, and say what is still owed.
 
     The code already committed, so the update does not fail; the step's own obligation (the
@@ -423,7 +519,9 @@ def record_followup(step: str, reason: str, *, retry: str = "the next launch or 
     '<step>' did not finish:`` to report every owed step, so keep it one whole line.
     """
     reason = " ".join(str(reason).split())[:500] or "failed"
-    print(f"  ⚠ Update follow-up '{step}' did not finish: {reason} ({retry})", flush=True)
+    print(
+        f"  ⚠ Update follow-up '{step}' did not finish: {reason} ({retry})", flush=True
+    )
     current = _current.get()
     if current is None:
         return
@@ -440,7 +538,12 @@ def record_user_action(step: str, reason: str) -> None:
     user re-applies it), so the run can never be a plain success: it finalizes ``partial`` and
     ``clawk update`` exits 1, as #122557 established for an unrestored autostash.
     """
-    _record("fact", f"update user action {step}", "user_action", {"step": step, "reason": " ".join(str(reason).split())[:500]})
+    _record(
+        "fact",
+        f"update user action {step}",
+        "user_action",
+        {"step": step, "reason": " ".join(str(reason).split())[:500]},
+    )
     persist_running_receipt()
 
 
@@ -450,9 +553,13 @@ def amend_terminal_followup(update_id: str, step: str, reason: str) -> None:
     if found is None:
         return
     path, record = found
-    record.setdefault("followups", []).append({"step": step, "reason": reason, "at": _utc_now_iso()})
+    record.setdefault("followups", []).append(
+        {"step": step, "reason": reason, "at": _utc_now_iso()}
+    )
     payload = (json.dumps(record, indent=2, default=str) + "\n").encode("utf-8")
-    with suppress(Exception):  # an unwritable store: the printed follow-up line still names it
+    with suppress(
+        Exception
+    ):  # an unwritable store: the printed follow-up line still names it
         from clawk_cli.runtime_state import _atomic_bytes
 
         _atomic_bytes(path, payload)
@@ -460,7 +567,9 @@ def amend_terminal_followup(update_id: str, step: str, reason: str) -> None:
             _write_latest(payload)
 
 
-def owe_followup(update_id: Optional[str], step: str, reason: str, **retry: str) -> None:
+def owe_followup(
+    update_id: Optional[str], step: str, reason: str, **retry: str
+) -> None:
     """A post-commit step failed: record it on the run while its receipt is open, else amend the
     run's closed receipt. Amending an OPEN run would append a second copy beside the one
     ``record_followup`` just persisted. Never raises."""
@@ -542,12 +651,20 @@ def git_error_stop_class(exc: BaseException) -> Optional[str]:
     if not isinstance(exc, subprocess.CalledProcessError):
         return None
     output = exc.stderr or exc.output or ""
-    output = output.decode("utf-8", "replace") if isinstance(output, bytes) else str(output)
-    argv = [str(part) for part in exc.cmd] if isinstance(exc.cmd, (list, tuple)) else str(exc.cmd or "").split()
+    output = (
+        output.decode("utf-8", "replace") if isinstance(output, bytes) else str(output)
+    )
+    argv = (
+        [str(part) for part in exc.cmd]
+        if isinstance(exc.cmd, (list, tuple))
+        else str(exc.cmd or "").split()
+    )
     return git_output_stop_class(output, argv, exc.returncode)
 
 
-def git_output_stop_class(output: str, argv: list[str], returncode: Optional[int] = None) -> Optional[str]:
+def git_output_stop_class(
+    output: str, argv: list[str], returncode: Optional[int] = None
+) -> Optional[str]:
     """:func:`git_error_stop_class` for a git call that returned instead of raising (``_git_run``)."""
     if "index.lock" in output and "File exists" in output:
         return "git_index_locked"  # another git (or a killed one, #132089) holds the index lock
@@ -604,9 +721,16 @@ def record_stop_without_receipt(reason: str, outcome: str) -> None:
     with suppress(Exception):
         now = _utc_now_iso()
         data = {
-            "schema": 1, "update_id": uuid.uuid4().hex, "started_at": now, "finished_at": now,
+            "schema": 1,
+            "update_id": uuid.uuid4().hex,
+            "started_at": now,
+            "finished_at": now,
             "outcome": "refused" if outcome == "refused" else "failed",
-            "stop_class": reason, "pre_update": {}, "stages": [], "steps": [], "fleet": [],
+            "stop_class": reason,
+            "pre_update": {},
+            "stages": [],
+            "steps": [],
+            "fleet": [],
         }
         with suppress(Exception):  # no marker, or an unreadable one: the CLI default
             claim = _started_by_handoff_partner()
@@ -621,7 +745,9 @@ def record_stop_without_receipt(reason: str, outcome: str) -> None:
         record_update_receipt(data)
 
 
-def finalize_update_receipt(outcome: str, fleet: list | None = None, stop_reason: str = "") -> Optional[Path]:
+def finalize_update_receipt(
+    outcome: str, fleet: list | None = None, stop_reason: str = ""
+) -> Optional[Path]:
     """Finalize + persist the receipt (``success``/``partial``/``failed``/``refused``); path or None.
 
     Exactly-once by construction: the context's receipt is popped first, so a second call (e.g. the
@@ -658,8 +784,11 @@ def finalize_update_receipt(outcome: str, fleet: list | None = None, stop_reason
         # receipt's still-pending rows forward so the startup warning survives (see
         # update_serve_obligations).
         from clawk_cli.update_serve_obligations import retain_receipt_manual_serves
+
         if "carried_manual_serves" in receipt.data:
-            prior = {"pending_manual_serves": receipt.data.pop("carried_manual_serves") or []}
+            prior = {
+                "pending_manual_serves": receipt.data.pop("carried_manual_serves") or []
+            }
         else:  # a receipt begun before the running record existed
             prior = read_latest_receipt() or {}
         pending = retain_receipt_manual_serves(prior)
@@ -679,7 +808,13 @@ def finalize_update_receipt(outcome: str, fleet: list | None = None, stop_reason
 
             sync = pm_receipt.last_for_update(receipt.correlation_id, consume=True)
             if isinstance(sync, dict):
-                for key in ("venv_rebuild", "plugin_bisect", "feature_list", "steps", "exit_code"):
+                for key in (
+                    "venv_rebuild",
+                    "plugin_bisect",
+                    "feature_list",
+                    "steps",
+                    "exit_code",
+                ):
                     if sync.get(key) is not None:
                         receipt.data[f"pm_{key}"] = sync[key]
                 if sync.get("outcome") is not None:
@@ -700,7 +835,9 @@ def finalize_update_receipt(outcome: str, fleet: list | None = None, stop_reason
 
         # The run's own file (named at begin): the durable running record becomes terminal.
         path = _run_file(directory, receipt.data)
-        payload = (json.dumps(receipt.data, indent=2, default=str) + "\n").encode("utf-8")
+        payload = (json.dumps(receipt.data, indent=2, default=str) + "\n").encode(
+            "utf-8"
+        )
         _atomic_bytes(path, payload)
         with suppress(Exception):  # stable pointer for the dashboard/desktop
             _write_latest(payload)
@@ -718,14 +855,18 @@ def finalize_update_receipt(outcome: str, fleet: list | None = None, stop_reason
 def _collection_enabled_now() -> Optional[bool]:
     """Shared-metrics consent via the ALREADY-LOADED config module (never an import: this interpreter
     predates the checkout swap). None when it cannot tell (not loaded, unreadable config)."""
-    reader = getattr(sys.modules.get("clawk_cli.config"), "read_raw_config_readonly", None)
+    reader = getattr(
+        sys.modules.get("clawk_cli.config"), "read_raw_config_readonly", None
+    )
     if reader is None:
         return None
     try:
         config: Any = reader()
     except Exception:
         return None
-    if type(config) is not dict:  # FailedConfigRead: a fallback, not what the user chose
+    if (
+        type(config) is not dict
+    ):  # FailedConfigRead: a fallback, not what the user chose
         return None
     for key in ("telemetry", "shared_metrics"):
         config = config.get(key) if isinstance(config, dict) else None
@@ -737,7 +878,8 @@ def _collection_enabled_now() -> Optional[bool]:
 #: (shared_metrics_update._STOP_REASON_PREFIX_CLASSES); never the message after it.
 _PARKED_REASON_LABEL = re.compile(
     r"(?:[A-Z][A-Za-z0-9_]{0,63}:(?: \[(?:Errno|WinError) \d+\])?"
-    r"|historical takeover preparation failed|Windows gateway recovery failed)")
+    r"|historical takeover preparation failed|Windows gateway recovery failed)"
+)
 _STOP_CLASS_TOKEN = re.compile(r"[a-z][a-z0-9_]{0,39}")
 
 
@@ -748,7 +890,9 @@ def _metric_receipt(data: dict[str, Any]) -> dict[str, Any]:
     the same run finalized in-process: the exit's ``stop_class`` token, the exit code, the stop
     reason's leading label (``-`` for any other text), and flags for the restart/user-action facts.
     """
-    raw_pre, raw_restart, raw_reason = (data.get(key) for key in ("pre_update", "gateway_restart", "stop_reason"))
+    raw_pre, raw_restart, raw_reason = (
+        data.get(key) for key in ("pre_update", "gateway_restart", "stop_reason")
+    )
     pre: dict[str, Any] = raw_pre if isinstance(raw_pre, dict) else {}
     restart: dict[str, Any] = raw_restart if isinstance(raw_restart, dict) else {}
     reason: str = raw_reason if isinstance(raw_reason, str) else ""
@@ -757,26 +901,42 @@ def _metric_receipt(data: dict[str, Any]) -> dict[str, Any]:
     exit_code = data.get("exit_code")
     return {
         "schema": data.get("schema"),
-        "update_id": data.get("update_id"), "started_at": data.get("started_at"),
-        "finished_at": data.get("finished_at"), "outcome": data.get("outcome"),
+        "update_id": data.get("update_id"),
+        "started_at": data.get("started_at"),
+        "finished_at": data.get("finished_at"),
+        "outcome": data.get("outcome"),
         "initiator": "desktop" if data.get("initiator") == "desktop" else None,
         "pre_update": {"commit_date": pre.get("commit_date")},
         "stages": [
             {key: mark[key] for key in ("name", "outcome", "at", "mode") if key in mark}
-            for mark in data.get("stages") or () if isinstance(mark, dict)
+            for mark in data.get("stages") or ()
+            if isinstance(mark, dict)
         ],
         "steps": [
             {"name": "admission", "ok": bool(step.get("ok"))}
-            for step in data.get("steps") or () if isinstance(step, dict) and step.get("name") == "admission"
+            for step in data.get("steps") or ()
+            if isinstance(step, dict) and step.get("name") == "admission"
         ],
-        "fleet": [{"state": row.get("state")} for row in data.get("fleet") or () if isinstance(row, dict)],
-        "stop_class": stop_class if isinstance(stop_class, str) and _STOP_CLASS_TOKEN.fullmatch(stop_class) else None,
-        "exit_code": exit_code if isinstance(exit_code, int) and not isinstance(exit_code, bool) else None,
+        "fleet": [
+            {"state": row.get("state")}
+            for row in data.get("fleet") or ()
+            if isinstance(row, dict)
+        ],
+        "stop_class": stop_class
+        if isinstance(stop_class, str) and _STOP_CLASS_TOKEN.fullmatch(stop_class)
+        else None,
+        "exit_code": exit_code
+        if isinstance(exit_code, int) and not isinstance(exit_code, bool)
+        else None,
         "stop_reason": label.group(0) if label else ("-" if reason else ""),
         "user_action": bool(data.get("user_action")),
-        "gateway_restart": {key: bool(restart.get(key)) for key in ("incomplete", "phase_error", "failed_units")},
+        "gateway_restart": {
+            key: bool(restart.get(key))
+            for key in ("incomplete", "phase_error", "failed_units")
+        },
         "runtime_outcomes": [
-            {"outcome": "failed"} for row in data.get("runtime_outcomes") or ()
+            {"outcome": "failed"}
+            for row in data.get("runtime_outcomes") or ()
             if isinstance(row, dict) and row.get("outcome") == "failed"
         ],
     }
@@ -822,14 +982,21 @@ def _park_metric_receipt(data: dict[str, Any], enabled: Optional[bool]) -> None:
     from clawk_constants import get_clawk_home
     from clawk_cli.runtime_state import _atomic_bytes
 
-    pending = get_clawk_home() / "telemetry" / "shared_metrics" / "pending_updates"  # = PENDING_DIRNAME
+    pending = (
+        get_clawk_home() / "telemetry" / "shared_metrics" / "pending_updates"
+    )  # = PENDING_DIRNAME
     if enabled is False:
         import shutil
 
-        shutil.rmtree(pending, ignore_errors=True)  # opted out: nothing parked may be counted later
+        shutil.rmtree(
+            pending, ignore_errors=True
+        )  # opted out: nothing parked may be counted later
         return
     pending.mkdir(parents=True, exist_ok=True)
-    _atomic_bytes(pending / f"{data.get('update_id')}.json", json.dumps(_metric_receipt(data), default=str).encode())
+    _atomic_bytes(
+        pending / f"{data.get('update_id')}.json",
+        json.dumps(_metric_receipt(data), default=str).encode(),
+    )
 
 
 def _publish_shared_metrics(data: dict[str, Any]) -> None:
@@ -840,7 +1007,9 @@ def _publish_shared_metrics(data: dict[str, Any]) -> None:
     collection gate (records them, or purges them when collection is off)."""
     with suppress(Exception):
         pre, post = data.get("pre_update") or {}, data.get("post_update") or {}
-        if data.get("pid") == os.getpid() and not (pre.get("sha") and pre.get("sha") == post.get("sha")):
+        if data.get("pid") == os.getpid() and not (
+            pre.get("sha") and pre.get("sha") == post.get("sha")
+        ):
             # This interpreter began the run before the checkout swap: importing now would load
             # pulled code into it. Consent comes from the config module it already has loaded.
             _park_metric_receipt(data, _collection_enabled_now())
@@ -866,7 +1035,9 @@ def finalized_receipt(update_id: str) -> Optional[dict[str, Any]]:
     return copy.deepcopy(data) if data is not None else None
 
 
-def finalize_pending_update_receipt(exit_code: Optional[int] = None, stop_reason: str = "") -> Optional[Path]:
+def finalize_pending_update_receipt(
+    exit_code: Optional[int] = None, stop_reason: str = ""
+) -> Optional[Path]:
     """Command-boundary safety net: persist a still-open receipt, if any. Never raises.
 
     ``clawk update`` has many early ``sys.exit`` paths (preflight refusals, venv-holder refusal,
@@ -881,8 +1052,15 @@ def finalize_pending_update_receipt(exit_code: Optional[int] = None, stop_reason
     current = _current.get()
     if current is None:
         return None
-    outcome = ("success" if exit_code in (0, None) else "refused" if exit_code == 2
-               else "partial" if current.data.get("user_action") else "failed")
+    outcome = (
+        "success"
+        if exit_code in (0, None)
+        else "refused"
+        if exit_code == 2
+        else "partial"
+        if current.data.get("user_action")
+        else "failed"
+    )
     if exit_code is not None:
         with suppress(Exception):
             clone = copy.copy(current)
@@ -901,7 +1079,11 @@ def resume_run_record() -> Optional[Path]:
     finalize), else None. Never raises.
     """
     current = _current.get()
-    found = read_run_record(str(current.data.get("update_id"))) if current is not None else None
+    found = (
+        read_run_record(str(current.data.get("update_id")))
+        if current is not None
+        else None
+    )
     if found is None:
         return None
     path, record = found
@@ -918,15 +1100,20 @@ def resume_run_record() -> Optional[Path]:
     return None
 
 
-def finalize_interrupted_update_receipt(stop_reason: str, *, exit_code: int = 130) -> Optional[Path]:
+def finalize_interrupted_update_receipt(
+    stop_reason: str, *, exit_code: int = 130
+) -> Optional[Path]:
     """Close a run the operator interrupted AFTER the commit point as ``interrupted``. Never raises.
 
     Not ``failed``: the code already moved, so "still on the previous version" would be false; the
     armed obligations finish the rest. The run's own on-disk record is preferred when it is further
     along (the completion child persisted stages this process never saw).
     """
-    print("⚠ Interrupted after the code was updated: the new code is in place; its remaining steps are owed "
-          "and the next launch or `clawk update` finishes them.", flush=True)
+    print(
+        "⚠ Interrupted after the code was updated: the new code is in place; its remaining steps are owed "
+        "and the next launch or `clawk update` finishes them.",
+        flush=True,
+    )
     if _current.get() is None:
         return None
     closed = resume_run_record()
@@ -943,7 +1130,9 @@ def finalize_interrupted_update_receipt(stop_reason: str, *, exit_code: int = 13
 def _prune_old_receipts(directory: Path) -> None:
     with suppress(Exception):
         receipts = (p for p in directory.glob("update_*.json") if p.is_file())
-        for stale in sorted(receipts, key=lambda p: p.stat().st_mtime, reverse=True)[_RECEIPT_KEEP:]:
+        for stale in sorted(receipts, key=lambda p: p.stat().st_mtime, reverse=True)[
+            _RECEIPT_KEEP:
+        ]:
             with suppress(OSError):
                 stale.unlink()
 
@@ -975,10 +1164,14 @@ def settle_latest_receipt_fleet(fleet: list[dict[str, Any]], *, discharges) -> b
         receipt["gateway_restart"] = gateway_restart
         if not discharges(receipt):
             return False
-        _write_latest((json.dumps(receipt, indent=2, default=str) + "\n").encode("utf-8"))
+        _write_latest(
+            (json.dumps(receipt, indent=2, default=str) + "\n").encode("utf-8")
+        )
         return True
     except Exception as exc:
-        logger.debug("Could not settle latest update receipt from the live fleet: %s", exc)
+        logger.debug(
+            "Could not settle latest update receipt from the live fleet: %s", exc
+        )
         return False
 
 
@@ -987,7 +1180,9 @@ def read_latest_receipt() -> Optional[dict[str, Any]]:
     with suppress(Exception):
         # The newest pointer wins (the root on a tie): the last writer of either store, exactly
         # as when updater and pm shared one folder.
-        points = [d / "latest.json" for d in _receipt_dirs() if (d / "latest.json").is_file()]
+        points = [
+            d / "latest.json" for d in _receipt_dirs() if (d / "latest.json").is_file()
+        ]
         if not points:
             return None
         path = max(points, key=lambda p: p.stat().st_mtime)
@@ -1014,7 +1209,11 @@ def read_receipt_for_action(action_id: str) -> Optional[dict[str, Any]]:
 
 def _profile_homes() -> list[tuple[str, Path]]:
     """``(profile, home)`` for the default home plus every valid named profile dir, sorted."""
-    from clawk_cli.profiles import _get_default_clawk_home, _get_profiles_root, _PROFILE_ID_RE
+    from clawk_cli.profiles import (
+        _get_default_clawk_home,
+        _get_profiles_root,
+        _PROFILE_ID_RE,
+    )
 
     homes: list[tuple[str, Path]] = []
     default_home = _get_default_clawk_home()
@@ -1025,7 +1224,9 @@ def _profile_homes() -> list[tuple[str, Path]]:
         homes.extend(
             (entry.name, entry)
             for entry in sorted(root.iterdir())
-            if entry.is_dir() and entry.name != "default" and _PROFILE_ID_RE.match(entry.name)
+            if entry.is_dir()
+            and entry.name != "default"
+            and _PROFILE_ID_RE.match(entry.name)
         )
     return homes
 
@@ -1116,28 +1317,44 @@ def row_is_external(row: Any) -> bool:
 
 
 def _fleet_row(
-    profile: str, pid: int, code_sha: Any, code_version: Any, expected_sha: Any,
-    state: str = "unknown", code_root: Optional[Path] = None,
-    expected_root: Optional[Path] = None, served_profiles: Any = None,
+    profile: str,
+    pid: int,
+    code_sha: Any,
+    code_version: Any,
+    expected_sha: Any,
+    state: str = "unknown",
+    code_root: Optional[Path] = None,
+    expected_root: Optional[Path] = None,
+    served_profiles: Any = None,
     self_restart_pending: Optional[set] = None,
 ) -> dict[str, Any]:
-    if state == "unknown" and code_root and expected_root and code_root != expected_root:
+    if (
+        state == "unknown"
+        and code_root
+        and expected_root
+        and code_root != expected_root
+    ):
         state = EXTERNAL_STATE
     if state == "unknown" and code_sha and expected_sha:
         state = "current" if str(code_sha) == str(expected_sha) else "stale"
     if state == "stale" and self_restart_pending and pid in self_restart_pending:
         state = RESTART_PENDING_STATE
     row = {
-        "profile": profile, "pid": pid, "code_sha": str(code_sha) if code_sha else None,
-        "code_version": code_version, "state": state,
+        "profile": profile,
+        "pid": pid,
+        "code_sha": str(code_sha) if code_sha else None,
+        "code_version": code_version,
+        "state": state,
         "code_root": str(code_root) if code_root else None,
     }
     # A live, identity-verified multiplexer represents every profile in this
     # list. Keep the field only when its shape is usable: callers use it to
     # discharge per-profile restart obligations, so corrupt status must not
     # widen coverage.
-    if isinstance(served_profiles, list) and served_profiles and all(
-        isinstance(name, str) and name for name in served_profiles
+    if (
+        isinstance(served_profiles, list)
+        and served_profiles
+        and all(isinstance(name, str) and name for name in served_profiles)
     ):
         row["served_profiles"] = list(dict.fromkeys(served_profiles))
     return row
@@ -1148,7 +1365,9 @@ _NOT_EXPECTED_STATES = {"stopped", "startup_failed"}
 
 
 def collect_fleet_versions(
-    *, pre_restart_pids: Optional[list[int]] = None, self_restart_pending: Optional[set] = None,
+    *,
+    pre_restart_pids: Optional[list[int]] = None,
+    self_restart_pending: Optional[set] = None,
 ) -> list[dict[str, Any]]:
     """Snapshot every profile's gateway code identity vs. the current tree.
 
@@ -1190,9 +1409,14 @@ def collect_fleet_versions(
             if sock is not None:
                 pid, identity = sock
                 row = _fleet_row(
-                    profile, pid, identity.get("code_sha"), identity.get("code_version"), expected_sha,
+                    profile,
+                    pid,
+                    identity.get("code_sha"),
+                    identity.get("code_version"),
+                    expected_sha,
                     served_profiles=identity.get("served_profiles"),
-                    code_root=_gateway_code_root(pid, home), expected_root=expected_root,
+                    code_root=_gateway_code_root(pid, home),
+                    expected_root=expected_root,
                     self_restart_pending=_pending,
                 )
                 results.append({**row, "source": "socket"})
@@ -1210,9 +1434,14 @@ def collect_fleet_versions(
             if live_gateway_pid_for_home(home) == pid:
                 results.append(
                     _fleet_row(
-                        profile, pid, record.get("code_sha"), record.get("code_version"), expected_sha,
+                        profile,
+                        pid,
+                        record.get("code_sha"),
+                        record.get("code_version"),
+                        expected_sha,
                         served_profiles=record.get("served_profiles"),
-                        code_root=_gateway_code_root(pid, home), expected_root=expected_root,
+                        code_root=_gateway_code_root(pid, home),
+                        expected_root=expected_root,
                         self_restart_pending=_pending,
                     )
                 )
@@ -1233,8 +1462,22 @@ def collect_fleet_versions(
             # could still mislabel B as down — inherent to the snapshot's data model.
             # See #93258.
             gw_state = record.get("gateway_state")
-            if pid in _pre_restart and isinstance(gw_state, str) and gw_state and gw_state not in _NOT_EXPECTED_STATES:
-                results.append(_fleet_row(profile, pid, None, record.get("code_version"), None, state="down"))
+            if (
+                pid in _pre_restart
+                and isinstance(gw_state, str)
+                and gw_state
+                and gw_state not in _NOT_EXPECTED_STATES
+            ):
+                results.append(
+                    _fleet_row(
+                        profile,
+                        pid,
+                        None,
+                        record.get("code_version"),
+                        None,
+                        state="down",
+                    )
+                )
     except Exception as exc:
         logger.debug("Fleet version probe failed: %s", exc)
     return results
@@ -1282,10 +1525,18 @@ def print_fleet_version_matrix(fleet: list[dict[str, Any]]) -> bool:
         states.add(entry.get("state"))
         if row_is_external(entry) and entry.get("code_root"):
             external_roots.append(f"{entry.get('profile')}: {entry.get('code_root')}")
-        fallback = _FLEET_ROW_IDENTITY_PENDING if entry.get("identity_pending") else _FLEET_ROW_UNKNOWN
-        print(_FLEET_ROW_LINES.get(entry.get("state"), fallback).format(
-            profile=entry.get("profile"), pid=entry.get("pid"), short=sha[:8] if isinstance(sha, str) and sha else "?",
-        ))
+        fallback = (
+            _FLEET_ROW_IDENTITY_PENDING
+            if entry.get("identity_pending")
+            else _FLEET_ROW_UNKNOWN
+        )
+        print(
+            _FLEET_ROW_LINES.get(entry.get("state"), fallback).format(
+                profile=entry.get("profile"),
+                pid=entry.get("pid"),
+                short=sha[:8] if isinstance(sha, str) and sha else "?",
+            )
+        )
     if external_roots:
         print()
         print("  ℹ These profiles run their own checkout and are updated separately:")
@@ -1293,7 +1544,9 @@ def print_fleet_version_matrix(fleet: list[dict[str, Any]]) -> bool:
             print(f"      {line}")
     if RESTART_PENDING_STATE in states:
         print()
-        print("  ℹ A restart-pending gateway has not yet been verified on the new code;")
+        print(
+            "  ℹ A restart-pending gateway has not yet been verified on the new code;"
+        )
         print("    check after this update exits with `clawk gateway status`.")
     stale_or_down = sum(1 for entry in fleet if entry.get("state") in ("stale", "down"))
     if stale_or_down:
@@ -1306,7 +1559,10 @@ def print_fleet_version_matrix(fleet: list[dict[str, Any]]) -> bool:
         # is still owed after ``✓ Update complete!``; every CLI start repeats it until restarted.
         print()
         print(
-            f"⚠ Gateway restart still owed: {stale_or_down} gateway(s) still running the old code (or stopped).")
-        print("  Run `clawk gateway restart` (or `clawk -p <profile> gateway restart` for a named")
+            f"⚠ Gateway restart still owed: {stale_or_down} gateway(s) still running the old code (or stopped)."
+        )
+        print(
+            "  Run `clawk gateway restart` (or `clawk -p <profile> gateway restart` for a named"
+        )
         print("  profile), then `clawk gateway status` to confirm.")
     return stale_or_down > 0

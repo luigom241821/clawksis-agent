@@ -32,6 +32,7 @@ from unittest.mock import MagicMock
 # Agent fixture — real methods bound where the fix depends on them
 # ---------------------------------------------------------------------------
 
+
 def _make_agent():
     """Minimal AIAgent with the real text helpers the fix relies on."""
     from agent.message_sanitization import _sanitize_surrogates
@@ -39,8 +40,8 @@ def _make_agent():
 
     agent = MagicMock(spec=AIAgent)
     agent._extract_reasoning = lambda msg: AIAgent._extract_reasoning(agent, msg)
-    agent._extract_codex_interim_visible_text = (
-        lambda msg: AIAgent._extract_codex_interim_visible_text(agent, msg)
+    agent._extract_codex_interim_visible_text = lambda msg: (
+        AIAgent._extract_codex_interim_visible_text(agent, msg)
     )
     agent._strip_think_blocks = lambda text: AIAgent._strip_think_blocks(agent, text)
     agent._sanitize_surrogates = lambda text: _sanitize_surrogates(text)
@@ -50,6 +51,7 @@ def _make_agent():
     agent.stream_delta_callback = None
     agent._stream_callback = None
     return agent
+
 
 def _vision_tool_result(text="The image shows a red stop sign."):
     """A realistic tool message whose content is a list (vision result)."""
@@ -62,9 +64,11 @@ def _vision_tool_result(text="The image shows a red stop sign."):
         ],
     }
 
+
 # ---------------------------------------------------------------------------
 # build_assistant_message — non-streaming / gateway path (site 2)
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAssistantMessageMultimodal:
     def test_list_content_does_not_crash(self):
@@ -75,7 +79,10 @@ class TestBuildAssistantMessageMultimodal:
         sdk_msg = SimpleNamespace(
             content=[
                 {"type": "text", "text": "answer after seeing the screenshot"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
             tool_calls=None,
             reasoning_content=None,
@@ -90,9 +97,11 @@ class TestBuildAssistantMessageMultimodal:
         assert isinstance(msg["content"], str)
         assert "answer after seeing the screenshot" in msg["content"]
 
+
 # ---------------------------------------------------------------------------
 # _interim_assistant_visible_text — dedup path (site 1)
 # ---------------------------------------------------------------------------
+
 
 class TestInterimVisibleTextMultimodal:
     def test_tool_list_content_does_not_crash(self):
@@ -114,12 +123,16 @@ class TestInterimVisibleTextMultimodal:
             "role": "assistant",
             "content": [
                 {"type": "text", "text": "Let me look at the screenshot."},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
             ],
             "finish_reason": "incomplete",
         }
         visible = AIAgent._interim_assistant_visible_text(agent, assistant_msg)
         assert "Let me look at the screenshot." in visible
+
 
 # ---------------------------------------------------------------------------
 # duplicate_previous_interim dedup — the exact shape from conversation_loop.py

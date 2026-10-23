@@ -130,7 +130,9 @@ async def test_internal_event_threads_marker_into_agent_run(monkeypatch, tmp_pat
 
     await runner._handle_message_with_agent(
         _event(internal=True, text="[ASYNC DELEGATION BATCH COMPLETE]"),
-        _source(), SESSION_KEY, 1,
+        _source(),
+        SESSION_KEY,
+        1,
     )
 
     kwargs = runner._run_agent.call_args.kwargs
@@ -151,7 +153,10 @@ async def test_real_user_event_gets_no_marker(monkeypatch, tmp_path):
     )
 
     await runner._handle_message_with_agent(
-        _event(internal=False), _source(), SESSION_KEY, 1,
+        _event(internal=False),
+        _source(),
+        SESSION_KEY,
+        1,
     )
 
     kwargs = runner._run_agent.call_args.kwargs
@@ -179,7 +184,9 @@ async def test_failed_early_fallback_row_is_marked_for_internal_event(
 
     await runner._handle_message_with_agent(
         _event(internal=True, text="[ASYNC DELEGATION BATCH COMPLETE]"),
-        _source(), SESSION_KEY, 1,
+        _source(),
+        SESSION_KEY,
+        1,
     )
 
     entries = _user_entries(runner.session_store.append_to_transcript.call_args_list)
@@ -206,7 +213,10 @@ async def test_failed_early_fallback_row_is_unmarked_for_real_user(
     )
 
     await runner._handle_message_with_agent(
-        _event(internal=False), _source(), SESSION_KEY, 1,
+        _event(internal=False),
+        _source(),
+        SESSION_KEY,
+        1,
     )
 
     entries = _user_entries(runner.session_store.append_to_transcript.call_args_list)
@@ -232,7 +242,9 @@ async def test_no_new_messages_fallback_row_is_marked_for_internal_event(
 
     await runner._handle_message_with_agent(
         _event(internal=True, text="[SYSTEM: Background process matched]"),
-        _source(), SESSION_KEY, 1,
+        _source(),
+        SESSION_KEY,
+        1,
     )
 
     entries = _user_entries(runner.session_store.append_to_transcript.call_args_list)
@@ -264,7 +276,7 @@ def test_marked_row_replays_cleanly_and_never_reaches_provider(tmp_path):
 
         # Session resume/load tolerates the extra key and keeps role='user'.
         replayed = db.get_messages_as_conversation(sid)
-        user_row, = [m for m in replayed if m["role"] == "user"]
+        (user_row,) = [m for m in replayed if m["role"] == "user"]
         assert user_row["display_kind"] == "internal_notification"
         assert user_row["content"].startswith("[ASYNC DELEGATION BATCH COMPLETE")
 

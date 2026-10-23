@@ -36,6 +36,7 @@ def copilot_profile():
 def _patch_efforts(monkeypatch, efforts):
     """Stub the catalog lookup the profile and main-agent path call for supported efforts."""
     import clawk_cli.models as models_mod
+
     monkeypatch.setattr(
         models_mod, "github_model_reasoning_efforts", lambda model: list(efforts)
     )
@@ -52,7 +53,9 @@ class TestCopilotReasoningEffortClamp:
         )
         assert extra_body["reasoning"] == {"effort": "xhigh"}
 
-    def test_xhigh_downgrades_to_high_when_unsupported(self, copilot_profile, monkeypatch):
+    def test_xhigh_downgrades_to_high_when_unsupported(
+        self, copilot_profile, monkeypatch
+    ):
         """A model whose catalog lacks xhigh gets the nearest weaker level."""
         _patch_efforts(monkeypatch, ["low", "medium", "high"])
         extra_body, _ = copilot_profile.build_api_kwargs_extras(
@@ -62,7 +65,9 @@ class TestCopilotReasoningEffortClamp:
         )
         assert extra_body["reasoning"] == {"effort": "high"}
 
-    def test_minimal_downgrades_to_low_when_unsupported(self, copilot_profile, monkeypatch):
+    def test_minimal_downgrades_to_low_when_unsupported(
+        self, copilot_profile, monkeypatch
+    ):
         _patch_efforts(monkeypatch, ["low", "medium", "high"])
         extra_body, _ = copilot_profile.build_api_kwargs_extras(
             model="o-series-model",
@@ -71,7 +76,9 @@ class TestCopilotReasoningEffortClamp:
         )
         assert extra_body["reasoning"] == {"effort": "low"}
 
-    def test_unsupported_effort_falls_back_to_medium(self, copilot_profile, monkeypatch):
+    def test_unsupported_effort_falls_back_to_medium(
+        self, copilot_profile, monkeypatch
+    ):
         """An effort not in the set, with no specific rule, falls to medium."""
         _patch_efforts(monkeypatch, ["low", "medium", "high"])
         extra_body, _ = copilot_profile.build_api_kwargs_extras(
@@ -81,7 +88,9 @@ class TestCopilotReasoningEffortClamp:
         )
         assert extra_body["reasoning"] == {"effort": "medium"}
 
-    def test_falls_back_to_first_supported_when_no_medium(self, copilot_profile, monkeypatch):
+    def test_falls_back_to_first_supported_when_no_medium(
+        self, copilot_profile, monkeypatch
+    ):
         """If medium isn't supported either, pick the first supported level."""
         _patch_efforts(monkeypatch, ["low", "high"])
         extra_body, _ = copilot_profile.build_api_kwargs_extras(
@@ -106,11 +115,17 @@ class TestCopilotOfflineAstraEfforts:
     """With no live catalog entry, Astra still advertises its own ladder (exact slugs only),
     and a structured catalog entry keeps precedence over the offline fallback."""
 
-    @pytest.mark.parametrize("model, expected", [
-        ("gpt-6-astra", ["low", "medium", "high", "xhigh", "max"]),
-        ("openai/gpt-6-astra", ["low", "medium", "high", "xhigh", "max"]),
-        ("gpt-6-astra-pro", []),  # speed-tier / unknown suffixes stay off the Astra ladder
-    ])
+    @pytest.mark.parametrize(
+        "model, expected",
+        [
+            ("gpt-6-astra", ["low", "medium", "high", "xhigh", "max"]),
+            ("openai/gpt-6-astra", ["low", "medium", "high", "xhigh", "max"]),
+            (
+                "gpt-6-astra-pro",
+                [],
+            ),  # speed-tier / unknown suffixes stay off the Astra ladder
+        ],
+    )
     def test_offline_fallback_uses_exact_astra_slugs(self, model, expected):
         from clawk_cli.models import github_model_reasoning_efforts
 
@@ -119,15 +134,32 @@ class TestCopilotOfflineAstraEfforts:
     def test_structured_catalog_beats_offline_fallback(self):
         from clawk_cli.models import github_model_reasoning_efforts
 
-        catalog = [{"id": "gpt-6-astra", "capabilities": {
-            "type": "chat", "supports": {"reasoning_effort": ["low", "high"]}}}]
-        assert github_model_reasoning_efforts("gpt-6-astra", catalog=catalog) == ["low", "high"]
+        catalog = [
+            {
+                "id": "gpt-6-astra",
+                "capabilities": {
+                    "type": "chat",
+                    "supports": {"reasoning_effort": ["low", "high"]},
+                },
+            }
+        ]
+        assert github_model_reasoning_efforts("gpt-6-astra", catalog=catalog) == [
+            "low",
+            "high",
+        ]
 
 
-@pytest.mark.parametrize("effort, expected", [
-    ("xhigh", "high"), ("max", "high"), ("ultra", "high"), ("minimal", "minimal"),
-    ("garbage", "medium"), (" HIGH ", "high"),
-])
+@pytest.mark.parametrize(
+    "effort, expected",
+    [
+        ("xhigh", "high"),
+        ("max", "high"),
+        ("ultra", "high"),
+        ("minimal", "minimal"),
+        ("garbage", "medium"),
+        (" HIGH ", "high"),
+    ],
+)
 def test_main_agent_github_clamp_never_escalates(monkeypatch, effort, expected):
     """The main-agent GitHub path shares the profile's clamp: unsupported levels step down to
     the nearest weaker listed one (max/ultra no longer fall all the way to medium)."""
@@ -136,5 +168,9 @@ def test_main_agent_github_clamp_never_escalates(monkeypatch, effort, expected):
     from agent.reasoning_params import ReasoningParamsMixin
 
     _patch_efforts(monkeypatch, ["minimal", "low", "medium", "high"])
-    agent = SimpleNamespace(model="gpt-5.4", reasoning_config={"enabled": True, "effort": effort})
-    assert ReasoningParamsMixin._github_models_reasoning_extra_body(agent) == {"effort": expected}
+    agent = SimpleNamespace(
+        model="gpt-5.4", reasoning_config={"enabled": True, "effort": effort}
+    )
+    assert ReasoningParamsMixin._github_models_reasoning_extra_body(agent) == {
+        "effort": expected
+    }

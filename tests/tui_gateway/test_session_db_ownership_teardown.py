@@ -241,8 +241,6 @@ def test_transfer_is_refused_for_the_shared_launch_handle(monkeypatch):
     assert agent._owns_session_db is False
 
 
-
-
 # ---------------------------------------------------------------------------
 # 3. The deferred builder — _start_agent_build
 # ---------------------------------------------------------------------------
@@ -402,7 +400,9 @@ def test_deferred_build_closes_the_handle_when_the_session_is_reaped_midbuild(
         # Simulate a concurrent reap landing while the agent was being built.
         with server._sessions_lock:
             server._sessions[sid] = {"session_key": "someone-else"}
-        built.append(types.SimpleNamespace(_session_db=session_db, _owns_session_db=False))
+        built.append(
+            types.SimpleNamespace(_session_db=session_db, _owns_session_db=False)
+        )
         return built[-1]
 
     monkeypatch.setattr(server, "_make_agent", _fake_make_agent)

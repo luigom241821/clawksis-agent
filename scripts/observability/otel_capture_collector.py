@@ -51,7 +51,10 @@ def main() -> None:
     log_path.write_text("", encoding="utf-8")
     CaptureHandler.log_path = log_path
     server = ThreadingHTTPServer((args.host, args.port), CaptureHandler)
-    print(f"OTLP capture collector listening on http://{args.host}:{args.port}; log={log_path}", flush=True)
+    print(
+        f"OTLP capture collector listening on http://{args.host}:{args.port}; log={log_path}",
+        flush=True,
+    )
     server.serve_forever()
 
 

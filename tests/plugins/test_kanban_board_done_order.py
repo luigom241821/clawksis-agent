@@ -23,7 +23,9 @@ from clawk_cli import kanban_db_connect as kbc
 def _load_plugin_router():
     repo_root = Path(__file__).resolve().parents[2]
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
-    spec = importlib.util.spec_from_file_location("clawk_kanban_plugin_done_order_test", plugin_file)
+    spec = importlib.util.spec_from_file_location(
+        "clawk_kanban_plugin_done_order_test", plugin_file
+    )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
@@ -57,16 +59,24 @@ def _finish(client, task_id):
 
 
 def test_done_column_orders_by_completion_time_not_creation(client):
-    first = client.post("/api/plugins/kanban/tasks", json={"title": "created first"}).json()["task"]
-    second = client.post("/api/plugins/kanban/tasks", json={"title": "created second"}).json()["task"]
+    first = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "created first"}
+    ).json()["task"]
+    second = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "created second"}
+    ).json()["task"]
     _finish(client, first["id"])
     _finish(client, second["id"])
 
     # complete_task stamps one wall clock for both, so pin distinct
     # timestamps: the card created first also finished last.
     with kbc.connect() as conn:
-        conn.execute("UPDATE tasks SET completed_at = 2000 WHERE id = ?", (first["id"],))
-        conn.execute("UPDATE tasks SET completed_at = 1000 WHERE id = ?", (second["id"],))
+        conn.execute(
+            "UPDATE tasks SET completed_at = 2000 WHERE id = ?", (first["id"],)
+        )
+        conn.execute(
+            "UPDATE tasks SET completed_at = 1000 WHERE id = ?", (second["id"],)
+        )
         conn.commit()
 
     done = _column(client, "done")
@@ -77,18 +87,32 @@ def test_done_column_survives_non_integer_completed_at(client):
     """A writer that bypassed complete_task can leave a non-integer completed_at
     behind. The board must render (no 500 from negating a string), order a
     parseable ISO stamp by its parsed time, and park garbage last with None."""
-    early = client.post("/api/plugins/kanban/tasks", json={"title": "epoch int"}).json()["task"]
-    iso = client.post("/api/plugins/kanban/tasks", json={"title": "iso string"}).json()["task"]
-    garbage = client.post("/api/plugins/kanban/tasks", json={"title": "garbage"}).json()["task"]
+    early = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "epoch int"}
+    ).json()["task"]
+    iso = client.post("/api/plugins/kanban/tasks", json={"title": "iso string"}).json()[
+        "task"
+    ]
+    garbage = client.post(
+        "/api/plugins/kanban/tasks", json={"title": "garbage"}
+    ).json()["task"]
     _finish(client, early["id"])
     _finish(client, iso["id"])
     _finish(client, garbage["id"])
 
     with kbc.connect() as conn:
-        conn.execute("UPDATE tasks SET completed_at = 1000 WHERE id = ?", (early["id"],))
-        conn.execute("UPDATE tasks SET completed_at = '2026-09-30T14:22:11', created_at = '2026-09-30T14:00:00', "
-                     "started_at = '2026-09-30T14:10:00' WHERE id = ?", (iso["id"],))
-        conn.execute("UPDATE tasks SET completed_at = 'not-a-timestamp' WHERE id = ?", (garbage["id"],))
+        conn.execute(
+            "UPDATE tasks SET completed_at = 1000 WHERE id = ?", (early["id"],)
+        )
+        conn.execute(
+            "UPDATE tasks SET completed_at = '2026-09-30T14:22:11', created_at = '2026-09-30T14:00:00', "
+            "started_at = '2026-09-30T14:10:00' WHERE id = ?",
+            (iso["id"],),
+        )
+        conn.execute(
+            "UPDATE tasks SET completed_at = 'not-a-timestamp' WHERE id = ?",
+            (garbage["id"],),
+        )
         conn.commit()
 
     r = client.get("/api/plugins/kanban/board")
@@ -98,7 +122,10 @@ def test_done_column_survives_non_integer_completed_at(client):
     # coerces to None and sorts last.
     assert [t["id"] for t in done] == [iso["id"], early["id"], garbage["id"]]
     # Served coerced: the client gets an epoch int, never the raw text.
-    assert all(isinstance(done[0][k], int) for k in ("created_at", "started_at", "completed_at"))
+    assert all(
+        isinstance(done[0][k], int)
+        for k in ("created_at", "started_at", "completed_at")
+    )
     assert done[2]["completed_at"] is None
 
 

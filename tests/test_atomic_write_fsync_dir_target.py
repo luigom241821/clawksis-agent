@@ -7,6 +7,7 @@ parent, so the rename that published the new file sat outside the requested dura
 (#115030). Both sides are compared through ``Path.resolve()``: on macOS the temp root is reached via
 ``/var`` -> ``/private/var`` and a raw comparison fails even on a correct fix.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +20,9 @@ from utils import atomic_write_text
 
 
 @pytest.mark.require_symlinks
-def test_fsync_dir_targets_resolved_parent_for_symlinked_destination(tmp_path: Path) -> None:
+def test_fsync_dir_targets_resolved_parent_for_symlinked_destination(
+    tmp_path: Path,
+) -> None:
     real = tmp_path / "real"
     links = tmp_path / "links"
     real.mkdir()

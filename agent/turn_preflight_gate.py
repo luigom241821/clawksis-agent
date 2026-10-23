@@ -18,12 +18,26 @@ logger = logging.getLogger("agent.conversation_loop")
 
 
 def run_preflight_gate(
-    agent: Any, *, request_pressure_tokens: Any, _moa_prepared_request: Any,
-    pending_moa_prepared_request: Any, messages: Any, system_message: Any, user_message: Any,
-    active_system_prompt: Any, conversation_history: Any, api_call_count: Any,
-    compression_attempts: Any, max_compression_attempts: Any, effective_task_id: Any,
-    final_response: Any, failed: Any, _turn_exit_reason: Any, _compression_timeout_exhausted: Any,
-    _preflight_compression_blocked: Any, _provider_overflow_recovery_pending: Any,
+    agent: Any,
+    *,
+    request_pressure_tokens: Any,
+    _moa_prepared_request: Any,
+    pending_moa_prepared_request: Any,
+    messages: Any,
+    system_message: Any,
+    user_message: Any,
+    active_system_prompt: Any,
+    conversation_history: Any,
+    api_call_count: Any,
+    compression_attempts: Any,
+    max_compression_attempts: Any,
+    effective_task_id: Any,
+    final_response: Any,
+    failed: Any,
+    _turn_exit_reason: Any,
+    _compression_timeout_exhausted: Any,
+    _preflight_compression_blocked: Any,
+    _provider_overflow_recovery_pending: Any,
     _last_preflight_pressure: Any,
 ) -> PreflightGateVerdict:
     """Run the pre-API guard chain in the original order. ``_last_preflight_pressure`` is
@@ -32,10 +46,15 @@ def run_preflight_gate(
     from agent.conversation_loop import _ollama_context_limit_error
 
     v = PreflightGateVerdict(
-        action="fallthrough", pending_moa_prepared_request=pending_moa_prepared_request,
-        messages=messages, active_system_prompt=active_system_prompt,
-        conversation_history=conversation_history, api_call_count=api_call_count,
-        compression_attempts=compression_attempts, final_response=final_response, failed=failed,
+        action="fallthrough",
+        pending_moa_prepared_request=pending_moa_prepared_request,
+        messages=messages,
+        active_system_prompt=active_system_prompt,
+        conversation_history=conversation_history,
+        api_call_count=api_call_count,
+        compression_attempts=compression_attempts,
+        final_response=final_response,
+        failed=failed,
         _turn_exit_reason=_turn_exit_reason,
         _compression_timeout_exhausted=_compression_timeout_exhausted,
         _preflight_compression_blocked=_preflight_compression_blocked,
@@ -49,7 +68,9 @@ def run_preflight_gate(
         v.failed = True
         v._turn_exit_reason = "ollama_runtime_context_too_small"
         append_message(messages, {"role": "assistant", "content": v.final_response})
-        agent._emit_diagnostic_status("❌ Ollama runtime context is too small for Clawksis tool use")
+        agent._emit_diagnostic_status(
+            "❌ Ollama runtime context is too small for Clawksis tool use"
+        )
         v.api_call_count -= 1
         agent._api_call_count = v.api_call_count
         with suppress(Exception):
@@ -88,15 +109,23 @@ def run_preflight_gate(
             f"{request_pressure_tokens:,}",
         )
     return run_preflight_compression(
-        agent, v, compressor=_compressor, request_pressure_tokens=request_pressure_tokens,
+        agent,
+        v,
+        compressor=_compressor,
+        request_pressure_tokens=request_pressure_tokens,
         provider_overflow_preflight=_provider_overflow_preflight,
         # An anchored figure is real usage + delta: never deferred. Only a whole-context rough
         # estimate waits for the provider's count.
         defer_preflight=(
-            (lambda _t: False) if getattr(agent, "_request_pressure_anchored", False)
-            else getattr(_compressor, "should_defer_preflight_to_real_usage", lambda _t: False)
+            (lambda _t: False)
+            if getattr(agent, "_request_pressure_anchored", False)
+            else getattr(
+                _compressor, "should_defer_preflight_to_real_usage", lambda _t: False
+            )
         ),
-        moa_prepared_request=_moa_prepared_request, system_message=system_message,
-        user_message=user_message, max_compression_attempts=max_compression_attempts,
+        moa_prepared_request=_moa_prepared_request,
+        system_message=system_message,
+        user_message=user_message,
+        max_compression_attempts=max_compression_attempts,
         effective_task_id=effective_task_id,
     )

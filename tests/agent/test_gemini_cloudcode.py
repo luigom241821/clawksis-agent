@@ -92,8 +92,7 @@ class TestPkce:
         verifier, challenge = _generate_pkce_pair()
 
         expected = (
-            base64
-            .urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
+            base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
             .rstrip(b"=")
             .decode("ascii")
         )
@@ -578,12 +577,14 @@ class TestCodeAssistVpcScDetection:
 
         from agent.google_code_assist import _is_vpc_sc_violation
 
-        body = json.dumps({
-            "error": {
-                "details": [{"reason": "SECURITY_POLICY_VIOLATED"}],
-                "message": "blocked by policy",
+        body = json.dumps(
+            {
+                "error": {
+                    "details": [{"reason": "SECURITY_POLICY_VIOLATED"}],
+                    "message": "blocked by policy",
+                }
             }
-        })
+        )
 
         assert _is_vpc_sc_violation(body) is True
 

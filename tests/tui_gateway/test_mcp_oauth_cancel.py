@@ -89,17 +89,31 @@ def test_session_operations_require_resolved_owner(tmp_path, monkeypatch, operat
     flow = DashboardOAuthFlow(
         "owned", "reports", None, home, "http://127.0.0.1:49152/callback"
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=test"))
-    monkeypatch.setattr(sessions, "_sessions", {
-        "owned": {"flow": flow, "server_name": "reports", "clawk_home": home, "httpd": None}
-    })
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=test")
+    )
+    monkeypatch.setattr(
+        sessions,
+        "_sessions",
+        {
+            "owned": {
+                "flow": flow,
+                "server_name": "reports",
+                "clawk_home": home,
+                "httpd": None,
+            }
+        },
+    )
 
     def invoke():
         if operation == "poll":
             return sessions.poll_flow("owned", "reports")
         if operation == "callback":
-            return sessions.deliver_callback_flow("owned", "reports", code="valid", state="test")
+            return sessions.deliver_callback_flow(
+                "owned", "reports", code="valid", state="test"
+            )
         from clawk_constants import get_clawk_home
+
         return sessions.cancel_flow("owned", "reports", str(get_clawk_home()))
 
     token = set_clawk_home_override(tmp_path / "other")
@@ -128,7 +142,9 @@ def test_cancel_does_not_revoke_an_approved_flow(tmp_path, monkeypatch):
     flow.discovery_error = "tools/list unavailable"
     flow.mark_approved()
     assert OAuthAttempt("https://idp.example", flow).poll() == {
-        "status": "approved", "error": "", "tools": [],
+        "status": "approved",
+        "error": "",
+        "tools": [],
         "discovery_error": "tools/list unavailable",
     }
     flow.mark_worker_done()

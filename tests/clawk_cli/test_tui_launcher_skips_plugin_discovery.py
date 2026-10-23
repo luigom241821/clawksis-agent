@@ -1,4 +1,3 @@
-
 """Regression test: the TUI launcher must not spend time on plugin discovery.
 
 `clawk --tui` just spawns a Node process; the spawned tui_gateway backend

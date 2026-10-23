@@ -13,8 +13,10 @@ from gateway.config import GatewayConfig, Platform, PlatformConfig
 from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
-def _make_event(text="/title", platform=Platform.TELEGRAM,
-                user_id="12345", chat_id="67890"):
+
+def _make_event(
+    text="/title", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -24,15 +26,18 @@ def _make_event(text="/title", platform=Platform.TELEGRAM,
     )
     return MessageEvent(text=text, source=source)
 
+
 def _make_runner(session_db=None):
     """Create a bare GatewayRunner with a mock session_store and optional session_db."""
     from gateway.run import GatewayRunner
+
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
     # Gateway holds the async facade; the slash handlers await it.
     if session_db is not None:
         from clawk_state import AsyncSessionDB
+
         session_db = AsyncSessionDB(session_db)
     runner._session_db = session_db
 
@@ -46,9 +51,11 @@ def _make_runner(session_db=None):
 
     return runner
 
+
 # ---------------------------------------------------------------------------
 # _handle_title_command
 # ---------------------------------------------------------------------------
+
 
 class TestHandleTitleCommand:
     """Tests for GatewayRunner._handle_title_command."""
@@ -57,6 +64,7 @@ class TestHandleTitleCommand:
     async def test_title_conflict(self, tmp_path):
         """Setting a title already used by another session returns error."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("other_session", "telegram")
         db.set_session_title("other_session", "Taken Title")
@@ -72,6 +80,7 @@ class TestHandleTitleCommand:
     async def test_title_control_chars_sanitized(self, tmp_path):
         """Control characters are stripped and sanitized title is stored."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -86,6 +95,7 @@ class TestHandleTitleCommand:
     async def test_set_title_propagates_to_telegram_topic_rename(self, tmp_path):
         """/title <name> also renames the visible Telegram topic, not just the DB."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -105,6 +115,7 @@ class TestHandleTitleCommand:
     async def test_show_title_does_not_rename_topic(self, tmp_path):
         """Showing the title (no arg) must not trigger a topic rename."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
         db.set_session_title("test_session_123", "Existing Title")
@@ -118,6 +129,7 @@ class TestHandleTitleCommand:
         runner._schedule_telegram_topic_title_rename.assert_not_called()
         db.close()
 
+
 # ---------------------------------------------------------------------------
 # /title in help and known_commands
 # ---------------------------------------------------------------------------
@@ -125,6 +137,7 @@ class TestHandleTitleCommand:
 # ---------------------------------------------------------------------------
 # /new with title
 # ---------------------------------------------------------------------------
+
 
 class TestResetCommandWithTitle:
     """Tests for GatewayRunner._handle_reset_command with a title argument."""
@@ -191,6 +204,7 @@ class TestResetCommandWithTitle:
         assert "session started untitled" in reply
         # Header must NOT claim the rejected title as the session name
         assert "New session started: Dup" not in reply
+
 
 # ---------------------------------------------------------------------------
 # /new in help output

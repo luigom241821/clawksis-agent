@@ -30,10 +30,16 @@ def test_modified_keypad_mirrors_its_non_keypad_twin():
     """Every supported modifier inherits its twin, including lock bits, only in CSI-u."""
     twins = {
         57414: "\x1b[13;{mod}u",
-        **{code: "\x1b[1;{mod}" + suffix for code, suffix in
-           zip((57417, 57418, 57419, 57420, 57423, 57424), "DCABHF")},
-        **{code: f"\x1b[{number};{{mod}}~" for code, number in
-           ((57421, 5), (57422, 6), (57425, 2), (57426, 3))},
+        **{
+            code: "\x1b[1;{mod}" + suffix
+            for code, suffix in zip(
+                (57417, 57418, 57419, 57420, 57423, 57424), "DCABHF"
+            )
+        },
+        **{
+            code: f"\x1b[{number};{{mod}}~"
+            for code, number in ((57421, 5), (57422, 6), (57425, 2), (57426, 3))
+        },
         **{57399 + digit: f"\x1b[{ord(str(digit))};{{mod}}u" for digit in range(10)},
     }
     for code, template in twins.items():
@@ -50,13 +56,16 @@ def test_modified_keypad_mirrors_its_non_keypad_twin():
 
     # First-writer-wins applies to the twin too, even when this builder stages a default.
     from prompt_toolkit.keys import Keys
+
     installed = dict(ANSI_SEQUENCES)
     installed["\x1b[13;3u"] = Keys.ControlA
     aliases = pt_input_extras._modify_other_keys_aliases(installed, Keys)
     assert aliases["\x1b[57414;3u"] == installed["\x1b[13;3u"]
 
 
-@pytest.mark.parametrize("prefix", ["alpha", "alpha  ", "alpha!?.,", "[Pasted text #1: 15 lines]"])
+@pytest.mark.parametrize(
+    "prefix", ["alpha", "alpha  ", "alpha!?.,", "[Pasted text #1: 15 lines]"]
+)
 def test_keypad_alt_enter_inserts_newlines_at_the_cursor(prefix):
     """Extended Enter must reach the newline handler, never self-insert raw CSI text."""
     from prompt_toolkit import Application
@@ -75,10 +84,16 @@ def test_keypad_alt_enter_inserts_newlines_at_the_cursor(prefix):
         kb.add("escape", "enter")(CLITuiMixin()._tui_insert_newline)
         kb.add("c-q")(lambda event: event.app.exit(result=buf.text))
         with create_pipe_input() as inp:
-            app = Application(layout=Layout(Window(BufferControl(buf))), key_bindings=kb,
-                              input=inp, output=DummyOutput())
-            return await asyncio.wait_for(app.run_async(
-                pre_run=lambda: inp.send_text(sequence * 2 + "\x11")), timeout=5)
+            app = Application(
+                layout=Layout(Window(BufferControl(buf))),
+                key_bindings=kb,
+                input=inp,
+                output=DummyOutput(),
+            )
+            return await asyncio.wait_for(
+                app.run_async(pre_run=lambda: inp.send_text(sequence * 2 + "\x11")),
+                timeout=5,
+            )
 
     for sequence in ("\x1b[57414;3u", "\x1b[57414;131u", "\x1b[13;3u", "\x1b\r"):
         assert asyncio.run(probe(sequence)) == prefix + "\n\nsuffix"

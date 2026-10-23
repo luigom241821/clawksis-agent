@@ -40,7 +40,9 @@ def _make_agent(monkeypatch, tmp_path: Path, **prune_keys):
 
     monkeypatch.setattr(config_mod, "load_config", lambda: _config(**prune_keys))
 
-    monkeypatch.setattr(config_mod, "load_config_readonly", lambda: _config(**prune_keys))
+    monkeypatch.setattr(
+        config_mod, "load_config_readonly", lambda: _config(**prune_keys)
+    )
     db = SessionDB(db_path=tmp_path / "state.db")
     with contextlib.redirect_stdout(io.StringIO()):
         agent = AIAgent(
@@ -59,7 +61,6 @@ def _make_agent(monkeypatch, tmp_path: Path, **prune_keys):
 
 
 class TestProactivePruneConfig:
-
     def test_custom_values_are_honored(self, monkeypatch, tmp_path):
         agent = _make_agent(
             monkeypatch,
@@ -78,7 +79,3 @@ class TestProactivePruneConfig:
         # back to disabled, never coerce to 1 token.
         agent = _make_agent(monkeypatch, tmp_path, proactive_prune_tokens=True)
         assert agent.context_compressor.proactive_prune_tokens == 0
-
-
-
-

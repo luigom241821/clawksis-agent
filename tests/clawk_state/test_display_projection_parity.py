@@ -149,7 +149,9 @@ class TestAncestorPrefix:
         for i in range(3):
             db.append_message(parent, "user", f"P user {i}")
             db.append_message(parent, "assistant", f"P assistant {i}")
-        db.archive_and_compact(parent, [{"role": "user", "content": "[parent summary]"}])
+        db.archive_and_compact(
+            parent, [{"role": "user", "content": "[parent summary]"}]
+        )
         # A real rotation stamps the parent end_reason='compression' (publish_compression_child).
         db.end_session(parent, "compression")
 

@@ -12,7 +12,9 @@ class _Ws:
         self.query_params = params
 
 
-def test_display_ticket_must_be_a_bot_desktop_ticket_pinned_to_a_profile_home(monkeypatch):
+def test_display_ticket_must_be_a_bot_desktop_ticket_pinned_to_a_profile_home(
+    monkeypatch,
+):
     ws_tickets._reset_for_tests()
     gateway_ticket = ws_tickets.mint_ticket(user_id="u", provider="google")
     assert display._consume_display_ticket(_Ws(display_ticket=gateway_ticket)) is None
@@ -20,11 +22,18 @@ def test_display_ticket_must_be_a_bot_desktop_ticket_pinned_to_a_profile_home(mo
     unpinned = ws_tickets.mint_ticket(user_id="display:v", provider="bot-desktop")
     assert display._consume_display_ticket(_Ws(display_ticket=unpinned)) is None
 
-    good = ws_tickets.mint_ticket(user_id="display:v", provider="bot-desktop",
-                                  extra={"clawk_home": "/srv/clawk/bot-a", "viewer_id": "v"})
+    good = ws_tickets.mint_ticket(
+        user_id="display:v",
+        provider="bot-desktop",
+        extra={"clawk_home": "/srv/clawk/bot-a", "viewer_id": "v"},
+    )
     info = display._consume_display_ticket(_Ws(display_ticket=good))
-    assert info and info["clawk_home"] == "/srv/clawk/bot-a" and info["viewer_id"] == "v"
-    assert display._consume_display_ticket(_Ws(display_ticket=good)) is None, "single use"
+    assert (
+        info and info["clawk_home"] == "/srv/clawk/bot-a" and info["viewer_id"] == "v"
+    )
+    assert display._consume_display_ticket(_Ws(display_ticket=good)) is None, (
+        "single use"
+    )
 
 
 def test_a_bad_ticket_is_refused_with_a_close_frame_the_renderer_can_read(monkeypatch):
@@ -39,15 +48,23 @@ def test_a_bad_ticket_is_refused_with_a_close_frame_the_renderer_can_read(monkey
     from clawk_cli import web_server
 
     ws_tickets._reset_for_tests()
-    prev = {k: getattr(web_server.app.state, k, None) for k in ("auth_required", "bound_host")}
+    prev = {
+        k: getattr(web_server.app.state, k, None)
+        for k in ("auth_required", "bound_host")
+    }
     web_server.app.state.auth_required = False
     web_server.app.state.bound_host = None
     client = TestClient(web_server.app)
     try:
-        used = ws_tickets.mint_ticket(user_id="display:v", provider="bot-desktop",
-                                      extra={"clawk_home": "/srv/clawk/bot-a", "viewer_id": "v"})
+        used = ws_tickets.mint_ticket(
+            user_id="display:v",
+            provider="bot-desktop",
+            extra={"clawk_home": "/srv/clawk/bot-a", "viewer_id": "v"},
+        )
         ws_tickets.consume_ticket(used)
-        with client.websocket_connect(f"/api/display/ws?display_ticket={used}") as conn:  # handshake completes
+        with client.websocket_connect(
+            f"/api/display/ws?display_ticket={used}"
+        ) as conn:  # handshake completes
             with pytest.raises(WebSocketDisconnect) as exc:
                 conn.receive_bytes()
         assert exc.value.code == 4401

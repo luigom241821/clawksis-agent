@@ -29,7 +29,9 @@ _EXTENSION_MIME_TYPES = {
 
 # Media types the major vision providers (Anthropic in particular) accept
 # inline. SVG/BMP/TIFF are rejected with a non-retryable 400.
-_ANTHROPIC_SUPPORTED_MEDIA_TYPES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
+_ANTHROPIC_SUPPORTED_MEDIA_TYPES = frozenset(
+    {"image/jpeg", "image/png", "image/gif", "image/webp"}
+)
 
 
 def unsupported_inline_image_media_type(url: str) -> Optional[str]:
@@ -39,13 +41,15 @@ def unsupported_inline_image_media_type(url: str) -> Optional[str]:
     header = url.partition(",")[0].lower()
     if not header.startswith("data:image/"):
         return None
-    subtype = header[len("data:image/"):].split(";", 1)[0].strip() or "unknown"
+    subtype = header[len("data:image/") :].split(";", 1)[0].strip() or "unknown"
     media_type = "image/jpeg" if subtype == "jpg" else f"image/{subtype}"
     return None if media_type in _ANTHROPIC_SUPPORTED_MEDIA_TYPES else media_type
 
 
 _MAGIC_MIME_TYPES = (
-    (b"\xff\xd8\xff", "image/jpeg"), ((b"GIF87a", b"GIF89a"), "image/gif"), (b"BM", "image/bmp"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    ((b"GIF87a", b"GIF89a"), "image/gif"),
+    (b"BM", "image/bmp"),
 )
 
 
@@ -90,14 +94,19 @@ def _detect_image_mime_type_from_bytes(data: bytes) -> Optional[str]:
         # A size >= 16 overrunning the sniffed window is merely a truncated read: clamp it.
         box_size = int.from_bytes(header[:4], "big")
         limit = 16 if box_size < 16 else min(box_size, len(header))
-        brands = {major} | {header[i:i + 4] for i in range(16, limit - 3, 4)}
+        brands = {major} | {header[i : i + 4] for i in range(16, limit - 3, 4)}
         # AV1-coded brands win over the generic HEIF ones when both appear.
         if brands & {b"avif", b"avis", b"av01"}:
             return "image/avif"
         if brands & {
-            b"heic", b"heix", b"heim", b"heis",  # HEVC-coded HEIF still/sequence
-            b"hevc", b"hevx",
-            b"mif1", b"msf1",                    # generic HEIF image / sequence
+            b"heic",
+            b"heix",
+            b"heim",
+            b"heis",  # HEVC-coded HEIF still/sequence
+            b"hevc",
+            b"hevx",
+            b"mif1",
+            b"msf1",  # generic HEIF image / sequence
         }:
             return "image/heic"
     return None
@@ -109,7 +118,11 @@ def _supported_media_types() -> frozenset:
     so the set is narrowed there and normalization converts those formats to PNG."""
     try:
         from agent.auxiliary_client import _runtime_main_value as _v
-        from clawk_cli.local_runtime.capabilities import ACCEPTED_IMAGE_MIMES, is_managed_provider
+        from clawk_cli.local_runtime.capabilities import (
+            ACCEPTED_IMAGE_MIMES,
+            is_managed_provider,
+        )
+
         if is_managed_provider(str(_v("provider") or ""), str(_v("base_url") or "")):
             return ACCEPTED_IMAGE_MIMES
     except Exception:  # best-effort narrowing only
@@ -125,6 +138,7 @@ def _rasterize_svg_to_png(svg_path: Path, out_path: Path) -> bool:
     """Best-effort SVG → PNG via cairosvg, svglib+reportlab, rsvg-convert, inkscape (all soft deps)."""
     try:
         import cairosvg  # type: ignore
+
         cairosvg.svg2png(url=str(svg_path), write_to=str(out_path))
         return _nonempty_file(out_path)
     except Exception:
@@ -132,6 +146,7 @@ def _rasterize_svg_to_png(svg_path: Path, out_path: Path) -> bool:
     try:
         from svglib.svglib import svg2rlg  # type: ignore
         from reportlab.graphics import renderPM  # type: ignore
+
         drawing = svg2rlg(str(svg_path))
         if drawing is not None:
             renderPM.drawToFile(drawing, str(out_path), fmt="PNG")
@@ -140,12 +155,25 @@ def _rasterize_svg_to_png(svg_path: Path, out_path: Path) -> bool:
         pass
     import shutil
     import subprocess
+
     for cmd in (
         ["rsvg-convert", "-o", str(out_path), str(svg_path)],
-        ["inkscape", str(svg_path), "--export-type=png", f"--export-filename={out_path}"]):
+        [
+            "inkscape",
+            str(svg_path),
+            "--export-type=png",
+            f"--export-filename={out_path}",
+        ],
+    ):
         if shutil.which(cmd[0]):
             try:
-                subprocess.run(cmd, check=True, capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
+                    stdin=subprocess.DEVNULL,
+                )
                 if _nonempty_file(out_path):
                     return True
             except Exception:
@@ -161,12 +189,18 @@ def rasterize_svg_data_url(url: str) -> Optional[str]:
     import base64
     from contextlib import suppress
     from urllib.parse import unquote
+
     header, _, payload = url.partition(",")
     try:
-        raw = base64.b64decode(payload) if ";base64" in header.lower() else unquote(payload).encode()
+        raw = (
+            base64.b64decode(payload)
+            if ";base64" in header.lower()
+            else unquote(payload).encode()
+        )
     except Exception:
         return None
     from tools.vision_tools import _secure_cache_dir, _write_private_bytes
+
     out_dir = _secure_cache_dir("cache/vision", "temp_vision_images")
     stem = out_dir / f"inline_{uuid.uuid4()}"
     svg_path, png_path = stem.with_suffix(".svg"), stem.with_suffix(".png")
@@ -174,7 +208,9 @@ def rasterize_svg_data_url(url: str) -> Optional[str]:
         svg_path.write_bytes(raw)
         if not _rasterize_svg_to_png(svg_path, png_path):
             return None
-        return "data:image/png;base64," + base64.b64encode(png_path.read_bytes()).decode("ascii")
+        return "data:image/png;base64," + base64.b64encode(
+            png_path.read_bytes()
+        ).decode("ascii")
     finally:
         for path in (svg_path, png_path):
             with suppress(OSError):
@@ -182,7 +218,8 @@ def rasterize_svg_data_url(url: str) -> Optional[str]:
 
 
 def _normalize_to_supported_image(
-    image_path: Path, detected_mime: str) -> tuple[Optional[Path], Optional[str], Optional[str]]:
+    image_path: Path, detected_mime: str
+) -> tuple[Optional[Path], Optional[str], Optional[str]]:
     """Ensure an image is in a provider-supported format. Returns ``(path, mime, error)``: the input
     unchanged when supported; ``(new_png_path, "image/png", None)`` after conversion — a temp file
     the CALLER must clean up; ``(None, None, message)`` when impossible. SVG is rasterized; other
@@ -190,16 +227,22 @@ def _normalize_to_supported_image(
     if detected_mime in _supported_media_types():
         return image_path, detected_mime, None
     from tools.vision_tools import _secure_cache_dir
+
     out_dir = _secure_cache_dir("cache/vision", "temp_vision_images")
     out_path = out_dir / f"converted_{uuid.uuid4()}.png"
     if detected_mime == "image/svg+xml":
         if _rasterize_svg_to_png(image_path, out_path):
             return out_path, "image/png", None
-        return None, None, (
-            "This is an SVG, which vision models cannot read directly, and no "
-            "SVG rasterizer is installed (tried cairosvg, svglib, rsvg-convert, "
-            "inkscape). Convert the SVG to PNG first — e.g. open it in a browser "
-            "and screenshot it — then re-run vision_analyze on the PNG.")
+        return (
+            None,
+            None,
+            (
+                "This is an SVG, which vision models cannot read directly, and no "
+                "SVG rasterizer is installed (tried cairosvg, svglib, rsvg-convert, "
+                "inkscape). Convert the SVG to PNG first — e.g. open it in a browser "
+                "and screenshot it — then re-run vision_analyze on the PNG."
+            ),
+        )
     # HEIF/AVIF need a codec Pillow's core doesn't always carry, served by DIFFERENT optional
     # backends that must not be gated on one another: HEIC/HEIF (HEVC) needs the pillow-heif
     # plugin registered; AVIF (AV1) is native in Pillow >= 11.3 while pillow-heif wheels are
@@ -209,11 +252,15 @@ def _normalize_to_supported_image(
     if detected_mime in ("image/heic", "image/avif"):
         try:
             import pillow_heif  # type: ignore
+
             pillow_heif.register_heif_opener()
         except Exception:
-            logger.debug("pillow-heif unavailable; relying on Pillow for %s", detected_mime)
+            logger.debug(
+                "pillow-heif unavailable; relying on Pillow for %s", detected_mime
+            )
     try:
         from PIL import Image as _PILImage
+
         with _PILImage.open(image_path) as _img:
             if _img.mode not in ("RGB", "RGBA", "L"):
                 _img = _img.convert("RGBA")
@@ -224,22 +271,37 @@ def _normalize_to_supported_image(
         logger.warning("Failed to normalize %s image to PNG: %s", detected_mime, _exc)
         # Codec-specific guidance: name the backend that actually serves this format.
         if detected_mime == "image/heic":
-            return None, None, (
-                "This is a HEIC/HEIF image (common for iPhone photos), which "
-                "vision models cannot read directly, and no HEIF decoder is "
-                "available. Install one (`pip install pillow-heif`) and re-run "
-                "vision_analyze, or convert the image to PNG/JPEG first.")
+            return (
+                None,
+                None,
+                (
+                    "This is a HEIC/HEIF image (common for iPhone photos), which "
+                    "vision models cannot read directly, and no HEIF decoder is "
+                    "available. Install one (`pip install pillow-heif`) and re-run "
+                    "vision_analyze, or convert the image to PNG/JPEG first."
+                ),
+            )
         if detected_mime == "image/avif":
-            return None, None, (
-                "This is an AVIF image, which vision models cannot read "
-                "directly, and no AV1 decoder is available. Upgrade Pillow "
-                "(>= 11.3 bundles AVIF support) or install a pillow-heif build "
-                "with an AV1 codec, then re-run vision_analyze — or convert the "
-                "image to PNG/JPEG first.")
-    return None, None, (
-        f"Image format {detected_mime!r} is not supported by the vision API "
-        f"and could not be converted to PNG (install Pillow for raster "
-        f"conversion). Convert it to PNG or JPEG and try again.")
+            return (
+                None,
+                None,
+                (
+                    "This is an AVIF image, which vision models cannot read "
+                    "directly, and no AV1 decoder is available. Upgrade Pillow "
+                    "(>= 11.3 bundles AVIF support) or install a pillow-heif build "
+                    "with an AV1 codec, then re-run vision_analyze — or convert the "
+                    "image to PNG/JPEG first."
+                ),
+            )
+    return (
+        None,
+        None,
+        (
+            f"Image format {detected_mime!r} is not supported by the vision API "
+            f"and could not be converted to PNG (install Pillow for raster "
+            f"conversion). Convert it to PNG or JPEG and try again."
+        ),
+    )
 
 
 # Full raster validation runs on untrusted images in a shared CPU executor: bound animated
@@ -251,7 +313,8 @@ _VISION_MAX_VALIDATED_AGGREGATE_PIXELS = 100_000_000
 def _validate_raster_image_decodable(
     image_path: Path,
     max_frames: int = _VISION_MAX_VALIDATED_FRAME_COUNT,
-    max_pixels: int = _VISION_MAX_VALIDATED_AGGREGATE_PIXELS) -> Optional[str]:
+    max_pixels: int = _VISION_MAX_VALIDATED_AGGREGATE_PIXELS,
+) -> Optional[str]:
     """Return an error unless Pillow can fully decode every frame. Header sniffing and ``Image.open``
     only inspect containers: a timed-out download can look like a valid PNG with a truncated pixel
     stream. Without Pillow the image passes unvalidated rather than rejecting everything."""
@@ -264,19 +327,23 @@ def _validate_raster_image_decodable(
             image.verify()
         with _PILImage.open(image_path) as image:
             validated_pixels = 0
-            for frame_number, frame in enumerate(_PILImageSequence.Iterator(image), start=1):
+            for frame_number, frame in enumerate(
+                _PILImageSequence.Iterator(image), start=1
+            ):
                 if frame_number > max_frames:
                     return (
                         "Image validation rejected animation: "
                         f"frame {frame_number} exceeds the maximum "
-                        f"{max_frames} validated frames.")
+                        f"{max_frames} validated frames."
+                    )
                 next_validated_pixels = validated_pixels + frame.width * frame.height
                 if next_validated_pixels > max_pixels:
                     return (
                         "Image validation rejected animation: aggregate decoded "
                         f"pixel count would reach {next_validated_pixels} at frame "
                         f"{frame_number}, exceeding the maximum "
-                        f"{max_pixels}.")
+                        f"{max_pixels}."
+                    )
                 frame.load()
                 validated_pixels = next_validated_pixels
     except Exception as exc:
@@ -290,6 +357,7 @@ def _image_exceeds_dimension(image_path: Path, max_dimension: int) -> bool:
     dependency must never break the embed path."""
     try:
         from PIL import Image as _PILImage
+
         with _PILImage.open(image_path) as _img:
             return max(_img.size) > max_dimension
     except Exception:
@@ -307,29 +375,51 @@ def _crop_image_region(
     try:
         from PIL import Image
     except ImportError:
-        return None, None, (
-            "region cropping requires Pillow (run `clawk pm repair`); "
-            "retry without the region parameter.")
-    if not (isinstance(region, (list, tuple)) and len(region) == 4
-            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in region)):
-        return None, None, (
-            "Invalid region: expected [x1, y1, x2, y2] as four numbers "
-            "(pixel coordinates in the original image).")
+        return (
+            None,
+            None,
+            (
+                "region cropping requires Pillow (run `clawk pm repair`); "
+                "retry without the region parameter."
+            ),
+        )
+    if not (
+        isinstance(region, (list, tuple))
+        and len(region) == 4
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in region)
+    ):
+        return (
+            None,
+            None,
+            (
+                "Invalid region: expected [x1, y1, x2, y2] as four numbers "
+                "(pixel coordinates in the original image)."
+            ),
+        )
     try:
         with Image.open(image_path) as img:
             width, height = img.size
             x1, y1, x2, y2 = (int(v) for v in region)
-            cx1, cy1, cx2, cy2 = (max(0, min(v, b)) for v, b in zip((x1, y1, x2, y2), (width, height) * 2))
+            cx1, cy1, cx2, cy2 = (
+                max(0, min(v, b)) for v, b in zip((x1, y1, x2, y2), (width, height) * 2)
+            )
             if cx2 <= cx1 or cy2 <= cy1:
-                return None, None, (
-                    f"Invalid region [{x1}, {y1}, {x2}, {y2}]: crops to zero "
-                    f"area after clamping to the image bounds. The image is "
-                    f"{width}x{height} px — pick x1<x2 and y1<y2 inside "
-                    f"[0, 0, {width}, {height}].")
+                return (
+                    None,
+                    None,
+                    (
+                        f"Invalid region [{x1}, {y1}, {x2}, {y2}]: crops to zero "
+                        f"area after clamping to the image bounds. The image is "
+                        f"{width}x{height} px — pick x1<x2 and y1<y2 inside "
+                        f"[0, 0, {width}, {height}]."
+                    ),
+                )
             cropped = img.crop((cx1, cy1, cx2, cy2))
             if offset_out is not None:
                 offset_out.update(x=cx1, y=cy1, width=cx2 - cx1, height=cy2 - cy1)
-            out_path = image_path.with_name(f"{image_path.stem}_region_{uuid.uuid4().hex[:8]}.png")
+            out_path = image_path.with_name(
+                f"{image_path.stem}_region_{uuid.uuid4().hex[:8]}.png"
+            )
             if cropped.mode not in ("RGB", "RGBA", "L", "LA", "P"):
                 cropped = cropped.convert("RGB")
             cropped.save(out_path, format="PNG")

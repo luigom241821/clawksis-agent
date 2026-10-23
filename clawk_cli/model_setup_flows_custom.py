@@ -14,8 +14,14 @@ import urllib.parse
 from clawk_cli.cli_output import line_input
 from clawk_cli.providers import custom_provider_slug
 from clawk_cli.model_setup_flows_common import (
-    _HTTP, _ask, _commit_model_config, _load_config_model_section,
-    _prune_replaced_custom_model_config_credentials, _radiolist, _say)
+    _HTTP,
+    _ask,
+    _commit_model_config,
+    _load_config_model_section,
+    _prune_replaced_custom_model_config_credentials,
+    _radiolist,
+    _say,
+)
 
 
 def _parse_context_length(text: str):
@@ -30,7 +36,9 @@ def _parse_context_length(text: str):
     return value if value > 0 else None
 
 
-def _report_context_length_detection(model_name: str, base_url: str, api_key: str) -> None:
+def _report_context_length_detection(
+    model_name: str, base_url: str, api_key: str
+) -> None:
     """Tell the user what the auto-detect resolver found for *model_name* at *base_url* (#2513).
 
     The runtime resolver (``get_model_context_length``) probes /models, local servers and the
@@ -40,34 +48,53 @@ def _report_context_length_detection(model_name: str, base_url: str, api_key: st
     is NOT written to config, which would freeze a probe result into a permanent override.
     """
     try:
-        from agent.model_metadata import DEFAULT_FALLBACK_CONTEXT, get_model_context_length
+        from agent.model_metadata import (
+            DEFAULT_FALLBACK_CONTEXT,
+            get_model_context_length,
+        )
         from clawk_cli.banner import _format_context_length
-        detected = get_model_context_length(model_name, base_url=base_url, api_key=api_key or "")
+
+        detected = get_model_context_length(
+            model_name, base_url=base_url, api_key=api_key or ""
+        )
     except Exception:  # a failing probe must never block the save
         return
     if detected and detected != DEFAULT_FALLBACK_CONTEXT:
-        print(f"  Context length auto-detected: {_format_context_length(detected)} tokens")
+        print(
+            f"  Context length auto-detected: {_format_context_length(detected)} tokens"
+        )
     else:
-        print(f"  Context length: not detected — using the default {_format_context_length(DEFAULT_FALLBACK_CONTEXT)} tokens "
-              f"(set model.context_length in config.yaml to override)")
+        print(
+            f"  Context length: not detected — using the default {_format_context_length(DEFAULT_FALLBACK_CONTEXT)} tokens "
+            f"(set model.context_length in config.yaml to override)"
+        )
 
 
 def _probe_custom_endpoint(effective_key: str, effective_url: str) -> tuple[dict, str]:
     """Verify a custom endpoint via ``probe_api_models`` and report; returns
     ``(probe, effective_url)`` where the URL may be the working fallback base."""
     from clawk_cli.models import probe_api_models
+
     probe = probe_api_models(effective_key, effective_url)
     if probe.get("used_fallback") and probe.get("resolved_base_url"):
-        print(f"Warning: endpoint verification worked at {probe['resolved_base_url']}/models, "
-              f"not the exact URL you entered. Saving the working base URL instead.")
+        print(
+            f"Warning: endpoint verification worked at {probe['resolved_base_url']}/models, "
+            f"not the exact URL you entered. Saving the working base URL instead."
+        )
         effective_url = probe["resolved_base_url"]
     elif probe.get("models") is not None:
-        print(f"Verified endpoint via {probe.get('probed_url')} ({len(probe.get('models') or [])} model(s) visible)")
+        print(
+            f"Verified endpoint via {probe.get('probed_url')} ({len(probe.get('models') or [])} model(s) visible)"
+        )
     else:
-        print(f"Warning: could not verify this endpoint via {probe.get('probed_url')}. Clawksis will still save it.")
+        print(
+            f"Warning: could not verify this endpoint via {probe.get('probed_url')}. Clawksis will still save it."
+        )
         suggested = probe.get("suggested_base_url")
         if suggested and suggested.endswith("/v1"):
-            print(f"  If this server expects /v1 in the path, try base URL: {suggested}")
+            print(
+                f"  If this server expects /v1 in the path, try base URL: {suggested}"
+            )
         elif suggested:
             print(f"  If /v1 should not be in the base URL, try: {suggested}")
     return probe, effective_url
@@ -86,7 +113,9 @@ def _pick_detected_model(detected_models: list) -> str:
         print("  Available models:")
         for i, m in enumerate(detected_models, 1):
             print(f"    {i}. {m}")
-        pick = input(f"  Select model [1-{len(detected_models)}] or type name: ").strip()
+        pick = input(
+            f"  Select model [1-{len(detected_models)}] or type name: "
+        ).strip()
         if pick.isdigit() and 1 <= int(pick) <= len(detected_models):
             return detected_models[int(pick) - 1]
         return pick
@@ -96,10 +125,15 @@ def _pick_detected_model(detected_models: list) -> str:
 def _model_flow_custom(config):
     """Custom endpoint: collect URL, API key, and model name; also saved to ``custom_providers`` so
     it appears in the provider menu on subsequent runs."""
-    from clawk_cli.main_provider_setup import _auto_provider_name, _prompt_custom_api_mode_selection, _save_custom_provider
+    from clawk_cli.main_provider_setup import (
+        _auto_provider_name,
+        _prompt_custom_api_mode_selection,
+        _save_custom_provider,
+    )
     from clawk_cli.auth import _save_model_choice, deactivate_provider
     from clawk_cli.config import custom_endpoint_key_env, get_env_value, save_env_value
     from clawk_cli.secret_prompt import masked_secret_prompt
+
     current_url = get_env_value("OPENAI_BASE_URL") or ""
     current_key = get_env_value("OPENAI_API_KEY") or ""
 
@@ -111,8 +145,12 @@ def _model_flow_custom(config):
     print()
 
     try:
-        base_url = line_input(f"API base URL [{current_url or 'e.g. https://api.example.com/v1'}]: ").strip()
-        api_key = masked_secret_prompt(f"API key [{current_key[:8] + '...' if current_key else 'optional'}]: ").strip()
+        base_url = line_input(
+            f"API base URL [{current_url or 'e.g. https://api.example.com/v1'}]: "
+        ).strip()
+        api_key = masked_secret_prompt(
+            f"API key [{current_key[:8] + '...' if current_key else 'optional'}]: "
+        ).strip()
     except (KeyboardInterrupt, EOFError):
         print("\nCancelled.")
         return
@@ -129,11 +167,20 @@ def _model_flow_custom(config):
     # Most local servers (Ollama, vLLM, llama.cpp) need /v1 for OpenAI-compatible
     # chat completions — offer to append it when the URL looks local without it.
     _url_lower = effective_url.rstrip("/").lower()
-    _looks_local = any(h in _url_lower for h in ("localhost", "127.0.0.1", "0.0.0.0", ":11434", ":8080", ":5000"))
+    _looks_local = any(
+        h in _url_lower
+        for h in ("localhost", "127.0.0.1", "0.0.0.0", ":11434", ":8080", ":5000")
+    )
     if _looks_local and not _url_lower.endswith("/v1"):
-        _say("", "  Hint: Did you mean to add /v1 at the end?",
-             "  Most local model servers (Ollama, vLLM, llama.cpp) require it.", f"  e.g. {effective_url.rstrip('/')}/v1")
-        if _ask("  Add /v1? [Y/n]: ", raw=True, cancel_msg=None, on_cancel="n").lower() in {"", "y", "yes"}:
+        _say(
+            "",
+            "  Hint: Did you mean to add /v1 at the end?",
+            "  Most local model servers (Ollama, vLLM, llama.cpp) require it.",
+            f"  e.g. {effective_url.rstrip('/')}/v1",
+        )
+        if _ask(
+            "  Add /v1? [Y/n]: ", raw=True, cancel_msg=None, on_cancel="n"
+        ).lower() in {"", "y", "yes"}:
             effective_url = effective_url.rstrip("/") + "/v1"
             print(f"  Updated URL: {effective_url}")
         print()
@@ -143,17 +190,27 @@ def _model_flow_custom(config):
     # Ask for the API mode explicitly so codex-compatible custom providers don't
     # silently fall back to chat_completions.
     current_model_cfg = config.get("model")
-    current_api_mode = str(current_model_cfg.get("api_mode") or "").strip() if isinstance(current_model_cfg, dict) else ""
-    api_mode = _prompt_custom_api_mode_selection(effective_url, current_api_mode=current_api_mode)
+    current_api_mode = (
+        str(current_model_cfg.get("api_mode") or "").strip()
+        if isinstance(current_model_cfg, dict)
+        else ""
+    )
+    api_mode = _prompt_custom_api_mode_selection(
+        effective_url, current_api_mode=current_api_mode
+    )
     print(f"  API mode: {api_mode}" if api_mode else "  API mode: auto-detect")
 
     # Select model — use probe results when available, fall back to manual input
     try:
         model_name = _pick_detected_model(probe.get("models") or [])
-        context_length_str = line_input("Context length in tokens [leave blank for auto-detect]: ").strip()
+        context_length_str = line_input(
+            "Context length in tokens [leave blank for auto-detect]: "
+        ).strip()
         # Display name — shown in the provider menu on future runs
         default_name = _auto_provider_name(effective_url)
-        display_name = line_input(f"Display name [{default_name}]: ").strip() or default_name
+        display_name = (
+            line_input(f"Display name [{default_name}]: ").strip() or default_name
+        )
     except (KeyboardInterrupt, EOFError):
         print("\nCancelled.")
         return
@@ -208,9 +265,18 @@ def _model_flow_custom(config):
         print("Endpoint saved. Use `/model` in chat or `clawk model` to set a model.")
 
     # Auto-save to custom_providers so it appears in the menu next time
-    _save_custom_provider(effective_url, effective_key, model_name or "", context_length=context_length,
-                          name=display_name, api_mode=api_mode, key_env=custom_key_env)
-    _prune_replaced_custom_model_config_credentials(effective_url, provider_name=display_name)
+    _save_custom_provider(
+        effective_url,
+        effective_key,
+        model_name or "",
+        context_length=context_length,
+        name=display_name,
+        api_mode=api_mode,
+        key_env=custom_key_env,
+    )
+    _prune_replaced_custom_model_config_credentials(
+        effective_url, provider_name=display_name
+    )
 
 
 def _configured_model_ids(cfg_models) -> list[str]:
@@ -230,7 +296,9 @@ def _configured_model_ids(cfg_models) -> list[str]:
     return out
 
 
-def _discover_named_custom_models(provider_info: dict, api_key: str, configured_models: list, explicit_catalog: bool):
+def _discover_named_custom_models(
+    provider_info: dict, api_key: str, configured_models: list, explicit_catalog: bool
+):
     """Live catalog probe for a named custom endpoint (native ``/api/tags`` for Ollama).
     Returns ``(models, native_catalog_empty)``; persists the live catalog as a side effect."""
     from clawk_cli.config import normalize_extra_headers
@@ -241,8 +309,14 @@ def _discover_named_custom_models(provider_info: dict, api_key: str, configured_
         should_use_ollama_native_catalog,
     )
 
-    from agent.command_token_source import build_command_token_provider, materialize_probe_api_key
-    source = build_command_token_provider(provider_info.get("key_cmd", ""), provider_info["name"])
+    from agent.command_token_source import (
+        build_command_token_provider,
+        materialize_probe_api_key,
+    )
+
+    source = build_command_token_provider(
+        provider_info.get("key_cmd", ""), provider_info["name"]
+    )
     api_key = materialize_probe_api_key(source if source is not None else api_key)
     name, base_url = provider_info["name"], provider_info["base_url"]
     api_mode = provider_info.get("api_mode", "")
@@ -251,52 +325,93 @@ def _discover_named_custom_models(provider_info: dict, api_key: str, configured_
     fetch_kwargs = {"timeout": 8.0}
     if api_mode:
         fetch_kwargs["api_mode"] = api_mode
-    native_catalog_provider = "ollama" if provider_key.lower() == "ollama" or name.strip().lower() == "ollama" else "custom"
+    native_catalog_provider = (
+        "ollama"
+        if provider_key.lower() == "ollama" or name.strip().lower() == "ollama"
+        else "custom"
+    )
     extra_headers = normalize_extra_headers(provider_info.get("extra_headers")) or {}
     candidate_headers = _get_ollama_native_headers(base_url, api_key=api_key)
     for key in tuple(candidate_headers):
         if any(key.lower() == existing.lower() for existing in extra_headers):
             del candidate_headers[key]
     candidate_headers.update(extra_headers)
-    caller_has_authorization = any(key.lower() == "authorization" for key in extra_headers)
+    caller_has_authorization = any(
+        key.lower() == "authorization" for key in extra_headers
+    )
     if api_key and not caller_has_authorization:
         for key in tuple(candidate_headers):
             if key.lower() == "authorization":
                 del candidate_headers[key]
         candidate_headers["Authorization"] = f"Bearer {api_key}"
-    use_native = should_use_ollama_native_catalog(native_catalog_provider, base_url, headers=candidate_headers or None)
-    native_headers_arg = candidate_headers or None if use_native else (extra_headers or None)
+    use_native = should_use_ollama_native_catalog(
+        native_catalog_provider, base_url, headers=candidate_headers or None
+    )
+    native_headers_arg = (
+        candidate_headers or None if use_native else (extra_headers or None)
+    )
     native_catalog_empty = False
     if use_native:
         if explicit_catalog and configured_models:
             live_models = configured_models
         else:
-            live_models = fetch_ollama_local_models(base_url, timeout=8.0, headers=native_headers_arg)
+            live_models = fetch_ollama_local_models(
+                base_url, timeout=8.0, headers=native_headers_arg
+            )
             native_catalog_empty = live_models == []
             if live_models is None:
-                live_models = fetch_api_models(api_key, _normalize_openai_base_url(base_url), headers=native_headers_arg, **fetch_kwargs)
+                live_models = fetch_api_models(
+                    api_key,
+                    _normalize_openai_base_url(base_url),
+                    headers=native_headers_arg,
+                    **fetch_kwargs,
+                )
                 native_catalog_empty = False
     else:
-        live_models = fetch_api_models(api_key, base_url, headers=native_headers_arg, **fetch_kwargs)
-    models = configured_models if explicit_catalog else [] if native_catalog_empty else (live_models or configured_models)
+        live_models = fetch_api_models(
+            api_key, base_url, headers=native_headers_arg, **fetch_kwargs
+        )
+    models = (
+        configured_models
+        if explicit_catalog
+        else []
+        if native_catalog_empty
+        else (live_models or configured_models)
+    )
     # Persist the live catalog to the custom_providers entry so no-probe surfaces
     # (dashboard, desktop, ACP) show the full list; mirrors model_switch.py's
     # _save_discovered_models_to_config. A failed save is non-fatal.
     if live_models:
         with contextlib.suppress(Exception):
-            from clawk_cli.model_switch_providers import _entry_credentials, _save_discovered_models_to_config
+            from clawk_cli.model_switch_providers import (
+                _entry_credentials,
+                _save_discovered_models_to_config,
+            )
+
             _save_discovered_models_to_config(
-                base_url, live_models, api_mode=api_mode, headers=extra_headers or None,
-                credential_identity=_entry_credentials(provider_info, "key_env", "api_key_env")[2])
+                base_url,
+                live_models,
+                api_mode=api_mode,
+                headers=extra_headers or None,
+                credential_identity=_entry_credentials(
+                    provider_info, "key_env", "api_key_env"
+                )[2],
+            )
     return models, native_catalog_empty
 
 
 def _pick_named_custom_model(name: str, models: list, saved_model: str):
     """Searchable radiolist over *models* (numbered prompt without curses); None = cancelled."""
-    default_idx = models.index(saved_model) if saved_model and saved_model in models else 0
+    default_idx = (
+        models.index(saved_model) if saved_model and saved_model in models else 0
+    )
     print(f"Found {len(models)} model(s):\n")
-    menu_items = [f"{m} (current)" if m == saved_model else m for m in models] + ["Cancel"]
-    idx = _radiolist(f"Select model from {name}:", menu_items, default_idx, searchable=True)
+    menu_items = [f"{m} (current)" if m == saved_model else m for m in models] + [
+        "Cancel"
+    ]
+    idx = _radiolist(
+        f"Select model from {name}:", menu_items, default_idx, searchable=True
+    )
     if idx is not None:
         print()
     else:
@@ -322,10 +437,18 @@ def _model_flow_named_custom(config, provider_info):
     """Named custom provider from ``custom_providers`` / ``providers.<key>``: probes the model
     catalog (native ``/api/tags`` for endpoints conservatively identified as Ollama); a previously
     saved model is pre-selected and is the fallback when probing fails."""
-    from clawk_cli.main_provider_setup import _custom_provider_api_key_config_value, _custom_provider_base_url_config_value, _save_custom_provider
+    from clawk_cli.main_provider_setup import (
+        _custom_provider_api_key_config_value,
+        _custom_provider_base_url_config_value,
+        _save_custom_provider,
+    )
     from clawk_cli.auth import _save_model_choice
     from clawk_cli.config import load_config, save_config
-    from clawk_cli.model_switch import _entry_models_discovered, _models_config_is_allowlist
+    from clawk_cli.model_switch import (
+        _entry_models_discovered,
+        _models_config_is_allowlist,
+    )
+
     name = provider_info["name"]
     base_url = provider_info["base_url"]
     api_mode = provider_info.get("api_mode", "")
@@ -338,6 +461,7 @@ def _model_flow_named_custom(config, provider_info):
     # profile's process env under multiplexing), like the runtime does (#67935).
     if not api_key and key_env:
         from agent.secret_scope import get_secret_str
+
         api_key = get_secret_str(key_env, "")
     # Only configured credentials may be persisted, never a short-lived probe token.
     config_api_key = _custom_provider_api_key_config_value(provider_info, api_key)
@@ -351,7 +475,9 @@ def _model_flow_named_custom(config, provider_info):
     if isinstance(discover, str):
         discover = discover.lower() not in {"false", "no", "0"}
     cfg_models = provider_info.get("models", {})
-    explicit_catalog = _models_config_is_allowlist(cfg_models, _entry_models_discovered(provider_info))
+    explicit_catalog = _models_config_is_allowlist(
+        cfg_models, _entry_models_discovered(provider_info)
+    )
     configured_models = _configured_model_ids(cfg_models)
 
     _say(f"  Provider: {name}", f"  URL:      {base_url}")
@@ -365,7 +491,9 @@ def _model_flow_named_custom(config, provider_info):
         models = configured_models or ([saved_model] if saved_model else [])
         print(f"Using configured models (discover_models: false): {len(models)}")
     else:
-        models, native_catalog_empty = _discover_named_custom_models(provider_info, api_key, configured_models, explicit_catalog)
+        models, native_catalog_empty = _discover_named_custom_models(
+            provider_info, api_key, configured_models, explicit_catalog
+        )
 
     if models:
         model_name = _pick_named_custom_model(name, models, saved_model)
@@ -399,7 +527,9 @@ def _model_flow_named_custom(config, provider_info):
         model.pop("api_key", None)
     else:
         model["provider"] = "custom"
-        model["base_url"] = _custom_provider_base_url_config_value(provider_info, base_url)
+        model["base_url"] = _custom_provider_base_url_config_value(
+            provider_info, base_url
+        )
         if config_api_key:
             model["api_key"] = config_api_key
     # Apply api_mode from custom_providers entry, or clear stale value
@@ -413,7 +543,9 @@ def _model_flow_named_custom(config, provider_info):
     if provider_key:
         cfg = load_config()
         providers_cfg = cfg.get("providers")
-        provider_entry = providers_cfg.get(provider_key) if isinstance(providers_cfg, dict) else None
+        provider_entry = (
+            providers_cfg.get(provider_key) if isinstance(providers_cfg, dict) else None
+        )
         if isinstance(provider_entry, dict):
             provider_entry["default_model"] = model_name
             # Only persist an inline api_key when the user originally had one
@@ -421,9 +553,14 @@ def _model_flow_named_custom(config, provider_info):
             # a synthesized api_key — the runtime resolves key_env directly and
             # writing it would downgrade credential hygiene.
             had_inline_api_key = bool(
-                str(provider_info.get("api_key_ref", "") or "").strip() or str(provider_info.get("api_key", "") or "").strip()
+                str(provider_info.get("api_key_ref", "") or "").strip()
+                or str(provider_info.get("api_key", "") or "").strip()
             )
-            if had_inline_api_key and config_api_key and not str(provider_entry.get("api_key", "") or "").strip():
+            if (
+                had_inline_api_key
+                and config_api_key
+                and not str(provider_entry.get("api_key", "") or "").strip()
+            ):
                 provider_entry["api_key"] = config_api_key
             if key_env and not str(provider_entry.get("key_env", "") or "").strip():
                 provider_entry["key_env"] = key_env

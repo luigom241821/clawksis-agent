@@ -22,7 +22,9 @@ import pytest
 from tools import mcp_death_supervisor, mcp_tool
 from tools import mcp_tool_lifecycle as _mcp_lifecycle
 
-pytestmark = pytest.mark.platforms("posix")  # the supervisor is POSIX-only (process groups)
+pytestmark = pytest.mark.platforms(
+    "posix"
+)  # the supervisor is POSIX-only (process groups)
 
 SUPERVISOR = os.path.join(os.path.dirname(mcp_tool.__file__), "mcp_death_supervisor.py")
 
@@ -76,24 +78,28 @@ def _kill(pid: int) -> None:
 
 @pytest.mark.parametrize("pgid", [0, 1, -1, -5])
 def test_refuses_process_groups_that_are_never_a_valid_target(pgid):
-    assert mcp_death_supervisor._is_safe_target(
-        pgid, own_pgid=4242, parent_pgid=777
-    ) is False
+    assert (
+        mcp_death_supervisor._is_safe_target(pgid, own_pgid=4242, parent_pgid=777)
+        is False
+    )
 
 
 def test_refuses_its_own_group_and_the_parents_group():
-    assert mcp_death_supervisor._is_safe_target(
-        4242, own_pgid=4242, parent_pgid=777
-    ) is False
-    assert mcp_death_supervisor._is_safe_target(
-        777, own_pgid=4242, parent_pgid=777
-    ) is False
+    assert (
+        mcp_death_supervisor._is_safe_target(4242, own_pgid=4242, parent_pgid=777)
+        is False
+    )
+    assert (
+        mcp_death_supervisor._is_safe_target(777, own_pgid=4242, parent_pgid=777)
+        is False
+    )
 
 
 def test_accepts_an_unrelated_group():
-    assert mcp_death_supervisor._is_safe_target(
-        999, own_pgid=4242, parent_pgid=777
-    ) is True
+    assert (
+        mcp_death_supervisor._is_safe_target(999, own_pgid=4242, parent_pgid=777)
+        is True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -153,9 +159,7 @@ def test_a_line_truncated_by_the_cap_is_never_acted_on():
     # "register 999999" clipped to "register 9" would reap the wrong group.
     stream = io.StringIO("register " + "9" * (mcp_death_supervisor._MAX_LINE_CHARS))
 
-    assert mcp_death_supervisor._serve(
-        stream, own_pgid=4242, parent_pgid=777
-    ) == set()
+    assert mcp_death_supervisor._serve(stream, own_pgid=4242, parent_pgid=777) == set()
 
 
 def test_unsafe_targets_are_rejected_at_registration_time():
@@ -275,9 +279,7 @@ def test_reaps_the_server_when_the_registering_parent_is_sigkilled(tmp_path):
     )
     victim_pid = supervisor_pid = None
     try:
-        victim_pid, supervisor_pid = (
-            int(x) for x in parent.stdout.readline().split()
-        )
+        victim_pid, supervisor_pid = (int(x) for x in parent.stdout.readline().split())
         assert _alive(victim_pid)
 
         # No graceful anything: the parent never runs another line of Python.
@@ -395,7 +397,9 @@ def all_groups_alive(monkeypatch):
     monkeypatch.setattr(mcp_tool.os, "killpg", lambda pgid, sig: None)
 
 
-def test_register_starts_the_supervisor_once_and_reuses_it(monkeypatch, all_groups_alive):
+def test_register_starts_the_supervisor_once_and_reuses_it(
+    monkeypatch, all_groups_alive
+):
     spawned = []
 
     def _spawn():
@@ -412,9 +416,9 @@ def test_register_starts_the_supervisor_once_and_reuses_it(monkeypatch, all_grou
     assert spawned[0].lines() == ["register 111", "register 222"]
 
 
-
-
-def test_supervisor_is_released_once_nothing_is_left_to_reap(monkeypatch, all_groups_alive):
+def test_supervisor_is_released_once_nothing_is_left_to_reap(
+    monkeypatch, all_groups_alive
+):
     """An empty registration set must not keep a supervisor resident.
 
     A gateway that once connected a stdio server would otherwise carry a
@@ -434,12 +438,18 @@ def test_supervisor_is_released_once_nothing_is_left_to_reap(monkeypatch, all_gr
 
     mcp_tool._update_death_supervisor("register", [111, 222])
     mcp_tool._update_death_supervisor("unregister", [111])
-    assert not spawned[0].closed, "released the supervisor while a group was still registered"
+    assert not spawned[0].closed, (
+        "released the supervisor while a group was still registered"
+    )
 
     mcp_tool._update_death_supervisor("unregister", [222])
     assert spawned[0].closed, "supervisor kept resident with nothing left to reap"
-    assert getattr(spawned[0], "waited", False), "released supervisor was never wait()ed -> zombie until the next Popen"
-    assert spawned[0].lines()[-1] == "unregister 222", "release happened before the last unregister was sent"
+    assert getattr(spawned[0], "waited", False), (
+        "released supervisor was never wait()ed -> zombie until the next Popen"
+    )
+    assert spawned[0].lines()[-1] == "unregister 222", (
+        "release happened before the last unregister was sent"
+    )
     assert mcp_tool._death_supervisor is None
 
     mcp_tool._update_death_supervisor("register", [333])
@@ -477,7 +487,9 @@ def test_unregister_alone_does_not_start_a_supervisor(monkeypatch):
     assert spawned == []
 
 
-def test_a_dead_supervisor_is_replaced_and_live_coverage_replayed(monkeypatch, all_groups_alive):
+def test_a_dead_supervisor_is_replaced_and_live_coverage_replayed(
+    monkeypatch, all_groups_alive
+):
     dead = _FakeSupervisor(exited=True)
     replacement = _FakeSupervisor()
     queue = [dead, replacement]
@@ -512,7 +524,9 @@ def test_replay_does_not_resurrect_an_unregistered_group(monkeypatch, all_groups
     assert "register 111" not in replacement.lines()[len(lines) :]
 
 
-def test_a_broken_pipe_never_propagates_into_a_live_mcp_session(monkeypatch, all_groups_alive):
+def test_a_broken_pipe_never_propagates_into_a_live_mcp_session(
+    monkeypatch, all_groups_alive
+):
     class _BrokenPipe(_FakeSupervisor):
         def __init__(self):
             super().__init__()
@@ -535,7 +549,9 @@ def test_a_broken_pipe_never_propagates_into_a_live_mcp_session(monkeypatch, all
     assert mcp_tool._death_supervisor is None
 
 
-def test_unregister_after_a_broken_pipe_rebuilds_coverage_for_survivors(monkeypatch, all_groups_alive):
+def test_unregister_after_a_broken_pipe_rebuilds_coverage_for_survivors(
+    monkeypatch, all_groups_alive
+):
     """A lost supervisor must be replaced by the NEXT lifecycle event, whatever its verb.
 
     Sequence from the #93517 review: two groups live, the control pipe dies
@@ -561,7 +577,9 @@ def test_unregister_after_a_broken_pipe_rebuilds_coverage_for_survivors(monkeypa
             pass
 
     spawned[0].stdin = _DeadStdin()
-    mcp_tool._update_death_supervisor("register", [333])  # the write fails; supervisor dropped
+    mcp_tool._update_death_supervisor(
+        "register", [333]
+    )  # the write fails; supervisor dropped
     assert mcp_tool._death_supervisor is None
     assert mcp_tool._supervised_pgids == {111, 222, 333}
 
@@ -704,7 +722,9 @@ def test_scoped_teardown_of_one_owner_keeps_the_other_owner_supervised(monkeypat
     """
     fake = _FakeSupervisor()
     monkeypatch.setattr(mcp_tool, "_spawn_death_supervisor", lambda: fake)
-    monkeypatch.setattr(_mcp_lifecycle.time, "sleep", lambda _s: None)  # skip the SIGTERM grace wait
+    monkeypatch.setattr(
+        _mcp_lifecycle.time, "sleep", lambda _s: None
+    )  # skip the SIGTERM grace wait
     a = subprocess.Popen(_VICTIM, start_new_session=True)
     b = subprocess.Popen(_VICTIM, start_new_session=True)
     try:
@@ -716,16 +736,22 @@ def test_scoped_teardown_of_one_owner_keeps_the_other_owner_supervised(monkeypat
             _mcp_lifecycle._stdio_pgids[b.pid] = pg_b
         mcp_tool._update_death_supervisor("register", [pg_a, pg_b])
 
-        _mcp_lifecycle._kill_orphaned_mcp_children(include_active=True, server_name="profile-a")
+        _mcp_lifecycle._kill_orphaned_mcp_children(
+            include_active=True, server_name="profile-a"
+        )
         a.wait(timeout=10)
 
-        assert b.poll() is None, "scoped teardown of profile-a killed profile-b's server"
+        assert b.poll() is None, (
+            "scoped teardown of profile-a killed profile-b's server"
+        )
         assert f"unregister {pg_a}" in fake.lines()
         assert f"unregister {pg_b}" not in fake.lines(), (
             "scoped teardown released the OTHER owner's group from the supervisor"
         )
         assert mcp_tool._supervised_pgids == {pg_b}
-        assert b.pid in _mcp_lifecycle._stdio_pids and b.pid in _mcp_lifecycle._stdio_pgids
+        assert (
+            b.pid in _mcp_lifecycle._stdio_pids and b.pid in _mcp_lifecycle._stdio_pgids
+        )
     finally:
         for p in (a, b):
             _kill(p.pid)

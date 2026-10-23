@@ -54,11 +54,13 @@ def _response(
     return SimpleNamespace(
         id=response_id,
         model="test/model",
-        choices=[SimpleNamespace(
-            index=0,
-            message=_mock_assistant_msg(content=content),
-            finish_reason=finish_reason,
-        )],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=content),
+                finish_reason=finish_reason,
+            )
+        ],
         usage=None,
     )
 
@@ -90,12 +92,19 @@ class TestContinuationRepetitionGuard:
         # Exactly one API call — no continuation was attempted.
         assert loop_agent.client.chat.completions.create.call_count == 1
 
-    @pytest.mark.parametrize("requested_repeat", [False, True], ids=["loop", "repeat-on-request"])
-    def test_repetition_dominated_stop_response_aborts(self, loop_agent, requested_repeat):
+    @pytest.mark.parametrize(
+        "requested_repeat", [False, True], ids=["loop", "repeat-on-request"]
+    )
+    def test_repetition_dominated_stop_response_aborts(
+        self, loop_agent, requested_repeat
+    ):
         if requested_repeat:
             # Asked-for repetition (identical lines, ~3.6k chars) is below runaway scale: a
             # completed answer must be delivered, not discarded.
-            echo = "Hello world, this is a sentence the user asked me to repeat many times.\n" * 50
+            echo = (
+                "Hello world, this is a sentence the user asked me to repeat many times.\n"
+                * 50
+            )
         else:
             paragraph = (
                 "A long paragraph that should never be delivered hundreds of times "
@@ -117,18 +126,22 @@ class TestContinuationRepetitionGuard:
             return
         assert result["completed"] is False
         assert result["partial"] is True
-        assert (result["failure_reason"], result["failure_retryable"]) == ("truncated", True)
+        assert (result["failure_reason"], result["failure_retryable"]) == (
+            "truncated",
+            True,
+        )
         assert "Repetition" in (result["final_response"] or "")
         assert not any(
-            isinstance(m, dict) and m.get("content") == echo
-            for m in result["messages"]
+            isinstance(m, dict) and m.get("content") == echo for m in result["messages"]
         )
 
     def test_legit_truncation_still_continues(self, loop_agent):
         # Ordinary short truncated fragments still get continuation retries.
         loop_agent.client.chat.completions.create.side_effect = [
-            _response("part one "), _response("part two "),
-            _response("part three "), _response("part four."),
+            _response("part one "),
+            _response("part two "),
+            _response("part three "),
+            _response("part four."),
         ]
 
         result = _run(loop_agent, "write me a long report")

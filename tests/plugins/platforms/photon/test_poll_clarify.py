@@ -11,6 +11,7 @@ both directions without spawning the Node sidecar or binding ports:
     carrying the chosen option (so the gateway clarify-intercept resolves it),
     a deselection is dropped, and an empty-title vote is dropped.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -146,5 +147,3 @@ async def test_send_clarify_with_choices_sends_native_poll(
     assert options == ["A", "B", "C"]
     # The vote returns as text, so text-capture must be enabled.
     assert marked == ["clar-1"]
-
-

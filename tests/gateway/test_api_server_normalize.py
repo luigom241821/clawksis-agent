@@ -13,7 +13,6 @@ class TestNormalizeChatContent:
     def test_plain_string_returned_as_is(self):
         assert _normalize_chat_content("hello world") == "hello world"
 
-
     def test_text_content_part(self):
         content = [{"type": "text", "text": "hello"}]
         assert _normalize_chat_content(content) == "hello"
@@ -26,7 +25,6 @@ class TestNormalizeChatContent:
         content = [{"type": "output_text", "text": "assistant output"}]
         assert _normalize_chat_content(content) == "assistant output"
 
-
     def test_empty_text_parts_filtered(self):
         content = [
             {"type": "text", "text": ""},
@@ -34,5 +32,3 @@ class TestNormalizeChatContent:
             {"type": "text", "text": ""},
         ]
         assert _normalize_chat_content(content) == "actual"
-
-

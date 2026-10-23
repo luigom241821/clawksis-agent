@@ -10,7 +10,13 @@ from tools.connectors.catalog_tool import MANAGE_CATALOG_SCHEMA, manage_catalog
 from tools.connectors.gateway import config as gateway_config
 from tools.connectors.managed import run_managed_action
 from tools.connectors.mcp import run_mcp_operation
-from tools.connectors.targets import ALIAS_PATTERN, ALL_ACTIONS, MCP_ACTIONS, normalize_targets, validate_action
+from tools.connectors.targets import (
+    ALIAS_PATTERN,
+    ALL_ACTIONS,
+    MCP_ACTIONS,
+    normalize_targets,
+    validate_action,
+)
 from tools.registry import registry, tool_error
 
 
@@ -36,14 +42,24 @@ def manage_connections(
 
     if action in MCP_ACTIONS:
         return run_mcp_operation(
-            mcp_targets, action, backend=mcp_backend,
-            connection_callback=connection_callback, session_id=session_id, tool_call_id=tool_call_id,
+            mcp_targets,
+            action,
+            backend=mcp_backend,
+            connection_callback=connection_callback,
+            session_id=session_id,
+            tool_call_id=tool_call_id,
         )
 
     return run_managed_action(
-        action, managed, args,
-        client_factory=client_factory, session_id=session_id, tool_call_id=tool_call_id, turn_id=turn_id,
-        connection_callback=connection_callback, connectors_available=connectors_available,
+        action,
+        managed,
+        args,
+        client_factory=client_factory,
+        session_id=session_id,
+        tool_call_id=tool_call_id,
+        turn_id=turn_id,
+        connection_callback=connection_callback,
+        connectors_available=connectors_available,
         card_surface=card_surface,
     )
 
@@ -53,9 +69,9 @@ MANAGE_CONNECTIONS_SCHEMA = {
     "description": (
         "Connect the user to apps. Two kinds: a hosted connector account (Gmail, Notion, ...) "
         "served through the tool gateway, and a local MCP server from the bundled catalog. "
-        "Targets go in 'connectors': a bare slug or {\"name\": \"gmail\"} is a hosted connector "
-        "account; {\"name\": \"linear\", \"mcp\": true} is a local MCP server. Many names exist on "
-        "both sides, so the user's own words decide. Pass \"mcp\": true only when the user asks "
+        'Targets go in \'connectors\': a bare slug or {"name": "gmail"} is a hosted connector '
+        'account; {"name": "linear", "mcp": true} is a local MCP server. Many names exist on '
+        'both sides, so the user\'s own words decide. Pass "mcp": true only when the user asks '
         "for an MCP server, a local server or an install, or when the name exists only as a "
         "catalog entry; otherwise the target is hosted. 'connect' and 'reconnect' are hosted "
         "actions; 'install', 'enable' and 'authorize' are MCP actions. A target the other side "
@@ -135,9 +151,9 @@ MANAGE_CONNECTIONS_SCHEMA = {
                 },
                 "description": (
                     "Targets. REQUIRED for every action but status and display "
-                    "(e.g. [\"gmail\", {\"name\": \"linear\", \"mcp\": true}]); optional filter for "
+                    '(e.g. ["gmail", {"name": "linear", "mcp": true}]); optional filter for '
                     "status. A bare slug is a hosted connector, so an MCP server needs the object "
-                    "form with \"mcp\": true."
+                    'form with "mcp": true.'
                 ),
             },
             "force": {
@@ -160,7 +176,9 @@ registry.register(
     # a cached schema agree. Read as a module attribute so tests patch
     # ``gateway.config.connectors_available`` at one seam.
     handler=lambda args, **kw: manage_connections(
-        args, session_id=kw.get("session_id"), tool_call_id=kw.get("tool_call_id"),
+        args,
+        session_id=kw.get("session_id"),
+        tool_call_id=kw.get("tool_call_id"),
         connectors_available=gateway_config.connectors_available,
     ),
     check_fn=lambda: gateway_config.connectors_available(),

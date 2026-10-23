@@ -28,12 +28,16 @@ def test_salvage_stubs_old_tools_and_keeps_todo_when_stubbing_suffices():
             "_todo_snapshot_synthetic": True,
         }
     ]
-    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(
+        original
+    )
 
     out = salvage_grown_transcript(original, grown)
 
     assert out is not None
-    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(
+        original
+    )
     assert any(m.get("_todo_snapshot_synthetic") for m in out)
     tools = [m["content"] for m in out if m.get("role") == "tool"]
     assert tools[-1] == "keep-latest"
@@ -55,12 +59,16 @@ def test_salvage_drops_todo_only_as_last_resort():
             "_todo_snapshot_synthetic": True,
         },
     ]
-    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(
+        original
+    )
 
     out = salvage_grown_transcript(original, grown)
 
     assert out is not None
-    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(
+        original
+    )
     assert not any(m.get("_todo_snapshot_synthetic") for m in out)
 
 
@@ -85,12 +93,16 @@ def test_salvage_last_resort_preserves_pruned_skill_reload_notice():
             "_todo_snapshot_synthetic": True,
         },
     ]
-    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(
+        original
+    )
 
     out = salvage_grown_transcript(original, grown)
 
     assert out is not None
-    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(out) < estimate_messages_tokens_rough(
+        original
+    )
     snapshot_rows = [m for m in out if m.get("_todo_snapshot_synthetic")]
     assert len(snapshot_rows) == 1
     assert snapshot_rows[0]["content"].startswith(_PRUNED_SKILL_RELOAD_NOTICE_HEADER)
@@ -113,16 +125,15 @@ def test_salvage_caps_oversized_summary():
         {
             "role": "user",
             "content": (
-                "[CONTEXT COMPACTION] "
-                + ("S" * 20_000)
-                + "\n\n"
-                + _SUMMARY_END_MARKER
+                "[CONTEXT COMPACTION] " + ("S" * 20_000) + "\n\n" + _SUMMARY_END_MARKER
             ),
             COMPRESSED_SUMMARY_METADATA_KEY: True,
         },
         {"role": "assistant", "content": "short reply"},
     ]
-    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(original)
+    assert estimate_messages_tokens_rough(grown) > estimate_messages_tokens_rough(
+        original
+    )
 
     out = salvage_grown_transcript(original, grown)
 
@@ -165,10 +176,7 @@ def test_salvage_does_not_cap_plain_user_text_quoting_summary_marker():
 def test_salvage_never_caps_unmarked_summary_shaped_live_user_text():
     original = [{"role": "user", "content": "O" * 20_000}]
     live_user_text = (
-        "[CONTEXT COMPACTION] "
-        + ("U" * 12_000)
-        + "\n\n"
-        + _SUMMARY_END_MARKER
+        "[CONTEXT COMPACTION] " + ("U" * 12_000) + "\n\n" + _SUMMARY_END_MARKER
     )
     candidate = [{"role": "user", "content": live_user_text}]
 
@@ -184,7 +192,9 @@ def test_salvage_never_strips_reasoning_from_retained_turns():
     reasoning = {
         "reasoning": "r" * 300,
         "reasoning_content": "rc" * 150,
-        "reasoning_details": [{"type": "reasoning.text", "text": "d" * 300, "signature": "s", "index": 0}],
+        "reasoning_details": [
+            {"type": "reasoning.text", "text": "d" * 300, "signature": "s", "index": 0}
+        ],
     }
     original = [
         {"role": "user", "content": "go"},
@@ -195,7 +205,13 @@ def test_salvage_never_strips_reasoning_from_retained_turns():
         {"role": "tool", "tool_call_id": "c", "content": "C" * 6000},
         {"role": "tool", "tool_call_id": "d", "content": "keep-latest"},
     ]
-    grown = original + [{"role": "user", "content": "Current todos:\n- [ ] x", "_todo_snapshot_synthetic": True}]
+    grown = original + [
+        {
+            "role": "user",
+            "content": "Current todos:\n- [ ] x",
+            "_todo_snapshot_synthetic": True,
+        }
+    ]
 
     out = salvage_grown_transcript(original, grown)
 

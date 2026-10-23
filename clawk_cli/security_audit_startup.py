@@ -4,6 +4,7 @@ Surfaces dangerous host / deployment posture at process start. Checks are adviso
 independently fail-safe: they return human-readable strings, any internal error yields no finding,
 and nothing here ever raises or blocks startup.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,10 +29,15 @@ def _is_root() -> bool:
 
 
 def _running_as_root() -> Optional[str]:
-    return None if not _is_root() else (
-        "Running as ROOT. The agent's terminal/file tools execute with full root privileges — a single "
-        "prompt-injection or exposed endpoint is a full host compromise. Run Clawksis as an unprivileged user "
-        "(or in a sandboxed terminal backend / container with a non-root user).")
+    return (
+        None
+        if not _is_root()
+        else (
+            "Running as ROOT. The agent's terminal/file tools execute with full root privileges — a single "
+            "prompt-injection or exposed endpoint is a full host compromise. Run Clawksis as an unprivileged user "
+            "(or in a sandboxed terminal backend / container with a non-root user)."
+        )
+    )
 
 
 def _iter_sshd_config_lines() -> list[str]:
@@ -47,7 +53,9 @@ def _iter_sshd_config_lines() -> list[str]:
             raw_lines = p.read_text(encoding="utf-8-sig", errors="replace").splitlines()
         except Exception:
             continue
-        lines.extend(s for s in map(str.strip, raw_lines) if s and not s.startswith("#"))
+        lines.extend(
+            s for s in map(str.strip, raw_lines) if s and not s.startswith("#")
+        )
     return lines
 
 
@@ -59,12 +67,18 @@ def _ssh_password_auth_enabled() -> Optional[str]:
     if not lines:
         return None
     # Last directive wins in sshd_config. Default (no directive) is "yes".
-    directives = [m.group(1).lower() for m in map(re.compile(r"(?i)^PasswordAuthentication\s+(\w+)").match, lines) if m]
+    directives = [
+        m.group(1).lower()
+        for m in map(re.compile(r"(?i)^PasswordAuthentication\s+(\w+)").match, lines)
+        if m
+    ]
     if directives and directives[-1] == "no":
         return None
     qualifier = "" if directives else " (default — no explicit directive)"
-    return (f"SSH password authentication is ENABLED{qualifier}. Password auth is brute-forceable and dangerous "
-            "on an internet-facing box. Set 'PasswordAuthentication no' in sshd_config and use key-based auth.")
+    return (
+        f"SSH password authentication is ENABLED{qualifier}. Password auth is brute-forceable and dangerous "
+        "on an internet-facing box. Set 'PasswordAuthentication no' in sshd_config and use key-based auth."
+    )
 
 
 def _in_container() -> bool:
@@ -89,14 +103,19 @@ def _path_is_mounted(path: Path) -> bool:
     except Exception:
         target = path
     try:
-        mounts = Path("/proc/mounts").read_text(encoding="utf-8", errors="replace").splitlines()
+        mounts = (
+            Path("/proc/mounts")
+            .read_text(encoding="utf-8", errors="replace")
+            .splitlines()
+        )
     except Exception:
         return True  # can't tell — fail safe (no warning)
     # (mountpoint, fstype) entries at or above target; the longest wins, first one on ties.
     covering = [
         (Path(parts[1]), parts[2])
         for parts in (line.split() for line in mounts)
-        if len(parts) >= 3 and (Path(parts[1]) == target or Path(parts[1]) in target.parents)
+        if len(parts) >= 3
+        and (Path(parts[1]) == target or Path(parts[1]) in target.parents)
     ]
     if not covering:
         return True
@@ -111,11 +130,15 @@ def _container_no_volume_mount(clawk_home: Optional[Path]) -> Optional[str]:
         from clawk_constants import get_clawk_home
 
         clawk_home = get_clawk_home()
-    if _path_is_mounted(clawk_home):  # any error propagates to run_security_audit (= no finding)
+    if _path_is_mounted(
+        clawk_home
+    ):  # any error propagates to run_security_audit (= no finding)
         return None
-    return (f"Running in a container but the data dir ({clawk_home}) is NOT on a persistent volume mount — "
-            "sessions, memory, skills, and API keys are ephemeral and lost on container restart. Mount a host "
-            "volume over the CLAWK_HOME data directory.")
+    return (
+        f"Running in a container but the data dir ({clawk_home}) is NOT on a persistent volume mount — "
+        "sessions, memory, skills, and API keys are ephemeral and lost on container restart. Mount a host "
+        "volume over the CLAWK_HOME data directory."
+    )
 
 
 def _network_listener_without_auth(config: Optional[dict]) -> list[str]:
@@ -134,18 +157,26 @@ def _network_listener_without_auth(config: Optional[dict]) -> list[str]:
     key = extra.get("key") or os.environ.get("API_SERVER_KEY", "")
     if not is_network_accessible(str(host)) or str(key).strip():
         return []
-    return [f"OpenAI-compatible API server is network-accessible ({host}) with NO API_SERVER_KEY. It dispatches "
-            "terminal-capable agent work — an unauthenticated network endpoint is remote code execution. "
-            "Set a strong API_SERVER_KEY."]
+    return [
+        f"OpenAI-compatible API server is network-accessible ({host}) with NO API_SERVER_KEY. It dispatches "
+        "terminal-capable agent work — an unauthenticated network endpoint is remote code execution. "
+        "Set a strong API_SERVER_KEY."
+    ]
 
 
-def run_security_audit(*, clawk_home: Optional[Path] = None, config: Optional[dict] = None) -> list[str]:
+def run_security_audit(
+    *, clawk_home: Optional[Path] = None, config: Optional[dict] = None
+) -> list[str]:
     """Run all checks and return human-readable warning strings. Pure (no logging); a check that
     raises simply contributes no finding.
     """
     findings: list[str] = []
-    for check in (_running_as_root, _ssh_password_auth_enabled, lambda: _container_no_volume_mount(clawk_home),
-                  lambda: _network_listener_without_auth(config)):
+    for check in (
+        _running_as_root,
+        _ssh_password_auth_enabled,
+        lambda: _container_no_volume_mount(clawk_home),
+        lambda: _network_listener_without_auth(config),
+    ):
         try:
             r = check()
         except Exception:
@@ -158,7 +189,10 @@ def run_security_audit(*, clawk_home: Optional[Path] = None, config: Optional[di
 
 
 def log_startup_security_warnings(
-    *, clawk_home: Optional[Path] = None, config: Optional[dict] = None, force: bool = False
+    *,
+    clawk_home: Optional[Path] = None,
+    config: Optional[dict] = None,
+    force: bool = False,
 ) -> list[str]:
     """Run the audit once per process (``force=True`` re-runs) and log each finding as a warning."""
     global _AUDIT_RAN
@@ -167,7 +201,10 @@ def log_startup_security_warnings(
     _AUDIT_RAN = True
     findings = run_security_audit(clawk_home=clawk_home, config=config)
     if findings:
-        logger.warning("Security posture audit found %d issue(s) — review your deployment:", len(findings))
+        logger.warning(
+            "Security posture audit found %d issue(s) — review your deployment:",
+            len(findings),
+        )
         for i, f in enumerate(findings, 1):
             logger.warning("  [security %d/%d] %s", i, len(findings), f)
     return findings

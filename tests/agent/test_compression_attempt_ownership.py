@@ -104,9 +104,7 @@ class TestLatePrimaryRestoreAfterFallbackCommit:
         gen = _claim_compressor_attempt(compressor)
 
         compressor._previous_summary = "attempt scribbles"
-        _restore_compressor_attempt_state(
-            compressor, snapshot, attempt_generation=gen
-        )
+        _restore_compressor_attempt_state(compressor, snapshot, attempt_generation=gen)
 
         assert compressor._previous_summary == "primary-era summary"
 
@@ -141,30 +139,25 @@ class TestCancelledCheckOwnership:
         compressor = _compressor()
 
         primary_gen = _claim_compressor_attempt(compressor)
-        _install_compression_cancelled_check(
-            compressor, lambda: "primary", primary_gen
-        )
+        _install_compression_cancelled_check(compressor, lambda: "primary", primary_gen)
 
         # Fallback claims and installs ITS callback while the primary is
         # still unwinding.
         fallback_gen = _claim_compressor_attempt(compressor)
         fallback_check = lambda: "fallback"
-        _install_compression_cancelled_check(
-            compressor, fallback_check, fallback_gen
-        )
+        _install_compression_cancelled_check(compressor, fallback_check, fallback_gen)
 
         # Detached primary's ``finally`` fires late — must be refused.
-        cleared = _clear_compression_cancelled_check_if_owner(
-            compressor, primary_gen
-        )
+        cleared = _clear_compression_cancelled_check_if_owner(compressor, primary_gen)
 
         assert cleared is False
         assert compressor._compression_cancelled_check is fallback_check
 
         # The owner can still clear its own callback afterwards.
-        assert _clear_compression_cancelled_check_if_owner(
-            compressor, fallback_gen
-        ) is True
+        assert (
+            _clear_compression_cancelled_check_if_owner(compressor, fallback_gen)
+            is True
+        )
         assert compressor._compression_cancelled_check is None
 
     def test_owner_clear_roundtrip(self):
@@ -279,8 +272,10 @@ class TestStaleAttemptEndToEnd:
         from agent.context_compressor import ContextCompressor
 
         compressor = ContextCompressor(
-            model="test/model", quiet_mode=True,
-            protect_first_n=2, protect_last_n=2,
+            model="test/model",
+            quiet_mode=True,
+            protect_first_n=2,
+            protect_last_n=2,
             abort_on_summary_failure=False,
         )
         # Context-length resolution is lazy. Set the property directly so the worker cannot
@@ -323,13 +318,19 @@ class TestStaleAttemptEndToEnd:
             return_value=self._llm_response("## Goal\ndelegated summary"),
         ):
             compressed = _run_summary_dispatch(
-                agent, messages, engine.compress,
+                agent,
+                messages,
+                engine.compress,
                 {"current_tokens": 999999, "force": True},
-                commit_fence=None, attempt_generation=generation, hard_cancel_event=None,
+                commit_fence=None,
+                attempt_generation=generation,
+                hard_cancel_event=None,
             )
 
         assert compressed != messages
-        assert inner._previous_summary and "delegated summary" in inner._previous_summary
+        assert (
+            inner._previous_summary and "delegated summary" in inner._previous_summary
+        )
 
     def test_detached_primary_late_success_cannot_write_after_fallback(self):
         import threading
@@ -362,8 +363,13 @@ class TestStaleAttemptEndToEnd:
         def attempt_a():
             try:
                 _run_summary_dispatch(
-                    agent, messages, cc.compress, kwargs,
-                    commit_fence=None, attempt_generation=1, hard_cancel_event=None,
+                    agent,
+                    messages,
+                    cc.compress,
+                    kwargs,
+                    commit_fence=None,
+                    attempt_generation=1,
+                    hard_cancel_event=None,
                 )
             except AuxiliaryExplicitCancellation:
                 outcomes_a.append("cancelled")
@@ -385,10 +391,17 @@ class TestStaleAttemptEndToEnd:
                 gen2 = _claim_compressor_attempt(cc)
                 assert gen2 == 2
                 _run_summary_dispatch(
-                    agent, messages, cc.compress, kwargs,
-                    commit_fence=None, attempt_generation=2, hard_cancel_event=None,
+                    agent,
+                    messages,
+                    cc.compress,
+                    kwargs,
+                    commit_fence=None,
+                    attempt_generation=2,
+                    hard_cancel_event=None,
                 )
-                assert cc._previous_summary and "fallback summary" in cc._previous_summary
+                assert (
+                    cc._previous_summary and "fallback summary" in cc._previous_summary
+                )
             finally:
                 # The detached primary's provider call returns only after fallback completion.
                 b_done.set()
@@ -434,8 +447,13 @@ class TestStaleAttemptEndToEnd:
         def attempt_a():
             try:
                 _run_summary_dispatch(
-                    agent, messages, cc.compress, kwargs,
-                    commit_fence=None, attempt_generation=1, hard_cancel_event=None,
+                    agent,
+                    messages,
+                    cc.compress,
+                    kwargs,
+                    commit_fence=None,
+                    attempt_generation=1,
+                    hard_cancel_event=None,
                 )
             except AuxiliaryExplicitCancellation:
                 outcomes_a.append("cancelled")
@@ -455,10 +473,17 @@ class TestStaleAttemptEndToEnd:
                 gen2 = _claim_compressor_attempt(cc)
                 assert gen2 == 2
                 _run_summary_dispatch(
-                    agent, messages, cc.compress, kwargs,
-                    commit_fence=None, attempt_generation=2, hard_cancel_event=None,
+                    agent,
+                    messages,
+                    cc.compress,
+                    kwargs,
+                    commit_fence=None,
+                    attempt_generation=2,
+                    hard_cancel_event=None,
                 )
-                assert cc._previous_summary and "fallback summary" in cc._previous_summary
+                assert (
+                    cc._previous_summary and "fallback summary" in cc._previous_summary
+                )
             finally:
                 b_done.set()
                 a_done.wait()
@@ -509,7 +534,9 @@ class TestDurableRollbackAtomicity:
         compressor._previous_summary = "current"
 
         _restore_compressor_attempt_state(
-            compressor, snapshot, durable_cooldown_authoritative=None,
+            compressor,
+            snapshot,
+            durable_cooldown_authoritative=None,
             attempt_generation=gen,
         )
         for t in threads:
@@ -540,7 +567,9 @@ class TestDurableRollbackAtomicity:
                 # A busy state.db write on THIS compressor must not block a claim on an
                 # unrelated compressor (gateway: N sessions share the module lock).
                 t = threading.Thread(
-                    target=lambda: other_claims_during_write.append(_claim_compressor_attempt(other)),
+                    target=lambda: other_claims_during_write.append(
+                        _claim_compressor_attempt(other)
+                    ),
                     daemon=True,
                 )
                 t.start()
@@ -550,7 +579,10 @@ class TestDurableRollbackAtomicity:
         compressor._session_id = "s1"
 
         _restore_compressor_attempt_state(
-            compressor, snapshot, durable_cooldown_authoritative=None, attempt_generation=gen,
+            compressor,
+            snapshot,
+            durable_cooldown_authoritative=None,
+            attempt_generation=gen,
         )
 
         assert other_claims_during_write == [1]

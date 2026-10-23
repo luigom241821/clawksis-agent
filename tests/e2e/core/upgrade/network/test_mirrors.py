@@ -31,8 +31,12 @@ pytestmark = [
     pytest.mark.platforms("linux"),
     # Every `clawk update` here targets a throwaway sandboxed install, never the real checkout.
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
-    pytest.mark.skipif(N.netns_required_reason() is not None, reason=str(N.netns_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
+    pytest.mark.skipif(
+        N.netns_required_reason() is not None, reason=str(N.netns_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -59,9 +63,14 @@ def test_pip_mirror_update_restages_pm_runtime_through_the_mirror(inst):
     mirror = N.HttpSite(S.simple_index_app(wheels))
     pip_conf = inst.sb.home / ".config" / "pip" / "pip.conf"
     pip_conf.parent.mkdir(parents=True, exist_ok=True)
-    pip_conf.write_text(f"[global]\nindex-url = {mirror.url}/simple/\n", encoding="utf-8")
+    pip_conf.write_text(
+        f"[global]\nindex-url = {mirror.url}/simple/\n", encoding="utf-8"
+    )
     pyproject = (pm / "pyproject.toml").read_text(encoding="utf-8")
-    new = inst.publish("pm-runtime-input", {"pm/pyproject.toml": pyproject + "\n# e2e: PM runtime input change\n"})
+    new = inst.publish(
+        "pm-runtime-input",
+        {"pm/pyproject.toml": pyproject + "\n# e2e: PM runtime input change\n"},
+    )
     before = inst.state()
     edge = inst.edge(sites=[mirror])
     try:
@@ -70,10 +79,16 @@ def test_pip_mirror_update_restages_pm_runtime_through_the_mirror(inst):
         edge.close()
         pip_conf.unlink()
     public = _public_index_hits(edge)
-    assert r.rc == 0 and inst.head() == new, "update with a pip mirror configured failed\n" + r.report(inst)
+    assert r.rc == 0 and inst.head() == new, (
+        "update with a pip mirror configured failed\n" + r.report(inst)
+    )
     after = inst.state()
-    assert after["pm_runtime"] != before["pm_runtime"], "the PM runtime was not restaged for its new inputs\n" + r.report(inst)
-    assert not public, f"a public index was contacted despite the mirror: {public}\n" + r.report(inst)
+    assert after["pm_runtime"] != before["pm_runtime"], (
+        "the PM runtime was not restaged for its new inputs\n" + r.report(inst)
+    )
+    assert not public, (
+        f"a public index was contacted despite the mirror: {public}\n" + r.report(inst)
+    )
 
 
 def test_npm_registry_mirror_serves_pm_npm_download(inst):
@@ -83,10 +98,24 @@ def test_npm_registry_mirror_serves_pm_npm_download(inst):
     tool = S.installed_tool(inst, "npm")
     version = tool["version"]
     tarball = f"npm-{version}.tgz"
-    blob = S.prefetch(f"https://registry.npmjs.org/npm/-/{tarball}", tool["artifacts"][0],
-                      inst.root / "npm-mirror" / tarball)
-    packument = json.dumps({"name": "npm", "dist-tags": {"latest": version}, "versions": {version: {
-        "name": "npm", "version": version, "dist": {"tarball": f"MIRROR/npm/-/{tarball}"}}}})
+    blob = S.prefetch(
+        f"https://registry.npmjs.org/npm/-/{tarball}",
+        tool["artifacts"][0],
+        inst.root / "npm-mirror" / tarball,
+    )
+    packument = json.dumps(
+        {
+            "name": "npm",
+            "dist-tags": {"latest": version},
+            "versions": {
+                version: {
+                    "name": "npm",
+                    "version": version,
+                    "dist": {"tarball": f"MIRROR/npm/-/{tarball}"},
+                }
+            },
+        }
+    )
     routes: dict = {f"/npm/-/{tarball}": blob.read_bytes()}
     mirror = N.HttpSite(N.static_app(routes))
     routes["/npm"] = packument.replace("MIRROR", mirror.url).encode()
@@ -102,9 +131,13 @@ def test_npm_registry_mirror_serves_pm_npm_download(inst):
             public = _public_index_hits(edge)
             assert not public and r.rc == 0, (
                 f"npm provisioning with a registry mirror failed or reached the public registry {public}\n"
-                + r.report(inst))
-            assert (inst.sb.clawk_home / "tools" / tool["entry"]).is_dir(), "npm was not re-provisioned\n" + r.report(inst)
-            assert any(h.path.endswith(tarball) and h.status == 200 for h in mirror.hits), (
-                "the tarball was not served by the mirror\n" + r.report(inst))
+                + r.report(inst)
+            )
+            assert (inst.sb.clawk_home / "tools" / tool["entry"]).is_dir(), (
+                "npm was not re-provisioned\n" + r.report(inst)
+            )
+            assert any(
+                h.path.endswith(tarball) and h.status == 200 for h in mirror.hits
+            ), "the tarball was not served by the mirror\n" + r.report(inst)
     finally:
         npmrc.unlink()

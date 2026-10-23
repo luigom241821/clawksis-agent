@@ -10,8 +10,6 @@ from agent.memory_context import StreamingContextScrubber, sanitize_context
 
 
 class TestStreamingContextScrubberBasics:
-
-
     def test_complete_block_in_single_delta(self):
         """Regression: the one-shot test case from #13672 must still work."""
         s = StreamingContextScrubber()
@@ -24,7 +22,6 @@ class TestStreamingContextScrubberBasics:
         )
         out = s.feed(leaked) + s.flush()
         assert out == "\n\nVisible answer"
-
 
     def test_realistic_fragmented_chunks_strip_memory_payload(self):
         """Exact leak scenario from the reviewer's comment — 4 realistic chunks.
@@ -49,16 +46,12 @@ class TestStreamingContextScrubberBasics:
         assert "stale memory" not in out
 
 
-
-
-
 class TestStreamingContextScrubberPartialTagFalsePositives:
     def test_partial_open_tag_tail_emitted_on_flush(self):
         """Bare '<mem' at end of stream is not really a memory-context tag."""
         s = StreamingContextScrubber()
         out = s.feed("hello <mem") + s.feed("ory other") + s.flush()
         assert out == "hello <memory other"
-
 
     def test_inline_memory_context_tag_mention_is_not_scrubbed(self):
         """A prose mention of the fence tag must not swallow the answer."""
@@ -69,14 +62,16 @@ class TestStreamingContextScrubberPartialTagFalsePositives:
             + s.feed("there was no matching fact.")
             + s.flush()
         )
-        assert out == "In that previous `<memory-context>` block, there was no matching fact."
+        assert (
+            out
+            == "In that previous `<memory-context>` block, there was no matching fact."
+        )
 
     def test_mid_sentence_memory_context_mention_is_not_scrubbed(self):
         """Only block-like memory-context spans are treated as leaked context."""
         s = StreamingContextScrubber()
         out = s.feed("The <memory-context> tag name is documented here.") + s.flush()
         assert out == "The <memory-context> tag name is documented here."
-
 
 
 class TestStreamingContextScrubberUnterminatedSpan:
@@ -161,10 +156,7 @@ class TestBuildMemoryContextBlockWarnsOnViolation:
         from agent.memory_context import build_memory_context_block
 
         prewrapped = (
-            "<memory-context>\n"
-            "[System note: ...]\n\n"
-            "real fact\n"
-            "</memory-context>"
+            "<memory-context>\n[System note: ...]\n\nreal fact\n</memory-context>"
         )
         with caplog.at_level(logging.WARNING, logger="agent.memory_context"):
             out = build_memory_context_block(prewrapped)
@@ -189,5 +181,10 @@ def test_old_memory_manager_import_path_still_resolves():
     # so the helpers that moved to agent.memory_context stay importable from it.
     import agent.memory_context as moved
     import agent.memory_manager as old
-    for name in ("sanitize_context", "StreamingContextScrubber", "build_memory_context_block"):
+
+    for name in (
+        "sanitize_context",
+        "StreamingContextScrubber",
+        "build_memory_context_block",
+    ):
         assert getattr(old, name, None) is getattr(moved, name), name

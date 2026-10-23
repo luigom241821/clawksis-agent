@@ -65,7 +65,9 @@ class Resampler:
             data = self._carry + samples
             step = self.src // self.dst
             usable = len(data) - len(data) % step
-            out = array("h", (sum(data[i:i + step]) // step for i in range(0, usable, step)))
+            out = array(
+                "h", (sum(data[i : i + step]) // step for i in range(0, usable, step))
+            )
             self._carry = data[usable:]
             return out.tobytes()
         data = self._carry + samples
@@ -108,7 +110,9 @@ class StreamingSession:
     def _take_audio(self, block: bool, timeout: float = 0.0) -> Optional[bytes]:
         """Next 16 kHz chunk (``b""`` when none is queued, None at end of audio)."""
         try:
-            chunk = self._audio.get(timeout=timeout) if block else self._audio.get_nowait()
+            chunk = (
+                self._audio.get(timeout=timeout) if block else self._audio.get_nowait()
+            )
         except queue.Empty:
             return b""
         if chunk and self._to_16k is not None:
@@ -119,8 +123,12 @@ class StreamingSession:
     def start(self) -> StreamingSession:
         # copy_context: a plugin session reads secrets from the opener's profile scope.
         ctx = contextvars.copy_context()
-        self._worker = threading.Thread(target=ctx.run, args=(self._run,), name=f"stt-stream-{self.provider}",
-                                        daemon=True)
+        self._worker = threading.Thread(
+            target=ctx.run,
+            args=(self._run,),
+            name=f"stt-stream-{self.provider}",
+            daemon=True,
+        )
         self._worker.start()
         return self
 
@@ -159,7 +167,12 @@ class StreamingSession:
                     logger.debug("on_partial callback raised", exc_info=True)
 
     def _error(self, message: str) -> dict[str, Any]:
-        return {"success": False, "transcript": "", "provider": self.provider, "error": message}
+        return {
+            "success": False,
+            "transcript": "",
+            "provider": self.provider,
+            "error": message,
+        }
 
     def _finish(self, result: dict[str, Any]) -> None:
         if not self._done.is_set():
@@ -170,7 +183,9 @@ class StreamingSession:
         try:
             self._finish(self._session())
         except Exception as exc:  # health: allow BLE001 -- worker boundary: every failure becomes the envelope
-            logger.warning("Live STT (%s) failed: %s", self.provider, exc, exc_info=True)
+            logger.warning(
+                "Live STT (%s) failed: %s", self.provider, exc, exc_info=True
+            )
             self._finish(self._error(f"live transcription failed: {exc}"))
 
     def _session(self) -> dict[str, Any]:  # pragma: no cover - overridden
@@ -186,8 +201,13 @@ class _WebSocketSession(StreamingSession):
     def _session(self) -> dict[str, Any]:
         from websockets.sync.client import connect
 
-        ws = connect(self.url, additional_headers=self.headers, open_timeout=_CONNECT_TIMEOUT_S,
-                     close_timeout=1, max_size=None)
+        ws = connect(
+            self.url,
+            additional_headers=self.headers,
+            open_timeout=_CONNECT_TIMEOUT_S,
+            close_timeout=1,
+            max_size=None,
+        )
         try:
             return self._loop(ws)
         finally:
@@ -247,25 +267,38 @@ class _WebSocketSession(StreamingSession):
     def _open(self, ws: Any) -> None:
         self._backlog = []
 
-    def _send_audio(self, ws: Any, chunk: bytes) -> None:  # pragma: no cover - overridden
+    def _send_audio(
+        self, ws: Any, chunk: bytes
+    ) -> None:  # pragma: no cover - overridden
         raise NotImplementedError
 
     def _end(self, ws: Any) -> None:  # pragma: no cover - overridden
         raise NotImplementedError
 
-    def _event(self, event: dict[str, Any]) -> Optional[dict[str, Any]]:  # pragma: no cover
+    def _event(
+        self, event: dict[str, Any]
+    ) -> Optional[dict[str, Any]]:  # pragma: no cover
         raise NotImplementedError
 
 
 class OpenAIRealtimeSession(_WebSocketSession):
     provider = "openai"
 
-    def __init__(self, api_key: str, base_url: str, model: str, language: Optional[str],
-                 prompt: Optional[str], on_partial: Optional[PartialCallback] = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        language: Optional[str],
+        prompt: Optional[str],
+        on_partial: Optional[PartialCallback] = None,
+    ) -> None:
         super().__init__(on_partial)
         parts = urlsplit(base_url.rstrip("/"))
         scheme = "wss" if parts.scheme == "https" else "ws"
-        self.url = urlunsplit((scheme, parts.netloc, f"{parts.path}/realtime", "intent=transcription", ""))
+        self.url = urlunsplit(
+            (scheme, parts.netloc, f"{parts.path}/realtime", "intent=transcription", "")
+        )
         self.headers = {"Authorization": f"Bearer {api_key}"}
         self.model, self.language, self.prompt = model, language, prompt
         self._resample = Resampler(INPUT_RATE, 24000)
@@ -283,15 +316,36 @@ class OpenAIRealtimeSession(_WebSocketSession):
                 transcription["language"] = self.language
         if self.prompt:
             transcription["prompt"] = self.prompt
-        ws.send(json.dumps({"type": "session.update", "session": {"type": "transcription", "audio": {"input": {
-            "format": {"type": "audio/pcm", "rate": 24000}, "transcription": transcription,
-            "turn_detection": None}}}}))
+        ws.send(
+            json.dumps(
+                {
+                    "type": "session.update",
+                    "session": {
+                        "type": "transcription",
+                        "audio": {
+                            "input": {
+                                "format": {"type": "audio/pcm", "rate": 24000},
+                                "transcription": transcription,
+                                "turn_detection": None,
+                            }
+                        },
+                    },
+                }
+            )
+        )
 
     def _send_audio(self, ws: Any, chunk: bytes) -> None:
         pcm = self._resample(chunk)
         if pcm:
             self._sent_audio = True
-            ws.send(json.dumps({"type": "input_audio_buffer.append", "audio": base64.b64encode(pcm).decode()}))
+            ws.send(
+                json.dumps(
+                    {
+                        "type": "input_audio_buffer.append",
+                        "audio": base64.b64encode(pcm).decode(),
+                    }
+                )
+            )
 
     def _end(self, ws: Any) -> None:
         if not self._sent_audio:
@@ -306,8 +360,11 @@ class OpenAIRealtimeSession(_WebSocketSession):
             self._text += str(event.get("delta") or "")
             self._set_partial(self._text)
         elif kind.endswith("input_audio_transcription.completed"):
-            return {"success": True, "transcript": str(event.get("transcript") or self._text).strip(),
-                    "provider": self.provider}
+            return {
+                "success": True,
+                "transcript": str(event.get("transcript") or self._text).strip(),
+                "provider": self.provider,
+            }
         elif kind == "error":
             message = str((event.get("error") or {}).get("message") or "provider error")
             # Committing < 100 ms of audio is "buffer too small": the user said nothing.
@@ -320,15 +377,28 @@ class OpenAIRealtimeSession(_WebSocketSession):
 class XAIStreamingSession(_WebSocketSession):
     provider = "xai"
 
-    def __init__(self, api_key: str, base_url: str, model: str, language: Optional[str],
-                 on_partial: Optional[PartialCallback] = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        language: Optional[str],
+        on_partial: Optional[PartialCallback] = None,
+    ) -> None:
         super().__init__(on_partial)
         parts = urlsplit(base_url.rstrip("/"))
         scheme = "wss" if parts.scheme == "https" else "ws"
-        query = {"sample_rate": INPUT_RATE, "encoding": "pcm", "interim_results": "true", "model": model}
+        query = {
+            "sample_rate": INPUT_RATE,
+            "encoding": "pcm",
+            "interim_results": "true",
+            "model": model,
+        }
         if language:
             query["language"] = language
-        self.url = urlunsplit((scheme, parts.netloc, f"{parts.path}/stt", urlencode(query), ""))
+        self.url = urlunsplit(
+            (scheme, parts.netloc, f"{parts.path}/stt", urlencode(query), "")
+        )
         self.headers = {"Authorization": f"Bearer {api_key}"}
         self._created = False
         self._utterances: list[str] = []  # speech_final stitched utterances
@@ -347,7 +417,9 @@ class XAIStreamingSession(_WebSocketSession):
         ws.send(json.dumps({"type": "audio.done"}))
 
     def _text(self) -> str:
-        return " ".join(p for p in (*self._utterances, *self._chunks, self._interim) if p).strip()
+        return " ".join(
+            p for p in (*self._utterances, *self._chunks, self._interim) if p
+        ).strip()
 
     def _event(self, event: dict[str, Any]) -> Optional[dict[str, Any]]:
         kind = event.get("type")
@@ -367,7 +439,11 @@ class XAIStreamingSession(_WebSocketSession):
             self._set_partial(self._text())
             return None
         if kind == "transcript.done":
-            return {"success": True, "transcript": self._text(), "provider": self.provider}
+            return {
+                "success": True,
+                "transcript": self._text(),
+                "provider": self.provider,
+            }
         if kind == "error":
             return self._error(str(event.get("message") or "provider error"))
         return None
@@ -376,24 +452,46 @@ class XAIStreamingSession(_WebSocketSession):
 class ElevenLabsRealtimeSession(_WebSocketSession):
     provider = "elevenlabs"
 
-    def __init__(self, api_key: str, base_url: str, language: Optional[str],
-                 on_partial: Optional[PartialCallback] = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        language: Optional[str],
+        on_partial: Optional[PartialCallback] = None,
+    ) -> None:
         super().__init__(on_partial)
         parts = urlsplit(base_url.rstrip("/"))
         scheme = "wss" if parts.scheme == "https" else "ws"
-        query = {"model_id": ELEVENLABS_REALTIME_MODEL, "audio_format": f"pcm_{INPUT_RATE}",
-                 "commit_strategy": "vad"}
+        query = {
+            "model_id": ELEVENLABS_REALTIME_MODEL,
+            "audio_format": f"pcm_{INPUT_RATE}",
+            "commit_strategy": "vad",
+        }
         if language:
             query["language_code"] = language
-        self.url = urlunsplit((scheme, parts.netloc, f"{parts.path}/speech-to-text/realtime", urlencode(query), ""))
+        self.url = urlunsplit(
+            (
+                scheme,
+                parts.netloc,
+                f"{parts.path}/speech-to-text/realtime",
+                urlencode(query),
+                "",
+            )
+        )
         self.headers = {"xi-api-key": api_key}
         self._committed: list[str] = []
         self._interim = ""
         self._ending = False
 
     def _chunk(self, pcm: bytes, commit: bool) -> str:
-        return json.dumps({"message_type": "input_audio_chunk", "audio_base_64": base64.b64encode(pcm).decode(),
-                           "commit": commit, "sample_rate": INPUT_RATE})
+        return json.dumps(
+            {
+                "message_type": "input_audio_chunk",
+                "audio_base_64": base64.b64encode(pcm).decode(),
+                "commit": commit,
+                "sample_rate": INPUT_RATE,
+            }
+        )
 
     def _send_audio(self, ws: Any, chunk: bytes) -> None:
         ws.send(self._chunk(chunk, False))
@@ -417,10 +515,24 @@ class ElevenLabsRealtimeSession(_WebSocketSession):
             self._interim = ""
             self._set_partial(self._text())
             if self._ending:
-                return {"success": True, "transcript": self._text(), "provider": self.provider}
-        elif kind in ("insufficient_audio_activity", "commit_throttled") and self._ending:
-            return {"success": True, "transcript": self._text(), "provider": self.provider}
-        elif kind and kind not in ("session_started", "committed_transcript_with_timestamps", "warning"):
+                return {
+                    "success": True,
+                    "transcript": self._text(),
+                    "provider": self.provider,
+                }
+        elif (
+            kind in ("insufficient_audio_activity", "commit_throttled") and self._ending
+        ):
+            return {
+                "success": True,
+                "transcript": self._text(),
+                "provider": self.provider,
+            }
+        elif kind and kind not in (
+            "session_started",
+            "committed_transcript_with_timestamps",
+            "warning",
+        ):
             if "error" in event:
                 return self._error(f"{kind}: {event.get('error')}")
         return None
@@ -429,7 +541,9 @@ class ElevenLabsRealtimeSession(_WebSocketSession):
 class _PluginSession(StreamingSession):
     """Adapts a plugin ``TranscriptionStreamSession`` to the caller API (partials polled)."""
 
-    def __init__(self, provider_name: str, inner: Any, on_partial: Optional[PartialCallback]) -> None:
+    def __init__(
+        self, provider_name: str, inner: Any, on_partial: Optional[PartialCallback]
+    ) -> None:
         super().__init__(on_partial)
         self.provider, self._inner = provider_name, inner
 
@@ -447,6 +561,7 @@ class _PluginSession(StreamingSession):
 
 # ── resolution ──
 
+
 def streaming_enabled(stt_config: dict[str, Any]) -> bool:
     return is_truthy_value(stt_config.get("streaming", False), default=False)
 
@@ -456,6 +571,7 @@ def _openai_credentials() -> Optional[tuple[str, str]]:
     the Realtime socket."""
     from tools.tool_backend_helpers import NOUS_MANAGED_PROVIDER, read_selection
     from tools.transcription_tools import _resolve_openai_audio_client_config
+
     if read_selection("stt") == NOUS_MANAGED_PROVIDER:
         return None
     try:
@@ -465,10 +581,16 @@ def _openai_credentials() -> Optional[tuple[str, str]]:
     return api_key, base_url
 
 
-def _builtin_session(provider: str, stt_config: dict[str, Any], language: Optional[str],
-                     prompt: Optional[str], on_partial: Optional[PartialCallback]) -> Optional[StreamingSession]:
+def _builtin_session(
+    provider: str,
+    stt_config: dict[str, Any],
+    language: Optional[str],
+    prompt: Optional[str],
+    on_partial: Optional[PartialCallback],
+) -> Optional[StreamingSession]:
     from tools import transcription_common as tc
     from tools import transcription_tools as tt
+
     raw_section = stt_config.get(provider)
     section: dict[str, Any] = raw_section if isinstance(raw_section, dict) else {}
     if provider == "openai":
@@ -476,15 +598,29 @@ def _builtin_session(provider: str, stt_config: dict[str, Any], language: Option
         if creds is None:
             return None
         model = str(section.get("streaming_model") or DEFAULT_OPENAI_STREAMING_MODEL)
-        return OpenAIRealtimeSession(creds[0], creds[1], model, language, prompt, on_partial)
+        return OpenAIRealtimeSession(
+            creds[0], creds[1], model, language, prompt, on_partial
+        )
     if provider == "xai":
         from clawk_cli.config import get_env_value
-        api_key = str(get_env_value("XAI_API_KEY") or "").strip()  # API key only, like the Desktop wire
+
+        api_key = str(
+            get_env_value("XAI_API_KEY") or ""
+        ).strip()  # API key only, like the Desktop wire
         if not api_key:
             return None
-        base = str(section.get("base_url") or get_env_value("XAI_STT_BASE_URL") or tc.XAI_STT_BASE_URL)
-        return XAIStreamingSession(api_key, base, tc.normalize_xai_stt_model(section.get("model")),
-                                   language, on_partial)
+        base = str(
+            section.get("base_url")
+            or get_env_value("XAI_STT_BASE_URL")
+            or tc.XAI_STT_BASE_URL
+        )
+        return XAIStreamingSession(
+            api_key,
+            base,
+            tc.normalize_xai_stt_model(section.get("model")),
+            language,
+            on_partial,
+        )
     if provider == "elevenlabs":
         api_key = tt._resolve_provider_key("ELEVENLABS_API_KEY", "elevenlabs")
         if not api_key:
@@ -494,18 +630,28 @@ def _builtin_session(provider: str, stt_config: dict[str, Any], language: Option
     return None
 
 
-def _plugin_session(provider: str, language: Optional[str], prompt: Optional[str],
-                    on_partial: Optional[PartialCallback]) -> Optional[StreamingSession]:
+def _plugin_session(
+    provider: str,
+    language: Optional[str],
+    prompt: Optional[str],
+    on_partial: Optional[PartialCallback],
+) -> Optional[StreamingSession]:
     from agent.transcription_registry import get_provider
+
     registered = get_provider(provider)
     if registered is None or not registered.streaming_capable:
         return None
-    return _PluginSession(provider, registered.open_stream_session(language=language, prompt=prompt), on_partial)
+    return _PluginSession(
+        provider,
+        registered.open_stream_session(language=language, prompt=prompt),
+        on_partial,
+    )
 
 
 def streaming_available(stt_config: Optional[dict[str, Any]] = None) -> bool:
     """Cheap capability probe (no connection): would :func:`open_streaming_session` try a wire?"""
     from tools import transcription_tools as tt
+
     cfg = tt._load_stt_config() if stt_config is None else stt_config
     if not streaming_enabled(cfg):
         return False
@@ -513,24 +659,30 @@ def streaming_available(stt_config: Optional[dict[str, Any]] = None) -> bool:
     if provider in STREAMING_PROVIDERS:
         return _builtin_session(provider, cfg, None, None, None) is not None
     from agent.transcription_registry import get_provider
+
     registered = get_provider(provider)
     return bool(registered is not None and registered.streaming_capable)
 
 
-def open_streaming_session(on_partial: Optional[PartialCallback] = None,
-                           stt_config: Optional[dict[str, Any]] = None) -> Optional[StreamingSession]:
+def open_streaming_session(
+    on_partial: Optional[PartialCallback] = None,
+    stt_config: Optional[dict[str, Any]] = None,
+) -> Optional[StreamingSession]:
     """Start a live STT session for the active profile's provider, or None (use the file path).
 
     None when ``stt.streaming`` is off, the provider has no live wire, or it lacks credentials.
     """
     from tools import transcription_tools as tt
+
     cfg = tt._load_stt_config() if stt_config is None else stt_config
     if not streaming_enabled(cfg):
         return None
     provider = tt._get_provider(cfg)
     if provider in ("none", "local", "local_command"):
         return None
-    language = tt._resolve_stt_language(provider, cfg, extra_keys=("language_code",) if provider == "elevenlabs" else ())
+    language = tt._resolve_stt_language(
+        provider, cfg, extra_keys=("language_code",) if provider == "elevenlabs" else ()
+    )
     prompt = str(cfg.get("prompt") or "").strip() or None
     try:
         if provider in STREAMING_PROVIDERS:
@@ -538,6 +690,8 @@ def open_streaming_session(on_partial: Optional[PartialCallback] = None,
         else:
             session = _plugin_session(provider, language, prompt, on_partial)
     except Exception:
-        logger.warning("Live STT session for %s could not open", provider, exc_info=True)
+        logger.warning(
+            "Live STT session for %s could not open", provider, exc_info=True
+        )
         return None
     return session.start() if session is not None else None

@@ -12,10 +12,18 @@ from gateway.hosted_rooms_common import bounded_int, compact_json, identifier
 POLICY_VERSION = 1
 MAX_POLICY_TOOLSETS = 128
 MAX_POLICY_ITERATIONS = (1 << 53) - 1
-_POLICY_FIELDS = {"version", "target_profile", "enabled_toolsets", "approval_mode", "max_iterations", "policy_digest"}
+_POLICY_FIELDS = {
+    "version",
+    "target_profile",
+    "enabled_toolsets",
+    "approval_mode",
+    "max_iterations",
+    "policy_digest",
+}
 
 
-class RoomExecutionPolicyError(ValueError): """A RoomLink execution policy is malformed or no longer current."""
+class RoomExecutionPolicyError(ValueError):
+    """A RoomLink execution policy is malformed or no longer current."""
 
 
 def _policy_digest(unsigned: Mapping[str, Any]) -> str:
@@ -24,12 +32,18 @@ def _policy_digest(unsigned: Mapping[str, Any]) -> str:
 
 def _identifier(value: Any, *, field: str) -> str:
     # Stringifies first (``None`` -> ""), so non-strings also fail as "is invalid".
-    return identifier(str(value or ""), label=field, error=RoomExecutionPolicyError, invalid=f"{field} is invalid")
+    return identifier(
+        str(value or ""),
+        label=field,
+        error=RoomExecutionPolicyError,
+        invalid=f"{field} is invalid",
+    )
 
 
 @dataclass(frozen=True)
 class RoomExecutionPolicy:
     """Immutable target policy applied at the agent and approval boundaries."""
+
     version: int
     target_profile: str
     enabled_toolsets: tuple[str, ...]
@@ -45,23 +59,38 @@ class RoomExecutionPolicy:
             raise RoomExecutionPolicyError("execution policy version is unsupported")
         target_profile = _identifier(value["target_profile"], field="target_profile")
         raw_toolsets = value["enabled_toolsets"]
-        if not isinstance(raw_toolsets, list) or not 1 <= len(raw_toolsets) <= MAX_POLICY_TOOLSETS:
+        if (
+            not isinstance(raw_toolsets, list)
+            or not 1 <= len(raw_toolsets) <= MAX_POLICY_TOOLSETS
+        ):
             raise RoomExecutionPolicyError("enabled_toolsets are invalid")
-        toolsets = tuple(sorted(_identifier(item, field="enabled_toolset") for item in raw_toolsets))
+        toolsets = tuple(
+            sorted(_identifier(item, field="enabled_toolset") for item in raw_toolsets)
+        )
         if len(set(toolsets)) != len(toolsets) or "bot_room" not in toolsets:
             raise RoomExecutionPolicyError("enabled_toolsets are invalid")
         approval_mode = str(value["approval_mode"] or "").strip().lower()
         if approval_mode not in {"manual", "smart", "off"}:
             raise RoomExecutionPolicyError("approval_mode is invalid")
         max_iterations = bounded_int(
-            value["max_iterations"], error=RoomExecutionPolicyError, message="max_iterations is invalid", low=1,
-            high=MAX_POLICY_ITERATIONS)
+            value["max_iterations"],
+            error=RoomExecutionPolicyError,
+            message="max_iterations is invalid",
+            low=1,
+            high=MAX_POLICY_ITERATIONS,
+        )
         unsigned = {
-            "version": POLICY_VERSION, "target_profile": target_profile, "enabled_toolsets": list(toolsets),
-            "approval_mode": approval_mode, "max_iterations": max_iterations}
+            "version": POLICY_VERSION,
+            "target_profile": target_profile,
+            "enabled_toolsets": list(toolsets),
+            "approval_mode": approval_mode,
+            "max_iterations": max_iterations,
+        }
         supplied = str(value["policy_digest"] or "").strip().lower()
         if supplied != _policy_digest(unsigned):
-            raise RoomExecutionPolicyError("policy_digest does not match the execution policy")
+            raise RoomExecutionPolicyError(
+                "policy_digest does not match the execution policy"
+            )
         return cls(**unsigned, policy_digest=supplied)
 
     def as_mapping(self) -> dict[str, Any]:
@@ -74,43 +103,72 @@ def _served_profile_scope(target_profile: str):
     for ``target_profile``, so its config and credentials must be read there, never from the
     launch profile's env or whatever home happens to be active (#116900)."""
     from contextlib import nullcontext
-    from clawk_cli.profiles import get_profile_dir, normalize_profile_name, profile_exists, profile_matches_home
+    from clawk_cli.profiles import (
+        get_profile_dir,
+        normalize_profile_name,
+        profile_exists,
+        profile_matches_home,
+    )
+
     # "default" is the launch home (a `-p x` multiplexer hosts it too), never a switch to ~/.clawksis.
-    if normalize_profile_name(target_profile) == "default" or profile_matches_home(target_profile):
+    if normalize_profile_name(target_profile) == "default" or profile_matches_home(
+        target_profile
+    ):
         return nullcontext()
     if not profile_exists(target_profile):
-        raise RoomExecutionPolicyError(f"target_profile {target_profile!r} is not a live profile")
+        raise RoomExecutionPolicyError(
+            f"target_profile {target_profile!r} is not a live profile"
+        )
     from gateway.run import _profile_runtime_scope
+
     return _profile_runtime_scope(get_profile_dir(target_profile))
 
 
-def execution_policy_mapping(*, target_profile: str, config: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def execution_policy_mapping(
+    *, target_profile: str, config: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     """Resolve the effective API-server policy from the served ``target_profile``'s own config."""
     target_profile = _identifier(target_profile, field="target_profile")
     if config is None:
         from gateway.run import _load_gateway_config
+
         with _served_profile_scope(target_profile):
             config = _load_gateway_config()
-            return execution_policy_mapping(target_profile=target_profile, config=config)
+            return execution_policy_mapping(
+                target_profile=target_profile, config=config
+            )
     if not isinstance(config, Mapping):
         raise RoomExecutionPolicyError("gateway config is invalid")
     from clawk_cli.config import resolve_turn_limit
     from clawk_cli.tools_config import _get_platform_tools
     from tools.approval import _YOLO_MODE_FROZEN
     from tools.approval_context import _normalize_approval_mode
+
     toolsets = sorted({*_get_platform_tools(dict(config), "api_server"), "bot_room"})
     agent = config.get("agent") if isinstance(config.get("agent"), Mapping) else {}
-    approvals = config.get("approvals") if isinstance(config.get("approvals"), Mapping) else {}
+    approvals = (
+        config.get("approvals") if isinstance(config.get("approvals"), Mapping) else {}
+    )
     unsigned = {
-        "version": POLICY_VERSION, "target_profile": _identifier(target_profile, field="target_profile"),
+        "version": POLICY_VERSION,
+        "target_profile": _identifier(target_profile, field="target_profile"),
         "enabled_toolsets": toolsets,
-        "approval_mode": ("off" if _YOLO_MODE_FROZEN else _normalize_approval_mode(approvals.get("mode", "manual"))),
-        "max_iterations": min(resolve_turn_limit(agent.get("max_turns")), MAX_POLICY_ITERATIONS)}
+        "approval_mode": (
+            "off"
+            if _YOLO_MODE_FROZEN
+            else _normalize_approval_mode(approvals.get("mode", "manual"))
+        ),
+        "max_iterations": min(
+            resolve_turn_limit(agent.get("max_turns")), MAX_POLICY_ITERATIONS
+        ),
+    }
     value = {**unsigned, "policy_digest": _policy_digest(unsigned)}
     return RoomExecutionPolicy.from_mapping(value).as_mapping()
 
 
-_CURRENT_POLICY: ContextVar[RoomExecutionPolicy | None] = ContextVar("hosted_room_execution_policy", default=None)
+_CURRENT_POLICY: ContextVar[RoomExecutionPolicy | None] = ContextVar(
+    "hosted_room_execution_policy", default=None
+)
 
 
 def bind_room_execution_policy(policy: RoomExecutionPolicy) -> Token:
@@ -126,6 +184,12 @@ def current_room_execution_policy() -> RoomExecutionPolicy | None:
 
 
 __all__ = [
-    "MAX_POLICY_ITERATIONS", "POLICY_VERSION", "RoomExecutionPolicy", "RoomExecutionPolicyError",
-    "bind_room_execution_policy", "current_room_execution_policy", "execution_policy_mapping",
-    "reset_room_execution_policy"]
+    "MAX_POLICY_ITERATIONS",
+    "POLICY_VERSION",
+    "RoomExecutionPolicy",
+    "RoomExecutionPolicyError",
+    "bind_room_execution_policy",
+    "current_room_execution_policy",
+    "execution_policy_mapping",
+    "reset_room_execution_policy",
+]

@@ -52,8 +52,10 @@ def read_home_selection(home: Path) -> Optional[dict[str, Any]]:
     plugins = config.get("plugins") or {}
     for key in ("enabled", "disabled"):
         names = plugins.get(key)
-        if names is not None and (not isinstance(names, list)
-                                  or any(not isinstance(name, str) for name in names)):
+        if names is not None and (
+            not isinstance(names, list)
+            or any(not isinstance(name, str) for name in names)
+        ):
             raise ValueError(f"plugins.{key} must be a list of names: {config_path}")
     provider = (config.get("memory") or {}).get("provider")
     if provider is not None and not isinstance(provider, str):
@@ -73,8 +75,13 @@ def _enabled_from_config(config: dict[str, Any]) -> list[str]:
     disabled = set(disabled) if isinstance(disabled, list) else set()
     out: list[str] = []
     for name in enabled:
-        if (isinstance(name, str) and name and name not in out
-                and name not in disabled and name.rsplit("/", 1)[-1] not in disabled):
+        if (
+            isinstance(name, str)
+            and name
+            and name not in out
+            and name not in disabled
+            and name.rsplit("/", 1)[-1] not in disabled
+        ):
             out.append(name)
     return out
 
@@ -109,15 +116,25 @@ def dependency_homes() -> list[Path]:
         return homes
     except OSError as exc:
         raise ValueError(f"could not enumerate profiles: {root}") from exc
-    homes.extend(profile for profile in profiles
-                 if _is_directory(profile) and profile.name != "default"
-                 and PROFILE_ID_RE.match(profile.name) and named_profile_is_live(profile))
+    homes.extend(
+        profile
+        for profile in profiles
+        if _is_directory(profile)
+        and profile.name != "default"
+        and PROFILE_ID_RE.match(profile.name)
+        and named_profile_is_live(profile)
+    )
     return homes
 
 
-def enabled_plugins_ordered(*, proposed_home=None, enabled=None, disabled=None,
-                            installing: Path | None = None,
-                            skip_invalid_secondary: bool = False) -> dict[Path, list[str]]:
+def enabled_plugins_ordered(
+    *,
+    proposed_home=None,
+    enabled=None,
+    disabled=None,
+    installing: Path | None = None,
+    skip_invalid_secondary: bool = False,
+) -> dict[Path, list[str]]:
     """plugins_dir → ordered enabled list, per home. Keyed by the
     PLUGINS DIR (where the member dirs live), not the home itself.
 
@@ -135,11 +152,24 @@ def enabled_plugins_ordered(*, proposed_home=None, enabled=None, disabled=None,
         except ValueError as exc:
             if not skip_invalid_secondary or home == homes[0]:
                 raise
-            LOG.warning("Skipping broken secondary profile %s during dependency verification: %s", home, exc)
+            LOG.warning(
+                "Skipping broken secondary profile %s during dependency verification: %s",
+                home,
+                exc,
+            )
             continue
         config = config or {}
-        if proposed_home is not None and home.resolve() == Path(proposed_home).resolve():
-            config = {**config, "plugins": {"enabled": list(enabled or ()), "disabled": list(disabled or ())}}
+        if (
+            proposed_home is not None
+            and home.resolve() == Path(proposed_home).resolve()
+        ):
+            config = {
+                **config,
+                "plugins": {
+                    "enabled": list(enabled or ()),
+                    "disabled": list(disabled or ()),
+                },
+            }
         names = _enabled_from_config(config)
         provider = _provider_from_config(home, config, installing=installing)
         if provider and provider not in names:
@@ -149,12 +179,23 @@ def enabled_plugins_ordered(*, proposed_home=None, enabled=None, disabled=None,
     return out
 
 
-def _provider_from_config(home: Path, config: dict[str, Any], *, installing: Path | None = None) -> Optional[str]:
+def _provider_from_config(
+    home: Path, config: dict[str, Any], *, installing: Path | None = None
+) -> Optional[str]:
     """The ``memory.provider`` key of an already-parsed config, when its
     plugin dir exists (no dir = not a member)."""
     provider = (config.get("memory") or {}).get("provider")
     if not provider or not provider.strip():
         return None
     name = provider.strip()
-    return name if (_is_directory(home / "plugins" / name) or
-                    (installing is not None and (home / "plugins" / name).resolve() == installing.resolve())) else None
+    return (
+        name
+        if (
+            _is_directory(home / "plugins" / name)
+            or (
+                installing is not None
+                and (home / "plugins" / name).resolve() == installing.resolve()
+            )
+        )
+        else None
+    )

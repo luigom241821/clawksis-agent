@@ -160,7 +160,6 @@ class TestCustomReasoningWireShape:
         assert "reasoning_effort" not in eb
         assert "think" not in eb
 
-
     def test_does_not_force_think_true_on_enable(self, custom_profile):
         """We must never send think=True on enable — it's Ollama-only and
         would 400 on GLM/vLLM endpoints that don't recognize it."""
@@ -171,9 +170,14 @@ class TestCustomReasoningWireShape:
 
     @pytest.mark.parametrize(
         "reasoning_config, expected",
-        [({"enabled": True, "effort": "high"}, "default"), ({"enabled": False, "effort": "medium"}, "none")],
+        [
+            ({"enabled": True, "effort": "high"}, "default"),
+            ({"enabled": False, "effort": "medium"}, "none"),
+        ],
     )
-    def test_groq_host_clamps_effort_to_groq_vocabulary(self, custom_profile, reasoning_config, expected):
+    def test_groq_host_clamps_effort_to_groq_vocabulary(
+        self, custom_profile, reasoning_config, expected
+    ):
         """api.groq.com accepts top-level reasoning_effort only as 'none' / 'default' (#75089).
 
         Drives the main transport so the clamp is proven where production reads it.
@@ -181,12 +185,18 @@ class TestCustomReasoningWireShape:
         from agent.transports.chat_completions import ChatCompletionsTransport
 
         kwargs = ChatCompletionsTransport().build_kwargs(
-            model="qwen/qwen3.6-27b", messages=[{"role": "user", "content": "ping"}], tools=None,
-            provider_profile=custom_profile, reasoning_config=reasoning_config,
-            base_url="https://api.groq.com/openai/v1", provider_name="custom",
+            model="qwen/qwen3.6-27b",
+            messages=[{"role": "user", "content": "ping"}],
+            tools=None,
+            provider_profile=custom_profile,
+            reasoning_config=reasoning_config,
+            base_url="https://api.groq.com/openai/v1",
+            provider_name="custom",
         )
         assert kwargs["reasoning_effort"] == expected
-        assert "think" not in kwargs.get("extra_body", {}) and "reasoning" not in kwargs.get("extra_body", {})
+        assert "think" not in kwargs.get(
+            "extra_body", {}
+        ) and "reasoning" not in kwargs.get("extra_body", {})
 
 
 class TestCustomReasoningWithNumCtx:
@@ -208,7 +218,9 @@ class TestCustomResponsesEffortVocabulary:
     ``xhigh`` while chat-completions on the same provider forwarded ``max``.
     """
 
-    def test_named_relay_keeps_configured_max_where_chat_completions_does(self, custom_profile):
+    def test_named_relay_keeps_configured_max_where_chat_completions_does(
+        self, custom_profile
+    ):
         from agent.transports.codex import _resolve_reasoning
 
         reasoning = {"enabled": True, "effort": "max"}
@@ -217,11 +229,19 @@ class TestCustomResponsesEffortVocabulary:
         )
         effort, enabled = _resolve_reasoning(
             "deepseek-flash",
-            {"provider": "custom:relay", "base_url": "https://relay.example/v1", "reasoning_config": reasoning},
+            {
+                "provider": "custom:relay",
+                "base_url": "https://relay.example/v1",
+                "reasoning_config": reasoning,
+            },
         )
-        assert (effort, enabled) == (top_level["reasoning_effort"], True) == ("max", True)
+        assert (
+            (effort, enabled) == (top_level["reasoning_effort"], True) == ("max", True)
+        )
 
-    def test_custom_entry_at_the_official_openai_origin_keeps_the_per_model_ladder(self):
+    def test_custom_entry_at_the_official_openai_origin_keeps_the_per_model_ladder(
+        self,
+    ):
         """api.openai.com's vocabulary is known per model; the custom declaration must not
         put ``max`` on the wire for a slug OpenAI rejects it on."""
         from agent.transports.codex import _resolve_reasoning

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import subprocess
 
-from clawk_cli.web_server_skew_exit import should_retire_for_skew, start_code_skew_watchdog
+from clawk_cli.web_server_skew_exit import (
+    should_retire_for_skew,
+    start_code_skew_watchdog,
+)
 
 _SKEW = ("aaaaaaaaaa", "bbbbbbbbbb")
 
@@ -24,7 +27,11 @@ class _Fence:
         self.idle, self.committed = idle, False
 
     def prepare(self):
-        return {"ok": True, "idle": True, "token": "t"} if self.idle else {"ok": False, "idle": False}
+        return (
+            {"ok": True, "idle": True, "token": "t"}
+            if self.idle
+            else {"ok": False, "idle": False}
+        )
 
     def commit(self, token):
         self.committed = token == "t"
@@ -43,8 +50,13 @@ def _run(fence, skews, *, update=False):
     server = _Server()
     seq = iter(skews)
     thread = start_code_skew_watchdog(
-        server, skew_fn=lambda: next(seq, skews[-1]),
-        update_probe=lambda: update, fence=fence, poll_s=0.01, max_polls=len(skews) + 2)
+        server,
+        skew_fn=lambda: next(seq, skews[-1]),
+        update_probe=lambda: update,
+        fence=fence,
+        poll_s=0.01,
+        max_polls=len(skews) + 2,
+    )
     thread.join(timeout=5)
     return server
 
@@ -52,7 +64,9 @@ def _run(fence, skews, *, update=False):
 def test_skew_retires_through_the_fence_after_two_consecutive_observations():
     fence = _Fence(idle=True)
     assert _run(fence, [_SKEW, _SKEW]).should_exit is True
-    assert fence.committed is True  # admission closed before exit: no turn can start mid-teardown
+    assert (
+        fence.committed is True
+    )  # admission closed before exit: no turn can start mid-teardown
 
 
 def test_a_single_blip_does_not_retire():
@@ -71,13 +85,25 @@ def test_never_retires_while_an_update_is_in_flight():
     assert _run(fence, [_SKEW, _SKEW, _SKEW], update=True).should_exit is False
 
 
-def test_default_probe_retires_once_the_checkout_moves_past_the_boot_revision(tmp_path, monkeypatch):
+def test_default_probe_retires_once_the_checkout_moves_past_the_boot_revision(
+    tmp_path, monkeypatch
+):
     """The real wiring: the watchdog reads the boot revision the serve lifespan records
     (``gateway.code_skew``) against a checkout whose HEAD then moves."""
     from gateway import code_skew
 
     repo = tmp_path / "repo"
-    git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    git = [
+        "git",
+        "-C",
+        str(repo),
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "commit.gpgsign=false",
+    ]
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "one"], check=True)
     monkeypatch.setattr(code_skew, "_PROJECT_ROOT", repo)
@@ -86,12 +112,14 @@ def test_default_probe_retires_once_the_checkout_moves_past_the_boot_revision(tm
 
     fence = _Fence(idle=True)
     unchanged = _Server()
-    start_code_skew_watchdog(unchanged, update_probe=lambda: False, fence=fence,
-                             poll_s=0.01, max_polls=4).join(timeout=5)
+    start_code_skew_watchdog(
+        unchanged, update_probe=lambda: False, fence=fence, poll_s=0.01, max_polls=4
+    ).join(timeout=5)
     assert unchanged.should_exit is False
 
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "two"], check=True)
     moved = _Server()
-    start_code_skew_watchdog(moved, update_probe=lambda: False, fence=fence,
-                             poll_s=0.01, max_polls=4).join(timeout=5)
+    start_code_skew_watchdog(
+        moved, update_probe=lambda: False, fence=fence, poll_s=0.01, max_polls=4
+    ).join(timeout=5)
     assert moved.should_exit is True

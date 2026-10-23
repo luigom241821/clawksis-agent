@@ -97,7 +97,7 @@ SCAR: list[tuple] = [
     # Fence language tag handling (Slack renders the tag literally).
     ("fence-lang-tag-slack", "```text\nliteral first line issue\n```"),
     # Backslashes inside code must survive doubling rules.
-    ("backslash-in-code", "`C:\\Users\\ben\\file.txt` and ```\npath = \"a\\\\b\"\n```"),
+    ("backslash-in-code", '`C:\\Users\\ben\\file.txt` and ```\npath = "a\\\\b"\n```'),
     ("backtick-in-fence", "```\nuse `inline` inside fence\n```"),
     # Headers containing bold markers (native strips redundant **).
     ("header-with-bold", "## The **Real** Deal"),
@@ -111,7 +111,10 @@ SCAR: list[tuple] = [
 ]
 
 ADVERSARIAL: list[tuple] = [
-    ("media-tag", "Here you go\nMEDIA:/tmp/output.png\ndone"),  # no-tmp: ok — fixture string parsed by MEDIA-tag conformance vectors
+    (
+        "media-tag",
+        "Here you go\nMEDIA:/tmp/output.png\ndone",
+    ),  # no-tmp: ok — fixture string parsed by MEDIA-tag conformance vectors
     ("unclosed-fence", "```python\nprint('never closed')"),
     ("pathological-nesting", "**bold *italic ~~struck `code` struck~~ italic* bold**"),
     ("placeholder-injection", "sneaky \x00PH0\x00 token and \x00SL1\x00 too"),
@@ -162,22 +165,52 @@ _EXPECT_OVERRIDES: dict[str, dict[str, tuple]] = {
         # Native wraps pipe tables into row groups; the connector's HTML lane
         # renders tables as <pre>. Same content, structurally different enough
         # that plain-text comparison is noise — documented divergence.
-        "table-simple": ("divergent", "native wraps tables into row groups; connector renders <pre> — content preserved, layout differs"),
-        "table-cjk": ("divergent", "same as table-simple (CJK width alignment is native-only)"),
-        "unclosed-fence": ("divergent", "unterminated fence: native escapes as prose, connector HTML may close the block — degraded either way, never a 400"),
-        "placeholder-injection": ("divergent", "NUL placeholder tokens are renderer-internal; each side neutralizes its own pattern"),
-        "whitespace-only": ("divergent", "native collapses to empty-ish prose, connector HTML preserves — cosmetic"),
+        "table-simple": (
+            "divergent",
+            "native wraps tables into row groups; connector renders <pre> — content preserved, layout differs",
+        ),
+        "table-cjk": (
+            "divergent",
+            "same as table-simple (CJK width alignment is native-only)",
+        ),
+        "unclosed-fence": (
+            "divergent",
+            "unterminated fence: native escapes as prose, connector HTML may close the block — degraded either way, never a 400",
+        ),
+        "placeholder-injection": (
+            "divergent",
+            "NUL placeholder tokens are renderer-internal; each side neutralizes its own pattern",
+        ),
+        "whitespace-only": (
+            "divergent",
+            "native collapses to empty-ish prose, connector HTML preserves — cosmetic",
+        ),
     },
     "slack": {
-        "placeholder-injection": ("divergent", "\\x00SL tokens are the native renderer's own placeholder alphabet; connector uses a different scheme"),
-        "unclosed-fence": ("divergent", "unterminated fence handling differs; both degrade without dropping content"),
+        "placeholder-injection": (
+            "divergent",
+            "\\x00SL tokens are the native renderer's own placeholder alphabet; connector uses a different scheme",
+        ),
+        "unclosed-fence": (
+            "divergent",
+            "unterminated fence handling differs; both degrade without dropping content",
+        ),
     },
     "whatsapp": {
-        "placeholder-injection": ("divergent", "placeholder alphabets are renderer-internal"),
-        "unclosed-fence": ("divergent", "unterminated fence handling differs; both degrade without dropping content"),
+        "placeholder-injection": (
+            "divergent",
+            "placeholder alphabets are renderer-internal",
+        ),
+        "unclosed-fence": (
+            "divergent",
+            "unterminated fence handling differs; both degrade without dropping content",
+        ),
     },
     "discord": {
-        "table-simple": ("divergent", "native converts GFM tables to bullet groups; connector passes raw markdown through (port deferred — parity report Phase 4/oracle section)"),
+        "table-simple": (
+            "divergent",
+            "native converts GFM tables to bullet groups; connector passes raw markdown through (port deferred — parity report Phase 4/oracle section)",
+        ),
         "table-cjk": ("divergent", "same as table-simple"),
     },
 }
@@ -190,15 +223,13 @@ def _expect_for(platform: str, vector_id: str) -> tuple:
 
 def _oracle_commit() -> str:
     try:
-        return (
-            subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=REPO_ROOT,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-        )
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
     except Exception:
         return "unknown"
 

@@ -74,9 +74,7 @@ class TestRequirementGateSeesExternalSecrets:
 
         assert adapter.check_requirements() is True
 
-    def test_profile_scope_build_failure_degrades_to_not_configured(
-        self, monkeypatch
-    ):
+    def test_profile_scope_build_failure_degrades_to_not_configured(self, monkeypatch):
         from agent import secret_scope
         from plugins.platforms.buzz import adapter
 
@@ -113,9 +111,7 @@ class TestScopedSemanticsUnchanged:
 
         monkeypatch.setenv("BUZZ_RELAY_URL", "wss://relay.example")
         monkeypatch.delenv("BUZZ_PRIVATE_KEY", raising=False)
-        calls = _install_fake_scope(
-            monkeypatch, {"BUZZ_PRIVATE_KEY": _STUB_KEY * 2}
-        )
+        calls = _install_fake_scope(monkeypatch, {"BUZZ_PRIVATE_KEY": _STUB_KEY * 2})
         token = secret_scope.set_secret_scope({})  # active, empty scope
 
         try:

@@ -25,25 +25,29 @@ def _patch_info(tmp_path, config_yaml, model, runtime):
 
 
 class TestFormatSessionInfo:
-
-
-
     def test_config_context_length(self, runner, tmp_path):
-        p1, p2, p3 = _patch_info(tmp_path, "model:\n  default: test-model\n  context_length: 32768\n",
-                                  "test-model",
-                                  {"provider": "custom", "base_url": "", "api_key": ""})
+        p1, p2, p3 = _patch_info(
+            tmp_path,
+            "model:\n  default: test-model\n  context_length: 32768\n",
+            "test-model",
+            {"provider": "custom", "base_url": "", "api_key": ""},
+        )
         with p1, p2, p3:
             info = runner._format_session_info()
         assert "32K" in info
         assert "config" in info
-
 
     def test_local_endpoint_shown(self, runner, tmp_path):
         p1, p2, p3 = _patch_info(
             tmp_path,
             "model:\n  default: qwen3:8b\n  provider: custom\n  base_url: http://localhost:11434/v1\n  context_length: 8192\n",
             "qwen3:8b",
-            {"provider": "custom", "base_url": "http://localhost:11434/v1", "api_key": ""})
+            {
+                "provider": "custom",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "",
+            },
+        )
         with p1, p2, p3:
             info = runner._format_session_info()
         assert "localhost:11434" in info
@@ -51,12 +55,24 @@ class TestFormatSessionInfo:
 
     def test_moa_preset_names_the_billed_aggregator(self, runner, tmp_path):
         """#112359: the preset name hides who pays; /model must name the acting aggregator."""
-        p1, p2, p3 = _patch_info(tmp_path, "model:\n  default: review\n  provider: moa\n",
-                                  "review", {"provider": "moa", "base_url": "", "api_key": ""})
-        moa_cfg = {"moa": {"presets": {"review": {
-            "reference_models": [{"provider": "openai", "model": "gpt-5.5"}],
-            "aggregator": {"provider": "nous", "model": "claude-opus-4.8"},
-        }}}}
+        p1, p2, p3 = _patch_info(
+            tmp_path,
+            "model:\n  default: review\n  provider: moa\n",
+            "review",
+            {"provider": "moa", "base_url": "", "api_key": ""},
+        )
+        moa_cfg = {
+            "moa": {
+                "presets": {
+                    "review": {
+                        "reference_models": [
+                            {"provider": "openai", "model": "gpt-5.5"}
+                        ],
+                        "aggregator": {"provider": "nous", "model": "claude-opus-4.8"},
+                    }
+                }
+            }
+        }
         with p1, p2, p3, patch("clawk_cli.config.load_config", return_value=moa_cfg):
             info = runner._format_session_info()
         assert "nous:claude-opus-4.8" in info
@@ -91,21 +107,27 @@ class TestFormatSessionInfo:
                 "api_key": "",
             },
         )
-        with p1, p2, p3, patch(
-            "clawk_cli.config.get_compatible_custom_providers",
-            return_value=[
-                {
-                    "name": "custom-local-agentw",
-                    "base_url": "http://127.0.0.1:8080/v1",
-                    "models": {},
-                }
-            ],
-        ), patch(
-            "agent.model_metadata.get_model_context_length",
-            side_effect=lambda *args, **kwargs: (
-                kwargs.get("config_context_length")
-                if kwargs.get("config_context_length")
-                else 131072
+        with (
+            p1,
+            p2,
+            p3,
+            patch(
+                "clawk_cli.config.get_compatible_custom_providers",
+                return_value=[
+                    {
+                        "name": "custom-local-agentw",
+                        "base_url": "http://127.0.0.1:8080/v1",
+                        "models": {},
+                    }
+                ],
+            ),
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=lambda *args, **kwargs: (
+                    kwargs.get("config_context_length")
+                    if kwargs.get("config_context_length")
+                    else 131072
+                ),
             ),
         ):
             info = runner._format_session_info()
@@ -123,8 +145,11 @@ class TestResetNoticeSessionInfo:
     def _source(self):
         from gateway.config import Platform
         from gateway.session import SessionSource
+
         return SessionSource(
-            platform=Platform.TELEGRAM, chat_id="123", user_id="u1",
+            platform=Platform.TELEGRAM,
+            chat_id="123",
+            user_id="u1",
             profile="planner",
         )
 
@@ -134,20 +159,28 @@ class TestResetNoticeSessionInfo:
         profile.mkdir(parents=True)
         base.mkdir()
         base.joinpath("config.yaml").write_text(
-            "model:\n  default: base-model\n  provider: custom\n  context_length: 1000\n")
+            "model:\n  default: base-model\n  provider: custom\n  context_length: 1000\n"
+        )
         profile.joinpath("config.yaml").write_text(
-            "model:\n  default: profile-model\n  provider: anthropic\n  context_length: 2000\n")
+            "model:\n  default: profile-model\n  provider: anthropic\n  context_length: 2000\n"
+        )
         return base, profile
 
     def test_multiplex_uses_profile_config(self, runner, tmp_path):
         from types import SimpleNamespace
+
         base, profile = self._homes(tmp_path)
         runner.config = SimpleNamespace(multiplex_profiles=True)
-        with patch("gateway.run._clawk_home", base), \
-             patch.object(GatewayRunner, "_resolve_profile_home_for_source", return_value=profile), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value=self._RUNTIME):
+        with (
+            patch("gateway.run._clawk_home", base),
+            patch.object(
+                GatewayRunner, "_resolve_profile_home_for_source", return_value=profile
+            ),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs", return_value=self._RUNTIME
+            ),
+        ):
             info = runner._reset_notice_session_info(self._source())
         assert "profile-model" in info
         assert "anthropic" in info
         assert "base-model" not in info
-

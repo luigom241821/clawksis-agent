@@ -29,8 +29,16 @@ SIDE_KEY = "bg_0a1b2c"
 
 
 def _policy(source: str, cwd: str) -> LocalSessionPolicy:
-    return LocalSessionPolicy(source=source, platform={**SURFACES, "kanban": "cli"}[source], cwd=cwd, model="m",
-                              toolsets=(), config_json="{}", request_json="{}", terminal_json="{}")
+    return LocalSessionPolicy(
+        source=source,
+        platform={**SURFACES, "kanban": "cli"}[source],
+        cwd=cwd,
+        model="m",
+        toolsets=(),
+        config_json="{}",
+        request_json="{}",
+        terminal_json="{}",
+    )
 
 
 def _viewer_session(attached: str = "approver"):
@@ -38,10 +46,16 @@ def _viewer_session(attached: str = "approver"):
     ``session:approve``, a read-only one, or nobody."""
     from types import SimpleNamespace
     from gateway.session_authority import LiveSession
+
     live = LiveSession(None, SESSION_KEY)
-    capabilities = {"approver": {"session:read", "session:approve"}, "read-only": {"session:read"}}.get(attached)
+    capabilities = {
+        "approver": {"session:read", "session:approve"},
+        "read-only": {"session:read"},
+    }.get(attached)
     if capabilities is not None:
-        live.subscribers["viewer"] = SimpleNamespace(capabilities=frozenset(capabilities))
+        live.subscribers["viewer"] = SimpleNamespace(
+            capabilities=frozenset(capabilities)
+        )
     return live
 
 
@@ -58,31 +72,55 @@ def turn(monkeypatch, tmp_path):
         prompts.append(approval_data)
         with A._lock:
             entry = A._gateway_queues[SESSION_KEY][-1]
-            entry.result = answers.get(approval_data.get("pattern_key"), answers.get("*", "deny"))
+            entry.result = answers.get(
+                approval_data.get("pattern_key"), answers.get("*", "deny")
+            )
             entry.event.set()
 
     cleanups = []
 
-    def start(*, platform: str = "local", source: str | None = None, viewer: bool = True,
-              attached: str = "approver", **set_answers):
+    def start(
+        *,
+        platform: str = "local",
+        source: str | None = None,
+        viewer: bool = True,
+        attached: str = "approver",
+        **set_answers,
+    ):
         """``viewer``: the turn is one the session's viewer submitted (``execute_admission`` binds it);
         ``False`` is a plugin injection or another producer admission into the session. ``attached``: see
         ``_viewer_session``."""
-        monkeypatch.setenv("CLAWK_EXEC_ASK", "1")  # start_gateway() sets it process-wide
-        for name in ("CLAWK_INTERACTIVE", "CLAWK_GATEWAY_SESSION", "CLAWK_CRON_SESSION"):
+        monkeypatch.setenv(
+            "CLAWK_EXEC_ASK", "1"
+        )  # start_gateway() sets it process-wide
+        for name in (
+            "CLAWK_INTERACTIVE",
+            "CLAWK_GATEWAY_SESSION",
+            "CLAWK_CRON_SESSION",
+        ):
             monkeypatch.delenv(name, raising=False)
         answers.update(set_answers)
-        vars_tokens = set_session_vars(platform=platform, session_key=SESSION_KEY, session_id=SESSION_KEY)
+        vars_tokens = set_session_vars(
+            platform=platform, session_key=SESSION_KEY, session_id=SESSION_KEY
+        )
         key_token = approval_context.set_current_session_key(SESSION_KEY)
-        policy_token = _ACTIVE_POLICY.set(_policy(source, str(tmp_path)) if source else None)
+        policy_token = _ACTIVE_POLICY.set(
+            _policy(source, str(tmp_path)) if source else None
+        )
         if viewer:
             from gateway.session_ingress import viewer_turn
+
             viewer_token = viewer_turn.set(_viewer_session(attached))
             cleanups.append(lambda: viewer_turn.reset(viewer_token))
         A.register_gateway_notify(SESSION_KEY, notify)
-        cleanups.append(lambda: (A.unregister_gateway_notify(SESSION_KEY), _ACTIVE_POLICY.reset(policy_token),
-                                 approval_context.reset_current_session_key(key_token),
-                                 clear_session_vars(vars_tokens)))
+        cleanups.append(
+            lambda: (
+                A.unregister_gateway_notify(SESSION_KEY),
+                _ACTIVE_POLICY.reset(policy_token),
+                approval_context.reset_current_session_key(key_token),
+                clear_session_vars(vars_tokens),
+            )
+        )
         return prompts
 
     with A._lock:
@@ -102,9 +140,13 @@ def turn(monkeypatch, tmp_path):
 
 def _rm_script(victim) -> tuple[str, str]:
     command = f"rm -rf {victim}"
-    assert detect_dangerous_command(command)[0], "probe command must trip a per-command guard"
-    return command, ("import json\nfrom clawk_tools import terminal\n"
-                     f"print(json.dumps(terminal({command!r})))")
+    assert detect_dangerous_command(command)[0], (
+        "probe command must trip a per-command guard"
+    )
+    return command, (
+        "import json\nfrom clawk_tools import terminal\n"
+        f"print(json.dumps(terminal({command!r})))"
+    )
 
 
 LOCAL_SOURCES = pytest.mark.parametrize("source", ["cli", "tui", "gui", "acp"])
@@ -133,21 +175,27 @@ def test_local_session_skips_whole_script_prompt(child_env, turn, source):
     command, code = _rm_script(victim)
     prompts = turn(source=source)  # every prompt is denied
     run_code(code, enabled_tools=("terminal",))
-    assert [p.get("pattern_key") for p in prompts if p.get("pattern_key") == "execute_code"] == []
+    assert [
+        p.get("pattern_key") for p in prompts if p.get("pattern_key") == "execute_code"
+    ] == []
     assert [p["command"] for p in prompts] == [command]
     assert victim.is_dir()
 
 
 # The approval-specific refusals the gate returns (tools/approval.py _EXECUTE_CODE_GATE / _pending_result).
-_DENIED_SCRIPT = ("BLOCKED: execute_code script denied by user. The user has NOT consented to running this code. "
-                  "Do NOT retry, do NOT rephrase the script, and do NOT attempt the same outcome via a different tool.")
+_DENIED_SCRIPT = (
+    "BLOCKED: execute_code script denied by user. The user has NOT consented to running this code. "
+    "Do NOT retry, do NOT rephrase the script, and do NOT attempt the same outcome via a different tool."
+)
 
 
 def _unanswered_script(code: str) -> str:
     """No notifier: the script parks as a pending approval nobody can answer, and never starts."""
-    return (f"⚠️ {A._EXECUTE_CODE_DESCRIPTION}. Asking the user for approval.\n\n**Code:**\n```python\n{code}\n```\n\n"
-            "STOP: do NOT re-run, rephrase, or re-issue this code — each variant sends the user ANOTHER approval "
-            "card. Wait for the user's decision; if this turn must end, report that approval is pending.")
+    return (
+        f"⚠️ {A._EXECUTE_CODE_DESCRIPTION}. Asking the user for approval.\n\n**Code:**\n```python\n{code}\n```\n\n"
+        "STOP: do NOT re-run, rephrase, or re-issue this code — each variant sends the user ANOTHER approval "
+        "card. Wait for the user's decision; if this turn must end, report that approval is pending."
+    )
 
 
 def _run_unguarded_rm(victim) -> tuple[str, dict]:
@@ -156,9 +204,19 @@ def _run_unguarded_rm(victim) -> tuple[str, dict]:
     import json
     from unittest.mock import patch
     from tools.code_execution_tool import execute_code
+
     code = f"import subprocess\nsubprocess.run(['rm', '-rf', {str(victim)!r}], check=False)\nprint('ran')"
-    with patch("tools.code_execution_tool._load_config", return_value={"mode": "project"}):
-        return code, json.loads(execute_code(code=code, task_id="child-env-test", enabled_tools=["terminal"], reset=True))
+    with patch(
+        "tools.code_execution_tool._load_config", return_value={"mode": "project"}
+    ):
+        return code, json.loads(
+            execute_code(
+                code=code,
+                task_id="child-env-test",
+                enabled_tools=["terminal"],
+                reset=True,
+            )
+        )
 
 
 @contextlib.contextmanager
@@ -192,7 +250,9 @@ def test_injected_turn_keeps_whole_script_gate(child_env, turn, source):
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("source", ["cli", "gui"])
 @pytest.mark.parametrize("attached", ["nobody", "read-only"])
-def test_viewer_turn_with_no_approver_attached_keeps_whole_script_gate(child_env, turn, source, attached):
+def test_viewer_turn_with_no_approver_attached_keeps_whole_script_gate(
+    child_env, turn, source, attached
+):
     """The turn's notifier is registered for every session turn, viewer attached or not; the exemption also
     needs an attached viewer that can answer approvals. Otherwise the script is approved as a whole and,
     with nobody approving, never runs."""
@@ -207,11 +267,14 @@ def test_viewer_turn_with_no_approver_attached_keeps_whole_script_gate(child_env
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("source", ["cli", "acp"])
-@pytest.mark.parametrize("notifier", [True, False], ids=["during-parent-turn", "after-parent-turn"])
+@pytest.mark.parametrize(
+    "notifier", [True, False], ids=["during-parent-turn", "after-parent-turn"]
+)
 def test_delegated_child_keeps_whole_script_gate(child_env, turn, notifier, source):
     """Sync and async delegate_task children carry the parent's launch policy but are not the
     session's foreground turn: the script is approved as a whole, and with no notifier it is refused."""
     from agent.delegation_context import delegated_child_context
+
     victim = child_env / "victim"
     victim.mkdir()
     prompts = turn(source=source)  # every prompt is denied
@@ -219,7 +282,9 @@ def test_delegated_child_keeps_whole_script_gate(child_env, turn, notifier, sour
         A.unregister_gateway_notify(SESSION_KEY)
     with delegated_child_context("child-session"):
         code, result = _run_unguarded_rm(victim)
-    assert result.get("error") == (_DENIED_SCRIPT if notifier else _unanswered_script(code)), result
+    assert result.get("error") == (
+        _DENIED_SCRIPT if notifier else _unanswered_script(code)
+    ), result
     assert "ran" not in result.get("output", "") and victim.is_dir()
     assert [p["pattern_key"] for p in prompts] == (["execute_code"] if notifier else [])
 
@@ -240,11 +305,16 @@ def test_side_task_keeps_whole_script_gate(child_env, turn, source):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("case,source", [("delegated-child", "cli"), ("side-task", "tui")])
-def test_no_notifier_refuses_terminal_inside_permitted_script(child_env, turn, case, source):
+@pytest.mark.parametrize(
+    "case,source", [("delegated-child", "cli"), ("side-task", "tui")]
+)
+def test_no_notifier_refuses_terminal_inside_permitted_script(
+    child_env, turn, case, source
+):
     """With the whole-script gate permitted independently (execute_code approved for the key), a dangerous
     terminal() the script issues with no notifier is still refused by the command guard and never runs."""
     from agent.delegation_context import delegated_child_context
+
     victim = child_env / "victim"
     victim.mkdir()
     command, code = _rm_script(victim)
@@ -252,17 +322,32 @@ def test_no_notifier_refuses_terminal_inside_permitted_script(child_env, turn, c
     A.unregister_gateway_notify(SESSION_KEY)  # the parent turn has ended
     key = SESSION_KEY if case == "delegated-child" else SIDE_KEY
     A.approve_session(key, "execute_code")
-    with delegated_child_context("child-session") if case == "delegated-child" else _side_task(child_env):
+    with (
+        delegated_child_context("child-session")
+        if case == "delegated-child"
+        else _side_task(child_env)
+    ):
         out = run_code(code, enabled_tools=("terminal",))  # the script itself ran
-    assert out == {"output": "", "exit_code": -1, "error": "", "status": "pending_approval", "approval_pending": True,
-                   "command": command, "description": "recursive delete", "pattern_key": "recursive delete",
-                   "smart_denied": False, "allow_permanent": True}
+    assert out == {
+        "output": "",
+        "exit_code": -1,
+        "error": "",
+        "status": "pending_approval",
+        "approval_pending": True,
+        "command": command,
+        "description": "recursive delete",
+        "pattern_key": "recursive delete",
+        "smart_denied": False,
+        "allow_permanent": True,
+    }
     assert A._pending[key]["command"] == command
     assert prompts == [] and victim.is_dir()
 
 
-@pytest.mark.parametrize("platform,source", [("telegram", None), ("discord", None),
-                                             ("local", "kanban"), ("local", None)])
+@pytest.mark.parametrize(
+    "platform,source",
+    [("telegram", None), ("discord", None), ("local", "kanban"), ("local", None)],
+)
 def test_other_sessions_keep_whole_script_prompt(turn, platform, source):
     """Messaging chats, the kanban worker source and a local route without a frozen policy
     still approve the script as a whole."""
@@ -276,7 +361,9 @@ def test_local_session_unattended_contexts_still_resolve_first(turn, monkeypatch
     """A finite (-q / -z) turn of a CLI-sourced session still resolves from single_query_mode."""
     for module in (A, approval_context):
         monkeypatch.setattr(module, "_is_single_query_approval_context", lambda: True)
-        monkeypatch.setattr(module, "_get_single_query_approval_mode", lambda: "deny", raising=False)
+        monkeypatch.setattr(
+            module, "_get_single_query_approval_mode", lambda: "deny", raising=False
+        )
     prompts = turn(source="cli")
     res = A.check_execute_code_guard("import os", "local")
     assert res["approved"] is False and res["outcome"] == "blocked"
@@ -286,7 +373,9 @@ def test_local_session_unattended_contexts_still_resolve_first(turn, monkeypatch
 def test_local_session_smart_mode_skips_script_assessment(turn, monkeypatch):
     monkeypatch.setattr(approval_context, "_get_approval_mode", lambda: "smart")
     assessed = []
-    monkeypatch.setattr(approval_smart, "_smart_approve", lambda c, d: assessed.append(c) or "deny")
+    monkeypatch.setattr(
+        approval_smart, "_smart_approve", lambda c, d: assessed.append(c) or "deny"
+    )
     prompts = turn(source="tui")
     assert A.check_execute_code_guard("import os", "local")["approved"] is True
     assert assessed == [] and prompts == []

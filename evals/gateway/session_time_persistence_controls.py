@@ -1,4 +1,5 @@
 """Isolated production-library controls; no transport/provider calls."""
+
 import contextlib
 import io
 import json
@@ -16,7 +17,12 @@ home = Path(tempfile.mkdtemp(prefix="idle-controls-"))
 for key in list(os.environ):
     if key.startswith("CLAWK_") or key.endswith(("_API_KEY", "_TOKEN")):
         os.environ.pop(key, None)
-os.environ.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), SESSION_IDLE_MINUTES="1", SESSION_RESET_HOUR="0")
+os.environ.update(
+    HOME=str(home),
+    CLAWK_HOME=str(home / ".clawksis"),
+    SESSION_IDLE_MINUTES="1",
+    SESSION_RESET_HOUR="0",
+)
 sys.path.insert(0, str(repo))
 import clawk_yaml as yaml
 from gateway.config import load_gateway_config, GatewayConfig, Platform
@@ -25,7 +31,15 @@ from gateway.run import GatewayRunner
 from gateway.agent_cache_pressure import AgentCacheBounds
 
 Path(os.environ["CLAWK_HOME"]).mkdir(exist_ok=True)
-Path(os.environ["CLAWK_HOME"], "config.yaml").write_text(yaml.safe_dump({"session_reset": {"mode": "both", "idle_minutes": 1}, "gateway": {"session_reset": {"mode": "daily", "at_hour": 0}}}), encoding="utf-8")
+Path(os.environ["CLAWK_HOME"], "config.yaml").write_text(
+    yaml.safe_dump(
+        {
+            "session_reset": {"mode": "both", "idle_minutes": 1},
+            "gateway": {"session_reset": {"mode": "daily", "at_hour": 0}},
+        }
+    ),
+    encoding="utf-8",
+)
 config = load_gateway_config()
 assert "default_reset_policy" not in config.to_dict()
 source = SessionSource(platform=Platform.TELEGRAM, chat_id="cache", user_id="control")
@@ -38,28 +52,50 @@ results = {"legacy_yaml_env_ignored": True, "cache": []}
 for strategy in ("ttl", "lru", "pressure"):
     runner = object.__new__(GatewayRunner)
     runner._agent_cache_lock = threading.Lock()
-    runner._agent_cache_bounds_cache = AgentCacheBounds(max_size=1, idle_ttl_secs=1, memory_high_mb=1, protect_recent=0)
+    runner._agent_cache_bounds_cache = AgentCacheBounds(
+        max_size=1, idle_ttl_secs=1, memory_high_mb=1, protect_recent=0
+    )
     runner.session_store = store
     trace = []
     released = threading.Event()
+
     def commit(msgs):
         assert msgs == messages
-        Path(home, strategy + "-memory.json").write_text(json.dumps(msgs), encoding="utf-8")
+        Path(home, strategy + "-memory.json").write_text(
+            json.dumps(msgs), encoding="utf-8"
+        )
         trace.append("memory")
+
     def release():
-        assert json.loads(Path(home, strategy + "-memory.json").read_text(encoding="utf-8")) == messages
+        assert (
+            json.loads(
+                Path(home, strategy + "-memory.json").read_text(encoding="utf-8")
+            )
+            == messages
+        )
         trace.append("release")
         released.set()
-    agent = SimpleNamespace(_memory_manager=object(), _session_messages=list(messages),
-                            _last_activity_ts=time.time() - 86400, _last_flushed_db_idx=len(messages),
-                            commit_memory_session=commit, release_clients=release)
+
+    agent = SimpleNamespace(
+        _memory_manager=object(),
+        _session_messages=list(messages),
+        _last_activity_ts=time.time() - 86400,
+        _last_flushed_db_idx=len(messages),
+        commit_memory_session=commit,
+        release_clients=release,
+    )
     active = SimpleNamespace(_last_activity_ts=time.time() - 86400)
     runner._running_agents = {"active": active}
-    runner._agent_cache = OrderedDict([(entry.session_key, (agent, "sig")), ("active", (active, "sig"))])
+    runner._agent_cache = OrderedDict(
+        [(entry.session_key, (agent, "sig")), ("active", (active, "sig"))]
+    )
     if strategy == "ttl":
         assert runner._sweep_idle_cached_agents() == 1
     elif strategy == "pressure":
-        unflushed = SimpleNamespace(_session_messages=[{"role": "user", "content": "not on disk"}], _last_flushed_db_idx=0)
+        unflushed = SimpleNamespace(
+            _session_messages=[{"role": "user", "content": "not on disk"}],
+            _last_flushed_db_idx=0,
+        )
         runner._agent_cache["unflushed"] = (unflushed, "sig")
         assert runner._sweep_agent_cache_under_pressure() == 1
         assert "unflushed" in runner._agent_cache
@@ -71,9 +107,19 @@ for strategy in ("ttl", "lru", "pressure"):
     assert "active" in runner._agent_cache
     resumed = store.get_or_create_session(source)
     assert resumed.session_id == entry.session_id
-    assert store.load_transcript(resumed.session_id)[0]["content"] == messages[0]["content"]
+    assert (
+        store.load_transcript(resumed.session_id)[0]["content"]
+        == messages[0]["content"]
+    )
     assert store._db.get_session(resumed.session_id)["end_reason"] is None
-    results["cache"].append({"strategy": strategy, "order": trace, "same_transcript": True, "active_preserved": True})
+    results["cache"].append(
+        {
+            "strategy": strategy,
+            "order": trace,
+            "same_transcript": True,
+            "active_preserved": True,
+        }
+    )
 
 store._db.end_session(entry.session_id, "ws_orphan_reap")
 recovered = store.get_or_create_session(source)
@@ -100,6 +146,7 @@ store._db.close()
 from contextlib import redirect_stdout
 from io import StringIO
 from clawk_cli.cli_info_mixin import CLIInfoMixin
+
 status_output = StringIO()
 with redirect_stdout(status_output):
     CLIInfoMixin._show_gateway_status(object.__new__(CLIInfoMixin))

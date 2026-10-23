@@ -33,21 +33,21 @@ def test_request_client_adds_copilot_vision_header_for_native_image_payload():
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "What is in this image?"},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
                 ],
             }
         ],
     }
 
     agent.client = object()
-    with patch.object(agent, "_is_openai_client_closed", return_value=False), patch.object(
-        agent, "_create_openai_client", side_effect=fake_create
+    with (
+        patch.object(agent, "_is_openai_client_closed", return_value=False),
+        patch.object(agent, "_create_openai_client", side_effect=fake_create),
     ):
         agent._create_request_openai_client(reason="test", api_kwargs=api_kwargs)
 
     headers = built_kwargs[-1]["default_headers"]
     assert headers["Copilot-Vision-Request"] == "true"
-
-
-
-

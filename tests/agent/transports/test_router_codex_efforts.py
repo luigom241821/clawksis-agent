@@ -29,6 +29,7 @@ def _router_plugin_module():
 @pytest.fixture
 def transport():
     import agent.transports.codex
+
     return get_transport("codex_responses")
 
 
@@ -36,16 +37,25 @@ def transport():
 def seeded_catalog(monkeypatch):
     """Seed the router efforts cache with catalog-shaped verdicts."""
     profile, mod = _router_plugin_module()
-    monkeypatch.setattr(mod, "_efforts_cache", {
-        # grok via Router: no "none", no "max" (live catalog shape)
-        "grok-4.6": ["minimal", "low", "medium", "high", "xhigh"],
-        # non-reasoning model: any reasoning field 400s
-        "gpt-4.1-mini": [],
-        # full ladder including max
-        "accounts/fireworks/models/kimi-k3": [
-            "minimal", "low", "medium", "high", "xhigh", "max",
-        ],
-    })
+    monkeypatch.setattr(
+        mod,
+        "_efforts_cache",
+        {
+            # grok via Router: no "none", no "max" (live catalog shape)
+            "grok-4.6": ["minimal", "low", "medium", "high", "xhigh"],
+            # non-reasoning model: any reasoning field 400s
+            "gpt-4.1-mini": [],
+            # full ladder including max
+            "accounts/fireworks/models/kimi-k3": [
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+            ],
+        },
+    )
     monkeypatch.setattr(mod, "_disk_checked", True)
     return profile
 
@@ -53,7 +63,11 @@ def seeded_catalog(monkeypatch):
 class TestProfileContract:
     def test_declared_vocabulary(self, seeded_catalog):
         assert seeded_catalog.supported_reasoning_efforts("grok-4.6") == (
-            "minimal", "low", "medium", "high", "xhigh",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
         )
 
     def test_non_reasoning_model_is_definitive_empty(self, seeded_catalog):
@@ -71,26 +85,40 @@ class TestProfileContract:
 
     def test_parse_efforts_catalog_shapes(self):
         _, mod = _router_plugin_module()
-        parsed = mod._parse_efforts([
-            {
-                "id": "grok-4.6",
-                "router": {"capabilities": {"reasoning": {
-                    "supported": True,
-                    "efforts": [{"value": "low"}, {"value": "high"}],
-                }}},
-            },
-            {
-                "id": "gpt-4.1",
-                "router": {"capabilities": {"reasoning": {"supported": False, "efforts": []}}},
-            },
-            # reasoning supported but vocabulary unpublished -> omitted (unknown)
-            {
-                "id": "mystery-model",
-                "router": {"capabilities": {"reasoning": {"supported": True, "efforts": []}}},
-            },
-            # no router metadata at all -> omitted
-            {"id": "bare-model"},
-        ])
+        parsed = mod._parse_efforts(
+            [
+                {
+                    "id": "grok-4.6",
+                    "router": {
+                        "capabilities": {
+                            "reasoning": {
+                                "supported": True,
+                                "efforts": [{"value": "low"}, {"value": "high"}],
+                            }
+                        }
+                    },
+                },
+                {
+                    "id": "gpt-4.1",
+                    "router": {
+                        "capabilities": {
+                            "reasoning": {"supported": False, "efforts": []}
+                        }
+                    },
+                },
+                # reasoning supported but vocabulary unpublished -> omitted (unknown)
+                {
+                    "id": "mystery-model",
+                    "router": {
+                        "capabilities": {
+                            "reasoning": {"supported": True, "efforts": []}
+                        }
+                    },
+                },
+                # no router metadata at all -> omitted
+                {"id": "bare-model"},
+            ]
+        )
         assert parsed == {"grok-4.6": ["low", "high"], "gpt-4.1": []}
 
 
@@ -194,29 +222,42 @@ class TestHostResolvedProfile:
 class TestCatalogIngestValidation:
     def test_unrecognized_effort_levels_are_dropped_at_ingest(self):
         _, mod = _router_plugin_module()
-        parsed = mod._parse_efforts([
-            {
-                "id": "future-model",
-                "router": {"capabilities": {"reasoning": {
-                    "supported": True,
-                    "efforts": [
-                        {"value": "low"},
-                        {"value": "hyperthink"},  # a new vendor tier
-                        {"value": "high"},
-                    ],
-                }}},
-            },
-            {
-                # every level unknown -> omitted entirely (unknown model), so
-                # the transport keeps its defaults instead of suppressing or
-                # passing garbage through.
-                "id": "alien-model",
-                "router": {"capabilities": {"reasoning": {
-                    "supported": True,
-                    "efforts": [{"value": "hyperthink"}, {"value": "galaxy"}],
-                }}},
-            },
-        ])
+        parsed = mod._parse_efforts(
+            [
+                {
+                    "id": "future-model",
+                    "router": {
+                        "capabilities": {
+                            "reasoning": {
+                                "supported": True,
+                                "efforts": [
+                                    {"value": "low"},
+                                    {"value": "hyperthink"},  # a new vendor tier
+                                    {"value": "high"},
+                                ],
+                            }
+                        }
+                    },
+                },
+                {
+                    # every level unknown -> omitted entirely (unknown model), so
+                    # the transport keeps its defaults instead of suppressing or
+                    # passing garbage through.
+                    "id": "alien-model",
+                    "router": {
+                        "capabilities": {
+                            "reasoning": {
+                                "supported": True,
+                                "efforts": [
+                                    {"value": "hyperthink"},
+                                    {"value": "galaxy"},
+                                ],
+                            }
+                        }
+                    },
+                },
+            ]
+        )
         assert parsed == {"future-model": ["low", "high"]}
 
     def test_fetch_models_dedupes_while_preserving_catalog_order(self, monkeypatch):

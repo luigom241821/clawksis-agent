@@ -26,13 +26,19 @@ from typing import Any, Callable, Mapping, Optional
 from urllib.parse import urlparse
 
 _SECTION = "plugin_oauth"
-_EXPIRY_MARGIN_MS = 120_000  # refresh this long before expiry, as the credential pool does
+_EXPIRY_MARGIN_MS = (
+    120_000  # refresh this long before expiry, as the credential pool does
+)
 _TOKEN_TIMEOUT = 10.0  # below AUTH_LOCK_TIMEOUT_SECONDS: a peer waiting for the refresh lock outlives the POST
-_CLIENT_ERROR_CODES = frozenset({"invalid_client", "unauthorized_client", "invalid_scope"})
+_CLIENT_ERROR_CODES = frozenset(
+    {"invalid_client", "unauthorized_client", "invalid_scope"}
+)
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 # Lowercase DNS name with at least one dot whose last label starts with a letter: no IP literal, port or scheme.
-_HOST_RE = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z](?:[a-z0-9-]*[a-z0-9])?$")
+_HOST_RE = re.compile(
+    r"^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z](?:[a-z0-9-]*[a-z0-9])?$"
+)
 
 
 @dataclass(frozen=True)
@@ -51,10 +57,13 @@ class OAuthClient:
     @property
     def fingerprint(self) -> str:
         """Hash of every field: a grant is used only with the entry it was made for."""
-        return hashlib.sha256(json.dumps(asdict(self), sort_keys=True).encode("utf-8")).hexdigest()
+        return hashlib.sha256(
+            json.dumps(asdict(self), sort_keys=True).encode("utf-8")
+        ).hexdigest()
 
 
 # ── Manifest ───────────────────────────────────────────────────────────────────────────────────────
+
 
 def _parse_url(url: Any):
     """``urlparse`` of *url*; None for a non-string or a URL it cannot read (bad IPv6 literal or port)."""
@@ -70,10 +79,17 @@ def _parse_url(url: Any):
 
 def _url_problems(where: str, url: Any) -> list[str]:
     parsed = _parse_url(url)
-    if (parsed is None or not parsed.hostname or parsed.username is not None or parsed.password is not None
-            or parsed.fragment):
+    if (
+        parsed is None
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
         return [f"{where}: must be an absolute URL without user info or fragment"]
-    if parsed.scheme != "https":  # no loopback exception: the code, refresh token and client secret travel here
+    if (
+        parsed.scheme != "https"
+    ):  # no loopback exception: the code, refresh token and client secret travel here
         return [f"{where}: must use https"]
     return []
 
@@ -84,42 +100,73 @@ def _clawk_owned_env(name: str) -> bool:
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.config_env_routing import is_registered_env_name
 
-    return is_registered_env_name(name) or any(name in p.api_key_env_vars for p in PROVIDER_REGISTRY.values())
+    return is_registered_env_name(name) or any(
+        name in p.api_key_env_vars for p in PROVIDER_REGISTRY.values()
+    )
 
 
 def _entry_problems(entry: dict, where: str) -> list[str]:
     oauth_id = entry.get("id")
-    problems = [] if isinstance(oauth_id, str) and _ID_RE.match(oauth_id) else [
-        f"{where}.id: {entry.get('id')!r} must be lowercase letters, digits and dashes"]
+    problems = (
+        []
+        if isinstance(oauth_id, str) and _ID_RE.match(oauth_id)
+        else [
+            f"{where}.id: {entry.get('id')!r} must be lowercase letters, digits and dashes"
+        ]
+    )
     for field in ("authorize_url", "token_url"):
         problems += _url_problems(f"{where}.{field}", entry.get(field))
     scopes = entry.get("scopes")
-    if not (isinstance(scopes, list) and scopes and all(isinstance(s, str) and s.strip() for s in scopes)):
+    if not (
+        isinstance(scopes, list)
+        and scopes
+        and all(isinstance(s, str) and s.strip() for s in scopes)
+    ):
         problems.append(f"{where}.scopes: must be a non-empty list of scope strings")
     for field, required in (("client_id_env", True), ("client_secret_env", False)):
         name = entry.get(field)
         if (required or name) and not (isinstance(name, str) and _ENV_RE.match(name)):
-            problems.append(f"{where}.{field}: {name!r} must be an UPPER_SNAKE environment variable name")
+            problems.append(
+                f"{where}.{field}: {name!r} must be an UPPER_SNAKE environment variable name"
+            )
         elif name and _clawk_owned_env(name):
-            problems.append(f"{where}.{field}: {name} is a variable Clawksis uses itself; declare the plugin's own")
+            problems.append(
+                f"{where}.{field}: {name} is a variable Clawksis uses itself; declare the plugin's own"
+            )
     hosts = entry.get("hosts")
-    if not (isinstance(hosts, list) and hosts and all(isinstance(h, str) and _HOST_RE.match(h) for h in hosts)):
-        problems.append(f"{where}.hosts: must list lowercase DNS host names (no scheme, port, path or IP address)")
+    if not (
+        isinstance(hosts, list)
+        and hosts
+        and all(isinstance(h, str) and _HOST_RE.match(h) for h in hosts)
+    ):
+        problems.append(
+            f"{where}.hosts: must list lowercase DNS host names (no scheme, port, path or IP address)"
+        )
     params = entry.get("authorize_params") or {}
-    if not (isinstance(params, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in params.items())):
+    if not (
+        isinstance(params, dict)
+        and all(isinstance(k, str) and isinstance(v, str) for k, v in params.items())
+    ):
         problems.append(f"{where}.authorize_params: must map strings to strings")
     return problems
 
 
 def _client(entry: dict) -> OAuthClient:
     return OAuthClient(
-        id=entry["id"], authorize_url=entry["authorize_url"], token_url=entry["token_url"],
-        scopes=tuple(entry["scopes"]), client_id_env=entry["client_id_env"], hosts=tuple(entry["hosts"]),
+        id=entry["id"],
+        authorize_url=entry["authorize_url"],
+        token_url=entry["token_url"],
+        scopes=tuple(entry["scopes"]),
+        client_id_env=entry["client_id_env"],
+        hosts=tuple(entry["hosts"]),
         client_secret_env=entry.get("client_secret_env") or "",
-        authorize_params=tuple(sorted((entry.get("authorize_params") or {}).items())))
+        authorize_params=tuple(sorted((entry.get("authorize_params") or {}).items())),
+    )
 
 
-def parse_oauth_clients(manifest: Mapping[str, Any]) -> tuple[list[OAuthClient], list[str]]:
+def parse_oauth_clients(
+    manifest: Mapping[str, Any],
+) -> tuple[list[OAuthClient], list[str]]:
     """``oauth:`` from a manifest dict: the well-formed clients, and one problem string per defect."""
     raw = (manifest or {}).get("oauth")
     if raw is None or raw == []:
@@ -130,7 +177,11 @@ def parse_oauth_clients(manifest: Mapping[str, Any]) -> tuple[list[OAuthClient],
     problems: list[str] = []
     for index, entry in enumerate(raw):
         where = f"oauth[{index}]"
-        entry_problems = _entry_problems(entry, where) if isinstance(entry, dict) else [f"{where}: must be a mapping"]
+        entry_problems = (
+            _entry_problems(entry, where)
+            if isinstance(entry, dict)
+            else [f"{where}: must be a mapping"]
+        )
         if not entry_problems and any(c.id == entry["id"] for c in clients):
             entry_problems = [f"{where}.id: {entry['id']!r} is declared twice"]
         problems += entry_problems
@@ -144,9 +195,14 @@ def _declared_clients(plugin_dir: Path) -> list[OAuthClient]:
     from pm.plugin_declarations import native_manifest_file, read_native_manifest
 
     manifest_file = native_manifest_file(plugin_dir)
-    clients, problems = parse_oauth_clients(read_native_manifest(manifest_file) if manifest_file else {})
+    clients, problems = parse_oauth_clients(
+        read_native_manifest(manifest_file) if manifest_file else {}
+    )
     if problems:
-        raise ValueError(f"Plugin '{plugin_dir.name}' has an invalid oauth: block in plugin.yaml: " + "; ".join(problems))
+        raise ValueError(
+            f"Plugin '{plugin_dir.name}' has an invalid oauth: block in plugin.yaml: "
+            + "; ".join(problems)
+        )
     return clients
 
 
@@ -162,7 +218,11 @@ def plugin_key(plugin_dir: Path) -> str:
 
 
 def _idp_hosts(client: OAuthClient) -> str:
-    return ", ".join(dict.fromkeys(urlparse(url).hostname for url in (client.authorize_url, client.token_url)))
+    return ", ".join(
+        dict.fromkeys(
+            urlparse(url).hostname for url in (client.authorize_url, client.token_url)
+        )
+    )
 
 
 def oauth_notice(manifest: Mapping[str, Any]) -> str:
@@ -171,7 +231,8 @@ def oauth_notice(manifest: Mapping[str, Any]) -> str:
     return "; ".join(
         f"Signs in to {c.id} at {_idp_hosts(c)} for {', '.join(c.hosts)} with `clawk auth add {name}:{c.id}` "
         "(Clawksis stores and refreshes the token; the plugin never receives it)"
-        for c in parse_oauth_clients(manifest)[0])
+        for c in parse_oauth_clients(manifest)[0]
+    )
 
 
 def oauth_surface(manifest: Mapping[str, Any]) -> set[str]:
@@ -179,7 +240,9 @@ def oauth_surface(manifest: Mapping[str, Any]) -> set[str]:
     hosts or scopes, shows up as added. Any other change only alters the fingerprint, so the user signs in again."""
     lines: set[str] = set()
     for c in parse_oauth_clients(manifest)[0]:
-        lines.add(f"{c.id} ({_idp_hosts(c)} -> {', '.join(c.hosts)}; {' '.join(c.scopes)})")
+        lines.add(
+            f"{c.id} ({_idp_hosts(c)} -> {', '.join(c.hosts)}; {' '.join(c.scopes)})"
+        )
     return lines
 
 
@@ -191,7 +254,9 @@ def _declared_env_names(manifest: Mapping[str, Any]) -> set[str]:
     return names
 
 
-def oauth_admission_problems(manifest: Mapping[str, Any], plugin_dir: Path) -> list[str]:
+def oauth_admission_problems(
+    manifest: Mapping[str, Any], plugin_dir: Path
+) -> list[str]:
     """Catalog admission on top of the shape: declared variables, no clash with core sign-ins or ``custom:``."""
     from clawk_cli.plugin_provider_requests import _PROVIDERS
 
@@ -199,12 +264,18 @@ def oauth_admission_problems(manifest: Mapping[str, Any], plugin_dir: Path) -> l
     declared = _declared_env_names(manifest)
     for client in clients:
         if client.id in _PROVIDERS:
-            problems.append(f"oauth id {client.id!r} is a Clawksis sign-in provider; pick another id")
+            problems.append(
+                f"oauth id {client.id!r} is a Clawksis sign-in provider; pick another id"
+            )
         for name in filter(None, (client.client_id_env, client.client_secret_env)):
             if name not in declared:
-                problems.append(f"oauth {client.id!r}: {name} must be declared under requires_env or optional_env")
+                problems.append(
+                    f"oauth {client.id!r}: {name} must be declared under requires_env or optional_env"
+                )
     if clients and plugin_dir.name == "custom":
-        problems.append("a plugin named 'custom' cannot declare oauth: `clawk auth add custom:<name>` is a custom provider")
+        problems.append(
+            "a plugin named 'custom' cannot declare oauth: `clawk auth add custom:<name>` is a custom provider"
+        )
     return problems
 
 
@@ -215,25 +286,38 @@ def _parent(host: str) -> str:
     return ".".join(labels[-keep:])
 
 
-def oauth_admission_warnings(manifest: Mapping[str, Any], plugin_dir: Path) -> list[str]:
+def oauth_admission_warnings(
+    manifest: Mapping[str, Any], plugin_dir: Path
+) -> list[str]:
     """Reviewer warnings: a host outside the sign-in provider's domains (does the IdP own it?), and plugin
     code that names a declared token URL (Clawksis refreshes the grant)."""
     clients = parse_oauth_clients(manifest)[0]
-    warnings = [f"oauth {c.id!r}: host {host} shares no domain with {_idp_hosts(c)}; check the provider owns it"
-                for c in clients for host in c.hosts
-                if _parent(host) not in {_parent(urlparse(u).hostname or "") for u in (c.authorize_url, c.token_url)}]
+    warnings = [
+        f"oauth {c.id!r}: host {host} shares no domain with {_idp_hosts(c)}; check the provider owns it"
+        for c in clients
+        for host in c.hosts
+        if _parent(host)
+        not in {
+            _parent(urlparse(u).hostname or "") for u in (c.authorize_url, c.token_url)
+        }
+    ]
     urls = sorted({c.token_url for c in clients})
     for path in sorted(plugin_dir.rglob("*.py")):
         try:
             text = path.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
-        warnings += [f"oauth: {path.relative_to(plugin_dir).as_posix()} names the token URL {url}; Clawksis "
-                     "refreshes the grant, so the plugin should not call it" for url in urls if url in text]
+        warnings += [
+            f"oauth: {path.relative_to(plugin_dir).as_posix()} names the token URL {url}; Clawksis "
+            "refreshes the grant, so the plugin should not call it"
+            for url in urls
+            if url in text
+        ]
     return warnings
 
 
 # ── Grant store: section ``plugin_oauth`` of the active profile's auth.json ────────────────────────
+
 
 def _read_grant(key: str) -> Optional[dict]:
     from clawk_cli.auth import _load_auth_store
@@ -250,7 +334,11 @@ def forget_plugin_grants(plugin: str) -> None:
     with _auth_store_lock():
         store = _load_auth_store()
         section = store.get(_SECTION)
-        stale = [k for k in section if k.rsplit(":", 1)[0] == plugin] if isinstance(section, dict) else []
+        stale = (
+            [k for k in section if k.rsplit(":", 1)[0] == plugin]
+            if isinstance(section, dict)
+            else []
+        )
         if stale:
             for key in stale:
                 section.pop(key)
@@ -259,7 +347,12 @@ def forget_plugin_grants(plugin: str) -> None:
 
 def _write_grant(key: str, row: Optional[dict]) -> None:
     """Replace one grant (``None`` removes it) under the auth-store lock; other sections stay as they are."""
-    from clawk_cli.auth import _auth_store_lock, _load_auth_store, _save_auth_store, _store_section
+    from clawk_cli.auth import (
+        _auth_store_lock,
+        _load_auth_store,
+        _save_auth_store,
+        _store_section,
+    )
 
     with _auth_store_lock():
         store = _load_auth_store()
@@ -273,6 +366,7 @@ def _write_grant(key: str, row: Optional[dict]) -> None:
 
 # ── Token endpoint ─────────────────────────────────────────────────────────────────────────────────
 
+
 def _auth_error(key: str, message: str, code: str):
     from clawk_cli.auth_constants import AuthError
 
@@ -284,7 +378,11 @@ def _env(name: str, code: str, key: str) -> str:
 
     value = str(get_secret(name) or "").strip()
     if not value:
-        raise _auth_error(key, f"{name} is not set. Add it to this profile's .env (the plugin declares it).", code)
+        raise _auth_error(
+            key,
+            f"{name} is not set. Add it to this profile's .env (the plugin declares it).",
+            code,
+        )
     return value
 
 
@@ -302,21 +400,35 @@ def _token_error(key: str, status: int, payload: Mapping[str, Any]):
 
     error = str(payload.get("error") or "").strip()
     if error in _OAUTH_GRANT_DEAD_CODES or error in _CLIENT_ERROR_CODES:
-        return _auth_error(key, f"the token endpoint refused the request (HTTP {status}, {error}).", error)
-    return _auth_error(key, f"the token endpoint failed with HTTP {status}.", "oauth_refresh_failed")
+        return _auth_error(
+            key,
+            f"the token endpoint refused the request (HTTP {status}, {error}).",
+            error,
+        )
+    return _auth_error(
+        key, f"the token endpoint failed with HTTP {status}.", "oauth_refresh_failed"
+    )
 
 
-def _require_granted_scopes(client: OAuthClient, payload: Mapping[str, Any], key: str) -> None:
+def _require_granted_scopes(
+    client: OAuthClient, payload: Mapping[str, Any], key: str
+) -> None:
     granted = payload.get("scope")
     if not isinstance(granted, str) or not granted.strip():
         return  # the IdP did not say which scopes it granted
     missing = [scope for scope in client.scopes if scope not in granted.split()]
     if missing:
-        raise _auth_error(key, "not every permission was granted, so nothing was saved. Missing: "
-                          + ", ".join(missing), "oauth_scope_not_granted")
+        raise _auth_error(
+            key,
+            "not every permission was granted, so nothing was saved. Missing: "
+            + ", ".join(missing),
+            "oauth_scope_not_granted",
+        )
 
 
-def _token_request(client: OAuthClient, key: str) -> Callable[[dict[str, str]], Mapping[str, Any]]:
+def _token_request(
+    client: OAuthClient, key: str
+) -> Callable[[dict[str, str]], Mapping[str, Any]]:
     """``OAuthPKCEConfig.token_request``: the client credentials are read right before each POST, so the
     secret never sits in the frozen config, whose repr would show it."""
 
@@ -324,19 +436,34 @@ def _token_request(client: OAuthClient, key: str) -> Callable[[dict[str, str]], 
         from clawk_cli.auth import _default_verify
         from clawk_cli.auth_constants import httpx
 
-        form = {**fields, "client_id": _env(client.client_id_env, "oauth_client_id_missing", key)}
+        form = {
+            **fields,
+            "client_id": _env(client.client_id_env, "oauth_client_id_missing", key),
+        }
         if client.client_secret_env:
-            form["client_secret"] = _env(client.client_secret_env, "oauth_client_secret_missing", key)
+            form["client_secret"] = _env(
+                client.client_secret_env, "oauth_client_secret_missing", key
+            )
         failure = ""
         try:
-            response = httpx.post(client.token_url, data=form, headers={"Accept": "application/json"},
-                                  timeout=_TOKEN_TIMEOUT, verify=_default_verify(), follow_redirects=False)
+            response = httpx.post(
+                client.token_url,
+                data=form,
+                headers={"Accept": "application/json"},
+                timeout=_TOKEN_TIMEOUT,
+                verify=_default_verify(),
+                follow_redirects=False,
+            )
         except httpx.HTTPError as exc:
             failure = type(exc).__name__
         if failure:  # raised outside the handler: httpx's error keeps the request, whose body holds the secrets
-            raise _auth_error(key, f"the token request failed ({failure}).", "oauth_refresh_failed")
+            raise _auth_error(
+                key, f"the token request failed ({failure}).", "oauth_refresh_failed"
+            )
         payload = _json_object(response)
-        if not 200 <= response.status_code < 300:  # a redirect is a failure too: it is never followed
+        if (
+            not 200 <= response.status_code < 300
+        ):  # a redirect is a failure too: it is never followed
             raise _token_error(key, response.status_code, payload)
         if fields.get("grant_type") == "authorization_code":
             _require_granted_scopes(client, payload, key)
@@ -349,12 +476,19 @@ def _pkce_config(client: OAuthClient, key: str, *, timeout: Optional[float] = No
     from clawk_cli.auth_oauth_pkce_plugin import OAuthPKCEConfig
 
     return OAuthPKCEConfig(
-        client_id=_env(client.client_id_env, "oauth_client_id_missing", key), authorize_url=client.authorize_url,
-        token_url=client.token_url, scopes=client.scopes, extra_authorize_params=dict(client.authorize_params),
-        label=key, token_request=_token_request(client, key), timeout_seconds=timeout or 180.0)
+        client_id=_env(client.client_id_env, "oauth_client_id_missing", key),
+        authorize_url=client.authorize_url,
+        token_url=client.token_url,
+        scopes=client.scopes,
+        extra_authorize_params=dict(client.authorize_params),
+        label=key,
+        token_request=_token_request(client, key),
+        timeout_seconds=timeout or 180.0,
+    )
 
 
 # ── Bearer for credentialed_provider_request ───────────────────────────────────────────────────────
+
 
 def _not_signed_in(message: str):
     from clawk_cli.plugin_provider_requests import ProviderNotSignedIn
@@ -363,20 +497,26 @@ def _not_signed_in(message: str):
 
 
 def _revoked(client: OAuthClient, key: str, code: str):
-    return _not_signed_in(f"The {client.id} sign-in for plugin '{key.rsplit(':', 1)[0]}' was revoked ({code}). "
-                          f"Run `clawk auth add {key}` to sign in again.")
+    return _not_signed_in(
+        f"The {client.id} sign-in for plugin '{key.rsplit(':', 1)[0]}' was revoked ({code}). "
+        f"Run `clawk auth add {key}` to sign in again."
+    )
 
 
 def _usable_grant(row: Optional[dict], client: OAuthClient, key: str) -> dict:
     plugin = key.rsplit(":", 1)[0]
     if row is None:
-        raise _not_signed_in(f"Not signed in to {client.id} for plugin '{plugin}' in this Clawksis profile. "
-                             f"Run `clawk auth add {key}`.")
+        raise _not_signed_in(
+            f"Not signed in to {client.id} for plugin '{plugin}' in this Clawksis profile. "
+            f"Run `clawk auth add {key}`."
+        )
     if row.get("dead"):
         raise _revoked(client, key, str(row["dead"]))
     if row.get("fingerprint") != client.fingerprint:
-        raise _not_signed_in(f"Plugin '{plugin}' changed its oauth entry '{client.id}' since you signed in. "
-                             f"Run `clawk auth add {key}` to sign in again.")
+        raise _not_signed_in(
+            f"Plugin '{plugin}' changed its oauth entry '{client.id}' since you signed in. "
+            f"Run `clawk auth add {key}` to sign in again."
+        )
     return row
 
 
@@ -398,11 +538,17 @@ def _refresh(client: OAuthClient, key: str, row: dict) -> str:
     if not refresh_token:
         raise _revoked(client, key, "no_refresh_token")
     try:
-        fields = _post_token(key, _pkce_config(client, key),
-                             {"grant_type": "refresh_token", "refresh_token": refresh_token}, code="oauth_refresh_failed")
+        fields = _post_token(
+            key,
+            _pkce_config(client, key),
+            {"grant_type": "refresh_token", "refresh_token": refresh_token},
+            code="oauth_refresh_failed",
+        )
     except AuthError as exc:
         if exc.code in _OAUTH_GRANT_DEAD_CODES:
-            _write_grant(key, {"dead": exc.code, "fingerprint": row.get("fingerprint")})  # keep no dead tokens
+            _write_grant(
+                key, {"dead": exc.code, "fingerprint": row.get("fingerprint")}
+            )  # keep no dead tokens
             raise _revoked(client, key, str(exc.code)) from None
         raise
     _write_grant(key, {**row, **fields})
@@ -435,7 +581,9 @@ def _plugin_oauth_spec(plugin_dir: Path, provider: str):
     def resolve(url: str) -> tuple[dict[str, str], str]:
         parsed = urlparse(url)
         if parsed.username is not None or parsed.password is not None:
-            raise PermissionError(f"Refusing to send the {client.id} sign-in to a URL with user info")
+            raise PermissionError(
+                f"Refusing to send the {client.id} sign-in to a URL with user info"
+            )
         # The grant is valid for every declared host, so the request URL (origin already checked) is its base.
         return {"Authorization": f"Bearer {_bearer(plugin_dir, client)}"}, url
 
@@ -448,6 +596,7 @@ def _origins(client: OAuthClient) -> frozenset:
 
 
 # ── clawk auth add|status|refresh|logout <plugin>:<id> ────────────────────────────────────────────
+
 
 def _installed_client(plugin: str, oauth_id: str) -> Optional[tuple[Path, OAuthClient]]:
     """Resolve *plugin* the way ``clawk plugins show`` does, then its ``oauth:`` entry *oauth_id*."""
@@ -472,19 +621,28 @@ def _cli_add(args: Any, client: OAuthClient, key: str) -> bool:
     from clawk_cli.auth_oauth_pkce_plugin import login
 
     if _unattended():
-        raise SystemExit(f"`clawk auth add {key}` signs you in through a browser; run it in your own terminal, "
-                         "not from a gateway, cron job or agent session.")
+        raise SystemExit(
+            f"`clawk auth add {key}` signs you in through a browser; run it in your own terminal, "
+            "not from a gateway, cron job or agent session."
+        )
     secret = " and the client secret" if client.client_secret_env else ""
-    print(f"Plugin '{key.rsplit(':', 1)[0]}' signs in to {client.id} at {urlparse(client.authorize_url).hostname}. "
-          f"The sign-in code{secret} go to {urlparse(client.token_url).hostname}; the token is sent only to "
-          f"{', '.join(client.hosts)}.")
+    print(
+        f"Plugin '{key.rsplit(':', 1)[0]}' signs in to {client.id} at {urlparse(client.authorize_url).hostname}. "
+        f"The sign-in code{secret} go to {urlparse(client.token_url).hostname}; the token is sent only to "
+        f"{', '.join(client.hosts)}."
+    )
     try:
-        fields = login(key, _pkce_config(client, key, timeout=getattr(args, "timeout", None)),
-                       open_browser=not getattr(args, "no_browser", False))
+        fields = login(
+            key,
+            _pkce_config(client, key, timeout=getattr(args, "timeout", None)),
+            open_browser=not getattr(args, "no_browser", False),
+        )
     except AuthError as exc:
         raise SystemExit(f"Login failed: {exc}") from None
     _write_grant(key, {**fields, "fingerprint": client.fingerprint})
-    print(f"Signed in to {client.id} for plugin '{key.rsplit(':', 1)[0]}'; the grant is stored in this Clawksis profile.")
+    print(
+        f"Signed in to {client.id} for plugin '{key.rsplit(':', 1)[0]}'; the grant is stored in this Clawksis profile."
+    )
     return True
 
 
@@ -495,13 +653,24 @@ def _cli_status(args: Any, client: OAuthClient, key: str) -> bool:
     try:
         _usable_grant(row, client, key)
     except ProviderNotSignedIn as exc:
-        state = "logged out" if row is None else "revoked" if row.get("dead") else "sign-in needed"
+        state = (
+            "logged out"
+            if row is None
+            else "revoked"
+            if row.get("dead")
+            else "sign-in needed"
+        )
         print(f"{key}: {state}\n  {exc}")
         return True
     expires = row.get("expires_at_ms") if row else None
-    print(f"{key}: logged in\n  hosts: {', '.join(client.hosts)}" + (
-        f"\n  access token valid until {datetime.fromtimestamp(int(expires) / 1000, UTC).isoformat(timespec='seconds')}"
-        if expires else ""))
+    print(
+        f"{key}: logged in\n  hosts: {', '.join(client.hosts)}"
+        + (
+            f"\n  access token valid until {datetime.fromtimestamp(int(expires) / 1000, UTC).isoformat(timespec='seconds')}"
+            if expires
+            else ""
+        )
+    )
     return True
 
 
@@ -521,7 +690,9 @@ def _cli_refresh(args: Any, client: OAuthClient, key: str) -> bool:
 
 def _cli_logout(args: Any, client: OAuthClient, key: str) -> bool:
     _write_grant(key, None)
-    print(f"Signed out of {client.id} for plugin '{key.rsplit(':', 1)[0]}'; the grant was removed from this profile.")
+    print(
+        f"Signed out of {client.id} for plugin '{key.rsplit(':', 1)[0]}'; the grant was removed from this profile."
+    )
     return True
 
 
@@ -530,11 +701,27 @@ def _logout_key(plugin: str, oauth_id: str) -> Optional[str]:
     from clawk_cli.plugins_cmd import _find_plugin_entry
 
     entry = _find_plugin_entry(plugin)
-    names = [f"{plugin_key(Path(str(entry[4])))}:{oauth_id}"] if entry is not None and entry[4] else []
-    return next((key for key in (*names, f"{plugin}:{oauth_id}") if _read_grant(key) is not None), None)
+    names = (
+        [f"{plugin_key(Path(str(entry[4])))}:{oauth_id}"]
+        if entry is not None and entry[4]
+        else []
+    )
+    return next(
+        (
+            key
+            for key in (*names, f"{plugin}:{oauth_id}")
+            if _read_grant(key) is not None
+        ),
+        None,
+    )
 
 
-_CLI_ACTIONS = {"add": _cli_add, "status": _cli_status, "refresh": _cli_refresh, "logout": _cli_logout}
+_CLI_ACTIONS = {
+    "add": _cli_add,
+    "status": _cli_status,
+    "refresh": _cli_refresh,
+    "logout": _cli_logout,
+}
 
 
 def handle_auth_action(action: str, args: Any, provider: str) -> Optional[bool]:
@@ -545,7 +732,9 @@ def handle_auth_action(action: str, args: Any, provider: str) -> Optional[bool]:
     if handler is None or not (sep and plugin and oauth_id) or plugin == "custom":
         return None
     if action == "logout" and (key := _logout_key(plugin, oauth_id)) is not None:
-        _write_grant(key, None)  # needs no valid oauth: entry: the plugin may be gone or its manifest broken
+        _write_grant(
+            key, None
+        )  # needs no valid oauth: entry: the plugin may be gone or its manifest broken
         print(f"Signed out of {key}; the grant was removed from this profile.")
         return True
     try:
@@ -559,6 +748,13 @@ def handle_auth_action(action: str, args: Any, provider: str) -> Optional[bool]:
 
 
 __all__ = [
-    "OAuthClient", "forget_plugin_grants", "handle_auth_action", "oauth_admission_problems",
-    "oauth_admission_warnings", "oauth_notice", "oauth_surface", "parse_oauth_clients", "plugin_key",
+    "OAuthClient",
+    "forget_plugin_grants",
+    "handle_auth_action",
+    "oauth_admission_problems",
+    "oauth_admission_warnings",
+    "oauth_notice",
+    "oauth_surface",
+    "parse_oauth_clients",
+    "plugin_key",
 ]

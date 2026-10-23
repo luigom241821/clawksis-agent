@@ -64,7 +64,9 @@ def test_tui_injector_slot_does_not_replace_the_gateway_slot():
 
     assert manager.has_gateway_message_injector is True
     assert manager.has_tui_message_injector is True
-    assert manager.inject_gateway_message(session_key="agent:main:telegram:dm:1") is True
+    assert (
+        manager.inject_gateway_message(session_key="agent:main:telegram:dm:1") is True
+    )
     assert manager.inject_tui_message(session_key="ses_tui") is False
     gateway.assert_called_once_with(session_key="agent:main:telegram:dm:1")
     tui.assert_called_once_with(session_key="ses_tui")
@@ -106,9 +108,13 @@ def test_unknown_session_key_falls_through_to_the_gateway_slot(tmp_path, monkeyp
     monkeypatch.setattr(server, "_sessions", {"ui-live": live})
     server.install_tui_message_injector(manager)
     try:
-        assert context.inject_message(
-            "wake telegram", session_key="agent:main:telegram:dm:42",
-        ) is True
+        assert (
+            context.inject_message(
+                "wake telegram",
+                session_key="agent:main:telegram:dm:42",
+            )
+            is True
+        )
     finally:
         server.clear_tui_message_injector(manager)
 

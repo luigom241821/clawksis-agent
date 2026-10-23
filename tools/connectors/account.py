@@ -23,9 +23,19 @@ class AccountOperationStart:
     failed: bool = False
 
 
-def _matching_open_operation(names: list[str], *, alias: str | None, repair_id: str | None,
-                             profile_home: str | None) -> ConnectionOperation | None:
-    matches = [live.find_target(name, alias=alias, repair_id=repair_id, profile_home=profile_home) for name in names]
+def _matching_open_operation(
+    names: list[str],
+    *,
+    alias: str | None,
+    repair_id: str | None,
+    profile_home: str | None,
+) -> ConnectionOperation | None:
+    matches = [
+        live.find_target(
+            name, alias=alias, repair_id=repair_id, profile_home=profile_home
+        )
+        for name in names
+    ]
     first = next((operation for operation in matches if operation is not None), None)
     if first is None:
         return None
@@ -47,10 +57,15 @@ def find_or_start_operation(
     account a reconnect repairs. The caller passes one name with either. ``initiator`` goes on the
     connect request; none leaves the gateway to record it as unknown."""
     with _start_lock:
-        if operation := _matching_open_operation(names, alias=alias, repair_id=repair_id, profile_home=profile_home):
+        if operation := _matching_open_operation(
+            names, alias=alias, repair_id=repair_id, profile_home=profile_home
+        ):
             return AccountOperationStart(operation=operation, started=False)
         operation = ConnectionOperation(
-            [Target(name, "connector", action, alias=alias, repair_id=repair_id) for name in names],
+            [
+                Target(name, "connector", action, alias=alias, repair_id=repair_id)
+                for name in names
+            ],
             session_key=f"account:{uuid.uuid4().hex}",
         )
         started = AccountOperationStart(operation=operation, started=True)
@@ -77,7 +92,11 @@ def _run(start: AccountOperationStart, action: str, initiator: str | None) -> No
     try:
         drive_operation(
             start.operation,
-            managed.managed_kind(managed.managed_client(creates_guest=True, initiator=initiator), action, force=False),
+            managed.managed_kind(
+                managed.managed_client(creates_guest=True, initiator=initiator),
+                action,
+                force=False,
+            ),
             connection_callback=lambda _payload: start.done.set(),
             tick_seconds=managed.WATCH_TICK_SECONDS,
             with_urls_in_result=False,

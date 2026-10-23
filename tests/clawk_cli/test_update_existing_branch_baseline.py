@@ -1,4 +1,5 @@
 """Real Git regression coverage for updates that land via an existing branch."""
+
 import subprocess
 from pathlib import Path
 
@@ -34,17 +35,30 @@ def checkout(tmp_path, monkeypatch):
 
 def prepare(root, *, is_fork=False):
     return update_cmd._prepare_checkout_for_update(
-        ["git"], "main", update_cmd._current_branch_name(["git"], check=True),
-        is_fork=is_fork, assume_yes=True, gateway_mode=False, gw_input_fn=None,
-        switch_branch=False, _windows_gateway_resume=None,
+        ["git"],
+        "main",
+        update_cmd._current_branch_name(["git"], check=True),
+        is_fork=is_fork,
+        assume_yes=True,
+        gateway_mode=False,
+        gw_input_fn=None,
+        switch_branch=False,
+        _windows_gateway_resume=None,
     )
 
 
 def pull(plan, **kwargs):
     return update_cmd._pull_updates(
-        ["git"], "main", plan.auto_stash_ref, prompt_for_restore=False,
-        gw_input_fn=None, discard_local_changes=False, keep_stash=False,
-        pre_sync_sha=plan.pre_sync_sha, rollback_branch=plan.rollback_branch, **kwargs,
+        ["git"],
+        "main",
+        plan.auto_stash_ref,
+        prompt_for_restore=False,
+        gw_input_fn=None,
+        discard_local_changes=False,
+        keep_stash=False,
+        pre_sync_sha=plan.pre_sync_sha,
+        rollback_branch=plan.rollback_branch,
+        **kwargs,
     )
 
 
@@ -54,8 +68,12 @@ def complete(plan, movement_baseline, monkeypatch):
     monkeypatch.setattr(update_cmd, "_complete_source_update", completed.append)
     request = {}
     update_cmd._apply_pulled_update(
-        ["git"], "main", movement_baseline, plan,
-        _windows_gateway_resume=None, completion_request=request,
+        ["git"],
+        "main",
+        movement_baseline,
+        plan,
+        _windows_gateway_resume=None,
+        completion_request=request,
     )
     assert completed == [request]
     return request
@@ -78,7 +96,9 @@ def test_same_commit_switch_is_still_a_noop(checkout):
 
 
 @pytest.mark.parametrize("parked", [False, True])
-def test_syntax_failure_returns_to_original_checkout_without_rewriting_main(checkout, parked):
+def test_syntax_failure_returns_to_original_checkout_without_rewriting_main(
+    checkout, parked
+):
     root, old, _tip = checkout
     if parked:
         git(root, "checkout", "-qb", "feature")
@@ -98,12 +118,16 @@ def test_syntax_failure_returns_to_original_checkout_without_rewriting_main(chec
         pull(plan)
     assert exc.value.code == 1
     assert git(root, "rev-parse", "HEAD") == old
-    assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == ("feature" if parked else "HEAD")
+    assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == (
+        "feature" if parked else "HEAD"
+    )
     assert git(root, "rev-parse", "main") == bad
     assert (root / "cli.py").read_text(encoding="utf8") == "value = 1\n"
 
 
-def test_rollback_restores_the_commit_when_the_parked_branch_is_taken(checkout, tmp_path):
+def test_rollback_restores_the_commit_when_the_parked_branch_is_taken(
+    checkout, tmp_path
+):
     """Another worktree holding the parked branch must not leave the install on broken code."""
     root, _old, _tip = checkout
     git(root, "checkout", "-qb", "feature")
@@ -122,6 +146,7 @@ def test_rollback_restores_the_commit_when_the_parked_branch_is_taken(checkout, 
     assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == "HEAD"
     assert (root / "cli.py").read_text(encoding="utf8") == "value = 1\n"
 
+
 def test_locally_ahead_switch_still_needs_completion(checkout):
     root, _old, tip = checkout
     git(root, "checkout", "-q", "--detach", tip)
@@ -134,7 +159,9 @@ def test_locally_ahead_switch_still_needs_completion(checkout):
     assert git(root, "rev-parse", "HEAD") == tip
 
 
-def test_merge_that_reports_success_without_moving_stale_main_is_refused(checkout, monkeypatch):
+def test_merge_that_reports_success_without_moving_stale_main_is_refused(
+    checkout, monkeypatch
+):
     """Detached on a side commit with a stale local main: the switch moves HEAD, so a baseline
     taken from the running code (or a bypass for "the switch already moved") would accept a
     merge that returned 0 but left HEAD on the stale main."""
@@ -167,7 +194,9 @@ def test_stale_local_main_can_catch_up_to_original_detached_tip(checkout):
     assert git(root, "rev-parse", "main") == tip
 
 
-@pytest.mark.parametrize("upstream_result", ["original", "unchanged", "wrong-branch", "reverted"])
+@pytest.mark.parametrize(
+    "upstream_result", ["original", "unchanged", "wrong-branch", "reverted"]
+)
 def test_fork_sync_after_stale_branch_repair(checkout, monkeypatch, upstream_result):
     root, old, tip = checkout
     git(root, "checkout", "-q", "main")
@@ -194,8 +223,12 @@ def test_fork_sync_after_stale_branch_repair(checkout, monkeypatch, upstream_res
         assert exc.value.code == 1
     else:
         request = complete(plan, pull(plan, sync_upstream=True), monkeypatch)
-        assert request["expected_sha"] == (upstream_tip if upstream_result == "original" else tip)
-        assert git(root, "rev-parse", "main") == (upstream_tip if upstream_result == "original" else tip)
+        assert request["expected_sha"] == (
+            upstream_tip if upstream_result == "original" else tip
+        )
+        assert git(root, "rev-parse", "main") == (
+            upstream_tip if upstream_result == "original" else tip
+        )
         assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == "main"
 
 
@@ -223,7 +256,9 @@ def test_early_fork_sync_without_push_still_completes(checkout, monkeypatch):
 
 def test_command_hands_off_after_existing_main_switch(update_tree, monkeypatch, capsys):
     t = update_tree
-    monkeypatch.setattr("clawk_cli.update_owning_install.retarget_to_owning_install", lambda *_: None)
+    monkeypatch.setattr(
+        "clawk_cli.update_owning_install.retarget_to_owning_install", lambda *_: None
+    )
     run = subprocess.run
 
     def local_git_only(command, *args, **kwargs):
@@ -236,7 +271,9 @@ def test_command_hands_off_after_existing_main_switch(update_tree, monkeypatch, 
     git(t.clone, "branch", "-f", "main", "origin/main")
     git(t.clone, "checkout", "-q", "--detach", t.base)
     t.args.channel = "main"
-    monkeypatch.setattr(update_cmd._m(), "_sync_with_upstream_if_needed", lambda *a, **k: True)
+    monkeypatch.setattr(
+        update_cmd._m(), "_sync_with_upstream_if_needed", lambda *a, **k: True
+    )
     update_cmd._m().cmd_update(t.args)
     assert git(t.clone, "rev-parse", "HEAD") == t.newer
     assert len(t.requests) == 1
@@ -278,7 +315,9 @@ def test_fork_sync_round_trip_is_not_misclassified_as_noop(tmp_path, monkeypatch
     assert git(root, "rev-parse", "--abbrev-ref", "HEAD") == "main"
 
 
-def test_a_refused_branch_switch_prints_the_refusal_not_a_missing_branch(checkout, capsys):
+def test_a_refused_branch_switch_prints_the_refusal_not_a_missing_branch(
+    checkout, capsys
+):
     """CP0's commit point refused (no marker can be written): the user used to read "Branch 'main'
     does not exist locally or on origin." above the real reason (review C8)."""
     from clawk_cli import update_cmd_commit
@@ -298,7 +337,9 @@ def test_a_refused_branch_switch_prints_the_refusal_not_a_missing_branch(checkou
     assert git(root, "rev-parse", "HEAD") == old
 
 
-def test_a_torn_branch_switch_leaves_the_autostash_parked(checkout, monkeypatch, capsys):
+def test_a_torn_branch_switch_leaves_the_autostash_parked(
+    checkout, monkeypatch, capsys
+):
     """A switch that stopped part-way keeps its marker for the next launch's restore; re-applying the
     autostash onto that half-written tree mixed the user's edits into git's partial writes (C8)."""
     from clawk_cli._early_recovery import interrupted_pull_marker
@@ -306,12 +347,17 @@ def test_a_torn_branch_switch_leaves_the_autostash_parked(checkout, monkeypatch,
     root, _old, _tip = checkout
     (root / "cli.py").write_text("value = 'local edit'\n", encoding="utf8")
     restored = []
-    monkeypatch.setattr(update_cmd._m(), "_restore_stashed_changes", lambda *a, **k: restored.append(a))
+    monkeypatch.setattr(
+        update_cmd._m(), "_restore_stashed_changes", lambda *a, **k: restored.append(a)
+    )
 
     def torn_switch(git_cmd, branch, target_ref, *, pre, stash):
-        interrupted_pull_marker(root).write_text(f"pid=1\npre={pre}\ntarget={pre}\nstash={stash}\n",
-                                                 encoding="utf-8")
-        return subprocess.CompletedProcess(["checkout", branch], 1, "", "error: unable to write file cli.py")
+        interrupted_pull_marker(root).write_text(
+            f"pid=1\npre={pre}\ntarget={pre}\nstash={stash}\n", encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(
+            ["checkout", branch], 1, "", "error: unable to write file cli.py"
+        )
 
     monkeypatch.setattr(update_cmd, "_switch_branch_at_commit_point", torn_switch)
     with pytest.raises(SystemExit):

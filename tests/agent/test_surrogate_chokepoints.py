@@ -17,7 +17,6 @@ The fix is owned at chokepoints, not leaf sites:
   request-body leaf are json-encodable before any provider sees them.
 """
 
-
 import json
 
 import pytest
@@ -159,15 +158,15 @@ def test_api_kwargs_walk_makes_tool_descriptions_json_safe():
     }
 
     assert _sanitize_structure_surrogates(api_kwargs) is True
-    encoded = json.dumps(api_kwargs)  # would raise UnicodeEncodeError-class failure before
+    encoded = json.dumps(
+        api_kwargs
+    )  # would raise UnicodeEncodeError-class failure before
     assert "\\ud83d" not in encoded.lower()
     desc = api_kwargs["tools"][0]["function"]["description"]
     assert desc.startswith("±5 message window")
     assert "\ufffd" in desc
     # Second walk is a no-op on the now-clean payload.
     assert _sanitize_structure_surrogates(api_kwargs) is False
-
-
 
 
 # ---------------------------------------------------------------------------

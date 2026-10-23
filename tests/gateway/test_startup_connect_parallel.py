@@ -129,7 +129,9 @@ async def test_startup_connects_platforms_concurrently(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_startup_one_failing_platform_does_not_block_others(monkeypatch, tmp_path):
+async def test_startup_one_failing_platform_does_not_block_others(
+    monkeypatch, tmp_path
+):
     """A failing/slow platform must not prevent others from connecting (#83791).
 
     Mirrors the reported Windows symptom: Telegram (dead proxy) must not keep
@@ -139,11 +141,15 @@ async def test_startup_one_failing_platform_does_not_block_others(monkeypatch, t
 
     class _FailingSlowAdapter(BasePlatformAdapter):
         def __init__(self):
-            super().__init__(PlatformConfig(enabled=True, token="***"), Platform.TELEGRAM)
+            super().__init__(
+                PlatformConfig(enabled=True, token="***"), Platform.TELEGRAM
+            )
 
         async def connect(self, *, is_reconnect: bool = False) -> bool:
             await asyncio.sleep(0.3)
-            self._set_fatal_error("telegram_proxy_dead", "proxy unreachable", retryable=True)
+            self._set_fatal_error(
+                "telegram_proxy_dead", "proxy unreachable", retryable=True
+            )
             return False
 
         async def disconnect(self) -> None:
@@ -193,17 +199,13 @@ class TestTelegramColdStartCap:
     """
 
     def _runner(self, tmp_path):
-        config = GatewayConfig(
-            platforms={}, sessions_dir=tmp_path / "sessions"
-        )
+        config = GatewayConfig(platforms={}, sessions_dir=tmp_path / "sessions")
         return GatewayRunner(config)
 
     def test_initial_telegram_budget_is_capped(self, tmp_path, monkeypatch):
         monkeypatch.delenv("CLAWK_GATEWAY_PLATFORM_CONNECT_TIMEOUT", raising=False)
         runner = self._runner(tmp_path)
-        initial = runner._platform_connect_timeout_secs(
-            Platform.TELEGRAM, initial=True
-        )
+        initial = runner._platform_connect_timeout_secs(Platform.TELEGRAM, initial=True)
         full = runner._platform_connect_timeout_secs(Platform.TELEGRAM)
         assert initial < full, (
             "cold-start Telegram budget must be shorter than the reconnect "
@@ -221,9 +223,10 @@ class TestTelegramColdStartCap:
     def test_env_override_applies_to_initial(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_GATEWAY_PLATFORM_CONNECT_TIMEOUT", "12")
         runner = self._runner(tmp_path)
-        assert runner._platform_connect_timeout_secs(
-            Platform.TELEGRAM, initial=True
-        ) == 12.0
+        assert (
+            runner._platform_connect_timeout_secs(Platform.TELEGRAM, initial=True)
+            == 12.0
+        )
 
     @pytest.mark.asyncio
     async def test_initial_connect_times_out_at_cap_and_queues_retry(

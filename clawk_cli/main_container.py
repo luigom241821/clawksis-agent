@@ -15,7 +15,15 @@ def _probe_container(cmd: list, backend: str, via_sudo: bool = False):
     all other exceptions propagate naturally.
     """
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15, check=False)
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
+        )
     except subprocess.TimeoutExpired:
         label = f"sudo {backend}" if via_sudo else backend
         print(
@@ -67,7 +75,12 @@ def exec_in_container(container_info: dict, cli_args: list):
             )
             sys.exit(1)
         cmd_prefix = [sudo_path, "-n", runtime]
-        if _probe_container(cmd_prefix[:2] + inspect_cmd, backend, via_sudo=True).returncode != 0:
+        if (
+            _probe_container(
+                cmd_prefix[:2] + inspect_cmd, backend, via_sudo=True
+            ).returncode
+            != 0
+        ):
             print(
                 f"Error: container '{container_name}' not found via {backend}.\n"
                 f"\n"

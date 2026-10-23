@@ -25,15 +25,26 @@ from typing import Any
 
 import pytest
 
-from tests.e2e.core.cli_tmux._classic import PROMPT, ClassicHome, Pane, assert_no_traceback, last_user, require_tmux
+from tests.e2e.core.cli_tmux._classic import (
+    PROMPT,
+    ClassicHome,
+    Pane,
+    assert_no_traceback,
+    last_user,
+    require_tmux,
+)
 from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall
 
 pytestmark = [
-    pytest.mark.platforms("linux"),  # the harness finds and reaps processes through /proc
+    pytest.mark.platforms(
+        "linux"
+    ),  # the harness finds and reaps processes through /proc
 ]
 
-MARKDOWN_REPLY = ("# Heading Two\n\nSome intro text for the markdown check.\n\n- alpha item\n- beta item\n"
-                  "- gamma item\n\n```python\ndef hello():\n    return 'hi'\n```\n\nEnd of STEP2 reply.")
+MARKDOWN_REPLY = (
+    "# Heading Two\n\nSome intro text for the markdown check.\n\n- alpha item\n- beta item\n"
+    "- gamma item\n\n```python\ndef hello():\n    return 'hi'\n```\n\nEnd of STEP2 reply."
+)
 # Flagged "shell command via -c/-lc flag" -> approval modal. The seq makes an EARLY tool result bulky,
 # so /compress has a middle worth summarizing.
 STEP3_CMD = 'bash -c "echo hi && seq 1 2500"'
@@ -62,9 +73,17 @@ def _main(record: dict[str, Any]):
     if "STEP2" in user:
         return Text(MARKDOWN_REPLY)
     if "STEP3" in user:
-        return Text(STEP3_DONE) if after_tool else ToolCall("terminal", {"command": STEP3_CMD})
+        return (
+            Text(STEP3_DONE)
+            if after_tool
+            else ToolCall("terminal", {"command": STEP3_CMD})
+        )
     if "STEP4" in user:
-        return Text(STEP4_DONE) if after_tool else ToolCall("read_file", {"path": "notes.txt"})
+        return (
+            Text(STEP4_DONE)
+            if after_tool
+            else ToolCall("read_file", {"path": "notes.txt"})
+        )
     if "STEP8" in user:
         return Text(LONG_REPLY, chunk_chars=6, delay_per_chunk=0.04)
     if "hello" in user.lower():
@@ -74,14 +93,25 @@ def _main(record: dict[str, Any]):
 
 def _aux(record: dict[str, Any]):
     blob = json.dumps((record.get("body") or {}).get("messages") or [])
-    return Text("Scripted session title" if "You name chat sessions" in blob else "Fake summary of the earlier conversation.")
+    return Text(
+        "Scripted session title"
+        if "You name chat sessions" in blob
+        else "Fake summary of the earlier conversation."
+    )
 
 
 def _session_rows(ch: ClassicHome) -> list[dict[str, Any]]:
-    conn = sqlite3.connect(f"file:{ch.clawk_home / 'state.db'}?mode=ro", uri=True, timeout=10)
+    conn = sqlite3.connect(
+        f"file:{ch.clawk_home / 'state.db'}?mode=ro", uri=True, timeout=10
+    )
     conn.row_factory = sqlite3.Row
     try:
-        return [dict(r) for r in conn.execute("SELECT id, title, message_count FROM sessions ORDER BY started_at")]
+        return [
+            dict(r)
+            for r in conn.execute(
+                "SELECT id, title, message_count FROM sessions ORDER BY started_at"
+            )
+        ]
     finally:
         conn.close()
 
@@ -101,8 +131,10 @@ class Steps:
 
     def expect(self, name: str, needles: list[str], text: str) -> None:
         missing = [n for n in needles if n not in text]
-        assert not missing, (f"step {name}: main showed {missing!r}; screen now:\n{text[-4000:]}\n"
-                             f"{self.pane.ch.diagnostics()}")
+        assert not missing, (
+            f"step {name}: main showed {missing!r}; screen now:\n{text[-4000:]}\n"
+            f"{self.pane.ch.diagnostics()}"
+        )
 
 
 def test_classic_cli_matches_main_baseline_across_fifteen_steps(tmp_path: Path) -> None:
@@ -113,43 +145,78 @@ def test_classic_cli_matches_main_baseline_across_fifteen_steps(tmp_path: Path) 
     s = Steps(pane)
     with llm:
         ch.write(llm.base_url, EXTRA_CONFIG)
-        (ch.work / "notes.txt").write_text("fixture line one\nfixture line two\nfixture line three\n", encoding="utf-8")
+        (ch.work / "notes.txt").write_text(
+            "fixture line one\nfixture line two\nfixture line three\n", encoding="utf-8"
+        )
         try:
             pane.launch()
             assert pane.ready(), f"01_startup: no status bar:\n{pane.screen()}"
-            s.expect("01_startup", ["Welcome to Clawksis!", "Session:", PROMPT], s.capture("01_startup", scrollback=True))
+            s.expect(
+                "01_startup",
+                ["Welcome to Clawksis!", "Session:", PROMPT],
+                s.capture("01_startup", scrollback=True),
+            )
 
             pane.submit("STEP2 please show me some markdown")
             assert pane.wait(["End of STEP2 reply."], 60), pane.screen()
             pane.settle()
             md = s.capture("02_markdown")
             # Rendered through Rich inside main's reply box, not raw markdown.
-            s.expect("02_markdown", ["\u2624 Clawksis", "Heading Two", "- alpha item", "def hello():"], md)
-            assert "# Heading Two" not in md and "```" not in md, f"02_markdown: raw markdown:\n{md}"
+            s.expect(
+                "02_markdown",
+                ["\u2624 Clawksis", "Heading Two", "- alpha item", "def hello():"],
+                md,
+            )
+            assert "# Heading Two" not in md and "```" not in md, (
+                f"02_markdown: raw markdown:\n{md}"
+            )
 
             pane.submit("STEP3 please run echo hi in the terminal")
-            assert pane.wait(["Dangerous Command"], 45), f"03a_approval_modal: no modal:\n{pane.screen()}"
+            assert pane.wait(["Dangerous Command"], 45), (
+                f"03a_approval_modal: no modal:\n{pane.screen()}"
+            )
             pane.settle(quiet=1.5, timeout=10)
-            s.expect("03a_approval_modal", ["Dangerous Command", STEP3_CMD, "1. Allow once", "4. Deny"],
-                     s.capture("03a_approval_modal"))
+            s.expect(
+                "03a_approval_modal",
+                ["Dangerous Command", STEP3_CMD, "1. Allow once", "4. Deny"],
+                s.capture("03a_approval_modal"),
+            )
             pane.keys("Enter")  # main's preselected first choice: Allow once
             assert pane.wait([STEP3_DONE], 60), pane.screen()
             pane.settle()
-            s.expect("03b_tool_reply", ["\u2192 allowed once", "\u2624 Clawksis", STEP3_DONE], s.capture("03b_tool_reply"))
+            s.expect(
+                "03b_tool_reply",
+                ["\u2192 allowed once", "\u2624 Clawksis", STEP3_DONE],
+                s.capture("03b_tool_reply"),
+            )
 
             pane.submit("STEP4 please read notes.txt")
             assert pane.wait([STEP4_DONE], 60), pane.screen()
             pane.settle()
-            s.expect("04_read_file", ["read", "notes.txt", STEP4_DONE], s.capture("04_read_file"))
+            s.expect(
+                "04_read_file",
+                ["read", "notes.txt", STEP4_DONE],
+                s.capture("04_read_file"),
+            )
 
             pane.submit("/help")
             pane.settle(quiet=2.0, timeout=20)
-            s.expect("05_help", ["/quit", "Exit the CLI", "/help skills"], s.capture("05_help"))
+            s.expect(
+                "05_help",
+                ["/quit", "Exit the CLI", "/help skills"],
+                s.capture("05_help"),
+            )
 
             pane.submit("/model")
-            assert pane.wait(["Model Picker"], 30), f"06a_model: no picker:\n{pane.screen()}"
+            assert pane.wait(["Model Picker"], 30), (
+                f"06a_model: no picker:\n{pane.screen()}"
+            )
             pane.settle(quiet=1.5, timeout=10)
-            s.expect("06a_model", ["Model Picker", "Current: fake-model"], s.capture("06a_model"))
+            s.expect(
+                "06a_model",
+                ["Model Picker", "Current: fake-model"],
+                s.capture("06a_model"),
+            )
             pane.keys("Escape")
             pane.settle(quiet=1.0, timeout=10)
 
@@ -160,8 +227,18 @@ def test_classic_cli_matches_main_baseline_across_fifteen_steps(tmp_path: Path) 
             pane.submit("/usage")
             assert pane.wait(["Session Token Usage"], 30), pane.screen()
             pane.settle()
-            s.expect("07_usage", ["Session Token Usage", "Model:", "fake-model", "API calls:", "Messages:",
-                                  "Compressions:"], s.capture("07_usage"))
+            s.expect(
+                "07_usage",
+                [
+                    "Session Token Usage",
+                    "Model:",
+                    "fake-model",
+                    "API calls:",
+                    "Messages:",
+                    "Compressions:",
+                ],
+                s.capture("07_usage"),
+            )
 
             pane.submit("STEP8 tell me a very long story")
             assert pane.wait(["w040"], 60), pane.screen()
@@ -170,41 +247,87 @@ def test_classic_cli_matches_main_baseline_across_fifteen_steps(tmp_path: Path) 
             interrupted = pane.wait(["Interrupted"], 45)
             pane.settle(quiet=2.0, timeout=30)
             text = s.capture("08_interrupt", scrollback=True)
-            assert not pane.dead(), f"08_interrupt: Ctrl+C killed the CLI (main stays at the prompt):\n{text[-3000:]}"
+            assert not pane.dead(), (
+                f"08_interrupt: Ctrl+C killed the CLI (main stays at the prompt):\n{text[-3000:]}"
+            )
             assert "THE-END" not in text, "08_interrupt: the turn was not interrupted"
-            assert interrupted, f"08_interrupt: main showed an 'Interrupted' notice; screen now:\n{text[-4000:]}"
+            assert interrupted, (
+                f"08_interrupt: main showed an 'Interrupted' notice; screen now:\n{text[-4000:]}"
+            )
 
             pane.submit("/compress")
-            assert pane.wait(["Compressed:", "No changes from compression"], 90), pane.screen()
+            assert pane.wait(["Compressed:", "No changes from compression"], 90), (
+                pane.screen()
+            )
             pane.settle(quiet=3.0, timeout=60)
-            s.expect("09_compress", ["Compressing", "Compressed:"], s.capture("09_compress"))
+            s.expect(
+                "09_compress", ["Compressing", "Compressed:"], s.capture("09_compress")
+            )
 
             pane.submit("/quit")
-            assert pane.wait_dead(30), f"10a_exit_summary: CLI alive 30 s after /quit:\n{pane.screen()}"
+            assert pane.wait_dead(30), (
+                f"10a_exit_summary: CLI alive 30 s after /quit:\n{pane.screen()}"
+            )
             summary = s.capture("10a_exit_summary", scrollback=True).split("/quit")[-1]
-            s.expect("10a_exit_summary", ["Resume this session with:", "clawk --resume ", f'clawk -c "{TITLE}"',
-                                          "Session:", f"Title:          {TITLE}", "Duration:", "Messages:"], summary)
+            s.expect(
+                "10a_exit_summary",
+                [
+                    "Resume this session with:",
+                    "clawk --resume ",
+                    f'clawk -c "{TITLE}"',
+                    "Session:",
+                    f"Title:          {TITLE}",
+                    "Duration:",
+                    "Messages:",
+                ],
+                summary,
+            )
 
             pane.launch("-c")
-            assert pane.ready(), f"10b_resume_recap: no prompt:\n{pane.scrollback()[-3000:]}"
+            assert pane.ready(), (
+                f"10b_resume_recap: no prompt:\n{pane.scrollback()[-3000:]}"
+            )
             recap = s.capture("10b_resume_recap", scrollback=True)
-            s.expect("10b_resume_recap", ["Resumed session", TITLE, "Previous Conversation",
-                                          "STEP2 please show me some markdown"], recap)
-            assert "END OF CONTEXT SUMMARY" not in recap, "10b: the raw compaction summary was dumped"
+            s.expect(
+                "10b_resume_recap",
+                [
+                    "Resumed session",
+                    TITLE,
+                    "Previous Conversation",
+                    "STEP2 please show me some markdown",
+                ],
+                recap,
+            )
+            assert "END OF CONTEXT SUMMARY" not in recap, (
+                "10b: the raw compaction summary was dumped"
+            )
             pane.submit("/quit")
             pane.wait_dead(30)
 
             pane.launch("chat", "-q", "hello")
             assert pane.wait([HELLO_REPLY], 120), f"11a_q_tty:\n{pane.screen()}"
             pane.settle(quiet=3.0, timeout=30)
-            s.expect("11a_q_tty", ["\u2624 Clawksis", HELLO_REPLY, PROMPT], s.capture("11a_q_tty"))
+            s.expect(
+                "11a_q_tty",
+                ["\u2624 Clawksis", HELLO_REPLY, PROMPT],
+                s.capture("11a_q_tty"),
+            )
             pane.kill()
 
             piped = ch.run("chat", "-q", "hello")
             assert_no_traceback(piped.stdout + piped.stderr, "11b_q_pipe")
             assert piped.returncode == 0, piped.stderr[-3000:]
-            s.expect("11b_q_pipe", ["Query: hello", HELLO_REPLY, "Resume this session with:", "Session:",
-                                    "Messages:"], piped.stdout)
+            s.expect(
+                "11b_q_pipe",
+                [
+                    "Query: hello",
+                    HELLO_REPLY,
+                    "Resume this session with:",
+                    "Session:",
+                    "Messages:",
+                ],
+                piped.stdout,
+            )
         finally:
             pane.kill()
             ch.reap()

@@ -29,10 +29,7 @@ def sample_repo(tmp_path: Path) -> Path:
 
     (repo / "src").mkdir()
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n"
-        "    return 'a'\n\n"
-        "def beta():\n"
-        "    return 'b'\n",
+        "def alpha():\n    return 'a'\n\ndef beta():\n    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -43,10 +40,7 @@ def sample_repo(tmp_path: Path) -> Path:
     _git(repo, "commit", "-m", "initial")
 
     (repo / "src" / "main.py").write_text(
-        "def alpha():\n"
-        "    return 'changed'\n\n"
-        "def beta():\n"
-        "    return 'b'\n",
+        "def alpha():\n    return 'changed'\n\ndef beta():\n    return 'b'\n",
         encoding="utf-8",
     )
     (repo / "src" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
@@ -70,12 +64,6 @@ def test_parse_typed_references_ignores_emails_and_handles():
     assert refs[0].line_start == 1
     assert refs[0].line_end == 2
     assert refs[2].target == "2"
-
-
-
-
-
-
 
 
 def test_folder_listing_falls_back_when_rg_is_blocked(sample_repo: Path):
@@ -145,10 +133,6 @@ def test_folder_listing_inside_cwd_unchanged(sample_repo: Path):
     assert not result.warnings
     assert "src/" in result.message
     assert "main.py" in result.message
-
-
-
-
 
 
 def test_missing_file_becomes_warning(sample_repo: Path):
@@ -221,7 +205,9 @@ def test_oversized_file_refused_without_full_read(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(Path, "read_text", _boom)
     result = preprocess_context_references(
-        f"Inspect @file:{payload.name}", cwd=tmp_path, context_length=1_000,
+        f"Inspect @file:{payload.name}",
+        cwd=tmp_path,
+        context_length=1_000,
     )
     assert "too large to inline safely" in result.message
     assert str(payload) in result.message
@@ -237,7 +223,9 @@ def test_line_range_ref_streams_only_the_window(tmp_path: Path, monkeypatch):
     small = tmp_path / "small.txt"
     small.write_text("first\nsecond\nthird\nfourth\n", encoding="utf-8")
     result = preprocess_context_references(
-        f"Inspect @file:{small.name}:2-3", cwd=tmp_path, context_length=1_000,
+        f"Inspect @file:{small.name}:2-3",
+        cwd=tmp_path,
+        context_length=1_000,
     )
     assert "second\nthird" in result.message
     assert "first" not in result.message
@@ -257,10 +245,12 @@ def test_binary_sniff_reads_prefix_only(tmp_path: Path):
         fh = orig_open(self, *args, **kwargs)
         if "b" in (args[0] if args else kwargs.get("mode", "r")):
             orig_read = fh.read
+
             def _read(*a, **k):
                 data = orig_read(*a, **k)
                 read_calls.append(len(data))
                 return data
+
             fh.read = _read
         return fh
 
@@ -279,7 +269,9 @@ def test_folder_listing_caps_line_count_io(tmp_path: Path, monkeypatch):
     big.write_bytes(b"line\n" * (context_references._LINE_COUNT_MAX_BYTES // 5 + 2))
     (assets / "small.txt").write_text("a\nb\n", encoding="utf-8")
 
-    result = preprocess_context_references("list @folder:assets", cwd=tmp_path, context_length=10_000_000)
+    result = preprocess_context_references(
+        "list @folder:assets", cwd=tmp_path, context_length=10_000_000
+    )
     assert "big.txt" in result.message and "bytes" in result.message
     assert "3 lines" in result.message  # small file still reports a line count
 
@@ -310,7 +302,9 @@ def test_line_range_bounds_reads_on_single_line_file(tmp_path: Path, monkeypatch
 
     monkeypatch.setattr(Path, "open", _counting_open)
     result = preprocess_context_references(
-        f"Inspect @file:{payload.name}:1-1", cwd=tmp_path, context_length=1_000,
+        f"Inspect @file:{payload.name}:1-1",
+        cwd=tmp_path,
+        context_length=1_000,
     )
     assert "too large to inline safely" in result.message
     # hard_limit = 500 tokens -> char budget 2000 -> each readline bounded at 2001
@@ -325,8 +319,13 @@ def test_run_quiet_caps_child_output(tmp_path: Path):
     from agent.context_references import _MAX_QUIET_OUTPUT_BYTES, _run_quiet
 
     huge = _run_quiet(
-        [sys.executable, "-c", f"import sys; sys.stdout.write('x' * {_MAX_QUIET_OUTPUT_BYTES + 1000})"],
-        tmp_path, 30,
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.write('x' * {_MAX_QUIET_OUTPUT_BYTES + 1000})",
+        ],
+        tmp_path,
+        30,
     )
     assert huge.returncode != 0
     assert len(huge.stdout) <= _MAX_QUIET_OUTPUT_BYTES
@@ -336,6 +335,7 @@ def test_run_quiet_caps_child_output(tmp_path: Path):
     # path keys on the returncode, and a 0 with truncated stdout was a silent success.
     with patch("agent.context_references.subprocess.Popen") as popen:
         import io
+
         fake = popen.return_value
         fake.stdout = io.BytesIO(b"x" * (_MAX_QUIET_OUTPUT_BYTES + 1000))
         fake.stderr = io.BytesIO(b"")
@@ -350,13 +350,17 @@ def test_run_quiet_caps_child_output(tmp_path: Path):
 
 
 def test_reference_count_is_capped(tmp_path: Path):
-    from agent.context_references import _MAX_EXPANDED_REFERENCES, preprocess_context_references
+    from agent.context_references import (
+        _MAX_EXPANDED_REFERENCES,
+        preprocess_context_references,
+    )
 
     for i in range(_MAX_EXPANDED_REFERENCES + 4):
         (tmp_path / f"f{i}.txt").write_text("data", encoding="utf-8")
     result = preprocess_context_references(
         " ".join(f"@file:f{i}.txt" for i in range(_MAX_EXPANDED_REFERENCES + 4)),
-        cwd=tmp_path, context_length=10_000_000,
+        cwd=tmp_path,
+        context_length=10_000_000,
     )
     skipped = [w for w in result.warnings if "not expanded" in w]
     assert len(skipped) == 4
@@ -379,7 +383,9 @@ def test_multiple_individually_safe_files_still_obey_aggregate_limit(tmp_path: P
     assert "context injection refused" in "\n".join(result.warnings)
 
 
-def test_binary_reference_block_maps_host_attachment_to_container_path(tmp_path: Path, monkeypatch):
+def test_binary_reference_block_maps_host_attachment_to_container_path(
+    tmp_path: Path, monkeypatch
+):
     """Docker backend: a staged binary attachment's host path is rendered as the
     bind-mounted in-container path so the agent's tools can read it.
 
@@ -436,7 +442,9 @@ def test_oversized_text_reference_maps_host_attachment_to_container_path(
     assert "too large to inline safely" in result.message
 
 
-def test_binary_reference_block_keeps_host_path_on_local_backend(tmp_path: Path, monkeypatch):
+def test_binary_reference_block_keeps_host_path_on_local_backend(
+    tmp_path: Path, monkeypatch
+):
     """Local backend: no translation — the agent's tools run on the host."""
     from agent.context_references import preprocess_context_references
 
@@ -470,7 +478,9 @@ def test_binary_reference_block_keeps_host_path_on_local_backend(tmp_path: Path,
 _SSH_WORKSPACE = "/srv/repos"  # the SSH host's workspace root; absent on the gateway
 
 
-def _stage_outside_workspace(tmp_path: Path, monkeypatch, name: str, subdir: str = "attachments") -> Path:
+def _stage_outside_workspace(
+    tmp_path: Path, monkeypatch, name: str, subdir: str = "attachments"
+) -> Path:
     """Stage *name* under a CLAWK_HOME that lives outside the workspace (SSH topology)."""
     clawk_home = tmp_path / "gateway-data"  # /opt/data inside the gateway container
     (clawk_home / subdir).mkdir(parents=True)
@@ -481,10 +491,14 @@ def _stage_outside_workspace(tmp_path: Path, monkeypatch, name: str, subdir: str
 
 def test_ssh_backend_staged_text_attachment_still_expands(tmp_path: Path, monkeypatch):
     """The gateway owns the bytes, so the ref must inline them, not refuse the path."""
-    from agent.context_references import format_reference_value, preprocess_context_references
+    from agent.context_references import (
+        format_reference_value,
+        preprocess_context_references,
+    )
 
     payload = _stage_outside_workspace(
-        tmp_path, monkeypatch, "Pasted content (3-5.4 KB).txt", subdir="composer-pastes")
+        tmp_path, monkeypatch, "Pasted content (3-5.4 KB).txt", subdir="composer-pastes"
+    )
     payload.write_text("pasted body\n", encoding="utf-8")
 
     result = preprocess_context_references(
@@ -499,7 +513,9 @@ def test_ssh_backend_staged_text_attachment_still_expands(tmp_path: Path, monkey
     assert "pasted body" in result.message
 
 
-def test_ssh_backend_staged_binary_attachment_points_at_the_synced_remote_path(tmp_path: Path, monkeypatch):
+def test_ssh_backend_staged_binary_attachment_points_at_the_synced_remote_path(
+    tmp_path: Path, monkeypatch
+):
     """Binaries stay on disk: the ref must render the path the ssh backend resolves (the
     file-sync mirrors the staging dirs to ``~/.clawksis`` on the remote)."""
     from agent.context_references import preprocess_context_references
@@ -519,7 +535,9 @@ def test_ssh_backend_staged_binary_attachment_points_at_the_synced_remote_path(t
     assert "~/.clawksis/attachments/archive.zip" in result.message
 
 
-def test_ref_outside_workspace_and_staging_dirs_is_still_refused(tmp_path: Path, monkeypatch):
+def test_ref_outside_workspace_and_staging_dirs_is_still_refused(
+    tmp_path: Path, monkeypatch
+):
     """Staging dirs are the only widening: any other path outside the workspace stays blocked."""
     from agent.context_references import preprocess_context_references
 
@@ -536,11 +554,15 @@ def test_ref_outside_workspace_and_staging_dirs_is_still_refused(tmp_path: Path,
         context_length=100_000,
     )
 
-    assert any("outside the allowed workspace" in warning for warning in result.warnings)
+    assert any(
+        "outside the allowed workspace" in warning for warning in result.warnings
+    )
     assert "not-for-the-agent" not in result.message
 
 
-def test_local_backend_staged_attachment_keeps_the_host_path(tmp_path: Path, monkeypatch):
+def test_local_backend_staged_attachment_keeps_the_host_path(
+    tmp_path: Path, monkeypatch
+):
     """Local backend: gateway and tools share a filesystem — no remote path rewrite."""
     from agent.context_references import preprocess_context_references
 
@@ -560,22 +582,10 @@ def test_local_backend_staged_attachment_keeps_the_host_path(tmp_path: Path, mon
     assert "~/.clawksis/attachments/" not in result.message
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @pytest.mark.asyncio
-async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, monkeypatch):
+async def test_blocks_canonical_read_denylist_credential_stores(
+    tmp_path: Path, monkeypatch
+):
     """@file expansion must honour the canonical read deny-list.
 
     The narrow in-module list historically missed the real credential stores
@@ -603,7 +613,9 @@ async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, 
     mcp_token.parent.mkdir(parents=True)
     mcp_token.write_text('{"token": "MCP-TOKEN-SECRET"}\n', encoding="utf-8")
 
-    gcloud_adc = tmp_path / ".config" / "gcloud" / "application_default_credentials.json"
+    gcloud_adc = (
+        tmp_path / ".config" / "gcloud" / "application_default_credentials.json"
+    )
     gcloud_adc.parent.mkdir(parents=True)
     gcloud_adc.write_text('{"refresh_token": "GCLOUD-SECRET"}\n', encoding="utf-8")
 
@@ -633,7 +645,9 @@ async def test_blocks_canonical_read_denylist_credential_stores(tmp_path: Path, 
 
 
 @pytest.mark.asyncio
-async def test_canonical_guard_fails_closed_when_lookup_raises(tmp_path: Path, monkeypatch):
+async def test_canonical_guard_fails_closed_when_lookup_raises(
+    tmp_path: Path, monkeypatch
+):
     """If the canonical read guard raises, the reference must fail CLOSED.
 
     The guard exists specifically to cover credential stores the narrow local
@@ -695,7 +709,9 @@ def test_format_reference_value_round_trips_through_the_parser(value):
 
 
 @pytest.mark.asyncio
-async def test_side_thread_expansion_guards_the_served_profile_home(tmp_path: Path, monkeypatch):
+async def test_side_thread_expansion_guards_the_served_profile_home(
+    tmp_path: Path, monkeypatch
+):
     """Inside a running loop (the gateway / TUI turn) the sync wrapper hops to a side thread; that
     thread must inherit the caller's profile scope so the credential guard checks the SERVED
     profile's home, not the launch profile's (a served profile's skill-hub cache was attachable)."""
@@ -713,8 +729,11 @@ async def test_side_thread_expansion_guards_the_served_profile_home(tmp_path: Pa
     token = set_clawk_home_override(served_home)
     try:
         result = preprocess_context_references(
-            "read @file:profiles/b/skills/.hub/injected.md", cwd=launch_home, allowed_root=launch_home,
-            context_length=100_000)
+            "read @file:profiles/b/skills/.hub/injected.md",
+            cwd=launch_home,
+            allowed_root=launch_home,
+            context_length=100_000,
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -723,7 +742,9 @@ async def test_side_thread_expansion_guards_the_served_profile_home(tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_composer_paste_outside_workspace_is_attached_but_sibling_dir_is_not(tmp_path, monkeypatch):
+async def test_composer_paste_outside_workspace_is_attached_but_sibling_dir_is_not(
+    tmp_path, monkeypatch
+):
     """Desktop saves a large paste under <CLAWK_HOME>/composer-pastes and attaches it
     as `@file:`; the chat cwd is almost never an ancestor of that directory, so the
     workspace guard must admit exactly that anchored root (#117149) — and nothing

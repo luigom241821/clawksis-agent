@@ -81,8 +81,12 @@ class TestLastReferenceMetricsAccessor:
 
     def test_read_does_not_disturb_usage_accounting(self):
         client = self._client()
-        client.chat.completions._last_reference_metrics = [slot_metrics(_acct(), "label")]
-        client.chat.completions._pending_reference_usage = CanonicalUsage(input_tokens=5)
+        client.chat.completions._last_reference_metrics = [
+            slot_metrics(_acct(), "label")
+        ]
+        client.chat.completions._pending_reference_usage = CanonicalUsage(
+            input_tokens=5
+        )
         client.chat.completions._pending_reference_cost = 0.05
 
         client.last_reference_metrics()
@@ -108,7 +112,6 @@ class TestConversationLoopHelper:
             client = None
 
         assert _moa_reference_metrics_for_hook(_Agent()) is None
-
 
     def test_a_raising_accessor_is_swallowed(self):
         from agent.conversation_loop import _moa_reference_metrics_for_hook

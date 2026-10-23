@@ -647,14 +647,22 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 def _escape_html(text: Any) -> str:
     return (
-        str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        .replace('"', "&quot;").replace("'", "&#39;")
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
     )
 
 
 def _format_timestamp(ts: Any) -> str:
     # A corrupt cell renders as N/A; never raw text (a TEXT timestamp would otherwise reach an HTML sink).
-    return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts and (ts := coerce_epoch(ts)) else "N/A"
+    return (
+        datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S")
+        if ts and (ts := coerce_epoch(ts))
+        else "N/A"
+    )
 
 
 _ROLE_ICONS = {"user": ICON_USER, "assistant": ICON_BOT, "system": ICON_SHIELD}
@@ -676,7 +684,9 @@ def _content_text(content: Any) -> str:
     return "\n".join(parts)
 
 
-def _collapsible(kind: str, icon: str, title: str, inner: str, indent: str, outer_class: str = "") -> str:
+def _collapsible(
+    kind: str, icon: str, title: str, inner: str, indent: str, outer_class: str = ""
+) -> str:
     """A chevron-headed collapsible block (tool-call / reasoning / system-prompt)."""
     return f"""
 {indent}<div class="{outer_class or kind}">
@@ -701,28 +711,39 @@ def _generate_messages_html(messages: list[dict[str, Any]]) -> str:
         # The role feeds two sinks and is externally influenced for tool/MCP messages: HTML-escape
         # the display text; reduce the class token to alnum/-/_ so a crafted role can neither break
         # out of the attribute nor split into extra classes (real roles keep matching `.message-<role>`).
-        role_class = "".join(c if c.isalnum() or c in "-_" else "-" for c in str(role).lower())
-        delay_style = f' style="animation-delay: {min(i * 0.05, 1.0)}s"' if i < 10 else ""  # stagger first items
+        role_class = "".join(
+            c if c.isalnum() or c in "-_" else "-" for c in str(role).lower()
+        )
+        delay_style = (
+            f' style="animation-delay: {min(i * 0.05, 1.0)}s"' if i < 10 else ""
+        )  # stagger first items
         html = (
             f'<div class="message message-{role_class} active"{delay_style}>'
             f'  <div class="message-header">'
             f'    <div class="role-badge">{_CHEVRON_HTML} {_ROLE_ICONS.get(role, ICON_TERMINAL)} {_escape_html(role)}</div>'
             f'    <div class="timestamp">{_format_timestamp(msg.get("timestamp", 0))}</div>'
-            '  </div>'
+            "  </div>"
             '  <div class="message-body">'
         )
         for tc in msg.get("tool_calls") or ():
             fn = tc.get("function", {})
             html += _collapsible(
-                "tool-call", ICON_WRENCH, f"Tool Call: {_escape_html(fn.get('name', 'unknown'))}",
-                f"<pre><code>{_escape_html(fn.get('arguments', '{}'))}</code></pre>", " " * 16,
+                "tool-call",
+                ICON_WRENCH,
+                f"Tool Call: {_escape_html(fn.get('name', 'unknown'))}",
+                f"<pre><code>{_escape_html(fn.get('arguments', '{}'))}</code></pre>",
+                " " * 16,
             )
         if content:
             escaped = _escape_html(content)
             html += f'  <div class="content">{f"<pre><code>{escaped}</code></pre>" if role == "tool" else escaped}</div>'
         if reasoning := msg.get("reasoning") or msg.get("reasoning_content"):
             html += _collapsible(
-                "reasoning", ICON_SPARKLES, "Reasoning", f'<div class="content">{_escape_html(reasoning)}</div>', " " * 12,
+                "reasoning",
+                ICON_SPARKLES,
+                "Reasoning",
+                f'<div class="content">{_escape_html(reasoning)}</div>',
+                " " * 12,
             )
         html_list.append(html + "  </div></div>")
     return "\n".join(html_list)
@@ -733,7 +754,7 @@ def _sidebar_item_html(s: dict[str, Any]) -> str:
     title = s.get("title") or s.get("preview") or "Untitled Session"
     title = title[:47] + "..." if len(title) > 50 else title
     return f"""
-            <a class="session-item" data-id="{_escape_html(sid)}" href="#{quote(sid, safe='')}">
+            <a class="session-item" data-id="{_escape_html(sid)}" href="#{quote(sid, safe="")}">
                 <div class="session-item-title">{_escape_html(title)}</div>
                 <div class="session-item-meta">
                     <span>{_escape_html(sid[:8])}</span>
@@ -764,11 +785,18 @@ def _sidebar_html(sessions: list[dict[str, Any]]) -> str:
 
 def _session_view_html(s: dict[str, Any], is_multi: bool) -> str:
     escaped_sid = _escape_html(str(s.get("id", "N/A")))
-    system_html = _collapsible(
-        "system-prompt", ICON_SHIELD, "System Prompt (Persona)",
-        f'<div class="content">{_escape_html(s["system_prompt"])}</div>', " " * 12,
-        outer_class="system-prompt-section active",
-    ) if s.get("system_prompt") else ""
+    system_html = (
+        _collapsible(
+            "system-prompt",
+            ICON_SHIELD,
+            "System Prompt (Persona)",
+            f'<div class="content">{_escape_html(s["system_prompt"])}</div>',
+            " " * 12,
+            outer_class="system-prompt-section active",
+        )
+        if s.get("system_prompt")
+        else ""
+    )
     return f"""
         <div class="{"session-view" if is_multi else "session-view active"}" id="view-{escaped_sid}">
             <header class="fade-in">
@@ -792,7 +820,9 @@ def generate_multi_session_html_export(sessions: list[dict[str, Any]]) -> str:
         return "<html><body><h1>No sessions to export.</h1></body></html>"
     is_multi = len(sessions) > 1
     return HTML_TEMPLATE.format(
-        page_title="Clawksis Session Export" if is_multi else _escape_html(sessions[0].get("title") or "Clawksis Session"),
+        page_title="Clawksis Session Export"
+        if is_multi
+        else _escape_html(sessions[0].get("title") or "Clawksis Session"),
         sidebar_html=_sidebar_html(sessions) if is_multi else "",
         sessions_html="\n".join(_session_view_html(s, is_multi) for s in sessions),
         main_margin="var(--sidebar-width)" if is_multi else "0",

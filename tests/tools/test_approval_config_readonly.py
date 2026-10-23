@@ -12,6 +12,7 @@ so they now use load_config_readonly() — the API built for exactly this
 These tests drive the REAL functions against a temp CLAWK_HOME config
 (AGENTS.md: E2E with real imports), not mocks of the seam under test.
 """
+
 import pytest
 
 import clawk_cli.config as hc
@@ -35,8 +36,7 @@ def config_home(tmp_path, monkeypatch):
     hc._LOAD_CONFIG_CACHE.clear()
 
 
-def test_readers_return_live_cache_without_corrupting_it(
-        config_home, monkeypatch):
+def test_readers_return_live_cache_without_corrupting_it(config_home, monkeypatch):
     """Guard-population check for the readonly swap: repeated reads return
     the same cached object and the cache stays intact — no swapped site
     may mutate what it returns."""

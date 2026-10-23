@@ -29,5 +29,3 @@ def test_cjk_fts_bridged_from_config(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_CJK_FTS", "1")
     gateway_run._reload_runtime_env_preserving_config_authority()
     assert os.environ["CLAWK_CJK_FTS"] == "False"
-
-

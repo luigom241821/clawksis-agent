@@ -19,17 +19,23 @@ _SYNTHETIC_PROMPT = re.compile(
 
 
 def _prompt_preview(db, content, display_kind, summary):
-    message = project_compaction_message_for_display({
-        "role": "user", "content": db._decode_content(content),
-        "display_kind": display_kind, "_compressed_summary": bool(summary),
-    })
+    message = project_compaction_message_for_display(
+        {
+            "role": "user",
+            "content": db._decode_content(content),
+            "display_kind": display_kind,
+            "_compressed_summary": bool(summary),
+        }
+    )
     if message is None or user_originated_turn_view(message) is None:
         return ""
     content = message.get("content")
     if isinstance(content, list):
         content = " ".join(
             part if isinstance(part, str) else part.get("text", "")
-            for part in content if isinstance(part, (str, dict)))
+            for part in content
+            if isinstance(part, (str, dict))
+        )
     if not isinstance(content, str):
         return ""
     text = " ".join(content.split())
@@ -58,11 +64,14 @@ def _display_rows_sql(conn, session_id, *, users_only=False):
     Current stores use the durable display index, including protected-tail copies.
     """
     filters = (" AND role = 'user'" if users_only else "") + DISPLAY_VISIBLE_SQL
-    indexed = conn.execute(
-        "SELECT 1 FROM messages WHERE session_id = ? AND (active = 1 OR compacted = 1) "
-        f"{filters} AND (display_order IS NULL OR display_identity IS NULL) LIMIT 1",
-        (session_id,),
-    ).fetchone() is None
+    indexed = (
+        conn.execute(
+            "SELECT 1 FROM messages WHERE session_id = ? AND (active = 1 OR compacted = 1) "
+            f"{filters} AND (display_order IS NULL OR display_identity IS NULL) LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        is None
+    )
     if indexed:
         return f"""WITH display_rows AS (
             SELECT (SELECT candidate.id FROM messages candidate
@@ -88,14 +97,28 @@ def _register_functions(db, conn):
     from agent.context_compressor import split_user_originated_turn
 
     def identity_content(content, display_kind):
-        handoff, live = split_user_originated_turn({
-            "role": "user", "content": db._decode_content(content), "display_kind": display_kind})
-        return db._encode_content(live.get("content")) if handoff is not None and live is not None else content
+        handoff, live = split_user_originated_turn(
+            {
+                "role": "user",
+                "content": db._decode_content(content),
+                "display_kind": display_kind,
+            }
+        )
+        return (
+            db._encode_content(live.get("content"))
+            if handoff is not None and live is not None
+            else content
+        )
 
-    conn.create_function("timeline_identity_content", 2, identity_content, deterministic=True)
-    conn.create_function("timeline_preview", 3,
-                         lambda content, kind, summary: _prompt_preview(db, content, kind, summary),
-                         deterministic=True)
+    conn.create_function(
+        "timeline_identity_content", 2, identity_content, deterministic=True
+    )
+    conn.create_function(
+        "timeline_preview",
+        3,
+        lambda content, kind, summary: _prompt_preview(db, content, kind, summary),
+        deterministic=True,
+    )
 
 
 def get_session_messages_around(db, session_id, row_id, *, limit=120):
@@ -115,53 +138,98 @@ def get_session_messages_around(db, session_id, row_id, *, limit=120):
             return None
         sql = _display_rows_sql(conn, session_id)
         params = {"sid": session_id, "row_id": row_id, "limit": limit}
-        selected = conn.execute(sql + """
+        selected = conn.execute(
+            sql
+            + """
             SELECT sort_id FROM display_rows WHERE row_id = :row_id
-        """, params).fetchone()
+        """,
+            params,
+        ).fetchone()
         if selected is None:
             return None
         params["start"] = selected["sort_id"]
-        counts = conn.execute(sql + """
+        counts = conn.execute(
+            sql
+            + """
             SELECT COUNT(*) AS total, COALESCE(SUM(sort_id < :start), 0) AS offset FROM display_rows
-        """, params).fetchone()
-        rows = conn.execute(sql + """
+        """,
+            params,
+        ).fetchone()
+        rows = conn.execute(
+            sql
+            + """
             SELECT m.* FROM (SELECT row_id, sort_id FROM display_rows
                             WHERE sort_id >= :start ORDER BY sort_id LIMIT :limit) AS page
             JOIN messages m ON m.id = page.row_id ORDER BY page.sort_id
-        """, params).fetchall()
-    messages = [db._row_to_message_dict(row, warn_context="timeline jump", summary_flag=True) for row in rows]
-    return {"messages": messages, "pagination": {
-        "row_id": row_id, "limit": limit, "returned": len(messages), "order": "oldest",
-        "offset": counts["offset"], "total": counts["total"],
-        "has_older": counts["offset"] > 0,
-        "has_newer": counts["offset"] + len(messages) < counts["total"],
-    }}
+        """,
+            params,
+        ).fetchall()
+    messages = [
+        db._row_to_message_dict(row, warn_context="timeline jump", summary_flag=True)
+        for row in rows
+    ]
+    return {
+        "messages": messages,
+        "pagination": {
+            "row_id": row_id,
+            "limit": limit,
+            "returned": len(messages),
+            "order": "oldest",
+            "offset": counts["offset"],
+            "total": counts["total"],
+            "has_older": counts["offset"] > 0,
+            "has_newer": counts["offset"] + len(messages) < counts["total"],
+        },
+    }
 
 
 def get_session_timeline(db, session_id, *, limit=500, after_row_id=0):
     """Chronological prompts. Cursor is the first physical row id of a logical turn."""
     with _snapshot(db) as conn:
         _register_functions(db, conn)
-        sql = _display_rows_sql(conn, session_id, users_only=True) + """,
+        sql = (
+            _display_rows_sql(conn, session_id, users_only=True)
+            + """,
             prompts AS MATERIALIZED (
                 SELECT row_id, sort_id, m.timestamp,
                        timeline_preview(m.content, m.display_kind, m._compressed_summary) AS preview
                 FROM display_rows JOIN messages m ON m.id = row_id
             ), eligible AS MATERIALIZED (SELECT * FROM prompts WHERE preview <> '')
         """
+        )
         params = {"sid": session_id, "after": after_row_id, "limit": limit + 1}
-        rows = conn.execute(sql + """
+        rows = conn.execute(
+            sql
+            + """
             SELECT row_id, sort_id, timestamp, preview, (SELECT COUNT(*) FROM eligible) AS total
             FROM eligible WHERE sort_id > :after ORDER BY sort_id LIMIT :limit
-        """, params).fetchall()
-        total = rows[0]["total"] if rows else conn.execute(
-            sql + "SELECT COUNT(*) FROM eligible", params).fetchone()[0]
+        """,
+            params,
+        ).fetchall()
+        total = (
+            rows[0]["total"]
+            if rows
+            else conn.execute(sql + "SELECT COUNT(*) FROM eligible", params).fetchone()[
+                0
+            ]
+        )
     has_more = len(rows) > limit
     page = rows[:limit]
     return {
-        "entries": [{"row_id": row["row_id"], "preview": row["preview"], "timestamp": row["timestamp"]}
-                    for row in page],
-        "pagination": {"limit": limit, "after_row_id": after_row_id, "returned": len(page),
-                       "total": total, "has_more": has_more,
-                       "next_cursor": page[-1]["sort_id"] if has_more else None},
+        "entries": [
+            {
+                "row_id": row["row_id"],
+                "preview": row["preview"],
+                "timestamp": row["timestamp"],
+            }
+            for row in page
+        ],
+        "pagination": {
+            "limit": limit,
+            "after_row_id": after_row_id,
+            "returned": len(page),
+            "total": total,
+            "has_more": has_more,
+            "next_cursor": page[-1]["sort_id"] if has_more else None,
+        },
     }

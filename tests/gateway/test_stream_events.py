@@ -51,6 +51,7 @@ class _FakeSink:
 
 # ── Message events → sink ────────────────────────────────────────────────────
 
+
 def test_message_chunk_flows_to_sink_on_delta():
     sink = _FakeSink()
     d = GatewayEventDispatcher(_base_adapter(), sink)
@@ -76,11 +77,14 @@ def test_commentary_flows_to_sink():
 
 # ── Tool events → progress queue, formatted by adapter ───────────────────────
 
+
 def test_tool_call_chunk_renders_default_chrome():
     lines = []
     d = GatewayEventDispatcher(
-        _base_adapter(), _FakeSink(),
-        enqueue_tool_line=lines.append, tool_mode="all",
+        _base_adapter(),
+        _FakeSink(),
+        enqueue_tool_line=lines.append,
+        tool_mode="all",
     )
     d.dispatch(ToolCallChunk(tool_name="terminal", preview="ls -la"))
     assert len(lines) == 1
@@ -91,8 +95,10 @@ def test_tool_call_chunk_renders_default_chrome():
 def test_new_mode_dedups_same_tool():
     lines = []
     d = GatewayEventDispatcher(
-        _base_adapter(), _FakeSink(),
-        enqueue_tool_line=lines.append, tool_mode="new",
+        _base_adapter(),
+        _FakeSink(),
+        enqueue_tool_line=lines.append,
+        tool_mode="new",
     )
     d.dispatch(ToolCallChunk(tool_name="terminal", preview="a"))
     d.dispatch(ToolCallChunk(tool_name="terminal", preview="b"))  # deduped
@@ -101,5 +107,3 @@ def test_new_mode_dedups_same_tool():
 
 
 # ── Control events → gateway-owned hooks ─────────────────────────────────────
-
-

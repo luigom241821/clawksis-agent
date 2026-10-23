@@ -14,14 +14,15 @@ import types
 from unittest.mock import MagicMock, patch
 
 
-
 # ===========================================================================
 # Helpers
 # ===========================================================================
 
+
 def _make_session_db(tmp_path):
     """Create a real SessionDB for integration-style tests."""
     from clawk_state import SessionDB
+
     db_path = tmp_path / "test_state.db"
     return SessionDB(db_path=db_path)
 
@@ -29,7 +30,9 @@ def _make_session_db(tmp_path):
 def _tui_session(agent=None, session_key="session-key-old", **extra):
     """Minimal TUI gateway session dict matching server._sessions values."""
     return {
-        "agent": agent if agent is not None else types.SimpleNamespace(session_id=session_key),
+        "agent": agent
+        if agent is not None
+        else types.SimpleNamespace(session_id=session_key),
         "session_key": session_key,
         "history": [],
         "history_lock": threading.Lock(),
@@ -49,6 +52,7 @@ def _tui_session(agent=None, session_key="session-key-old", **extra):
 # ===========================================================================
 # Bug #20001: _finalize_session uses stale session_key
 # ===========================================================================
+
 
 class TestFinalizeSessionUsesAgentSessionId:
     """After compression rotates agent.session_id, _finalize_session()
@@ -102,16 +106,15 @@ class TestFinalizeSessionUsesAgentSessionId:
         assert continuation["end_reason"] == "tui_close"
 
 
-
 # ===========================================================================
 # Bug #20001: _sync_session_key_after_compress post-run_conversation
 # ===========================================================================
 
 
-
 # ===========================================================================
 # Bug #19029: pending_title ValueError wedge
 # ===========================================================================
+
 
 class TestPendingTitleValueError:
     """When set_session_title raises ValueError (duplicate/invalid title),
@@ -127,6 +130,7 @@ class TestPendingTitleValueError:
         class _Agent:
             session_id = "test-session"
             _cached_system_prompt = ""
+
             def run_conversation(self, prompt, **kw):
                 return {
                     "final_response": "ok",
@@ -150,6 +154,7 @@ class TestPendingTitleValueError:
         class _ImmediateThread:
             def __init__(self, target=None, daemon=None, **kw):
                 self._target = target
+
             def start(self):
                 self._target()
 
@@ -157,11 +162,13 @@ class TestPendingTitleValueError:
         monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
 
         try:
-            server.handle_request({
-                "id": "1",
-                "method": "prompt.submit",
-                "params": {"session_id": "sid", "text": "hello"},
-            })
+            server.handle_request(
+                {
+                    "id": "1",
+                    "method": "prompt.submit",
+                    "params": {"session_id": "sid", "text": "hello"},
+                }
+            )
 
             # pending_title should be cleared on ValueError, not left wedged
             assert session.get("pending_title") is None, (
@@ -172,10 +179,10 @@ class TestPendingTitleValueError:
             server._sessions.pop("sid", None)
 
 
-
 # ===========================================================================
 # Bug #18765: Gateway surfaces null response
 # ===========================================================================
+
 
 class TestGatewaySurfacesNullResponse:
     """When the agent does work (api_calls > 0) but returns no final_response,
@@ -196,13 +203,13 @@ class TestGatewaySurfacesNullResponse:
 
         response = agent_result.get("final_response") or ""
         response = _normalize_empty_agent_response(
-            agent_result, response, history_len=10,
+            agent_result,
+            response,
+            history_len=10,
         )
 
         assert response != "", "Null response with api_calls>0 must be surfaced"
         assert "nonexistent_tool" in response
-
-
 
     def test_failed_generic_error(self):
         """Agent failed with non-context error → generic error message."""
@@ -217,13 +224,14 @@ class TestGatewaySurfacesNullResponse:
 
         response = agent_result.get("final_response") or ""
         response = _normalize_empty_agent_response(
-            agent_result, response, history_len=5,
+            agent_result,
+            response,
+            history_len=5,
         )
 
         # Plain outcome plus the way forward; the raw provider text stays in the log.
         assert "500 Internal Server Error" not in response
         assert response
-
 
     def test_silent_drop_after_stop_surfaces_hint(self):
         """Regression for #31884: after /stop, the next user message hits a
@@ -243,7 +251,9 @@ class TestGatewaySurfacesNullResponse:
 
         response = agent_result.get("final_response") or ""
         result = _normalize_empty_agent_response(
-            agent_result, response, history_len=10,
+            agent_result,
+            response,
+            history_len=10,
         )
 
         assert result, "Silent-drop turn must surface a user-facing hint"
@@ -252,6 +262,7 @@ class TestGatewaySurfacesNullResponse:
 # ===========================================================================
 # Prune: finalize_orphaned_compression_sessions
 # ===========================================================================
+
 
 class TestFinalizeOrphanedCompressionSessions:
     """The prune migration marks ghost compression continuations as ended."""
@@ -288,9 +299,3 @@ class TestFinalizeOrphanedCompressionSessions:
         session = db.get_session("ghost-cont")
         assert session["ended_at"] is not None
         assert session["end_reason"] == "orphaned_compression"
-
-
-
-
-
-

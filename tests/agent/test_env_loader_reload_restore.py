@@ -52,7 +52,9 @@ def _register_fake_source(values: dict[str, str], *, override_existing: bool):
     reg_module.register_source(_Fake(), replace=True)
 
 
-def _make_home(tmp_path: Path, monkeypatch, env_text: str, *, preserve: str = "") -> Path:
+def _make_home(
+    tmp_path: Path, monkeypatch, env_text: str, *, preserve: str = ""
+) -> Path:
     home = tmp_path / ".clawk"
     home.mkdir()
     secrets = "secrets:\n  fakebulk:\n    enabled: true\n"
@@ -87,13 +89,17 @@ def test_source_secret_survives_second_load_clawk_dotenv(tmp_path, monkeypatch):
     [(False, ""), (True, "GLM_API_KEY")],
     ids=["gap-fill-source", "preserve_existing-name"],
 )
-def test_reload_restore_keeps_dotenv_precedence(tmp_path, monkeypatch, override_existing, preserve):
+def test_reload_restore_keeps_dotenv_precedence(
+    tmp_path, monkeypatch, override_existing, preserve
+):
     """Names .env must win are never restored over a later .env edit: an ``override_existing: false``
     source only fills gaps, and a ``secrets.preserve_existing`` name keeps .env's value even against an
     overriding source. Both land in the per-home snapshot on load 1 (no .env value yet), so restoring
     the whole snapshot froze them at the source value; a cold start would have yielded ``local``."""
     home = _make_home(tmp_path, monkeypatch, "", preserve=preserve)
-    _register_fake_source({"GLM_API_KEY": "vault-value"}, override_existing=override_existing)
+    _register_fake_source(
+        {"GLM_API_KEY": "vault-value"}, override_existing=override_existing
+    )
 
     env_loader.load_clawk_dotenv(clawk_home=home)
     assert os.environ["GLM_API_KEY"] == "vault-value"

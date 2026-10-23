@@ -1,4 +1,5 @@
 """Managed launch preserves direct I/O across engine command-line versions."""
+
 from __future__ import annotations
 
 import subprocess
@@ -9,11 +10,19 @@ import pytest
 from clawk_cli.local_runtime import supervisor
 
 
-@pytest.mark.parametrize("help_text, expected", [
-    ("-lm, --load-mode MODE\n  dio: use DirectIO if available", ["--load-mode", "dio"]),
-    ("-dio, --direct-io  use DirectIO if available", ["-dio"]),
-])
-def test_spawn_selects_supported_direct_io_option(tmp_path, monkeypatch, help_text, expected):
+@pytest.mark.parametrize(
+    "help_text, expected",
+    [
+        (
+            "-lm, --load-mode MODE\n  dio: use DirectIO if available",
+            ["--load-mode", "dio"],
+        ),
+        ("-dio, --direct-io  use DirectIO if available", ["-dio"]),
+    ],
+)
+def test_spawn_selects_supported_direct_io_option(
+    tmp_path, monkeypatch, help_text, expected
+):
     monkeypatch.setattr(supervisor, "runtimes_root", lambda: tmp_path / "runtime")
     executable = tmp_path / "engine" / "llama-server"
     probes = []
@@ -24,15 +33,20 @@ def test_spawn_selects_supported_direct_io_option(tmp_path, monkeypatch, help_te
 
     monkeypatch.setattr(supervisor.subprocess, "run", run)
     commands = []
-    monkeypatch.setattr(supervisor, "spawn_server", lambda argv, **kwargs: (
-        commands.append(argv) or SimpleNamespace(pid=123, poll=lambda: 0), None,
-    ))
+    monkeypatch.setattr(
+        supervisor,
+        "spawn_server",
+        lambda argv, **kwargs: (
+            commands.append(argv) or SimpleNamespace(pid=123, poll=lambda: 0),
+            None,
+        ),
+    )
     sup = supervisor.LlamaServerSupervisor(executable, tmp_path / "models", port=19001)
     monkeypatch.setattr(sup, "_write_state", lambda: None)
     try:
         sup._spawn()
         index = commands[0].index(expected[0])
-        assert commands[0][index:index + len(expected)] == expected
+        assert commands[0][index : index + len(expected)] == expected
         if expected[0] == "--load-mode":
             assert "-dio" not in commands[0]
         assert probes == [[str(executable), "--help"]]
@@ -63,12 +77,20 @@ def test_failed_engine_probe_can_be_retried(tmp_path, monkeypatch):
     monkeypatch.setattr(supervisor.subprocess, "run", fail)
     with pytest.raises(subprocess.TimeoutExpired):
         supervisor._direct_io_args(executable)
-    monkeypatch.setattr(supervisor.subprocess, "run", lambda argv, **kwargs:
-                        subprocess.CompletedProcess(argv, 0, "--load-mode MODE", ""))
+    monkeypatch.setattr(
+        supervisor.subprocess,
+        "run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(
+            argv, 0, "--load-mode MODE", ""
+        ),
+    )
     assert supervisor._direct_io_args(executable) == ("--load-mode", "dio")
 
 
 def test_engine_without_direct_io_uses_its_supported_defaults(tmp_path, monkeypatch):
-    monkeypatch.setattr(supervisor.subprocess, "run", lambda argv, **kwargs:
-                        subprocess.CompletedProcess(argv, 0, "--model FILE", ""))
+    monkeypatch.setattr(
+        supervisor.subprocess,
+        "run",
+        lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, "--model FILE", ""),
+    )
     assert supervisor._direct_io_args(tmp_path / "llama-server") == ()

@@ -97,7 +97,10 @@ def test_two_concurrent_clients_each_use_their_own_loop_and_overrides(monkeypatc
 
     assert results["p0"] != results["p1"]
     calls = {c.args[0]: c.kwargs for c in real_connect.call_args_list}
-    assert calls == {"wss://p0": {"ping_interval": 10}, "wss://p1": {"ping_interval": 20}}
+    assert calls == {
+        "wss://p0": {"ping_interval": 10},
+        "wss://p1": {"ping_interval": 20},
+    }
     # Thread-local registrations are cleared for the pooled executor thread.
     assert getattr(feishu_adapter._ws_isolation_state, "loop", None) is None
     assert getattr(feishu_adapter._ws_isolation_state, "connect_kwargs", None) is None
@@ -178,12 +181,19 @@ def test_receive_loop_death_during_disconnect_is_not_an_error(monkeypatch, caplo
     stub = _adapter_stub(_running=False)  # disconnect() already flipped it
 
     thread = threading.Thread(
-        target=lambda: feishu_adapter._run_official_feishu_ws_client(FakeSDKClient(), stub), daemon=True
+        target=lambda: feishu_adapter._run_official_feishu_ws_client(
+            FakeSDKClient(), stub
+        ),
+        daemon=True,
     )
     thread.start()
     thread.join(timeout=10)
     assert not thread.is_alive()
-    errors = [r for r in caplog.records if r.levelno >= logging.ERROR and "receive loop" in r.getMessage()]
+    errors = [
+        r
+        for r in caplog.records
+        if r.levelno >= logging.ERROR and "receive loop" in r.getMessage()
+    ]
     assert errors == [], [r.getMessage() for r in errors]
 
 
@@ -248,11 +258,21 @@ def test_sdk_reconnect_ladder_publishes_retrying(monkeypatch):
             self.on_reconnecting()  # what lark_oapi ``_reconnect()`` fires first
 
     client = FakeSDKClient()
-    stub = _adapter_stub(_loop=adapter_loop, _running=True, _ws_client=client, status_writes=[])
-    stub._write_runtime_status_safe = lambda context, **kw: stub.status_writes.append(kw["platform_state"])
-    stub._ws_link_retrying = types.MethodType(feishu_adapter.FeishuAdapter._ws_link_retrying, stub)
+    stub = _adapter_stub(
+        _loop=adapter_loop, _running=True, _ws_client=client, status_writes=[]
+    )
+    stub._write_runtime_status_safe = lambda context, **kw: stub.status_writes.append(
+        kw["platform_state"]
+    )
+    stub._ws_link_retrying = types.MethodType(
+        feishu_adapter.FeishuAdapter._ws_link_retrying, stub
+    )
 
-    thread = threading.Thread(target=feishu_adapter._run_official_feishu_ws_client, args=(client, stub), daemon=True)
+    thread = threading.Thread(
+        target=feishu_adapter._run_official_feishu_ws_client,
+        args=(client, stub),
+        daemon=True,
+    )
     thread.start()
     thread.join(timeout=10)
     assert not thread.is_alive()
@@ -278,7 +298,9 @@ def _supervisor_stub():
         connect_should_fail=0,
         status_writes=[],
     )
-    stub._write_runtime_status_safe = lambda context, **kw: stub.status_writes.append(kw["platform_state"])
+    stub._write_runtime_status_safe = lambda context, **kw: stub.status_writes.append(
+        kw["platform_state"]
+    )
 
     async def _connect_websocket():
         stub.connect_calls += 1

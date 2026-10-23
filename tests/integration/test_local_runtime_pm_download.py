@@ -20,7 +20,9 @@ from pm.lock import Facts, Lockfile
 
 
 @pytest.mark.platforms("windows", arch="arm64")
-def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatch, record_property):
+def test_live_pinned_cuda_download_pause_resume_and_execute(
+    tmp_path, monkeypatch, record_property
+):
     home = tmp_path / "home"
     store = home / "tools"
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -29,7 +31,9 @@ def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatc
     monkeypatch.setattr(lm, "_RUNNING", {})
     app = FastAPI()
     app.include_router(lm.router)
-    pinned = Lockfile(paths.lockfile_path()).artifacts("llamacpp-cuda", pm.current_target())
+    pinned = Lockfile(paths.lockfile_path()).artifacts(
+        "llamacpp-cuda", pm.current_target()
+    )
     flowing = threading.Event()
     release = threading.Event()
     snapshots = []
@@ -42,6 +46,7 @@ def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatc
         def tick(done, total, ranges):
             original(done, total, ranges)
             snapshots.append((done, total))
+
         return tick
 
     def observed_stage(job):
@@ -53,9 +58,15 @@ def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatc
             original(stage, done, total, label)
             if stage == "download" and label == "1/2":
                 first_archive_bytes = done
-            if stage == "download" and label == "2/2" and first_archive_bytes < done < total and not flowing.is_set():
+            if (
+                stage == "download"
+                and label == "2/2"
+                and first_archive_bytes < done < total
+                and not flowing.is_set()
+            ):
                 flowing.set()
                 assert release.wait(30)
+
         return tick
 
     monkeypatch.setattr(lm, "_runtime_progress_hook", observed_stage)
@@ -71,18 +82,26 @@ def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatc
         raise AssertionError(row)
 
     with TestClient(app) as client:
-        response = client.post("/api/local-models/runtime/install", json={"backend": "cuda"})
+        response = client.post(
+            "/api/local-models/runtime/install", json={"backend": "cuda"}
+        )
         assert response.status_code == 200, response.text
         job_id = response.json()["job_id"]
         try:
-            assert flowing.wait(240), client.get(f"/api/local-models/jobs/{job_id}").text
-            assert client.post("/api/local-models/download/pause", json={"job_id": job_id}).json()["paused"]
+            assert flowing.wait(240), client.get(
+                f"/api/local-models/jobs/{job_id}"
+            ).text
+            assert client.post(
+                "/api/local-models/download/pause", json={"job_id": job_id}
+            ).json()["paused"]
         finally:
             release.set()
         paused = wait_job(client, job_id, {"paused", "done", "error"})
         assert paused["status"] == "paused", paused
         assert binaries.installed_engine("cuda") is None
-        assert client.post("/api/local-models/download/resume", json={"job_id": job_id}).json()["resumed"]
+        assert client.post(
+            "/api/local-models/download/resume", json={"job_id": job_id}
+        ).json()["resumed"]
         completed = wait_job(client, job_id, {"done", "error"})
         assert completed["status"] == "done", completed
 
@@ -92,12 +111,26 @@ def test_live_pinned_cuda_download_pause_resume_and_execute(tmp_path, monkeypatc
     assert fact["artifacts"] == [asset["sha256"] for asset in pinned]
     assert [done for done, _ in snapshots] == sorted(done for done, _ in snapshots)
     assert completed["done_bytes"] == completed["total_bytes"] > 0
-    receipt = {"target": pm.current_target(), "tag": engine.tag,
-               "download_bytes": completed["done_bytes"], "pause_bytes": paused["done_bytes"],
-               "artifacts": pinned, "binary": str(engine.binary), "commands": {}}
+    receipt = {
+        "target": pm.current_target(),
+        "tag": engine.tag,
+        "download_bytes": completed["done_bytes"],
+        "pause_bytes": paused["done_bytes"],
+        "artifacts": pinned,
+        "binary": str(engine.binary),
+        "commands": {},
+    }
     for argument in ("--version", "--list-devices"):
-        run = subprocess.run([str(engine.binary), argument], cwd=engine.binary.parent,
-                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
+        run = subprocess.run(
+            [str(engine.binary), argument],
+            cwd=engine.binary.parent,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+        )
         assert run.returncode == 0, run.stdout + run.stderr
         receipt["commands"][argument] = run.stdout + run.stderr
     dlls = sorted(engine.binary.parent.glob("*.dll"))

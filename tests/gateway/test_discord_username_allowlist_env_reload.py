@@ -95,7 +95,9 @@ class TestResolvedAllowlistSurvivesEnvReload:
         nor the resolved set stays denied."""
         monkeypatch.setenv("DISCORD_ALLOWED_USERS", "teknium,123mikeyd")
         runner = _make_runner(_resolved_adapter())
-        assert runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        assert (
+            runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        )
 
     def test_empty_env_allowlist_never_consults_adapter(self, monkeypatch):
         """Fail-closed invariant: with NO configured allowlist, adapter memory
@@ -128,11 +130,14 @@ class TestResolvedAllowlistSurvivesEnvReload:
         monkeypatch.setenv("DISCORD_ALLOWED_USERS", "teknium")
         adapter = SimpleNamespace(resolved_allowlist_user_ids=lambda: MagicMock())
         runner = _make_runner(adapter)
-        assert runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        assert (
+            runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        )
 
     def test_raising_resolver_fails_closed(self, monkeypatch):
         """An adapter whose accessor raises must not break authz for senders
         the env list already covers, nor authorize anyone else."""
+
         def _boom():
             raise RuntimeError("adapter mid-reconnect")
 
@@ -142,7 +147,9 @@ class TestResolvedAllowlistSurvivesEnvReload:
         # numeric entry in env still authorizes
         assert runner._is_user_authorized(_discord_source()) is True
         # stranger still denied
-        assert runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        assert (
+            runner._is_user_authorized(_discord_source("666000666000666000")) is False
+        )
 
 
 PAIRED_ID = "111222333444555666"
@@ -163,7 +170,9 @@ def _resolved_discord_adapter(entries, members):
 
 
 def _member(uid, name):
-    return SimpleNamespace(id=int(uid), name=name, display_name=name, global_name=None, discriminator="0")
+    return SimpleNamespace(
+        id=int(uid), name=name, display_name=name, global_name=None, discriminator="0"
+    )
 
 
 class TestDiscordAdapterResolvedAccessor:
@@ -172,7 +181,8 @@ class TestDiscordAdapterResolvedAccessor:
         (it would widen the gateway layer to allow-everyone from adapter memory alone), not an
         unresolved username, and not a numeric entry (the gateway reads those live from the env)."""
         adapter = _resolved_discord_adapter(
-            {"teknium", "ghost", "*", PAIRED_ID}, [_member(OPERATOR_ID, "teknium")])
+            {"teknium", "ghost", "*", PAIRED_ID}, [_member(OPERATOR_ID, "teknium")]
+        )
         assert adapter.resolved_allowlist_user_ids() == {OPERATOR_ID}
 
 
@@ -183,7 +193,8 @@ class TestRemovedNumericEntryIsNotResurrected:
 
     def test_revoked_paired_id_denied_after_env_reload(self, monkeypatch):
         adapter = _resolved_discord_adapter(
-            {"teknium", PAIRED_ID}, [_member(OPERATOR_ID, "teknium")])
+            {"teknium", PAIRED_ID}, [_member(OPERATOR_ID, "teknium")]
+        )
         runner = _make_runner(adapter)
         monkeypatch.setenv("DISCORD_ALLOWED_USERS", f"teknium,{PAIRED_ID}")
         assert runner._is_user_authorized(_discord_source(PAIRED_ID)) is True

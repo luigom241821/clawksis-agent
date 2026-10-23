@@ -62,18 +62,23 @@ def test_show_json_survives_blob_cells_in_sibling_tables(board):
         tid = kb.create_task(conn, title="card", assignee="coder")
         conn.execute(
             "INSERT INTO task_comments (task_id, author, body, created_at) "
-            "VALUES (?, 'user', X'FFFEABCD00', 1000)", (tid,),
+            "VALUES (?, 'user', X'FFFEABCD00', 1000)",
+            (tid,),
         )
         conn.execute(
             "INSERT INTO task_events (task_id, kind, payload, created_at) "
-            "VALUES (?, 'note', X'FFFEABCD00', 1000)", (tid,),
+            "VALUES (?, 'note', X'FFFEABCD00', 1000)",
+            (tid,),
         )
 
     with kbc.connect() as conn:
         comments = kb.list_comments(conn, tid)
         assert isinstance(comments[-1].body, str) and "\ufffd" in comments[-1].body
         events = kb.list_events(conn, tid)
-        json.dumps([dataclasses.asdict(c) for c in comments] + [dataclasses.asdict(e) for e in events])
+        json.dumps(
+            [dataclasses.asdict(c) for c in comments]
+            + [dataclasses.asdict(e) for e in events]
+        )
 
 
 def test_respawn_guard_survives_blob_comment_body_and_failure_error(board):

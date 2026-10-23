@@ -30,7 +30,10 @@ _DISK_IO_ERROR_MARKER = "disk i/o error"
 # "Store BUSY, not gone" — HTTP callers map these to 503 instead of 500. Corruption
 # is deliberately absent: a malformed store must surface, not be retried into a timeout.
 _TRANSIENT_SQLITE_MARKERS = (
-    _DISK_IO_ERROR_MARKER, "database is locked", "database table is locked", "busy",
+    _DISK_IO_ERROR_MARKER,
+    "database is locked",
+    "database table is locked",
+    "busy",
 )
 
 
@@ -63,10 +66,11 @@ def _is_no_more_rows(exc: sqlite3.Error) -> bool:
 
 
 def is_transient_sqlite_error(exc: BaseException) -> bool:
-    """"Busy right now", not "damaged": one predicate so retry and the HTTP
+    """ "Busy right now", not "damaged": one predicate so retry and the HTTP
     503-vs-500 split cannot drift apart."""
     return isinstance(exc, sqlite3.OperationalError) and (
-        is_sqlite_lock_error(exc) or any(marker in str(exc).lower() for marker in _TRANSIENT_SQLITE_MARKERS)
+        is_sqlite_lock_error(exc)
+        or any(marker in str(exc).lower() for marker in _TRANSIENT_SQLITE_MARKERS)
     )
 
 
@@ -80,8 +84,12 @@ def is_malformed_schema_error(exc: BaseException) -> bool:
 
 # "Filesystem cannot accept another write" substrings (OSError, sqlite3, wrapped RPC strings).
 _DISK_FULL_MARKERS = (
-    "no space left on device", "not enough space", "database or disk is full",  # SQLITE_FULL
-    "disk full", "full disk", "enospc",
+    "no space left on device",
+    "not enough space",
+    "database or disk is full",  # SQLITE_FULL
+    "disk full",
+    "full disk",
+    "enospc",
 )
 
 
@@ -97,8 +105,17 @@ def is_disk_full_error(exc: BaseException | str | None) -> bool:
 
 # Every classify_persistence_error bucket; consumers enumerate this tuple.
 PERSISTENCE_ERROR_CAUSES = (
-    "locked", "compression", "compression_closed", "turn_lease", "corrupt", "fts_index",
-    "replaced", "deleted_wal", "disk", "session_row_missing", "unknown",
+    "locked",
+    "compression",
+    "compression_closed",
+    "turn_lease",
+    "corrupt",
+    "fts_index",
+    "replaced",
+    "deleted_wal",
+    "disk",
+    "session_row_missing",
+    "unknown",
 )
 
 
@@ -108,7 +125,10 @@ PERSISTENCE_ERROR_CAUSES = (
 # Kept as plain substrings so sqlite3.DatabaseError, wrapped RPC strings, and logged message text all match
 # the same helper. See #77386.
 _DB_CORRUPTION_MARKERS = (
-    "malformed", "file is not a database", "not a database", "database corruption",
+    "malformed",
+    "file is not a database",
+    "not a database",
+    "database corruption",
 )
 
 # The module constant exists on Python 3.11+; the numeric value is stable across SQLite releases.
@@ -315,12 +335,17 @@ def classify_persistence_error(exc_or_str) -> str:
         return "fts_index"
     if _sqlite_primary_code(exc_or_str) in _SQLITE_LOCK_CODES:
         return "locked"
-    if getattr(exc_or_str, "sqlite_errorcode", None) == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY:
+    if (
+        getattr(exc_or_str, "sqlite_errorcode", None)
+        == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
+    ):
         return "session_row_missing"
     text = str(exc_or_str).lower()
     for markers, cause in _PERSISTENCE_CAUSE_BY_PHRASE:
         if any(marker in text for marker in markers):
             return cause
-    if is_disk_full_error(exc_or_str) or any(m in text for m in ("disk", "readonly", "read-only")):
+    if is_disk_full_error(exc_or_str) or any(
+        m in text for m in ("disk", "readonly", "read-only")
+    ):
         return "disk"
     return "unknown"

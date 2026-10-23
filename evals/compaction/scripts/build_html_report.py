@@ -4,6 +4,7 @@
 Usage: build_report.py <runs_dir> <out_html>
 Expects runs/<checkout>_<session>.json pairs from run_compaction.py.
 """
+
 import html
 import json
 import sys
@@ -16,13 +17,14 @@ pairs = {}
 for f in sorted(RUNS.glob("*.json")):
     co, sid = f.stem.split("_", 1)
     if co == "main":
-        co, sid = "main-co", f.stem[len("main-co_"):]
+        co, sid = "main-co", f.stem[len("main-co_") :]
     elif co == "pr":
-        co, sid = "pr-co", f.stem[len("pr-co_"):]
+        co, sid = "pr-co", f.stem[len("pr-co_") :]
     data = json.loads(f.read_text(encoding="utf-8"))
     pairs.setdefault(sid, {})[co] = data
 
 E = html.escape
+
 
 def msg_class(m):
     role = m.get("role", "?")
@@ -38,6 +40,7 @@ def msg_class(m):
             return "todosnap"
     return role
 
+
 def render_msg(m, idx):
     role = m.get("role", "?")
     c = m.get("content")
@@ -46,7 +49,9 @@ def render_msg(m, idx):
     tool = m.get("tool_name") or ""
     tcs = m.get("tool_calls") or []
     tc_names = ", ".join(
-        (t.get("function", {}) or {}).get("name", "?") for t in tcs if isinstance(t, dict)
+        (t.get("function", {}) or {}).get("name", "?")
+        for t in tcs
+        if isinstance(t, dict)
     )
     cls = msg_class(m)
     nchars = len(c)
@@ -56,7 +61,7 @@ def render_msg(m, idx):
     if tc_names:
         label += f" → {tc_names}"
     preview = c[:180].replace("\n", " ")
-    full = c if nchars <= 20000 else c[:20000] + f"\n…[{nchars-20000:,} more chars]"
+    full = c if nchars <= 20000 else c[:20000] + f"\n…[{nchars - 20000:,} more chars]"
     return (
         f'<details class="msg {cls}"><summary><span class="idx">#{idx}</span>'
         f'<span class="role">{E(label)}</span>'
@@ -65,16 +70,18 @@ def render_msg(m, idx):
         f"<pre>{E(full)}</pre></details>"
     )
 
+
 def render_column(title, data, key):
     meta = data["meta"]
     msgs = data[key]
     body = "".join(render_msg(m, i) for i, m in enumerate(msgs))
     return (
         f'<div class="col"><div class="colhead"><h3>{E(title)}</h3>'
-        f'<div class="stats">{meta[key.replace("before","before_msgs").replace("after","after_msgs")] if False else len(msgs)} msgs · '
-        f'~{(meta["before_tokens_est"] if key=="before" else meta["after_tokens_est"]):,} tok</div></div>'
+        f'<div class="stats">{meta[key.replace("before", "before_msgs").replace("after", "after_msgs")] if False else len(msgs)} msgs · '
+        f"~{(meta['before_tokens_est'] if key == 'before' else meta['after_tokens_est']):,} tok</div></div>"
         f'<div class="msgs">{body}</div></div>'
     )
+
 
 def survival_stats(before, after):
     after_texts = set()
@@ -82,8 +89,14 @@ def survival_stats(before, after):
         c = m.get("content")
         if isinstance(c, str) and c:
             after_texts.add(c[:400])
-    kept = sum(1 for m in before if isinstance(m.get("content"), str) and (m.get("content") or "")[:400] in after_texts)
+    kept = sum(
+        1
+        for m in before
+        if isinstance(m.get("content"), str)
+        and (m.get("content") or "")[:400] in after_texts
+    )
     return kept
+
 
 sections = []
 toc = []
@@ -95,22 +108,61 @@ for sid, versions in pairs.items():
     mm, pm = main_d["meta"], pr_d["meta"]
 
     def count_markers(msgs, needle):
-        return sum((m.get("content") or "").count(needle) for m in msgs if isinstance(m.get("content"), str))
+        return sum(
+            (m.get("content") or "").count(needle)
+            for m in msgs
+            if isinstance(m.get("content"), str)
+        )
 
     rows = []
+
     def stat(name, mv, pv):
         cls = "diff" if mv != pv else ""
-        rows.append(f"<tr class='{cls}'><td>{E(name)}</td><td>{E(str(mv))}</td><td>{E(str(pv))}</td></tr>")
+        rows.append(
+            f"<tr class='{cls}'><td>{E(name)}</td><td>{E(str(mv))}</td><td>{E(str(pv))}</td></tr>"
+        )
 
     stat("Messages after", mm["after_msgs"], pm["after_msgs"])
-    stat("Est. tokens after", f"{mm['after_tokens_est']:,}", f"{pm['after_tokens_est']:,}")
-    stat("Reduction", f"{100-100*mm['after_tokens_est']//max(1,mm['before_tokens_est'])}%", f"{100-100*pm['after_tokens_est']//max(1,pm['before_tokens_est'])}%")
+    stat(
+        "Est. tokens after",
+        f"{mm['after_tokens_est']:,}",
+        f"{pm['after_tokens_est']:,}",
+    )
+    stat(
+        "Reduction",
+        f"{100 - 100 * mm['after_tokens_est'] // max(1, mm['before_tokens_est'])}%",
+        f"{100 - 100 * pm['after_tokens_est'] // max(1, pm['before_tokens_est'])}%",
+    )
     stat("Compress time", f"{mm['elapsed_s']}s", f"{pm['elapsed_s']}s")
-    stat("SKILL_PRUNED markers", count_markers(main_d["after"], "SKILL_PRUNED"), count_markers(pr_d["after"], "SKILL_PRUNED"))
-    stat("Policy digest blocks", count_markers(main_d["after"], "SKILL POLICY DIGEST") + count_markers(main_d["after"], "SKILL_POLICY_DIGEST"), count_markers(pr_d["after"], "SKILL POLICY DIGEST") + count_markers(pr_d["after"], "SKILL_POLICY_DIGEST"))
-    stat("Todo snapshot present", "yes" if count_markers(main_d["after"], "preserved across context compression") else "no", "yes" if count_markers(pr_d["after"], "preserved across context compression") else "no")
-    stat("Kept-verbatim msgs", survival_stats(main_d["before"], main_d["after"]), survival_stats(pr_d["before"], pr_d["after"]))
-    stat("Summary error", mm.get("summary_error") or "—", pm.get("summary_error") or "—")
+    stat(
+        "SKILL_PRUNED markers",
+        count_markers(main_d["after"], "SKILL_PRUNED"),
+        count_markers(pr_d["after"], "SKILL_PRUNED"),
+    )
+    stat(
+        "Policy digest blocks",
+        count_markers(main_d["after"], "SKILL POLICY DIGEST")
+        + count_markers(main_d["after"], "SKILL_POLICY_DIGEST"),
+        count_markers(pr_d["after"], "SKILL POLICY DIGEST")
+        + count_markers(pr_d["after"], "SKILL_POLICY_DIGEST"),
+    )
+    stat(
+        "Todo snapshot present",
+        "yes"
+        if count_markers(main_d["after"], "preserved across context compression")
+        else "no",
+        "yes"
+        if count_markers(pr_d["after"], "preserved across context compression")
+        else "no",
+    )
+    stat(
+        "Kept-verbatim msgs",
+        survival_stats(main_d["before"], main_d["after"]),
+        survival_stats(pr_d["before"], pr_d["after"]),
+    )
+    stat(
+        "Summary error", mm.get("summary_error") or "—", pm.get("summary_error") or "—"
+    )
 
     todo_html = ""
     for label, d in (("main", mm), ("PR #87090", pm)):

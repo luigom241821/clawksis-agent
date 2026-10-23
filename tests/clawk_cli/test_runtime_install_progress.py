@@ -1,6 +1,10 @@
 """PM download bytes and install phases remain separate, faithful UI facts."""
 
-from clawk_cli.web_routers.local_models import _download_progress_hook, _job, _runtime_progress_hook
+from clawk_cli.web_routers.local_models import (
+    _download_progress_hook,
+    _job,
+    _runtime_progress_hook,
+)
 
 
 def test_runtime_stages_preserve_pm_whole_plan_progress():
@@ -20,4 +24,7 @@ def test_runtime_stages_preserve_pm_whole_plan_progress():
     assert job["done_bytes"] == job["total_bytes"] == 100
     stage("verify", 0, 0, "")
     assert job["phase"] == "verifying-runtime"
-    assert sum(end - start for rows in job["ranges"].values() for start, end in rows) == 100
+    assert (
+        sum(end - start for rows in job["ranges"].values() for start, end in rows)
+        == 100
+    )

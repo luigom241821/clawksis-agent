@@ -6,6 +6,7 @@ assembles the spawn command.  Auto-installation lives in
 :mod:`agent.lsp.install`; nothing here probes binaries until a file in
 that language is actually edited.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,26 +27,47 @@ _EXTS_BY_LANGUAGE: dict[str, Sequence[str]] = {
     "typescriptreact": (".tsx",),
     "javascript": (".js", ".mjs", ".cjs"),
     "javascriptreact": (".jsx",),
-    "vue": (".vue",), "svelte": (".svelte",), "astro": (".astro",),
-    "go": (".go",), "rust": (".rs",),
+    "vue": (".vue",),
+    "svelte": (".svelte",),
+    "astro": (".astro",),
+    "go": (".go",),
+    "rust": (".rs",),
     "ruby": (".rb", ".rake", ".gemspec", ".ru"),
     "c": (".c", ".h"),
     "cpp": (".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"),
-    "csharp": (".cs", ".csx"), "fsharp": (".fs", ".fsi", ".fsx"),
-    "swift": (".swift",), "java": (".java",), "kotlin": (".kt", ".kts"),
-    "yaml": (".yaml", ".yml"), "json": (".json",), "jsonc": (".jsonc",),
-    "lua": (".lua",), "php": (".php",), "blade": (".blade.php",), "prisma": (".prisma",), "dart": (".dart",),
+    "csharp": (".cs", ".csx"),
+    "fsharp": (".fs", ".fsi", ".fsx"),
+    "swift": (".swift",),
+    "java": (".java",),
+    "kotlin": (".kt", ".kts"),
+    "yaml": (".yaml", ".yml"),
+    "json": (".json",),
+    "jsonc": (".jsonc",),
+    "lua": (".lua",),
+    "php": (".php",),
+    "blade": (".blade.php",),
+    "prisma": (".prisma",),
+    "dart": (".dart",),
     "ocaml": (".ml", ".mli"),
     "shellscript": (".sh", ".bash", ".zsh"),
     "terraform": (".tf", ".tfvars"),
-    "latex": (".tex",), "bibtex": (".bib",), "gleam": (".gleam",),
-    "clojure": (".clj", ".cljc", ".edn"), "clojurescript": (".cljs",),
-    "nix": (".nix",), "typst": (".typ", ".typc"), "haskell": (".hs", ".lhs"),
-    "julia": (".jl",), "elixir": (".ex", ".exs"), "zig": (".zig", ".zon"),
+    "latex": (".tex",),
+    "bibtex": (".bib",),
+    "gleam": (".gleam",),
+    "clojure": (".clj", ".cljc", ".edn"),
+    "clojurescript": (".cljs",),
+    "nix": (".nix",),
+    "typst": (".typ", ".typc"),
+    "haskell": (".hs", ".lhs"),
+    "julia": (".jl",),
+    "elixir": (".ex", ".exs"),
+    "zig": (".zig", ".zon"),
     "dockerfile": (".dockerfile",),
     "powershell": (".ps1", ".psm1", ".psd1"),
 }
-LANGUAGE_BY_EXT: dict[str, str] = {ext: lang for lang, exts in _EXTS_BY_LANGUAGE.items() for ext in exts}
+LANGUAGE_BY_EXT: dict[str, str] = {
+    ext: lang for lang, exts in _EXTS_BY_LANGUAGE.items() for ext in exts
+}
 
 _SpawnFn = Callable[[str, "ServerContext"], Optional["SpawnSpec"]]
 _RootFn = Callable[[str, str], Optional[str]]
@@ -54,6 +76,7 @@ _RootFn = Callable[[str, str], Optional[str]]
 @dataclass
 class SpawnSpec:
     """Result of resolving a server for a file (``None`` means skip)."""
+
     command: list[str]
     workspace_root: str
     cwd: str
@@ -66,6 +89,7 @@ class SpawnSpec:
 class ServerDef:
     """One language server: ``resolve_root(file, ws)`` → per-server root or ``None`` to skip;
     ``build_spawn(root, ctx)`` → :class:`SpawnSpec` or ``None`` when the binary can't be found."""
+
     server_id: str
     extensions: tuple[str, ...]
     resolve_root: _RootFn
@@ -85,6 +109,7 @@ class ServerDef:
 @dataclass
 class ServerContext:
     """User policy passed into :meth:`ServerDef.build_spawn` (install strategy, overrides)."""
+
     workspace_root: str
     install_strategy: str = "auto"  # "auto" | "manual" | "off"
     binary_overrides: dict[str, list[str]] = field(default_factory=dict)
@@ -106,7 +131,11 @@ def _file_ext_or_basename(path: str) -> str:
     """Lower-cased extension (compound ones first), or the full basename for extensionless files (``Dockerfile``)."""
     base = os.path.basename(path)
     lower = base.lower()
-    return next((c for c in _COMPOUND_EXTS if lower.endswith(c)), None) or os.path.splitext(base)[1].lower() or base
+    return (
+        next((c for c in _COMPOUND_EXTS if lower.endswith(c)), None)
+        or os.path.splitext(base)[1].lower()
+        or base
+    )
 
 
 def _which(*names: str) -> Optional[str]:
@@ -114,61 +143,107 @@ def _which(*names: str) -> Optional[str]:
     return next((p for n in names if (p := shutil.which(n))), None)
 
 
-def _root_or_workspace(file_path: str, workspace: str, markers: Sequence[str], excludes: Sequence[str] = ()) -> Optional[str]:
+def _root_or_workspace(
+    file_path: str, workspace: str, markers: Sequence[str], excludes: Sequence[str] = ()
+) -> Optional[str]:
     """``nearest_root`` with workspace fallback; ``None`` iff an exclude marker hit."""
     ceiling = os.path.dirname(workspace) if workspace else None
     found = nearest_root(file_path, markers, excludes=excludes, ceiling=ceiling)
-    if found is None and excludes and nearest_root(file_path, markers, ceiling=ceiling) is not None:
+    if (
+        found is None
+        and excludes
+        and nearest_root(file_path, markers, ceiling=ceiling) is not None
+    ):
         # None is ambiguous with excludes configured: a hit without them means
         # the exclude fired (gated off); otherwise fall back to the workspace.
         return None
     return found or workspace
 
 
-def _markers_root(markers: Optional[Sequence[str]], excludes: Sequence[str] = ()) -> _RootFn:
+def _markers_root(
+    markers: Optional[Sequence[str]], excludes: Sequence[str] = ()
+) -> _RootFn:
     """Root resolver over marker files; ``None`` markers means "always the workspace root"."""
     if markers is None:
         return lambda fp, ws: ws
     return lambda fp, ws: _root_or_workspace(fp, ws, markers, excludes=excludes)
 
 
-def _find_binary(ctx: ServerContext, server_id: str, which: Sequence[str], install_pkg: Optional[str]) -> Optional[str]:
+def _find_binary(
+    ctx: ServerContext, server_id: str, which: Sequence[str], install_pkg: Optional[str]
+) -> Optional[str]:
     """Config override → PATH → (optional) auto-install; ``None`` when nothing resolves."""
     override = ctx.binary_overrides.get(server_id)
-    bin_path = override[0] if override and override[0] and os.path.exists(override[0]) else _which(*which)
+    bin_path = (
+        override[0]
+        if override and override[0] and os.path.exists(override[0])
+        else _which(*which)
+    )
     if bin_path is None and install_pkg is not None:
         from agent.lsp.install import try_install
+
         bin_path = try_install(install_pkg, ctx.install_strategy)
     return bin_path
 
 
-def _make_spec(root: str, ctx: ServerContext, server_id: str, command: list[str],
-               base_init: Optional[dict[str, Any]] = None, seed: bool = False) -> SpawnSpec:
+def _make_spec(
+    root: str,
+    ctx: ServerContext,
+    server_id: str,
+    command: list[str],
+    base_init: Optional[dict[str, Any]] = None,
+    seed: bool = False,
+) -> SpawnSpec:
     from pm import env_for
 
-    init = ctx.init_overrides.get(server_id, {}) if base_init is None else {**base_init, **ctx.init_overrides.get(server_id, {})}
+    init = (
+        ctx.init_overrides.get(server_id, {})
+        if base_init is None
+        else {**base_init, **ctx.init_overrides.get(server_id, {})}
+    )
     env = env_for("node")
     env.update(ctx.env_overrides.get(server_id, {}))
-    return SpawnSpec(command, root, root, env=env,
-                     initialization_options=init, seed_diagnostics_on_first_push=seed)
+    return SpawnSpec(
+        command,
+        root,
+        root,
+        env=env,
+        initialization_options=init,
+        seed_diagnostics_on_first_push=seed,
+    )
 
 
-def _simple_spawn(server_id: str, which: Sequence[str], args: Sequence[str] = (),
-                  install_pkg: Optional[str] = None, base_init: Optional[dict[str, Any]] = None,
-                  seed: bool = False, untrusted_init: Optional[dict[str, Any]] = None) -> _SpawnFn:
+def _simple_spawn(
+    server_id: str,
+    which: Sequence[str],
+    args: Sequence[str] = (),
+    install_pkg: Optional[str] = None,
+    base_init: Optional[dict[str, Any]] = None,
+    seed: bool = False,
+    untrusted_init: Optional[dict[str, Any]] = None,
+) -> _SpawnFn:
     """Build a spawn function for the common single-binary server shape; ``untrusted_init`` replaces
     ``base_init`` in an untrusted workspace (the server's own switch for not loading project code)."""
+
     def build(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
         bin_path = _find_binary(ctx, server_id, which, install_pkg)
         init = base_init if ctx.trusted or untrusted_init is None else untrusted_init
-        return None if bin_path is None else _make_spec(root, ctx, server_id, [bin_path, *args], init, seed)
+        return (
+            None
+            if bin_path is None
+            else _make_spec(root, ctx, server_id, [bin_path, *args], init, seed)
+        )
+
     return build
 
 
 # ---- bespoke spawn builders ----
 
+
 def _spawn_pyright(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
-    bin_path = _find_binary(ctx, "pyright", ("pyright-langserver", "pyright"), "pyright")
+    bin_path = _find_binary(
+        ctx, "pyright", ("pyright-langserver", "pyright"), "pyright"
+    )
     if bin_path is None:
         return None
     # If we got the cli ``pyright``, the langserver is its sibling — same suffix, since on Windows
@@ -181,7 +256,13 @@ def _spawn_pyright(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
     # Point pyright at the project venv; its default "python on PATH" rarely is.  Pyright executes
     # this interpreter, so a checkout's own venv is only used when the workspace is trusted.
     py = _detect_python(root if ctx.trusted else None)
-    return _make_spec(root, ctx, "pyright", [bin_path, "--stdio"], {"python": {"pythonPath": py}} if py else {})
+    return _make_spec(
+        root,
+        ctx,
+        "pyright",
+        [bin_path, "--stdio"],
+        {"python": {"pythonPath": py}} if py else {},
+    )
 
 
 def _detect_python(root: Optional[str]) -> Optional[str]:
@@ -189,14 +270,22 @@ def _detect_python(root: Optional[str]) -> Optional[str]:
     # operator's own environment; ``root`` (the project's .venv/venv) is None for an untrusted workspace.
     project = (os.path.join(root, ".venv"), os.path.join(root, "venv")) if root else ()
     venvs = [v for v in (os.environ.get("VIRTUAL_ENV"), *project) if v]
-    paths = (os.path.join(v, sub) for v in venvs for sub in ("bin/python", "bin/python3", "Scripts/python.exe"))
+    paths = (
+        os.path.join(v, sub)
+        for v in venvs
+        for sub in ("bin/python", "bin/python3", "Scripts/python.exe")
+    )
     project_python = next((p for p in paths if os.path.exists(p)), None)
     if project_python is not None:
         return project_python
     from pm import installed_package
 
     installed = installed_package("python")
-    return str(installed.binary) if installed is not None and installed.binary is not None else None
+    return (
+        str(installed.binary)
+        if installed is not None and installed.binary is not None
+        else None
+    )
 
 
 _warned_once: set = set()
@@ -210,14 +299,19 @@ def _warn_once(key: str, message: str) -> None:
 
 
 def _spawn_bash_ls(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
-    bin_path = _find_binary(ctx, "bash-language-server", ("bash-language-server",), "bash-language-server")
+    bin_path = _find_binary(
+        ctx, "bash-language-server", ("bash-language-server",), "bash-language-server"
+    )
     if bin_path is None:
         return None
     # bash-language-server delegates diagnostics to shellcheck; without it the
     # server runs but never reports anything.  Warn once so the gap is visible.
     if _which("shellcheck") is None:
-        _warn_once("shellcheck", "bash-language-server: shellcheck not found on PATH — diagnostics will be empty "
-                   "until shellcheck is installed (apt: shellcheck, brew: shellcheck, scoop: shellcheck).")
+        _warn_once(
+            "shellcheck",
+            "bash-language-server: shellcheck not found on PATH — diagnostics will be empty "
+            "until shellcheck is installed (apt: shellcheck, brew: shellcheck, scoop: shellcheck).",
+        )
     return _make_spec(root, ctx, "bash-language-server", [bin_path, "start"])
 
 
@@ -240,7 +334,10 @@ def _node_modules_trees(bin_path: str, root: Optional[str]) -> list[str]:
     (symlinks resolved), Clawksis staging, then the project's (``root`` None: Clawksis's trees only, for
     TypeScript's SDK pin in an untrusted workspace, whose own JavaScript must not load)."""
     from agent.lsp.install import clawk_lsp_bin_dir
-    trees = [str(clawk_lsp_bin_dir().parent / "node_modules")] + ([os.path.join(root, "node_modules")] if root else [])
+
+    trees = [str(clawk_lsp_bin_dir().parent / "node_modules")] + (
+        [os.path.join(root, "node_modules")] if root else []
+    )
     real = os.path.realpath(bin_path)
     marker = f"{os.sep}node_modules{os.sep}"
     if (idx := real.rfind(marker)) >= 0:
@@ -251,9 +348,13 @@ def _node_modules_trees(bin_path: str, root: Optional[str]) -> list[str]:
 def _vue_server_major(trees: Sequence[str]) -> int:
     """Major version of the first ``@vue/language-server`` found in ``trees``; 0 when unreadable."""
     import json
+
     for tree in trees:
         try:
-            with open(os.path.join(tree, "@vue", "language-server", "package.json"), encoding="utf-8-sig") as fh:
+            with open(
+                os.path.join(tree, "@vue", "language-server", "package.json"),
+                encoding="utf-8-sig",
+            ) as fh:
                 return int(str(json.load(fh).get("version", "")).split(".")[0])
         except (OSError, ValueError):
             continue
@@ -263,12 +364,16 @@ def _vue_server_major(trees: Sequence[str]) -> int:
 def _typescript_sdk_dir(trees: Sequence[str]) -> Optional[str]:
     """First ``typescript/lib`` in ``trees`` holding a JS ``typescript.js`` (TypeScript 7+ ships none)."""
     cands = (os.path.join(tree, "typescript", "lib") for tree in trees)
-    return next((c for c in cands if os.path.isfile(os.path.join(c, "typescript.js"))), None)
+    return next(
+        (c for c in cands if os.path.isfile(os.path.join(c, "typescript.js"))), None
+    )
 
 
 def _spawn_vue(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
     """Spawn @vue/language-server 2.x self-hosting TypeScript (``hybridMode`` off, explicit ``tsdk``)."""
-    bin_path = _find_binary(ctx, "vue-language-server", ("vue-language-server",), "@vue/language-server")
+    bin_path = _find_binary(
+        ctx, "vue-language-server", ("vue-language-server",), "@vue/language-server"
+    )
     if bin_path is None:
         return None
     trees = _node_modules_trees(bin_path, root)
@@ -279,8 +384,13 @@ def _spawn_vue(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
     if tsdk is None:
         _warn_once("vue-tsdk", _VUE_TSDK_MSG)
         return None
-    return _make_spec(root, ctx, "vue-language-server", [bin_path, "--stdio"],
-                      {"typescript": {"tsdk": tsdk}, "vue": {"hybridMode": False}})
+    return _make_spec(
+        root,
+        ctx,
+        "vue-language-server",
+        [bin_path, "--stdio"],
+        {"typescript": {"tsdk": tsdk}, "vue": {"hybridMode": False}},
+    )
 
 
 _TS_UNTRUSTED_MSG = (
@@ -293,7 +403,9 @@ _TS_UNTRUSTED_MSG = (
 def _spawn_typescript(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
     """typescript-language-server loads the workspace's own ``node_modules/typescript`` unless
     ``tsserver.path`` names another, so an untrusted workspace is pinned to Clawksis's copy."""
-    bin_path = _find_binary(ctx, "typescript", ("typescript-language-server",), "typescript-language-server")
+    bin_path = _find_binary(
+        ctx, "typescript", ("typescript-language-server",), "typescript-language-server"
+    )
     if bin_path is None:
         return None
     base: dict[str, Any] = {}
@@ -311,17 +423,22 @@ def _find_pses_bundle(ctx: ServerContext) -> Optional[str]:
     ``lsp.servers.powershell.command[0]`` when a directory, ``init_overrides["powershell"]["bundlePath"]``,
     ``PSES_BUNDLE_PATH`` env, then ``<CLAWK_HOME>/lsp/PowerShellEditorServices``."""
     from clawk_constants import get_clawk_home
+
     override = ctx.binary_overrides.get("powershell")
     init = ctx.init_overrides.get("powershell", {})
     candidates = [
         override[0] if override else None,
-        str(init["bundlePath"]) if isinstance(init, dict) and init.get("bundlePath") else None,
+        str(init["bundlePath"])
+        if isinstance(init, dict) and init.get("bundlePath")
+        else None,
         os.environ.get("PSES_BUNDLE_PATH"),
         os.path.join(str(get_clawk_home()), "lsp", "PowerShellEditorServices"),
     ]
     for cand in filter(None, candidates):
         # Accept either the bundle root or the inner module dir.
-        if os.path.isfile(os.path.join(cand, "PowerShellEditorServices", "Start-EditorServices.ps1")):
+        if os.path.isfile(
+            os.path.join(cand, "PowerShellEditorServices", "Start-EditorServices.ps1")
+        ):
             return cand
         if os.path.isfile(os.path.join(cand, "Start-EditorServices.ps1")):
             return os.path.dirname(cand)
@@ -344,7 +461,9 @@ def _spawn_powershell_es(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
     if bundle is None:
         _warn_once("pses-bundle", _PSES_MISSING_MSG)
         return None
-    start_script = os.path.join(bundle, "PowerShellEditorServices", "Start-EditorServices.ps1")
+    start_script = os.path.join(
+        bundle, "PowerShellEditorServices", "Start-EditorServices.ps1"
+    )
     # PSES writes connection info to the session details file on startup.
     session_dir = clawk_lsp_session_dir()
     inner = (
@@ -355,15 +474,31 @@ def _spawn_powershell_es(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
         f"-HostName Clawksis -HostProfileId clawk -HostVersion 1.0.0 -Stdio -LogLevel Normal"
     )
     return SpawnSpec(
-        [pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", inner],
-        root, root, env=ctx.env_overrides.get("powershell", {}),
-        initialization_options={k: v for k, v in ctx.init_overrides.get("powershell", {}).items() if k != "bundlePath"},
+        [
+            pwsh,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            inner,
+        ],
+        root,
+        root,
+        env=ctx.env_overrides.get("powershell", {}),
+        initialization_options={
+            k: v
+            for k, v in ctx.init_overrides.get("powershell", {}).items()
+            if k != "bundlePath"
+        },
     )
 
 
 def clawk_lsp_session_dir() -> str:
     """Return (and create) the dir for PSES session/log scratch files."""
     from clawk_constants import get_clawk_home
+
     d = os.path.join(str(get_clawk_home()), "lsp", "pses")
     os.makedirs(d, exist_ok=True)
     return d
@@ -377,107 +512,330 @@ def clawk_lsp_session_dir() -> str:
 # mix.exs, build.zig, stack/cabal, Lua ``runtime.plugin``, terraform providers, prisma.config.ts, Vue's
 # tsconfig ``vueCompilerOptions.plugins``, which @vue/language-core require()s from the project, ...),
 # and so do user-declared ``lsp.servers`` entries, whose behaviour Clawksis cannot vouch for.
-UNTRUSTED_SAFE_SERVERS = frozenset({
-    "pyright",                  # interpreter pinned to the operator's own (_spawn_pyright)
-    "typescript",               # tsserver pinned to Clawksis's SDK; plugins then resolve beside it (_spawn_typescript)
-    "svelte-language-server",   # isTrusted: false — no svelte.config.js, no project svelte/prettier
-    "bash-language-server",     # parses scripts; diagnostics from shellcheck on PATH
-    "yaml-language-server",     # validates against JSON schemas (may fetch them); no project code
-    "dockerfile-ls",            # parses the Dockerfile; never builds it
-    "intelephense",             # static PHP indexer; never runs php or composer
-    "clangd",                   # no --query-driver, so it never runs a project compiler
-})
+UNTRUSTED_SAFE_SERVERS = frozenset(
+    {
+        "pyright",  # interpreter pinned to the operator's own (_spawn_pyright)
+        "typescript",  # tsserver pinned to Clawksis's SDK; plugins then resolve beside it (_spawn_typescript)
+        "svelte-language-server",  # isTrusted: false — no svelte.config.js, no project svelte/prettier
+        "bash-language-server",  # parses scripts; diagnostics from shellcheck on PATH
+        "yaml-language-server",  # validates against JSON schemas (may fetch them); no project code
+        "dockerfile-ls",  # parses the Dockerfile; never builds it
+        "intelephense",  # static PHP indexer; never runs php or composer
+        "clangd",  # no --query-driver, so it never runs a project compiler
+    }
+)
 
 
 # ---- the registry ----
 
-_JS_MARKERS = ["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock", "package.json", "tsconfig.json"]
+_JS_MARKERS = [
+    "package-lock.json",
+    "bun.lockb",
+    "bun.lock",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "package.json",
+    "tsconfig.json",
+]
 _DENO_EXCLUDES = ["deno.json", "deno.jsonc"]
 _root_typescript = _markers_root(_JS_MARKERS, _DENO_EXCLUDES)
 
 
-def _server(server_id: str, extensions: tuple[str, ...], description: str, *,
-            markers: Optional[Sequence[str]] = None, excludes: Sequence[str] = (),
-            resolve_root: Optional[_RootFn] = None, build_spawn: Optional[_SpawnFn] = None,
-            which: Sequence[str] = (), args: Sequence[str] = (), install_pkg: Optional[str] = None,
-            base_init: Optional[dict[str, Any]] = None, seed: bool = False,
-            untrusted_init: Optional[dict[str, Any]] = None, multi_root: bool = False) -> ServerDef:
+def _server(
+    server_id: str,
+    extensions: tuple[str, ...],
+    description: str,
+    *,
+    markers: Optional[Sequence[str]] = None,
+    excludes: Sequence[str] = (),
+    resolve_root: Optional[_RootFn] = None,
+    build_spawn: Optional[_SpawnFn] = None,
+    which: Sequence[str] = (),
+    args: Sequence[str] = (),
+    install_pkg: Optional[str] = None,
+    base_init: Optional[dict[str, Any]] = None,
+    seed: bool = False,
+    untrusted_init: Optional[dict[str, Any]] = None,
+    multi_root: bool = False,
+) -> ServerDef:
     """Registry entry factory: defaults to marker-based root + single-binary spawn."""
     return ServerDef(
-        server_id, extensions,
+        server_id,
+        extensions,
         resolve_root or _markers_root(markers, excludes),
-        build_spawn or _simple_spawn(server_id, which or (server_id,), args, install_pkg, base_init, seed, untrusted_init),
-        seed_first_push=seed, description=description, multi_root=multi_root,
+        build_spawn
+        or _simple_spawn(
+            server_id,
+            which or (server_id,),
+            args,
+            install_pkg,
+            base_init,
+            seed,
+            untrusted_init,
+        ),
+        seed_first_push=seed,
+        description=description,
+        multi_root=multi_root,
     )
 
 
 SERVERS: list[ServerDef] = [
-    _server("pyright", (".py", ".pyi"), "Python — Microsoft pyright",
-            markers=["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"],
-            build_spawn=_spawn_pyright, multi_root=True),
-    _server("typescript", (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"),
-            "JavaScript/TypeScript — typescript-language-server", resolve_root=_root_typescript,
-            build_spawn=_spawn_typescript, seed=True),
-    _server("vue-language-server", (".vue",), "Vue.js — @vue/language-server", resolve_root=_root_typescript,
-            build_spawn=_spawn_vue),
-    _server("svelte-language-server", (".svelte",), "Svelte — svelte-language-server", resolve_root=_root_typescript,
-            which=("svelteserver", "svelte-language-server"), args=("--stdio",), install_pkg="svelte-language-server",
-            untrusted_init={"isTrusted": False}),
-    _server("astro-language-server", (".astro",), "Astro — @astrojs/language-server", resolve_root=_root_typescript,
-            which=("astro-ls", "astro-language-server"), args=("--stdio",), install_pkg="@astrojs/language-server"),
-    _server("gopls", (".go",), "Go — gopls", markers=["go.work", "go.mod", "go.sum"], install_pkg="gopls"),
-    _server("rust-analyzer", (".rs",), "Rust — rust-analyzer", markers=["Cargo.toml", "Cargo.lock"], install_pkg="rust-analyzer"),
-    _server("clangd", (".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".hxx"), "C/C++ — clangd",
-            markers=["compile_commands.json", "compile_flags.txt", ".clangd"],
-            args=("--background-index", "--clang-tidy"), install_pkg="clangd"),
-    _server("bash-language-server", (".sh", ".bash", ".zsh", ".ksh"), "Bash — bash-language-server", build_spawn=_spawn_bash_ls),
-    _server("yaml-language-server", (".yaml", ".yml"), "YAML — yaml-language-server",
-            args=("--stdio",), install_pkg="yaml-language-server"),
-    _server("lua-language-server", (".lua",), "Lua — lua-language-server",
-            markers=[".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml"],
-            install_pkg="lua-language-server"),
+    _server(
+        "pyright",
+        (".py", ".pyi"),
+        "Python — Microsoft pyright",
+        markers=[
+            "pyproject.toml",
+            "setup.py",
+            "setup.cfg",
+            "requirements.txt",
+            "Pipfile",
+            "pyrightconfig.json",
+        ],
+        build_spawn=_spawn_pyright,
+        multi_root=True,
+    ),
+    _server(
+        "typescript",
+        (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"),
+        "JavaScript/TypeScript — typescript-language-server",
+        resolve_root=_root_typescript,
+        build_spawn=_spawn_typescript,
+        seed=True,
+    ),
+    _server(
+        "vue-language-server",
+        (".vue",),
+        "Vue.js — @vue/language-server",
+        resolve_root=_root_typescript,
+        build_spawn=_spawn_vue,
+    ),
+    _server(
+        "svelte-language-server",
+        (".svelte",),
+        "Svelte — svelte-language-server",
+        resolve_root=_root_typescript,
+        which=("svelteserver", "svelte-language-server"),
+        args=("--stdio",),
+        install_pkg="svelte-language-server",
+        untrusted_init={"isTrusted": False},
+    ),
+    _server(
+        "astro-language-server",
+        (".astro",),
+        "Astro — @astrojs/language-server",
+        resolve_root=_root_typescript,
+        which=("astro-ls", "astro-language-server"),
+        args=("--stdio",),
+        install_pkg="@astrojs/language-server",
+    ),
+    _server(
+        "gopls",
+        (".go",),
+        "Go — gopls",
+        markers=["go.work", "go.mod", "go.sum"],
+        install_pkg="gopls",
+    ),
+    _server(
+        "rust-analyzer",
+        (".rs",),
+        "Rust — rust-analyzer",
+        markers=["Cargo.toml", "Cargo.lock"],
+        install_pkg="rust-analyzer",
+    ),
+    _server(
+        "clangd",
+        (".c", ".cpp", ".cc", ".cxx", ".h", ".hh", ".hpp", ".hxx"),
+        "C/C++ — clangd",
+        markers=["compile_commands.json", "compile_flags.txt", ".clangd"],
+        args=("--background-index", "--clang-tidy"),
+        install_pkg="clangd",
+    ),
+    _server(
+        "bash-language-server",
+        (".sh", ".bash", ".zsh", ".ksh"),
+        "Bash — bash-language-server",
+        build_spawn=_spawn_bash_ls,
+    ),
+    _server(
+        "yaml-language-server",
+        (".yaml", ".yml"),
+        "YAML — yaml-language-server",
+        args=("--stdio",),
+        install_pkg="yaml-language-server",
+    ),
+    _server(
+        "lua-language-server",
+        (".lua",),
+        "Lua — lua-language-server",
+        markers=[
+            ".luarc.json",
+            ".luarc.jsonc",
+            ".luacheckrc",
+            ".stylua.toml",
+            "stylua.toml",
+            "selene.toml",
+            "selene.yml",
+        ],
+        install_pkg="lua-language-server",
+    ),
     # Before intelephense: Blade templates are Laravel's, plain .php stays with intelephense.
-    _server("laravel-lsp", (".blade.php",), "Laravel Blade — laravel-lsp (manual: composer global require laravel/lsp)",
-            markers=["artisan", "composer.json", "composer.lock"], args=("lsp",)),
-    _server("intelephense", (".php",), "PHP — intelephense", markers=["composer.json", "composer.lock", ".php-version"],
-            args=("--stdio",), install_pkg="intelephense", base_init={"telemetry": {"enabled": False}}),
-    _server("ocaml-lsp", (".ml", ".mli"), "OCaml — ocaml-lsp", markers=["dune-project", "dune-workspace", ".merlin", "opam"],
-            which=("ocamllsp",)),
-    _server("dockerfile-ls", (".dockerfile", "Dockerfile"), "Dockerfile — dockerfile-language-server-nodejs",
-            which=("docker-langserver",), args=("--stdio",), install_pkg="dockerfile-language-server-nodejs"),
+    _server(
+        "laravel-lsp",
+        (".blade.php",),
+        "Laravel Blade — laravel-lsp (manual: composer global require laravel/lsp)",
+        markers=["artisan", "composer.json", "composer.lock"],
+        args=("lsp",),
+    ),
+    _server(
+        "intelephense",
+        (".php",),
+        "PHP — intelephense",
+        markers=["composer.json", "composer.lock", ".php-version"],
+        args=("--stdio",),
+        install_pkg="intelephense",
+        base_init={"telemetry": {"enabled": False}},
+    ),
+    _server(
+        "ocaml-lsp",
+        (".ml", ".mli"),
+        "OCaml — ocaml-lsp",
+        markers=["dune-project", "dune-workspace", ".merlin", "opam"],
+        which=("ocamllsp",),
+    ),
+    _server(
+        "dockerfile-ls",
+        (".dockerfile", "Dockerfile"),
+        "Dockerfile — dockerfile-language-server-nodejs",
+        which=("docker-langserver",),
+        args=("--stdio",),
+        install_pkg="dockerfile-language-server-nodejs",
+    ),
     # terraform-ls is heavy to auto-install; require the user to provide it.
-    _server("terraform-ls", (".tf", ".tfvars"), "Terraform — terraform-ls", markers=[".terraform.lock.hcl", "terraform.tfstate"],
-            args=("serve",), base_init={"experimentalFeatures": {"prefillRequiredFields": True, "validateOnSave": True}}),
-    _server("dart", (".dart",), "Dart — built-in language server", markers=["pubspec.yaml", "analysis_options.yaml"],
-            args=("language-server", "--lsp")),
-    _server("haskell-language-server", (".hs", ".lhs"), "Haskell — haskell-language-server",
-            markers=["stack.yaml", "cabal.project", "hie.yaml"],
-            which=("haskell-language-server-wrapper", "haskell-language-server"), args=("--lsp",)),
-    _server("julia", (".jl",), "Julia — LanguageServer.jl", markers=["Project.toml", "Manifest.toml"],
-            args=("--startup-file=no", "--history-file=no", "-e", "using LanguageServer; runserver()")),
-    _server("clojure-lsp", (".clj", ".cljs", ".cljc", ".edn"), "Clojure — clojure-lsp",
-            markers=["deps.edn", "project.clj", "shadow-cljs.edn", "bb.edn", "build.boot"], args=("listen",)),
-    _server("nixd", (".nix",), "Nix — nixd", resolve_root=lambda fp, ws: nearest_root(fp, ["flake.nix"]) or ws),
+    _server(
+        "terraform-ls",
+        (".tf", ".tfvars"),
+        "Terraform — terraform-ls",
+        markers=[".terraform.lock.hcl", "terraform.tfstate"],
+        args=("serve",),
+        base_init={
+            "experimentalFeatures": {
+                "prefillRequiredFields": True,
+                "validateOnSave": True,
+            }
+        },
+    ),
+    _server(
+        "dart",
+        (".dart",),
+        "Dart — built-in language server",
+        markers=["pubspec.yaml", "analysis_options.yaml"],
+        args=("language-server", "--lsp"),
+    ),
+    _server(
+        "haskell-language-server",
+        (".hs", ".lhs"),
+        "Haskell — haskell-language-server",
+        markers=["stack.yaml", "cabal.project", "hie.yaml"],
+        which=("haskell-language-server-wrapper", "haskell-language-server"),
+        args=("--lsp",),
+    ),
+    _server(
+        "julia",
+        (".jl",),
+        "Julia — LanguageServer.jl",
+        markers=["Project.toml", "Manifest.toml"],
+        args=(
+            "--startup-file=no",
+            "--history-file=no",
+            "-e",
+            "using LanguageServer; runserver()",
+        ),
+    ),
+    _server(
+        "clojure-lsp",
+        (".clj", ".cljs", ".cljc", ".edn"),
+        "Clojure — clojure-lsp",
+        markers=["deps.edn", "project.clj", "shadow-cljs.edn", "bb.edn", "build.boot"],
+        args=("listen",),
+    ),
+    _server(
+        "nixd",
+        (".nix",),
+        "Nix — nixd",
+        resolve_root=lambda fp, ws: nearest_root(fp, ["flake.nix"]) or ws,
+    ),
     _server("zls", (".zig", ".zon"), "Zig — zls", markers=["build.zig"]),
-    _server("gleam", (".gleam",), "Gleam — built-in language server", markers=["gleam.toml"], args=("lsp",)),
-    _server("elixir-ls", (".ex", ".exs"), "Elixir — elixir-ls", markers=["mix.exs", "mix.lock"],
-            which=("elixir-ls", "language_server.sh")),
-    _server("prisma", (".prisma",), "Prisma — built-in language server", markers=["schema.prisma", "prisma/schema.prisma"],
-            args=("language-server",)),
-    _server("kotlin-language-server", (".kt", ".kts"), "Kotlin — kotlin-language-server",
-            markers=["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts", "pom.xml"]),
+    _server(
+        "gleam",
+        (".gleam",),
+        "Gleam — built-in language server",
+        markers=["gleam.toml"],
+        args=("lsp",),
+    ),
+    _server(
+        "elixir-ls",
+        (".ex", ".exs"),
+        "Elixir — elixir-ls",
+        markers=["mix.exs", "mix.lock"],
+        which=("elixir-ls", "language_server.sh"),
+    ),
+    _server(
+        "prisma",
+        (".prisma",),
+        "Prisma — built-in language server",
+        markers=["schema.prisma", "prisma/schema.prisma"],
+        args=("language-server",),
+    ),
+    _server(
+        "kotlin-language-server",
+        (".kt", ".kts"),
+        "Kotlin — kotlin-language-server",
+        markers=[
+            "settings.gradle",
+            "settings.gradle.kts",
+            "build.gradle",
+            "build.gradle.kts",
+            "pom.xml",
+        ],
+    ),
     # jdtls has a complex install flow; we look for the wrapper script a manual install produces.
-    _server("jdtls", (".java",), "Java — Eclipse JDT Language Server",
-            markers=["pom.xml", "build.gradle", "build.gradle.kts", ".project", ".classpath", "settings.gradle"]),
+    _server(
+        "jdtls",
+        (".java",),
+        "Java — Eclipse JDT Language Server",
+        markers=[
+            "pom.xml",
+            "build.gradle",
+            "build.gradle.kts",
+            ".project",
+            ".classpath",
+            "settings.gradle",
+        ],
+    ),
     # No universal PowerShell root marker; nearest_root is exact-name only (no globs).
-    _server("powershell", (".ps1", ".psm1", ".psd1"), "PowerShell — PowerShellEditorServices (manual bundle)",
-            markers=["PSScriptAnalyzerSettings.psd1"], build_spawn=_spawn_powershell_es),
+    _server(
+        "powershell",
+        (".ps1", ".psm1", ".psd1"),
+        "PowerShell — PowerShellEditorServices (manual bundle)",
+        markers=["PSScriptAnalyzerSettings.psd1"],
+        build_spawn=_spawn_powershell_es,
+    ),
 ]
 
 
-def find_server_for_file(file_path: str, servers: Optional[Sequence[ServerDef]] = None) -> Optional[ServerDef]:
+def find_server_for_file(
+    file_path: str, servers: Optional[Sequence[ServerDef]] = None
+) -> Optional[ServerDef]:
     """Return the first entry of ``servers`` (default: the built-in registry) that handles ``file_path``."""
-    return next((srv for srv in (SERVERS if servers is None else servers) if srv.matches(file_path)), None)
+    return next(
+        (
+            srv
+            for srv in (SERVERS if servers is None else servers)
+            if srv.matches(file_path)
+        ),
+        None,
+    )
 
 
 def language_id_for(path: str, srv: Optional[ServerDef] = None) -> str:
@@ -489,12 +847,17 @@ def language_id_for(path: str, srv: Optional[ServerDef] = None) -> str:
 
 def _custom_spawn(server_id: str, command: Sequence[str]) -> _SpawnFn:
     """Spawn builder for a config-declared server: ``command[0]`` is a path or a PATH lookup, no auto-install."""
+
     def build(root: str, ctx: ServerContext) -> Optional[SpawnSpec]:
         bin_path = _which(os.path.expanduser(command[0]))
         if bin_path is None:
-            _warn_once(f"custom:{server_id}", f"lsp.servers.{server_id}: command {command[0]!r} not found on PATH — server skipped")
+            _warn_once(
+                f"custom:{server_id}",
+                f"lsp.servers.{server_id}: command {command[0]!r} not found on PATH — server skipped",
+            )
             return None
         return _make_spec(root, ctx, server_id, [bin_path, *command[1:]])
+
     return build
 
 
@@ -509,18 +872,40 @@ def custom_servers(servers_cfg: Any) -> list[ServerDef]:
     for server_id, cfg in servers_cfg.items():
         if server_id in builtin or not isinstance(cfg, dict) or "extensions" not in cfg:
             continue
-        command, exts, markers = cfg.get("command"), cfg.get("extensions"), cfg.get("root_markers")
-        if not (isinstance(command, list) and command and all(isinstance(c, str) and c for c in command)
-                and isinstance(exts, list) and exts and all(isinstance(e, str) and e for e in exts)):
-            logger.warning("lsp.servers.%s: custom server needs command: [bin, ...args] and extensions: [.ext, ...] — ignored", server_id)
+        command, exts, markers = (
+            cfg.get("command"),
+            cfg.get("extensions"),
+            cfg.get("root_markers"),
+        )
+        if not (
+            isinstance(command, list)
+            and command
+            and all(isinstance(c, str) and c for c in command)
+            and isinstance(exts, list)
+            and exts
+            and all(isinstance(e, str) and e for e in exts)
+        ):
+            logger.warning(
+                "lsp.servers.%s: custom server needs command: [bin, ...args] and extensions: [.ext, ...] — ignored",
+                server_id,
+            )
             continue
-        out.append(ServerDef(
-            str(server_id), tuple(e.lower() if e.startswith(".") else e for e in exts),
-            _markers_root([str(m) for m in markers] if isinstance(markers, list) and markers else None),
-            _custom_spawn(str(server_id), command),
-            description=str(cfg.get("description") or f"{server_id} — custom (lsp.servers)"),
-            language_id=str(cfg.get("language_id") or ""),
-        ))
+        out.append(
+            ServerDef(
+                str(server_id),
+                tuple(e.lower() if e.startswith(".") else e for e in exts),
+                _markers_root(
+                    [str(m) for m in markers]
+                    if isinstance(markers, list) and markers
+                    else None
+                ),
+                _custom_spawn(str(server_id), command),
+                description=str(
+                    cfg.get("description") or f"{server_id} — custom (lsp.servers)"
+                ),
+                language_id=str(cfg.get("language_id") or ""),
+            )
+        )
     return out
 
 

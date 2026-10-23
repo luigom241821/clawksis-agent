@@ -14,7 +14,9 @@ from contextlib import suppress
 _SYSTEMCTL_RESTART_TIMEOUT_MAX = (2**31 - 1) // 1000 - 1
 
 
-def systemd_restart_timeout(scope_cmd: list, svc_name: str, *, start_only: bool = False) -> float:
+def systemd_restart_timeout(
+    scope_cmd: list, svc_name: str, *, start_only: bool = False
+) -> float:
     """Outwait the unit's stop + start budgets, not just the systemctl client.
 
     A client timeout does not cancel the manager's queued restart. Unknown or
@@ -30,7 +32,8 @@ def systemd_restart_timeout(scope_cmd: list, svc_name: str, *, start_only: bool 
         budgets["TimeoutStopUSec"] = 90.0
     try:
         show = _systemctl(
-            scope_cmd + ["show", svc_name, "--property=TimeoutStopUSec,TimeoutStartUSec"],
+            scope_cmd
+            + ["show", svc_name, "--property=TimeoutStopUSec,TimeoutStartUSec"],
             timeout=5,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -42,7 +45,11 @@ def systemd_restart_timeout(scope_cmd: list, svc_name: str, *, start_only: bool 
                 # The shared parser returns None for infinity/unrecognized units.
                 try:
                     raw = raw.strip()
-                    duration = int(raw) if raw.isascii() and raw.isdigit() else parse_systemd_duration_to_us(raw)
+                    duration = (
+                        int(raw)
+                        if raw.isascii() and raw.isdigit()
+                        else parse_systemd_duration_to_us(raw)
+                    )
                     if duration is not None and duration > 0:
                         budgets[key] = duration / 1_000_000
                 except (ValueError, OverflowError):
@@ -53,13 +60,18 @@ def systemd_restart_timeout(scope_cmd: list, svc_name: str, *, start_only: bool 
 _RESTART_SEC_UNITS = (("ms", 0.001), ("us", 0.000001), ("min", 60.0), ("s", 1.0))
 
 
-def service_restart_sec(scope_cmd_: list, svc_name_: str, default: float = 0.0) -> float:
+def service_restart_sec(
+    scope_cmd_: list, svc_name_: str, default: float = 0.0
+) -> float:
     """Read the unit's ``RestartUSec`` in seconds. ``is-active`` pollers must wait
     >= RestartSec + slack or they give up *during* the cooldown and misreport."""
     from clawk_cli.update_cmd_fleet import _systemctl
 
     try:
-        _show = _systemctl(scope_cmd_ + ["show", svc_name_, "--property=RestartUSec", "--value"], timeout=5)
+        _show = _systemctl(
+            scope_cmd_ + ["show", svc_name_, "--property=RestartUSec", "--value"],
+            timeout=5,
+        )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return default
     raw = (_show.stdout or "").strip()

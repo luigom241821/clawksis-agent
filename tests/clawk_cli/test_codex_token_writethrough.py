@@ -33,7 +33,9 @@ def _read(path: Path) -> dict:
 def profile_env(tmp_path, monkeypatch):
     """Global root at tmp/.clawk, active profile at tmp/.clawk/profiles/work (real on-disk layout)."""
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))  # Windows resolves the native root from here
+    monkeypatch.setenv(
+        "LOCALAPPDATA", str(tmp_path)
+    )  # Windows resolves the native root from here
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
@@ -43,35 +45,62 @@ def profile_env(tmp_path, monkeypatch):
 
 def test_profile_refresh_of_root_grant_writes_through_to_root(profile_env):
     profile_path, root_path = profile_env
-    _write(root_path, {
-        "version": 1,
-        "providers": {"openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("old")}},
-        "credential_pool": {"openai-codex": [
-            {"provider": "openai-codex", "source": "device_code", **_pair("old")}]},
-    })
+    _write(
+        root_path,
+        {
+            "version": 1,
+            "providers": {
+                "openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("old")}
+            },
+            "credential_pool": {
+                "openai-codex": [
+                    {
+                        "provider": "openai-codex",
+                        "source": "device_code",
+                        **_pair("old"),
+                    }
+                ]
+            },
+        },
+    )
     _write(profile_path, {"version": 1, "providers": {}})
 
     rotated = _pair("new")
-    auth._save_codex_tokens(rotated, last_refresh="2026-08-16T00:00:00Z", write_through=True)
+    auth._save_codex_tokens(
+        rotated, last_refresh="2026-08-16T00:00:00Z", write_through=True
+    )
 
     root = _read(root_path)
     assert root["providers"]["openai-codex"]["tokens"] == rotated
-    assert root["credential_pool"]["openai-codex"][0]["refresh_token"] == rotated["refresh_token"]
-    assert root["credential_pool"]["openai-codex"][0]["access_token"] == rotated["access_token"]
+    assert (
+        root["credential_pool"]["openai-codex"][0]["refresh_token"]
+        == rotated["refresh_token"]
+    )
+    assert (
+        root["credential_pool"]["openai-codex"][0]["access_token"]
+        == rotated["access_token"]
+    )
     # A profile copy would shadow root and disable the write-through on the next refresh (#74339).
     assert "openai-codex" not in _read(profile_path).get("providers", {})
 
 
 def test_profile_owned_grant_stays_local(profile_env):
     profile_path, root_path = profile_env
-    _write(profile_path, {
-        "version": 1,
-        "providers": {"openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("prof")}},
-    })
+    _write(
+        profile_path,
+        {
+            "version": 1,
+            "providers": {
+                "openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("prof")}
+            },
+        },
+    )
     _write(root_path, {"version": 1, "providers": {}})
 
     rotated = _pair("next")
-    auth._save_codex_tokens(rotated, last_refresh="2026-08-16T00:00:00Z", write_through=True)
+    auth._save_codex_tokens(
+        rotated, last_refresh="2026-08-16T00:00:00Z", write_through=True
+    )
 
     assert _read(profile_path)["providers"]["openai-codex"]["tokens"] == rotated
     assert "openai-codex" not in _read(root_path).get("providers", {})
@@ -79,7 +108,15 @@ def test_profile_owned_grant_stays_local(profile_env):
     # A fresh login under a profile that was borrowing root's grant is the profile's own account,
     # never a rewrite of root's.
     _write(profile_path, {"version": 1, "providers": {}})
-    _write(root_path, {"version": 1, "providers": {"openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("root")}}})
+    _write(
+        root_path,
+        {
+            "version": 1,
+            "providers": {
+                "openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("root")}
+            },
+        },
+    )
     auth._save_codex_tokens(_pair("login"))
     assert _read(profile_path)["providers"]["openai-codex"]["tokens"] == _pair("login")
     assert _read(root_path)["providers"]["openai-codex"]["tokens"] == _pair("root")
@@ -101,23 +138,35 @@ class _RotatingEndpoint:
 
     def post(self, url, *, headers=None, data=None):
         import time
+
         with self._guard:
             replay = data["refresh_token"] in self.seen
             self.seen.append(data["refresh_token"])
-        time.sleep(self.hold_seconds)  # a concurrent refresher must wait on the lock, not overlap
+        time.sleep(
+            self.hold_seconds
+        )  # a concurrent refresher must wait on the lock, not overlap
         if replay:
             return httpx.Response(400, json={"error": "refresh_token_reused"})
-        return httpx.Response(200, json={"access_token": "new-at", "refresh_token": "new-rt"})
+        return httpx.Response(
+            200, json={"access_token": "new-at", "refresh_token": "new-rt"}
+        )
 
 
-def test_concurrent_refreshes_of_shared_root_grant_submit_old_token_once(profile_env, monkeypatch):
+def test_concurrent_refreshes_of_shared_root_grant_submit_old_token_once(
+    profile_env, monkeypatch
+):
     """Two refreshers holding the same stale pre-read pair: the second re-reads ROOT under its lock,
     sees the peer's rotated pair and adopts it instead of replaying the single-use token."""
     profile_path, root_path = profile_env
-    _write(root_path, {
-        "version": 1,
-        "providers": {"openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("old")}},
-    })
+    _write(
+        root_path,
+        {
+            "version": 1,
+            "providers": {
+                "openai-codex": {"auth_mode": "chatgpt", "tokens": _pair("old")}
+            },
+        },
+    )
     _write(profile_path, {"version": 1, "providers": {}})
     endpoint = _RotatingEndpoint(hold_seconds=1.5)  # longer than the lock floor (1 s)
     monkeypatch.setattr(auth_codex, "_codex_http_client", lambda **kw: endpoint)
@@ -130,7 +179,9 @@ def test_concurrent_refreshes_of_shared_root_grant_submit_old_token_once(profile
 
     def _refresh(name):
         try:
-            results[name] = auth._refresh_codex_auth_tokens(_pair("old"), timeout_seconds=1.0)
+            results[name] = auth._refresh_codex_auth_tokens(
+                _pair("old"), timeout_seconds=1.0
+            )
         except Exception as exc:  # pragma: no cover - surfaced via the assertion below
             errors[name] = exc
 

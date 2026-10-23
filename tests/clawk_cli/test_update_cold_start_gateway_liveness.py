@@ -51,7 +51,9 @@ def test_cold_start_raises_when_process_does_not_survive(monkeypatch, capsys):
     assert "✓ Starting Windows gateway after update" not in capsys.readouterr().out
 
 
-def test_failed_readiness_keeps_the_dead_attestation_for_the_retry(monkeypatch, tmp_path, capsys):
+def test_failed_readiness_keeps_the_dead_attestation_for_the_retry(
+    monkeypatch, tmp_path, capsys
+):
     """#110020 review: the attestation is the retry's only authority to spawn under Desktop
     ownership, so a spawn that returns a PID but never becomes ready must NOT consume it —
     otherwise the registered retry sees ownership with no marker and "succeeds" with no gateway."""

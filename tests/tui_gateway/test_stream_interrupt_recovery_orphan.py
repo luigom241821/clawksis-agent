@@ -25,7 +25,9 @@ def test_creator_repairs_the_accounting_placeholder_source(tmp_path):
     stamps the real surface on the same id, and a real source is never downgraded."""
     db = SessionDB(tmp_path / "state.db")
     # First writer wins the INSERT because the row creation lost the race with the SQLite lock.
-    db.update_token_counts(ORPHAN_SID, input_tokens=1200, output_tokens=90, model="grok-4.6")
+    db.update_token_counts(
+        ORPHAN_SID, input_tokens=1200, output_tokens=90, model="grok-4.6"
+    )
     assert db.get_session(ORPHAN_SID)["source"] == "unknown"
 
     db.create_session(ORPHAN_SID, source="desktop")
@@ -42,11 +44,21 @@ def test_creator_repairs_the_accounting_placeholder_source(tmp_path):
 def test_startup_sweep_collects_a_legacy_unknown_phantom(tmp_path):
     """A phantom an older build already left on disk is collected, not left open forever."""
     db = SessionDB(tmp_path / "state.db")
-    db.update_token_counts(ORPHAN_SID, input_tokens=10, output_tokens=5, model="claude-sonnet-5")
-    db.append_message(ORPHAN_SID, role="assistant", content="review table, cut mid-stream")
+    db.update_token_counts(
+        ORPHAN_SID, input_tokens=10, output_tokens=5, model="claude-sonnet-5"
+    )
+    db.append_message(
+        ORPHAN_SID, role="assistant", content="review table, cut mid-stream"
+    )
     stale = time.time() - 8 * 3600
-    db._conn.execute("UPDATE sessions SET started_at = ? WHERE id = ?", (stale, ORPHAN_SID))
-    db._conn.execute("UPDATE messages SET timestamp = ? WHERE session_id = ?", (stale, ORPHAN_SID))
+    db._conn.execute(
+        "UPDATE sessions SET started_at = ? WHERE id = ?", (stale, ORPHAN_SID)
+    )
+    db._conn.execute(
+        "UPDATE messages SET timestamp = ? WHERE session_id = ?", (stale, ORPHAN_SID)
+    )
     db._conn.commit()
 
-    assert db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S, sources=_ORPHAN_SWEEP_SOURCES) == [ORPHAN_SID]
+    assert db.sweep_orphaned_sessions(
+        max_idle_seconds=IDLE_S, sources=_ORPHAN_SWEEP_SOURCES
+    ) == [ORPHAN_SID]

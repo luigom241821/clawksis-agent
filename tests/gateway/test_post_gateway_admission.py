@@ -32,7 +32,8 @@ def _runner(*, multiplex=False):
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(
-        platforms={Platform.WHATSAPP: PlatformConfig(enabled=True)}, multiplex_profiles=multiplex,
+        platforms={Platform.WHATSAPP: PlatformConfig(enabled=True)},
+        multiplex_profiles=multiplex,
     )
     adapter = SimpleNamespace(send=AsyncMock())
     runner.adapters = {Platform.WHATSAPP: adapter}
@@ -51,15 +52,23 @@ def _runner(*, multiplex=False):
 
 def _event(text="queue my report", profile=None):
     source = SessionSource(
-        platform=Platform.WHATSAPP, user_id="15551234567@s.whatsapp.net",
-        chat_id="15551234567@s.whatsapp.net", user_name="tester", chat_type="dm", profile=profile,
+        platform=Platform.WHATSAPP,
+        user_id="15551234567@s.whatsapp.net",
+        chat_id="15551234567@s.whatsapp.net",
+        user_name="tester",
+        chat_type="dm",
+        profile=profile,
     )
     return MessageEvent(text=text, message_id="m1", source=source)
 
 
 @pytest.fixture(autouse=True)
 def _allow_all(monkeypatch):
-    for key in ("WHATSAPP_ALLOWED_USERS", "GATEWAY_ALLOWED_USERS", "GATEWAY_ALLOW_ALL_USERS"):
+    for key in (
+        "WHATSAPP_ALLOWED_USERS",
+        "GATEWAY_ALLOWED_USERS",
+        "GATEWAY_ALLOW_ALL_USERS",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "*")
 
@@ -83,7 +92,10 @@ async def test_handled_consumes_the_turn_and_its_reply_is_delivered():
     first = seen[0]
     assert first["text"] == "queue my report" and first["message_id"] == "m1"
     assert first["platform"] == "whatsapp"
-    assert first["source"]["chat_id"] == "15551234567@s.whatsapp.net" and first["session_key"]
+    assert (
+        first["source"]["chat_id"] == "15551234567@s.whatsapp.net"
+        and first["session_key"]
+    )
     assert "gateway" not in first and "session_store" not in first
 
 
@@ -111,7 +123,11 @@ async def test_consumer_fires_in_the_routed_profile_scope_only(tmp_path):
     with _profile_runtime_scope(launch):
         _register(lambda **_k: fired.append(("launch", get_clawk_home())))
     with _profile_runtime_scope(routed):
-        _register(lambda **_k: fired.append(("beta", get_clawk_home())) or {"action": "handled"})
+        _register(
+            lambda **_k: (
+                fired.append(("beta", get_clawk_home())) or {"action": "handled"}
+            )
+        )
 
     runner = _runner(multiplex=True)
     runner._resolve_profile_home_for_source = lambda _source: routed
@@ -125,15 +141,25 @@ async def test_consumer_fires_in_the_routed_profile_scope_only(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_under_an_authority_the_hook_fires_once_at_ingress_never_at_execution(monkeypatch):
+async def test_under_an_authority_the_hook_fires_once_at_ingress_never_at_execution(
+    monkeypatch,
+):
     """A consumed message is never committed, and an admitted row's execution (first run or
     restart replay) never offers the same message to the plugin again."""
     import gateway.session_authorities as authorities
     import gateway.session_ingress as ingress
 
     fired = []
-    _register(lambda **kwargs: fired.append(kwargs["text"]) or (
-        {"action": "handled", "reply": "consumed"} if kwargs["text"] == "eat me" else None))
+    _register(
+        lambda **kwargs: (
+            fired.append(kwargs["text"])
+            or (
+                {"action": "handled", "reply": "consumed"}
+                if kwargs["text"] == "eat me"
+                else None
+            )
+        )
+    )
     runner = _runner()
     admitted = []
 
@@ -141,7 +167,11 @@ async def test_under_an_authority_the_hook_fires_once_at_ingress_never_at_execut
         admitted.append(event.text)
         return "admitted"
 
-    monkeypatch.setattr(authorities, "active_authority", lambda _runner: SimpleNamespace(route_epoch=lambda _route: 0))
+    monkeypatch.setattr(
+        authorities,
+        "active_authority",
+        lambda _runner: SimpleNamespace(route_epoch=lambda _route: 0),
+    )
     monkeypatch.setattr(ingress, "admit_message", _admit)
 
     assert await runner._handle_message(_event("eat me")) == "consumed"
@@ -173,10 +203,25 @@ async def test_webhook_deliveries_fire_the_hook_once_per_admission_never_on_a_pr
     from tests.gateway.fixtures.webhook_route_authority import mount_authority
 
     fired = []
-    _register(lambda **kwargs: fired.append(kwargs["message_id"]) or (
-        {"action": "handled", "reply": "plugin took it"} if "eat" in kwargs["text"] else None))
-    adapter = WebhookAdapter(PlatformConfig(enabled=True, extra={"secret": "owned-secret", "routes": {
-        "fixture": {"prompt": "{text}"}}}))
+    _register(
+        lambda **kwargs: (
+            fired.append(kwargs["message_id"])
+            or (
+                {"action": "handled", "reply": "plugin took it"}
+                if "eat" in kwargs["text"]
+                else None
+            )
+        )
+    )
+    adapter = WebhookAdapter(
+        PlatformConfig(
+            enabled=True,
+            extra={
+                "secret": "owned-secret",
+                "routes": {"fixture": {"prompt": "{text}"}},
+            },
+        )
+    )
     sent = []
 
     async def _sink(delivery, chat_id, content):
@@ -189,14 +234,24 @@ async def test_webhook_deliveries_fire_the_hook_once_per_admission_never_on_a_pr
 
     async def _post(client, text, delivery_id):
         body = json.dumps({"text": text}).encode()
-        signature = "sha256=" + hmac.new(b"owned-secret", body, hashlib.sha256).hexdigest()
-        return await client.post("/webhooks/fixture", data=body, headers={
-            "X-GitHub-Delivery": delivery_id, "X-Hub-Signature-256": signature})
+        signature = (
+            "sha256=" + hmac.new(b"owned-secret", body, hashlib.sha256).hexdigest()
+        )
+        return await client.post(
+            "/webhooks/fixture",
+            data=body,
+            headers={
+                "X-GitHub-Delivery": delivery_id,
+                "X-Hub-Signature-256": signature,
+            },
+        )
 
     async with TestClient(TestServer(app)) as client:
         db = adapter._message_handler.__self__.session_authority.db
         assert (await _post(client, "eat this", "d-eat")).status == 202
-        assert sent == ["plugin took it"] and not db._read_all("SELECT 1 FROM session_admissions")
+        assert sent == ["plugin took it"] and not db._read_all(
+            "SELECT 1 FROM session_admissions"
+        )
         assert (await _post(client, "keep this", "d-keep")).status == 202
         assert (await _post(client, "keep this", "d-keep")).status in (200, 202)
         rows = db._read_all("SELECT request_id FROM session_admissions")

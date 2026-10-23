@@ -5,6 +5,7 @@ WITHOUT a Telegram token and then stopped leaves ``fatal / No bot token configur
 Channels payload must not repeat that after the user saved credentials: with no live gateway the
 platform reads ``gateway_stopped`` and carries no error (Desktop Messaging page report).
 """
+
 import json
 
 import pytest
@@ -27,17 +28,35 @@ def client(monkeypatch, _isolate_clawk_home):
     home = get_clawk_home()
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", home / "state.db")
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    (home / ".env").write_text(f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\nTELEGRAM_ALLOWED_USERS=42\n", encoding="utf-8")
-    (home / "config.yaml").write_text("platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8")
-    (home / "gateway_state.json").write_text(json.dumps({
-        "kind": "gateway", "pid": 999_999_999, "start_time": 1.0, "gateway_state": "stopped",
-        "exit_reason": "shutdown", "updated_at": "2026-01-01T00:00:00+00:00",
-        "platforms": {"telegram": {
-            "state": "fatal", "error_code": "missing_credentials",
-            "error_message": "No bot token configured",
-            "writer_pid": 999_999_999, "writer_start_time": 1.0,
-        }},
-    }), encoding="utf-8")
+    (home / ".env").write_text(
+        f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\nTELEGRAM_ALLOWED_USERS=42\n",
+        encoding="utf-8",
+    )
+    (home / "config.yaml").write_text(
+        "platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8"
+    )
+    (home / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "kind": "gateway",
+                "pid": 999_999_999,
+                "start_time": 1.0,
+                "gateway_state": "stopped",
+                "exit_reason": "shutdown",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "platforms": {
+                    "telegram": {
+                        "state": "fatal",
+                        "error_code": "missing_credentials",
+                        "error_message": "No bot token configured",
+                        "writer_pid": 999_999_999,
+                        "writer_start_time": 1.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     c = TestClient(app)
     c.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
     return c
@@ -61,12 +80,21 @@ def test_operator_stopped_gateway_does_not_report_retained_startup_failure(clien
     ``/api/status`` does, not wear a "Start failed" badge with the stale reason (#112517)."""
     from clawk_constants import get_clawk_home
 
-    (get_clawk_home() / "gateway_state.json").write_text(json.dumps({
-        "kind": "gateway", "pid": 999_999_999, "start_time": 1.0,
-        "gateway_state": "startup_failed", "desired_state": "stopped",
-        "exit_reason": "Port 8642 already in use", "updated_at": "2026-01-01T00:00:00+00:00",
-        "platforms": {},
-    }), encoding="utf-8")
+    (get_clawk_home() / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "kind": "gateway",
+                "pid": 999_999_999,
+                "start_time": 1.0,
+                "gateway_state": "startup_failed",
+                "desired_state": "stopped",
+                "exit_reason": "Port 8642 already in use",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "platforms": {},
+            }
+        ),
+        encoding="utf-8",
+    )
 
     payload = client.get("/api/messaging/platforms").json()
     telegram = next(p for p in payload["platforms"] if p["id"] == "telegram")

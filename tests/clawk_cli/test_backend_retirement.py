@@ -8,21 +8,43 @@ def test_retirement_reserves_admission_until_cancel_or_permanent_commit(monkeypa
     from tui_gateway import server
     from clawk_cli import backend_retirement
 
-    monkeypatch.setattr(backend_retirement, "retirement", backend_retirement.RetirementFence())
+    monkeypatch.setattr(
+        backend_retirement, "retirement", backend_retirement.RetirementFence()
+    )
     monkeypatch.setattr(web_server, "_SESSION_TOKEN", "retirement-test-token")
-    monkeypatch.setitem(server._methods, "test.retirement", lambda rid, params: server._ok(rid, {}))
+    monkeypatch.setitem(
+        server._methods, "test.retirement", lambda rid, params: server._ok(rid, {})
+    )
     client = TestClient(web_server.app)
     headers = {"X-Clawksis-Session-Token": "retirement-test-token"}
     rpc = {"id": "test", "method": "test.retirement", "params": {}}
 
     def post(action, token=None, authenticated=True):
-        return client.post("/api/health/retirement", json={"action": action, **({"token": token} if token else {})},
-                           headers=headers if authenticated else {})
+        return client.post(
+            "/api/health/retirement",
+            json={"action": action, **({"token": token} if token else {})},
+            headers=headers if authenticated else {},
+        )
 
     assert post("prepare", authenticated=False).status_code == 401
-    for invalid in ({"action": []}, {"action": "commit"}, {"action": "cancel", "token": 123}, []):
-        assert client.post("/api/health/retirement", json=invalid, headers=headers).status_code == 400
-    assert client.post("/api/health/retirement", content="not json", headers=headers).status_code == 400
+    for invalid in (
+        {"action": []},
+        {"action": "commit"},
+        {"action": "cancel", "token": 123},
+        [],
+    ):
+        assert (
+            client.post(
+                "/api/health/retirement", json=invalid, headers=headers
+            ).status_code
+            == 400
+        )
+    assert (
+        client.post(
+            "/api/health/retirement", content="not json", headers=headers
+        ).status_code
+        == 400
+    )
     assert "result" in server.handle_request(rpc)
     prepared = post("prepare")
     assert prepared.status_code == 200

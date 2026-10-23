@@ -1,6 +1,5 @@
 """Single-owner /model argument parsing (clawk_cli.model_switch.parse_model_switch_args)."""
 
-
 from clawk_cli.model_switch import (
     MODEL_SWITCH_ERR_ONCE_WITH_GLOBAL,
     MODEL_SWITCH_ERROR_TEXT,
@@ -23,7 +22,9 @@ def test_provider_flag_and_scopes():
 
     assert parse_model_switch_args("sonnet").scope == "default"
     assert parse_model_switch_args("sonnet --session").scope == "session"
-    assert parse_model_switch_args("sonnet \u2013session").scope == "session"  # iOS/Telegram en-dash
+    assert (
+        parse_model_switch_args("sonnet \u2013session").scope == "session"
+    )  # iOS/Telegram en-dash
     assert parse_model_switch_args("sonnet --once").scope == "once"
     assert parse_model_switch_args("--refresh").force_refresh is True
 
@@ -31,4 +32,7 @@ def test_provider_flag_and_scopes():
 def test_once_with_global_conflict():
     req = parse_model_switch_args("sonnet --once --global")
     assert MODEL_SWITCH_ERR_ONCE_WITH_GLOBAL in req.errors
-    assert MODEL_SWITCH_ERROR_TEXT[MODEL_SWITCH_ERR_ONCE_WITH_GLOBAL] in req.error_messages()
+    assert (
+        MODEL_SWITCH_ERROR_TEXT[MODEL_SWITCH_ERR_ONCE_WITH_GLOBAL]
+        in req.error_messages()
+    )

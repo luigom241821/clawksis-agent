@@ -19,11 +19,17 @@ def _fresh(monkeypatch):
     monkeypatch.setattr(lcm, "_attempted", set())
     monkeypatch.setattr(lcm, "_undelivered", {})
     import clawk_cli.memory_provider_migration as mpm
+
     monkeypatch.setattr(mpm, "catalog_source", lambda name: name)
 
 
-@pytest.mark.parametrize("argv", [["import-agent", "claude-code", "--dry-run"], ["claw", "migrate", "--dry-run"]])
-def test_old_spelling_without_the_plugin_names_the_install(argv, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    "argv",
+    [["import-agent", "claude-code", "--dry-run"], ["claw", "migrate", "--dry-run"]],
+)
+def test_old_spelling_without_the_plugin_names_the_install(
+    argv, tmp_path, monkeypatch, capsys
+):
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -35,9 +41,14 @@ def test_old_spelling_without_the_plugin_names_the_install(argv, tmp_path, monke
         parser.parse_args(sys.argv[1:])
     err = capsys.readouterr().err
     assert exc.value.code == 2
-    assert f"`clawk {argv[0]}` moved out of core into the 'agent-importers' plugin, which is not loaded" in err
+    assert (
+        f"`clawk {argv[0]}` moved out of core into the 'agent-importers' plugin, which is not loaded"
+        in err
+    )
     assert "clawk plugins install agent-importers" in err
-    assert lcm.moved_command_hint("clawk auth", argv[0]) == ""  # never a `clawk auth` login spelling
+    assert (
+        lcm.moved_command_hint("clawk auth", argv[0]) == ""
+    )  # never a `clawk auth` login spelling
 
 
 def test_only_a_home_with_registered_imports_gets_the_plugin(tmp_path):
@@ -47,7 +58,9 @@ def test_only_a_home_with_registered_imports_gets_the_plugin(tmp_path):
     for home in (synced, untouched):
         home.mkdir()
         (home / "config.yaml").write_text("model: test\n", encoding="utf-8")
-    (synced / "import-sync.json").write_text('{"version": 1, "agents": {}}', encoding="utf-8")
+    (synced / "import-sync.json").write_text(
+        '{"version": 1, "agents": {}}', encoding="utf-8"
+    )
     calls, said = [], []
 
     def install(name):
@@ -57,38 +70,53 @@ def test_only_a_home_with_registered_imports_gets_the_plugin(tmp_path):
 
     assert lcm.migrate_home(untouched, install=install, say=said.append) == []
     assert calls == [] and said == []
-    assert lcm.migrate_home(synced, install=install, say=said.append) == ["agent-importers"]
+    assert lcm.migrate_home(synced, install=install, say=said.append) == [
+        "agent-importers"
+    ]
     assert calls == ["agent-importers"]
     assert "✓ `clawk import-agent` moved out of core" in said[0]
 
 
-def test_a_scheduled_sync_on_a_home_nothing_migrated_installs_the_plugin_and_runs(tmp_path, monkeypatch, capsys):
+def test_a_scheduled_sync_on_a_home_nothing_migrated_installs_the_plugin_and_runs(
+    tmp_path, monkeypatch, capsys
+):
     """An upgrade that ran no `clawk update` (a Docker image swap) leaves a home with sync sources and
     no plugin; when the scheduled `clawk import-agent --sync` is its only Clawksis process, that run
     installs the plugin and parses as the plugin's own command."""
     home = tmp_path / ".clawk"
     home.mkdir()
     (home / "config.yaml").write_text("model: test\n", encoding="utf-8")
-    (home / "import-sync.json").write_text('{"version": 1, "agents": {}}', encoding="utf-8")
+    (home / "import-sync.json").write_text(
+        '{"version": 1, "agents": {}}', encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     monkeypatch.setattr(sys, "argv", ["clawk", "import-agent", "--sync"])
     installs = []
 
     def install_into(target, consent=None):
-        def install(name):  # what the catalog install leaves behind: the plugin, enabled
+        def install(
+            name,
+        ):  # what the catalog install leaves behind: the plugin, enabled
             installs.append((target, name))
             plugin = target / "plugins" / name
             plugin.mkdir(parents=True)
-            (plugin / "plugin.yaml").write_text(f"name: {name}\nversion: 1.0.0\n", encoding="utf-8")
+            (plugin / "plugin.yaml").write_text(
+                f"name: {name}\nversion: 1.0.0\n", encoding="utf-8"
+            )
             (plugin / "__init__.py").write_text(
                 "def register(ctx):\n"
                 "    ctx.register_cli_command('import-agent', 'import', "
                 "lambda p: p.add_argument('--sync', action='store_true'), lambda args: 'synced')\n",
-                encoding="utf-8")
-            (target / "config.yaml").write_text(f"model: test\nplugins:\n  enabled: [{name}]\n", encoding="utf-8")
+                encoding="utf-8",
+            )
+            (target / "config.yaml").write_text(
+                f"model: test\nplugins:\n  enabled: [{name}]\n", encoding="utf-8"
+            )
             return {"ok": True}
+
         return install
+
     monkeypatch.setattr(lcm, "_install_into", install_into)
     from clawk_cli.main import _build_cli_parser
 

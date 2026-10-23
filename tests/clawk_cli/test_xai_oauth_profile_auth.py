@@ -6,7 +6,9 @@ from clawk_cli import auth
 from clawk_cli.auth import AuthError
 
 
-def test_read_xai_oauth_tokens_uses_credential_pool_when_provider_tokens_empty(monkeypatch):
+def test_read_xai_oauth_tokens_uses_credential_pool_when_provider_tokens_empty(
+    monkeypatch,
+):
     """Profile auth can have fresh pool tokens while singleton provider state is empty.
 
     This mirrors profiled cron after re-auth/credential-pool sync: the xAI
@@ -36,5 +38,3 @@ def test_read_xai_oauth_tokens_uses_credential_pool_when_provider_tokens_empty(m
     assert resolved["tokens"]["refresh_token"] == "pool-refresh"
     assert resolved["tokens"]["token_type"] == "Bearer"
     assert resolved["last_refresh"] == "2026-06-03T19:00:00Z"
-
-

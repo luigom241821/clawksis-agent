@@ -46,12 +46,6 @@ def test_acquire_blocks_second_holder(db: SessionDB) -> None:
     assert db.get_compression_lock_holder("sess1") == "holder1"
 
 
-
-
-
-
-
-
 # ----------------------------------------------------------------------
 # Per-session isolation
 # ----------------------------------------------------------------------
@@ -98,10 +92,11 @@ def test_non_expired_lock_from_dead_pid_is_reclaimed(
     # namespace (same-namespace kernel proof is still proof; foreign and
     # unstamped holders defer to TTL — see test_lease_pid_namespace.py).
     from clawk_state_pidns import holder_namespace_token
+
     dead_holder = f"pid=424242{holder_namespace_token()}:tid=1:agent=abc:nonce=deadbeef"
-    assert db.try_acquire_compression_lock(
-        "sess1", dead_holder, ttl_seconds=300
-    ) is True
+    assert (
+        db.try_acquire_compression_lock("sess1", dead_holder, ttl_seconds=300) is True
+    )
 
     probed: list[int] = []
 
@@ -113,12 +108,13 @@ def test_non_expired_lock_from_dead_pid_is_reclaimed(
         clawk_state, "psutil", SimpleNamespace(pid_exists=process_is_gone)
     )
 
-    assert db.try_acquire_compression_lock(
-        "sess1", "pid=525252:tid=2:agent=def:nonce=fresh", ttl_seconds=300
-    ) is True
+    assert (
+        db.try_acquire_compression_lock(
+            "sess1", "pid=525252:tid=2:agent=def:nonce=fresh", ttl_seconds=300
+        )
+        is True
+    )
     assert probed == [424242]
-
-
 
 
 def test_probe_doubt_keeps_lease_until_ttl(
@@ -129,10 +125,9 @@ def test_probe_doubt_keeps_lease_until_ttl(
     # reached (unstamped holders are gated before the probe — see
     # test_lease_pid_namespace.py).
     from clawk_state_pidns import holder_namespace_token
+
     holder = f"pid=424242{holder_namespace_token()}:tid=1:agent=abc:nonce=doubt"
-    assert db.try_acquire_compression_lock(
-        "sess1", holder, ttl_seconds=300
-    ) is True
+    assert db.try_acquire_compression_lock("sess1", holder, ttl_seconds=300) is True
 
     def probe_blows_up(pid: int) -> bool:
         raise RuntimeError("transient probe failure")
@@ -141,30 +136,35 @@ def test_probe_doubt_keeps_lease_until_ttl(
         clawk_state, "psutil", SimpleNamespace(pid_exists=probe_blows_up)
     )
 
-    assert db.try_acquire_compression_lock(
-        "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
-    ) is False
+    assert (
+        db.try_acquire_compression_lock(
+            "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
+        )
+        is False
+    )
     assert db.get_compression_lock_holder("sess1") == holder
 
 
 def test_non_expired_lock_from_live_pid_is_not_reclaimed(db: SessionDB) -> None:
     live_holder = f"pid={os.getpid()}:tid=1:agent=abc:nonce=live"
-    assert db.try_acquire_compression_lock(
-        "sess1", live_holder, ttl_seconds=300
-    ) is True
-    assert db.try_acquire_compression_lock(
-        "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
-    ) is False
-
-
+    assert (
+        db.try_acquire_compression_lock("sess1", live_holder, ttl_seconds=300) is True
+    )
+    assert (
+        db.try_acquire_compression_lock(
+            "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
+        )
+        is False
+    )
 
 
 def test_unstructured_holder_waits_for_ttl(
     db: SessionDB, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert db.try_acquire_compression_lock(
-        "sess1", "legacy_holder", ttl_seconds=300
-    ) is True
+    assert (
+        db.try_acquire_compression_lock("sess1", "legacy_holder", ttl_seconds=300)
+        is True
+    )
     monkeypatch.setattr(
         clawk_state,
         "psutil",
@@ -179,24 +179,17 @@ def test_unstructured_holder_waits_for_ttl(
         "kill",
         lambda *_args: pytest.fail("unstructured holder must not probe a PID"),
     )
-    assert db.try_acquire_compression_lock(
-        "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
-    ) is False
-
-
-
-
+    assert (
+        db.try_acquire_compression_lock(
+            "sess1", "pid=525252:tid=2:agent=def:nonce=other", ttl_seconds=300
+        )
+        is False
+    )
 
 
 # ----------------------------------------------------------------------
 # Empty / invalid input
 # ----------------------------------------------------------------------
-
-
-
-
-
-
 
 
 # ----------------------------------------------------------------------

@@ -28,6 +28,7 @@ def _routed_scope(runner: Any, source: Any):
     if not getattr(getattr(runner, "config", None), "multiplex_profiles", False):
         return contextlib.nullcontext()
     from gateway.run import _async_profile_runtime_scope
+
     return _async_profile_runtime_scope(runner._resolve_profile_home_for_source(source))
 
 
@@ -38,21 +39,33 @@ async def run_post_admission_hook(
     try:
         async with _routed_scope(runner, source):
             from clawk_cli.lifecycle import ainvoke_hook, has_hook
+
             if not has_hook(POST_ADMISSION_HOOK):
                 return False, None
             results = await ainvoke_hook(
-                POST_ADMISSION_HOOK, session_key=session_key,
+                POST_ADMISSION_HOOK,
+                session_key=session_key,
                 platform=source.platform.value if source.platform else "",
-                source=source.to_dict(), message_id=event.message_id, text=event.text or "",
+                source=source.to_dict(),
+                message_id=event.message_id,
+                text=event.text or "",
             )
     except asyncio.CancelledError:
         raise
     except Exception:
-        logger.warning("%s failed; continuing with the agent turn", POST_ADMISSION_HOOK, exc_info=True)
+        logger.warning(
+            "%s failed; continuing with the agent turn",
+            POST_ADMISSION_HOOK,
+            exc_info=True,
+        )
         return False, None
     for result in results:
         if isinstance(result, dict) and result.get("action") == "handled":
             reply = result.get("reply")
-            logger.info("%s: a plugin handled the message for session %s", POST_ADMISSION_HOOK, session_key)
+            logger.info(
+                "%s: a plugin handled the message for session %s",
+                POST_ADMISSION_HOOK,
+                session_key,
+            )
             return True, reply if isinstance(reply, str) and reply.strip() else None
     return False, None

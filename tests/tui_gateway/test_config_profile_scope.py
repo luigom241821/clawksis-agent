@@ -90,7 +90,9 @@ def test_config_get_full_reads_params_profile_yaml_not_launch(tmp_path, monkeypa
     assert _read_yaml(launch)["terminal"]["cwd"] == LAUNCH_CWD
 
 
-def test_config_set_persistent_write_lands_on_params_profile_yaml(tmp_path, monkeypatch):
+def test_config_set_persistent_write_lands_on_params_profile_yaml(
+    tmp_path, monkeypatch
+):
     launch, worker = _homes(tmp_path)
     _bind_homes(monkeypatch, launch, worker)
 
@@ -115,7 +117,9 @@ def test_config_set_without_profile_still_writes_launch_home(tmp_path, monkeypat
     assert _read_yaml(worker)["display"]["busy_input_mode"] == "queue"
 
 
-def test_launch_cwd_reads_launch_config_during_foreign_profile_scope(tmp_path, monkeypatch):
+def test_launch_cwd_reads_launch_config_during_foreign_profile_scope(
+    tmp_path, monkeypatch
+):
     launch, worker = _homes(tmp_path)
     launch_cwd = tmp_path / "launch-workspace"
     worker_cwd = tmp_path / "worker-workspace"
@@ -161,7 +165,9 @@ def test_profile_cwd_write_does_not_retarget_launch_session(tmp_path, monkeypatc
         server._sessions.pop(sid, None)
 
 
-def test_session_bound_profile_cwd_write_does_not_retarget_launch_process(tmp_path, monkeypatch):
+def test_session_bound_profile_cwd_write_does_not_retarget_launch_process(
+    tmp_path, monkeypatch
+):
     launch, worker = _homes(tmp_path)
     launch_cwd = tmp_path / "launch-workspace"
     worker_cwd = tmp_path / "worker-workspace"
@@ -176,7 +182,11 @@ def test_session_bound_profile_cwd_write_does_not_retarget_launch_process(tmp_pa
     )
 
     response = _set(
-        {"session_id": "worker-session", "key": "terminal.cwd", "value": str(worker_cwd)}
+        {
+            "session_id": "worker-session",
+            "key": "terminal.cwd",
+            "value": str(worker_cwd),
+        }
     )
 
     assert response["result"]["cwd"] == str(worker_cwd)
@@ -184,7 +194,9 @@ def test_session_bound_profile_cwd_write_does_not_retarget_launch_process(tmp_pa
     assert server.os.environ["TERMINAL_CWD"] == str(launch_cwd)
 
 
-def test_launch_profile_cwd_write_updates_non_local_terminal_task(tmp_path, monkeypatch):
+def test_launch_profile_cwd_write_updates_non_local_terminal_task(
+    tmp_path, monkeypatch
+):
     launch, worker = _homes(tmp_path)
     old_cwd = tmp_path / "old-workspace"
     new_cwd = tmp_path / "new-workspace"

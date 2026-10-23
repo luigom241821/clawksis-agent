@@ -24,9 +24,15 @@ class TestPerTurnStreamIsolation:
             adapter._send_reply_queued = AsyncMock(return_value={"errcode": 0})
 
             # User 1, 2, 3 all start streaming simultaneously
-            await adapter.send_stream_frame("user1 content", chat_id="user-1", turn_id="turn-1")
-            await adapter.send_stream_frame("user2 content", chat_id="user-2", turn_id="turn-2")
-            await adapter.send_stream_frame("user3 content", chat_id="user-3", turn_id="turn-3")
+            await adapter.send_stream_frame(
+                "user1 content", chat_id="user-1", turn_id="turn-1"
+            )
+            await adapter.send_stream_frame(
+                "user2 content", chat_id="user-2", turn_id="turn-2"
+            )
+            await adapter.send_stream_frame(
+                "user3 content", chat_id="user-3", turn_id="turn-3"
+            )
 
             # All 3 turns active
             assert "user-1:turn-1" in adapter._stream_turns
@@ -75,15 +81,21 @@ class TestPerTurnStreamIsolation:
             adapter._send_reply_queued = AsyncMock(return_value={"errcode": 0})
 
             # Consumer 1 starts streaming
-            await adapter.send_stream_frame("consumer1 frame1", chat_id="chat-1", turn_id="turn-1")
+            await adapter.send_stream_frame(
+                "consumer1 frame1", chat_id="chat-1", turn_id="turn-1"
+            )
             assert "chat-1:turn-1" in adapter._stream_turns
 
             # Consumer 2 starts streaming (concurrent)
-            await adapter.send_stream_frame("consumer2 frame1", chat_id="chat-1", turn_id="turn-2")
+            await adapter.send_stream_frame(
+                "consumer2 frame1", chat_id="chat-1", turn_id="turn-2"
+            )
             assert "chat-1:turn-2" in adapter._stream_turns
 
             # Both turns coexist
-            assert len([k for k in adapter._stream_turns if k.startswith("chat-1:")]) == 2
+            assert (
+                len([k for k in adapter._stream_turns if k.startswith("chat-1:")]) == 2
+            )
 
             # Consumer 1 finalizes
             ok1 = await adapter.send_stream_frame(
@@ -118,9 +130,15 @@ class TestPerTurnStreamIsolation:
             adapter._ws = AsyncMock(closed=False)
 
             # All 3 users start streaming
-            await adapter.send_stream_frame("A content", chat_id="user-A", turn_id="turn-A")
-            await adapter.send_stream_frame("B content", chat_id="user-B", turn_id="turn-B")
-            await adapter.send_stream_frame("C content", chat_id="user-C", turn_id="turn-C")
+            await adapter.send_stream_frame(
+                "A content", chat_id="user-A", turn_id="turn-A"
+            )
+            await adapter.send_stream_frame(
+                "B content", chat_id="user-B", turn_id="turn-B"
+            )
+            await adapter.send_stream_frame(
+                "C content", chat_id="user-C", turn_id="turn-C"
+            )
 
             # User A hits stream expired
             adapter._send_reply_queued = AsyncMock(
@@ -166,14 +184,21 @@ class TestPerTurnStreamIsolation:
             adapter._ws = AsyncMock(closed=False)
 
             # Consumer 1 and 2 both start
-            await adapter.send_stream_frame("c1 frame", chat_id="chat-1", turn_id="turn-1")
-            await adapter.send_stream_frame("c2 frame", chat_id="chat-1", turn_id="turn-2")
+            await adapter.send_stream_frame(
+                "c1 frame", chat_id="chat-1", turn_id="turn-1"
+            )
+            await adapter.send_stream_frame(
+                "c2 frame", chat_id="chat-1", turn_id="turn-2"
+            )
             assert "chat-1:turn-1" in adapter._stream_turns
             assert "chat-1:turn-2" in adapter._stream_turns
 
             # Consumer 1 hits expired error on finalize
             adapter._send_reply_queued = AsyncMock(
-                return_value={"errcode": STREAM_EXPIRED_ERRCODE, "errmsg": "stream expired"}
+                return_value={
+                    "errcode": STREAM_EXPIRED_ERRCODE,
+                    "errmsg": "stream expired",
+                }
             )
             ok1 = await adapter.send_stream_frame(
                 "c1 final", chat_id="chat-1", finalize=True, turn_id="turn-1"
@@ -191,7 +216,6 @@ class TestPerTurnStreamIsolation:
             assert "chat-1:turn-2" not in adapter._stream_turns
         finally:
             await adapter.disconnect()
-
 
 
 class TestNativeFallbackStreamClose:
@@ -225,7 +249,11 @@ class TestNativeFallbackStreamClose:
             async def send_stream_frame(
                 self, text, *, finalize=False, chat_id=None, reply_to=None, **kwargs
             ):
-                call_info = {"text_len": len(text), "finalize": finalize, "text_preview": text[:20]}
+                call_info = {
+                    "text_len": len(text),
+                    "finalize": finalize,
+                    "text_preview": text[:20],
+                }
                 self.send_stream_frame_calls.append(call_info)
 
                 # Seed frame (empty) always succeeds
@@ -242,17 +270,22 @@ class TestNativeFallbackStreamClose:
 
             async def send(self, chat_id, content, reply_to=None, metadata=None):
                 self.send_calls.append({"content_preview": content[:20]})
-                return type("SendResult", (), {"success": True, "message_id": "msg-1"})()
+                return type(
+                    "SendResult", (), {"success": True, "message_id": "msg-1"}
+                )()
 
         MockAdapter.__abstractmethods__ = frozenset()
         adapter = MockAdapter()
-        cfg = StreamConsumerConfig(chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5)
+        cfg = StreamConsumerConfig(
+            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5
+        )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
         # Send short content to minimize frame count
         consumer.on_delta("X")
 
         import asyncio
+
         task = asyncio.create_task(consumer.run())
         await asyncio.sleep(0.05)
         consumer.finish()
@@ -270,7 +303,9 @@ class TestNativeFallbackStreamClose:
         # the seed had length 0 and the first content frame failed, finalize
         # must still be attempted to close the typing bubble.
         finalize_calls = [c for c in adapter.send_stream_frame_calls if c["finalize"]]
-        assert len(finalize_calls) >= 1, "Finalize should be called even though seed had length 0"
+        assert len(finalize_calls) >= 1, (
+            "Finalize should be called even though seed had length 0"
+        )
 
         # Fire-and-forget (14c49c781a): with the throttle removed, the 1-char
         # content "X" is pushed immediately as an intermediate frame instead of
@@ -313,11 +348,15 @@ class TestNativeFallbackStreamClose:
 
             async def send(self, chat_id, content, reply_to=None, metadata=None):
                 self.frames.append({"send": content})
-                return type("SendResult", (), {"success": True, "message_id": "msg-1"})()
+                return type(
+                    "SendResult", (), {"success": True, "message_id": "msg-1"}
+                )()
 
         MockAdapter.__abstractmethods__ = frozenset()
         adapter = MockAdapter()
-        cfg = StreamConsumerConfig(chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5)
+        cfg = StreamConsumerConfig(
+            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5
+        )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
         # Send enough to trigger frames
@@ -326,6 +365,7 @@ class TestNativeFallbackStreamClose:
         consumer.on_delta(" Third will fail.")
 
         import asyncio
+
         task = asyncio.create_task(consumer.run())
         await asyncio.sleep(0.1)
         consumer.finish()
@@ -369,16 +409,21 @@ class TestNativeFallbackStreamClose:
 
             async def send(self, chat_id, content, reply_to=None, metadata=None):
                 self.frames.append({"send": content})
-                return type("SendResult", (), {"success": True, "message_id": "msg-1"})()
+                return type(
+                    "SendResult", (), {"success": True, "message_id": "msg-1"}
+                )()
 
         MockAdapter.__abstractmethods__ = frozenset()
         adapter = MockAdapter()
-        cfg = StreamConsumerConfig(chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5)
+        cfg = StreamConsumerConfig(
+            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5
+        )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
         consumer.on_delta("Content that will cause stream to fail.")
 
         import asyncio
+
         task = asyncio.create_task(consumer.run())
         await asyncio.sleep(0.1)
         consumer.finish()

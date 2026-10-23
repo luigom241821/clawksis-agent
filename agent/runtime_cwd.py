@@ -82,7 +82,9 @@ def _existing_dir(raw: str, label: str) -> Path | None:
 
 
 def _resolve_configured_cwd(
-    *, override_is_final: bool, include_session_override: bool = True,
+    *,
+    override_is_final: bool,
+    include_session_override: bool = True,
 ) -> Path | None:
     """Session override, then TERMINAL_CWD; each validated as a real directory.
 
@@ -116,5 +118,6 @@ def resolve_context_cwd(*, include_session_override: bool = True) -> Path | None
     TERMINAL_CWD.
     """
     return _resolve_configured_cwd(
-        override_is_final=True, include_session_override=include_session_override,
+        override_is_final=True,
+        include_session_override=include_session_override,
     )

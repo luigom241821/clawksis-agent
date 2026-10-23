@@ -30,12 +30,24 @@ class PromptSubmitParams(SessionParams):
     ``truncate_before_message_id``, or the legacy ``truncate_before_user_ordinal``)."""
 
     text: JsonValue = ""
-    display_kind: str | None = None  # only "hidden" is honoured; anything else renders as a user row
-    interrupted: bool | None = None  # client-side barge-in: the turn's model message carries the note
-    queued: bool | None = None  # client queue drain — the busy path must hold it, never redirect/steer
-    surface: str | None = None  # a ClientSurface value; unknown values clear the surface
-    voice_context: str | None = None  # recent spoken transcript, model input only (voice-live)
-    voice_turn: bool | None = None  # a spoken voice-conversation turn: runs on auxiliary.voice_chat
+    display_kind: str | None = (
+        None  # only "hidden" is honoured; anything else renders as a user row
+    )
+    interrupted: bool | None = (
+        None  # client-side barge-in: the turn's model message carries the note
+    )
+    queued: bool | None = (
+        None  # client queue drain — the busy path must hold it, never redirect/steer
+    )
+    surface: str | None = (
+        None  # a ClientSurface value; unknown values clear the surface
+    )
+    voice_context: str | None = (
+        None  # recent spoken transcript, model input only (voice-live)
+    )
+    voice_turn: bool | None = (
+        None  # a spoken voice-conversation turn: runs on auxiliary.voice_chat
+    )
     # Desktop-generated large-paste preview (first ~1000 chars); TITLE input only, never the model turn.
     title_preview: str | None = None
     truncate_before_user_ordinal: int | None = None
@@ -43,14 +55,21 @@ class PromptSubmitParams(SessionParams):
     truncate_before_message_id: str | None = None
     confirm_truncate: bool | None = None
     confirm_empty_truncate: bool | None = None
-    confirm_deep_truncate: bool | None = None  # send when the cut archives >1 user turn (enforced next release)
+    confirm_deep_truncate: bool | None = (
+        None  # send when the cut archives >1 user turn (enforced next release)
+    )
     rebind_survivor_row_ids: list[int] | None = None
     # In-process only: injected by the hosted-room / bot-relay handlers, never accepted from a
     # client (a client dict for ``_turn_author`` answers 4124). Excluded from the rendered wire.
-    hosted_task: JsonValue | None = Field(default=None, exclude=True, alias="_hosted_task")
-    turn_author: JsonValue | None = Field(default=None, exclude=True, alias="_turn_author")
+    hosted_task: JsonValue | None = Field(
+        default=None, exclude=True, alias="_hosted_task"
+    )
+    turn_author: JsonValue | None = Field(
+        default=None, exclude=True, alias="_turn_author"
+    )
     hosted_terminal_callback: JsonValue | None = Field(
-        default=None, exclude=True, alias="_hosted_terminal_callback")
+        default=None, exclude=True, alias="_hosted_terminal_callback"
+    )
 
 
 class PromptSubmitStatus(WireEnum):
@@ -79,8 +98,12 @@ class PromptSubmitResult(Result):
     forwarded: bool | None = None
 
 
-method("prompt.submit", params=PromptSubmitParams, result=PromptSubmitResult,
-       doc="Send a user turn to a live session; busy sessions queue / steer / redirect instead of refusing.")
+method(
+    "prompt.submit",
+    params=PromptSubmitParams,
+    result=PromptSubmitResult,
+    doc="Send a user turn to a live session; busy sessions queue / steer / redirect instead of refusing.",
+)
 
 
 # ── attachments ───────────────────────────────────────────────────────────────────────────────
@@ -111,16 +134,26 @@ class ClipboardPasteParams(SessionParams):
     pass
 
 
-method("clipboard.paste", params=ClipboardPasteParams, result=AttachedImageResult,
-       doc="Save the host clipboard image into the session and queue it for the next turn.")
+method(
+    "clipboard.paste",
+    params=ClipboardPasteParams,
+    result=AttachedImageResult,
+    doc="Save the host clipboard image into the session and queue it for the next turn.",
+)
 
 
 class ImageAttachParams(SessionParams):
-    path: str  # a host path, optionally followed by remainder text (drop syntax accepted)
+    path: (
+        str  # a host path, optionally followed by remainder text (drop syntax accepted)
+    )
 
 
-method("image.attach", params=ImageAttachParams, result=AttachedImageResult,
-       doc="Queue a gateway-visible image file for the next turn.")
+method(
+    "image.attach",
+    params=ImageAttachParams,
+    result=AttachedImageResult,
+    doc="Queue a gateway-visible image file for the next turn.",
+)
 
 
 class ImageAttachBytesParams(SessionParams):
@@ -133,8 +166,12 @@ class ImageAttachBytesParams(SessionParams):
     ext: str | None = None
 
 
-method("image.attach_bytes", params=ImageAttachBytesParams, result=AttachedImageResult,
-       doc="Queue an image uploaded as base64 (remote client); reply mirrors image.attach.")
+method(
+    "image.attach_bytes",
+    params=ImageAttachBytesParams,
+    result=AttachedImageResult,
+    doc="Queue an image uploaded as base64 (remote client); reply mirrors image.attach.",
+)
 
 
 class PdfAttachParams(SessionParams):
@@ -163,8 +200,12 @@ class PdfAttachResult(Result):
     text: str
 
 
-method("pdf.attach", params=PdfAttachParams, result=PdfAttachResult,
-       doc="Render a PDF's pages to PNG and queue them as images for the next turn.")
+method(
+    "pdf.attach",
+    params=PdfAttachParams,
+    result=PdfAttachResult,
+    doc="Render a PDF's pages to PNG and queue them as images for the next turn.",
+)
 
 
 class FileAttachParams(SessionParams):
@@ -185,8 +226,12 @@ class FileAttachResult(Result):
     uploaded: bool
 
 
-method("file.attach", params=FileAttachParams, result=FileAttachResult,
-       doc="Stage a non-image file into the session workspace and hand back its @file: ref.")
+method(
+    "file.attach",
+    params=FileAttachParams,
+    result=FileAttachResult,
+    doc="Stage a non-image file into the session workspace and hand back its @file: ref.",
+)
 
 
 class ImageDetachParams(SessionParams):
@@ -198,8 +243,12 @@ class ImageDetachResult(Result):
     count: int
 
 
-method("image.detach", params=ImageDetachParams, result=ImageDetachResult,
-       doc="Drop a queued image before the turn is sent.")
+method(
+    "image.detach",
+    params=ImageDetachParams,
+    result=ImageDetachResult,
+    doc="Drop a queued image before the turn is sent.",
+)
 
 
 class InputDetectDropParams(SessionParams):
@@ -217,8 +266,12 @@ class InputDetectDropResult(ImageMeta):
     text: str | None = None
 
 
-method("input.detect_drop", params=InputDetectDropParams, result=InputDetectDropResult,
-       doc="Recognise a terminal file drop pasted into the composer and turn it into an attachment.")
+method(
+    "input.detect_drop",
+    params=InputDetectDropParams,
+    result=InputDetectDropResult,
+    doc="Recognise a terminal file drop pasted into the composer and turn it into an attachment.",
+)
 
 
 # ── side agents ───────────────────────────────────────────────────────────────────────────────
@@ -235,10 +288,18 @@ class TaskIdResult(Result):
     task_id: str
 
 
-method("prompt.background", params=SideAgentParams, result=TaskIdResult,
-       doc="Run a task on a fresh agent in the background; the answer arrives as background.complete.")
-method("prompt.btw", params=SideAgentParams, result=TaskIdResult,
-       doc="Side question over a snapshot of the live conversation; the answer arrives as btw.complete.")
+method(
+    "prompt.background",
+    params=SideAgentParams,
+    result=TaskIdResult,
+    doc="Run a task on a fresh agent in the background; the answer arrives as background.complete.",
+)
+method(
+    "prompt.btw",
+    params=SideAgentParams,
+    result=TaskIdResult,
+    doc="Side question over a snapshot of the live conversation; the answer arrives as btw.complete.",
+)
 
 
 class PreviewRestartParams(SessionParams):
@@ -247,8 +308,12 @@ class PreviewRestartParams(SessionParams):
     context: str | None = None  # the preview pane's console output
 
 
-method("preview.restart", params=PreviewRestartParams, result=TaskIdResult,
-       doc="Spawn a hidden agent that brings the desktop preview's dev server back up.")
+method(
+    "preview.restart",
+    params=PreviewRestartParams,
+    result=TaskIdResult,
+    doc="Spawn a hidden agent that brings the desktop preview's dev server back up.",
+)
 
 
 # ── batch clarify locks / proxied request answers ─────────────────────────────────────────────
@@ -274,8 +339,12 @@ class ClarifyLockResult(Result):
     remaining: list[str] | None = None
 
 
-method("clarify.lock", params=ClarifyLockParams, result=ClarifyLockResult,
-       doc="Lock one answer of a batch clarify request (editable until every question is locked).")
+method(
+    "clarify.lock",
+    params=ClarifyLockParams,
+    result=ClarifyLockResult,
+    doc="Lock one answer of a batch clarify request (editable until every question is locked).",
+)
 
 
 class RequestAnswerParams(Params):
@@ -288,8 +357,12 @@ class RequestAnswerResult(Result):
     status: ClarifyLockStatus
 
 
-method("request.answer", params=RequestAnswerParams, result=RequestAnswerResult,
-       doc="Answer an open server→client request from a client that never received the frame.")
+method(
+    "request.answer",
+    params=RequestAnswerParams,
+    result=RequestAnswerResult,
+    doc="Answer an open server→client request from a client that never received the frame.",
+)
 
 
 # ── approvals ─────────────────────────────────────────────────────────────────────────────────
@@ -303,8 +376,12 @@ class ApprovalPendingResult(Result):
     approvals: list[PendingApproval]
 
 
-method("approval.pending", params=ApprovalPendingParams, result=ApprovalPendingResult,
-       doc="Replay the approvals still waiting on this session (reconnect / polling).")
+method(
+    "approval.pending",
+    params=ApprovalPendingParams,
+    result=ApprovalPendingResult,
+    doc="Replay the approvals still waiting on this session (reconnect / polling).",
+)
 
 
 class ApprovalReceivedParams(SessionParams):
@@ -315,8 +392,12 @@ class ApprovalReceivedResult(Result):
     acknowledged: bool
 
 
-method("approval.received", params=ApprovalReceivedParams, result=ApprovalReceivedResult,
-       doc="Tell the backend the card is on screen, so its timeout clock starts.")
+method(
+    "approval.received",
+    params=ApprovalReceivedParams,
+    result=ApprovalReceivedResult,
+    doc="Tell the backend the card is on screen, so its timeout clock starts.",
+)
 
 
 class ApprovalRespondParams(SessionParams):
@@ -332,8 +413,12 @@ class ApprovalRespondResult(Result):
     resolved: int  # how many pending approvals this decision unblocked
 
 
-method("approval.respond", params=ApprovalRespondParams, result=ApprovalRespondResult,
-       doc="Deliver the user's decision on a dangerous command (falls back to durable identity on a stale sid).")
+method(
+    "approval.respond",
+    params=ApprovalRespondParams,
+    result=ApprovalRespondResult,
+    doc="Deliver the user's decision on a dangerous command (falls back to durable identity on a stale sid).",
+)
 
 
 # ── voice ─────────────────────────────────────────────────────────────────────────────────────
@@ -365,8 +450,12 @@ class VoiceToggleResult(Result):
     details: str | None = None
 
 
-method("voice.toggle", params=VoiceToggleParams, result=VoiceToggleResult,
-       doc="/voice parity: report, flip voice mode on/off, or toggle speech output.")
+method(
+    "voice.toggle",
+    params=VoiceToggleParams,
+    result=VoiceToggleResult,
+    doc="/voice parity: report, flip voice mode on/off, or toggle speech output.",
+)
 
 
 class VoiceRecordAction(WireEnum):
@@ -376,7 +465,9 @@ class VoiceRecordAction(WireEnum):
 
 class VoiceRecordParams(Params):
     action: VoiceRecordAction = VoiceRecordAction.start
-    session_id: str | None = None  # where voice.transcript / voice.status events are addressed
+    session_id: str | None = (
+        None  # where voice.transcript / voice.status events are addressed
+    )
     profile: str | None = None
 
 
@@ -391,8 +482,12 @@ class VoiceRecordResult(Result):
     reason: str | None = None  # "wake_owned" when another surface holds the mic
 
 
-method("voice.record", params=VoiceRecordParams, result=VoiceRecordResult,
-       doc="VAD-bounded push-to-talk; the transcript arrives as a voice.transcript event.")
+method(
+    "voice.record",
+    params=VoiceRecordParams,
+    result=VoiceRecordResult,
+    doc="VAD-bounded push-to-talk; the transcript arrives as a voice.transcript event.",
+)
 
 
 class VoiceTtsParams(Params):
@@ -404,8 +499,12 @@ class VoiceTtsResult(Result):
     status: str  # "speaking"
 
 
-method("voice.tts", params=VoiceTtsParams, result=VoiceTtsResult,
-       doc="Speak text through the backend TTS engine (barge-in aware).")
+method(
+    "voice.tts",
+    params=VoiceTtsParams,
+    result=VoiceTtsResult,
+    doc="Speak text through the backend TTS engine (barge-in aware).",
+)
 
 
 # ── wake word ─────────────────────────────────────────────────────────────────────────────────
@@ -438,8 +537,12 @@ class WakeStartResult(Result):
     frame_length: int | None = None
 
 
-method("wake.start", params=WakeStartParams, result=WakeStartResult,
-       doc="Arm the wake-word listener for the calling surface; refusals explain why.")
+method(
+    "wake.start",
+    params=WakeStartParams,
+    result=WakeStartResult,
+    doc="Arm the wake-word listener for the calling surface; refusals explain why.",
+)
 
 
 class WakeStopParams(Params):
@@ -459,8 +562,12 @@ class WakeStopResult(WakeOwnerResult):
     disabled_persisted: bool
 
 
-method("wake.stop", params=WakeStopParams, result=WakeStopResult,
-       doc="Stop this surface's listener; persist also writes wake_word.enabled: false.")
+method(
+    "wake.stop",
+    params=WakeStopParams,
+    result=WakeStopResult,
+    doc="Stop this surface's listener; persist also writes wake_word.enabled: false.",
+)
 
 
 class WakeControlParams(Params):
@@ -471,16 +578,24 @@ class WakePauseResult(WakeOwnerResult):
     paused: bool
 
 
-method("wake.pause", params=WakeControlParams, result=WakePauseResult,
-       doc="Release the mic (e.g. while the desktop's browser captures audio).")
+method(
+    "wake.pause",
+    params=WakeControlParams,
+    result=WakePauseResult,
+    doc="Release the mic (e.g. while the desktop's browser captures audio).",
+)
 
 
 class WakeResumeResult(WakeOwnerResult):
     resumed: bool
 
 
-method("wake.resume", params=WakeControlParams, result=WakeResumeResult,
-       doc="Reclaim the mic after a pause; no-op if the listener isn't armed.")
+method(
+    "wake.resume",
+    params=WakeControlParams,
+    result=WakeResumeResult,
+    doc="Reclaim the mic after a pause; no-op if the listener isn't armed.",
+)
 
 
 class WakeStatusParams(Params):
@@ -522,8 +637,12 @@ class WakeStatusResult(Result):
     frame_length: int
 
 
-method("wake.status", params=WakeStatusParams, result=WakeStatusResult,
-       doc="Everything a client needs to draw the wake-word state and decide whether to (re)arm.")
+method(
+    "wake.status",
+    params=WakeStatusParams,
+    result=WakeStatusResult,
+    doc="Everything a client needs to draw the wake-word state and decide whether to (re)arm.",
+)
 
 
 class WakeFeedParams(Params):
@@ -539,5 +658,9 @@ class WakeFeedResult(WakeOwnerResult):
     fed: bool  # false with reason "empty" / "not_owner"
 
 
-method("wake.feed", params=WakeFeedParams, result=WakeFeedResult,
-       doc="Push client-captured PCM into the armed detector (mic-less remote backends).")
+method(
+    "wake.feed",
+    params=WakeFeedParams,
+    result=WakeFeedResult,
+    doc="Push client-captured PCM into the armed detector (mic-less remote backends).",
+)

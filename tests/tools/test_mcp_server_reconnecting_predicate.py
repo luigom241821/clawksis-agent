@@ -24,7 +24,9 @@ def parked_server(monkeypatch):
 
 def test_transient_park_is_reconnecting(parked_server):
     assert mcp_server_reconnecting("x") is True
-    parked_server._park_reason = "from parked state"  # rapid-drop budget exhausted, still probing
+    parked_server._park_reason = (
+        "from parked state"  # rapid-drop budget exhausted, still probing
+    )
     assert mcp_server_reconnecting("x") is True
 
 
@@ -35,9 +37,13 @@ def test_permanent_error_park_is_not_reconnecting(parked_server):
 
 def test_park_records_reason_and_proven_session_clears_it(parked_server, monkeypatch):
     """The run loop hands ``_park`` its revival reason; a proven healthy session forgets it."""
+
     async def _shutdown_at_once(timeout=None):
         return "shutdown"
-    monkeypatch.setattr(parked_server, "_wait_for_reconnect_or_shutdown", _shutdown_at_once)
+
+    monkeypatch.setattr(
+        parked_server, "_wait_for_reconnect_or_shutdown", _shutdown_at_once
+    )
 
     asyncio.run(parked_server._park("from parked state (permanent error)"))
     assert parked_server._park_reason == "from parked state (permanent error)"

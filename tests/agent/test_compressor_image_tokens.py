@@ -17,8 +17,6 @@ class TestContentLengthForBudget:
     def test_plain_string(self):
         assert _content_length_for_budget("hello world") == 11
 
-
-
     def test_text_only_list(self):
         content = [
             {"type": "text", "text": "first"},
@@ -26,17 +24,17 @@ class TestContentLengthForBudget:
         ]
         assert _content_length_for_budget(content) == 5 + 6
 
-
-
-
-
-
-
     def test_image_priced_at_the_learned_cost(self):
         """The budget walk charges each image at the per-image price learned from provider usage
         (the same figure the trigger estimator uses), falling back to the flat default."""
-        content = [{"type": "text", "text": "look"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]
-        assert _content_length_for_budget(content) == 4 + DEFAULT_IMAGE_TOKEN_COST * _CHARS_PER_TOKEN
+        content = [
+            {"type": "text", "text": "look"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+        ]
+        assert (
+            _content_length_for_budget(content)
+            == 4 + DEFAULT_IMAGE_TOKEN_COST * _CHARS_PER_TOKEN
+        )
         with image_cost_context(4_000):
             assert _content_length_for_budget(content) == 4 + 4_000 * _CHARS_PER_TOKEN
 
@@ -58,17 +56,24 @@ class TestTokenBudgetWithImages:
         # so the tail should be trimmed.
         messages = [{"role": "system", "content": "sys"}]
         for i in range(5):
-            messages.append({
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"turn {i}"},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}},
-                ],
-            })
-            messages.append({
-                "role": "assistant",
-                "content": f"response {i}",
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": f"turn {i}"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "data:image/png;base64,AAA"},
+                        },
+                    ],
+                }
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": f"response {i}",
+                }
+            )
 
         cut = cc._find_tail_cut_by_tokens(messages, head_end=0, token_budget=5000)
 

@@ -28,7 +28,9 @@ def _age(path, seconds):
 
 def test_idle_screen_is_stopped_but_a_used_or_held_one_is_not(tmp_path, monkeypatch):
     sd, stops = _running(monkeypatch, tmp_path)
-    monkeypatch.setattr(lease, "get", lambda profile_key=None: lease.Lease(holder=lease.AGENT))
+    monkeypatch.setattr(
+        lease, "get", lambda profile_key=None: lease.Lease(holder=lease.AGENT)
+    )
 
     _age(sd / "env", 5)  # just started, never stamped: ages from publish
     assert runtime.stop_if_idle() is False and stops == []
@@ -38,15 +40,23 @@ def test_idle_screen_is_stopped_but_a_used_or_held_one_is_not(tmp_path, monkeypa
     assert runtime.stop_if_idle() is False and stops == []
 
     _age(sd / "activity", 3600)
-    monkeypatch.setattr(lease, "get", lambda profile_key=None: lease.Lease(holder=lease.HUMAN, viewer_id="v1"))
-    assert runtime.stop_if_idle() is False and stops == [], "a human mid-login is never timed out"
+    monkeypatch.setattr(
+        lease,
+        "get",
+        lambda profile_key=None: lease.Lease(holder=lease.HUMAN, viewer_id="v1"),
+    )
+    assert runtime.stop_if_idle() is False and stops == [], (
+        "a human mid-login is never timed out"
+    )
 
-    monkeypatch.setattr(lease, "get", lambda profile_key=None: lease.Lease(holder=lease.AGENT))
+    monkeypatch.setattr(
+        lease, "get", lambda profile_key=None: lease.Lease(holder=lease.AGENT)
+    )
     assert runtime.stop_if_idle() is True and stops == [True]
 
 
 def test_idle_stop_disabled_by_zero(tmp_path, monkeypatch):
     sd, stops = _running(monkeypatch, tmp_path)
     monkeypatch.setattr(runtime, "idle_stop_seconds", lambda: 0.0)
-    _age(sd / "env", 10 ** 6)
+    _age(sd / "env", 10**6)
     assert runtime.stop_if_idle() is False and stops == []

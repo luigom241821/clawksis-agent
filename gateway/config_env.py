@@ -45,10 +45,12 @@ def _enable_credential_names(platform: Platform) -> tuple:
     if platform in _ENV_ENABLE_CREDENTIALS:
         return _ENV_ENABLE_CREDENTIALS[platform]
     from gateway.platform_registry import platform_registry
+
     entry = platform_registry.get(platform.value)
     names = tuple(getattr(entry, "env_enable_credentials", ()) or ())
     if not names:
         from gateway.platform_env import bundled_env_rows
+
         names = (bundled_env_rows(platform.value) or ((), ()))[1]
     return names
 
@@ -68,7 +70,10 @@ def _warn_explicit_disable_beats_env(platform: Platform) -> None:
         "start its adapter. Environment credentials no longer override an "
         "explicit disable. Remove the key or set platforms.%s.enabled: true to "
         "turn it back on.",
-        platform.value, platform.value, creds, platform.value,
+        platform.value,
+        platform.value,
+        creds,
+        platform.value,
     )
 
 
@@ -77,12 +82,21 @@ def _loading_secondary_under_multiplexer() -> bool:
     home override; the runner sets the multiplex flag). Same signal ``gateway.config`` uses for scoped reads."""
     from agent.secret_scope import is_multiplex_active
     from clawk_constants import get_clawk_home_override, profile_name_for_home
+
     override = get_clawk_home_override()
-    return bool(override) and is_multiplex_active() and profile_name_for_home(override) != "default"
+    return (
+        bool(override)
+        and is_multiplex_active()
+        and profile_name_for_home(override) != "default"
+    )
 
 
 def _enable_from_env(
-    config: GatewayConfig, platform: Platform, *, pop_marker: bool = False, warn: bool = True
+    config: GatewayConfig,
+    platform: Platform,
+    *,
+    pop_marker: bool = False,
+    warn: bool = True,
 ) -> PlatformConfig:
     """Enable *platform* on env credentials unless config.yaml explicitly disabled it.
 
@@ -93,11 +107,16 @@ def _enable_from_env(
     """
     platform_config = config.platforms.setdefault(platform, PlatformConfig())
     extra = platform_config.extra
-    explicit = extra.pop("_enabled_explicit", False) if pop_marker else extra.get("_enabled_explicit", False)
+    explicit = (
+        extra.pop("_enabled_explicit", False)
+        if pop_marker
+        else extra.get("_enabled_explicit", False)
+    )
     if platform_config.enabled:
         return platform_config
     if not explicit and not (
-        platform.value in SHARED_LISTENER_MIRROR_PLATFORMS and _loading_secondary_under_multiplexer()
+        platform.value in SHARED_LISTENER_MIRROR_PLATFORMS
+        and _loading_secondary_under_multiplexer()
     ):
         # A secondary's API_SERVER_KEY / WEBHOOK_ENABLED (the docs require the key in its .env for
         # /p/<profile>/ auth) must not turn into listener intent: the default profile's listener already
@@ -114,10 +133,19 @@ def _api_server(config: GatewayConfig) -> None:
     key = getenv("API_SERVER_KEY")
     if not _has_usable_api_server_key(key):
         return
-    extra = _enable_from_env(config, Platform.API_SERVER, pop_marker=True, warn=False).extra
+    extra = _enable_from_env(
+        config, Platform.API_SERVER, pop_marker=True, warn=False
+    ).extra
     extra["key"] = key
     csv_extras(extra, (("cors_origins", getenv("API_SERVER_CORS_ORIGINS")),))
-    env_extras(extra, (("port", "API_SERVER_PORT", INT), ("host", "API_SERVER_HOST"), ("model_name", "API_SERVER_MODEL_NAME")))
+    env_extras(
+        extra,
+        (
+            ("port", "API_SERVER_PORT", INT),
+            ("host", "API_SERVER_HOST"),
+            ("model_name", "API_SERVER_MODEL_NAME"),
+        ),
+    )
 
 
 def _webhook(config: GatewayConfig) -> None:
@@ -129,7 +157,10 @@ def _webhook(config: GatewayConfig) -> None:
         if enabled
         else config.platforms[Platform.WEBHOOK]
     )
-    env_extras(webhook_config.extra, (("port", "WEBHOOK_PORT", INT), ("secret", "WEBHOOK_SECRET")))
+    env_extras(
+        webhook_config.extra,
+        (("port", "WEBHOOK_PORT", INT), ("secret", "WEBHOOK_SECRET")),
+    )
 
 
 def _msgraph_webhook(config: GatewayConfig) -> None:
@@ -137,16 +168,27 @@ def _msgraph_webhook(config: GatewayConfig) -> None:
     client_state = getenv("MSGRAPH_WEBHOOK_CLIENT_STATE")
     resources = getenv("MSGRAPH_WEBHOOK_ACCEPTED_RESOURCES")
     allowed_cidrs = getenv("MSGRAPH_WEBHOOK_ALLOWED_SOURCE_CIDRS")
-    if not (enabled or Platform.MSGRAPH_WEBHOOK in config.platforms or getenv("MSGRAPH_WEBHOOK_PORT")
-            or client_state or resources or allowed_cidrs):
+    if not (
+        enabled
+        or Platform.MSGRAPH_WEBHOOK in config.platforms
+        or getenv("MSGRAPH_WEBHOOK_PORT")
+        or client_state
+        or resources
+        or allowed_cidrs
+    ):
         return
-    msgraph_cfg = config.platforms.setdefault(Platform.MSGRAPH_WEBHOOK, PlatformConfig())
+    msgraph_cfg = config.platforms.setdefault(
+        Platform.MSGRAPH_WEBHOOK, PlatformConfig()
+    )
     if enabled:  # same guard as webhook, but READ (don't pop) the marker: the relay pass still consults it
         _enable_from_env(config, Platform.MSGRAPH_WEBHOOK, warn=False)
     env_extras(msgraph_cfg.extra, (("port", "MSGRAPH_WEBHOOK_PORT", INT),))
     if client_state:
         msgraph_cfg.extra["client_state"] = client_state
-    csv_extras(msgraph_cfg.extra, (("accepted_resources", resources), ("allowed_source_cidrs", allowed_cidrs)))
+    csv_extras(
+        msgraph_cfg.extra,
+        (("accepted_resources", resources), ("allowed_source_cidrs", allowed_cidrs)),
+    )
 
 
 def _plugin_probe_seed(entry) -> Optional[dict]:
@@ -167,9 +209,13 @@ def _plugin_is_configured(entry, existing_extra: dict, seed: Optional[dict]) -> 
         for k, v in (seed or {}).items():
             if k != "home_channel":
                 existing_extra.setdefault(k, v)
-        configured = bool(entry.is_connected(PlatformConfig(enabled=True, extra=existing_extra)))
+        configured = bool(
+            entry.is_connected(PlatformConfig(enabled=True, extra=existing_extra))
+        )
     except Exception as exc:
-        logger.debug("is_connected for %s raised: %s — skipping enablement", entry.name, exc)
+        logger.debug(
+            "is_connected for %s raised: %s — skipping enablement", entry.name, exc
+        )
         return False
     if not configured:
         logger.debug(
@@ -190,11 +236,19 @@ def _enable_plugin_platform(config: GatewayConfig, entry) -> None:
     already_enabled = existing_cfg is not None and existing_cfg.enabled
     existing_extra = dict(existing_cfg.extra or {}) if existing_cfg is not None else {}
     # Never re-enable a platform the user explicitly disabled (marker set by the YAML loader).
-    if existing_cfg is not None and not already_enabled and existing_extra.get("_enabled_explicit", False):
+    if (
+        existing_cfg is not None
+        and not already_enabled
+        and existing_extra.get("_enabled_explicit", False)
+    ):
         return
     seed = _plugin_probe_seed(entry)
     # is_connected gates only platforms not already enabled by YAML/env.
-    if not already_enabled and entry.is_connected is not None and not _plugin_is_configured(entry, existing_extra, seed):
+    if (
+        not already_enabled
+        and entry.is_connected is not None
+        and not _plugin_is_configured(entry, existing_extra, seed)
+    ):
         return
     # Dependencies LAST — only for platforms already enabled or past the credential gate.
     try:
@@ -214,13 +268,17 @@ def _enable_plugin_platform(config: GatewayConfig, entry) -> None:
         return
     platform_config = config.platforms.setdefault(platform, PlatformConfig())
     platform_config.enabled = True
-    if seed:  # commit the probe's env-seeded extras (env_enablement_fn is never called twice)
+    if (
+        seed
+    ):  # commit the probe's env-seeded extras (env_enablement_fn is never called twice)
         seed = dict(seed)
         home = seed.pop("home_channel", None)
         platform_config.extra.update(seed)
         if isinstance(home, dict) and home.get("chat_id"):
             platform_config.home_channel = HomeChannel(
-                platform=platform, chat_id=str(home["chat_id"]), name=str(home.get("name") or "Home"),
+                platform=platform,
+                chat_id=str(home["chat_id"]),
+                name=str(home.get("name") or "Home"),
                 thread_id=str(home["thread_id"]) if home.get("thread_id") else None,
             )
 
@@ -232,10 +290,14 @@ def _configured_plugin_entries(config: GatewayConfig) -> list:
     block is in config.platforms), so the YAML is not parsed a second time here."""
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent
         from gateway.platform_registry import platform_registry
         from gateway.platform_activation import configured_plugin_entries
-        return configured_plugin_entries(platform_registry, yaml_cfg={}, platform_names=config.platforms)
+
+        return configured_plugin_entries(
+            platform_registry, yaml_cfg={}, platform_names=config.platforms
+        )
     except Exception as e:  # health: allow BLE001 -- moved from the plugin pass: discovery never breaks config load
         logger.debug("Plugin platform discovery for env overrides failed: %s", e)
         return []
@@ -248,8 +310,11 @@ def _bundled_env_fallbacks(config: GatewayConfig, entries: list) -> list:
     from types import SimpleNamespace
     from gateway.platform_activation import activation_predicate
     from gateway.platform_env import _BUNDLED_ENV_SIBLINGS, bundled_env_rows
+
     have = {getattr(e, "name", "") for e in entries}
-    names = (set(Platform._scan_bundled_plugin_platforms()[0]) | set(_BUNDLED_ENV_SIBLINGS)) - have
+    names = (
+        set(Platform._scan_bundled_plugin_platforms()[0]) | set(_BUNDLED_ENV_SIBLINGS)
+    ) - have
     if not names:
         return []
     wanted = activation_predicate(yaml_cfg={}, platform_names=config.platforms)
@@ -257,7 +322,11 @@ def _bundled_env_fallbacks(config: GatewayConfig, entries: list) -> list:
     for name in sorted(names):
         rows = bundled_env_rows(name) if wanted(name) else None
         if rows and rows[0]:
-            out.append(SimpleNamespace(name=name, env_overrides=rows[0], env_enable_credentials=rows[1]))
+            out.append(
+                SimpleNamespace(
+                    name=name, env_overrides=rows[0], env_enable_credentials=rows[1]
+                )
+            )
     return out
 
 
@@ -310,7 +379,11 @@ def _relay(config: GatewayConfig) -> None:
     """
     relay_url_env = getenv("GATEWAY_RELAY_URL").strip()
     existing_relay = config.platforms.get(Platform.RELAY)
-    relay_url_yaml = str(existing_relay.extra.get("relay_url") or "").strip() if existing_relay else ""
+    relay_url_yaml = (
+        str(existing_relay.extra.get("relay_url") or "").strip()
+        if existing_relay
+        else ""
+    )
     relay_url_val = relay_url_env or relay_url_yaml
     if relay_url_val:
         relay_config = _enable_from_env(config, Platform.RELAY)
@@ -319,7 +392,9 @@ def _relay(config: GatewayConfig) -> None:
         if not relay_config.enabled:
             return
 
-    if not relay_url_env or is_truthy_value(getenv("GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS")):
+    if not relay_url_env or is_truthy_value(
+        getenv("GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS")
+    ):
         return
     skip = {Platform.RELAY, Platform.LOCAL, Platform.API_SERVER, Platform.WEBHOOK}
     for platform, platform_config in config.platforms.items():
@@ -357,7 +432,9 @@ def _apply_env_overrides(config: GatewayConfig) -> None:
     disabling (needs every platform's final ``enabled``), and the marker scrub, which must be last.
     """
     entries = _configured_plugin_entries(config)
-    _apply_plugin_env_overrides(config, entries + _bundled_env_fallbacks(config, entries))
+    _apply_plugin_env_overrides(
+        config, entries + _bundled_env_fallbacks(config, entries)
+    )
     _api_server(config)
     _webhook(config)
     _msgraph_webhook(config)

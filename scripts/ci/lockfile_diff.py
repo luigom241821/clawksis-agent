@@ -115,7 +115,9 @@ def _git_show(ref: str, path: str, repo_root: str) -> str | None:
     proc = subprocess.run(
         ["git", "show", f"{ref}:{path}"],
         capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=repo_root,
         check=False,
     )
@@ -126,7 +128,9 @@ def _tracked_lockfiles(ref: str, repo_root: str) -> set[str]:
     proc = subprocess.run(
         ["git", "ls-tree", "-r", "--name-only", ref],
         capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=repo_root,
         check=True,
     )
@@ -139,7 +143,9 @@ def _tracked_lockfiles(ref: str, repo_root: str) -> set[str]:
 
 def diff_refs(base: str, head: str, repo_root: str = ".") -> dict[str, dict[str, list]]:
     """Diff every package-lock.json tracked at either ref."""
-    lockfiles = _tracked_lockfiles(base, repo_root) | _tracked_lockfiles(head, repo_root)
+    lockfiles = _tracked_lockfiles(base, repo_root) | _tracked_lockfiles(
+        head, repo_root
+    )
     diffs = {}
     for path in sorted(lockfiles):
         base_text = _git_show(base, path, repo_root)

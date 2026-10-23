@@ -20,13 +20,13 @@ Both prongs together close the FD-recycling window. The tests below pin
 prong 1 and the agent's stranger-thread abort entry point (no network, no
 real sockets).
 """
+
 from __future__ import annotations
 
 import logging
 import socket as _socket
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,9 @@ def test_force_close_tcp_sockets_shutdown_only_no_close():
     n = force_close_tcp_sockets(client)
 
     assert n == 1
-    assert sock.shutdown_calls == 1, "shutdown() must run — it's how we unblock the worker"
+    assert sock.shutdown_calls == 1, (
+        "shutdown() must run — it's how we unblock the worker"
+    )
     assert sock.close_calls == 0, (
         "close() must NOT run from this helper — releasing the FD here is the "
         "race that wrote TLS bytes into kanban.db (#29507)"
@@ -104,7 +106,6 @@ def test_force_close_tcp_sockets_uses_shut_rdwr():
     force_close_tcp_sockets(client)
 
     assert captured == [_socket.SHUT_RDWR]
-
 
 
 # ---------------------------------------------------------------------------

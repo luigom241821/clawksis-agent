@@ -7,7 +7,12 @@ import pytest
 
 from clawk_cli import skills_hub as cli_hub
 from clawk_cli.subcommands.skills import build_skills_parser
-from tools.skills_hub_github import GitHubAuth, GitHubSource, _tap_cache_key, github_provider_for
+from tools.skills_hub_github import (
+    GitHubAuth,
+    GitHubSource,
+    _tap_cache_key,
+    github_provider_for,
+)
 from tools.skills_hub_models import SkillMeta, _cache_metas, _skill_meta_to_dict
 from tools.skills_hub_official import ClawksisIndexSource
 from tools.skills_hub_search import _clawk_index_cache_file, parallel_search_sources
@@ -17,8 +22,11 @@ from tools.skills_hub_search import _clawk_index_cache_file, parallel_search_sou
 def catalog(request, monkeypatch):
     def entry(repo, provider, name):
         return SkillMeta(
-            name=name, description="GPU utilities", source="github",
-            identifier=f"{repo}/skills/{name}", trust_level="trusted",
+            name=name,
+            description="GPU utilities",
+            source="github",
+            identifier=f"{repo}/skills/{name}",
+            trust_level="trusted",
             extra={"provider": provider},
         )
 
@@ -30,14 +38,19 @@ def catalog(request, monkeypatch):
     if request.param == "index":
         path = _clawk_index_cache_file()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"skills": [_skill_meta_to_dict(m) for m in others + wanted]}), encoding="utf-8")
+        path.write_text(
+            json.dumps({"skills": [_skill_meta_to_dict(m) for m in others + wanted]}),
+            encoding="utf-8",
+        )
         source = ClawksisIndexSource(auth)
     else:
         source = GitHubSource(auth)
         for tap in source.taps:
             key = _tap_cache_key(tap["repo"], tap.get("path", ""), tap.get("bucket"))
             label = github_provider_for(tap["repo"])
-            entries = others if label == "OpenAI" else wanted if label == "NVIDIA" else []
+            entries = (
+                others if label == "OpenAI" else wanted if label == "NVIDIA" else []
+            )
             _cache_metas(key, entries)
     monkeypatch.setattr(cli_hub, "_sources", lambda: [source])
     return source, others, wanted
@@ -46,20 +59,37 @@ def catalog(request, monkeypatch):
 def test_cli_provider_search_finds_matches_beyond_global_window(catalog, capsys):
     source, others, wanted = catalog
     parser = argparse.ArgumentParser(prog="clawk")
-    build_skills_parser(parser.add_subparsers(dest="command"), cmd_skills=cli_hub.skills_command)
+    build_skills_parser(
+        parser.add_subparsers(dest="command"), cmd_skills=cli_hub.skills_command
+    )
 
     for query in ("gpu", ""):
-        args = parser.parse_args([
-            "skills", "search", query, "--source", "nvidia", "--limit", "2", "--json",
-        ])
+        args = parser.parse_args(
+            [
+                "skills",
+                "search",
+                query,
+                "--source",
+                "nvidia",
+                "--limit",
+                "2",
+                "--json",
+            ]
+        )
         args.func(args)
         result = json.loads(capsys.readouterr().out)
-        assert [row["identifier"] for row in result] == [m.identifier for m in wanted[:2]]
+        assert [row["identifier"] for row in result] == [
+            m.identifier for m in wanted[:2]
+        ]
 
     # Filtering one call must not mutate the cached catalog for later searches.
-    assert [m.identifier for m in source.search("gpu", limit=2)] == [m.identifier for m in others[:2]]
+    assert [m.identifier for m in source.search("gpu", limit=2)] == [
+        m.identifier for m in others[:2]
+    ]
 
-    args = parser.parse_args(["skills", "search", "gpu", "--source", "anthropic", "--json"])
+    args = parser.parse_args(
+        ["skills", "search", "gpu", "--source", "anthropic", "--json"]
+    )
     args.func(args)
     assert json.loads(capsys.readouterr().out) == []
 
@@ -67,7 +97,9 @@ def test_cli_provider_search_finds_matches_beyond_global_window(catalog, capsys)
 def test_parallel_provider_search_applies_per_source_limit_after_filter(catalog):
     source, _, wanted = catalog
     results, counts, timed_out = parallel_search_sources(
-        [source], query="gpu", source_filter=" NVIDIA ",
+        [source],
+        query="gpu",
+        source_filter=" NVIDIA ",
         per_source_limits={source.source_id(): 2},
     )
     assert [m.identifier for m in results] == [m.identifier for m in wanted[:2]]

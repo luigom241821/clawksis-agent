@@ -84,8 +84,8 @@ def _live_main_key(key: str) -> Optional[str]:
     if key in _live_connections:
         return key
     for suffix in ("-wal", "-shm"):
-        if key.endswith(suffix) and key[:-len(suffix)] in _live_connections:
-            return key[:-len(suffix)]
+        if key.endswith(suffix) and key[: -len(suffix)] in _live_connections:
+            return key[: -len(suffix)]
     return None
 
 
@@ -145,7 +145,11 @@ def _tracking_factory(factory: type) -> type:
 
 
 def connect_tracked(
-    path: Path | str, *, tracking_path: Path | str | None = None, connect_fn=None, **kwargs,
+    path: Path | str,
+    *,
+    tracking_path: Path | str | None = None,
+    connect_fn=None,
+    **kwargs,
 ) -> sqlite3.Connection:
     """``sqlite3.connect`` that registers the connection for the lifetime of the fd (released on
     ``close()``). Use for any database that might be byte-probed (``state.db``, ``kanban.db``).
@@ -157,7 +161,11 @@ def connect_tracked(
     with _live_lock:
         conn = opener(str(path), **kwargs)
         try:
-            resolved = _key(tracking_path) if tracking_path is not None else _canonical_db_path(conn)
+            resolved = (
+                _key(tracking_path)
+                if tracking_path is not None
+                else _canonical_db_path(conn)
+            )
             if resolved is None:
                 return conn  # in-memory / unnamed: nothing on disk to byte-probe
             if not isinstance(conn, _TrackingMixin):
@@ -221,7 +229,9 @@ def file_length_matches_header(conn: sqlite3.Connection) -> Optional[bool]:
         return None
 
 
-def read_header_bytes_preopen(path: Path | str, *, length: int = 100, force: bool = False) -> Optional[bytes]:
+def read_header_bytes_preopen(
+    path: Path | str, *, length: int = 100, force: bool = False
+) -> Optional[bytes]:
     """Read the first *length* bytes of *path* -- only when no connection is live. The ONLY
     sanctioned byte-level read of a database file, for first-open validation (real SQLite? zeroed?
     overwritten?). Check and open/read/close run together under ``_live_lock`` so a connection
@@ -231,7 +241,8 @@ def read_header_bytes_preopen(path: Path | str, *, length: int = 100, force: boo
             logger.debug(
                 "refusing byte-level read of %s: a live connection exists in "
                 "this process and close() would cancel its POSIX locks",
-                path)
+                path,
+            )
             return None
         try:
             with open(path, "rb") as handle:
@@ -253,5 +264,6 @@ def offline_file_access(path: Path | str, *, what: str = "read"):
                 f"Refusing to {what} {path}: a connection to {subject} is still open "
                 "in this process, and raw file access would cancel that "
                 "connection's POSIX advisory locks. Close all database "
-                "handles (stop the gateway/dashboard) and retry.")
+                "handles (stop the gateway/dashboard) and retry."
+            )
         yield

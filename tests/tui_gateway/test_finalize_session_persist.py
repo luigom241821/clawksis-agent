@@ -52,8 +52,6 @@ def _make_session(agent=None, history=None, session_key="test_key_001"):
 class TestFinalizeSessionPersist:
     """Verify _finalize_session flushes messages via _persist_session."""
 
-
-
     def test_commit_memory_still_called(self):
         """Existing memory commit path is preserved."""
         from tui_gateway.server import _finalize_session
@@ -66,9 +64,6 @@ class TestFinalizeSessionPersist:
 
         agent.commit_memory_session.assert_called_once()
 
-
-
-
     def test_already_finalized_skips(self):
         """Double-finalize is a no-op."""
         from tui_gateway.server import _finalize_session
@@ -80,8 +75,6 @@ class TestFinalizeSessionPersist:
         _finalize_session(session)
 
         agent._persist_session.assert_not_called()
-
-
 
 
 class TestFinalizeSessionPersistE2E:
@@ -169,7 +162,9 @@ class TestFinalizeSessionPersistE2E:
             {"role": "assistant", "content": "hi there"},
         ]
         for m in loaded:
-            db.append_message(session_id=session_id, role=m["role"], content=m["content"])
+            db.append_message(
+                session_id=session_id, role=m["role"], content=m["content"]
+            )
         monkeypatch.setattr(srv, "_get_db", lambda: db)
 
         # Resumed session: history hydrated from the DB, no turn ran, so the
@@ -194,7 +189,9 @@ class TestOnSessionEndHook:
         agent = _make_agent(session_id="hook_test_001")
         agent.model = "claude-sonnet-4"
         agent.platform = "tui"
-        session = _make_session(agent=agent, history=[{"role": "user", "content": "test"}])
+        session = _make_session(
+            agent=agent, history=[{"role": "user", "content": "test"}]
+        )
 
         _finalize_session(session, end_reason="tui_close")
 

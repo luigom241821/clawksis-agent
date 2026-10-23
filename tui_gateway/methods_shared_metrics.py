@@ -31,14 +31,22 @@ def _shared_metrics_record_setup_completed(cfg) -> None:
 
     model = cfg.get("model") if isinstance(cfg, dict) else None
     provider = model.get("provider") if isinstance(model, dict) else None
-    record_setup_completed(surface="desktop", provider=provider if isinstance(provider, str) and provider else None)
+    record_setup_completed(
+        surface="desktop",
+        provider=provider if isinstance(provider, str) and provider else None,
+    )
 
 
 def _tui_model_friction(signal, session, turns=1):
     from clawk_cli.observability.shared_metrics_model import record_model_friction
+
     record_model_friction(
-        signal, session_id=session.get("session_key"), agent=session.get("agent"),
-        clawk_home=session.get("profile_home"), turns=turns)
+        signal,
+        session_id=session.get("session_key"),
+        agent=session.get("agent"),
+        clawk_home=session.get("profile_home"),
+        turns=turns,
+    )
 
 
 @method("shared_metrics.status")
@@ -62,6 +70,7 @@ def _(rid, params: dict) -> dict:
     enabled = params.get("enabled") is True
     send = enabled and params.get("send") is True
     from clawk_cli.observability.shared_metrics_consent import set_answer
+
     try:
         cfg = _load_cfg_raw()
         set_answer(cfg, enabled, send)
@@ -69,11 +78,16 @@ def _(rid, params: dict) -> dict:
     except Exception as e:
         return _err(rid, 5096, str(e))
     from clawk_cli.setup import _record_send_consent_change
+
     # Unconditional, like the wizard: a send key already false may still have an open window.
     _record_send_consent_change(enabled=send)
     if not enabled:
-        from clawk_cli.observability.shared_metrics_desktop import purge_onboarding_latches
-        from clawk_cli.observability.shared_metrics_process import purge_pending_receipts
+        from clawk_cli.observability.shared_metrics_desktop import (
+            purge_onboarding_latches,
+        )
+        from clawk_cli.observability.shared_metrics_process import (
+            purge_pending_receipts,
+        )
         from clawk_constants import get_clawk_home
 
         purge_onboarding_latches()
@@ -91,7 +105,9 @@ def _(rid, params: dict) -> dict:
     each command lands exactly once. Always ``{ok: true}`` (the events API never raises)."""
     from clawk_cli.observability.shared_metrics_events import record_slash_command
 
-    record_slash_command(command=str(params.get("command") or ""), surface=_resolve_session_platform())
+    record_slash_command(
+        command=str(params.get("command") or ""), surface=_resolve_session_platform()
+    )
     return _ok(rid, {"ok": True})
 
 
@@ -102,10 +118,13 @@ def _(rid, params: dict) -> dict:
     ready time once per launch; ``launch_id`` latches it here too, so a reconnect to this backend
     never re-counts. A Desktop on a URL/cloud backend has no ``CLAWK_DESKTOP`` here, so the
     client's declared surface wins over env detection. Always ``{ok: true}``."""
-    from clawk_cli.observability.shared_metrics_startup import record_rpc_startup_latency
+    from clawk_cli.observability.shared_metrics_startup import (
+        record_rpc_startup_latency,
+    )
 
     record_rpc_startup_latency(
-        client_surface=params.get("surface") or _resolve_session_platform(), elapsed_ms=params.get("elapsed_ms"),
+        client_surface=params.get("surface") or _resolve_session_platform(),
+        elapsed_ms=params.get("elapsed_ms"),
         launch_id=params.get("launch_id"),
     )
     return _ok(rid, {"ok": True})
@@ -120,11 +139,15 @@ def _(rid, params: dict) -> dict:
     from clawk_cli.observability.shared_metrics_update import record_desktop_update
 
     record_desktop_update(
-        outcome=params.get("outcome"), failed_stage=params.get("failed_stage"),
-        duration_ms=params.get("duration_ms"), mechanism=params.get("mechanism"),
+        outcome=params.get("outcome"),
+        failed_stage=params.get("failed_stage"),
+        duration_ms=params.get("duration_ms"),
+        mechanism=params.get("mechanism"),
         from_commit_date=params.get("from_commit_date"),
     )
     return _ok(rid, {"ok": True})
+
+
 # ---- end v4 reliability ----
 
 
@@ -134,7 +157,9 @@ def _(rid, params: dict) -> dict:
 def _(rid, params: dict) -> dict:
     """Desktop reports each area the user opened, at most once per UTC day (latched on both sides).
     Always ``{ok: true}``; a no-op unless shared metrics are on."""
-    from clawk_cli.observability.shared_metrics_desktop import record_desktop_feature_use
+    from clawk_cli.observability.shared_metrics_desktop import (
+        record_desktop_feature_use,
+    )
 
     record_desktop_feature_use(area=params.get("area"))
     return _ok(rid, {"ok": True})
@@ -169,7 +194,11 @@ def _(rid, params: dict) -> dict:
     and compares it to the default itself; only the key and the direction are recorded."""
     from clawk_cli.observability.shared_metrics_desktop import record_desktop_dislike
 
-    record_desktop_dislike(signal=params.get("signal"), target=params.get("target"), setting=params.get("setting"))
+    record_desktop_dislike(
+        signal=params.get("signal"),
+        target=params.get("target"),
+        setting=params.get("setting"),
+    )
     return _ok(rid, {"ok": True})
 
 
@@ -181,10 +210,14 @@ def _(rid, params: dict) -> dict:
     from clawk_cli.observability.shared_metrics_desktop import record_desktop_daily
 
     recorded = record_desktop_daily(
-        day=params.get("day"), modes=params.get("modes"), actions=params.get("actions"),
+        day=params.get("day"),
+        modes=params.get("modes"),
+        actions=params.get("actions"),
         bot_count=params.get("bot_count"),
     )
     return _ok(rid, {"recorded": recorded})
+
+
 # ---- end v5 desktop ----
 
 

@@ -32,42 +32,57 @@ def validate_coalesce_config(route_name: str, route: dict) -> None:
         return
     for exclusive in ("deliver_only", "cron_job"):
         if route.get(exclusive):
-            raise ValueError(f"[webhook] Route '{route_name}' combines {exclusive} with coalesce. Coalescing only "
-                             f"applies to agent-mode routes.")
+            raise ValueError(
+                f"[webhook] Route '{route_name}' combines {exclusive} with coalesce. Coalescing only "
+                f"applies to agent-mode routes."
+            )
     key = coalesce.get("key") if isinstance(coalesce, dict) else None
     if not isinstance(key, str) or not key.strip():
-        raise ValueError(f"[webhook] Route '{route_name}' has a coalesce block without a non-empty string 'key'. "
-                         f"Set coalesce.key to a payload field (e.g. 'pull_request.number') or a template "
-                         f"(e.g. '{{repository.full_name}}#{{number}}').")
+        raise ValueError(
+            f"[webhook] Route '{route_name}' has a coalesce block without a non-empty string 'key'. "
+            f"Set coalesce.key to a payload field (e.g. 'pull_request.number') or a template "
+            f"(e.g. '{{repository.full_name}}#{{number}}')."
+        )
     for field in ("window_seconds", "max_wait_seconds"):
         value = coalesce.get(field)
-        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0):
-            raise ValueError(f"[webhook] Route '{route_name}' coalesce.{field} must be a positive number, got {value!r}.")
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0
+        ):
+            raise ValueError(
+                f"[webhook] Route '{route_name}' coalesce.{field} must be a positive number, got {value!r}."
+            )
 
 
 @dataclass
 class PendingEvent:
     """Newest event of a coalesce group plus the group's bookkeeping."""
+
     payload: Any
     prompt: str
     delivery_id: str
     first_at: float
     count: int
     dispatch_kwargs: dict[str, Any]
-    superseded: tuple[str, ...] = ()  # delivery ids of the earlier events this one replaced
+    superseded: tuple[
+        str, ...
+    ] = ()  # delivery ids of the earlier events this one replaced
 
     def prompt_with_note(self) -> str:
         if self.count <= 1:
             return self.prompt
-        return (f"{self.prompt}\n\n(Note: {self.count} webhook events for this item arrived in quick succession "
-                f"and were coalesced — this is the most recent one; earlier events are superseded.)")
+        return (
+            f"{self.prompt}\n\n(Note: {self.count} webhook events for this item arrived in quick succession "
+            f"and were coalesced — this is the most recent one; earlier events are superseded.)"
+        )
 
 
 class WebhookCoalescer:
     """Debounce-and-supersede buffer. ``dispatch(payload, prompt, delivery_id, **kwargs)`` is the adapter's
     agent-run spawner. Only ever driven from the aiohttp event loop → no locking."""
 
-    def __init__(self, dispatch: Callable[..., Any], render: Callable[[str, dict, str, str], str]):
+    def __init__(
+        self, dispatch: Callable[..., Any], render: Callable[[str, dict, str, str], str]
+    ):
         self._dispatch = dispatch
         self._render = render
         self._pending: dict[str, PendingEvent] = {}
@@ -77,7 +92,9 @@ class WebhookCoalescer:
     def pending(self) -> dict[str, PendingEvent]:
         return self._pending
 
-    def group_key(self, route_name: str, key_template: str, payload: dict, event_type: str) -> Optional[str]:
+    def group_key(
+        self, route_name: str, key_template: str, payload: dict, event_type: str
+    ) -> Optional[str]:
         """``"{route}|{rendered key}"`` for a bare dotted field or a brace template; ``None`` when a field did
         not resolve — unrelated entities must not collapse into one shared group (review finding on #92066)."""
         template = key_template.strip()
@@ -88,27 +105,56 @@ class WebhookCoalescer:
             return None
         return f"{route_name}|{rendered}"
 
-    def enqueue(self, *, route_name: str, coalesce: dict, payload: dict, event_type: str, prompt: str,
-                delivery_id: str, now: float, **dispatch_kwargs) -> bool:
+    def enqueue(
+        self,
+        *,
+        route_name: str,
+        coalesce: dict,
+        payload: dict,
+        event_type: str,
+        prompt: str,
+        delivery_id: str,
+        now: float,
+        **dispatch_kwargs,
+    ) -> bool:
         """Buffer one event; False when the key did not resolve and the caller must dispatch immediately."""
         group_key = self.group_key(route_name, coalesce["key"], payload, event_type)
         if group_key is None:
-            logger.info("[webhook] coalesce key %r unresolved for delivery %s on route %s — dispatching immediately",
-                        coalesce["key"], delivery_id, route_name)
+            logger.info(
+                "[webhook] coalesce key %r unresolved for delivery %s on route %s — dispatching immediately",
+                coalesce["key"],
+                delivery_id,
+                route_name,
+            )
             return False
         window = float(coalesce.get("window_seconds", DEFAULT_WINDOW_SECONDS))
         max_wait = float(coalesce.get("max_wait_seconds", DEFAULT_MAX_WAIT_SECONDS))
         existing = self._pending.get(group_key)
         first_at = existing.first_at if existing else now
         count = existing.count + 1 if existing else 1
-        dispatch_kwargs = {**dispatch_kwargs, "route_name": route_name, "event_type": event_type}
+        dispatch_kwargs = {
+            **dispatch_kwargs,
+            "route_name": route_name,
+            "event_type": event_type,
+        }
         superseded = (*existing.superseded, existing.delivery_id) if existing else ()
-        self._pending[group_key] = PendingEvent(payload=payload, prompt=prompt, delivery_id=delivery_id,
-                                                first_at=first_at, count=count, dispatch_kwargs=dispatch_kwargs,
-                                                superseded=superseded)
+        self._pending[group_key] = PendingEvent(
+            payload=payload,
+            prompt=prompt,
+            delivery_id=delivery_id,
+            first_at=first_at,
+            count=count,
+            dispatch_kwargs=dispatch_kwargs,
+            superseded=superseded,
+        )
         if existing is not None:
-            logger.info("[webhook] coalesced delivery %s superseded by %s (group=%s, %d events)",
-                        existing.delivery_id, delivery_id, group_key, count)
+            logger.info(
+                "[webhook] coalesced delivery %s superseded by %s (group=%s, %d events)",
+                existing.delivery_id,
+                delivery_id,
+                group_key,
+                count,
+            )
         old = self._timers.pop(group_key, None)
         if old is not None and not old.done():
             old.cancel()
@@ -129,10 +175,20 @@ class WebhookCoalescer:
             self._settle(group_key, entry)
 
     def _settle(self, group_key: str, entry: PendingEvent) -> Any:
-        logger.info("[webhook] coalesce settled group=%s events=%d delivery=%s", group_key, entry.count,
-                    entry.delivery_id)
-        return self._dispatch(entry.payload, entry.prompt_with_note(), entry.delivery_id, time.time(),
-                              **entry.dispatch_kwargs, superseded=entry.superseded)
+        logger.info(
+            "[webhook] coalesce settled group=%s events=%d delivery=%s",
+            group_key,
+            entry.count,
+            entry.delivery_id,
+        )
+        return self._dispatch(
+            entry.payload,
+            entry.prompt_with_note(),
+            entry.delivery_id,
+            time.time(),
+            **entry.dispatch_kwargs,
+            superseded=entry.superseded,
+        )
 
     async def flush(self) -> None:
         """Dispatch every pending group now and wait until each run is handed to the runner, so an adapter
@@ -147,7 +203,9 @@ class WebhookCoalescer:
             try:
                 handed_off.append(self._settle(group_key, entry))
             except Exception:
-                logger.exception("[webhook] failed to flush coalesced group %s", group_key)
+                logger.exception(
+                    "[webhook] failed to flush coalesced group %s", group_key
+                )
         awaitables = [t for t in handed_off if isinstance(t, asyncio.Future)]
         if awaitables:
             await asyncio.gather(*awaitables, return_exceptions=True)

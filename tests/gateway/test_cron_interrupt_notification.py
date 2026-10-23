@@ -21,6 +21,7 @@ from gateway.config import Platform
 from tests.gateway.restart_test_helpers import make_restart_runner
 from tools import browser_tool_lifecycle as bt_lifecycle
 
+
 @pytest.fixture(autouse=True)
 def _reset_cron_running_set():
     import cron.scheduler as sched
@@ -31,6 +32,7 @@ def _reset_cron_running_set():
     sched._running_job_ids.clear()
     sched._interrupted_job_ids.clear()
 
+
 def _telegram_job(job_id="be62d36a9914", name="daily-digest", chat_id="123456"):
     return {
         "id": job_id,
@@ -38,8 +40,10 @@ def _telegram_job(job_id="be62d36a9914", name="daily-digest", chat_id="123456"):
         "deliver": f"telegram:{chat_id}",
     }
 
+
 def _telegram_target(chat_id="123456"):
     return {"platform": "telegram", "chat_id": chat_id, "thread_id": None}
+
 
 def _bind_notifier(runner):
     from gateway.run import GatewayRunner
@@ -52,6 +56,7 @@ def _bind_notifier(runner):
     )
     return runner
 
+
 class TestNotifyInterruptedCronJobs:
     @pytest.mark.asyncio
     async def test_owner_is_told_the_run_was_killed(self):
@@ -59,9 +64,13 @@ class TestNotifyInterruptedCronJobs:
         _bind_notifier(runner)
         job = _telegram_job()
 
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target()]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target()],
+            ),
+        ):
             sent = await runner._notify_interrupted_cron_jobs([job["id"]])
 
         assert sent == 1
@@ -72,18 +81,29 @@ class TestNotifyInterruptedCronJobs:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("setting", [None, False, True])
-    async def test_interrupt_notice_is_a_suppressible_diagnostic(self, tmp_path, monkeypatch, setting):
+    async def test_interrupt_notice_is_a_suppressible_diagnostic(
+        self, tmp_path, monkeypatch, setting
+    ):
         import json
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("CLAWK_MANAGED_DIR", str(tmp_path / "managed"))
-        cfg = {} if setting is None else {"display": {"suppress_warning_notifications": setting}}
+        cfg = (
+            {}
+            if setting is None
+            else {"display": {"suppress_warning_notifications": setting}}
+        )
         (tmp_path / "config.yaml").write_text(json.dumps(cfg))
         runner, adapter = make_restart_runner()
         _bind_notifier(runner)
         job = _telegram_job()
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target()]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target()],
+            ),
+        ):
             sent = await runner._notify_interrupted_cron_jobs([job["id"]])
         expected = 0 if setting is True else 1
         assert sent == expected
@@ -98,8 +118,10 @@ class TestNotifyInterruptedCronJobs:
         _bind_notifier(runner)
         job = {"id": "j1", "name": "local-job", "deliver": "local"}
 
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets", return_value=[]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch("cron.scheduler._resolve_delivery_targets", return_value=[]),
+        ):
             sent = await runner._notify_interrupted_cron_jobs(["j1"])
 
         assert sent == 0
@@ -112,9 +134,13 @@ class TestNotifyInterruptedCronJobs:
         runner.config.platforms[Platform.TELEGRAM].gateway_restart_notification = False
         job = _telegram_job()
 
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target()]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target()],
+            ),
+        ):
             sent = await runner._notify_interrupted_cron_jobs([job["id"]])
 
         assert sent == 0
@@ -171,9 +197,13 @@ class TestNotifyInterruptedCronJobs:
 
         adapter.send = _boom
 
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target()]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target()],
+            ),
+        ):
             sent = await runner._notify_interrupted_cron_jobs([job["id"]])
 
         assert sent == 0
@@ -184,17 +214,24 @@ class TestNotifyInterruptedCronJobs:
         _bind_notifier(runner)
         job = _telegram_job()
 
-        with patch("cron.jobs.get_job", return_value=job), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target(), _telegram_target()]):
+        with (
+            patch("cron.jobs.get_job", return_value=job),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target(), _telegram_target()],
+            ),
+        ):
             sent = await runner._notify_interrupted_cron_jobs([job["id"]])
 
         assert sent == 1
         assert len(adapter.sent) == 1
 
+
 class TestShutdownDeliversNoticeBeforeDisconnect:
     @pytest.mark.asyncio
-    async def test_notice_is_sent_while_the_adapter_is_still_connected(self, monkeypatch):
+    async def test_notice_is_sent_while_the_adapter_is_still_connected(
+        self, monkeypatch
+    ):
         """The whole point is ordering: a notice sent after teardown is lost,
         which is the bug."""
         import cron.scheduler as sched
@@ -216,7 +253,9 @@ class TestShutdownDeliversNoticeBeforeDisconnect:
         async def _tracking_send(chat_id, content, reply_to=None, metadata=None):
             if "was cut short" in content:
                 events.append("cron_notice")
-            return await real_send(chat_id, content, reply_to=reply_to, metadata=metadata)
+            return await real_send(
+                chat_id, content, reply_to=reply_to, metadata=metadata
+            )
 
         async def _tracking_disconnect():
             events.append("disconnect")
@@ -224,12 +263,16 @@ class TestShutdownDeliversNoticeBeforeDisconnect:
         adapter.send = _tracking_send
         adapter.disconnect = _tracking_disconnect
 
-        with patch("gateway.status.remove_pid_file"), \
-             patch("gateway.status.publish_runtime_status"), \
-             patch("cron.scheduler.mark_job_run"), \
-             patch("cron.jobs.get_job", return_value=_telegram_job()), \
-             patch("cron.scheduler._resolve_delivery_targets",
-                   return_value=[_telegram_target()]):
+        with (
+            patch("gateway.status.remove_pid_file"),
+            patch("gateway.status.publish_runtime_status"),
+            patch("cron.scheduler.mark_job_run"),
+            patch("cron.jobs.get_job", return_value=_telegram_job()),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[_telegram_target()],
+            ),
+        ):
             await runner.stop()
 
         assert "cron_notice" in events, "interrupted-cron notice was never sent"

@@ -45,12 +45,24 @@ def prompt_progress(chunk: Any) -> Optional[dict]:
     if choices is None and isinstance(chunk, dict):
         choices = chunk.get("choices")
     for choice in choices or []:
-        finish = choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
-        delta = choice.get("delta") if isinstance(choice, dict) else getattr(choice, "delta", None)
+        finish = (
+            choice.get("finish_reason")
+            if isinstance(choice, dict)
+            else getattr(choice, "finish_reason", None)
+        )
+        delta = (
+            choice.get("delta")
+            if isinstance(choice, dict)
+            else getattr(choice, "delta", None)
+        )
         if finish:
             return None
         for field in _CONTENT_FIELDS:
-            value = delta.get(field) if isinstance(delta, dict) else getattr(delta, field, None)
+            value = (
+                delta.get(field)
+                if isinstance(delta, dict)
+                else getattr(delta, field, None)
+            )
             if value:
                 return None
     return progress
@@ -110,11 +122,17 @@ class PromptReadingClock:
         """Count the reading up to this progress chunk; False when it reports nothing new read."""
         now = time.monotonic()
         wall, self._mark = now - self._mark, now
-        processed, server_ms = _count(progress, "processed"), _count(progress, "time_ms")
+        processed, server_ms = (
+            _count(progress, "processed"),
+            _count(progress, "time_ms"),
+        )
         if processed is None or processed <= self._processed:
             return False
         server = wall if server_ms is None else (server_ms - self._server_ms) / 1000
-        self._processed, self._server_ms = processed, self._server_ms if server_ms is None else server_ms
+        self._processed, self._server_ms = (
+            processed,
+            self._server_ms if server_ms is None else server_ms,
+        )
         spent = max(0.0, min(wall, server))
         self.seconds += spent
         hook = current_prompt_reading_hook()

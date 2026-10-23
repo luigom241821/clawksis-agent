@@ -20,17 +20,27 @@ from agent.pet.constants import FRAME_H, FRAME_W, PetState
 # ─────────────────────────────────────────────────────────────────────────
 
 
-
 def test_derive_priority_order():
     # error beats everything
-    assert state.derive_pet_state(error=True, celebrate=True, busy=True) is PetState.FAILED
+    assert (
+        state.derive_pet_state(error=True, celebrate=True, busy=True) is PetState.FAILED
+    )
     # celebrate beats completion/tool
-    assert state.derive_pet_state(celebrate=True, just_completed=True, tool_running=True) is PetState.JUMP
+    assert (
+        state.derive_pet_state(celebrate=True, just_completed=True, tool_running=True)
+        is PetState.JUMP
+    )
     # completion beats waiting/tool
-    assert state.derive_pet_state(just_completed=True, awaiting_input=True) is PetState.WAVE
+    assert (
+        state.derive_pet_state(just_completed=True, awaiting_input=True)
+        is PetState.WAVE
+    )
     # waiting (blocked on the user) outranks the in-flight signals — a clarify
     # mid-turn pauses on you even though a tool is technically still open.
-    assert state.derive_pet_state(awaiting_input=True, tool_running=True, busy=True) is PetState.WAITING
+    assert (
+        state.derive_pet_state(awaiting_input=True, tool_running=True, busy=True)
+        is PetState.WAITING
+    )
     # tool beats reasoning
     assert state.derive_pet_state(tool_running=True, reasoning=True) is PetState.RUN
     # reasoning beats bare-busy
@@ -44,10 +54,14 @@ def test_todos_all_done():
     assert state.todos_all_done(None) is False
     assert state.todos_all_done([]) is False
     # any open item → not done
-    assert state.todos_all_done([{"status": "completed"}, {"status": "pending"}]) is False
+    assert (
+        state.todos_all_done([{"status": "completed"}, {"status": "pending"}]) is False
+    )
     assert state.todos_all_done([{"status": "in_progress"}]) is False
     # every item terminal → done (completed and/or cancelled)
-    assert state.todos_all_done([{"status": "completed"}, {"status": "cancelled"}]) is True
+    assert (
+        state.todos_all_done([{"status": "completed"}, {"status": "cancelled"}]) is True
+    )
 
     # objects with a .status attr work too (mirrors dict + attr access)
     class _T:
@@ -79,21 +93,30 @@ def test_state_row_index_maps_to_supported_atlas_taxonomies():
     assert constants.state_row_index(PetState.WAITING, 8) == 0
 
     # Alias rows resolve as expected.
-    assert constants.state_row_index("wave", 9) == constants.state_row_index("waving", 9) == 3
-    assert constants.state_row_index("jump", 9) == constants.state_row_index("jumping", 9) == 4
-    assert constants.state_row_index("run", 9) == constants.state_row_index("running", 9) == 7
+    assert (
+        constants.state_row_index("wave", 9)
+        == constants.state_row_index("waving", 9)
+        == 3
+    )
+    assert (
+        constants.state_row_index("jump", 9)
+        == constants.state_row_index("jumping", 9)
+        == 4
+    )
+    assert (
+        constants.state_row_index("run", 9)
+        == constants.state_row_index("running", 9)
+        == 7
+    )
 
     # unknown row names clamp to idle (row 0), never raise
     assert constants.state_row_index("nonsense") == 0
 
 
-
-
-
-
 # ─────────────────────────────────────────────────────────────────────────
 # synthetic spritesheet fixture
 # ─────────────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def boba_like(tmp_path, monkeypatch):
@@ -122,14 +145,9 @@ def boba_like(tmp_path, monkeypatch):
     return pet_dir
 
 
-
-
-
-
 # ─────────────────────────────────────────────────────────────────────────
 # render — decode + every encoder produces output
 # ─────────────────────────────────────────────────────────────────────────
-
 
 
 def test_trims_trailing_blank_frames(tmp_path):
@@ -180,10 +198,6 @@ def test_trims_trailing_blank_frames(tmp_path):
     }
 
 
-
-
-
-
 def test_cells_grid_shape(boba_like):
     sprite = store.load_pet("boba").spritesheet
     r = render.PetRenderer(str(sprite), mode="unicode", scale=0.4, unicode_cols=14)
@@ -194,17 +208,17 @@ def test_cells_grid_shape(boba_like):
     (top, bottom) = grid[0][0]
     assert len(top) == 4 and len(bottom) == 4
     # missing-sheet renderer yields no cells, never raises
-    assert render.PetRenderer(str(sprite.parent / "missing.webp"), mode="unicode").cells("idle", 0) == []
+    assert (
+        render.PetRenderer(str(sprite.parent / "missing.webp"), mode="unicode").cells(
+            "idle", 0
+        )
+        == []
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # render — kitty Unicode placeholders (TUI graphics path)
 # ─────────────────────────────────────────────────────────────────────────
-
-
-
-
-
 
 
 def test_kitty_payload_structure(boba_like):
@@ -229,18 +243,14 @@ def test_kitty_payload_structure(boba_like):
         assert f"c={payload['cols']}" in esc and f"r={payload['rows']}" in esc
 
 
-
-
-
-
-
-
-
-
-
-
 def _clear_graphics_env(monkeypatch):
-    for key in ("KITTY_WINDOW_ID", "TERM_PROGRAM", "ITERM_SESSION_ID", "WEZTERM_PANE", "TERM"):
+    for key in (
+        "KITTY_WINDOW_ID",
+        "TERM_PROGRAM",
+        "ITERM_SESSION_ID",
+        "WEZTERM_PANE",
+        "TERM",
+    ):
         monkeypatch.delenv(key, raising=False)
 
 

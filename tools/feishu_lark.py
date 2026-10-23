@@ -28,6 +28,7 @@ def _check_feishu():
     # eagerly loads websockets/dispatcher/every api model (~5s). This probe fires at
     # every ``clawk`` startup; the handlers still do the real import when invoked.
     import importlib.util
+
     try:
         return importlib.util.find_spec("lark_oapi") is not None
     except (ImportError, ValueError):
@@ -44,7 +45,8 @@ def build_request(method, uri, paths=None, queries=None, body=None):
         BaseRequest.builder()
         .http_method(HttpMethod.GET if method == "GET" else HttpMethod.POST)
         .uri(uri)
-        .token_types({AccessTokenType.TENANT}))
+        .token_types({AccessTokenType.TENANT})
+    )
     if paths:
         builder = builder.paths(paths)
     if queries:
@@ -61,7 +63,11 @@ def lark_call(client, method, uri, paths=None, queries=None, body=None):
     blocking lark client is called directly.
     """
     response = client.request(build_request(method, uri, paths, queries, body))
-    return getattr(response, "code", None), getattr(response, "msg", ""), response_data(response)
+    return (
+        getattr(response, "code", None),
+        getattr(response, "msg", ""),
+        response_data(response),
+    )
 
 
 def raw_body(response):

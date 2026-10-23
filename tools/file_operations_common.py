@@ -13,6 +13,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple
 @dataclass
 class ReadResult:
     """Result from reading a file."""
+
     content: str = ""
     total_lines: int = 0
     file_size: int = 0
@@ -35,12 +36,17 @@ class ReadResult:
     _content_sha256: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items() if not k.startswith("_") and v is not None and v != []}
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if not k.startswith("_") and v is not None and v != []
+        }
 
 
 @dataclass
 class WriteResult:
     """Result from writing a file."""
+
     bytes_written: int = 0
     dirs_created: bool = False
     # True when the on-disk sha256 matched the intended content; None when the
@@ -55,12 +61,17 @@ class WriteResult:
     warning: Optional[str] = None
 
     def to_dict(self) -> dict:
-        return {k: v for k, v in self.__dict__.items() if not k.startswith("_") and v is not None}
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if not k.startswith("_") and v is not None
+        }
 
 
 @dataclass
 class PatchResult:
     """Result from patching a file."""
+
     success: bool = False
     diff: str = ""
     files_modified: list[str] = field(default_factory=list)
@@ -75,12 +86,19 @@ class PatchResult:
     # One ``(path, read_sha256, written_sha256)`` per file write, in order: the sha256 of the
     # bytes the edit read ("" when it created the file, None when unknown) and of the bytes it
     # wrote (None when unknown). patch_tool carries a task's full-file baseline across them.
-    _writes: list[tuple[str, Optional[str], Optional[str]]] = field(default_factory=list)
+    _writes: list[tuple[str, Optional[str], Optional[str]]] = field(
+        default_factory=list
+    )
 
     # Emission order is part of the output contract.
     _DICT_FIELDS: ClassVar[tuple] = (
-        "diff", "files_modified", "files_created", "files_deleted",
-        "lint", "lsp_diagnostics", "error",
+        "diff",
+        "files_modified",
+        "files_created",
+        "files_deleted",
+        "lint",
+        "lsp_diagnostics",
+        "error",
     )
 
     def to_dict(self) -> dict:
@@ -99,6 +117,7 @@ class PatchResult:
 @dataclass
 class SearchMatch:
     """A single search match."""
+
     path: str
     line_number: int
     content: str
@@ -108,6 +127,7 @@ class SearchMatch:
 @dataclass
 class SearchResult:
     """Result from searching."""
+
     matches: list[SearchMatch] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
@@ -150,7 +170,8 @@ class SearchResult:
                 result["matches_text"] = dense
             else:
                 result["matches"] = [
-                    {"path": m.path, "line": m.line_number, "content": m.content} for m in self.matches
+                    {"path": m.path, "line": m.line_number, "content": m.content}
+                    for m in self.matches
                 ]
         if self.files:
             result["files"] = self.files
@@ -169,6 +190,7 @@ class SearchResult:
 @dataclass
 class LintResult:
     """Result from linting a file."""
+
     success: bool = True
     skipped: bool = False
     output: str = ""
@@ -186,6 +208,7 @@ class LintResult:
 @dataclass
 class ExecuteResult:
     """Result from executing a shell command."""
+
     stdout: str = ""
     exit_code: int = 0
     # Set when the backend's own ``builtin cd -- <cwd> || exit 126`` wrapper failed:
@@ -222,7 +245,9 @@ def _strip_terminal_fence_leaks(text: str) -> str:
     cleaned_lines: list[str] = []
     for line in text.splitlines(keepends=True):
         had_terminal_wrapper = "__CLAWK_FENCE_" in line or "\x1b]" in line
-        cleaned = _FENCE_MARKER_RE.sub("", _OSC_SEQUENCE_RE.sub("", line)).replace("\x07", "")
+        cleaned = _FENCE_MARKER_RE.sub("", _OSC_SEQUENCE_RE.sub("", line)).replace(
+            "\x07", ""
+        )
         if had_terminal_wrapper and cleaned.strip("'\r\n\t ") == "":
             continue
         cleaned_lines.append(cleaned)
@@ -264,7 +289,7 @@ def _strip_bom(text: str) -> tuple[str, bool]:
     """Return (text-without-leading-BOM, had_bom). Only a leading BOM is
     stripped; mid-content U+FEFF is legitimate data."""
     if _has_bom(text):
-        return text[len(_UTF8_BOM):], True
+        return text[len(_UTF8_BOM) :], True
     return text, False
 
 
@@ -291,18 +316,25 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
-def normalize_read_pagination(offset: Any = DEFAULT_READ_OFFSET,
-                              limit: Any = DEFAULT_READ_LIMIT) -> tuple[int, int]:
+def normalize_read_pagination(
+    offset: Any = DEFAULT_READ_OFFSET, limit: Any = DEFAULT_READ_LIMIT
+) -> tuple[int, int]:
     """Clamp read_file pagination so invalid values can never reach a sed range
     like ``0,-1p`` (schemas declare bounds, but not every caller enforces them).
     The ``limit`` ceiling is ``tool_output.max_lines`` from config.yaml."""
     from tools.tool_output_limits import get_max_lines
+
     normalized_offset = max(1, _coerce_int(offset, DEFAULT_READ_OFFSET))
-    normalized_limit = max(1, min(_coerce_int(limit, DEFAULT_READ_LIMIT), get_max_lines()))
+    normalized_limit = max(
+        1, min(_coerce_int(limit, DEFAULT_READ_LIMIT), get_max_lines())
+    )
     return normalized_offset, normalized_limit
 
 
-def normalize_search_pagination(offset: Any = DEFAULT_SEARCH_OFFSET,
-                                limit: Any = DEFAULT_SEARCH_LIMIT) -> tuple[int, int]:
+def normalize_search_pagination(
+    offset: Any = DEFAULT_SEARCH_OFFSET, limit: Any = DEFAULT_SEARCH_LIMIT
+) -> tuple[int, int]:
     """Return safe search pagination bounds for shell head/tail pipelines."""
-    return max(0, _coerce_int(offset, DEFAULT_SEARCH_OFFSET)), max(1, _coerce_int(limit, DEFAULT_SEARCH_LIMIT))
+    return max(0, _coerce_int(offset, DEFAULT_SEARCH_OFFSET)), max(
+        1, _coerce_int(limit, DEFAULT_SEARCH_LIMIT)
+    )

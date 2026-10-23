@@ -3,17 +3,24 @@
 ``ClientLifecycleMixin`` owns task cleanup, the shared primary client, per-request client caches
 (owner-thread close vs stranger-thread abort), credential rotation and route-derived headers.
 """
+
 import logging
 import threading
 import time
 from contextlib import suppress
 from typing import Any, Optional
 
-from agent.lazy_forward import forward as _forward, forward_static as _forward_static, lazy_attr as _lazy_attr
+from agent.lazy_forward import (
+    forward as _forward,
+    forward_static as _forward_static,
+    lazy_attr as _lazy_attr,
+)
 from clawk_cli.timeouts import get_provider_request_timeout
 from utils import base_url_host_matches, env_float
 
-logger = logging.getLogger("run_agent")  # origin module's logger name: log records / caplog filters unchanged
+logger = logging.getLogger(
+    "run_agent"
+)  # origin module's logger name: log records / caplog filters unchanged
 _QWEN_CODE_VERSION = "0.14.1"  # Qwen Portal mimics the QwenCode CLI
 # Per-request cache slot attribute names (OpenAI-style and Anthropic clients).
 _OPENAI_SLOT = "_request_client_cache"
@@ -24,14 +31,18 @@ _NO_SOCKETS_SUFFIX = " — no sockets found; in-flight request may keep running 
 def _routermint_headers() -> dict:
     """User-Agent RouterMint needs to avoid Cloudflare 1010 blocks."""
     from clawk_cli.version_info import get_version_info
+
     return {"User-Agent": f"ClawksisAgent/{get_version_info().base_version}"}
 
 
 def _qwen_portal_headers() -> dict:
     import platform as _plat
+
     _ua = f"QwenCode/{_QWEN_CODE_VERSION} ({_plat.system().lower()}; {_plat.machine()})"
     return {
-        "User-Agent": _ua, "X-DashScope-CacheControl": "enable", "X-DashScope-UserAgent": _ua,
+        "User-Agent": _ua,
+        "X-DashScope-CacheControl": "enable",
+        "X-DashScope-UserAgent": _ua,
         "X-DashScope-AuthType": "qwen-oauth",
     }
 
@@ -39,17 +50,45 @@ def _qwen_portal_headers() -> dict:
 # Route-specific default headers; first host match wins (order preserved from the original chain).
 # Builders resolve their module lazily so run_agent keeps its import-time cost and avoids cycles.
 _ROUTE_DEFAULT_HEADERS = (
-    ("openrouter.ai", lambda self, url: _lazy_attr("agent.auxiliary_client", "build_or_headers")()),
-    ("ai-gateway.vercel.sh", lambda self, url: dict(_lazy_attr("agent.auxiliary_client", "_AI_GATEWAY_HEADERS"))),
-    ("integrate.api.nvidia.com", lambda self, url: _lazy_attr("agent.auxiliary_client", "build_nvidia_nim_headers")(url)),
+    (
+        "openrouter.ai",
+        lambda self, url: _lazy_attr("agent.auxiliary_client", "build_or_headers")(),
+    ),
+    (
+        "ai-gateway.vercel.sh",
+        lambda self, url: dict(
+            _lazy_attr("agent.auxiliary_client", "_AI_GATEWAY_HEADERS")
+        ),
+    ),
+    (
+        "integrate.api.nvidia.com",
+        lambda self, url: _lazy_attr(
+            "agent.auxiliary_client", "build_nvidia_nim_headers"
+        )(url),
+    ),
     ("api.routermint.com", lambda self, url: _routermint_headers()),
-    ("githubcopilot.com", lambda self, url: _lazy_attr("clawk_cli.models", "copilot_default_headers")()),
-    ("api.kimi.com", lambda self, url: dict(_lazy_attr("agent.auxiliary_client", "_AI_GATEWAY_HEADERS"))),
+    (
+        "githubcopilot.com",
+        lambda self, url: _lazy_attr("clawk_cli.models", "copilot_default_headers")(),
+    ),
+    (
+        "api.kimi.com",
+        lambda self, url: dict(
+            _lazy_attr("agent.auxiliary_client", "_AI_GATEWAY_HEADERS")
+        ),
+    ),
     ("portal.qwen.ai", lambda self, url: _qwen_portal_headers()),
-    ("chatgpt.com", lambda self, url: _lazy_attr("agent.codex_headers", "codex_cloudflare_headers")(
-        self._client_kwargs.get("api_key", ""), base_url=url)),
+    (
+        "chatgpt.com",
+        lambda self, url: _lazy_attr("agent.codex_headers", "codex_cloudflare_headers")(
+            self._client_kwargs.get("api_key", ""), base_url=url
+        ),
+    ),
     # Covers provider=xai and provider=xai-oauth (api.x.ai).
-    ("x.ai", lambda self, url: _lazy_attr("tools.xai_http", "clawk_xai_default_headers")()),
+    (
+        "x.ai",
+        lambda self, url: _lazy_attr("tools.xai_http", "clawk_xai_default_headers")(),
+    ),
 )
 
 
@@ -61,15 +100,31 @@ def _reset_slot(cache: dict, *, in_use: bool = False) -> None:
 
 
 def _valid_credential_pair(api_key: Any, base_url: Any) -> bool:
-    return bool(isinstance(api_key, str) and api_key.strip() and isinstance(base_url, str) and base_url.strip())
+    return bool(
+        isinstance(api_key, str)
+        and api_key.strip()
+        and isinstance(base_url, str)
+        and base_url.strip()
+    )
 
 
-def _swap_fallback_clients(agent, fb_client, fb_provider: str, fb_model: str, fb_base_url: str, fb_api_mode: str) -> None:
+def _swap_fallback_clients(
+    agent,
+    fb_client,
+    fb_provider: str,
+    fb_model: str,
+    fb_base_url: str,
+    fb_api_mode: str,
+) -> None:
     """Install the fallback client(s) in place, honoring request_timeout_seconds (None = SDK default)."""
     timeout = get_provider_request_timeout(fb_provider, fb_model)
-    if fb_provider == "bedrock" and fb_api_mode in ("anthropic_messages", "bedrock_converse"):
+    if fb_provider == "bedrock" and fb_api_mode in (
+        "anthropic_messages",
+        "bedrock_converse",
+    ):
         # Non-Mantle Bedrock: boto3-chain auth, no OpenAI/Anthropic SDK client to carry over.
         from agent.bedrock_adapter import bind_bedrock_runtime
+
         bind_bedrock_runtime(agent, fb_base_url, fb_api_mode)
         return
     # The SDK exposes an empty/stale api_key when a rotating source is installed.
@@ -77,20 +132,38 @@ def _swap_fallback_clients(agent, fb_client, fb_provider: str, fb_model: str, fb
     credential = key_provider if callable(key_provider) else fb_client.api_key
     if fb_api_mode == "anthropic_messages":
         from agent.anthropic_adapter import build_anthropic_client
-        from agent.anthropic_credentials import resolve_anthropic_token, anthropic_route_is_oauth
+        from agent.anthropic_credentials import (
+            resolve_anthropic_token,
+            anthropic_route_is_oauth,
+        )
+
         is_anthropic = fb_provider == "anthropic"
-        effective_key = credential or (resolve_anthropic_token(model=getattr(agent, "model", None)) if is_anthropic else None) or ""
+        effective_key = (
+            credential
+            or (
+                resolve_anthropic_token(model=getattr(agent, "model", None))
+                if is_anthropic
+                else None
+            )
+            or ""
+        )
         agent.api_key = agent._anthropic_api_key = effective_key
         agent._anthropic_base_url = fb_base_url
-        agent._anthropic_client = build_anthropic_client(effective_key, fb_base_url, timeout=timeout)
-        agent._is_anthropic_oauth = anthropic_route_is_oauth(fb_base_url, effective_key, provider=fb_provider)
+        agent._anthropic_client = build_anthropic_client(
+            effective_key, fb_base_url, timeout=timeout
+        )
+        agent._is_anthropic_oauth = anthropic_route_is_oauth(
+            fb_base_url, effective_key, provider=fb_provider
+        )
         agent.client, agent._client_kwargs = None, {}
         return
     agent.api_key = credential
     agent.client = fb_client
     # Keep provider headers resolve_provider_client() baked into fb_client (SDK: _custom_headers), else
     # later request-client rebuilds drop them and User-Agent-sentinel providers (Kimi Coding) 403.
-    fb_headers = getattr(fb_client, "_custom_headers", None) or getattr(fb_client, "default_headers", None)
+    fb_headers = getattr(fb_client, "_custom_headers", None) or getattr(
+        fb_client, "default_headers", None
+    )
     agent._client_kwargs = {"api_key": credential, "base_url": fb_base_url}
     if fb_headers:
         agent._client_kwargs["default_headers"] = dict(fb_headers)
@@ -107,22 +180,29 @@ class ClientLifecycleMixin:
 
         def kill_processes() -> None:
             from tools.process_registry import process_registry
+
             # A session can run several task IDs; delegated IDs also differ from session_id.
             # Never match the environment key (e.g. "default"), shared by parent and siblings.
             owners = getattr(self, "_process_owner_task_ids", ())
             for process in process_registry.list_sessions():
-                if process["owner_task_id"] in owners and process["status"] == "running":
+                if (
+                    process["owner_task_id"] in owners
+                    and process["status"] == "running"
+                ):
                     # An explicitly persisted job (terminal persist_on_release=true) survives
                     # agent close — session end, compression, error recovery (#41225). The
                     # user can still stop it on purpose via process_manage kill.
                     if process.get("persist_on_release"):
                         continue
                     process_registry.kill_process(
-                        process["session_id"], source="agent_close", consume_output=True,
+                        process["session_id"],
+                        source="agent_close",
+                        consume_output=True,
                     )
 
         def release_computer_use() -> None:
             from tools.computer_use.tool import release_computer_use_session
+
             release_computer_use_session(task_id)
 
         def forget_file_state() -> None:
@@ -130,12 +210,18 @@ class ClientLifecycleMixin:
             # ``cron:<job>:<uuid>``, subagents: ``subagent-N-xxxx``), which differs from session_id;
             # cleanup_vm(session_id) alone leaves a finished run looking like a live sibling (#114446).
             from tools.file_tools import clear_file_ops_cache
+
             for owner in getattr(self, "_process_owner_task_ids", ()):
                 if owner and owner != task_id:
                     clear_file_ops_cache(owner)
 
-        for step in (kill_processes, lambda: cleanup_vm(task_id), lambda: cleanup_browser(task_id),
-                     release_computer_use, forget_file_state):
+        for step in (
+            kill_processes,
+            lambda: cleanup_vm(task_id),
+            lambda: cleanup_browser(task_id),
+            release_computer_use,
+            forget_file_state,
+        ):
             _quietly(step)
 
     def _client_log_context(self) -> str:
@@ -187,13 +273,22 @@ class ClientLifecycleMixin:
     def _build_keepalive_http_client(base_url: str = "", *, verify: Any = True) -> Any:
         """Build the shared OpenAI httpx client used by main and aux paths."""
         from agent.process_bootstrap import build_keepalive_http_client
+
         return build_keepalive_http_client(base_url, verify=verify)
 
-    _create_openai_client = _forward("agent.agent_runtime_helpers", "create_openai_client")
-    _force_close_tcp_sockets = _forward_static("agent.agent_runtime_helpers", "force_close_tcp_sockets")
-    _cleanup_dead_connections = _forward("agent.agent_runtime_helpers_dead_connections", "cleanup_dead_connections")
+    _create_openai_client = _forward(
+        "agent.agent_runtime_helpers", "create_openai_client"
+    )
+    _force_close_tcp_sockets = _forward_static(
+        "agent.agent_runtime_helpers", "force_close_tcp_sockets"
+    )
+    _cleanup_dead_connections = _forward(
+        "agent.agent_runtime_helpers_dead_connections", "cleanup_dead_connections"
+    )
     _run_codex_stream = _forward("agent.codex_runtime", "run_codex_stream")
-    _recover_with_credential_pool = _forward("agent.agent_runtime_helpers", "recover_with_credential_pool")
+    _recover_with_credential_pool = _forward(
+        "agent.agent_runtime_helpers", "recover_with_credential_pool"
+    )
 
     def _close_openai_client(self, client: Any, *, reason: str, shared: bool) -> None:
         if client is None:
@@ -203,9 +298,21 @@ class ClientLifecycleMixin:
         force_closed = self._force_close_tcp_sockets(client)
         try:
             client.close()
-            logger.info("OpenAI client closed (%s, shared=%s, tcp_force_closed=%d) %s", reason, shared, force_closed, ctx)
+            logger.info(
+                "OpenAI client closed (%s, shared=%s, tcp_force_closed=%d) %s",
+                reason,
+                shared,
+                force_closed,
+                ctx,
+            )
         except Exception as exc:
-            logger.debug("OpenAI client close failed (%s, shared=%s) %s error=%s", reason, shared, ctx, exc)
+            logger.debug(
+                "OpenAI client close failed (%s, shared=%s) %s error=%s",
+                reason,
+                shared,
+                ctx,
+                exc,
+            )
 
     def _retire_shared_openai_client(self, client: Any, *, reason: str) -> None:
         """Ownership-safe retirement of a replaced shared OpenAI client: ``shutdown()`` sockets only, FDs to GC.
@@ -226,10 +333,17 @@ class ClientLifecycleMixin:
             shutdown_count = self._force_close_tcp_sockets(client)
             logger.info(
                 "Shared OpenAI client retired (%s, tcp_shutdown=%d, fd_release=deferred_to_gc) %s",
-                reason, shutdown_count, self._client_log_context(),
+                reason,
+                shutdown_count,
+                self._client_log_context(),
             )
         except Exception as exc:
-            logger.debug("Shared OpenAI client retire failed (%s) %s error=%s", reason, self._client_log_context(), exc)
+            logger.debug(
+                "Shared OpenAI client retire failed (%s) %s error=%s",
+                reason,
+                self._client_log_context(),
+                exc,
+            )
 
     def _drain_transports_after_abandonment(self, *, reason: str) -> int:
         """FD-safe transport drain for an abandoned (timed-out) worker; returns sockets shut down.
@@ -250,7 +364,9 @@ class ClientLifecycleMixin:
             if client is not None:
                 drained += self._force_close_tcp_sockets(client)
         except Exception:
-            logger.debug("Abandoned-worker drain: shared client sweep failed", exc_info=True)
+            logger.debug(
+                "Abandoned-worker drain: shared client sweep failed", exc_info=True
+            )
         # Cached per-request wire clients: abort (shutdown + poison the reuse slot) so the unwinding
         # worker discards them instead of re-caching.
         for slot_attr, abort, label in (
@@ -264,24 +380,36 @@ class ClientLifecycleMixin:
                 if cached is not None:
                     abort(cached, reason=reason)
             except Exception:
-                logger.debug("Abandoned-worker drain: %s client abort failed", label, exc_info=True)
+                logger.debug(
+                    "Abandoned-worker drain: %s client abort failed",
+                    label,
+                    exc_info=True,
+                )
         # Codex app-server session watches a private interrupt event.
         try:
-            request_interrupt = getattr(getattr(self, "_codex_session", None), "request_interrupt", None)
+            request_interrupt = getattr(
+                getattr(self, "_codex_session", None), "request_interrupt", None
+            )
             if callable(request_interrupt):
                 request_interrupt()
         except Exception:
-            logger.debug("Abandoned-worker drain: codex interrupt failed", exc_info=True)
+            logger.debug(
+                "Abandoned-worker drain: codex interrupt failed", exc_info=True
+            )
         # Inline (cron-style) request abort hook, when registered.
         try:
             abort_active = getattr(self, "_active_request_abort", None)
             if callable(abort_active):
                 abort_active(reason)
         except Exception:
-            logger.debug("Abandoned-worker drain: active request abort failed", exc_info=True)
+            logger.debug(
+                "Abandoned-worker drain: active request abort failed", exc_info=True
+            )
         logger.info(
             "Abandoned-worker transports drained (%s, tcp_shutdown=%d, fd_release=deferred_to_worker) %s",
-            reason, drained, self._client_log_context(),
+            reason,
+            drained,
+            self._client_log_context(),
         )
         return drained
 
@@ -292,12 +420,18 @@ class ClientLifecycleMixin:
                 # MoA's ``client`` is an in-process facade, not an SDK client; generic rebuilds must preserve that.
                 if (getattr(self, "provider", "") or "").strip().lower() == "moa":
                     from agent.moa_loop import build_moa_facade
+
                     new_client = build_moa_facade(self, self.model)
                 else:
-                    new_client = self._create_openai_client(self._client_kwargs, reason=reason, shared=True)
+                    new_client = self._create_openai_client(
+                        self._client_kwargs, reason=reason, shared=True
+                    )
             except Exception as exc:
                 logger.warning(
-                    "Failed to rebuild shared primary client (%s) %s error=%s", reason, self._client_log_context(), exc,
+                    "Failed to rebuild shared primary client (%s) %s error=%s",
+                    reason,
+                    self._client_log_context(),
+                    exc,
                 )
                 return False
             self.client = new_client
@@ -316,15 +450,22 @@ class ClientLifecycleMixin:
             if client is not None and not self._is_openai_client_closed(client):
                 return client
             try:
-                new_client = self._create_openai_client(self._client_kwargs, reason=reason, shared=True)
+                new_client = self._create_openai_client(
+                    self._client_kwargs, reason=reason, shared=True
+                )
             except Exception as exc:
                 logger.warning(
-                    "Failed to recreate closed OpenAI client (%s) %s error=%s", reason, self._client_log_context(), exc,
+                    "Failed to recreate closed OpenAI client (%s) %s error=%s",
+                    reason,
+                    self._client_log_context(),
+                    exc,
                 )
                 raise RuntimeError("Failed to recreate closed OpenAI client") from exc
             self.client = new_client
         logger.warning(
-            "Detected closed shared OpenAI client; recreated before use (%s) %s", reason, self._client_log_context(),
+            "Detected closed shared OpenAI client; recreated before use (%s) %s",
+            reason,
+            self._client_log_context(),
         )
         self._close_openai_client(client, reason=f"replace:{reason}", shared=True)
         return new_client
@@ -341,6 +482,7 @@ class ClientLifecycleMixin:
                     _contains_image(v) for v in value.values()
                 )
             return isinstance(value, list) and any(_contains_image(v) for v in value)
+
         return any(
             _contains_image(item)
             for field in ("messages", "input")
@@ -354,10 +496,14 @@ class ClientLifecycleMixin:
     # whose sockets were shut from a stranger thread (never reuse it).
     # Reuse reasons: closes from the FD-owning worker's own finally after a response — the only closes that
     # attest a healthy pool. Poisoning still wins.
-    _REQUEST_CLIENT_REUSE_REASONS = frozenset({"request_complete", "stream_request_complete"})
+    _REQUEST_CLIENT_REUSE_REASONS = frozenset(
+        {"request_complete", "stream_request_complete"}
+    )
 
     def _request_slot(self, slot_attr: str) -> dict:
-        cache = getattr(self, slot_attr, None)  # lazy: tests build agents via AIAgent.__new__ without __init__
+        cache = getattr(
+            self, slot_attr, None
+        )  # lazy: tests build agents via AIAgent.__new__ without __init__
         if cache is None:
             setattr(self, slot_attr, cache := {})
             _reset_slot(cache)
@@ -370,7 +516,11 @@ class ClientLifecycleMixin:
             cached = cache["client"]
             if cached is None or cache["in_use"]:
                 return None, None
-            if not cache["poisoned"] and cache["key"] == key and not self._is_openai_client_closed(cached):
+            if (
+                not cache["poisoned"]
+                and cache["key"] == key
+                and not self._is_openai_client_closed(cached)
+            ):
                 cache["in_use"] = True
                 return cached, None
             # Key changed / poisoned / externally closed — rebuild. in_use was False, so closing the stale
@@ -390,7 +540,10 @@ class ClientLifecycleMixin:
         with self._openai_client_lock():
             cache = self._request_slot(slot_attr)
             if cache["client"] is client:
-                if reason in self._REQUEST_CLIENT_REUSE_REASONS and not cache["poisoned"]:
+                if (
+                    reason in self._REQUEST_CLIENT_REUSE_REASONS
+                    and not cache["poisoned"]
+                ):
                     cache["in_use"] = False
                     return True
                 _reset_slot(cache)
@@ -400,12 +553,16 @@ class ClientLifecycleMixin:
         """Teardown: empty the slot and return ``(client, was_in_use)``."""
         with self._openai_client_lock():
             cache = getattr(self, slot_attr, None)
-            client, in_use = (cache["client"], bool(cache["in_use"])) if cache else (None, False)
+            client, in_use = (
+                (cache["client"], bool(cache["in_use"])) if cache else (None, False)
+            )
             if cache is not None:
                 _reset_slot(cache)
         return client, in_use
 
-    def _abort_request_slot_client(self, slot_attr: str, client: Any, *, reason: str) -> None:
+    def _abort_request_slot_client(
+        self, slot_attr: str, client: Any, *, reason: str
+    ) -> None:
         """Cross-thread abort (interrupt loop, stale detector): ``shutdown(SHUT_RDWR)`` without releasing FDs.
 
         ``close()`` from a non-owning thread races the live SSL BIO and corrupts unrelated FDs; shutdown unblocks
@@ -415,7 +572,9 @@ class ClientLifecycleMixin:
             return
         anthropic = slot_attr == _ANTHROPIC_SLOT
         label = "Anthropic" if anthropic else "OpenAI"
-        context = self._anthropic_log_context() if anthropic else self._client_log_context()
+        context = (
+            self._anthropic_log_context() if anthropic else self._client_log_context()
+        )
         with self._openai_client_lock():
             cache = self._request_slot(slot_attr)
             if cache["client"] is client:
@@ -434,13 +593,26 @@ class ClientLifecycleMixin:
             _log = logger.warning if shutdown_count == 0 else logger.info
             _log(
                 "%s client aborted (%s, shared=False, tcp_force_closed=%d, deferred_close=stranger_thread) %s%s",
-                label, reason, shutdown_count, context, _NO_SOCKETS_SUFFIX if shutdown_count == 0 else "",
+                label,
+                reason,
+                shutdown_count,
+                context,
+                _NO_SOCKETS_SUFFIX if shutdown_count == 0 else "",
             )
         except Exception as exc:
-            logger.debug("%s client abort failed (%s, shared=False) %s error=%s", label, reason, context, exc)
+            logger.debug(
+                "%s client abort failed (%s, shared=False) %s error=%s",
+                label,
+                reason,
+                context,
+                exc,
+            )
 
-    def _create_request_openai_client(self, *, reason: str, api_kwargs: Optional[dict] = None) -> Any:
+    def _create_request_openai_client(
+        self, *, reason: str, api_kwargs: Optional[dict] = None
+    ) -> Any:
         from unittest.mock import Mock
+
         primary_client = self._ensure_primary_openai_client(reason=reason)
         if self.provider == "moa" or isinstance(primary_client, Mock):
             return primary_client
@@ -449,18 +621,27 @@ class ClientLifecycleMixin:
         # No SDK retry loop: the outer loop owns retries/rotation/fallback, and SDK retries stretch a hung
         # request ~3x past our stale detector.
         request_kwargs["max_retries"] = 0
-        is_copilot = base_url_host_matches(str(request_kwargs.get("base_url", "")), "githubcopilot.com")
+        is_copilot = base_url_host_matches(
+            str(request_kwargs.get("base_url", "")), "githubcopilot.com"
+        )
         if is_copilot and self._api_kwargs_have_image_parts(api_kwargs or {}):
             from clawk_cli.copilot_auth import copilot_request_headers
-            request_kwargs["default_headers"] = copilot_request_headers(is_agent_turn=True, is_vision=True)
+
+            request_kwargs["default_headers"] = copilot_request_headers(
+                is_agent_turn=True, is_vision=True
+            )
         cached, stale = self._checkout_request_slot(_OPENAI_SLOT, request_kwargs)
         if cached is not None:
             return cached
         if stale is not None:
-            self._close_openai_client(stale, reason=f"reuse_evict:{reason}", shared=False)
+            self._close_openai_client(
+                stale, reason=f"reuse_evict:{reason}", shared=False
+            )
         client = self._create_openai_client(request_kwargs, reason=reason, shared=False)
         # Snapshot nested dicts (default_headers) so an aliased inner object can't mutate the cache key.
-        snapshot = {k: dict(v) if isinstance(v, dict) else v for k, v in request_kwargs.items()}
+        snapshot = {
+            k: dict(v) if isinstance(v, dict) else v for k, v in request_kwargs.items()
+        }
         self._store_request_slot(_OPENAI_SLOT, client, snapshot)
         return client
 
@@ -486,27 +667,47 @@ class ClientLifecycleMixin:
     def _request_anthropic_client_key(self) -> tuple:
         """Cache key over everything forcing a fresh client: credential, base URL/region, timeout, 1M-beta flag."""
         if getattr(self, "provider", None) == "bedrock":
-            return ("bedrock", getattr(self, "_bedrock_region", "us-east-1") or "us-east-1")
+            return (
+                "bedrock",
+                getattr(self, "_bedrock_region", "us-east-1") or "us-east-1",
+            )
         return (
-            "direct", self._anthropic_api_key, getattr(self, "_anthropic_base_url", None),
-            get_provider_request_timeout(self.provider, self.model), bool(getattr(self, "_oauth_1m_beta_disabled", False)),
+            "direct",
+            self._anthropic_api_key,
+            getattr(self, "_anthropic_base_url", None),
+            get_provider_request_timeout(self.provider, self.model),
+            bool(getattr(self, "_oauth_1m_beta_disabled", False)),
         )
 
     def _build_direct_anthropic_client(self, token: str, base_url: Any) -> Any:
         """Native Anthropic client for ``token``/``base_url`` with the provider/model request timeout."""
         from agent.anthropic_adapter import build_anthropic_client
-        return build_anthropic_client(token, base_url, timeout=get_provider_request_timeout(self.provider, self.model))
+
+        return build_anthropic_client(
+            token,
+            base_url,
+            timeout=get_provider_request_timeout(self.provider, self.model),
+        )
 
     def _anthropic_oauth_flag(self, token: str) -> bool:
         """OAuth flag only on native Anthropic routes; third-party Anthropic-protocol endpoints must not trip OAuth paths."""
         from agent.anthropic_credentials import anthropic_route_is_oauth
-        return anthropic_route_is_oauth(getattr(self, "_anthropic_base_url", None), token, provider=self.provider)
+
+        return anthropic_route_is_oauth(
+            getattr(self, "_anthropic_base_url", None), token, provider=self.provider
+        )
 
     def _build_anthropic_client_for_key(self, key: tuple) -> Any:
-        from agent.anthropic_adapter import build_anthropic_bedrock_client, build_anthropic_client
+        from agent.anthropic_adapter import (
+            build_anthropic_bedrock_client,
+            build_anthropic_client,
+        )
+
         if key[0] == "bedrock":
             return build_anthropic_bedrock_client(key[1])
-        return build_anthropic_client(key[1], key[2], timeout=key[3], drop_context_1m_beta=key[4])
+        return build_anthropic_client(
+            key[1], key[2], timeout=key[3], drop_context_1m_beta=key[4]
+        )
 
     def _create_request_anthropic_client(self, *, reason: str) -> Any:
         """Build (or reuse) a request-local Anthropic client for one in-flight call.
@@ -523,21 +724,34 @@ class ClientLifecycleMixin:
         if stale is not None:
             self._close_request_anthropic_client(stale, reason=f"reuse_evict:{reason}")
         client = self._build_anthropic_client_for_key(key)
-        logger.debug("Anthropic request client created (%s, shared=False) %s", reason, self._anthropic_log_context())
+        logger.debug(
+            "Anthropic request client created (%s, shared=False) %s",
+            reason,
+            self._anthropic_log_context(),
+        )
         self._store_request_slot(_ANTHROPIC_SLOT, client, key)
         return client
 
     def _close_request_anthropic_client(self, client: Any, *, reason: str) -> None:
         """Owner-thread close: clean finish keeps the pool warm; otherwise force-close sockets (CLOSE-WAIT) + SDK close."""
-        if client is None or self._release_request_slot(_ANTHROPIC_SLOT, client, reason):
+        if client is None or self._release_request_slot(
+            _ANTHROPIC_SLOT, client, reason
+        ):
             return
         try:
             self._force_close_tcp_sockets(client)
             client.close()
-            logger.info("Anthropic client closed (%s, shared=False) %s", reason, self._anthropic_log_context())
+            logger.info(
+                "Anthropic client closed (%s, shared=False) %s",
+                reason,
+                self._anthropic_log_context(),
+            )
         except Exception as exc:
             logger.debug(
-                "Anthropic client close failed (%s, shared=False) %s error=%s", reason, self._anthropic_log_context(), exc,
+                "Anthropic client close failed (%s, shared=False) %s error=%s",
+                reason,
+                self._anthropic_log_context(),
+                exc,
             )
 
     def _close_cached_request_anthropic_client(self, *, reason: str) -> None:
@@ -545,7 +759,9 @@ class ClientLifecycleMixin:
         client, in_use = self._take_request_slot(_ANTHROPIC_SLOT)
         if client is None:
             return
-        if in_use:  # checked out by a worker — same reasoning as the OpenAI teardown hook
+        if (
+            in_use
+        ):  # checked out by a worker — same reasoning as the OpenAI teardown hook
             self._abort_request_anthropic_client(client, reason=f"{reason}_in_flight")
             return
         with suppress(Exception):
@@ -561,21 +777,28 @@ class ClientLifecycleMixin:
         self._client_kwargs["api_key"] = self.api_key
         self._client_kwargs["base_url"] = self.base_url
 
-    def _adopt_openai_credentials(self, api_key: str, base_url: str, *, reason: str) -> bool:
+    def _adopt_openai_credentials(
+        self, api_key: str, base_url: str, *, reason: str
+    ) -> bool:
         """Apply a fresh key/base_url to the OpenAI-style kwargs and rebuild the shared client."""
         self.api_key, self.base_url = api_key.strip(), base_url.strip().rstrip("/")
         self._sync_client_kwargs_credentials()
         return self._replace_primary_openai_client(reason=reason)
 
     def _try_refresh_codex_client_credentials(self, *, force: bool = True) -> bool:
-        if self.api_mode != "codex_responses" or self.provider not in {"openai-codex", "xai-oauth"}:
+        if self.api_mode != "codex_responses" or self.provider not in {
+            "openai-codex",
+            "xai-oauth",
+        }:
             return False
         # No silent account swap: a non-singleton credential (manual pool entry, explicit api_key=) must not be
         # replaced by the device_code singleton's tokens — the pool's reactive recovery owns that case.
         try:
             from clawk_cli import auth as _auth
+
             resolve = (
-                _auth.resolve_codex_runtime_credentials if self.provider == "openai-codex"
+                _auth.resolve_codex_runtime_credentials
+                if self.provider == "openai-codex"
                 else _auth.resolve_xai_oauth_runtime_credentials
             )
             singleton_now = resolve(refresh_if_expiring=False)
@@ -587,7 +810,8 @@ class ClientLifecycleMixin:
         if singleton_key and old_key and singleton_key != old_key:
             logger.debug(
                 "%s singleton tokens differ from the active api_key; skipping singleton force-refresh to avoid "
-                "silent account swap. Reactive credential rotation should go through the pool.", self.provider,
+                "silent account swap. Reactive credential rotation should go through the pool.",
+                self.provider,
             )
             return False
         try:
@@ -600,21 +824,34 @@ class ClientLifecycleMixin:
             return False
         # No NEW token minted (the resolver returns the same stale token when refresh fails) → False.
         if old_key and api_key.strip() == old_key:
-            logger.debug("%s credential refresh returned the same token; refresh likely failed silently", self.provider)
+            logger.debug(
+                "%s credential refresh returned the same token; refresh likely failed silently",
+                self.provider,
+            )
             return False
-        return self._adopt_openai_credentials(api_key, base_url, reason=f"{self.provider}_credential_refresh")
+        return self._adopt_openai_credentials(
+            api_key, base_url, reason=f"{self.provider}_credential_refresh"
+        )
 
-    def _try_refresh_nous_client_credentials(self, *, force: bool = True, require_account: str | None = None) -> bool:
+    def _try_refresh_nous_client_credentials(
+        self, *, force: bool = True, require_account: str | None = None
+    ) -> bool:
         # Portal serves anthropic/* on the native Messages route, so either client kind may hold the expiring JWT.
-        if self.provider != "nous" or self.api_mode not in ("chat_completions", "anthropic_messages"):
+        if self.provider != "nous" or self.api_mode not in (
+            "chat_completions",
+            "anthropic_messages",
+        ):
             return False
         try:
             from clawk_cli.auth import resolve_nous_runtime_credentials
+
             timeout = env_float("CLAWK_NOUS_TIMEOUT_SECONDS", 15)
             # Pass the bearer that just 401'd so a refresh already done by a sibling process is
             # adopted instead of rotating the grant again.
             creds = resolve_nous_runtime_credentials(
-                timeout_seconds=timeout, force_refresh=force, stale_access_token=self.api_key or None,
+                timeout_seconds=timeout,
+                force_refresh=force,
+                stale_access_token=self.api_key or None,
             )
         except Exception as exc:
             logger.debug("Nous credential refresh failed: %s", exc)
@@ -622,12 +859,14 @@ class ClientLifecycleMixin:
         api_key, base_url = creds.get("api_key"), creds.get("base_url")
         if not _valid_credential_pair(api_key, base_url):
             return False
-        if (str(api_key).strip() == str(self.api_key or "").strip()
-                and str(base_url).strip().rstrip("/") == str(self.base_url or "").strip().rstrip("/")):
+        if str(api_key).strip() == str(self.api_key or "").strip() and str(
+            base_url
+        ).strip().rstrip("/") == str(self.base_url or "").strip().rstrip("/"):
             return False  # store holds the same key on the same route: nothing to adopt, no client rebuild
         if require_account is not None:
             try:
                 from clawk_cli.auth_constants import _decode_jwt_claims
+
                 new_account = _decode_jwt_claims(str(api_key)).get("sub")
             except Exception:
                 new_account = None
@@ -639,12 +878,17 @@ class ClientLifecycleMixin:
                 return False
         if self.api_mode == "anthropic_messages":
             self.api_key, self.base_url = api_key.strip(), base_url.strip().rstrip("/")
-            self._anthropic_api_key, self._anthropic_base_url = self.api_key, self.base_url
+            self._anthropic_api_key, self._anthropic_base_url = (
+                self.api_key,
+                self.base_url,
+            )
             self._rebuild_anthropic_client()
             return True
         # Nous requests should not inherit OpenRouter-only attribution headers.
         self._client_kwargs.pop("default_headers", None)
-        return self._adopt_openai_credentials(api_key, base_url, reason="nous_credential_refresh")
+        return self._adopt_openai_credentials(
+            api_key, base_url, reason="nous_credential_refresh"
+        )
 
     # Adopt a fresh key this many seconds before the one in hand expires. Wider than the store's
     # own refresh skew (120 s) so the keepalive has normally already minted the replacement.
@@ -666,22 +910,30 @@ class ClientLifecycleMixin:
         changes who is billed). When either side lacks a ``sub`` nothing is adopted here; the
         reactive 401 path is unchanged.
         """
-        if getattr(self, "provider", "") != "nous" or not getattr(self, "api_key", None):
+        if getattr(self, "provider", "") != "nous" or not getattr(
+            self, "api_key", None
+        ):
             return False
         try:
             from clawk_cli.auth_constants import _decode_jwt_claims
+
             claims = _decode_jwt_claims(self.api_key)
         except Exception:
             return False
         exp, account = claims.get("exp"), claims.get("sub")
-        if not account or not isinstance(exp, (int, float)) or exp - time.time() > self._NOUS_KEY_ADOPT_SKEW_S:
+        if (
+            not account
+            or not isinstance(exp, (int, float))
+            or exp - time.time() > self._NOUS_KEY_ADOPT_SKEW_S
+        ):
             return False
         try:
-            return self._try_refresh_nous_client_credentials(force=False, require_account=str(account))
+            return self._try_refresh_nous_client_credentials(
+                force=False, require_account=str(account)
+            )
         except Exception:
             logger.debug("Nous key pre-expiry adoption failed", exc_info=True)
             return False
-
 
     def _resolve_env_credentials(self) -> Optional[tuple]:
         """Current ``.env``-sourced ``(api_key, base_url, default_base)`` for this provider, or ``None``.
@@ -694,44 +946,79 @@ class ClientLifecycleMixin:
         except ImportError:
             return None
         pconfig = PROVIDER_REGISTRY.get(self.provider)
-        if pconfig and getattr(pconfig, "auth_type", "") == "api_key" and getattr(pconfig, "api_key_env_vars", ()):
+        if (
+            pconfig
+            and getattr(pconfig, "auth_type", "") == "api_key"
+            and getattr(pconfig, "api_key_env_vars", ())
+        ):
             # First non-empty env var wins (lazy: later vars are not read).
-            api_key = next((k for k in (get_env_prefer_dotenv(v).strip() for v in pconfig.api_key_env_vars) if k), "")
+            api_key = next(
+                (
+                    k
+                    for k in (
+                        get_env_prefer_dotenv(v).strip()
+                        for v in pconfig.api_key_env_vars
+                    )
+                    if k
+                ),
+                "",
+            )
             if not api_key:
                 return None
             url_var = pconfig.base_url_env_var
-            env_url = get_env_prefer_dotenv(url_var).strip().rstrip("/") if url_var else ""
+            env_url = (
+                get_env_prefer_dotenv(url_var).strip().rstrip("/") if url_var else ""
+            )
             default_base = (pconfig.inference_base_url or "").strip().rstrip("/")
             base_url = env_url or default_base
             if self.provider == "actual":
                 from clawk_cli.auth import normalize_actual_base_url
-                from clawk_cli.runtime_provider import _config_base_url_for_provider, _get_model_config
-                configured_base = _config_base_url_for_provider(_get_model_config(), "actual")
+                from clawk_cli.runtime_provider import (
+                    _config_base_url_for_provider,
+                    _get_model_config,
+                )
+
+                configured_base = _config_base_url_for_provider(
+                    _get_model_config(), "actual"
+                )
                 base_url = normalize_actual_base_url(configured_base or base_url)
             elif self.provider in ("kimi-coding", "zai"):
                 from clawk_cli import auth as _auth
-                resolver = _auth._resolve_kimi_base_url if self.provider == "kimi-coding" else _auth._resolve_zai_base_url
-                base_url = resolver(api_key, pconfig.inference_base_url, env_url).rstrip("/")
+
+                resolver = (
+                    _auth._resolve_kimi_base_url
+                    if self.provider == "kimi-coding"
+                    else _auth._resolve_zai_base_url
+                )
+                base_url = resolver(
+                    api_key, pconfig.inference_base_url, env_url
+                ).rstrip("/")
         elif self.provider == "custom":
             # Named custom provider: identity in config, credential in key_env; no key_env → nothing to watch.
             try:
                 from clawk_cli.runtime_provider import _get_named_custom_provider
             except ImportError:
                 return None
-            custom_provider = _get_named_custom_provider(getattr(self, "requested_provider", "") or "")
+            custom_provider = _get_named_custom_provider(
+                getattr(self, "requested_provider", "") or ""
+            )
             key_env = str((custom_provider or {}).get("key_env") or "").strip()
             api_key = get_env_prefer_dotenv(key_env).strip() if key_env else ""
             if not custom_provider or not api_key:
                 return None
             # Custom providers pin base_url in config, so only key edits are adopted here.
-            base_url = default_base = str(custom_provider.get("base_url") or "").strip().rstrip("/")
+            base_url = default_base = (
+                str(custom_provider.get("base_url") or "").strip().rstrip("/")
+            )
         else:
             return None
         if not base_url:
             return None
         return api_key, base_url, default_base
 
-    def _should_adopt_env_credentials(self, api_key: str, base_url: str, default_base: str) -> bool:
+    def _should_adopt_env_credentials(
+        self, api_key: str, base_url: str, default_base: str
+    ) -> bool:
         """Adopt only env *edits* (resolved value changed since last look), never drift from ``self.*``:
         pool rotation/failover and a config ``model.base_url`` legitimately move the session."""
         prev = getattr(self, "_env_creds_seen", None)
@@ -741,12 +1028,17 @@ class ClientLifecycleMixin:
             # First look: adopt only the boot-default case (anything else is unattributable on turn one), and
             # never stomp a pool-rotated key.
             pool_rotated = (
-                api_key != self.api_key and getattr(self, "_credential_pool", None) is not None
+                api_key != self.api_key
+                and getattr(self, "_credential_pool", None) is not None
                 and getattr(self, "_credential_pool_entry_id", None)
             )
             return current_base == default_base and not unchanged and not pool_rotated
         # Adopt only while the session still runs on the registry default or the previously-seen env value.
-        return (base_url, api_key) != prev and current_base in {default_base, prev[0]} and not unchanged
+        return (
+            (base_url, api_key) != prev
+            and current_base in {default_base, prev[0]}
+            and not unchanged
+        )
 
     def _try_refresh_env_client_credentials(self) -> bool:
         """Adopt ``~/.clawksis/.env`` credential/base-url edits at the turn boundary (a Settings save updates ``.env``
@@ -756,7 +1048,9 @@ class ClientLifecycleMixin:
         latter resolve to ``provider="custom"`` with no registry entry, so they are matched through the
         runtime provider's config lookup instead.
         """
-        if self.api_mode != "chat_completions" or getattr(self, "_fallback_activated", False):
+        if self.api_mode != "chat_completions" or getattr(
+            self, "_fallback_activated", False
+        ):
             return False
         resolved = self._resolve_env_credentials()
         if resolved is None:
@@ -766,7 +1060,10 @@ class ClientLifecycleMixin:
             self._env_creds_seen = (base_url, api_key)
             return False
         from clawk_cli.route_identity import normalize_route_base_url
-        route_changed = normalize_route_base_url(self.base_url) != normalize_route_base_url(base_url)
+
+        route_changed = normalize_route_base_url(
+            self.base_url
+        ) != normalize_route_base_url(base_url)
         prior_api_key, prior_base_url = self.api_key, self.base_url
         prior_client_kwargs = dict(self._client_kwargs)
         self.api_key, self.base_url = api_key, base_url
@@ -782,11 +1079,18 @@ class ClientLifecycleMixin:
         # Rebind the pool entry id to the adopted key, or the next 429 quarantines the wrong credential.
         try:
             from agent.agent_runtime_helpers import sync_credential_pool_entry_id
+
             sync_credential_pool_entry_id(self)
         except Exception:
-            logger.debug("sync_credential_pool_entry_id after env refresh failed", exc_info=True)
+            logger.debug(
+                "sync_credential_pool_entry_id after env refresh failed", exc_info=True
+            )
         self._env_creds_seen = (base_url, api_key)
-        logger.info("Applied updated .env credentials for %s: endpoint %s", self.provider, self.base_url)
+        logger.info(
+            "Applied updated .env credentials for %s: endpoint %s",
+            self.provider,
+            self.base_url,
+        )
         return True
 
     def _try_refresh_vertex_client_credentials(self) -> bool:
@@ -795,18 +1099,23 @@ class ClientLifecycleMixin:
             return False
         try:
             from agent.vertex_adapter import get_vertex_config
+
             token, base_url = get_vertex_config()
         except Exception as exc:
             logger.debug("Vertex credential refresh failed: %s", exc)
             return False
         ok = _valid_credential_pair(token, base_url) and self._adopt_openai_credentials(
-            token, base_url, reason="vertex_credential_refresh",
+            token,
+            base_url,
+            reason="vertex_credential_refresh",
         )
         if ok:
             logger.info("Vertex AI OAuth token refreshed")
         return ok
 
-    def _apply_copilot_token(self, token: str, enterprise_base_url: Any, *, reason: str) -> bool:
+    def _apply_copilot_token(
+        self, token: str, enterprise_base_url: Any, *, reason: str
+    ) -> bool:
         self.api_key = token
         if enterprise_base_url:
             self.base_url = enterprise_base_url.rstrip("/")
@@ -823,12 +1132,20 @@ class ClientLifecycleMixin:
         if not self._is_copilot_provider():
             return False
         try:
-            from clawk_cli.copilot_auth import resolve_copilot_token, get_copilot_api_token, evict_cached_exchanged_token
+            from clawk_cli.copilot_auth import (
+                resolve_copilot_token,
+                get_copilot_api_token,
+                evict_cached_exchanged_token,
+            )
+
             new_token, token_source = resolve_copilot_token()
         except Exception as exc:
             logger.debug("Copilot credential refresh failed: %s", exc)
             return False
-        new_token, enterprise_base_url = (new_token.strip() if isinstance(new_token, str) else ""), None
+        new_token, enterprise_base_url = (
+            (new_token.strip() if isinstance(new_token, str) else ""),
+            None,
+        )
         if not new_token:
             return False
         # Fall back to the raw token only if the exchange itself is unavailable.
@@ -838,8 +1155,12 @@ class ClientLifecycleMixin:
             if isinstance(api_token, str) and api_token.strip():
                 new_token, enterprise_base_url = api_token.strip(), exchanged_base_url
         except Exception as exc:
-            logger.debug("Copilot 401 re-exchange failed, using resolved token: %s", exc)
-        ok = self._apply_copilot_token(new_token, enterprise_base_url, reason="copilot_credential_refresh")
+            logger.debug(
+                "Copilot 401 re-exchange failed, using resolved token: %s", exc
+            )
+        ok = self._apply_copilot_token(
+            new_token, enterprise_base_url, reason="copilot_credential_refresh"
+        )
         if ok:
             logger.info("Copilot credentials refreshed from %s", token_source)
         return ok
@@ -853,7 +1174,12 @@ class ClientLifecycleMixin:
         if not self._is_copilot_provider():
             return False
         try:
-            from clawk_cli.copilot_auth import resolve_copilot_token, get_copilot_api_token, evict_cached_exchanged_token
+            from clawk_cli.copilot_auth import (
+                resolve_copilot_token,
+                get_copilot_api_token,
+                evict_cached_exchanged_token,
+            )
+
             raw_token, token_source = resolve_copilot_token()
             if not isinstance(raw_token, str) or not raw_token.strip():
                 return False
@@ -873,9 +1199,16 @@ class ClientLifecycleMixin:
                 "(network/exchange endpoint unavailable)."
             )
             return False
-        ok = self._apply_copilot_token(api_token.strip(), enterprise_base_url, reason="copilot_stale_credential_recovery")
+        ok = self._apply_copilot_token(
+            api_token.strip(),
+            enterprise_base_url,
+            reason="copilot_stale_credential_recovery",
+        )
         if ok:
-            logger.info("Copilot credentials re-exchanged after stale-credential 400 (source=%s)", token_source)
+            logger.info(
+                "Copilot credentials re-exchanged after stale-credential 400 (source=%s)",
+                token_source,
+            )
         return ok
 
     def _try_refresh_anthropic_client_credentials(self) -> bool:
@@ -883,8 +1216,10 @@ class ClientLifecycleMixin:
         # and Azure use static keys — a refresh would pick up the ~/.claude OAuth token and break auth.
         anthropic_base_url = getattr(self, "_anthropic_base_url", "") or ""
         if (
-            self.api_mode != "anthropic_messages" or not hasattr(self, "_anthropic_api_key")
-            or self.provider != "anthropic" or base_url_host_matches(anthropic_base_url, "azure.com")
+            self.api_mode != "anthropic_messages"
+            or not hasattr(self, "_anthropic_api_key")
+            or self.provider != "anthropic"
+            or base_url_host_matches(anthropic_base_url, "azure.com")
         ):
             return False
         # Off the official hosts (a /anthropic proxy the resolver accepts, or a URL-bearing alias,
@@ -892,12 +1227,18 @@ class ClientLifecycleMixin:
         # ANTHROPIC_API_KEY / the OAuth token would leak it (#17829). Hostname match, not substring,
         # so ``proxy.example/anthropic.com`` stays foreign.
         official_host = not anthropic_base_url or any(
-            base_url_host_matches(anthropic_base_url, host) for host in ("anthropic.com", "claude.com"))
+            base_url_host_matches(anthropic_base_url, host)
+            for host in ("anthropic.com", "claude.com")
+        )
         current_key = str(self._anthropic_api_key or "")
-        if not official_host and not (current_key.startswith("sk-ant-") or getattr(self, "_is_anthropic_oauth", False)):
+        if not official_host and not (
+            current_key.startswith("sk-ant-")
+            or getattr(self, "_is_anthropic_oauth", False)
+        ):
             return False
         try:
             from agent.anthropic_credentials import resolve_anthropic_token
+
             new_token = resolve_anthropic_token(model=self.model)
         except Exception as exc:
             logger.debug("Anthropic credential refresh failed: %s", exc)
@@ -909,12 +1250,19 @@ class ClientLifecycleMixin:
             self._anthropic_client.close()
         try:
             base_url = getattr(self, "_anthropic_base_url", None)
-            self._anthropic_client = self._build_direct_anthropic_client(new_token, base_url)
+            self._anthropic_client = self._build_direct_anthropic_client(
+                new_token, base_url
+            )
         except Exception as exc:
-            logger.warning("Failed to rebuild Anthropic client after credential refresh: %s", exc)
+            logger.warning(
+                "Failed to rebuild Anthropic client after credential refresh: %s", exc
+            )
             return False
         old_token = self._anthropic_api_key
-        self._anthropic_api_key, self._is_anthropic_oauth = new_token, self._anthropic_oauth_flag(new_token)
+        self._anthropic_api_key, self._is_anthropic_oauth = (
+            new_token,
+            self._anthropic_oauth_flag(new_token),
+        )
         # Claude Code revokes the old token on refresh: every holder of it (agent.api_key, the compressor's
         # main_runtime, the fallback-restore snapshot) must move too, or compression 401s for the session's life.
         if self.api_key == old_token:
@@ -923,7 +1271,9 @@ class ClientLifecycleMixin:
         if cc is not None and getattr(cc, "api_key", None) == old_token:
             cc.api_key = new_token
         rt = getattr(self, "_primary_runtime", None) or {}
-        if rt.get("anthropic_api_key") == old_token:  # fallback restore rebuilds from the key + flag pair
+        if (
+            rt.get("anthropic_api_key") == old_token
+        ):  # fallback restore rebuilds from the key + flag pair
             rt["is_anthropic_oauth"] = self._is_anthropic_oauth
         for k in ("api_key", "anthropic_api_key", "compressor_api_key"):
             if rt.get(k) == old_token:
@@ -931,11 +1281,14 @@ class ClientLifecycleMixin:
         # The turn's aux runtime was published before the first request triggered this refresh, so
         # same-turn `auto` aux calls (approvals, goal judge, plugin llm) would still send the revoked token.
         from agent.auxiliary_key_rotation import rotate_runtime_main_api_key
+
         rotate_runtime_main_api_key(old_token, new_token)
         return True
 
     # ------------------------------------------------------------------ route-derived client config
-    def _apply_client_headers_for_base_url(self, base_url: str, *, apply_user_headers: bool = True) -> None:
+    def _apply_client_headers_for_base_url(
+        self, base_url: str, *, apply_user_headers: bool = True
+    ) -> None:
         for host, build in _ROUTE_DEFAULT_HEADERS:
             if base_url_host_matches(base_url, host):
                 self._client_kwargs["default_headers"] = build(self, base_url)
@@ -945,8 +1298,13 @@ class ClientLifecycleMixin:
             self._client_kwargs.pop("default_headers", None)
             with suppress(Exception):
                 from providers import get_provider_profile
+
                 profile = get_provider_profile(self.provider)
-                if profile and profile.default_headers and (profile_headers := dict(profile.default_headers)):
+                if (
+                    profile
+                    and profile.default_headers
+                    and (profile_headers := dict(profile.default_headers))
+                ):
                     self._client_kwargs["default_headers"] = profile_headers
         # User overrides win over URL/profile defaults for the same route; a swap to another endpoint must not
         # inherit them.
@@ -955,8 +1313,13 @@ class ClientLifecycleMixin:
         # Per-provider extra_headers last so they survive swaps/rebuilds. SECURITY: may carry credentials; never log.
         if self.api_mode not in ("anthropic_messages", "bedrock_converse"):
             try:
-                from clawk_cli.config import apply_custom_provider_extra_headers_to_client_kwargs
-                apply_custom_provider_extra_headers_to_client_kwargs(self._client_kwargs, base_url)
+                from clawk_cli.config import (
+                    apply_custom_provider_extra_headers_to_client_kwargs,
+                )
+
+                apply_custom_provider_extra_headers_to_client_kwargs(
+                    self._client_kwargs, base_url
+                )
             except Exception:
                 logger.debug("custom-provider extra_headers skipped", exc_info=True)
 
@@ -965,7 +1328,10 @@ class ClientLifecycleMixin:
         Delegates to ``agent.auxiliary_client`` so main and aux clients cannot drift. No-op for Anthropic/Bedrock."""
         if self.api_mode in ("anthropic_messages", "bedrock_converse"):
             return
-        from agent.auxiliary_client import _apply_user_default_headers as _merge_user_headers
+        from agent.auxiliary_client import (
+            _apply_user_default_headers as _merge_user_headers,
+        )
+
         merged = _merge_user_headers(self._client_kwargs.get("default_headers"))
         if merged:
             self._client_kwargs["default_headers"] = merged
@@ -974,18 +1340,35 @@ class ClientLifecycleMixin:
         """Adopt *entry* as the live credential. Returns False, changing nothing, when the entry's
         route cannot serve this conversation's model (a conversation's model is never rewritten by a
         rotation; the caller treats a refused swap as "no entry")."""
-        runtime_key = getattr(entry, "runtime_api_key", None) or getattr(entry, "access_token", "")
-        runtime_base = getattr(entry, "runtime_base_url", None) or getattr(entry, "base_url", None) or self.base_url
+        runtime_key = getattr(entry, "runtime_api_key", None) or getattr(
+            entry, "access_token", ""
+        )
+        runtime_base = (
+            getattr(entry, "runtime_base_url", None)
+            or getattr(entry, "base_url", None)
+            or self.base_url
+        )
         from clawk_cli.providers import is_actual_route
+
         actual_route = is_actual_route(getattr(self, "provider", ""), runtime_base)
         if actual_route:
             from clawk_cli.auth import normalize_actual_base_url
+
             runtime_base = normalize_actual_base_url(runtime_base)
-        stripped_base = runtime_base.rstrip("/") if isinstance(runtime_base, str) else runtime_base
+        stripped_base = (
+            runtime_base.rstrip("/") if isinstance(runtime_base, str) else runtime_base
+        )
         # Refuse BEFORE any state changes below: a refused swap must leave the agent exactly as it was.
         from clawk_cli.anon_auth import route_can_serve_model
-        if not route_can_serve_model(getattr(self, "provider", None), stripped_base, getattr(self, "model", None)):
-            logger.info("Credential %s skipped: its route cannot serve model %s", getattr(entry, "id", "?"), self.model)
+
+        if not route_can_serve_model(
+            getattr(self, "provider", None), stripped_base, getattr(self, "model", None)
+        ):
+            logger.info(
+                "Credential %s skipped: its route cannot serve model %s",
+                getattr(entry, "id", "?"),
+                self.model,
+            )
             return False
         if actual_route:
             self.api_mode = "chat_completions"
@@ -993,12 +1376,20 @@ class ClientLifecycleMixin:
                 self._transport_cache.clear()
         self._credential_pool_entry_id = getattr(entry, "id", None)
         from clawk_cli.route_identity import normalize_route_base_url
-        route_changed = normalize_route_base_url(self.base_url) != normalize_route_base_url(runtime_base)
+
+        route_changed = normalize_route_base_url(
+            self.base_url
+        ) != normalize_route_base_url(runtime_base)
         if self.api_mode == "anthropic_messages":
             with suppress(Exception):
                 self._anthropic_client.close()
-            self._anthropic_api_key, self._anthropic_base_url = runtime_key, stripped_base
-            self._anthropic_client = self._build_direct_anthropic_client(runtime_key, self._anthropic_base_url)
+            self._anthropic_api_key, self._anthropic_base_url = (
+                runtime_key,
+                stripped_base,
+            )
+            self._anthropic_client = self._build_direct_anthropic_client(
+                runtime_key, self._anthropic_base_url
+            )
             self._is_anthropic_oauth = self._anthropic_oauth_flag(runtime_key)
             self.api_key, self.base_url = runtime_key, stripped_base
             return True
@@ -1019,14 +1410,24 @@ class ClientLifecycleMixin:
         self._client_kwargs.pop("ssl_ca_cert", None)
         try:
             from clawk_cli.config import (
-                apply_custom_provider_tls_to_client_kwargs, get_compatible_custom_providers, load_config_readonly,
+                apply_custom_provider_tls_to_client_kwargs,
+                get_compatible_custom_providers,
+                load_config_readonly,
             )
+
             apply_custom_provider_tls_to_client_kwargs(
-                self._client_kwargs, str(self.base_url or ""), get_compatible_custom_providers(load_config_readonly()),
+                self._client_kwargs,
+                str(self.base_url or ""),
+                get_compatible_custom_providers(load_config_readonly()),
             )
         except Exception:
-            logger.debug("custom-provider TLS resolution skipped on credential rotation", exc_info=True)
-        self._apply_client_headers_for_base_url(self.base_url, apply_user_headers=not route_changed)
+            logger.debug(
+                "custom-provider TLS resolution skipped on credential rotation",
+                exc_info=True,
+            )
+        self._apply_client_headers_for_base_url(
+            self.base_url, apply_user_headers=not route_changed
+        )
 
     def _anthropic_messages_create(self, api_kwargs: dict, *, client: Any = None):
         # A supplied request-local client was already refreshed in _create_request_anthropic_client.
@@ -1034,13 +1435,18 @@ class ClientLifecycleMixin:
             self._try_refresh_anthropic_client_credentials()
         # Strips Responses-only kwargs that leak in under an api_mode-flip race.
         from agent.anthropic_adapter import create_anthropic_message
+
         # on_response: rate-limit + credits state live in response headers, which the parsed Message drops.
         return create_anthropic_message(
-            client or self._anthropic_client, api_kwargs, log_prefix=getattr(self, "log_prefix", ""),
+            client or self._anthropic_client,
+            api_kwargs,
+            log_prefix=getattr(self, "log_prefix", ""),
             prefer_stream=not bool(getattr(self, "_disable_streaming", False)),
             on_response=self._capture_anthropic_response_headers,
         )
 
     def _rebuild_anthropic_client(self) -> None:
         """Rebuild the Anthropic client after an interrupt/stale call (Bedrock SDK for bedrock; honors 1M-beta flag)."""
-        self._anthropic_client = self._build_anthropic_client_for_key(self._request_anthropic_client_key())
+        self._anthropic_client = self._build_anthropic_client_for_key(
+            self._request_anthropic_client_key()
+        )

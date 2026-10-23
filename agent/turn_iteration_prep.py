@@ -38,6 +38,7 @@ def _anchors_current_turn(messages: Any, idx: Any, user_message: Any) -> bool:
     view = user_originated_turn_view(msg)
     return view is not None and view.get("content") == user_message
 
+
 ITERATION_BUDGET_WARNING_TEMPLATE = (
     "[SYSTEM NOTICE — iteration budget checkpoint] You have used {used} of {maximum} "
     "iterations. Checkpoint durable progress now, then continue the task; do not stop "
@@ -84,8 +85,12 @@ def _maybe_inject_iteration_budget_warning(agent: Any, messages: Any) -> bool:
         )
     # Only the current tool-result tail is mutable; an older turn may already be cached.
     from agent.context_compressor import _DB_PERSISTED_MARKER
-    if (not messages or messages[-1].get("role") != "tool"
-            or messages[-1].get(_DB_PERSISTED_MARKER)):
+
+    if (
+        not messages
+        or messages[-1].get("role") != "tool"
+        or messages[-1].get(_DB_PERSISTED_MARKER)
+    ):
         return False
     message = messages[-1]
     content = message.get("content", "")
@@ -116,13 +121,16 @@ class IterationPrep:
 # position is reproduced verbatim. The row is never dropped: removal can form
 # ``tool -> user`` (#48879) or ``user -> user``, which repair then merges —
 # losing the second row's checkpoint ``api_content``. Neutralise a copy instead.
-def _neutralise_replay_echo_ghosts(seq: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+def _neutralise_replay_echo_ghosts(
+    seq: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
     """(new list, neutralised); never mutates ``seq`` or its row dicts."""
     from agent.agent_runtime_helpers_placeholders import (
         _INTERRUPTED_PLACEHOLDER,
         _LEGACY_INTERRUPTED_PLACEHOLDER,
     )
     from agent.conversation_loop import _INTERRUPT_SCAFFOLD_MARKER
+
     # Retire only spellings that predate the #132949 wording change: the scaffold
     # (#81841) and the old placeholder, both reproduced verbatim. The current
     # placeholder is the post-fix value — it stays (this is also what
@@ -132,8 +140,12 @@ def _neutralise_replay_echo_ghosts(seq: list[dict[str, Any]]) -> tuple[list[dict
     out: list[dict[str, Any]] = []
     for m in seq:
         if (
-            m.get("display_kind") == "hidden" and m.get("role") == "assistant"
-            and any(isinstance(m.get(k), str) and m[k].strip() in hazards for k in ("content", "api_content"))
+            m.get("display_kind") == "hidden"
+            and m.get("role") == "assistant"
+            and any(
+                isinstance(m.get(k), str) and m[k].strip() in hazards
+                for k in ("content", "api_content")
+            )
         ):
             m = {**m, "content": "", "api_content": _INTERRUPTED_PLACEHOLDER}
             neutralised += 1
@@ -142,7 +154,12 @@ def _neutralise_replay_echo_ghosts(seq: list[dict[str, Any]]) -> tuple[list[dict
 
 
 def prepare_iteration(
-    agent: Any, *, messages: Any, api_call_count: Any, user_message: Any = None, current_turn_user_idx: Any = None,
+    agent: Any,
+    *,
+    messages: Any,
+    api_call_count: Any,
+    user_message: Any = None,
+    current_turn_user_idx: Any = None,
 ) -> IterationPrep:
     """Prepare ``messages`` for this iteration in the original order. Every mutation here is
     cache-safe by construction: steer text is appended as a new (not yet persisted) user row, the ghost-row
@@ -153,6 +170,7 @@ def prepare_iteration(
     # before this iteration's request is built and with nothing in flight.
     if getattr(agent, "_nous_wire_pending", None):
         from agent.nous_wire import apply_pending_wire_switch
+
         apply_pending_wire_switch(agent)
 
     # Fire step_callback for gateway hooks (agent:step event).
@@ -160,7 +178,9 @@ def prepare_iteration(
         try:
             agent.step_callback(api_call_count, _previous_tool_round(messages))
         except Exception as _step_err:
-            logger.debug("step_callback error (iteration %s): %s", api_call_count, _step_err)
+            logger.debug(
+                "step_callback error (iteration %s): %s", api_call_count, _step_err
+            )
 
     # Tool-calling iterations for the skill nudge; resets whenever skill_manage is used.
     if agent._skill_nudge_interval > 0 and "skill_manage" in agent.valid_tool_names:
@@ -188,7 +208,9 @@ def prepare_iteration(
     # Appended to the newest tool result; never a synthetic user/system row.
     _maybe_inject_iteration_budget_warning(agent, messages)
 
-    request_logger = getattr(agent, "logger", None) or logger  # same name as the origin module
+    request_logger = (
+        getattr(agent, "logger", None) or logger
+    )  # same name as the origin module
     # Per-agent validation cursor skips re-parsing tool_call args already validated.
     # Identity-keyed; a rewritten list breaks the prefix match and forces a re-scan.
     _sanitize_cursor = getattr(agent, "_sanitize_args_cursor", None)
@@ -197,7 +219,10 @@ def prepare_iteration(
         with suppress(Exception):
             agent._sanitize_args_cursor = _sanitize_cursor
     repaired_tool_calls = agent._sanitize_tool_call_arguments(
-        messages, logger=request_logger, session_id=agent.session_id, cursor=_sanitize_cursor
+        messages,
+        logger=request_logger,
+        session_id=agent.session_id,
+        cursor=_sanitize_cursor,
     )
     if repaired_tool_calls > 0:
         # In-place arg repair may have popped _DB_PERSISTED_MARKER off stamped live dicts;
@@ -213,13 +238,15 @@ def prepare_iteration(
     if _echo_neutralised:
         request_logger.info(
             "Neutralised %d interrupt-placeholder row(s) before request (session=%s)",
-            _echo_neutralised, agent.session_id or "-",
+            _echo_neutralised,
+            agent.session_id or "-",
         )
 
     # Repair malformed role alternation (tool→user / user→user tails): providers
     # return empty content on them and the empty-retry loop spins. The _with_cursor
     # variant also recomputes the SessionDB flush cursor after compaction.
     from agent.agent_runtime_helpers import repair_message_sequence_with_cursor
+
     repaired_seq = repair_message_sequence_with_cursor(agent, messages)
     if repaired_seq > 0:
         request_logger.info(
@@ -237,7 +264,9 @@ def prepare_iteration(
             if _reanchored_idx != current_turn_user_idx:
                 request_logger.info(
                     "Re-anchored current_turn_user_idx %s -> %s after alternation repair (session=%s)",
-                    current_turn_user_idx, _reanchored_idx, agent.session_id or "-",
+                    current_turn_user_idx,
+                    _reanchored_idx,
+                    agent.session_id or "-",
                 )
                 current_turn_user_idx = _reanchored_idx
     # Mid-turn compaction (post-tool gate, overflow restart, recovery) rebuilds ``messages`` without
@@ -245,15 +274,21 @@ def prepare_iteration(
     # tool rows: prefix canonicalization then drops the assistant tool_call whose result fell past the
     # split, the orphaned result is sanitized away, and the model silently loses tool output that
     # state.db still holds. A valid index always lands on this turn's user row; re-anchor otherwise.
-    if user_message is not None and not _anchors_current_turn(messages, current_turn_user_idx, user_message):
+    if user_message is not None and not _anchors_current_turn(
+        messages, current_turn_user_idx, user_message
+    ):
         _reanchored_idx = _reanchor(agent, messages, user_message)
         request_logger.info(
             "Re-anchored stale current_turn_user_idx %s -> %s (session=%s)",
-            current_turn_user_idx, _reanchored_idx, agent.session_id or "-",
+            current_turn_user_idx,
+            _reanchored_idx,
+            agent.session_id or "-",
         )
         current_turn_user_idx = _reanchored_idx
     return IterationPrep(
-        action="fallthrough", messages=messages, request_logger=request_logger,
+        action="fallthrough",
+        messages=messages,
+        request_logger=request_logger,
         current_turn_user_idx=current_turn_user_idx,
     )
 
@@ -263,7 +298,7 @@ def _previous_tool_round(messages: Any) -> list:
     for _idx, _m in enumerate(reversed(messages)):
         if _m.get("role") == "assistant" and _m.get("tool_calls"):
             _results_by_id = {}
-            for _tm in messages[len(messages) - _idx:]:
+            for _tm in messages[len(messages) - _idx :]:
                 if _tm.get("role") != "tool":
                     break
                 _tcid = _tm.get("tool_call_id")
@@ -281,17 +316,24 @@ def _previous_tool_round(messages: Any) -> list:
     return []
 
 
-def _inject_steer_after_newest_tool_result(agent: Any, messages: Any, steer_text: str) -> None:
+def _inject_steer_after_newest_tool_result(
+    agent: Any, messages: Any, steer_text: str
+) -> None:
     """Append the steer marker as a standalone user row after the newest tool message; with no
     tool message, put the text back so the post-tool-execution drain delivers it later."""
     for _si in range(len(messages) - 1, -1, -1):
         _sm = messages[_si]
         if isinstance(_sm, dict) and _sm.get("role") == "tool":
             from agent.prompt_builder import steer_user_row
+
             messages.insert(_si + 1, steer_user_row(steer_text))
-            logger.debug("Pre-API-call steer drain: appended user row after tool msg at index %d", _si)
+            logger.debug(
+                "Pre-API-call steer drain: appended user row after tool msg at index %d",
+                _si,
+            )
             return
     from agent.agent_runtime_helpers import _requeue_pending_steer
+
     _requeue_pending_steer(agent, steer_text)
 
 
@@ -305,15 +347,26 @@ class ApiCallAnnouncement:
 
 
 def announce_api_call(
-    agent: Any, *, messages: Any, api_messages: Any, api_call_count: Any, approx_tokens: Any,
+    agent: Any,
+    *,
+    messages: Any,
+    api_messages: Any,
+    api_call_count: Any,
+    approx_tokens: Any,
     total_chars: Any,
 ) -> ApiCallAnnouncement:
     """Print the request summary (verbose) or start the quiet-mode thinking indicator."""
     thinking_spinner = None
     if not agent.quiet_mode:
-        agent._vprint(f"\n{agent.log_prefix}🔄 Making API call #{api_call_count}/{agent.max_iterations}...")
-        agent._vprint(f"{agent.log_prefix}   📊 Request size: {len(api_messages)} messages, ~{approx_tokens:,} tokens (~{total_chars:,} chars)")
-        agent._vprint(f"{agent.log_prefix}   🔧 Available tools: {len(agent.tools) if agent.tools else 0}")
+        agent._vprint(
+            f"\n{agent.log_prefix}🔄 Making API call #{api_call_count}/{agent.max_iterations}..."
+        )
+        agent._vprint(
+            f"{agent.log_prefix}   📊 Request size: {len(api_messages)} messages, ~{approx_tokens:,} tokens (~{total_chars:,} chars)"
+        )
+        agent._vprint(
+            f"{agent.log_prefix}   🔧 Available tools: {len(agent.tools) if agent.tools else 0}"
+        )
     else:
         # Animated thinking spinner in quiet mode
         face = random.choice(KawaiiSpinner.get_thinking_faces())
@@ -325,14 +378,20 @@ def announce_api_call(
         elif not agent._has_stream_consumers() and agent._should_start_quiet_spinner():
             # Raw KawaiiSpinner only when no streaming consumers and the
             # spinner output has a safe sink.
-            spinner_type = random.choice(['brain', 'sparkle', 'pulse', 'moon', 'star'])
-            thinking_spinner = KawaiiSpinner(f"{face} {verb}...", spinner_type=spinner_type, print_fn=agent._print_fn)
+            spinner_type = random.choice(["brain", "sparkle", "pulse", "moon", "star"])
+            thinking_spinner = KawaiiSpinner(
+                f"{face} {verb}...", spinner_type=spinner_type, print_fn=agent._print_fn
+            )
             thinking_spinner.start()
 
     # Log request details if verbose
     if agent.verbose_logging:
-        logging.debug(f"API Request - Model: {agent.model}, Messages: {len(messages)}, Tools: {len(agent.tools) if agent.tools else 0}")
-        logging.debug(f"Last message role: {messages[-1]['role'] if messages else 'none'}")
+        logging.debug(
+            f"API Request - Model: {agent.model}, Messages: {len(messages)}, Tools: {len(agent.tools) if agent.tools else 0}"
+        )
+        logging.debug(
+            f"Last message role: {messages[-1]['role'] if messages else 'none'}"
+        )
         logging.debug(f"Total message size: ~{approx_tokens:,} tokens")
     return ApiCallAnnouncement(action="fallthrough", thinking_spinner=thinking_spinner)
 
@@ -350,20 +409,29 @@ class IterationStart:
 
 
 def begin_iteration(
-    agent: Any, *, messages: Any, conversation_history: Any, original_user_message: Any,
-    api_call_count: Any, interrupted: Any, _turn_exit_reason: Any,
+    agent: Any,
+    *,
+    messages: Any,
+    conversation_history: Any,
+    original_user_message: Any,
+    api_call_count: Any,
+    interrupted: Any,
+    _turn_exit_reason: Any,
 ) -> IterationStart:
     """Iteration entry in the original order: apply a pending redirect, reset the checkpoint
     dedup, then the interrupt / review-budget / iteration-budget exits. ``api_call_count`` is
     incremented here (the grace call consumes its flag instead of the budget)."""
     from agent.conversation_loop import (
-        _apply_active_turn_redirect, _review_input_budget_exhausted
+        _apply_active_turn_redirect,
+        _review_input_budget_exhausted,
     )
 
     def _verdict(action: str) -> IterationStart:
         return IterationStart(
-            action=action, original_user_message=original_user_message,
-            api_call_count=api_call_count, interrupted=interrupted,
+            action=action,
+            original_user_message=original_user_message,
+            api_call_count=api_call_count,
+            interrupted=interrupted,
             _turn_exit_reason=_turn_exit_reason,
         )
 
@@ -372,7 +440,8 @@ def begin_iteration(
         _apply_active_turn_redirect(agent, messages, _redirect_text)
         if isinstance(original_user_message, str):
             original_user_message = (
-                f"{original_user_message}\n\n" f"User correction during the turn: {_redirect_text}"
+                f"{original_user_message}\n\n"
+                f"User correction during the turn: {_redirect_text}"
             )
         agent._persist_session(messages, conversation_history)
 
@@ -382,7 +451,9 @@ def begin_iteration(
     if agent._interrupt_requested:
         interrupted = True
         _issuer = interrupt_issuer(agent)
-        _turn_exit_reason = f"interrupted_by_system({_issuer})" if _issuer else "interrupted_by_user"
+        _turn_exit_reason = (
+            f"interrupted_by_system({_issuer})" if _issuer else "interrupted_by_user"
+        )
         if not agent.quiet_mode:
             agent._safe_print("\n⚡ Breaking out of tool loop due to interrupt...")
         return _verdict("break")
@@ -395,7 +466,8 @@ def begin_iteration(
             agent._safe_print(
                 f"\n⏹️  Review input budget exhausted "
                 f"({int(agent.session_input_tokens):,} tokens) — stopping "
-                f"the review tool loop before the next provider call.", diagnostic=True,
+                f"the review tool loop before the next provider call.",
+                diagnostic=True,
             )
         return _verdict("break")
 
@@ -412,7 +484,10 @@ def begin_iteration(
     elif not agent.iteration_budget.consume():
         _turn_exit_reason = "budget_exhausted"
         if not agent.quiet_mode:
-            agent._safe_print(f"\n⚠️  Iteration budget exhausted ({agent.iteration_budget.used}/{agent.iteration_budget.max_total} iterations used)", diagnostic=True)
+            agent._safe_print(
+                f"\n⚠️  Iteration budget exhausted ({agent.iteration_budget.used}/{agent.iteration_budget.max_total} iterations used)",
+                diagnostic=True,
+            )
         return _verdict("break")
     return _verdict("fallthrough")
 
@@ -435,11 +510,24 @@ class RetryRestartVerdict:
 
 
 def apply_retry_restarts(
-    agent: Any, *, _retry: Any, response: Any, interrupted: Any, messages: Any,
-    conversation_history: Any, user_message: Any, api_kwargs: Any, current_turn_user_idx: Any,
-    final_response: Any, retry_count: Any, max_retries: Any, api_call_count: Any,
-    restart_count: Any, length_continue_retries: Any,
-    _preflight_compression_blocked: Any, _turn_exit_reason: Any,
+    agent: Any,
+    *,
+    _retry: Any,
+    response: Any,
+    interrupted: Any,
+    messages: Any,
+    conversation_history: Any,
+    user_message: Any,
+    api_kwargs: Any,
+    current_turn_user_idx: Any,
+    final_response: Any,
+    retry_count: Any,
+    max_retries: Any,
+    api_call_count: Any,
+    restart_count: Any,
+    length_continue_retries: Any,
+    _preflight_compression_blocked: Any,
+    _turn_exit_reason: Any,
 ) -> RetryRestartVerdict:
     """Consume the ``TurnRetryState`` restart flags after the retry loop, in the original
     priority order. Refunds the iteration budget/count for restarts that produced no valid
@@ -452,13 +540,17 @@ def apply_retry_restarts(
     forever and hold the turn lease indefinitely."""
 
     from agent.conversation_loop import (
-        _HANDOFF_SKIP_FINAL_RESPONSE, _should_skip_model_call_for_reference_handoff
+        _HANDOFF_SKIP_FINAL_RESPONSE,
+        _should_skip_model_call_for_reference_handoff,
     )
 
     def _verdict(action: str) -> RetryRestartVerdict:
         return RetryRestartVerdict(
-            action=action, current_turn_user_idx=current_turn_user_idx,
-            final_response=final_response, retry_count=retry_count, restart_count=restart_count,
+            action=action,
+            current_turn_user_idx=current_turn_user_idx,
+            final_response=final_response,
+            retry_count=retry_count,
+            restart_count=restart_count,
             api_call_count=api_call_count,
             _preflight_compression_blocked=_preflight_compression_blocked,
             _turn_exit_reason=_turn_exit_reason,
@@ -506,7 +598,8 @@ def apply_retry_restarts(
             # api_content stamp below, the loop's injection site, and the flush's persist-override row
             # (#48677) must all target the surviving dict, not a stale position. Exact-content match first
             # so a todo-snapshot user message appended after the tail can't steal the anchor.
-            messages, user_message
+            messages,
+            user_message,
         ):
             logger.info(
                 "Skipping compressed-restart model call: reference-only "
@@ -548,14 +641,18 @@ def apply_retry_restarts(
     if _retry.restart_with_length_continuation:
         # Boost the output budget per retry (shared ladder, see boosted_output_cap).
         agent._ephemeral_max_output_tokens = boosted_output_cap(
-            agent, agent._requested_output_cap_from_api_kwargs(api_kwargs), length_continue_retries
+            agent,
+            agent._requested_output_cap_from_api_kwargs(api_kwargs),
+            length_continue_retries,
         )
         return _verdict("continue")
 
     # All retries may exhaust with `response` still None; break out cleanly.
     if response is None:
         _turn_exit_reason = "all_retries_exhausted_no_response"
-        agent._emit_diagnostic_status("❌ The model provider didn't answer after all retries. Send /retry, or switch models with /model.")
+        agent._emit_diagnostic_status(
+            "❌ The model provider didn't answer after all retries. Send /retry, or switch models with /model."
+        )
         agent._persist_session(messages, conversation_history)
         return _verdict("break")
     # A response arrived, so the turn is not stuck re-issuing a cancelled request: start

@@ -62,16 +62,22 @@ def clean_port_state():
 
 
 def test_configured_user_agent_is_returned():
-    assert token_request_user_agent({"user_agent": "My-MCP-Client/1.0"}) == "My-MCP-Client/1.0"
+    assert (
+        token_request_user_agent({"user_agent": "My-MCP-Client/1.0"})
+        == "My-MCP-Client/1.0"
+    )
 
 
-@pytest.mark.parametrize("cfg", [
-    pytest.param({}, id="absent"),
-    pytest.param({"user_agent": None}, id="null"),
-    pytest.param({"user_agent": ""}, id="empty"),
-    pytest.param({"user_agent": "   "}, id="whitespace-only"),
-    pytest.param({"user_agent": 7}, id="non-string"),
-])
+@pytest.mark.parametrize(
+    "cfg",
+    [
+        pytest.param({}, id="absent"),
+        pytest.param({"user_agent": None}, id="null"),
+        pytest.param({"user_agent": ""}, id="empty"),
+        pytest.param({"user_agent": "   "}, id="whitespace-only"),
+        pytest.param({"user_agent": 7}, id="non-string"),
+    ],
+)
 def test_unset_user_agent_values_are_treated_as_absent(cfg):
     assert token_request_user_agent(cfg) is None
 
@@ -92,15 +98,19 @@ def _ready_for_token_requests(provider):
     provider.context.oauth_metadata = SimpleNamespace(
         token_endpoint="https://idp.example.com/oauth/token"
     )
-    provider.context.client_info = OAuthClientInformationFull.model_validate({
-        "client_id": "client-1",
-        "redirect_uris": ["http://127.0.0.1:33333/callback"],
-    })
-    provider.context.current_tokens = OAuthToken.model_validate({
-        "access_token": "at",
-        "token_type": "Bearer",
-        "refresh_token": "rt",
-    })
+    provider.context.client_info = OAuthClientInformationFull.model_validate(
+        {
+            "client_id": "client-1",
+            "redirect_uris": ["http://127.0.0.1:33333/callback"],
+        }
+    )
+    provider.context.current_tokens = OAuthToken.model_validate(
+        {
+            "access_token": "at",
+            "token_type": "Bearer",
+            "refresh_token": "rt",
+        }
+    )
 
 
 def _build_provider_via(builder, monkeypatch, tmp_path, cfg):
@@ -116,13 +126,14 @@ def _manager_builder(server_name, server_url, cfg):
     return MCPOAuthManager().get_or_build_provider(server_name, server_url, cfg)
 
 
-@pytest.mark.parametrize("builder", [
-    pytest.param(build_oauth_auth, id="build_oauth_auth"),
-    pytest.param(_manager_builder, id="oauth_manager"),
-])
-def test_token_requests_carry_the_configured_user_agent(
-    builder, tmp_path, monkeypatch
-):
+@pytest.mark.parametrize(
+    "builder",
+    [
+        pytest.param(build_oauth_auth, id="build_oauth_auth"),
+        pytest.param(_manager_builder, id="oauth_manager"),
+    ],
+)
+def test_token_requests_carry_the_configured_user_agent(builder, tmp_path, monkeypatch):
     """Both token-endpoint requests, on both provider construction paths."""
     provider = _build_provider_via(
         builder, monkeypatch, tmp_path, {"user_agent": "My-MCP-Client/1.0"}
@@ -138,10 +149,13 @@ def test_token_requests_carry_the_configured_user_agent(
     assert refresh.headers["User-Agent"] == "My-MCP-Client/1.0"
 
 
-@pytest.mark.parametrize("builder", [
-    pytest.param(build_oauth_auth, id="build_oauth_auth"),
-    pytest.param(_manager_builder, id="oauth_manager"),
-])
+@pytest.mark.parametrize(
+    "builder",
+    [
+        pytest.param(build_oauth_auth, id="build_oauth_auth"),
+        pytest.param(_manager_builder, id="oauth_manager"),
+    ],
+)
 def test_unconfigured_user_agent_falls_back_to_the_clawk_default(
     builder, tmp_path, monkeypatch
 ):
@@ -167,19 +181,27 @@ def test_user_agent_does_not_disturb_token_auth_preparation(tmp_path, monkeypatc
     """The stamp runs after prepare_token_auth — a confidential client's
     Authorization header must survive alongside the custom User-Agent."""
     provider = _build_provider_via(
-        build_oauth_auth, monkeypatch, tmp_path,
-        {"user_agent": "UA/1", "client_id": "pre", "client_secret": "shh",
-         "token_endpoint_auth_method": "client_secret_basic"},
+        build_oauth_auth,
+        monkeypatch,
+        tmp_path,
+        {
+            "user_agent": "UA/1",
+            "client_id": "pre",
+            "client_secret": "shh",
+            "token_endpoint_auth_method": "client_secret_basic",
+        },
     )
     _ready_for_token_requests(provider)
     from mcp.shared.auth import OAuthClientInformationFull
 
-    provider.context.client_info = OAuthClientInformationFull.model_validate({
-        "client_id": "pre",
-        "client_secret": "shh",
-        "token_endpoint_auth_method": "client_secret_basic",
-        "redirect_uris": ["http://127.0.0.1:33333/callback"],
-    })
+    provider.context.client_info = OAuthClientInformationFull.model_validate(
+        {
+            "client_id": "pre",
+            "client_secret": "shh",
+            "token_endpoint_auth_method": "client_secret_basic",
+            "redirect_uris": ["http://127.0.0.1:33333/callback"],
+        }
+    )
 
     exchange = asyncio.run(
         provider._exchange_token_authorization_code("code", "verifier")
@@ -216,14 +238,28 @@ def device_authorization_server():
             seen.append((self.path, {k.lower(): v for k, v in self.headers.items()}))
             base = f"http://127.0.0.1:{self.server.server_port}"
             if self.path == "/device":
-                return self._reply(200, {"device_code": "fixture-device-code", "user_code": "TEST-CODE",
-                                         "verification_uri": f"{base}/verify", "interval": 0.01,
-                                         "expires_in": 30})
+                return self._reply(
+                    200,
+                    {
+                        "device_code": "fixture-device-code",
+                        "user_code": "TEST-CODE",
+                        "verification_uri": f"{base}/verify",
+                        "interval": 0.01,
+                        "expires_in": 30,
+                    },
+                )
             if self.path == "/token":
                 if sum(path == "/token" for path, _ in seen) == 1:
                     return self._reply(400, {"error": "authorization_pending"})
-                return self._reply(200, {"access_token": "at", "refresh_token": "rt",
-                                         "token_type": "Bearer", "expires_in": 3600})
+                return self._reply(
+                    200,
+                    {
+                        "access_token": "at",
+                        "refresh_token": "rt",
+                        "token_type": "Bearer",
+                        "expires_in": 3600,
+                    },
+                )
             self._reply(404, {})
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -260,17 +296,24 @@ def test_device_flow_token_poll_carries_a_user_agent_on_the_wire(
     cfg, storage = prepare_oauth_config("srv", f"{base}/mcp", {})
     cfg["_resolved_port"] = cfg.get("redirect_port", 8420)
     provider = ClawksisMCPOAuthProvider(
-        server_url=f"{base}/mcp", server_name="srv", storage=storage,
+        server_url=f"{base}/mcp",
+        server_name="srv",
+        storage=storage,
         client_metadata=_build_client_metadata(cfg),
         token_user_agent=cfg.get("user_agent"),
     )
     provider.context.oauth_metadata = SimpleNamespace(
-        issuer=base, token_endpoint=f"{base}/token", device_authorization_endpoint=f"{base}/device")
-    provider.context.client_info = OAuthClientInformationFull.model_validate({
-        "client_id": "fixture-client",
-        "token_endpoint_auth_method": "none",
-        "redirect_uris": ["http://127.0.0.1:33333/callback"],
-    })
+        issuer=base,
+        token_endpoint=f"{base}/token",
+        device_authorization_endpoint=f"{base}/device",
+    )
+    provider.context.client_info = OAuthClientInformationFull.model_validate(
+        {
+            "client_id": "fixture-client",
+            "token_endpoint_auth_method": "none",
+            "redirect_uris": ["http://127.0.0.1:33333/callback"],
+        }
+    )
 
     httpx = sdk_httpx()
 

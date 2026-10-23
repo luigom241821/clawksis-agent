@@ -51,8 +51,7 @@ def conn(kanban_home):
         yield c
 
 
-def _orphan_running(conn, tid, *, claim_lock=None, claim_expires=None,
-                    worker_pid=None):
+def _orphan_running(conn, tid, *, claim_lock=None, claim_expires=None, worker_pid=None):
     """Force a task into running with (partially) broken claim bookkeeping."""
     conn.execute(
         "UPDATE tasks SET status='running', claim_lock=?, claim_expires=?, "
@@ -73,7 +72,8 @@ class TestReconcileOrphanedRunning:
         assert reconciled == [tid]
         row = conn.execute(
             "SELECT status, claim_lock, claim_expires, worker_pid "
-            "FROM tasks WHERE id=?", (tid,),
+            "FROM tasks WHERE id=?",
+            (tid,),
         ).fetchone()
         assert row["status"] == "ready"
         assert row["claim_lock"] is None
@@ -90,9 +90,12 @@ class TestReconcileOrphanedRunning:
         reconciled = kbd.reconcile_orphaned_running(conn)
 
         assert reconciled == [tid]
-        assert conn.execute(
-            "SELECT status FROM tasks WHERE id=?", (tid,)
-        ).fetchone()["status"] == "ready"
+        assert (
+            conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[
+                "status"
+            ]
+            == "ready"
+        )
 
     def test_reconciled_event_and_note_logged(self, conn):
         tid = kb.create_task(conn, title="zombie", assignee="w")
@@ -113,9 +116,12 @@ class TestReconcileOrphanedRunning:
         kb.claim_task(conn, tid)
 
         assert kbd.reconcile_orphaned_running(conn) == []
-        assert conn.execute(
-            "SELECT status FROM tasks WHERE id=?", (tid,)
-        ).fetchone()["status"] == "running"
+        assert (
+            conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[
+                "status"
+            ]
+            == "running"
+        )
 
     def test_live_worker_pid_defers_reconcile(self, conn):
         """If the orphan row still records a live PID on this host, don't
@@ -125,9 +131,12 @@ class TestReconcileOrphanedRunning:
         try:
             _orphan_running(conn, tid, worker_pid=sleeper.pid)
             assert kbd.reconcile_orphaned_running(conn) == []
-            assert conn.execute(
-                "SELECT status FROM tasks WHERE id=?", (tid,)
-            ).fetchone()["status"] == "running"
+            assert (
+                conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[
+                    "status"
+                ]
+                == "running"
+            )
         finally:
             sleeper.terminate()
             sleeper.wait()
@@ -146,7 +155,8 @@ class TestReconcileOrphanedRunning:
             tid = kb.create_task(conn, title=f"s-{status}", assignee="w")
             conn.execute(
                 "UPDATE tasks SET status=?, claim_lock=NULL, "
-                "claim_expires=NULL WHERE id=?", (status, tid),
+                "claim_expires=NULL WHERE id=?",
+                (status, tid),
             )
         conn.commit()
         assert kbd.reconcile_orphaned_running(conn) == []
@@ -157,13 +167,17 @@ class TestDispatchOnceReconciles:
         tid = kb.create_task(conn, title="zombie", assignee="w")
         _orphan_running(conn, tid)
 
-        result = kbd.dispatch_once(conn, spawn_fn=lambda *a, **k: (True, ""),
-                                  dry_run=True)
+        result = kbd.dispatch_once(
+            conn, spawn_fn=lambda *a, **k: (True, ""), dry_run=True
+        )
 
         assert tid in result.reconciled_orphans
-        assert conn.execute(
-            "SELECT status FROM tasks WHERE id=?", (tid,)
-        ).fetchone()["status"] == "ready"
+        assert (
+            conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[
+                "status"
+            ]
+            == "ready"
+        )
 
     def test_dispatch_once_reconcile_can_be_disabled(self, conn):
         """kanban.reconcile_orphans=false plumbs through as
@@ -171,10 +185,17 @@ class TestDispatchOnceReconciles:
         tid = kb.create_task(conn, title="zombie", assignee="w")
         _orphan_running(conn, tid)
 
-        result = kbd.dispatch_once(conn, spawn_fn=lambda *a, **k: (True, ""),
-                                  dry_run=True, reconcile_orphans=False)
+        result = kbd.dispatch_once(
+            conn,
+            spawn_fn=lambda *a, **k: (True, ""),
+            dry_run=True,
+            reconcile_orphans=False,
+        )
 
         assert result.reconciled_orphans == []
-        assert conn.execute(
-            "SELECT status FROM tasks WHERE id=?", (tid,)
-        ).fetchone()["status"] == "running"
+        assert (
+            conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[
+                "status"
+            ]
+            == "running"
+        )

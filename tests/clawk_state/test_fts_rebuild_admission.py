@@ -52,9 +52,7 @@ def _lock_file(db_path: Path) -> Path:
 @contextlib.contextmanager
 def _rebuild_lock_held_by_other_process(db_path: Path, hold_seconds: float = 30.0):
     """Hold the FTS rebuild authority for *db_path* in a real child process."""
-    script = _HOLD_LOCK_SCRIPT.format(
-        lock=str(_lock_file(db_path)), hold=hold_seconds
-    )
+    script = _HOLD_LOCK_SCRIPT.format(lock=str(_lock_file(db_path)), hold=hold_seconds)
     proc = subprocess.Popen(
         [sys.executable, "-c", script], stdout=subprocess.PIPE, text=True
     )
@@ -100,9 +98,7 @@ def _meta_value(db_path: Path, key: str):
 
 @pytest.fixture
 def fast_timeout(monkeypatch):
-    monkeypatch.setattr(
-        clawk_state_common, "_FTS_REBUILD_LOCK_TIMEOUT_SECONDS", 0.5
-    )
+    monkeypatch.setattr(clawk_state_common, "_FTS_REBUILD_LOCK_TIMEOUT_SECONDS", 0.5)
 
 
 @pytest.fixture
@@ -456,9 +452,7 @@ class TestNonContentionErrnoFailsFast:
         assert any("non-contention error" in m for m in messages)
         assert not any("held by another process" in m for m in messages)
 
-    def test_repair_lock_non_contention_errno_fails_fast(
-        self, tmp_path, monkeypatch
-    ):
+    def test_repair_lock_non_contention_errno_fails_fast(self, tmp_path, monkeypatch):
         """Sibling site: the state.db repair lock shares the errno filter."""
         import fcntl
 

@@ -49,7 +49,15 @@ class I18nCatalogResult(Result):
 
 # ── methods ───────────────────────────────────────────────────────────────────────────────────
 
-method("i18n.languages", params=ProfileParams, result=I18nLanguagesResult,
-       doc="Every language some layer supplies (bundled ∪ user overlay ∪ plugin packs), en first.")
-method("i18n.catalog", params=I18nCatalogParams, result=I18nCatalogResult,
-       doc="Pack + overlay messages for one language and surface; the renderer merges them over its bundled catalog.")
+method(
+    "i18n.languages",
+    params=ProfileParams,
+    result=I18nLanguagesResult,
+    doc="Every language some layer supplies (bundled ∪ user overlay ∪ plugin packs), en first.",
+)
+method(
+    "i18n.catalog",
+    params=I18nCatalogParams,
+    result=I18nCatalogResult,
+    doc="Pack + overlay messages for one language and surface; the renderer merges them over its bundled catalog.",
+)

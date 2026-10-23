@@ -16,6 +16,7 @@ from tools.mcp_tool import MCPServerTask, _MCP_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not _MCP_AVAILABLE, reason="MCP SDK not installed")
 
+
 class TestStdioEncodingErrorHandler:
     """Verify that _run_stdio passes encoding_error_handler='replace'."""
 
@@ -43,15 +44,19 @@ class TestStdioEncodingErrorHandler:
                 patch("tools.mcp_tool.StdioServerParameters") as mock_params,
                 patch("tools.mcp_tool.stdio_client", return_value=mock_stdio_cm),
                 patch("tools.mcp_tool.ClientSession", return_value=mock_session_cm),
-                patch("tools.mcp_tool_lifecycle._snapshot_child_pids", return_value=set()),
+                patch(
+                    "tools.mcp_tool_lifecycle._snapshot_child_pids", return_value=set()
+                ),
                 patch("tools.mcp_tool_config._write_stderr_log_header"),
                 patch("tools.mcp_tool._get_mcp_stderr_log", return_value=None),
             ):
                 server = MCPServerTask("test-encoding")
-                await server.start({
-                    "command": "echo",
-                    "args": ["hello"],
-                })
+                await server.start(
+                    {
+                        "command": "echo",
+                        "args": ["hello"],
+                    }
+                )
 
                 call_kwargs = mock_params.call_args.kwargs
                 assert call_kwargs["encoding_error_handler"] == "replace", (

@@ -92,12 +92,16 @@ def test_handoff_children_cannot_read_the_handoff_console(tmp_path: Path) -> Non
     )
 
     # Windows PowerShell 5.1 `*>` writes UTF-16LE with a BOM.
-    report = output.read_text(encoding="utf-16", errors="replace") if output.exists() else ""
+    report = (
+        output.read_text(encoding="utf-16", errors="replace") if output.exists() else ""
+    )
     assert result.returncode == 0, report
     assert "WORKING-DIRECTORY SELF-TEST: PASS" in report
 
 
-def test_handoff_fails_closed_when_install_root_cannot_be_entered(tmp_path: Path) -> None:
+def test_handoff_fails_closed_when_install_root_cannot_be_entered(
+    tmp_path: Path,
+) -> None:
     install_root = tmp_path / "missing" / "checkout"
     launch_cwd = tmp_path / "profile-home"
     launch_cwd.mkdir()

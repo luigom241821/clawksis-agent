@@ -11,6 +11,7 @@ gap for headless/VPS users. These tests pin:
 - POST /api/cron/jobs accepts ``skills`` and persists it on the job;
   PUT /api/cron/jobs/{id} can update the list.
 """
+
 import pytest
 
 
@@ -117,14 +118,16 @@ class TestSkillCreate:
     def test_create_writes_skill_md(self, client, isolated_profiles):
         resp = client.post(
             "/api/skills",
-            json={"name": "my-new-skill", "content": SKILL_MD.format(name="my-new-skill")},
+            json={
+                "name": "my-new-skill",
+                "content": SKILL_MD.format(name="my-new-skill"),
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
         skill_md = isolated_profiles["default"] / "skills" / "my-new-skill" / "SKILL.md"
         assert skill_md.exists()
         assert "Do the thing." in skill_md.read_text(encoding="utf-8")
-
 
     def test_create_rejects_missing_frontmatter(self, client, isolated_profiles):
         resp = client.post(
@@ -134,7 +137,6 @@ class TestSkillCreate:
         assert resp.status_code == 400
         assert "frontmatter" in resp.json()["detail"].lower()
         assert not (isolated_profiles["default"] / "skills" / "bad-skill").exists()
-
 
     def test_create_rejects_invalid_name(self, client, isolated_profiles):
         resp = client.post(
@@ -158,7 +160,6 @@ class TestSkillUpdate:
             isolated_profiles["default"] / "skills" / "dashboard-skill" / "SKILL.md"
         )
         assert "Do the NEW thing." in skill_md.read_text(encoding="utf-8")
-
 
     def test_update_invalid_frontmatter_400(self, client, isolated_profiles):
         resp = client.put(

@@ -30,7 +30,9 @@ def test_terminal_env_config_uses_terminal_cwd(monkeypatch, tmp_path):
     assert config["cwd"] == str(workspace)
 
 
-def test_execute_code_project_mode_falls_back_when_terminal_cwd_missing(monkeypatch, tmp_path):
+def test_execute_code_project_mode_falls_back_when_terminal_cwd_missing(
+    monkeypatch, tmp_path
+):
     """Invalid TERMINAL_CWD should not break execute_code project mode startup."""
     staging = tmp_path / "staging"
     staging.mkdir()

@@ -6,8 +6,6 @@ from gateway.config import GatewayConfig
 from clawk_cli import gateway as gateway_cli
 
 
-
-
 def test_positive_watchdog_config_generates_notify_unit(monkeypatch):
     monkeypatch.setattr(
         gateway_cli,
@@ -21,10 +19,6 @@ def test_positive_watchdog_config_generates_notify_unit(monkeypatch):
     assert "Type=notify" in unit
     assert "NotifyAccess=main" in unit
     assert "WatchdogSec=120s" in unit
-
-
-
-
 
 
 def test_system_unit_reads_watchdog_from_target_home(tmp_path, monkeypatch):
@@ -56,5 +50,3 @@ def test_system_unit_reads_watchdog_from_target_home(tmp_path, monkeypatch):
 
     assert "Type=notify" in unit
     assert "WatchdogSec=75s" in unit
-
-

@@ -44,20 +44,39 @@ def home(tmp_path, monkeypatch, clean_layers):
     return home
 
 
-def _write_pack_plugin(home, name="clawk-lang-pl", *, lang="pl", core=None, tui=None, desktop=None,
-                       manifest_extra=None, with_init=False):
+def _write_pack_plugin(
+    home,
+    name="clawk-lang-pl",
+    *,
+    lang="pl",
+    core=None,
+    tui=None,
+    desktop=None,
+    manifest_extra=None,
+    with_init=False,
+):
     plugin = home / "plugins" / name
     (plugin / "locales").mkdir(parents=True)
-    manifest = {"name": name, "version": "1.0.0", "description": f"{lang} language pack",
-                "provides_locales": [lang], **(manifest_extra or {})}
+    manifest = {
+        "name": name,
+        "version": "1.0.0",
+        "description": f"{lang} language pack",
+        "provides_locales": [lang],
+        **(manifest_extra or {}),
+    }
     (plugin / "plugin.yaml").write_text(yaml.safe_dump(manifest), encoding="utf-8")
     for surface, data in (("", core), (".tui", tui), (".desktop", desktop)):
         if data is not None:
-            (plugin / "locales" / f"{lang}{surface}.yaml").write_text(yaml.safe_dump(data, allow_unicode=True),
-                                                                      encoding="utf-8")
+            (plugin / "locales" / f"{lang}{surface}.yaml").write_text(
+                yaml.safe_dump(data, allow_unicode=True), encoding="utf-8"
+            )
     if with_init:
-        (plugin / "__init__.py").write_text("def register(ctx):\n    pass\n", encoding="utf-8")
-    (home / "config.yaml").write_text(yaml.safe_dump({"plugins": {"enabled": [name]}}), encoding="utf-8")
+        (plugin / "__init__.py").write_text(
+            "def register(ctx):\n    pass\n", encoding="utf-8"
+        )
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"plugins": {"enabled": [name]}}), encoding="utf-8"
+    )
     return plugin
 
 
@@ -71,8 +90,9 @@ def _load(home) -> PluginManager:
 
 
 def test_user_overlay_overrides_bundled_and_is_partial(home):
-    (home / "locales" / "de.yaml").write_text(yaml.safe_dump({"approval": {"denied": "Überschrieben"}}),
-                                              encoding="utf-8")
+    (home / "locales" / "de.yaml").write_text(
+        yaml.safe_dump({"approval": {"denied": "Überschrieben"}}), encoding="utf-8"
+    )
     i18n.reset_language_cache()
     assert i18n.t(_KEY, lang="de") == "Überschrieben"
     # A key the overlay does not carry still comes from the bundled German catalog, not English.
@@ -82,8 +102,9 @@ def test_user_overlay_overrides_bundled_and_is_partial(home):
 
 
 def test_overlay_only_language_is_supported_and_falls_back_to_english(home):
-    (home / "locales" / "eo.yaml").write_text(yaml.safe_dump({"approval": {"denied": "Esperanto titolo"}}),
-                                              encoding="utf-8")
+    (home / "locales" / "eo.yaml").write_text(
+        yaml.safe_dump({"approval": {"denied": "Esperanto titolo"}}), encoding="utf-8"
+    )
     i18n.reset_language_cache()
     assert "eo" in i18n.supported_languages()
     assert i18n.t(_KEY, lang="eo") == "Esperanto titolo"
@@ -92,14 +113,18 @@ def test_overlay_only_language_is_supported_and_falls_back_to_english(home):
     assert i18n.supported_languages()[0] == "en"
 
 
-def test_overlay_is_profile_scoped_across_two_homes(tmp_path, monkeypatch, clean_layers):
+def test_overlay_is_profile_scoped_across_two_homes(
+    tmp_path, monkeypatch, clean_layers
+):
     """Home A overlays de; home B does not. A → B → A must never serve A's overlay to B or B's miss to A."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     home_a, home_b = tmp_path / "a", tmp_path / "b"
     (home_a / "locales").mkdir(parents=True)
     home_b.mkdir()
-    (home_a / "locales" / "de.yaml").write_text(yaml.safe_dump({"approval": {"denied": "Nur A"}}), encoding="utf-8")
+    (home_a / "locales" / "de.yaml").write_text(
+        yaml.safe_dump({"approval": {"denied": "Nur A"}}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home_a))
     i18n.reset_language_cache()
     bundled_de = i18n_layers.parse_locale_file(i18n._locales_dir() / "de.yaml")[_KEY]
@@ -118,8 +143,12 @@ def test_overlay_is_profile_scoped_across_two_homes(tmp_path, monkeypatch, clean
 
 
 def test_manifest_only_pack_registers_language_and_display_language_resolves(home):
-    _write_pack_plugin(home, core={"approval": {"denied": "Zatwierdzenie"}},
-                       tui={"status": {"ready": "Gotowy"}}, desktop={"settings": {"title": "Ustawienia"}})
+    _write_pack_plugin(
+        home,
+        core={"approval": {"denied": "Zatwierdzenie"}},
+        tui={"status": {"ready": "Gotowy"}},
+        desktop={"settings": {"title": "Ustawienia"}},
+    )
     assert "pl" not in i18n.supported_languages()
 
     manager = _load(home)
@@ -138,17 +167,32 @@ def test_manifest_only_pack_registers_language_and_display_language_resolves(hom
     # Registration never touches display.language; setting it makes the pack the active language.
     assert i18n.get_language() == "en"
     (home / "config.yaml").write_text(
-        yaml.safe_dump({"plugins": {"enabled": ["clawk-lang-pl"]}, "display": {"language": "pl"}}), encoding="utf-8")
+        yaml.safe_dump(
+            {"plugins": {"enabled": ["clawk-lang-pl"]}, "display": {"language": "pl"}}
+        ),
+        encoding="utf-8",
+    )
     i18n.reset_language_cache()
     assert i18n.get_language() == "pl"
     assert i18n.t(_KEY) == "Zatwierdzenie"
     option = next(o for o in i18n.language_options() if o["id"] == "pl")
-    assert option == {"id": "pl", "endonym": "pl", "rtl": False, "source": "plugin:clawk-lang-pl"}
+    assert option == {
+        "id": "pl",
+        "endonym": "pl",
+        "rtl": False,
+        "source": "plugin:clawk-lang-pl",
+    }
 
 
 def test_pack_with_register_function_and_metadata(home):
-    _write_pack_plugin(home, core={"approval": {"denied": "Zatwierdzenie"}}, with_init=True,
-                       manifest_extra={"provides_locales": [{"id": "pl", "endonym": "Polski", "rtl": False}]})
+    _write_pack_plugin(
+        home,
+        core={"approval": {"denied": "Zatwierdzenie"}},
+        with_init=True,
+        manifest_extra={
+            "provides_locales": [{"id": "pl", "endonym": "Polski", "rtl": False}]
+        },
+    )
     manager = _load(home)
     assert manager._plugins["clawk-lang-pl"].enabled
     option = next(o for o in i18n.language_options() if o["id"] == "pl")
@@ -156,8 +200,12 @@ def test_pack_with_register_function_and_metadata(home):
 
 
 def test_pack_overrides_overlay_and_unload_drops_it(home):
-    (home / "locales" / "de.yaml").write_text(yaml.safe_dump({"approval": {"denied": "Overlay"}}), encoding="utf-8")
-    _write_pack_plugin(home, "clawk-lang-de", lang="de", core={"approval": {"denied": "Pack"}})
+    (home / "locales" / "de.yaml").write_text(
+        yaml.safe_dump({"approval": {"denied": "Overlay"}}), encoding="utf-8"
+    )
+    _write_pack_plugin(
+        home, "clawk-lang-de", lang="de", core={"approval": {"denied": "Pack"}}
+    )
     i18n.reset_language_cache()
     assert i18n.t(_KEY, lang="de") == "Overlay"
 
@@ -180,10 +228,16 @@ def test_pack_only_language_disappears_on_unload(home):
 
 
 def test_later_pack_wins_over_earlier_pack(home):
-    _write_pack_plugin(home, "aaa-lang-pl", core={"approval": {"denied": "First"}, "approval.cancelled": "Only first"})
+    _write_pack_plugin(
+        home,
+        "aaa-lang-pl",
+        core={"approval": {"denied": "First"}, "approval.cancelled": "Only first"},
+    )
     _write_pack_plugin(home, "zzz-lang-pl", core={"approval": {"denied": "Second"}})
-    (home / "config.yaml").write_text(yaml.safe_dump({"plugins": {"enabled": ["aaa-lang-pl", "zzz-lang-pl"]}}),
-                                      encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"plugins": {"enabled": ["aaa-lang-pl", "zzz-lang-pl"]}}),
+        encoding="utf-8",
+    )
     _load(home)
     assert i18n.t(_KEY, lang="pl") == "Second"
     assert i18n.t("approval.cancelled", lang="pl") == "Only first"
@@ -194,10 +248,16 @@ def test_register_locale_accepts_dicts_and_rejects_bad_ids(home):
     from clawk_cli.plugins_manifest import PluginManifest
 
     manager = PluginManager()
-    ctx = PluginContext(PluginManifest(name="inline-pack", source="user", path=str(home)), manager)
-    handle = ctx.register_locale("PT_BR", {"approval": {"denied": "Título"}}, endonym="Português (Brasil)")
+    ctx = PluginContext(
+        PluginManifest(name="inline-pack", source="user", path=str(home)), manager
+    )
+    handle = ctx.register_locale(
+        "PT_BR", {"approval": {"denied": "Título"}}, endonym="Português (Brasil)"
+    )
     assert handle.key == "pt-br.core"
-    assert i18n.t(_KEY, lang="pt-BR") == "Título"  # the supplied id beats the pt-br → pt alias
+    assert (
+        i18n.t(_KEY, lang="pt-BR") == "Título"
+    )  # the supplied id beats the pt-br → pt alias
     with pytest.raises(ValueError):
         ctx.register_locale("not a lang", {"a": "b"})
     with pytest.raises(ValueError):

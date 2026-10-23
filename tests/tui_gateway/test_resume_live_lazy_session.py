@@ -54,7 +54,9 @@ def _resume(params):
 
 def test_resume_by_stored_key_reattaches(live_lazy_session):
     sid, record = live_lazy_session
-    out = _resume({"profile": "ops", "session_id": record["session_key"], "omit_messages": True})
+    out = _resume(
+        {"profile": "ops", "session_id": record["session_key"], "omit_messages": True}
+    )
     assert "error" not in out, out
     assert out["result"]["session_id"] == sid
     assert out["result"]["stored_session_id"] == record["session_key"]
@@ -84,7 +86,9 @@ class _Agent:
 
 
 @pytest.mark.parametrize("shape", ["override_only", "built_agent", "pending_switch"])
-def test_live_reattach_reports_the_sessions_own_model_not_the_profile_default(live_lazy_session, monkeypatch, shape):
+def test_live_reattach_reports_the_sessions_own_model_not_the_profile_default(
+    live_lazy_session, monkeypatch, shape
+):
     """A reload of a still-live session must not flip the Desktop picker to the config default. The eager
     (cold) resume already reports the chat's own model; the warm reattach reported `_resolve_model()`, so
     the pick a user made in the composer appeared to change at random depending on whether the backend had
@@ -98,9 +102,14 @@ def test_live_reattach_reports_the_sessions_own_model_not_the_profile_default(li
         record["agent"] = _Agent()
     else:
         record["agent"] = _Agent()
-        record["pending_model_switch"] = {"display_model": "claude-sonnet-5[1m]", "display_provider": expected[1]}
+        record["pending_model_switch"] = {
+            "display_model": "claude-sonnet-5[1m]",
+            "display_provider": expected[1],
+        }
         expected = ("claude-sonnet-5[1m]", expected[1])
-    out = _resume({"profile": "ops", "session_id": record["session_key"], "omit_messages": True})
+    out = _resume(
+        {"profile": "ops", "session_id": record["session_key"], "omit_messages": True}
+    )
     assert "error" not in out, out
     info = out["result"]["info"]
     assert (info["model"], info["provider"]) == expected

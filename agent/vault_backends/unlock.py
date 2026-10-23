@@ -22,10 +22,14 @@ from typing import Callable, Dict, Optional
 _IDLE_TTL_S = 30 * 60
 
 _lock = threading.Lock()
-_sessions: dict[tuple[str, str], tuple[str, float]] = {}   # (profile home, backend) → (token, last_used)
+_sessions: dict[
+    tuple[str, str], tuple[str, float]
+] = {}  # (profile home, backend) → (token, last_used)
 _callback_tls = threading.local()
 
-UnlockPrompt = Callable[[str, str], str]  # (backend_name, display_name) -> master password ("" = cancelled)
+UnlockPrompt = Callable[
+    [str, str], str
+]  # (backend_name, display_name) -> master password ("" = cancelled)
 # (origin, site label) -> {"identifier": str, "password": str} or None when the user declines. The
 # surface owns the masked fields; the tool stores the answer in the local vault and fills at once.
 SaveLoginPrompt = Callable[[str, str], Optional[dict[str, str]]]
@@ -66,6 +70,7 @@ def _key(backend: str) -> tuple[str, str]:
     # Tokens are profile-scoped: a Desktop gateway hosts several profiles in one process and
     # profile B must never reuse (or lock) profile A's manager session.
     from clawk_constants import get_clawk_home
+
     return (str(get_clawk_home()), backend)
 
 
@@ -110,7 +115,9 @@ def begin_unlock(backend: str) -> int:
         return _generation.get(_key(backend), 0)
 
 
-def store_session_token(backend: str, token: str, generation: Optional[int] = None) -> bool:
+def store_session_token(
+    backend: str, token: str, generation: Optional[int] = None
+) -> bool:
     """Commit an unlock. Returns False (and drops the token) when a Lock happened since ``begin_unlock``."""
     key = _key(backend)
     with _lock:
@@ -127,7 +134,11 @@ def lock(backend: Optional[str] = None) -> None:
     with _lock:
         # Bump the generation for every key the lock names (not only the ones holding a token):
         # an unlock that is still running for this backend must see the lock when it returns.
-        keys = {k for k in list(_sessions) + list(_generation) if k[0] == home and (backend is None or k[1] == backend)}
+        keys = {
+            k
+            for k in list(_sessions) + list(_generation)
+            if k[0] == home and (backend is None or k[1] == backend)
+        }
         if backend is not None:
             keys.add((home, backend))
         for key in keys:
@@ -162,6 +173,7 @@ def is_unlocked(backend: str) -> bool:
 def can_prompt_here() -> bool:
     """False in contexts where no human can answer (cron, webhook, api_server, -q)."""
     from tools.approval_context import _no_user_can_answer
+
     if _no_user_can_answer():
         return False
     return get_unlock_prompt_callback() is not None

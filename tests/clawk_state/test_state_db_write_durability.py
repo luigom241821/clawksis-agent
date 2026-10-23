@@ -60,9 +60,7 @@ def test_connect_repair_durable_sets_macos_barriers(tmp_path: Path) -> None:
     conn = _connect_repair_durable(db)
     try:
         synchronous = conn.execute("PRAGMA synchronous").fetchone()[0]
-        checkpoint_fullfsync = conn.execute(
-            "PRAGMA checkpoint_fullfsync"
-        ).fetchone()[0]
+        checkpoint_fullfsync = conn.execute("PRAGMA checkpoint_fullfsync").fetchone()[0]
     finally:
         conn.close()
 
@@ -88,8 +86,6 @@ def test_connect_repair_durable_is_autocommit(tmp_path: Path) -> None:
         conn.execute("VACUUM")
     finally:
         conn.close()
-
-
 
 
 def test_repair_still_works_through_durable_connection(tmp_path: Path) -> None:

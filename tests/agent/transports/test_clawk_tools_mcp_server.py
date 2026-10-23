@@ -34,7 +34,6 @@ class TestSignatureFromSchema:
         assert annots["query"] == str
         assert param.default is inspect.Parameter.empty
 
-
     def test_skip_private_params(self):
         """Params starting with '_' are excluded from the signature."""
         schema = {
@@ -76,16 +75,21 @@ class TestSignatureFromSchema:
 
 
 class TestModuleSurface:
-
     def test_exposed_tools_are_safe_subset(self):
         """We MUST NOT expose tools codex already has, because codex'
         own builtins are better-integrated with its sandbox + approvals.
         Specifically: no terminal/shell, no read_file/write_file, no
         patch — those are codex's built-in tools."""
         from agent.transports.clawk_tools_mcp_server import EXPOSED_TOOLS
+
         forbidden = {
-            "terminal", "shell", "read_file", "write_file", "patch",
-            "search_files", "process",
+            "terminal",
+            "shell",
+            "read_file",
+            "write_file",
+            "patch",
+            "search_files",
+            "process",
         }
         leaked = forbidden & set(EXPOSED_TOOLS)
         assert not leaked, (

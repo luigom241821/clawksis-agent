@@ -37,14 +37,17 @@ def test_dry_run_prints_plan_without_mutating(monkeypatch, tmp_path, capsys):
     assert clawk_home.exists()
 
 
-def test_dry_run_lists_named_profiles_without_desktop_userdata(monkeypatch, tmp_path, capsys):
+def test_dry_run_lists_named_profiles_without_desktop_userdata(
+    monkeypatch, tmp_path, capsys
+):
     """Full-uninstall dry-run lists named profiles even on a machine with no desktop
     userData dir — the profiles section must not depend on the desktop install."""
     profile = SimpleNamespace(name="work", path=tmp_path / "profiles" / "work")
     monkeypatch.setattr(uninstall, "_is_default_clawk_home", lambda home: True)
     monkeypatch.setattr(uninstall, "_discover_named_profiles", lambda: [profile])
     monkeypatch.setattr(
-        "clawk_cli.gui_uninstall.desktop_userdata_dir", lambda: tmp_path / "absent-userdata"
+        "clawk_cli.gui_uninstall.desktop_userdata_dir",
+        lambda: tmp_path / "absent-userdata",
     )
 
     uninstall._print_uninstall_dry_run(

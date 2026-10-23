@@ -37,7 +37,8 @@ def _make_skill(skills_dir: Path, name: str):
     d = skills_dir / name
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
-        f"---\nname: {name}\ndescription: x\n---\n", encoding="utf-8",
+        f"---\nname: {name}\ndescription: x\n---\n",
+        encoding="utf-8",
     )
     return d
 
@@ -58,15 +59,19 @@ def pin_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     import clawk_constants
+
     importlib.reload(clawk_constants)
     from tools import skill_usage
+
     importlib.reload(skill_usage)
     # curator module reads config through its own loader; keep defaults.
     from agent import curator
+
     importlib.reload(curator)
     monkeypatch.setattr(curator, "_load_config", dict)
     monkeypatch.setattr(skill_usage, "_prune_builtins_enabled", lambda: False)
     from clawk_cli import curator as curator_cli
+
     importlib.reload(curator_cli)
 
     yield {
@@ -118,7 +123,9 @@ def test_pin_fails_loudly_when_write_does_not_land(pin_env, capsys, monkeypatch)
     )
     # Record on disk must NOT claim a pin.
     rec = env["usage"].get_record(name)
-    assert not rec.get("pinned"), "usage record claims pinned=true despite failed eligibility"
+    assert not rec.get("pinned"), (
+        "usage record claims pinned=true despite failed eligibility"
+    )
     # Error output must explain the refusal, not just fail quietly.
     assert "pin" in out.lower(), "refusal must mention the pin outcome"
 

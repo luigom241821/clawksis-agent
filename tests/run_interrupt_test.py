@@ -17,6 +17,7 @@ from run_agent import AIAgent
 from tools.delegate_tool import _run_single_child
 from tools.interrupt import set_interrupt, is_interrupted
 
+
 def main() -> int:
     set_interrupt(False)
 
@@ -99,6 +100,7 @@ def main() -> int:
                 except Exception as e:
                     print(f"ERROR in delegate: {e}")
                     import traceback
+
                     traceback.print_exc()
 
     print("Starting agent thread...")
@@ -122,7 +124,9 @@ def main() -> int:
     print("Called parent.interrupt()")
 
     for i, c in enumerate(parent._active_children):
-        print(f"  Child {i} after interrupt: _interrupt_requested={c._interrupt_requested}")
+        print(
+            f"  Child {i} after interrupt: _interrupt_requested={c._interrupt_requested}"
+        )
     print(f"Global is_interrupted: {is_interrupted()}")
 
     agent_thread.join(timeout=10)
@@ -136,7 +140,9 @@ def main() -> int:
         if elapsed < 2.0:
             print("✅ PASS: Interrupt detected quickly!")
         else:
-            print(f"❌ FAIL: Took {elapsed:.2f}s — interrupt was too slow or not detected")
+            print(
+                f"❌ FAIL: Took {elapsed:.2f}s — interrupt was too slow or not detected"
+            )
     else:
         print("❌ FAIL: No result!")
 

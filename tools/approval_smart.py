@@ -80,7 +80,9 @@ def _verdict_reasoning() -> dict | None:
 
     config = _get_auxiliary_task_config("approval")
     extra_body = config.get("extra_body")
-    if config.get("reasoning_effort") not in (None, "") or (isinstance(extra_body, dict) and "reasoning" in extra_body):
+    if config.get("reasoning_effort") not in (None, "") or (
+        isinstance(extra_body, dict) and "reasoning" in extra_body
+    ):
         return None
     return {"enabled": False}
 
@@ -99,7 +101,9 @@ def _smart_approve(command: str, description: str) -> str:
         # Pass the same configured value explicitly (belt) and log the call + duration (suspenders) so a
         # hang is visible in the logs instead of silent. See #72500, #82846.
         smart_timeout = _get_task_timeout("approval")
-        logger.debug("Smart approvals: assessing risk for command (timeout=%ss)", smart_timeout)
+        logger.debug(
+            "Smart approvals: assessing risk for command (timeout=%ss)", smart_timeout
+        )
         system_prompt = _SYSTEM_PROMPT
         # Operator policy goes in the SYSTEM prompt only — the trusted channel. Never
         # next to the <command> block: that would dilute the trust boundary and teach
@@ -121,11 +125,19 @@ def _smart_approve(command: str, description: str) -> str:
             "Respond with exactly one word: APPROVE, DENY, or ESCALATE"
         )
         response = call_llm(
-            task="approval", temperature=0, max_tokens=16, timeout=smart_timeout,
-            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            task="approval",
+            temperature=0,
+            max_tokens=16,
+            timeout=smart_timeout,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             reasoning_config=_verdict_reasoning(),
         )
-        logger.debug("Smart approvals: LLM call completed in %.1fs", time.monotonic() - _smart_t0)
+        logger.debug(
+            "Smart approvals: LLM call completed in %.1fs", time.monotonic() - _smart_t0
+        )
         answer = (response.choices[0].message.content or "").strip().upper()
         if not answer:
             # WARNING, not DEBUG: an empty-but-200 body is an infrastructure failure, not a
@@ -134,30 +146,45 @@ def _smart_approve(command: str, description: str) -> str:
             # uncertain outcome, but is indistinguishable from a genuine ESCALATE in the logs
             # unless this fires above DEBUG.
             finish_reason = getattr(response.choices[0], "finish_reason", None)
-            logger.warning("Smart approvals: guardian returned an empty answer "
-                           "(finish_reason=%s), escalating", finish_reason)
+            logger.warning(
+                "Smart approvals: guardian returned an empty answer "
+                "(finish_reason=%s), escalating",
+                finish_reason,
+            )
             return "escalate"
         return _VERDICTS.get(answer, "escalate")
     except Exception as e:
         # WARNING, not DEBUG: a failed/blocked guardian call is a real event
         # the operator needs to see (the hang was invisible at DEBUG).
-        logger.warning("Smart approvals: LLM call failed after %.1fs (%s: %s), escalating",
-                       time.monotonic() - _smart_t0, type(e).__name__, e)
+        logger.warning(
+            "Smart approvals: LLM call failed after %.1fs (%s: %s), escalating",
+            time.monotonic() - _smart_t0,
+            type(e).__name__,
+            e,
+        )
         return "escalate"
 
 
-def _smart_verdict(command: str, description: str, pattern_key: str,
-                   pattern_keys: list[str], session_key: str) -> str:
+def _smart_verdict(
+    command: str,
+    description: str,
+    pattern_key: str,
+    pattern_keys: list[str],
+    session_key: str,
+) -> str:
     """Run the guardian LLM with observer hooks; 'approve' | 'deny' | 'escalate'.
     Redaction is observer-payload preparation, not approval policy: if it fails,
     skip observability rather than leak raw data or block the LLM decision."""
     try:
         from agent.redact import redact_sensitive_text
+
         payload = {
             "command": redact_sensitive_text(command, force=True),
             "description": redact_sensitive_text(description, force=True),
-            "pattern_key": pattern_key, "pattern_keys": list(pattern_keys),
-            "session_key": session_key, "surface": "smart",
+            "pattern_key": pattern_key,
+            "pattern_keys": list(pattern_keys),
+            "session_key": session_key,
+            "surface": "smart",
         }
     except Exception as exc:
         logger.debug("Smart approval hook redaction failed: %s", exc)
@@ -166,5 +193,10 @@ def _smart_verdict(command: str, description: str, pattern_key: str,
         _ctx._fire_approval_hook("pre_approval_request", **payload)
     verdict = _smart_approve(command, description)
     if payload is not None and verdict in {"approve", "deny"}:
-        _ctx._fire_approval_hook("post_approval_response", **payload, choice=f"smart_{verdict}", decided_by="aux_llm")
+        _ctx._fire_approval_hook(
+            "post_approval_response",
+            **payload,
+            choice=f"smart_{verdict}",
+            decided_by="aux_llm",
+        )
     return verdict

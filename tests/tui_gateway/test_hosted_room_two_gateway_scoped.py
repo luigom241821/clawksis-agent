@@ -140,9 +140,7 @@ async def test_in_process_scoped_transport_contract_finishes_headlessly(
     )
 
     agent = MagicMock()
-    agent.run_conversation.return_value = {
-        "final_response": "Scoped peer response."
-    }
+    agent.run_conversation.return_value = {"final_response": "Scoped peer response."}
     agent.session_prompt_tokens = agent.session_completion_tokens = (
         agent.session_total_tokens
     ) = 0
@@ -156,8 +154,7 @@ async def test_in_process_scoped_transport_contract_finishes_headlessly(
         deadline = asyncio.get_running_loop().time() + 20
         while asyncio.get_running_loop().time() < deadline:
             if any(
-                event["kind"] == "message.member"
-                for event in home._events("room-1")
+                event["kind"] == "message.member" for event in home._events("room-1")
             ):
                 break
             await asyncio.sleep(0.02)
@@ -169,9 +166,7 @@ async def test_in_process_scoped_transport_contract_finishes_headlessly(
         assert home.stop(timeout=5.0)
 
     reply = next(
-        event
-        for event in home._events("room-1")
-        if event["kind"] == "message.member"
+        event for event in home._events("room-1") if event["kind"] == "message.member"
     )
     assert reply["payload"]["text"] == "Scoped peer response."
     assert reply["actor"]["connection_id"] == "peer-target"

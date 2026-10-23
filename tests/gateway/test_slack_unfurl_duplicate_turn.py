@@ -41,7 +41,8 @@ def _load_installed_package(name):
     displaced = {
         m: sys.modules.pop(m)
         for m in tuple(sys.modules)
-        if (m == name or m.startswith(prefix)) and not isinstance(sys.modules[m], ModuleType)
+        if (m == name or m.startswith(prefix))
+        and not isinstance(sys.modules[m], ModuleType)
     }
     try:
         return importlib.import_module(name)
@@ -290,9 +291,7 @@ class TestClaimReleasedOnFailure:
             assert ORIGINAL_TS in adapter._processed_message_ts
             # A later invocation for the same ts that fails must not strip
             # the claim the successful turn already holds.
-            adapter._resolve_user_name = AsyncMock(
-                side_effect=RuntimeError("boom")
-            )
+            adapter._resolve_user_name = AsyncMock(side_effect=RuntimeError("boom"))
             second = _original_event()
             second["client_msg_id"] = "cmid-replay"
             try:

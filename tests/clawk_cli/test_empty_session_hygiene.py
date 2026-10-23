@@ -20,7 +20,6 @@ def db(tmp_path):
 
 
 class TestDeleteSessionIfEmpty:
-
     def test_keeps_session_with_messages(self, db):
         db.create_session(session_id="busy", source="cli", model="test")
         db.append_message("busy", role="user", content="hello")
@@ -53,7 +52,6 @@ class TestDeleteSessionIfEmpty:
         assert db.get_session("parent") is not None
         assert db.get_session("child") is not None
 
-
     def test_removes_on_disk_transcripts(self, db, tmp_path):
         sessions_dir = tmp_path / "sessions"
         sessions_dir.mkdir()
@@ -79,7 +77,6 @@ class TestDeleteSessionIfEmpty:
         assert (sessions_dir / "busy.json").exists()
 
 
-
 class TestCLIDiscardSessionIfEmpty:
     """Wiring tests for ClawksisCLI._discard_session_if_empty."""
 
@@ -90,10 +87,6 @@ class TestCLIDiscardSessionIfEmpty:
         cli._session_db = db
         cli.conversation_history = []
         return cli
-
-
-
-
 
     def test_db_error_swallowed(self, db):
         class Boom:

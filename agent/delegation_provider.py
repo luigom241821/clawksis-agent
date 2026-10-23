@@ -42,16 +42,42 @@ from agent.provider_base import ProviderBase
 #: Per-task property names core owns. A provider-declared parameter with one of these names is
 #: refused at schema-build time: plugins add parameters, they never redefine core ones, and the
 #: raw route fields (``provider``/``model``/``base_url``/``api_key``) never become model-facing.
-RESERVED_TASK_PARAMETERS = frozenset({
-    "goal", "context", "index", "output_schema", "images", "group", "role", "toolsets",
-    "acp_command", "acp_args", "provider", "model", "base_url", "api_key", "api_mode",
-})
+RESERVED_TASK_PARAMETERS = frozenset(
+    {
+        "goal",
+        "context",
+        "index",
+        "output_schema",
+        "images",
+        "group",
+        "role",
+        "toolsets",
+        "acp_command",
+        "acp_args",
+        "provider",
+        "model",
+        "base_url",
+        "api_key",
+        "api_mode",
+    }
+)
 
 #: Keys a route may carry; anything else in a provider's answer is ignored.
-ROUTE_KEYS = frozenset({
-    "model", "provider", "base_url", "api_key", "api_mode", "request_overrides",
-    "reasoning_effort", "service_tier", "fallback_providers", "profile", "label",
-})
+ROUTE_KEYS = frozenset(
+    {
+        "model",
+        "provider",
+        "base_url",
+        "api_key",
+        "api_mode",
+        "request_overrides",
+        "reasoning_effort",
+        "service_tier",
+        "fallback_providers",
+        "profile",
+        "label",
+    }
+)
 
 
 class DelegationRouteError(ValueError):
@@ -101,7 +127,9 @@ class DelegationProvider(ProviderBase):
         return ""
 
     @abc.abstractmethod
-    def route_task(self, task: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str, Any]:
+    def route_task(
+        self, task: Mapping[str, Any], config: Mapping[str, Any]
+    ) -> dict[str, Any]:
         """Return the route for one task (vocabulary in the module docstring).
 
         ``task`` carries ``goal``, ``context``, ``index`` and the values the model supplied for

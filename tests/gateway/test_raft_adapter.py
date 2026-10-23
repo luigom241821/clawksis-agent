@@ -74,8 +74,6 @@ class TestRaftWakePayload:
 
 
 class TestRaftWakeHttp:
-
-
     @pytest.mark.asyncio
     async def test_rejects_content_bearing_payload(self):
         adapter = _make_adapter()
@@ -95,13 +93,14 @@ class TestRaftWakeHttp:
         assert body == {"ok": False, "error": "content_not_allowed"}
         adapter.handle_message.assert_not_called()
 
-
     @pytest.mark.parametrize("blank", [None, "   "])
     def test_unset_bridge_token_is_unset_not_a_guessable_token(self, blank):
         """A null/blank YAML token must reach connect()'s auto-generated one, never authorize "None"."""
         adapter = _make_adapter(bridge_token=blank)
         assert adapter._bridge_token == ""
-        assert not adapter._authorized(SimpleNamespace(headers={BRIDGE_TOKEN_HEADER: str(blank)}))
+        assert not adapter._authorized(
+            SimpleNamespace(headers={BRIDGE_TOKEN_HEADER: str(blank)})
+        )
 
 
 class TestRaftActivityHttp:
@@ -117,7 +116,10 @@ class TestRaftActivityHttp:
 
             unknown = await client.post(
                 "/activity",
-                json={**_activity_event("evt-1"), "transcript_path": "/tmp/session.jsonl"},
+                json={
+                    **_activity_event("evt-1"),
+                    "transcript_path": "/tmp/session.jsonl",
+                },
                 headers={BRIDGE_TOKEN_HEADER: "bridge-secret"},
             )
             assert unknown.status == 400
@@ -179,8 +181,6 @@ class TestBodySize:
 
 
 class TestRaftConfig:
-
-
     def test_interactive_setup_keeps_existing_profile_when_not_reconfigured(
         self, monkeypatch, tmp_path
     ):
@@ -208,6 +208,7 @@ class TestRaftConfig:
 # silently connect the bridge subprocess / CLI hint to the default profile's
 # external Raft workspace/agent identity instead of its own. Mirrors the
 # Buzz/SimpleX fix for #98738.
+
 
 @pytest.fixture
 def multiplex_scope():
@@ -250,7 +251,6 @@ class _FakeCtx:
 
 
 class TestMultiplexProfileScope:
-
     def test_secondary_profile_uses_its_own_slug_and_never_borrows_default(
         self, multiplex_scope, default_profile_env, monkeypatch
     ):
@@ -262,17 +262,24 @@ class TestMultiplexProfileScope:
         monkeypatch.setattr(raft_mod.shutil, "which", lambda name: "/usr/bin/raft")
         spawned = []
         monkeypatch.setattr(
-            raft_mod.subprocess, "Popen",
+            raft_mod.subprocess,
+            "Popen",
             lambda cmd, **kwargs: spawned.append(cmd) or SimpleNamespace(pid=1),
         )
 
         multiplex_scope({"RAFT_PROFILE": "secondary-profile-slug"})
         _make_adapter()._spawn_bridge(9999)
-        assert spawned[-1][:3] == ["/usr/bin/raft", "--profile", "secondary-profile-slug"]
+        assert spawned[-1][:3] == [
+            "/usr/bin/raft",
+            "--profile",
+            "secondary-profile-slug",
+        ]
         assert _env_enablement() == {"enabled": True}
         ctx = _FakeCtx()
         register(ctx)
-        assert "--profile secondary-profile-slug" in ctx.platform_kwargs["platform_hint"]
+        assert (
+            "--profile secondary-profile-slug" in ctx.platform_kwargs["platform_hint"]
+        )
         assert "default-profile-slug" not in ctx.platform_kwargs["platform_hint"]
 
         spawned.clear()
@@ -293,6 +300,8 @@ class TestMultiplexProfileScope:
             assert _env_enablement() == {"enabled": True}
             ctx = _FakeCtx()
             register(ctx)
-            assert "--profile default-profile-slug" in ctx.platform_kwargs["platform_hint"]
+            assert (
+                "--profile default-profile-slug" in ctx.platform_kwargs["platform_hint"]
+            )
         finally:
             set_multiplex_active(False)

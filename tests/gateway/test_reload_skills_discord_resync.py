@@ -20,6 +20,7 @@ No ``tree.sync()`` is required because Discord fetches autocomplete
 options dynamically on every keystroke — we only need to rebind the
 data the live callbacks already read from.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,6 +31,7 @@ def _make_adapter():
     """Construct a DiscordAdapter without going through __init__ / token checks."""
     from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.platforms.base import Platform
+
     adapter = object.__new__(DiscordAdapter)
     adapter.config = MagicMock()
     adapter.config.extra = {}
@@ -64,9 +66,11 @@ class TestRefreshSkillGroup:
         # User adds new-skill to disk and removes old-skill.
         def fake_collector(*, reserved_names):
             return (
-                {"creative": [("new-skill", "Fresh skill", "/new-skill")]},  # categories
+                {
+                    "creative": [("new-skill", "Fresh skill", "/new-skill")]
+                },  # categories
                 [],  # uncategorized
-                0,   # hidden
+                0,  # hidden
             )
 
         monkeypatch.setattr(
@@ -83,8 +87,6 @@ class TestRefreshSkillGroup:
         assert names == ["new-skill"]
         assert "old-skill" not in adapter._skill_lookup
         assert adapter._skill_lookup["new-skill"] == ("Fresh skill", "/new-skill")
-
-
 
 
 class TestHandleReloadSkillsCallsRefreshSkillGroup:
@@ -104,6 +106,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
         # Import without constructing a real runner — test the method
         # directly against an ``object.__new__`` instance.
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
 
         sync_refresh = MagicMock(return_value=(5, 0))
@@ -111,6 +114,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         class AsyncAdapter:
             name = "async-platform"
+
             async def refresh_skill_group(self):
                 async_called["flag"] = True
                 return (3, 0)
@@ -131,9 +135,7 @@ class TestHandleReloadSkillsCallsRefreshSkillGroup:
 
         # Mock reload_skills itself so no disk scan runs.
         fake_result = {"added": [], "removed": [], "total": 7}
-        with patch(
-            "agent.skill_commands.reload_skills", return_value=fake_result
-        ):
+        with patch("agent.skill_commands.reload_skills", return_value=fake_result):
             event = MagicMock()
             event.source = MagicMock()
             # _session_key_for_source may be called — make it safe.

@@ -115,8 +115,6 @@ def test_lock_released_when_holder_fd_closes(root):
         pass  # acquires immediately — no TurnBusyError
 
 
-
-
 def test_lock_path_is_short_and_sanitized(root):
     p = turn_lock_path(root, "we/ird nam√©" + "x" * 200)
     assert p.parent == bot_relay.relay_root(root) / bot_relay.LOCKS_DIR

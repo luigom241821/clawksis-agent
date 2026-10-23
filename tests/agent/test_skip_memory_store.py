@@ -10,7 +10,6 @@ memory toolset is explicitly enabled, while the external-provider block stays
 gated on ``skip_memory``.
 """
 
-
 from run_agent import AIAgent
 
 
@@ -41,12 +40,6 @@ def _make_agent(
         enabled_toolsets=enabled_toolsets,
         disabled_toolsets=disabled_toolsets,
     )
-
-
-
-
-
-
 
 
 def test_skip_memory_memory_tool_handler_works_and_provider_skipped(

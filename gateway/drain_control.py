@@ -10,6 +10,7 @@ orphan past :data:`DRAIN_REQUEST_MAX_AGE_SECONDS`; re-writing refreshes it).
 Reading never raises: a malformed file reads as ``{}`` — still drain-active
 (fail-safe toward quiescing).  Staleness rejects only on a *definite* verdict.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -43,8 +44,11 @@ def open_restart_wait(runner) -> None:
 def restart_wait_open(runner) -> bool:
     """True while *runner* is in a restart's after-turn wait (draining, not yet stopping)."""
     descriptor = getattr(runner, "session_runtime_descriptor", None) or {}
-    return (bool(getattr(runner, "_draining", False)) and bool(getattr(runner, "_running", False))
-            and descriptor.get("drain_reason") == RESTART_WAIT_REASON)
+    return (
+        bool(getattr(runner, "_draining", False))
+        and bool(getattr(runner, "_running", False))
+        and descriptor.get("drain_reason") == RESTART_WAIT_REASON
+    )
 
 
 # The reads a client needs during that wait to find and open the conversation parked on
@@ -53,29 +57,52 @@ def restart_wait_open(runner) -> bool:
 # drain's refusal. The prompt itself (approval.pending / *.respond) rides the WebSocket.
 _RESTART_WAIT_READS = re.compile(
     r"/api/(?:health|status|profiles/sessions(?:/sidebar)?"
-    r"|sessions/[^/]+(?:/messages(?:/around)?|/timeline)?)")
+    r"|sessions/[^/]+(?:/messages(?:/around)?|/timeline)?)"
+)
 
 
 def restart_wait_read(runner, method, path) -> bool:
     """True for an allowlisted read request while *runner* is in a restart's after-turn wait."""
-    return (method == "GET" and bool(_RESTART_WAIT_READS.fullmatch(path or ""))
-            and restart_wait_open(runner))
+    return (
+        method == "GET"
+        and bool(_RESTART_WAIT_READS.fullmatch(path or ""))
+        and restart_wait_open(runner)
+    )
+
 
 # The WebSocket verbs an interactive client may still call during that wait: attach to and read the
 # parked session, answer its prompt (or interrupt the turn so the restart can finish) and commit
 # queued input for the next owner. Every other verb (config.set, session.save, rollback.restore,
 # process.kill, reload.*, ...) would run on an owner that is shutting down, so it is refused with
 # ``runtime_draining`` exactly like the REST writes above.
-RESTART_WAIT_WS_METHODS = frozenset({
-    "ping", "runtime.describe", "session.resume", "session.detach", "session.events.since",
-    "session.info", "session.list", "prompt.submit", "prompt.receipt", "session.interrupt",
-    "approval.pending", "approval.received", "approval.respond", "clarify.respond", "clarify.lock",
-})
+RESTART_WAIT_WS_METHODS = frozenset(
+    {
+        "ping",
+        "runtime.describe",
+        "session.resume",
+        "session.detach",
+        "session.events.since",
+        "session.info",
+        "session.list",
+        "prompt.submit",
+        "prompt.receipt",
+        "session.interrupt",
+        "approval.pending",
+        "approval.received",
+        "approval.respond",
+        "clarify.respond",
+        "clarify.lock",
+    }
+)
 
 
 def ws_method_refused_while_draining(runner, method) -> bool:
     """True when an interactive WebSocket verb must be refused because *runner* is draining."""
-    return bool(getattr(runner, "_draining", False)) and method not in RESTART_WAIT_WS_METHODS
+    return (
+        bool(getattr(runner, "_draining", False))
+        and method not in RESTART_WAIT_WS_METHODS
+    )
+
 
 _DRAIN_REQUEST_FILENAME = ".drain_request.json"
 # Drain-gated lifecycle actions complete in minutes; an hour bounds the wedge a leaked
@@ -99,21 +126,33 @@ def current_instantiation_epoch() -> str:
     """
     boot_id = pid1_start = ""
     with contextlib.suppress(OSError):
-        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
+        boot_id = (
+            Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
+        )
     with contextlib.suppress(OSError, IndexError):
         # "<pid> (<comm>) <state> ...": comm may contain spaces/parens, so split on the
         # LAST ')'. starttime is field 22 (1-indexed) = tail index 19.
-        pid1_start = Path("/proc/1/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()[19]
+        pid1_start = (
+            Path("/proc/1/stat")
+            .read_text(encoding="utf-8")
+            .rsplit(")", 1)[1]
+            .split()[19]
+        )
     return f"{boot_id}:{pid1_start}" if (boot_id or pid1_start) else ""
 
 
 def drain_request_path(home: Optional[Path] = None) -> Path:
     """Absolute path to the drain-request marker, respecting CLAWK_HOME."""
-    return Path(home if home is not None else get_clawk_home()) / _DRAIN_REQUEST_FILENAME
+    return (
+        Path(home if home is not None else get_clawk_home()) / _DRAIN_REQUEST_FILENAME
+    )
 
 
 def write_drain_request(
-    *, principal: str = "drain-control", suppress_notification: bool = False, home: Optional[Path] = None
+    *,
+    principal: str = "drain-control",
+    suppress_notification: bool = False,
+    home: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Write the begin-drain marker atomically; returns the payload.
 
@@ -124,8 +163,11 @@ def write_drain_request(
     copy surviving a machine restart on the durable volume reads as stale.
     """
     payload = {
-        "action": "drain", "requested_at": datetime.now(UTC).isoformat(), "principal": principal,
-        "epoch": current_instantiation_epoch(), "suppress_notification": bool(suppress_notification),
+        "action": "drain",
+        "requested_at": datetime.now(UTC).isoformat(),
+        "principal": principal,
+        "epoch": current_instantiation_epoch(),
+        "suppress_notification": bool(suppress_notification),
     }
     atomic_json_write(drain_request_path(home), payload)
     return payload
@@ -164,7 +206,10 @@ def _marker_is_expired(body: dict[str, Any]) -> bool:
         _log.warning(
             "drain-control: ignoring expired drain marker (requested_at=%s, age=%.0fs > max %.0fs, principal=%s) "
             "— the drain that wrote it was never cancelled; treating as stale so the gateway keeps accepting turns.",
-            raw, age, DRAIN_REQUEST_MAX_AGE_SECONDS, body.get("principal"),
+            raw,
+            age,
+            DRAIN_REQUEST_MAX_AGE_SECONDS,
+            body.get("principal"),
         )
     return True
 
@@ -175,7 +220,9 @@ def _active_drain_body(home: Optional[Path]) -> Optional[dict[str, Any]]:
     if body is None:
         return None
     current, marker_epoch = current_instantiation_epoch(), body.get("epoch")
-    if (current and marker_epoch and marker_epoch != current) or _marker_is_expired(body):
+    if (current and marker_epoch and marker_epoch != current) or _marker_is_expired(
+        body
+    ):
         return None
     return body
 

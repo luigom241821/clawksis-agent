@@ -82,7 +82,3 @@ def test_install_suppresses_flood_and_forwards_real_errors():
         assert forwarded[0] is real_ctx
     finally:
         loop.close()
-
-
-
-

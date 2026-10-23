@@ -201,9 +201,9 @@ async def test_bot_authored_thread_root_uses_per_team_bot_id():
     )
     assert result is True
     # And the primary bot id must NOT match in that workspace.
-    adapter._thread_context_cache[f"{CHANNEL_ID}:{THREAD_TS}:T2"].parent_user_id = (
-        BOT_USER_ID
-    )
+    adapter._thread_context_cache[
+        f"{CHANNEL_ID}:{THREAD_TS}:T2"
+    ].parent_user_id = BOT_USER_ID
     result = await SlackAdapter._bot_authored_thread_root(
         adapter, CHANNEL_ID, THREAD_TS, team_id="T2"
     )

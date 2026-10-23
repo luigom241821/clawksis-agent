@@ -4,7 +4,11 @@ from types import SimpleNamespace
 import pytest
 
 from agent.codex_runtime import _record_codex_app_server_compaction
-from agent.conversation_compression import COMPACTION_DONE_STATUS, COMPACTION_STATUS, compress_context
+from agent.conversation_compression import (
+    COMPACTION_DONE_STATUS,
+    COMPACTION_STATUS,
+    compress_context,
+)
 from agent.transports.codex_app_server_session import TurnResult
 
 
@@ -64,7 +68,9 @@ class DummyAgent:
         )
         self.statuses = []
         self.status_events = []
-        self.status_callback = lambda kind, text: self.status_events.append((kind, text))
+        self.status_callback = lambda kind, text: self.status_events.append(
+            (kind, text)
+        )
         self.warnings = []
         self.events = []
         self.built_prompts = []
@@ -93,9 +99,7 @@ class DummyAgent:
 
 
 def test_codex_app_server_native_auto_mode_leaves_thread_compaction_to_codex():
-    agent = DummyAgent(
-        TurnResult(thread_id="thread-1", turn_id="compact-turn-1")
-    )
+    agent = DummyAgent(TurnResult(thread_id="thread-1", turn_id="compact-turn-1"))
     messages = [{"role": "user", "content": "hi"}]
 
     returned, prompt = compress_context(
@@ -114,9 +118,7 @@ def test_codex_app_server_native_auto_mode_leaves_thread_compaction_to_codex():
 
 
 def test_codex_app_server_compaction_heartbeat_refreshes_activity_while_waiting():
-    agent = DummyAgent(
-        TurnResult(thread_id="thread-1", turn_id="compact-turn-1")
-    )
+    agent = DummyAgent(TurnResult(thread_id="thread-1", turn_id="compact-turn-1"))
     agent._codex_session = SlowCodexSession(
         agent._codex_session.result,
         agent.touch_calls,
@@ -146,10 +148,6 @@ def test_codex_app_server_compaction_heartbeat_refreshes_activity_while_waiting(
     )
 
 
-
-
-
-
 def test_codex_app_server_compression_failure_preserves_bookkeeping():
     agent = DummyAgent(TurnResult(error="compact failed"))
     messages = [{"role": "user", "content": "hi"}]
@@ -176,9 +174,6 @@ def test_codex_app_server_compression_failure_preserves_bookkeeping():
     ]
 
 
-
-
-
 def test_codex_native_boundary_clears_stale_clawk_fallback_streak():
     from unittest.mock import patch
 
@@ -192,9 +187,7 @@ def test_codex_native_boundary_clears_stale_clawk_fallback_streak():
     compressor._fallback_compression_streak = 1
     compressor._last_summary_fallback_used = True
 
-    agent = DummyAgent(
-        TurnResult(thread_id="thread-1", turn_id="normal-turn-1")
-    )
+    agent = DummyAgent(TurnResult(thread_id="thread-1", turn_id="normal-turn-1"))
     agent.context_compressor = compressor
     turn = TurnResult(
         thread_id="thread-1",
@@ -267,9 +260,7 @@ def test_codex_compaction_error_without_interrupt_also_arms_cooldown():
     agent.context_compressor = RecordingCooldownCompressor()
     messages = [{"role": "user", "content": "hi"}]
 
-    compress_context(
-        agent, messages, "system", approx_tokens=100000, task_id="test"
-    )
+    compress_context(agent, messages, "system", approx_tokens=100000, task_id="test")
 
     assert len(agent.context_compressor.recorded) == 1
     assert agent.context_compressor.recorded[0][1] == "boom"
@@ -316,8 +307,6 @@ def test_successful_codex_compaction_arms_no_cooldown():
     agent.context_compressor = RecordingCooldownCompressor()
     messages = [{"role": "user", "content": "hi"}]
 
-    compress_context(
-        agent, messages, "system", approx_tokens=100000, task_id="test"
-    )
+    compress_context(agent, messages, "system", approx_tokens=100000, task_id="test")
 
     assert agent.context_compressor.recorded == []

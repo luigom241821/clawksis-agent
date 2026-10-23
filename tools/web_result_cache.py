@@ -33,6 +33,7 @@ _INDEX_MAX_ENTRIES = 500  # oldest entries evicted past this
 def _web_config() -> dict:
     try:
         from tools.web_tools import _load_web_config
+
         return _load_web_config()
     except Exception:
         return {}
@@ -77,13 +78,16 @@ def _deep_copy(response: dict) -> dict:
 
 # ─── Search memo (in-memory, single-flight) ───────────────────────────────────
 
+
 class SearchMemo:
     """TTL memo + single-flight coalescer for search responses. Thread-safe: the parallel tool-dispatch pool
     and subagents share this process, so identical queries genuinely race; per-key locks make the losers
     wait for (and share) the winner's response."""
 
     def __init__(self) -> None:
-        self._store: dict[tuple, tuple[float, dict]] = {}  # key -> (expires_at, response)
+        self._store: dict[
+            tuple, tuple[float, dict]
+        ] = {}  # key -> (expires_at, response)
         self._store_lock = threading.Lock()
         self._key_locks: dict[tuple, threading.Lock] = {}
 
@@ -105,7 +109,11 @@ class SearchMemo:
 
     def store(self, provider: str, query: str, limit: int, response: dict) -> None:
         """Cache a SUCCESSFUL response for the bucketed key."""
-        if not cache_enabled() or not isinstance(response, dict) or not response.get("success"):
+        if (
+            not cache_enabled()
+            or not isinstance(response, dict)
+            or not response.get("success")
+        ):
             return
         key = self._key(provider, query, limit)
         with self._store_lock:
@@ -125,7 +133,9 @@ class SearchMemo:
                 # safe snapshot under _store_lock because holders already have their reference.
                 # See #94618.
                 if len(self._key_locks) > 256:
-                    self._key_locks = {k: v for k, v in self._key_locks.items() if v.locked()}
+                    self._key_locks = {
+                        k: v for k, v in self._key_locks.items() if v.locked()
+                    }
                 lock = self._key_locks[key] = threading.Lock()
             return lock
 
@@ -160,6 +170,7 @@ _index_lock = threading.Lock()
 def _cache_dir() -> Optional[Path]:
     try:
         from clawk_constants import get_clawk_dir
+
         d = get_clawk_dir("cache/web", "web_cache")
         d.mkdir(parents=True, exist_ok=True)
         return d
@@ -169,7 +180,9 @@ def _cache_dir() -> Optional[Path]:
 
 def _load_index() -> dict:
     try:
-        data = json.loads((_cache_dir() / _INDEX_FILENAME).read_text(encoding="utf-8-sig"))
+        data = json.loads(
+            (_cache_dir() / _INDEX_FILENAME).read_text(encoding="utf-8-sig")
+        )
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
@@ -181,7 +194,9 @@ def _save_index(index: dict) -> None:
     path = d / _INDEX_FILENAME
     try:
         if len(index) > _INDEX_MAX_ENTRIES:
-            newest = sorted(index.items(), key=lambda kv: kv[1].get("fetched_at", 0), reverse=True)
+            newest = sorted(
+                index.items(), key=lambda kv: kv[1].get("fetched_at", 0), reverse=True
+            )
             index = dict(newest[:_INDEX_MAX_ENTRIES])
         # CLI, gateway, cron, and subagents all write this index; the replace is atomic, so the worst case
         # under concurrent writers is a lost insert, never a truncated index.
@@ -244,21 +259,32 @@ def _is_local_dev_url(url: str) -> bool:
         if "." not in host and ":" not in host:
             return True
         import ipaddress
+
         try:
             ip = ipaddress.ip_address(host)
         except ValueError:
             return False  # public DNS name
-        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_unspecified
+        )
     except Exception:
         return True
 
 
 def _cacheable(url: str) -> bool:
     """Extract-cache gate: enabled, not a local-dev host, not user-exempted."""
-    return cache_enabled() and not (_is_local_dev_url(url) or _is_cache_exempt_host(url))
+    return cache_enabled() and not (
+        _is_local_dev_url(url) or _is_cache_exempt_host(url)
+    )
 
 
-def extract_cache_get(url: str, format: Optional[str] = None, provider: str = "") -> Optional[dict]:
+def extract_cache_get(
+    url: str, format: Optional[str] = None, provider: str = ""
+) -> Optional[dict]:
     """Return {'url','title','content'} for a fresh cached page, else None."""
     if not _cacheable(url):
         return None
@@ -275,11 +301,21 @@ def extract_cache_get(url: str, format: Optional[str] = None, provider: str = ""
     except Exception:
         return None
     logger.info("web_extract cache hit: %s", url)
-    return {"url": url, "title": entry.get("title", ""), "content": content, "error": None, "cached": True}
+    return {
+        "url": url,
+        "title": entry.get("title", ""),
+        "content": content,
+        "error": None,
+        "cached": True,
+    }
 
 
 def extract_cache_put(
-    url: str, content: str, title: str = "", format: Optional[str] = None, provider: str = ""
+    url: str,
+    content: str,
+    title: str = "",
+    format: Optional[str] = None,
+    provider: str = "",
 ) -> None:
     """Store one successful extraction's full clean text for TTL reuse; pages over the truncate-store
     ceiling are not cached (serving a capped copy back as if whole would silently lose the tail)."""
@@ -287,15 +323,20 @@ def extract_cache_put(
         return
     try:
         from tools.web_tools_truncate import MAX_STORED_TEXT_CHARS
+
         file_path = _entry_file_path(url, format, provider)
         if len(content) > MAX_STORED_TEXT_CHARS or file_path is None:
             return
         from tools.spill_safety import write_text_exclusive
+
         write_text_exclusive(file_path, content, private=False, overwrite=True)
         with _index_lock:
             index = _load_index()
             index[_url_digest(url, format, provider)] = {
-                "url": url, "file": str(file_path), "title": title or "", "fetched_at": time.time(),
+                "url": url,
+                "file": str(file_path),
+                "title": title or "",
+                "fetched_at": time.time(),
             }
             _save_index(index)
     except Exception as exc:

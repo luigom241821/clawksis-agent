@@ -87,14 +87,21 @@ def handle_spurious_eof(recovery_times: list[float], log_fn: object) -> bool:
     if len(recovery_times) > MAX_RECOVERIES_PER_MINUTE:
         log_fn(  # type: ignore[operator]
             f"stdin spurious-EOF recovery rate exceeded "
-            f"({len(recovery_times)}/min, cap {MAX_RECOVERIES_PER_MINUTE})")
+            f"({len(recovery_times)}/min, cap {MAX_RECOVERIES_PER_MINUTE})"
+        )
         return False
-    log_fn(f"stdin spurious EOF (subprocess O_NONBLOCK flip), recovering: {diagnose_stdin_state()}")  # type: ignore[operator]
+    log_fn(
+        f"stdin spurious EOF (subprocess O_NONBLOCK flip), recovering: {diagnose_stdin_state()}"
+    )  # type: ignore[operator]
     # Restore blocking mode on the shared description, and clear SO_RCVTIMEO too: a
     # non-zero timeout would make the next readline() return '' again until the limiter fires.
     os.set_blocking(0, True)
     # "ll" = struct timeval {tv_sec, tv_usec}; zero timeval disables the timeout.
-    _stdin_sockopt(lambda s: s.setsockopt(socket.SOL_SOCKET, socket.SO_RCVTIMEO, struct.pack("ll", 0, 0)))
+    _stdin_sockopt(
+        lambda s: s.setsockopt(
+            socket.SOL_SOCKET, socket.SO_RCVTIMEO, struct.pack("ll", 0, 0)
+        )
+    )
     # TextIOWrapper.readline returns '' on EAGAIN but does NOT stick EOF; the next call
     # blocks until data arrives or the peer truly closes.
     return True

@@ -1,19 +1,39 @@
 """Turn-local presentation of diagnostic-only wakes; execution and controls stay live."""
+
 from contextlib import contextmanager
 from contextvars import ContextVar
 
 
-_muted_surface: ContextVar[str | None] = ContextVar("muted_notification_surface", default=None)
+_muted_surface: ContextVar[str | None] = ContextVar(
+    "muted_notification_surface", default=None
+)
 # These are text/media UI events, not approval/clarify/connection requests or outcomes.
-_FREEFORM_EVENTS = frozenset({
-    "message.start", "message.delta", "message.interim", "message.complete",
-    "reasoning.delta", "thinking.delta", "status.update", "notification.show",
-    "tool.start", "tool.complete", "tool.generating", "error", "reaction",
-})
+_FREEFORM_EVENTS = frozenset(
+    {
+        "message.start",
+        "message.delta",
+        "message.interim",
+        "message.complete",
+        "reasoning.delta",
+        "thinking.delta",
+        "status.update",
+        "notification.show",
+        "tool.start",
+        "tool.complete",
+        "tool.generating",
+        "error",
+        "reaction",
+    }
+)
 _PRESENTATION_CALLBACKS = (
-    "stream_delta_callback", "interim_assistant_callback", "reasoning_callback",
+    "stream_delta_callback",
+    "interim_assistant_callback",
+    "reasoning_callback",
     "tool_progress_callback",
-    "tool_start_callback", "tool_complete_callback", "tool_gen_callback", "reaction_callback",
+    "tool_start_callback",
+    "tool_complete_callback",
+    "tool_gen_callback",
+    "reaction_callback",
 )
 
 
@@ -24,13 +44,16 @@ def event_presentation_muted(event: str, session_id: str) -> bool:
 def diagnostic_process_event(event: dict) -> bool:
     """Early failure/monitor diagnostics, not the explicitly requested final result."""
     return bool(event.get("task_failure_notice")) or event.get("type") in {
-        "watch_disabled", "watch_overflow_tripped", "watch_overflow_released",
+        "watch_disabled",
+        "watch_overflow_tripped",
+        "watch_overflow_released",
     }
 
 
 def notification_config_snapshot():
     """Read the owning effective config once per turn (the loader already returns a fresh copy)."""
     from gateway.warning_notifications import effective_user_config
+
     return effective_user_config()
 
 
@@ -38,8 +61,10 @@ def notification_config_snapshot():
 def notification_policy_snapshot(agent, platform, config):
     """Bind one foreground policy for callbacks, including worker threads. ``config`` is read-only."""
     missing = object()
-    saved = {key: getattr(agent, key, missing)
-             for key in ("_notification_config", "_notification_platform")}
+    saved = {
+        key: getattr(agent, key, missing)
+        for key in ("_notification_config", "_notification_platform")
+    }
     try:
         agent._notification_config = config
         agent._notification_platform = platform
@@ -59,7 +84,11 @@ def notification_turn(agent, *, muted: bool, session_id: str = ""):
         yield
         return
     missing = object()
-    keys = (*_PRESENTATION_CALLBACKS, "suppress_status_output", "_mute_notification_reply")
+    keys = (
+        *_PRESENTATION_CALLBACKS,
+        "suppress_status_output",
+        "_mute_notification_reply",
+    )
     saved = {key: getattr(agent, key, missing) for key in keys}
     token = _muted_surface.set(session_id)
     try:

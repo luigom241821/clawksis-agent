@@ -13,8 +13,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from clawk_state_common import (
-    _RECOVERABLE_END_REASONS_SQL, _RESET_CHILD_SQL, _RESET_END_REASONS_SQL, _sql_json_extract,
-    _sql_session_last_active)
+    _RECOVERABLE_END_REASONS_SQL,
+    _RESET_CHILD_SQL,
+    _RESET_END_REASONS_SQL,
+    _sql_json_extract,
+    _sql_session_last_active,
+)
 
 # Log-record parity with the origin module (caplog tests pin "clawk_state").
 logger = logging.getLogger("clawk_state")
@@ -31,9 +35,9 @@ _COMPRESSION_LINEAGE_CTE = f"""
                         JOIN sessions child ON child.id = lineage.id
                         JOIN sessions parent ON parent.id = child.parent_session_id
                         WHERE parent.end_reason = 'compression'
-                          AND {_sql_json_extract('child.model_config', '$._branched_from')} IS NULL
-                          AND {_sql_json_extract('child.model_config', '$._delegate_from')} IS NULL
-                          AND NOT ({_RESET_CHILD_SQL.format(a='child')})
+                          AND {_sql_json_extract("child.model_config", "$._branched_from")} IS NULL
+                          AND {_sql_json_extract("child.model_config", "$._delegate_from")} IS NULL
+                          AND NOT ({_RESET_CHILD_SQL.format(a="child")})
                           AND COALESCE(child.source, '') != 'tool'
                     )
                 """
@@ -117,8 +121,8 @@ _ORPHANS_SQL = f"""
                   AND EXISTS (SELECT 1 FROM messages m
                                WHERE m.session_id = o.id)
                   AND COALESCE(o.source, '') != 'tool'
-                  AND {_sql_json_extract('o.model_config', '$._branched_from')} IS NULL
-                  AND {_sql_json_extract('o.model_config', '$._delegate_from')} IS NULL
+                  AND {_sql_json_extract("o.model_config", "$._branched_from")} IS NULL
+                  AND {_sql_json_extract("o.model_config", "$._delegate_from")} IS NULL
                 ORDER BY o.started_at ASC
                 """
 # Donor profile fence: the donor's effective profile (NULL reads as the store's own, the same convention
@@ -150,7 +154,10 @@ _ORPHAN_CONTIGUITY_DONORS_SQL = f"""
                         LIMIT 2
                         """
 _OPTIONAL_TABLE_NAMES = (
-    "telegram_dm_topic_mode", "telegram_dm_topic_bindings", "delivery_obligations")
+    "telegram_dm_topic_mode",
+    "telegram_dm_topic_bindings",
+    "delivery_obligations",
+)
 
 
 def _optional_table_columns(conn) -> dict[str, set[str]]:
@@ -162,29 +169,41 @@ def _optional_table_columns(conn) -> dict[str, set[str]]:
     it. Identity settlement must gate its column SQL on the column actually being there
     rather than on table existence, and must not force those migrations (#113757).
     """
-    existing = {row[0] for row in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?, ?)",
-        _OPTIONAL_TABLE_NAMES)}
+    existing = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN (?, ?, ?)",
+            _OPTIONAL_TABLE_NAMES,
+        )
+    }
     return {
         table: {row[1] for row in conn.execute(f"PRAGMA table_info('{table}')")}
-        for table in _OPTIONAL_TABLE_NAMES if table in existing
+        for table in _OPTIONAL_TABLE_NAMES
+        if table in existing
     }
 
 
-_HANDOFF_FAIL_SQL = "UPDATE sessions SET handoff_state = 'failed', handoff_error = ? WHERE "
+_HANDOFF_FAIL_SQL = (
+    "UPDATE sessions SET handoff_state = 'failed', handoff_error = ? WHERE "
+)
 
 
 class SessionGatewayMixin:
     """Routing index, session peers/orphans, hygiene streaks, heartbeats, handoffs."""
 
     def _reap_inactive_orphan_desktop_holders(
-        self, holders: list[tuple[int, str]], *, min_age_seconds: float) -> list[int]:
+        self, holders: list[tuple[int, str]], *, min_age_seconds: float
+    ) -> list[int]:
         """Terminate old PPID-1 Desktop ephemeral backends with no client.
 
         Fails closed: anything whose parent, age, argv, or network connections
         cannot be proved safe remains a repair-blocking holder."""
         from clawk_state import psutil
-        from clawk_state_dbfile import _concrete_state_db_holder_pids, _is_inactive_orphan_desktop_holder
+        from clawk_state_dbfile import (
+            _concrete_state_db_holder_pids,
+            _is_inactive_orphan_desktop_holder,
+        )
+
         if not sys.platform.startswith("linux") or psutil is None:
             return []
         try:
@@ -196,12 +215,18 @@ class SessionGatewayMixin:
         for pid in _concrete_state_db_holder_pids(self.db_path, holders):
             try:
                 process = psutil.Process(pid)
-                statuses = [conn.status for conn in process.net_connections(kind="inet")]
+                statuses = [
+                    conn.status for conn in process.net_connections(kind="inet")
+                ]
                 if not _is_inactive_orphan_desktop_holder(
-                    ppid=process.ppid(), age_seconds=now - process.create_time(),
+                    ppid=process.ppid(),
+                    age_seconds=now - process.create_time(),
                     min_age_seconds=min_age_seconds,
-                    ephemeral_backend=_is_ephemeral_port_zero_backend(process.cmdline()),
-                    connection_statuses=statuses):
+                    ephemeral_backend=_is_ephemeral_port_zero_backend(
+                        process.cmdline()
+                    ),
+                    connection_statuses=statuses,
+                ):
                     continue
             except Exception:
                 continue
@@ -232,10 +257,20 @@ class SessionGatewayMixin:
         return signalled
 
     def record_gateway_session_peer(
-        self, session_id: str, *, source: str, user_id: str | None = None, session_key: str | None = None,
-        chat_id: str | None = None, chat_type: str | None = None, thread_id: str | None = None, display_name: str | None = None,
-        origin_json: str | None = None, include_compression_ancestors: bool = False,
-        transport_profile: str | None = None) -> None:
+        self,
+        session_id: str,
+        *,
+        source: str,
+        user_id: str | None = None,
+        session_key: str | None = None,
+        chat_id: str | None = None,
+        chat_type: str | None = None,
+        thread_id: str | None = None,
+        display_name: str | None = None,
+        origin_json: str | None = None,
+        include_compression_ancestors: bool = False,
+        transport_profile: str | None = None,
+    ) -> None:
         """Persist the gateway routing peer for an existing session row. ``display_name`` / ``origin_json``:
         ``None`` leaves the stored value untouched (consumers read routing data from state.db, not
         sessions.json). ``include_compression_ancestors`` keeps a compression lineage on one routing peer
@@ -250,10 +285,19 @@ class SessionGatewayMixin:
         if not session_id or not session_key:
             return
         identity = (
-            session_key, source, user_id, chat_id, chat_type, thread_id, display_name, origin_json,
-            transport_profile)
+            session_key,
+            source,
+            user_id,
+            chat_id,
+            chat_type,
+            thread_id,
+            display_name,
+            origin_json,
+            transport_profile,
+        )
         ancestors = include_compression_ancestors
         query_params = [session_id, *identity] if ancestors else [*identity, session_id]
+
         def _do(conn):
             conn.execute(
                 f"""{_COMPRESSION_LINEAGE_CTE if ancestors else ""}
@@ -269,7 +313,12 @@ class SessionGatewayMixin:
             if ancestors:
                 return
             # The UPDATE silently no-ops on a missing row — insert it with full identity.
-            if conn.execute("SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)).fetchone() is None:
+            if (
+                conn.execute(
+                    "SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)
+                ).fetchone()
+                is None
+            ):
                 conn.execute(
                     """INSERT INTO sessions (
                                id, source, created_source, user_id, session_key, chat_id,
@@ -288,50 +337,97 @@ class SessionGatewayMixin:
                                created_source = COALESCE(sessions.created_source, excluded.created_source)""",
                     # Same ownership stamp as _insert_session_row: an unowned (NULL) row
                     # vanishes from profile-keyed consumers.
-                    (session_id, source, source, user_id, session_key, chat_id, chat_type, thread_id, display_name,
-                     origin_json, self._own_profile_name(), transport_profile, time.time()),
+                    (
+                        session_id,
+                        source,
+                        source,
+                        user_id,
+                        session_key,
+                        chat_id,
+                        chat_type,
+                        thread_id,
+                        display_name,
+                        origin_json,
+                        self._own_profile_name(),
+                        transport_profile,
+                        time.time(),
+                    ),
                 )
+
         self._execute_write(_do)
 
-    def save_gateway_routing_entry(self, session_key: str, entry_json: str, *, scope: str = "") -> None:
+    def save_gateway_routing_entry(
+        self, session_key: str, entry_json: str, *, scope: str = ""
+    ) -> None:
         """Upsert one gateway routing entry (session_key -> SessionEntry JSON); ``scope``
         namespaces the index per sessions_dir so two stores never share routing state."""
         if not session_key or not entry_json:
             return
-        from clawk_state_mutation_retirement import ROUTE_RETIRED_SQL, route_retired_params
+        from clawk_state_mutation_retirement import (
+            ROUTE_RETIRED_SQL,
+            route_retired_params,
+        )
+
         self._write_sql(
             f"""INSERT INTO gateway_routing (scope, session_key, entry_json, updated_at)
                SELECT :scope, :key, :entry, :now WHERE NOT {ROUTE_RETIRED_SQL}
                ON CONFLICT(scope, session_key) DO UPDATE SET
                    entry_json = excluded.entry_json,
                    updated_at = excluded.updated_at""",
-            {'scope': scope, 'key': session_key, **route_retired_params(session_key, entry_json, time.time())},
+            {
+                "scope": scope,
+                "key": session_key,
+                **route_retired_params(session_key, entry_json, time.time()),
+            },
         )
 
-    def replace_gateway_routing_entries(self, entries: dict[str, str], *, scope: str = "") -> set[str]:
+    def replace_gateway_routing_entries(
+        self, entries: dict[str, str], *, scope: str = ""
+    ) -> set[str]:
         """Atomically replace the routing index for *scope* (keys absent from *entries*
         are removed); other scopes untouched. Returns the keys skipped as retired routes, which
         the sessions.json mirror must leave out too."""
-        from clawk_state_mutation_retirement import ROUTE_RETIRED_SQL, route_retired_params
+        from clawk_state_mutation_retirement import (
+            ROUTE_RETIRED_SQL,
+            route_retired_params,
+        )
+
         now = time.time()
-        rows = [{'scope': scope, 'key': k, **route_retired_params(k, v, now)} for k, v in entries.items() if k and v]
+        rows = [
+            {"scope": scope, "key": k, **route_retired_params(k, v, now)}
+            for k, v in entries.items()
+            if k and v
+        ]
+
         def _do(conn):
             conn.execute("DELETE FROM gateway_routing WHERE scope = ?", (scope,))
             if rows:
                 conn.executemany(
                     "INSERT INTO gateway_routing (scope, session_key, entry_json, updated_at) "
                     "SELECT :scope, :key, :entry, :now WHERE NOT " + ROUTE_RETIRED_SQL,
-                    rows)
-            kept = {r[0] for r in conn.execute("SELECT session_key FROM gateway_routing WHERE scope = ?", (scope,))}
-            return {row['key'] for row in rows} - kept
+                    rows,
+                )
+            kept = {
+                r[0]
+                for r in conn.execute(
+                    "SELECT session_key FROM gateway_routing WHERE scope = ?", (scope,)
+                )
+            }
+            return {row["key"] for row in rows} - kept
+
         return self._execute_write(_do)
 
     def load_gateway_routing_entries(self, *, scope: str = "") -> dict[str, str]:
         """Load routing entries for *scope* as {session_key: entry_json}."""
-        rows = self._read_all("SELECT session_key, entry_json FROM gateway_routing WHERE scope = ?", (scope,))
+        rows = self._read_all(
+            "SELECT session_key, entry_json FROM gateway_routing WHERE scope = ?",
+            (scope,),
+        )
         return {r["session_key"]: r["entry_json"] for r in rows}
 
-    def list_never_active_keyed_sessions(self, *, older_than_days: float) -> list[dict[str, Any]]:
+    def list_never_active_keyed_sessions(
+        self, *, older_than_days: float
+    ) -> list[dict[str, Any]]:
         """Keyed, still-open rows with no evidence of a single turn (no messages, tokens, tool/API calls,
         activity, or title): leaked fixtures or chats routed but never answered. Safe to drop — the gateway
         mints a fresh session on the next message. Needs its own selector because ``bulk prune``/``archive``
@@ -343,7 +439,8 @@ class SessionGatewayMixin:
         if older_than_days < 0:
             raise ValueError(
                 f"older_than_days must be >= 0, got {older_than_days!r}: a negative "
-                "retention builds a future cutoff that matches every never-active keyed row.")
+                "retention builds a future cutoff that matches every never-active keyed row."
+            )
         cutoff = time.time() - (float(older_than_days) * 86400.0)
         rows = self._read_all(
             """
@@ -372,28 +469,42 @@ class SessionGatewayMixin:
         )
         return [dict(r) for r in rows]
 
-    def gateway_routing_entry_for_session(self, session_id: str) -> Optional[dict[str, Any]]:
+    def gateway_routing_entry_for_session(
+        self, session_id: str
+    ) -> Optional[dict[str, Any]]:
         """The routing entry (any scope) whose current owner is *session_id*, or None. The id lives
         only inside ``entry_json``, so matching is done in Python; an archived/rotated row has none."""
         for row in self._read_all("SELECT entry_json FROM gateway_routing"):
             try:
                 entry = json.loads(row["entry_json"] or "{}")
-            except (ValueError, TypeError, RecursionError):  # malformed / non-text / over-nested entry
+            except (
+                ValueError,
+                TypeError,
+                RecursionError,
+            ):  # malformed / non-text / over-nested entry
                 continue
             if isinstance(entry, dict) and entry.get("session_id") == session_id:
                 return entry
         return None
 
-    def _routing_entries_for_sessions(self, session_ids: set[str]) -> list[tuple[str, str, str]]:
+    def _routing_entries_for_sessions(
+        self, session_ids: set[str]
+    ) -> list[tuple[str, str, str]]:
         """``(scope, session_key, session_id)`` of ``gateway_routing`` rows pointing at any of
         *session_ids*; the target id lives only inside ``entry_json``, so matching is in Python."""
         found: list[tuple[str, str, str]] = []
         if not session_ids:
             return found
-        for row in self._read_all("SELECT scope, session_key, entry_json FROM gateway_routing"):
+        for row in self._read_all(
+            "SELECT scope, session_key, entry_json FROM gateway_routing"
+        ):
             try:
                 entry = json.loads(row["entry_json"] or "{}")
-            except (ValueError, TypeError, RecursionError):  # malformed / non-text / over-nested entry
+            except (
+                ValueError,
+                TypeError,
+                RecursionError,
+            ):  # malformed / non-text / over-nested entry
                 continue
             if isinstance(entry, dict) and entry.get("session_id") in session_ids:
                 found.append((row["scope"], row["session_key"], entry["session_id"]))
@@ -401,10 +512,17 @@ class SessionGatewayMixin:
 
     def _delete_routing_entries_for_sessions(self, session_ids: set[str]) -> int:
         """Drop ``gateway_routing`` rows pointing at any of *session_ids*."""
-        doomed = [(scope, key) for scope, key, _ in self._routing_entries_for_sessions(session_ids)]
+        doomed = [
+            (scope, key)
+            for scope, key, _ in self._routing_entries_for_sessions(session_ids)
+        ]
         if not doomed:
             return 0
-        self._write_sql("DELETE FROM gateway_routing WHERE scope = ? AND session_key = ?", doomed, many=True)
+        self._write_sql(
+            "DELETE FROM gateway_routing WHERE scope = ? AND session_key = ?",
+            doomed,
+            many=True,
+        )
         return len(doomed)
 
     def retire_gateway_routes(self, session_ids, *, namespace, expiring=()) -> None:
@@ -420,12 +538,18 @@ class SessionGatewayMixin:
 
         def _do(conn):
             from clawk_state_mutation_retirement import fence_shared_routes
+
             fence_shared_routes(conn, namespace, ids, expiring=expiring)
+
         self._execute_write(_do)
 
     def prune_never_active_keyed_sessions(
-        self, *, older_than_days: float, sessions_dir: Optional[Path] = None,
-        deleted_ids: Optional[list] = None) -> tuple[int, int, int]:
+        self,
+        *,
+        older_than_days: float,
+        sessions_dir: Optional[Path] = None,
+        deleted_ids: Optional[list] = None,
+    ) -> tuple[int, int, int]:
         """Delete never-active keyed rows and the routing entries naming them; returns
         ``(sessions_deleted, routing_entries_deleted, sessions_skipped)``. Deletion goes through
         :meth:`delete_sessions` (one transaction; delegate cascade, FTS, transcripts).
@@ -438,12 +562,19 @@ class SessionGatewayMixin:
         nonexistent id. The row sweep is one transaction; routing entries are dropped in a
         second write after it commits. ``sessions_skipped`` counts only the guarded rows.
         ``deleted_ids`` (the owning gateway) receives every candidate id that was not kept."""
-        candidates = self.list_never_active_keyed_sessions(older_than_days=older_than_days)
+        candidates = self.list_never_active_keyed_sessions(
+            older_than_days=older_than_days
+        )
         # A fresh local reset tip is its conversation's current target, not a never-active chat:
         # the conversation holds the earlier segments' history and the owner's queued work.
         from clawk_state_local import owned_lineage_ids
+
         with self._read_ctx() as conn:
-            ids = {str(row["id"]) for row in candidates if owned_lineage_ids(conn, str(row["id"])) == [str(row["id"])]}
+            ids = {
+                str(row["id"])
+                for row in candidates
+                if owned_lineage_ids(conn, str(row["id"])) == [str(row["id"])]
+            }
         if not ids:
             return (0, 0, 0)
         skipped: list[str] = []
@@ -452,7 +583,11 @@ class SessionGatewayMixin:
         # follow-up sweep then only catches entries a concurrent writer re-added.
         routed_before = self._routing_entries_for_sessions(ids)
         deleted = self.delete_sessions(
-            list(ids), sessions_dir=sessions_dir, exclude_active_write_guards=True, skipped_ids=skipped)
+            list(ids),
+            sessions_dir=sessions_dir,
+            exclude_active_write_guards=True,
+            skipped_ids=skipped,
+        )
         kept = set(skipped)
         self._delete_routing_entries_for_sessions(ids - kept)
         routing_deleted = sum(1 for _, _, sid in routed_before if sid not in kept)
@@ -461,7 +596,8 @@ class SessionGatewayMixin:
         return (deleted, routing_deleted, len(skipped))
 
     def list_gateway_sessions(
-        self, *, platform: Optional[str] = None, active_only: bool = True) -> list[dict[str, Any]]:
+        self, *, platform: Optional[str] = None, active_only: bool = True
+    ) -> list[dict[str, Any]]:
         """List gateway sessions (rows with a session_key): newest row per key, one live
         mapping per routing key. ``platform`` filters on ``source``."""
         # Full rows carry token/cost totals — drain queued async accounting deltas first.
@@ -481,13 +617,22 @@ class SessionGatewayMixin:
               )
         """
         params: list = [platform] if platform else []
-        query += (" AND LOWER(source) = LOWER(?)" if platform else "") + (
-            " AND ended_at IS NULL" if active_only else "") + " ORDER BY last_active DESC"
+        query += (
+            (" AND LOWER(source) = LOWER(?)" if platform else "")
+            + (" AND ended_at IS NULL" if active_only else "")
+            + " ORDER BY last_active DESC"
+        )
         return [self._session_row_dict(r) for r in self._read_all(query, params)]
 
     def find_latest_gateway_session_for_peer(
-        self, *, source: str, user_id: Optional[str] = None, session_key: Optional[str] = None,
-        chat_id: Optional[str] = None, chat_type: Optional[str] = None, thread_id: Optional[str] = None,
+        self,
+        *,
+        source: str,
+        user_id: Optional[str] = None,
+        session_key: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        chat_type: Optional[str] = None,
+        thread_id: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         """Find the latest recoverable gateway session for a routing peer. The durable ``session_key`` on the row rebuilds a missing/pruned ``sessions.json`` mapping. Rows
         ended only by the old ``agent_close`` bug or a mistaken TUI ``ws_orphan_reap`` are recoverable;
@@ -525,11 +670,25 @@ class SessionGatewayMixin:
             owner = self._own_profile_name()
             row = conn.execute(
                 _PEER_BY_TUPLE_SQL,
-                (source, user_id, chat_id, chat_type, thread_id, owner, owner, owner, owner, owner, owner),
+                (
+                    source,
+                    user_id,
+                    chat_id,
+                    chat_type,
+                    thread_id,
+                    owner,
+                    owner,
+                    owner,
+                    owner,
+                    owner,
+                    owner,
+                ),
             ).fetchone()
         return self._session_row_dict(row) if row else None
 
-    def find_orphaned_gateway_sessions(self, *, max_gap_s: Optional[float] = None) -> list[dict[str, Any]]:
+    def find_orphaned_gateway_sessions(
+        self, *, max_gap_s: Optional[float] = None
+    ) -> list[dict[str, Any]]:
         """Report message-bearing rows that lost their routing identity (messages, no ``session_key``).
         Adoptable only when exactly one keyed predecessor can be named: ``lineage`` (``parent_session_id``
         is a keyed row of the same source; no time window) or ``contiguity`` (exactly one keyed same-source
@@ -551,18 +710,35 @@ class SessionGatewayMixin:
                     evidence = "lineage"
                     donor = conn.execute(
                         _ORPHAN_LINEAGE_DONOR_SQL,
-                        (orphan["parent_session_id"], orphan["source"], owner, owner, orphan_owner),
+                        (
+                            orphan["parent_session_id"],
+                            orphan["source"],
+                            owner,
+                            owner,
+                            orphan_owner,
+                        ),
                     ).fetchone()
                     if donor is None:
-                        reason = "parent session carries no gateway identity of this source"
+                        reason = (
+                            "parent session carries no gateway identity of this source"
+                        )
                 else:
                     evidence = "contiguity"
                     started = orphan["started_at"] or 0
                     candidates = conn.execute(
                         _ORPHAN_CONTIGUITY_DONORS_SQL,
-                        (orphan["id"], orphan["source"], orphan["user_id"], orphan["user_id"],
-                         started - gap, started + gap, orphan["last_active"],
-                         owner, owner, orphan_owner),
+                        (
+                            orphan["id"],
+                            orphan["source"],
+                            orphan["user_id"],
+                            orphan["user_id"],
+                            started - gap,
+                            started + gap,
+                            orphan["last_active"],
+                            owner,
+                            owner,
+                            orphan_owner,
+                        ),
                     ).fetchall()
                     if not candidates:
                         reason = f"no keyed predecessor fell quiet within {gap:.0f}s of this session's start"
@@ -570,21 +746,33 @@ class SessionGatewayMixin:
                         reason = "ambiguous: more than one keyed predecessor matches this window"
                     else:
                         donor = candidates[0]
-                records.append({
-                    "orphan_id": orphan["id"], "source": orphan["source"],
-                    "message_count": orphan["message_count"], "started_at": orphan["started_at"],
-                    "last_active": orphan["last_active"], "donor_id": donor["id"] if donor else None,
-                    "session_key": donor["session_key"] if donor else None,
-                    "evidence": evidence if donor else "", "adoptable": donor is not None, "reason": reason})
+                records.append(
+                    {
+                        "orphan_id": orphan["id"],
+                        "source": orphan["source"],
+                        "message_count": orphan["message_count"],
+                        "started_at": orphan["started_at"],
+                        "last_active": orphan["last_active"],
+                        "donor_id": donor["id"] if donor else None,
+                        "session_key": donor["session_key"] if donor else None,
+                        "evidence": evidence if donor else "",
+                        "adoptable": donor is not None,
+                        "reason": reason,
+                    }
+                )
         # Two unkeyed successors claiming one predecessor: at most one continues that chat.
         contested = {
-            r["donor_id"] for r in records
-            if r["adoptable"] and sum(1 for x in records if x["donor_id"] == r["donor_id"]) > 1
+            r["donor_id"]
+            for r in records
+            if r["adoptable"]
+            and sum(1 for x in records if x["donor_id"] == r["donor_id"]) > 1
         }
         for record in records:
             if record["donor_id"] in contested:
                 record["adoptable"] = False
-                record["reason"] = "ambiguous: more than one unkeyed session claims this predecessor"
+                record["reason"] = (
+                    "ambiguous: more than one unkeyed session claims this predecessor"
+                )
         return records
 
     def adopt_orphaned_gateway_session(self, orphan_id: str, donor_id: str) -> bool:
@@ -594,6 +782,7 @@ class SessionGatewayMixin:
         if not orphan_id or not donor_id or orphan_id == donor_id:
             return False
         owner = self._own_profile_name()
+
         def _do(conn):
             donor = conn.execute(
                 "SELECT session_key, chat_id, chat_type, thread_id, user_id, "
@@ -602,11 +791,20 @@ class SessionGatewayMixin:
             ).fetchone()
             orphan = conn.execute(
                 "SELECT session_key, source, profile_name FROM sessions WHERE id = ?",
-                (orphan_id,)).fetchone()
-            if (donor is None or orphan is None or not donor["session_key"] or orphan["session_key"]
-                    or (donor["source"] or "") != (orphan["source"] or "")
-                    or (owner is not None
-                        and (donor["profile_name"] or owner) != (orphan["profile_name"] or owner))):
+                (orphan_id,),
+            ).fetchone()
+            if (
+                donor is None
+                or orphan is None
+                or not donor["session_key"]
+                or orphan["session_key"]
+                or (donor["source"] or "") != (orphan["source"] or "")
+                or (
+                    owner is not None
+                    and (donor["profile_name"] or owner)
+                    != (orphan["profile_name"] or owner)
+                )
+            ):
                 return False
             # Belt-and-suspenders for gateway routing metadata (#59527): the gateway re-records the peer on
             # the child after rotation (d5b4879d4), but a hard crash between child creation and that write
@@ -626,22 +824,34 @@ class SessionGatewayMixin:
                           display_name = COALESCE(display_name, ?),
                           parent_session_id = COALESCE(parent_session_id, ?)
                     WHERE id = ? AND session_key IS NULL""",
-                (donor["session_key"], donor["chat_id"], donor["chat_type"], donor["thread_id"],
-                 donor["user_id"], donor["origin_json"], donor["display_name"], donor_id, orphan_id),
+                (
+                    donor["session_key"],
+                    donor["chat_id"],
+                    donor["chat_type"],
+                    donor["thread_id"],
+                    donor["user_id"],
+                    donor["origin_json"],
+                    donor["display_name"],
+                    donor_id,
+                    orphan_id,
+                ),
             )
             # Retire under a reason recovery does NOT treat as resumable — 'agent_close' /
             # 'ws_orphan_reap' would keep it in the running and the orphan could lose the chat again.
             conn.execute(
                 "UPDATE sessions SET ended_at = COALESCE(ended_at, ?), "
                 "end_reason = 'superseded_by_repair' WHERE id = ?",
-                (time.time(), donor_id))
+                (time.time(), donor_id),
+            )
             return True
+
         return self._execute_write(_do)
 
     def increment_hygiene_failure_streak(self, session_key: str) -> int:
         """Atomically increment the session-hygiene failure streak for one chat."""
         if not session_key:
             return 1
+
         def _do(conn):
             conn.execute(
                 """INSERT INTO gateway_hygiene_state (session_key, failure_streak)
@@ -651,16 +861,20 @@ class SessionGatewayMixin:
                 (session_key,),
             )
             row = conn.execute(
-                "SELECT failure_streak FROM gateway_hygiene_state WHERE session_key = ?", (session_key,),
+                "SELECT failure_streak FROM gateway_hygiene_state WHERE session_key = ?",
+                (session_key,),
             ).fetchone()
             return int(row[0])
+
         return self._execute_write(_do)
 
     def reset_hygiene_failure_streak(self, session_key: str) -> None:
         """Clear the persisted session-hygiene failure streak for one chat."""
         if not session_key:
             return
-        self._write_sql("DELETE FROM gateway_hygiene_state WHERE session_key = ?", (session_key,))
+        self._write_sql(
+            "DELETE FROM gateway_hygiene_state WHERE session_key = ?", (session_key,)
+        )
 
     def rekey_profile_state(self, old_name: str, new_name: str) -> dict[str, int]:
         """Atomically rewrite exact profile identity in this state database."""
@@ -672,8 +886,12 @@ class SessionGatewayMixin:
         ns_len = len(old_ns)
 
         def _do(conn):
-            existing = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            existing = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
             topic_columns = _optional_table_columns(conn)
             collision = conn.execute(
                 "SELECT old.scope, ? || substr(old.session_key, ?) "
@@ -685,7 +903,8 @@ class SessionGatewayMixin:
             ).fetchone()
             if collision is not None:
                 raise ValueError(
-                    f"profile routing collision in scope {collision[0]!r}: {collision[1]!r}")
+                    f"profile routing collision in scope {collision[0]!r}: {collision[1]!r}"
+                )
             for table, columns in (
                 ("telegram_dm_topic_mode", ("chat_id",)),
                 ("telegram_dm_topic_bindings", ("chat_id", "thread_id")),
@@ -693,61 +912,80 @@ class SessionGatewayMixin:
                 if "profile_name" not in topic_columns.get(table, set()):
                     continue
                 equality = " AND ".join(
-                    f"target.{column} = old.{column}" for column in columns)
+                    f"target.{column} = old.{column}" for column in columns
+                )
                 collision = conn.execute(
                     f"SELECT 1 FROM {table} AS old JOIN {table} AS target "
                     f"ON target.profile_name = ? AND {equality} "
-                    "WHERE old.profile_name = ? LIMIT 1", (new, old)).fetchone()
+                    "WHERE old.profile_name = ? LIMIT 1",
+                    (new, old),
+                ).fetchone()
                 if collision is not None:
                     raise ValueError(f"profile identity collision in {table}")
 
             counts["sessions_profile_name"] = conn.execute(
-                "UPDATE sessions SET profile_name = ? WHERE profile_name = ?", (new, old)).rowcount
+                "UPDATE sessions SET profile_name = ? WHERE profile_name = ?",
+                (new, old),
+            ).rowcount
             counts["gateway_heartbeats_profile"] = conn.execute(
-                "UPDATE gateway_heartbeats SET profile = ? WHERE profile = ?", (new, old)).rowcount
+                "UPDATE gateway_heartbeats SET profile = ? WHERE profile = ?",
+                (new, old),
+            ).rowcount
             counts["sessions_session_key"] = conn.execute(
                 "UPDATE sessions SET session_key = ? || substr(session_key, ?) "
                 "WHERE substr(session_key, 1, ?) = ?",
-                (new_ns, ns_len + 1, ns_len, old_ns)).rowcount
+                (new_ns, ns_len + 1, ns_len, old_ns),
+            ).rowcount
 
             origin_count = 0
             for session_id, origin_json in conn.execute(
-                    "SELECT id, origin_json FROM sessions WHERE origin_json IS NOT NULL").fetchall():
+                "SELECT id, origin_json FROM sessions WHERE origin_json IS NOT NULL"
+            ).fetchall():
                 try:
                     payload = json.loads(origin_json)
                 except (ValueError, TypeError):
                     continue
                 if isinstance(payload, dict) and payload.get("profile") == old:
                     payload["profile"] = new
-                    conn.execute("UPDATE sessions SET origin_json = ? WHERE id = ?",
-                                 (json.dumps(payload, ensure_ascii=False), session_id))
+                    conn.execute(
+                        "UPDATE sessions SET origin_json = ? WHERE id = ?",
+                        (json.dumps(payload, ensure_ascii=False), session_id),
+                    )
                     origin_count += 1
             counts["sessions_origin_json"] = origin_count
 
             if "delivery_obligations" in existing:
-                if "adapter_profile" in topic_columns.get("delivery_obligations", set()):
+                if "adapter_profile" in topic_columns.get(
+                    "delivery_obligations", set()
+                ):
                     counts["delivery_obligations_adapter_profile"] = conn.execute(
                         "UPDATE delivery_obligations SET adapter_profile = ? WHERE adapter_profile = ?",
-                        (new, old)).rowcount
+                        (new, old),
+                    ).rowcount
                 counts["delivery_obligations_session_key"] = conn.execute(
                     "UPDATE delivery_obligations SET session_key = ? || substr(session_key, ?) "
                     "WHERE substr(session_key, 1, ?) = ?",
-                    (new_ns, ns_len + 1, ns_len, old_ns)).rowcount
+                    (new_ns, ns_len + 1, ns_len, old_ns),
+                ).rowcount
             for table in ("telegram_dm_topic_mode", "telegram_dm_topic_bindings"):
                 if "profile_name" in topic_columns.get(table, set()):
                     counts[f"{table}_profile_name"] = conn.execute(
                         f"UPDATE {table} SET profile_name = ? WHERE profile_name = ?",
-                        (new, old)).rowcount
+                        (new, old),
+                    ).rowcount
             if "session_key" in topic_columns.get("telegram_dm_topic_bindings", set()):
                 counts["telegram_dm_topic_bindings_session_key"] = conn.execute(
                     "UPDATE telegram_dm_topic_bindings "
                     "SET session_key = ? || substr(session_key, ?) "
                     "WHERE substr(session_key, 1, ?) = ?",
-                    (new_ns, ns_len + 1, ns_len, old_ns)).rowcount
+                    (new_ns, ns_len + 1, ns_len, old_ns),
+                ).rowcount
 
             routing = conn.execute(
                 "SELECT rowid, session_key, entry_json FROM gateway_routing "
-                "WHERE substr(session_key, 1, ?) = ?", (ns_len, old_ns)).fetchall()
+                "WHERE substr(session_key, 1, ?) = ?",
+                (ns_len, old_ns),
+            ).fetchall()
             for rowid, session_key, entry_json in routing:
                 new_session_key = new_ns + session_key[ns_len:]
                 new_json = entry_json
@@ -757,15 +995,20 @@ class SessionGatewayMixin:
                     except (ValueError, TypeError):
                         payload = None
                     if isinstance(payload, dict):
-                        if isinstance(payload.get("session_key"), str) and payload["session_key"].startswith(old_ns):
-                            payload["session_key"] = new_ns + payload["session_key"][ns_len:]
+                        if isinstance(payload.get("session_key"), str) and payload[
+                            "session_key"
+                        ].startswith(old_ns):
+                            payload["session_key"] = (
+                                new_ns + payload["session_key"][ns_len:]
+                            )
                         origin = payload.get("origin")
                         if isinstance(origin, dict) and origin.get("profile") == old:
                             origin["profile"] = new
                         new_json = json.dumps(payload, ensure_ascii=False)
                 conn.execute(
                     "UPDATE gateway_routing SET session_key = ?, entry_json = ? WHERE rowid = ?",
-                    (new_session_key, new_json, rowid))
+                    (new_session_key, new_json, rowid),
+                )
             counts["gateway_routing"] = len(routing)
 
         self._execute_write(_do)
@@ -802,49 +1045,71 @@ class SessionGatewayMixin:
         ns, ns_len = f"agent:{name}:", len(f"agent:{name}:")
 
         def _do(conn):
-            existing = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            existing = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
             topic_columns = _optional_table_columns(conn)
             if "gateway_routing" in existing:
                 counts["gateway_routing"] = conn.execute(
                     "DELETE FROM gateway_routing WHERE substr(session_key, 1, ?) = ?",
-                    (ns_len, ns)).rowcount
+                    (ns_len, ns),
+                ).rowcount
             if "gateway_heartbeats" in existing:
                 counts["gateway_heartbeats"] = conn.execute(
-                    "DELETE FROM gateway_heartbeats WHERE profile = ?", (name,)).rowcount
+                    "DELETE FROM gateway_heartbeats WHERE profile = ?", (name,)
+                ).rowcount
             if "delivery_obligations" in existing:
                 # Terminalize, never hard-delete: a pending obligation is delivery state someone may
                 # still care about, and the ledger's own retention prunes abandoned rows. Only
                 # non-terminal rows are touched — delivered history is left exactly as it was.
                 # A ledger created before ``adapter_profile`` existed matches on namespace alone.
-                by_profile = ("adapter_profile = ? OR "
-                              if "adapter_profile" in topic_columns.get("delivery_obligations", set())
-                              else "")
-                params = (time.time(), name, ns_len, ns) if by_profile else (time.time(), ns_len, ns)
+                by_profile = (
+                    "adapter_profile = ? OR "
+                    if "adapter_profile"
+                    in topic_columns.get("delivery_obligations", set())
+                    else ""
+                )
+                params = (
+                    (time.time(), name, ns_len, ns)
+                    if by_profile
+                    else (time.time(), ns_len, ns)
+                )
                 counts["delivery_obligations"] = conn.execute(
                     "UPDATE delivery_obligations SET state='abandoned', updated_at=? "
                     f"WHERE ({by_profile}substr(session_key, 1, ?) = ?) "
-                    "AND state NOT IN ('delivered', 'abandoned')", params).rowcount
+                    "AND state NOT IN ('delivered', 'abandoned')",
+                    params,
+                ).rowcount
             if "profile_name" in topic_columns.get("telegram_dm_topic_mode", set()):
                 counts["telegram_dm_topic_mode"] = conn.execute(
-                    "DELETE FROM telegram_dm_topic_mode WHERE profile_name = ?", (name,)).rowcount
+                    "DELETE FROM telegram_dm_topic_mode WHERE profile_name = ?", (name,)
+                ).rowcount
             binding_columns = topic_columns.get("telegram_dm_topic_bindings", set())
             if "session_key" in binding_columns:
                 # A rename rewrites a binding's session_key namespace as well as its profile_name
                 # (:meth:`rekey_profile_state`), so matching on one alone leaves the other behind.
                 # Legacy v1/v2 bindings have no profile_name but keep the ``agent:<name>:`` namespace
                 # in session_key, so the namespace match alone is the exact cleanup there.
-                by_profile = "profile_name = ? OR " if "profile_name" in binding_columns else ""
+                by_profile = (
+                    "profile_name = ? OR " if "profile_name" in binding_columns else ""
+                )
                 params = (name, ns_len, ns) if by_profile else (ns_len, ns)
                 counts["telegram_dm_topic_bindings"] = conn.execute(
                     "DELETE FROM telegram_dm_topic_bindings "
-                    f"WHERE {by_profile}substr(session_key, 1, ?) = ?", params).rowcount
+                    f"WHERE {by_profile}substr(session_key, 1, ?) = ?",
+                    params,
+                ).rowcount
 
         self._execute_write(_do)
         return counts
 
     @staticmethod
-    def session_gateway_runtime(session_meta: Optional[dict[str, Any]]) -> dict[str, Any]:
+    def session_gateway_runtime(
+        session_meta: Optional[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Read the persisted runtime route off a session row dict (``model_config`` as
         JSON string or parsed dict). Precedence: nested ``gateway_runtime`` (gateway sync /
         CLI ``/model``), then top-level ``provider``/``base_url``/``api_mode`` (TUI), with
@@ -853,6 +1118,7 @@ class SessionGatewayMixin:
         to its ``billing_base_url`` endpoint for the readers' bare-custom heal (#136323).
         Empty dict on parse failure — resume uses ambient config."""
         from clawk_state import _BARE_BILLING_PROVIDERS
+
         raw = (session_meta or {}).get("model_config")
         if isinstance(raw, str):
             try:
@@ -866,11 +1132,17 @@ class SessionGatewayMixin:
         # merge, but gateway_runtime is replaced whole (not deep-merged), so None survives here.
         if isinstance(runtime, dict) and runtime.get("provider"):
             return {k: v for k, v in runtime.items() if v is not None}
-        top_level = {key: raw.get(key) for key in ("provider", "base_url", "api_mode") if raw.get(key)}
+        top_level = {
+            key: raw.get(key)
+            for key in ("provider", "base_url", "api_mode")
+            if raw.get(key)
+        }
         # billing_provider is COALESCE-written on the first accounted API call — the only durable
         # record for sessions that never ran /model. Bare buckets ("auto"/"custom") are not
         # routable identities; "auto" is filtered so resume falls back to the ambient default.
-        billing_provider = str((session_meta or {}).get("billing_provider") or "").strip()
+        billing_provider = str(
+            (session_meta or {}).get("billing_provider") or ""
+        ).strip()
         if billing_provider and billing_provider.lower() not in _BARE_BILLING_PROVIDERS:
             top_level.setdefault("provider", billing_provider)
         elif billing_provider.lower() == "custom" and not top_level.get("provider"):
@@ -880,7 +1152,9 @@ class SessionGatewayMixin:
             # from that endpoint instead of resume recombining the stored model with the ambient
             # default (#136323); an endpoint no longer configured still heals to nothing. "auto"
             # bills through the router with no attributable endpoint and stays filtered.
-            billing_base_url = str((session_meta or {}).get("billing_base_url") or "").strip()
+            billing_base_url = str(
+                (session_meta or {}).get("billing_base_url") or ""
+            ).strip()
             if billing_base_url:
                 top_level.setdefault("base_url", billing_base_url)
                 top_level["provider"] = "custom"
@@ -891,8 +1165,15 @@ class SessionGatewayMixin:
         return {k: v for k, v in runtime.items() if v is not None}
 
     def register_backend_heartbeat(
-        self, *, backend_id: str, pid: int, started_at: float, last_heartbeat: Optional[float] = None,
-        profile: str = "", host: str = "") -> None:
+        self,
+        *,
+        backend_id: str,
+        pid: int,
+        started_at: float,
+        last_heartbeat: Optional[float] = None,
+        profile: str = "",
+        host: str = "",
+    ) -> None:
         """Upsert this backend's liveness row. ``backend_id`` MUST be stable for the process
         lifetime (e.g. ``f"{profile}@{host}:{pid}"``) so a respawn cannot inherit a dead
         predecessor's heartbeat; ``started_at`` is when THIS process started, so a backend
@@ -905,15 +1186,21 @@ class SessionGatewayMixin:
             " VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(backend_id) DO UPDATE SET pid = excluded.pid,"
             " started_at = excluded.started_at, last_heartbeat = excluded.last_heartbeat,"
             " profile = excluded.profile, host = excluded.host",
-            (str(backend_id), int(pid), float(started_at), ts, str(profile), str(host)))
+            (str(backend_id), int(pid), float(started_at), ts, str(profile), str(host)),
+        )
 
     def clear_backend_heartbeat(self, backend_id: str) -> bool:
         """Remove this backend's heartbeat row (from ``atexit``); True if removed. A crashed
         backend's row is reclaimed later by ``prune_stale_heartbeats``."""
         if not backend_id:
             return False
-        return self._write_rowcount(
-            "DELETE FROM gateway_heartbeats WHERE backend_id = ?", (str(backend_id),)) > 0
+        return (
+            self._write_rowcount(
+                "DELETE FROM gateway_heartbeats WHERE backend_id = ?",
+                (str(backend_id),),
+            )
+            > 0
+        )
 
     def prune_stale_heartbeats(self, *, max_age_seconds: float) -> list[str]:
         """Drop heartbeat rows older than the staleness window; return removed backend ids.
@@ -921,39 +1208,50 @@ class SessionGatewayMixin:
         if max_age_seconds <= 0:
             return []
         cutoff = time.time() - max_age_seconds
+
         def _do(conn):
             cur = conn.execute(
                 "DELETE FROM gateway_heartbeats WHERE last_heartbeat < ? RETURNING backend_id",
-                (cutoff,))
+                (cutoff,),
+            )
             return [str(r[0]) for r in cur.fetchall()]
+
         return list(self._execute_write(_do) or [])
 
     def list_backend_heartbeats(self) -> list[dict[str, Any]]:
         """Snapshot of every backend heartbeat (diagnostics/tests); fields mirror the table."""
         rows = self._read_all(
             "SELECT backend_id, pid, started_at, last_heartbeat, profile, host FROM gateway_heartbeats"
-            " ORDER BY last_heartbeat DESC")
+            " ORDER BY last_heartbeat DESC"
+        )
         return [dict(r) for r in rows]
 
     def request_handoff(self, session_id: str, platform: str) -> bool:
         """Mark a session pending handoff to *platform*; False if a handoff is already in flight."""
-        return self._write_rowcount(
-            "UPDATE sessions SET handoff_state = 'pending',     handoff_platform = ?, "
-            "    handoff_error = NULL WHERE id = ? AND (handoff_state IS NULL "
-            "                  OR handoff_state IN ('completed', 'failed'))",
-            (platform, session_id),
-        ) > 0
+        return (
+            self._write_rowcount(
+                "UPDATE sessions SET handoff_state = 'pending',     handoff_platform = ?, "
+                "    handoff_error = NULL WHERE id = ? AND (handoff_state IS NULL "
+                "                  OR handoff_state IN ('completed', 'failed'))",
+                (platform, session_id),
+            )
+            > 0
+        )
 
     def get_handoff_state(self, session_id: str) -> Optional[dict[str, Any]]:
         """Return ``{"state", "platform", "error"}`` or None if the session has no handoff record."""
         try:
             row = self._read_one(
                 "SELECT handoff_state, handoff_platform, handoff_error FROM sessions WHERE id = ?",
-                (session_id,))
+                (session_id,),
+            )
             if not row:
                 return None
-            return {"state": row["handoff_state"], "platform": row["handoff_platform"],
-                    "error": row["handoff_error"]}
+            return {
+                "state": row["handoff_state"],
+                "platform": row["handoff_platform"],
+                "error": row["handoff_error"],
+            }
         except Exception:
             return None
 
@@ -964,30 +1262,45 @@ class SessionGatewayMixin:
                 "SELECT s.*, COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved FROM sessions s "
                 "LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash "
                 "WHERE s.handoff_state = 'pending' "
-                "ORDER BY s.started_at ASC")
+                "ORDER BY s.started_at ASC"
+            )
             return [self._session_row_dict(r) for r in rows]
         except Exception:
             return []
 
     def claim_handoff(self, session_id: str) -> bool:
         """Atomically transition pending → running. Returns True if claimed."""
-        return self._write_rowcount(
-            "UPDATE sessions SET handoff_state = 'running' WHERE id = ? AND handoff_state = 'pending'",
-            (session_id,),
-        ) > 0
+        return (
+            self._write_rowcount(
+                "UPDATE sessions SET handoff_state = 'running' WHERE id = ? AND handoff_state = 'pending'",
+                (session_id,),
+            )
+            > 0
+        )
 
     def has_pending_handoffs(self) -> bool:
         """Bounded existence probe for the handoff watcher's idle gate (the gate fails open on error)."""
-        return self._read_one("SELECT 1 FROM sessions WHERE handoff_state = 'pending' LIMIT 1") is not None
+        return (
+            self._read_one(
+                "SELECT 1 FROM sessions WHERE handoff_state = 'pending' LIMIT 1"
+            )
+            is not None
+        )
 
     def complete_handoff(self, session_id: str) -> None:
         """Mark a handoff as completed."""
         self._write_sql(
             "UPDATE sessions SET handoff_state = 'completed', handoff_error = NULL WHERE id = ?",
-            (session_id,))
+            (session_id,),
+        )
 
     def fail_handoff(
-        self, session_id: str, error: str, *, only_states: Optional[tuple[str, ...]] = None) -> bool:
+        self,
+        session_id: str,
+        error: str,
+        *,
+        only_states: Optional[tuple[str, ...]] = None,
+    ) -> bool:
         """Mark a handoff failed and record the reason; True when a row transitioned. ``only_states`` makes
         the write a compare-and-swap on ``handoff_state``. Waiters that give up (CLI 60s poll, Desktop
         bounded poll) MUST pass ``only_states=("pending",)``: once the watcher has claimed the row
@@ -996,8 +1309,15 @@ class SessionGatewayMixin:
         (split-brain: the handoff delivered and ``switch_session`` re-pointed the session). The watcher
         fails its OWN claimed row unconditionally."""
         states = tuple(only_states) if only_states else ()
-        sql = _HANDOFF_FAIL_SQL + "id = ?" + (
-            f" AND handoff_state IN ({', '.join('?' for _ in states)})" if states else "")
+        sql = (
+            _HANDOFF_FAIL_SQL
+            + "id = ?"
+            + (
+                f" AND handoff_state IN ({', '.join('?' for _ in states)})"
+                if states
+                else ""
+            )
+        )
         return self._write_rowcount(sql, (error[:500], session_id, *states)) > 0
 
     def reclaim_stale_running_handoffs(self, error: str) -> list[str]:
@@ -1008,12 +1328,18 @@ class SessionGatewayMixin:
         Failing rather than re-queueing is deliberate: the dead gateway may already have switched the
         session key and dispatched the synthetic turn, so a blind retry risks double delivery; a clean
         terminal state the user can retry from is right."""
+
         def _do(conn):
-            cur = conn.execute("SELECT id FROM sessions WHERE handoff_state = 'running'")
+            cur = conn.execute(
+                "SELECT id FROM sessions WHERE handoff_state = 'running'"
+            )
             ids = [r[0] for r in cur.fetchall()]
             if ids:
-                conn.execute(_HANDOFF_FAIL_SQL + "handoff_state = 'running'", (error[:500],))
+                conn.execute(
+                    _HANDOFF_FAIL_SQL + "handoff_state = 'running'", (error[:500],)
+                )
             return ids
+
         try:
             return self._execute_write(_do) or []
         except Exception:
@@ -1021,5 +1347,7 @@ class SessionGatewayMixin:
             # 'running' rows in place, so the operator needs a trace.
             logger.warning(
                 "reclaim_stale_running_handoffs failed; stranded 'running' "
-                "handoff rows (if any) were left in place", exc_info=True)
+                "handoff rows (if any) were left in place",
+                exc_info=True,
+            )
             return []

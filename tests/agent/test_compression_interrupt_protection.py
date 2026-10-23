@@ -20,8 +20,6 @@ import agent.auxiliary_client as aux
 
 
 class TestAuxInterruptProtection:
-
-
     def test_context_manager_is_reentrant(self):
         with aux.aux_interrupt_protection():
             assert aux._aux_interrupt_protected() is True
@@ -38,7 +36,6 @@ class TestAuxInterruptProtection:
         except ValueError:
             pass
         assert aux._aux_interrupt_protected() is False
-
 
     def test_nested_protection_preserves_explicit_cancel_check(self):
         """A hard-cancel hook installed by the compression host survives the
@@ -65,7 +62,9 @@ class TestCompressionProtectsSummaryCall:
             class _Choice:
                 class _Msg:
                     content = "[CONTEXT SUMMARY]: ok"
+
                 message = _Msg()
+
             choices = [_Choice()]
 
         def fake_call_llm(**kwargs):
@@ -74,7 +73,9 @@ class TestCompressionProtectsSummaryCall:
             seen["task"] = kwargs.get("task")
             return _Resp()
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
 
         msgs = [
@@ -99,7 +100,9 @@ class TestCompressionProtectsSummaryCall:
         compression transaction can abort without rotating the session."""
         from agent.context_compressor import ContextCompressor
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
 
         msgs = [
@@ -108,9 +111,12 @@ class TestCompressionProtectsSummaryCall:
             {"role": "user", "content": "more"},
             {"role": "assistant", "content": "done"},
         ]
-        with aux.aux_interrupt_protection(cancel_check=lambda: True), patch(
-            "agent.context_compressor.call_llm",
-            side_effect=aux.AuxiliaryExplicitCancellation(),
+        with (
+            aux.aux_interrupt_protection(cancel_check=lambda: True),
+            patch(
+                "agent.context_compressor.call_llm",
+                side_effect=aux.AuxiliaryExplicitCancellation(),
+            ),
         ):
             try:
                 c._generate_summary(msgs)
@@ -124,7 +130,9 @@ class TestCompressionProtectsSummaryCall:
         summary-failure fallback semantics when no host cancel was requested."""
         from agent.context_compressor import ContextCompressor
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(model="test", quiet_mode=True)
 
         msgs = [
@@ -143,7 +151,9 @@ class TestCompressionProtectsSummaryCall:
         """Cancellation after the handoff scan must be a compressor no-op."""
         from agent.context_compressor import ContextCompressor
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100000
+        ):
             c = ContextCompressor(
                 model="test",
                 protect_first_n=1,

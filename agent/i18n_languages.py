@@ -48,7 +48,11 @@ def describe_language(lang: str, *, pack: dict | None, overlay: bool) -> Languag
     ``source`` names the highest layer that supplies the language (``plugin:<name>`` > ``overlay`` >
     ``bundled``) so a picker can say where a language came from."""
     bundled = BUNDLED_LANGUAGE_INFO.get(lang)
-    endonym, rtl = bundled if bundled else ((pack or {}).get("endonym") or lang, bool((pack or {}).get("rtl")))
+    endonym, rtl = (
+        bundled
+        if bundled
+        else ((pack or {}).get("endonym") or lang, bool((pack or {}).get("rtl")))
+    )
     if pack is not None:
         source = str(pack.get("source") or "plugin")
     elif overlay and bundled is None:
@@ -66,9 +70,16 @@ def language_options() -> list[LanguageOption]:
 
     overlay_langs = i18n_layers.overlay_languages(get_clawk_home())
     return [
-        describe_language(lang, pack=i18n_layers.pack_info(lang), overlay=lang in overlay_langs)
+        describe_language(
+            lang, pack=i18n_layers.pack_info(lang), overlay=lang in overlay_langs
+        )
         for lang in i18n.supported_languages()
     ]
 
 
-__all__ = ["BUNDLED_LANGUAGE_INFO", "LanguageOption", "describe_language", "language_options"]
+__all__ = [
+    "BUNDLED_LANGUAGE_INFO",
+    "LanguageOption",
+    "describe_language",
+    "language_options",
+]

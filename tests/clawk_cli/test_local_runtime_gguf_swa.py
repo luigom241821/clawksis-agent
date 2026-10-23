@@ -31,8 +31,14 @@ def _header(**extra_metadata) -> GGUFHeader:
         f"{_ARCH}.attention.value_length": 512,
         **extra_metadata,
     }
-    return GGUFHeader(path="test.gguf", version=3, metadata=metadata,
-                      n_tensors=0, tensor_bytes=0, embd_table_bytes=0)
+    return GGUFHeader(
+        path="test.gguf",
+        version=3,
+        metadata=metadata,
+        n_tensors=0,
+        tensor_bytes=0,
+        embd_table_bytes=0,
+    )
 
 
 def test_unknown_arch_without_pattern_falls_back_to_full_attention():
@@ -42,12 +48,14 @@ def test_unknown_arch_without_pattern_falls_back_to_full_attention():
 
 
 def test_unknown_arch_with_pattern_is_priced_per_layer():
-    header = _header(**{
-        # 5 SWA layers followed by 1 global layer, exactly as the GGUF declares it.
-        f"{_ARCH}.attention.sliding_window_pattern": [1, 1, 1, 1, 1, 0],
-        f"{_ARCH}.attention.key_length_swa": 256,
-        f"{_ARCH}.attention.value_length_swa": 256,
-    })
+    header = _header(
+        **{
+            # 5 SWA layers followed by 1 global layer, exactly as the GGUF declares it.
+            f"{_ARCH}.attention.sliding_window_pattern": [1, 1, 1, 1, 1, 0],
+            f"{_ARCH}.attention.key_length_swa": 256,
+            f"{_ARCH}.attention.value_length_swa": 256,
+        }
+    )
     profile = profile_from_gguf(header)
 
     kinds = [kind for kind, _ in profile.layers]
@@ -80,14 +88,21 @@ def _pack_value(vtype: int, value) -> bytes:
         return struct.pack("<Q", len(raw)) + raw
     if vtype == _ARRAY:
         etype, items = value
-        return struct.pack("<IQ", etype, len(items)) + b"".join(_pack_value(etype, i) for i in items)
+        return struct.pack("<IQ", etype, len(items)) + b"".join(
+            _pack_value(etype, i) for i in items
+        )
     return struct.pack(_SCALAR_FMT[vtype], value)
 
 
 def _write_gguf(path: Path, metadata: dict) -> None:
     """metadata: key -> (vtype, value); ARRAY values are (element_vtype, [items])."""
-    body = b"".join(struct.pack("<Q", len(k.encode())) + k.encode() + struct.pack("<I", vt) +
-                     _pack_value(vt, v) for k, (vt, v) in metadata.items())
+    body = b"".join(
+        struct.pack("<Q", len(k.encode()))
+        + k.encode()
+        + struct.pack("<I", vt)
+        + _pack_value(vt, v)
+        for k, (vt, v) in metadata.items()
+    )
     path.write_bytes(b"GGUF" + struct.pack("<IQQ", 3, 0, len(metadata)) + body)
 
 
@@ -95,18 +110,24 @@ def test_binary_array_pattern_uint8_elements_round_trips(tmp_path):
     """Some writers encode the per-layer array with uint8 (not bool) elements; the parser must
     not care which scalar element type carries the 0/1 flags."""
     path = tmp_path / "m.gguf"
-    _write_gguf(path, {
-        "general.architecture": (_STRING, _ARCH),
-        f"{_ARCH}.block_count": (4, 6),
-        f"{_ARCH}.context_length": (4, 262144),
-        f"{_ARCH}.attention.head_count_kv": (4, 8),
-        f"{_ARCH}.attention.sliding_window": (4, 1024),
-        f"{_ARCH}.attention.key_length": (4, 512),
-        f"{_ARCH}.attention.value_length": (4, 512),
-        f"{_ARCH}.attention.sliding_window_pattern": (_ARRAY, (0, [1, 1, 1, 1, 1, 0])),
-        f"{_ARCH}.attention.key_length_swa": (4, 256),
-        f"{_ARCH}.attention.value_length_swa": (4, 256),
-    })
+    _write_gguf(
+        path,
+        {
+            "general.architecture": (_STRING, _ARCH),
+            f"{_ARCH}.block_count": (4, 6),
+            f"{_ARCH}.context_length": (4, 262144),
+            f"{_ARCH}.attention.head_count_kv": (4, 8),
+            f"{_ARCH}.attention.sliding_window": (4, 1024),
+            f"{_ARCH}.attention.key_length": (4, 512),
+            f"{_ARCH}.attention.value_length": (4, 512),
+            f"{_ARCH}.attention.sliding_window_pattern": (
+                _ARRAY,
+                (0, [1, 1, 1, 1, 1, 0]),
+            ),
+            f"{_ARCH}.attention.key_length_swa": (4, 256),
+            f"{_ARCH}.attention.value_length_swa": (4, 256),
+        },
+    )
     profile = profile_from_gguf(read_gguf_header(path))
     assert [k for k, _ in profile.layers] == [LayerKind.SWA] * 5 + [LayerKind.FULL]
 
@@ -116,20 +137,33 @@ def test_binary_scalar_period_defaults_to_dense_first_false(tmp_path):
     per-layer array; for architectures outside the small dense_first=True set this must expand
     with the full-attention layer closing each period (llama.cpp's dense_first=False default)."""
     path = tmp_path / "m.gguf"
-    _write_gguf(path, {
-        "general.architecture": (_STRING, _ARCH),
-        f"{_ARCH}.block_count": (4, 7),
-        f"{_ARCH}.context_length": (4, 262144),
-        f"{_ARCH}.attention.head_count_kv": (4, 8),
-        f"{_ARCH}.attention.sliding_window": (4, 1024),
-        f"{_ARCH}.attention.key_length": (4, 512),
-        f"{_ARCH}.attention.value_length": (4, 512),
-        f"{_ARCH}.attention.sliding_window_pattern": (4, 4),  # scalar period, not an array
-    })
+    _write_gguf(
+        path,
+        {
+            "general.architecture": (_STRING, _ARCH),
+            f"{_ARCH}.block_count": (4, 7),
+            f"{_ARCH}.context_length": (4, 262144),
+            f"{_ARCH}.attention.head_count_kv": (4, 8),
+            f"{_ARCH}.attention.sliding_window": (4, 1024),
+            f"{_ARCH}.attention.key_length": (4, 512),
+            f"{_ARCH}.attention.value_length": (4, 512),
+            f"{_ARCH}.attention.sliding_window_pattern": (
+                4,
+                4,
+            ),  # scalar period, not an array
+        },
+    )
     profile = profile_from_gguf(read_gguf_header(path))
     kinds = [k for k, _ in profile.layers]
-    assert kinds == [LayerKind.SWA, LayerKind.SWA, LayerKind.SWA, LayerKind.FULL,
-                      LayerKind.SWA, LayerKind.SWA, LayerKind.SWA]
+    assert kinds == [
+        LayerKind.SWA,
+        LayerKind.SWA,
+        LayerKind.SWA,
+        LayerKind.FULL,
+        LayerKind.SWA,
+        LayerKind.SWA,
+        LayerKind.SWA,
+    ]
 
 
 def test_binary_scalar_period_honors_dense_first_true_architectures(tmp_path):
@@ -138,35 +172,51 @@ def test_binary_scalar_period_honors_dense_first_true_architectures(tmp_path):
     with 7 layers and period 4 that puts FULL at indices 0 and 4, not just index 3."""
     arch = "laguna"
     path = tmp_path / "m.gguf"
-    _write_gguf(path, {
-        "general.architecture": (_STRING, arch),
-        f"{arch}.block_count": (4, 7),
-        f"{arch}.context_length": (4, 262144),
-        f"{arch}.attention.head_count_kv": (4, 8),
-        f"{arch}.attention.sliding_window": (4, 1024),
-        f"{arch}.attention.key_length": (4, 512),
-        f"{arch}.attention.value_length": (4, 512),
-        f"{arch}.attention.sliding_window_pattern": (4, 4),
-    })
+    _write_gguf(
+        path,
+        {
+            "general.architecture": (_STRING, arch),
+            f"{arch}.block_count": (4, 7),
+            f"{arch}.context_length": (4, 262144),
+            f"{arch}.attention.head_count_kv": (4, 8),
+            f"{arch}.attention.sliding_window": (4, 1024),
+            f"{arch}.attention.key_length": (4, 512),
+            f"{arch}.attention.value_length": (4, 512),
+            f"{arch}.attention.sliding_window_pattern": (4, 4),
+        },
+    )
     profile = profile_from_gguf(read_gguf_header(path))
     kinds = [k for k, _ in profile.layers]
-    assert kinds == [LayerKind.FULL, LayerKind.SWA, LayerKind.SWA, LayerKind.SWA,
-                      LayerKind.FULL, LayerKind.SWA, LayerKind.SWA]
+    assert kinds == [
+        LayerKind.FULL,
+        LayerKind.SWA,
+        LayerKind.SWA,
+        LayerKind.SWA,
+        LayerKind.FULL,
+        LayerKind.SWA,
+        LayerKind.SWA,
+    ]
 
 
 def test_binary_length_mismatched_array_falls_back_to_full_attention(tmp_path):
     """A declared array whose length doesn't match block_count is malformed/unusable — must fall
     back to the safe all-global default rather than misaligning it against the layers."""
     path = tmp_path / "m.gguf"
-    _write_gguf(path, {
-        "general.architecture": (_STRING, _ARCH),
-        f"{_ARCH}.block_count": (4, 6),
-        f"{_ARCH}.context_length": (4, 262144),
-        f"{_ARCH}.attention.head_count_kv": (4, 8),
-        f"{_ARCH}.attention.sliding_window": (4, 1024),
-        f"{_ARCH}.attention.key_length": (4, 512),
-        f"{_ARCH}.attention.value_length": (4, 512),
-        f"{_ARCH}.attention.sliding_window_pattern": (_ARRAY, (7, [1, 1, 1, 0])),  # 4 != 6 layers
-    })
+    _write_gguf(
+        path,
+        {
+            "general.architecture": (_STRING, _ARCH),
+            f"{_ARCH}.block_count": (4, 6),
+            f"{_ARCH}.context_length": (4, 262144),
+            f"{_ARCH}.attention.head_count_kv": (4, 8),
+            f"{_ARCH}.attention.sliding_window": (4, 1024),
+            f"{_ARCH}.attention.key_length": (4, 512),
+            f"{_ARCH}.attention.value_length": (4, 512),
+            f"{_ARCH}.attention.sliding_window_pattern": (
+                _ARRAY,
+                (7, [1, 1, 1, 0]),
+            ),  # 4 != 6 layers
+        },
+    )
     profile = profile_from_gguf(read_gguf_header(path))
     assert all(k == LayerKind.FULL for k, _ in profile.layers)

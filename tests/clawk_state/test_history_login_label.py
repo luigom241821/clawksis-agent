@@ -18,7 +18,12 @@ LOGIN = 'auth:v1:["basic","","e2e"]'
 
 
 def _actor(subject, tmp_path):
-    return Principal(subject, str(tmp_path), frozenset({"session:read", "session:create"}), "native-http:x")
+    return Principal(
+        subject,
+        str(tmp_path),
+        frozenset({"session:read", "session:create"}),
+        "native-http:x",
+    )
 
 
 def _auth(db, subject, row_id):
@@ -54,16 +59,19 @@ def test_the_exact_subject_still_matches(db):
     assert _auth(db, LOGIN, "subject-row") is True
 
 
-@pytest.mark.parametrize("subject", [
-    'auth:v1:["basic","https://idp.example","e2e"]',  # issuer-bearing: the label drops the issuer
-    'auth:v1:["basic","",""]',                        # empty user
-    'auth:v1:["basic","","  "]',                      # blank user
-    'auth:v1:["ba:sic","","e2e"]',                    # a ':' in the provider would forge a third form
-    'auth:v1:["","","e2e"]',                          # empty provider
-    'auth:v1:["auth","","v1:[\\"x\\"]"]',             # label would read as a subject itself
-    'auth:v1:"basic"',                                # non-list payload
-    'uid:501',                                        # not a login subject at all
-])
+@pytest.mark.parametrize(
+    "subject",
+    [
+        'auth:v1:["basic","https://idp.example","e2e"]',  # issuer-bearing: the label drops the issuer
+        'auth:v1:["basic","",""]',  # empty user
+        'auth:v1:["basic","","  "]',  # blank user
+        'auth:v1:["ba:sic","","e2e"]',  # a ':' in the provider would forge a third form
+        'auth:v1:["","","e2e"]',  # empty provider
+        'auth:v1:["auth","","v1:[\\"x\\"]"]',  # label would read as a subject itself
+        'auth:v1:"basic"',  # non-list payload
+        "uid:501",  # not a login subject at all
+    ],
+)
 def test_labels_that_must_not_map(subject):
     assert _login_label(subject) is None
 
@@ -84,11 +92,24 @@ def test_one_parser_reads_the_login_subject_for_every_caller():
     """``authenticated_subject``'s format is parsed in one place: the control socket's
     forwarded-subject gate and the login label both use its checked result."""
     from gateway.control_socket import _structured_login_subject
-    from gateway.session_identity import authenticated_subject, parse_authenticated_subject
+    from gateway.session_identity import (
+        authenticated_subject,
+        parse_authenticated_subject,
+    )
 
-    subject = authenticated_subject({'provider': 'basic', 'issuer': '', 'user_id': 'e2e'})
-    assert parse_authenticated_subject(subject) == ('basic', '', 'e2e')
-    for bad in ('uid:501', 'auth:v1:"basic"', 'auth:v1:[1,2,3]', 'auth:v1:["a","b"]', 'auth:v1:[', None, 7):
+    subject = authenticated_subject(
+        {"provider": "basic", "issuer": "", "user_id": "e2e"}
+    )
+    assert parse_authenticated_subject(subject) == ("basic", "", "e2e")
+    for bad in (
+        "uid:501",
+        'auth:v1:"basic"',
+        "auth:v1:[1,2,3]",
+        'auth:v1:["a","b"]',
+        "auth:v1:[",
+        None,
+        7,
+    ):
         assert parse_authenticated_subject(bad) is None
         assert _login_label(bad) is None
         if isinstance(bad, str):
@@ -103,6 +124,11 @@ def test_a_forwarded_bob_cannot_mutate_a_row_bound_to_alice(db):
     db.create_session("alice-row", source="desktop", user_id="basic:alice")
     with db._read_ctx() as conn:
         with pytest.raises(Exception) as raised:
-            authorize_history(conn, _actor(bob, db.db_path.parent), "alice-row", claim=True)
+            authorize_history(
+                conn, _actor(bob, db.db_path.parent), "alice-row", claim=True
+            )
         assert getattr(raised.value, "reason", None) == "permission_denied"
-        assert authorize_history(conn, _actor(alice, db.db_path.parent), "alice-row") is True
+        assert (
+            authorize_history(conn, _actor(alice, db.db_path.parent), "alice-row")
+            is True
+        )

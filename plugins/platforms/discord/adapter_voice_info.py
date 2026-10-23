@@ -1,4 +1,5 @@
 """Who is in the bot's Discord voice channel and who is speaking, for status and prompt context."""
+
 from __future__ import annotations
 
 import time
@@ -13,7 +14,9 @@ class DiscordVoiceInfoMixin:
     _client: Any
     discard_pending_voice_input: Any
 
-    def _bind_voice_text_channel(self, guild_id: int, text_channel_id: Any, source: Optional[dict]) -> None:
+    def _bind_voice_text_channel(
+        self, guild_id: int, text_channel_id: Any, source: Optional[dict]
+    ) -> None:
         """A programmatic join's transcription binding, on every path: cold join, same voice channel and
         move. The already-connected paths returned before writing it, so a successful join to another
         text channel kept answering in the old one. Moving to another text channel drops speech captured
@@ -42,7 +45,9 @@ class DiscordVoiceInfoMixin:
         for m in channel.members:
             if bot_user and m.id == bot_user.id:
                 continue  # skip the bot itself
-            members_info.append({"user_id": m.id, "display_name": m.display_name, "is_bot": m.bot})
+            members_info.append(
+                {"user_id": m.id, "display_name": m.display_name, "is_bot": m.bot}
+            )
         speaking_user_ids: set = set()
         receiver = self._voice_receivers.get(guild_id)
         if receiver:
@@ -56,8 +61,10 @@ class DiscordVoiceInfoMixin:
         for info in members_info:
             info["is_speaking"] = info["user_id"] in speaking_user_ids
         return {
-            "channel_name": channel.name, "member_count": len(members_info),
-            "members": members_info, "speaking_count": len(speaking_user_ids),
+            "channel_name": channel.name,
+            "member_count": len(members_info),
+            "members": members_info,
+            "speaking_count": len(speaking_user_ids),
         }
 
     def get_voice_channel_context(self, guild_id: int) -> str:
@@ -65,7 +72,9 @@ class DiscordVoiceInfoMixin:
         info = self.get_voice_channel_info(guild_id)
         if not info:
             return ""
-        parts = [f"[Voice channel: #{info['channel_name']} — {info['member_count']} participant(s)]"]
+        parts = [
+            f"[Voice channel: #{info['channel_name']} — {info['member_count']} participant(s)]"
+        ]
         for m in info["members"]:
             status = " (speaking)" if m["is_speaking"] else ""
             parts.append(f"  - {m['display_name']}{status}")

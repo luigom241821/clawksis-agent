@@ -66,19 +66,32 @@ class _ScriptedAgent:
 
 
 def _resume_then_idle_steps():
-    return [lambda c: c.awake(1.0), lambda c: c.sleep(SLEEP_S), lambda c: c.awake(TIMEOUT_S)]
+    return [
+        lambda c: c.awake(1.0),
+        lambda c: c.sleep(SLEEP_S),
+        lambda c: c.awake(TIMEOUT_S),
+    ]
 
 
 def test_turn_watchdog_thread_ignores_host_sleep(clock, monkeypatch):
     agent = _ScriptedAgent(clock, _resume_then_idle_steps())
     fired_at_read = []
     monkeypatch.setattr(
-        gateway_run, "_abandon_timed_out_gateway_turn", lambda **_kw: fired_at_read.append(agent.reads))
+        gateway_run,
+        "_abandon_timed_out_gateway_turn",
+        lambda **_kw: fired_at_read.append(agent.reads),
+    )
 
     _watch_gateway_turn_inactivity(
-        agent_holder=[agent], task_id="t", process_baseline=None, timeout=TIMEOUT_S,
-        worker_done=threading.Event(), timeout_fired=threading.Event(),
-        cleanup_lock=threading.Lock(), poll_interval=0.01)
+        agent_holder=[agent],
+        task_id="t",
+        process_baseline=None,
+        timeout=TIMEOUT_S,
+        worker_done=threading.Event(),
+        timeout_fired=threading.Event(),
+        cleanup_lock=threading.Lock(),
+        poll_interval=0.01,
+    )
 
     # Read 2 is the first poll after resume (2001 s wall idle, 1 s awake): it must not fire.
     assert fired_at_read == [3]
@@ -87,7 +100,9 @@ def test_turn_watchdog_thread_ignores_host_sleep(clock, monkeypatch):
 @pytest.mark.asyncio
 async def test_turn_poll_loop_ignores_host_sleep(clock, monkeypatch):
     turn_ctx = TurnContext()
-    agent = _ScriptedAgent(clock, [lambda c: c.sleep(SLEEP_S), lambda c: c.awake(TIMEOUT_S)])
+    agent = _ScriptedAgent(
+        clock, [lambda c: c.sleep(SLEEP_S), lambda c: c.awake(TIMEOUT_S)]
+    )
     turn_ctx.agent_holder[0] = agent
     runner = object.__new__(GatewayRunner)
     runner._agent_activity_summary = lambda a: a.get_activity_summary()
@@ -109,14 +124,25 @@ async def test_turn_poll_loop_ignores_host_sleep(clock, monkeypatch):
     runner._run_agent_timeout_result = lambda _worker, _ctx: "timed out"
     monkeypatch.setattr(asyncio, "wait", _poll_without_waiting)
     monkeypatch.setattr(
-        gateway_run, "_abandon_timed_out_gateway_turn", lambda **_kw: fired_at_read.append(agent.reads))
+        gateway_run,
+        "_abandon_timed_out_gateway_turn",
+        lambda **_kw: fired_at_read.append(agent.reads),
+    )
     worker = GatewayRunner._RunAgentWorker(
-        agent_timeout=TIMEOUT_S, agent_warning=900.0, task_id="t", process_baseline=None,
-        worker_done=threading.Event(), timeout_fired=threading.Event(),
-        cleanup_lock=threading.Lock(), is_current=lambda: True)
+        agent_timeout=TIMEOUT_S,
+        agent_warning=900.0,
+        task_id="t",
+        process_baseline=None,
+        worker_done=threading.Event(),
+        timeout_fired=threading.Event(),
+        cleanup_lock=threading.Lock(),
+        is_current=lambda: True,
+    )
     worker.executor_task = object()
 
-    result = await runner._run_agent_await_turn_worker(worker, turn_ctx, asyncio.Event(), None)
+    result = await runner._run_agent_await_turn_worker(
+        worker, turn_ctx, asyncio.Event(), None
+    )
 
     assert result == "timed out"
     assert warned_at_read == [2]
@@ -126,12 +152,16 @@ async def test_turn_poll_loop_ignores_host_sleep(clock, monkeypatch):
 def test_stale_agent_eviction_ignores_host_sleep(clock, monkeypatch):
     monkeypatch.setenv("CLAWK_AGENT_TIMEOUT", str(TIMEOUT_S))
     turn = TurnState(ctx=TurnContext(), started_ts=clock.wall)
-    agent = _ScriptedAgent(clock, [lambda c: c.sleep(SLEEP_S), lambda c: c.awake(TIMEOUT_S)])
+    agent = _ScriptedAgent(
+        clock, [lambda c: c.sleep(SLEEP_S), lambda c: c.awake(TIMEOUT_S)]
+    )
     turn.agent = agent
     runner = object.__new__(GatewayRunner)
     runner._peek_session_state = lambda _key: SimpleNamespace(turn=turn)
     evicted_at_read = []
-    runner._hm_evict_running_agent = lambda _key, _reason: evicted_at_read.append(agent.reads)
+    runner._hm_evict_running_agent = lambda _key, _reason: evicted_at_read.append(
+        agent.reads
+    )
 
     runner._hm_evict_idle_stale_agent("k")
     assert evicted_at_read == []
@@ -140,7 +170,9 @@ def test_stale_agent_eviction_ignores_host_sleep(clock, monkeypatch):
     assert evicted_at_read == [2]
 
 
-def test_stale_agent_eviction_drops_sleep_credit_once_the_agent_was_active_again(clock, monkeypatch):
+def test_stale_agent_eviction_drops_sleep_credit_once_the_agent_was_active_again(
+    clock, monkeypatch
+):
     """Eviction samples the meter only when a message arrives. Sleep before the agent's
     post-resume activity must not keep discounting the idle time that followed that activity."""
     monkeypatch.setenv("CLAWK_AGENT_TIMEOUT", str(TIMEOUT_S))
@@ -151,12 +183,16 @@ def test_stale_agent_eviction_drops_sleep_credit_once_the_agent_was_active_again
         agent._origin = c.wall  # the agent's last activity
         c.awake(TIMEOUT_S)
 
-    agent = _ScriptedAgent(clock, [lambda c: c.sleep(SLEEP_S), work_after_resume_then_idle])
+    agent = _ScriptedAgent(
+        clock, [lambda c: c.sleep(SLEEP_S), work_after_resume_then_idle]
+    )
     turn.agent = agent
     runner = object.__new__(GatewayRunner)
     runner._peek_session_state = lambda _key: SimpleNamespace(turn=turn)
     evicted_at_read = []
-    runner._hm_evict_running_agent = lambda _key, _reason: evicted_at_read.append(agent.reads)
+    runner._hm_evict_running_agent = lambda _key, _reason: evicted_at_read.append(
+        agent.reads
+    )
 
     runner._hm_evict_idle_stale_agent("k")
     assert evicted_at_read == []

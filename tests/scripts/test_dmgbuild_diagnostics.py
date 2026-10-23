@@ -1,4 +1,5 @@
 """DMG diagnostics observe failures without changing the native result."""
+
 import io
 import json
 import os
@@ -14,10 +15,12 @@ from scripts.bundles import dmgbuild_diagnostics as diagnostics
 
 def test_detach_diagnostics_run_before_cleanup_and_preserve_results():
     events = []
-    attachment = {"system-entities": [
-        {"dev-entry": "/dev/disk24"},
-        {"dev-entry": "/dev/disk25s1", "mount-point": "/Volumes/Install Clawksis"},
-    ]}
+    attachment = {
+        "system-entities": [
+            {"dev-entry": "/dev/disk24"},
+            {"dev-entry": "/dev/disk25s1", "mount-point": "/Volumes/Install Clawksis"},
+        ]
+    }
     failure = (16, "hdiutil: couldn't eject disk25 - Resource busy")
 
     def native(command, *args, **kwargs):
@@ -33,9 +36,17 @@ def test_detach_diagnostics_run_before_cleanup_and_preserve_results():
     observed("attach", "-nobrowse", "/tmp/our staging.dmg")
     assert observed("detach", "/dev/disk25s1", plist=False) is failure
     observed("detach", "-force", "/dev/disk25s1", plist=False)
-    assert [event[0] for event in events] == ["attach", "detach", "diagnostic", "detach"]
+    assert [event[0] for event in events] == [
+        "attach",
+        "detach",
+        "diagnostic",
+        "detach",
+    ]
     assert events[2][1] == "/dev/disk25s1"
-    assert events[2][2] == {"image": "/tmp/our staging.dmg", "entities": attachment["system-entities"]}
+    assert events[2][2] == {
+        "image": "/tmp/our staging.dmg",
+        "entities": attachment["system-entities"],
+    }
     assert events[2][3] == failure[1]
 
     def broken_report(*args):
@@ -48,17 +59,27 @@ def test_detach_diagnostics_run_before_cleanup_and_preserve_results():
     assert broken("convert", "input", "-o", "output")[0] == 0
 
     calls = []
+
     def run(argv, **kwargs):
         calls.append(argv)
         assert kwargs["timeout"] <= 15
         if argv[-1] == "/usr/bin/true":
             return subprocess.CompletedProcess(argv, 0, "", "")
-        return subprocess.CompletedProcess(argv, 0, "COMMAND PID PPID USER FD TYPE NAME\nmds 4321 1 root 7r DIR /Volumes/Install Clawksis\n", "")
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            "COMMAND PID PPID USER FD TYPE NAME\nmds 4321 1 root 7r DIR /Volumes/Install Clawksis\n",
+            "",
+        )
 
-    diagnostics.report_detach_failure("/dev/disk25s1", events[2][2], failure[1], run=run, stream=errors)
+    diagnostics.report_detach_failure(
+        "/dev/disk25s1", events[2][2], failure[1], run=run, stream=errors
+    )
     text = errors.getvalue()
     assert "mds 4321 1 root 7r" in text
-    assert any("+f" in argv and argv[-1] == "/Volumes/Install Clawksis" for argv in calls)
+    assert any(
+        "+f" in argv and argv[-1] == "/Volumes/Install Clawksis" for argv in calls
+    )
     file_query = next(argv for argv in calls if "-f" in argv)
     assert "/tmp/our staging.dmg" in file_query and "/dev/disk24" in file_query
     assert "/dev/disk25s1" in file_query and "/dev/rdisk25s1" in file_query
@@ -66,11 +87,17 @@ def test_detach_diagnostics_run_before_cleanup_and_preserve_results():
 
     def timeout(argv, **kwargs):
         if argv[-1] == "/usr/bin/true":
-            return subprocess.CompletedProcess(argv, 1, "", "sudo: a password is required")
-        raise subprocess.TimeoutExpired(argv, kwargs["timeout"], output=b"partial holder data")
+            return subprocess.CompletedProcess(
+                argv, 1, "", "sudo: a password is required"
+            )
+        raise subprocess.TimeoutExpired(
+            argv, kwargs["timeout"], output=b"partial holder data"
+        )
 
     errors = io.StringIO()
-    diagnostics.report_detach_failure("/dev/disk25s1", events[2][2], failure[1], run=timeout, stream=errors)
+    diagnostics.report_detach_failure(
+        "/dev/disk25s1", events[2][2], failure[1], run=timeout, stream=errors
+    )
     assert "unprivileged" in errors.getvalue()
     assert "partial holder data" in errors.getvalue()
     assert "timed out" in errors.getvalue()
@@ -82,13 +109,18 @@ def test_resize_timings_preserve_native_arguments_and_failure():
     calls = []
 
     def native(command, *args, **kwargs):
-        assert '[dmg-hdiutil] start resize' in output.getvalue()
+        assert "[dmg-hdiutil] start resize" in output.getvalue()
         calls.append((command, args, kwargs))
         return failure
 
     observed = diagnostics.wrap_hdiutil(native, stream=output)
-    assert observed("resize", "-quiet", "-sectors", "min", "image.dmg", plist=False) is failure
-    assert calls == [("resize", ("-quiet", "-sectors", "min", "image.dmg"), {"plist": False})]
+    assert (
+        observed("resize", "-quiet", "-sectors", "min", "image.dmg", plist=False)
+        is failure
+    )
+    assert calls == [
+        ("resize", ("-quiet", "-sectors", "min", "image.dmg"), {"plist": False})
+    ]
     assert "[dmg-hdiutil] end resize" in output.getvalue()
     assert "status=6" in output.getvalue()
     assert "elapsed=" in output.getvalue()
@@ -100,50 +132,87 @@ def test_diagnostic_entrypoint_preserves_cli_arguments_and_failure(tmp_path):
     package.mkdir()
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "core.py").write_text(
-        'def hdiutil(command, *args, **kwargs):\n'
+        "def hdiutil(command, *args, **kwargs):\n"
         '    print("fixture native", command, *args, flush=True)\n'
         '    if command == "attach":\n'
         '        return 0, {"system-entities": [{"dev-entry": "/dev/clawk-dmg-fixture-not-a-device"}]}\n'
-        '    return (0, "cleanup") if "-force" in args else (16, "Resource busy")\n', encoding="utf-8")
+        '    return (0, "cleanup") if "-force" in args else (16, "Resource busy")\n',
+        encoding="utf-8",
+    )
     (package / "__main__.py").write_text(
-        'import json, sys\nfrom . import core\n'
-        'def main():\n'
-        '    print(json.dumps(sys.argv[1:]), flush=True)\n'
+        "import json, sys\nfrom . import core\n"
+        "def main():\n"
+        "    print(json.dumps(sys.argv[1:]), flush=True)\n"
         '    core.hdiutil("attach", "-nobrowse", "/clawk-dmg-fixture-no-image.dmg")\n'
         '    result = core.hdiutil("detach", "/dev/clawk-dmg-fixture-not-a-device", plist=False)\n'
         '    core.hdiutil("detach", "-force", "/dev/clawk-dmg-fixture-not-a-device", plist=False)\n'
-        '    raise SystemExit(result[0])\n', encoding="utf-8")
+        "    raise SystemExit(result[0])\n",
+        encoding="utf-8",
+    )
     args = ["-s", "settings with spaces.json", "Install Clawksis", "output.dmg"]
-    result = subprocess.run([sys.executable, str(Path(diagnostics.__file__)), *args],
-                            cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(tmp_path)},
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, encoding="utf-8", timeout=60, check=False)
+    result = subprocess.run(
+        [sys.executable, str(Path(diagnostics.__file__)), *args],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 16
     assert json.dumps(args) in result.stdout
-    assert result.stdout.index("[dmg-detach]") < result.stdout.index("fixture native detach -force")
+    assert result.stdout.index("[dmg-detach]") < result.stdout.index(
+        "fixture native detach -force"
+    )
 
 
 @pytest.mark.platforms("macos")
 def test_native_busy_image_reports_the_process_holding_its_file(tmp_path):
     image, mount = tmp_path.resolve() / "held.dmg", tmp_path.resolve() / "mount"
     mount.mkdir()
-    subprocess.run(["/usr/bin/hdiutil", "create", "-size", "16m", "-fs", "HFS+",
-                    "-volname", "Clawksis diagnostic fixture", str(image)],
-                   check=True, capture_output=True, timeout=60)
+    subprocess.run(
+        [
+            "/usr/bin/hdiutil",
+            "create",
+            "-size",
+            "16m",
+            "-fs",
+            "HFS+",
+            "-volname",
+            "Clawksis diagnostic fixture",
+            str(image),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
 
     def native(command, *args, plist=True):
         argv = ["/usr/bin/hdiutil", command, *args, *(["-plist"] if plist else [])]
         result = subprocess.run(argv, capture_output=True, timeout=60, check=False)
-        output = plistlib.loads(result.stdout) if plist and result.returncode == 0 else (result.stdout + result.stderr).decode()
+        output = (
+            plistlib.loads(result.stdout)
+            if plist and result.returncode == 0
+            else (result.stdout + result.stderr).decode()
+        )
         return result.returncode, output
 
     log = io.StringIO()
-    observed = diagnostics.wrap_hdiutil(native, report=lambda *args: diagnostics.report_detach_failure(*args, stream=log))
+    observed = diagnostics.wrap_hdiutil(
+        native,
+        report=lambda *args: diagnostics.report_detach_failure(*args, stream=log),
+    )
     device = None
     try:
-        code, info = observed("attach", "-nobrowse", "-mountpoint", str(mount), str(image))
+        code, info = observed(
+            "attach", "-nobrowse", "-mountpoint", str(mount), str(image)
+        )
         assert code == 0, info
-        device = next(e["dev-entry"] for e in info["system-entities"] if e.get("mount-point"))
+        device = next(
+            e["dev-entry"] for e in info["system-entities"] if e.get("mount-point")
+        )
         held = mount / "held-open.txt"
         with held.open("w") as handle:
             handle.write("owned test handle\n")
@@ -156,4 +225,9 @@ def test_native_busy_image_reports_the_process_holding_its_file(tmp_path):
             assert "COMMAND" in report and "PID" in report
     finally:
         if device:
-            subprocess.run(["/usr/bin/hdiutil", "detach", "-force", device], capture_output=True, timeout=60, check=False)
+            subprocess.run(
+                ["/usr/bin/hdiutil", "detach", "-force", device],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )

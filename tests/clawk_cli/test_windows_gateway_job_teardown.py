@@ -26,6 +26,7 @@ from clawk_cli import gateway
 # 1. Watcher template contract
 # ---------------------------------------------------------------------------
 
+
 def _captured_watcher_source(monkeypatch) -> str:
     """Spawn the watcher with a mocked Popen and return the inlined -c source."""
     captured = {}
@@ -47,13 +48,14 @@ def _captured_watcher_source(monkeypatch) -> str:
     assert argv[1] == "-c"
     return argv[2]
 
-class TestWatcherRespawnTemplate:
 
+class TestWatcherRespawnTemplate:
     def test_respawn_source_compiles(self, monkeypatch):
         """The inlined -c template is built via str.format over a
         dedented literal — guard against brace/indentation regressions."""
         src = _captured_watcher_source(monkeypatch)
         compile(src, "<watcher>", "exec")
+
 
 # ---------------------------------------------------------------------------
 # 2. Post-update resume liveness gate

@@ -11,13 +11,24 @@ import shlex
 from pathlib import Path
 from typing import Dict, Any, Optional, Set
 
-from agent.prompt_builder import _read_text_with_timeout, _scan_context_content, _truncate_content
+from agent.prompt_builder import (
+    _read_text_with_timeout,
+    _scan_context_content,
+    _truncate_content,
+)
 from agent.search_policy import SEARCH_PRUNE_DIR_NAMES
 
 logger = logging.getLogger(__name__)
 
 # Same filenames as prompt_builder.py, in priority order (first match wins per dir).
-_HINT_FILENAMES = ["AGENTS.override.md", "AGENTS.md", "agents.md", "CLAUDE.md", "claude.md", ".cursorrules"]
+_HINT_FILENAMES = [
+    "AGENTS.override.md",
+    "AGENTS.md",
+    "agents.md",
+    "CLAUDE.md",
+    "claude.md",
+    ".cursorrules",
+]
 # Per-file ceiling for on-demand subdirectory hints. 32 KiB matches Codex's `project_doc_max_bytes` default
 # (Claude Code and Cursor apply none); it is a guard against a stray huge CLAUDE.md in a vendored tree, not a
 # target — keep area AGENTS.md files well under it (~8k) because this text lands in a tool result on the first
@@ -60,6 +71,7 @@ def _resolved_hint_target(hint_path: Path, working_dir: Path) -> Optional[Path]:
         return None
     try:
         from agent.file_safety import get_read_block_error
+
         blocked = get_read_block_error(str(resolved)) is not None
     except Exception:
         # Mirror context_references: a deny-list lookup that fails re-opens the
@@ -78,7 +90,10 @@ def _first_hint_file(directory: Path):
     for filename in _HINT_FILENAMES:
         candidate = directory / filename
         try:
-            if not candidate.is_file() or (target := _resolved_hint_target(candidate, directory)) is None:
+            if (
+                not candidate.is_file()
+                or (target := _resolved_hint_target(candidate, directory)) is None
+            ):
                 continue
             # Read the resolved target (not the link path) so a symlink swapped
             # between check and read still lands on the vetted file.
@@ -107,7 +122,14 @@ def _nav_targets(cmd: str) -> list:
             segment_start = True
             continue
         if segment_start and token in _NAV_COMMANDS:
-            operand = next((t for t in tokens[idx + 1:] if t in _SHELL_OPERATORS or not t.startswith("-")), None)
+            operand = next(
+                (
+                    t
+                    for t in tokens[idx + 1 :]
+                    if t in _SHELL_OPERATORS or not t.startswith("-")
+                ),
+                None,
+            )
             if operand and operand not in _SHELL_OPERATORS:
                 targets.append(operand)
         segment_start = False
@@ -123,7 +145,11 @@ _CONTAINER_HOMES = frozenset({Path("/home"), Path("/root"), Path("/workspace")})
 def _is_home_like_working_dir(working_dir: Path) -> bool:
     """True when ``working_dir`` is a home the desktop/container fell back to — not a project."""
     home = Path.home()
-    if working_dir == home or working_dir in _CONTAINER_HOMES or working_dir.parent in _CONTAINER_HOMES:
+    if (
+        working_dir == home
+        or working_dir in _CONTAINER_HOMES
+        or working_dir.parent in _CONTAINER_HOMES
+    ):
         return True
     # Also the local-sandbox home mount: a docker backend binds the host home under a
     # container path whose basename stays the user name (e.g. /mnt/host-home/brooklyn).
@@ -184,7 +210,9 @@ class SubdirectoryHintTracker:
         if found and found[1]:
             self._loaded_digests.add(_digest(found[1]))
 
-    def check_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> Optional[str]:
+    def check_tool_call(
+        self, tool_name: str, tool_args: dict[str, Any]
+    ) -> Optional[str]:
         """Return formatted hint text for newly visited directories, or None."""
         from agent.safe_worker_policy import safe_worker_enabled
 
@@ -192,7 +220,11 @@ class SubdirectoryHintTracker:
             return None
         if self._home_is_working_dir:
             return None
-        all_hints = [h for d in self._extract_directories(tool_name, tool_args) if (h := self._load_hints_for_directory(d))]
+        all_hints = [
+            h
+            for d in self._extract_directories(tool_name, tool_args)
+            if (h := self._load_hints_for_directory(d))
+        ]
         return "\n\n" + "\n\n".join(all_hints) if all_hints else None
 
     def _extract_directories(self, tool_name: str, args: dict[str, Any]) -> list:
@@ -242,7 +274,9 @@ class SubdirectoryHintTracker:
         for target in _nav_targets(cmd):
             self._add_path_candidate(target, candidates)
         for token in tokens:
-            if token.startswith(("-", "http://", "https://", "git@")) or ("/" not in token and "." not in token):
+            if token.startswith(("-", "http://", "https://", "git@")) or (
+                "/" not in token and "." not in token
+            ):
                 continue
             self._add_path_candidate(token, candidates)
 
@@ -266,7 +300,11 @@ class SubdirectoryHintTracker:
                 return False
         except OSError:
             return False
-        return path not in self._loaded_dirs and self._within_working_dir(path) and not self._is_excluded(path)
+        return (
+            path not in self._loaded_dirs
+            and self._within_working_dir(path)
+            and not self._is_excluded(path)
+        )
 
     def _is_excluded(self, path: Path) -> bool:
         """True when a segment *below* the working dir is an excluded copy dir
@@ -281,7 +319,11 @@ class SubdirectoryHintTracker:
         """Load the first hint file in *directory*; formatted text or None."""
         self._loaded_dirs.add(directory)
         if self._home_is_working_dir or not self._within_working_dir(directory):
-            logger.debug("Skipping hint files in %s — outside working_dir %s", directory, self.working_dir)
+            logger.debug(
+                "Skipping hint files in %s — outside working_dir %s",
+                directory,
+                self.working_dir,
+            )
             return None
         for filename in _HINT_FILENAMES:
             hint_path = directory / filename
@@ -298,16 +340,26 @@ class SubdirectoryHintTracker:
                     continue
                 digest = _digest(content)
                 if digest in self._loaded_digests:
-                    logger.debug("Skipping duplicate hint content at %s (digest %s)", hint_path, digest[:12])
+                    logger.debug(
+                        "Skipping duplicate hint content at %s (digest %s)",
+                        hint_path,
+                        digest[:12],
+                    )
                     return None
                 self._loaded_digests.add(digest)
                 # Same security scan as startup context loading.
                 content = _scan_context_content(content, filename)
                 rel_path = self._display_path(hint_path)
                 content = _truncate_content(
-                    content, filename, max_chars=_MAX_HINT_CHARS, read_path=rel_path, queue_warning=False,
+                    content,
+                    filename,
+                    max_chars=_MAX_HINT_CHARS,
+                    read_path=rel_path,
+                    queue_warning=False,
                 )
-                logger.debug("Loaded subdirectory hints from %s: %s", directory, [rel_path])
+                logger.debug(
+                    "Loaded subdirectory hints from %s: %s", directory, [rel_path]
+                )
                 return f"[Subdirectory context discovered: {rel_path}]\n{content}"  # first match wins per directory
             except Exception as exc:
                 logger.debug("Could not read %s: %s", hint_path, exc)

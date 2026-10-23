@@ -31,8 +31,14 @@ def scoped_profile(tmp_path, monkeypatch):
 def test_provider_config_key_env_resolves_through_secret_scope(scoped_profile):
     from clawk_cli.models_local import _api_key_from_provider_config
 
-    entry = {"base_url": "https://ollama.internal/v1", "key_env": "EXAMPLE_PROVIDER_API_KEY"}
-    assert _api_key_from_provider_config(entry, "key_env", "api_key_env") == "sk-from-profile-dotenv"
+    entry = {
+        "base_url": "https://ollama.internal/v1",
+        "key_env": "EXAMPLE_PROVIDER_API_KEY",
+    }
+    assert (
+        _api_key_from_provider_config(entry, "key_env", "api_key_env")
+        == "sk-from-profile-dotenv"
+    )
 
 
 def test_named_custom_flow_probes_with_scoped_key_env(scoped_profile):
@@ -45,10 +51,14 @@ def test_named_custom_flow_probes_with_scoped_key_env(scoped_profile):
         "key_env": "EXAMPLE_PROVIDER_API_KEY",
         "model": "qwen3.6-35b-fast",
     }
-    with patch("clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]) as mock_fetch, \
-         patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError), \
-         patch("builtins.input", return_value="1"), \
-         patch("builtins.print"):
+    with (
+        patch(
+            "clawk_cli.models.fetch_api_models", return_value=["qwen3.6-35b-fast"]
+        ) as mock_fetch,
+        patch("clawk_cli.curses_ui.curses_radiolist", side_effect=ImportError),
+        patch("builtins.input", return_value="1"),
+        patch("builtins.print"),
+    ):
         _model_flow_named_custom({}, provider_info)
 
     assert mock_fetch.call_args.args[0] == "sk-from-profile-dotenv"

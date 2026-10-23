@@ -26,8 +26,14 @@ def no_external_work(monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail(f"old updater attempted work outside the fresh child: {args!r}")
 
-    for name in ("ensure", "sync_venv", "ensure_environment", "build_environment",
-                 "ensure_python_tool", "ensure_import"):
+    for name in (
+        "ensure",
+        "sync_venv",
+        "ensure_environment",
+        "build_environment",
+        "ensure_python_tool",
+        "ensure_import",
+    ):
         monkeypatch.setattr(pm, name, forbidden)
     for name in ("Popen", "run"):
         monkeypatch.setattr(subprocess, name, forbidden)
@@ -52,12 +58,20 @@ class FreshChild:
     def run(self, command, *, cwd, env):
         """Intercept ONLY the fresh-child seam, leaving the real JSON bridge intact."""
         assert command[:7] == [
-            sys.executable, "-I", "-S", "-B", "-X", "utf8", str(ROOT / "clawk_cli/_update_takeover.py"),
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-X",
+            "utf8",
+            str(ROOT / "clawk_cli/_update_takeover.py"),
         ], f"old installer/fallback ran instead of takeover: {command!r}"
         assert len(command) == 9
         assert Path(command[0]).is_absolute()
         assert Path(cwd) == ROOT
-        assert not any(key.startswith(("PYTHON", "UV_")) or key == "VIRTUAL_ENV" for key in env)
+        assert not any(
+            key.startswith(("PYTHON", "UV_")) or key == "VIRTUAL_ENV" for key in env
+        )
         context, result = map(Path, command[7:])
         assert context.is_absolute() and result.is_absolute()
         assert context.parent == result.parent and context != result
@@ -82,20 +96,34 @@ class FreshChild:
         real_import_module = importlib.import_module
 
         def check_import(name):
-            if name == "pm" or name.startswith("pm.") or name in {
-                "clawk_cli._update_takeover", "clawk_cli.update_finish",
-            }:
+            if (
+                name == "pm"
+                or name.startswith("pm.")
+                or name
+                in {
+                    "clawk_cli._update_takeover",
+                    "clawk_cli.update_finish",
+                }
+            ):
                 pytest.fail(f"fresh updater imported in the old parent: {name}")
 
         def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
-            resolved = importlib.util.resolve_name("." * level + name, globals["__package__"]) if level else name
+            resolved = (
+                importlib.util.resolve_name("." * level + name, globals["__package__"])
+                if level
+                else name
+            )
             check_import(resolved)
             for attr in fromlist or ():
                 check_import(f"{resolved}.{attr}")
             return real_import(name, globals, locals, fromlist, level)
 
         def guarded_import_module(name, package=None):
-            check_import(importlib.util.resolve_name(name, package) if name.startswith(".") else name)
+            check_import(
+                importlib.util.resolve_name(name, package)
+                if name.startswith(".")
+                else name
+            )
             return real_import_module(name, package)
 
         with self.monkeypatch.context() as guard:
@@ -107,8 +135,12 @@ class FreshChild:
         assert len(self.requests) == before_calls + 1
         assert all(not path.exists() for path in self.paths[-1])
         assert dict(os.environ) == before_env
-        assert all(sys.modules.get(name) is module for name, module in before_modules.items())
-        assert {p: p.read_bytes() for p in home.rglob("*") if p.is_file()} == before_files
+        assert all(
+            sys.modules.get(name) is module for name, module in before_modules.items()
+        )
+        assert {
+            p: p.read_bytes() for p in home.rglob("*") if p.is_file()
+        } == before_files
 
 
 @pytest.fixture

@@ -26,6 +26,7 @@ import plugins.platforms.telegram.telegram_network as tnet
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class FakeTransport(httpx.AsyncBaseTransport):
     """Records calls and raises / returns based on a host→action mapping."""
 
@@ -55,6 +56,7 @@ class FakeTransport(httpx.AsyncBaseTransport):
     async def aclose(self) -> None:
         self.closed = True
 
+
 def _fake_transport_factory(calls, behavior):
     """Returns a factory that creates FakeTransport instances."""
     instances = []
@@ -67,24 +69,31 @@ def _fake_transport_factory(calls, behavior):
     factory.instances = instances
     return factory
 
+
 def _telegram_request(path="/botTOKEN/getMe"):
     return httpx.Request("GET", f"https://api.telegram.org{path}")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # IP parsing & validation
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestParseFallbackIpEnv:
     def test_filters_invalid_and_ipv6(self):
-        ips = tnet.parse_fallback_ip_env("149.154.167.220, bad, 2001:67c:4e8:f004::9,149.154.167.220")
+        ips = tnet.parse_fallback_ip_env(
+            "149.154.167.220, bad, 2001:67c:4e8:f004::9,149.154.167.220"
+        )
         assert ips == ["149.154.167.220", "149.154.167.220"]
 
     def test_none_returns_empty(self):
         assert tnet.parse_fallback_ip_env(None) == []
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Request rewriting
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestRewriteRequestForIp:
     def test_preserves_host_and_sni(self):
@@ -96,18 +105,24 @@ class TestRewriteRequestForIp:
         assert rewritten.extensions["sni_hostname"] == "api.telegram.org"
         assert rewritten.url.path == "/botTOKEN/getMe"
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Fallback transport – core behavior
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestFallbackTransport:
     """IPv4 literals first → hostname last → stick to whichever works."""
 
     @pytest.mark.asyncio
-    async def test_ipv4_literal_tried_before_hostname_and_becomes_sticky(self, monkeypatch):
+    async def test_ipv4_literal_tried_before_hostname_and_becomes_sticky(
+        self, monkeypatch
+    ):
         calls = []
         behavior = {"api.telegram.org": "timeout", "149.154.167.220": "ok"}
-        monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior))
+        monkeypatch.setattr(
+            tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior)
+        )
 
         transport = tnet.TelegramFallbackTransport(["149.154.167.220"])
         resp = await transport.handle_async_request(_telegram_request())
@@ -133,9 +148,13 @@ class TestFallbackTransport:
             "149.154.167.220": "ok",
             "149.154.167.221": "ok",
         }
-        monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior))
+        monkeypatch.setattr(
+            tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior)
+        )
 
-        transport = tnet.TelegramFallbackTransport(["149.154.167.220", "149.154.167.221"])
+        transport = tnet.TelegramFallbackTransport(
+            ["149.154.167.220", "149.154.167.221"]
+        )
 
         # First request: .220 works immediately (IPv4-first) → becomes sticky
         await transport.handle_async_request(_telegram_request())
@@ -157,12 +176,15 @@ class TestFallbackTransport:
         """IPv6-only / seed-IP-blocked hosts still reach the hostname last."""
         calls = []
         behavior = {"149.154.167.220": "timeout", "api.telegram.org": "ok"}
-        monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior))
+        monkeypatch.setattr(
+            tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior)
+        )
         transport = tnet.TelegramFallbackTransport(["149.154.167.220"])
         resp = await transport.handle_async_request(_telegram_request())
         assert resp.status_code == 200
         assert [c["url_host"] for c in calls] == ["149.154.167.220", "api.telegram.org"]
         assert transport._sticky_ip is None
+
 
 class TestFallbackTransportPassthrough:
     """Requests that don't need fallback behavior."""
@@ -171,7 +193,9 @@ class TestFallbackTransportPassthrough:
     async def test_non_telegram_host_bypasses_fallback(self, monkeypatch):
         calls = []
         behavior = {}
-        monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior))
+        monkeypatch.setattr(
+            tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior)
+        )
 
         transport = tnet.TelegramFallbackTransport(["149.154.167.220"])
         request = httpx.Request("GET", "https://example.com/path")
@@ -181,8 +205,8 @@ class TestFallbackTransportPassthrough:
         assert calls[0]["url_host"] == "example.com"
         assert transport._sticky_ip is tnet._UNSET
 
-class TestFallbackTransportInit:
 
+class TestFallbackTransportInit:
     def test_uses_proxy_env_for_primary_and_fallback_transports(self, monkeypatch):
         seen_kwargs = []
 
@@ -190,7 +214,17 @@ class TestFallbackTransportInit:
             seen_kwargs.append(kwargs.copy())
             return FakeTransport([], {})
 
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy", "TELEGRAM_PROXY", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "TELEGRAM_PROXY",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", factory)
@@ -205,7 +239,9 @@ class TestFallbackTransportInit:
 
         asyncio.run(transport._get_fallback("149.154.167.220"))
         assert len(seen_kwargs) == 2
-        assert all(kwargs["proxy"] == "http://proxy.example:8080" for kwargs in seen_kwargs)
+        assert all(
+            kwargs["proxy"] == "http://proxy.example:8080" for kwargs in seen_kwargs
+        )
 
     def test_no_proxy_bypasses_fallback_ip_cidr(self, monkeypatch):
         seen_kwargs = []
@@ -214,7 +250,17 @@ class TestFallbackTransportInit:
             seen_kwargs.append(kwargs.copy())
             return FakeTransport([], {})
 
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy", "TELEGRAM_PROXY", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "TELEGRAM_PROXY",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
         monkeypatch.setenv("NO_PROXY", "149.154.160.0/20")
@@ -242,7 +288,17 @@ class TestFallbackTransportInit:
             seen_kwargs.append(kwargs.copy())
             return FakeTransport([], {})
 
-        for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy", "TELEGRAM_PROXY", "NO_PROXY", "no_proxy"):
+        for key in (
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "ALL_PROXY",
+            "https_proxy",
+            "http_proxy",
+            "all_proxy",
+            "TELEGRAM_PROXY",
+            "NO_PROXY",
+            "no_proxy",
+        ):
             monkeypatch.delenv(key, raising=False)
         monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", factory)
 
@@ -275,13 +331,16 @@ class TestFallbackTransportInit:
                 for opt in kw["socket_options"]
             )
 
+
 class TestFallbackTransportClose:
     @pytest.mark.asyncio
     async def test_aclose_closes_all_transports(self, monkeypatch):
         factory = _fake_transport_factory([], {})
         monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", factory)
 
-        transport = tnet.TelegramFallbackTransport(["149.154.167.220", "149.154.167.221"])
+        transport = tnet.TelegramFallbackTransport(
+            ["149.154.167.220", "149.154.167.221"]
+        )
         # Lazy fallback build (#63311): materialize both fallback pools so
         # aclose() has something to tear down.
         await transport._get_fallback("149.154.167.220")
@@ -292,25 +351,37 @@ class TestFallbackTransportClose:
         assert len(factory.instances) == 3
         assert all(t.closed for t in factory.instances)
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Config layer – TELEGRAM_FALLBACK_IPS env → config.extra
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class TestConfigFallbackIps:
     def test_env_var_populates_config_extra(self, monkeypatch):
-        from gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
+        from gateway.config import (
+            GatewayConfig,
+            Platform,
+            PlatformConfig,
+            _apply_env_overrides,
+        )
 
         monkeypatch.setenv("TELEGRAM_FALLBACK_IPS", "149.154.167.220,149.154.167.221")
-        config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="tok")})
+        config = GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="tok")}
+        )
         _apply_env_overrides(config)
 
         assert config.platforms[Platform.TELEGRAM].extra["fallback_ips"] == [
-            "149.154.167.220", "149.154.167.221",
+            "149.154.167.220",
+            "149.154.167.221",
         ]
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Adapter layer – _fallback_ips() reads config correctly
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 class TestAdapterFallbackIps:
     def _make_adapter(self, extra=None):
@@ -318,7 +389,9 @@ class TestAdapterFallbackIps:
         from unittest.mock import MagicMock
 
         # Ensure telegram mock is in place
-        if "telegram" not in sys.modules or not hasattr(sys.modules["telegram"], "__file__"):
+        if "telegram" not in sys.modules or not hasattr(
+            sys.modules["telegram"], "__file__"
+        ):
             mod = MagicMock()
             mod.ext.ContextTypes.DEFAULT_TYPE = type(None)
             mod.constants.ParseMode.MARKDOWN_V2 = "MarkdownV2"
@@ -326,7 +399,12 @@ class TestAdapterFallbackIps:
             mod.constants.ChatType.SUPERGROUP = "supergroup"
             mod.constants.ChatType.CHANNEL = "channel"
             mod.constants.ChatType.PRIVATE = "private"
-            for name in ("telegram", "telegram.ext", "telegram.constants", "telegram.request"):
+            for name in (
+                "telegram",
+                "telegram.ext",
+                "telegram.constants",
+                "telegram.request",
+            ):
                 sys.modules.setdefault(name, mod)
 
         from gateway.config import PlatformConfig
@@ -342,16 +420,21 @@ class TestAdapterFallbackIps:
         assert adapter._fallback_ips() == ["149.154.167.220"]
 
     def test_csv_string_in_extra(self):
-        adapter = self._make_adapter(extra={"fallback_ips": "149.154.167.220,149.154.167.221"})
+        adapter = self._make_adapter(
+            extra={"fallback_ips": "149.154.167.220,149.154.167.221"}
+        )
         assert adapter._fallback_ips() == ["149.154.167.220", "149.154.167.221"]
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # DoH auto-discovery
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _doh_answer(*ips: str) -> dict:
     """Build a minimal DoH JSON response with A records."""
     return {"Answer": [{"type": 1, "data": ip} for ip in ips]}
+
 
 class FakeDoHClient:
     """Mock httpx.AsyncClient for DoH queries."""
@@ -383,6 +466,7 @@ class FakeDoHClient:
     async def __aexit__(self, *args):
         pass
 
+
 class TestDiscoverFallbackIps:
     """Tests for discover_fallback_ips() — DoH-based auto-discovery."""
 
@@ -395,17 +479,23 @@ class TestDiscoverFallbackIps:
             addrs = [(None, None, None, None, (ip, 443)) for ip in system_dns_ips]
             monkeypatch.setattr(tnet.socket, "getaddrinfo", lambda *a, **kw: addrs)
         else:
+
             def _fail(*a, **kw):
                 raise OSError("dns failed")
+
             monkeypatch.setattr(tnet.socket, "getaddrinfo", _fail)
         return client
 
     @pytest.mark.asyncio
     async def test_google_and_cloudflare_ips_collected(self, monkeypatch):
-        self._patch_doh(monkeypatch, {
-            "https://dns.google": (200, _doh_answer("149.154.167.220")),
-            "https://cloudflare-dns.com": (200, _doh_answer("149.154.167.221")),
-        }, system_dns_ips=["149.154.166.110"])
+        self._patch_doh(
+            monkeypatch,
+            {
+                "https://dns.google": (200, _doh_answer("149.154.167.220")),
+                "https://cloudflare-dns.com": (200, _doh_answer("149.154.167.221")),
+            },
+            system_dns_ips=["149.154.166.110"],
+        )
 
         ips = await tnet.discover_fallback_ips()
         assert "149.154.167.220" in ips
@@ -419,20 +509,31 @@ class TestDiscoverFallbackIps:
         fallback lets the IP-rewrite retry recover from transient primary-path
         failures instead of jumping straight to the hardcoded seed list.
         """
-        self._patch_doh(monkeypatch, {
-            "https://dns.google": (200, _doh_answer("149.154.166.110", "149.154.167.220")),
-            "https://cloudflare-dns.com": (200, _doh_answer("149.154.166.110")),
-        }, system_dns_ips=["149.154.166.110"])
+        self._patch_doh(
+            monkeypatch,
+            {
+                "https://dns.google": (
+                    200,
+                    _doh_answer("149.154.166.110", "149.154.167.220"),
+                ),
+                "https://cloudflare-dns.com": (200, _doh_answer("149.154.166.110")),
+            },
+            system_dns_ips=["149.154.166.110"],
+        )
 
         ips = await tnet.discover_fallback_ips()
         assert ips == ["149.154.166.110", "149.154.167.220"]
 
     @pytest.mark.asyncio
     async def test_doh_results_deduplicated(self, monkeypatch):
-        self._patch_doh(monkeypatch, {
-            "https://dns.google": (200, _doh_answer("149.154.167.220")),
-            "https://cloudflare-dns.com": (200, _doh_answer("149.154.167.220")),
-        }, system_dns_ips=["149.154.166.110"])
+        self._patch_doh(
+            monkeypatch,
+            {
+                "https://dns.google": (200, _doh_answer("149.154.167.220")),
+                "https://cloudflare-dns.com": (200, _doh_answer("149.154.167.220")),
+            },
+            system_dns_ips=["149.154.166.110"],
+        )
 
         ips = await tnet.discover_fallback_ips()
         assert ips == ["149.154.167.220"]
@@ -446,10 +547,14 @@ class TestDiscoverFallbackIps:
         the system IP, that IP is the best candidate we have and should be
         used as the fallback target.
         """
-        self._patch_doh(monkeypatch, {
-            "https://dns.google": (200, _doh_answer("149.154.166.110")),
-            "https://cloudflare-dns.com": (200, _doh_answer("149.154.166.110")),
-        }, system_dns_ips=["149.154.166.110"])
+        self._patch_doh(
+            monkeypatch,
+            {
+                "https://dns.google": (200, _doh_answer("149.154.166.110")),
+                "https://cloudflare-dns.com": (200, _doh_answer("149.154.166.110")),
+            },
+            system_dns_ips=["149.154.166.110"],
+        )
 
         ips = await tnet.discover_fallback_ips()
         assert ips == ["149.154.166.110"]
@@ -461,10 +566,14 @@ class TestDiscoverFallbackIps:
         even while the system-DNS worker thread is still hanging."""
         import time as _time
 
-        self._patch_doh(monkeypatch, {
-            "https://dns.google": (200, _doh_answer("149.154.167.220")),
-            "https://cloudflare-dns.com": (200, _doh_answer()),
-        }, system_dns_ips=["149.154.166.110"])
+        self._patch_doh(
+            monkeypatch,
+            {
+                "https://dns.google": (200, _doh_answer("149.154.167.220")),
+                "https://cloudflare-dns.com": (200, _doh_answer()),
+            },
+            system_dns_ips=["149.154.166.110"],
+        )
         monkeypatch.setattr(tnet, "_DOH_TIMEOUT", 0.2)
 
         def _hung_getaddrinfo(*a, **kw):

@@ -24,7 +24,11 @@ def test_child_query_opts_out_of_autoload():
 def test_capability_read_does_not_load_the_model(monkeypatch):
     seen = []
     monkeypatch.setattr(endpoint, "managed_root", lambda: ("http://127.0.0.1:1", "k"))
-    monkeypatch.setattr(endpoint, "managed_get_json", lambda base, key, path, timeout_s: seen.append(path) or {})
+    monkeypatch.setattr(
+        endpoint,
+        "managed_get_json",
+        lambda base, key, path, timeout_s: seen.append(path) or {},
+    )
     capabilities._props_modalities("qwen")
     assert seen == ["/props?model=qwen&autoload=false"]
 
@@ -32,7 +36,11 @@ def test_capability_read_does_not_load_the_model(monkeypatch):
 def test_prefill_read_does_not_load_the_model(monkeypatch):
     seen = []
     monkeypatch.setattr(load_progress, "_endpoint", lambda: ("http://127.0.0.1:1", "k"))
-    monkeypatch.setattr(endpoint, "managed_get_json", lambda base, key, path, timeout_s: seen.append(path) or [])
+    monkeypatch.setattr(
+        endpoint,
+        "managed_get_json",
+        lambda base, key, path, timeout_s: seen.append(path) or [],
+    )
     assert load_progress.get_prefill_progress("qwen") is None
     assert seen == ["/slots?model=qwen&autoload=false"]
 
@@ -47,9 +55,28 @@ class _Client:
         path = url.split("127.0.0.1:1", 1)[1]
         self.paths.append(path)
         if path == "/models":
-            return SimpleNamespace(status_code=200, json=lambda: {"data": [{"id": "qwen", "status": {
-                "value": "unloaded", "args": ["llama-server.exe", "--ctx-size", "65536", "--jinja"]}}]})
-        return SimpleNamespace(status_code=400, json=lambda: {"error": {"message": "model is not loaded"}})
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "data": [
+                        {
+                            "id": "qwen",
+                            "status": {
+                                "value": "unloaded",
+                                "args": [
+                                    "llama-server.exe",
+                                    "--ctx-size",
+                                    "65536",
+                                    "--jinja",
+                                ],
+                            },
+                        }
+                    ]
+                },
+            )
+        return SimpleNamespace(
+            status_code=400, json=lambda: {"error": {"message": "model is not loaded"}}
+        )
 
 
 def test_context_probe_reads_launch_args_for_an_unloaded_model():
@@ -61,11 +88,20 @@ def test_context_probe_reads_launch_args_for_an_unloaded_model():
     assert "/props?model=qwen" not in client.paths
 
 
-@pytest.mark.parametrize("body", [["not", "an", "object"], {"data": "oops"}, {"data": [{"id": "qwen", "status": "loading"}]}])
+@pytest.mark.parametrize(
+    "body",
+    [
+        ["not", "an", "object"],
+        {"data": "oops"},
+        {"data": [{"id": "qwen", "status": "loading"}]},
+    ],
+)
 def test_context_probe_survives_an_odd_models_body(body):
     from agent.model_metadata_llamacpp import router_launch_ctx
 
-    client = SimpleNamespace(get=lambda url: SimpleNamespace(status_code=200, json=lambda: body))
+    client = SimpleNamespace(
+        get=lambda url: SimpleNamespace(status_code=200, json=lambda: body)
+    )
     assert router_launch_ctx(client, "http://127.0.0.1:1", "qwen") is None
 
 
@@ -74,7 +110,9 @@ def test_an_unloaded_model_counts_as_idle(monkeypatch):
     sup = LlamaServerSupervisor.__new__(LlamaServerSupervisor)
 
     def request(route, body=None, timeout_s=30):
-        raise urllib.error.HTTPError(route, 400, "model is not loaded", {}, io.BytesIO(b""))
+        raise urllib.error.HTTPError(
+            route, 400, "model is not loaded", {}, io.BytesIO(b"")
+        )
 
     monkeypatch.setattr(sup, "_request", request, raising=False)
     assert sup._probe_idle("qwen") is True

@@ -5,6 +5,7 @@ command the dispatcher does not send. A commit or channel run also gets a
 post-build receipt tag. This step runs before that tag exists, so it prints
 the tag shape and names the step that writes the real tag.
 """
+
 from __future__ import annotations
 
 import json
@@ -100,9 +101,17 @@ def release_command(env: Mapping[str, str]) -> list[str] | None:
     branch = _text(env.get("DEFAULT_BRANCH"))
     if not repository or not branch or facts["kind"] not in {"commit", "channel"}:
         return None
-    if facts["disposable_channel"] or facts["disposable_run"] or facts["disposable_receivers"]:
+    if (
+        facts["disposable_channel"]
+        or facts["disposable_run"]
+        or facts["disposable_receivers"]
+    ):
         return None
-    if not facts["all_jobs"] or facts["termux_upgrade_from_tag"] or facts["upload_release"]:
+    if (
+        not facts["all_jobs"]
+        or facts["termux_upgrade_from_tag"]
+        or facts["upload_release"]
+    ):
         return None
     commit = facts["build_commit"]
     if not isinstance(commit, str) or not commit:
@@ -113,8 +122,14 @@ def release_command(env: Mapping[str, str]) -> list[str] | None:
     if facts["kind"] == "channel":
         from scripts.releases.channel_build import dispatch_command
 
-        return dispatch_command(str(facts["channel"]), commit, str(repository), branch, baked or None,
-                                str(facts["branding"]))
+        return dispatch_command(
+            str(facts["channel"]),
+            commit,
+            str(repository),
+            branch,
+            baked or None,
+            str(facts["branding"]),
+        )
     from scripts.releases.commit_build import dispatch_command
 
     return dispatch_command(commit, str(repository), branch, baked or None)
@@ -134,8 +149,11 @@ def receipt_shape(facts: Mapping[str, object]) -> str | None:
         return None
     from scripts.releases.commit_build import receipt_tag
 
-    return receipt_tag(str(kind), "0.0.0", "2000-01-01T00:00:00Z", run_id).replace(
-        "v0.0.0", "v<version>", 1).replace("20000101T000000Z", "<run-created-utc>", 1)
+    return (
+        receipt_tag(str(kind), "0.0.0", "2000-01-01T00:00:00Z", run_id)
+        .replace("v0.0.0", "v<version>", 1)
+        .replace("20000101T000000Z", "<run-created-utc>", 1)
+    )
 
 
 def report(env: Mapping[str, str]) -> str:
@@ -149,7 +167,19 @@ def report(env: Mapping[str, str]) -> str:
     if command is None:
         lines.append("release.py: this dispatch is not a release.py --build-commit run")
     else:
-        lines.append("release.py: " + shlex.join(["python", "scripts/release.py", "--publish", "--remote", "<remote>", *command_flags(facts)]))
+        lines.append(
+            "release.py: "
+            + shlex.join(
+                [
+                    "python",
+                    "scripts/release.py",
+                    "--publish",
+                    "--remote",
+                    "<remote>",
+                    *command_flags(facts),
+                ]
+            )
+        )
         lines.append("workflow: " + shlex.join(command))
     shape = receipt_shape(facts)
     if shape is None:

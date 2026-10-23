@@ -2,15 +2,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 
-
 def _response(content="ok"):
     message = SimpleNamespace(content=content, tool_calls=[])
     choice = SimpleNamespace(message=message, finish_reason="stop")
     return SimpleNamespace(choices=[choice], usage=None, model="fake")
-
-
-
-
 
 
 def test_slot_reasoning_config_parses_effort_and_none():
@@ -22,7 +17,6 @@ def test_slot_reasoning_config_parses_effort_and_none():
     }
     assert _slot_reasoning_config({"reasoning_effort": "none"}) == {"enabled": False}
     assert _slot_reasoning_config({}) is None
-
 
 
 def test_moa_reference_passes_per_slot_reasoning_config(monkeypatch):
@@ -38,14 +32,15 @@ def test_moa_reference_passes_per_slot_reasoning_config(monkeypatch):
     with patch("clawk_cli.runtime_provider.resolve_runtime_provider") as mock_resolve:
         mock_resolve.return_value = {"provider": "openai-codex", "model": "gpt-5.6-sol"}
         _run_reference(
-            {"provider": "openai-codex", "model": "gpt-5.6-sol", "reasoning_effort": "low"},
+            {
+                "provider": "openai-codex",
+                "model": "gpt-5.6-sol",
+                "reasoning_effort": "low",
+            },
             [{"role": "user", "content": "judge this"}],
         )
 
     assert captured["reasoning_config"] == {"enabled": True, "effort": "low"}
-
-
-
 
 
 class TestAggregatorGlobalFallback:
@@ -54,10 +49,6 @@ class TestAggregatorGlobalFallback:
     (agent.reasoning_overrides for the slot's model) > global
     agent.reasoning_effort. Reference advisors do NOT get this fallback
     (side calls — cost containment)."""
-
-
-
-
 
     def test_global_yaml_false_disables(self, monkeypatch):
         from agent import moa_loop
@@ -68,7 +59,6 @@ class TestAggregatorGlobalFallback:
         )
         cfg = moa_loop._aggregator_reasoning_config({})
         assert cfg == {"enabled": False}
-
 
     def test_reference_slots_do_not_inherit_global(self, monkeypatch):
         """Advisors stay slot-or-default: global effort must NOT leak in."""

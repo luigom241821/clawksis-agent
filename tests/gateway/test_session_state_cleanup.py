@@ -50,10 +50,6 @@ class TestReleaseRunningAgentStateUnit:
         runner._release_running_agent_state("missing")  # still fine
 
 
-
-
-
-
 class TestSessionResetZombieRace:
     """Regression for #28686 — a session_reset racing the in-flight run's
     guarded release must not leave a dead agent locking the slot forever.
@@ -83,4 +79,3 @@ class TestSessionResetZombieRace:
         assert key not in runner._running_agents
         assert key not in runner._running_agents_ts
         assert key not in runner._busy_ack_ts
-

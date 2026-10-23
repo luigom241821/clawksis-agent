@@ -30,9 +30,14 @@ def test_derived_version_shows_plus_question_for_dirty_unknown_distance():
 def test_display_version_names_the_distance_without_the_commit():
     """Labels say how far past the release an install is; the commit is shown
     beside them where there is room (`clawk --version` keeps `.g<sha>`)."""
-    ahead = VersionInfo("0.21.5", "0.21.5+1913.gf83a9e9", 1913, "f83a9e9" + "0" * 33, "main", "git")
+    ahead = VersionInfo(
+        "0.21.5", "0.21.5+1913.gf83a9e9", 1913, "f83a9e9" + "0" * 33, "main", "git"
+    )
     assert ahead.display_version == "0.21.5+1913"
-    assert VersionInfo("0.21.5", "0.21.5", 0, None, None, "git").display_version == "0.21.5"
+    assert (
+        VersionInfo("0.21.5", "0.21.5", 0, None, None, "git").display_version
+        == "0.21.5"
+    )
 
 
 def test_display_version_keeps_tagless_stamp_identity(tmp_path, monkeypatch):
@@ -46,7 +51,9 @@ def test_display_version_keeps_tagless_stamp_identity(tmp_path, monkeypatch):
     }
     stamp_file = tmp_path / "install-stamp.json"
     stamp_file.write_text(json.dumps(stamp), encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file)
+    monkeypatch.setattr(
+        "clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file
+    )
 
     info = get_version_info()
 
@@ -75,18 +82,31 @@ def test_stamp_version_info_reads_nix_stamp(tmp_path, monkeypatch):
     }
     stamp_file = tmp_path / "install-stamp.json"
     stamp_file.write_text(json.dumps(stamp))
-    monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file)
+    monkeypatch.setattr(
+        "clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file
+    )
 
     info = get_version_info()
 
-    assert info == VersionInfo("0.19.0", "0.19.0+3", 3, "a" * 40, "feature/version", "nix", distribution="nix")
+    assert info == VersionInfo(
+        "0.19.0", "0.19.0+3", 3, "a" * 40, "feature/version", "nix", distribution="nix"
+    )
 
 
-def test_stamp_version_info_preserves_ci_provenance_and_docker_distribution(tmp_path, monkeypatch):
-    stamp = {"commit": "d" * 40, "source": "ci", "distribution": "docker", "updateMechanism": "external"}
+def test_stamp_version_info_preserves_ci_provenance_and_docker_distribution(
+    tmp_path, monkeypatch
+):
+    stamp = {
+        "commit": "d" * 40,
+        "source": "ci",
+        "distribution": "docker",
+        "updateMechanism": "external",
+    }
     stamp_file = tmp_path / "install-stamp.json"
     stamp_file.write_text(json.dumps(stamp))
-    monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file)
+    monkeypatch.setattr(
+        "clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file
+    )
 
     info = get_version_info()
 
@@ -108,11 +128,15 @@ def test_stamp_version_info_preserves_missing_branch(tmp_path, monkeypatch):
     }
     stamp_file = tmp_path / "install-stamp.json"
     stamp_file.write_text(json.dumps(stamp))
-    monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file)
+    monkeypatch.setattr(
+        "clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file
+    )
 
     info = get_version_info()
 
-    assert info == VersionInfo("0.19.0", "0.19.0+?", None, "b" * 40, None, "docker", True)
+    assert info == VersionInfo(
+        "0.19.0", "0.19.0+?", None, "b" * 40, None, "docker", True
+    )
 
 
 def test_stamp_version_info_ignores_fallback_commit(tmp_path, monkeypatch):
@@ -126,7 +150,9 @@ def test_stamp_version_info_ignores_fallback_commit(tmp_path, monkeypatch):
     }
     stamp_file = tmp_path / "install-stamp.json"
     stamp_file.write_text(json.dumps(stamp))
-    monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file)
+    monkeypatch.setattr(
+        "clawk_cli.version_info._resolve_stamp_file", lambda: stamp_file
+    )
     monkeypatch.setattr("clawk_cli.version_info._resolve_repo_dir", lambda: None)
 
     info = get_version_info()
@@ -153,13 +179,19 @@ def test_get_version_info_unknown_when_no_stamp_and_no_git(monkeypatch):
     assert info.source == "unknown"
 
 
-def test_get_version_info_derives_identity_from_reachable_release_tag(tmp_path, monkeypatch):
+def test_get_version_info_derives_identity_from_reachable_release_tag(
+    tmp_path, monkeypatch
+):
     repo = tmp_path / "repo"
     repo.mkdir()
 
     def git(*args: str) -> str:
         result = subprocess.run(
-            ["git", *args], cwd=repo, text=True, capture_output=True, check=True,
+            ["git", *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=True,
             env={"HOME": str(tmp_path), "PATH": __import__("os").environ["PATH"]},
         )
         return result.stdout.strip()
@@ -187,14 +219,20 @@ def test_get_version_info_derives_identity_from_reachable_release_tag(tmp_path, 
     assert info.source == "git"
 
 
-def test_get_version_info_takes_the_version_a_calver_only_release_shipped(tmp_path, monkeypatch):
+def test_get_version_info_takes_the_version_a_calver_only_release_shipped(
+    tmp_path, monkeypatch
+):
     """Releases tagged only vYYYY.M.D resolve to their pyproject version, not "unknown"."""
     repo = tmp_path / "repo"
     repo.mkdir()
 
     def git(*args: str) -> str:
         result = subprocess.run(
-            ["git", *args], cwd=repo, text=True, capture_output=True, check=True,
+            ["git", *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=True,
             env={"HOME": str(tmp_path), "PATH": __import__("os").environ["PATH"]},
         )
         return result.stdout.strip()
@@ -202,11 +240,15 @@ def test_get_version_info_takes_the_version_a_calver_only_release_shipped(tmp_pa
     git("init", "-q")
     git("config", "user.name", "Clawksis Test")
     git("config", "user.email", "clawk@example.invalid")
-    (repo / "pyproject.toml").write_text('[project]\nname = "clawksis-agent"\nversion = "0.21.4"\n', encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "clawksis-agent"\nversion = "0.21.4"\n', encoding="utf-8"
+    )
     git("add", "pyproject.toml")
     git("commit", "-qm", "release")
     git("tag", "v2026.9.21")
-    (repo / "pyproject.toml").write_text('[project]\nname = "clawksis-agent"\nversion = "0.0.0"\n', encoding="utf-8")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "clawksis-agent"\nversion = "0.0.0"\n', encoding="utf-8"
+    )
     git("commit", "-qam", "next")
 
     monkeypatch.setattr("clawk_cli.version_info._resolve_stamp_file", lambda: None)
@@ -221,7 +263,12 @@ def test_get_version_info_takes_the_version_a_calver_only_release_shipped(tmp_pa
 
 def test_resolve_stamp_file_honors_install_root(tmp_path, monkeypatch):
     """Sealed installs (the Nix wrapper) point CLAWK_INSTALL_ROOT at the stamp dir."""
-    stamp = {"commit": "e" * 40, "source": "nix", "distribution": "nix", "updateMechanism": "external"}
+    stamp = {
+        "commit": "e" * 40,
+        "source": "nix",
+        "distribution": "nix",
+        "updateMechanism": "external",
+    }
     (tmp_path / "install-stamp.json").write_text(json.dumps(stamp))
     monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(tmp_path))
 
@@ -238,7 +285,9 @@ def test_resolve_stamp_file_install_root_without_stamp_is_none(tmp_path, monkeyp
     assert _resolve_stamp_file() is None
 
 
-def test_resolve_stamp_file_falls_back_to_code_root_when_env_unset(tmp_path, monkeypatch):
+def test_resolve_stamp_file_falls_back_to_code_root_when_env_unset(
+    tmp_path, monkeypatch
+):
     monkeypatch.delenv("CLAWK_INSTALL_ROOT", raising=False)
     stamp = {"commit": "f" * 40, "source": "docker", "updateMechanism": "external"}
     (tmp_path / "install-stamp.json").write_text(json.dumps(stamp))
@@ -265,12 +314,21 @@ def test_old_updater_version_stub_reads_the_same_stamp_as_version_info(tmp_path)
     def read(install_root: Path) -> list[str]:
         env = {**os.environ, "CLAWK_INSTALL_ROOT": str(install_root)}
         return subprocess.run(
-            [sys.executable, "-c", probe], env=env, capture_output=True, text=True, check=True
+            [sys.executable, "-c", probe],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.split()
 
     stamped = tmp_path / "stamped"
     stamped.mkdir()
-    stamp = {"commit": "c" * 40, "baseVersion": "9.8.7", "source": "ci", "updateMechanism": "external"}
+    stamp = {
+        "commit": "c" * 40,
+        "baseVersion": "9.8.7",
+        "source": "ci",
+        "updateMechanism": "external",
+    }
     (stamped / "install-stamp.json").write_text(json.dumps(stamp))
     compat, identity = read(stamped)
     assert compat == identity == stamp["baseVersion"]
@@ -280,13 +338,20 @@ def test_old_updater_version_stub_reads_the_same_stamp_as_version_info(tmp_path)
     assert read(unstamped)[0] == "0.0.0"
 
 
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="the blocking untracked scan uses a FIFO")
+@pytest.mark.skipif(
+    not hasattr(os, "mkfifo"), reason="the blocking untracked scan uses a FIFO"
+)
 def test_a_timed_out_status_probe_never_strands_index_lock(tmp_path):
     """The update opens its receipt with this probe; killed by its 3 s timeout while refreshing
     the index, it used to leave .git/index.lock for the same run's merge to die on (#132089)."""
+
     def git(*args):
-        subprocess.run(["git", "-c", "user.email=t@example.invalid", "-c", "user.name=t", *args],
-                       cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@example.invalid", "-c", "user.name=t", *args],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
 
     git("init", "-q")
     (tmp_path / "a.txt").write_text("a", encoding="utf-8")

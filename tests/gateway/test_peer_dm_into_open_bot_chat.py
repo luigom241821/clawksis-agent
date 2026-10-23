@@ -58,7 +58,12 @@ def _owner_settles(monkeypatch, home, *, status, reply="", error="", reason=""):
             claimed = mailbox.claim_pending_delivery(home, owner)
             assert claimed is not None and claimed["delivery_id"] == delivery_id
             mailbox.complete_delivery(
-                home, delivery_id, status=status, reply=reply, error=error, reason=reason
+                home,
+                delivery_id,
+                status=status,
+                reply=reply,
+                error=error,
+                reason=reason,
             )
         except BaseException as exc:
             errors.append(exc)
@@ -86,7 +91,14 @@ def _join_owner(owner) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("target", "open_in_desktop", "owner_replies", "status", "content", "turn_ran_here"),
+    (
+        "target",
+        "open_in_desktop",
+        "owner_replies",
+        "status",
+        "content",
+        "turn_ran_here",
+    ),
     [
         ("scratch", True, True, 200, "ran here", True),
         ("bot-chat", True, False, 200, "ran here", True),
@@ -95,7 +107,14 @@ def _join_owner(owner) -> None:
     ids=["other-session", "bot-chat-open-in-a-viewer", "bot-chat-not-open"],
 )
 async def test_a_peer_turn_into_an_open_bot_chat_is_answered_by_its_live_owner(
-    tmp_path, monkeypatch, target, open_in_desktop, owner_replies, status, content, turn_ran_here
+    tmp_path,
+    monkeypatch,
+    target,
+    open_in_desktop,
+    owner_replies,
+    status,
+    content,
+    turn_ran_here,
 ):
     """Without a profile authority nothing else may execute the Bot Chat's turn: a Desktop viewer
     lease is not an owner, so the turn runs here and no mailbox delivery is admitted."""
@@ -109,17 +128,34 @@ async def test_a_peer_turn_into_an_open_bot_chat_is_answered_by_its_live_owner(
     lease = None
     if open_in_desktop:
         from clawk_cli.active_sessions import try_acquire_active_session
+
         lease, refusal = try_acquire_active_session(
-            session_id="bot-chat", surface="desktop", config={}, registry_home=home, track_liveness=True,
-            metadata={"live_session_id": "live-1", "bot_live_delivery_consumer": True})
+            session_id="bot-chat",
+            surface="desktop",
+            config={},
+            registry_home=home,
+            track_liveness=True,
+            metadata={"live_session_id": "live-1", "bot_live_delivery_consumer": True},
+        )
         assert lease is not None and refusal is None
-    owner = _owner_answers(monkeypatch, home, "pong") if owner_replies and target == "bot-chat" else None
+    owner = (
+        _owner_answers(monkeypatch, home, "pong")
+        if owner_replies and target == "bot-chat"
+        else None
+    )
     adapter = APIServerAdapter(PlatformConfig(enabled=True))
     adapter._session_db = db
     try:
-        with patch.object(adapter, "_run_agent", AsyncMock(return_value=({"final_response": "ran here"}, {}))) as run:
+        with patch.object(
+            adapter,
+            "_run_agent",
+            AsyncMock(return_value=({"final_response": "ran here"}, {})),
+        ) as run:
             async with TestClient(TestServer(_app(adapter))) as cli:
-                resp = await cli.post(f"/api/sessions/{target}/chat", json={"message": "ping", "author": AUTHOR})
+                resp = await cli.post(
+                    f"/api/sessions/{target}/chat",
+                    json={"message": "ping", "author": AUTHOR},
+                )
                 body = await resp.json()
         if owner is not None:
             _join_owner(owner)
@@ -131,12 +167,19 @@ async def test_a_peer_turn_into_an_open_bot_chat_is_answered_by_its_live_owner(
             assert not admitted
             return
         [record] = [json.loads(path.read_text()) for path in admitted]
-        assert (record["message"], record["author"], record["owner"]["live_session_id"]) == ("ping", AUTHOR, "live-1")
+        assert (
+            record["message"],
+            record["author"],
+            record["owner"]["live_session_id"],
+        ) == ("ping", AUTHOR, "live-1")
         assert body["delivery_id"] == record["delivery_id"]
         if status == 200:
             assert body["message"]["content"] == content
         else:
-            assert (body["object"], body["status"]) == ("clawk.session.chat.queued", "queued")
+            assert (body["object"], body["status"]) == (
+                "clawk.session.chat.queued",
+                "queued",
+            )
     finally:
         if lease is not None:
             lease.release()
@@ -146,7 +189,9 @@ async def test_a_peer_turn_into_an_open_bot_chat_is_answered_by_its_live_owner(
 def _sse_events(raw: str) -> list[tuple[str, dict]]:
     events = []
     for frame in raw.split("\n\n"):
-        lines = [line for line in frame.splitlines() if line and not line.startswith(":")]
+        lines = [
+            line for line in frame.splitlines() if line and not line.startswith(":")
+        ]
         if lines and lines[0].startswith("event: "):
             events.append((lines[0][7:], json.loads(lines[1][6:])))
     return events
@@ -160,7 +205,9 @@ def _runs_app(adapter):
     return app
 
 
-async def _poll_terminal(cli, run_id, *, until=("completed", "failed", "cancelled"), tries=100):
+async def _poll_terminal(
+    cli, run_id, *, until=("completed", "failed", "cancelled"), tries=100
+):
     status = {}
     for _ in range(tries):
         status = await (await cli.get(f"/v1/runs/{run_id}")).json()
@@ -191,13 +238,24 @@ async def test_a_peer_run_into_an_open_bot_chat_is_driven_by_its_owners_receipt(
     db.set_session_title("bot-chat", "Bot Chat")
     db.create_session("scratch", "api_server")
     from clawk_cli.active_sessions import try_acquire_active_session
+
     lease, refusal = try_acquire_active_session(
-        session_id="bot-chat", surface="desktop", config={}, registry_home=home, track_liveness=True,
-        metadata={"live_session_id": "live-1", "bot_live_delivery_consumer": True})
+        session_id="bot-chat",
+        surface="desktop",
+        config={},
+        registry_home=home,
+        track_liveness=True,
+        metadata={"live_session_id": "live-1", "bot_live_delivery_consumer": True},
+    )
     assert lease is not None and refusal is None
     owner = (
         _owner_settles(
-            monkeypatch, home, status=receipt[0], reply=receipt[1], error=receipt[2], reason=receipt[3]
+            monkeypatch,
+            home,
+            status=receipt[0],
+            reply=receipt[1],
+            error=receipt[2],
+            reason=receipt[3],
         )
         if receipt
         else None
@@ -208,14 +266,22 @@ async def test_a_peer_run_into_an_open_bot_chat_is_driven_by_its_owners_receipt(
 
     def _create_agent(**kwargs):
         agent = type("Agent", (), {})()
-        agent.run_conversation = lambda *a, **k: (ran_here.append(k.get("task_id")), {"final_response": "ran here"})[1]
-        agent.session_prompt_tokens = agent.session_completion_tokens = agent.session_total_tokens = 0
+        agent.run_conversation = lambda *a, **k: (
+            ran_here.append(k.get("task_id")),
+            {"final_response": "ran here"},
+        )[1]
+        agent.session_prompt_tokens = agent.session_completion_tokens = (
+            agent.session_total_tokens
+        ) = 0
         return agent
 
     try:
         with patch.object(adapter, "_create_agent", side_effect=_create_agent):
             async with TestClient(TestServer(_runs_app(adapter))) as cli:
-                resp = await cli.post("/v1/runs", json={"input": "ping", "session_id": target, "author": AUTHOR})
+                resp = await cli.post(
+                    "/v1/runs",
+                    json={"input": "ping", "session_id": target, "author": AUTHOR},
+                )
                 body = await resp.json()
                 assert resp.status == 202, body
                 run_id = body["run_id"]
@@ -233,7 +299,11 @@ async def test_a_peer_run_into_an_open_bot_chat_is_driven_by_its_owners_receipt(
             assert status["output"] == expected[1] and not admitted
             return
         [record] = [json.loads(path.read_text()) for path in admitted]
-        assert (record["message"], record["author"], record["owner"]["live_session_id"]) == ("ping", AUTHOR, "live-1")
+        assert (
+            record["message"],
+            record["author"],
+            record["owner"]["live_session_id"],
+        ) == ("ping", AUTHOR, "live-1")
         assert status["delivery_id"] == record["delivery_id"]
         if expected[0] == "completed":
             assert status["output"] == expected[1] and status["completed"] is True
@@ -241,30 +311,51 @@ async def test_a_peer_run_into_an_open_bot_chat_is_driven_by_its_owners_receipt(
             assert status["reason"] == expected[1] and "429" in status["error"]
         else:
             assert status["interrupted"] is True and status["completed"] is False
-        assert run_id not in adapter._active_run_tasks, "the run retired like an executor-backed one"
+        assert run_id not in adapter._active_run_tasks, (
+            "the run retired like an executor-backed one"
+        )
     finally:
         lease.release()
         db.close()
 
 
 @pytest.mark.parametrize("as_json", [False, True], ids=["text", "json"])
-def test_peer_dm_reports_a_turn_queued_in_the_open_bot_chat_as_delivered(monkeypatch, capsys, as_json):
+def test_peer_dm_reports_a_turn_queued_in_the_open_bot_chat_as_delivered(
+    monkeypatch, capsys, as_json
+):
     """The queued answer means the message IS in the peer's open Bot Chat: say so, succeed, and tell
     the sender not to resend, instead of printing ``(no reply)`` as if the turn were empty."""
     monkeypatch.setattr(peer_mod, "_ensure_bot_chat", lambda base, key: "bot-chat")
-    monkeypatch.setattr(peer_mod, "_request", lambda url, key, **kw: {
-        "object": "clawk.session.chat.queued", "session_id": "bot-chat", "status": "claimed", "delivery_id": "d" * 32})
+    monkeypatch.setattr(
+        peer_mod,
+        "_request",
+        lambda url, key, **kw: {
+            "object": "clawk.session.chat.queued",
+            "session_id": "bot-chat",
+            "status": "claimed",
+            "delivery_id": "d" * 32,
+        },
+    )
 
-    code = peer_mod._peer_dm(SimpleNamespace(json=as_json), "hello", "mini", None, "http://peer:8642", "key")
+    code = peer_mod._peer_dm(
+        SimpleNamespace(json=as_json), "hello", "mini", None, "http://peer:8642", "key"
+    )
     out = capsys.readouterr().out
 
     assert code == 0
     assert "(no reply)" not in out
     if as_json:
-        assert json.loads(out) == {"peer": "mini", "profile": None, "session_id": "bot-chat",
-                                   "status": "claimed", "delivery_id": "d" * 32}
+        assert json.loads(out) == {
+            "peer": "mini",
+            "profile": None,
+            "session_id": "bot-chat",
+            "status": "claimed",
+            "delivery_id": "d" * 32,
+        }
     else:
-        assert "went into that chat (session bot-chat)" in out and "Do NOT resend" in out
+        assert (
+            "went into that chat (session bot-chat)" in out and "Do NOT resend" in out
+        )
 
 
 @pytest.mark.asyncio
@@ -277,8 +368,20 @@ async def test_gateway_shutdown_reports_a_live_owned_run_as_interrupted(tmp_path
     queue: asyncio.Queue = asyncio.Queue()
     adapter._run_streams["run-1"] = queue
     launch = runs_mod._RunLaunch(
-        adapter, "run-1", queue, "bot-chat", None, True, "ping", [], False, agent_kwargs={},
-        request_profile=None, browser_control_principal=None, browser_control_transport_family=None)
+        adapter,
+        "run-1",
+        queue,
+        "bot-chat",
+        None,
+        True,
+        "ping",
+        [],
+        False,
+        agent_kwargs={},
+        request_profile=None,
+        browser_control_principal=None,
+        browser_control_transport_family=None,
+    )
     waiting = asyncio.Event()
 
     async def _receipt_never_arrives(*_a, **_k):
@@ -286,8 +389,15 @@ async def test_gateway_shutdown_reports_a_live_owned_run_as_interrupted(tmp_path
         await asyncio.sleep(3600)
 
     with patch("tools.bot_live_delivery.await_delivery_async", _receipt_never_arrives):
-        task = asyncio.create_task(runs_mod._execute_run_via_live_owner(
-            adapter, launch, tmp_path, {"delivery_id": "d" * 32, "status": "queued"}, _api_server=None))
+        task = asyncio.create_task(
+            runs_mod._execute_run_via_live_owner(
+                adapter,
+                launch,
+                tmp_path,
+                {"delivery_id": "d" * 32, "status": "queued"},
+                _api_server=None,
+            )
+        )
         adapter._active_run_tasks["run-1"] = task
         await asyncio.wait_for(waiting.wait(), 5)
         runs_mod._mark_shutdown_interrupted_runs(adapter, ["run-1"])

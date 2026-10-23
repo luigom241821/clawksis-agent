@@ -42,19 +42,17 @@ class _FakeProc:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # (2) tools.browser_tool_lifecycle._kill_process_tree
 # ---------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------
 # (3) tools.code_execution_tool._kill_process_group
 # ---------------------------------------------------------------------------
 
-class TestCodeExecutionDelegation:
 
+class TestCodeExecutionDelegation:
     @pytest.mark.platforms("linux")
     def test_escalate_waits_then_sigkills_tree(self, monkeypatch):
         import signal as _signal
@@ -101,6 +99,7 @@ class TestCodeExecutionDelegation:
 # ---------------------------------------------------------------------------
 # End-to-end: setsid grandchild dies through the compat wrapper
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.live_system_guard_bypass
 @pytest.mark.platforms("posix")  # POSIX session semantics

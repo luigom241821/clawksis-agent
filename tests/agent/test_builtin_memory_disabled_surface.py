@@ -110,7 +110,9 @@ class TestBuiltinMemoryToolAvailability:
             calls += 1
             return (False, True) if calls == 1 else (True, False)
 
-        monkeypatch.setattr(memory_tool_module, "get_builtin_memory_store_flags", _flags)
+        monkeypatch.setattr(
+            memory_tool_module, "get_builtin_memory_store_flags", _flags
+        )
         definition = _memory_tool_definition()
 
         assert calls == 1
@@ -186,8 +188,12 @@ class TestIndependentStoreWriteGates:
         from tools.memory_tool import memory_tool
 
         store = self._store(memory_enabled=False, user_profile_enabled=True)
-        denied = json.loads(memory_tool(action="add", target="memory", content="fact", store=store))
-        allowed = json.loads(memory_tool(action="add", target="user", content="pref", store=store))
+        denied = json.loads(
+            memory_tool(action="add", target="memory", content="fact", store=store)
+        )
+        allowed = json.loads(
+            memory_tool(action="add", target="user", content="pref", store=store)
+        )
 
         assert denied["success"] is False
         assert denied["target"] == "memory"
@@ -197,8 +203,12 @@ class TestIndependentStoreWriteGates:
         from tools.memory_tool import memory_tool
 
         store = self._store(memory_enabled=True, user_profile_enabled=False)
-        denied = json.loads(memory_tool(action="add", target="user", content="pref", store=store))
-        allowed = json.loads(memory_tool(action="add", target="memory", content="fact", store=store))
+        denied = json.loads(
+            memory_tool(action="add", target="user", content="pref", store=store)
+        )
+        allowed = json.loads(
+            memory_tool(action="add", target="memory", content="fact", store=store)
+        )
 
         assert denied["success"] is False
         assert denied["target"] == "user"
@@ -215,7 +225,9 @@ class TestIndependentStoreWriteGates:
         assert result["success"] is False
         assert result["target"] == "memory"
 
-    def test_invalid_target_error_is_bounded_and_carries_recovery_hint(self, clawk_home):
+    def test_invalid_target_error_is_bounded_and_carries_recovery_hint(
+        self, clawk_home
+    ):
         """Model-supplied target is interpolated into the error: it must stay
         capped at the shared tool_error bound and keep the recovery hint."""
         from tools.memory_tool import memory_tool

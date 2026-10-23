@@ -14,7 +14,11 @@ from pathlib import Path
 import pytest
 
 CASES = json.loads(
-    (Path(__file__).resolve().parents[2] / "apps/desktop/src/lib/mcp-enabled-cases.json").read_text(encoding="utf-8"))
+    (
+        Path(__file__).resolve().parents[2]
+        / "apps/desktop/src/lib/mcp-enabled-cases.json"
+    ).read_text(encoding="utf-8")
+)
 
 
 def _readers():
@@ -26,16 +30,22 @@ def _readers():
 
     return {
         "mcp client": mcp_server_enabled,
-        "toolset resolver": lambda cfg: "s" in enabled_mcp_server_names({"mcp_servers": {"s": cfg}}),
+        "toolset resolver": lambda cfg: (
+            "s" in enabled_mcp_server_names({"mcp_servers": {"s": cfg}})
+        ),
         "profile editor": _mcp_entry_enabled,
         "catalog": server_enabled,
         "server list": lambda cfg: summarize_server("s", cfg)["enabled"],
     }
 
 
-@pytest.mark.parametrize("case", CASES, ids=lambda c: repr(c.get("enabled", "<absent>")))
+@pytest.mark.parametrize(
+    "case", CASES, ids=lambda c: repr(c.get("enabled", "<absent>"))
+)
 def test_every_reader_agrees_with_the_shared_table(case):
     entry = {k: v for k, v in case.items() if k != "on"}
-    answers = {name: bool(read({"command": "x", **entry})) for name, read in _readers().items()}
+    answers = {
+        name: bool(read({"command": "x", **entry})) for name, read in _readers().items()
+    }
 
     assert answers == dict.fromkeys(answers, case["on"])

@@ -76,15 +76,12 @@ class TestValidateOutput:
         assert errors
 
 
-
-
 class TestPromptPlumbing:
     def test_contract_block_carries_schema(self):
         out = append_output_contract("base context", ADDRESS_SCHEMA)
         assert "base context" in out
         assert "OUTPUT CONTRACT" in out
         assert '"city"' in out
-
 
     def test_retry_message_carries_verbatim_errors(self):
         msg = build_retry_message(["'city' is a required property"])
@@ -98,7 +95,6 @@ class TestPromptPlumbing:
 
 
 class TestToolSchemaSurface:
-
     def test_output_schema_advertised_per_task_only(self):
         """output_schema is advertised inside tasks[] items (the only spawn
         shape); the legacy top-level param stays handler-accepted but out
@@ -255,7 +251,6 @@ class TestRunSingleChildSchemaValidation:
         entry = _run(child)
         assert entry["schema_valid"] is True and len(child.calls) == 1
 
-
     def test_retry_turn_runs_in_delegated_child_context(self, monkeypatch):
         """The retry is a second run_conversation on the child, issued from the parent's
         thread where CLAWK_KANBAN_TASK is set. Unwrapped it carries the worker's identity,
@@ -276,7 +271,9 @@ class TestRunSingleChildSchemaValidation:
 
         child = _Child(['{"city": "Berlin"}'])
         child._delegate_output_schema = ADDRESS_SCHEMA
-        _validate_child_output_schema(child, {"final_response": "not json", "api_calls": 1}, 0, "child-0", None)
+        _validate_child_output_schema(
+            child, {"final_response": "not json", "api_calls": 1}, 0, "child-0", None
+        )
         assert seen == [True]
         assert is_delegated_child_context() is False
 
@@ -311,7 +308,10 @@ class TestDelegateTaskDispatch:
         ):
             out = delegate_task(
                 tasks=[
-                    {"goal": "Summarize the release notes for module A", "output_schema": "not-a-dict"},
+                    {
+                        "goal": "Summarize the release notes for module A",
+                        "output_schema": "not-a-dict",
+                    },
                     {"goal": "Summarize the release notes for module B"},
                 ],
                 parent_agent=_make_mock_parent(),
@@ -336,7 +336,10 @@ class TestDelegateTaskDispatch:
         ):
             out = delegate_task(
                 tasks=[
-                    {"goal": "Summarize the release notes for module A", "output_schema": {"type": 42}},
+                    {
+                        "goal": "Summarize the release notes for module A",
+                        "output_schema": {"type": 42},
+                    },
                     {"goal": "Summarize the release notes for module B"},
                 ],
                 parent_agent=_make_mock_parent(),

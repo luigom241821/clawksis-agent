@@ -57,7 +57,11 @@ def human_wait_ceiling() -> float:
     value is always safe for ``Lock.acquire(timeout=...)`` / ``Thread.join(timeout=...)``."""
     from tools import approval_context
     from agent.deadline import MAX_SAFE_TIMEOUT_S
-    return min(MAX_SAFE_TIMEOUT_S, float(approval_context._get_approval_timeout()) + HUMAN_WAIT_MARGIN_S)
+
+    return min(
+        MAX_SAFE_TIMEOUT_S,
+        float(approval_context._get_approval_timeout()) + HUMAN_WAIT_MARGIN_S,
+    )
 
 
 def _clamped_window_seconds(started: float, now: float, ceiling: float) -> float:
@@ -89,6 +93,7 @@ def _resolve_key(session_key: str | None) -> str:
     if session_key is not None:
         return session_key
     from tools import approval_context
+
     return approval_context.get_current_session_key()
 
 
@@ -137,7 +142,9 @@ def human_wait_window(session_key: str | None = None):
                 state.pending -= 1
                 if state.pending == 0:
                     if state.window_started is not None:
-                        state.completed_seconds += _clamped_window_seconds(state.window_started, now, ceiling)
+                        state.completed_seconds += _clamped_window_seconds(
+                            state.window_started, now, ceiling
+                        )
                     state.window_started = None
 
 

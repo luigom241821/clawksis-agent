@@ -6,6 +6,7 @@ shutdown race); the coroutine is then never awaited or closed, which triggers a
 close the coroutine on scheduling failure. ``future.result()`` failures are deliberately
 NOT handled: once the loop accepts the coroutine its lifecycle belongs to the loop.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,9 +19,12 @@ _DEFAULT_LOGGER = logging.getLogger(__name__)
 
 
 def safe_schedule_threadsafe(
-    coro: Coroutine[Any, Any, Any], loop: Optional[asyncio.AbstractEventLoop], *,
+    coro: Coroutine[Any, Any, Any],
+    loop: Optional[asyncio.AbstractEventLoop],
+    *,
     logger: Optional[logging.Logger] = None,
-    log_message: str = "Failed to schedule coroutine on loop", log_level: int = logging.DEBUG,
+    log_message: str = "Failed to schedule coroutine on loop",
+    log_level: int = logging.DEBUG,
 ) -> Optional[Future]:
     """Schedule ``coro`` on ``loop`` from a sync context, leak-safe.
 

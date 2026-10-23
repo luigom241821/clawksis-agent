@@ -18,9 +18,7 @@ async def test_config_saved_during_connect_is_rescanned(tmp_path, monkeypatch, s
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.setattr(
-        "clawk_cli.profiles.get_active_profile_name", lambda: "default"
-    )
+    monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "default")
     (profile / "config.yaml").write_text("model: {default: test}\n", encoding="utf-8")
     secrets = profile / ".env"
     secrets.write_text("DISCORD_BOT_TOKEN=discord-test\n", encoding="utf-8")

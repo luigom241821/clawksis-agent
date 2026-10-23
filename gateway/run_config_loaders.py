@@ -17,11 +17,17 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from gateway.config import Platform
 from gateway.restart import (
-    DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT, DEFAULT_GATEWAY_POST_INTERRUPT_GRACE_TIMEOUT,
-    DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT, DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
-    DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT, parse_cron_drain_timeout,
-    parse_restart_after_turn_timeout, parse_restart_drain_timeout,
-    launchd_service_label, parse_signal_interrupt_grace_timeout, read_launchd_exit_timeout_s,
+    DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT,
+    DEFAULT_GATEWAY_POST_INTERRUPT_GRACE_TIMEOUT,
+    DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT,
+    DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
+    DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT,
+    parse_cron_drain_timeout,
+    parse_restart_after_turn_timeout,
+    parse_restart_drain_timeout,
+    launchd_service_label,
+    parse_signal_interrupt_grace_timeout,
+    read_launchd_exit_timeout_s,
     resolve_launchd_capped_drain,
 )
 from gateway.session import SessionSource
@@ -49,7 +55,10 @@ class GatewayConfigLoadersMixin:
     def _cfg_str(section: str, key: str) -> str:
         """``<section>.<key>`` from the gateway runtime config as a stripped string ("" when unset)."""
         from gateway.run import _load_gateway_config
-        return str(cfg_get(_load_gateway_config(), section, key, default="") or "").strip()
+
+        return str(
+            cfg_get(_load_gateway_config(), section, key, default="") or ""
+        ).strip()
 
     @classmethod
     def _env_or_cfg_str(cls, env_var: str, section: str, key: str) -> str:
@@ -64,11 +73,14 @@ class GatewayConfigLoadersMixin:
         then legacy agent.prefill_messages_file. Relative paths resolve from ~/.clawksis/.
         """
         from gateway.run import _gateway_config_home, _load_gateway_config
+
         file_path = os.getenv("CLAWK_PREFILL_MESSAGES_FILE", "")
         if not file_path:
             cfg = _load_gateway_config()
             file_path = str(
-                cfg.get("prefill_messages_file", "") or cfg_get(cfg, "agent", "prefill_messages_file", default="") or ""
+                cfg.get("prefill_messages_file", "")
+                or cfg_get(cfg, "agent", "prefill_messages_file", default="")
+                or ""
             )
         if not file_path:
             return []
@@ -82,7 +94,9 @@ class GatewayConfigLoadersMixin:
             with open(path, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             if not isinstance(data, list):
-                logger.warning("Prefill messages file must contain a JSON array: %s", path)
+                logger.warning(
+                    "Prefill messages file must contain a JSON array: %s", path
+                )
                 return []
             return data
         except Exception as e:
@@ -95,6 +109,7 @@ class GatewayConfigLoadersMixin:
         ``display.personality`` / ``agent.system_prompt``."""
         from agent.session_client_env import session_env
         from gateway.run import _load_gateway_config
+
         prompt = session_env("CLAWK_EPHEMERAL_SYSTEM_PROMPT")
         if prompt:
             return prompt
@@ -103,14 +118,22 @@ class GatewayConfigLoadersMixin:
     def _channel_override(self, platform: Platform, chat_id: str, thread_id, parent_id):
         """``channel_overrides`` entry for this channel/thread, or None (also when no config is bound)."""
         from gateway.run import _get_channel_override
+
         config = getattr(self, "config", None)
         if not config:
             return None
-        return _get_channel_override(config, platform, chat_id, thread_id=thread_id, parent_id=parent_id)
+        return _get_channel_override(
+            config, platform, chat_id, thread_id=thread_id, parent_id=parent_id
+        )
 
     def _resolve_model_for_channel(
-        self, platform: Platform, chat_id: str, *, user_config: Optional[dict] = None,
-        thread_id: Optional[str] = None, parent_id: Optional[str] = None,
+        self,
+        platform: Platform,
+        chat_id: str,
+        *,
+        user_config: Optional[dict] = None,
+        thread_id: Optional[str] = None,
+        parent_id: Optional[str] = None,
     ) -> str:
         """Resolve model for this channel: channel_overrides else global default.
 
@@ -120,6 +143,7 @@ class GatewayConfigLoadersMixin:
         """
         from gateway.run import _resolve_gateway_model
         from clawk_cli.model_switch import resolve_effective_model
+
         return resolve_effective_model(
             None,  # session tier applied downstream (_apply_session_model_override)
             self._channel_override(platform, chat_id, thread_id, parent_id),
@@ -127,7 +151,11 @@ class GatewayConfigLoadersMixin:
         )
 
     def _get_system_prompt_for_channel(
-        self, platform: Platform, chat_id: str, *, thread_id: Optional[str] = None,
+        self,
+        platform: Platform,
+        chat_id: str,
+        *,
+        thread_id: Optional[str] = None,
         parent_id: Optional[str] = None,
     ) -> str:
         """Ephemeral system prompt for this channel/thread.
@@ -158,12 +186,14 @@ class GatewayConfigLoadersMixin:
         """
         from gateway.run import _load_gateway_config
         from clawk_constants import resolve_reasoning_config
+
         return resolve_reasoning_config(_load_gateway_config(), model)
 
     @staticmethod
     def _parse_reasoning_command_args(raw_args: str) -> tuple[str, bool]:
         """Parse `/reasoning` args into `(value, persist_global)`; `--global` anywhere persists to config."""
         import shlex
+
         text = str(raw_args or "").strip().replace("—", "--")
         if not text:
             return "", False
@@ -175,7 +205,10 @@ class GatewayConfigLoadersMixin:
         return value.strip().lower(), "--global" in tokens
 
     def _resolve_session_reasoning_config(
-        self, *, source: Optional[SessionSource] = None, session_key: Optional[str] = None,
+        self,
+        *,
+        source: Optional[SessionSource] = None,
+        session_key: Optional[str] = None,
         model: str = "",
     ) -> dict | None:
         """Session ``/reasoning --session`` > per-model ``agent.reasoning_overrides`` > global.
@@ -186,15 +219,21 @@ class GatewayConfigLoadersMixin:
         resolved_session_key = self._resolve_session_key_or_none(source, session_key)
         if resolved_session_key:
             _r_state = self._peek_session_state(resolved_session_key)
-            if _r_state is not None and _r_state.conversation.reasoning_override is not None:
+            if (
+                _r_state is not None
+                and _r_state.conversation.reasoning_override is not None
+            ):
                 return _r_state.conversation.reasoning_override
         from gateway.session_setting_commands import local_policy
+
         if (policy := local_policy(self, source)) is not None:
             # A local session runs its frozen (or followed) level, not the profile's.
             return policy.current_reasoning_config(self, resolved_session_key)
         return self._load_reasoning_config(model)
 
-    def _set_session_reasoning_override(self, session_key: str, reasoning_config: Optional[dict]) -> None:
+    def _set_session_reasoning_override(
+        self, session_key: str, reasoning_config: Optional[dict]
+    ) -> None:
         """Set or clear the session-scoped reasoning override."""
         if not session_key:
             return
@@ -204,7 +243,9 @@ class GatewayConfigLoadersMixin:
             None if reasoning_config is None else dict(reasoning_config)
         )
 
-    def _resolve_session_service_tier(self, source=None, session_key: Optional[str] = None) -> Optional[str]:
+    def _resolve_session_service_tier(
+        self, source=None, session_key: Optional[str] = None
+    ) -> Optional[str]:
         """Effective service tier: a session-scoped /fast override beats the config default.
 
         The override stores "priority" or None (explicit normal), so presence — not truthiness — decides.
@@ -212,15 +253,24 @@ class GatewayConfigLoadersMixin:
         resolved_session_key = self._resolve_session_key_or_none(source, session_key)
         if resolved_session_key:
             _t_state = self._peek_session_state(resolved_session_key)
-            if _t_state is not None and _t_state.conversation.service_tier_override is not _SERVICE_TIER_UNSET:
+            if (
+                _t_state is not None
+                and _t_state.conversation.service_tier_override
+                is not _SERVICE_TIER_UNSET
+            ):
                 return _t_state.conversation.service_tier_override
         from gateway.session_setting_commands import local_live_for_route, local_policy
+
         live = local_live_for_route(self, resolved_session_key)
         if live is not None and (policy := local_policy(self, live.source)) is not None:
-            return policy.current_service_tier(self, resolved_session_key)  # its frozen tier, not config.yaml's
+            return policy.current_service_tier(
+                self, resolved_session_key
+            )  # its frozen tier, not config.yaml's
         return self._load_service_tier()
 
-    def _set_session_service_tier_override(self, session_key: str, service_tier, clear: bool = False) -> None:
+    def _set_session_service_tier_override(
+        self, session_key: str, service_tier, clear: bool = False
+    ) -> None:
         """Set ("priority" / None = explicit normal) or ``clear`` the session-scoped /fast override."""
         if not session_key:
             return
@@ -241,12 +291,17 @@ class GatewayConfigLoadersMixin:
     def _load_show_reasoning() -> bool:
         """``display.show_reasoning`` toggle."""
         from gateway.run import _load_gateway_config
-        return is_truthy_value(cfg_get(_load_gateway_config(), "display", "show_reasoning"), default=False)
+
+        return is_truthy_value(
+            cfg_get(_load_gateway_config(), "display", "show_reasoning"), default=False
+        )
 
     @classmethod
     def _load_busy_input_mode(cls) -> str:
         """Gateway drain-time busy-input behavior from env/config (default ``interrupt``)."""
-        mode = cls._env_or_cfg_str("CLAWK_GATEWAY_BUSY_INPUT_MODE", "display", "busy_input_mode").lower()
+        mode = cls._env_or_cfg_str(
+            "CLAWK_GATEWAY_BUSY_INPUT_MODE", "display", "busy_input_mode"
+        ).lower()
         return mode if mode in {"queue", "steer"} else "interrupt"
 
     @classmethod
@@ -257,17 +312,32 @@ class GatewayConfigLoadersMixin:
         is honored only when explicitly set so existing queue setups keep working.
         """
         from gateway.run import GatewayRunner
-        legacy = cls._env_or_cfg_str("CLAWK_GATEWAY_BUSY_TEXT_MODE", "display", "busy_text_mode").lower()
+
+        legacy = cls._env_or_cfg_str(
+            "CLAWK_GATEWAY_BUSY_TEXT_MODE", "display", "busy_text_mode"
+        ).lower()
         if legacy in {"interrupt", "queue"}:
             return legacy
-        return "queue" if GatewayRunner._load_busy_input_mode() == "queue" else "interrupt"
+        return (
+            "queue" if GatewayRunner._load_busy_input_mode() == "queue" else "interrupt"
+        )
 
     @staticmethod
-    def _busy_modes_from_config(config: dict, *, fallback_input: str, fallback_text: str) -> tuple[str, str]:
+    def _busy_modes_from_config(
+        config: dict, *, fallback_input: str, fallback_text: str
+    ) -> tuple[str, str]:
         """Resolve one profile's busy modes without consulting process env."""
-        raw_input = str(cfg_get(config, "display", "busy_input_mode", default="") or "").strip().lower()
+        raw_input = (
+            str(cfg_get(config, "display", "busy_input_mode", default="") or "")
+            .strip()
+            .lower()
+        )
         input_mode = raw_input if raw_input in _BUSY_INPUT_MODES else fallback_input
-        raw_text = str(cfg_get(config, "display", "busy_text_mode", default="") or "").strip().lower()
+        raw_text = (
+            str(cfg_get(config, "display", "busy_text_mode", default="") or "")
+            .strip()
+            .lower()
+        )
         if raw_text in {"interrupt", "queue"}:
             text_mode = raw_text
         elif raw_input in _BUSY_INPUT_MODES:
@@ -281,10 +351,16 @@ class GatewayConfigLoadersMixin:
         """``display.busy_text_debounce_seconds`` / ``display.busy_text_hard_cap_seconds`` for one
         profile, without consulting process env (#116893). A non-numeric or negative value is
         rejected with a warning naming the key, never silently coerced."""
-        from gateway.platforms.base import DEFAULT_BUSY_TEXT_DEBOUNCE_SECONDS, DEFAULT_BUSY_TEXT_HARD_CAP_SECONDS
+        from gateway.platforms.base import (
+            DEFAULT_BUSY_TEXT_DEBOUNCE_SECONDS,
+            DEFAULT_BUSY_TEXT_HARD_CAP_SECONDS,
+        )
+
         out = []
-        for key, default in (("busy_text_debounce_seconds", DEFAULT_BUSY_TEXT_DEBOUNCE_SECONDS),
-                             ("busy_text_hard_cap_seconds", DEFAULT_BUSY_TEXT_HARD_CAP_SECONDS)):
+        for key, default in (
+            ("busy_text_debounce_seconds", DEFAULT_BUSY_TEXT_DEBOUNCE_SECONDS),
+            ("busy_text_hard_cap_seconds", DEFAULT_BUSY_TEXT_HARD_CAP_SECONDS),
+        ):
             raw = cfg_get(config, "display", key, default=None)
             if raw is None or raw == "":
                 out.append(default)
@@ -294,7 +370,12 @@ class GatewayConfigLoadersMixin:
                 if value < 0 or value != value:
                     raise ValueError(raw)
             except (TypeError, ValueError):
-                logger.warning("display.%s=%r is not a non-negative number; using %s", key, raw, default)
+                logger.warning(
+                    "display.%s=%r is not a non-negative number; using %s",
+                    key,
+                    raw,
+                    default,
+                )
                 value = default
             out.append(value)
         return out[0], out[1]
@@ -305,13 +386,19 @@ class GatewayConfigLoadersMixin:
         ``None`` when off (#116895). ``natural`` is the fixed 800-2500 range; ``custom`` reads the
         bounds and rejects non-integer, negative or inverted values with a warning naming the key,
         falling back to the natural range instead of letting ``random.uniform`` raise at send."""
-        mode = str(cfg_get(config, "human_delay", "mode", default="off") or "off").strip().lower()
+        mode = (
+            str(cfg_get(config, "human_delay", "mode", default="off") or "off")
+            .strip()
+            .lower()
+        )
         if mode == "off":
             return None
         lo, hi = DEFAULT_HUMAN_DELAY_RANGE_MS
         if mode != "natural":
             if mode != "custom":
-                logger.warning("human_delay.mode=%r is not off/natural/custom; using natural", mode)
+                logger.warning(
+                    "human_delay.mode=%r is not off/natural/custom; using natural", mode
+                )
                 return DEFAULT_HUMAN_DELAY_RANGE_MS
             bounds = []
             for key, default in (("min_ms", lo), ("max_ms", hi)):
@@ -321,27 +408,43 @@ class GatewayConfigLoadersMixin:
                     if value < 0:
                         raise ValueError(raw)
                 except (TypeError, ValueError):
-                    logger.warning("human_delay.%s=%r is not a non-negative integer; using %s", key, raw, default)
+                    logger.warning(
+                        "human_delay.%s=%r is not a non-negative integer; using %s",
+                        key,
+                        raw,
+                        default,
+                    )
                     value = default
                 bounds.append(value)
             lo, hi = bounds
             if lo > hi:
-                logger.warning("human_delay.min_ms=%s exceeds human_delay.max_ms=%s; using natural range", lo, hi)
+                logger.warning(
+                    "human_delay.min_ms=%s exceeds human_delay.max_ms=%s; using natural range",
+                    lo,
+                    hi,
+                )
                 lo, hi = DEFAULT_HUMAN_DELAY_RANGE_MS
         return lo, hi
 
     def _snapshot_profile_busy_modes(self, profile_name: str, config: dict) -> None:
         """Cache a routed profile's busy policy and pacing for this gateway lifetime."""
         input_mode, text_mode = self._busy_modes_from_config(
-            config, fallback_input=getattr(self, "_busy_input_mode", "interrupt"),
+            config,
+            fallback_input=getattr(self, "_busy_input_mode", "interrupt"),
             fallback_text=getattr(self, "_busy_text_mode", "interrupt"),
         )
-        self.__dict__.setdefault("_busy_input_modes_by_profile", {})[profile_name] = input_mode
-        self.__dict__.setdefault("_busy_text_modes_by_profile", {})[profile_name] = text_mode
+        self.__dict__.setdefault("_busy_input_modes_by_profile", {})[profile_name] = (
+            input_mode
+        )
+        self.__dict__.setdefault("_busy_text_modes_by_profile", {})[profile_name] = (
+            text_mode
+        )
         self.__dict__.setdefault("_busy_text_timing_by_profile", {})[profile_name] = (
-            self._busy_text_timing_from_config(config))
+            self._busy_text_timing_from_config(config)
+        )
         self.__dict__.setdefault("_human_delay_by_profile", {})[profile_name] = (
-            self._human_delay_from_config(config))
+            self._human_delay_from_config(config)
+        )
 
     def _busy_profile_name_for_source(self, source: SessionSource) -> Optional[str]:
         """Return the routed profile whose busy policy applies, if any."""
@@ -362,7 +465,9 @@ class GatewayConfigLoadersMixin:
         if not profile_name:
             return fallback
         modes = getattr(self, attr + "s_by_profile", None)
-        return modes.get(profile_name, fallback) if isinstance(modes, dict) else fallback
+        return (
+            modes.get(profile_name, fallback) if isinstance(modes, dict) else fallback
+        )
 
     def _effective_busy_input_mode(self, source: SessionSource) -> str:
         """Resolve busy input mode from the routed profile startup snapshot."""
@@ -378,15 +483,21 @@ class GatewayConfigLoadersMixin:
         try:
             float(raw)
         except (TypeError, ValueError):
-            logger.warning("Invalid %s '%s', using default %.0fs", cfg_key, raw, default)
+            logger.warning(
+                "Invalid %s '%s', using default %.0fs", cfg_key, raw, default
+            )
 
     @classmethod
     def _load_restart_drain_timeout(cls) -> float:
         """Graceful gateway restart/stop drain timeout in seconds."""
-        raw = cls._env_or_cfg_str("CLAWK_RESTART_DRAIN_TIMEOUT", "agent", "restart_drain_timeout")
+        raw = cls._env_or_cfg_str(
+            "CLAWK_RESTART_DRAIN_TIMEOUT", "agent", "restart_drain_timeout"
+        )
         value = parse_restart_drain_timeout(raw)
         if raw and value == DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT:
-            cls._warn_unparsable_timeout("restart_drain_timeout", raw, DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT)
+            cls._warn_unparsable_timeout(
+                "restart_drain_timeout", raw, DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+            )
         return value
 
     @staticmethod
@@ -413,21 +524,29 @@ class GatewayConfigLoadersMixin:
                 "restart_drain_timeout=%.0fs exceeds the live launchd exit timeout (%.0fs) for %s; "
                 "signal-driven stops will drain at most %.0fs so teardown finishes before launchd "
                 "SIGKILLs (launchd clamps ExitTimeOut in the per-user domain).",
-                drain_timeout, exit_timeout, label, effective,
+                drain_timeout,
+                exit_timeout,
+                label,
+                effective,
             )
         else:
             logger.info(
                 "launchd exit timeout for %s is %.0fs (drain %.0fs fits)",
-                label, exit_timeout, drain_timeout,
+                label,
+                exit_timeout,
+                drain_timeout,
             )
         return exit_timeout
 
     @classmethod
-    def _load_env_or_agent_cfg_timeout(cls, env_var: str, cfg_key: str, parse, default: float) -> float:
+    def _load_env_or_agent_cfg_timeout(
+        cls, env_var: str, cfg_key: str, parse, default: float
+    ) -> float:
         """Env var (non-empty) else ``agent.<cfg_key>``; warn once when a supplied value fails to parse.
 
         ``0`` is a valid value; the parser falls back to ``default`` on garbage."""
         from gateway.run import _load_gateway_config
+
         env_raw = os.getenv(env_var)
         if env_raw is not None and str(env_raw).strip() != "":
             raw: object = env_raw
@@ -442,8 +561,10 @@ class GatewayConfigLoadersMixin:
     def _load_restart_after_turn_timeout(cls) -> float:
         """In-band restart wait-for-idle timeout in seconds."""
         return cls._load_env_or_agent_cfg_timeout(
-            "CLAWK_RESTART_AFTER_TURN_TIMEOUT", "restart_after_turn_timeout",
-            parse_restart_after_turn_timeout, DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT,
+            "CLAWK_RESTART_AFTER_TURN_TIMEOUT",
+            "restart_after_turn_timeout",
+            parse_restart_after_turn_timeout,
+            DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT,
         )
 
     @classmethod
@@ -453,26 +574,42 @@ class GatewayConfigLoadersMixin:
         See #82161.
         """
         return cls._load_env_or_agent_cfg_timeout(
-            "CLAWK_CRON_DRAIN_TIMEOUT", "cron_drain_timeout",
-            parse_cron_drain_timeout, DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT,
+            "CLAWK_CRON_DRAIN_TIMEOUT",
+            "cron_drain_timeout",
+            parse_cron_drain_timeout,
+            DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT,
         )
 
     @classmethod
     def _load_signal_interrupt_grace_timeout(cls) -> float:
         """``gateway.signal_interrupt_grace_timeout``: unexpected-signal post-interrupt grace in seconds."""
         from gateway.run import _load_gateway_config
-        raw = cfg_get(_load_gateway_config(), "gateway", "signal_interrupt_grace_timeout", default=None)
+
+        raw = cfg_get(
+            _load_gateway_config(),
+            "gateway",
+            "signal_interrupt_grace_timeout",
+            default=None,
+        )
         value = parse_signal_interrupt_grace_timeout(raw)
         if raw is not None and raw != "":
             cls._warn_unparsable_timeout(
-                "signal_interrupt_grace_timeout", raw, DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT
+                "signal_interrupt_grace_timeout",
+                raw,
+                DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT,
             )
         return value
 
     def _post_interrupt_grace_timeout(self) -> float:
         """Grace before teardown after forcibly interrupting agents (longer on an unexpected signal)."""
-        if getattr(self, "_signal_initiated_shutdown", False) and not getattr(self, "_restart_requested", False):
-            grace = getattr(self, "_signal_interrupt_grace_timeout", DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT)
+        if getattr(self, "_signal_initiated_shutdown", False) and not getattr(
+            self, "_restart_requested", False
+        ):
+            grace = getattr(
+                self,
+                "_signal_interrupt_grace_timeout",
+                DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT,
+            )
             return max(0.0, float(grace))
         return DEFAULT_GATEWAY_POST_INTERRUPT_GRACE_TIMEOUT
 
@@ -484,16 +621,22 @@ class GatewayConfigLoadersMixin:
         secondary sees its own ``.env`` value, not the launch profile's ``os.environ``."""
         from gateway.run import _load_gateway_config
         from gateway.platforms._shared import platform_gate_env as _platform_gate_env
+
         mode = _platform_gate_env("CLAWK_BACKGROUND_NOTIFICATIONS")
         if not mode:
-            raw = cfg_get(_load_gateway_config(), "display", "background_process_notifications")
+            raw = cfg_get(
+                _load_gateway_config(), "display", "background_process_notifications"
+            )
             if raw is False:
                 mode = "off"
             elif raw not in {None, ""}:
                 mode = str(raw)
         mode = (mode or "concise").strip().lower()
         if mode not in {"concise", "all", "result", "error", "off"}:
-            logger.warning("Unknown background_process_notifications '%s', defaulting to 'concise'", mode)
+            logger.warning(
+                "Unknown background_process_notifications '%s', defaulting to 'concise'",
+                mode,
+            )
             return "concise"
         return mode
 
@@ -501,6 +644,7 @@ class GatewayConfigLoadersMixin:
     def _load_provider_routing() -> dict:
         """OpenRouter provider routing preferences (canonical fail-open loader: managed overlay + ${VAR})."""
         from gateway.run import _load_gateway_config
+
         try:
             return _load_gateway_config().get("provider_routing", {}) or {}
         except Exception:
@@ -510,6 +654,7 @@ class GatewayConfigLoadersMixin:
     def _load_fallback_model() -> list | None:
         """Fallback chain: ``fallback_providers`` (kept first) merged with legacy ``fallback_model``."""
         from gateway.run import _load_gateway_config
+
         try:
             # Canonical gateway loader (fail-open): managed overlay + ${VAR} expansion apply here too.
             return get_fallback_chain(_load_gateway_config()) or None
@@ -534,6 +679,7 @@ class GatewayConfigLoadersMixin:
         """
         from gateway.run import _gateway_config_home
         from clawk_constants import clawk_home_key
+
         home = _gateway_config_home()
         by_home = getattr(self, "_fallback_model_by_home", None)
         if by_home is None:
@@ -541,6 +687,7 @@ class GatewayConfigLoadersMixin:
         home_key = clawk_home_key(home)
         try:
             from clawk_cli.config_effective import load_user_config_effective
+
             cfg_path = home / "config.yaml"
             if not cfg_path.exists():
                 by_home[home_key] = self._fallback_model = None
@@ -549,7 +696,10 @@ class GatewayConfigLoadersMixin:
             # below survives, instead of being WIPED by an empty fail-open result.
             cfg = load_user_config_effective(cfg_path, fail_closed=True)
         except Exception:
-            logger.debug("fallback_providers refresh: config.yaml read failed; keeping last known-good chain", exc_info=True)
+            logger.debug(
+                "fallback_providers refresh: config.yaml read failed; keeping last known-good chain",
+                exc_info=True,
+            )
             self._fallback_model = by_home.get(home_key, self._fallback_model)
             return self._fallback_model
         by_home[home_key] = self._fallback_model = get_fallback_chain(cfg) or None
@@ -570,7 +720,10 @@ class GatewayConfigLoadersMixin:
             return
         new_chain = list(chain or [])
         rate_limited_until = getattr(agent, "_rate_limited_until", 0) or 0
-        if getattr(agent, "_fallback_activated", False) and rate_limited_until > time.monotonic():
+        if (
+            getattr(agent, "_fallback_activated", False)
+            and rate_limited_until > time.monotonic()
+        ):
             return
         old_chain = list(getattr(agent, "_fallback_chain", []) or [])
         agent._fallback_chain = new_chain

@@ -135,11 +135,18 @@ class FakeLLMServer:
         self._script: list[Response] = list(script) if isinstance(script, list) else []
         self._responder: Responder | None = script if callable(script) else None
         self.default_text = default_text
-        self._aux = aux or (lambda _req: Text("Fake summary of the earlier conversation."))
+        self._aux = aux or (
+            lambda _req: Text("Fake summary of the earlier conversation.")
+        )
         # ``api_key`` may name several accepted keys (a credential pool on one host).
-        self.expected_api_key = api_key if isinstance(api_key, str) or api_key is None else None
+        self.expected_api_key = (
+            api_key if isinstance(api_key, str) or api_key is None else None
+        )
         self.accepted_api_keys: frozenset[str] | None = (
-            None if api_key is None else frozenset([api_key] if isinstance(api_key, str) else api_key))
+            None
+            if api_key is None
+            else frozenset([api_key] if isinstance(api_key, str) else api_key)
+        )
         # Opt-in so existing ``requests`` counts stay main/aux POSTs only.
         self.record_get = record_get
         # Optional: derive reported ``usage.prompt_tokens`` from each request body (so token-driven
@@ -164,7 +171,9 @@ class FakeLLMServer:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(self))
         server.daemon_threads = True
         self._server = server
-        self._thread = threading.Thread(target=server.serve_forever, name="fake-llm", daemon=True)
+        self._thread = threading.Thread(
+            target=server.serve_forever, name="fake-llm", daemon=True
+        )
         self._thread.start()
 
     def stop(self) -> None:
@@ -209,13 +218,17 @@ class FakeLLMServer:
     def aux_requests(self) -> list[dict[str, Any]]:
         return [r["body"] for r in self.requests if r["kind"] == "aux"]
 
-    def wait_for_requests(self, n: int, timeout: float = 30.0, kind: str = "main") -> None:
+    def wait_for_requests(
+        self, n: int, timeout: float = 30.0, kind: str = "main"
+    ) -> None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if sum(1 for r in self.requests if r["kind"] == kind) >= n:
                 return
             time.sleep(0.02)
-        raise AssertionError(f"expected {n} {kind} requests, saw {len(self.requests)} total")
+        raise AssertionError(
+            f"expected {n} {kind} requests, saw {len(self.requests)} total"
+        )
 
     def next_tool_call_id(self) -> str:
         with self._lock:
@@ -230,7 +243,12 @@ def _handler_for(server: FakeLLMServer) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *_a: object) -> None:
             pass
 
-        def _send_json(self, status: int, payload: dict[str, Any], headers: dict[str, str] | None = None) -> None:
+        def _send_json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -243,14 +261,30 @@ def _handler_for(server: FakeLLMServer) -> type[BaseHTTPRequestHandler]:
         def do_GET(self) -> None:
             if server.record_get:
                 with server._lock:
-                    server.requests.append({
-                        "path": self.path, "kind": "get", "auth": self.headers.get("Authorization", ""),
-                        "headers": {k.lower(): v for k, v in self.headers.items()}, "body": None, "t": time.time(),
-                    })
+                    server.requests.append(
+                        {
+                            "path": self.path,
+                            "kind": "get",
+                            "auth": self.headers.get("Authorization", ""),
+                            "headers": {k.lower(): v for k, v in self.headers.items()},
+                            "body": None,
+                            "t": time.time(),
+                        }
+                    )
             if self.path.rstrip("/").endswith("/models"):
-                self._send_json(200, {"object": "list", "data": [
-                    {"id": MODEL_ID, "object": "model", "context_length": 128000},
-                ]})
+                self._send_json(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [
+                            {
+                                "id": MODEL_ID,
+                                "object": "model",
+                                "context_length": 128000,
+                            },
+                        ],
+                    },
+                )
                 return
             self._send_json(404, {"error": {"message": "not found"}})
 
@@ -275,22 +309,47 @@ def _handler_for(server: FakeLLMServer) -> type[BaseHTTPRequestHandler]:
                 server.requests.append(record)
             accepted = server.accepted_api_keys
             if accepted is not None and auth not in {f"Bearer {k}" for k in accepted}:
-                self._send_json(401, {"error": {"message": "invalid api key", "type": "authentication_error"}})
+                self._send_json(
+                    401,
+                    {
+                        "error": {
+                            "message": "invalid api key",
+                            "type": "authentication_error",
+                        }
+                    },
+                )
                 return
             if not self.path.rstrip("/").endswith("/chat/completions"):
-                self._send_json(404, {"error": {"message": f"unsupported path {self.path}"}})
+                self._send_json(
+                    404, {"error": {"message": f"unsupported path {self.path}"}}
+                )
                 return
             resp = server._next_main(record) if kind == "main" else server._aux(record)
             record["response"] = type(resp).__name__
-            prompt_tokens = server.prompt_tokens_fn(body) if server.prompt_tokens_fn else None
+            prompt_tokens = (
+                server.prompt_tokens_fn(body) if server.prompt_tokens_fn else None
+            )
             self._respond(resp, bool(body.get("stream")), prompt_tokens, record)
 
         # response rendering
-        def _respond(self, resp: Response, stream: bool, prompt_tokens: int | None = None,
-                     record: dict[str, Any] | None = None) -> None:
+        def _respond(
+            self,
+            resp: Response,
+            stream: bool,
+            prompt_tokens: int | None = None,
+            record: dict[str, Any] | None = None,
+        ) -> None:
             if isinstance(resp, Error):
-                headers = {"Retry-After": str(resp.retry_after)} if resp.retry_after is not None else {}
-                self._send_json(resp.status, {"error": {"message": resp.message, "type": "server_error"}}, headers)
+                headers = (
+                    {"Retry-After": str(resp.retry_after)}
+                    if resp.retry_after is not None
+                    else {}
+                )
+                self._send_json(
+                    resp.status,
+                    {"error": {"message": resp.message, "type": "server_error"}},
+                    headers,
+                )
                 return
             if isinstance(resp, Hang):
                 server._stop.wait(resp.seconds)
@@ -326,12 +385,19 @@ def _handler_for(server: FakeLLMServer) -> type[BaseHTTPRequestHandler]:
             if record is not None:
                 record["usage"] = usage
             if not stream:
-                self._send_json(200, {
-                    "id": "chatcmpl-fake", "object": "chat.completion", "created": int(time.time()),
-                    "model": MODEL_ID,
-                    "choices": [{"index": 0, "message": message, "finish_reason": finish}],
-                    "usage": usage,
-                })
+                self._send_json(
+                    200,
+                    {
+                        "id": "chatcmpl-fake",
+                        "object": "chat.completion",
+                        "created": int(time.time()),
+                        "model": MODEL_ID,
+                        "choices": [
+                            {"index": 0, "message": message, "finish_reason": finish}
+                        ],
+                        "usage": usage,
+                    },
+                )
                 return
             self._start_sse()
             self._sse(_chunk({"role": "assistant", "content": ""}))
@@ -347,13 +413,37 @@ def _handler_for(server: FakeLLMServer) -> type[BaseHTTPRequestHandler]:
                 if message.get("content"):
                     self._sse(_chunk({"content": message["content"]}))
                 for i, tc in enumerate(message["tool_calls"]):
-                    self._sse(_chunk({"tool_calls": [{
-                        "index": i, "id": tc["id"], "type": "function",
-                        "function": {"name": tc["function"]["name"], "arguments": ""},
-                    }]}))
-                    self._sse(_chunk({"tool_calls": [{
-                        "index": i, "function": {"arguments": tc["function"]["arguments"]},
-                    }]}))
+                    self._sse(
+                        _chunk(
+                            {
+                                "tool_calls": [
+                                    {
+                                        "index": i,
+                                        "id": tc["id"],
+                                        "type": "function",
+                                        "function": {
+                                            "name": tc["function"]["name"],
+                                            "arguments": "",
+                                        },
+                                    }
+                                ]
+                            }
+                        )
+                    )
+                    self._sse(
+                        _chunk(
+                            {
+                                "tool_calls": [
+                                    {
+                                        "index": i,
+                                        "function": {
+                                            "arguments": tc["function"]["arguments"]
+                                        },
+                                    }
+                                ]
+                            }
+                        )
+                    )
             last = _chunk({}, finish)
             last["usage"] = usage
             self._sse(last)
@@ -382,13 +472,18 @@ def _pieces(text: str, size: int) -> list[str]:
 
 def _chunk(delta: dict[str, Any], finish: str | None = None) -> dict[str, Any]:
     return {
-        "id": "chatcmpl-fake", "object": "chat.completion.chunk", "created": int(time.time()),
-        "model": MODEL_ID, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+        "id": "chatcmpl-fake",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": MODEL_ID,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
     }
 
 
 def _message_for(
-    resp: Text | ToolCall, server: FakeLLMServer, prompt_tokens: int | None = None,
+    resp: Text | ToolCall,
+    server: FakeLLMServer,
+    prompt_tokens: int | None = None,
 ) -> tuple[dict[str, Any], str, dict[str, Any]]:
     if isinstance(resp, Text):
         message: dict[str, Any] = {"role": "assistant", "content": resp.text}
@@ -404,8 +499,14 @@ def _message_for(
         return message, resp.finish_reason, usage
     calls = [(resp.name, resp.args), *resp.parallel]
     tool_calls = [
-        {"id": server.next_tool_call_id(), "type": "function",
-         "function": {"name": name, "arguments": args if isinstance(args, str) else json.dumps(args)}}
+        {
+            "id": server.next_tool_call_id(),
+            "type": "function",
+            "function": {
+                "name": name,
+                "arguments": args if isinstance(args, str) else json.dumps(args),
+            },
+        }
         for name, args in calls
     ]
     message = {"role": "assistant", "content": resp.text, "tool_calls": tool_calls}
@@ -445,8 +546,7 @@ def write_clawk_home(
         "  shared_metrics:\n"
         "    enabled: false\n"
         "    send: false\n"
-        f"    offer_version: {OFFER_VERSION}\n"
-        + extra_config,
+        f"    offer_version: {OFFER_VERSION}\n" + extra_config,
         encoding="utf-8",
     )
     (home / ".env").write_text(f"OPENAI_API_KEY={api_key}\n", encoding="utf-8")

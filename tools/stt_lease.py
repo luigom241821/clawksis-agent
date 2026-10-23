@@ -53,14 +53,21 @@ def warm_stt_provider(
 
     if stt_config is None:
         stt_config = transcription_tools._load_stt_config()
-    name = (provider or transcription_tools._get_provider(stt_config) or "").lower().strip()
+    name = (
+        (provider or transcription_tools._get_provider(stt_config) or "")
+        .lower()
+        .strip()
+    )
     result: dict[str, Any] = {"provider": name, "warmed": False, "action": "noop"}
     if name not in {"local", "local_command"}:
         return result
     if name == "local_command":
         result.update(warmed=True)
         return result
-    if not transcription_tools._HAS_FASTER_WHISPER and not transcription_tools._try_lazy_install_stt():
+    if (
+        not transcription_tools._HAS_FASTER_WHISPER
+        and not transcription_tools._try_lazy_install_stt()
+    ):
         result.update(action="error", error="faster-whisper not installed")
         return result
     local_cfg = stt_config.get("local") or {}
@@ -94,12 +101,21 @@ def warm_stt_provider(
         result.update(action="error", error=str(exc))
         return result
     elapsed_ms = int((time.monotonic() - started) * 1000)
-    result.update(warmed=True, action="cached" if hot_before else "loaded", elapsed_ms=elapsed_ms)
-    logger.info("[STT] warm-up local model '%s': %s in %dms", model_name, result["action"], elapsed_ms)
+    result.update(
+        warmed=True, action="cached" if hot_before else "loaded", elapsed_ms=elapsed_ms
+    )
+    logger.info(
+        "[STT] warm-up local model '%s': %s in %dms",
+        model_name,
+        result["action"],
+        elapsed_ms,
+    )
     return result
 
 
-def acquire_stt_lease(lease: str, stt_config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def acquire_stt_lease(
+    lease: str, stt_config: Optional[dict[str, Any]] = None
+) -> dict[str, Any]:
     """Register ``lease`` (e.g. ``"desktop:voice-input:abcd1234"``) and warm the engine.
 
     Re-acquiring is idempotent but still re-warms (cheap on a cache hit; heals

@@ -39,13 +39,48 @@ def canary(label: str) -> str:
     return f"{label}-{secrets.token_hex(8)}"
 
 
-_STRIP_SUFFIXES = ("_API_KEY", "_TOKEN", "_BASE_URL", "_SECRET", "_ACCESS_KEY", "_KEY_ID", "_KEY", "_PASSWORD")
-_STRIP_PREFIXES = ("CLAWK_", "OPENAI", "ANTHROPIC", "OPENROUTER", "AWS_", "AZURE_", "GOOGLE_", "GEMINI",
-                   "PYTEST_", "NOUS_", "XAI_", "LLM_", "CUSTOM_", "TERMINAL_", "API_SERVER_")
-_DROP = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy",
-         "XDG_STATE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-         # no route to the developer's systemd --user bus
-         "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR")
+_STRIP_SUFFIXES = (
+    "_API_KEY",
+    "_TOKEN",
+    "_BASE_URL",
+    "_SECRET",
+    "_ACCESS_KEY",
+    "_KEY_ID",
+    "_KEY",
+    "_PASSWORD",
+)
+_STRIP_PREFIXES = (
+    "CLAWK_",
+    "OPENAI",
+    "ANTHROPIC",
+    "OPENROUTER",
+    "AWS_",
+    "AZURE_",
+    "GOOGLE_",
+    "GEMINI",
+    "PYTEST_",
+    "NOUS_",
+    "XAI_",
+    "LLM_",
+    "CUSTOM_",
+    "TERMINAL_",
+    "API_SERVER_",
+)
+_DROP = (
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "XDG_STATE_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    # no route to the developer's systemd --user bus
+    "DBUS_SESSION_BUS_ADDRESS",
+    "XDG_RUNTIME_DIR",
+)
 
 
 def real_user_home() -> Path:
@@ -56,9 +91,15 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
     """Child env: fake HOME (profile-root anchor) + CLAWK_HOME under it, nothing credential-shaped,
     no yolo/approval env inherited from the invoking agent."""
     home = home.resolve()
-    assert home != real_user_home(), f"refusing to run a probe against the real HOME: {home}"
-    env = {k: v for k, v in os.environ.items()
-           if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES)) and k not in _DROP}
+    assert home != real_user_home(), (
+        f"refusing to run a probe against the real HOME: {home}"
+    )
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))
+        and k not in _DROP
+    }
     env.update(
         HOME=str(home),
         CLAWK_HOME=str(home / ".clawksis"),
@@ -77,8 +118,14 @@ def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, s
     return env
 
 
-def write_home(clawk_home: Path, base_url: str, *, api_key: str, config: str = "",
-               env: dict[str, str] | None = None) -> Path:
+def write_home(
+    clawk_home: Path,
+    base_url: str,
+    *,
+    api_key: str,
+    config: str = "",
+    env: dict[str, str] | None = None,
+) -> Path:
     """config.yaml routing the model to the fake provider + .env with the (canary) key.
 
     ``config`` is appended verbatim (YAML top-level sections)."""
@@ -95,12 +142,13 @@ def write_home(clawk_home: Path, base_url: str, *, api_key: str, config: str = "
         "updates:\n"
         "  check: false\n"
         "compression:\n"
-        "  enabled: false\n"
-        + config,
+        "  enabled: false\n" + config,
         encoding="utf-8",
     )
     lines = {"OPENAI_API_KEY": api_key, **(env or {})}
-    (clawk_home / ".env").write_text("".join(f"{k}={v}\n" for k, v in lines.items()), encoding="utf-8")
+    (clawk_home / ".env").write_text(
+        "".join(f"{k}={v}\n" for k, v in lines.items()), encoding="utf-8"
+    )
     return clawk_home
 
 
@@ -110,7 +158,9 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def poll(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1) -> Any:
+def poll(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         got = pred()
@@ -128,13 +178,25 @@ def kill_group(proc: subprocess.Popen, sig: int = signal.SIGKILL) -> None:
         pass
 
 
-def run_clawk(argv: list[str], home: Path, *, timeout: float = 120.0, cwd: Path | None = None,
-               extra_env: dict[str, str] | None = None, stdin: str | None = None) -> subprocess.CompletedProcess:
+def run_clawk(
+    argv: list[str],
+    home: Path,
+    *,
+    timeout: float = 120.0,
+    cwd: Path | None = None,
+    extra_env: dict[str, str] | None = None,
+    stdin: str | None = None,
+) -> subprocess.CompletedProcess:
     """``python -m clawk_cli.main <argv>`` in its own process group; the group is always reaped."""
     proc = subprocess.Popen(
-        [sys.executable, "-m", "clawk_cli.main", *argv], cwd=str(cwd or home), env=hermetic_env(home, extra_env),
+        [sys.executable, "-m", "clawk_cli.main", *argv],
+        cwd=str(cwd or home),
+        env=hermetic_env(home, extra_env),
         stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
     )
     try:
         out, err = proc.communicate(input=stdin, timeout=timeout)
@@ -146,11 +208,24 @@ def run_clawk(argv: list[str], home: Path, *, timeout: float = 120.0, cwd: Path 
     return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
-def run_python(code: str, home: Path, *args: str, timeout: float = 120.0,
-               extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+def run_python(
+    code: str,
+    home: Path,
+    *args: str,
+    timeout: float = 120.0,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """A fresh interpreter importing the worktree's Clawksis under the hermetic env."""
-    return subprocess.run([sys.executable, "-c", code, *args], cwd=str(home), env=hermetic_env(home, extra_env),
-                          capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
+    return subprocess.run(
+        [sys.executable, "-c", code, *args],
+        cwd=str(home),
+        env=hermetic_env(home, extra_env),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def db_blob(db: Path) -> str:
@@ -160,12 +235,18 @@ def db_blob(db: Path) -> str:
     con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
         parts: list[str] = []
-        tables = [r[0] for r in con.execute("select name from sqlite_master where type='table'")]
+        tables = [
+            r[0]
+            for r in con.execute("select name from sqlite_master where type='table'")
+        ]
         for t in tables:
             try:
                 for row in con.execute(f'select * from "{t}"'):
-                    parts += [c.decode("utf-8", "replace") if isinstance(c, bytes) else str(c)
-                              for c in row if c is not None]
+                    parts += [
+                        c.decode("utf-8", "replace") if isinstance(c, bytes) else str(c)
+                        for c in row
+                        if c is not None
+                    ]
             except sqlite3.DatabaseError:
                 continue
         return "\n".join(parts)

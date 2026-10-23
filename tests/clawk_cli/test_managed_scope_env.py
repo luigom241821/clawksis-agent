@@ -1,4 +1,5 @@
 """Env integration tests — managed .env applied last with override."""
+
 import os
 
 import pytest
@@ -21,8 +22,12 @@ def test_managed_env_beats_user_env(env_homes, monkeypatch):
     from clawk_cli.env_loader import load_clawk_dotenv
 
     home, managed = env_homes
-    (home / ".env").write_text("OPENAI_API_BASE=https://user.example/v1\n", encoding="utf-8")
-    (managed / ".env").write_text("OPENAI_API_BASE=https://org.example/v1\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "OPENAI_API_BASE=https://user.example/v1\n", encoding="utf-8"
+    )
+    (managed / ".env").write_text(
+        "OPENAI_API_BASE=https://org.example/v1\n", encoding="utf-8"
+    )
     load_clawk_dotenv(clawk_home=str(home))
     assert os.environ["OPENAI_API_BASE"] == "https://org.example/v1"
 

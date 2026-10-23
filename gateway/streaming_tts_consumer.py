@@ -31,36 +31,74 @@ class _HandleDeclined(Exception):
 class StreamingTTSConsumer:
     """Consumes LLM text deltas and produces streaming PCM audio for an adapter."""
 
-    def __init__(self, adapter: Any, chat_id: str, tts_config: dict[str, Any],
-                 loop: asyncio.AbstractEventLoop, *, metadata: Optional[dict[str, Any]] = None,
-                 audio_format: Optional[AudioFormat] = None) -> None:
+    def __init__(
+        self,
+        adapter: Any,
+        chat_id: str,
+        tts_config: dict[str, Any],
+        loop: asyncio.AbstractEventLoop,
+        *,
+        metadata: Optional[dict[str, Any]] = None,
+        audio_format: Optional[AudioFormat] = None,
+    ) -> None:
         from tools.tts_streaming import SentenceChunker, resolve_streaming_provider
-        self._adapter, self._chat_id, self._loop, self._metadata = adapter, chat_id, loop, metadata
+
+        self._adapter, self._chat_id, self._loop, self._metadata = (
+            adapter,
+            chat_id,
+            loop,
+            metadata,
+        )
         # Resolved once; None => inactive, gateway falls back to whole-file TTS.
         self._streamer = resolve_streaming_provider(tts_config)
         self._chunker = SentenceChunker.from_config(tts_config)
         # Provisional: refreshed from the streamer when the handle opens on the first PCM chunk,
         # since an OpenAI-compatible endpoint reports its real rate only in the response (#76466).
-        self._audio_format = audio_format or AudioFormat() if self._streamer is None else self._streamer_format()
+        self._audio_format = (
+            audio_format or AudioFormat()
+            if self._streamer is None
+            else self._streamer_format()
+        )
         # Thread-safe queue of completed clauses plus the _DONE/_ABORT sentinels.
         self._queue: queue.Queue[Any] = queue.Queue(maxsize=256)
         self._handle: Optional[StreamingTTSHandle] = None
         self._task: Optional[asyncio.Task] = None  # drain task, created once by start()
         self._completed = self._partial = self._aborted = False
         self._finished = self._dropped = self._suppress_whole_file = False
-        self._lock, self._strip_markdown = threading.Lock(), None  # stripper lazily imported
+        self._lock, self._strip_markdown = (
+            threading.Lock(),
+            None,
+        )  # stripper lazily imported
 
     def _streamer_format(self) -> AudioFormat:
-        return AudioFormat(**{f: int(getattr(self._streamer, f, getattr(AudioFormat, f)))
-                              for f in ("sample_rate", "channels", "sample_width")})
+        return AudioFormat(
+            **{
+                f: int(getattr(self._streamer, f, getattr(AudioFormat, f)))
+                for f in ("sample_rate", "channels", "sample_width")
+            }
+        )
 
-    active = property(lambda self: self._streamer is not None)  # usable streaming provider
-    completed = property(lambda self: self._completed)  # streaming audio fully delivered
-    partial = property(lambda self: self._partial)  # some audio audible before a failure/drop
-    audible = property(lambda self: bool(self._handle and self._handle.audible))  # PCM written
-    dropped = property(lambda self: self._dropped)  # queue saturation dropped >= 1 clause
-    suppress_whole_file = property(lambda self: self._suppress_whole_file)  # skip whole-file TTS
-    done = property(lambda self: self._task is not None and self._task.done())  # drain task ended
+    active = property(
+        lambda self: self._streamer is not None
+    )  # usable streaming provider
+    completed = property(
+        lambda self: self._completed
+    )  # streaming audio fully delivered
+    partial = property(
+        lambda self: self._partial
+    )  # some audio audible before a failure/drop
+    audible = property(
+        lambda self: bool(self._handle and self._handle.audible)
+    )  # PCM written
+    dropped = property(
+        lambda self: self._dropped
+    )  # queue saturation dropped >= 1 clause
+    suppress_whole_file = property(
+        lambda self: self._suppress_whole_file
+    )  # skip whole-file TTS
+    done = property(
+        lambda self: self._task is not None and self._task.done()
+    )  # drain task ended
 
     def _enqueue_clauses(self, clauses, full_msg: str, *, log_errors: bool) -> None:
         try:
@@ -78,8 +116,9 @@ class StreamingTTSConsumer:
         if self._aborted or not self.active or self._finished:
             return
         clauses = self._chunker.flush() if text is None else self._chunker.feed(text)
-        self._enqueue_clauses(clauses, "streaming TTS queue full, dropping clause",
-                              log_errors=True)
+        self._enqueue_clauses(
+            clauses, "streaming TTS queue full, dropping clause", log_errors=True
+        )
 
     def finish(self) -> None:
         """Signal end-of-text: flush the chunker tail, then enqueue ``_DONE`` after all flushed
@@ -89,8 +128,11 @@ class StreamingTTSConsumer:
         self._finished = True
         if self._aborted or not self.active:
             return
-        self._enqueue_clauses(self._chunker.flush(), "streaming TTS queue full while flushing tail",
-                              log_errors=False)
+        self._enqueue_clauses(
+            self._chunker.flush(),
+            "streaming TTS queue full while flushing tail",
+            log_errors=False,
+        )
         # The load-bearing _DONE sentinel must never be lost: evict clauses until it fits.
         while not self._put_sentinel(_DONE, mark_dropped=True):
             pass
@@ -117,7 +159,10 @@ class StreamingTTSConsumer:
     def _settle(self, *, failed: bool) -> None:
         """Set outcome flags from what was audible: never report completion after a failure or a
         dropped clause; keep suppression whenever audio was audible (no replay from the start)."""
-        audible, degraded = bool(self._handle and self._handle.audible), failed or self._dropped
+        audible, degraded = (
+            bool(self._handle and self._handle.audible),
+            failed or self._dropped,
+        )
         self._completed = audible and not degraded
         self._partial = self._partial or (audible and degraded)
         self._suppress_whole_file = audible
@@ -139,8 +184,13 @@ class StreamingTTSConsumer:
     async def _run(self) -> None:
         """Drain clauses until a sentinel/abort, synthesise + write each, then finalise the stream;
         a clause or finalise failure settles the outcome flags and aborts the adapter stream."""
-        if not self.active or not self._adapter.supports_streaming_tts(self._chat_id, self._audio_format):
-            logger.debug("adapter %s does not support streaming TTS", getattr(self._adapter, "name", "?"))
+        if not self.active or not self._adapter.supports_streaming_tts(
+            self._chat_id, self._audio_format
+        ):
+            logger.debug(
+                "adapter %s does not support streaming TTS",
+                getattr(self._adapter, "name", "?"),
+            )
             return
         self._suppress_whole_file = False
         try:
@@ -165,7 +215,9 @@ class StreamingTTSConsumer:
             if not self._aborted and self._handle is not None:
                 try:
                     handle, interrupted = self._handle, self._aborted
-                    await self._adapter.finish_streaming_tts(handle, interrupted=interrupted)
+                    await self._adapter.finish_streaming_tts(
+                        handle, interrupted=interrupted
+                    )
                 except Exception as exc:
                     logger.debug("finish_streaming_tts error: %s", exc)
                     self._settle(failed=True)
@@ -182,11 +234,16 @@ class StreamingTTSConsumer:
 
     async def _synthesise_and_write(self, clause: str) -> None:
         """Synthesise one clause via the streamer and write PCM chunks."""
-        if self._streamer is None or (self._handle is not None and self._handle.aborted):
+        if self._streamer is None or (
+            self._handle is not None and self._handle.aborted
+        ):
             return
-        if self._strip_markdown is None:  # lazy import: tools.tts_tool would cycle at module load
+        if (
+            self._strip_markdown is None
+        ):  # lazy import: tools.tts_tool would cycle at module load
             try:
                 from tools.tts_text_normalize import _strip_markdown_for_tts as _strip
+
                 self._strip_markdown = _strip
             except ImportError:
                 self._strip_markdown = lambda t: t
@@ -196,7 +253,11 @@ class StreamingTTSConsumer:
         while True:
             # next() runs in a thread so a blocking provider never stalls the loop.
             chunk = await asyncio.to_thread(next, iterator, _DONE)
-            if chunk is _DONE or self._aborted or (self._handle is not None and self._handle.aborted):
+            if (
+                chunk is _DONE
+                or self._aborted
+                or (self._handle is not None and self._handle.aborted)
+            ):
                 return
             if not chunk:
                 continue
@@ -229,7 +290,9 @@ class StreamingTTSConsumer:
             logger.debug("streaming TTS _ABORT sentinel could not be enqueued")
         if self._handle is not None and not self._handle.aborted:
             with contextlib.suppress(Exception):
-                self._loop.call_soon_threadsafe(asyncio.create_task, self._safe_abort(reason))
+                self._loop.call_soon_threadsafe(
+                    asyncio.create_task, self._safe_abort(reason)
+                )
 
     async def wait_complete(self, timeout: float = 10.0) -> bool:
         """Wait for the drain task to finish. Returns True only on full success."""

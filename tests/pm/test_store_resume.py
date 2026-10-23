@@ -14,7 +14,6 @@ from tests.pm._range_server import RangeHandler as _Handler, url as _url
 from tests.pm._range_server import dl_server as dl_server  # noqa: PLC0414 -- the self-alias is load-bearing: it suppresses F811 for the pytest fixture parameter shadowing this import
 
 
-
 def test_store_fetch_resumes_interrupted_download(tmp_path, dl_server, monkeypatch):
     # Isolate the store root (and thus the managed partials area) to tmp_path.
     runtime = tmp_path / "runtime"
@@ -62,7 +61,7 @@ def test_store_fetch_resumes_interrupted_download(tmp_path, dl_server, monkeypat
     # The successful fetch consumed (moved) the partial out of the managed area.
     assert not (partials / f"{key}.part").exists()
 
-    resumed = _Handler.ranges_seen[len(first):]
+    resumed = _Handler.ranges_seen[len(first) :]
     # One resumed request, for ONLY the missing tail — the already-durable
     # prefix was NOT re-requested (it must not start at byte 0).
     assert len(resumed) == 1, f"expected a single resumed request, saw {resumed}"

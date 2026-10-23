@@ -79,7 +79,9 @@ def test_quick_snapshot_is_published_with_manifest(tmp_path, monkeypatch) -> Non
     assert snapshot_id is not None
     assert len(published) == 1
     manifest = json.loads(
-        (home / "state-snapshots" / snapshot_id / "manifest.json").read_text(encoding="utf-8")
+        (home / "state-snapshots" / snapshot_id / "manifest.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert manifest["id"] == snapshot_id
     assert manifest["files"] == {"config.yaml": 10}
@@ -127,7 +129,9 @@ def test_quick_snapshot_listing_ignores_partial_directories(tmp_path) -> None:
     assert list_quick_snapshots(clawk_home=home) == []
 
 
-def test_failed_automatic_backup_preserves_previous_archive(tmp_path, monkeypatch) -> None:
+def test_failed_automatic_backup_preserves_previous_archive(
+    tmp_path, monkeypatch
+) -> None:
     home = tmp_path / ".clawk"
     home.mkdir()
     (home / "state.db").write_bytes(b"not-a-database")

@@ -16,10 +16,9 @@ The fix adds:
 """
 
 
-
-
-
-def test_gateway_corruption_banner_backups_dir_follows_clawk_home(monkeypatch, tmp_path):
+def test_gateway_corruption_banner_backups_dir_follows_clawk_home(
+    monkeypatch, tmp_path
+):
     """The gateway broadcast's step 3 must name the live backups dir, not ~/.clawksis (#104250).
 
     Pre-update backups live at ``<clawk_root>/backups`` (``clawk_cli/backup.py``); a
@@ -37,7 +36,9 @@ def test_gateway_corruption_banner_backups_dir_follows_clawk_home(monkeypatch, t
     runner._session_db_init_error = "database disk image is malformed"
     sent = []
     monkeypatch.setattr(
-        runner, "_home_channel_transports", lambda: [("telegram", {}, "home-chat", object())]
+        runner,
+        "_home_channel_transports",
+        lambda: [("telegram", {}, "home-chat", object())],
     )
 
     async def _capture_send(_platform, _home, _transport, message, _log_fmt):
@@ -51,7 +52,9 @@ def test_gateway_corruption_banner_backups_dir_follows_clawk_home(monkeypatch, t
     assert "~/.clawksis/backups" not in sent[0]
 
 
-def test_format_turn_completion_corrupt_names_the_sessions_own_store(monkeypatch, tmp_path):
+def test_format_turn_completion_corrupt_names_the_sessions_own_store(
+    monkeypatch, tmp_path
+):
     """Recovery commands target the store that failed, not the process default (#105887).
 
     A Desktop ``serve`` backend launched on the root home hosts named-profile sessions
@@ -92,10 +95,6 @@ def test_format_turn_completion_corrupt_never_names_the_live_db():
     assert "clawk sessions recover --source" in explanation
 
 
-
-
-
-
 def test_corrupt_guidance_pins_the_failing_profile(tmp_path, monkeypatch):
     """#105887: every `clawk ...` command in the recovery guidance (turn explainer, gateway
     home-channel notice, exhausted-repair diagnostic) carries the active profile selector and
@@ -115,7 +114,9 @@ def test_corrupt_guidance_pins_the_failing_profile(tmp_path, monkeypatch):
     (root / "active_profile").write_text("other\n")
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
-    explanation = AIAgent._format_turn_completion_explanation("session_persistence_failed", "corrupt")
+    explanation = AIAgent._format_turn_completion_explanation(
+        "session_persistence_failed", "corrupt"
+    )
     commands = [line.strip() for line in explanation.splitlines() if "clawk " in line]
     assert commands and all("clawk -p research " in line for line in commands), commands
     # The conftest pins clawk_state.DEFAULT_DB_PATH, so the store named is whatever the
@@ -125,15 +126,23 @@ def test_corrupt_guidance_pins_the_failing_profile(tmp_path, monkeypatch):
     runner = object.__new__(gateway_run.GatewayRunner)
     runner._session_db_init_error = "database disk image is malformed"
     sent = []
-    monkeypatch.setattr(runner, "_home_channel_transports", lambda: [("telegram", {}, "home-chat", object())])
+    monkeypatch.setattr(
+        runner,
+        "_home_channel_transports",
+        lambda: [("telegram", {}, "home-chat", object())],
+    )
 
     async def _capture_send(_platform, _home, _transport, message, _log_fmt):
         sent.append(message)
 
     monkeypatch.setattr(runner, "_send_home_channel_message", _capture_send)
     asyncio.run(runner._send_session_db_warning_notifications())
-    notice_commands = [line.strip() for line in sent[0].splitlines() if "clawk " in line]
-    assert notice_commands and all("clawk -p research " in line for line in notice_commands), notice_commands
+    notice_commands = [
+        line.strip() for line in sent[0].splitlines() if "clawk " in line
+    ]
+    assert notice_commands and all(
+        "clawk -p research " in line for line in notice_commands
+    ), notice_commands
     assert f"--source {_default_db_path()} " in sent[0]
 
     exhausted = _persistent_repair_exhausted_error(home / "state.db")

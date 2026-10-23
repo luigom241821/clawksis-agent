@@ -63,14 +63,6 @@ def _make_running_again(conn, tid):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
 def test_block_loop_detected_event_emitted(kanban_home: Path) -> None:
     with kbc.connect_closing() as conn:
         tid = _running_task(conn)
@@ -78,8 +70,9 @@ def test_block_loop_detected_event_emitted(kanban_home: Path) -> None:
         kb.unblock_task(conn, tid)
         _make_running_again(conn, tid)
         kb.block_task(conn, tid, reason="x", kind="capability")
-        events = [e for e in kb.list_events(conn, tid)
-                  if e.kind == "block_loop_detected"]
+        events = [
+            e for e in kb.list_events(conn, tid) if e.kind == "block_loop_detected"
+        ]
         assert events, "expected a block_loop_detected event"
         payload = events[-1].payload or {}
         assert payload.get("recurrences") == 2
@@ -114,7 +107,8 @@ def test_dependency_then_parent_done_promotes(kanban_home: Path) -> None:
 
 
 def test_dependency_block_with_terminal_parents_parks_then_escalates(
-    kanban_home: Path, capsys: pytest.CaptureFixture[str],
+    kanban_home: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A ``dependency`` block whose parents are all terminal can never be
     satisfied by ``recompute_ready``: it must park in ``blocked`` as
@@ -129,15 +123,27 @@ def test_dependency_block_with_terminal_parents_parks_then_escalates(
         child = _running_task(conn, title="child-of-done", parents=(parent,))
 
         # `clawk kanban block <child> --kind dependency waiting on upstream`
-        args = argparse.Namespace(task_id=child, ids=None, reason=["waiting", "on", "upstream"], kind="dependency")
+        args = argparse.Namespace(
+            task_id=child,
+            ids=None,
+            reason=["waiting", "on", "upstream"],
+            kind="dependency",
+        )
         assert kanban_cli._cmd_block(args) == 0
         assert "needs_input" in capsys.readouterr().out
         parked = kb.get_task(conn, child)
-        assert (parked.status, parked.block_kind, parked.block_recurrences) == ("blocked", "needs_input", 1)
+        assert (parked.status, parked.block_kind, parked.block_recurrences) == (
+            "blocked",
+            "needs_input",
+            1,
+        )
         events = kb.list_events(conn, child)
         assert not [e for e in events if e.kind == "dependency_wait"]
         blocked = [e for e in events if e.kind == "blocked"][-1].payload
-        assert (blocked["requested_kind"], blocked["rekind_reason"]) == ("dependency", "no_open_parent")
+        assert (blocked["requested_kind"], blocked["rekind_reason"]) == (
+            "dependency",
+            "no_open_parent",
+        )
         assert kb.recompute_ready(conn) == 0
         assert kb.get_task(conn, child).status == "blocked"
 
@@ -146,12 +152,15 @@ def test_dependency_block_with_terminal_parents_parks_then_escalates(
         assert kb.claim_task(conn, child, claimer="worker") is not None
         assert kb.block_task(conn, child, reason="still waiting", kind="dependency")
         assert kb.get_task(conn, child).status == "triage"
-        loop = [e for e in kb.list_events(conn, child) if e.kind == "block_loop_detected"][-1].payload
+        loop = [
+            e for e in kb.list_events(conn, child) if e.kind == "block_loop_detected"
+        ][-1].payload
         assert loop["recurrences"] == kb.BLOCK_RECURRENCE_LIMIT
 
 
 def test_dependency_block_with_open_parent_stays_parked_across_dispatch_tick(
-    kanban_home: Path, all_assignees_spawnable,
+    kanban_home: Path,
+    all_assignees_spawnable,
 ) -> None:
     """Control: a genuine wait on an incomplete parent parks in ``todo``
     without counting a recurrence, survives a dispatch tick unspawned, and
@@ -173,7 +182,11 @@ def test_dependency_block_with_open_parent_stays_parked_across_dispatch_tick(
         for _ in range(kb.BLOCK_RECURRENCE_LIMIT + 1):
             assert kb.block_task(conn, child, reason="wait", kind="dependency")
             parked = kb.get_task(conn, child)
-            assert (parked.status, parked.block_kind, parked.block_recurrences) == ("todo", "dependency", 0)
+            assert (parked.status, parked.block_kind, parked.block_recurrences) == (
+                "todo",
+                "dependency",
+                0,
+            )
             with kb.write_txn(conn):
                 conn.execute("UPDATE tasks SET status='running' WHERE id=?", (child,))
         assert kb.block_task(conn, child, reason="wait", kind="dependency")
@@ -196,5 +209,3 @@ def test_dependency_block_with_open_parent_stays_parked_across_dispatch_tick(
 # ---------------------------------------------------------------------------
 # Validation + back-compat
 # ---------------------------------------------------------------------------
-
-

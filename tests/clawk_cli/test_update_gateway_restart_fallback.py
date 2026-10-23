@@ -35,10 +35,14 @@ def test_profile_relaunch_wins_and_skips_the_cmdline_replay(monkeypatch):
     monkeypatch.setattr(
         gateway,
         "launch_detached_gateway_restart_by_cmdline",
-        lambda *_a: pytest.fail("cmdline replay must not run when the profile path works"),
+        lambda *_a: pytest.fail(
+            "cmdline replay must not run when the profile path works"
+        ),
     )
 
-    assert gateway._prepare_profile_gateway_update_restart("fitness", 4242) == "detached"
+    assert (
+        gateway._prepare_profile_gateway_update_restart("fitness", 4242) == "detached"
+    )
 
 
 def test_falls_back_to_cmdline_replay_when_profile_relaunch_fails(monkeypatch):

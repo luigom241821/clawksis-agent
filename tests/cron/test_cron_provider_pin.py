@@ -35,16 +35,28 @@ def _run_owned_job(job, tmp_path):
     db.create_session(ref.session_id, source="cron")
     authority = SimpleNamespace(
         db=db,
-        sessions={ref.session_id: SimpleNamespace(source=SimpleNamespace(user_id="cron-owner"))},
+        sessions={
+            ref.session_id: SimpleNamespace(
+                source=SimpleNamespace(user_id="cron-owner")
+            )
+        },
         pending_results={},
     )
     row = {
-        "admission_id": admission_id, "request_id": request_id,
-        "principal_id": "cron-owner", "payload": {"text": ""},
+        "admission_id": admission_id,
+        "request_id": request_id,
+        "principal_id": "cron-owner",
+        "payload": {"text": ""},
     }
-    policy = SimpleNamespace(request_json=json.dumps({
-        "cron_job": job, "extra_prompt": None, "request_id": request_id,
-    }))
+    policy = SimpleNamespace(
+        request_json=json.dumps(
+            {
+                "cron_job": job,
+                "extra_prompt": None,
+                "request_id": request_id,
+            }
+        )
+    )
 
     async def run():
         previous = current_execution()
@@ -79,8 +91,15 @@ def _base_job(**overrides):
     return job
 
 
-def _run(job, tmp_path, *, current_provider="openrouter", current_model=None, cron_model=None,
-         cron_model_provider=None):
+def _run(
+    job,
+    tmp_path,
+    *,
+    current_provider="openrouter",
+    current_model=None,
+    cron_model=None,
+    cron_model_provider=None,
+):
     """Drive run_job against a temp config.yaml whose ``model.default`` / ``model.provider`` are
     the CURRENT global defaults. Returns ``(success, error, agent_kwargs, resolve_kwargs)`` where
     the last two are the kwargs AIAgent / resolve_runtime_provider were called with (None when
@@ -112,18 +131,24 @@ def _run(job, tmp_path, *, current_provider="openrouter", current_model=None, cr
             "api_mode": "chat_completions",
         }
 
-    with patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler._get_clawk_home", return_value=tmp_path), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=_resolve), \
-         patch("run_agent.AIAgent") as mock_agent_cls:
+    with (
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler._get_clawk_home", return_value=tmp_path),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=_resolve
+        ),
+        patch("run_agent.AIAgent") as mock_agent_cls,
+    ):
         mock_agent = MagicMock()
         mock_agent.run_conversation.return_value = {"final_response": "ok"}
         mock_agent_cls.return_value = mock_agent
         success, _output, _final, error = _run_owned_job(job, tmp_path)
-        agent_kwargs = mock_agent_cls.call_args.kwargs if mock_agent_cls.called else None
+        agent_kwargs = (
+            mock_agent_cls.call_args.kwargs if mock_agent_cls.called else None
+        )
     return success, error, agent_kwargs, (resolve_kwargs or None)
 
 
@@ -133,7 +158,8 @@ class TestUnpinnedJobsFollowTheMainModel:
         provider/model, never on what it was created under."""
         job = _base_job(provider_snapshot="old-provider", model_snapshot="old-model")
         success, error, agent_kwargs, resolve_kwargs = _run(
-            job, tmp_path, current_provider="new-provider", current_model="new-model")
+            job, tmp_path, current_provider="new-provider", current_model="new-model"
+        )
 
         assert success is True, error
         assert agent_kwargs["model"] == "new-model"
@@ -143,22 +169,39 @@ class TestUnpinnedJobsFollowTheMainModel:
     def test_explicit_pin_then_fleet_default_beat_the_main_model(self, tmp_path):
         pinned = _base_job(provider="pinned-provider", model="pinned-model")
         success, error, agent_kwargs, resolve_kwargs = _run(
-            pinned, tmp_path, current_provider="new-provider", current_model="new-model",
-            cron_model="fleet-model", cron_model_provider="fleet-provider")
+            pinned,
+            tmp_path,
+            current_provider="new-provider",
+            current_model="new-model",
+            cron_model="fleet-model",
+            cron_model_provider="fleet-provider",
+        )
         assert success is True, error
-        assert (agent_kwargs["model"], resolve_kwargs["requested"]) == ("pinned-model", "pinned-provider")
+        assert (agent_kwargs["model"], resolve_kwargs["requested"]) == (
+            "pinned-model",
+            "pinned-provider",
+        )
 
         success, error, agent_kwargs, resolve_kwargs = _run(
-            _base_job(), tmp_path, current_provider="new-provider", current_model="new-model",
-            cron_model="fleet-model", cron_model_provider="fleet-provider")
+            _base_job(),
+            tmp_path,
+            current_provider="new-provider",
+            current_model="new-model",
+            cron_model="fleet-model",
+            cron_model_provider="fleet-provider",
+        )
         assert success is True, error
-        assert (agent_kwargs["model"], resolve_kwargs["requested"]) == ("fleet-model", "fleet-provider")
+        assert (agent_kwargs["model"], resolve_kwargs["requested"]) == (
+            "fleet-model",
+            "fleet-provider",
+        )
 
     def test_missing_model_guides_to_user_owned_cli(self, tmp_path, monkeypatch):
         """A missing-model failure cannot advertise agent-owned pinning."""
         monkeypatch.delenv("CLAWK_MODEL", raising=False)
         success, error, agent_kwargs, _ = _run(
-            _base_job(), tmp_path, current_provider="openrouter", current_model=None)
+            _base_job(), tmp_path, current_provider="openrouter", current_model=None
+        )
 
         assert success is False
         assert agent_kwargs is None
@@ -169,17 +212,33 @@ class TestPinnedLocksTheMainModel:
     """``pinned`` is a lock on the main model at the time it is set, stored as a plain pin."""
 
     @staticmethod
-    def _store(monkeypatch, tmp_path, main_model="main-model", main_provider="openrouter"):
+    def _store(
+        monkeypatch, tmp_path, main_model="main-model", main_provider="openrouter"
+    ):
         from cron import jobs
+
         (tmp_path / "config.yaml").write_text(f"model:\n  default: {main_model}\n")
         monkeypatch.setattr(jobs, "get_clawk_home", lambda: tmp_path, raising=True)
         state = {"jobs": []}
-        monkeypatch.setattr(jobs, "load_jobs", lambda: list(state["jobs"]), raising=True)
-        monkeypatch.setattr(jobs, "save_jobs", lambda j: state.__setitem__("jobs", list(j)), raising=True)
-        monkeypatch.setattr(jobs, "resolve_job_ref", lambda ref: next(
-            (j for j in state["jobs"] if j["id"] == ref), None), raising=True)
+        monkeypatch.setattr(
+            jobs, "load_jobs", lambda: list(state["jobs"]), raising=True
+        )
+        monkeypatch.setattr(
+            jobs,
+            "save_jobs",
+            lambda j: state.__setitem__("jobs", list(j)),
+            raising=True,
+        )
+        monkeypatch.setattr(
+            jobs,
+            "resolve_job_ref",
+            lambda ref: next((j for j in state["jobs"] if j["id"] == ref), None),
+            raising=True,
+        )
         resolver = MagicMock(return_value={"provider": main_provider})
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", resolver)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", resolver
+        )
         return jobs, resolver
 
     def test_pinned_true_locks_then_pinned_false_releases(self, monkeypatch, tmp_path):
@@ -198,7 +257,9 @@ class TestPinnedLocksTheMainModel:
 
         # The main model moves on; the locked job does not.
         (tmp_path / "config.yaml").write_text("model:\n  default: newer-model\n")
-        assert jobs.update_job(locked["id"], {"name": "renamed"})["model"] == "main-model"
+        assert (
+            jobs.update_job(locked["id"], {"name": "renamed"})["model"] == "main-model"
+        )
 
         released = jobs.update_job(locked["id"], {"pinned": False})
         assert (released["model"], released["provider"]) == (None, None)
@@ -206,8 +267,13 @@ class TestPinnedLocksTheMainModel:
     def test_pinned_never_overrides_an_explicit_model(self, monkeypatch, tmp_path):
         jobs, resolver = self._store(monkeypatch, tmp_path)
 
-        job = jobs.create_job(prompt="do a thing", schedule="every 1 hour", model="my-model",
-                              provider="nous", pinned=True)
+        job = jobs.create_job(
+            prompt="do a thing",
+            schedule="every 1 hour",
+            model="my-model",
+            provider="nous",
+            pinned=True,
+        )
         assert (job["model"], job["provider"]) == ("my-model", "nous")
         resolver.assert_not_called()
 
@@ -223,7 +289,8 @@ class TestRuntimeResolutionTargetModel:
     def test_primary_resolution_passes_effective_model(self, tmp_path):
         job = _base_job(model="my-pinned-model", provider="openrouter")
         success, error, _agent_kwargs, resolve_kwargs = _run(
-            job, tmp_path, current_provider="openrouter", current_model="other-model")
+            job, tmp_path, current_provider="openrouter", current_model="other-model"
+        )
 
         assert success is True, error
         assert resolve_kwargs["target_model"] == "my-pinned-model"

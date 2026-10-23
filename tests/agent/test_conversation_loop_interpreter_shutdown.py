@@ -18,9 +18,11 @@ The fix adds an early check in the outer except handler: if
 ``"cannot schedule new futures"`` pattern, the loop breaks immediately with
 a clean ``interpreter_shutdown`` exit reason.
 """
+
 from __future__ import annotations
 
 from agent.conversation_loop import _is_interpreter_shutdown_error
+
 
 class TestInterpreterShutdownDetection:
     """Verify the interpreter-shutdown error matcher used by the
@@ -28,9 +30,7 @@ class TestInterpreterShutdownDetection:
 
     def test_matches_full_interpreter_shutdown_message(self):
         """The canonical CPython asyncio shutdown message."""
-        exc = RuntimeError(
-            "cannot schedule new futures after interpreter shutdown"
-        )
+        exc = RuntimeError("cannot schedule new futures after interpreter shutdown")
         assert _is_interpreter_shutdown_error(exc) is True
 
     def test_matches_short_shutdown_variant(self):

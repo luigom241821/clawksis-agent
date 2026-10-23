@@ -49,21 +49,35 @@ def _log_into(profile: Path, *, adopt: bool) -> None:
         if adopt:
             clawk_logging.setup_logging(clawk_home=profile)
         else:
-            assert clawk_logging.enable_profile_log_routing([Path(profile).parent.parent, profile]) is True
+            assert (
+                clawk_logging.enable_profile_log_routing(
+                    [Path(profile).parent.parent, profile]
+                )
+                is True
+            )
         logger.error("routed record before deletion")
     finally:
         reset_clawk_home_override(token)
     clawk_logging.flush_log_queue()
-    assert "routed record before deletion" in (profile / "logs" / "agent.log").read_text(encoding="utf-8")
+    assert "routed record before deletion" in (
+        profile / "logs" / "agent.log"
+    ).read_text(encoding="utf-8")
 
 
 def _routers() -> list:
-    return [h for h in clawk_logging._queued_file_handlers
-            if isinstance(h, clawk_logging._ProfileRoutingFileHandler)]
+    return [
+        h
+        for h in clawk_logging._queued_file_handlers
+        if isinstance(h, clawk_logging._ProfileRoutingFileHandler)
+    ]
 
 
-@pytest.mark.parametrize("adopt", [False, True], ids=["explicit-routing", "setup_logging-adoption"])
-def test_delete_profile_releases_every_routed_handler_for_that_home(routed_profile, adopt):
+@pytest.mark.parametrize(
+    "adopt", [False, True], ids=["explicit-routing", "setup_logging-adoption"]
+)
+def test_delete_profile_releases_every_routed_handler_for_that_home(
+    routed_profile, adopt
+):
     _home, profile = routed_profile
     _log_into(profile, adopt=adopt)
     routers = _routers()
@@ -76,5 +90,7 @@ def test_delete_profile_releases_every_routed_handler_for_that_home(routed_profi
     for router in routers:
         assert resolved not in router._profile_handlers
         assert resolved not in router._profile_homes
-    assert all(handler.stream is None for handler in held.values()), "streams still open into the deleted profile"
+    assert all(handler.stream is None for handler in held.values()), (
+        "streams still open into the deleted profile"
+    )
     assert not profile.exists()

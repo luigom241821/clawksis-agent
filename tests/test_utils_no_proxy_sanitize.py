@@ -21,8 +21,16 @@ from utils import normalize_proxy_env_vars, sanitize_no_proxy_entries
 
 @pytest.fixture
 def proxy_env(monkeypatch):
-    for key in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy"):
+    for key in (
+        "NO_PROXY",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
 
 
@@ -38,16 +46,25 @@ class TestSanitizeNoProxyEntries:
         "entry,expected",
         [
             ("[::1]", "::1"),
-            ("[::1]:8080", "::1"),  # httpx cannot express a port-scoped v6 bypass; the literal still bypasses every port
+            (
+                "[::1]:8080",
+                "::1",
+            ),  # httpx cannot express a port-scoped v6 bypass; the literal still bypasses every port
             ("[2001:db8::1]", "2001:db8::1"),
             ("[::ffff:127.0.0.1]", "::ffff:127.0.0.1"),
             ("[::1]/128", "::1"),
-            ("::1/128", "::1"),  # httpx cannot compile v6 CIDR bypasses at all; degrade to the bare literal
+            (
+                "::1/128",
+                "::1",
+            ),  # httpx cannot compile v6 CIDR bypasses at all; degrade to the bare literal
             ("2001:db8::/32", "2001:db8::"),
         ],
     )
     def test_bracketed_and_cidr_ipv6_entries_are_rewritten(self, entry, expected):
-        assert sanitize_no_proxy_entries(f"example.com,{entry}") == f"example.com,{expected}"
+        assert (
+            sanitize_no_proxy_entries(f"example.com,{entry}")
+            == f"example.com,{expected}"
+        )
 
     @pytest.mark.parametrize(
         "value",
@@ -83,7 +100,9 @@ class TestNormalizeProxyEnvVars:
         monkeypatch.setenv("HTTPS_PROXY", "socks://127.0.0.1:7890")
         monkeypatch.setenv("NO_PROXY", _CLASH_NO_PROXY)
         normalize_proxy_env_vars()
-        assert os_get("HTTPS_PROXY") == "socks5://127.0.0.1:7890"  # pre-existing behavior intact
+        assert (
+            os_get("HTTPS_PROXY") == "socks5://127.0.0.1:7890"
+        )  # pre-existing behavior intact
         assert os_get("NO_PROXY") == "127.0.0.1,localhost,::1"
 
 

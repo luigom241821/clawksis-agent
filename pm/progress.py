@@ -9,6 +9,7 @@ containment never hides an error. ``CLAWK_VERBOSE=0`` forces containment.
 
 Stdlib-only: the bootstrap runner imports this from a pre-3.11 system Python.
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -45,7 +46,10 @@ def verbose_output(env: Optional[Mapping[str, str]] = None) -> bool:
         return True
     if explicit in _FALSE:
         return False
-    return any(source.get(key, "").strip().lower() not in ("", *_FALSE) for key in ("CI", "GITHUB_ACTIONS"))
+    return any(
+        source.get(key, "").strip().lower() not in ("", *_FALSE)
+        for key in ("CI", "GITHUB_ACTIONS")
+    )
 
 
 def _is_terminal(stream: IO[str]) -> bool:
@@ -62,8 +66,14 @@ class LiveTail:
     quick to deserve a line of their own.
     """
 
-    def __init__(self, label: Optional[str], stream: Optional[IO[str]] = None, *,
-                 hide: Optional[Callable[[str], bool]] = None, indent: str = "") -> None:
+    def __init__(
+        self,
+        label: Optional[str],
+        stream: Optional[IO[str]] = None,
+        *,
+        hide: Optional[Callable[[str], bool]] = None,
+        indent: str = "",
+    ) -> None:
         self.label = label
         self.stream = sys.stdout if stream is None else stream
         self.hide = hide
@@ -81,7 +91,9 @@ class LiveTail:
 
     def write(self, text: str) -> int:
         # npm and uv redraw with bare CRs; each redraw is a line of progress.
-        lines = (self._partial + text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        lines = (
+            (self._partial + text).replace("\r\n", "\n").replace("\r", "\n").split("\n")
+        )
         self._partial = lines.pop()[-MAX_LINE:]
         for line in lines:
             self._line(line)
@@ -118,7 +130,9 @@ class LiveTail:
         if not self.tail:
             self._emit(f"{self.indent}✗ {name} failed\n")
             return
-        self._emit(f"{self.indent}✗ {name} failed; last {len(self.tail)} lines of output:\n")
+        self._emit(
+            f"{self.indent}✗ {name} failed; last {len(self.tail)} lines of output:\n"
+        )
         self._emit("".join(f"{self.indent}    {line}\n" for line in self.tail))
 
     def _line(self, line: str) -> None:
@@ -146,9 +160,15 @@ class LiveTail:
         self.stream.flush()
 
 
-def run_contained(command: Sequence[str], label: str, *, stream: Optional[IO[str]] = None,
-                  hide: Optional[Callable[[str], bool]] = None, indent: str = "",
-                  **kwargs) -> subprocess.CompletedProcess:
+def run_contained(
+    command: Sequence[str],
+    label: str,
+    *,
+    stream: Optional[IO[str]] = None,
+    hide: Optional[Callable[[str], bool]] = None,
+    indent: str = "",
+    **kwargs,
+) -> subprocess.CompletedProcess:
     """``subprocess.run(check=True)`` under the output policy."""
     if verbose_output():
         out = sys.stdout if stream is None else stream
@@ -156,8 +176,13 @@ def run_contained(command: Sequence[str], label: str, *, stream: Optional[IO[str
         out.flush()
         return subprocess.run(command, check=True, **kwargs)
     tail = LiveTail(label, stream, hide=hide, indent=indent)
-    captured = dict(stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                    encoding="utf-8", errors="replace")
+    captured = dict(
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if not tail.live:
         try:
             result = subprocess.run(command, check=True, **captured, **kwargs)

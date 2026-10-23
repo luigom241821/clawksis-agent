@@ -10,12 +10,21 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from agent.image_gen_provider import (
-    ImageGenProvider, error_response, normalize_reference_images, save_b64_image, save_url_image)
+    ImageGenProvider,
+    error_response,
+    normalize_reference_images,
+    save_b64_image,
+    save_url_image,
+)
 
 logger = logging.getLogger(__name__)
 
 # OpenAI-style ``size`` per semantic aspect, shared by every OpenAI-compatible backend.
-OPENAI_SIZES: dict[str, str] = {"landscape": "1536x1024", "square": "1024x1024", "portrait": "1024x1536"}
+OPENAI_SIZES: dict[str, str] = {
+    "landscape": "1536x1024",
+    "square": "1024x1024",
+    "portrait": "1024x1536",
+}
 
 # gpt-image-2 quality tiers as virtual model ids (same API model, different ``quality`` knob).
 GPT_IMAGE_2_API_MODEL = "gpt-image-2"
@@ -69,9 +78,15 @@ def load_image_gen_config(sub: Optional[str] = None) -> dict[str, Any]:
 
 
 def resolve_static_model(
-    models: dict[str, dict[str, Any]], default: str, *, env_var: str, config_key: str,
-    explicit: Optional[str] = None, include_top_level: bool = True,
-    config: Optional[dict[str, Any]] = None, passthrough: bool = False,
+    models: dict[str, dict[str, Any]],
+    default: str,
+    *,
+    env_var: str,
+    config_key: str,
+    explicit: Optional[str] = None,
+    include_top_level: bool = True,
+    config: Optional[dict[str, Any]] = None,
+    passthrough: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     """``(model_id, meta)`` from a fixed catalog; first *known* id wins (unknown ids fall through):
     explicit → ``env_var`` → ``image_gen.<config_key>.model`` → ``image_gen.model`` → ``default``.
@@ -94,14 +109,23 @@ def resolve_static_model(
         if isinstance(candidate, str) and candidate in models:
             return candidate, models[candidate]
     if passthrough:
-        custom = next((c.strip() for c in (env_override, candidates[0]) if isinstance(c, str) and c.strip()), "")
+        custom = next(
+            (
+                c.strip()
+                for c in (env_override, candidates[0])
+                if isinstance(c, str) and c.strip()
+            ),
+            "",
+        )
         if custom:
             return custom, {"display": custom, "api_model": custom, "quality": None}
     return default, models[default]
 
 
 def collect_source_images(
-    image_url: Optional[str], reference_image_urls: Optional[list[str]], limit: Optional[int] = None
+    image_url: Optional[str],
+    reference_image_urls: Optional[list[str]],
+    limit: Optional[int] = None,
 ) -> list[str]:
     """Primary ``image_url`` first, then normalized references, clamped to ``limit``."""
     sources: list[str] = []
@@ -113,7 +137,8 @@ def collect_source_images(
 
 def catalog_rows(
     models: dict[str, dict[str, Any]],
-    fields: Iterable[str] = ("display", "speed", "strengths", "price"), *,
+    fields: Iterable[str] = ("display", "speed", "strengths", "price"),
+    *,
     price: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Picker rows: ``id`` + ``fields`` (missing ``display`` → id, else ``""``); ``price`` overrides."""
@@ -133,7 +158,10 @@ def api_key_setup_schema(
 ) -> dict[str, Any]:
     """``get_setup_schema()`` dict for a provider authenticated by one env var."""
     return {
-        "name": name, "badge": badge, "tag": tag, "env_vars": [{"key": key, "prompt": prompt, "url": url}],
+        "name": name,
+        "badge": badge,
+        "tag": tag,
+        "env_vars": [{"key": key, "prompt": prompt, "url": url}],
     }
 
 
@@ -168,11 +196,15 @@ class StaticImageGenProvider(ImageGenProvider):
         return api_key_setup_schema(**self.setup)
 
 
-def error_factory(provider: str, aspect: str, *, model: str = "", prompt: str = "") -> ErrorFn:
+def error_factory(
+    provider: str, aspect: str, *, model: str = "", prompt: str = ""
+) -> ErrorFn:
     """Return ``fail(error, error_type, **override)`` pre-bound to this call's context."""
 
     def fail(error: str, error_type: str, **override: Any) -> dict[str, Any]:
-        kwargs = dict(provider=provider, model=model, prompt=prompt, aspect_ratio=aspect)
+        kwargs = dict(
+            provider=provider, model=model, prompt=prompt, aspect_ratio=aspect
+        )
         kwargs.update(override)
         return error_response(error=error, error_type=error_type, **kwargs)
 
@@ -192,13 +224,23 @@ def import_openai(provider: str, aspect: str) -> tuple[Any, Optional[dict[str, A
     try:
         import openai
     except ImportError:
-        return None, error_factory(provider, aspect)(OPENAI_MISSING, "missing_dependency")
+        return None, error_factory(provider, aspect)(
+            OPENAI_MISSING, "missing_dependency"
+        )
     return openai, None
 
 
 def materialize_image(
-    b64: Optional[str], url: Optional[str], *, prefix: str, label: str, provider: str, model: str,
-    prompt: str, aspect: str, log: logging.Logger = logger,
+    b64: Optional[str],
+    url: Optional[str],
+    *,
+    prefix: str,
+    label: str,
+    provider: str,
+    model: str,
+    prompt: str,
+    aspect: str,
+    log: logging.Logger = logger,
     on_url_fail: Optional[Callable[[Exception], None]] = None,
 ) -> tuple[Optional[str], Optional[dict[str, Any]]]:
     """``(image_ref, None)`` or ``(None, error)`` for a ``(b64_json, url)`` pair. Base64 is always
@@ -210,12 +252,20 @@ def materialize_image(
         except Exception as exc:
             return None, fail(f"Could not save image to cache: {exc}", "io_error")
     if url:
-        return cache_url_best_effort(url, prefix=prefix, label=label, log=log, on_fail=on_url_fail), None
-    return None, fail(f"{label} response contained neither b64_json nor URL", "empty_response")
+        return cache_url_best_effort(
+            url, prefix=prefix, label=label, log=log, on_fail=on_url_fail
+        ), None
+    return None, fail(
+        f"{label} response contained neither b64_json nor URL", "empty_response"
+    )
 
 
 def cache_url_best_effort(
-    url: str, *, prefix: str, label: str, log: logging.Logger = logger,
+    url: str,
+    *,
+    prefix: str,
+    label: str,
+    log: logging.Logger = logger,
     on_fail: Optional[Callable[[Exception], None]] = None,
 ) -> str:
     """Cache ``url`` locally; on failure warn (or call ``on_fail``) and return the bare URL."""
@@ -225,7 +275,12 @@ def cache_url_best_effort(
         if on_fail is not None:
             on_fail(exc)
         else:
-            log.warning("%s image URL %s could not be cached (%s); falling back to bare URL.", label, url, exc)
+            log.warning(
+                "%s image URL %s could not be cached (%s); falling back to bare URL.",
+                label,
+                url,
+                exc,
+            )
         return url
 
 
@@ -252,7 +307,9 @@ class HttpFailure:
     response: Any = None
 
 
-def record_token_usage(usage: Any, *, model: str, provider: str, base_url: Optional[str] = None) -> None:
+def record_token_usage(
+    usage: Any, *, model: str, provider: str, base_url: Optional[str] = None
+) -> None:
     """Record a token-billed image call against the ambient session as task ``image_generation``.
 
     Token-metered image models (OpenRouter chat-image and Image API models, OpenAI ``gpt-image``)
@@ -268,13 +325,21 @@ def record_token_usage(usage: Any, *, model: str, provider: str, base_url: Optio
     from agent.aux_accounting import record_aux_usage
 
     record_aux_usage(
-        SimpleNamespace(model=model, usage=usage), "image_generation", provider=provider, base_url=base_url)
+        SimpleNamespace(model=model, usage=usage),
+        "image_generation",
+        provider=provider,
+        base_url=base_url,
+    )
 
 
 def _never_connected(exc: Exception) -> bool:
     """True when the last connection attempt never connected, so no server accepted the request body
     (a redirect hop may have answered earlier, but a redirect accepts nothing)."""
-    from urllib3.exceptions import MaxRetryError, NameResolutionError, NewConnectionError
+    from urllib3.exceptions import (
+        MaxRetryError,
+        NameResolutionError,
+        NewConnectionError,
+    )
 
     cause = exc.args[0] if exc.args else None
     reason = cause.reason if isinstance(cause, MaxRetryError) else cause
@@ -282,7 +347,12 @@ def _never_connected(exc: Exception) -> bool:
 
 
 def post_json(
-    url: str, *, headers: dict[str, str], payload: dict[str, Any], timeout: Any, label: str,
+    url: str,
+    *,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: Any,
+    label: str,
     error_message: Callable[[Any, Exception], str] = requests_error_message,
     catch_request_exception: bool = False,
 ) -> tuple[Optional[Any], Optional[HttpFailure]]:
@@ -300,21 +370,36 @@ def post_json(
         status = resp.status_code if resp is not None else 0
         message = error_message(resp, exc)
         return None, HttpFailure(
-            "http", f"{label} image generation failed ({status}): {message}", "api_error",
-            status=status, message=message, response=resp)
+            "http",
+            f"{label} image generation failed ({status}): {message}",
+            "api_error",
+            status=status,
+            message=message,
+            response=resp,
+        )
     except requests.Timeout:
         return None, HttpFailure(
-            "timeout", f"{label} image generation timed out ({int(read_timeout)}s)", "timeout")
+            "timeout",
+            f"{label} image generation timed out ({int(read_timeout)}s)",
+            "timeout",
+        )
     except requests.ConnectionError as exc:
         kind = "unreachable" if _never_connected(exc) else "connection"
-        return None, HttpFailure(kind, f"{label} connection error: {exc}", "connection_error")
+        return None, HttpFailure(
+            kind, f"{label} connection error: {exc}", "connection_error"
+        )
     except requests.RequestException as exc:
         if not catch_request_exception:
             raise
-        return None, HttpFailure("request", f"{label} request failed: {exc}", "api_error")
+        return None, HttpFailure(
+            "request", f"{label} request failed: {exc}", "api_error"
+        )
     try:
         return response.json(), None
     except Exception as exc:
         return None, HttpFailure(
-            "invalid_json", f"{label} returned invalid JSON: {exc}", "invalid_response", message=str(exc),
+            "invalid_json",
+            f"{label} returned invalid JSON: {exc}",
+            "invalid_response",
+            message=str(exc),
         )

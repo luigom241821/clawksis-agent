@@ -1,4 +1,5 @@
 """Authority-local subscription ordering over the existing bounded transports/replay."""
+
 from copy import deepcopy
 import logging
 import threading
@@ -35,32 +36,52 @@ class SessionEvents:
                 self.sequence = 0
             return self.epoch, self.sequence
 
-    def publish(self, session_id, payload, *, event_type="message.complete", execution=None):
+    def publish(
+        self, session_id, payload, *, event_type="message.complete", execution=None
+    ):
         # ``execution`` stamps this frame alone; the shared stamp is read without the lock elsewhere.
         with self.lock:
             self.watermark()
-            frame = {'jsonrpc': '2.0', 'method': 'event', 'params': {
-                **(self.execution if execution is None else execution), 'type': event_type, 'session_id': self._key,
-                'payload': deepcopy(payload), 'replay_epoch': self.epoch}}
+            frame = {
+                "jsonrpc": "2.0",
+                "method": "event",
+                "params": {
+                    **(self.execution if execution is None else execution),
+                    "type": event_type,
+                    "session_id": self._key,
+                    "payload": deepcopy(payload),
+                    "replay_epoch": self.epoch,
+                },
+            }
             event_replay._stamp_event(frame)
-            if frame['params']['seq'] <= self.sequence:
+            if frame["params"]["seq"] <= self.sequence:
                 # Another publisher may evict us after watermark's lookup.
                 self.epoch = uuid.uuid4().hex
-                frame['params']['replay_epoch'] = self.epoch
+                frame["params"]["replay_epoch"] = self.epoch
             # The ring froze the frame under its private lookup key; live recipients see the
             # canonical ID here and ``since`` restores it on the thawed replay copies.
-            frame['params']['session_id'] = session_id
+            frame["params"]["session_id"] = session_id
             self._public_id = session_id
-            self.sequence = frame['params']['seq']
+            self.sequence = frame["params"]["seq"]
 
             def overflow(transport):
                 # The peer's socket is healthy; only its event subscription ended. Same
                 # shape as the client's own synthetic gap so one consumer handles both.
                 if self.on_overflow is not None:
                     self.on_overflow(transport)
-                return {'jsonrpc': '2.0', 'method': 'event', 'params': {
-                    'type': 'session.replay_gap', 'session_id': session_id,
-                    'payload': {'replay_epoch': self.epoch, 'latest_seq': self.sequence}}}
+                return {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": "session.replay_gap",
+                        "session_id": session_id,
+                        "payload": {
+                            "replay_epoch": self.epoch,
+                            "latest_seq": self.sequence,
+                        },
+                    },
+                }
+
             delivered = self.fanout.write(frame, overflow=overflow)
             for observer in tuple(self.observers):
                 try:
@@ -68,8 +89,11 @@ class SessionEvents:
                     delivered = True
                 except Exception:
                     # A request-owned projection cannot undo committed publication or starve peers.
-                    logging.getLogger(__name__).warning('Session event observer failed for %s', session_id,
-                                                        exc_info=True)
+                    logging.getLogger(__name__).warning(
+                        "Session event observer failed for %s",
+                        session_id,
+                        exc_info=True,
+                    )
             # True when a live viewer or observer took the frame; the replay ring alone is not
             # delivery (a detached finite viewer reads nothing until it reattaches).
             return delivered
@@ -78,12 +102,29 @@ class SessionEvents:
         with self.lock:
             current_epoch, latest = self.watermark()
             frames = event_replay.events_since(self._key, sequence)
-            missing = (epoch != current_epoch or sequence > latest
-                       or event_replay.is_truncated(self._key, sequence)
-                       or event_replay.latest_seq(self._key) != latest)
-            events = [] if missing else [
-                {**frame, 'session_id': self._public_id} if frame.get('session_id') == self._key else frame
-                for frame in frames]
-            return {'events': events, 'latest_seq': latest, 'last_sequence': latest,
-                    'epoch': current_epoch, 'replay_epoch': current_epoch,
-                    'truncated': missing, 'snapshot_required': missing, 'count': len(events)}
+            missing = (
+                epoch != current_epoch
+                or sequence > latest
+                or event_replay.is_truncated(self._key, sequence)
+                or event_replay.latest_seq(self._key) != latest
+            )
+            events = (
+                []
+                if missing
+                else [
+                    {**frame, "session_id": self._public_id}
+                    if frame.get("session_id") == self._key
+                    else frame
+                    for frame in frames
+                ]
+            )
+            return {
+                "events": events,
+                "latest_seq": latest,
+                "last_sequence": latest,
+                "epoch": current_epoch,
+                "replay_epoch": current_epoch,
+                "truncated": missing,
+                "snapshot_required": missing,
+                "count": len(events),
+            }

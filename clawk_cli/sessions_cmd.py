@@ -21,6 +21,7 @@ from clawk_state_errors import SessionActiveWriteGuardError
 
 def get_clawk_home():
     from clawk_cli import main
+
     return main.get_clawk_home()
 
 
@@ -35,7 +36,11 @@ def _size_mb(path) -> float:
 def _size_delta_label(saved_mb: float) -> str:
     """A negative delta means the file GREW (concurrent writes during a long optimize); "reclaimed
     -163.0 MB" reads as data loss, so say "grew by"."""
-    return f"reclaimed {saved_mb:.1f} MB" if saved_mb >= 0 else f"grew by {-saved_mb:.1f} MB"
+    return (
+        f"reclaimed {saved_mb:.1f} MB"
+        if saved_mb >= 0
+        else f"grew by {-saved_mb:.1f} MB"
+    )
 
 
 def _confirm_prompt(prompt: str) -> bool:
@@ -53,6 +58,7 @@ def _not_found(session_id) -> int:
 
 def _print_dry_run_preview(candidates, filters) -> None:
     from clawk_cli.session_filters import describe_filters
+
     print(f"Would export {len(candidates)} session(s) ({describe_filters(filters)}).")
     for row in candidates[:100]:
         print(f"  {row.get('id')}  {row.get('source', '')}")
@@ -61,9 +67,28 @@ def _print_dry_run_preview(candidates, filters) -> None:
 
 
 _FILTER_ARGS = (
-    "older_than", "newer_than", "before", "after", "source", "title", "end_reason", "cwd", "min_messages",
-    "max_messages", "model", "provider", "user", "chat_id", "chat_type", "branch", "min_tokens", "max_tokens",
-    "min_cost", "max_cost", "min_tool_calls", "max_tool_calls",
+    "older_than",
+    "newer_than",
+    "before",
+    "after",
+    "source",
+    "title",
+    "end_reason",
+    "cwd",
+    "min_messages",
+    "max_messages",
+    "model",
+    "provider",
+    "user",
+    "chat_id",
+    "chat_type",
+    "branch",
+    "min_tokens",
+    "max_tokens",
+    "min_cost",
+    "max_cost",
+    "min_tool_calls",
+    "max_tool_calls",
 )
 
 
@@ -73,7 +98,11 @@ def _any_filter_args(args) -> bool:
 
 def _export_dir(output) -> Path:
     """``--output`` dir for multi-file exports; ``~/.clawksis/session-exports`` when empty or ``-``."""
-    return Path(output).expanduser() if output and output != "-" else get_clawk_home() / "session-exports"
+    return (
+        Path(output).expanduser()
+        if output and output != "-"
+        else get_clawk_home() / "session-exports"
+    )
 
 
 def _output_file_in_dir(output, default_name: str):
@@ -99,13 +128,16 @@ def _write_output(output, text, summary) -> None:
 
 # -- handlers that must run BEFORE SessionDB() is opened ----------------------
 
+
 def _cmd_repair(args):
     from clawk_state import DEFAULT_DB_PATH as db_path, SessionDB
     from clawk_state_repair import _db_opens_cleanly, repair_state_db_schema
+
     if not db_path.exists():
         print(f"No session database at {db_path} (nothing to repair).")
         return
     from clawk_state_reconcile import repair_declarative_schema, schema_drift_reason
+
     # A missing canonical sessions table is not additive upgrade drift: creating
     # an empty one could hide lost history. Preserve corruption/recovery routing.
     reason = _db_opens_cleanly(db_path)
@@ -132,14 +164,16 @@ def _cmd_repair(args):
         print(f"  strategy: {report.get('strategy')}")
         try:
             with SessionDB(db_path=db_path, read_only=drift_only) as _repair_db:
-                n = _repair_db._conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+                n = _repair_db._conn.execute(
+                    "SELECT COUNT(*) FROM sessions"
+                ).fetchone()[0]
             print(f"✓ Repaired — {n} sessions recovered.")
         except Exception:
             print("✓ Repaired.")
         return
     print(f"✗ Repair failed: {report.get('error')}")
     if drift_only:
-        if report.get('backup_path'):
+        if report.get("backup_path"):
             print(f"  A backup is preserved at: {report['backup_path']}")
         return 1
     if report.get("backup_path"):
@@ -162,8 +196,12 @@ def _cmd_recover(args):
     """Offline recovery: works on a disposable copy of the source; never touches the active database."""
     import sqlite3
     from clawk_cli.session_recovery import (
-        SessionRecoveryError, inspect_session_database, recover_session_database, write_recovery_report,
+        SessionRecoveryError,
+        inspect_session_database,
+        recover_session_database,
+        write_recovery_report,
     )
+
     source, output = args.source, getattr(args, "output", None)
     inspect_only = bool(getattr(args, "inspect_only", False))
     allow_partial = bool(getattr(args, "allow_partial", False))
@@ -171,9 +209,18 @@ def _cmd_recover(args):
     if not inspect_only and output is not None and report_path is None:
         report_path = output.with_name(output.name + ".recovery.json")
     usage_errors = (
-        (inspect_only and output is not None, "--output cannot be used with --inspect-only."),
-        (inspect_only and allow_partial, "--allow-partial cannot be used with --inspect-only."),
-        (not inspect_only and output is None, "--output is required unless --inspect-only is used."),
+        (
+            inspect_only and output is not None,
+            "--output cannot be used with --inspect-only.",
+        ),
+        (
+            inspect_only and allow_partial,
+            "--allow-partial cannot be used with --inspect-only.",
+        ),
+        (
+            not inspect_only and output is None,
+            "--output is required unless --inspect-only is used.",
+        ),
         (
             report_path is not None and os.path.lexists(report_path.expanduser()),
             f"refusing to overwrite existing report: {report_path}",
@@ -191,12 +238,18 @@ def _cmd_recover(args):
             print("Recovering canonical session data into a new database…")
             progress = _RecoveryProgress()
             report = recover_session_database(
-                source, output, work_dir=work_dir, chunk_size=getattr(args, "chunk_size", 1000),
-                progress_cb=progress, allow_partial=allow_partial,
+                source,
+                output,
+                work_dir=work_dir,
+                chunk_size=getattr(args, "chunk_size", 1000),
+                progress_cb=progress,
+                allow_partial=allow_partial,
             )
             progress.finish()
     except (SessionRecoveryError, OSError, sqlite3.DatabaseError) as exc:
-        print(f"Error: session recovery failed: {exc}\nThe supplied source database was not replaced or deleted.")
+        print(
+            f"Error: session recovery failed: {exc}\nThe supplied source database was not replaced or deleted."
+        )
         return 1
     if report_path is None:
         print(json.dumps(report, indent=2, sort_keys=True))
@@ -224,7 +277,11 @@ class _RecoveryProgress:
             self.table = table
         total = info.get("source_rows")
         suffix = f"/{int(total):,}" if total is not None else ""
-        print(f"\r  {table}: {int(info.get('copied_rows') or 0):,}{suffix}", end="", flush=True)
+        print(
+            f"\r  {table}: {int(info.get('copied_rows') or 0):,}{suffix}",
+            end="",
+            flush=True,
+        )
 
     def finish(self):
         if self.table is not None:
@@ -249,7 +306,10 @@ def _print_recovery_verdict(report, output, allow_partial) -> int:
             )
         else:
             print(f"✓ Partial recovery output verified at: {output}")
-        sessions_n, messages_n = int(counts.get("sessions") or 0), int(counts.get("messages") or 0)
+        sessions_n, messages_n = (
+            int(counts.get("sessions") or 0),
+            int(counts.get("messages") or 0),
+        )
         print(
             f"  Recovered {sessions_n:,} sessions and {messages_n:,} messages.\n"
             "  The active session database was not changed.\n"
@@ -266,12 +326,14 @@ def _print_recovery_verdict(report, output, allow_partial) -> int:
 
 def _cmd_import(args):
     from clawk_cli.foreign_sessions import run_sessions_import
+
     # Explicit path but nothing imported -> non-zero for scripts. Picker cancel (no path) -> exit 0.
     if run_sessions_import(args) is None and getattr(args, "path", None):
         return 1
 
 
 # -- handlers that receive an open SessionDB ----------------------------------
+
 
 def _default_exclude(args):
     """Hide third-party tool sessions by default, but honour explicit --source."""
@@ -281,16 +343,20 @@ def _default_exclude(args):
 def _surface_reader(db):
     """``--source cli`` also matches a gateway row stored as ``local`` with that created surface."""
     from clawk_cli.gateway_session_store import SurfaceLabelReader
+
     return SurfaceLabelReader(db)
 
 
 def _cmd_list(db, args):
     from clawk_state_sessions import workspace_key as _ws_key
+
     # LIMIT lives in the query, so probe one row past the cap: it is the only way to know the
     # page was cut without a second COUNT query (``--limit 0`` is ``LIMIT 0``: no rows, no probe).
     limit = args.limit
     sessions = _surface_reader(db).list_sessions_rich(
-        source=args.source, exclude_sources=_default_exclude(args), limit=limit + 1 if limit > 0 else limit,
+        source=args.source,
+        exclude_sources=_default_exclude(args),
+        limit=limit + 1 if limit > 0 else limit,
     )
     truncated = limit > 0 and len(sessions) > limit
     sessions = sessions[:limit] if truncated else sessions
@@ -301,7 +367,10 @@ def _cmd_list(db, args):
         _needle = _ws_filter.lower()
         keyed = ((s, (_ws_key(s) or "").lower()) for s in sessions)
         sessions = [
-            s for s, key in keyed if key and (_needle in key or _needle == os.path.basename(key.rstrip("/\\")))
+            s
+            for s, key in keyed
+            if key
+            and (_needle in key or _needle == os.path.basename(key.rstrip("/\\")))
         ]
     if not sessions:
         print("No sessions found.")
@@ -314,22 +383,46 @@ def _cmd_list(db, args):
     def _ws(s):  # repo/dir basename, "—" when unbound
         key = _ws_key(s)
         return ((os.path.basename(key.rstrip("/\\")) or key) if key else "—")[:16]
+
     _title = lambda s, n: (s.get("title") or "—")[:n]
     _preview = lambda s, n: s.get("preview", "")[:n]
     _ago = lambda s: _relative_time(s.get("last_active"), session_id=s["id"])
 
-    def _src(s):  # current routing platform; "<created>→<current>" when provenance diverged (#56439)
+    def _src(
+        s,
+    ):  # current routing platform; "<created>→<current>" when provenance diverged (#56439)
         created = s.get("created_source") or ""
-        return f"{created}→{s['source']}" if created and created != s["source"] else s["source"]
+        return (
+            f"{created}→{s['source']}"
+            if created and created != s["source"]
+            else s["source"]
+        )
+
     layouts = {  # (has_ws, has_titles): header, rule width, row formatter
-        (True, True): (f"{'Title':<28} {'Workspace':<18} {'Last Active':<13} {'ID'}", 110,
-                       lambda s: f"{_title(s, 26):<28} {_ws(s):<18} {_ago(s):<13} {s['id']}"),
-        (True, False): (f"{'Preview':<38} {'Workspace':<18} {'Last Active':<13} {'Src':<16} {'ID'}", 110,
-                        lambda s: f"{_preview(s, 36):<38} {_ws(s):<18} {_ago(s):<13} {_src(s):<16} {s['id']}"),
-        (False, True): (f"{'Title':<32} {'Preview':<40} {'Last Active':<13} {'ID'}", 110,
-                        lambda s: f"{_title(s, 30):<32} {_preview(s, 38):<40} {_ago(s):<13} {s['id']}"),
-        (False, False): (f"{'Preview':<50} {'Last Active':<13} {'Src':<16} {'ID'}", 105,
-                         lambda s: f"{_preview(s, 48):<50} {_ago(s):<13} {_src(s):<16} {s['id']}"),
+        (True, True): (
+            f"{'Title':<28} {'Workspace':<18} {'Last Active':<13} {'ID'}",
+            110,
+            lambda s: f"{_title(s, 26):<28} {_ws(s):<18} {_ago(s):<13} {s['id']}",
+        ),
+        (True, False): (
+            f"{'Preview':<38} {'Workspace':<18} {'Last Active':<13} {'Src':<16} {'ID'}",
+            110,
+            lambda s: (
+                f"{_preview(s, 36):<38} {_ws(s):<18} {_ago(s):<13} {_src(s):<16} {s['id']}"
+            ),
+        ),
+        (False, True): (
+            f"{'Title':<32} {'Preview':<40} {'Last Active':<13} {'ID'}",
+            110,
+            lambda s: (
+                f"{_title(s, 30):<32} {_preview(s, 38):<40} {_ago(s):<13} {s['id']}"
+            ),
+        ),
+        (False, False): (
+            f"{'Preview':<50} {'Last Active':<13} {'Src':<16} {'ID'}",
+            105,
+            lambda s: f"{_preview(s, 48):<50} {_ago(s):<13} {_src(s):<16} {s['id']}",
+        ),
     }
     header, rule, fmt = layouts[(has_ws, has_titles)]
     print(header + "\n" + "─" * rule)
@@ -341,8 +434,10 @@ def _cmd_list(db, args):
 
 # -- export -----------------------------------------------------------------
 
+
 def _cmd_export(db, args):
     from clawk_cli.session_filters import build_prune_filters
+
     filters = None
     if _any_filter_args(args):
         try:
@@ -360,9 +455,11 @@ def _cmd_export(db, args):
         if not args.redact or data is None:
             return data
         from clawk_cli.session_export_md import redact_session_data
+
         return redact_session_data(data)
 
     from clawk_cli.session_export import SAVE_TRANSCRIPT_FORMATS, export_projection
+
     # --only is a transcript view too (md/jsonl of what the user saw); md/qmd without --only go to _export_markdown.
     shown = args.format in SAVE_TRANSCRIPT_FORMATS or bool(getattr(args, "only", None))
     projection = export_projection(shown)
@@ -372,13 +469,16 @@ def _cmd_export(db, args):
         ``sessions.max_export_messages`` guard (0 disables) runs before any is loaded. ``None`` = the
         sessions a bare export loads."""
         from clawk_state import SessionExportTooLargeError, resolved_max_export_messages
+
         if shown:
             return False
         limit = resolved_max_export_messages()
         if limit == 0:
             return False  # resolved before the bare-path scan: a disabled guard costs nothing
         if session_ids is None:
-            session_ids = [s["id"] for s in db.search_sessions(source=None, limit=100000)]
+            session_ids = [
+                s["id"] for s in db.search_sessions(source=None, limit=100000)
+            ]
         try:
             db.assert_exports_safe(session_ids, max_messages=limit)
         except SessionExportTooLargeError as exc:
@@ -388,8 +488,10 @@ def _cmd_export(db, args):
 
     def _collect_sessions():
         """--session-id / filters / bare export -> redacted session dicts, or None after printing an error."""
+
         def _one(session_id):
             return _redact(db.export_session(session_id, **projection))
+
         if args.session_id:
             resolved = db.resolve_session_id(args.session_id)
             if resolved and _too_large([resolved]):
@@ -411,6 +513,7 @@ def _cmd_export(db, args):
         if _too_large():
             return None
         return [_redact(s) for s in db.export_all(source=None, **projection)]
+
     if getattr(args, "only", None):
         return _export_flat("only", args, _collect_sessions)
     if args.format == "trace":
@@ -423,31 +526,61 @@ def _cmd_export(db, args):
 def _render_only(args, sessions):
     """--only user-prompts: one prompt record per line (jsonl) or headed sections (md)."""
     from clawk_cli.session_export import export_record_count, render_sessions_export
-    rendered = render_sessions_export(sessions, fmt="markdown" if args.format == "md" else "jsonl", only=args.only)
+
+    rendered = render_sessions_export(
+        sessions, fmt="markdown" if args.format == "md" else "jsonl", only=args.only
+    )
     count, noun = export_record_count(sessions, only=args.only)
-    return rendered, f"Exported {count} {noun}{'' if count == 1 else 's'} to {args.output}"
+    return (
+        rendered,
+        f"Exported {count} {noun}{'' if count == 1 else 's'} to {args.output}",
+    )
 
 
 def _render_html(args, sessions):
     """One self-contained file (single session, or multi-session with sidebar)."""
-    from clawk_cli.session_export_html import generate_html_export, generate_multi_session_html_export
+    from clawk_cli.session_export_html import (
+        generate_html_export,
+        generate_multi_session_html_export,
+    )
+
     single = len(sessions) == 1
-    content = generate_html_export(sessions[0]) if single else generate_multi_session_html_export(sessions)
-    return content, f"Exported {len(sessions)} {'session' if single else 'sessions'} to {args.output} (HTML)"
+    content = (
+        generate_html_export(sessions[0])
+        if single
+        else generate_multi_session_html_export(sessions)
+    )
+    return (
+        content,
+        f"Exported {len(sessions)} {'session' if single else 'sessions'} to {args.output} (HTML)",
+    )
 
 
 def _render_jsonl(args, sessions):
     lines = "".join(json.dumps(s, ensure_ascii=False) + "\n" for s in sessions)
-    return lines, f"Exported {len(sessions)} {'session' if args.session_id else 'sessions'} to {args.output}"
+    return (
+        lines,
+        f"Exported {len(sessions)} {'session' if args.session_id else 'sessions'} to {args.output}",
+    )
 
 
 #: kind -> (usage error when the --output/--format combination is unusable, renderer)
 _FLAT_EXPORTERS = {
     "only": (
-        lambda a: a.format not in ("jsonl", "md"), "--only user-prompts supports --format jsonl or md.", _render_only
+        lambda a: a.format not in ("jsonl", "md"),
+        "--only user-prompts supports --format jsonl or md.",
+        _render_only,
     ),
-    "html": (lambda a: not a.output or a.output == "-", "HTML export requires an output file path.", _render_html),
-    "jsonl": (lambda a: not a.output, "JSONL export requires an output path (use - for stdout).", _render_jsonl),
+    "html": (
+        lambda a: not a.output or a.output == "-",
+        "HTML export requires an output file path.",
+        _render_html,
+    ),
+    "jsonl": (
+        lambda a: not a.output,
+        "JSONL export requires an output path (use - for stdout).",
+        _render_jsonl,
+    ),
 }
 
 
@@ -460,8 +593,12 @@ def _export_flat(kind, args, collect):
     sessions = collect()
     if sessions is not None:
         from clawk_cli.session_export import default_save_filename
-        name = (default_save_filename(sessions[0].get("id", ""), args.format) if len(sessions) == 1
-                else f"clawk_sessions.{args.format}")
+
+        name = (
+            default_save_filename(sessions[0].get("id", ""), args.format)
+            if len(sessions) == 1
+            else f"clawk_sessions.{args.format}"
+        )
         args.output = _output_file_in_dir(args.output, name)
         _write_output(args.output, *render(args, sessions))
 
@@ -476,15 +613,29 @@ def _export_trace(db, args, filters):
         if not session_id:
             print("No session found to export. Pass --session-id.")
             return
-    from agent.trace_upload import TraceRedactionError, build_trace_jsonl, upload_session_trace
+    from agent.trace_upload import (
+        TraceRedactionError,
+        build_trace_jsonl,
+        upload_session_trace,
+    )
+
     redact_trace = not getattr(args, "no_redact", False)
     if getattr(args, "upload", False):
         if not session_id:
-            print("--upload exports one session: pass --session-id (or drop filters to use the most recent).")
+            print(
+                "--upload exports one session: pass --session-id (or drop filters to use the most recent)."
+            )
             return
         resolved = db.resolve_session_id(session_id)
         db.close()
-        print(upload_session_trace(resolved, cwd="", redact=redact_trace, private=not getattr(args, "public", False)))
+        print(
+            upload_session_trace(
+                resolved,
+                cwd="",
+                redact=redact_trace,
+                private=not getattr(args, "public", False),
+            )
+        )
         return
     if session_id:
         ids = [db.resolve_session_id(session_id)]
@@ -499,7 +650,14 @@ def _export_trace(db, args, filters):
         messages = db.get_messages_as_conversation(sid)
         if not messages:
             return None
-        return build_trace_jsonl(messages, session_id=sid, model=meta.get("model") or "", cwd="", redact=redact_trace)
+        return build_trace_jsonl(
+            messages,
+            session_id=sid,
+            model=meta.get("model") or "",
+            cwd="",
+            redact=redact_trace,
+        )
+
     try:
         if len(ids) == 1:
             jsonl = _render_trace(ids[0])
@@ -507,7 +665,9 @@ def _export_trace(db, args, filters):
                 print(f"No transcript to export for session '{ids[0]}'.")
                 return
             args.output = _output_file_in_dir(args.output, f"{ids[0]}.trace.jsonl")
-            _write_output(args.output, jsonl, f"Exported 1 session trace to {args.output}")
+            _write_output(
+                args.output, jsonl, f"Exported 1 session trace to {args.output}"
+            )
         else:
             out_dir = _export_dir(args.output)
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -524,9 +684,15 @@ def _export_trace(db, args, filters):
 
 def _export_markdown(db, args, filters, redact):
     """Markdown / QMD export: one file per session plus a manifest entry."""
-    from clawk_cli.session_export_md import append_manifest_entry, write_session_markdown
+    from clawk_cli.session_export_md import (
+        append_manifest_entry,
+        write_session_markdown,
+    )
+
     if args.output == "-":
-        print("Markdown/QMD export writes files; stdout (-) is only supported with --format jsonl.")
+        print(
+            "Markdown/QMD export writes files; stdout (-) is only supported with --format jsonl."
+        )
         return
     output_dir = _export_dir(args.output)
 
@@ -539,12 +705,16 @@ def _export_markdown(db, args, filters, redact):
             return None, None, None
         snapshots = {
             segment["id"]: segment.get("messages") or []
-            for segment in (raw_data.get("segments") or [raw_data]) if segment.get("id")
+            for segment in (raw_data.get("segments") or [raw_data])
+            if segment.get("id")
         }
         data = redact(raw_data)
-        path = write_session_markdown(data, output_dir, fmt=args.format, force=args.force)
+        path = write_session_markdown(
+            data, output_dir, fmt=args.format, force=args.force
+        )
         append_manifest_entry(output_dir, data, path, fmt=args.format)
         return data, path, snapshots
+
     if args.delete_after_verified and not args.yes:
         print("--delete-after-verified requires --yes.")
         return
@@ -553,10 +723,14 @@ def _export_markdown(db, args, filters, redact):
         return
     lineage_is_logical = getattr(args, "lineage", "single") == "logical"
     if args.session_id:
-        return _export_markdown_single(db, args, _export_one, output_dir, lineage_is_logical)
+        return _export_markdown_single(
+            db, args, _export_one, output_dir, lineage_is_logical
+        )
     if not filters:
-        print("Refusing bulk export without a filter. Pass --session-id or "
-              "at least one filter (e.g. --older-than 90, --source telegram).")
+        print(
+            "Refusing bulk export without a filter. Pass --session-id or "
+            "at least one filter (e.g. --older-than 90, --source telegram)."
+        )
         return
     candidates = db.list_prune_candidates(**filters)
     if args.dry_run:
@@ -564,7 +738,9 @@ def _export_markdown(db, args, filters, redact):
     exported = 0
     for row in candidates:
         try:
-            data, exported_path, _ = _export_one(row["id"], include_lineage=lineage_is_logical)
+            data, exported_path, _ = _export_one(
+                row["id"], include_lineage=lineage_is_logical
+            )
         except FileExistsError as e:
             print(f"Skipping existing export: {e}. Pass --force to overwrite.")
             continue
@@ -576,27 +752,39 @@ def _export_markdown(db, args, filters, redact):
 def _export_markdown_single(db, args, export_one, output_dir, lineage_is_logical):
     """--session-id markdown export, optionally + verified delete of it and its delegates."""
     from clawk_cli.session_export_md import verify_export_file
+
     resolved_session_id = db.resolve_session_id(args.session_id)
     delete_target_ids = (
-        db.get_session_delete_targets(resolved_session_id) if args.delete_after_verified else [resolved_session_id]
+        db.get_session_delete_targets(resolved_session_id)
+        if args.delete_after_verified
+        else [resolved_session_id]
     )
     exported_items = []
     for target_id in delete_target_ids:
         try:
             data, exported_path, snapshots = export_one(
-                target_id, include_lineage=(target_id == resolved_session_id and lineage_is_logical),
+                target_id,
+                include_lineage=(
+                    target_id == resolved_session_id and lineage_is_logical
+                ),
             )
         except FileExistsError as e:
             print(f"Export already exists: {e}. Pass --force to overwrite.")
             return
         if not data or not exported_path:
-            print(f"Session '{target_id}' disappeared during export; nothing was deleted.")
+            print(
+                f"Session '{target_id}' disappeared during export; nothing was deleted."
+            )
             return
         exported_items.append((data, exported_path, snapshots))
-    message_count = sum(len(data.get("messages") or []) for data, _path, _ in exported_items)
+    message_count = sum(
+        len(data.get("messages") or []) for data, _path, _ in exported_items
+    )
     n = len(exported_items)
-    print(f"Exported {n} session{'' if n == 1 else 's'} ({message_count} message{'' if message_count == 1 else 's'}) "
-          f"to {exported_items[0][1] if n == 1 else output_dir}")
+    print(
+        f"Exported {n} session{'' if n == 1 else 's'} ({message_count} message{'' if message_count == 1 else 's'}) "
+        f"to {exported_items[0][1] if n == 1 else output_dir}"
+    )
     if not args.delete_after_verified:
         return
     # verify_export_file proves file == dict; store == dict is decided inside delete_session's transaction
@@ -605,54 +793,81 @@ def _export_markdown_single(db, args, export_one, output_dir, lineage_is_logical
     for data, exported_path, snapshots in exported_items:
         ok, reason = verify_export_file(exported_path, data)
         if not ok:
-            print(f"Export verification failed; not deleting session '{data.get('id')}': {reason}")
+            print(
+                f"Export verification failed; not deleting session '{data.get('id')}': {reason}"
+            )
             return
         expected_messages.update(snapshots)
     try:
         if not db.delete_session(
-            resolved_session_id, sessions_dir=_sessions_dir(), expected_delete_ids=delete_target_ids,
-            expected_display_messages=expected_messages, exclude_active_write_guards=True,
+            resolved_session_id,
+            sessions_dir=_sessions_dir(),
+            expected_delete_ids=delete_target_ids,
+            expected_display_messages=expected_messages,
+            exclude_active_write_guards=True,
         ):
-            print(f"Exported, but session '{resolved_session_id}' was not deleted because its history or delegate set "
-                  "changed after export.")
+            print(
+                f"Exported, but session '{resolved_session_id}' was not deleted because its history or delegate set "
+                "changed after export."
+            )
             return
     except SessionActiveWriteGuardError as exc:
         print(f"Exported, but not deleted: {exc}")
         return
     delegates = len(delete_target_ids) - 1
-    delegate_suffix = f" and {delegates} delegate session{'' if delegates == 1 else 's'}" if delegates else ""
+    delegate_suffix = (
+        f" and {delegates} delegate session{'' if delegates == 1 else 's'}"
+        if delegates
+        else ""
+    )
     print(f"Deleted exported session '{resolved_session_id}'{delegate_suffix}.")
 
 
 # -- delete / prune / archive -------------------------------------------------
+
 
 def _cmd_delete(db, args):
     resolved_session_id = db.resolve_session_id(args.session_id)
     if not resolved_session_id:
         return _not_found(args.session_id)
     # The delete is honored (explicit id), but a pin is a "keep" flag: say so instead of silently destroying it.
-    _pinned_note = " (this session is PINNED)" if (db.get_session(resolved_session_id) or {}).get("pinned") else ""
+    _pinned_note = (
+        " (this session is PINNED)"
+        if (db.get_session(resolved_session_id) or {}).get("pinned")
+        else ""
+    )
     if not args.yes:
-        if not _confirm_prompt(f"Delete session '{resolved_session_id}'{_pinned_note} and all its messages? [y/N] "):
+        if not _confirm_prompt(
+            f"Delete session '{resolved_session_id}'{_pinned_note} and all its messages? [y/N] "
+        ):
             print("Cancelled.")
             return
     elif _pinned_note:
         print(f"Warning: deleting a pinned session '{resolved_session_id}'.")
     from clawk_state_runtime import RuntimeStoreError
+
     try:
-        if not db.delete_session(resolved_session_id, sessions_dir=_sessions_dir(), exclude_active_write_guards=True):
+        if not db.delete_session(
+            resolved_session_id,
+            sessions_dir=_sessions_dir(),
+            exclude_active_write_guards=True,
+        ):
             return _not_found(args.session_id)
     except SessionActiveWriteGuardError as exc:
         print(f"Cannot delete active session: {exc}")
         return 1
     except RuntimeStoreError as exc:
         # The ledger refuses to delete a session with accepted, unfinished turns; say what to do.
-        if exc.reason == 'unknown_execution':
-            print(f"Cannot delete session '{resolved_session_id}': a turn was lost across a gateway restart. "
-                  f"Acknowledge it first with: clawk sessions discard {resolved_session_id}")
-        elif exc.reason == 'session_busy':
-            print(f"Cannot delete session '{resolved_session_id}': it has a queued or running turn. "
-                  "Wait for it to finish (or stop it), then retry.")
+        if exc.reason == "unknown_execution":
+            print(
+                f"Cannot delete session '{resolved_session_id}': a turn was lost across a gateway restart. "
+                f"Acknowledge it first with: clawk sessions discard {resolved_session_id}"
+            )
+        elif exc.reason == "session_busy":
+            print(
+                f"Cannot delete session '{resolved_session_id}': it has a queued or running turn. "
+                "Wait for it to finish (or stop it), then retry."
+            )
         else:
             print(f"Cannot delete session '{resolved_session_id}': {exc.reason}")
         return 1
@@ -672,13 +887,16 @@ def _prune_never_active_keyed(db, args):
     only stop from being *created* — rows already written to a developer's state.db need a sweep to leave.
     """
     from clawk_cli.session_filters import format_epoch, parse_duration_seconds
+
     older_than = getattr(args, "older_than", None)
     days = _NEVER_ACTIVE_DEFAULT_DAYS
     if older_than is not None:
         seconds = parse_duration_seconds(str(older_than))
         if seconds is None:
-            print(f"Error: --older-than '{older_than}' is not a duration. "
-                  "Use a bare number of days or a form like '2d' / '1w'.")
+            print(
+                f"Error: --older-than '{older_than}' is not a duration. "
+                "Use a bare number of days or a form like '2d' / '1w'."
+            )
             return
         days = seconds / 86400.0
     candidates = db.list_never_active_keyed_sessions(older_than_days=days)
@@ -686,33 +904,46 @@ def _prune_never_active_keyed(db, args):
         print(f"No never-active keyed sessions older than {days:g} day(s).")
         return
     shown = candidates if args.dry_run else candidates[:15]
-    print(f"{len(candidates)} never-active keyed session(s) older than {days:g} day(s) "
-          "— no messages, tokens, tool calls or title:")
+    print(
+        f"{len(candidates)} never-active keyed session(s) older than {days:g} day(s) "
+        "— no messages, tokens, tool calls or title:"
+    )
     for s in shown:
-        print(f"  {s['id']}  {format_epoch(s.get('started_at')):<17} {(s.get('source') or '-'):<10} "
-              f"{s.get('session_key') or '-'}")
+        print(
+            f"  {s['id']}  {format_epoch(s.get('started_at')):<17} {(s.get('source') or '-'):<10} "
+            f"{s.get('session_key') or '-'}"
+        )
     if len(candidates) > len(shown):
         print_truncated(len(candidates) - len(shown))
     if args.dry_run:
         print("Dry run — nothing deleted.")
         return
-    if not args.yes and not _confirm_prompt(f"Delete {len(candidates)} session(s)? [y/N] "):
+    if not args.yes and not _confirm_prompt(
+        f"Delete {len(candidates)} session(s)? [y/N] "
+    ):
         print("Aborted.")
         return
     owner = getattr(args, "owner_endpoint", None)
     if owner is not None:
         from clawk_cli.gateway_client import GatewayClientError
         from clawk_cli.sessions_owner import owner_prune, report_owner_failure
+
         try:
             result = owner_prune(owner, never_active_days=days)
         except (GatewayClientError, OSError, TimeoutError) as exc:
             return report_owner_failure(exc)
-        deleted, routing_deleted, skipped = result["deleted"], result["routing_deleted"], result["skipped"]
+        deleted, routing_deleted, skipped = (
+            result["deleted"],
+            result["routing_deleted"],
+            result["skipped"],
+        )
     else:
         deleted, routing_deleted, skipped = db.prune_never_active_keyed_sessions(
             older_than_days=days, sessions_dir=_sessions_dir()
         )
-    print(f"Deleted {deleted} never-active session(s) and {routing_deleted} stale routing entr(ies).")
+    print(
+        f"Deleted {deleted} never-active session(s) and {routing_deleted} stale routing entr(ies)."
+    )
     if skipped:
         print(f"Skipped {skipped} session(s) with a live turn or compression lock.")
 
@@ -730,16 +961,26 @@ def _note_pinned_skipped(db, filters, action):
         verb = "deleted"
         optin = "Pass --include-pinned to delete them anyway, or unpin first with `clawk sessions unpin <id>`."
     else:
-        verb, optin = "archived", "Unpin first with `clawk sessions unpin <id>` to include them."
-    print(f"Note: {skipped} pinned session{suffix} also match these filters but will NOT be {verb} "
-          f"(pin is a keep flag). {optin}")
+        verb, optin = (
+            "archived",
+            "Unpin first with `clawk sessions unpin <id>` to include them.",
+        )
+    print(
+        f"Note: {skipped} pinned session{suffix} also match these filters but will NOT be {verb} "
+        f"(pin is a keep flag). {optin}"
+    )
 
 
 def _cmd_prune_or_archive(db, args, action):
     prune = action == "prune"
     if prune and getattr(args, "never_active", False):
         return _prune_never_active_keyed(db, args)
-    from clawk_cli.session_filters import build_prune_filters, describe_filters, format_epoch
+    from clawk_cli.session_filters import (
+        build_prune_filters,
+        describe_filters,
+        format_epoch,
+    )
+
     # Bare `prune` keeps the historical "older than 90 days" default. ANY filter — including --source —
     # suppresses the implicit cutoff (`prune --source cron` matches ALL cron sessions); the preview +
     # confirmation below is the safety net.
@@ -751,12 +992,16 @@ def _cmd_prune_or_archive(db, args, action):
         print(f"Error: {e}")
         return 1
     if not prune and not any(v for k, v in filters.items() if k != "older_than_days"):
-        print("Refusing to archive every ended session: pass at least one "
-              "filter (e.g. --newer-than 5h, --source cli, --title codex).")
+        print(
+            "Refusing to archive every ended session: pass at least one "
+            "filter (e.g. --newer-than 5h, --source cli, --title codex)."
+        )
         return
 
     # Prune skips archived rows unless --include-archived; archive only targets not-yet-archived rows.
-    filters["archived"] = None if prune and getattr(args, "include_archived", False) else False
+    filters["archived"] = (
+        None if prune and getattr(args, "include_archived", False) else False
+    )
     filters["include_pinned"] = getattr(args, "include_pinned", False)
     # Archive flips a compression lineage as a unit, matched through its tip (an old ancestor alone
     # never qualifies); the preview must show the same rows the archive will touch.
@@ -772,15 +1017,21 @@ def _cmd_prune_or_archive(db, args, action):
     candidates = db.list_prune_candidates(**filters, whole_lineages=prune)
     # Archive expands each matched tip to its compression lineage, so a direct-open count would
     # misdescribe its effect.
-    skipped_open = db.count_open_prune_matches(**filters) if (prune or not include_open) else 0
+    skipped_open = (
+        db.count_open_prune_matches(**filters) if (prune or not include_open) else 0
+    )
     if skipped_open and prune:
-        print(f"Note: {skipped_open} open session{'' if skipped_open == 1 else 's'} also match these filters but "
-              "will be skipped because prune only deletes ended sessions. Use `clawk sessions delete <id>` "
-              "to remove one explicitly.")
+        print(
+            f"Note: {skipped_open} open session{'' if skipped_open == 1 else 's'} also match these filters but "
+            "will be skipped because prune only deletes ended sessions. Use `clawk sessions delete <id>` "
+            "to remove one explicitly."
+        )
     elif skipped_open:
-        print(f"Note: {skipped_open} matching session{'' if skipped_open == 1 else 's'} still open — "
-              "skipped because archive defaults to ended sessions. Use --include-open to archive "
-              "them too.")
+        print(
+            f"Note: {skipped_open} matching session{'' if skipped_open == 1 else 's'} still open — "
+            "skipped because archive defaults to ended sessions. Use --include-open to archive "
+            "them too."
+        )
     if not candidates:
         print(f"No sessions match ({describe_filters(filters)}).")
         return
@@ -792,36 +1043,50 @@ def _cmd_prune_or_archive(db, args, action):
     )
     if args.dry_run or not args.yes:
         shown = candidates if args.dry_run else candidates[:15]
-        print(f"{len(candidates)} session(s) match ({describe_filters(filters)}; {_span}):")
+        print(
+            f"{len(candidates)} session(s) match ({describe_filters(filters)}; {_span}):"
+        )
         for s in shown:
             model = (s.get("model") or "-").split("/")[-1][:24]
-            print(f"  {s['id']}  {format_epoch(s.get('last_active')):<17} {s['source']:<10} {model:<24} "
-                  f"{s['message_count']:>4} msgs  {(s.get('title') or '')[:36]}")
+            print(
+                f"  {s['id']}  {format_epoch(s.get('last_active')):<17} {s['source']:<10} {model:<24} "
+                f"{s['message_count']:>4} msgs  {(s.get('title') or '')[:36]}"
+            )
         if len(candidates) > len(shown):
             print_truncated(len(candidates) - len(shown))
         if args.dry_run:
             print(f"Dry run — nothing {'deleted' if prune else 'archived'}.")
             return
     verb = "Delete" if prune else "Archive"
-    if not args.yes and not _confirm_prompt(f"{verb} these {len(candidates)} session(s) ({_span})? [y/N] "):
+    if not args.yes and not _confirm_prompt(
+        f"{verb} these {len(candidates)} session(s) ({_span})? [y/N] "
+    ):
         print("Cancelled.")
         return
     if prune and getattr(args, "owner_endpoint", None) is not None:
         # The live gateway owns the store: it deletes, through the housekeeping retirement path.
         from clawk_cli.gateway_client import GatewayClientError
         from clawk_cli.sessions_owner import owner_prune, report_owner_failure
+
         try:
-            print(f"Pruned {owner_prune(args.owner_endpoint, filters=filters)['deleted']} session(s).")
+            print(
+                f"Pruned {owner_prune(args.owner_endpoint, filters=filters)['deleted']} session(s)."
+            )
         except (GatewayClientError, OSError, TimeoutError) as exc:
             return report_owner_failure(exc)
     elif prune:
-        print(f"Pruned {db.prune_sessions(sessions_dir=_sessions_dir(), exclude_active_write_guards=True, **filters)} session(s).")
+        print(
+            f"Pruned {db.prune_sessions(sessions_dir=_sessions_dir(), exclude_active_write_guards=True, **filters)} session(s)."
+        )
     else:
-        print(f"Archived {db.archive_sessions(**filters)} session(s). They're hidden from listings "
-              "but fully recoverable (nothing was deleted).")
+        print(
+            f"Archived {db.archive_sessions(**filters)} session(s). They're hidden from listings "
+            "but fully recoverable (nothing was deleted)."
+        )
 
 
 # -- titles / pins -----------------------------------------------------------
+
 
 def _cmd_rename(db, args):
     resolved_session_id = db.resolve_session_id(args.session_id)
@@ -856,7 +1121,9 @@ def _cmd_pin(db, args, pinning):
         resolved = db.resolve_session_id(raw_id)
         if resolved and db.set_session_pinned(resolved, pinning):
             title = db.get_session_title(resolved)
-            print(f"{'Pinned' if pinning else 'Unpinned'} session '{resolved}'.{f'  ({title})' if title else ''}")
+            print(
+                f"{'Pinned' if pinning else 'Unpinned'} session '{resolved}'.{f'  ({title})' if title else ''}"
+            )
         else:
             failures += _not_found(raw_id)
     return 1 if failures else None
@@ -864,11 +1131,18 @@ def _cmd_pin(db, args, pinning):
 
 def _cmd_pinned(db, args):
     # limit=1 keeps the recency page minimal; include_pinned back-fills ALL pinned rows the page missed.
-    rows = db.list_sessions_rich(limit=1, include_pinned=True, exclude_sources=_default_exclude(args))
+    rows = db.list_sessions_rich(
+        limit=1, include_pinned=True, exclude_sources=_default_exclude(args)
+    )
     pinned_rows = [s for s in rows if s.get("pinned")]
     if getattr(args, "json", False):
         keys = ("title", "source", "last_active", "message_count")
-        print(json.dumps([{"id": s["id"], **{k: s.get(k) for k in keys}} for s in pinned_rows], indent=2))
+        print(
+            json.dumps(
+                [{"id": s["id"], **{k: s.get(k) for k in keys}} for s in pinned_rows],
+                indent=2,
+            )
+        )
         return
     if not pinned_rows:
         print("No pinned sessions. Pin one with: clawk sessions pin <session_id>")
@@ -876,12 +1150,15 @@ def _cmd_pinned(db, args):
     print(f"{'Title':<32} {'Last Active':<13} {'Src':<9} {'ID'}\n" + "─" * 100)
     for s in pinned_rows:
         title = (s.get("title") or s.get("preview", "") or "—")[:30]
-        print(f"{title:<32} {_relative_time(s.get('last_active'), session_id=s['id']):<13} {(s.get('source') or '-'):<9} {s['id']}")
+        print(
+            f"{title:<32} {_relative_time(s.get('last_active'), session_id=s['id']):<13} {(s.get('source') or '-'):<9} {s['id']}"
+        )
 
 
 def _cmd_retitle_skills(db, args):
     from agent.skill_commands import describe_skill_invocation
     from agent.title_generator import generate_title
+
     limit = max(1, int(getattr(args, "limit", 200) or 200))
     apply_changes = bool(getattr(args, "apply", False))
     candidates = db.list_skill_scaffolded_sessions(limit=limit)
@@ -925,7 +1202,9 @@ def _cmd_retitle_skills(db, args):
 def _cmd_browse(db, args):
     limit = getattr(args, "limit", 500) or 500
     sessions = _surface_reader(db).list_sessions_rich(
-        source=getattr(args, "source", None), exclude_sources=_default_exclude(args), limit=limit
+        source=getattr(args, "source", None),
+        exclude_sources=_default_exclude(args),
+        limit=limit,
     )
     if not sessions:
         db.close()
@@ -940,17 +1219,23 @@ def _cmd_browse(db, args):
         return
     print(f"Resuming session: {selected_id}")
     from clawk_cli.relaunch import relaunch
+
     relaunch(["--resume", selected_id])  # won't return after execvp
 
 
 # -- storage maintenance -----------------------------------------------------
+
 
 def _print_size_change(db, before_mb, prefix=""):
     """Report before/after size, preferring SQLite's page accounting over stat(): in WAL mode a VACUUM's
     rewrite sits in the -wal file until a checkpoint (refused while a live gateway holds a read-mark),
     so the main file lags and stat() can even go negative."""
     logical_after = db.logical_size_bytes()
-    after_mb = logical_after / (1024 * 1024) if logical_after is not None else _size_mb(db.db_path)
+    after_mb = (
+        logical_after / (1024 * 1024)
+        if logical_after is not None
+        else _size_mb(db.db_path)
+    )
     delta = _size_delta_label(before_mb - after_mb)
     print(f"{prefix}Database size: {before_mb:.1f} MB -> {after_mb:.1f} MB ({delta})")
 
@@ -968,8 +1253,12 @@ def _cmd_optimize(db, args):
 
 
 def _cmd_clean_markers(db, args):
-    print(f"{'Dry run — scanning' if args.dry_run else 'Scanning'} for stale tool-call marker rows (#78148)…")
-    report = db.purge_stale_tool_call_markers(dry_run=args.dry_run, backup=not args.no_backup)
+    print(
+        f"{'Dry run — scanning' if args.dry_run else 'Scanning'} for stale tool-call marker rows (#78148)…"
+    )
+    report = db.purge_stale_tool_call_markers(
+        dry_run=args.dry_run, backup=not args.no_backup
+    )
     if report["rows_affected"] == 0:
         print("✓ No affected rows found — nothing to clean.")
     elif args.dry_run:
@@ -995,17 +1284,25 @@ def _cmd_optimize_storage(db, args):
     except Exception:
         free_bytes = None
     need_bytes = before_bytes if do_vacuum else int(before_bytes * 0.3)
-    print(f"Search-index optimization for {db_path}\n  Current database size: {before_mb:.1f} MB")
+    print(
+        f"Search-index optimization for {db_path}\n  Current database size: {before_mb:.1f} MB"
+    )
     if free_bytes is not None:
-        print(f"  Free disk: {free_bytes / (1024*1024):.0f} MB "
-              f"(need ~{need_bytes / (1024*1024):.0f} MB to complete{' incl. VACUUM' if do_vacuum else ''})")
+        print(
+            f"  Free disk: {free_bytes / (1024 * 1024):.0f} MB "
+            f"(need ~{need_bytes / (1024 * 1024):.0f} MB to complete{' incl. VACUUM' if do_vacuum else ''})"
+        )
         if free_bytes < need_bytes:
-            print("\n⚠ Not enough free disk to complete safely. Free up space, or run with --no-vacuum "
-                  "(rebuilds the index but doesn't reclaim space until a later VACUUM).")
+            print(
+                "\n⚠ Not enough free disk to complete safely. Free up space, or run with --no-vacuum "
+                "(rebuilds the index but doesn't reclaim space until a later VACUUM)."
+            )
             return
     if before_mb > 500:
-        print("  This may take a while on a large database. It runs in the foreground with progress below; "
-              "safe to Ctrl-C and re-run (it resumes).")
+        print(
+            "  This may take a while on a large database. It runs in the foreground with progress below; "
+            "safe to Ctrl-C and re-run (it resumes)."
+        )
     if not getattr(args, "yes", False):
         try:
             resp = input("Proceed? [y/N] ").strip().lower()
@@ -1015,16 +1312,25 @@ def _cmd_optimize_storage(db, args):
             print("Cancelled.")
             return
     _last = {"phase": None}
-    labels = {"teardown": "Reclaiming old index", "vacuum": "Compacting database (VACUUM)", "done": "Done"}
+    labels = {
+        "teardown": "Reclaiming old index",
+        "vacuum": "Compacting database (VACUUM)",
+        "done": "Done",
+    }
 
     def _progress(info):
         phase = info.get("phase")
         if phase == "backfill":
-            print(f"\r  Rebuilding index: {info.get('percent', 0):3d}% "
-                  f"({info.get('indexed',0):,}/{info.get('total',0):,})", end="", flush=True)
+            print(
+                f"\r  Rebuilding index: {info.get('percent', 0):3d}% "
+                f"({info.get('indexed', 0):,}/{info.get('total', 0):,})",
+                end="",
+                flush=True,
+            )
         elif phase != _last["phase"]:
             print(f"\n  {labels.get(phase, phase)}…", flush=True)
         _last["phase"] = phase
+
     print("Optimizing search-index storage…")
     try:
         result = db.optimize_fts_storage(progress_cb=_progress, vacuum=do_vacuum)
@@ -1037,30 +1343,44 @@ def _cmd_optimize_storage(db, args):
     print("\n✓ Search index optimized.")
     _print_size_change(db, before_mb, prefix="  ")
     if result.get("vacuumed") is False:
-        print("  (VACUUM was skipped or failed — run `clawk sessions optimize` later to reclaim freed space.)")
+        print(
+            "  (VACUUM was skipped or failed — run `clawk sessions optimize` later to reclaim freed space.)"
+        )
 
 
 def _cmd_repair_routing(db, args):
-    records = db.find_orphaned_gateway_sessions(max_gap_s=getattr(args, "max_gap_seconds", None))
+    records = db.find_orphaned_gateway_sessions(
+        max_gap_s=getattr(args, "max_gap_seconds", None)
+    )
     adoptable = [r for r in records if r["adoptable"]]
     for record in records:
-        print(f"{record['orphan_id']}  ({record['source']}, {record['message_count']} messages)")
+        print(
+            f"{record['orphan_id']}  ({record['source']}, {record['message_count']} messages)"
+        )
         if record["adoptable"]:
-            print(f"  → adopt into {record['session_key']} (from {record['donor_id']}, "
-                  f"evidence: {record['evidence']})")
+            print(
+                f"  → adopt into {record['session_key']} (from {record['donor_id']}, "
+                f"evidence: {record['evidence']})"
+            )
         else:
             print(f"  ✗ not repairable — {record['reason']}")
     if not records:
         print("✓ No gateway sessions are missing their routing identity.")
         return
     if not adoptable:
-        print(f"\n{len(records)} orphaned session(s) found, none unambiguously repairable. Nothing to do.")
+        print(
+            f"\n{len(records)} orphaned session(s) found, none unambiguously repairable. Nothing to do."
+        )
         return
     if not getattr(args, "apply", False):
-        print(f"\n{len(adoptable)} of {len(records)} orphaned session(s) can be repaired. "
-              "Re-run with --apply to perform them.")
+        print(
+            f"\n{len(adoptable)} of {len(records)} orphaned session(s) can be repaired. "
+            "Re-run with --apply to perform them."
+        )
         return
-    print("\nStop the gateway before applying — a running gateway still holds the old routing mapping in memory.")
+    print(
+        "\nStop the gateway before applying — a running gateway still holds the old routing mapping in memory."
+    )
     if not _confirm_prompt(f"Adopt {len(adoptable)} orphaned session(s)? [y/N] "):
         print("Aborted — nothing was changed.")
         return
@@ -1070,7 +1390,9 @@ def _cmd_repair_routing(db, args):
             repaired += 1
             print(f"✓ {record['orphan_id']} now owns {record['session_key']}")
         else:
-            print(f"✗ {record['orphan_id']} was not adopted (the row changed since it was reported)")
+            print(
+                f"✗ {record['orphan_id']} was not adopted (the row changed since it was reported)"
+            )
     print(f"\nRepaired {repaired} of {len(adoptable)} session(s).")
 
 
@@ -1107,6 +1429,7 @@ def _repair_prompts_lacks_skill_safety(row) -> bool:
     # Only the Skill Safety guidance is a reliable marker: <available_skills> is legitimately
     # absent when no skills are installed, but the guidance is emitted whenever skill_manage is.
     from agent.prompt_builder import SKILL_SAFETY_HEADING
+
     prompt = (row.get("system_prompt") or "").strip()
     return bool(prompt and SKILL_SAFETY_HEADING not in prompt)
 
@@ -1128,16 +1451,24 @@ def _cmd_repair_prompts(db, args):
             return 1
         row = db.get_session(session_id)
         if row and row.get("system_prompt"):
-            findings.append({
-                "id": row["id"], "reason": "targeted clear", "prompt_chars": len(row["system_prompt"]),
-            })
+            findings.append(
+                {
+                    "id": row["id"],
+                    "reason": "targeted clear",
+                    "prompt_chars": len(row["system_prompt"]),
+                }
+            )
     else:
         seen = set()
         offset = 0
         while True:
             batch = db.list_sessions_rich(
-                limit=200, offset=offset, include_children=True,
-                include_archived=True, include_hidden=True, compact_rows=True,
+                limit=200,
+                offset=offset,
+                include_children=True,
+                include_archived=True,
+                include_hidden=True,
+                compact_rows=True,
             )
             if not batch:
                 break
@@ -1153,22 +1484,28 @@ def _cmd_repair_prompts(db, args):
                 pin = _repair_prompts_pin_names(row)
                 entry = {"id": row["id"], "prompt_chars": len(row["system_prompt"])}
                 if "skill_manage" in (pin or ()):
-                    findings.append({
-                        **entry,
-                        "reason": "Skill Safety guidance missing while the tools[] pin carries skill_manage",
-                    })
+                    findings.append(
+                        {
+                            **entry,
+                            "reason": "Skill Safety guidance missing while the tools[] pin carries skill_manage",
+                        }
+                    )
                 elif pin is None:
-                    unverifiable.append({
-                        **entry,
-                        "reason": "skills markers missing but the tools[] pin is unavailable or unreadable",
-                    })
+                    unverifiable.append(
+                        {
+                            **entry,
+                            "reason": "skills markers missing but the tools[] pin is unavailable or unreadable",
+                        }
+                    )
                 elif set(pin) == {"memory"}:
                     # Not proof: toolsets=[memory] is also a legitimate user config whose healthy
                     # prompt has no skills markers, so auto-clearing it would repeat every run.
-                    unverifiable.append({
-                        **entry,
-                        "reason": "memory-only tools[] pin may be a user toolset; clear explicitly by SESSION_ID",
-                    })
+                    unverifiable.append(
+                        {
+                            **entry,
+                            "reason": "memory-only tools[] pin may be a user toolset; clear explicitly by SESSION_ID",
+                        }
+                    )
 
     apply = bool(getattr(args, "apply", False))
     as_json = bool(getattr(args, "json", False))
@@ -1189,25 +1526,35 @@ def _cmd_repair_prompts(db, args):
         else:
             print("No degraded stored system prompts found.")
             if unverifiable:
-                print(f"{len(unverifiable)} row(s) lacked enough tools[] evidence and were left unchanged.")
+                print(
+                    f"{len(unverifiable)} row(s) lacked enough tools[] evidence and were left unchanged."
+                )
         return 0
 
     if not as_json:
         for finding in findings:
-            print(f"  {finding['id']}  ({finding['prompt_chars']} chars) - {finding['reason']}")
+            print(
+                f"  {finding['id']}  ({finding['prompt_chars']} chars) - {finding['reason']}"
+            )
         if unverifiable:
-            print(f"\nSkipped {len(unverifiable)} unverifiable row(s) without enough tools[] evidence.")
+            print(
+                f"\nSkipped {len(unverifiable)} unverifiable row(s) without enough tools[] evidence."
+            )
 
     if not apply:
         if as_json:
             print(json.dumps(_payload([]), indent=2))
         else:
-            print(f"\n{len(findings)} stored prompt(s) can be repaired. Re-run with --apply to clear them; "
-                  "the next turn rebuilds a healthy prompt (one prefix-cache break per session).")
+            print(
+                f"\n{len(findings)} stored prompt(s) can be repaired. Re-run with --apply to clear them; "
+                "the next turn rebuilds a healthy prompt (one prefix-cache break per session)."
+            )
         return 0
 
     # JSON mode is the non-interactive automation surface; --apply is the explicit mutation opt-in.
-    if not as_json and not _confirm_prompt(f"Clear {len(findings)} stored prompt(s)? [y/N] "):
+    if not as_json and not _confirm_prompt(
+        f"Clear {len(findings)} stored prompt(s)? [y/N] "
+    ):
         print("Aborted - nothing was changed.")
         return 0
 
@@ -1219,9 +1566,13 @@ def _cmd_repair_prompts(db, args):
     if as_json:
         print(json.dumps(_payload(cleared), indent=2))
     else:
-        print(f"\nCleared {len(cleared)} stored prompt(s); the next turn for each rebuilds and persists "
-              "a healthy prompt.")
-        print("One 'Stored system prompt ... is null' warning per repaired session is expected on that rebuild.")
+        print(
+            f"\nCleared {len(cleared)} stored prompt(s); the next turn for each rebuilds and persists "
+            "a healthy prompt."
+        )
+        print(
+            "One 'Stored system prompt ... is null' warning per repaired session is expected on that rebuild."
+        )
     return 0
 
 
@@ -1237,35 +1588,52 @@ def _cmd_stats(db, args):
 
 # -- dispatch -----------------------------------------------------------------
 
+
 def _cmd_repair_profiles(args):
     from clawk_cli.sessions_cmd_repair_profiles import cmd_repair_profiles
+
     return cmd_repair_profiles(args)
 
 
 def _cmd_set_journal_mode(args):
     from clawk_cli.sessions_cmd_journal_mode import cmd_set_journal_mode
+
     return cmd_set_journal_mode(args)
 
 
 def _cmd_discard(args):
     from clawk_cli.sessions_discard import cmd_discard
+
     return cmd_discard(args)
 
 
 _PRE_DB_HANDLERS = {
-    "repair": _cmd_repair, "recover": _cmd_recover, "import": _cmd_import,
+    "repair": _cmd_repair,
+    "recover": _cmd_recover,
+    "import": _cmd_import,
     "repair-profiles": _cmd_repair_profiles,  # opens every profile's store itself
     "set-journal-mode": _cmd_set_journal_mode,  # offline: must not open the store it converts
     "discard": _cmd_discard,  # a gateway control (prompt.resolve_unknown), never a direct store write
 }
 _OBSERVATIONAL_DB_ACTIONS = frozenset({"list", "stats", "pinned"})
 _DB_HANDLERS = {
-    "list": _cmd_list, "export": _cmd_export, "delete": _cmd_delete, "rename": _cmd_rename, "pinned": _cmd_pinned,
-    "prune": partial(_cmd_prune_or_archive, action="prune"), "pin": partial(_cmd_pin, pinning=True),
-    "archive": partial(_cmd_prune_or_archive, action="archive"), "unpin": partial(_cmd_pin, pinning=False),
-    "retitle-skills": _cmd_retitle_skills, "browse": _cmd_browse, "optimize": _cmd_optimize,
-    "clean-markers": _cmd_clean_markers, "optimize-storage": _cmd_optimize_storage,
-    "repair-routing": _cmd_repair_routing, "repair-prompts": _cmd_repair_prompts, "stats": _cmd_stats,
+    "list": _cmd_list,
+    "export": _cmd_export,
+    "delete": _cmd_delete,
+    "rename": _cmd_rename,
+    "pinned": _cmd_pinned,
+    "prune": partial(_cmd_prune_or_archive, action="prune"),
+    "pin": partial(_cmd_pin, pinning=True),
+    "archive": partial(_cmd_prune_or_archive, action="archive"),
+    "unpin": partial(_cmd_pin, pinning=False),
+    "retitle-skills": _cmd_retitle_skills,
+    "browse": _cmd_browse,
+    "optimize": _cmd_optimize,
+    "clean-markers": _cmd_clean_markers,
+    "optimize-storage": _cmd_optimize_storage,
+    "repair-routing": _cmd_repair_routing,
+    "repair-prompts": _cmd_repair_prompts,
+    "stats": _cmd_stats,
 }
 
 
@@ -1274,7 +1642,11 @@ def _print_empty_store(action: str, args) -> None:
     if action == "stats":
         print("Total sessions: 0\nTotal messages: 0")
     elif action == "pinned":
-        print("[]" if getattr(args, "json", False) else "No pinned sessions. Pin one with: clawk sessions pin <session_id>")
+        print(
+            "[]"
+            if getattr(args, "json", False)
+            else "No pinned sessions. Pin one with: clawk sessions pin <session_id>"
+        )
     else:
         print("No sessions found.")
 
@@ -1291,17 +1663,23 @@ def cmd_sessions(args, sessions_parser=None):
         return pre(args)
     from clawk_state import SessionDB
     from clawk_constants import get_clawk_home
+
     # Verified deletion is an explicit mutation, not a read-only export.
     deleting_export = (
-        action == "export" and getattr(args, "delete_after_verified", False)
-        and getattr(args, "yes", False) and getattr(args, "session_id", None)
+        action == "export"
+        and getattr(args, "delete_after_verified", False)
+        and getattr(args, "yes", False)
+        and getattr(args, "session_id", None)
         and getattr(args, "format", None) in ("md", "qmd")
     )
-    observational = action in _OBSERVATIONAL_DB_ACTIONS or (action == "export" and not deleting_export)
+    observational = action in _OBSERVATIONAL_DB_ACTIONS or (
+        action == "export" and not deleting_export
+    )
     if action == "prune":
         # The always-on gateway owns the store: this process only reads the preview, the owner
         # deletes. No gateway: the local prune below, behind the holder scan, as before.
         from clawk_cli.sessions_owner import live_owner
+
         args.owner_endpoint = live_owner()
         observational = args.owner_endpoint is not None
     # A served-profile process has no single default home: pass the store path explicitly.
@@ -1312,8 +1690,10 @@ def cmd_sessions(args, sessions_parser=None):
         # mode=ro cannot create the store; a reader on a fresh profile reports empty rather than failing.
         if observational and not path.exists():
             return _print_empty_store(action, args)
-        print("Could not open your session history database. "
-              "Run: clawk sessions repair to fix it (a backup is made first).")
+        print(
+            "Could not open your session history database. "
+            "Run: clawk sessions repair to fix it (a backup is made first)."
+        )
         print(f"Details: {e}")
         return 1
     try:
@@ -1321,9 +1701,14 @@ def cmd_sessions(args, sessions_parser=None):
         if handler is None:
             sessions_parser.print_help()
             return
-        if (action in _HELD_STORE_ACTIONS and not getattr(args, "dry_run", False) and not getattr(args, "force", False)
-                and getattr(args, "owner_endpoint", None) is None):
+        if (
+            action in _HELD_STORE_ACTIONS
+            and not getattr(args, "dry_run", False)
+            and not getattr(args, "force", False)
+            and getattr(args, "owner_endpoint", None) is None
+        ):
             from clawk_state_holders import held_store_refusal
+
             # Same path the SessionDB above opened, so the scan never depends on the db object.
             refusal = held_store_refusal(path, command=action)
             if refusal:
@@ -1337,7 +1722,9 @@ def cmd_sessions(args, sessions_parser=None):
             if not observational or not _schema_not_built(e):
                 raise
             # A read-only opener skips schema migration, so a store from an older release can lack a column.
-            print(f"Error: session database needs migration — run any writing clawk command first ({e})")
+            print(
+                f"Error: session database needs migration — run any writing clawk command first ({e})"
+            )
             return 1
     finally:
         db.close()

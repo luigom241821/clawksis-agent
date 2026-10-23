@@ -22,7 +22,10 @@ LLM_REQUEST_MIDDLEWARE = "llm_request"
 LLM_EXECUTION_MIDDLEWARE = "llm_execution"
 
 VALID_MIDDLEWARE: set[str] = {
-    TOOL_REQUEST_MIDDLEWARE, TOOL_EXECUTION_MIDDLEWARE, LLM_REQUEST_MIDDLEWARE, LLM_EXECUTION_MIDDLEWARE,
+    TOOL_REQUEST_MIDDLEWARE,
+    TOOL_EXECUTION_MIDDLEWARE,
+    LLM_REQUEST_MIDDLEWARE,
+    LLM_EXECUTION_MIDDLEWARE,
 }
 
 
@@ -56,18 +59,26 @@ def _safe_copy(payload: Any) -> Any:
     try:
         return deepcopy(payload)
     except Exception as exc:  # pragma: no cover - exercised via fallback test
-        logger.debug("deepcopy failed for request payload (%s); using shallow copy", exc)
+        logger.debug(
+            "deepcopy failed for request payload (%s); using shallow copy", exc
+        )
         return dict(payload) if isinstance(payload, dict) else payload
 
 
 def _apply_request_chain(
-    kind: str, payload_key: str, trace: list[dict[str, Any]], original: Any, **kwargs: Any
+    kind: str,
+    payload_key: str,
+    trace: list[dict[str, Any]],
+    original: Any,
+    **kwargs: Any,
 ) -> RequestMiddlewareResult:
     """Feed ``kwargs[payload_key]`` through every ``kind`` middleware; each may return ``{payload_key: {...}}``."""
     from clawk_cli.plugins import invoke_middleware
 
     current = kwargs[payload_key]
-    for result in invoke_middleware(kind, _payload_key=payload_key, **middleware_payload(**kwargs)):
+    for result in invoke_middleware(
+        kind, _payload_key=payload_key, **middleware_payload(**kwargs)
+    ):
         if not isinstance(result, dict):
             continue
         next_payload = result.get(payload_key)
@@ -81,11 +92,16 @@ def _apply_request_chain(
         }
         trace.append(entry or {"source": "plugin"})
     return RequestMiddlewareResult(
-        payload=current, original_payload=original, changed=bool(trace), trace=trace,
+        payload=current,
+        original_payload=original,
+        changed=bool(trace),
+        trace=trace,
     )
 
 
-def apply_llm_request_middleware(request: dict[str, Any], **context: Any) -> RequestMiddlewareResult:
+def apply_llm_request_middleware(
+    request: dict[str, Any], **context: Any
+) -> RequestMiddlewareResult:
     """Apply registered LLM request middleware; ``{"request": {...}}`` replaces the provider kwargs."""
     from clawk_cli.plugins import has_middleware
 
@@ -94,8 +110,13 @@ def apply_llm_request_middleware(request: dict[str, Any], **context: Any) -> Req
 
     original_request = _safe_copy(request)
     return _apply_request_chain(
-        LLM_REQUEST_MIDDLEWARE, "request", [], original_request,
-        request=_safe_copy(original_request), original_request=original_request, **context,
+        LLM_REQUEST_MIDDLEWARE,
+        "request",
+        [],
+        original_request,
+        request=_safe_copy(original_request),
+        original_request=original_request,
+        **context,
     )
 
 
@@ -114,7 +135,8 @@ def apply_tool_request_middleware(
         from agent import relay_runtime
 
         relay_args = relay_runtime.apply_tool_request_intercepts(
-            session_id=session_id, tool_name=tool_name, args=current_args)
+            session_id=session_id, tool_name=tool_name, args=current_args
+        )
         if relay_args != current_args:
             current_args = _safe_copy(relay_args)
             trace.append({"source": "nemo_relay"})
@@ -123,30 +145,51 @@ def apply_tool_request_middleware(
 
     if not has_middleware(TOOL_REQUEST_MIDDLEWARE):
         return RequestMiddlewareResult(
-            payload=args if not trace else current_args, original_payload=args,
-            changed=bool(trace), trace=trace,
+            payload=args if not trace else current_args,
+            original_payload=args,
+            changed=bool(trace),
+            trace=trace,
         )
     return _apply_request_chain(
-        TOOL_REQUEST_MIDDLEWARE, "args", trace, original_args,
-        tool_name=tool_name, args=current_args, original_args=original_args, **context,
+        TOOL_REQUEST_MIDDLEWARE,
+        "args",
+        trace,
+        original_args,
+        tool_name=tool_name,
+        args=current_args,
+        original_args=original_args,
+        **context,
     )
 
 
 def run_llm_execution_middleware(
-    request: dict[str, Any], next_call: Callable[[dict[str, Any]], Any], **context: Any) -> Any:
+    request: dict[str, Any], next_call: Callable[[dict[str, Any]], Any], **context: Any
+) -> Any:
     """Run provider execution through registered LLM execution middleware."""
     return _run_execution_chain(
-        LLM_EXECUTION_MIDDLEWARE, next_call,
-        request=request, original_request=context.pop("original_request", request), **context)
+        LLM_EXECUTION_MIDDLEWARE,
+        next_call,
+        request=request,
+        original_request=context.pop("original_request", request),
+        **context,
+    )
 
 
 def run_tool_execution_middleware(
-    tool_name: str, args: dict[str, Any], next_call: Callable[[dict[str, Any]], Any], **context: Any,
+    tool_name: str,
+    args: dict[str, Any],
+    next_call: Callable[[dict[str, Any]], Any],
+    **context: Any,
 ) -> Any:
     """Run tool execution through registered tool execution middleware."""
     return _run_execution_chain(
-        TOOL_EXECUTION_MIDDLEWARE, next_call,
-        tool_name=tool_name, args=args, original_args=context.pop("original_args", args), **context)
+        TOOL_EXECUTION_MIDDLEWARE,
+        next_call,
+        tool_name=tool_name,
+        args=args,
+        original_args=context.pop("original_args", args),
+        **context,
+    )
 
 
 class _DownstreamExecutionError(Exception):
@@ -158,7 +201,9 @@ class _DownstreamExecutionError(Exception):
         self.original = original
 
 
-def _run_execution_chain(kind: str, terminal_call: Callable[[Any], Any], **kwargs: Any) -> Any:
+def _run_execution_chain(
+    kind: str, terminal_call: Callable[[Any], Any], **kwargs: Any
+) -> Any:
     from clawk_cli.plugins import _delivery_manager
 
     payload_key = "request" if "request" in kwargs else "args"
@@ -188,7 +233,9 @@ def _run_execution_chain(kind: str, terminal_call: Callable[[Any], Any], **kwarg
                 )
             next_called = True
             try:
-                next_result = call_at(index + 1, payload if next_payload is None else next_payload)
+                next_result = call_at(
+                    index + 1, payload if next_payload is None else next_payload
+                )
                 next_succeeded = True
                 return next_result
             except Exception as exc:
@@ -204,7 +251,9 @@ def _run_execution_chain(kind: str, terminal_call: Callable[[Any], Any], **kwarg
         except Exception as exc:
             # Runs once per tool/LLM call: a mis-declared callback fails identically every time,
             # so it goes through the manager's warn-once reporter (#111922).
-            manager._report_hook_failure(kind, callback, call_kwargs, exc, surface="Middleware")
+            manager._report_hook_failure(
+                kind, callback, call_kwargs, exc, surface="Middleware"
+            )
             if next_succeeded:
                 return next_result
             if next_called:

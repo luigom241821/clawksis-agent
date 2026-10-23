@@ -4,6 +4,7 @@ is selected, and the interpreter inside any venv. Shared by PM and pre-import la
 Only stdlib and clawk_constants: environment selection must work before
 any dependency from that environment has been imported.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,7 +28,9 @@ def dependency_home_root() -> Path:
     from clawk_constants import get_default_clawk_root, get_clawk_home_override
 
     override = get_clawk_home_override()
-    return get_default_clawk_root(home=override) if override else get_default_clawk_root()
+    return (
+        get_default_clawk_root(home=override) if override else get_default_clawk_root()
+    )
 
 
 def installs_root() -> Path:
@@ -59,8 +62,13 @@ def owning_home_root(project_root: Path) -> Path | None:
 
     root = Path(project_root).resolve()
     key = install_key(root)
-    candidates = [candidate for candidate in dict.fromkeys((root.parent, _get_platform_default_clawk_home()))
-                  if (candidate / "installs" / key / "facts.json").is_file()]
+    candidates = [
+        candidate
+        for candidate in dict.fromkeys(
+            (root.parent, _get_platform_default_clawk_home())
+        )
+        if (candidate / "installs" / key / "facts.json").is_file()
+    ]
     if not candidates:
         return None
     owner = _launcher_bound_root(root, candidates) or candidates[0]
@@ -77,7 +85,7 @@ def _launcher_bound_root(project_root: Path, candidates: list[Path]) -> Path | N
     from clawk_cli._launchers import _launcher_python
 
     local = project_root / ".clawk" / "bin"
-    for name in (("clawk.exe", "clawk.cmd") if os.name == "nt" else ("clawk",)):
+    for name in ("clawk.exe", "clawk.cmd") if os.name == "nt" else ("clawk",):
         python = _launcher_python(local / name)
         if python is None or not python.is_file():
             continue
@@ -91,15 +99,19 @@ def _launcher_bound_root(project_root: Path, candidates: list[Path]) -> Path | N
     return None
 
 
-def install_state_permission_message(project_root: Path, exc: PermissionError) -> str | None:
+def install_state_permission_message(
+    project_root: Path, exc: PermissionError
+) -> str | None:
     """Describe an access failure inside this install's dependency state."""
     if not exc.filename:
         return None
     denied = Path(exc.filename).resolve()
     if not denied.is_relative_to(install_state_dir(project_root).resolve()):
         return None
-    return (f"install state is not writable by this user ({denied}); "
-            "run as the install owner or grant write access")
+    return (
+        f"install state is not writable by this user ({denied}); "
+        "run as the install owner or grant write access"
+    )
 
 
 def runtime_facts_path(project_root: Path) -> Path:
@@ -120,10 +132,16 @@ def activation_input_mtimes(project_root: Path) -> dict[str, int]:
     """Snapshot before installing, so an input edited mid-install records its
     pre-install mtime and the next run re-activates."""
     root = Path(project_root)
-    return {name: (root / name).stat().st_mtime_ns for name in ACTIVATION_INPUTS if (root / name).is_file()}
+    return {
+        name: (root / name).stat().st_mtime_ns
+        for name in ACTIVATION_INPUTS
+        if (root / name).is_file()
+    }
 
 
-def record_activation_inputs(stamps: Path, mtimes: dict[str, int], project_root: Path, *, test_environment: bool) -> None:
+def record_activation_inputs(
+    stamps: Path, mtimes: dict[str, int], project_root: Path, *, test_environment: bool
+) -> None:
     """Give each stamp the exact mtime of the input the install was verified against.
 
     Recorded on every successful install, including no-op syncs: a checkout that
@@ -137,7 +155,9 @@ def record_activation_inputs(stamps: Path, mtimes: dict[str, int], project_root:
     # The sentinel is inherited by child shells; equal input mtimes in another
     # checkout must never make their test interpreter appear current here.
     stamps.mkdir(parents=True, exist_ok=True)
-    (stamps / ".project-root").write_text(str(Path(project_root).resolve()), encoding="utf-8")
+    (stamps / ".project-root").write_text(
+        str(Path(project_root).resolve()), encoding="utf-8"
+    )
     if test_environment:
         (stamps / ".test-environment").touch()
     for name, mtime in mtimes.items():
@@ -155,17 +175,25 @@ def _payload_manifest(root: Path) -> dict | None:
     error. Readers then take each field with ``.get`` and treat an absent one as unset.
     """
     try:
-        manifest = json.loads((root.parent / "manifest.json").read_text(encoding="utf-8-sig"))
+        manifest = json.loads(
+            (root.parent / "manifest.json").read_text(encoding="utf-8-sig")
+        )
     except (OSError, ValueError):
         return None
     if not isinstance(manifest, dict) or not isinstance(manifest.get("repo"), str):
         return None
     runtime = manifest.get("runtime", {})
     commands = runtime.get("commands", {}) if isinstance(runtime, dict) else None
-    well_formed = (isinstance(commands, dict)
-                   and isinstance(commands.get("clawk", ""), str)
-                   and all(isinstance(manifest.get(key, ""), str) for key in ("venv", "store")))
-    return manifest if well_formed and (root.parent / manifest["repo"]).resolve() == root else None
+    well_formed = (
+        isinstance(commands, dict)
+        and isinstance(commands.get("clawk", ""), str)
+        and all(isinstance(manifest.get(key, ""), str) for key in ("venv", "store"))
+    )
+    return (
+        manifest
+        if well_formed and (root.parent / manifest["repo"]).resolve() == root
+        else None
+    )
 
 
 def _payload_path(root: Path, relative: str, what: str) -> Path:
@@ -184,7 +212,12 @@ def payload_venv(project_root: Path) -> Path | None:
 
 
 def _payload_clawk_command(root: Path) -> Path | None:
-    command = (_payload_manifest(root) or {}).get("runtime", {}).get("commands", {}).get("clawk")
+    command = (
+        (_payload_manifest(root) or {})
+        .get("runtime", {})
+        .get("commands", {})
+        .get("clawk")
+    )
     return _payload_path(root, command, "launcher") if command else None
 
 
@@ -205,7 +238,11 @@ def cli_command_name(project_root: Path) -> str:
 
 
 def base_venv(project_root: Path) -> Path:
-    return payload_venv(project_root) or project_venv_dir(Path(project_root).resolve()) or Path(project_root).resolve() / "venv"
+    return (
+        payload_venv(project_root)
+        or project_venv_dir(Path(project_root).resolve())
+        or Path(project_root).resolve() / "venv"
+    )
 
 
 def store_root(project_root: Path, *, honor_runtime_override: bool = True) -> Path:
@@ -313,8 +350,13 @@ def _recorded_venv(project_root: Path) -> Path | None:
         raise RuntimeError("invalid dependency environment path")
     environment = Path(value).resolve()
     generations = install_state_dir(project_root) / "environments"
-    if not environment.is_relative_to(generations.resolve()) or not (environment / "pyvenv.cfg").is_file():
-        raise RuntimeError(f"dependency environment is missing or outside this install: {environment}")
+    if (
+        not environment.is_relative_to(generations.resolve())
+        or not (environment / "pyvenv.cfg").is_file()
+    ):
+        raise RuntimeError(
+            f"dependency environment is missing or outside this install: {environment}"
+        )
     return environment
 
 
@@ -349,7 +391,9 @@ def _payload_store_python(root: Path) -> Path | None:
     return _payload_path(root, relative, "interpreter")
 
 
-def venv_command(project_root: Path, venv: Path, options: tuple[str, ...] | list[str] = ()) -> list[str]:
+def venv_command(
+    project_root: Path, venv: Path, options: tuple[str, ...] | list[str] = ()
+) -> list[str]:
     """The argv prefix that runs Python inside *venv*; append a script, ``-c`` or ``-m``.
 
     A sealed payload never enters a venv through ``Scripts\\python.exe``. That redirector sits
@@ -407,7 +451,10 @@ def site_packages(venv: Path) -> Path:
 
     if os.name == "nt":
         return venv / "Lib/site-packages"
-    version = venv_python_version(venv) or (sys.version_info.major, sys.version_info.minor)
+    version = venv_python_version(venv) or (
+        sys.version_info.major,
+        sys.version_info.minor,
+    )
     return venv / f"lib/python{version[0]}.{version[1]}/site-packages"
 
 
@@ -446,8 +493,14 @@ def _require_own_dependencies(project_root: Path) -> None:
 
     if sys.prefix != sys.base_prefix:
         return  # a venv interpreter (developer .venv, test env) carries its own packages
-    if Path(sys.base_prefix).resolve().is_relative_to(store_root(project_root).resolve()):
-        raise NoCommittedEnvironment("no dependency environment is committed for this install")
+    if (
+        Path(sys.base_prefix)
+        .resolve()
+        .is_relative_to(store_root(project_root).resolve())
+    ):
+        raise NoCommittedEnvironment(
+            "no dependency environment is committed for this install"
+        )
 
 
 def activate_dependencies(project_root: Path) -> None:
@@ -460,7 +513,12 @@ def activate_dependencies(project_root: Path) -> None:
 
     state = install_state_dir(project_root)
     if state.is_dir():
-        from clawk_cli.runtime_state import runtime_lock, recover_publication, lease_generation
+        from clawk_cli.runtime_state import (
+            runtime_lock,
+            recover_publication,
+            lease_generation,
+        )
+
         # The lock's holder may be another profile's backend running a full dependency rebuild;
         # this process only reads the committed selection, so it proceeds without waiting rather
         # than leaving the backend unbound (see runtime_lock).
@@ -473,7 +531,10 @@ def activate_dependencies(project_root: Path) -> None:
             release = lease_generation(environment)
             # Without the lock, an installer may commit a new generation between the
             # read and the lease, leaving the leased one unselected and collectable.
-            while not held and (current := committed_venv(project_root)) not in (None, environment):
+            while not held and (current := committed_venv(project_root)) not in (
+                None,
+                environment,
+            ):
                 release()
                 environment, release = current, lease_generation(current)
             selected = site_packages(environment)
@@ -492,20 +553,30 @@ def activate_dependencies(project_root: Path) -> None:
         raise RuntimeError(f"dependency environment has no site-packages: {selected}")
     import site
 
-    sys.path[:] = [entry for entry in sys.path
-                   if Path(entry).name not in ("site-packages", "dist-packages")
-                   and Path(entry).resolve() != project_root.resolve()]
+    sys.path[:] = [
+        entry
+        for entry in sys.path
+        if Path(entry).name not in ("site-packages", "dist-packages")
+        and Path(entry).resolve() != project_root.resolve()
+    ]
     # uv editable members are activated by .pth files, not by sys.path alone.
     site.addsitedir(str(selected))
-    sys.path[:] = [str(project_root.resolve()), str(selected),
-                   *[entry for entry in sys.path if Path(entry).resolve() != selected.resolve()]]
-    os.environ["PYTHONPATH"] = os.pathsep.join([str(project_root.resolve()), str(selected)])
+    sys.path[:] = [
+        str(project_root.resolve()),
+        str(selected),
+        *[entry for entry in sys.path if Path(entry).resolve() != selected.resolve()],
+    ]
+    os.environ["PYTHONPATH"] = os.pathsep.join(
+        [str(project_root.resolve()), str(selected)]
+    )
     os.environ.pop("VIRTUAL_ENV", None)
     # The venv's own `clawk`/`clawk-acp` console scripts are editable installs bound to
     # the build-time source snapshot, not this checkout (#124627): a child that resolves
     # `clawk` off PATH must hit the checkout's own launcher first, never the venv's copy.
     # A sealed payload's launchers live in <payload>/bin instead.
-    directories = [payload_command_dir(project_root) or project_root.resolve() / ".clawk" / "bin"]
+    directories = [
+        payload_command_dir(project_root) or project_root.resolve() / ".clawk" / "bin"
+    ]
     # A sealed payload's Windows venv redirectors never go on PATH: a shipped venv's still
     # names the build machine, and a generation built since names PM's writable Python copy,
     # which cannot start the package's executables (see venv_command).
@@ -527,8 +598,12 @@ def activation_environment(project_root: Path) -> dict[str, str]:
     env.pop("VIRTUAL_ENV", None)
     # Nothing committed: the child's own clawk_bootstrap decides (a bare store Python refuses),
     # rather than inheriting the pre-PM in-tree venv from here.
-    env["PYTHONPATH"] = os.pathsep.join([str(project_root.resolve()),
-                                         *([str(site_packages(environment))] if environment else [])])
+    env["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(project_root.resolve()),
+            *([str(site_packages(environment))] if environment else []),
+        ]
+    )
     # The child-process sentinel. Its VALUE is the installed-state file this
     # environment was composed against, so a consumer learns that it inherited
     # an activated shell and which checkout/profile that shell came from. Its
@@ -552,17 +627,32 @@ def _fish_quote(value: str) -> str:
 
 # fish refuses to assign these, and each is either inherited unchanged from the
 # invoking shell (PWD, SHLVL, _) or fish's own state, so skipping loses nothing.
-_FISH_READ_ONLY = frozenset({
-    "PWD", "SHLVL", "_", "status", "version", "hostname", "fish_pid", "history",
-    "pipestatus", "status_generation", "umask", "FISH_VERSION",
-})
+_FISH_READ_ONLY = frozenset(
+    {
+        "PWD",
+        "SHLVL",
+        "_",
+        "status",
+        "version",
+        "hostname",
+        "fish_pid",
+        "history",
+        "pipestatus",
+        "status_generation",
+        "umask",
+        "FISH_VERSION",
+    }
+)
 
 # dialect -> (export statement, names the shell cannot assign). fish splits
 # values of variables named *PATH on colons when they are set from a single
 # word, so PATH stays a list.
 _SHELL_DIALECTS = {
     "sh": (lambda name, value: f"export {name}={shlex.quote(value)}", frozenset()),
-    "fish": (lambda name, value: f"set -gx {name} {_fish_quote(value)}", _FISH_READ_ONLY),
+    "fish": (
+        lambda name, value: f"set -gx {name} {_fish_quote(value)}",
+        _FISH_READ_ONLY,
+    ),
 }
 _SHELL_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
@@ -574,16 +664,25 @@ def shell_exports(env: dict[str, str], dialect: str) -> str:
     they pass through untouched instead of failing the whole script.
     """
     statement, read_only = _SHELL_DIALECTS[dialect]
-    return "\n".join(statement(name, str(value)) for name, value in env.items()
-                     if _SHELL_IDENTIFIER.fullmatch(name) and name not in read_only)
+    return "\n".join(
+        statement(name, str(value))
+        for name, value in env.items()
+        if _SHELL_IDENTIFIER.fullmatch(name) and name not in read_only
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Print the composed activation environment.")
+    parser = argparse.ArgumentParser(
+        description="Print the composed activation environment."
+    )
     parser.add_argument("--format", choices=["json", *_SHELL_DIALECTS], default="json")
     options = parser.parse_args(argv)
     env = activation_environment(Path(__file__).resolve().parents[1])
-    print(json.dumps(env) if options.format == "json" else shell_exports(env, options.format))
+    print(
+        json.dumps(env)
+        if options.format == "json"
+        else shell_exports(env, options.format)
+    )
 
 
 if __name__ == "__main__":

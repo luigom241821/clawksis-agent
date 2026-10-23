@@ -47,6 +47,9 @@ def test_compress_here_reappends_verbatim_tail(capsys):
     # Result = compressed head + verbatim tail (last 2 exchanges).
     assert shell.conversation_history == summary + history[4:]
     # No consecutive same-role user/assistant messages anywhere.
-    roles = [m["role"] for m in shell.conversation_history
-             if m["role"] in ("user", "assistant")]
+    roles = [
+        m["role"]
+        for m in shell.conversation_history
+        if m["role"] in ("user", "assistant")
+    ]
     assert all(roles[i] != roles[i + 1] for i in range(len(roles) - 1))

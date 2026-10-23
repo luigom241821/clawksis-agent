@@ -34,17 +34,27 @@ WORDS = {1: 60, 2: 260, 3: 130}
 
 def _reply(turn: int) -> str:
     words = [f"t{turn}w{i:03d}" for i in range(WORDS[turn])]
-    return "\n".join(" ".join(words[j:j + 21]) for j in range(0, len(words), 21))
+    return "\n".join(" ".join(words[j : j + 21]) for j in range(0, len(words), 21))
 
 
-def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Path) -> None:
+def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(
+    tmp_path: Path,
+) -> None:
     require_tmux()
     sock = f"clawk-e2e-{uuid.uuid4().hex[:8]}"
     home = tmp_path / "home"
     (tmp_path / "work").mkdir()
 
     def tmux(*args: str) -> str:
-        return subprocess.run(["tmux", "-L", sock, *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, check=False).stdout
+        return subprocess.run(
+            ["tmux", "-L", sock, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        ).stdout
 
     def transcript() -> str:
         return tmux("capture-pane", "-p", "-J", "-t", "p", "-S", "-", "-E", "-")
@@ -59,7 +69,11 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
         out = [f"fake provider requests: main={kinds['main']} aux={kinds['aux']}"]
         for name in ("agent.log", "errors.log"):
             log = home / ".clawksis" / "logs" / name
-            tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-40:] if log.exists() else ["<missing>"]
+            tail = (
+                log.read_text(encoding="utf-8", errors="replace").splitlines()[-40:]
+                if log.exists()
+                else ["<missing>"]
+            )
             out += [f"--- {name} (tail) ---", *tail]
         pid = tmux("display-message", "-p", "-t", "p", "#{pane_pid}").strip()
         if pid.isdigit():
@@ -98,15 +112,46 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
 
     with llm:
         write_clawk_home(home / ".clawksis", llm.base_url)
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("CLAWK_", "TMUX"))}
-        env.update(HOME=str(home), CLAWK_HOME=str(home / ".clawksis"), PYTHONPATH=str(REPO_ROOT),
-                   TERM="xterm-256color", CLAWK_STATE_DB_GUARD_BYPASS="1", PYTHONFAULTHANDLER="1")
+        env = {
+            k: v for k, v in os.environ.items() if not k.startswith(("CLAWK_", "TMUX"))
+        }
+        env.update(
+            HOME=str(home),
+            CLAWK_HOME=str(home / ".clawksis"),
+            PYTHONPATH=str(REPO_ROOT),
+            TERM="xterm-256color",
+            CLAWK_STATE_DB_GUARD_BYPASS="1",
+            PYTHONFAULTHANDLER="1",
+        )
         argv = [sys.executable, "-m", "clawk_cli.main", "chat", "--cli", "--yolo"]
-        subprocess.run(["tmux", "-L", sock, "-f", os.devnull, "new-session", "-d", "-s", "p", "-x", "120",
-                        "-y", "24", "-c", str(tmp_path / "work"), *argv], env=env, check=True, timeout=30)
+        subprocess.run(
+            [
+                "tmux",
+                "-L",
+                sock,
+                "-f",
+                os.devnull,
+                "new-session",
+                "-d",
+                "-s",
+                "p",
+                "-x",
+                "120",
+                "-y",
+                "24",
+                "-c",
+                str(tmp_path / "work"),
+                *argv,
+            ],
+            env=env,
+            check=True,
+            timeout=30,
+        )
         try:
             tmux("set", "-g", "window-size", "manual")
-            tmux("set", "-g", "remain-on-exit", "on")  # keeps a crash or the diagnostics' dump readable
+            tmux(
+                "set", "-g", "remain-on-exit", "on"
+            )  # keeps a crash or the diagnostics' dump readable
             wait_for("Welcome to Clawksis", timeout=120)
             # The welcome line is printed before the input loop exists. Keys typed then land in the
             # still-cooked tty: the kernel echoes them (a plain transcript row) and hands the app
@@ -127,7 +172,9 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
             resize(80)  # idle shrink
             time.sleep(1.5)
             ask(3)
-            wait_for("t3w020")  # the end of the first line: its commit repaints the chrome
+            wait_for(
+                "t3w020"
+            )  # the end of the first line: its commit repaints the chrome
             resize(70)  # two-step shrink mid-stream
             time.sleep(0.8)
             resize(60)
@@ -142,16 +189,30 @@ def test_resizes_keep_each_transcript_line_once_in_tmux_scrollback(tmp_path: Pat
     lines = final.split("\n")
     stale_preview = [line for line in lines if line.lstrip().startswith("\u2026")]
     assert len(stale_preview) <= 3, final
-    words = Counter(re.findall(r"\bt\dw\d{3}\b", "\n".join(ln for ln in lines if ln not in stale_preview)))
+    words = Counter(
+        re.findall(
+            r"\bt\dw\d{3}\b", "\n".join(ln for ln in lines if ln not in stale_preview)
+        )
+    )
     expected = {f"t{t}w{i:03d}" for t, n in WORDS.items() for i in range(n)}
     assert sorted(w for w in expected if words[w] != 1) == [], final
     assert [final.count(f"zq{t}q") for t in WORDS] == [1, 1, 1], final
     # One composer row. The glyph layout also prints each sent message as a `❯ question` row.
     sent = {f"question zq{t}q please" for t in WORDS}
-    assert sum(1 for line in final.split("\n")
-               if line.lstrip().startswith("❯") and line.strip()[1:].strip() not in sent) == 1, final
+    assert (
+        sum(
+            1
+            for line in final.split("\n")
+            if line.lstrip().startswith("❯") and line.strip()[1:].strip() not in sent
+        )
+        == 1
+    ), final
     # Resizes touch only the transcript, so blank runs are judged from the first question on (the
     # glyph layout's startup spacing under the welcome banner is printed before any resize).
-    turns = final[final.index("\u276f question zq1q"):]
-    blank_runs = [len(run) for run in re.findall(r"(?:^[ \t]*\n)+", turns, flags=re.MULTILINE)]
-    assert max(blank_runs, default=0) <= 2, final  # the reply panel's own spacing, nothing more
+    turns = final[final.index("\u276f question zq1q") :]
+    blank_runs = [
+        len(run) for run in re.findall(r"(?:^[ \t]*\n)+", turns, flags=re.MULTILINE)
+    ]
+    assert max(blank_runs, default=0) <= 2, (
+        final
+    )  # the reply panel's own spacing, nothing more

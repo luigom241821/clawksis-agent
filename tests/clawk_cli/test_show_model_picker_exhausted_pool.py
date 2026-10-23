@@ -24,7 +24,9 @@ def _run_picker(payload_providers):
         captured.update(kwargs)
         return {"providers": payload_providers}
 
-    cli = SimpleNamespace(model="some-model", provider="", _open_model_picker=MagicMock())
+    cli = SimpleNamespace(
+        model="some-model", provider="", _open_model_picker=MagicMock()
+    )
     ctx = SimpleNamespace(user_providers={}, custom_providers=[])
     with patch("clawk_cli.inventory.build_models_payload", side_effect=_fake_build):
         _show_model_picker(cli, ctx, force_refresh=False)

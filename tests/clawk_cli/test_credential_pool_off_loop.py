@@ -22,14 +22,16 @@ import clawk_cli.web_routers.ops as _rt_ops
 # _urlopen_bounded
 # ---------------------------------------------------------------------------
 
-class TestUrlopenBounded:
 
+class TestUrlopenBounded:
     def test_reraises_worker_exception(self):
         with patch("urllib.request.urlopen", side_effect=OSError("boom")):
             with pytest.raises(OSError, match="boom"):
                 copilot_auth._urlopen_bounded("req", 1.0)
 
-    def test_hard_cap_fires_on_hung_resolver_and_closes_late_response(self, monkeypatch):
+    def test_hard_cap_fires_on_hung_resolver_and_closes_late_response(
+        self, monkeypatch
+    ):
         """A urlopen that hangs past timeout + grace must raise TimeoutError
         promptly, and when the abandoned worker later *succeeds* it must close
         the response instead of leaking the socket."""
@@ -54,9 +56,11 @@ class TestUrlopenBounded:
             release.set()
             assert closed.wait(timeout=2), "late response was not closed"
 
+
 # ---------------------------------------------------------------------------
 # single-flight exchange
 # ---------------------------------------------------------------------------
+
 
 class TestExchangeSingleFlight:
     @pytest.fixture(autouse=True)
@@ -97,7 +101,11 @@ class TestExchangeSingleFlight:
 
         results = []
         threads = [
-            threading.Thread(target=lambda: results.append(copilot_auth.exchange_copilot_token("ghu_" + "x" * 30)))
+            threading.Thread(
+                target=lambda: results.append(
+                    copilot_auth.exchange_copilot_token("ghu_" + "x" * 30)
+                )
+            )
             for _ in range(8)
         ]
         for t in threads:
@@ -162,9 +170,11 @@ class TestExchangeSingleFlight:
         finally:
             lock.release()
 
+
 # ---------------------------------------------------------------------------
 # web_server credential-pool handlers off the loop
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_list_credential_pool_runs_off_event_loop(monkeypatch):

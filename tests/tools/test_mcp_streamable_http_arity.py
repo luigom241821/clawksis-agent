@@ -64,10 +64,13 @@ def _transport_yielding(*values):
     return _Ctx()
 
 
-@pytest.mark.parametrize("sdk,streams", [
-    ("mcp 2.x", (MagicMock(), MagicMock())),
-    ("mcp 1.x", (MagicMock(), MagicMock(), (lambda: None))),
-])
+@pytest.mark.parametrize(
+    "sdk,streams",
+    [
+        ("mcp 2.x", (MagicMock(), MagicMock())),
+        ("mcp 1.x", (MagicMock(), MagicMock(), (lambda: None))),
+    ],
+)
 def test_run_http_accepts_the_arity_each_sdk_generation_yields(sdk, streams):
     from tools.mcp_tool import MCPServerTask
 
@@ -79,13 +82,17 @@ def test_run_http_accepts_the_arity_each_sdk_generation_yields(sdk, streams):
         self._shutdown_event.set()
 
     async def _drive():
-        with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-             patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-             _patch_sdk_async_client(_DummyAsyncClient), \
-             patch("tools.mcp_tool.streamable_http_client",
-                   return_value=_transport_yielding(*streams)), \
-             patch("tools.mcp_tool.ClientSession", _DummySession), \
-             patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+        with (
+            patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+            patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            _patch_sdk_async_client(_DummyAsyncClient),
+            patch(
+                "tools.mcp_tool.streamable_http_client",
+                return_value=_transport_yielding(*streams),
+            ),
+            patch("tools.mcp_tool.ClientSession", _DummySession),
+            patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+        ):
             await server._run_http({"url": "https://example.com/mcp"})
 
     asyncio.run(_drive())
@@ -111,13 +118,17 @@ def test_the_session_streams_are_the_first_two_yielded():
         self._shutdown_event.set()
 
     async def _drive():
-        with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-             patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-             _patch_sdk_async_client(_DummyAsyncClient), \
-             patch("tools.mcp_tool.streamable_http_client",
-                   return_value=_transport_yielding(read, write, (lambda: None))), \
-             patch("tools.mcp_tool.ClientSession", _CapturingSession), \
-             patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+        with (
+            patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+            patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            _patch_sdk_async_client(_DummyAsyncClient),
+            patch(
+                "tools.mcp_tool.streamable_http_client",
+                return_value=_transport_yielding(read, write, (lambda: None)),
+            ),
+            patch("tools.mcp_tool.ClientSession", _CapturingSession),
+            patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+        ):
             await server._run_http({"url": "https://example.com/mcp"})
 
     asyncio.run(_drive())
@@ -163,13 +174,17 @@ def test_the_seeded_header_is_the_handshake_version_on_the_wire():
         self._shutdown_event.set()
 
     async def _drive():
-        with _patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-             _patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-             _patch_sdk_async_client(_CapturingAsyncClient), \
-             _patch("tools.mcp_tool.streamable_http_client",
-                    return_value=_transport_yielding(MagicMock(), MagicMock())), \
-             _patch("tools.mcp_tool.ClientSession", _DummySession), \
-             _patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+        with (
+            _patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+            _patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            _patch_sdk_async_client(_CapturingAsyncClient),
+            _patch(
+                "tools.mcp_tool.streamable_http_client",
+                return_value=_transport_yielding(MagicMock(), MagicMock()),
+            ),
+            _patch("tools.mcp_tool.ClientSession", _DummySession),
+            _patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+        ):
             await server._run_http({"url": "https://example.com/mcp"})
 
     asyncio.run(_drive())
@@ -196,17 +211,23 @@ def test_an_explicit_protocol_header_still_wins():
         self._shutdown_event.set()
 
     async def _drive():
-        with _patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-             _patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-             _patch_sdk_async_client(_CapturingAsyncClient), \
-             _patch("tools.mcp_tool.streamable_http_client",
-                    return_value=_transport_yielding(MagicMock(), MagicMock())), \
-             _patch("tools.mcp_tool.ClientSession", _DummySession), \
-             _patch.object(MCPServerTask, "_discover_tools", _discover_tools):
-            await server._run_http({
-                "url": "https://example.com/mcp",
-                "headers": {"MCP-Protocol-Version": "2025-06-18"},
-            })
+        with (
+            _patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+            _patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            _patch_sdk_async_client(_CapturingAsyncClient),
+            _patch(
+                "tools.mcp_tool.streamable_http_client",
+                return_value=_transport_yielding(MagicMock(), MagicMock()),
+            ),
+            _patch("tools.mcp_tool.ClientSession", _DummySession),
+            _patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+        ):
+            await server._run_http(
+                {
+                    "url": "https://example.com/mcp",
+                    "headers": {"MCP-Protocol-Version": "2025-06-18"},
+                }
+            )
 
     asyncio.run(_drive())
 

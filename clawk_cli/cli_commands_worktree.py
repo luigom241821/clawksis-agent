@@ -17,8 +17,11 @@ def enter_new_worktree(cli, wt_info) -> bool:
     from clawk_cli.gateway_automation import gateway_connection
     from clawk_cli.gateway_client import GatewayClientError
     from clawk_cli.gateway_session_store import move_cli_workspace
+
     try:
-        move_cli_workspace(cli, wt_info)  # the gateway session's tools, then this process
+        move_cli_workspace(
+            cli, wt_info
+        )  # the gateway session's tools, then this process
     except GatewayClientError as e:
         print(f"  {_t('worktree.enter_failed', error=refusal_text(e))}")
         active = _cli._active_worktree

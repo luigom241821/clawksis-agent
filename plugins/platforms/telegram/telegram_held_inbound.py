@@ -33,9 +33,13 @@ class TelegramHeldInboundMixin:
             current = None
         if prior is not None and not prior.done() and prior is not current:
             return
-        self._held_inbound_redispatch_task = loop.create_task(self._redispatch_held_inbound(prior=None if prior is current else prior))
+        self._held_inbound_redispatch_task = loop.create_task(
+            self._redispatch_held_inbound(prior=None if prior is current else prior)
+        )
 
-    def _hold_inbound_event(self, event: MessageEvent, *, where: str, schedule: bool = True) -> None:
+    def _hold_inbound_event(
+        self, event: MessageEvent, *, where: str, schedule: bool = True
+    ) -> None:
         """Preserve an inbound event that cannot be dispatched now (PTB already acked the update, so dropping is silent loss).
         Capped, identity-deduped; permanent fatal discards. ``schedule=False`` inside a drain avoids poison-event loops.
 
@@ -45,13 +49,18 @@ class TelegramHeldInboundMixin:
         """
         if self._is_permanent_fatal():
             logger.warning(
-                "[Telegram] Discarding inbound under non-retryable fatal (%s, %d chars)", where, len(getattr(event, "text", None) or ""))
+                "[Telegram] Discarding inbound under non-retryable fatal (%s, %d chars)",
+                where,
+                len(getattr(event, "text", None) or ""),
+            )
             return
         successor = getattr(self, "_held_inbound_successor", None)
         target = successor() if successor is not None else None
         if target is not None:  # retired by a runner rebuild (#132829)
             self._accept_update()  # the claim being dispatched is ours, not the successor's
-            target._adopt_held_event(event, where=f"{where}-forwarded", schedule=schedule)
+            target._adopt_held_event(
+                event, where=f"{where}-forwarded", schedule=schedule
+            )
             return
         held = getattr(self, "_held_inbound_events", None)
         if held is None:
@@ -62,12 +71,21 @@ class TelegramHeldInboundMixin:
         while len(held) >= max_n:
             dropped = held.pop(0)
             logger.warning(
-                "[Telegram] Held-inbound queue full (%d); dropping oldest (%d chars)", max_n, len(getattr(dropped, "text", None) or ""))
+                "[Telegram] Held-inbound queue full (%d); dropping oldest (%d chars)",
+                max_n,
+                len(getattr(dropped, "text", None) or ""),
+            )
         held.append(event)
         self._accept_update()
         logger.warning(
-            "[Telegram] Holding inbound (%s, %d chars, queue=%d)%s", where, len(getattr(event, "text", None) or ""), len(held),
-            " - will redispatch on reconnect" if self._should_drop_delayed_delivery() else (" - scheduling redispatch" if schedule else ""))
+            "[Telegram] Holding inbound (%s, %d chars, queue=%d)%s",
+            where,
+            len(getattr(event, "text", None) or ""),
+            len(held),
+            " - will redispatch on reconnect"
+            if self._should_drop_delayed_delivery()
+            else (" - scheduling redispatch" if schedule else ""),
+        )
         # A live-path hold must not orphan the event waiting for a reconnect that never comes.
         if schedule and not self._should_drop_delayed_delivery():
             self._schedule_held_inbound_redispatch()
@@ -75,7 +93,9 @@ class TelegramHeldInboundMixin:
     def adopt_held_inbound(self, predecessor: "TelegramHeldInboundMixin") -> None:
         """Take over the hold queue of the instance the runner just replaced with us (#132829): it only
         drains on its own ``_mark_connected``, which never comes; later holds there forward here."""
-        self._held_inbound_successor = None  # we own the queue again: a reverse link would forward in a cycle
+        self._held_inbound_successor = (
+            None  # we own the queue again: a reverse link would forward in a cycle
+        )
         predecessor._held_inbound_successor = weakref.ref(self)
         held = getattr(predecessor, "_held_inbound_events", None) or []
         events = list(held)
@@ -84,7 +104,9 @@ class TelegramHeldInboundMixin:
             self._adopt_held_event(event, where="adopted", schedule=False)
         self._schedule_held_inbound_redispatch()
 
-    def _adopt_held_event(self, event: MessageEvent, *, where: str, schedule: bool) -> None:
+    def _adopt_held_event(
+        self, event: MessageEvent, *, where: str, schedule: bool
+    ) -> None:
         """Hold a predecessor's event here; only the transport ref moves (profile/authz stay as resolved)."""
         if getattr(event, "source", None) is not None:
             event.source._transport_adapter_ref = weakref.ref(self)
@@ -95,24 +117,33 @@ class TelegramHeldInboundMixin:
         for rest in events[idx:]:
             self._hold_inbound_event(rest, where=where, schedule=False)
 
-    async def _redispatch_held_inbound(self, prior: Optional[asyncio.Task] = None) -> None:
+    async def _redispatch_held_inbound(
+        self, prior: Optional[asyncio.Task] = None
+    ) -> None:
         """Drain the hold queue after reconnect or a connected-path hold; ``prior`` (previous
         redispatch task) is cancelled+awaited here so ``_mark_connected`` stays synchronous."""
-        if prior is not asyncio.current_task():  # a self-redispatch must not cancel itself
+        if (
+            prior is not asyncio.current_task()
+        ):  # a self-redispatch must not cancel itself
             await cancel_task(prior)
         held = getattr(self, "_held_inbound_events", None)
         if self._is_permanent_fatal():
             if held:
                 n = len(held)
                 held.clear()
-                logger.warning("[Telegram] Redispatch aborted; discarded %d held inbound under non-retryable fatal", n)
+                logger.warning(
+                    "[Telegram] Redispatch aborted; discarded %d held inbound under non-retryable fatal",
+                    n,
+                )
             return
         if not held:
             return
         # Take ownership atomically; concurrent holds append to the fresh list for a follow-up.
         events = list(held)
         held.clear()
-        logger.warning("[Telegram] Redispatching %d held inbound message(s)", len(events))
+        logger.warning(
+            "[Telegram] Redispatching %d held inbound message(s)", len(events)
+        )
         allow_followup_schedule = True
         try:
             for idx, event in enumerate(events):
@@ -128,7 +159,9 @@ class TelegramHeldInboundMixin:
                     # Retryable failure: re-hold but do NOT reschedule now (a poison event would
                     # tight-loop); the next mark_connected/live hold drains.
                     logger.exception(
-                        "[Telegram] Failed to redispatch held inbound (%d chars); re-holding", len(getattr(event, "text", None) or ""))
+                        "[Telegram] Failed to redispatch held inbound (%d chars); re-holding",
+                        len(getattr(event, "text", None) or ""),
+                    )
                     self._rehold_from(events, idx, "redispatch-failed")
                     allow_followup_schedule = False
                     return
@@ -138,5 +171,6 @@ class TelegramHeldInboundMixin:
                 allow_followup_schedule
                 and getattr(self, "_held_inbound_events", None)
                 and not self._should_drop_delayed_delivery()
-                and not self._is_permanent_fatal()):
+                and not self._is_permanent_fatal()
+            ):
                 self._schedule_held_inbound_redispatch()

@@ -64,30 +64,39 @@ def _age_fence(fence: CompressionCommitFence, idle_seconds: float) -> None:
 class TestStallClassificationIsFenceIdle:
     def test_fresh_fence_is_not_stalled(self):
         fence = CompressionCommitFence()
-        assert compression_attempt_stalled(
-            commit_fence=fence,
-            started_at=time.monotonic(),
-            idle_timeout_seconds=1.0,
-        ) is False
+        assert (
+            compression_attempt_stalled(
+                commit_fence=fence,
+                started_at=time.monotonic(),
+                idle_timeout_seconds=1.0,
+            )
+            is False
+        )
 
     def test_idle_fence_is_stalled(self):
         fence = CompressionCommitFence()
         _age_fence(fence, 2.0)
-        assert compression_attempt_stalled(
-            commit_fence=fence,
-            started_at=time.monotonic(),
-            idle_timeout_seconds=1.0,
-        ) is True
+        assert (
+            compression_attempt_stalled(
+                commit_fence=fence,
+                started_at=time.monotonic(),
+                idle_timeout_seconds=1.0,
+            )
+            is True
+        )
 
     def test_recent_progress_is_not_stalled(self):
         fence = CompressionCommitFence()
         _age_fence(fence, 2.0)
         fence.touch_progress()
-        assert compression_attempt_stalled(
-            commit_fence=fence,
-            started_at=time.monotonic() - 5.0,
-            idle_timeout_seconds=1.0,
-        ) is False
+        assert (
+            compression_attempt_stalled(
+                commit_fence=fence,
+                started_at=time.monotonic() - 5.0,
+                idle_timeout_seconds=1.0,
+            )
+            is False
+        )
 
     def test_chat_and_responses_share_the_fence_clock(self):
         """Transport-agnostic: both APIs tick the same fence or they don't."""
@@ -95,20 +104,28 @@ class TestStallClassificationIsFenceIdle:
         responses_fence = CompressionCommitFence()
         _age_fence(chat_fence, 2.0)
         responses_fence.touch_progress()
-        assert compression_attempt_stalled(
-            commit_fence=chat_fence,
-            started_at=time.monotonic(),
-            idle_timeout_seconds=1.0,
-        ) is True
-        assert compression_attempt_stalled(
-            commit_fence=responses_fence,
-            started_at=time.monotonic(),
-            idle_timeout_seconds=1.0,
-        ) is False
+        assert (
+            compression_attempt_stalled(
+                commit_fence=chat_fence,
+                started_at=time.monotonic(),
+                idle_timeout_seconds=1.0,
+            )
+            is True
+        )
+        assert (
+            compression_attempt_stalled(
+                commit_fence=responses_fence,
+                started_at=time.monotonic(),
+                idle_timeout_seconds=1.0,
+            )
+            is False
+        )
 
 
 class TestEarlyStopStaysNeutral:
-    @pytest.mark.parametrize(("user_stop", "outcome"), [(True, "skipped"), (False, "failed")])
+    @pytest.mark.parametrize(
+        ("user_stop", "outcome"), [(True, "skipped"), (False, "failed")]
+    )
     def test_explicit_interrupt_before_stall_does_not_arm_cooldown(
         self, tmp_path: Path, monkeypatch, user_stop, outcome
     ):
@@ -117,7 +134,11 @@ class TestEarlyStopStaysNeutral:
         from clawk_cli.observability import shared_metrics_events
 
         recorded = []
-        monkeypatch.setattr(shared_metrics_events, "record_compression", lambda **kw: recorded.append(kw["outcome"]))
+        monkeypatch.setattr(
+            shared_metrics_events,
+            "record_compression",
+            lambda **kw: recorded.append(kw["outcome"]),
+        )
         db, agent = _build_agent(tmp_path, "EARLY_STOP_96775")
         original = _messages()
         live = copy.deepcopy(original)
@@ -273,9 +294,7 @@ class TestStallInterruptedBackoff:
         assert db.get_compression_failure_cooldown("FRESH_FENCE_CANCEL") is None
         assert agent.context_compressor.should_compress(50_000) is True
 
-    def test_manual_force_bypasses_stall_backoff(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_manual_force_bypasses_stall_backoff(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(
             "agent.conversation_compression.resolve_context_compression_timeouts",
             lambda compression_cfg=None: (1.0, 10.0),

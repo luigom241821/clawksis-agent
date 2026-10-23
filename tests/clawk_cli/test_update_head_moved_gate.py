@@ -18,6 +18,7 @@ from clawk_cli import main_web_build
 from clawk_cli import main_install_repair
 from clawk_cli import update_cmd
 
+
 def _make_head_pinned_side_effect(sha="abc123"):
     """Simulate a detached checkout pinned to ``sha``: HEAD never moves."""
 
@@ -37,6 +38,7 @@ def _make_head_pinned_side_effect(sha="abc123"):
 
     return side_effect
 
+
 def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
     """Patch the clawk_cli.main helpers ``_cmd_update_impl`` touches.
 
@@ -47,13 +49,12 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
     monkeypatch.setattr(clawk_main.subprocess, "run", run_side_effect)
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
     (tmp_path / ".git").mkdir()  # pass the "is a git repo" gate
-    monkeypatch.setattr(
-        clawk_main, "_resolve_update_branch", lambda args: "main"
-    )
+    monkeypatch.setattr(clawk_main, "_resolve_update_branch", lambda args: "main")
     monkeypatch.setattr(clawk_main, "_is_windows", lambda: False)
     monkeypatch.setattr(main_install_repair, "_is_windows", lambda: False)
     monkeypatch.setattr(
-        clawk_main, "_get_origin_url",
+        clawk_main,
+        "_get_origin_url",
         lambda *a, **k: "https://github.com/samuelgradientai-sys/clawksis-agent.git",
     )
     monkeypatch.setattr(update_cmd, "_is_fork", lambda *a, **k: False)
@@ -67,21 +68,21 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
     monkeypatch.setattr(
         main_web_build, "_record_bytecode_fingerprint", lambda *a, **k: None
     )
-    monkeypatch.setattr(
-        clawk_main, "_run_pre_update_backup", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        clawk_main, "_pause_windows_gateways_for_update", lambda: None
-    )
+    monkeypatch.setattr(clawk_main, "_run_pre_update_backup", lambda *a, **k: None)
+    monkeypatch.setattr(clawk_main, "_pause_windows_gateways_for_update", lambda: None)
     monkeypatch.setattr(
         clawk_main, "_resume_windows_gateways_after_update", lambda *a, **k: None
     )
     # Short-circuit the long tail: dependency install + desktop build.
     monkeypatch.setattr(clawk_main, "_write_update_incomplete_marker", lambda: None)
     monkeypatch.setattr(clawk_main, "_clear_update_incomplete_marker", lambda: None)
-    monkeypatch.setattr(main_install_repair, "_clear_update_incomplete_marker", lambda: None)
+    monkeypatch.setattr(
+        main_install_repair, "_clear_update_incomplete_marker", lambda: None
+    )
     # Gateway restart path (called after a successful update).
-    monkeypatch.setattr(update_cmd, "_finish_dashboard_update_cleanup", lambda *a, **k: None)
+    monkeypatch.setattr(
+        update_cmd, "_finish_dashboard_update_cleanup", lambda *a, **k: None
+    )
     # Keep the (now surfaced — #78574) gateway auto-restart phase away from
     # this machine's real gateways: discovery returns nothing, systemd is
     # unsupported, so the phase is a clean no-op for both snapshots.
@@ -90,12 +91,11 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
     monkeypatch.setattr(
         clawk_gateway, "find_gateway_pids", lambda all_profiles=False: []
     )
-    monkeypatch.setattr(
-        clawk_gateway, "supports_systemd_services", lambda: False
-    )
+    monkeypatch.setattr(clawk_gateway, "supports_systemd_services", lambda: False)
     monkeypatch.setattr(
         clawk_gateway, "find_profile_gateway_processes", lambda *a, **k: []
     )
+
 
 def test_update_fails_loudly_when_head_pinned(monkeypatch, tmp_path, capsys):
     """A detached/pinned HEAD that never moves must fail loudly, not print

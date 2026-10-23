@@ -172,8 +172,7 @@ def test_desktop_session_search_stamps_the_requested_profile(monkeypatch):
     )
 
     assert {
-        (row["profile"], row["is_default_profile"])
-        for row in response["results"]
+        (row["profile"], row["is_default_profile"]) for row in response["results"]
     } == {("worker", False)}
 
 
@@ -199,13 +198,17 @@ def test_desktop_session_search_attaches_profile_to_rich_results(monkeypatch):
 
     # Browsing never initializes a store: serve the fake as the profile's existing store,
     # as the requested-profile test above does.
-    monkeypatch.setattr(_rt_sessions, "_cron_profile_home", lambda profile: (profile, None))
+    monkeypatch.setattr(
+        _rt_sessions, "_cron_profile_home", lambda profile: (profile, None)
+    )
     monkeypatch.setattr(
         _rt_sessions,
         "_open_session_db_for_profile",
         lambda profile, *, read_only: _RichFakeSessionDB(read_only=read_only),
     )
-    response = asyncio.run(_rt_sessions.search_sessions(q="20260603", limit=1, profile="personal"))
+    response = asyncio.run(
+        _rt_sessions.search_sessions(q="20260603", limit=1, profile="personal")
+    )
     assert response["results"][0]["profile"] == "personal"
     assert response["results"][0]["title"] == "Custom Title"
 
@@ -224,29 +227,43 @@ class _DeepLineageSessionDB(_FakeSessionDB):
     TIP = "s1100"
     MID = "s100"
 
-    def search_sessions_by_id(self, query, limit=20, include_archived=True,
-                              source=None, sources=None, exclude_sources=None):
+    def search_sessions_by_id(
+        self,
+        query,
+        limit=20,
+        include_archived=True,
+        source=None,
+        sources=None,
+        exclude_sources=None,
+    ):
         return []  # pragma: no cover - content-hit path only in this test
 
-    def search_messages(self, query, source_filter=None, exclude_sources=None,
-                        limit=20, fields=None):
-        return [{
-            "session_id": self.MID,
-            "snippet": "content hit inside a deep lineage",
-            "role": "assistant",
-            "source": "desktop",
-            "model": "gpt",
-            "session_started": 200,
-        }][:limit]
+    def search_messages(
+        self, query, source_filter=None, exclude_sources=None, limit=20, fields=None
+    ):
+        return [
+            {
+                "session_id": self.MID,
+                "snippet": "content hit inside a deep lineage",
+                "role": "assistant",
+                "source": "desktop",
+                "model": "gpt",
+                "session_started": 200,
+            }
+        ][:limit]
 
     def get_session(self, session_id):
         parent = None
         if session_id != "s000":
             parent = f"s{int(session_id[1:]) - 1:03d}"
         n = int(session_id[1:])
-        return {"id": session_id, "parent_session_id": parent,
-                "end_reason": "compression",
-                "ended_at": n + 1, "started_at": n}
+        return {
+            "id": session_id,
+            "parent_session_id": parent,
+            "end_reason": "compression",
+            "ended_at": n + 1,
+            "started_at": n,
+        }
 
     def get_compression_tip(self, session_id):
         # Faithful simulation of the REAL bounded forward walk in

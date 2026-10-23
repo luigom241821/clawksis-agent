@@ -35,7 +35,9 @@ def _verify_self_as_gateway(monkeypatch):
     """Without a socket answer the state file is only a claim; the fallback classifies a LIVE
     pid from it only when the home's identity resolver verifies that pid as the gateway
     (#110420). The live-pid tests write the record about pytest itself, so verify it."""
-    monkeypatch.setattr("gateway.status.live_gateway_pid_for_home", lambda h: os.getpid())
+    monkeypatch.setattr(
+        "gateway.status.live_gateway_pid_for_home", lambda h: os.getpid()
+    )
 
 
 _DEAD_PID = 999999899  # never a live pid
@@ -45,8 +47,12 @@ def test_killed_never_replaced_gateway_is_a_down_row(monkeypatch, tmp_path):
     _setup(
         monkeypatch,
         tmp_path,
-        {"pid": _DEAD_PID, "gateway_state": "running", "kind": "clawk-gateway",
-         "code_version": "0.20.5"},
+        {
+            "pid": _DEAD_PID,
+            "gateway_state": "running",
+            "kind": "clawk-gateway",
+            "code_version": "0.20.5",
+        },
     )
     fleet = ur.collect_fleet_versions(pre_restart_pids=[_DEAD_PID])
     assert len(fleet) == 1
@@ -130,8 +136,12 @@ def test_live_gateway_rows_unchanged(monkeypatch, tmp_path):
     _setup(
         monkeypatch,
         tmp_path,
-        {"pid": os.getpid(), "gateway_state": "running", "code_sha": "HEADSHA",
-         "kind": "clawk-gateway"},
+        {
+            "pid": os.getpid(),
+            "gateway_state": "running",
+            "code_sha": "HEADSHA",
+            "kind": "clawk-gateway",
+        },
     )
     fleet = ur.collect_fleet_versions(pre_restart_pids=[os.getpid()])
     assert len(fleet) == 1

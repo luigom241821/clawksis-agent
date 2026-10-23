@@ -15,6 +15,7 @@ reconnect ladder and hands the adapter to the supervisor for a rebuild
 (#113618). ``_polling_heartbeat_loop`` runs the check every probe, so
 steady-state wedges are caught without any Bot API call.
 """
+
 import asyncio
 import time as _time
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -35,9 +36,7 @@ def _make_adapter(*, stalled_seconds: float) -> TelegramAdapter:
     adapter._app.updater.running = True
     bot = MagicMock()
     bot.get_me = AsyncMock()
-    bot.get_webhook_info = AsyncMock(
-        return_value=MagicMock(pending_update_count=0)
-    )
+    bot.get_webhook_info = AsyncMock(return_value=MagicMock(pending_update_count=0))
     adapter._app.bot = bot
     adapter._bot = bot
     adapter._polling_generation = 2
@@ -73,7 +72,9 @@ async def test_stalled_long_poll_hands_off_to_supervisor():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("via_verifier", [False, True], ids=["watchdog", "verifier"])
-async def test_confirmed_stall_hands_off_before_reusing_updater(monkeypatch, via_verifier):
+async def test_confirmed_stall_hands_off_before_reusing_updater(
+    monkeypatch, via_verifier
+):
     """#113618: a confirmed stall (watchdog or post-reconnect verifier) must escalate to the
     retryable fatal and mark the adapter degraded instead of restarting the same Updater."""
     from plugins.platforms.telegram import adapter as tg_adapter
@@ -200,7 +201,9 @@ async def test_heartbeat_detects_wedged_long_poll_with_empty_queue():
         await real_sleep(0)
 
     with patch("asyncio.sleep", new=fast_sleep):
-        with patch.object(adapter, "_handle_polling_network_error", new=AsyncMock()) as rec:
+        with patch.object(
+            adapter, "_handle_polling_network_error", new=AsyncMock()
+        ) as rec:
             loop_task = asyncio.ensure_future(adapter._polling_heartbeat_loop())
             try:
                 # Run probe cycles until the stall watchdog escalates (the

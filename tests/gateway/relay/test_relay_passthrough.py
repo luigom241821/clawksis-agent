@@ -44,7 +44,9 @@ def adapter():
     return RelayAdapter(PlatformConfig(), _desc(), transport=StubConnector(_desc()))
 
 
-def _interaction_forward(payload: dict, *, profile: str | None = None) -> PassthroughForward:
+def _interaction_forward(
+    payload: dict, *, profile: str | None = None
+) -> PassthroughForward:
     body = json.dumps(payload).encode("utf-8")
     return PassthroughForward(
         platform="discord",
@@ -60,7 +62,9 @@ def _interaction_forward(payload: dict, *, profile: str | None = None) -> Passth
 def test_passthrough_from_wire_byte_preserves_body():
     """The wire frame's base64 body decodes back to the exact bytes (parity with
     the connector's toPassthroughForward)."""
-    original = json.dumps({"type": 2, "data": {"name": "ping"}, "guild_id": "g1"}).encode("utf-8")
+    original = json.dumps(
+        {"type": 2, "data": {"name": "ping"}, "guild_id": "g1"}
+    ).encode("utf-8")
     wire = {
         "platform": "discord",
         "botId": "appShared",
@@ -95,8 +99,6 @@ def test_passthrough_from_wire_stamps_routed_profile():
     }
     fwd = _passthrough_from_wire(wire)
     assert fwd.profile == "reviewer"
-
-
 
 
 @pytest.mark.asyncio
@@ -259,8 +261,6 @@ async def test_dm_interaction_keys_as_discord_dm(adapter, monkeypatch):
     assert ev.source.delivered_via_upstream_relay is True
 
 
-
-
 @pytest.mark.asyncio
 async def test_routed_profile_round_trips_on_every_egress_frame(adapter, monkeypatch):
     """Relay passthrough round-trip keeps ``profile`` (#88715 phase 5): the profile the connector
@@ -273,25 +273,45 @@ async def test_routed_profile_round_trips_on_every_egress_frame(adapter, monkeyp
 
     fwd = _interaction_forward(
         {
-            "id": "interaction-3", "type": 2, "channel_id": "chan-9", "guild_id": "guild-7",
-            "data": {"name": "summarize"}, "member": {"user": {"id": "user-3", "username": "ben"}},
+            "id": "interaction-3",
+            "type": 2,
+            "channel_id": "chan-9",
+            "guild_id": "guild-7",
+            "data": {"name": "summarize"},
+            "member": {"user": {"id": "user-3", "username": "ben"}},
         },
         profile="reviewer",
     )
     await stub.push_passthrough(fwd, buffer_id=None)
     await adapter.send("chan-9", "done")
     await adapter.send_follow_up(
-        session_key="agent:reviewer:discord:group:chan-9", kind="discord.interaction_token", content="x")
+        session_key="agent:reviewer:discord:group:chan-9",
+        kind="discord.interaction_token",
+        content="x",
+    )
     assert stub.sent[-1]["metadata"]["profile"] == "reviewer"
     assert stub.follow_ups[-1]["metadata"]["profile"] == "reviewer"
 
     # Legacy namespace / unrouted chat: byte-identical frames, no profile key.
-    await stub.push_passthrough(_interaction_forward({
-        "id": "interaction-4", "type": 2, "channel_id": "chan-1", "guild_id": "guild-7",
-        "data": {"name": "summarize"}, "member": {"user": {"id": "user-3"}}}), buffer_id=None)
+    await stub.push_passthrough(
+        _interaction_forward(
+            {
+                "id": "interaction-4",
+                "type": 2,
+                "channel_id": "chan-1",
+                "guild_id": "guild-7",
+                "data": {"name": "summarize"},
+                "member": {"user": {"id": "user-3"}},
+            }
+        ),
+        buffer_id=None,
+    )
     await adapter.send("chan-1", "done")
     await adapter.send_follow_up(
-        session_key="agent:main:discord:group:chan-1", kind="discord.interaction_token", content="x")
+        session_key="agent:main:discord:group:chan-1",
+        kind="discord.interaction_token",
+        content="x",
+    )
     assert "profile" not in stub.sent[-1]["metadata"]
     assert "profile" not in stub.follow_ups[-1]["metadata"]
 
@@ -312,19 +332,46 @@ async def test_modal_submit_renders_its_submitted_values(adapter, monkeypatch):
         seen.append(event)
 
     monkeypatch.setattr(adapter, "handle_message", fake_handle)
-    fwd = _interaction_forward({
-        "id": "i-modal", "type": 5, "channel_id": "th1", "guild_id": "g1",
-        "channel": {"type": 11, "parent_id": "c1"},
-        "member": {"user": {"id": "u1", "username": "ben"}},
-        "data": {"custom_id": "feedback", "components": [
-            {"type": 1, "components": [{"type": 4, "custom_id": "title", "value": "Café ☕ outage"}]},
-            {"type": 1, "components": [{"type": 4, "custom_id": "notes", "value": ""}]},
-            {"type": 18, "component": {"type": 4, "custom_id": "steps", "value": "1. deploy\n2. 💥"}},
-        ]},
-    })
+    fwd = _interaction_forward(
+        {
+            "id": "i-modal",
+            "type": 5,
+            "channel_id": "th1",
+            "guild_id": "g1",
+            "channel": {"type": 11, "parent_id": "c1"},
+            "member": {"user": {"id": "u1", "username": "ben"}},
+            "data": {
+                "custom_id": "feedback",
+                "components": [
+                    {
+                        "type": 1,
+                        "components": [
+                            {"type": 4, "custom_id": "title", "value": "Café ☕ outage"}
+                        ],
+                    },
+                    {
+                        "type": 1,
+                        "components": [{"type": 4, "custom_id": "notes", "value": ""}],
+                    },
+                    {
+                        "type": 18,
+                        "component": {
+                            "type": 4,
+                            "custom_id": "steps",
+                            "value": "1. deploy\n2. 💥",
+                        },
+                    },
+                ],
+            },
+        }
+    )
     await adapter._transport.push_passthrough(fwd)
 
     assert len(seen) == 1
     ev = seen[0]
     assert ev.text == "feedback\ntitle: Café ☕ outage\nsteps: 1. deploy\n2. 💥"
-    assert (ev.source.chat_type, ev.source.thread_id, ev.source.parent_chat_id) == ("thread", "th1", "c1")
+    assert (ev.source.chat_type, ev.source.thread_id, ev.source.parent_chat_id) == (
+        "thread",
+        "th1",
+        "c1",
+    )

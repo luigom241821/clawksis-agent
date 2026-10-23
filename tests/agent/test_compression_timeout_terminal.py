@@ -123,9 +123,7 @@ def test_pre_api_compression_timeout_is_typed_terminal():
     # The typed terminal is the over-window outcome; a request that fits its window is sent uncompressed.
     agent.context_compressor._resolved_context_length = 1
     agent.context_compressor.should_compress = MagicMock(return_value=True)
-    agent.context_compressor.should_compress_info = MagicMock(
-        return_value=(True, None)
-    )
+    agent.context_compressor.should_compress_info = MagicMock(return_value=(True, None))
     agent.context_compressor.should_defer_preflight_to_real_usage = MagicMock(
         return_value=False
     )
@@ -163,9 +161,7 @@ def test_pre_api_compression_timeout_is_typed_terminal():
         # outcomes satisfy the invariant under test: the unchanged oversized
         # request never reaches the provider after a host timeout.
         try:
-            result = agent.run_conversation(
-                "continue", conversation_history=history
-            )
+            result = agent.run_conversation("continue", conversation_history=history)
         except PreflightCompressionTimedOut:
             result = None
 

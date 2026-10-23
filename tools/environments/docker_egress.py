@@ -19,11 +19,20 @@ _NODE_OPTIONS_SENTINEL = "_CLAWK_EGRESS_NODE_OPTIONS_APPEND"
 _CA_MODE_FLAGS = {"--use-openssl-ca", "--use-bundled-ca"}
 
 # Env names whose override would weaken or bypass enforced egress.
-_PROXY_CONTROL_ENV = frozenset({
-    "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy",
-    "NO_PROXY", "no_proxy",
-    "REQUESTS_CA_BUNDLE", "SSL_CERT_FILE", "CURL_CA_BUNDLE",
-    "NODE_EXTRA_CA_CERTS"})
+_PROXY_CONTROL_ENV = frozenset(
+    {
+        "HTTPS_PROXY",
+        "https_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+        "NO_PROXY",
+        "no_proxy",
+        "REQUESTS_CA_BUNDLE",
+        "SSL_CERT_FILE",
+        "CURL_CA_BUNDLE",
+        "NODE_EXTRA_CA_CERTS",
+    }
+)
 
 
 def _egress_proxy_args_for_docker() -> tuple[list[str], dict[str, str], list[str]]:
@@ -55,17 +64,20 @@ def _egress_proxy_args_for_docker() -> tuple[list[str], dict[str, str], list[str
     if not status.configured:
         return _degraded(
             "proxy.enabled is true but iron-proxy is not configured. "
-            "Run `clawk egress setup` to mint tokens and write proxy.yaml.")
+            "Run `clawk egress setup` to mint tokens and write proxy.yaml."
+        )
     if not (status.pid and status.listening):
         return _degraded(
             f"iron-proxy is enabled but not running on port {status.tunnel_port}. "
-            "Start it with `clawk egress start`.")
+            "Start it with `clawk egress start`."
+        )
     if status.ca_cert_path is None or not status.ca_cert_path.exists():
         # Configured a moment ago but the trust anchor vanished: proxy env vars
         # without the CA would make every TLS handshake fail.
         return _degraded(
             f"iron-proxy CA cert vanished from {status.ca_cert_path}. "
-            "Re-run `clawk egress setup` to regenerate it.")
+            "Re-run `clawk egress setup` to regenerate it."
+        )
     # Empty/corrupt mappings look like an upstream outage from inside the
     # sandbox (every request 403s); refuse rather than ship a broken sandbox.
     mappings = ip.load_mappings()
@@ -73,7 +85,8 @@ def _egress_proxy_args_for_docker() -> tuple[list[str], dict[str, str], list[str
         return _degraded(
             "iron-proxy is configured but mappings.json is empty or "
             "corrupt.  Re-run `clawk egress setup` to mint provider "
-            "tokens before starting a sandbox.")
+            "tokens before starting a sandbox."
+        )
 
     volume_args = ["-v", f"{status.ca_cert_path}:{_CONTAINER_CA}:ro"]
 
@@ -98,7 +111,8 @@ def _egress_proxy_args_for_docker() -> tuple[list[str], dict[str, str], list[str
         "CURL_CA_BUNDLE": _CONTAINER_CA,
         "NODE_EXTRA_CA_CERTS": _CONTAINER_CA,
         "CLAWK_EGRESS_PROXY": "1",  # lets the in-sandbox agent know it is proxy-aware
-        _NODE_OPTIONS_SENTINEL: "--use-openssl-ca"}
+        _NODE_OPTIONS_SENTINEL: "--use-openssl-ca",
+    }
 
     # Proxy tokens under the standard provider env names (and their aliases) so
     # SDKs work unchanged; CLAWK_PROXY_TOKEN_* copies are for diagnostics.
@@ -114,13 +128,20 @@ def _egress_proxy_args_for_docker() -> tuple[list[str], dict[str, str], list[str
 
 
 def _egress_reuse_fingerprint(
-    volume_args: list[str], env_overrides: dict[str, str], host_args: list[str]) -> str:
+    volume_args: list[str], env_overrides: dict[str, str], host_args: list[str]
+) -> str:
     """Stable Docker-label value for the egress posture of a container."""
     if not (volume_args or env_overrides or host_args):
         return "off"
     payload = json.dumps(
-        {"volume_args": volume_args, "env_overrides": env_overrides, "host_args": host_args},
-        sort_keys=True, separators=(",", ":"))
+        {
+            "volume_args": volume_args,
+            "env_overrides": env_overrides,
+            "host_args": host_args,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
@@ -128,11 +149,16 @@ def _egress_enforce_on_docker(default: bool = True) -> bool:
     """Read proxy.enforce_on_docker; any config failure fails safe to *default*."""
     try:
         from clawk_cli.config import load_config
-        return bool((load_config().get("proxy") or {}).get("enforce_on_docker", default))
+
+        return bool(
+            (load_config().get("proxy") or {}).get("enforce_on_docker", default)
+        )
     except (ImportError, OSError):
         return default
     except Exception as exc:  # malformed config.yaml etc.
-        logger.warning("Could not read proxy config for egress collision check: %s", exc)
+        logger.warning(
+            "Could not read proxy config for egress collision check: %s", exc
+        )
         return default
 
 
@@ -170,14 +196,16 @@ def _env_flag_value(arg: str) -> tuple[str, str | None] | None:
         if ch in _DOCKER_RUN_BOOL_SHORTHANDS:
             continue
         if ch == "e":
-            rest = arg[pos + 2:]
+            rest = arg[pos + 2 :]
             rest = rest.removeprefix("=")
             return "env", rest or None
         return None
     return None
 
 
-def _extra_args_egress_collisions(extra_args: list[str], critical_names: set[str]) -> list[str]:
+def _extra_args_egress_collisions(
+    extra_args: list[str], critical_names: set[str]
+) -> list[str]:
     """Return docker_extra_args entries that can override egress controls."""
     # Folded membership: ``-e NAME`` resolves NAME in the host env, which is
     # case-insensitive on Windows — ``-eopenai_api_key`` would inject the real
@@ -198,8 +226,11 @@ def _extra_args_egress_collisions(extra_args: list[str], critical_names: set[str
             if kind == "env-file":
                 collisions.append("--env-file")
             else:
-                value = inline_value if inline_value is not None else (
-                    extra_args[i + 1] if i + 1 < len(extra_args) else "")
+                value = (
+                    inline_value
+                    if inline_value is not None
+                    else (extra_args[i + 1] if i + 1 < len(extra_args) else "")
+                )
                 name = value.split("=", 1)[0]
                 if name.upper() in critical_folded:
                     collisions.append(name)
@@ -219,7 +250,9 @@ def _collision_guard(msg: str, *, enforce: bool, remedy: str, consequence: str) 
     logger.warning("%s  %s", msg, consequence)
 
 
-def check_forward_env_collisions(forward_env: list[str], critical: set[str], enforce: bool) -> None:
+def check_forward_env_collisions(
+    forward_env: list[str], critical: set[str], enforce: bool
+) -> None:
     # Folded membership: forward_env names are resolved via os.getenv() on the
     # host, which is case-insensitive on Windows — ``openai_api_key`` would
     # inject the real credential into the container under a variant name.
@@ -230,16 +263,20 @@ def check_forward_env_collisions(forward_env: list[str], critical: set[str], enf
             f"docker_forward_env would inject real egress-protected variables {collisions}",
             enforce=enforce,
             remedy="Remove these names from docker_forward_env or disable enforce_on_docker "
-                   "to opt out of egress isolation.",
-            consequence="Explicit docker_forward_env values will override egress tokens.")
+            "to opt out of egress isolation.",
+            consequence="Explicit docker_forward_env values will override egress tokens.",
+        )
 
 
-def check_docker_env_collisions(user_env: dict[str, str], egress_env: dict[str, str], enforce: bool) -> None:
+def check_docker_env_collisions(
+    user_env: dict[str, str], egress_env: dict[str, str], enforce: bool
+) -> None:
     """Reject docker_env overrides of proxy-control vars or real provider keys (read from the
     live token mappings; for those ANY override collides since a real key bypasses the swap)."""
     provider_keys: set[str] = set()
     try:
         from agent.proxy_sources import iron_proxy as ip
+
         provider_keys = {m.real_env_name for m in ip.load_mappings()}
     except Exception:  # best-effort
         pass
@@ -257,26 +294,36 @@ def check_docker_env_collisions(user_env: dict[str, str], egress_env: dict[str, 
             f"docker_env in config.yaml overrides egress-proxy variables {collisions}",
             enforce=enforce,
             remedy="Remove these keys from docker_env or disable enforce_on_docker to opt out "
-                   "of egress isolation.",
+            "of egress isolation.",
             consequence="Falling back to docker_env values; sandbox traffic will NOT route "
-                        "through the proxy.")
+            "through the proxy.",
+        )
 
 
-def check_extra_args_collisions(extra_args: list[str], critical: set[str], enforce: bool) -> None:
+def check_extra_args_collisions(
+    extra_args: list[str], critical: set[str], enforce: bool
+) -> None:
     collisions = _extra_args_egress_collisions(extra_args, critical)
     if collisions:
         _collision_guard(
             f"docker_extra_args would override egress-proxy controls {collisions}",
             enforce=enforce,
             remedy="Remove these args or disable enforce_on_docker to opt out of egress isolation.",
-            consequence="Extra Docker args may bypass egress isolation.")
+            consequence="Extra Docker args may bypass egress isolation.",
+        )
 
 
-def merge_egress_env(user_env: dict[str, str], egress_env: dict[str, str], enforce: bool) -> dict[str, str]:
+def merge_egress_env(
+    user_env: dict[str, str], egress_env: dict[str, str], enforce: bool
+) -> dict[str, str]:
     """Merge docker_env with egress overrides (egress wins under enforcement, docker_env
     otherwise) and resolve the NODE_OPTIONS sentinel: the flag is APPENDED to the operator's
     NODE_OPTIONS after stripping conflicting CA-mode flags so it wins deterministically."""
-    merged = {**user_env, **egress_env} if enforce and egress_env else {**egress_env, **user_env}
+    merged = (
+        {**user_env, **egress_env}
+        if enforce and egress_env
+        else {**egress_env, **user_env}
+    )
 
     raw_append = merged.pop(_NODE_OPTIONS_SENTINEL, None)
     if raw_append:
@@ -288,7 +335,10 @@ def merge_egress_env(user_env: dict[str, str], egress_env: dict[str, str], enfor
                 logger.warning(
                     "Overriding conflicting NODE_OPTIONS CA-mode flag(s) %s "
                     "with egress-required %s to keep Node routed through the "
-                    "egress CA store.", dropped, append_token)
+                    "egress CA store.",
+                    dropped,
+                    append_token,
+                )
             tokens = [t for t in tokens if t not in _CA_MODE_FLAGS or t == append_token]
         if append_token not in tokens:
             tokens.append(append_token)

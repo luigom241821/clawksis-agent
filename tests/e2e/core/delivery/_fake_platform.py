@@ -50,16 +50,25 @@ PROFILES: dict[str, dict[str, Any]] = {
 }
 
 
-def wait_until(predicate: Callable[[], Any], what: str, timeout: float = DEADLINE,
-               proc: Optional[subprocess.Popen] = None, log: Optional[Path] = None) -> Any:
+def wait_until(
+    predicate: Callable[[], Any],
+    what: str,
+    timeout: float = DEADLINE,
+    proc: Optional[subprocess.Popen] = None,
+    log: Optional[Path] = None,
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         value = predicate()
         if value:
             return value
         if proc is not None and proc.poll() is not None:
-            tail = log.read_text(errors="replace")[-4000:] if log and log.exists() else ""
-            raise AssertionError(f"gateway child exited (rc={proc.returncode}) waiting for {what}\n{tail}")
+            tail = (
+                log.read_text(errors="replace")[-4000:] if log and log.exists() else ""
+            )
+            raise AssertionError(
+                f"gateway child exited (rc={proc.returncode}) waiting for {what}\n{tail}"
+            )
         if time.monotonic() >= deadline:
             raise AssertionError(f"timed out after {timeout:.0f}s waiting for {what}")
         time.sleep(POLL)
@@ -119,8 +128,14 @@ class FakePlatformServer:
     def _apply(self, rec: dict) -> None:
         kind = rec["kind"]
         if kind == "post":
-            msg = PlatformMessage(rec["message_id"], rec["platform"], rec["chat_id"], rec.get("thread_id"),
-                                  rec["text"], rec.get("reply_to"))
+            msg = PlatformMessage(
+                rec["message_id"],
+                rec["platform"],
+                rec["chat_id"],
+                rec.get("thread_id"),
+                rec["text"],
+                rec.get("reply_to"),
+            )
             self.messages[msg.message_id] = msg
             self.order.append(msg.message_id)
         elif kind == "edit":
@@ -138,12 +153,27 @@ class FakePlatformServer:
         _append_jsonl(self.journal, rec)
         self._apply(rec)
 
-    def post(self, platform: str, chat_id: str, thread_id: Optional[str], text: str,
-             reply_to: Optional[str]) -> str:
+    def post(
+        self,
+        platform: str,
+        chat_id: str,
+        thread_id: Optional[str],
+        text: str,
+        reply_to: Optional[str],
+    ) -> str:
         with self._lock:
             mid = f"pm-{os.getpid()}-{len(self.order) + 1}"
-            self._commit({"kind": "post", "message_id": mid, "platform": platform, "chat_id": str(chat_id),
-                          "thread_id": thread_id, "text": text, "reply_to": reply_to})
+            self._commit(
+                {
+                    "kind": "post",
+                    "message_id": mid,
+                    "platform": platform,
+                    "chat_id": str(chat_id),
+                    "thread_id": thread_id,
+                    "text": text,
+                    "reply_to": reply_to,
+                }
+            )
             return mid
 
     def edit(self, message_id: str, text: str) -> bool:
@@ -161,11 +191,17 @@ class FakePlatformServer:
             self._commit({"kind": "delete", "message_id": message_id})
             return True
 
-    def visible(self, platform: Optional[str] = None, chat_id: Optional[str] = None) -> list[PlatformMessage]:
+    def visible(
+        self, platform: Optional[str] = None, chat_id: Optional[str] = None
+    ) -> list[PlatformMessage]:
         with self._lock:
-            return [m for m in (self.messages[i] for i in self.order)
-                    if not m.deleted and (platform is None or m.platform == platform)
-                    and (chat_id is None or m.chat_id == str(chat_id))]
+            return [
+                m
+                for m in (self.messages[i] for i in self.order)
+                if not m.deleted
+                and (platform is None or m.platform == platform)
+                and (chat_id is None or m.chat_id == str(chat_id))
+            ]
 
 
 # Fault injection ------------------------------------------------------------------------------
@@ -194,7 +230,9 @@ class Fault:
     chat_id: Optional[str] = None
     hits: int = 0
 
-    def matches(self, platform: str, op: str, content: str, chat_id: Optional[str] = None) -> bool:
+    def matches(
+        self, platform: str, op: str, content: str, chat_id: Optional[str] = None
+    ) -> bool:
         if self.hits >= self.times or platform != self.platform:
             return False
         if self.chat_id is not None and chat_id != self.chat_id:
@@ -246,24 +284,43 @@ def _adapter_class():
             return None
 
         # faults
-        async def _fault(self, op: str, content: str, accept: Callable[[], Any],
-                         chat_id: Optional[str] = None) -> Optional[Any]:
+        async def _fault(
+            self,
+            op: str,
+            content: str,
+            accept: Callable[[], Any],
+            chat_id: Optional[str] = None,
+        ) -> Optional[Any]:
             fault = self.world.take_fault(self.pname, op, content, chat_id)
             if fault is None:
                 return None
             if fault.kind == "timeout":
-                return SendResult(success=False, error="Timed out waiting for platform response",
-                                  error_kind="transient")
+                return SendResult(
+                    success=False,
+                    error="Timed out waiting for platform response",
+                    error_kind="transient",
+                )
             if fault.kind == "ack_lost":
                 accept()
-                return SendResult(success=False, error="Timed out waiting for platform response",
-                                  error_kind="transient")
+                return SendResult(
+                    success=False,
+                    error="Timed out waiting for platform response",
+                    error_kind="transient",
+                )
             if fault.kind == "rate_limit":
-                return SendResult(success=False, error=f"Too Many Requests: retry after {fault.retry_after}",
-                                  retry_after=fault.retry_after, error_kind="rate_limited")
+                return SendResult(
+                    success=False,
+                    error=f"Too Many Requests: retry after {fault.retry_after}",
+                    retry_after=fault.retry_after,
+                    error_kind="rate_limited",
+                )
             if fault.kind == "conn_error":
-                return SendResult(success=False, error="Connection reset by peer", retryable=True,
-                                  error_kind="transient")
+                return SendResult(
+                    success=False,
+                    error="Connection reset by peer",
+                    retryable=True,
+                    error_kind="transient",
+                )
             if fault.kind in ("hold", "hold_after"):
                 if fault.kind == "hold_after":
                     accept()
@@ -278,68 +335,157 @@ def _adapter_class():
             return str(tid) if tid else None
 
         # outbound
-        async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None,
-                       metadata: Optional[dict[str, Any]] = None) -> SendResult:
+        async def send(
+            self,
+            chat_id: str,
+            content: str,
+            reply_to: Optional[str] = None,
+            metadata: Optional[dict[str, Any]] = None,
+        ) -> SendResult:
             content = content or ""
             thread_id = self._thread(metadata)
-            self.world.record_op({"platform": self.pname, "op": "send", "chat_id": str(chat_id),
-                                  "thread_id": thread_id, "content": content,
-                                  "interim": bool((metadata or {}).get("_interim_send"))})
-            chunks = self.truncate_message(content, self.MAX_MESSAGE_LENGTH) if content else [""]
+            self.world.record_op(
+                {
+                    "platform": self.pname,
+                    "op": "send",
+                    "chat_id": str(chat_id),
+                    "thread_id": thread_id,
+                    "content": content,
+                    "interim": bool((metadata or {}).get("_interim_send")),
+                }
+            )
+            chunks = (
+                self.truncate_message(content, self.MAX_MESSAGE_LENGTH)
+                if content
+                else [""]
+            )
             posted: list[str] = []
 
             def accept() -> None:
                 for chunk in chunks:
-                    posted.append(self.world.server.post(self.pname, chat_id, thread_id, chunk, reply_to))
+                    posted.append(
+                        self.world.server.post(
+                            self.pname, chat_id, thread_id, chunk, reply_to
+                        )
+                    )
 
             faulted = await self._fault("send", content, accept, str(chat_id))
             if faulted is not None:
                 return faulted
             accept()
-            return SendResult(success=True, message_id=posted[-1], continuation_message_ids=tuple(posted[:-1]))
+            return SendResult(
+                success=True,
+                message_id=posted[-1],
+                continuation_message_ids=tuple(posted[:-1]),
+            )
 
-        async def edit_message(self, chat_id: str, message_id: str, content: str, *,
-                               finalize: bool = False) -> SendResult:
-            self.world.record_op({"platform": self.pname, "op": "edit", "chat_id": str(chat_id),
-                                  "message_id": message_id, "content": content, "finalize": finalize})
+        async def edit_message(
+            self, chat_id: str, message_id: str, content: str, *, finalize: bool = False
+        ) -> SendResult:
+            self.world.record_op(
+                {
+                    "platform": self.pname,
+                    "op": "edit",
+                    "chat_id": str(chat_id),
+                    "message_id": message_id,
+                    "content": content,
+                    "finalize": finalize,
+                }
+            )
             if not self.profile["edits"]:
                 return SendResult(success=False, error="Not supported")
             if len(content) > self.MAX_MESSAGE_LENGTH:
-                return SendResult(success=False, error="Bad Request: message is too long", error_kind="too_long")
-            faulted = await self._fault("edit", content, lambda: self.world.server.edit(message_id, content),
-                                        str(chat_id))
+                return SendResult(
+                    success=False,
+                    error="Bad Request: message is too long",
+                    error_kind="too_long",
+                )
+            faulted = await self._fault(
+                "edit",
+                content,
+                lambda: self.world.server.edit(message_id, content),
+                str(chat_id),
+            )
             if faulted is not None:
                 return faulted
             if not self.world.server.edit(message_id, content):
-                return SendResult(success=False, error="Bad Request: message to edit not found",
-                                  error_kind="not_found")
+                return SendResult(
+                    success=False,
+                    error="Bad Request: message to edit not found",
+                    error_kind="not_found",
+                )
             return SendResult(success=True, message_id=message_id)
 
         async def delete_message(self, chat_id: str, message_id: str) -> bool:
-            self.world.record_op({"platform": self.pname, "op": "delete", "chat_id": str(chat_id),
-                                  "message_id": message_id})
+            self.world.record_op(
+                {
+                    "platform": self.pname,
+                    "op": "delete",
+                    "chat_id": str(chat_id),
+                    "message_id": message_id,
+                }
+            )
             return self.world.server.delete(message_id)
 
         # a crash point between "handler returned (turn persisted)" and "final text ledgered"
         async def _extract_response_content(self, response, event, session_key, **kw):
             chat = str(getattr(getattr(event, "source", None), "chat_id", "") or "")
-            if self.world.take_fault(self.pname, "pre_ledger", str(response or ""), chat) is not None:
+            if (
+                self.world.take_fault(
+                    self.pname, "pre_ledger", str(response or ""), chat
+                )
+                is not None
+            ):
                 self.world.note_hold(self.pname, "pre_ledger", str(response or ""))
                 await asyncio.Event().wait()
-            return await super()._extract_response_content(response, event, session_key, **kw)
+            return await super()._extract_response_content(
+                response, event, session_key, **kw
+            )
 
         # inbound
-        async def inject(self, text: str, message_id: str, *, chat_id: str = "c1", user_id: str = "u1",
-                         thread_id: Optional[str] = None, chat_type: str = "dm") -> None:
+        async def inject(
+            self,
+            text: str,
+            message_id: str,
+            *,
+            chat_id: str = "c1",
+            user_id: str = "u1",
+            thread_id: Optional[str] = None,
+            chat_type: str = "dm",
+        ) -> None:
             if self._dedup.is_duplicate(message_id):
-                self.world.record_op({"platform": self.pname, "op": "inbound_duplicate_dropped",
-                                      "chat_id": str(chat_id), "message_id": message_id})
+                self.world.record_op(
+                    {
+                        "platform": self.pname,
+                        "op": "inbound_duplicate_dropped",
+                        "chat_id": str(chat_id),
+                        "message_id": message_id,
+                    }
+                )
                 return
-            self.world.record_op({"platform": self.pname, "op": "inbound", "chat_id": str(chat_id),
-                                  "message_id": message_id, "content": text})
-            source = self.build_source(chat_id=chat_id, chat_name=f"chat-{chat_id}", chat_type=chat_type,
-                                       user_id=user_id, user_name="tester", thread_id=thread_id)
-            event = MessageEvent(text=text, message_type=MessageType.TEXT, source=source, message_id=message_id)
+            self.world.record_op(
+                {
+                    "platform": self.pname,
+                    "op": "inbound",
+                    "chat_id": str(chat_id),
+                    "message_id": message_id,
+                    "content": text,
+                }
+            )
+            source = self.build_source(
+                chat_id=chat_id,
+                chat_name=f"chat-{chat_id}",
+                chat_type=chat_type,
+                user_id=user_id,
+                user_name="tester",
+                thread_id=thread_id,
+            )
+            event = MessageEvent(
+                text=text,
+                message_type=MessageType.TEXT,
+                source=source,
+                message_id=message_id,
+            )
             await self.handle_message(event)
 
     return FakePlatformAdapter
@@ -354,20 +500,32 @@ class ChildWorld:
         self._lock = threading.Lock()
         self.faults: list[Fault] = []
 
-    def take_fault(self, platform: str, op: str, content: str, chat_id: Optional[str] = None) -> Optional[Fault]:
+    def take_fault(
+        self, platform: str, op: str, content: str, chat_id: Optional[str] = None
+    ) -> Optional[Fault]:
         with self._lock:
             for f in self.faults:
                 if f.matches(platform, op, content, chat_id):
                     f.hits += 1
-                    _append_jsonl(self.spool / "faults_fired.jsonl",
-                                  {"pid": os.getpid(), "platform": platform, "op": op, "kind": f.kind,
-                                   "chat_id": chat_id, "content": content[:200]})
+                    _append_jsonl(
+                        self.spool / "faults_fired.jsonl",
+                        {
+                            "pid": os.getpid(),
+                            "platform": platform,
+                            "op": op,
+                            "kind": f.kind,
+                            "chat_id": chat_id,
+                            "content": content[:200],
+                        },
+                    )
                     return f
         return None
 
     def note_hold(self, platform: str, op: str, content: str) -> None:
-        _append_jsonl(self.spool / "holds.jsonl", {"pid": os.getpid(), "platform": platform, "op": op,
-                                                   "content": content})
+        _append_jsonl(
+            self.spool / "holds.jsonl",
+            {"pid": os.getpid(), "platform": platform, "op": op, "content": content},
+        )
 
     def record_op(self, op: dict) -> None:
         op["pid"] = os.getpid()
@@ -381,32 +539,59 @@ def _serve(spool: Path) -> None:  # pragma: no cover - runs in the child process
     # Knob-only: shrink the ledger's in-process redelivery backoff (30 s / 120 s) so a rejected final
     # is retried within the test's patience; the policy (who retries, with which marker) is untouched.
     import gateway.delivery_ledger as ledger
+
     ledger._RETRY_BACKOFF_SECONDS = tuple(cfg.get("ledger_backoff", (0.5, 1.0)))
 
-    from gateway.config import GatewayConfig, HomeChannel, Platform, PlatformConfig, StreamingConfig
+    from gateway.config import (
+        GatewayConfig,
+        HomeChannel,
+        Platform,
+        PlatformConfig,
+        StreamingConfig,
+    )
     from gateway.platform_registry import PlatformEntry, platform_registry
     from gateway.run import GatewayRunner
 
     cls = _adapter_class()
     platforms = {}
     for name, profile in cfg["platforms"].items():
-        platform_registry.register(PlatformEntry(
-            name=name, label=name, check_fn=lambda: True, source="plugin",
-            adapter_factory=lambda pc, n=name, p=profile: cls(pc, name=n, profile=p, world=world),
-            allow_all_env=f"{name.upper()}_ALLOW_ALL_USERS"))
+        platform_registry.register(
+            PlatformEntry(
+                name=name,
+                label=name,
+                check_fn=lambda: True,
+                source="plugin",
+                adapter_factory=lambda pc, n=name, p=profile: cls(
+                    pc, name=n, profile=p, world=world
+                ),
+                allow_all_env=f"{name.upper()}_ALLOW_ALL_USERS",
+            )
+        )
         os.environ[f"{name.upper()}_ALLOW_ALL_USERS"] = "true"
         plat = Platform(name)
-        platforms[plat] = PlatformConfig(enabled=True, token="fake-token",
-                                         home_channel=HomeChannel(platform=plat, chat_id="home", name="home"))
+        platforms[plat] = PlatformConfig(
+            enabled=True,
+            token="fake-token",
+            home_channel=HomeChannel(platform=plat, chat_id="home", name="home"),
+        )
 
     config = GatewayConfig(
         platforms=platforms,
-        streaming=StreamingConfig(enabled=True, transport="edit", edit_interval=0.05, buffer_threshold=24,
-                                  cursor=""),
-        loop_watchdog=False, write_sessions_json=False, multiplex_profiles=False,
+        streaming=StreamingConfig(
+            enabled=True,
+            transport="edit",
+            edit_interval=0.05,
+            buffer_threshold=24,
+            cursor="",
+        ),
+        loop_watchdog=False,
+        write_sessions_json=False,
+        multiplex_profiles=False,
     )
 
-    async def handle_rpc(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def handle_rpc(
+        reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         while True:
             line = await reader.readline()
             if not line:
@@ -425,8 +610,12 @@ def _serve(spool: Path) -> None:  # pragma: no cover - runs in the child process
         cmd = req["cmd"]
         if cmd == "inject":
             adapter = runner.adapters[Platform(req["platform"])]
-            await adapter.inject(req["text"], req["message_id"], chat_id=req.get("chat_id", "c1"),
-                                 thread_id=req.get("thread_id"))
+            await adapter.inject(
+                req["text"],
+                req["message_id"],
+                chat_id=req.get("chat_id", "c1"),
+                thread_id=req.get("thread_id"),
+            )
             return {"ok": True}
         if cmd == "adapter_id":
             adapter = runner.adapters.get(Platform(req["platform"]))
@@ -434,7 +623,9 @@ def _serve(spool: Path) -> None:  # pragma: no cover - runs in the child process
         if cmd == "reconnect":
             # The adapter's socket dies with a retryable error; the REAL reconnect watcher replaces it.
             old = runner.adapters[Platform(req["platform"])]
-            old._set_fatal_error("fake_socket_closed", "socket closed by peer", retryable=True)
+            old._set_fatal_error(
+                "fake_socket_closed", "socket closed by peer", retryable=True
+            )
             await old._notify_fatal_error()
             return {"ok": True, "id": id(old)}
         if cmd == "fault":
@@ -445,11 +636,17 @@ def _serve(spool: Path) -> None:  # pragma: no cover - runs in the child process
             chats = req.get("chats")
 
             def mine(key: str) -> bool:
-                return chats is None or any(re.search(rf":{re.escape(c)}(:|$)", key) for c in chats)
+                return chats is None or any(
+                    re.search(rf":{re.escape(c)}(:|$)", key) for c in chats
+                )
 
             busy = []
             for adapter in runner.adapters.values():
-                keys = set(adapter._active_sessions) | set(adapter._pending_messages) | set(adapter._session_tasks)
+                keys = (
+                    set(adapter._active_sessions)
+                    | set(adapter._pending_messages)
+                    | set(adapter._session_tasks)
+                )
                 busy.extend(k for k in keys if mine(k))
             running = [k for k in list(runner._running_agents) if mine(k)]
             return {"ok": True, "busy": sorted(busy), "running": sorted(running)}
@@ -482,14 +679,29 @@ def _serve(spool: Path) -> None:  # pragma: no cover - runs in the child process
 # Test-process side ----------------------------------------------------------------------------
 
 
-_KEEP_ENV = ("PATH", "LANG", "LC_ALL", "TMPDIR", "PYTHONPATH", "VIRTUAL_ENV", "SYSTEMROOT")
+_KEEP_ENV = (
+    "PATH",
+    "LANG",
+    "LC_ALL",
+    "TMPDIR",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "SYSTEMROOT",
+)
 
 
 class GatewayProcess:
     """A real gateway in a child process on ``home``; RPC + SIGKILL + restart on the same state."""
 
-    def __init__(self, root: Path, *, platforms: dict[str, str], llm_base_url: str,
-                 extra_config: str = "", ledger_backoff=(0.5, 1.0)) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        platforms: dict[str, str],
+        llm_base_url: str,
+        extra_config: str = "",
+        ledger_backoff=(0.5, 1.0),
+    ) -> None:
         from tests.fakes.fake_llm_provider import write_clawk_home
 
         self.root = root
@@ -498,8 +710,9 @@ class GatewayProcess:
         self.spool = root / "spool"
         self.spool.mkdir(parents=True, exist_ok=True)
         write_clawk_home(self.clawk_home, llm_base_url, extra_config=extra_config)
-        (self.spool / "config.json").write_text(json.dumps(
-            {"platforms": platforms, "ledger_backoff": list(ledger_backoff)}))
+        (self.spool / "config.json").write_text(
+            json.dumps({"platforms": platforms, "ledger_backoff": list(ledger_backoff)})
+        )
         self.proc: Optional[subprocess.Popen] = None
         self.sock: Optional[socket.socket] = None
         self._rfile = None
@@ -516,17 +729,26 @@ class GatewayProcess:
 
     def env(self) -> dict[str, str]:
         env = {k: os.environ[k] for k in _KEEP_ENV if k in os.environ}
-        env.update({
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home),
-            # The child's HOME is itself a throwaway tmp dir, so ~/.clawksis IS the temp home here; the
-            # live-system guard (armed by the inherited isolation marker) would refuse it.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-            "CLAWK_GATEWAY_LOCK_DIR": str(self.root / "gateway-locks"),
-            "TZ": "UTC", "PYTHONHASHSEED": "0", "PYTHONUNBUFFERED": "1", "C12_PARENT_PID": str(os.getpid()),
-            "CLAWK_DISABLE_LAZY_INSTALLS": "1",
-            "AWS_EC2_METADATA_DISABLED": "true", "CLAWK_HONCHO_HOST": "clawk",
-            "PYTHONPATH": f"{REPO_ROOT}{os.pathsep}{os.environ.get('PYTHONPATH', '')}".rstrip(os.pathsep),
-        })
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                # The child's HOME is itself a throwaway tmp dir, so ~/.clawksis IS the temp home here; the
+                # live-system guard (armed by the inherited isolation marker) would refuse it.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+                "CLAWK_GATEWAY_LOCK_DIR": str(self.root / "gateway-locks"),
+                "TZ": "UTC",
+                "PYTHONHASHSEED": "0",
+                "PYTHONUNBUFFERED": "1",
+                "C12_PARENT_PID": str(os.getpid()),
+                "CLAWK_DISABLE_LAZY_INSTALLS": "1",
+                "AWS_EC2_METADATA_DISABLED": "true",
+                "CLAWK_HONCHO_HOST": "clawk",
+                "PYTHONPATH": f"{REPO_ROOT}{os.pathsep}{os.environ.get('PYTHONPATH', '')}".rstrip(
+                    os.pathsep
+                ),
+            }
+        )
         return env
 
     def start(self) -> GatewayProcess:
@@ -535,14 +757,34 @@ class GatewayProcess:
         ready_before = len(read_jsonl(self.spool / "ready.jsonl"))
         with open(self.log, "wb") as log:
             self.proc = subprocess.Popen(
-                [sys.executable, "-m", "tests.e2e.core.delivery._fake_platform", "serve", str(self.spool)],
-                cwd=str(REPO_ROOT), env=self.env(), stdout=log, stderr=subprocess.STDOUT,
-                start_new_session=True)
+                [
+                    sys.executable,
+                    "-m",
+                    "tests.e2e.core.delivery._fake_platform",
+                    "serve",
+                    str(self.spool),
+                ],
+                cwd=str(REPO_ROOT),
+                env=self.env(),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
         self.pids.append(self.proc.pid)
         rec = wait_until(
-            lambda: next((r for r in read_jsonl(self.spool / "ready.jsonl")[ready_before:]
-                          if r["pid"] == self.proc.pid), None),
-            "gateway child ready", timeout=240, proc=self.proc, log=self.log)
+            lambda: next(
+                (
+                    r
+                    for r in read_jsonl(self.spool / "ready.jsonl")[ready_before:]
+                    if r["pid"] == self.proc.pid
+                ),
+                None,
+            ),
+            "gateway child ready",
+            timeout=240,
+            proc=self.proc,
+            log=self.log,
+        )
         self.sock = socket.create_connection(("127.0.0.1", rec["port"]), timeout=120)
         self._rfile = self.sock.makefile("rb")
         return self
@@ -552,15 +794,30 @@ class GatewayProcess:
         self.sock.sendall((json.dumps({"cmd": cmd, **kw}) + "\n").encode())
         line = self._rfile.readline()
         if not line:
-            raise AssertionError(f"gateway child closed the RPC channel during {cmd}\n"
-                                 + self.log.read_text(errors="replace")[-4000:])
+            raise AssertionError(
+                f"gateway child closed the RPC channel during {cmd}\n"
+                + self.log.read_text(errors="replace")[-4000:]
+            )
         resp = json.loads(line)
         assert resp.get("ok"), f"rpc {cmd} failed: {resp}"
         return resp
 
-    def inject(self, platform: str, text: str, message_id: str, chat_id: str, thread_id: Optional[str] = None):
-        return self.rpc("inject", platform=platform, text=text, message_id=message_id, chat_id=chat_id,
-                        thread_id=thread_id)
+    def inject(
+        self,
+        platform: str,
+        text: str,
+        message_id: str,
+        chat_id: str,
+        thread_id: Optional[str] = None,
+    ):
+        return self.rpc(
+            "inject",
+            platform=platform,
+            text=text,
+            message_id=message_id,
+            chat_id=chat_id,
+            thread_id=thread_id,
+        )
 
     def fault(self, **fault: Any) -> None:
         self.rpc("fault", fault=fault)
@@ -569,7 +826,13 @@ class GatewayProcess:
         r = self.rpc("busy", chats=chats)
         return not r["busy"] and not r["running"]
 
-    def wait_idle(self, chats: Optional[list[str]], what: str, timeout: float = DEADLINE, settle: int = 3) -> None:
+    def wait_idle(
+        self,
+        chats: Optional[list[str]],
+        what: str,
+        timeout: float = DEADLINE,
+        settle: int = 3,
+    ) -> None:
         """Idle for ``settle`` consecutive polls (a queued drain task can hop between checks)."""
         streak = [0]
 
@@ -584,7 +847,9 @@ class GatewayProcess:
 
     def kill9(self) -> None:
         assert self.proc is not None
-        assert self.proc.poll() is None, "gateway exited before the kill (a clean exit is not a crash test)"
+        assert self.proc.poll() is None, (
+            "gateway exited before the kill (a clean exit is not a crash test)"
+        )
         os.killpg(self.proc.pid, signal.SIGKILL)
         self.proc.wait(timeout=60)
         self._close()
@@ -628,7 +893,12 @@ RECOVERY_MARKER_PREFIXES: tuple = ()
 
 
 def recovery_markers() -> tuple:
-    from gateway.delivery_ledger import FLOOD_MARKER, RECONNECTED_MARKER, RECOVERED_MARKER
+    from gateway.delivery_ledger import (
+        FLOOD_MARKER,
+        RECONNECTED_MARKER,
+        RECOVERED_MARKER,
+    )
+
     return (RECOVERED_MARKER, RECONNECTED_MARKER, FLOOD_MARKER)
 
 
@@ -684,7 +954,7 @@ def visible_copies(msgs: list[PlatformMessage], aid: str) -> list[Copy]:
         text, marked = m.text, False
         for mk in markers:
             if text.startswith(mk):
-                text, marked = text[len(mk):], True
+                text, marked = text[len(mk) :], True
         cleaned.append((m.message_id, _CHUNK_INDICATOR.sub("", text), marked))
     copies: list[Copy] = []
     h, f = header(aid), footer(aid)
@@ -697,14 +967,18 @@ def visible_copies(msgs: list[PlatformMessage], aid: str) -> list[Copy]:
             # A preview cut inside the header itself. When the final edit then fails, the fallback
             # continuation carries the rest from the original cut (a prefix with no word boundary is
             # not backed up), so the header spans two messages: one rendition, not a stale stub.
-            ahead = [c[1] for c in cleaned[i + 1:i + 2] if h not in c[1]]
+            ahead = [c[1] for c in cleaned[i + 1 : i + 2] if h not in c[1]]
             if not (ahead and join_chunks([stub, ahead[0]]).startswith(h)):
                 copies.append(Copy(norm(stub), marked, False, [mid]))
                 continue
             text, start = stub, 0
         parts, ids = [text[start:]], [mid]
         j = i
-        while f not in parts[-1] and j + 1 < len(cleaned) and header(aid) not in cleaned[j + 1][1]:
+        while (
+            f not in parts[-1]
+            and j + 1 < len(cleaned)
+            and header(aid) not in cleaned[j + 1][1]
+        ):
             j += 1
             parts.append(cleaned[j][1])
             ids.append(cleaned[j][0])
@@ -725,7 +999,8 @@ def persisted_answers(db_path: Path, aid: str) -> list[str]:
     try:
         rows = conn.execute(
             "SELECT content FROM messages WHERE role='assistant' AND content LIKE ? ORDER BY id",
-            (f"%{header(aid)}%",)).fetchall()
+            (f"%{header(aid)}%",),
+        ).fetchall()
     finally:
         conn.close()
     return [r[0] for r in rows]
@@ -736,8 +1011,10 @@ def persisted_user_rows(db_path: Path, token: str) -> list[str]:
 
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=30)
     try:
-        rows = conn.execute("SELECT content FROM messages WHERE role='user' AND content LIKE ? ORDER BY id",
-                            (f"%{token}%",)).fetchall()
+        rows = conn.execute(
+            "SELECT content FROM messages WHERE role='user' AND content LIKE ? ORDER BY id",
+            (f"%{token}%",),
+        ).fetchall()
     finally:
         conn.close()
     return [r[0] for r in rows]

@@ -19,7 +19,11 @@ from tempfile import TemporaryDirectory
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from tools.transcription_audio import (
-    _find_ffmpeg_binary, _probe_audio_duration, _run_quiet, _transcode_audio_for_stt)
+    _find_ffmpeg_binary,
+    _probe_audio_duration,
+    _run_quiet,
+    _transcode_audio_for_stt,
+)
 from tools.transcription_common import MAX_FILE_SIZE, _error_result, _ok_result
 
 logger = logging.getLogger("tools.transcription_tools")
@@ -28,11 +32,15 @@ _MB = 1024 * 1024
 # Vendor-documented per-request upload caps. Providers not listed here (DeepInfra's
 # OpenAI-compatible endpoint, command and plugin providers) get the OpenAI-shaped default.
 _PROVIDER_MAX_BYTES = {
-    "openai": 25 * _MB,  # developers.openai.com/api/docs/guides/speech-to-text: "Files can be up to 25 MB"
-    "groq": 25 * _MB,  # console.groq.com/docs/speech-to-text: 25 MB free tier (100 MB dev tier)
-    "mistral": 500 * _MB,  # docs.mistral.ai/resources/known-limitations: 500 MB, 60 minutes
+    "openai": 25
+    * _MB,  # developers.openai.com/api/docs/guides/speech-to-text: "Files can be up to 25 MB"
+    "groq": 25
+    * _MB,  # console.groq.com/docs/speech-to-text: 25 MB free tier (100 MB dev tier)
+    "mistral": 500
+    * _MB,  # docs.mistral.ai/resources/known-limitations: 500 MB, 60 minutes
     "xai": 500 * _MB,  # docs.x.ai speech-to-text: "Max 500 MB" (413 above it)
-    "elevenlabs": 5 * 1024 * _MB - 1,  # elevenlabs.io speech-to-text convert: "must be less than 5.0GB"
+    "elevenlabs": 5 * 1024 * _MB
+    - 1,  # elevenlabs.io speech-to-text convert: "must be less than 5.0GB"
 }
 _PROVIDER_MAX_SECONDS = {"mistral": 3600.0}
 # OpenAI per-model duration caps, all measured live (the vendor docs give none in seconds):
@@ -42,7 +50,11 @@ _PROVIDER_MAX_SECONDS = {"mistral": 3600.0}
 # - whisper-1 answers in ~3% of real time (600 s -> 17.8 s, 1200 s -> 55 s), so 600 s segments
 #   finish well inside the default 60 s ``stt.openai.timeout``.
 # - gpt-transcribe returned 1322 s complete in 16.7 s and accepted 1558 s, so it gets no cap.
-_OPENAI_MODEL_MAX_SECONDS = {"gpt-4o-transcribe": 450.0, "gpt-4o-mini-transcribe": 450.0, "whisper-1": 600.0}
+_OPENAI_MODEL_MAX_SECONDS = {
+    "gpt-4o-transcribe": 450.0,
+    "gpt-4o-mini-transcribe": 450.0,
+    "whisper-1": 600.0,
+}
 # Margin under each cap so container overhead and duration rounding never tip a segment over.
 _SEGMENT_HEADROOM = 0.9
 # How far back from the ideal cut a silence may sit and still be used as the cut point.
@@ -57,7 +69,9 @@ def upload_limit(provider: str, model: Optional[str]) -> tuple[int, Optional[flo
     return _PROVIDER_MAX_BYTES.get(provider, MAX_FILE_SIZE), max_seconds
 
 
-def _fits(path: str, limit: tuple[int, Optional[float]], duration: Optional[float]) -> bool:
+def _fits(
+    path: str, limit: tuple[int, Optional[float]], duration: Optional[float]
+) -> bool:
     max_bytes, max_seconds = limit
     if os.path.getsize(path) > max_bytes:
         return False
@@ -75,15 +89,32 @@ def exceeds_upload_limit(path: str, limit: tuple[int, Optional[float]]) -> bool:
 def _too_large(path: str, max_bytes: int, reason: str) -> dict[str, Any]:
     size_mb = os.path.getsize(path) / _MB
     return _error_result(
-        f"File too large: {size_mb:.1f}MB (max {max_bytes / _MB:.0f}MB) and it could not be split: {reason}")
+        f"File too large: {size_mb:.1f}MB (max {max_bytes / _MB:.0f}MB) and it could not be split: {reason}"
+    )
 
 
 def _silence_midpoints(ffmpeg: str, path: str) -> list[float]:
     """Midpoints (seconds) of the pauses ffmpeg's silencedetect finds; [] on any failure."""
     try:
-        result = _run_quiet([ffmpeg, "-hide_banner", "-nostats", "-i", path,
-                             "-af", "silencedetect=noise=-35dB:d=0.4", "-f", "null", "-"], timeout=300)
-    except (OSError, subprocess.SubprocessError) as exc:  # silence-aware cuts are an optimisation
+        result = _run_quiet(
+            [
+                ffmpeg,
+                "-hide_banner",
+                "-nostats",
+                "-i",
+                path,
+                "-af",
+                "silencedetect=noise=-35dB:d=0.4",
+                "-f",
+                "null",
+                "-",
+            ],
+            timeout=300,
+        )
+    except (
+        OSError,
+        subprocess.SubprocessError,
+    ) as exc:  # silence-aware cuts are an optimisation
         logger.debug("silencedetect failed for %s: %s", path, exc)
         return []
     starts = [float(v) for v in re.findall(r"silence_start: (-?[\d.]+)", result.stderr)]
@@ -98,7 +129,9 @@ def _cut_points(duration: float, target: float, silences: list[float]) -> list[f
     lookback = min(_MAX_SILENCE_LOOKBACK_SECONDS, target / 4)
     while duration - position > target:
         ideal = position + target
-        nearby = [s for s in silences if ideal - lookback <= s <= ideal and s > position]
+        nearby = [
+            s for s in silences if ideal - lookback <= s <= ideal and s > position
+        ]
         position = max(nearby) if nearby else ideal
         cuts.append(position)
     return cuts
@@ -106,14 +139,38 @@ def _cut_points(duration: float, target: float, silences: list[float]) -> list[f
 
 def _split(ffmpeg: str, path: str, work_dir: str, cuts: list[float]) -> list[str]:
     pattern = os.path.join(work_dir, "part%03d.m4a")
-    _run_quiet([ffmpeg, "-y", "-loglevel", "error", "-i", path, "-vn", "-c", "copy", "-f", "segment",
-                "-segment_times", ",".join(f"{c:.3f}" for c in cuts), "-reset_timestamps", "1", pattern],
-               timeout=300)
-    return sorted(os.path.join(work_dir, name) for name in os.listdir(work_dir) if name.startswith("part"))
+    _run_quiet(
+        [
+            ffmpeg,
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            path,
+            "-vn",
+            "-c",
+            "copy",
+            "-f",
+            "segment",
+            "-segment_times",
+            ",".join(f"{c:.3f}" for c in cuts),
+            "-reset_timestamps",
+            "1",
+            pattern,
+        ],
+        timeout=300,
+    )
+    return sorted(
+        os.path.join(work_dir, name)
+        for name in os.listdir(work_dir)
+        if name.startswith("part")
+    )
 
 
 def transcribe_oversized(
-    path: str, limit: tuple[int, Optional[float]], dispatch: Callable[[str], dict[str, Any]],
+    path: str,
+    limit: tuple[int, Optional[float]],
+    dispatch: Callable[[str], dict[str, Any]],
 ) -> dict[str, Any]:
     """Fit *path* under *limit* (re-encode, else split at silences) and run *dispatch* per piece."""
     from tools.voice_mode_transcript import is_whisper_hallucination
@@ -122,23 +179,38 @@ def transcribe_oversized(
     ffmpeg = _find_ffmpeg_binary()
     if not ffmpeg:
         return _too_large(path, max_bytes, "ffmpeg was not found")
-    with TemporaryDirectory(prefix="clawk-stt-split-", ignore_cleanup_errors=True) as work_dir:
+    with TemporaryDirectory(
+        prefix="clawk-stt-split-", ignore_cleanup_errors=True
+    ) as work_dir:
         compact, error = _transcode_audio_for_stt(path, work_dir)
         if error or not compact:
             return _too_large(path, max_bytes, error or "re-encoding produced no file")
         duration = _probe_audio_duration(compact)
         if _fits(compact, limit, duration):
-            logger.info("Re-encoded oversized audio %s to %.1fMB for a single STT upload",
-                        os.path.basename(path), os.path.getsize(compact) / _MB)
+            logger.info(
+                "Re-encoded oversized audio %s to %.1fMB for a single STT upload",
+                os.path.basename(path),
+                os.path.getsize(compact) / _MB,
+            )
             return dispatch(compact)
         if not duration:
             return _too_large(path, max_bytes, "its duration could not be read")
         target = max_bytes * _SEGMENT_HEADROOM * duration / os.path.getsize(compact)
         if max_seconds:
             target = min(target, max_seconds * _SEGMENT_HEADROOM)
-        parts = _split(ffmpeg, compact, work_dir, _cut_points(duration, target, _silence_midpoints(ffmpeg, compact)))
-        logger.info("Transcribing %s (%.0fs) in %d segments of <= %.0fs",
-                    os.path.basename(path), duration, len(parts), math.ceil(target))
+        parts = _split(
+            ffmpeg,
+            compact,
+            work_dir,
+            _cut_points(duration, target, _silence_midpoints(ffmpeg, compact)),
+        )
+        logger.info(
+            "Transcribing %s (%.0fs) in %d segments of <= %.0fs",
+            os.path.basename(path),
+            duration,
+            len(parts),
+            math.ceil(target),
+        )
         transcripts: list[str] = []
         provider = ""
         for index, part in enumerate(parts, start=1):
@@ -147,11 +219,17 @@ def transcribe_oversized(
             if result.get("no_speech"):
                 continue
             if not result.get("success"):
-                return _error_result(f"Segment {index}/{len(parts)} failed: {result.get('error', 'unknown error')}",
-                                     provider=provider)
+                return _error_result(
+                    f"Segment {index}/{len(parts)} failed: {result.get('error', 'unknown error')}",
+                    provider=provider,
+                )
             text = (result.get("transcript") or "").strip()
             if text and not is_whisper_hallucination(text):
                 transcripts.append(text)
     if not transcripts:
-        return _error_result("Transcription returned an empty transcript", no_speech=True, provider=provider)
+        return _error_result(
+            "Transcription returned an empty transcript",
+            no_speech=True,
+            provider=provider,
+        )
     return {**_ok_result(" ".join(transcripts), provider), "segments": len(parts)}

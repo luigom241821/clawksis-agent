@@ -58,31 +58,39 @@ def test_every_owed_identity_requires_current_evidence(monkeypatch, bad):
     directory.mkdir(parents=True)
     if bad == "marker":
         # Recorded obligation for an SHA the fleet does not serve: no verified discharge.
-        inventory = json.dumps({"version": 1, "runtimes": [{"kind": "gateway", "profile": "beta"}]})
-        (home / "fleet_restart_pending").write_text(f"expected_sha=future\ninventory={inventory}\n")
+        inventory = json.dumps(
+            {"version": 1, "runtimes": [{"kind": "gateway", "profile": "beta"}]}
+        )
+        (home / "fleet_restart_pending").write_text(
+            f"expected_sha=future\ninventory={inventory}\n"
+        )
     owed = {"kind": "gateway", "profile": "beta", "code_sha": "old"}
     if bad == "wrong-kind":
         owed["kind"] = "serve"
     if bad == "unknown-profile":
         owed["profile"] = "unknown"
     (directory / "latest.json").write_text(
-        json.dumps({
-            "outcome": "failed",
-            "plan": {
-                "runtimes": [
-                    {"kind": "gateway", "profile": "alpha", "code_sha": "old"},
-                    owed,
-                ]
-            },
-        })
+        json.dumps(
+            {
+                "outcome": "failed",
+                "plan": {
+                    "runtimes": [
+                        {"kind": "gateway", "profile": "alpha", "code_sha": "old"},
+                        owed,
+                    ]
+                },
+            }
+        )
     )
     rows = [{"profile": "alpha", "state": "current", "code_sha": "new"}]
     if bad != "missing":
-        rows.append({
-            "profile": "beta",
-            "state": bad if bad in {"unknown", "down", "stale"} else "current",
-            "code_sha": "old" if bad == "wrong-sha" else "new",
-        })
+        rows.append(
+            {
+                "profile": "beta",
+                "state": bad if bad in {"unknown", "down", "stale"} else "current",
+                "code_sha": "old" if bad == "wrong-sha" else "new",
+            }
+        )
     monkeypatch.setattr(update_cmd, "_current_checkout_sha", lambda: "new")
     monkeypatch.setattr(update_receipt, "collect_fleet_versions", lambda: rows)
     assert update_cmd_fleet._pending_fleet_restart_needed()
@@ -97,16 +105,40 @@ def test_supervised_serve_row_never_vetoes_gateway_discharge(monkeypatch, superv
     home = get_clawk_home()
     directory = home / "logs" / "update_receipts"
     directory.mkdir(parents=True)
-    (directory / "latest.json").write_text(json.dumps({
-        "outcome": "failed",
-        "post_update": {"sha": "pulled"},
-        "gateway_restart": {"restarted_services": ["clawk-gateway"], "incomplete": False},
-        "plan": {"runtimes": [
-            {"kind": "gateway", "profile": "default", "code_sha": "old", "supervisor": "manual"},
-            {"kind": "dashboard", "profile": "default", "code_sha": None, "supervisor": supervisor, "restart_via": "respawn-argv"},
-        ]},
-    }))
+    (directory / "latest.json").write_text(
+        json.dumps(
+            {
+                "outcome": "failed",
+                "post_update": {"sha": "pulled"},
+                "gateway_restart": {
+                    "restarted_services": ["clawk-gateway"],
+                    "incomplete": False,
+                },
+                "plan": {
+                    "runtimes": [
+                        {
+                            "kind": "gateway",
+                            "profile": "default",
+                            "code_sha": "old",
+                            "supervisor": "manual",
+                        },
+                        {
+                            "kind": "dashboard",
+                            "profile": "default",
+                            "code_sha": None,
+                            "supervisor": supervisor,
+                            "restart_via": "respawn-argv",
+                        },
+                    ]
+                },
+            }
+        )
+    )
     monkeypatch.setattr(update_cmd, "_current_checkout_sha", lambda: "new")
-    monkeypatch.setattr(update_receipt, "collect_fleet_versions", lambda: [{"profile": "default", "state": "current", "code_sha": "new"}])
+    monkeypatch.setattr(
+        update_receipt,
+        "collect_fleet_versions",
+        lambda: [{"profile": "default", "state": "current", "code_sha": "new"}],
+    )
     assert not update_cmd_fleet._update_owes_fleet_restart()
     assert not update_cmd_fleet._pending_fleet_restart_needed()

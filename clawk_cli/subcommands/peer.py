@@ -63,13 +63,22 @@ def _peer_secret(name: str) -> str:
 
 
 def _request(
-    url: str, key: str, *, method: str = "GET", body: dict | None = None,
-    timeout: int = LIST_TIMEOUT_S, headers: dict[str, str] | None = None) -> dict:
+    url: str,
+    key: str,
+    *,
+    method: str = "GET",
+    body: dict | None = None,
+    timeout: int = LIST_TIMEOUT_S,
+    headers: dict[str, str] | None = None,
+) -> dict:
     from clawk_cli.urllib_security import open_credentialed_url
+
     data = json.dumps(body).encode("utf-8") if body is not None else None
     request_headers = {
-        "Authorization": f"Bearer {key}", "Content-Type": "application/json",
-        "User-Agent": "clawk-peer-dm"}
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "User-Agent": "clawk-peer-dm",
+    }
     if headers:
         request_headers.update(headers)
     req = urllib.request.Request(url, data=data, method=method, headers=request_headers)
@@ -107,10 +116,15 @@ def _find_bot_chat(base: str, key: str) -> str | None:
     return the ordinary visible listing, so this single request degrades
     to exactly the previous behavior against them.
     """
-    query = urllib.parse.urlencode({"limit": 200, "title": BOT_CHAT_TITLE, "include_hidden": 1})
+    query = urllib.parse.urlencode(
+        {"limit": 200, "title": BOT_CHAT_TITLE, "include_hidden": 1}
+    )
     listing = _request(f"{base}/api/sessions?{query}", key)
     for session in listing.get("data") or []:
-        if isinstance(session, dict) and (session.get("title") or "").strip() == BOT_CHAT_TITLE:
+        if (
+            isinstance(session, dict)
+            and (session.get("title") or "").strip() == BOT_CHAT_TITLE
+        ):
             return str(session.get("id") or "") or None
     return None
 
@@ -121,8 +135,11 @@ def _ensure_bot_chat(base: str, key: str) -> str:
         return existing
     try:
         created = _request(
-            f"{base}/api/sessions", key, method="POST",
-            body={"title": BOT_CHAT_TITLE, "source": "bot_peer_dm"})
+            f"{base}/api/sessions",
+            key,
+            method="POST",
+            body={"title": BOT_CHAT_TITLE, "source": "bot_peer_dm"},
+        )
     except urllib.error.HTTPError as exc:
         detail = _http_error_detail(exc)
         if exc.code == 400 and "title" in detail.lower():
@@ -133,10 +150,13 @@ def _ensure_bot_chat(base: str, key: str) -> str:
                 f"Peer already has a '{BOT_CHAT_TITLE}' session but it is hidden and the "
                 f"peer's gateway is too old to expose hidden sessions to this lookup "
                 f"(HTTP 400: {detail}). Update the peer's clawksis-agent, or unhide the "
-                f"session there: PATCH /api/sessions/<id> {{\"hidden\": false}}.") from exc
+                f'session there: PATCH /api/sessions/<id> {{"hidden": false}}.'
+            ) from exc
         raise
     # Real api_server wraps the row: {"object": "clawk.session", "session": {...}}.
-    session = created.get("session") if isinstance(created.get("session"), dict) else created
+    session = (
+        created.get("session") if isinstance(created.get("session"), dict) else created
+    )
     session_id = str(session.get("id") or session.get("session_id") or "")
     if not session_id:
         raise RuntimeError("Peer did not return a session id for the new Bot Chat")
@@ -160,7 +180,9 @@ def _http_error_detail(exc: urllib.error.HTTPError) -> str:
     try:
         body = exc.read().decode("utf-8", "replace")
         parsed = json.loads(body)
-        message = parsed.get("error", {}).get("message") if isinstance(parsed, dict) else None
+        message = (
+            parsed.get("error", {}).get("message") if isinstance(parsed, dict) else None
+        )
         return message or body[:200]
     except Exception:
         return str(exc)
@@ -176,7 +198,8 @@ def _resolve_peer_target(target: str) -> tuple[str, str | None, dict, str]:
     if not key:
         raise PermissionError(
             f"No API key for peer '{peer_name}'. Set it: clawk peer add {peer_name} "
-            f"--url <url> --key <key> (or add {_peer_key_env(peer_name)}=<key> to ~/.clawksis/.env)")
+            f"--url <url> --key <key> (or add {_peer_key_env(peer_name)}=<key> to ~/.clawksis/.env)"
+        )
     return peer_name, profile, peer, key
 
 
@@ -206,8 +229,10 @@ def _peer_failure(peer_name: str, exc: Exception) -> int:
     """Print a peer HTTP rejection or transport failure to stderr; always exit 1."""
     if isinstance(exc, urllib.error.HTTPError):
         detail = _http_error_detail(exc)
-        print(f"Peer '{peer_name}' rejected the request (HTTP {exc.code}): {detail}",
-              file=sys.stderr)
+        print(
+            f"Peer '{peer_name}' rejected the request (HTTP {exc.code}): {detail}",
+            file=sys.stderr,
+        )
     else:
         print(f"Could not reach peer '{peer_name}': {exc}", file=sys.stderr)
     return 1
@@ -225,26 +250,38 @@ def _emit(args, payload: dict, text_lines: list[str]) -> int:
 def _peer_add(args) -> int:
     name = (args.name or "").strip().lower()
     if not _PEER_NAME_RE.match(name):
-        print(f"Invalid peer name: {name!r} (lowercase, digits, -, _; max 64)", file=sys.stderr)
+        print(
+            f"Invalid peer name: {name!r} (lowercase, digits, -, _; max 64)",
+            file=sys.stderr,
+        )
         return 2
     url = (args.url or "").strip()
     if not url.lower().startswith(("http://", "https://")):
-        print("Peer --url must be an http(s) gateway base URL, e.g. http://spark.lan:8377", file=sys.stderr)
+        print(
+            "Peer --url must be an http(s) gateway base URL, e.g. http://spark.lan:8377",
+            file=sys.stderr,
+        )
         return 2
     peers = _load_peers()
-    peers[name] = {"url": url.rstrip("/"), **({"note": args.note.strip()} if getattr(args, "note", "") else {})}
+    peers[name] = {
+        "url": url.rstrip("/"),
+        **({"note": args.note.strip()} if getattr(args, "note", "") else {}),
+    }
     _save_peers(peers)
     key = (getattr(args, "key", "") or "").strip()
     if key:
         from clawk_cli.config import save_env_value
 
         save_env_value(_peer_key_env(name), key)
-        print(f"Peer '{name}' saved ({url}) — key stored as {_peer_key_env(name)} in ~/.clawksis/.env")
+        print(
+            f"Peer '{name}' saved ({url}) — key stored as {_peer_key_env(name)} in ~/.clawksis/.env"
+        )
     else:
         print(
             f"Peer '{name}' saved ({url}). No key given — set the peer's API_SERVER_KEY with:\n"
             f"  clawk peer add {name} --url {url} --key <key>\n"
-            f"  (or add {_peer_key_env(name)}=<key> to ~/.clawksis/.env)")
+            f"  (or add {_peer_key_env(name)}=<key> to ~/.clawksis/.env)"
+        )
     return 0
 
 
@@ -256,25 +293,32 @@ def _peer_remove(args) -> int:
         return 1
     peers.pop(name)
     _save_peers(peers)
-    print(f"Peer '{name}' removed (its {_peer_key_env(name)} entry in .env is kept; delete it manually if unused).")
+    print(
+        f"Peer '{name}' removed (its {_peer_key_env(name)} entry in .env is kept; delete it manually if unused)."
+    )
     return 0
 
 
 def _peer_list(args) -> int:
     peers = _load_peers()
     if not peers:
-        print("No peers registered. Add one: clawk peer add <name> --url http://host:port --key <API_SERVER_KEY>")
+        print(
+            "No peers registered. Add one: clawk peer add <name> --url http://host:port --key <API_SERVER_KEY>"
+        )
         return 0
     for name in sorted(peers):
         entry = peers[name] if isinstance(peers[name], dict) else {}
-        has_key = "key set" if _peer_secret(name) else f"NO KEY ({_peer_key_env(name)} unset)"
+        has_key = (
+            "key set" if _peer_secret(name) else f"NO KEY ({_peer_key_env(name)} unset)"
+        )
         note = f" — {entry.get('note')}" if entry.get("note") else ""
         print(f"{name}\t{entry.get('url', '?')}\t[{has_key}]{note}")
     return 0
 
 
-def _peer_run_ctl(args, action: str, peer_name: str, profile: str | None, base: str,
-                  key: str) -> int:
+def _peer_run_ctl(
+    args, action: str, peer_name: str, profile: str | None, base: str, key: str
+) -> int:
     """``status`` / ``stop`` on an asynchronous run."""
     run_id = (getattr(args, "run_id", None) or "").strip()
     if not run_id:
@@ -283,8 +327,12 @@ def _peer_run_ctl(args, action: str, peer_name: str, profile: str | None, base: 
     stop = action == "stop"
     try:
         result = _request(
-            f"{base}/v1/runs/{urllib.parse.quote(run_id, safe='')}" + ("/stop" if stop else ""),
-            key, method="POST" if stop else "GET", body={} if stop else None)
+            f"{base}/v1/runs/{urllib.parse.quote(run_id, safe='')}"
+            + ("/stop" if stop else ""),
+            key,
+            method="POST" if stop else "GET",
+            body={} if stop else None,
+        )
     except (urllib.error.URLError, TimeoutError, OSError, RuntimeError) as exc:
         return _peer_failure(peer_name, exc)
     if getattr(args, "json", False):
@@ -309,23 +357,38 @@ def _turn_body(message: str, *, message_key: str, **extra) -> dict:
     return body
 
 
-def _peer_run(args, message: str, peer_name: str, profile: str | None, base: str, key: str) -> int:
-    idempotency_key = (getattr(args, "idempotency_key", None) or f"peer-{uuid.uuid4().hex}").strip()
-    if (not idempotency_key or len(idempotency_key) > 255
-            or re.search(r"[\r\n\x00]", idempotency_key)):
-        print("Idempotency key must be 1-255 characters without control newlines.", file=sys.stderr)
+def _peer_run(
+    args, message: str, peer_name: str, profile: str | None, base: str, key: str
+) -> int:
+    idempotency_key = (
+        getattr(args, "idempotency_key", None) or f"peer-{uuid.uuid4().hex}"
+    ).strip()
+    if (
+        not idempotency_key
+        or len(idempotency_key) > 255
+        or re.search(r"[\r\n\x00]", idempotency_key)
+    ):
+        print(
+            "Idempotency key must be 1-255 characters without control newlines.",
+            file=sys.stderr,
+        )
         return 2
     try:
         if _peer_run_durability(base, key) is not True:
             print(
                 "Warning: this peer does not advertise restart-durable "
                 "run replay; keep the run ID and avoid blind retries "
-                "after a gateway restart.", file=sys.stderr)
+                "after a gateway restart.",
+                file=sys.stderr,
+            )
         session_id = _ensure_bot_chat(base, key)
         result = _request(
-            f"{base}/v1/runs", key, method="POST",
+            f"{base}/v1/runs",
+            key,
+            method="POST",
             body=_turn_body(message, message_key="input", session_id=session_id),
-            headers={"Idempotency-Key": idempotency_key})
+            headers={"Idempotency-Key": idempotency_key},
+        )
     except (urllib.error.URLError, TimeoutError, OSError, RuntimeError) as exc:
         return _peer_failure(peer_name, exc)
     run_id = str(result.get("run_id") or "")
@@ -333,22 +396,39 @@ def _peer_run(args, message: str, peer_name: str, profile: str | None, base: str
         print(f"Peer '{peer_name}' did not return a run ID.", file=sys.stderr)
         return 1
     payload = {
-        "peer": peer_name, "profile": profile, "session_id": session_id, "run_id": run_id,
-        "status": result.get("status") or "started", "idempotency_key": idempotency_key,
-        "replayed": bool(result.get("replayed", False))}
+        "peer": peer_name,
+        "profile": profile,
+        "session_id": session_id,
+        "run_id": run_id,
+        "status": result.get("status") or "started",
+        "idempotency_key": idempotency_key,
+        "replayed": bool(result.get("replayed", False)),
+    }
     replay = " (replayed)" if payload["replayed"] else ""
-    return _emit(args, payload, [
-        f"{run_id}: {payload['status']}{replay}", f"session_id: {session_id}",
-        f"idempotency_key: {idempotency_key}"])
+    return _emit(
+        args,
+        payload,
+        [
+            f"{run_id}: {payload['status']}{replay}",
+            f"session_id: {session_id}",
+            f"idempotency_key: {idempotency_key}",
+        ],
+    )
 
 
-def _peer_dm(args, message: str, peer_name: str, profile: str | None, base: str, key: str) -> int:
+def _peer_dm(
+    args, message: str, peer_name: str, profile: str | None, base: str, key: str
+) -> int:
     session_id = ""
     try:
         session_id = _ensure_bot_chat(base, key)
         result = _request(
-            f"{base}/api/sessions/{urllib.parse.quote(session_id, safe='')}/chat", key,
-            method="POST", body=_turn_body(message, message_key="message"), timeout=DM_TIMEOUT_S)
+            f"{base}/api/sessions/{urllib.parse.quote(session_id, safe='')}/chat",
+            key,
+            method="POST",
+            body=_turn_body(message, message_key="message"),
+            timeout=DM_TIMEOUT_S,
+        )
     except RuntimeError as exc:
         print(f"Peer '{peer_name}': {exc}", file=sys.stderr)
         return 1
@@ -359,20 +439,32 @@ def _peer_dm(args, message: str, peer_name: str, profile: str | None, base: str,
         # and deliver it twice. urllib raises that timeout bare; one it wraps in URLError hit while
         # connecting or sending, so the request never arrived and "could not reach" is the truth.
         if session_id and isinstance(exc, TimeoutError):
-            print(f"Peer '{peer_name}' accepted the message but its turn is still running after "
-                  f"{DM_TIMEOUT_S}s: the message is already in its Bot Chat (session {session_id}) "
-                  "and will be answered there. The reply cannot come back on this call. Do NOT resend.",
-                  file=sys.stderr)
+            print(
+                f"Peer '{peer_name}' accepted the message but its turn is still running after "
+                f"{DM_TIMEOUT_S}s: the message is already in its Bot Chat (session {session_id}) "
+                "and will be answered there. The reply cannot come back on this call. Do NOT resend.",
+                file=sys.stderr,
+            )
             return 1
         return _peer_failure(peer_name, exc)
     if result.get("object") == "clawk.session.chat.queued":
         # The peer's Bot Chat is open in its Desktop and that turn outlasted the peer's wait: the
         # message is in the open chat and is answered there, so a resend would run it twice.
         queued_in = result.get("session_id") or session_id
-        return _emit(args, {"peer": peer_name, "profile": profile, "session_id": queued_in,
-                            "status": result.get("status") or "queued", "delivery_id": result.get("delivery_id")},
-                     [f"Peer '{peer_name}' has its Bot Chat open, so the message went into that chat (session "
-                      f"{queued_in}) and is answered there. The reply cannot come back on this call. Do NOT resend."])
+        return _emit(
+            args,
+            {
+                "peer": peer_name,
+                "profile": profile,
+                "session_id": queued_in,
+                "status": result.get("status") or "queued",
+                "delivery_id": result.get("delivery_id"),
+            },
+            [
+                f"Peer '{peer_name}' has its Bot Chat open, so the message went into that chat (session "
+                f"{queued_in}) and is answered there. The reply cannot come back on this call. Do NOT resend."
+            ],
+        )
     msg = result.get("message")
     reply = str(msg.get("content") or "") if isinstance(msg, dict) else ""
     # A successful bare silence marker is a delivery decision, not a message:
@@ -382,16 +474,27 @@ def _peer_dm(args, message: str, peer_name: str, profile: str | None, base: str,
     # local `clawk chat -Q` transport (tools/bot_mode_dm.py) — this is the
     # 4th Bot Mode delivery door and was missing the same check.
     from gateway.response_filters import is_intentional_silence_response
+
     if is_intentional_silence_response(reply):
         reply = ""
-    payload = {"peer": peer_name, "profile": profile,
-               "session_id": result.get("session_id") or session_id, "reply": reply}
+    payload = {
+        "peer": peer_name,
+        "profile": profile,
+        "session_id": result.get("session_id") or session_id,
+        "reply": reply,
+    }
     return _emit(args, payload, [reply or "(no reply)"])
 
 
 _REGISTRY_ACTIONS = {
-    "add": _peer_add, "set": _peer_add, "remove": _peer_remove, "rm": _peer_remove,
-    "list": _peer_list, "ls": _peer_list, None: _peer_list}
+    "add": _peer_add,
+    "set": _peer_add,
+    "remove": _peer_remove,
+    "rm": _peer_remove,
+    "list": _peer_list,
+    "ls": _peer_list,
+    None: _peer_list,
+}
 
 
 def cmd_peer(args) -> int:
@@ -423,13 +526,14 @@ def cmd_peer(args) -> int:
 def build_peer_parser(subparsers) -> None:
     """Attach the ``peer`` subcommand to ``subparsers``."""
     parser = subparsers.add_parser(
-        "peer", help="Bot-to-bot DMs across machines (peer Clawksis gateways)",
+        "peer",
+        help="Bot-to-bot DMs across machines (peer Clawksis gateways)",
         description="Register other Clawksis gateways as peers and message their agents. "
-            "'clawk peer dm <peer>[/<agent>] \"...\"' delivers into the remote "
-            "agent's canonical Bot Chat over the peer's API server and prints "
-            "the reply — the cross-machine twin of 'clawk -p <bot> chat'. "
-            "The peer must run the api_server platform; its API_SERVER_KEY is "
-            "stored locally as a credential in ~/.clawksis/.env.",
+        "'clawk peer dm <peer>[/<agent>] \"...\"' delivers into the remote "
+        "agent's canonical Bot Chat over the peer's API server and prints "
+        "the reply — the cross-machine twin of 'clawk -p <bot> chat'. "
+        "The peer must run the api_server platform; its API_SERVER_KEY is "
+        "stored locally as a credential in ~/.clawksis/.env.",
         epilog=(
             "Examples:\n"
             "  clawk peer add spark --url http://spark.lan:8377 --key <API_SERVER_KEY>\n"
@@ -441,14 +545,24 @@ def build_peer_parser(subparsers) -> None:
             "  clawk peer stop spark run_abc123\n"
             "  clawk peer remove spark\n"
             "\n"
-            "Exit codes: 0 ok, 1 delivery/peer error, 2 usage error."),
-        formatter_class=argparse.RawDescriptionHelpFormatter)
+            "Exit codes: 0 ok, 1 delivery/peer error, 2 usage error."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     peer_sub = parser.add_subparsers(dest="peer_action")
 
-    add_p = peer_sub.add_parser("add", aliases=["set"], help="Register (or update) a peer gateway")
+    add_p = peer_sub.add_parser(
+        "add", aliases=["set"], help="Register (or update) a peer gateway"
+    )
     add_p.add_argument("name", help="Peer name (lowercase slug, e.g. spark, homelab)")
-    add_p.add_argument("--url", required=True, help="Peer gateway base URL, e.g. http://spark.lan:8377")
-    add_p.add_argument("--key", default="", help="The peer's API_SERVER_KEY (stored in ~/.clawksis/.env)")
+    add_p.add_argument(
+        "--url", required=True, help="Peer gateway base URL, e.g. http://spark.lan:8377"
+    )
+    add_p.add_argument(
+        "--key",
+        default="",
+        help="The peer's API_SERVER_KEY (stored in ~/.clawksis/.env)",
+    )
     add_p.add_argument("--note", default="", help="Optional description")
 
     peer_sub.add_parser("list", aliases=["ls"], help="List registered peers")
@@ -458,19 +572,43 @@ def build_peer_parser(subparsers) -> None:
 
     def _remote(name: str, help: str, *, run_id: bool):
         sp = peer_sub.add_parser(name, help=help)
-        sp.add_argument("target", help="<peer> or <peer>/<agent> (named profile on a multiplexed peer)")
+        sp.add_argument(
+            "target",
+            help="<peer> or <peer>/<agent> (named profile on a multiplexed peer)",
+        )
         if run_id:
             sp.add_argument("run_id", help="Run ID returned by 'clawk peer run'")
         else:
-            sp.add_argument("message", nargs="?", default=None, help="Message text (or stdin)")
+            sp.add_argument(
+                "message", nargs="?", default=None, help="Message text (or stdin)"
+            )
             if name == "run":
                 sp.add_argument(
-                    "--idempotency-key", default=None, help="Stable retry key (generated when omitted)")
-        sp.add_argument("--json", action="store_true", default=False, help="Emit a JSON result")
+                    "--idempotency-key",
+                    default=None,
+                    help="Stable retry key (generated when omitted)",
+                )
+        sp.add_argument(
+            "--json", action="store_true", default=False, help="Emit a JSON result"
+        )
 
-    _remote("dm", "Message an agent on a peer gateway and print its reply", run_id=False)
-    _remote("run", "Start a long peer turn asynchronously and return its run ID", run_id=False)
-    _remote("status", "Read the status and final output of an asynchronous peer run", run_id=True)
-    _remote("stop", "Stop one asynchronous peer run without affecting another turn", run_id=True)
+    _remote(
+        "dm", "Message an agent on a peer gateway and print its reply", run_id=False
+    )
+    _remote(
+        "run",
+        "Start a long peer turn asynchronously and return its run ID",
+        run_id=False,
+    )
+    _remote(
+        "status",
+        "Read the status and final output of an asynchronous peer run",
+        run_id=True,
+    )
+    _remote(
+        "stop",
+        "Stop one asynchronous peer run without affecting another turn",
+        run_id=True,
+    )
 
     parser.set_defaults(func=cmd_peer)

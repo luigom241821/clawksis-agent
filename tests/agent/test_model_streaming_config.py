@@ -8,6 +8,7 @@ into plain text and return zero ``tool_calls``, silently no-oping delegated
 tasks. ``model.streaming: false`` must seed ``_disable_streaming`` at agent
 init so the whole session (parent and subagents) uses the non-streaming path.
 """
+
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -83,10 +84,10 @@ def test_streaming_false_read_from_real_config_file(mock_openai):
     home = Path(os.environ["CLAWK_HOME"])
     (home / "config.yaml").write_text(
         "model:\n"
-        "  default: \"test/model\"\n"
-        "  provider: \"custom\"\n"
-        "  base_url: \"http://127.0.0.1:9999/v1\"\n"
-        "  api_key: \"x\"\n"
+        '  default: "test/model"\n'
+        '  provider: "custom"\n'
+        '  base_url: "http://127.0.0.1:9999/v1"\n'
+        '  api_key: "x"\n'
         "  streaming: false\n",
         encoding="utf-8",
     )

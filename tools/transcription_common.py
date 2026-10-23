@@ -34,10 +34,26 @@ COMMON_LOCAL_BIN_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 OPENAI_BASE_URL = os.getenv("STT_OPENAI_BASE_URL", "https://api.openai.com/v1")
 XAI_STT_BASE_URL = os.getenv("XAI_STT_BASE_URL", "https://api.x.ai/v1")
-ELEVENLABS_STT_BASE_URL = os.getenv("ELEVENLABS_STT_BASE_URL", "https://api.elevenlabs.io/v1")
+ELEVENLABS_STT_BASE_URL = os.getenv(
+    "ELEVENLABS_STT_BASE_URL", "https://api.elevenlabs.io/v1"
+)
 # DeepInfra STT base URL is resolved via clawk_cli.models.deepinfra_base_url (shared).
 
-SUPPORTED_FORMATS = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".ogg", ".oga", ".opus", ".aac", ".flac", ".caf"}
+SUPPORTED_FORMATS = {
+    ".mp3",
+    ".mp4",
+    ".mpeg",
+    ".mpga",
+    ".m4a",
+    ".wav",
+    ".webm",
+    ".ogg",
+    ".oga",
+    ".opus",
+    ".aac",
+    ".flac",
+    ".caf",
+}
 LOCAL_NATIVE_AUDIO_FORMATS = {".wav", ".aiff", ".aif"}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
@@ -47,10 +63,16 @@ MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 STT_MODEL_CATALOG = {
     "local": ["base", "tiny", "small", "medium", "large-v3", "turbo"],
     "groq": ["whisper-large-v3-turbo", "whisper-large-v3"],
-    "openai": ["whisper-1", "gpt-4o-mini-transcribe", "gpt-4o-transcribe", "gpt-transcribe"],
+    "openai": [
+        "whisper-1",
+        "gpt-4o-mini-transcribe",
+        "gpt-4o-transcribe",
+        "gpt-transcribe",
+    ],
     "mistral": ["voxtral-mini-latest", "voxtral-mini-2602"],
     "xai": ["grok-voice-transcribe-2.0", "grok-voice-transcribe-1.0"],
-    "elevenlabs": ["scribe_v2", "scribe_v1"]}
+    "elevenlabs": ["scribe_v2", "scribe_v1"],
+}
 # ElevenLabs historically uses ``model_id`` instead of ``model``.
 STT_MODEL_CONFIG_KEY = {"elevenlabs": "model_id"}
 
@@ -65,8 +87,18 @@ RETIRED_GROQ_MODELS = frozenset({"distil-whisper-large-v3-en"})
 # dispatcher short-circuits them before command/plugin lookup.
 # The plugin hook from issue #30398-style follow-up rejects plugins registering under any of these names;
 # the dispatcher in ``transcribe_audio`` short-circuits them defensively as well.
-BUILTIN_STT_PROVIDERS = frozenset({
-    "local", "local_command", "groq", "openai", "mistral", "xai", "elevenlabs", "deepinfra"})
+BUILTIN_STT_PROVIDERS = frozenset(
+    {
+        "local",
+        "local_command",
+        "groq",
+        "openai",
+        "mistral",
+        "xai",
+        "elevenlabs",
+        "deepinfra",
+    }
+)
 # Built-in providers that upload audio to a remote API.
 CLOUD_STT_PROVIDERS = frozenset(BUILTIN_STT_PROVIDERS - {"local", "local_command"})
 
@@ -103,6 +135,7 @@ def _lazy_ensure_quietly(extra: str) -> None:
     Installs are gated by ``security.allow_lazy_installs`` inside pm."""
     try:
         import pm
+
         pm.ensure_import(extra)
     except Exception:
         pass
@@ -121,7 +154,10 @@ def _process_error_detail(exc: subprocess.CalledProcessError) -> str:
 
 
 def _log_prompt_unsupported(label: str) -> None:
-    logger.debug("%s does not support transcription prompts — proceeding without the prompt.", label)
+    logger.debug(
+        "%s does not support transcription prompts — proceeding without the prompt.",
+        label,
+    )
 
 
 def _config_number(cfg: dict[str, Any], key: str, default, cast=float):

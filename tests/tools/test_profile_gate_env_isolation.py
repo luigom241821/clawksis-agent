@@ -19,17 +19,34 @@ from tools.environments.local import served_profile_child_env
 # Gates injected outside any dotenv — the shape a name-list scrub cannot see. Mix of allowlist,
 # deny list, allow-all opt-in, bot policy, channel scoping and a plugin adapter's gate.
 _GATES = {
-    "DISCORD_ALLOWED_CHANNELS": "111", "DISCORD_ALLOWED_ROLES": "r1", "DISCORD_IGNORED_CHANNELS": "222",
-    "DISCORD_ALLOW_BOTS": "all", "TELEGRAM_GROUP_ALLOWED_CHATS": "-100", "SLACK_ALLOWED_CHANNELS": "C1",
-    "WHATSAPP_GROUP_ALLOW_FROM": "+1555", "GATEWAY_ALLOW_ALL_USERS": "true",
+    "DISCORD_ALLOWED_CHANNELS": "111",
+    "DISCORD_ALLOWED_ROLES": "r1",
+    "DISCORD_IGNORED_CHANNELS": "222",
+    "DISCORD_ALLOW_BOTS": "all",
+    "TELEGRAM_GROUP_ALLOWED_CHATS": "-100",
+    "SLACK_ALLOWED_CHANNELS": "C1",
+    "WHATSAPP_GROUP_ALLOW_FROM": "+1555",
+    "GATEWAY_ALLOW_ALL_USERS": "true",
 }
 _PROBE = f"import json,os;print(json.dumps({{k:os.environ.get(k) for k in {sorted(_GATES)!r}}}))"
 
 
 def _seen_by_child(env: dict) -> set[str]:
-    out = subprocess.run([sys.executable, "-c", _PROBE], env=env, capture_output=True,
-                         text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
-    return {k for k, v in json.loads(out.stdout.strip().splitlines()[-1]).items() if v is not None}
+    out = subprocess.run(
+        [sys.executable, "-c", _PROBE],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
+    return {
+        k
+        for k, v in json.loads(out.stdout.strip().splitlines()[-1]).items()
+        if v is not None
+    }
 
 
 @pytest.fixture
@@ -50,8 +67,13 @@ def test_routed_child_drops_gates_and_same_home_child_keeps_them(homes):
     """The seam every served-profile spawn funnels through: routed target → no gate reaches the child
     (observed from INSIDE a real child); same-home target → an operator export is preserved."""
     a, b = homes
-    assert _seen_by_child(served_profile_child_env(base=os.environ, target_home=b)) == set()
-    assert _seen_by_child(served_profile_child_env(base=os.environ, target_home=a)) == set(_GATES)
+    assert (
+        _seen_by_child(served_profile_child_env(base=os.environ, target_home=b))
+        == set()
+    )
+    assert _seen_by_child(
+        served_profile_child_env(base=os.environ, target_home=a)
+    ) == set(_GATES)
 
 
 def test_update_recovery_child_env_drops_gates_only_for_other_profiles(homes):

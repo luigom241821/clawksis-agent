@@ -70,8 +70,12 @@ def test_ledger_operations_close_every_connection(monkeypatch, tmp_path):
 
     oid = dl.compute_obligation_id("sess", "msg", "content")
     dl.record_obligation(
-        obligation_id=oid, session_key="sess", platform="telegram",
-        chat_id="123", thread_id=None, content="hello",
+        obligation_id=oid,
+        session_key="sess",
+        platform="telegram",
+        chat_id="123",
+        thread_id=None,
+        content="hello",
     )
     dl.mark_attempting(oid)
     dl.mark_delivered(oid)
@@ -80,5 +84,3 @@ def test_ledger_operations_close_every_connection(monkeypatch, tmp_path):
     assert opened, "expected at least one connection to be opened"
     assert len(opened) == len(closed)
     assert set(opened) == set(closed)
-
-

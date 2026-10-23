@@ -17,10 +17,23 @@ def test_foreign_rpc_preview_import_and_profile_isolation(tmp_path, monkeypatch)
     folder = tmp_path / ".claude" / "projects" / "project"
     folder.mkdir(parents=True)
     log = folder / "session.jsonl"
-    lines = [{"type": role, "sessionId": "foreign-one", "cwd": str(tmp_path),
-              "message": {"role": role, "content": content}}
-             for role, content in [("user", "# Files mentioned by the user:\nplan.md\n\n## My request:\nFix the import"), ("assistant", "Here is the fix."),
-                                   ("assistant", "And its test."), ("user", "Continue")]]
+    lines = [
+        {
+            "type": role,
+            "sessionId": "foreign-one",
+            "cwd": str(tmp_path),
+            "message": {"role": role, "content": content},
+        }
+        for role, content in [
+            (
+                "user",
+                "# Files mentioned by the user:\nplan.md\n\n## My request:\nFix the import",
+            ),
+            ("assistant", "Here is the fix."),
+            ("assistant", "And its test."),
+            ("user", "Continue"),
+        ]
+    ]
     log.write_text("\n".join(map(json.dumps, lines)), encoding="utf-8")
     original = log.read_bytes()
     db = SessionDB(tmp_path / ".clawk" / "state.db")
@@ -45,7 +58,10 @@ def test_foreign_rpc_preview_import_and_profile_isolation(tmp_path, monkeypatch)
         assert results[0]["session_id"] == results[1]["session_id"]
         sid = results[0]["session_id"]
         stored = db.get_session(sid)
-        assert json.loads(stored["origin_json"])["imported_from"]["foreign_session_id"] == "foreign-one"
+        assert (
+            json.loads(stored["origin_json"])["imported_from"]["foreign_session_id"]
+            == "foreign-one"
+        )
         history = db.get_messages(sid)
         assert [message["role"] for message in history] == ["user", "assistant", "user"]
         assert len(history) == preview["total"] == stored["message_count"]
@@ -59,7 +75,9 @@ def test_foreign_rpc_preview_import_and_profile_isolation(tmp_path, monkeypatch)
         db.close()
 
 
-def test_foreign_pages_confine_handles_and_failed_import_rolls_back(tmp_path, monkeypatch):
+def test_foreign_pages_confine_handles_and_failed_import_rolls_back(
+    tmp_path, monkeypatch
+):
     from clawk_cli import foreign_sessions_browser as browser
     from clawk_state import SessionDB
 
@@ -68,12 +86,26 @@ def test_foreign_pages_confine_handles_and_failed_import_rolls_back(tmp_path, mo
     folder = tmp_path / ".codex" / "sessions"
     folder.mkdir(parents=True)
     for index in range(3):
-        (folder / f"rollout-{index}.jsonl").write_text(json.dumps({
-            "type": "response_item", "payload": {"type": "message", "role": "user",
-            "content": [{"type": "input_text", "text": f"Question {index}"}]}}), encoding="utf-8")
+        (folder / f"rollout-{index}.jsonl").write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": f"Question {index}"}
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
     calls = []
     parse = browser._parse
-    monkeypatch.setattr(browser, "_parse", lambda row: (calls.append(row[1]), parse(row))[1])
+    monkeypatch.setattr(
+        browser, "_parse", lambda row: (calls.append(row[1]), parse(row))[1]
+    )
     page = browser.list_foreign_sessions(limit=1)
     assert len(calls) == 1
     next_page = browser.list_foreign_sessions(offset=page["next_offset"], limit=1)
@@ -85,9 +117,11 @@ def test_foreign_pages_confine_handles_and_failed_import_rolls_back(tmp_path, mo
         browser.resolve_foreign_session("0" * 64)
     db = SessionDB(tmp_path / ".clawk" / "state.db")
     insert = db._insert_message_rows
+
     def failing_insert(*args, **kwargs):
         insert(*args, **kwargs)
         raise RuntimeError("interrupted write")
+
     monkeypatch.setattr(db, "_insert_message_rows", failing_insert)
     try:
         with pytest.raises(RuntimeError, match="interrupted write"):

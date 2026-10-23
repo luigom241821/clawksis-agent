@@ -92,20 +92,25 @@ def test_lookup_chain_consults_managed_runtime(clawk_home, monkeypatch):
 
     monkeypatch.setattr(
         "clawk_cli.local_runtime.capabilities.managed_model_supports_vision",
-        lambda mid: True)
+        lambda mid: True,
+    )
 
     def catalog_must_not_run(*a, **k):
         raise AssertionError("cloud catalog consulted for a managed model")
 
-    monkeypatch.setattr("agent.models_dev.get_model_capabilities",
-                        catalog_must_not_run)
+    monkeypatch.setattr("agent.models_dev.get_model_capabilities", catalog_must_not_run)
 
     got = ir._lookup_supports_vision("llamacpp", "Some-Local-Model", {})
     assert got is True
 
     # Explicit user override still outranks the managed answer.
-    cfg = {"model": {"provider": "llamacpp", "name": "Some-Local-Model",
-                     "supports_vision": False}}
+    cfg = {
+        "model": {
+            "provider": "llamacpp",
+            "name": "Some-Local-Model",
+            "supports_vision": False,
+        }
+    }
     got = ir._lookup_supports_vision("llamacpp", "Some-Local-Model", cfg)
     assert got is False
 
@@ -127,14 +132,16 @@ def test_webp_transcodes_to_png_for_managed_provider(clawk_home, monkeypatch, tm
     img = Image.new("RGB", (32, 32), (255, 0, 0))
     img.save(webp_path, format="WEBP")
 
-    monkeypatch.setattr("agent.auxiliary_client._runtime_main_value",
-                        lambda k: {"provider": "llamacpp",
-                                   "base_url": ""}.get(k, ""))
+    monkeypatch.setattr(
+        "agent.auxiliary_client._runtime_main_value",
+        lambda k: {"provider": "llamacpp", "base_url": ""}.get(k, ""),
+    )
 
     data_url = ir._file_to_data_url(webp_path)
     assert data_url is not None
     assert data_url.startswith("data:image/png;base64,"), (
-        "webp must transcode to png for the managed server")
+        "webp must transcode to png for the managed server"
+    )
 
 
 def test_webp_passes_through_for_cloud_providers(clawk_home, monkeypatch, tmp_path):
@@ -147,16 +154,19 @@ def test_webp_passes_through_for_cloud_providers(clawk_home, monkeypatch, tmp_pa
     webp_path = tmp_path / "shot.webp"
     Image.new("RGB", (32, 32), (255, 0, 0)).save(webp_path, format="WEBP")
 
-    monkeypatch.setattr("agent.auxiliary_client._runtime_main_value",
-                        lambda k: {"provider": "anthropic",
-                                   "base_url": ""}.get(k, ""))
+    monkeypatch.setattr(
+        "agent.auxiliary_client._runtime_main_value",
+        lambda k: {"provider": "anthropic", "base_url": ""}.get(k, ""),
+    )
 
     data_url = ir._file_to_data_url(webp_path)
     assert data_url is not None
     assert data_url.startswith("data:image/webp;base64,")
 
 
-def test_vision_analyze_normalization_narrows_for_managed(clawk_home, monkeypatch, tmp_path):
+def test_vision_analyze_normalization_narrows_for_managed(
+    clawk_home, monkeypatch, tmp_path
+):
     """vision_analyze's native fast path embeds the image into conversation
     history via _normalize_to_supported_image — for the managed server a
     WebP must convert to PNG THERE too, or the tool path re-introduces the
@@ -169,17 +179,19 @@ def test_vision_analyze_normalization_narrows_for_managed(clawk_home, monkeypatc
     webp_path = tmp_path / "img.webp"
     Image.new("RGB", (32, 32), (255, 0, 0)).save(webp_path, format="WEBP")
 
-    monkeypatch.setattr("agent.auxiliary_client._runtime_main_value",
-                        lambda k: {"provider": "llamacpp",
-                                   "base_url": ""}.get(k, ""))
+    monkeypatch.setattr(
+        "agent.auxiliary_client._runtime_main_value",
+        lambda k: {"provider": "llamacpp", "base_url": ""}.get(k, ""),
+    )
     _out_path, mime, err = vt._normalize_to_supported_image(webp_path, "image/webp")
     assert err is None
     assert mime == "image/png", "managed server: webp must normalize to png"
 
     # Cloud providers keep webp untouched.
-    monkeypatch.setattr("agent.auxiliary_client._runtime_main_value",
-                        lambda k: {"provider": "anthropic",
-                                   "base_url": ""}.get(k, ""))
+    monkeypatch.setattr(
+        "agent.auxiliary_client._runtime_main_value",
+        lambda k: {"provider": "anthropic", "base_url": ""}.get(k, ""),
+    )
     _out_path, mime, err = vt._normalize_to_supported_image(webp_path, "image/webp")
     assert err is None
     assert mime == "image/webp"

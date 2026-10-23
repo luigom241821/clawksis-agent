@@ -13,7 +13,6 @@ Fix: _search_files (find) and _search_with_grep both now exclude hidden
 directories, matching ripgrep's default behavior.
 """
 
-
 import pytest
 
 from tools.file_operations import ShellFileOperations
@@ -47,8 +46,6 @@ def searchable_tree(tmp_path):
     (private_dir / "notes.txt").write_text("unlisted hidden content")
 
     return tmp_path / "skills"
-
-
 
 
 class TestGrepExcludesHiddenDirs:
@@ -125,16 +122,22 @@ class TestGrepSearchesRootsUnderHiddenDirs:
     def _hidden_tree(tmp_path):
         home = tmp_path / ".clawk"
         (home / "skills").mkdir(parents=True)
-        (home / "skills" / "SKILL.md").write_text("visible document under a hidden home")
+        (home / "skills" / "SKILL.md").write_text(
+            "visible document under a hidden home"
+        )
         (home / ".hub").mkdir()
-        (home / ".hub" / "catalog.json").write_text("visible document cached from the hub")
+        (home / ".hub" / "catalog.json").write_text(
+            "visible document cached from the hub"
+        )
         return home
 
     def test_absolute_root_under_hidden_dir_is_searched_but_hidden_children_are_not(
         self, tmp_path, monkeypatch
     ):
         home = self._hidden_tree(tmp_path)
-        ops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
         monkeypatch.setattr(ops, "_has_command", lambda command: command == "grep")
 
         result = ops.search("visible document", path=str(home), target="content")
@@ -155,15 +158,17 @@ class TestGrepSearchesRootsUnderHiddenDirs:
 
     def test_single_file_root_under_hidden_dir_is_searched(self, tmp_path, monkeypatch):
         home = self._hidden_tree(tmp_path)
-        ops = ShellFileOperations(LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path))
+        ops = ShellFileOperations(
+            LocalEnvironment(cwd=str(tmp_path)), cwd=str(tmp_path)
+        )
         monkeypatch.setattr(ops, "_has_command", lambda command: command == "grep")
 
-        result = ops.search("visible document", path=str(home / "skills" / "SKILL.md"), target="content")
+        result = ops.search(
+            "visible document", path=str(home / "skills" / "SKILL.md"), target="content"
+        )
 
         assert result.error is None
         assert result.total_count == 1
-
-
 
 
 class TestIgnoreFileWritten:
@@ -174,11 +179,13 @@ class TestIgnoreFileWritten:
 
         # Patch module-level paths
         import tools.skills_hub as hub_mod
+
         monkeypatch.setattr(hub_mod, "CLAWK_HOME", tmp_path)
         monkeypatch.setattr(hub_mod, "SKILLS_DIR", tmp_path / "skills")
         monkeypatch.setattr(hub_mod, "HUB_DIR", tmp_path / "skills" / ".hub")
         monkeypatch.setattr(
-            hub_mod, "INDEX_CACHE_DIR",
+            hub_mod,
+            "INDEX_CACHE_DIR",
             tmp_path / "skills" / ".hub" / "index-cache",
         )
 
@@ -195,11 +202,13 @@ class TestIgnoreFileWritten:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
         import tools.skills_hub as hub_mod
+
         monkeypatch.setattr(hub_mod, "CLAWK_HOME", tmp_path)
         monkeypatch.setattr(hub_mod, "SKILLS_DIR", tmp_path / "skills")
         monkeypatch.setattr(hub_mod, "HUB_DIR", tmp_path / "skills" / ".hub")
         monkeypatch.setattr(
-            hub_mod, "INDEX_CACHE_DIR",
+            hub_mod,
+            "INDEX_CACHE_DIR",
             tmp_path / "skills" / ".hub" / "index-cache",
         )
 

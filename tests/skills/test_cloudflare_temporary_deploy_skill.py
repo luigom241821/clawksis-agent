@@ -55,7 +55,10 @@ Run `wrangler logout` first, or remove CLOUDFLARE_API_TOKEN.
 
 class TestParseCreated:
     def test_live_url(self):
-        assert pdo.parse(CREATED)["live_url"] == "https://my-worker.swift-otter.workers.dev"
+        assert (
+            pdo.parse(CREATED)["live_url"]
+            == "https://my-worker.swift-otter.workers.dev"
+        )
 
     def test_claim_url(self):
         assert (
@@ -77,8 +80,6 @@ class TestParseCreated:
 class TestParseReused:
     def test_state_is_reused(self):
         assert pdo.parse(REUSED)["account_state"] == "reused"
-
-
 
 
 class TestNoDeploy:
@@ -132,7 +133,6 @@ class TestUrlHygiene:
         assert pdo.parse(text)["live_url"] == "https://w.acct.workers.dev"
 
 
-
 class TestCli:
     def test_selftest_exits_zero(self):
         assert pdo.main(["--selftest"]) == 0
@@ -143,7 +143,6 @@ class TestCli:
         out = json.loads(capsys.readouterr().out)
         assert rc == 0
         assert out["live_url"] == "https://my-worker.swift-otter.workers.dev"
-
 
 
 if __name__ == "__main__":

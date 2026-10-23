@@ -25,7 +25,13 @@ def test_session_history_preserves_codex_message_items(tmp_path):
         "",
         codex_message_items=message_items,
         reasoning="Thinking before the tool",
-        tool_calls=[{"id": "call-1", "type": "function", "function": {"name": "terminal", "arguments": "{}"}}],
+        tool_calls=[
+            {
+                "id": "call-1",
+                "type": "function",
+                "function": {"name": "terminal", "arguments": "{}"},
+            }
+        ],
     )
     previous_db = server._db
     server._db = db
@@ -39,7 +45,11 @@ def test_session_history_preserves_codex_message_items(tmp_path):
 
     try:
         response = server.handle_request(
-            {"id": "1", "method": "session.history", "params": {"session_id": "runtime-session"}}
+            {
+                "id": "1",
+                "method": "session.history",
+                "params": {"session_id": "runtime-session"},
+            }
         )
     finally:
         server._sessions.pop("runtime-session", None)

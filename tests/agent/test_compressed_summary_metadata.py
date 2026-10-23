@@ -12,6 +12,7 @@ Two invariants:
    opencode-go) reject unknown message keys with "Extra inputs are not
    permitted", poisoning the session.
 """
+
 from unittest.mock import MagicMock, patch
 
 
@@ -23,9 +24,7 @@ from agent.context_compressor import (
 
 
 def _make_compressor():
-    with patch(
-        "agent.context_compressor.get_model_context_length", return_value=8000
-    ):
+    with patch("agent.context_compressor.get_model_context_length", return_value=8000):
         return ContextCompressor(
             model="test-model", quiet_mode=True, config_context_length=8000
         )
@@ -47,7 +46,6 @@ def _compress(cc, msgs):
 
 
 class TestMetadataFlagSet:
-
     def test_helper_detects_flag(self):
         assert ContextCompressor._has_compressed_summary_metadata(
             {COMPRESSED_SUMMARY_METADATA_KEY: True}
@@ -60,7 +58,6 @@ class TestMetadataFlagSet:
 
 
 class TestMetadataFlagNeverReachesWire:
-
     def test_chat_completions_transport_strips_flag(self):
         from agent.transports.chat_completions import ChatCompletionsTransport
 
@@ -77,13 +74,8 @@ class TestMetadataFlagNeverReachesWire:
         )
         # Sanitization must not destroy the in-process flag on the originals.
         assert any(
-            isinstance(m, dict) and m.get(COMPRESSED_SUMMARY_METADATA_KEY)
-            for m in out
+            isinstance(m, dict) and m.get(COMPRESSED_SUMMARY_METADATA_KEY) for m in out
         )
-
-
-
-
 
 
 class TestClassifyAgreesWithPredicatesOnLiveEmissions:
@@ -116,7 +108,8 @@ class TestClassifyAgreesWithPredicatesOnLiveEmissions:
             )
         out = _compress(cc, msgs)
         flagged = [
-            m for m in out
+            m
+            for m in out
             if isinstance(m, dict) and m.get(COMPRESSED_SUMMARY_METADATA_KEY)
         ]
         return flagged
@@ -126,17 +119,14 @@ class TestClassifyAgreesWithPredicatesOnLiveEmissions:
         from agent.context_compressor import is_compaction_summary_message
 
         kind = ContextCompressor.classify_summary_content(message.get("content"))
-        detected = ContextCompressor._is_context_summary_content(
-            message.get("content")
-        )
+        detected = ContextCompressor._is_context_summary_content(message.get("content"))
         assert (kind is not None) == detected
         # is_compaction_summary_message also honors the metadata flag, so it
         # must detect every message classify flags — and on a flag-stripped
         # copy (the DB-reload shape) content classification alone must carry.
         assert is_compaction_summary_message(message) is True
         stripped = {
-            k: v for k, v in message.items()
-            if k != COMPRESSED_SUMMARY_METADATA_KEY
+            k: v for k, v in message.items() if k != COMPRESSED_SUMMARY_METADATA_KEY
         }
         assert is_compaction_summary_message(stripped) == (kind is not None)
         return kind
@@ -171,5 +161,7 @@ class TestClassifyAgreesWithPredicatesOnLiveEmissions:
             {"role": "assistant", "content": None},
         ):
             assert ContextCompressor.classify_summary_content(msg["content"]) is None
-            assert ContextCompressor._is_context_summary_content(msg["content"]) is False
+            assert (
+                ContextCompressor._is_context_summary_content(msg["content"]) is False
+            )
             assert is_compaction_summary_message(msg) is False

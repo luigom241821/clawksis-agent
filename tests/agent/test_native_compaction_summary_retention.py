@@ -46,10 +46,20 @@ class TestIsSummaryItemCanonical:
     def test_standalone_content_detected_without_metadata(self):
         # The wire sanitizers strip underscore keys, so content-only
         # detection must still work on the canonical prefix.
-        assert _is_summary_item({"role": "assistant", "content": _standalone_summary_content()}) is True
+        assert (
+            _is_summary_item(
+                {"role": "assistant", "content": _standalone_summary_content()}
+            )
+            is True
+        )
 
     def test_merged_content_detected_without_metadata(self):
-        assert _is_summary_item({"role": "assistant", "content": _merged_summary_content()}) is True
+        assert (
+            _is_summary_item(
+                {"role": "assistant", "content": _merged_summary_content()}
+            )
+            is True
+        )
 
     def test_malformed_inputs_are_not_summaries(self):
         assert _is_summary_item(None) is False
@@ -67,7 +77,11 @@ class TestIsSummaryItemNegativeWitnesses:
         assert _is_summary_item(item) is False
 
     def test_false_valued_metadata_flag_is_not_a_summary(self):
-        item = {"role": "assistant", "content": "hi", COMPRESSED_SUMMARY_METADATA_KEY: False}
+        item = {
+            "role": "assistant",
+            "content": "hi",
+            COMPRESSED_SUMMARY_METADATA_KEY: False,
+        }
         assert _is_summary_item(item) is False
 
     def test_arbitrary_underscore_summary_key_is_not_a_summary(self):
@@ -75,7 +89,10 @@ class TestIsSummaryItemNegativeWitnesses:
         assert _is_summary_item(item) is False
 
     def test_non_clawk_assistant_content_is_not_a_summary(self):
-        item = {"role": "assistant", "content": "Conversation Summary: I finished the task."}
+        item = {
+            "role": "assistant",
+            "content": "Conversation Summary: I finished the task.",
+        }
         assert _is_summary_item(item) is False
 
 
@@ -94,7 +111,9 @@ class TestExtractItemTextVariations:
         assert _extract_item_text(item) == "Part 1 Part 2 Part 3"
 
     def test_output_text_fallback(self):
-        assert _extract_item_text({"output_text": "Output fallback"}) == "Output fallback"
+        assert (
+            _extract_item_text({"output_text": "Output fallback"}) == "Output fallback"
+        )
 
     def test_malformed_or_empty(self):
         assert _extract_item_text({"content": None}) is None
@@ -108,7 +127,11 @@ class TestPrunePreCheckpointItemsRetainsSummaries:
         summary_content = _standalone_summary_content("Step 1 complete")
         items = [
             {"role": "user", "content": "User Ask 1"},
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"role": "user", "content": "User Ask 2"},
             {"role": "assistant", "content": "Normal chatter to prune"},
             {"type": "compaction", "encrypted_content": "blob_cp"},
@@ -129,7 +152,11 @@ class TestPrunePreCheckpointItemsRetainsSummaries:
     def test_role_agnostic_retention_does_not_touch_user_budget(self):
         summary_content = _standalone_summary_content("x" * 2000)
         items = [
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"role": "user", "content": "short ask"},
             {"type": "compaction", "encrypted_content": "blob_cp"},
         ]
@@ -151,7 +178,11 @@ class TestPrunePreCheckpointItemsSummaryBudget:
         marker that keeps the summary non-active."""
         long_summary = _standalone_summary_content("Summary line " * 500)
         items = [
-            {"role": "assistant", "content": long_summary, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": long_summary,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob_cp"},
             {"role": "user", "content": "Ask"},
         ]
@@ -163,7 +194,11 @@ class TestPrunePreCheckpointItemsSummaryBudget:
     def test_summary_that_fits_budget_is_retained_whole(self):
         summary_content = _standalone_summary_content("short body")
         items = [
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob_cp"},
             {"role": "user", "content": "Ask"},
         ]
@@ -183,9 +218,17 @@ class TestPrunePreCheckpointItemsIdempotency:
         required item 5)."""
         summary_content = _standalone_summary_content("same body")
         items = [
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"role": "user", "content": "mid ask"},
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob_cp"},
             {"role": "user", "content": "Ask"},
         ]
@@ -198,7 +241,11 @@ class TestPrunePreCheckpointItemsIdempotency:
     def test_re_pruning_an_already_pruned_result_is_stable(self):
         summary_content = _standalone_summary_content("stable body")
         items = [
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"role": "user", "content": "ask"},
             {"type": "compaction", "encrypted_content": "blob_cp"},
         ]
@@ -218,7 +265,11 @@ class TestPrunePreCheckpointItemsLiveCompressorEmissions:
         assert ContextCompressor.classify_summary_content(rendered) == "standalone"
 
         items = [
-            {"role": "assistant", "content": rendered, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": rendered,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob_cp"},
             {"role": "user", "content": "Ask"},
         ]
@@ -230,7 +281,11 @@ class TestPrunePreCheckpointItemsLiveCompressorEmissions:
         assert ContextCompressor.classify_summary_content(merged) == "merged"
 
         items = [
-            {"role": "assistant", "content": merged, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": merged,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob_cp"},
             {"role": "user", "content": "Ask"},
         ]
@@ -242,12 +297,18 @@ class TestPrunePreCheckpointItemsEnableSummaryRetentionToggle:
     def test_disabling_summary_retention_drops_pre_checkpoint_summaries(self):
         summary_content = _standalone_summary_content("Old")
         items = [
-            {"role": "assistant", "content": summary_content, COMPRESSED_SUMMARY_METADATA_KEY: True},
+            {
+                "role": "assistant",
+                "content": summary_content,
+                COMPRESSED_SUMMARY_METADATA_KEY: True,
+            },
             {"type": "compaction", "encrypted_content": "blob"},
             {"role": "user", "content": "New ask"},
         ]
 
-        pruned_disabled = prune_pre_checkpoint_items(items, enable_summary_retention=False)
+        pruned_disabled = prune_pre_checkpoint_items(
+            items, enable_summary_retention=False
+        )
         contents = [m.get("content") for m in pruned_disabled]
         assert summary_content not in contents
 
@@ -294,11 +355,13 @@ class TestChatMessagesToResponsesInputSummaryCarrierLoss:
             {
                 "role": "assistant",
                 "content": "",
-                "tool_calls": [{
-                    "id": "call_1",
-                    "type": "function",
-                    "function": {"name": "do_thing", "arguments": "{}"},
-                }],
+                "tool_calls": [
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {"name": "do_thing", "arguments": "{}"},
+                    }
+                ],
             },
             {
                 "role": "tool",
@@ -311,7 +374,8 @@ class TestChatMessagesToResponsesInputSummaryCarrierLoss:
         ]
 
         items = _chat_messages_to_responses_input(
-            messages, native_compaction_eligible=True,
+            messages,
+            native_compaction_eligible=True,
         )
 
         # The summary survives, exactly once, as a plain message item —
@@ -323,7 +387,8 @@ class TestChatMessagesToResponsesInputSummaryCarrierLoss:
             for it in items
         )
         matches = [
-            it for it in items
+            it
+            for it in items
             if isinstance(it, dict) and _extract_item_text(it) == merged
         ]
         assert len(matches) == 1
@@ -348,20 +413,25 @@ class TestChatMessagesToResponsesInputSummaryCarrierLoss:
                 # content above. The exact-replay path prefers this over
                 # `content` for prefix-cache continuity, which is exactly
                 # what shadows the summary (#90976).
-                "codex_message_items": [{
-                    "type": "message",
-                    "role": "assistant",
-                    "id": "msg_stale_1",
-                    "status": "completed",
-                    "content": [{"type": "output_text", "text": "stale pre-merge answer"}],
-                }],
+                "codex_message_items": [
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "id": "msg_stale_1",
+                        "status": "completed",
+                        "content": [
+                            {"type": "output_text", "text": "stale pre-merge answer"}
+                        ],
+                    }
+                ],
             },
             _checkpoint_message(),
             {"role": "user", "content": "next ask"},
         ]
 
         items = _chat_messages_to_responses_input(
-            messages, native_compaction_eligible=True,
+            messages,
+            native_compaction_eligible=True,
         )
 
         assert not any(
@@ -369,7 +439,8 @@ class TestChatMessagesToResponsesInputSummaryCarrierLoss:
             for it in items
         )
         matches = [
-            it for it in items
+            it
+            for it in items
             if isinstance(it, dict) and _extract_item_text(it) == merged
         ]
         assert len(matches) == 1

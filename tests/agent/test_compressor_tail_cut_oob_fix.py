@@ -10,7 +10,9 @@ from agent.context_compressor import ContextCompressor
 @pytest.fixture()
 def compressor():
     """Create a ContextCompressor with mocked dependencies."""
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         c = ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -31,9 +33,22 @@ class TestTailCutBoundaryClamp:
     """
 
     def _make_tool_group(self, call_id, n_results=1):
-        msgs = [{"role": "assistant", "tool_calls": [{"id": call_id, "type": "function", "function": {"name": "x", "arguments": "{}"}}]}]
+        msgs = [
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": "x", "arguments": "{}"},
+                    }
+                ],
+            }
+        ]
         for i in range(n_results):
-            msgs.append({"role": "tool", "content": f"result {i}", "tool_call_id": call_id})
+            msgs.append(
+                {"role": "tool", "content": f"result {i}", "tool_call_id": call_id}
+            )
         return msgs
 
     def test_tail_cut_never_exceeds_len_messages(self, compressor):

@@ -22,7 +22,8 @@ def two_profiles(tmp_path, monkeypatch):
         (home / "config.yaml").write_text(
             f"file_read_max_chars: {max_bytes}\ntool_output:\n  max_bytes: {max_bytes}\n"
             f"browser:\n  command_timeout: {timeout}\n  snapshot_threshold: {threshold}\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     monkeypatch.setenv("CLAWK_HOME", str(prof_a))
     return prof_a, prof_b
 
@@ -59,8 +60,13 @@ def test_config_caches_are_keyed_by_profile(two_profiles):
     cam._cmd_timeout_resolved, cam._cached_cmd_timeout = False, None
 
     def read_all():
-        return (tol.get_tool_output_limits()["max_bytes"], ft._get_max_read_chars(),
-                bt._get_command_timeout(), bt.get_browser_snapshot_threshold(), cam._get_command_timeout())
+        return (
+            tol.get_tool_output_limits()["max_bytes"],
+            ft._get_max_read_chars(),
+            bt._get_command_timeout(),
+            bt.get_browser_snapshot_threshold(),
+            cam._get_command_timeout(),
+        )
 
     assert _under(prof_a, read_all) == (222, 222, 33, 3300, 33)
     assert _under(prof_b, read_all) == (888, 888, 77, 7700, 77)
@@ -86,16 +92,26 @@ def test_skill_manage_schema_stable_but_creation_follows_active_profile(two_prof
     assert "brain-a" not in for_a and "brain-b" not in for_a
     assert "skills.create_dir" in for_a
 
-    for home, create_dir, other, name in ((prof_a, "brain-a", prof_b, "first-a"),
-                                         (prof_b, "brain-b", prof_a, "only-b"),
-                                         (prof_a, "brain-a", prof_b, "second-a")):
-        content = (f"---\nname: {name}\n"
-                   "description: Use when checking routing. Create in the active profile.\n"
-                   "---\n\n# Scoped skill\n")
+    for home, create_dir, other, name in (
+        (prof_a, "brain-a", prof_b, "first-a"),
+        (prof_b, "brain-b", prof_a, "only-b"),
+        (prof_a, "brain-a", prof_b, "second-a"),
+    ):
+        content = (
+            f"---\nname: {name}\n"
+            "description: Use when checking routing. Create in the active profile.\n"
+            "---\n\n# Scoped skill\n"
+        )
 
         def create():
-            raw = registry.dispatch("skill_manage", {
-                "operations": [{"action": "create", "name": name, "content": content}]})
+            raw = registry.dispatch(
+                "skill_manage",
+                {
+                    "operations": [
+                        {"action": "create", "name": name, "content": content}
+                    ]
+                },
+            )
             assert isinstance(raw, str)
             return json.loads(raw)
 
@@ -103,5 +119,7 @@ def test_skill_manage_schema_stable_but_creation_follows_active_profile(two_prof
         assert not (other / "brain-b" / name / "SKILL.md").exists()
         result = _under(home, create)
         assert result["success"], result
-        assert (home / create_dir / name / "SKILL.md").read_text(encoding="utf-8") == content
+        assert (home / create_dir / name / "SKILL.md").read_text(
+            encoding="utf-8"
+        ) == content
         assert not (home / "skills" / name).exists()

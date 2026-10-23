@@ -41,8 +41,11 @@ def _provider_for(issuer: str, *, iss_in_redirect: str | None) -> _Provider:
     async def callback():
         return AuthorizationCodeResult(code="c0de", state="st", iss=iss_in_redirect)
 
-    provider.context = SimpleNamespace(oauth_metadata=meta, callback_handler=callback,
-                                       client_info=SimpleNamespace(grant_types=["authorization_code"]))
+    provider.context = SimpleNamespace(
+        oauth_metadata=meta,
+        callback_handler=callback,
+        client_info=SimpleNamespace(grant_types=["authorization_code"]),
+    )
     provider._clawk_oauth_flow = "browser"
     return provider
 
@@ -57,10 +60,28 @@ def _redirect_passes_sdk_check(provider: _Provider) -> bool:
     return True
 
 
-@pytest.mark.parametrize("issuer, iss, expected", [
-    ("https://api.figma.com", None, True),        # the advertised-but-omitted case Figma ships
-    ("https://api.figma.com", "https://evil.example", False),  # a wrong iss is still rejected
-    ("https://auth.example.com", None, False),   # every other server keeps the strict RFC 9207 rule
-])
+@pytest.mark.parametrize(
+    "issuer, iss, expected",
+    [
+        (
+            "https://api.figma.com",
+            None,
+            True,
+        ),  # the advertised-but-omitted case Figma ships
+        (
+            "https://api.figma.com",
+            "https://evil.example",
+            False,
+        ),  # a wrong iss is still rejected
+        (
+            "https://auth.example.com",
+            None,
+            False,
+        ),  # every other server keeps the strict RFC 9207 rule
+    ],
+)
 def test_missing_iss_is_tolerated_for_figma_only(issuer, iss, expected):
-    assert _redirect_passes_sdk_check(_provider_for(issuer, iss_in_redirect=iss)) is expected
+    assert (
+        _redirect_passes_sdk_check(_provider_for(issuer, iss_in_redirect=iss))
+        is expected
+    )

@@ -19,26 +19,72 @@ def test_xvnc_never_sends_the_holders_clipboard_to_watchers(tmp_path):
     bindir = tmp_path / "bin"
     bindir.mkdir()
     argv_log = tmp_path / "xvnc-argv"
-    (bindir / "Xvnc").write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{argv_log}"\nexec sleep 3\n', encoding="utf-8")
-    for stub in ("xdpyinfo", "setxkbmap", "xsetroot", "xset", "dbus-run-session", "xauth"):
+    (bindir / "Xvnc").write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$@" > "{argv_log}"\nexec sleep 3\n',
+        encoding="utf-8",
+    )
+    for stub in (
+        "xdpyinfo",
+        "setxkbmap",
+        "xsetroot",
+        "xset",
+        "dbus-run-session",
+        "xauth",
+    ):
         (bindir / stub).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     for exe in bindir.iterdir():
         exe.chmod(0o755)
-    for tool in ("mkdir", "sed", "cat", "printf", "dirname", "bash", "sh", "rm", "ln", "touch", "chmod", "xauth", "od", "tr", "awk", "grep", "seq", "sleep", "kill"):
+    for tool in (
+        "mkdir",
+        "sed",
+        "cat",
+        "printf",
+        "dirname",
+        "bash",
+        "sh",
+        "rm",
+        "ln",
+        "touch",
+        "chmod",
+        "xauth",
+        "od",
+        "tr",
+        "awk",
+        "grep",
+        "seq",
+        "sleep",
+        "kill",
+    ):
         real = shutil.which(tool)
         if real and not (bindir / tool).exists():
             (bindir / tool).symlink_to(real)
     env = {
-        "PATH": str(bindir), "HOME": str(tmp_path),
-        "CLAWK_BD_PROFILE": "t", "CLAWK_BD_DISPLAY_NUM": "99",
-        "CLAWK_BD_SOCKET": str(tmp_path / "rfb.sock"), "CLAWK_BD_XAUTH": str(tmp_path / "Xauthority"),
-        "CLAWK_BD_ENV_FILE": str(tmp_path / "env"), "CLAWK_BD_CONFIG_HOME": str(tmp_path / "xdg"),
+        "PATH": str(bindir),
+        "HOME": str(tmp_path),
+        "CLAWK_BD_PROFILE": "t",
+        "CLAWK_BD_DISPLAY_NUM": "99",
+        "CLAWK_BD_SOCKET": str(tmp_path / "rfb.sock"),
+        "CLAWK_BD_XAUTH": str(tmp_path / "Xauthority"),
+        "CLAWK_BD_ENV_FILE": str(tmp_path / "env"),
+        "CLAWK_BD_CONFIG_HOME": str(tmp_path / "xdg"),
     }
-    subprocess.run(["bash", str(LAUNCHER)], env=env, check=True, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    subprocess.run(
+        ["bash", str(LAUNCHER)],
+        env=env,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=30,
+    )
     argv = argv_log.read_text(encoding="utf-8-sig").split("\n")
     assert "-SendCutText=0" in argv, argv
-    assert not any(a.startswith("-AcceptCutText") for a in argv), "paste into the screen must keep working"
+    assert not any(a.startswith("-AcceptCutText") for a in argv), (
+        "paste into the screen must keep working"
+    )
     # Xvnc's own cut-text cap and the bridge filter's must agree, or one side drops a paste the other admits.
     from tools.bot_desktop.rfb_filter import _MAX_CUT_TEXT
+
     assert int(argv[argv.index("-MaxCutText") + 1]) == _MAX_CUT_TEXT, argv
-    assert not os.path.exists(tmp_path / "rfb.sock")  # stub never bound it; nothing leaked
+    assert not os.path.exists(
+        tmp_path / "rfb.sock"
+    )  # stub never bound it; nothing leaked

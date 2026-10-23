@@ -36,6 +36,7 @@ class _StubCLI:
     def _stage_and_swap_model(self, result, old_model):
         # Staging + in-place swap lives in a helper; run the real one on this stub.
         import cli as _cli_mod
+
         return _cli_mod.ClawksisCLI._stage_and_swap_model(self, result, old_model)
 
     model = "old/model"

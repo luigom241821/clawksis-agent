@@ -20,7 +20,9 @@ import os
 import sys
 from types import SimpleNamespace
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -34,7 +36,10 @@ _PROJECTED = [
             {
                 "id": "acp_s1_t1",
                 "type": "function",
-                "function": {"name": "acpagent_edit", "arguments": '{"path": "main.py"}'},
+                "function": {
+                    "name": "acpagent_edit",
+                    "arguments": '{"path": "main.py"}',
+                },
             }
         ],
     },
@@ -68,7 +73,9 @@ def test_projected_rows_are_appended_and_the_nudge_ticks():
     messages = [{"role": "user", "content": "edit main.py"}]
     spliced = splice_provider_projection(
         agent,
-        _response(clawk_projected_messages=_projected_rows(), clawk_provider_tool_iterations=1),
+        _response(
+            clawk_projected_messages=_projected_rows(), clawk_provider_tool_iterations=1
+        ),
         messages,
     )
     assert spliced == 2
@@ -105,23 +112,35 @@ def test_ordinary_provider_response_is_a_no_op():
 def test_garbage_attributes_cannot_break_the_turn():
     agent = _agent()
     messages: list = []
-    assert splice_provider_projection(
-        agent,
-        _response(
-            clawk_projected_messages="not-a-list",
-            clawk_provider_tool_iterations="lots",
-        ),
-        messages,
-    ) == 0
+    assert (
+        splice_provider_projection(
+            agent,
+            _response(
+                clawk_projected_messages="not-a-list",
+                clawk_provider_tool_iterations="lots",
+            ),
+            messages,
+        )
+        == 0
+    )
     assert messages == []
     assert agent._iters_since_skill == 0
 
     # A list with non-dict entries keeps only the usable rows.
-    assert splice_provider_projection(
-        agent,
-        _response(clawk_projected_messages=[{"role": "tool", "content": "ok"}, "junk", None]),
-        messages,
-    ) == 1
+    assert (
+        splice_provider_projection(
+            agent,
+            _response(
+                clawk_projected_messages=[
+                    {"role": "tool", "content": "ok"},
+                    "junk",
+                    None,
+                ]
+            ),
+            messages,
+        )
+        == 1
+    )
     assert [m["role"] for m in messages] == ["tool"]
 
 
@@ -136,7 +155,9 @@ class _FakeAgentProviderCompletions:
         self._iterations = iterations
 
     def create(self, **_kwargs):
-        message = SimpleNamespace(content="Edited main.py.", tool_calls=[], reasoning=None)
+        message = SimpleNamespace(
+            content="Edited main.py.", tool_calls=[], reasoning=None
+        )
         return SimpleNamespace(
             choices=[SimpleNamespace(message=message, finish_reason="stop")],
             usage=None,
@@ -181,15 +202,19 @@ def test_provider_work_lands_in_the_transcript_through_the_real_loop(monkeypatch
 
     messages = result["messages"]
     tool_rows = [
-        m for m in messages
-        if isinstance(m, dict) and m.get("role") == "tool" and m.get("name") == "acpagent_edit"
+        m
+        for m in messages
+        if isinstance(m, dict)
+        and m.get("role") == "tool"
+        and m.get("name") == "acpagent_edit"
     ]
     assert tool_rows, messages
     assert "1 file changed" in tool_rows[0]["content"]
 
     # The projected call precedes its result, and both precede the final answer.
     idx_call = next(
-        i for i, m in enumerate(messages)
+        i
+        for i, m in enumerate(messages)
         if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls")
     )
     idx_result = messages.index(tool_rows[0])
@@ -208,6 +233,7 @@ def test_ordinary_provider_turn_is_unchanged(monkeypatch):
     """A completion without the attributes must not gain rows or counter ticks."""
     _agent, result = _run_turn(monkeypatch, projected=[], iterations=0)
     assert not [
-        m for m in result["messages"]
+        m
+        for m in result["messages"]
         if isinstance(m, dict) and str(m.get("name") or "").startswith("acpagent_")
     ]

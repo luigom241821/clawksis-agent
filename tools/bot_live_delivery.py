@@ -4,6 +4,7 @@ Only gateway/session_bot.py admits execution. Old claimed/terminal records remai
 inspectable; the legacy UI claim consumer is retired. No authority means refusal.
 Receipt storage derives from FalconOrtiz's live-owner mailbox (#101564).
 """
+
 from __future__ import annotations
 
 import json
@@ -33,12 +34,12 @@ def _bot_chat_tip(home: Path) -> str | None:
     """Current Bot Chat tip id, or None when the profile has no store or no Bot Chat yet."""
     from clawk_state import SessionDB
 
-    if not (home / 'state.db').is_file():
+    if not (home / "state.db").is_file():
         return None
-    db = SessionDB(db_path=home / 'state.db', read_only=True)
+    db = SessionDB(db_path=home / "state.db", read_only=True)
     try:
-        row = db.get_session_by_title('Bot Chat')
-        return db.get_compression_tip(row['id']) if row else None
+        row = db.get_session_by_title("Bot Chat")
+        return db.get_compression_tip(row["id"]) if row else None
     finally:
         db.close()
 
@@ -53,13 +54,18 @@ def find_canonical_live_owner(profile_home: Path | str) -> dict[str, Any] | None
 
     home = Path(profile_home).resolve()
     discovery = discover_gateway_endpoint(home, timeout=5)
-    if discovery.state != 'ready' or discovery.endpoint is None:
-        raise ValueError('profile authority is not ready')
-    if not (home / 'state.db').is_file():
+    if discovery.state != "ready" or discovery.endpoint is None:
+        raise ValueError("profile authority is not ready")
+    if not (home / "state.db").is_file():
         return None
     tip = _bot_chat_tip(home)
-    return dict(profile_home=str(home), session_id=tip or '', canonical=True,
-                lease_id=discovery.endpoint.instance_id, live_session_id=tip or '')
+    return dict(
+        profile_home=str(home),
+        session_id=tip or "",
+        canonical=True,
+        lease_id=discovery.endpoint.instance_id,
+        live_session_id=tip or "",
+    )
 
 
 class PreDialError(ValueError):
@@ -71,19 +77,24 @@ class PreDialError(ValueError):
 
 def authority_delivery(home, params):
     """Call only this home's already-running authority; never start a fallback."""
-    return _authority_rpc(home, 'bot_relay.deliver', params)
+    return _authority_rpc(home, "bot_relay.deliver", params)
 
 
 def authority_settle(home, params):
     """The same authority's ``bot_relay.settle``: the delivery id settled as never sent, or its
     existing receipt (``gateway/session_bot.py:_settle``)."""
-    return _authority_rpc(home, 'bot_relay.settle', params)
+    return _authority_rpc(home, "bot_relay.settle", params)
 
 
 def _authority_rpc(home, method, params):
     import asyncio
     from clawk_cli.gateway_runtime import discover_gateway_endpoint
-    from clawk_cli.gateway_client import GATEWAY_WS_PROTOCOL, GatewayClient, _session_ticket, gateway_ws_target
+    from clawk_cli.gateway_client import (
+        GATEWAY_WS_PROTOCOL,
+        GatewayClient,
+        _session_ticket,
+        gateway_ws_target,
+    )
     from websockets.asyncio.client import connect
 
     home = Path(home).resolve()
@@ -92,15 +103,17 @@ def _authority_rpc(home, method, params):
     async def request():
         nonlocal rpc_started
         discovery = await asyncio.to_thread(discover_gateway_endpoint, home, timeout=5)
-        if discovery.state != 'ready' or discovery.endpoint is None:
-            raise ValueError('profile authority is not ready')
+        if discovery.state != "ready" or discovery.endpoint is None:
+            raise ValueError("profile authority is not ready")
         endpoint = discovery.endpoint
         ticket = await asyncio.to_thread(_session_ticket, home, endpoint)
         url, protocols = gateway_ws_target(endpoint, ticket)
         # Loopback authority dial: never through HTTP(S)_PROXY (websockets>=14 honours it by default).
-        async with connect(url, subprotocols=protocols, open_timeout=10, proxy=None) as ws:
+        async with connect(
+            url, subprotocols=protocols, open_timeout=10, proxy=None
+        ) as ws:
             if ws.subprotocol != GATEWAY_WS_PROTOCOL:
-                raise ValueError('authority protocol mismatch')
+                raise ValueError("authority protocol mismatch")
             async with GatewayClient(ws) as client:
                 rpc_started = True  # the RPC is going out: past here a failure may have been admitted
                 return await client.rpc(method, **params)
@@ -113,6 +126,7 @@ def _authority_rpc(home, method, params):
         # A gateway-hosted tool call runs on a thread with a live loop, where asyncio.run() raises
         # before anything is dialed (#139303).
         from model_tools import _run_async
+
         return _run_async(request())
     except Exception as exc:
         if not rpc_started:
@@ -123,9 +137,13 @@ def _authority_rpc(home, method, params):
 def _owner(home: Path | str, owner: dict[str, Any]) -> dict[str, str]:
     pinned = {key: owner.get(key) for key in _OWNER_KEYS}
     # An empty session_id is the discovered "no Bot Chat yet" state; the door creates it.
-    if not all(isinstance(value, str) and (value or key in ("session_id", "live_session_id"))
-               for key, value in pinned.items()):
-        raise ValueError("owner requires profile_home, session_id, lease_id and live_session_id")
+    if not all(
+        isinstance(value, str) and (value or key in ("session_id", "live_session_id"))
+        for key, value in pinned.items()
+    ):
+        raise ValueError(
+            "owner requires profile_home, session_id, lease_id and live_session_id"
+        )
     if pinned["profile_home"] != str(Path(home).resolve()):
         raise ValueError("owner belongs to a different profile home")
     return pinned
@@ -173,8 +191,12 @@ def _dir_owner(path: Path) -> str:
         except ImportError as exc:
             return f"unknown ({exc})"
         try:
-            descriptor = win32security.GetFileSecurity(str(path), win32security.OWNER_SECURITY_INFORMATION)
-            name, domain, _ = win32security.LookupAccountSid(None, descriptor.GetSecurityDescriptorOwner())
+            descriptor = win32security.GetFileSecurity(
+                str(path), win32security.OWNER_SECURITY_INFORMATION
+            )
+            name, domain, _ = win32security.LookupAccountSid(
+                None, descriptor.GetSecurityDescriptorOwner()
+            )
         except pywintypes.error as exc:
             return f"unknown ({exc})"
         return f"{domain}\\{name}" if domain else name
@@ -194,10 +216,18 @@ def _unusable(root: Path, exc: PermissionError) -> MailboxUnusable:
     remedy = unusable_dir_remedy(root)
     level = logging.DEBUG if root in _warned_unusable else logging.WARNING
     _warned_unusable.add(root)
-    log.log(level, "bot_live_delivery: mailbox directory %s (owner %s) is not usable by this process (%s); "
-            "Bot Chat deliveries are paused until it is repaired, other clients are unaffected. To repair, %s",
-            root, _dir_owner(root), exc, remedy)
-    return MailboxUnusable(exc.errno, f"bot mailbox directory is not usable: {exc}", str(root))
+    log.log(
+        level,
+        "bot_live_delivery: mailbox directory %s (owner %s) is not usable by this process (%s); "
+        "Bot Chat deliveries are paused until it is repaired, other clients are unaffected. To repair, %s",
+        root,
+        _dir_owner(root),
+        exc,
+        remedy,
+    )
+    return MailboxUnusable(
+        exc.errno, f"bot mailbox directory is not usable: {exc}", str(root)
+    )
 
 
 def _prepare(root: Path) -> Path:
@@ -209,14 +239,21 @@ def _prepare(root: Path) -> Path:
         root.chmod(0o700)
     except OSError as exc:
         # On POSIX chmod fails only when another uid owns the dir: refuse a mailbox someone else controls.
-        if os.name != "nt" and root.stat().st_uid != os.getuid():  # windows-footgun: ok — POSIX only
+        if (
+            os.name != "nt" and root.stat().st_uid != os.getuid()
+        ):  # windows-footgun: ok — POSIX only
             raise
         # A foreign Windows ACL can deny FILE_WRITE_ATTRIBUTES even when this process can
         # still use the existing mailbox. Hardening must not abort recovery. The poller
         # re-enters twice a second, so WARNING once per dir and DEBUG after.
         level = logging.DEBUG if root in _warned_unhardened else logging.WARNING
         _warned_unhardened.add(root)
-        log.log(level, "bot_live_delivery: could not harden mailbox directory %s (%s)", root, exc)
+        log.log(
+            level,
+            "bot_live_delivery: could not harden mailbox directory %s (%s)",
+            root,
+            exc,
+        )
     if created:
         # Only a fresh mailbox dir needs its parents durably linked; the live
         # poller re-enters this lock twice a second per profile, and two
@@ -250,7 +287,9 @@ def _read(path: Path) -> dict[str, Any] | None:
     except FileNotFoundError:
         return None
     if not isinstance(record, dict):
-        raise ValueError(f"ticket {path.name} is not a JSON object ({type(record).__name__})")
+        raise ValueError(
+            f"ticket {path.name} is not a JSON object ({type(record).__name__})"
+        )
     return record
 
 
@@ -268,15 +307,22 @@ def _ticket_shape_error(path: Path, record: dict[str, Any]) -> str | None:
     profile exactly like corrupt JSON did before ``_scan_read`` existed.
     """
     owner = record.get("owner")
-    created_at, sequence = record.get("created_at"), record.get("sequence", record.get("created_at"))
+    created_at, sequence = (
+        record.get("created_at"),
+        record.get("sequence", record.get("created_at")),
+    )
     if record.get("delivery_id") != path.stem or record.get("id") != path.stem:
         return "id does not match filename"
     status = record.get("status")
     if not isinstance(status, str) or status not in ({"queued", "claimed"} | _TERMINAL):
         return f"unknown status {status!r}"
-    if not all(isinstance(v, int) and not isinstance(v, bool) for v in (created_at, sequence)):
+    if not all(
+        isinstance(v, int) and not isinstance(v, bool) for v in (created_at, sequence)
+    ):
         return "created_at/sequence are not integers"
-    if not isinstance(owner, dict) or not all(isinstance(owner.get(k), str) and owner[k] for k in _OWNER_KEYS):
+    if not isinstance(owner, dict) or not all(
+        isinstance(owner.get(k), str) and owner[k] for k in _OWNER_KEYS
+    ):
         return "owner pin is incomplete"
     return None
 
@@ -294,12 +340,20 @@ def _scan_read(path: Path) -> dict[str, Any] | None:
     try:
         record = _read(path)
         problem = None if record is None else _ticket_shape_error(path, record)
-    except (OSError, ValueError) as exc:  # ValueError: corrupt JSON and invalid UTF-8 alike
+    except (
+        OSError,
+        ValueError,
+    ) as exc:  # ValueError: corrupt JSON and invalid UTF-8 alike
         record, problem = None, str(exc)
     if problem is not None:
         level = logging.DEBUG if path in _warned_unreadable else logging.WARNING
         _warned_unreadable.add(path)
-        log.log(level, "bot_live_delivery: skipping unreadable ticket %s (%s)", path.name, problem)
+        log.log(
+            level,
+            "bot_live_delivery: skipping unreadable ticket %s (%s)",
+            path.name,
+            problem,
+        )
         return None
     _warned_unreadable.discard(path)
     return record
@@ -318,21 +372,32 @@ def _next_sequence(root: Path) -> int:
         persisted = int(counter.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         persisted = 0
-    scanned = max((record.get("sequence", record["created_at"])
-                   for candidate in root.glob("*.json")
-                   if (record := _scan_read(candidate)) is not None), default=0)
+    scanned = max(
+        (
+            record.get("sequence", record["created_at"])
+            for candidate in root.glob("*.json")
+            if (record := _scan_read(candidate)) is not None
+        ),
+        default=0,
+    )
     sequence = max(persisted, scanned) + 1
     atomic_write_text(counter, str(sequence), mode=0o600, fsync_dir=True)
     return sequence
 
 
 def _write(path: Path, record: dict[str, Any]) -> None:
-    atomic_json_write(path, record, indent=None, sort_keys=True, fsync_dir=True, mode=0o600)
+    atomic_json_write(
+        path, record, indent=None, sort_keys=True, fsync_dir=True, mode=0o600
+    )
 
 
 def deliver_to_live_owner(
-    profile_home: Path | str, owner: dict[str, Any], message: str,
-    *, delivery_id: str | None = None, author: dict[str, Any] | None = None,
+    profile_home: Path | str,
+    owner: dict[str, Any],
+    message: str,
+    *,
+    delivery_id: str | None = None,
+    author: dict[str, Any] | None = None,
     notification_category: str = "result",
 ) -> dict[str, Any]:
     """Return durable admission immediately, without waiting for the owner.
@@ -340,32 +405,78 @@ def deliver_to_live_owner(
     Retry with the same id AND pinned owner/message to inspect the existing
     state. Reusing an id with a different payload is an error, never an overwrite.
     """
-    return _door(authority_delivery, profile_home, owner, message, delivery_id=delivery_id, author=author,
-                 notification_category=notification_category)
+    return _door(
+        authority_delivery,
+        profile_home,
+        owner,
+        message,
+        delivery_id=delivery_id,
+        author=author,
+        notification_category=notification_category,
+    )
 
 
-def settle_held_delivery(profile_home: Path | str, owner: dict[str, Any], message: str, *, delivery_id: str,
-                         author: dict[str, Any] | None = None) -> dict[str, Any]:
+def settle_held_delivery(
+    profile_home: Path | str,
+    owner: dict[str, Any],
+    message: str,
+    *,
+    delivery_id: str,
+    author: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Finalize a refusal marked ``admitted: false`` under the same identity: the owner's terminal
     not-sent receipt (``refused``), or the receipt of an attempt that admitted the id meanwhile."""
-    return _door(authority_settle, profile_home, owner, message, delivery_id=delivery_id, author=author)
+    return _door(
+        authority_settle,
+        profile_home,
+        owner,
+        message,
+        delivery_id=delivery_id,
+        author=author,
+    )
 
 
-def _door(call: Callable[[Path, dict], dict], profile_home, owner, message, *, delivery_id=None, author=None,
-          notification_category="result"):
+def _door(
+    call: Callable[[Path, dict], dict],
+    profile_home,
+    owner,
+    message,
+    *,
+    delivery_id=None,
+    author=None,
+    notification_category="result",
+):
     pinned = _owner(profile_home, owner)
     if not isinstance(message, str):
         raise ValueError("message must be a string")
-    if notification_category not in ('result', 'diagnostic'):
+    if notification_category not in ("result", "diagnostic"):
         raise ValueError("invalid notification category")
     home = Path(profile_home).resolve()
-    category = {"notification_category": "diagnostic"} if notification_category == "diagnostic" else {}
+    category = (
+        {"notification_category": "diagnostic"}
+        if notification_category == "diagnostic"
+        else {}
+    )
     # The authority refuses a category-changing replay (admission_conflict), so the admitted
     # category is the producer's; echo it so callers can check the receipt's identity.
-    return {**call(home, dict(id=_delivery_id(delivery_id if delivery_id is not None else uuid.uuid4().hex),
-        profile=home.name if home.parent.name == "profiles" else "default",
-        message=message, **({"session_id": pinned["session_id"]} if pinned["session_id"] else {}),
-        **({"author": dict(author)} if author else {}), **category)), **category}
+    return {
+        **call(
+            home,
+            dict(
+                id=_delivery_id(
+                    delivery_id if delivery_id is not None else uuid.uuid4().hex
+                ),
+                profile=home.name if home.parent.name == "profiles" else "default",
+                message=message,
+                **(
+                    {"session_id": pinned["session_id"]} if pinned["session_id"] else {}
+                ),
+                **({"author": dict(author)} if author else {}),
+                **category,
+            ),
+        ),
+        **category,
+    }
 
 
 def owner_holds_delivery(profile_home: Path | str, record: dict) -> bool:
@@ -375,7 +486,9 @@ def owner_holds_delivery(profile_home: Path | str, record: dict) -> bool:
     reachable; an unreachable one raises (outcome unknown, never cancelled). Only an unadmitted
     legacy record whose profile has no store is provably ownerless.
     """
-    owner = find_canonical_live_owner(profile_home)  # raises while the authority is unreachable
+    owner = find_canonical_live_owner(
+        profile_home
+    )  # raises while the authority is unreachable
     return owner is not None or bool(record.get("admission_id"))
 
 
@@ -389,8 +502,13 @@ def claim_pending_delivery(profile_home, owner):
 
 
 def complete_delivery(
-    profile_home: Path | str, delivery_id: str, *, status: str,
-    reply: str = "", error: str = "", reason: str = "",
+    profile_home: Path | str,
+    delivery_id: str,
+    *,
+    status: str,
+    reply: str = "",
+    error: str = "",
+    reason: str = "",
 ) -> dict[str, Any]:
     """Persist an immutable terminal receipt; duplicate identical completion is safe."""
     key = _delivery_id(delivery_id)
@@ -414,7 +532,11 @@ def complete_delivery(
 
 
 def cancel_queued_delivery(
-    profile_home: Path | str, delivery_id: str, *, error: str, reason: str,
+    profile_home: Path | str,
+    delivery_id: str,
+    *,
+    error: str,
+    reason: str,
 ) -> dict[str, Any] | None:
     """Cancel an ownerless queued receipt without racing a consumer's claim.
 
@@ -427,13 +549,20 @@ def cancel_queued_delivery(
         # An authority admission lives in its FIFO: only the authority may settle it.
         if record is None or record["status"] != "queued" or record.get("admission_id"):
             return record
-        record.update(status="cancelled", reply="", error=error, reason=reason,
-                      completed_at=time.time_ns())
+        record.update(
+            status="cancelled",
+            reply="",
+            error=error,
+            reason=reason,
+            completed_at=time.time_ns(),
+        )
         _write(path, record)
         return record
 
 
-def read_delivery_result(profile_home: Path | str, delivery_id: str) -> dict[str, Any] | None:
+def read_delivery_result(
+    profile_home: Path | str, delivery_id: str
+) -> dict[str, Any] | None:
     """Read admission/claim/terminal state without waiting or deleting its receipt."""
     key = _delivery_id(delivery_id)
     if not _root(profile_home).is_dir():
@@ -441,11 +570,15 @@ def read_delivery_result(profile_home: Path | str, delivery_id: str) -> dict[str
     # atomic_replace can fall back to an in-place rewrite on Windows. Use the writer's
     # short lock so local pollers never open a partially rewritten or sharing-locked file.
     with _locked(profile_home) as root:
-        record = _read(root / f'{key}.json')
-    if record is not None and record.get('admission_id') and record.get('status') == 'canonical':
+        record = _read(root / f"{key}.json")
+    if (
+        record is not None
+        and record.get("admission_id")
+        and record.get("status") == "canonical"
+    ):
         # Older owners used this transitional spelling. Publication/recovery updates it;
         # a reader never dials the owner or replays an admission just to inspect its receipt.
-        return {**record, 'status': 'queued'}
+        return {**record, "status": "queued"}
     return record
 
 
@@ -465,8 +598,11 @@ def _poll_receipt(profile_home: Path | str, delivery_id: str) -> dict[str, Any] 
 
 
 def await_delivery(
-    profile_home: Path | str, delivery_id: str, timeout: float | None,
-    *, should_stop: Callable[[], bool] | None = None,
+    profile_home: Path | str,
+    delivery_id: str,
+    timeout: float | None,
+    *,
+    should_stop: Callable[[], bool] | None = None,
 ) -> dict[str, Any] | None:
     """Poll a receipt until the owner settles it, ``timeout`` lapses, or ``should_stop`` says so.
 
@@ -487,12 +623,17 @@ def await_delivery(
         remaining = None if deadline is None else deadline - time.monotonic()
         if remaining is not None and remaining <= 0:
             return record
-        time.sleep(_POLL_SECONDS if remaining is None else min(_POLL_SECONDS, remaining))
+        time.sleep(
+            _POLL_SECONDS if remaining is None else min(_POLL_SECONDS, remaining)
+        )
 
 
 async def await_delivery_async(
-    profile_home: Path | str, delivery_id: str, timeout: float | None,
-    *, should_stop: Callable[[], bool] | None = None,
+    profile_home: Path | str,
+    delivery_id: str,
+    timeout: float | None,
+    *,
+    should_stop: Callable[[], bool] | None = None,
 ) -> dict[str, Any] | None:
     """``await_delivery`` for an event loop: never blocks a worker thread for the whole budget."""
     import asyncio
@@ -507,4 +648,6 @@ async def await_delivery_async(
         remaining = None if deadline is None else deadline - time.monotonic()
         if remaining is not None and remaining <= 0:
             return record
-        await asyncio.sleep(_POLL_SECONDS if remaining is None else min(_POLL_SECONDS, remaining))
+        await asyncio.sleep(
+            _POLL_SECONDS if remaining is None else min(_POLL_SECONDS, remaining)
+        )

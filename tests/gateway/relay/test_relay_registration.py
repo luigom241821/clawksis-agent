@@ -42,8 +42,6 @@ def test_registers_when_url_configured(monkeypatch):
     assert platform_registry.is_registered("relay") is True
 
 
-
-
 class TestConfigRegistrationAgreementUnderMultiplexScope:
     """The config loader and the relay registration path must resolve the SAME
     GATEWAY_RELAY_URL under an active multiplex profile scope — the routing

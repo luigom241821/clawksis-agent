@@ -29,19 +29,21 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         if self.path.endswith("/chat/completions"):
             captures.append(body)
-        data = json.dumps({
-            "id": "fixture",
-            "object": "chat.completion",
-            "created": 0,
-            "model": body.get("model", body.get("name", "fixture")),
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "fixture"},
-                    "finish_reason": "stop",
-                }
-            ],
-        }).encode()
+        data = json.dumps(
+            {
+                "id": "fixture",
+                "object": "chat.completion",
+                "created": 0,
+                "model": body.get("model", body.get("name", "fixture")),
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": "fixture"},
+                        "finish_reason": "stop",
+                    }
+                ],
+            }
+        ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
@@ -121,18 +123,20 @@ for provider in ["custom:my-gateway", "custom"]:
             [{"role": "user", "content": "offline payload only"}], []
         )
         profile = get_provider_profile(agent.provider)
-        rows.append({
-            "provider": agent.provider,
-            "model": agent.model,
-            "declared_format": model_spec.get("reasoning_format"),
-            "profile": None if profile is None else type(profile).__name__,
-            "agent_has_custom_models": any(
-                e.get("models") == models for e in agent._custom_providers
-            ),
-            "configured_context_length": agent._config_context_length,
-            "supports_reasoning_extra_body": agent._supports_reasoning_extra_body(),
-            "kwargs": kwargs,
-        })
+        rows.append(
+            {
+                "provider": agent.provider,
+                "model": agent.model,
+                "declared_format": model_spec.get("reasoning_format"),
+                "profile": None if profile is None else type(profile).__name__,
+                "agent_has_custom_models": any(
+                    e.get("models") == models for e in agent._custom_providers
+                ),
+                "configured_context_length": agent._config_context_length,
+                "supports_reasoning_extra_body": agent._supports_reasoning_extra_body(),
+                "kwargs": kwargs,
+            }
+        )
         agent.client.chat.completions.create(**kwargs)
         agent.client.close()
 
@@ -167,7 +171,9 @@ for request, row in zip(captures, rows):
 print(
     json.dumps(
         {
-            "status": "PASS: named-route parity restored" if arm == "fixed" else "PASS: named-route reasoning loss reproduced",
+            "status": "PASS: named-route parity restored"
+            if arm == "fixed"
+            else "PASS: named-route reasoning loss reproduced",
             "repo": str(REPO),
             "home": os.environ["HOME"],
             "clawk_home": os.environ["CLAWK_HOME"],

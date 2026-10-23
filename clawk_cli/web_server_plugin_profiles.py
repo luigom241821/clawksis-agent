@@ -32,11 +32,20 @@ from clawk_cli.config import get_process_clawk_home
 _log = logging.getLogger("clawk_cli.web_server")
 
 # Valid for every served profile, so a profile's plugin code must never receive them.
-_GATEWAY_CREDENTIAL_HEADERS = frozenset({
-    "authorization", "cookie", "host", "x-clawk-gateway-ticket", "x-clawk-session-token"})
+_GATEWAY_CREDENTIAL_HEADERS = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "host",
+        "x-clawk-gateway-ticket",
+        "x-clawk-session-token",
+    }
+)
 # Every query credential the gateway accepts (``web_server_chat._ws_auth_ok``, ``_has_valid_query_token``,
 # the display bridge, the PTY reattach key) and the profile selector; compared after URL-decoding.
-_GATEWAY_QUERY_KEYS = frozenset({"token", "ticket", "internal", "display_ticket", "attach", "profile"})
+_GATEWAY_QUERY_KEYS = frozenset(
+    {"token", "ticket", "internal", "display_ticket", "attach", "profile"}
+)
 
 _profile_plugins: dict[str, list] = {}
 # Bumped by each explicit rescan of a profile: a scan begun before it publishes neither its list nor a miss.
@@ -61,8 +70,13 @@ _unknown_plugins: dict[tuple[str, str], float] = {}
 def secondary_profile_home() -> Optional[Path]:
     """The active scope's home when it is a profile other than the launch profile, else None."""
     from clawk_constants import get_clawk_home, clawk_home_key
+
     home = get_clawk_home()
-    return None if clawk_home_key(home) == clawk_home_key(get_process_clawk_home()) else Path(home)
+    return (
+        None
+        if clawk_home_key(home) == clawk_home_key(get_process_clawk_home())
+        else Path(home)
+    )
 
 
 def _scan_profile_plugins(home: Path) -> list:
@@ -72,11 +86,17 @@ def _scan_profile_plugins(home: Path) -> list:
     from clawk_cli.plugins import get_bundled_plugins_dir
     from clawk_cli.profiles import _get_default_clawk_home
     from clawk_cli.web_server_dashboard import _discover_dashboard_plugins
+
     bundled, own = get_bundled_plugins_dir(), Path(home) / "plugins"
-    dirs = [own] + [r for r in [_get_default_clawk_home() / "plugins"]
-                    if r.resolve(strict=False) != own.resolve(strict=False)]
+    dirs = [own] + [
+        r
+        for r in [_get_default_clawk_home() / "plugins"]
+        if r.resolve(strict=False) != own.resolve(strict=False)
+    ]
     return _discover_dashboard_plugins(
-        [(d, "user") for d in dirs] + [(bundled / "memory", "bundled"), (bundled, "bundled")])
+        [(d, "user") for d in dirs]
+        + [(bundled / "memory", "bundled"), (bundled, "bundled")]
+    )
 
 
 def _published(key: str, rescans: int, plugins: list) -> list:
@@ -91,6 +111,7 @@ def profile_dashboard_plugins(home: Path, force_rescan: bool = False) -> list:
     """Dashboard plugins of the profile at ``home`` (:func:`_scan_profile_plugins`), cached per home
     like the launch profile's list. An explicit rescan also forgets the profile's cached misses."""
     from clawk_constants import clawk_home_key
+
     key = clawk_home_key(home)
     with _profile_plugins_lock:
         if force_rescan:
@@ -98,7 +119,11 @@ def profile_dashboard_plugins(home: Path, force_rescan: bool = False) -> list:
             for unknown in [k for k in _unknown_plugins if k[0] == key]:
                 del _unknown_plugins[unknown]
         cached, rescans = _profile_plugins.get(key), _profile_rescans.get(key, 0)
-    if cached is None or force_rescan or any(not Path(p["_dir"]).is_dir() for p in cached):
+    if (
+        cached is None
+        or force_rescan
+        or any(not Path(p["_dir"]).is_dir() for p in cached)
+    ):
         cached = _published(key, rescans, _scan_profile_plugins(home))
     return cached
 
@@ -112,6 +137,7 @@ def rescanned_plugin(home: Path, name: str) -> Optional[dict]:
     within the last :data:`_UNKNOWN_PLUGIN_RESCAN_SECS` is answered without one. Blocking: the
     request gate runs it on a worker thread."""
     from clawk_constants import clawk_home_key
+
     home_key, now = clawk_home_key(home), time.monotonic()
     key = (home_key, name)
     with _profile_plugins_lock:
@@ -126,7 +152,9 @@ def rescanned_plugin(home: Path, name: str) -> Optional[dict]:
             del _unknown_plugins[expired]
         if plugin is not None:
             _unknown_plugins.pop(key, None)
-        elif _profile_rescans.get(home_key, 0) == rescans:  # an explicit rescan since may have found it
+        elif (
+            _profile_rescans.get(home_key, 0) == rescans
+        ):  # an explicit rescan since may have found it
             _unknown_plugins[key] = now + _UNKNOWN_PLUGIN_RESCAN_SECS
     return plugin
 
@@ -144,9 +172,15 @@ def _in_process_api_file(name: str) -> Optional[Path]:
     the launch profile's discovery entry."""
     import sys
     from clawk_cli.web_server import _get_dashboard_plugins, app
-    from clawk_cli.web_server_dashboard import _launch_profile_scope, _plugin_api_mounted
+    from clawk_cli.web_server_dashboard import (
+        _launch_profile_scope,
+        _plugin_api_mounted,
+    )
+
     if _plugin_api_mounted(app, name):
-        file = getattr(sys.modules.get(f"clawk_dashboard_plugin_{name}"), "__file__", None)
+        file = getattr(
+            sys.modules.get(f"clawk_dashboard_plugin_{name}"), "__file__", None
+        )
         return Path(file).resolve() if file else None
     with _launch_profile_scope():
         return plugin_api_path(_named(_get_dashboard_plugins(), name))
@@ -156,8 +190,11 @@ def _runs_in_process(plugin: Optional[dict]) -> bool:
     """Whether a secondary profile's entry may use this process's router: only its bundled copy,
     and only when that router runs that very file (a launch-profile user plugin can shadow the
     bundled name, or a disabled one hide it)."""
-    return (plugin is not None and plugin.get("source") == "bundled"
-            and _in_process_api_file(plugin["name"]) == plugin_api_path(plugin))
+    return (
+        plugin is not None
+        and plugin.get("source") == "bundled"
+        and _in_process_api_file(plugin["name"]) == plugin_api_path(plugin)
+    )
 
 
 def secondary_plugin(name: str) -> Optional[dict]:
@@ -176,7 +213,9 @@ def _secondary_hosted_plugin(name: str) -> Optional[dict]:
 def in_process_router_refused(name: str) -> bool:
     """Whether this process's ``/api/plugins/<name>/`` router (the launch profile's copy) must not
     serve the active scope: a secondary profile runs only its own bundled copy here."""
-    return secondary_profile_home() is not None and not _runs_in_process(secondary_plugin(name))
+    return secondary_profile_home() is not None and not _runs_in_process(
+        secondary_plugin(name)
+    )
 
 
 @contextmanager
@@ -186,20 +225,29 @@ def plugin_request_scope(scope) -> Iterator[None]:
     dependency answers it as for any other route."""
     from fastapi import HTTPException
     from clawk_cli.web_server_profiles import _config_profile_scope, _is_current_profile
-    profile = dict(parse_qsl(scope.get("query_string", b"").decode("latin-1"))).get("profile")
+
+    profile = dict(parse_qsl(scope.get("query_string", b"").decode("latin-1"))).get(
+        "profile"
+    )
     with ExitStack() as stack:
         if not _is_current_profile(profile):
             try:
                 stack.enter_context(_config_profile_scope(profile))
             except HTTPException as exc:
-                _log.debug("Plugin request for profile %r left unscoped: %s", profile, exc.detail)
+                _log.debug(
+                    "Plugin request for profile %r left unscoped: %s",
+                    profile,
+                    exc.detail,
+                )
         yield
 
 
 def hosted_response(result: dict[str, Any]) -> Response:
     """A plugin host's buffered ``asgi`` answer as a response."""
     response = Response(content=result["body"], status_code=int(result["status"]))
-    for key, value in result["headers"]:  # a list, so repeated headers (Set-Cookie) all survive
+    for key, value in result[
+        "headers"
+    ]:  # a list, so repeated headers (Set-Cookie) all survive
         if key.lower() not in {"content-length", "transfer-encoding", "connection"}:
             response.headers.append(key, value)
     return response
@@ -207,28 +255,41 @@ def hosted_response(result: dict[str, Any]) -> Response:
 
 def _hosted_executor(home: Path) -> ThreadPoolExecutor:
     from clawk_constants import clawk_home_key
+
     key = clawk_home_key(home)
     with _profile_plugins_lock:
         executor = _hosted_executors.get(key)
         if executor is None:
             executor = _hosted_executors[key] = ThreadPoolExecutor(
-                _HOSTED_REQUEST_THREADS, thread_name_prefix=f"plugin-host-requests-{Path(home).name}")
+                _HOSTED_REQUEST_THREADS,
+                thread_name_prefix=f"plugin-host-requests-{Path(home).name}",
+            )
         return executor
 
 
-async def run_hosted_request(home: Path, name: str, call: Callable[[float], dict[str, Any]]) -> Response:
+async def run_hosted_request(
+    home: Path, name: str, call: Callable[[float], dict[str, Any]]
+) -> Response:
     """Run ``call(timeout)``, one plugin host ``asgi`` round trip for plugin ``name`` of the profile at
     ``home``, on that profile's own threads in this request's context; its answer, or 504 after
     :data:`HOSTED_REQUEST_TIMEOUT_SECS`. Other failures propagate."""
     timeout = HOSTED_REQUEST_TIMEOUT_SECS
     deadline, context = time.monotonic() + timeout, contextvars.copy_context()
     job = asyncio.get_running_loop().run_in_executor(
-        _hosted_executor(home), context.run, lambda: call(max(deadline - time.monotonic(), 0.01)))
+        _hosted_executor(home),
+        context.run,
+        lambda: call(max(deadline - time.monotonic(), 0.01)),
+    )
     try:
         return hosted_response(await asyncio.wait_for(job, timeout))
     except TimeoutError:
-        _log.warning("Plugin %s: its plugin host did not answer within %gs", name, timeout)
-        return JSONResponse({"detail": f"plugin {name!r} did not answer within {timeout:g}s"}, status_code=504)
+        _log.warning(
+            "Plugin %s: its plugin host did not answer within %gs", name, timeout
+        )
+        return JSONResponse(
+            {"detail": f"plugin {name!r} did not answer within {timeout:g}s"},
+            status_code=504,
+        )
 
 
 async def forward_secondary_plugin_request(request, name: str) -> Optional[Response]:
@@ -242,25 +303,55 @@ async def forward_secondary_plugin_request(request, name: str) -> Optional[Respo
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     rest = get_route_path(request.scope).split("/", 4)
     path = "/" + (rest[4] if len(rest) > 4 else "")
-    query = urlencode([(k, v) for k, v in parse_qsl(request.url.query, keep_blank_values=True)
-                       if k not in _GATEWAY_QUERY_KEYS])
-    headers = [(k, v) for k, v in request.headers.items() if k.lower() not in _GATEWAY_CREDENTIAL_HEADERS]
+    query = urlencode(
+        [
+            (k, v)
+            for k, v in parse_qsl(request.url.query, keep_blank_values=True)
+            if k not in _GATEWAY_QUERY_KEYS
+        ]
+    )
+    headers = [
+        (k, v)
+        for k, v in request.headers.items()
+        if k.lower() not in _GATEWAY_CREDENTIAL_HEADERS
+    ]
     body = await request.body()
     from clawk_cli.plugin_host_http_auth import admitted_for_sensitive_route
+
     authenticated = admitted_for_sensitive_route(request)
 
     def call(timeout: float) -> dict[str, Any]:
         from clawk_cli.plugins import get_plugin_manager
-        host = get_plugin_manager()._plugin_host()  # the active (secondary) profile's own host
-        return host.asgi_request(name, str(plugin["_dir"]), str(plugin["_api_file"]), request.method, path,
-                                 query, headers, body, timeout=timeout, authenticated=authenticated)
+
+        host = (
+            get_plugin_manager()._plugin_host()
+        )  # the active (secondary) profile's own host
+        return host.asgi_request(
+            name,
+            str(plugin["_dir"]),
+            str(plugin["_api_file"]),
+            request.method,
+            path,
+            query,
+            headers,
+            body,
+            timeout=timeout,
+            authenticated=authenticated,
+        )
 
     try:
         return await run_hosted_request(home, name, call)
     except Exception as exc:  # health: allow BLE001 -- the host runs third-party code; any failure is this request's 502
-        _log.warning("Plugin %s: its profile's plugin host could not serve %s: %s", name, path, exc)
-        return JSONResponse({"detail": f"plugin {name!r} could not run in this profile's plugin host"},
-                            status_code=502)
+        _log.warning(
+            "Plugin %s: its profile's plugin host could not serve %s: %s",
+            name,
+            path,
+            exc,
+        )
+        return JSONResponse(
+            {"detail": f"plugin {name!r} could not run in this profile's plugin host"},
+            status_code=502,
+        )
 
 
 async def refuse_secondary_plugin_socket(scope, receive, send, name: str) -> bool:
@@ -270,14 +361,30 @@ async def refuse_secondary_plugin_socket(scope, receive, send, name: str) -> boo
     if _secondary_hosted_plugin(name) is None:
         return False
     from clawk_cli.web_server_chat import _ws_auth_ok
+
     socket = WebSocket(scope, receive, send)
-    if not ((scope.get("state") or {}).get("native_http_principal") or _ws_auth_ok(socket)):
+    if not (
+        (scope.get("state") or {}).get("native_http_principal") or _ws_auth_ok(socket)
+    ):
         await send({"type": "websocket.close", "code": status.WS_1008_POLICY_VIOLATION})
         return True
     detail = f"plugin {name!r} runs in this profile's plugin host, which does not carry websockets yet"
-    _log.info("Plugin %s: refused a websocket for %s: %s", name, secondary_profile_home(), detail)
+    _log.info(
+        "Plugin %s: refused a websocket for %s: %s",
+        name,
+        secondary_profile_home(),
+        detail,
+    )
     if "websocket.http.response" in (scope.get("extensions") or {}):
-        await socket.send_denial_response(JSONResponse({"detail": detail}, status_code=501))
+        await socket.send_denial_response(
+            JSONResponse({"detail": detail}, status_code=501)
+        )
     else:
-        await send({"type": "websocket.close", "code": status.WS_1008_POLICY_VIOLATION, "reason": detail[:120]})
+        await send(
+            {
+                "type": "websocket.close",
+                "code": status.WS_1008_POLICY_VIOLATION,
+                "reason": detail[:120],
+            }
+        )
     return True

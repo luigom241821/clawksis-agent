@@ -48,11 +48,20 @@ def bang_shell_enabled() -> bool:
     try:
         from utils import env_var_enabled
     except Exception:  # pragma: no cover - utils is always importable in-tree
-        def env_var_enabled(name, default=""):  # type: ignore[misc]
-            return str(os.getenv(name, default)).strip().lower() in {"1", "true", "yes", "on"}
 
-    return not (env_var_enabled("CLAWK_GATEWAY_SESSION") or env_var_enabled("CLAWK_CRON_SESSION")
-                or (os.getenv("CLAWK_SESSION_PLATFORM") or "").strip())
+        def env_var_enabled(name, default=""):  # type: ignore[misc]
+            return str(os.getenv(name, default)).strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
+
+    return not (
+        env_var_enabled("CLAWK_GATEWAY_SESSION")
+        or env_var_enabled("CLAWK_CRON_SESSION")
+        or (os.getenv("CLAWK_SESSION_PLATFORM") or "").strip()
+    )
 
 
 def resolve_bang_cwd(session_key: Optional[str] = None) -> Optional[str]:
@@ -63,7 +72,10 @@ def resolve_bang_cwd(session_key: Optional[str] = None) -> Optional[str]:
     """
     try:
         from tools.terminal_tool import _get_env_config, get_session_cwd
-        return get_session_cwd(session_key) or (_get_env_config() or {}).get("cwd") or None
+
+        return (
+            get_session_cwd(session_key) or (_get_env_config() or {}).get("cwd") or None
+        )
     except Exception:
         return None
 
@@ -94,10 +106,17 @@ def _bang_env() -> dict:
     boundary is unavailable, let the launch fail rather than passing the CLI's full environment.
     """
     from tools.environments.local import build_subprocess_env
+
     return build_subprocess_env()
 
 
-def run_bang_command(command: str, *, cwd: Optional[str] = None, timeout: int = DEFAULT_TIMEOUT, writer=None) -> int:
+def run_bang_command(
+    command: str,
+    *,
+    cwd: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+    writer=None,
+) -> int:
     """Execute *command*, streaming merged stdout/stderr through *writer* (default ``print``); return the exit code.
 
     Output exists only on the user's terminal — nothing is returned for insertion into history.
@@ -108,15 +127,24 @@ def run_bang_command(command: str, *, cwd: Optional[str] = None, timeout: int = 
         run_cwd = None
     try:
         from clawk_cli._subprocess_compat import windows_hide_flags
+
         creationflags = windows_hide_flags()
     except Exception:
         creationflags = 0
     try:
         # shell=True is intentional (matches quick_commands): the human typed this, not the model.
         proc = subprocess.Popen(
-            command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-            encoding="utf-8", errors="replace", cwd=run_cwd, env=_bang_env(),
-            creationflags=creationflags)
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=run_cwd,
+            env=_bang_env(),
+            creationflags=creationflags,
+        )
     except Exception as exc:
         emit(f"!: failed to run command: {exc}")
         return 127

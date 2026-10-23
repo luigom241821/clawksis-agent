@@ -9,6 +9,7 @@ then landed as a separate plain message and interrupted the running agent.
 Near-limit command chunks must route through the text-batching pipeline so
 continuations merge in before dispatch; short commands stay immediate.
 """
+
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -64,7 +65,9 @@ def _make_message(text, *, chat_id=12345):
 
 
 def _make_update(text):
-    return SimpleNamespace(update_id=1, message=_make_message(text), effective_message=None)
+    return SimpleNamespace(
+        update_id=1, message=_make_message(text), effective_message=None
+    )
 
 
 @pytest.mark.asyncio

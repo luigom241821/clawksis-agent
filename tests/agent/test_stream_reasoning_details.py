@@ -8,7 +8,10 @@ import pytest
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
-from agent.chat_completion_helpers import build_assistant_message, interruptible_streaming_api_call
+from agent.chat_completion_helpers import (
+    build_assistant_message,
+    interruptible_streaming_api_call,
+)
 from agent.chat_completion_helpers_relay import RelayChatAccumulator
 from agent.transports.chat_completions import ChatCompletionsTransport
 from clawk_state import SessionDB
@@ -18,14 +21,27 @@ from run_agent import AIAgent
 @pytest.mark.parametrize("collector", ["main", "relay"])
 @pytest.mark.parametrize("delivery", ["final", "multiple", "absent"])
 def test_stream_reasoning_details_survive_replay(tmp_path, collector, delivery):
-    details = [
-        {"type": "opaque.native", "version": 1, "messages": [
-            {"type": "thinking", "signature": " signed+/=\n", "thinking": "α"},
-            {"type": "text", "text": "hello"},
-            {"type": "redacted_thinking", "data": "AA+/=="}],
-         "projection": {"content": "hello world", "tool_calls": []}},
-        {"type": "opaque.future", "index": 7, "unknown": [None, False, {"signature": "\r\n"}]},
-    ] if delivery != "absent" else []
+    details = (
+        [
+            {
+                "type": "opaque.native",
+                "version": 1,
+                "messages": [
+                    {"type": "thinking", "signature": " signed+/=\n", "thinking": "α"},
+                    {"type": "text", "text": "hello"},
+                    {"type": "redacted_thinking", "data": "AA+/=="},
+                ],
+                "projection": {"content": "hello world", "tool_calls": []},
+            },
+            {
+                "type": "opaque.future",
+                "index": 7,
+                "unknown": [None, False, {"signature": "\r\n"}],
+            },
+        ]
+        if delivery != "absent"
+        else []
+    )
     deltas = [{"role": "assistant", "content": "hello"}, {"content": " world"}]
     if delivery == "multiple":
         deltas[0]["reasoning_details"] = details[:1]
@@ -40,7 +56,9 @@ def test_stream_reasoning_details_survive_replay(tmp_path, collector, delivery):
             pass
 
         def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            body = json.loads(
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            )
             if not self.path.endswith("/chat/completions"):
                 self.send_response(404)
                 self.end_headers()
@@ -50,9 +68,21 @@ def test_stream_reasoning_details_survive_replay(tmp_path, collector, delivery):
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
             for index, delta in enumerate(deltas):
-                chunk = {"id": "local-proof", "object": "chat.completion.chunk", "created": 1,
-                         "model": "test-model", "choices": [{"index": 0, "delta": delta,
-                         "finish_reason": "stop" if index == len(deltas) - 1 else None}]}
+                chunk = {
+                    "id": "local-proof",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "test-model",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": delta,
+                            "finish_reason": "stop"
+                            if index == len(deltas) - 1
+                            else None,
+                        }
+                    ],
+                }
                 self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
                 self.wfile.flush()
             self.wfile.write(b"data: [DONE]\n\n")
@@ -61,9 +91,18 @@ def test_stream_reasoning_details_survive_replay(tmp_path, collector, delivery):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base_url = f"http://127.0.0.1:{server.server_port}/v1"
-    agent = AIAgent(api_key="local-test", base_url=base_url, provider="custom", model="test-model",
-                    platform="subagent", quiet_mode=True, skip_memory=True, skip_context_files=True,
-                    enabled_toolsets=[], save_trajectories=False)
+    agent = AIAgent(
+        api_key="local-test",
+        base_url=base_url,
+        provider="custom",
+        model="test-model",
+        platform="subagent",
+        quiet_mode=True,
+        skip_memory=True,
+        skip_context_files=True,
+        enabled_toolsets=[],
+        save_trajectories=False,
+    )
     kwargs = {"model": "test-model", "messages": [{"role": "user", "content": "hi"}]}
     try:
         if collector == "main":
@@ -76,11 +115,19 @@ def test_stream_reasoning_details_survive_replay(tmp_path, collector, delivery):
                         acc.observe(chunk.model_dump(mode="json"))
             recorded = acc.finalize()
             recorded["choices"][0]["index"] = 0
-            response = ChatCompletion.model_validate({"id": "local-proof", "created": 1,
-                "object": "chat.completion", **recorded})
+            response = ChatCompletion.model_validate(
+                {
+                    "id": "local-proof",
+                    "created": 1,
+                    "object": "chat.completion",
+                    **recorded,
+                }
+            )
         assert requests and all(request["stream"] is True for request in requests)
         assert response.choices[0].message.content == "hello world"
-        assert getattr(response.choices[0].message, "reasoning_details", None) == (details or None)
+        assert getattr(response.choices[0].message, "reasoning_details", None) == (
+            details or None
+        )
         normalized = ChatCompletionsTransport().normalize_response(response)
         assert normalized.reasoning_details == (details or None)
         message = build_assistant_message(agent, normalized, normalized.finish_reason)

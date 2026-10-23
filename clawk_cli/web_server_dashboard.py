@@ -1,5 +1,4 @@
-"""Dashboard UI assets: SPA mount, theme normalisation/bootstrap CSS, dashboard-plugin discovery and the plugins-hub merge.
-"""
+"""Dashboard UI assets: SPA mount, theme normalisation/bootstrap CSS, dashboard-plugin discovery and the plugins-hub merge."""
 
 import asyncio
 import logging
@@ -39,6 +38,7 @@ def _normalise_prefix(raw: Optional[str]) -> str:
     """Normalise an X-Forwarded-Prefix header value (single source of truth lives in
     ``clawk_cli.dashboard_auth.prefix`` so gate, OAuth, cookies and SPA mount agree)."""
     from clawk_cli.dashboard_auth.prefix import normalise_prefix
+
     return normalise_prefix(raw)
 
 
@@ -58,6 +58,7 @@ def _render_active_theme_bootstrap_css() -> str:
     ``applyTheme()`` writes inline styles on ``documentElement`` which outrank this block.
     """
     from clawk_cli.config import load_config
+
     try:
         active = cfg_get(load_config(), "dashboard", "theme", default="default")
         if not active or not isinstance(active, str):
@@ -74,6 +75,7 @@ def _render_active_theme_bootstrap_css() -> str:
 
             def _esc(s: str) -> str:  # defensive ``</style>`` escape
                 return str(s).replace("</", "<\\/")
+
             return (
                 '<style id="clawk-theme-bootstrap">'
                 ":root{"
@@ -132,7 +134,9 @@ def mount_spa(application: FastAPI):
             # gate is off: on a gated serve the token must never be readable without auth.
             # See #94227, #95575.
             gated = bool(getattr(application.state, "auth_required", False))
-            withheld = gated or bool(getattr(app.state, "withhold_session_token", False))
+            withheld = gated or bool(
+                getattr(app.state, "withhold_session_token", False)
+            )
             if full_path == "" and not withheld:
                 return HTMLResponse(
                     "<!doctype html><html><head><script>"
@@ -142,6 +146,7 @@ def mount_spa(application: FastAPI):
                     headers=_NO_STORE,
                 )
             return JSONResponse({"error": _HEADLESS_MSG}, status_code=404)
+
         return
 
     # A missing WEB_DIST is deliberately NOT a mount-time terminal state (#82614): a long-lived `clawk
@@ -164,20 +169,32 @@ def mount_spa(application: FastAPI):
             html = (WEB_DIST / "index.html").read_text(encoding="utf-8-sig")
         except OSError:
             # Partial build / wiped dist / permissions: same JSON 404 as a fully-missing dist.
-            return JSONResponse({"error": "Frontend not built. Run: cd web && npm run build"}, status_code=404)
+            return JSONResponse(
+                {"error": "Frontend not built. Run: cd web && npm run build"},
+                status_code=404,
+            )
         chat_js = "true" if _DASHBOARD_EMBEDDED_CHAT_ENABLED else "false"
         gated = bool(getattr(app.state, "auth_required", False))
         # The gateway-hosted listener (gateway/run_api.py) never publishes it: local clients use tickets.
         withheld = gated or bool(getattr(app.state, "withhold_session_token", False))
-        token_js = "" if withheld else f'window.__CLAWK_SESSION_TOKEN__="{_server()._SESSION_TOKEN}";'
+        token_js = (
+            ""
+            if withheld
+            else f'window.__CLAWK_SESSION_TOKEN__="{_server()._SESSION_TOKEN}";'
+        )
         # Launcher-preselected profile (``--open-profile``): the SPA's fallback scope when the URL
         # omits ``?profile=`` (#73085). ``</`` escaped so a hostile name cannot close the script tag.
-        initial_profile_js = json.dumps(str(getattr(application.state, "initial_profile", "") or "")).replace("</", "<\\/")
+        initial_profile_js = json.dumps(
+            str(getattr(application.state, "initial_profile", "") or "")
+        ).replace("</", "<\\/")
         # This backend's OWN profile name (empty when it cannot be named unambiguously). The SPA
         # falls back to it when neither the URL nor --open-profile names one, so requests carry an
         # explicit scope from the first paint: destructive routes 400 on an unnamed profile as soon
         # as the host serves more than one, and the switcher shows the same profile it writes.
-        from clawk_cli.web_server_profiles import serving_profile_name as _serving_profile_name
+        from clawk_cli.web_server_profiles import (
+            serving_profile_name as _serving_profile_name,
+        )
+
         serving_profile_js = json.dumps(_serving_profile_name()).replace("</", "<\\/")
         bootstrap_script = (
             f"<script>{token_js}"
@@ -190,8 +207,14 @@ def mount_spa(application: FastAPI):
         )
         if prefix:
             # Rewrite absolute asset URLs baked into the Vite build to go through the proxy.
-            for attr in ('href="/assets/', 'src="/assets/', 'href="/favicon.ico"', 'href="/fonts/',
-                         'href="/ds-assets/', 'src="/ds-assets/'):
+            for attr in (
+                'href="/assets/',
+                'src="/assets/',
+                'href="/favicon.ico"',
+                'href="/fonts/',
+                'href="/ds-assets/',
+                'src="/ds-assets/',
+            ):
                 html = html.replace(attr, attr.replace('"/', f'"{prefix}/', 1))
         theme_bootstrap = _render_active_theme_bootstrap_css()
         if theme_bootstrap:
@@ -205,16 +228,22 @@ def mount_spa(application: FastAPI):
     @application.get("/assets/{filename}.css")
     async def serve_css(filename: str, request: Request):
         css_path = WEB_DIST / "assets" / f"{filename}.css"
-        if not css_path.is_file() or not css_path.resolve().is_relative_to(WEB_DIST.resolve()):
+        if not css_path.is_file() or not css_path.resolve().is_relative_to(
+            WEB_DIST.resolve()
+        ):
             return JSONResponse({"error": "not found"}, status_code=404)
         prefix = _normalise_prefix(request.headers.get("x-forwarded-prefix"))
         css = css_path.read_text(encoding="utf-8-sig")
         if prefix:
             for asset_dir in ("/fonts/", "/fonts-terminal/", "/ds-assets/", "/assets/"):
                 for quote in ("", '"', "'"):
-                    css = css.replace(f"url({quote}{asset_dir}", f"url({quote}{prefix}{asset_dir}")
+                    css = css.replace(
+                        f"url({quote}{asset_dir}", f"url({quote}{prefix}{asset_dir}"
+                    )
         return Response(
-            content=css, media_type="text/css", headers={"Cache-Control": _IMMUTABLE_ASSET_CACHE_CONTROL}
+            content=css,
+            media_type="text/css",
+            headers={"Cache-Control": _IMMUTABLE_ASSET_CACHE_CONTROL},
         )
 
     class _ImmutableAssetFiles(StaticFiles):
@@ -228,7 +257,9 @@ def mount_spa(application: FastAPI):
 
     # check_dir=False: the dist may not exist yet; StaticFiles 404s per-request until it does.
     application.mount(
-        "/assets", _ImmutableAssetFiles(directory=WEB_DIST / "assets", check_dir=False), name="assets"
+        "/assets",
+        _ImmutableAssetFiles(directory=WEB_DIST / "assets", check_dir=False),
+        name="assets",
     )
 
     @application.get("/{full_path:path}")
@@ -237,7 +268,9 @@ def mount_spa(application: FastAPI):
         # An unmatched /api/* path is a missing endpoint, not a client-side route: return a
         # real 404 JSON instead of index.html (which breaks JSON clients with a SyntaxError).
         if full_path == "api" or full_path.startswith("api/"):
-            return JSONResponse({"detail": f"No such API endpoint: /{full_path}"}, status_code=404)
+            return JSONResponse(
+                {"detail": f"No such API endpoint: /{full_path}"}, status_code=404
+            )
         file_path = WEB_DIST / full_path
         # Prevent path traversal via url-encoded sequences (%2e%2e/)
         if (
@@ -256,19 +289,57 @@ def mount_spa(application: FastAPI):
 
 # Built-in themes — label + description only; colors live in web/src/themes/presets.ts.
 _BUILTIN_DASHBOARD_THEMES = [
-    {"name": "default",       "label": "Clawksis Teal",         "description": "Classic dark teal — the canonical Clawksis look"},
-    {"name": "default-large", "label": "Clawksis Teal (Large)", "description": "Clawksis Teal with bigger fonts and roomier spacing"},
-    {"name": "nous-blue",     "label": "Nous Blue",           "description": "Light mode — vivid Nous-blue accents on cream canvas"},
-    {"name": "midnight",      "label": "Midnight",            "description": "Deep blue-violet with cool accents"},
-    {"name": "ember",     "label": "Ember",          "description": "Warm crimson and bronze — forge vibes"},
-    {"name": "mono",      "label": "Mono",           "description": "Clean grayscale — minimal and focused"},
-    {"name": "cyberpunk", "label": "Cyberpunk",      "description": "Neon green on black — matrix terminal"},
-    {"name": "rose",      "label": "Rosé",           "description": "Soft pink and warm ivory — easy on the eyes"},
-    {"name": "pixel",     "label": "Clawksis Pixel", "description": "16-bit retro — pixel font, purple grid & scanlines"},
+    {
+        "name": "default",
+        "label": "Clawksis Teal",
+        "description": "Classic dark teal — the canonical Clawksis look",
+    },
+    {
+        "name": "default-large",
+        "label": "Clawksis Teal (Large)",
+        "description": "Clawksis Teal with bigger fonts and roomier spacing",
+    },
+    {
+        "name": "nous-blue",
+        "label": "Nous Blue",
+        "description": "Light mode — vivid Nous-blue accents on cream canvas",
+    },
+    {
+        "name": "midnight",
+        "label": "Midnight",
+        "description": "Deep blue-violet with cool accents",
+    },
+    {
+        "name": "ember",
+        "label": "Ember",
+        "description": "Warm crimson and bronze — forge vibes",
+    },
+    {
+        "name": "mono",
+        "label": "Mono",
+        "description": "Clean grayscale — minimal and focused",
+    },
+    {
+        "name": "cyberpunk",
+        "label": "Cyberpunk",
+        "description": "Neon green on black — matrix terminal",
+    },
+    {
+        "name": "rose",
+        "label": "Rosé",
+        "description": "Soft pink and warm ivory — easy on the eyes",
+    },
+    {
+        "name": "pixel",
+        "label": "Clawksis Pixel",
+        "description": "16-bit retro — pixel font, purple grid & scanlines",
+    },
 ]
 
 
-def _parse_theme_layer(value: Any, default_hex: str, default_alpha: float = 1.0) -> Optional[dict[str, Any]]:
+def _parse_theme_layer(
+    value: Any, default_hex: str, default_alpha: float = 1.0
+) -> Optional[dict[str, Any]]:
     """Normalise a theme layer spec (bare hex shorthand or ``{hex, alpha}`` dict); ``None`` on
     garbage so the caller falls back to a built-in default."""
     if value is None:
@@ -294,15 +365,27 @@ _THEME_DEFAULT_TYPOGRAPHY: dict[str, str] = {
     "lineHeight": "1.55",
     "letterSpacing": "0",
 }
-_THEME_DEFAULT_LAYOUT: dict[str, str] = {
-    "radius": "0.5rem", "density": "comfortable"
-}
+_THEME_DEFAULT_LAYOUT: dict[str, str] = {"radius": "0.5rem", "density": "comfortable"}
 _THEME_OVERRIDE_KEYS = {
-    "card", "cardForeground", "popover", "popoverForeground",
-    "primary", "primaryForeground", "secondary", "secondaryForeground",
-    "muted", "mutedForeground", "accent", "accentForeground",
-    "destructive", "destructiveForeground", "success", "warning",
-    "border", "input", "ring",
+    "card",
+    "cardForeground",
+    "popover",
+    "popoverForeground",
+    "primary",
+    "primaryForeground",
+    "secondary",
+    "secondaryForeground",
+    "muted",
+    "mutedForeground",
+    "accent",
+    "accentForeground",
+    "destructive",
+    "destructiveForeground",
+    "success",
+    "warning",
+    "border",
+    "input",
+    "ring",
 }
 
 # Named asset slots; other keys under ``assets.custom`` become ``--theme-asset-custom-<key>``.
@@ -311,7 +394,15 @@ _THEME_NAMED_ASSET_KEYS = {"bg", "hero", "logo", "crest", "sidebar", "header"}
 # Component-style buckets: each camelCase property under a bucket emits
 # ``--component-<bucket>-<kebab-property>`` on :root, consumed by shell components.
 _THEME_COMPONENT_BUCKETS = {
-    "card", "header", "footer", "sidebar", "tab", "progress", "badge", "backdrop", "page"
+    "card",
+    "header",
+    "footer",
+    "sidebar",
+    "tab",
+    "progress",
+    "badge",
+    "backdrop",
+    "page",
 }
 _THEME_LAYOUT_VARIANTS = {"standard", "cockpit", "tiled"}
 
@@ -349,9 +440,17 @@ def _normalise_theme_definition(data: dict[str, Any]) -> Optional[dict[str, Any]
     palette_src = _dict_field(data, "palette")
     colors_src = _dict_field(data, "colors")
 
-    def _layer(key: str, default_hex: str, default_alpha: float = 1.0) -> dict[str, Any]:
-        parsed = _parse_theme_layer(palette_src.get(key, colors_src.get(key)), default_hex, default_alpha)
-        return parsed if parsed is not None else {"hex": default_hex, "alpha": default_alpha}
+    def _layer(
+        key: str, default_hex: str, default_alpha: float = 1.0
+    ) -> dict[str, Any]:
+        parsed = _parse_theme_layer(
+            palette_src.get(key, colors_src.get(key)), default_hex, default_alpha
+        )
+        return (
+            parsed
+            if parsed is not None
+            else {"hex": default_hex, "alpha": default_alpha}
+        )
 
     raw_noise = palette_src.get("noiseOpacity", data.get("noiseOpacity"))
     try:
@@ -362,13 +461,23 @@ def _normalise_theme_definition(data: dict[str, Any]) -> Optional[dict[str, Any]
         "background": _layer("background", "#041c1c", 1.0),
         "midground": _layer("midground", "#ffe6cb", 1.0),
         "foreground": _layer("foreground", "#ffffff", 0.0),
-        "warmGlow": palette_src.get("warmGlow") or data.get("warmGlow") or "rgba(255, 189, 56, 0.35)",
+        "warmGlow": palette_src.get("warmGlow")
+        or data.get("warmGlow")
+        or "rgba(255, 189, 56, 0.35)",
         "noiseOpacity": noise,
     }
 
     typo_src = _dict_field(data, "typography")
     typography = dict(_THEME_DEFAULT_TYPOGRAPHY)
-    for key in ("fontSans", "fontMono", "fontDisplay", "fontUrl", "baseSize", "lineHeight", "letterSpacing"):
+    for key in (
+        "fontSans",
+        "fontMono",
+        "fontDisplay",
+        "fontUrl",
+        "baseSize",
+        "lineHeight",
+        "letterSpacing",
+    ):
         if _nonempty_str(typo_src.get(key)):
             typography[key] = typo_src[key]
 
@@ -381,32 +490,50 @@ def _normalise_theme_definition(data: dict[str, Any]) -> Optional[dict[str, Any]
         layout["density"] = density
 
     color_overrides = {
-        k: v for k, v in _dict_field(data, "colorOverrides").items()
+        k: v
+        for k, v in _dict_field(data, "colorOverrides").items()
         if k in _THEME_OVERRIDE_KEYS and _nonempty_str(v)
     }
 
     assets_src = _dict_field(data, "assets")
-    assets_out: dict[str, Any] = {k: assets_src[k] for k in _THEME_NAMED_ASSET_KEYS if _nonempty_str(assets_src.get(k))}
-    custom_assets = {k: v for k, v in _dict_field(assets_src, "custom").items() if _css_ident(k) and _nonempty_str(v)}
+    assets_out: dict[str, Any] = {
+        k: assets_src[k]
+        for k in _THEME_NAMED_ASSET_KEYS
+        if _nonempty_str(assets_src.get(k))
+    }
+    custom_assets = {
+        k: v
+        for k, v in _dict_field(assets_src, "custom").items()
+        if _css_ident(k) and _nonempty_str(v)
+    }
     if custom_assets:
         assets_out["custom"] = custom_assets
 
     custom_css_val = data.get("customCSS")
-    custom_css = custom_css_val[:_THEME_CUSTOM_CSS_MAX] if _nonempty_str(custom_css_val) else None
+    custom_css = (
+        custom_css_val[:_THEME_CUSTOM_CSS_MAX]
+        if _nonempty_str(custom_css_val)
+        else None
+    )
 
     component_styles: dict[str, dict[str, str]] = {}
     for bucket, props in _dict_field(data, "componentStyles").items():
         if bucket not in _THEME_COMPONENT_BUCKETS or not isinstance(props, dict):
             continue
         clean = {
-            prop: str(value) for prop, value in props.items()
-            if _css_ident(prop) and isinstance(value, (str, int, float)) and str(value).strip()
+            prop: str(value)
+            for prop, value in props.items()
+            if _css_ident(prop)
+            and isinstance(value, (str, int, float))
+            and str(value).strip()
         }
         if clean:
             component_styles[bucket] = clean
 
     layout_variant = data.get("layoutVariant")
-    if not (isinstance(layout_variant, str) and layout_variant in _THEME_LAYOUT_VARIANTS):
+    if not (
+        isinstance(layout_variant, str) and layout_variant in _THEME_LAYOUT_VARIANTS
+    ):
         layout_variant = "standard"
 
     result: dict[str, Any] = {
@@ -453,6 +580,7 @@ def _discover_user_themes() -> list:
 # ---------------------------------------------------------------------------
 # Dashboard plugin system
 # ---------------------------------------------------------------------------
+
 
 def _safe_plugin_api_relpath(api_field: Any, *, dashboard_dir: Path) -> Optional[str]:
     """Validate the manifest's ``api`` field (later imported as a Python module — arbitrary
@@ -522,11 +650,16 @@ def _dashboard_plugin_search_dirs() -> list[tuple]:
     return search_dirs
 
 
-def _dashboard_plugin_entry(data: dict[str, Any], name: str, dashboard_dir: Path, source: str) -> dict[str, Any]:
+def _dashboard_plugin_entry(
+    data: dict[str, Any], name: str, dashboard_dir: Path, source: str
+) -> dict[str, Any]:
     # Tab options: ``path`` + ``position`` for a new tab, optional ``override`` to replace a
     # built-in route, and ``hidden`` to register component/slots without adding a tab.
     raw_tab = data.get("tab", {}) if isinstance(data.get("tab"), dict) else {}
-    tab_info = {"path": raw_tab.get("path", f"/{name}"), "position": raw_tab.get("position", "end")}
+    tab_info = {
+        "path": raw_tab.get("path", f"/{name}"),
+        "position": raw_tab.get("position", "end"),
+    }
     override_path = raw_tab.get("override")
     if isinstance(override_path, str) and override_path.startswith("/"):
         tab_info["override"] = override_path
@@ -534,7 +667,11 @@ def _dashboard_plugin_entry(data: dict[str, Any], name: str, dashboard_dir: Path
         tab_info["hidden"] = True
     # Slots the plugin populates via ``window.registerSlot(pluginName, slotName, Component)``.
     slots_src = data.get("slots")
-    slots = [s for s in slots_src if isinstance(s, str) and s] if isinstance(slots_src, list) else []
+    slots = (
+        [s for s in slots_src if isinstance(s, str) and s]
+        if isinstance(slots_src, list)
+        else []
+    )
     # Validate ``api`` at discovery time so the cached value is already safe for the importer.
     raw_api = data.get("api")
     safe_api = _safe_plugin_api_relpath(raw_api, dashboard_dir=dashboard_dir)
@@ -544,7 +681,8 @@ def _dashboard_plugin_entry(data: dict[str, Any], name: str, dashboard_dir: Path
             "relative file inside the plugin's dashboard/ "
             "directory); backend routes from this plugin will "
             "not be mounted",
-            name, raw_api,
+            name,
+            raw_api,
         )
     return {
         "name": name,
@@ -568,14 +706,18 @@ def _discover_dashboard_plugins(search_dirs: Optional[list] = None) -> list:
     project plugin sources — same three sources as ``clawk_cli.plugins`` — or ``search_dirs``."""
     plugins = []
     seen_names: set = set()
-    for plugins_root, source in (_dashboard_plugin_search_dirs() if search_dirs is None else search_dirs):
+    for plugins_root, source in (
+        _dashboard_plugin_search_dirs() if search_dirs is None else search_dirs
+    ):
         try:
             if not plugins_root.is_dir():
                 continue
             with os.scandir(plugins_root) as scan:
                 children = sorted((Path(e.path) for e in scan), key=lambda p: p.name)
         except OSError as exc:
-            _log.warning("Skipping unreadable dashboard plugin root %s: %s", plugins_root, exc)
+            _log.warning(
+                "Skipping unreadable dashboard plugin root %s: %s", plugins_root, exc
+            )
             continue
         for child in children:
             manifest_file = child / "dashboard" / "manifest.json"
@@ -587,9 +729,13 @@ def _discover_dashboard_plugins(search_dirs: Optional[list] = None) -> list:
                 if name in seen_names:
                     continue
                 seen_names.add(name)
-                plugins.append(_dashboard_plugin_entry(data, name, child / "dashboard", source))
+                plugins.append(
+                    _dashboard_plugin_entry(data, name, child / "dashboard", source)
+                )
             except OSError as exc:
-                _log.warning("Skipping unreadable dashboard plugin %s: %s", manifest_file, exc)
+                _log.warning(
+                    "Skipping unreadable dashboard plugin %s: %s", manifest_file, exc
+                )
                 continue
             except Exception as exc:
                 _log.warning("Bad dashboard plugin manifest %s: %s", manifest_file, exc)
@@ -642,7 +788,9 @@ def _schedule_check_fn_probe(fn) -> Optional[threading.Thread]:
             with _plugins_hub_probe_lock:
                 _plugins_hub_probe_inflight.discard(fn)
 
-    thread = threading.Thread(target=_probe, name="plugins-hub-checkfn-probe", daemon=True)
+    thread = threading.Thread(
+        target=_probe, name="plugins-hub-checkfn-probe", daemon=True
+    )
     thread.start()
     return thread
 
@@ -650,7 +798,11 @@ def _schedule_check_fn_probe(fn) -> Optional[threading.Thread]:
 def _plugin_login_command(name: str) -> str:
     """A plugin that left core with its own login command (``clawk spotify login``), else ``clawk auth <name>``."""
     from clawk_cli.left_core_migration import LEFT_CORE
-    return next((f"clawk {f.cli} login" for f in LEFT_CORE if f.plugin == name and f.cli), f"clawk auth {name}")
+
+    return next(
+        (f"clawk {f.cli} login" for f in LEFT_CORE if f.plugin == name and f.cli),
+        f"clawk auth {name}",
+    )
 
 
 def _plugin_auth_hint(name: str, provides_tools: list) -> tuple:
@@ -661,6 +813,7 @@ def _plugin_auth_hint(name: str, provides_tools: list) -> tuple:
     """
     try:
         from tools.registry import get_cached_check_fn_result, registry
+
         for tname in provides_tools:
             entry = registry.get_entry(tname)
             if not entry or not entry.check_fn:
@@ -677,7 +830,13 @@ def _plugin_auth_hint(name: str, provides_tools: list) -> tuple:
 
 def _plugin_runtime_status(aliases: set, enabled_set: set, disabled_set: set) -> str:
     """enabled / disabled / inactive for a plugin's name+key alias set (disabled wins)."""
-    return "disabled" if aliases & disabled_set else "enabled" if aliases & enabled_set else "inactive"
+    return (
+        "disabled"
+        if aliases & disabled_set
+        else "enabled"
+        if aliases & enabled_set
+        else "inactive"
+    )
 
 
 def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
@@ -688,7 +847,10 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
     event loop). Only cached availability is consumed and the payload is memoized briefly to
     collapse the dashboard's bursty duplicate fetches.
     """
-    from clawk_cli.web_server_memory import _discover_memory_provider_statuses, _normalize_memory_provider_name
+    from clawk_cli.web_server_memory import (
+        _discover_memory_provider_statuses,
+        _normalize_memory_provider_name,
+    )
     from clawk_cli.web_server import _get_dashboard_plugins
     from clawk_cli.config import get_clawk_home, load_config
     from clawk_constants import clawk_home_key
@@ -698,7 +860,9 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
     if not force_refresh:
         with _plugins_hub_cache_lock:
             cached = _plugins_hub_cache.get(cache_key)
-            if cached is not None and now < _plugins_hub_cache_expires_at.get(cache_key, 0.0):
+            if cached is not None and now < _plugins_hub_cache_expires_at.get(
+                cache_key, 0.0
+            ):
                 return cached
 
     started_at = time.monotonic()
@@ -720,7 +884,9 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
     dash_by_name = {str(p["name"]): p for p in dashboard_list}
     disabled_set = _get_disabled_set()
     enabled_set = _get_enabled_set()
-    hidden_plugins: list = cfg_get(load_config(), "dashboard", "hidden_plugins", default=[]) or []
+    hidden_plugins: list = (
+        cfg_get(load_config(), "dashboard", "hidden_plugins", default=[]) or []
+    )
     plugins_root_resolved = (get_clawk_home() / "plugins").resolve()
     rows: list[dict[str, Any]] = []
 
@@ -734,7 +900,14 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
         # backends/platforms/providers and the live memory provider count as enabled without a list
         # entry (#73131, #82898).
         runtime_status = _plugin_status(
-            name, enabled_set, disabled_set, key=key, source=source, dir_path=dir_str, active=active)
+            name,
+            enabled_set,
+            disabled_set,
+            key=key,
+            source=source,
+            dir_path=dir_str,
+            active=active,
+        )
         if runtime_status == "not enabled":
             runtime_status = "inactive"
 
@@ -745,33 +918,46 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
             under_user_tree = True
         except ValueError:
             under_user_tree = False
-        can_remove_update = source in {"user", "git"} and under_user_tree and dir_path.is_dir()
+        can_remove_update = (
+            source in {"user", "git"} and under_user_tree and dir_path.is_dir()
+        )
 
         provides_tools = _read_plugin_manifest_at(dir_path).get("provides_tools") or []
-        auth_required, auth_command = _plugin_auth_hint(name, provides_tools) if provides_tools else (False, "")
+        auth_required, auth_command = (
+            _plugin_auth_hint(name, provides_tools) if provides_tools else (False, "")
+        )
 
-        rows.append({
-            "name": name,
-            "version": version or "",
-            "description": description or "",
-            "source": source,
-            "runtime_status": runtime_status,
-            "has_dashboard_manifest": dm is not None or (dir_path / "dashboard" / "manifest.json").exists(),
-            "dashboard_manifest": _strip_dashboard_manifest(dm) if dm else None,
-            "path": dir_str,
-            "can_remove": can_remove_update,
-            "can_update_git": can_remove_update and (dir_path / ".git").exists(),
-            "auth_required": auth_required,
-            "auth_command": auth_command,
-            "user_hidden": name in hidden_plugins,
-            "removed_reason": removed_annotation(name, dir_str, removed_entries),
-        })
+        rows.append(
+            {
+                "name": name,
+                "version": version or "",
+                "description": description or "",
+                "source": source,
+                "runtime_status": runtime_status,
+                "has_dashboard_manifest": dm is not None
+                or (dir_path / "dashboard" / "manifest.json").exists(),
+                "dashboard_manifest": _strip_dashboard_manifest(dm) if dm else None,
+                "path": dir_str,
+                "can_remove": can_remove_update,
+                "can_update_git": can_remove_update and (dir_path / ".git").exists(),
+                "auth_required": auth_required,
+                "auth_command": auth_command,
+                "user_hidden": name in hidden_plugins,
+                "removed_reason": removed_annotation(name, dir_str, removed_entries),
+            }
+        )
 
     agent_names = {r["name"] for r in rows}
-    orphan_dashboard = [_strip_dashboard_manifest(p) for p in dashboard_list if str(p["name"]) not in agent_names]
+    orphan_dashboard = [
+        _strip_dashboard_manifest(p)
+        for p in dashboard_list
+        if str(p["name"]) not in agent_names
+    ]
     memory_providers = _discover_memory_provider_statuses()
     try:
-        context_engines = [{"name": n, "description": desc} for n, desc in _discover_context_engines()]
+        context_engines = [
+            {"name": n, "description": desc} for n, desc in _discover_context_engines()
+        ]
     except Exception:
         context_engines = []
 
@@ -779,7 +965,9 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
         "plugins": rows,
         "orphan_dashboard_plugins": orphan_dashboard,
         "providers": {
-            "memory_provider": _normalize_memory_provider_name(_get_current_memory_provider()),
+            "memory_provider": _normalize_memory_provider_name(
+                _get_current_memory_provider()
+            ),
             "memory_options": memory_providers,
             "context_engine": _get_current_context_engine(),
             "context_options": context_engines,
@@ -788,15 +976,22 @@ def _merged_plugins_hub(force_refresh: bool = False) -> dict[str, Any]:
     duration = time.monotonic() - started_at
     if duration >= 0.25:
         _log.info(
-            "plugins/hub rebuilt in %.3fs (plugins=%d memory_options=%d)", duration, len(rows), len(memory_providers)
+            "plugins/hub rebuilt in %.3fs (plugins=%d memory_options=%d)",
+            duration,
+            len(rows),
+            len(memory_providers),
         )
     with _plugins_hub_cache_lock:
         _plugins_hub_cache[cache_key] = payload
-        _plugins_hub_cache_expires_at[cache_key] = time.monotonic() + _PLUGINS_HUB_CACHE_TTL_SECONDS
+        _plugins_hub_cache_expires_at[cache_key] = (
+            time.monotonic() + _PLUGINS_HUB_CACHE_TTL_SECONDS
+        )
     return payload
 
 
-def _plugin_api_mount_skip_reason(plugin: dict[str, Any], enabled_set: set, disabled_set: set) -> Optional[str]:
+def _plugin_api_mount_skip_reason(
+    plugin: dict[str, Any], enabled_set: set, disabled_set: set
+) -> Optional[str]:
     """Why a plugin's backend ``api`` must NOT be imported, or None when it may be.
 
     User plugins must be in ``plugins.enabled`` and not ``plugins.disabled`` before their
@@ -819,6 +1014,7 @@ def _launch_profile_scope():
     expand through another profile's secrets."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
     from clawk_cli.web_server_profiles import _config_profile_scope
+
     token = set_clawk_home_override(None)
     try:
         with _config_profile_scope(None):
@@ -831,13 +1027,18 @@ def _plugin_enable_sets_here() -> tuple[set, set]:
     """``(plugins.enabled, plugins.disabled)`` of the active profile scope from one cached read-only
     config read: the gates run on the event loop for every plugin request and upgrade."""
     from clawk_cli.config import load_config_readonly
+
     try:
         config = load_config_readonly()
     except Exception:  # health: allow BLE001 -- an unreadable config grants no consent (empty sets), as plugins_cmd reads it
         config = {}
-    enabled, disabled = (cfg_get(config, "plugins", key, default=[]) for key in ("enabled", "disabled"))
-    return (set(enabled) if isinstance(enabled, list) else set(),
-            set(disabled) if isinstance(disabled, list) else set())
+    enabled, disabled = (
+        cfg_get(config, "plugins", key, default=[]) for key in ("enabled", "disabled")
+    )
+    return (
+        set(enabled) if isinstance(enabled, list) else set(),
+        set(disabled) if isinstance(disabled, list) else set(),
+    )
 
 
 def _plugin_consent_withheld(plugin: dict[str, Any]) -> bool:
@@ -848,7 +1049,9 @@ def _plugin_consent_withheld(plugin: dict[str, Any]) -> bool:
     profile the request acts for decides alone: a native ticket's profile, a ``?profile=``
     selection, else the launch profile (#134889, PLG-3).
     """
-    return _plugin_api_mount_skip_reason(plugin, *_plugin_enable_sets_here()) is not None
+    return (
+        _plugin_api_mount_skip_reason(plugin, *_plugin_enable_sets_here()) is not None
+    )
 
 
 def _plugin_api_name(scope) -> str:
@@ -866,11 +1069,19 @@ async def _plugin_api_request_refused(name: str) -> bool:
     counts as a user plugin (safe default: refused).
     """
     from clawk_cli.web_server import _get_dashboard_plugins
-    from clawk_cli.web_server_plugin_profiles import rescanned_plugin, secondary_profile_home
+    from clawk_cli.web_server_plugin_profiles import (
+        rescanned_plugin,
+        secondary_profile_home,
+    )
+
     plugin = next((p for p in _get_dashboard_plugins() if p.get("name") == name), None)
     home = secondary_profile_home()
-    if plugin is None and home is not None:  # installed since the last scan (rate-limited per name)
-        plugin = await asyncio.to_thread(rescanned_plugin, home, name)  # a disk scan: off the event loop
+    if (
+        plugin is None and home is not None
+    ):  # installed since the last scan (rate-limited per name)
+        plugin = await asyncio.to_thread(
+            rescanned_plugin, home, name
+        )  # a disk scan: off the event loop
     return _plugin_consent_withheld(plugin or {"name": name, "source": "user"})
 
 
@@ -893,7 +1104,11 @@ class PluginApiWebSocketGate:
         self.app = app
 
     async def __call__(self, scope, receive, send) -> None:
-        from clawk_cli.web_server_plugin_profiles import plugin_request_scope, refuse_secondary_plugin_socket
+        from clawk_cli.web_server_plugin_profiles import (
+            plugin_request_scope,
+            refuse_secondary_plugin_socket,
+        )
+
         name = _plugin_api_name(scope) if scope["type"] == "websocket" else ""
         if not name:
             await self.app(scope, receive, send)
@@ -915,8 +1130,13 @@ def _native_ws_scope(scope):
     same profile, so consent, home and ``get_secret`` all follow the grant, as on HTTP
     (``native_profile_scope``).
     """
-    from clawk_cli.dashboard_auth.native_http import HEADER, native_profile_scope, redeem_native_ws
+    from clawk_cli.dashboard_auth.native_http import (
+        HEADER,
+        native_profile_scope,
+        redeem_native_ws,
+    )
     from clawk_cli.web_server_profiles import _config_profile_scope
+
     conn = HTTPConnection(scope)
     if HEADER not in conn.headers:
         yield True
@@ -935,7 +1155,9 @@ def _native_ws_scope(scope):
 _plugin_api_mount_lock = threading.Lock()
 
 
-async def _plugin_route_secret_scope(conn: HTTPConnection, profile: Optional[str] = None):
+async def _plugin_route_secret_scope(
+    conn: HTTPConnection, profile: Optional[str] = None
+):
     """Home + secret scope for one ``/api/plugins/<name>/`` request: the launch profile's, or the
     ``?profile=``-requested one — the same ``_config_profile_scope`` seam the built-in routers use.
     Without it plugin handlers ran unscoped, so under multi-profile hosting every ``get_secret``
@@ -946,11 +1168,14 @@ async def _plugin_route_secret_scope(conn: HTTPConnection, profile: Optional[str
     ``run_in_threadpool`` copies the request context into the worker."""
     from clawk_cli.web_server_plugin_profiles import in_process_router_refused
     from clawk_cli.web_server_profiles import _config_profile_scope, _is_current_profile
+
     name = _plugin_api_name(conn.scope)
     with _config_profile_scope(profile):
         # The plugin must not run on a profile that disabled it (#134889), and this router is the
         # launch profile's copy: a secondary profile reaches it only for bundled plugins (PLG-3).
-        if (not _is_current_profile(profile) and await _plugin_api_request_refused(name)) or in_process_router_refused(name):
+        if (
+            not _is_current_profile(profile) and await _plugin_api_request_refused(name)
+        ) or in_process_router_refused(name):
             if conn.scope["type"] == "websocket":
                 raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
             raise HTTPException(status_code=404, detail="Plugin not found")
@@ -969,20 +1194,45 @@ def _mount_hosted_plugin_api(app, plugin: dict, api_file_name: str) -> None:
         # still the launch profile's (discovery scans only the launch home and the root).
         target = await asyncio.to_thread(_hosted_plugin_for_request, name)
         if target is None:
-            return JSONResponse({"detail": f"plugin {name!r} is not enabled in this profile"}, status_code=404)
+            return JSONResponse(
+                {"detail": f"plugin {name!r} is not enabled in this profile"},
+                status_code=404,
+            )
         host, dashboard_dir, api_file = target
         from clawk_cli.web_server_plugin_profiles import run_hosted_request
-        query, headers = request.url.query, [(k, v) for k, v in request.headers.items() if k.lower() != "host"]
+
+        query, headers = (
+            request.url.query,
+            [(k, v) for k, v in request.headers.items() if k.lower() != "host"],
+        )
         body = await request.body()
         from clawk_cli.plugin_host_http_auth import admitted_for_sensitive_route
-        authenticated = admitted_for_sensitive_route(request)
-        return await run_hosted_request(host.home, name, lambda timeout: host.asgi_request(
-            name, dashboard_dir, api_file, request.method, "/" + path, query, headers, body,
-            timeout=timeout, authenticated=authenticated))
 
-    app.add_api_route(f"/api/plugins/{name}/{{path:path}}", forward, include_in_schema=False,
-                      methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-                      dependencies=[Depends(_plugin_route_secret_scope)])
+        authenticated = admitted_for_sensitive_route(request)
+        return await run_hosted_request(
+            host.home,
+            name,
+            lambda timeout: host.asgi_request(
+                name,
+                dashboard_dir,
+                api_file,
+                request.method,
+                "/" + path,
+                query,
+                headers,
+                body,
+                timeout=timeout,
+                authenticated=authenticated,
+            ),
+        )
+
+    app.add_api_route(
+        f"/api/plugins/{name}/{{path:path}}",
+        forward,
+        include_in_schema=False,
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        dependencies=[Depends(_plugin_route_secret_scope)],
+    )
     _log.info("Mounted plugin API routes via the plugin host: /api/plugins/%s/", name)
 
 
@@ -991,12 +1241,23 @@ def _hosted_plugin_for_request(name: str) -> Optional[tuple]:
     when that profile has no enabled user copy of it."""
     from clawk_cli.plugins import get_plugin_manager
     from clawk_cli.plugins_cmd import _get_disabled_set, _get_enabled_set
+
     for plugin in _discover_dashboard_plugins():
-        if plugin.get("name") != name or not plugin.get("_api_file") or plugin.get("source") != "user":
+        if (
+            plugin.get("name") != name
+            or not plugin.get("_api_file")
+            or plugin.get("source") != "user"
+        ):
             continue
-        if _plugin_api_mount_skip_reason(plugin, _get_enabled_set(), _get_disabled_set()):
+        if _plugin_api_mount_skip_reason(
+            plugin, _get_enabled_set(), _get_disabled_set()
+        ):
             return None
-        return get_plugin_manager()._plugin_host(), str(plugin["_dir"]), str(plugin["_api_file"])
+        return (
+            get_plugin_manager()._plugin_host(),
+            str(plugin["_dir"]),
+            str(plugin["_api_file"]),
+        )
     return None
 
 
@@ -1016,8 +1277,10 @@ def _mount_plugin_api_routes():
     user's intent. (#46435, GHSA-mcfc-hp25-cjv7)
     """
     from clawk_cli.web_server import _get_dashboard_plugins, app
+
     try:
         from clawk_cli.plugins_cmd import _get_enabled_set, _get_disabled_set
+
         enabled_set = _get_enabled_set()
         disabled_set = _get_disabled_set()
     except Exception:
@@ -1047,25 +1310,56 @@ def _try_hot_mount_plugin_api(name: str) -> bool:
         return False
     from clawk_cli.plugins_cmd import _get_disabled_set, _get_enabled_set
     from clawk_cli.web_server import _get_dashboard_plugins, app
-    from clawk_cli.web_server_plugin_profiles import plugin_api_path, secondary_plugin, secondary_profile_home
+    from clawk_cli.web_server_plugin_profiles import (
+        plugin_api_path,
+        secondary_plugin,
+        secondary_profile_home,
+    )
+
     # A secondary profile reaches this router only for its own bundled copy (Clawksis code), and its
     # own lists decide that one (PLG-3).
-    secondary, own, requester_sets = secondary_profile_home() is not None, secondary_plugin(name), _plugin_enable_sets_here()
+    secondary, own, requester_sets = (
+        secondary_profile_home() is not None,
+        secondary_plugin(name),
+        _plugin_enable_sets_here(),
+    )
     with _launch_profile_scope(), _plugin_api_mount_lock:
         enabled_set, disabled_set = _get_enabled_set(), _get_disabled_set()
-        if _plugin_api_mounted(app, name):  # a mounted plugin's unknown subpath: no disk rescan
+        if _plugin_api_mounted(
+            app, name
+        ):  # a mounted plugin's unknown subpath: no disk rescan
             return False
-        plugin = next((p for p in _get_dashboard_plugins(force_rescan=True) if p.get("name") == name), None)
+        plugin = next(
+            (
+                p
+                for p in _get_dashboard_plugins(force_rescan=True)
+                if p.get("name") == name
+            ),
+            None,
+        )
         if secondary:
-            if own is None or own.get("source") != "bundled" or plugin_api_path(plugin) != plugin_api_path(own):
+            if (
+                own is None
+                or own.get("source") != "bundled"
+                or plugin_api_path(plugin) != plugin_api_path(own)
+            ):
                 return False
             enabled_set, disabled_set = requester_sets
         routes = app.router.routes
         before = len(routes)
-        if plugin is None or not _mount_one_plugin_api(app, plugin, enabled_set, disabled_set):
+        if plugin is None or not _mount_one_plugin_api(
+            app, plugin, enabled_set, disabled_set
+        ):
             return False
         fresh, rest = routes[before:], routes[:before]
-        at = next((i for i, r in enumerate(rest) if getattr(r, "endpoint", None) is _plugin_api_hot_mount), len(rest))
+        at = next(
+            (
+                i
+                for i, r in enumerate(rest)
+                if getattr(r, "endpoint", None) is _plugin_api_hot_mount
+            ),
+            len(rest),
+        )
         # One slice assignment: a request iterating the list on the loop thread sees routes
         # shift right (re-checks one), never skips one.
         routes[:] = rest[:at] + fresh + rest[at:]
@@ -1079,7 +1373,10 @@ def _plugin_api_mounted(app, name: str) -> bool:
     prefix = f"/api/plugins/{name}"
     return any(
         getattr(r, "endpoint", None) is not _plugin_api_hot_mount
-        and (getattr(r, "path", "") == prefix or getattr(r, "path", "").startswith(prefix + "/"))
+        and (
+            getattr(r, "path", "") == prefix
+            or getattr(r, "path", "").startswith(prefix + "/")
+        )
         for r in app.router.routes
     )
 
@@ -1098,14 +1395,21 @@ class _PluginApiHotMount:
     async def __call__(self, scope, receive, send) -> None:
         from clawk_cli.web_server import app
         from clawk_cli.web_server_plugin_profiles import plugin_request_scope
+
         name = str(scope.get("path_params", {}).get("name", ""))
-        with plugin_request_scope(scope):  # a ``?profile=`` selection decides its own cold mount (PLG-3)
+        with plugin_request_scope(
+            scope
+        ):  # a ``?profile=`` selection decides its own cold mount (PLG-3)
             mounted = await asyncio.to_thread(_try_hot_mount_plugin_api, name)
         if mounted:
-            _log.info("Hot-mounted plugin API routes on first request: /api/plugins/%s/", name)
+            _log.info(
+                "Hot-mounted plugin API routes on first request: /api/plugins/%s/", name
+            )
             await app.router(dict(scope, path_params={}), receive, send)
             return
-        await JSONResponse({"detail": "Not Found"}, status_code=404)(scope, receive, send)
+        await JSONResponse({"detail": "Not Found"}, status_code=404)(
+            scope, receive, send
+        )
 
 
 _plugin_api_hot_mount = _PluginApiHotMount()
@@ -1114,14 +1418,21 @@ _plugin_api_hot_mount = _PluginApiHotMount()
 def _register_plugin_api_fallback(app) -> None:
     """Register the hot-mount fallback once, after the startup plugin routers (so a mounted
     router always matches first) and before the SPA catch-all."""
-    if any(getattr(r, "endpoint", None) is _plugin_api_hot_mount for r in app.router.routes):
+    if any(
+        getattr(r, "endpoint", None) is _plugin_api_hot_mount for r in app.router.routes
+    ):
         return
-    app.router.add_route("/api/plugins/{name}/{path:path}", _plugin_api_hot_mount,
-                         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-                         include_in_schema=False)
+    app.router.add_route(
+        "/api/plugins/{name}/{path:path}",
+        _plugin_api_hot_mount,
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        include_in_schema=False,
+    )
 
 
-def _mount_one_plugin_api(app, plugin: dict[str, Any], enabled_set: set, disabled_set: set) -> bool:
+def _mount_one_plugin_api(
+    app, plugin: dict[str, Any], enabled_set: set, disabled_set: set
+) -> bool:
     """Mount one plugin's backend API routes on ``app`` if its trust gates pass.
 
     Returns True when routes were added. Callers must hold ``_plugin_api_mount_lock``.
@@ -1139,6 +1450,7 @@ def _mount_one_plugin_api(app, plugin: dict[str, Any], enabled_set: set, disable
         return False
     if plugin.get("source") not in ("bundled", "project"):
         from clawk_cli.plugin_isolation import ISOLATION_HOST, isolation_mode
+
         if isolation_mode() == ISOLATION_HOST:
             _mount_hosted_plugin_api(app, plugin, api_file_name)
             return True
@@ -1147,7 +1459,8 @@ def _mount_one_plugin_api(app, plugin: dict[str, Any], enabled_set: set, disable
             "Plugin %s: ignoring backend api=%s (project plugins may "
             "not auto-import Python code; move the plugin to "
             "~/.clawksis/plugins/ if you trust it)",
-            plugin["name"], api_file_name,
+            plugin["name"],
+            api_file_name,
         )
         return False
     dashboard_dir = Path(plugin["_dir"])
@@ -1159,11 +1472,17 @@ def _mount_one_plugin_api(app, plugin: dict[str, Any], enabled_set: set, disable
         # with after caching or a future caller bypasses the validator.
         _log.warning(
             "Plugin %s: refusing to import api file outside its "
-            "dashboard directory (%s)", plugin["name"], api_path,
+            "dashboard directory (%s)",
+            plugin["name"],
+            api_path,
         )
         return False
     if not api_path.exists():
-        _log.warning("Plugin %s declares api=%s but file not found", plugin["name"], api_file_name)
+        _log.warning(
+            "Plugin %s declares api=%s but file not found",
+            plugin["name"],
+            api_file_name,
+        )
         return False
     try:
         module_name = f"clawk_dashboard_plugin_{plugin['name']}"
@@ -1191,5 +1510,10 @@ def _mount_one_plugin_api(app, plugin: dict[str, Any], enabled_set: set, disable
         _log.info("Mounted plugin API routes: /api/plugins/%s/", plugin["name"])
         return True
     except Exception as exc:  # health: allow BLE001 -- executes third-party plugin code; any failure must skip that plugin, not crash the server
-        _log.warning("Failed to load plugin %s API routes: %s", plugin["name"], exc, exc_info=True)
+        _log.warning(
+            "Failed to load plugin %s API routes: %s",
+            plugin["name"],
+            exc,
+            exc_info=True,
+        )
         return False

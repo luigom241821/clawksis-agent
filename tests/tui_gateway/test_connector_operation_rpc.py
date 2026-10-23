@@ -47,11 +47,19 @@ class PipeClient:
     def events(self, kind, *, expect=1):
         deadline = time.time() + 2
         while time.time() < deadline:
-            found = [f["params"] for f in list(self.frames) if f.get("method") == "event" and f["params"]["type"] == kind]
+            found = [
+                f["params"]
+                for f in list(self.frames)
+                if f.get("method") == "event" and f["params"]["type"] == kind
+            ]
             if len(found) >= expect:
                 return found
             time.sleep(0.01)
-        return [f["params"] for f in list(self.frames) if f.get("method") == "event" and f["params"]["type"] == kind]
+        return [
+            f["params"]
+            for f in list(self.frames)
+            if f.get("method") == "event" and f["params"]["type"] == kind
+        ]
 
 
 SID = "op-rpc-session"
@@ -62,9 +70,17 @@ def owned(monkeypatch):
     live.reset_for_tests()
     with ExitStack() as stack:
         owner, stranger = PipeClient(stack), PipeClient(stack)
-        session = dict(transport=owner.transport, agent=None, session_key=SID, history=[],
-                       history_lock=threading.Lock(), history_version=0, running=False, attached_images=[],
-                       source="desktop")
+        session = dict(
+            transport=owner.transport,
+            agent=None,
+            session_key=SID,
+            history=[],
+            history_lock=threading.Lock(),
+            history_version=0,
+            running=False,
+            attached_images=[],
+            source="desktop",
+        )
         monkeypatch.setitem(server._sessions, SID, session)
         yield owner, stranger, session
     live.reset_for_tests()
@@ -72,13 +88,22 @@ def owned(monkeypatch):
 
 def _rpc(client, method, **params):
     before = len(client.frames)
-    response = server.dispatch({"jsonrpc": "2.0", "id": 7, "method": method,
-                                "params": {"owner": {"type": "session", "session_id": SID}, **params}}, client.transport)
+    response = server.dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 7,
+            "method": method,
+            "params": {"owner": {"type": "session", "session_id": SID}, **params},
+        },
+        client.transport,
+    )
     if response is not None:
         return response
     deadline = time.time() + 2
     while time.time() < deadline:
-        replies = [frame for frame in list(client.frames)[before:] if frame.get("id") == 7]
+        replies = [
+            frame for frame in list(client.frames)[before:] if frame.get("id") == 7
+        ]
         if replies:
             return replies[-1]
         time.sleep(0.01)
@@ -99,8 +124,13 @@ def _connect_rpc(client, **params):
 
 
 def _open_op():
-    operation = ConnectionOperation([Target("gmail", "connector", "connect"), Target("notion", "connector", "connect")],
-                                    session_key=SID)
+    operation = ConnectionOperation(
+        [
+            Target("gmail", "connector", "connect"),
+            Target("notion", "connector", "connect"),
+        ],
+        session_key=SID,
+    )
     live.open(operation)
     return operation
 
@@ -108,42 +138,69 @@ def _open_op():
 def test_operation_status_returns_the_live_snapshot_with_the_server_deadline(owned):
     owner, _, _ = owned
     operation = _open_op()
-    operation.transition("gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/gmail")
+    operation.transition(
+        "gmail",
+        TargetState.initiated,
+        Actor.backend_watcher,
+        connect_url="https://l/gmail",
+    )
     reply = _rpc(owner, "connectors.operation.status", op_id=operation.op_id)
     result = reply["result"]
     assert result["op_id"] == operation.op_id
     assert result["deadline_at"] == operation.deadline_at
     assert result["settled"] is False and result["settled_by"] is None
     by = {t["name"]: t for t in result["targets"]}
-    assert by["gmail"]["state"] == "initiated" and by["gmail"]["connect_url"] == "https://l/gmail"
+    assert (
+        by["gmail"]["state"] == "initiated"
+        and by["gmail"]["connect_url"] == "https://l/gmail"
+    )
     assert by["notion"]["state"] == "pending"
 
 
 def test_operation_status_is_owner_only_and_validates_params(owned):
     owner, stranger, _ = owned
     operation = _open_op()
-    assert _rpc(stranger, "connectors.operation.status", op_id=operation.op_id)["error"]["code"] == 4001
+    assert (
+        _rpc(stranger, "connectors.operation.status", op_id=operation.op_id)["error"][
+            "code"
+        ]
+        == 4001
+    )
     assert _rpc(owner, "connectors.operation.status")["error"]["code"] == 4000
-    assert _rpc(owner, "connectors.operation.status", op_id="nope")["error"]["code"] == 4004
+    assert (
+        _rpc(owner, "connectors.operation.status", op_id="nope")["error"]["code"]
+        == 4004
+    )
 
 
 def test_respond_drives_the_live_operation_and_emits_update(owned):
     owner, stranger, _ = owned
     operation = _open_op()
     operation.transition("gmail", TargetState.initiated, Actor.backend_watcher)
-    foreign = _rpc(stranger, "connection.respond", op_id=operation.op_id,
-                   result={"targets": [{"name": "notion", "status": "skipped"}]})
+    foreign = _rpc(
+        stranger,
+        "connection.respond",
+        op_id=operation.op_id,
+        result={"targets": [{"name": "notion", "status": "skipped"}]},
+    )
     assert foreign["error"]["code"] == 4001
     assert operation.target("notion").state == TargetState.pending
 
-    reply = _rpc(owner, "connection.respond", op_id=operation.op_id,
-                 result={"targets": [{"name": "notion", "status": "skipped"}]})
+    reply = _rpc(
+        owner,
+        "connection.respond",
+        op_id=operation.op_id,
+        result={"targets": [{"name": "notion", "status": "skipped"}]},
+    )
     assert "result" in reply, reply
     assert operation.target("notion").state == TargetState.skipped
     assert operation.wake.is_set()
     updates = owner.events("connection.update", expect=2)
     assert updates and updates[-1]["payload"]["target"] == "notion"
-    assert updates[-1]["payload"]["to"] == "skipped" and updates[-1]["payload"]["actor"] == "user"
+    assert (
+        updates[-1]["payload"]["to"] == "skipped"
+        and updates[-1]["payload"]["actor"] == "user"
+    )
     assert updates[-1]["payload"]["op_id"] == operation.op_id
 
 
@@ -153,9 +210,17 @@ def test_respond_cannot_claim_an_outcome_for_any_target(owned):
     owner, _, _ = owned
     operation = _open_op()
     operation.transition("gmail", TargetState.initiated, Actor.backend_watcher)
-    reply = _rpc(owner, "connection.respond", op_id=operation.op_id,
-                 result={"targets": [{"name": "gmail", "status": "connected"},
-                                     {"name": "notion", "status": "failed"}]})
+    reply = _rpc(
+        owner,
+        "connection.respond",
+        op_id=operation.op_id,
+        result={
+            "targets": [
+                {"name": "gmail", "status": "connected"},
+                {"name": "notion", "status": "failed"},
+            ]
+        },
+    )
     assert reply["error"]["code"] == 4002, reply
     assert operation.target("gmail").state == TargetState.initiated
     assert operation.target("notion").state == TargetState.pending
@@ -164,10 +229,17 @@ def test_respond_cannot_claim_an_outcome_for_any_target(owned):
 def test_respond_continue_settles_and_emits_the_settlement_update(owned):
     owner, _, _ = owned
     operation = _open_op()
-    reply = _rpc(owner, "connection.respond", op_id=operation.op_id, result={"settled_by": "continue"})
+    reply = _rpc(
+        owner,
+        "connection.respond",
+        op_id=operation.op_id,
+        result={"settled_by": "continue"},
+    )
     assert "result" in reply
     assert operation.settled and operation.settled_by.value == "continue"
-    settled = [u for u in owner.events("connection.update") if u["payload"].get("settled")]
+    settled = [
+        u for u in owner.events("connection.update") if u["payload"].get("settled")
+    ]
     assert settled and settled[-1]["payload"]["settled_by"] == "continue"
 
 
@@ -185,9 +257,21 @@ def test_panel_connect_reissues_only_a_dead_link(owned, monkeypatch):
     with (the card reopens it), so the RPC refuses rather than spend a second mint."""
     owner, _, _ = owned
     operation = _open_op()
-    operation.transition("gmail", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/gmail/1")
-    operation.transition("notion", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/notion/1")
-    operation.transition("notion", TargetState.failed, Actor.backend_watcher, detail="vendor: nope")
+    operation.transition(
+        "gmail",
+        TargetState.initiated,
+        Actor.backend_watcher,
+        connect_url="https://l/gmail/1",
+    )
+    operation.transition(
+        "notion",
+        TargetState.initiated,
+        Actor.backend_watcher,
+        connect_url="https://l/notion/1",
+    )
+    operation.transition(
+        "notion", TargetState.failed, Actor.backend_watcher, detail="vendor: nope"
+    )
     mints = []
 
     class Client:
@@ -196,12 +280,23 @@ def test_panel_connect_reissues_only_a_dead_link(owned, monkeypatch):
 
         def connections(self, names, *, reinitiate=False, **_):
             mints.append((tuple(names), reinitiate))
-            return {"results": [{"connector": n, "status": "initiated", "connect_url": f"https://l/{n}/2"} for n in names]}
+            return {
+                "results": [
+                    {
+                        "connector": n,
+                        "status": "initiated",
+                        "connect_url": f"https://l/{n}/2",
+                    }
+                    for n in names
+                ]
+            }
 
     monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", Client)
     # The real dispatcher: availability gate passes, then the open operation routes to _reissue.
     monkeypatch.setattr("tools.connectors.connectors_available", lambda: True)
-    monkeypatch.setattr("model_tools._select_tool_names", lambda *a, **k: {"manage_connections"})
+    monkeypatch.setattr(
+        "model_tools._select_tool_names", lambda *a, **k: {"manage_connections"}
+    )
 
     refused = _connect_rpc(owner, connectors=["gmail"])
     assert refused["error"]["code"] == 4002 and mints == []
@@ -219,7 +314,12 @@ def test_a_failed_reissue_leaves_the_row_failed_with_no_link(owned, monkeypatch,
     """Try again whose mint fails must not show the row as waiting on the old dead link."""
     owner, _, _ = owned
     operation = _open_op()
-    operation.transition("notion", TargetState.initiated, Actor.backend_watcher, connect_url="https://l/notion/1")
+    operation.transition(
+        "notion",
+        TargetState.initiated,
+        Actor.backend_watcher,
+        connect_url="https://l/notion/1",
+    )
     actor = Actor.clock if dead == TargetState.expired else Actor.backend_watcher
     operation.transition("notion", dead, actor, detail="vendor: nope")
 
@@ -228,16 +328,29 @@ def test_a_failed_reissue_leaves_the_row_failed_with_no_link(owned, monkeypatch,
             pass
 
         def connections(self, names, *, reinitiate=False, **_):
-            return {"results": [{"connector": n, "status": "failed", "status_reason": "vendor: still no"} for n in names]}
+            return {
+                "results": [
+                    {
+                        "connector": n,
+                        "status": "failed",
+                        "status_reason": "vendor: still no",
+                    }
+                    for n in names
+                ]
+            }
 
     monkeypatch.setattr("tools.connectors.gateway.client.ConnectorClient", Client)
     monkeypatch.setattr("tools.connectors.connectors_available", lambda: True)
-    monkeypatch.setattr("model_tools._select_tool_names", lambda *a, **k: {"manage_connections"})
+    monkeypatch.setattr(
+        "model_tools._select_tool_names", lambda *a, **k: {"manage_connections"}
+    )
 
     before = len(owner.frames)
     _rpc(owner, "connectors.connect", connectors=["notion"])
     deadline = time.time() + 2
-    while time.time() < deadline and not [f for f in list(owner.frames)[before:] if f.get("id") == 7]:
+    while time.time() < deadline and not [
+        f for f in list(owner.frames)[before:] if f.get("id") == 7
+    ]:
         time.sleep(0.01)
     target = operation.target("notion")
     assert target.state == TargetState.failed

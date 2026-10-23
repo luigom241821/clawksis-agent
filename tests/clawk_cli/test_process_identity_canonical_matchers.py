@@ -18,12 +18,27 @@ LOOPBACK = "--host 127.0.0.1 --port 0"
 CMDLINES = [
     ("python -m clawk_cli.main serve " + LOOPBACK, "serve", True, True),
     ("python -m clawk_cli.main dashboard", "dashboard", False, True),
-    ("/venv/bin/clawk serve --isolated --host=127.0.0.1 --port=0 --ssh-owner-nonce abc", "serve", True, False),
-    (r"C:\clawk\.venv\Scripts\clawk.exe serve --host 100.106.105.2 --port 9119", "serve", False, False),
+    (
+        "/venv/bin/clawk serve --isolated --host=127.0.0.1 --port=0 --ssh-owner-nonce abc",
+        "serve",
+        True,
+        False,
+    ),
+    (
+        r"C:\clawk\.venv\Scripts\clawk.exe serve --host 100.106.105.2 --port 9119",
+        "serve",
+        False,
+        False,
+    ),
     ("clawk.exe dashboard", "dashboard", False, False),
     ("clawk --profile ops serve " + LOOPBACK, "serve", True, False),
     ("clawk -m serve kanban --preserve-cache " + LOOPBACK, "kanban", False, False),
-    ("python -m clawk_cli.main kanban --preserve-cache " + LOOPBACK, "kanban", False, False),
+    (
+        "python -m clawk_cli.main kanban --preserve-cache " + LOOPBACK,
+        "kanban",
+        False,
+        False,
+    ),
     ("clawk --reasoning high dashboard " + LOOPBACK, "dashboard", False, False),
     ("clawk gateway run --replace", "gateway", False, False),
     ("clawk chat --model serve", "chat", False, False),
@@ -33,7 +48,8 @@ CMDLINES = [
 
 @pytest.mark.parametrize("cmdline,subcommand,reapable,desktop_backend", CMDLINES)
 def test_kill_and_relaunch_predicates_agree_with_the_canonical_holder_matcher(
-        cmdline, subcommand, reapable, desktop_backend):
+    cmdline, subcommand, reapable, desktop_backend
+):
     assert _clawk_holder_subcommand(cmdline) == subcommand
     # Desktop-local reap (a KILL path): serve + loopback + ephemeral port, decided by tokens.
     assert _is_desktop_local_serve_cmdline(cmdline) is reapable
@@ -42,8 +58,12 @@ def test_kill_and_relaunch_predicates_agree_with_the_canonical_holder_matcher(
 
 
 def test_desktop_local_serve_spares_fixed_port_and_remote_hosts():
-    assert not _is_desktop_local_serve_cmdline("clawk serve --host 100.106.105.2 --port 9119 --skip-build")
-    assert not _is_desktop_local_serve_cmdline("clawk serve --host 127.0.0.1 --port 9119")
+    assert not _is_desktop_local_serve_cmdline(
+        "clawk serve --host 100.106.105.2 --port 9119 --skip-build"
+    )
+    assert not _is_desktop_local_serve_cmdline(
+        "clawk serve --host 127.0.0.1 --port 9119"
+    )
     assert _is_desktop_local_serve_cmdline("clawk serve --host localhost --port 0")
 
 
@@ -61,8 +81,11 @@ def test_profile_liveness_is_the_shared_ladder(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gw_status, "resolve_gateway_liveness", fake_resolve)
     calls: list = []
-    monkeypatch.setattr(gw_status, "get_running_pid",
-                        lambda path, cleanup_stale=True: calls.append((path, cleanup_stale)))
+    monkeypatch.setattr(
+        gw_status,
+        "get_running_pid",
+        lambda path, cleanup_stale=True: calls.append((path, cleanup_stale)),
+    )
     assert _check_gateway_running(tmp_path) is True
     assert seen["profile_dir"] == tmp_path
     seen["pid_probe"](tmp_path / "gateway.pid")
@@ -78,14 +101,22 @@ BACKENDS = [
 ]
 
 
-def test_dashboard_scan_selects_entrypoint_plus_subcommand_tokens_never_substrings(monkeypatch):
+def test_dashboard_scan_selects_entrypoint_plus_subcommand_tokens_never_substrings(
+    monkeypatch,
+):
     from clawk_cli import dashboard_procs
     from clawk_cli import process_identity
 
-    monkeypatch.setattr(dashboard_procs, "_iter_process_table",
-                        lambda: [(4242, DECOY), *((5000 + i, cmd) for i, cmd in enumerate(BACKENDS))])
+    monkeypatch.setattr(
+        dashboard_procs,
+        "_iter_process_table",
+        lambda: [(4242, DECOY), *((5000 + i, cmd) for i, cmd in enumerate(BACKENDS))],
+    )
     monkeypatch.setattr(process_identity, "ledger_entries", list)
-    assert dashboard_procs._scan_dashboard_processes() == [(5000, BACKENDS[0]), (5001, BACKENDS[1])]
+    assert dashboard_procs._scan_dashboard_processes() == [
+        (5000, BACKENDS[0]),
+        (5001, BACKENDS[1]),
+    ]
 
 
 def test_dashboard_runtime_parse_refuses_the_decoy_and_reads_a_real_backend():
@@ -94,4 +125,6 @@ def test_dashboard_runtime_parse_refuses_the_decoy_and_reads_a_real_backend():
     assert _parse_dashboard_runtime(DECOY) is None
     assert _parse_dashboard_runtime(BACKENDS[0]) == ("serve", "127.0.0.1", 0)
     # launchd ProgramArguments arrive ``shlex.join``ed: a quoted path with spaces is still the entry.
-    assert _parse_dashboard_runtime("'/Users/a b/venv/bin/clawk' dashboard --port 9200") == ("dashboard", "127.0.0.1", 9200)
+    assert _parse_dashboard_runtime(
+        "'/Users/a b/venv/bin/clawk' dashboard --port 9200"
+    ) == ("dashboard", "127.0.0.1", 9200)

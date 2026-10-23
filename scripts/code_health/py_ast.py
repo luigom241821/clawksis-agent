@@ -45,9 +45,13 @@ def _deferred_parts(node: ast.AST) -> list[ast.AST] | None:
     Comprehensions and class bodies run immediately, so they are not deferred.
     """
     if isinstance(node, ast.Lambda):
-        return [d for d in (*node.args.defaults, *node.args.kw_defaults) if d is not None]
+        return [
+            d for d in (*node.args.defaults, *node.args.kw_defaults) if d is not None
+        ]
     if isinstance(node, _FUNCS):
-        defaults = [d for d in (*node.args.defaults, *node.args.kw_defaults) if d is not None]
+        defaults = [
+            d for d in (*node.args.defaults, *node.args.kw_defaults) if d is not None
+        ]
         return [*node.decorator_list, *defaults]
     if isinstance(node, ast.GeneratorExp):
         return [node.generators[0].iter]

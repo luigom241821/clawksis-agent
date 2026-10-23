@@ -59,40 +59,72 @@ def test_post_tool_compression_reanchors_the_active_user_boundary(monkeypatch):
 
 
 def _response(*, tool: bool):
-    tool_calls = [SimpleNamespace(
-        id="call_1", type="function",
-        function=SimpleNamespace(name="web_search", arguments='{"query": "x"}'),
-    )] if tool else None
+    tool_calls = (
+        [
+            SimpleNamespace(
+                id="call_1",
+                type="function",
+                function=SimpleNamespace(name="web_search", arguments='{"query": "x"}'),
+            )
+        ]
+        if tool
+        else None
+    )
     message = SimpleNamespace(
-        content=None if tool else "done", reasoning_content=None, reasoning=None, tool_calls=tool_calls,
+        content=None if tool else "done",
+        reasoning_content=None,
+        reasoning=None,
+        tool_calls=tool_calls,
     )
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=message, finish_reason="tool_calls" if tool else "stop")],
-        model="test/model", usage=None,
+        choices=[
+            SimpleNamespace(
+                message=message, finish_reason="tool_calls" if tool else "stop"
+            )
+        ],
+        model="test/model",
+        usage=None,
     )
 
 
 def test_pre_api_compression_mid_turn_keeps_this_turns_tool_pair_on_the_wire():
     """Pre-API compression after a tool round shrinks ``messages`` from the front; the next request
     must still carry this turn's assistant tool_call and its result (state.db holds both)."""
-    tool_def = {"type": "function", "function": {
-        "name": "web_search", "description": "s",
-        "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
-    }}
+    tool_def = {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "s",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+            },
+        },
+    }
     with (
         patch("model_tools.get_tool_definitions", return_value=[tool_def]),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
         patch("agent.model_metadata.get_model_context_length", return_value=256_000),
-        patch("agent.context_compressor.get_model_context_length", return_value=256_000),
+        patch(
+            "agent.context_compressor.get_model_context_length", return_value=256_000
+        ),
     ):
         agent = AIAgent(
-            api_key="test-key-1234567890", base_url="https://openrouter.ai/api/v1", model="test/model",
-            quiet_mode=True, skip_context_files=True, skip_memory=True, max_iterations=6,
+            api_key="test-key-1234567890",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            max_iterations=6,
         )
     agent.client = MagicMock()
     # No usage: the post-tool gate has no real count, so the pre-API gate owns the compaction.
-    agent.client.chat.completions.create.side_effect = [_response(tool=True), _response(tool=False)]
+    agent.client.chat.completions.create.side_effect = [
+        _response(tool=True),
+        _response(tool=False),
+    ]
     agent._cached_system_prompt = "You are helpful."
     agent._use_prompt_caching = False
     agent._disable_streaming = True
@@ -121,19 +153,37 @@ def test_pre_api_compression_mid_turn_keeps_this_turns_tool_pair_on_the_wire():
 
     def _estimate(messages=None, *_args, **_kwargs):
         # The tool result tips the request over threshold until one compaction ran.
-        return 200 if not compactions and any(m.get("role") == "tool" for m in messages or []) else 10
+        return (
+            200
+            if not compactions and any(m.get("role") == "tool" for m in messages or [])
+            else 10
+        )
 
     def _compress(messages, _system_message, **_kwargs):
         compactions.append(len(messages))
-        return list(messages[2:]), "compressed prompt"  # two historical rows summarized away
+        return list(
+            messages[2:]
+        ), "compressed prompt"  # two historical rows summarized away
 
     def _execute(_assistant_message, messages, *_args):
-        messages.append({"role": "tool", "name": "web_search", "tool_call_id": "call_1", "content": "RESULT-1"})
+        messages.append(
+            {
+                "role": "tool",
+                "name": "web_search",
+                "tool_call_id": "call_1",
+                "content": "RESULT-1",
+            }
+        )
 
-    history = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i}"} for i in range(30)]
+    history = [
+        {"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i}"}
+        for i in range(30)
+    ]
     with (
         patch("agent.turn_context.estimate_request_tokens_rough", return_value=10),
-        patch("agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate
+        ),
         patch("agent.conversation_loop._estimate_tools_tokens_rough", return_value=0),
         patch.object(agent, "_compress_context", side_effect=_compress),
         patch.object(agent, "_execute_tool_calls", side_effect=_execute),
@@ -148,7 +198,9 @@ def test_pre_api_compression_mid_turn_keeps_this_turns_tool_pair_on_the_wire():
     assert len(compactions) == 1
     sent = agent.client.chat.completions.create.call_args_list[-1].kwargs["messages"]
     assert [(m["role"], m.get("tool_call_id")) for m in sent[-3:]] == [
-        ("user", None), ("assistant", None), ("tool", "call_1"),
+        ("user", None),
+        ("assistant", None),
+        ("tool", "call_1"),
     ]
     assert [t["id"] for t in sent[-2]["tool_calls"]] == ["call_1"]
     assert sent[-1]["content"] == "RESULT-1"

@@ -1,6 +1,7 @@
 """How a gateway turn's reply reaches the editor: ``messageId`` grouping, exactly-once final text, tool and
 permission bubbles closed as the in-process agent closed them. Mixed into ``GatewayACPAgent``, whose state
 (``_conn``, ``_streamed``, ``_segments``, ``_tool_args``, ``_message_ids``, ``_cut``) it reads and updates."""
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,12 @@ def _text(payload):
 class GatewayReplyMixin:
     async def _project_tool(self, kind, sid, editor_id, aid, payload):
         """``tool.start`` / ``tool.complete`` as the in-process callbacks projected them (#134889 ACP-15)."""
-        from acp_adapter.tools import build_tool_complete, build_tool_start, coerce_tool_args
+        from acp_adapter.tools import (
+            build_tool_complete,
+            build_tool_start,
+            coerce_tool_args,
+        )
+
         # In-process turns publish ``tool_name``; managed workers publish ``name``.
         tool_name = payload.get("tool_name") or payload.get("name") or "tool"
         call_id = payload["tool_call_id"]
@@ -32,16 +38,26 @@ class GatewayReplyMixin:
             args = coerce_tool_args(payload.get("args"))
             self._tool_args[(sid, call_id)] = (tool_name, args, aid)
             if self._conn:
-                await self._conn.session_update(session_id=editor_id, update=build_tool_start(call_id, tool_name, args))
+                await self._conn.session_update(
+                    session_id=editor_id,
+                    update=build_tool_start(call_id, tool_name, args),
+                )
             return
         name, args, _ = self._tool_args.pop((sid, call_id), (tool_name, {}, aid))
         result = payload.get("result")
         if self._conn:
             # ``is_error`` is the executor's verdict: a cancelled or failed tool may return plain text the
             # result heuristic reads as success.
-            await self._conn.session_update(session_id=editor_id, update=build_tool_complete(
-                call_id, name, result=result if isinstance(result, str) else None, function_args=args,
-                is_error=payload.get("is_error") is True))
+            await self._conn.session_update(
+                session_id=editor_id,
+                update=build_tool_complete(
+                    call_id,
+                    name,
+                    result=result if isinstance(result, str) else None,
+                    function_args=args,
+                    is_error=payload.get("is_error") is True,
+                ),
+            )
 
     async def _finish_reply(self, sid, editor_id, aid, payload):
         """Show the settled reply's unseen remainder, then end the turn: its reply's id closes, and a tool
@@ -49,24 +65,38 @@ class GatewayReplyMixin:
         flushed them at turn end. Shared by ``message.complete`` and a retry's terminal receipt."""
         remainder = self._final_remainder(aid, payload)
         if remainder and self._conn:
-            await self._conn.session_update(session_id=editor_id, update=self._chunk(sid, remainder))
+            await self._conn.session_update(
+                session_id=editor_id, update=self._chunk(sid, remainder)
+            )
         self._end_message(sid)
         await self._flush_open_tools(sid, editor_id, aid)
 
     async def _flush_open_tools(self, sid, editor_id, aid):
         """Close every call admission *aid* started and never completed (``failed``: it produced no result)."""
         from acp_adapter.tools import build_tool_abandoned
-        for key in [key for key, held in self._tool_args.items() if key[0] == sid and held[2] == aid]:
+
+        for key in [
+            key
+            for key, held in self._tool_args.items()
+            if key[0] == sid and held[2] == aid
+        ]:
             name, _, _ = self._tool_args.pop(key)
             if self._conn:
-                await self._conn.session_update(session_id=editor_id, update=build_tool_abandoned(key[1], name))
+                await self._conn.session_update(
+                    session_id=editor_id, update=build_tool_abandoned(key[1], name)
+                )
 
     def _chunk(self, sid, text, *, thought=False):
         """An assistant (or thought) chunk carrying the session's current ``messageId``: ACP clients group
         chunks into one reply by it and start a new bubble when it changes."""
         from acp_adapter.events import AssistantMessageIdAllocator
-        update = (acp.update_agent_thought_text if thought else acp.update_agent_message_text)(text)
-        update.message_id = self._message_ids.setdefault(sid, AssistantMessageIdAllocator()).current()
+
+        update = (
+            acp.update_agent_thought_text if thought else acp.update_agent_message_text
+        )(text)
+        update.message_id = self._message_ids.setdefault(
+            sid, AssistantMessageIdAllocator()
+        ).current()
         return update
 
     def _end_message(self, sid):
@@ -86,9 +116,13 @@ class GatewayReplyMixin:
         else:
             import json
             from acp_adapter.events import _build_plan_update_from_todo_result
+
             todos = payload.get("todos")
-            update = _build_plan_update_from_todo_result(json.dumps({"todos": todos})) \
-                if isinstance(todos, list) else None
+            update = (
+                _build_plan_update_from_todo_result(json.dumps({"todos": todos}))
+                if isinstance(todos, list)
+                else None
+            )
         if update is not None and self._conn:
             await self._conn.session_update(session_id=editor_id, update=update)
 
@@ -106,24 +140,35 @@ class GatewayReplyMixin:
         shown = self._segments.pop(aid, [])
         cut = self._cut.pop(aid, None)
         # Local interrupt status is metadata; ACP carries it in stop_reason.
-        if not text or (payload.get("outcome") == "cancelled"
-                        and text.startswith(INTERRUPT_WAITING_FOR_MODEL_PREFIX)):
+        if not text or (
+            payload.get("outcome") == "cancelled"
+            and text.startswith(INTERRUPT_WAITING_FOR_MODEL_PREFIX)
+        ):
             return ""
         segments = {s.strip() for s in shown}
         if payload.get("response_reused") is True and (
-                text.strip() in segments | {streamed.strip()} if cut is not None or payload.get("receipt")
-                else (streamed or shown)):
+            text.strip() in segments | {streamed.strip()}
+            if cut is not None or payload.get("receipt")
+            else (streamed or shown)
+        ):
             # The owner names the final as a reply already painted (never inferred from text); after a
             # replay gap or from a receipt, only when this editor showed all of it.
             return ""
-        if cut is not None:  # a replay gap stopped its live text: the rest once, or marked in full
+        if (
+            cut is not None
+        ):  # a replay gap stopped its live text: the rest once, or marked in full
             from clawk_cli.gateway_replay_gap import owed_reply
+
             # An interim after the gap closed the cut segment and may already have shown the whole reply.
             return "" if not cut and text.strip() in segments else owed_reply(cut, text)
         if text.startswith(streamed):
-            remainder = text[len(streamed):]
+            remainder = text[len(streamed) :]
             # An unstreamed final the owner already published as an interim segment.
-            return "" if not streamed and text.strip() in {s.strip() for s in shown} else remainder
+            return (
+                ""
+                if not streamed and text.strip() in {s.strip() for s in shown}
+                else remainder
+            )
         if text.strip() == streamed.strip():
             return ""
         return "\n\n" + text
@@ -134,11 +179,21 @@ class GatewayReplyMixin:
         ``failed`` for a reject or a dismissal (#134889 ACP-15)."""
         outcome = getattr(response, "outcome", None)
         allowed = getattr(outcome, "outcome", None) == "selected" and any(
-            option.option_id == getattr(outcome, "option_id", None) and option.kind.startswith("allow")
-            for option in options)
+            option.option_id == getattr(outcome, "option_id", None)
+            and option.kind.startswith("allow")
+            for option in options
+        )
         try:
-            await self._conn.session_update(session_id=editor_id, update=acp.update_tool_call(
-                tool_call.tool_call_id, status="completed" if allowed else "failed"))
+            await self._conn.session_update(
+                session_id=editor_id,
+                update=acp.update_tool_call(
+                    tool_call.tool_call_id, status="completed" if allowed else "failed"
+                ),
+            )
         except Exception:
             # Boundary: display only; a failed close must never cost the user's answer its delivery.
-            logger.debug("ACP permission card %s not closed", tool_call.tool_call_id, exc_info=True)
+            logger.debug(
+                "ACP permission card %s not closed",
+                tool_call.tool_call_id,
+                exc_info=True,
+            )

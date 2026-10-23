@@ -14,6 +14,7 @@ from model_tools import (
 # handle_function_call
 # =========================================================================
 
+
 class TestHandleFunctionCall:
     def test_agent_loop_tool_returns_error(self):
         for tool_name in _AGENT_LOOP_TOOLS:
@@ -24,8 +25,6 @@ class TestHandleFunctionCall:
         result = json.loads(handle_function_call("totally_fake_tool_xyz", {}))
         assert "error" in result
         assert "totally_fake_tool_xyz" in result["error"]
-
-
 
     def test_post_tool_call_receives_non_negative_integer_duration_ms(self):
         """Regression: post_tool_call and transform_tool_result hooks must
@@ -40,9 +39,7 @@ class TestHandleFunctionCall:
         ):
             handle_function_call("web_search", {"q": "test"}, task_id="t1")
 
-        kwargs_by_hook = {
-            c.args[0]: c.kwargs for c in mock_invoke_hook.call_args_list
-        }
+        kwargs_by_hook = {c.args[0]: c.kwargs for c in mock_invoke_hook.call_args_list}
         assert "duration_ms" in kwargs_by_hook["post_tool_call"]
         assert "duration_ms" in kwargs_by_hook["transform_tool_result"]
 
@@ -72,17 +69,20 @@ class TestHandleFunctionCall:
             assert kwargs_by_hook[hook_name]["error_type"] == "tool_error"
             assert kwargs_by_hook[hook_name]["error_message"] == "exit 1"
 
-
-    def test_tool_request_and_execution_middleware_wrap_registry_dispatch(self, monkeypatch):
+    def test_tool_request_and_execution_middleware_wrap_registry_dispatch(
+        self, monkeypatch
+    ):
         seen = {}
 
         def fake_invoke_middleware(kind, **kwargs):
             if kind == "tool_request":
-                return [{
-                    "args": {**kwargs["args"], "rewritten": True},
-                    "source": "test-middleware",
-                    "reason": "rewrite",
-                }]
+                return [
+                    {
+                        "args": {**kwargs["args"], "rewritten": True},
+                        "source": "test-middleware",
+                        "reason": "rewrite",
+                    }
+                ]
             return []
 
         def execution_middleware(**kwargs):
@@ -96,9 +96,16 @@ class TestHandleFunctionCall:
         manager = type(
             "Manager",
             (),
-            {"_middleware": {"tool_request": [fake_invoke_middleware], "tool_execution": [execution_middleware]}},
+            {
+                "_middleware": {
+                    "tool_request": [fake_invoke_middleware],
+                    "tool_execution": [execution_middleware],
+                }
+            },
         )()
-        monkeypatch.setattr("clawk_cli.plugins.invoke_middleware", fake_invoke_middleware)
+        monkeypatch.setattr(
+            "clawk_cli.plugins.invoke_middleware", fake_invoke_middleware
+        )
         monkeypatch.setattr("clawk_cli.plugins.get_plugin_manager", lambda: manager)
         hook_calls = []
         monkeypatch.setattr(
@@ -131,8 +138,12 @@ class TestHandleFunctionCall:
         from clawk_cli import lifecycle
 
         hook_calls = []
-        monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *_args, **_kwargs: [])
-        monkeypatch.setattr(lifecycle, "has_hook", lambda name: name == "post_tool_call")
+        monkeypatch.setattr(
+            "clawk_cli.plugins.invoke_hook", lambda *_args, **_kwargs: []
+        )
+        monkeypatch.setattr(
+            lifecycle, "has_hook", lambda name: name == "post_tool_call"
+        )
         monkeypatch.setattr(
             lifecycle,
             "invoke_hook",
@@ -163,8 +174,12 @@ class TestHandleFunctionCall:
         from clawk_cli import lifecycle
 
         hook_calls = []
-        monkeypatch.setattr("clawk_cli.plugins.invoke_hook", lambda *_args, **_kwargs: [])
-        monkeypatch.setattr(lifecycle, "has_hook", lambda name: name == "post_tool_call")
+        monkeypatch.setattr(
+            "clawk_cli.plugins.invoke_hook", lambda *_args, **_kwargs: []
+        )
+        monkeypatch.setattr(
+            lifecycle, "has_hook", lambda name: name == "post_tool_call"
+        )
         monkeypatch.setattr(
             lifecycle,
             "invoke_hook",
@@ -202,10 +217,10 @@ class TestHandleFunctionCall:
 # =========================================================================
 
 
-
 # =========================================================================
 # Pre-tool-call blocking via plugin hooks
 # =========================================================================
+
 
 class TestPreToolCallBlocking:
     """Verify that pre_tool_call hooks can block tool execution."""
@@ -231,7 +246,9 @@ class TestPreToolCallBlocking:
         monkeypatch.setattr("clawk_cli.plugins.has_hook", lambda name: True)
         monkeypatch.setattr("model_tools.registry.dispatch", fake_dispatch)
 
-        result = json.loads(handle_function_call("read_file", {"path": "test.txt"}, task_id="t1"))
+        result = json.loads(
+            handle_function_call("read_file", {"path": "test.txt"}, task_id="t1")
+        )
         assert result == {"error": "Blocked by policy"}
         assert not dispatch_called
         post_call = next(call for call in hook_calls if call[0] == "post_tool_call")
@@ -249,33 +266,42 @@ class TestPreToolCallBlocking:
             return []
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
-        monkeypatch.setattr("model_tools.registry.dispatch",
-                            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not run")))
-        monkeypatch.setattr("tools.file_tools_read_tracking.notify_other_tool_call",
-                            lambda task_id: notifications.append(task_id))
+        monkeypatch.setattr(
+            "model_tools.registry.dispatch",
+            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not run")),
+        )
+        monkeypatch.setattr(
+            "tools.file_tools_read_tracking.notify_other_tool_call",
+            lambda task_id: notifications.append(task_id),
+        )
 
-        result = json.loads(handle_function_call("web_search", {"q": "test"}, task_id="t1"))
+        result = json.loads(
+            handle_function_call("web_search", {"q": "test"}, task_id="t1")
+        )
         assert result == {"error": "Blocked"}
         assert notifications == []
 
     def test_invalid_hook_returns_do_not_block(self, monkeypatch):
         """Malformed hook returns should be ignored — tool executes normally."""
+
         def fake_invoke_hook(hook_name, **kwargs):
             if hook_name == "pre_tool_call":
                 return [
                     "block",
-                    {"action": "block"},           # missing message
+                    {"action": "block"},  # missing message
                     {"action": "deny", "message": "nope"},
                 ]
             return []
 
         monkeypatch.setattr("clawk_cli.plugins.invoke_hook", fake_invoke_hook)
-        monkeypatch.setattr("model_tools.registry.dispatch",
-                            lambda *a, **kw: json.dumps({"ok": True}))
+        monkeypatch.setattr(
+            "model_tools.registry.dispatch", lambda *a, **kw: json.dumps({"ok": True})
+        )
 
-        result = json.loads(handle_function_call("read_file", {"path": "test.txt"}, task_id="t1"))
+        result = json.loads(
+            handle_function_call("read_file", {"path": "test.txt"}, task_id="t1")
+        )
         assert result == {"ok": True}
-
 
     def test_relay_rewrite_is_visible_to_pre_tool_authorization(self, monkeypatch):
         observed = {}
@@ -312,12 +338,9 @@ class TestPreToolCallBlocking:
         assert observed["dispatch_args"]["path"] == "approved.txt"
 
 
-
 # =========================================================================
 # Legacy toolset map
 # =========================================================================
-
-
 
 
 # =========================================================================
@@ -325,13 +348,11 @@ class TestPreToolCallBlocking:
 # =========================================================================
 
 
-
-
-
 # =========================================================================
 # _coerce_number — inf / nan must fall through to the original string
 # (regression: fix: eliminate duplicate checkpoint entries and JSON-unsafe coercion)
 # =========================================================================
+
 
 class TestCoerceNumberInfNan:
     """_coerce_number must honor its documented contract ("Returns original
@@ -340,21 +361,22 @@ class TestCoerceNumberInfNan:
 
     def test_inf_returns_original_string(self):
         from tools.arg_coercion import _coerce_number
-        assert _coerce_number("inf") == "inf"
 
+        assert _coerce_number("inf") == "inf"
 
     def test_nan_returns_original_string(self):
         from tools.arg_coercion import _coerce_number
+
         assert _coerce_number("nan") == "nan"
-
-
 
     def test_normal_numbers_still_coerce(self):
         """Guard against over-correction — real numbers still coerce."""
         from tools.arg_coercion import _coerce_number
+
         assert _coerce_number("42") == 42
         assert _coerce_number("3.14") == 3.14
         assert _coerce_number("1e3") == 1000
+
 
 class TestDisabledToolsetsPlatformBundle:
     """Regression test for #33924: disabling a platform bundle (clawk-*)
@@ -394,7 +416,6 @@ class TestDisabledToolsetsPlatformBundle:
         names = {t["function"]["name"] for t in tools}
         assert "discord" not in names
 
-
     def test_disabling_browser_keeps_web_search_when_web_enabled(self):
         """Regression for #64503: disabling the `browser` toolset must NOT
         strip `web_search`, which belongs to `web`/`search`. Disabling browser
@@ -417,11 +438,10 @@ class TestDisabledToolsetsPlatformBundle:
         assert "web_search" in set(resolve_toolset("web"))
         assert "web_search" in set(resolve_toolset("search"))
 
-
-
     def test_bundle_non_core_tools_unknown_falls_back(self):
         """An unknown/garbage bundle name falls back to full resolution (best effort)."""
         from toolsets import bundle_non_core_tools
+
         # A non-existent bundle resolves to an empty set (no tools), not a crash.
         assert bundle_non_core_tools("clawk-does-not-exist") == set()
 
@@ -437,11 +457,16 @@ class TestDisabledToolsetsPostureToolset:
 
         # web_search is check_fn-gated (needs an API key); probe only the core
         # tools actually present in baseline so gating cannot mask the fix.
-        core_probe = {"terminal", "read_file", "write_file", "web_search", "execute_code"}
+        core_probe = {
+            "terminal",
+            "read_file",
+            "write_file",
+            "web_search",
+            "execute_code",
+        }
 
         baseline = {
-            t["function"]["name"]
-            for t in get_tool_definitions(quiet_mode=True)
+            t["function"]["name"] for t in get_tool_definitions(quiet_mode=True)
         }
         present_core = core_probe & baseline
         # Sanity: at least some probed core tools are available in this env.
@@ -449,9 +474,7 @@ class TestDisabledToolsetsPostureToolset:
 
         no_coding = {
             t["function"]["name"]
-            for t in get_tool_definitions(
-                disabled_toolsets=["coding"], quiet_mode=True
-            )
+            for t in get_tool_definitions(disabled_toolsets=["coding"], quiet_mode=True)
         }
         # Previously the full resolve_toolset("coding") subtraction stripped
         # these shared core tools, collapsing the schema to a handful (#57315).
@@ -470,9 +493,7 @@ class TestDisabledToolsetsPostureToolset:
 
         no_file = {
             t["function"]["name"]
-            for t in get_tool_definitions(
-                disabled_toolsets=["file"], quiet_mode=True
-            )
+            for t in get_tool_definitions(disabled_toolsets=["file"], quiet_mode=True)
         }
         assert "write_file" not in no_file
 
@@ -481,10 +502,10 @@ class TestDisabledToolsetsPostureToolset:
 # Tool Search bridge dispatch
 # =========================================================================
 
+
 class TestBridgeDispatch:
     """handle_function_call routes tool_search/tool_describe inline, unwraps tool_call,
     and refuses tool_call targets outside the session-scoped deferrable catalog."""
-
 
     def test_tool_call_bad_args_error(self):
         with patch("model_tools.get_tool_definitions", return_value=[]):
@@ -493,17 +514,28 @@ class TestBridgeDispatch:
 
     def test_tool_call_rejects_out_of_scope_and_unwraps_in_scope(self):
         import tools.tool_search as ts
-        with patch("model_tools.get_tool_definitions", return_value=[]), \
-             patch.object(ts, "resolve_underlying_call", return_value=("mcp_x", {"a": 1}, None)), \
-             patch.object(ts, "scoped_deferrable_names", return_value=frozenset()):
+
+        with (
+            patch("model_tools.get_tool_definitions", return_value=[]),
+            patch.object(
+                ts, "resolve_underlying_call", return_value=("mcp_x", {"a": 1}, None)
+            ),
+            patch.object(ts, "scoped_deferrable_names", return_value=frozenset()),
+        ):
             result = json.loads(handle_function_call("tool_call", {"name": "mcp_x"}))
         assert result.get("error")
 
-        with patch("model_tools.get_tool_definitions", return_value=[]), \
-             patch.object(ts, "resolve_underlying_call", return_value=("mcp_x", {"a": 1}, None)), \
-             patch.object(ts, "scoped_deferrable_names", return_value=frozenset({"mcp_x"})), \
-             patch.object(ts, "validate_deferred_call_args", return_value=None), \
-             patch("model_tools.registry.dispatch", return_value='{"ok": true}') as disp:
+        with (
+            patch("model_tools.get_tool_definitions", return_value=[]),
+            patch.object(
+                ts, "resolve_underlying_call", return_value=("mcp_x", {"a": 1}, None)
+            ),
+            patch.object(
+                ts, "scoped_deferrable_names", return_value=frozenset({"mcp_x"})
+            ),
+            patch.object(ts, "validate_deferred_call_args", return_value=None),
+            patch("model_tools.registry.dispatch", return_value='{"ok": true}') as disp,
+        ):
             out = handle_function_call("tool_call", {"name": "mcp_x"}, task_id="t")
         assert json.loads(out) == {"ok": True}
         assert disp.call_args.args[0] == "mcp_x" and disp.call_args.args[1] == {"a": 1}
@@ -515,13 +547,16 @@ class TestBridgeDispatch:
 # Browser schema retrieval hints
 # =========================================================================
 
+
 class TestBrowserRetrievalHints:
     """Browser schemas name web_search/web_extract only when the session actually has them (#39797)."""
 
     @staticmethod
     def _defs(*names):
-        return [{"type": "function", "function": {"name": n, "description": f"{n}."}} for n in names]
-
+        return [
+            {"type": "function", "function": {"name": n, "description": f"{n}."}}
+            for n in names
+        ]
 
     def test_silent_without_web_tools(self):
         # Real static schemas + rewriters: the rewritten browser descriptions must not mention absent web tools.
@@ -529,9 +564,17 @@ class TestBrowserRetrievalHints:
         from tools.browser_cdp_tool import BROWSER_CDP_SCHEMA
         from tools.browser_tool import BROWSER_TOOL_SCHEMAS
 
-        navigate = next(s for s in BROWSER_TOOL_SCHEMAS if s["name"] == "browser_navigate")
-        defs = [{"type": "function", "function": navigate}, {"type": "function", "function": BROWSER_CDP_SCHEMA}]
-        rendered = " ".join(d["function"]["description"] for d in _apply_dynamic_schemas(defs + self._defs("terminal")))
+        navigate = next(
+            s for s in BROWSER_TOOL_SCHEMAS if s["name"] == "browser_navigate"
+        )
+        defs = [
+            {"type": "function", "function": navigate},
+            {"type": "function", "function": BROWSER_CDP_SCHEMA},
+        ]
+        rendered = " ".join(
+            d["function"]["description"]
+            for d in _apply_dynamic_schemas(defs + self._defs("terminal"))
+        )
         assert "web_search" not in rendered
         assert "web_extract" not in rendered
 

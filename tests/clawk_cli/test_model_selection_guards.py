@@ -89,7 +89,5 @@ def test_cost_guard_still_fires_through_registry():
         cost_input=50.0,
         cost_output=200.0,
     )
-    warnings = selection_warnings(
-        "pricey/model", provider="anthropic", model_info=info
-    )
+    warnings = selection_warnings("pricey/model", provider="anthropic", model_info=info)
     assert any(w.kind == "cost" for w in warnings)

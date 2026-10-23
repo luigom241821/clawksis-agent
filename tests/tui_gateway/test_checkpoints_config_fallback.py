@@ -23,10 +23,15 @@ class TestLoadCheckpointsEnabled:
 
     def test_honors_config_enabled_true(self):
         """``checkpoints: {enabled: true}`` in config.yaml enables checkpoints."""
-        assert server._load_checkpoints_enabled({"checkpoints": {"enabled": True}}) is True
+        assert (
+            server._load_checkpoints_enabled({"checkpoints": {"enabled": True}}) is True
+        )
 
     def test_honors_config_enabled_false(self):
-        assert server._load_checkpoints_enabled({"checkpoints": {"enabled": False}}) is False
+        assert (
+            server._load_checkpoints_enabled({"checkpoints": {"enabled": False}})
+            is False
+        )
 
     def test_legacy_bool_form(self):
         """Legacy ``checkpoints: true`` (bare bool) still enables."""
@@ -46,28 +51,32 @@ class TestResolveCheckpointsEnabled:
     def test_config_enabled_used_when_env_unset(self, monkeypatch):
         """Desktop path: no CLAWK_TUI_CHECKPOINTS → config ``enabled: true`` wins."""
         monkeypatch.delenv("CLAWK_TUI_CHECKPOINTS", raising=False)
-        assert server._resolve_checkpoints_enabled(
-            {"checkpoints": {"enabled": True}}
-        ) is True
+        assert (
+            server._resolve_checkpoints_enabled({"checkpoints": {"enabled": True}})
+            is True
+        )
 
     def test_config_disabled_used_when_env_unset(self, monkeypatch):
         monkeypatch.delenv("CLAWK_TUI_CHECKPOINTS", raising=False)
-        assert server._resolve_checkpoints_enabled(
-            {"checkpoints": {"enabled": False}}
-        ) is False
+        assert (
+            server._resolve_checkpoints_enabled({"checkpoints": {"enabled": False}})
+            is False
+        )
 
     def test_env_var_overrides_config(self, monkeypatch):
         """CLI ``--tui --checkpoints`` (env set) still wins over config."""
         monkeypatch.setenv("CLAWK_TUI_CHECKPOINTS", "1")
-        assert server._resolve_checkpoints_enabled(
-            {"checkpoints": {"enabled": False}}
-        ) is True
+        assert (
+            server._resolve_checkpoints_enabled({"checkpoints": {"enabled": False}})
+            is True
+        )
 
     def test_env_var_false_overrides_config_true(self, monkeypatch):
         monkeypatch.setenv("CLAWK_TUI_CHECKPOINTS", "0")
-        assert server._resolve_checkpoints_enabled(
-            {"checkpoints": {"enabled": True}}
-        ) is False
+        assert (
+            server._resolve_checkpoints_enabled({"checkpoints": {"enabled": True}})
+            is False
+        )
 
 
 class TestMakeAgentCheckpointsFallback:
@@ -98,8 +107,12 @@ class TestMakeAgentCheckpointsFallback:
         monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
         monkeypatch.delenv("CLAWK_DESKTOP_TERMINAL", raising=False)
         monkeypatch.setattr(
-            server, "_load_cfg",
-            lambda: {**cfg, "model": {"default": "gpt-5.5", "provider": "openai-codex"}},
+            server,
+            "_load_cfg",
+            lambda: {
+                **cfg,
+                "model": {"default": "gpt-5.5", "provider": "openai-codex"},
+            },
         )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
@@ -112,7 +125,9 @@ class TestMakeAgentCheckpointsFallback:
             },
         )
         monkeypatch.setattr("run_agent.AIAgent", fake_agent)
-        monkeypatch.setattr(server, "_load_enabled_toolsets", lambda platform=None: ["file"])
+        monkeypatch.setattr(
+            server, "_load_enabled_toolsets", lambda platform=None: ["file"]
+        )
         monkeypatch.setattr(server, "_get_db", lambda: None)
         server._make_agent("sid", "session-key")
         return captured

@@ -17,6 +17,7 @@ from agent.auxiliary_client import extract_content_or_reasoning
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
+
 def _make_response(content, **msg_attrs):
     """Build a minimal OpenAI-compatible ChatCompletion response stub.
 
@@ -30,6 +31,7 @@ def _make_response(content, **msg_attrs):
 
 # ── extract_content_or_reasoning() ────────────────────────────────────────
 
+
 class TestExtractContentOrReasoning:
     """agent/auxiliary_client.py — extract_content_or_reasoning()"""
 
@@ -40,7 +42,6 @@ class TestExtractContentOrReasoning:
     def test_none_content_returns_empty(self):
         response = _make_response(None)
         assert extract_content_or_reasoning(response) == ""
-
 
     def test_think_blocks_stripped_with_remaining_content(self):
         response = _make_response("<think>internal reasoning</think>The answer is 42.")
@@ -54,19 +55,28 @@ class TestExtractContentOrReasoning:
         )
         assert extract_content_or_reasoning(response) == "The actual reasoning output"
 
-
     def test_content_preferred_over_reasoning(self):
         """When both content and reasoning exist, content wins."""
         response = _make_response("Actual answer", reasoning="Internal reasoning")
         assert extract_content_or_reasoning(response) == "Actual answer"
 
     def test_dict_message_and_whitespace_fall_back(self):
-        assert extract_content_or_reasoning(
-            {"content": " ", "reasoning_content": "dict reasoning"}
-        ) == "dict reasoning"
-        assert extract_content_or_reasoning(
-            {"choices": [{"message": {"content": "", "reasoning": "from response"}}]}
-        ) == "from response"
+        assert (
+            extract_content_or_reasoning(
+                {"content": " ", "reasoning_content": "dict reasoning"}
+            )
+            == "dict reasoning"
+        )
+        assert (
+            extract_content_or_reasoning(
+                {
+                    "choices": [
+                        {"message": {"content": "", "reasoning": "from response"}}
+                    ]
+                }
+            )
+            == "from response"
+        )
 
     def test_string_message_passthrough(self):
         response = types.SimpleNamespace(
@@ -81,7 +91,10 @@ class TestExtractContentOrReasoning:
             max_reasoning_chars=8000,
         )
         assert text == huge[:8000]
-        assert extract_content_or_reasoning(
-            {"content": "", "reasoning_content": "short"},
-            max_reasoning_chars=8000,
-        ) == "short"
+        assert (
+            extract_content_or_reasoning(
+                {"content": "", "reasoning_content": "short"},
+                max_reasoning_chars=8000,
+            )
+            == "short"
+        )

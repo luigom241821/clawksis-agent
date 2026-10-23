@@ -18,16 +18,6 @@ from agent.context_compressor import (
 )
 
 
-
-
-
-
-
-
-
-
-
-
 def test_inherited_handoff_detected_in_resumed_protected_head():
     """On a resumed lineage the handoff commonly sits right after the system
     prompt (in the protected head). ``_find_latest_context_summary`` must
@@ -36,7 +26,10 @@ def test_inherited_handoff_detected_in_resumed_protected_head():
     Task read as live intent)."""
     messages = [
         {"role": "system", "content": "system prompt"},
-        {"role": "user", "content": f"{SUMMARY_PREFIX}\n{HISTORICAL_TASK_HEADING}\nUser asked: 'task A'"},
+        {
+            "role": "user",
+            "content": f"{SUMMARY_PREFIX}\n{HISTORICAL_TASK_HEADING}\nUser asked: 'task A'",
+        },
         {"role": "assistant", "content": "ok"},
         {"role": "user", "content": "Unrelated task B: what's the capital of France?"},
     ]
@@ -49,5 +42,3 @@ def test_inherited_handoff_detected_in_resumed_protected_head():
     # The detected body is stripped of the prefix (treated as state, not a
     # standalone instruction message).
     assert not body.startswith(SUMMARY_PREFIX)
-
-

@@ -30,9 +30,6 @@ class _Result:
         return {"name": self.name, "class": self.klass}
 
 
-
-
-
 def test_clock_gate_due_when_never_run(homed):
     assert cad.check_due(now=1000.0, interval_hours=24) is True
 
@@ -62,14 +59,22 @@ def test_interval_reads_config(homed):
 
 def test_run_writes_receipt_and_marker(homed):
     import pm.receipt as receipts
+
     calls = []
+
     def checks(directory):
         calls.append(directory)
         return [_Result("plug", update_available=True)]
-    result = cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=homed / "plugins")
+
+    result = cad.run_scheduled_check(
+        run_checks_fn=checks, plugins_dir=homed / "plugins"
+    )
     assert result[0].name == "plug"
     assert receipts.latest()["outcome"] == "updates-available"
-    assert cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=homed / "plugins") is None
+    assert (
+        cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=homed / "plugins")
+        is None
+    )
     assert len(calls) == 1
 
 
@@ -88,50 +93,69 @@ def test_damaged_install_records_do_not_stop_the_scheduled_check(homed):
         calls.append(directory)
         return [_Result("plug", update_available=True)]
 
-    assert cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=plugins)[0].name == "plug"
+    assert (
+        cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=plugins)[0].name
+        == "plug"
+    )
     assert receipts.latest()["outcome"] == "updates-available"
     assert cad.run_scheduled_check(run_checks_fn=checks, plugins_dir=plugins) is None
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize('enabled', [False, True])
-def test_auto_apply_selects_only_updateable_git_and_persists_receipt(homed, enabled, caplog):
+@pytest.mark.parametrize("enabled", [False, True])
+def test_auto_apply_selects_only_updateable_git_and_persists_receipt(
+    homed, enabled, caplog
+):
     from pm import receipt
+
     applied = []
-    rows = [_Result('gitplug', update_available=True),
-            _Result('pipplug', klass='pip', update_available=True),
-            _Result('broken', needs_fixing='mismatch')]
-    cad.run_scheduled_check(run_checks_fn=lambda _: rows, plugins_dir=homed / 'plugins',
-                            apply_updates_fn=applied.append,
-                            config_get=lambda section, key: enabled if key == 'auto_apply' else 24)
-    assert applied == (['gitplug'] if enabled else [])
-    assert receipt.latest()['outcome'] == 'updates-available'
-    assert 'broken' in caplog.text and 'trust-update-url' in caplog.text
+    rows = [
+        _Result("gitplug", update_available=True),
+        _Result("pipplug", klass="pip", update_available=True),
+        _Result("broken", needs_fixing="mismatch"),
+    ]
+    cad.run_scheduled_check(
+        run_checks_fn=lambda _: rows,
+        plugins_dir=homed / "plugins",
+        apply_updates_fn=applied.append,
+        config_get=lambda section, key: enabled if key == "auto_apply" else 24,
+    )
+    assert applied == (["gitplug"] if enabled else [])
+    assert receipt.latest()["outcome"] == "updates-available"
+    assert "broken" in caplog.text and "trust-update-url" in caplog.text
 
 
-@pytest.mark.parametrize('failed', [False, True])
-def test_housekeeping_runs_real_cadence_and_backs_off(homed, monkeypatch, caplog, failed):
+@pytest.mark.parametrize("failed", [False, True])
+def test_housekeeping_runs_real_cadence_and_backs_off(
+    homed, monkeypatch, caplog, failed
+):
     import gateway.run as gateway
     from clawk_cli import plugins_updates, plugins_cmd
     from pm import receipt
 
     calls, applied = [], []
+
     def checks(directory):
         calls.append(directory)
         if failed:
-            raise OSError('offline')
-        return [_Result('plug', update_available=True)]
-    monkeypatch.setattr(plugins_updates, 'run_checks', checks)
-    monkeypatch.setattr(plugins_cmd, '_plugins_dir', lambda: homed / 'plugins')
-    monkeypatch.setattr(plugins_cmd, 'cmd_update', lambda name, **kwargs: applied.append((name, kwargs)))
-    monkeypatch.setattr(cad, 'auto_apply_enabled', lambda *_: True)
+            raise OSError("offline")
+        return [_Result("plug", update_available=True)]
+
+    monkeypatch.setattr(plugins_updates, "run_checks", checks)
+    monkeypatch.setattr(plugins_cmd, "_plugins_dir", lambda: homed / "plugins")
+    monkeypatch.setattr(
+        plugins_cmd, "cmd_update", lambda name, **kwargs: applied.append((name, kwargs))
+    )
+    monkeypatch.setattr(cad, "auto_apply_enabled", lambda *_: True)
     for _ in range(2):
-        gateway._housekeeping_chore('Plugin update check', gateway._housekeeping_plugin_update_check)
-    assert calls == [homed / 'plugins']
-    assert applied == ([] if failed else [('plug', {'interactive': False})])
+        gateway._housekeeping_chore(
+            "Plugin update check", gateway._housekeeping_plugin_update_check
+        )
+    assert calls == [homed / "plugins"]
+    assert applied == ([] if failed else [("plug", {"interactive": False})])
     saved = receipt.latest()
-    assert saved['outcome'] == ('failed' if failed else 'updates-available')
-    assert saved['exit_code'] == int(failed)
-    assert (homed / 'plugin-update-checks/last-run').is_file()
+    assert saved["outcome"] == ("failed" if failed else "updates-available")
+    assert saved["exit_code"] == int(failed)
+    assert (homed / "plugin-update-checks/last-run").is_file()
     if failed:
-        assert saved['warnings'][0]['message'] in caplog.text
+        assert saved["warnings"][0]["message"] in caplog.text

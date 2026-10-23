@@ -12,21 +12,50 @@ import time
 import urllib.parse
 from fastapi import APIRouter
 from clawk_cli.web_routers._common import (
-    REDACTED_CREDENTIAL_WRITE_DETAIL, http_failure, is_redacted_credential_preview,
-    redacted_credential_preview, scoped_to_thread,
+    REDACTED_CREDENTIAL_WRITE_DETAIL,
+    http_failure,
+    is_redacted_credential_preview,
+    redacted_credential_preview,
+    scoped_to_thread,
 )
 from clawk_cli.web_deps import LateState, late
 from clawk_cli.web_server_config import (
-    _apply_main_model_assignment, _denormalize_config_from_web, _normalize_config_for_web, _schema_with_dynamic_provider_options,
+    _apply_main_model_assignment,
+    _denormalize_config_from_web,
+    _normalize_config_for_web,
+    _schema_with_dynamic_provider_options,
     _validated_main_model_selection,
 )
 from clawk_cli.web_server_profiles import (
-    _approval_mode_of, _broadcast_gateway_session_info, _is_other_profile, _parse_model_entries,
+    _approval_mode_of,
+    _broadcast_gateway_session_info,
+    _is_other_profile,
+    _parse_model_entries,
 )
 from fastapi import HTTPException, Request
-from clawk_cli.config import DEFAULT_CONFIG, OPTIONAL_ENV_VARS, read_raw_config, require_readable_config_before_write, custom_endpoint_key_env, coerce_provider_id, find_provider_entry, get_compatible_custom_providers, _ENV_REF_RE, _deep_merge
-from clawk_cli.config_providers import _canonical_api_mode, _custom_provider_entry_to_provider_config
-from clawk_cli.web_models import ConfigUpdate, EnvVarUpdate, EnvVarDelete, EnvVarReveal, CustomEndpointUpdate
+from clawk_cli.config import (
+    DEFAULT_CONFIG,
+    OPTIONAL_ENV_VARS,
+    read_raw_config,
+    require_readable_config_before_write,
+    custom_endpoint_key_env,
+    coerce_provider_id,
+    find_provider_entry,
+    get_compatible_custom_providers,
+    _ENV_REF_RE,
+    _deep_merge,
+)
+from clawk_cli.config_providers import (
+    _canonical_api_mode,
+    _custom_provider_entry_to_provider_config,
+)
+from clawk_cli.web_models import (
+    ConfigUpdate,
+    EnvVarUpdate,
+    EnvVarDelete,
+    EnvVarReveal,
+    CustomEndpointUpdate,
+)
 from typing import Any, Dict, List, Optional, Tuple
 
 _log = logging.getLogger("clawk_cli.web_server")
@@ -34,7 +63,9 @@ config_router = APIRouter()
 router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_channel_managed_env_keys = late("_channel_managed_env_keys", "clawk_cli.web_server_messaging")
+_channel_managed_env_keys = late(
+    "_channel_managed_env_keys", "clawk_cli.web_server_messaging"
+)
 _config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_profiles")
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 _require_token = late("_require_token")
@@ -52,9 +83,22 @@ _REVEAL_WINDOW_SECONDS = 30
 
 # Display order for tabs — unlisted categories sort alphabetically after these.
 _CATEGORY_ORDER = [
-    "general", "agent", "terminal", "display", "delegation",
-    "memory", "compression", "security", "browser", "voice",
-    "tts", "stt", "logging", "discord", "resilience", "auxiliary",
+    "general",
+    "agent",
+    "terminal",
+    "display",
+    "delegation",
+    "memory",
+    "compression",
+    "security",
+    "browser",
+    "voice",
+    "tts",
+    "stt",
+    "logging",
+    "discord",
+    "resilience",
+    "auxiliary",
 ]
 
 
@@ -85,7 +129,10 @@ async def get_config(profile: Optional[str] = None, include_defaults: bool = Tru
     # context, so the profile override stays scoped to the worker thread.
     # Opt in to saved values so clients can distinguish user choices from defaults.
     config = await scoped_to_thread(
-        profile, lambda: _normalize_config_for_web(load_config() if include_defaults else read_raw_config())
+        profile,
+        lambda: _normalize_config_for_web(
+            load_config() if include_defaults else read_raw_config()
+        ),
     )
     # Strip internal keys that the frontend shouldn't see or send back
     return {k: v for k, v in config.items() if not k.startswith("_")}
@@ -110,6 +157,7 @@ async def get_schema(profile: Optional[str] = None):
 async def get_egress_status(profile: Optional[str] = None):
     """Dashboard/Desktop-readable egress proxy status and remediation text."""
     from clawk_cli.proxy_cli import format_status_text
+
     with _config_profile_scope(profile):  # reads the profile's ``proxy:`` config block
         return {"text": format_status_text()}
 
@@ -137,12 +185,17 @@ async def update_config(
                 # block compare is always-unequal), and a post-save reload can
                 # serve the pre-save cache on an (mtime_ns, size) collision.
                 # Only approvals.mode feeds session.info, so it is the trigger.
-                approvals_mode_changed = _approval_mode_of(merged) != _approval_mode_of(existing)
+                approvals_mode_changed = _approval_mode_of(merged) != _approval_mode_of(
+                    existing
+                )
                 # Explicit English must survive default stripping: an absent
                 # language lets the desktop follow the OS on its next launch.
                 # Ordinary settings saves include merged defaults, not a choice.
                 save_config(
-                    merged, preserve_keys={("display", "language")} if preserve_language else None
+                    merged,
+                    preserve_keys={("display", "language")}
+                    if preserve_language
+                    else None,
                 )
         # REST saves bypass the config.set RPC (which re-emits itself), so
         # refresh live sessions' cached approval/YOLO indicators after a mode
@@ -156,10 +209,17 @@ async def update_config(
         return await asyncio.to_thread(_run)
 
 
-def _provider_card(d, description: str, url, *, is_password: bool, advanced: bool) -> dict:
+def _provider_card(
+    d, description: str, url, *, is_password: bool, advanced: bool
+) -> dict:
     return {
-        "provider": d.slug, "provider_label": d.label, "description": description, "url": url,
-        "is_password": is_password, "advanced": advanced, "category": "provider",
+        "provider": d.slug,
+        "provider_label": d.label,
+        "description": description,
+        "url": url,
+        "is_password": is_password,
+        "advanced": advanced,
+        "category": "provider",
     }
 
 
@@ -168,7 +228,12 @@ _AUTH_TYPE_ENV_VARS = {
         ("AWS_REGION", lambda d, var: f"{d.label} ({var})"),
         ("AWS_PROFILE", lambda d, var: f"{d.label} ({var})"),
     ),
-    "vertex": (("VERTEX_CREDENTIALS_PATH", lambda d, var: f"{d.label} — service account JSON path (or use ADC)"),),
+    "vertex": (
+        (
+            "VERTEX_CREDENTIALS_PATH",
+            lambda d, var: f"{d.label} — service account JSON path (or use ADC)",
+        ),
+    ),
 }
 
 
@@ -192,7 +257,8 @@ def _catalog_provider_env_metadata() -> dict:
     # GITHUB_TOKEN, a Skills-Hub "tool" credential) must not be promoted into a
     # provider card even when a provider (Copilot) lists them as auth aliases.
     _non_provider_keys = {
-        k for k, v in OPTIONAL_ENV_VARS.items()
+        k
+        for k, v in OPTIONAL_ENV_VARS.items()
         if (v or {}).get("category") and (v or {}).get("category") != "provider"
     }
 
@@ -217,7 +283,9 @@ def _catalog_provider_env_metadata() -> dict:
         if existing.get("provider") == entry.get("provider"):
             return
         profiles = existing.setdefault("provider_profiles", [_profile(existing)])
-        if not any(profile.get("provider") == entry.get("provider") for profile in profiles):
+        if not any(
+            profile.get("provider") == entry.get("provider") for profile in profiles
+        ):
             profiles.append(_profile(entry))
 
     for d in provider_catalog():
@@ -229,7 +297,11 @@ def _catalog_provider_env_metadata() -> dict:
             if env_var in _non_provider_keys:
                 continue  # don't hijack a shared tool/messaging credential
             entry = _provider_card(
-                d, d.description, d.signup_url or None, is_password=True, advanced=False,
+                d,
+                d.description,
+                d.signup_url or None,
+                is_password=True,
+                advanced=False,
             )
             entry["provider_primary"] = index == 0
             _add_provider_env(
@@ -240,7 +312,13 @@ def _catalog_provider_env_metadata() -> dict:
         if d.base_url_env_var:
             meta.setdefault(
                 d.base_url_env_var,
-                _provider_card(d, f"{d.label} base URL override", None, is_password=False, advanced=True),
+                _provider_card(
+                    d,
+                    f"{d.label} base URL override",
+                    None,
+                    is_password=False,
+                    advanced=True,
+                ),
             )
 
         # Providers without api_key_env_vars would otherwise be invisible on
@@ -250,8 +328,11 @@ def _catalog_provider_env_metadata() -> dict:
         for var, describe in _AUTH_TYPE_ENV_VARS.get(d.auth_type, ()):
             existing = meta.get(var, {})
             meta[var] = _provider_card(
-                d, existing.get("description") or describe(d, var), existing.get("url"),
-                is_password=False, advanced=existing.get("advanced", True),
+                d,
+                existing.get("description") or describe(d, var),
+                existing.get("url"),
+                is_password=False,
+                advanced=existing.get("advanced", True),
             )
     return meta
 
@@ -278,7 +359,9 @@ def _get_env_vars_sync(profile: Optional[str] = None):
             "is_set": bool(value),
             "redacted_value": redacted_credential_preview(value),
             "description": info.get("description") or cat_meta.get("description", ""),
-            "url": info.get("url") if info.get("url") is not None else cat_meta.get("url"),
+            "url": info.get("url")
+            if info.get("url") is not None
+            else cat_meta.get("url"),
             "category": info.get("category") or cat_meta.get("category", ""),
             "is_password": info.get("password", cat_meta.get("is_password", False)),
             "tools": info.get("tools", []),
@@ -335,18 +418,26 @@ async def set_env_var(body: EnvVarUpdate, profile: Optional[str] = None):
     if is_redacted_credential_preview(body.value):
         raise HTTPException(status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL)
     with _env_write_errors("PUT /api/env failed"):
-        return await scoped_to_thread(body.profile or profile, lambda: _save_env_credential(body.key, body.value, body.provider_setup))
+        return await scoped_to_thread(
+            body.profile or profile,
+            lambda: _save_env_credential(body.key, body.value, body.provider_setup),
+        )
 
 
 def _save_env_credential(key: str, value: str, provider_setup: bool = False) -> Any:
     """Save under the request's profile scope; a new provider API key also counts as a provider setup."""
     from clawk_cli.config import load_env
     from clawk_cli.credential_lifecycle import save_provider_env_credential
-    from clawk_cli.observability.shared_metrics_setup import record_api_key_saved, web_setup_surface
+    from clawk_cli.observability.shared_metrics_setup import (
+        record_api_key_saved,
+        web_setup_surface,
+    )
 
     previous = load_env().get(key)
     result = save_provider_env_credential(key, value)
-    record_api_key_saved(key, value, previous, web_setup_surface(), connecting=provider_setup)
+    record_api_key_saved(
+        key, value, previous, web_setup_surface(), connecting=provider_setup
+    )
     return result
 
 
@@ -359,7 +450,10 @@ _CREDENTIAL_PROBES: dict[str, tuple[str, str]] = {
     "OPENROUTER_API_KEY": ("https://openrouter.ai/api/v1/key", "bearer"),
     "OPENAI_API_KEY": ("https://api.openai.com/v1/models", "bearer"),
     "XAI_API_KEY": ("https://api.x.ai/v1/models", "bearer"),
-    "GEMINI_API_KEY": ("https://generativelanguage.googleapis.com/v1beta/models", "query"),
+    "GEMINI_API_KEY": (
+        "https://generativelanguage.googleapis.com/v1beta/models",
+        "query",
+    ),
 }
 
 
@@ -368,7 +462,9 @@ def _custom_endpoint_id(raw: str, fallback: str = "custom") -> str:
     return slug or fallback
 
 
-def _resolve_custom_endpoint_entry(providers: Any, endpoint_id: str) -> tuple[Any, Optional[dict[str, Any]]]:
+def _resolve_custom_endpoint_entry(
+    providers: Any, endpoint_id: str
+) -> tuple[Any, Optional[dict[str, Any]]]:
     """Resolve a custom endpoint id using the stored key first, then its legacy slug.
 
     The list route hands Desktop the literal ``providers.<key>`` (a v11→v12
@@ -397,7 +493,9 @@ def _models_from_custom_endpoint_entry(entry: dict[str, Any]) -> list[str]:
         models.insert(0, default_model)
 
     seen: set[str] = set()
-    return [model for model in models if model and not (model in seen or seen.add(model))]
+    return [
+        model for model in models if model and not (model in seen or seen.add(model))
+    ]
 
 
 def _api_key_display(entry: dict[str, Any]) -> tuple[bool, Optional[str]]:
@@ -419,7 +517,9 @@ def _api_key_display(entry: dict[str, Any]) -> tuple[bool, Optional[str]]:
 
 def _raw_provider_api_key(endpoint_id: str) -> Any:
     """The on-disk (un-expanded) ``api_key`` of a providers entry, or ``None``."""
-    _stored, entry = find_provider_entry(read_raw_config().get("providers"), endpoint_id)
+    _stored, entry = find_provider_entry(
+        read_raw_config().get("providers"), endpoint_id
+    )
     return entry.get("api_key") if isinstance(entry, dict) else None
 
 
@@ -448,20 +548,37 @@ def _endpoint_api_mode(entry: dict[str, Any]) -> str:
 
 
 def _endpoint_row(
-    endpoint_id: str, name: str, base_url: str, model: str, models: list[str], context_length,
-    discover_models: bool, key_entry: dict[str, Any], is_current: bool, source: str,
+    endpoint_id: str,
+    name: str,
+    base_url: str,
+    model: str,
+    models: list[str],
+    context_length,
+    discover_models: bool,
+    key_entry: dict[str, Any],
+    is_current: bool,
+    source: str,
 ) -> dict[str, Any]:
     has_api_key, api_key_preview = _api_key_display(key_entry)
     return {
-        "id": endpoint_id, "name": name, "base_url": base_url, "model": model, "models": models,
+        "id": endpoint_id,
+        "name": name,
+        "base_url": base_url,
+        "model": model,
+        "models": models,
         "api_mode": _endpoint_api_mode(key_entry),
-        "context_length": context_length, "discover_models": discover_models,
-        "has_api_key": has_api_key, "api_key_preview": api_key_preview,
-        "is_current": is_current, "source": source,
+        "context_length": context_length,
+        "discover_models": discover_models,
+        "has_api_key": has_api_key,
+        "api_key_preview": api_key_preview,
+        "is_current": is_current,
+        "source": source,
     }
 
 
-def _model_names_provider(model_cfg: dict[str, Any], provider_key: str, entry: Optional[dict[str, Any]]) -> bool:
+def _model_names_provider(
+    model_cfg: dict[str, Any], provider_key: str, entry: Optional[dict[str, Any]]
+) -> bool:
     """True when ``model.provider`` points at this ``providers`` entry.
 
     ``switch_model`` spells the active provider either as the stored key or as
@@ -488,17 +605,34 @@ def _custom_endpoint_response(cfg: dict[str, Any]) -> dict[str, Any]:
         for provider_id, raw_entry in providers.items():
             if not isinstance(raw_entry, dict):
                 continue
-            base_url = str(raw_entry.get("base_url") or raw_entry.get("url") or raw_entry.get("api") or "").strip()
+            base_url = str(
+                raw_entry.get("base_url")
+                or raw_entry.get("url")
+                or raw_entry.get("api")
+                or ""
+            ).strip()
             if not base_url:
                 continue
             endpoint_id = str(provider_id)
             models = _models_from_custom_endpoint_entry(raw_entry)
-            endpoints.append(_endpoint_row(
-                endpoint_id, str(raw_entry.get("name") or endpoint_id), base_url,
-                str(raw_entry.get("model") or raw_entry.get("default_model") or (models[0] if models else "")),
-                models, raw_entry.get("context_length"), bool(raw_entry.get("discover_models", True)),
-                raw_entry, _model_names_provider(model_cfg, endpoint_id, raw_entry), "providers",
-            ))
+            endpoints.append(
+                _endpoint_row(
+                    endpoint_id,
+                    str(raw_entry.get("name") or endpoint_id),
+                    base_url,
+                    str(
+                        raw_entry.get("model")
+                        or raw_entry.get("default_model")
+                        or (models[0] if models else "")
+                    ),
+                    models,
+                    raw_entry.get("context_length"),
+                    bool(raw_entry.get("discover_models", True)),
+                    raw_entry,
+                    _model_names_provider(model_cfg, endpoint_id, raw_entry),
+                    "providers",
+                )
+            )
 
     # Legacy ``custom_providers:`` list entries the migration left behind are
     # still routed at runtime (get_compatible_custom_providers), so they need a
@@ -516,40 +650,72 @@ def _custom_endpoint_response(cfg: dict[str, Any]) -> dict[str, Any]:
             continue
         seen_ids.add(endpoint_id)
         models = _models_from_custom_endpoint_entry(entry)
-        is_current = is_bare_custom and entry["base_url"].rstrip("/") == current_base_url.rstrip("/")
-        endpoints.append(_endpoint_row(
-            endpoint_id, entry["name"], entry["base_url"],
-            str(entry.get("model") or (models[0] if models else "")), models,
-            entry.get("context_length"), bool(entry.get("discover_models", True)),
-            entry, is_current, "custom_providers",
-        ))
+        is_current = is_bare_custom and entry["base_url"].rstrip(
+            "/"
+        ) == current_base_url.rstrip("/")
+        endpoints.append(
+            _endpoint_row(
+                endpoint_id,
+                entry["name"],
+                entry["base_url"],
+                str(entry.get("model") or (models[0] if models else "")),
+                models,
+                entry.get("context_length"),
+                bool(entry.get("discover_models", True)),
+                entry,
+                is_current,
+                "custom_providers",
+            )
+        )
 
-    if is_bare_custom and not any(e["id"] == "custom" or e["is_current"] for e in endpoints):
-        endpoints.insert(0, _endpoint_row(
-            "custom", "Custom", current_base_url, current_model, [current_model] if current_model else [],
-            model_cfg.get("context_length"), True, model_cfg, True, "direct-config",
-        ))
+    if is_bare_custom and not any(
+        e["id"] == "custom" or e["is_current"] for e in endpoints
+    ):
+        endpoints.insert(
+            0,
+            _endpoint_row(
+                "custom",
+                "Custom",
+                current_base_url,
+                current_model,
+                [current_model] if current_model else [],
+                model_cfg.get("context_length"),
+                True,
+                model_cfg,
+                True,
+                "direct-config",
+            ),
+        )
 
     return {
         "endpoints": endpoints,
         "current": {
-            "provider": current_provider, "model": current_model, "base_url": current_base_url,
+            "provider": current_provider,
+            "model": current_model,
+            "base_url": current_base_url,
         },
     }
 
 
-def _pop_legacy_custom_provider(cfg: dict[str, Any], provider_key: str) -> Optional[dict[str, Any]]:
+def _pop_legacy_custom_provider(
+    cfg: dict[str, Any], provider_key: str
+) -> Optional[dict[str, Any]]:
     """Remove and return the legacy ``custom_providers:`` list entry whose name slugs to *provider_key*."""
     legacy = cfg.get("custom_providers")
     if not isinstance(legacy, list):
         return None
     for index, entry in enumerate(legacy):
-        if isinstance(entry, dict) and _custom_endpoint_id(str(entry.get("name") or "")) == provider_key:
+        if (
+            isinstance(entry, dict)
+            and _custom_endpoint_id(str(entry.get("name") or "")) == provider_key
+        ):
             return legacy.pop(index)
     return None
 
 
-def _detach_main_model_from_provider(cfg: dict[str, Any], provider_key: str, entry: Optional[dict[str, Any]] = None) -> None:
+def _detach_main_model_from_provider(
+    cfg: dict[str, Any], provider_key: str, entry: Optional[dict[str, Any]] = None
+) -> None:
     """Drop the main-slot mirror of a provider that no longer exists.
 
     ``activate_custom_endpoint`` copies the endpoint's ``base_url`` and
@@ -563,14 +729,18 @@ def _detach_main_model_from_provider(cfg: dict[str, Any], provider_key: str, ent
     See #62269.
     """
     model_cfg = cfg.get("model")
-    if not isinstance(model_cfg, dict) or not _model_names_provider(model_cfg, provider_key, entry):
+    if not isinstance(model_cfg, dict) or not _model_names_provider(
+        model_cfg, provider_key, entry
+    ):
         return
     for field in ("provider", "base_url", "api_key", "key_env"):
         model_cfg.pop(field, None)
     cfg["model"] = model_cfg
 
 
-def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> tuple[str, dict[str, Any]]:
+def _write_custom_endpoint(
+    cfg: dict[str, Any], body: CustomEndpointUpdate
+) -> tuple[str, dict[str, Any]]:
     name = (body.name or "").strip()
     base_url = (body.base_url or "").strip().rstrip("/")
     model = (body.model or "").strip()
@@ -582,9 +752,13 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     try:
         parsed = urllib.parse.urlparse(base_url)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="base_url must include scheme and host") from exc
+        raise HTTPException(
+            status_code=400, detail="base_url must include scheme and host"
+        ) from exc
     if not parsed.scheme or not parsed.netloc:
-        raise HTTPException(status_code=400, detail="base_url must include scheme and host")
+        raise HTTPException(
+            status_code=400, detail="base_url must include scheme and host"
+        )
     if not model:
         raise HTTPException(status_code=400, detail="model required")
 
@@ -596,8 +770,14 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         providers = {}
     # An edit payload carries the stored key verbatim; slugging it first would
     # miss the entry and fork a slugged twin next to the original.
-    stored_key, existing = _resolve_custom_endpoint_entry(providers, body.id or body.name)
-    endpoint_id = coerce_provider_id(stored_key) if existing is not None else _custom_endpoint_id(body.id or body.name)
+    stored_key, existing = _resolve_custom_endpoint_entry(
+        providers, body.id or body.name
+    )
+    endpoint_id = (
+        coerce_provider_id(stored_key)
+        if existing is not None
+        else _custom_endpoint_id(body.id or body.name)
+    )
     if existing is None:
         # Settings saves the row the list rendered. A legacy custom_providers
         # entry is not in providers, so resolving only there forked a keyless
@@ -607,7 +787,8 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         legacy = _pop_legacy_custom_provider(cfg, endpoint_id)
         converted = (
             _custom_provider_entry_to_provider_config(legacy, provider_key=endpoint_id)
-            if legacy is not None else None
+            if legacy is not None
+            else None
         )
         if isinstance(converted, dict):
             existing = converted
@@ -618,17 +799,20 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     if existing is None:
         existing = {}
 
-
     # Merge onto the existing entry rather than replacing it: a providers.<name>
     # block can carry hand-written keys the dashboard has no field for
     # (``key_env``/``api_key_env``, ``extra_headers`` — possibly with
     # credentials — ``request_overrides``); rebuilding from scratch silently
     # dropped them on an unrelated edit.
     entry: dict[str, Any] = dict(existing)
-    entry.update({
-        "name": name, "base_url": base_url, "model": model,
-        "discover_models": bool(body.discover_models),
-    })
+    entry.update(
+        {
+            "name": name,
+            "base_url": base_url,
+            "model": model,
+            "discover_models": bool(body.discover_models),
+        }
+    )
     # A Responses-only or Anthropic-compatible host 404s on the runtime's
     # Chat Completions default, so the panel pins the transport the same way
     # ``clawk model`` does (``api_mode``; the runtime also reads the v12
@@ -647,7 +831,9 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     # See #69988.
     details = {d.id.strip(): d for d in (body.model_details or ()) if d.id.strip()}
     existing_models = entry.get("models")
-    models_map: dict[str, Any] = dict(existing_models) if isinstance(existing_models, dict) else {}
+    models_map: dict[str, Any] = (
+        dict(existing_models) if isinstance(existing_models, dict) else {}
+    )
     for candidate in (*(body.models or ()), *details, model):
         model_id = str(candidate).strip()
         if not model_id:
@@ -658,8 +844,16 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         if detail is not None:
             # Keep the alias metadata ``/v1/models`` advertised so the catalogue
             # still says what ``gpt-5.6-sol-high`` stands for after Save.
-            row.update({k: v.strip() for k, v in (("canonical_model", detail.canonical_model),
-                                                  ("reasoning_effort", detail.reasoning_effort)) if v and v.strip()})
+            row.update(
+                {
+                    k: v.strip()
+                    for k, v in (
+                        ("canonical_model", detail.canonical_model),
+                        ("reasoning_effort", detail.reasoning_effort),
+                    )
+                    if v and v.strip()
+                }
+            )
         models_map[model_id] = row
     entry["models"] = models_map
     # A reasoning alias is not a model the inference route accepts literally:
@@ -669,6 +863,7 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     canonical = (alias.canonical_model or "").strip() if alias is not None else ""
     if canonical and canonical != model:
         from clawk_constants import parse_reasoning_effort
+
         effort = (alias.reasoning_effort or "").strip().lower()
         if parse_reasoning_effort(effort) is not None:
             agent_cfg = cfg.get("agent") if isinstance(cfg.get("agent"), dict) else {}
@@ -693,8 +888,12 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
     if submitted_key:
         # ``${KEY_ENV}`` is the GET display for key_env entries; the helper covers the
         # sentinel and legacy masks. Either one is display-only, current or stale.
-        if _ENV_REF_RE.fullmatch(submitted_key) or is_redacted_credential_preview(submitted_key):
-            raise HTTPException(status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL)
+        if _ENV_REF_RE.fullmatch(submitted_key) or is_redacted_credential_preview(
+            submitted_key
+        ):
+            raise HTTPException(
+                status_code=400, detail=REDACTED_CREDENTIAL_WRITE_DETAIL
+            )
         save_env_value(env_var, submitted_key)
         entry["key_env"] = env_var
         entry.pop("api_key", None)
@@ -703,7 +902,9 @@ def _write_custom_endpoint(cfg: dict[str, Any], body: CustomEndpointUpdate) -> t
         remove_env_value(env_var)
         entry.pop("key_env", None)
         entry.pop("api_key", None)
-    elif str(entry.get("api_key") or "").strip() and not _config_api_key_is_env_ref(endpoint_id):
+    elif str(entry.get("api_key") or "").strip() and not _config_api_key_is_env_ref(
+        endpoint_id
+    ):
         # Migrate a plaintext key an earlier release wrote, on the next save,
         # without the user having to re-enter it.
         save_env_value(env_var, entry["api_key"].strip())
@@ -733,7 +934,11 @@ def list_custom_endpoints(profile: Optional[str] = None):
     targets the active profile, so read/write must resolve that profile's home
     rather than the process-level CLAWK_HOME (mirrors ``/api/config``).
     """
-    with http_failure("GET /api/providers/custom-endpoints failed", 500, detail="Failed to list custom endpoints"):
+    with http_failure(
+        "GET /api/providers/custom-endpoints failed",
+        500,
+        detail="Failed to list custom endpoints",
+    ):
         with _config_profile_scope(profile):
             return _custom_endpoint_response(load_config())
 
@@ -741,19 +946,29 @@ def list_custom_endpoints(profile: Optional[str] = None):
 @router.post("/api/providers/custom-endpoints")
 def upsert_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = None):
     """Create or update a v12+ ``providers`` custom endpoint entry."""
-    with http_failure("POST /api/providers/custom-endpoints failed", 500, detail="Failed to save custom endpoint"):
+    with http_failure(
+        "POST /api/providers/custom-endpoints failed",
+        500,
+        detail="Failed to save custom endpoint",
+    ):
         # Sync-def endpoints run on worker threads: the load→mutate→save span
         # holds _CONFIG_MUTATION_LOCK so a concurrent config autosave cannot
         # drop this write (or vice versa).
         with _config_profile_scope(profile), _CONFIG_MUTATION_LOCK:
             cfg = load_config()
             providers = cfg.get("providers")
-            created = _resolve_custom_endpoint_entry(
-                providers if isinstance(providers, dict) else {}, body.id or body.name)[1] is None
+            created = (
+                _resolve_custom_endpoint_entry(
+                    providers if isinstance(providers, dict) else {},
+                    body.id or body.name,
+                )[1]
+                is None
+            )
             endpoint_id, _entry = _write_custom_endpoint(cfg, body)
             save_config(cfg)
             response = _custom_endpoint_response(cfg)
             from clawk_constants import get_clawk_home
+
             home = get_clawk_home()
         if created:  # editing an endpoint that exists sets nothing new up
             _record_custom_endpoint_setup(home)
@@ -764,44 +979,72 @@ def upsert_custom_endpoint(body: CustomEndpointUpdate, profile: Optional[str] = 
 
 def _record_custom_endpoint_setup(home: Any) -> None:
     """Counted after the config lock is released (a cold metrics runtime must not stall writers)."""
-    from clawk_cli.observability.shared_metrics_setup import record_provider_setup_done, web_setup_surface
+    from clawk_cli.observability.shared_metrics_setup import (
+        record_provider_setup_done,
+        web_setup_surface,
+    )
 
-    record_provider_setup_done(web_setup_surface(), "custom", clawk_home=home, background=True)
+    record_provider_setup_done(
+        web_setup_surface(), "custom", clawk_home=home, background=True
+    )
 
 
 @router.post("/api/providers/custom-endpoints/{endpoint_id}/activate")
 def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
     """Set a configured custom endpoint as the default model provider."""
     with http_failure(
-        f"POST /api/providers/custom-endpoints/{endpoint_id}/activate failed", 500,
+        f"POST /api/providers/custom-endpoints/{endpoint_id}/activate failed",
+        500,
         detail="Failed to activate custom endpoint",
     ):
         with _config_profile_scope(profile), _CONFIG_MUTATION_LOCK:  # RMW span
             cfg = load_config()
-            stored_key, entry = _resolve_custom_endpoint_entry(cfg.get("providers"), endpoint_id)
+            stored_key, entry = _resolve_custom_endpoint_entry(
+                cfg.get("providers"), endpoint_id
+            )
             if entry is None:
                 # A legacy ``custom_providers:`` row: the main slot names providers by
                 # key, so promote the entry to ``providers.<key>`` (the v12 shape the
                 # migration would have written) before activating it.
                 provider_key = _custom_endpoint_id(endpoint_id)
                 legacy = _pop_legacy_custom_provider(cfg, provider_key)
-                entry = _custom_provider_entry_to_provider_config(legacy, provider_key=provider_key) if legacy else None
+                entry = (
+                    _custom_provider_entry_to_provider_config(
+                        legacy, provider_key=provider_key
+                    )
+                    if legacy
+                    else None
+                )
                 if entry is None:
-                    raise HTTPException(status_code=404, detail="custom endpoint not found")
-                providers = cfg.get("providers") if isinstance(cfg.get("providers"), dict) else {}
+                    raise HTTPException(
+                        status_code=404, detail="custom endpoint not found"
+                    )
+                providers = (
+                    cfg.get("providers")
+                    if isinstance(cfg.get("providers"), dict)
+                    else {}
+                )
                 providers[provider_key] = entry
                 cfg["providers"] = providers
             else:
                 provider_key = coerce_provider_id(stored_key)
 
             models = _models_from_custom_endpoint_entry(entry)
-            model = str(entry.get("model") or entry.get("default_model") or (models[0] if models else "")).strip()
+            model = str(
+                entry.get("model")
+                or entry.get("default_model")
+                or (models[0] if models else "")
+            ).strip()
             base_url = str(entry.get("base_url") or entry.get("api") or "").strip()
             if not model or not base_url:
-                raise HTTPException(status_code=400, detail="custom endpoint is incomplete")
+                raise HTTPException(
+                    status_code=400, detail="custom endpoint is incomplete"
+                )
 
             model_cfg = _apply_main_model_assignment(
-                cfg.get("model", {}), _validated_main_model_selection(cfg, provider_key, model, base_url))
+                cfg.get("model", {}),
+                _validated_main_model_selection(cfg, provider_key, model, base_url),
+            )
             if entry.get("key_env"):
                 model_cfg["key_env"] = entry["key_env"]
                 model_cfg.pop("api_key", None)
@@ -825,7 +1068,8 @@ def activate_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
 def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
     """Remove a configured custom endpoint from ``providers``."""
     with http_failure(
-        f"DELETE /api/providers/custom-endpoints/{endpoint_id} failed", 500,
+        f"DELETE /api/providers/custom-endpoints/{endpoint_id} failed",
+        500,
         detail="Failed to delete custom endpoint",
     ):
         with _config_profile_scope(profile), _CONFIG_MUTATION_LOCK:  # RMW span
@@ -840,7 +1084,9 @@ def delete_custom_endpoint(endpoint_id: str, profile: Optional[str] = None):
                 # A legacy ``custom_providers:`` row is addressed by its slug.
                 provider_key = _custom_endpoint_id(endpoint_id)
                 if _pop_legacy_custom_provider(cfg, provider_key) is None:
-                    raise HTTPException(status_code=404, detail="custom endpoint not found")
+                    raise HTTPException(
+                        status_code=404, detail="custom endpoint not found"
+                    )
             _detach_main_model_from_provider(cfg, provider_key, entry)
             remove_env_value(custom_endpoint_key_env(provider_key))
             save_config(cfg)
@@ -854,7 +1100,12 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
     """Probe a custom endpoint by calling its OpenAI-compatible /models URL."""
     base_url = (body.base_url or "").strip().rstrip("/")
     if not base_url:
-        return {"ok": False, "reachable": True, "message": "Enter an endpoint URL first.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "Enter an endpoint URL first.",
+            "models": [],
+        }
 
     headers = {"Accept": "application/json"}
     if body.api_key and body.api_key.strip():
@@ -862,11 +1113,26 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
 
     resolved, resp = await _probe_openai_compatible_models(base_url, headers)
     if resp is None:
-        return {"ok": False, "reachable": False, "message": f"Could not reach {base_url}/models.", "models": []}
+        return {
+            "ok": False,
+            "reachable": False,
+            "message": f"Could not reach {base_url}/models.",
+            "models": [],
+        }
     if resp.status_code in (401, 403):
-        return {"ok": False, "reachable": True, "message": "The endpoint rejected the API key.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "The endpoint rejected the API key.",
+            "models": [],
+        }
     if not resp.is_success:
-        return {"ok": False, "reachable": True, "message": f"Endpoint returned HTTP {resp.status_code}.", "models": []}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": f"Endpoint returned HTTP {resp.status_code}.",
+            "models": [],
+        }
     # ``models`` stays the bare id list older clients read; ``model_details`` keeps the
     # alias metadata (``canonical_model`` / ``reasoning_effort``) the id list flattens.
     entries = _parse_model_entries(resp)
@@ -877,8 +1143,14 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
         # is lenient by design, so classify the empty result here instead of reporting
         # success. ok:false + reachable:true is a warning in the UI — Save stays possible
         # for endpoints that legitimately expose no model list.
-        return {"ok": False, "reachable": True, "message": _no_models_probe_message(resp, resolved),
-                "models": [], "model_details": [], "resolved_base_url": resolved}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": _no_models_probe_message(resp, resolved),
+            "models": [],
+            "model_details": [],
+            "resolved_base_url": resolved,
+        }
     # /models answering proves nothing about the transport the runtime will POST to:
     # a Responses-only host lists models fine and 404s every /chat/completions (#93622).
     # Probe the route the saved mode (or the runtime's URL auto-detect) actually uses, on the
@@ -887,15 +1159,25 @@ async def validate_custom_endpoint(body: CustomEndpointUpdate):
     probe_model = (body.model or "").strip() or (ids[0] if ids else "")
     try:
         async with _endpoint_probe_client(resolved, 8.0) as client:
-            missing = await _probe_transport_route(client, resolved, mode, probe_model, headers)
+            missing = await _probe_transport_route(
+                client, resolved, mode, probe_model, headers
+            )
     except Exception:
         missing = ""  # inconclusive (see _probe_transport_route): never block on a transport error
 
-    result = {"ok": True, "reachable": True, "message": "", "models": ids, "model_details": entries,
-              "transport_checked": mode, "resolved_base_url": resolved}
+    result = {
+        "ok": True,
+        "reachable": True,
+        "message": "",
+        "models": ids,
+        "model_details": entries,
+        "transport_checked": mode,
+        "resolved_base_url": resolved,
+    }
     if missing:
         result.update(ok=False, message=missing)
     return result
+
 
 def _no_models_probe_message(resp: Any, base_url: str) -> str:
     """Why a 200 ``/models`` probe yielded no usable models (#83128).
@@ -912,16 +1194,22 @@ def _no_models_probe_message(resp: Any, base_url: str) -> str:
         payload = None
     if not isinstance(payload, (dict, list)):
         kind = content_type or "a non-JSON body"
-        return (f"Connected to {url}, but it returned {kind} instead of a JSON model list — "
-                "the URL may be an SPA catch-all or a wrong base URL, not an OpenAI-compatible API.")
+        return (
+            f"Connected to {url}, but it returned {kind} instead of a JSON model list — "
+            "the URL may be an SPA catch-all or a wrong base URL, not an OpenAI-compatible API."
+        )
     data = payload.get("data") if isinstance(payload, dict) else payload
     if not isinstance(data, list):
         return f"Connected to {url}, but its response is not an OpenAI-compatible model list."
-    return (f"Connected to {url}, but it advertised no models. "
-            "Start a model on that endpoint and try again.")
+    return (
+        f"Connected to {url}, but it advertised no models. "
+        "Start a model on that endpoint and try again."
+    )
 
 
-async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]) -> tuple[str, Any]:
+async def _probe_openai_compatible_models(
+    base_url: str, headers: Optional[dict]
+) -> tuple[str, Any]:
     """GET ``{base}/models``, then ``{base}/v1/models`` (or the ``/v1``-stripped variant) when the
     first answers a non-success. Returns ``(resolved_base_url, response)`` — the base that served the
     model list is what the caller must PERSIST: the runtime appends ``/chat/completions`` to the saved
@@ -933,7 +1221,9 @@ async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]
     async with _endpoint_probe_client(base, 8.0) as client:
         for candidate in (base, alternate):
             try:
-                candidate_resp = await client.get(candidate + "/models", headers=headers)
+                candidate_resp = await client.get(
+                    candidate + "/models", headers=headers
+                )
             except Exception:
                 continue
             # Keep the most telling failure: a 401/403 from the /v1 alternate says "server is
@@ -945,20 +1235,29 @@ async def _probe_openai_compatible_models(base_url: str, headers: Optional[dict]
     return resolved, resp
 
 
-_TRANSPORT_ROUTES = {"chat_completions": "/chat/completions", "codex_responses": "/responses",
-                     "anthropic_messages": "/messages"}
-_TRANSPORT_LABELS = {"chat_completions": "Chat Completions", "codex_responses": "Responses API",
-                     "anthropic_messages": "Anthropic Messages"}
+_TRANSPORT_ROUTES = {
+    "chat_completions": "/chat/completions",
+    "codex_responses": "/responses",
+    "anthropic_messages": "/messages",
+}
+_TRANSPORT_LABELS = {
+    "chat_completions": "Chat Completions",
+    "codex_responses": "Responses API",
+    "anthropic_messages": "Anthropic Messages",
+}
 
 
 def _auto_api_mode(base_url: str) -> str:
     """The transport the runtime falls back to for an endpoint without a pinned ``api_mode``
     (same resolver as ``runtime_provider_custom._custom_runtime``)."""
     from clawk_cli.runtime_provider import _detect_api_mode_for_url
+
     return _detect_api_mode_for_url(base_url) or "chat_completions"
 
 
-async def _probe_transport_route(client, base_url: str, mode: str, model: str, headers: dict[str, str]) -> str:
+async def _probe_transport_route(
+    client, base_url: str, mode: str, model: str, headers: dict[str, str]
+) -> str:
     """POST a 1-token request to ``mode``'s route; return a failure message when the host does
     not serve it (404/405/501), ``""`` otherwise. Any other status — 200, 400 (bad body), 401,
     422, 429 — means the route exists, which is all the check needs to know; a network error or
@@ -967,21 +1266,35 @@ async def _probe_transport_route(client, base_url: str, mode: str, model: str, h
     if route is None:
         return ""
     if mode == "anthropic_messages":
-        payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}
+        payload = {
+            "model": model,
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "hi"}],
+        }
         token = headers.get("Authorization", "").removeprefix("Bearer ")
-        headers = {**headers, "anthropic-version": "2023-06-01", **({"x-api-key": token} if token else {})}
+        headers = {
+            **headers,
+            "anthropic-version": "2023-06-01",
+            **({"x-api-key": token} if token else {}),
+        }
     elif mode == "codex_responses":
         payload = {"model": model, "input": "hi", "max_output_tokens": 16}
     else:
-        payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]}
+        payload = {
+            "model": model,
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "hi"}],
+        }
     try:
         resp = await client.post(base_url + route, json=payload, headers=headers)
     except Exception:
         return ""
     if resp.status_code not in (404, 405, 501):
         return ""
-    return (f"{base_url}/models answered, but POST {route} returned HTTP {resp.status_code}: this host "
-            f"does not serve the {_TRANSPORT_LABELS[mode]} API. Pick the API mode it does serve.")
+    return (
+        f"{base_url}/models answered, but POST {route} returned HTTP {resp.status_code}: this host "
+        f"does not serve the {_TRANSPORT_LABELS[mode]} API. Pick the API mode it does serve."
+    )
 
 
 def _endpoint_probe_client(url: str, timeout: float):
@@ -991,7 +1304,10 @@ def _endpoint_probe_client(url: str, timeout: float):
     page and the GUI reported "advertised no models" while the CLI saw the model (#63472)."""
     import httpx
     from agent.model_metadata import is_local_endpoint
-    return httpx.AsyncClient(timeout=httpx.Timeout(timeout), trust_env=not is_local_endpoint(url))
+
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(timeout), trust_env=not is_local_endpoint(url)
+    )
 
 
 @router.post("/api/providers/validate")
@@ -1022,15 +1338,30 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
         resolved, resp = await _probe_openai_compatible_models(value, headers)
         url = resolved + "/models"
         if resp is None:
-            return {"ok": False, "reachable": False, "message": f"Could not reach {url}."}
+            return {
+                "ok": False,
+                "reachable": False,
+                "message": f"Could not reach {url}.",
+            }
         entries = _parse_model_entries(resp)
         models = [e["id"] for e in entries]
         if not models and not resp.is_success:
             # A proxy/gateway error page parses as "no models"; name the status instead so the
             # GUI does not tell the user to "start a model" on a server that answered.
-            return {"ok": False, "reachable": True, "message": f"{url} answered HTTP {resp.status_code}.", "models": []}
-        return {"ok": True, "reachable": True, "message": "", "models": models, "model_details": entries,
-                "resolved_base_url": resolved}
+            return {
+                "ok": False,
+                "reachable": True,
+                "message": f"{url} answered HTTP {resp.status_code}.",
+                "models": [],
+            }
+        return {
+            "ok": True,
+            "reachable": True,
+            "message": "",
+            "models": models,
+            "model_details": entries,
+            "resolved_base_url": resolved,
+        }
 
     probe = _CREDENTIAL_PROBES.get(key)
     if not probe:
@@ -1040,6 +1371,7 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
     url, auth = probe
     if key == "GEMINI_API_KEY":
         from agent.gemini_native_adapter import normalize_gemini_base_url
+
         # Normalize guarantees the version segment; the key itself never decides the surface —
         # AQ. keys exist for both AI Studio and Vertex express mode (#115306).
         url = normalize_gemini_base_url(url.rsplit("/models", 1)[0]) + "/models"
@@ -1054,14 +1386,26 @@ async def validate_provider_credential(body: EnvVarUpdate, request: Request):
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
             resp = await client.get(url, headers=headers, params=params)
     except Exception:
-        return {"ok": False, "reachable": False, "message": "Could not reach the provider to verify the key."}
+        return {
+            "ok": False,
+            "reachable": False,
+            "message": "Could not reach the provider to verify the key.",
+        }
 
     if resp.status_code in (401, 403):
-        return {"ok": False, "reachable": True, "message": "That API key was rejected. Double-check it and try again."}
+        return {
+            "ok": False,
+            "reachable": True,
+            "message": "That API key was rejected. Double-check it and try again.",
+        }
     if resp.status_code == 429 or resp.is_success:
         # 429 = key is valid but rate-limited; success = valid.
         return {"ok": True, "reachable": True, "message": ""}
-    return {"ok": False, "reachable": True, "message": f"Provider returned HTTP {resp.status_code} for this key."}
+    return {
+        "ok": False,
+        "reachable": True,
+        "message": f"Provider returned HTTP {resp.status_code} for this key.",
+    }
 
 
 @router.delete("/api/env")
@@ -1097,7 +1441,9 @@ async def reveal_env_var(
     cutoff = now - _REVEAL_WINDOW_SECONDS
     _reveal_timestamps[:] = [t for t in _reveal_timestamps if t > cutoff]
     if len(_reveal_timestamps) >= _REVEAL_MAX_PER_WINDOW:
-        raise HTTPException(status_code=429, detail="Too many reveal requests. Try again shortly.")
+        raise HTTPException(
+            status_code=429, detail="Too many reveal requests. Try again shortly."
+        )
     _reveal_timestamps.append(now)
 
     env_on_disk = await scoped_to_thread(body.profile or profile, load_env)

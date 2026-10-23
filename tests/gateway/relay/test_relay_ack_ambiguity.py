@@ -48,7 +48,9 @@ class AckLossTransport:
     async def send_outbound(self, payload, platform=None):
         op = payload.get("op")
         key = "seal" if (op == "draft" and payload.get("final")) else op
-        self.ops.append((op, bool(payload.get("final")), str(payload.get("content"))[:30]))
+        self.ops.append(
+            (op, bool(payload.get("final")), str(payload.get("content"))[:30])
+        )
         if self._lost(key):
             return {
                 "success": False,

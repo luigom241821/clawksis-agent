@@ -70,12 +70,15 @@ def test_length_guard_rejects_long_strings():
 
 # --- Integration through DeliveryRouter ------------------------------------
 
+
 class RecordingAdapter:
     def __init__(self):
         self.calls = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.calls.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        self.calls.append(
+            {"chat_id": chat_id, "content": content, "metadata": metadata}
+        )
         return {"success": True}
 
 
@@ -149,14 +152,22 @@ async def test_env_does_not_disable_filter_when_config_enabled(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_multiplex_profiles_independent_silence_narration_filtering(tmp_path, monkeypatch):
+async def test_multiplex_profiles_independent_silence_narration_filtering(
+    tmp_path, monkeypatch
+):
     # secondary profile keeps its own setting under multiplex regardless of process env
     monkeypatch.setattr("gateway.delivery.get_clawk_home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_FILTER_SILENCE_NARRATION", "1")
     adapter_a = RecordingAdapter()
     adapter_b = RecordingAdapter()
-    router_a = DeliveryRouter(GatewayConfig(filter_silence_narration=True), adapters={Platform.DISCORD: adapter_a})
-    router_b = DeliveryRouter(GatewayConfig(filter_silence_narration=False), adapters={Platform.DISCORD: adapter_b})
+    router_a = DeliveryRouter(
+        GatewayConfig(filter_silence_narration=True),
+        adapters={Platform.DISCORD: adapter_a},
+    )
+    router_b = DeliveryRouter(
+        GatewayConfig(filter_silence_narration=False),
+        adapters={Platform.DISCORD: adapter_b},
+    )
     target = DeliveryTarget.parse("discord:99887766")
 
     res_a = await router_a._deliver_to_platform(target, "*(silent)*", metadata=None)
@@ -186,7 +197,9 @@ async def test_cron_job_id_metadata_bypasses_the_filter(tmp_path, monkeypatch):
     target = DeliveryTarget.parse("discord:99887766")
 
     result = await router._deliver_to_platform(
-        target, "*(silent)*", metadata={"job_id": "92e639af907f"},
+        target,
+        "*(silent)*",
+        metadata={"job_id": "92e639af907f"},
     )
 
     assert len(adapter.calls) == 1
@@ -204,7 +217,9 @@ async def test_non_cron_metadata_still_filters(tmp_path, monkeypatch):
     target = DeliveryTarget.parse("discord:99887766")
 
     result = await router._deliver_to_platform(
-        target, "*(silent)*", metadata={"thread_id": "42", "user_id": "u1"},
+        target,
+        "*(silent)*",
+        metadata={"thread_id": "42", "user_id": "u1"},
     )
 
     assert adapter.calls == []
@@ -212,5 +227,3 @@ async def test_non_cron_metadata_still_filters(tmp_path, monkeypatch):
 
 
 # --- Config round-trip ------------------------------------------------------
-
-

@@ -26,40 +26,121 @@ def register_cli(parent_parser: argparse.ArgumentParser) -> None:
     # (name, help, handler, [(flag, add_argument kwargs), ...]) — declaration order is the
     # ``--help`` order, so keep it stable.
     commands = [
-        ("install", "Install the PM-pinned iron-proxy binary", cmd_install, [
-            ("--force", dict(action="store_true", help="Verify and repair the managed copy")),
-        ]),
-        ("setup", "Interactive wizard: install + CA + mint tokens + write config", cmd_setup, [
-            ("--tunnel-port", dict(type=int, default=None,
-                                   help=f"Override the tunnel port (default {ip._DEFAULT_TUNNEL_PORT})")),
-            ("--from-bitwarden", dict(action="store_true", help=(
-                "Treat secrets as managed by Bitwarden — discover provider keys "
-                "from secrets.bitwarden config instead of the current env.  Fails "
-                "loudly if BW is unreachable rather than silently falling back."))),
-            ("--no-bitwarden", dict(action="store_true", help=(
-                "Explicitly switch credential_source back to env on re-setup "
-                "(only meaningful when the previous setup used --from-bitwarden)."))),
-            ("--rotate-tokens", dict(action="store_true", help=(
-                "Mint fresh proxy tokens for every provider (default is to "
-                "preserve tokens for providers that already had one — avoids "
-                "401-ing already-running sandboxes on re-setup)."))),
-            ("--restart", dict(dest="restart", action="store_true", default=None, help=(
-                "If a daemon is already running, restart it automatically after "
-                "writing the new config/tokens (non-interactive default on a tty is to ask)."))),
-            ("--no-restart", dict(dest="restart", action="store_false", help=(
-                "Do not restart a running daemon after setup; you'll need to run "
-                "`clawk egress restart` yourself for changes to take effect."))),
-        ]),
+        (
+            "install",
+            "Install the PM-pinned iron-proxy binary",
+            cmd_install,
+            [
+                (
+                    "--force",
+                    dict(
+                        action="store_true", help="Verify and repair the managed copy"
+                    ),
+                ),
+            ],
+        ),
+        (
+            "setup",
+            "Interactive wizard: install + CA + mint tokens + write config",
+            cmd_setup,
+            [
+                (
+                    "--tunnel-port",
+                    dict(
+                        type=int,
+                        default=None,
+                        help=f"Override the tunnel port (default {ip._DEFAULT_TUNNEL_PORT})",
+                    ),
+                ),
+                (
+                    "--from-bitwarden",
+                    dict(
+                        action="store_true",
+                        help=(
+                            "Treat secrets as managed by Bitwarden — discover provider keys "
+                            "from secrets.bitwarden config instead of the current env.  Fails "
+                            "loudly if BW is unreachable rather than silently falling back."
+                        ),
+                    ),
+                ),
+                (
+                    "--no-bitwarden",
+                    dict(
+                        action="store_true",
+                        help=(
+                            "Explicitly switch credential_source back to env on re-setup "
+                            "(only meaningful when the previous setup used --from-bitwarden)."
+                        ),
+                    ),
+                ),
+                (
+                    "--rotate-tokens",
+                    dict(
+                        action="store_true",
+                        help=(
+                            "Mint fresh proxy tokens for every provider (default is to "
+                            "preserve tokens for providers that already had one — avoids "
+                            "401-ing already-running sandboxes on re-setup)."
+                        ),
+                    ),
+                ),
+                (
+                    "--restart",
+                    dict(
+                        dest="restart",
+                        action="store_true",
+                        default=None,
+                        help=(
+                            "If a daemon is already running, restart it automatically after "
+                            "writing the new config/tokens (non-interactive default on a tty is to ask)."
+                        ),
+                    ),
+                ),
+                (
+                    "--no-restart",
+                    dict(
+                        dest="restart",
+                        action="store_false",
+                        help=(
+                            "Do not restart a running daemon after setup; you'll need to run "
+                            "`clawk egress restart` yourself for changes to take effect."
+                        ),
+                    ),
+                ),
+            ],
+        ),
         ("start", "Start the managed iron-proxy", cmd_start, []),
         ("stop", "Stop the managed iron-proxy", cmd_stop, []),
-        ("restart", "Restart the managed iron-proxy (stop if running, then start)", cmd_restart, []),
-        ("reload", "Hot-reload the running daemon's ruleset from proxy.yaml "
-                   "(management API — no restart, no dropped connections)", cmd_reload, []),
-        ("status", "Show proxy state and mappings", cmd_status, [
-            ("--show-tokens", dict(action="store_true", help=(
-                "Print the proxy tokens (default: redacted prefix only). "
-                "Beware: tokens may persist in your shell history."))),
-        ]),
+        (
+            "restart",
+            "Restart the managed iron-proxy (stop if running, then start)",
+            cmd_restart,
+            [],
+        ),
+        (
+            "reload",
+            "Hot-reload the running daemon's ruleset from proxy.yaml "
+            "(management API — no restart, no dropped connections)",
+            cmd_reload,
+            [],
+        ),
+        (
+            "status",
+            "Show proxy state and mappings",
+            cmd_status,
+            [
+                (
+                    "--show-tokens",
+                    dict(
+                        action="store_true",
+                        help=(
+                            "Print the proxy tokens (default: redacted prefix only). "
+                            "Beware: tokens may persist in your shell history."
+                        ),
+                    ),
+                ),
+            ],
+        ),
         ("disable", "Turn off the proxy integration", cmd_disable, []),
         ("config", "Print the generated proxy.yaml path", cmd_config, []),
     ]
@@ -86,13 +167,15 @@ def cmd_install(args: argparse.Namespace) -> int:
 def cmd_setup(args: argparse.Namespace) -> int:
     """Four-step wizard; each ``_setup_*`` phase prints its own step and returns ``None`` to abort."""
     console = Console()
-    console.print(Panel.fit(
-        "[bold]iron-proxy setup[/bold]\n\n"
-        "Routes outbound sandbox traffic through a local TLS-intercepting\n"
-        "proxy so prompt-injected agents never see real provider API keys.\n\n"
-        "[dim]Project: https://github.com/ironsh/iron-proxy  (Apache-2.0)[/dim]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold]iron-proxy setup[/bold]\n\n"
+            "Routes outbound sandbox traffic through a local TLS-intercepting\n"
+            "proxy so prompt-injected agents never see real provider API keys.\n\n"
+            "[dim]Project: https://github.com/ironsh/iron-proxy  (Apache-2.0)[/dim]",
+            border_style="cyan",
+        )
+    )
     if not _setup_install_binary(console):
         return 1
     ca = _setup_ca_cert(console)
@@ -106,7 +189,9 @@ def cmd_setup(args: argparse.Namespace) -> int:
         return 1
     _setup_restart_daemon(console, args, proxy_cfg)
     console.print()
-    console.print("[green]✓ iron-proxy is configured.[/green]  Sandboxes will route outbound traffic through it.")
+    console.print(
+        "[green]✓ iron-proxy is configured.[/green]  Sandboxes will route outbound traffic through it."
+    )
     console.print(
         "  Start:   [cyan]clawk egress start[/cyan]\n"
         "  Restart: [cyan]clawk egress restart[/cyan]  (after any re-setup)\n"
@@ -158,8 +243,12 @@ def _setup_mint_tokens(console: Console, args: argparse.Namespace):
         # runs, NOT exported into an interactive shell); backfill so discovery sees them.
         loaded = _load_env_file_into_environ()
         if loaded:
-            console.print(f"  [dim]Loaded {loaded} provider key name(s) from ~/.clawksis/.env for discovery.[/dim]")
-    discovered = ip.discover_provider_mappings(available_env_names=available_env_names or None)
+            console.print(
+                f"  [dim]Loaded {loaded} provider key name(s) from ~/.clawksis/.env for discovery.[/dim]"
+            )
+    discovered = ip.discover_provider_mappings(
+        available_env_names=available_env_names or None
+    )
     # Preserve existing tokens unless rotation was requested — re-running setup must not
     # invalidate tokens baked into already-running sandboxes.
     existing = ip.load_mappings()
@@ -185,24 +274,34 @@ def _setup_mint_tokens(console: Console, args: argparse.Namespace):
                 shutil.copy2(str(mappings_src), str(backup))
                 console.print(f"  [dim]backup: {backup}[/dim]")
         except OSError as exc:
-            console.print(f"  [yellow]Could not back up mappings before rotation: {exc}[/yellow]")
+            console.print(
+                f"  [yellow]Could not back up mappings before rotation: {exc}[/yellow]"
+            )
     elif rotate and not existing:
         console.print(
             "[dim]Note: --rotate-tokens is a no-op on first-time setup (no existing tokens to rotate).[/dim]"
         )
-    mappings = ip.merge_mappings(existing=existing, discovered=discovered, rotate=rotate)
+    mappings = ip.merge_mappings(
+        existing=existing, discovered=discovered, rotate=rotate
+    )
     if not mappings:
-        console.print("  [yellow]No known provider API keys found in env/Bitwarden.[/yellow]")
+        console.print(
+            "  [yellow]No known provider API keys found in env/Bitwarden.[/yellow]"
+        )
         console.print("  Set at least one of these and rerun setup:")
         for env_name in sorted(ip._BEARER_PROVIDERS):
             console.print(f"    - {env_name}")
         return None
     # Providers we recognise but can't proxy (SigV4, service-account OAuth) still work — they
     # just bypass the egress isolation, so say so.
-    uncovered = ip.discover_uncovered_providers(available_env_names=available_env_names or None)
+    uncovered = ip.discover_uncovered_providers(
+        available_env_names=available_env_names or None
+    )
     if uncovered:
         console.print()
-        console.print("  [yellow]⚠[/yellow]  Detected provider env vars that the proxy does not yet cover:")
+        console.print(
+            "  [yellow]⚠[/yellow]  Detected provider env vars that the proxy does not yet cover:"
+        )
         for name in uncovered:
             console.print(f"    - {name}")
         console.print(
@@ -210,11 +309,15 @@ def _setup_mint_tokens(console: Console, args: argparse.Namespace):
             "OAuth (SigV4, service-account files) and will hold real "
             "credentials inside the sandbox.  Egress isolation is INCOMPLETE for these.[/dim]"
         )
-    console.print(_mappings_table(mappings, "Provider env", "Upstream hosts", show_tokens=False))
+    console.print(
+        _mappings_table(mappings, "Provider env", "Upstream hosts", show_tokens=False)
+    )
     return mappings
 
 
-def _setup_write_config(console: Console, args: argparse.Namespace, mappings, ca_crt, ca_key):
+def _setup_write_config(
+    console: Console, args: argparse.Namespace, mappings, ca_crt, ca_key
+):
     """Write proxy.yaml + mappings, then enable the integration in config; returns ``proxy_cfg``."""
     _step(console, 4, "Write config and persist mappings")
     cfg = load_config()
@@ -232,7 +335,9 @@ def _setup_write_config(console: Console, args: argparse.Namespace, mappings, ca
         tunnel_port = int(proxy_cfg.get("tunnel_port", ip._DEFAULT_TUNNEL_PORT))
     proxy_cfg["tunnel_port"] = tunnel_port
     extra_hosts = list(proxy_cfg.get("extra_allowed_hosts") or [])
-    allowed = list(ip._DEFAULT_ALLOWED_HOSTS) + [h for h in extra_hosts if h not in ip._DEFAULT_ALLOWED_HOSTS]
+    allowed = list(ip._DEFAULT_ALLOWED_HOSTS) + [
+        h for h in extra_hosts if h not in ip._DEFAULT_ALLOWED_HOSTS
+    ]
     # Pre-create the audit log 0o600. The pinned v0.39 daemon never writes it (reserved for
     # v0.40+ per-request records), so a pre-create failure is a WARNING, not a setup abort.
     audit_log_path = ip._proxy_state_dir() / "audit.log"
@@ -278,7 +383,9 @@ def _setup_write_config(console: Console, args: argparse.Namespace, mappings, ca
     elif getattr(args, "no_bitwarden", False):
         proxy_cfg["credential_source"] = "env"
         if existing_source == "bitwarden":
-            console.print("[yellow]Switched credential_source from bitwarden to env.[/yellow]")
+            console.print(
+                "[yellow]Switched credential_source from bitwarden to env.[/yellow]"
+            )
     elif existing_source == "bitwarden":
         console.print(
             "[dim]Keeping credential_source=bitwarden from existing config. "
@@ -290,7 +397,9 @@ def _setup_write_config(console: Console, args: argparse.Namespace, mappings, ca
     return proxy_cfg
 
 
-def _setup_restart_daemon(console: Console, args: argparse.Namespace, proxy_cfg: dict) -> None:
+def _setup_restart_daemon(
+    console: Console, args: argparse.Namespace, proxy_cfg: dict
+) -> None:
     """Stop a running daemon and decide whether to (re)start it with the new config.
 
     --restart → always (re)start; --no-restart → never (print the manual hint); neither + tty →
@@ -314,10 +423,16 @@ def _setup_restart_daemon(console: Console, args: argparse.Namespace, proxy_cfg:
         do_restart = False
     if do_restart:
         try:
-            new_status = ip.start_proxy(install_if_missing=bool(proxy_cfg.get("auto_install", True)))
+            new_status = ip.start_proxy(
+                install_if_missing=bool(proxy_cfg.get("auto_install", True))
+            )
         except Exception as exc:
-            console.print(f"  [yellow]⚠ could not start iron-proxy with the new config: {exc}[/yellow]")
-            console.print("  Run [cyan]clawk egress start[/cyan] manually before launching new Docker sandboxes.")
+            console.print(
+                f"  [yellow]⚠ could not start iron-proxy with the new config: {exc}[/yellow]"
+            )
+            console.print(
+                "  Run [cyan]clawk egress start[/cyan] manually before launching new Docker sandboxes."
+            )
         else:
             listening = "listening" if new_status.listening else "not yet listening"
             verb = "restarted" if was_running else "started"
@@ -338,13 +453,19 @@ def cmd_start(args: argparse.Namespace) -> int:
     cfg = load_config()
     proxy_cfg = cfg.get("proxy") or {}
     if not proxy_cfg.get("enabled"):
-        console.print("[yellow]proxy.enabled is false — run `clawk egress setup` first.[/yellow]")
+        console.print(
+            "[yellow]proxy.enabled is false — run `clawk egress setup` first.[/yellow]"
+        )
         return 1
     # ``credential_source: bitwarden`` refreshes upstream secrets from BSM at startup — that is
     # the rotation guarantee distinguishing it from ``env``.
     credential_source = proxy_cfg.get("credential_source", "env")
     bw_cfg = (cfg.get("secrets") or {}).get("bitwarden")
-    refresh_bw = (credential_source == "bitwarden" and bw_cfg is not None and bool(bw_cfg.get("enabled")))
+    refresh_bw = (
+        credential_source == "bitwarden"
+        and bw_cfg is not None
+        and bool(bw_cfg.get("enabled"))
+    )
     # Silent-degrade guard: bitwarden mode chosen but secrets.bitwarden disabled/removed. Refuse
     # (quietly starting on host env is the bug class BW mode exists to defeat) unless the
     # documented escape hatch is set.
@@ -398,7 +519,11 @@ def cmd_start(args: argparse.Namespace) -> int:
     if not status.pid:
         console.print("[red]✗ iron-proxy did not come up cleanly[/red]")
         return 1
-    listening = ("[green]listening[/green]" if status.listening else "[yellow]not yet listening[/yellow]")
+    listening = (
+        "[green]listening[/green]"
+        if status.listening
+        else "[yellow]not yet listening[/yellow]"
+    )
     console.print(
         f"[green]✓[/green] iron-proxy running  pid={status.pid}  port={status.tunnel_port}  {listening}"
     )
@@ -434,7 +559,9 @@ def cmd_reload(args: argparse.Namespace) -> int:
     except Exception as exc:
         console.print(f"[red]✗ reload failed:[/red] {exc}")
         return 1
-    console.print("[green]✓[/green] iron-proxy ruleset reloaded in-place (no restart, connections preserved)")
+    console.print(
+        "[green]✓[/green] iron-proxy ruleset reloaded in-place (no restart, connections preserved)"
+    )
     console.print(
         "[dim]Note: new upstream secrets (rotated keys, new providers) "
         "still need `clawk egress restart` — the daemon reads real "
@@ -451,7 +578,9 @@ def format_status_text(*, show_tokens: bool = False) -> str:
     lines = ["Egress proxy status", ""]
     lines.extend(
         f"{label}: {value}"
-        for label, value in _status_rows(proxy_cfg, status, yn=lambda v: "yes" if v else "no", dim=lambda t: t)
+        for label, value in _status_rows(
+            proxy_cfg, status, yn=lambda v: "yes" if v else "no", dim=lambda t: t
+        )
     )
     lines.append("Scope: Docker backend only in this release")
     mappings = ip.load_mappings()
@@ -459,16 +588,27 @@ def format_status_text(*, show_tokens: bool = False) -> str:
         lines.extend(["", "Token mappings:"])
         for m in mappings:
             tok = m.proxy_token if show_tokens else mask_secret(m.proxy_token)
-            lines.append(f"  - {m.real_env_name}: {tok} ({', '.join(m.upstream_hosts)})")
+            lines.append(
+                f"  - {m.real_env_name}: {tok} ({', '.join(m.upstream_hosts)})"
+            )
     uncovered = ip.discover_uncovered_providers()
     if uncovered:
-        lines.extend(["", "Uncovered providers (real credentials still visible inside the sandbox):"])
+        lines.extend(
+            [
+                "",
+                "Uncovered providers (real credentials still visible inside the sandbox):",
+            ]
+        )
         for name in uncovered:
             lines.append(f"  - {name}")
     if bool(proxy_cfg.get("enabled")) and not status.configured:
-        lines.extend(["", "Next: run `clawk egress setup` to mint tokens and write proxy.yaml."])
+        lines.extend(
+            ["", "Next: run `clawk egress setup` to mint tokens and write proxy.yaml."]
+        )
     elif bool(proxy_cfg.get("enabled")) and not (status.pid and status.listening):
-        lines.extend(["", "Next: run `clawk egress start` before launching Docker sandboxes."])
+        lines.extend(
+            ["", "Next: run `clawk egress start` before launching Docker sandboxes."]
+        )
     return "\n".join(lines)
 
 
@@ -480,14 +620,20 @@ def cmd_status(args: argparse.Namespace) -> int:
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("", style="bold")
     table.add_column("")
-    for label, value in _status_rows(proxy_cfg, status, yn=_yn, dim=lambda t: f"[dim]{t}[/dim]"):
+    for label, value in _status_rows(
+        proxy_cfg, status, yn=_yn, dim=lambda t: f"[dim]{t}[/dim]"
+    ):
         table.add_row(label, value)
     console.print(table)
     mappings = ip.load_mappings()
     if mappings:
         console.print()
         console.print("[bold]Token mappings[/bold]")
-        console.print(_mappings_table(mappings, "Real env", "Upstream", show_tokens=args.show_tokens))
+        console.print(
+            _mappings_table(
+                mappings, "Real env", "Upstream", show_tokens=args.show_tokens
+            )
+        )
         if args.show_tokens:
             console.print(
                 "[yellow]⚠[/yellow]  proxy tokens just printed in full — "
@@ -497,7 +643,9 @@ def cmd_status(args: argparse.Namespace) -> int:
     uncovered = ip.discover_uncovered_providers()
     if uncovered:
         console.print()
-        console.print("[yellow]Uncovered providers[/yellow] (real credentials still visible inside the sandbox):")
+        console.print(
+            "[yellow]Uncovered providers[/yellow] (real credentials still visible inside the sandbox):"
+        )
         for name in uncovered:
             console.print(f"  - {name}")
     return 0
@@ -526,7 +674,9 @@ def cmd_config(args: argparse.Namespace) -> int:
     console = Console()
     status = ip.get_status()
     if status.config_path is None:
-        console.print("[yellow](no config generated — run `clawk egress setup`)[/yellow]")
+        console.print(
+            "[yellow](no config generated — run `clawk egress setup`)[/yellow]"
+        )
         return 1
     console.print(str(status.config_path))
     return 0
@@ -539,18 +689,28 @@ def _bitwarden_env_names(console: Console) -> Optional[list[str]]:
     cfg = load_config()
     bw_cfg = (cfg.get("secrets") or {}).get("bitwarden") or {}
     if not bw_cfg.get("enabled"):
-        console.print("  [red]✗ --from-bitwarden requested but secrets.bitwarden.enabled is false.[/red]")
-        console.print("  Run `clawk secrets bitwarden setup` first, or omit --from-bitwarden.")
+        console.print(
+            "  [red]✗ --from-bitwarden requested but secrets.bitwarden.enabled is false.[/red]"
+        )
+        console.print(
+            "  Run `clawk secrets bitwarden setup` first, or omit --from-bitwarden."
+        )
         return None
     try:
         from agent.secret_sources import bitwarden as bw
+
         token_env = bw_cfg.get("access_token_env", "BWS_ACCESS_TOKEN")
         access_token = os.environ.get(token_env, "").strip()
         if not access_token:
-            console.print(f"  [red]✗ --from-bitwarden requested but {token_env} is not set in the environment.[/red]")
+            console.print(
+                f"  [red]✗ --from-bitwarden requested but {token_env} is not set in the environment.[/red]"
+            )
             return None
         secrets, _ = bw.fetch_bitwarden_secrets(
-            access_token=access_token, project_id=bw_cfg.get("project_id", ""), cache_ttl_seconds=0, use_cache=False
+            access_token=access_token,
+            project_id=bw_cfg.get("project_id", ""),
+            cache_ttl_seconds=0,
+            use_cache=False,
         )
         names = list(secrets.keys())
         if not names:
@@ -589,7 +749,9 @@ def _load_env_file_into_environ() -> int:
     return added
 
 
-def _mappings_table(mappings, env_header: str, hosts_header: str, *, show_tokens: bool) -> Table:
+def _mappings_table(
+    mappings, env_header: str, hosts_header: str, *, show_tokens: bool
+) -> Table:
     table = Table(show_header=True, header_style="bold")
     table.add_column(env_header, style="cyan")
     table.add_column(hosts_header, style="dim")

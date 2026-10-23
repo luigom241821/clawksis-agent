@@ -25,7 +25,9 @@ def _redaction_on(monkeypatch):
 
 
 def test_send_error_redacts_token_and_signed_url():
-    out = send_error(f"upstream said 401 for Authorization: Bearer {_FAKE_TOKEN} at {_FAKE_URL_SECRET}")
+    out = send_error(
+        f"upstream said 401 for Authorization: Bearer {_FAKE_TOKEN} at {_FAKE_URL_SECRET}"
+    )
     assert set(out) == {"error"}
     assert _FAKE_TOKEN not in out["error"]
     assert "sk_live_ABCDEF0123456789" not in out["error"]
@@ -48,13 +50,20 @@ async def test_ntfy_standalone_failure_is_redacted(monkeypatch):
             return False
 
         async def post(self, *a, **k):
-            raise RuntimeError(f"connect failed: Authorization: Bearer {_FAKE_TOKEN} {_FAKE_URL_SECRET}")
+            raise RuntimeError(
+                f"connect failed: Authorization: Bearer {_FAKE_TOKEN} {_FAKE_URL_SECRET}"
+            )
 
     monkeypatch.setattr(ntfy, "HTTPX_AVAILABLE", True)
     monkeypatch.setattr(ntfy.httpx, "AsyncClient", _Boom)
-    result = await ntfy._standalone_send(PlatformConfig(enabled=True, extra={}), "clawk-test", "hi")
+    result = await ntfy._standalone_send(
+        PlatformConfig(enabled=True, extra={}), "clawk-test", "hi"
+    )
     assert "error" in result
-    assert _FAKE_TOKEN not in result["error"] and "sk_live_ABCDEF0123456789" not in result["error"]
+    assert (
+        _FAKE_TOKEN not in result["error"]
+        and "sk_live_ABCDEF0123456789" not in result["error"]
+    )
     assert "connect failed" in result["error"]
 
 
@@ -67,7 +76,13 @@ async def test_irc_standalone_failure_is_redacted(monkeypatch):
 
     monkeypatch.setattr(irc.asyncio, "open_connection", _boom)
     result = await irc._standalone_send(
-        PlatformConfig(enabled=True, extra={"server": "irc.example", "channel": "#x", "nickname": "h"}), "#x", "hi")
+        PlatformConfig(
+            enabled=True,
+            extra={"server": "irc.example", "channel": "#x", "nickname": "h"},
+        ),
+        "#x",
+        "hi",
+    )
     assert "error" in result
     assert _FAKE_TOKEN not in result["error"]
     assert "refused" in result["error"]

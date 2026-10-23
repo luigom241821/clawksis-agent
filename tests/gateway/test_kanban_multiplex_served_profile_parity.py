@@ -27,7 +27,9 @@ def served(tmp_path, monkeypatch):
     alpha = root / "profiles" / "alpha"
     alpha.mkdir(parents=True)
     (root / ".env").write_text("CLAWK_MODEL=default-model\nTERMINAL_ENV=docker\n")
-    (root / "config.yaml").write_text("gateway:\n  multiplex_profiles: true\nterminal:\n  backend: docker\n")
+    (root / "config.yaml").write_text(
+        "gateway:\n  multiplex_profiles: true\nterminal:\n  backend: docker\n"
+    )
     (alpha / ".env").write_text("")
     (alpha / "config.yaml").write_text("display:\n  language: zh\n")
     monkeypatch.setenv("CLAWK_HOME", str(root))
@@ -43,7 +45,9 @@ def served(tmp_path, monkeypatch):
         set_multiplex_active(False)
 
 
-def test_worker_for_served_profile_gets_its_own_env_and_toolset_pin(served, monkeypatch):
+def test_worker_for_served_profile_gets_its_own_env_and_toolset_pin(
+    served, monkeypatch
+):
     """The dispatcher (root context) spawns alpha's worker client: no launch-profile settings leak
     into the child; the toolset pin is resolved by alpha's owner (``kanban.run``), not the dispatcher."""
     kb.init_db()
@@ -61,7 +65,9 @@ def test_worker_for_served_profile_gets_its_own_env_and_toolset_pin(served, monk
         return SimpleNamespace(pid=4242)
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(kbd, "_open_worker_log", lambda task, board: open("/dev/null", "w"))
+    monkeypatch.setattr(
+        kbd, "_open_worker_log", lambda task, board: open("/dev/null", "w")
+    )
     monkeypatch.setattr(kbd, "_clawk_argv", lambda: ["clawk"], raising=False)
     kbd._default_spawn(task, str(served.alpha), board=None)
 
@@ -77,7 +83,14 @@ class RecordingAdapter:
 
     async def send(self, chat_id, text, metadata=None):
         from gateway.media_policy import media_delivery_strict
-        self.sent.append({"text": text, "home": str(get_clawk_home()), "strict": media_delivery_strict()})
+
+        self.sent.append(
+            {
+                "text": text,
+                "home": str(get_clawk_home()),
+                "strict": media_delivery_strict(),
+            }
+        )
         return SimpleNamespace(success=True, error=None)
 
     async def handle_message(self, event):
@@ -87,12 +100,20 @@ class RecordingAdapter:
 def test_notifier_pings_run_under_the_subscribers_profile(served, monkeypatch):
     """A subscription owned by served alpha is pinged with alpha's home active, so its media policy
     and display language apply — alpha's own adapter was already selected before this fix."""
-    (served.alpha / "config.yaml").write_text("display:\n  language: zh\ngateway:\n  strict: true\n")
+    (served.alpha / "config.yaml").write_text(
+        "display:\n  language: zh\ngateway:\n  strict: true\n"
+    )
     kb.init_db()
     conn = kbc.connect()
     try:
         tid = kb.create_task(conn, title="notify parity", assignee="alpha")
-        kbn.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="1001", notifier_profile="alpha")
+        kbn.add_notify_sub(
+            conn,
+            task_id=tid,
+            platform="telegram",
+            chat_id="1001",
+            notifier_profile="alpha",
+        )
         kb.complete_task(conn, tid, summary="done")
     finally:
         conn.close()

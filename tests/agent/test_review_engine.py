@@ -22,6 +22,7 @@ from agent.review_engine import (
 from tools import async_delegation as ad
 from tools.process_registry import process_registry
 
+
 @pytest.fixture(autouse=True)
 def _clean_state():
     ad._reset_for_tests()
@@ -35,9 +36,11 @@ def _clean_state():
     while not process_registry.completion_queue.empty():
         process_registry.completion_queue.get_nowait()
 
+
 # ---------------------------------------------------------------------------
 # snapshot_recent_messages
 # ---------------------------------------------------------------------------
+
 
 def test_snapshot_takes_last_ten_chat_messages_only():
     msgs = (
@@ -50,6 +53,7 @@ def test_snapshot_takes_last_ten_chat_messages_only():
     assert snap[0]["text"] == "m5"
     assert snap[-1]["text"] == "m14"
     assert all(m["role"] == "user" for m in snap)
+
 
 def test_snapshot_skips_toolcall_stub_assistant_messages():
     msgs = [
@@ -64,16 +68,20 @@ def test_snapshot_skips_toolcall_stub_assistant_messages():
         "PR #123: https://example.com/pr/123",
     ]
 
+
 def test_snapshot_handles_multimodal_content_lists():
-    msgs = [{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": "look at this"},
-            {"type": "image_url", "image_url": {"url": "x"}},
-        ],
-    }]
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look at this"},
+                {"type": "image_url", "image_url": {"url": "x"}},
+            ],
+        }
+    ]
     snap = snapshot_recent_messages(msgs)
     assert snap[0]["text"] == "look at this\n[image_url]"
+
 
 def test_snapshot_caps_oversized_messages():
     msgs = [{"role": "user", "content": "x" * 50_000}]
@@ -81,9 +89,11 @@ def test_snapshot_caps_oversized_messages():
     assert len(snap[0]["text"]) < 13_000
     assert snap[0]["text"].endswith("[... truncated ...]")
 
+
 # ---------------------------------------------------------------------------
 # build_review_task
 # ---------------------------------------------------------------------------
+
 
 def test_build_review_task_includes_excerpt_and_prompt():
     snap = [
@@ -100,17 +110,23 @@ def test_build_review_task_includes_excerpt_and_prompt():
     assert "PR #99 opened" in context
     assert prompt.strip() in context
 
+
 # ---------------------------------------------------------------------------
 # auxiliary.review credential resolution
 # ---------------------------------------------------------------------------
 
+
 def test_load_review_credentials_cfg_reads_config(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.config.load_config_readonly",
-        lambda: {"auxiliary": {"review": {
-            "provider": "openrouter",
-            "model": "anthropic/claude-opus-4.6",
-        }}},
+        lambda: {
+            "auxiliary": {
+                "review": {
+                    "provider": "openrouter",
+                    "model": "anthropic/claude-opus-4.6",
+                }
+            }
+        },
     )
     cfg = re_mod._load_review_credentials_cfg()
     assert cfg == {
@@ -121,6 +137,7 @@ def test_load_review_credentials_cfg_reads_config(monkeypatch):
         "api_mode": "",
     }
 
+
 def test_load_review_credentials_cfg_auto_means_inherit(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.config.load_config_readonly",
@@ -128,15 +145,18 @@ def test_load_review_credentials_cfg_auto_means_inherit(monkeypatch):
     )
     assert re_mod._load_review_credentials_cfg() is None
 
+
 def test_load_review_credentials_cfg_missing_section(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.config.load_config_readonly", lambda: {"auxiliary": {}}
     )
     assert re_mod._load_review_credentials_cfg() is None
 
+
 # ---------------------------------------------------------------------------
 # delegate_task credentials_cfg override (the internal /review routing hook)
 # ---------------------------------------------------------------------------
+
 
 def _fake_parent():
     parent = MagicMock()
@@ -146,6 +166,7 @@ def _fake_parent():
     parent._active_children = []
     parent._active_children_lock = None
     return parent
+
 
 def test_delegate_task_credentials_cfg_overrides_delegation_config(monkeypatch):
     """The per-call credentials_cfg dict must reach the credential resolver
@@ -157,8 +178,13 @@ def test_delegate_task_credentials_cfg_overrides_delegation_config(monkeypatch):
     def fake_resolve(cfg, parent_agent):
         seen["cfg"] = cfg
         return {
-            "model": cfg.get("model"), "provider": None, "base_url": None,
-            "api_key": None, "api_mode": None, "command": None, "args": None,
+            "model": cfg.get("model"),
+            "provider": None,
+            "base_url": None,
+            "api_key": None,
+            "api_mode": None,
+            "command": None,
+            "args": None,
         }
 
     fake_child = MagicMock()
@@ -166,10 +192,15 @@ def test_delegate_task_credentials_cfg_overrides_delegation_config(monkeypatch):
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", fake_resolve)
     monkeypatch.setattr(dt, "_build_child_agent", lambda **kw: fake_child)
     monkeypatch.setattr(
-        dt, "_run_single_child",
+        dt,
+        "_run_single_child",
         lambda *a, **k: {
-            "task_index": 0, "status": "completed", "summary": "ok",
-            "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+            "task_index": 0,
+            "status": "completed",
+            "summary": "ok",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
             "exit_reason": "completed",
         },
     )
@@ -185,9 +216,11 @@ def test_delegate_task_credentials_cfg_overrides_delegation_config(monkeypatch):
     assert parsed["status"] == "dispatched"
     assert seen["cfg"] == override
 
+
 # ---------------------------------------------------------------------------
 # start_review end-to-end through the async delegation rail
 # ---------------------------------------------------------------------------
+
 
 def test_start_review_dispatches_background_and_completes(monkeypatch):
     import tools.delegate_tool as dt
@@ -197,16 +230,25 @@ def test_start_review_dispatches_background_and_completes(monkeypatch):
     def fake_run_single_child(task_index, goal, child=None, parent_agent=None, **kw):
         captured["goal"] = goal
         return {
-            "task_index": 0, "status": "completed",
-            "summary": "REVIEW: looks good", "api_calls": 2,
-            "duration_seconds": 0.1, "model": "m", "exit_reason": "completed",
+            "task_index": 0,
+            "status": "completed",
+            "summary": "REVIEW: looks good",
+            "api_calls": 2,
+            "duration_seconds": 0.1,
+            "model": "m",
+            "exit_reason": "completed",
         }
 
     fake_child = MagicMock()
     fake_child._delegate_role = "leaf"
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     built = {}
 
@@ -244,56 +286,87 @@ def test_start_review_dispatches_background_and_completes(monkeypatch):
     assert evt is not None and evt["type"] == "async_delegation"
     assert evt["results"][0]["summary"] == "REVIEW: looks good"
 
+
 def test_start_review_rejects_empty_conversation():
     with pytest.raises(ValueError, match="empty"):
         start_review(_fake_parent(), [], "")
+
 
 def test_start_review_requires_agent():
     with pytest.raises(ValueError, match="No active agent"):
         start_review(None, [{"role": "user", "content": "x"}], "")
 
+
 # ---------------------------------------------------------------------------
 # collect_parent_loaded_skills — reviewer inherits the parent's working skills
 # ---------------------------------------------------------------------------
+
 
 def test_collect_skills_from_preloaded_prompt_and_history():
     from agent.review_engine import collect_parent_loaded_skills
 
     parent = MagicMock()
     parent.ephemeral_system_prompt = (
-        '[IMPORTANT: The user launched this CLI session with the '
+        "[IMPORTANT: The user launched this CLI session with the "
         '"clawksis-agent-dev" skill preloaded. Treat its instructions as '
-        'active guidance for the duration of this session unless the user '
-        'overrides them.]'
+        "active guidance for the duration of this session unless the user "
+        "overrides them.]"
     )
     msgs = [
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"function": {"name": "skill_view",
-                          "arguments": '{"name": "github-pr-workflow"}'}},
-            # reference-file read of an already-counted skill: skipped
-            {"function": {"name": "skill_view",
-                          "arguments": '{"name": "clawksis-agent-dev", '
-                                       '"file_path": "references/x.md"}'}},
-            {"function": {"name": "read_file",
-                          "arguments": '{"path": "/tmp/x"}'}},
-        ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "skill_view",
+                        "arguments": '{"name": "github-pr-workflow"}',
+                    }
+                },
+                # reference-file read of an already-counted skill: skipped
+                {
+                    "function": {
+                        "name": "skill_view",
+                        "arguments": '{"name": "clawksis-agent-dev", '
+                        '"file_path": "references/x.md"}',
+                    }
+                },
+                {"function": {"name": "read_file", "arguments": '{"path": "/tmp/x"}'}},
+            ],
+        },
         # duplicate load coalesces
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"function": {"name": "skill_view",
-                          "arguments": '{"name": "github-pr-workflow"}'}},
-        ]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "skill_view",
+                        "arguments": '{"name": "github-pr-workflow"}',
+                    }
+                },
+            ],
+        },
     ]
     names = collect_parent_loaded_skills(parent, msgs)
     assert names == ["clawksis-agent-dev", "github-pr-workflow"]
+
 
 def test_collect_skills_empty_when_none_loaded():
     from agent.review_engine import collect_parent_loaded_skills
 
     parent = MagicMock()
     parent.ephemeral_system_prompt = None
-    assert collect_parent_loaded_skills(parent, [
-        {"role": "user", "content": "hi"},
-    ]) == []
+    assert (
+        collect_parent_loaded_skills(
+            parent,
+            [
+                {"role": "user", "content": "hi"},
+            ],
+        )
+        == []
+    )
+
 
 def test_collect_skills_caps_at_limit():
     from agent.review_engine import collect_parent_loaded_skills
@@ -301,15 +374,25 @@ def test_collect_skills_caps_at_limit():
     parent = MagicMock()
     parent.ephemeral_system_prompt = ""
     msgs = [
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"function": {"name": "skill_view",
-                          "arguments": json.dumps({"name": f"skill-{i}"})}}
-        ]}
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "skill_view",
+                        "arguments": json.dumps({"name": f"skill-{i}"}),
+                    }
+                }
+            ],
+        }
         for i in range(15)
     ]
     import inspect
+
     cap = inspect.signature(collect_parent_loaded_skills).parameters["limit"].default
     assert len(collect_parent_loaded_skills(parent, msgs)) == cap < 15
+
 
 def test_briefing_includes_loaded_skills_instruction():
     snap = [{"role": "user", "text": "review my PR"}]
@@ -317,14 +400,20 @@ def test_briefing_includes_loaded_skills_instruction():
     assert "clawksis-agent-dev, xitter" in context
     assert "skill_view" in context
 
+
 def test_start_review_threads_loaded_skills_into_context(monkeypatch):
     import tools.delegate_tool as dt
 
     fake_child = MagicMock()
     fake_child._delegate_role = "leaf"
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     built = {}
 
@@ -335,10 +424,15 @@ def test_start_review_threads_loaded_skills_into_context(monkeypatch):
     monkeypatch.setattr(dt, "_build_child_agent", fake_build)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)
     monkeypatch.setattr(
-        dt, "_run_single_child",
+        dt,
+        "_run_single_child",
         lambda *a, **k: {
-            "task_index": 0, "status": "completed", "summary": "ok",
-            "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+            "task_index": 0,
+            "status": "completed",
+            "summary": "ok",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
             "exit_reason": "completed",
         },
     )
@@ -357,10 +451,12 @@ def test_start_review_threads_loaded_skills_into_context(monkeypatch):
     assert "clawksis-agent-dev" in built["context"]
     assert "skill_view" in built["context"]
 
+
 # ---------------------------------------------------------------------------
 # Workspace context files — ALL subagents (reviewer included) get AGENTS.md
 # et al. in their child system prompt (tools/delegate_tool.py)
 # ---------------------------------------------------------------------------
+
 
 def test_child_system_prompt_embeds_workspace_context(tmp_path):
     """Real file I/O through the same loader the main system prompt uses."""
@@ -376,9 +472,11 @@ def test_child_system_prompt_embeds_workspace_context(tmp_path):
     )
     assert "sibling call sites" in prompt
 
+
 # ---------------------------------------------------------------------------
 # Registry sync: `review` must be a first-class slot in every aux-task surface
 # ---------------------------------------------------------------------------
+
 
 def test_review_registered_in_every_aux_surface():
     """The /review slot must appear in every aux-model picker registry.
@@ -392,18 +490,22 @@ def test_review_registered_in_every_aux_surface():
     from clawk_cli.main_provider_setup import _AUX_TASKS
     from clawk_cli.web_server_config import _AUX_TASK_SLOTS
 
-    assert "review" in DEFAULT_CONFIG["auxiliary"], \
+    assert "review" in DEFAULT_CONFIG["auxiliary"], (
         "review missing from DEFAULT_CONFIG['auxiliary']"
+    )
 
     aux_keys = {k for k, _name, _desc in _AUX_TASKS}
     assert "review" in aux_keys, "review missing from _AUX_TASKS (CLI picker)"
 
-    assert "review" in _AUX_TASK_SLOTS, \
+    assert "review" in _AUX_TASK_SLOTS, (
         "review missing from _AUX_TASK_SLOTS (dashboard REST API)"
+    )
+
 
 # ---------------------------------------------------------------------------
 # format_dispatch_note
 # ---------------------------------------------------------------------------
+
 
 def test_format_dispatch_note_dispatched():
     prompt = "security\n" * 100

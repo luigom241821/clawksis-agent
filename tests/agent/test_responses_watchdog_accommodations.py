@@ -24,7 +24,9 @@ sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
 sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
 
-def _make_mock_agent(provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1"):
+def _make_mock_agent(
+    provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1"
+):
     agent = MagicMock()
     agent.provider = provider
     agent.api_mode = api_mode
@@ -49,28 +51,40 @@ def test_xai_responses_receives_stale_timeout_floor_in_api_call(monkeypatch):
     """
     from agent import chat_completion_helpers as h
 
-    agent = _make_mock_agent(provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1")
+    agent = _make_mock_agent(
+        provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1"
+    )
     assert h._is_openai_codex_backend(agent) is False
 
     monkeypatch.setenv("CLAWK_CODEX_TTFB_TIMEOUT_SECONDS", "0")
     closes = []
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: SimpleNamespace())
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: SimpleNamespace()
+    )
     monkeypatch.setattr(agent, "_close_request_openai_client", lambda *a, **k: None)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
     # 65k tokens estimate -> floor is >=900.0s
     large_text = "word " * 65_000
-    api_kwargs = {"messages": [{"role": "user", "content": large_text}], "stream": False}
+    api_kwargs = {
+        "messages": [{"role": "user", "content": large_text}],
+        "stream": False,
+    }
 
     sentinel = SimpleNamespace(ok=True)
     stop = {"flag": False}
 
     def fake_hang_or_delay(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 0.5
-        while time.time() < deadline and not stop["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         if "stale_call_kill" in closes:
             raise RuntimeError("aborted by stale kill")
@@ -90,16 +104,21 @@ def test_xai_responses_ttfb_scaled_for_large_requests(monkeypatch):
     """Large requests scale TTFB timeout for xai-oauth (codex_responses) instead of killing at small TTFB cutoff."""
     from agent import chat_completion_helpers as h
 
-    agent = _make_mock_agent(provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1")
+    agent = _make_mock_agent(
+        provider="xai-oauth", api_mode="codex_responses", base_url="https://api.x.ai/v1"
+    )
     assert h._is_openai_codex_backend(agent) is False
 
     monkeypatch.setenv("CLAWK_CODEX_TTFB_TIMEOUT_SECONDS", "0.2")
 
     closes = []
-    monkeypatch.setattr(agent, "_create_request_openai_client", lambda **k: SimpleNamespace())
+    monkeypatch.setattr(
+        agent, "_create_request_openai_client", lambda **k: SimpleNamespace()
+    )
     monkeypatch.setattr(agent, "_close_request_openai_client", lambda *a, **k: None)
     monkeypatch.setattr(
-        agent, "_abort_request_openai_client",
+        agent,
+        "_abort_request_openai_client",
         lambda c, reason=None: closes.append(reason),
     )
 
@@ -108,7 +127,11 @@ def test_xai_responses_ttfb_scaled_for_large_requests(monkeypatch):
 
     def fake_hang_small(api_kwargs, client=None, on_first_delta=None):
         deadline = time.time() + 5
-        while time.time() < deadline and not stop_small["flag"] and not agent._interrupt_requested:
+        while (
+            time.time() < deadline
+            and not stop_small["flag"]
+            and not agent._interrupt_requested
+        ):
             time.sleep(0.02)
         raise RuntimeError("hang")
 
@@ -116,7 +139,10 @@ def test_xai_responses_ttfb_scaled_for_large_requests(monkeypatch):
 
     try:
         with pytest.raises(TimeoutError):
-            h.interruptible_api_call(agent, {"messages": [{"role": "user", "content": "hello"}], "stream": True})
+            h.interruptible_api_call(
+                agent,
+                {"messages": [{"role": "user", "content": "hello"}], "stream": True},
+            )
         assert "codex_ttfb_kill" in closes
     finally:
         stop_small["flag"] = True
@@ -132,7 +158,9 @@ def test_xai_responses_ttfb_scaled_for_large_requests(monkeypatch):
 
     monkeypatch.setattr(agent, "_run_codex_stream", fake_stream_delayed)
 
-    result = h.interruptible_api_call(agent, {"messages": [{"role": "user", "content": large_text}], "stream": True})
+    result = h.interruptible_api_call(
+        agent, {"messages": [{"role": "user", "content": large_text}], "stream": True}
+    )
     assert result.ok is True
     assert "codex_ttfb_kill" not in closes
 

@@ -34,7 +34,9 @@ async def test_webhook_mode_refuses_to_start_without_secret(monkeypatch, secret)
     adapter = _adapter()
 
     with pytest.raises(RuntimeError):
-        await adapter._start_webhook_mode("https://example.test/telegram", is_reconnect=False)
+        await adapter._start_webhook_mode(
+            "https://example.test/telegram", is_reconnect=False
+        )
 
     adapter._app.updater.start_webhook.assert_not_awaited()
 
@@ -44,7 +46,11 @@ async def test_webhook_mode_registers_secret_token(monkeypatch):
     monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "  s3cret  ")
     adapter = _adapter()
 
-    await adapter._start_webhook_mode("https://example.test/telegram", is_reconnect=False)
+    await adapter._start_webhook_mode(
+        "https://example.test/telegram", is_reconnect=False
+    )
 
     adapter._app.updater.start_webhook.assert_awaited_once()
-    assert adapter._app.updater.start_webhook.await_args.kwargs["secret_token"] == "s3cret"
+    assert (
+        adapter._app.updater.start_webhook.await_args.kwargs["secret_token"] == "s3cret"
+    )

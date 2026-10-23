@@ -1,4 +1,5 @@
 """Release sampling follows tag chronology across CalVer and SemVer, local tags or not."""
+
 import os
 import subprocess
 
@@ -6,7 +7,9 @@ from scripts.releases.pick_tags import pick_tags
 
 
 def _git(cwd, *args, env=None):
-    return subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True)
+    return subprocess.run(
+        ["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True
+    )
 
 
 def _seed_origin(root):
@@ -35,8 +38,21 @@ def test_sampling_reads_origin_not_local_tags(tmp_path):
     _seed_origin(tmp_path)
     # --no-local forces the transport, so the tagless clone truly lacks the
     # tag objects, not just their refs.
-    _git(tmp_path, "clone", "--no-local", str(tmp_path / "origin.git"), str(tmp_path / "with-tags"))
-    _git(tmp_path, "clone", "--no-local", "--no-tags", str(tmp_path / "origin.git"), str(tmp_path / "tagless"))
+    _git(
+        tmp_path,
+        "clone",
+        "--no-local",
+        str(tmp_path / "origin.git"),
+        str(tmp_path / "with-tags"),
+    )
+    _git(
+        tmp_path,
+        "clone",
+        "--no-local",
+        "--no-tags",
+        str(tmp_path / "origin.git"),
+        str(tmp_path / "tagless"),
+    )
     expected = ["v2026.7.20", "v0.27.0"]
     assert pick_tags(tmp_path / "with-tags", 3, "v0.28.0") == expected
     assert pick_tags(tmp_path / "tagless", 3, "v0.28.0") == expected

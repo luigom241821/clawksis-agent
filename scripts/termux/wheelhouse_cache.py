@@ -1,4 +1,5 @@
 """The wheelhouse manifest is the proof used to admit restored build output."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,15 +9,26 @@ import re
 from pathlib import Path
 
 
-def build_identity(repo: Path, builder: str, platform_tag: str, python_abi: str) -> dict[str, str]:
+def build_identity(
+    repo: Path, builder: str, platform_tag: str, python_abi: str
+) -> dict[str, str]:
     files = (
-        "uv.lock", "pyproject.toml", "pm/lock.json", "pm/termux_runtime_libs.json",
+        "uv.lock",
+        "pyproject.toml",
+        "pm/lock.json",
+        "pm/termux_runtime_libs.json",
         "scripts/termux/build_config.sh",
-        "scripts/termux/termux_build.sh", "scripts/termux/build_wheels.py",
-        "scripts/termux/retag_wheel.py", "scripts/termux/python_linkage.py",
-        "scripts/termux/wheelhouse_cache.py", "scripts/termux/build_environment.py",
-        "pm/environment.py", "pm/build_operations.py", "pm/operations.py",
-        "pm/pyproject.toml", "pm/uv.lock",
+        "scripts/termux/termux_build.sh",
+        "scripts/termux/build_wheels.py",
+        "scripts/termux/retag_wheel.py",
+        "scripts/termux/python_linkage.py",
+        "scripts/termux/wheelhouse_cache.py",
+        "scripts/termux/build_environment.py",
+        "pm/environment.py",
+        "pm/build_operations.py",
+        "pm/operations.py",
+        "pm/pyproject.toml",
+        "pm/uv.lock",
         "scripts/termux/termux-builder.Dockerfile",
     )
     return {
@@ -44,7 +56,9 @@ def write_manifest(payload: Path, identity: dict[str, str], **metadata: str) -> 
         "buildSetSha256": _sha256(payload / ".work/build_set.txt"),
         "wheels": [{"name": w.name, "sha256": _sha256(w)} for w in wheels],
     }
-    (payload / "index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+    (payload / "index.json").write_text(
+        json.dumps(index, indent=2) + "\n", encoding="utf-8"
+    )
     (payload / "SHA256SUMS").write_text(
         "".join(f"{w['sha256']}  {w['name']}\n" for w in index["wheels"]),
         encoding="utf-8",
@@ -91,12 +105,17 @@ def main() -> int:
     args = parser.parse_args()
     if args.commit is not None and not re.fullmatch(r"[a-f0-9]{40}", args.commit):
         parser.error("--commit requires an exact full SHA")
-    identity = build_identity(args.repo, args.builder, args.platform_tag, args.python_abi)
+    identity = build_identity(
+        args.repo, args.builder, args.platform_tag, args.python_abi
+    )
     if args.action == "check":
         return 0 if is_usable(args.payload, identity) else 1
     write_manifest(
-        args.payload, identity, **({"commit": args.commit} if args.commit else {"tag": args.tag}),
-        platformTag=args.platform_tag, pythonAbi=args.python_abi,
+        args.payload,
+        identity,
+        **({"commit": args.commit} if args.commit else {"tag": args.tag}),
+        platformTag=args.platform_tag,
+        pythonAbi=args.python_abi,
     )
     return 0
 

@@ -23,8 +23,6 @@ def _build():
     return parser
 
 
-
-
 def test_cron_edit_no_agent_tristate():
     parser = _build()
     # --no-agent -> True, --agent -> False, neither -> None

@@ -3,6 +3,7 @@
 Build the real image and verify that legacy ``/usr/bin/tini -g -- <cmd>``
 entrypoints still boot the image (no ``rc.init: -g: not found`` boot loop).
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -20,9 +21,20 @@ def test_legacy_tini_entrypoint_boots(built_image: str) -> None:
     main-wrapper, so the requested command runs normally.
     """
     r = subprocess.run(
-        ["docker", "run", "--rm", "--entrypoint", "/usr/bin/tini",
-         built_image, "-g", "--", "--help"],
-        capture_output=True, text=True, timeout=120,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "/usr/bin/tini",
+            built_image,
+            "-g",
+            "--",
+            "--help",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     combined = r.stdout + r.stderr

@@ -29,7 +29,17 @@ class VersionInfo:
     distance: int | None
     commit: str | None
     branch: str | None
-    source: Literal["build", "commit-build", "ci", "docker", "fallback", "git", "local", "nix", "unknown"]
+    source: Literal[
+        "build",
+        "commit-build",
+        "ci",
+        "docker",
+        "fallback",
+        "git",
+        "local",
+        "nix",
+        "unknown",
+    ]
     dirty: bool = False
     commit_date: int | None = None
     distribution: Literal["docker", "nix", "desktop-app"] | None = None
@@ -61,7 +71,13 @@ def _derived_version(
 def _run_git(repo_dir: Path, *args: str) -> str | None:
     try:
         result = subprocess.run(
-            ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3, cwd=str(repo_dir),
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=3,
+            cwd=str(repo_dir),
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
@@ -101,22 +117,37 @@ def _calver_release_version(repo_dir: Path) -> tuple[str, int] | None:
     checkout past such a release would compare as "unknown" against plugins'
     ``requires_clawk``.
     """
-    described = _run_git(repo_dir, "describe", "--tags", "--long", "--match", "v2[0-9][0-9][0-9].*", "HEAD")
+    described = _run_git(
+        repo_dir,
+        "describe",
+        "--tags",
+        "--long",
+        "--match",
+        "v2[0-9][0-9][0-9].*",
+        "HEAD",
+    )
     if not described:
         return None
     tag, count, _ = described.rsplit("-", 2)
     distance = _parse_nonnegative(count)
     try:
-        project = tomllib.loads(_run_git(repo_dir, "show", f"{tag}:pyproject.toml") or "").get("project", {})
+        project = tomllib.loads(
+            _run_git(repo_dir, "show", f"{tag}:pyproject.toml") or ""
+        ).get("project", {})
     except tomllib.TOMLDecodeError:
         return None
     version = project.get("version")
-    if distance is None or not isinstance(version, str) or not STABLE_TAG_RE.fullmatch(f"v{version}"):
+    if (
+        distance is None
+        or not isinstance(version, str)
+        or not STABLE_TAG_RE.fullmatch(f"v{version}")
+    ):
         return None
     return version, distance
 
 
 # --- Install stamp reader ---------------------------------------------------
+
 
 def _resolve_stamp_file() -> Path | None:
     """The executing tree's stamp (pm.paths.install_stamp_path owns the location)."""
@@ -177,8 +208,22 @@ def _stamp_version_info() -> VersionInfo | None:
     # ``source`` describes build provenance, while ``distribution`` identifies
     # the package form users installed. Keep both facts intact for support.
     source = (
-        cast(Literal["build", "commit-build", "ci", "docker", "fallback", "git", "local", "nix", "unknown"], stamp_source)
-        if stamp_source in {"commit-build", "ci", "docker", "fallback", "git", "local", "nix"}
+        cast(
+            Literal[
+                "build",
+                "commit-build",
+                "ci",
+                "docker",
+                "fallback",
+                "git",
+                "local",
+                "nix",
+                "unknown",
+            ],
+            stamp_source,
+        )
+        if stamp_source
+        in {"commit-build", "ci", "docker", "fallback", "git", "local", "nix"}
         else "build"
     )
     distribution = data.get("distribution")
@@ -205,7 +250,9 @@ def _stamp_version_info() -> VersionInfo | None:
 # --- Git provenance (source/dev installs) -----------------------------------
 
 
-def _git_version_info(repo_dir: Path, *, include_untracked: bool = False) -> VersionInfo:
+def _git_version_info(
+    repo_dir: Path, *, include_untracked: bool = False
+) -> VersionInfo:
     commit = _run_git(repo_dir, "rev-parse", "HEAD")
     # A detached HEAD has no branch. Leave the field None: every formatter
     # already prints the commit separately and handles a missing branch.
@@ -228,28 +275,35 @@ def _git_version_info(repo_dir: Path, *, include_untracked: bool = False) -> Ver
         dirty_result = subprocess.run(
             status_command,
             capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=3,
             cwd=str(repo_dir),
             check=False,
         )
-        dirty = dirty_result.returncode == 0 and bool((dirty_result.stdout or "").strip())
+        dirty = dirty_result.returncode == 0 and bool(
+            (dirty_result.stdout or "").strip()
+        )
     except (OSError, subprocess.SubprocessError):
         dirty = False
 
     tags = _run_git(repo_dir, "tag", "--merged", "HEAD", "--list", "v[0-9]*")
     releases = [
-        tag[1:]
-        for tag in (tags or "").splitlines()
-        if STABLE_TAG_RE.fullmatch(tag)
+        tag[1:] for tag in (tags or "").splitlines() if STABLE_TAG_RE.fullmatch(tag)
     ]
     base_version = (
         max(releases, key=lambda value: tuple(int(part) for part in value.split(".")))
-        if releases else "unknown"
+        if releases
+        else "unknown"
     )
-    distance = _parse_nonnegative(
-        _run_git(repo_dir, "rev-list", "--count", f"v{base_version}..HEAD")
-    ) if releases else None
+    distance = (
+        _parse_nonnegative(
+            _run_git(repo_dir, "rev-list", "--count", f"v{base_version}..HEAD")
+        )
+        if releases
+        else None
+    )
     if not releases:
         base_version, distance = _calver_release_version(repo_dir) or ("unknown", None)
     short_commit = _run_git(repo_dir, "rev-parse", "--short=7", "HEAD")
@@ -259,7 +313,14 @@ def _git_version_info(repo_dir: Path, *, include_untracked: bool = False) -> Ver
         display_version = _derived_version(base_version, distance, dirty, short_commit)
 
     return VersionInfo(
-        base_version, display_version, distance, commit, branch, "git", dirty, commit_date
+        base_version,
+        display_version,
+        distance,
+        commit,
+        branch,
+        "git",
+        dirty,
+        commit_date,
     )
 
 

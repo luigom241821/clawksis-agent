@@ -29,23 +29,39 @@ KIND_BY_FRAME_TYPE: Mapping[str, str] = {
     "error": "turn.error",
 }
 
-_COORDINATE_FIELDS = ("room_id", "thread_id", "member_id", "turn_id", "task_id", "execution_generation")
+_COORDINATE_FIELDS = (
+    "room_id",
+    "thread_id",
+    "member_id",
+    "turn_id",
+    "task_id",
+    "execution_generation",
+)
 
 
-def emit_room_member_activity(hosted_task: Mapping[str, Any], *, kind: str, payload: Mapping[str, Any] | None,
-                              seq: int | None = None) -> bool:
+def emit_room_member_activity(
+    hosted_task: Mapping[str, Any],
+    *,
+    kind: str,
+    payload: Mapping[str, Any] | None,
+    seq: int | None = None,
+) -> bool:
     """Queue one activity event for every registered consumer; False when nobody listens."""
     from agent.plugin_stream_hooks import enqueue_plugin_stream_hook
 
     coordinates = {field: hosted_task.get(field) for field in _COORDINATE_FIELDS}
-    return enqueue_plugin_stream_hook(HOOK_NAME, **coordinates, kind=kind, seq=seq, payload=dict(payload or {}))
+    return enqueue_plugin_stream_hook(
+        HOOK_NAME, **coordinates, kind=kind, seq=seq, payload=dict(payload or {})
+    )
 
 
 # Server→client request frames (``{"id": "srq-…", "method": …}``) that are member activity.
 KIND_BY_REQUEST_METHOD: Mapping[str, str] = {"approval": "request.opened"}
 
 
-def project_room_member_activity(frame: Mapping[str, Any], sessions: Mapping[str, Mapping[str, Any]]) -> bool:
+def project_room_member_activity(
+    frame: Mapping[str, Any], sessions: Mapping[str, Mapping[str, Any]]
+) -> bool:
     """Fire the hook for an outgoing session frame (event notification or server→client request) when its
     session is running a room turn."""
     params = frame.get("params")
@@ -62,8 +78,14 @@ def project_room_member_activity(frame: Mapping[str, Any], sessions: Mapping[str
     if kind is None:
         return False
     session = sessions.get(str(params.get("session_id") or ""))
-    hosted_task = session.get("_hosted_room_task") if isinstance(session, Mapping) else None
+    hosted_task = (
+        session.get("_hosted_room_task") if isinstance(session, Mapping) else None
+    )
     if not isinstance(hosted_task, Mapping):
         return False
     return emit_room_member_activity(
-        hosted_task, kind=kind, payload=payload if isinstance(payload, Mapping) else None, seq=params.get("seq"))
+        hosted_task,
+        kind=kind,
+        payload=payload if isinstance(payload, Mapping) else None,
+        seq=params.get("seq"),
+    )

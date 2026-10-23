@@ -11,12 +11,23 @@ class TestRetiredTirithKeys:
         from clawk_cli.config_migrations import run_migrations
 
         config_path = tmp_path / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "_config_version": 49,
-            "security": {"redact_secrets": True, "tirith_enabled": True, "tirith_fail_open": False},
-        }), encoding="utf-8")
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "_config_version": 49,
+                    "security": {
+                        "redact_secrets": True,
+                        "tirith_enabled": True,
+                        "tirith_fail_open": False,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        run_migrations(49, {"env_added": [], "config_added": [], "warnings": []}, quiet=True)
+        run_migrations(
+            49, {"env_added": [], "config_added": [], "warnings": []}, quiet=True
+        )
         raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
         assert raw["security"] == {"redact_secrets": True}
         assert not (raw.get("plugins") or {}).get("enabled")

@@ -5,6 +5,7 @@ install-root path — inline helper, to be deduped with
 boot_bootstrap._install_key at assembly), never home-global. Mechanism
 comes from the stamp; external installs have no channel at all.
 """
+
 import hashlib
 import json
 from pathlib import Path
@@ -34,9 +35,7 @@ def _stamp(root: Path, mechanism: str, tag: str | None = None) -> None:
 def _config_for(root: Path, channel: str) -> dict:
     return {
         "update": {
-            "installs": {
-                install_id(root): {"path": str(root), "channel": channel}
-            }
+            "installs": {install_id(root): {"path": str(root), "channel": channel}}
         }
     }
 
@@ -90,22 +89,29 @@ class TestInstallId:
         drift before the assembly-time dedupe."""
         root = tmp_path / "install"
         root.mkdir()
-        expected = hashlib.sha256(
-            str(root.resolve()).encode("utf-8")
-        ).hexdigest()[:16]
+        expected = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:16]
         assert install_id(root) == expected
 
 
 class TestResolve:
-
     def test_channel_bundle_keeps_baked_subscription_in_its_cli(self, tmp_path):
-        (tmp_path / 'install-stamp.json').write_text(json.dumps({
-            'payload': 'bundled', 'source': 'channel-build',
-            'updateMechanism': 'electron-updater', 'tag': None,
-            'channelBuild': {'channel': 'r2-preview'},
-        }), encoding='utf-8')
-        assert default_channel(tmp_path) == 'r2-preview'
-        assert resolve_update_channel(_config_for(tmp_path, 'stable'), tmp_path) == 'r2-preview'
+        (tmp_path / "install-stamp.json").write_text(
+            json.dumps(
+                {
+                    "payload": "bundled",
+                    "source": "channel-build",
+                    "updateMechanism": "electron-updater",
+                    "tag": None,
+                    "channelBuild": {"channel": "r2-preview"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert default_channel(tmp_path) == "r2-preview"
+        assert (
+            resolve_update_channel(_config_for(tmp_path, "stable"), tmp_path)
+            == "r2-preview"
+        )
 
     def test_multi_install_isolation(self, tmp_path):
         """Two installs, one config: each resolves its own record and a
@@ -118,32 +124,43 @@ class TestResolve:
         assert resolve_update_channel(config, a) == CHANNEL_STABLE
         assert resolve_update_channel(config, b) == CHANNEL_MAIN
 
-    @pytest.mark.parametrize('mechanism,tag,payload,record,expected', [
-        ('self', None, None, None, 'main'),
-        ('self', 'v1.2.3-canary.20260818', None, None, 'main'),
-        (None, None, None, None, 'main'),
-        ('self', None, None, 'canary', 'canary'),
-        ('self', None, None, 'yolo', 'yolo'),
-        ('electron-updater', 'v1.2.3', None, None, 'stable'),
-        ('electron-updater', 'v1.2.3+canary.20260819T171926Z', None, 'stable', 'canary'),
-        ('app-installer', 'v1.2.3+canary.20260819T171926Z', None, None, 'canary'),
-        ('microsoft-store', 'v1.2.3+canary.20260819T171926Z', None, None, 'canary'),
-        ('electron-updater', 'v1.2.3-canary.20260818', None, None, 'stable'),
-        ('electron-updater', None, None, 'canary', 'stable'),
-        ('external', 'v1.2.3', 'bundled', 'main', 'stable'),
-        ('external', 'v1.2.3', 'light', 'main', 'stable'),
-        ('external', 'v1.2.4+canary.20260911T125822Z', 'bundled', 'main', 'canary'),
-        ('external', 'v1.2.4+canary.20260911T125822Z', 'light', 'main', 'canary'),
-    ])
+    @pytest.mark.parametrize(
+        "mechanism,tag,payload,record,expected",
+        [
+            ("self", None, None, None, "main"),
+            ("self", "v1.2.3-canary.20260818", None, None, "main"),
+            (None, None, None, None, "main"),
+            ("self", None, None, "canary", "canary"),
+            ("self", None, None, "yolo", "yolo"),
+            ("electron-updater", "v1.2.3", None, None, "stable"),
+            (
+                "electron-updater",
+                "v1.2.3+canary.20260819T171926Z",
+                None,
+                "stable",
+                "canary",
+            ),
+            ("app-installer", "v1.2.3+canary.20260819T171926Z", None, None, "canary"),
+            ("microsoft-store", "v1.2.3+canary.20260819T171926Z", None, None, "canary"),
+            ("electron-updater", "v1.2.3-canary.20260818", None, None, "stable"),
+            ("electron-updater", None, None, "canary", "stable"),
+            ("external", "v1.2.3", "bundled", "main", "stable"),
+            ("external", "v1.2.3", "light", "main", "stable"),
+            ("external", "v1.2.4+canary.20260911T125822Z", "bundled", "main", "canary"),
+            ("external", "v1.2.4+canary.20260911T125822Z", "light", "main", "canary"),
+        ],
+    )
     def test_channel_policy(self, tmp_path, mechanism, tag, payload, record, expected):
         if mechanism is not None:
-            stamp = {'updateMechanism': mechanism, 'tag': tag}
+            stamp = {"updateMechanism": mechanism, "tag": tag}
             if payload:
-                stamp['payload'] = payload
-            (tmp_path / 'install-stamp.json').write_text(json.dumps(stamp), encoding='utf-8')
+                stamp["payload"] = payload
+            (tmp_path / "install-stamp.json").write_text(
+                json.dumps(stamp), encoding="utf-8"
+            )
         config = _config_for(tmp_path, record) if record else {}
         assert resolve_update_channel(config, tmp_path) == expected
-        if record is None or mechanism != 'self':
+        if record is None or mechanism != "self":
             assert default_channel(tmp_path) == expected
 
 
@@ -171,10 +188,13 @@ class TestSetChannel:
         assert record["path"] == str(root)
         assert resolve_update_channel(written, root) == channel
 
-
-
-    @pytest.mark.parametrize("mechanism", ["external", "electron-updater", "app-installer", "microsoft-store"])
-    def test_os_owned_mechanism_refuses_channel_writes(self, tmp_path, monkeypatch, mechanism):
+    @pytest.mark.parametrize(
+        "mechanism",
+        ["external", "electron-updater", "app-installer", "microsoft-store"],
+    )
+    def test_os_owned_mechanism_refuses_channel_writes(
+        self, tmp_path, monkeypatch, mechanism
+    ):
         self._home(tmp_path, monkeypatch)
         root = tmp_path / "os-owned-tree"
         _stamp(root, mechanism)
@@ -182,16 +202,23 @@ class TestSetChannel:
             set_install_channel("stable", root)
 
     @pytest.mark.parametrize("channel", ["main", "stable", "canary"])
-    def test_commit_build_channel_refusal_keeps_existing_config(self, tmp_path, monkeypatch, channel):
+    def test_commit_build_channel_refusal_keeps_existing_config(
+        self, tmp_path, monkeypatch, channel
+    ):
         home = self._home(tmp_path, monkeypatch)
         config = home / "config.yaml"
         config.write_text("# preserve\nupdate: {}\n")
         before = config.read_bytes()
         root = tmp_path / "commit-build"
         root.mkdir()
-        (root / "install-stamp.json").write_text(json.dumps({
-            "source": "commit-build", "updateMechanism": "external",
-        }))
+        (root / "install-stamp.json").write_text(
+            json.dumps(
+                {
+                    "source": "commit-build",
+                    "updateMechanism": "external",
+                }
+            )
+        )
         message = "This build doesn't get updates. Ask the developer who gave it to you for a new build."
         with pytest.raises(ValueError) as error:
             set_install_channel(channel, root)
@@ -238,9 +265,7 @@ class TestSetChannelCLI:
 
             return _deny
 
-        monkeypatch.setattr(
-            "clawk_cli.update_cmd._cmd_update_impl", _sentinel
-        )
+        monkeypatch.setattr("clawk_cli.update_cmd._cmd_update_impl", _sentinel)
         for name in ("Popen", "run", "call", "check_call", "check_output"):
             monkeypatch.setattr(subprocess, name, _denied(f"subprocess.{name}"))
         monkeypatch.setattr(
@@ -256,7 +281,9 @@ class TestSetChannelCLI:
         monkeypatch.setenv("CLAWK_HOME", str(home))
         return home
 
-    def test_malformed_update_section_refused_not_normalized(self, tmp_path, monkeypatch):
+    def test_malformed_update_section_refused_not_normalized(
+        self, tmp_path, monkeypatch
+    ):
         """A scalar/malformed ``update`` (or ``update.installs``) is refused —
         the dotted writer would silently turn it into a mapping and destroy
         the user's value. The file is left byte-identical."""
@@ -288,7 +315,9 @@ class TestSetChannelCLI:
         _stamp(root, "self")
         initial = {"model": {"provider": "fixture"}, **_config_for(other, "stable")}
         cfg = home / "config.yaml"
-        cfg.write_text("# retain user comment\n" + yaml.safe_dump(initial), encoding="utf-8")
+        cfg.write_text(
+            "# retain user comment\n" + yaml.safe_dump(initial), encoding="utf-8"
+        )
         before = cfg.read_bytes()
 
         with pytest.raises(SystemExit) as exc:
@@ -310,7 +339,10 @@ class TestSetChannelCLI:
         assert exc.value.code == 0
         assert writes == [(cfg, f"update.installs.{install_id(root)}")]
         expected = initial
-        expected["update"]["installs"][install_id(root)] = {"path": str(root), "channel": "canary"}
+        expected["update"]["installs"][install_id(root)] = {
+            "path": str(root),
+            "channel": "canary",
+        }
         assert yaml.safe_load(cfg.read_text(encoding="utf-8")) == expected
         assert cfg.read_text(encoding="utf-8").startswith("# retain user comment\n")
         output = capsys.readouterr().out
@@ -318,7 +350,9 @@ class TestSetChannelCLI:
         assert "forward-incompatible" in output
         assert not (home / "logs" / "update_receipts").exists()
 
-    def test_metadata_refusals_leave_config_unchanged(self, tmp_path, monkeypatch, capsys):
+    def test_metadata_refusals_leave_config_unchanged(
+        self, tmp_path, monkeypatch, capsys
+    ):
         from clawk_cli import main
 
         home = self._home(tmp_path, monkeypatch)
@@ -342,8 +376,15 @@ class TestSetChannelCLI:
     def _args(self, **kw):
         from types import SimpleNamespace
 
-        base = dict(check=False, gateway=False, branch=None, channel=None,
-                    set_channel=None, install_id=False, plan=False)
+        base = dict(
+            check=False,
+            gateway=False,
+            branch=None,
+            channel=None,
+            set_channel=None,
+            install_id=False,
+            plan=False,
+        )
         base.update(kw)
         return SimpleNamespace(**base)
 
@@ -353,11 +394,15 @@ class TestSetChannelCLI:
         from clawk_cli import main, update_cmd
 
         monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+
         def unexpected_update(*args, **kwargs):
             pytest.fail("metadata command entered the real updater")
+
         monkeypatch.setattr(update_cmd, "_cmd_update_impl", unexpected_update)
 
-    def test_stable_switch_warns_about_state_without_requiring_a_newer_release(self, tmp_path, monkeypatch, capsys):
+    def test_stable_switch_warns_about_state_without_requiring_a_newer_release(
+        self, tmp_path, monkeypatch, capsys
+    ):
         from clawk_cli.main import cmd_update
 
         self._home(tmp_path, monkeypatch)
@@ -371,22 +416,32 @@ class TestSetChannelCLI:
         assert "Wait" not in out
 
 
-
-@pytest.mark.parametrize('kind,expected', [('missing', 'missing'), ('replaced', 'replaced'),
-                                             ('unclaimed', 'unclaimed'), ('healthy', None)])
+@pytest.mark.parametrize(
+    "kind,expected",
+    [
+        ("missing", "missing"),
+        ("replaced", "replaced"),
+        ("unclaimed", "unclaimed"),
+        ("healthy", None),
+    ],
+)
 def test_doctor_channel_records_are_read_only(tmp_path, monkeypatch, kind, expected):
     from copy import deepcopy
-    home, root = tmp_path / '.clawk', tmp_path / 'install'
-    monkeypatch.setenv('CLAWK_HOME', str(home))
-    if kind != 'missing':
+
+    home, root = tmp_path / ".clawk", tmp_path / "install"
+    monkeypatch.setenv("CLAWK_HOME", str(home))
+    if kind != "missing":
         root.mkdir()
-    key = '0' * 16 if kind == 'replaced' else install_id(root)
-    config = {'update': {'installs': {key: {'path': str(root), 'channel': 'main'}}}}
-    if kind == 'healthy':
-        state = home / 'installs' / key
+    key = "0" * 16 if kind == "replaced" else install_id(root)
+    config = {"update": {"installs": {key: {"path": str(root), "channel": "main"}}}}
+    if kind == "healthy":
+        state = home / "installs" / key
         state.mkdir(parents=True)
-        (state / 'install.json').write_text(json.dumps({'root': str(root)}), encoding='utf-8')
+        (state / "install.json").write_text(
+            json.dumps({"root": str(root)}), encoding="utf-8"
+        )
     before = deepcopy(config)
     assert [(key, reason) for key, _, reason in stale_channel_records(config)] == (
-        [(key, expected)] if expected else [])
+        [(key, expected)] if expected else []
+    )
     assert config == before

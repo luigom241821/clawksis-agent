@@ -43,11 +43,16 @@ from plugins.platforms.discord.adapter import DiscordAdapter
 # and do NOT monkeypatch discord.DMChannel to it.
 # ---------------------------------------------------------------------------
 
+
 class _TextChannel:
     """Fake Discord text channel (not a DM, not a Thread)."""
 
-    def __init__(self, channel_id: int = 100, name: str = "general",
-                 guild_name: str = "Test Server"):
+    def __init__(
+        self,
+        channel_id: int = 100,
+        name: str = "general",
+        guild_name: str = "Test Server",
+    ):
         self.id = channel_id
         self.name = name
         self.guild = SimpleNamespace(name=guild_name, id=1)
@@ -57,14 +62,20 @@ class _TextChannel:
         async def _empty():
             return
             yield
+
         return _empty()
 
 
 class _Thread:
     """Fake Discord thread (not a DM, not a top-level channel)."""
 
-    def __init__(self, thread_id: int, name: str = "thread",
-                 parent=None, guild_name: str = "Test Server"):
+    def __init__(
+        self,
+        thread_id: int,
+        name: str = "thread",
+        parent=None,
+        guild_name: str = "Test Server",
+    ):
         self.id = thread_id
         self.name = name
         self.parent = parent
@@ -78,6 +89,7 @@ class _Thread:
         async def _empty():
             return
             yield
+
         return _empty()
 
 
@@ -117,6 +129,7 @@ def _make_message(
 # Adapter fixture
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def adapter(monkeypatch):
     # Clear relevant env vars so tests are hermetic
@@ -145,6 +158,7 @@ def adapter(monkeypatch):
 # Scenario 1 — thread-starter message duplicate via on_message (the main bug)
 # ---------------------------------------------------------------------------
 
+
 class TestThreadStarterDedup:
     """Pre-seeding dedup with thread.id prevents a second dispatch when the
     thread-starter message arrives as a duplicate MESSAGE_CREATE event."""
@@ -172,7 +186,10 @@ class TestThreadStarterDedup:
         monkeypatch.setattr(adapter, "_auto_create_thread", fake_auto_create_thread)
 
         async def fake_mark_async(tid):  # first yield point after thread creation
-            assert str(tid) in adapter._dedup._seen, "dedup pre-seed must precede await mark_async"
+            assert str(tid) in adapter._dedup._seen, (
+                "dedup pre-seed must precede await mark_async"
+            )
+
         monkeypatch.setattr(adapter._threads, "mark_async", fake_mark_async)
 
         # 1) Original user message arrives → triggers thread creation + dispatch
@@ -202,7 +219,6 @@ class TestThreadStarterDedup:
         assert adapter.handle_message.call_count == 1, (
             "handle_message should only be called once — duplicate starter dropped"
         )
-
 
     @pytest.mark.asyncio
     async def test_no_dedup_seed_when_thread_creation_fails(self, adapter, monkeypatch):
@@ -244,6 +260,7 @@ class TestThreadStarterDedup:
 # ---------------------------------------------------------------------------
 # Scenario 2 — direct double-call to _handle_message with same message id
 # ---------------------------------------------------------------------------
+
 
 class TestDirectDoubleDispatch:
     """on_message dedup (checked before _handle_message) prevents double dispatch.
@@ -289,6 +306,7 @@ class TestDirectDoubleDispatch:
 # Scenario 4 — dedup cache integrity after thread pre-seeding
 # ---------------------------------------------------------------------------
 
+
 class TestDedupCacheIntegrity:
     """Verify the dedup cache state is correct after pre-seeding."""
 
@@ -320,4 +338,3 @@ class TestDedupCacheIntegrity:
         assert adapter._dedup.is_duplicate(str(msg2_id)) is False, (
             "A new message with a different ID should not be blocked"
         )
-

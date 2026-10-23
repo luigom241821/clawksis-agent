@@ -13,6 +13,7 @@ Main's classic CLI holds a ``SessionDB`` writer. Rewired, the gateway is the sin
 The session id is the gateway's: :meth:`open_session` creates or resumes the session before the
 banner and adopts the id it returns.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,26 +29,67 @@ from clawk_cli.gateway_connection import RESUME_REFUSALS, GatewayConnection
 logger = logging.getLogger(__name__)
 
 # Read-only SessionDB methods main's CLI calls (served by the WAL reader).
-_READS = frozenset({
-    "get_session", "get_session_title", "get_session_by_title", "resolve_resume_session_id",
-    "get_messages_as_conversation", "get_resume_conversations", "assert_resume_safe",
-    "is_kanban_owned_session", "list_sessions_rich", "search_sessions", "get_next_title_in_lineage",
-    "get_handoff_state", "get_meta", "get_compression_tip", "resolve_session_by_title", "get_messages",
-    "session_count", "sanitize_title", "session_yolo_enabled",
-    "get_session_model_config_value",
-})
+_READS = frozenset(
+    {
+        "get_session",
+        "get_session_title",
+        "get_session_by_title",
+        "resolve_resume_session_id",
+        "get_messages_as_conversation",
+        "get_resume_conversations",
+        "assert_resume_safe",
+        "is_kanban_owned_session",
+        "list_sessions_rich",
+        "search_sessions",
+        "get_next_title_in_lineage",
+        "get_handoff_state",
+        "get_meta",
+        "get_compression_tip",
+        "resolve_session_by_title",
+        "get_messages",
+        "session_count",
+        "sanitize_title",
+        "session_yolo_enabled",
+        "get_session_model_config_value",
+    }
+)
 # Writes the gateway already performs itself (persistence, accounting, maintenance).
-_GATEWAY_OWNED = frozenset({
-    "create_session", "reopen_session", "append_messages_batch", "flush_token_counts",
-    "update_session_model", "patch_session_model_config", "maybe_auto_archive",
-    "maybe_auto_prune_and_vacuum", "set_meta", "update_token_counts", "close",
-})
+_GATEWAY_OWNED = frozenset(
+    {
+        "create_session",
+        "reopen_session",
+        "append_messages_batch",
+        "flush_token_counts",
+        "update_session_model",
+        "patch_session_model_config",
+        "maybe_auto_archive",
+        "maybe_auto_prune_and_vacuum",
+        "set_meta",
+        "update_token_counts",
+        "close",
+    }
+)
 # Mutations the owner refuses without the execution generation they were read at (clawk_state_runtime).
-_GENERATION_FENCED = frozenset({"delete", "rewind", "reset", "branch", "model", "compress", "workspace"})
-_COUNTED_REPAIRS = frozenset({"prune_empty_ghost_sessions", "finalize_orphaned_compression_sessions"})
+_GENERATION_FENCED = frozenset(
+    {"delete", "rewind", "reset", "branch", "model", "compress", "workspace"}
+)
+_COUNTED_REPAIRS = frozenset(
+    {"prune_empty_ghost_sessions", "finalize_orphaned_compression_sessions"}
+)
 # Launch options main's ``cli.main`` takes that are creation policy on the gateway session.
-_LAUNCH_POLICY = ("model", "provider", "toolsets", "reasoning", "api_key", "base_url", "max_turns",
-                  "ignore_rules", "checkpoints", "pass_session_id", "skills")
+_LAUNCH_POLICY = (
+    "model",
+    "provider",
+    "toolsets",
+    "reasoning",
+    "api_key",
+    "base_url",
+    "max_turns",
+    "ignore_rules",
+    "checkpoints",
+    "pass_session_id",
+    "skills",
+)
 
 
 def _noop(*_a, **_k):
@@ -62,7 +104,9 @@ class GatewaySessionStore:
     """Truthy until the viewer's gateway connection is final (main's ``if self._session_db:`` guards);
     a gateway hang-up stays truthy, and the next call redials."""
 
-    current: dict | None = None  # the opened session's snapshot; never ``__getattr__``'s refusal
+    current: dict | None = (
+        None  # the opened session's snapshot; never ``__getattr__``'s refusal
+    )
 
     def __init__(self, connection=None):
         self.connection = connection or GatewayConnection.shared()
@@ -86,12 +130,16 @@ class GatewaySessionStore:
         first start, after the CLI's startup maintenance probe) is retried on the next read."""
         if self._reader is None:
             from clawk_constants import get_clawk_home
+
             path = get_clawk_home() / "state.db"
             if not path.exists():
                 return None
             try:
                 from clawk_state import SessionDB
-                self._reader = SurfaceLabelReader(SessionDB(db_path=path, read_only=True))
+
+                self._reader = SurfaceLabelReader(
+                    SessionDB(db_path=path, read_only=True)
+                )
             except Exception as exc:  # health: allow BLE001 -- reads find nothing; retried on the next read
                 logger.debug("read-only state.db unavailable: %s", exc)
         return self._reader
@@ -102,6 +150,7 @@ class GatewaySessionStore:
         if name in _READS:
             if name in {"sanitize_title", "session_yolo_enabled"}:
                 from clawk_state import SessionDB
+
                 return getattr(SessionDB, name)
             db = self._db()
             if db is None:
@@ -113,7 +162,10 @@ class GatewaySessionStore:
             return _zero
 
         def refused(*_a, **_k):
-            raise GatewayClientError(f"{name} is not on the gateway session yet; nothing was written")
+            raise GatewayClientError(
+                f"{name} is not on the gateway session yet; nothing was written"
+            )
+
         return refused
 
     # -- session lifecycle -----------------------------------------------------------------
@@ -143,18 +195,29 @@ class GatewaySessionStore:
         """Create (or resume) the gateway session for this CLI and adopt its id. A resume target the
         gateway does not know is left as is: main's own "Session not found" path reports it."""
         key = self.connection.launch_api_key = (launch or {}).get("api_key") or None
-        self.connection.launch_api_key_typed = key is not None and key == getattr(cli, "_typed_api_key", None)
+        self.connection.launch_api_key_typed = key is not None and key == getattr(
+            cli, "_typed_api_key", None
+        )
         if getattr(cli, "_resumed", False):
             try:
-                snapshot = self.attach(cli.session_id, typed=self.connection.launch_api_key_typed)
+                snapshot = self.attach(
+                    cli.session_id, typed=self.connection.launch_api_key_typed
+                )
             except GatewayClientError as exc:
                 if str(exc) in RESUME_REFUSALS:
                     return None
                 raise
             # The CLI sends a coding-posture toolset pick and an env-folded ignore_rules too; only a typed
             # -t / --ignore-rules is checked.
-            _check_resume_launch({**(launch or {}), "toolsets": getattr(cli, "_typed_toolsets", None),
-                                  "ignore_rules": getattr(cli, "_explicit_ignore_rules", None) or None}, snapshot)
+            _check_resume_launch(
+                {
+                    **(launch or {}),
+                    "toolsets": getattr(cli, "_typed_toolsets", None),
+                    "ignore_rules": getattr(cli, "_explicit_ignore_rules", None)
+                    or None,
+                },
+                snapshot,
+            )
             return self._adopt(snapshot)
         return self.create(launch)
 
@@ -163,6 +226,7 @@ class GatewaySessionStore:
         title step); adopts and returns the new session id. ``record_cwd=False`` (``/new``,
         ``--create-if-missing``) leaves the row's cwd empty, as main's explicit creates did."""
         from agent.session_source import CLI_FAMILY_SOURCES, session_source_for
+
         params = _creation_policy(launch or {})
         params["cwd"] = os.path.realpath(os.getenv("TERMINAL_CWD") or os.getcwd())
         # Main's row label: ``cli``, ``oneshot`` for a finite -q/-Q run, or an explicit --source.
@@ -170,7 +234,11 @@ class GatewaySessionStore:
         # Main's row stamp (run_agent._launch_cwd_for_session): this process's cwd (``-w`` never
         # chdirs, so the repo root), only for a CLI-family label on a local terminal backend.
         local = (os.getenv("TERMINAL_ENV") or "local").strip().lower() in ("", "local")
-        params["row_cwd"] = os.getcwd() if record_cwd and local and params["source"] in CLI_FAMILY_SOURCES else ""
+        params["row_cwd"] = (
+            os.getcwd()
+            if record_cwd and local and params["source"] in CLI_FAMILY_SOURCES
+            else ""
+        )
         if title:
             params["title"] = title
         params.update(self.client_env())
@@ -183,9 +251,12 @@ class GatewaySessionStore:
     def client_env(self):
         """This shell's ``client_env`` when the gateway takes it (one ``runtime.describe`` per store)."""
         from clawk_cli.gateway_chat import client_env_policy
+
         if self._create_parameters is None:
             described = self.call("runtime.describe")
-            contract = described.get("session_create") if isinstance(described, dict) else None
+            contract = (
+                described.get("session_create") if isinstance(described, dict) else None
+            )
             self._create_parameters = list((contract or {}).get("parameters") or [])
         return client_env_policy(self._create_parameters)
 
@@ -194,10 +265,18 @@ class GatewaySessionStore:
         attaches this viewer to; returns the child id (main's /branch then switches to it)."""
         snapshot = self.call("session.resume", session_id=session_id)
         payload = {"title": title} if title else {}
-        receipt = self.call("session.mutate", session_id=session_id, request_id=uuid.uuid4().hex,
-                            expected_revision=snapshot["revision"],
-                            expected_generation=snapshot["execution_generation"],
-                            operation="branch", payload=payload) or {}
+        receipt = (
+            self.call(
+                "session.mutate",
+                session_id=session_id,
+                request_id=uuid.uuid4().hex,
+                expected_revision=snapshot["revision"],
+                expected_generation=snapshot["execution_generation"],
+                operation="branch",
+                payload=payload,
+            )
+            or {}
+        )
         child = receipt.get("branched_session_id")
         if not child:
             raise GatewayClientError("branch_failed")
@@ -209,8 +288,15 @@ class GatewaySessionStore:
         fence = {}
         if operation in _GENERATION_FENCED:
             fence["expected_generation"] = snapshot["execution_generation"]
-        return self.call("session.mutate", session_id=session_id, request_id=uuid.uuid4().hex,
-                         expected_revision=snapshot["revision"], operation=operation, payload=payload, **fence)
+        return self.call(
+            "session.mutate",
+            session_id=session_id,
+            request_id=uuid.uuid4().hex,
+            expected_revision=snapshot["revision"],
+            operation=operation,
+            payload=payload,
+            **fence,
+        )
 
     def set_session_title(self, session_id, title):
         try:
@@ -220,62 +306,112 @@ class GatewaySessionStore:
             # print main's "already in use" copy from the reader when another row holds the title.
             holder = self._title_holder(session_id, title)
             if holder:
-                raise ValueError(f"Title '{title}' is already in use by session {holder}") from exc
+                raise ValueError(
+                    f"Title '{title}' is already in use by session {holder}"
+                ) from exc
             raise
         if session_id in self.snapshots:
             self.connection.state(session_id).title = title
         return True
 
-    def rewind_user_turn(self, session_id, user_ordinal, *, warm_history=None, require_retryable=False, **_kw):
+    def rewind_user_turn(
+        self,
+        session_id,
+        user_ordinal,
+        *,
+        warm_history=None,
+        require_retryable=False,
+        **_kw,
+    ):
         """Main's ``SessionDB.rewind_user_turn`` (``/undo N``, ``/retry``) as ``session.mutate rewind``.
         The user turn is located on the gateway's snapshot transcript (its rows carry ``row_id``),
         checked against the CLI's warm view exactly as main checks it, then rewound by that row id."""
-        from agent.context_compressor import history_before_user_originated_turn, retryable_user_text
+        from agent.context_compressor import (
+            history_before_user_originated_turn,
+            retryable_user_text,
+        )
         from agent.message_content import flatten_message_text
         from agent.session_persistence import _is_ephemeral_scaffolding
         from clawk_state_rewind import (
-            _HISTORY_CHANGED, RewindOutcome, RewindTargetUnavailableError, _comparison_content, _user_indices)
+            _HISTORY_CHANGED,
+            RewindOutcome,
+            RewindTargetUnavailableError,
+            _comparison_content,
+            _user_indices,
+        )
+
         snapshot = self.call("session.resume", session_id=session_id)
-        durable = [m for m in snapshot.get("messages") or [] if not m.get("archived")]  # the live rows
+        durable = [
+            m for m in snapshot.get("messages") or [] if not m.get("archived")
+        ]  # the live rows
         durable_user = _user_indices(durable)
         if user_ordinal < 0:
             user_ordinal = max(len(durable_user) + user_ordinal, 0)
         if user_ordinal >= len(durable_user):
-            raise RewindTargetUnavailableError("target user message is no longer in session history")
+            raise RewindTargetUnavailableError(
+                "target user message is no longer in session history"
+            )
         target = durable[durable_user[user_ordinal]]
-        durable_prefix, live_view = history_before_user_originated_turn(durable, durable_user[user_ordinal])
+        durable_prefix, live_view = history_before_user_originated_turn(
+            durable, durable_user[user_ordinal]
+        )
         prefix = [{k: v for k, v in m.items() if k != "row_id"} for m in durable_prefix]
         if warm_history is not None:
             warm = [m for m in warm_history if not _is_ephemeral_scaffolding(m)]
             warm_user = _user_indices(warm)
             if len(warm_user) != len(durable_user):
                 raise RuntimeError(_HISTORY_CHANGED)
-            prefix, warm_live = history_before_user_originated_turn(warm, warm_user[user_ordinal])
+            prefix, warm_live = history_before_user_originated_turn(
+                warm, warm_user[user_ordinal]
+            )
             if _comparison_content(live_view) != _comparison_content(warm_live):
                 raise RuntimeError(_HISTORY_CHANGED)
-        live_text = retryable_user_text(live_view.get("content")) if require_retryable else None
+        live_text = (
+            retryable_user_text(live_view.get("content")) if require_retryable else None
+        )
         if not isinstance(target.get("row_id"), int):
             raise RuntimeError("rewind target has no durable row identity")
-        receipt = self.call("session.mutate", session_id=session_id, request_id=uuid.uuid4().hex,
-                            expected_revision=snapshot["revision"],
-                            expected_generation=snapshot["execution_generation"],
-                            operation="rewind", payload={"target_message_id": target["row_id"]}) or {}
+        receipt = (
+            self.call(
+                "session.mutate",
+                session_id=session_id,
+                request_id=uuid.uuid4().hex,
+                expected_revision=snapshot["revision"],
+                expected_generation=snapshot["execution_generation"],
+                operation="rewind",
+                payload={"target_message_id": target["row_id"]},
+            )
+            or {}
+        )
         return RewindOutcome(
-            prefix=prefix, live_view=live_view,
-            live_text=live_text if live_text is not None else flatten_message_text(live_view.get("content")),
-            rewound_count=int(receipt.get("rewound_count") or 0), turns_undone=len(durable_user) - user_ordinal)
+            prefix=prefix,
+            live_view=live_view,
+            live_text=live_text
+            if live_text is not None
+            else flatten_message_text(live_view.get("content")),
+            rewound_count=int(receipt.get("rewound_count") or 0),
+            turns_undone=len(durable_user) - user_ordinal,
+        )
 
     def set_session_yolo(self, session_id, enabled):
         """Main's ``/yolo`` persist hook: the gateway session's own bypass (``config.set yolo``, persisted
         on the route), since approvals run there. The CLI's in-process flag stays main's display state."""
-        self.call("config.set", session_id=session_id, key="yolo", value="1" if enabled else "0")
+        self.call(
+            "config.set",
+            session_id=session_id,
+            key="yolo",
+            value="1" if enabled else "0",
+        )
 
     def _title_holder(self, session_id, title):
         db = self._db()
         if db is None or not title:
             return None
         with db._read_ctx() as conn:
-            row = conn.execute("SELECT id FROM sessions WHERE title = ? AND id != ?", (title, session_id)).fetchone()
+            row = conn.execute(
+                "SELECT id FROM sessions WHERE title = ? AND id != ?",
+                (title, session_id),
+            ).fetchone()
         return row[0] if row else None
 
     def _leave(self, session_id):
@@ -302,9 +438,15 @@ class GatewaySessionStore:
             # run the owner's viewer close (fencing the session's delegations, ending it at idle).
             if not held and snapshot.get("subscription_id"):
                 try:
-                    self.call("session.detach", session_id=resolved, subscription_id=snapshot["subscription_id"])
+                    self.call(
+                        "session.detach",
+                        session_id=resolved,
+                        subscription_id=snapshot["subscription_id"],
+                    )
                 except GatewayClientError as exc:
-                    logger.debug("session.detach after a refused delete failed: %s", exc)
+                    logger.debug(
+                        "session.detach after a refused delete failed: %s", exc
+                    )
             raise
         self._leave(session_id)
         return True
@@ -314,12 +456,18 @@ class GatewaySessionStore:
         the idle local row with that reason once no viewer is left (``ended_at`` / ``end_reason``)."""
         snapshot = self.snapshots.pop(session_id, None)
         state = self.connection.states.get(session_id)
-        reachable = state is not None and state.subscription_id is not None and not self.connection.final
+        reachable = (
+            state is not None
+            and state.subscription_id is not None
+            and not self.connection.final
+        )
         if reachable:
             try:
                 # Hung up: redial first, so the detach names the subscription the reconnect resumed.
                 self.connection.start()
-                if state.gaps != state.attached_gaps:  # a replay gap retired it: re-attach, so the detach lands
+                if (
+                    state.gaps != state.attached_gaps
+                ):  # a replay gap retired it: re-attach, so the detach lands
                     self.connection.reattach(session_id)
             except GatewayClientError as exc:
                 logger.debug("redial for session.detach failed: %s", exc)
@@ -328,7 +476,12 @@ class GatewaySessionStore:
         if subscription and reachable:
             params = {"end_reason": reason} if reason else {}
             try:
-                self.call("session.detach", session_id=session_id, subscription_id=subscription, **params)
+                self.call(
+                    "session.detach",
+                    session_id=session_id,
+                    subscription_id=subscription,
+                    **params,
+                )
             except GatewayClientError as exc:
                 logger.debug("session.detach failed: %s", exc)
         if self.current is snapshot:
@@ -346,7 +499,8 @@ class GatewaySessionStore:
                     "SELECT 1 FROM sessions WHERE id = ? AND title IS NULL"
                     " AND NOT EXISTS (SELECT 1 FROM messages WHERE messages.session_id = sessions.id)"
                     " AND NOT EXISTS (SELECT 1 FROM sessions child WHERE child.parent_session_id = sessions.id)",
-                    (session_id,)).fetchone()
+                    (session_id,),
+                ).fetchone()
         except Exception as exc:  # health: allow BLE001 -- a failed probe keeps the row (never deletes on doubt)
             logger.debug("empty-session probe failed: %s", exc)
             return False
@@ -366,15 +520,24 @@ class GatewaySessionStore:
         if "tools" not in info:
             return None
         grouped = info.get("tools") or {}
-        toolset_of = {name: toolset for toolset, names in grouped.items() for name in names or []}
+        toolset_of = {
+            name: toolset for toolset, names in grouped.items() for name in names or []
+        }
         availability = info.get("tool_availability") or {
-            "available_toolsets": [], "unavailable_toolsets": [], "lazy_tools": [], "disabled_tools": []}
+            "available_toolsets": [],
+            "unavailable_toolsets": [],
+            "lazy_tools": [],
+            "disabled_tools": [],
+        }
         for item in availability.get("unavailable_toolsets", []):
             for name in item.get("tools", []):
                 toolset_of.setdefault(name, item.get("id", item.get("name", "")))
         return {
-            "tools": [{"type": "function", "function": {"name": name}} for names in grouped.values()
-                      for name in names or []],
+            "tools": [
+                {"type": "function", "function": {"name": name}}
+                for names in grouped.values()
+                for name in names or []
+            ],
             "get_toolset_for_tool": toolset_of.get,
             "availability": availability,
             "skills_by_category": info.get("skills") or {},
@@ -420,6 +583,7 @@ class SurfaceLabelReader:
         still matches ``--source desktop``.
         """
         from gateway.session_policy import SURFACE_GROUPS
+
         wanted = {requested} if isinstance(requested, str) else set(requested or ())
         created = set()
         live = set(wanted)
@@ -442,25 +606,35 @@ class SurfaceLabelReader:
 
     def search_sessions(self, source=None, limit=20, offset=0, **kw):
         return self._labelled(
-            source, limit, offset,
+            source,
+            limit,
+            offset,
             lambda src, lim, off, surfaces: self._wrapped.search_sessions(
-                source=src, limit=lim, offset=off, local_created_sources=surfaces, **kw))
+                source=src, limit=lim, offset=off, local_created_sources=surfaces, **kw
+            ),
+        )
 
     def list_sessions_rich(self, source=None, sources=None, limit=20, offset=0, **kw):
         requested = sources if sources else ([source] if source else None)
         if not requested:
             return self._wrapped.list_sessions_rich(limit=limit, offset=offset, **kw)
         return self._labelled(
-            requested, limit, offset,
+            requested,
+            limit,
+            offset,
             lambda src, lim, off, surfaces: self._wrapped.list_sessions_rich(
-                sources=src, limit=lim, offset=off, local_created_sources=surfaces, **kw))
+                sources=src, limit=lim, offset=off, local_created_sources=surfaces, **kw
+            ),
+        )
 
     def session_count(self, source=None, sources=None, **kw):
         expanded = self._expand(sources or source)
         if expanded is None:
             return self._wrapped.session_count(source=source, sources=sources, **kw)
         live, surfaces = expanded
-        return self._wrapped.session_count(sources=live, local_created_sources=surfaces, **kw)
+        return self._wrapped.session_count(
+            sources=live, local_created_sources=surfaces, **kw
+        )
 
 
 _CANONICAL_LOCAL_ID = re.compile(r"^local-([0-9a-f]{8})[0-9a-f]{56}$")
@@ -477,6 +651,7 @@ def _creation_policy(launch):
     """The explicit launch flags as ``session.create`` policy (the thin client's own mapping);
     unset flags leave the gateway to resolve the profile default, as main's CLI did."""
     from clawk_cli.gateway_chat import _requested_policy, env_launch_flags
+
     fields = {key: launch.get(key) for key in _LAUNCH_POLICY}
     if isinstance(fields.get("toolsets"), (list, tuple)):
         fields["toolsets"] = ",".join(str(item) for item in fields["toolsets"])
@@ -505,12 +680,17 @@ def _check_resume_launch(launch, snapshot):
     """Explicit launch flags on ``--resume`` / ``-c`` against the session's frozen route, as the thin
     client checks them: the same flags again are fine, a different value is refused, never dropped."""
     from clawk_cli.gateway_chat import check_resume_policy, resume_policy_error
+
     fields = {key: launch.get(key) for key in _RESUME_CHECKED}
     if isinstance(fields.get("toolsets"), (list, tuple)):
         fields["toolsets"] = ",".join(str(item) for item in fields["toolsets"])
     check_resume_policy(argparse.Namespace(**fields), snapshot)
-    frozen = ((snapshot.get("info") or {}).get("launch_request") or {})
-    differs = [key for key, value in _classic_only_policy(launch).items() if frozen.get(key) != value]
+    frozen = (snapshot.get("info") or {}).get("launch_request") or {}
+    differs = [
+        key
+        for key, value in _classic_only_policy(launch).items()
+        if frozen.get(key) != value
+    ]
     if differs:
         raise resume_policy_error(differs)
 
@@ -523,10 +703,12 @@ def move_cli_workspace(cli, wt_info):
     follow, so a later /new creates its session from the tree; a chdir OSError leaves both where they
     were (the gateway session has moved by then)."""
     from clawk_cli.gateway_automation import gateway_connection
+
     cwd = wt_info["path"]
     if gateway_connection(cli) is not None:
         cli._session_db._mutate(cli.session_id, "workspace", {"cwd": cwd})
         from clawk_cli.tui_worktree_resume import record_tui_worktree
+
         record_tui_worktree(wt_info)
     os.chdir(cwd)
     os.environ["TERMINAL_CWD"] = cwd
@@ -544,13 +726,19 @@ def create_titled_session(title):
     "could not be created" copy)."""
     params = _creation_policy({})
     params["cwd"] = os.path.realpath(os.getenv("TERMINAL_CWD") or os.getcwd())
-    params["source"] = "cli"  # main's titled row is `cli` (clawk_cli.main._create_titled_session)
+    params["source"] = (
+        "cli"  # main's titled row is `cli` (clawk_cli.main._create_titled_session)
+    )
     params["row_cwd"] = ""
     try:
         store = session_store()
         params.update(store.client_env())
-        snapshot = store.call("session.create", request_id=uuid.uuid4().hex, title=title, **params)
+        snapshot = store.call(
+            "session.create", request_id=uuid.uuid4().hex, title=title, **params
+        )
     except GatewayClientError as exc:
-        logger.warning("Failed to create titled session %r on the gateway: %s", title, exc)
+        logger.warning(
+            "Failed to create titled session %r on the gateway: %s", title, exc
+        )
         return None
     return snapshot["stored_session_id"]

@@ -1,17 +1,25 @@
 """Named-profile lifecycle inside the host gateway, never a service-manager action."""
+
 from __future__ import annotations
 
 import logging
 
 from clawk_constants import get_clawk_home, get_default_clawk_root
-from clawk_cli.profiles import parked_marker_path, profile_is_parked, profile_is_standalone, profiles_to_serve
+from clawk_cli.profiles import (
+    parked_marker_path,
+    profile_is_parked,
+    profile_is_standalone,
+    profiles_to_serve,
+)
 
 
 logger = logging.getLogger(__name__)
 
 
 def ack_confirmed(answer, key, name):
-    return isinstance(answer, dict) and answer.get(key) == name and not answer.get("error")
+    return (
+        isinstance(answer, dict) and answer.get(key) == name and not answer.get("error")
+    )
 
 
 def ack_failure(answer):
@@ -24,6 +32,7 @@ def mark_planned_stop(pid: int | None = None) -> None:
     """Best-effort planned-stop marker for ``pid`` (default: the recorded gateway PID)."""
     try:
         from gateway.status import get_running_pid, write_planned_stop_marker
+
         if pid is None:
             pid = get_running_pid(cleanup_stale=False)
         if pid is not None:
@@ -41,16 +50,25 @@ def host_scope_for_all_verb(owner):
     named-profile guard then refused (exit 78): the host stayed down after a Desktop update.
     """
     from clawk_cli.gateway_migrate import _home_env
+
     return _home_env(owner.home if owner is not None else get_default_clawk_root())
 
 
 def profile_lifecycle(command: str, args) -> bool:
     """True when a named-profile command was handled (including an unconfirmed request)."""
     from clawk_cli import gateway as gw
-    from gateway.control_socket import request_unserve_profile, request_serve_profile_hot
+    from gateway.control_socket import (
+        request_unserve_profile,
+        request_serve_profile_hot,
+    )
 
     name = gw._current_profile_name()
-    if not name or name == "default" or getattr(args, "all", False) or getattr(args, "force", False):
+    if (
+        not name
+        or name == "default"
+        or getattr(args, "all", False)
+        or getattr(args, "force", False)
+    ):
         return False
     home = get_clawk_home()
     if profile_is_standalone(home):
@@ -70,6 +88,7 @@ def profile_lifecycle(command: str, args) -> bool:
         owner = gw._host_multiplexer_for_all_verb()
         if owner is None:
             from clawk_cli.gateway_multiplex_served import live_default_gateway_pid
+
             if live_default_gateway_pid() is None:
                 return False  # Unpark even when today's normal start path must start the host first.
         host_home = owner.home if owner is not None else get_default_clawk_root()
@@ -77,8 +96,12 @@ def profile_lifecycle(command: str, args) -> bool:
         if ack_confirmed(answer, "served", name):
             print(f"Profile '{name}' served by the host gateway.")
         else:
-            print(f"Profile '{name}' unparked, but serving was not confirmed: {ack_failure(answer)}.")
-            print("The host retries on its next rescan (within 30s). Check gateway status.")
+            print(
+                f"Profile '{name}' unparked, but serving was not confirmed: {ack_failure(answer)}."
+            )
+            print(
+                "The host retries on its next rescan (within 30s). Check gateway status."
+            )
         return True
 
     # A separate --force gateway still owns its normal process/service lifecycle.
@@ -90,16 +113,21 @@ def profile_lifecycle(command: str, args) -> bool:
     host_home = owner.home if owner is not None else get_default_clawk_root()
     # Unserving stops this profile's executing turns: the live-work policy applies before the teardown.
     from clawk_cli.gateway_lifecycle_guards import refuse_while_sessions_live
+
     refuse_while_sessions_live(command, args, host_home=host_home, profile=name)
     if command == "stop":
         # Persist intent BEFORE teardown: the periodic rescan must not re-add this profile.
         marker.touch()
         answer = request_unserve_profile(host_home, name)
         if ack_confirmed(answer, "unserved", name):
-            print(f"Profile '{name}' parked; its bots and cron are stopped. "
-                  f"Start again with: clawk -p {name} gateway start")
+            print(
+                f"Profile '{name}' parked; its bots and cron are stopped. "
+                f"Start again with: clawk -p {name} gateway start"
+            )
         else:
-            print(f"Profile '{name}' parked, but immediate stop was not confirmed: {ack_failure(answer)}.")
+            print(
+                f"Profile '{name}' parked, but immediate stop was not confirmed: {ack_failure(answer)}."
+            )
             print("The host drops it on its next rescan (within 30s).")
         return True
 
@@ -111,7 +139,9 @@ def profile_lifecycle(command: str, args) -> bool:
     if ack_confirmed(answer, "served", name):
         print(f"Profile '{name}' restarted by the host gateway.")
     else:
-        print(f"Profile '{name}' stopped, but serving was not confirmed: {ack_failure(answer)}.")
+        print(
+            f"Profile '{name}' stopped, but serving was not confirmed: {ack_failure(answer)}."
+        )
         print("The host retries on its next rescan (within 30s). Check gateway status.")
     return True
 
@@ -119,13 +149,17 @@ def profile_lifecycle(command: str, args) -> bool:
 def print_parked_status() -> bool:
     """A parked satellite is still installed, but is not a running gateway."""
     from clawk_cli import gateway as gw
+
     name = gw._current_profile_name()
     if name and name != "default" and profile_is_parked(get_clawk_home()):
         print(f"Profile '{name}': parked (clawk -p {name} gateway start)")
         return True
     if not name or name == "default":
-        parked = [profile for profile, home in profiles_to_serve(True, include_parked=True)
-                  if profile != "default" and profile_is_parked(home)]
+        parked = [
+            profile
+            for profile, home in profiles_to_serve(True, include_parked=True)
+            if profile != "default" and profile_is_parked(home)
+        ]
         if parked:
             owner = gw.host_multiplexer_serving()
             if owner is not None:
@@ -167,7 +201,9 @@ def _pid_owned_by_home(pid: int, home) -> bool:
     from clawk_cli.dashboard_procs import _clawk_home_for_pid
 
     record = hr.read_record(hr.ROLE_GATEWAY)
-    is_host = record is not None and record.pid == pid and hr.record_names_live_owner(record)
+    is_host = (
+        record is not None and record.pid == pid and hr.record_names_live_owner(record)
+    )
     if is_host and not _same_clawk_home(host_attach.record_home(record), home):
         return False  # the live host, launched from another home
     if _launch_record_owns(pid, home):
@@ -191,13 +227,23 @@ def _launch_record_owns(pid: int, home) -> bool:
     environment alone cannot prove.
     """
     from gateway.status import (
-        _GATEWAY_KIND, _get_process_start_time, _pid_from_record, _read_pid_record, _same_clawk_home)
+        _GATEWAY_KIND,
+        _get_process_start_time,
+        _pid_from_record,
+        _read_pid_record,
+        _same_clawk_home,
+    )
 
     record = _read_pid_record() or {}
     started, recorded_home = record.get("start_time"), record.get("clawk_home")
-    return (record.get("kind") == _GATEWAY_KIND and _pid_from_record(record) == pid
-            and started is not None and started == _get_process_start_time(pid)
-            and isinstance(recorded_home, str) and _same_clawk_home(recorded_home, home))
+    return (
+        record.get("kind") == _GATEWAY_KIND
+        and _pid_from_record(record) == pid
+        and started is not None
+        and started == _get_process_start_time(pid)
+        and isinstance(recorded_home, str)
+        and _same_clawk_home(recorded_home, home)
+    )
 
 
 def report_profile_stop_failure() -> None:
@@ -213,8 +259,10 @@ def report_profile_stop_failure() -> None:
     if absent:
         print("✗ No gateway running for this profile")
         return
-    gw.print_error("Gateway stop was not confirmed; a gateway may still be running. "
-                   "Check gateway status and process ownership.")
+    gw.print_error(
+        "Gateway stop was not confirmed; a gateway may still be running. "
+        "Check gateway status and process ownership."
+    )
     _print_host_hint()
     raise SystemExit(1)
 
@@ -230,5 +278,7 @@ def _print_host_hint() -> None:
         logger.debug("Could not read the host record for the stop hint", exc_info=True)
         return
     if pid is not None and record is not None and record.pid == pid:
-        print(f"  PID {pid} is the host gateway serving this profile; stopping it would take every "
-              f"served profile offline. Stop the host instead: clawk gateway stop --all")
+        print(
+            f"  PID {pid} is the host gateway serving this profile; stopping it would take every "
+            f"served profile offline. Stop the host instead: clawk gateway stop --all"
+        )

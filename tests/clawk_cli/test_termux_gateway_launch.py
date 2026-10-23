@@ -1,4 +1,5 @@
 """Termux's interactive fast launch keeps main's deferred-startup hints (main's ClawksisCLI runs again)."""
+
 import sys
 
 
@@ -16,5 +17,6 @@ def test_termux_fast_launch_defers_agent_startup_like_main(monkeypatch):
     assert len(launches) == 1
     assert launches[0].compact is True
     import os
+
     assert os.environ["CLAWK_DEFER_AGENT_STARTUP"] == "1"
     assert os.environ["CLAWK_FAST_STARTUP_BANNER"] == "1"

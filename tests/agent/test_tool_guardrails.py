@@ -35,8 +35,6 @@ def test_tool_call_signature_hashes_canonical_nested_unicode_args_without_exposi
     assert "∇" not in json.dumps(metadata)
 
 
-
-
 def test_config_parses_nested_warn_and_hard_stop_thresholds():
     cfg = ToolCallGuardrailConfig.from_mapping(
         {
@@ -132,18 +130,6 @@ def test_hard_stop_enabled_blocks_repeated_exact_failure_before_next_execution()
     assert blocked.count == 2
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def test_skill_read_tools_are_idempotent_and_block_repeated_identical_success_output():
     cases = [
         (
@@ -168,7 +154,10 @@ def test_skill_read_tools_are_idempotent_and_block_repeated_identical_success_ou
         )
 
         assert controller.before_call(tool_name, args).action == "allow"
-        assert controller.after_call(tool_name, args, result, failed=False).action == "allow"
+        assert (
+            controller.after_call(tool_name, args, result, failed=False).action
+            == "allow"
+        )
         assert controller.before_call(tool_name, args).action == "allow"
         warn = controller.after_call(tool_name, args, result, failed=False)
         assert warn.action == "warn"
@@ -185,10 +174,23 @@ def test_mutating_or_unknown_tools_are_not_blocked_for_repeated_identical_succes
     )
 
     for _ in range(3):
-        assert controller.before_call("write_file", {"path": "/tmp/x", "content": "x"}).action == "allow"
-        assert controller.after_call("write_file", {"path": "/tmp/x", "content": "x"}, "ok", failed=False).action == "allow"
+        assert (
+            controller.before_call(
+                "write_file", {"path": "/tmp/x", "content": "x"}
+            ).action
+            == "allow"
+        )
+        assert (
+            controller.after_call(
+                "write_file", {"path": "/tmp/x", "content": "x"}, "ok", failed=False
+            ).action
+            == "allow"
+        )
         assert controller.before_call("custom_tool", {"x": 1}).action == "allow"
-        assert controller.after_call("custom_tool", {"x": 1}, "ok", failed=False).action == "allow"
+        assert (
+            controller.after_call("custom_tool", {"x": 1}, "ok", failed=False).action
+            == "allow"
+        )
 
 
 def test_identical_call_streak_halts_any_tool_when_hard_stop_enabled():
@@ -225,7 +227,12 @@ def test_identical_call_streak_never_halts_when_hard_stop_disabled_or_for_poller
         ToolCallGuardrailConfig(hard_stop_enabled=True, no_progress_block_after=2)
     )
     for _ in range(6):
-        hard.observe_call("process_manage", {"action": "poll", "session_id": "p1"}, "running", failed=False)
+        hard.observe_call(
+            "process_manage",
+            {"action": "poll", "session_id": "p1"},
+            "running",
+            failed=False,
+        )
     assert hard.halt_decision is None  # an unchanged poll is legitimate progress
 
     # A changed result resets the streak.
@@ -234,24 +241,22 @@ def test_identical_call_streak_never_halts_when_hard_stop_disabled_or_for_poller
     assert hard.halt_decision is None
 
 
-
-
-
-
 # ── Per-turn runaway-loop caps (Claude Code v2.1.212, Week 29) ──────────────
 
 from agent.tool_guardrails import LoopCapConfig
 
 
-
-
-
-
 def test_loop_cap_zero_disables_and_junk_falls_back():
     # 0 is a legitimate "unlimited" value; negatives / junk fall back to default.
     assert LoopCapConfig.from_mapping({"max_web_searches": 0}).max_web_searches == 0
-    assert LoopCapConfig.from_mapping({"max_web_searches": -5}).max_web_searches == LoopCapConfig().max_web_searches
-    assert LoopCapConfig.from_mapping({"max_subagents": "nope"}).max_subagents == LoopCapConfig().max_subagents
+    assert (
+        LoopCapConfig.from_mapping({"max_web_searches": -5}).max_web_searches
+        == LoopCapConfig().max_web_searches
+    )
+    assert (
+        LoopCapConfig.from_mapping({"max_subagents": "nope"}).max_subagents
+        == LoopCapConfig().max_subagents
+    )
 
 
 def test_web_search_cap_blocks_after_limit_regardless_of_hard_stop():
@@ -265,21 +270,13 @@ def test_web_search_cap_blocks_after_limit_regardless_of_hard_stop():
         )
     )
     for i in range(3):
-        assert controller.before_call("web_search", {"query": f"q{i}"}).action == "allow"
+        assert (
+            controller.before_call("web_search", {"query": f"q{i}"}).action == "allow"
+        )
     decision = controller.before_call("web_search", {"query": "q4"})
     assert decision.action == "block"
     assert decision.code == "loop_web_search_cap"
     assert decision.should_halt is True
-
-
-
-
-
-
-
-
-
-
 
 
 # ── Legitimate flows must survive hard stops (Teknium, Sep 2026) ────────────
@@ -306,8 +303,12 @@ def test_fix_retest_loop_is_never_hard_stopped():
         d = _run_red(c)
         assert not d.should_halt, f"halted on red run {i + 1}"
         # the model edits between runs — a landed mutation is progress
-        c.after_call("patch", {"path": "x.py", "old_string": "a", "new_string": f"b{i}"},
-                     '{"success": true, "diff": "..."}', failed=False)
+        c.after_call(
+            "patch",
+            {"path": "x.py", "old_string": "a", "new_string": f"b{i}"},
+            '{"success": true, "diff": "..."}',
+            failed=False,
+        )
     assert c.halt_decision is None
     assert c.before_call("terminal", _PYTEST).allows_execution
 
@@ -326,7 +327,12 @@ def test_intervening_mutation_resets_the_replay_streak_only_once():
     c = _HARD()
     for _ in range(4):
         _run_red(c)
-    c.after_call("write_file", {"path": "x.py", "content": "y"}, '{"bytes_written": 1}', failed=False)
+    c.after_call(
+        "write_file",
+        {"path": "x.py", "content": "y"},
+        '{"bytes_written": 1}',
+        failed=False,
+    )
     for _ in range(5):
         assert c.before_call("terminal", _PYTEST).allows_execution
         c.after_call("terminal", _PYTEST, _RED, failed=True)
@@ -345,7 +351,9 @@ def test_distinct_failing_terminal_commands_warn_but_never_halt():
     c2 = _HARD()
     last = None
     for i in range(8):
-        last = c2.after_call("send_message", {"to": f"u{i}"}, '{"error": "no route"}', failed=True)
+        last = c2.after_call(
+            "send_message", {"to": f"u{i}"}, '{"error": "no route"}', failed=True
+        )
     assert last.should_halt and last.code == "same_tool_failure_halt"
 
 
@@ -355,7 +363,9 @@ def test_browser_retry_after_action_is_not_a_replay():
     for _ in range(8):
         assert c.before_call("browser_navigate", nav).allows_execution
         c.after_call("browser_navigate", nav, '{"error": "timeout"}', failed=True)
-        c.after_call("browser_click", {"selector": "#retry"}, '{"ok": true}', failed=False)
+        c.after_call(
+            "browser_click", {"selector": "#retry"}, '{"ok": true}', failed=False
+        )
     assert c.halt_decision is None
 
 
@@ -383,8 +393,13 @@ def test_harness_refusals_are_not_tool_failures_on_either_classifier(tmp_path):
     task = {"dedup_hits": {}}
     for _ in range(3):
         dedup_block = _dedup_stub_or_block(task, (str(target), 1, 999), str(target))
-    consecutive_block = [read_file_tool(str(target), offset=1, limit=5, task_id="t-read") for _ in range(4)][-1]
-    search_block = [search_tool("const x", path=str(tmp_path), task_id="t-search") for _ in range(4)][-1]
+    consecutive_block = [
+        read_file_tool(str(target), offset=1, limit=5, task_id="t-read")
+        for _ in range(4)
+    ][-1]
+    search_block = [
+        search_tool("const x", path=str(tmp_path), task_id="t-search") for _ in range(4)
+    ][-1]
 
     for refusal in (dedup_block, consecutive_block, search_block):
         assert json.loads(refusal)["error"].startswith("BLOCKED"), refusal
@@ -401,7 +416,12 @@ def test_a_real_tool_error_is_still_a_failure():
     assert classify_tool_failure("read_file", real)[0] is True
     assert _detect_tool_failure("read_file", real)[0] is True
     # The marker is only honoured as the literal boolean, never as truthy prose.
-    assert classify_tool_failure("read_file", '{"error": "x", "guardrail_refusal": "yes"}')[0] is True
+    assert (
+        classify_tool_failure(
+            "read_file", '{"error": "x", "guardrail_refusal": "yes"}'
+        )[0]
+        is True
+    )
 
 
 def test_identical_streak_ignores_volatile_execution_metadata():
@@ -411,15 +431,28 @@ def test_identical_streak_ignores_volatile_execution_metadata():
     controller = ToolCallGuardrailController(
         ToolCallGuardrailConfig(hard_stop_enabled=True, no_progress_block_after=5)
     )
-    args = {"code": "import subprocess\nprint(subprocess.run(['true']).returncode) if False else None"}
+    args = {
+        "code": "import subprocess\nprint(subprocess.run(['true']).returncode) if False else None"
+    }
 
     def result(n):
-        return json.dumps({
-            "status": "success", "output": "", "exit_code": 0, "tool_calls_made": 0,
-            "duration_seconds": 1.0 + n / 100,
-            "kernel": {"mode": "session", "reused": True, "execution_count": 100 + n, "state_reset": False},
-            "stdout_truncated": False, "stdout_bytes_captured": 0,
-        })
+        return json.dumps(
+            {
+                "status": "success",
+                "output": "",
+                "exit_code": 0,
+                "tool_calls_made": 0,
+                "duration_seconds": 1.0 + n / 100,
+                "kernel": {
+                    "mode": "session",
+                    "reused": True,
+                    "execution_count": 100 + n,
+                    "state_reset": False,
+                },
+                "stdout_truncated": False,
+                "stdout_bytes_captured": 0,
+            }
+        )
 
     for i in range(4):
         controller.observe_call("execute_code", args, result(i), failed=False)
@@ -436,10 +469,18 @@ def test_identical_streak_still_resets_when_real_output_changes():
     )
     args = {"code": "print(1)"}
     for i in range(6):
-        out = json.dumps({"status": "success", "output": f"line {i}", "duration_seconds": 1.0,
-                          "kernel": {"execution_count": i}})
+        out = json.dumps(
+            {
+                "status": "success",
+                "output": f"line {i}",
+                "duration_seconds": 1.0,
+                "kernel": {"execution_count": i},
+            }
+        )
         controller.observe_call("execute_code", args, out, failed=False)
-    assert controller.halt_decision is None, "different real output must not count as a replay"
+    assert controller.halt_decision is None, (
+        "different real output must not count as a replay"
+    )
 
 
 def test_other_tools_keep_duration_and_execution_count_as_real_output():
@@ -451,48 +492,89 @@ def test_other_tools_keep_duration_and_execution_count_as_real_output():
     )
     args = {"job": "build-42"}
     for i in range(6):
-        out = json.dumps({"status": "done", "duration_seconds": 10 + i,
-                          "stats": {"execution_count": 100 + i}})
+        out = json.dumps(
+            {
+                "status": "done",
+                "duration_seconds": 10 + i,
+                "stats": {"execution_count": 100 + i},
+            }
+        )
         controller.observe_call("mcp_ci_job_status", args, out, failed=False)
-    assert controller.halt_decision is None, "a real change in duration_seconds/execution_count was treated as a replay"
+    assert controller.halt_decision is None, (
+        "a real change in duration_seconds/execution_count was treated as a replay"
+    )
 
 
 def test_execute_code_replay_streak_notice_fires_on_warn_only_desktop_config():
     # #124072: on an interactive surface hard stops are off, so the appended notice is
     # the only signal the model gets. 186 no-op print("...") cells whose results differed
     # only in kernel.execution_count / duration_seconds produced zero notices.
-    controller = ToolCallGuardrailController(ToolCallGuardrailConfig.from_mapping({}, platform="desktop"))
+    controller = ToolCallGuardrailController(
+        ToolCallGuardrailConfig.from_mapping({}, platform="desktop")
+    )
     args = {"code": 'print("...")'}
 
     def result(n):
-        return json.dumps({
-            "status": "success", "output": "...\n", "exit_code": 0, "tool_calls_made": 0,
-            "duration_seconds": 0.001 * n,
-            "kernel": {"mode": "session", "reused": True, "execution_count": n, "state_reset": False},
-            "stdout_truncated": False, "stdout_bytes_captured": 4, "stdout_bytes_total": 4,
-            "stdout_bytes_omitted": 0,
-        })
+        return json.dumps(
+            {
+                "status": "success",
+                "output": "...\n",
+                "exit_code": 0,
+                "tool_calls_made": 0,
+                "duration_seconds": 0.001 * n,
+                "kernel": {
+                    "mode": "session",
+                    "reused": True,
+                    "execution_count": n,
+                    "state_reset": False,
+                },
+                "stdout_truncated": False,
+                "stdout_bytes_captured": 4,
+                "stdout_bytes_total": 4,
+                "stdout_bytes_omitted": 0,
+            }
+        )
 
     notices = [
-        controller.observe_call("execute_code", args, result(i), tool_call_id=f"c{i}").notice
+        controller.observe_call(
+            "execute_code", args, result(i), tool_call_id=f"c{i}"
+        ).notice
         for i in range(1, 7)
     ]
     assert notices[:2] == [None, None]
-    assert all(n is not None and "consecutive identical call to execute_code" in n for n in notices[2:]), notices
+    assert all(
+        n is not None and "consecutive identical call to execute_code" in n
+        for n in notices[2:]
+    ), notices
     assert controller.halt_decision is None, "warn-only surfaces must not halt"
 
 
 @pytest.mark.parametrize("prior_ordinary_failures", [0, 2])
-@pytest.mark.parametrize("result,throttled", [
-    (json.dumps({"error": "Slack API error: ratelimited. Retry after 1 seconds."}), True),
-    (json.dumps({"ok": False, "error": "busy", "retry_after": 30}), True),
-    (json.dumps({"error": "channel_not_found"}), False),  # control: a real replay still warns
-])
-def test_rate_limited_retry_is_not_a_replay_but_stays_bounded(result, throttled, prior_ordinary_failures):
+@pytest.mark.parametrize(
+    "result,throttled",
+    [
+        (
+            json.dumps(
+                {"error": "Slack API error: ratelimited. Retry after 1 seconds."}
+            ),
+            True,
+        ),
+        (json.dumps({"ok": False, "error": "busy", "retry_after": 30}), True),
+        (
+            json.dumps({"error": "channel_not_found"}),
+            False,
+        ),  # control: a real replay still warns
+    ],
+)
+def test_rate_limited_retry_is_not_a_replay_but_stays_bounded(
+    result, throttled, prior_ordinary_failures
+):
     """Retrying a throttled read after its cooldown must not draw the "stop retrying unchanged"
     warning (even after earlier ordinary failures with the same args), yet an endpoint that never
     recovers still halts unattended runs on the per-tool cap."""
-    controller = ToolCallGuardrailController(ToolCallGuardrailConfig.from_mapping({}, platform="webhook"))
+    controller = ToolCallGuardrailController(
+        ToolCallGuardrailConfig.from_mapping({}, platform="webhook")
+    )
     tool, args = "mcp_slack_history", {"channel": "C123"}
     for _ in range(prior_ordinary_failures):
         controller.after_call(tool, args, json.dumps({"error": "upstream timeout"}))

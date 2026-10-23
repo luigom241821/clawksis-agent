@@ -5,8 +5,12 @@ import pytest
 
 from clawk_state import SessionDB
 from clawk_state_runtime import (
-    admit_session_input, begin_runtime_epoch, claim_session_input, list_session_admissions,
-    recover_session_inputs, resolve_unknown_session_input,
+    admit_session_input,
+    begin_runtime_epoch,
+    claim_session_input,
+    list_session_admissions,
+    recover_session_inputs,
+    resolve_unknown_session_input,
 )
 from tui_gateway import server
 
@@ -20,22 +24,38 @@ class _InlineThread:
 
 
 @pytest.mark.parametrize("ledger", ["unknown", "queued"])
-def test_legacy_submit_refuses_while_canonical_ledger_holds_work(monkeypatch, tmp_path, ledger):
+def test_legacy_submit_refuses_while_canonical_ledger_holds_work(
+    monkeypatch, tmp_path, ledger
+):
     db = SessionDB(db_path=tmp_path / "state.db")
     monkeypatch.setattr(server, "_get_db", lambda: db)
-    for name in ("_schedule_agent_build", "_schedule_session_cap_enforcement", "_register_session_cwd",
-                 "_start_agent_build"):
+    for name in (
+        "_schedule_agent_build",
+        "_schedule_session_cap_enforcement",
+        "_register_session_cwd",
+        "_start_agent_build",
+    ):
         monkeypatch.setattr(server, name, lambda *_a, **_k: None)
-    monkeypatch.setattr(server, "_restart_completed_failed_agent_build", lambda *_a: False)
+    monkeypatch.setattr(
+        server, "_restart_completed_failed_agent_build", lambda *_a: False
+    )
     turns = []
     monkeypatch.setattr(server, "_run_after_agent_ready", lambda *a: turns.append(a[1]))
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
-    created = server.handle_request({"id": "c", "method": "session.create", "params": {"source": "desktop"}})
+    created = server.handle_request(
+        {"id": "c", "method": "session.create", "params": {"source": "desktop"}}
+    )
     sid, key = created["result"]["session_id"], created["result"]["stored_session_id"]
     db.create_session(key, "cli")
     first = begin_runtime_epoch(db, instance_id="gateway-1")
-    admit_session_input(db, epoch=first, principal_id="owner", session_id=key, request_id="r1",
-                        payload={"text": "lost?"})
+    admit_session_input(
+        db,
+        epoch=first,
+        principal_id="owner",
+        session_id=key,
+        request_id="r1",
+        payload={"text": "lost?"},
+    )
     epoch = first
     if ledger == "unknown":
         claim_session_input(db, epoch=first, session_id=key)
@@ -43,7 +63,13 @@ def test_legacy_submit_refuses_while_canonical_ledger_holds_work(monkeypatch, tm
         recover_session_inputs(db, epoch=epoch)
 
     def submit():
-        return server.handle_request({"id": "p", "method": "prompt.submit", "params": {"session_id": sid, "text": "hi"}})
+        return server.handle_request(
+            {
+                "id": "p",
+                "method": "prompt.submit",
+                "params": {"session_id": sid, "text": "hi"},
+            }
+        )
 
     try:
         refused = submit()
@@ -53,8 +79,12 @@ def test_legacy_submit_refuses_while_canonical_ledger_holds_work(monkeypatch, tm
         if ledger == "unknown":
             # Once the operator discards the lost turn through the gateway the barrier lifts.
             (row,) = list_session_admissions(db, session_id=key)
-            resolve_unknown_session_input(db, epoch=epoch, admission_id=row["admission_id"],
-                                          generation=row["generation"])
+            resolve_unknown_session_input(
+                db,
+                epoch=epoch,
+                admission_id=row["admission_id"],
+                generation=row["generation"],
+            )
             assert submit()["result"]["status"] == "streaming"
             assert turns == [sid]
     finally:

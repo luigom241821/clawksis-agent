@@ -155,7 +155,9 @@ def _install_modal_test_modules(
             return {"kind": "registry", "image": image}
 
     async def _lookup_aio(_name: str, create_if_missing: bool = False):
-        return types.SimpleNamespace(name="clawksis-agent", create_if_missing=create_if_missing)
+        return types.SimpleNamespace(
+            name="clawksis-agent", create_if_missing=create_if_missing
+        )
 
     class _FakeSandboxInstance:
         def __init__(self, image):
@@ -172,12 +174,14 @@ def _install_modal_test_modules(
             self.terminate = types.SimpleNamespace(aio=_terminate_aio)
 
     async def _create_aio(*_args, image=None, app=None, timeout=None, **kwargs):
-        create_calls.append({
-            "image": image,
-            "app": app,
-            "timeout": timeout,
-            **kwargs,
-        })
+        create_calls.append(
+            {
+                "image": image,
+                "app": app,
+                "timeout": timeout,
+                **kwargs,
+            }
+        )
         image_id = image.get("image_id") if isinstance(image, dict) else None
         if fail_on_snapshot_ids and image_id in fail_on_snapshot_ids:
             raise RuntimeError(f"cannot restore {image_id}")
@@ -204,27 +208,38 @@ def _install_modal_test_modules(
     }
 
 
-def test_modal_environment_migrates_legacy_snapshot_key_and_uses_snapshot_id(tmp_path, monkeypatch):
+def test_modal_environment_migrates_legacy_snapshot_key_and_uses_snapshot_id(
+    tmp_path, monkeypatch
+):
     state = _install_modal_test_modules(tmp_path)
     snapshot_store = state["snapshot_store"]
     snapshot_store.parent.mkdir(parents=True, exist_ok=True)
     snapshot_store.write_text(json.dumps({"task-legacy": "im-legacy123"}))
 
-    modal_module = _load_module("tools.environments.modal", TOOLS_DIR / "environments" / "modal.py")
+    modal_module = _load_module(
+        "tools.environments.modal", TOOLS_DIR / "environments" / "modal.py"
+    )
     monkeypatch.setattr(modal_module, "ensure_lazy_dep", lambda extra: None)
     env = modal_module.ModalEnvironment(image="python:3.11", task_id="task-legacy")
 
     try:
         assert state["from_id_calls"] == ["im-legacy123"]
-        assert state["create_calls"][0]["image"] == {"kind": "snapshot", "image_id": "im-legacy123"}
-        assert json.loads(snapshot_store.read_text()) == {"direct:task-legacy": "im-legacy123"}
+        assert state["create_calls"][0]["image"] == {
+            "kind": "snapshot",
+            "image_id": "im-legacy123",
+        }
+        assert json.loads(snapshot_store.read_text()) == {
+            "direct:task-legacy": "im-legacy123"
+        }
     finally:
         env.cleanup()
 
 
 def test_resolve_modal_image_uses_snapshot_ids_and_registry_images(tmp_path):
     state = _install_modal_test_modules(tmp_path)
-    modal_module = _load_module("tools.environments.modal", TOOLS_DIR / "environments" / "modal.py")
+    modal_module = _load_module(
+        "tools.environments.modal", TOOLS_DIR / "environments" / "modal.py"
+    )
 
     snapshot_image = modal_module._resolve_modal_image("im-snapshot123")
     registry_image = modal_module._resolve_modal_image("python:3.11")
@@ -240,14 +255,18 @@ def test_persistent_cleanup_snapshots_without_expiry(tmp_path, monkeypatch):
     """The SDK default retains a filesystem snapshot for 30 days; an idle persistent
     sandbox would then silently restart from the base image, so Clawksis must opt out."""
     state = _install_modal_test_modules(tmp_path, snapshot_id="im-fresh")
-    modal_module = _load_module("tools.environments.modal", TOOLS_DIR / "environments" / "modal.py")
+    modal_module = _load_module(
+        "tools.environments.modal", TOOLS_DIR / "environments" / "modal.py"
+    )
     monkeypatch.setattr(modal_module, "ensure_lazy_dep", lambda extra: None)
 
     env = modal_module.ModalEnvironment(image="python:3.11", task_id="task-ttl")
     env.cleanup()
 
     assert state["snapshot_calls"] == [{"ttl": None}]
-    assert json.loads(state["snapshot_store"].read_text()) == {"direct:task-ttl": "im-fresh"}
+    assert json.loads(state["snapshot_store"].read_text()) == {
+        "direct:task-ttl": "im-fresh"
+    }
 
 
 def test_concurrent_snapshot_stores_keep_both_tasks(tmp_path, monkeypatch):
@@ -277,15 +296,23 @@ def test_concurrent_snapshot_stores_keep_both_tasks(tmp_path, monkeypatch):
     monkeypatch.setattr(modal_module, "_load_json_store", load_then_block_in_a)
 
     cleanup_a = threading.Thread(
-        target=modal_module._store_direct_snapshot, args=("task-A", "im-AAAA"), name="cleanup-A")
+        target=modal_module._store_direct_snapshot,
+        args=("task-A", "im-AAAA"),
+        name="cleanup-A",
+    )
     cleanup_a.start()
     assert a_loaded.wait(10)
     cleanup_b = threading.Thread(
-        target=modal_module._store_direct_snapshot, args=("task-B", "im-BBBB"), name="cleanup-B")
+        target=modal_module._store_direct_snapshot,
+        args=("task-B", "im-BBBB"),
+        name="cleanup-B",
+    )
     cleanup_b.start()
     # Unlocked code lets B finish here; a locked store is seen parking B on the lock.
-    wait_until(lambda: not cleanup_b.is_alive() or contended.is_set(),
-               what="cleanup B finished or blocked on the snapshot store lock")
+    wait_until(
+        lambda: not cleanup_b.is_alive() or contended.is_set(),
+        what="cleanup B finished or blocked on the snapshot store lock",
+    )
     release_a.set()
     cleanup_a.join(10)
     cleanup_b.join(10)
@@ -296,7 +323,9 @@ def test_concurrent_snapshot_stores_keep_both_tasks(tmp_path, monkeypatch):
     }
 
 
-def test_snapshot_store_update_proceeds_when_the_lock_is_unavailable(tmp_path, monkeypatch):
+def test_snapshot_store_update_proceeds_when_the_lock_is_unavailable(
+    tmp_path, monkeypatch
+):
     """A wedged or unsupported lock must not abort a sandbox lifecycle step: modal's restore
     fallback deletes the failed snapshot id and then retries with the base image."""
     import contextlib

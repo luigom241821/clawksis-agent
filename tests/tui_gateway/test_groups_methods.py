@@ -19,7 +19,9 @@ def home(tmp_path, monkeypatch):
     path = tmp_path / ".clawk"
     path.mkdir()
     (path / "profiles" / "ops").mkdir(parents=True)
-    (path / "profiles" / "ops" / "config.yaml").write_text("{}\n")  # identity marker: local roster
+    (path / "profiles" / "ops" / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker: local roster
     monkeypatch.setenv("CLAWK_HOME", str(path))
     monkeypatch.setattr(srv, "_run_idempotency_store", DurableRunStore(), raising=False)
     methods_groups.stop_hosted_room_service(timeout=1.0)
@@ -60,14 +62,14 @@ def _create_room():
     )["room"]
 
 
-
-
 def test_capabilities_and_invitation_advertise_scoped_roomlink(home, monkeypatch):
     monkeypatch.setenv("API_SERVER_KEY", "gateway-api-key-1234567890")
     monkeypatch.setenv("CLAWK_PROFILE", "reviewer")
     # The advertised policy is the SERVED profile's own config, so the profile must exist (#116900).
     (home / "profiles" / "reviewer").mkdir(parents=True)
-    (home / "profiles" / "reviewer" / "config.yaml").write_text("approvals:\n  mode: manual\n")
+    (home / "profiles" / "reviewer" / "config.yaml").write_text(
+        "approvals:\n  mode: manual\n"
+    )
     result = _result(srv._methods["groups.capabilities"](1, {}))
     assert result["room_link"]["enabled"] is True
     assert result["room_link"]["profile"] == "reviewer"
@@ -181,9 +183,7 @@ def test_launch_profile_is_valid_for_roomlink_invitation(home, monkeypatch):
     monkeypatch.setenv("API_SERVER_KEY", "gateway-api-key-1234567890")
     monkeypatch.setenv("CLAWK_PROFILE", "default")
 
-    capability = _result(
-        srv._methods["groups.capabilities"](1, {"profile": "default"})
-    )
+    capability = _result(srv._methods["groups.capabilities"](1, {"profile": "default"}))
     invitation = _result(
         srv._methods["groups.peer.invite"](
             2,
@@ -304,7 +304,7 @@ def test_register_peer_route_probes_scope_and_persists_via_service(home, monkeyp
     from gateway.hosted_rooms import local_authority_gateway_id
 
     catalog = catalog_mapping(
-            target_profile="default",
+        target_profile="default",
         installation_id="install-peer",
         persistent_process=True,
     )
@@ -393,7 +393,7 @@ def test_register_requires_roomlink_protocol_v2(home, monkeypatch):
             "target_profile": "reviewer",
             "grant": "signed.room.grant",
             "catalog": catalog_mapping(
-            target_profile="default",
+                target_profile="default",
                 installation_id="install-peer",
                 protocol_versions=(1,),
                 persistent_process=True,
@@ -847,9 +847,9 @@ def test_pruned_room_send_and_log_report_expired_history(home, monkeypatch):
     _create_room()
     monkeypatch.setattr(hosted_rooms, "MAX_DISBANDED_ROOM_TOMBSTONES", 0)
     _result(srv._methods["groups.disband"](2, {"room_id": "room-1"}))
-    repeated = _result(
-        srv._methods["groups.disband"](3, {"room_id": "room-1"})
-    )["tombstone"]
+    repeated = _result(srv._methods["groups.disband"](3, {"room_id": "room-1"}))[
+        "tombstone"
+    ]
     assert repeated["idempotent"] is True
     assert repeated["history_expired"] is True
 
@@ -933,9 +933,7 @@ def test_failed_remote_revocation_keeps_room_recoverable(home, monkeypatch):
     ] == ["room-1"]
 
 
-def test_disband_does_not_revoke_routes_while_stop_is_unacknowledged(
-    home, monkeypatch
-):
+def test_disband_does_not_revoke_routes_while_stop_is_unacknowledged(home, monkeypatch):
     _create_room()
     calls = []
 

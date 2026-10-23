@@ -31,9 +31,12 @@ def test_few_messages_huge_content_triggers_gate():
     big = "x" * 280_000
     messages = [_msg("hi")] * 7 + [_msg(big)]
     assert len(messages) <= PROTECT_FIRST_N + PROTECT_LAST_N + 1  # would fail old gate
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is True
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is True
+    )
 
 
 def test_content_below_threshold_does_not_trigger():
@@ -41,6 +44,9 @@ def test_content_below_threshold_does_not_trigger():
     must not trigger — the estimator stays under and the count gate is not
     tripped."""
     messages = [_msg("x" * ((THRESHOLD_TOKENS - 1000) * 4))]
-    assert _should_run_preflight_estimate(
-        messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
-    ) is False
+    assert (
+        _should_run_preflight_estimate(
+            messages, PROTECT_FIRST_N, PROTECT_LAST_N, THRESHOLD_TOKENS
+        )
+        is False
+    )

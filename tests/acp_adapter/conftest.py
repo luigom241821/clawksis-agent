@@ -58,22 +58,39 @@ def daemon(tmp_path, model_peer, request):
     config = {
         "gateway": {"multiplex_profiles": False},
         "approvals": {"mode": "manual", "timeout": 60},
-        "model": {"provider": "custom", "default": "local-wire-stub", "base_url": model_url},
+        "model": {
+            "provider": "custom",
+            "default": "local-wire-stub",
+            "base_url": model_url,
+        },
         "auxiliary": {"title_generation": {"enabled": False}},
     }
-    for key, value in (request.param.items() if isinstance(getattr(request, 'param', None), dict) else ()):
+    for key, value in (
+        request.param.items()
+        if isinstance(getattr(request, "param", None), dict)
+        else ()
+    ):
         config.setdefault(key, {}).update(value)
     (home / "config.yaml").write_text(json.dumps(config))
     env = {k: os.environ[k] for k in ("PATH", "LANG", "TZ") if k in os.environ}
-    env.update(HOME=str(user), USERPROFILE=str(user), CLAWK_HOME=str(home),
-               PYTHONPATH=str(root), PYTHONUNBUFFERED="1",
-               OPENAI_API_KEY="loopback-only", OPENAI_BASE_URL=model_url,
-               CLAWK_ACP_SKIP_CONFIGURED_MCP="1")
+    env.update(
+        HOME=str(user),
+        USERPROFILE=str(user),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(root),
+        PYTHONUNBUFFERED="1",
+        OPENAI_API_KEY="loopback-only",
+        OPENAI_BASE_URL=model_url,
+        CLAWK_ACP_SKIP_CONFIGURED_MCP="1",
+    )
     command = [sys.executable, "-m", "gateway.run"]
-    if getattr(request, 'param', None) == 'proposed-acp-descriptor':
+    if getattr(request, "param", None) == "proposed-acp-descriptor":
         # API-owner handoff only: execution/create/policy stay unmodified. This
         # fixture explicitly distinguishes the proposed advert from shipped HEAD.
-        command = [sys.executable, '-c', '''
+        command = [
+            sys.executable,
+            "-c",
+            """
 from gateway.session_controls import AuthorityConnection
 original = AuthorityConnection.describe
 async def describe(self, ref, params):
@@ -84,11 +101,18 @@ async def describe(self, ref, params):
 AuthorityConnection.describe = describe
 import runpy
 runpy.run_module('gateway.run', run_name='__main__')
-''']
+""",
+        ]
     log_path = tmp_path / "gateway.log"
     with log_path.open("w") as log:
-        process = subprocess.Popen(command, cwd=root, env=env,
-                                   stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(
+            command,
+            cwd=root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
         try:
             deadline = time.monotonic() + 40
             descriptor = {}
@@ -99,7 +123,7 @@ runpy.run_module('gateway.run', run_name='__main__')
                         break
                 except (OSError, ValueError):
                     pass
-                time.sleep(.1)
+                time.sleep(0.1)
             assert descriptor.get("state") == "ready", log_path.read_text()
             yield home, descriptor, env, root
         finally:
@@ -115,8 +139,8 @@ runpy.run_module('gateway.run', run_name='__main__')
 @pytest.fixture
 def server_spec(tmp_path):
     """A stdio MCP server spec whose tool echoes a borrowed credential."""
-    script = tmp_path / 'owned_mcp.py'
-    script.write_text('''import json, os, sys
+    script = tmp_path / "owned_mcp.py"
+    script.write_text("""import json, os, sys
 for line in sys.stdin:
  r=json.loads(line); method=r.get('method'); ident=r.get('id')
  if ident is None: continue
@@ -125,6 +149,10 @@ for line in sys.stdin:
  elif method=='tools/call': result={'content':[{'type':'text','text':os.environ['BORROWED_CREDENTIAL']}]}
  else: result={}
  print(json.dumps({'jsonrpc':'2.0','id':ident,'result':result}),flush=True)
-''')
-    return {'name': 'same-editor-name', 'command': sys.executable, 'args': [str(script)],
-            'env': [{'name': 'BORROWED_CREDENTIAL', 'value': 'PRIVATE_A'}]}
+""")
+    return {
+        "name": "same-editor-name",
+        "command": sys.executable,
+        "args": [str(script)],
+        "env": [{"name": "BORROWED_CREDENTIAL", "value": "PRIVATE_A"}],
+    }

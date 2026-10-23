@@ -39,7 +39,9 @@ def test_partial_reread_keeps_an_unchanged_full_read_or_write(tmp_path):
                 path.write_text(original, encoding="utf-8")
                 if source == "pages":
                     for offset in (1, 2, 3):
-                        assert "error" not in _call("read_file", path, task, offset=offset, limit=1)
+                        assert "error" not in _call(
+                            "read_file", path, task, offset=offset, limit=1
+                        )
                 else:
                     assert "error" not in _call("read_file", path, task)
             assert "error" not in _call("read_file", path, task, offset=2, limit=2)
@@ -85,7 +87,9 @@ def test_partial_read_cannot_refresh_a_changed_full_baseline(tmp_path):
         assert "error" not in _call("read_file", path, "clamped")
         refused = _call("write_file", path, "clamped", content="replacement\n")
         assert refused.get("stale_write_blocked"), refused
-        assert path.read_text(encoding="utf-8").startswith("x" * (get_max_line_length() + 10))
+        assert path.read_text(encoding="utf-8").startswith(
+            "x" * (get_max_line_length() + 10)
+        )
     finally:
         clear_file_ops_cache("clamped")
 
@@ -110,12 +114,23 @@ def _read(path, task_id, **paging):
 
 
 def _replace(path, task_id, old, new):
-    return _ok(_dispatch("patch", task_id, path=str(path), old_string=old, new_string=new))
+    return _ok(
+        _dispatch("patch", task_id, path=str(path), old_string=old, new_string=new)
+    )
 
 
 def _v4a(task_id, *updates):
-    body = "".join(f"*** Update File: {p}\n@@\n-{old}\n+{new}\n" for p, old, new in updates)
-    return _ok(_dispatch("patch", task_id, mode="patch", patch=f"*** Begin Patch\n{body}*** End Patch"))
+    body = "".join(
+        f"*** Update File: {p}\n@@\n-{old}\n+{new}\n" for p, old, new in updates
+    )
+    return _ok(
+        _dispatch(
+            "patch",
+            task_id,
+            mode="patch",
+            patch=f"*** Begin Patch\n{body}*** End Patch",
+        )
+    )
 
 
 def _blocked(result):
@@ -174,8 +189,14 @@ def test_own_v4a_patch_keeps_the_baseline_for_every_file(tmp_path, task):
 
     # A file the patch created holds only bytes the task wrote, like write_file creating it.
     added = tmp_path / "added.txt"
-    _ok(_dispatch("patch", task, mode="patch",
-                  patch=f"*** Begin Patch\n*** Add File: {added}\n+created\n*** End Patch"))
+    _ok(
+        _dispatch(
+            "patch",
+            task,
+            mode="patch",
+            patch=f"*** Begin Patch\n*** Add File: {added}\n+created\n*** End Patch",
+        )
+    )
     _ok(_write(added, task, "replaced\n"))
     assert added.read_text() == "replaced\n"
 
@@ -211,7 +232,9 @@ def test_blind_patch_never_gains_a_baseline(tmp_path, task):
     assert path.read_text() == "merged\n"
 
 
-def test_sibling_patch_voids_the_other_task_and_gives_the_patcher_nothing(tmp_path, task):
+def test_sibling_patch_voids_the_other_task_and_gives_the_patcher_nothing(
+    tmp_path, task
+):
     path = tmp_path / "shared.txt"
     path.write_text("left\nright\n")
     sibling = f"{task}-sibling"
@@ -233,7 +256,9 @@ def test_sibling_patch_voids_the_other_task_and_gives_the_patcher_nothing(tmp_pa
         clear_file_ops_cache(sibling)
 
 
-@pytest.mark.parametrize("preserve_mtime", [False, True], ids=["mtime-moves", "mtime-restored"])
+@pytest.mark.parametrize(
+    "preserve_mtime", [False, True], ids=["mtime-moves", "mtime-restored"]
+)
 def test_external_edit_after_own_patch_is_refused(tmp_path, task, preserve_mtime):
     path = tmp_path / "external.txt"
     path.write_text("one\ntwo\n")
@@ -255,7 +280,9 @@ def test_external_edit_after_own_patch_is_refused(tmp_path, task, preserve_mtime
     assert path.read_text() == "merged\n"
 
 
-def test_write_landing_after_the_patch_write_gives_no_baseline(tmp_path, task, monkeypatch):
+def test_write_landing_after_the_patch_write_gives_no_baseline(
+    tmp_path, task, monkeypatch
+):
     path = tmp_path / "raced-after.txt"
     path.write_text("one\ntwo\n")
     original = file_operations.ShellFileOperations.patch_replace
@@ -268,7 +295,9 @@ def test_write_landing_after_the_patch_write_gives_no_baseline(tmp_path, task, m
         return result
 
     _read(path, task)
-    monkeypatch.setattr(file_operations.ShellFileOperations, "patch_replace", patch_then_external_write)
+    monkeypatch.setattr(
+        file_operations.ShellFileOperations, "patch_replace", patch_then_external_write
+    )
     _replace(path, task, "one", "ONE")
     monkeypatch.undo()
 
@@ -276,7 +305,9 @@ def test_write_landing_after_the_patch_write_gives_no_baseline(tmp_path, task, m
     assert path.read_text() == "ONE\nRACED\n"
 
 
-def test_write_landing_before_the_patch_read_gives_no_baseline(tmp_path, task, monkeypatch):
+def test_write_landing_before_the_patch_read_gives_no_baseline(
+    tmp_path, task, monkeypatch
+):
     """The patch applied its delta to bytes the task never saw in full."""
     path = tmp_path / "raced-before.txt"
     path.write_text("one\ntwo\n")
@@ -287,7 +318,9 @@ def test_write_landing_before_the_patch_read_gives_no_baseline(tmp_path, task, m
         return original(self, *args, **kwargs)
 
     _read(path, task)
-    monkeypatch.setattr(file_operations.ShellFileOperations, "patch_replace", external_write_then_patch)
+    monkeypatch.setattr(
+        file_operations.ShellFileOperations, "patch_replace", external_write_then_patch
+    )
     _replace(path, task, "one", "ONE")
     monkeypatch.undo()
     assert path.read_text() == "ONE\nUNSEEN\n"
@@ -325,11 +358,15 @@ def test_own_patch_after_compaction_keeps_the_baseline(tmp_path, task, reread):
     assert path.read_text() == "merged\n"
 
 
-def test_third_patch_failure_hint_requires_a_full_reread_before_write_file(tmp_path, task):
+def test_third_patch_failure_hint_requires_a_full_reread_before_write_file(
+    tmp_path, task
+):
     path = tmp_path / "anchor.txt"
     path.write_text("alpha\n")
     for _ in range(3):
-        failed = _dispatch("patch", task, path=str(path), old_string="missing", new_string="x")
+        failed = _dispatch(
+            "patch", task, path=str(path), old_string="missing", new_string="x"
+        )
     hint = failed["_hint"]
     assert "failure #3" in hint
     assert "re-read the file in full, then use write_file to replace it" in hint

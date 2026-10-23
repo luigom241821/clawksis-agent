@@ -51,7 +51,8 @@ def _load_plugin_router():
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
     assert plugin_file.exists(), f"plugin file missing: {plugin_file}"
     spec = importlib.util.spec_from_file_location(
-        "clawk_dashboard_plugin_kanban_model_override_test", plugin_file,
+        "clawk_dashboard_plugin_kanban_model_override_test",
+        plugin_file,
     )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -92,14 +93,20 @@ def test_provider_without_model_rejected(conn):
         kb.set_model_override(conn, tid, None, provider="openrouter")
     with pytest.raises(ValueError):
         kb.create_task(
-            conn, title="t2", assignee="worker", provider_override="openrouter",
+            conn,
+            title="t2",
+            assignee="worker",
+            provider_override="openrouter",
         )
 
 
 def test_create_task_with_model_and_provider(conn):
     tid = kb.create_task(
-        conn, title="t", assignee="worker",
-        model_override="qwen-max", provider_override="openrouter",
+        conn,
+        title="t",
+        assignee="worker",
+        model_override="qwen-max",
+        provider_override="openrouter",
     )
     t = kb.get_task(conn, tid)
     assert t.model_override == "qwen-max"
@@ -110,8 +117,6 @@ def test_create_task_with_model_and_provider(conn):
     assert ev.payload["provider_override"] == "openrouter"
 
 
-
-
 # ---------------------------------------------------------------------------
 # Worker spawn — task identity resolves trusted owner policy
 # ---------------------------------------------------------------------------
@@ -120,16 +125,30 @@ def test_create_task_with_model_and_provider(conn):
 @pytest.mark.parametrize(
     "overrides, expected_model, expected_provider, expected_reasoning",
     [
-        ({"model_override": "glm-5", "provider_override": "openrouter",
-          "reasoning_effort": "high"}, "glm-5", "openrouter", "high"),
+        (
+            {
+                "model_override": "glm-5",
+                "provider_override": "openrouter",
+                "reasoning_effort": "high",
+            },
+            "glm-5",
+            "openrouter",
+            "high",
+        ),
         ({"reasoning_effort": "high"}, "profile-model", "custom", "high"),
         ({"reasoning_effort": "none"}, "profile-model", "custom", None),
         ({}, "profile-model", "custom", "low"),
     ],
 )
 def test_spawn_resolves_claimed_task_policy(
-    monkeypatch, tmp_path, conn, kanban_home, overrides,
-    expected_model, expected_provider, expected_reasoning,
+    monkeypatch,
+    tmp_path,
+    conn,
+    kanban_home,
+    overrides,
+    expected_model,
+    expected_provider,
+    expected_reasoning,
 ):
     """The worker passes identity, while the owner reads overrides from SQLite."""
     from gateway.session_contract import Principal
@@ -139,11 +158,19 @@ def test_spawn_resolves_claimed_task_policy(
 
     profile = kanban_home / "profiles" / "elias"
     profile.mkdir(parents=True)
-    (profile / "config.yaml").write_text("{}\n")  # identity marker: a bare dir is not a live profile
+    (profile / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker: a bare dir is not a live profile
     workspace = tmp_path / "ws"
     workspace.mkdir()
-    tid = kb.create_task(conn, title="t", assignee="elias",
-                         workspace_kind="dir", workspace_path=str(workspace), **overrides)
+    tid = kb.create_task(
+        conn,
+        title="t",
+        assignee="elias",
+        workspace_kind="dir",
+        workspace_path=str(workspace),
+        **overrides,
+    )
     task = kb.claim_task(conn, tid)
     assert task is not None
     captured = {}
@@ -159,11 +186,18 @@ def test_spawn_resolves_claimed_task_policy(
     assert captured["env"]["CLAWK_HOME"] == str(profile)
     actor = Principal("owner", str(profile), frozenset({"session:create"}), "transport")
     connection = SimpleNamespace(
-        authority=SimpleNamespace(profile_id=str(profile)), actor=actor, native_owner=True)
-    config = {"model": {"default": "profile-model", "provider": "custom"},
-              "agent": {"reasoning_effort": "medium",
-                        "reasoning_overrides": {"profile-model": "low", "glm-5": "low"}},
-              "platform_toolsets": {"cli": ["terminal"]}}
+        authority=SimpleNamespace(profile_id=str(profile)),
+        actor=actor,
+        native_owner=True,
+    )
+    config = {
+        "model": {"default": "profile-model", "provider": "custom"},
+        "agent": {
+            "reasoning_effort": "medium",
+            "reasoning_overrides": {"profile-model": "low", "glm-5": "low"},
+        },
+        "platform_toolsets": {"cli": ["terminal"]},
+    }
     original_config = json.dumps(config, sort_keys=True)
 
     async def resolve_at_owner(params, board_db):
@@ -171,13 +205,19 @@ def test_spawn_resolves_claimed_task_policy(
         policy, _ = build_kanban_policy(connection, params, config)
         assert policy.model == expected_model
         assert policy.provider == expected_provider
-        expected = ({"enabled": False} if expected_reasoning is None else
-                    {"enabled": True, "effort": expected_reasoning})
+        expected = (
+            {"enabled": False}
+            if expected_reasoning is None
+            else {"enabled": True, "effort": expected_reasoning}
+        )
         assert policy.reasoning_config == expected
         assert policy.cwd == str(workspace) and "kanban" in policy.toolsets
         context = json.loads(policy.kanban_json)
         assert (context["task_id"], context["run_id"], context["claim_lock"]) == (
-            task.id, task.current_run_id, task.claim_lock)
+            task.id,
+            task.current_run_id,
+            task.claim_lock,
+        )
         # A worker cannot replace trusted settings or reuse another claim.
         with pytest.raises(RuntimeStoreError, match="invalid_params"):
             build_kanban_policy(connection, params | {"model": "forged"}, config)
@@ -278,8 +318,11 @@ def test_reasoning_effort_survives_clearing_the_model(conn):
     """Depth and model are independent knobs: dropping a model override must
     not silently reset the thinking depth the operator chose."""
     tid = kb.create_task(
-        conn, title="t", assignee="worker",
-        model_override="glm-5", provider_override="openrouter",
+        conn,
+        title="t",
+        assignee="worker",
+        model_override="glm-5",
+        provider_override="openrouter",
         reasoning_effort="ultra",
     )
     assert kb.set_model_override(conn, tid, None)
@@ -287,8 +330,6 @@ def test_reasoning_effort_survives_clearing_the_model(conn):
     assert t.model_override is None
     assert t.provider_override is None
     assert t.reasoning_effort == "ultra"
-
-
 
 
 def test_patch_sets_and_clears_reasoning_effort(client):

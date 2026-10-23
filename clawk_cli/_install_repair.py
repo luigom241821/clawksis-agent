@@ -141,8 +141,10 @@ def ensure_windows_bin_launchers(
         venv interpreter — anything the store-python launcher should replace."""
         exe = target / f"{name}.exe"
         if not exe.exists():
-            return not ((target / f"{name}.cmd").is_file()
-                        and _launcher_present(root / ".clawk" / "bin", name))
+            return not (
+                (target / f"{name}.cmd").is_file()
+                and _launcher_present(root / ".clawk" / "bin", name)
+            )
         return exe_is_venv_bound(exe, venv_dir)
 
     targets: list[Path] = []
@@ -296,7 +298,9 @@ def migrate_windows_bin_path(
 
     home_bin = home / "bin"
     if any(
-        not ((home_bin / f"{name}.exe").is_file() or (home_bin / f"{name}.cmd").is_file())
+        not (
+            (home_bin / f"{name}.exe").is_file() or (home_bin / f"{name}.cmd").is_file()
+        )
         for name in _WINDOWS_BIN_LAUNCHERS
     ):
         return False  # staging incomplete — leave the PATH alone
@@ -306,7 +310,11 @@ def migrate_windows_bin_path(
 
         if not owns_user_path(home):
             return False  # new consoles resolve another home; leave the User PATH to it
-    except (ImportError, OSError, ValueError):  # an old updater's _launchers, or a failed Win32 call
+    except (
+        ImportError,
+        OSError,
+        ValueError,
+    ):  # an old updater's _launchers, or a failed Win32 call
         return False
 
     if read_user_path is None:

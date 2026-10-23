@@ -52,8 +52,10 @@ def test_user_entries_overlay_builtins_by_name():
 def test_root_level_personalities_are_honoured_below_agent_block():
     """config.yaml's top-level ``personalities:`` (the shape DEFAULT_CONFIG ships) must be
     visible on every surface; ``agent.personalities`` wins on a clash (#9636)."""
-    cfg = {"personalities": {"robot": "root", "shared": "root"},
-           "agent": {"personalities": {"shared": "agent"}}}
+    cfg = {
+        "personalities": {"robot": "root", "shared": "root"},
+        "agent": {"personalities": {"shared": "agent"}},
+    }
     merged = available_personalities(cfg)
     assert merged["robot"] == "root"
     assert merged["shared"] == "agent"
@@ -118,8 +120,6 @@ def test_prompt_text_normalizes_none_str_list():
     assert prompt_text(["a", " b ", ""]) == "a\nb"
 
 
-
-
 # ── persistence (single write path) ──────────────────────────────────────────
 
 
@@ -140,8 +140,8 @@ def test_persist_personality_never_touches_system_prompt(tmp_path):
     home = tmp_path / ".clawk"
     home.mkdir()
     (home / "config.yaml").write_text(
-        yaml.safe_dump({"agent": {"system_prompt": "manual forever"}})
-    , encoding="utf-8")
+        yaml.safe_dump({"agent": {"system_prompt": "manual forever"}}), encoding="utf-8"
+    )
     with patch.dict(os.environ, {"CLAWK_HOME": str(home)}):
         assert persist_personality("kawaii") is True
         raw = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))
@@ -153,7 +153,9 @@ def test_persist_personality_never_touches_system_prompt(tmp_path):
 
 
 def _run_migration(home, cfg):
-    (home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8"
+    )
     with patch.dict(os.environ, {"CLAWK_HOME": str(home)}):
         from clawk_cli.config import migrate_config, read_raw_config
 

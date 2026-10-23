@@ -11,12 +11,17 @@ from .method_ctx import bind_module
 
 
 def _plugin_server_rows(
-    plugin_dir: Path | None, key: str, *, portable: bool,
+    plugin_dir: Path | None,
+    key: str,
+    *,
+    portable: bool,
     catalog_titles: dict[str, str] | None = None,
 ) -> list[dict]:
     if not portable or plugin_dir is None:
         return []
-    package = _tools_mod("clawk_cli.agent_plugins").load_agent_plugin(plugin_dir, plugin_dir)
+    package = _tools_mod("clawk_cli.agent_plugins").load_agent_plugin(
+        plugin_dir, plugin_dir
+    )
     namespace = package.manifest.get("extensions", {}).get("com.nousresearch.clawk", {})
     declared = namespace.get("servers", {})
     if not isinstance(declared, dict):
@@ -31,7 +36,9 @@ def _plugin_server_rows(
     # (one live-catalog resolution per listing): a per-plugin ``get_live_catalog_entry`` would
     # re-resolve the whole catalog once per installed plugin.
     display_name = str(package.manifest.get("name") or "") or None
-    sidecar = _tools_mod("clawk_cli.plugins_cmd_catalog").catalog_install_record(plugin_dir)
+    sidecar = _tools_mod("clawk_cli.plugins_cmd_catalog").catalog_install_record(
+        plugin_dir
+    )
     if sidecar:
         title = (catalog_titles or {}).get(str(sidecar.get("catalog_name") or ""))
         if title:
@@ -41,7 +48,9 @@ def _plugin_server_rows(
         internal_name = server_name_for(key, name)
         connection_key = resolve_key(internal_name)
         server = core._servers.get(connection_key)
-        connected = server is not None and (server.session is not None or server._is_recycled_stdio())
+        connected = server is not None and (
+            server.session is not None or server._is_recycled_stdio()
+        )
         if connected:
             rows.append({"name": name, "state": "connected", "sentence": ""})
             continue
@@ -50,11 +59,15 @@ def _plugin_server_rows(
         if decl is None or status is None:
             rows.append({"name": name, "state": "unknown", "sentence": ""})
             continue
-        rows.append({
-            "name": name,
-            "state": status.state,
-            "sentence": liveness.describe(decl, status.availability, status.state, display_name),
-        })
+        rows.append(
+            {
+                "name": name,
+                "state": status.state,
+                "sentence": liveness.describe(
+                    decl, status.availability, status.state, display_name
+                ),
+            }
+        )
     return rows
 
 

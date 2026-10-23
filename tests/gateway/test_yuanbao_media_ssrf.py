@@ -21,5 +21,3 @@ class TestDownloadUrlSSRF:
     async def test_loopback_blocked(self):
         with pytest.raises(ValueError, match="SSRF protection"):
             await download_url("http://127.0.0.1:8080/secret")
-
-

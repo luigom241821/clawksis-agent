@@ -29,6 +29,7 @@ WORKER_HOOKS = (
     "on_kanban_worker_stale_claim",
 )
 
+
 @pytest.fixture
 def kanban_home(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
@@ -39,6 +40,7 @@ def kanban_home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     kb.init_db()
     return home
+
 
 @pytest.fixture
 def captured_hooks(monkeypatch):
@@ -55,8 +57,11 @@ def captured_hooks(monkeypatch):
     finally:
         mgr._hooks = saved
 
+
 def test_dispatch_spawn_fires_worker_spawned(
-    kanban_home, all_assignees_spawnable, captured_hooks,
+    kanban_home,
+    all_assignees_spawnable,
+    captured_hooks,
 ):
     """A dispatched spawn fires the hook AFTER the PID is durably persisted."""
     pid_at_fire_time: list = []
@@ -96,6 +101,7 @@ def test_dispatch_spawn_fires_worker_spawned(
     assert "board" in kw
     assert pid_at_fire_time == [4242]
 
+
 def test_crash_reclaim_fires_worker_exited(kanban_home, captured_hooks, monkeypatch):
     """A dead-PID reclaim fires the exit observer with the exit facts."""
     conn = kbc.connect()
@@ -121,6 +127,7 @@ def test_crash_reclaim_fires_worker_exited(kanban_home, captured_hooks, monkeypa
     assert kw["run_id"] is not None
     assert "profile_name" in kw
     assert "board" in kw
+
 
 def test_stale_claim_reclaim_fires_hook(kanban_home, captured_hooks):
     """A TTL-expired reclaim fires the stale-claim observer post-commit."""
@@ -149,8 +156,11 @@ def test_stale_claim_reclaim_fires_hook(kanban_home, captured_hooks):
     assert "profile_name" in kw
     assert "board" in kw
 
+
 def test_raising_callbacks_never_break_worker_lifecycle(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     """Raising subscribers must not break spawn, crash reclaim, or stale reclaim."""
     mgr = get_plugin_manager()
@@ -173,8 +183,7 @@ def test_raising_callbacks_never_break_worker_lifecycle(
 
             kb.claim_task(conn, tid)
             conn.execute(
-                "UPDATE tasks SET claim_expires = ?, worker_pid = NULL "
-                "WHERE id = ?",
+                "UPDATE tasks SET claim_expires = ?, worker_pid = NULL WHERE id = ?",
                 (int(time.time()) - 100, tid),
             )
             conn.commit()

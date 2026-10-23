@@ -72,8 +72,11 @@ class SessionPersistenceMixin:
         if db is None or not sessions_file.exists():
             return
         from clawk_state_mutation_retirement import route_retired
+
         targets = None if session_ids is None else set(session_ids)
-        with self._lazy("_save_lock", threading.Lock):  # never interleaves with a full save's write
+        with self._lazy(
+            "_save_lock", threading.Lock
+        ):  # never interleaves with a full save's write
             with open(sessions_file, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
@@ -81,8 +84,12 @@ class SessionPersistenceMixin:
             kept = {}
             for key, entry in data.items():
                 sid = entry.get("session_id") if isinstance(entry, dict) else None
-                if (key.startswith("_") or not isinstance(sid, str) or (targets is not None and sid not in targets)
-                        or not route_retired(db, key, json.dumps({"session_id": sid}))):
+                if (
+                    key.startswith("_")
+                    or not isinstance(sid, str)
+                    or (targets is not None and sid not in targets)
+                    or not route_retired(db, key, json.dumps({"session_id": sid}))
+                ):
                     kept[key] = entry
             if len(kept) < len(data):
                 atomic_json_write(sessions_file, kept, mode=0o600)
@@ -106,10 +113,14 @@ class SessionPersistenceMixin:
                 return acquire(path)  # process-wide registry: one writer per path
             except Exception as e:
                 if not _is_live_system_guard(e):
-                    print(f"[gateway] Warning: SQLite session store unavailable, falling back to JSONL: {e}")
+                    print(
+                        f"[gateway] Warning: SQLite session store unavailable, falling back to JSONL: {e}"
+                    )
                 raise
 
-        return self._db_handle_cache.get(path, _open, non_cacheable=_is_live_system_guard)
+        return self._db_handle_cache.get(
+            path, _open, non_cacheable=_is_live_system_guard
+        )
 
     def _pinned_db(self):
         """Return the explicitly pinned DB (``store._db = x``), else ``_DB_UNPINNED``."""
@@ -122,7 +133,11 @@ class SessionPersistenceMixin:
         ``store._db = None``); unpinned, each read resolves the scope so a multiplexed profile's
         writes reach its own store."""
         pinned = self._pinned_db()
-        return self._open_session_db_for_active_scope() if pinned is _DB_UNPINNED else pinned
+        return (
+            self._open_session_db_for_active_scope()
+            if pinned is _DB_UNPINNED
+            else pinned
+        )
 
     @_db.setter
     def _db(self, value) -> None:
@@ -173,6 +188,7 @@ class SessionPersistenceMixin:
         home: Optional[Path] = None
         try:
             from clawk_cli.profiles import get_profile_dir, profile_exists
+
             if profile_exists(profile):
                 home = Path(get_profile_dir(profile))
         except Exception as exc:
@@ -205,10 +221,14 @@ class SessionPersistenceMixin:
             # profile's scope happens to be active: a scoped drain tick or cron mirror touching a
             # default chat used to write its rows into the secondary's store (#102157's picture).
             routing_home = getattr(self, "_routing_home", None)
-            if routing_home is None or not getattr(self.config, "multiplex_profiles", False):
+            if routing_home is None or not getattr(
+                self.config, "multiplex_profiles", False
+            ):
                 return self._db
             try:
-                return self._open_session_db_for_active_scope(db_path=routing_home / "state.db")
+                return self._open_session_db_for_active_scope(
+                    db_path=routing_home / "state.db"
+                )
             except Exception:
                 return None
         home = self._profile_home_for_key(session_key)
@@ -217,7 +237,10 @@ class SessionPersistenceMixin:
             # physical stores — fail closed; callers already handle a missing DB.
             logger.warning(
                 "gateway.session: profile %r has no resolvable home (key %r); refusing to fall "
-                "back to the ambient store", profile, session_key)
+                "back to the ambient store",
+                profile,
+                session_key,
+            )
             return None
         try:
             return self._open_session_db_for_active_scope(db_path=home / "state.db")
@@ -249,8 +272,12 @@ class SessionPersistenceMixin:
         """Close every SessionDB handle this store opened (one per path). Closing only ``store._db``
         would strand secondary profiles' handles with their WAL lock held ('database is locked' on
         restart). Drained under the lock, closed outside it; a pinned handle is the pinner's."""
+
         def _close(db) -> None:
-            from clawk_state_registry import release_or_close  # shared instances no-op on close()
+            from clawk_state_registry import (
+                release_or_close,
+            )  # shared instances no-op on close()
+
             try:
                 release_or_close(db)
             except Exception as exc:
@@ -296,8 +323,12 @@ class SessionPersistenceMixin:
         setter = self._routing_db_method("set_meta")
         if setter is None:
             return False
-        setter(self._chat_labels_meta_key(source.platform, source.scope_id, source.chat_id),
-               json.dumps([source.chat_name, source.chat_topic]))
+        setter(
+            self._chat_labels_meta_key(
+                source.platform, source.scope_id, source.chat_id
+            ),
+            json.dumps([source.chat_name, source.chat_topic]),
+        )
         return True
 
     def chat_labels(self, platform, scope_id, chat_id) -> Optional[tuple]:
@@ -333,6 +364,7 @@ class SessionPersistenceMixin:
     def _routing_entry_from_json(key: str, entry_json: str) -> Optional[SessionEntry]:
         """Parse one gateway_routing row; None (with a warning) when invalid."""
         from gateway.session import SessionEntry
+
         try:
             entry_data = json.loads(entry_json)
             if isinstance(entry_data, dict):
@@ -358,7 +390,9 @@ class SessionPersistenceMixin:
         mirror_retired = self._import_legacy_sessions_json(db_had_entries)
         self._loaded = True
         self._routing_db_loaded = db_load_succeeded
-        self._routing_fallback_baseline = None if db_load_succeeded else self._entries_as_dicts()
+        self._routing_fallback_baseline = (
+            None if db_load_succeeded else self._entries_as_dicts()
+        )
         if mirror_retired and db_load_succeeded:
             # Rewrite the mirror while the fences that kept those routes out still hold: a prune's
             # ages out, and the import would then restore the retired route.
@@ -369,7 +403,10 @@ class SessionPersistenceMixin:
                 try:
                     self.strip_retired_mirror_routes()
                 except Exception:
-                    logger.warning("gateway.session: could not strip retired routes from sessions.json", exc_info=True)
+                    logger.warning(
+                        "gateway.session: could not strip retired routes from sessions.json",
+                        exc_info=True,
+                    )
         # A hard crash skips graceful shutdown and leaves sessions.json pointing at ended sessions.
         self._prune_stale_sessions_locked()
 
@@ -377,6 +414,7 @@ class SessionPersistenceMixin:
         """Legacy import: sessions.json fills only keys the DB lacks. Lock held. Returns how many
         mirror entries it skipped as retired routes."""
         from gateway.session import SessionEntry
+
         sessions_file = self.sessions_dir / "sessions.json"
         retired = 0
         if not sessions_file.exists():
@@ -389,16 +427,22 @@ class SessionPersistenceMixin:
                 # "_"-prefixed keys are sentinels (e.g. "_README"), not entries.
                 if key.startswith("_") or key in self._entries:
                     continue
-                if not isinstance(entry_data, dict):  # corrupt file must not abort the whole load
+                if not isinstance(
+                    entry_data, dict
+                ):  # corrupt file must not abort the whole load
                     logger.warning(
-                        "Skipping invalid session entry %r: expected dict, got %s", key,
-                        type(entry_data).__name__)
+                        "Skipping invalid session entry %r: expected dict, got %s",
+                        key,
+                        type(entry_data).__name__,
+                    )
                     continue
                 try:
                     from clawk_state_mutation_retirement import route_retired
+
                     db = self._routing_db
-                    if db is not None and route_retired(db, key, json.dumps(
-                            {'session_id': entry_data['session_id']})):
+                    if db is not None and route_retired(
+                        db, key, json.dumps({"session_id": entry_data["session_id"]})
+                    ):
                         retired += 1
                         continue
                     self._entries[key] = SessionEntry.from_dict(entry_data)
@@ -408,7 +452,10 @@ class SessionPersistenceMixin:
             if imported and db_had_entries:
                 logger.info(
                     "gateway.session: imported %d legacy sessions.json entr%s missing from "
-                    "state.db routing table", imported, "y" if imported == 1 else "ies")
+                    "state.db routing table",
+                    imported,
+                    "y" if imported == 1 else "ies",
+                )
         except Exception as e:
             print(f"[gateway] Warning: Failed to load sessions: {e}")
         return retired
@@ -438,7 +485,9 @@ class SessionPersistenceMixin:
                     self._entries[key] = verdict
                     recovered_keys += 1
         except Exception as exc:
-            logger.warning("gateway.session: stale-entry pruning skipped due to DB error: %s", exc)
+            logger.warning(
+                "gateway.session: stale-entry pruning skipped due to DB error: %s", exc
+            )
             return
         for key in stale_keys:
             del self._entries[key]
@@ -449,6 +498,7 @@ class SessionPersistenceMixin:
         """For a routing entry whose row has ended: ``"prune"``, a replacement entry (repoint), or
         None (keep as-is)."""
         from gateway.session_lifecycle import _now
+
         local_target = self._local_receipt_target(entry)
         if local_target is not None:
             # The authority's receipt names the route's target (a compression child after a
@@ -457,33 +507,54 @@ class SessionPersistenceMixin:
             if local_target == entry.session_id:
                 return None
             import copy
+
             repointed = copy.copy(entry)
             repointed.session_id = local_target
             logger.warning(
                 "gateway.session: repointing stale sessions.json entry %r from ended %s "
-                "(end_reason=%r) to its local receipt target %s", key, entry.session_id,
-                row["end_reason"], local_target)
+                "(end_reason=%r) to its local receipt target %s",
+                key,
+                entry.session_id,
+                row["end_reason"],
+                local_target,
+            )
             return repointed
         recovered_entry = None
         if entry.origin is not None:
             try:
                 recovered_entry = self._recover_session_from_db(
-                    session_key=key, source=entry.origin, now=_now(), raise_on_lookup_error=True)
+                    session_key=key,
+                    source=entry.origin,
+                    now=_now(),
+                    raise_on_lookup_error=True,
+                )
             except Exception as exc:
                 # Indeterminate: keep the only routing handle.
                 logger.debug(
                     "gateway.session: recovery lookup failed for stale sessions.json entry %r -> "
-                    "%s: %s", key, entry.session_id, exc)
+                    "%s: %s",
+                    key,
+                    entry.session_id,
+                    exc,
+                )
                 return None
         # Compression-ended parent with a newer live child for the same peer: repoint instead of
         # dropping, or queued/resume-pending work vanishes until the next message.
-        if recovered_entry is not None and recovered_entry.session_id != entry.session_id:
+        if (
+            recovered_entry is not None
+            and recovered_entry.session_id != entry.session_id
+        ):
             logger.warning(
                 "gateway.session: repointing stale sessions.json entry %r from ended %s "
-                "(end_reason=%r) to recovered %s", key, entry.session_id, row["end_reason"],
-                recovered_entry.session_id)
+                "(end_reason=%r) to recovered %s",
+                key,
+                entry.session_id,
+                row["end_reason"],
+                recovered_entry.session_id,
+            )
             if entry.prompt_pin and (
-                self._compression_tip_for_session_id(entry.session_id) == recovered_entry.session_id
+                self._compression_tip_for_session_id(entry.session_id)
+                == recovered_entry.session_id
             ):
                 # The compression child continues this conversation: its internal turns keep the
                 # pinned system bytes (the rebuilt entry is minimal and would drop them).
@@ -497,11 +568,19 @@ class SessionPersistenceMixin:
         if recovered_entry is not None:
             logger.info(
                 "gateway.session: reopened ended session %s for sessions.json entry %r "
-                "(end_reason=%r); keeping route", entry.session_id, key, row["end_reason"])
+                "(end_reason=%r); keeping route",
+                entry.session_id,
+                key,
+                row["end_reason"],
+            )
             return None
         logger.warning(
             "gateway.session: pruning stale sessions.json entry %r -> %s (end_reason=%r); left by "
-            "a crashed gateway", key, entry.session_id, row["end_reason"])
+            "a crashed gateway",
+            key,
+            entry.session_id,
+            row["end_reason"],
+        )
         return "prune"
 
     def _entries_as_dicts(self) -> dict[str, Any]:
@@ -530,7 +609,9 @@ class SessionPersistenceMixin:
         try:
             durable = loader(scope=self._routing_scope())
         except Exception as exc:
-            logger.warning("gateway.session: recovered state.db routing load failed: %s", exc)
+            logger.warning(
+                "gateway.session: recovered state.db routing load failed: %s", exc
+            )
             return
         current = self._entries_as_dicts()
         for key, entry_json in durable.items():
@@ -544,7 +625,9 @@ class SessionPersistenceMixin:
             elif key not in current:
                 continue  # loaded from fallback and deliberately removed
             elif current[key] == baseline[key]:
-                self._entries[key] = durable_entry  # unchanged fallback data yields to the DB copy
+                self._entries[key] = (
+                    durable_entry  # unchanged fallback data yields to the DB copy
+                )
         self._routing_db_loaded = True
         self._routing_fallback_baseline = None
 
@@ -569,14 +652,19 @@ class SessionPersistenceMixin:
             replacer = self._routing_db_method("replace_gateway_routing_entries")
             if replacer is not None:
                 try:
-                    retired = replacer({k: json.dumps(v) for k, v in data.items()}, scope=self._routing_scope())
+                    retired = replacer(
+                        {k: json.dumps(v) for k, v in data.items()},
+                        scope=self._routing_scope(),
+                    )
                     db_saved = True
                     # A retired route the save skipped stays out of the mirror too: its fence may
                     # age out (a prune's), and the next start's legacy import would restore it.
                     if retired:
                         data = {k: v for k, v in data.items() if k not in retired}
                 except Exception as exc:
-                    logger.warning("gateway.session: state.db routing save failed: %s", exc)
+                    logger.warning(
+                        "gateway.session: state.db routing save failed: %s", exc
+                    )
             if getattr(self, "_write_sessions_json", True) or not db_saved:
                 try:
                     self._save_sessions_json(data)
@@ -587,17 +675,25 @@ class SessionPersistenceMixin:
                     # already-committed primary write as failed.
                     logger.warning(
                         "gateway.session: sessions.json mirror save failed after state.db commit: "
-                        "%s", exc)
+                        "%s",
+                        exc,
+                    )
             self._persisted_routing_generation = generation
             # This rewrite supersedes fast records at or below its generation; newer ones stay for
             # the next delayed full writer.
             if fast_persisted:
-                for key in [k for k, (rev, _) in fast_persisted.items() if rev <= generation]:
+                for key in [
+                    k for k, (rev, _) in fast_persisted.items() if rev <= generation
+                ]:
                     del fast_persisted[key]
 
     def _save_sessions_json(self, data: dict[str, Any]) -> None:
         """Write the legacy sessions.json mirror of the routing index (atomic + fsync)."""
-        atomic_json_write(self.sessions_dir / "sessions.json", {"_README": _SESSIONS_JSON_README, **data}, mode=0o600)
+        atomic_json_write(
+            self.sessions_dir / "sessions.json",
+            {"_README": _SESSIONS_JSON_README, **data},
+            mode=0o600,
+        )
 
     def _save_entries(self) -> None:
         """Snapshot latest state under ``_lock`` and persist after releasing it."""
@@ -606,8 +702,12 @@ class SessionPersistenceMixin:
         self._persist_routing_data(data, generation)
 
     def _save_entry(
-        self, session_key: str, *, entry_data: Optional[dict[str, Any]] = None,
-        lock_held: bool = False) -> None:
+        self,
+        session_key: str,
+        *,
+        entry_data: Optional[dict[str, Any]] = None,
+        lock_held: bool = False,
+    ) -> None:
         """Persist ONE routing entry via UPSERT — the per-turn fast path (a full rewrite fsyncs a
         multi-MB sessions.json). The key -> session_id mapping never changes here: structural
         transitions use the full rewrite (which also refreshes the sessions.json mirror; it may lag
@@ -623,7 +723,10 @@ class SessionPersistenceMixin:
                 return
             serialized = dict(entry_data) if entry_data is not None else entry.to_dict()
             # The O(n) full snapshot is deferred to the fallback branch.
-            entry_json, revision = json.dumps(serialized), self._next_routing_generation_locked()
+            entry_json, revision = (
+                json.dumps(serialized),
+                self._next_routing_generation_locked(),
+            )
         saver = self._routing_db_method("save_gateway_routing_entry")
         if saver is not None:
             try:
@@ -640,7 +743,10 @@ class SessionPersistenceMixin:
             except Exception as exc:
                 logger.warning(
                     "gateway.session: single-entry routing save failed for %r (%s); falling back "
-                    "to full index rewrite", session_key, exc)
+                    "to full index rewrite",
+                    session_key,
+                    exc,
+                )
         if entry_data is not None:
             # Full-snapshot fallback carrying the candidate transition.
             with guard:

@@ -18,7 +18,11 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     (tmp_path / ".clawk").mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    for stub in ("_cleanup_gateway_service", "_maybe_unregister_gateway_service", "_stop_profile_backends"):
+    for stub in (
+        "_cleanup_gateway_service",
+        "_maybe_unregister_gateway_service",
+        "_stop_profile_backends",
+    ):
         monkeypatch.setattr(profiles, stub, lambda *a, **k: None)
     return tmp_path
 

@@ -44,14 +44,40 @@ def model_id_from_stem(stem: str) -> str:
 # ggml tensor type sizes: type_id -> (block_bytes, block_elems). IQ-family verified against
 # ggml-common.h.
 _GGML_TYPE_SIZES = {
-    0: (4, 1), 1: (2, 1), 2: (18, 32), 3: (20, 32), 6: (22, 32), 7: (24, 32),
-    8: (34, 32), 9: (36, 32), 10: (84, 256), 11: (110, 256), 12: (144, 256),
-    13: (176, 256), 14: (210, 256), 15: (292, 256), 16: (66, 256),
-    17: (74, 256), 18: (98, 256), 19: (50, 256), 20: (18, 32),
-    21: (110, 256), 22: (82, 256), 23: (136, 256), 24: (1, 1), 25: (2, 1),
-    26: (4, 1), 27: (8, 1), 28: (8, 1), 29: (56, 256), 30: (2, 1),
+    0: (4, 1),
+    1: (2, 1),
+    2: (18, 32),
+    3: (20, 32),
+    6: (22, 32),
+    7: (24, 32),
+    8: (34, 32),
+    9: (36, 32),
+    10: (84, 256),
+    11: (110, 256),
+    12: (144, 256),
+    13: (176, 256),
+    14: (210, 256),
+    15: (292, 256),
+    16: (66, 256),
+    17: (74, 256),
+    18: (98, 256),
+    19: (50, 256),
+    20: (18, 32),
+    21: (110, 256),
+    22: (82, 256),
+    23: (136, 256),
+    24: (1, 1),
+    25: (2, 1),
+    26: (4, 1),
+    27: (8, 1),
+    28: (8, 1),
+    29: (56, 256),
+    30: (2, 1),
     39: (17, 32),  # MXFP4 — 32 elements per 17-byte block (gpt-oss family)
-    40: (36, 64),  # NVFP4 — 4 E4M3 sub-block scales + 32 bytes of E2M1 (Nemotron 3.5 Bolt)
+    40: (
+        36,
+        64,
+    ),  # NVFP4 — 4 E4M3 sub-block scales + 32 bytes of E2M1 (Nemotron 3.5 Bolt)
     41: (18, 128),  # Q1_0
     42: (18, 64),  # Q2_0
 }
@@ -59,16 +85,29 @@ _GGML_TYPE_SIZES = {
 # GGUF metadata value types -> struct format; STRING (8) and ARRAY (9) are variable-length.
 _V_STRING, _V_ARRAY = 8, 9
 _SCALAR_FMT = {
-    0: "<B", 1: "<b", 2: "<H", 3: "<h",       # uint8 int8 uint16 int16
-    4: "<I", 5: "<i", 6: "<f", 7: "<?",       # uint32 int32 float32 bool
-    10: "<Q", 11: "<q", 12: "<d",             # uint64 int64 float64
+    0: "<B",
+    1: "<b",
+    2: "<H",
+    3: "<h",  # uint8 int8 uint16 int16
+    4: "<I",
+    5: "<i",
+    6: "<f",
+    7: "<?",  # uint32 int32 float32 bool
+    10: "<Q",
+    11: "<q",
+    12: "<d",  # uint64 int64 float64
 }
 
 # general.sampling.* metadata key -> preset INI key.
-_SAMPLING_INI_KEY = {"temp": "temp", "temperature": "temp", "top_p": "top-p",
-                     "top_k": "top-k", "min_p": "min-p",
-                     "repeat_penalty": "repeat-penalty",
-                     "presence_penalty": "presence-penalty"}
+_SAMPLING_INI_KEY = {
+    "temp": "temp",
+    "temperature": "temp",
+    "top_p": "top-p",
+    "top_k": "top-k",
+    "min_p": "min-p",
+    "repeat_penalty": "repeat-penalty",
+    "presence_penalty": "presence-penalty",
+}
 
 
 @dataclass
@@ -77,8 +116,10 @@ class GGUFHeader:
     version: int
     metadata: dict = field(default_factory=dict)
     n_tensors: int = 0
-    tensor_bytes: int = 0          # exact sum over the tensor table
-    embd_table_bytes: int = 0      # token_embd.weight (duplicated host-side when fully offloaded)
+    tensor_bytes: int = 0  # exact sum over the tensor table
+    embd_table_bytes: int = (
+        0  # token_embd.weight (duplicated host-side when fully offloaded)
+    )
     # block index -> bytes of that block's FFN weights (the tensors a `blk\.N\.ffn_.*\.weight`
     # -ot override moves), so spill placement can move only as many blocks as it needs.
     ffn_block_bytes: dict[int, int] = field(default_factory=dict)
@@ -99,8 +140,11 @@ class GGUFHeader:
     def lazy_bytes(self) -> int:
         """Bytes of weights llama.cpp keeps on disk and reads row by row instead of loading."""
         marked = _LAZY_READ_TENSORS.get(self.architecture, frozenset())
-        return sum(nbytes for name, nbytes in self.lazy_candidate_bytes.items()
-                   if name in marked and nbytes > _LAZY_READ_MIN_BYTES)
+        return sum(
+            nbytes
+            for name, nbytes in self.lazy_candidate_bytes.items()
+            if name in marked and nbytes > _LAZY_READ_MIN_BYTES
+        )
 
     def _arch_key(self, suffix: str):
         return self.metadata.get(f"{self.architecture}.{suffix}")
@@ -110,6 +154,7 @@ class GGUFHeader:
         """One copy of one sequence's recurrent state: an f32 conv window plus the SSM state, per
         block that keeps state. llama.cpp holds one copy per slot per speculative draft position.
         0 when the file declares no SSM shape."""
+
         def ssm(key: str) -> int:
             return int(self._arch_key(f"ssm.{key}") or 0)
 
@@ -131,15 +176,18 @@ class GGUFHeader:
     full_attention_interval = _arch_int(
         "full_attention_interval",
         "GDN-hybrid discriminator (qwen35 family): every Nth layer is full attention, the rest "
-        "are linear/recurrent. 0 = not present.")
+        "are linear/recurrent. 0 = not present.",
+    )
     key_length_swa = _arch_int(
         "attention.key_length_swa",
         "Per-token key size for sliding-window layers when it differs from the global "
-        "attention.key_length (e.g. gemma3/gemma4). 0 = not present.")
+        "attention.key_length (e.g. gemma3/gemma4). 0 = not present.",
+    )
     value_length_swa = _arch_int(
         "attention.value_length_swa",
         "Per-token value size for sliding-window layers when it differs from the global "
-        "attention.value_length. 0 = not present.")
+        "attention.value_length. 0 = not present.",
+    )
     del _arch_int
 
     @property
@@ -209,8 +257,9 @@ class GGUFHeader:
         scalar = int(v or 0)
         interval = self.full_attention_interval
         if interval > 1:
-            return [scalar if (i + 1) % interval == 0 else 0
-                    for i in range(self.n_layer)]
+            return [
+                scalar if (i + 1) % interval == 0 else 0 for i in range(self.n_layer)
+            ]
         return [scalar] * self.n_layer
 
     @property
@@ -239,13 +288,20 @@ def split_parts(path: Path) -> list[Path] | None:
     if m is None:
         return None
     stem, total = path.name[: m.start()], int(m.group(2))
-    parts = [p for p in (path.with_name(f"{stem}-{i:05d}-of-{total:05d}.gguf")
-                         for i in range(1, total + 1)) if p.is_file()]
+    parts = [
+        p
+        for p in (
+            path.with_name(f"{stem}-{i:05d}-of-{total:05d}.gguf")
+            for i in range(1, total + 1)
+        )
+        if p.is_file()
+    ]
     return parts if len(parts) > 1 else None
 
 
 def _read_part(path: Path) -> GGUFHeader:
     """One file's own header: metadata and that file's tensor table."""
+
     def read(f, fmt: str):
         # A header cut short raises ValueError, which every caller already treats as "skip this
         # model"; struct.error would escape them and take the whole preset pass down.
@@ -308,11 +364,17 @@ def _read_part(path: Path) -> GGUFHeader:
             elif m := _SSM_CONV.match(name):
                 recurrent_blocks.add(int(m.group(1)))
 
-    return GGUFHeader(path=str(path), version=version, metadata=metadata,
-                      n_tensors=n_tensors, tensor_bytes=tensor_bytes,
-                      embd_table_bytes=embd_bytes, ffn_block_bytes=ffn_block_bytes,
-                      lazy_candidate_bytes=lazy_candidate_bytes,
-                      recurrent_blocks=frozenset(recurrent_blocks))
+    return GGUFHeader(
+        path=str(path),
+        version=version,
+        metadata=metadata,
+        n_tensors=n_tensors,
+        tensor_bytes=tensor_bytes,
+        embd_table_bytes=embd_bytes,
+        ffn_block_bytes=ffn_block_bytes,
+        lazy_candidate_bytes=lazy_candidate_bytes,
+        recurrent_blocks=frozenset(recurrent_blocks),
+    )
 
 
 def read_gguf_header(path: str | Path) -> GGUFHeader:
@@ -351,11 +413,17 @@ def read_gguf_header(path: str | Path) -> GGUFHeader:
     return GGUFHeader(
         # The path stays the part the caller named: it is the model id source and the preset's
         # ``model`` key, and llama.cpp resolves the split from any one of its members.
-        path=str(path), version=first.version, metadata=first.metadata,
+        path=str(path),
+        version=first.version,
+        metadata=first.metadata,
         n_tensors=sum(h.n_tensors for h in readable),
         tensor_bytes=sum(h.tensor_bytes for h in readable),
         embd_table_bytes=sum(h.embd_table_bytes for h in readable),
         ffn_block_bytes=ffn_block_bytes,
-        lazy_candidate_bytes={name: nbytes for h in readable
-                              for name, nbytes in h.lazy_candidate_bytes.items()},
-        recurrent_blocks=frozenset().union(*(h.recurrent_blocks for h in readable)))
+        lazy_candidate_bytes={
+            name: nbytes
+            for h in readable
+            for name, nbytes in h.lazy_candidate_bytes.items()
+        },
+        recurrent_blocks=frozenset().union(*(h.recurrent_blocks for h in readable)),
+    )

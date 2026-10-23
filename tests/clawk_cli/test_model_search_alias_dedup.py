@@ -40,4 +40,3 @@ class TestPickerMergeAliasDedup:
         assert k3_rows == ["kimi-k3"], out
         # Live-only entries with no curated twin still surface.
         assert "kimi-for-coding" in out
-

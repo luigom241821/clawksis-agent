@@ -22,7 +22,11 @@ from .shared_metrics_contract import _bucket, _non_negative_number
 logger = logging.getLogger(__name__)
 
 _THRESHOLDS_MS = (
-    (500, "lt_500ms"), (1_000, "500ms_to_1s"), (2_000, "1s_to_2s"), (5_000, "2s_to_5s"), (10_000, "5s_to_10s"),
+    (500, "lt_500ms"),
+    (1_000, "500ms_to_1s"),
+    (2_000, "1s_to_2s"),
+    (5_000, "2s_to_5s"),
+    (10_000, "5s_to_10s"),
 )
 # (pid, surface, client launch id): a forked child re-arms, a surface in this process counts once,
 # and an RPC-reporting client counts once per launch (a Desktop reconnect re-sends the same launch).
@@ -52,7 +56,12 @@ def record_startup_latency(*, surface: str, elapsed_ms: Any) -> None:
     """Record one measured startup (no-op unless shared metrics are on; never raises)."""
     from .shared_metrics_events import _emit
 
-    _emit(contract.STARTUP_LATENCY_MARK, startup_latency_fields, surface=surface, elapsed_ms=elapsed_ms)
+    _emit(
+        contract.STARTUP_LATENCY_MARK,
+        startup_latency_fields,
+        surface=surface,
+        elapsed_ms=elapsed_ms,
+    )
 
 
 def process_started_at() -> float | None:
@@ -93,7 +102,9 @@ def _collection_enabled() -> bool:
 def _record_since_process_start(surface: str, ready_at: float) -> None:
     started = process_started_at()
     if started is not None:
-        record_startup_latency(surface=surface, elapsed_ms=max(0.0, ready_at - started) * 1000)
+        record_startup_latency(
+            surface=surface, elapsed_ms=max(0.0, ready_at - started) * 1000
+        )
 
 
 def record_process_ready(surface: str, *, background: bool = False) -> None:
@@ -113,8 +124,10 @@ def record_process_ready(surface: str, *, background: bool = False) -> None:
             return
         context = contextvars.copy_context()
         threading.Thread(
-            target=context.run, args=(_record_since_process_start, surface, ready_at),
-            name="clawk-startup-latency", daemon=True,
+            target=context.run,
+            args=(_record_since_process_start, surface, ready_at),
+            name="clawk-startup-latency",
+            daemon=True,
         ).start()
     except Exception:
         logger.debug("Startup latency for %s not recorded", surface, exc_info=True)
@@ -139,14 +152,28 @@ def record_cli_one_shot_ready() -> None:
 def _launch_key(launch_id: Any) -> str:
     """The client's per-launch id, only ever a local latch key (never recorded). Older clients send
     none and latch on their side; they count once per backend process and surface."""
-    return launch_id if isinstance(launch_id, str) and len(launch_id) <= _LAUNCH_ID_MAX_LEN else ""
+    return (
+        launch_id
+        if isinstance(launch_id, str) and len(launch_id) <= _LAUNCH_ID_MAX_LEN
+        else ""
+    )
 
 
-def record_rpc_startup_latency(*, client_surface: Any, elapsed_ms: Any, launch_id: Any = None) -> None:
+def record_rpc_startup_latency(
+    *, client_surface: Any, elapsed_ms: Any, launch_id: Any = None
+) -> None:
     """The TUI / Desktop client's own launch -> ready measurement, once per (surface, client launch)
     in this backend process. ``client_surface`` is the client's declared surface or the backend's
     detection (``desktop``/``tui``); anything else records nothing."""
-    surface = {"desktop": "desktop_attach", "desktop_attach": "desktop_attach", "tui": "tui"}.get(client_surface)
+    surface = {
+        "desktop": "desktop_attach",
+        "desktop_attach": "desktop_attach",
+        "tui": "tui",
+    }.get(client_surface)
     # Only a usable measurement spends the launch's claim.
-    if surface is not None and latency_bucket(elapsed_ms) is not None and _claim(surface, _launch_key(launch_id)):
+    if (
+        surface is not None
+        and latency_bucket(elapsed_ms) is not None
+        and _claim(surface, _launch_key(launch_id))
+    ):
         record_startup_latency(surface=surface, elapsed_ms=elapsed_ms)

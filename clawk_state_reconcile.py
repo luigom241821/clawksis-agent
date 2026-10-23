@@ -5,6 +5,7 @@ once, additive DDL only (:func:`reconcile_drift_for_browse`); ``clawk sessions r
 a protected snapshot so failed DDL never leaves the store partly upgraded or escalates into FTS
 surgery (:func:`repair_declarative_schema`). Neither runs while a gateway owns the store.
 """
+
 import contextlib
 import logging
 import os
@@ -19,12 +20,17 @@ def schema_drift_reason(path: Path):
     from clawk_state_schema import schema_read_probe_statements
     from clawk_cli.sqlite_safe_read import connect_tracked
 
-    with closing(connect_tracked(path.resolve().as_uri() + '?mode=ro', uri=True, tracking_path=path)) as conn:
+    with closing(
+        connect_tracked(
+            path.resolve().as_uri() + "?mode=ro", uri=True, tracking_path=path
+        )
+    ) as conn:
         try:
             for statement in schema_read_probe_statements():
                 conn.execute(statement).fetchone()
         except sqlite3.OperationalError as exc:
             from clawk_state_repair import _schema_not_built
+
             if _schema_not_built(exc):
                 return str(exc)
             raise
@@ -33,12 +39,15 @@ def schema_drift_reason(path: Path):
 
 def _reconcile_snapshot(path, guard):
     from clawk_state_repair import (
-        _copy_database_snapshot, _db_opens_cleanly, _repair_conn,
-        _repair_scratch_space_error, _unlink_db_triple,
+        _copy_database_snapshot,
+        _db_opens_cleanly,
+        _repair_conn,
+        _repair_scratch_space_error,
+        _unlink_db_triple,
     )
     from clawk_state_schema import apply_declared_schema
 
-    scratch = path.with_name(path.name + '.reconcile-scratch')
+    scratch = path.with_name(path.name + ".reconcile-scratch")
     if error := _repair_scratch_space_error(path):
         raise RuntimeError(error)
     if error := _unlink_db_triple(scratch):
@@ -51,34 +60,48 @@ def _reconcile_snapshot(path, guard):
             apply_declared_schema(conn.cursor())
             conn.commit()
         if reason := schema_drift_reason(scratch):
-            raise RuntimeError(f'schema reconciliation incomplete: {reason}')
+            raise RuntimeError(f"schema reconciliation incomplete: {reason}")
         if reason := _db_opens_cleanly(scratch):
-            raise RuntimeError(f'reconciled snapshot is unhealthy: {reason}')
+            raise RuntimeError(f"reconciled snapshot is unhealthy: {reason}")
         _copy_database_snapshot(scratch, path, destination_connection=guard)
     finally:
         if error := _unlink_db_triple(scratch):
-            logging.getLogger(__name__).warning('Could not remove reconciliation snapshot: %s', error)
+            logging.getLogger(__name__).warning(
+                "Could not remove reconciliation snapshot: %s", error
+            )
 
 
 def _require_history_tables(conn):
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if {'sessions', 'messages'} - tables:
-        raise RuntimeError('canonical history tables are missing; use sessions recover, not additive reconciliation')
+    tables = {
+        row[0]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    if {"sessions", "messages"} - tables:
+        raise RuntimeError(
+            "canonical history tables are missing; use sessions recover, not additive reconciliation"
+        )
 
 
 def _reconcile_locked(path, backup, report):
     from clawk_state_repair import (
-        _backup_db_file, _db_opens_cleanly, _exclusive_repair_db_guard,
+        _backup_db_file,
+        _db_opens_cleanly,
+        _exclusive_repair_db_guard,
         _live_writer_holds_db,
     )
 
     if _live_writer_holds_db(path):
-        raise RuntimeError('a live writer still holds state.db; stop it and retry')
+        raise RuntimeError("a live writer still holds state.db; stop it and retry")
     from clawk_cli.sqlite_safe_read import connect_tracked
-    with closing(connect_tracked(path.resolve().as_uri() + '?mode=ro', uri=True, tracking_path=path)) as conn:
+
+    with closing(
+        connect_tracked(
+            path.resolve().as_uri() + "?mode=ro", uri=True, tracking_path=path
+        )
+    ) as conn:
         _require_history_tables(conn)
     if schema_drift_reason(path) is None:
-        report.update(repaired=True, strategy='already_healthy')
+        report.update(repaired=True, strategy="already_healthy")
         return
     # Additive repair is not a substitute for corruption recovery.
     if reason := _db_opens_cleanly(path):
@@ -86,13 +109,15 @@ def _reconcile_locked(path, backup, report):
     if backup:
         bpath, error = _backup_db_file(path)
         if bpath is None:
-            raise RuntimeError(f'pre-repair backup refused: {error}')
-        report['backup_path'] = str(bpath)
+            raise RuntimeError(f"pre-repair backup refused: {error}")
+        report["backup_path"] = str(bpath)
     with _exclusive_repair_db_guard(path) as (guard, error):
         if guard is None:
-            raise RuntimeError(f'could not acquire exclusive state.db repair ownership: {error}')
+            raise RuntimeError(
+                f"could not acquire exclusive state.db repair ownership: {error}"
+            )
         _reconcile_snapshot(path, guard)
-        report.update(repaired=True, strategy='reconcile_declarative_schema')
+        report.update(repaired=True, strategy="reconcile_declarative_schema")
 
 
 # Browse-time reconcile (#140315). A store whose tables/columns lag SCHEMA_SQL is not corrupt:
@@ -127,26 +152,33 @@ class DeclarativeDriftError(RuntimeError):
 def is_declarative_drift_error(exc: BaseException) -> bool:
     """``no such table/column`` from a schema read probe: drift, never corruption."""
     from clawk_state_repair import _schema_not_built
+
     return isinstance(exc, sqlite3.OperationalError) and _schema_not_built(exc)
 
 
 def _repair_command(home: Path) -> str:
     """The `clawk sessions repair` invocation that targets *home* (no time limit, additive only)."""
-    from gateway.status import _profile_label_for_home  # never raises: None when unknown
+    from gateway.status import (
+        _profile_label_for_home,
+    )  # never raises: None when unknown
+
     label = _profile_label_for_home(home)
-    if label == 'default':
-        return 'clawk sessions repair'
+    if label == "default":
+        return "clawk sessions repair"
     if label:
-        return f'clawk -p {label} sessions repair'
-    return f'CLAWK_HOME={home} clawk sessions repair'
+        return f"clawk -p {label} sessions repair"
+    return f"CLAWK_HOME={home} clawk sessions repair"
 
 
 def _owner_remedy(home: Path) -> tuple[str, str]:
-    from gateway.status import _profile_label_for_home  # never raises: None when unknown
+    from gateway.status import (
+        _profile_label_for_home,
+    )  # never raises: None when unknown
+
     label = _profile_label_for_home(home)
-    if label and label != 'default':
-        return label, f'clawk -p {label} gateway restart'
-    return label or str(home), 'clawk gateway restart'
+    if label and label != "default":
+        return label, f"clawk -p {label} gateway restart"
+    return label or str(home), "clawk gateway restart"
 
 
 def _owning_gateway_restart(home: Path) -> str:
@@ -155,9 +187,14 @@ def _owning_gateway_restart(home: Path) -> str:
     restart` is refused there ("Manage the host gateway instead"), so name the owner's own command."""
     from gateway.runtime_ownership import canonical_home
     from gateway.status import _read_gateway_lock_record
-    record = _read_gateway_lock_record(canonical_home(home) / 'gateway.lock') or {}
-    owner_home = record.get('clawk_home')
-    if isinstance(owner_home, str) and owner_home and canonical_home(Path(owner_home)) != canonical_home(home):
+
+    record = _read_gateway_lock_record(canonical_home(home) / "gateway.lock") or {}
+    owner_home = record.get("clawk_home")
+    if (
+        isinstance(owner_home, str)
+        and owner_home
+        and canonical_home(Path(owner_home)) != canonical_home(home)
+    ):
         return _owner_remedy(Path(owner_home))[1]
     return _owner_remedy(home)[1]
 
@@ -167,7 +204,13 @@ def _lockless_gateway_holder(path: Path) -> str | None:
     multiplexer serves named profiles without reserving their per-profile lock, so the lock alone
     misses it. Only holders whose command line is a Clawksis ``gateway`` run count; plain readers
     (Desktop, sibling browses, CLI reads) are not owners. Returns a description, else None."""
-    from clawk_state_holders import _looks_like_clawk, _read_proc_argv, describe_holder_pid, foreign_state_db_holders
+    from clawk_state_holders import (
+        _looks_like_clawk,
+        _read_proc_argv,
+        describe_holder_pid,
+        foreign_state_db_holders,
+    )
+
     for pid, _target in foreign_state_db_holders(path):
         if pid <= 0:
             continue
@@ -175,10 +218,15 @@ def _lockless_gateway_holder(path: Path) -> str | None:
         if argv is None:
             try:
                 import psutil
+
                 argv = psutil.Process(pid).cmdline() or None
-            except (ImportError, OSError, psutil.Error):  # gone, denied, or no psutil: not provably ours
+            except (
+                ImportError,
+                OSError,
+                psutil.Error,
+            ):  # gone, denied, or no psutil: not provably ours
                 argv = None
-        if argv and _looks_like_clawk(argv) and 'gateway' in argv[1:]:
+        if argv and _looks_like_clawk(argv) and "gateway" in argv[1:]:
             return describe_holder_pid(pid)
     return None
 
@@ -192,6 +240,7 @@ class _Budget:
 
     def __init__(self, seconds: float):
         import time
+
         self._clock = time.monotonic
         self.deadline = self._clock() + seconds
         self.expired = False
@@ -208,12 +257,15 @@ class _Budget:
                 self.expired = True
                 return 1  # sqlite raises OperationalError('interrupted'); the caller rolls back
             return 0
+
         conn.set_progress_handler(progress, _BUDGET_PROGRESS_OPS)
 
     def check(self) -> None:
         if self.expired or self.remaining() <= 0:
             self.expired = True
-            raise BrowseBudgetExceeded('browse schema catch-up exceeded its time budget')
+            raise BrowseBudgetExceeded(
+                "browse schema catch-up exceeded its time budget"
+            )
 
 
 def _apply_additive_schema(path: Path, budget: _Budget | None = None) -> None:
@@ -230,11 +282,17 @@ def _apply_additive_schema(path: Path, budget: _Budget | None = None) -> None:
 
     budget = budget or _Budget(BROWSE_RECONCILE_BUDGET_S)
     budget.check()
-    with closing(connect_tracked(path, tracking_path=path, timeout=budget.busy_timeout(),
-                                 isolation_level=None)) as conn:
+    with closing(
+        connect_tracked(
+            path,
+            tracking_path=path,
+            timeout=budget.busy_timeout(),
+            isolation_level=None,
+        )
+    ) as conn:
         _reapply_durability_barriers(conn)
         budget.arm(conn)
-        conn.execute('BEGIN IMMEDIATE')
+        conn.execute("BEGIN IMMEDIATE")
         try:
             cursor = conn.cursor()
             apply_declared_schema(cursor)
@@ -247,16 +305,18 @@ def _apply_additive_schema(path: Path, budget: _Budget | None = None) -> None:
                         raise DeclarativeDriftError(str(exc)) from exc
                     raise
             budget.check()
-            conn.execute('COMMIT')
+            conn.execute("COMMIT")
         except BaseException as exc:
             with contextlib.suppress(sqlite3.Error):
-                conn.execute('ROLLBACK')
+                conn.execute("ROLLBACK")
             if budget.expired and isinstance(exc, sqlite3.OperationalError):
-                raise BrowseBudgetExceeded('browse schema catch-up exceeded its time budget') from exc
+                raise BrowseBudgetExceeded(
+                    "browse schema catch-up exceeded its time budget"
+                ) from exc
             raise
 
 
-BROWSE_RECONCILE_PURPOSE = 'browse_schema_reconcile'
+BROWSE_RECONCILE_PURPOSE = "browse_schema_reconcile"
 _BROWSE_SIBLING_POLL_S = 0.1
 
 
@@ -265,7 +325,9 @@ class CorruptStoreError(sqlite3.DatabaseError):
     own malformed-image error so every caller maps it to the corrupt-store status (``clawk doctor``)."""
 
     def __init__(self, detail: str):
-        super().__init__(f'database disk image is malformed (integrity_check: {detail})')
+        super().__init__(
+            f"database disk image is malformed (integrity_check: {detail})"
+        )
 
 
 def _integrity_problem(path: Path, budget: _Budget):
@@ -274,28 +336,38 @@ def _integrity_problem(path: Path, budget: _Budget):
     so an index with the right entry count but the wrong keys passes it. Raises
     :class:`BrowseBudgetExceeded` when the scan cannot finish in time (fail closed: no write)."""
     from clawk_cli.sqlite_safe_read import connect_tracked
+
     budget.check()
     try:
-        with closing(connect_tracked(path.resolve().as_uri() + '?mode=ro', uri=True, tracking_path=path,
-                                     timeout=budget.busy_timeout())) as conn:
+        with closing(
+            connect_tracked(
+                path.resolve().as_uri() + "?mode=ro",
+                uri=True,
+                tracking_path=path,
+                timeout=budget.busy_timeout(),
+            )
+        ) as conn:
             budget.arm(conn)
-            rows = conn.execute('PRAGMA integrity_check(3)').fetchall()
+            rows = conn.execute("PRAGMA integrity_check(3)").fetchall()
     except sqlite3.DatabaseError as exc:
         if budget.expired:
-            raise BrowseBudgetExceeded('integrity check exceeded the browse time budget') from exc
+            raise BrowseBudgetExceeded(
+                "integrity check exceeded the browse time budget"
+            ) from exc
         from clawk_state_errors import is_malformed_db_error
+
         if is_malformed_db_error(exc):
             return str(exc)
         raise
     budget.check()
-    problems = [str(r[0]) for r in rows if r and str(r[0]).lower() != 'ok']
-    return '; '.join(problems[:3]) or None
+    problems = [str(r[0]) for r in rows if r and str(r[0]).lower() != "ok"]
+    return "; ".join(problems[:3]) or None
 
 
 def _store_signature(path: Path):
     """(size, mtime_ns) of the main file and its WAL: any committed write changes one of them."""
     out = []
-    for p in (path, path.with_name(path.name + '-wal')):
+    for p in (path, path.with_name(path.name + "-wal")):
         try:
             st = p.stat()
             out.append((st.st_size, st.st_mtime_ns))
@@ -326,13 +398,17 @@ def _reserving(home: Path):
     """``exclusive_maintenance`` for a browse. A lock this user cannot open at all (a root-run
     gateway's, #42685) is not drift and not a crash: refuse by name with its recovery text."""
     from gateway.runtime_ownership import exclusive_maintenance
+
     with contextlib.ExitStack() as stack:
         try:
-            stack.enter_context(exclusive_maintenance([home], purpose=BROWSE_RECONCILE_PURPOSE))
+            stack.enter_context(
+                exclusive_maintenance([home], purpose=BROWSE_RECONCILE_PURPOSE)
+            )
         except OSError as exc:
             raise DeclarativeDriftError(
-                f'Session store is behind this Clawksis version, but its gateway.lock cannot be used '
-                f'({exc}); nothing was changed.') from exc
+                f"Session store is behind this Clawksis version, but its gateway.lock cannot be used "
+                f"({exc}); nothing was changed."
+            ) from exc
         yield
 
 
@@ -345,6 +421,7 @@ def _reserve_for_ddl(home: Path, path: Path, owned):
     out to own it, and :class:`_SiblingStillBusy` past the bound."""
     import time
     from gateway.runtime_ownership import OwnershipConflict, live_runtime_owner
+
     deadline = time.monotonic() + BROWSE_RECONCILE_BUDGET_S + 0.5
     with contextlib.ExitStack() as stack:
         while True:
@@ -371,9 +448,15 @@ def _verify_clean_before_lock(path: Path, too_slow):
     the scan vouches for. Raises :class:`CorruptStoreError` for a damaged store (latched, so polls do
     not rescan it) and ``too_slow()`` when the scan cannot finish in its budget (remembered for the
     same signature, so a polling sidebar does not rescan a multi-GB file every few seconds)."""
-    from clawk_state_health import STORAGE_CORRUPT, mark_storage_corrupt, storage_corrupt_reason, storage_state
+    from clawk_state_health import (
+        STORAGE_CORRUPT,
+        mark_storage_corrupt,
+        storage_corrupt_reason,
+        storage_state,
+    )
+
     if storage_state(path) == STORAGE_CORRUPT:
-        raise CorruptStoreError(storage_corrupt_reason(path) or 'latched corrupt')
+        raise CorruptStoreError(storage_corrupt_reason(path) or "latched corrupt")
     key = str(path.resolve())
     signature = _store_signature(path)
     if _scan_too_slow.get(key) == signature:
@@ -404,23 +487,31 @@ def reconcile_drift_for_browse(path: Path) -> bool:
     if reason is None:
         return False
     from clawk_cli.sqlite_safe_read import connect_tracked
-    with closing(connect_tracked(path.resolve().as_uri() + '?mode=ro', uri=True, tracking_path=path)) as conn:
+
+    with closing(
+        connect_tracked(
+            path.resolve().as_uri() + "?mode=ro", uri=True, tracking_path=path
+        )
+    ) as conn:
         try:
             _require_history_tables(conn)
         except RuntimeError as exc:
             raise DeclarativeDriftError(
-                f'Session store is missing its history tables ({reason}); this is not upgrade drift. '
-                'Run `clawk sessions recover`.') from exc
+                f"Session store is missing its history tables ({reason}); this is not upgrade drift. "
+                "Run `clawk sessions recover`."
+            ) from exc
     home = path.parent
     label, _ = _owner_remedy(home)
 
     def owned(drift, holder=None):
-        restart = 'clawk gateway restart' if holder else _owning_gateway_restart(home)
-        who = f' ({holder})' if holder else ''
+        restart = "clawk gateway restart" if holder else _owning_gateway_restart(home)
+        who = f" ({holder})" if holder else ""
         return DeclarativeDriftError(
             f"Session store for profile '{label}' is behind this Clawksis version ({drift}), and a "
-            f'running gateway owns it{who}, so browsing will not write to it. Restart that gateway '
-            f'(`{restart}`) to bring the store up to date.', owned=True)
+            f"running gateway owns it{who}, so browsing will not write to it. Restart that gateway "
+            f"(`{restart}`) to bring the store up to date.",
+            owned=True,
+        )
 
     def too_slow():
         # A gateway that booted while browse was verifying the store is the real answer: name it.
@@ -430,9 +521,10 @@ def reconcile_drift_for_browse(path: Path) -> bool:
         # running. The repair path has no time limit.
         return DeclarativeDriftError(
             f"Session store for profile '{label}' is behind this Clawksis version ({reason}) and is too "
-            f'large to verify and update within {BROWSE_RECONCILE_BUDGET_S:.0f}s while browsing. Your '
-            f'history is untouched: nothing was changed and the list was not cleared. Run '
-            f'`{_repair_command(home)}` to bring it up to date (it has no time limit), then reload.')
+            f"large to verify and update within {BROWSE_RECONCILE_BUDGET_S:.0f}s while browsing. Your "
+            f"history is untouched: nothing was changed and the list was not cleared. Run "
+            f"`{_repair_command(home)}` to bring it up to date (it has no time limit), then reload."
+        )
 
     # A gateway already owns it: never scan or write, refuse by name at once. Probe the flock itself
     # (a record left by a released holder still names a live PID), holding it for no work at all.
@@ -444,7 +536,9 @@ def reconcile_drift_for_browse(path: Path) -> bool:
             raise owned(reason) from exc
     if holder := _lockless_gateway_holder(path):
         raise owned(reason, holder)
-    with _path_scan_lock(path):  # one scan per store per process; concurrent polls wait for it
+    with _path_scan_lock(
+        path
+    ):  # one scan per store per process; concurrent polls wait for it
         if schema_drift_reason(path) is None:
             return False
         signature = _verify_clean_before_lock(path, too_slow)
@@ -453,19 +547,25 @@ def reconcile_drift_for_browse(path: Path) -> bool:
                 if current:
                     return False
                 budget = _Budget(BROWSE_RECONCILE_BUDGET_S)
-                if holder := _lockless_gateway_holder(path):  # a legacy gateway started during the scan
+                if holder := _lockless_gateway_holder(
+                    path
+                ):  # a legacy gateway started during the scan
                     raise owned(reason, holder)
                 if _store_signature(path) != signature:
                     # Written since the scan (a gateway that came and went): the scan no longer
                     # vouches for these bytes. Refuse; the next browse scans the new state.
                     raise DeclarativeDriftError(
                         f"Session store for profile '{label}' changed while browsing verified it "
-                        f'({reason}); nothing was changed. Retry in a moment; the list was not cleared.')
+                        f"({reason}); nothing was changed. Retry in a moment; the list was not cleared."
+                    )
+
                 def not_writable(why):
                     return DeclarativeDriftError(
                         f"Session store for profile '{label}' is behind this Clawksis version ({reason}), "
-                        f'but {why} is not writable by this user, so browsing cannot add the missing '
-                        f'tables/columns; nothing was changed. Fix the permissions, then reload.')
+                        f"but {why} is not writable by this user, so browsing cannot add the missing "
+                        f"tables/columns; nothing was changed. Fix the permissions, then reload."
+                    )
+
                 # The shared column reconciler logs a readonly ALTER failure and continues, so check
                 # first: the file plus its directory (SQLite creates its journal/WAL beside it).
                 for target in (path, path.parent):
@@ -474,26 +574,32 @@ def reconcile_drift_for_browse(path: Path) -> bool:
                 try:
                     _apply_additive_schema(path, budget)
                 except sqlite3.OperationalError as exc:
-                    if 'readonly' in str(exc).lower():
+                    if "readonly" in str(exc).lower():
                         raise not_writable(str(path)) from exc
                     raise
                 except DeclarativeDriftError as exc:
                     raise DeclarativeDriftError(
                         f"Session store for profile '{label}' is behind this Clawksis version and could not "
-                        f'be caught up ({exc}); nothing was changed. Run `clawk sessions repair` for that '
-                        'profile.') from exc
+                        f"be caught up ({exc}); nothing was changed. Run `clawk sessions repair` for that "
+                        "profile."
+                    ) from exc
         except BrowseBudgetExceeded as exc:
             raise too_slow() from exc
         except _SiblingStillBusy as exc:
             raise DeclarativeDriftError(
                 f"Session store for profile '{label}' is being brought up to date by another Clawksis "
-                f'process ({exc}). Retry in a moment; the list was not cleared.') from exc
+                f"process ({exc}). Retry in a moment; the list was not cleared."
+            ) from exc
     if after := schema_drift_reason(path):
         raise DeclarativeDriftError(
             f"Session store for profile '{label}' is behind this Clawksis version and could not be "
-            f'caught up ({after}). Run `clawk sessions repair` for that profile.')
+            f"caught up ({after}). Run `clawk sessions repair` for that profile."
+        )
     logging.getLogger(__name__).warning(
-        'state.db at %s lagged SCHEMA_SQL (%s); added the missing tables/columns for browsing', path, reason)
+        "state.db at %s lagged SCHEMA_SQL (%s); added the missing tables/columns for browsing",
+        path,
+        reason,
+    )
     return True
 
 
@@ -502,13 +608,19 @@ def repair_declarative_schema(path: Path, *, backup: bool = True):
     from gateway.runtime_ownership import OwnershipConflict, exclusive_maintenance
     from clawk_state_repair import _cross_process_repair_lock
 
-    report = {'repaired': False, 'strategy': None, 'backup_path': None, 'error': None}
+    report = {"repaired": False, "strategy": None, "backup_path": None, "error": None}
     try:
         with exclusive_maintenance([path.parent]):
             with _cross_process_repair_lock(path) as holding:
                 if not holding:
-                    raise RuntimeError('could not obtain the state.db repair lock')
+                    raise RuntimeError("could not obtain the state.db repair lock")
                 _reconcile_locked(path, backup, report)
-    except (OwnershipConflict, OSError, sqlite3.Error, RuntimeError, TimeoutError) as exc:
-        report['error'] = str(exc)
+    except (
+        OwnershipConflict,
+        OSError,
+        sqlite3.Error,
+        RuntimeError,
+        TimeoutError,
+    ) as exc:
+        report["error"] = str(exc)
     return report

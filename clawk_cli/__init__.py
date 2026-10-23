@@ -23,6 +23,7 @@ def __getattr__(name: str) -> str:
     if name != "__version__":
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     from clawk_cli.steward import read_install_stamp
+
     try:
         from pm.paths import repo_root
     except ModuleNotFoundError as exc:
@@ -31,8 +32,13 @@ def __getattr__(name: str) -> str:
         # The old editable finder may not know the new pm package yet.
         import json
         from pathlib import Path
+
         try:
-            stamp = json.loads((Path(__file__).resolve().parents[1] / "install-stamp.json").read_text(encoding="utf-8-sig"))
+            stamp = json.loads(
+                (Path(__file__).resolve().parents[1] / "install-stamp.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
             return str(stamp.get("baseVersion") or "0.0.0")
         except (OSError, ValueError, AttributeError):
             return "0.0.0"
@@ -52,7 +58,9 @@ def _ensure_utf8() -> bool:
         if stream is None:
             continue
         try:
-            if (getattr(stream, "encoding", "") or "").lower().replace("-", "") == "utf8":
+            if (getattr(stream, "encoding", "") or "").lower().replace(
+                "-", ""
+            ) == "utf8":
                 continue
             # Preferred: reconfigure in place, preserving object identity so code already holding
             # a reference to the old sys.stdout benefits from the repair too.
@@ -61,8 +69,14 @@ def _ensure_utf8() -> bool:
                 reconfigure(encoding="utf-8", errors="replace")
             else:
                 # No reconfigure(): reopen the fd as UTF-8 (closefd=False keeps the original fd open).
-                new_stream = open(stream.fileno(), "w", encoding="utf-8", errors="replace",  # windows-footgun: ok (stdout re-open for write, not a read)
-                                  buffering=1, closefd=False)
+                new_stream = open(
+                    stream.fileno(),
+                    "w",
+                    encoding="utf-8",
+                    errors="replace",  # windows-footgun: ok (stdout re-open for write, not a read)
+                    buffering=1,
+                    closefd=False,
+                )
                 setattr(sys, stream_name, new_stream)
             repaired = True
         except (AttributeError, OSError, ValueError):

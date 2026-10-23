@@ -21,10 +21,6 @@ def _ensure_monitor_stopped():
     mm.stop_memory_monitoring(timeout=1.0)
 
 
-
-
-
-
 def test_double_start_is_noop():
     assert mm.start_memory_monitoring(interval_seconds=3600.0) is True
     assert mm.start_memory_monitoring(interval_seconds=3600.0) is False
@@ -35,5 +31,3 @@ def test_stop_ends_monitoring():
     mm.start_memory_monitoring(interval_seconds=3600.0)
     mm.stop_memory_monitoring(timeout=1.0)
     assert mm.is_running() is False
-
-

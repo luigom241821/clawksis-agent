@@ -24,7 +24,9 @@ class TestIsStaleToolCallMarkerMessage:
         msg = {
             "role": "assistant",
             "content": "[memory]",
-            "tool_calls": [{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+            ],
         }
         assert _is_stale_tool_call_marker_message(msg) is True
 
@@ -32,7 +34,9 @@ class TestIsStaleToolCallMarkerMessage:
         msg = {
             "role": "assistant",
             "content": "[foo.bar]",
-            "tool_calls": [{"id": "1", "function": {"name": "foo.bar", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "1", "function": {"name": "foo.bar", "arguments": "{}"}}
+            ],
         }
         assert _is_stale_tool_call_marker_message(msg) is True
 
@@ -46,7 +50,9 @@ class TestIsStaleToolCallMarkerMessage:
         msg = {
             "role": "assistant",
             "content": "I'll check that for you.",
-            "tool_calls": [{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+            ],
         }
         assert _is_stale_tool_call_marker_message(msg) is False
 
@@ -54,7 +60,9 @@ class TestIsStaleToolCallMarkerMessage:
         msg = {
             "role": "user",
             "content": "[memory]",
-            "tool_calls": [{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+            "tool_calls": [
+                {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+            ],
         }
         assert _is_stale_tool_call_marker_message(msg) is False
 
@@ -66,14 +74,18 @@ class TestStripStaleToolCallMarkers:
             {
                 "role": "assistant",
                 "content": "[memory]",
-                "tool_calls": [{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+                "tool_calls": [
+                    {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+                ],
             },
             {"role": "tool", "content": "ok", "tool_call_id": "1"},
         ]
         out = _strip_stale_tool_call_markers(messages)
         assert out[1]["content"] == ""
         # Tool call itself must survive — provider tool_call/result pairing.
-        assert out[1]["tool_calls"] == [{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}]
+        assert out[1]["tool_calls"] == [
+            {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+        ]
 
     def test_unaffected_session_passes_through_unchanged(self):
         messages = [
@@ -102,14 +114,23 @@ class TestGetMessagesAsConversationStripsStaleMarkers:
                 db.append_message("s1", role="user", content="do the full task")
                 # Stray contamination written by an older build (pre-#78148 fix).
                 db.append_message(
-                    "s1", role="assistant", content="[memory]",
-                    tool_calls=[{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+                    "s1",
+                    role="assistant",
+                    content="[memory]",
+                    tool_calls=[
+                        {
+                            "id": "1",
+                            "function": {"name": "skill_manage", "arguments": "{}"},
+                        }
+                    ],
                 )
                 db.append_message("s1", role="tool", content="ok", tool_call_id="1")
                 db.append_message("s1", role="assistant", content="Here is the result.")
 
                 conv = db.get_messages_as_conversation("s1")
-                contents = [m.get("content") for m in conv if m.get("role") == "assistant"]
+                contents = [
+                    m.get("content") for m in conv if m.get("role") == "assistant"
+                ]
 
                 assert "[memory]" not in contents
                 assert "Here is the result." in contents
@@ -146,8 +167,12 @@ class TestPurgeStaleToolCallMarkers:
         db.create_session(session_id="s1", source="cli")
         db.append_message("s1", role="user", content="do the full task")
         db.append_message(
-            "s1", role="assistant", content="[memory]",
-            tool_calls=[{"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}],
+            "s1",
+            role="assistant",
+            content="[memory]",
+            tool_calls=[
+                {"id": "1", "function": {"name": "skill_manage", "arguments": "{}"}}
+            ],
         )
         db.append_message("s1", role="tool", content="ok", tool_call_id="1")
         db.append_message("s1", role="assistant", content="Here is the result.")
@@ -203,7 +228,9 @@ class TestPurgeStaleToolCallMarkers:
                 # Running again finds nothing left to clean — idempotent.
                 second = db.purge_stale_tool_call_markers(dry_run=False)
                 assert second["rows_affected"] == 0
-                assert second["backup_path"] is None  # nothing to change, nothing to back up
+                assert (
+                    second["backup_path"] is None
+                )  # nothing to change, nothing to back up
             finally:
                 db.close()
 

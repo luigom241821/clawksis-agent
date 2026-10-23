@@ -80,12 +80,17 @@ class Edge:
         return [self.proxy.port, *(s.port for s in self.sites)]
 
     def env(self) -> dict[str, str]:
-        return N.proxy_env(self.proxy.url_with_auth() if self.use_auth else self.proxy.url)
+        return N.proxy_env(
+            self.proxy.url_with_auth() if self.use_auth else self.proxy.url
+        )
 
     def transcript(self) -> str:
         rows = [self.proxy.transcript(80)]
         for site in self.sites:
-            rows.append(f"[mirror {site.url}] " + (", ".join(str(h) for h in site.hits[-40:]) or "(no requests)"))
+            rows.append(
+                f"[mirror {site.url}] "
+                + (", ".join(str(h) for h in site.hits[-40:]) or "(no requests)")
+            )
         return "\n".join(rows)
 
     def close(self) -> None:
@@ -113,15 +118,27 @@ class Installed:
         self._n += 1
         I.git("update-ref", "refs/heads/main", self.head(), cwd=self.origin)
         files = files or {f"E2E_NETWORK_{tag}.txt": f"{tag} {time.time_ns()}\n"}
-        return I.publish_commit(self.origin, self.root, f"e2e network: {tag} #{self._n}", files)
+        return I.publish_commit(
+            self.origin, self.root, f"e2e network: {tag} #{self._n}", files
+        )
 
     # -- edges -----------------------------------------------------------------
-    def edge(self, *, assets: N.App | None = None, git: N.App | None = None,
-             extra: dict[str, N.App] | None = None, sites: Iterable[N.HttpSite] = (),
-             eof_hosts: Iterable[str] = (), auth: tuple[str, str] | None = None) -> Edge:
+    def edge(
+        self,
+        *,
+        assets: N.App | None = None,
+        git: N.App | None = None,
+        extra: dict[str, N.App] | None = None,
+        sites: Iterable[N.HttpSite] = (),
+        eof_hosts: Iterable[str] = (),
+        auth: tuple[str, str] | None = None,
+    ) -> Edge:
         """Proxy routes: the release-channel host (default: no records published, so ``main``
         follows the branch), github.com (default: the git server over the bare origin)."""
-        routes = {ASSETS: assets or N.static_app({}), "github.com": git or N.git_app(self.gitroot)}
+        routes = {
+            ASSETS: assets or N.static_app({}),
+            "github.com": git or N.git_app(self.gitroot),
+        }
         routes.update(extra or {})
         for host in eof_hosts:
             routes.pop(host, None)
@@ -129,8 +146,15 @@ class Installed:
         return Edge(self, proxy, list(sites), use_auth=auth is not None)
 
     # -- running -----------------------------------------------------------------
-    def run(self, argv: list[str], *, edge: Edge | None, env: dict[str, str] | None = None,
-            corporate_root: bool = True, timeout: float = 900) -> Result:
+    def run(
+        self,
+        argv: list[str],
+        *,
+        edge: Edge | None,
+        env: dict[str, str] | None = None,
+        corporate_root: bool = True,
+        timeout: float = 900,
+    ) -> Result:
         """``argv`` inside the sandbox with its own network namespace. ``edge=None`` is fully
         offline. ``corporate_root`` overlays the distro trust store with one that also trusts
         the proxy's root (what an admin's ``update-ca-certificates`` leaves behind)."""
@@ -138,11 +162,20 @@ class Installed:
         if edge is not None:
             e.update(edge.env())
         e.update(env or {})
-        bridge = N.Bridge(self.root / "bridges" / f"b{time.time_ns()}", edge.ports if edge else [])
+        bridge = N.Bridge(
+            self.root / "bridges" / f"b{time.time_ns()}", edge.ports if edge else []
+        )
         t0 = time.monotonic()
         try:
-            cp = H.run(bridge.wrap(argv), env=e, cwd=self.sb.root, writable=[self.sb.root],
-                       timeout=timeout, unshare_net=True, ro_binds=self.trust if corporate_root else ())
+            cp = H.run(
+                bridge.wrap(argv),
+                env=e,
+                cwd=self.sb.root,
+                writable=[self.sb.root],
+                timeout=timeout,
+                unshare_net=True,
+                ro_binds=self.trust if corporate_root else (),
+            )
         finally:
             bridge.close()
         return Result(cp, time.monotonic() - t0, edge)
@@ -170,13 +203,17 @@ class Installed:
             "head": self.head(),
             "facts": read(inst / "facts.json"),
             "pm_runtime": read(inst / "pm-runtime" / "selected.json"),
-            "tools": sorted(p.name for p in tools.iterdir() if p.is_dir()) if tools.is_dir() else [],
+            "tools": sorted(p.name for p in tools.iterdir() if p.is_dir())
+            if tools.is_dir()
+            else [],
         }
 
     def logs_tail(self, lines: int = 40) -> str:
         out = []
         for log in sorted((self.sb.clawk_home / "logs").glob("*.log")):
-            text = log.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
+            text = log.read_text(encoding="utf-8", errors="replace").splitlines()[
+                -lines:
+            ]
             out.append(f"--- {log.name} (tail) ---\n" + "\n".join(text))
         return "\n".join(out) or "(no logs)"
 
@@ -195,17 +232,30 @@ def seed_install(root: Path) -> Installed:
     sb.env.pop("SSL_CERT_FILE", None)
     script = sb.root / "install.sh"
     shutil.copy(H.WORKTREE / "scripts" / "install.sh", script)
-    cp = sb.run(["bash", str(script), "--non-interactive", "--skip-browser"], timeout=1800, input="",
-                env=I.fresh_install_env(sb))
+    cp = sb.run(
+        ["bash", str(script), "--non-interactive", "--skip-browser"],
+        timeout=1800,
+        input="",
+        env=I.fresh_install_env(sb),
+    )
     assert cp.returncode == 0, "seed install failed:\n" + I.describe(cp)
-    I.pin_main_channel(sb)  # cells publish commits, not releases (test_release_channel_records opts back into stable)
+    I.pin_main_channel(
+        sb
+    )  # cells publish commits, not releases (test_release_channel_records opts back into stable)
     # From here on the checkout talks to the official URL, which only the proxy can serve.
     (sb.home / ".gitconfig").write_text("", encoding="utf-8")
     gitroot = root / "gitroot"
     (gitroot / "NousResearch").mkdir(parents=True, exist_ok=True)
     (gitroot / "NousResearch" / "clawksis-agent.git").symlink_to(origin)
     ca = N.TestCA(root / "corporate-ca")
-    inst = Installed(root, sb, origin, gitroot, ca, ca.os_trust_store(root / "corporate-ca" / "etc-ssl-certs"))
+    inst = Installed(
+        root,
+        sb,
+        origin,
+        gitroot,
+        ca,
+        ca.os_trust_store(root / "corporate-ca" / "etc-ssl-certs"),
+    )
     assert_isolated(inst)
     return inst
 
@@ -229,30 +279,50 @@ def assert_isolated(inst: Installed) -> None:
         r = inst.run([inst.sb.python, "-c", probe], edge=edge, timeout=60)
     finally:
         edge.close()
-    assert r.rc == 0 and "ISOLATED" in r.cp.stdout, "network namespace is not isolated:\n" + I.describe(r.cp)
+    assert r.rc == 0 and "ISOLATED" in r.cp.stdout, (
+        "network namespace is not isolated:\n" + I.describe(r.cp)
+    )
 
 
 # ---------------------------------------------------------------------------
 # Release-channel records (the R2 objects under https://clawk-assets.nousresearch.com/).
 # ---------------------------------------------------------------------------
 
+
 def canonical(value: object) -> bytes:
     """The channel wire encoding (sorted keys, compact, trailing newline)."""
-    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+    return (
+        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        + "\n"
+    ).encode()
 
 
 def _identity(name: str, token: str) -> dict:
     pascal = f"ClawksisChannel{token}"
-    return {"token": token, "displayName": f"Clawksis {name}", "appId": f"ai.clawk.channel.h{token}",
-            "appNamePascal": pascal, "artifactNamePascal": pascal, "cliName": f"clawk-{name}",
-            "windowsExecutableName": pascal, "msixAppIdWithOrg": f"NousResearch.{pascal}"}
+    return {
+        "token": token,
+        "displayName": f"Clawksis {name}",
+        "appId": f"ai.clawk.channel.h{token}",
+        "appNamePascal": pascal,
+        "artifactNamePascal": pascal,
+        "cliName": f"clawk-{name}",
+        "windowsExecutableName": pascal,
+        "msixAppIdWithOrg": f"NousResearch.{pascal}",
+    }
 
 
 GITHUB_API = "api.github.com"
 
 
-def stable_release(inst: Installed, commit: str, *, tag: str = "v99.1.1", draft: bool = False,
-                   prerelease: bool = False, api_commit: str | None = None) -> dict[str, bytes]:
+def stable_release(
+    inst: Installed,
+    commit: str,
+    *,
+    tag: str = "v99.1.1",
+    draft: bool = False,
+    prerelease: bool = False,
+    api_commit: str | None = None,
+) -> dict[str, bytes]:
     """A published GitHub release ``tag`` at ``commit``: the tag on origin plus the API objects.
 
     ``api_commit`` makes GitHub report a different commit than the tag on origin points at.
@@ -260,13 +330,17 @@ def stable_release(inst: Installed, commit: str, *, tag: str = "v99.1.1", draft:
     I.git("tag", "-f", tag, commit, cwd=inst.origin)
     release = {"tag_name": tag, "draft": draft, "prerelease": prerelease}
     base = f"/repos/{REPOSITORY}"
-    return {f"{base}/releases/latest": canonical(release), f"{base}/releases/tags/{tag}": canonical(release),
-            f"{base}/commits/{tag}": canonical({"sha": api_commit or commit})}
+    return {
+        f"{base}/releases/latest": canonical(release),
+        f"{base}/releases/tags/{tag}": canonical(release),
+        f"{base}/commits/{tag}": canonical({"sha": api_commit or commit}),
+    }
 
 
 # ---------------------------------------------------------------------------
 # Mirrors: a PEP 503 simple index and an npm registry holding a small pre-fetched set.
 # ---------------------------------------------------------------------------
+
 
 def prefetch(url: str, sha256: str, dest: Path) -> Path:
     """Fixture-time download (host network, like the seed install) verified against its pin."""
@@ -297,10 +371,16 @@ def lock_wheels(lock: Path) -> list[tuple[str, str, str]]:
 
 def simple_index_app(files: dict[str, list[tuple[Path, str]]]) -> N.App:
     """PEP 503 index: ``/simple/<name>/`` lists links (with ``#sha256=``) to ``/files/<wheel>``."""
-    routes: dict[str, bytes] = {"/simple/": b"<html><body>" + b"".join(
-        f'<a href="/simple/{n}/">{n}</a>'.encode() for n in files) + b"</body></html>"}
+    routes: dict[str, bytes] = {
+        "/simple/": b"<html><body>"
+        + b"".join(f'<a href="/simple/{n}/">{n}</a>'.encode() for n in files)
+        + b"</body></html>"
+    }
     for name, wheels in files.items():
-        links = "".join(f'<a href="/files/{p.name}#sha256={sha}">{p.name}</a><br/>' for p, sha in wheels)
+        links = "".join(
+            f'<a href="/files/{p.name}#sha256={sha}">{p.name}</a><br/>'
+            for p, sha in wheels
+        )
         page = f"<!DOCTYPE html><html><body>{links}</body></html>".encode()
         for spelling in {name, re.sub(r"[-_.]+", "-", name).lower()}:
             routes[f"/simple/{spelling}/"] = page
@@ -322,7 +402,9 @@ def env_without(env: dict[str, str], *names: str) -> dict[str, str]:
 
 
 def installed_tool(inst: Installed, name: str) -> dict:
-    facts = json.loads((inst.sb.clawk_home / "tools" / "facts.json").read_text(encoding="utf-8"))
+    facts = json.loads(
+        (inst.sb.clawk_home / "tools" / "facts.json").read_text(encoding="utf-8")
+    )
     return facts["packages"][name]
 
 
@@ -352,8 +434,14 @@ def assert_nothing_changed(inst: Installed, before: dict, r: Result, what: str) 
     and the next ``clawk`` still starts."""
     assert r.rc != 0, f"{what}: the command reported success\n" + r.report(inst)
     claimed = [b for b in SUCCESS_BANNERS if b in r.out]
-    assert not claimed, f"{what}: failed run printed a success banner {claimed}\n" + r.report(inst)
+    assert not claimed, (
+        f"{what}: failed run printed a success banner {claimed}\n" + r.report(inst)
+    )
     after = inst.state()
-    assert after == before, f"{what}: install state moved {before} -> {after}\n" + r.report(inst)
+    assert after == before, (
+        f"{what}: install state moved {before} -> {after}\n" + r.report(inst)
+    )
     v = inst.version_works()
-    assert v.rc == 0 and I.TRACEBACK not in v.out, f"{what}: `clawk --version` broken afterwards\n" + I.describe(v.cp)
+    assert v.rc == 0 and I.TRACEBACK not in v.out, (
+        f"{what}: `clawk --version` broken afterwards\n" + I.describe(v.cp)
+    )

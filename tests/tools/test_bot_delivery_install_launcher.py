@@ -1,4 +1,5 @@
 """Bot deliveries must not pin the caller's obsolete dependency generation."""
+
 from pathlib import Path
 import sys
 
@@ -76,20 +77,26 @@ def test_real_delivery_launcher_imports_new_generation(tmp_path, monkeypatch):
     # Load the checkout's constants before the launcher's bootstrap import;
     # an editable test interpreter may also expose an older installed checkout.
     import shutil
+
     shutil.copyfile(real_root / "clawk_constants.py", root / "clawk_constants.py")
     (package / "__init__.py").write_text(
-        f"__path__.append({str(real_root / 'clawk_cli')!r})\n", encoding="utf-8")
+        f"__path__.append({str(real_root / 'clawk_cli')!r})\n", encoding="utf-8"
+    )
     (package / "main.py").write_text(
         "import json, sys\n"
         "def main():\n"
         "    import plugin_generation_probe\n"
         "    print(json.dumps([plugin_generation_probe.VALUE, sys.argv[1:]]))\n"
-        "    return 0\n", encoding="utf-8")
+        "    return 0\n",
+        encoding="utf-8",
+    )
     # Keep the entry point local and non-networked, but run real PM selection.
     (root / "clawk_bootstrap.py").write_text(
         f"import sys\nsys.path.append({str(real_root)!r})\n"
         "from pathlib import Path\nfrom pm.environments import activate_dependencies\n"
-        "activate_dependencies(Path(__file__).resolve().parent)\n", encoding="utf-8")
+        "activate_dependencies(Path(__file__).resolve().parent)\n",
+        encoding="utf-8",
+    )
     runtime = tmp_path / "runtime"
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(runtime))
     out = root / ".clawk" / "bin"
@@ -105,9 +112,12 @@ def test_real_delivery_launcher_imports_new_generation(tmp_path, monkeypatch):
     old_package.mkdir(parents=True)
     (old_package / "__init__.py").write_text("", encoding="utf-8")
     (old_package / "main.py").write_text(
-        "def main():\n    print('old-generation')\n    return 0\n", encoding="utf-8")
+        "def main():\n    print('old-generation')\n    return 0\n", encoding="utf-8"
+    )
     (old_package.parent / "clawk_bootstrap.py").write_text("", encoding="utf-8")
-    assert _launchers.mint_launcher("clawk", old_package.parent, old_bin, real_python, None)
+    assert _launchers.mint_launcher(
+        "clawk", old_package.parent, old_bin, real_python, None
+    )
     monkeypatch.setattr(bot_relay, "__file__", str(root / "tools" / "bot_relay.py"))
     monkeypatch.setattr(sys, "executable", str(old_bin / "python.exe"))
     argv = _delivery_argv("researcher", str(tmp_path / "message&extra.txt"))
@@ -117,16 +127,39 @@ def test_real_delivery_launcher_imports_new_generation(tmp_path, monkeypatch):
         packages.mkdir(parents=True)
         (selected / "pyvenv.cfg").write_text("home = fixture\n", encoding="utf-8")
         (packages / "plugin_generation_probe.py").write_text(
-            f"VALUE = {generation!r}\n", encoding="utf-8")
-        record.write_text(json.dumps({"packages": {"venv": {"environment": str(selected)}}}), encoding="utf-8")
-        result = subprocess.run(argv, cwd=tmp_path, env=dict(os.environ),
-                                capture_output=True, text=True, timeout=30, check=False)
+            f"VALUE = {generation!r}\n", encoding="utf-8"
+        )
+        record.write_text(
+            json.dumps({"packages": {"venv": {"environment": str(selected)}}}),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            argv,
+            cwd=tmp_path,
+            env=dict(os.environ),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         assert result.stdout.strip() == json.dumps([generation, argv[1:]])
     # A broken selected generation must fail, never silently reuse the old CLI.
-    record.write_text(json.dumps({"packages": {"venv": {"environment": str(record.parent / 'missing')}}}), encoding="utf-8")
-    result = subprocess.run(argv, cwd=tmp_path, env=dict(os.environ),
-                            capture_output=True, text=True, timeout=30, check=False)
+    record.write_text(
+        json.dumps(
+            {"packages": {"venv": {"environment": str(record.parent / "missing")}}}
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        argv,
+        cwd=tmp_path,
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode != 0
     assert "dependency environment" in result.stderr
     assert "old-generation" not in result.stdout
@@ -141,12 +174,16 @@ def test_launcher_shape_preserves_profile_and_lock(tmp_path, monkeypatch, name):
     target = home / "profiles" / "researcher"
     monkeypatch.setattr(bot_mode_dm, "_default_home", lambda: str(home))
     monkeypatch.setattr(bot_mode_probe, "_clawk_root", lambda path: home)
-    monkeypatch.setattr(bot_mode_probe, "_roster", lambda root: [("researcher", target)])
+    monkeypatch.setattr(
+        bot_mode_probe, "_roster", lambda root: [("researcher", target)]
+    )
     locked = []
+
     @contextlib.contextmanager
     def lock(root, profile):
         locked.append((root, profile))
         yield
+
     monkeypatch.setattr(bot_relay, "acquire_turn_lock", lock)
     argv = [str(tmp_path / name), "-p", "researcher", "chat"]
     assert bot_mode_dm._local_delivery_home(argv) == target

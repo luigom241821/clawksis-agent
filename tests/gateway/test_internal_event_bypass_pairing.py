@@ -24,6 +24,7 @@ from tools.process_registry import ProcessRegistry, ProcessSession
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeRegistry:
     """Return pre-canned sessions, then None once exhausted."""
 
@@ -111,6 +112,7 @@ async def test_internal_event_bypasses_authorization(monkeypatch, tmp_path):
     # run_in_executor.  Auth check happens before _handle_message_with_agent.
     async def _raise(*_a, **_kw):
         raise RuntimeError("sentinel — stop here")
+
     monkeypatch.setattr(GatewayRunner, "_handle_message_with_agent", _raise)
 
     try:
@@ -124,7 +126,9 @@ async def test_internal_event_bypasses_authorization(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_notify_on_complete_uses_session_store_origin_for_group_topic(monkeypatch, tmp_path):
+async def test_notify_on_complete_uses_session_store_origin_for_group_topic(
+    monkeypatch, tmp_path
+):
     import tools.process_registry as pr_module
     from gateway.session import SessionSource
 
@@ -137,19 +141,22 @@ async def test_notify_on_complete_uses_session_store_origin_for_group_topic(monk
 
     async def _instant_sleep(*_a, **_kw):
         pass
+
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
 
     runner = GatewayRunner(GatewayConfig())
     adapter = SimpleNamespace(send=AsyncMock(), handle_message=AsyncMock())
     runner.adapters[Platform.TELEGRAM] = adapter
-    runner.session_store._entries["agent:main:telegram:group:-100:42"] = SimpleNamespace(
-        origin=SessionSource(
-            platform=Platform.TELEGRAM,
-            chat_id="-100",
-            chat_type="group",
-            thread_id="42",
-            user_id="user-42",
-            user_name="alice",
+    runner.session_store._entries["agent:main:telegram:group:-100:42"] = (
+        SimpleNamespace(
+            origin=SessionSource(
+                platform=Platform.TELEGRAM,
+                chat_id="-100",
+                chat_type="group",
+                thread_id="42",
+                user_id="user-42",
+                user_name="alice",
+            )
         )
     )
 
@@ -211,5 +218,3 @@ async def test_none_user_id_does_not_generate_pairing_code(monkeypatch, tmp_path
     assert not generate_called, (
         "Pairing code should NOT be generated for messages with user_id=None"
     )
-
-

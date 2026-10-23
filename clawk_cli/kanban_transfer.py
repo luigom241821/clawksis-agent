@@ -48,7 +48,14 @@ ARCHIVE_FORMAT_VERSION = 1
 # if it is in one of these — terminal and already-parked tasks are left
 # alone rather than having their history rewritten.
 _DISPATCHABLE_STATUSES = ("ready", "running", "todo", "scheduled")
-_COUNTED_TABLES = ("tasks", "task_links", "task_comments", "task_events", "task_runs", "task_attachments")
+_COUNTED_TABLES = (
+    "tasks",
+    "task_links",
+    "task_comments",
+    "task_events",
+    "task_runs",
+    "task_attachments",
+)
 
 
 def _placeholders(items) -> str:
@@ -59,11 +66,14 @@ def _placeholders(items) -> str:
 # Export
 # ---------------------------------------------------------------------------
 
+
 def _snapshot_db(source: Path, target: Path) -> None:
     """Consistent copy of ``source`` via the online-backup API (a file copy
     would miss pages still in the ``-wal`` sidecar and could tear)."""
-    with contextlib.closing(sqlite3.connect(str(source))) as src, \
-            contextlib.closing(sqlite3.connect(str(target))) as dst:
+    with (
+        contextlib.closing(sqlite3.connect(str(source))) as src,
+        contextlib.closing(sqlite3.connect(str(target))) as dst,
+    ):
         src.backup(dst)
 
 
@@ -104,11 +114,16 @@ def _scrub_local_state(conn: sqlite3.Connection) -> None:
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def _count_rows(conn: sqlite3.Connection) -> dict[str, int]:
-    return {t: int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]) for t in _COUNTED_TABLES}
+    return {
+        t: int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0])
+        for t in _COUNTED_TABLES
+    }
 
 
 def export_board(
@@ -129,7 +144,9 @@ def export_board(
     if not db_path.exists():
         raise FileNotFoundError(f"board {slug!r} has no database at {db_path}")
 
-    base = str(Path(output_path).expanduser()).removesuffix(".tar.gz").removesuffix(".tgz")
+    base = (
+        str(Path(output_path).expanduser()).removesuffix(".tar.gz").removesuffix(".tgz")
+    )
     Path(base).parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -152,8 +169,16 @@ def export_board(
         meta["project_id"] = None
         _write_json(staged / "board.json", meta)
 
-        attachments = copy_regular_files(kb.attachments_root(slug), staged / "attachments") if include_attachments else 0
-        logs = copy_regular_files(kb.worker_logs_dir(slug), staged / "logs") if include_logs else 0
+        attachments = (
+            copy_regular_files(kb.attachments_root(slug), staged / "attachments")
+            if include_attachments
+            else 0
+        )
+        logs = (
+            copy_regular_files(kb.worker_logs_dir(slug), staged / "logs")
+            if include_logs
+            else 0
+        )
 
         from clawk_cli.version_info import get_version_info
 
@@ -164,7 +189,10 @@ def export_board(
             "board_name": meta.get("name") or slug,
             "exported_at": int(time.time()),
             "clawk_version": get_version_info().base_version,
-            "includes": {"attachments": bool(include_attachments), "logs": bool(include_logs)},
+            "includes": {
+                "attachments": bool(include_attachments),
+                "logs": bool(include_logs),
+            },
             "counts": {**counts, "attachment_files": attachments, "log_files": logs},
         }
         _write_json(staged / "manifest.json", manifest)
@@ -183,6 +211,7 @@ def export_board(
 # Import
 # ---------------------------------------------------------------------------
 
+
 def _available_slug(preferred: str) -> str:
     """``preferred`` or the first free ``<preferred>-N``. ``default`` always
     exists, so a default-board export lands as ``default-2``."""
@@ -199,7 +228,9 @@ def _available_slug(preferred: str) -> str:
 def _read_manifest(root: Path) -> dict[str, Any]:
     path = root / "manifest.json"
     if not path.exists():
-        raise ValueError("archive is not a Clawksis kanban board export (no manifest.json)")
+        raise ValueError(
+            "archive is not a Clawksis kanban board export (no manifest.json)"
+        )
     try:
         manifest = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as exc:
@@ -227,7 +258,9 @@ def _read_board_metadata(path: Path) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
-def _relocate_imported_rows(conn: sqlite3.Connection, slug: str) -> tuple[dict[str, int], list[str]]:
+def _relocate_imported_rows(
+    conn: sqlite3.Connection, slug: str
+) -> tuple[dict[str, int], list[str]]:
     """Re-anchor an imported board's rows to this machine; returns ``(stats, warnings)``.
 
     * Attachment rows are repointed at this board's tree; rows whose blob
@@ -247,16 +280,23 @@ def _relocate_imported_rows(conn: sqlite3.Connection, slug: str) -> tuple[dict[s
         _scrub_local_state(conn)
 
         dropped = rehomed = 0
-        for row in conn.execute("SELECT id, task_id, stored_path FROM task_attachments").fetchall():
+        for row in conn.execute(
+            "SELECT id, task_id, stored_path FROM task_attachments"
+        ).fetchall():
             landed = attachments_dir / row["task_id"] / Path(row["stored_path"]).name
             if landed.is_file():
-                conn.execute("UPDATE task_attachments SET stored_path = ? WHERE id = ?", (str(landed), row["id"]))
+                conn.execute(
+                    "UPDATE task_attachments SET stored_path = ? WHERE id = ?",
+                    (str(landed), row["id"]),
+                )
                 rehomed += 1
             else:
                 conn.execute("DELETE FROM task_attachments WHERE id = ?", (row["id"],))
                 dropped += 1
         if dropped:
-            warnings.append(f"{dropped} attachment record(s) dropped — the files were not in the archive")
+            warnings.append(
+                f"{dropped} attachment record(s) dropped — the files were not in the archive"
+            )
 
         parked = [
             r["id"]
@@ -268,7 +308,10 @@ def _relocate_imported_rows(conn: sqlite3.Connection, slug: str) -> tuple[dict[s
         ]
         conn.execute("UPDATE tasks SET workspace_path = NULL, branch_name = NULL")
         if parked:
-            conn.execute(f"UPDATE tasks SET status = 'triage' WHERE id IN ({_placeholders(parked)})", parked)
+            conn.execute(
+                f"UPDATE tasks SET status = 'triage' WHERE id IN ({_placeholders(parked)})",
+                parked,
+            )
             warnings.append(
                 f"{len(parked)} task(s) moved to triage — their workspace was a directory or git "
                 f"worktree on the exporting machine and needs to be pointed somewhere on this one"
@@ -278,7 +321,14 @@ def _relocate_imported_rows(conn: sqlite3.Connection, slug: str) -> tuple[dict[s
             conn.execute(
                 "INSERT INTO task_events (task_id, run_id, kind, payload, created_at) "
                 "VALUES (?, NULL, 'imported', ?, ?)",
-                (row["id"], json.dumps({"board": slug, "parked": row["id"] in parked}, ensure_ascii=False), now),
+                (
+                    row["id"],
+                    json.dumps(
+                        {"board": slug, "parked": row["id"] in parked},
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
             )
 
     return {"attachments": rehomed, "parked": len(parked)}, warnings
@@ -298,7 +348,9 @@ def import_board(
 
     roots = archive_root_dirs(archive)
     if len(roots) != 1:
-        raise ValueError("a kanban board archive must contain exactly one top-level directory")
+        raise ValueError(
+            "a kanban board archive must contain exactly one top-level directory"
+        )
     archive_root = roots.pop()
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -311,7 +363,9 @@ def import_board(
         if not staged_db.is_file():
             raise ValueError("archive is missing kanban.db")
 
-        requested = kb._normalize_board_slug(slug or manifest.get("board") or archive_root)
+        requested = kb._normalize_board_slug(
+            slug or manifest.get("board") or archive_root
+        )
         if not requested:
             raise ValueError(
                 "cannot determine a board name from the archive — pass one "

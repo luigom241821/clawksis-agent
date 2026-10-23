@@ -9,6 +9,7 @@ inbound messages.
 The fix routes WHATSAPP_* reads through ``get_secret()`` (``agent.secret_scope``)
 which honours the active scope.
 """
+
 import pytest
 
 from agent import secret_scope as ss
@@ -37,7 +38,9 @@ class TestWhatsAppEnvViaSecretScope:
         ss.set_multiplex_active(True)
 
         # Write a profile .env with bot mode
-        (tmp_path / ".env").write_text("WHATSAPP_MODE=bot\nWHATSAPP_DM_POLICY=allowlist\n")
+        (tmp_path / ".env").write_text(
+            "WHATSAPP_MODE=bot\nWHATSAPP_DM_POLICY=allowlist\n"
+        )
 
         tok = ss.set_secret_scope(ss.build_profile_secret_scope(tmp_path))
         try:
@@ -149,6 +152,7 @@ class TestWhatsAppCloudAdapterUsesSecretScope:
             # verify the dm_policy assignment path doesn't crash under scope.
             # We test via the mixin's behavior instead.
             from gateway.platforms.whatsapp_common import _get_wsecret
+
             assert _get_wsecret("WHATSAPP_DM_POLICY", default="pairing") == "allowlist"
         finally:
             ss.reset_secret_scope(tok)

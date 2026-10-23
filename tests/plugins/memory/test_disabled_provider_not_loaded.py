@@ -59,7 +59,8 @@ def test_disabled_user_provider_is_found_but_never_loaded(homes):
         "memory:\n  provider: fakemem\nplugins:\n  disabled: []\n", encoding="utf-8"
     )
     (disabled / "config.yaml").write_text(
-        "memory:\n  provider: fakemem\nplugins:\n  disabled: [fakemem-manifest]\n", encoding="utf-8"
+        "memory:\n  provider: fakemem\nplugins:\n  disabled: [fakemem-manifest]\n",
+        encoding="utf-8",
     )
 
     with _scoped_home(enabled):

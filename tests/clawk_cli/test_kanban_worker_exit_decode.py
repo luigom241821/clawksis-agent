@@ -24,8 +24,6 @@ def _spawn_exit(code: int) -> subprocess.Popen:
     return proc
 
 
-
-
 @pytest.mark.platforms("windows")
 def test_native_windows_reaper_and_decode(monkeypatch):
     """Native Windows, nothing patched: ``_IS_WINDOWS`` selects the Popen-poll
@@ -37,4 +35,7 @@ def test_native_windows_reaper_and_decode(monkeypatch):
     proc = _spawn_exit(kb.KANBAN_RATE_LIMIT_EXIT_CODE)
     kbd._live_worker_procs[proc.pid] = proc
     assert kbd.reap_worker_zombies() == [proc.pid]
-    assert kbd._classify_worker_exit(proc.pid) == ("rate_limited", kb.KANBAN_RATE_LIMIT_EXIT_CODE)
+    assert kbd._classify_worker_exit(proc.pid) == (
+        "rate_limited",
+        kb.KANBAN_RATE_LIMIT_EXIT_CODE,
+    )

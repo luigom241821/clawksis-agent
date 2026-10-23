@@ -93,9 +93,7 @@ def test_parallel_children_keep_parent_environment_and_own_contexts():
     def run_child(child_id: str) -> tuple[str, str, str | None, object]:
         with delegated_child_context(child_id):
             observed_context = str(_SESSION_ID.get())
-            observed_subprocess = build_subprocess_env(base={}).get(
-                "CLAWK_SESSION_ID"
-            )
+            observed_subprocess = build_subprocess_env(base={}).get("CLAWK_SESSION_ID")
             observed_environment = os.environ.get("CLAWK_SESSION_ID")
         return (
             observed_context,

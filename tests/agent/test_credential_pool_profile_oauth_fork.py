@@ -6,6 +6,7 @@ The Anthropic token endpoint is replaced at the ``urllib.request.urlopen``
 boundary with genuine single-use semantics (a refresh token redeems once;
 a second POST returns ``invalid_grant``).
 """
+
 from __future__ import annotations
 
 import io
@@ -35,6 +36,7 @@ def fleet(tmp_path, monkeypatch):
     # The pytest seat-belt in the root write-through compares the global path
     # against $HOME/.clawksis/auth.json; our root is elsewhere, so writes go.
     import clawk_constants
+
     clawk_constants._default_clawk_root_memo = None  # type: ignore[attr-defined]
 
     expired = int((time.time() - 3600) * 1000)
@@ -42,16 +44,29 @@ def fleet(tmp_path, monkeypatch):
         "version": 1,
         "providers": {},
         "credential_pool": {
-            "anthropic": [{
-                "id": "abc123", "label": "team-grant", "auth_type": "oauth",
-                "priority": 0, "source": "manual:clawk_pkce",
-                "access_token": "sk-ant-oat01-AT0", "refresh_token": "sk-ant-ort-RT0",
-                "expires_at_ms": expired, "base_url": "https://api.anthropic.com",
-            }],
-            "openai": [{
-                "id": "key001", "label": "static", "auth_type": "api_key",
-                "priority": 0, "source": "manual", "access_token": "sk-static-key",
-            }],
+            "anthropic": [
+                {
+                    "id": "abc123",
+                    "label": "team-grant",
+                    "auth_type": "oauth",
+                    "priority": 0,
+                    "source": "manual:clawk_pkce",
+                    "access_token": "sk-ant-oat01-AT0",
+                    "refresh_token": "sk-ant-ort-RT0",
+                    "expires_at_ms": expired,
+                    "base_url": "https://api.anthropic.com",
+                }
+            ],
+            "openai": [
+                {
+                    "id": "key001",
+                    "label": "static",
+                    "auth_type": "api_key",
+                    "priority": 0,
+                    "source": "manual",
+                    "access_token": "sk-static-key",
+                }
+            ],
         },
     }
     (root / "auth.json").write_text(json.dumps(store))
@@ -72,12 +87,18 @@ def fleet(tmp_path, monkeypatch):
             rt = json.loads(body)["refresh_token"]
         else:
             from urllib.parse import parse_qsl
+
             rt = dict(parse_qsl(body))["refresh_token"]
         if rt in server["spent"] or rt not in server["valid"]:
             server["log"].append(("REUSE", rt))
             raise urllib.error.HTTPError(
-                req.full_url, 400, "Bad Request", {},
-                io.BytesIO(b'{"error":"invalid_grant","error_description":"refresh_token_reused"}'),
+                req.full_url,
+                400,
+                "Bad Request",
+                {},
+                io.BytesIO(
+                    b'{"error":"invalid_grant","error_description":"refresh_token_reused"}'
+                ),
             )
         server["n"] += 1
         server["spent"].add(rt)
@@ -85,10 +106,16 @@ def fleet(tmp_path, monkeypatch):
         new_rt = f"sk-ant-ort-RT{server['n']}"
         server["valid"].add(new_rt)
         server["log"].append(("ROTATE", rt, new_rt))
-        return _Resp(json.dumps({
-            "access_token": f"sk-ant-oat01-AT{server['n']}",
-            "refresh_token": new_rt, "expires_in": 28800, "token_type": "Bearer",
-        }).encode())
+        return _Resp(
+            json.dumps(
+                {
+                    "access_token": f"sk-ant-oat01-AT{server['n']}",
+                    "refresh_token": new_rt,
+                    "expires_in": 28800,
+                    "token_type": "Bearer",
+                }
+            ).encode()
+        )
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
@@ -97,11 +124,13 @@ def fleet(tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(home))
         clawk_constants._default_clawk_root_memo = None  # type: ignore[attr-defined]
         import clawk_cli.auth as auth_mod
+
         auth_mod._global_auth_store_cache = None
         auth_mod._oauth_heal_clean_marks.clear()
 
     # Process-wide notice buffer: start each test clean.
     import clawk_cli.auth as _auth_mod
+
     _auth_mod._oauth_heal_notices.clear()
     _auth_mod._oauth_heal_clean_marks.clear()
 
@@ -116,38 +145,70 @@ def fleet(tmp_path, monkeypatch):
 
 def _profile(fleet, name, **kw):
     from clawk_cli.profiles import create_profile
+
     fleet["use"](fleet["root"])
     return create_profile(name, **kw)
 
 
 # ── A. cloning never copies single-use OAuth grants ──────────────────────
 
+
 def test_clone_all_strips_oauth_grant_but_keeps_api_keys(fleet):
     (fleet["root"] / ".anthropic_oauth.json").write_text(
-        json.dumps({"accessToken": "sk-ant-oat01-AT0", "refreshToken": "sk-ant-ort-RT0", "expiresAt": 1})
+        json.dumps(
+            {
+                "accessToken": "sk-ant-oat01-AT0",
+                "refreshToken": "sk-ant-ort-RT0",
+                "expiresAt": 1,
+            }
+        )
     )
     pdir = _profile(fleet, "forge", clone_all=True)
     store = json.loads((pdir / "auth.json").read_text())
-    assert "anthropic" not in store["credential_pool"], "OAuth grant was forked into the clone"
+    assert "anthropic" not in store["credential_pool"], (
+        "OAuth grant was forked into the clone"
+    )
     assert store["credential_pool"]["openai"][0]["access_token"] == "sk-static-key"
     assert not (pdir / ".anthropic_oauth.json").exists()
 
 
 def test_strip_helper_drops_device_code_blocks_and_reports(tmp_path):
     from clawk_cli.auth import strip_cloned_single_use_oauth_grants
+
     pdir = tmp_path / "p"
     pdir.mkdir()
-    (pdir / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {"openai-codex": {"access_token": "a", "refresh_token": "r"}, "nous": {"agent_key": "k"}},
-        "credential_pool": {
-            "xai-oauth": [{"id": "x", "auth_type": "oauth", "access_token": "t", "refresh_token": "r"}],
-            "anthropic": [
-                {"id": "legacy", "access_token": "sk-ant-oat01-legacy"},  # no auth_type field
-                {"id": "key", "auth_type": "api_key", "access_token": "sk-ant-api03-x"},
-            ],
-        },
-    }))
+    (pdir / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "openai-codex": {"access_token": "a", "refresh_token": "r"},
+                    "nous": {"agent_key": "k"},
+                },
+                "credential_pool": {
+                    "xai-oauth": [
+                        {
+                            "id": "x",
+                            "auth_type": "oauth",
+                            "access_token": "t",
+                            "refresh_token": "r",
+                        }
+                    ],
+                    "anthropic": [
+                        {
+                            "id": "legacy",
+                            "access_token": "sk-ant-oat01-legacy",
+                        },  # no auth_type field
+                        {
+                            "id": "key",
+                            "auth_type": "api_key",
+                            "access_token": "sk-ant-api03-x",
+                        },
+                    ],
+                },
+            }
+        )
+    )
     summary = strip_cloned_single_use_oauth_grants(pdir)
     store = json.loads((pdir / "auth.json").read_text())
     assert sorted(summary["pool"]) == ["anthropic", "xai-oauth"]
@@ -163,22 +224,43 @@ def test_strip_helper_drops_cloned_nous_refresh_grant(tmp_path, fleet):
     agent_key-only nous rows carry no single-use grant and must survive both strip and heal.
     """
     from agent.credential_pool import load_pool
-    from clawk_cli.auth import heal_forked_single_use_oauth_grants, strip_cloned_single_use_oauth_grants
+    from clawk_cli.auth import (
+        heal_forked_single_use_oauth_grants,
+        strip_cloned_single_use_oauth_grants,
+    )
+
     grant = {"access_token": "AT1", "refresh_token": "RT1", "agent_key": "AK"}
     root_store = json.loads((fleet["root"] / "auth.json").read_text())
     root_store["providers"]["nous"] = dict(grant)
     (fleet["root"] / "auth.json").write_text(json.dumps(root_store))
     pdir = _profile(fleet, "nousstrip")
-    ak_row = {"id": "ak", "source": "device_code", "auth_type": "oauth", "agent_key": "PAK"}
-    (pdir / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {"nous": dict(grant)},
-        "credential_pool": {"nous": [dict(grant, id="n", source="device_code", auth_type="oauth"), ak_row]},
-    }))
+    ak_row = {
+        "id": "ak",
+        "source": "device_code",
+        "auth_type": "oauth",
+        "agent_key": "PAK",
+    }
+    (pdir / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {"nous": dict(grant)},
+                "credential_pool": {
+                    "nous": [
+                        dict(grant, id="n", source="device_code", auth_type="oauth"),
+                        ak_row,
+                    ]
+                },
+            }
+        )
+    )
     summary = strip_cloned_single_use_oauth_grants(pdir)
     store = json.loads((pdir / "auth.json").read_text())
     assert (summary["pool"], summary["providers"]) == (["nous"], ["nous"])
-    assert store["credential_pool"]["nous"] == [ak_row] and "nous" not in store["providers"]
+    assert (
+        store["credential_pool"]["nous"] == [ak_row]
+        and "nous" not in store["providers"]
+    )
     # Mixed shape: the surviving ak row keeps the profile "owning" nous, so the next load must
     # not re-seed root's single-use RT from the global-root providers fallback (fork again).
     fleet["use"](pdir)
@@ -187,32 +269,62 @@ def test_strip_helper_drops_cloned_nous_refresh_grant(tmp_path, fleet):
     assert all(row.get("refresh_token") != "RT1" for row in rows), rows
 
     # Heal: a fork living only in the providers block (flat nous tokens, shared RT) is dropped.
-    (fleet["root"] / "auth.json").write_text(json.dumps({"version": 1, "providers": {"nous": dict(grant)}}))
+    (fleet["root"] / "auth.json").write_text(
+        json.dumps({"version": 1, "providers": {"nous": dict(grant)}})
+    )
     kid = _profile(fleet, "nousfork")
-    (kid / "auth.json").write_text(json.dumps({"version": 1, "providers": {"nous": dict(grant)}}))
+    (kid / "auth.json").write_text(
+        json.dumps({"version": 1, "providers": {"nous": dict(grant)}})
+    )
     fleet["use"](kid)
     assert heal_forked_single_use_oauth_grants("nous")["providers_block"] is True
     assert "nous" not in json.loads((kid / "auth.json").read_text())["providers"]
 
     # Heal: an agent_key-only profile row that copied root's id (and looks "fresher") is not a
     # fork; heal_pool_rows must keep it rather than match it to root's refresh-bearing row.
-    rrow = dict(grant, id="r1", source="device_code", auth_type="oauth",
-                last_refresh="2026-01-01T00:00:00+00:00")
-    (fleet["root"] / "auth.json").write_text(json.dumps({"version": 1, "credential_pool": {"nous": [rrow]}}))
+    rrow = dict(
+        grant,
+        id="r1",
+        source="device_code",
+        auth_type="oauth",
+        last_refresh="2026-01-01T00:00:00+00:00",
+    )
+    (fleet["root"] / "auth.json").write_text(
+        json.dumps({"version": 1, "credential_pool": {"nous": [rrow]}})
+    )
     akid = _profile(fleet, "nousakid")
-    ak_copied = {"id": "r1", "source": "device_code", "auth_type": "oauth", "access_token": "",
-                 "agent_key": "PAK", "last_refresh": "2026-06-01T00:00:00+00:00"}
-    (akid / "auth.json").write_text(json.dumps({"version": 1, "credential_pool": {"nous": [ak_copied]}}))
+    ak_copied = {
+        "id": "r1",
+        "source": "device_code",
+        "auth_type": "oauth",
+        "access_token": "",
+        "agent_key": "PAK",
+        "last_refresh": "2026-06-01T00:00:00+00:00",
+    }
+    (akid / "auth.json").write_text(
+        json.dumps({"version": 1, "credential_pool": {"nous": [ak_copied]}})
+    )
     fleet["use"](akid)
     heal_forked_single_use_oauth_grants("nous")
-    assert json.loads((akid / "auth.json").read_text())["credential_pool"]["nous"] == [ak_copied]
-    root_rows = json.loads((fleet["root"] / "auth.json").read_text())["credential_pool"]["nous"]
-    assert [(r["id"], r.get("refresh_token"), r.get("agent_key")) for r in root_rows] == [("r1", "RT1", "AK")]
+    assert json.loads((akid / "auth.json").read_text())["credential_pool"]["nous"] == [
+        ak_copied
+    ]
+    root_rows = json.loads((fleet["root"] / "auth.json").read_text())[
+        "credential_pool"
+    ]["nous"]
+    assert [
+        (r["id"], r.get("refresh_token"), r.get("agent_key")) for r in root_rows
+    ] == [("r1", "RT1", "AK")]
 
 
 def test_strip_helper_is_a_noop_without_credentials(tmp_path):
     from clawk_cli.auth import strip_cloned_single_use_oauth_grants
-    assert strip_cloned_single_use_oauth_grants(tmp_path) == {"pool": [], "providers": [], "files": []}
+
+    assert strip_cloned_single_use_oauth_grants(tmp_path) == {
+        "pool": [],
+        "providers": [],
+        "files": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -233,12 +345,16 @@ def test_strip_helper_leaves_shared_root_auth_store_unchanged(fleet, link):
     shared = _shared_profile(fleet, "shared", link=link)
 
     assert strip_cloned_single_use_oauth_grants(shared) == {
-        "pool": [], "providers": [], "files": [],
+        "pool": [],
+        "providers": [],
+        "files": [],
     }
     assert (root / "auth.json").read_text() == before
 
 
-def test_strip_helper_fails_closed_when_root_store_cannot_be_resolved(fleet, monkeypatch):
+def test_strip_helper_fails_closed_when_root_store_cannot_be_resolved(
+    fleet, monkeypatch
+):
     """Credential hygiene must not mutate auth when store identity is unknown."""
     from clawk_cli.auth import strip_cloned_single_use_oauth_grants
     import clawk_constants
@@ -247,13 +363,18 @@ def test_strip_helper_fails_closed_when_root_store_cannot_be_resolved(fleet, mon
     _seed_codex_grant(root)
     before = (root / "auth.json").read_text()
     shared = _shared_profile(
-        fleet, "shared", link=lambda target, alias: alias.symlink_to(target))
+        fleet, "shared", link=lambda target, alias: alias.symlink_to(target)
+    )
     monkeypatch.setattr(
-        clawk_constants, "get_default_clawk_root",
-        lambda: (_ for _ in ()).throw(OSError("root unavailable")))
+        clawk_constants,
+        "get_default_clawk_root",
+        lambda: (_ for _ in ()).throw(OSError("root unavailable")),
+    )
 
     assert strip_cloned_single_use_oauth_grants(shared) == {
-        "pool": [], "providers": [], "files": [],
+        "pool": [],
+        "providers": [],
+        "files": [],
     }
     assert (root / "auth.json").read_text() == before
 
@@ -268,11 +389,15 @@ def test_strip_helper_fails_closed_when_store_identity_check_errors(fleet, monke
     (copied / "auth.json").write_text((root / "auth.json").read_text())
     before = (copied / "auth.json").read_text()
     monkeypatch.setattr(
-        type(copied), "samefile",
-        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("stat unavailable")))
+        type(copied),
+        "samefile",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("stat unavailable")),
+    )
 
     assert strip_cloned_single_use_oauth_grants(copied) == {
-        "pool": [], "providers": [], "files": [],
+        "pool": [],
+        "providers": [],
+        "files": [],
     }
     assert (copied / "auth.json").read_text() == before
 
@@ -327,10 +452,15 @@ def test_borrower_prune_never_deletes_root_singleton_grant(fleet, tmp_path):
     from agent.credential_pool import load_pool
 
     root = fleet["root"]
-    (root / ".anthropic_oauth.json").write_text(json.dumps({
-        "accessToken": "sk-ant-oat01-AT0", "refreshToken": "sk-ant-ort-RT0",
-        "expiresAt": int((time.time() - 3600) * 1000),
-    }))
+    (root / ".anthropic_oauth.json").write_text(
+        json.dumps(
+            {
+                "accessToken": "sk-ant-oat01-AT0",
+                "refreshToken": "sk-ant-ort-RT0",
+                "expiresAt": int((time.time() - 3600) * 1000),
+            }
+        )
+    )
     store = json.loads((root / "auth.json").read_text())
     store["active_provider"] = "anthropic"
     del store["credential_pool"]["anthropic"]
@@ -342,14 +472,19 @@ def test_borrower_prune_never_deletes_root_singleton_grant(fleet, tmp_path):
     kid = _profile(fleet, "kid")
     fleet["use"](kid)
     pool = load_pool("anthropic")
-    assert [e.source for e in pool.entries()] == ["clawk_pkce"], "borrowed root grant was pruned"
+    assert [e.source for e in pool.entries()] == ["clawk_pkce"], (
+        "borrowed root grant was pruned"
+    )
     assert fleet["rows"](root) and fleet["rows"](root)[0]["source"] == "clawk_pkce"
     assert fleet["rows"](kid) is None
 
     # Rotating from the profile commits BOTH the pool row and the singleton at ROOT.
     sel = pool.select()
     assert sel is not None and sel.access_token == "sk-ant-oat01-AT1"
-    assert json.loads((root / ".anthropic_oauth.json").read_text())["refreshToken"] == "sk-ant-ort-RT1"
+    assert (
+        json.loads((root / ".anthropic_oauth.json").read_text())["refreshToken"]
+        == "sk-ant-ort-RT1"
+    )
     assert not (kid / ".anthropic_oauth.json").exists()
     assert fleet["rows"](root)[0]["refresh_token"] == "sk-ant-ort-RT1"
 
@@ -360,12 +495,21 @@ def test_profile_auth_add_owns_only_its_own_rows(fleet):
     kid = _profile(fleet, "kid")
     fleet["use"](kid)
     pool = load_pool("anthropic")
-    pool.add_entry(PooledCredential(
-        provider="anthropic", id="own001", label="mine", auth_type=AUTH_TYPE_OAUTH,
-        priority=0, source="manual:clawk_pkce", access_token="sk-ant-oat01-MINE",
-        refresh_token="rt-mine",
-    ))
-    assert [e["id"] for e in fleet["rows"](kid)] == ["own001"], "borrowed root row was copied into the profile"
+    pool.add_entry(
+        PooledCredential(
+            provider="anthropic",
+            id="own001",
+            label="mine",
+            auth_type=AUTH_TYPE_OAUTH,
+            priority=0,
+            source="manual:clawk_pkce",
+            access_token="sk-ant-oat01-MINE",
+            refresh_token="rt-mine",
+        )
+    )
+    assert [e["id"] for e in fleet["rows"](kid)] == ["own001"], (
+        "borrowed root row was copied into the profile"
+    )
     assert [e["id"] for e in fleet["rows"](fleet["root"])] == ["abc123"]
 
 
@@ -384,20 +528,49 @@ def test_profile_fresh_add_with_no_login_anywhere_lands_in_the_profile(fleet, pr
     root_before = root_file.read_bytes()
 
     fleet["use"](kid)
-    load_pool(provider).add_entry(PooledCredential(
-        provider=provider, id="fresh1", label="mine", auth_type=AUTH_TYPE_OAUTH, priority=0,
-        source="manual:device_code", access_token="at-fresh", refresh_token="rt-fresh",
-    ))
+    load_pool(provider).add_entry(
+        PooledCredential(
+            provider=provider,
+            id="fresh1",
+            label="mine",
+            auth_type=AUTH_TYPE_OAUTH,
+            priority=0,
+            source="manual:device_code",
+            access_token="at-fresh",
+            refresh_token="rt-fresh",
+        )
+    )
 
     assert "fresh1" in [e.id for e in load_pool(provider).entries()]
-    assert "fresh1" in [r["id"] for r in json.loads((kid / "auth.json").read_text())["credential_pool"][provider]]
+    assert "fresh1" in [
+        r["id"]
+        for r in json.loads((kid / "auth.json").read_text())["credential_pool"][
+            provider
+        ]
+    ]
     assert root_file.read_bytes() == root_before
 
 
-@pytest.mark.parametrize("root_rows", [[], [{
-    "id": "rootkey", "label": "root-key", "auth_type": "api_key", "priority": 0,
-    "source": "manual", "access_token": "root-api-key"}]], ids=["root_pool_empty", "root_api_key_row"])
-def test_anthropic_auth_add_survives_the_next_load_beside_a_root_singleton(fleet: dict, root_rows: list) -> None:
+@pytest.mark.parametrize(
+    "root_rows",
+    [
+        [],
+        [
+            {
+                "id": "rootkey",
+                "label": "root-key",
+                "auth_type": "api_key",
+                "priority": 0,
+                "source": "manual",
+                "access_token": "root-api-key",
+            }
+        ],
+    ],
+    ids=["root_pool_empty", "root_api_key_row"],
+)
+def test_anthropic_auth_add_survives_the_next_load_beside_a_root_singleton(
+    fleet: dict, root_rows: list
+) -> None:
     """``auth add anthropic`` saves a ``manual:clawk_pkce`` row, which the pool owns. When root's
     login lives only in its ``.anthropic_oauth.json``, the next load must not take that row for a
     copy of root's file: it stays in the profile, and root's file is left as it was."""
@@ -408,18 +581,33 @@ def test_anthropic_auth_add_survives_the_next_load_beside_a_root_singleton(fleet
     store["credential_pool"]["anthropic"] = root_rows
     (root / "auth.json").write_text(json.dumps(store), encoding="utf-8")
     singleton = root / ".anthropic_oauth.json"
-    singleton.write_text(json.dumps({
-        "accessToken": "at-root", "refreshToken": "rt-root", "expiresAt": int((time.time() - 3600) * 1000),
-    }), encoding="utf-8")
+    singleton.write_text(
+        json.dumps(
+            {
+                "accessToken": "at-root",
+                "refreshToken": "rt-root",
+                "expiresAt": int((time.time() - 3600) * 1000),
+            }
+        ),
+        encoding="utf-8",
+    )
     singleton_before = singleton.read_bytes()
     kid = _profile(fleet, "kid")
 
     fleet["use"](kid)
-    load_pool("anthropic").add_entry(PooledCredential(
-        provider="anthropic", id="kid001", label="mine", auth_type=AUTH_TYPE_OAUTH, priority=0,
-        source="manual:clawk_pkce", access_token="at-kid", refresh_token="rt-kid",
-        expires_at_ms=int((time.time() + 8 * 3600) * 1000),
-    ))
+    load_pool("anthropic").add_entry(
+        PooledCredential(
+            provider="anthropic",
+            id="kid001",
+            label="mine",
+            auth_type=AUTH_TYPE_OAUTH,
+            priority=0,
+            source="manual:clawk_pkce",
+            access_token="at-kid",
+            refresh_token="rt-kid",
+            expires_at_ms=int((time.time() + 8 * 3600) * 1000),
+        )
+    )
     assert [r["id"] for r in fleet["rows"](kid)] == ["kid001"]
 
     fleet["use"](kid)  # a later process
@@ -428,12 +616,31 @@ def test_anthropic_auth_add_survives_the_next_load_beside_a_root_singleton(fleet
     assert singleton.read_bytes() == singleton_before
 
 
-@pytest.mark.parametrize("provider,root_login", [
-    ("nous", {"access_token": "at-root", "refresh_token": "rt-root", "agent_key": "ak-root"}),
-    ("openai-codex", {"tokens": {"access_token": "at-root", "refresh_token": "rt-root"}}),
-    ("xai-oauth", {"tokens": {"access_token": "at-root", "refresh_token": "rt-root"}}),
-], ids=["nous", "openai-codex", "xai-oauth"])
-def test_profile_auth_add_never_copies_roots_provider_login(fleet: dict, provider: str, root_login: dict) -> None:
+@pytest.mark.parametrize(
+    "provider,root_login",
+    [
+        (
+            "nous",
+            {
+                "access_token": "at-root",
+                "refresh_token": "rt-root",
+                "agent_key": "ak-root",
+            },
+        ),
+        (
+            "openai-codex",
+            {"tokens": {"access_token": "at-root", "refresh_token": "rt-root"}},
+        ),
+        (
+            "xai-oauth",
+            {"tokens": {"access_token": "at-root", "refresh_token": "rt-root"}},
+        ),
+    ],
+    ids=["nous", "openai-codex", "xai-oauth"],
+)
+def test_profile_auth_add_never_copies_roots_provider_login(
+    fleet: dict, provider: str, root_login: dict
+) -> None:
     """Root's login may live only in ``providers.<id>``, with no pool rows yet. A profile sees it
     through the root fallback; neither the profile's first ``auth add`` nor a later load may write
     that single-use refresh token into the profile's store."""
@@ -447,10 +654,18 @@ def test_profile_auth_add_never_copies_roots_provider_login(fleet: dict, provide
     kid = _profile(fleet, "kid")
 
     fleet["use"](kid)
-    load_pool(provider).add_entry(PooledCredential(
-        provider=provider, id="mine01", label="mine", auth_type=AUTH_TYPE_OAUTH, priority=0,
-        source="manual:device_code", access_token="at-mine", refresh_token="rt-mine",
-    ))
+    load_pool(provider).add_entry(
+        PooledCredential(
+            provider=provider,
+            id="mine01",
+            label="mine",
+            auth_type=AUTH_TYPE_OAUTH,
+            priority=0,
+            source="manual:device_code",
+            access_token="at-mine",
+            refresh_token="rt-mine",
+        )
+    )
     assert "rt-root" not in (kid / "auth.json").read_text(encoding="utf-8")
 
     fleet["use"](kid)  # a later process
@@ -458,8 +673,10 @@ def test_profile_auth_add_never_copies_roots_provider_login(fleet: dict, provide
     assert "rt-root" not in (kid / "auth.json").read_text(encoding="utf-8")
 
 
-def test_auth_add_never_reports_added_for_a_row_the_store_did_not_keep(fleet, monkeypatch, capsys):
-    """"Added" is printed only for a credential the store holds afterwards."""
+def test_auth_add_never_reports_added_for_a_row_the_store_did_not_keep(
+    fleet, monkeypatch, capsys
+):
+    """ "Added" is printed only for a credential the store holds afterwards."""
     from argparse import Namespace
 
     from agent import credential_pool
@@ -467,9 +684,15 @@ def test_auth_add_never_reports_added_for_a_row_the_store_did_not_keep(fleet, mo
 
     monkeypatch.setattr(credential_pool, "write_credential_pool", lambda *a, **kw: [])
     with pytest.raises(SystemExit, match="not saved"):
-        auth_add_command(Namespace(
-            provider="openrouter", auth_type="api-key", api_key="sk-or-v1-new", label="new", priority=None,
-        ))
+        auth_add_command(
+            Namespace(
+                provider="openrouter",
+                auth_type="api-key",
+                api_key="sk-or-v1-new",
+                label="new",
+                priority=None,
+            )
+        )
     assert "Added" not in capsys.readouterr().out
 
 
@@ -488,6 +711,7 @@ def test_classic_mode_persist_is_unchanged(fleet):
 # (verbatim --clone-all, or the old borrowed-persist). The heal runs inside
 # the profile's load_pool(): consolidate to ROOT (freshest rotation wins),
 # strip the profile copy, borrow root from then on.
+
 
 def _fork(fleet, name, *, rotated_to=None):
     """Create *name* with a pre-fix style verbatim copy of root's auth.json.
@@ -530,8 +754,16 @@ def test_heal_consolidates_existing_forks_to_the_live_copy(fleet, caplog):
     assert fleet["rows"](forge) is None
     assert fleet["rows"](fleet["root"])[0]["refresh_token"] == "sk-ant-ort-RT2"
     assert fleet["rows"](fleet["root"])[0]["id"] == "abc123"
-    healed = [r.message for r in caplog.records if "consolidated forked anthropic OAuth grant" in r.message]
-    assert len(healed) == 1 and "profile forge" in healed[0] and "root updated" in healed[0]
+    healed = [
+        r.message
+        for r in caplog.records
+        if "consolidated forked anthropic OAuth grant" in r.message
+    ]
+    assert (
+        len(healed) == 1
+        and "profile forge" in healed[0]
+        and "root updated" in healed[0]
+    )
 
     for home in (atlas, fleet["root"], forge):
         fleet["use"](home)
@@ -549,7 +781,10 @@ def test_heal_consolidates_existing_forks_to_the_live_copy(fleet, caplog):
 def test_heal_is_idempotent_and_logs_once(fleet, caplog):
     import logging
     from agent.credential_pool import load_pool
-    from clawk_cli.auth import consume_oauth_heal_notices, heal_forked_single_use_oauth_grants
+    from clawk_cli.auth import (
+        consume_oauth_heal_notices,
+        heal_forked_single_use_oauth_grants,
+    )
 
     kid = _fork(fleet, "kid")
     fleet["use"](kid)
@@ -580,8 +815,16 @@ def test_heal_never_deletes_the_only_surviving_copy(fleet):
     fleet["use"](kid)
     sel = load_pool("anthropic").select()
     assert sel is not None and sel.access_token == "sk-ant-oat01-AT2"
-    assert fleet["rows"](kid) and fleet["rows"](kid)[0]["refresh_token"] == "sk-ant-ort-RT2"
-    assert "anthropic" not in (json.loads((fleet["root"] / "auth.json").read_text())["credential_pool"])
+    assert (
+        fleet["rows"](kid)
+        and fleet["rows"](kid)[0]["refresh_token"] == "sk-ant-ort-RT2"
+    )
+    assert (
+        "anthropic"
+        not in (
+            json.loads((fleet["root"] / "auth.json").read_text())["credential_pool"]
+        )
+    )
 
 
 @pytest.mark.parametrize("shape", ["pool", "provider"])
@@ -592,19 +835,42 @@ def test_heal_preserves_independent_grants_for_same_account(fleet, shape, claims
     from clawk_cli.auth import heal_forked_single_use_oauth_grants
 
     def pair(tag):
-        payload = base64.urlsafe_b64encode(json.dumps({
-            "sub": "same-account", "exp": int(time.time()) + 3600, "jti": tag,
-        }).encode()).decode().rstrip("=")
-        return {"access_token": "h." + payload + ".s" if claims else tag,
-                "refresh_token": "independent-" + tag}
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps(
+                    {
+                        "sub": "same-account",
+                        "exp": int(time.time()) + 3600,
+                        "jti": tag,
+                    }
+                ).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
+        return {
+            "access_token": "h." + payload + ".s" if claims else tag,
+            "refresh_token": "independent-" + tag,
+        }
 
     def store(tag):
         tokens = pair(tag)
         if shape == "provider":
             return {"version": 1, "providers": {"openai-codex": {"tokens": tokens}}}
-        return {"version": 1, "providers": {}, "credential_pool": {"openai-codex": [{
-            "id": tag, "auth_type": "oauth", "source": "manual:device_code", **tokens,
-        }]}}
+        return {
+            "version": 1,
+            "providers": {},
+            "credential_pool": {
+                "openai-codex": [
+                    {
+                        "id": tag,
+                        "auth_type": "oauth",
+                        "source": "manual:device_code",
+                        **tokens,
+                    }
+                ]
+            },
+        }
 
     root = fleet["root"] / "auth.json"
     kid = _profile(fleet, "independent")
@@ -618,6 +884,7 @@ def test_heal_preserves_independent_grants_for_same_account(fleet, shape, claims
     assert (root.read_bytes(), profile.read_bytes()) == before
     if claims:
         from agent.credential_pool import load_pool
+
         for _ in range(3):
             selected = load_pool("openai-codex").select()
             assert selected is not None
@@ -636,12 +903,24 @@ def test_heal_rotated_fork_moves_provider_block_with_the_pool_row(fleet):
 
     def store(tag, exp_off):
         tokens = {"access_token": "at-" + tag, "refresh_token": "rt-" + tag}
-        issued = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + exp_off - 3600))
-        return {"version": 1,
-                "providers": {"openai-codex": {"tokens": tokens, "last_refresh": issued}},
-                "credential_pool": {"openai-codex": [{
-                    "id": "shared-id", "auth_type": "oauth", "source": "device_code", **tokens,
-                    "expires_at_ms": int((time.time() + exp_off) * 1000)}]}}
+        issued = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + exp_off - 3600)
+        )
+        return {
+            "version": 1,
+            "providers": {"openai-codex": {"tokens": tokens, "last_refresh": issued}},
+            "credential_pool": {
+                "openai-codex": [
+                    {
+                        "id": "shared-id",
+                        "auth_type": "oauth",
+                        "source": "device_code",
+                        **tokens,
+                        "expires_at_ms": int((time.time() + exp_off) * 1000),
+                    }
+                ]
+            },
+        }
 
     root = fleet["root"] / "auth.json"
     kid = _profile(fleet, "rotated")
@@ -665,31 +944,62 @@ def test_heal_leaves_a_different_account_alone(fleet):
     from agent.credential_pool import load_pool
 
     def jwt(sub):
-        payload = base64.urlsafe_b64encode(json.dumps({"sub": sub, "exp": int(time.time()) + 3600}).encode()).rstrip(b"=")
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"sub": sub, "exp": int(time.time()) + 3600}).encode()
+        ).rstrip(b"=")
         return "h." + payload.decode() + ".s"
 
     root_store = json.loads((fleet["root"] / "auth.json").read_text())
-    root_store["credential_pool"]["xai-oauth"] = [{
-        "id": "rootx", "auth_type": "oauth", "priority": 0, "source": "manual:device_code",
-        "access_token": jwt("alice"), "refresh_token": "xr-alice",
-    }]
+    root_store["credential_pool"]["xai-oauth"] = [
+        {
+            "id": "rootx",
+            "auth_type": "oauth",
+            "priority": 0,
+            "source": "manual:device_code",
+            "access_token": jwt("alice"),
+            "refresh_token": "xr-alice",
+        }
+    ]
     (fleet["root"] / "auth.json").write_text(json.dumps(root_store))
     kid = _profile(fleet, "kid")
     kid.mkdir(parents=True, exist_ok=True)
-    (kid / "auth.json").write_text(json.dumps({
-        "version": 1, "providers": {},
-        "credential_pool": {"xai-oauth": [
-            {"id": "kidx", "auth_type": "oauth", "priority": 0, "source": "manual:device_code",
-             "access_token": jwt("bob"), "refresh_token": "xr-bob"},
-            {"id": "kidk", "auth_type": "api_key", "priority": 1, "source": "manual",
-             "access_token": "xai-static"},
-        ]},
-    }))
+    (kid / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {},
+                "credential_pool": {
+                    "xai-oauth": [
+                        {
+                            "id": "kidx",
+                            "auth_type": "oauth",
+                            "priority": 0,
+                            "source": "manual:device_code",
+                            "access_token": jwt("bob"),
+                            "refresh_token": "xr-bob",
+                        },
+                        {
+                            "id": "kidk",
+                            "auth_type": "api_key",
+                            "priority": 1,
+                            "source": "manual",
+                            "access_token": "xai-static",
+                        },
+                    ]
+                },
+            }
+        )
+    )
     fleet["use"](kid)
     load_pool("xai-oauth")
     rows = (json.loads((kid / "auth.json").read_text())["credential_pool"])["xai-oauth"]
     assert [r["id"] for r in rows] == ["kidx", "kidk"]
-    assert json.loads((fleet["root"] / "auth.json").read_text())["credential_pool"]["xai-oauth"][0]["refresh_token"] == "xr-alice"
+    assert (
+        json.loads((fleet["root"] / "auth.json").read_text())["credential_pool"][
+            "xai-oauth"
+        ][0]["refresh_token"]
+        == "xr-alice"
+    )
 
 
 def test_heal_pkce_singleton_shape_commits_live_pair_to_root_singleton(fleet):
@@ -702,36 +1012,53 @@ def test_heal_pkce_singleton_shape_commits_live_pair_to_root_singleton(fleet):
     store["active_provider"] = "anthropic"
     del store["credential_pool"]["anthropic"]
     (root / "auth.json").write_text(json.dumps(store))
-    (root / ".anthropic_oauth.json").write_text(json.dumps({
-        "accessToken": "sk-ant-oat01-AT0", "refreshToken": "sk-ant-ort-RT0",
-        "expiresAt": int((time.time() - 3600) * 1000),
-    }))
+    (root / ".anthropic_oauth.json").write_text(
+        json.dumps(
+            {
+                "accessToken": "sk-ant-oat01-AT0",
+                "refreshToken": "sk-ant-ort-RT0",
+                "expiresAt": int((time.time() - 3600) * 1000),
+            }
+        )
+    )
     fleet["use"](root)
     load_pool("anthropic")  # seeds root's clawk_pkce row from the singleton
 
     kid = _profile(fleet, "kid")
     kid.mkdir(parents=True, exist_ok=True)
     import shutil
+
     shutil.copy2(root / "auth.json", kid / "auth.json")
-    (kid / ".anthropic_oauth.json").write_text(json.dumps({
-        "accessToken": "sk-ant-oat01-AT1", "refreshToken": "sk-ant-ort-RT1",
-        "expiresAt": int((time.time() - 60) * 1000),
-    }))
+    (kid / ".anthropic_oauth.json").write_text(
+        json.dumps(
+            {
+                "accessToken": "sk-ant-oat01-AT1",
+                "refreshToken": "sk-ant-ort-RT1",
+                "expiresAt": int((time.time() - 60) * 1000),
+            }
+        )
+    )
     kstore = json.loads((kid / "auth.json").read_text())
     kstore["credential_pool"]["anthropic"][0].update(
-        access_token="sk-ant-oat01-AT1", refresh_token="sk-ant-ort-RT1",
+        access_token="sk-ant-oat01-AT1",
+        refresh_token="sk-ant-ort-RT1",
         expires_at_ms=int((time.time() - 60) * 1000),
     )
     (kid / "auth.json").write_text(json.dumps(kstore))
     srv = fleet["server"]
-    srv["spent"].add("sk-ant-ort-RT0"); srv["valid"] = {"sk-ant-ort-RT1"}; srv["n"] = 1
+    srv["spent"].add("sk-ant-ort-RT0")
+    srv["valid"] = {"sk-ant-ort-RT1"}
+    srv["n"] = 1
 
     fleet["use"](kid)
     sel = load_pool("anthropic").select()
     assert sel is not None and sel.access_token == "sk-ant-oat01-AT2"
     assert not (kid / ".anthropic_oauth.json").exists()
     assert fleet["rows"](kid) is None
-    assert json.loads((root / ".anthropic_oauth.json").read_text())["refreshToken"] == "sk-ant-ort-RT2"
+    assert (
+        json.loads((root / ".anthropic_oauth.json").read_text())["refreshToken"]
+        == "sk-ant-ort-RT2"
+    )
     fleet["use"](root)
     sel = load_pool("anthropic").select()
     assert sel is not None and sel.access_token == "sk-ant-oat01-AT2"
@@ -740,6 +1067,7 @@ def test_heal_pkce_singleton_shape_commits_live_pair_to_root_singleton(fleet):
 
 def test_heal_is_a_noop_in_classic_mode(fleet):
     from clawk_cli.auth import heal_forked_single_use_oauth_grants
+
     fleet["use"](fleet["root"])
     before = (fleet["root"] / "auth.json").read_text()
     assert heal_forked_single_use_oauth_grants("anthropic") is None
@@ -748,17 +1076,29 @@ def test_heal_is_a_noop_in_classic_mode(fleet):
 
 # ── C. a SHARED root store is not a fork (#101356) ───────────────────────
 
+
 def _seed_codex_grant(root):
     """Give the root store an openai-codex pool row AND a providers block."""
     fresh = int((time.time() + 3600) * 1000)
     store = json.loads((root / "auth.json").read_text())
-    store["credential_pool"]["openai-codex"] = [{
-        "id": "cdx001", "label": "codex", "auth_type": "oauth", "priority": 0,
-        "source": "manual:device_code", "access_token": "cdx-AT0",
-        "refresh_token": "cdx-RT0", "expires_at_ms": fresh,
-    }]
+    store["credential_pool"]["openai-codex"] = [
+        {
+            "id": "cdx001",
+            "label": "codex",
+            "auth_type": "oauth",
+            "priority": 0,
+            "source": "manual:device_code",
+            "access_token": "cdx-AT0",
+            "refresh_token": "cdx-RT0",
+            "expires_at_ms": fresh,
+        }
+    ]
     store["providers"]["openai-codex"] = {
-        "tokens": {"access_token": "cdx-AT0", "refresh_token": "cdx-RT0", "expires_at_ms": fresh},
+        "tokens": {
+            "access_token": "cdx-AT0",
+            "refresh_token": "cdx-RT0",
+            "expires_at_ms": fresh,
+        },
         "last_refresh": fresh / 1000.0,
     }
     (root / "auth.json").write_text(json.dumps(store))
@@ -793,13 +1133,18 @@ def test_heal_skips_profile_auth_json_symlinked_to_the_root_store(fleet):
     """#101356: `ln -s ~/.clawksis/auth.json <profile>/auth.json` shares ONE store.
     Both sides of the consolidation read the same file, so every row looks like
     a fork of itself — healing would strip the shared grant through the link."""
-    from clawk_cli.auth import consume_oauth_heal_notices, heal_forked_single_use_oauth_grants
+    from clawk_cli.auth import (
+        consume_oauth_heal_notices,
+        heal_forked_single_use_oauth_grants,
+    )
 
     root = fleet["root"]
     _seed_codex_grant(root)
     before = (root / "auth.json").read_text()
 
-    shared = _shared_profile(fleet, "shared", link=lambda target, alias: alias.symlink_to(target))
+    shared = _shared_profile(
+        fleet, "shared", link=lambda target, alias: alias.symlink_to(target)
+    )
     fleet["use"](shared)
 
     assert heal_forked_single_use_oauth_grants("openai-codex") is None
@@ -820,7 +1165,9 @@ def test_heal_skips_profile_auth_json_hardlinked_to_the_root_store(fleet):
     _seed_codex_grant(root)
     before = (root / "auth.json").read_text()
 
-    shared = _shared_profile(fleet, "twin", link=lambda target, alias: os.link(target, alias))
+    shared = _shared_profile(
+        fleet, "twin", link=lambda target, alias: os.link(target, alias)
+    )
     fleet["use"](shared)
 
     assert heal_forked_single_use_oauth_grants("openai-codex") is None
@@ -835,10 +1182,15 @@ def test_heal_leaves_an_aliased_anthropic_singleton_alone(fleet):
     from clawk_cli.auth import heal_forked_single_use_oauth_grants
 
     root = fleet["root"]
-    (root / ".anthropic_oauth.json").write_text(json.dumps({
-        "accessToken": "AT-shared", "refreshToken": "RT-shared",
-        "expiresAt": int((time.time() + 3600) * 1000),
-    }))
+    (root / ".anthropic_oauth.json").write_text(
+        json.dumps(
+            {
+                "accessToken": "AT-shared",
+                "refreshToken": "RT-shared",
+                "expiresAt": int((time.time() + 3600) * 1000),
+            }
+        )
+    )
     kid = _profile(fleet, "kid")
     kid.mkdir(parents=True, exist_ok=True)
     (kid / "auth.json").write_text(json.dumps({"providers": {}, "credential_pool": {}}))
@@ -851,8 +1203,6 @@ def test_heal_leaves_an_aliased_anthropic_singleton_alone(fleet):
     assert (root / ".anthropic_oauth.json").read_text() == before
 
 
-
-
 # ── E. the clean mark outlives the process ──────────────────────────────
 #
 # The in-memory mark only silences the heal for one process, so every fresh
@@ -862,12 +1212,11 @@ def test_heal_leaves_an_aliased_anthropic_singleton_alone(fleet):
 # heal reads -- including the ROOT store, which the in-memory fingerprint
 # could safely ignore precisely because it died with the process.
 
+
 def _new_process(auth_mod):
     """Simulate a fresh `clawk` invocation: in-memory state gone, disk kept."""
     auth_mod._oauth_heal_clean_marks.clear()
     auth_mod._global_auth_store_cache = None
-
-
 
 
 def _kid_with_api_key_only(fleet, name="kid"):
@@ -875,16 +1224,27 @@ def _kid_with_api_key_only(fleet, name="kid"):
     to run its locked body to find that out (not the no-files fast path)."""
     pdir = _profile(fleet, name)
     pdir.mkdir(parents=True, exist_ok=True)
-    (pdir / "auth.json").write_text(json.dumps({
-        "version": 1, "providers": {},
-        "credential_pool": {"openai": [{
-            "id": "k1", "label": "static", "auth_type": "api_key",
-            "priority": 0, "source": "manual", "access_token": "sk-local",
-        }]},
-    }))
+    (pdir / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {},
+                "credential_pool": {
+                    "openai": [
+                        {
+                            "id": "k1",
+                            "label": "static",
+                            "auth_type": "api_key",
+                            "priority": 0,
+                            "source": "manual",
+                            "access_token": "sk-local",
+                        }
+                    ]
+                },
+            }
+        )
+    )
     return pdir
-
-
 
 
 def test_persisted_mark_still_re_heals_when_the_root_store_gains_a_grant(fleet):
@@ -901,9 +1261,13 @@ def test_persisted_mark_still_re_heals_when_the_root_store_gains_a_grant(fleet):
 
     kid = _kid_with_api_key_only(fleet, "kid2")
     fork = {
-        "id": "abc123", "label": "team-grant", "auth_type": "oauth",
-        "priority": 0, "source": "manual:clawk_pkce",
-        "access_token": "sk-ant-oat01-AT0", "refresh_token": "sk-ant-ort-RT0",
+        "id": "abc123",
+        "label": "team-grant",
+        "auth_type": "oauth",
+        "priority": 0,
+        "source": "manual:clawk_pkce",
+        "access_token": "sk-ant-oat01-AT0",
+        "refresh_token": "sk-ant-ort-RT0",
         "expires_at_ms": int((time.time() + 3600) * 1000),
         "base_url": "https://api.anthropic.com",
     }
@@ -920,7 +1284,8 @@ def test_persisted_mark_still_re_heals_when_the_root_store_gains_a_grant(fleet):
     (root / "auth.json").write_text(json.dumps(store))
     _new_process(auth_mod)
     assert auth_mod.heal_forked_single_use_oauth_grants("anthropic") is not None, (
-        "the persisted mark skipped a heal that had become necessary")
+        "the persisted mark skipped a heal that had become necessary"
+    )
     assert not fleet["rows"](kid), "the fork survived in the profile store"
 
     # A heal that actually did work writes no mark, so the one on disk is now
@@ -931,28 +1296,44 @@ def test_persisted_mark_still_re_heals_when_the_root_store_gains_a_grant(fleet):
     assert grants._oauth_heal_clean_mark_path().read_text() != marked
 
 
-
 # ── G. token generation is the authority boundary (#120815) ─────────────
 
-@pytest.mark.parametrize("borrowed", [False, True], ids=["owned-rows", "borrowed-root-rows"])
+
+@pytest.mark.parametrize(
+    "borrowed", [False, True], ids=["owned-rows", "borrowed-root-rows"]
+)
 def test_stale_terminal_verdict_cannot_kill_peer_token_generation(fleet, borrowed):
     from agent.credential_pool import STATUS_DEAD, STATUS_EXHAUSTED, load_pool
 
     fleet["use"](_profile(fleet, "stale-dead") if borrowed else fleet["root"])
-    stale, stale_billing, peer = load_pool("anthropic"), load_pool("anthropic"), load_pool("anthropic")
+    stale, stale_billing, peer = (
+        load_pool("anthropic"),
+        load_pool("anthropic"),
+        load_pool("anthropic"),
+    )
     stale_adopter = load_pool("anthropic")
-    assert peer.try_refresh_matching(credential_id="abc123").refresh_token == "sk-ant-ort-RT1"
+    assert (
+        peer.try_refresh_matching(credential_id="abc123").refresh_token
+        == "sk-ant-ort-RT1"
+    )
     # An ordinary flush whose pair already matches disk must not re-hydrate the live object.
     live = peer._entries[0]
     peer._persist()
     assert peer._entries[0] is live
     # A stale writer's _adopt hands back the post-persist entry carrying the peer's pair.
     adopted = stale_adopter._adopt(stale_adopter._entries[0], last_status=None)
-    assert adopted.refresh_token == "sk-ant-ort-RT1" and adopted is stale_adopter._entries[0]
+    assert (
+        adopted.refresh_token == "sk-ant-ort-RT1"
+        and adopted is stale_adopter._entries[0]
+    )
 
     stale.mark_exhausted_and_rotate(
-        status_code=401, credential_id="abc123",
-        error_context={"reason": "invalid_grant", "message": "refresh token already used"},
+        status_code=401,
+        credential_id="abc123",
+        error_context={
+            "reason": "invalid_grant",
+            "message": "refresh token already used",
+        },
     )
 
     row = fleet["rows"](fleet["root"])[0]
@@ -975,8 +1356,12 @@ def test_terminal_verdict_for_current_token_generation_still_persists(fleet):
     fleet["use"](fleet["root"])
     pool = load_pool("anthropic")
     pool.mark_exhausted_and_rotate(
-        status_code=401, credential_id="abc123",
-        error_context={"reason": "invalid_grant", "message": "refresh token already used"},
+        status_code=401,
+        credential_id="abc123",
+        error_context={
+            "reason": "invalid_grant",
+            "message": "refresh token already used",
+        },
     )
 
     row = fleet["rows"](fleet["root"])[0]

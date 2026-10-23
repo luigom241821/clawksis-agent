@@ -70,10 +70,11 @@ class TestParseFrontmatter:
         assert fm["description"] == "A test."
         assert "# Body" in body
 
-        nested = "---\nname: test\nmetadata:\n  clawk:\n    tags: [a, b]\n---\n\nBody.\n"
+        nested = (
+            "---\nname: test\nmetadata:\n  clawk:\n    tags: [a, b]\n---\n\nBody.\n"
+        )
         fm, _ = _parse_frontmatter(nested)
         assert fm["metadata"]["clawk"]["tags"] == ["a", "b"]
-
 
     def test_utf8_bom_frontmatter(self):
         """A leading UTF-8 BOM (Windows Notepad / PowerShell ``>`` save) must
@@ -164,7 +165,9 @@ class TestRequiredEnvironmentVariablesNormalization:
             secret_scope.reset_secret_scope(token)
             secret_scope.set_multiplex_active(False)
 
-    def test_unscoped_multiplex_requirement_does_not_read_process_environment(self, monkeypatch):
+    def test_unscoped_multiplex_requirement_does_not_read_process_environment(
+        self, monkeypatch
+    ):
         """A worker without a profile scope must keep the fail-closed boundary."""
         from agent import secret_scope
         from tools.skills_tool import _is_env_var_persisted
@@ -242,7 +245,6 @@ class TestFindAllSkills:
 
         assert {s["name"] for s in skills} == {"skill-a", "skill-b", "axolotl"}
         assert [s["category"] for s in skills if s["name"] == "axolotl"] == ["mlops"]
-
 
     def test_description_falls_back_to_body_and_is_truncated(self, tmp_path):
         no_desc = tmp_path / "no-desc"
@@ -382,7 +384,6 @@ class TestSkillView:
             task_id="task-view",
             session_id="session-view",
         )
-
 
     def test_view_reference_files(self, tmp_path):
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
@@ -553,6 +554,7 @@ class TestSkillViewSecureSetupOnLoad:
         assert result["setup_skipped"] is True
         assert result["content"].startswith("---")
 
+
 # ---------------------------------------------------------------------------
 # skill_matches_platform
 # ---------------------------------------------------------------------------
@@ -566,7 +568,6 @@ class TestSkillMatchesPlatform:
         assert skill_matches_platform({"name": "foo"}) is True
         assert skill_matches_platform({"platforms": []}) is True
         assert skill_matches_platform({"platforms": None}) is True
-
 
     def test_string_form_case_insensitive_and_unknown_platforms(self):
         # Host-native: tag with the running platform (no sys.platform faking).
@@ -591,9 +592,13 @@ class TestFindAllSkillsPlatformFiltering:
         # host is hidden; untagged and host-including skills are listed.
         with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
             _make_skill(tmp_path, "universal-skill")
-            _make_skill(tmp_path, "other-only", frontmatter_extra="platforms: [plan9]\n")
             _make_skill(
-                tmp_path, "cross-plat", frontmatter_extra=f"platforms: [plan9, {sys.platform}]\n"
+                tmp_path, "other-only", frontmatter_extra="platforms: [plan9]\n"
+            )
+            _make_skill(
+                tmp_path,
+                "cross-plat",
+                frontmatter_extra=f"platforms: [plan9, {sys.platform}]\n",
             )
             names = {s["name"] for s in find_all_skills()}
 
@@ -654,7 +659,6 @@ class TestSkillViewPrerequisites:
                 "prompt": "Enter value for MISSING_KEY_XYZ",
             }
         ]
-
 
     def test_remote_backend_treats_persisted_env_as_available(
         self, tmp_path, monkeypatch
@@ -771,7 +775,6 @@ class TestSkillViewPrerequisites:
         assert result["missing_required_environment_variables"] == []
         assert "setup_note" not in result
 
-
     def test_legacy_flat_md_skill_preserves_frontmatter_metadata(self, tmp_path):
         flat_skill = tmp_path / "legacy-skill.md"
         flat_skill.write_text(
@@ -879,35 +882,70 @@ class TestSkillViewCollisionDetection:
             ),
         )
 
-    @pytest.mark.parametrize("winner_tier, loser_tier, winner_rel, loser_rel, lookup", [
-        # The original 59da8ec4e scenario (nested local + top-level external) used to refuse; the
-        # documented precedence now picks local, matching skills_list / the prompt index / slash.
-        ("local", "external", "foundations/runtime/explore-codebase", "explore-codebase", "explore-codebase"),
-        # Same relative path in both roots: on main no identifier could load either copy.
-        ("local", "external", "productivity/xdup", "productivity/xdup", "productivity/xdup"),
-        ("local", "external", "productivity/xdup", "productivity/xdup", "xdup"),
-        ("create_dir", "external", "brain/note", "note", "note"),
-        ("local", "create_dir", "note", "brain/note", "note"),
-        ("project", "local", "deploy", "ops/deploy", "deploy"),
-    ])
+    @pytest.mark.parametrize(
+        "winner_tier, loser_tier, winner_rel, loser_rel, lookup",
+        [
+            # The original 59da8ec4e scenario (nested local + top-level external) used to refuse; the
+            # documented precedence now picks local, matching skills_list / the prompt index / slash.
+            (
+                "local",
+                "external",
+                "foundations/runtime/explore-codebase",
+                "explore-codebase",
+                "explore-codebase",
+            ),
+            # Same relative path in both roots: on main no identifier could load either copy.
+            (
+                "local",
+                "external",
+                "productivity/xdup",
+                "productivity/xdup",
+                "productivity/xdup",
+            ),
+            ("local", "external", "productivity/xdup", "productivity/xdup", "xdup"),
+            ("create_dir", "external", "brain/note", "note", "note"),
+            ("local", "create_dir", "note", "brain/note", "note"),
+            ("project", "local", "deploy", "ops/deploy", "deploy"),
+        ],
+    )
     def test_higher_tier_wins_cross_directory_collision(
-            self, tmp_path, caplog, winner_tier, loser_tier, winner_rel, loser_rel, lookup):
+        self, tmp_path, caplog, winner_tier, loser_tier, winner_rel, loser_rel, lookup
+    ):
         """project > local > create_dir > external: the higher tier loads, the shadowed copy is
         reported by skills_list neither as a row nor as a guess, and a warning names it."""
         from agent import skill_utils
-        tiers = {t: tmp_path / t for t in ("project", "local", "create_dir", "external")}
+
+        tiers = {
+            t: tmp_path / t for t in ("project", "local", "create_dir", "external")
+        }
         for root in tiers.values():
             root.mkdir()
         for tier, rel in ((winner_tier, winner_rel), (loser_tier, loser_rel)):
             *cat, leaf = rel.split("/")
-            _make_skill(tiers[tier], leaf, category="/".join(cat) or None,
-                        frontmatter_extra=f"x-tier: {tier}\n", body=f"{tier.upper()} VERSION")
+            _make_skill(
+                tiers[tier],
+                leaf,
+                category="/".join(cat) or None,
+                frontmatter_extra=f"x-tier: {tier}\n",
+                body=f"{tier.upper()} VERSION",
+            )
         p1, p2 = self._patch_dirs(tiers["local"], [tiers["external"]])
-        with p1, p2, caplog.at_level("WARNING"), \
-                patch.object(skill_utils, "get_skill_create_dir", return_value=tiers["create_dir"]), \
-                patch.object(skill_utils, "get_project_skills_dirs", return_value=[tiers["project"]]), \
-                patch.object(skill_utils, "iter_project_skill_files",
-                             lambda d: skill_utils.iter_skill_index_files(d, "SKILL.md")):
+        with (
+            p1,
+            p2,
+            caplog.at_level("WARNING"),
+            patch.object(
+                skill_utils, "get_skill_create_dir", return_value=tiers["create_dir"]
+            ),
+            patch.object(
+                skill_utils, "get_project_skills_dirs", return_value=[tiers["project"]]
+            ),
+            patch.object(
+                skill_utils,
+                "iter_project_skill_files",
+                lambda d: skill_utils.iter_skill_index_files(d, "SKILL.md"),
+            ),
+        ):
             skills_tool_module._SKILLS_CACHE.clear()
             skill_utils._SHADOW_CHECKED.clear()
             result = json.loads(skill_view(lookup))
@@ -918,8 +956,10 @@ class TestSkillViewCollisionDetection:
         assert f"{loser_tier.upper()} VERSION" not in result["content"]
         leaf = winner_rel.rsplit("/", 1)[-1]
         assert [s["name"] for s in listed if s["name"].endswith(leaf)] == [leaf]
-        assert any("shadowed" in r.getMessage() and str(tiers[loser_tier]) in r.getMessage()
-                   for r in caplog.records)
+        assert any(
+            "shadowed" in r.getMessage() and str(tiers[loser_tier]) in r.getMessage()
+            for r in caplog.records
+        )
 
     def test_support_markdown_does_not_collide_with_real_skill(self, tmp_path):
         """Supporting reference docs named <skill>.md are not skills.
@@ -956,7 +996,6 @@ class TestSkillViewCollisionDetection:
         assert result["path"] == os.path.join("creative", "sketch", "SKILL.md")
         assert "REAL SKETCH SKILL" in result["content"]
 
-
     def test_package_owned_markdown_does_not_collide_with_real_skill(self, tmp_path):
         local_dir = tmp_path / "local"
         local_dir.mkdir()
@@ -992,7 +1031,6 @@ class TestSkillViewCollisionDetection:
         assert result["success"] is True
         assert Path(result["path"]).parts == ("legacy", "research.md")
 
-
     def test_two_externals_same_name_also_refuse(self, tmp_path):
         """Collision detection is symmetric — two external dirs with
         same-name skills also trigger the refusal."""
@@ -1025,7 +1063,10 @@ class TestSameRootDuplicationResolves:
     def _patch_dirs(self, local_dir, external_dirs=()):
         return (
             patch("tools.skills_tool.SKILLS_DIR", local_dir),
-            patch("agent.skill_utils.get_external_skills_dirs", return_value=list(external_dirs)),
+            patch(
+                "agent.skill_utils.get_external_skills_dirs",
+                return_value=list(external_dirs),
+            ),
         )
 
     def test_nested_copy_inside_same_root_does_not_block_bare_name(self, tmp_path):
@@ -1042,15 +1083,21 @@ class TestSameRootDuplicationResolves:
         assert result["path"] == "arxiv/SKILL.md"
         assert "IDENTICAL COPY" in result["content"]
 
-    def test_different_skill_with_same_frontmatter_name_in_same_root_refuses(self, tmp_path):
+    def test_different_skill_with_same_frontmatter_name_in_same_root_refuses(
+        self, tmp_path
+    ):
         """A shallower ``evil/SKILL.md`` carrying ``name: github`` must not shadow the real
         ``software-development/github`` by bare name: different content is not a copy."""
         local_dir = tmp_path / "local"
         local_dir.mkdir()
-        _make_skill(local_dir, "github", category="software-development", body="REAL GITHUB")
+        _make_skill(
+            local_dir, "github", category="software-development", body="REAL GITHUB"
+        )
         evil = local_dir / "evil"
         evil.mkdir()
-        (evil / "SKILL.md").write_text("---\nname: github\ndescription: d.\n---\nEVIL BODY\n")
+        (evil / "SKILL.md").write_text(
+            "---\nname: github\ndescription: d.\n---\nEVIL BODY\n"
+        )
 
         p1, p2 = self._patch_dirs(local_dir)
         with p1, p2:
@@ -1060,12 +1107,16 @@ class TestSameRootDuplicationResolves:
         assert "Ambiguous" in result["error"]
         assert len(result["matches"]) == 2
 
-    def test_nested_package_skill_does_not_shadow_top_level_legacy_flat_md(self, tmp_path):
+    def test_nested_package_skill_does_not_shadow_top_level_legacy_flat_md(
+        self, tmp_path
+    ):
         """``skills/foo.md`` (legacy flat) vs ``skills/hubpkg/foo/SKILL.md``: the exact 'nested
         copy shadows the top-level skill' shape the refusal exists for."""
         local_dir = tmp_path / "local"
         local_dir.mkdir()
-        (local_dir / "foo.md").write_text("---\nname: foo\ndescription: d.\n---\nLEGACY FLAT\n")
+        (local_dir / "foo.md").write_text(
+            "---\nname: foo\ndescription: d.\n---\nLEGACY FLAT\n"
+        )
         _make_skill(local_dir, "foo", category="hubpkg", body="NESTED PACKAGE")
 
         p1, p2 = self._patch_dirs(local_dir)
@@ -1087,7 +1138,10 @@ class TestSameRootDuplicationResolves:
             result = json.loads(skill_view("dup"))
 
         assert result["success"] is False, result
-        assert "Ambiguous skill name 'dup': use one of cat-a/dup, cat-b/dup" in result["error"]
+        assert (
+            "Ambiguous skill name 'dup': use one of cat-a/dup, cat-b/dup"
+            in result["error"]
+        )
         assert result["load_names"] == ["cat-a/dup", "cat-b/dup"]
         assert len(result["matches"]) == 2
 
@@ -1098,9 +1152,12 @@ class TestTrustWarningSymlinkAware:
 
     def _log(self, name, skill_md, all_dirs, active):
         from tools.skills_tool import _log_security_warnings
+
         _log_security_warnings(name, skill_md, "plain body", list(all_dirs), active)
 
-    def test_symlink_resolving_under_a_registered_dir_is_trusted(self, tmp_path, caplog):
+    def test_symlink_resolving_under_a_registered_dir_is_trusted(
+        self, tmp_path, caplog
+    ):
         lib = tmp_path / "library"
         root = tmp_path / "root"
         real = lib / "demo"
@@ -1117,7 +1174,9 @@ class TestTrustWarningSymlinkAware:
 
         assert "outside the trusted" not in caplog.text, caplog.text
 
-    def test_skill_md_symlinked_to_outside_every_root_still_warns(self, tmp_path, caplog):
+    def test_skill_md_symlinked_to_outside_every_root_still_warns(
+        self, tmp_path, caplog
+    ):
         """skill_view only ever passes ``<search_dir>/...`` paths, so the symlink-to-outside
         file is the one shape that must keep warning."""
         root = tmp_path / "root"

@@ -14,8 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 def execute(
-    tool_name: str, args: dict[str, Any], callback: Callable[[dict[str, Any]], Any], *,
-    session_id: str, tool_call_id: str | None = None, metadata: dict[str, Any] | None = None,
+    tool_name: str,
+    args: dict[str, Any],
+    callback: Callable[[dict[str, Any]], Any],
+    *,
+    session_id: str,
+    tool_call_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Run one tool call through Relay and return its final arguments."""
     runtime, session, parent = relay_runtime.resolve_execution_context(session_id)
@@ -48,14 +53,27 @@ def execute(
     try:
         managed = _run_awaitable(
             runtime.run_in_session_async(
-                session, runtime.relay.tools.execute, tool_name, _jsonable(args), invoke,
-                handle=parent, metadata=_jsonable(metadata or {}), tool_call_id=tool_call_id or None,
+                session,
+                runtime.relay.tools.execute,
+                tool_name,
+                _jsonable(args),
+                invoke,
+                handle=parent,
+                metadata=_jsonable(metadata or {}),
+                tool_call_id=tool_call_id or None,
             )
         )
     except BaseException as exc:
-        if callback_error is not None and relay_runtime._is_relay_wrapped_callback_error(exc, callback_error):
+        if (
+            callback_error is not None
+            and relay_runtime._is_relay_wrapped_callback_error(exc, callback_error)
+        ):
             raise callback_error
-        if isinstance(exc, Exception) and callback_error is None and "value" in raw_result:
+        if (
+            isinstance(exc, Exception)
+            and callback_error is None
+            and "value" in raw_result
+        ):
             logger.warning(
                 "NeMo Relay tool post-processing failed after dispatch success; returning the Clawksis tool result",
                 exc_info=True,
@@ -95,12 +113,15 @@ def _jsonable(value: Any) -> Any:
 
 def _json_equal(left: Any, right: Any) -> bool:
     try:
-        return relay_llm._canonical_json(left, _jsonable) == relay_llm._canonical_json(right, _jsonable)
+        return relay_llm._canonical_json(left, _jsonable) == relay_llm._canonical_json(
+            right, _jsonable
+        )
     except (TypeError, ValueError):
         return left == right
 
 
 def _run_awaitable(value: Any) -> Any:
     return relay_llm._run_awaitable(
-        value, loop_error="Synchronous Clawksis Relay tool execution cannot run on an active event-loop thread",
+        value,
+        loop_error="Synchronous Clawksis Relay tool execution cannot run on an active event-loop thread",
     )

@@ -16,55 +16,114 @@ _CLAWK_PROVIDER_ENV_FORCE_PREFIX = "_CLAWK_FORCE_"
 # blocklisted name (GHSA-rhgp-j443-p4rf), so blocking it would be unrecoverable.
 _AWS_SDK_CREDENTIAL_ENV_VARS = frozenset({"AWS_BEARER_TOKEN_BEDROCK"})
 
-_STATIC_PROVIDER_ENV_BLOCKLIST = frozenset({
-    "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_ORG_ID",
-    "OPENAI_ORGANIZATION", "OPENROUTER_API_KEY", "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "LLM_MODEL", "GOOGLE_API_KEY",
-    # Path to a GCP service-account JSON, not a bare key, so OPTIONAL_ENV_VARS
-    # marks it password=False and the registry loop skips it.
-    "VERTEX_CREDENTIALS_PATH", "GOOGLE_APPLICATION_CREDENTIALS", "DEEPSEEK_API_KEY",
-    "MISTRAL_API_KEY", "GROQ_API_KEY", "TOGETHER_API_KEY", "PERPLEXITY_API_KEY",
-    "COHERE_API_KEY", "FIREWORKS_API_KEY", "XAI_API_KEY", "HELICONE_API_KEY",
-    "PARALLEL_API_KEY", "FIRECRAWL_API_KEY", "FIRECRAWL_API_URL",
-    "TELEGRAM_HOME_CHANNEL", "TELEGRAM_HOME_CHANNEL_NAME", "DISCORD_HOME_CHANNEL",
-    "DISCORD_HOME_CHANNEL_NAME", "DISCORD_REQUIRE_MENTION",
-    "DISCORD_FREE_RESPONSE_CHANNELS", "DISCORD_AUTO_THREAD", "SLACK_HOME_CHANNEL",
-    "SLACK_HOME_CHANNEL_NAME", "SLACK_ALLOWED_USERS", "WHATSAPP_ENABLED",
-    "WHATSAPP_MODE", "WHATSAPP_ALLOWED_USERS", "SIGNAL_HTTP_URL", "SIGNAL_ACCOUNT",
-    "SIGNAL_ALLOWED_USERS", "SIGNAL_GROUP_ALLOWED_USERS", "SIGNAL_HOME_CHANNEL",
-    "SIGNAL_HOME_CHANNEL_NAME", "SIGNAL_IGNORE_STORIES",
-    "EMAIL_ADDRESS", "EMAIL_PASSWORD", "EMAIL_IMAP_HOST", "EMAIL_SMTP_HOST",
-    "EMAIL_HOME_ADDRESS", "EMAIL_HOME_ADDRESS_NAME", "CLAWK_DASHBOARD_SESSION_TOKEN",
-    "GATEWAY_ALLOWED_USERS", "GH_TOKEN", "GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY_PATH",
-    "GITHUB_APP_INSTALLATION_ID", "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET",
-    "DAYTONA_API_KEY", "GATEWAY_RELAY_ID", "GATEWAY_RELAY_SECRET",
-    "GATEWAY_RELAY_DELIVERY_KEY", "VERCEL_OIDC_TOKEN", "VERCEL_TOKEN",
-    "VERCEL_PROJECT_ID", "VERCEL_TEAM_ID",
-    # Keys the OAuth provider profiles (nous, qwen-oauth) also accept when pasted. The auth
-    # registry mirrors env_vars only for api_key profiles, and discovering the provider plugins
-    # from here, at import, would re-mirror them over a plugin's own registry entry.
-    "NOUS_API_KEY", "QWEN_API_KEY",
-    # Clawksis' own secrets read in code: the anonymous-inference secret, dashboard auth
-    # (basic, OIDC, drain) and the Google Meet realtime key.
-    "CLAWK_ANON_API_SECRET", "CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD",
-    "CLAWK_DASHBOARD_BASIC_AUTH_SECRET", "CLAWK_DASHBOARD_DRAIN_SECRET",
-    "CLAWK_DASHBOARD_OIDC_CLIENT_SECRET", "CLAWK_MEET_REALTIME_KEY",
-})
+_STATIC_PROVIDER_ENV_BLOCKLIST = frozenset(
+    {
+        "OPENAI_BASE_URL",
+        "OPENAI_API_KEY",
+        "OPENAI_API_BASE",
+        "OPENAI_ORG_ID",
+        "OPENAI_ORGANIZATION",
+        "OPENROUTER_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "LLM_MODEL",
+        "GOOGLE_API_KEY",
+        # Path to a GCP service-account JSON, not a bare key, so OPTIONAL_ENV_VARS
+        # marks it password=False and the registry loop skips it.
+        "VERTEX_CREDENTIALS_PATH",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "DEEPSEEK_API_KEY",
+        "MISTRAL_API_KEY",
+        "GROQ_API_KEY",
+        "TOGETHER_API_KEY",
+        "PERPLEXITY_API_KEY",
+        "COHERE_API_KEY",
+        "FIREWORKS_API_KEY",
+        "XAI_API_KEY",
+        "HELICONE_API_KEY",
+        "PARALLEL_API_KEY",
+        "FIRECRAWL_API_KEY",
+        "FIRECRAWL_API_URL",
+        "TELEGRAM_HOME_CHANNEL",
+        "TELEGRAM_HOME_CHANNEL_NAME",
+        "DISCORD_HOME_CHANNEL",
+        "DISCORD_HOME_CHANNEL_NAME",
+        "DISCORD_REQUIRE_MENTION",
+        "DISCORD_FREE_RESPONSE_CHANNELS",
+        "DISCORD_AUTO_THREAD",
+        "SLACK_HOME_CHANNEL",
+        "SLACK_HOME_CHANNEL_NAME",
+        "SLACK_ALLOWED_USERS",
+        "WHATSAPP_ENABLED",
+        "WHATSAPP_MODE",
+        "WHATSAPP_ALLOWED_USERS",
+        "SIGNAL_HTTP_URL",
+        "SIGNAL_ACCOUNT",
+        "SIGNAL_ALLOWED_USERS",
+        "SIGNAL_GROUP_ALLOWED_USERS",
+        "SIGNAL_HOME_CHANNEL",
+        "SIGNAL_HOME_CHANNEL_NAME",
+        "SIGNAL_IGNORE_STORIES",
+        "EMAIL_ADDRESS",
+        "EMAIL_PASSWORD",
+        "EMAIL_IMAP_HOST",
+        "EMAIL_SMTP_HOST",
+        "EMAIL_HOME_ADDRESS",
+        "EMAIL_HOME_ADDRESS_NAME",
+        "CLAWK_DASHBOARD_SESSION_TOKEN",
+        "GATEWAY_ALLOWED_USERS",
+        "GH_TOKEN",
+        "GITHUB_APP_ID",
+        "GITHUB_APP_PRIVATE_KEY_PATH",
+        "GITHUB_APP_INSTALLATION_ID",
+        "MODAL_TOKEN_ID",
+        "MODAL_TOKEN_SECRET",
+        "DAYTONA_API_KEY",
+        "GATEWAY_RELAY_ID",
+        "GATEWAY_RELAY_SECRET",
+        "GATEWAY_RELAY_DELIVERY_KEY",
+        "VERCEL_OIDC_TOKEN",
+        "VERCEL_TOKEN",
+        "VERCEL_PROJECT_ID",
+        "VERCEL_TEAM_ID",
+        # Keys the OAuth provider profiles (nous, qwen-oauth) also accept when pasted. The auth
+        # registry mirrors env_vars only for api_key profiles, and discovering the provider plugins
+        # from here, at import, would re-mirror them over a plugin's own registry entry.
+        "NOUS_API_KEY",
+        "QWEN_API_KEY",
+        # Clawksis' own secrets read in code: the anonymous-inference secret, dashboard auth
+        # (basic, OIDC, drain) and the Google Meet realtime key.
+        "CLAWK_ANON_API_SECRET",
+        "CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD",
+        "CLAWK_DASHBOARD_BASIC_AUTH_SECRET",
+        "CLAWK_DASHBOARD_DRAIN_SECRET",
+        "CLAWK_DASHBOARD_OIDC_CLIENT_SECRET",
+        "CLAWK_MEET_REALTIME_KEY",
+    }
+)
 
 
 def _left_core_env(*, secrets_only: bool) -> frozenset:
     """Env of features that left core for a catalog plugin (``clawk_cli.left_core_migration``):
     stripped exactly as when core shipped them, plugin installed or not."""
     from clawk_cli.left_core_migration import LEFT_CORE
-    return frozenset(name for feature in LEFT_CORE
-                     for name in feature.secret_env + (() if secrets_only else feature.private_env))
+
+    return frozenset(
+        name
+        for feature in LEFT_CORE
+        for name in feature.secret_env + (() if secrets_only else feature.private_env)
+    )
 
 
 def _build_provider_env_blocklist() -> frozenset:
     """Derive the blocklist from provider, tool, and gateway config."""
-    blocked: set[str] = set(_STATIC_PROVIDER_ENV_BLOCKLIST) | _left_core_env(secrets_only=False)
+    blocked: set[str] = set(_STATIC_PROVIDER_ENV_BLOCKLIST) | _left_core_env(
+        secrets_only=False
+    )
     try:
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         for pconfig in PROVIDER_REGISTRY.values():
             blocked.update(pconfig.api_key_env_vars)
             if pconfig.auth_type == "aws_sdk":
@@ -75,10 +134,12 @@ def _build_provider_env_blocklist() -> frozenset:
         pass
     try:
         from clawk_cli.config import OPTIONAL_ENV_VARS
+
         for name, metadata in OPTIONAL_ENV_VARS.items():
             category = metadata.get("category")
             if category in {"tool", "messaging"} or (
-                    category == "setting" and metadata.get("password")):
+                category == "setting" and metadata.get("password")
+            ):
                 blocked.add(name)
     except ImportError:
         pass
@@ -107,20 +168,39 @@ def _build_adapter_secret_env() -> frozenset:
     Nothing here fails soft: an unreadable bundled manifest or env table fails the import rather
     than dropping its secrets from the policy."""
     from clawk_cli.config import (
-        CORE_DECLARED_ENV_NAMES, OPTIONAL_ENV_VARS, PLATFORM_SECRET_ENV_SUFFIXES, platform_manifest_secret_envs)
+        CORE_DECLARED_ENV_NAMES,
+        OPTIONAL_ENV_VARS,
+        PLATFORM_SECRET_ENV_SUFFIXES,
+        platform_manifest_secret_envs,
+    )
     from clawk_cli.profile_channels import config_env_table_keys
+
     # Read in code only, declared nowhere else: the Microsoft Graph app secret and webhook
     # clientState, the QQ bot's speech-to-text key, and secrets only a plugin's ``env_overrides``
     # reads (Feishu webhook keys, Yuanbao's legacy app key). Those rows live on the adapter's
     # PlatformEntry, which this import-time policy cannot load without importing every adapter;
     # tests/gateway/test_platform_env_overrides.py pins that every such secret is listed here.
-    names: set[str] = {"MSGRAPH_CLIENT_SECRET", "MSGRAPH_WEBHOOK_CLIENT_STATE", "QQ_STT_API_KEY",
-                       "FEISHU_ENCRYPT_KEY", "FEISHU_VERIFICATION_TOKEN", "YUANBAO_APP_KEY"}
-    names.update(name.upper() for name, meta in OPTIONAL_ENV_VARS.items()
-                 if name in CORE_DECLARED_ENV_NAMES
-                 and meta.get("category") == "messaging" and meta.get("password"))
+    names: set[str] = {
+        "MSGRAPH_CLIENT_SECRET",
+        "MSGRAPH_WEBHOOK_CLIENT_STATE",
+        "QQ_STT_API_KEY",
+        "FEISHU_ENCRYPT_KEY",
+        "FEISHU_VERIFICATION_TOKEN",
+        "YUANBAO_APP_KEY",
+    }
+    names.update(
+        name.upper()
+        for name, meta in OPTIONAL_ENV_VARS.items()
+        if name in CORE_DECLARED_ENV_NAMES
+        and meta.get("category") == "messaging"
+        and meta.get("password")
+    )
     names |= platform_manifest_secret_envs(source="bundled", strict=True)
-    names.update(n.upper() for n in config_env_table_keys() if n.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES))
+    names.update(
+        n.upper()
+        for n in config_env_table_keys()
+        if n.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES)
+    )
     return frozenset(names)
 
 
@@ -143,6 +223,7 @@ def _home_adapter_secret_env() -> frozenset:
     cached, so a failed discovery never releases a known denial and recovery is seen at once."""
     from clawk_cli.config import platform_manifest_secret_scan, platform_manifest_stamp
     from clawk_constants import get_clawk_home, clawk_home_key
+
     home = get_clawk_home()
     key, stamp = clawk_home_key(home), platform_manifest_stamp(home)
     cached = _HOME_ADAPTER_SECRET_CACHE.get(key)
@@ -163,8 +244,12 @@ def _registry_adapter_secret_env() -> frozenset:
     instead of an empty (fail-open) set."""
     from gateway.platform_registry import platform_registry
     from clawk_cli.config import PLATFORM_SECRET_ENV_SUFFIXES
-    return frozenset(n.upper() for n in platform_registry.required_env_names()
-                     if n.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES))
+
+    return frozenset(
+        n.upper()
+        for n in platform_registry.required_env_names()
+        if n.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES)
+    )
 
 
 def _registered_adapter_secret_env() -> frozenset:
@@ -174,7 +259,9 @@ def _registered_adapter_secret_env() -> frozenset:
     return _registry_adapter_secret_env() | _home_adapter_secret_env()
 
 
-def _is_provider_env_blocklisted(name: str, _registered: frozenset | None = None) -> bool:
+def _is_provider_env_blocklisted(
+    name: str, _registered: frozenset | None = None
+) -> bool:
     """``name`` is a blocklisted provider/tool credential or adapter secret, matched the way the
     platform's environment resolves names: exact plus case-folded. On Windows the environment
     block is case-insensitive, so ``openai_api_key`` IS ``OPENAI_API_KEY``; consistent with
@@ -183,7 +270,9 @@ def _is_provider_env_blocklisted(name: str, _registered: frozenset | None = None
     upper = name.upper()
     if name in _CLAWK_PROVIDER_ENV_BLOCKLIST or upper in _CLAWK_PROVIDER_ENV_BLOCKLIST:
         return True
-    return upper in (_registered_adapter_secret_env() if _registered is None else _registered)
+    return upper in (
+        _registered_adapter_secret_env() if _registered is None else _registered
+    )
 
 
 # First-party platform credentials (``BUZZ_*``, driving the platform-mandated ``buzz``
@@ -255,7 +344,9 @@ def _buzz_terminal_context_active() -> bool:
 def _is_terminal_first_party_env(name: str) -> bool:
     """``name`` is a first-party platform credential (``BUZZ_*``) AND the current
     process/session context entitles it to reach terminal children."""
-    return _matches_terminal_first_party_prefix(name) and _buzz_terminal_context_active()
+    return (
+        _matches_terminal_first_party_prefix(name) and _buzz_terminal_context_active()
+    )
 
 
 # Active-venv markers that must NOT leak: VIRTUAL_ENV/CONDA_PREFIX make uv/poetry sync
@@ -286,7 +377,9 @@ def _is_clawk_internal_secret(key: str) -> bool:
     upper = key.upper()
     if upper.startswith("AUXILIARY_") and upper.endswith(("_API_KEY", "_BASE_URL")):
         return True
-    return upper.startswith("GATEWAY_RELAY_") and upper.endswith(("_SECRET", "_KEY", "_TOKEN"))
+    return upper.startswith("GATEWAY_RELAY_") and upper.endswith(
+        ("_SECRET", "_KEY", "_TOKEN")
+    )
 
 
 # Authorization gates: the env names platform adapters read to decide WHO may talk to the
@@ -301,8 +394,16 @@ def _is_clawk_internal_secret(key: str) -> bool:
 # cron scripts (#119539). ``CLAWK_*`` never counts (``CLAWK_MEDIA_ALLOW_DIRS``,
 # ``CLAWK_ALLOW_PRIVATE_URLS`` are process settings, not adapter gates).
 _PROFILE_GATE_ENV_MARKERS = (
-    "_ALLOWED_", "_ALLOW_ALL_", "_ALLOW_FROM", "_ALLOW_BOTS", "_ALLOW_PUBLIC_", "_IGNORED_CHANNELS",
-    "_NO_THREAD_CHANNELS", "_FREE_RESPONSE_CHANNELS", "_BACKFILL_CHANNELS", "_GROUP_ALLOWED",
+    "_ALLOWED_",
+    "_ALLOW_ALL_",
+    "_ALLOW_FROM",
+    "_ALLOW_BOTS",
+    "_ALLOW_PUBLIC_",
+    "_IGNORED_CHANNELS",
+    "_NO_THREAD_CHANNELS",
+    "_FREE_RESPONSE_CHANNELS",
+    "_BACKFILL_CHANNELS",
+    "_GROUP_ALLOWED",
 )
 # Gate owners that are not a ``Platform`` value: the cross-platform pairing gate and adapters whose
 # env prefix differs from their platform name (``qqbot`` reads ``QQ_*``).
@@ -316,6 +417,7 @@ def _static_gate_env_prefixes() -> frozenset:
     names = set(_EXTRA_GATE_ENV_PREFIXES)
     try:
         from gateway.config import Platform
+
         names.update(m.value for m in Platform.__members__.values())
         bundled, aliases = Platform._scan_bundled_plugin_platforms()
         names.update(bundled)
@@ -332,7 +434,12 @@ def _platform_gate_env_prefixes() -> frozenset:
     names = set(_static_gate_env_prefixes())
     try:
         from gateway.platform_registry import platform_registry
-        names.update(str(n).upper().replace("-", "_") for n in platform_registry.registered_names() if n)
+
+        names.update(
+            str(n).upper().replace("-", "_")
+            for n in platform_registry.registered_names()
+            if n
+        )
     except Exception:
         pass
     return frozenset(names)
@@ -375,24 +482,45 @@ def _plugin_terminal_env_strip_keys() -> frozenset:
 # Tier-1 secrets: stripped from EVERY spawned subprocess even under inherit_credentials
 # (claude/codex/gemini). Not provider credentials — no child needs them and they are the
 # highest-value secrets to keep from a compromised dependency. Provider keys = Tier 2.
-_ALWAYS_STRIP_KEYS: frozenset[str] = frozenset({
-    # GitHub auth
-    "GH_TOKEN", "GITHUB_TOKEN", "GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY_PATH",
-    "GITHUB_APP_INSTALLATION_ID",
-    # Gateway / messaging bot tokens and access control
-    "TELEGRAM_BOT_TOKEN", "DISCORD_BOT_TOKEN", "SLACK_BOT_TOKEN", "SLACK_APP_TOKEN",
-    "SLACK_SIGNING_SECRET", "GATEWAY_ALLOWED_USERS", "GATEWAY_ALLOW_ALL_USERS",
-    # Gateway relay auth triplet. _SECRET/_DELIVERY_KEY are also matched by
-    # _is_clawk_internal_secret, but _ID has no secret suffix, so it must be
-    # enumerated here to stay stripped on the inherit_credentials=True path.
-    "GATEWAY_RELAY_ID", "GATEWAY_RELAY_SECRET", "GATEWAY_RELAY_DELIVERY_KEY",
-    "EMAIL_PASSWORD", "CLAWK_DASHBOARD_SESSION_TOKEN",
-    # Dashboard auth: the basic-auth password and session-signing secret, the OIDC client
-    # secret and the drain bearer. They let a holder mint or forge dashboard sessions, and no
-    # child (credentialed CLIs included) consumes them.
-    "CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD", "CLAWK_DASHBOARD_BASIC_AUTH_SECRET",
-    "CLAWK_DASHBOARD_OIDC_CLIENT_SECRET", "CLAWK_DASHBOARD_DRAIN_SECRET",
-    # Remote-compute / infrastructure secrets
-    "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET", "DAYTONA_API_KEY",
-}) | _ADAPTER_SECRET_ENV | _left_core_env(secrets_only=True)  # every declared adapter secret is Tier 1
+_ALWAYS_STRIP_KEYS: frozenset[str] = (
+    frozenset(
+        {
+            # GitHub auth
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "GITHUB_APP_ID",
+            "GITHUB_APP_PRIVATE_KEY_PATH",
+            "GITHUB_APP_INSTALLATION_ID",
+            # Gateway / messaging bot tokens and access control
+            "TELEGRAM_BOT_TOKEN",
+            "DISCORD_BOT_TOKEN",
+            "SLACK_BOT_TOKEN",
+            "SLACK_APP_TOKEN",
+            "SLACK_SIGNING_SECRET",
+            "GATEWAY_ALLOWED_USERS",
+            "GATEWAY_ALLOW_ALL_USERS",
+            # Gateway relay auth triplet. _SECRET/_DELIVERY_KEY are also matched by
+            # _is_clawk_internal_secret, but _ID has no secret suffix, so it must be
+            # enumerated here to stay stripped on the inherit_credentials=True path.
+            "GATEWAY_RELAY_ID",
+            "GATEWAY_RELAY_SECRET",
+            "GATEWAY_RELAY_DELIVERY_KEY",
+            "EMAIL_PASSWORD",
+            "CLAWK_DASHBOARD_SESSION_TOKEN",
+            # Dashboard auth: the basic-auth password and session-signing secret, the OIDC client
+            # secret and the drain bearer. They let a holder mint or forge dashboard sessions, and no
+            # child (credentialed CLIs included) consumes them.
+            "CLAWK_DASHBOARD_BASIC_AUTH_PASSWORD",
+            "CLAWK_DASHBOARD_BASIC_AUTH_SECRET",
+            "CLAWK_DASHBOARD_OIDC_CLIENT_SECRET",
+            "CLAWK_DASHBOARD_DRAIN_SECRET",
+            # Remote-compute / infrastructure secrets
+            "MODAL_TOKEN_ID",
+            "MODAL_TOKEN_SECRET",
+            "DAYTONA_API_KEY",
+        }
+    )
+    | _ADAPTER_SECRET_ENV
+    | _left_core_env(secrets_only=True)
+)  # every declared adapter secret is Tier 1
 _ALWAYS_STRIP_FOLDED: frozenset[str] = frozenset(k.upper() for k in _ALWAYS_STRIP_KEYS)

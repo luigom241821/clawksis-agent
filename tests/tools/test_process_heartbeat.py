@@ -5,6 +5,7 @@ heartbeat" event on the completion queue so the agent stays current on a long bo
 train, full suite, deploy) without polling. Invariants: each heartbeat carries only NEW output,
 heartbeats stop at exit, and the normal completion notice still fires.
 """
+
 import json
 import queue
 import time
@@ -38,14 +39,22 @@ def test_heartbeat_carries_only_new_output_and_stops_at_exit(tmp_path, monkeypat
     monkeypatch.setattr(pr, "HEARTBEAT_MIN_SECONDS", 1)
     monkeypatch.setattr(pr, "HEARTBEAT_TICK_SECONDS", 0.1)
     registry = ProcessRegistry()
-    session = registry.spawn_local("echo first; sleep 2.5; echo second; sleep 2.5", cwd=str(tmp_path))
+    session = registry.spawn_local(
+        "echo first; sleep 2.5; echo second; sleep 2.5", cwd=str(tmp_path)
+    )
     session.notify_on_complete = True
     assert registry.arm_heartbeat(session, 1) == 1
 
-    assert _wait_until(lambda: registry.poll(session.id)["status"] != "running", timeout=20)
+    assert _wait_until(
+        lambda: registry.poll(session.id)["status"] != "running", timeout=20
+    )
     # Give the completion event a moment to be enqueued after the reader observes EOF.
-    assert _wait_until(lambda: any(e.get("type") == "completion" for e in list(registry.completion_queue.queue)),
-                       timeout=5)
+    assert _wait_until(
+        lambda: any(
+            e.get("type") == "completion" for e in list(registry.completion_queue.queue)
+        ),
+        timeout=5,
+    )
     events = _drain(registry.completion_queue)
     beats = [e for e in events if e["type"] == "heartbeat"]
     completion = [e for e in events if e["type"] == "completion"]
@@ -55,12 +64,18 @@ def test_heartbeat_carries_only_new_output_and_stops_at_exit(tmp_path, monkeypat
     assert all(b["session_id"] == session.id and b["interval"] == 1 for b in beats)
     # Output is a delta: every produced line appears in exactly one heartbeat, never twice.
     joined = "".join(b["output"] for b in beats)
-    assert joined.count("first") == 1 and joined.count("second") == 1, [b["output"] for b in beats]
+    assert joined.count("first") == 1 and joined.count("second") == 1, [
+        b["output"] for b in beats
+    ]
     assert len(completion) == 1
     # Heartbeats never outlive the process: nothing after the completion notice.
     assert events.index(completion[0]) > events.index(beats[-1])
-    assert not _wait_until(lambda: any(e.get("type") == "heartbeat" for e in list(registry.completion_queue.queue)),
-                           timeout=2.5)
+    assert not _wait_until(
+        lambda: any(
+            e.get("type") == "heartbeat" for e in list(registry.completion_queue.queue)
+        ),
+        timeout=2.5,
+    )
 
 
 def test_a_tick_with_no_new_output_queues_nothing():
@@ -68,7 +83,9 @@ def test_a_tick_with_no_new_output_queues_nothing():
     skipped rather than delivered as "(no new output)"; the next tick with output still carries
     exactly the delta and the sequence counts delivered beats only."""
     registry = ProcessRegistry()
-    session = pr.ProcessSession(id="proc_quiet", command="sleep 600", notify_on_complete=True)
+    session = pr.ProcessSession(
+        id="proc_quiet", command="sleep 600", notify_on_complete=True
+    )
     session._heartbeat_last = 0.0
 
     registry._emit_heartbeat(session, now=100.0)
@@ -80,7 +97,11 @@ def test_a_tick_with_no_new_output_queues_nothing():
     session.total_output_chars += len("first line\n")
     registry._emit_heartbeat(session, now=300.0)
     (beat,) = _drain(registry.completion_queue)
-    assert beat["type"] == "heartbeat" and beat["seq"] == 1 and beat["output"] == "first line\n"
+    assert (
+        beat["type"] == "heartbeat"
+        and beat["seq"] == 1
+        and beat["output"] == "first line\n"
+    )
 
     registry._emit_heartbeat(session, now=400.0)
     assert _drain(registry.completion_queue) == []
@@ -93,7 +114,13 @@ def test_schema_minimum_heartbeat_is_disabled_for_foreground(monkeypatch):
 
     def fake_terminal_tool(**kwargs):
         captured.update(kwargs)
-        return json.dumps({"output": "Background process started", "session_id": "proc_x", "exit_code": 0})
+        return json.dumps(
+            {
+                "output": "Background process started",
+                "session_id": "proc_x",
+                "exit_code": 0,
+            }
+        )
 
     monkeypatch.setattr(tt, "terminal_tool", fake_terminal_tool)
     heartbeat_schema = tt.TERMINAL_SCHEMA["parameters"]["properties"]["heartbeat"]
@@ -123,16 +150,27 @@ def test_first_heartbeat_carries_output_produced_before_arming(tmp_path, monkeyp
     registry = ProcessRegistry()
     session = registry.spawn_local("echo first; sleep 3", cwd=str(tmp_path))
     session.notify_on_complete = True
-    assert _wait_until(lambda: "first" in registry.poll(session.id).get("output_preview", ""), timeout=10)
+    assert _wait_until(
+        lambda: "first" in registry.poll(session.id).get("output_preview", ""),
+        timeout=10,
+    )
     registry.arm_heartbeat(session, 1)
 
-    assert _wait_until(lambda: any(e.get("type") == "heartbeat" for e in list(registry.completion_queue.queue)),
-                       timeout=10)
-    first_beat = next(e for e in _drain(registry.completion_queue) if e["type"] == "heartbeat")
+    assert _wait_until(
+        lambda: any(
+            e.get("type") == "heartbeat" for e in list(registry.completion_queue.queue)
+        ),
+        timeout=10,
+    )
+    first_beat = next(
+        e for e in _drain(registry.completion_queue) if e["type"] == "heartbeat"
+    )
     assert "first" in first_beat["output"], first_beat
 
 
-def test_terminal_dispatch_heartbeat_implies_notify_and_foreground_runs_without_it(monkeypatch):
+def test_terminal_dispatch_heartbeat_implies_notify_and_foreground_runs_without_it(
+    monkeypatch,
+):
     """A foreground call carrying an explicit positive heartbeat (the shape models copy from a
     background call) runs once with the heartbeat dropped: refusing it only produced
     identical-call retry loops. Notification intent (`notify=true`) stays refused."""
@@ -142,32 +180,66 @@ def test_terminal_dispatch_heartbeat_implies_notify_and_foreground_runs_without_
 
     def fake_terminal_tool(**kwargs):
         captured.update(kwargs)
-        return json.dumps({"output": "Background process started", "session_id": "proc_x", "exit_code": 0})
+        return json.dumps(
+            {
+                "output": "Background process started",
+                "session_id": "proc_x",
+                "exit_code": 0,
+            }
+        )
 
     monkeypatch.setattr(tt, "terminal_tool", fake_terminal_tool)
     dispatch = tt._handle_terminal
-    fg = json.loads(dispatch({"command": "sleep 1", "background": False, "notify": False, "heartbeat": 120}))
+    fg = json.loads(
+        dispatch(
+            {
+                "command": "sleep 1",
+                "background": False,
+                "notify": False,
+                "heartbeat": 120,
+            }
+        )
+    )
     assert not fg.get("error")
     assert captured["background"] is False and captured["heartbeat"] == 0
     assert captured["notify_on_complete"] is False
 
     captured.clear()
     fg_notify = json.loads(dispatch({"command": "sleep 1", "notify": True}))
-    assert fg_notify.get("error") and "background" in fg_notify["error"] and not captured
+    assert (
+        fg_notify.get("error") and "background" in fg_notify["error"] and not captured
+    )
 
-    bg = json.loads(dispatch({"command": "sleep 1", "background": True, "heartbeat": 120}))
+    bg = json.loads(
+        dispatch({"command": "sleep 1", "background": True, "heartbeat": 120})
+    )
     assert "error" not in bg or not bg["error"]
     assert captured["heartbeat"] == 120 and captured["notify_on_complete"] is True
 
 
 def test_a_cut_tick_carries_its_omitted_count_as_a_field_and_the_marker_is_rendered_once():
     from tools.process_registry_notifications import (
-        HEARTBEAT_OUTPUT_CHARS, format_process_notification, heartbeat_output_tail)
+        HEARTBEAT_OUTPUT_CHARS,
+        format_process_notification,
+        heartbeat_output_tail,
+    )
+
     output, omitted = heartbeat_output_tail("x" * 5 + "y" * HEARTBEAT_OUTPUT_CHARS)
     assert (output, omitted) == ("y" * HEARTBEAT_OUTPUT_CHARS, 5)
-    beat = {"type": "heartbeat", "session_id": "proc_1", "command": "make", "seq": 1, "elapsed": 60,
-            "interval": 60, "output": output, "omitted": omitted}
-    assert f"heartbeat:\n...(5 earlier characters omitted)\n{output}]" in format_process_notification(beat)
+    beat = {
+        "type": "heartbeat",
+        "session_id": "proc_1",
+        "command": "make",
+        "seq": 1,
+        "elapsed": 60,
+        "interval": 60,
+        "output": output,
+        "omitted": omitted,
+    }
+    assert (
+        f"heartbeat:\n...(5 earlier characters omitted)\n{output}]"
+        in format_process_notification(beat)
+    )
     # Job text that looks like a marker is output, never a count.
     literal = "...(10 earlier characters omitted)\n"
     assert heartbeat_output_tail(literal) == (literal, 0)

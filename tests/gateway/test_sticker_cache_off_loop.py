@@ -10,6 +10,7 @@ These tests pin the two invariants of the off-loop form: the write runs on a
 worker thread, and the lock keeps two concurrent load/merge/save triples from
 losing an entry in the DURABLE file.
 """
+
 import asyncio
 import json
 import threading
@@ -79,9 +80,7 @@ def test_concurrent_writes_do_not_lose_an_entry(cache_file, monkeypatch):
                 pass
         return data
 
-    monkeypatch.setattr(
-        sticker_cache, "_load_cache", _interleaving_load, raising=True
-    )
+    monkeypatch.setattr(sticker_cache, "_load_cache", _interleaving_load, raising=True)
 
     async def scenario():
         try:

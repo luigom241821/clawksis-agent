@@ -7,6 +7,7 @@ under the same gate as the native read path (``_native_read_enabled``; ``CLAWK_N
 turns both off).  Semantics mirror the shell scripts they replace; anything they cannot answer
 (a FIFO, a device, an unexpected error) returns None and the caller takes the shell path.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -70,14 +71,19 @@ def atomic_write(path: str, data: bytes) -> Optional[str]:
         except FileNotFoundError:
             mode = None
         tmp = os.path.join(parent, f".clawk-tmp.{secrets.token_hex(6)}")
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
-                     0o666 if mode is None else 0o600)
+        fd = os.open(
+            tmp,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o666 if mode is None else 0o600,
+        )
     except OSError as e:
         return f"{e.strerror or e}: {e.filename or target}"
     try:
         if mode is not None:
             try:
-                os.fchmod(fd, mode)  # before any content: the bytes never sit in a wider file
+                os.fchmod(
+                    fd, mode
+                )  # before any content: the bytes never sit in a wider file
             except OSError:
                 pass  # best effort, as in the shell script (the temp then stays 0o600)
         with open(fd, "wb") as fh:

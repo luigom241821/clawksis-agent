@@ -30,7 +30,18 @@ from unittest.mock import patch
 
 import clawk_state
 import clawk_state_repair
-from clawk_state_repair import _MAX_MALFORMED_BACKUPS, _MAX_PERSISTENT_REPAIR_ATTEMPTS, _REPAIR_BACKUP_MIN_FREE_BYTES, _backup_content_identity, _backup_db_file, _db_fingerprint, _existing_malformed_backups, _persistent_repair_attempts_exhausted, _record_repair_outcome, _repair_backup_headroom_bytes
+from clawk_state_repair import (
+    _MAX_MALFORMED_BACKUPS,
+    _MAX_PERSISTENT_REPAIR_ATTEMPTS,
+    _REPAIR_BACKUP_MIN_FREE_BYTES,
+    _backup_content_identity,
+    _backup_db_file,
+    _db_fingerprint,
+    _existing_malformed_backups,
+    _persistent_repair_attempts_exhausted,
+    _record_repair_outcome,
+    _repair_backup_headroom_bytes,
+)
 
 
 def _damaged_db(tmp_path: Path, size: int = 200_000) -> Path:
@@ -133,7 +144,11 @@ def test_backup_refused_when_disk_would_be_exhausted(tmp_path):
     tight = type(
         "Usage",
         (),
-        {"total": 10_000_000_000, "used": 0, "free": _REPAIR_BACKUP_MIN_FREE_BYTES // 2},
+        {
+            "total": 10_000_000_000,
+            "used": 0,
+            "free": _REPAIR_BACKUP_MIN_FREE_BYTES // 2,
+        },
     )()
     with patch("shutil.disk_usage", return_value=tight):
         path, reason = _backup_db_file(db)
@@ -156,7 +171,9 @@ def test_backup_allowed_on_small_volume_with_room(tmp_path):
         handle.truncate(50_000_000)
     assert db.stat().st_size == 50_000_000
     small_vm = type(
-        "Usage", (), {"total": 10_000_000_000, "used": 8_500_000_000, "free": 1_500_000_000}
+        "Usage",
+        (),
+        {"total": 10_000_000_000, "used": 8_500_000_000, "free": 1_500_000_000},
     )()
     with patch("shutil.disk_usage", return_value=small_vm):
         path, reason = _backup_db_file(db)
@@ -166,7 +183,9 @@ def test_backup_allowed_on_small_volume_with_room(tmp_path):
 def test_headroom_scales_with_volume_size():
     """Big volumes reserve proportionally; small ones keep a modest floor."""
     assert _repair_backup_headroom_bytes(1_000_000_000) == _REPAIR_BACKUP_MIN_FREE_BYTES
-    assert _repair_backup_headroom_bytes(1_000_000_000_000) > _REPAIR_BACKUP_MIN_FREE_BYTES
+    assert (
+        _repair_backup_headroom_bytes(1_000_000_000_000) > _REPAIR_BACKUP_MIN_FREE_BYTES
+    )
 
 
 def test_disk_guard_accounts_for_sidecars(tmp_path):
@@ -181,7 +200,11 @@ def test_disk_guard_accounts_for_sidecars(tmp_path):
     usage = type(
         "Usage",
         (),
-        {"total": 10_000_000_000, "used": 0, "free": _REPAIR_BACKUP_MIN_FREE_BYTES + 300_000_000},
+        {
+            "total": 10_000_000_000,
+            "used": 0,
+            "free": _REPAIR_BACKUP_MIN_FREE_BYTES + 300_000_000,
+        },
     )()
     with patch("shutil.disk_usage", return_value=usage):
         path, reason = _backup_db_file(db)
@@ -209,8 +232,10 @@ def test_failed_copy_leaves_no_countable_debris(tmp_path):
             raise OSError(28, "No space left on device")
         return real_copy2(src, dst, *a, **kw)
 
-    with patch("shutil.disk_usage", return_value=roomy), \
-            patch("shutil.copy2", sidecar_fails):
+    with (
+        patch("shutil.disk_usage", return_value=roomy),
+        patch("shutil.copy2", sidecar_fails),
+    ):
         for _ in range(6):
             _backup_db_file(db)
             time.sleep(0.01)
@@ -394,8 +419,7 @@ def test_staging_name_is_outside_the_backup_prefix(tmp_path):
         staging_names.append(Path(dst).name)
         return real_copy2(src, dst, *a, **kw)
 
-    with patch("shutil.disk_usage", return_value=roomy), \
-            patch("shutil.copy2", capture):
+    with patch("shutil.disk_usage", return_value=roomy), patch("shutil.copy2", capture):
         path, reason = _backup_db_file(db)
 
     assert reason is None and path is not None
@@ -431,8 +455,7 @@ def test_orphaned_staging_is_never_returned_as_the_backup_path(tmp_path):
         seen.append(Path(dst))
         return real_copy2(src, dst, *a, **kw)
 
-    with patch("shutil.disk_usage", return_value=roomy), \
-            patch("shutil.copy2", capture):
+    with patch("shutil.disk_usage", return_value=roomy), patch("shutil.copy2", capture):
         first, _ = _backup_db_file(db)
     assert first is not None
     Path(first).unlink(missing_ok=True)
@@ -576,7 +599,9 @@ def test_budget_exhausts_while_a_writer_commits_between_passes(tmp_path):
         _record_repair_outcome(db, repaired=False)
         writer = sqlite3.connect(str(db), isolation_level=None)
         try:
-            writer.execute("UPDATE sessions SET blob=? WHERE id='20000'", (f"v{index}",))
+            writer.execute(
+                "UPDATE sessions SET blob=? WHERE id='20000'", (f"v{index}",)
+            )
         finally:
             writer.close()
 
@@ -718,7 +743,9 @@ def test_backup_not_deduped_after_interior_page_write(tmp_path):
     with patch("shutil.disk_usage", return_value=roomy):
         second, err = _backup_db_file(db)
     assert err is None and second is not None
-    assert second != first, "an interior-page write was wrongly deduped to a stale backup"
+    assert second != first, (
+        "an interior-page write was wrongly deduped to a stale backup"
+    )
     assert len(_existing_malformed_backups(db)) == 2
 
 
@@ -752,8 +779,10 @@ def test_publication_failure_leaves_no_countable_partial_bundle(tmp_path):
             raise OSError(28, "No space left on device")
         return real_replace(src, dst, *a, **kw)
 
-    with patch("shutil.disk_usage", return_value=roomy), \
-            patch("os.replace", replace_fails_after_first):
+    with (
+        patch("shutil.disk_usage", return_value=roomy),
+        patch("os.replace", replace_fails_after_first),
+    ):
         try:
             _backup_db_file(db)
         except OSError:
@@ -762,7 +791,8 @@ def test_publication_failure_leaves_no_countable_partial_bundle(tmp_path):
     # No countable main backup, and no orphaned promoted sidecar, may survive.
     assert not _existing_malformed_backups(db), "a partial bundle was left countable"
     promoted = [
-        p for p in tmp_path.iterdir()
+        p
+        for p in tmp_path.iterdir()
         if ".malformed-backup-" in p.name and p.name != "state.db"
     ]
     assert not promoted, f"partial promoted files survived: {promoted}"

@@ -16,23 +16,32 @@ from clawk_cli.plugin_capabilities import _child_dict
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
 def _set_plugin_entry_flag(plugin_id: str, key: str, value: bool) -> None:
     """Write ``plugins.entries.<plugin_id>.<key> = value`` into config.yaml."""
     from clawk_cli.config import load_config, save_config
+
     config = load_config()
-    entry = _child_dict(_child_dict(_child_dict(config, "plugins"), "entries"), plugin_id)
+    entry = _child_dict(
+        _child_dict(_child_dict(config, "plugins"), "entries"), plugin_id
+    )
     entry[key] = bool(value)
     save_config(config)
 
 
 # ── Capability consent flow (#64228) ─────────────────────────────────────────
-def _declared_capabilities_from_manifest(manifest: dict, plugin_name: str = "?") -> list:
+def _declared_capabilities_from_manifest(
+    manifest: dict, plugin_name: str = "?"
+) -> list:
     """Extract + normalize the ``capabilities:`` declaration from a manifest."""
     from clawk_cli.plugin_capabilities import parse_declared_capabilities
-    return parse_declared_capabilities((manifest or {}).get("capabilities"), plugin_name)
+
+    return parse_declared_capabilities(
+        (manifest or {}).get("capabilities"), plugin_name
+    )
 
 
 def _declared_capabilities_for_key(key: str) -> list:
@@ -42,16 +51,21 @@ def _declared_capabilities_for_key(key: str) -> list:
         return []
     if entry[3] == "entrypoint":
         from clawk_cli.plugins import discover_entrypoint_manifests
+
         for manifest in discover_entrypoint_manifests():
             if key in (manifest.key, manifest.name):
                 return list(manifest.capabilities)
         return []
     if not entry[4]:
         return []
-    return _declared_capabilities_from_manifest(_pc()._read_manifest(Path(entry[4])), entry[0])
+    return _declared_capabilities_from_manifest(
+        _pc()._read_manifest(Path(entry[4])), entry[0]
+    )
 
 
-def _run_capability_consent(console, plugin_id: str, declared: list, *, context: str = "install") -> bool:
+def _run_capability_consent(
+    console, plugin_id: str, declared: list, *, context: str = "install"
+) -> bool:
     """Show the capability consent screen and record the decision; True when granted.
 
     On consent the pending capabilities are granted under
@@ -59,7 +73,12 @@ def _run_capability_consent(console, plugin_id: str, declared: list, *, context:
     or in ANY non-interactive context — they stay ungranted (fail closed) and the plugin must
     degrade via ``ctx.has_capability()``. Consent + audit, NOT a sandbox.
     """
-    from clawk_cli.plugin_capabilities import CAPABILITY_REGISTRY, pending_capabilities, record_consent
+    from clawk_cli.plugin_capabilities import (
+        CAPABILITY_REGISTRY,
+        pending_capabilities,
+        record_consent,
+    )
+
     pending = pending_capabilities(plugin_id, declared)
     if not pending:
         # Refresh the consent hash so a later declaration change is detected.
@@ -68,34 +87,40 @@ def _run_capability_consent(console, plugin_id: str, declared: list, *, context:
         return True
 
     verb = "requests" if context == "install" else "now requests"
-    console.print(f"\n  [yellow]Plugin [bold]{plugin_id}[/bold] {verb} the following capabilities:[/yellow]")
+    console.print(
+        f"\n  [yellow]Plugin [bold]{plugin_id}[/bold] {verb} the following capabilities:[/yellow]"
+    )
     for cap in pending:
         spec = CAPABILITY_REGISTRY.get(cap)
         console.print(f"    [bold]{cap}[/bold] — {spec.description if spec else ''}")
     console.print(
         "  [dim]Granting trusts the plugin author with these host surfaces. "
         "This is consent, not a sandbox — plugins run as regular Python "
-        "in-process.[/dim]")
+        "in-process.[/dim]"
+    )
 
     if not _pc()._is_tty():
         console.print(
             "  [yellow]Non-interactive session: capabilities NOT granted "
             "(fail closed).[/yellow] Run "
             f"`clawk plugins capabilities {plugin_id}` to review and "
-            f"`clawk plugins enable {plugin_id}` to grant interactively.")
+            f"`clawk plugins enable {plugin_id}` to grant interactively."
+        )
         return False
 
     if _pc()._ask_yes("  Grant these capabilities? [y/N] ", console.input):
         record_consent(plugin_id, pending, declared)
         console.print(
             f"  [green]✓[/green] Granted: {', '.join(pending)} "
-            f"([dim]plugins.entries.{plugin_id}.granted_capabilities[/dim])")
+            f"([dim]plugins.entries.{plugin_id}.granted_capabilities[/dim])"
+        )
         return True
 
     console.print(
         f"  [dim]Declined. {plugin_id} stays enabled with these capabilities "
         "off; it should degrade gracefully (ctx.has_capability()). Re-run "
-        f"`clawk plugins enable {plugin_id}` to grant later.[/dim]")
+        f"`clawk plugins enable {plugin_id}` to grant later.[/dim]"
+    )
     return False
 
 
@@ -106,6 +131,7 @@ def cmd_capabilities(name: Optional[str] = None) -> None:
         granted_capabilities,
         plugin_capability_granted,
     )
+
     console = _pc()._console()
     if name is not None:
         hit = _pc()._find_plugin_entry(name)
@@ -120,7 +146,9 @@ def cmd_capabilities(name: Optional[str] = None) -> None:
         declared = _declared_capabilities_for_key(key)
         granted = granted_capabilities(key)
         # Effective state includes grants live via deprecated allow_* keys.
-        effective = {cap for cap in CAPABILITY_REGISTRY if plugin_capability_granted(key, cap)}
+        effective = {
+            cap for cap in CAPABILITY_REGISTRY if plugin_capability_granted(key, cap)
+        }
         if not declared and not effective and name is None:
             continue
         rows.append((key, entry[3], declared, granted, effective))
@@ -144,10 +172,14 @@ def cmd_capabilities(name: Optional[str] = None) -> None:
                 mark = "[green]granted[/green] [dim](via legacy allow_* key — deprecated)[/dim]"
             console.print(f"  {cap}: {mark}")
         for cap in sorted(effective - set(declared)):
-            console.print(f"  {cap}: [green]granted[/green] [dim](not declared in manifest)[/dim]")
+            console.print(
+                f"  {cap}: [green]granted[/green] [dim](not declared in manifest)[/dim]"
+            )
 
 
-def _resolve_tool_override_grant(console, key: str, allow_tool_override: Optional[bool]) -> None:
+def _resolve_tool_override_grant(
+    console, key: str, allow_tool_override: Optional[bool]
+) -> None:
     """Resolve and persist the ``allow_tool_override`` grant for a plugin."""
     if allow_tool_override is None:
         # Default NO: a blind Enter or a non-interactive stdin denies safely.
@@ -164,9 +196,11 @@ def _resolve_tool_override_grant(console, key: str, allow_tool_override: Optiona
         console.print(
             f"[green]✓[/green] Granted [bold]{key}[/bold] permission to "
             "override built-in tools "
-            f"([dim]plugins.entries.{key}.allow_tool_override: true[/dim]).")
+            f"([dim]plugins.entries.{key}.allow_tool_override: true[/dim])."
+        )
     else:
         console.print(
             f"[dim]{key} may not override built-in tools. Re-run "
             f"`clawk plugins enable {key} --allow-tool-override` to grant "
-            "this later.[/dim]")
+            "this later.[/dim]"
+        )

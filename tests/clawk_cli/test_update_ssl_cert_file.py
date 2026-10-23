@@ -14,7 +14,10 @@ from clawk_cli import update_cmd
 def _git_config(configured: str | None):
     def run(cmd, args, **kwargs):
         assert args[:3] == ["config", "--get", "http.sslCAInfo"], args
-        return subprocess.CompletedProcess(cmd, 0 if configured else 1, configured or "", "")
+        return subprocess.CompletedProcess(
+            cmd, 0 if configured else 1, configured or "", ""
+        )
+
     return run
 
 
@@ -31,6 +34,8 @@ def test_ssl_cert_file_reaches_network_git_children(monkeypatch, tmp_path):
 def test_configured_git_ca_is_not_overridden(monkeypatch, tmp_path):
     monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "corp-bundle.pem"))
     monkeypatch.delenv("GIT_SSL_CAINFO", raising=False)
-    monkeypatch.setattr(update_cmd, "_git_run", _git_config(str(tmp_path / "configured.pem")))
+    monkeypatch.setattr(
+        update_cmd, "_git_run", _git_config(str(tmp_path / "configured.pem"))
+    )
     update_cmd._map_ssl_cert_file_for_git(["git"])
     assert "GIT_SSL_CAINFO" not in os.environ

@@ -1,4 +1,5 @@
 """Tests for the profile-scoped credential primitive (Workstream A / Phase 2)."""
+
 import pytest
 
 from agent import secret_scope as ss
@@ -39,7 +40,6 @@ class TestMultiplexActiveFailClosed:
         with pytest.raises(ss.UnscopedSecretError):
             ss.get_secret("ANTHROPIC_API_KEY")
 
-
     def test_scoped_missing_key_returns_default_not_environ(self, monkeypatch):
         # Even though the value exists in os.environ, a scope is authoritative:
         # an absent scope key must NOT fall through to the (cross-profile) env.
@@ -51,8 +51,6 @@ class TestMultiplexActiveFailClosed:
             assert ss.get_secret("OPENAI_API_KEY", "d") == "d"
         finally:
             ss.reset_secret_scope(token)
-
-
 
 
 class TestScopedSingleProfile:
@@ -69,7 +67,6 @@ class TestScopedSingleProfile:
             assert ss.get_secret("ANTHROPIC_API_KEY") == "sk-from-env-file"
         finally:
             ss.reset_secret_scope(token)
-
 
     def test_scope_miss_absent_everywhere_returns_default(self, monkeypatch):
         monkeypatch.delenv("NOPE_KEY", raising=False)
@@ -98,7 +95,9 @@ class TestRoutedForeignHomeScope:
     profile's env there, so a scoped miss must fail closed exactly like multiplex —
     the .env-overlay fallthrough is only safe when the scope's home IS ours."""
 
-    def test_scoped_miss_under_foreign_home_returns_default(self, monkeypatch, tmp_path):
+    def test_scoped_miss_under_foreign_home_returns_default(
+        self, monkeypatch, tmp_path
+    ):
         from clawk_constants import set_clawk_home_override, reset_clawk_home_override
 
         monkeypatch.setenv("OPENAI_API_KEY", "sk-launch-profile")
@@ -115,7 +114,11 @@ class TestRoutedForeignHomeScope:
     def test_scoped_miss_under_own_home_keeps_env_overlay(self, monkeypatch, tmp_path):
         """The deliberate single-profile overlay: a scope bound for the process's
         own home still falls through to os.environ (systemd / op run credentials)."""
-        from clawk_constants import get_process_clawk_home, set_clawk_home_override, reset_clawk_home_override
+        from clawk_constants import (
+            get_process_clawk_home,
+            set_clawk_home_override,
+            reset_clawk_home_override,
+        )
 
         monkeypatch.setenv("OPENAI_API_KEY", "sk-own-env")
         home_token = set_clawk_home_override(str(get_process_clawk_home()))
@@ -140,7 +143,9 @@ class TestRoutedForeignHomeScope:
             ss.reset_secret_scope(token)
             reset_clawk_home_override(home_token)
 
-    def test_stamped_foreign_scope_miss_fails_closed_without_override(self, monkeypatch, tmp_path):
+    def test_stamped_foreign_scope_miss_fails_closed_without_override(
+        self, monkeypatch, tmp_path
+    ):
         """The kanban/MCP shape: a foreign-home scope bound WITHOUT the CLAWK_HOME
         override (deliberate — those paths need the dispatcher's policy reads).
         The profile_home stamp makes serves_routed_profile see it anyway."""
@@ -209,7 +214,9 @@ class TestScopeSetupRecovery:
     CLAWK_HOME override or secret scope silently re-homes every later read in
     the caller's context."""
 
-    def test_profile_runtime_scope_setup_failure_restores_override(self, monkeypatch, tmp_path):
+    def test_profile_runtime_scope_setup_failure_restores_override(
+        self, monkeypatch, tmp_path
+    ):
         from gateway.run import _profile_runtime_scope
         from clawk_constants import get_clawk_home_override
 
@@ -226,7 +233,9 @@ class TestScopeSetupRecovery:
         assert get_clawk_home_override() is None
         assert ss.current_secret_scope() is None
 
-    def test_worker_profile_scope_setup_failure_restores_override(self, monkeypatch, tmp_path):
+    def test_worker_profile_scope_setup_failure_restores_override(
+        self, monkeypatch, tmp_path
+    ):
         from clawk_cli.kanban_db_dispatch import _worker_profile_scope
         from clawk_constants import get_clawk_home_override
 
@@ -243,7 +252,9 @@ class TestScopeSetupRecovery:
         assert get_clawk_home_override() is None
         assert ss.current_secret_scope() is None
 
-    def test_model_switch_bind_releases_partial_scopes_on_raise(self, monkeypatch, tmp_path):
+    def test_model_switch_bind_releases_partial_scopes_on_raise(
+        self, monkeypatch, tmp_path
+    ):
         """The scopes object never reaches the caller when the bind raises, so the
         bind must release what it already bound (home override + secret scope).
         Driven through ``server`` — the split module's functions run rebound on
@@ -300,9 +311,7 @@ class TestEnvFileParsing:
         assert ss.load_env_file(tmp_path / ".env") == {"MY_TOKEN": original}
 
     def test_load_env_file_single_quotes_and_plain_values(self, tmp_path):
-        (tmp_path / ".env").write_text(
-            "PLAIN=abc123\nQUOTED='single quoted'\nEMPTY=\n"
-        )
+        (tmp_path / ".env").write_text("PLAIN=abc123\nQUOTED='single quoted'\nEMPTY=\n")
         assert ss.load_env_file(tmp_path / ".env") == {
             "PLAIN": "abc123",
             "QUOTED": "single quoted",
@@ -328,8 +337,7 @@ class TestEnvFileParsing:
     def test_inline_comment_after_quoted_value(self, tmp_path):
         """Quotes strip AND the trailing comment drops; inner `#` survives."""
         (tmp_path / ".env").write_text(
-            "DQ=\"has # inside\" # trailing\n"
-            "SQ='single # inside' # trailing\n"
+            "DQ=\"has # inside\" # trailing\nSQ='single # inside' # trailing\n"
         )
         assert ss.load_env_file(tmp_path / ".env") == {
             "DQ": "has # inside",
@@ -338,9 +346,7 @@ class TestEnvFileParsing:
 
     def test_inline_comment_with_escaped_quote_inside_value(self, tmp_path):
         r"""Escape-aware close-quote scan: `\"` must not terminate the value."""
-        (tmp_path / ".env").write_text(
-            'KEY="a \\" quote # x" # trail\n'
-        )
+        (tmp_path / ".env").write_text('KEY="a \\" quote # x" # trail\n')
         assert ss.load_env_file(tmp_path / ".env") == {"KEY": 'a " quote # x'}
 
     def test_round_trip_writer_value_with_trailing_comment(self, tmp_path):
@@ -353,9 +359,6 @@ class TestEnvFileParsing:
         (tmp_path / ".env").write_text(f"MY_TOKEN={quoted} # rotated 2026-08\n")
         assert ss.load_env_file(tmp_path / ".env") == {"MY_TOKEN": original}
 
-
-
-
     def test_strips_utf8_bom_from_first_key(self, tmp_path):
         """Windows editors often save .env as UTF-8 with BOM (EF BB BF).
 
@@ -363,9 +366,7 @@ class TestEnvFileParsing:
         misses under an installed scope. utf-8-sig strips the leading BOM.
         """
         env = tmp_path / ".env"
-        env.write_bytes(
-            b"\xef\xbb\xbfANTHROPIC_API_KEY=sk-x\nOPENAI_API_KEY=sk-y\n"
-        )
+        env.write_bytes(b"\xef\xbb\xbfANTHROPIC_API_KEY=sk-x\nOPENAI_API_KEY=sk-y\n")
         out = ss.load_env_file(env)
         assert out == {
             "ANTHROPIC_API_KEY": "sk-x",
@@ -546,7 +547,9 @@ class TestSecretScopeAcrossExecutorThreads:
             assert seen == "scope-key"
             # A scoped miss must still not borrow the (cross-profile) env value.
             monkeypatch.setenv("OPENAI_API_KEY", "env-leak")
-            assert pool.submit(ss.get_secret, "OPENAI_API_KEY").result(timeout=10) is None
+            assert (
+                pool.submit(ss.get_secret, "OPENAI_API_KEY").result(timeout=10) is None
+            )
         finally:
             pool.shutdown(wait=True)
             ss.reset_secret_scope(token)
@@ -554,13 +557,17 @@ class TestSecretScopeAcrossExecutorThreads:
 
 class TestUnscopedSecretErrorSignature:
     def test_named_secret_leads_the_user_sentence(self):
-        err = ss.UnscopedSecretError("SURPLUS_API_KEY", "get_secret('SURPLUS_API_KEY') with no scope")
+        err = ss.UnscopedSecretError(
+            "SURPLUS_API_KEY", "get_secret('SURPLUS_API_KEY') with no scope"
+        )
         assert err.secret_name == "SURPLUS_API_KEY" and "SURPLUS_API_KEY" in str(err)
         assert err.developer_detail in getattr(err, "__notes__", [])
 
     def test_legacy_single_message_positional_is_the_developer_detail(self):
         """Older callers passed the whole sentence positionally; it must not be read as a name."""
-        err = ss.UnscopedSecretError("get_secret('X') called with no profile secret scope active.")
+        err = ss.UnscopedSecretError(
+            "get_secret('X') called with no profile secret scope active."
+        )
         assert err.secret_name == ""
         assert err.developer_detail.startswith("get_secret('X')")
         assert "get_secret" not in str(err)

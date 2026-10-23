@@ -94,7 +94,9 @@ class TestBranchRoutingColumns:
         source = _make_source()
         parent_entry = store.get_or_create_session(source)
         store._db.append_message(parent_entry.session_id, role="user", content="hello")
-        store._db.append_message(parent_entry.session_id, role="assistant", content="world")
+        store._db.append_message(
+            parent_entry.session_id, role="assistant", content="world"
+        )
 
         runner = _make_branch_runner(store)
 
@@ -110,7 +112,9 @@ class TestBranchRoutingColumns:
 
         from unittest import mock
 
-        with mock.patch.object(store, "switch_session", side_effect=_crash_before_switch):
+        with mock.patch.object(
+            store, "switch_session", side_effect=_crash_before_switch
+        ):
             with pytest.raises(RuntimeError, match="simulated crash"):
                 await runner._handle_branch_command(_make_event("/branch"))
 
@@ -162,7 +166,9 @@ class TestBranchSystemPrompt:
         parent_entry = store.get_or_create_session(source)
         store._db.update_system_prompt(parent_entry.session_id, "PARENT PROMPT")
         store._db.append_message(parent_entry.session_id, role="user", content="hello")
-        store._db.append_message(parent_entry.session_id, role="assistant", content="world")
+        store._db.append_message(
+            parent_entry.session_id, role="assistant", content="world"
+        )
 
         runner = _make_branch_runner(store)
         await runner._handle_branch_command(_make_event("/branch"))
@@ -177,4 +183,3 @@ class TestBranchSystemPrompt:
             "turn will re-probe the workspace and forfeit the warm cache "
             "the copied transcript buys"
         )
-

@@ -8,13 +8,18 @@ get_messages() into replace_messages() — must not re-encode that TEXT,
 or the forked session replays with reasoning fields decoding to strings
 and every isinstance(..., list) consumer silently drops them.
 """
+
 import pytest
 
 from clawk_state import SessionDB
 
 
 REASONING_DETAILS = [
-    {"type": "reasoning.text", "text": "compare both branches first", "format": "unknown"}
+    {
+        "type": "reasoning.text",
+        "text": "compare both branches first",
+        "format": "unknown",
+    }
 ]
 CODEX_REASONING_ITEMS = [
     {"id": "rs_1", "type": "reasoning", "encrypted_content": "opaque-blob"}

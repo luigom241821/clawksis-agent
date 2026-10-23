@@ -67,7 +67,10 @@ HEADLESS_SNAPSHOT_STDOUT = (
 
 @pytest.mark.platforms("windows")
 @patch("tools.browser_tool_session._get_session_info")
-@patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser")
+@patch(
+    "tools.browser_tool_install._find_agent_browser",
+    return_value="/usr/bin/agent-browser",
+)
 @patch("tools.browser_tool_cloud._is_local_mode", return_value=True)
 @patch("tools.browser_tool_install._chromium_installed", return_value=True)
 @patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None)
@@ -99,15 +102,25 @@ def test_local_command_env_pins_headed_false(
         patch("os.close"),
         patch("os.unlink"),
         patch("os.makedirs"),
-        patch("builtins.open", MagicMock(return_value=MagicMock(
-            __enter__=MagicMock(return_value=MagicMock(
-                read=MagicMock(return_value=HEADLESS_SNAPSHOT_STDOUT))),
-            __exit__=MagicMock(return_value=False),
-        ))),
+        patch(
+            "builtins.open",
+            MagicMock(
+                return_value=MagicMock(
+                    __enter__=MagicMock(
+                        return_value=MagicMock(
+                            read=MagicMock(return_value=HEADLESS_SNAPSHOT_STDOUT)
+                        )
+                    ),
+                    __exit__=MagicMock(return_value=False),
+                )
+            ),
+        ),
         patch("tools.interrupt.is_interrupted", return_value=False),
         patch("tools.browser_tool_lifecycle._write_owner_pid"),
     ):
-        bt_session._run_browser_command("task1", "snapshot", [], _engine_override="auto")
+        bt_session._run_browser_command(
+            "task1", "snapshot", [], _engine_override="auto"
+        )
 
     assert len(captured) == 1
     cmd, env = captured[0]

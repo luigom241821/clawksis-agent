@@ -12,6 +12,7 @@ journal_mode in apply_wal_with_fallback), before _init_schema runs — so it
 cannot be handled at the FTS-rebuild layer. These tests verify the
 sqlite_master surgery path recovers the canonical data and self-heals on open.
 """
+
 import contextlib
 import json
 import sqlite3
@@ -69,9 +70,7 @@ def test_duplicate_fts_makes_every_statement_fail(tmp_path):
     assert is_malformed_db_error(exc_info.value)
 
 
-def test_generic_malformed_open_does_not_attempt_schema_surgery(
-    tmp_path, monkeypatch
-):
+def test_generic_malformed_open_does_not_attempt_schema_surgery(tmp_path, monkeypatch):
     """A generic SQLITE_CORRUPT error has no schema/FTS provenance."""
     db_path = tmp_path / "state.db"
     repair_calls = []
@@ -79,9 +78,12 @@ def test_generic_malformed_open_does_not_attempt_schema_surgery(
     def _generic_corruption(*_args, **_kwargs):
         raise sqlite3.DatabaseError("database disk image is malformed")
 
-    monkeypatch.setattr(clawk_state, "apply_wal_with_fallback", _generic_corruption)  # SessionDB open path
     monkeypatch.setattr(
-        clawk_state, "repair_state_db_schema",
+        clawk_state, "apply_wal_with_fallback", _generic_corruption
+    )  # SessionDB open path
+    monkeypatch.setattr(
+        clawk_state,
+        "repair_state_db_schema",
         lambda *args, **kwargs: repair_calls.append((args, kwargs)),
     )
 
@@ -110,8 +112,6 @@ def test_repaired_db_search_works(tmp_path):
         db.close()
 
 
-
-
 def test_auto_heal_attempted_once_per_process(tmp_path, monkeypatch):
     """A still-broken DB must not loop: the second open just raises."""
     db_path = tmp_path / "state.db"
@@ -138,10 +138,6 @@ def test_auto_heal_attempted_once_per_process(tmp_path, monkeypatch):
     monkeypatch.setattr(clawk_state, "repair_state_db_schema", real_repair)
 
 
-
-
-
-
 def test_unrepairable_file_fails_safely(tmp_path, monkeypatch):
     """A file too damaged to recover must report failure, keep a backup, and
     never raise from the repair routine itself."""
@@ -153,10 +149,6 @@ def test_unrepairable_file_fails_safely(tmp_path, monkeypatch):
     assert report["error"]
     # The (damaged) original bytes are preserved for manual restore.
     assert report["backup_path"] and Path(report["backup_path"]).exists()
-
-
-
-
 
 
 # ── FTS read-corruption class (#66724) ───────────────────────────────────
@@ -180,8 +172,6 @@ def _corrupt_fts_shadow_segments(db_path: Path) -> None:
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     conn.execute("UPDATE messages_fts_data SET block = X'BADC0FFEE0DDF00D'")
     conn.close()
-
-
 
 
 def test_fts_read_corruption_repaired_in_place(tmp_path):
@@ -246,10 +236,6 @@ class _NoTrigramRuntimeCursor(sqlite3.Cursor):
 class _NoTrigramRuntimeConnection(sqlite3.Connection):
     def cursor(self, factory=None):
         return super().cursor(factory or _NoTrigramRuntimeCursor)
-
-
-
-
 
 
 # ── FTS write-corruption class (#50502) ──────────────────────────────────
@@ -318,8 +304,6 @@ def test_fts_write_corruption_repaired_in_place(tmp_path):
         assert hits >= 5
     finally:
         db.close()
-
-
 
 
 def _corrupt_btree_index(db_path: Path, index_name: str) -> None:
@@ -450,7 +434,8 @@ def _lock_held_by_other_process(db_path: Path, hold_seconds: float = 30.0):
     )
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
-        stdout=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     try:
         # Wait for the child to actually own the lock before yielding.
@@ -511,6 +496,7 @@ def _release_header_probe_fds() -> None:
     import os
 
     import clawk_state_dbfile
+
     with clawk_state_dbfile._HEADER_PROBE_LOCK:
         for fd, _dev, _ino in clawk_state_dbfile._HEADER_PROBE_FDS.values():
             os.close(fd)
@@ -539,7 +525,9 @@ def test_two_processes_repairing_at_once_perform_surgery_once(tmp_path):
     procs = [
         subprocess.Popen(
             [sys.executable, "-c", script],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         for _ in range(2)
     ]
@@ -609,7 +597,8 @@ def test_backup_refusal_hard_stops_the_repair(tmp_path, monkeypatch):
     original_bytes = db_path.read_bytes()
 
     monkeypatch.setattr(
-        clawk_state_repair, "_backup_db_file",
+        clawk_state_repair,
+        "_backup_db_file",
         lambda p: (None, "a connection to it is still open in this process"),
     )
 
@@ -631,7 +620,8 @@ def test_backup_copy_failure_hard_stops_the_repair(tmp_path, monkeypatch):
     _corrupt_duplicate_fts(db_path)
 
     monkeypatch.setattr(
-        clawk_state_repair, "_backup_db_file",
+        clawk_state_repair,
+        "_backup_db_file",
         lambda p: (None, "backup copy failed: [Errno 28] No space left on device"),
     )
 
@@ -678,16 +668,17 @@ def _configure_journal_mode(monkeypatch, tmp_path, mode) -> None:
     home.mkdir(exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "config.yaml").write_text(
-        yaml.safe_dump({"database": {"journal_mode": mode}}), encoding="utf-8",
+        yaml.safe_dump({"database": {"journal_mode": mode}}),
+        encoding="utf-8",
     )
     monkeypatch.setattr(
-        clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda **kwargs: False,
+        clawk_state_wal,
+        "is_sqlite_wal_reset_vulnerable",
+        lambda **kwargs: False,
     )
 
 
-def test_repair_restores_configured_wal_after_surgery(
-    tmp_path, caplog, monkeypatch
-):
+def test_repair_restores_configured_wal_after_surgery(tmp_path, caplog, monkeypatch):
     """A repaired file left in delete mode must return to the configured WAL.
 
     Simulates the reported sequence: corruption drops the WAL bit (the file
@@ -719,9 +710,7 @@ def test_repair_restores_configured_wal_after_surgery(
     assert _mode_of(db_path) == "wal"
 
 
-def test_repair_restore_matches_canonical_on_vulnerable_sqlite(
-    tmp_path, monkeypatch
-):
+def test_repair_restore_matches_canonical_on_vulnerable_sqlite(tmp_path, monkeypatch):
     """The restore must go through the WAL-reset gate, not around it.
 
     On a WAL-reset-vulnerable SQLite (the reporter ran 3.50.4), the
@@ -747,9 +736,7 @@ def test_repair_restore_matches_canonical_on_vulnerable_sqlite(
     assert _mode_of(db_path) == "delete"
 
 
-def test_repair_reports_mode_change_when_probe_succeeded(
-    tmp_path, caplog, monkeypatch
-):
+def test_repair_reports_mode_change_when_probe_succeeded(tmp_path, caplog, monkeypatch):
     """When the pre-surgery probe read the file (header intact), the
     post-restore WARNING names the before/after modes — the #89393 signal,
     arriving through the repair door instead of the open door."""
@@ -777,11 +764,7 @@ def test_repair_reports_mode_change_when_probe_succeeded(
     assert _mode_of(db_path) == "wal"
 
 
-
-
-def test_repair_restore_failure_is_nonfatal(
-    tmp_path, caplog, monkeypatch
-):
+def test_repair_restore_failure_is_nonfatal(tmp_path, caplog, monkeypatch):
     """When the canonical restore path raises (locked/unsupported fs), the
     repair result stands and a WARNING is logged — never an exception out
     of the repair path."""
@@ -826,6 +809,7 @@ def test_repair_honors_configured_delete_mode(tmp_path, monkeypatch):
 
 
 # ── #98924 companion: recovery surface beyond the probe fix (#98935) ───────
+
 
 # The probe itself is fixed in #98935; this test must not depend on it.
 def test_fts_recovery_includes_vtables_that_raise_decode_errors(tmp_path):

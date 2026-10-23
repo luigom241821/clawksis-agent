@@ -21,18 +21,25 @@ def _home(config: GatewayConfig, qq_config: PlatformConfig) -> None:
         )
     if qq_home:
         qq_config.home_channel = HomeChannel(
-            platform=Platform.QQBOT, chat_id=qq_home,
+            platform=Platform.QQBOT,
+            chat_id=qq_home,
             name=getenv("QQBOT_HOME_CHANNEL_NAME") or getenv(name_env, "Home"),
-            thread_id=getenv("QQBOT_HOME_CHANNEL_THREAD_ID") or getenv("QQ_HOME_CHANNEL_THREAD_ID") or None,
+            thread_id=getenv("QQBOT_HOME_CHANNEL_THREAD_ID")
+            or getenv("QQ_HOME_CHANNEL_THREAD_ID")
+            or None,
         )
 
 
 ENV_ENABLE_CREDENTIALS = ("QQ_APP_ID", "QQ_CLIENT_SECRET")
 ENV_OVERRIDES = (
     EnvCred(
-        Platform.QQBOT, (("QQ_APP_ID", "QQ_CLIENT_SECRET"),),
+        Platform.QQBOT,
+        (("QQ_APP_ID", "QQ_CLIENT_SECRET"),),
         optional=(("app_id", "QQ_APP_ID"), ("client_secret", "QQ_CLIENT_SECRET")),
-        optional_stripped=(("allow_from", "QQ_ALLOWED_USERS"), ("group_allow_from", "QQ_GROUP_ALLOWED_USERS")),
+        optional_stripped=(
+            ("allow_from", "QQ_ALLOWED_USERS"),
+            ("group_allow_from", "QQ_GROUP_ALLOWED_USERS"),
+        ),
         then=_home,
     ),
 )

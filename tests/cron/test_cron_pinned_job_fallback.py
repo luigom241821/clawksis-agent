@@ -38,13 +38,25 @@ def _run_owned_job(job, tmp_path):
     db = acquire(tmp_path / "state.db")
     db.create_session(ref.session_id, source="cron")
     authority = SimpleNamespace(
-        db=db, pending_results={},
-        sessions={ref.session_id: SimpleNamespace(source=SimpleNamespace(user_id="cron-owner"))},
+        db=db,
+        pending_results={},
+        sessions={
+            ref.session_id: SimpleNamespace(
+                source=SimpleNamespace(user_id="cron-owner")
+            )
+        },
     )
-    row = {"admission_id": admission_id, "request_id": "cron-owner-request",
-           "principal_id": "cron-owner", "payload": {"text": ""}}
-    policy = SimpleNamespace(request_json=json.dumps(
-        {"cron_job": job, "extra_prompt": None, "request_id": "cron-owner-request"}))
+    row = {
+        "admission_id": admission_id,
+        "request_id": "cron-owner-request",
+        "principal_id": "cron-owner",
+        "payload": {"text": ""},
+    }
+    policy = SimpleNamespace(
+        request_json=json.dumps(
+            {"cron_job": job, "extra_prompt": None, "request_id": "cron-owner-request"}
+        )
+    )
 
     async def run():
         previous = current_execution()
@@ -63,6 +75,7 @@ def _run_owned_job(job, tmp_path):
     finally:
         release(db)
 
+
 _CONFIG = (
     "model:\n"
     "  default: gpt-5.6-sol\n"
@@ -75,8 +88,12 @@ _CHAIN = [{"provider": "openrouter", "model": "z-ai/glm-5.2"}]
 
 
 def _runtime(provider):
-    return {"api_key": "k", "base_url": "https://example.invalid/v1", "provider": provider,
-            "api_mode": "chat_completions"}
+    return {
+        "api_key": "k",
+        "base_url": "https://example.invalid/v1",
+        "provider": provider,
+        "api_mode": "chat_completions",
+    }
 
 
 def _run(tmp_path, job, *, primary_error=None):
@@ -93,14 +110,18 @@ def _run(tmp_path, job, *, primary_error=None):
             raise primary_error
         return _runtime(kwargs.get("requested") or "openai-codex")
 
-    with patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler._get_clawk_home", return_value=tmp_path), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve), \
-         patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-         patch("run_agent.AIAgent") as agent_cls:
+    with (
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler._get_clawk_home", return_value=tmp_path),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve
+        ),
+        patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]),
+        patch("run_agent.AIAgent") as agent_cls,
+    ):
         agent_cls.return_value.run_conversation.return_value = {"final_response": "ok"}
         success, _output, _final, error = _run_owned_job(dict(job), tmp_path)
     kwargs = agent_cls.call_args.kwargs if agent_cls.called else {}
@@ -108,23 +129,41 @@ def _run(tmp_path, job, *, primary_error=None):
 
 
 def _job(**pin):
-    return {"id": "pin-job", "name": "pin job", "prompt": "hi", "model": None, "provider": None,
-            "base_url": None, **pin}
+    return {
+        "id": "pin-job",
+        "name": "pin job",
+        "prompt": "hi",
+        "model": None,
+        "provider": None,
+        "base_url": None,
+        **pin,
+    }
 
 
 PINS = [
-    pytest.param({"provider": "anthropic", "model": "claude-sonnet-5"}, id="provider+model"),
+    pytest.param(
+        {"provider": "anthropic", "model": "claude-sonnet-5"}, id="provider+model"
+    ),
     pytest.param({"model": "claude-sonnet-5"}, id="model-only"),
     pytest.param({"provider": "anthropic"}, id="provider-only"),
-    pytest.param({"provider": "custom", "base_url": "http://127.0.0.1:8080/v1", "model": "local"},
-                 id="endpoint"),
+    pytest.param(
+        {
+            "provider": "custom",
+            "base_url": "http://127.0.0.1:8080/v1",
+            "model": "local",
+        },
+        id="endpoint",
+    ),
 ]
 
 
 @pytest.mark.parametrize("pin", PINS)
-def test_pinned_job_primary_auth_failure_does_not_land_on_the_global_chain(tmp_path, pin):
+def test_pinned_job_primary_auth_failure_does_not_land_on_the_global_chain(
+    tmp_path, pin
+):
     success, error, requested, agent_kwargs = _run(
-        tmp_path, _job(**pin), primary_error=AuthError("No credentials stored"))
+        tmp_path, _job(**pin), primary_error=AuthError("No credentials stored")
+    )
     assert success is False
     assert "No credentials stored" in (error or "")
     assert "openrouter" not in requested
@@ -135,18 +174,28 @@ def test_pinned_job_dns_blip_does_not_land_on_the_global_chain(tmp_path):
     import httpx
 
     success, _error, requested, agent_kwargs = _run(
-        tmp_path, _job(provider="xai-oauth", model="grok-4.5"),
-        primary_error=httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known"))
+        tmp_path,
+        _job(provider="xai-oauth", model="grok-4.5"),
+        primary_error=httpx.ConnectError(
+            "[Errno 8] nodename nor servname provided, or not known"
+        ),
+    )
     assert success is False
-    assert set(requested) == {"xai-oauth"}  # preflight probe + real resolve; no chain entry
+    assert set(requested) == {
+        "xai-oauth"
+    }  # preflight probe + real resolve; no chain entry
     assert agent_kwargs == {}
 
 
 @pytest.mark.parametrize("pin", PINS)
 def test_resolve_job_runtime_does_not_walk_the_chain_for_a_pinned_job(pin):
     """The resolver itself, below preflight (which can be off: ``cron.preflight: false``)."""
-    jc = _CronJobConfig(cfg={"fallback_providers": list(_CHAIN)}, model=pin.get("model") or "gpt-5.6-sol",
-                        model_cfg={}, cron_default_provider="")
+    jc = _CronJobConfig(
+        cfg={"fallback_providers": list(_CHAIN)},
+        model=pin.get("model") or "gpt-5.6-sol",
+        model_cfg={},
+        cron_default_provider="",
+    )
     resolve = MagicMock(side_effect=AuthError("No credentials stored"))
     with patch("clawk_cli.runtime_provider.resolve_runtime_provider", resolve):
         with pytest.raises(RuntimeError, match="No credentials stored"):
@@ -155,15 +204,21 @@ def test_resolve_job_runtime_does_not_walk_the_chain_for_a_pinned_job(pin):
 
 
 def test_resolve_job_runtime_walks_the_chain_for_an_unpinned_job():
-    jc = _CronJobConfig(cfg={"fallback_providers": list(_CHAIN)}, model="gpt-5.6-sol",
-                        model_cfg={}, cron_default_provider="")
+    jc = _CronJobConfig(
+        cfg={"fallback_providers": list(_CHAIN)},
+        model="gpt-5.6-sol",
+        model_cfg={},
+        cron_default_provider="",
+    )
 
     def resolve(**kwargs):
         if kwargs.get("requested") == "openrouter":
             return _runtime("openrouter")
         raise AuthError("No credentials stored")
 
-    with patch("clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve):
+    with patch(
+        "clawk_cli.runtime_provider.resolve_runtime_provider", side_effect=resolve
+    ):
         runtime, model = _resolve_job_runtime(_job(), "free-job", jc)
     assert (runtime["provider"], model) == ("openrouter", "z-ai/glm-5.2")
 
@@ -177,10 +232,14 @@ def test_pinned_job_agent_gets_no_runtime_fallback_ladder(tmp_path, pin):
 
 def test_unpinned_job_still_walks_the_global_chain_at_resolve_time(tmp_path):
     success, error, requested, agent_kwargs = _run(
-        tmp_path, _job(), primary_error=AuthError("No Codex credentials stored"))
+        tmp_path, _job(), primary_error=AuthError("No Codex credentials stored")
+    )
     assert (success, error) == (True, None)
     assert requested == [None, "openrouter"]
-    assert (agent_kwargs["provider"], agent_kwargs["model"]) == ("openrouter", "z-ai/glm-5.2")
+    assert (agent_kwargs["provider"], agent_kwargs["model"]) == (
+        "openrouter",
+        "z-ai/glm-5.2",
+    )
 
 
 def test_unpinned_job_agent_inherits_the_global_chain_mid_run(tmp_path):
@@ -204,7 +263,8 @@ def test_pinned_job_same_provider_credential_pool_still_loads(tmp_path):
     pool.has_credentials.return_value = True
     with patch("agent.credential_pool.load_pool", return_value=pool) as load_pool:
         success, error, _requested, agent_kwargs = _run(
-            tmp_path, _job(provider="anthropic", model="claude-sonnet-5"))
+            tmp_path, _job(provider="anthropic", model="claude-sonnet-5")
+        )
     assert (success, error) == (True, None)
     load_pool.assert_called_once_with("anthropic")
     assert agent_kwargs["credential_pool"] is pool
@@ -212,8 +272,15 @@ def test_pinned_job_same_provider_credential_pool_still_loads(tmp_path):
 
 
 def test_pinned_job_failure_notice_does_not_promise_a_backup(monkeypatch):
-    monkeypatch.setattr(scheduler, "load_config", lambda: {"fallback_providers": list(_CHAIN)})
-    phrase = scheduler._fallback_chain_phrase(_job(provider="anthropic", model="claude-sonnet-5"))
+    monkeypatch.setattr(
+        scheduler, "load_config", lambda: {"fallback_providers": list(_CHAIN)}
+    )
+    phrase = scheduler._fallback_chain_phrase(
+        _job(provider="anthropic", model="claude-sonnet-5")
+    )
     assert "pinned" in phrase and "--unpin" in phrase
     assert "succeeded" not in phrase
-    assert scheduler._fallback_chain_phrase(_job()) == "No backup provider succeeded either."
+    assert (
+        scheduler._fallback_chain_phrase(_job())
+        == "No backup provider succeeded either."
+    )

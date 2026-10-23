@@ -1,4 +1,5 @@
 """Validate staged Docker artifact identities and publish receipts."""
+
 from __future__ import annotations
 
 import argparse
@@ -14,8 +15,10 @@ SHA256 = re.compile(r"[a-f0-9]{64}")
 GIT_SHA = re.compile(r"[a-f0-9]{40}")
 from clawk_cli.update_channel import STABLE_TAG_RE
 from scripts.releases.versioning import parse_attempt_ref
+
 ARCHES = ("amd64", "arm64")
 IMAGE = "nousresearch/clawksis-agent"
+
 
 class DockerReleaseError(ValueError):
     """Raised when a phase/manifest violates the staged-release contract."""
@@ -24,18 +27,27 @@ class DockerReleaseError(ValueError):
 def require_stable_tag(tag: str) -> str:
     # The versioned image is tagged by the attempt ref; stable/latest move only
     # at publish. The old v-suffix shape is dead.
-    if not isinstance(tag, str) or not (STABLE_TAG_RE.fullmatch(tag) or parse_attempt_ref(tag)):
+    if not isinstance(tag, str) or not (
+        STABLE_TAG_RE.fullmatch(tag) or parse_attempt_ref(tag)
+    ):
         raise DockerReleaseError(f"Not a stable release tag: {tag!r}")
     return tag
 
 
-def build_manifest(tag: str, commit: str, digests: dict[str, str], archive_sha256: dict[str, str] | None = None) -> dict:
+def build_manifest(
+    tag: str,
+    commit: str,
+    digests: dict[str, str],
+    archive_sha256: dict[str, str] | None = None,
+) -> dict:
     """Digest manifest emitted by the test phase (artifact ``docker-test-manifest``)."""
     require_stable_tag(tag)
     if not isinstance(commit, str) or not GIT_SHA.fullmatch(commit):
         raise DockerReleaseError(f"Invalid release commit: {commit!r}")
     if sorted(digests) != sorted(ARCHES):
-        raise DockerReleaseError(f"Manifest needs per-arch digests for {ARCHES}, got {sorted(digests)}")
+        raise DockerReleaseError(
+            f"Manifest needs per-arch digests for {ARCHES}, got {sorted(digests)}"
+        )
     for arch, digest in digests.items():
         if not SHA256.fullmatch(digest):
             raise DockerReleaseError(f"Invalid digest for {arch}: {digest!r}")
@@ -47,7 +59,9 @@ def build_manifest(tag: str, commit: str, digests: dict[str, str], archive_sha25
     }
     if archive_sha256 is not None:
         if sorted(archive_sha256) != sorted(ARCHES):
-            raise DockerReleaseError(f"Manifest needs per-arch archive hashes for {ARCHES}")
+            raise DockerReleaseError(
+                f"Manifest needs per-arch archive hashes for {ARCHES}"
+            )
         manifest["archives"] = {arch: archive_sha256[arch] for arch in ARCHES}
     return manifest
 
@@ -60,7 +74,9 @@ def parse_manifest(raw: bytes) -> dict:
     if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA:
         raise DockerReleaseError("Manifest schema mismatch")
     require_stable_tag(manifest.get("tag", ""))
-    if not isinstance(manifest.get("commit"), str) or not GIT_SHA.fullmatch(manifest["commit"]):
+    if not isinstance(manifest.get("commit"), str) or not GIT_SHA.fullmatch(
+        manifest["commit"]
+    ):
         raise DockerReleaseError("Manifest commit is not a full git SHA")
     digests = manifest.get("digests")
     if not isinstance(digests, dict) or sorted(digests) != sorted(ARCHES):
@@ -69,9 +85,13 @@ def parse_manifest(raw: bytes) -> dict:
         if not isinstance(digest, str) or not SHA256.fullmatch(digest):
             raise DockerReleaseError(f"Invalid digest for {arch}")
     archives = manifest.get("archives", {})
-    if archives and (not isinstance(archives, dict) or sorted(archives) != sorted(ARCHES)):
+    if archives and (
+        not isinstance(archives, dict) or sorted(archives) != sorted(ARCHES)
+    ):
         raise DockerReleaseError(f"Manifest archive hashes must cover {ARCHES}")
-    if "list-digest" in manifest and not re.fullmatch(r"sha256:[a-f0-9]{64}", manifest["list-digest"]):
+    if "list-digest" in manifest and not re.fullmatch(
+        r"sha256:[a-f0-9]{64}", manifest["list-digest"]
+    ):
         raise DockerReleaseError("Invalid published manifest-list digest")
     return manifest
 
@@ -98,10 +118,17 @@ def output(argv: list[str]) -> str:
 
 
 def _inspect(reference: str, run) -> str:
-    return run([
-        "docker", "buildx", "imagetools", "inspect", reference,
-        "--format", "{{json .Manifest.Digest}}",
-    ]).strip('"')
+    return run(
+        [
+            "docker",
+            "buildx",
+            "imagetools",
+            "inspect",
+            reference,
+            "--format",
+            "{{json .Manifest.Digest}}",
+        ]
+    ).strip('"')
 
 
 def _version_digest(tag: str, suffix: str, run) -> str:
@@ -109,13 +136,19 @@ def _version_digest(tag: str, suffix: str, run) -> str:
     try:
         digest = _inspect(reference, run)
     except subprocess.CalledProcessError as exc:
-        raise DockerReleaseError(f"Docker versioned tag {reference} is missing") from exc
+        raise DockerReleaseError(
+            f"Docker versioned tag {reference} is missing"
+        ) from exc
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
-        raise DockerReleaseError(f"Published image manifest digest is invalid: {reference}")
+        raise DockerReleaseError(
+            f"Published image manifest digest is invalid: {reference}"
+        )
     return digest
 
 
-def promote_stable(tag: str, digest: str, release_tag: str, *, run=output, sleep=time.sleep) -> None:
+def promote_stable(
+    tag: str, digest: str, release_tag: str, *, run=output, sleep=time.sleep
+) -> None:
     """Point the final ``vX.Y.Z``, stable and latest tags at the attempt's registry images.
 
     ``tag`` is the attempt ref the images were pushed under; ``release_tag`` is
@@ -127,13 +160,23 @@ def promote_stable(tag: str, digest: str, release_tag: str, *, run=output, sleep
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
         raise DockerReleaseError("Invalid published manifest-list digest")
     if _version_digest(tag, "", run) != digest:
-        raise DockerReleaseError("Docker versioned tag differs from the final release receipt")
+        raise DockerReleaseError(
+            "Docker versioned tag differs from the final release receipt"
+        )
     # Inspect both before moving either alias; desktop has its own registry digest.
     variants = (("", digest), ("-desktop", _version_digest(tag, "-desktop", run)))
     for suffix, version_digest in variants:
         command = [
-            "docker", "buildx", "imagetools", "create", "-t", f"{IMAGE}:{release_tag}{suffix}",
-            "-t", f"{IMAGE}:stable{suffix}", "-t", f"{IMAGE}:latest{suffix}",
+            "docker",
+            "buildx",
+            "imagetools",
+            "create",
+            "-t",
+            f"{IMAGE}:{release_tag}{suffix}",
+            "-t",
+            f"{IMAGE}:stable{suffix}",
+            "-t",
+            f"{IMAGE}:latest{suffix}",
             f"{IMAGE}@{version_digest}",
         ]
         for attempt in range(3):
@@ -151,7 +194,9 @@ def promote_stable(tag: str, digest: str, release_tag: str, *, run=output, sleep
                 if attempt < 2:
                     sleep(20)
             else:
-                raise DockerReleaseError(f"Docker {alias}{suffix} alias read-back mismatch")
+                raise DockerReleaseError(
+                    f"Docker {alias}{suffix} alias read-back mismatch"
+                )
 
 
 def stable_alias_digest(run=output) -> str | None:
@@ -181,15 +226,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_manifest = sub.add_parser("manifest", help="Emit the tested-image digest manifest JSON")
+    p_manifest = sub.add_parser(
+        "manifest", help="Emit the tested-image digest manifest JSON"
+    )
     p_manifest.add_argument("--tag", required=True)
     p_manifest.add_argument("--commit", required=True)
     p_manifest.add_argument("--digest-amd64", required=True)
     p_manifest.add_argument("--digest-arm64", required=True)
-    p_manifest.add_argument("--archive-amd64", default="", help="Optional sha256 file of the amd64 image archive")
+    p_manifest.add_argument(
+        "--archive-amd64",
+        default="",
+        help="Optional sha256 file of the amd64 image archive",
+    )
     p_manifest.add_argument("--archive-arm64", default="")
 
-    p_verify = sub.add_parser("verify", help="Verify a downloaded manifest against the release identity")
+    p_verify = sub.add_parser(
+        "verify", help="Verify a downloaded manifest against the release identity"
+    )
     p_verify.add_argument("--tag", required=True)
     p_verify.add_argument("--commit", required=True)
     p_verify.add_argument("manifest", help="Path to the downloaded manifest JSON")
@@ -198,7 +251,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "manifest":
             archive_hashes = {}
-            for arch, path in (("amd64", args.archive_amd64), ("arm64", args.archive_arm64)):
+            for arch, path in (
+                ("amd64", args.archive_amd64),
+                ("arm64", args.archive_arm64),
+            ):
                 if path:
                     archive_hashes[arch] = sha256_file(path)
             manifest = build_manifest(

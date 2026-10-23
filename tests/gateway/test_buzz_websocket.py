@@ -34,7 +34,9 @@ CHANNEL = "ccc2bc1a-7a82-5a8f-8c4e-57a070cbe7cd"
 def _make_adapter(extra=None):
     from gateway.config import PlatformConfig
 
-    cfg = PlatformConfig(enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})})
+    cfg = PlatformConfig(
+        enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})}
+    )
     adapter = BuzzAdapter(cfg)
     adapter._self_pubkey = SELF_PUBKEY
     adapter._private_key = TEST_PRIVATE_KEY
@@ -150,7 +152,11 @@ async def test_websocket_loop_reconnects_when_read_goes_silent(monkeypatch, capl
     monkeypatch.setattr(_buzz_mod, "_WS_READ_IDLE_TIMEOUT", 0.05)
     caplog.set_level(logging.WARNING)
     states = []
-    monkeypatch.setattr(adapter, "_write_runtime_status_safe", lambda status, **kw: states.append(kw["platform_state"]))
+    monkeypatch.setattr(
+        adapter,
+        "_write_runtime_status_safe",
+        lambda status, **kw: states.append(kw["platform_state"]),
+    )
 
     sockets = []
     release_parked_receive = asyncio.Event()
@@ -190,11 +196,15 @@ async def test_websocket_loop_reconnects_when_read_goes_silent(monkeypatch, capl
     assert len(sockets) >= 2, "idle read watchdog did not force a reconnect"
     assert sockets[0].exited, "the silent connection was not closed before reconnecting"
     assert any("went silent" in record.message for record in caplog.records)
-    assert states[:2] == ["retrying", "connected"], f"health must flip to retrying and back, got {states}"
+    assert states[:2] == ["retrying", "connected"], (
+        f"health must flip to retrying and back, got {states}"
+    )
 
 
 @pytest.mark.asyncio
-async def test_websocket_loop_reconnects_when_discovery_send_sees_closed_socket(monkeypatch):
+async def test_websocket_loop_reconnects_when_discovery_send_sees_closed_socket(
+    monkeypatch,
+):
     """A send-side ConnectionClosed proves the socket is dead even while the read is parked.
 
     #112049: the discovery sweep logged ``ConnectionClosedError`` for hours while
@@ -207,7 +217,9 @@ async def test_websocket_loop_reconnects_when_discovery_send_sees_closed_socket(
     adapter.poll_interval = 0.02
     monkeypatch.setattr(_buzz_mod, "_MIN_POLL_INTERVAL", 0.02)
     monkeypatch.setattr(_buzz_mod, "_DM_DISCOVERY_EVERY", 1)
-    monkeypatch.setattr(_buzz_mod, "_WS_READ_IDLE_TIMEOUT", 30.0)  # far away: only the send side can end this
+    monkeypatch.setattr(
+        _buzz_mod, "_WS_READ_IDLE_TIMEOUT", 30.0
+    )  # far away: only the send side can end this
 
     sockets = []
 
@@ -250,12 +262,16 @@ async def test_websocket_loop_reconnects_when_discovery_send_sees_closed_socket(
         except (TimeoutError, asyncio.CancelledError):
             pass
 
-    assert len(sockets) >= 2, "a closed socket seen by the discovery sweep did not force a reconnect"
+    assert len(sockets) >= 2, (
+        "a closed socket seen by the discovery sweep did not force a reconnect"
+    )
     assert sockets[0].exited, "the dead connection was not closed before reconnecting"
 
 
 @pytest.mark.asyncio
-async def test_websocket_loop_backs_off_and_publishes_retrying_on_clean_relay_close(monkeypatch):
+async def test_websocket_loop_backs_off_and_publishes_retrying_on_clean_relay_close(
+    monkeypatch,
+):
     """A relay that accepts, then cleanly closes after subscribe, is a disconnect like any other.
 
     StopAsyncIteration used to return from the read loop without raising, so the
@@ -263,7 +279,11 @@ async def test_websocket_loop_backs_off_and_publishes_retrying_on_clean_relay_cl
     """
     adapter = _make_adapter()
     states = []
-    monkeypatch.setattr(adapter, "_write_runtime_status_safe", lambda status, **kw: states.append(kw["platform_state"]))
+    monkeypatch.setattr(
+        adapter,
+        "_write_runtime_status_safe",
+        lambda status, **kw: states.append(kw["platform_state"]),
+    )
 
     async def clean_close():
         raise StopAsyncIteration
@@ -289,9 +309,13 @@ async def test_websocket_loop_backs_off_and_publishes_retrying_on_clean_relay_cl
         except (TimeoutError, asyncio.CancelledError):
             pass
 
-    assert len(sockets) == 1, f"clean close must back off before reconnecting, got {len(sockets)} connects in 0.3s"
+    assert len(sockets) == 1, (
+        f"clean close must back off before reconnecting, got {len(sockets)} connects in 0.3s"
+    )
     assert sockets[0].exited, "the closed connection was not exited before backing off"
-    assert states == ["retrying"], f"a clean relay close must publish retrying, got {states}"
+    assert states == ["retrying"], (
+        f"a clean relay close must publish retrying, got {states}"
+    )
 
 
 @pytest.mark.asyncio
@@ -312,7 +336,11 @@ async def test_websocket_loop_dispatches_frames_and_closes_cleanly(monkeypatch):
     frames = iter(
         [
             json.dumps(
-                ["EVENT", "clawk-buzz-0", {"id": "e1", "kind": 9, "created_at": 2, "content": "hi"}]
+                [
+                    "EVENT",
+                    "clawk-buzz-0",
+                    {"id": "e1", "kind": 9, "created_at": 2, "content": "hi"},
+                ]
             ),
         ]
     )
@@ -369,6 +397,7 @@ async def test_websocket_auth_uses_credentials_owner_tag():
     websocket = _FakeWebSocket()
     await adapter._authenticate_websocket(websocket)
     assert ["auth", "b" * 64, "", "c" * 128] in websocket.sent[0][1]["tags"]
+
 
 # ── CLOSED frame handling ──────────────────────────────────────────────────
 
@@ -443,7 +472,9 @@ async def test_websocket_loop_drops_restricted_channel_without_reconnect():
     assert CHANNEL not in adapter._channel_state, (
         "channel_state entry should be removed for a restricted channel"
     )
-    assert not task.done(), "websocket_loop must not exit/reconnect on a restricted CLOSED"
+    assert not task.done(), (
+        "websocket_loop must not exit/reconnect on a restricted CLOSED"
+    )
 
     task.cancel()
     try:
@@ -587,7 +618,11 @@ async def test_seeded_subscription_resumes_from_high_water_mark():
     """A channel with a real high-water mark keeps the since-resume contract
     (last_ts - 1, same-second overlap de-duped by id)."""
     adapter = _make_adapter()
-    adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 1_700_000_000, "seen": {}}
+    adapter._channel_state[CHANNEL] = {
+        "chat_type": "group",
+        "last_ts": 1_700_000_000,
+        "seen": {},
+    }
 
     class _Ws:
         def __init__(self):
@@ -694,7 +729,11 @@ async def test_restricted_channel_not_readopted_by_discovery():
         if args[:2] == ["dms", "list"]:
             return 0, json.dumps([{"dm_id": CHANNEL}]), ""
         if args[:2] == ["channels", "list"]:
-            return 0, json.dumps([{"channel_id": CHANNEL, "name": "DM", "description": ""}]), ""
+            return (
+                0,
+                json.dumps([{"channel_id": CHANNEL, "name": "DM", "description": ""}]),
+                "",
+            )
         return 0, "[]", ""
 
     adapter._run_cli = scripted_cli
@@ -746,7 +785,9 @@ async def test_ws_discovery_loop_subscribes_newly_discovered_conversation(monkey
         except asyncio.CancelledError:
             pass
 
-    assert new_dm in subscriptions.values(), "sweep did not subscribe the new conversation"
+    assert new_dm in subscriptions.values(), (
+        "sweep did not subscribe the new conversation"
+    )
     req = ws.sent[0]
     assert req[0] == "REQ" and req[2]["#h"] == [new_dm]
     # Fresh conversation: no since floor (#78429 applies here too).

@@ -26,12 +26,17 @@ def pinned_home(definition_path: Path) -> str | None:
         try:
             with definition_path.open("rb") as fh:
                 data = plistlib.load(fh)
-        except (OSError, ValueError, ExpatError):  # unreadable / not a plist: pins nobody
+        except (
+            OSError,
+            ValueError,
+            ExpatError,
+        ):  # unreadable / not a plist: pins nobody
             return None
         env = data.get("EnvironmentVariables") if isinstance(data, dict) else None
         value = env.get("CLAWK_HOME") if isinstance(env, dict) else None
         return (str(value).strip() or None) if value is not None else None
     from clawk_cli import gateway as gw
+
     return gw._clawk_home_pinned_by_unit(definition_path)
 
 
@@ -77,14 +82,20 @@ def definition_belongs_to_home(definition_path: Path, home: Path, action: str) -
     raw = pinned_home(definition_path)
     if raw is None or _resolve(raw) == _resolve(home):
         return True
-    print(f"✗ Refusing to {action} {definition_path}: it runs CLAWK_HOME={raw}, "
-          f"but this process has CLAWK_HOME={home}.")
-    print("  That file is another install's gateway. Use that install, or pass --force-unit-path")
+    print(
+        f"✗ Refusing to {action} {definition_path}: it runs CLAWK_HOME={raw}, "
+        f"but this process has CLAWK_HOME={home}."
+    )
+    print(
+        "  That file is another install's gateway. Use that install, or pass --force-unit-path"
+    )
     print("  to `clawk gateway install` if you really mean to repoint it at this home.")
     return False
 
 
-def unit_belongs_to_caller(unit_path: Path, system: bool, action: str, run_as_user: str | None = None) -> bool:
+def unit_belongs_to_caller(
+    unit_path: Path, system: bool, action: str, run_as_user: str | None = None
+) -> bool:
     """``definition_belongs_to_home`` for the systemd unit at *unit_path*, judged against the home this
     process would pin there (``run_as_user``'s for an explicit ``--system --run-as-user`` install)."""
     from clawk_cli import gateway as gw
@@ -92,7 +103,11 @@ def unit_belongs_to_caller(unit_path: Path, system: bool, action: str, run_as_us
     home = service_home_for_unit(unit_path, system)
     if system and run_as_user:
         try:
-            home = Path(gw._clawk_home_for_target_user(gw._system_service_identity(run_as_user)[2]))
+            home = Path(
+                gw._clawk_home_for_target_user(
+                    gw._system_service_identity(run_as_user)[2]
+                )
+            )
         except ValueError:
             pass  # unknown account: generate_systemd_unit refuses it later with the real error
     return definition_belongs_to_home(unit_path, home, action)
@@ -113,6 +128,7 @@ def foreign_systemd_unit_home(system: bool) -> str | None:
     default home operating a unit that pins the invoking user's home is the operator, not a stranger.
     """
     from clawk_cli import gateway as gw
+
     unit_home = gw._clawk_home_pinned_by_unit(gw.get_systemd_unit_path(system=system))
     if not unit_home:
         return None
@@ -124,6 +140,7 @@ def foreign_systemd_unit_home(system: bool) -> str | None:
     if unit == mine:
         return None
     from clawk_constants import account_default_clawk_home
+
     if mine == account_default_clawk_home().resolve():
         return None
     return unit_home
@@ -132,6 +149,7 @@ def foreign_systemd_unit_home(system: bool) -> str | None:
 def refuse_foreign_systemd_unit(action: str, system: bool) -> None:
     """Exit non-zero instead of operating another install's unit (see ``foreign_systemd_unit_home``)."""
     from clawk_cli import gateway as gw
+
     unit_home = foreign_systemd_unit_home(system)
     if unit_home is None:
         return
@@ -147,7 +165,10 @@ def refuse_foreign_launchd_plist(verb: str) -> None:
     """The launchd half of ``refuse_foreign_systemd_unit``: exit 1 rather than start/stop/restart/remove a
     LaunchAgent pinning another CLAWK_HOME. (Windows task names derive from LOCALAPPDATA, not HOME.)"""
     from clawk_cli import gateway as gw
-    if not definition_belongs_to_home(gw.get_launchd_plist_path(), gw.get_clawk_home(), verb):
+
+    if not definition_belongs_to_home(
+        gw.get_launchd_plist_path(), gw.get_clawk_home(), verb
+    ):
         sys.exit(1)
 
 
@@ -155,8 +176,11 @@ def service_definition_homes(definition: str) -> list[str]:
     """Every CLAWK_HOME a gateway service definition sets: systemd ``Environment=``, launchd
     ``EnvironmentVariables``, the Windows ``gateway.cmd`` ``set`` line and the ``gateway.vbs`` env item."""
     import re
+
     homes = re.findall(r'CLAWK_HOME=([^"\r\n]+)', definition)
-    homes += re.findall(r"<key>CLAWK_HOME</key>\s*<string>(.*?)</string>", definition, flags=re.DOTALL)
+    homes += re.findall(
+        r"<key>CLAWK_HOME</key>\s*<string>(.*?)</string>", definition, flags=re.DOTALL
+    )
     homes += re.findall(r'Item\("CLAWK_HOME"\)\s*=\s*"([^"\r\n]+)"', definition)
     return homes
 
@@ -165,7 +189,12 @@ def service_definition_launchers(definition: str) -> list[str]:
     """The scripts a definition starts, by their quoted absolute paths. The Windows Startup-folder
     fallback and a Scheduled Task's action name no home: they start the home's ``gateway.vbs``, which does."""
     import re
-    found = re.findall(r'"((?:[A-Za-z]:[\\/]|\\\\|/)[^"\r\n]*\.(?:vbs|cmd))"', definition, flags=re.IGNORECASE)
+
+    found = re.findall(
+        r'"((?:[A-Za-z]:[\\/]|\\\\|/)[^"\r\n]*\.(?:vbs|cmd))"',
+        definition,
+        flags=re.IGNORECASE,
+    )
     return list(dict.fromkeys(found))
 
 
@@ -173,10 +202,16 @@ def temp_home_in_service_definition(definition: str) -> str | None:
     """Temp-dir CLAWK_HOME baked into a systemd unit / launchd plist, or None. A temp home means a
     test/E2E harness generated it; installing it leaves the gateway "running" but deaf to every platform."""
     import tempfile
+
     candidates = service_definition_homes(definition)
     temp_roots = {
         Path(tempfile.gettempdir()).resolve(),
-        Path("/tmp"), Path("/var/tmp"), Path("/private/tmp"), Path("/private/var/tmp"),  # no-tmp: ok — detects a temp CLAWK_HOME in service definitions
+        Path("/tmp"),
+        Path("/var/tmp"),
+        Path("/private/tmp"),
+        Path(
+            "/private/var/tmp"
+        ),  # no-tmp: ok — detects a temp CLAWK_HOME in service definitions
     }
     for raw in candidates:
         try:
@@ -193,7 +228,9 @@ def refuse_temp_home_service_write(definition: str, kind: str) -> bool:
     temp_home = temp_home_in_service_definition(definition)
     if temp_home is None:
         return False
-    print(f"✗ Refusing to write the gateway {kind}: CLAWK_HOME resolves to a temporary directory ({temp_home}).")
+    print(
+        f"✗ Refusing to write the gateway {kind}: CLAWK_HOME resolves to a temporary directory ({temp_home})."
+    )
     print(
         "  This usually means a test/E2E environment exported CLAWK_HOME. "
         "Unset it (or run from a clean shell) and retry."

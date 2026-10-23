@@ -43,9 +43,7 @@ def _response(prompt_tokens=25_900, completion_tokens=0, usage_present=True):
     return SimpleNamespace(usage=usage)
 
 
-def _record_streak(
-    agent, responses, finish_reasons=None, observed_generations=None
-):
+def _record_streak(agent, responses, finish_reasons=None, observed_generations=None):
     """Record attempts the way the loop does: record, then increment."""
     finish_reasons = finish_reasons or ["stop"] * len(responses)
     observed_generations = observed_generations or [False] * len(responses)
@@ -172,9 +170,7 @@ class TestDeterministicEmpty:
         assert present is True
         assert zero is False  # reasoning tokens are real generation
 
-        _record_streak(
-            agent, [_reasoning_only_response(), _reasoning_only_response()]
-        )
+        _record_streak(agent, [_reasoning_only_response(), _reasoning_only_response()])
         assert guard.deterministic_empty(agent) is False
 
 
@@ -247,18 +243,13 @@ class TestEmptyRetryBudget:
         # _estimate_attempt_cost catches internally and returns None.
         agent = _agent(model=None, provider=None)
         resp = SimpleNamespace(usage=object())
-        assert (
-            guard.empty_retry_budget(agent, resp)
-            == guard.DEFAULT_EMPTY_RETRY_BUDGET
-        )
+        assert guard.empty_retry_budget(agent, resp) == guard.DEFAULT_EMPTY_RETRY_BUDGET
 
 
 class TestStreakCost:
     def test_streak_cost_accumulates(self, monkeypatch):
         costs = iter([Decimal("1.10"), Decimal("1.23")])
-        monkeypatch.setattr(
-            guard, "_estimate_attempt_cost", lambda a, r: next(costs)
-        )
+        monkeypatch.setattr(guard, "_estimate_attempt_cost", lambda a, r: next(costs))
         agent = _agent()
         _record_streak(agent, [_response(), _response()])
         assert guard.streak_cost_usd(agent) == Decimal("2.33")

@@ -17,8 +17,13 @@ from tools.process_registry import ProcessRegistry, ProcessSession
 
 def _live_session(sid="proc_killverify1", pid=424242, start=777001):
     s = ProcessSession(
-        id=sid, command="sleep 999", task_id="t1", started_at=time.time(),
-        pid=pid, pid_scope="host", host_start_time=start,
+        id=sid,
+        command="sleep 999",
+        task_id="t1",
+        started_at=time.time(),
+        pid=pid,
+        pid_scope="host",
+        host_start_time=start,
     )
     proc = MagicMock()
     proc.pid = pid
@@ -42,8 +47,10 @@ def test_kill_with_surviving_root_keeps_session_running():
     reg._running[s.id] = s
     try:
         _, _, save = _paused_registry_calls()
-        with patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=True), \
-             patch("psutil.Process", side_effect=Exception("gone")):
+        with (
+            patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=True),
+            patch("psutil.Process", side_effect=Exception("gone")),
+        ):
             result = reg.kill_process(s.id)
     finally:
         patch.stopall()
@@ -71,8 +78,10 @@ def test_kill_with_surviving_descendant_keeps_session_running():
     parent.children.return_value = [kid]
     try:
         _, _, save = _paused_registry_calls()
-        with patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=True), \
-             patch("psutil.Process", return_value=parent):
+        with (
+            patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=True),
+            patch("psutil.Process", return_value=parent),
+        ):
             result = reg.kill_process(s.id)
     finally:
         patch.stopall()
@@ -92,8 +101,10 @@ def test_kill_with_dead_tree_still_reports_killed():
     reg._running[s.id] = s
     try:
         _, _, _save = _paused_registry_calls()
-        with patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=False), \
-             patch("psutil.Process", side_effect=Exception("gone")):
+        with (
+            patch.object(ProcessRegistry, "_host_pid_is_ours", return_value=False),
+            patch("psutil.Process", side_effect=Exception("gone")),
+        ):
             result = reg.kill_process(s.id)
     finally:
         patch.stopall()
@@ -111,7 +122,9 @@ def test_escalated_kill_of_sigterm_ignoring_child_reports_killed(tmp_path, monke
     window, and the verification must give the kernel a moment to reap it — poll() right
     after kill() still says alive, which turned every escalated kill into 'Kill incomplete'."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.2))
+    monkeypatch.setattr(
+        ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.2)
+    )
     monkeypatch.setattr(ProcessRegistry, "_write_checkpoint", lambda self: None)
     reg = ProcessRegistry()
     s = reg.spawn_local("trap '' TERM; sleep 30", cwd=str(tmp_path))
@@ -127,7 +140,9 @@ def test_escalated_kill_of_sigterm_ignoring_child_reports_killed(tmp_path, monke
     assert s.id in reg._finished
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signal escalation; Windows uses taskkill")
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX signal escalation; Windows uses taskkill"
+)
 @pytest.mark.live_system_guard_bypass  # the late children are SIGKILLed after their shell dies
 def test_kill_reaps_children_spawned_during_the_grace_window(tmp_path, monkeypatch):
     """The interactive ``bash -lic`` wrapper ignores SIGTERM and keeps running its script
@@ -142,7 +157,9 @@ def test_kill_reaps_children_spawned_during_the_grace_window(tmp_path, monkeypat
             return False
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 1.5))
+    monkeypatch.setattr(
+        ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 1.5)
+    )
     monkeypatch.setattr(ProcessRegistry, "_write_checkpoint", lambda self: None)
     started, pid_file = tmp_path / "started", tmp_path / "late_pids"
     reg = ProcessRegistry()
@@ -157,9 +174,15 @@ def test_kill_reaps_children_spawned_during_the_grace_window(tmp_path, monkeypat
             time.sleep(0.02)
         # Kill once the script runs but before the late children exist.
         result = reg.kill_process(s.id)
-        late = [int(p) for p in pid_file.read_text(encoding="utf-8").split()] if pid_file.exists() else []
+        late = (
+            [int(p) for p in pid_file.read_text(encoding="utf-8").split()]
+            if pid_file.exists()
+            else []
+        )
         settle = time.monotonic() + 5  # SIGKILL lands asynchronously on a loaded box
-        while (survivors := [p for p in late if _alive(p)]) and time.monotonic() < settle:
+        while (
+            survivors := [p for p in late if _alive(p)]
+        ) and time.monotonic() < settle:
             time.sleep(0.05)
     finally:
         for p in late:

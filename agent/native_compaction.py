@@ -30,7 +30,10 @@ _ELIGIBLE_MODEL_MARKER = "gpt-5.6"
 
 
 def is_native_compaction_model(
-    model: Optional[str], *, provider: Optional[str] = None, base_url: Optional[str] = None,
+    model: Optional[str],
+    *,
+    provider: Optional[str] = None,
+    base_url: Optional[str] = None,
 ) -> bool:
     """Preserve gpt-5.6 eligibility; Astra (``-900k`` is a picker alias of the same wire slug)
     additionally requires official Codex OAuth."""
@@ -42,16 +45,29 @@ def is_native_compaction_model(
 
 
 def resolve_native_compaction_capabilities(
-    *, model: Optional[str], base_url: Optional[str], provider: Optional[str] = None, is_codex_backend: bool = False,
+    *,
+    model: Optional[str],
+    base_url: Optional[str],
+    provider: Optional[str] = None,
+    is_codex_backend: bool = False,
 ) -> dict[str, bool]:
     """Resolve the native-compaction capability for a runtime destination (a resolved ``False``
     is distinct from "unresolved" and must survive model switches unchanged)."""
     direct_default = (provider or "").strip().lower() == "openai" and not base_url
-    return {"native_compaction": is_native_compaction_model(model, provider=provider, base_url=base_url) and (
-        direct_default or is_direct_openai_route(base_url, is_codex_backend=is_codex_backend))}
+    return {
+        "native_compaction": is_native_compaction_model(
+            model, provider=provider, base_url=base_url
+        )
+        and (
+            direct_default
+            or is_direct_openai_route(base_url, is_codex_backend=is_codex_backend)
+        )
+    }
 
 
-def is_direct_openai_route(base_url: Optional[str], *, is_codex_backend: bool = False) -> bool:
+def is_direct_openai_route(
+    base_url: Optional[str], *, is_codex_backend: bool = False
+) -> bool:
     """True for api.openai.com or the ChatGPT Codex backend — nothing else."""
     if is_codex_backend:
         return True
@@ -73,7 +89,9 @@ def _positive_int(value: Any, *, reject: tuple = (bool,)) -> Optional[int]:
     return parsed if parsed > 0 else None
 
 
-def resolve_compact_threshold(configured_threshold: Any, local_trigger_tokens: Any = None) -> int:
+def resolve_compact_threshold(
+    configured_threshold: Any, local_trigger_tokens: Any = None
+) -> int:
     """Resolve automatic mode or clamp an explicit native threshold.
 
     Omitted/invalid follows the local compressor trigger minus the safety margin. An
@@ -81,8 +99,16 @@ def resolve_compact_threshold(configured_threshold: Any, local_trigger_tokens: A
     fires first. Booleans are never thresholds.
     """
     local = _positive_int(local_trigger_tokens)
-    upper = None if local is None else max(
-        1_024, local - LOCAL_TRIGGER_SAFETY_MARGIN if local > LOCAL_TRIGGER_SAFETY_MARGIN else int(local * 0.8))
+    upper = (
+        None
+        if local is None
+        else max(
+            1_024,
+            local - LOCAL_TRIGGER_SAFETY_MARGIN
+            if local > LOCAL_TRIGGER_SAFETY_MARGIN
+            else int(local * 0.8),
+        )
+    )
     configured = _positive_int(configured_threshold, reject=(bool, float))
     if configured is None:
         return upper if upper is not None else DEFAULT_COMPACT_THRESHOLD
@@ -106,18 +132,27 @@ def _warn_native_compaction_suppressed_by_checkpoint_gate() -> None:
         )
 
 
-def native_compaction_context_management(agent: Any, *, is_codex_backend: bool, is_xai_responses: bool = False,
-                                         is_github_responses: bool = False) -> Optional[list[dict[str, Any]]]:
+def native_compaction_context_management(
+    agent: Any,
+    *,
+    is_codex_backend: bool,
+    is_xai_responses: bool = False,
+    is_github_responses: bool = False,
+) -> Optional[list[dict[str, Any]]]:
     """Return the ``context_management`` payload for this request, or None ("do not send").
 
     Every gate is re-checked per request so a mid-session model switch or the in-session
     kill switch (``agent.codex_responses_native_compaction = False``) takes effect next call.
     """
     capabilities = getattr(agent, "runtime_capabilities", None)
-    if isinstance(capabilities, dict) and not capabilities.get("native_compaction", False):
+    if isinstance(capabilities, dict) and not capabilities.get(
+        "native_compaction", False
+    ):
         return None
     # compression.enabled: false disables ALL automatic compaction, native included.
-    if not getattr(agent, "codex_responses_native_compaction", False) or not getattr(agent, "compression_enabled", True):
+    if not getattr(agent, "codex_responses_native_compaction", False) or not getattr(
+        agent, "compression_enabled", True
+    ):
         return None
     # Server-side compaction is a lossy boundary the provider owns (no pre-compress checkpoint
     # can run first), so the checkpoint-aware compressor stays authoritative. Explicit-True
@@ -125,18 +160,33 @@ def native_compaction_context_management(agent: Any, *, is_codex_backend: bool, 
     if getattr(agent, "compression_checkpoint_required", False) is True:
         _warn_native_compaction_suppressed_by_checkpoint_gate()
         return None
-    if is_xai_responses or is_github_responses or not is_native_compaction_model(
-        getattr(agent, "model", None), provider=getattr(agent, "provider", None),
-        base_url=getattr(agent, "base_url", None),
+    if (
+        is_xai_responses
+        or is_github_responses
+        or not is_native_compaction_model(
+            getattr(agent, "model", None),
+            provider=getattr(agent, "provider", None),
+            base_url=getattr(agent, "base_url", None),
+        )
     ):
         return None
-    trusted_proxy = bool(getattr(agent, "capabilities", {}).get("openai_native_compaction", False))
-    if not trusted_proxy and not is_direct_openai_route(getattr(agent, "base_url", None), is_codex_backend=is_codex_backend):
+    trusted_proxy = bool(
+        getattr(agent, "capabilities", {}).get("openai_native_compaction", False)
+    )
+    if not trusted_proxy and not is_direct_openai_route(
+        getattr(agent, "base_url", None), is_codex_backend=is_codex_backend
+    ):
         return None
 
     compressor = getattr(agent, "context_compressor", None)
-    local_trigger = getattr(compressor, "threshold_tokens", None) if compressor is not None else None
-    threshold = resolve_compact_threshold(getattr(agent, "codex_responses_compact_threshold", None), local_trigger)
+    local_trigger = (
+        getattr(compressor, "threshold_tokens", None)
+        if compressor is not None
+        else None
+    )
+    threshold = resolve_compact_threshold(
+        getattr(agent, "codex_responses_compact_threshold", None), local_trigger
+    )
     return [{"type": "compaction", "compact_threshold": threshold}]
 
 
@@ -149,6 +199,7 @@ RETAINED_SUMMARY_TOKEN_BUDGET = 32_000
 def _approx_tokens(text: str) -> int:
     """Retention cost of one carried-over text; never 0 so an empty item still consumes budget."""
     from agent.model_metadata import estimate_tokens_rough
+
     return max(1, estimate_tokens_rough(text))
 
 
@@ -156,8 +207,13 @@ def _head_within_budget(text: str, budget: int) -> str:
     """Longest prefix of ``text`` whose ``_approx_tokens`` fits ``budget``. A plain ``budget * CHARS_PER_TOKEN``
     char slice would keep ~2x the budget of Cyrillic and ~4x of CJK; ASCII still gets that many chars."""
     from agent.model_metadata import CHARS_PER_TOKEN
-    head = text[:max(0, budget) * CHARS_PER_TOKEN]  # every char costs >= 1/CHARS_PER_TOKEN token
-    if head.isascii():  # ASCII costs exactly ceil(len / CHARS_PER_TOKEN): the cap already fits
+
+    head = text[
+        : max(0, budget) * CHARS_PER_TOKEN
+    ]  # every char costs >= 1/CHARS_PER_TOKEN token
+    if (
+        head.isascii()
+    ):  # ASCII costs exactly ceil(len / CHARS_PER_TOKEN): the cap already fits
         return head
     lo, hi = 0, len(head)
     while lo < hi:
@@ -185,8 +241,10 @@ def _extract_item_text(item: Any) -> Optional[str]:
         candidates: tuple = (part,)  # non-str, non-dict parts filter out below
         if isinstance(part, dict):
             part_meta = part.get("metadata")
-            candidates = (part.get("text") or part.get("input_text") or part.get("output_text"),
-                          part_meta.get("text") if isinstance(part_meta, dict) else None)
+            candidates = (
+                part.get("text") or part.get("input_text") or part.get("output_text"),
+                part_meta.get("text") if isinstance(part_meta, dict) else None,
+            )
         parts.extend(c.strip() for c in candidates if isinstance(c, str) and c.strip())
     text = " ".join(parts)
     return text if text.strip() else None
@@ -194,15 +252,23 @@ def _extract_item_text(item: Any) -> Optional[str]:
 
 def _input_text_parts_cost(content: Any) -> Optional[int]:
     """Measure only the adapter-owned text-only shape, including whitespace and empty parts."""
-    if not isinstance(content, list) or not content or not all(
-        isinstance(part, dict) and part.get("type") == "input_text"
-        and isinstance(part.get("text"), str) for part in content
+    if (
+        not isinstance(content, list)
+        or not content
+        or not all(
+            isinstance(part, dict)
+            and part.get("type") == "input_text"
+            and isinstance(part.get("text"), str)
+            for part in content
+        )
     ):
         return None
     return sum(_approx_tokens(part["text"]) for part in content)
 
 
-def _truncate_input_text_parts(content: list[dict[str, Any]], budget: int) -> list[dict[str, Any]]:
+def _truncate_input_text_parts(
+    content: list[dict[str, Any]], budget: int
+) -> list[dict[str, Any]]:
     """Copy the head of validated input_text parts without flattening their metadata."""
     head = []
     for part in content:
@@ -223,8 +289,11 @@ def _has_retainable_image_content(item: Any) -> bool:
     adapter-owned shape counts, so empty multipart placeholders never become durable history)."""
     content = item.get("content") if isinstance(item, dict) else None
     return isinstance(content, list) and any(
-        isinstance(part, dict) and str(part.get("type") or "").strip().lower() == "input_image"
-        and isinstance(part.get("image_url"), str) and part["image_url"].strip() for part in content
+        isinstance(part, dict)
+        and str(part.get("type") or "").strip().lower() == "input_image"
+        and isinstance(part.get("image_url"), str)
+        and part["image_url"].strip()
+        for part in content
     )
 
 
@@ -241,7 +310,8 @@ def prune_pre_checkpoint_items(
     items: list[dict[str, Any]],
     retained_user_token_budget: int = RETAINED_USER_MESSAGE_TOKEN_BUDGET,
     retained_summary_token_budget: int = RETAINED_SUMMARY_TOKEN_BUDGET,
-    enable_summary_retention: bool = True, item_sources: Optional[list[Any]] = None,
+    enable_summary_retention: bool = True,
+    item_sources: Optional[list[Any]] = None,
 ) -> list[dict[str, Any]]:
     """Restructure Responses input around the newest compaction checkpoint.
 
@@ -279,7 +349,9 @@ def prune_pre_checkpoint_items(
     """
     if not isinstance(items, list) or not items:
         return items
-    last_cp = max((i for i, item in enumerate(items) if _is_compaction_item(item)), default=None)
+    last_cp = max(
+        (i for i, item in enumerate(items) if _is_compaction_item(item)), default=None
+    )
     if last_cp is None:
         return items
     first_cp = last_cp
@@ -288,7 +360,9 @@ def prune_pre_checkpoint_items(
 
     pre = items[:first_cp]
     has_sources = isinstance(item_sources, list) and len(item_sources) == len(items)
-    pre_sources: list[Any] = item_sources[:first_cp] if has_sources else [None] * len(pre)
+    pre_sources: list[Any] = (
+        item_sources[:first_cp] if has_sources else [None] * len(pre)
+    )
 
     retained_reversed: list[dict[str, Any]] = []
     user_remaining = max(0, int(retained_user_token_budget))
@@ -314,12 +388,23 @@ def prune_pre_checkpoint_items(
         # Canonical source-based summary detection: reads the ORIGINAL chat message's own content, so it
         # sees past a lossy conversion (a typed `function_call_output` wrapper, or a stale exact-replay
         # message) that erased the summary from `item` itself (#90976).
-        if enable_summary_retention and isinstance(source, dict) and _is_summary_item(source):
+        if (
+            enable_summary_retention
+            and isinstance(source, dict)
+            and _is_summary_item(source)
+        ):
             text = flatten_message_text(source.get("content"))
             _src_role = source.get("role")
-            _retain_summary(text if text.strip() else None,
-                            {"type": "message", "role": _src_role if _src_role in ("user", "assistant") else "assistant",
-                             "content": text})
+            _retain_summary(
+                text if text.strip() else None,
+                {
+                    "type": "message",
+                    "role": _src_role
+                    if _src_role in ("user", "assistant")
+                    else "assistant",
+                    "content": text,
+                },
+            )
             continue
         # Typed non-message items never carry role=user or a summary flag.
         if "type" in item and item.get("type") != "message":
@@ -357,15 +442,32 @@ def prune_pre_checkpoint_items(
                 # an older completed ask replace the newer oversized ask.
                 user_remaining = 0
 
-    result = items[first_cp : last_cp + 1] + list(reversed(retained_reversed)) + items[last_cp + 1 :]
-    logger.debug("Pruned pre-checkpoint items: %d input -> %d retained (user_rem=%d, summary_rem=%d)",
-                 len(items), len(result), user_remaining, summary_remaining)
+    result = (
+        items[first_cp : last_cp + 1]
+        + list(reversed(retained_reversed))
+        + items[last_cp + 1 :]
+    )
+    logger.debug(
+        "Pruned pre-checkpoint items: %d input -> %d retained (user_rem=%d, summary_rem=%d)",
+        len(items),
+        len(result),
+        user_remaining,
+        summary_remaining,
+    )
     return result
 
 
 _REJECTION_MARKERS = (
-    "unknown", "unsupported", "invalid", "unexpected", "not permitted",
-    "not allowed", "unrecognized", "extra field", "no such", "bad request",
+    "unknown",
+    "unsupported",
+    "invalid",
+    "unexpected",
+    "not permitted",
+    "not allowed",
+    "unrecognized",
+    "extra field",
+    "no such",
+    "bad request",
     "not supported",
 )
 
@@ -406,7 +508,9 @@ def has_compaction_checkpoint(items: Any) -> bool:
     )
 
 
-def merge_interim_reasoning_items(prior_items: Any, new_items: Any) -> list[dict[str, Any]]:
+def merge_interim_reasoning_items(
+    prior_items: Any, new_items: Any
+) -> list[dict[str, Any]]:
     """Merge ``codex_reasoning_items`` across Codex incomplete-continuation dedup.
 
     A checkpoint on the EARLIER response is not re-emitted by the continuation, so a blind

@@ -9,8 +9,10 @@ def test_failed_in_place_repair_keeps_the_source(monkeypatch, tmp_path):
     from gateway.platforms.base import transcode_to_ogg_opus
 
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/ffmpeg")
-    monkeypatch.setattr("gateway.platforms.base.subprocess.run",
-                        lambda argv, **kw: SimpleNamespace(returncode=1, stderr=b"boom"))
+    monkeypatch.setattr(
+        "gateway.platforms.base.subprocess.run",
+        lambda argv, **kw: SimpleNamespace(returncode=1, stderr=b"boom"),
+    )
     bad = tmp_path / "bad.ogg"
     bad.write_bytes(b"ID3")
     assert transcode_to_ogg_opus(str(bad), output_path=str(bad)) is None

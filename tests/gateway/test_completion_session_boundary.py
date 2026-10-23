@@ -53,6 +53,7 @@ class _SessionDB:
 def _runner(adapter, *, session_db=...):
     def admit(event):
         event._gateway_accepted = True
+
     adapter.handle_message.side_effect = admit
     runner = object.__new__(GatewayRunner)
     runner._running = True
@@ -133,8 +134,10 @@ def _completion_evt(parent_session_id=None, session_id="proc_x"):
 # The stamp is threaded from the watcher into the completion event
 # ---------------------------------------------------------------------------
 
+
 def test_watcher_stamps_parent_session_id_on_completion_event(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     _finished_session(isolated_registry)
     adapter = SimpleNamespace(handle_message=AsyncMock())
@@ -148,7 +151,9 @@ def test_watcher_stamps_parent_session_id_on_completion_event(
 
     monkeypatch.setattr(runner, "_deliver_completion_notification", _capture)
     _run_watcher(
-        monkeypatch, runner, _watcher("proc_boundary", "sess-spawner"),
+        monkeypatch,
+        runner,
+        _watcher("proc_boundary", "sess-spawner"),
     )
 
     assert captured.get("type") == "completion"
@@ -156,12 +161,14 @@ def test_watcher_stamps_parent_session_id_on_completion_event(
 
 
 def test_watcher_falls_back_to_process_session_stamp(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """Watchers recovered without the stamp still pick it up off the
     ProcessSession (spawn-time stamp survives checkpoint/restore there)."""
     _finished_session(
-        isolated_registry, parent_session_id="sess-from-registry",
+        isolated_registry,
+        parent_session_id="sess-from-registry",
     )
     adapter = SimpleNamespace(handle_message=AsyncMock())
     runner = _runner(adapter)
@@ -182,8 +189,10 @@ def test_watcher_falls_back_to_process_session_stamp(
 # Pre-flight verdicts on stamped completion events
 # ---------------------------------------------------------------------------
 
+
 def test_completion_from_user_closed_session_is_dropped(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """/new closed the spawning session -> the stamped completion must NOT
     land in the chat's new session."""
@@ -197,14 +206,17 @@ def test_completion_from_user_closed_session_is_dropped(
     )
 
     _run_watcher(
-        monkeypatch, runner, _watcher("proc_boundary", "sess-closed"),
+        monkeypatch,
+        runner,
+        _watcher("proc_boundary", "sess-closed"),
     )
 
     adapter.handle_message.assert_not_awaited()
 
 
 def test_completion_after_idle_end_still_delivers(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """Idle/timeout ends are the relay-plane norm — the chat stays routable
     and the completion must deliver."""
@@ -212,13 +224,13 @@ def test_completion_after_idle_end_still_delivers(
     adapter = SimpleNamespace(handle_message=AsyncMock())
     runner = _runner(
         adapter,
-        session_db=_SessionDB(
-            {"ended_at": 1786288000.0, "end_reason": "idle_timeout"}
-        ),
+        session_db=_SessionDB({"ended_at": 1786288000.0, "end_reason": "idle_timeout"}),
     )
 
     _run_watcher(
-        monkeypatch, runner, _watcher("proc_boundary", "sess-idle"),
+        monkeypatch,
+        runner,
+        _watcher("proc_boundary", "sess-idle"),
     )
 
     adapter.handle_message.assert_awaited_once()
@@ -230,7 +242,9 @@ def test_completion_from_live_session_delivers(monkeypatch, isolated_registry):
     runner = _runner(adapter, session_db=_SessionDB({"ended_at": None}))
 
     _run_watcher(
-        monkeypatch, runner, _watcher("proc_boundary", "sess-live"),
+        monkeypatch,
+        runner,
+        _watcher("proc_boundary", "sess-live"),
     )
 
     adapter.handle_message.assert_awaited_once()
@@ -256,7 +270,8 @@ def test_retry_verdict_returns_false_for_watcher_repoll():
 
     result = asyncio.run(
         runner._deliver_completion_notification(
-            "text", _completion_evt("sess-uncertain"),
+            "text",
+            _completion_evt("sess-uncertain"),
         )
     )
 
@@ -270,7 +285,8 @@ def test_terminal_verdict_returns_none_without_injection():
 
     result = asyncio.run(
         runner._deliver_completion_notification(
-            "text", _completion_evt("sess-gone"),
+            "text",
+            _completion_evt("sess-gone"),
         )
     )
 
@@ -281,6 +297,7 @@ def test_terminal_verdict_returns_none_without_injection():
 # ---------------------------------------------------------------------------
 # The async-delegation path is unaffected
 # ---------------------------------------------------------------------------
+
 
 def test_async_delegation_gate_unchanged():
     """A stamped async_delegation event still routes through the existing
@@ -306,31 +323,41 @@ def test_async_delegation_gate_unchanged():
 # The stamp survives checkpoint/restore
 # ---------------------------------------------------------------------------
 
+
 def test_parent_session_id_survives_checkpoint_recovery(tmp_path, monkeypatch):
     import tools.process_registry as pr_module
 
     checkpoint = tmp_path / "processes.json"
-    checkpoint.write_text(json.dumps([{
-        "session_id": "proc_recovered",
-        "command": "sleep 999",
-        "pid": 4242,
-        "pid_scope": "host",
-        "host_start_time": 111.0,
-        "started_at": 1234.5,
-        "task_id": "task",
-        "session_key": "agent:main:telegram:dm:123",
-        "watcher_platform": "telegram",
-        "watcher_chat_id": "123",
-        "watcher_interval": 5,
-        "notify_on_complete": True,
-        "parent_session_id": "sess-spawner",
-    }]), encoding="utf-8")
+    checkpoint.write_text(
+        json.dumps(
+            [
+                {
+                    "session_id": "proc_recovered",
+                    "command": "sleep 999",
+                    "pid": 4242,
+                    "pid_scope": "host",
+                    "host_start_time": 111.0,
+                    "started_at": 1234.5,
+                    "task_id": "task",
+                    "session_key": "agent:main:telegram:dm:123",
+                    "watcher_platform": "telegram",
+                    "watcher_chat_id": "123",
+                    "watcher_interval": 5,
+                    "notify_on_complete": True,
+                    "parent_session_id": "sess-spawner",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(pr_module, "CHECKPOINT_PATH", checkpoint)
 
     registry = ProcessRegistry()
     monkeypatch.setattr(registry, "_host_pid_is_ours", lambda *_a: True)
     monkeypatch.setattr(
-        registry, "_write_checkpoint", lambda *_a, **_kw: None,
+        registry,
+        "_write_checkpoint",
+        lambda *_a, **_kw: None,
     )
 
     assert registry.recover_from_checkpoint() == 1

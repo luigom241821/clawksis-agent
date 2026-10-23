@@ -1,5 +1,4 @@
-"""Gateway platform command derivations (Telegram / Discord / Slack) from ``COMMAND_REGISTRY``.
-"""
+"""Gateway platform command derivations (Telegram / Discord / Slack) from ``COMMAND_REGISTRY``."""
 
 from __future__ import annotations
 
@@ -10,7 +9,11 @@ from typing import Any
 
 from agent.i18n import t
 from clawk_cli.commands import (
-    COMMAND_REGISTRY, _is_gateway_available, _iter_plugin_command_entries, _resolve_config_gates)
+    COMMAND_REGISTRY,
+    _is_gateway_available,
+    _iter_plugin_command_entries,
+    _resolve_config_gates,
+)
 
 # Logger name parity with the origin module (tests capture "clawk_cli.commands").
 logger = logging.getLogger("clawk_cli.commands")
@@ -55,11 +58,12 @@ def _normalize_telegram_desc(desc: str) -> str:
 
 def _truncate_desc(desc: str, limit: int) -> str:
     """Clamp a menu description to *limit* chars with a ``...`` tail."""
-    return desc if len(desc) <= limit else desc[:limit - 3] + "..."
+    return desc if len(desc) <= limit else desc[: limit - 3] + "..."
 
 
 def _clamp_command_names(
-    entries: Sequence[tuple[str, ...]], reserved: set[str]) -> list[tuple[str, ...]]:
+    entries: Sequence[tuple[str, ...]], reserved: set[str]
+) -> list[tuple[str, ...]]:
     """Enforce the 32-char Telegram/Discord name limit: over-long names are truncated; on a
     collision with *reserved* or an earlier entry a 31-char prefix + digit ``0``-``9`` is tried,
     then the entry is silently dropped. Duplicates are dropped; extra tuple elements pass through.
@@ -70,7 +74,7 @@ def _clamp_command_names(
         if len(name) > _CMD_NAME_LIMIT:
             candidate = name[:_CMD_NAME_LIMIT]
             if candidate in used:
-                prefix = name[:_CMD_NAME_LIMIT - 1]
+                prefix = name[: _CMD_NAME_LIMIT - 1]
                 for digit in range(10):
                     candidate = f"{prefix}{digit}"
                     if candidate not in used:
@@ -87,15 +91,23 @@ def _clamp_command_names(
 
 # --- Telegram ---------------------------------------------------------------
 
+
 def telegram_bot_commands(*, include_plugins: bool = True) -> list[tuple[str, str]]:
     """(command_name, description) pairs for Telegram setMyCommands: sanitized canonical names
     only (no aliases). Built-ins needing arguments are included (their handlers show usage when
     selected bare); plugin commands needing arguments are excluded (may lack a no-arg fallback)."""
     pairs = [(cmd.name, cmd.describe()) for cmd in _gateway_available_commands()]
     if include_plugins:
-        pairs += [(n, d) for n, d, hint in _iter_plugin_command_entries()
-                  if not _requires_argument(hint)]
-    return [(tg, _normalize_telegram_desc(desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]
+        pairs += [
+            (n, d)
+            for n, d, hint in _iter_plugin_command_entries()
+            if not _requires_argument(hint)
+        ]
+    return [
+        (tg, _normalize_telegram_desc(desc))
+        for name, desc in pairs
+        if (tg := _sanitize_telegram_name(name))
+    ]
 
 
 # Telegram allows 100 BotCommands; the 60-slot default keeps every built-in plus common skill
@@ -105,22 +117,47 @@ _TELEGRAM_BOT_API_MAX_COMMANDS = 100
 # priority_mode -> rank tables consulted in order ("configured" = user list,
 # "default" = _TELEGRAM_MENU_PRIORITY); unranked candidates keep stable order after.
 _TELEGRAM_PRIORITY_TIERS: dict[str, tuple[str, ...]] = {
-    "prepend": ("configured", "default"), "append": ("default", "configured"),
-    "replace": ("configured",)}
+    "prepend": ("configured", "default"),
+    "append": ("default", "configured"),
+    "replace": ("configured",),
+}
 
 # Built-ins that must survive Telegram's small visible menu cap (everything else stays
 # dispatchable when typed). Order = rank: everyday, maintenance, mid-turn control, operational.
 _TELEGRAM_MENU_PRIORITY = (
-    "help", "new", "stop", "status", "egress", "resume", "sessions", "model",
-    "debug", "restart", "update", "verbose", "commands",
-    "approve", "deny", "queue", "steer", "bg", "btw",
-    "reasoning", "usage", "platforms", "platform", "profile", "whoami")
+    "help",
+    "new",
+    "stop",
+    "status",
+    "egress",
+    "resume",
+    "sessions",
+    "model",
+    "debug",
+    "restart",
+    "update",
+    "verbose",
+    "commands",
+    "approve",
+    "deny",
+    "queue",
+    "steer",
+    "bg",
+    "btw",
+    "reasoning",
+    "usage",
+    "platforms",
+    "platform",
+    "profile",
+    "whoami",
+)
 
 
 def _telegram_command_menu_config() -> dict[str, Any]:
     """Normalized ``platforms.telegram.extra.command_menu`` config with safe defaults."""
     try:
         from clawk_cli.config import read_raw_config
+
         node: Any = read_raw_config() or {}
     except Exception:
         node = {}
@@ -128,7 +165,9 @@ def _telegram_command_menu_config() -> dict[str, Any]:
         node = node.get(key) if isinstance(node, Mapping) else None
     menu_cfg: Mapping[str, Any] = node if isinstance(node, Mapping) else {}
     try:
-        max_commands = int(menu_cfg.get("max_commands", _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS))
+        max_commands = int(
+            menu_cfg.get("max_commands", _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS)
+        )
     except (TypeError, ValueError):
         max_commands = _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS
     priority_mode = str(menu_cfg.get("priority_mode") or "prepend").strip().lower()
@@ -136,11 +175,18 @@ def _telegram_command_menu_config() -> dict[str, Any]:
     if isinstance(raw_priority, list):
         priority = [str(item) for item in raw_priority if str(item).strip()]
     else:
-        priority = [raw_priority] if isinstance(raw_priority, str) and raw_priority.strip() else []
+        priority = (
+            [raw_priority]
+            if isinstance(raw_priority, str) and raw_priority.strip()
+            else []
+        )
     return {
         "max_commands": max(1, min(_TELEGRAM_BOT_API_MAX_COMMANDS, max_commands)),
-        "priority_mode": priority_mode if priority_mode in _TELEGRAM_PRIORITY_TIERS else "prepend",
-        "priority": priority}
+        "priority_mode": priority_mode
+        if priority_mode in _TELEGRAM_PRIORITY_TIERS
+        else "prepend",
+        "priority": priority,
+    }
 
 
 def telegram_menu_max_commands() -> int:
@@ -159,7 +205,8 @@ def _sanitized_rank(raw_names: Sequence[str]) -> dict[str, int]:
 
 
 def _prioritize_telegram_menu_candidates(
-    candidates: list[tuple[str, str, str, str]]) -> list[tuple[str, str, str, str]]:
+    candidates: list[tuple[str, str, str, str]],
+) -> list[tuple[str, str, str, str]]:
     """Order ``(final_name, description, source, raw_name)`` candidates; the default priority
     applies to core only, "replace" mode ignores it. ``raw_name`` is the pre-clamp name so a
     configured long command stays addressable."""
@@ -168,11 +215,16 @@ def _prioritize_telegram_menu_candidates(
     default_rank = _sanitized_rank(_TELEGRAM_MENU_PRIORITY)
     tiers = _TELEGRAM_PRIORITY_TIERS[menu_cfg["priority_mode"]]
 
-    def _rank(stable_index: int, candidate: tuple[str, str, str, str]) -> tuple[int, int, int]:
+    def _rank(
+        stable_index: int, candidate: tuple[str, str, str, str]
+    ) -> tuple[int, int, int]:
         final_name, _desc, source, raw_name = candidate
         indexes = {
-            "configured": configured_rank.get(raw_name, configured_rank.get(final_name)),
-            "default": default_rank.get(final_name) if source == "core" else None}
+            "configured": configured_rank.get(
+                raw_name, configured_rank.get(final_name)
+            ),
+            "default": default_rank.get(final_name) if source == "core" else None,
+        }
         for tier, table in enumerate(tiers):
             if indexes[table] is not None:
                 return (tier, indexes[table], stable_index)
@@ -182,6 +234,7 @@ def _prioritize_telegram_menu_candidates(
 
 
 # --- Shared skill/plugin collection for gateway platforms -------------------
+
 
 def _iter_gateway_skills(platform: str):
     """Yield ``(cmd_key, info, rel_parts)`` for skills eligible as gateway slash commands.
@@ -197,7 +250,10 @@ def _iter_gateway_skills(platform: str):
 
     from agent.skill_commands import get_skill_commands
     from agent.skill_utils import (
-        get_disabled_skill_names, get_external_skills_dirs, get_project_skills_dirs)
+        get_disabled_skill_names,
+        get_external_skills_dirs,
+        get_project_skills_dirs,
+    )
     from tools.skills_tool import SKILLS_DIR
 
     try:
@@ -231,7 +287,10 @@ def _iter_gateway_skills(platform: str):
 
 
 def _collect_gateway_skill_entries(
-    platform: str, max_slots: int | None, reserved_names: set[str], desc_limit: int = 100,
+    platform: str,
+    max_slots: int | None,
+    reserved_names: set[str],
+    desc_limit: int = 100,
     sanitize_name: Callable[[str], str] | None = None,
 ) -> tuple[list[tuple[str, str, str, str]], int]:
     """Collect plugin + skill entries for a gateway platform.
@@ -259,18 +318,26 @@ def _collect_gateway_skill_entries(
 
     def _plugin_rows():
         from clawk_cli.plugins import get_plugin_commands
+
         plugin_cmds = get_plugin_commands()
         for cmd_name in sorted(plugin_cmds):
             meta = plugin_cmds[cmd_name]
-            if platform == "telegram" and _requires_argument(str(meta.get("args_hint") or "")):
+            if platform == "telegram" and _requires_argument(
+                str(meta.get("args_hint") or "")
+            ):
                 continue
-            yield cmd_name, meta.get("description") or t("slash.shared.plugin_command_desc"), ""
+            yield (
+                cmd_name,
+                meta.get("description") or t("slash.shared.plugin_command_desc"),
+                "",
+            )
 
     plugin_entries = _entries(_plugin_rows())
     reserved_names.update(n for n, *_rest in plugin_entries)
     skill_entries = _entries(
         (cmd_key.lstrip("/"), info.get("description", ""), cmd_key)
-        for cmd_key, info, _rel in _iter_gateway_skills(platform))
+        for cmd_key, info, _rel in _iter_gateway_skills(platform)
+    )
 
     if max_slots is None:
         return plugin_entries + skill_entries, 0
@@ -279,7 +346,9 @@ def _collect_gateway_skill_entries(
     return (plugin_entries + skill_entries[:remaining])[:max_slots], hidden_count
 
 
-def telegram_menu_commands(max_commands: int = 100) -> tuple[list[tuple[str, str]], int]:
+def telegram_menu_commands(
+    max_commands: int = 100,
+) -> tuple[list[tuple[str, str]], int]:
     """``(menu_commands, hidden_count)`` for Telegram, capped to the Bot API limit. Tier order:
     core CommandDefs, plugin slash commands, skill commands (alphabetical; hub and
     telegram-disabled skills excluded). Tiers keep relative order unless named in
@@ -287,18 +356,28 @@ def telegram_menu_commands(max_commands: int = 100) -> tuple[list[tuple[str, str
     prioritized dynamic command can displace an unprioritized core command."""
     core_commands = list(telegram_bot_commands(include_plugins=False))
     entries, hidden_count = _collect_gateway_skill_entries(
-        platform="telegram", max_slots=None, reserved_names={n for n, _ in core_commands},
-        desc_limit=40, sanitize_name=_sanitize_telegram_name)
+        platform="telegram",
+        max_slots=None,
+        reserved_names={n for n, _ in core_commands},
+        desc_limit=40,
+        sanitize_name=_sanitize_telegram_name,
+    )
     candidates = [(name, desc, "core", name) for name, desc in core_commands]
-    candidates += [(name, desc, "skill" if cmd_key else "plugin", raw)
-                   for name, desc, cmd_key, raw in entries]
+    candidates += [
+        (name, desc, "skill" if cmd_key else "plugin", raw)
+        for name, desc, cmd_key, raw in entries
+    ]
     candidates = _prioritize_telegram_menu_candidates(candidates)
     overflow_count = max(0, len(candidates) - max_commands)
-    menu = [(name, _normalize_telegram_desc(desc)) for name, desc, _source, _raw_name in candidates[:max_commands]]
+    menu = [
+        (name, _normalize_telegram_desc(desc))
+        for name, desc, _source, _raw_name in candidates[:max_commands]
+    ]
     return menu, hidden_count + overflow_count
 
 
 # --- Discord ----------------------------------------------------------------
+
 
 def discord_skill_commands_by_category(
     reserved_names: set[str],
@@ -340,7 +419,10 @@ def discord_skill_commands_by_category(
                     "skill will not appear in the /skill autocomplete. "
                     "Rename the skill's frontmatter ``name:`` to differ "
                     "in its first 32 chars.",
-                    discord_name, cmd_key, discord_name)
+                    discord_name,
+                    cmd_key,
+                    discord_name,
+                )
             elif prior is not None:
                 logger.warning(
                     "Discord /skill: %r and %r both clamp to %r on "
@@ -348,12 +430,20 @@ def discord_skill_commands_by_category(
                     "will appear in the /skill autocomplete. Rename "
                     "one skill's frontmatter ``name:`` to differ in "
                     "its first 32 chars.",
-                    prior, cmd_key, discord_name, prior)
+                    prior,
+                    cmd_key,
+                    discord_name,
+                    prior,
+                )
             if prior is not None:
                 hidden += 1
                 continue
             names_used[discord_name] = cmd_key
-            entry = (discord_name, _truncate_desc(info.get("description", ""), 100), cmd_key)
+            entry = (
+                discord_name,
+                _truncate_desc(info.get("description", ""), 100),
+                cmd_key,
+            )
             if len(rel_parts) >= 2:
                 categories.setdefault(rel_parts[0], []).append(entry)
             else:
@@ -371,9 +461,29 @@ def discord_skill_commands_by_category(
 _SLACK_MAX_SLASH_COMMANDS = 50
 _SLACK_NAME_LIMIT = 32
 _SLACK_INVALID_CHARS = re.compile(r"[^a-z0-9_\-]")
-_SLACK_RESERVED_COMMANDS = frozenset({
-    "me", "status", "away", "dnd", "shrug", "remind", "msg", "feed", "who", "collapse", "expand",
-    "leave", "join", "open", "search", "topic", "mute", "pro", "shortcuts"})
+_SLACK_RESERVED_COMMANDS = frozenset(
+    {
+        "me",
+        "status",
+        "away",
+        "dnd",
+        "shrug",
+        "remind",
+        "msg",
+        "feed",
+        "who",
+        "collapse",
+        "expand",
+        "leave",
+        "join",
+        "open",
+        "search",
+        "topic",
+        "mute",
+        "pro",
+        "shortcuts",
+    }
+)
 
 # Canonical commands deliberately routed through ``/clawk <command>`` on Slack only: the registry
 # sits at Slack's 50-slash cap, so rather than let the clamp silently drop whichever command sorts
@@ -381,13 +491,29 @@ _SLACK_RESERVED_COMMANDS = frozenset({
 # canonical command tips past the cap, demote a rarer one-off lookup (version, whoami, diff, ...)
 # rather than a recurring interactive surface (context, loop, save, approvals). Keep TIGHT — the
 # parity test reads this set. Aliases are never pinned ahead of canonicals.
-_SLACK_VIA_CLAWK_ONLY = frozenset({
-    "moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat",
-    "refine", "review", "pause", "whoami", "platform", "insights", "login",
-    # Recovery-only, after a restart lost a turn: `/clawk discard` reaches it.
-    "discard",
-    # One-time answer to the low-disk prompt; `/clawk autoprune on` reaches it.
-    "autoprune"})
+_SLACK_VIA_CLAWK_ONLY = frozenset(
+    {
+        "moa",
+        "debug",
+        "egress",
+        "init",
+        "version",
+        "diff",
+        "update",
+        "heartbeat",
+        "refine",
+        "review",
+        "pause",
+        "whoami",
+        "platform",
+        "insights",
+        "login",
+        # Recovery-only, after a restart lost a turn: `/clawk discard` reaches it.
+        "discard",
+        # One-time answer to the low-disk prompt; `/clawk autoprune on` reaches it.
+        "autoprune",
+    }
+)
 
 
 def _sanitize_slack_name(raw: str) -> str:
@@ -402,18 +528,36 @@ def slack_native_slashes() -> list[tuple[str, str, str]]:
     _SLACK_VIA_CLAWK_ONLY are skipped. ``/clawk`` is always first for anything dropped."""
     available = _gateway_available_commands()
     wanted = [(cmd.name, cmd.describe(), cmd.args_hint or "") for cmd in available]
-    wanted += [(alias, t("slash.shared.slack_alias_for", name=cmd.name, description=cmd.describe()),
-                cmd.args_hint or "") for cmd in available for alias in cmd.aliases]
-    wanted += [(name, desc, hint or "") for name, desc, hint in _iter_plugin_command_entries()]
+    wanted += [
+        (
+            alias,
+            t(
+                "slash.shared.slack_alias_for",
+                name=cmd.name,
+                description=cmd.describe(),
+            ),
+            cmd.args_hint or "",
+        )
+        for cmd in available
+        for alias in cmd.aliases
+    ]
+    wanted += [
+        (name, desc, hint or "") for name, desc, hint in _iter_plugin_command_entries()
+    ]
 
     entries: list[tuple[str, str, str]] = [
-        ("clawk", t("slash.clawk.description"), "[subcommand] [args]")]
+        ("clawk", t("slash.clawk.description"), "[subcommand] [args]")
+    ]
     seen = {"clawk"}
     for name, desc, hint in wanted:
         slack_name = _sanitize_slack_name(name)
-        if (not slack_name or slack_name in seen or slack_name in _SLACK_RESERVED_COMMANDS
-                or slack_name in _SLACK_VIA_CLAWK_ONLY
-                or len(entries) >= _SLACK_MAX_SLASH_COMMANDS):
+        if (
+            not slack_name
+            or slack_name in seen
+            or slack_name in _SLACK_RESERVED_COMMANDS
+            or slack_name in _SLACK_VIA_CLAWK_ONLY
+            or len(entries) >= _SLACK_MAX_SLASH_COMMANDS
+        ):
             continue
         # Slack description cap is 2000 chars; keep it short.
         entries.append((slack_name, desc[:140], hint[:100]))
@@ -422,13 +566,18 @@ def slack_native_slashes() -> list[tuple[str, str, str]]:
 
 
 def slack_app_manifest(
-    request_url: str = "https://clawksis-agent.local/slack/commands") -> dict[str, Any]:
+    request_url: str = "https://clawksis-agent.local/slack/commands",
+) -> dict[str, Any]:
     """``features.slash_commands`` manifest portion only (decoupled from the rest of the manifest
     users configure in the Slack UI); ``request_url`` is schema-required, ignored in Socket Mode."""
     slashes = []
     for name, desc, usage in slack_native_slashes():
-        entry = {"command": f"/{name}", "description": desc or t("slash.shared.plugin_default_desc", name=name),
-                 "should_escape": False, "url": request_url}
+        entry = {
+            "command": f"/{name}",
+            "description": desc or t("slash.shared.plugin_default_desc", name=name),
+            "should_escape": False,
+            "url": request_url,
+        }
         if usage:
             entry["usage_hint"] = usage
         slashes.append(entry)
@@ -439,7 +588,9 @@ def slack_subcommand_map() -> dict[str, str]:
     """name/alias -> "/command" for the Slack ``/clawk`` handler, plugin commands included."""
     mapping: dict[str, str] = {
         name: f"/{name}"
-        for cmd in _gateway_available_commands() for name in (cmd.name, *cmd.aliases)}
+        for cmd in _gateway_available_commands()
+        for name in (cmd.name, *cmd.aliases)
+    }
     for name, _description, _args_hint in _iter_plugin_command_entries():
         mapping.setdefault(name, f"/{name}")
     return mapping

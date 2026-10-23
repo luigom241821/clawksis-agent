@@ -1,4 +1,5 @@
 """Persisted notification routes authorize exactly one transport, including route-only profiles."""
+
 import asyncio
 from pathlib import Path
 
@@ -39,51 +40,99 @@ def setup_runner(tmp_path, monkeypatch):
     runner._primary_profile_name = "default"
     runner._kanban_notifier_profile = "default"
     runner._kanban_dispatcher_lock_handle = object()
-    runner.config = GatewayConfig(multiplex_profiles=True, profile_routes=parse_profile_routes([
-        dict(platform="discord", guild_id="guild", chat_id="parent", profile="yuki"),
-    ]))
+    runner.config = GatewayConfig(
+        multiplex_profiles=True,
+        profile_routes=parse_profile_routes(
+            [
+                dict(
+                    platform="discord",
+                    guild_id="guild",
+                    chat_id="parent",
+                    profile="yuki",
+                ),
+            ]
+        ),
+    )
     return runner
 
 
-def completion(*, profile="yuki", metadata=None, chat="post", thread="post",
-               user="creator", mode="notify+wake"):
+def completion(
+    *,
+    profile="yuki",
+    metadata=None,
+    chat="post",
+    thread="post",
+    user="creator",
+    mode="notify+wake",
+):
     with kbc.connect() as conn:
         task = kb.create_task(conn, title="route completion", assignee="worker")
-        kbn.add_notify_sub(conn, task_id=task, platform="discord", chat_id=chat,
-                           thread_id=thread, chat_type="thread", user_id=user,
-                           notifier_profile=profile, delivery_mode=mode,
-                           delivery_metadata=metadata if metadata is not None else
-                           {"guild_id": "guild", "scope_id": "guild", "parent_chat_id": "parent"})
+        kbn.add_notify_sub(
+            conn,
+            task_id=task,
+            platform="discord",
+            chat_id=chat,
+            thread_id=thread,
+            chat_type="thread",
+            user_id=user,
+            notifier_profile=profile,
+            delivery_mode=mode,
+            delivery_metadata=metadata
+            if metadata is not None
+            else {"guild_id": "guild", "scope_id": "guild", "parent_chat_id": "parent"},
+        )
         kb.complete_task(conn, task, result="finished")
     return task
 
 
 def collect(runner):
-    return _notifier_collect(runner, kb, notifier_profile="default", gc_due=False, gc_retention_days=30)
+    return _notifier_collect(
+        runner, kb, notifier_profile="default", gc_due=False, gc_retention_days=30
+    )
 
 
 async def deliver(runner, rows):
     for row in rows:
-        await _KanbanNotification(runner, row, platform_cls=Platform, sub_fail_counts={}).deliver()
+        await _KanbanNotification(
+            runner, row, platform_cls=Platform, sub_fail_counts={}
+        ).deliver()
 
 
 def unseen(task):
     with kbc.connect() as conn:
-        return kbn.unseen_events_for_sub(conn, task_id=task, platform="discord", chat_id="post",
-                                         thread_id="post", kinds=["completed"])[1]
+        return kbn.unseen_events_for_sub(
+            conn,
+            task_id=task,
+            platform="discord",
+            chat_id="post",
+            thread_id="post",
+            kinds=["completed"],
+        )[1]
 
 
-def test_exact_routed_profile_delivers_once_on_its_authorized_transport(tmp_path, monkeypatch):
+def test_exact_routed_profile_delivers_once_on_its_authorized_transport(
+    tmp_path, monkeypatch
+):
     runner = setup_runner(tmp_path, monkeypatch)
     primary = runner.adapters[Platform.DISCORD]
-    task = completion(metadata={"scope_id": "guild", "guild_id": "stale-alias", "parent_chat_id": "parent"})
+    task = completion(
+        metadata={
+            "scope_id": "guild",
+            "guild_id": "stale-alias",
+            "parent_chat_id": "parent",
+        }
+    )
     rows = collect(runner)
     assert [row["task"].id for row in rows] == [task]
     asyncio.run(deliver(runner, rows))
     assert len(primary.sent) == len(primary.handled) == 1
     source = primary.handled[0].source
-    assert (source.profile, source.guild_id, source.scope_id, source.parent_chat_id) == (
-        "yuki", "guild", "guild", "parent")
+    assert (
+        source.profile,
+        source.guild_id,
+        source.scope_id,
+        source.parent_chat_id,
+    ) == ("yuki", "guild", "guild", "parent")
     assert runner._delivery_adapter_for(source) is primary
     assert not collect(runner)
 
@@ -100,12 +149,16 @@ def test_exact_routed_profile_delivers_once_on_its_authorized_transport(tmp_path
     assert not unseen(task)
 
 
-def test_user_routed_subscription_uses_only_its_authorized_profile(tmp_path, monkeypatch):
+def test_user_routed_subscription_uses_only_its_authorized_profile(
+    tmp_path, monkeypatch
+):
     runner = setup_runner(tmp_path, monkeypatch)
     primary = runner.adapters[Platform.DISCORD]
-    runner.config.profile_routes = parse_profile_routes([
-        dict(platform="discord", user_id="creator", profile="yuki"),
-    ])
+    runner.config.profile_routes = parse_profile_routes(
+        [
+            dict(platform="discord", user_id="creator", profile="yuki"),
+        ]
+    )
 
     routed = completion(profile="yuki", chat="shared", thread="")
     rows = collect(runner)
@@ -127,16 +180,21 @@ def test_route_denials_leave_events_retryable_at_claim_and_send(tmp_path, monkey
     # Unknown owners, wrong/default owners, incomplete anchors, and partial credentials
     # never become primary delivery authority.
     tasks = [completion(profile=owner) for owner in ("other", "default", None)]
-    tasks += [completion(metadata=meta) for meta in (
-        {"parent_chat_id": "parent"}, {"guild_id": "guild"},
-        {"guild_id": "wrong", "parent_chat_id": "parent"},
-    )]
+    tasks += [
+        completion(metadata=meta)
+        for meta in (
+            {"parent_chat_id": "parent"},
+            {"guild_id": "guild"},
+            {"guild_id": "wrong", "parent_chat_id": "parent"},
+        )
+    ]
     assert not collect(runner)
     assert all(unseen(task) for task in tasks)
 
     good = completion()
     # A tombstoned (deleted) owner profile is no longer served by the multiplexer.
     from clawk_constants import clear_named_profile_deleted, mark_named_profile_deleted
+
     yuki_home = tmp_path / ".clawk" / "profiles" / "yuki"
     mark_named_profile_deleted(yuki_home)
     assert not collect(runner)
@@ -144,8 +202,9 @@ def test_route_denials_leave_events_retryable_at_claim_and_send(tmp_path, monkey
     rows = collect(runner)
     assert [row["task"].id for row in rows] == [good]
     # Reassignment after the claim must rewind, never send using stale authority.
-    runner.config.profile_routes = parse_profile_routes([
-        dict(platform="discord", guild_id="guild", chat_id="parent", profile="other")])
+    runner.config.profile_routes = parse_profile_routes(
+        [dict(platform="discord", guild_id="guild", chat_id="parent", profile="other")]
+    )
     asyncio.run(deliver(runner, rows))
     assert primary.sent == primary.handled == []
     assert unseen(good)
@@ -153,12 +212,18 @@ def test_route_denials_leave_events_retryable_at_claim_and_send(tmp_path, monkey
     # Equal-specificity rules retain configuration order: an unknown parent
     # cannot skip an earlier rule, but a known conflicting parent rules it out.
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "tied-routes.db"))
-    runner.config.profile_routes = parse_profile_routes([
-        dict(platform="discord", guild_id="guild", chat_id="parent", profile="other"),
-        dict(platform="discord", guild_id="guild", chat_id="post", profile="yuki"),
-    ])
+    runner.config.profile_routes = parse_profile_routes(
+        [
+            dict(
+                platform="discord", guild_id="guild", chat_id="parent", profile="other"
+            ),
+            dict(platform="discord", guild_id="guild", chat_id="post", profile="yuki"),
+        ]
+    )
     ambiguous = completion(metadata={"scope_id": "guild"})
-    exact = completion(metadata={"scope_id": "guild", "parent_chat_id": "different-parent"})
+    exact = completion(
+        metadata={"scope_id": "guild", "parent_chat_id": "different-parent"}
+    )
     rows = collect(runner)
     assert [row["task"].id for row in rows] == [exact]
     asyncio.run(deliver(runner, rows))
@@ -180,11 +245,19 @@ def test_kanban_wakes_install_the_destination_runtime_scope(tmp_path, monkeypatc
         async def handle_message(self, event):
             # A real yield catches scopes that mutate process-global state.
             await asyncio.sleep(0)
-            observed.append((event.source.profile, get_secret("KANBAN_TEST_SECRET"), get_clawk_home()))
+            observed.append(
+                (
+                    event.source.profile,
+                    get_secret("KANBAN_TEST_SECRET"),
+                    get_clawk_home(),
+                )
+            )
             await super().handle_message(event)
 
     for name in ("yuki", "other"):
-        (home / "profiles" / name / ".env").write_text(f"KANBAN_TEST_SECRET={name}\n", encoding="utf-8")
+        (home / "profiles" / name / ".env").write_text(
+            f"KANBAN_TEST_SECRET={name}\n", encoding="utf-8"
+        )
         runner._profile_adapters[name] = {Platform.DISCORD: ScopedAdapter()}
         completion(profile=name)
     rows = collect(runner)
@@ -192,11 +265,20 @@ def test_kanban_wakes_install_the_destination_runtime_scope(tmp_path, monkeypatc
 
     async def concurrent_wakes():
         with _profile_runtime_scope(home):
-            await asyncio.gather(*(_KanbanNotification(runner, row, platform_cls=Platform,
-                                                       sub_fail_counts={}).deliver() for row in rows))
+            await asyncio.gather(
+                *(
+                    _KanbanNotification(
+                        runner, row, platform_cls=Platform, sub_fail_counts={}
+                    ).deliver()
+                    for row in rows
+                )
+            )
             assert get_secret("KANBAN_TEST_SECRET") == "primary"
+
     asyncio.run(concurrent_wakes())
-    assert sorted(observed) == [(name, name, home / "profiles" / name) for name in ("other", "yuki")]
+    assert sorted(observed) == [
+        (name, name, home / "profiles" / name) for name in ("other", "yuki")
+    ]
 
 
 def test_removed_profile_never_wakes_under_the_primary_runtime(tmp_path, monkeypatch):
@@ -214,7 +296,9 @@ def test_removed_profile_never_wakes_under_the_primary_runtime(tmp_path, monkeyp
     assert unseen(task)
 
 
-def test_anchorless_thread_subscription_warns_once_instead_of_silent_skip(tmp_path, monkeypatch, caplog):
+def test_anchorless_thread_subscription_warns_once_instead_of_silent_skip(
+    tmp_path, monkeypatch, caplog
+):
     """A CLI-created Discord thread sub with no ``parent_chat_id`` cannot match a channel-level
     route and is skipped fail-closed — that skip must be visible ONCE at WARNING, not buried at
     DEBUG on every tick forever (#110919)."""
@@ -227,13 +311,19 @@ def test_anchorless_thread_subscription_warns_once_instead_of_silent_skip(tmp_pa
     with caplog.at_level(logging.WARNING, logger=notifier.logger.name):
         assert not collect(runner)
         assert not collect(runner)
-    warnings = [r for r in caplog.records if "parent_chat_id" in r.getMessage() and task in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if "parent_chat_id" in r.getMessage() and task in r.getMessage()
+    ]
     assert len(warnings) == 1 and warnings[0].levelno == logging.WARNING
     assert "--parent-chat-id" in warnings[0].getMessage()
     assert unseen(task)
 
 
-def test_pinned_profile_without_this_platform_delivers_via_primary(tmp_path, monkeypatch, caplog):
+def test_pinned_profile_without_this_platform_delivers_via_primary(
+    tmp_path, monkeypatch, caplog
+):
     """A profile_routes-pinned profile that runs OTHER-platform adapters but none for the
     subscription's platform is not a dead-end: the primary bot — the only credential serving that
     chat, for inbound turns too — delivers, exactly as for a route-only profile (#115460, option 1).
@@ -261,8 +351,12 @@ def test_pinned_profile_without_this_platform_delivers_via_primary(tmp_path, mon
     stamped = completion(profile="default")
     with caplog.at_level(logging.WARNING, logger=notifier.logger.name):
         assert not collect(runner)
-    warnings = [r for r in caplog.records if "pins that chat to profile yuki" in r.getMessage()
-                and stamped in r.getMessage()]
+    warnings = [
+        r
+        for r in caplog.records
+        if "pins that chat to profile yuki" in r.getMessage()
+        and stamped in r.getMessage()
+    ]
     assert len(warnings) == 1 and warnings[0].levelno == logging.WARNING
     assert "--notifier-profile yuki" in warnings[0].getMessage()
     assert unseen(stamped)

@@ -28,7 +28,9 @@ def bridge(monkeypatch):
 
     def fake_block(event, sid, payload, timeout=None, **_kw):
         answer = fake_block.answers.pop(0) if fake_block.answers else ""
-        calls.append({"event": event, "sid": sid, "payload": payload, "timeout": timeout})
+        calls.append(
+            {"event": event, "sid": sid, "payload": payload, "timeout": timeout}
+        )
         return answer
 
     fake_block.answers = []
@@ -56,13 +58,14 @@ def test_a_client_that_answers_gets_the_full_deadline_back(session, bridge):
     assert bridge.calls[1]["timeout"] == server._TOUR_TIMEOUT_S
 
 
-
-
 def test_later_actions_short_circuit_instead_of_stalling_again(session, bridge):
     """The regression: a "give me a tour" turn stacks one timeout per action."""
     server._tour_request("s1", {"action": "targets"})
     for action in ("show", "start", "next", "stop"):
-        assert json.loads(server._tour_request("s1", {"action": action}))["success"] is False
+        assert (
+            json.loads(server._tour_request("s1", {"action": action}))["success"]
+            is False
+        )
 
     assert len(bridge.calls) == 1
 
@@ -86,10 +89,16 @@ def test_a_new_session_reprobes(bridge, monkeypatch):
     server._tour_request("dead", {"action": "targets"})
     bridge.answers = [json.dumps({"success": True})]
 
-    assert json.loads(server._tour_request("fresh", {"action": "targets"}))["success"] is True
+    assert (
+        json.loads(server._tour_request("fresh", {"action": "targets"}))["success"]
+        is True
+    )
 
 
 def test_a_session_with_no_record_still_bridges(bridge):
     """Detached callers have no session dict; they keep the plain bridge."""
     bridge.answers = [json.dumps({"success": True})]
-    assert json.loads(server._tour_request("gone", {"action": "targets"}))["success"] is True
+    assert (
+        json.loads(server._tour_request("gone", {"action": "targets"}))["success"]
+        is True
+    )

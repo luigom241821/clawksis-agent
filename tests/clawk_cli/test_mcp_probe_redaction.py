@@ -140,12 +140,15 @@ class TestRedactMcpProbeText:
         _assert_fully_redacted(out)
         assert "Digest ***" in out
 
-    @pytest.mark.parametrize("key_quote,value_quote", [
-        ("'", "'"),
-        ('"', '"'),
-        ("'", '"'),
-        ('"', "'"),
-    ])
+    @pytest.mark.parametrize(
+        "key_quote,value_quote",
+        [
+            ("'", "'"),
+            ('"', '"'),
+            ("'", '"'),
+            ('"', "'"),
+        ],
+    )
     def test_mapping_quotes_on_api_key(self, key_quote, value_quote):
         from clawk_cli.mcp_config import redact_mcp_probe_text
 
@@ -182,16 +185,20 @@ class TestRedactMcpProbeText:
         from clawk_cli.mcp_config import redact_mcp_header_display
 
         assert redact_mcp_header_display("X-Api-Key", OPAQUE_API_KEY) == "***"
-        assert redact_mcp_header_display(
-            "Authorization", f"Bearer ${{MCP_TEST_TOKEN}}; backup={SYNTHETIC}"
-        ) == "***"
+        assert (
+            redact_mcp_header_display(
+                "Authorization", f"Bearer ${{MCP_TEST_TOKEN}}; backup={SYNTHETIC}"
+            )
+            == "***"
+        )
 
     def test_header_display_keeps_pure_env_template(self):
         from clawk_cli.mcp_config import redact_mcp_header_display
 
-        assert redact_mcp_header_display(
-            "Authorization", "Bearer ${MCP_TEST_TOKEN}"
-        ) == "Bearer ${MCP_TEST_TOKEN}"
+        assert (
+            redact_mcp_header_display("Authorization", "Bearer ${MCP_TEST_TOKEN}")
+            == "Bearer ${MCP_TEST_TOKEN}"
+        )
 
 
 class TestProbeHelperRedactsBeforeRaise:
@@ -244,7 +251,7 @@ class TestProbeHelperRedactsBeforeRaise:
         def boom(coro, timeout):
             coro.close()
             raise RuntimeError(
-                f'connect failed: Authorization: Digest '
+                f"connect failed: Authorization: Digest "
                 f'response="{OPAQUE_API_KEY}", username="u"'
             )
 
@@ -278,12 +285,15 @@ class TestProbeHelperRedactsBeforeRaise:
 class TestCmdMcpTestRedaction:
     def test_success_display_keeps_env_template(self, tmp_path, capsys, monkeypatch):
         monkeypatch.setenv("MCP_TEST_TOKEN", SYNTHETIC)
-        _seed_config(tmp_path, {
-            "ink": {
-                "url": "https://mcp.example/mcp",
-                "headers": {"Authorization": "Bearer ${MCP_TEST_TOKEN}"},
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {
+                    "url": "https://mcp.example/mcp",
+                    "headers": {"Authorization": "Bearer ${MCP_TEST_TOKEN}"},
+                },
             },
-        })
+        )
         monkeypatch.setattr(
             "clawk_cli.mcp_config._probe_single_server",
             lambda *a, **k: [("ping", "Ping")],
@@ -294,15 +304,20 @@ class TestCmdMcpTestRedaction:
         out = capsys.readouterr().out
         _assert_fully_redacted(out)
         assert "Connected" in out
-        assert "${MCP_TEST_TOKEN}" in (tmp_path / "config.yaml").read_text(encoding="utf-8")
+        assert "${MCP_TEST_TOKEN}" in (tmp_path / "config.yaml").read_text(
+            encoding="utf-8"
+        )
 
     def test_success_display_masks_literal_header(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "ink": {
-                "url": "https://mcp.example/mcp",
-                "headers": {"Authorization": f"Bearer {SYNTHETIC}"},
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {
+                    "url": "https://mcp.example/mcp",
+                    "headers": {"Authorization": f"Bearer {SYNTHETIC}"},
+                },
             },
-        })
+        )
         monkeypatch.setattr(
             "clawk_cli.mcp_config._probe_single_server",
             lambda *a, **k: [("ping", "Ping")],
@@ -314,13 +329,18 @@ class TestCmdMcpTestRedaction:
         _assert_fully_redacted(out)
         assert "Authorization:" in out
 
-    def test_success_display_masks_opaque_api_key_header(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "ink": {
-                "url": "https://mcp.example/mcp",
-                "headers": {"X-Api-Key": OPAQUE_API_KEY},
+    def test_success_display_masks_opaque_api_key_header(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {
+                    "url": "https://mcp.example/mcp",
+                    "headers": {"X-Api-Key": OPAQUE_API_KEY},
+                },
             },
-        })
+        )
         monkeypatch.setattr(
             "clawk_cli.mcp_config._probe_single_server",
             lambda *a, **k: [("ping", "Ping")],
@@ -333,15 +353,20 @@ class TestCmdMcpTestRedaction:
         assert "X-Api-Key:" in out
         assert "***" in out
 
-    def test_success_display_masks_mixed_env_and_literal(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "ink": {
-                "url": "https://mcp.example/mcp",
-                "headers": {
-                    "Authorization": f"Bearer ${{MCP_TEST_TOKEN}}; backup={SYNTHETIC}",
+    def test_success_display_masks_mixed_env_and_literal(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {
+                    "url": "https://mcp.example/mcp",
+                    "headers": {
+                        "Authorization": f"Bearer ${{MCP_TEST_TOKEN}}; backup={SYNTHETIC}",
+                    },
                 },
             },
-        })
+        )
         monkeypatch.setattr(
             "clawk_cli.mcp_config._probe_single_server",
             lambda *a, **k: [("ping", "Ping")],
@@ -354,9 +379,12 @@ class TestCmdMcpTestRedaction:
         assert "***" in out
 
     def test_probe_exception_is_redacted(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "ink": {"url": "https://mcp.example/mcp"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {"url": "https://mcp.example/mcp"},
+            },
+        )
 
         def boom(*a, **k):
             raise RuntimeError(f"connect failed: {HEADER}")
@@ -381,17 +409,24 @@ class TestDashboardMcpTestRedaction:
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
         from clawk_cli import mcp_config
 
-        _seed_config(tmp_path, {
-            "ink": {"url": "https://mcp.example/mcp"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {"url": "https://mcp.example/mcp"},
+            },
+        )
 
         def boom(name, config, connect_timeout=30, details=None):
             raise RuntimeError(f"connect failed: {HEADER}")
 
         monkeypatch.setattr(mcp_config, "_probe_single_server", boom)
-        monkeypatch.setattr(mcp_config, "_get_mcp_servers", lambda: {
-            "ink": {"url": "https://mcp.example/mcp"},
-        })
+        monkeypatch.setattr(
+            mcp_config,
+            "_get_mcp_servers",
+            lambda: {
+                "ink": {"url": "https://mcp.example/mcp"},
+            },
+        )
 
         client = TestClient(app)
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
@@ -412,9 +447,12 @@ class TestDashboardMcpTestRedaction:
         from clawk_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
         from clawk_cli import mcp_config
 
-        _seed_config(tmp_path, {
-            "ink": {"url": "https://mcp.example/mcp"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {"url": "https://mcp.example/mcp"},
+            },
+        )
 
         def boom(name, config, connect_timeout=30, details=None):
             raise RuntimeError(
@@ -423,9 +461,13 @@ class TestDashboardMcpTestRedaction:
             )
 
         monkeypatch.setattr(mcp_config, "_probe_single_server", boom)
-        monkeypatch.setattr(mcp_config, "_get_mcp_servers", lambda: {
-            "ink": {"url": "https://mcp.example/mcp"},
-        })
+        monkeypatch.setattr(
+            mcp_config,
+            "_get_mcp_servers",
+            lambda: {
+                "ink": {"url": "https://mcp.example/mcp"},
+            },
+        )
 
         client = TestClient(app)
         client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
@@ -455,9 +497,12 @@ class TestSiblingProbeConsumersRedact:
         assert "***" in out  # credential span masked, whichever redactor got it first
 
     def test_mcp_login_redacts_probe_exception(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "ink": {"url": "https://mcp.example/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {"url": "https://mcp.example/mcp", "auth": "oauth"},
+            },
+        )
 
         def boom(*a, **k):
             raise RuntimeError(f"connect failed: {HEADER}")

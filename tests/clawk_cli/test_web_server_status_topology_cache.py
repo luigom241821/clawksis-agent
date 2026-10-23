@@ -56,7 +56,9 @@ def test_topology_cache_rescans_after_ttl(monkeypatch):
     try:
         _web_server_gateway._collect_profile_gateway_topology_cached()
         # Age the cache entry past the TTL instead of sleeping through it.
-        _web_server_gateway._TOPOLOGY_CACHE["ts"] -= _web_server_gateway._TOPOLOGY_CACHE_TTL + 1.0
+        _web_server_gateway._TOPOLOGY_CACHE["ts"] -= (
+            _web_server_gateway._TOPOLOGY_CACHE_TTL + 1.0
+        )
         _web_server_gateway._collect_profile_gateway_topology_cached()
     finally:
         _reset_cache()

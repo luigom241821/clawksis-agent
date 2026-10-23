@@ -83,4 +83,4 @@ def elide_middle(text: str, head: int, tail: int) -> str:
     if len(text) <= head + tail:
         return text
     marker = _elision_marker(omitted=len(text) - head - tail, total=len(text))
-    return text[:head] + marker + text[len(text) - tail:]
+    return text[:head] + marker + text[len(text) - tail :]

@@ -18,11 +18,11 @@ DEFAULT_PROBE_PORTS = (8080,)  # llama-server default; managed port comes from c
 
 @dataclass
 class DetectedServer:
-    base_url: str            # OpenAI-compatible /v1 root
-    build_info: str          # e.g. "b10290-c8e03ce81"
-    model_path: str          # currently loaded model (may be empty in router mode)
+    base_url: str  # OpenAI-compatible /v1 root
+    build_info: str  # e.g. "b10290-c8e03ce81"
+    model_path: str  # currently loaded model (may be empty in router mode)
     n_ctx: int | None
-    router_mode: bool        # GET /models answered -> router management available
+    router_mode: bool  # GET /models answered -> router management available
     auth_required: bool
 
 
@@ -42,7 +42,9 @@ def probe_port(port: int) -> DetectedServer | None:
     root = f"http://127.0.0.1:{port}"
     status, props = _get(f"{root}/props")
     if status == 401:
-        return DetectedServer(f"{root}/v1", "", "", None, router_mode=False, auth_required=True)
+        return DetectedServer(
+            f"{root}/v1", "", "", None, router_mode=False, auth_required=True
+        )
     if status != 200 or not isinstance(props, dict):
         return None
     build = str(props.get("build_info", ""))
@@ -51,10 +53,15 @@ def probe_port(port: int) -> DetectedServer | None:
     dgs = props.get("default_generation_settings")
     models_status, models = _get(f"{root}/models")
     return DetectedServer(
-        base_url=f"{root}/v1", build_info=build, model_path=str(props.get("model_path", "")),
+        base_url=f"{root}/v1",
+        build_info=build,
+        model_path=str(props.get("model_path", "")),
         n_ctx=dgs.get("n_ctx") if isinstance(dgs, dict) else None,
-        router_mode=models_status == 200 and isinstance(models, dict) and "data" in models,
-        auth_required=False)
+        router_mode=models_status == 200
+        and isinstance(models, dict)
+        and "data" in models,
+        auth_required=False,
+    )
 
 
 def detect_server(extra_ports: tuple[int, ...] = ()) -> DetectedServer | None:

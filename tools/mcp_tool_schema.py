@@ -17,7 +17,10 @@ logger = logging.getLogger("tools.mcp_tool")
 _MCP_INJECTION_PATTERNS = [
     (re.compile(pattern, re.IGNORECASE), reason)
     for pattern, reason in (
-        (r"ignore\s+(all\s+)?previous\s+instructions", "prompt override attempt ('ignore previous instructions')"),
+        (
+            r"ignore\s+(all\s+)?previous\s+instructions",
+            "prompt override attempt ('ignore previous instructions')",
+        ),
         (r"you\s+are\s+now\s+a", "identity override attempt ('you are now a...')"),
         (r"your\s+new\s+(task|role|instructions?)\s+(is|are)", "task override attempt"),
         (r"system\s*:\s*", "system prompt injection attempt"),
@@ -26,18 +29,31 @@ _MCP_INJECTION_PATTERNS = [
         (r"(curl|wget|fetch)\s+https?://", "network command in description"),
         (r"base64\.(b64decode|decodebytes)", "base64 decode reference"),
         (r"exec\s*\(|eval\s*\(", "code execution reference"),
-        (r"import\s+(subprocess|os|shutil|socket)", "dangerous import reference"))]
+        (r"import\s+(subprocess|os|shutil|socket)", "dangerous import reference"),
+    )
+]
 
 
-def _scan_mcp_description(server_name: str, tool_name: str, description: str) -> list[str]:
+def _scan_mcp_description(
+    server_name: str, tool_name: str, description: str
+) -> list[str]:
     """Scan a tool description for injection patterns; returns finding strings (empty =
     clean) and logs a warning when any match."""
     if not description:
         return []
-    findings = [reason for pattern, reason in _MCP_INJECTION_PATTERNS if pattern.search(description)]
+    findings = [
+        reason
+        for pattern, reason in _MCP_INJECTION_PATTERNS
+        if pattern.search(description)
+    ]
     if findings:
-        logger.warning("MCP server '%s' tool '%s': suspicious description content — %s. Description: %.200s",
-                       server_name, tool_name, "; ".join(findings), description)
+        logger.warning(
+            "MCP server '%s' tool '%s': suspicious description content — %s. Description: %.200s",
+            server_name,
+            tool_name,
+            "; ".join(findings),
+            description,
+        )
     return findings
 
 
@@ -57,18 +73,28 @@ def _rewrite_local_refs(node):
     normalized = {}
     for key, value in node.items():
         if key in ("properties", "patternProperties") and isinstance(value, dict):
-            normalized[key] = {name: _rewrite_local_refs(schema) for name, schema in value.items()}
+            normalized[key] = {
+                name: _rewrite_local_refs(schema) for name, schema in value.items()
+            }
         else:
-            normalized["$defs" if key == "definitions" else key] = _rewrite_local_refs(value)
+            normalized["$defs" if key == "definitions" else key] = _rewrite_local_refs(
+                value
+            )
     ref = normalized.get("$ref")
     if isinstance(ref, str) and ref.startswith("#/definitions/"):
-        normalized["$ref"] = "#/$defs/" + ref[len("#/definitions/"):]
+        normalized["$ref"] = "#/$defs/" + ref[len("#/definitions/") :]
     return normalized
 
 
 # Mapping-valued JSON Schema keywords: the value maps entry NAMES to schemas and is never a
 # schema node itself. Repair must recurse into the map's values only (#110530).
-_SCHEMA_MAP_KEYS = ("properties", "patternProperties", "$defs", "definitions", "dependentSchemas")
+_SCHEMA_MAP_KEYS = (
+    "properties",
+    "patternProperties",
+    "$defs",
+    "definitions",
+    "dependentSchemas",
+)
 
 
 def _repair_object_shape(node, *, _object_root=False):
@@ -96,12 +122,16 @@ def _repair_object_shape(node, *, _object_root=False):
             # A schema map (entry name -> schema), never a schema node itself: recursing over
             # the whole map would inject a bogus ``"type": "object"`` *entry* when one of its
             # keys is literally named ``properties``/``required`` (#110530).
-            repaired[key] = {name: _repair_object_shape(schema) for name, schema in value.items()}
+            repaired[key] = {
+                name: _repair_object_shape(schema) for name, schema in value.items()
+            }
         else:
             repaired[key] = _repair_object_shape(value)
     # Constraint fragments are returned untouched: repairing them is what destroys them.
     if _object_root or "properties" in repaired or "type" in node:
-        if not repaired.get("type") and ("properties" in repaired or "required" in repaired):
+        if not repaired.get("type") and (
+            "properties" in repaired or "required" in repaired
+        ):
             repaired["type"] = "object"
         if repaired.get("type") == "object":
             if not isinstance(repaired.get("properties"), dict):
@@ -110,8 +140,11 @@ def _repair_object_shape(node, *, _object_root=False):
             # OpenAI-compatible backends (#56123); ``[]`` is valid everywhere (Gemini included).
             required = repaired.get("required")
             props = repaired.get("properties") or {}
-            repaired["required"] = ([r for r in required if isinstance(r, str) and r in props]
-                                    if isinstance(required, list) else [])
+            repaired["required"] = (
+                [r for r in required if isinstance(r, str) and r in props]
+                if isinstance(required, list)
+                else []
+            )
     return repaired
 
 
@@ -133,6 +166,7 @@ def _normalize_mcp_input_schema(schema: dict | None) -> dict:
     if not schema:
         return dict(_EMPTY_OBJECT_SCHEMA)
     from tools.schema_sanitizer import collapse_const_unions, strip_nullable_unions
+
     normalized = _rewrite_local_refs(schema)
     normalized = strip_nullable_unions(normalized, keep_nullable_hint=True)
     normalized = collapse_const_unions(normalized)
@@ -175,12 +209,24 @@ def mcp_prefixed_tool_name(server_name: str, tool_name: str) -> str:
     full_name = f"{MCP_TOOL_NAME_PREFIX}{sanitize_mcp_name_component(server_name)}__{sanitize_mcp_name_component(tool_name)}"
     if len(full_name) <= _MCP_TOOL_NAME_MAX_LENGTH:
         return full_name
-    suffix = "_" + hashlib.sha256(full_name.encode("utf-8")).hexdigest()[:_MCP_TOOL_NAME_HASH_LENGTH]
-    if full_name not in _clamped_names_warned:  # recomputed on every health refresh; warn once
+    suffix = (
+        "_"
+        + hashlib.sha256(full_name.encode("utf-8")).hexdigest()[
+            :_MCP_TOOL_NAME_HASH_LENGTH
+        ]
+    )
+    if (
+        full_name not in _clamped_names_warned
+    ):  # recomputed on every health refresh; warn once
         _clamped_names_warned.add(full_name)
-        logger.warning("MCP tool name %r (%d chars) exceeds the %d-char provider limit; shortened to a "
-                       "deterministic hash-suffixed name", full_name, len(full_name), _MCP_TOOL_NAME_MAX_LENGTH)
-    return full_name[:_MCP_TOOL_NAME_MAX_LENGTH - len(suffix)] + suffix
+        logger.warning(
+            "MCP tool name %r (%d chars) exceeds the %d-char provider limit; shortened to a "
+            "deterministic hash-suffixed name",
+            full_name,
+            len(full_name),
+            _MCP_TOOL_NAME_MAX_LENGTH,
+        )
+    return full_name[: _MCP_TOOL_NAME_MAX_LENGTH - len(suffix)] + suffix
 
 
 def _convert_mcp_schema(server_name: str, mcp_tool) -> dict:
@@ -188,8 +234,12 @@ def _convert_mcp_schema(server_name: str, mcp_tool) -> dict:
     ``registry.register(schema=...)`` dict."""
     return {
         "name": mcp_prefixed_tool_name(server_name, mcp_tool.name),
-        "description": strip_unicode_tags(mcp_tool.description or f"MCP tool {mcp_tool.name} from {server_name}"),
-        "parameters": _normalize_mcp_input_schema(mcp_field(mcp_tool, "input_schema", "inputSchema")),
+        "description": strip_unicode_tags(
+            mcp_tool.description or f"MCP tool {mcp_tool.name} from {server_name}"
+        ),
+        "parameters": _normalize_mcp_input_schema(
+            mcp_field(mcp_tool, "input_schema", "inputSchema")
+        ),
     }
 
 
@@ -198,59 +248,101 @@ def _convert_mcp_schema(server_name: str, mcp_tool) -> dict:
 # ``_build_utility_schemas`` must not change.
 _UTILITY_TOOL_SPECS = (
     ("list_resources", "List available resources from MCP server '{server}'", {}, None),
-    ("read_resource", "Read a resource by URI from MCP server '{server}'",
-     {"uri": {"type": "string", "description": "URI of the resource to read"}}, ["uri"]),
+    (
+        "read_resource",
+        "Read a resource by URI from MCP server '{server}'",
+        {"uri": {"type": "string", "description": "URI of the resource to read"}},
+        ["uri"],
+    ),
     ("list_prompts", "List available prompts from MCP server '{server}'", {}, None),
-    ("get_prompt", "Get a prompt by name from MCP server '{server}'",
-     {
-         "name": {"type": "string", "description": "Name of the prompt to retrieve"},
-         "arguments": {
-             "type": "object",
-             "description": "Optional arguments to pass to the prompt",
-             "properties": {},
-             "additionalProperties": True},
-     }, ["name"]),
-    ("list_event_types", "List the event types MCP server '{server}' can notify about, and your active "
-     "subscriptions to them", {}, None),
-    ("subscribe_event", "Subscribe to an event from MCP server '{server}': each occurrence starts a new "
-     "agent run with your instructions and delivers its result to the chosen target",
-     {
-         "name": {"type": "string", "description": "Event type name from list_event_types"},
-         "arguments": {
-             "type": "object",
-             "description": "Subscription arguments matching the event's inputSchema",
-             "properties": {},
-             "additionalProperties": True},
-         "instructions": {"type": "string",
-                          "description": "What to do each time the event arrives (up to 2000 characters)"},
-         "deliver": {"type": "string",
-                     "description": "Where each run's result goes: log, telegram, discord, slack, ..."},
-         "deliver_chat_id": {"type": "string", "description": "Optional chat id on the deliver platform"},
-     }, ["name"]),
-    ("unsubscribe_event", "Cancel a subscription to an event from MCP server '{server}'",
-     {
-         "name": {"type": "string", "description": "Event type name"},
-         "arguments": {
-             "type": "object",
-             "description": "The same arguments the subscription was made with",
-             "properties": {},
-             "additionalProperties": True},
-     }, ["name"]))
+    (
+        "get_prompt",
+        "Get a prompt by name from MCP server '{server}'",
+        {
+            "name": {"type": "string", "description": "Name of the prompt to retrieve"},
+            "arguments": {
+                "type": "object",
+                "description": "Optional arguments to pass to the prompt",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+        ["name"],
+    ),
+    (
+        "list_event_types",
+        "List the event types MCP server '{server}' can notify about, and your active "
+        "subscriptions to them",
+        {},
+        None,
+    ),
+    (
+        "subscribe_event",
+        "Subscribe to an event from MCP server '{server}': each occurrence starts a new "
+        "agent run with your instructions and delivers its result to the chosen target",
+        {
+            "name": {
+                "type": "string",
+                "description": "Event type name from list_event_types",
+            },
+            "arguments": {
+                "type": "object",
+                "description": "Subscription arguments matching the event's inputSchema",
+                "properties": {},
+                "additionalProperties": True,
+            },
+            "instructions": {
+                "type": "string",
+                "description": "What to do each time the event arrives (up to 2000 characters)",
+            },
+            "deliver": {
+                "type": "string",
+                "description": "Where each run's result goes: log, telegram, discord, slack, ...",
+            },
+            "deliver_chat_id": {
+                "type": "string",
+                "description": "Optional chat id on the deliver platform",
+            },
+        },
+        ["name"],
+    ),
+    (
+        "unsubscribe_event",
+        "Cancel a subscription to an event from MCP server '{server}'",
+        {
+            "name": {"type": "string", "description": "Event type name"},
+            "arguments": {
+                "type": "object",
+                "description": "The same arguments the subscription was made with",
+                "properties": {},
+                "additionalProperties": True,
+            },
+        },
+        ["name"],
+    ),
+)
 
 
 def _build_utility_schemas(server_name: str) -> list[dict]:
     """Schemas for the resource/prompt utility tools as ``{schema, handler_key}`` dicts."""
     out = []
     for handler_key, description, properties, required in _UTILITY_TOOL_SPECS:
-        parameters = {"type": "object", "properties": {k: dict(v) for k, v in properties.items()}}
+        parameters = {
+            "type": "object",
+            "properties": {k: dict(v) for k, v in properties.items()},
+        }
         if required is not None:
             parameters["required"] = list(required)
-        out.append({
-            "schema": {
-                "name": mcp_prefixed_tool_name(server_name, handler_key),
-                "description": description.format(server=server_name),
-                "parameters": parameters},
-            "handler_key": handler_key})
+        out.append(
+            {
+                "schema": {
+                    "name": mcp_prefixed_tool_name(server_name, handler_key),
+                    "description": description.format(server=server_name),
+                    "parameters": parameters,
+                },
+                "handler_key": handler_key,
+            }
+        )
     return out
 
 
@@ -262,7 +354,9 @@ def _normalize_name_filter(value: Any, label: str) -> set[str]:
         return {value}
     if isinstance(value, (list, tuple, set)):
         return {str(item) for item in value}
-    logger.warning("MCP config %s must be a string or list of strings; ignoring %r", label, value)
+    logger.warning(
+        "MCP config %s must be a string or list of strings; ignoring %r", label, value
+    )
     return set()
 
 
@@ -274,7 +368,11 @@ def matches_name_filter(tool_name: str, patterns: set[str]) -> bool:
         return False
     if tool_name in patterns:
         return True
-    return any(fnmatch.fnmatchcase(tool_name, p) for p in patterns if "*" in p or "?" in p or "[" in p)
+    return any(
+        fnmatch.fnmatchcase(tool_name, p)
+        for p in patterns
+        if "*" in p or "?" in p or "[" in p
+    )
 
 
 # Utility handler -> capability key that must be non-None on the server's ``initialize``
@@ -287,6 +385,11 @@ def matches_name_filter(tool_name: str, patterns: set[str]) -> bool:
 # with JSON-RPC ``-32601 Method not found``, which made the model conclude the server was broken even when
 # the real tools worked. See #18051.
 _UTILITY_CAPABILITY_ATTRS = {
-    "list_resources": "resources", "read_resource": "resources",
-    "list_prompts": "prompts", "get_prompt": "prompts",
-    "list_event_types": "events", "subscribe_event": "events", "unsubscribe_event": "events"}
+    "list_resources": "resources",
+    "read_resource": "resources",
+    "list_prompts": "prompts",
+    "get_prompt": "prompts",
+    "list_event_types": "events",
+    "subscribe_event": "events",
+    "unsubscribe_event": "events",
+}

@@ -8,6 +8,7 @@ constants value-imported at import time, so under a profile override the
 validator rejected media the bridge had legitimately written into the override
 profile's cache. The validator must resolve the cache roots per-call.
 """
+
 from pathlib import Path
 
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
@@ -38,5 +39,3 @@ def test_validator_follows_override_switch(tmp_path):
         assert _is_allowed_bridge_path(str(a_media)) is False
     finally:
         reset_clawk_home_override(token)
-
-

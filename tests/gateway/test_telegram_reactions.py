@@ -39,10 +39,6 @@ def _make_event(chat_id: str = "123", message_id: str = "456") -> MessageEvent:
 # ── _reactions_enabled ───────────────────────────────────────────────
 
 
-
-
-
-
 def test_explicit_env_wins_over_materialized_yaml_default(monkeypatch):
     """TELEGRAM_REACTIONS=true must beat the stock ``reactions: false`` in config.yaml (#109032).
 
@@ -58,7 +54,11 @@ def test_explicit_env_wins_over_materialized_yaml_default(monkeypatch):
 
 def test_scoped_miss_does_not_leak_default_profile_env(monkeypatch):
     """Under multiplex a scoped miss must not read another profile's process-env value (#72348)."""
-    from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+    from agent.secret_scope import (
+        reset_secret_scope,
+        set_multiplex_active,
+        set_secret_scope,
+    )
 
     monkeypatch.setenv("TELEGRAM_REACTIONS", "true")  # default profile's bridged value
     adapter = _make_adapter()
@@ -152,19 +152,26 @@ async def test_clear_reactions_handles_api_error_gracefully(monkeypatch):
 def test_config_bridges_telegram_reactions(monkeypatch, tmp_path):
     """gateway/config.py bridges telegram.reactions to TELEGRAM_REACTIONS env var."""
     import clawk_yaml as yaml
+
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.safe_dump({
-        "telegram": {
-            "reactions": True,
-        },
-    }))
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "telegram": {
+                    "reactions": True,
+                },
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Use setenv (not delenv) so monkeypatch registers cleanup even when
     # the var doesn't exist yet — load_gateway_config will overwrite it.
     monkeypatch.setenv("TELEGRAM_REACTIONS", "")
 
     from gateway.config import load_gateway_config
+
     load_gateway_config()
 
     import os
+
     assert os.getenv("TELEGRAM_REACTIONS") == "true"

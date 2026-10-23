@@ -40,7 +40,9 @@ def conn(tmp_path, monkeypatch):
 def _sleeper():
     proc = subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(120)"],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     time.sleep(0.2)
     return proc
@@ -53,7 +55,9 @@ def _completed_card_with_worker(conn, proc, *, ended_ago: int = 600) -> tuple[st
     kbd._set_worker_pid(conn, tid, proc.pid)
     assert kb.complete_task(conn, tid, result="done", expected_run_id=run_id) is True
     # Default: the run closed long enough ago that the reaper's grace window has passed.
-    conn.execute("UPDATE task_runs SET ended_at = ended_at - ? WHERE id=?", (ended_ago, run_id))
+    conn.execute(
+        "UPDATE task_runs SET ended_at = ended_at - ? WHERE id=?", (ended_ago, run_id)
+    )
     return tid, run_id
 
 
@@ -62,16 +66,32 @@ def test_worker_alive_after_completion_is_reaped_on_dispatch_tick(conn):
     try:
         tid, run_id = _completed_card_with_worker(conn, proc)
         # The evidence the running-only sweeps lost lives on the closed run row.
-        run = conn.execute("SELECT worker_pid, worker_started_at, ended_at FROM task_runs WHERE id=?", (run_id,)).fetchone()
-        assert run["ended_at"] is not None and run["worker_pid"] == proc.pid and run["worker_started_at"] is not None
+        run = conn.execute(
+            "SELECT worker_pid, worker_started_at, ended_at FROM task_runs WHERE id=?",
+            (run_id,),
+        ).fetchone()
+        assert (
+            run["ended_at"] is not None
+            and run["worker_pid"] == proc.pid
+            and run["worker_started_at"] is not None
+        )
 
-        result = kbd.dispatch_once(conn, spawn_fn=lambda *a, **k: 0, dry_run=True, max_spawn=0)
+        result = kbd.dispatch_once(
+            conn, spawn_fn=lambda *a, **k: 0, dry_run=True, max_spawn=0
+        )
 
         assert result.reaped_terminal_workers == [tid]
         assert proc.wait(timeout=10) is not None
-        run = conn.execute("SELECT worker_pid, worker_started_at FROM task_runs WHERE id=?", (run_id,)).fetchone()
+        run = conn.execute(
+            "SELECT worker_pid, worker_started_at FROM task_runs WHERE id=?", (run_id,)
+        ).fetchone()
         assert run["worker_pid"] is None and run["worker_started_at"] is None
-        kinds = [r["kind"] for r in conn.execute("SELECT kind FROM task_events WHERE task_id=?", (tid,))]
+        kinds = [
+            r["kind"]
+            for r in conn.execute(
+                "SELECT kind FROM task_events WHERE task_id=?", (tid,)
+            )
+        ]
         assert "terminal_worker_reaped" in kinds
     finally:
         if proc.poll() is None:
@@ -85,16 +105,31 @@ def test_recycled_pid_and_legacy_row_are_never_signalled(conn):
     try:
         _tid, run_id = _completed_card_with_worker(conn, stranger)
         # PID reuse: the recorded fingerprint belongs to a process that no longer exists.
-        conn.execute("UPDATE task_runs SET worker_started_at = worker_started_at - 1000000 WHERE id=?", (run_id,))
+        conn.execute(
+            "UPDATE task_runs SET worker_started_at = worker_started_at - 1000000 WHERE id=?",
+            (run_id,),
+        )
         _, legacy_run = _completed_card_with_worker(conn, legacy)
-        conn.execute("UPDATE task_runs SET worker_started_at = NULL WHERE id=?", (legacy_run,))
+        conn.execute(
+            "UPDATE task_runs SET worker_started_at = NULL WHERE id=?", (legacy_run,)
+        )
 
         assert kbd.reap_terminal_workers(conn) == []
 
         assert stranger.poll() is None and legacy.poll() is None
         # Stale evidence is dropped so the row is not rescanned; the legacy row is left alone.
-        assert conn.execute("SELECT worker_pid FROM task_runs WHERE id=?", (run_id,)).fetchone()["worker_pid"] is None
-        assert conn.execute("SELECT worker_pid FROM task_runs WHERE id=?", (legacy_run,)).fetchone()["worker_pid"] == legacy.pid
+        assert (
+            conn.execute(
+                "SELECT worker_pid FROM task_runs WHERE id=?", (run_id,)
+            ).fetchone()["worker_pid"]
+            is None
+        )
+        assert (
+            conn.execute(
+                "SELECT worker_pid FROM task_runs WHERE id=?", (legacy_run,)
+            ).fetchone()["worker_pid"]
+            == legacy.pid
+        )
     finally:
         for p in (stranger, legacy):
             p.kill()
@@ -117,7 +152,9 @@ def test_fresh_terminal_run_is_left_alone_until_grace_passes(conn):
         assert kbd.reap_terminal_workers(conn, signal_fn=signal_fn) == []
 
         assert signals == [] and proc.poll() is None
-        run = conn.execute("SELECT worker_pid FROM task_runs WHERE id=?", (run_id,)).fetchone()
+        run = conn.execute(
+            "SELECT worker_pid FROM task_runs WHERE id=?", (run_id,)
+        ).fetchone()
         assert run["worker_pid"] == proc.pid  # evidence kept for a later tick
         conn.execute(
             "UPDATE task_runs SET ended_at = ended_at - ? WHERE id=?",

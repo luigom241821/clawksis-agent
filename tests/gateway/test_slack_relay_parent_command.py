@@ -37,5 +37,3 @@ def test_slack_relay_parent_becomes_gateway_command(wire_text: str, expected: st
     assert event.message_type == MessageType.COMMAND
     assert event.source.platform == Platform.SLACK
     assert event.source.delivered_via_upstream_relay is True
-
-

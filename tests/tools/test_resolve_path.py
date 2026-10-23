@@ -16,7 +16,6 @@ class TestResolvePath:
         result = _resolve_path_for_task("foo/bar.py")
         assert result == (tmp_path / "foo" / "bar.py")
 
-
     def test_relative_path_prefers_recorded_session_cwd(self, monkeypatch, tmp_path):
         """The session's recorded cwd must win after the terminal changes directory."""
         start_dir = tmp_path / "start"
@@ -32,7 +31,9 @@ class TestResolvePath:
         terminal_tool.record_session_cwd(task_id, str(live_dir))
 
         try:
-            result = file_tools_paths._resolve_path_for_task("nested/file.txt", task_id=task_id)
+            result = file_tools_paths._resolve_path_for_task(
+                "nested/file.txt", task_id=task_id
+            )
         finally:
             terminal_tool.clear_session_cwd(task_id)
 

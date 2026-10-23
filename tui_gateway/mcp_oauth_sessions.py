@@ -60,35 +60,55 @@ def finish_flow(session_id: str) -> None:
 
 
 def start_flow(
-    clawk_home: str, server_name: str, cfg: dict, *, reconnect_live: bool = False,
-    url_timeout: float = 30.0, client_redirect_uri: Optional[str] = None) -> dict[str, Any]:
+    clawk_home: str,
+    server_name: str,
+    cfg: dict,
+    *,
+    reconnect_live: bool = False,
+    url_timeout: float = 30.0,
+    client_redirect_uri: Optional[str] = None,
+) -> dict[str, Any]:
     """Begin an MCP OAuth flow and return ``{session_id, auth_url, flow}``; blocks up to
     ``url_timeout`` for the authorization URL. With ``client_redirect_uri`` (invalid values
     raise ``ValueError``) no gateway-side listener is bound."""
     from tools.mcp_dashboard_oauth import DashboardOAuthFlow
+
     if client_redirect_uri is not None:
         client_redirect_uri = _validate_client_redirect_uri(client_redirect_uri)
     cutoff = time.time() - _SESSION_TTL_SECONDS  # opportunistic GC of expired sessions
     with _sessions_lock:
-        for sid in [sid for sid, rec in _sessions.items() if rec["created_at"] < cutoff]:
+        for sid in [
+            sid for sid, rec in _sessions.items() if rec["created_at"] < cutoff
+        ]:
             _shutdown_listener(_sessions.pop(sid))
     with _sessions_lock:
         active = [r for r in _sessions.values() if not r["flow"].worker_done]
         if len(active) >= _MAX_PENDING:
             raise RuntimeError("Too many MCP OAuth flows are already in progress")
-        if any(r["server_name"] == server_name and r["clawk_home"] == clawk_home for r in active):
+        if any(
+            r["server_name"] == server_name and r["clawk_home"] == clawk_home
+            for r in active
+        ):
             raise RuntimeError(f"MCP OAuth for '{server_name}' is already in progress")
 
     session_id = secrets.token_urlsafe(24)
     flow = DashboardOAuthFlow(
-        flow_id=session_id, server_name=server_name, profile=None, clawk_home=clawk_home,
-        redirect_uri="", reconnect_live=reconnect_live)
+        flow_id=session_id,
+        server_name=server_name,
+        profile=None,
+        clawk_home=clawk_home,
+        redirect_uri="",
+        reconnect_live=reconnect_live,
+    )
     httpd = choose_callback_receiver(flow, cfg, client_redirect_uri)
     rec = register_flow(flow, httpd=httpd)
     threading.Thread(
-        target=run_worker, args=(clawk_home, server_name, dict(cfg), reconnect_live),
+        target=run_worker,
+        args=(clawk_home, server_name, dict(cfg), reconnect_live),
         kwargs={"flow": flow, "on_done": lambda: _shutdown_listener(rec)},
-        daemon=True, name=f"mcp-oauth-{server_name}").start()
+        daemon=True,
+        name=f"mcp-oauth-{server_name}",
+    ).start()
     try:
         auth_url = None
         # wait_for_authorization_url is async; run its wait synchronously.
@@ -99,13 +119,17 @@ def start_flow(
                 break
             if snap.get("status") == "error":
                 raise RuntimeError(
-                    snap.get("error") or "MCP OAuth flow failed before authorization")
+                    snap.get("error") or "MCP OAuth flow failed before authorization"
+                )
             time.sleep(0.1)
         if not auth_url:
             raise TimeoutError("Timed out waiting for MCP authorization URL")
     except Exception as exc:
         from tools.mcp_dashboard_oauth import exception_message
-        flow.mark_error(exception_message(exc))  # no-op when the worker already recorded the cause
+
+        flow.mark_error(
+            exception_message(exc)
+        )  # no-op when the worker already recorded the cause
         _shutdown_listener(rec)
         raise
     # ``flow`` mirrors the provider-OAuth discriminator: open a URL then poll (no user_code).
@@ -113,10 +137,13 @@ def start_flow(
 
 
 def _lookup(
-    session_id: str, server_name: str, clawk_home: Optional[str] = None,
+    session_id: str,
+    server_name: str,
+    clawk_home: Optional[str] = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Find a session belonging to the caller's resolved profile."""
     from clawk_constants import clawk_home_key
+
     with _sessions_lock:
         rec = _sessions.get(session_id)
     if rec is None:
@@ -140,8 +167,11 @@ def poll_flow(session_id: str, server_name: str) -> dict[str, Any]:
     raw = snap.get("status")
     status = raw if raw in ("approved", "error") else "pending"
     out: dict[str, Any] = {
-        "session_id": session_id, "status": status, "error_message": snap.get("error"),
-        "auth_url": snap.get("authorization_url")}
+        "session_id": session_id,
+        "status": status,
+        "error_message": snap.get("error"),
+        "auth_url": snap.get("authorization_url"),
+    }
     if status == "approved":
         out["tools"] = list(getattr(flow, "tools", []) or [])
     return out
@@ -159,8 +189,14 @@ def cancel_flow(session_id: str, server_name: str, clawk_home: str) -> dict[str,
 
 
 def deliver_callback_flow(
-    session_id: str, server_name: str, *, code: Optional[str], state: Optional[str],
-    error: Optional[str] = None, iss: Optional[str] = None) -> dict[str, Any]:
+    session_id: str,
+    server_name: str,
+    *,
+    code: Optional[str],
+    state: Optional[str],
+    error: Optional[str] = None,
+    iss: Optional[str] = None,
+) -> dict[str, Any]:
     """Relay a client-captured OAuth redirect into a session's flow (remote-backend companion
     to ``start_flow(client_redirect_uri=...)``); ``deliver_callback`` still verifies ``state``
     and rejects replays. Returns ``{ok: true}`` or ``{ok: false, error_message}``."""

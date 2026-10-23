@@ -19,12 +19,23 @@ def test_different_checkout_is_external_but_same_checkout_sha_skew_is_stale(tmp_
     separate = _checkout(tmp_path, "separate")
 
     external = update_receipt._fleet_row(
-        "pinned", 1, "old", "1", "new",
-        code_root=separate, expected_root=updated, served_profiles=["pinned", "coder", "coder"],
+        "pinned",
+        1,
+        "old",
+        "1",
+        "new",
+        code_root=separate,
+        expected_root=updated,
+        served_profiles=["pinned", "coder", "coder"],
     )
     stale = update_receipt._fleet_row(
-        "default", 2, "old", "1", "new",
-        code_root=updated, expected_root=updated,
+        "default",
+        2,
+        "old",
+        "1",
+        "new",
+        code_root=updated,
+        expected_root=updated,
     )
 
     assert external["state"] == "external"
@@ -56,7 +67,9 @@ def test_gateway_root_uses_pid_guarded_status_argv(tmp_path, monkeypatch):
 def test_gateway_root_uses_virtualenv_when_module_path_is_absent(tmp_path, monkeypatch):
     root = _checkout(tmp_path, "pinned")
     venv = root / "venv"
-    monkeypatch.setattr("gateway.status.read_runtime_status", lambda _path: {"pid": 42, "argv": ["-m"]})
+    monkeypatch.setattr(
+        "gateway.status.read_runtime_status", lambda _path: {"pid": 42, "argv": ["-m"]}
+    )
     fake_process = SimpleNamespace(
         environ=lambda: {"VIRTUAL_ENV": str(venv)},
         exe=lambda: "/usr/bin/python",
@@ -67,7 +80,9 @@ def test_gateway_root_uses_virtualenv_when_module_path_is_absent(tmp_path, monke
 
 
 def test_external_receipt_row_does_not_report_runtime_skew():
-    receipt = {"fleet": [{"profile": "pinned", "state": "external", "code_sha": "foreign"}]}
+    receipt = {
+        "fleet": [{"profile": "pinned", "state": "external", "code_sha": "foreign"}]
+    }
     assert update_cmd_fleet._receipt_reports_stale_runtime(receipt, "updated") is False
 
 
@@ -75,7 +90,9 @@ def test_external_gateway_does_not_block_pending_restart_discharge(monkeypatch):
     rows = [
         {"profile": "default", "state": "current", "code_sha": "updated"},
         {
-            "profile": "pinned", "state": "external", "code_sha": "foreign",
+            "profile": "pinned",
+            "state": "external",
+            "code_sha": "foreign",
             "served_profiles": ["pinned", "coder"],
         },
     ]
@@ -85,19 +102,26 @@ def test_external_gateway_does_not_block_pending_restart_discharge(monkeypatch):
 
 
 def test_external_gateway_does_not_fail_matrix(capsys):
-    failed = update_receipt.print_fleet_version_matrix([
-        {
-            "profile": "pinned", "pid": 42, "code_sha": "foreign",
-            "state": "external", "code_root": "/srv/clawk-pinned",
-        }
-    ])
+    failed = update_receipt.print_fleet_version_matrix(
+        [
+            {
+                "profile": "pinned",
+                "pid": 42,
+                "code_sha": "foreign",
+                "state": "external",
+                "code_root": "/srv/clawk-pinned",
+            }
+        ]
+    )
     output = capsys.readouterr().out
     assert failed is False
     assert "separate checkout" in output
     assert "/srv/clawk-pinned" in output
 
 
-def test_collect_fleet_versions_classifies_separate_checkout_gateway(tmp_path, monkeypatch):
+def test_collect_fleet_versions_classifies_separate_checkout_gateway(
+    tmp_path, monkeypatch
+):
     """The production entry point resolves the gateway's code root and reports ``external``.
 
     A pid-guarded ``gateway_state.json`` whose argv points at a pinned checkout must
@@ -108,17 +132,32 @@ def test_collect_fleet_versions_classifies_separate_checkout_gateway(tmp_path, m
     pinned = _checkout(tmp_path, "pinned")
     home = tmp_path / "fleet_home"
     home.mkdir()
-    (home / "gateway_state.json").write_text(json.dumps({
-        "gateway_state": "running", "kind": "clawk-gateway", "pid": 4242,
-        "argv": [str(pinned / "clawk_cli" / "main.py"), "gateway", "run"],
-        "code_sha": "f" * 40, "code_version": "0.0.1",
-    }), encoding="utf-8")
+    (home / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "gateway_state": "running",
+                "kind": "clawk-gateway",
+                "pid": 4242,
+                "argv": [str(pinned / "clawk_cli" / "main.py"), "gateway", "run"],
+                "code_sha": "f" * 40,
+                "code_version": "0.0.1",
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         "clawk_cli.build_info.get_code_identity",
-        lambda refresh=False: {"sha": "a" * 40, "short_sha": "a" * 8, "version": "1.0", "source": "git"},
+        lambda refresh=False: {
+            "sha": "a" * 40,
+            "short_sha": "a" * 8,
+            "version": "1.0",
+            "source": "git",
+        },
     )
     monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
-    monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: tmp_path / "no_profiles")
+    monkeypatch.setattr(
+        "clawk_cli.profiles._get_profiles_root", lambda: tmp_path / "no_profiles"
+    )
     monkeypatch.setattr(update_receipt, "_socket_identity", lambda _home: None)
     monkeypatch.setattr("gateway.status.live_gateway_pid_for_home", lambda _home: 4242)
 
@@ -126,4 +165,6 @@ def test_collect_fleet_versions_classifies_separate_checkout_gateway(tmp_path, m
 
     assert [row["state"] for row in fleet] == ["external"]
     assert fleet[0]["code_root"] == str(pinned.resolve())
-    assert update_receipt.print_fleet_version_matrix(fleet) is False  # matrix does not fail the update
+    assert (
+        update_receipt.print_fleet_version_matrix(fleet) is False
+    )  # matrix does not fail the update

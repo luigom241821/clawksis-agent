@@ -11,8 +11,10 @@ from clawk_cli.plugin_validate import validate_plugin_dir
 
 def _plugin(root: Path, files: dict[str, str]) -> Path:
     root.mkdir(parents=True)
-    (root / "plugin.yaml").write_text(yaml.safe_dump({"name": root.name, "version": "1.0.0", "description": "x"}),
-                                      encoding="utf-8")
+    (root / "plugin.yaml").write_text(
+        yaml.safe_dump({"name": root.name, "version": "1.0.0", "description": "x"}),
+        encoding="utf-8",
+    )
     files = {"__init__.py": "def register(ctx):\n    pass\n", **files}
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -25,13 +27,18 @@ def _private_warnings(report) -> list[str]:
 
 
 def test_private_core_import_warns_with_file_and_line_but_validate_passes(tmp_path):
-    plugin = _plugin(tmp_path / "router", {"lib/agent_runner.py": (
-        "import json\n"
-        "def run():\n"
-        "    from tools.tirith_security import ensure_installed\n"
-        "    from clawk_cli.config import _private_helper\n"
-        "    return ensure_installed, _private_helper\n"
-    )})
+    plugin = _plugin(
+        tmp_path / "router",
+        {
+            "lib/agent_runner.py": (
+                "import json\n"
+                "def run():\n"
+                "    from tools.tirith_security import ensure_installed\n"
+                "    from clawk_cli.config import _private_helper\n"
+                "    return ensure_installed, _private_helper\n"
+            )
+        },
+    )
 
     report = validate_plugin_dir(plugin)
 
@@ -43,26 +50,29 @@ def test_private_core_import_warns_with_file_and_line_but_validate_passes(tmp_pa
 
 
 def test_documented_public_stdlib_and_own_package_imports_are_not_flagged(tmp_path):
-    plugin = _plugin(tmp_path / "clean", {
-        "__init__.py": (
-            "import os, json\n"
-            "from typing import TYPE_CHECKING\n"
-            "import requests\n"
-            "from agent.memory_provider import MemoryProvider\n"  # documented provider base class
-            "from gateway.platforms import base\n"  # documented module, imported from its package
-            "from clawk_cli.plugins import PluginContext\n"  # what register() receives
-            "from clean_lib.helpers import local_helper\n"  # the plugin's own package
-            "from .client import Client\n"
-            "if TYPE_CHECKING:\n"
-            "    from run_agent import AIAgent\n"
-            "def register(ctx):\n"
-            "    from clawk_cli.plugins import get_plugin_manager\n"  # same module, undocumented name
-            "    return get_plugin_manager\n"
-        ),
-        "clean_lib/__init__.py": "",
-        "clean_lib/helpers.py": "def local_helper():\n    pass\n",
-        "client.py": "class Client:\n    pass\n",
-    })
+    plugin = _plugin(
+        tmp_path / "clean",
+        {
+            "__init__.py": (
+                "import os, json\n"
+                "from typing import TYPE_CHECKING\n"
+                "import requests\n"
+                "from agent.memory_provider import MemoryProvider\n"  # documented provider base class
+                "from gateway.platforms import base\n"  # documented module, imported from its package
+                "from clawk_cli.plugins import PluginContext\n"  # what register() receives
+                "from clean_lib.helpers import local_helper\n"  # the plugin's own package
+                "from .client import Client\n"
+                "if TYPE_CHECKING:\n"
+                "    from run_agent import AIAgent\n"
+                "def register(ctx):\n"
+                "    from clawk_cli.plugins import get_plugin_manager\n"  # same module, undocumented name
+                "    return get_plugin_manager\n"
+            ),
+            "clean_lib/__init__.py": "",
+            "clean_lib/helpers.py": "def local_helper():\n    pass\n",
+            "client.py": "class Client:\n    pass\n",
+        },
+    )
 
     [warning] = _private_warnings(validate_plugin_dir(plugin))
 
@@ -95,21 +105,28 @@ def test_platform_plugin_seams_are_public_and_exist(tmp_path):
 
     for module, name in _PLATFORM_PLUGIN_SEAMS:
         assert hasattr(importlib.import_module(module), name), f"{module}.{name}"
-    imports = "".join(f"from {module} import {name}\n" for module, name in _PLATFORM_PLUGIN_SEAMS)
+    imports = "".join(
+        f"from {module} import {name}\n" for module, name in _PLATFORM_PLUGIN_SEAMS
+    )
     plugin = _plugin(tmp_path / "chatplat", {"adapter.py": imports})
 
     assert _private_warnings(validate_plugin_dir(plugin)) == []
 
 
 _SKILL_CATALOG_SEAMS = (
-    ("tools.skills_tool", "find_all_skills"), ("tools.skills_tool", "sort_skills"),
-    ("tools.skills_tool", "skill_search_dirs"), ("tools.skills_tool", "locate_skill"),
-    ("tools.skills_tool", "skill_lookup_path_error"), ("tools.skills_sync", "dir_hash"),
+    ("tools.skills_tool", "find_all_skills"),
+    ("tools.skills_tool", "sort_skills"),
+    ("tools.skills_tool", "skill_search_dirs"),
+    ("tools.skills_tool", "locate_skill"),
+    ("tools.skills_tool", "skill_lookup_path_error"),
+    ("tools.skills_sync", "dir_hash"),
     ("tools.skill_usage", "read_skill_name"),
 )
 
 
-def test_skill_catalog_seams_are_public_and_drive_the_skills_tools(tmp_path, monkeypatch):
+def test_skill_catalog_seams_are_public_and_drive_the_skills_tools(
+    tmp_path, monkeypatch
+):
     """The documented skill-catalog helpers import cleanly, raise no private-import finding, and are
     the names ``skills_list`` reads, so a plugin sees exactly what the agent sees."""
     import importlib
@@ -119,10 +136,19 @@ def test_skill_catalog_seams_are_public_and_drive_the_skills_tools(tmp_path, mon
 
     for module, name in _SKILL_CATALOG_SEAMS:
         assert hasattr(importlib.import_module(module), name), f"{module}.{name}"
-    imports = "".join(f"from {module} import {name}\n" for module, name in _SKILL_CATALOG_SEAMS)
-    assert _private_warnings(validate_plugin_dir(_plugin(tmp_path / "catalog", {"view.py": imports}))) == []
+    imports = "".join(
+        f"from {module} import {name}\n" for module, name in _SKILL_CATALOG_SEAMS
+    )
+    assert (
+        _private_warnings(
+            validate_plugin_dir(_plugin(tmp_path / "catalog", {"view.py": imports}))
+        )
+        == []
+    )
 
     marker = {"name": "seam-probe-skill", "description": "d", "category": None}
     monkeypatch.setattr(skills_tool, "find_all_skills", lambda **_kw: [dict(marker)])
     listed = json.loads(skills_tool.skills_list())
-    assert [s["name"] for s in listed["skills"] if s["name"] == "seam-probe-skill"] == ["seam-probe-skill"]
+    assert [s["name"] for s in listed["skills"] if s["name"] == "seam-probe-skill"] == [
+        "seam-probe-skill"
+    ]

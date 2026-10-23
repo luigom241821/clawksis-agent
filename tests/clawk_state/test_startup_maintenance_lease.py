@@ -20,7 +20,9 @@ def test_maintenance_steps_renew_the_armed_watchdog_lease(tmp_path, monkeypatch)
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         # Maintenance is throttled by state_meta; a fresh DB has never run it.
-        monkeypatch.setattr(db, "prune_sessions", lambda **kw: 120)  # VACUUM only runs after a real prune
+        monkeypatch.setattr(
+            db, "prune_sessions", lambda **kw: 120
+        )  # VACUUM only runs after a real prune
         monkeypatch.setattr(db, "sweep_orphaned_sessions", lambda **kw: [])
         monkeypatch.setattr(db, "_freelist_ratio", lambda: 1.0)
         monkeypatch.setattr(db, "vacuum", lambda: None)
@@ -29,7 +31,10 @@ def test_maintenance_steps_renew_the_armed_watchdog_lease(tmp_path, monkeypatch)
 
         db.maybe_auto_archive(idle_days=3, min_interval_hours=0)
         db.maybe_auto_prune_and_vacuum(
-            retention_days=90, min_interval_hours=0, vacuum=True, min_vacuum_interval_days=0,
+            retention_days=90,
+            min_interval_hours=0,
+            vacuum=True,
+            min_vacuum_interval_days=0,
         )
 
         # One renewal per long step (archive, prune, sweep, vacuum), the last one

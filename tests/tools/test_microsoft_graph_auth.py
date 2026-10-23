@@ -96,7 +96,6 @@ class TestMicrosoftGraphTokenProvider:
         assert second == "token-1"
         assert len(calls) == 1
 
-
     async def test_http_error_includes_server_message(self):
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(

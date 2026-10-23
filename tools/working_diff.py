@@ -15,7 +15,11 @@ import subprocess
 from contextlib import suppress
 from typing import Dict, List
 
-from clawk_cli._subprocess_compat import harden_git_argv, noninteractive_git_env, selected_git_env
+from clawk_cli._subprocess_compat import (
+    harden_git_argv,
+    noninteractive_git_env,
+    selected_git_env,
+)
 
 _GIT_TIMEOUT = 15
 _MAX_UNTRACKED_FILES = 50  # sanity cap so a node_modules explosion can't hang us
@@ -43,9 +47,14 @@ def _run(args: list[str], cwd: str, timeout: int = _GIT_TIMEOUT):
         return 127, ""
     proc = subprocess.run(
         [command, "-c", "core.quotePath=false", *harden_git_argv(args)],
-        cwd=cwd, capture_output=True, text=True, timeout=timeout,
-        encoding="utf-8", errors="replace",
-        stdin=subprocess.DEVNULL, env=env,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        env=env,
         check=False,
     )
     return proc.returncode, proc.stdout
@@ -64,17 +73,21 @@ def _untracked_diff(cwd: str, files: list[str]) -> str:
             # --no-index exits 1 when the files differ — that's the success
             # path here, so ignore the return code and keep the output.
             _, out = _run(
-                ["diff", "--no-ext-diff", "--no-index", "--", os.devnull, rel], cwd,
+                ["diff", "--no-ext-diff", "--no-index", "--", os.devnull, rel],
+                cwd,
             )
             if out.strip():
                 chunks.append(out.rstrip("\n"))
     if len(files) > _MAX_UNTRACKED_FILES:
-        chunks.append(f"... ({len(files) - _MAX_UNTRACKED_FILES} more untracked files not shown)")
+        chunks.append(
+            f"... ({len(files) - _MAX_UNTRACKED_FILES} more untracked files not shown)"
+        )
     return "\n".join(chunks)
 
 
-def collect_working_diff(cwd: str, mode: str = "working",
-                         paths: list[str] | None = None) -> dict:
+def collect_working_diff(
+    cwd: str, mode: str = "working", paths: list[str] | None = None
+) -> dict:
     """Collect a git diff of the working directory.
 
     Returns ``{"success", "stat", "diff", "untracked", "empty"}`` on success or
@@ -83,8 +96,10 @@ def collect_working_diff(cwd: str, mode: str = "working",
     through to git verbatim, so quoted paths with spaces survive).
     """
     if mode not in VALID_MODES:
-        return {"success": False,
-                "error": f"Unknown mode '{mode}'. Use: {', '.join(VALID_MODES)}"}
+        return {
+            "success": False,
+            "error": f"Unknown mode '{mode}'. Use: {', '.join(VALID_MODES)}",
+        }
 
     try:
         code, _ = _run(["rev-parse", "--is-inside-work-tree"], cwd, timeout=5)
@@ -106,7 +121,9 @@ def collect_working_diff(cwd: str, mode: str = "working",
     try:
         _, stat_out = _run([*base_args, "--stat", *pathspec], cwd)
         _, diff_out = _run([*base_args, *pathspec], cwd, timeout=_GIT_TIMEOUT * 2)
-        untracked = _untracked_files(cwd) if mode in ("working", "all") and not paths else []
+        untracked = (
+            _untracked_files(cwd) if mode in ("working", "all") and not paths else []
+        )
         untracked_diff = _untracked_diff(cwd, untracked) if untracked else ""
     except subprocess.TimeoutExpired:
         return {"success": False, "error": "git diff timed out."}

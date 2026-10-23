@@ -15,13 +15,18 @@ def _append_warning(result: ModelSwitchResult, text: str) -> None:
         result.warning_message = text
 
 
-def _threshold_tokens(compressor: Any, model: str, context_length: int, provider: str = "") -> int:
+def _threshold_tokens(
+    compressor: Any, model: str, context_length: int, provider: str = ""
+) -> int:
     """The trigger the compressor WILL use after the switch (cap, model_thresholds and small-window
     floor included), so the warning quotes the real number; duck-typed engines keep the plain ratio."""
     preview = getattr(compressor, "preview_threshold_tokens", None)
     if callable(preview):
         return int(preview(model, context_length, provider))
-    return max(int(context_length * float(getattr(compressor, "threshold_percent", 0.5))), MINIMUM_CONTEXT_LENGTH)
+    return max(
+        int(context_length * float(getattr(compressor, "threshold_percent", 0.5))),
+        MINIMUM_CONTEXT_LENGTH,
+    )
 
 
 def _estimate_tokens(agent: Any, messages: Optional[list[dict]]) -> Optional[int]:
@@ -31,7 +36,10 @@ def _estimate_tokens(agent: Any, messages: Optional[list[dict]]) -> Optional[int
 
     if messages is not None:
         protect = (
-            int(getattr(cc, "protect_first_n", 3)) + int(getattr(cc, "protect_last_n", 20)) + 1)
+            int(getattr(cc, "protect_first_n", 3))
+            + int(getattr(cc, "protect_last_n", 20))
+            + 1
+        )
         if len(messages) <= protect:
             return None
         try:
@@ -41,7 +49,9 @@ def _estimate_tokens(agent: Any, messages: Optional[list[dict]]) -> Optional[int
             tools = getattr(agent, "tools", None)
             return int(
                 estimate_request_tokens_rough(
-                    messages, system_prompt=system_prompt, tools=tools or None))
+                    messages, system_prompt=system_prompt, tools=tools or None
+                )
+            )
         except Exception:
             pass
 
@@ -59,7 +69,8 @@ def merge_preflight_compression_warning(
     config_context_length: int | None = None,
     configured_model: str | None = None,
     configured_provider: str | None = None,
-    configured_base_url: str | None = None) -> None:
+    configured_base_url: str | None = None,
+) -> None:
     """If the next user message will likely preflight-compress, append a warning."""
     if not result.success or agent is None:
         return
@@ -89,7 +100,8 @@ def merge_preflight_compression_warning(
         config_context_length=config_context_length,
         configured_model=_or_agent(configured_model, "model"),
         configured_provider=_or_agent(configured_provider, "provider"),
-        configured_base_url=_or_agent(configured_base_url, "base_url"))
+        configured_base_url=_or_agent(configured_base_url, "base_url"),
+    )
     if not new_ctx:
         return
 
@@ -97,7 +109,9 @@ def merge_preflight_compression_warning(
     if estimate is None:
         return
 
-    new_threshold = _threshold_tokens(cc, result.new_model, new_ctx, result.target_provider)
+    new_threshold = _threshold_tokens(
+        cc, result.new_model, new_ctx, result.target_provider
+    )
     if estimate < new_threshold:
         return
 
@@ -111,7 +125,8 @@ def merge_preflight_compression_warning(
         f"Session is ~{estimate:,} tokens; "
         f"{result.new_model} allows {new_ctx:,} "
         f"(auto-compress at ~{new_threshold:,}). "
-        f"Your next message will run preflight compression before the model replies.")
+        f"Your next message will run preflight compression before the model replies."
+    )
     _append_warning(result, "".join(parts))
 
 
@@ -122,7 +137,8 @@ def enrich_model_switch_warnings_for_gateway(
     session_key: str,
     source: Any,
     custom_providers: list | None = None,
-    load_gateway_config: Callable[[], dict] | None = None) -> None:
+    load_gateway_config: Callable[[], dict] | None = None,
+) -> None:
     """Gateway helper: cached agent + session DB messages."""
     lock = getattr(runner, "_agent_cache_lock", None)
     cache = getattr(runner, "_agent_cache", None)
@@ -136,17 +152,27 @@ def enrich_model_switch_warnings_for_gateway(
         return
 
     configured: dict = dict.fromkeys(
-        ("config_context_length", "configured_model", "configured_provider", "configured_base_url"))
+        (
+            "config_context_length",
+            "configured_model",
+            "configured_provider",
+            "configured_base_url",
+        )
+    )
     if load_gateway_config is not None:
         try:
             cfg = load_gateway_config()
             model_cfg = cfg.get("model", {}) if isinstance(cfg, dict) else {}
-            if isinstance(model_cfg, dict) and model_cfg.get("context_length") is not None:
+            if (
+                isinstance(model_cfg, dict)
+                and model_cfg.get("context_length") is not None
+            ):
                 configured.update(
                     config_context_length=int(model_cfg["context_length"]),
                     configured_model=model_cfg.get("default") or model_cfg.get("model"),
                     configured_provider=model_cfg.get("provider"),
-                    configured_base_url=model_cfg.get("base_url"))
+                    configured_base_url=model_cfg.get("base_url"),
+                )
         except Exception:
             pass
 
@@ -161,4 +187,9 @@ def enrich_model_switch_warnings_for_gateway(
             pass
 
     merge_preflight_compression_warning(
-        result, agent=agent, messages=messages, custom_providers=custom_providers, **configured)
+        result,
+        agent=agent,
+        messages=messages,
+        custom_providers=custom_providers,
+        **configured,
+    )

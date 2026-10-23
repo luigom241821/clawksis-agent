@@ -63,7 +63,9 @@ def _positive_int_setting(kanban_cfg: dict, key: str) -> Optional[int]:
     return value
 
 
-def _resolve_auto_decompose_settings(load_config: Callable[[], Any]) -> tuple[bool, int]:
+def _resolve_auto_decompose_settings(
+    load_config: Callable[[], Any],
+) -> tuple[bool, int]:
     """Live (enabled, per_tick) auto-decompose settings, re-read every dispatcher tick.
 
     Fails safe: a config read error returns ``(False, 3)`` rather than
@@ -92,7 +94,11 @@ def _gc_retention_days() -> int:
     try:
         from clawk_cli.config import load_config
 
-        return int(((load_config() or {}).get("kanban") or {}).get("done_sub_retention_days", 30))
+        return int(
+            ((load_config() or {}).get("kanban") or {}).get(
+                "done_sub_retention_days", 30
+            )
+        )
     except Exception:
         return 30
 
@@ -129,7 +135,9 @@ def _acquire_singleton_lock(lock_path) -> tuple[Optional[object], str]:
         return None, "unavailable"
     try:
         Path(lock_path).parent.mkdir(parents=True, exist_ok=True)
-        handle = open(str(lock_path), "a+", encoding="utf-8")  # windows-footgun: ok (append-mode lock handle, write not read)
+        handle = open(
+            str(lock_path), "a+", encoding="utf-8"
+        )  # windows-footgun: ok (append-mode lock handle, write not read)
     except OSError:
         return None, "unavailable"
     if not _try_acquire_file_lock(handle):

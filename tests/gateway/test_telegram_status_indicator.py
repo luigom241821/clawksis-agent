@@ -22,8 +22,6 @@ def _make_adapter(extra):
     return adapter
 
 
-
-
 @pytest.mark.asyncio
 async def test_disabled_is_noop():
     adapter = _make_adapter(extra={"status_indicator": False})
@@ -38,5 +36,3 @@ async def test_online_sets_default_text():
     adapter._bot.set_my_short_description.assert_awaited_once_with(
         short_description="Online"
     )
-
-

@@ -21,8 +21,9 @@ def is_diagnostic_notice(notice) -> bool:
     Credit-service notices are automatic diagnostics at every level (usage bands are ``info``,
     ``credits.restored`` is ``success``); everything else is diagnostic only when it warns.
     """
-    return (getattr(notice, "level", None) in {"warn", "error"}
-            or str(getattr(notice, "key", "") or "").startswith("credits."))
+    return getattr(notice, "level", None) in {"warn", "error"} or str(
+        getattr(notice, "key", "") or ""
+    ).startswith("credits.")
 
 
 def diagnostic_metadata(event) -> dict:
@@ -30,8 +31,11 @@ def diagnostic_metadata(event) -> dict:
 
     Only internal wakes may classify a turn; human content never does.
     """
-    if getattr(event, "internal", False) and (getattr(event, "metadata", None) or {}).get(
-            "notification_category") == "diagnostic":
+    if (
+        getattr(event, "internal", False)
+        and (getattr(event, "metadata", None) or {}).get("notification_category")
+        == "diagnostic"
+    ):
         return {"notification_category": "diagnostic"}
     return {}
 
@@ -39,6 +43,7 @@ def diagnostic_metadata(event) -> dict:
 def effective_user_config() -> dict:
     """The active profile's effective config, or ``{}`` when it cannot be read (presentation fails open)."""
     from clawk_cli.config_effective import load_user_config_effective
+
     try:
         config = load_user_config_effective()
     except Exception:
@@ -49,8 +54,9 @@ def effective_user_config() -> dict:
 def diagnostic_turn_muted(display_metadata, platform, user_config=None) -> bool:
     """One admission rule for every surface: a diagnostic-category wake mutes its turn's
     presentation only when the owning policy hides diagnostics. Human content never mutes."""
-    return ((display_metadata or {}).get("notification_category") == "diagnostic"
-            and not warning_notifications_enabled(platform, user_config))
+    return (display_metadata or {}).get(
+        "notification_category"
+    ) == "diagnostic" and not warning_notifications_enabled(platform, user_config)
 
 
 def diagnostic_wake_muted(event, user_config=None) -> bool:
@@ -59,7 +65,8 @@ def diagnostic_wake_muted(event, user_config=None) -> bool:
     if isinstance(snapshot, bool):
         return snapshot
     return bool(getattr(event, "internal", False)) and diagnostic_turn_muted(
-        getattr(event, "metadata", None), event.source.platform, user_config)
+        getattr(event, "metadata", None), event.source.platform, user_config
+    )
 
 
 def render_notification(render, *, platform, diagnostic=True, user_config=None) -> bool:
@@ -75,7 +82,9 @@ def render_notification(render, *, platform, diagnostic=True, user_config=None) 
     return True
 
 
-async def present_notification(present, *, platform, diagnostic=True, user_config=None) -> bool:
+async def present_notification(
+    present, *, platform, diagnostic=True, user_config=None
+) -> bool:
     """Async twin of :func:`render_notification` for lifecycle emitters that await a send.
 
     Return whether the presenter ran; its own receipt/exception is the caller's to interpret.
@@ -98,4 +107,6 @@ def warning_notifications_enabled(platform, user_config=None) -> bool:
     elif not isinstance(user_config, dict):
         user_config = {}
     platform_key = getattr(platform, "value", platform)
-    return not resolve_display_setting(user_config, platform_key, "suppress_warning_notifications", False)
+    return not resolve_display_setting(
+        user_config, platform_key, "suppress_warning_notifications", False
+    )

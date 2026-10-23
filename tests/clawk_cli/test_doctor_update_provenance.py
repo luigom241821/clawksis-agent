@@ -18,7 +18,9 @@ import clawk_cli.doctor_state as ds
 
 
 # --- plugin provenance rows ---------------------------------------------
-def _make_plugin(plugins: Path, name, *, sidecar=None, git=False, manifest_update_url=None):
+def _make_plugin(
+    plugins: Path, name, *, sidecar=None, git=False, manifest_update_url=None
+):
     pdir = plugins / name
     pdir.mkdir(parents=True, exist_ok=True)
     if sidecar is not None:
@@ -42,33 +44,74 @@ def _make_plugin(plugins: Path, name, *, sidecar=None, git=False, manifest_updat
 
 def test_no_plugins_dir_is_info(tmp_path):
     rows = ds._plugin_provenance_rows(tmp_path / "missing")
-    assert rows == [("info", "No plugins directory yet (nothing to check provenance for)", "")]
+    assert rows == [
+        ("info", "No plugins directory yet (nothing to check provenance for)", "")
+    ]
 
 
 def test_mixed_provenance_diagnostic_is_read_only(tmp_path, monkeypatch, capsys):
-    plugins = tmp_path / 'plugins'
-    url = 'https://example.com/x'
+    plugins = tmp_path / "plugins"
+    url = "https://example.com/x"
     cases = [
-        ('drifty', {'source': 'git', 'update_url': url}, False, None, 'warn', 'reinstall'),
-        ('dropped', None, False, None, 'info', 'manually'),
-        ('cloned', None, True, None, 'info', 'adopt'),
-        ('fine', {'source': 'git', 'update_url': url}, True, url, 'ok', 'good standing'),
-        ('sneaky', {'source': 'git'}, True, 'https://evil.example/x', 'warn', 'no url was saved'),
-        ('swapped', {'source': 'git', 'update_url': url}, True, 'https://evil.example/x', 'warn', 'update_url mismatch'),
-        ('removed', {'source': 'git', 'update_url': url}, True, None, 'warn', 'update_url mismatch'),
+        (
+            "drifty",
+            {"source": "git", "update_url": url},
+            False,
+            None,
+            "warn",
+            "reinstall",
+        ),
+        ("dropped", None, False, None, "info", "manually"),
+        ("cloned", None, True, None, "info", "adopt"),
+        (
+            "fine",
+            {"source": "git", "update_url": url},
+            True,
+            url,
+            "ok",
+            "good standing",
+        ),
+        (
+            "sneaky",
+            {"source": "git"},
+            True,
+            "https://evil.example/x",
+            "warn",
+            "no url was saved",
+        ),
+        (
+            "swapped",
+            {"source": "git", "update_url": url},
+            True,
+            "https://evil.example/x",
+            "warn",
+            "update_url mismatch",
+        ),
+        (
+            "removed",
+            {"source": "git", "update_url": url},
+            True,
+            None,
+            "warn",
+            "update_url mismatch",
+        ),
     ]
     for name, sidecar, git, manifest, *_ in cases:
-        _make_plugin(plugins, name, sidecar=sidecar, git=git, manifest_update_url=manifest)
-    before = {p: p.read_bytes() for p in plugins.rglob('*') if p.is_file()}
+        _make_plugin(
+            plugins, name, sidecar=sidecar, git=git, manifest_update_url=manifest
+        )
+    before = {p: p.read_bytes() for p in plugins.rglob("*") if p.is_file()}
     rows = ds._plugin_provenance_rows(plugins)
     for name, *_, severity, remedy in cases:
-        assert any(kind == severity and name in text and remedy in text + detail
-                   for kind, text, detail in rows)
-    monkeypatch.setattr('clawk_constants.get_clawk_home', lambda: tmp_path)
+        assert any(
+            kind == severity and name in text and remedy in text + detail
+            for kind, text, detail in rows
+        )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path)
     ds._check_update_provenance(False)
     output = capsys.readouterr().out
     assert all(name in output for name, *_ in cases)
-    assert {p: p.read_bytes() for p in plugins.rglob('*') if p.is_file()} == before
+    assert {p: p.read_bytes() for p in plugins.rglob("*") if p.is_file()} == before
 
 
 # --- doctor-side wiring -------------------------------------------------

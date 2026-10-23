@@ -11,6 +11,7 @@ import pytest
 # Helpers to build mock Daytona SDK objects
 # ---------------------------------------------------------------------------
 
+
 def _make_exec_response(result="", exit_code=0):
     return SimpleNamespace(result=result, exit_code=exit_code)
 
@@ -50,11 +51,14 @@ def _patch_daytona_imports(monkeypatch):
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def daytona_sdk(monkeypatch):
     """Provide a mock daytona SDK module and return it for assertions."""
     # The SDK itself is faked below; bypass the PM install while exercising it.
-    monkeypatch.setattr("tools.environments.daytona.ensure_lazy_dep", lambda extra: None)
+    monkeypatch.setattr(
+        "tools.environments.daytona.ensure_lazy_dep", lambda extra: None
+    )
     return _patch_daytona_imports(monkeypatch)
 
 
@@ -65,7 +69,9 @@ def make_env(daytona_sdk, monkeypatch):
     monkeypatch.setattr("tools.environments.base.is_interrupted", lambda: False)
     # Prevent skills/credential sync from consuming mock exec calls
     monkeypatch.setattr("tools.credential_files.get_credential_file_mounts", list)
-    monkeypatch.setattr("tools.credential_files.get_skills_directory_mount", lambda **kw: None)
+    monkeypatch.setattr(
+        "tools.credential_files.get_skills_directory_mount", lambda **kw: None
+    )
     monkeypatch.setattr("tools.credential_files.iter_skills_files", lambda **kw: [])
 
     def _factory(
@@ -115,6 +121,7 @@ def make_env(daytona_sdk, monkeypatch):
 # Constructor / cwd resolution
 # ---------------------------------------------------------------------------
 
+
 class TestCwdResolution:
     def test_constructor_prepares_sdk_once(self, make_env, monkeypatch):
         calls = []
@@ -126,7 +133,6 @@ class TestCwdResolution:
         env = make_env(home_dir="/home/testuser")
         assert env.cwd == "/home/testuser"
 
-
     def test_empty_home_keeps_default_cwd(self, make_env):
         env = make_env(home_dir="")
         assert env.cwd == "/home/daytona"  # keeps constructor default
@@ -136,16 +142,17 @@ class TestCwdResolution:
 # Sandbox persistence / resume
 # ---------------------------------------------------------------------------
 
+
 class TestPersistence:
     def test_persistent_resumes_via_get(self, make_env):
         existing = _make_sandbox(sandbox_id="sb-existing")
         existing.process.exec.return_value = _make_exec_response(result="/root")
-        env = make_env(get_side_effect=lambda name: existing, persistent=True,
-                       task_id="mytask")
+        env = make_env(
+            get_side_effect=lambda name: existing, persistent=True, task_id="mytask"
+        )
         existing.start.assert_called_once()
         env._mock_client.get.assert_called_once_with("clawk-mytask")
         env._mock_client.create.assert_not_called()
-
 
     def test_non_persistent_skips_lookup(self, make_env):
         env = make_env(persistent=False)
@@ -158,13 +165,13 @@ class TestPersistence:
 # Cleanup
 # ---------------------------------------------------------------------------
 
+
 class TestCleanup:
     def test_persistent_cleanup_stops_sandbox(self, make_env):
         env = make_env(persistent=True)
         sb = env._sandbox
         env.cleanup()
         sb.stop.assert_called_once()
-
 
     def test_cleanup_swallows_errors(self, make_env):
         env = make_env(persistent=True)
@@ -177,12 +184,13 @@ class TestCleanup:
 # Execute
 # ---------------------------------------------------------------------------
 
+
 class TestExecute:
     def test_basic_command(self, make_env):
         sb = _make_sandbox()
         # Calls: (1) $HOME detection, (2) init_session bootstrap, (3) actual command
         sb.process.exec.side_effect = [
-            _make_exec_response(result="/root"),       # $HOME
+            _make_exec_response(result="/root"),  # $HOME
             _make_exec_response(result="", exit_code=0),  # init_session
             _make_exec_response(result="hello", exit_code=0),  # actual cmd
         ]
@@ -194,11 +202,10 @@ class TestExecute:
         assert result["returncode"] == 0
 
 
-
-
 # ---------------------------------------------------------------------------
 # Resource conversion
 # ---------------------------------------------------------------------------
+
 
 class TestResourceConversion:
     def _get_resources_kwargs(self, daytona_sdk):
@@ -207,7 +214,6 @@ class TestResourceConversion:
     def test_memory_converted_to_gib(self, make_env, daytona_sdk):
         make_env(memory=5120)
         assert self._get_resources_kwargs(daytona_sdk)["memory"] == 5
-
 
     def test_small_values_clamped_to_1(self, make_env, daytona_sdk):
         make_env(memory=100, disk=100)
@@ -219,6 +225,7 @@ class TestResourceConversion:
 # ---------------------------------------------------------------------------
 # Ensure sandbox ready
 # ---------------------------------------------------------------------------
+
 
 class TestInterrupt:
     def test_interrupt_stops_sandbox_and_returns_130(self, make_env, monkeypatch):
@@ -241,9 +248,7 @@ class TestInterrupt:
 
         # is_interrupted is checked by base.py's _wait_for_process,
         # patch where it's actually referenced (base.py's local binding)
-        monkeypatch.setattr(
-            "tools.environments.base.is_interrupted", lambda: True
-        )
+        monkeypatch.setattr("tools.environments.base.is_interrupted", lambda: True)
         try:
             result = env.execute("sleep 10")
             assert result["returncode"] == 130
@@ -256,15 +261,16 @@ class TestInterrupt:
 # DaytonaError surfaces directly (no retry)
 # ---------------------------------------------------------------------------
 
+
 class TestRetryExhausted:
     def test_both_attempts_fail(self, make_env, daytona_sdk):
         """DaytonaError surfaces directly as rc=1 (retry logic was removed)."""
         sb = _make_sandbox()
         sb.state = "started"
         sb.process.exec.side_effect = [
-            _make_exec_response(result="/root"),       # $HOME
+            _make_exec_response(result="/root"),  # $HOME
             _make_exec_response(result="", exit_code=0),  # init_session
-            daytona_sdk.DaytonaError("fail1"),         # actual command fails
+            daytona_sdk.DaytonaError("fail1"),  # actual command fails
         ]
         env = make_env(sandbox=sb)
 
@@ -276,6 +282,7 @@ class TestRetryExhausted:
 # ---------------------------------------------------------------------------
 # Ensure sandbox ready
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureSandboxReady:
     def test_restarts_stopped_sandbox(self, make_env):
@@ -294,6 +301,7 @@ class TestEnsureSandboxReady:
 # ---------------------------------------------------------------------------
 # Sync safety: shell-metacharacter quoting
 # ---------------------------------------------------------------------------
+
 
 class TestSyncSafety:
     def test_single_upload_quotes_parent_path(self, make_env, tmp_path):

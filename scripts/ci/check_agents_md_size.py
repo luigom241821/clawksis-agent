@@ -27,24 +27,44 @@ CHAIN_MAX_CHARS = 30_000
 
 def _int_constant(source: Path, name: str) -> int:
     for node in ast.walk(ast.parse(source.read_text(encoding="utf-8-sig"))):
-        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == name for t in node.targets):
+        if isinstance(node, ast.Assign) and any(
+            getattr(t, "id", None) == name for t in node.targets
+        ):
             return int(ast.literal_eval(node.value))
-    raise SystemExit(f"{source}: no {name} assignment; update scripts/ci/check_agents_md_size.py")
+    raise SystemExit(
+        f"{source}: no {name} assignment; update scripts/ci/check_agents_md_size.py"
+    )
 
 
 def _chain(rel: str, sizes: dict[str, int]) -> list[str]:
     """Every tracked AGENTS.md from the root down to ``rel``, root first."""
-    ancestors = [str(p / "AGENTS.md") if str(p) != "." else "AGENTS.md" for p in PurePosixPath(rel).parents]
+    ancestors = [
+        str(p / "AGENTS.md") if str(p) != "." else "AGENTS.md"
+        for p in PurePosixPath(rel).parents
+    ]
     return [p for p in reversed(ancestors) if p in sizes and p != rel] + [rel]
 
 
 def main(repo: Path) -> int:
-    hint_cap = _int_constant(repo / "agent" / "subdirectory_hints.py", "_MAX_HINT_CHARS")
-    tracked = subprocess.run(
-        ["git", "ls-files", "-z", "--", "AGENTS.md", "*/AGENTS.md"], cwd=repo, capture_output=True,
-        check=True, stdin=subprocess.DEVNULL, timeout=60,
-    ).stdout.decode("utf-8").split("\0")
-    sizes = {rel: len((repo / rel).read_text(encoding="utf-8-sig")) for rel in filter(None, tracked)}
+    hint_cap = _int_constant(
+        repo / "agent" / "subdirectory_hints.py", "_MAX_HINT_CHARS"
+    )
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "-z", "--", "AGENTS.md", "*/AGENTS.md"],
+            cwd=repo,
+            capture_output=True,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+        )
+        .stdout.decode("utf-8")
+        .split("\0")
+    )
+    sizes = {
+        rel: len((repo / rel).read_text(encoding="utf-8-sig"))
+        for rel in filter(None, tracked)
+    }
     over = []
     for rel, size in sorted(sizes.items()):
         cap = ROOT_MAX_CHARS if rel == "AGENTS.md" else hint_cap
@@ -53,13 +73,23 @@ def main(repo: Path) -> int:
         chain = _chain(rel, sizes)
         total = sum(sizes[p] for p in chain)
         if len(chain) > 1 and total > CHAIN_MAX_CHARS:
-            over.append(f"{' + '.join(chain)}: {total} chars > {CHAIN_MAX_CHARS} chain cap")
+            over.append(
+                f"{' + '.join(chain)}: {total} chars > {CHAIN_MAX_CHARS} chain cap"
+            )
     for line in over:
         print(line)
     if over:
-        print("Move long form into website/docs/developer-guide/ or a sibling doc instead of raising a cap.")
+        print(
+            "Move long form into website/docs/developer-guide/ or a sibling doc instead of raising a cap."
+        )
     return 1 if over else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]))
+    sys.exit(
+        main(
+            Path(sys.argv[1])
+            if len(sys.argv) > 1
+            else Path(__file__).resolve().parents[2]
+        )
+    )

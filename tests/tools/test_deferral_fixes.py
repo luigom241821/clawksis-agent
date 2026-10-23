@@ -152,7 +152,9 @@ class TestBridgePeelInPlanner:
         segments = _plan_tool_batch_segments(calls)
         assert _flatten_ids(segments) == ["a", "t", "b"]
 
-    def test_bridged_mcp_admission_matches_direct_admission(self, mcp_pair, tmp_path, monkeypatch):
+    def test_bridged_mcp_admission_matches_direct_admission(
+        self, mcp_pair, tmp_path, monkeypatch
+    ):
         """The peel restores PARITY, not extra permissiveness: a bridged call
         to an opted-in MCP tool gets exactly the admission the same tool gets
         when called directly. Opted-in MCP tools have always shared parallel
@@ -161,16 +163,21 @@ class TestBridgePeelInPlanner:
         scopes) — the bridge must not silently upgrade OR downgrade that."""
         monkeypatch.chdir(tmp_path)
         alpha, _ = mcp_pair
-        direct = _plan_tool_batch_segments([
-            _tc(alpha, "{}", call_id="m1"),
-            _tc("write_file", '{"path":"x.py","content":"a"}', call_id="w1"),
-        ])
-        bridged = _plan_tool_batch_segments([
-            _bridge_tc(alpha, {}, call_id="m1"),
-            _tc("write_file", '{"path":"x.py","content":"a"}', call_id="w1"),
-        ])
-        assert [(k, [c.id for c in cs]) for k, cs in direct] == \
-               [(k, [c.id for c in cs]) for k, cs in bridged]
+        direct = _plan_tool_batch_segments(
+            [
+                _tc(alpha, "{}", call_id="m1"),
+                _tc("write_file", '{"path":"x.py","content":"a"}', call_id="w1"),
+            ]
+        )
+        bridged = _plan_tool_batch_segments(
+            [
+                _bridge_tc(alpha, {}, call_id="m1"),
+                _tc("write_file", '{"path":"x.py","content":"a"}', call_id="w1"),
+            ]
+        )
+        assert [(k, [c.id for c in cs]) for k, cs in direct] == [
+            (k, [c.id for c in cs]) for k, cs in bridged
+        ]
 
     def test_core_file_tools_cannot_be_smuggled_through_the_bridge(self):
         """Wrapped core file tools remain sequential because they are not deferrable."""
@@ -187,7 +194,9 @@ class TestShortDescSentenceBoundary:
     """Fix 2: listing lines survive abbreviations, versions, hostnames."""
 
     def test_clean_two_sentence_case_still_clips_at_first(self):
-        assert _short_desc("Open an issue. Second sentence dropped.") == "Open an issue."
+        assert (
+            _short_desc("Open an issue. Second sentence dropped.") == "Open an issue."
+        )
 
     def test_abbreviation_does_not_truncate(self):
         s = _short_desc("Create an issue (e.g. a bug report) in a repository.")
@@ -204,12 +213,10 @@ class TestShortDescSentenceBoundary:
     def test_exclamation_terminator_is_kept(self):
         assert _short_desc("List repos! Supports pagination.") == "List repos!"
 
-
     def test_long_text_still_clips_with_ellipsis(self):
         s = _short_desc("word " * 40)
         assert len(s) <= 61
         assert s.endswith("…")
-
 
 
 class TestSourceNameIndexing:
@@ -233,13 +240,19 @@ class TestSourceNameIndexing:
         from tools.registry import registry
 
         names = [
-            self._register("create_issue", "mcp-linear", "Create a new issue in a team."),
+            self._register(
+                "create_issue", "mcp-linear", "Create a new issue in a team."
+            ),
             self._register("post_message", "mcp-slack", "Post a message to a channel."),
         ]
         try:
-            defs = [_td(n, d) for n, d in
-                    [("create_issue", "Create a new issue in a team."),
-                     ("post_message", "Post a message to a channel.")]]
+            defs = [
+                _td(n, d)
+                for n, d in [
+                    ("create_issue", "Create a new issue in a team."),
+                    ("post_message", "Post a message to a channel."),
+                ]
+            ]
             catalog = build_catalog(defs)
             hits = search_catalog(catalog, "linear")
             assert [h.name for h in hits] == ["create_issue"]
@@ -255,12 +268,16 @@ class TestSourceNameIndexing:
         from tools.registry import registry
 
         names = [
-            self._register("mcp__linear__create_issue", "mcp-linear", "Create an issue."),
+            self._register(
+                "mcp__linear__create_issue", "mcp-linear", "Create an issue."
+            ),
             self._register("mcp__slack__post_message", "mcp-slack", "Post a message."),
         ]
         try:
-            defs = [_td("mcp__linear__create_issue", "Create an issue."),
-                    _td("mcp__slack__post_message", "Post a message.")]
+            defs = [
+                _td("mcp__linear__create_issue", "Create an issue."),
+                _td("mcp__slack__post_message", "Post a message."),
+            ]
             catalog = build_catalog(defs)
             # The prefix is in no document, so it can never match or rank.
             assert all("mcp" not in e._tokens for e in catalog)
@@ -269,7 +286,6 @@ class TestSourceNameIndexing:
         finally:
             for n in names:
                 registry.deregister(n)
-
 
     def test_unknown_token_returns_nothing(self):
         """A token no document carries is the query's rarest token, so it gates and nothing
@@ -283,8 +299,10 @@ class TestSourceNameIndexing:
             self._register("github_merge_pr", "mcp-github", "Merge a pull request."),
         ]
         try:
-            defs = [_td("github_create_issue", "Create an issue."),
-                    _td("github_merge_pr", "Merge a pull request.")]
+            defs = [
+                _td("github_create_issue", "Create an issue."),
+                _td("github_merge_pr", "Merge a pull request."),
+            ]
             catalog = build_catalog(defs)
             assert search_catalog(catalog, "zzzz") == []
             assert search_catalog(catalog, "hub") == []

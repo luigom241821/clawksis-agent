@@ -48,7 +48,9 @@ def _async_delegation_alive(monkeypatch, tmp_path) -> bool:
     return ad.recover_abandoned_delegations() == 0
 
 
-@pytest.mark.parametrize("site", ["delivery_ledger", "api_server_runs", "async_delegation"])
+@pytest.mark.parametrize(
+    "site", ["delivery_ledger", "api_server_runs", "async_delegation"]
+)
 def test_one_second_drift_keeps_owner_live(site, monkeypatch, tmp_path):
     if site == "delivery_ledger":
         assert _delivery_ledger_alive() is True

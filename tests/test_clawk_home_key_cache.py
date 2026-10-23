@@ -56,9 +56,7 @@ class TestSameAnswerAsBefore:
         assert hc.clawk_home_key(tmp_path / "real") == _uncached(tmp_path / "real")
 
 
-
 class TestWhatGetsRemembered:
-
     def test_a_missing_path_is_not_remembered(self, tmp_path):
         # The answer can change once the directory is created, for example
         # when part of the path turns out to be a link, so it must not stick.
@@ -77,11 +75,11 @@ class TestWhatGetsRemembered:
         assert before == after
 
 
-
-
 class TestHomeChanges:
     def test_pointing_clawk_home_somewhere_else_gives_a_new_key(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         # A different home is a different input path, so it lands on its own
         # entry rather than reusing the first one.

@@ -18,7 +18,9 @@ from tui_gateway import server
 def captured(monkeypatch):
     events = []
     monkeypatch.setattr(
-        server, "_broadcast_global_event", lambda ev, payload=None: events.append((ev, payload))
+        server,
+        "_broadcast_global_event",
+        lambda ev, payload=None: events.append((ev, payload)),
     )
     # Teardown's real work (finalize, agent close, notifier unregister) is out
     # of scope — this is about what reaches the client.
@@ -46,7 +48,9 @@ def test_reclaim_reasons_announce_to_clients(captured, reason):
     ]
 
 
-@pytest.mark.parametrize("reason", ["tui_close", "tui_shutdown", "ws_disconnect", "branched"])
+@pytest.mark.parametrize(
+    "reason", ["tui_close", "tui_shutdown", "ws_disconnect", "branched"]
+)
 def test_client_initiated_closes_stay_silent(captured, reason):
     """The client asked for these, so announcing them would be noise."""
     server._teardown_session(_session(), end_reason=reason)
@@ -63,7 +67,9 @@ def test_broadcast_failure_does_not_break_teardown(monkeypatch):
 
     monkeypatch.setattr(server, "_broadcast_global_event", _boom)
     monkeypatch.setattr(
-        server, "_finalize_session", lambda s, **k: finalized.append(k.get("end_reason"))
+        server,
+        "_finalize_session",
+        lambda s, **k: finalized.append(k.get("end_reason")),
     )
 
     server._teardown_session(_session(), end_reason="ws_orphan_reap")

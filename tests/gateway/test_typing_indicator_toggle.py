@@ -82,5 +82,3 @@ async def test_typing_indicator_enabled_spawns_refresh_loop():
     await adapter._process_message_background(event, _sk())
 
     assert adapter.send_typing.await_count >= 1
-
-

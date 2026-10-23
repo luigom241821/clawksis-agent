@@ -69,13 +69,15 @@ def test_probe_uses_child_payload_and_sanitizes_python_environment(
         "sqlite_source_id": "child-source-id",
     }
     fake_python.write_text(
-        "\n".join([
-            "#!/bin/sh",
-            '[ "$1" = "-I" ] && [ "$2" = "-c" ] || exit 10',
-            '[ -z "${PYTHONHOME+x}" ] || exit 11',
-            '[ -z "${PYTHONPATH+x}" ] || exit 12',
-            f"printf '%s\\n' {shlex.quote(json.dumps(payload))}",
-        ])
+        "\n".join(
+            [
+                "#!/bin/sh",
+                '[ "$1" = "-I" ] && [ "$2" = "-c" ] || exit 10',
+                '[ -z "${PYTHONHOME+x}" ] || exit 11',
+                '[ -z "${PYTHONPATH+x}" ] || exit 12',
+                f"printf '%s\\n' {shlex.quote(json.dumps(payload))}",
+            ]
+        )
         + "\n",
         encoding="utf-8",
     )

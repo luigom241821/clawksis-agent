@@ -23,15 +23,15 @@ from tools.computer_use import tool as cu_tool
 
 
 class TestAtexitTeardown:
-
-
     def test_shutdown_stops_every_session_backend(self):
         """Session-scoped caches are all drained, not only the legacy slot."""
         first = MagicMock()
         second = MagicMock()
-        with patch.object(cu_tool, "_backend", None), \
-             patch.object(cu_tool, "_backends", {"one": first, "two": second}), \
-             patch.object(cu_tool, "_backend_call_locks", {}):
+        with (
+            patch.object(cu_tool, "_backend", None),
+            patch.object(cu_tool, "_backends", {"one": first, "two": second}),
+            patch.object(cu_tool, "_backend_call_locks", {}),
+        ):
             cu_tool._shutdown_backend_atexit()
             first.stop.assert_called_once()
             second.stop.assert_called_once()

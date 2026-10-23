@@ -122,7 +122,9 @@ def _iter_which_calls(tree: ast.AST):
         name = (
             func.attr
             if isinstance(func, ast.Attribute)
-            else func.id if isinstance(func, ast.Name) else None
+            else func.id
+            if isinstance(func, ast.Name)
+            else None
         )
         if name != "which":
             continue
@@ -183,7 +185,9 @@ class _ResolutionSiteVisitor(ast.NodeVisitor):
             and isinstance(func.value, ast.Name)
             and func.value.id in self._shutil_aliases
         )
-        is_imported_which = isinstance(func, ast.Name) and func.id in self._which_aliases
+        is_imported_which = (
+            isinstance(func, ast.Name) and func.id in self._which_aliases
+        )
         if is_shutil_which or is_imported_which:
             self.sites.add((self._symbol, "bare_which"))
         self.generic_visit(node)
@@ -199,11 +203,14 @@ class _ResolutionSiteVisitor(ast.NodeVisitor):
     def _visit_path_table(self, node: ast.List | ast.Tuple) -> None:
         # Re-join fragments split across path-construction arguments before matching.
         strings = [
-            child.value for child in ast.walk(node)
+            child.value
+            for child in ast.walk(node)
             if isinstance(child, ast.Constant) and isinstance(child.value, str)
         ]
         joined = "/".join(strings)
-        fragments = {fragment for fragment in _KNOWN_PATH_FRAGMENTS if fragment in joined}
+        fragments = {
+            fragment for fragment in _KNOWN_PATH_FRAGMENTS if fragment in joined
+        }
         if len(fragments) >= 2:
             self.sites.add((self._symbol, "known_path_table"))
 
@@ -221,7 +228,8 @@ def _source_files() -> list[Path]:
         rel_dir = Path(dirpath).relative_to(REPO_ROOT)
         if rel_dir == Path("."):
             dirnames[:] = [
-                d for d in dirnames
+                d
+                for d in dirnames
                 if d not in _EXEMPT_DIRS and not _is_packaging_copy(d)
             ]
         for fname in filenames:
@@ -323,7 +331,9 @@ def test_no_unreviewed_bare_managed_runtime_lookups():
 
     assert not unexpected, (
         "Bare PATH lookup for a Clawksis-managed runtime.\n\n"
-        + "\n".join(f"  {rel}:{lineno}  which({cmd!r})" for rel, cmd, lineno in unexpected)
+        + "\n".join(
+            f"  {rel}:{lineno}  which({cmd!r})" for rel, cmd, lineno in unexpected
+        )
         + "\n\n$CLAWK_HOME/bin (uv) and $CLAWK_HOME/node are not on an "
         "arbitrary process's PATH, so this resolves a system copy — or nothing "
         "— on an install that has a managed one.\n"

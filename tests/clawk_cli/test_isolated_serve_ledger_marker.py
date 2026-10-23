@@ -28,16 +28,25 @@ def _await_ledger_row(ledger, proc, log, *, timeout=45):
     while time.monotonic() < deadline:
         if proc.poll() is not None:
             break
-        pids = {proc.pid, *(c.pid for c in psutil.Process(proc.pid).children(recursive=True))}
+        pids = {
+            proc.pid,
+            *(c.pid for c in psutil.Process(proc.pid).children(recursive=True)),
+        }
         try:
             rows = json.loads(ledger.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             rows = []
         for row in rows:
-            if row.get("purpose") == "serve" and row.get("pid") in pids and row.get("port"):
+            if (
+                row.get("purpose") == "serve"
+                and row.get("pid") in pids
+                and row.get("port")
+            ):
                 return row
         time.sleep(0.1)
-    pytest.fail(f"serve never registered (exit={proc.poll()}): {log.read_text(encoding='utf-8', errors='replace')}")
+    pytest.fail(
+        f"serve never registered (exit={proc.poll()}): {log.read_text(encoding='utf-8', errors='replace')}"
+    )
 
 
 def _stop(proc):
@@ -55,9 +64,18 @@ def _stop(proc):
 def test_isolated_serve_ledger_row_is_marked_and_ordinary_serve_is_not(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
-    env = {**os.environ, "CLAWK_HOME": str(home), "CLAWK_GATEWAY_LOCK_DIR": str(tmp_path / "locks")}
-    for key in ("CLAWK_DESKTOP", "CLAWK_PARENT_PID", "CLAWK_PARENT_START_MARKER",
-                "CLAWK_DASHBOARD_SESSION_TOKEN", "CLAWK_SPAWN"):
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "CLAWK_GATEWAY_LOCK_DIR": str(tmp_path / "locks"),
+    }
+    for key in (
+        "CLAWK_DESKTOP",
+        "CLAWK_PARENT_PID",
+        "CLAWK_PARENT_START_MARKER",
+        "CLAWK_DASHBOARD_SESSION_TOKEN",
+        "CLAWK_SPAWN",
+    ):
         env.pop(key, None)
     ledger = home / "spawn-ledger.json"
 
@@ -69,9 +87,20 @@ def test_isolated_serve_ledger_row_is_marked_and_ordinary_serve_is_not(tmp_path)
             log = tmp_path / f"{name}.log"
             with log.open("w", encoding="utf-8") as out:
                 procs[name] = subprocess.Popen(
-                    [sys.executable, "-m", "clawk_cli.main", "serve", *extra,
-                     "--host", "127.0.0.1", "--port", str(_free_port())],
-                    env=env, stdout=out, stderr=subprocess.STDOUT,
+                    [
+                        sys.executable,
+                        "-m",
+                        "clawk_cli.main",
+                        "serve",
+                        *extra,
+                        "--host",
+                        "127.0.0.1",
+                        "--port",
+                        str(_free_port()),
+                    ],
+                    env=env,
+                    stdout=out,
+                    stderr=subprocess.STDOUT,
                 )
             rows[name] = _await_ledger_row(ledger, procs[name], log)
     finally:

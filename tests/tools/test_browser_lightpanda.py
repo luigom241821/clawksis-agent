@@ -17,9 +17,11 @@ from tools import browser_tool_cdp as bt_cdp
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _reset_engine_cache():
     """Reset the module-level engine cache so tests start clean."""
     import tools.browser_tool as bt
+
     bt._cached_browser_engine = None
     bt._browser_engine_resolved = False
 
@@ -36,54 +38,68 @@ def _clean_engine_cache():
 # _get_browser_engine
 # ---------------------------------------------------------------------------
 
+
 class TestGetBrowserEngine:
     """Test engine resolution from config and env vars."""
-
 
     def test_config_lightpanda(self):
         """Config browser.engine = 'lightpanda' is respected."""
         from tools.browser_tool_cloud import _get_browser_engine
+
         cfg = {"browser": {"engine": "lightpanda"}}
         with patch("clawk_cli.config.read_raw_config", return_value=cfg):
             assert _get_browser_engine() == "lightpanda"
-
-
 
 
 # ---------------------------------------------------------------------------
 # _should_inject_engine
 # ---------------------------------------------------------------------------
 
+
 class TestShouldInjectEngine:
     """Test whether --engine flag is injected based on mode."""
 
     def test_auto_never_injects(self):
         from tools.browser_tool_cloud import _should_inject_engine
+
         assert _should_inject_engine("auto") is False
 
     def test_lightpanda_injects_in_local_mode(self):
         from tools.browser_tool_cloud import _should_inject_engine
-        with patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_cdp._get_cdp_override", return_value=""), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None):
+
+        with (
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch("tools.browser_tool_cdp._get_cdp_override", return_value=""),
+            patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None),
+        ):
             assert _should_inject_engine("lightpanda") is True
 
     def test_chrome_injects_in_local_mode(self):
         from tools.browser_tool_cloud import _should_inject_engine
-        with patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_cdp._get_cdp_override", return_value=""), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None):
+
+        with (
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch("tools.browser_tool_cdp._get_cdp_override", return_value=""),
+            patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None),
+        ):
             assert _should_inject_engine("chrome") is True
 
     def test_no_inject_in_camofox_mode(self):
         from tools.browser_tool_cloud import _should_inject_engine
+
         with patch("tools.browser_tool._is_camofox_mode", return_value=True):
             assert _should_inject_engine("lightpanda") is False
 
     def test_no_inject_with_cdp_override(self):
         from tools.browser_tool_cloud import _should_inject_engine
-        with patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_cdp._get_cdp_override_raw", return_value="ws://localhost:9222"):
+
+        with (
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch(
+                "tools.browser_tool_cdp._get_cdp_override_raw",
+                return_value="ws://localhost:9222",
+            ),
+        ):
             assert _should_inject_engine("lightpanda") is False
 
 
@@ -91,32 +107,37 @@ class TestShouldInjectEngine:
 # _needs_lightpanda_fallback
 # ---------------------------------------------------------------------------
 
+
 class TestNeedsLightpandaFallback:
     """Test fallback detection for Lightpanda results."""
 
     def test_non_lightpanda_never_falls_back(self):
         from tools.browser_tool_lightpanda_fallback import _needs_lightpanda_fallback
+
         result = {"success": False, "error": "timeout"}
         assert _needs_lightpanda_fallback("chrome", "open", result) is False
         assert _needs_lightpanda_fallback("auto", "open", result) is False
 
     def test_failed_command_triggers_fallback(self):
         from tools.browser_tool_lightpanda_fallback import _needs_lightpanda_fallback
+
         result = {"success": False, "error": "page.goto: Timeout"}
         assert _needs_lightpanda_fallback("lightpanda", "open", result) is True
 
-
     def test_empty_snapshot_triggers_fallback(self):
         from tools.browser_tool_lightpanda_fallback import _needs_lightpanda_fallback
+
         result = {"success": True, "data": {"snapshot": ""}}
         assert _needs_lightpanda_fallback("lightpanda", "snapshot", result) is True
-
 
     def test_unknown_command_does_not_trigger_fallback(self):
         """Commands not in the whitelist should not trigger fallback."""
         from tools.browser_tool_lightpanda_fallback import _needs_lightpanda_fallback
+
         result = {"success": False, "error": "nope"}
-        assert _needs_lightpanda_fallback("lightpanda", "some_future_cmd", result) is False
+        assert (
+            _needs_lightpanda_fallback("lightpanda", "some_future_cmd", result) is False
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -124,28 +145,40 @@ class TestNeedsLightpandaFallback:
 # ---------------------------------------------------------------------------
 
 
-
 class TestLightpandaRequirements:
     """Lightpanda should expose browser tools without local Chromium."""
 
     def test_lightpanda_local_mode_does_not_require_chromium(self):
 
-        with patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_cdp._get_cdp_override", return_value=""), \
-             patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser"), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None), \
-             patch("tools.browser_tool_cloud._get_browser_engine", return_value="lightpanda"), \
-             patch("tools.browser_tool_install._chromium_installed", return_value=False):
+        with (
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch("tools.browser_tool_cdp._get_cdp_override", return_value=""),
+            patch(
+                "tools.browser_tool_install._find_agent_browser",
+                return_value="/usr/bin/agent-browser",
+            ),
+            patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None),
+            patch(
+                "tools.browser_tool_cloud._get_browser_engine",
+                return_value="lightpanda",
+            ),
+            patch("tools.browser_tool_install._chromium_installed", return_value=False),
+        ):
             assert bt_install.check_browser_requirements() is True
 
     def test_chrome_local_mode_still_requires_chromium(self):
 
-        with patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("tools.browser_tool_cdp._get_cdp_override", return_value=""), \
-             patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser"), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None), \
-             patch("tools.browser_tool_cloud._get_browser_engine", return_value="auto"), \
-             patch("tools.browser_tool_install._chromium_installed", return_value=False):
+        with (
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch("tools.browser_tool_cdp._get_cdp_override", return_value=""),
+            patch(
+                "tools.browser_tool_install._find_agent_browser",
+                return_value="/usr/bin/agent-browser",
+            ),
+            patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None),
+            patch("tools.browser_tool_cloud._get_browser_engine", return_value="auto"),
+            patch("tools.browser_tool_install._chromium_installed", return_value=False),
+        ):
             assert bt_install.check_browser_requirements() is False
 
 
@@ -154,14 +187,13 @@ class TestLightpandaRequirements:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Chrome fallback behavior
 # ---------------------------------------------------------------------------
 
+
 class TestChromeFallback:
     """Chrome fallback must hand off from Lightpanda without leaking engine policy."""
-
 
     def test_chrome_fallback_injects_required_sandbox_args(self, tmp_path):
 
@@ -179,14 +211,23 @@ class TestChromeFallback:
         # sibling pytest processes (atexit _emergency_cleanup_all_sessions),
         # which rmtree'd the fresh pidless dir mid-command — the CI flake
         # this test kept hitting before the reaper grace fix.
-        with patch("tools.browser_tool_session._run_browser_command", return_value={
-                 "success": True, "data": {"url": "https://example.com/"}
-             }), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser"), \
-             patch("tools.browser_tool_install._chromium_installed", return_value=True), \
-             patch("tools.browser_tool_session._needs_chromium_sandbox_bypass", return_value=True), \
-             patch("subprocess.Popen", side_effect=capture_popen):
+        with (
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                return_value={"success": True, "data": {"url": "https://example.com/"}},
+            ),
+            patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)),
+            patch(
+                "tools.browser_tool_install._find_agent_browser",
+                return_value="/usr/bin/agent-browser",
+            ),
+            patch("tools.browser_tool_install._chromium_installed", return_value=True),
+            patch(
+                "tools.browser_tool_session._needs_chromium_sandbox_bypass",
+                return_value=True,
+            ),
+            patch("subprocess.Popen", side_effect=capture_popen),
+        ):
             result = bt_lightpanda_fallback._run_chrome_fallback_command(
                 "task1", "screenshot", [], timeout=30
             )
@@ -203,13 +244,14 @@ class TestChromeFallback:
 # fallback warning annotation
 # ---------------------------------------------------------------------------
 
+
 class TestLightpandaFallbackWarning:
     """Verify Chrome fallback results are annotated for users."""
 
     def test_fallback_result_gets_user_visible_warning(self):
         from tools.browser_tool_lightpanda_fallback import _annotate_lightpanda_fallback
 
-        result = {"success": True, "data": {"snapshot": "- heading \"Hello\" [ref=e1]"}}
+        result = {"success": True, "data": {"snapshot": '- heading "Hello" [ref=e1]'}}
         annotated = _annotate_lightpanda_fallback(
             result,
             "Lightpanda returned an empty/too-short snapshot; retried with Chrome.",
@@ -225,26 +267,46 @@ class TestLightpandaFallbackWarning:
         assert annotated["data"]["fallback_warning"] == annotated["fallback_warning"]
         assert annotated["data"]["browser_engine"] == "chrome"
 
-
     def test_browser_navigate_surfaces_fallback_warning(self):
         import json
         import tools.browser_tool as bt
 
         result = bt_lightpanda_fallback._annotate_lightpanda_fallback(
-            {"success": True, "data": {"title": "Fallback OK", "url": "https://example.com/"}},
+            {
+                "success": True,
+                "data": {"title": "Fallback OK", "url": "https://example.com/"},
+            },
             "synthetic Lightpanda failure; retried with Chrome.",
         )
 
-        with patch("tools.browser_tool_cloud._is_local_backend", return_value=True), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None), \
-             patch("tools.browser_tool_session._get_session_info", return_value={
-                 "session_name": "test", "_first_nav": False, "features": {"local": True, "proxies": True}
-             }), \
-             patch("tools.browser_tool_session._run_browser_command", side_effect=[
-                 result,
-                 {"success": True, "data": {"snapshot": "- heading \"Fallback OK\" [ref=e1]", "refs": {"e1": {}}}},
-             ]):
-            response = json.loads(bt.browser_navigate("https://example.com", task_id="warn-test"))
+        with (
+            patch("tools.browser_tool_cloud._is_local_backend", return_value=True),
+            patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None),
+            patch(
+                "tools.browser_tool_session._get_session_info",
+                return_value={
+                    "session_name": "test",
+                    "_first_nav": False,
+                    "features": {"local": True, "proxies": True},
+                },
+            ),
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                side_effect=[
+                    result,
+                    {
+                        "success": True,
+                        "data": {
+                            "snapshot": '- heading "Fallback OK" [ref=e1]',
+                            "refs": {"e1": {}},
+                        },
+                    },
+                ],
+            ),
+        ):
+            response = json.loads(
+                bt.browser_navigate("https://example.com", task_id="warn-test")
+            )
 
         assert response["success"] is True
         assert response["browser_engine"] == "chrome"
@@ -252,7 +314,6 @@ class TestLightpandaFallbackWarning:
         assert response["browser_engine_fallback"]["from"] == "lightpanda"
         assert response["browser_engine_fallback"]["to"] == "chrome"
         bt._last_active_session_key.pop("warn-test", None)
-
 
     def test_browser_vision_lightpanda_response_has_structured_fallback(self, tmp_path):
         import json
@@ -270,14 +331,22 @@ class TestLightpandaFallbackWarning:
         class _Response:
             choices = [_Choice()]
 
-        with patch("tools.browser_tool_cloud._get_browser_engine", return_value="lightpanda"), \
-             patch("tools.browser_tool_cloud._should_inject_engine", return_value=True), \
-             patch("tools.browser_tool_lightpanda_fallback._chrome_fallback_screenshot", return_value={
-                 "success": True, "data": {"path": str(chrome_shot)}
-             }), \
-             patch("clawk_constants.get_clawk_dir", return_value=tmp_path), \
-             patch("agent.auxiliary_client.call_llm", return_value=_Response()):
-            response = json.loads(bt.browser_vision("what is this?", task_id="vision-structured"))
+        with (
+            patch(
+                "tools.browser_tool_cloud._get_browser_engine",
+                return_value="lightpanda",
+            ),
+            patch("tools.browser_tool_cloud._should_inject_engine", return_value=True),
+            patch(
+                "tools.browser_tool_lightpanda_fallback._chrome_fallback_screenshot",
+                return_value={"success": True, "data": {"path": str(chrome_shot)}},
+            ),
+            patch("clawk_constants.get_clawk_dir", return_value=tmp_path),
+            patch("agent.auxiliary_client.call_llm", return_value=_Response()),
+        ):
+            response = json.loads(
+                bt.browser_vision("what is this?", task_id="vision-structured")
+            )
 
         assert response["success"] is True
         assert response["browser_engine"] == "chrome"
@@ -285,15 +354,20 @@ class TestLightpandaFallbackWarning:
         assert response["browser_engine_fallback"]["to"] == "chrome"
         assert response["browser_engine_fallback"]["reason"]
 
+
 # ---------------------------------------------------------------------------
 # _engine_override parameter
 # ---------------------------------------------------------------------------
+
 
 class TestEngineOverride:
     """Verify _engine_override bypasses the cached engine."""
 
     @patch("tools.browser_tool_session._get_session_info")
-    @patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser")
+    @patch(
+        "tools.browser_tool_install._find_agent_browser",
+        return_value="/usr/bin/agent-browser",
+    )
     @patch("tools.browser_tool_cloud._is_local_mode", return_value=True)
     @patch("tools.browser_tool_install._chromium_installed", return_value=True)
     @patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None)
@@ -322,25 +396,43 @@ class TestEngineOverride:
             return mock_proc
 
         # We need to mock the file operations too
-        with patch("subprocess.Popen", side_effect=capture_popen), \
-             patch("os.open", return_value=99), \
-             patch("os.close"), \
-             patch("os.unlink"), \
-             patch("os.makedirs"), \
-             patch("builtins.open", MagicMock(return_value=MagicMock(
-                 __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value='{"success": true, "data": {}}'))),
-                 __exit__=MagicMock(return_value=False),
-             ))), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("tools.browser_tool_lifecycle._write_owner_pid"):
-            bt_session._run_browser_command("task1", "snapshot", [], _engine_override="auto")
+        with (
+            patch("subprocess.Popen", side_effect=capture_popen),
+            patch("os.open", return_value=99),
+            patch("os.close"),
+            patch("os.unlink"),
+            patch("os.makedirs"),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    return_value=MagicMock(
+                        __enter__=MagicMock(
+                            return_value=MagicMock(
+                                read=MagicMock(
+                                    return_value='{"success": true, "data": {}}'
+                                )
+                            )
+                        ),
+                        __exit__=MagicMock(return_value=False),
+                    )
+                ),
+            ),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("tools.browser_tool_lifecycle._write_owner_pid"),
+        ):
+            bt_session._run_browser_command(
+                "task1", "snapshot", [], _engine_override="auto"
+            )
 
         # Should NOT contain "--engine" since override is "auto"
         assert len(captured_cmds) == 1
         assert "--engine" not in captured_cmds[0]
 
     @patch("tools.browser_tool_session._get_session_info")
-    @patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser")
+    @patch(
+        "tools.browser_tool_install._find_agent_browser",
+        return_value="/usr/bin/agent-browser",
+    )
     @patch("tools.browser_tool_cloud._is_local_mode", return_value=True)
     @patch("tools.browser_tool_install._chromium_installed", return_value=True)
     @patch("tools.browser_tool_cloud._get_cloud_provider", return_value=None)
@@ -370,27 +462,44 @@ class TestEngineOverride:
 
         # Return a substantive snapshot so the LP fallback does NOT trigger.
         mock_stdout = '{"success": true, "data": {"snapshot": "- heading \\"Hello\\" [ref=e1]", "refs": {"e1": {}}}}'
-        with patch("subprocess.Popen", side_effect=capture_popen), \
-             patch("os.open", return_value=99), \
-             patch("os.close"), \
-             patch("os.unlink"), \
-             patch("os.makedirs"), \
-             patch("builtins.open", MagicMock(return_value=MagicMock(
-                 __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=mock_stdout))),
-                 __exit__=MagicMock(return_value=False),
-             ))), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("tools.browser_tool_session._needs_chromium_sandbox_bypass", return_value=True), \
-             patch("tools.browser_tool_lifecycle._write_owner_pid"), \
-             patch.dict(os.environ, {}, clear=False):
+        with (
+            patch("subprocess.Popen", side_effect=capture_popen),
+            patch("os.open", return_value=99),
+            patch("os.close"),
+            patch("os.unlink"),
+            patch("os.makedirs"),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    return_value=MagicMock(
+                        __enter__=MagicMock(
+                            return_value=MagicMock(
+                                read=MagicMock(return_value=mock_stdout)
+                            )
+                        ),
+                        __exit__=MagicMock(return_value=False),
+                    )
+                ),
+            ),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch(
+                "tools.browser_tool_session._needs_chromium_sandbox_bypass",
+                return_value=True,
+            ),
+            patch("tools.browser_tool_lifecycle._write_owner_pid"),
+            patch.dict(os.environ, {}, clear=False),
+        ):
             # AppArmor/root detection would normally auto-inject Chromium args.
             bt_session._run_browser_command("task1", "snapshot", [])
 
             # User-supplied current and legacy Chromium knobs must also be removed.
-            with patch.dict(os.environ, {
-                "AGENT_BROWSER_ARGS": "--no-sandbox",
-                "AGENT_BROWSER_CHROME_FLAGS": "--disable-dev-shm-usage",
-            }):
+            with patch.dict(
+                os.environ,
+                {
+                    "AGENT_BROWSER_ARGS": "--no-sandbox",
+                    "AGENT_BROWSER_CHROME_FLAGS": "--disable-dev-shm-usage",
+                },
+            ):
                 bt_session._run_browser_command("task1", "snapshot", [])
 
         assert len(captured_cmds) == 2
@@ -418,28 +527,50 @@ class TestEngineOverride:
             captured_cmds.append(cmd)
             return mock_proc
 
-        mock_stdout = json.dumps({
-            "success": True,
-            "data": {"snapshot": '- heading "Hello" [ref=e1]', "refs": {"e1": {}}},
-        })
-        with patch("tools.browser_tool_session._get_session_info", return_value={"session_name": "local-sidecar"}), \
-             patch("tools.browser_tool_install._find_agent_browser", return_value="/usr/bin/agent-browser"), \
-             patch("tools.browser_tool_cloud._is_local_mode", return_value=False), \
-             patch("tools.browser_tool_install._chromium_installed", return_value=True), \
-             patch("tools.browser_tool_cloud._get_cloud_provider", return_value=mock_provider), \
-             patch("tools.browser_tool_cdp._get_cdp_override", return_value=""), \
-             patch("tools.browser_tool._is_camofox_mode", return_value=False), \
-             patch("subprocess.Popen", side_effect=capture_popen), \
-             patch("os.open", return_value=99), \
-             patch("os.close"), \
-             patch("os.unlink"), \
-             patch("os.makedirs"), \
-             patch("builtins.open", MagicMock(return_value=MagicMock(
-                 __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value=mock_stdout))),
-                 __exit__=MagicMock(return_value=False),
-             ))), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("tools.browser_tool_lifecycle._write_owner_pid"):
+        mock_stdout = json.dumps(
+            {
+                "success": True,
+                "data": {"snapshot": '- heading "Hello" [ref=e1]', "refs": {"e1": {}}},
+            }
+        )
+        with (
+            patch(
+                "tools.browser_tool_session._get_session_info",
+                return_value={"session_name": "local-sidecar"},
+            ),
+            patch(
+                "tools.browser_tool_install._find_agent_browser",
+                return_value="/usr/bin/agent-browser",
+            ),
+            patch("tools.browser_tool_cloud._is_local_mode", return_value=False),
+            patch("tools.browser_tool_install._chromium_installed", return_value=True),
+            patch(
+                "tools.browser_tool_cloud._get_cloud_provider",
+                return_value=mock_provider,
+            ),
+            patch("tools.browser_tool_cdp._get_cdp_override", return_value=""),
+            patch("tools.browser_tool._is_camofox_mode", return_value=False),
+            patch("subprocess.Popen", side_effect=capture_popen),
+            patch("os.open", return_value=99),
+            patch("os.close"),
+            patch("os.unlink"),
+            patch("os.makedirs"),
+            patch(
+                "builtins.open",
+                MagicMock(
+                    return_value=MagicMock(
+                        __enter__=MagicMock(
+                            return_value=MagicMock(
+                                read=MagicMock(return_value=mock_stdout)
+                            )
+                        ),
+                        __exit__=MagicMock(return_value=False),
+                    )
+                ),
+            ),
+            patch("tools.interrupt.is_interrupted", return_value=False),
+            patch("tools.browser_tool_lifecycle._write_owner_pid"),
+        ):
             bt_session._run_browser_command("task::local", "snapshot", [])
 
         assert len(captured_cmds) == 1
@@ -450,6 +581,7 @@ class TestEngineOverride:
 # ---------------------------------------------------------------------------
 # lightpanda_engine_status — is the engine in effect, or shadowed?
 # ---------------------------------------------------------------------------
+
 
 class TestLightpandaEngineStatus:
     def _gates(self, monkeypatch, **overrides):
@@ -465,13 +597,16 @@ class TestLightpandaEngineStatus:
         )
         gates.update(overrides)
         homes = {
-            "_using_lightpanda_engine": bt_lightpanda_fallback, "_get_cdp_override_raw": bt_cdp,
-            "_get_cloud_provider": bt_cloud, "_use_real_profile": bt_cloud,
+            "_using_lightpanda_engine": bt_lightpanda_fallback,
+            "_get_cdp_override_raw": bt_cdp,
+            "_get_cloud_provider": bt_cloud,
+            "_use_real_profile": bt_cloud,
         }
         for name, fn in gates.items():
             monkeypatch.setattr(homes.get(name, bt), name, fn)
         monkeypatch.setattr(
-            "tools.browser_use_cli.is_legacy_browser_use_cloud_config", lambda cfg: False
+            "tools.browser_use_cli.is_legacy_browser_use_cloud_config",
+            lambda cfg: False,
         )
         return bt
 
@@ -539,6 +674,7 @@ class TestLightpandaEngineStatus:
 # Browser Use mode session lifecycle
 # ---------------------------------------------------------------------------
 
+
 class _FakeServer:
     def __init__(self, port=4321, alive=True):
         self.port = port
@@ -561,9 +697,14 @@ class TestLightpandaSessionCreation:
                 return launch
             return _FakeServer(), None
 
-        monkeypatch.setattr("tools.browser_tool_real_profile._real_profile_cdp", lambda: (None, None))
+        monkeypatch.setattr(
+            "tools.browser_tool_real_profile._real_profile_cdp", lambda: (None, None)
+        )
         monkeypatch.setattr(bt, "_is_browser_use_cli_mode", lambda: bu_mode)
-        monkeypatch.setattr("tools.browser_tool_lightpanda_fallback._using_lightpanda_engine", lambda: True)
+        monkeypatch.setattr(
+            "tools.browser_tool_lightpanda_fallback._using_lightpanda_engine",
+            lambda: True,
+        )
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: local_backend)
         monkeypatch.setattr("tools.browser_lightpanda.launch_lightpanda", fake_launch)
         return bt, calls
@@ -590,7 +731,9 @@ class TestLightpandaSessionCreation:
         assert calls == []
 
     def test_launch_failure_raises(self, monkeypatch):
-        _bt, _ = self._common(monkeypatch, launch=(None, "no lightpanda binary was found"))
+        _bt, _ = self._common(
+            monkeypatch, launch=(None, "no lightpanda binary was found")
+        )
         with pytest.raises(RuntimeError, match="no lightpanda binary"):
             bt_session._create_local_session("task-1")
 
@@ -633,9 +776,14 @@ class TestLightpandaSessionLifecycle:
             "tools.browser_lightpanda.get_server", lambda name: _FakeServer(alive=False)
         )
         assert bt_session._local_backend_process_dead(info) is True
-        monkeypatch.setattr("tools.browser_lightpanda.get_server", lambda name: _FakeServer())
+        monkeypatch.setattr(
+            "tools.browser_lightpanda.get_server", lambda name: _FakeServer()
+        )
         assert bt_session._local_backend_process_dead(info) is False
-        assert bt_session._local_backend_process_dead({"features": {"local": True}}) is False
+        assert (
+            bt_session._local_backend_process_dead({"features": {"local": True}})
+            is False
+        )
 
     def test_get_session_info_respawns_dead_lightpanda(self, monkeypatch):
         bt = self.bt
@@ -652,18 +800,27 @@ class TestLightpandaSessionLifecycle:
             cleaned.append(key)
             bt._active_sessions.pop(key, None)
 
-        monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
         monkeypatch.setattr(
-            bt, "_browser_session_backend",
+            "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+        )
+        monkeypatch.setattr(
+            bt,
+            "_browser_session_backend",
             lambda key: MagicMock(ensure_healthy=lambda: True),
         )
         monkeypatch.setattr("tools.browser_lightpanda.get_server", lambda name: None)
-        monkeypatch.setattr(bt_lifecycle, "_cleanup_single_browser_session", fake_cleanup)
+        monkeypatch.setattr(
+            bt_lifecycle, "_cleanup_single_browser_session", fake_cleanup
+        )
         monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_session._create_local_session", lambda *a, **k: fresh)
+        monkeypatch.setattr(
+            "tools.browser_tool_session._create_local_session", lambda *a, **k: fresh
+        )
         supervised = []
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", supervised.append)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", supervised.append
+        )
 
         info = bt_session._get_session_info("task-1")
         assert cleaned == ["task-1"]
@@ -679,9 +836,11 @@ class TestLightpandaSessionLifecycle:
         self._seed()
         stopped = []
         monkeypatch.setattr("tools.browser_lightpanda.stop_lightpanda", stopped.append)
-        with patch("tools.browser_tool._maybe_stop_recording"), \
-             patch("tools.browser_tool_session._run_browser_command") as run, \
-             patch("tools.browser_tool.os.path.exists", return_value=False):
+        with (
+            patch("tools.browser_tool._maybe_stop_recording"),
+            patch("tools.browser_tool_session._run_browser_command") as run,
+            patch("tools.browser_tool.os.path.exists", return_value=False),
+        ):
             bt_lifecycle.cleanup_browser("task-1")
         run.assert_not_called()
         assert stopped == ["lp_dead"]
@@ -691,16 +850,20 @@ class TestLightpandaSessionLifecycle:
     def test_emergency_cleanup_stops_all_lightpanda(self, monkeypatch):
         bt = self.bt
         bt._cleanup_done = False
-        with patch("tools.browser_lightpanda.stop_all_lightpanda") as stop_all, \
-             patch("tools.browser_tool_real_profile._terminate_real_profile_chrome"), \
-             patch("tools.browser_tool_lifecycle.cleanup_all_browsers"), \
-             patch("tools.browser_tool_lifecycle._reap_orphaned_browser_sessions"):
+        with (
+            patch("tools.browser_lightpanda.stop_all_lightpanda") as stop_all,
+            patch("tools.browser_tool_real_profile._terminate_real_profile_chrome"),
+            patch("tools.browser_tool_lifecycle.cleanup_all_browsers"),
+            patch("tools.browser_tool_lifecycle._reap_orphaned_browser_sessions"),
+        ):
             bt_lifecycle._emergency_cleanup_all_sessions()
         stop_all.assert_called_once()
 
     def test_orphan_reaper_sweeps_lightpanda_records(self, tmp_path):
-        with patch("tools.browser_lightpanda.reap_orphaned_lightpanda") as reap, \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)):
+        with (
+            patch("tools.browser_lightpanda.reap_orphaned_lightpanda") as reap,
+            patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)),
+        ):
             bt_lifecycle._reap_orphaned_browser_sessions()
         reap.assert_called_once()
 
@@ -708,6 +871,7 @@ class TestLightpandaSessionLifecycle:
         """A parseable-but-non-object state file is swept like an unreadable one —
         never an AttributeError that wedges the reaper."""
         from tools import browser_lightpanda
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         state_dir = browser_lightpanda._state_dir()
         bad = state_dir / "broken.json"
@@ -717,14 +881,18 @@ class TestLightpandaSessionLifecycle:
         assert browser_lightpanda.reap_orphaned_lightpanda() == 0
         assert not bad.exists() and not dead_owner.exists()
 
-    def test_orphan_sweep_mid_record_write_keeps_the_live_record(self, tmp_path, monkeypatch):
+    def test_orphan_sweep_mid_record_write_keeps_the_live_record(
+        self, tmp_path, monkeypatch
+    ):
         """A sweep running while the owner writes its record must not see a torn (empty) file:
         it would unlink it as corrupt and the live server would never be reaped after a crash."""
         from tests.file_write_observer import observe_file_writes
         from tools import browser_lightpanda
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        server = browser_lightpanda.LightpandaServer("live", 9222, MagicMock(pid=os.getpid()), "x.log")
+        server = browser_lightpanda.LightpandaServer(
+            "live", 9222, MagicMock(pid=os.getpid()), "x.log"
+        )
         monkeypatch.setitem(browser_lightpanda._servers, "live", server)
         with observe_file_writes(browser_lightpanda.reap_orphaned_lightpanda):
             browser_lightpanda._write_record(server)

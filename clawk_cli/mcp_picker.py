@@ -10,8 +10,18 @@ from clawk_cli.colors import Colors
 from clawk_cli.cli_output import prompt_yes_no
 from clawk_cli.curses_ui import curses_single_select
 from clawk_cli.mcp_catalog import (
-    CatalogEntry, CatalogError, catalog_diagnostics, install_entry, is_enabled, is_installed,
-    list_catalog, installed_servers, remove_server, server_enabled, uninstall_entry, _say,
+    CatalogEntry,
+    CatalogError,
+    catalog_diagnostics,
+    install_entry,
+    is_enabled,
+    is_installed,
+    list_catalog,
+    installed_servers,
+    remove_server,
+    server_enabled,
+    uninstall_entry,
+    _say,
 )
 from clawk_cli.config import load_config, save_config
 
@@ -56,14 +66,21 @@ def _build_rows() -> list[_Row]:
     for name, cfg in sorted(servers.items()):
         if name in catalog_names:
             continue
-        status = _STATUS_CUSTOM_ENABLED if server_enabled(cfg) else _STATUS_CUSTOM_DISABLED
-        rows.append(_Row(name, str(cfg.get("url") or cfg.get("command") or "(no transport)"), status))
+        status = (
+            _STATUS_CUSTOM_ENABLED if server_enabled(cfg) else _STATUS_CUSTOM_DISABLED
+        )
+        rows.append(
+            _Row(
+                name,
+                str(cfg.get("url") or cfg.get("command") or "(no transport)"),
+                status,
+            )
+        )
     return rows
 
 
 def _format_row(row: _Row) -> str:
     return f"{row.name:<18} {row.status:<24} {row.description}"
-
 
 
 def _enable_disable(name: str, *, enable: bool) -> None:
@@ -140,22 +157,45 @@ def _handle_row(row: _Row) -> None:
         return
     if row.is_custom:
         enabled = is_enabled(row.name)
-        _run_submenu(f"Action for '{row.name}' (custom)", [
-            ("Configure tools (probe server + re-pick)", lambda: _configure_tools(row.name)),
-            ("Enable" if not enabled else "Disable",
-             lambda: _enable_disable(row.name, enable=not is_enabled(row.name))),
-            ("Remove from config", lambda: _remove_custom(row.name))])
+        _run_submenu(
+            f"Action for '{row.name}' (custom)",
+            [
+                (
+                    "Configure tools (probe server + re-pick)",
+                    lambda: _configure_tools(row.name),
+                ),
+                (
+                    "Enable" if not enabled else "Disable",
+                    lambda: _enable_disable(row.name, enable=not is_enabled(row.name)),
+                ),
+                ("Remove from config", lambda: _remove_custom(row.name)),
+            ],
+        )
         return
     # Catalog row, installed + enabled
     print()
     _say(f"  '{row.name}' is already enabled.", Colors.DIM)
-    _run_submenu(f"Action for '{row.name}'", [
-        ("Configure tools (probe server + re-pick)", lambda: _configure_tools(row.name)),
-        ("Disable (keep config, stop loading on next session)",
-         lambda: _enable_disable(row.name, enable=False)),
-        ("Uninstall (remove config and any cloned files)", lambda: _uninstall(row.name)),
-        ("Reinstall (re-clone, re-prompt for credentials)",
-         lambda: _install(row.entry, "reinstall"))])
+    _run_submenu(
+        f"Action for '{row.name}'",
+        [
+            (
+                "Configure tools (probe server + re-pick)",
+                lambda: _configure_tools(row.name),
+            ),
+            (
+                "Disable (keep config, stop loading on next session)",
+                lambda: _enable_disable(row.name, enable=False),
+            ),
+            (
+                "Uninstall (remove config and any cloned files)",
+                lambda: _uninstall(row.name),
+            ),
+            (
+                "Reinstall (re-clone, re-prompt for credentials)",
+                lambda: _install(row.entry, "reinstall"),
+            ),
+        ],
+    )
 
 
 def _print_rows_text(rows: list[_Row]) -> None:
@@ -179,7 +219,10 @@ def _print_rows_text(rows: list[_Row]) -> None:
     if future:
         print()
         for name, _, _msg in future:
-            _say(f"  ⚠ '{name}' requires a newer Clawksis — run `clawk update` to install this entry.", Colors.YELLOW)
+            _say(
+                f"  ⚠ '{name}' requires a newer Clawksis — run `clawk update` to install this entry.",
+                Colors.YELLOW,
+            )
         print()
     print()
 

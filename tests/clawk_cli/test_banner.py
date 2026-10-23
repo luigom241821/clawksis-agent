@@ -8,6 +8,7 @@ from clawk_cli import banner
 import model_tools
 import tools.mcp_tool_discovery
 
+
 def test_banner_snapshot_accepts_bom_without_weakening_freshness(tmp_path, monkeypatch):
     import json
 
@@ -26,6 +27,7 @@ def test_banner_snapshot_accepts_bom_without_weakening_freshness(tmp_path, monke
     (tmp_path / "config.yaml").write_text("display: {skin: mono}", encoding="utf-8")
     assert banner.load_banner_snapshot(["file"]) is None
 
+
 def test_cprint_falls_back_to_plain_print_when_prompt_toolkit_has_no_console(capsys):
     with patch(
         "prompt_toolkit.print_formatted_text",
@@ -34,6 +36,7 @@ def test_cprint_falls_back_to_plain_print_when_prompt_toolkit_has_no_console(cap
         banner.cprint("fallback text")
 
     assert capsys.readouterr().out == "fallback text\n"
+
 
 def test_empty_model_shows_no_model_configured(tmp_path, monkeypatch):
     """The banner prints before credentials resolve; with no model it says so rather than guessing."""
@@ -45,9 +48,17 @@ def test_empty_model_shows_no_model_configured(tmp_path, monkeypatch):
         patch.object(banner, "get_update_result", return_value=None),
         patch.object(tools.mcp_tool_discovery, "get_mcp_status", return_value=[]),
     ):
-        console = Console(record=True, force_terminal=False, color_system=None, width=160)
-        banner.build_welcome_banner(console=console, model="", cwd="/tmp/project", tools=[],
-                                    enabled_toolsets=[], provider="auto")
+        console = Console(
+            record=True, force_terminal=False, color_system=None, width=160
+        )
+        banner.build_welcome_banner(
+            console=console,
+            model="",
+            cwd="/tmp/project",
+            tools=[],
+            enabled_toolsets=[],
+            provider="auto",
+        )
     assert "no model configured" in console.export_text()
 
 
@@ -69,8 +80,13 @@ def test_build_welcome_banner_does_not_center_pad_hero_art():
         patch.object(banner, "_active_skin", return_value=skin),
     ):
         console = Console(file=buf, force_terminal=False, color_system=None, width=80)
-        banner.build_welcome_banner(console=console, model="m", cwd="/tmp", tools=[],
-                                    get_toolset_for_tool=lambda _: None)
+        banner.build_welcome_banner(
+            console=console,
+            model="m",
+            cwd="/tmp",
+            tools=[],
+            get_toolset_for_tool=lambda _: None,
+        )
 
     hero_line = next(line for line in buf.getvalue().splitlines() if "\u2800X" in line)
     assert hero_line.startswith("\u2502  \u2800X"), repr(hero_line)
@@ -79,5 +95,11 @@ def test_build_welcome_banner_does_not_center_pad_hero_art():
 def test_baked_banner_uses_live_identity(monkeypatch):
     from clawk_cli import banner, version_info
 
-    monkeypatch.setattr(version_info, "get_code_identity", lambda: {"short_sha": "a1b2c3d4"})
-    assert banner._baked_banner_state() == {"upstream": "a1b2c3d4", "local": "a1b2c3d4", "ahead": 0}
+    monkeypatch.setattr(
+        version_info, "get_code_identity", lambda: {"short_sha": "a1b2c3d4"}
+    )
+    assert banner._baked_banner_state() == {
+        "upstream": "a1b2c3d4",
+        "local": "a1b2c3d4",
+        "ahead": 0,
+    }

@@ -79,6 +79,7 @@ def _attach_auth_runner(adapter, auth_fn=None):
 
 def _clear_clarify_state():
     from tools import clarify_gateway as cm
+
     with cm._lock:
         cm._entries.clear()
         cm._session_index.clear()
@@ -88,6 +89,7 @@ def _clear_clarify_state():
 # ===========================================================================
 # send_clarify — Block Kit render (a)
 # ===========================================================================
+
 
 class TestSlackSendClarify:
     def setup_method(self):
@@ -133,7 +135,6 @@ class TestSlackSendClarify:
                 action_ids = [element["action_id"] for element in block["elements"]]
                 assert len(action_ids) == len(set(action_ids))
 
-
     @pytest.mark.asyncio
     async def test_mrkdwn_escapes_question(self):
         adapter = _make_adapter()
@@ -147,13 +148,17 @@ class TestSlackSendClarify:
             clarify_id="cid2",
             session_key="sk2",
         )
-        section_text = mock_client.chat_postMessage.call_args[1]["blocks"][0]["text"]["text"]
+        section_text = mock_client.chat_postMessage.call_args[1]["blocks"][0]["text"][
+            "text"
+        ]
         assert "<A>" not in section_text
         assert "&lt;A&gt;" in section_text
         assert "&amp;" in section_text
 
     @pytest.mark.asyncio
-    async def test_retire_clarify_card_drops_buttons_and_makes_a_late_click_a_noop(self):
+    async def test_retire_clarify_card_drops_buttons_and_makes_a_late_click_a_noop(
+        self,
+    ):
         """Gateway-driven retirement (timeout / prose / reset) rewrites the card and wins the race
         against a later button click on the same message."""
         from tools import clarify_gateway as cm
@@ -163,21 +168,36 @@ class TestSlackSendClarify:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_postMessage = AsyncMock(return_value={"ts": "1.2"})
         mock_client.chat_update = AsyncMock()
-        cm.register("cid-retire", "sk-retire", "Which environment?", ["staging", "production"])
+        cm.register(
+            "cid-retire", "sk-retire", "Which environment?", ["staging", "production"]
+        )
         await adapter.send_clarify(
-            chat_id="C1", question="Which environment?", choices=["staging", "production"],
-            clarify_id="cid-retire", session_key="sk-retire")
+            chat_id="C1",
+            question="Which environment?",
+            choices=["staging", "production"],
+            clarify_id="cid-retire",
+            session_key="sk-retire",
+        )
 
         await adapter.retire_clarify_card("cid-retire", "⏳ expired")
 
         kwargs = mock_client.chat_update.call_args.kwargs
-        assert (kwargs["channel"], kwargs["ts"], kwargs["text"]) == ("C1", "1.2", "⏳ expired")
+        assert (kwargs["channel"], kwargs["ts"], kwargs["text"]) == (
+            "C1",
+            "1.2",
+            "⏳ expired",
+        )
         assert all(block["type"] != "actions" for block in kwargs["blocks"])
 
-        await adapter._handle_clarify_action(AsyncMock(), {
-            "message": {"ts": "1.2", "blocks": kwargs["blocks"]},
-            "channel": {"id": "C1"}, "user": {"name": "norbert", "id": "U_N"},
-        }, {"action_id": "clawk_clarify_choice_0", "value": "cid-retire|0"})
+        await adapter._handle_clarify_action(
+            AsyncMock(),
+            {
+                "message": {"ts": "1.2", "blocks": kwargs["blocks"]},
+                "channel": {"id": "C1"},
+                "user": {"name": "norbert", "id": "U_N"},
+            },
+            {"action_id": "clawk_clarify_choice_0", "value": "cid-retire|0"},
+        )
         assert mock_client.chat_update.await_count == 1
         assert not cm._entries["cid-retire"].event.is_set()
 
@@ -192,15 +212,28 @@ class TestSlackSendClarify:
         mock_client = adapter._team_clients["T1"]
         mock_client.chat_postMessage = AsyncMock(return_value={"ts": "1.2"})
         mock_client.chat_update = AsyncMock()
-        cm.register("cid-other", "sk-other", "Which environment?", ["staging", "production"])
+        cm.register(
+            "cid-other", "sk-other", "Which environment?", ["staging", "production"]
+        )
         await adapter.send_clarify(
-            chat_id="C1", question="Which environment?", choices=["staging", "production"],
-            clarify_id="cid-other", session_key="sk-other")
-        await adapter._handle_clarify_action(AsyncMock(), {
-            "message": {"ts": "1.2", "blocks": []},
-            "channel": {"id": "C1"}, "user": {"name": "norbert", "id": "U_N"},
-        }, {"action_id": "clawk_clarify_other", "value": "cid-other|other"})
-        assert "Awaiting typed answer" in mock_client.chat_update.call_args.kwargs["text"]
+            chat_id="C1",
+            question="Which environment?",
+            choices=["staging", "production"],
+            clarify_id="cid-other",
+            session_key="sk-other",
+        )
+        await adapter._handle_clarify_action(
+            AsyncMock(),
+            {
+                "message": {"ts": "1.2", "blocks": []},
+                "channel": {"id": "C1"},
+                "user": {"name": "norbert", "id": "U_N"},
+            },
+            {"action_id": "clawk_clarify_other", "value": "cid-other|other"},
+        )
+        assert (
+            "Awaiting typed answer" in mock_client.chat_update.call_args.kwargs["text"]
+        )
 
         cm.clear_session("sk-other")
         await adapter.retire_clarify_card("cid-other", "⏳ expired")
@@ -208,14 +241,15 @@ class TestSlackSendClarify:
         assert mock_client.chat_update.await_count == 2
         assert mock_client.chat_update.call_args.kwargs["text"] == "⏳ expired"
 
+
 # ===========================================================================
 # _handle_clarify_action — choice click resolves (b)
 # ===========================================================================
 
+
 class TestSlackClarifyChoiceAction:
     def setup_method(self):
         _clear_clarify_state()
-
 
     @pytest.mark.asyncio
     async def test_unauthorized_click_ignored(self):
@@ -246,6 +280,7 @@ class TestSlackClarifyChoiceAction:
 # _handle_clarify_action — "Other" → text-capture → typed reply (c)
 # ===========================================================================
 
+
 class TestSlackClarifyOtherFlow:
     def setup_method(self):
         _clear_clarify_state()
@@ -264,10 +299,13 @@ class TestSlackClarifyOtherFlow:
 
         ack = AsyncMock()
         body = {
-            "message": {"ts": "4.4", "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text": "❓ Pick"}},
-                {"type": "actions", "elements": []},
-            ]},
+            "message": {
+                "ts": "4.4",
+                "blocks": [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": "❓ Pick"}},
+                    {"type": "actions", "elements": []},
+                ],
+            },
             "channel": {"id": "C1"},
             "user": {"name": "norbert", "id": "U_N"},
         }
@@ -286,7 +324,9 @@ class TestSlackClarifyOtherFlow:
 
         # Now the gateway text-intercept (platform-agnostic) resolves from the
         # user's next typed message. We exercise that leveraged path directly.
-        assert cm.resolve_text_response_for_session("sk-other", "my custom answer") is True
+        assert (
+            cm.resolve_text_response_for_session("sk-other", "my custom answer") is True
+        )
         with cm._lock:
             entry = cm._entries.get("cidO")
         assert entry.response == "my custom answer"
@@ -296,6 +336,7 @@ class TestSlackClarifyOtherFlow:
 # ===========================================================================
 # Base text-fallback unchanged for platforms without an override (e)
 # ===========================================================================
+
 
 class TestBaseAdapterClarifyFallbackUnchanged:
     @pytest.mark.asyncio
@@ -308,19 +349,32 @@ class TestBaseAdapterClarifyFallbackUnchanged:
             def __init__(self):
                 self.sent: list = []
 
-            async def connect(self, *, is_reconnect: bool = False): pass
-            async def disconnect(self): pass
+            async def connect(self, *, is_reconnect: bool = False):
+                pass
+
+            async def disconnect(self):
+                pass
+
             async def send(self, chat_id, content, **kw):
                 self.sent.append(content)
                 return SendResult(success=True, message_id="1")
-            async def edit(self, *a, **k): return SendResult(success=False)
-            async def get_history(self, *a, **k): return []
-            async def get_chat_info(self, *a, **k): return {}
+
+            async def edit(self, *a, **k):
+                return SendResult(success=False)
+
+            async def get_history(self, *a, **k):
+                return []
+
+            async def get_chat_info(self, *a, **k):
+                return {}
 
         adapter = _Stub()
         result = await adapter.send_clarify(
-            chat_id="c", question="Pick a fruit",
-            choices=["apple", "banana"], clarify_id="x", session_key="s",
+            chat_id="c",
+            question="Pick a fruit",
+            choices=["apple", "banana"],
+            clarify_id="x",
+            session_key="s",
         )
         assert result.success is True
         text = adapter.sent[0]

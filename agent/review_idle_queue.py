@@ -42,12 +42,17 @@ def defer_max_age_s(task_cfg: Optional[dict[str, Any]]) -> float:
     return value if value > 0 else _MAX_AGE_DEFAULT_S
 
 
-def review_targets_managed_local(agent: Any, task_cfg: Optional[dict[str, Any]]) -> bool:
+def review_targets_managed_local(
+    agent: Any, task_cfg: Optional[dict[str, Any]]
+) -> bool:
     """Would this review fork decode on the llama-server WE manage? Exact netloc match against the
     supervisor state file; any failure reads False (immediate spawn is the safe default). The cheap
     TTL-cached netloc probe runs FIRST so cloud-only installs skip runtime resolution on the turn's tail."""
     try:
-        from agent.auxiliary_managed_local import _is_managed_local_endpoint, _managed_local_netloc
+        from agent.auxiliary_managed_local import (
+            _is_managed_local_endpoint,
+            _managed_local_netloc,
+        )
 
         if not _managed_local_netloc():
             return False
@@ -101,10 +106,15 @@ class ReviewIdleQueue:
             existing = self._pending.get(session_key)
             enqueued_at = existing.enqueued_at if existing is not None else self._now()
             self._pending[session_key] = _PendingReview(
-                agent, session_key, kwargs, enqueued_at, contextvars.copy_context())
+                agent, session_key, kwargs, enqueued_at, contextvars.copy_context()
+            )
         self._ensure_thread()
         self._wake.set()
-        logger.info("Background review deferred (session=%s, queued=%d)", session_key[-12:], len(self._pending))
+        logger.info(
+            "Background review deferred (session=%s, queued=%d)",
+            session_key[-12:],
+            len(self._pending),
+        )
 
     def pending_count(self) -> int:
         with self._lock:
@@ -113,7 +123,9 @@ class ReviewIdleQueue:
     def _ensure_thread(self) -> None:
         with self._lock:
             if self._thread is None or not self._thread.is_alive():
-                self._thread = threading.Thread(target=self._run, daemon=True, name="bg-review-idle-queue")
+                self._thread = threading.Thread(
+                    target=self._run, daemon=True, name="bg-review-idle-queue"
+                )
                 self._thread.start()
 
     def _quiet_for(self) -> float:
@@ -129,10 +141,15 @@ class ReviewIdleQueue:
             if not self._pending:
                 return None
             now = self._now()
-            aged = [p for p in self._pending.values()
-                    if now - p.enqueued_at >= defer_max_age_s(p.kwargs.get("task_cfg"))]
+            aged = [
+                p
+                for p in self._pending.values()
+                if now - p.enqueued_at >= defer_max_age_s(p.kwargs.get("task_cfg"))
+            ]
             candidate = min(aged, key=lambda p: p.enqueued_at) if aged else None
-        if candidate is None and (self._quiet_for() < _IDLE_SETTLE_S or not self._server_idle()):
+        if candidate is None and (
+            self._quiet_for() < _IDLE_SETTLE_S or not self._server_idle()
+        ):
             return None
         with self._lock:
             if candidate is None:
@@ -164,11 +181,15 @@ class ReviewIdleQueue:
         if not self._still_enabled(item):
             logger.info(
                 "Deferred background review dropped: reviews were disabled while it was queued (session=%s)",
-                item.session_key[-12:])
+                item.session_key[-12:],
+            )
             return
         logger.info(
             "Dispatching deferred background review (session=%s, waited=%.0fs, queued=%d)",
-            item.session_key[-12:], self._now() - item.enqueued_at, self.pending_count())
+            item.session_key[-12:],
+            self._now() - item.enqueued_at,
+            self.pending_count(),
+        )
         item.agent._spawn_background_review_now(**item.kwargs)
 
     @staticmethod
@@ -195,15 +216,22 @@ def _managed_server_idle() -> bool:
             return True
 
         def _get(path: str) -> Any:
-            with urllib.request.urlopen(urllib.request.Request(f"{base}{path}", headers=headers), timeout=3) as r:
+            with urllib.request.urlopen(
+                urllib.request.Request(f"{base}{path}", headers=headers), timeout=3
+            ) as r:
                 return json.loads(r.read())
 
-        loaded = [m["id"] for m in _get("/models").get("data", [])
-                  if (m.get("status") or {}).get("value") in ("loaded", "ready")]
+        loaded = [
+            m["id"]
+            for m in _get("/models").get("data", [])
+            if (m.get("status") or {}).get("value") in ("loaded", "ready")
+        ]
         return not any(
             # autoload=false: a model unloaded since the /models read must not load again for a status read.
-            s.get("is_processing") for mid in loaded
-            for s in _get(f"/slots?model={quote(mid)}&autoload=false") if isinstance(s, dict)
+            s.get("is_processing")
+            for mid in loaded
+            for s in _get(f"/slots?model={quote(mid)}&autoload=false")
+            if isinstance(s, dict)
         )
     except Exception:
         return True

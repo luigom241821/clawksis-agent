@@ -22,7 +22,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Set, Tuple
 
 # split_command_line, not shlex: shlex eats Windows path backslashes.
-from clawk_cli._subprocess_compat import IS_WINDOWS, kill_process_tree, split_command_line, windows_hide_flags
+from clawk_cli._subprocess_compat import (
+    IS_WINDOWS,
+    kill_process_tree,
+    split_command_line,
+    windows_hide_flags,
+)
 
 try:
     import fcntl  # POSIX only; Windows falls back to best-effort without flock.
@@ -77,7 +82,11 @@ def _forget_home_registrations(registry: set[tuple], lock: threading.Lock) -> No
 
 
 def _entry_matches(e: Any, event: Optional[str], command: str) -> bool:
-    return isinstance(e, dict) and (event is None or e.get("event") == event) and e.get("command") == command
+    return (
+        isinstance(e, dict)
+        and (event is None or e.get("event") == event)
+        and e.get("command") == command
+    )
 
 
 def _utc_now_iso() -> str:
@@ -91,9 +100,12 @@ def _payload_fields(kwargs: dict[str, Any]) -> dict[str, Any]:
     except OSError:
         cwd = ""
     from clawk_cli.profiles import get_active_profile_name
+
     return {
         "tool_name": kwargs.get("tool_name"),
-        "tool_input": kwargs.get("args") if isinstance(kwargs.get("args"), dict) else None,
+        "tool_input": kwargs.get("args")
+        if isinstance(kwargs.get("args"), dict)
+        else None,
         "session_id": kwargs.get("session_id") or kwargs.get("parent_session_id") or "",
         "cwd": cwd,
         # Resolved at fire time: a multiplexed gateway's hook script must know which profile fired it.
@@ -118,7 +130,10 @@ class _ToolMatcherMixin:
                 self.compiled_matcher = re.compile(self.matcher)
             except re.error as exc:
                 logger.warning(
-                    "%s matcher %r is invalid (%s) — treating as literal equality", self._MATCHER_KIND, self.matcher, exc,
+                    "%s matcher %r is invalid (%s) — treating as literal equality",
+                    self._MATCHER_KIND,
+                    self.matcher,
+                    exc,
                 )
                 self.compiled_matcher = None
 
@@ -146,8 +161,13 @@ class ShellHookSpec(_ToolMatcherMixin):
 
 # --- Public API ---
 
-def register_from_config(cfg: Optional[dict[str, Any]], *, accept_hooks: bool = False,
-                         interactive: bool = False) -> list[ShellHookSpec]:
+
+def register_from_config(
+    cfg: Optional[dict[str, Any]],
+    *,
+    accept_hooks: bool = False,
+    interactive: bool = False,
+) -> list[ShellHookSpec]:
     """Register every configured shell hook (idempotent); returns the newly wired specs. Skipped
     entries (unknown, malformed, not allowlisted, already registered) are logged only.
 
@@ -160,8 +180,11 @@ def register_from_config(cfg: Optional[dict[str, Any]], *, accept_hooks: bool = 
     if not specs:
         return []
     from clawk_cli.plugins import get_plugin_manager  # lazy: avoids import cycle
+
     manager, home_key = get_plugin_manager(), _home_key()
-    with _registered_lock:  # an already-wired hook is never re-asked for (main checked this first)
+    with (
+        _registered_lock
+    ):  # an already-wired hook is never re-asked for (main checked this first)
         specs = [spec for spec in specs if _key(home_key, spec) not in _registered]
     accept, allowed = _resolve_effective_accept(cfg, accept_hooks), allowlisted_pairs()
     # TTY prompt outside the lock; _wire takes the lock and re-checks.
@@ -170,9 +193,14 @@ def register_from_config(cfg: Optional[dict[str, Any]], *, accept_hooks: bool = 
         if _consented(spec, accept, allowed, prompt=interactive):
             consented.append(spec)
         else:
-            logger.warning("shell hook for %s (%s) not allowlisted in %s — skipped. Use --accept-hooks / "
-                           "CLAWK_ACCEPT_HOOKS=1 / hooks_auto_accept: true, or approve it at a CLI prompt "
-                           "for this profile.", spec.event, spec.command, allowlist_path())
+            logger.warning(
+                "shell hook for %s (%s) not allowlisted in %s — skipped. Use --accept-hooks / "
+                "CLAWK_ACCEPT_HOOKS=1 / hooks_auto_accept: true, or approve it at a CLI prompt "
+                "for this profile.",
+                spec.event,
+                spec.command,
+                allowlist_path(),
+            )
     with _registered_lock:
         return _wire(manager, home_key, consented)
 
@@ -188,6 +216,7 @@ def sync_from_config(load_cfg: Callable[[], dict[str, Any]]) -> None:
     disarm a ``fail_closed`` guard, so each adds but never removes. Config and allowlist are read
     under the same lock as the apply, so the last sync to run always applies the newest state."""
     from clawk_cli.plugins import get_plugin_manager  # lazy: avoids import cycle
+
     with _sync_lock:
         cfg = load_cfg()
         specs, complete = _hook_specs(cfg)
@@ -198,17 +227,30 @@ def sync_from_config(load_cfg: Callable[[], dict[str, Any]]) -> None:
         home_key = _home_key()
         # A launch approval the allowlist now holds is the allowlist's to keep (or revoke).
         _launch_consent.difference_update({(home_key, *pair) for pair in allowed})
-        allowed |= {(event, command) for home, event, command in _launch_consent if home == home_key}
+        allowed |= {
+            (event, command)
+            for home, event, command in _launch_consent
+            if home == home_key
+        }
         accept = _resolve_effective_accept(cfg, False)
         wanted = []
         for spec in specs:
             if accept or (spec.event, spec.command) in allowed:
                 wanted.append(spec)
-            elif (home_key, spec.event, spec.command) not in _skip_logged:  # once per process, not per open
+            elif (
+                home_key,
+                spec.event,
+                spec.command,
+            ) not in _skip_logged:  # once per process, not per open
                 _skip_logged.add((home_key, spec.event, spec.command))
-                logger.warning("shell hook for %s (%s) not allowlisted in %s — skipped. Approve it at a CLI "
-                               "prompt for this profile, or use --accept-hooks / CLAWK_ACCEPT_HOOKS=1 / "
-                               "hooks_auto_accept: true.", spec.event, spec.command, allowlist_path())
+                logger.warning(
+                    "shell hook for %s (%s) not allowlisted in %s — skipped. Approve it at a CLI "
+                    "prompt for this profile, or use --accept-hooks / CLAWK_ACCEPT_HOOKS=1 / "
+                    "hooks_auto_accept: true.",
+                    spec.event,
+                    spec.command,
+                    allowlist_path(),
+                )
         manager = get_plugin_manager()
         with _registered_lock:
             _wire(manager, home_key, wanted)
@@ -216,25 +258,40 @@ def sync_from_config(load_cfg: Callable[[], dict[str, Any]]) -> None:
                 suspended = (home_key, "", "removal")
                 if suspended not in _skip_logged:
                     _skip_logged.add(suspended)
-                    logger.warning("shell hooks: %s, so removed or revoked hooks stay registered until it is "
-                                   "fixed", "the allowlist is unreadable" if not readable
-                                   else "a hooks: entry in config.yaml is malformed")
+                    logger.warning(
+                        "shell hooks: %s, so removed or revoked hooks stay registered until it is "
+                        "fixed",
+                        "the allowlist is unreadable"
+                        if not readable
+                        else "a hooks: entry in config.yaml is malformed",
+                    )
                 return
             # In-memory consent ends with the hook's config entry, so a removed-and-re-added hook asks again.
             configured = {(home_key, spec.event, spec.command) for spec in specs}
-            _launch_consent.difference_update({c for c in _launch_consent if c[0] == home_key and c not in configured})
+            _launch_consent.difference_update(
+                {c for c in _launch_consent if c[0] == home_key and c not in configured}
+            )
             keep = {_key(home_key, spec) for spec in wanted}
             stale = {k for k in _registered if k[0] == home_key and k not in keep}
             _registered.difference_update(stale)
             for event in {k[1] for k in stale}:
                 # Replaced, never edited in place: a concurrent invoke_hook keeps iterating the old list.
-                manager._hooks[event] = [cb for cb in manager._hooks.get(event, [])
-                                         if getattr(cb, "shell_hook_key", None) not in stale]
+                manager._hooks[event] = [
+                    cb
+                    for cb in manager._hooks.get(event, [])
+                    if getattr(cb, "shell_hook_key", None) not in stale
+                ]
     for _home, event, _matcher, command in stale:
-        logger.info("shell hook unregistered (removed from config or allowlist): %s -> %s", event, command)
+        logger.info(
+            "shell hook unregistered (removed from config or allowlist): %s -> %s",
+            event,
+            command,
+        )
 
 
-def record_consent_from_config(cfg: Optional[dict[str, Any]], *, accept_hooks: bool = False) -> list[ShellHookSpec]:
+def record_consent_from_config(
+    cfg: Optional[dict[str, Any]], *, accept_hooks: bool = False
+) -> list[ShellHookSpec]:
     """First-use consent without registering anything, for a client whose turns run in a gateway that
     has no TTY: the prompt (or an opt-in) for each configured hook not yet allowlisted. The gateway
     registers from the same allowlist when the client opens its session. Returns the consented specs."""
@@ -255,8 +312,11 @@ def accept_for_launch(cfg: Optional[dict[str, Any]]) -> None:
         return
     saved, home_key = allowlisted_pairs(), _home_key()
     with _sync_lock:
-        _launch_consent.update((home_key, spec.event, spec.command) for spec in specs
-                               if (spec.event, spec.command) not in saved)
+        _launch_consent.update(
+            (home_key, spec.event, spec.command)
+            for spec in specs
+            if (spec.event, spec.command) not in saved
+        )
 
 
 def accept_for_process() -> None:
@@ -267,15 +327,20 @@ def accept_for_process() -> None:
     _process_accept = True
 
 
-def _hook_specs(cfg: Optional[dict[str, Any]]) -> tuple[Optional[list[ShellHookSpec]], bool]:
+def _hook_specs(
+    cfg: Optional[dict[str, Any]],
+) -> tuple[Optional[list[ShellHookSpec]], bool]:
     """``(specs, complete)``: the configured hooks, or ``None`` when this process must run none
     (safe worker, safe mode, no config) — the one guard every registrar and the consent path share;
     ``complete`` is False when a configured entry was dropped as malformed."""
     from agent.safe_worker_policy import safe_worker_enabled
     from utils import env_var_enabled
+
     if safe_worker_enabled() or not isinstance(cfg, dict):
         return None, True
-    if env_var_enabled("CLAWK_SAFE_MODE"):  # hooks are user customizations too — fire zero user-configured code
+    if env_var_enabled(
+        "CLAWK_SAFE_MODE"
+    ):  # hooks are user customizations too — fire zero user-configured code
         logger.info("CLAWK_SAFE_MODE=1 — shell-hook registration skipped")
         return None, True
     return _parse_hooks(cfg.get("hooks"))
@@ -285,7 +350,9 @@ def _key(home_key: str, spec: ShellHookSpec) -> tuple[str, str, Optional[str], s
     return (home_key, spec.event, spec.matcher, spec.command)
 
 
-def _wire(manager: Any, home_key: str, specs: list[ShellHookSpec]) -> list[ShellHookSpec]:
+def _wire(
+    manager: Any, home_key: str, specs: list[ShellHookSpec]
+) -> list[ShellHookSpec]:
     """Register ``specs`` not yet wired for this home; caller holds ``_registered_lock``."""
     registered = []
     for spec in specs:
@@ -297,21 +364,34 @@ def _wire(manager: Any, home_key: str, specs: list[ShellHookSpec]) -> list[Shell
         manager._hooks.setdefault(spec.event, []).append(callback)
         _registered.add(key)
         registered.append(spec)
-        logger.info("shell hook registered: %s -> %s (matcher=%s, timeout=%ds, fail_closed=%s)",
-                    spec.event, spec.command, spec.matcher, spec.timeout, spec.fail_closed)
+        logger.info(
+            "shell hook registered: %s -> %s (matcher=%s, timeout=%ds, fail_closed=%s)",
+            spec.event,
+            spec.command,
+            spec.matcher,
+            spec.timeout,
+            spec.fail_closed,
+        )
     return registered
 
 
 def _approved_pairs(approvals: list[Any]) -> set[tuple[str, str]]:
-    return {(e["event"], e["command"]) for e in approvals
-            if isinstance(e, dict) and isinstance(e.get("event"), str) and isinstance(e.get("command"), str)}
+    return {
+        (e["event"], e["command"])
+        for e in approvals
+        if isinstance(e, dict)
+        and isinstance(e.get("event"), str)
+        and isinstance(e.get("command"), str)
+    }
 
 
 def allowlisted_pairs() -> set[tuple[str, str]]:
     return _approved_pairs(load_allowlist()["approvals"])
 
 
-def _consented(spec: ShellHookSpec, accept: bool, allowed: set[tuple[str, str]], *, prompt: bool) -> bool:
+def _consented(
+    spec: ShellHookSpec, accept: bool, allowed: set[tuple[str, str]], *, prompt: bool
+) -> bool:
     """Allowlisted, or approved now (opt-in, or a TTY prompt when ``prompt``; recorded); ``allowed``
     caches one read."""
     pair = (spec.event, spec.command)
@@ -346,6 +426,7 @@ def re_register_config_hooks() -> None:
     """
     _forget_home_registrations(_registered, _registered_lock)
     from clawk_cli.config import load_config
+
     register_from_config(load_config())
 
 
@@ -361,6 +442,7 @@ def reset_for_tests() -> None:
 
 # --- Config parsing ---
 
+
 def _parse_hooks_block(hooks_cfg: Any) -> list[ShellHookSpec]:
     """Normalise ``hooks:`` into specs; malformed entries warn-and-skip, never raise."""
     return _parse_hooks(hooks_cfg)[0]
@@ -370,6 +452,7 @@ def _parse_hooks(hooks_cfg: Any) -> tuple[list[ShellHookSpec], bool]:
     """``(specs, complete)``: ``complete`` is False when an entry was dropped as malformed (a typo
     must not read as a deliberate removal); an absent or empty ``hooks:`` is complete."""
     from clawk_cli.plugins import SHELL_UNSUPPORTED_HOOKS, VALID_HOOKS
+
     if hooks_cfg is None:
         return [], True
     if not isinstance(hooks_cfg, dict):
@@ -377,27 +460,51 @@ def _parse_hooks(hooks_cfg: Any) -> tuple[list[ShellHookSpec], bool]:
     specs: list[ShellHookSpec] = []
     complete = True
     for event_name, entries in hooks_cfg.items():
-        if event_name in ("output_spill", "outbound"):  # reserved non-event sub-sections under `hooks:`
+        if event_name in (
+            "output_spill",
+            "outbound",
+        ):  # reserved non-event sub-sections under `hooks:`
             continue
-        if event_name in SHELL_UNSUPPORTED_HOOKS:  # _parse_response has no channel for these directives — refuse loudly
-            logger.warning("hook event %r is Python-plugin-only: shell hooks cannot return its directive, "
-                           "so this registration is refused rather than silently ignored", event_name)
+        if (
+            event_name in SHELL_UNSUPPORTED_HOOKS
+        ):  # _parse_response has no channel for these directives — refuse loudly
+            logger.warning(
+                "hook event %r is Python-plugin-only: shell hooks cannot return its directive, "
+                "so this registration is refused rather than silently ignored",
+                event_name,
+            )
             continue  # well-formed and deliberate: refused, but not a typo that should suspend removal
         if event_name not in VALID_HOOKS:
-            suggestion = difflib.get_close_matches(str(event_name), VALID_HOOKS, n=1, cutoff=0.6)
+            suggestion = difflib.get_close_matches(
+                str(event_name), VALID_HOOKS, n=1, cutoff=0.6
+            )
             if suggestion:
-                logger.warning("unknown hook event %r in hooks: config — did you mean %r?", event_name, suggestion[0])
+                logger.warning(
+                    "unknown hook event %r in hooks: config — did you mean %r?",
+                    event_name,
+                    suggestion[0],
+                )
             else:
-                logger.warning("unknown hook event %r in hooks: config (valid: %s)", event_name, ", ".join(sorted(VALID_HOOKS)))
+                logger.warning(
+                    "unknown hook event %r in hooks: config (valid: %s)",
+                    event_name,
+                    ", ".join(sorted(VALID_HOOKS)),
+                )
             complete = False
             continue
         if entries is None:
             continue
         if not isinstance(entries, list):
-            logger.warning("hooks.%s must be a list of hook definitions; got %s", event_name, type(entries).__name__)
+            logger.warning(
+                "hooks.%s must be a list of hook definitions; got %s",
+                event_name,
+                type(entries).__name__,
+            )
             complete = False
             continue
-        parsed = [_parse_single_entry(event_name, i, raw) for i, raw in enumerate(entries)]
+        parsed = [
+            _parse_single_entry(event_name, i, raw) for i, raw in enumerate(entries)
+        ]
         complete = complete and None not in parsed
         specs.extend(spec for spec in parsed if spec is not None)
     return specs, complete
@@ -419,13 +526,21 @@ def _parse_single_entry(event: str, index: int, raw: Any) -> Optional[ShellHookS
         warn(".matcher must be a string regex; ignoring")
         matcher = None
     if matcher is not None and event not in _TOOL_EVENTS:
-        warn(".matcher=%r will be ignored at runtime — the matcher field is only honored for "
-             "pre_tool_call / post_tool_call.  The hook will fire on every %s event.", matcher, event)
+        warn(
+            ".matcher=%r will be ignored at runtime — the matcher field is only honored for "
+            "pre_tool_call / post_tool_call.  The hook will fire on every %s event.",
+            matcher,
+            event,
+        )
         matcher = None
     try:
         timeout = int(raw.get("timeout", DEFAULT_TIMEOUT_SECONDS))
     except (TypeError, ValueError):
-        warn(".timeout must be an int (got %r); using default %ds", raw.get("timeout"), DEFAULT_TIMEOUT_SECONDS)
+        warn(
+            ".timeout must be an int (got %r); using default %ds",
+            raw.get("timeout"),
+            DEFAULT_TIMEOUT_SECONDS,
+        )
         timeout = DEFAULT_TIMEOUT_SECONDS
     if timeout < 1:
         warn(".timeout must be >=1; using default %ds", DEFAULT_TIMEOUT_SECONDS)
@@ -436,19 +551,35 @@ def _parse_single_entry(event: str, index: int, raw: Any) -> Optional[ShellHookS
     # ``fail_closed`` (canonical) wins over ``failClosed`` (Cursor/Claude-Code compat).
     fail_closed = raw.get("fail_closed", raw.get("failClosed", False))
     if not isinstance(fail_closed, bool):
-        warn(".fail_closed must be a boolean (got %r); using default false (fail open)", fail_closed)
+        warn(
+            ".fail_closed must be a boolean (got %r); using default false (fail open)",
+            fail_closed,
+        )
         fail_closed = False
     if fail_closed and event not in _BLOCKING_EVENTS:
-        warn(".fail_closed=true will be ignored at runtime — fail_closed only applies to blocking-capable "
-             "events (%s).  The hook will fail open on %s like any other hook.", ", ".join(sorted(_BLOCKING_EVENTS)), event)
+        warn(
+            ".fail_closed=true will be ignored at runtime — fail_closed only applies to blocking-capable "
+            "events (%s).  The hook will fail open on %s like any other hook.",
+            ", ".join(sorted(_BLOCKING_EVENTS)),
+            event,
+        )
         fail_closed = False
-    return ShellHookSpec(event=event, command=command.strip(), matcher=matcher, timeout=timeout, fail_closed=fail_closed)
+    return ShellHookSpec(
+        event=event,
+        command=command.strip(),
+        matcher=matcher,
+        timeout=timeout,
+        fail_closed=fail_closed,
+    )
 
 
 # --- Subprocess callback ---
 
 # Popen failure -> diagnostic; WinError 193 gets its own below, everything else is str(exc).
-_POPEN_ERRORS = ((FileNotFoundError, "command not found"), (PermissionError, "command not executable"))
+_POPEN_ERRORS = (
+    (FileNotFoundError, "command not found"),
+    (PermissionError, "command not executable"),
+)
 
 # A hook configured as a bare script path runs on POSIX because the kernel reads its shebang.
 # CreateProcess has no such mechanism and answers WinError 193 ("%1 is not a valid Win32
@@ -473,12 +604,20 @@ def _windows_script_argv(argv: list[str]) -> list[str]:
     # Resolved inside the caller's try: no Git for Windows raises RuntimeError carrying the
     # installer's own actionable guidance, which is a better diagnostic than any we could add.
     from tools.environments.local import _find_bash
+
     return [_find_bash(), *argv]
 
 
 def _spawn(spec: ShellHookSpec, stdin_json: str) -> dict[str, Any]:
     """The single subprocess site: run ``spec.command`` with ``stdin_json`` on stdin. Same result keys for every outcome."""
-    result: dict[str, Any] = {"returncode": None, "stdout": "", "stderr": "", "timed_out": False, "elapsed_seconds": 0.0, "error": None}
+    result: dict[str, Any] = {
+        "returncode": None,
+        "stdout": "",
+        "stderr": "",
+        "timed_out": False,
+        "elapsed_seconds": 0.0,
+        "error": None,
+    }
 
     def failed(error: str) -> dict[str, Any]:
         result["error"] = error
@@ -493,18 +632,30 @@ def _spawn(spec: ShellHookSpec, stdin_json: str) -> dict[str, Any]:
     t0 = time.monotonic()
     # Own process group on POSIX so a timed-out hook's descendants are reaped with it (Windows: kill_process_tree
     # / taskkill /T). Hooks that finish in time keep detached helpers alive.
-    popen_kwargs: dict[str, Any] = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {"process_group": 0}
+    popen_kwargs: dict[str, Any] = (
+        {"creationflags": windows_hide_flags()} if IS_WINDOWS else {"process_group": 0}
+    )
     # CLAWK_HOME follows the routed profile (the import-time environ holds the launch profile's), and
     # under multiplexing os.environ carries the DEFAULT profile's secrets, which a secondary's hook
     # script must not inherit; single-profile runs keep the process env byte-for-byte as before.
     from agent.secret_scope import is_multiplex_active
     from tools.environments.local import build_subprocess_env
+
     try:
         if IS_WINDOWS:
             argv = _windows_script_argv(argv)
-        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, encoding='utf-8', errors='replace', shell=False,
-                                env=build_subprocess_env(scrub_secrets=is_multiplex_active()), **popen_kwargs)
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            shell=False,
+            env=build_subprocess_env(scrub_secrets=is_multiplex_active()),
+            **popen_kwargs,
+        )
     except Exception as exc:
         for cls, msg in _POPEN_ERRORS:
             if isinstance(exc, cls):
@@ -518,16 +669,25 @@ def _spawn(spec: ShellHookSpec, stdin_json: str) -> dict[str, Any]:
         stdout, stderr = proc.communicate(input=stdin_json, timeout=spec.timeout)
     except BaseException as exc:
         # BaseException: the hook leads its own process group, so Ctrl+C's SIGINT never reaches it — only we can.
-        kill_process_tree(proc)  # the whole tree — forked helpers holding the pipes would stall the drain
+        kill_process_tree(
+            proc
+        )  # the whole tree — forked helpers holding the pipes would stall the drain
         with suppress(Exception):
             proc.communicate(timeout=1)
         if not isinstance(exc, Exception):
             raise
-        if not isinstance(exc, subprocess.TimeoutExpired):  # pragma: no cover — defensive
+        if not isinstance(
+            exc, subprocess.TimeoutExpired
+        ):  # pragma: no cover — defensive
             return failed(str(exc))
         result.update(timed_out=True, elapsed_seconds=round(time.monotonic() - t0, 3))
         return result
-    result.update(returncode=proc.returncode, stdout=stdout or "", stderr=stderr or "", elapsed_seconds=round(time.monotonic() - t0, 3))
+    result.update(
+        returncode=proc.returncode,
+        stdout=stdout or "",
+        stderr=stderr or "",
+        elapsed_seconds=round(time.monotonic() - t0, 3),
+    )
     return result
 
 
@@ -539,20 +699,30 @@ def _make_callback(spec: ShellHookSpec) -> Callable[..., Optional[dict[str, Any]
 
         if safe_worker_enabled():
             return None
-        if spec.event in _TOOL_EVENTS and not spec.matches_tool(kwargs.get("tool_name")):
+        if spec.event in _TOOL_EVENTS and not spec.matches_tool(
+            kwargs.get("tool_name")
+        ):
             return None
-        return _evaluate_result(spec, _spawn(spec, _serialize_payload(spec.event, kwargs)))
+        return _evaluate_result(
+            spec, _spawn(spec, _serialize_payload(spec.event, kwargs))
+        )
 
-    _callback.__name__ = _callback.__qualname__ = f"shell_hook[{spec.event}:{spec.command}]"
+    _callback.__name__ = _callback.__qualname__ = (
+        f"shell_hook[{spec.event}:{spec.command}]"
+    )
     return _callback
 
 
 def _fail_closed_block(spec: ShellHookSpec, reason: str) -> dict[str, Any]:
-    return {"action": "block", "message": f"hook {spec.command} failed closed: {reason}"}
+    return {
+        "action": "block",
+        "message": f"hook {spec.command} failed closed: {reason}",
+    }
 
 
 def _evaluate_result(
-    spec: ShellHookSpec, r: dict[str, Any],
+    spec: ShellHookSpec,
+    r: dict[str, Any],
 ) -> Optional[dict[str, Any]]:
     """Turn a :func:`_spawn` diagnostic dict into the hook's contribution.
 
@@ -576,30 +746,61 @@ def _evaluate_result(
     blocking_event = spec.event in _BLOCKING_EVENTS
     fail_closed = spec.fail_closed and blocking_event
     if r["error"]:
-        logger.warning("shell hook failed (event=%s command=%s): %s", spec.event, spec.command, r["error"])
+        logger.warning(
+            "shell hook failed (event=%s command=%s): %s",
+            spec.event,
+            spec.command,
+            r["error"],
+        )
     elif r["timed_out"]:
-        logger.warning("shell hook timed out after %.2fs (event=%s command=%s)", r["elapsed_seconds"], spec.event, spec.command)
+        logger.warning(
+            "shell hook timed out after %.2fs (event=%s command=%s)",
+            r["elapsed_seconds"],
+            spec.event,
+            spec.command,
+        )
     if r["error"] or r["timed_out"]:
-        return _fail_closed_block(spec, r["error"] or f"timed out after {spec.timeout}s") if fail_closed else None
+        return (
+            _fail_closed_block(spec, r["error"] or f"timed out after {spec.timeout}s")
+            if fail_closed
+            else None
+        )
     stderr = r["stderr"].strip()
     if stderr:
-        logger.debug("shell hook stderr (event=%s command=%s): %s", spec.event, spec.command, stderr[:_STDERR_MESSAGE_LIMIT])
+        logger.debug(
+            "shell hook stderr (event=%s command=%s): %s",
+            spec.event,
+            spec.command,
+            stderr[:_STDERR_MESSAGE_LIMIT],
+        )
     if r["returncode"] == BLOCK_EXIT_CODE and blocking_event:
         parsed = _parse_response(spec.event, r["stdout"])
         if isinstance(parsed, dict) and parsed.get("action") == "block":
             return parsed
         message = stderr[:_STDERR_MESSAGE_LIMIT] or _DEFAULT_BLOCK_MESSAGE
-        logger.info("shell hook exited %d — blocking (event=%s command=%s): %s", BLOCK_EXIT_CODE, spec.event, spec.command, message)
+        logger.info(
+            "shell hook exited %d — blocking (event=%s command=%s): %s",
+            BLOCK_EXIT_CODE,
+            spec.event,
+            spec.command,
+            message,
+        )
         return {"action": "block", "message": message}
     # Other non-zero exits: still parse stdout so exit-code failures can carry a block directive.
     if r["returncode"] != 0:
-        logger.warning("shell hook exited %d (event=%s command=%s); stderr=%s",
-                       r["returncode"], spec.event, spec.command, stderr[:_STDERR_MESSAGE_LIMIT])
+        logger.warning(
+            "shell hook exited %d (event=%s command=%s); stderr=%s",
+            r["returncode"],
+            spec.event,
+            spec.command,
+            stderr[:_STDERR_MESSAGE_LIMIT],
+        )
     stdout = (r["stdout"] or "").strip()
     parsed = _parse_response(spec.event, stdout)
     if parsed is None and fail_closed and r["returncode"] != 0:
         return _fail_closed_block(
-            spec, f"hook exited {r['returncode']} with no directive",
+            spec,
+            f"hook exited {r['returncode']} with no directive",
         )
 
     if parsed is None and fail_closed and stdout and not _is_json_object(stdout):
@@ -619,7 +820,11 @@ def _is_json_object(text: str) -> bool:
 
 def _serialize_payload(event: str, kwargs: dict[str, Any]) -> str:
     """Render the stdin JSON payload; unserialisable values are stringified."""
-    return json.dumps({"hook_event_name": event, **_payload_fields(kwargs)}, ensure_ascii=False, default=str)
+    return json.dumps(
+        {"hook_event_name": event, **_payload_fields(kwargs)},
+        ensure_ascii=False,
+        default=str,
+    )
 
 
 def _block_message(primary: Any, secondary: Any) -> str:
@@ -630,13 +835,19 @@ def _block_message(primary: Any, secondary: Any) -> str:
 
 # pre_tool_call dialects in check order — Clawksis ``action`` then Claude-Code ``decision`` — as (verb key,
 # block-message primary, secondary, modify payload key); both translate to the canonical Clawksis shape.
-_PRE_TOOL_DIALECTS = (("action", "message", "reason", "args"), ("decision", "reason", "message", "tool_input"))
+_PRE_TOOL_DIALECTS = (
+    ("action", "message", "reason", "args"),
+    ("decision", "reason", "message", "tool_input"),
+)
 
 
 def _parse_pre_tool_call(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     for verb, primary, secondary, _ in _PRE_TOOL_DIALECTS:
         if data.get(verb) == "block":
-            return {"action": "block", "message": _block_message(data.get(primary), data.get(secondary))}
+            return {
+                "action": "block",
+                "message": _block_message(data.get(primary), data.get(secondary)),
+            }
     for verb, _, _, payload in _PRE_TOOL_DIALECTS:
         if data.get(verb) == "modify" and isinstance(data.get(payload), dict):
             return {"action": "modify", "args": data[payload]}
@@ -663,10 +874,15 @@ def _parse_pre_verify(data: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 def _parse_context(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     context = data.get("context")
-    return {"context": context} if isinstance(context, str) and context.strip() else None
+    return (
+        {"context": context} if isinstance(context, str) and context.strip() else None
+    )
 
 
-_RESPONSE_PARSERS: dict[str, Callable[[dict[str, Any]], Optional[dict[str, Any]]]] = {"pre_tool_call": _parse_pre_tool_call, "pre_verify": _parse_pre_verify}
+_RESPONSE_PARSERS: dict[str, Callable[[dict[str, Any]], Optional[dict[str, Any]]]] = {
+    "pre_tool_call": _parse_pre_tool_call,
+    "pre_verify": _parse_pre_verify,
+}
 
 
 def _parse_response(event: str, stdout: str) -> Optional[dict[str, Any]]:
@@ -677,12 +893,19 @@ def _parse_response(event: str, stdout: str) -> Optional[dict[str, Any]]:
     try:
         data = json.loads(stdout)
     except json.JSONDecodeError:
-        logger.warning("shell hook stdout was not valid JSON (event=%s): %s", event, stdout[:200])
+        logger.warning(
+            "shell hook stdout was not valid JSON (event=%s): %s", event, stdout[:200]
+        )
         return None
-    return _RESPONSE_PARSERS.get(event, _parse_context)(data) if isinstance(data, dict) else None
+    return (
+        _RESPONSE_PARSERS.get(event, _parse_context)(data)
+        if isinstance(data, dict)
+        else None
+    )
 
 
 # --- Allowlist / consent ---
+
 
 def allowlist_path() -> Path:
     """Path to the per-user shell-hook allowlist file."""
@@ -718,9 +941,13 @@ def save_allowlist(data: dict[str, Any]) -> None:
     try:
         atomic_json_write(p, data, sort_keys=True, mode=0o600)
     except OSError as exc:
-        logger.warning("Failed to persist shell hook allowlist to %s: %s. The approval holds for this process "
-                       "only (a gateway keeps a launch's --accept-hooks until it restarts); a gateway session "
-                       "opened from a CLI prompt skips the hook, and the next run re-prompts.", p, exc)
+        logger.warning(
+            "Failed to persist shell hook allowlist to %s: %s. The approval holds for this process "
+            "only (a gateway keeps a launch's --accept-hooks until it restarts); a gateway session "
+            "opened from a CLI prompt skips the hook, and the next run re-prompts.",
+            p,
+            exc,
+        )
 
 
 @contextmanager
@@ -732,7 +959,9 @@ def _locked_update_approvals() -> Iterator[dict[str, Any]]:
         if fcntl is None:  # pragma: no cover — non-POSIX fallback
             stack.enter_context(_allowlist_write_lock)
         else:
-            lock_fh = stack.enter_context(open(p.with_suffix(p.suffix + ".lock"), "a+", encoding="utf-8"))  # windows-footgun: ok (write/append mode, not a read)
+            lock_fh = stack.enter_context(
+                open(p.with_suffix(p.suffix + ".lock"), "a+", encoding="utf-8")
+            )  # windows-footgun: ok (write/append mode, not a read)
             fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
             stack.callback(_flock_unlock, lock_fh)
         data = load_allowlist()
@@ -749,7 +978,11 @@ def _prompt_and_record(event: str, command: str, *, accept_hooks: bool) -> bool:
     """Approve an unseen ``(event, command)`` pair; True iff granted and recorded."""
     if accept_hooks:
         _record_approval(event, command)
-        logger.info("shell hook auto-approved via --accept-hooks / env / config: %s -> %s", event, command)
+        logger.info(
+            "shell hook auto-approved via --accept-hooks / env / config: %s -> %s",
+            event,
+            command,
+        )
         return True
     if not sys.stdin.isatty():
         return False
@@ -769,9 +1002,18 @@ def _prompt_and_record(event: str, command: str, *, accept_hooks: bool) -> bool:
 
 
 def _record_approval(event: str, command: str) -> None:
-    entry = {"event": event, "command": command, "approved_at": _utc_now_iso(), "script_mtime_at_approval": script_mtime_iso(command)}
+    entry = {
+        "event": event,
+        "command": command,
+        "approved_at": _utc_now_iso(),
+        "script_mtime_at_approval": script_mtime_iso(command),
+    }
     with _locked_update_approvals() as data:
-        data["approvals"] = [e for e in data.get("approvals", []) if not _entry_matches(e, event, command)] + [entry]
+        data["approvals"] = [
+            e
+            for e in data.get("approvals", [])
+            if not _entry_matches(e, event, command)
+        ] + [entry]
 
 
 def revoke(command: str) -> int:
@@ -780,11 +1022,27 @@ def revoke(command: str) -> int:
     processes keep it until restart."""
     with _locked_update_approvals() as data:
         before = len(data.get("approvals", []))
-        data["approvals"] = [e for e in data.get("approvals", []) if not _entry_matches(e, None, command)]
+        data["approvals"] = [
+            e for e in data.get("approvals", []) if not _entry_matches(e, None, command)
+        ]
         return before - len(data["approvals"])
 
 
-_SCRIPT_EXTENSIONS: tuple[str, ...] = (".sh", ".bash", ".zsh", ".fish", ".py", ".pyw", ".rb", ".pl", ".lua", ".js", ".mjs", ".cjs", ".ts")
+_SCRIPT_EXTENSIONS: tuple[str, ...] = (
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".py",
+    ".pyw",
+    ".rb",
+    ".pl",
+    ".lua",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+)
 
 
 def _command_script_path(command: str) -> str:
@@ -793,25 +1051,41 @@ def _command_script_path(command: str) -> str:
         parts = split_command_line(command) or [command]
     except ValueError:
         return command
-    return (next((p for p in parts if p.lower().endswith(_SCRIPT_EXTENSIONS)), None)
-            or next((p for p in parts if "/" in p or p.startswith("~")), None) or parts[0])
+    return (
+        next((p for p in parts if p.lower().endswith(_SCRIPT_EXTENSIONS)), None)
+        or next((p for p in parts if "/" in p or p.startswith("~")), None)
+        or parts[0]
+    )
 
 
 def _resolve_effective_accept(cfg: dict[str, Any], accept_hooks_arg: bool) -> bool:
     """Any truthy opt-in channel wins: explicit arg, this process's --accept-hooks, CLAWK_ACCEPT_HOOKS,
     hooks_auto_accept."""
     from utils import env_var_enabled
+
     if accept_hooks_arg or _process_accept or env_var_enabled("CLAWK_ACCEPT_HOOKS"):
         return True
     cfg_val = cfg.get("hooks_auto_accept", False)
-    return cfg_val if isinstance(cfg_val, bool) else isinstance(cfg_val, str) and cfg_val.strip().lower() in _TRUTHY
+    return (
+        cfg_val
+        if isinstance(cfg_val, bool)
+        else isinstance(cfg_val, str) and cfg_val.strip().lower() in _TRUTHY
+    )
 
 
 # --- Introspection (used by `clawk hooks` CLI) ---
 
+
 def allowlist_entry_for(event: str, command: str) -> Optional[dict[str, Any]]:
     """Return the allowlist record for this pair, if any."""
-    return next((e for e in load_allowlist().get("approvals", []) if _entry_matches(e, event, command)), None)
+    return next(
+        (
+            e
+            for e in load_allowlist().get("approvals", [])
+            if _entry_matches(e, event, command)
+        ),
+        None,
+    )
 
 
 def script_mtime_iso(command: str) -> Optional[str]:
@@ -821,7 +1095,11 @@ def script_mtime_iso(command: str) -> Optional[str]:
         mtime = os.path.getmtime(os.path.expanduser(path)) if path else None
     except OSError:
         return None
-    return None if mtime is None else datetime.fromtimestamp(mtime, tz=UTC).isoformat().replace("+00:00", "Z")
+    return (
+        None
+        if mtime is None
+        else datetime.fromtimestamp(mtime, tz=UTC).isoformat().replace("+00:00", "Z")
+    )
 
 
 def script_is_executable(command: str) -> bool:
@@ -829,10 +1107,14 @@ def script_is_executable(command: str) -> bool:
     path = _command_script_path(command)
     expanded = os.path.expanduser(path)
     try:
-        argv = split_command_line(command) if path and os.path.isfile(expanded) else None
+        argv = (
+            split_command_line(command) if path and os.path.isfile(expanded) else None
+        )
     except ValueError:
         return False
-    return argv is not None and os.access(expanded, os.X_OK if argv and argv[0] == path else os.R_OK)
+    return argv is not None and os.access(
+        expanded, os.X_OK if argv and argv[0] == path else os.R_OK
+    )
 
 
 def run_once(spec: ShellHookSpec, kwargs: dict[str, Any]) -> dict[str, Any]:

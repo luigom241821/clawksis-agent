@@ -7,6 +7,7 @@ diagnostics would look brand-new.  We build a pre→post line map from
 set-difference; diagnostics in a deleted region map to ``None`` and drop out.
 Keeping range in the key preserves the "same error at a new line" signal.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -26,7 +27,9 @@ def build_line_shift(pre_text: str, post_text: str) -> _Shift:
     if pre_lines == post_lines:
         return lambda line: line
     # Opcodes are (tag, i1, i2, j1, j2): i-range in pre, j-range in post.
-    opcodes = difflib.SequenceMatcher(a=pre_lines, b=post_lines, autojunk=False).get_opcodes()
+    opcodes = difflib.SequenceMatcher(
+        a=pre_lines, b=post_lines, autojunk=False
+    ).get_opcodes()
 
     def shift(line: int) -> Optional[int]:
         for tag, i1, i2, j1, _j2 in opcodes:
@@ -42,7 +45,9 @@ def build_line_shift(pre_text: str, post_text: str) -> _Shift:
     return shift
 
 
-def shift_diagnostic_range(diag: dict[str, Any], shift: _Shift) -> Optional[dict[str, Any]]:
+def shift_diagnostic_range(
+    diag: dict[str, Any], shift: _Shift
+) -> Optional[dict[str, Any]]:
     """Copy of ``diag`` with its line range remapped; ``None`` if the start line was deleted.
 
     A multi-line diagnostic whose end straddles the deletion collapses to a
@@ -61,15 +66,22 @@ def shift_diagnostic_range(diag: dict[str, Any], shift: _Shift) -> Optional[dict
     return {
         **diag,
         "range": {
-            "start": {"line": new_start_line, "character": int(start.get("character", 0))},
+            "start": {
+                "line": new_start_line,
+                "character": int(start.get("character", 0)),
+            },
             "end": {"line": new_end_line, "character": int(end.get("character", 0))},
         },
     }
 
 
-def shift_baseline(baseline: list[dict[str, Any]], shift: _Shift) -> list[dict[str, Any]]:
+def shift_baseline(
+    baseline: list[dict[str, Any]], shift: _Shift
+) -> list[dict[str, Any]]:
     """Apply ``shift`` to every diagnostic in ``baseline``, dropping deleted entries."""
-    shifted = (shift_diagnostic_range(d, shift) for d in baseline if isinstance(d, dict))
+    shifted = (
+        shift_diagnostic_range(d, shift) for d in baseline if isinstance(d, dict)
+    )
     return [s for s in shifted if s is not None]
 
 

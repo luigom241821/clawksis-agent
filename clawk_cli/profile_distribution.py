@@ -23,7 +23,8 @@ import clawk_yaml as yaml
 from clawk_cli._subprocess_compat import noninteractive_git_env
 from clawk_cli.archive_safe import normalize_archive_parts
 from clawk_cli.profiles import (
-    DEFAULT_EXPORT_EXCLUDE_ROOT, profile_path_contains_private_store,
+    DEFAULT_EXPORT_EXCLUDE_ROOT,
+    profile_path_contains_private_store,
     profile_path_is_private,
 )
 from utils import rmtree_readonly
@@ -35,12 +36,28 @@ ENV_EXAMPLE_FILENAME = ".env.EXAMPLE"
 
 # Default distribution-owned paths (relative to profile root). Authors may override via
 # ``distribution_owned:``. config.yaml is dist-owned but preserved on update by default.
-DEFAULT_DIST_OWNED: tuple[str, ...] = ("SOUL.md", "config.yaml", "mcp.json", "skills", "cron", MANIFEST_FILENAME)
+DEFAULT_DIST_OWNED: tuple[str, ...] = (
+    "SOUL.md",
+    "config.yaml",
+    "mcp.json",
+    "skills",
+    "cron",
+    MANIFEST_FILENAME,
+)
 
 # Distribution-specific user data extends the shared profile/runtime exclusions.
-USER_OWNED_EXCLUDE: frozenset = DEFAULT_EXPORT_EXCLUDE_ROOT | frozenset({
-    "memories", "sessions", "plans", "workspace", "home", "backups", "cache", "local",
-})
+USER_OWNED_EXCLUDE: frozenset = DEFAULT_EXPORT_EXCLUDE_ROOT | frozenset(
+    {
+        "memories",
+        "sessions",
+        "plans",
+        "workspace",
+        "home",
+        "backups",
+        "cache",
+        "local",
+    }
+)
 
 # Profile distributions own cron definitions, not scheduler state. The runtime has
 # one canonical multi-record store; every sibling under cron/ is runtime data.
@@ -61,12 +78,12 @@ def _is_installer_owned_path(parts: tuple[str, ...]) -> bool:
     return parts[0] == "skills" and len(parts) == 2 and parts[1].startswith(".")
 
 
-
 class DistributionError(Exception):
     """Raised for distribution install/update failures."""
 
 
 # Manifest
+
 
 def _str(data: dict, key: str, default: str = "") -> str:
     return str(data.get(key) or default)
@@ -82,12 +99,16 @@ class EnvRequirement:
     @classmethod
     def from_dict(cls, data: Any) -> EnvRequirement:
         if not isinstance(data, dict):
-            raise DistributionError(f"env_requires entry must be a mapping, got {type(data).__name__}")
+            raise DistributionError(
+                f"env_requires entry must be a mapping, got {type(data).__name__}"
+            )
         name = _str(data, "name").strip()
         if not name:
             raise DistributionError("env_requires entry missing 'name'")
         return cls(
-            name=name, description=_str(data, "description"), required=bool(data.get("required", True)),
+            name=name,
+            description=_str(data, "description"),
+            required=bool(data.get("required", True)),
             default=data.get("default"),
         )
 
@@ -118,7 +139,9 @@ class DistributionManifest:
     @classmethod
     def from_dict(cls, data: Any) -> DistributionManifest:
         if not isinstance(data, dict):
-            raise DistributionError(f"{MANIFEST_FILENAME} must be a mapping, got {type(data).__name__}")
+            raise DistributionError(
+                f"{MANIFEST_FILENAME} must be a mapping, got {type(data).__name__}"
+            )
         name = _str(data, "name").strip()
         if not name:
             raise DistributionError(f"{MANIFEST_FILENAME} missing 'name'")
@@ -129,21 +152,31 @@ class DistributionManifest:
         if dist_owned_raw and not isinstance(dist_owned_raw, list):
             raise DistributionError("distribution_owned must be a list")
         return cls(
-            name=name, version=_str(data, "version", "0.1.0"), description=_str(data, "description"),
-            clawk_requires=_str(data, "clawk_requires"), author=_str(data, "author"),
-            license=_str(data, "license"), env_requires=[EnvRequirement.from_dict(e) for e in env_raw],
-            distribution_owned=[str(p).strip().strip("/") for p in dist_owned_raw if str(p).strip()],
-            source=_str(data, "source"), installed_at=_str(data, "installed_at"),
+            name=name,
+            version=_str(data, "version", "0.1.0"),
+            description=_str(data, "description"),
+            clawk_requires=_str(data, "clawk_requires"),
+            author=_str(data, "author"),
+            license=_str(data, "license"),
+            env_requires=[EnvRequirement.from_dict(e) for e in env_raw],
+            distribution_owned=[
+                str(p).strip().strip("/") for p in dist_owned_raw if str(p).strip()
+            ],
+            source=_str(data, "source"),
+            installed_at=_str(data, "installed_at"),
         )
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"name": self.name, "version": self.version}
         # Key order is the on-disk YAML order (write_manifest uses sort_keys=False).
         optional = (
-            ("description", self.description), ("clawk_requires", self.clawk_requires),
-            ("author", self.author), ("license", self.license),
+            ("description", self.description),
+            ("clawk_requires", self.clawk_requires),
+            ("author", self.author),
+            ("license", self.license),
             ("env_requires", [e.to_dict() for e in self.env_requires]),
-            ("distribution_owned", self.distribution_owned), ("source", self.source),
+            ("distribution_owned", self.distribution_owned),
+            ("source", self.source),
             ("installed_at", self.installed_at),
         )
         out.update((k, v) for k, v in optional if v)
@@ -173,14 +206,27 @@ def write_manifest(profile_dir: Path, manifest: DistributionManifest) -> Path:
     # distribution.yaml, _copy_dist_payload reaches here with no manifest on disk. It is a
     # shareable descriptor, not a secret — don't leave it at mkstemp's 0600. An existing
     # file's mode is preserved.
-    atomic_yaml_write(mf_path, manifest.to_dict(), sort_keys=False, default_flow_style=False, create_mode=0o644)
+    atomic_yaml_write(
+        mf_path,
+        manifest.to_dict(),
+        sort_keys=False,
+        default_flow_style=False,
+        create_mode=0o644,
+    )
     return mf_path
 
 
 # Version check
 
 _VERSION_OP_RE = re.compile(r"^\s*(>=|<=|==|!=|>|<)\s*(.+?)\s*$")
-_VERSION_OPS = {">=": operator.ge, "<=": operator.le, "==": operator.eq, "!=": operator.ne, ">": operator.gt, "<": operator.lt}
+_VERSION_OPS = {
+    ">=": operator.ge,
+    "<=": operator.le,
+    "==": operator.eq,
+    "!=": operator.ne,
+    ">": operator.gt,
+    "<": operator.lt,
+}
 
 
 def _parse_semver(v: str) -> tuple[int, int, int]:
@@ -200,14 +246,17 @@ def check_clawk_requires(spec: str, current_version: str) -> None:
     m = _VERSION_OP_RE.match(spec)
     op, target = m.groups() if m else (">=", spec.strip())
     if not _VERSION_OPS[op](_parse_semver(current_version), _parse_semver(target)):
-        raise DistributionError(f"This distribution requires Clawksis {op}{target}, but you have {current_version}.")
+        raise DistributionError(
+            f"This distribution requires Clawksis {op}{target}, but you have {current_version}."
+        )
 
 
 def _env_template_from_manifest(manifest: DistributionManifest) -> str:
     """Generate a ``.env.template`` body from env_requires."""
     lines = [
         "# Environment variables required by this Clawksis distribution.",
-        "# Copy to `.env` and fill in your own values before running.", "",
+        "# Copy to `.env` and fill in your own values before running.",
+        "",
     ]
     for req in manifest.env_requires:
         if req.description:
@@ -239,10 +288,16 @@ def _git_clone(url: str, dest: Path) -> None:
     if _GITHUB_SHORTHAND_RE.match(url):
         url = f"https://{url.rstrip('/')}"
     from clawk_cli.git_credentials import run_git_with_credential_fallback
+
     try:
         result = run_git_with_credential_fallback(
-            ["git", "clone", "--depth", "1", url, str(dest)], url, env=noninteractive_git_env(),
-            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            ["git", "clone", "--depth", "1", url, str(dest)],
+            url,
+            env=noninteractive_git_env(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     except FileNotFoundError as exc:
         raise DistributionError("git is required for git-URL installs") from exc
@@ -273,9 +328,9 @@ def _stage_source(source: str, workdir: Path) -> tuple[Path, str]:
         )
     else:
         raise DistributionError(
-        f"Cannot resolve distribution source: {source!r}. "
-        "Expected a git URL (e.g. github.com/user/repo) or a local directory."
-    )
+            f"Cannot resolve distribution source: {source!r}. "
+            "Expected a git URL (e.g. github.com/user/repo) or a local directory."
+        )
     if not (staged / MANIFEST_FILENAME).is_file():
         raise DistributionError(missing)
     return staged, provenance
@@ -295,9 +350,11 @@ def _reject_distribution_symlinks(staged: Path) -> None:
 
 # Install
 
+
 @dataclass
 class InstallPlan:
     """Summary of what an install will do, surfaced for user confirmation."""
+
     manifest: DistributionManifest
     staged_dir: Path
     provenance: str
@@ -311,10 +368,13 @@ def _has_cron_jobs(staged: Path) -> bool:
     return staged.joinpath(*_CRON_STORE_REL).is_file()
 
 
-def plan_install(source: str, workdir: Path, override_name: Optional[str] = None) -> InstallPlan:
+def plan_install(
+    source: str, workdir: Path, override_name: Optional[str] = None
+) -> InstallPlan:
     """Stage *source* and produce a plan describing what install would do."""
     from clawk_cli.profiles import _canon_valid, get_profile_dir
     from clawk_cli.version_info import get_version_info
+
     staged, provenance = _stage_source(source, workdir)
     _reject_distribution_symlinks(staged)
     manifest = read_manifest(staged)
@@ -322,7 +382,9 @@ def plan_install(source: str, workdir: Path, override_name: Optional[str] = None
         raise DistributionError(
             f"No {MANIFEST_FILENAME} found at the distribution root — this source is not a Clawksis distribution."
         )
-    check_clawk_requires(manifest.clawk_requires, get_version_info().base_version)  # fail fast
+    check_clawk_requires(
+        manifest.clawk_requires, get_version_info().base_version
+    )  # fail fast
     canon = _canon_valid(override_name or manifest.name)
     if canon == "default":
         raise DistributionError(
@@ -336,20 +398,29 @@ def plan_install(source: str, workdir: Path, override_name: Optional[str] = None
     target_dir = get_profile_dir(canon)
     existing = target_dir.is_dir()
     return InstallPlan(
-        manifest=manifest, staged_dir=staged, provenance=provenance, target_dir=target_dir, existing=existing,
-        preserves_config=existing, has_cron=_has_cron_jobs(staged),
+        manifest=manifest,
+        staged_dir=staged,
+        provenance=provenance,
+        target_dir=target_dir,
+        existing=existing,
+        preserves_config=existing,
+        has_cron=_has_cron_jobs(staged),
     )
 
 
 def _owned_entries(staged: Path, manifest: DistributionManifest):
     """Yield ``(src, rel_parts)`` for every staged path the distribution owns."""
-    explicit_owned = [p for p in (p.strip().strip("/") for p in manifest.distribution_owned) if p]
+    explicit_owned = [
+        p for p in (p.strip().strip("/") for p in manifest.distribution_owned) if p
+    ]
     if not explicit_owned:
         # Legacy: no allowlist means the whole payload (minus USER_OWNED_EXCLUDE) is owned.
         # Do NOT narrow to DEFAULT_DIST_OWNED — existing distributions ship arbitrary extra
         # top-level paths without declaring them.
         for entry in staged.iterdir():
-            if entry.name not in USER_OWNED_EXCLUDE and not _is_installer_owned_path((entry.name,)):
+            if entry.name not in USER_OWNED_EXCLUDE and not _is_installer_owned_path(
+                (entry.name,)
+            ):
                 yield entry, (entry.name,)
         return
     # Path-aware allowlist: copy exactly the declared paths.
@@ -410,16 +481,21 @@ def _merge_cron_store(src: Path, home: Path) -> None:
             shutil.copy2(src, staged_store / "jobs.json")
             with cron_jobs.use_cron_store(tmp):
                 shipped = {
-                    job["id"]: job for job in cron_jobs.load_jobs()
+                    job["id"]: job
+                    for job in cron_jobs.load_jobs()
                     if isinstance(job, dict) and job.get("id")
                 }
         with cron_jobs.use_cron_store(home):
             import_job_definitions(
-                shipped, paused_reason="Installed from a profile distribution; review it, then resume.")
+                shipped,
+                paused_reason="Installed from a profile distribution; review it, then resume.",
+            )
     except (RuntimeError, ValueError) as exc:
         # RuntimeError: load_jobs on a corrupt/unreadable store; ValueError: a job-labelled
         # unschedulable definition. OSError propagates as-is like every other copy step.
-        raise DistributionError(f"Could not merge cron jobs into {dest}: {exc}") from exc
+        raise DistributionError(
+            f"Could not merge cron jobs into {dest}: {exc}"
+        ) from exc
 
 
 def _real_dir(base: Path, parts: tuple[str, ...]) -> Path:
@@ -455,9 +531,12 @@ def _is_container(path: Path, rel: tuple[str, ...]) -> bool:
     if not path.is_dir():
         return False
     if rel[0] == "skills":
-        return not any((p / "SKILL.md").is_file() for p in (path, *path.parents[: len(rel) - 1]))
+        return not any(
+            (p / "SKILL.md").is_file() for p in (path, *path.parents[: len(rel) - 1])
+        )
     return not any(
-        p.is_file() and p.name != "DESCRIPTION.md" and not p.name.startswith(".") for p in path.iterdir()
+        p.is_file() and p.name != "DESCRIPTION.md" and not p.name.startswith(".")
+        for p in path.iterdir()
     )
 
 
@@ -492,7 +571,11 @@ def _refuse_store_ancestor_replacement(dest: Path, rel_parts: tuple[str, ...]) -
     (``platforms`` shipped as a file over ``platforms/``) would be a whole-directory replace,
     taking ``platforms/pairing`` with it. Refused before the first write. Only called for entries
     ``_merges_per_root`` rejected, so a store ancestor reaching here is a file."""
-    if profile_path_contains_private_store(rel_parts) and dest.is_dir() and not dest.is_symlink():
+    if (
+        profile_path_contains_private_store(rel_parts)
+        and dest.is_dir()
+        and not dest.is_symlink()
+    ):
         raise DistributionError(
             f"{dest} is a directory that holds credential stores, and the distribution ships a "
             f"file named {'/'.join(rel_parts)}; refusing to replace it"
@@ -507,8 +590,11 @@ def _merges_per_root(src: Path, rel_parts: tuple[str, ...]) -> bool:
     use this, so the guard covers exactly what the copy merges. An ancestor of a credential
     store (``platforms`` of ``platforms/pairing``) is merged too, so replacing it whole can
     neither delete the installer's store nor plant the author's."""
-    return src.is_dir() and (len(rel_parts) == 1 or _is_container(src, rel_parts)
-                             or profile_path_contains_private_store(rel_parts))
+    return src.is_dir() and (
+        len(rel_parts) == 1
+        or _is_container(src, rel_parts)
+        or profile_path_contains_private_store(rel_parts)
+    )
 
 
 def _refuse_symlinked_targets(target: Path, entries) -> None:
@@ -529,7 +615,9 @@ def _refuse_symlinked_targets(target: Path, entries) -> None:
             _refuse_store_ancestor_replacement(path / rel_parts[-1], rel_parts)
 
 
-def _copy_dist_payload(staged: Path, target: Path, manifest: DistributionManifest, preserve_config: bool) -> None:
+def _copy_dist_payload(
+    staged: Path, target: Path, manifest: DistributionManifest, preserve_config: bool
+) -> None:
     """Copy distribution-owned files (see ``_owned_entries``) from *staged* into *target*.
 
     User-owned paths are never touched. ``config.yaml`` is replaced only when
@@ -559,7 +647,11 @@ def _copy_dist_payload(staged: Path, target: Path, manifest: DistributionManifes
                 # _replace_entry unlinks first so copy2 cannot write through a symlinked .env.EXAMPLE.
                 _replace_entry(src, target / ENV_EXAMPLE_FILENAME)
                 continue
-            if name == "config.yaml" and preserve_config and (target / "config.yaml").exists():
+            if (
+                name == "config.yaml"
+                and preserve_config
+                and (target / "config.yaml").exists()
+            ):
                 continue
         if _merges_per_root(src, rel_parts):
             _merge_dir(src, _real_dir(target, rel_parts), rel_parts)
@@ -568,7 +660,9 @@ def _copy_dist_payload(staged: Path, target: Path, manifest: DistributionManifes
 
     # Emit .env.EXAMPLE from manifest if the staged tree didn't ship one
     if manifest.env_requires and not (target / ENV_EXAMPLE_FILENAME).exists():
-        (target / ENV_EXAMPLE_FILENAME).write_text(_env_template_from_manifest(manifest), encoding="utf-8")
+        (target / ENV_EXAMPLE_FILENAME).write_text(
+            _env_template_from_manifest(manifest), encoding="utf-8"
+        )
 
     # Make sure the manifest on disk reflects resolved name + source
     write_manifest(target, manifest)
@@ -577,16 +671,21 @@ def _copy_dist_payload(staged: Path, target: Path, manifest: DistributionManifes
 def _bootstrap_user_dirs(target: Path) -> None:
     """Create the bootstrap dirs a fresh profile expects (same set as ``create_profile``)."""
     from clawk_cli.profiles import _PROFILE_DIRS
+
     for d in _PROFILE_DIRS:
         (target / d).mkdir(parents=True, exist_ok=True)
 
 
 def install_distribution(
-    source: str, name: Optional[str] = None, force: bool = False, create_alias: bool = False
+    source: str,
+    name: Optional[str] = None,
+    force: bool = False,
+    create_alias: bool = False,
 ) -> InstallPlan:
     """Install a distribution from *source* into a new profile; returns the resolved plan.
     Use :func:`plan_install` first to preview + prompt."""
     from clawk_cli.profiles import check_alias_collision, create_wrapper_script
+
     with tempfile.TemporaryDirectory(prefix="clawk_dist_install_") as tmp:
         plan = plan_install(source, Path(tmp), override_name=name)
         if plan.existing and not force:
@@ -598,7 +697,9 @@ def install_distribution(
         # Fresh install (or --force): config.yaml comes from the distribution. Roots the
         # payload does not ship are left alone either way, so --force keeps user skills.
         _bootstrap_user_dirs(plan.target_dir)
-        _copy_dist_payload(plan.staged_dir, plan.target_dir, plan.manifest, preserve_config=False)
+        _copy_dist_payload(
+            plan.staged_dir, plan.target_dir, plan.manifest, preserve_config=False
+        )
         if create_alias and check_alias_collision(plan.manifest.name) is None:
             create_wrapper_script(plan.manifest.name)
         return plan
@@ -632,7 +733,12 @@ def update_distribution(profile_name: str, force_config: bool = False) -> Instal
     with tempfile.TemporaryDirectory(prefix="clawk_dist_update_") as tmp:
         plan = plan_install(existing_manifest.source, Path(tmp), override_name=canon)
         plan.preserves_config = not force_config
-        _copy_dist_payload(plan.staged_dir, plan.target_dir, plan.manifest, preserve_config=plan.preserves_config)
+        _copy_dist_payload(
+            plan.staged_dir,
+            plan.target_dir,
+            plan.manifest,
+            preserve_config=plan.preserves_config,
+        )
         return plan
 
 

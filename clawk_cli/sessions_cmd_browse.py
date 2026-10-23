@@ -9,7 +9,12 @@ from clawk_state_errors import SessionActiveWriteGuardError
 
 def _session_status_tag(status: Optional[str]) -> str:
     """Short fixed-width tag for a session lifecycle status."""
-    return {"complete": "done", "interrupted": "intr", "error": "err", "empty": "empty"}.get(status or "", "-")
+    return {
+        "complete": "done",
+        "interrupted": "intr",
+        "error": "err",
+        "empty": "empty",
+    }.get(status or "", "-")
 
 
 def _annotate_session_statuses(sessions: list, session_db) -> None:
@@ -17,7 +22,9 @@ def _annotate_session_statuses(sessions: list, session_db) -> None:
     if session_db is None or not sessions:
         return
     try:
-        statuses = session_db.session_lifecycle_statuses([s.get("id") for s in sessions])
+        statuses = session_db.session_lifecycle_statuses(
+            [s.get("id") for s in sessions]
+        )
     except Exception:
         return
     for s in sessions:
@@ -56,7 +63,9 @@ _FIXED_COLS = 3 + 5 + 2 + 5 + 2 + 12 + 6 + 18 + 6
 def _format_row(s: dict, max_x: int) -> str:
     name_width = max(20, max_x - _FIXED_COLS)
     sid = s["id"][:18]
-    name = ((s.get("title") or "").strip() or (s.get("preview") or "").strip())[:name_width] or sid
+    name = ((s.get("title") or "").strip() or (s.get("preview") or "").strip())[
+        :name_width
+    ] or sid
     return (
         f"{name:<{name_width}}  {_session_status_tag(s.get('_status')):<5}  "
         f"{_msgs_str(s):>5}  {_relative_time(s.get('last_active'), session_id=s['id']):<10}  "
@@ -68,7 +77,11 @@ class _CursesBrowser:
     """State + render loop for the curses picker. ``run`` is the wrapper target."""
 
     def __init__(self, curses, sessions, delete_fn):
-        self.curses, self.sessions, self.delete_fn = curses, sessions, delete_fn  # delete_fn None => no delete
+        self.curses, self.sessions, self.delete_fn = (
+            curses,
+            sessions,
+            delete_fn,
+        )  # delete_fn None => no delete
         self.result = None
         self.cursor = self.scroll = 0
         self.search = ""
@@ -80,7 +93,9 @@ class _CursesBrowser:
         return self.curses.color_pair(n) if self.curses.has_colors() else fallback
 
     def _status_attr(self, status):
-        pair = {"complete": 1, "interrupted": 2, "error": 5, "empty": 4}.get(status or "")
+        pair = {"complete": 1, "interrupted": 2, "error": 5, "empty": 4}.get(
+            status or ""
+        )
         return self._pair(pair, self.curses.A_NORMAL) if pair else self.curses.A_NORMAL
 
     def _put(self, stdscr, y, x, text, n, attr):
@@ -90,27 +105,34 @@ class _CursesBrowser:
             pass
 
     def _refilter(self, reset_cursor=True):
-        self.filtered = [s for s in self.sessions if _match(s, self.search)] if self.search else list(self.sessions)
+        self.filtered = (
+            [s for s in self.sessions if _match(s, self.search)]
+            if self.search
+            else list(self.sessions)
+        )
         if reset_cursor:
             self.cursor = self.scroll = 0
 
     def _draw(self, stdscr, max_y, max_x):
         c = self.curses
         if self.search:
-            header, header_attr = f"  Browse sessions — filter: {self.search}█", c.A_BOLD | self._pair(3)
+            header, header_attr = (
+                f"  Browse sessions — filter: {self.search}█",
+                c.A_BOLD | self._pair(3),
+            )
         else:
             header = "  Browse sessions — ↑↓ navigate  Enter select  Type to filter  Esc quit"
             header_attr = c.A_BOLD | self._pair(2)
         self._put(stdscr, 0, 0, header, max_x - 1, header_attr)
         name_width = max(20, max_x - _FIXED_COLS)
-        col_header = (
-            f"   {'Title / Preview':<{name_width}}  {'Stat':<5}  {'Msgs':>5}  {'Active':<10}  {'Src':<5} {'ID'}"
-        )
+        col_header = f"   {'Title / Preview':<{name_width}}  {'Stat':<5}  {'Msgs':>5}  {'Active':<10}  {'Src':<5} {'ID'}"
         self._put(stdscr, 1, 0, col_header, max_x - 1, self._pair(4, c.A_DIM))
         visible_rows = max(max_y - 4, 1)  # header + col header + blank + footer
         filtered = self.filtered
         if not filtered:
-            self._put(stdscr, 3, 0, "  No sessions match the filter.", max_x - 1, c.A_DIM)
+            self._put(
+                stdscr, 3, 0, "  No sessions match the filter.", max_x - 1, c.A_DIM
+            )
         else:
             self.cursor = max(min(self.cursor, len(filtered) - 1), 0)
             if self.cursor < self.scroll:
@@ -118,22 +140,40 @@ class _CursesBrowser:
             elif self.cursor >= self.scroll + visible_rows:
                 self.scroll = self.cursor - visible_rows + 1
             tag_x = 3 + max(20, (max_x - 3) - _FIXED_COLS) + 2
-            for draw_i, i in enumerate(range(self.scroll, min(len(filtered), self.scroll + visible_rows))):
+            for draw_i, i in enumerate(
+                range(self.scroll, min(len(filtered), self.scroll + visible_rows))
+            ):
                 y = draw_i + 3
                 if y >= max_y - 1:
                     break
                 s, selected = filtered[i], i == self.cursor
                 row = (" → " if selected else "   ") + _format_row(s, max_x - 3)
                 try:
-                    stdscr.addnstr(y, 0, row, max_x - 1, c.A_BOLD | self._pair(1) if selected else c.A_NORMAL)
-                    if not selected and tag_x + 5 < max_x - 1:  # recolor the status tag in place
+                    stdscr.addnstr(
+                        y,
+                        0,
+                        row,
+                        max_x - 1,
+                        c.A_BOLD | self._pair(1) if selected else c.A_NORMAL,
+                    )
+                    if (
+                        not selected and tag_x + 5 < max_x - 1
+                    ):  # recolor the status tag in place
                         status = s.get("_status")
-                        stdscr.addnstr(y, tag_x, f"{_session_status_tag(status):<5}", 5, self._status_attr(status))
+                        stdscr.addnstr(
+                            y,
+                            tag_x,
+                            f"{_session_status_tag(status):<5}",
+                            5,
+                            self._status_attr(status),
+                        )
                 except c.error:
                     pass
         footer_attr = self._pair(4, c.A_DIM)
         if self.confirm_delete is not None:
-            footer = f"  Delete session '{_clip(_label(self.confirm_delete), 40)}'? [y/N]"
+            footer = (
+                f"  Delete session '{_clip(_label(self.confirm_delete), 40)}'? [y/N]"
+            )
             footer_attr = c.A_BOLD | self._pair(5)
         elif self.flash:
             footer = f"  {self.flash}"
@@ -149,7 +189,9 @@ class _CursesBrowser:
     def _handle_key(self, key) -> bool:
         """Apply one keypress; return True when the picker should exit."""
         c = self.curses
-        if self.confirm_delete is not None:  # y/n confirmation mode — only an explicit 'y' deletes
+        if (
+            self.confirm_delete is not None
+        ):  # y/n confirmation mode — only an explicit 'y' deletes
             target, self.confirm_delete = self.confirm_delete, None
             if key not in {ord("y"), ord("Y")}:
                 return False
@@ -167,12 +209,16 @@ class _CursesBrowser:
             return not self.sessions
         if key in (c.KEY_UP, c.KEY_DOWN):
             if self.filtered:
-                self.cursor = (self.cursor + (1 if key == c.KEY_DOWN else -1)) % len(self.filtered)
+                self.cursor = (self.cursor + (1 if key == c.KEY_DOWN else -1)) % len(
+                    self.filtered
+                )
         elif key in {c.KEY_ENTER, 10, 13}:
             if self.filtered:
                 self.result = self.filtered[self.cursor]["id"]
             return True
-        elif key == 27 and not self.search:  # Esc: first clears the search, second exits
+        elif (
+            key == 27 and not self.search
+        ):  # Esc: first clears the search, second exits
             return True
         elif key == 27:
             self.search = ""
@@ -183,7 +229,12 @@ class _CursesBrowser:
                 self._refilter()
         elif key == ord("q") and not self.search:
             return True
-        elif key == ord("d") and not self.search and self.delete_fn is not None and self.filtered:
+        elif (
+            key == ord("d")
+            and not self.search
+            and self.delete_fn is not None
+            and self.filtered
+        ):
             # 'd' deletes only when the filter is empty; mid-search it types into the query.
             self.confirm_delete = self.filtered[self.cursor]
         elif 32 <= key <= 126:
@@ -198,7 +249,13 @@ class _CursesBrowser:
             c.start_color()
             c.use_default_colors()
             # 1 selected, 2 header, 3 search, 4 dim, 5 error/delete
-            palette = (c.COLOR_GREEN, c.COLOR_YELLOW, c.COLOR_CYAN, 8 if c.COLORS > 8 else c.COLOR_WHITE, c.COLOR_RED)
+            palette = (
+                c.COLOR_GREEN,
+                c.COLOR_YELLOW,
+                c.COLOR_CYAN,
+                8 if c.COLORS > 8 else c.COLOR_WHITE,
+                c.COLOR_RED,
+            )
             for n, color in enumerate(palette, 1):
                 c.init_pair(n, color, -1)
         while True:
@@ -256,18 +313,29 @@ def _session_browse_picker(sessions: list, session_db=None) -> Optional[str]:
     def _delete_session(session_id: str) -> bool:
         try:
             from clawk_cli.sessions_cmd import get_clawk_home
+
             sessions_dir = get_clawk_home() / "sessions"
         except Exception:
             sessions_dir = None
         try:
-            return bool(session_db.delete_session(session_id, sessions_dir=sessions_dir, exclude_active_write_guards=True))
+            return bool(
+                session_db.delete_session(
+                    session_id,
+                    sessions_dir=sessions_dir,
+                    exclude_active_write_guards=True,
+                )
+            )
         except SessionActiveWriteGuardError:
             raise  # the browser tells the user the session is busy instead of a generic failure
         except Exception:
             return False
+
     try:  # curses first; any failure (no curses module, odd terminal) falls back
         import curses
-        browser = _CursesBrowser(curses, sessions, _delete_session if session_db is not None else None)
+
+        browser = _CursesBrowser(
+            curses, sessions, _delete_session if session_db is not None else None
+        )
         curses.wrapper(browser.run)
         return browser.result
     except Exception:

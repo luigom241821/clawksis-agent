@@ -38,7 +38,9 @@ PAYLOAD_DIR_NAME = "agent-payload"
 
 #: Executables that sit beside a Linux Electron launcher without being one.
 #: AppRun is the AppImage entry stub, which re-execs the launcher below.
-_LINUX_NON_LAUNCHERS = frozenset({"AppRun", "chrome-sandbox", "chrome_crashpad_handler"})
+_LINUX_NON_LAUNCHERS = frozenset(
+    {"AppRun", "chrome-sandbox", "chrome_crashpad_handler"}
+)
 
 
 class NotBundledApp(Exception):

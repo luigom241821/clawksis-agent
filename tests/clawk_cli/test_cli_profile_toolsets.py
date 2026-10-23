@@ -1,6 +1,7 @@
 """A stale ``platform_toolsets.cli`` entry (a toolset whose plugin was uninstalled) must not refuse every
 `clawk chat` (#138670): the profile default is the gateway's to resolve, only a picked list rides
 session.create. The CLI's launch params go through the real gateway policy build (scripted transport)."""
+
 from contextlib import asynccontextmanager
 
 import pytest
@@ -19,6 +20,7 @@ def store():
     @asynccontextmanager
     async def connect():
         yield client
+
     conn = GatewayConnection(connect=connect)
     conn.start(5)
     yield GatewaySessionStore(conn), client
@@ -30,21 +32,44 @@ def _launch(monkeypatch, db, toolsets=None, coding=None):
     bare host. Returns the CLI and the lines its startup printed."""
     import cli as cli_mod
     from clawk_cli.cli_init_mixin import CLIInitMixin
+
     monkeypatch.delenv("CLAWK_SESSION_SOURCE", raising=False)
     monkeypatch.setattr(cli_mod, "CLI_CONFIG", CONFIG)
     monkeypatch.setattr("agent.coding_context.coding_selection", lambda **_: coding)
-    monkeypatch.setattr("clawk_cli.plugins.get_plugin_toolset_keys_nowait", lambda: set())
+    monkeypatch.setattr(
+        "clawk_cli.plugins.get_plugin_toolset_keys_nowait", lambda: set()
+    )
     printed = []
 
     class Host(CLIInitMixin):
         def __init__(self, toolsets=None, **_):
             self.model, self.requested_provider, self._resumed = "m1", "auto", False
-            self.session_id, self._session_db, self.ignore_rules = "20261012_000000_abcdef", db, False
+            self.session_id, self._session_db, self.ignore_rules = (
+                "20261012_000000_abcdef",
+                db,
+                False,
+            )
             self._console_print = printed.append
             self._init_toolsets(toolsets)
+
     monkeypatch.setattr(cli_mod, "ClawksisCLI", Host)
-    host = cli_mod._build_cli_from_args(None, toolsets, None, None, None, None, None, None, None, False, None,
-                                        False, False, False, None)
+    host = cli_mod._build_cli_from_args(
+        None,
+        toolsets,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        False,
+        None,
+        False,
+        False,
+        False,
+        None,
+    )
     host._ensure_gateway_session()
     return host, printed
 
@@ -57,6 +82,7 @@ def test_stale_profile_toolset_warns_and_the_session_is_created(store, monkeypat
     from gateway.session_local_inventory import _policy_tools, _unknown_toolsets
     from gateway.session_policy import build_policy
     from tests.clawk_cli import test_gateway_session_store as fake
+
     db, client = store
     # The gateway judges the profile list against its own plugins and reports the stale name with the
     # session (``unknown_toolsets``); the CLI prints main's "Unknown toolsets" line from it (PLG-7).
@@ -67,13 +93,22 @@ def test_stale_profile_toolset_warns_and_the_session_is_created(store, monkeypat
         reply = await real_rpc(method, **params)
         if method == "session.create":
             policy = params_seen["policy"] = build_policy(params, CONFIG)
-            reply["info"]["unknown_toolsets"] = _unknown_toolsets(list(policy.current_toolsets(CONFIG)), CONFIG)
+            reply["info"]["unknown_toolsets"] = _unknown_toolsets(
+                list(policy.current_toolsets(CONFIG)), CONFIG
+            )
         return reply
+
     monkeypatch.setattr(client, "rpc", rpc)
     monkeypatch.setitem(fake.INFO, "enabled_toolsets", ["terminal"])
     host, printed = _launch(monkeypatch, db)
-    assert len(printed) == 1 and "gone_plugin" in printed[0] and "terminal" not in printed[0], printed
-    assert host.enabled_toolsets == ["terminal"]  # the gateway's resolved list, for display
+    assert (
+        len(printed) == 1
+        and "gone_plugin" in printed[0]
+        and "terminal" not in printed[0]
+    ), printed
+    assert host.enabled_toolsets == [
+        "terminal"
+    ]  # the gateway's resolved list, for display
     params = _created(client)
     assert "toolsets" not in params
     policy = params_seen["policy"]
@@ -88,6 +123,7 @@ def test_stale_profile_toolset_warns_and_the_session_is_created(store, monkeypat
 def test_explicit_unknown_toolset_is_still_refused(store, monkeypatch):
     from gateway.session_policy import build_policy
     from clawk_state_runtime import RuntimeStoreError
+
     db, client = store
     _launch(monkeypatch, db, toolsets="terminal,bogus")
     params = _created(client)
@@ -99,5 +135,7 @@ def test_explicit_unknown_toolset_is_still_refused(store, monkeypatch):
 def test_coding_posture_is_left_to_the_gateway(store, monkeypatch):
     db, client = store
     host, _printed = _launch(monkeypatch, db, coding=["terminal"])
-    assert host.enabled_toolsets == ["terminal"]  # the local display still shows the posture
+    assert host.enabled_toolsets == [
+        "terminal"
+    ]  # the local display still shows the posture
     assert "toolsets" not in _created(client)

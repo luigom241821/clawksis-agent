@@ -14,12 +14,16 @@ from __future__ import annotations
 import pytest
 
 from gateway.status import (
-    _gateway_command_subcommand, looks_like_gateway_command_line, looks_like_gateway_runtime_command_line,
+    _gateway_command_subcommand,
+    looks_like_gateway_command_line,
+    looks_like_gateway_runtime_command_line,
 )
 from clawk_cli import gateway as gateway_mod
 from clawk_cli.gateway import GATEWAY_RESTART_WATCHER_TIMEOUT_S
 from clawk_cli.update_cmd_windows import (
-    _clawk_holder_subcommand, _pending_relaunch_pids, _relaunch_verify_timeout_s,
+    _clawk_holder_subcommand,
+    _pending_relaunch_pids,
+    _relaunch_verify_timeout_s,
 )
 
 
@@ -58,7 +62,12 @@ def test_spawned_restart_watcher_is_not_identified_as_a_gateway(monkeypatch):
         ({"default": 14980}, [], {14980}, [14980]),
         # An unmapped entry without captured argv was never handed to a watcher.
         ({}, [{"pid": 4242, "argv": None}], {4242}, []),
-        ({"default": 14980}, [{"pid": 4242, "argv": ["python"]}], {14980, 4242}, [4242, 14980]),
+        (
+            {"default": 14980},
+            [{"pid": 4242, "argv": ["python"]}],
+            {14980, 4242},
+            [4242, 14980],
+        ),
     ],
 )
 def test_pending_relaunch_pids(profiles, unmapped, alive, expected):

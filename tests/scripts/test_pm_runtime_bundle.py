@@ -1,4 +1,5 @@
 """A payload carries PM's independent dependency graph, not the app's imports."""
+
 import json
 import os
 from pathlib import Path
@@ -20,14 +21,20 @@ def _exercise_relocated_pm_runtime(tmp_path, monkeypatch):
     root = tmp_path / "build"
     repo = root / "clawksis-agent"
     source = Path(__file__).resolve().parents[2]
-    shutil.copytree(source / "pm", repo / "pm", ignore=shutil.ignore_patterns("__pycache__", ".clawk-tmp.*"))
+    shutil.copytree(
+        source / "pm",
+        repo / "pm",
+        ignore=shutil.ignore_patterns("__pycache__", ".clawk-tmp.*"),
+    )
     (repo / "clawk_cli").mkdir()
     for name in ("__init__.py", "runtime_state.py"):
         shutil.copy2(source / "clawk_cli" / name, repo / "clawk_cli" / name)
     shutil.copy2(source / "clawk_constants.py", repo / "clawk_constants.py")
     # Copy the base executable, not a venv's launcher. The test host provides
     # its stdlib; production's package stage provides the complete distribution.
-    python = root / "tools" / "python" / ("python.exe" if os.name == "nt" else "bin/python")
+    python = (
+        root / "tools" / "python" / ("python.exe" if os.name == "nt" else "bin/python")
+    )
     python.parent.mkdir(parents=True)
     if os.name == "nt":
         shutil.copytree(Path(sys.base_prefix), python.parent, dirs_exist_ok=True)
@@ -35,12 +42,21 @@ def _exercise_relocated_pm_runtime(tmp_path, monkeypatch):
         shutil.copy2(Path(sys._base_executable).resolve(), python)
         # Relocatable PBS does not retain the host's stdlib prefix. Supply the
         # fixture's promised host library tree, including libpython on macOS.
-        (python.parent.parent / "lib").symlink_to(Path(sys.base_prefix) / "lib", target_is_directory=True)
+        (python.parent.parent / "lib").symlink_to(
+            Path(sys.base_prefix) / "lib", target_is_directory=True
+        )
     stage = getattr(native, "stage_pm_runtime", None)
     assert callable(stage), "native payload has no isolated PM runtime stage"
     cache = tmp_path / "build-cache"
-    monkeypatch.setattr("pm.client._request", lambda *args, **kwargs: pytest.fail("runtime staging must not bootstrap a worker"))
-    monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable)))
+    monkeypatch.setattr(
+        "pm.client._request",
+        lambda *args, **kwargs: pytest.fail(
+            "runtime staging must not bootstrap a worker"
+        ),
+    )
+    monkeypatch.setattr(
+        "pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable))
+    )
     stage(root, python, repo, cache=cache)
     assert cache.is_dir()
     assert not (tmp_path / "home/cache/uv").exists()
@@ -64,15 +80,31 @@ assert importlib.util.find_spec('openai') is None
 assert importlib.util.find_spec('yaml') is None
 print(json.dumps(YAML(typ='safe').load('isolated: true')))
 """
-    checked = subprocess.run([str(base), "-I", "-S", "-B", "-c", probe, str(site)],
-                             cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+    checked = subprocess.run(
+        [str(base), "-I", "-S", "-B", "-c", probe, str(site)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert checked.returncode == 0, checked.stderr
     assert json.loads(checked.stdout) == {"isolated": True}
     from pm import runtime as runtime_api, paths
+
     monkeypatch.setattr(paths, "repo_root", lambda: moved / "clawksis-agent")
-    command = runtime_api.runtime_command(moved / "clawksis-agent/pm/launch.py", ["status"])
-    checked = subprocess.run(command, cwd=tmp_path, env=runtime_api.runtime_environment(),
-                             capture_output=True, text=True, timeout=30, check=False)
+    command = runtime_api.runtime_command(
+        moved / "clawksis-agent/pm/launch.py", ["status"]
+    )
+    checked = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=runtime_api.runtime_environment(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert checked.returncode == 0, checked.stderr
     assert "no pm sync receipt" in checked.stdout
     assert str(root) not in (runtime / "pyvenv.cfg").read_text()
@@ -107,7 +139,16 @@ def test_pm_builder_ignores_ambient_uv_configuration(tmp_path, monkeypatch, pois
     config.write_text('required-version = "<0.1"\n', encoding="utf-8")
     uv = shutil.which("uv")
     assert uv
-    monkeypatch.setattr("pm.client._request", lambda *args, **kwargs: pytest.fail("runtime staging must not bootstrap a worker"))
-    monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable)))
-    executable = stage_manager_runtime(python=Path(sys.executable), destination=tmp_path / "runtime")
+    monkeypatch.setattr(
+        "pm.client._request",
+        lambda *args, **kwargs: pytest.fail(
+            "runtime staging must not bootstrap a worker"
+        ),
+    )
+    monkeypatch.setattr(
+        "pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable))
+    )
+    executable = stage_manager_runtime(
+        python=Path(sys.executable), destination=tmp_path / "runtime"
+    )
     assert executable.is_file()

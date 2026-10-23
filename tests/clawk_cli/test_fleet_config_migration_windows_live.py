@@ -3,6 +3,7 @@
 Real profile homes on the Windows filesystem, real migration pipeline,
 fresh-process semantics via CLAWK_HOME env — mirrors the Linux live E2E.
 """
+
 import sys
 from pathlib import Path
 

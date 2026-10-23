@@ -28,6 +28,7 @@ from tui_gateway import server as srv
 
 PROFILE_HOME = "/home/user/.clawksis/profiles/work"
 
+
 class _InlineThread:
     """Drop-in for ``threading.Thread`` that runs the target synchronously.
 
@@ -43,11 +44,13 @@ class _InlineThread:
         if self._target is not None:
             self._target()
 
+
 @pytest.fixture
 def fake_session():
     """A minimal session carrying a non-default ``profile_home``."""
     agent = MagicMock()
     return {"agent": agent, "session_key": "sess_k", "profile_home": PROFILE_HOME}
+
 
 @pytest.fixture
 def override_calls():
@@ -60,18 +63,22 @@ def override_calls():
     # run_conversation returns a plain dict like the real agent does.
     agent_instance.run_conversation.return_value = {"final_response": "done"}
 
-    with patch("tui_gateway.server.threading.Thread", _InlineThread), \
-        patch("tui_gateway.server.set_clawk_home_override", return_value="TOK") as m_set, \
-        patch("tui_gateway.server.reset_clawk_home_override") as m_reset, \
-        patch("tui_gateway.server._background_agent_kwargs", return_value={}), \
-        patch("tui_gateway.server._ephemeral_preview_agent_kwargs", return_value={}), \
-        patch("tui_gateway.server._preview_restart_callbacks", return_value={}), \
-        patch("tui_gateway.server._preview_restart_history", return_value=[]), \
-        patch("tui_gateway.server._set_session_context", return_value=None), \
-        patch("tui_gateway.server._clear_session_context"), \
-        patch("tui_gateway.server._session_cwd", return_value="/tmp"), \
-        patch("tui_gateway.server._emit"), \
-        patch("run_agent.AIAgent", return_value=agent_instance) as m_agent:
+    with (
+        patch("tui_gateway.server.threading.Thread", _InlineThread),
+        patch(
+            "tui_gateway.server.set_clawk_home_override", return_value="TOK"
+        ) as m_set,
+        patch("tui_gateway.server.reset_clawk_home_override") as m_reset,
+        patch("tui_gateway.server._background_agent_kwargs", return_value={}),
+        patch("tui_gateway.server._ephemeral_preview_agent_kwargs", return_value={}),
+        patch("tui_gateway.server._preview_restart_callbacks", return_value={}),
+        patch("tui_gateway.server._preview_restart_history", return_value=[]),
+        patch("tui_gateway.server._set_session_context", return_value=None),
+        patch("tui_gateway.server._clear_session_context"),
+        patch("tui_gateway.server._session_cwd", return_value="/tmp"),
+        patch("tui_gateway.server._emit"),
+        patch("run_agent.AIAgent", return_value=agent_instance) as m_agent,
+    ):
         yield {
             "set": m_set,
             "reset": m_reset,
@@ -79,14 +86,18 @@ def override_calls():
             "agent": agent_instance,
         }
 
+
 def _run(method_name, params, session):
     """Invoke a registered RPC handler with ``_sess`` patched to our session."""
     handler = srv._methods[method_name]
     with patch("tui_gateway.server._sess", return_value=(session, None)):
         return handler("rid1", params)
 
+
 class TestBackgroundProfileOverride:
-    def test_background_binds_and_restores_profile_home(self, fake_session, override_calls):
+    def test_background_binds_and_restores_profile_home(
+        self, fake_session, override_calls
+    ):
         """prompt.background binds profile_home for the ephemeral turn and restores it."""
         _run("prompt.background", {"text": "hi", "session_id": "ui1"}, fake_session)
 
@@ -102,8 +113,11 @@ class TestBackgroundProfileOverride:
         override_calls["set"].assert_called_once_with(PROFILE_HOME)
         override_calls["reset"].assert_called_once_with("TOK")
 
+
 class TestPreviewRestartProfileOverride:
-    def test_preview_binds_and_restores_profile_home(self, fake_session, override_calls):
+    def test_preview_binds_and_restores_profile_home(
+        self, fake_session, override_calls
+    ):
         """preview.restart binds profile_home for the ephemeral turn and restores it."""
         _run(
             "preview.restart",

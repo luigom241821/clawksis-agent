@@ -3,6 +3,7 @@
 Real profile files under a temp CLAWK_HOME, the production startup hook and the
 standalone predicate. Only the connector HTTP calls are replaced.
 """
+
 from unittest.mock import Mock
 import json
 import os
@@ -24,7 +25,10 @@ SPELLINGS = {
     "top": {"platforms": DISABLE},
     "nested": {"gateway": {"platforms": DISABLE}},
     "string-false": {"platforms": {"relay": {"enabled": "false"}}},
-    "top-beats-nested": {"platforms": DISABLE, "gateway": {"platforms": {"relay": {"enabled": True}}}},
+    "top-beats-nested": {
+        "platforms": DISABLE,
+        "gateway": {"platforms": {"relay": {"enabled": True}}},
+    },
     "managed": None,  # user YAML absent; disable comes from CLAWK_MANAGED_DIR
 }
 
@@ -42,7 +46,9 @@ def profile(tmp_path, monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://identity.example/token")
     monkeypatch.setenv("SLACK_BOT_TOKEN", "native-test-token")
     # Discovery stays live: Slack's SLACK_BOT_TOKEN env row is declared by its bundled plugin entry.
-    monkeypatch.setattr(GatewayStartupMixin, "_register_config_hooks", lambda *a, **k: None)
+    monkeypatch.setattr(
+        GatewayStartupMixin, "_register_config_hooks", lambda *a, **k: None
+    )
     platform_registry.unregister("relay")
     yield tmp_path
     platform_registry.unregister("relay")
@@ -60,7 +66,9 @@ def write_disable(home, spelling, monkeypatch):
 
 
 @pytest.mark.parametrize("spelling", list(SPELLINGS))
-def test_disabled_relay_startup_hook_has_no_side_effects(profile, monkeypatch, spelling):
+def test_disabled_relay_startup_hook_has_no_side_effects(
+    profile, monkeypatch, spelling
+):
     write_disable(profile, spelling, monkeypatch)
     http = Mock(side_effect=AssertionError("disabled relay reached the connector"))
     monkeypatch.setattr("urllib.request.urlopen", http)
@@ -71,7 +79,9 @@ def test_disabled_relay_startup_hook_has_no_side_effects(profile, monkeypatch, s
 
     http.assert_not_called()
     assert not platform_registry.is_registered("relay")
-    assert {k: v for k, v in os.environ.items() if k.startswith("GATEWAY_RELAY_")} == before
+    assert {
+        k: v for k, v in os.environ.items() if k.startswith("GATEWAY_RELAY_")
+    } == before
     # The test seam and an explicit URL do not override the operator either.
     assert relay.register_relay_adapter(force=True, url=URL) is False
     # Standalone routing (cron preflight) agrees: nothing is relay-fronted.
@@ -80,9 +90,15 @@ def test_disabled_relay_startup_hook_has_no_side_effects(profile, monkeypatch, s
 
 def test_url_only_activation_is_unchanged(profile, monkeypatch):
     """Control: with no ``enabled`` key the injected URL still activates relay."""
-    (profile / "config.yaml").write_text(yaml.safe_dump({"platforms": {"relay": {"extra": {"note": "kept"}}}}))
-    provision = Mock(return_value={"gatewayId": "g", "secret": "b" * 64, "deliveryKey": "d"})
-    monkeypatch.setattr(relay, "_resolve_relay_identity_token", Mock(return_value="identity-token"))
+    (profile / "config.yaml").write_text(
+        yaml.safe_dump({"platforms": {"relay": {"extra": {"note": "kept"}}}})
+    )
+    provision = Mock(
+        return_value={"gatewayId": "g", "secret": "b" * 64, "deliveryKey": "d"}
+    )
+    monkeypatch.setattr(
+        relay, "_resolve_relay_identity_token", Mock(return_value="identity-token")
+    )
     monkeypatch.setattr(relay, "_post_provision", provision)
     monkeypatch.setattr(relay, "_post_policy", Mock(return_value=200))
 
@@ -94,7 +110,9 @@ def test_url_only_activation_is_unchanged(profile, monkeypatch):
 
 
 @pytest.mark.parametrize("spelling", list(SPELLINGS))
-def test_predicate_agrees_with_loader_and_keeps_native_adapters(profile, monkeypatch, spelling):
+def test_predicate_agrees_with_loader_and_keeps_native_adapters(
+    profile, monkeypatch, spelling
+):
     """The standalone predicate and ``load_gateway_config()`` are two readers of one rule, and an
     opted-out relay does not own the profile's native connections."""
     write_disable(profile, spelling, monkeypatch)
@@ -108,17 +126,28 @@ def test_predicate_agrees_with_loader_and_keeps_native_adapters(profile, monkeyp
     from cron.scheduler_delivery import _resolve_target_transport
 
     resolved, error = _resolve_target_transport(
-        {"id": "job"}, Platform.SLACK, "slack", {"chat_id": "channel"}, {}, config,
+        {"id": "job"},
+        Platform.SLACK,
+        "slack",
+        {"chat_id": "channel"},
+        {},
+        config,
     )
     assert error is None
     assert resolved[1] is config.platforms[Platform.SLACK]
 
 
 def test_legacy_json_disable_is_advisory_like_other_platforms(profile, monkeypatch):
-    (profile / "gateway.json").write_text(json.dumps({"platforms": {
-        "relay": {"enabled": False},
-        "telegram": {"enabled": False},
-    }}))
+    (profile / "gateway.json").write_text(
+        json.dumps(
+            {
+                "platforms": {
+                    "relay": {"enabled": False},
+                    "telegram": {"enabled": False},
+                }
+            }
+        )
+    )
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "native-telegram-test-token")
     monkeypatch.setenv("GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS", "true")
     config = load_gateway_config()
@@ -130,7 +159,9 @@ def test_legacy_json_disable_is_advisory_like_other_platforms(profile, monkeypat
     assert config.platforms[Platform.TELEGRAM].enabled is True
 
 
-def test_malformed_user_yaml_drops_the_yaml_layer_for_both_readers(profile, monkeypatch):
+def test_malformed_user_yaml_drops_the_yaml_layer_for_both_readers(
+    profile, monkeypatch
+):
     """The loader falls back to env + gateway.json WITHOUT the managed layer on a malformed user
     file; the predicate must fall back the same way or startup suppresses native adapters for a
     relay it then refuses to register."""

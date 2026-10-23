@@ -39,7 +39,9 @@ def test_positive_display_count_untouched():
 
 
 def test_already_failed_check_not_rewritten():
-    out = _apply_display_count_guard(_report(status="fail", count=0, overall="degraded"))
+    out = _apply_display_count_guard(
+        _report(status="fail", count=0, overall="degraded")
+    )
     # Guard only flips pass->fail; an existing failure keeps its message.
     assert out["checks"][0]["message"] == "ScreenCaptureKit reachable"
 

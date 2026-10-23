@@ -42,7 +42,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from clawk_cli import version_info as _version_info
 
 _version_info._cached_version_info = _version_info.VersionInfo(
-    "unknown", "git.0000000", None, "0" * 40, "main", "git")
+    "unknown", "git.0000000", None, "0" * 40, "main", "git"
+)
 
 
 # ── Sandbox CLAWK_HOME before ANY test module is imported ──────────────────
@@ -214,7 +215,7 @@ if not HOST_LOCK_DIR_AT_CONFTEST_IMPORT:
     _LOCK_DIR_ROOT = Path(tempfile.gettempdir())
     for _stale in _LOCK_DIR_ROOT.glob(f"{_LOCK_DIR_PREFIX}*"):
         try:
-            _stale_pid = int(_stale.name[len(_LOCK_DIR_PREFIX):])
+            _stale_pid = int(_stale.name[len(_LOCK_DIR_PREFIX) :])
         except ValueError:
             continue
         try:
@@ -251,7 +252,10 @@ from tests._fixtures.live_system_guard import (
     _live_system_guard,
 )
 from tests._fixtures.model_peer import model_peer  # fixture registers here
-from tests._fixtures.platform_gating import _platforms_gate_reason, _reject_contradictory_platform_marks
+from tests._fixtures.platform_gating import (
+    _platforms_gate_reason,
+    _reject_contradictory_platform_marks,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -307,6 +311,7 @@ def _hermetic_environment(tmp_path, tmp_path_factory, monkeypatch):
     # leak that module-global into the next test's routed-profile decisions.
     try:
         import clawk_constants as _hc
+
         monkeypatch.setattr(_hc, "_PINNED_PROCESS_CLAWK_HOME", None, raising=False)
     except Exception:
         pass
@@ -314,8 +319,9 @@ def _hermetic_environment(tmp_path, tmp_path_factory, monkeypatch):
     # PATH) and writes a marker at a fixed per-user path: confine it to this test's directory.
     from clawk_cli import install_state
 
-    isolated_places = install_state.Places(markers=(tmp_path / "machine-marker",),
-                                           sources=(install_state._active_root,))
+    isolated_places = install_state.Places(
+        markers=(tmp_path / "machine-marker",), sources=(install_state._active_root,)
+    )
     monkeypatch.setattr(install_state, "machine_places", lambda: isolated_places)
     install_state.probe.cache_clear()
     from clawk_cli import onboarding_due
@@ -377,7 +383,9 @@ def _hermetic_environment(tmp_path, tmp_path_factory, monkeypatch):
         monkeypatch.setattr(tui_server_mod, "_served_profile_homes", set())
     # A classic CLI's gateway-session toolset reader is process-global too (``_ensure_gateway_session``).
     tools_config_mod = sys.modules.get("clawk_cli.tools_config")
-    if tools_config_mod is not None and hasattr(tools_config_mod, "_gateway_plugin_toolsets"):
+    if tools_config_mod is not None and hasattr(
+        tools_config_mod, "_gateway_plugin_toolsets"
+    ):
         monkeypatch.setattr(tools_config_mod, "_gateway_plugin_toolsets", None)
 
     clawk_state_mod = sys.modules.get("clawk_state")
@@ -416,6 +424,7 @@ def _hermetic_environment(tmp_path, tmp_path_factory, monkeypatch):
     #    singleton might still be cached from a previous test).
     try:
         import clawk_cli.plugins as _plugins_mod
+
         monkeypatch.setattr(_plugins_mod, "_plugin_manager", None)
         # Also clear the keyed per-home manager cache (and any plugin
         # submodules it left in sys.modules) so a manager built for a
@@ -484,7 +493,9 @@ def _neutralize_git_safe_directory_read(request, monkeypatch):
         from clawk_cli import _subprocess_compat
     except Exception:
         return
-    monkeypatch.setattr(_subprocess_compat, "_user_safe_directories", lambda base_env: [], raising=False)
+    monkeypatch.setattr(
+        _subprocess_compat, "_user_safe_directories", lambda base_env: [], raising=False
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -529,7 +540,9 @@ def _close_leaked_session_dbs():
     # sys.modules lookup, not import: a file that never touched title_generator spawned
     # nothing. Tests that swap in a stub module (tui_gateway golden transcript) have no
     # real threads either, so a stub without the helper is the same "nothing to join" case.
-    wait = getattr(sys.modules.get("agent.title_generator"), "wait_for_title_upgrades", None)
+    wait = getattr(
+        sys.modules.get("agent.title_generator"), "wait_for_title_upgrades", None
+    )
     if wait is not None:
         wait()
     try:
@@ -639,6 +652,7 @@ def _capture_real_kanban_root() -> Path:
         # honor it via the normal resolver (it may be a profile dir whose
         # root matters).
         from clawk_constants import get_default_clawk_root
+
         return get_default_clawk_root().resolve()
     # No pre-existing CLAWK_HOME: the real root is the platform default,
     # NOT the sandbox tempdir now sitting in the env.
@@ -684,9 +698,7 @@ def _kanban_write_guard(_hermetic_environment, monkeypatch):
             resolved = Path(db_path).expanduser().resolve()
         else:
             resolved = (
-                _kdb.kanban_db_path(board=kwargs.get("board"))
-                .expanduser()
-                .resolve()
+                _kdb.kanban_db_path(board=kwargs.get("board")).expanduser().resolve()
             )
         try:
             resolved.relative_to(_REAL_KANBAN_ROOT)
@@ -733,12 +745,8 @@ def _state_db_write_guard(request, monkeypatch):
     if _PRE_SANDBOX_CLAWK_HOME and not _clawk_home_points_at_production(
         _PRE_SANDBOX_CLAWK_HOME
     ):
-        extra_roots.append(
-            Path(_PRE_SANDBOX_CLAWK_HOME).expanduser().resolve()
-        )
-    monkeypatch.setattr(
-        _hs, "_STATE_DB_GUARD_EXTRA_DENY_ROOTS", tuple(extra_roots)
-    )
+        extra_roots.append(Path(_PRE_SANDBOX_CLAWK_HOME).expanduser().resolve())
+    monkeypatch.setattr(_hs, "_STATE_DB_GUARD_EXTRA_DENY_ROOTS", tuple(extra_roots))
     yield
 
 
@@ -1032,8 +1040,10 @@ def _relocate_basetemp_outside_operator_home(config) -> None:
     native = _get_platform_default_clawk_home().resolve()
     factory = config._tmp_path_factory
     given = factory._given_basetemp
-    candidate = given if given is not None else Path(
-        os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir()
+    candidate = (
+        given
+        if given is not None
+        else Path(os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir())
     )
     if not candidate.resolve().is_relative_to(native):
         return
@@ -1061,8 +1071,12 @@ def _pytest_disk_temp_root(native: Path) -> Path:
     the native home. Entries idle for a day are swept on the way in."""
     from clawk_constants_scratch import prune_idle_entries
 
-    if os.name != "nt" and os.path.isdir("/var/tmp"):  # no-tmp: ok — disk-backed FHS root
-        root = Path("/var/tmp/clawk-pytest")  # no-tmp: ok — /var/tmp is disk-backed by FHS, never tmpfs
+    if os.name != "nt" and os.path.isdir(
+        "/var/tmp"
+    ):  # no-tmp: ok — disk-backed FHS root
+        root = Path(
+            "/var/tmp/clawk-pytest"
+        )  # no-tmp: ok — /var/tmp is disk-backed by FHS, never tmpfs
     else:
         root = native.parent / "clawk-pytest"
     root.mkdir(parents=True, exist_ok=True)
@@ -1094,7 +1108,9 @@ def _processes_with_clawk_home_under(roots) -> list[int]:
                 environ = handle.read().split(b"\0")
         except OSError:
             continue
-        home = next((item[12:] for item in environ if item.startswith(b"CLAWK_HOME=")), None)
+        home = next(
+            (item[12:] for item in environ if item.startswith(b"CLAWK_HOME=")), None
+        )
         if not home:
             continue
         try:
@@ -1118,8 +1134,11 @@ def _reap_session_clawk_processes(config) -> list[int]:
 
     factory = getattr(config, "_tmp_path_factory", None)
     # The basetemp pytest already created (never create one at teardown just to scan it).
-    roots = [getattr(config, "_clawk_relocated_basetemp", None), os.environ.get("CLAWK_TEST_SANDBOX_HOME"),
-             getattr(factory, "_basetemp", None)]
+    roots = [
+        getattr(config, "_clawk_relocated_basetemp", None),
+        os.environ.get("CLAWK_TEST_SANDBOX_HOME"),
+        getattr(factory, "_basetemp", None),
+    ]
     pids = _processes_with_clawk_home_under(roots)
     for pid in pids:
         try:
@@ -1168,7 +1187,9 @@ def pytest_unconfigure(config):
     _remove_relocated_basetemp(config)
 
 
-@pytest.hookimpl(trylast=True)  # after _pytest.tmpdir has built config._tmp_path_factory
+@pytest.hookimpl(
+    trylast=True
+)  # after _pytest.tmpdir has built config._tmp_path_factory
 def pytest_configure(config):
     """Register markers used by hermetic conftest."""
     _relocate_basetemp_outside_operator_home(config)
@@ -1182,7 +1203,8 @@ def pytest_configure(config):
         "markers", "allow_real_home_io: explicitly bypass the test-only home I/O guard."
     )
     config.addinivalue_line(
-        "markers", "real_release_channels: keep the real R2 channel reader (no local source-branch stub)."
+        "markers",
+        "real_release_channels: keep the real R2 channel reader (no local source-branch stub).",
     )
     config.addinivalue_line(
         "markers",
@@ -1248,7 +1270,10 @@ def pytest_configure(config):
     # raises AttributeError at timer setup and the whole run aborts before any
     # test executes. Fall back to the thread-based timer on Windows so the
     # suite runs natively there (POSIX keeps the more reliable signal method).
-    if sys.platform == "win32" and getattr(config.option, "timeout_method", None) == "signal":
+    if (
+        sys.platform == "win32"
+        and getattr(config.option, "timeout_method", None) == "signal"
+    ):
         config.option.timeout_method = "thread"
 
 
@@ -1285,7 +1310,9 @@ def pytest_runtest_call(item):
     try:
         return (yield)
     finally:
-        wait = getattr(sys.modules.get("agent.title_generator"), "wait_for_title_upgrades", None)
+        wait = getattr(
+            sys.modules.get("agent.title_generator"), "wait_for_title_upgrades", None
+        )
         if wait is not None:
             wait()
 
@@ -1481,9 +1508,14 @@ _REAL_CLAWK_ROOT_CANDIDATES = _capture_real_clawk_root()
 # ones present (none on CI runners, so the guard costs nothing there), each literal and resolved.
 from clawk_cli.gui_uninstall import packaged_gui_app_paths
 
-_REAL_INSTALLED_GUI_APPS = sorted({
-    os.path.normcase(form) for app in packaged_gui_app_paths() if os.path.lexists(app)
-    for form in (os.path.abspath(app), os.path.realpath(app))})
+_REAL_INSTALLED_GUI_APPS = sorted(
+    {
+        os.path.normcase(form)
+        for app in packaged_gui_app_paths()
+        if os.path.lexists(app)
+        for form in (os.path.abspath(app), os.path.realpath(app))
+    }
+)
 
 
 @pytest.fixture(autouse=True)
@@ -1498,7 +1530,9 @@ def _forbid_real_user_path_writes(monkeypatch):
         return
 
     def refuse(*_args, **_kwargs):
-        raise AssertionError("TEST BUG: write to the real Windows User PATH (HKCU\\Environment)")
+        raise AssertionError(
+            "TEST BUG: write to the real Windows User PATH (HKCU\\Environment)"
+        )
 
     monkeypatch.setattr("clawk_cli._launchers._register_windows_user_path", refuse)
     monkeypatch.setattr("clawk_cli._install_repair._write_user_path_raw", refuse)
@@ -1515,7 +1549,9 @@ def _forbid_real_clawk_home_io(monkeypatch, request):
         return
     from tests.home_io_guard import HomeIOGuard
 
-    HomeIOGuard(lambda: _REAL_CLAWK_ROOT_CANDIDATES, lambda: _REAL_INSTALLED_GUI_APPS).install(monkeypatch)
+    HomeIOGuard(
+        lambda: _REAL_CLAWK_ROOT_CANDIDATES, lambda: _REAL_INSTALLED_GUI_APPS
+    ).install(monkeypatch)
 
 
 @pytest.fixture
@@ -1525,9 +1561,13 @@ def real_bash() -> str:
     exits 1. Prefer Git for Windows' bash there; elsewhere the PATH one is real."""
     found = shutil.which("bash")
     if sys.platform == "win32" and (
-            not found or any(marker in found.lower() for marker in ("system32", "windowsapps"))):
+        not found
+        or any(marker in found.lower() for marker in ("system32", "windowsapps"))
+    ):
         for rel in (("Git", "bin", "bash.exe"), ("Git", "usr", "bin", "bash.exe")):
-            candidate = Path(os.environ.get("ProgramFiles", r"C:\Program Files")).joinpath(*rel)
+            candidate = Path(
+                os.environ.get("ProgramFiles", r"C:\Program Files")
+            ).joinpath(*rel)
             if candidate.exists():
                 return str(candidate)
     return found or "bash"

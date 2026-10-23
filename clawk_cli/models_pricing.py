@@ -54,7 +54,9 @@ def _cache_catalog(
     observe (an org's model policy can change while a long-lived process holds the entry)."""
     _pricing_cache[cache_key] = result
     if not result:
-        _pricing_cache_retry_after[cache_key] = time.monotonic() + _FAILED_CATALOG_TTL_SECONDS
+        _pricing_cache_retry_after[cache_key] = (
+            time.monotonic() + _FAILED_CATALOG_TTL_SECONDS
+        )
     elif ttl_seconds:
         _pricing_cache_retry_after[cache_key] = time.monotonic() + ttl_seconds
     else:
@@ -144,13 +146,18 @@ def _price_float(raw: Any, *, positive: bool) -> float | None:
 
 def _sale_pct(current: Any, original: Any) -> int | None:
     """Percent discount when *current* is strictly below *original* (both positive finite)."""
-    cur, orig = _price_float(current, positive=True), _price_float(original, positive=True)
+    cur, orig = (
+        _price_float(current, positive=True),
+        _price_float(original, positive=True),
+    )
     if cur is None or orig is None or cur >= orig:
         return None
     return round((1.0 - (cur / orig)) * 100)
 
 
-def compute_sale_discount(prompt: str, completion: str, original: Any) -> tuple[int, str, str] | None:
+def compute_sale_discount(
+    prompt: str, completion: str, original: Any
+) -> tuple[int, str, str] | None:
     """Sale chrome from gateway ``pricing.original`` (Nous Portal only; callers gate on the provider
     and opted in via ``include_sale_original=True``): ``(discount_percent, was_prompt_raw,
     was_completion_raw)`` when ``original`` is a dict and the current prompt (fallback: completion)
@@ -162,10 +169,14 @@ def compute_sale_discount(prompt: str, completion: str, original: Any) -> tuple[
     was_prompt_str = str(was_prompt) if was_prompt not in (None, "") else ""
     was_completion_str = str(was_completion) if was_completion not in (None, "") else ""
 
-    if _price_float(prompt, positive=False) == 0 and _price_float(completion, positive=False) in (0, None):
+    if _price_float(prompt, positive=False) == 0 and _price_float(
+        completion, positive=False
+    ) in (0, None):
         return (100, was_prompt_str, was_completion_str)
 
-    if not isinstance(original, dict) or (not was_prompt_str and not was_completion_str):
+    if not isinstance(original, dict) or (
+        not was_prompt_str and not was_completion_str
+    ):
         return None
 
     pct = _sale_pct(prompt, was_prompt)
@@ -177,7 +188,9 @@ def compute_sale_discount(prompt: str, completion: str, original: Any) -> tuple[
     return None
 
 
-def _get_json(url: str, headers: dict[str, str], timeout: float, opener=None) -> Optional[dict]:
+def _get_json(
+    url: str, headers: dict[str, str], timeout: float, opener=None
+) -> Optional[dict]:
     """GET *url* as JSON via the origin's catalog opener (or *opener*); None on any failure."""
     from clawk_cli.models import _urlopen_model_catalog_request
 
@@ -189,7 +202,9 @@ def _get_json(url: str, headers: dict[str, str], timeout: float, opener=None) ->
         return None
 
 
-def _pricing_entry(pricing: dict, prompt_key: str = "prompt", completion_key: str = "completion") -> dict[str, Any]:
+def _pricing_entry(
+    pricing: dict, prompt_key: str = "prompt", completion_key: str = "completion"
+) -> dict[str, Any]:
     """Picker-shape ``{prompt, completion[, input_cache_read, input_cache_write]}`` from a catalog
     ``pricing`` block whose cache fields already use the clawk names."""
     entry: dict[str, Any] = {
@@ -226,6 +241,7 @@ def fetch_models_with_pricing(
     ``pricing.original`` rates through as a nested ``original`` dict for sale chrome."""
     from clawk_cli.chat_catalog import catalog_item_is_generation
     from clawk_cli.models import _CLAWK_USER_AGENT, _openrouter_model_supports_tools
+
     url_root = (base_url or "").rstrip("/")
     cache_key = url_root + _pricing_auth_fingerprint(api_key)
     if not force_refresh:
@@ -253,8 +269,16 @@ def fetch_models_with_pricing(
             # Sale chrome is Nous Portal-only; never copy pricing.original for other catalogs.
             original = pricing.get("original") if include_sale_original else None
             if isinstance(original, dict):
-                orig_entry = {key: str(original[key]) for key in ("prompt", "completion", "input_cache_read", "input_cache_write")
-                              if original.get(key) not in (None, "")}
+                orig_entry = {
+                    key: str(original[key])
+                    for key in (
+                        "prompt",
+                        "completion",
+                        "input_cache_read",
+                        "input_cache_write",
+                    )
+                    if original.get(key) not in (None, "")
+                }
                 if orig_entry.get("prompt") or orig_entry.get("completion"):
                     entry["original"] = orig_entry
             # Nous Portal-only: the gateway bills this row to a subscription the account holds, not to credits.
@@ -269,8 +293,12 @@ def fetch_models_with_pricing(
                 entry["usage_level"] = item["usage_level"]
             # Nous only: the catalog's display name, so a limit line can name a model the way the
             # picker does ("Model A", not the routed id).
-            if include_sale_original and isinstance(item.get("name"), str) and item["name"].strip() \
-                    and item["name"].strip() != mid:
+            if (
+                include_sale_original
+                and isinstance(item.get("name"), str)
+                and item["name"].strip()
+                and item["name"].strip() != mid
+            ):
                 entry["name"] = item["name"].strip()
             # Nous Portal-only: on-sale rows join the picker, which must not offer a tool-less model.
             if include_sale_original and not _openrouter_model_supports_tools(item):
@@ -283,7 +311,9 @@ def fetch_models_with_pricing(
     return _cache_catalog(cache_key, result, cache_ttl_seconds)
 
 
-def fetch_ai_gateway_pricing(timeout: float = 8.0, *, force_refresh: bool = False) -> dict[str, dict[str, str]]:
+def fetch_ai_gateway_pricing(
+    timeout: float = 8.0, *, force_refresh: bool = False
+) -> dict[str, dict[str, str]]:
     """Vercel AI Gateway /v1/models pricing, translating its ``input`` / ``output`` field names to
     the picker's ``prompt`` / ``completion`` (cache read/write names already match)."""
     from clawk_constants import AI_GATEWAY_BASE_URL
@@ -294,7 +324,12 @@ def fetch_ai_gateway_pricing(timeout: float = 8.0, *, force_refresh: bool = Fals
         if cached is not None:
             return cached
 
-    payload = _get_json(f"{cache_key}/models", {"Accept": "application/json"}, timeout, opener=urllib.request.urlopen)
+    payload = _get_json(
+        f"{cache_key}/models",
+        {"Accept": "application/json"},
+        timeout,
+        opener=urllib.request.urlopen,
+    )
     if payload is None:
         return _cache_catalog(cache_key, {})
 
@@ -348,7 +383,9 @@ def _resolve_nous_pricing_credentials() -> tuple[str, str]:
 _NOUS_CATALOG_TTL_SECONDS = 300.0
 
 
-def _fetch_nous_pricing(api_key: str, base_url: str, *, force_refresh: bool) -> dict[str, dict[str, Any]]:
+def _fetch_nous_pricing(
+    api_key: str, base_url: str, *, force_refresh: bool
+) -> dict[str, dict[str, Any]]:
     """Shared by pricing and policy lookups so both read one cache entry."""
     return fetch_models_with_pricing(
         api_key=api_key,
@@ -375,7 +412,9 @@ def nous_policy_allowed_ids(*, force_refresh: bool = False) -> Optional[set[str]
     api_key, base_url = _resolve_nous_pricing_credentials()
     if not api_key or not base_url:
         return None
-    return set(_fetch_nous_pricing(api_key, base_url, force_refresh=force_refresh)) or None
+    return (
+        set(_fetch_nous_pricing(api_key, base_url, force_refresh=force_refresh)) or None
+    )
 
 
 # Past this size an allowed set reads as a whole catalog rather than an allowlist, and is not
@@ -397,7 +436,9 @@ def restrict_to_nous_policy(
     empty list (a paid tier's gated models) means "nothing to gate", not "nothing survived"."""
     if not allowed:
         return list(model_ids)
-    kept = [mid for mid in model_ids if mid in allowed or mid.split(":", 1)[0] in allowed]
+    kept = [
+        mid for mid in model_ids if mid in allowed or mid.split(":", 1)[0] in allowed
+    ]
     if rescue_empty and not kept and len(allowed) <= _NOUS_POLICY_APPEND_MAX:
         return sorted(allowed)
     return kept
@@ -405,10 +446,13 @@ def restrict_to_nous_policy(
 
 def _remember_provider_cache_key(provider: str, cache_key: str) -> None:
     from clawk_cli.models import _pricing_profile_key
+
     _pricing_provider_cache_keys[(_pricing_profile_key(), provider)] = cache_key
 
 
-def _fetch_openrouter_pricing(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_openrouter_pricing(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     _remember_provider_cache_key("openrouter", _OPENROUTER_PRICING_BASE)
     return fetch_models_with_pricing(
         api_key=_resolve_openrouter_api_key(),
@@ -417,12 +461,16 @@ def _fetch_openrouter_pricing(*, force_refresh: bool = False) -> dict[str, dict[
     )
 
 
-def _fetch_ai_gateway_pricing_for_provider(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_ai_gateway_pricing_for_provider(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     _remember_provider_cache_key("ai-gateway", _ai_gateway_pricing_scope())
     return fetch_ai_gateway_pricing(force_refresh=force_refresh)
 
 
-def _fetch_novita_pricing_for_provider(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_novita_pricing_for_provider(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     _remember_provider_cache_key("novita", _novita_pricing_scope())
     return _fetch_novita_pricing(force_refresh=force_refresh)
 
@@ -441,7 +489,9 @@ def _kilo_pricing_scope() -> str:
     return base_url.rstrip("/").removesuffix("/v1")
 
 
-def _fetch_kilocode_pricing(timeout: float = 8.0, *, force_refresh: bool = False) -> dict[str, dict[str, str]]:
+def _fetch_kilocode_pricing(
+    timeout: float = 8.0, *, force_refresh: bool = False
+) -> dict[str, dict[str, str]]:
     """Kilo Gateway ``{base}/models`` pricing (public OpenRouter-shaped catalog — per-token
     ``prompt``/``completion``/``input_cache_read`` strings, no key required, attached best-effort
     so an authenticated read also carries the key), cached on the catalog URL.
@@ -481,7 +531,10 @@ def _fetch_kilocode_pricing(timeout: float = 8.0, *, force_refresh: bool = False
         # The gateway's ``-1`` sentinel means "rate varies" (auto-router models); no price is
         # shown rather than a fabricated one. _price_float also drops any other unusable value
         # (blank / non-numeric), so a malformed row cannot poison the rest of the catalog.
-        if _price_float(entry["prompt"], positive=False) is None or _price_float(entry["completion"], positive=False) is None:
+        if (
+            _price_float(entry["prompt"], positive=False) is None
+            or _price_float(entry["completion"], positive=False) is None
+        ):
             continue
         if entry:
             result[str(mid)] = entry
@@ -489,17 +542,23 @@ def _fetch_kilocode_pricing(timeout: float = 8.0, *, force_refresh: bool = False
     return _cache_catalog(cache_key, result)
 
 
-def _fetch_fireworks_pricing_for_provider(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_fireworks_pricing_for_provider(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     _remember_provider_cache_key("fireworks", _FIREWORKS_PRICING_KEY)
     return _fireworks_pricing_from_models_dev(force_refresh=force_refresh)
 
 
-def _fetch_kilocode_pricing_for_provider(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_kilocode_pricing_for_provider(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     _remember_provider_cache_key("kilocode", _kilo_pricing_scope())
     return _fetch_kilocode_pricing(force_refresh=force_refresh)
 
 
-def _fetch_nous_pricing_for_provider(*, force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def _fetch_nous_pricing_for_provider(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, Any]]:
     api_key, base_url = _resolve_nous_pricing_credentials()
     if not base_url:
         return {}
@@ -510,7 +569,9 @@ def _fetch_nous_pricing_for_provider(*, force_refresh: bool = False) -> dict[str
     # pricing_cache_scope's last-resort fallback reads this value too; there it serves only as
     # an identity token for the prewarm single-flight, where including the credential is
     # equally correct (a key rotation means a new catalog and deserves a fresh worker).
-    _remember_provider_cache_key("nous", base_url.rstrip("/") + _pricing_auth_fingerprint(api_key))
+    _remember_provider_cache_key(
+        "nous", base_url.rstrip("/") + _pricing_auth_fingerprint(api_key)
+    )
     return _fetch_nous_pricing(api_key, base_url, force_refresh=force_refresh)
 
 
@@ -520,22 +581,33 @@ _FIREWORKS_PRICING_KEY = "models.dev/fireworks"
 
 def _ai_gateway_pricing_scope() -> str:
     from clawk_constants import AI_GATEWAY_BASE_URL
+
     return AI_GATEWAY_BASE_URL.rstrip("/")
 
 
 def _novita_pricing_scope() -> str:
-    return (os.getenv("NOVITA_BASE_URL", "").strip() or "https://api.novita.ai/openai/v1").rstrip("/")
+    return (
+        os.getenv("NOVITA_BASE_URL", "").strip() or "https://api.novita.ai/openai/v1"
+    ).rstrip("/")
 
 
 def get_cached_nous_inference_base_url() -> str:
     """The profile's persisted Nous endpoint (bare origin, no ``/v1``) without refreshing auth."""
     try:
         from clawk_cli.auth import (
-            _load_auth_store, _load_provider_state, _optional_base_url, _validate_nous_inference_url_from_network,
+            _load_auth_store,
+            _load_provider_state,
+            _optional_base_url,
+            _validate_nous_inference_url_from_network,
         )
 
         state = _load_provider_state(_load_auth_store(), "nous") or {}
-        url = _validate_nous_inference_url_from_network(_optional_base_url(state.get("inference_base_url"))) or ""
+        url = (
+            _validate_nous_inference_url_from_network(
+                _optional_base_url(state.get("inference_base_url"))
+            )
+            or ""
+        )
         return url.rstrip("/").removesuffix("/v1")
     except Exception:
         return ""
@@ -576,7 +648,9 @@ def resolve_pricing_provider(provider: str, *, base_url: str = "") -> str:
     # trust boundary: require an exact official hostname (or one of its explicit subdomains),
     # never a mere substring such as ``openrouter.ai.attacker.invalid``.
     if not inferred or not any(
-        provider == inferred and not host.startswith(".") and base_url_host_matches(base_url, host)
+        provider == inferred
+        and not host.startswith(".")
+        and base_url_host_matches(base_url, host)
         for host, provider in _URL_TO_PROVIDER.items()
     ):
         return ""
@@ -584,12 +658,21 @@ def resolve_pricing_provider(provider: str, *, base_url: str = "") -> str:
 
 
 def pricing_cache_scope(
-    provider: str, *, base_url: str = "", current_provider: str = "", current_base_url: str = ""
+    provider: str,
+    *,
+    base_url: str = "",
+    current_provider: str = "",
+    current_base_url: str = "",
 ) -> str:
     """The current endpoint identity a provider's pricing cache is keyed on. Resolves local configuration
     only, never fetches: picker prewarm single-flight uses it so an endpoint rotation can start a new
     worker while the previous endpoint is still slow or unreachable."""
-    from clawk_cli.models import _deepinfra_catalog_url, _pricing_profile_key, normalize_provider
+    from clawk_cli.models import (
+        _deepinfra_catalog_url,
+        _pricing_profile_key,
+        normalize_provider,
+    )
+
     normalized = resolve_pricing_provider(provider, base_url=base_url)
     static = _STATIC_PRICING_SCOPES.get(normalized)
     if static:
@@ -610,16 +693,25 @@ def pricing_cache_scope(
         persisted_base = get_cached_nous_inference_base_url()
         if persisted_base:
             return persisted_base
-        return _pricing_provider_cache_keys.get((_pricing_profile_key(), normalized), _DEFAULT_NOUS_INFERENCE_BASE)
+        return _pricing_provider_cache_keys.get(
+            (_pricing_profile_key(), normalized), _DEFAULT_NOUS_INFERENCE_BASE
+        )
     return ""
 
 
 def _cached_only_pricing(normalized: str) -> dict[str, dict[str, str]]:
     """Process-resident pricing for *normalized* without any provider I/O."""
-    from clawk_cli.models import _deepinfra_catalog_cache, _deepinfra_catalog_url, _pricing_profile_key
+    from clawk_cli.models import (
+        _deepinfra_catalog_cache,
+        _deepinfra_catalog_url,
+        _pricing_profile_key,
+    )
+
     if normalized == "deepinfra":
         cache_key, _url = _deepinfra_catalog_url()
-        return _fetch_deepinfra_pricing() if cache_key in _deepinfra_catalog_cache else {}
+        return (
+            _fetch_deepinfra_pricing() if cache_key in _deepinfra_catalog_cache else {}
+        )
     cache_key = _pricing_provider_cache_keys.get((_pricing_profile_key(), normalized))
     if cache_key is None and normalized in ("openrouter", "ai-gateway", "fireworks"):
         cache_key = _STATIC_PRICING_SCOPES[normalized]()
@@ -627,7 +719,11 @@ def _cached_only_pricing(normalized: str) -> dict[str, dict[str, str]]:
 
 
 def get_pricing_for_provider(
-    provider: str, *, base_url: str = "", force_refresh: bool = False, cached_only: bool = False
+    provider: str,
+    *,
+    base_url: str = "",
+    force_refresh: bool = False,
+    cached_only: bool = False,
 ) -> dict[str, dict[str, str]]:
     """Return live pricing for providers that support it (openrouter, nous, ai-gateway, novita,
     deepinfra, fireworks, kilocode); ``{}`` for everything else. ``cached_only`` never starts
@@ -640,7 +736,9 @@ def get_pricing_for_provider(
     return fetcher(force_refresh=force_refresh) if fetcher else {}
 
 
-def _fireworks_pricing_from_models_dev(*, force_refresh: bool = False) -> dict[str, dict[str, str]]:
+def _fireworks_pricing_from_models_dev(
+    *, force_refresh: bool = False
+) -> dict[str, dict[str, str]]:
     """Fireworks picker pricing from the models.dev registry cache (``fetch_models_dev()`` keeps a
     shared in-memory + disk cache, 1h TTL) — a pure dict transform, no per-render network call."""
     cache_key = "models.dev/fireworks"
@@ -670,21 +768,30 @@ def _fireworks_pricing_from_models_dev(*, force_refresh: bool = False) -> dict[s
     return _cache_catalog(cache_key, result)
 
 
-def _fetch_novita_pricing(timeout: float = 8.0, *, force_refresh: bool = False) -> dict[str, dict[str, str]]:
+def _fetch_novita_pricing(
+    timeout: float = 8.0, *, force_refresh: bool = False
+) -> dict[str, dict[str, str]]:
     """NovitaAI /v1/models pricing (per-million prices in units of 0.0001 USD → per-token strings),
     cached on the resolved base URL so menu renders don't re-hit the network."""
     from clawk_cli.models import _CLAWK_USER_AGENT
+
     api_key = os.getenv("NOVITA_API_KEY", "").strip()
     if not api_key:
         return {}
 
-    cache_key = (os.getenv("NOVITA_BASE_URL", "").strip() or "https://api.novita.ai/openai/v1").rstrip("/")
+    cache_key = (
+        os.getenv("NOVITA_BASE_URL", "").strip() or "https://api.novita.ai/openai/v1"
+    ).rstrip("/")
     if not force_refresh:
         cached = _cached_catalog(cache_key)
         if cached is not None:
             return cached
 
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": _CLAWK_USER_AGENT}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Accept": "application/json",
+        "User-Agent": _CLAWK_USER_AGENT,
+    }
     payload = _get_json(cache_key + "/models", headers, timeout)
     if payload is None:
         return _cache_catalog(cache_key, {})
@@ -692,7 +799,10 @@ def _fetch_novita_pricing(timeout: float = 8.0, *, force_refresh: bool = False) 
     result: dict[str, dict[str, str]] = {}
     for item in _catalog_items(payload):
         mid = item.get("id")
-        inp, out = item.get("input_token_price_per_m"), item.get("output_token_price_per_m")
+        inp, out = (
+            item.get("input_token_price_per_m"),
+            item.get("output_token_price_per_m"),
+        )
         if not mid or (inp is None and out is None):
             continue
         result[str(mid)] = {
@@ -703,12 +813,17 @@ def _fetch_novita_pricing(timeout: float = 8.0, *, force_refresh: bool = False) 
     return _cache_catalog(cache_key, result)
 
 
-def _fetch_deepinfra_pricing(timeout: float = 5.0, *, force_refresh: bool = False) -> dict[str, dict[str, str]]:
+def _fetch_deepinfra_pricing(
+    timeout: float = 5.0, *, force_refresh: bool = False
+) -> dict[str, dict[str, str]]:
     """DeepInfra chat-model pricing: ``input_tokens`` / ``output_tokens`` / ``cache_read_tokens`` in
     $/MTok → per-token ``prompt`` / ``completion`` / ``input_cache_read`` (cached by the by-tag
     helper)."""
     from clawk_cli.models import _fetch_deepinfra_models_by_tag
-    items = _fetch_deepinfra_models_by_tag("chat", timeout=timeout, force_refresh=force_refresh)
+
+    items = _fetch_deepinfra_models_by_tag(
+        "chat", timeout=timeout, force_refresh=force_refresh
+    )
     result: dict[str, dict[str, str]] = {}
     for item in items or []:
         metadata = item.get("metadata") or {}
@@ -717,7 +832,11 @@ def _fetch_deepinfra_pricing(timeout: float = 5.0, *, force_refresh: bool = Fals
             continue
         entry = {
             ours: _per_token(pricing[theirs])
-            for theirs, ours in (("input_tokens", "prompt"), ("output_tokens", "completion"), ("cache_read_tokens", "input_cache_read"))
+            for theirs, ours in (
+                ("input_tokens", "prompt"),
+                ("output_tokens", "completion"),
+                ("cache_read_tokens", "input_cache_read"),
+            )
             if pricing.get(theirs) is not None
         }
         if entry:

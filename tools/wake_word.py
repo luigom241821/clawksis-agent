@@ -60,8 +60,14 @@ _SILENCE_ALERT_SECONDS = 10
 # Unknown providers probe as openwakeword but fail to build.
 _PROVIDERS: dict[str, tuple[str, str]] = {
     "porcupine": ("_PorcupineEngine", "wake-porcupine"),
-    **{k: ("_SherpaKwsEngine", "wake-sherpa") for k in ("sherpa", "sherpa-onnx", "kws", "open")},
-    **{k: ("_OpenWakeWordEngine", "wake-openwakeword") for k in ("openwakeword", "oww", "local")},
+    **{
+        k: ("_SherpaKwsEngine", "wake-sherpa")
+        for k in ("sherpa", "sherpa-onnx", "kws", "open")
+    },
+    **{
+        k: ("_OpenWakeWordEngine", "wake-openwakeword")
+        for k in ("openwakeword", "oww", "local")
+    },
 }
 _PROVIDER_PREFERENCE = ("openwakeword", "sherpa", "porcupine")
 
@@ -75,9 +81,15 @@ class WakeWordInUse(RuntimeError):
 # capture: "local" (PortAudio on the backend host), "client" (desktop/TUI streams int16
 # frames via wake.feed), or "auto" (local when a device exists, else client).
 _DEFAULTS: dict[str, Any] = {
-    "enabled": False, "surface": "auto", "input_device": None, "capture": "auto",
-    "provider": "auto", "phrase": "hey clawk", "sensitivity": 0.6,
-    "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES, "start_new_session": True,
+    "enabled": False,
+    "surface": "auto",
+    "input_device": None,
+    "capture": "auto",
+    "provider": "auto",
+    "phrase": "hey clawk",
+    "sensitivity": 0.6,
+    "confirmation_frames": _DEFAULT_CONFIRMATION_FRAMES,
+    "start_new_session": True,
 }
 
 # Bundled "hey clawk" model (tools/wakewords/) — the default; alias names resolve
@@ -88,7 +100,9 @@ _BUNDLED_MODEL_ALIASES = frozenset({"", "hey_clawk", "hey clawk", "clawk"})
 
 def _bundled_wakeword_path() -> str:
     """Path to the shipped hey_clawk.tflite — pyopen-wakeword runs TFLite only."""
-    return os.path.join(os.path.dirname(__file__), "wakewords", f"{_BUNDLED_MODEL_NAME}.tflite")
+    return os.path.join(
+        os.path.dirname(__file__), "wakewords", f"{_BUNDLED_MODEL_NAME}.tflite"
+    )
 
 
 def load_wake_word_config() -> dict[str, Any]:
@@ -96,6 +110,7 @@ def load_wake_word_config() -> dict[str, Any]:
     cfg = None
     with suppress(Exception):
         from clawk_cli.config import load_config
+
         cfg = load_config().get("wake_word")
     return cfg if isinstance(cfg, dict) else {}
 
@@ -114,20 +129,32 @@ def _clamped(cfg: dict[str, Any], key: str, cast, lo, hi):
     return min(max(n, lo), hi)
 
 
-def _provider(cfg: dict[str, Any], *, supported: Callable[[str], bool] | None = None) -> str:
+def _provider(
+    cfg: dict[str, Any], *, supported: Callable[[str], bool] | None = None
+) -> str:
     provider = str(_get(cfg, "provider")).strip().lower() or "auto"
     if provider != "auto":
         return provider
     if supported is None:
         from pm.extras import extra_supported
+
         supported = extra_supported
-    return next((name for name in _PROVIDER_PREFERENCE if supported(_PROVIDERS[name][1])), "porcupine")
+    return next(
+        (name for name in _PROVIDER_PREFERENCE if supported(_PROVIDERS[name][1])),
+        "porcupine",
+    )
 
 
 def _input_device(cfg: dict[str, Any]) -> int | str | None:
     """Configured PortAudio input selector, preserving indices and names."""
     raw = _get(cfg, "input_device")
-    return None if isinstance(raw, bool) else raw if raw is None or isinstance(raw, int) else (str(raw).strip() or None)
+    return (
+        None
+        if isinstance(raw, bool)
+        else raw
+        if raw is None or isinstance(raw, int)
+        else (str(raw).strip() or None)
+    )
 
 
 def _sensitivity(cfg: dict[str, Any]) -> float:
@@ -145,8 +172,12 @@ def wake_phrase(cfg: Optional[dict[str, Any]] = None) -> str:
     return str(_get(cfg, "phrase")) or "hey clawk"
 
 
-def resolve_capture_mode(cfg: Optional[dict[str, Any]] = None, *, prefer_client: bool = False,
-                         force_local: bool = False) -> str:
+def resolve_capture_mode(
+    cfg: Optional[dict[str, Any]] = None,
+    *,
+    prefer_client: bool = False,
+    force_local: bool = False,
+) -> str:
     """Return ``local`` or ``client`` capture mode for this arm. ``prefer_client`` is set by remote
     desktop; ``force_local`` keeps CLI/TUI on the process mic. Under ``auto`` a working backend input
     always wins; client is the fallback only for a preferring surface with no usable backend mic —
@@ -157,11 +188,19 @@ def resolve_capture_mode(cfg: Optional[dict[str, Any]] = None, *, prefer_client:
     raw = str(_get(cfg, "capture") or "auto").strip().lower()
     if raw in ("client", "remote", "external"):
         return "client"
-    return "client" if raw != "local" and prefer_client and not _local_input_device_ready() else "local"
+    return (
+        "client"
+        if raw != "local" and prefer_client and not _local_input_device_ready()
+        else "local"
+    )
 
 
 def _input_channels(info: Any) -> int:
-    ch = info.get("max_input_channels") if isinstance(info, dict) else getattr(info, "max_input_channels", 0)
+    ch = (
+        info.get("max_input_channels")
+        if isinstance(info, dict)
+        else getattr(info, "max_input_channels", 0)
+    )
     return int(ch or 0)
 
 
@@ -173,8 +212,10 @@ def _local_input_device_ready() -> bool:
         if isinstance(devices, dict):
             return _input_channels(devices) > 0
         # Also accept a resolvable default input (some hosts list devices oddly).
-        return (any(_input_channels(d) > 0 for d in devices)
-                or _input_channels(sd.query_devices(None, "input")) > 0)
+        return (
+            any(_input_channels(d) > 0 for d in devices)
+            or _input_channels(sd.query_devices(None, "input")) > 0
+        )
     except Exception:
         return False
 
@@ -189,9 +230,11 @@ def wake_surface_enabled(surface: str, cfg: Optional[dict[str, Any]] = None) -> 
 
 # ── Multi-profile phrase enrollment (open-vocabulary routing) ──
 
+
 def _active_profile_name() -> str:
     with suppress(Exception):
         from clawk_cli.profiles import get_active_profile_name
+
         return get_active_profile_name() or "default"
     return "default"
 
@@ -204,10 +247,16 @@ def enrolled_profile_phrases() -> dict[str, str]:
     with suppress(Exception):
         from clawk_cli.config import read_user_config_raw
         from clawk_cli.profiles import get_profile_dir, list_profiles
+
         for info in list_profiles():
             name = getattr(info, "name", None) or str(info)
             with suppress(Exception):
-                wc = read_user_config_raw(Path(get_profile_dir(name)) / "config.yaml").get("wake_word") or {}
+                wc = (
+                    read_user_config_raw(
+                        Path(get_profile_dir(name)) / "config.yaml"
+                    ).get("wake_word")
+                    or {}
+                )
                 if isinstance(wc, dict) and wc.get("enabled"):
                     phrase = str(wc.get("phrase") or f"hey {name}").strip()
                     if phrase:
@@ -217,9 +266,11 @@ def enrolled_profile_phrases() -> dict[str, str]:
 
 # ── Audio capture (lazy — never import sounddevice at module load) ──
 
+
 def _import_audio():
     import numpy as np
     import sounddevice as sd
+
     return sd, np
 
 
@@ -243,8 +294,11 @@ def _describe_input_device(selector: int | str | None, sd=None) -> dict[str, Any
         return details
     if info.get("name"):
         details["name"] = str(info["name"])
-    for key, out_key, cast in (("max_input_channels", "max_input_channels", int),
-                               ("default_samplerate", "default_samplerate", float), ("hostapi", "hostapi_index", int)):
+    for key, out_key, cast in (
+        ("max_input_channels", "max_input_channels", int),
+        ("default_samplerate", "default_samplerate", float),
+        ("hostapi", "hostapi_index", int),
+    ):
         if isinstance(info.get(key), (int, float)):
             details[out_key] = cast(info[key])
     if "hostapi_index" in details:
@@ -270,20 +324,29 @@ def _resample_audio_frame(np, frame, output_length: int):
     else:
         # Unusual low-rate devices: interpolate up to the 16 kHz frame size.
         source_positions = np.arange(source.size, dtype=np.float64)
-        values = np.interp(np.linspace(0, source.size - 1, output_length), source_positions, source)
+        values = np.interp(
+            np.linspace(0, source.size - 1, output_length), source_positions, source
+        )
     return np.rint(values).clip(-32768, 32767).astype(np.int16)
 
 
 def silent_audio_hint(details: dict[str, Any]) -> str:
     """Platform-specific remediation for an armed stream delivering silence."""
     if sys.platform == "darwin":
-        return ("Microphone delivers only silence. Grant the Clawksis backend "
-                "microphone access in System Settings > Privacy & Security > "
-                "Microphone, then toggle the wake word.")
-    fix = ("Set wake_word.input_device to a different PortAudio input device"
-           if sys.platform == "win32" else "Check the selected input device")
+        return (
+            "Microphone delivers only silence. Grant the Clawksis backend "
+            "microphone access in System Settings > Privacy & Security > "
+            "Microphone, then toggle the wake word."
+        )
+    fix = (
+        "Set wake_word.input_device to a different PortAudio input device"
+        if sys.platform == "win32"
+        else "Check the selected input device"
+    )
     selector = details.get("selector")
-    label = str(details.get("name") or "").strip() or ("system default" if selector is None else str(selector))
+    label = str(details.get("name") or "").strip() or (
+        "system default" if selector is None else str(selector)
+    )
     hostapi = str(details.get("hostapi") or "").strip()
     label = f"{label} ({hostapi})" if hostapi else label
     return f"Microphone delivers only silence from {label}. {fix}, then toggle the wake word."
@@ -298,11 +361,17 @@ def _build_engine(cfg: dict[str, Any]) -> _Engine:
 
 # ── Requirements probe (for /wake status + enable path) ──
 
+
 def _stt_ready() -> bool:
     """Is a speech-to-text provider configured and enabled? (A wake without STT arms the
     mic but every utterance dies at transcription — same bar as ``check_voice_requirements``.)"""
     with suppress(Exception):
-        from tools.transcription_tools import _get_provider, _load_stt_config, is_stt_enabled
+        from tools.transcription_tools import (
+            _get_provider,
+            _load_stt_config,
+            is_stt_enabled,
+        )
+
         stt_config = _load_stt_config()
         return is_stt_enabled(stt_config) and _get_provider(stt_config) != "none"
     return False
@@ -322,7 +391,12 @@ def _tts_ready() -> bool:
     use" counts as ready and we never touch pip from here.
     """
     try:
-        from tools.tts_tool import _get_provider, _load_tts_config, check_tts_requirements
+        from tools.tts_tool import (
+            _get_provider,
+            _load_tts_config,
+            check_tts_requirements,
+        )
+
         provider = _get_provider(_load_tts_config())
     except Exception:
         return False
@@ -352,8 +426,11 @@ def _tts_ready() -> bool:
         return False
 
 
-def check_wake_word_requirements(cfg: Optional[dict[str, Any]] = None, *,
-                                 supported: Callable[[str], bool] | None = None) -> dict[str, Any]:
+def check_wake_word_requirements(
+    cfg: Optional[dict[str, Any]] = None,
+    *,
+    supported: Callable[[str], bool] | None = None,
+) -> dict[str, Any]:
     """Report whether wake-word detection can run, with a remediation hint."""
     cfg = cfg if cfg is not None else load_wake_word_config()
     import pm
@@ -388,24 +465,34 @@ def check_wake_word_requirements(cfg: Optional[dict[str, Any]] = None, *,
     hint = ""
 
     if not platform_ok:
-        alternatives = [name for name in ("sherpa", "porcupine")
-                        if supported(_PROVIDERS[name][1])]
+        alternatives = [
+            name for name in ("sherpa", "porcupine") if supported(_PROVIDERS[name][1])
+        ]
         hint = f"The {provider} wake engine is not supported on this platform."
         if alternatives:
             hint += f" Set wake_word.provider to {' or '.join(alternatives)}."
-    elif provider == "porcupine" and not (os.getenv("PORCUPINE_ACCESS_KEY") or "").strip():
+    elif (
+        provider == "porcupine"
+        and not (os.getenv("PORCUPINE_ACCESS_KEY") or "").strip()
+    ):
         key_ok = False
         hint = "Set PORCUPINE_ACCESS_KEY (free key at https://console.picovoice.ai)."
     elif not deps_ok and not lazy_ok:
         hint = install_hint(feature)
     elif deps_ok and not audio_ok and resolve_capture_mode(cfg) == "local":
-        hint = "Microphone capture needs sounddevice + numpy and a working audio device."
+        hint = (
+            "Microphone capture needs sounddevice + numpy and a working audio device."
+        )
     elif not stt_ok or not tts_ok:
         missing = " and ".join(
-            name for name, ok in (("speech-to-text", stt_ok), ("text-to-speech", tts_ok)) if not ok
+            name
+            for name, ok in (("speech-to-text", stt_ok), ("text-to-speech", tts_ok))
+            if not ok
         )
-        hint = (f"Wake word needs {missing} configured — run `clawk tools` "
-                f"(Voice section) or see the voice-mode docs.")
+        hint = (
+            f"Wake word needs {missing} configured — run `clawk tools` "
+            f"(Voice section) or see the voice-mode docs."
+        )
 
     capture_mode = resolve_capture_mode(cfg)
 
@@ -415,20 +502,29 @@ def check_wake_word_requirements(cfg: Optional[dict[str, Any]] = None, *,
     else:
         mic_ok = (deps_ok and audio_ok) or (not deps_ok and lazy_ok)
         if deps_ok and not audio_ok and not hint:
-            hint = ("No local microphone on this backend. Remote desktop can stream "
-                    "the client mic — set wake_word.capture: client or use a desktop "
-                    "build with client-capture wake support.")
+            hint = (
+                "No local microphone on this backend. Remote desktop can stream "
+                "the client mic — set wake_word.capture: client or use a desktop "
+                "build with client-capture wake support."
+            )
 
     return {
-        "available": platform_ok and key_ok and stt_ok and tts_ok and mic_ok, "provider": provider,
-        "deps_available": deps_ok, "audio_available": audio_ok,
+        "available": platform_ok and key_ok and stt_ok and tts_ok and mic_ok,
+        "provider": provider,
+        "deps_available": deps_ok,
+        "audio_available": audio_ok,
         "local_input_available": _local_input_device_ready() if deps_ok else False,
-        "capture": capture_mode, "access_key_set": key_ok, "stt_available": stt_ok, "tts_available": tts_ok,
-        "phrase": wake_phrase(cfg), "hint": hint,
+        "capture": capture_mode,
+        "access_key_set": key_ok,
+        "stt_available": stt_ok,
+        "tts_available": tts_ok,
+        "phrase": wake_phrase(cfg),
+        "hint": hint,
     }
 
 
 # ── Detector ──
+
 
 @dataclass
 class _Capture:
@@ -459,7 +555,11 @@ class _Capture:
         """
         if self.stream is not None:
             available = getattr(self.stream, "read_available", None)
-            if stop is not None and available is not None and not self._skip_available_poll:
+            if (
+                stop is not None
+                and available is not None
+                and not self._skip_available_poll
+            ):
                 stalled = 0.0
                 while self.stream.read_available < self.frame_length:
                     if stop.wait(_READ_POLL_SECONDS):
@@ -468,7 +568,9 @@ class _Capture:
                     if stalled >= _READ_STALL_FALLBACK_SECONDS:
                         logger.warning(
                             "wake word: read_available stuck below frame length for "
-                            "%.1fs — falling back to blocking reads", stalled)
+                            "%.1fs — falling back to blocking reads",
+                            stalled,
+                        )
                         self._skip_available_poll = True
                         break
             return self.stream.read(self.frame_length)[0]
@@ -495,14 +597,27 @@ class WakeWordDetector:
     """Background hotword listener; fires ``on_wake()`` when the phrase is heard. The engine is built
     once and kept across pause/resume — only the stream + reader thread cycle, so mic toggles are cheap."""
 
-    def __init__(self, engine: _Engine, on_wake: Callable[[], None], cooldown: float = _FIRE_COOLDOWN_SECONDS,
-                 on_failure: Optional[Callable[[WakeWordDetector], None]] = None,
-                 input_device: int | str | None = None, external_audio: bool = False):
-        self.engine, self.on_wake, self.cooldown, self.on_failure = engine, on_wake, cooldown, on_failure
+    def __init__(
+        self,
+        engine: _Engine,
+        on_wake: Callable[[], None],
+        cooldown: float = _FIRE_COOLDOWN_SECONDS,
+        on_failure: Optional[Callable[[WakeWordDetector], None]] = None,
+        input_device: int | str | None = None,
+        external_audio: bool = False,
+    ):
+        self.engine, self.on_wake, self.cooldown, self.on_failure = (
+            engine,
+            on_wake,
+            cooldown,
+            on_failure,
+        )
         self.input_device, self.external_audio = input_device, bool(external_audio)
         self.input_device_details: dict[str, Any] = (
             {"selector": "client", "name": "client capture", "hostapi": "remote"}
-            if self.external_audio else {"selector": input_device})
+            if self.external_audio
+            else {"selector": input_device}
+        )
         self._thread: Optional[threading.Thread] = None
         # Armed capture of the current reader thread; lets _halt_thread abort a
         # blocking read the poll guard cannot return from. Written by _run.
@@ -557,15 +672,21 @@ class WakeWordDetector:
             self._stop.clear()
             ready = threading.Event()
             startup_errors: list[BaseException] = []
-            self._thread = threading.Thread(target=self._run, args=(ready, startup_errors),
-                                            daemon=True, name="wake-word")
+            self._thread = threading.Thread(
+                target=self._run,
+                args=(ready, startup_errors),
+                daemon=True,
+                name="wake-word",
+            )
             self._thread.start()
         if not ready.wait(_START_TIMEOUT_SECONDS):
             self._halt_thread()
             raise TimeoutError("Timed out while opening the wake-word microphone.")
         if startup_errors:
             self._halt_thread()
-            raise RuntimeError("Failed to open the wake-word microphone.") from startup_errors[0]
+            raise RuntimeError(
+                "Failed to open the wake-word microphone."
+            ) from startup_errors[0]
 
     # pause/resume keep the engine; stop tears it down.
     def pause(self) -> None:
@@ -614,8 +735,11 @@ class WakeWordDetector:
             with suppress(Exception):  # drain stale frames from a previous arm
                 while True:
                     self._audio_q.get_nowait()
-            logger.info("wake word: client-capture mode (frame=%d, rate=%d) — waiting for wake.feed",
-                        frame_length, SAMPLE_RATE)
+            logger.info(
+                "wake word: client-capture mode (frame=%d, rate=%d) — waiting for wake.feed",
+                frame_length,
+                SAMPLE_RATE,
+            )
             return _Capture(queue=self._audio_q, frame_length=frame_length)
 
         try:
@@ -623,20 +747,33 @@ class WakeWordDetector:
         except (ImportError, OSError) as e:
             logger.error("wake word: audio libraries unavailable: %s", e)
             raise
-        details = self.input_device_details = _describe_input_device(self.input_device, sd)
+        details = self.input_device_details = _describe_input_device(
+            self.input_device, sd
+        )
         # Capture at the device's native rate when PortAudio reports one; frames are resampled to the engine.
         cap, rate = _Capture(np=np), details.get("default_samplerate")
         if isinstance(rate, (int, float)) and not isinstance(rate, bool) and rate > 0:
             with suppress(OverflowError, ValueError):
                 cap.rate = round(rate)
         cap.frame_length = max(1, round(frame_length * cap.rate / SAMPLE_RATE))
-        logger.info("wake word: opening microphone device=%s selector=%r hostapi=%s "
-                    "default_rate=%s capture_rate=%d engine_rate=%d", details.get("name") or "system default",
-                    self.input_device, details.get("hostapi") or "unknown",
-                    details.get("default_samplerate") or "unknown", cap.rate, SAMPLE_RATE)
+        logger.info(
+            "wake word: opening microphone device=%s selector=%r hostapi=%s "
+            "default_rate=%s capture_rate=%d engine_rate=%d",
+            details.get("name") or "system default",
+            self.input_device,
+            details.get("hostapi") or "unknown",
+            details.get("default_samplerate") or "unknown",
+            cap.rate,
+            SAMPLE_RATE,
+        )
         try:
-            cap.stream = sd.InputStream(device=self.input_device, samplerate=cap.rate, channels=1,
-                                        dtype="int16", blocksize=cap.frame_length)
+            cap.stream = sd.InputStream(
+                device=self.input_device,
+                samplerate=cap.rate,
+                channels=1,
+                dtype="int16",
+                blocksize=cap.frame_length,
+            )
             cap.stream.start()
         except Exception as e:
             cap.close()
@@ -656,9 +793,12 @@ class WakeWordDetector:
             if self._silent_frames == silent_alert_frames:
                 self.audio_silent = True
                 if frame is not None:
-                    logger.warning("wake word: mic delivers only silence (peak<=%d for %ds); %s",
-                                   _SILENCE_PEAK, _SILENCE_ALERT_SECONDS,
-                                   silent_audio_hint(self.input_device_details))
+                    logger.warning(
+                        "wake word: mic delivers only silence (peak<=%d for %ds); %s",
+                        _SILENCE_PEAK,
+                        _SILENCE_ALERT_SECONDS,
+                        silent_audio_hint(self.input_device_details),
+                    )
         elif self._silent_frames:
             if self.audio_silent:
                 logger.info("wake word: mic audio detected — stream healthy")
@@ -674,7 +814,9 @@ class WakeWordDetector:
         logger.info("wake word: phrase detected — firing callback")
         if not self._callback_inflight.is_set():
             self._callback_inflight.set()
-            threading.Thread(target=self._dispatch_wake, daemon=True, name="wake-word-callback").start()
+            threading.Thread(
+                target=self._dispatch_wake, daemon=True, name="wake-word-callback"
+            ).start()
 
     def _recover_capture(self, frame_length: int, retries) -> Optional[_Capture]:
         """Retry only an already-started local capture, keeping its owner and engine."""
@@ -693,7 +835,9 @@ class WakeWordDetector:
                 self.engine.reset()
             self.audio_silent, self._silent_frames = False, 0
             return cap
-        logger.warning("wake word: microphone recovery exhausted; toggle wake word to retry")
+        logger.warning(
+            "wake word: microphone recovery exhausted; toggle wake word to retry"
+        )
         return None
 
     def _run(self, ready: threading.Event, startup_errors: list[BaseException]) -> None:
@@ -709,14 +853,20 @@ class WakeWordDetector:
         # re-fire on audio captured before the pause (wake → voice → resume → wake loop).
         with suppress(Exception):
             self.engine.reset()
-        logger.info("wake word: listening (frame=%d, rate=%d, external=%s)",
-                    frame_length, SAMPLE_RATE, self.external_audio)
+        logger.info(
+            "wake word: listening (frame=%d, rate=%d, external=%s)",
+            frame_length,
+            SAMPLE_RATE,
+            self.external_audio,
+        )
         ready.set()
         failed = False
         # Bound the whole arm, not just consecutive open failures: a device can
         # reopen successfully and fail its very next read forever.
         retries = iter((0.5, 1.0, 2.0))
-        silent_alert_frames = max(1, int(_SILENCE_ALERT_SECONDS * SAMPLE_RATE / max(1, frame_length)))
+        silent_alert_frames = max(
+            1, int(_SILENCE_ALERT_SECONDS * SAMPLE_RATE / max(1, frame_length))
+        )
         try:
             while not self._stop.is_set():
                 try:
@@ -764,6 +914,7 @@ _detector_lock = threading.Lock()
 
 def _lock_path() -> Path:
     from clawk_constants import get_default_clawk_root
+
     return get_default_clawk_root() / "runtime" / "wake-word.lock"
 
 
@@ -771,16 +922,23 @@ def _flock(handle, acquire: bool) -> None:
     """Non-blocking exclusive lock (or unlock) of one byte / whole file, per OS."""
     if os.name == "nt":
         import msvcrt
+
         if acquire:  # msvcrt needs at least one byte to lock
             handle.seek(0, os.SEEK_END)
             if handle.tell() == 0:
                 handle.write(b"\0")
                 handle.flush()
         handle.seek(0)
-        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK if acquire else msvcrt.LK_UNLCK, 1)
+        msvcrt.locking(
+            handle.fileno(), msvcrt.LK_NBLCK if acquire else msvcrt.LK_UNLCK, 1
+        )
     else:
         import fcntl
-        fcntl.flock(handle.fileno(), (fcntl.LOCK_EX | fcntl.LOCK_NB) if acquire else fcntl.LOCK_UN)
+
+        fcntl.flock(
+            handle.fileno(),
+            (fcntl.LOCK_EX | fcntl.LOCK_NB) if acquire else fcntl.LOCK_UN,
+        )
 
 
 def _acquire_machine_lock(path: Optional[Path] = None):
@@ -830,8 +988,13 @@ def _detector_failed(detector: WakeWordDetector) -> None:
             _teardown_locked(detector.engine.close)
 
 
-def start_listening(on_wake: Callable[[], None], *, owner: object, config: Optional[dict[str, Any]] = None,
-                    external_audio: bool = False) -> WakeWordDetector:
+def start_listening(
+    on_wake: Callable[[], None],
+    *,
+    owner: object,
+    config: Optional[dict[str, Any]] = None,
+    external_audio: bool = False,
+) -> WakeWordDetector:
     """Claim, build, and start the detector. Idempotent for the same owner; a different owner
     (or process) gets :class:`WakeWordInUse`. Raises if engine construction fails (missing deps /
     access key / model) — callers should probe :func:`check_wake_word_requirements` first."""
@@ -850,18 +1013,27 @@ def start_listening(on_wake: Callable[[], None], *, owner: object, config: Optio
         try:
             cfg = config if config is not None else load_wake_word_config()
             engine_cfg = {**cfg, "capture": "client" if external_audio else "local"}
-            _detector = WakeWordDetector(_build_engine(engine_cfg), on_wake, on_failure=_detector_failed,
-                                         input_device=_input_device(cfg), external_audio=external_audio)
+            _detector = WakeWordDetector(
+                _build_engine(engine_cfg),
+                on_wake,
+                on_failure=_detector_failed,
+                input_device=_input_device(cfg),
+                external_audio=external_audio,
+            )
             _detector_owner = owner
             _detector.start()
             return _detector
         except Exception:
             with suppress(Exception):
-                _teardown_locked(_detector.stop if _detector is not None else lambda: None)
+                _teardown_locked(
+                    _detector.stop if _detector is not None else lambda: None
+                )
             raise
 
 
-def _owned_call(owner: object, action: Optional[Callable[[WakeWordDetector], None]] = None) -> bool:
+def _owned_call(
+    owner: object, action: Optional[Callable[[WakeWordDetector], None]] = None
+) -> bool:
     """Under the lock, True iff ``owner`` holds the lease; also runs ``action(detector)`` when given."""
     with _detector_lock:
         det = _owned_detector(owner)
@@ -910,13 +1082,19 @@ def get_input_device_status(cfg: Optional[dict[str, Any]] = None) -> dict[str, A
     """Return configured/active PortAudio input diagnostics for status UIs."""
     if (det := _current_detector()) is not None:
         return dict(det.input_device_details)
-    return _describe_input_device(_input_device(cfg if cfg is not None else load_wake_word_config()))
+    return _describe_input_device(
+        _input_device(cfg if cfg is not None else load_wake_word_config())
+    )
 
 
 def get_last_match() -> Optional[tuple[str, str]]:
     """(matched phrase, profile) of the most recent wake fire when the engine reports
     per-phrase matches (sherpa multi-profile routing); None otherwise."""
-    return None if (det := _current_detector()) is None else getattr(det.engine, "last_match", None)
+    return (
+        None
+        if (det := _current_detector()) is None
+        else getattr(det.engine, "last_match", None)
+    )
 
 
 def feed_audio(*, owner: object, pcm_int16) -> bool:
@@ -933,5 +1111,8 @@ def detector_frame_info() -> dict[str, Any]:
     """Sample rate + frame length for client capture streamers."""
     if (det := _current_detector()) is None:
         return {"sample_rate": SAMPLE_RATE, "frame_length": 1280}
-    return {"sample_rate": SAMPLE_RATE, "external_audio": bool(det.external_audio),
-            "frame_length": int(getattr(det.engine, "frame_length", 1280) or 1280)}
+    return {
+        "sample_rate": SAMPLE_RATE,
+        "external_audio": bool(det.external_audio),
+        "frame_length": int(getattr(det.engine, "frame_length", 1280) or 1280),
+    }

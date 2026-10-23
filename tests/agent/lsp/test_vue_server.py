@@ -5,6 +5,7 @@
 run, so it never publishes diagnostics.  Clawksis pins the self-hosting 2.x line
 and starts it with ``vue.hybridMode`` off plus an explicit JS TypeScript SDK.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,22 +22,33 @@ def _stage(tmp_path, monkeypatch, vue_version: str, *, js_sdk: bool):
     node_modules = tmp_path / "lsp" / "node_modules"
     pkg = node_modules / "@vue" / "language-server"
     (pkg / "bin").mkdir(parents=True)
-    (pkg / "package.json").write_text(json.dumps({"version": vue_version}), encoding="utf-8")
+    (pkg / "package.json").write_text(
+        json.dumps({"version": vue_version}), encoding="utf-8"
+    )
     launcher = pkg / "bin" / "vue-language-server.js"
     launcher.write_text("#!/usr/bin/env node\n", encoding="utf-8")
     launcher.chmod(0o755)
     (tmp_path / "lsp" / "bin").mkdir()
     staged = tmp_path / "lsp" / "bin" / "vue-language-server"
-    staged.write_text(launcher.read_text(encoding="utf-8"), encoding="utf-8")  # copied like the Windows path, not symlinked
+    staged.write_text(
+        launcher.read_text(encoding="utf-8"), encoding="utf-8"
+    )  # copied like the Windows path, not symlinked
     staged.chmod(0o755)
     if js_sdk:
         (node_modules / "typescript" / "lib").mkdir(parents=True)
-        (node_modules / "typescript" / "lib" / "typescript.js").write_text("", encoding="utf-8")
+        (node_modules / "typescript" / "lib" / "typescript.js").write_text(
+            "", encoding="utf-8"
+        )
     return str(staged)
 
 
-@pytest.mark.parametrize("vue_version, js_sdk, spawns", [("2.2.12", True, True), ("3.3.11", True, False), ("2.2.12", False, False)])
-def test_vue_spawns_only_a_self_hosting_server_with_a_js_typescript_sdk(tmp_path, monkeypatch, vue_version, js_sdk, spawns):
+@pytest.mark.parametrize(
+    "vue_version, js_sdk, spawns",
+    [("2.2.12", True, True), ("3.3.11", True, False), ("2.2.12", False, False)],
+)
+def test_vue_spawns_only_a_self_hosting_server_with_a_js_typescript_sdk(
+    tmp_path, monkeypatch, vue_version, js_sdk, spawns
+):
     """2.x + JS SDK → spawn with ``hybridMode`` off and ``tsdk`` pointing at that SDK; a 3.x install
     (tunnel-only) or a missing/Go-only TypeScript must be skipped instead of spawning a server that
     can never publish diagnostics."""
@@ -60,11 +72,18 @@ def test_js_toolchain_recipes_pin_a_javascript_typescript_sdk():
     from agent.lsp.install import INSTALL_RECIPES
 
     def major(spec: str, name: str) -> int:
-        assert spec.startswith(f"{name}@"), spec  # unpinned = floats onto the next major
-        return int(spec[len(name) + 1:].split(".")[0])
+        assert spec.startswith(f"{name}@"), (
+            spec
+        )  # unpinned = floats onto the next major
+        return int(spec[len(name) + 1 :].split(".")[0])
 
-    vue, tsls = INSTALL_RECIPES["@vue/language-server"], INSTALL_RECIPES["typescript-language-server"]
+    vue, tsls = (
+        INSTALL_RECIPES["@vue/language-server"],
+        INSTALL_RECIPES["typescript-language-server"],
+    )
     assert major(vue["pkg"], "@vue/language-server") < 3
     for recipe in (vue, tsls):
-        sdk = [p for p in recipe.get("extra_pkgs") or [] if p.split("@")[0] == "typescript"]
+        sdk = [
+            p for p in recipe.get("extra_pkgs") or [] if p.split("@")[0] == "typescript"
+        ]
         assert sdk and major(sdk[0], "typescript") < 7

@@ -7,7 +7,9 @@ from clawk_state import SessionDB
 
 @pytest.mark.parametrize("react_before_compaction", [False, True])
 def test_compacted_reactions_are_delivered_once_without_reviving_rewound_rows(
-    tmp_path, monkeypatch, react_before_compaction,
+    tmp_path,
+    monkeypatch,
+    react_before_compaction,
 ):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     db_path = tmp_path / "state.db"
@@ -21,7 +23,9 @@ def test_compacted_reactions_are_delivered_once_without_reviving_rewound_rows(
         if react_before_compaction:
             db.set_message_reaction(sid, target, "👍")
         db.archive_and_compact(
-            sid, [{"role": "user", "content": "summary"}, tail], tail_count=1,
+            sid,
+            [{"role": "user", "content": "summary"}, tail],
+            tail_count=1,
         )
         visible = db.get_messages(sid, include_compacted=True)
         assert target in {row["id"] for row in visible}
@@ -40,7 +44,9 @@ def test_compacted_reactions_are_delivered_once_without_reviving_rewound_rows(
         ]
         assert db.take_unseen_reactions(sid) == []
         assert db.get_messages_as_conversation(sid) == before
-        archived = {row["id"]: row for row in db.get_messages(sid, include_compacted=True)}
+        archived = {
+            row["id"]: row for row in db.get_messages(sid, include_compacted=True)
+        }
         assert archived[target]["content"] == "the original answer"
         assert discarded not in archived
     finally:

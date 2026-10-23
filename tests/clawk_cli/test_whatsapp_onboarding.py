@@ -27,12 +27,6 @@ class _FakeProc:
         self.killed = True
 
 
-
-
-
-
-
-
 def test_apply_whatsapp_onboarding_saves_pairing_policy(monkeypatch):
     from clawk_cli import web_server as ws
 
@@ -40,9 +34,15 @@ def test_apply_whatsapp_onboarding_saves_pairing_policy(monkeypatch):
     removed = []
     enabled = []
 
-    monkeypatch.setattr(_cfg_mod, "save_env_value", lambda key, value: saved.setdefault(key, value))
+    monkeypatch.setattr(
+        _cfg_mod, "save_env_value", lambda key, value: saved.setdefault(key, value)
+    )
     monkeypatch.setattr(_cfg_mod, "remove_env_value", lambda key: removed.append(key))
-    monkeypatch.setattr(_web_server_messaging, "_write_platform_enabled", lambda platform, value: enabled.append((platform, value)))
+    monkeypatch.setattr(
+        _web_server_messaging,
+        "_write_platform_enabled",
+        lambda platform, value: enabled.append((platform, value)),
+    )
     monkeypatch.setattr(
         _web_server_messaging,
         "_restart_gateway_after_whatsapp_onboarding",
@@ -77,7 +77,9 @@ def test_apply_whatsapp_onboarding_saves_pairing_policy(monkeypatch):
     assert "pairing" not in _web_server_messaging._whatsapp_onboarding_sessions
 
 
-def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(monkeypatch, tmp_path):
+def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(
+    monkeypatch, tmp_path
+):
     from clawk_cli import web_server as ws
 
     session_dir = tmp_path / "session"
@@ -98,7 +100,9 @@ def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(monkeyp
     )
     _web_server_messaging._whatsapp_onboarding_sessions.clear()
     _web_server_messaging._whatsapp_onboarding_sessions["old"] = old_record
-    monkeypatch.setattr(_web_server_messaging, "_whatsapp_session_path", lambda: session_dir)
+    monkeypatch.setattr(
+        _web_server_messaging, "_whatsapp_session_path", lambda: session_dir
+    )
     monkeypatch.setattr(ws.secrets, "token_urlsafe", lambda size: "existing-creds")
 
     result = asyncio.run(
@@ -115,9 +119,10 @@ def test_start_whatsapp_onboarding_existing_creds_returns_linked_account(monkeyp
     assert result["account_phone"] == "15551234567"
     assert old_record.status == "cancelled"
     assert old_proc.terminated is True
-    assert _web_server_messaging._whatsapp_onboarding_sessions["existing-creds"].account_phone == "15551234567"
+    assert (
+        _web_server_messaging._whatsapp_onboarding_sessions[
+            "existing-creds"
+        ].account_phone
+        == "15551234567"
+    )
     _web_server_messaging._whatsapp_onboarding_sessions.clear()
-
-
-
-

@@ -95,10 +95,21 @@ _probe_failure_logged = False
 
 
 def _session_work_in_flight(session: dict) -> bool:
-    if any(session.get(key) for key in ("running", "queued_prompt", "queued_prompts", "_auto_continue_scheduled")):
+    if any(
+        session.get(key)
+        for key in (
+            "running",
+            "queued_prompt",
+            "queued_prompts",
+            "_auto_continue_scheduled",
+        )
+    ):
         return True
-    return any(thread.is_alive() for key in ("_run_thread", "_agent_build_thread")
-               if (thread := session.get(key)) is not None)
+    return any(
+        thread.is_alive()
+        for key in ("_run_thread", "_agent_build_thread")
+        if (thread := session.get(key)) is not None
+    )
 
 
 def busy_ledger() -> Optional[str]:
@@ -120,11 +131,16 @@ def busy_ledger() -> Optional[str]:
         if retirement.active_count():
             return "retirement_admission"
         with gateway._sessions_lock:
-            busy_sessions = [sid for sid, s in gateway._sessions.items() if _session_work_in_flight(s)]
+            busy_sessions = [
+                sid
+                for sid, s in gateway._sessions.items()
+                if _session_work_in_flight(s)
+            ]
         if busy_sessions:
             return "session:" + ",".join(str(sid) for sid in busy_sessions)
         from tools.async_delegation import active_count
         from cron.scheduler import get_running_job_ids
+
         if active_count():
             return "delegation"
         running_jobs = get_running_job_ids()
@@ -132,7 +148,10 @@ def busy_ledger() -> Optional[str]:
     except Exception:
         if not _probe_failure_logged:
             _probe_failure_logged = True
-            _log.warning("idle-exit turn probe unavailable; this backend will not self-retire", exc_info=True)
+            _log.warning(
+                "idle-exit turn probe unavailable; this backend will not self-retire",
+                exc_info=True,
+            )
         return None
 
 
@@ -143,15 +162,26 @@ def turn_in_flight() -> Optional[bool]:
     return None if ledger is None else bool(ledger)
 
 
-def should_exit_idle(tracker: IdleClientTracker, grace_s: float,
-                     probe: Callable[[], Optional[bool]] = turn_in_flight) -> bool:
+def should_exit_idle(
+    tracker: IdleClientTracker,
+    grace_s: float,
+    probe: Callable[[], Optional[bool]] = turn_in_flight,
+) -> bool:
     """Exit only when no client has been connected for ``grace_s`` AND no turn is provably running.
     A probe that cannot answer keeps the process (fail closed)."""
-    return tracker.idle_for() >= grace_s and probe() is False  # idle_for() is 0 while a client is connected
+    return (
+        tracker.idle_for() >= grace_s and probe() is False
+    )  # idle_for() is 0 while a client is connected
 
 
-def start_idle_watchdog(server, tracker: IdleClientTracker, *, grace_s: float = DEFAULT_IDLE_GRACE_S,
-                        poll_s: float = 15.0, probe: Callable[[], Optional[bool]] = turn_in_flight) -> threading.Thread:
+def start_idle_watchdog(
+    server,
+    tracker: IdleClientTracker,
+    *,
+    grace_s: float = DEFAULT_IDLE_GRACE_S,
+    poll_s: float = 15.0,
+    probe: Callable[[], Optional[bool]] = turn_in_flight,
+) -> threading.Thread:
     """Daemon thread that sets ``server.should_exit`` once :func:`should_exit_idle` holds."""
 
     poll_s = min(poll_s, max(0.5, grace_s / 4))
@@ -159,12 +189,16 @@ def start_idle_watchdog(server, tracker: IdleClientTracker, *, grace_s: float = 
     def _loop() -> None:
         while not getattr(server, "should_exit", False):
             if should_exit_idle(tracker, grace_s, probe):
-                _log.warning("SSH-isolated backend idle for %.0fs with no client and no running turn; exiting.",
-                             tracker.idle_for())
+                _log.warning(
+                    "SSH-isolated backend idle for %.0fs with no client and no running turn; exiting.",
+                    tracker.idle_for(),
+                )
                 server.should_exit = True
                 return
             time.sleep(poll_s)
 
-    thread = threading.Thread(target=_loop, daemon=True, name="ssh-isolated-idle-watchdog")
+    thread = threading.Thread(
+        target=_loop, daemon=True, name="ssh-isolated-idle-watchdog"
+    )
     thread.start()
     return thread

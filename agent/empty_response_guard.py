@@ -100,7 +100,10 @@ def resolve_guard_settings(section: Any) -> tuple[bool, Decimal]:
             if candidate > 0:
                 threshold = candidate
         except Exception:
-            logger.debug("empty-guard: invalid cost_threshold_usd %r, using default", threshold_raw)
+            logger.debug(
+                "empty-guard: invalid cost_threshold_usd %r, using default",
+                threshold_raw,
+            )
     return (enabled, threshold)
 
 
@@ -112,7 +115,11 @@ def guard_enabled(agent: Any) -> bool:
 
 def _cost_threshold_usd(agent: Any) -> Decimal:
     value = getattr(agent, _THRESHOLD_ATTR, None)
-    return value if isinstance(value, Decimal) and value > 0 else DEFAULT_COST_THRESHOLD_USD
+    return (
+        value
+        if isinstance(value, Decimal) and value > 0
+        else DEFAULT_COST_THRESHOLD_USD
+    )
 
 
 def _attempts(agent: Any) -> list[EmptyAttempt]:
@@ -130,8 +137,12 @@ def _normalized_usage(agent: Any, response: Any, what: str) -> Any:
         return None
     try:
         from agent.usage_pricing import normalize_usage
-        return normalize_usage(raw_usage, provider=getattr(agent, "provider", None),
-                               api_mode=getattr(agent, "api_mode", None))
+
+        return normalize_usage(
+            raw_usage,
+            provider=getattr(agent, "provider", None),
+            api_mode=getattr(agent, "api_mode", None),
+        )
     except Exception:
         logger.debug("empty-guard: %s failed", what, exc_info=True)
         return None
@@ -144,9 +155,13 @@ def _estimate_attempt_cost(agent: Any, response: Any) -> Optional[Decimal]:
         return None
     try:
         from agent.usage_pricing import estimate_usage_cost
+
         result = estimate_usage_cost(
-            getattr(agent, "model", "") or "", canonical, provider=getattr(agent, "provider", None),
-            base_url=getattr(agent, "base_url", None), api_key=getattr(agent, "api_key", None),
+            getattr(agent, "model", "") or "",
+            canonical,
+            provider=getattr(agent, "provider", None),
+            base_url=getattr(agent, "base_url", None),
+            api_key=getattr(agent, "api_key", None),
         )
     except Exception:
         logger.debug("empty-guard: cost estimation failed", exc_info=True)

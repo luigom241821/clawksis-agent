@@ -130,8 +130,11 @@ class TestTickReapsDeadOwnerClaims:
         monkeypatch.setattr(
             scheduler_mod,
             "_last_dead_owner_reap_at",
-            {clawk_home_key(scheduler_mod._get_clawk_home()):
-             time.monotonic() - scheduler_mod._DEAD_OWNER_REAP_INTERVAL_SECONDS - 1},
+            {
+                clawk_home_key(scheduler_mod._get_clawk_home()): time.monotonic()
+                - scheduler_mod._DEAD_OWNER_REAP_INTERVAL_SECONDS
+                - 1
+            },
         )
         _run_tick()
         assert len(calls) == 2, "an expired throttle window must reap again"
@@ -140,9 +143,7 @@ class TestTickReapsDeadOwnerClaims:
         def _boom():
             raise RuntimeError("ledger unavailable")
 
-        monkeypatch.setattr(
-            "cron.executions.recover_interrupted_executions", _boom
-        )
+        monkeypatch.setattr("cron.executions.recover_interrupted_executions", _boom)
 
         assert _run_tick() == 0
 
@@ -166,7 +167,10 @@ class TestOneShotCliRunIsSynchronous:
 
         def _fake_cron_api(**kwargs):
             observed["async_delivery"] = async_delivery_supported()
-            return {"success": True, "job": {"executed": True, "execution_success": True}}
+            return {
+                "success": True,
+                "job": {"executed": True, "execution_success": True},
+            }
 
         monkeypatch.setattr(cron_cli, "_cron_api", _fake_cron_api)
 

@@ -4,6 +4,7 @@ Every per-test sandbox is ``<basetemp>/.../clawk_test`` and ``get_default_clawk_
 prefers the platform-native home whenever ``CLAWK_HOME`` sits *under* it — so a basetemp
 inside the home silently turns the sandbox back into the live install (#111101).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,7 +23,11 @@ def _sibling_root_only(monkeypatch):
     import os
 
     real_isdir = os.path.isdir
-    monkeypatch.setattr(suite_conftest.os.path, "isdir", lambda p: False if p == "/var/tmp" else real_isdir(p))  # no-tmp: ok — disables the disk-root branch
+    monkeypatch.setattr(
+        suite_conftest.os.path,
+        "isdir",
+        lambda p: False if p == "/var/tmp" else real_isdir(p),
+    )  # no-tmp: ok — disables the disk-root branch
 
 
 def _config_with_basetemp(given: Path | None) -> SimpleNamespace:
@@ -35,13 +40,17 @@ def _config_with_basetemp(given: Path | None) -> SimpleNamespace:
 def test_basetemp_inside_the_native_home_is_relocated_outside_it(tmp_path, monkeypatch):
     native = tmp_path / "native-home"
     native.mkdir()
-    monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: native)
+    monkeypatch.setattr(
+        clawk_constants, "_get_platform_default_clawk_home", lambda: native
+    )
     config = _config_with_basetemp(native / ".repro")
 
     suite_conftest._relocate_basetemp_outside_operator_home(config)
 
     relocated = config._tmp_path_factory._given_basetemp
-    assert relocated is not None and not relocated.resolve().is_relative_to(native.resolve())
+    assert relocated is not None and not relocated.resolve().is_relative_to(
+        native.resolve()
+    )
     assert config.option.basetemp == str(relocated)
     # One shared, prunable root (never a loose dir in the operator's $HOME) and gone when
     # this pytest exits; a run killed before that is swept as soon as the root is idle.
@@ -56,7 +65,9 @@ def test_basetemp_inside_the_native_home_is_relocated_outside_it(tmp_path, monke
 def test_basetemp_outside_the_native_home_is_left_alone(tmp_path, monkeypatch):
     native = tmp_path / "native-home"
     native.mkdir()
-    monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: native)
+    monkeypatch.setattr(
+        clawk_constants, "_get_platform_default_clawk_home", lambda: native
+    )
     given = tmp_path / "elsewhere"
     config = _config_with_basetemp(given)
 
@@ -66,23 +77,33 @@ def test_basetemp_outside_the_native_home_is_left_alone(tmp_path, monkeypatch):
     assert config.option.basetemp == str(given)
 
 
-def test_fallback_root_escapes_a_repo_checked_out_inside_the_native_home(tmp_path, monkeypatch):
+def test_fallback_root_escapes_a_repo_checked_out_inside_the_native_home(
+    tmp_path, monkeypatch
+):
     # Default install: repo at ~/.clawksis/clawksis-agent and TEMP under the home (Windows).
     native = tmp_path / "native-home"
     (native / "clawksis-agent").mkdir(parents=True)
-    monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: native)
+    monkeypatch.setattr(
+        clawk_constants, "_get_platform_default_clawk_home", lambda: native
+    )
     monkeypatch.setattr(suite_conftest, "PROJECT_ROOT", native / "clawksis-agent")
-    monkeypatch.setattr(suite_conftest.tempfile, "gettempdir", lambda: str(native / "tmp"))
+    monkeypatch.setattr(
+        suite_conftest.tempfile, "gettempdir", lambda: str(native / "tmp")
+    )
     monkeypatch.delenv("PYTEST_DEBUG_TEMPROOT", raising=False)
     config = _config_with_basetemp(None)
 
     suite_conftest._relocate_basetemp_outside_operator_home(config)
 
     relocated = config._tmp_path_factory._given_basetemp
-    assert relocated is not None and not relocated.resolve().is_relative_to(native.resolve())
+    assert relocated is not None and not relocated.resolve().is_relative_to(
+        native.resolve()
+    )
 
 
-def test_relocation_root_sweeps_basetemps_of_killed_runs_and_keeps_live_ones(tmp_path, monkeypatch):
+def test_relocation_root_sweeps_basetemps_of_killed_runs_and_keeps_live_ones(
+    tmp_path, monkeypatch
+):
     import os
     import time
 

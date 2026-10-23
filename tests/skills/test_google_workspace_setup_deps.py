@@ -20,7 +20,9 @@ SETUP_PATH = (
 )
 
 
-@pytest.mark.parametrize("command", ["--check", "--check-live", "--auth-url", "--auth-code", "--revoke"])
+@pytest.mark.parametrize(
+    "command", ["--check", "--check-live", "--auth-url", "--auth-code", "--revoke"]
+)
 def test_oauth_stops_at_pm_restart_boundary(command, monkeypatch, tmp_path, capsys):
     monkeypatch.syspath_prepend(str(SETUP_PATH.parent))
     spec = importlib.util.spec_from_file_location("google_workspace_setup", SETUP_PATH)
@@ -29,13 +31,25 @@ def test_oauth_stops_at_pm_restart_boundary(command, monkeypatch, tmp_path, caps
     spec.loader.exec_module(module)
     for name in ("TOKEN_PATH", "CLIENT_SECRET_PATH", "PENDING_AUTH_PATH"):
         path = tmp_path / f"{name}.json"
-        path.write_text(json.dumps({"state": "pending-state", "code_verifier": "verifier"}))
+        path.write_text(
+            json.dumps({"state": "pending-state", "code_verifier": "verifier"})
+        )
         monkeypatch.setattr(module, name, path)
     before = {path: path.read_bytes() for path in tmp_path.glob("*.json")}
-    ensure = Mock(side_effect=pm.InstallError("venv", "google installed; restart Clawksis to activate"))
+    ensure = Mock(
+        side_effect=pm.InstallError(
+            "venv", "google installed; restart Clawksis to activate"
+        )
+    )
     monkeypatch.setattr(pm, "ensure_import", ensure)
-    monkeypatch.setattr("subprocess.check_call", Mock(side_effect=AssertionError("ambient install")))
-    monkeypatch.setattr(sys, "argv", [str(SETUP_PATH), command] + (["code"] if command == "--auth-code" else []))
+    monkeypatch.setattr(
+        "subprocess.check_call", Mock(side_effect=AssertionError("ambient install"))
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [str(SETUP_PATH), command] + (["code"] if command == "--auth-code" else []),
+    )
 
     with pytest.raises(SystemExit) as failure:
         module.main()

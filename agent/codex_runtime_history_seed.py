@@ -19,15 +19,21 @@ from typing import Any, Dict, List
 MAX_HISTORY_SEED_CHARS = 32_000
 _TOOL_RESULT_PREVIEW_CHARS = 400
 
-_HEADER = ("Prior conversation from this Clawksis session (the thread you are continuing was started fresh; "
-           "treat these turns as already having happened):")
+_HEADER = (
+    "Prior conversation from this Clawksis session (the thread you are continuing was started fresh; "
+    "treat these turns as already having happened):"
+)
 
 
 def _text_of(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        parts = [p if isinstance(p, str) else p.get("text", "") for p in content if isinstance(p, (str, dict))]
+        parts = [
+            p if isinstance(p, str) else p.get("text", "")
+            for p in content
+            if isinstance(p, (str, dict))
+        ]
         return "\n".join(p for p in parts if p)
     return ""
 
@@ -38,10 +44,16 @@ def _render_row(msg: dict[str, Any]) -> str:
     if role == "user":
         return f"[USER]\n{text}" if text else ""
     if role == "assistant":
-        calls = [c.get("function", {}).get("name") for c in msg.get("tool_calls") or [] if isinstance(c, dict)]
+        calls = [
+            c.get("function", {}).get("name")
+            for c in msg.get("tool_calls") or []
+            if isinstance(c, dict)
+        ]
         lines = [f"[ASSISTANT]\n{text}"] if text else []
         if calls:
-            lines.append("[ASSISTANT called tools: " + ", ".join(c for c in calls if c) + "]")
+            lines.append(
+                "[ASSISTANT called tools: " + ", ".join(c for c in calls if c) + "]"
+            )
         return "\n".join(lines)
     if role == "tool":
         if len(text) > _TOOL_RESULT_PREVIEW_CHARS:

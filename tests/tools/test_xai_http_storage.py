@@ -36,18 +36,25 @@ def test_storage_defaults_to_permanent_public_urls(tmp_path, monkeypatch):
 
 def test_invalid_storage_retention_falls_back_to_bounded_ttl(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump({
-        "video_gen": {
-            "xai": {
-                "storage": {
-                    "expires_after": "definitely-not-a-duration",
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "video_gen": {
+                    "xai": {
+                        "storage": {
+                            "expires_after": "definitely-not-a-duration",
+                        },
+                    },
                 },
-            },
-        },
-    }))
+            }
+        )
+    )
     _invalidate_config_cache()
 
-    from tools.xai_http import SAFE_XAI_STORAGE_EXPIRES_AFTER_SECONDS, build_xai_storage_options
+    from tools.xai_http import (
+        SAFE_XAI_STORAGE_EXPIRES_AFTER_SECONDS,
+        build_xai_storage_options,
+    )
 
     storage = build_xai_storage_options(
         "video_gen",

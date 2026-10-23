@@ -40,7 +40,9 @@ def _clear_host_fact_caches():
     facts.clear_caches()
 
 
-def make_pe(path: Path, machine: int = PE_AMD64, *, truncate_to: int | None = None) -> Path:
+def make_pe(
+    path: Path, machine: int = PE_AMD64, *, truncate_to: int | None = None
+) -> Path:
     """Write a minimal, structurally-complete PE file with one section.
 
     Layout: DOS header (e_lfanew=0x80) → PE signature + COFF header at 0x80 →
@@ -66,13 +68,7 @@ def make_pe(path: Path, machine: int = PE_AMD64, *, truncate_to: int | None = No
 # ─── _parse_pe_machine ──────────────────────────────────────────────────────
 
 
-
-
-
-
 # ─── _expected_windows_pe_machines ──────────────────────────────────────────
-
-
 
 
 # ─── _windows_native_machine ────────────────────────────────────────────────
@@ -108,9 +104,7 @@ class _FakeKernel32:
         self._user_runnable = user_runnable
         self.GetCurrentProcess = _SettableFunc(lambda: -1)
         self.IsWow64Process2 = _SettableFunc(self._is_wow64_process2)
-        self.GetMachineTypeAttributes = _SettableFunc(
-            self._get_machine_type_attributes
-        )
+        self.GetMachineTypeAttributes = _SettableFunc(self._get_machine_type_attributes)
 
     def _is_wow64_process2(self, _handle, process_ref, native_ref):
         if not self._wow64_ok:
@@ -162,8 +156,10 @@ def test_native_machine_reports_os_arch_not_process_arch():
     import ctypes
 
     # WinDLL only exists on Windows; create=True so Linux/macOS CI can stub it.
-    with patch.object(ctypes, "WinDLL", _fake_windll(PE_ARM64), create=True), \
-         patch("platform.machine", return_value="AMD64"):
+    with (
+        patch.object(ctypes, "WinDLL", _fake_windll(PE_ARM64), create=True),
+        patch("platform.machine", return_value="AMD64"),
+    ):
         assert main_desktop._windows_native_machine() == "ARM64"
 
 
@@ -180,40 +176,31 @@ def test_expected_machines_prefers_user_runnable_api_over_arch_name(monkeypatch)
 
     monkeypatch.setenv("PROCESSOR_ARCHITECTURE", "AMD64")
     monkeypatch.delenv("PROCESSOR_ARCHITEW6432", raising=False)
-    with patch.object(
-        ctypes,
-        "WinDLL",
-        _fake_windll(
-            PE_ARM64, wow64_ok=False, user_runnable={PE_ARM64, PE_AMD64}
+    with (
+        patch.object(
+            ctypes,
+            "WinDLL",
+            _fake_windll(PE_ARM64, wow64_ok=False, user_runnable={PE_ARM64, PE_AMD64}),
+            create=True,
         ),
-        create=True,
-    ), patch("platform.machine", return_value="AMD64"):
+        patch("platform.machine", return_value="AMD64"),
+    ):
         assert main_desktop._expected_windows_pe_machines() == {PE_ARM64, PE_AMD64}
-
-
-
-
-
-
 
 
 # ─── _desktop_exe_integrity_error ───────────────────────────────────────────
 
 
-
-
 # ─── _desktop_packaged_executable arch preference (win32) ───────────────────
-
-
-
-
 
 
 # ─── staged integrity gate ─────────────────────────────────────────────────
 
 
 @pytest.mark.platforms("linux")
-def test_corrupt_staged_app_keeps_live_bytes_without_backup_recovery(tmp_path, monkeypatch, capsys):
+def test_corrupt_staged_app_keeps_live_bytes_without_backup_recovery(
+    tmp_path, monkeypatch, capsys
+):
     """Exercise publication and PE parsing, not Windows host/architecture discovery."""
     desktop_dir = tmp_path / "apps" / "desktop"
     live_exe = desktop_dir / "release" / "linux-unpacked" / "clawk"
@@ -251,9 +238,15 @@ def test_corrupt_staged_app_keeps_live_bytes_without_backup_recovery(tmp_path, m
         discard(path)
 
     monkeypatch.setattr(main_desktop, "_discard_desktop_staging", check_before_discard)
-    with patch.object(main_desktop.os, "rename", wraps=main_desktop.os.rename) as rename:
-        with pytest.raises(RuntimeError, match="previous desktop app was left untouched"):
-            main_desktop._promote_staged_desktop_app(desktop_dir, staging, integrity_check=check_pe)
+    with patch.object(
+        main_desktop.os, "rename", wraps=main_desktop.os.rename
+    ) as rename:
+        with pytest.raises(
+            RuntimeError, match="previous desktop app was left untouched"
+        ):
+            main_desktop._promote_staged_desktop_app(
+                desktop_dir, staging, integrity_check=check_pe
+            )
         rename.assert_not_called()
 
     assert checked == [staged_exe]
@@ -330,12 +323,14 @@ def test_build_only_fails_when_pack_produces_corrupt_exe(tmp_path, monkeypatch, 
     def pack_into_staging(cmd, *args, **kwargs):
         assert kwargs["env"]["PATH"].startswith("C:\\pm-pinned-git\\cmd;")
         # The build holds the checkout lock, so npm arrives wrapped in the custody launcher.
-        cmd = cmd[cmd.index("/usr/bin/npm"):] if "/usr/bin/npm" in cmd else cmd
+        cmd = cmd[cmd.index("/usr/bin/npm") :] if "/usr/bin/npm" in cmd else cmd
         if cmd[1:3] != ["run", "builder"]:
             return subprocess.CompletedProcess(list(cmd), 0)
         # electron-builder honours -c.directories.output=<staging>; emulate a
         # pack that "succeeds" but writes a truncated exe there.
-        out_flag = next((a for a in cmd if str(a).startswith("-c.directories.output=")), None)
+        out_flag = next(
+            (a for a in cmd if str(a).startswith("-c.directories.output=")), None
+        )
         assert out_flag is not None, "pack must be redirected into a staging dir"
         staging = Path(str(out_flag).split("=", 1)[1])
         make_pe(staging / "win-unpacked" / "Clawksis.exe", PE_AMD64, truncate_to=0x300)
@@ -343,17 +338,26 @@ def test_build_only_fails_when_pack_produces_corrupt_exe(tmp_path, monkeypatch, 
 
     def pinned_git(name, *, base_env):
         assert name == "git"
-        return SimpleNamespace(env={**base_env, "PATH": "C:\\pm-pinned-git\\cmd;" + base_env["PATH"]})
+        return SimpleNamespace(
+            env={**base_env, "PATH": "C:\\pm-pinned-git\\cmd;" + base_env["PATH"]}
+        )
 
-    with patch("clawk_cli.main_desktop.shutil.which", return_value="/usr/bin/npm"), \
-         patch("clawk_cli.source_build.source_build_env", return_value={"PATH": "/usr/bin"}), \
-         patch("clawk_cli.source_build.prepare_source_dependencies"), \
-         patch("pm.ensure", side_effect=pinned_git), \
-         patch("clawk_cli.main_desktop._desktop_build_needed", return_value=True), \
-         patch("clawk_cli.main_desktop._stop_desktop_processes_locking_build", return_value=[]), \
-         patch("clawk_cli.main_desktop._windows_native_machine", return_value="AMD64"), \
-         patch("clawk_cli.main_desktop.subprocess.run", side_effect=pack_into_staging), \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("clawk_cli.main_desktop.shutil.which", return_value="/usr/bin/npm"),
+        patch(
+            "clawk_cli.source_build.source_build_env", return_value={"PATH": "/usr/bin"}
+        ),
+        patch("clawk_cli.source_build.prepare_source_dependencies"),
+        patch("pm.ensure", side_effect=pinned_git),
+        patch("clawk_cli.main_desktop._desktop_build_needed", return_value=True),
+        patch(
+            "clawk_cli.main_desktop._stop_desktop_processes_locking_build",
+            return_value=[],
+        ),
+        patch("clawk_cli.main_desktop._windows_native_machine", return_value="AMD64"),
+        patch("clawk_cli.main_desktop.subprocess.run", side_effect=pack_into_staging),
+        pytest.raises(SystemExit) as exc,
+    ):
         cli_main.cmd_gui(_ns())
 
     assert exc.value.code == 1

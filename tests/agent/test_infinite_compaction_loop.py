@@ -25,6 +25,7 @@ from agent.context_compressor import ContextCompressor
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_compressor(**kwargs) -> ContextCompressor:
     defaults = dict(
         model="test-model",
@@ -40,18 +41,23 @@ def _make_compressor(**kwargs) -> ContextCompressor:
     with patch("agent.context_compressor.get_model_context_length", return_value=96000):
         return ContextCompressor(**defaults)
 
+
 def _build_session(n_turns: int, words_per_turn: int = 20) -> list:
     """Build a multi-turn conversation with a system prompt."""
     base_text = " ".join(["a"] * words_per_turn)
     messages = [{"role": "system", "content": "You are a helpful agent."}]
     for i in range(n_turns):
         messages.append({"role": "user", "content": f"{base_text} (user turn {i})"})
-        messages.append({"role": "assistant", "content": f"{base_text} (assistant turn {i})"})
+        messages.append(
+            {"role": "assistant", "content": f"{base_text} (assistant turn {i})"}
+        )
     return messages
+
 
 # ---------------------------------------------------------------------------
 # Test: compress_start >= compress_end registers as ineffective
 # ---------------------------------------------------------------------------
+
 
 class TestCompressNoOpRegistersIneffective:
     """When compress_start >= compress_end, the fix defers further attempts
@@ -108,9 +114,11 @@ class TestCompressNoOpRegistersIneffective:
             "should_compress should return False while the structural backoff holds"
         )
 
+
 # ---------------------------------------------------------------------------
 # Test: _find_tail_cut_by_tokens raw-budget fallback
 # ---------------------------------------------------------------------------
+
 
 class TestTailCutRawBudgetFallback:
     """When the entire transcript fits within soft_ceiling, the fix
@@ -136,6 +144,7 @@ class TestTailCutRawBudgetFallback:
             f"(cut={cut}, head_end={head_end}, n={n})"
         )
 
+
 # ---------------------------------------------------------------------------
 # Test: Effective compression resets counter
 # ---------------------------------------------------------------------------
@@ -143,6 +152,7 @@ class TestTailCutRawBudgetFallback:
 # ---------------------------------------------------------------------------
 # Test: anti-thrashing in should_compress
 # ---------------------------------------------------------------------------
+
 
 class TestAntiThrashing:
     """Directly test the should_compress anti-thrashing guard."""
@@ -154,9 +164,11 @@ class TestAntiThrashing:
         comp._ineffective_compression_count = 2
         assert not comp.should_compress(73_000)
 
+
 # ---------------------------------------------------------------------------
 # Test: summary-LLM cooldown guard in should_compress (#11529)
 # ---------------------------------------------------------------------------
+
 
 class TestCooldownGuard:
     """should_compress() must skip compression while the summary LLM is in
@@ -172,6 +184,7 @@ class TestCooldownGuard:
         comp._summary_failure_cooldown_until = time.monotonic() + 60
         assert not comp.should_compress(73_000)
 
+
 # ---------------------------------------------------------------------------
 # Test: #48621 — gpt-5.3-codex-spark short-session boundary
 #
@@ -182,6 +195,7 @@ class TestCooldownGuard:
 # boundary logic always exposes a minimal compressible window.  This test
 # locks that behavior in for the exact #48621 parameters.
 # ---------------------------------------------------------------------------
+
 
 class TestCodexSparkShortSessionBoundary:
     """Verify that gpt-5.3-codex-spark's short-session scenario always yields
@@ -205,14 +219,22 @@ class TestCodexSparkShortSessionBoundary:
             messages.append({"role": "assistant", "content": f"Answer {i}"})
         for i in range(3):
             messages.append({"role": "user", "content": f"Run command {i}"})
-            messages.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{
-                    "id": f"tc{i}", "type": "function",
-                    "function": {"name": "terminal", "arguments": "{}"},
-                }],
-            })
-            messages.append({"role": "tool", "tool_call_id": f"tc{i}", "content": big_tool})
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": f"tc{i}",
+                            "type": "function",
+                            "function": {"name": "terminal", "arguments": "{}"},
+                        }
+                    ],
+                }
+            )
+            messages.append(
+                {"role": "tool", "tool_call_id": f"tc{i}", "content": big_tool}
+            )
         messages.append({"role": "user", "content": "Final question"})
         messages.append({"role": "assistant", "content": "Final answer"})
 
@@ -226,6 +248,7 @@ class TestCodexSparkShortSessionBoundary:
         )
         assert comp.has_content_to_compress(messages) is True
 
+
 class TestPressureRealFloor:
     """Regression: Cyrillic-heavy sessions under-count in the rough estimate,
     letting real prompts ride the provider window (64,842→64,995 observed)
@@ -235,22 +258,27 @@ class TestPressureRealFloor:
         class _C:
             last_real_prompt_tokens = last_real
             awaiting_real_usage_after_compression = awaiting
+
         return _C()
 
     def test_real_floor_lifts_undercounted_rough(self):
         from agent.conversation_loop import _pressure_with_real_floor
+
         assert _pressure_with_real_floor(self._compressor(64_842), 45_000) == 64_842
 
     def test_rough_wins_when_larger(self):
         from agent.conversation_loop import _pressure_with_real_floor
+
         assert _pressure_with_real_floor(self._compressor(30_000), 45_000) == 45_000
 
     def test_stale_real_ignored_right_after_compaction(self):
         from agent.conversation_loop import _pressure_with_real_floor
+
         compressor = self._compressor(64_842, awaiting=True)
         assert _pressure_with_real_floor(compressor, 20_000) == 20_000
 
     def test_zero_and_missing_real_are_safe(self):
         from agent.conversation_loop import _pressure_with_real_floor
+
         assert _pressure_with_real_floor(self._compressor(0), 10_000) == 10_000
         assert _pressure_with_real_floor(object(), 10_000) == 10_000

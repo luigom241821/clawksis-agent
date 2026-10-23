@@ -24,7 +24,9 @@ def _cli():
     return cli
 
 
-def _load_prefill_messages(file_path: str, base_dir: Path | None = None) -> list[dict[str, Any]]:
+def _load_prefill_messages(
+    file_path: str, base_dir: Path | None = None
+) -> list[dict[str, Any]]:
     """Load prefill messages (JSON array) from *file_path*; missing/empty -> [].
 
     Relative paths resolve against *base_dir*, defaulting to the CLI's clawk home.
@@ -52,17 +54,23 @@ def _load_prefill_messages(file_path: str, base_dir: Path | None = None) -> list
 def _resolve_prefill_messages_file(config: dict[str, Any]) -> str:
     """Prefill file path: env, then top-level ``prefill_messages_file``, then legacy ``agent.*``."""
     from agent.session_client_env import session_env
+
     agent_cfg = config.get("agent", {})
     return (
         session_env("CLAWK_PREFILL_MESSAGES_FILE").strip()
         or str(config.get("prefill_messages_file", "") or "").strip()
-        or (str(agent_cfg.get("prefill_messages_file", "") or "").strip() if isinstance(agent_cfg, dict) else "")
+        or (
+            str(agent_cfg.get("prefill_messages_file", "") or "").strip()
+            if isinstance(agent_cfg, dict)
+            else ""
+        )
     )
 
 
 def _parse_reasoning_config(effort) -> dict | None:
     """Parse a reasoning effort level (string or YAML bool; ``false``/``off`` = disabled)."""
     from clawk_constants import parse_reasoning_effort
+
     result = parse_reasoning_effort(effort)
     if effort and str(effort).strip() and result is None:
         logger.warning("Unknown reasoning_effort '%s', using default (medium)", effort)
@@ -84,19 +92,47 @@ def _parse_service_tier_config(raw: str) -> str | None:
 _TERMINAL_ENV_MAPPINGS = {
     key: f"TERMINAL_{key.upper()}"
     for key in (
-        "degraded_mode", "cwd", "timeout", "home_mode", "lifetime_seconds", "docker_image",
-        "docker_forward_env", "modal_image", "daytona_image", "vercel_runtime", "vercel_image",
-        "ssh_host", "ssh_user", "ssh_port", "ssh_key", "container_cpu", "container_memory",
-        "container_disk", "container_persistent", "docker_volumes", "docker_env", "docker_extra_args",
-        "docker_shm_size", "docker_mount_cwd_to_workspace", "docker_network", "docker_run_as_host_user",
+        "degraded_mode",
+        "cwd",
+        "timeout",
+        "home_mode",
+        "lifetime_seconds",
+        "docker_image",
+        "docker_forward_env",
+        "modal_image",
+        "daytona_image",
+        "vercel_runtime",
+        "vercel_image",
+        "ssh_host",
+        "ssh_user",
+        "ssh_port",
+        "ssh_key",
+        "container_cpu",
+        "container_memory",
+        "container_disk",
+        "container_persistent",
+        "docker_volumes",
+        "docker_env",
+        "docker_extra_args",
+        "docker_shm_size",
+        "docker_mount_cwd_to_workspace",
+        "docker_network",
+        "docker_run_as_host_user",
         "docker_snap_compat",
-        "docker_persist_across_processes", "docker_shared_container_key", "docker_orphan_reaper",
-        "sandbox_dir", "persistent_shell",
+        "docker_persist_across_processes",
+        "docker_shared_container_key",
+        "docker_orphan_reaper",
+        "sandbox_dir",
+        "persistent_shell",
     )
 }
 
 
-_TERMINAL_ENV_MAPPINGS = {"env_type": "TERMINAL_ENV", **_TERMINAL_ENV_MAPPINGS, "sudo_password": "SUDO_PASSWORD"}
+_TERMINAL_ENV_MAPPINGS = {
+    "env_type": "TERMINAL_ENV",
+    **_TERMINAL_ENV_MAPPINGS,
+    "sudo_password": "SUDO_PASSWORD",
+}
 
 
 # Per-task auxiliary endpoint tuples (config key -> env var).
@@ -122,6 +158,7 @@ _CWD_PLACEHOLDERS = (".", "auto", "cwd")
 def _mirror_config_to_env(defaults, _file_has_terminal_config):
     """Project config.yaml values into the env vars the tool modules read (terminal/browser/auxiliary/security/sessions). Env always wins when already set."""
     from cli import _AUXILIARY_TASK_ENV, _CWD_PLACEHOLDERS, _TERMINAL_ENV_MAPPINGS
+
     terminal_config = defaults.get("terminal", {})
 
     # "backend" (documented) and legacy "env_type" are both accepted; "backend" wins.
@@ -148,11 +185,15 @@ def _mirror_config_to_env(defaults, _file_has_terminal_config):
             if not _is_gateway:
                 os.environ[env_var] = str(val)
         elif _file_has_terminal_config or env_var not in os.environ:
-            os.environ[env_var] = json.dumps(val) if isinstance(val, (list, dict)) else str(val)
+            os.environ[env_var] = (
+                json.dumps(val) if isinstance(val, (list, dict)) else str(val)
+            )
 
     browser_config = defaults.get("browser", {})
     if "inactivity_timeout" in browser_config:
-        os.environ["BROWSER_INACTIVITY_TIMEOUT"] = str(browser_config["inactivity_timeout"])
+        os.environ["BROWSER_INACTIVITY_TIMEOUT"] = str(
+            browser_config["inactivity_timeout"]
+        )
 
     # Only non-empty / non-"auto" auxiliary values are bridged so auto-detection still works.
     auxiliary_config = defaults.get("auxiliary", {})
@@ -183,43 +224,82 @@ def _mirror_config_to_env(defaults, _file_has_terminal_config):
 def _cli_config_defaults():
     """Built-in defaults for every config key the CLI reads (the file overlays these)."""
     from clawk_cli.config_defaults import DEFAULT_SANDBOX_IMAGE as img
+
     return {
         "model": {"default": "", "base_url": "", "provider": "auto"},
         "terminal": {
-            "env_type": "local", "cwd": ".", "home_mode": "auto", "lifetime_seconds": 300,  # cwd "." -> os.getcwd()
-            "docker_image": img, "docker_forward_env": [], "modal_image": img, "daytona_image": img, "docker_volumes": [],
+            "env_type": "local",
+            "cwd": ".",
+            "home_mode": "auto",
+            "lifetime_seconds": 300,  # cwd "." -> os.getcwd()
+            "docker_image": img,
+            "docker_forward_env": [],
+            "modal_image": img,
+            "daytona_image": img,
+            "docker_volumes": [],
             "docker_mount_cwd_to_workspace": False,  # opt-in only: sandbox isolation
             "docker_shared_container_key": "",
         },
         "browser": {
-            "inactivity_timeout": 120, "record_sessions": False, "engine": "auto",  # auto (Chrome) | lightpanda | chrome
-            "camofox": {"rewrite_loopback_urls": False, "loopback_host_alias": "host.docker.internal"},
+            "inactivity_timeout": 120,
+            "record_sessions": False,
+            "engine": "auto",  # auto (Chrome) | lightpanda | chrome
+            "camofox": {
+                "rewrite_loopback_urls": False,
+                "loopback_host_alias": "host.docker.internal",
+            },
         },
         # threshold: fraction of the model's context limit; min_tail: real user messages kept in the tail
-        "compression": {"enabled": True, "threshold": 0.50, "min_tail_user_messages": 1},
+        "compression": {
+            "enabled": True,
+            "threshold": 0.50,
+            "min_tail_user_messages": 1,
+        },
         "agent": {
-            "max_turns": 500, "verbose": False, "system_prompt": "", "prefill_messages_file": "",  # max_turns shared with subagents
-            "reasoning_effort": "", "service_tier": "",
+            "max_turns": 500,
+            "verbose": False,
+            "system_prompt": "",
+            "prefill_messages_file": "",  # max_turns shared with subagents
+            "reasoning_effort": "",
+            "service_tier": "",
             "personalities": {},  # user overrides merged by name over clawk_cli.personality builtins
         },
         "display": {
             "compact": False,
             # /resume recap tuning and show_reasoning: keep in sync with clawk_cli/config.py DEFAULT_CONFIG
-            "resume_display": "full", "resume_exchanges": 10, "resume_max_user_chars": 300,
-            "resume_max_assistant_chars": 200, "resume_max_assistant_lines": 3, "resume_skip_tool_only": True,
-            "show_reasoning": True, "reasoning_full": False, "streaming": True, "busy_input_mode": "interrupt",
+            "resume_display": "full",
+            "resume_exchanges": 10,
+            "resume_max_user_chars": 300,
+            "resume_max_assistant_chars": 200,
+            "resume_max_assistant_lines": 3,
+            "resume_skip_tool_only": True,
+            "show_reasoning": True,
+            "reasoning_full": False,
+            "streaming": True,
+            "busy_input_mode": "interrupt",
             "cli_layout": "modern",
-            "persistent_output": True, "persistent_output_max_lines": 200,
+            "persistent_output": True,
+            "persistent_output_max_lines": 200,
             # Also clear scrollback on redraw/resize recovery; off because users prefer history.
             "cli_rebuild_scrollback_on_redraw": False,
             "persist_prompts": True,  # one-line summary of resolved modal prompts into scrollback
             "skin": "default",
         },
         "code_execution": {"timeout": 300, "max_tool_calls": 50},
-        "auxiliary": {"vision": {"provider": "auto", "model": "", "base_url": "", "api_key": ""}},
+        "auxiliary": {
+            "vision": {"provider": "auto", "model": "", "base_url": "", "api_key": ""}
+        },
         # delegation: empty model/provider = inherit parent; api_key falls back to OPENAI_API_KEY
-        "delegation": {"max_iterations": 45, "model": "", "provider": "", "base_url": "", "api_key": ""},
-        "onboarding": {"seen": {}},  # first-touch hint flags (agent/onboarding.py), latched once shown
+        "delegation": {
+            "max_iterations": 45,
+            "model": "",
+            "provider": "",
+            "base_url": "",
+            "api_key": "",
+        },
+        "onboarding": {
+            "seen": {}
+        },  # first-touch hint flags (agent/onboarding.py), latched once shown
     }
 
 
@@ -232,7 +312,10 @@ def _merge_file_config(defaults: dict[str, Any], file_config: dict[str, Any]) ->
         elif isinstance(file_config["model"], dict):
             defaults["model"].update(file_config["model"])
             # Promote model.model -> model.default (ClawksisCLI checks "default" first).
-            if "model" in file_config["model"] and "default" not in file_config["model"]:
+            if (
+                "model" in file_config["model"]
+                and "default" not in file_config["model"]
+            ):
                 defaults["model"]["default"] = file_config["model"]["model"]
 
     # Deep-merge dict sections, overwrite scalars; a None section keeps the defaults;
@@ -251,7 +334,8 @@ def _merge_file_config(defaults: dict[str, Any], file_config: dict[str, Any]) ->
     # Legacy root-level max_turns -> agent.max_turns whenever the nested key is missing.
     agent_file_config = file_config.get("agent")
     if "max_turns" in file_config and not (
-        isinstance(agent_file_config, dict) and agent_file_config.get("max_turns") is not None
+        isinstance(agent_file_config, dict)
+        and agent_file_config.get("max_turns") is not None
     ):
         defaults["agent"]["max_turns"] = file_config["max_turns"]
 
@@ -261,10 +345,16 @@ def load_cli_config() -> dict[str, Any]:
 
     ``CLAWK_IGNORE_USER_CONFIG=1`` skips the user config entirely (``.env`` still loads).
     """
-    from cli import _cli_config_defaults, _clawk_home, _merge_file_config, _mirror_config_to_env
-    config_path = _clawk_home / 'config.yaml'
+    from cli import (
+        _cli_config_defaults,
+        _clawk_home,
+        _merge_file_config,
+        _mirror_config_to_env,
+    )
+
+    config_path = _clawk_home / "config.yaml"
     if not config_path.exists() or os.environ.get("CLAWK_IGNORE_USER_CONFIG") == "1":
-        config_path = Path(__file__).parent / 'cli-config.yaml'
+        config_path = Path(__file__).parent / "cli-config.yaml"
 
     defaults = _cli_config_defaults()
 
@@ -285,6 +375,7 @@ def load_cli_config() -> dict[str, Any]:
 
     # Expand ${ENV_VAR} references before bridging to env vars.
     from clawk_cli.config import _expand_env_vars
+
     defaults = _expand_env_vars(defaults)
 
     # Administrator-pinned (managed scope) values overlay LAST; cli.py builds its config
@@ -309,8 +400,12 @@ def _init_logging_and_display_from_config() -> None:
         lambda: _im("clawk_logging").setup_logging(mode="cli"),
         lambda: _im("clawk_cli.config").print_config_warnings(),
         lambda: _im("clawk_cli.skin_engine").init_skin_from_config(_cli().CLI_CONFIG),
-        lambda: _im("agent.display").set_tool_preview_max_len(int(_display("tool_preview_length", 0) or 0)),
-        lambda: _im("agent.display").set_friendly_tool_labels(bool(_display("friendly_tool_labels", True))),
+        lambda: _im("agent.display").set_tool_preview_max_len(
+            int(_display("tool_preview_length", 0) or 0)
+        ),
+        lambda: _im("agent.display").set_friendly_tool_labels(
+            bool(_display("friendly_tool_labels", True))
+        ),
     ):
         try:
             step()

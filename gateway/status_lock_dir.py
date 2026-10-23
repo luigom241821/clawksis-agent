@@ -1,5 +1,6 @@
 """The unusable scoped-lock dir report (#134889 W2). :mod:`gateway.status` raises it from
 ``acquire_scoped_lock``; nothing here reads back into that module."""
+
 from __future__ import annotations
 
 import logging
@@ -30,10 +31,18 @@ def unusable_lock_dir(lock_dir: Path, exc: PermissionError) -> ScopedLockDirUnus
     """Log *lock_dir* as unusable (WARNING once, then DEBUG) and return the error to raise."""
     level = logging.DEBUG if lock_dir in _warned else logging.WARNING
     _warned.add(lock_dir)
-    log.log(level, "Gateway lock directory %s is not usable by this process (%s); it was likely created "
-               "by an elevated (administrator) Clawksis. Platforms that need a token lock stay down until it "
-               "is repaired. To repair, %s", lock_dir, exc, unusable_dir_remedy(lock_dir))
-    return ScopedLockDirUnusable(exc.errno, f"gateway lock directory is not usable: {exc}", str(lock_dir))
+    log.log(
+        level,
+        "Gateway lock directory %s is not usable by this process (%s); it was likely created "
+        "by an elevated (administrator) Clawksis. Platforms that need a token lock stay down until it "
+        "is repaired. To repair, %s",
+        lock_dir,
+        exc,
+        unusable_dir_remedy(lock_dir),
+    )
+    return ScopedLockDirUnusable(
+        exc.errno, f"gateway lock directory is not usable: {exc}", str(lock_dir)
+    )
 
 
 def unusable_lock_dir_recovered(lock_dir: Path) -> None:

@@ -31,7 +31,9 @@ def test_select_cached_history_keeps_expected_replay_cleanup():
 
     assert observed is None
     assert len(persisted) < len(live)
-    assert persisted == [{"role": "user", "content": "check status", "_db_persisted": True}]
+    assert persisted == [
+        {"role": "user", "content": "check status", "_db_persisted": True}
+    ]
     assert _select_cached_agent_history(persisted, live) is persisted
 
 
@@ -77,20 +79,35 @@ def test_persistent_transcript_lag_escalates_to_error(caplog):
     from gateway.run_turn_runner import _TRANSCRIPT_LAG_ESCALATION_TURNS, TurnRunner
 
     persisted = [{"role": "user", "content": "hello"}]
-    live = [{"role": "user", "content": "hello", "_db_persisted": True},
-            {"role": "assistant", "content": "not written"}]
+    live = [
+        {"role": "user", "content": "hello", "_db_persisted": True},
+        {"role": "assistant", "content": "not written"},
+    ]
     runner = SimpleNamespace()
-    ctx = SimpleNamespace(history=persisted, channel_prompt=None, user_config=None,
-                          session_id="sid-1", session_key="agent:main:telegram:dm:1")
+    ctx = SimpleNamespace(
+        history=persisted,
+        channel_prompt=None,
+        user_config=None,
+        session_id="sid-1",
+        session_key="agent:main:telegram:dm:1",
+    )
     turn = TurnRunner(runner, ctx)
     agent = SimpleNamespace(session_id="sid-1", _session_messages=live)
 
     with caplog.at_level(logging.WARNING, logger="gateway.run"):
         for _ in range(_TRANSCRIPT_LAG_ESCALATION_TURNS):
-            history, _observed, _media = turn._load_turn_history(agent, reused_cached_agent=True)
+            history, _observed, _media = turn._load_turn_history(
+                agent, reused_cached_agent=True
+            )
     assert len(history) == len(live)  # live context still preserved
-    levels = [r.levelno for r in caplog.records if "lagged live cached history" in r.getMessage()]
-    assert levels == [logging.WARNING] * (_TRANSCRIPT_LAG_ESCALATION_TURNS - 1) + [logging.ERROR]
+    levels = [
+        r.levelno
+        for r in caplog.records
+        if "lagged live cached history" in r.getMessage()
+    ]
+    assert levels == [logging.WARNING] * (_TRANSCRIPT_LAG_ESCALATION_TURNS - 1) + [
+        logging.ERROR
+    ]
 
     # Disk caught up: the streak resets, so the next lag starts again at WARNING.
     agent._session_messages = [dict(persisted[0], _db_persisted=True)]

@@ -30,7 +30,9 @@ from tests.e2e.core.upgrade import _install_helpers as I
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
 ]
 
 REFUSAL = "Another Clawksis update is already running"
@@ -140,25 +142,43 @@ class Rig:
         self.root = root
         origin = I.make_origin(root, I.head_sha())
         self.checkout = root / "checkout"
-        I.git("clone", "-q", "--shared", "-b", "main", str(origin), str(self.checkout), cwd=root)
+        I.git(
+            "clone",
+            "-q",
+            "--shared",
+            "-b",
+            "main",
+            str(origin),
+            str(self.checkout),
+            cwd=root,
+        )
         self.hold = root / "hold-fetch"
         self.fetch_log = root / "fetch.log"
         wrap = root / "wrap"
         wrap.mkdir()
-        real_git = subprocess.run(["sh", "-c", "command -v git"], text=True, encoding="utf-8",
-                                  capture_output=True, check=False).stdout.strip()
+        real_git = subprocess.run(
+            ["sh", "-c", "command -v git"],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        ).stdout.strip()
         (wrap / "git").write_text(
             "#!/usr/bin/env bash\n"
             'for a in "$@"; do if [ "$a" = fetch ]; then\n'
             f'  echo "fetch $CLAWK_HOME" >> "{self.fetch_log}"\n'
             f'  for _ in $(seq 600); do [ -e "{self.hold}" ] || break; sleep 0.2; done\n'
             "fi; done\n"
-            f'exec "{real_git}" "$@"\n', encoding="utf-8")
+            f'exec "{real_git}" "$@"\n',
+            encoding="utf-8",
+        )
         (wrap / "git").chmod(0o755)
         self.wrap = wrap
 
     def env(self, name: str) -> dict[str, str]:
-        env = H.isolated_env(self.root / name, extra_path=[self.wrap], pythonpath=self.checkout)
+        env = H.isolated_env(
+            self.root / name, extra_path=[self.wrap], pythonpath=self.checkout
+        )
         return env
 
     def driver(self, *args: str, timeout: float = 300) -> dict:
@@ -166,22 +186,62 @@ class Rig:
         envs = {name: self.env(name) for name in ("home-a", "home-b")}
         (self.root / "envs.json").write_text(json.dumps(envs), encoding="utf-8")
         (self.root / "driver.py").write_text(_DRIVER, encoding="utf-8")
-        argv = H.sandbox_argv([sys.executable, str(self.root / "driver.py"), str(self.root), str(self.checkout), *args],
-                              writable=[self.root])
-        cp = subprocess.run(argv, env=envs["home-a"], cwd=self.checkout, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=timeout, check=False)
-        assert cp.returncode == 0, f"driver failed:\n{cp.stdout[-3000:]}\n{cp.stderr[-3000:]}"
+        argv = H.sandbox_argv(
+            [
+                sys.executable,
+                str(self.root / "driver.py"),
+                str(self.root),
+                str(self.checkout),
+                *args,
+            ],
+            writable=[self.root],
+        )
+        cp = subprocess.run(
+            argv,
+            env=envs["home-a"],
+            cwd=self.checkout,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        assert cp.returncode == 0, (
+            f"driver failed:\n{cp.stdout[-3000:]}\n{cp.stderr[-3000:]}"
+        )
         return json.loads(cp.stdout.strip().splitlines()[-1])
 
     def update(self, name: str) -> subprocess.Popen:
         env = self.env(name)
-        argv = H.sandbox_argv([sys.executable, "-m", "clawk_cli.main", "update", "--yes", "--branch", "main",
-                               "--no-gateway-restart"], writable=[self.root])
-        return subprocess.Popen(argv, env=env, cwd=self.checkout, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        argv = H.sandbox_argv(
+            [
+                sys.executable,
+                "-m",
+                "clawk_cli.main",
+                "update",
+                "--yes",
+                "--branch",
+                "main",
+                "--no-gateway-restart",
+            ],
+            writable=[self.root],
+        )
+        return subprocess.Popen(
+            argv,
+            env=env,
+            cwd=self.checkout,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
 
     def fetchers(self) -> list[str]:
-        return self.fetch_log.read_text(encoding="utf-8-sig").splitlines() if self.fetch_log.exists() else []
+        return (
+            self.fetch_log.read_text(encoding="utf-8-sig").splitlines()
+            if self.fetch_log.exists()
+            else []
+        )
 
     def marker(self, name: str) -> Path:
         return Path(self.env(name)["CLAWK_HOME"]) / ".clawk-update-in-progress"
@@ -207,14 +267,30 @@ def test_two_homes_cannot_update_one_checkout_at_once(rig):
     rig.hold.touch()
     first = rig.update("home-a")
     try:
-        H.wait_for(lambda: rig.fetchers(), timeout=180, what="the first update to reach its fetch")
+        H.wait_for(
+            lambda: rig.fetchers(),
+            timeout=180,
+            what="the first update to reach its fetch",
+        )
         # --ignored: a lock file in the worktree shows whatever the tree's .gitignore says.
-        status = I.git("status", "--porcelain", "--ignored", "--untracked-files=all", cwd=rig.checkout)
+        status = I.git(
+            "status",
+            "--porcelain",
+            "--ignored",
+            "--untracked-files=all",
+            cwd=rig.checkout,
+        )
         held = [line for line in status.splitlines() if "clawk-update" in line]
-        assert not held, f"the live update's lock is a worktree file (autostash takes it): {held}"
+        assert not held, (
+            f"the live update's lock is a worktree file (autostash takes it): {held}"
+        )
         code, out = _finish(rig.update("home-b"), timeout=60)
-        assert code == 2 and REFUSAL in out, f"second home's update was not refused (rc={code}):\n{out[-4000:]}"
-        assert len(rig.fetchers()) == 1, f"two updates reached the fetch concurrently: {rig.fetchers()}"
+        assert code == 2 and REFUSAL in out, (
+            f"second home's update was not refused (rc={code}):\n{out[-4000:]}"
+        )
+        assert len(rig.fetchers()) == 1, (
+            f"two updates reached the fetch concurrently: {rig.fetchers()}"
+        )
     finally:
         rig.hold.unlink()
         H.kill_tree(first)
@@ -224,7 +300,9 @@ def test_two_homes_cannot_update_one_checkout_at_once(rig):
 def test_live_owner_is_not_aged_out(rig):
     """(b) A live owner (matching creation time) with a 25-minute-old claim still owns the lock."""
     r = rig.driver("owner", str(25 * 60), "0")
-    assert r["rc"] == 2 and REFUSAL in r["out"], f"a live 25-min-old owner was aged out (rc={r['rc']}):\n{r['out']}"
+    assert r["rc"] == 2 and REFUSAL in r["out"], (
+        f"a live 25-min-old owner was aged out (rc={r['rc']}):\n{r['out']}"
+    )
     assert not rig.fetchers(), "the update ran past a live owner's lock"
     assert r["marker_kept"], "the live owner's marker was rewritten or deleted"
 
@@ -232,7 +310,9 @@ def test_live_owner_is_not_aged_out(rig):
 def test_reused_pid_marker_is_reclaimed(rig):
     """(c) A live pid whose creation time does not match the claim is a recycled pid: reclaim."""
     r = rig.driver("owner", "0", "-500")
-    assert r["rc"] != 2 and REFUSAL not in r["out"], f"a recycled pid blocked the update (rc={r['rc']}):\n{r['out']}"
+    assert r["rc"] != 2 and REFUSAL not in r["out"], (
+        f"a recycled pid blocked the update (rc={r['rc']}):\n{r['out']}"
+    )
     assert rig.fetchers(), f"the update never got past the lock:\n{r['out']}"
 
 
@@ -240,16 +320,23 @@ def test_killed_owner_keeps_the_checkout_locked_while_its_tree_runs(rig):
     """(d) SIGKILL `clawk update` while its completion child runs: the child inherited the locked
     fd, so a new update (any home) is refused until the child exits; never starts mid-mutation."""
     r = rig.driver("kill-mid-completion", timeout=600)
-    assert r["child_seen"] and r["child_alive_before"], f"no completion child outlived the owner: {r}"
+    assert r["child_seen"] and r["child_alive_before"], (
+        f"no completion child outlived the owner: {r}"
+    )
     assert r["rc"] == 2 and REFUSAL in r["out"], (
         f"a new update started while the killed update's completion child ran (rc={r['rc']}, "
-        f"child alive after: {r['child_alive_after']}):\n{r['out']}")
+        f"child alive after: {r['child_alive_after']}):\n{r['out']}"
+    )
 
 
 def test_orphaned_update_tree_reads_as_in_progress(rig):
     """(e) SIGKILL `clawk update` mid-completion and lose its marker: the completion child still
     holds the checkout lock, so every "is an update running" reader must still say yes."""
     r = rig.driver("orphan-reader", timeout=600)
-    assert r["child_seen"] and r["child_alive_after"], f"premise: no completion child outlived the owner: {r}"
+    assert r["child_seen"] and r["child_alive_after"], (
+        f"premise: no completion child outlived the owner: {r}"
+    )
     assert r["reader"] is not None, f"reader process failed:\n{r['reader_out']}"
-    assert r["reader"]["skew_reader"] is True, f"the server's update probe missed the live update tree: {r}"
+    assert r["reader"]["skew_reader"] is True, (
+        f"the server's update probe missed the live update tree: {r}"
+    )

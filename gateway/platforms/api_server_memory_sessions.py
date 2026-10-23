@@ -31,9 +31,13 @@ logger = logging.getLogger(__name__)
 class ApiServerMemorySessions:
     """Session-keyed ``MemoryManager`` registry with exclusive check-out/check-in."""
 
-    def __init__(self, *, max_size: Optional[int] = None, idle_ttl_secs: Optional[float] = None) -> None:
+    def __init__(
+        self, *, max_size: Optional[int] = None, idle_ttl_secs: Optional[float] = None
+    ) -> None:
         # (manager, owning home, last check-in on the monotonic clock, the same on the wall clock)
-        self._entries: OrderedDict[tuple[str, str], tuple[Any, Optional[Path], float, float]] = OrderedDict()
+        self._entries: OrderedDict[
+            tuple[str, str], tuple[Any, Optional[Path], float, float]
+        ] = OrderedDict()
         self._lock = threading.Lock()
         self._max_size = max_size
         self._idle_ttl_secs = idle_ttl_secs
@@ -42,15 +46,25 @@ class ApiServerMemorySessions:
 
     def _bounds(self) -> tuple[int, float]:
         if self._max_size is None or self._idle_ttl_secs is None:
-            from gateway.run import _AGENT_CACHE_IDLE_TTL_SECS, _AGENT_CACHE_MAX_SIZE, _load_gateway_config
+            from gateway.run import (
+                _AGENT_CACHE_IDLE_TTL_SECS,
+                _AGENT_CACHE_MAX_SIZE,
+                _load_gateway_config,
+            )
             from gateway.agent_cache_pressure import resolve_agent_cache_bounds
+
             configured = None
             with suppress(Exception):
                 configured = resolve_agent_cache_bounds(_load_gateway_config())
             if self._max_size is None:
-                self._max_size = getattr(configured, "max_size", None) or _AGENT_CACHE_MAX_SIZE
+                self._max_size = (
+                    getattr(configured, "max_size", None) or _AGENT_CACHE_MAX_SIZE
+                )
             if self._idle_ttl_secs is None:
-                self._idle_ttl_secs = getattr(configured, "idle_ttl_secs", None) or _AGENT_CACHE_IDLE_TTL_SECS
+                self._idle_ttl_secs = (
+                    getattr(configured, "idle_ttl_secs", None)
+                    or _AGENT_CACHE_IDLE_TTL_SECS
+                )
         return self._max_size, self._idle_ttl_secs
 
     @staticmethod
@@ -58,6 +72,7 @@ class ApiServerMemorySessions:
         """(registry key, profile home to re-enter on eviction) for the CURRENT scope. Callers run
         inside ``_profile_scope`` (or a single-profile gateway), so the ambient home is the owner's."""
         from clawk_constants import get_clawk_home, clawk_home_key
+
         home = Path(get_clawk_home())
         return clawk_home_key(home), home
 
@@ -76,6 +91,7 @@ class ApiServerMemorySessions:
         if entry is None:
             return None
         from clawk_state_mutation_retirement import RETRY_HORIZON_S
+
         if time.time() - entry[3] > RETRY_HORIZON_S:
             self._shutdown_async(entry[0], entry[1])
             return None
@@ -119,7 +135,10 @@ class ApiServerMemorySessions:
     def _shutdown_async(self, manager: Any, owner: Optional[Path]) -> None:
         """Eviction runs inside a request's own turn: never make that reply wait on a provider drain."""
         from agent.memory_provider import spawn_context_thread
-        spawn_context_thread(self._shutdown, args=(manager, owner), name="api-server-memory-evict").start()
+
+        spawn_context_thread(
+            self._shutdown, args=(manager, owner), name="api-server-memory-evict"
+        ).start()
 
     @staticmethod
     def _shutdown(manager: Any, owner: Optional[Path]) -> None:
@@ -128,8 +147,10 @@ class ApiServerMemorySessions:
         scope: Any = nullcontext()
         with suppress(Exception):
             from agent.secret_scope import is_multiplex_active
+
             if owner is not None and is_multiplex_active():
                 from gateway.run import _profile_runtime_scope
+
                 scope = _profile_runtime_scope(owner)
         try:
             with scope:

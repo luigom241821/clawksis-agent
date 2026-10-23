@@ -24,7 +24,11 @@ def _bridged_tool_labels(name: str, args: dict) -> list[dict]:
 def _active_image_routing_identity(agent: Any) -> tuple[str, str]:
     """Return the live provider/model, falling back before agent startup."""
     from agent.auxiliary_client import _read_main_model, _read_main_provider
-    return (getattr(agent, "provider", "") or _read_main_provider(), getattr(agent, "model", "") or _read_main_model())
+
+    return (
+        getattr(agent, "provider", "") or _read_main_provider(),
+        getattr(agent, "model", "") or _read_main_model(),
+    )
 
 
 def _build_image_ref_message(user_text: str, image_paths: list[str]) -> str:
@@ -40,7 +44,8 @@ def _build_image_ref_message(user_text: str, image_paths: list[str]) -> str:
     """
     prefix = "\n\n".join(
         f"[The user attached an image: {p.name}]\n[Examine it with the vision_analyze tool using image_url: {p}]"
-        for p in map(Path, image_paths) if p.exists()
+        for p in map(Path, image_paths)
+        if p.exists()
     )
     text = user_text or ""
     if prefix:
@@ -48,26 +53,35 @@ def _build_image_ref_message(user_text: str, image_paths: list[str]) -> str:
     return text or "What do you see in this image?"
 
 
-def _build_persist_message_with_image_refs(user_text: str, image_paths: list[str]) -> str:
+def _build_persist_message_with_image_refs(
+    user_text: str, image_paths: list[str]
+) -> str:
     """Persisted form of the user's message: ``@image:<path>`` directives (the desktop renders them as
     images); ``_build_image_ref_message``'s ``image_url:`` hint is model-only, never persisted. Caption
     first, directives last: session previews are the first 60 chars of the first user message."""
     from agent.context_references import format_reference_value
+
     text = user_text or ""
-    refs = "\n".join(f"@image:{format_reference_value(p)}" for p in image_paths if Path(p).exists())
+    refs = "\n".join(
+        f"@image:{format_reference_value(p)}" for p in image_paths if Path(p).exists()
+    )
     if not refs:
         return text
     return f"{text}\n{refs}" if text else refs
 
 
-def _build_persist_user_message(user_text: str, image_paths: list[str], run_message: Any) -> Any:
+def _build_persist_user_message(
+    user_text: str, image_paths: list[str], run_message: Any
+) -> Any:
     """Shape the persisted user turn like the model payload: ``_flush_messages_to_session_db`` ignores a
     plain-string override for a list (native-vision) payload, so swap only the text part for the
     ``@image:`` form, keep image parts, drop API-only text parts (barge-in note)."""
     persist_text = _build_persist_message_with_image_refs(user_text, image_paths)
     if not isinstance(run_message, list):
         return persist_text
-    image_parts = [p for p in run_message if not (isinstance(p, dict) and p.get("type") == "text")]
+    image_parts = [
+        p for p in run_message if not (isinstance(p, dict) and p.get("type") == "text")
+    ]
     return [{"type": "text", "text": persist_text}, *image_parts]
 
 
@@ -102,7 +116,9 @@ def _history_dict_text(content: dict, *, image_urls: bool) -> str:
 
 def _content_display_text(content: Any) -> str:
     if isinstance(content, list):
-        return "\n".join(t for t in (_content_display_text(part).strip() for part in content) if t)
+        return "\n".join(
+            t for t in (_content_display_text(part).strip() for part in content) if t
+        )
     if isinstance(content, dict):
         return _history_dict_text(content, image_urls=False)
     return "" if content is None else str(content)
@@ -117,11 +133,15 @@ def _coerce_message_text(content: Any, *, image_urls: bool = True) -> str:
     if isinstance(content, list):
         chunks: list[str] = []
         for part in content:
-            if isinstance(part, str) or (isinstance(part, dict) and isinstance(part.get("text"), str)):
+            if isinstance(part, str) or (
+                isinstance(part, dict) and isinstance(part.get("text"), str)
+            ):
                 chunks.append(part if isinstance(part, str) else part["text"])
             elif isinstance(part, dict) and part.get("type"):
                 rendered = _history_dict_text(part, image_urls=image_urls)
-                chunks.append(rendered if part["type"] in _HISTORY_TEXT_KINDS else f"\n{rendered}")
+                chunks.append(
+                    rendered if part["type"] in _HISTORY_TEXT_KINDS else f"\n{rendered}"
+                )
         return "".join(chunks)
     if isinstance(content, dict):
         return _history_dict_text(content, image_urls=image_urls)
@@ -149,34 +169,51 @@ def _strip_trailing_screenshot_placeholders(text: str) -> tuple[str, int]:
 
 def _user_image_display_text(content: Any) -> str | None:
     """Project verified native-vision images as refs without changing stored/model content."""
-    if not isinstance(content, list) or len(content) < 2 or not isinstance(content[0], dict):
+    if (
+        not isinstance(content, list)
+        or len(content) < 2
+        or not isinstance(content[0], dict)
+    ):
         return None
     text_part = content[0]
     if text_part.get("type") != "text" or not isinstance(text_part.get("text"), str):
         return None
     text = text_part["text"]
     from agent.context_references import format_reference_value
+
     if "\n\n[Image attached at: " in text:
         caption, hints = text.split("\n\n[Image attached at: ", 1)
         if not caption or caption == "What do you see in this image?":
             return None
         hints, placeholders = _strip_trailing_screenshot_placeholders(hints)
-        matches = [_IMAGE_HINT_RE.fullmatch(line) for line in ("[Image attached at: " + hints).split("\n")]
+        matches = [
+            _IMAGE_HINT_RE.fullmatch(line)
+            for line in ("[Image attached at: " + hints).split("\n")
+        ]
         if not all(matches):
             return None
         paths = [match[1] for match in matches]
         if placeholders not in (0, len(paths)):
             return None
-        projected = caption + "\n\n" + "\n".join(f"@image:{format_reference_value(p)}" for p in paths)
+        projected = (
+            caption
+            + "\n\n"
+            + "\n".join(f"@image:{format_reference_value(p)}" for p in paths)
+        )
     else:
         body, placeholders = _strip_trailing_screenshot_placeholders(text)
         lines = body.splitlines()
         ref_lines = [line for line in lines if line.startswith("@image:")]
         matches = [_IMAGE_REF_RE.fullmatch(line) for line in ref_lines]
-        if not matches or not all(matches) or lines[-len(matches):] != ref_lines:
+        if not matches or not all(matches) or lines[-len(matches) :] != ref_lines:
             return None
-        paths = [match[1][1:-1] if match[1][0] in ('`', '"', "'") else match[1] for match in matches]
-        if any(format_reference_value(p) != match[1] for p, match in zip(paths, matches)):
+        paths = [
+            match[1][1:-1] if match[1][0] in ("`", '"', "'") else match[1]
+            for match in matches
+        ]
+        if any(
+            format_reference_value(p) != match[1] for p, match in zip(paths, matches)
+        ):
             return None
         if placeholders not in (0, len(paths)):
             return None
@@ -188,23 +225,40 @@ def _user_image_display_text(content: Any) -> str | None:
     from fastapi import HTTPException
     from clawk_cli.web_routers.files import _fs_regular_file
     from clawk_cli.web_server import _FS_DATA_URL_MAX_BYTES
-    image_parts = content[1:1 + len(paths)]
-    if len(image_parts) != len(paths) or len(content) not in (1 + len(paths), 2 + len(paths)):
+
+    image_parts = content[1 : 1 + len(paths)]
+    if len(image_parts) != len(paths) or len(content) not in (
+        1 + len(paths),
+        2 + len(paths),
+    ):
         return None
     if len(content) > 1 + len(paths):
         from agent.memory_context import sanitize_context
+
         memory = content[-1]
-        if not isinstance(memory, dict) or memory.get("type") != "text" or not isinstance(memory.get("text"), str) or sanitize_context(memory["text"]).strip():
+        if (
+            not isinstance(memory, dict)
+            or memory.get("type") != "text"
+            or not isinstance(memory.get("text"), str)
+            or sanitize_context(memory["text"]).strip()
+        ):
             return None
     for path, part in zip(paths, image_parts):
-        if not Path(path).is_absolute() or not isinstance(part, dict) or part.get("type") != "image_url":
+        if (
+            not Path(path).is_absolute()
+            or not isinstance(part, dict)
+            or part.get("type") != "image_url"
+        ):
             return None
         match = _IMAGE_DATA_RE.fullmatch(_history_part_image_url(part))
         if not match or len(match[1]) > ((_FS_DATA_URL_MAX_BYTES + 2) // 3) * 4:
             return None
         try:
             target, st = _fs_regular_file(Path(path))
-            if st.st_size > _FS_DATA_URL_MAX_BYTES or target.read_bytes() != base64.b64decode(match[1], validate=True):
+            if (
+                st.st_size > _FS_DATA_URL_MAX_BYTES
+                or target.read_bytes() != base64.b64decode(match[1], validate=True)
+            ):
                 return None
         except (OSError, ValueError, binascii.Error, HTTPException):
             return None
@@ -213,16 +267,22 @@ def _user_image_display_text(content: Any) -> str | None:
 
 def _history_text_only_part(part: dict) -> bool:
     kind = part.get("type")
-    return kind in _HISTORY_TEXT_KINDS or (kind is None and isinstance(part.get("text"), str))
+    return kind in _HISTORY_TEXT_KINDS or (
+        kind is None and isinstance(part.get("text"), str)
+    )
 
 
 def _is_text_only_busy_payload(content: Any) -> bool:
     """True when a busy submit carries only plain text, not attachments/media."""
     if isinstance(content, list):
         return bool(content) and all(
-            isinstance(part, str) or (isinstance(part, dict) and _history_text_only_part(part)) for part in content
+            isinstance(part, str)
+            or (isinstance(part, dict) and _history_text_only_part(part))
+            for part in content
         )
-    return isinstance(content, (str, int, float)) or (isinstance(content, dict) and _history_text_only_part(content))
+    return isinstance(content, (str, int, float)) or (
+        isinstance(content, dict) and _history_text_only_part(content)
+    )
 
 
 def _is_display_hidden_marker(role: str | None, text: str) -> bool:
@@ -248,9 +308,20 @@ def _expand_skill_invocation_for_replay(text: str, task_id: str) -> str:
     if not head.startswith("/"):
         return text
     try:
-        from agent.skill_commands import build_skill_invocation_message, resolve_skill_command_key
+        from agent.skill_commands import (
+            build_skill_invocation_message,
+            resolve_skill_command_key,
+        )
+
         cmd_key = resolve_skill_command_key(head.lstrip("/"), interactive=True)
-        return text if cmd_key is None else (build_skill_invocation_message(cmd_key, arg.strip(), task_id=task_id) or text)
+        return (
+            text
+            if cmd_key is None
+            else (
+                build_skill_invocation_message(cmd_key, arg.strip(), task_id=task_id)
+                or text
+            )
+        )
     except Exception:  # a skill that no longer resolves must not break the rewind
         logger.debug("skill re-expansion failed for replay", exc_info=True)
         return text
@@ -269,7 +340,11 @@ def _legacy_display_kind(role: str, text: str) -> str | None:
 
     if failed_turn := untyped_failed_turn_display_kind(role, text):
         return failed_turn
-    return "auto_continue" if role == "user" and text.lstrip().startswith(_AUTO_CONTINUE_NOTE_PREFIX) else None
+    return (
+        "auto_continue"
+        if role == "user" and text.lstrip().startswith(_AUTO_CONTINUE_NOTE_PREFIX)
+        else None
+    )
 
 
 _HISTORY_ASSISTANT_DETAIL_KEYS = (
@@ -282,7 +357,9 @@ _HISTORY_ASSISTANT_DETAIL_KEYS = (
 _HISTORY_ROLES = frozenset({"user", "assistant", "tool", "system"})
 
 
-def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: bool = True) -> list[dict]:
+def _history_to_messages(
+    history: list[dict], *, profile_home=None, image_urls: bool = True
+) -> list[dict]:
     """``image_urls=False`` is the ``inline_images=false`` projection (#116511): image parts render ``[image]``
     so a remote client's history read stays kilobytes instead of re-transmitting every stored attachment."""
     from agent.history_commentary import project_history_commentary
@@ -299,7 +376,9 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
         # display_kind="hidden": model-facing scaffolding the "[System:" sniff does not catch.
         if role not in _HISTORY_ROLES or m.get("display_kind") == "hidden":
             continue
-        content_text = _user_image_display_text(m.get("content")) if role == "user" else None
+        content_text = (
+            _user_image_display_text(m.get("content")) if role == "user" else None
+        )
         if content_text is None:
             content_text = _coerce_message_text(m.get("content"), image_urls=image_urls)
         if _is_display_hidden_marker(role, content_text):
@@ -318,23 +397,42 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
         if role == "user" and m.get("display_kind") == STEER_DISPLAY_KIND:
             # Mid-turn /steer: show the user's own words, not the model-facing marker wrapper.
             from agent.conversation_compression import _extract_steer_text_from_message
+
             content_text = _extract_steer_text_from_message(m) or content_text
         if role == "tool":
-            tc_name, tc_args = tool_call_args.get(m.get("tool_call_id") or "", (None, None))
+            tc_name, tc_args = tool_call_args.get(
+                m.get("tool_call_id") or "", (None, None)
+            )
             name = tc_name or m.get("tool_name") or "tool"
             args = tc_args or {}
             # `context` is an 80-char preview; ship args so a full-call renderer isn't truncated.
             labels = _bridged_tool_labels(name, args)
-            messages.append({"role": "tool", "name": name, "context": _tool_ctx(name, args),
-                             # Edit cards need the original result; other tool outputs
-                             # remain omitted from this compact display projection.
-                             **({"content": m.get("content")} if name in {"write_file", "patch", "skill_manage"} else {}),
-                             **{key: m[key] for key in ("tool_call_id", "timestamp", "display_metadata")
-                                if m.get(key) is not None},
-                             **({"args": args} if args else {}), **({"labels": labels} if labels else {})})
+            messages.append(
+                {
+                    "role": "tool",
+                    "name": name,
+                    "context": _tool_ctx(name, args),
+                    # Edit cards need the original result; other tool outputs
+                    # remain omitted from this compact display projection.
+                    **(
+                        {"content": m.get("content")}
+                        if name in {"write_file", "patch", "skill_manage"}
+                        else {}
+                    ),
+                    **{
+                        key: m[key]
+                        for key in ("tool_call_id", "timestamp", "display_metadata")
+                        if m.get(key) is not None
+                    },
+                    **({"args": args} if args else {}),
+                    **({"labels": labels} if labels else {}),
+                }
+            )
             continue
         # Assistant detail sidecars can carry the only visible reply or reasoning after resume/reload.
-        has_assistant_detail = role == "assistant" and any(m.get(key) for key in _HISTORY_ASSISTANT_DETAIL_KEYS)
+        has_assistant_detail = role == "assistant" and any(
+            m.get(key) for key in _HISTORY_ASSISTANT_DETAIL_KEYS
+        )
         if not content_text.strip() and not has_assistant_detail:
             continue
         msg = {"role": role, "text": content_text}
@@ -351,7 +449,11 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
         if invocation:
             msg.update(text=invocation, display_kind="skill_invocation")
         if role == "assistant":
-            msg.update((key, m[key]) for key in _HISTORY_ASSISTANT_DETAIL_KEYS if m.get(key) is not None)
+            msg.update(
+                (key, m[key])
+                for key in _HISTORY_ASSISTANT_DETAIL_KEYS
+                if m.get(key) is not None
+            )
         # Display-only timeline metadata (model switches, delegation events).
         display_kind = m.get("display_kind") or _legacy_display_kind(role, content_text)
         if display_kind:
@@ -365,9 +467,15 @@ def _history_to_messages(history: list[dict], *, profile_home=None, image_urls: 
 def _coerce_seed_history(value: Any) -> list[dict]:
     history = []
     for item in value if isinstance(value, list) else ():
-        if not isinstance(item, dict) or item.get("role") not in ("user", "assistant", "system"):
+        if not isinstance(item, dict) or item.get("role") not in (
+            "user",
+            "assistant",
+            "system",
+        ):
             continue
-        content = item.get("text") if item.get("content") is None else item.get("content")
+        content = (
+            item.get("text") if item.get("content") is None else item.get("content")
+        )
         if isinstance(content, str) and content.strip():
             row = {"role": item["role"], "content": content}
             # "hidden" is the one display_kind a seeding client may author: model-facing scaffolding the
@@ -384,12 +492,18 @@ def _inflight_text(value: Any) -> str:
 
 
 def _start_inflight_turn(
-    session: dict, text: Any, *, display_kind: str | None = None,
+    session: dict,
+    text: Any,
+    *,
+    display_kind: str | None = None,
     display_metadata: dict | None = None,
 ) -> None:
     now = time.time()
     turn = {
-        "assistant": "", "started_at": now, "streaming": True, "updated_at": now,
+        "assistant": "",
+        "started_at": now,
+        "streaming": True,
+        "updated_at": now,
         "user": _inflight_text(text),
     }
     if display_kind:
@@ -397,7 +511,9 @@ def _start_inflight_turn(
     if isinstance(display_metadata, dict):
         turn["display_metadata"] = dict(display_metadata)
     session["inflight_turn"] = turn
-    _record_pending_turn(session, text, now)  # durable twin (resilience.durable_turns, opt-in)
+    _record_pending_turn(
+        session, text, now
+    )  # durable twin (resilience.durable_turns, opt-in)
 
 
 def _append_inflight_delta(session: dict, delta: Any) -> None:
@@ -407,7 +523,11 @@ def _append_inflight_delta(session: dict, delta: Any) -> None:
     turn = session.get("inflight_turn")
     if not isinstance(turn, dict):
         turn = {"assistant": "", "streaming": True, "user": ""}
-    turn.update(assistant=f"{turn.get('assistant') or ''}{text}", streaming=True, updated_at=time.time())
+    turn.update(
+        assistant=f"{turn.get('assistant') or ''}{text}",
+        streaming=True,
+        updated_at=time.time(),
+    )
     session["inflight_turn"] = turn
 
 
@@ -422,7 +542,10 @@ def _record_inflight_correction(session: dict, text: Any) -> None:
     # place the bubble between the output seen and the output redirected.
     turn = dict(turn)
     turn["corrections"] = [*(turn.get("corrections") or []), correction]
-    turn["correction_offsets"] = [*(turn.get("correction_offsets") or []), len(str(turn.get("assistant") or ""))]
+    turn["correction_offsets"] = [
+        *(turn.get("correction_offsets") or []),
+        len(str(turn.get("assistant") or "")),
+    ]
     turn["updated_at"] = time.time()
     session["inflight_turn"] = turn
 
@@ -435,26 +558,39 @@ def _clear_inflight_turn(session: dict) -> None:
     session.pop("_submit_user_row", None)
 
 
-def _fail_inflight_turn(session: dict, error: Any, error_surface: Optional[dict] = None) -> None:
+def _fail_inflight_turn(
+    session: dict, error: Any, error_surface: Optional[dict] = None
+) -> None:
     """Mark the in-flight turn terminal-error but keep it replayable: a failure's terminal frame can be lost on
     WS disconnect and the turn may never have been committed, so the snapshot lets ``session.resume`` replay
     prompt, partial text and error. Lives until the next turn starts or the session closes. Caller holds history_lock."""
-    message = str(error) if not isinstance(error, BaseException) else (str(error) or type(error).__name__)
+    message = (
+        str(error)
+        if not isinstance(error, BaseException)
+        else (str(error) or type(error).__name__)
+    )
     now = time.time()
     turn = session.get("inflight_turn")
     if not isinstance(turn, dict):
         turn = {"assistant": "", "user": "", "started_at": now}
     turn.update(
-        assistant=str(turn.get("assistant") or ""), user=str(turn.get("user") or ""),
-        error=message or "turn failed", status="error", recoverable=True,
+        assistant=str(turn.get("assistant") or ""),
+        user=str(turn.get("user") or ""),
+        error=message or "turn failed",
+        status="error",
+        recoverable=True,
     )
-    if error_surface:  # {layer, code, retryable} so a reconnect renders the same layered error card
+    if (
+        error_surface
+    ):  # {layer, code, retryable} so a reconnect renders the same layered error card
         turn["error_surface"] = dict(error_surface)
     else:
         turn.pop("error_surface", None)
     turn.update(streaming=False, updated_at=now)
     session["inflight_turn"] = turn
-    _clear_pending_turn(session)  # the turn ended (with an error), it did not crash: nothing to resume
+    _clear_pending_turn(
+        session
+    )  # the turn ended (with an error), it did not crash: nothing to resume
     # The turn is over (build failed, agent missing, prologue raised): the submit-time row stays as the
     # durable record of the send, but a later turn must not adopt it as its own input.
     session.pop("_submit_user_row", None)
@@ -477,16 +613,18 @@ def _strip_prompt_echo(message: str, prompt: Any) -> str:
     window = _TURN_PROMPT_ECHO_WINDOW
     if len(needle) < window or len(message) < window:
         return message
-    shingles = {needle[i:i + window] for i in range(len(needle) - window + 1)}
+    shingles = {needle[i : i + window] for i in range(len(needle) - window + 1)}
     escaped = json.dumps(needle)[1:-1]
     if escaped != needle:
-        shingles.update(escaped[i:i + window] for i in range(len(escaped) - window + 1))
+        shingles.update(
+            escaped[i : i + window] for i in range(len(escaped) - window + 1)
+        )
     out: list[str] = []
     i, n = 0, len(message)
     while i <= n - window:
-        if message[i:i + window] in shingles:
+        if message[i : i + window] in shingles:
             j = i + window
-            while j < n and message[j - window + 1:j + 1] in shingles:
+            while j < n and message[j - window + 1 : j + 1] in shingles:
                 j += 1
             out.append("<prompt>")
             i = j
@@ -521,6 +659,7 @@ def _turn_failure_detail(error: Any, reason: Any = None, prompt: Any = None) -> 
         return ""
     try:
         from agent.redact import redact_sensitive_text
+
         message = redact_sensitive_text(message, force=True)
     except Exception:
         message = "<unredactable>"  # never fail open
@@ -529,7 +668,11 @@ def _turn_failure_detail(error: Any, reason: Any = None, prompt: Any = None) -> 
     message = _strip_prompt_echo(message, prompt)
     if len(message) > _TURN_FAILURE_DETAIL_LIMIT:
         message = message[:_TURN_FAILURE_DETAIL_LIMIT] + "\u2026"
-    out = " failure_reason={}".format(" ".join(reason_text.split())) if reason_text else ""
+    out = (
+        " failure_reason={}".format(" ".join(reason_text.split()))
+        if reason_text
+        else ""
+    )
     return out + (f" cause={message!r}" if message else "")
 
 

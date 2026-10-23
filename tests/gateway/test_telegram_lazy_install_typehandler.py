@@ -137,8 +137,7 @@ def test_lazy_install_rebinds_every_placeholder(monkeypatch, fake_telegram_sdk):
 
     survivors = [name for name in stubbed if getattr(adapter, name) is PLACEHOLDER]
     assert not survivors, (
-        "lazy install left these bound to the import-time placeholder: "
-        f"{survivors}"
+        f"lazy install left these bound to the import-time placeholder: {survivors}"
     )
 
     # Spot-check that the rebind wired up the real objects, not just anything

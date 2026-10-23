@@ -10,7 +10,6 @@ import pytest
 from agent.i18n import t
 
 
-
 def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
     """Create a ClawksisCLI instance with minimal mocking."""
     import importlib
@@ -48,12 +47,17 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
         "prompt_toolkit.auto_suggest": MagicMock(),
     }
     try:
-        with patch.dict(sys.modules, prompt_toolkit_stubs), \
-             patch.dict("os.environ", clean_env, clear=False):
+        with (
+            patch.dict(sys.modules, prompt_toolkit_stubs),
+            patch.dict("os.environ", clean_env, clear=False),
+        ):
             import cli as _cli_mod
+
             _cli_mod = importlib.reload(_cli_mod)
-            with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), \
-                 patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}):
+            with (
+                patch.object(_cli_mod, "get_tool_definitions", return_value=[]),
+                patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
+            ):
                 return _cli_mod.ClawksisCLI(**kwargs)
     finally:
         # The reload above re-executed cli.py while prompt_toolkit was stubbed
@@ -68,36 +72,32 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
         # Reload once more with the real modules visible so cli's globals
         # rebind cleanly.
         import cli as _cli_restore
+
         importlib.reload(_cli_restore)
 
 
 class TestMaxTurnsResolution:
     """max_turns must always resolve to a positive integer, never None."""
 
-
     def test_explicit_max_turns_honored(self):
         cli = _make_cli(max_turns=25)
         assert cli.max_turns == 25
-
-
-
 
     def test_legacy_root_max_turns_is_used_when_agent_key_exists_without_value(self):
         cli_obj = _make_cli(config_overrides={"agent": {}, "max_turns": 77})
         assert cli_obj.max_turns == 77
 
 
-
-
-
 class TestFallbackChainInit:
     def test_merges_new_and_legacy_fallback_config(self):
-        cli = _make_cli(config_overrides={
-            "fallback_providers": [
-                {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
-            ],
-            "fallback_model": {"provider": "nous", "model": "Hermes-4"},
-        })
+        cli = _make_cli(
+            config_overrides={
+                "fallback_providers": [
+                    {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
+                ],
+                "fallback_model": {"provider": "nous", "model": "Hermes-4"},
+            }
+        )
         assert cli._fallback_model == [
             {"provider": "openrouter", "model": "anthropic/claude-sonnet-4.6"},
             {"provider": "nous", "model": "Hermes-4"},
@@ -105,11 +105,9 @@ class TestFallbackChainInit:
 
 
 class TestBusyInputMode:
-
     def test_busy_input_mode_queue_is_honored(self):
         cli = _make_cli(config_overrides={"display": {"busy_input_mode": "queue"}})
         assert cli.busy_input_mode == "queue"
-
 
     def test_queue_command_works_while_busy(self):
         """When agent is running, /queue should still put the prompt in _pending_input."""
@@ -153,6 +151,7 @@ class TestBusyInputMode:
         # sentinel class must come from the same (reloaded) module the
         # instance's handler compares against.
         import cli as _cli_mod
+
         cli._pending_input.put(_cli_mod._VoiceInputMessage("spoken prompt"))
         cli.process_command("/queue edit 1 corrected prompt")
         items = cli._pending_input_items()
@@ -168,23 +167,45 @@ class TestBusyInputMode:
         cli.process_command("/queue move 1 9")
         assert cli._pending_input_items() == ["only item"]
 
-    @pytest.mark.parametrize("command, usage_key", [
-        ("/queue rm", "cli.queue.usage_remove"),
-        ("/queue rm 1 extra", "cli.queue.usage_remove"),
-        ("/queue rm \u2461", "cli.queue.usage_remove"),         # ② : isdigit() but not int()
-        ("/queue rm " + "9" * 5000, "cli.queue.usage_remove"),  # past int()'s digit limit
-        ("/queue edit \u00b2 new text", "cli.queue.usage_edit"),  # ²
-        ("/queue move \u2466 1", "cli.queue.usage_move"),       # ⑦
-        ("/queue move 1 \u2466", "cli.queue.usage_move"),
-    ], ids=["rm-bare", "rm-trailing-words", "rm-circled-digit", "rm-over-int-limit",
-            "edit-superscript", "move-src-circled", "move-dst-circled"])
-    def test_queue_malformed_index_prints_usage_instead_of_raising(self, command, usage_key):
+    @pytest.mark.parametrize(
+        "command, usage_key",
+        [
+            ("/queue rm", "cli.queue.usage_remove"),
+            ("/queue rm 1 extra", "cli.queue.usage_remove"),
+            (
+                "/queue rm \u2461",
+                "cli.queue.usage_remove",
+            ),  # ② : isdigit() but not int()
+            (
+                "/queue rm " + "9" * 5000,
+                "cli.queue.usage_remove",
+            ),  # past int()'s digit limit
+            ("/queue edit \u00b2 new text", "cli.queue.usage_edit"),  # ²
+            ("/queue move \u2466 1", "cli.queue.usage_move"),  # ⑦
+            ("/queue move 1 \u2466", "cli.queue.usage_move"),
+        ],
+        ids=[
+            "rm-bare",
+            "rm-trailing-words",
+            "rm-circled-digit",
+            "rm-over-int-limit",
+            "edit-superscript",
+            "move-src-circled",
+            "move-dst-circled",
+        ],
+    )
+    def test_queue_malformed_index_prints_usage_instead_of_raising(
+        self, command, usage_key
+    ):
         """A bad index used to raise ValueError out of the slash handler, which
         escapes the prompt_toolkit key handler and kills the TUI."""
         cli = _make_cli()
         import cli as _cli_mod
+
         printed = []
-        with patch.object(_cli_mod, "_cprint", side_effect=lambda s, *a, **k: printed.append(s)):
+        with patch.object(
+            _cli_mod, "_cprint", side_effect=lambda s, *a, **k: printed.append(s)
+        ):
             cli.process_command("/queue first prompt")
             cli.process_command(command)
         assert cli._pending_input_items() == ["first prompt"]
@@ -195,7 +216,6 @@ class TestBusyInputMode:
         cli.process_command("/queue first prompt")
         cli.process_command("/queue edit 1\treplacement")
         assert cli._pending_input_items() == ["replacement"]
-
 
     def test_interrupt_mode_routes_busy_enter_to_interrupt(self):
         """In interrupt mode (default), Enter while busy goes to _interrupt_queue."""
@@ -241,11 +261,16 @@ class TestPromptToolkitTerminalCompatibility:
         # Default: Enter submits while c-j stays free for the newline binding.
         # (Runs on the POSIX CI job; the native-Windows arm is the marked test
         # below, so no sys.platform fake is needed here.)
-        with _patch.dict(_os.environ, {}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.dict(_os.environ, {}, clear=True),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
@@ -256,27 +281,50 @@ class TestPromptToolkitTerminalCompatibility:
                 submit_handler,
                 multiline_shortcuts_enabled=False,
             )
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert bindings[("c-j",)] is submit_handler
 
         # POSIX over SSH: c-j stays free so Ctrl+Enter (sent as LF by
         # Windows Terminal / Kitty / mintty over SSH) inserts a newline.
-        with _patch.dict(_os.environ, {"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.dict(
+                _os.environ, {"SSH_CONNECTION": "1.2.3.4 5 6.7.8.9 22"}, clear=True
+            ),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
         # Ghostty through tmux: TERM_PROGRAM is tmux, but Ghostty exports a
         # stable env marker. Keep c-j free so Ctrl+J inserts a newline.
-        with _patch.dict(_os.environ, {"TERM": "tmux-256color", "TERM_PROGRAM": "tmux", "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty"}, clear=True), \
-             _patch("builtins.open", side_effect=OSError("no /proc")):
+        with (
+            _patch.dict(
+                _os.environ,
+                {
+                    "TERM": "tmux-256color",
+                    "TERM_PROGRAM": "tmux",
+                    "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty",
+                },
+                clear=True,
+            ),
+            _patch("builtins.open", side_effect=OSError("no /proc")),
+        ):
             kb = KeyBindings()
             _bind_prompt_submit_keys(kb, submit_handler)
-            bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+            bindings = {
+                tuple(key.value for key in binding.keys): binding.handler
+                for binding in kb.bindings
+            }
             assert bindings[("c-m",)] is submit_handler
             assert ("c-j",) not in bindings
 
@@ -293,7 +341,10 @@ class TestPromptToolkitTerminalCompatibility:
 
         kb = KeyBindings()
         _bind_prompt_submit_keys(kb, submit_handler)
-        bindings = {tuple(key.value for key in binding.keys): binding.handler for binding in kb.bindings}
+        bindings = {
+            tuple(key.value for key in binding.keys): binding.handler
+            for binding in kb.bindings
+        }
         assert bindings[("c-m",)] is submit_handler
         assert ("c-j",) not in bindings
 
@@ -306,8 +357,6 @@ class TestPromptToolkitTerminalCompatibility:
         _disable_prompt_toolkit_cpr_warning(app)
 
         assert renderer.cpr_not_supported_callback is None
-
-
 
     @pytest.mark.platforms("linux")
     def test_cpr_gating_posix_suppresses_without_ssh(self, monkeypatch):
@@ -327,8 +376,6 @@ class TestPromptToolkitTerminalCompatibility:
 
         monkeypatch.setenv("PROMPT_TOOLKIT_NO_CPR", "1")
         assert _terminal_may_leak_cpr() is True
-
-
 
 
 class TestHistoryDisplay:
@@ -362,7 +409,6 @@ class TestHistoryDisplay:
         assert "A" * 250 in output
         assert "A" * 250 + "..." not in output
 
-
     def test_resume_without_target_lists_recent_sessions(self, capsys):
         cli = _make_cli()
         cli.session_id = "current"
@@ -387,8 +433,6 @@ class TestHistoryDisplay:
 
         assert t("cli.session.recent_header") in output
         assert "Checking Running Clawksis" in output
-
-
 
     def test_sessions_command_no_args_lists_recent_sessions(self, capsys):
         """/sessions with no args prints the recent-sessions table (TUI parity).
@@ -420,7 +464,6 @@ class TestHistoryDisplay:
         assert "Checking Running Clawksis" in output
         assert "20260401_201329_d85961" in output
 
-
     def test_sessions_with_target_delegates_to_resume(self):
         """/sessions <id_or_title> behaves identically to /resume <id_or_title>.
 
@@ -432,9 +475,7 @@ class TestHistoryDisplay:
         with patch.object(cli, "_handle_resume_command") as mock_resume:
             cli.process_command("/sessions Checking Running Clawksis")
 
-        mock_resume.assert_called_once_with(
-            "/resume Checking Running Clawksis"
-        )
+        mock_resume.assert_called_once_with("/resume Checking Running Clawksis")
 
 
 class TestNestedDictModelDefaultPairing:
@@ -449,34 +490,40 @@ class TestNestedDictModelDefaultPairing:
     """
 
     def test_nested_dict_default_keeps_provider_paired(self):
-        cli = _make_cli(config_overrides={
-            "model": {
-                "default": {"provider": "nous", "model": "nested-default-model"},
-                "provider": "auto",
-            },
-        })
+        cli = _make_cli(
+            config_overrides={
+                "model": {
+                    "default": {"provider": "nous", "model": "nested-default-model"},
+                    "provider": "auto",
+                },
+            }
+        )
         assert cli.model == "nested-default-model"
         assert cli.requested_provider == "nous"
         assert cli.provider == "nous"
 
     def test_nested_dict_model_alias_keeps_provider_paired(self):
-        cli = _make_cli(config_overrides={
-            "model": {
-                "model": {"provider": "openai", "model": "nested-alias-model"},
-                "provider": "auto",
-            },
-        })
+        cli = _make_cli(
+            config_overrides={
+                "model": {
+                    "model": {"provider": "openai", "model": "nested-alias-model"},
+                    "provider": "auto",
+                },
+            }
+        )
         assert cli.model == "nested-alias-model"
         assert cli.requested_provider == "openai"
         assert cli.provider == "openai"
 
     def test_flat_string_default_still_uses_outer_provider(self):
-        cli = _make_cli(config_overrides={
-            "model": {
-                "default": "flat-default-model",
-                "provider": "auto",
-            },
-        })
+        cli = _make_cli(
+            config_overrides={
+                "model": {
+                    "default": "flat-default-model",
+                    "provider": "auto",
+                },
+            }
+        )
         assert cli.model == "flat-default-model"
         assert cli.requested_provider == "auto"
         assert cli.provider == "auto"
@@ -542,21 +589,28 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "provider": "opencode-go",  # stale root-level key
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-                "provider": "openrouter",  # correct canonical key
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "provider": "opencode-go",  # stale root-level key
+                    "model": {
+                        "default": "google/gemini-3-flash-preview",
+                        "provider": "openrouter",  # correct canonical key
+                    },
+                }
+            )
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
         assert cfg["model"]["provider"] == "openrouter"
 
-    def test_root_provider_used_as_fallback_when_model_provider_missing(self, tmp_path, monkeypatch):
+    def test_root_provider_used_as_fallback_when_model_provider_missing(
+        self, tmp_path, monkeypatch
+    ):
         """Legacy root-level provider still populates model.provider in the CLI loader."""
         import clawk_yaml as yaml
 
@@ -565,21 +619,28 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "provider": "opencode-go",  # stale root key
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-                # no explicit model.provider — defaults provide "auto"
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "provider": "opencode-go",  # stale root key
+                    "model": {
+                        "default": "google/gemini-3-flash-preview",
+                        # no explicit model.provider — defaults provide "auto"
+                    },
+                }
+            )
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
         assert cfg["model"]["provider"] == "opencode-go"
 
-    def test_root_base_url_used_as_fallback_when_model_base_url_missing(self, tmp_path, monkeypatch):
+    def test_root_base_url_used_as_fallback_when_model_base_url_missing(
+        self, tmp_path, monkeypatch
+    ):
         """Legacy root-level base_url still populates model.base_url in the CLI loader."""
         import clawk_yaml as yaml
 
@@ -588,14 +649,19 @@ class TestRootLevelProviderOverride:
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "base_url": "https://example.com/v1",
-            "model": {
-                "default": "google/gemini-3-flash-preview",
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "base_url": "https://example.com/v1",
+                    "model": {
+                        "default": "google/gemini-3-flash-preview",
+                    },
+                }
+            )
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
@@ -611,14 +677,19 @@ class TestRootLevelProviderOverride:
         monkeypatch.delenv("TERMINAL_VERCEL_RUNTIME", raising=False)
 
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "terminal": {
-                "backend": "vercel_sandbox",
-                "vercel_runtime": "python3.13",
-            },
-        }))
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "terminal": {
+                        "backend": "vercel_sandbox",
+                        "vercel_runtime": "python3.13",
+                    },
+                }
+            )
+        )
 
         import cli
+
         monkeypatch.setattr(cli, "_clawk_home", clawk_home)
         cfg = cli.load_cli_config()
 
@@ -659,16 +730,10 @@ class TestRootLevelProviderOverride:
         assert result["model"]["provider"] == "correct-provider"
         assert "provider" not in result  # root key still cleaned up
 
-
-
-
-
-
     # --- model-id alias canonicalization (issue #34500) -------------------
     # ``model.name`` / ``model.model`` must canonicalize to ``model.default``
     # so the runtime resolver (and ~14 other readers) never sends an empty
     # ``model=`` to the backend. Precedence: default > model > name.
-
 
     def test_normalize_model_alias_to_default(self):
         """model.model becomes model.default."""
@@ -678,16 +743,15 @@ class TestRootLevelProviderOverride:
         assert result["model"]["default"] == "via-model-key"
         assert "model" not in result["model"]
 
-
-
     def test_normalize_model_wins_over_name(self):
         """Precedence: model > name when both are aliases and default is empty."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({"model": {"model": "m-key", "name": "n-key"}})
+        result = _normalize_root_model_keys(
+            {"model": {"model": "m-key", "name": "n-key"}}
+        )
         assert result["model"]["default"] == "m-key"
         assert "model" not in result["model"] and "name" not in result["model"]
-
 
     # --- dict-valued model.default flattening (PR #83902 follow-up) --------
     # ``model.default: {provider: ..., model: ...}`` must flatten into a string
@@ -700,11 +764,13 @@ class TestRootLevelProviderOverride:
         """dict model.default -> string default + provider, no outer provider set."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({
-            "model": {
-                "default": {"provider": "nous", "model": "nested-default-model"},
-            },
-        })
+        result = _normalize_root_model_keys(
+            {
+                "model": {
+                    "default": {"provider": "nous", "model": "nested-default-model"},
+                },
+            }
+        )
         assert result["model"]["default"] == "nested-default-model"
         assert result["model"]["provider"] == "nous"
 
@@ -712,12 +778,14 @@ class TestRootLevelProviderOverride:
         """Nested provider replaces the merged default "auto"."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({
-            "model": {
-                "default": {"provider": "nous", "model": "nested-default-model"},
-                "provider": "auto",
-            },
-        })
+        result = _normalize_root_model_keys(
+            {
+                "model": {
+                    "default": {"provider": "nous", "model": "nested-default-model"},
+                    "provider": "auto",
+                },
+            }
+        )
         assert result["model"]["default"] == "nested-default-model"
         assert result["model"]["provider"] == "nous"
 
@@ -725,12 +793,14 @@ class TestRootLevelProviderOverride:
         """An explicitly configured model.provider beats the nested provider."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({
-            "model": {
-                "default": {"provider": "nous", "model": "nested-default-model"},
-                "provider": "anthropic",
-            },
-        })
+        result = _normalize_root_model_keys(
+            {
+                "model": {
+                    "default": {"provider": "nous", "model": "nested-default-model"},
+                    "provider": "anthropic",
+                },
+            }
+        )
         assert result["model"]["default"] == "nested-default-model"
         assert result["model"]["provider"] == "anthropic"
 
@@ -738,11 +808,13 @@ class TestRootLevelProviderOverride:
         """dict model.model alias also flattens (default > model > name)."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({
-            "model": {
-                "model": {"provider": "openai", "model": "nested-alias-model"},
-            },
-        })
+        result = _normalize_root_model_keys(
+            {
+                "model": {
+                    "model": {"provider": "openai", "model": "nested-alias-model"},
+                },
+            }
+        )
         assert result["model"]["default"] == "nested-alias-model"
         assert result["model"]["provider"] == "openai"
         assert "model" not in result["model"]
@@ -751,9 +823,11 @@ class TestRootLevelProviderOverride:
         """Plain string defaults keep existing behavior exactly."""
         from clawk_cli.config import _normalize_root_model_keys
 
-        result = _normalize_root_model_keys({
-            "model": {"default": "flat-default-model", "provider": "auto"},
-        })
+        result = _normalize_root_model_keys(
+            {
+                "model": {"default": "flat-default-model", "provider": "auto"},
+            }
+        )
         assert result["model"]["default"] == "flat-default-model"
         assert result["model"]["provider"] == "auto"
 
@@ -771,22 +845,34 @@ class TestPluginToolsetStartupValidation:
         printed: list[str] = []
         stub._console_print = printed.append
         monkeypatch.setattr(_cli_mod, "CLI_CONFIG", {"agent": {}})
-        for name in ("get_plugin_toolset_keys_nowait", "discover_plugins", "get_plugin_manager"):
-            monkeypatch.setattr(f"clawk_cli.plugins.{name}", lambda *_a: pytest.fail("probed plugins"))
+        for name in (
+            "get_plugin_toolset_keys_nowait",
+            "discover_plugins",
+            "get_plugin_manager",
+        ):
+            monkeypatch.setattr(
+                f"clawk_cli.plugins.{name}", lambda *_a: pytest.fail("probed plugins")
+            )
         stub._init_toolsets(["terminal", "voice_stack", "voice_stak"])
         assert printed == []
         assert stub.enabled_toolsets == ["terminal", "voice_stack", "voice_stak"]
-
-
-
 
 
 @pytest.mark.parametrize(
     "env, expected",
     [
         ({"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "fake-openai-project-key"}, ""),
-        ({"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "sk-or-v1-fake-in-openai-var"}, "sk-or-v1-fake-in-openai-var"),
-        ({"OPENROUTER_API_KEY": "sk-or-v1-fake-router", "OPENAI_API_KEY": "fake-openai-project-key"}, "sk-or-v1-fake-router"),
+        (
+            {"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": "sk-or-v1-fake-in-openai-var"},
+            "sk-or-v1-fake-in-openai-var",
+        ),
+        (
+            {
+                "OPENROUTER_API_KEY": "sk-or-v1-fake-router",
+                "OPENAI_API_KEY": "fake-openai-project-key",
+            },
+            "sk-or-v1-fake-router",
+        ),
     ],
     ids=["real-openai-key-not-seeded", "sk-or-in-openai-var", "openrouter-key-wins"],
 )

@@ -26,10 +26,6 @@ class TestNormalizeCustomProviderEntry:
         yield
         _PROVIDER_NORMALIZE_WARNED.clear()
 
-
-
-
-
     def test_unknown_keys_warned_once_per_signature(self, caplog):
         """Repeated normalization of the same entry (as happens on every
         picker/inventory load) must warn only once — otherwise the warning
@@ -41,17 +37,11 @@ class TestNormalizeCustomProviderEntry:
         }
         with caplog.at_level(logging.WARNING):
             for _ in range(5):
-                _normalize_custom_provider_entry(
-                    dict(entry), provider_key="test"
-                )
+                _normalize_custom_provider_entry(dict(entry), provider_key="test")
         unknown_warnings = [
-            r for r in caplog.records
-            if "unknown config keys" in r.message.lower()
+            r for r in caplog.records if "unknown config keys" in r.message.lower()
         ]
         assert len(unknown_warnings) == 1
-
-
-
 
     def test_env_var_placeholder_in_base_url_not_rejected(self):
         """A base_url that is an un-expanded ${ENV_VAR} placeholder must not be
@@ -70,13 +60,18 @@ class TestNormalizeCustomProviderEntry:
     def test_catalog_provider_is_a_known_key_and_survives_normalization(self, caplog):
         """``catalog_provider`` (vendor alias for metadata lookups, #112649) is accepted without an
         unknown-key warning and carried on the normalized entry."""
-        entry = {"base_url": "https://gw.example.com/v1", "key_env": "GW_KEY", "catalog_provider": "deepseek"}
+        entry = {
+            "base_url": "https://gw.example.com/v1",
+            "key_env": "GW_KEY",
+            "catalog_provider": "deepseek",
+        }
         with caplog.at_level(logging.WARNING):
             result = _normalize_custom_provider_entry(entry, provider_key="925llm")
         assert result is not None
         assert result["catalog_provider"] == "deepseek"
-        assert not [r for r in caplog.records if "unknown config keys" in r.message.lower()]
-
+        assert not [
+            r for r in caplog.records if "unknown config keys" in r.message.lower()
+        ]
 
     def test_numeric_yaml_name_and_key_become_strings(self):
         """Unquoted YAML `name: 2070` / key 2070 must not be dropped as non-str."""
@@ -96,5 +91,3 @@ class TestNormalizeCustomProviderEntry:
         stored, entry = find_provider_entry({2070: {"base_url": "http://x"}}, "2070")
         assert stored == 2070
         assert entry == {"base_url": "http://x"}
-
-

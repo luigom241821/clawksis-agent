@@ -5,6 +5,7 @@ endpoints; these tests stub ``_sidecar_call`` to assert endpoint + body
 shape. Inbound reaction events are fed straight to ``_dispatch_inbound``.
 Neither path spawns the Node sidecar or binds ports.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone, UTC
@@ -94,6 +95,7 @@ def _reaction_event(
 
 # -- Outbound: /react and /unreact body shapes ------------------------------
 
+
 @pytest.mark.asyncio
 async def test_add_reaction_posts_react(monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = _make_adapter(monkeypatch)
@@ -142,6 +144,7 @@ async def test_reaction_failure_is_soft(monkeypatch: pytest.MonkeyPatch) -> None
 
 # -- Lifecycle hooks ---------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_hooks_noop_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PHOTON_REACTIONS", raising=False)
@@ -172,6 +175,7 @@ async def test_processing_start_adds_eyes(monkeypatch: pytest.MonkeyPatch) -> No
 
 # -- Inbound reaction routing ------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_inbound_reaction_on_bot_message_routed(
     monkeypatch: pytest.MonkeyPatch,
@@ -191,5 +195,3 @@ async def test_inbound_reaction_on_bot_message_routed(
     assert event.reply_to_message_id == "bot-msg-1"
     assert event.reply_to_text == "the bot's earlier reply"
     assert event.reply_to_is_own_message is True
-
-

@@ -79,12 +79,12 @@ def test_relay_package_calls_no_signature_verification():
                 continue
             m = _FORBIDDEN_SYMBOL_RE.search(line)
             if m:
-                offenders.append(f"{path.name}:{lineno}: '{m.group(0)}' in: {stripped[:80]}")
+                offenders.append(
+                    f"{path.name}:{lineno}: '{m.group(0)}' in: {stripped[:80]}"
+                )
     assert not offenders, (
         "The relay path must not perform platform signature/crypto verification "
         "(A2). Found verification-symbol references:\n  "
         + "\n  ".join(offenders)
         + "\nThe connector verifies at the edge; the gateway re-validates nothing."
     )
-
-

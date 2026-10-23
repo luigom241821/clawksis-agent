@@ -90,7 +90,9 @@ class ReviewItem:
 # ---------------------------------------------------------------------------
 
 
-def collect_from_statuses(review_statuses_json: str) -> tuple[list[ReviewItem], set[str]]:
+def collect_from_statuses(
+    review_statuses_json: str,
+) -> tuple[list[ReviewItem], set[str]]:
     """Parse the nested review_status JSON into flat ReviewItems.
 
     The input is a JSON array of ``{source, results: [...]}`` objects.
@@ -126,16 +128,18 @@ def collect_from_statuses(review_statuses_json: str) -> tuple[list[ReviewItem], 
             kind = r.get("kind", "info")
             if kind not in _SEVERITY_ORDER:
                 kind = "info"
-            items.append(ReviewItem(
-                severity=kind,
-                title=r.get("title", "Unknown"),
-                summary=r.get("summary", ""),
-                detail=r.get("detail", ""),
-                link=r.get("link", ""),
-                link_label=r.get("link_label", "View logs"),
-                how_to_fix=r.get("how_to_fix", ""),
-                source=source,
-            ))
+            items.append(
+                ReviewItem(
+                    severity=kind,
+                    title=r.get("title", "Unknown"),
+                    summary=r.get("summary", ""),
+                    detail=r.get("detail", ""),
+                    link=r.get("link", ""),
+                    link_label=r.get("link_label", "View logs"),
+                    how_to_fix=r.get("how_to_fix", ""),
+                    source=source,
+                )
+            )
 
     return items, sources
 
@@ -171,9 +175,7 @@ def collect_failed_jobs(
 
     # Pre-normalize exclude sources once: lowercase + hyphens→spaces, so
     # "supply-chain" matches "Supply-chain scan / ...".
-    norm_sources = {
-        src.lower().replace("-", " ") for src in (exclude_sources or set())
-    }
+    norm_sources = {src.lower().replace("-", " ") for src in (exclude_sources or set())}
 
     items: list[ReviewItem] = []
     for name, result in sorted(needs.items()):
@@ -184,12 +186,14 @@ def collect_failed_jobs(
             if any(src in norm for src in norm_sources):
                 continue
         job_url = (job_urls or {}).get(name, run_url)
-        items.append(ReviewItem(
-            severity="error",
-            title=name,
-            summary=f"Job **{name}** failed.",
-            job_url=job_url,
-        ))
+        items.append(
+            ReviewItem(
+                severity="error",
+                title=name,
+                summary=f"Job **{name}** failed.",
+                job_url=job_url,
+            )
+        )
     return items
 
 
@@ -332,7 +336,9 @@ def render_comment(
 # ---------------------------------------------------------------------------
 
 
-def _attach_job_urls(items: list[ReviewItem], job_urls: dict[str, str], run_url: str) -> None:
+def _attach_job_urls(
+    items: list[ReviewItem], job_urls: dict[str, str], run_url: str
+) -> None:
     """Fill in per-job log links for all items.
 
     Uses the same case-insensitive, hyphen-normalized matching as
@@ -382,7 +388,11 @@ def assemble(
     items.extend(status_items)
 
     # 2. Synthesized error items for failed jobs not covered by statuses
-    items.extend(collect_failed_jobs(needs_json, run_url, exclude_sources=sources, job_urls=job_urls))
+    items.extend(
+        collect_failed_jobs(
+            needs_json, run_url, exclude_sources=sources, job_urls=job_urls
+        )
+    )
 
     # 3. Attach per-job log links to all items (not just synthesized errors)
     _attach_job_urls(items, job_urls or {}, run_url)
@@ -425,7 +435,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    pending = [j.strip() for j in args.pending_jobs.split(",") if j.strip()] if args.pending_jobs else None
+    pending = (
+        [j.strip() for j in args.pending_jobs.split(",") if j.strip()]
+        if args.pending_jobs
+        else None
+    )
 
     body = assemble(
         needs_json=args.needs_json,

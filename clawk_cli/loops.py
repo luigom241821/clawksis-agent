@@ -88,7 +88,13 @@ def parse_loop_args(text: str) -> dict[str, Any]:
     ``interval_seconds`` None means self-paced, ``error`` is set for unusable input.
     """
     raw = (text or "").strip()
-    result: dict[str, Any] = {"interval_seconds": None, "prompt": "", "times": 0, "until": "", "error": None}
+    result: dict[str, Any] = {
+        "interval_seconds": None,
+        "prompt": "",
+        "times": 0,
+        "until": "",
+        "error": None,
+    }
     if not raw:
         return {**result, "error": "empty"}
 
@@ -102,8 +108,11 @@ def parse_loop_args(text: str) -> dict[str, Any]:
             if times < 1:
                 raise ValueError
         except ValueError:
-            return {**result, "error": f"--times expects a positive integer, got {m_times.group(1)!r}"}
-        raw = (raw[: m_times.start()] + raw[m_times.end():]).strip()
+            return {
+                **result,
+                "error": f"--times expects a positive integer, got {m_times.group(1)!r}",
+            }
+        raw = (raw[: m_times.start()] + raw[m_times.end() :]).strip()
 
     m_until = re.search(r"\s--until\s+(.+)$", raw, re.DOTALL)
     if m_until:
@@ -122,7 +131,13 @@ def parse_loop_args(text: str) -> dict[str, Any]:
 
     if not raw:
         return {**result, "error": "missing prompt (usage: /loop [interval] <prompt>)"}
-    return {**result, "interval_seconds": interval, "prompt": raw, "times": times, "until": until}
+    return {
+        **result,
+        "interval_seconds": interval,
+        "prompt": raw,
+        "times": times,
+        "until": until,
+    }
 
 
 def format_interval(seconds: float) -> str:
@@ -169,7 +184,11 @@ def self_paced_floor_seconds() -> int:
 
 def self_paced_ceiling_seconds() -> int:
     floor = self_paced_floor_seconds()
-    return _config_int("self_paced_ceiling_seconds", max(floor, DEFAULT_SELF_PACED_CEILING_SECONDS), floor)
+    return _config_int(
+        "self_paced_ceiling_seconds",
+        max(floor, DEFAULT_SELF_PACED_CEILING_SECONDS),
+        floor,
+    )
 
 
 @dataclass
@@ -177,12 +196,12 @@ class LoopState:
     """Serializable /loop state stored per session."""
 
     prompt: str
-    status: str = "active"            # active | paused | done | cleared
-    mode: str = "interval"            # interval | self_paced
-    interval_seconds: float = 0.0     # fixed cadence (mode == "interval")
-    current_delay: float = 0.0        # live cadence (self-paced backoff)
-    times: int = 0                    # user cap (--times N); 0 = none
-    until: str = ""                   # judged stop condition; "" = none
+    status: str = "active"  # active | paused | done | cleared
+    mode: str = "interval"  # interval | self_paced
+    interval_seconds: float = 0.0  # fixed cadence (mode == "interval")
+    current_delay: float = 0.0  # live cadence (self-paced backoff)
+    times: int = 0  # user cap (--times N); 0 = none
+    until: str = ""  # judged stop condition; "" = none
     max_ticks: int = DEFAULT_MAX_TICKS  # config backstop; 0 = unlimited
     ticks_fired: int = 0
     created_at: float = 0.0
@@ -191,7 +210,7 @@ class LoopState:
     # True between "wakeup injected" and "that turn's response evaluated": stops a tick from
     # double-firing mid-turn and tells the post-turn hook the turn that just ended was ours.
     awaiting_response: bool = False
-    last_response_digest: str = ""    # self-paced change detection
+    last_response_digest: str = ""  # self-paced change detection
     paused_reason: Optional[str] = None
     last_stop_reason: Optional[str] = None
     # Gateway routing (platform / chat_id / chat_type / thread_id) captured at creation so the
@@ -217,12 +236,18 @@ class LoopState:
         casts = {"str": str, "int": int, "float": float, "bool": bool}
         for f in fields(cls):
             if f.name not in kwargs:
-                kwargs[f.name] = casts[f.type](data.get(f.name, f.default) or casts[f.type]())
+                kwargs[f.name] = casts[f.type](
+                    data.get(f.name, f.default) or casts[f.type]()
+                )
         return cls(**kwargs)
 
     def cadence_label(self) -> str:
         if self.mode == "self_paced":
-            live = f", currently {format_interval(self.current_delay)}" if self.current_delay else ""
+            live = (
+                f", currently {format_interval(self.current_delay)}"
+                if self.current_delay
+                else ""
+            )
             return f"self-paced{live}"
         return f"every {format_interval(self.interval_seconds)}"
 
@@ -270,7 +295,9 @@ def _parse_state(raw: str, session_id: str = "") -> Optional[LoopState]:
         return LoopState.from_json(raw)
     except Exception as exc:
         if session_id:
-            logger.warning("LoopManager: could not parse stored loop for %s: %s", session_id, exc)
+            logger.warning(
+                "LoopManager: could not parse stored loop for %s: %s", session_id, exc
+            )
         return None
 
 
@@ -313,8 +340,10 @@ def list_active_loops() -> list[tuple[str, LoopState]]:
     if db is None:
         return []
     out: list[tuple[str, LoopState]] = []
-    for key, raw in _db_op("list_meta_prefix", lambda: db.list_meta_prefix(_META_PREFIX), []):
-        session_id = key[len(_META_PREFIX):]
+    for key, raw in _db_op(
+        "list_meta_prefix", lambda: db.list_meta_prefix(_META_PREFIX), []
+    ):
+        session_id = key[len(_META_PREFIX) :]
         state = _parse_state(raw) if session_id and raw else None
         if state is not None and state.status == "active":
             out.append((session_id, state))
@@ -326,13 +355,15 @@ def store_has_active_loop(db: Any) -> bool:
     caller keeps its full scan). Unlike :func:`list_active_loops` this takes the store explicitly and
     propagates read errors, so an idle gate can tell "empty" from "unavailable"."""
     for key, raw in db.list_meta_prefix(_META_PREFIX):
-        state = _parse_state(raw, key[len(_META_PREFIX):]) if raw else None
+        state = _parse_state(raw, key[len(_META_PREFIX) :]) if raw else None
         if state is None or state.status == "active":
             return True
     return False
 
 
-def migrate_loop_to_session(old_session_id: str, new_session_id: str, *, reason: str = "") -> bool:
+def migrate_loop_to_session(
+    old_session_id: str, new_session_id: str, *, reason: str = ""
+) -> bool:
     """Carry a /loop from a parent session to its continuation. Best-effort, never raises.
 
     Context compression rotates ``session_id`` to a fresh child; without this the loop silently
@@ -345,13 +376,19 @@ def migrate_loop_to_session(old_session_id: str, new_session_id: str, *, reason:
         return False
     try:
         state = load_loop(old_session_id)
-        if state is None or state.status == "cleared" or load_loop(new_session_id) is not None:
+        if (
+            state is None
+            or state.status == "cleared"
+            or load_loop(new_session_id) is not None
+        ):
             return False
         save_loop(new_session_id, state)
         clear_loop(old_session_id)
         logger.debug(
             "LoopManager: migrated loop %s -> %s (%s)",
-            old_session_id, new_session_id, reason or "rotation",
+            old_session_id,
+            new_session_id,
+            reason or "rotation",
         )
         return True
     except Exception as exc:  # pragma: no cover - defensive
@@ -378,7 +415,11 @@ def _digest_response(response: str) -> str:
     text = (response or "").strip().lower()
     text = re.sub(r"\d{1,2}:\d{2}(:\d{2})?", "", text)
     text = re.sub(r"\d{4}-\d{2}-\d{2}", "", text)
-    text = re.sub(r"\b\d+(\.\d+)?\s*(s|sec|secs|seconds|m|min|mins|minutes|h|hr|hrs|hours)\b", "", text)
+    text = re.sub(
+        r"\b\d+(\.\d+)?\s*(s|sec|secs|seconds|m|min|mins|minutes|h|hr|hrs|hours)\b",
+        "",
+        text,
+    )
     text = re.sub(r"\s+", " ", text)
     return hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
 
@@ -429,7 +470,11 @@ class LoopManager:
         meta = f"{s.cadence_label()}, {', '.join(caps)}"
         if s.status == "active":
             remaining = s.remaining_label()
-            tail = ", wakeup running" if s.awaiting_response else (f", {remaining}" if remaining else "")
+            tail = (
+                ", wakeup running"
+                if s.awaiting_response
+                else (f", {remaining}" if remaining else "")
+            )
             return f"↻ Loop (active, {meta}{tail}): {s.prompt}"
         if s.status == "paused":
             return f"⏸ Loop (paused, {meta}{_dash(s.paused_reason)}): {s.prompt}"
@@ -453,7 +498,11 @@ class LoopManager:
 
         now = time.time()
         self_paced = interval_seconds is None
-        interval = 0.0 if self_paced else float(max(int(interval_seconds), min_interval_seconds()))
+        interval = (
+            0.0
+            if self_paced
+            else float(max(int(interval_seconds), min_interval_seconds()))
+        )
         state = LoopState(
             prompt=prompt,
             mode="self_paced" if self_paced else "interval",
@@ -498,7 +547,9 @@ class LoopManager:
         """Cheap check: active, not mid-wakeup, and the clock has passed."""
         s = self._state
         return (
-            s is not None and s.status == "active" and not s.awaiting_response
+            s is not None
+            and s.status == "active"
+            and not s.awaiting_response
             and (now if now is not None else time.time()) >= s.next_due_at
         )
 
@@ -517,14 +568,20 @@ class LoopManager:
         s.awaiting_response = True
         # Provisional schedule from NOW: complete_tick reschedules from turn end, but if the
         # process dies mid-turn this keeps the persisted loop from being 'due' in a tight loop.
-        s.next_due_at = s.last_fired_at + (s.current_delay or s.interval_seconds or self_paced_floor_seconds())
+        s.next_due_at = s.last_fired_at + (
+            s.current_delay or s.interval_seconds or self_paced_floor_seconds()
+        )
         self._save()
 
         if s.prompt.lstrip().startswith("/"):
             return s.prompt.strip()
         cadence = f", {s.cadence_label()}" if s.mode == "interval" else ", self-paced"
-        template = WAKEUP_PROMPT_WITH_UNTIL_TEMPLATE if s.until else WAKEUP_PROMPT_TEMPLATE
-        return template.format(tick=s.ticks_fired, cadence=cadence, prompt=s.prompt, until=s.until)
+        template = (
+            WAKEUP_PROMPT_WITH_UNTIL_TEMPLATE if s.until else WAKEUP_PROMPT_TEMPLATE
+        )
+        return template.format(
+            tick=s.ticks_fired, cadence=cadence, prompt=s.prompt, until=s.until
+        )
 
     def abandon_tick(self) -> None:
         """Roll back a fired tick whose injection failed (nothing ran)."""
@@ -554,15 +611,23 @@ class LoopManager:
         """
         s = self._state
         if s is None or not s.awaiting_response:
-            return {"status": s.status if s else None, "stopped": False, "reason": "no tick in flight", "message": ""}
+            return {
+                "status": s.status if s else None,
+                "stopped": False,
+                "reason": "no tick in flight",
+                "message": "",
+            }
         s.awaiting_response = False
         now = time.time()
         ticks = _ticks_label(s.ticks_fired)
 
         # 1. Agent self-stop marker.
         if response_signals_complete(last_response):
-            return self._stop("done", "agent signaled the task is complete",
-                              f"✓ Loop finished after {ticks} — task complete.")
+            return self._stop(
+                "done",
+                "agent signaled the task is complete",
+                f"✓ Loop finished after {ticks} — task complete.",
+            )
 
         # 2. Evidence-based --until judge (reuses the /goal judge; fail-open).
         if s.until and (last_response or "").strip():
@@ -573,23 +638,33 @@ class LoopManager:
             except Exception as exc:
                 verdict, reason = "continue", f"judge unavailable: {type(exc).__name__}"
             if verdict == "done":
-                return self._stop("done", f"stop condition met: {reason}",
-                                  f"✓ Loop finished after {ticks} — {reason}")
+                return self._stop(
+                    "done",
+                    f"stop condition met: {reason}",
+                    f"✓ Loop finished after {ticks} — {reason}",
+                )
             if verdict == "blocked":
                 # Unachievable stop condition: pause so the user can re-scope, don't spin.
                 why = f"stop condition judged unachievable: {reason}"
-                return self._stop("paused", why,
-                                  f"⏸ Loop paused — {why}. /loop resume to keep going, /loop stop to end it.")
+                return self._stop(
+                    "paused",
+                    why,
+                    f"⏸ Loop paused — {why}. /loop resume to keep going, /loop stop to end it.",
+                )
 
         # 3. --times user cap.
         if s.times and s.ticks_fired >= s.times:
-            return self._stop("done", f"completed the requested {s.times} runs",
-                              f"✓ Loop finished — ran {s.times}/{s.times} times.")
+            return self._stop(
+                "done",
+                f"completed the requested {s.times} runs",
+                f"✓ Loop finished — ran {s.times}/{s.times} times.",
+            )
 
         # 4. Config backstop budget → pause (recoverable), not done.
         if s.max_ticks and s.ticks_fired >= s.max_ticks:
             return self._stop(
-                "paused", f"tick budget exhausted ({s.ticks_fired}/{s.max_ticks})",
+                "paused",
+                f"tick budget exhausted ({s.ticks_fired}/{s.max_ticks})",
                 f"⏸ Loop paused — {s.ticks_fired}/{s.max_ticks} ticks used "
                 "(loops.max_ticks). /loop resume to keep going, /loop stop to end it.",
             )
@@ -599,7 +674,9 @@ class LoopManager:
             digest = _digest_response(last_response)
             floor = self_paced_floor_seconds()
             if digest and digest == s.last_response_digest:
-                s.current_delay = min(max(s.current_delay, floor) * 2, self_paced_ceiling_seconds())
+                s.current_delay = min(
+                    max(s.current_delay, floor) * 2, self_paced_ceiling_seconds()
+                )
             else:
                 s.current_delay = float(floor)
             s.last_response_digest = digest
@@ -607,7 +684,12 @@ class LoopManager:
             s.current_delay = s.interval_seconds
         s.next_due_at = now + s.current_delay
         self._save()
-        return {"status": "active", "stopped": False, "reason": "loop continues", "message": ""}
+        return {
+            "status": "active",
+            "stopped": False,
+            "reason": "loop continues",
+            "message": "",
+        }
 
 
 def goal_blocks_loop_tick(session_id: str) -> bool:
@@ -640,12 +722,20 @@ LOOP_HELP = (
 
 def _pause_output(mgr: LoopManager) -> str:
     state = mgr.pause(reason="user-paused")
-    return "No loop set." if state is None else f"⏸ Loop paused: {state.prompt}\nUse /loop resume to continue."
+    return (
+        "No loop set."
+        if state is None
+        else f"⏸ Loop paused: {state.prompt}\nUse /loop resume to continue."
+    )
 
 
 def _resume_output(mgr: LoopManager) -> str:
     state = mgr.resume()
-    return "No loop to resume." if state is None else f"▶ Loop resumed ({state.cadence_label()}): {state.prompt}"
+    return (
+        "No loop to resume."
+        if state is None
+        else f"▶ Loop resumed ({state.cadence_label()}): {state.prompt}"
+    )
 
 
 # Control words -> handler returning the output text. Anything else is a new loop spec.
@@ -653,7 +743,10 @@ _CONTROL_COMMANDS = {
     **dict.fromkeys(("", "status"), lambda mgr: mgr.status_line()),
     "pause": _pause_output,
     "resume": _resume_output,
-    **dict.fromkeys(("stop", "clear", "cancel"), lambda mgr: "✓ Loop stopped." if mgr.clear() else "No active loop."),
+    **dict.fromkeys(
+        ("stop", "clear", "cancel"),
+        lambda mgr: "✓ Loop stopped." if mgr.clear() else "No active loop.",
+    ),
     **dict.fromkeys(("help", "--help", "-h"), lambda mgr: LOOP_HELP),
 }
 
@@ -677,7 +770,10 @@ def dispatch_loop_command(
     parsed = parse_loop_args(arg)
     if parsed["error"]:
         if parsed["error"] == "empty":
-            return {"output": "Usage: /loop [interval] <prompt> — see /loop help.", "created": False}
+            return {
+                "output": "Usage: /loop [interval] <prompt> — see /loop help.",
+                "created": False,
+            }
         return {"output": f"/loop: {parsed['error']}", "created": False}
 
     replacing = mgr.has_loop()
@@ -695,7 +791,10 @@ def dispatch_loop_command(
     lines = [f"↻ Loop set ({state.cadence_label()}): {state.prompt}"]
     if replacing:
         lines.append("(replaced the previous loop for this session)")
-    if parsed["interval_seconds"] is not None and parsed["interval_seconds"] < state.interval_seconds:
+    if (
+        parsed["interval_seconds"] is not None
+        and parsed["interval_seconds"] < state.interval_seconds
+    ):
         lines.append(
             f"(interval raised to the {format_interval(state.interval_seconds)} minimum — "
             "loops.min_interval_seconds)"
@@ -706,13 +805,23 @@ def dispatch_loop_command(
             f"backs off up to {format_interval(self_paced_ceiling_seconds())} while nothing changes."
         )
     if state.times:
-        lines.append(f"Runs {state.times} time{'s' if state.times != 1 else ''}, then stops.")
+        lines.append(
+            f"Runs {state.times} time{'s' if state.times != 1 else ''}, then stops."
+        )
     if state.until:
         lines.append(f"Stops when: {state.until}")
     if not state.times and state.max_ticks:
-        lines.append(f"Backstop budget: {state.max_ticks} ticks (loops.max_ticks; 0 = unlimited).")
-    first = "fires now, then on the cadence above" if state.status == "active" else state.remaining_label()
-    lines.append(f"First wakeup {first}. Controls: /loop status · pause · resume · stop.")
+        lines.append(
+            f"Backstop budget: {state.max_ticks} ticks (loops.max_ticks; 0 = unlimited)."
+        )
+    first = (
+        "fires now, then on the cadence above"
+        if state.status == "active"
+        else state.remaining_label()
+    )
+    lines.append(
+        f"First wakeup {first}. Controls: /loop status · pause · resume · stop."
+    )
     return {"output": "\n".join(lines), "created": True}
 
 

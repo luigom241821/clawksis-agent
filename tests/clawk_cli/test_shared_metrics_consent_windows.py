@@ -26,9 +26,7 @@ T0 = datetime(2026, 8, 1, tzinfo=UTC)
 
 
 def ts(days=0, hours=0):
-    return (T0 + timedelta(days=days, hours=hours)).isoformat().replace(
-        "+00:00", "Z"
-    )
+    return (T0 + timedelta(days=days, hours=hours)).isoformat().replace("+00:00", "Z")
 
 
 def dt(days=0, hours=0):
@@ -119,7 +117,7 @@ class TestRefusedWindowIsNeverReleased:
         _observe(store, True, dt(0, 6))
         for n in range(1, 90, 10):
             _add(store, f"REFUSED-d{n}", ts(days=n), ts(days=n, hours=1))
-        _observe(store, False, dt(90))   # first observation: boot on day 90
+        _observe(store, False, dt(90))  # first observation: boot on day 90
         _observe(store, True, dt(91))
         _observe(store, True, dt(92))
 
@@ -143,7 +141,7 @@ class TestClockAdversaries:
         """
         _observe(store, True, dt(0))
         _observe(store, True, datetime(2099, 1, 1, tzinfo=UTC))
-        _observe(store, False, dt(1))            # honest clock at revoke
+        _observe(store, False, dt(1))  # honest clock at revoke
         for n in range(2, 10):
             _add(store, f"REFUSED-{n}", ts(days=n), ts(days=n, hours=2))
 
@@ -194,13 +192,13 @@ class TestClockAdversaries:
         _observe(store, False, dt(5))
         for n in range(1, 4):
             _add(store, f"REFUSED-{n}", ts(days=5, hours=n), ts(days=5, hours=n + 1))
-        _observe(store, True, dt(-12))   # 12-day rollback at re-enable
+        _observe(store, True, dt(-12))  # 12-day rollback at re-enable
         _observe(store, True, dt(-11))
 
         during = [p for p in _eligible(store) if p.startswith("REFUSED")]
         assert not during, f"rollback released refused packages: {during}"
 
-        _observe(store, True, dt(20))    # clock recovers
+        _observe(store, True, dt(20))  # clock recovers
         _observe(store, True, dt(21))
         after = [p for p in _eligible(store) if p.startswith("REFUSED")]
         assert not after, f"recovery released refused packages: {after}"
@@ -250,7 +248,7 @@ class TestReconcilerProperties:
         own, not by coincidence of the sibling mark.
         """
         _observe(store, True, dt(5))
-        _observe(store, True, dt(0))   # rollback
+        _observe(store, True, dt(0))  # rollback
         with store._connection() as connection:
             stamp = connection.execute(
                 "SELECT stamp FROM consent_marks WHERE name = 'obs'"
@@ -274,8 +272,15 @@ class TestReconcilerProperties:
                     " packaged_value"
                     ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        yesterday, "clawk.client.active", "0.0.0-test",
-                        "macos", "arm64", "git", "{}", 1, 0,
+                        yesterday,
+                        "clawk.client.active",
+                        "0.0.0-test",
+                        "macos",
+                        "arm64",
+                        "git",
+                        "{}",
+                        1,
+                        0,
                     ),
                 )
 

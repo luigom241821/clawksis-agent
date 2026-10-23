@@ -10,10 +10,16 @@ from __future__ import annotations
 
 import pytest
 
-from scripts._activation import ACTIVATION_ENV_VAR, activation_command, require_activation
+from scripts._activation import (
+    ACTIVATION_ENV_VAR,
+    activation_command,
+    require_activation,
+)
 
 
-def test_returns_when_activated_and_exits_naming_the_command_when_not(monkeypatch, capsys):
+def test_returns_when_activated_and_exits_naming_the_command_when_not(
+    monkeypatch, capsys
+):
     monkeypatch.setenv(ACTIVATION_ENV_VAR, "<installed-state path>")
     require_activation()  # must return, not raise
 

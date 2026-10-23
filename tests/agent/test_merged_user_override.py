@@ -27,9 +27,9 @@ def test_replay_flush_row_keeps_prefix_and_exact_api_sidecar():
     assert repair_message_sequence(None, messages) == 1
     merged_wire = messages[1]["content"]
     # The recorded prefix is bookkeeping: the estimate prices only the row's content.
-    assert estimate_messages_tokens_rough([messages[1]]) == estimate_messages_tokens_rough(
-        [{"role": "user", "content": merged_wire}]
-    )
+    assert estimate_messages_tokens_rough(
+        [messages[1]]
+    ) == estimate_messages_tokens_rough([{"role": "user", "content": merged_wire}])
     agent = _agent_persisting(clean)
     expected = "please deploy build 42 to staging\n\ncan you also run the smoke tests"
     row = _db_flush_row(agent, messages[1], True)
@@ -60,4 +60,7 @@ def test_empty_gateway_timestamp_turn_preserves_all_unanswered_rows_on_live_and_
         assert messages[1]["content"] == expected
         assert _db_flush_row(agent, messages[1], True)["content"] == expected
         # A later non-empty override on the same row joins like the merge does.
-        assert _db_flush_row(_agent_persisting("later"), messages[1], True)["content"] == expected + "\n\nlater"
+        assert (
+            _db_flush_row(_agent_persisting("later"), messages[1], True)["content"]
+            == expected + "\n\nlater"
+        )

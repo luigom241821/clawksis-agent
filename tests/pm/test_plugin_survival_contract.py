@@ -55,6 +55,7 @@ def _uv_available() -> bool:
 
 # 1. Sidecar with no root dependency surface never joins the union
 
+
 def test_sidecar_no_root_pyproject_excludes_nested_and_external(tmp_path, monkeypatch):
     """The mnemosyne-wrapper shape: plugin root has ONLY plugin.yaml +
     marker; its runtime lives in sidecar dirs with their own pyprojects.
@@ -67,7 +68,9 @@ def test_sidecar_no_root_pyproject_excludes_nested_and_external(tmp_path, monkey
     wrapper = plugins_dir / "mnemosyne-wrapper"
     wrapper.mkdir(parents=True)
     (wrapper / "plugin.yaml").write_text("name: mnemosyne-wrapper\n", encoding="utf-8")
-    (wrapper / "mnemosyne-wrapper.json").write_text('{"wrapper": true}\n', encoding="utf-8")
+    (wrapper / "mnemosyne-wrapper.json").write_text(
+        '{"wrapper": true}\n', encoding="utf-8"
+    )
     # a nested pyproject INSIDE the plugin dir (below the scanned root)
     nested = wrapper / "runtime"
     nested.mkdir()
@@ -100,6 +103,7 @@ def test_sidecar_no_root_pyproject_excludes_nested_and_external(tmp_path, monkey
 
 # 2. Conflict through the PUBLIC admission path: refused, preserved, retry
 
+
 def _local_conflict_members(home: Path) -> tuple[Path, Path, Path, Path]:
     """plug-a and plug-b both need a local project named sharedlib, but
     map it to DIFFERENT path sources (v1 vs v2) — a union with NO valid
@@ -109,13 +113,16 @@ def _local_conflict_members(home: Path) -> tuple[Path, Path, Path, Path]:
     for path, version in ((shared1, "1.0.0"), (shared2, "2.0.0")):
         path.mkdir(parents=True)
         (path / "pyproject.toml").write_text(
-            "[project]\nname = \"sharedlib\"\n"
+            '[project]\nname = "sharedlib"\n'
             f'version = "{version}"\nrequires-python = ">=3.11"\n',
             encoding="utf-8",
         )
     plugins_dir = home / "plugins"
     members = []
-    for name, pin, shared in (("plug-a", "1.0.0", shared1), ("plug-b", "2.0.0", shared2)):
+    for name, pin, shared in (
+        ("plug-a", "1.0.0", shared1),
+        ("plug-b", "2.0.0", shared2),
+    ):
         plug = plugins_dir / name
         plug.mkdir(parents=True)
         (plug / "plugin.yaml").write_text(f"name: {name}\n", encoding="utf-8")
@@ -148,8 +155,12 @@ def admission_env(tmp_path, monkeypatch):
     # the venv package's stamp digest + lock seed read core/uv.lock —
     # produce a real one (no deps: uv lock resolves offline)
     subprocess.run(
-        [shutil.which("uv"), "lock"], cwd=core, check=True,
-        capture_output=True, text=True, timeout=120,
+        [shutil.which("uv"), "lock"],
+        cwd=core,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     home = tmp_path / "home"
     _write_enabled(home, [])  # nothing enabled yet — the candidate must move it
@@ -165,6 +176,7 @@ def admission_env(tmp_path, monkeypatch):
     monkeypatch.setattr(ws.paths, "repo_root", lambda: core)
     monkeypatch.setattr(ensure, "lazy_installs_allowed", lambda: True)
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "tools"))
+
     # Exercise the real dependency transaction in-process so the local uv
     # fixture owns provisioning; worker transport is covered separately. The
     # facade's project_root selects a foreign checkout for the worker; this
@@ -174,12 +186,16 @@ def admission_env(tmp_path, monkeypatch):
         return ensure.sync_venv(*args, **kwargs)
 
     monkeypatch.setattr("pm.client.sync_venv", in_process_sync)
-    monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: (Path(shutil.which("uv")), Path(sys.executable)))
+    monkeypatch.setattr(
+        "pm._uv._toolchain",
+        lambda **kwargs: (Path(shutil.which("uv")), Path(sys.executable)),
+    )
     return tmp_path, home
 
 
 def _latest_receipt(home: Path) -> dict:
     from pm.receipt import latest
+
     receipt = latest()
     assert receipt is not None, f"no pm receipt written for {home}"
     return receipt
@@ -198,6 +214,7 @@ def test_conflicting_candidate_refused_unenabled_and_unimported(admission_env):
     _write_enabled(home, [], provider="plug-a")
     admission.admit_plugin_set_change(set(), set(), active_plugins_dir=home / "plugins")
     from pm.environments import selected_venv
+
     working = selected_venv(tmp_path / "core")
     config_before = (home / "config.yaml").read_bytes()
     tree_before = {p: sorted(str(f) for f in p.rglob("*")) for p in (plug_a, plug_b)}
@@ -206,8 +223,15 @@ def test_conflicting_candidate_refused_unenabled_and_unimported(admission_env):
     marker = wrapper / "mnemosyne-wrapper.json"
     marker.write_bytes(b'{"wrapper":true}\n')
     sidecar = tmp_path / "external-sidecar"
-    subprocess.run([shutil.which("uv"), "venv", "--python", sys.executable, str(sidecar)], check=True, capture_output=True, timeout=60)
-    sidecar_python = sidecar / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    subprocess.run(
+        [shutil.which("uv"), "venv", "--python", sys.executable, str(sidecar)],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
+    sidecar_python = sidecar / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
     before = marker.read_bytes()
 
     with pytest.raises(admission.AdmissionRefused) as excinfo:
@@ -256,22 +280,42 @@ def test_conflicting_candidate_refused_unenabled_and_unimported(admission_env):
         "the conflicting candidate must remain unenabled after the retry"
     )
     assert marker.read_bytes() == before
-    child = subprocess.run([str(sidecar_python), "-c", "import sys; print(sys.prefix)"], check=True, capture_output=True, text=True, timeout=30)
+    child = subprocess.run(
+        [str(sidecar_python), "-c", "import sys; print(sys.prefix)"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert Path(child.stdout.strip()) == sidecar
     from pm.environments import selected_venv
+
     selected = selected_venv(tmp_path / "core")
     assert selected.is_dir() and selected != sidecar
     # A declared version range remains a member across the next managed rebuild.
     project = plug_a / "pyproject.toml"
-    project.write_text(project.read_text(encoding="utf-8").replace("sharedlib==1.0.0", "sharedlib>=1,<2"), encoding="utf-8")
-    admission.admit_plugin_set_change({"plug-a"}, set(), active_plugins_dir=home / "plugins")
+    project.write_text(
+        project.read_text(encoding="utf-8").replace(
+            "sharedlib==1.0.0", "sharedlib>=1,<2"
+        ),
+        encoding="utf-8",
+    )
+    admission.admit_plugin_set_change(
+        {"plug-a"}, set(), active_plugins_dir=home / "plugins"
+    )
     assert selected_venv(tmp_path / "core") != selected
     assert marker.read_bytes() == before
-    subprocess.run([str(sidecar_python), "-c", "import sys; assert sys.prefix != sys.base_prefix"], check=True, timeout=30)
+    subprocess.run(
+        [str(sidecar_python), "-c", "import sys; assert sys.prefix != sys.base_prefix"],
+        check=True,
+        timeout=30,
+    )
 
 
 @pytest.mark.skipif(not _uv_available(), reason="uv not on PATH")
-def test_malformed_secondary_cannot_evict_recorded_member(admission_env, monkeypatch, caplog):
+def test_malformed_secondary_cannot_evict_recorded_member(
+    admission_env, monkeypatch, caplog
+):
     """A→B→A: passive inspection survives bad config; A's recorded graph does not shrink."""
     from pm.environments import runtime_facts_path, selected_venv
     from pm.install import sync_venv, venv_is_current
@@ -282,16 +326,23 @@ def test_malformed_secondary_cannot_evict_recorded_member(admission_env, monkeyp
     profile = home_a / "profiles" / "work"
     profile.mkdir(parents=True)
     _write_enabled(profile, ["profile-dep"])
-    _fixtures.installing_member(profile / "plugins" / "profile-dep", "profile-dep", tmp_path / "wheels")
+    _fixtures.installing_member(
+        profile / "plugins" / "profile-dep", "profile-dep", tmp_path / "wheels"
+    )
     sync_venv(explicit=True)
     recorded = Facts(runtime_facts_path(core), strict=True).get("venv")
     selected = selected_venv(core)
     assert recorded["stamp"] and selected.is_dir()
-    assert "profile-dep" in (Path(recorded["resolved_lock"]).parent / "pyproject.toml").read_text()
+    assert (
+        "profile-dep"
+        in (Path(recorded["resolved_lock"]).parent / "pyproject.toml").read_text()
+    )
 
     bad = profile / "config.yaml"
     bad.write_text("plugins: [broken]\n", encoding="utf-8")
-    _fixtures.installing_member(home_a / "plugins" / "new-dep", "new-dep", tmp_path / "wheels")
+    _fixtures.installing_member(
+        home_a / "plugins" / "new-dep", "new-dep", tmp_path / "wheels"
+    )
     _write_enabled(home_a, ["new-dep"])
     assert venv_is_current(project_root=core) is False
     assert str(bad) in caplog.text
@@ -309,7 +360,10 @@ def test_malformed_secondary_cannot_evict_recorded_member(admission_env, monkeyp
     monkeypatch.setenv("CLAWK_HOME", str(home_b))
     sync_venv(explicit=True)
     assert selected_venv(core).is_dir()
-    assert Facts(runtime_facts_path(core), strict=True).get("venv")["stamp"] != recorded["stamp"]
+    assert (
+        Facts(runtime_facts_path(core), strict=True).get("venv")["stamp"]
+        != recorded["stamp"]
+    )
 
     monkeypatch.setenv("CLAWK_HOME", str(home_a))
     with pytest.raises(ValueError, match="config.yaml"):
@@ -320,7 +374,10 @@ def test_malformed_secondary_cannot_evict_recorded_member(admission_env, monkeyp
     restored = Facts(runtime_facts_path(core), strict=True).get("venv")
     assert selected_venv(core).is_dir()
     assert restored["stamp"] != recorded["stamp"]
-    assert "profile-dep" in (Path(restored["resolved_lock"]).parent / "pyproject.toml").read_text()
+    assert (
+        "profile-dep"
+        in (Path(restored["resolved_lock"]).parent / "pyproject.toml").read_text()
+    )
 
 
 @pytest.mark.skipif(not _uv_available(), reason="uv not on PATH")
@@ -345,22 +402,36 @@ def test_plugin_whose_pyproject_installs_nothing_keeps_the_environment(admission
     (plugin / "plugin.yaml").write_text("name: importers\n", encoding="utf-8")
     (plugin / "__init__.py").write_text("VERSION = 1\n", encoding="utf-8")
     (plugin / "pyproject.toml").write_text(
-        '[project]\nname="importers"\nversion="1"\nrequires-python=">=3.11"\ndependencies=[]\n', encoding="utf-8")
+        '[project]\nname="importers"\nversion="1"\nrequires-python=">=3.11"\ndependencies=[]\n',
+        encoding="utf-8",
+    )
 
-    admission.admit_plugin_set_change({"importers"}, set(), active_plugins_dir=home / "plugins")
+    admission.admit_plugin_set_change(
+        {"importers"}, set(), active_plugins_dir=home / "plugins"
+    )
 
-    assert yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))["plugins"]["enabled"] == ["importers"]
+    assert yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))[
+        "plugins"
+    ]["enabled"] == ["importers"]
     assert selected_venv(core) == selected
     assert Facts(runtime_facts_path(core), strict=True).get("venv") == recorded
-    (plugin / "__init__.py").write_text("VERSION = 2\n", encoding="utf-8")  # what an update changes
+    (plugin / "__init__.py").write_text(
+        "VERSION = 2\n", encoding="utf-8"
+    )  # what an update changes
     assert venv_is_current(project_root=core) is True
 
     real = home / "plugins" / "real"
     _fixtures.installing_member(real, "real", tmp_path / "wheels")
     (real / "plugin.yaml").write_text("name: real\n", encoding="utf-8")
-    admission.admit_plugin_set_change({"importers", "real"}, set(), active_plugins_dir=home / "plugins")
-    workspace = Path(Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]).parent
-    members = tomllib.loads((workspace / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["uv"]["workspace"]["members"]
+    admission.admit_plugin_set_change(
+        {"importers", "real"}, set(), active_plugins_dir=home / "plugins"
+    )
+    workspace = Path(
+        Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]
+    ).parent
+    members = tomllib.loads((workspace / "pyproject.toml").read_text(encoding="utf-8"))[
+        "tool"
+    ]["uv"]["workspace"]["members"]
     assert [Path(member).name.split("-")[0] for member in members] == ["real"]
     assert selected_venv(core) != selected
     assert venv_is_current(project_root=core) is True
@@ -378,28 +449,45 @@ def test_update_sync_disables_plugin_excluded_by_requires_python(admission_env):
 
     tmp_path, home = admission_env
     core = tmp_path / "core"
-    for name, requires in (("fits", ">=3.11"), ("too-old", f"<{sys.version_info[0]}.{sys.version_info[1]}")):
-        _fixtures.installing_member(home / "plugins" / name, name, tmp_path / "wheels", requires_python=requires)
-    (home / "config.yaml").write_text("# operator note\nplugins:\n  enabled: [fits, too-old]\n", encoding="utf-8")
+    for name, requires in (
+        ("fits", ">=3.11"),
+        ("too-old", f"<{sys.version_info[0]}.{sys.version_info[1]}"),
+    ):
+        _fixtures.installing_member(
+            home / "plugins" / name, name, tmp_path / "wheels", requires_python=requires
+        )
+    (home / "config.yaml").write_text(
+        "# operator note\nplugins:\n  enabled: [fits, too-old]\n", encoding="utf-8"
+    )
     profile = home / "profiles" / "work"
     _write_enabled(profile, [], provider="too-old")
     (profile / "plugins" / "too-old").mkdir(parents=True)
     (profile / "plugins" / "too-old" / "pyproject.toml").write_bytes(
-        (home / "plugins" / "too-old" / "pyproject.toml").read_bytes().replace(b'name="too-old"', b'name="too-old-work"'))
+        (home / "plugins" / "too-old" / "pyproject.toml")
+        .read_bytes()
+        .replace(b'name="too-old"', b'name="too-old-work"')
+    )
 
     with pytest.raises(InstallError, match="Python requirement"):
         sync_venv(explicit=True)  # admission semantics stay: an ordinary sync refuses
 
     sync_venv(explicit=True, evict_incompatible_plugins=True)
 
-    workspace = Path(Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]).parent
+    workspace = Path(
+        Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]
+    ).parent
     assert selected_venv(core).is_dir()
     assert "fits" in (workspace / "pyproject.toml").read_text()
     assert "too-old" not in (workspace / "pyproject.toml").read_text()
     text = (home / "config.yaml").read_text(encoding="utf-8")
     assert "# operator note" in text
     assert "too-old" in yaml.safe_load(text)["plugins"]["disabled"]
-    assert yaml.safe_load((profile / "config.yaml").read_text(encoding="utf-8"))["memory"]["provider"] == ""
+    assert (
+        yaml.safe_load((profile / "config.yaml").read_text(encoding="utf-8"))["memory"][
+            "provider"
+        ]
+        == ""
+    )
     assert "too-old" in json.dumps(_latest_receipt(home).get("warnings"))
     assert venv_is_current(project_root=core) is True
 
@@ -431,7 +519,9 @@ def test_update_sync_survives_unreadable_secondary_profile(admission_env):
 
     tmp_path, home = admission_env
     core = tmp_path / "core"
-    _fixtures.installing_member(home / "plugins" / "primary-dep", "primary-dep", tmp_path / "wheels")
+    _fixtures.installing_member(
+        home / "plugins" / "primary-dep", "primary-dep", tmp_path / "wheels"
+    )
     _write_enabled(home, ["primary-dep"])
     broken = home / "profiles" / "work" / "config.yaml"
     broken.parent.mkdir(parents=True)
@@ -442,7 +532,9 @@ def test_update_sync_survives_unreadable_secondary_profile(admission_env):
 
     sync_venv(explicit=True, evict_incompatible_plugins=True)
 
-    workspace = Path(Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]).parent
+    workspace = Path(
+        Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]
+    ).parent
     assert "primary-dep" in (workspace / "pyproject.toml").read_text()
     assert broken.read_text(encoding="utf-8") == "plugins: [broken]\n"
     assert str(broken.parent) in json.dumps(_latest_receipt(home).get("warnings"))
@@ -450,7 +542,9 @@ def test_update_sync_survives_unreadable_secondary_profile(admission_env):
 
 
 @pytest.mark.skipif(not _uv_available(), reason="uv not on PATH")
-def test_plugin_our_version_rejects_sits_out_without_being_disabled(admission_env, monkeypatch):
+def test_plugin_our_version_rejects_sits_out_without_being_disabled(
+    admission_env, monkeypatch
+):
     """requires_clawk is judged against our version identity, which can lag (an untagged
     source checkout reads as an older release). Such a plugin sits out: config untouched,
     boot's currency check neither raises nor loops, and it rejoins once the verdict flips."""
@@ -467,7 +561,9 @@ def test_plugin_our_version_rejects_sits_out_without_being_disabled(admission_en
     for name in ("fits", "needs-newer"):
         _fixtures.installing_member(home / "plugins" / name, name, tmp_path / "wheels")
     manifest = home / "plugins" / "needs-newer" / "plugin.yaml"
-    manifest.write_text("name: needs-newer\nrequires_clawk: '>=999'\n", encoding="utf-8")
+    manifest.write_text(
+        "name: needs-newer\nrequires_clawk: '>=999'\n", encoding="utf-8"
+    )
     _write_enabled(home, ["fits", "needs-newer"])
     before = (home / "config.yaml").read_bytes()
 
@@ -475,20 +571,28 @@ def test_plugin_our_version_rejects_sits_out_without_being_disabled(admission_en
     sync_venv(explicit=True, evict_incompatible_plugins=True)
 
     assert (home / "config.yaml").read_bytes() == before
-    assert "Left plugin 'needs-newer'" in json.dumps(_latest_receipt(home).get("warnings"))
-    workspace = Path(Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]).parent
+    assert "Left plugin 'needs-newer'" in json.dumps(
+        _latest_receipt(home).get("warnings")
+    )
+    workspace = Path(
+        Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]
+    ).parent
     assert "needs-newer" not in (workspace / "pyproject.toml").read_text()
     assert venv_is_current(project_root=core) is True
 
     manifest.write_text("name: needs-newer\nrequires_clawk: '>=0'\n", encoding="utf-8")
     assert venv_is_current(project_root=core) is False
     sync_venv(explicit=True, evict_incompatible_plugins=True)
-    workspace = Path(Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]).parent
+    workspace = Path(
+        Facts(runtime_facts_path(core), strict=True).get("venv")["resolved_lock"]
+    ).parent
     assert "needs-newer" in (workspace / "pyproject.toml").read_text()
 
 
 @pytest.mark.skipif(not _uv_available(), reason="uv not on PATH")
-def test_update_sync_retries_a_fetch_failure_once_before_disabling(admission_env, monkeypatch):
+def test_update_sync_retries_a_fetch_failure_once_before_disabling(
+    admission_env, monkeypatch
+):
     """Build evidence disables a plugin at once. A fetch failure could be the moment, so it
     gets one more try first. Either way the recorded state is the one boot expects."""
     from pm.install import sync_venv, venv_is_current
@@ -510,20 +614,31 @@ def test_update_sync_retries_a_fetch_failure_once_before_disabling(admission_env
     broken.mkdir()
     (broken / "pyproject.toml").write_text(
         '[project]\nname="broken-lib"\ndynamic=["version"]\n'
-        '[build-system]\nrequires=[]\nbuild-backend="backend"\nbackend-path=["."]\n', encoding="utf-8")
+        '[build-system]\nrequires=[]\nbuild-backend="backend"\nbackend-path=["."]\n',
+        encoding="utf-8",
+    )
     (broken / "backend.py").write_text(
         "def get_requires_for_build_wheel(config=None): return []\n"
         "def prepare_metadata_for_build_wheel(directory, config=None): raise SystemExit('no build')\n"
-        "def build_wheel(directory, config=None, metadata=None): raise SystemExit('no build')\n", encoding="utf-8")
+        "def build_wheel(directory, config=None, metadata=None): raise SystemExit('no build')\n",
+        encoding="utf-8",
+    )
     # Plugin requirements are index-only; local and remote inputs come through tool.uv.sources.
-    for name, dependency, source in (("wont-build", "broken-lib", f'{{ path = "{broken.as_posix()}" }}'),
-                                     ("offline-dep", "gone", '{ url = "https://127.0.0.1:9/gone-1.0-py3-none-any.whl" }')):
+    for name, dependency, source in (
+        ("wont-build", "broken-lib", f'{{ path = "{broken.as_posix()}" }}'),
+        (
+            "offline-dep",
+            "gone",
+            '{ url = "https://127.0.0.1:9/gone-1.0-py3-none-any.whl" }',
+        ),
+    ):
         plugin = home / "plugins" / name
         plugin.mkdir(parents=True)
         (plugin / "pyproject.toml").write_text(
             f'[project]\nname="{name}"\nversion="1"\nrequires-python=">=3.11"\n'
             f'dependencies=["{dependency}"]\n[tool.uv]\npackage=false\n'
-            f'[tool.uv.sources]\n{dependency} = {source}\n', encoding="utf-8",
+            f"[tool.uv.sources]\n{dependency} = {source}\n",
+            encoding="utf-8",
         )
     _write_enabled(home, ["wont-build", "offline-dep"])
 
@@ -533,7 +648,9 @@ def test_update_sync_retries_a_fetch_failure_once_before_disabling(admission_env
     assert cfg["plugins"]["disabled"] == ["wont-build", "offline-dep"]
     # After the full selection's own attempt: build evidence once, the fetch failure twice.
     assert trials[1:] == ["wont-build", "offline-dep", "offline-dep"]
-    assert "could not be prepared, twice" in json.dumps(_latest_receipt(home).get("warnings"))
+    assert "could not be prepared, twice" in json.dumps(
+        _latest_receipt(home).get("warnings")
+    )
     assert venv_is_current(project_root=tmp_path / "core") is True
 
 
@@ -548,8 +665,16 @@ def test_active_context_home_exported_to_wrapper_subprocess(monkeypatch, tmp_pat
     try:
         child_env = build_subprocess_env()
         child = subprocess.run(
-            [sys.executable, "-c", "import os; print(os.environ['CLAWK_HOME'], end='')"],
-            env=child_env, capture_output=True, text=True, check=True, timeout=60,
+            [
+                sys.executable,
+                "-c",
+                "import os; print(os.environ['CLAWK_HOME'], end='')",
+            ],
+            env=child_env,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=60,
         )
         assert child.stdout == str(active)
     finally:

@@ -19,24 +19,14 @@ class TestPositiveCases:
     def test_gpt_5_bare(self):
         assert model_forces_max_completion_tokens("gpt-5") is True
 
-
-
-
     def test_gpt_4o(self):
         assert model_forces_max_completion_tokens("gpt-4o") is True
-
-
-
 
     def test_o1(self):
         assert model_forces_max_completion_tokens("o1") is True
 
-
-
     def test_o3(self):
         assert model_forces_max_completion_tokens("o3") is True
-
-
 
 
 # ─── Negative cases: older or non-OpenAI families still use max_tokens ──────
@@ -50,14 +40,9 @@ class TestNegativeCases:
         # Classic gpt-4 (non-omni) still uses max_tokens on chat completions.
         assert model_forces_max_completion_tokens("gpt-4") is False
 
-
     def test_claude_family(self):
         assert model_forces_max_completion_tokens("claude-3-opus") is False
         assert model_forces_max_completion_tokens("claude-sonnet-4-6") is False
-
-
-
-
 
 
 # ─── Edge cases ─────────────────────────────────────────────────────────────
@@ -70,16 +55,11 @@ class TestEdgeCases:
     def test_none(self):
         assert model_forces_max_completion_tokens(None) is False  # type: ignore[arg-type]
 
-
-
-
     def test_vendor_prefix_stripped(self):
         # OpenRouter-style "vendor/model" names should match the tail.
         assert model_forces_max_completion_tokens("openai/gpt-5.4") is True
         assert model_forces_max_completion_tokens("openai/gpt-4o-mini") is True
         assert model_forces_max_completion_tokens("openai/o3-mini") is True
-
-
 
     def test_gpt_5_substring_in_middle_not_matched(self):
         # Only a prefix should match — "local-gpt-5-clone" is a different model.

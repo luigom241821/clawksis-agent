@@ -49,7 +49,6 @@ class TestPlatformTokenPlaceholderGuard:
         assert config.platforms[Platform.TELEGRAM].enabled is False
         assert "placeholder" in caplog.text.lower()
 
-
     def test_accepts_real_token(self, caplog):
         """A real-looking bot token should pass validation."""
         config = _make_gateway_config(
@@ -59,7 +58,6 @@ class TestPlatformTokenPlaceholderGuard:
             _validate_and_return(config)
         assert config.platforms[Platform.TELEGRAM].enabled is True
         assert "placeholder" not in caplog.text.lower()
-
 
     def test_disabled_platform_not_checked(self, caplog):
         """Disabled platforms should not be validated."""
@@ -77,7 +75,6 @@ class TestPlatformTokenPlaceholderGuard:
 class TestAPIServerPlaceholderKeyGuard:
     """Verify that the API server rejects placeholder keys on network hosts."""
 
-
     @pytest.mark.asyncio
     async def test_refuses_wildcard_with_short_random_key(self):
         """A short but non-placeholder key is brute-forceable on a public bind.
@@ -90,7 +87,9 @@ class TestAPIServerPlaceholderKeyGuard:
         from gateway.platforms.api_server import APIServerAdapter
 
         adapter = APIServerAdapter(
-            PlatformConfig(enabled=True, extra={"host": "0.0.0.0", "key": "a1b2c3d4e5f6"})
+            PlatformConfig(
+                enabled=True, extra={"host": "0.0.0.0", "key": "a1b2c3d4e5f6"}
+            )
         )
         result = await adapter.connect()
         assert result is False

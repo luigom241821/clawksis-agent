@@ -42,12 +42,15 @@ from tests.e2e.core.providers._openai_helpers import (
 )
 from tests.e2e.core.providers._openai_tui import TuiGateway
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="subprocess harness is Linux-gated")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="subprocess harness is Linux-gated"
+)
 
 KNOWN: dict[str, tuple[str, str]] = {
     "custom_twin_priced": (
         r"custom:openrouter row has 0/\d+ models priced",
-        "#120757 custom:<key> row pointing at a priced aggregator gets no picker prices"),
+        "#120757 custom:<key> row pointing at a priced aggregator gets no picker prices",
+    ),
 }
 
 
@@ -120,18 +123,51 @@ class FakeCatalog:
                 pass
 
             def do_GET(self) -> None:
-                server.requests.append((self.path, self.headers.get("Authorization", "")))
+                server.requests.append(
+                    (self.path, self.headers.get("Authorization", ""))
+                )
                 path = self.path.split("?")[0].rstrip("/")
-                if path == "/relay/v1/models":  # the decoy relay: plain OpenAI model list, no prices
-                    status, body = 200, {"object": "list", "data": [{"id": RELAY_MODEL, "object": "model"}]}
+                if (
+                    path == "/relay/v1/models"
+                ):  # the decoy relay: plain OpenAI model list, no prices
+                    status, body = (
+                        200,
+                        {
+                            "object": "list",
+                            "data": [{"id": RELAY_MODEL, "object": "model"}],
+                        },
+                    )
                 elif path == "/api/v1/models":
-                    status, body = 200, {"data": [
-                        {"id": mid, "name": mid, "context_length": 200000, "created": 1780000000,
-                         "architecture": {"modality": "text->text", "input_modalities": ["text"],
-                                          "output_modalities": ["text"]},
-                         "pricing": {"prompt": p, "completion": c, "request": "0", "image": "0"},
-                         "supported_parameters": ["tools", "reasoning", "max_tokens"]}
-                        for mid, p, c in CATALOG]}
+                    status, body = (
+                        200,
+                        {
+                            "data": [
+                                {
+                                    "id": mid,
+                                    "name": mid,
+                                    "context_length": 200000,
+                                    "created": 1780000000,
+                                    "architecture": {
+                                        "modality": "text->text",
+                                        "input_modalities": ["text"],
+                                        "output_modalities": ["text"],
+                                    },
+                                    "pricing": {
+                                        "prompt": p,
+                                        "completion": c,
+                                        "request": "0",
+                                        "image": "0",
+                                    },
+                                    "supported_parameters": [
+                                        "tools",
+                                        "reasoning",
+                                        "max_tokens",
+                                    ],
+                                }
+                                for mid, p, c in CATALOG
+                            ]
+                        },
+                    )
                 else:
                     status, body = 404, {"error": {"message": "not found"}}
                 data = json.dumps(body).encode()
@@ -164,34 +200,61 @@ def _home(tmp_path: Path, catalog: FakeCatalog, dead: socket.socket) -> _ShimHom
     h = _ShimHome(tmp_path)
     write_sitecustomize_shim(tmp_path / "shim", _SHIM)
     proxy = f"http://127.0.0.1:{dead.getsockname()[1]}"
-    h.extra = {"PYTHONPATH": f"{tmp_path / 'shim'}:{REPO_ROOT}",
-               "CLAWK_E2E_ORIGIN_REDIRECT": f"{VENDOR_ORIGIN}={catalog.origin}",
-               **{k: proxy for k in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")},
-               "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"}
-    h.write({
-        "model": {"provider": "openrouter", "default": TWIN_MODELS[0]},
-        "providers": {
-            "openrouter": {"name": "OpenRouter-Full", "base_url": f"{VENDOR_ORIGIN}/api/v1",
-                           "api_key": "sk-or-fake-twin", "models": TWIN_MODELS},
-            # Decoys: serve a catalog model id, but are relays with no price catalog of their own.
-            **{key: {"name": f"Relay {key}", "base_url": f"{catalog.origin}/relay/v1",
-                     "api_key": "sk-relay-fake", "models": [RELAY_MODEL]} for key, _slug in DECOYS},
+    h.extra = {
+        "PYTHONPATH": f"{tmp_path / 'shim'}:{REPO_ROOT}",
+        "CLAWK_E2E_ORIGIN_REDIRECT": f"{VENDOR_ORIGIN}={catalog.origin}",
+        **{
+            k: proxy for k in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy")
         },
-    }, dotenv={"OPENROUTER_API_KEY": "sk-or-fake-builtin",
-               # The picker lists a providers: entry keyed by a built-in name only while that
-               # built-in is credentialed; this makes the custom:deepseek decoy row appear.
-               "DEEPSEEK_API_KEY": "sk-ds-fake-builtin"})
+        "NO_PROXY": "127.0.0.1,localhost",
+        "no_proxy": "127.0.0.1,localhost",
+    }
+    h.write(
+        {
+            "model": {"provider": "openrouter", "default": TWIN_MODELS[0]},
+            "providers": {
+                "openrouter": {
+                    "name": "OpenRouter-Full",
+                    "base_url": f"{VENDOR_ORIGIN}/api/v1",
+                    "api_key": "sk-or-fake-twin",
+                    "models": TWIN_MODELS,
+                },
+                # Decoys: serve a catalog model id, but are relays with no price catalog of their own.
+                **{
+                    key: {
+                        "name": f"Relay {key}",
+                        "base_url": f"{catalog.origin}/relay/v1",
+                        "api_key": "sk-relay-fake",
+                        "models": [RELAY_MODEL],
+                    }
+                    for key, _slug in DECOYS
+                },
+            },
+        },
+        dotenv={
+            "OPENROUTER_API_KEY": "sk-or-fake-builtin",
+            # The picker lists a providers: entry keyed by a built-in name only while that
+            # built-in is credentialed; this makes the custom:deepseek decoy row appear.
+            "DEEPSEEK_API_KEY": "sk-ds-fake-builtin",
+        },
+    )
     return h
 
 
 def _row(payload: dict[str, Any], slug: str) -> dict[str, Any] | None:
-    return next((r for r in payload.get("providers") or [] if r.get("slug") == slug), None)
+    return next(
+        (r for r in payload.get("providers") or [] if r.get("slug") == slug), None
+    )
 
 
 def _priced(row: dict[str, Any] | None) -> dict[str, Any]:
     """``{model: price entry}`` for the row's models that carry a real price."""
     pricing = (row or {}).get("pricing") or {}
-    return {m: p for m, p in pricing.items() if isinstance(p, dict) and (p.get("input") or p.get("output"))}
+    return {
+        m: p
+        for m, p in pricing.items()
+        if isinstance(p, dict) and (p.get("input") or p.get("output"))
+    }
 
 
 def _refreshed_options(tmp_path: Path) -> tuple[dict[str, Any], list[tuple[str, str]]]:
@@ -236,8 +299,10 @@ def test_builtin_aggregator_row_prices_from_catalog(picker) -> None:
     listed = [m for m in (row or {}).get("models") or [] if m in TWIN_MODELS]
     assert listed and set(listed) <= set(priced), (listed, (row or {}).get("pricing"))
     for mid in listed:
-        assert (_dollars(priced[mid]["input"]), _dollars(priced[mid]["output"])) == pytest.approx(
-            _expected_price(mid)), (mid, priced[mid])
+        assert (
+            _dollars(priced[mid]["input"]),
+            _dollars(priced[mid]["output"]),
+        ) == pytest.approx(_expected_price(mid)), (mid, priced[mid])
 
 
 @pytest.mark.parametrize("slug", [slug for _key, slug in DECOYS])
@@ -247,8 +312,12 @@ def test_relay_without_catalog_gets_no_borrowed_prices(picker, slug: str) -> Non
     ``custom:deepseek`` row, whose slug has the same ``custom:<key>`` shape as the twin."""
     payload, _requests = picker
     relay = _row(payload, slug)
-    assert relay is not None and RELAY_MODEL in (relay.get("models") or []), payload.get("providers")
-    assert _priced(relay) == {}, f"{slug} (upstream: the relay) borrowed prices: {relay.get('pricing')}"
+    assert relay is not None and RELAY_MODEL in (relay.get("models") or []), (
+        payload.get("providers")
+    )
+    assert _priced(relay) == {}, (
+        f"{slug} (upstream: the relay) borrowed prices: {relay.get('pricing')}"
+    )
 
 
 def test_config_defined_twin_row_is_priced_like_the_aggregator(picker) -> None:
@@ -256,12 +325,15 @@ def test_config_defined_twin_row_is_priced_like_the_aggregator(picker) -> None:
     must carry the aggregator's prices, not none."""
     payload, _requests = picker
     twin, builtin = _row(payload, "custom:openrouter"), _row(payload, "openrouter")
-    assert twin is not None and set(TWIN_MODELS) <= set(twin.get("models") or []), payload.get("providers")
+    assert twin is not None and set(TWIN_MODELS) <= set(twin.get("models") or []), (
+        payload.get("providers")
+    )
     priced = _priced(twin)
     with bug_assertions(KNOWN, "custom_twin_priced"):
         assert set(priced) == set(TWIN_MODELS), (
             f"custom:openrouter row has {len(priced)}/{len(TWIN_MODELS)} models priced "
-            f"(pricing={twin.get('pricing')!r})")
+            f"(pricing={twin.get('pricing')!r})"
+        )
         for mid, entry in _priced(builtin).items():
             if mid in priced:
                 assert priced[mid] == entry, (mid, priced[mid], entry)

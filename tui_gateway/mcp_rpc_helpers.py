@@ -9,8 +9,12 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping
 
 
-def server_configs_with_sources(config_servers: Mapping[str, dict]) -> tuple[dict[str, dict], dict[str, str | None]]:
-    servers = {name: dict(cfg) for name, cfg in config_servers.items() if isinstance(cfg, dict)}
+def server_configs_with_sources(
+    config_servers: Mapping[str, dict],
+) -> tuple[dict[str, dict], dict[str, str | None]]:
+    servers = {
+        name: dict(cfg) for name, cfg in config_servers.items() if isinstance(cfg, dict)
+    }
     plugins: dict[str, str | None] = {name: None for name in servers}
     try:
         from clawk_cli.plugins import discover_plugins, get_plugin_manager
@@ -34,10 +38,16 @@ def summarize_server(name: str, cfg: dict, plugin: str | None = None) -> dict[st
     from tools.mcp_tool_common import mcp_server_enabled
 
     cfg = cfg if isinstance(cfg, dict) else {}
-    transport = "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    transport = (
+        "http" if cfg.get("url") else ("stdio" if cfg.get("command") else "unknown")
+    )
     auth = cfg.get("auth")
     headers = cfg.get("headers") or {}
-    if not auth and isinstance(headers, dict) and any(str(key).lower() == "authorization" for key in headers):
+    if (
+        not auth
+        and isinstance(headers, dict)
+        and any(str(key).lower() == "authorization" for key in headers)
+    ):
         auth = "header"
     return {
         "name": name,
@@ -47,11 +57,14 @@ def summarize_server(name: str, cfg: dict, plugin: str | None = None) -> dict[st
         "args": list(cfg.get("args") or []),
         "env": sorted(str(k) for k in (cfg.get("env") or {})),
         "auth": auth,
-        "oauth_tokens_present": _oauth_tokens_present(name) if auth == "oauth" else None,
+        "oauth_tokens_present": _oauth_tokens_present(name)
+        if auth == "oauth"
+        else None,
         "enabled": mcp_server_enabled(cfg),
         "tools": cfg.get("tools"),
         "source": "plugin" if plugin is not None else "config",
-        "plugin": plugin}
+        "plugin": plugin,
+    }
 
 
 def record_mcp_add(entry: Any, server_config: Mapping[str, Any], saved: bool) -> None:
@@ -59,6 +72,14 @@ def record_mcp_add(entry: Any, server_config: Mapping[str, Any], saved: bool) ->
     command/args configuration (``_save_mcp_server`` returns False)."""
     from clawk_cli.mcp_catalog import record_mcp_install
 
-    source = "catalog" if entry is not None else ("url" if server_config.get("url") else "local")
-    record_mcp_install(source, entry.name if entry is not None else None, "success" if saved else "failed",
-                       failure_class=None if saved else "config_rejected")
+    source = (
+        "catalog"
+        if entry is not None
+        else ("url" if server_config.get("url") else "local")
+    )
+    record_mcp_install(
+        source,
+        entry.name if entry is not None else None,
+        "success" if saved else "failed",
+        failure_class=None if saved else "config_rejected",
+    )

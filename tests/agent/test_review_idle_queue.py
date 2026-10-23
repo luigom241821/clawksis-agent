@@ -184,16 +184,13 @@ def _wrapper_agent(monkeypatch, defer="auto", managed=True):
         "agent.background_review.load_background_review_settings",
         lambda: (True, {"defer": defer}),
     )
+    monkeypatch.setattr(riq, "review_targets_managed_local", lambda a, cfg: managed)
     monkeypatch.setattr(
-        riq, "review_targets_managed_local", lambda a, cfg: managed
-    )
-    monkeypatch.setattr(
-        riq.QUEUE, "enqueue",
+        riq.QUEUE,
+        "enqueue",
         lambda a, key, kw: calls["enqueued"].append((key, kw)),
     )
-    agent._spawn_background_review_now = (
-        lambda **kw: calls["spawned"].append(kw)
-    )
+    agent._spawn_background_review_now = lambda **kw: calls["spawned"].append(kw)
     bound = types.MethodType(run_agent.AIAgent._spawn_background_review, agent)
     return bound, calls
 
@@ -224,8 +221,11 @@ def test_wrapper_defer_never_is_old_behavior(monkeypatch):
 
 def test_wrapper_refine_bypasses_queue(monkeypatch):
     spawn, calls = _wrapper_agent(monkeypatch, defer="auto", managed=True)
-    spawn([{"role": "user", "content": "hi"}], review_memory=True,
-          focus="save the deploy workflow")
+    spawn(
+        [{"role": "user", "content": "hi"}],
+        review_memory=True,
+        focus="save the deploy workflow",
+    )
     assert calls["enqueued"] == []
     assert len(calls["spawned"]) == 1
     assert calls["spawned"][0]["focus"] == "save the deploy workflow"
@@ -234,8 +234,12 @@ def test_wrapper_refine_bypasses_queue(monkeypatch):
 def test_wrapper_bare_refine_bypasses_queue(monkeypatch):
     """/refine with no focus text is still explicit: never deferred."""
     spawn, calls = _wrapper_agent(monkeypatch, defer="auto", managed=True)
-    spawn([{"role": "user", "content": "hi"}], review_memory=True,
-          focus=None, explicit=True)
+    spawn(
+        [{"role": "user", "content": "hi"}],
+        review_memory=True,
+        focus=None,
+        explicit=True,
+    )
     assert calls["enqueued"] == []
     assert len(calls["spawned"]) == 1
 
@@ -253,9 +257,9 @@ def test_wrapper_cloud_fast_path_skips_runtime_resolution(monkeypatch):
         raise AssertionError("runtime resolution must not run")
 
     monkeypatch.setattr(
-        "agent.auxiliary_managed_local._managed_local_netloc", lambda: "")
-    monkeypatch.setattr(
-        "agent.background_review._resolve_review_runtime", _explode)
+        "agent.auxiliary_managed_local._managed_local_netloc", lambda: ""
+    )
+    monkeypatch.setattr("agent.background_review._resolve_review_runtime", _explode)
     assert riq.review_targets_managed_local(object(), {}) is False
     assert resolved["count"] == 0
 
@@ -296,27 +300,23 @@ def _requeue_agent(monkeypatch, managed=True):
 
     agent = _FakeAgent()
     calls = {"enqueued": []}
+    monkeypatch.setattr(riq, "review_targets_managed_local", lambda a, cfg: managed)
     monkeypatch.setattr(
-        riq, "review_targets_managed_local", lambda a, cfg: managed
-    )
-    monkeypatch.setattr(
-        riq.QUEUE, "enqueue",
+        riq.QUEUE,
+        "enqueue",
         lambda a, key, kw: calls["enqueued"].append(kw),
     )
-    agent._REVIEW_REQUEUE_MAX_ATTEMPTS = (
-        run_agent.AIAgent._REVIEW_REQUEUE_MAX_ATTEMPTS
-    )
-    bound = types.MethodType(
-        run_agent.AIAgent._maybe_requeue_preempted_review, agent
-    )
+    agent._REVIEW_REQUEUE_MAX_ATTEMPTS = run_agent.AIAgent._REVIEW_REQUEUE_MAX_ATTEMPTS
+    bound = types.MethodType(run_agent.AIAgent._maybe_requeue_preempted_review, agent)
     return bound, calls
 
 
 def test_preempted_review_requeues(monkeypatch):
     requeue, calls = _requeue_agent(monkeypatch)
-    requeue(_Run(cancelled=True),
-            {"task_cfg": {"defer": "auto"}, "focus": None,
-             "_requeue_attempts": 1})
+    requeue(
+        _Run(cancelled=True),
+        {"task_cfg": {"defer": "auto"}, "focus": None, "_requeue_attempts": 1},
+    )
     assert len(calls["enqueued"]) == 1
     # The attempt counter rides along so the cap survives the round trip.
     assert calls["enqueued"][0]["_requeue_attempts"] == 1
@@ -324,25 +324,28 @@ def test_preempted_review_requeues(monkeypatch):
 
 def test_completed_review_does_not_requeue(monkeypatch):
     requeue, calls = _requeue_agent(monkeypatch)
-    requeue(_Run(cancelled=False),
-            {"task_cfg": {"defer": "auto"}, "focus": None,
-             "_requeue_attempts": 1})
+    requeue(
+        _Run(cancelled=False),
+        {"task_cfg": {"defer": "auto"}, "focus": None, "_requeue_attempts": 1},
+    )
     assert calls["enqueued"] == []
 
 
 def test_requeue_attempt_cap(monkeypatch):
     requeue, calls = _requeue_agent(monkeypatch)
-    requeue(_Run(cancelled=True),
-            {"task_cfg": {"defer": "auto"}, "focus": None,
-             "_requeue_attempts": 4})
+    requeue(
+        _Run(cancelled=True),
+        {"task_cfg": {"defer": "auto"}, "focus": None, "_requeue_attempts": 4},
+    )
     assert calls["enqueued"] == []
 
 
 def test_requeue_skips_non_managed(monkeypatch):
     requeue, calls = _requeue_agent(monkeypatch, managed=False)
-    requeue(_Run(cancelled=True),
-            {"task_cfg": {"defer": "auto"}, "focus": None,
-             "_requeue_attempts": 1})
+    requeue(
+        _Run(cancelled=True),
+        {"task_cfg": {"defer": "auto"}, "focus": None, "_requeue_attempts": 1},
+    )
     assert calls["enqueued"] == []
 
 
@@ -350,20 +353,28 @@ def test_dispatch_runs_under_the_enqueuing_profile_context(tmp_path, monkeypatch
     """#108537: the enabled re-check and the spawn must run under the contextvars captured at
     enqueue (that profile's home + secret scope), not the shared dispatcher thread's ambient ones."""
     from agent import secret_scope as ss
-    from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     ambient, on_home, off_home = (tmp_path / n for n in ("ambient", "on", "off"))
     for home, gate in ((ambient, False), (on_home, True), (off_home, False)):
         home.mkdir()
         (home / "config.yaml").write_text(
-            f"auxiliary:\n  background_review:\n    enabled: {str(gate).lower()}\n", encoding="utf-8")
+            f"auxiliary:\n  background_review:\n    enabled: {str(gate).lower()}\n",
+            encoding="utf-8",
+        )
     monkeypatch.setenv("CLAWK_HOME", str(ambient))
     q, clock = _make_queue()
     seen = []
 
     class _Agent:
         def _spawn_background_review_now(self, **kwargs):
-            seen.append((kwargs["home"], get_clawk_home(), ss.get_secret("REVIEW_PROBE_KEY")))
+            seen.append(
+                (kwargs["home"], get_clawk_home(), ss.get_secret("REVIEW_PROBE_KEY"))
+            )
 
     class _Stop(BaseException):
         pass
@@ -372,6 +383,7 @@ def test_dispatch_runs_under_the_enqueuing_profile_context(tmp_path, monkeypatch
         def wait(self):
             if q.pending_count() == 0:
                 raise _Stop
+
         def clear(self):
             pass
 
@@ -379,13 +391,17 @@ def test_dispatch_runs_under_the_enqueuing_profile_context(tmp_path, monkeypatch
     try:
         for home in (on_home, off_home):
             tok = set_clawk_home_override(home)
-            stok = ss.set_secret_scope({"REVIEW_PROBE_KEY": home.name}, profile_home=str(home))
+            stok = ss.set_secret_scope(
+                {"REVIEW_PROBE_KEY": home.name}, profile_home=str(home)
+            )
             try:
                 q.enqueue(_Agent(), home.name, {"home": home, "task_cfg": {}})
             finally:
                 ss.reset_secret_scope(stok)
                 reset_clawk_home_override(tok)
-        clock["t"] += defer_max_age_s(None) + 1  # aged out: dispatch regardless of idleness
+        clock["t"] += (
+            defer_max_age_s(None) + 1
+        )  # aged out: dispatch regardless of idleness
         q._wake = _DrainWake()
         with pytest.raises(_Stop):
             q._run()  # the dispatcher itself runs with NO profile scope (ambient = disabled)

@@ -25,7 +25,11 @@ class _Stub(CLIChatTurnMixin):
 def _interrupted_turn(payload):
     turn = MagicMock()
     turn.mute_notification_reply = False
-    turn.result = {"interrupted": True, "interrupt_message": payload, "final_response": ""}
+    turn.result = {
+        "interrupted": True,
+        "interrupt_message": payload,
+        "final_response": "",
+    }
     turn.use_streaming_tts = False
     return turn
 
@@ -34,7 +38,9 @@ def test_tuple_payload_is_requeued_with_its_images():
     cli = _Stub()
     images = [Path("/tmp/clip.png")]
 
-    cli._chat_render_turn(_interrupted_turn(("look at this", images)), MagicMock(), None)
+    cli._chat_render_turn(
+        _interrupted_turn(("look at this", images)), MagicMock(), None
+    )
 
     assert cli._pending_input.get_nowait() == ("look at this", images)
 
@@ -44,8 +50,11 @@ def test_queued_parts_join_text_and_merge_images():
     cli._interrupt_queue.put("second")
     cli._interrupt_queue.put(("third", [Path("/tmp/b.png")]))
 
-    cli._chat_render_turn(_interrupted_turn(("first", [Path("/tmp/a.png")])), MagicMock(), None)
+    cli._chat_render_turn(
+        _interrupted_turn(("first", [Path("/tmp/a.png")])), MagicMock(), None
+    )
 
     assert cli._pending_input.get_nowait() == (
-        "first\nsecond\nthird", [Path("/tmp/a.png"), Path("/tmp/b.png")],
+        "first\nsecond\nthird",
+        [Path("/tmp/a.png"), Path("/tmp/b.png")],
     )

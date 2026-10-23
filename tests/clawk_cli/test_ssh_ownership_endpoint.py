@@ -48,7 +48,9 @@ def test_ssh_ownership_reports_replaced_runtime(tmp_path, monkeypatch):
     )
     client = TestClient(web_server.app)
 
-    response = client.get("/api/ssh/ownership", headers={"X-Clawksis-Session-Token": token})
+    response = client.get(
+        "/api/ssh/ownership", headers={"X-Clawksis-Session-Token": token}
+    )
 
     assert response.status_code == 200
     assert response.json()["runtimeIntact"] is False

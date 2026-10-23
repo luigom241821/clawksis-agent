@@ -26,8 +26,11 @@ def test_session_create_stamps_project_and_row_persists_it(monkeypatch, tmp_path
     sid = None
     try:
         response = server.handle_request(
-            {"id": "create", "method": "session.create",
-             "params": {"source": "desktop", "project_id": "proj123"}}
+            {
+                "id": "create",
+                "method": "session.create",
+                "params": {"source": "desktop", "project_id": "proj123"},
+            }
         )
         assert "result" in response, response
         result = response["result"]
@@ -55,13 +58,17 @@ def test_project_overlay_is_applied_once_and_keeps_other_overlays(monkeypatch):
     monkeypatch.setattr(
         server,
         "_project_instructions_block_for_session",
-        lambda _session: f"{server._PROJECT_INSTRUCTIONS_BEGIN}\nbe brief\n{server._PROJECT_INSTRUCTIONS_END}",
+        lambda _session: (
+            f"{server._PROJECT_INSTRUCTIONS_BEGIN}\nbe brief\n{server._PROJECT_INSTRUCTIONS_END}"
+        ),
     )
     agent = SimpleNamespace(ephemeral_system_prompt="persona overlay")
     session = {"agent": agent, "project_id": "proj123"}
 
     server._apply_project_instructions_to_session(session)
-    server._apply_project_instructions_to_session(session)  # every turn re-applies: no duplicates
+    server._apply_project_instructions_to_session(
+        session
+    )  # every turn re-applies: no duplicates
 
     prompt = agent.ephemeral_system_prompt
     assert prompt.startswith("persona overlay")

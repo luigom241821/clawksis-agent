@@ -18,7 +18,16 @@ from clawk_cli.auth import _load_auth_store
 from clawk_cli.web_server import _SESSION_TOKEN, app
 from tests.clawk_cli.anon_portal import as_local_desktop_backend, claimed_trial
 from tests.clawk_cli.test_anon_upgrade import (
-    EMAIL, FREE_PICK, INFERENCE, PORTAL, WELCOME, _model_config, _write_model_config, free_account, portal)
+    EMAIL,
+    FREE_PICK,
+    INFERENCE,
+    PORTAL,
+    WELCOME,
+    _model_config,
+    _write_model_config,
+    free_account,
+    portal,
+)
 
 client = TestClient(app)
 HEADERS = {"X-Clawksis-Session-Token": _SESSION_TOKEN}
@@ -29,16 +38,22 @@ __all__ = ["free_account", "portal"]  # fixtures imported from the CLI test modu
 def _wait_for_terminal(session_id: str, timeout: float = 10.0) -> dict:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        body = client.get(f"/api/providers/oauth/nous/poll/{session_id}", headers=HEADERS).json()
+        body = client.get(
+            f"/api/providers/oauth/nous/poll/{session_id}", headers=HEADERS
+        ).json()
         if body["status"] != "pending":
             return body
         time.sleep(0.05)
     pytest.fail("poller never left pending")
 
 
-def test_start_shows_the_device_code_and_completion_reports_what_moved(portal, free_account):
+def test_start_shows_the_device_code_and_completion_reports_what_moved(
+    portal, free_account
+):
     anon_auth.ensure_portal_identity(explicit=True)
-    _write_model_config({"provider": "nous", "default": anon_auth.GUEST_MODEL, "base_url": WELCOME})
+    _write_model_config(
+        {"provider": "nous", "default": anon_auth.GUEST_MODEL, "base_url": WELCOME}
+    )
 
     resp = client.post("/api/providers/oauth/nous/start", headers=HEADERS)
     assert resp.status_code == 200, resp.text
@@ -90,22 +105,32 @@ def test_a_connector_only_guest_is_not_reported_as_the_free_tier(portal, monkeyp
     assert not [p for p in providers if p["id"] == "nous"]
 
 
-def test_a_sign_in_cancelled_while_waiting_stops_the_token_poll_and_persists_nothing(portal, free_account):
+def test_a_sign_in_cancelled_while_waiting_stops_the_token_poll_and_persists_nothing(
+    portal, free_account
+):
     """The poller is blocked on the token endpoint when the user cancels: the poll stops, and
     nothing reaches the auth store."""
     import threading
     from clawk_cli import web_server_oauth
+
     guest = anon_auth.ensure_portal_identity(explicit=True)
     portal.token_pending = True
 
     threads_before = set(threading.enumerate())
     start = client.post("/api/providers/oauth/nous/start", headers=HEADERS).json()
-    assert client.delete(f"/api/providers/oauth/sessions/{start['session_id']}", headers=HEADERS).json()["ok"] is True
+    assert (
+        client.delete(
+            f"/api/providers/oauth/sessions/{start['session_id']}", headers=HEADERS
+        ).json()["ok"]
+        is True
+    )
     for t in set(threading.enumerate()) - threads_before:
         t.join(timeout=5)
         assert not t.is_alive()
     portal.token_pending = False
     assert portal.token_grants == 0
     state = _load_auth_store()["providers"]["nous"]
-    assert state["anon_token"] == guest["anon_token"] and anon_auth.is_guest_state(state)
+    assert state["anon_token"] == guest["anon_token"] and anon_auth.is_guest_state(
+        state
+    )
     assert web_server_oauth._oauth_sessions.get(start["session_id"]) is None

@@ -9,7 +9,9 @@ from tests.compat.old_updater_support import (
 )
 
 
-@pytest.mark.parametrize("quiet,output", [(True, "EBADENGINE"), (False, "unrelated failure")])
+@pytest.mark.parametrize(
+    "quiet,output", [(True, "EBADENGINE"), (False, "unrelated failure")]
+)
 def test_retired_retry_handoffs_without_provisioning(fresh_child, quiet, output):
     with fresh_child.exits():
         maybe_repair_npm_engine("/caller-owned/npm", output, quiet=quiet)

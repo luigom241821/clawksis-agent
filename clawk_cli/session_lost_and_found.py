@@ -16,10 +16,19 @@ from typing import Any, Callable, Optional, Sequence
 
 from clawk_cli.session_schema_history import SCHEMA_HISTORY, reachable_physical_layouts
 
-from clawk_state_ids import is_known_session_id  # every minted id shape: sentinel for schema-less rows
+from clawk_state_ids import (
+    is_known_session_id,
+)  # every minted id shape: sentinel for schema-less rows
 from clawk_cli.session_recovery import (
-    _AUXILIARY_TABLE_SCHEMAS, _AUXILIARY_TABLES, _CANONICAL_TABLES, _DANGLING_TOOL_PIN, _count_rows,
-    _immediate_transaction, _placeholder_titles, _quoted_columns, _table_columns,
+    _AUXILIARY_TABLE_SCHEMAS,
+    _AUXILIARY_TABLES,
+    _CANONICAL_TABLES,
+    _DANGLING_TOOL_PIN,
+    _count_rows,
+    _immediate_transaction,
+    _placeholder_titles,
+    _quoted_columns,
+    _table_columns,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,11 +36,31 @@ logger = logging.getLogger(__name__)
 MESSAGE_ROLES = frozenset({"user", "assistant", "tool", "system"})
 
 # Values observed in sessions.source across gateway platforms and tooling.
-KNOWN_SOURCES = frozenset({
-    "cli", "telegram", "discord", "slack", "whatsapp", "signal", "matrix",
-    "irc", "email", "x", "twitter", "api", "gateway", "web", "dashboard",
-    "tool", "subagent", "cron", "recovered", "imported", "acp",
-})
+KNOWN_SOURCES = frozenset(
+    {
+        "cli",
+        "telegram",
+        "discord",
+        "slack",
+        "whatsapp",
+        "signal",
+        "matrix",
+        "irc",
+        "email",
+        "x",
+        "twitter",
+        "api",
+        "gateway",
+        "web",
+        "dashboard",
+        "tool",
+        "subagent",
+        "cron",
+        "recovered",
+        "imported",
+        "acp",
+    }
+)
 
 # A record's field count is the column count of the table when the row was last written. It classifies
 # the record but says nothing about which column each cell belongs to — live stores gain columns through
@@ -53,7 +82,7 @@ _LAYOUT_SENTINELS: dict[str, tuple[str, ...]] = {
 }
 
 # Plausible unix-epoch window for started_at heuristics on legacy layouts.
-_EPOCH_LOW = 1_000_000_000.0   # 2001
+_EPOCH_LOW = 1_000_000_000.0  # 2001
 _EPOCH_HIGH = 4_000_000_000.0  # 2096
 
 # Title label/prefix of every session row this lane synthesises (legacy-layout rows and stubbed parents).
@@ -84,7 +113,9 @@ SQLITE3_CLI_GUIDANCE = (
 # The predicate lives in clawk_cli.sqlite_runtime (stdlib-only, shared with
 # the installer/update gates) so the embedded runtime and the salvage shell
 # can never disagree about which versions are safe.
-from clawk_cli.sqlite_runtime import is_sqlite_wal_reset_vulnerable as _wal_reset_vulnerable
+from clawk_cli.sqlite_runtime import (
+    is_sqlite_wal_reset_vulnerable as _wal_reset_vulnerable,
+)
 
 _WAL_RESET_VULNERABLE_GUIDANCE = (
     "salvage against a Clawksis database with the WAL-reset bug "
@@ -103,7 +134,9 @@ class LostAndFoundError(RuntimeError):
 def _parse_sqlite3_cli_version(binary: str) -> Optional[tuple[int, int, int]]:
     """Version of the sqlite3 CLI at *binary* via ``--version``, or None when it cannot run or be parsed."""
     try:
-        probe = subprocess.run([binary, "--version"], capture_output=True, timeout=30, check=False)
+        probe = subprocess.run(
+            [binary, "--version"], capture_output=True, timeout=30, check=False
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     if probe.returncode != 0:
@@ -154,7 +187,8 @@ def find_sqlite3_cli() -> Optional[str]:
             "reason": "wal_reset_vulnerable",
             "binary": binary,
             "version": version_str,
-            "detail": f"reports version {version_str}, which has " + _WAL_RESET_VULNERABLE_GUIDANCE,
+            "detail": f"reports version {version_str}, which has "
+            + _WAL_RESET_VULNERABLE_GUIDANCE,
         }
         return None
     return binary
@@ -172,7 +206,12 @@ def _cli_supports_recover(binary: str) -> bool:
             conn.commit()
         finally:
             conn.close()
-        probe = subprocess.run([binary, "-readonly", str(scratch), ".recover"], capture_output=True, timeout=30, check=False)
+        probe = subprocess.run(
+            [binary, "-readonly", str(scratch), ".recover"],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
         return probe.returncode == 0 and b"sqlite_dbpage" not in probe.stderr
     except (OSError, subprocess.SubprocessError, sqlite3.Error):
         return False
@@ -184,7 +223,11 @@ SQLITE_HEADER_LENGTH = 100
 
 
 def run_cli_lost_and_found_recover(
-    source: Path, lf_path: Path, sqlite3_bin: str, *, timeout: float = 3600.0,
+    source: Path,
+    lf_path: Path,
+    sqlite3_bin: str,
+    *,
+    timeout: float = 3600.0,
 ) -> dict[str, Any]:
     """Run ``sqlite3 <source> .recover`` streamed into a fresh scratch DB.
 
@@ -210,10 +253,14 @@ def run_cli_lost_and_found_recover(
         f"{a['dump_stderr_tail'] or a['load_stderr_tail']}".strip()
         for a in attempts
     )
-    raise LostAndFoundError(f"sqlite3 .recover did not produce a usable lost_and_found database: {details}")
+    raise LostAndFoundError(
+        f"sqlite3 .recover did not produce a usable lost_and_found database: {details}"
+    )
 
 
-def _cli_recover_attempts(source: Path, lf_path: Path, sqlite3_bin: str, *, timeout: float) -> list[dict[str, Any]]:
+def _cli_recover_attempts(
+    source: Path, lf_path: Path, sqlite3_bin: str, *, timeout: float
+) -> list[dict[str, Any]]:
     """``--ignore-freelist`` first (no resurrected deleted rows), plain ``.recover`` for older shells."""
     attempts: list[dict[str, Any]] = []
     for command in (".recover --ignore-freelist", ".recover"):
@@ -224,10 +271,15 @@ def _cli_recover_attempts(source: Path, lf_path: Path, sqlite3_bin: str, *, time
         # PIPE would block the dump child, stall load's stdin, and burn the whole timeout.
         with tempfile.TemporaryFile(prefix="clawk-recover-dump-stderr-") as dump_stderr:
             dump = subprocess.Popen(
-                [sqlite3_bin, "-readonly", str(source), command], stdout=subprocess.PIPE, stderr=dump_stderr
+                [sqlite3_bin, "-readonly", str(source), command],
+                stdout=subprocess.PIPE,
+                stderr=dump_stderr,
             )
             load = subprocess.Popen(
-                [sqlite3_bin, str(lf_path)], stdin=dump.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+                [sqlite3_bin, str(lf_path)],
+                stdin=dump.stdout,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
             )
             assert dump.stdout is not None
             dump.stdout.close()  # let dump receive SIGPIPE if load dies
@@ -243,13 +295,19 @@ def _cli_recover_attempts(source: Path, lf_path: Path, sqlite3_bin: str, *, time
                 load.kill()
                 dump.wait()  # reap: kill() alone leaves returncode None and a zombie until GC
                 load.wait()
-                raise LostAndFoundError(f"sqlite3 .recover timed out after {timeout:.0f}s")
-        attempts.append({
-            "command": command, "dump_returncode": dump.returncode, "load_returncode": load.returncode,
-            "dump_stderr_tail": dump_err.decode("utf-8", "replace")[-2000:],
-            "load_stderr_tail": load_err.decode("utf-8", "replace")[-2000:],
-            "usable": _lost_and_found_db_usable(lf_path),
-        })
+                raise LostAndFoundError(
+                    f"sqlite3 .recover timed out after {timeout:.0f}s"
+                )
+        attempts.append(
+            {
+                "command": command,
+                "dump_returncode": dump.returncode,
+                "load_returncode": load.returncode,
+                "dump_stderr_tail": dump_err.decode("utf-8", "replace")[-2000:],
+                "load_stderr_tail": load_err.decode("utf-8", "replace")[-2000:],
+                "usable": _lost_and_found_db_usable(lf_path),
+            }
+        )
         if attempts[-1]["usable"]:
             break
     return attempts
@@ -261,7 +319,12 @@ def _lost_and_found_db_usable(lf_path: Path) -> bool:
     try:
         conn = sqlite3.connect(str(lf_path))
         try:
-            return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1").fetchone() is not None
+            return (
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' LIMIT 1"
+                ).fetchone()
+                is not None
+            )
         finally:
             conn.close()
     except sqlite3.DatabaseError:
@@ -302,8 +365,13 @@ def _is_session_id(value: Any) -> bool:
 
 
 def _looks_like_source(value: Any) -> bool:
-    return bool(value) and isinstance(value, str) and (
-        value in KNOWN_SOURCES or bool(re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", value))
+    return (
+        bool(value)
+        and isinstance(value, str)
+        and (
+            value in KNOWN_SOURCES
+            or bool(re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", value))
+        )
     )
 
 
@@ -312,8 +380,11 @@ def _session_source_index(cells: tuple[Any, ...]) -> Optional[int]:
         return 1
     # Fresh runtime schemas inserted counters after id; upgraded databases
     # append those same columns. Width alone cannot distinguish the layouts.
-    if (len(cells) > 3 and _looks_like_source(cells[3])
-            and all(v is None or isinstance(v, int) for v in cells[1:3])):
+    if (
+        len(cells) > 3
+        and _looks_like_source(cells[3])
+        and all(v is None or isinstance(v, int) for v in cells[1:3])
+    ):
         return 3
     return None
 
@@ -324,7 +395,10 @@ def classify_lost_and_found_row(nfield: int, cells: tuple[Any, ...]) -> Optional
         # Rowid-alias tables store their INTEGER PRIMARY KEY as NULL; messages is the only canonical
         # table shaped like that with a session id second and a role third.
         is_message = (
-            isinstance(cells[1], str) and cells[1] and isinstance(cells[2], str) and cells[2] in MESSAGE_ROLES
+            isinstance(cells[1], str)
+            and cells[1]
+            and isinstance(cells[2], str)
+            and cells[2] in MESSAGE_ROLES
         )
         return "messages" if is_message else None
     if not _is_session_id(cells[0] if cells else None):
@@ -335,32 +409,45 @@ def classify_lost_and_found_row(nfield: int, cells: tuple[Any, ...]) -> Optional
     # Any historical sessions width: session id first + recognizable source (every sessions layout ever
     # shipped has at least the 14 original columns). Stores created at the runtime-authority schema carry
     # runtime_revision/runtime_generation right after id, so the source cell sits at 3 there (#101409 lane).
-    if nfield >= SESSIONS_LEGACY_MINIMAL_NFIELD and _session_source_index(cells) is not None:
+    if (
+        nfield >= SESSIONS_LEGACY_MINIMAL_NFIELD
+        and _session_source_index(cells) is not None
+    ):
         return "sessions"
     return None
 
 
 def _heuristic_started_at(cells: tuple[Any, ...]) -> float:
     for value in cells:
-        if isinstance(value, (int, float)) and _EPOCH_LOW <= float(value) <= _EPOCH_HIGH:
+        if (
+            isinstance(value, (int, float))
+            and _EPOCH_LOW <= float(value) <= _EPOCH_HIGH
+        ):
             return float(value)
     return 0.0
 
 
 def _insert_prefix_row(
-    dest: sqlite3.Connection, table: str, dest_columns: list[str], values: list[Any],
+    dest: sqlite3.Connection,
+    table: str,
+    dest_columns: list[str],
+    values: list[Any],
     notnull_substitutes: Optional[dict[int, Any]] = None,
 ) -> bool:
     if notnull_substitutes:
         values = [
-            notnull_substitutes[index] if value is None and index in notnull_substitutes else value
+            notnull_substitutes[index]
+            if value is None and index in notnull_substitutes
+            else value
             for index, value in enumerate(values)
         ]
     return _execute_insert(dest, table, dest_columns[: len(values)], values)
 
 
 def _sessions_prefix_columns(
-    columns: list[str], defaults: dict[int, Any], cells: tuple[Any, ...],
+    columns: list[str],
+    defaults: dict[int, Any],
+    cells: tuple[Any, ...],
 ) -> tuple[list[str], dict[int, Any]]:
     """Positional fallback for a sessions record no history layout claimed.
 
@@ -377,11 +464,16 @@ def _sessions_prefix_columns(
         else [*base_columns, *runtime_columns]
     )
     named_defaults = {columns[i]: value for i, value in defaults.items()}
-    return ordered, {i: named_defaults[c] for i, c in enumerate(ordered) if c in named_defaults}
+    return ordered, {
+        i: named_defaults[c] for i, c in enumerate(ordered) if c in named_defaults
+    }
 
 
 def _declared_types(conn: sqlite3.Connection, table: str) -> dict[str, str]:
-    return {str(row[1]): str(row[2] or "") for row in conn.execute(f'PRAGMA table_info("{table}")')}
+    return {
+        str(row[1]): str(row[2] or "")
+        for row in conn.execute(f'PRAGMA table_info("{table}")')
+    }
 
 
 def _type_conflicts(value: Any, declared: str) -> bool:
@@ -472,25 +564,52 @@ def _blank_or(rule: Callable[[str], bool]) -> Callable[[str], bool]:
 _TEXT_SHAPE_RULES: dict[str, dict[str, Callable[[str], bool]]] = {
     "sessions": {
         "session_key": lambda value: bool(_SESSION_KEY_PATTERN.match(value)),
-        **dict.fromkeys(("chat_type", "end_reason", "cost_status", "cost_source", "billing_mode",
-                         "last_activity_provenance", "handoff_platform"), _is_token),
-        "pricing_version": lambda value: bool(re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value)),
+        **dict.fromkeys(
+            (
+                "chat_type",
+                "end_reason",
+                "cost_status",
+                "cost_source",
+                "billing_mode",
+                "last_activity_provenance",
+                "handoff_platform",
+            ),
+            _is_token,
+        ),
+        "pricing_version": lambda value: bool(
+            re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value)
+        ),
         "title_source": lambda value: value in _TITLE_SOURCES,
         "handoff_state": lambda value: value in _HANDOFF_STATES,
         "parent_session_id": _is_session_id,
         "system_prompt_hash": lambda value: bool(re.fullmatch(r"[0-9a-f]{64}", value)),
-        "model_config": _is_json_start, "origin_json": _is_json_start,
-        "cwd": _is_path, "git_repo_root": _is_path,
+        "model_config": _is_json_start,
+        "origin_json": _is_json_start,
+        "cwd": _is_path,
+        "git_repo_root": _is_path,
         "billing_base_url": _is_url,
     },
     "messages": {
-        **dict.fromkeys(("effect_disposition", "finish_reason", "display_kind"), _is_token),
-        **dict.fromkeys(("tool_calls", "reasoning_details", "codex_reasoning_items", "codex_message_items",
-                         "api_content", "display_metadata"), _blank_or(_is_json_start)),
+        **dict.fromkeys(
+            ("effect_disposition", "finish_reason", "display_kind"), _is_token
+        ),
+        **dict.fromkeys(
+            (
+                "tool_calls",
+                "reasoning_details",
+                "codex_reasoning_items",
+                "codex_message_items",
+                "api_content",
+                "display_metadata",
+            ),
+            _blank_or(_is_json_start),
+        ),
     },
     "session_model_usage": {
         "billing_base_url": _blank_or(_is_url),
-        **dict.fromkeys(("billing_mode", "cost_status", "cost_source"), _blank_or(_is_token)),
+        **dict.fromkeys(
+            ("billing_mode", "cost_status", "cost_source"), _blank_or(_is_token)
+        ),
     },
 }
 
@@ -515,7 +634,9 @@ def _cell_fits(kind: str, name: str, value: Any, dest_types: dict[str, str]) -> 
     return not isinstance(value, str) or _text_shape_holds(kind, name, value)
 
 
-def _row_invariants_hold(kind: str, layout: tuple[str, ...], rows: Sequence[tuple[Any, ...]]) -> bool:
+def _row_invariants_hold(
+    kind: str, layout: tuple[str, ...], rows: Sequence[tuple[Any, ...]]
+) -> bool:
     """Cross-column invariants every writer honours, checked per record.
 
     ``handoff_error`` is only ever written together with ``handoff_state``
@@ -567,7 +688,9 @@ class LayoutEvidence:
             self.rows_by_width.setdefault(len(cells), []).append(cells)
 
 
-def infer_physical_layouts(evidence: LayoutEvidence, dest_types: dict[str, str]) -> dict[int, list[Optional[str]]]:
+def infer_physical_layouts(
+    evidence: LayoutEvidence, dest_types: dict[str, str]
+) -> dict[int, list[Optional[str]]]:
     """Infer which source column each record position holds, per field count.
 
     Salvaged records carry no schema. Every layout a real store can have is,
@@ -609,10 +732,16 @@ def infer_physical_layouts(evidence: LayoutEvidence, dest_types: dict[str, str])
         if not same_width:
             return True
         positions = {name: index for index, name in enumerate(layout)}
-        key = (len(layout), positions.get("handoff_error"), positions.get("handoff_state"))
+        key = (
+            len(layout),
+            positions.get("handoff_error"),
+            positions.get("handoff_state"),
+        )
         verdict = invariant_verdicts.get(key)
         if verdict is None:
-            verdict = invariant_verdicts[key] = _row_invariants_hold(kind, layout, same_width)
+            verdict = invariant_verdicts[key] = _row_invariants_hold(
+                kind, layout, same_width
+            )
         return verdict
 
     def accept(layout: tuple[str, ...], first_new: int) -> bool:
@@ -627,7 +756,9 @@ def infer_physical_layouts(evidence: LayoutEvidence, dest_types: dict[str, str])
     # while the table had exactly ``k`` columns (ADD COLUMN runs at startup,
     # before any row is written), so its layout is a chain state of exactly
     # that length.
-    survivors_by_width: dict[int, list[tuple[str, ...]]] = {w: [] for w in sorted(evidence.widths)}
+    survivors_by_width: dict[int, list[tuple[str, ...]]] = {
+        w: [] for w in sorted(evidence.widths)
+    }
     for layout in reachable_physical_layouts(kind, accept):
         bucket = survivors_by_width.get(len(layout))
         if bucket is not None and layout not in bucket:
@@ -689,11 +820,15 @@ def _execute_insert(
     dest: sqlite3.Connection, table: str, columns: list[str], values: list[Any]
 ) -> bool:
     quoted, placeholders = _quoted_columns(columns)
-    cursor = dest.execute(f'INSERT OR IGNORE INTO "{table}" ({quoted}) VALUES ({placeholders})', values)
+    cursor = dest.execute(
+        f'INSERT OR IGNORE INTO "{table}" ({quoted}) VALUES ({placeholders})', values
+    )
     return cursor.rowcount == 1
 
 
-def _copy_direct_tables(lf_conn: sqlite3.Connection, dest: sqlite3.Connection) -> dict[str, int]:
+def _copy_direct_tables(
+    lf_conn: sqlite3.Connection, dest: sqlite3.Connection
+) -> dict[str, int]:
     """Copy rows .recover managed to attribute to real canonical tables."""
     copied: dict[str, int] = {}
     for table in (*_CANONICAL_TABLES, *_AUXILIARY_TABLES):
@@ -701,7 +836,9 @@ def _copy_direct_tables(lf_conn: sqlite3.Connection, dest: sqlite3.Connection) -
         if not source_columns:
             continue
         dest_columns = _table_columns(dest, table)
-        if not dest_columns and table in _AUXILIARY_TABLE_SCHEMAS:  # lazily-created gateway table
+        if (
+            not dest_columns and table in _AUXILIARY_TABLE_SCHEMAS
+        ):  # lazily-created gateway table
             _AUXILIARY_TABLE_SCHEMAS[table](dest)
             dest_columns = _table_columns(dest, table)
         columns = [c for c in dest_columns if c in source_columns]
@@ -713,18 +850,28 @@ def _copy_direct_tables(lf_conn: sqlite3.Connection, dest: sqlite3.Connection) -
             copied[table] = 0
             continue
         before = _count_rows(dest, table)
-        dest.executemany(f'INSERT OR IGNORE INTO "{table}" ({quoted}) VALUES ({placeholders})', rows)
+        dest.executemany(
+            f'INSERT OR IGNORE INTO "{table}" ({quoted}) VALUES ({placeholders})', rows
+        )
         copied[table] = _count_rows(dest, table) - before
     return copied
 
 
-def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connection) -> dict[str, Any]:
+def map_lost_and_found_rows(
+    lf_conn: sqlite3.Connection, dest: sqlite3.Connection
+) -> dict[str, Any]:
     """Best-effort mapping of a .recover output DB into a fresh SessionDB."""
     report: dict[str, Any] = {
-        "direct_table_rows": {}, "mapped": {"sessions": 0, "messages": 0, "session_model_usage": 0},
-        "legacy_minimal_sessions": 0, "mapped_by_layout": 0, "unrecognized_layout_rows": 0,
-        "unrecognized_layout_widths": {}, "inferred_layouts": {},
-        "unmapped_rows": 0, "insert_conflicts": 0, "lost_and_found_tables": [],
+        "direct_table_rows": {},
+        "mapped": {"sessions": 0, "messages": 0, "session_model_usage": 0},
+        "legacy_minimal_sessions": 0,
+        "mapped_by_layout": 0,
+        "unrecognized_layout_rows": 0,
+        "unrecognized_layout_widths": {},
+        "inferred_layouts": {},
+        "unmapped_rows": 0,
+        "insert_conflicts": 0,
+        "lost_and_found_tables": [],
     }
     with _immediate_transaction(dest):
         report["direct_table_rows"] = _copy_direct_tables(lf_conn, dest)
@@ -733,7 +880,8 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
         # rows with a NULL session id / role / source were already rejected by classify_lost_and_found_row.
         targets: dict[str, tuple[list[str], dict[int, Any]]] = {}
         for kind_name, protected in (
-            ("sessions", ("id", "source")), ("messages", ("session_id", "role")),
+            ("sessions", ("id", "source")),
+            ("messages", ("session_id", "role")),
             ("session_model_usage", ("session_id", "model")),
         ):
             columns = _table_columns(dest, kind_name)
@@ -743,15 +891,21 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
             targets[kind_name] = (columns, defaults)
         dest_types = {table: _declared_types(dest, table) for table in targets}
         lf_tables = [
-            str(row[0]) for row in
-            lf_conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'lost_and_found%'")
+            str(row[0])
+            for row in lf_conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'lost_and_found%'"
+            )
         ]
         report["lost_and_found_tables"] = lf_tables
 
         def records():
             """Yield (kind, lf_rowid, nfield, cells) for every classifiable lost_and_found row."""
             for lf_table in lf_tables:
-                if _table_columns(lf_conn, lf_table)[:3] != ["rootpgno", "pgno", "nfield"]:
+                if _table_columns(lf_conn, lf_table)[:3] != [
+                    "rootpgno",
+                    "pgno",
+                    "nfield",
+                ]:
                     continue
                 for row in lf_conn.execute(f'SELECT * FROM "{lf_table}"'):
                     try:
@@ -760,7 +914,12 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
                         yield None, None, 0, ()
                         continue
                     cells = tuple(row[4 : 4 + max(nfield, 0)])
-                    yield classify_lost_and_found_row(nfield, cells), row[3], nfield, cells
+                    yield (
+                        classify_lost_and_found_row(nfield, cells),
+                        row[3],
+                        nfield,
+                        cells,
+                    )
 
         # Pass 1: stream the population once, keeping only what layout inference needs. The physical
         # layout is a property of the whole population (one store wrote all of them), so it is inferred
@@ -771,12 +930,16 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
                 report["unmapped_rows"] += 1
             else:
                 evidence[kind].add(cells)
-        layouts = {kind: infer_physical_layouts(evidence[kind], dest_types[kind]) for kind in targets}
+        layouts = {
+            kind: infer_physical_layouts(evidence[kind], dest_types[kind])
+            for kind in targets
+        }
         # Per kind and record width, the column each position resolved to (None where the surviving
         # layouts disagreed and the cell was left to the destination default).
         report["inferred_layouts"] = {
             kind: {str(width): list(layout) for width, layout in by_width.items()}
-            for kind, by_width in layouts.items() if by_width
+            for kind, by_width in layouts.items()
+            if by_width
         }
 
         # Pass 2: insert. Records whose width resolved to a layout are mapped by column name (#101409);
@@ -786,7 +949,9 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
                 continue  # counted in pass 1
             columns, defaults = targets[kind]
             layout = layouts[kind].get(len(cells))
-            legacy_minimal = kind == "sessions" and nfield == SESSIONS_LEGACY_MINIMAL_NFIELD
+            legacy_minimal = (
+                kind == "sessions" and nfield == SESSIONS_LEGACY_MINIMAL_NFIELD
+            )
             if layout is None and not legacy_minimal:
                 report["unrecognized_layout_rows"] += 1
                 widths = report["unrecognized_layout_widths"].setdefault(kind, [])
@@ -796,7 +961,12 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
                 if layout is not None:
                     # messages.id is a rowid alias: NULL in the record, carried by the lost_and_found row id.
                     inserted = _insert_named_row(
-                        dest, kind, layout, cells, columns, defaults,
+                        dest,
+                        kind,
+                        layout,
+                        cells,
+                        columns,
+                        defaults,
                         {"id": lf_rowid} if kind == "messages" else None,
                     )
                     report["mapped_by_layout"] += int(inserted)
@@ -804,21 +974,27 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
                     # A 14-field record matching no known layout (torn cells, or a pre-history store):
                     # salvage identity + timing rather than guessing 14 positional meanings.
                     row_values = (
-                        cells[0], cells[1] if _looks_like_source(cells[1]) else "recovered",
+                        cells[0],
+                        cells[1] if _looks_like_source(cells[1]) else "recovered",
                         _heuristic_started_at(cells),
                         f"{STUB_TITLE_PREFIX}] legacy session row (layout unknown)",
                     )
-                    inserted = dest.execute(
-                        "INSERT OR IGNORE INTO sessions (id, source, started_at, title) VALUES (?, ?, ?, ?)",
-                        row_values,
-                    ).rowcount == 1
+                    inserted = (
+                        dest.execute(
+                            "INSERT OR IGNORE INTO sessions (id, source, started_at, title) VALUES (?, ?, ?, ?)",
+                            row_values,
+                        ).rowcount
+                        == 1
+                    )
                     report["legacy_minimal_sessions"] += int(inserted)
                 else:
-                    values = list(cells[:len(columns)])
+                    values = list(cells[: len(columns)])
                     if kind == "messages":
                         values[0] = lf_rowid
                     elif kind == "sessions":
-                        columns, defaults = _sessions_prefix_columns(columns, defaults, cells)
+                        columns, defaults = _sessions_prefix_columns(
+                            columns, defaults, cells
+                        )
                     inserted = _insert_prefix_row(dest, kind, columns, values, defaults)
             except sqlite3.DatabaseError:
                 report["unmapped_rows"] += 1
@@ -833,7 +1009,11 @@ def map_lost_and_found_rows(lf_conn: sqlite3.Connection, dest: sqlite3.Connectio
 def stub_missing_parent_sessions(dest: sqlite3.Connection) -> dict[str, Any]:
     """Fabricate clearly-marked placeholder parents for salvaged child rows: children (messages,
     model-usage rows) are NEVER deleted for FK cleanup — a stub parent beats losing the only copy."""
-    result: dict[str, Any] = {"sessions_stubbed": 0, "messages_retained": 0, "usage_rows_retained": 0}
+    result: dict[str, Any] = {
+        "sessions_stubbed": 0,
+        "messages_retained": 0,
+        "usage_rows_retained": 0,
+    }
     with _immediate_transaction(dest):
         orphan_ids: dict[str, dict[str, Any]] = {}
         for session_id, first_ts, count in dest.execute(
@@ -848,7 +1028,9 @@ def stub_missing_parent_sessions(dest: sqlite3.Connection) -> dict[str, Any]:
             "SELECT DISTINCT u.session_id FROM session_model_usage AS u WHERE u.session_id IS NOT NULL AND NOT "
             "EXISTS (SELECT 1 FROM sessions WHERE sessions.id = u.session_id)"
         ):
-            orphan_ids.setdefault(str(session_id), {"started_at": 0.0, "message_count": 0})
+            orphan_ids.setdefault(
+                str(session_id), {"started_at": 0.0, "message_count": 0}
+            )
         titles = _placeholder_titles(dest, _STUB_TITLE_LABEL)
         for session_id, info in sorted(orphan_ids.items()):
             title = next(titles)
@@ -859,7 +1041,9 @@ def stub_missing_parent_sessions(dest: sqlite3.Connection) -> dict[str, Any]:
             )
             result["sessions_stubbed"] += 1
             result["messages_retained"] += info["message_count"]
-        result["usage_rows_retained"] = int(dest.execute("SELECT COUNT(*) FROM session_model_usage").fetchone()[0])
+        result["usage_rows_retained"] = int(
+            dest.execute("SELECT COUNT(*) FROM session_model_usage").fetchone()[0]
+        )
 
         # Repair dangling intra-sessions references without deleting rows.
         dest.execute(
@@ -870,7 +1054,9 @@ def stub_missing_parent_sessions(dest: sqlite3.Connection) -> dict[str, Any]:
             "UPDATE sessions SET system_prompt_hash = NULL WHERE system_prompt_hash IS NOT NULL AND NOT EXISTS "
             "(SELECT 1 FROM system_prompts WHERE system_prompts.hash = sessions.system_prompt_hash)"
         )
-        dest.execute(f"UPDATE sessions SET tool_names = NULL WHERE {_DANGLING_TOOL_PIN}")
+        dest.execute(
+            f"UPDATE sessions SET tool_names = NULL WHERE {_DANGLING_TOOL_PIN}"
+        )
     return result
 
 

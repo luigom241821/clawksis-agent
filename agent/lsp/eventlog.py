@@ -10,6 +10,7 @@ by the distinct pairs touched in one process, each capped at ``_ANNOUNCE_CAP`` k
 bucket resets and the first-seen line re-fires once, so per-file keys can't grow for the life of
 a gateway process (#62950).
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,14 +24,20 @@ event_log = logging.getLogger("clawk.lint.lsp")
 
 _announce_lock = threading.Lock()
 _ANNOUNCE_CAP = 512
-_announced_active: set = set()        # keys: (server_id, workspace_root)
-_announced_unavailable: set = set()   # keys: (server_id, binary_path_or_name)
-_announced_no_root: set = set()       # keys: (server_id, file_path)
-_announced_skipped: set = set()       # keys: (server_id, workspace_root)
-_announced_excluded: set = set()      # keys: (server_id, workspace_root)
-_announced_untrusted: set = set()     # keys: (server_id, workspace_root)
-_ALL_BUCKETS = (_announced_active, _announced_unavailable, _announced_no_root, _announced_skipped, _announced_excluded,
-                _announced_untrusted)
+_announced_active: set = set()  # keys: (server_id, workspace_root)
+_announced_unavailable: set = set()  # keys: (server_id, binary_path_or_name)
+_announced_no_root: set = set()  # keys: (server_id, file_path)
+_announced_skipped: set = set()  # keys: (server_id, workspace_root)
+_announced_excluded: set = set()  # keys: (server_id, workspace_root)
+_announced_untrusted: set = set()  # keys: (server_id, workspace_root)
+_ALL_BUCKETS = (
+    _announced_active,
+    _announced_unavailable,
+    _announced_no_root,
+    _announced_skipped,
+    _announced_excluded,
+    _announced_untrusted,
+)
 
 
 def _short_path(file_path: str) -> str:
@@ -50,14 +57,18 @@ def _emit(server_id: str, level: int, message: str) -> None:
     event_log.log(level, "lsp[%s] %s", server_id, message)
 
 
-def _emit_once(bucket: set, key: tuple, server_id: str, level: int, first: str, repeat: str) -> None:
+def _emit_once(
+    bucket: set, key: tuple, server_id: str, level: int, first: str, repeat: str
+) -> None:
     """Log *first* at *level* the first time *key* is seen, *repeat* at DEBUG thereafter."""
     with _announce_lock:
         is_first = key not in bucket
         if is_first and len(bucket) >= _ANNOUNCE_CAP:
             bucket.clear()
         bucket.add(key)
-    _emit(server_id, level if is_first else logging.DEBUG, first if is_first else repeat)
+    _emit(
+        server_id, level if is_first else logging.DEBUG, first if is_first else repeat
+    )
 
 
 # ---- Public event helpers — call these from the LSP layer ----
@@ -75,8 +86,14 @@ def log_disabled(server_id: str, file_path: str, reason: str) -> None:
 
 def log_active(server_id: str, workspace_root: str) -> None:
     """A client started for (server_id, workspace_root).  INFO once per pair, DEBUG thereafter."""
-    _emit_once(_announced_active, (server_id, workspace_root), server_id, logging.INFO,
-               f"active for {workspace_root}", f"reused client for {workspace_root}")
+    _emit_once(
+        _announced_active,
+        (server_id, workspace_root),
+        server_id,
+        logging.INFO,
+        f"active for {workspace_root}",
+        f"reused client for {workspace_root}",
+    )
 
 
 def log_diagnostics(server_id: str, file_path: str, count: int) -> None:
@@ -87,13 +104,18 @@ def log_diagnostics(server_id: str, file_path: str, count: int) -> None:
 def log_no_project_root(server_id: str, file_path: str) -> None:
     """File had no recognised project marker.  INFO once per file, DEBUG thereafter."""
     msg = f"no project root for {_short_path(file_path)}"
-    _emit_once(_announced_no_root, (server_id, file_path), server_id, logging.INFO, msg, msg)
+    _emit_once(
+        _announced_no_root, (server_id, file_path), server_id, logging.INFO, msg, msg
+    )
 
 
 def log_server_unavailable(server_id: str, binary_or_pkg: str) -> None:
     """Server binary unresolved.  WARNING once per (server_id, binary), DEBUG thereafter."""
     _emit_once(
-        _announced_unavailable, (server_id, binary_or_pkg), server_id, logging.WARNING,
+        _announced_unavailable,
+        (server_id, binary_or_pkg),
+        server_id,
+        logging.WARNING,
         f"server unavailable: {binary_or_pkg} not found "
         "(install via `clawk lsp install <id>` or set lsp.servers.<id>.command)",
         f"server still unavailable: {binary_or_pkg}",
@@ -107,41 +129,79 @@ def log_timeout(server_id: str, file_path: str, kind: str = "diagnostics") -> No
 
 def log_server_error(server_id: str, file_path: str, exc: BaseException) -> None:
     """An unexpected exception bubbled out of the LSP layer.  WARNING."""
-    _emit(server_id, logging.WARNING, f"unexpected error for {_short_path(file_path)}: {type(exc).__name__}: {exc}")
+    _emit(
+        server_id,
+        logging.WARNING,
+        f"unexpected error for {_short_path(file_path)}: {type(exc).__name__}: {exc}",
+    )
 
 
 def log_spawn_failed(server_id: str, workspace_root: str, exc: BaseException) -> None:
     """The LSP server failed to spawn or initialize.  WARNING."""
-    _emit(server_id, logging.WARNING, f"spawn/initialize failed for {workspace_root}: {type(exc).__name__}: {exc}")
+    _emit(
+        server_id,
+        logging.WARNING,
+        f"spawn/initialize failed for {workspace_root}: {type(exc).__name__}: {exc}",
+    )
 
 
-def log_skipped_broken(server_id: str, workspace_root: str, file_path: str, retry_in: Optional[float] = None) -> None:
+def log_skipped_broken(
+    server_id: str,
+    workspace_root: str,
+    file_path: str,
+    retry_in: Optional[float] = None,
+) -> None:
     """A request was skipped because ``(server_id, root)`` is marked broken.  INFO once per root, then DEBUG:
     at default log levels a skipped file and a clean file otherwise look identical (``log_clean`` is DEBUG).
     ``retry_in`` (seconds, from ``lsp.broken_retry_seconds``) names when the pair gets another try."""
-    until = f"retry in {retry_in:.0f}s" if retry_in is not None else "no diagnostics for this root until restart"
-    _emit_once(_announced_skipped, (server_id, workspace_root), server_id, logging.INFO,
-               f"skipping {_short_path(file_path)}: {workspace_root} marked broken after an earlier failure ({until})",
-               f"skipping {_short_path(file_path)}: {workspace_root} marked broken")
+    until = (
+        f"retry in {retry_in:.0f}s"
+        if retry_in is not None
+        else "no diagnostics for this root until restart"
+    )
+    _emit_once(
+        _announced_skipped,
+        (server_id, workspace_root),
+        server_id,
+        logging.INFO,
+        f"skipping {_short_path(file_path)}: {workspace_root} marked broken after an earlier failure ({until})",
+        f"skipping {_short_path(file_path)}: {workspace_root} marked broken",
+    )
 
 
-def log_root_excluded(server_id: str, workspace_root: str, file_path: str, *, invalid: bool = False) -> None:
+def log_root_excluded(
+    server_id: str, workspace_root: str, file_path: str, *, invalid: bool = False
+) -> None:
     """``workspace_root`` matches ``lsp.exclude_roots`` (or the key is malformed and every root is skipped).
     INFO once per root — a deliberate gate must still be visible, or an excluded file looks like a clean one —
     DEBUG thereafter."""
-    why = "lsp.exclude_roots is not a list (fix the key)" if invalid else "matches lsp.exclude_roots"
-    _emit_once(_announced_excluded, (server_id, workspace_root), server_id, logging.INFO,
-               f"skipping {_short_path(file_path)}: {workspace_root} {why}",
-               f"skipping {_short_path(file_path)}: {workspace_root} excluded")
+    why = (
+        "lsp.exclude_roots is not a list (fix the key)"
+        if invalid
+        else "matches lsp.exclude_roots"
+    )
+    _emit_once(
+        _announced_excluded,
+        (server_id, workspace_root),
+        server_id,
+        logging.INFO,
+        f"skipping {_short_path(file_path)}: {workspace_root} {why}",
+        f"skipping {_short_path(file_path)}: {workspace_root} excluded",
+    )
 
 
 def log_untrusted_skipped(server_id: str, workspace_root: str, file_path: str) -> None:
     """``server_id`` is not safe in an untrusted workspace and ``workspace_root`` is not trusted.
     INFO once per root (a deliberate gate must not look like a clean file), DEBUG thereafter."""
-    _emit_once(_announced_untrusted, (server_id, workspace_root), server_id, logging.INFO,
-               f"skipped: untrusted workspace {workspace_root} ({_short_path(file_path)}); "
-               "add it to lsp.trusted_workspaces to run this server there",
-               f"skipped: untrusted workspace {workspace_root}")
+    _emit_once(
+        _announced_untrusted,
+        (server_id, workspace_root),
+        server_id,
+        logging.INFO,
+        f"skipped: untrusted workspace {workspace_root} ({_short_path(file_path)}); "
+        "add it to lsp.trusted_workspaces to run this server there",
+        f"skipped: untrusted workspace {workspace_root}",
+    )
 
 
 def log_reaped(keys: list[tuple[str, str]], idle_timeout: float) -> None:
@@ -153,7 +213,11 @@ def log_reaped(keys: list[tuple[str, str]], idle_timeout: float) -> None:
     with _announce_lock:
         _announced_active.difference_update(keys)
     summary = ", ".join(f"{sid} ({root})" for sid, root in keys)
-    _emit("reaper", logging.INFO, f"reaped {len(keys)} idle client(s) after {idle_timeout:.0f}s: {summary}")
+    _emit(
+        "reaper",
+        logging.INFO,
+        f"reaped {len(keys)} idle client(s) after {idle_timeout:.0f}s: {summary}",
+    )
 
 
 def log_released(keys: list[tuple[str, str]], reason: str) -> None:
@@ -162,7 +226,9 @@ def log_released(keys: list[tuple[str, str]], reason: str) -> None:
     with _announce_lock:
         _announced_active.difference_update(keys)
     summary = ", ".join(f"{sid} ({root})" for sid, root in keys)
-    _emit("reaper", logging.INFO, f"released {len(keys)} client(s) ({reason}): {summary}")
+    _emit(
+        "reaper", logging.INFO, f"released {len(keys)} client(s) ({reason}): {summary}"
+    )
 
 
 def reset_announce_caches() -> None:

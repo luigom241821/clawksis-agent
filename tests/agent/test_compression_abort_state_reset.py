@@ -25,6 +25,7 @@ from unittest.mock import patch
 def _make_agent(session_db):
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
         from run_agent import AIAgent
+
         agent = AIAgent(
             api_key="test-key",
             base_url="https://openrouter.ai/api/v1",
@@ -81,15 +82,14 @@ class TestAbortPathsResetPerAttemptState:
             compress_context,
             conversation_history_after_compression,
         )
+
         agent.context_compressor = _InPlaceSuccessCompressor()
         compacted, _ = compress_context(
             agent, messages, "system", approx_tokens=100_000
         )
         assert agent._last_compaction_in_place is True
         assert agent._last_compression_attempt_in_place is True
-        return compacted, conversation_history_after_compression(
-            agent, compacted, None
-        )
+        return compacted, conversation_history_after_compression(agent, compacted, None)
 
     def test_breaker_blocked_skip_retains_previous_baseline(self):
         """Pre-lock breaker skip after an in-place success must keep baseline."""
@@ -131,5 +131,3 @@ class TestAbortPathsResetPerAttemptState:
             # the compacted rows).
             assert new_history is history
             db.close()
-
-

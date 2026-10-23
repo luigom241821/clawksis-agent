@@ -11,9 +11,15 @@ from clawk_platform.host import facts, summary
 
 @pytest.fixture
 def n1x(monkeypatch):
-    pinned = {"os_family": "win32", "native_arch": "arm64", "gpu_class": "unknown",
-              "cpu_model": "NVIDIA RTX Spark N1X", "cpu_vendor": "NVIDIA", "ram_total_bytes": 128 * 2**30,
-              "nvidia_gpus": ()}
+    pinned = {
+        "os_family": "win32",
+        "native_arch": "arm64",
+        "gpu_class": "unknown",
+        "cpu_model": "NVIDIA RTX Spark N1X",
+        "cpu_vendor": "NVIDIA",
+        "ram_total_bytes": 128 * 2**30,
+        "nvidia_gpus": (),
+    }
     for name, value in pinned.items():
         monkeypatch.setattr(facts, name, lambda value=value: value)
     monkeypatch.setattr(summary, "_account", lambda: ("ada", "Ada Lovelace"))
@@ -23,7 +29,9 @@ def n1x(monkeypatch):
 
 
 def _call(params: dict) -> dict:
-    return server.handle_request({"jsonrpc": "2.0", "id": 7, "method": "machine.facts", "params": params})
+    return server.handle_request(
+        {"jsonrpc": "2.0", "id": 7, "method": "machine.facts", "params": params}
+    )
 
 
 def test_machine_facts_over_the_wire(n1x):

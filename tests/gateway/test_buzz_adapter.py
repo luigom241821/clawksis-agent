@@ -60,6 +60,7 @@ _ENV_VARS = (
     "BUZZ_AUTH_TAG",
 )
 
+
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch, tmp_path):
     """Keep tests hermetic: no ambient Buzz env vars or real credentials."""
@@ -67,6 +68,7 @@ def _clean_env(monkeypatch, tmp_path):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(_buzz_mod, "_DEFAULT_CREDENTIALS_DIR", tmp_path / "no-creds")
     yield
+
 
 def _event(event_id, pubkey=OTHER_PUBKEY, content="hello", created_at=1000, kind=9):
     return {
@@ -78,10 +80,13 @@ def _event(event_id, pubkey=OTHER_PUBKEY, content="hello", created_at=1000, kind
         "tags": [["h", CHANNEL]],
     }
 
+
 def _make_adapter(extra=None):
     from gateway.config import PlatformConfig
 
-    cfg = PlatformConfig(enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})})
+    cfg = PlatformConfig(
+        enabled=True, extra={"relay_url": "https://test.relay", **(extra or {})}
+    )
     adapter = BuzzAdapter(cfg)
     adapter._self_pubkey = SELF_PUBKEY
     adapter._self_npub = SELF_NPUB
@@ -91,6 +96,7 @@ def _make_adapter(extra=None):
     # tests are authorized by default and override the callback at the boundary.
     adapter.set_authorization_check(lambda *_args: True)
     return adapter
+
 
 class _ScriptedCli:
     """Fake ``_run_cli`` that routes on the buzz subcommand and records calls."""
@@ -112,27 +118,34 @@ class _ScriptedCli:
             return queue[0]
         return 0, "[]", ""
 
+
 # ── bech32 / identity helpers ─────────────────────────────────────────────
 
-class TestBech32Helpers:
 
+class TestBech32Helpers:
     def test_hex_to_npub_known_pair(self):
         assert hex_to_npub(SELF_PUBKEY) == SELF_NPUB
 
     def test_npub_to_hex_known_pair(self):
         assert npub_to_hex(SELF_NPUB) == SELF_PUBKEY
 
+
 # ── Adapter init / config precedence ──────────────────────────────────────
 
-class TestBuzzAdapterInit:
 
+class TestBuzzAdapterInit:
     def test_env_overrides_config(self, monkeypatch):
         monkeypatch.setenv("BUZZ_RELAY_URL", "https://env.relay")
         from gateway.config import PlatformConfig
-        adapter = BuzzAdapter(PlatformConfig(enabled=True, extra={"relay_url": "https://cfg.relay"}))
+
+        adapter = BuzzAdapter(
+            PlatformConfig(enabled=True, extra={"relay_url": "https://cfg.relay"})
+        )
         assert adapter.relay_url == "https://env.relay"
 
+
 # ── Multiplex secondary-profile scope (#98738) ─────────────────────────────
+
 
 @pytest.fixture
 def multiplex_scope():
@@ -155,6 +168,7 @@ def multiplex_scope():
         reset_secret_scope(token)
     set_multiplex_active(False)
 
+
 @pytest.fixture
 def default_profile_env(monkeypatch):
     """The default profile's YAML-to-env bridge output in os.environ."""
@@ -169,8 +183,8 @@ def default_profile_env(monkeypatch):
     monkeypatch.setenv("BUZZ_PRIVATE_KEY", "nsec1default")
     monkeypatch.setenv("BUZZ_AUTH_TAG", '["auth","default-profile-tag","","x"]')
 
-class TestMultiplexProfileScope:
 
+class TestMultiplexProfileScope:
     def test_secondary_extra_wins_over_default_profile_env(
         self, multiplex_scope, default_profile_env, tmp_path
     ):
@@ -344,7 +358,9 @@ class TestMultiplexProfileScope:
             finally:
                 reset_clawk_home_override(token)
 
-    def test_env_enablement_scoped_returns_none(self, multiplex_scope, default_profile_env):
+    def test_env_enablement_scoped_returns_none(
+        self, multiplex_scope, default_profile_env
+    ):
         """Scoped env enablement must not fabricate Buzz for a profile from
         the default profile's env values."""
         multiplex_scope()
@@ -378,7 +394,16 @@ class TestMultiplexProfileScope:
         cli.write_text("#!/bin/sh\n", encoding="utf-8")
         calls = {}
 
-        async def fake_exec(cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=None):
+        async def fake_exec(
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=None,
+        ):
             calls["relay"] = relay_url
             return 0, '{"accepted": true, "event_id": "e1"}', ""
 
@@ -447,9 +472,7 @@ class TestMultiplexProfileScope:
         tags = [t for t in ws.sent[0][1]["tags"] if t and t[0] == "auth"]
         assert tags == []
 
-    def test_ws_auth_tag_scoped_profile_uses_its_own_tag(
-        self, multiplex_scope
-    ):
+    def test_ws_auth_tag_scoped_profile_uses_its_own_tag(self, multiplex_scope):
         """Positive control: a tag present in the profile's own secret scope
         IS attached to the NIP-42 auth event."""
         import asyncio as _asyncio
@@ -477,9 +500,7 @@ class TestMultiplexProfileScope:
         tags = [t for t in ws.sent[0][1]["tags"] if t and t[0] == "auth"]
         assert tags == [json.loads(profile_tag)]
 
-    def test_ws_auth_tag_unscoped_default_profile_keeps_env(
-        self, default_profile_env
-    ):
+    def test_ws_auth_tag_unscoped_default_profile_keeps_env(self, default_profile_env):
         """The default profile constructs unscoped even under multiplex, so
         its env-provided auth tag still applies (legacy behavior kept)."""
         import asyncio as _asyncio
@@ -536,9 +557,7 @@ class TestMultiplexProfileScope:
             is True
         )
 
-    def test_validate_config_unscoped_keeps_env_precedence(
-        self, default_profile_env
-    ):
+    def test_validate_config_unscoped_keeps_env_precedence(self, default_profile_env):
         """Single-profile/unscoped: env relay + env key still validate even
         with an empty extra mapping."""
         from gateway.config import PlatformConfig
@@ -557,7 +576,16 @@ class TestMultiplexProfileScope:
         cli.write_text("#!/bin/sh\n", encoding="utf-8")
         calls = {}
 
-        async def fake_exec(cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=None):
+        async def fake_exec(
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=None,
+        ):
             calls["args"] = args
             return 0, '{"accepted": true, "event_id": "e1"}', ""
 
@@ -593,7 +621,16 @@ class TestMultiplexProfileScope:
         cli = tmp_path / "buzz"
         cli.write_text("#!/bin/sh\n", encoding="utf-8")
 
-        async def fake_exec(cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=None):
+        async def fake_exec(
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=None,
+        ):
             raise AssertionError("CLI must not run without a resolved target")
 
         monkeypatch.setattr(_buzz_mod, "_exec_buzz", fake_exec)
@@ -613,12 +650,15 @@ class TestMultiplexProfileScope:
         assert result.get("error")
         assert "success" not in result
 
+
 # ── CLI error contract ────────────────────────────────────────────────────
 
-class TestCliErrorContract:
 
+class TestCliErrorContract:
     def test_parses_json_error(self):
-        msg = _cli_error_message('{"error":"relay_error","message":"boom","retryable":false}', 2)
+        msg = _cli_error_message(
+            '{"error":"relay_error","message":"boom","retryable":false}', 2
+        )
         assert "relay_error" in msg and "boom" in msg and "exit 2" in msg
 
     @pytest.mark.parametrize(
@@ -626,17 +666,19 @@ class TestCliErrorContract:
         [
             "x" * 100_000,
             json.dumps({"error": "relay_error", "message": "x" * 100_000}),
-        ], ids=["plain-large", "json-large"],
+        ],
+        ids=["plain-large", "json-large"],
     )
     def test_bounds_untrusted_cli_error_output(self, stderr):
         msg = _cli_error_message(stderr, 2)
         assert len(msg) <= 900
         assert msg.endswith("...")
 
+
 # ── Seeding / high-water mark / de-dupe ───────────────────────────────────
 
-class TestPollingDedupe:
 
+class TestPollingDedupe:
     @pytest.fixture
     def adapter(self):
         a = _make_adapter()
@@ -652,10 +694,14 @@ class TestPollingDedupe:
     @pytest.mark.asyncio
     async def test_seed_sets_high_water_mark_without_dispatch(self, adapter):
         cli = _ScriptedCli()
-        cli.script("messages", "get", [
-            _event("e1", content="@Chip old history", created_at=100),
-            _event("e2", content="@Chip newer history", created_at=200),
-        ])
+        cli.script(
+            "messages",
+            "get",
+            [
+                _event("e1", content="@Chip old history", created_at=100),
+                _event("e2", content="@Chip newer history", created_at=200),
+            ],
+        )
         adapter._run_cli = cli
         await adapter._seed_channel(CHANNEL, chat_type="group")
 
@@ -668,16 +714,22 @@ class TestPollingDedupe:
     @pytest.mark.asyncio
     async def test_new_event_dispatched_once(self, adapter):
         cli = _ScriptedCli()
-        cli.script("messages", "get", [_event("e1", content="@Chip hi", created_at=100)])
+        cli.script(
+            "messages", "get", [_event("e1", content="@Chip hi", created_at=100)]
+        )
         adapter._run_cli = cli
         await adapter._seed_channel(CHANNEL, chat_type="group")
 
         # Poll 1: seeded event + a genuinely new mention
         cli.responses.clear()
-        cli.script("messages", "get", [
-            _event("e1", content="@Chip hi", created_at=100),
-            _event("e2", content="hey @Chip, ping", created_at=150),
-        ])
+        cli.script(
+            "messages",
+            "get",
+            [
+                _event("e1", content="@Chip hi", created_at=100),
+                _event("e2", content="hey @Chip, ping", created_at=150),
+            ],
+        )
         await adapter._poll_channel(CHANNEL)
         assert [d["message_id"] for d in adapter._dispatched] == ["e2"]
         assert adapter._dispatched[0]["text"] == "hey @Chip, ping"
@@ -688,21 +740,27 @@ class TestPollingDedupe:
         assert len(adapter._dispatched) == 1
 
     @pytest.mark.asyncio
-    async def test_malformed_attachment_url_does_not_abort_following_event(self, adapter):
+    async def test_malformed_attachment_url_does_not_abort_following_event(
+        self, adapter
+    ):
         adapter._channel_state[CHANNEL] = {
             "chat_type": "group",
             "last_ts": 0,
             "seen": {},
         }
-        malformed = _event("malformed-attachment", content="background chatter", created_at=159)
-        malformed["tags"].append([
-            "imeta",
-            "url https://[invalid/media.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename invalid.bin",
-        ])
+        malformed = _event(
+            "malformed-attachment", content="background chatter", created_at=159
+        )
+        malformed["tags"].append(
+            [
+                "imeta",
+                "url https://[invalid/media.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename invalid.bin",
+            ]
+        )
         valid = _event("following-valid", content="@Chip still there?", created_at=160)
         cli = _ScriptedCli()
         cli.script("messages", "get", [malformed, valid])
@@ -710,22 +768,26 @@ class TestPollingDedupe:
 
         await adapter._poll_channel(CHANNEL)
 
-        assert [item["message_id"] for item in adapter._dispatched] == ["following-valid"]
+        assert [item["message_id"] for item in adapter._dispatched] == [
+            "following-valid"
+        ]
+
 
 class TestInboundAttachments:
-
     def test_imeta_total_declared_bytes_are_bounded(self):
         event = _event("bounded", content="@Chip files")
         per_file_size = 6 * 1024 * 1024
         for index in range(4):
-            event["tags"].append([
-                "imeta",
-                f"url https://test.relay/media/{index}.bin",
-                "m application/octet-stream",
-                "x " + format(index + 1, "064x"),
-                f"size {per_file_size}",
-                f"filename {index}.bin",
-            ])
+            event["tags"].append(
+                [
+                    "imeta",
+                    f"url https://test.relay/media/{index}.bin",
+                    "m application/octet-stream",
+                    "x " + format(index + 1, "064x"),
+                    f"size {per_file_size}",
+                    f"filename {index}.bin",
+                ]
+            )
 
         attachments = BuzzAdapter._imeta_attachments(event)
 
@@ -758,13 +820,15 @@ class TestInboundAttachments:
         )
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay/media/verified.bin",
-            "sha256": digest,
-            "size": len(payload),
-            "filename": "verified.txt",
-            "mime_type": "text/plain",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay/media/verified.bin",
+                "sha256": digest,
+                "size": len(payload),
+                "filename": "verified.txt",
+                "mime_type": "text/plain",
+            }
+        )
 
         assert cached is not None
         assert cached.kind == "document"
@@ -772,7 +836,9 @@ class TestInboundAttachments:
         assert Path(cached.path).read_bytes() == payload
 
     @pytest.mark.asyncio
-    async def test_download_rejects_untrusted_attachment_host_before_network(self, monkeypatch):
+    async def test_download_rejects_untrusted_attachment_host_before_network(
+        self, monkeypatch
+    ):
         import httpx
 
         def must_not_create_client(**kwargs):
@@ -781,18 +847,22 @@ class TestInboundAttachments:
         monkeypatch.setattr(httpx, "AsyncClient", must_not_create_client)
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://untrusted.example/media/file.bin",
-            "sha256": "a" * 64,
-            "size": 12,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://untrusted.example/media/file.bin",
+                "sha256": "a" * 64,
+                "size": 12,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is None
 
     @pytest.mark.asyncio
-    async def test_download_rejects_unconfigured_nondefault_port_before_network(self, monkeypatch):
+    async def test_download_rejects_unconfigured_nondefault_port_before_network(
+        self, monkeypatch
+    ):
         import httpx
 
         def must_not_create_client(**kwargs):
@@ -801,18 +871,22 @@ class TestInboundAttachments:
         monkeypatch.setattr(httpx, "AsyncClient", must_not_create_client)
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay:8443/media/file.bin",
-            "sha256": "a" * 64,
-            "size": 12,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay:8443/media/file.bin",
+                "sha256": "a" * 64,
+                "size": 12,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is None
 
     @pytest.mark.asyncio
-    async def test_download_allows_explicitly_configured_nondefault_port(self, monkeypatch):
+    async def test_download_allows_explicitly_configured_nondefault_port(
+        self, monkeypatch
+    ):
         import httpx
 
         payload = b"x"
@@ -832,13 +906,15 @@ class TestInboundAttachments:
         )
         adapter = _make_adapter({"attachment_hosts": ["test.relay:8443"]})
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay:8443/media/file.bin",
-            "sha256": hashlib.sha256(payload).hexdigest(),
-            "size": 1,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay:8443/media/file.bin",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": 1,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is not None
 
@@ -855,14 +931,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event("unaddressed-attachment", content="shared file")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 12",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 12",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -887,14 +965,16 @@ class TestInboundAttachments:
 
         adapter._dispatch_message = capture
         event = _event("failed-attachment", content="@Chip inspect this")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 12",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 12",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -903,29 +983,31 @@ class TestInboundAttachments:
 
     def test_imeta_sanitizes_filename_and_rejects_incomplete_metadata(self):
         event = _event("metadata", content="@Chip files")
-        event["tags"].extend([
+        event["tags"].extend(
             [
-                "imeta",
-                "url https://test.relay/media/valid.bin",
-                "m text/plain",
-                "x " + "a" * 64,
-                "size 12",
-                "filename ../../private/report.txt",
-            ],
-            [
-                "imeta",
-                "url http://test.relay/media/insecure.bin",
-                "x " + "b" * 64,
-                "size 12",
-                "filename insecure.bin",
-            ],
-            [
-                "imeta",
-                "url https://test.relay/media/no-hash.bin",
-                "size 12",
-                "filename no-hash.bin",
-            ],
-        ])
+                [
+                    "imeta",
+                    "url https://test.relay/media/valid.bin",
+                    "m text/plain",
+                    "x " + "a" * 64,
+                    "size 12",
+                    "filename ../../private/report.txt",
+                ],
+                [
+                    "imeta",
+                    "url http://test.relay/media/insecure.bin",
+                    "x " + "b" * 64,
+                    "size 12",
+                    "filename insecure.bin",
+                ],
+                [
+                    "imeta",
+                    "url https://test.relay/media/no-hash.bin",
+                    "size 12",
+                    "filename no-hash.bin",
+                ],
+            ]
+        )
 
         attachments = BuzzAdapter._imeta_attachments(event)
 
@@ -955,14 +1037,16 @@ class TestInboundAttachments:
 
         adapter._dispatch_message = capture
         event = _event("attachment-only", content="")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 12",
-            "filename attachment.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 12",
+                "filename attachment.bin",
+            ]
+        )
 
         await adapter._handle_event(
             DM_CHANNEL,
@@ -988,8 +1072,12 @@ class TestInboundAttachments:
         event = _event("malformed-attachment-only", content="")
         event["tags"].append(["imeta", "url definitely-not-a-url"])
 
-        await adapter._handle_event(DM_CHANNEL, adapter._channel_state[DM_CHANNEL], event)
-        await adapter._handle_event(DM_CHANNEL, adapter._channel_state[DM_CHANNEL], event)
+        await adapter._handle_event(
+            DM_CHANNEL, adapter._channel_state[DM_CHANNEL], event
+        )
+        await adapter._handle_event(
+            DM_CHANNEL, adapter._channel_state[DM_CHANNEL], event
+        )
 
         adapter._download_attachment.assert_not_awaited()
         adapter._dispatch_message.assert_awaited_once()
@@ -1020,14 +1108,16 @@ class TestInboundAttachments:
         adapter._dispatch_message = AsyncMock()
         event = _event("excess-imeta", content="@Chip inspect")
         for index in range(5):
-            event["tags"].append([
-                "imeta",
-                f"url https://test.relay/media/{index}.bin",
-                "m application/octet-stream",
-                "x " + format(index + 1, "064x"),
-                "size 1",
-                f"filename {index}.bin",
-            ])
+            event["tags"].append(
+                [
+                    "imeta",
+                    f"url https://test.relay/media/{index}.bin",
+                    "m application/octet-stream",
+                    "x " + format(index + 1, "064x"),
+                    "size 1",
+                    f"filename {index}.bin",
+                ]
+            )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1040,14 +1130,16 @@ class TestInboundAttachments:
 
     def test_imeta_bounds_filename_to_filesystem_safe_utf8_length(self):
         event = _event("long-name", content="@Chip file")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename " + ("é" * 180) + ".pdf",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename " + ("é" * 180) + ".pdf",
+            ]
+        )
 
         filename = BuzzAdapter._imeta_attachments(event)[0]["filename"]
 
@@ -1055,7 +1147,9 @@ class TestInboundAttachments:
         assert filename.endswith(".pdf")
 
     @pytest.mark.asyncio
-    async def test_cache_write_failure_is_treated_as_failed_attachment(self, monkeypatch):
+    async def test_cache_write_failure_is_treated_as_failed_attachment(
+        self, monkeypatch
+    ):
         import httpx
 
         payload = b"x"
@@ -1082,13 +1176,15 @@ class TestInboundAttachments:
         )
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay/media/file.bin",
-            "sha256": digest,
-            "size": 1,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay/media/file.bin",
+                "sha256": digest,
+                "size": 1,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is None
 
@@ -1114,13 +1210,15 @@ class TestInboundAttachments:
         )
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay/media/file.bin",
-            "sha256": hashlib.sha256(payload).hexdigest(),
-            "size": 1,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay/media/file.bin",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "size": 1,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is None
 
@@ -1146,14 +1244,16 @@ class TestInboundAttachments:
         adapter._dispatch_message = capture
         event = _event("mixed", content="@Chip inspect")
         for index, mime_type in enumerate(("image/png", "audio/mpeg")):
-            event["tags"].append([
-                "imeta",
-                f"url https://test.relay/media/{index}.bin",
-                f"m {mime_type}",
-                "x " + format(index + 1, "064x"),
-                "size 1",
-                f"filename {index}.bin",
-            ])
+            event["tags"].append(
+                [
+                    "imeta",
+                    f"url https://test.relay/media/{index}.bin",
+                    f"m {mime_type}",
+                    "x " + format(index + 1, "064x"),
+                    "size 1",
+                    f"filename {index}.bin",
+                ]
+            )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1165,7 +1265,13 @@ class TestInboundAttachments:
         ("status", "payload", "headers", "declared_size", "expected_digest"),
         [
             (302, b"", {}, 1, "a" * 64),
-            (200, b"x", {"content-length": "invalid"}, 1, hashlib.sha256(b"x").hexdigest()),
+            (
+                200,
+                b"x",
+                {"content-length": "invalid"},
+                1,
+                hashlib.sha256(b"x").hexdigest(),
+            ),
             (200, b"x", {}, 2, hashlib.sha256(b"x").hexdigest()),
             (200, b"xx", {}, 1, hashlib.sha256(b"xx").hexdigest()),
             (200, b"x", {}, 1, "a" * 64),
@@ -1188,54 +1294,64 @@ class TestInboundAttachments:
             "AsyncClient",
             lambda **kwargs: real_async_client(
                 transport=httpx.MockTransport(
-                    lambda _request: httpx.Response(status, content=payload, headers=headers)
+                    lambda _request: httpx.Response(
+                        status, content=payload, headers=headers
+                    )
                 ),
                 **kwargs,
             ),
         )
         adapter = _make_adapter()
 
-        cached = await adapter._download_attachment({
-            "url": "https://test.relay/media/file.bin",
-            "sha256": expected_digest,
-            "size": declared_size,
-            "filename": "file.bin",
-            "mime_type": "application/octet-stream",
-        })
+        cached = await adapter._download_attachment(
+            {
+                "url": "https://test.relay/media/file.bin",
+                "sha256": expected_digest,
+                "size": declared_size,
+                "filename": "file.bin",
+                "mime_type": "application/octet-stream",
+            }
+        )
 
         assert cached is None
 
     def test_imeta_rejects_url_credentials_and_fragments_and_caps_items(self):
         event = _event("url-safety", content="@Chip files")
-        event["tags"].extend([
+        event["tags"].extend(
             [
-                "imeta",
-                "url https://user:password@test.relay/media/private.bin",
-                "x " + "a" * 64,
-                "size 1",
-                "filename private.bin",
-            ],
-            [
-                "imeta",
-                "url https://test.relay/media/fragment.bin#hidden",
-                "x " + "b" * 64,
-                "size 1",
-                "filename fragment.bin",
-            ],
-        ])
+                [
+                    "imeta",
+                    "url https://user:password@test.relay/media/private.bin",
+                    "x " + "a" * 64,
+                    "size 1",
+                    "filename private.bin",
+                ],
+                [
+                    "imeta",
+                    "url https://test.relay/media/fragment.bin#hidden",
+                    "x " + "b" * 64,
+                    "size 1",
+                    "filename fragment.bin",
+                ],
+            ]
+        )
         for index in range(6):
-            event["tags"].append([
-                "imeta",
-                f"url https://test.relay/media/{index}.bin",
-                "x " + format(index + 1, "064x"),
-                "size 1",
-                f"filename {index}.bin",
-            ])
+            event["tags"].append(
+                [
+                    "imeta",
+                    f"url https://test.relay/media/{index}.bin",
+                    "x " + format(index + 1, "064x"),
+                    "size 1",
+                    f"filename {index}.bin",
+                ]
+            )
 
         attachments = BuzzAdapter._imeta_attachments(event)
 
         assert len(attachments) == 4
-        assert all("@" not in item["url"] and "#" not in item["url"] for item in attachments)
+        assert all(
+            "@" not in item["url"] and "#" not in item["url"] for item in attachments
+        )
 
     @pytest.mark.asyncio
     async def test_self_attachment_stops_before_authorization_or_cache(self):
@@ -1250,14 +1366,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event("self-attachment", pubkey=SELF_PUBKEY, content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1279,14 +1397,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event("unauthorized-attachment", content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1301,12 +1421,15 @@ class TestInboundAttachments:
         authorization,
     ):
         adapter = _make_adapter()
-        adapter._run_cli = AsyncMock(side_effect=AssertionError("authorization test invoked Buzz CLI"))
+        adapter._run_cli = AsyncMock(
+            side_effect=AssertionError("authorization test invoked Buzz CLI")
+        )
         adapter._resolve_user_name = AsyncMock(return_value="Other")
         adapter._allowed_pubkeys = {OTHER_PUBKEY}
         if authorization is None:
             adapter.set_authorization_check(None)
         elif authorization == "raise":
+
             def raise_unknown(*_args):
                 raise RuntimeError("authorization backend unavailable")
 
@@ -1323,14 +1446,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event(f"gateway-{authorization}-attachment", content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1343,7 +1468,9 @@ class TestInboundAttachments:
     @pytest.mark.asyncio
     async def test_explicit_true_gateway_authority_caches_attachment(self):
         adapter = _make_adapter()
-        adapter._run_cli = AsyncMock(side_effect=AssertionError("authorization test invoked Buzz CLI"))
+        adapter._run_cli = AsyncMock(
+            side_effect=AssertionError("authorization test invoked Buzz CLI")
+        )
         adapter._resolve_user_name = AsyncMock(return_value="Other")
         authorization_check = MagicMock(return_value=True)
         adapter.set_authorization_check(authorization_check)
@@ -1361,14 +1488,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event("gateway-authorized-attachment", content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1395,10 +1524,14 @@ class TestInboundAttachments:
         runner.pairing_store.is_approved.return_value = False
 
         adapter = _make_adapter()
-        adapter._run_cli = AsyncMock(side_effect=AssertionError("authorization test invoked Buzz CLI"))
+        adapter._run_cli = AsyncMock(
+            side_effect=AssertionError("authorization test invoked Buzz CLI")
+        )
         adapter._resolve_user_name = AsyncMock(return_value="Other")
         adapter._allowed_pubkeys = {OTHER_PUBKEY}
-        adapter.set_authorization_check(runner._make_adapter_auth_check(adapter.platform))
+        adapter.set_authorization_check(
+            runner._make_adapter_auth_check(adapter.platform)
+        )
         adapter._cache_inbound_attachments = AsyncMock()
         adapter._dispatch_message = AsyncMock()
         adapter._channel_state[CHANNEL] = {
@@ -1407,14 +1540,16 @@ class TestInboundAttachments:
             "seen": {},
         }
         event = _event("gateway-default-denied-attachment", content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            "url https://test.relay/media/file.bin",
-            "m application/octet-stream",
-            "x " + "a" * 64,
-            "size 1",
-            "filename file.bin",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                "url https://test.relay/media/file.bin",
+                "m application/octet-stream",
+                "x " + "a" * 64,
+                "size 1",
+                "filename file.bin",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
@@ -1459,23 +1594,26 @@ class TestInboundAttachments:
 
         adapter._dispatch_message = capture
         event = _event(f"homogeneous-{kind}", content="@Chip inspect")
-        event["tags"].append([
-            "imeta",
-            f"url https://test.relay/media/{kind}",
-            f"m {mime_type}",
-            "x " + "a" * 64,
-            "size 1",
-            f"filename file-{kind}",
-        ])
+        event["tags"].append(
+            [
+                "imeta",
+                f"url https://test.relay/media/{kind}",
+                f"m {mime_type}",
+                "x " + "a" * 64,
+                "size 1",
+                f"filename file-{kind}",
+            ]
+        )
 
         await adapter._handle_event(CHANNEL, adapter._channel_state[CHANNEL], event)
 
         assert dispatched[-1]["message_type"] is expected_type
 
+
 # ── Mention gating / DMs / authorization ──────────────────────────────────
 
-class TestMentionGating:
 
+class TestMentionGating:
     @pytest.fixture
     def adapter(self):
         a = _make_adapter()
@@ -1497,12 +1635,16 @@ class TestMentionGating:
 
     @pytest.mark.asyncio
     async def test_unaddressed_channel_message_ignored(self, adapter):
-        await self._poll_with(adapter, _event("e1", content="just chatting", created_at=10))
+        await self._poll_with(
+            adapter, _event("e1", content="just chatting", created_at=10)
+        )
         assert adapter._dispatched == []
 
     @pytest.mark.asyncio
     async def test_name_mention_dispatched(self, adapter):
-        await self._poll_with(adapter, _event("e1", content="hey @Chip can you help?", created_at=10))
+        await self._poll_with(
+            adapter, _event("e1", content="hey @Chip can you help?", created_at=10)
+        )
         assert len(adapter._dispatched) == 1
         assert adapter._dispatched[0]["text"] == "hey @Chip can you help?"
 
@@ -1556,20 +1698,29 @@ class TestMentionGating:
         assert adapter._dispatched == []
 
     @pytest.mark.asyncio
-    async def test_require_mention_false_still_dispatches_unaddressed_message(self, adapter):
+    async def test_require_mention_false_still_dispatches_unaddressed_message(
+        self, adapter
+    ):
         adapter.require_mention = False
-        await self._poll_with(adapter, _event("e1", content="just chatting", created_at=10))
+        await self._poll_with(
+            adapter, _event("e1", content="just chatting", created_at=10)
+        )
         assert len(adapter._dispatched) == 1
 
     def test_strip_mention_requires_at_for_display_name(self, adapter):
         assert adapter._strip_mention("@Chip: /whoami") == "/whoami"
         assert adapter._strip_mention("Chip: please review") == "Chip: please review"
-        assert adapter._strip_mention("@Chip-bot: please review") == "@Chip-bot: please review"
+        assert (
+            adapter._strip_mention("@Chip-bot: please review")
+            == "@Chip-bot: please review"
+        )
 
     @pytest.mark.asyncio
     async def test_allowlist_blocks_unauthorized(self, adapter):
         adapter._allowed_pubkeys = {"b" * 64}
-        await self._poll_with(adapter, _event("e1", content="@Chip hello", created_at=10))
+        await self._poll_with(
+            adapter, _event("e1", content="@Chip hello", created_at=10)
+        )
         assert adapter._dispatched == []
 
     @pytest.mark.asyncio
@@ -1577,7 +1728,9 @@ class TestMentionGating:
         adapter._allowed_pubkeys = {OTHER_PUBKEY}
         adapter._reaction_only_pubkeys = {AGENT_PUBKEY}
         adapter.send_reaction = AsyncMock(return_value=True)
-        event = _event("e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10)
+        event = _event(
+            "e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10
+        )
         event["tags"].append(["p", SELF_PUBKEY])
 
         await self._poll_with(adapter, event)
@@ -1590,7 +1743,9 @@ class TestMentionGating:
         adapter._allowed_pubkeys = {AGENT_PUBKEY}
         adapter._reaction_only_pubkeys = {AGENT_PUBKEY}
         adapter.send_reaction = AsyncMock(return_value=True)
-        event = _event("e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10)
+        event = _event(
+            "e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10
+        )
         event["tags"].append(["p", SELF_PUBKEY])
 
         await self._poll_with(adapter, event)
@@ -1599,14 +1754,18 @@ class TestMentionGating:
         assert len(adapter._dispatched) == 1
 
     @pytest.mark.asyncio
-    async def test_agent_message_without_explicit_recipient_gets_no_reaction(self, adapter):
+    async def test_agent_message_without_explicit_recipient_gets_no_reaction(
+        self, adapter
+    ):
         adapter._allowed_pubkeys = {OTHER_PUBKEY}
         adapter._reaction_only_pubkeys = {AGENT_PUBKEY}
         adapter.send_reaction = AsyncMock(return_value=True)
 
         await self._poll_with(
             adapter,
-            _event("e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10),
+            _event(
+                "e1", pubkey=AGENT_PUBKEY, content="@Chip coordinate", created_at=10
+            ),
         )
 
         adapter.send_reaction.assert_not_awaited()
@@ -1625,14 +1784,26 @@ class TestMentionGating:
         adapter.send_reaction.assert_not_awaited()
         assert adapter._dispatched == []
 
+
 # ── NIP-10 thread replies as addressed (issue #75826) ────────────────────
 #
 # With require_mention (default), channel replies whose direct parent is the
 # agent's own message must dispatch even when the text has no @name — Buzz
 # Desktop's natural reply affordance for /approve never types a mention.
 
-def _tagged_event(event_id, channel, *, content, pubkey=OTHER_PUBKEY,
-                  created_at=1000, kind=9, p=None, reply_to=None, root=None):
+
+def _tagged_event(
+    event_id,
+    channel,
+    *,
+    content,
+    pubkey=OTHER_PUBKEY,
+    created_at=1000,
+    kind=9,
+    p=None,
+    reply_to=None,
+    root=None,
+):
     """Event with the tag shapes observed on a live relay (h/p/e tags)."""
     tags = [["h", channel]]
     # NIP-10 order as Desktop emits: root first, then reply (when both set).
@@ -1650,6 +1821,7 @@ def _tagged_event(event_id, channel, *, content, pubkey=OTHER_PUBKEY,
         "kind": kind,
         "tags": tags,
     }
+
 
 class TestNip10ThreadReplyMentionGate:
     """require_mention + NIP-10 reply-to-own-message (#75826)."""
@@ -1678,12 +1850,17 @@ class TestNip10ThreadReplyMentionGate:
             "child", CHANNEL, content="ok", root="root-id", reply_to="parent-id"
         )
         assert _event_reply_parent_id(ev) == "parent-id"
-        assert _event_reply_parent_id(
-            _tagged_event("c2", CHANNEL, content="ok", root="only-root")
-        ) == "only-root"
+        assert (
+            _event_reply_parent_id(
+                _tagged_event("c2", CHANNEL, content="ok", root="only-root")
+            )
+            == "only-root"
+        )
 
     @pytest.mark.asyncio
-    async def test_thread_reply_to_own_message_dispatches_without_mention(self, adapter):
+    async def test_thread_reply_to_own_message_dispatches_without_mention(
+        self, adapter
+    ):
         # Live agent prompt lands first (self-echo is cached, not dispatched).
         await self._poll_with(
             adapter,
@@ -1785,7 +1962,9 @@ class TestNip10ThreadReplyMentionGate:
             ],
         )
         await adapter._poll_channel(CHANNEL)
-        assert [d["message_id"] for d in adapter._dispatched] == ["post-restart-approve"]
+        assert [d["message_id"] for d in adapter._dispatched] == [
+            "post-restart-approve"
+        ]
         assert adapter._dispatched[0]["reply_to_is_own_message"] is True
 
     @pytest.mark.asyncio
@@ -1798,9 +1977,7 @@ class TestNip10ThreadReplyMentionGate:
             {"accepted": True, "event_id": "sent-prompt", "message": ""},
         )
         adapter._run_cli = cli
-        result = await adapter.send(
-            CHANNEL, "⚠️ Dangerous command requires approval"
-        )
+        result = await adapter.send(CHANNEL, "⚠️ Dangerous command requires approval")
         assert result.success is True
         assert "sent-prompt" in adapter._channel_state[CHANNEL]["event_meta"]
         meta = adapter._channel_state[CHANNEL]["event_meta"]["sent-prompt"]
@@ -1856,6 +2033,7 @@ class TestNip10ThreadReplyMentionGate:
         assert d["reply_to_is_own_message"] is True
         assert d["reply_to_text"] == "previous answer"
 
+
 # ── DM classification via p-tags (issue #68871) ──────────────────────────
 #
 # `buzz dms list` returns [] on some hosted relays, so DM conversations leak
@@ -1864,8 +2042,8 @@ class TestNip10ThreadReplyMentionGate:
 # p-tagged to our own pubkey WITHOUT the text mentioning us, while channel
 # messages only ever p-tag us when the text visibly @mentions us.
 
-class TestDmClassification:
 
+class TestDmClassification:
     @pytest.fixture
     def adapter(self):
         a = _make_adapter()
@@ -1901,8 +2079,11 @@ class TestDmClassification:
     async def test_unmentioned_ptagged_dm_latches_and_dispatches(self, adapter):
         """The reported bug: a DM without an @mention must dispatch."""
         await self._poll_with(
-            adapter, DM_CHANNEL,
-            _tagged_event("e1", DM_CHANNEL, content="here's a test message", p=SELF_PUBKEY),
+            adapter,
+            DM_CHANNEL,
+            _tagged_event(
+                "e1", DM_CHANNEL, content="here's a test message", p=SELF_PUBKEY
+            ),
         )
         assert adapter._channel_state[DM_CHANNEL]["chat_type"] == "dm"
         assert [d["message_id"] for d in adapter._dispatched] == ["e1"]
@@ -1913,9 +2094,15 @@ class TestDmClassification:
         """A #general reply to us p-tags our pubkey (observed live) — that
         must NOT reclassify the channel; mention gating still applies."""
         await self._poll_with(
-            adapter, CHANNEL,
-            _tagged_event("e1", CHANNEL, content="@chip what's up?",
-                          p=SELF_PUBKEY, reply_to="root-event"),
+            adapter,
+            CHANNEL,
+            _tagged_event(
+                "e1",
+                CHANNEL,
+                content="@chip what's up?",
+                p=SELF_PUBKEY,
+                reply_to="root-event",
+            ),
         )
         assert adapter._channel_state[CHANNEL]["chat_type"] == "group"
         # It carried a mention, so it dispatches — but as a group message.
@@ -1924,7 +2111,8 @@ class TestDmClassification:
         # And once the mention is absent, the channel gate drops the message
         # even though the earlier reply p-tagged us.
         await self._poll_with(
-            adapter, CHANNEL,
+            adapter,
+            CHANNEL,
             _tagged_event("e2", CHANNEL, content="thanks everyone", created_at=1001),
         )
         assert len(adapter._dispatched) == 1
@@ -1935,14 +2123,16 @@ class TestDmClassification:
         adapter._channel_meta[CHANNEL]["description"] = ""
         adapter._channel_meta[CHANNEL]["name"] = "announcements"
         await self._poll_with(
-            adapter, CHANNEL,
+            adapter,
+            CHANNEL,
             _tagged_event("e1", CHANNEL, content="fyi everyone", p=SELF_PUBKEY),
         )
         assert adapter._channel_state[CHANNEL]["chat_type"] == "group"
         assert [d["message_id"] for d in adapter._dispatched] == ["e1"]
 
         await self._poll_with(
-            adapter, CHANNEL,
+            adapter,
+            CHANNEL,
             _tagged_event(
                 "e2", CHANNEL, content="plain follow-up", created_at=1001, p=None
             ),
@@ -1953,7 +2143,8 @@ class TestDmClassification:
     async def test_missing_metadata_never_latches_group_as_dm(self, adapter):
         adapter._channel_meta.pop(CHANNEL)
         await self._poll_with(
-            adapter, CHANNEL,
+            adapter,
+            CHANNEL,
             _tagged_event("e1", CHANNEL, content="tag-only mention", p=SELF_PUBKEY),
         )
         assert adapter._channel_state[CHANNEL]["chat_type"] == "group"
@@ -1969,11 +2160,24 @@ class TestDmClassification:
         a = _make_adapter()
         cli = _ScriptedCli()
         cli.script("dms", "list", [])
-        cli.script("channels", "list", [
-            {"channel_id": DM_CHANNEL, "name": "DM", "description": "", "created_at": 1},
-            {"channel_id": CHANNEL, "name": "general",
-             "description": "General conversation and community updates.", "created_at": 2},
-        ])
+        cli.script(
+            "channels",
+            "list",
+            [
+                {
+                    "channel_id": DM_CHANNEL,
+                    "name": "DM",
+                    "description": "",
+                    "created_at": 1,
+                },
+                {
+                    "channel_id": CHANNEL,
+                    "name": "general",
+                    "description": "General conversation and community updates.",
+                    "created_at": 2,
+                },
+            ],
+        )
         a._run_cli = cli
         await a._discover_dms(seed=False)
         assert a._channel_state[DM_CHANNEL]["chat_type"] == "dm"
@@ -1994,16 +2198,26 @@ class TestDmClassification:
         a = _make_adapter(extra={"channels": ["some-other-channel"]})
         cli = _ScriptedCli()
         cli.script("dms", "list", [])
-        cli.script("channels", "list", [
-            {"channel_id": CHANNEL, "name": "general",
-             "description": "General conversation and community updates.", "created_at": 2},
-        ])
+        cli.script(
+            "channels",
+            "list",
+            [
+                {
+                    "channel_id": CHANNEL,
+                    "name": "general",
+                    "description": "General conversation and community updates.",
+                    "created_at": 2,
+                },
+            ],
+        )
         a._run_cli = cli
         await a._discover_dms(seed=False)
         assert CHANNEL not in a._channel_state
 
     @pytest.mark.asyncio
-    async def test_dm_metadata_promotes_existing_group_without_recipient_tag(self, adapter):
+    async def test_dm_metadata_promotes_existing_group_without_recipient_tag(
+        self, adapter
+    ):
         cli = _ScriptedCli()
         cli.script("dms", "list", [])
         cli.script("channels", "list", [adapter._channel_meta[DM_CHANNEL]])
@@ -2012,14 +2226,15 @@ class TestDmClassification:
         assert adapter._channel_state[DM_CHANNEL]["chat_type"] == "dm"
 
         await self._poll_with(
-            adapter, DM_CHANNEL,
+            adapter,
+            DM_CHANNEL,
             _tagged_event("e1", DM_CHANNEL, content="no mention and no p tag"),
         )
         assert [d["message_id"] for d in adapter._dispatched] == ["e1"]
         assert adapter._dispatched[0]["chat_type"] == "dm"
 
-class TestThreadRoots:
 
+class TestThreadRoots:
     @pytest.mark.asyncio
     async def test_inbound_root_e_tag_propagates_to_session_source(self):
         adapter = _make_adapter()
@@ -2047,16 +2262,23 @@ class TestThreadRoots:
 
         assert dispatched[0].source.thread_id == "stable-root"
 
+
 # ── Sending ───────────────────────────────────────────────────────────────
 
-class TestBuzzAdapterSend:
 
+class TestBuzzAdapterSend:
     @pytest.mark.asyncio
     async def test_send_success_via_stdin(self):
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "evt123", "message": ""})
+        cli.script(
+            "messages", "send", {"accepted": True, "event_id": "evt123", "message": ""}
+        )
         adapter._run_cli = cli
 
         result = await adapter.send(CHANNEL, "hello **markdown**")
@@ -2080,9 +2302,17 @@ class TestBuzzAdapterSend:
         new top-level channel messages instead of thread replies.
         """
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "evt-reply", "message": ""})
+        cli.script(
+            "messages",
+            "send",
+            {"accepted": True, "event_id": "evt-reply", "message": ""},
+        )
         adapter._run_cli = cli
 
         result = await adapter.send(
@@ -2140,7 +2370,9 @@ class TestBuzzAdapterSend:
         adapter._run_cli = AsyncMock(
             return_value=(
                 0,
-                json.dumps({"accepted": False, "message": "upload rejected " + "x" * 100_000}),
+                json.dumps(
+                    {"accepted": False, "message": "upload rejected " + "x" * 100_000}
+                ),
                 "",
             )
         )
@@ -2158,12 +2390,14 @@ class TestBuzzAdapterSend:
         adapter._run_cli = AsyncMock(
             return_value=(
                 0,
-                json.dumps({
-                    "accepted": True,
-                    "event_id": " evt-safe ",
-                    "message": "x" * 100_000,
-                    "raw_response": "y" * 100_000,
-                }),
+                json.dumps(
+                    {
+                        "accepted": True,
+                        "event_id": " evt-safe ",
+                        "message": "x" * 100_000,
+                        "raw_response": "y" * 100_000,
+                    }
+                ),
                 "",
             )
         )
@@ -2180,7 +2414,9 @@ class TestBuzzAdapterSend:
         img.write_bytes(b"\x89PNG fake")
         adapter = _make_adapter()
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "evt126", "message": ""})
+        cli.script(
+            "messages", "send", {"accepted": True, "event_id": "evt126", "message": ""}
+        )
         adapter._run_cli = cli
         result = await adapter.send_image(CHANNEL, str(img), caption="screenshot")
         assert result.success is True
@@ -2220,9 +2456,7 @@ class TestBuzzAdapterSend:
         # publish calls only.
         sends = [c for c in cli.calls if tuple(c[0][:2]) == ("messages", "send")]
         assert len(sends) == 2
-        assert sends[0][1] == (
-            "Continue in @session:default/20260809_092321_24aa09."
-        )
+        assert sends[0][1] == ("Continue in @session:default/20260809_092321_24aa09.")
         assert sends[1][1] == (
             "Continue in @\u200bsession:default/20260809_092321_24aa09."
         )
@@ -2283,14 +2517,20 @@ class TestBuzzAdapterSend:
         assert cli.calls[1][1] == "See @\u200bsession:default/example."
 
     @pytest.mark.asyncio
-    async def test_send_image_file_missing_local_path_uses_base_fallback_notice(self, tmp_path):
+    async def test_send_image_file_missing_local_path_uses_base_fallback_notice(
+        self, tmp_path
+    ):
         missing = tmp_path / "missing.png"
         adapter = _make_adapter()
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "evt127", "message": ""})
+        cli.script(
+            "messages", "send", {"accepted": True, "event_id": "evt127", "message": ""}
+        )
         adapter._run_cli = cli
 
-        result = await adapter.send_image_file(CHANNEL, str(missing), caption="screenshot")
+        result = await adapter.send_image_file(
+            CHANNEL, str(missing), caption="screenshot"
+        )
 
         assert result.success is True
         args, stdin_text = cli.calls[0]
@@ -2306,7 +2546,9 @@ class TestBuzzAdapterSend:
         img.write_bytes(b"\x89PNG fake")
         adapter = _make_adapter()
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "evt127", "message": ""})
+        cli.script(
+            "messages", "send", {"accepted": True, "event_id": "evt127", "message": ""}
+        )
         adapter._run_cli = cli
 
         await adapter.send_multiple_images(CHANNEL, [(img.as_uri(), "screenshot")])
@@ -2320,7 +2562,9 @@ class TestBuzzAdapterSend:
         assert stdin_text == "screenshot"
         assert "Couldn't deliver the image attachment." not in stdin_text
 
+
 # ── Thread anchoring ──────────────────────────────────────────────────────
+
 
 class TestThreadAnchoring:
     """A reply must JOIN the thread it was triggered from, not nest a new one.
@@ -2361,8 +2605,10 @@ class TestThreadAnchoring:
 
     def test_reply_inside_thread_joins_that_thread(self):
         a = _make_adapter()
-        a._record_thread_root("m3", self._event(
-            "m3", ["e", "root1", "", "root"], ["e", "m2", "", "reply"]))
+        a._record_thread_root(
+            "m3",
+            self._event("m3", ["e", "root1", "", "root"], ["e", "m2", "", "reply"]),
+        )
         assert a._resolve_reply_anchor("m3") == "root1"
 
     def test_unknown_and_empty_anchors_pass_through(self):
@@ -2383,20 +2629,25 @@ class TestThreadAnchoring:
         """End-to-end through send(): argv must carry the thread root."""
         adapter = _make_adapter()
         adapter._channel_state[CHANNEL] = {"chat_type": "dm", "last_ts": 0, "seen": {}}
-        adapter._record_thread_root("m3", self._event(
-            "m3", ["e", "root1", "", "root"], ["e", "m2", "", "reply"]))
+        adapter._record_thread_root(
+            "m3",
+            self._event("m3", ["e", "root1", "", "root"], ["e", "m2", "", "reply"]),
+        )
         cli = _ScriptedCli()
-        cli.script("messages", "send", {"accepted": True, "event_id": "e9", "message": ""})
+        cli.script(
+            "messages", "send", {"accepted": True, "event_id": "e9", "message": ""}
+        )
         adapter._run_cli = cli
 
         await adapter.send(CHANNEL, "in-thread answer", reply_to="m3")
         args, _stdin = cli.calls[0]
         assert args[args.index("--reply-to") + 1] == "root1"
 
+
 # ── Inbound media localisation ─────────────────────────────────────────────────
 
-class TestInboundMediaLocalisation:
 
+class TestInboundMediaLocalisation:
     @staticmethod
     def _capture_dispatch(adapter, *, failed_urls=None):
         captured = []
@@ -2467,7 +2718,9 @@ class TestInboundMediaLocalisation:
         assert cli_calls[0][-1] == media_url
 
     @pytest.mark.asyncio
-    async def test_multiple_images_are_localised_in_content_order(self, monkeypatch, tmp_path):
+    async def test_multiple_images_are_localised_in_content_order(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
         adapter = _make_adapter()
         captured, calls = self._capture_dispatch(adapter)
@@ -2492,7 +2745,9 @@ class TestInboundMediaLocalisation:
         assert [call[-1] for call in calls] == [first, second]
 
     @pytest.mark.asyncio
-    async def test_non_image_attachment_is_cached_as_document(self, monkeypatch, tmp_path):
+    async def test_non_image_attachment_is_cached_as_document(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
         adapter = _make_adapter()
         captured, _calls = self._capture_dispatch(adapter)
@@ -2541,7 +2796,9 @@ class TestInboundMediaLocalisation:
         assert event.media_types == []
 
     @pytest.mark.asyncio
-    async def test_one_failed_download_does_not_drop_other_media(self, monkeypatch, tmp_path):
+    async def test_one_failed_download_does_not_drop_other_media(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
         adapter = _make_adapter()
         failed = f"https://test.relay/media/{'2' * 64}.png"
@@ -2643,6 +2900,7 @@ class TestInboundMediaLocalisation:
         assert event.media_urls == []
         assert calls == []
 
+
 class TestInboundMediaAuthorizationGate:
     """Authenticated retrieval must never run for an unauthorized sender.
 
@@ -2687,7 +2945,9 @@ class TestInboundMediaAuthorizationGate:
         assert captured[0].media_urls == []
 
     @pytest.mark.asyncio
-    async def test_missing_authorization_check_blocks_download(self, monkeypatch, tmp_path):
+    async def test_missing_authorization_check_blocks_download(
+        self, monkeypatch, tmp_path
+    ):
         adapter = _make_adapter()
         captured, cli_calls, text = await self._dispatch_with_check(
             adapter, monkeypatch, tmp_path, None
@@ -2698,7 +2958,9 @@ class TestInboundMediaAuthorizationGate:
         assert captured[0].media_urls == []
 
     @pytest.mark.asyncio
-    async def test_raising_authorization_check_blocks_download(self, monkeypatch, tmp_path):
+    async def test_raising_authorization_check_blocks_download(
+        self, monkeypatch, tmp_path
+    ):
         def boom(*_args):
             raise RuntimeError("auth backend down")
 
@@ -2712,7 +2974,9 @@ class TestInboundMediaAuthorizationGate:
         assert captured[0].media_urls == []
 
     @pytest.mark.asyncio
-    async def test_truthy_non_boolean_is_not_an_authorization(self, monkeypatch, tmp_path):
+    async def test_truthy_non_boolean_is_not_an_authorization(
+        self, monkeypatch, tmp_path
+    ):
         """A non-boolean result must not be coerced into a credentialed fetch."""
         adapter = _make_adapter()
         captured, cli_calls, text = await self._dispatch_with_check(
@@ -2823,7 +3087,9 @@ class TestInboundMediaAuthorizationGate:
         assert len(result.error) <= 900
 
     @pytest.mark.asyncio
-    async def test_send_to_platform_live_buzz_delivers_all_media(self, monkeypatch, tmp_path):
+    async def test_send_to_platform_live_buzz_delivers_all_media(
+        self, monkeypatch, tmp_path
+    ):
         from gateway.config import Platform
         from tools.send_message_tool import _send_to_platform
 
@@ -2866,10 +3132,11 @@ class TestInboundMediaAuthorizationGate:
             for call in cli.calls
         )
 
+
 # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-class TestBuzzAdapterLifecycle:
 
+class TestBuzzAdapterLifecycle:
     @pytest.mark.asyncio
     async def test_disconnect_releases_scoped_lock(self, monkeypatch):
         """The identity lock taken in connect() must be released on disconnect."""
@@ -2896,15 +3163,22 @@ class TestBuzzAdapterLifecycle:
         import gateway.status as gateway_status
 
         monkeypatch.setattr(
-            gateway_status, "acquire_scoped_lock",
-            lambda scope, identity, metadata=None: (False, {"pid": 4242, "profile": "other"}),
+            gateway_status,
+            "acquire_scoped_lock",
+            lambda scope, identity, metadata=None: (
+                False,
+                {"pid": 4242, "profile": "other"},
+            ),
         )
         adapter = _make_adapter()
         adapter.cli_path = "/fake/buzz"
-        monkeypatch.setattr(_buzz_mod, "_resolve_private_key", lambda extra=None: "nsec1test")
+        monkeypatch.setattr(
+            _buzz_mod, "_resolve_private_key", lambda extra=None: "nsec1test"
+        )
         cli = _ScriptedCli()
         cli.script(
-            "users", "get",
+            "users",
+            "get",
             [{"pubkey": SELF_PUBKEY, "display_name": "Chip"}],
         )
         adapter._run_cli = cli
@@ -2915,42 +3189,53 @@ class TestBuzzAdapterLifecycle:
         # channels list must never run: the conflict branch short-circuits connect()
         assert not any(call[0][:2] == ["channels", "list"] for call in cli.calls)
 
+
 # ── Credentials / requirements ────────────────────────────────────────────
 
-class TestCredentialResolution:
 
+class TestCredentialResolution:
     def test_env_key_wins(self, monkeypatch):
         monkeypatch.setenv("BUZZ_PRIVATE_KEY", "nsec1fromenv")
         assert _resolve_private_key() == "nsec1fromenv"
 
     def test_credentials_file_fallback(self, monkeypatch, tmp_path):
         creds = tmp_path / "agent_credentials.json"
-        creds.write_text(json.dumps({"nsec": "nsec1fromfile", "npub": "npub1x"}), encoding="utf-8")
+        creds.write_text(
+            json.dumps({"nsec": "nsec1fromfile", "npub": "npub1x"}), encoding="utf-8"
+        )
         monkeypatch.setenv("BUZZ_CREDENTIALS_FILE", str(creds))
         assert _resolve_private_key() == "nsec1fromfile"
 
     def test_owner_auth_tag_from_credentials_file(self, monkeypatch, tmp_path):
         tag = ["auth", "b" * 64, "", "c" * 128]
         creds = tmp_path / "agent_credentials.json"
-        creds.write_text(json.dumps({"nsec": "nsec1fromfile", "auth_tag": tag}), encoding="utf-8")
+        creds.write_text(
+            json.dumps({"nsec": "nsec1fromfile", "auth_tag": tag}), encoding="utf-8"
+        )
         monkeypatch.setenv("BUZZ_CREDENTIALS_FILE", str(creds))
         assert json.loads(_resolve_auth_tag()) == tag
 
     def test_invalid_owner_auth_tag_fails_closed(self, monkeypatch, tmp_path):
         creds = tmp_path / "agent_credentials.json"
-        creds.write_text(json.dumps({"nsec": "nsec1fromfile", "auth_tag": ["bad"]}), encoding="utf-8")
+        creds.write_text(
+            json.dumps({"nsec": "nsec1fromfile", "auth_tag": ["bad"]}), encoding="utf-8"
+        )
         monkeypatch.setenv("BUZZ_CREDENTIALS_FILE", str(creds))
         with pytest.raises(ValueError, match="auth tag"):
             _resolve_auth_tag()
 
-    def test_scoped_credentials_and_tag_do_not_borrow_ambient_profile(self, monkeypatch, tmp_path):
+    def test_scoped_credentials_and_tag_do_not_borrow_ambient_profile(
+        self, monkeypatch, tmp_path
+    ):
         from agent import secret_scope as ss
 
         ambient_tag = ["auth", "a" * 64, "", "d" * 128]
         scoped_tag = ["auth", "b" * 64, "", "c" * 128]
         ambient = tmp_path / "ambient.json"
         scoped = tmp_path / "scoped.json"
-        ambient.write_text(json.dumps({"nsec": "nsec1ambient", "auth_tag": ambient_tag}))
+        ambient.write_text(
+            json.dumps({"nsec": "nsec1ambient", "auth_tag": ambient_tag})
+        )
         scoped.write_text(json.dumps({"nsec": "nsec1scoped", "auth_tag": scoped_tag}))
         monkeypatch.setenv("BUZZ_CREDENTIALS_FILE", str(ambient))
         monkeypatch.setenv("BUZZ_AUTH_TAG", json.dumps(ambient_tag))
@@ -2966,12 +3251,16 @@ class TestCredentialResolution:
     def test_owner_auth_tag_uses_credentials_autodiscovery(self, monkeypatch, tmp_path):
         tag = ["auth", "b" * 64, "", "c" * 128]
         creds = tmp_path / "agent_credentials.json"
-        creds.write_text(json.dumps({"nsec": "nsec1fromfile", "auth_tag": tag}), encoding="utf-8")
+        creds.write_text(
+            json.dumps({"nsec": "nsec1fromfile", "auth_tag": tag}), encoding="utf-8"
+        )
         monkeypatch.setattr(_buzz_mod, "_DEFAULT_CREDENTIALS_DIR", tmp_path)
         assert _resolve_private_key() == "nsec1fromfile"
         assert json.loads(_resolve_auth_tag()) == tag
 
-    def test_empty_multiplex_scope_never_autodiscovers_ambient_credentials(self, monkeypatch, tmp_path):
+    def test_empty_multiplex_scope_never_autodiscovers_ambient_credentials(
+        self, monkeypatch, tmp_path
+    ):
         from agent import secret_scope as ss
 
         tag = ["auth", "a" * 64, "", "d" * 128]
@@ -2988,15 +3277,16 @@ class TestCredentialResolution:
             ss.reset_secret_scope(token)
             ss.set_multiplex_active(False)
 
+
 # ── Env enablement / registration / standalone send ──────────────────────
 
-class TestEnvEnablement:
 
+class TestEnvEnablement:
     def test_returns_none_when_unconfigured(self):
         assert _env_enablement() is None
 
-class TestBuzzPluginRegistration:
 
+class TestBuzzPluginRegistration:
     def test_register_platform_contract(self):
         from gateway.platform_registry import platform_registry
 
@@ -3013,8 +3303,8 @@ class TestBuzzPluginRegistration:
         assert callable(kwargs["env_enablement_fn"])
         assert set(kwargs["required_env"]) == {"BUZZ_RELAY_URL", "BUZZ_PRIVATE_KEY"}
 
-class TestStandaloneSend:
 
+class TestStandaloneSend:
     @pytest.mark.asyncio
     async def test_standalone_send_success(self, monkeypatch, tmp_path):
         from gateway.config import PlatformConfig
@@ -3027,13 +3317,34 @@ class TestStandaloneSend:
 
         captured = {}
 
-        async def fake_exec(cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=30.0):
-            captured.update(cli_path=cli_path, args=args, relay_url=relay_url, auth_tag=auth_tag, input_text=input_text)
-            return 0, json.dumps({"accepted": True, "event_id": "evt-cron", "message": ""}), ""
+        async def fake_exec(
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=30.0,
+        ):
+            captured.update(
+                cli_path=cli_path,
+                args=args,
+                relay_url=relay_url,
+                auth_tag=auth_tag,
+                input_text=input_text,
+            )
+            return (
+                0,
+                json.dumps({"accepted": True, "event_id": "evt-cron", "message": ""}),
+                "",
+            )
 
         monkeypatch.setattr(_buzz_mod, "_exec_buzz", fake_exec)
 
-        result = await _standalone_send(PlatformConfig(enabled=True, extra={}), CHANNEL, "cron says hi")
+        result = await _standalone_send(
+            PlatformConfig(enabled=True, extra={}), CHANNEL, "cron says hi"
+        )
         assert result == {"success": True, "message_id": "evt-cron"}
         assert captured["args"][:2] == ["messages", "send"]
         assert captured["input_text"] == "cron says hi"
@@ -3069,7 +3380,14 @@ class TestStandaloneSend:
         captured = {}
 
         async def fake_exec(
-            cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=30.0
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=30.0,
         ):
             captured.update(
                 private_key=private_key,
@@ -3077,7 +3395,11 @@ class TestStandaloneSend:
                 args=args,
                 input_text=input_text,
             )
-            return 0, json.dumps({"accepted": True, "event_id": "evt-auth", "message": ""}), ""
+            return (
+                0,
+                json.dumps({"accepted": True, "event_id": "evt-auth", "message": ""}),
+                "",
+            )
 
         monkeypatch.setattr(_buzz_mod, "_exec_buzz", fake_exec)
 
@@ -3110,7 +3432,9 @@ class TestStandaloneSend:
         # Ambient credentials dir must not be borrowed when a direct key is set.
         ambient = tmp_path / "ambient_credentials.json"
         ambient.write_text(
-            json.dumps({"nsec": "nsec1ambient", "auth_tag": ["auth", "a" * 64, "", "d" * 128]}),
+            json.dumps(
+                {"nsec": "nsec1ambient", "auth_tag": ["auth", "a" * 64, "", "d" * 128]}
+            ),
             encoding="utf-8",
         )
         monkeypatch.setattr(_buzz_mod, "_DEFAULT_CREDENTIALS_DIR", tmp_path)
@@ -3118,10 +3442,21 @@ class TestStandaloneSend:
         captured = {}
 
         async def fake_exec(
-            cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=30.0
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=30.0,
         ):
             captured.update(private_key=private_key, auth_tag=auth_tag)
-            return 0, json.dumps({"accepted": True, "event_id": "evt-key", "message": ""}), ""
+            return (
+                0,
+                json.dumps({"accepted": True, "event_id": "evt-key", "message": ""}),
+                "",
+            )
 
         monkeypatch.setattr(_buzz_mod, "_exec_buzz", fake_exec)
         result = await _standalone_send(
@@ -3185,7 +3520,9 @@ class TestStandaloneSend:
         ]
 
     @pytest.mark.asyncio
-    async def test_standalone_send_extracts_path_from_media_descriptor(self, monkeypatch, tmp_path):
+    async def test_standalone_send_extracts_path_from_media_descriptor(
+        self, monkeypatch, tmp_path
+    ):
         from gateway.config import PlatformConfig
 
         fake_cli = tmp_path / "buzz"
@@ -3198,7 +3535,16 @@ class TestStandaloneSend:
 
         captured = {}
 
-        async def fake_exec(cli_path, args, *, relay_url, private_key, auth_tag="", input_text=None, timeout=30.0):
+        async def fake_exec(
+            cli_path,
+            args,
+            *,
+            relay_url,
+            private_key,
+            auth_tag="",
+            input_text=None,
+            timeout=30.0,
+        ):
             captured["args"] = args
             return 0, json.dumps({"accepted": True, "event_id": "evt-media"}), ""
 
@@ -3219,17 +3565,26 @@ class TestStandaloneSend:
         file_index = captured["args"].index("--file")
         assert captured["args"][file_index + 1] == str(document)
 
+
 # ── Editing and deleting (streaming) ──────────────────────────────────
 
-class TestBuzzAdapterEdit:
 
+class TestBuzzAdapterEdit:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("content", ["partial answer\nGrüezi 🌍\n", "--status\n- checking progress"])
+    @pytest.mark.parametrize(
+        "content", ["partial answer\nGrüezi 🌍\n", "--status\n- checking progress"]
+    )
     async def test_edit_preserves_literal_content_and_original_target(self, content):
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
-        cli.script("messages", "edit", {"accepted": True, "event_id": "edit1", "message": ""})
+        cli.script(
+            "messages", "edit", {"accepted": True, "event_id": "edit1", "message": ""}
+        )
         adapter._run_cli = cli
 
         result = await adapter.edit_message(CHANNEL, "orig1", content)
@@ -3246,7 +3601,11 @@ class TestBuzzAdapterEdit:
     @pytest.mark.asyncio
     async def test_edit_marks_its_own_event_seen(self):
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
         cli.script("messages", "edit", {"accepted": True, "event_id": "edit1"})
         adapter._run_cli = cli
@@ -3257,7 +3616,11 @@ class TestBuzzAdapterEdit:
     @pytest.mark.asyncio
     async def test_edit_accepts_finalize_without_changing_behaviour(self):
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
         cli.script("messages", "edit", {"accepted": True, "event_id": "edit1"})
         adapter._run_cli = cli
@@ -3307,7 +3670,11 @@ class TestBuzzAdapterEdit:
     @pytest.mark.asyncio
     async def test_delete_targets_the_event(self):
         adapter = _make_adapter()
-        adapter._channel_state[CHANNEL] = {"chat_type": "group", "last_ts": 0, "seen": {}}
+        adapter._channel_state[CHANNEL] = {
+            "chat_type": "group",
+            "last_ts": 0,
+            "seen": {},
+        }
         cli = _ScriptedCli()
         cli.script("messages", "delete", {"accepted": True, "event_id": "del1"})
         adapter._run_cli = cli
@@ -3332,6 +3699,7 @@ class TestBuzzAdapterEdit:
 
         assert await adapter.delete_message(CHANNEL, "") is False
         assert cli.calls == []
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "stdout",
@@ -3383,7 +3751,12 @@ class TestBuzzAdapterEdit:
             AsyncMock(
                 return_value=(
                     0,
-                    json.dumps({"accepted": False, "message": "upload rejected " + "x" * 100_000}),
+                    json.dumps(
+                        {
+                            "accepted": False,
+                            "message": "upload rejected " + "x" * 100_000,
+                        }
+                    ),
                     "",
                 )
             ),
@@ -3400,7 +3773,10 @@ class TestBuzzAdapterEdit:
         assert len(result["error"]) <= 1024
         assert "success" not in result
         assert "media_delivered" not in result
+
+
 # ── Durable channel cursors across restart (#90464) ───────────────────────
+
 
 class TestChannelCursorPersistence:
     """A restart must resume from the saved cursor, not reseed from history.
@@ -3437,7 +3813,9 @@ class TestChannelCursorPersistence:
         return cli
 
     @pytest.mark.asyncio
-    async def test_restart_resumes_instead_of_reseeding(self, adapter, tmp_path, monkeypatch):
+    async def test_restart_resumes_instead_of_reseeding(
+        self, adapter, tmp_path, monkeypatch
+    ):
         await self._seed(adapter, _event("e1", content="@Chip first", created_at=100))
 
         # Restart. The relay now also holds a mention that landed while the
@@ -3451,10 +3829,14 @@ class TestChannelCursorPersistence:
         restarted._dispatch_message = capture
         restarted._message_handler = AsyncMock()
         cli = _ScriptedCli()
-        cli.script("messages", "get", [
-            _event("e1", content="@Chip first", created_at=100),
-            _event("e2", content="@Chip sent while you were down", created_at=150),
-        ])
+        cli.script(
+            "messages",
+            "get",
+            [
+                _event("e1", content="@Chip first", created_at=100),
+                _event("e2", content="@Chip sent while you were down", created_at=150),
+            ],
+        )
         restarted._run_cli = cli
         restarted._load_cursors()
         await restarted._seed_channel(CHANNEL, chat_type="group")
@@ -3470,7 +3852,9 @@ class TestChannelCursorPersistence:
         assert [d["message_id"] for d in restarted._dispatched] == ["e2"]
 
     @pytest.mark.asyncio
-    async def test_cursor_survives_only_for_the_same_identity_and_relay(self, adapter, tmp_path, monkeypatch):
+    async def test_cursor_survives_only_for_the_same_identity_and_relay(
+        self, adapter, tmp_path, monkeypatch
+    ):
         await self._seed(adapter, _event("e1", created_at=100))
 
         # Same machine, different bot: channel ids would collide but the event
@@ -3485,7 +3869,9 @@ class TestChannelCursorPersistence:
         assert elsewhere._restored_cursors == {}
 
     @pytest.mark.asyncio
-    async def test_unreadable_cursor_file_falls_back_to_seeding(self, adapter, tmp_path):
+    async def test_unreadable_cursor_file_falls_back_to_seeding(
+        self, adapter, tmp_path
+    ):
         path = self._cursor_file(tmp_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{ not json", encoding="utf-8")
@@ -3506,17 +3892,19 @@ class TestChannelCursorPersistence:
         path = self._cursor_file(tmp_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps({
-                "identity": SELF_PUBKEY,
-                "relay": "https://test.relay",
-                "channels": {
-                    CHANNEL: {
-                        "chat_type": "group",
-                        "last_ts": 100,
-                        "seen": [f"e{i}" for i in range(cap * 2)],
-                    }
-                },
-            }),
+            json.dumps(
+                {
+                    "identity": SELF_PUBKEY,
+                    "relay": "https://test.relay",
+                    "channels": {
+                        CHANNEL: {
+                            "chat_type": "group",
+                            "last_ts": 100,
+                            "seen": [f"e{i}" for i in range(cap * 2)],
+                        }
+                    },
+                }
+            ),
             encoding="utf-8",
         )
         adapter._load_cursors()
@@ -3529,7 +3917,9 @@ class TestChannelCursorPersistence:
         assert "e0" not in seen
 
     @pytest.mark.asyncio
-    async def test_cursor_write_runs_off_the_event_loop(self, adapter, tmp_path, monkeypatch):
+    async def test_cursor_write_runs_off_the_event_loop(
+        self, adapter, tmp_path, monkeypatch
+    ):
         """The write fsyncs + renames once per inbound event on the WebSocket transport."""
         import threading
 
@@ -3545,7 +3935,11 @@ class TestChannelCursorPersistence:
 
         monkeypatch.setattr(utils, "atomic_json_write", _record)
         cli.responses.clear()
-        cli.script("messages", "get", [_event("e1", created_at=100), _event("e2", created_at=200)])
+        cli.script(
+            "messages",
+            "get",
+            [_event("e1", created_at=100), _event("e2", created_at=200)],
+        )
         await adapter._poll_channel(CHANNEL)
 
         assert threads and threading.get_ident() not in threads

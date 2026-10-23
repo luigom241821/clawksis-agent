@@ -5,6 +5,7 @@ pushed as exactly that ref. A version is spent only by publication: an attempt
 that fails is abandoned with a marker ref, and the next cut is attempt N+1 of
 the same version. At most one attempt, of any version, is outstanding.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,8 +20,14 @@ from pathlib import Path
 from scripts.releases import lanes as lane_set, stable
 from scripts.releases.draft_warning import draft_body
 from scripts.releases.versioning import (
-    SEED, attempt_ref, derive_next_version, marker_ref, next_attempt,
-    outstanding_attempts, parse_attempt_ref, parse_marker_ref,
+    SEED,
+    attempt_ref,
+    derive_next_version,
+    marker_ref,
+    next_attempt,
+    outstanding_attempts,
+    parse_attempt_ref,
+    parse_marker_ref,
 )
 
 WORKFLOW = "stable-release.yml"
@@ -35,7 +42,9 @@ class ReleaseRefused(RuntimeError):
 
 
 def _git(repo: Path, *args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=repo, text=True, encoding="utf-8").strip()
+    return subprocess.check_output(
+        ["git", *args], cwd=repo, text=True, encoding="utf-8"
+    ).strip()
 
 
 def _claims(repo: Path, remote: str) -> list[str]:
@@ -48,12 +57,28 @@ def _claims(repo: Path, remote: str) -> list[str]:
     local here, and a stray local tag of a listed name is replaced by the
     remote's.
     """
-    listed = _git(repo, "ls-remote", "--tags", remote, *(f"refs/tags/{glob}" for glob in _ATTEMPT_GLOBS))
-    refs = (line.split("\t", 1)[1].removeprefix("refs/tags/")
-            for line in listed.splitlines() if "\t" in line)
-    claims = sorted({ref for ref in refs if parse_attempt_ref(ref) or parse_marker_ref(ref)})
+    listed = _git(
+        repo,
+        "ls-remote",
+        "--tags",
+        remote,
+        *(f"refs/tags/{glob}" for glob in _ATTEMPT_GLOBS),
+    )
+    refs = (
+        line.split("\t", 1)[1].removeprefix("refs/tags/")
+        for line in listed.splitlines()
+        if "\t" in line
+    )
+    claims = sorted(
+        {ref for ref in refs if parse_attempt_ref(ref) or parse_marker_ref(ref)}
+    )
     if claims:
-        _git(repo, "fetch", remote, *(f"+refs/tags/{ref}:refs/tags/{ref}" for ref in claims))
+        _git(
+            repo,
+            "fetch",
+            remote,
+            *(f"+refs/tags/{ref}:refs/tags/{ref}" for ref in claims),
+        )
     return claims
 
 
@@ -64,22 +89,41 @@ def _claim_commit(repo: Path, tag: str) -> str:
 def _refresh_claims(repo: Path, remote: str) -> None:
     # Pruned, so a deleted release/* branch stops admitting commits. Tags are
     # fetched separately: pruning there would delete local-only claim tags.
-    _git(repo, "fetch", "--prune", remote, *stable.release_line_refspecs(_RELEASE_LINE_PREFIX))
-    _git(repo, "fetch", remote, *(f"+refs/tags/{glob}:refs/tags/{glob}" for glob in _ATTEMPT_GLOBS))
+    _git(
+        repo,
+        "fetch",
+        "--prune",
+        remote,
+        *stable.release_line_refspecs(_RELEASE_LINE_PREFIX),
+    )
+    _git(
+        repo,
+        "fetch",
+        remote,
+        *(f"+refs/tags/{glob}:refs/tags/{glob}" for glob in _ATTEMPT_GLOBS),
+    )
 
 
 def _require_release_line(repo: Path, commit: str) -> None:
     """The commit must be on the remote's ``main`` or a ``release/*`` branch."""
     if not _git(repo, *stable.release_line_contains(commit, _RELEASE_LINE_PREFIX)[1:]):
-        raise ReleaseRefused(f"{commit} is not on the remote's main or a release/* branch")
+        raise ReleaseRefused(
+            f"{commit} is not on the remote's main or a release/* branch"
+        )
 
 
-def _claim_collision(repo: Path, remote: str, tag: str, error: Exception) -> ReleaseRefused:
-    subprocess.run(["git", "tag", "--delete", tag], cwd=repo, capture_output=True, check=False)
+def _claim_collision(
+    repo: Path, remote: str, tag: str, error: Exception
+) -> ReleaseRefused:
+    subprocess.run(
+        ["git", "tag", "--delete", tag], cwd=repo, capture_output=True, check=False
+    )
     try:
         _git(repo, "fetch", remote, f"+refs/tags/{tag}:refs/tags/{tag}")
         details = _git(
-            repo, "for-each-ref", f"refs/tags/{tag}",
+            repo,
+            "for-each-ref",
+            f"refs/tags/{tag}",
             "--format=%(taggername)|%(taggerdate:iso-strict)|%(*objectname)",
         )
     except subprocess.CalledProcessError:
@@ -98,7 +142,9 @@ def _outstanding_attempts(repo: Path, remote: str) -> list[tuple[str, int, str]]
 
     def is_published(version: str) -> bool:
         if version not in published:
-            published[version] = bool(_git(repo, "ls-remote", remote, f"refs/tags/v{version}"))
+            published[version] = bool(
+                _git(repo, "ls-remote", remote, f"refs/tags/v{version}")
+            )
         return published[version]
 
     return outstanding_attempts(_claims(repo, remote), is_published)
@@ -110,7 +156,8 @@ def _outstanding_attempt(repo: Path, remote: str) -> tuple[str, int, str] | None
     if len(outstanding) > 1:
         refs = ", ".join(ref for *_rest, ref in outstanding)
         raise ReleaseRefused(
-            f"more than one outstanding attempt ({refs}) — abandon all but one before releasing")
+            f"more than one outstanding attempt ({refs}) — abandon all but one before releasing"
+        )
     return outstanding[0] if outstanding else None
 
 
@@ -119,36 +166,74 @@ RUN_FIELDS = "databaseId,url,headBranch,headSha,displayTitle,status"
 
 def _is_claim_run(row: dict, claim_tag: str, commit: str) -> bool:
     return stable.is_claim_run(
-        title=row.get("displayTitle"), head_branch=row.get("headBranch"),
-        head_sha=row.get("headSha"), claim_tag=claim_tag, commit=commit)
+        title=row.get("displayTitle"),
+        head_branch=row.get("headBranch"),
+        head_sha=row.get("headSha"),
+        claim_tag=claim_tag,
+        commit=commit,
+    )
 
 
 def _attempt_run(execute, repository: str, ref: str, commit: str) -> dict | None:
     """The workflow run for ``ref`` at ``commit``, or None when none is listed."""
-    raw = execute([
-        "gh", "run", "list", "--repo", repository, "--workflow", WORKFLOW, "--limit", "100",
-        "--json", RUN_FIELDS,
-    ])
+    raw = execute(
+        [
+            "gh",
+            "run",
+            "list",
+            "--repo",
+            repository,
+            "--workflow",
+            WORKFLOW,
+            "--limit",
+            "100",
+            "--json",
+            RUN_FIELDS,
+        ]
+    )
     try:
         rows = json.loads(raw or "[]")
     except json.JSONDecodeError:
         return None
-    return next((row for row in rows if isinstance(row, dict) and _is_claim_run(row, ref, commit)
-                 and row.get("url") and row.get("databaseId") is not None), None)
+    return next(
+        (
+            row
+            for row in rows
+            if isinstance(row, dict)
+            and _is_claim_run(row, ref, commit)
+            and row.get("url")
+            and row.get("databaseId") is not None
+        ),
+        None,
+    )
 
 
-def _refuse_outstanding(outstanding: tuple[str, int, str], *, repo: Path, remote: str,
-                        repository: str, execute) -> ReleaseRefused:
+def _refuse_outstanding(
+    outstanding: tuple[str, int, str],
+    *,
+    repo: Path,
+    remote: str,
+    repository: str,
+    execute,
+) -> ReleaseRefused:
     """Print the blocking run and both ways out, then return the refusal to raise."""
     version, _attempt, ref = outstanding
     run = _attempt_run(execute, repository, ref, _claim_commit(repo, ref))
-    lines = [f"{ref} is outstanding: it has no abandon marker and v{version} is not published."]
-    lines.append(f"Workflow: {run['url']}" if run else f"No workflow run is listed for {ref}.")
-    lines += ["If the attempt is unfixable, abandon it:",
-              f"    python scripts/release.py abandon --version {version} --remote {remote}"]
+    lines = [
+        f"{ref} is outstanding: it has no abandon marker and v{version} is not published."
+    ]
+    lines.append(
+        f"Workflow: {run['url']}" if run else f"No workflow run is listed for {ref}."
+    )
+    lines += [
+        "If the attempt is unfixable, abandon it:",
+        f"    python scripts/release.py abandon --version {version} --remote {remote}",
+    ]
     if run:
-        lines += ["If the attempt is fixable, rerun its failed jobs:",
-                  f"    gh run rerun {run['databaseId']} --failed --repo {repository}"]
+        lines += [
+            "If the attempt is fixable, rerun its failed jobs:",
+            f"    gh run rerun {run['databaseId']} --failed --repo {repository}",
+        ]
     print("\n".join(lines), file=sys.stderr)
     return ReleaseRefused(f"{ref} is outstanding — publish or abandon it first")
 
@@ -158,17 +243,30 @@ def _require_ancestry(repo: Path, commit: str, published_commit: str | None) -> 
     if published_commit is None:
         return
     ancestor = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", published_commit, commit], cwd=repo, capture_output=True, check=False)
+        ["git", "merge-base", "--is-ancestor", published_commit, commit],
+        cwd=repo,
+        capture_output=True,
+        check=False,
+    )
     if ancestor.returncode != 0:
         raise ReleaseRefused(
-            f"{commit} does not descend from the published stable head {published_commit}")
+            f"{commit} does not descend from the published stable head {published_commit}"
+        )
 
 
 def _next_claim_epoch(repo: Path, claims: list[str]) -> int:
     """One past the newest claim epoch; ``claims`` are fetched, so their objects are local."""
-    epochs = _git(repo, "for-each-ref", "refs/tags/rc.*", "--format=%(refname:strip=2) %(taggerdate:unix)")
-    previous = [int(stamp) for ref, _, stamp in (line.partition(" ") for line in epochs.splitlines())
-                if ref in claims and parse_attempt_ref(ref) and stamp.isdigit()]
+    epochs = _git(
+        repo,
+        "for-each-ref",
+        "refs/tags/rc.*",
+        "--format=%(refname:strip=2) %(taggerdate:unix)",
+    )
+    previous = [
+        int(stamp)
+        for ref, _, stamp in (line.partition(" ") for line in epochs.splitlines())
+        if ref in claims and parse_attempt_ref(ref) and stamp.isdigit()
+    ]
     return max(int(time.time()), max(previous, default=0) + 1)
 
 
@@ -176,8 +274,16 @@ def _next_claim_epoch(repo: Path, claims: list[str]) -> int:
 GITHUB_BODY_LIMIT = 125_000
 
 
-def _changelog(repo: Path, repository: str, *, commit: str, tag: str, version: str,
-               published: tuple[str, str | None], no_changelog: bool) -> str:
+def _changelog(
+    repo: Path,
+    repository: str,
+    *,
+    commit: str,
+    tag: str,
+    version: str,
+    published: tuple[str, str | None],
+    no_changelog: bool,
+) -> str:
     """The commit changelog from the stable base to the cut commit.
 
     GitHub's generate-notes lists merged pull requests since the last published
@@ -187,21 +293,46 @@ def _changelog(repo: Path, repository: str, *, commit: str, tag: str, version: s
 
     published_version, base = published
     receipt = f"v{published_version}"
-    if base is None and subprocess.run(
-            ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{receipt}^{{commit}}"],
-            cwd=repo, capture_output=True, check=False).returncode == 0:
+    if (
+        base is None
+        and subprocess.run(
+            [
+                "git",
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                f"refs/tags/{receipt}^{{commit}}",
+            ],
+            cwd=repo,
+            capture_output=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
         # Before the first publication the seed version's tag is the base.
         base = receipt
     commits = release_script.get_commits(since_tag=base, until=commit, cwd=repo)
     return release_script.generate_changelog(
-        commits, tag, version, repo_url=f"https://github.com/{repository}",
-        prev_tag=receipt if base else None, no_changelog=no_changelog,
+        commits,
+        tag,
+        version,
+        repo_url=f"https://github.com/{repository}",
+        prev_tag=receipt if base else None,
+        no_changelog=no_changelog,
     )
 
 
-def _abandon_confirmed(outstanding: tuple[str, int, str], confirm_abandon: Callable[[str], bool],
-                       refusal: ReleaseRefused, *, repo: Path, remote: str, repository: str,
-                       execute, inspect) -> None:
+def _abandon_confirmed(
+    outstanding: tuple[str, int, str],
+    confirm_abandon: Callable[[str], bool],
+    refusal: ReleaseRefused,
+    *,
+    repo: Path,
+    remote: str,
+    repository: str,
+    execute,
+    inspect,
+) -> None:
     """Abandon exactly the attempt the person approved, or raise ``refusal``.
 
     The prompt can sit open while another operator abandons it and cuts the
@@ -213,18 +344,45 @@ def _abandon_confirmed(outstanding: tuple[str, int, str], confirm_abandon: Calla
     if not confirm_abandon(ref):
         raise refusal
     if _outstanding_attempt(repo, remote) != outstanding:
-        raise ReleaseRefused(f"{ref} changed while waiting for an answer — nothing was abandoned")
-    print(abandon_steps([_abandon_attempt(version, attempt, ref, repo=repo, remote=remote,
-                                          repository=repository, execute=execute, inspect=inspect)]),
-          file=sys.stderr)
+        raise ReleaseRefused(
+            f"{ref} changed while waiting for an answer — nothing was abandoned"
+        )
+    print(
+        abandon_steps(
+            [
+                _abandon_attempt(
+                    version,
+                    attempt,
+                    ref,
+                    repo=repo,
+                    remote=remote,
+                    repository=repository,
+                    execute=execute,
+                    inspect=inspect,
+                )
+            ]
+        ),
+        file=sys.stderr,
+    )
 
 
-def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
-            execute, autopublish: bool = False, no_changelog: bool = False,
-            lanes: frozenset[str] = lane_set.DEFAULT,
-            published: tuple[str, str | None] = (SEED, None),
-            run_wait: float = 0, sleep=time.sleep,
-            confirm_abandon: Callable[[str], bool] | None = None, inspect=None) -> dict:
+def release(
+    commit: str,
+    *,
+    bump: str,
+    repo: Path,
+    remote: str,
+    repository: str,
+    execute,
+    autopublish: bool = False,
+    no_changelog: bool = False,
+    lanes: frozenset[str] = lane_set.DEFAULT,
+    published: tuple[str, str | None] = (SEED, None),
+    run_wait: float = 0,
+    sleep=time.sleep,
+    confirm_abandon: Callable[[str], bool] | None = None,
+    inspect=None,
+) -> dict:
     """Claim the next attempt of the derived version, cut its draft, and start the gate.
 
     ``published`` is the stable channel's ``(version, commit)``; the commit is
@@ -244,8 +402,13 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
     outstanding = _outstanding_attempt(repo, remote)
     refusal = None
     if outstanding is not None:
-        refusal = _refuse_outstanding(outstanding, repo=repo, remote=remote,
-                                      repository=repository, execute=execute)
+        refusal = _refuse_outstanding(
+            outstanding,
+            repo=repo,
+            remote=remote,
+            repository=repository,
+            execute=execute,
+        )
         if confirm_abandon is None:
             raise refusal
     published_version, published_commit = published
@@ -256,15 +419,25 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
         # public the published identity still names the previous version.
         raise ReleaseRefused(
             f"v{version} already has a final tag. Its publication is still finishing. "
-            "Wait for Stable Release Publication, then cut again.")
+            "Wait for Stable Release Publication, then cut again."
+        )
     claims = _claims(repo, remote)
     attempt = next_attempt(version, claims)
     tag = attempt_ref(version, attempt)
     # Built before the claim: a body GitHub refuses would otherwise burn the attempt.
-    body = draft_body(version=version, attempt_ref=tag, notes=_changelog(
-        repo, repository, commit=commit, tag=tag, version=version, published=published,
-        no_changelog=no_changelog,
-    ))
+    body = draft_body(
+        version=version,
+        attempt_ref=tag,
+        notes=_changelog(
+            repo,
+            repository,
+            commit=commit,
+            tag=tag,
+            version=version,
+            published=published,
+            no_changelog=no_changelog,
+        ),
+    )
     if len(body) > GITHUB_BODY_LIMIT:
         raise ReleaseRefused(
             f"the {tag} draft body is {len(body)} characters; GitHub accepts at most "
@@ -274,29 +447,44 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
             f"--remote {remote} > changelog.md\n"
             "     Do this before step 2: once the retry claims this attempt, changelog numbers the next one.\n"
             "  2. Re-run the same release command with --no-changelog.\n"
-            "  3. Edit changelog.md down in your editor and paste it into the draft release body.")
+            "  3. Edit changelog.md down in your editor and paste it into the draft release body."
+        )
     if refusal is not None:
         # Everything that can refuse the new cut has run, so a yes cannot
         # destroy the old attempt and then fail to replace it. The attempt
         # number ignores markers, so abandoning does not change ``tag``.
-        _abandon_confirmed(outstanding, confirm_abandon, refusal, repo=repo, remote=remote,
-                           repository=repository, execute=execute, inspect=inspect)
+        _abandon_confirmed(
+            outstanding,
+            confirm_abandon,
+            refusal,
+            repo=repo,
+            remote=remote,
+            repository=repository,
+            execute=execute,
+            inspect=inspect,
+        )
     claim_epoch = _next_claim_epoch(repo, claims)
-    claim = json.dumps({
-        "schema": 1,
-        "version": version,
-        "attempt": attempt,
-        "commit": commit,
-        "autopublish": autopublish,
-        "lanes": sorted(lanes),
-        "lanesRevision": lane_set.LANES_REVISION,
-        "claimEpoch": claim_epoch,
-    }, sort_keys=True, separators=(",", ":"))
+    claim = json.dumps(
+        {
+            "schema": 1,
+            "version": version,
+            "attempt": attempt,
+            "commit": commit,
+            "autopublish": autopublish,
+            "lanes": sorted(lanes),
+            "lanesRevision": lane_set.LANES_REVISION,
+            "claimEpoch": claim_epoch,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     subprocess.check_output(
         # -f replaces a local-only tag of this name (not a claim, so never on
         # the remote); the push below stays non-forcing.
-        ["git", "tag", "-f", "-a", tag, commit, "-m", claim], cwd=repo,
-        text=True, encoding="utf-8",
+        ["git", "tag", "-f", "-a", tag, commit, "-m", claim],
+        cwd=repo,
+        text=True,
+        encoding="utf-8",
         env={**os.environ, "GIT_COMMITTER_DATE": f"@{claim_epoch} +0000"},
     )
     try:
@@ -304,11 +492,20 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
     except subprocess.CalledProcessError as error:
         raise _claim_collision(repo, remote, tag, error) from error
     ref = f"refs/tags/{tag}"
-    remote_ref = dict(line.split()[::-1] for line in _git(
-        repo, "ls-remote", remote, ref, f"{ref}^{{}}",
-    ).splitlines())
-    if (remote_ref.get(ref) != _git(repo, "rev-parse", ref)
-            or remote_ref.get(f"{ref}^{{}}") != commit):
+    remote_ref = dict(
+        line.split()[::-1]
+        for line in _git(
+            repo,
+            "ls-remote",
+            remote,
+            ref,
+            f"{ref}^{{}}",
+        ).splitlines()
+    )
+    if (
+        remote_ref.get(ref) != _git(repo, "rev-parse", ref)
+        or remote_ref.get(f"{ref}^{{}}") != commit
+    ):
         raise ReleaseRefused(f"claim {tag} did not persist with exact remote custody")
     # The pre-check and the push are not one atomic step: a concurrent cut of a
     # different version passes the same check. Re-read before anything starts.
@@ -317,7 +514,8 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
     try:
         # The body carries a warning at both ends, so it is handed over as a file.
         file = tempfile.NamedTemporaryFile(
-            "w", suffix=".md", delete=False, encoding="utf-8", newline="\n")
+            "w", suffix=".md", delete=False, encoding="utf-8", newline="\n"
+        )
         try:
             file.write(body)
         finally:
@@ -326,24 +524,55 @@ def release(commit: str, *, bump: str, repo: Path, remote: str, repository: str,
             # gh prints the new release's page. A draft is not reachable
             # through releases/tag/<tag> (GitHub serves it at an untagged-*
             # URL), so this printed page is the only link to it.
-            url = (execute([
-                "gh", "release", "create", tag, "--repo", repository,
-                "--verify-tag", "--draft", "--notes-file", file.name,
-                "--title", f"Clawksis v{version}",
-            ]) or "").strip()
+            url = (
+                execute(
+                    [
+                        "gh",
+                        "release",
+                        "create",
+                        tag,
+                        "--repo",
+                        repository,
+                        "--verify-tag",
+                        "--draft",
+                        "--notes-file",
+                        file.name,
+                        "--title",
+                        f"Clawksis v{version}",
+                    ]
+                )
+                or ""
+            ).strip()
         finally:
             os.unlink(file.name)
-        execute([
-            "gh", "workflow", "run", WORKFLOW, "--ref", stable.CONTROLLER_BRANCH, "--repo", repository,
-            "--raw-field", f"tag={tag}",
-        ])
+        execute(
+            [
+                "gh",
+                "workflow",
+                "run",
+                WORKFLOW,
+                "--ref",
+                stable.CONTROLLER_BRANCH,
+                "--repo",
+                repository,
+                "--raw-field",
+                f"tag={tag}",
+            ]
+        )
         run_url = _await_run(execute, repository, tag, wait=run_wait, sleep=sleep)
     except Exception as exc:
         raise ReleaseRefused(f"release {tag} never started: {exc}") from exc
-    return {"version": version, "tag": tag, "commit": commit, "url": url, "repository": repository,
-            "final_url": f"https://github.com/{repository}/releases/tag/v{version}",
-            "run_url": run_url, "autopublish": autopublish,
-            "lanes": lanes}
+    return {
+        "version": version,
+        "tag": tag,
+        "commit": commit,
+        "url": url,
+        "repository": repository,
+        "final_url": f"https://github.com/{repository}/releases/tag/v{version}",
+        "run_url": run_url,
+        "autopublish": autopublish,
+        "lanes": lanes,
+    }
 
 
 RUN_POLL_SECONDS = 2
@@ -354,10 +583,24 @@ def _await_run(execute, repository: str, tag: str, *, wait: float, sleep) -> str
     """The dispatched run's URL, polling up to ``wait`` seconds. Empty if it never lists."""
     polls = int(wait // RUN_POLL_SECONDS)
     for poll in range(polls + 1):
-        run_url = _dispatched_run(execute([
-            "gh", "run", "list", "--repo", repository, "--workflow", WORKFLOW, "--limit", "100",
-            "--json", RUN_FIELDS,
-        ]), tag)
+        run_url = _dispatched_run(
+            execute(
+                [
+                    "gh",
+                    "run",
+                    "list",
+                    "--repo",
+                    repository,
+                    "--workflow",
+                    WORKFLOW,
+                    "--limit",
+                    "100",
+                    "--json",
+                    RUN_FIELDS,
+                ]
+            ),
+            tag,
+        )
         if run_url or poll == polls:
             return run_url
         sleep(RUN_POLL_SECONDS)
@@ -370,8 +613,13 @@ def _dispatched_run(raw: str, tag: str) -> str:
         rows = json.loads(raw or "[]")
     except json.JSONDecodeError:
         return ""
-    matched = [row for row in rows if isinstance(row, dict) and row.get("url")
-               and row.get("displayTitle") == stable.claim_run_title(tag)]
+    matched = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and row.get("url")
+        and row.get("displayTitle") == stable.claim_run_title(tag)
+    ]
     if len(matched) != 1:
         return ""
     return str(matched[0]["url"])
@@ -391,10 +639,20 @@ def _latest_run(raw: str) -> str:
 
 def _release_view(tag: str, repository: str, inspect) -> dict | None:
     try:
-        return json.loads(inspect([
-            "gh", "release", "view", tag, "--repo", repository,
-            "--json", "tagName,isDraft,isPrerelease",
-        ]))
+        return json.loads(
+            inspect(
+                [
+                    "gh",
+                    "release",
+                    "view",
+                    tag,
+                    "--repo",
+                    repository,
+                    "--json",
+                    "tagName,isDraft,isPrerelease",
+                ]
+            )
+        )
     except ReleaseRefused as exc:
         if "not found" in str(exc).lower():
             return None
@@ -409,26 +667,49 @@ def _outstanding_ref(repo: Path, remote: str, version: str) -> str:
     return attempt_ref(version, attempt)
 
 
-def _preflight_publish(version: str, repository: str, inspect, head_version,
-                       repo: Path | None, remote: str | None) -> None:
+def _preflight_publish(
+    version: str,
+    repository: str,
+    inspect,
+    head_version,
+    repo: Path | None,
+    remote: str | None,
+) -> None:
     requested = tuple(map(int, version.split(".")))
     head = head_version()
     if head and tuple(map(int, head.split("."))) >= requested:
         raise ReleaseRefused(f"stable {version} is burned or superseded by {head}")
     if repo is None or remote is None:
-        raise ValueError("preflight needs the release repository to find the attempt ref")
+        raise ValueError(
+            "preflight needs the release repository to find the attempt ref"
+        )
     # The draft lives on the attempt ref, never on the final tag and never on
     # the old v{version}-rc shape.
     _refresh_claims(repo, remote)
     attempt_ref = _outstanding_ref(repo, remote, version)
-    rows = [(tag, row) for tag in (f"v{version}", attempt_ref)
-            if (row := _release_view(tag, repository, inspect)) is not None]
-    if len(rows) != 1 or rows[0][0] != attempt_ref or rows[0][1].get("isDraft") is not True:
+    rows = [
+        (tag, row)
+        for tag in (f"v{version}", attempt_ref)
+        if (row := _release_view(tag, repository, inspect)) is not None
+    ]
+    if (
+        len(rows) != 1
+        or rows[0][0] != attempt_ref
+        or rows[0][1].get("isDraft") is not True
+    ):
         raise ReleaseRefused(f"stable {version} is burned or has no release draft")
 
 
-def publish(version: str, *, repository: str, dispatch, inspect=None, head_version=None,
-            repo: Path | None = None, remote: str | None = None) -> dict:
+def publish(
+    version: str,
+    *,
+    repository: str,
+    dispatch,
+    inspect=None,
+    head_version=None,
+    repo: Path | None = None,
+    remote: str | None = None,
+) -> dict:
     """Request ordered publication through the one production sequencer."""
     tag = f"v{version}"
     from clawk_cli.update_channel import STABLE_TAG_RE
@@ -437,48 +718,105 @@ def publish(version: str, *, repository: str, dispatch, inspect=None, head_versi
         raise ReleaseRefused(f"{version} is not a stable version")
     if inspect is not None and head_version is not None:
         _preflight_publish(version, repository, inspect, head_version, repo, remote)
-    dispatch([
-        "gh", "workflow", "run", "stable-release-publication.yml",
-        "--repo", repository, "--raw-field", f"version={version}",
-    ])
+    dispatch(
+        [
+            "gh",
+            "workflow",
+            "run",
+            "stable-release-publication.yml",
+            "--repo",
+            repository,
+            "--raw-field",
+            f"version={version}",
+        ]
+    )
     return {"requested": tag, "version": version, "repository": repository}
 
 
 def _in_progress_runs(inspect, repository: str, tag: str, commit: str) -> list[dict]:
     """Release runs of ``tag`` that have not completed, as ``gh run list`` rows."""
-    rows = json.loads(inspect([
-        "gh", "run", "list", "--repo", repository, "--workflow", WORKFLOW, "--limit", "100",
-        "--json", RUN_FIELDS,
-    ]) or "[]")
-    return [row for row in rows if row["status"] != "completed" and _is_claim_run(row, tag, commit)]
+    rows = json.loads(
+        inspect(
+            [
+                "gh",
+                "run",
+                "list",
+                "--repo",
+                repository,
+                "--workflow",
+                WORKFLOW,
+                "--limit",
+                "100",
+                "--json",
+                RUN_FIELDS,
+            ]
+        )
+        or "[]"
+    )
+    return [
+        row
+        for row in rows
+        if row["status"] != "completed" and _is_claim_run(row, tag, commit)
+    ]
 
 
-def _abandon_attempt(version: str, attempt: int, tag: str, *, repo: Path, remote: str,
-                     repository: str, execute, inspect=None) -> dict:
+def _abandon_attempt(
+    version: str,
+    attempt: int,
+    tag: str,
+    *,
+    repo: Path,
+    remote: str,
+    repository: str,
+    execute,
+    inspect=None,
+) -> dict:
     cancelled: list[str] = []
     if inspect is not None:
         draft = _release_view(tag, repository, inspect)
         if draft is not None and draft.get("isDraft") is not True:
             raise ReleaseRefused(f"{tag} is published and cannot be abandoned")
-        for run in _in_progress_runs(inspect, repository, tag, _claim_commit(repo, tag)):
-            execute(["gh", "run", "cancel", str(run["databaseId"]), "--repo", repository, "--force"])
+        for run in _in_progress_runs(
+            inspect, repository, tag, _claim_commit(repo, tag)
+        ):
+            execute(
+                [
+                    "gh",
+                    "run",
+                    "cancel",
+                    str(run["databaseId"]),
+                    "--repo",
+                    repository,
+                    "--force",
+                ]
+            )
             cancelled.append(run["url"])
         if draft is not None:
             execute(["gh", "release", "delete", tag, "--repo", repository, "--yes"])
     marker = marker_ref(version, attempt)
-    message = json.dumps({"schema": 1, "version": version, "attempt": attempt, "attemptRef": tag},
-                         sort_keys=True, separators=(",", ":"))
+    message = json.dumps(
+        {"schema": 1, "version": version, "attempt": attempt, "attemptRef": tag},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     # -f replaces a local-only marker of this name; the push stays non-forcing.
     _git(repo, "tag", "-f", "-a", marker, f"{tag}^{{commit}}", "-m", message)
     try:
         _git(repo, "push", remote, f"refs/tags/{marker}")
     except subprocess.CalledProcessError as error:
         raise _claim_collision(repo, remote, marker, error) from error
-    return {"version": version, "tag": tag, "marker": marker, "repository": repository,
-            "cancelled": cancelled}
+    return {
+        "version": version,
+        "tag": tag,
+        "marker": marker,
+        "repository": repository,
+        "cancelled": cancelled,
+    }
 
 
-def abandon(version: str, *, repo: Path, remote: str, repository: str, execute, inspect=None) -> list[dict]:
+def abandon(
+    version: str, *, repo: Path, remote: str, repository: str, execute, inspect=None
+) -> list[dict]:
     """Clear every outstanding attempt of ``version``, oldest first. Attempt refs stay; markers are the record.
 
     Each attempt's in-progress runs are cancelled and its draft deleted before
@@ -491,12 +829,24 @@ def abandon(version: str, *, repo: Path, remote: str, repository: str, execute, 
     rerun picks up the rest.
     """
     _refresh_claims(repo, remote)
-    matching = sorted(found for found in _outstanding_attempts(repo, remote) if found[0] == version)
+    matching = sorted(
+        found for found in _outstanding_attempts(repo, remote) if found[0] == version
+    )
     if not matching:
         raise ReleaseRefused(f"stable {version} has no outstanding attempt to abandon")
-    return [_abandon_attempt(version, attempt, tag, repo=repo, remote=remote,
-                             repository=repository, execute=execute, inspect=inspect)
-            for _version, attempt, tag in matching]
+    return [
+        _abandon_attempt(
+            version,
+            attempt,
+            tag,
+            repo=repo,
+            remote=remote,
+            repository=repository,
+            execute=execute,
+            inspect=inspect,
+        )
+        for _version, attempt, tag in matching
+    ]
 
 
 def next_steps(result: dict, *, bold: bool = False) -> str:
@@ -506,34 +856,54 @@ def next_steps(result: dict, *, bold: bool = False) -> str:
     from the terminal, so piped output stays plain.
     """
     version, tag = result["version"], result["tag"]
-    actions_url = f"https://github.com/{result['repository']}/actions/workflows/{WORKFLOW}"
+    actions_url = (
+        f"https://github.com/{result['repository']}/actions/workflows/{WORKFLOW}"
+    )
     lines = [
         f"Attempting release {tag} for v{version}.",
-        "Release CI: " + (result.get("run_url")
-                          or f"the run is not listed yet. Find {tag} at {actions_url}"),
+        "Release CI: "
+        + (
+            result.get("run_url")
+            or f"the run is not listed yet. Find {tag} at {actions_url}"
+        ),
     ]
     lanes = result["lanes"]
     left_out = [name for name in lane_set.LEFT_OUT if name not in lanes]
     if left_out:
         effects = "; ".join(lane_set.LEFT_OUT[name] for name in left_out)
-        lines.append(f"Not built: {', '.join(left_out)}. {effects[0].upper()}{effects[1:]}.")
+        lines.append(
+            f"Not built: {', '.join(left_out)}. {effects[0].upper()}{effects[1:]}."
+        )
     if lane_set.has_bundles(lanes) and not lane_set.advances_desktop(lanes):
-        lines.append("This is a partial desktop release: its packages are verified, but the desktop "
-                     "update channel and feeds stay on the previous release (they move only when "
-                     "windows and macos-arm64 are both built).")
-    untested = [name for name in lane_set.NAMES if name not in lanes and name not in lane_set.LEFT_OUT
-                and not (name == "termux-checks" and "termux" not in lanes)]
+        lines.append(
+            "This is a partial desktop release: its packages are verified, but the desktop "
+            "update channel and feeds stay on the previous release (they move only when "
+            "windows and macos-arm64 are both built)."
+        )
+    untested = [
+        name
+        for name in lane_set.NAMES
+        if name not in lanes
+        and name not in lane_set.LEFT_OUT
+        and not (name == "termux-checks" and "termux" not in lanes)
+    ]
     if untested:
         warning = f"Not tested: {', '.join(untested)}"
         lines.append(f"\033[1m{warning}\033[0m" if bold else warning)
     lines.append(f"Draft release: {result['url']}")
     if result["autopublish"]:
-        lines.append("Edit the notes in the draft release. Autopublish is on: "
-                     f"when Release CI is green, v{version} publishes itself.")
+        lines.append(
+            "Edit the notes in the draft release. Autopublish is on: "
+            f"when Release CI is green, v{version} publishes itself."
+        )
     else:
-        lines.append("Edit the notes in the draft release. "
-                     f"When Release CI is green, to publish v{version}, run:")
-        lines.append(f"    python scripts/release.py publish --version {version} --remote origin")
+        lines.append(
+            "Edit the notes in the draft release. "
+            f"When Release CI is green, to publish v{version}, run:"
+        )
+        lines.append(
+            f"    python scripts/release.py publish --version {version} --remote origin"
+        )
     return "\n".join(lines)
 
 
@@ -561,30 +931,51 @@ def cmd_release(args) -> None:
     from scripts import release as release_script
 
     try:
-        lanes = lane_set.select(only=lane_set.parse_list(args.only), with_=lane_set.parse_list(args.with_lanes) or (),
-                                without=lane_set.parse_list(args.without_lanes) or ())
+        lanes = lane_set.select(
+            only=lane_set.parse_list(args.only),
+            with_=lane_set.parse_list(args.with_lanes) or (),
+            without=lane_set.parse_list(args.without_lanes) or (),
+        )
     except ValueError as error:
         raise SystemExit(f"release: {error}") from error
     repo = release_script.REPO_ROOT
     remote = release_script.resolve_push_remote(args.remote)
     repository = release_script.remote_github_repo(remote)
     if not repository:
-        raise SystemExit(f"release: remote {remote!r} does not point at a GitHub repository")
+        raise SystemExit(
+            f"release: remote {remote!r} does not point at a GitHub repository"
+        )
     commit = _git(repo, "rev-parse", "--verify", f"{args.commit}^{{commit}}")
 
     def execute(command: list[str]) -> None:
-        completed = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False)
+        completed = subprocess.run(
+            command,
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
         if completed.returncode != 0:
             raise RuntimeError(completed.stderr.strip() or "release command failed")
         return completed.stdout
 
     from scripts.releases.versioning import published_stable_identity
+
     result = release(
-        commit, bump=args.bump, repo=repo, remote=remote, repository=repository,
-        execute=execute, autopublish=args.autopublish, no_changelog=args.no_changelog,
+        commit,
+        bump=args.bump,
+        repo=repo,
+        remote=remote,
+        repository=repository,
+        execute=execute,
+        autopublish=args.autopublish,
+        no_changelog=args.no_changelog,
         lanes=lanes,
-        published=published_stable_identity(repository), run_wait=RUN_WAIT_SECONDS,
-        confirm_abandon=_abandon_prompt(), inspect=lambda command: _inspect(repo, command),
+        published=published_stable_identity(repository),
+        run_wait=RUN_WAIT_SECONDS,
+        confirm_abandon=_abandon_prompt(),
+        inspect=lambda command: _inspect(repo, command),
     )
     print(next_steps(result, bold=sys.stdout.isatty() and "NO_COLOR" not in os.environ))
 
@@ -598,8 +989,17 @@ def cmd_changelog(args) -> None:
     published = published_stable_identity(repository)
     version = derive_next_version(published=published[0], bump=args.bump)
     tag = attempt_ref(version, next_attempt(version, _claims(repo, remote)))
-    print(_changelog(repo, repository, commit=commit, tag=tag, version=version,
-                     published=published, no_changelog=False))
+    print(
+        _changelog(
+            repo,
+            repository,
+            commit=commit,
+            tag=tag,
+            version=version,
+            published=published,
+            no_changelog=False,
+        )
+    )
 
 
 def _command_repository(args) -> tuple[Path, str, str]:
@@ -609,18 +1009,24 @@ def _command_repository(args) -> tuple[Path, str, str]:
     remote = release_script.resolve_push_remote(args.remote)
     repository = release_script.remote_github_repo(remote)
     if not repository:
-        raise SystemExit(f"release: remote {remote!r} does not point at a GitHub repository")
+        raise SystemExit(
+            f"release: remote {remote!r} does not point at a GitHub repository"
+        )
     return repo, remote, repository
 
 
 def _execute(repo: Path, command: list[str]) -> None:
-    completed = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False)
+    completed = subprocess.run(
+        command, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False
+    )
     if completed.returncode != 0:
         raise ReleaseRefused(completed.stderr.strip() or "release command failed")
 
 
 def _inspect(repo: Path, command: list[str]) -> str:
-    completed = subprocess.run(command, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False)
+    completed = subprocess.run(
+        command, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False
+    )
     if completed.returncode != 0:
         raise ReleaseRefused(completed.stderr.strip() or "release inspection failed")
     return completed.stdout
@@ -631,7 +1037,9 @@ def publish_steps(result: dict) -> str:
     version = result["version"]
     lines = [
         f"Requested publication of v{version}.",
-        f"Workflow: {result['run_url']}" if result.get("run_url") else "Workflow: the run is not listed yet. Open the Actions tab.",
+        f"Workflow: {result['run_url']}"
+        if result.get("run_url")
+        else "Workflow: the run is not listed yet. Open the Actions tab.",
         "Wait for that workflow to finish. It publishes the draft and moves the stable channel.",
         f"The release page is https://github.com/{result['repository']}/releases/tag/v{version}.",
     ]
@@ -643,7 +1051,9 @@ def abandon_steps(results: list[dict]) -> str:
     version = results[0]["version"]
     lines = []
     for result in results:
-        lines.append(f"Cleared {result['tag']}. The marker {result['marker']} records it.")
+        lines.append(
+            f"Cleared {result['tag']}. The marker {result['marker']} records it."
+        )
         lines.extend(f"Cancelled {url}" for url in result.get("cancelled", []))
     _version, last = parse_attempt_ref(results[-1]["tag"])
     lines.append(f"v{version} is not spent. The next cut is rc.{last + 1}-v{version}.")
@@ -653,21 +1063,43 @@ def abandon_steps(results: list[dict]) -> str:
 def cmd_publish(args) -> None:
     repo, remote, repository = _command_repository(args)
     from scripts.releases.versioning import published_stable_version
-    result = publish(args.version, repository=repository,
-                     dispatch=lambda command: _execute(repo, command),
-                     inspect=lambda command: _inspect(repo, command),
-                     head_version=lambda: published_stable_version(repository),
-                     repo=repo, remote=remote)
-    listed = _inspect(repo, [
-        "gh", "run", "list", "--repo", repository, "--workflow", "stable-release-publication.yml",
-        "--json", "databaseId,url,headBranch,status", "--limit", "1",
-    ])
+
+    result = publish(
+        args.version,
+        repository=repository,
+        dispatch=lambda command: _execute(repo, command),
+        inspect=lambda command: _inspect(repo, command),
+        head_version=lambda: published_stable_version(repository),
+        repo=repo,
+        remote=remote,
+    )
+    listed = _inspect(
+        repo,
+        [
+            "gh",
+            "run",
+            "list",
+            "--repo",
+            repository,
+            "--workflow",
+            "stable-release-publication.yml",
+            "--json",
+            "databaseId,url,headBranch,status",
+            "--limit",
+            "1",
+        ],
+    )
     print(publish_steps({**result, "run_url": _latest_run(listed)}))
 
 
 def cmd_abandon(args) -> None:
     repo, remote, repository = _command_repository(args)
-    result = abandon(args.version, repo=repo, remote=remote, repository=repository,
-                     execute=lambda command: _execute(repo, command),
-                     inspect=lambda command: _inspect(repo, command))
+    result = abandon(
+        args.version,
+        repo=repo,
+        remote=remote,
+        repository=repository,
+        execute=lambda command: _execute(repo, command),
+        inspect=lambda command: _inspect(repo, command),
+    )
     print(abandon_steps(result))

@@ -29,6 +29,7 @@ while os.getppid() == parent and time.monotonic() < deadline:
     time.sleep(0.1)
 """
 
+
 def _gateway_argv(tmp_path: Path) -> list[str]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
@@ -46,7 +47,9 @@ def _wait_for(path: Path, proc: subprocess.Popen) -> None:
 
 
 @pytest.mark.spawns_gateway_lookalike
-def test_scan_claims_a_bare_gateway_only_for_the_home_its_environment_names(tmp_path, monkeypatch):
+def test_scan_claims_a_bare_gateway_only_for_the_home_its_environment_names(
+    tmp_path, monkeypatch
+):
     home_a, home_b = tmp_path / "home-a", tmp_path / "home-b"
     home_a.mkdir()
     home_b.mkdir()
@@ -55,13 +58,16 @@ def test_scan_claims_a_bare_gateway_only_for_the_home_its_environment_names(tmp_
     proc = subprocess.Popen(
         _gateway_argv(tmp_path),
         env={**os.environ, "CLAWK_HOME": str(home_a), "STUB_READY": str(ready)},
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     # Any other gateway on the host reads as an unreadable environment, so resolving it never
     # touches the operator's real home; only the stub's own environment is replayed.
     real_home_for_pid = dashboard_procs._clawk_home_for_pid
     monkeypatch.setattr(
-        dashboard_procs, "_clawk_home_for_pid",
+        dashboard_procs,
+        "_clawk_home_for_pid",
         lambda pid, **kw: real_home_for_pid(pid, **kw) if pid == proc.pid else None,
     )
     try:
@@ -73,4 +79,3 @@ def test_scan_claims_a_bare_gateway_only_for_the_home_its_environment_names(tmp_
     finally:
         proc.terminate()
         proc.wait(timeout=10)
-

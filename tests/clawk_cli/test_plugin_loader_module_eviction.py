@@ -31,7 +31,8 @@ def isolated_modules(monkeypatch: pytest.MonkeyPatch) -> dict:
     ``AttributeError`` on the stand-in.
     """
     modules: dict[str, object] = {
-        f"unrelated_{i}": types.ModuleType(f"unrelated_{i}") for i in range(_MODULE_COUNT)
+        f"unrelated_{i}": types.ModuleType(f"unrelated_{i}")
+        for i in range(_MODULE_COUNT)
     }
     monkeypatch.setattr(plugins_loader, "sys", types.SimpleNamespace(modules=modules))
     return modules
@@ -54,7 +55,11 @@ def fast_thread_switching() -> Iterator[None]:
 
 
 def test_evict_modules_drops_module_and_submodules(isolated_modules: dict) -> None:
-    for name in ("clawk_plugins.aop", "clawk_plugins.aop.client", "clawk_plugins.aop_other"):
+    for name in (
+        "clawk_plugins.aop",
+        "clawk_plugins.aop.client",
+        "clawk_plugins.aop_other",
+    ):
         isolated_modules[name] = types.ModuleType(name)
 
     plugins_loader._evict_modules("clawk_plugins.aop")
@@ -66,7 +71,8 @@ def test_evict_modules_drops_module_and_submodules(isolated_modules: dict) -> No
 
 
 def test_evict_modules_tolerates_concurrent_imports(
-    isolated_modules: dict, fast_thread_switching: None,
+    isolated_modules: dict,
+    fast_thread_switching: None,
 ) -> None:
     """A concurrent import must not abort the plugin load.
 
@@ -115,5 +121,7 @@ def test_evict_modules_tolerates_concurrent_imports(
     # the eviction running against a mapping it has to itself, which is the case the fix is
     # not about. A silent pass here would mean the regression stopped being covered at all.
     assert churn_rounds > 0, "churn thread never ran — the race window was never opened"
-    leftover = [name for name in isolated_modules if name.startswith("clawk_plugins.victim_")]
+    leftover = [
+        name for name in isolated_modules if name.startswith("clawk_plugins.victim_")
+    ]
     assert not leftover, f"eviction left entries behind: {leftover[:5]}"

@@ -28,7 +28,8 @@ def _get_profile_pool() -> concurrent.futures.ThreadPoolExecutor:
     with _profile_pool_lock:
         if _profile_pool is None:
             _profile_pool = concurrent.futures.ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="cron-seq")
+                max_workers=1, thread_name_prefix="cron-seq"
+            )
         return _profile_pool
 
 
@@ -43,12 +44,20 @@ def _log_tick_yield_once(reason: str) -> None:
             "Cron tick yielded: this process is running stale code (%s) and a "
             "fresher gateway owns the runtime lock — jobs will fire from that "
             "process. Restart this one to reclaim its ticks.",
-            reason)
+            reason,
+        )
     _last_yield_log = {"reason": reason, "at": now}
 
 
-def tick(verbose=True, adapters=None, loop=None, sync=True, *, can_dispatch=None,
-         headless: bool = False):
+def tick(
+    verbose=True,
+    adapters=None,
+    loop=None,
+    sync=True,
+    *,
+    can_dispatch=None,
+    headless: bool = False,
+):
     from clawk_cli.backend_retirement import retirement
 
     # Hold admission through the entire scan/advance/submit handoff. A predicate alone races
@@ -56,8 +65,9 @@ def tick(verbose=True, adapters=None, loop=None, sync=True, *, can_dispatch=None
     with retirement.work() as admitted:
         if not admitted:
             return 0
-        return _tick_admitted(verbose, adapters, loop, sync, can_dispatch=can_dispatch,
-                              headless=headless)
+        return _tick_admitted(
+            verbose, adapters, loop, sync, can_dispatch=can_dispatch, headless=headless
+        )
 
 
 def _acquire_tick_lock_or_degrade(_sched):
@@ -71,7 +81,9 @@ def _acquire_tick_lock_or_degrade(_sched):
     except OSError as exc:
         if exc.errno not in store_health.UNWRITABLE_ERRNOS:
             raise  # EMFILE/ENFILE etc. stay a FAILED tick (#87644)
-        store_health.note_unwritable(exc, "tick lock unavailable", "lock", cron_dir=lock_dir)
+        store_health.note_unwritable(
+            exc, "tick lock unavailable", "lock", cron_dir=lock_dir
+        )
         _sched._sweep_mcp_orphans()
         return None
 
@@ -85,7 +97,9 @@ def _advance_or_drop_recurring(_sched, due_jobs: list) -> list:
         return due_jobs
     except OSError as exc:
         skipped = [j for j in due_jobs if is_recurring(j)]
-        store_health.note_unwritable(exc, f"skipped {len(skipped)} recurring job(s)", "advance", skipped)
+        store_health.note_unwritable(
+            exc, f"skipped {len(skipped)} recurring job(s)", "advance", skipped
+        )
         return [j for j in due_jobs if not is_recurring(j)]
 
 
@@ -93,6 +107,7 @@ def _pre_dispatch_housekeeping(_sched, headless: bool) -> None:
     """Admission reconcile, legacy upgrade drain and dead-owner reap, run under the tick lock
     before due jobs are read."""
     from cron.scheduler_authority import reconcile_pending
+
     if headless:
         reconcile_pending(allow_connect=False)
     else:
@@ -100,15 +115,24 @@ def _pre_dispatch_housekeeping(_sched, headless: bool) -> None:
     # Upgrade drain for the retired CLI lane's records: never let it stop due jobs below.
     try:
         from cron.bot_chat_legacy import drain_legacy_pending
+
         drain_legacy_pending()
     except Exception as _legacy_exc:
-        _sched.logger.warning("Legacy Bot Chat pending drain failed: %s", _legacy_exc, exc_info=True)
+        _sched.logger.warning(
+            "Legacy Bot Chat pending drain failed: %s", _legacy_exc, exc_info=True
+        )
     _sched._maybe_reap_dead_owners()
 
 
 def _tick_admitted(
-    verbose: bool = True, adapters=None, loop=None, sync: bool = True, *, can_dispatch=None,
-    headless: bool = False):
+    verbose: bool = True,
+    adapters=None,
+    loop=None,
+    sync: bool = True,
+    *,
+    can_dispatch=None,
+    headless: bool = False,
+):
     """Check and run all due jobs. File-locked so only one tick runs at a time (gateway ticker vs
     standalone daemon / manual tick). ``can_dispatch``: optional gate; false leaves due jobs for the
     next allowed tick. ``headless``: the tick runs outside any gateway (system crontab, ``clawk
@@ -132,11 +156,14 @@ def _tick_admitted(
         # `clawk pause` ESTOP: skip dispatch, never touch in-flight runs; check_paused logs once.
         with contextlib.suppress(ImportError):
             from agent.estop import check_paused as _estop_check_paused
+
             if _estop_check_paused("cron", _sched.logger):
                 return 0
 
         if can_dispatch is not None and not can_dispatch():
-            _sched.logger.debug("Cron dispatch paused while gateway drains existing work")
+            _sched.logger.debug(
+                "Cron dispatch paused while gateway drains existing work"
+            )
             return 0
 
         _pre_dispatch_housekeeping(_sched, headless)
@@ -150,6 +177,7 @@ def _tick_admitted(
         _sched._sweep_stale_inflight_for_tick(due_jobs)
         if headless:
             from cron.scheduler_gateway_gate import refuse_agent_jobs_without_gateway
+
             due_jobs = refuse_agent_jobs_without_gateway(due_jobs)
 
         if not due_jobs:
@@ -160,7 +188,9 @@ def _tick_admitted(
                 # load_config()). Still run the post-tick MCP orphan sweep: main intentionally sweeps on
                 # idle ticks so orphaned stdio children from crashed jobs are reaped even when nothing is
                 # due.
-                _sched.logger.info("%s - No jobs due", _sched._clawk_now().strftime('%H:%M:%S'))
+                _sched.logger.info(
+                    "%s - No jobs due", _sched._clawk_now().strftime("%H:%M:%S")
+                )
             store_health.recheck_idle()
             _sched._sweep_mcp_orphans()
             return 0
@@ -172,7 +202,11 @@ def _tick_admitted(
             return 0
 
         if verbose:
-            _sched.logger.info("%s - %s job(s) due", _sched._clawk_now().strftime('%H:%M:%S'), len(due_jobs))
+            _sched.logger.info(
+                "%s - %s job(s) due",
+                _sched._clawk_now().strftime("%H:%M:%S"),
+                len(due_jobs),
+            )
 
         # Advance next_run_at for recurring jobs FIRST, under the lock, before any execution
         # (at-most-once). Re-advancing running jobs keeps the grace window alive; mark_job_run
@@ -187,7 +221,8 @@ def _tick_admitted(
             _sched.logger.info(
                 "Running %d job(s) in parallel (max_workers=%s)",
                 len(due_jobs),
-                _max_workers if _max_workers else "unbounded")
+                _max_workers if _max_workers else "unbounded",
+            )
 
         def _process_job(job: dict) -> bool:
             return _sched._process_due_job(job, adapters, loop, verbose)
@@ -198,7 +233,9 @@ def _tick_admitted(
         _all_futures: list = []
         pool = _sched._get_parallel_pool(_max_workers)
         for job in due_jobs:
-            job_pool = _get_profile_pool() if str(job.get("profile") or "").strip() else pool
+            job_pool = (
+                _get_profile_pool() if str(job.get("profile") or "").strip() else pool
+            )
             fut = _sched._submit_with_guard(job, job_pool, _process_job)
             if fut is None:
                 continue

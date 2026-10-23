@@ -41,7 +41,9 @@ def _install_test_section(manager: PluginManager, content) -> None:
     )
 
 
-def test_real_aiagent_freezes_section_within_life_and_rerenders_on_invalidate(monkeypatch):
+def test_real_aiagent_freezes_section_within_life_and_rerenders_on_invalidate(
+    monkeypatch,
+):
     # Pin the workspace snapshot: build_coding_workspace_block shells out to
     # live `git status`/`git log` on every build, and a git call failing or
     # timing out under test-suite contention makes the two builds differ in
@@ -83,7 +85,9 @@ def test_real_aiagent_freezes_section_within_life_and_rerenders_on_invalidate(mo
     assert calls[0]["session_id"] == agent.session_id
     assert calls[1]["session_id"] == agent.session_id
     assert "## Plugin Context: example.rules" in rebuilt
-    assert rebuilt.index("## Plugin Context: example.rules") < rebuilt.index("Conversation started:")
+    assert rebuilt.index("## Plugin Context: example.rules") < rebuilt.index(
+        "Conversation started:"
+    )
     assert "example.rules" not in agent._cached_system_prompt_static
 
 
@@ -191,13 +195,14 @@ def test_fresh_process_resume_restores_identical_full_prompt_without_callback(tm
     resumed_prompt = base64.b64decode(outputs[1]["prompt_b64"])
     if first_prompt != resumed_prompt:
         diff_at = next(
-            i for i, (left, right) in enumerate(zip(first_prompt, resumed_prompt))
+            i
+            for i, (left, right) in enumerate(zip(first_prompt, resumed_prompt))
             if left != right
         )
         raise AssertionError(
             f"prompt bytes differ at {diff_at}: "
-            f"first={first_prompt[diff_at - 100:diff_at + 100]!r} "
-            f"resumed={resumed_prompt[diff_at - 100:diff_at + 100]!r}"
+            f"first={first_prompt[diff_at - 100 : diff_at + 100]!r} "
+            f"resumed={resumed_prompt[diff_at - 100 : diff_at + 100]!r}"
         )
     assert b"original bytes" in first_prompt
     # RESTORE stays frozen: the resumed prompt is byte-identical, plugin

@@ -79,7 +79,9 @@ def test_empty_text_is_refused_without_a_lookup():
 
 
 def test_record_without_live_agent_is_false():
-    _register_subagent({"subagent_id": "sid-steer-3", "status": "running", "agent": None})
+    _register_subagent(
+        {"subagent_id": "sid-steer-3", "status": "running", "agent": None}
+    )
     try:
         assert steer_subagent("sid-steer-3", "hello") is False
     finally:
@@ -751,7 +753,10 @@ class TestSubagentSteerRPC:
         )
         owner_record["transport"] = rebound_transport
         try:
-            for transport, expected in ((original_transport, "rejected"), (rebound_transport, "queued")):
+            for transport, expected in (
+                (original_transport, "rejected"),
+                (rebound_transport, "queued"),
+            ):
                 envelope = self._call(
                     {
                         "session_id": "owner-session",

@@ -99,12 +99,18 @@ class SharedMetricsSubscriber:
     @staticmethod
     def _classify(event: Any) -> list[tuple[str, dict, int]]:
         """Return every ``(metric_name, dimensions, amount)`` the event satisfies."""
-        counted = [(*m, 1) for m in (project(event) for project in _COUNTERS) if m is not None]
+        counted = [
+            (*m, 1) for m in (project(event) for project in _COUNTERS) if m is not None
+        ]
         return counted + model_token_counters(event)
 
     def _record_milestones(self, metric_name: str, dimensions: dict) -> None:
         """Latch every install milestone this counter reaches (each once per install, ever)."""
-        reached = [m for m in milestones_for(metric_name, dimensions) if m not in self._milestones_done]
+        reached = [
+            m
+            for m in milestones_for(metric_name, dimensions)
+            if m not in self._milestones_done
+        ]
         if not reached:
             return
         from .shared_metrics_snapshot import install_age_bucket
@@ -114,26 +120,39 @@ class SharedMetricsSubscriber:
             self.store.record_milestone(milestone, age, self._client_resource)
             self._milestones_done.add(milestone)
 
-    def _record_engagement(self, event: Any, classified: list[tuple[str, dict, int]]) -> None:
+    def _record_engagement(
+        self, event: Any, classified: list[tuple[str, dict, int]]
+    ) -> None:
         """Fold a turn start/end or an attended turn's model into the local daily engagement rollup."""
-        surface, route = engagement.interaction_surface(classified), engagement.turn_route(event)
+        surface, route = (
+            engagement.interaction_surface(classified),
+            engagement.turn_route(event),
+        )
         if surface is None and route is None:
             return
         with self._lock:
             if not self._active:
                 return
             try:
-                engagement.record(self.store, self._client_resource, surface=surface, route=route)
+                engagement.record(
+                    self.store, self._client_resource, surface=surface, route=route
+                )
             except Exception:
-                logger.warning("Unable to update the Clawksis engagement rollup", exc_info=True)
+                logger.warning(
+                    "Unable to update the Clawksis engagement rollup", exc_info=True
+                )
 
     def _persist(self, metric_name: str, dimensions: dict, amount: int) -> None:
         store, resource = self.store, self._client_resource
         special = {
             FEATURE_USED_MARK: lambda: None,  # a first-use fact, not a counter row
-            FEATURE_DISABLED_METRIC: lambda: store.record_counter_once_per_day(metric_name, dimensions, resource),
+            FEATURE_DISABLED_METRIC: lambda: store.record_counter_once_per_day(
+                metric_name, dimensions, resource
+            ),
             CLIENT_ACTIVE_METRIC: lambda: store.record_client_active(resource),
-            INSTALL_SNAPSHOT_METRIC: lambda: store.record_install_snapshot(dimensions, resource),
+            INSTALL_SNAPSHOT_METRIC: lambda: store.record_install_snapshot(
+                dimensions, resource
+            ),
         }.get(metric_name)
         if special is not None:
             special()
@@ -142,7 +161,11 @@ class SharedMetricsSubscriber:
 
     def _record_features(self, metric_name: str, dimensions: dict) -> None:
         """Latch each feature's first real use (once per install, with the owning profile's age)."""
-        reached = [f for f in signals.features_for(metric_name, dimensions) if f not in self._features_done]
+        reached = [
+            f
+            for f in signals.features_for(metric_name, dimensions)
+            if f not in self._features_done
+        ]
         if not reached:
             return
         age = signals.days_since_install_bucket(self._clawk_home)
@@ -168,7 +191,9 @@ class SharedMetricsSubscriber:
             ):
                 return
         ticket = metadata.get(COMMIT_TICKET_KEY) if isinstance(metadata, dict) else None
-        saved = True  # a row the contract rejects is settled too: no retry can change that
+        saved = (
+            True  # a row the contract rejects is settled too: no retry can change that
+        )
         classified = self._classify(event)
         self._record_engagement(event, classified)
         for metric_name, dimensions, amount in classified:
@@ -182,7 +207,9 @@ class SharedMetricsSubscriber:
                 except Exception:
                     saved = False
                     logger.warning(
-                        "Unable to persist the Clawksis shared metric: %s", metric_name, exc_info=True
+                        "Unable to persist the Clawksis shared metric: %s",
+                        metric_name,
+                        exc_info=True,
                     )
         if ticket and saved:
             with self._lock:

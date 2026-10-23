@@ -20,7 +20,11 @@ def _make_exe(path):
 def test_path_hit_comes_first_and_known_dirs_are_still_recorded(tmp_path):
     on_path = _make_exe(tmp_path / "pathbin" / "tool")
     in_known = _make_exe(tmp_path / "known" / "tool")
-    res = locate_command("tool", LookupContext(path=str(on_path.parent)), known_dirs=(str(in_known.parent),))
+    res = locate_command(
+        "tool",
+        LookupContext(path=str(on_path.parent)),
+        known_dirs=(str(in_known.parent),),
+    )
     assert res.kind == "path_executable"
     assert res.command == (str(on_path),)
     assert [c.present for c in res.candidates] == [True, True]
@@ -30,7 +34,9 @@ def test_path_hit_comes_first_and_known_dirs_are_still_recorded(tmp_path):
 @pytest.mark.platforms("posix")
 def test_known_dir_hit_when_path_misses(tmp_path):
     in_known = _make_exe(tmp_path / "known" / "tool")
-    res = locate_command("tool", LookupContext(path=""), known_dirs=(str(in_known.parent),))
+    res = locate_command(
+        "tool", LookupContext(path=""), known_dirs=(str(in_known.parent),)
+    )
     assert res.kind == "known_path"
     assert res.source == f"known_dir:{in_known.parent}"
     assert res.candidates[0].present is False
@@ -91,18 +97,30 @@ def test_windows_pathext_is_honored_without_mutating_environ(tmp_path, monkeypat
     assert os.environ.get("PATHEXT") == before
 
 
-
-
 def test_one_candidate_per_known_dir_regardless_of_pathext(tmp_path):
-    res = locate_command("nothing-here", LookupContext(path=""), known_dirs=(str(tmp_path / "a"), str(tmp_path / "b")))
-    assert [c.source for c in res.candidates] == ["PATH", f"known_dir:{tmp_path / 'a'}", f"known_dir:{tmp_path / 'b'}"]
+    res = locate_command(
+        "nothing-here",
+        LookupContext(path=""),
+        known_dirs=(str(tmp_path / "a"), str(tmp_path / "b")),
+    )
+    assert [c.source for c in res.candidates] == [
+        "PATH",
+        f"known_dir:{tmp_path / 'a'}",
+        f"known_dir:{tmp_path / 'b'}",
+    ]
 
 
 def test_known_dir_tables_match_the_host_os():
     from clawk_platform.resolver import known_dirs as kd
 
-    every = (*kd.homebrew_dirs(), *kd.user_local_bin(), *kd.rust_tool_dirs(),
-             *kd.node_tool_dirs(), *kd.clawk_vendored_dirs(), *kd.windows_user_program_dirs())
+    every = (
+        *kd.homebrew_dirs(),
+        *kd.user_local_bin(),
+        *kd.rust_tool_dirs(),
+        *kd.node_tool_dirs(),
+        *kd.clawk_vendored_dirs(),
+        *kd.windows_user_program_dirs(),
+    )
     assert every, "at least one table applies on every host"
     if sys.platform == "win32":
         assert not any(d.startswith("/") for d in every)

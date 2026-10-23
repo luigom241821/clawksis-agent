@@ -86,18 +86,34 @@ def _run_on_daemon(call, cli, *, response, schedule=None):
 
     def _worker():
         try:
-            with patch.object(cli._app.loop, "call_soon_threadsafe", side_effect=schedule or (lambda cb: cb())), \
-                 patch.object(cli, "_prompt_text_input") as mock_stdin, \
-                 patch.object(cli, "_invalidate"), \
-                 patch.object(cli, "_capture_modal_input_snapshot", side_effect=lambda: outcome["capture"].append(1)), \
-                 patch.object(cli, "_restore_modal_input_snapshot", side_effect=lambda: outcome["restore"].append(1)):
+            with (
+                patch.object(
+                    cli._app.loop,
+                    "call_soon_threadsafe",
+                    side_effect=schedule or (lambda cb: cb()),
+                ),
+                patch.object(cli, "_prompt_text_input") as mock_stdin,
+                patch.object(cli, "_invalidate"),
+                patch.object(
+                    cli,
+                    "_capture_modal_input_snapshot",
+                    side_effect=lambda: outcome["capture"].append(1),
+                ),
+                patch.object(
+                    cli,
+                    "_restore_modal_input_snapshot",
+                    side_effect=lambda: outcome["restore"].append(1),
+                ),
+            ):
                 outcome["result"] = call()
                 outcome["stdin_called"] = mock_stdin.called
         finally:
             done.set()
 
     worker = threading.Thread(target=_worker, daemon=True)
-    answerer = threading.Thread(target=_answer_modal_when_open, args=(cli, response, done), daemon=True)
+    answerer = threading.Thread(
+        target=_answer_modal_when_open, args=(cli, response, done), daemon=True
+    )
     answerer.start()
     worker.start()
     worker.join(timeout=2.0)
@@ -134,11 +150,15 @@ class TestModal:
     def test_main_thread_with_app_uses_modal(self):
         """On the main thread with a running app, the queue-based modal is used."""
         cli = _make_cli()
-        with patch.object(cli, "_capture_modal_input_snapshot"), \
-             patch.object(cli, "_restore_modal_input_snapshot"), \
-             patch.object(cli, "_invalidate"), \
-             patch.object(cli, "_prompt_text_input") as mock_stdin:
-            answerer = threading.Thread(target=_answer_modal_when_open, args=(cli, "once"), daemon=True)
+        with (
+            patch.object(cli, "_capture_modal_input_snapshot"),
+            patch.object(cli, "_restore_modal_input_snapshot"),
+            patch.object(cli, "_invalidate"),
+            patch.object(cli, "_prompt_text_input") as mock_stdin,
+        ):
+            answerer = threading.Thread(
+                target=_answer_modal_when_open, args=(cli, "once"), daemon=True
+            )
             answerer.start()
             result = cli._prompt_text_input_modal(
                 title="⚠️  /new",
@@ -150,7 +170,6 @@ class TestModal:
 
         mock_stdin.assert_not_called()
         assert result == "once"
-
 
 
 class TestConfirmDestructiveSlash:
@@ -184,7 +203,10 @@ class TestConfirmDestructiveSlash:
         """The bare /new confirm drives the modal (not stdin) and returns the
         chosen outcome — bug #33961 froze this path on native Windows."""
         cli = self._make_interactive_cli()
-        with patch("cli.load_cli_config", return_value={"approvals": {"destructive_slash_confirm": True}}):
+        with patch(
+            "cli.load_cli_config",
+            return_value={"approvals": {"destructive_slash_confirm": True}},
+        ):
             outcome = _run_on_daemon(
                 lambda: cli._confirm_destructive_slash(
                     "new",
@@ -242,10 +264,12 @@ class TestNativeWindowsNoRawInputDeadlock:
 
         def _worker():
             try:
-                with patch("builtins.input", side_effect=_blocking_input), \
-                     patch.object(cli, "_capture_modal_input_snapshot"), \
-                     patch.object(cli, "_restore_modal_input_snapshot"), \
-                     patch.object(cli, "_invalidate"):
+                with (
+                    patch("builtins.input", side_effect=_blocking_input),
+                    patch.object(cli, "_capture_modal_input_snapshot"),
+                    patch.object(cli, "_restore_modal_input_snapshot"),
+                    patch.object(cli, "_invalidate"),
+                ):
                     outcome["result"] = cli._prompt_text_input_modal(
                         title="/new",
                         detail="destroys conversation state",
@@ -296,8 +320,10 @@ class TestNativeWindowsNoRawInputDeadlock:
         outcome = {}
 
         def _worker():
-            with patch("builtins.input", side_effect=_tracking_input), \
-                 patch.object(cli, "_invalidate"):
+            with (
+                patch("builtins.input", side_effect=_tracking_input),
+                patch.object(cli, "_invalidate"),
+            ):
                 outcome["result"] = cli._prompt_text_input_modal(
                     title="/new",
                     detail="destroys conversation state",

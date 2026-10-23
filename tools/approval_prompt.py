@@ -17,10 +17,17 @@ from tools.interrupt import is_interrupted
 logger = logging.getLogger("tools.approval")
 
 
-def prompt_dangerous_approval(command: str, description: str, timeout_seconds: int | None = None,
-                              allow_permanent: bool = True, approval_callback=None,
-                              *, allow_session: bool = True, smart_denied: bool = False,
-                              title: str | None = None) -> str:
+def prompt_dangerous_approval(
+    command: str,
+    description: str,
+    timeout_seconds: int | None = None,
+    allow_permanent: bool = True,
+    approval_callback=None,
+    *,
+    allow_session: bool = True,
+    smart_denied: bool = False,
+    title: str | None = None,
+) -> str:
     """Prompt the user to approve a dangerous command (CLI only).
 
     allow_permanent=False hides [a]lways. allow_session=False hides
@@ -45,12 +52,21 @@ def prompt_dangerous_approval(command: str, description: str, timeout_seconds: i
     if timeout_seconds is None:
         timeout_seconds = _ctx._get_approval_timeout()
     from tools.human_input_hooks import human_input_request
+
     # Everything below is a human prompt (callback panel or input() fallback, both bounded by the approval deadline):
     # record it as human-wait time so the concurrent batch deadline excludes it.
     # See #79719.
     with human_input_request("approval", prompt=command) as human, human_wait_window():
-        human.outcome = choice = _ask_human(command, description, timeout_seconds, allow_permanent,
-                                            approval_callback, allow_session, smart_denied, title=title)
+        human.outcome = choice = _ask_human(
+            command,
+            description,
+            timeout_seconds,
+            allow_permanent,
+            approval_callback,
+            allow_session,
+            smart_denied,
+            title=title,
+        )
         return choice
 
 
@@ -58,6 +74,7 @@ class Unanswered(str):
     """Choice ``"cancelled"`` carrying the reason nobody answered. Compares equal to the gateway's
     withdrawn-prompt choice so every consumer already handling ``cancelled`` fails closed without
     attributing a denial to the user."""
+
     __slots__ = ("cause",)
 
     def __new__(cls, cause: str):
@@ -67,9 +84,12 @@ class Unanswered(str):
 
 
 _CLI_CHOICE_ALIASES = {
-    "o": "once", "once": "once",
-    "s": "session", "session": "session",
-    "a": "always", "always": "always",
+    "o": "once",
+    "once": "once",
+    "s": "session",
+    "session": "session",
+    "a": "always",
+    "always": "always",
 }
 
 _CLI_CHOICE_I18N = {
@@ -100,18 +120,30 @@ def callback_accepts(callback, keyword: str) -> bool:
     """True when *callback* takes ``keyword`` (or ``**kwargs``); approval callbacks predate ``title``
     and a TypeError inside the callback would read as a deny."""
     import inspect
+
     try:
         params = inspect.signature(callback).parameters
     except (TypeError, ValueError):
         return False
-    return keyword in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    return keyword in params or any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+    )
 
 
-def _ask_human(command: str, description: str, timeout_seconds: int, allow_permanent: bool,
-               approval_callback, allow_session: bool, smart_denied: bool, title: str | None = None) -> str:
+def _ask_human(
+    command: str,
+    description: str,
+    timeout_seconds: int,
+    allow_permanent: bool,
+    approval_callback,
+    allow_session: bool,
+    smart_denied: bool,
+    title: str | None = None,
+) -> str:
     # Redact before any user-visible rendering; the original `command` still executes after approval. Same redactor as
     # memory/log sanitization so tokens mask consistently across surfaces.
     from agent.redact import redact_sensitive_text
+
     display_command = redact_sensitive_text(command)
     display_description = redact_sensitive_text(description)
     # Smart DENY and a session-less gate both reduce the menu to once/deny.
@@ -120,11 +152,19 @@ def _ask_human(command: str, description: str, timeout_seconds: int, allow_perma
     if approval_callback is not None:
         try:
             # Non-default scopes only: legacy callbacks lack the newer keywords.
-            callback_kwargs = {"allow_permanent": allow_permanent,
-                               **({"allow_session": False} if not allow_session else {}),
-                               **({"smart_denied": True} if smart_denied else {}),
-                               **({"title": title} if title and callback_accepts(approval_callback, "title") else {})}
-            return approval_callback(display_command, display_description, **callback_kwargs)
+            callback_kwargs = {
+                "allow_permanent": allow_permanent,
+                **({"allow_session": False} if not allow_session else {}),
+                **({"smart_denied": True} if smart_denied else {}),
+                **(
+                    {"title": title}
+                    if title and callback_accepts(approval_callback, "title")
+                    else {}
+                ),
+            }
+            return approval_callback(
+                display_command, display_description, **callback_kwargs
+            )
         except Exception as e:
             logger.error("Approval callback failed: %s", e, exc_info=True)
             return Unanswered(f"the approval callback failed: {type(e).__name__}")
@@ -140,33 +180,47 @@ def _ask_human(command: str, description: str, timeout_seconds: int, allow_perma
         # run_agent.py _execute_tool_calls_concurrent / _spawn_background_review for the established
         # pattern). See #15216.
         from prompt_toolkit.application.current import get_app_or_none
+
         if get_app_or_none() is not None:
-            logger.warning("Dangerous-command approval requested on a thread with no "
-                           "approval callback while prompt_toolkit is active; failing closed "
-                           "to avoid stdin deadlock. command=%r description=%r", command, description)
-            return Unanswered("no approval callback is registered on this thread while prompt_toolkit owns "
-                              "the terminal, so the prompt could not be shown")
+            logger.warning(
+                "Dangerous-command approval requested on a thread with no "
+                "approval callback while prompt_toolkit is active; failing closed "
+                "to avoid stdin deadlock. command=%r description=%r",
+                command,
+                description,
+            )
+            return Unanswered(
+                "no approval callback is registered on this thread while prompt_toolkit owns "
+                "the terminal, so the prompt could not be shown"
+            )
     except Exception:
         pass  # prompt_toolkit absent or detection failed: legacy input() path is safe
 
     os.environ["CLAWK_SPINNER_PAUSE"] = "1"
     try:
         from agent.i18n import t
+
         # (prompt key, menu key) by menu shape: once/deny, full, or no [a]lways.
         shape = "smart_deny" if once_only else "long" if allow_permanent else "short"
         prompt_key, menu_key = f"approval.prompt_{shape}", f"approval.choose_{shape}"
-        header = title or t('approval.dangerous_header', description=display_description)
-        print(f"\n  {header}"
-              f"\n      {display_command}\n\n{t(menu_key)}\n")
+        header = title or t(
+            "approval.dangerous_header", description=display_description
+        )
+        print(f"\n  {header}\n      {display_command}\n\n{t(menu_key)}\n")
         sys.stdout.flush()
         choice = _read_choice(t(prompt_key), timeout_seconds)
         if choice is None:
             print("\n" + t("approval.timeout", **_ctx.approval_timeout_notice_kwargs()))
             return "timeout"  # distinct from deny: the user never answered
         if once_only:
-            decision = {**dict.fromkeys(t("approval.smart_deny_once_inputs").split(","), "once"),
-                        **dict.fromkeys(t("approval.smart_deny_deny_inputs").split(","), "deny"),
-                        }.get(choice, "deny")
+            decision = {
+                **dict.fromkeys(
+                    t("approval.smart_deny_once_inputs").split(","), "once"
+                ),
+                **dict.fromkeys(
+                    t("approval.smart_deny_deny_inputs").split(","), "deny"
+                ),
+            }.get(choice, "deny")
         else:
             decision = _CLI_CHOICE_ALIASES.get(choice, "deny")
             if decision == "always" and not allow_permanent:
@@ -185,6 +239,7 @@ def _ask_human(command: str, description: str, timeout_seconds: int, allow_perma
 def get_plugin_manager():
     """Lazy plugin-manager seam used by tests and early tool-only imports."""
     from clawk_cli.plugins import discover_plugins, get_plugin_manager as _get_manager
+
     # Approval can be imported before model_tools (which triggers discovery); make an explicitly selected transport
     # available on the first approval instead of treating the undiscovered registry as unavailable.
     discover_plugins()
@@ -193,12 +248,26 @@ def get_plugin_manager():
 
 def _attempt(name: str, choice, failure, fallback) -> dict:
     """Result shape of :func:`_present_with_selected_transport` once a transport is selected."""
-    return {"selected": True, "choice": choice, "failure": failure, "fallback": fallback, "name": name}
+    return {
+        "selected": True,
+        "choice": choice,
+        "failure": failure,
+        "fallback": fallback,
+        "name": name,
+    }
 
 
-def _present_with_selected_transport(*, command: str, description: str, pattern_key: str,
-                                     pattern_keys: list[str], session_key: str, surface: str,
-                                     allow_session: bool, allow_permanent: bool) -> dict:
+def _present_with_selected_transport(
+    *,
+    command: str,
+    description: str,
+    pattern_key: str,
+    pattern_keys: list[str],
+    session_key: str,
+    surface: str,
+    allow_session: bool,
+    allow_permanent: bool,
+) -> dict:
     """Present through an explicitly selected plugin transport, if any. A selected
     transport replaces every built-in prompt surface; detection, allowed scopes,
     persistence, timeout, and final authorization stay host-owned. A failed
@@ -220,14 +289,22 @@ def _present_with_selected_transport(*, command: str, description: str, pattern_
 
     try:
         from agent.redact import redact_sensitive_text
-        from clawk_cli.approval_transport import ApprovalRequest, invoke_approval_transport
+        from clawk_cli.approval_transport import (
+            ApprovalRequest,
+            invoke_approval_transport,
+        )
 
         timeout_seconds = _ctx._get_approval_timeout()
         request = ApprovalRequest.create(
             command=redact_sensitive_text(command, force=True),
-            description=redact_sensitive_text(description, force=True), pattern_key=pattern_key,
-            pattern_keys=tuple(pattern_keys), session_key=session_key, surface=surface, allow_session=allow_session,
-            allow_permanent=allow_permanent, timeout_seconds=timeout_seconds,
+            description=redact_sensitive_text(description, force=True),
+            pattern_key=pattern_key,
+            pattern_keys=tuple(pattern_keys),
+            session_key=session_key,
+            surface=surface,
+            allow_session=allow_session,
+            allow_permanent=allow_permanent,
+            timeout_seconds=timeout_seconds,
         )
     except Exception:
         # Never fall back to raw text if redaction or request construction fails:
@@ -235,21 +312,37 @@ def _present_with_selected_transport(*, command: str, description: str, pattern_
         logger.warning("Could not build redacted plugin approval request")
         return _attempt(name, "deny", "error", None)
     hook_kwargs = dict(
-        command=request.command, description=request.description, pattern_key=pattern_key,
-        pattern_keys=list(pattern_keys), session_key=session_key, surface=f"transport:{name}",
-        request_id=request.request_id, request_digest=request.digest,
+        command=request.command,
+        description=request.description,
+        pattern_key=pattern_key,
+        pattern_keys=list(pattern_keys),
+        session_key=session_key,
+        surface=f"transport:{name}",
+        request_id=request.request_id,
+        request_digest=request.digest,
     )
     _ctx._fire_approval_hook("pre_approval_request", **hook_kwargs)
     from tools.human_input_hooks import human_input_request
-    with human_input_request("approval", prompt=request.command, session_key=session_key) as human, \
-            human_wait_window(session_key):
+
+    with (
+        human_input_request(
+            "approval", prompt=request.command, session_key=session_key
+        ) as human,
+        human_wait_window(session_key),
+    ):
         result = invoke_approval_transport(
-            registered.present, request, timeout_seconds=timeout_seconds,
+            registered.present,
+            request,
+            timeout_seconds=timeout_seconds,
             on_poll=activity_heartbeat("waiting for plugin approval transport"),
             is_interrupted=is_interrupted,
         )
-        human.outcome = result.choice if result.failure is None else f"transport_{result.failure}"
-    _ctx._fire_approval_hook("post_approval_response", **hook_kwargs, choice=human.outcome)
+        human.outcome = (
+            result.choice if result.failure is None else f"transport_{result.failure}"
+        )
+    _ctx._fire_approval_hook(
+        "post_approval_response", **hook_kwargs, choice=human.outcome
+    )
     return _attempt(name, result.choice, result.failure, fallback)
 
 
@@ -264,16 +357,22 @@ def _transport_choice(attempt: dict, *, pattern_key: str, description: str):
     if not failure:
         return attempt.get("choice"), None
     if attempt.get("fallback") == "builtin":
-        logger.warning("Approval transport %r failed (%s); using explicit builtin fallback",
-                       attempt.get("name"), failure)
+        logger.warning(
+            "Approval transport %r failed (%s); using explicit builtin fallback",
+            attempt.get("name"),
+            failure,
+        )
         return None, None
     from tools import approval as _a
+
     breaker_addendum = _a._denial_breaker_addendum(_ctx.get_current_session_key())
     return None, _a._denied(
         f"BLOCKED: Selected approval transport failed ({failure}); the user "
         "has NOT consented to this action. Do NOT retry this command or "
         f"attempt the same outcome through another route.{breaker_addendum}",
-        pattern_key=pattern_key, description=description, outcome=f"transport_{failure}",
+        pattern_key=pattern_key,
+        description=description,
+        outcome=f"transport_{failure}",
     )
 
 
@@ -284,9 +383,14 @@ def _consent(choice, unresolved: str) -> str:
     return unresolved if choice in ("timeout", "cancelled") else "decline"
 
 
-def request_elicitation_consent(message: str, description: str, *,
-                                timeout_seconds: int | None = None,
-                                surface: str = "mcp-elicitation", title: str = "Confirm this action?") -> str:
+def request_elicitation_consent(
+    message: str,
+    description: str,
+    *,
+    timeout_seconds: int | None = None,
+    surface: str = "mcp-elicitation",
+    title: str = "Confirm this action?",
+) -> str:
     """Route an MCP elicitation request to the surface owning the active session:
     gateway sessions through ``_await_gateway_decision``, CLI/TUI through
     ``prompt_dangerous_approval``. Always fails closed: a missing notify_cb in a
@@ -294,6 +398,7 @@ def request_elicitation_consent(message: str, description: str, *,
     treats them as "user did not approve" rather than retrying or hanging.
     Returns ``"accept" | "decline" | "cancel"``."""
     from tools import approval as _a
+
     try:
         session_key = _ctx.get_current_session_key()
     except Exception as exc:  # pragma: no cover -- defensive
@@ -316,14 +421,24 @@ def request_elicitation_consent(message: str, description: str, *,
     if _ctx._is_gateway_approval_context() or api_run_context:
         notify_cb = _a._gateway_notify_cb(session_key)
         if notify_cb is None:
-            logger.warning("Elicitation requested in gateway session %s but no "
-                           "notify_cb is registered — failing closed", session_key)
+            logger.warning(
+                "Elicitation requested in gateway session %s but no "
+                "notify_cb is registered — failing closed",
+                session_key,
+            )
             return "decline"
         try:
             decision = _gw._await_gateway_decision(
-                session_key, notify_cb, {"command": message, "description": description,
-                                         "pattern_key": "mcp_elicitation",
-                                         "pattern_keys": ["mcp_elicitation"]}, surface=surface)
+                session_key,
+                notify_cb,
+                {
+                    "command": message,
+                    "description": description,
+                    "pattern_key": "mcp_elicitation",
+                    "pattern_keys": ["mcp_elicitation"],
+                },
+                surface=surface,
+            )
         except Exception as exc:
             logger.error("Elicitation gateway dispatch failed: %s", exc, exc_info=True)
             return "decline"
@@ -336,26 +451,45 @@ def request_elicitation_consent(message: str, description: str, *,
     # Nobody can answer a -q, cron or unattended-platform worker. A `clawk chat -q` turn still has the CLI's
     # panel callback registered, which would wait the full approval timeout before failing closed.
     if _ctx._no_user_can_answer():
-        logger.info("Elicitation consent (%s) declined: no user can answer in this session", surface)
+        logger.info(
+            "Elicitation consent (%s) declined: no user can answer in this session",
+            surface,
+        )
         return "decline"
 
     # Same observer payload as the gateway branch (#131876); post fires in a finally so the
     # wait settles for observers on the early fail-closed return too.
-    hook_kwargs = dict(command=message, description=description, pattern_key="mcp_elicitation",
-                       pattern_keys=["mcp_elicitation"], session_key=session_key, surface=surface)
+    hook_kwargs = dict(
+        command=message,
+        description=description,
+        pattern_key="mcp_elicitation",
+        pattern_keys=["mcp_elicitation"],
+        session_key=session_key,
+        surface=surface,
+    )
     _ctx._fire_approval_hook("pre_approval_request", **hook_kwargs)
     hook_choice = "cancelled"
     try:
         from tools.terminal_tool import _get_approval_callback
+
         # allow_permanent=False: elicitation is a per-call confirmation — no pattern to remember.
         # Pass the agent thread's panel callback: without it prompt_toolkit fails the prompt closed unseen.
-        choice = prompt_dangerous_approval(message, description, timeout_seconds=timeout_seconds,
-                                           allow_permanent=False, title=title,
-                                           approval_callback=_get_approval_callback())
+        choice = prompt_dangerous_approval(
+            message,
+            description,
+            timeout_seconds=timeout_seconds,
+            allow_permanent=False,
+            title=title,
+            approval_callback=_get_approval_callback(),
+        )
         hook_choice = choice
     except Exception as exc:
         logger.error("Elicitation CLI prompt failed: %s", exc, exc_info=True)
         return "decline"
     finally:
-        _ctx._fire_approval_hook("post_approval_response", **hook_kwargs, choice=hook_choice)
-    return _consent(choice, "cancel")  # timeout mirrors the gateway's unresolved outcome
+        _ctx._fire_approval_hook(
+            "post_approval_response", **hook_kwargs, choice=hook_choice
+        )
+    return _consent(
+        choice, "cancel"
+    )  # timeout mirrors the gateway's unresolved outcome

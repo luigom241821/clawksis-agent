@@ -66,7 +66,9 @@ def test_list_providers_dedupes_aliases_in_cached_snapshot():
     assert providers.list_providers() == [profile]
 
 
-def test_provider_lookups_reuse_the_home_plugin_stamp_within_its_ttl(tmp_path, monkeypatch):
+def test_provider_lookups_reuse_the_home_plugin_stamp_within_its_ttl(
+    tmp_path, monkeypatch
+):
     """The model-picker hot path must not stat plugin directories per lookup (#119950)."""
     _reset_registry()
     profile = _profile("known")
@@ -101,9 +103,16 @@ def test_api_key_profiles_declare_their_registry_key_env():
     missing = []
     for profile in providers.list_providers():
         row = PROVIDER_REGISTRY.get(profile.name)
-        if profile.auth_type != "api_key" or row is None or row.auth_type != "api_key" or not row.api_key_env_vars:
+        if (
+            profile.auth_type != "api_key"
+            or row is None
+            or row.auth_type != "api_key"
+            or not row.api_key_env_vars
+        ):
             continue
         keys = [v for v in profile.env_vars if not v.endswith(("_BASE_URL", "_URL"))]
         if not keys or keys[0] not in row.api_key_env_vars:
-            missing.append((profile.name, tuple(profile.env_vars), tuple(row.api_key_env_vars)))
+            missing.append(
+                (profile.name, tuple(profile.env_vars), tuple(row.api_key_env_vars))
+            )
     assert not missing, f"profiles whose env_vars miss their registry key: {missing}"

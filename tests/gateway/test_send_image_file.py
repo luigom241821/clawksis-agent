@@ -62,9 +62,7 @@ class TestTelegramSendImageFile:
         mock_msg.message_id = 42
         adapter._bot.send_photo = AsyncMock(return_value=mock_msg)
 
-        result = _run(
-            adapter.send_image_file(chat_id="12345", image_path=str(img))
-        )
+        result = _run(adapter.send_image_file(chat_id="12345", image_path=str(img)))
         assert result.success
         assert result.message_id == "42"
         adapter._bot.send_photo.assert_awaited_once()
@@ -72,7 +70,6 @@ class TestTelegramSendImageFile:
         # Verify photo arg was a file object (opened in rb mode)
         call_kwargs = adapter._bot.send_photo.call_args
         assert call_kwargs.kwargs["chat_id"] == 12345
-
 
     def test_returns_error_when_not_connected(self, adapter):
         """send_image_file should return error when bot is None."""
@@ -116,7 +113,6 @@ class TestDiscordSendImageFile:
         a = DiscordAdapter(config)
         a._client = MagicMock()
         return a
-
 
     def test_send_document_uploads_file_attachment(self, adapter, tmp_path):
         """send_document should upload a native Discord attachment."""
@@ -187,7 +183,12 @@ def _ensure_slack_mock():
         return
 
     slack_mod = MagicMock()
-    for name in ("slack_bolt", "slack_bolt.async_app", "slack_sdk", "slack_sdk.web.async_client"):
+    for name in (
+        "slack_bolt",
+        "slack_bolt.async_app",
+        "slack_sdk",
+        "slack_sdk.web.async_client",
+    ):
         sys.modules.setdefault(name, slack_mod)
 
 
@@ -203,7 +204,6 @@ class TestSlackSendImageFile:
         a = SlackAdapter(config)
         a._app = MagicMock()
         return a
-
 
     def test_returns_error_when_not_connected(self, adapter):
         adapter._app = None
@@ -263,5 +263,3 @@ class TestScreenshotCleanup:
         _cleanup_old_screenshots(tmp_path, max_age_hours=24)
 
         assert old.exists(), "Repeated cleanup should be skipped while throttled"
-
-

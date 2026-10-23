@@ -54,8 +54,14 @@ def fake_cli(tmp_path, monkeypatch):
     return bindir
 
 
-def test_an_out_of_tree_external_process_provider_resolves_end_to_end(fake_cli, monkeypatch):
-    from clawk_cli.auth import PROVIDER_REGISTRY, resolve_external_process_provider_credentials, resolve_provider
+def test_an_out_of_tree_external_process_provider_resolves_end_to_end(
+    fake_cli, monkeypatch
+):
+    from clawk_cli.auth import (
+        PROVIDER_REGISTRY,
+        resolve_external_process_provider_credentials,
+        resolve_provider,
+    )
     from clawk_cli.runtime_provider import resolve_runtime_provider
 
     assert PROVIDER_REGISTRY["acme"] is PROVIDER_REGISTRY["acme-acp"]
@@ -63,16 +69,28 @@ def test_an_out_of_tree_external_process_provider_resolves_end_to_end(fake_cli, 
     assert resolve_provider("acme") == "acme-acp"
 
     creds = resolve_external_process_provider_credentials("acme-acp")
-    assert Path(creds["command"]) == fake_cli / ("acme-cli.exe" if os.name == "nt" else "acme-cli")
+    assert Path(creds["command"]) == fake_cli / (
+        "acme-cli.exe" if os.name == "nt" else "acme-cli"
+    )
     assert (creds["args"], creds["api_key"]) == (["--acp"], "acme-acp")
 
-    monkeypatch.setenv("ACME_CLI_PATH", str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")))
+    monkeypatch.setenv(
+        "ACME_CLI_PATH",
+        str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")),
+    )
     monkeypatch.setenv("ACME_ACP_ARGS", "--acp=true --verbose")
     creds = resolve_external_process_provider_credentials("acme-acp")
-    assert (creds["command"], creds["args"]) == (str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")), ["--acp=true", "--verbose"])
+    assert (creds["command"], creds["args"]) == (
+        str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")),
+        ["--acp=true", "--verbose"],
+    )
 
     runtime = resolve_runtime_provider(requested="acme", target_model="acme")
-    assert (runtime["provider"], runtime["base_url"], runtime["source"]) == ("acme-acp", "acp://acme", "process")
+    assert (runtime["provider"], runtime["base_url"], runtime["source"]) == (
+        "acme-acp",
+        "acp://acme",
+        "process",
+    )
 
 
 def test_copilot_acp_launch_details_are_unchanged(fake_cli, monkeypatch):
@@ -80,9 +98,23 @@ def test_copilot_acp_launch_details_are_unchanged(fake_cli, monkeypatch):
     from clawk_cli.runtime_provider import resolve_runtime_provider
 
     creds = resolve_external_process_provider_credentials("copilot-acp")
-    assert Path(creds["command"]) == fake_cli / ("copilot.exe" if os.name == "nt" else "copilot")
-    assert (creds["args"], creds["api_key"], creds["base_url"]) == (["--acp", "--stdio"], "copilot-acp", "acp://copilot")
+    assert Path(creds["command"]) == fake_cli / (
+        "copilot.exe" if os.name == "nt" else "copilot"
+    )
+    assert (creds["args"], creds["api_key"], creds["base_url"]) == (
+        ["--acp", "--stdio"],
+        "copilot-acp",
+        "acp://copilot",
+    )
 
-    monkeypatch.setenv("COPILOT_CLI_PATH", str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")))
-    assert resolve_external_process_provider_credentials("copilot-acp")["command"] == str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme"))
-    assert resolve_runtime_provider(requested="copilot-acp", target_model="x")["base_url"] == "acp://copilot"
+    monkeypatch.setenv(
+        "COPILOT_CLI_PATH",
+        str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme")),
+    )
+    assert resolve_external_process_provider_credentials("copilot-acp")[
+        "command"
+    ] == str(fake_cli / ("custom-acme.exe" if os.name == "nt" else "custom-acme"))
+    assert (
+        resolve_runtime_provider(requested="copilot-acp", target_model="x")["base_url"]
+        == "acp://copilot"
+    )

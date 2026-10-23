@@ -17,7 +17,9 @@ def client(monkeypatch):
 
 
 @pytest.mark.parametrize("locked", [True, False])
-def test_preview_respects_locked_root_and_sensitive_paths(client, monkeypatch, tmp_path, locked):
+def test_preview_respects_locked_root_and_sensitive_paths(
+    client, monkeypatch, tmp_path, locked
+):
     root = tmp_path / "root"
     root.mkdir()
     if locked:
@@ -38,7 +40,9 @@ def test_preview_respects_locked_root_and_sensitive_paths(client, monkeypatch, t
     names = {entry["name"] for entry in response.json()["entries"]}
     assert "safe.txt" in names
     assert "auth.json" not in names
-    assert client.get("/api/fs/list", params={"path": str(tmp_path)}).status_code == (403 if locked else 200)
+    assert client.get("/api/fs/list", params={"path": str(tmp_path)}).status_code == (
+        403 if locked else 200
+    )
 
 
 @pytest.mark.parametrize("locked", [True, False])
@@ -86,11 +90,21 @@ def test_git_reads_filter_credentials_without_losing_safe_diffs(
     assert "SAFE_CHANGE" in diff
     assert ("PRIVATE_EXAMPLE" in diff) is not locked
     for endpoint in ("/api/git/file-diff", "/api/git/review/diff"):
-        response = client.get(endpoint, params={"path": str(root), "file": ".env", "staged": change != "unstaged"})
+        response = client.get(
+            endpoint,
+            params={"path": str(root), "file": ".env", "staged": change != "unstaged"},
+        )
         assert response.status_code == (403 if locked else 200)
         # A pathspec is not a file name and must not expand into credential files.
         for file in (":(top)*", ".", "archive"):
-            response = client.get(endpoint, params={"path": str(root), "file": file, "staged": change != "unstaged"})
+            response = client.get(
+                endpoint,
+                params={
+                    "path": str(root),
+                    "file": file,
+                    "staged": change != "unstaged",
+                },
+            )
             assert "PRIVATE_EXAMPLE" not in response.text
 
     monkeypatch.setenv("CLAWK_DASHBOARD_FILES_ROOT", str(tmp_path / "other"))

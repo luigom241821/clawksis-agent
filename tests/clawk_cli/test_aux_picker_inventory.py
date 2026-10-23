@@ -47,6 +47,7 @@ CONFIG = {
     ],
 }
 
+
 @pytest.fixture
 def configured_home(tmp_path, monkeypatch):
     """A CLAWK_HOME with one ``providers:`` entry and one legacy
@@ -61,7 +62,9 @@ def configured_home(tmp_path, monkeypatch):
     monkeypatch.setenv("LEGACY_KEY", "sk-legacy")
     return home
 
+
 # ─── The substrate contract ─────────────────────────────────────────────
+
 
 def test_aux_picker_surfaces_user_defined_providers(configured_home):
     """Both config schemas for a user's own endpoint reach an aux picker.
@@ -81,6 +84,7 @@ def test_aux_picker_surfaces_user_defined_providers(configured_home):
         "a legacy custom_providers: entry must be selectable for auxiliary tasks"
     )
 
+
 def test_aux_picker_requests_exhausted_pool_visibility(configured_home):
     """#66624: a provider whose credential pool is entirely rate-limited
     must stay visible. Rate limits are per-model and the aux picker writes a
@@ -97,6 +101,7 @@ def test_aux_picker_requests_exhausted_pool_visibility(configured_home):
         inventory.build_aux_picker_rows()
 
     assert seen.get("for_picker") is True
+
 
 # ─── Shared rendering ───────────────────────────────────────────────────
 

@@ -32,6 +32,7 @@ from agent.model_metadata import (
 
 STALE_THINKING = "considering the next move carefully... " * 200  # ~2K tok
 
+
 def _reasoning_heavy_session(n_turns: int = 40) -> list:
     """Transcript whose bulk is stale reasoning replay (the #84371 shape)."""
     msgs = [{"role": "system", "content": "You are Clawksis."}]
@@ -54,23 +55,34 @@ def _reasoning_heavy_session(n_turns: int = 40) -> list:
         msgs.append({"role": "tool", "tool_call_id": f"c{i}", "content": f"r{i}"})
     return msgs
 
+
 class TestWireTruthPredicate:
     def test_codex_responses_never_ships_stale_thinking_text(self):
-        assert stale_thinking_reaches_wire(
-            "codex_responses", "deepseek", "deepseek-v4-flash", ""
-        ) is False
+        assert (
+            stale_thinking_reaches_wire(
+                "codex_responses", "deepseek", "deepseek-v4-flash", ""
+            )
+            is False
+        )
 
     def test_chat_completions_echo_family_ships_it(self):
         # DeepSeek thinking mode over chat_completions echoes stored
         # reasoning_content back on every assistant turn.
-        assert stale_thinking_reaches_wire(
-            "", "deepseek", "deepseek-reasoner", "https://api.deepseek.com"
-        ) is True
+        assert (
+            stale_thinking_reaches_wire(
+                "", "deepseek", "deepseek-reasoner", "https://api.deepseek.com"
+            )
+            is True
+        )
 
     def test_strict_chat_completions_strips_it(self):
-        assert stale_thinking_reaches_wire(
-            "", "mistral", "mistral-large", "https://api.mistral.ai"
-        ) is False
+        assert (
+            stale_thinking_reaches_wire(
+                "", "mistral", "mistral-large", "https://api.mistral.ai"
+            )
+            is False
+        )
+
 
 class TestEstimatorParity:
     """Trigger-fires must imply the walk finds a compactable middle."""
@@ -80,9 +92,7 @@ class TestEstimatorParity:
         wire = stale_thinking_reaches_wire(
             "codex_responses", "deepseek", "deepseek-v4-flash", ""
         )
-        trigger = estimate_messages_tokens_rough(
-            msgs, charge_stale_thinking=wire
-        )
+        trigger = estimate_messages_tokens_rough(msgs, charge_stale_thinking=wire)
 
         cc = ContextCompressor(
             model="deepseek-v4-flash",
@@ -109,9 +119,7 @@ class TestEstimatorParity:
         the walk excludes: both figures land in the same size class."""
         msgs = _reasoning_heavy_session()
         legacy = estimate_messages_tokens_rough(msgs)
-        route_aware = estimate_messages_tokens_rough(
-            msgs, charge_stale_thinking=False
-        )
+        route_aware = estimate_messages_tokens_rough(msgs, charge_stale_thinking=False)
         from agent.context_compressor import _last_assistant_index
 
         newest = _last_assistant_index(msgs)
@@ -126,13 +134,14 @@ class TestEstimatorParity:
 
     def test_newest_turn_thinking_still_charged(self):
         msgs = _reasoning_heavy_session(n_turns=2)
-        stripped = estimate_messages_tokens_rough(
-            msgs, charge_stale_thinking=False
-        )
+        stripped = estimate_messages_tokens_rough(msgs, charge_stale_thinking=False)
         no_thinking = estimate_messages_tokens_rough(
             [
-                {k: v for k, v in m.items()
-                 if k not in ("reasoning", "reasoning_content")}
+                {
+                    k: v
+                    for k, v in m.items()
+                    if k not in ("reasoning", "reasoning_content")
+                }
                 for m in msgs
             ]
         )
@@ -177,9 +186,7 @@ class TestEstimatorParity:
                 for i, m in enumerate(msgs)
             )
 
-        trigger_echo = estimate_messages_tokens_rough(
-            msgs, charge_stale_thinking=True
-        )
+        trigger_echo = estimate_messages_tokens_rough(msgs, charge_stale_thinking=True)
         trigger_codex = estimate_messages_tokens_rough(
             msgs, charge_stale_thinking=False
         )
@@ -193,16 +200,24 @@ class TestEstimatorParity:
         # And the echo route genuinely charges the stale thinking bulk.
         assert walk_echo > 3 * walk_codex
 
+
 class TestReasoningDoubleCount:
     """``reasoning`` and ``reasoning_content`` carrying the same text must be
     charged once — the wire ships at most one of them."""
 
     def test_trigger_counts_identical_pair_once(self):
         base = [{"role": "assistant", "content": "x"}]
-        rc_only = [{"role": "assistant", "content": "x",
-                    "reasoning_content": "y" * 4000}]
-        both = [{"role": "assistant", "content": "x",
-                 "reasoning": "y" * 4000, "reasoning_content": "y" * 4000}]
+        rc_only = [
+            {"role": "assistant", "content": "x", "reasoning_content": "y" * 4000}
+        ]
+        both = [
+            {
+                "role": "assistant",
+                "content": "x",
+                "reasoning": "y" * 4000,
+                "reasoning_content": "y" * 4000,
+            }
+        ]
         e0 = estimate_messages_tokens_rough(base)
         e1 = estimate_messages_tokens_rough(rc_only)
         e2 = estimate_messages_tokens_rough(both)
@@ -212,10 +227,13 @@ class TestReasoningDoubleCount:
 
     def test_walk_counts_identical_pair_once(self):
         base = {"role": "assistant", "content": "x"}
-        rc_only = {"role": "assistant", "content": "x",
-                   "reasoning_content": "y" * 4000}
-        both = {"role": "assistant", "content": "x",
-                "reasoning": "y" * 4000, "reasoning_content": "y" * 4000}
+        rc_only = {"role": "assistant", "content": "x", "reasoning_content": "y" * 4000}
+        both = {
+            "role": "assistant",
+            "content": "x",
+            "reasoning": "y" * 4000,
+            "reasoning_content": "y" * 4000,
+        }
         w0 = _estimate_msg_budget_tokens(base, charge_stale_thinking=True)
         w1 = _estimate_msg_budget_tokens(rc_only, charge_stale_thinking=True)
         w2 = _estimate_msg_budget_tokens(both, charge_stale_thinking=True)
@@ -225,8 +243,7 @@ class TestReasoningDoubleCount:
         """No reasoning_content to displace it → `reasoning` is the
         promotion proxy and must stay counted."""
         base = [{"role": "assistant", "content": "x"}]
-        r_only = [{"role": "assistant", "content": "x",
-                   "reasoning": "y" * 4000}]
+        r_only = [{"role": "assistant", "content": "x", "reasoning": "y" * 4000}]
         assert (
             estimate_messages_tokens_rough(r_only)
             > estimate_messages_tokens_rough(base) + 500
@@ -243,14 +260,19 @@ class TestReasoningDoubleCount:
     def test_pad_reasoning_content_does_not_displace(self):
         """A one-space echo pad is not real content; `reasoning` still
         carries the chargeable text."""
-        msg = {"role": "assistant", "content": "x",
-               "reasoning": "y" * 4000, "reasoning_content": " "}
+        msg = {
+            "role": "assistant",
+            "content": "x",
+            "reasoning": "y" * 4000,
+            "reasoning_content": " ",
+        }
         w = _estimate_msg_budget_tokens(msg, charge_stale_thinking=True)
         w_base = _estimate_msg_budget_tokens(
             {"role": "assistant", "content": "x", "reasoning_content": " "},
             charge_stale_thinking=True,
         )
         assert w > w_base + 500
+
 
 class TestNoProgressDeadLoopBreaker:
     """A fired compaction that returns the transcript unchanged must arm the

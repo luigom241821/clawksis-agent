@@ -100,7 +100,9 @@ def test_repair_checks_foreign_holders_before_opening_sqlite(tmp_path, monkeypat
     def _unexpected_probe(*_args, **_kwargs):
         pytest.fail("repair opened SQLite before excluding foreign holders")
 
-    monkeypatch.setattr(clawk_state_repair, "_connect_repair_durable", _unexpected_probe)
+    monkeypatch.setattr(
+        clawk_state_repair, "_connect_repair_durable", _unexpected_probe
+    )
 
     report = repair_state_db_schema(db, backup=False)
 
@@ -113,9 +115,7 @@ def test_linux_holder_scan_does_not_require_psutil(tmp_path, monkeypatch):
     """The Linux safety scan must not make psutil a repair dependency."""
     monkeypatch.setattr(clawk_state_holders, "psutil", None)
 
-    holders = clawk_state_holders.foreign_state_db_holders(
-        tmp_path / "absent-state.db"
-    )
+    holders = clawk_state_holders.foreign_state_db_holders(tmp_path / "absent-state.db")
 
     assert holders == []
 
@@ -180,7 +180,9 @@ def test_uninspectable_watched_descriptor_blocks_repair_before_sqlite(
     def _unexpected_probe(*_args, **_kwargs):
         pytest.fail("repair opened SQLite with unproven descriptor identity")
 
-    monkeypatch.setattr(clawk_state_repair, "_connect_repair_durable", _unexpected_probe)
+    monkeypatch.setattr(
+        clawk_state_repair, "_connect_repair_durable", _unexpected_probe
+    )
 
     report = repair_state_db_schema(db, backup=False)
 
@@ -226,7 +228,8 @@ def test_uninspectable_unknown_descriptor_uses_clawk_identity_at_repair_boundary
             pytest.fail("repair opened SQLite with an unproven Clawksis descriptor")
 
         monkeypatch.setattr(
-            clawk_state_repair, "_connect_repair_durable",
+            clawk_state_repair,
+            "_connect_repair_durable",
             _unexpected_probe,
         )
         report = repair_state_db_schema(db, backup=False)
@@ -243,7 +246,8 @@ def test_uninspectable_unknown_descriptor_uses_clawk_identity_at_repair_boundary
             return real_connect(*args, **kwargs)
 
         monkeypatch.setattr(
-            clawk_state_repair, "_connect_repair_durable",
+            clawk_state_repair,
+            "_connect_repair_durable",
             _record_probe,
         )
         report = repair_state_db_schema(db, backup=False)
@@ -274,23 +278,27 @@ def test_uninspectable_watched_identity_blocks_alias_before_sqlite(
         # the ``Path.exists`` precheck in repair_state_db_schema (which would otherwise
         # swallow the error and report the database missing).
         frame = sys._getframe(1)
-        if (str(path) == str(db) and not args and not kwargs
-                and frame.f_globals.get("__name__") == "clawk_state_holders"):
+        if (
+            str(path) == str(db)
+            and not args
+            and not kwargs
+            and frame.f_globals.get("__name__") == "clawk_state_holders"
+        ):
             raise PermissionError(errno.EACCES, "watched identity denied", path)
         if path == "/proc/4242/fd/7":
             return real_stat(db)
         return real_stat(path, *args, **kwargs)
 
     monkeypatch.setattr(clawk_state_holders.os, "listdir", _listdir)
-    monkeypatch.setattr(
-        clawk_state_holders.os, "readlink", lambda _path: str(alias)
-    )
+    monkeypatch.setattr(clawk_state_holders.os, "readlink", lambda _path: str(alias))
     monkeypatch.setattr(clawk_state_holders.os, "stat", _stat)
 
     def _unexpected_probe(*_args, **_kwargs):
         pytest.fail("repair opened SQLite with an unproven watched identity")
 
-    monkeypatch.setattr(clawk_state_repair, "_connect_repair_durable", _unexpected_probe)
+    monkeypatch.setattr(
+        clawk_state_repair, "_connect_repair_durable", _unexpected_probe
+    )
 
     report = repair_state_db_schema(db, backup=False)
 
@@ -321,9 +329,7 @@ def test_uninspectable_alias_descriptor_for_clawk_blocks_before_sqlite(
         return real_stat(path, *args, **kwargs)
 
     monkeypatch.setattr(clawk_state_holders.os, "listdir", _listdir)
-    monkeypatch.setattr(
-        clawk_state_holders.os, "readlink", lambda _path: str(alias)
-    )
+    monkeypatch.setattr(clawk_state_holders.os, "readlink", lambda _path: str(alias))
     monkeypatch.setattr(clawk_state_holders.os, "stat", _stat)
     monkeypatch.setattr(
         clawk_state_holders,
@@ -334,7 +340,9 @@ def test_uninspectable_alias_descriptor_for_clawk_blocks_before_sqlite(
     def _unexpected_probe(*_args, **_kwargs):
         pytest.fail("repair opened SQLite with an unproven Clawksis alias fd")
 
-    monkeypatch.setattr(clawk_state_repair, "_connect_repair_durable", _unexpected_probe)
+    monkeypatch.setattr(
+        clawk_state_repair, "_connect_repair_durable", _unexpected_probe
+    )
 
     report = repair_state_db_schema(db, backup=False)
 

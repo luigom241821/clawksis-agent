@@ -63,5 +63,3 @@ def test_unlinked_task_unchanged(kanban_conn):
     # No branch is persisted — the worker still owns the wt/<id> fallback for
     # genuinely ad-hoc worktree tasks, but unlinked scratch tasks have none.
     assert task.branch_name is None
-
-

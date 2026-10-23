@@ -82,15 +82,11 @@ class TestResolveClientWsHost:
         _set_bound(saved_app_state, "127.0.0.1")
         assert _web_server_chat._resolve_client_ws_host() == "127.0.0.1"
 
-
     def test_public_dns_bind_preserved(self, saved_app_state, clear_ws_host_env):
         _set_bound(saved_app_state, "fly-app.example.dev")
         assert _web_server_chat._resolve_client_ws_host() == "fly-app.example.dev"
 
-
-    def test_blank_env_falls_back_to_bind(
-        self, saved_app_state, monkeypatch
-    ):
+    def test_blank_env_falls_back_to_bind(self, saved_app_state, monkeypatch):
         """An explicitly empty override (e.g. ``CLAWK_DASHBOARD_WS_HOST=``)
         must NOT silently pin to loopback — it's an unset-by-accident, not
         an intent. Treat whitespace-only as absent and fall through."""
@@ -105,7 +101,6 @@ class TestResolveClientWsHost:
 
 
 class TestGatewayWsUrlHost:
-
     def test_ipv6_wildcard_bind_dials_loopback(
         self, saved_app_state, clear_ws_host_env
     ):
@@ -123,11 +118,7 @@ class TestGatewayWsUrlHost:
 
 
 class TestSidecarUrlHost:
-
-
-    def test_no_bound_host_returns_none(
-        self, saved_app_state, clear_ws_host_env
-    ):
+    def test_no_bound_host_returns_none(self, saved_app_state, clear_ws_host_env):
         web_server.app.state.bound_host = None
         web_server.app.state.bound_port = None
         assert _web_server_chat._build_sidecar_url("ch-1") is None

@@ -22,6 +22,7 @@ import pytest
 # Fixtures
 # ──────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def clawk_home(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME so SessionDB.state_meta writes stay hermetic."""
@@ -32,9 +33,11 @@ def clawk_home(tmp_path, monkeypatch):
 
     # Bust the goal module's DB cache so it re-resolves CLAWK_HOME each test.
     from clawk_cli import goals
+
     goals._DB_CACHE.clear()
     yield home
     goals._DB_CACHE.clear()
+
 
 def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
     """Build a minimal ClawksisCLI stub with an active goal wired in."""
@@ -57,12 +60,13 @@ def _make_cli_with_goal(session_id: str, goal_text: str = "build a thing"):
     cli._goal_manager = mgr
     return cli, mgr
 
+
 # ──────────────────────────────────────────────────────────────────────
 # Tests
 # ──────────────────────────────────────────────────────────────────────
 
-class TestInterruptAutoPause:
 
+class TestInterruptAutoPause:
     def test_interrupted_turn_is_resumable(self, clawk_home):
         """After auto-pause from Ctrl+C, /goal resume puts it back to active."""
         sid = f"sid-resume-{uuid.uuid4().hex}"
@@ -78,9 +82,11 @@ class TestInterruptAutoPause:
         mgr.resume()
         assert mgr.state.status == "active"
 
+
 class TestHealthyTurnStillRuns:
     def test_clean_response_enqueues_continuation_when_judge_says_continue(
-        self, clawk_home,
+        self,
+        clawk_home,
     ):
         """Sanity check: the hook still works in the happy path."""
         sid = f"sid-healthy-{uuid.uuid4().hex}"

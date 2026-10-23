@@ -125,7 +125,9 @@ if _SPEC_PATH:
                 return
             _capture(tokens, kwargs, shape)
             self._e2e_stub = True
-            self._child_created = False  # Popen.__del__ must not reap a pid we never made.
+            self._child_created = (
+                False  # Popen.__del__ must not reap a pid we never made.
+            )
             self.args = tokens
             self.stdin = self.stdout = self.stderr = None
             self.pid = 0
@@ -138,7 +140,9 @@ if _SPEC_PATH:
             return 0 if self._e2e_stub else super().wait(timeout)
 
         def communicate(self, input=None, timeout=None):
-            return (None, None) if self._e2e_stub else super().communicate(input, timeout)
+            return (
+                (None, None) if self._e2e_stub else super().communicate(input, timeout)
+            )
 
         def send_signal(self, sig):
             if not self._e2e_stub:

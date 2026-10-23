@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-SERVER = textwrap.dedent('''\
+SERVER = textwrap.dedent("""\
     from mcp.server.mcpserver import MCPServer, Context
     app = MCPServer("prog")
 
@@ -19,7 +19,7 @@ SERVER = textwrap.dedent('''\
         return "done"
 
     app.run()
-''')
+""")
 
 
 @pytest.mark.no_isolate
@@ -31,7 +31,8 @@ def test_mcp_progress_notifications_reach_tool_progress_callback(monkeypatch, tm
     (home / "server.py").write_text(SERVER, encoding="utf-8")
     (home / "config.yaml").write_text(
         f"mcp_servers:\n  prog:\n    command: {json.dumps(sys.executable)}\n    args: [{json.dumps(str(home / 'server.py'))}]\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     from agent.tool_progress_relay import bound_tool_progress
@@ -42,15 +43,20 @@ def test_mcp_progress_notifications_reach_tool_progress_callback(monkeypatch, tm
     events = []
     try:
         assert "mcp__prog__slow" in disc.discover_mcp_tools()
-        with bound_tool_progress(lambda *a, **kw: events.append((a, kw)), "mcp__prog__slow", "call-7"):
+        with bound_tool_progress(
+            lambda *a, **kw: events.append((a, kw)), "mcp__prog__slow", "call-7"
+        ):
             result = registry.dispatch("mcp__prog__slow", {})
         assert "done" in result
     finally:
         from tools.mcp_tool_lifecycle import shutdown_mcp_servers
+
         shutdown_mcp_servers()
         _loop._stop_mcp_loop()
 
-    assert events and all(a[0] == "tool.progress" and a[1] == "mcp__prog__slow" for a, _ in events)
+    assert events and all(
+        a[0] == "tool.progress" and a[1] == "mcp__prog__slow" for a, _ in events
+    )
     assert {kw["tool_call_id"] for _, kw in events} == {"call-7"}
     # 20 updates sent back to back: the throttle drops intermediates, never the final 100%. Exact
     # pacing is pinned below on a controlled clock.
@@ -64,9 +70,13 @@ def test_progress_throttle_is_per_call_and_always_passes_first_and_final(monkeyp
     clock = [0.0]
     monkeypatch.setattr(relay.time, "monotonic", lambda: 100.0 + clock[0] / 8)
     events = []
-    with relay.bound_tool_progress(lambda *a, **kw: events.append(kw["progress"]), "t", "call-1"):
+    with relay.bound_tool_progress(
+        lambda *a, **kw: events.append(kw["progress"]), "t", "call-1"
+    ):
         report = relay.current_tool_progress()
-        for step in range(1, 11):  # one update every 1/8 s (exact in binary floats), total 100
+        for step in range(
+            1, 11
+        ):  # one update every 1/8 s (exact in binary floats), total 100
             report(step * 10.0, 100.0, None)
             clock[0] += 1
 

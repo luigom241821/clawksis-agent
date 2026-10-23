@@ -12,7 +12,11 @@ class _FakeDB:
         return "sess-123"
 
     def export_session(self, session_id, **_projection):
-        return {"id": "sess-123", "source": "cli", "messages": [{"role": "user", "content": "hi"}]}
+        return {
+            "id": "sess-123",
+            "source": "cli",
+            "messages": [{"role": "user", "content": "hi"}],
+        }
 
     def assert_exports_safe(self, session_ids, max_messages=None):
         return None
@@ -25,9 +29,12 @@ def _export(monkeypatch, *argv):
     # Read-only observation commands short-circuit when state.db is absent; the fake DB
     # stands in for the file that would otherwise be opened read-only.
     from clawk_constants import get_clawk_home
+
     (get_clawk_home() / "state.db").touch()
     monkeypatch.setattr(clawk_state, "SessionDB", lambda **_kw: _FakeDB())
-    monkeypatch.setattr(sys, "argv", ["clawk", "sessions", "export", "--session-id", "sess", *argv])
+    monkeypatch.setattr(
+        sys, "argv", ["clawk", "sessions", "export", "--session-id", "sess", *argv]
+    )
     main_mod.main()
 
 

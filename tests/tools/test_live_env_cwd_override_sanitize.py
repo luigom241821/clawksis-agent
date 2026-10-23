@@ -72,7 +72,10 @@ def test_real_builders_tag_env_type_and_record_host_cwd(tmp_path):
     from tools.environments.docker import DockerEnvironment
     from tools.terminal_tool_backends import _create_environment
 
-    assert _create_environment("local", image="", cwd=str(tmp_path), timeout=5).env_type == "local"
+    assert (
+        _create_environment("local", image="", cwd=str(tmp_path), timeout=5).env_type
+        == "local"
+    )
     docker = object.__new__(DockerEnvironment)  # _mount_args needs no docker daemon
     docker._persistent = False
     DockerEnvironment._mount_args(docker, [], str(tmp_path), True, "t")

@@ -15,13 +15,18 @@ import time
 from pathlib import Path
 from typing import NoReturn
 from clawk_cli.cli_output import line_input
-from clawk_cli.process_identity import is_desktop_owned_backend as _is_desktop_owned_backend
+from clawk_cli.process_identity import (
+    is_desktop_owned_backend as _is_desktop_owned_backend,
+)
 
-_PRE_BUILD_HINT = "  Pre-build first:  npm install --workspace web && npm run build -w web"
+_PRE_BUILD_HINT = (
+    "  Pre-build first:  npm install --workspace web && npm run build -w web"
+)
 
 
-def _find_stale_dashboard_pids(*, exclude_pids: set[int] | None = None,
-                               scope_home: str | None = None) -> list[int]:
+def _find_stale_dashboard_pids(
+    *, exclude_pids: set[int] | None = None, scope_home: str | None = None
+) -> list[int]:
     """PIDs of running ``dashboard``/``serve`` backends the caller may stop.
 
     *scope_home*: keep only backends whose resolved Clawksis home (see
@@ -35,6 +40,7 @@ def _find_stale_dashboard_pids(*, exclude_pids: set[int] | None = None,
         _pids_owned_by_clawk_home,
         _scan_dashboard_processes,
     )
+
     pids = [pid for pid, _cmd in _scan_dashboard_processes(exclude_pids=exclude_pids)]
     # The scan also selects the caller's own wrapper shell (``bash -c 'clawk dashboard --stop'``);
     # killing it takes down the invoking terminal.
@@ -50,6 +56,7 @@ def _parse_dashboard_runtime(command: str) -> tuple[str, str, int] | None:
     backend inventory (a kill + kickstart path) and ``--status`` (#121156).
     """
     from clawk_cli.update_cmd_windows import _clawk_holder_subcommand
+
     mode = _clawk_holder_subcommand(command)
     if mode not in ("dashboard", "serve"):
         return None
@@ -87,10 +94,19 @@ _SYSTEMCTL_ERRORS = (FileNotFoundError, subprocess.TimeoutExpired, OSError)
 def _run_probe(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
     """Captured, text-decoded ``subprocess.run`` for short local probes (systemctl, ps)."""
     return subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout, check=False)
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+    )
 
 
-def _restart_managed_dashboard_service(reason: str, unit: str = _DASHBOARD_SYSTEMD_UNIT) -> bool:
+def _restart_managed_dashboard_service(
+    reason: str, unit: str = _DASHBOARD_SYSTEMD_UNIT
+) -> bool:
     """Restart a systemd-managed dashboard instead of raw-killing its PID.
 
     True when a unit was found and handled (success or printed failure) — which
@@ -110,7 +126,9 @@ def _restart_managed_dashboard_service(reason: str, unit: str = _DASHBOARD_SYSTE
     scope: tuple[str, ...] | None = None
     for candidate in (("--user",), ()):
         try:
-            result = _systemctl(*candidate, "list-unit-files", unit, "--no-legend", "--no-pager")
+            result = _systemctl(
+                *candidate, "list-unit-files", unit, "--no-legend", "--no-pager"
+            )
         except _SYSTEMCTL_ERRORS:
             continue
         if result.returncode != 0:
@@ -132,7 +150,12 @@ def _restart_managed_dashboard_service(reason: str, unit: str = _DASHBOARD_SYSTE
     active_state = (active.stdout or "").strip()
     enabled_state = (enabled.stdout or "").strip()
     if active_state != "active" and enabled_state not in {
-        "enabled", "enabled-runtime", "linked", "linked-runtime", "static", "generated",
+        "enabled",
+        "enabled-runtime",
+        "linked",
+        "linked-runtime",
+        "static",
+        "generated",
     }:
         return False
 
@@ -155,7 +178,9 @@ def _restart_managed_dashboard_service(reason: str, unit: str = _DASHBOARD_SYSTE
         if result.returncode == 0:
             print(f"    ✓ restarted {unit}")
             return True
-        errors.append(f"{' '.join(command)}: {(result.stderr or result.stdout or '').strip()}")
+        errors.append(
+            f"{' '.join(command)}: {(result.stderr or result.stdout or '').strip()}"
+        )
 
     print(f"    ✗ failed to restart {unit}")
     for err in errors:
@@ -209,7 +234,16 @@ def _unit_main_pid_is(svc_name: str, cgroup_path: str, pid: int) -> bool:
     for scope_args in scopes:
         try:
             result = _run_probe(
-                ["systemctl", *scope_args, "show", svc_name, "--property=MainPID", "--value"], timeout=10)
+                [
+                    "systemctl",
+                    *scope_args,
+                    "show",
+                    svc_name,
+                    "--property=MainPID",
+                    "--value",
+                ],
+                timeout=10,
+            )
         except _SYSTEMCTL_ERRORS:
             continue
         if result.returncode == 0 and (result.stdout or "").strip() == str(pid):
@@ -243,8 +277,13 @@ def _systemd_owner_for_pid(pid: int) -> tuple[str, str | None] | None:
 
 def _systemd_restart_commands(unit: str, scope: str | None) -> list[str]:
     """The command(s) that restart *unit* in its scope; both forms when the scope is unknown."""
-    user_cmd, system_cmd = f"systemctl --user restart {unit}", f"sudo systemctl restart {unit}"
-    return {"user": [user_cmd], "system": [system_cmd]}.get(scope or "", [user_cmd, system_cmd])
+    user_cmd, system_cmd = (
+        f"systemctl --user restart {unit}",
+        f"sudo systemctl restart {unit}",
+    )
+    return {"user": [user_cmd], "system": [system_cmd]}.get(
+        scope or "", [user_cmd, system_cmd]
+    )
 
 
 def _format_restart_commands(commands: list[str]) -> str:
@@ -260,7 +299,9 @@ def _try_restart_systemd_service(svc_name: str, cgroup_path: str | None = None) 
     scope = _extract_scope_from_cgroup(cgroup_path) if cgroup_path else None
     system_cmd = ["systemctl", "restart", svc_name]
     user_cmd = ["systemctl", "--user", "restart", svc_name]
-    candidates = {"user": [user_cmd], "system": [system_cmd]}.get(scope, [system_cmd, user_cmd])
+    candidates = {"user": [user_cmd], "system": [system_cmd]}.get(
+        scope, [system_cmd, user_cmd]
+    )
     for cmd in candidates:
         try:
             if _run_probe(cmd, timeout=15).returncode == 0:
@@ -296,9 +337,12 @@ def _loaded_launchd_backend_jobs(
     from xml.parsers.expat import ExpatError
 
     from clawk_cli.gateway import _launchd_print_service_pid
+
     uid = os.getuid()  # windows-footgun: ok — darwin-only branch
     jobs: list[tuple[str, str, list[str], int | None]] = []
-    for kind, plist_dir in (plist_dirs if plist_dirs is not None else _launchd_plist_dirs()):
+    for kind, plist_dir in (
+        plist_dirs if plist_dirs is not None else _launchd_plist_dirs()
+    ):
         try:
             plists = sorted(plist_dir.glob("*.plist"))
         except OSError:
@@ -335,7 +379,9 @@ def _loaded_launchd_backend_jobs(
 
 
 def _launchd_job_owning_backend(
-    pid: int, cmdline: list[str] | None, jobs: list[tuple[str, str, list[str], int | None]],
+    pid: int,
+    cmdline: list[str] | None,
+    jobs: list[tuple[str, str, list[str], int | None]],
     ancestors: list[int] | tuple[int, ...] = (),
 ) -> tuple[str, str, int | None] | None:
     """``(domain, label, live_pid)`` of the loaded launchd job that owns *pid*: launchd reports *pid*
@@ -345,6 +391,7 @@ def _launchd_job_owning_backend(
     would only re-create that conflict. ``--no-open`` is ignored on both sides: the respawn path adds
     it, so an earlier respawn's argv is the plist's plus that flag. None when no loaded job claims
     the process."""
+
     def _norm(argv: list[str]) -> list[str]:
         return [a for a in argv if a != "--no-open"]
 
@@ -356,17 +403,27 @@ def _launchd_job_owning_backend(
     return None
 
 
-def _restart_launchd_job(domain: str, label: str, old_pid: int | None, *, timeout: float = 15.0) -> bool:
+def _restart_launchd_job(
+    domain: str, label: str, old_pid: int | None, *, timeout: float = 15.0
+) -> bool:
     """Bring a launchd-supervised backend back after its process was stopped: ``launchctl kickstart
     <domain>/<label>`` (no ``-k`` — a KeepAlive job may already have respawned it, and a kill would
     take that fresh process down), then require launchd to report a live PID other than *old_pid*
     within *timeout*. A kickstart that returns 0 only means "restart requested"; a job that is loaded
     but never comes back on a fresh PID is a failure the operator must hear about."""
     from clawk_cli.gateway import _wait_for_launchd_service_pid
+
     try:
-        if _run_probe(["launchctl", "kickstart", f"{domain}/{label}"], timeout=30).returncode != 0:
+        if (
+            _run_probe(
+                ["launchctl", "kickstart", f"{domain}/{label}"], timeout=30
+            ).returncode
+            != 0
+        ):
             return False
-        return _wait_for_launchd_service_pid(label, old_pid=old_pid, timeout=timeout, domain=domain)
+        return _wait_for_launchd_service_pid(
+            label, old_pid=old_pid, timeout=timeout, domain=domain
+        )
     except _SYSTEMCTL_ERRORS:
         return False
 
@@ -381,7 +438,11 @@ def _dashboard_cmdline_for_pid(pid: int) -> list[str] | None:
         if os.path.exists(cmdline_path):
             with open(cmdline_path, "rb") as f:
                 raw = f.read()
-            argv = [part.decode("utf-8", errors="replace") for part in raw.split(b"\x00") if part]
+            argv = [
+                part.decode("utf-8", errors="replace")
+                for part in raw.split(b"\x00")
+                if part
+            ]
             return argv or None
         result = _run_probe(["ps", "-p", str(pid), "-o", "command="], timeout=10)
         if result.returncode != 0:
@@ -411,9 +472,14 @@ def _respawnable_command_for_current_install(argv: list[str]) -> list[str]:
     checkout's own ``clawk`` entry script stays Python, so it and every other shape replay unchanged.
     """
     root = Path(__file__).resolve().parents[1]
-    if (len(argv) > 2 and os.path.basename(argv[0]).startswith("python")
-            and os.path.basename(argv[1]) == "clawk" and Path(argv[1]) != root / "clawk"):
+    if (
+        len(argv) > 2
+        and os.path.basename(argv[0]).startswith("python")
+        and os.path.basename(argv[1]) == "clawk"
+        and Path(argv[1]) != root / "clawk"
+    ):
         from clawk_cli._launchers import runtime_command
+
         return runtime_command(root, argv[2:])
     return list(argv)
 
@@ -426,6 +492,7 @@ def _respawn_dashboard_processes(commands: list[list[str]]) -> list[list[str]]:
     See #78821.
     """
     from clawk_constants import get_clawk_home
+
     respawned: list[list[str]] = []
     spawned: list[tuple[list[str], list[str], subprocess.Popen]] = []
     failed: list[tuple[list[str], list[str], str]] = []
@@ -442,8 +509,13 @@ def _respawn_dashboard_processes(commands: list[list[str]]) -> list[list[str]]:
         try:
             with open(log_path, "ab") as log_f:
                 proc = subprocess.Popen(
-                    command, stdin=subprocess.DEVNULL, stdout=log_f, stderr=subprocess.STDOUT,
-                    start_new_session=True, close_fds=True)
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                    close_fds=True,
+                )
             spawned.append((original, command, proc))
         except (OSError, ValueError) as exc:
             failed.append((original, command, str(exc)))
@@ -457,8 +529,14 @@ def _respawn_dashboard_processes(commands: list[list[str]]) -> list[list[str]]:
         if proc.poll() is None:
             respawned.append(command)
         else:
-            failed.append((original, command, f"child exited during the first "
-                                              f"{_RESPAWN_LIVENESS_GRACE_SECONDS:.0f}s (code {proc.returncode})"))
+            failed.append(
+                (
+                    original,
+                    command,
+                    f"child exited during the first "
+                    f"{_RESPAWN_LIVENESS_GRACE_SECONDS:.0f}s (code {proc.returncode})",
+                )
+            )
 
     for command in respawned:
         print(f"    ✓ restarted: {shlex.join(command)}")
@@ -525,7 +603,11 @@ def _install_hangup_protection(gateway_mode: bool = False):
     Gateway updates are already detached, but still need the log mirror for the
     Desktop progress watchdog. Returns state for ``_finalize_update_output``."""
     state = {
-        "prev_stdout": sys.stdout, "prev_stderr": sys.stderr, "log_file": None, "installed": False}
+        "prev_stdout": sys.stdout,
+        "prev_stderr": sys.stderr,
+        "log_file": None,
+        "installed": False,
+    }
 
     import signal as _signal
 
@@ -540,14 +622,21 @@ def _install_hangup_protection(gateway_mode: bool = False):
         # home, never a sticky profile's: the update mutates the shared checkout, and the
         # Desktop and the hand-off scripts read <root>/logs/update.log.
         from clawk_constants import get_default_clawk_root as _get_root_home
+
         logs_dir = _get_root_home() / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         log_file = open(logs_dir / "update.log", "a", buffering=1, encoding="utf-8")
 
         import datetime as _dt
 
-        stage = "continued on the pulled code" if os.environ.get("CLAWK_UPDATE_POST_SWAP") == "1" else "started"
-        log_file.write(f"\n=== clawk update {stage} {_dt.datetime.now().isoformat(timespec='seconds')} ===\n")
+        stage = (
+            "continued on the pulled code"
+            if os.environ.get("CLAWK_UPDATE_POST_SWAP") == "1"
+            else "started"
+        )
+        log_file.write(
+            f"\n=== clawk update {stage} {_dt.datetime.now().isoformat(timespec='seconds')} ===\n"
+        )
 
         state["log_file"] = log_file
         sys.stdout = _UpdateOutputStream(state["prev_stdout"], log_file)
@@ -587,6 +676,7 @@ def _report_dashboard_status() -> int:
     """
     from clawk_cli.dashboard_procs import _ledger_serve_binds, _scan_dashboard_processes
     from gateway.status import _pid_exists
+
     binds = _ledger_serve_binds()
     live: list[tuple[int, str, str]] = []
     for pid, command in _scan_dashboard_processes():
@@ -614,6 +704,7 @@ def _report_dashboard_status() -> int:
 def _dashboard_listening(host: str, port: int) -> bool:
     """True when something accepts TCP connections at host:port (even a 401 proves a dashboard is up)."""
     import socket
+
     try:
         with socket.create_connection((_dashboard_probe_host(host), port), timeout=1.5):
             return True
@@ -638,6 +729,7 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
 
     try:
         from clawk_cli.web_server import should_require_dashboard_auth
+
         if not should_require_dashboard_auth(host):
             return
     except Exception:
@@ -645,6 +737,7 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
 
     try:
         from clawk_cli.dashboard_auth import list_providers
+
         if list_providers():
             return
     except Exception:
@@ -661,7 +754,9 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
     print()
     print("  How do you want to authenticate the dashboard?")
     print("    [1] Username & password (quickest; for a trusted LAN / VPN)")
-    print("    [2] OAuth via Nous Portal (run `clawk dashboard register`)\n    [3] Cancel\n")
+    print(
+        "    [2] OAuth via Nous Portal (run `clawk dashboard register`)\n    [3] Cancel\n"
+    )
 
     try:
         choice = input("  Choice [1]: ").strip() or "1"
@@ -686,6 +781,7 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
 
     import getpass
     import secrets
+
     print()
     try:
         username = line_input("  Username [admin]: ").strip() or "admin"
@@ -711,6 +807,7 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
     try:
         from clawk_cli.config import load_config, save_config
         from clawk_cli.plugins_cmd import ensure_basic_auth_plugin_enabled_in_config
+
         cfg = load_config()
         basic = cfg.setdefault("dashboard", {}).setdefault("basic_auth", {})
         basic["username"] = username
@@ -722,7 +819,9 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
         # plugins.disabled; unblock it so discover_plugins below registers it,
         # and tell an operator who deliberately disabled it.
         if ensure_basic_auth_plugin_enabled_in_config(cfg):
-            print("  ✓ Re-enabled the bundled 'basic' auth plugin (was in plugins.disabled)")
+            print(
+                "  ✓ Re-enabled the bundled 'basic' auth plugin (was in plugins.disabled)"
+            )
         save_config(cfg)
     except Exception as exc:
         _cancel(f"  ✗ Failed to write config.yaml: {exc}")
@@ -730,10 +829,13 @@ def _maybe_setup_dashboard_auth_interactively(args) -> None:
     # Re-run plugin discovery so the provider registers before start_server's gate.
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins(force=True)
     except Exception as exc:
-        print(f"  ⚠ Plugin re-discovery failed ({exc}); the gate may still "
-              "fail closed. Set the password again or restart the dashboard.")
+        print(
+            f"  ⚠ Plugin re-discovery failed ({exc}); the gate may still "
+            "fail closed. Set the password again or restart the dashboard."
+        )
 
     print()
     print(f"  ✓ Username/password auth configured (user: {username}).")
@@ -745,6 +847,7 @@ def _read_ssh_session_token_file(path: str) -> str:
     """Read and unlink a Desktop SSH token from its private runtime directory."""
     if sys.platform == "win32":
         from clawk_cli.windows_ssh_runtime import read_token
+
         return read_token(path)
 
     import stat as _stat
@@ -761,13 +864,17 @@ def _read_ssh_session_token_file(path: str) -> str:
     try:
         relative = Path(path).relative_to(token_root)
     except ValueError as exc:
-        raise SystemExit("--ssh-session-token-file must be under the desktop-ssh directory") from exc
+        raise SystemExit(
+            "--ssh-session-token-file must be under the desktop-ssh directory"
+        ) from exc
     if len(relative.parts) != 2 or not re.fullmatch(r"[0-9a-f]{32}", relative.parts[0]):
         raise SystemExit("--ssh-session-token-file has an invalid runtime path")
     if not re.fullmatch(r"[0-9a-f]{16}\.token", relative.parts[1]):
         raise SystemExit("--ssh-session-token-file has an invalid filename")
 
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    directory_flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    )
     file_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     uid = os.getuid() if hasattr(os, "getuid") else None
 
@@ -865,7 +972,7 @@ def _explicit_endpoint_flags(argv=None) -> set:
     a loopback attach on some other port.
     """
     typed = set()
-    for token in (sys.argv[1:] if argv is None else argv):
+    for token in sys.argv[1:] if argv is None else argv:
         name = str(token).split("=", 1)[0]
         if name in ("--host", "--port"):
             typed.add(name[2:])
@@ -877,7 +984,11 @@ def _endpoint_conflict(args, record, typed: set) -> str:
     if "port" in typed:
         wanted_port = getattr(args, "port", None)
         # ``--port 0`` is "any free port", not a demand for a specific one.
-        if isinstance(wanted_port, int) and wanted_port > 0 and wanted_port != record.port:
+        if (
+            isinstance(wanted_port, int)
+            and wanted_port > 0
+            and wanted_port != record.port
+        ):
             return f"--port {wanted_port} (the host owner is on port {record.port})"
     if "host" in typed:
         wanted_host = str(getattr(args, "host", "") or "")
@@ -885,7 +996,9 @@ def _endpoint_conflict(args, record, typed: set) -> str:
         loopback = {"127.0.0.1", "localhost", "::1"}
         wildcard = {"0.0.0.0", "::", "*"}
         # A wildcard owner already answers on loopback; anything else must match exactly.
-        reachable = wanted_host == owner_host or (owner_host in wildcard and wanted_host in loopback)
+        reachable = wanted_host == owner_host or (
+            owner_host in wildcard and wanted_host in loopback
+        )
         if not reachable:
             return f"--host {wanted_host} (the host owner is bound to {owner_host})"
     return ""
@@ -931,19 +1044,26 @@ def _attach_to_host_backend(args, headless_backend: bool) -> None:
     typed = _explicit_endpoint_flags()
     conflict = _endpoint_conflict(args, record, typed)
     if conflict:
-        print(f"Refusing to start: this host is already served by {hr.describe(record)}.")
+        print(
+            f"Refusing to start: this host is already served by {hr.describe(record)}."
+        )
         print(f"  You asked for {conflict}.")
         print("  Stop that backend, or drop the flag to use the running one.")
         sys.exit(GATEWAY_FATAL_CONFIG_EXIT_CODE)
 
     if not headless_backend and not identity.get("servesSpa"):
-        print(f"Refusing to start: this host is already served by {hr.describe(record)}, "
-              "which is a headless `clawk serve` backend with no dashboard UI.")
-        print("  Stop it and run `clawk dashboard`, or use --isolated for a dedicated server.")
+        print(
+            f"Refusing to start: this host is already served by {hr.describe(record)}, "
+            "which is a headless `clawk serve` backend with no dashboard UI."
+        )
+        print(
+            "  Stop it and run `clawk dashboard`, or use --isolated for a dedicated server."
+        )
         sys.exit(GATEWAY_FATAL_CONFIG_EXIT_CODE)
 
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         profile = get_active_profile_name()
     except Exception:
         profile = "default"
@@ -953,17 +1073,21 @@ def _attach_to_host_backend(args, headless_backend: bool) -> None:
     url = f"http://{format_url_host(hr.dial_host(record))}:{record.port}/?profile={wanted}"
 
     kind = "backend" if headless_backend else "dashboard"
-    print(f"Clawksis {kind} already running on this host: PID {record.pid}, port {record.port}.")
+    print(
+        f"Clawksis {kind} already running on this host: PID {record.pid}, port {record.port}."
+    )
     print(f"  Managing profile '{wanted}': {url}")
     if not headless_backend and not args.no_open:
         with contextlib.suppress(Exception):
             import webbrowser
+
             webbrowser.open(url)
     sys.exit(0)
 
 
 def _route_named_profile_dashboard(
-    args, _headless_backend: bool, _ssh_owner_nonce: str, _token_file: str) -> None:
+    args, _headless_backend: bool, _ssh_owner_nonce: str, _token_file: str
+) -> None:
     """Route a named-profile launch to the single MACHINE dashboard (per-request ``?profile=`` scoping
     makes one server per profile pure fragmentation).
 
@@ -975,6 +1099,7 @@ def _route_named_profile_dashboard(
     """
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         _launch_profile = get_active_profile_name()
     except Exception:
         _launch_profile = "default"
@@ -992,23 +1117,32 @@ def _route_named_profile_dashboard(
         f"preselected). Use --isolated for a dedicated per-profile server."
     )
     reexec_argv = [
-        sys.executable, "-m", "clawk_cli.main",
-        "-p", "default",
+        sys.executable,
+        "-m",
+        "clawk_cli.main",
+        "-p",
+        "default",
         # Preserve the lean serve path so a named-profile `serve` doesn't
         # silently rebuild the UI as `dashboard`.
         "serve" if _headless_backend else "dashboard",
-        "--port", str(args.port),
-        "--host", args.host,
-        "--open-profile", _launch_profile]
+        "--port",
+        str(args.port),
+        "--host",
+        args.host,
+        "--open-profile",
+        _launch_profile,
+    ]
     for enabled, extra in (
         (_ssh_owner_nonce, ["--ssh-owner-nonce", _ssh_owner_nonce]),
         (_token_file, ["--ssh-session-token-file", _token_file]),
         (args.no_open, ["--no-open"]),
         (getattr(args, "insecure", False), ["--insecure"]),
-        (getattr(args, "skip_build", False), ["--skip-build"])):
+        (getattr(args, "skip_build", False), ["--skip-build"]),
+    ):
         if enabled:
             reexec_argv.extend(extra)
     from tools.environments.local import build_subprocess_env
+
     # CLAWK_HOME is pinned to the machine root below — the factory must not
     # re-inject a profile home.
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
@@ -1019,6 +1153,7 @@ def _route_named_profile_dashboard(
     # get_default_clawk_root() strips a trailing profiles/<name> for both layouts.
     try:
         from clawk_constants import get_default_clawk_root
+
         env["CLAWK_HOME"] = str(get_default_clawk_root())
     except Exception:
         env.pop("CLAWK_HOME", None)  # prior behaviour rather than blocking the reroute
@@ -1041,6 +1176,7 @@ def _resolve_dashboard_web_dist(args, _headless_backend: bool) -> None:
     """
     from clawk_cli.main import PROJECT_ROOT
     from clawk_cli.main_web_build import _build_web_ui
+
     skip_build = getattr(args, "skip_build", False)
     if _headless_backend:
         os.environ["CLAWK_SERVE_HEADLESS"] = "1"  # set before web_server import
@@ -1064,11 +1200,15 @@ def _resolve_dashboard_web_dist(args, _headless_backend: bool) -> None:
             # ONE recovery build through the normal build path.
             _recoverable = "CLAWK_WEB_DIST" not in os.environ
             if _recoverable:
-                print(f"⚠ --skip-build was passed but no web dist found at: {_dist_root}")
+                print(
+                    f"⚠ --skip-build was passed but no web dist found at: {_dist_root}"
+                )
                 print("  Attempting one recovery build of the web UI...")
                 _build_web_ui(PROJECT_ROOT / "web", fatal=True)
             if not (_dist_root / "index.html").exists():
-                print(f"✗ --skip-build was passed but no web dist found at: {_dist_root}")
+                print(
+                    f"✗ --skip-build was passed but no web dist found at: {_dist_root}"
+                )
                 if _recoverable:
                     print("  The recovery build did not produce a usable dist.")
                 print(_PRE_BUILD_HINT)

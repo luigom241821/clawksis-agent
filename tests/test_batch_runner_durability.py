@@ -30,6 +30,7 @@ from batch_runner import BatchRunner, _process_batch_worker
 # Trajectory write durability (fsync)
 # =========================================================================
 
+
 class TestTrajectoryWriteDurability:
     """Verify that trajectory entries are flushed and fsync'd to disk.
 
@@ -88,6 +89,7 @@ class TestTrajectoryWriteDurability:
 # =========================================================================
 # Pool cleanup on interruption / exception — drives the REAL run()
 # =========================================================================
+
 
 def _make_runner(tmp_path, monkeypatch):
     """Build a minimal real BatchRunner against a 1-line tmp dataset."""

@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+
 pytest.importorskip("telegram", reason="python-telegram-bot not installed")
 from telegram.error import Conflict, TelegramError
 from telegram.request import BaseRequest
@@ -127,8 +128,6 @@ async def _cancel_task(task):
     await asyncio.gather(task, return_exceptions=True)
 
 
-
-
 @pytest.mark.asyncio
 async def test_real_base_request_bom_rejected_by_ptb_cannot_record_progress():
     adapter = TelegramAdapter(PlatformConfig(enabled=True, token="123456:test-token"))
@@ -198,9 +197,10 @@ async def test_real_base_request_unsuccessful_200_envelope_cannot_record_progres
             with pytest.raises(KeyError, match="result"):
                 await request.post("https://api.telegram.org/bot-token/getUpdates")
         else:
-            assert await request.post(
-                "https://api.telegram.org/bot-token/getUpdates"
-            ) == []
+            assert (
+                await request.post("https://api.telegram.org/bot-token/getUpdates")
+                == []
+            )
     finally:
         tg_adapter._POLLING_GENERATION_CONTEXT.reset(context_token)
 
@@ -222,9 +222,7 @@ async def test_real_base_request_valid_success_envelope_records_progress():
     context_token = tg_adapter._POLLING_GENERATION_CONTEXT.set(generation)
 
     try:
-        result = await request.post(
-            "https://api.telegram.org/bot-token/getUpdates"
-        )
+        result = await request.post("https://api.telegram.org/bot-token/getUpdates")
     finally:
         tg_adapter._POLLING_GENERATION_CONTEXT.reset(context_token)
 
@@ -233,8 +231,6 @@ async def test_real_base_request_valid_success_envelope_records_progress():
     assert adapter._polling_network_error_count == 0
     assert adapter._polling_conflict_count == 0
     assert adapter._send_path_degraded is False
-
-
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,9 @@ _PY = sys.executable
 
 
 def test_success_returns_completed_process():
-    result = bounded_probe_run([_PY, "-c", "print('ok'); import sys; sys.exit(0)"], timeout=30)
+    result = bounded_probe_run(
+        [_PY, "-c", "print('ok'); import sys; sys.exit(0)"], timeout=30
+    )
     assert result is not None
     assert result.returncode == 0
     assert result.stdout.strip() == "ok"
@@ -41,7 +43,9 @@ def test_success_returns_completed_process():
 def test_nonzero_exit_is_returned_not_swallowed():
     """Unlike bounded_git_probe, callers see the real returncode — the gateway
     scan branches on ``returncode != 0`` to trip the wmic→powershell fallback."""
-    result = bounded_probe_run([_PY, "-c", "print('partial'); import sys; sys.exit(3)"], timeout=30)
+    result = bounded_probe_run(
+        [_PY, "-c", "print('partial'); import sys; sys.exit(3)"], timeout=30
+    )
     assert result is not None
     assert result.returncode == 3
     assert result.stdout.strip() == "partial"

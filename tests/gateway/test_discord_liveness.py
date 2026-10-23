@@ -118,15 +118,25 @@ class _BrokenWebSocket:
     ("key", "attribute", "raw"),
     [
         ("websocket_liveness_interval_seconds", "_liveness_interval_seconds", "nan"),
-        ("websocket_heartbeat_ack_max_age_seconds", "_heartbeat_ack_max_age_seconds", "inf"),
+        (
+            "websocket_heartbeat_ack_max_age_seconds",
+            "_heartbeat_ack_max_age_seconds",
+            "inf",
+        ),
         ("websocket_max_latency_seconds", "_max_latency_seconds", "-inf"),
         ("websocket_max_latency_seconds", "_max_latency_seconds", True),
         ("websocket_max_latency_seconds", "_max_latency_seconds", "15s"),
         ("websocket_liveness_failure_threshold", "_liveness_failure_threshold", 2.5),
-        ("websocket_liveness_failure_threshold", "_liveness_failure_threshold", float("inf")),
+        (
+            "websocket_liveness_failure_threshold",
+            "_liveness_failure_threshold",
+            float("inf"),
+        ),
     ],
 )
-def test_nonfinite_liveness_config_disables_that_probe_dimension(monkeypatch, key, attribute, raw):
+def test_nonfinite_liveness_config_disables_that_probe_dimension(
+    monkeypatch, key, attribute, raw
+):
     adapter = DiscordAdapter(
         PlatformConfig(enabled=True, token="test-token", extra={key: raw})
     )
@@ -158,7 +168,9 @@ def test_unusable_liveness_config_warns_instead_of_disabling_silently(caplog):
     assert adapter._max_latency_seconds == 0.0
     assert adapter._liveness_failure_threshold == 0
     assert adapter._heartbeat_ack_max_age_seconds == 0.0
-    warned = [r.getMessage() for r in caplog.records if "liveness knob" in r.getMessage()]
+    warned = [
+        r.getMessage() for r in caplog.records if "liveness knob" in r.getMessage()
+    ]
     assert len(warned) == 4
 
 
@@ -225,7 +237,9 @@ def _live_bot_factory():
     """Stand-in for ``commands.Bot`` that yields a ``_LiveBot`` with a stubbed ``fetch_user``."""
 
     def factory(**kwargs):
-        bot = _LiveBot(intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions"))
+        bot = _LiveBot(
+            intents=kwargs["intents"], allowed_mentions=kwargs.get("allowed_mentions")
+        )
         bot.fetch_user = AsyncMock()
         return bot
 
@@ -237,10 +251,15 @@ async def _connect(adapter: DiscordAdapter, monkeypatch, bot_factory):
         "gateway.status.acquire_scoped_lock",
         lambda scope, identity, metadata=None: (True, None),
     )
-    monkeypatch.setattr("gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None)
+    monkeypatch.setattr(
+        "gateway.status_scoped_locks.release_scoped_lock", lambda scope, identity: None
+    )
     intents = SimpleNamespace(
-        message_content=False, dm_messages=False, guild_messages=False,
-        members=False, voice_states=False,
+        message_content=False,
+        dm_messages=False,
+        guild_messages=False,
+        members=False,
+        voice_states=False,
     )
     monkeypatch.setattr(discord_platform.Intents, "default", lambda: intents)
     monkeypatch.setattr(discord_platform.commands, "Bot", bot_factory)
@@ -360,7 +379,9 @@ async def test_disconnect_cancels_liveness_task(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reason", ["socket_closed", "client_closed"])
-async def test_closed_transport_first_strike_forces_reconnect(monkeypatch, caplog, reason):
+async def test_closed_transport_first_strike_forces_reconnect(
+    monkeypatch, caplog, reason
+):
     """A closed transport is a confirmed death — strike 1 must reconnect (#118487).
 
     Pre-fix, the first ``socket_closed`` strike logged ``1/2`` and waited for a
@@ -389,7 +410,9 @@ async def test_closed_transport_first_strike_forces_reconnect(monkeypatch, caplo
             f"fatal handler not called after first {reason} strike",
         )
 
-    assert calls == 1, f"first {reason} strike must escalate without a confirming strike"
+    assert calls == 1, (
+        f"first {reason} strike must escalate without a confirming strike"
+    )
     assert adapter._disconnecting is True
     errors = [r.getMessage() for r in caplog.records if r.levelname == "ERROR"]
     assert any("forcing reconnect" in m and reason in m for m in errors)
@@ -435,7 +458,9 @@ async def test_recovery_after_unhealthy_streak_is_logged(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
-async def test_probe_exit_after_mark_disconnected_is_logged_at_info(monkeypatch, caplog):
+async def test_probe_exit_after_mark_disconnected_is_logged_at_info(
+    monkeypatch, caplog
+):
     """The probe must say why it stopped, even on a benign exit (#118487, #118504).
 
     Reached through a *production* setter (``_mark_disconnected`` flips
@@ -466,8 +491,7 @@ async def test_probe_exit_after_mark_disconnected_is_logged_at_info(monkeypatch,
 
     assert not task.cancelled()
     exits = [
-        r for r in caplog.records
-        if "probe exiting (running=False" in r.getMessage()
+        r for r in caplog.records if "probe exiting (running=False" in r.getMessage()
     ]
     assert len(exits) == 1
     assert exits[0].levelname == "INFO"

@@ -5,6 +5,7 @@ match what boot_bootstrap gates them with, a failing step must not stop the
 rest, and step_migrate_config must restore its backups when a migration
 fails or does not advance the version.
 """
+
 from pathlib import Path
 
 import pytest
@@ -138,10 +139,15 @@ def test_boot_drops_the_live_plugin_catalog_cache(tmp_path, monkeypatch):
     cache.parent.mkdir()
     cache.write_text("{}", encoding="utf-8")
 
-    assert ("drop_live_plugin_catalog", post_update.step_drop_live_plugin_catalog) in post_update.BOOT_HOME_STEPS
+    assert (
+        "drop_live_plugin_catalog",
+        post_update.step_drop_live_plugin_catalog,
+    ) in post_update.BOOT_HOME_STEPS
     assert post_update.step_drop_live_plugin_catalog() == {"ok": True}
     assert not cache.exists()
-    assert post_update.step_drop_live_plugin_catalog() == {"ok": True}  # absent cache is fine
+    assert post_update.step_drop_live_plugin_catalog() == {
+        "ok": True
+    }  # absent cache is fine
 
 
 # ── machine-step registry ────────────────────────────────────────────
@@ -170,14 +176,20 @@ def test_provisioning_does_not_use_human_diagnostics(tmp_path, monkeypatch):
     runtime.mkdir()
     (runtime / "facts.json").write_text(json.dumps({"schema": 1, "packages": {}}))
     lock = tmp_path / "lock.json"
-    lock.write_text(json.dumps({"schema": 1, "packages": {"node": {"version": "test"}}}))
+    lock.write_text(
+        json.dumps({"schema": 1, "packages": {"node": {"version": "test"}}})
+    )
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(runtime))
     monkeypatch.setattr(paths, "lockfile_path", lambda: lock)
     monkeypatch.setattr(engine, "sealed", lambda: False)
     monkeypatch.setattr(engine, "lazy_installs_allowed", lambda: True)
-    monkeypatch.setattr(pm, "check", lambda: ["translated diagnostic without a package token"])
+    monkeypatch.setattr(
+        pm, "check", lambda: ["translated diagnostic without a package token"]
+    )
     ensured = []
-    monkeypatch.setattr(pm, "ensure", lambda name, **kwargs: ensured.append((name, kwargs)))
+    monkeypatch.setattr(
+        pm, "ensure", lambda name, **kwargs: ensured.append((name, kwargs))
+    )
 
     assert post_update.main(["--scope", "machine"]) == 0
     assert ensured == [("node", {"explicit": True})]
@@ -201,12 +213,21 @@ def test_provision_runtimes_reensures_only_what_pm_names(monkeypatch):
     pm_ensure = importlib.import_module("pm.install")
 
     ensured = []
-    monkeypatch.setattr(pm, "drift", lambda: {"node": "outdated", "venv": "out of sync"})
+    monkeypatch.setattr(
+        pm, "drift", lambda: {"node": "outdated", "venv": "out of sync"}
+    )
     monkeypatch.setattr(pm_ensure, "sealed", lambda: False)
     monkeypatch.setattr(pm_ensure, "lazy_installs_allowed", lambda: True)
-    monkeypatch.setattr(pm, "ensure", lambda name, explicit=False: ensured.append((name, explicit)))
-    monkeypatch.setattr(pm, "sync_venv", lambda explicit=False, evict_incompatible_plugins=False:
-                        ensured.append(("venv", explicit and evict_incompatible_plugins)))
+    monkeypatch.setattr(
+        pm, "ensure", lambda name, explicit=False: ensured.append((name, explicit))
+    )
+    monkeypatch.setattr(
+        pm,
+        "sync_venv",
+        lambda explicit=False, evict_incompatible_plugins=False: ensured.append(
+            ("venv", explicit and evict_incompatible_plugins)
+        ),
+    )
 
     result = post_update.step_provision_runtimes()
 
@@ -233,7 +254,8 @@ def test_provision_runtimes_respects_the_lazy_install_policy(monkeypatch):
 
 def test_main_reports_failure_in_exit_code(monkeypatch):
     monkeypatch.setattr(
-        post_update, "HOME_STEPS",
+        post_update,
+        "HOME_STEPS",
         (("bad", lambda: (_ for _ in ()).throw(RuntimeError("x"))),),
     )
     monkeypatch.setattr(post_update, "MACHINE_STEPS", ())
@@ -257,8 +279,16 @@ def test_main_scope_selects_registries(monkeypatch):
 
 def test_scope_cli_rejects_unrelated_flags_without_running_steps(monkeypatch):
     ran = []
-    monkeypatch.setattr(post_update, "HOME_STEPS", (("home", lambda: ran.append("home") or {"ok": True}),))
-    monkeypatch.setattr(post_update, "MACHINE_STEPS", (("machine", lambda: ran.append("machine") or {"ok": True}),))
+    monkeypatch.setattr(
+        post_update,
+        "HOME_STEPS",
+        (("home", lambda: ran.append("home") or {"ok": True}),),
+    )
+    monkeypatch.setattr(
+        post_update,
+        "MACHINE_STEPS",
+        (("machine", lambda: ran.append("machine") or {"ok": True}),),
+    )
     for flags in (
         ["--gateway-mode"],
         ["--assume-yes"],

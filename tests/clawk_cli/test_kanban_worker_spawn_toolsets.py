@@ -115,6 +115,7 @@ def test_default_spawn_does_not_pass_mutable_launch_overrides(monkeypatch, tmp_p
     assert captured["cmd"][-2:] == ["-m", "clawk_cli.kanban_worker_client"]
     assert task.model_override not in captured["cmd"]
 
+
 def test_default_spawn_resolves_env_passthrough_under_multiplex(monkeypatch, tmp_path):
     """Under multiplex a worker spawn with ``terminal.env_passthrough`` configured must
     forward the ASSIGNEE profile's own value, never crash on an unscoped read or leak the
@@ -124,9 +125,12 @@ def test_default_spawn_resolves_env_passthrough_under_multiplex(monkeypatch, tmp
     profile = root / "profiles" / "elias"
     profile.mkdir(parents=True)
     root.joinpath("config.yaml").write_text(
-        "terminal:\n  env_passthrough:\n    - MY_PASSTHROUGH_VAR\n", encoding="utf-8")
+        "terminal:\n  env_passthrough:\n    - MY_PASSTHROUGH_VAR\n", encoding="utf-8"
+    )
     profile.joinpath("config.yaml").write_text("{}\n", encoding="utf-8")
-    profile.joinpath(".env").write_text("MY_PASSTHROUGH_VAR=elias-value\n", encoding="utf-8")
+    profile.joinpath(".env").write_text(
+        "MY_PASSTHROUGH_VAR=elias-value\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("MY_PASSTHROUGH_VAR", "dispatcher-value")
 
@@ -161,7 +165,9 @@ def test_default_spawn_resolves_env_passthrough_under_multiplex(monkeypatch, tmp
     assert captured["env"].get("MY_PASSTHROUGH_VAR") == "elias-value"
 
 
-def test_worker_toolsets_come_from_the_assignee_profile_not_the_parent_config(tmp_path, monkeypatch):
+def test_worker_toolsets_come_from_the_assignee_profile_not_the_parent_config(
+    tmp_path, monkeypatch
+):
     """The worker's toolsets are frozen by the assignee profile's own gateway (its config), never
     by the dispatcher's root/active profile: a root config that only lists ``kanban`` must not
     reach a worker whose profile grants ``terminal`` and ``web``."""
@@ -180,28 +186,60 @@ def test_worker_toolsets_come_from_the_assignee_profile_not_the_parent_config(tm
     monkeypatch.setenv("CLAWK_HOME", str(profile))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.delenv("CLAWK_KANBAN_DB", raising=False)
-    monkeypatch.setattr("clawk_cli.profiles.resolve_profile_env", lambda name: str(profile))
+    monkeypatch.setattr(
+        "clawk_cli.profiles.resolve_profile_env", lambda name: str(profile)
+    )
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    kb.create_board("owned")  # explicit creation; connect() never creates a board (#43243)
+    kb.create_board(
+        "owned"
+    )  # explicit creation; connect() never creates a board (#43243)
     with closing(connect(board="owned")) as conn:
-        task_id = kb.create_task(conn, title="t", body="b", assignee="elias",
-                                 workspace_kind="dir", workspace_path=str(workspace))
+        task_id = kb.create_task(
+            conn,
+            title="t",
+            body="b",
+            assignee="elias",
+            workspace_kind="dir",
+            workspace_path=str(workspace),
+        )
         kb.recompute_ready(conn)
         task = kb.claim_task(conn, task_id)
     actor = Principal("owner", str(profile), frozenset({"session:create"}), "transport")
-    connection = SimpleNamespace(authority=SimpleNamespace(profile_id=str(profile)), actor=actor, native_owner=True)
-    params = dict(board="owned", task_id=task.id, run_id=task.current_run_id, claim_lock=task.claim_lock)
+    connection = SimpleNamespace(
+        authority=SimpleNamespace(profile_id=str(profile)),
+        actor=actor,
+        native_owner=True,
+    )
+    params = dict(
+        board="owned",
+        task_id=task.id,
+        run_id=task.current_run_id,
+        claim_lock=task.claim_lock,
+    )
 
-    assignee_config = {"model": {"default": "m", "provider": "custom"},
-                       "platform_toolsets": {"cli": ["terminal", "web"]}, "toolsets": ["clawk-cli"]}
+    assignee_config = {
+        "model": {"default": "m", "provider": "custom"},
+        "platform_toolsets": {"cli": ["terminal", "web"]},
+        "toolsets": ["clawk-cli"],
+    }
     policy, _ = build_kanban_policy(connection, params, assignee_config)
     assert {"terminal", "web", "kanban"} <= set(policy.toolsets)
 
-    root_only_kanban = {"model": {"default": "m", "provider": "custom"}, "platform_toolsets": {"cli": ["kanban"]}}
+    root_only_kanban = {
+        "model": {"default": "m", "provider": "custom"},
+        "platform_toolsets": {"cli": ["kanban"]},
+    }
     other_profile = tmp_path
     with pytest.raises(Exception):
         # A dispatcher acting for another profile cannot mint this worker's policy at all.
-        build_kanban_policy(SimpleNamespace(authority=SimpleNamespace(profile_id=str(other_profile)),
-                                            actor=actor, native_owner=True), params, root_only_kanban)
+        build_kanban_policy(
+            SimpleNamespace(
+                authority=SimpleNamespace(profile_id=str(other_profile)),
+                actor=actor,
+                native_owner=True,
+            ),
+            params,
+            root_only_kanban,
+        )
     assert json.loads(policy.kanban_json)["profile"] == "elias"

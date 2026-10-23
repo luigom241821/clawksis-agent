@@ -37,11 +37,29 @@ BOT_ID = "B0STANDIN"
 BOT_NAME = "clawk"
 MAX_TEXT = 40_000  # chat.postMessage hard limit (msg_too_long above it)
 _STRUCTURED = ("blocks", "attachments", "metadata", "files", "chunks", "file_uploads")
-_SCOPES = ",".join((
-    "app_mentions:read", "assistant:write", "channels:history", "channels:read", "chat:write",
-    "commands", "files:read", "files:write", "groups:history", "groups:read", "im:history", "im:read",
-    "im:write", "mpim:history", "mpim:read", "mpim:write", "reactions:read", "reactions:write",
-    "users:read"))
+_SCOPES = ",".join(
+    (
+        "app_mentions:read",
+        "assistant:write",
+        "channels:history",
+        "channels:read",
+        "chat:write",
+        "commands",
+        "files:read",
+        "files:write",
+        "groups:history",
+        "groups:read",
+        "im:history",
+        "im:read",
+        "im:write",
+        "mpim:history",
+        "mpim:read",
+        "mpim:write",
+        "reactions:read",
+        "reactions:write",
+        "users:read",
+    )
+)
 
 
 def _decode(key: str, value: Any) -> Any:
@@ -54,7 +72,9 @@ def _decode(key: str, value: Any) -> Any:
 
 
 class SlackStandin(StandinServer):
-    def __init__(self, bot_token: str = "xoxb-standin", app_token: str = "xapp-standin") -> None:
+    def __init__(
+        self, bot_token: str = "xoxb-standin", app_token: str = "xapp-standin"
+    ) -> None:
         super().__init__()
         self.bot_token = bot_token
         self.app_token = app_token
@@ -106,7 +126,10 @@ class SlackStandin(StandinServer):
             reader = await request.multipart()
             async for part in reader:
                 if part.filename:
-                    params[part.name] = {"filename": part.filename, "size": len(await part.read())}
+                    params[part.name] = {
+                        "filename": part.filename,
+                        "size": len(await part.read()),
+                    }
                 else:
                     params[part.name] = await part.text()
         elif request.can_read_body:
@@ -119,7 +142,9 @@ class SlackStandin(StandinServer):
         return auth[7:] if auth.startswith("Bearer ") else str(params.pop("token", ""))
 
     def _reply(self, body: dict[str, Any]) -> web.Response:
-        return web.json_response(body, headers={"x-oauth-scopes": _SCOPES, "x-accepted-oauth-scopes": ""})
+        return web.json_response(
+            body, headers={"x-oauth-scopes": _SCOPES, "x-accepted-oauth-scopes": ""}
+        )
 
     async def _api(self, request: web.Request) -> web.Response:
         method = request.match_info["method"]
@@ -153,9 +178,14 @@ class SlackStandin(StandinServer):
         if method not in ("chat.appendStream", "chat.stopStream"):
             return params
         with self._lock:
-            vis = self._visible.get((str(params.get("channel", "")), str(params.get("ts", ""))))
+            vis = self._visible.get(
+                (str(params.get("channel", "")), str(params.get("ts", "")))
+            )
             before = vis.text if vis is not None else ""
-        return {**params, "_stream_text": before + str(params.get("markdown_text") or "")}
+        return {
+            **params,
+            "_stream_text": before + str(params.get("markdown_text") or ""),
+        }
 
     async def _upload(self, request: web.Request) -> web.Response:
         fid = request.match_info["file_id"]
@@ -169,7 +199,10 @@ class SlackStandin(StandinServer):
         self.record("file_download", {"path": path}, None)
         for f in self.files.values():
             if f.get("_path") == path:
-                return web.Response(body=f["_data"], content_type=f.get("mimetype", "application/octet-stream"))
+                return web.Response(
+                    body=f["_data"],
+                    content_type=f.get("mimetype", "application/octet-stream"),
+                )
         return web.Response(status=404)
 
     async def _response_url(self, request: web.Request) -> web.Response:
@@ -181,8 +214,15 @@ class SlackStandin(StandinServer):
             return web.Response(status=404, text="no_such_response_url")
         self.record("response_url", {"rid": rid, "channel": target[0], **params}, None)
         with self._lock:
-            self._ephemerals.append({"channel": target[0], "user": target[1], "text": params.get("text", ""),
-                                     "replace_original": params.get("replace_original"), "via": "response_url"})
+            self._ephemerals.append(
+                {
+                    "channel": target[0],
+                    "user": target[1],
+                    "text": params.get("text", ""),
+                    "replace_original": params.get("replace_original"),
+                    "via": "response_url",
+                }
+            )
         return web.Response(text="ok")
 
     def _new_response_url(self, channel: str, user_id: str) -> str:
@@ -200,9 +240,19 @@ class SlackStandin(StandinServer):
         await ws.prepare(request)
         self._sockets.append(ws)
         self.record("socket_connect", {"sockets": len(self._sockets)}, None)
-        await ws.send_str(json.dumps({"type": "hello", "num_connections": len(self._sockets),
-                                      "debug_info": {"host": "standin", "approximate_connection_time": 3600},
-                                      "connection_info": {"app_id": APP_ID}}))
+        await ws.send_str(
+            json.dumps(
+                {
+                    "type": "hello",
+                    "num_connections": len(self._sockets),
+                    "debug_info": {
+                        "host": "standin",
+                        "approximate_connection_time": 3600,
+                    },
+                    "connection_info": {"app_id": APP_ID},
+                }
+            )
+        )
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
@@ -235,11 +285,23 @@ class SlackStandin(StandinServer):
         # Slack delivers one envelope to ONE of the app's connections.
         await live[-1].send_str(json.dumps(envelope))
 
-    def push(self, envelope_type: str, payload: dict[str, Any], *, retry_attempt: int = 0,
-             retry_reason: str = "", accepts_response_payload: bool = False) -> dict[str, Any]:
-        envelope = {"envelope_id": str(uuid.uuid4()), "type": envelope_type, "payload": payload,
-                    "accepts_response_payload": accepts_response_payload,
-                    "retry_attempt": retry_attempt, "retry_reason": retry_reason}
+    def push(
+        self,
+        envelope_type: str,
+        payload: dict[str, Any],
+        *,
+        retry_attempt: int = 0,
+        retry_reason: str = "",
+        accepts_response_payload: bool = False,
+    ) -> dict[str, Any]:
+        envelope = {
+            "envelope_id": str(uuid.uuid4()),
+            "type": envelope_type,
+            "payload": payload,
+            "accepts_response_payload": accepts_response_payload,
+            "retry_attempt": retry_attempt,
+            "retry_reason": retry_reason,
+        }
         with self._lock:
             self.envelopes.append(envelope)
         self.run_in_loop(self._asend(envelope))
@@ -255,15 +317,35 @@ class SlackStandin(StandinServer):
             return self.users[user_id]
         is_bot = user_id == BOT_USER_ID
         name = BOT_NAME if is_bot else f"user{user_id.lower()}"
-        return {"id": user_id, "team_id": TEAM_ID, "name": name, "real_name": name.title(), "deleted": False,
-                "is_bot": is_bot, "is_app_user": False, "tz": "UTC",
-                "profile": {"display_name": name, "real_name": name.title(), "bot_id": BOT_ID if is_bot else None}}
+        return {
+            "id": user_id,
+            "team_id": TEAM_ID,
+            "name": name,
+            "real_name": name.title(),
+            "deleted": False,
+            "is_bot": is_bot,
+            "is_app_user": False,
+            "tz": "UTC",
+            "profile": {
+                "display_name": name,
+                "real_name": name.title(),
+                "bot_id": BOT_ID if is_bot else None,
+            },
+        }
 
     def _channel(self, channel: str) -> dict[str, Any]:
         is_im = channel.startswith("D")
-        info: dict[str, Any] = {"id": channel, "is_im": is_im, "is_channel": channel.startswith("C"),
-                                "is_group": channel.startswith("G"), "is_mpim": False, "is_private": not channel.startswith("C"),
-                                "is_member": True, "is_archived": False, "context_team_id": TEAM_ID}
+        info: dict[str, Any] = {
+            "id": channel,
+            "is_im": is_im,
+            "is_channel": channel.startswith("C"),
+            "is_group": channel.startswith("G"),
+            "is_mpim": False,
+            "is_private": not channel.startswith("C"),
+            "is_member": True,
+            "is_archived": False,
+            "context_team_id": TEAM_ID,
+        }
         if is_im:
             info["user"] = "U" + channel[1:]
         else:
@@ -271,8 +353,15 @@ class SlackStandin(StandinServer):
         return info
 
     def _m_auth_test(self, _p: dict[str, Any]) -> dict[str, Any]:
-        return {"url": "https://standin.slack.com/", "team": "Standin", "user": BOT_NAME, "team_id": TEAM_ID,
-                "user_id": BOT_USER_ID, "bot_id": BOT_ID, "is_enterprise_install": False}
+        return {
+            "url": "https://standin.slack.com/",
+            "team": "Standin",
+            "user": BOT_NAME,
+            "team_id": TEAM_ID,
+            "user_id": BOT_USER_ID,
+            "bot_id": BOT_ID,
+            "is_enterprise_install": False,
+        }
 
     def _m_apps_connections_open(self, _p: dict[str, Any]) -> dict[str, Any]:
         return {"url": self.ws_url}
@@ -281,7 +370,14 @@ class SlackStandin(StandinServer):
         return {"user": self._user(str(p.get("user", "")))}
 
     def _m_bots_info(self, p: dict[str, Any]) -> dict[str, Any]:
-        return {"bot": {"id": p.get("bot", BOT_ID), "name": BOT_NAME, "user_id": BOT_USER_ID, "app_id": APP_ID}}
+        return {
+            "bot": {
+                "id": p.get("bot", BOT_ID),
+                "name": BOT_NAME,
+                "user_id": BOT_USER_ID,
+                "app_id": APP_ID,
+            }
+        }
 
     def _m_conversations_info(self, p: dict[str, Any]) -> dict[str, Any]:
         return {"channel": self._channel(str(p.get("channel", "")))}
@@ -289,7 +385,10 @@ class SlackStandin(StandinServer):
     def _m_users_conversations(self, _p: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             ids = sorted(c for c in self._history if not c.startswith("D"))
-        return {"channels": [self._channel(c) for c in ids], "response_metadata": {"next_cursor": ""}}
+        return {
+            "channels": [self._channel(c) for c in ids],
+            "response_metadata": {"next_cursor": ""},
+        }
 
     def _m_conversations_open(self, p: dict[str, Any]) -> dict[str, Any]:
         users = str(p.get("users", "")).split(",")[0]
@@ -303,24 +402,43 @@ class SlackStandin(StandinServer):
     def _m_conversations_replies(self, p: dict[str, Any]) -> dict[str, Any]:
         msgs = self._thread_messages(str(p.get("channel", "")), str(p.get("ts", "")))
         limit = int(p.get("limit") or 1000)
-        return {"messages": msgs[:limit], "has_more": False, "response_metadata": {"next_cursor": ""}}
+        return {
+            "messages": msgs[:limit],
+            "has_more": False,
+            "response_metadata": {"next_cursor": ""},
+        }
 
     def _m_conversations_history(self, p: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            msgs = [m for m in self._history.get(str(p.get("channel", "")), []) if not m.get("thread_ts")
-                    or m.get("thread_ts") == m["ts"]]
+            msgs = [
+                m
+                for m in self._history.get(str(p.get("channel", "")), [])
+                if not m.get("thread_ts") or m.get("thread_ts") == m["ts"]
+            ]
         limit = int(p.get("limit") or 100)
-        return {"messages": list(reversed(msgs))[:limit], "has_more": False,
-                "response_metadata": {"next_cursor": ""}}
+        return {
+            "messages": list(reversed(msgs))[:limit],
+            "has_more": False,
+            "response_metadata": {"next_cursor": ""},
+        }
 
     def _remember(self, channel: str, msg: dict[str, Any]) -> None:
         with self._lock:
             self._history.setdefault(channel, []).append(msg)
 
-    def _bot_post(self, channel: str, text: str, p: dict[str, Any], kind: str) -> dict[str, Any]:
+    def _bot_post(
+        self, channel: str, text: str, p: dict[str, Any], kind: str
+    ) -> dict[str, Any]:
         ts = self.next_ts()
-        msg = {"type": "message", "user": BOT_USER_ID, "bot_id": BOT_ID, "app_id": APP_ID, "text": text,
-               "ts": ts, "team": TEAM_ID}
+        msg = {
+            "type": "message",
+            "user": BOT_USER_ID,
+            "bot_id": BOT_ID,
+            "app_id": APP_ID,
+            "text": text,
+            "ts": ts,
+            "team": TEAM_ID,
+        }
         if p.get("blocks"):
             msg["blocks"] = p["blocks"]
         thread_ts = p.get("thread_ts")
@@ -328,8 +446,15 @@ class SlackStandin(StandinServer):
             msg["thread_ts"] = str(thread_ts)
         self._remember(channel, msg)
         with self._lock:
-            self._visible[(channel, ts)] = Visible(ts, text, extra={
-                "kind": kind, "thread_ts": msg.get("thread_ts"), "blocks": p.get("blocks")})
+            self._visible[(channel, ts)] = Visible(
+                ts,
+                text,
+                extra={
+                    "kind": kind,
+                    "thread_ts": msg.get("thread_ts"),
+                    "blocks": p.get("blocks"),
+                },
+            )
         return msg
 
     def _m_chat_postMessage(self, p: dict[str, Any]) -> dict[str, Any]:
@@ -346,8 +471,14 @@ class SlackStandin(StandinServer):
 
     def _m_chat_postEphemeral(self, p: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            self._ephemerals.append({"channel": str(p.get("channel", "")), "user": p.get("user"),
-                                     "text": p.get("text", ""), "via": "chat.postEphemeral"})
+            self._ephemerals.append(
+                {
+                    "channel": str(p.get("channel", "")),
+                    "user": p.get("user"),
+                    "text": p.get("text", ""),
+                    "via": "chat.postEphemeral",
+                }
+            )
         return {"message_ts": self.next_ts()}
 
     def _vis(self, p: dict[str, Any]) -> Visible:
@@ -367,8 +498,17 @@ class SlackStandin(StandinServer):
             vis.edits += 1
             if "blocks" in p:
                 vis.extra["blocks"] = p.get("blocks")
-        return {"channel": p["channel"], "ts": p["ts"], "text": text,
-                "message": {"type": "message", "user": BOT_USER_ID, "bot_id": BOT_ID, "text": text}}
+        return {
+            "channel": p["channel"],
+            "ts": p["ts"],
+            "text": text,
+            "message": {
+                "type": "message",
+                "user": BOT_USER_ID,
+                "bot_id": BOT_ID,
+                "text": text,
+            },
+        }
 
     def _m_chat_delete(self, p: dict[str, Any]) -> dict[str, Any]:
         vis = self._vis(p)
@@ -407,12 +547,18 @@ class SlackStandin(StandinServer):
 
     # Side-effect-only methods the adapter calls (reactions, assistant thread status/title/prompts).
     _m_reactions_add = _m_reactions_remove = _m_ok
-    _m_assistant_threads_setStatus = _m_assistant_threads_setTitle = _m_assistant_threads_setSuggestedPrompts = _m_ok
+    _m_assistant_threads_setStatus = _m_assistant_threads_setTitle = (
+        _m_assistant_threads_setSuggestedPrompts
+    ) = _m_ok
 
     def _m_files_getUploadURLExternal(self, p: dict[str, Any]) -> dict[str, Any]:
         fid = f"F{next(self._ids):08d}"
-        self.files[fid] = {"id": fid, "name": p.get("filename"), "title": p.get("filename"),
-                           "size": int(p.get("length") or 0)}
+        self.files[fid] = {
+            "id": fid,
+            "name": p.get("filename"),
+            "title": p.get("filename"),
+            "size": int(p.get("length") or 0),
+        }
         return {"upload_url": f"{self.base_url}/upload/{fid}", "file_id": fid}
 
     def _m_files_completeUploadExternal(self, p: dict[str, Any]) -> dict[str, Any]:
@@ -425,9 +571,13 @@ class SlackStandin(StandinServer):
             out.append({k: v for k, v in f.items() if not k.startswith("_")})
             if channel:
                 comment = str(p.get("initial_comment") or "")
-                msg = self._bot_post(channel, comment, {"thread_ts": p.get("thread_ts")}, "file")
+                msg = self._bot_post(
+                    channel, comment, {"thread_ts": p.get("thread_ts")}, "file"
+                )
                 with self._lock:
-                    self._visible[(channel, msg["ts"])].extra.update(file_id=e["id"], title=f.get("title"))
+                    self._visible[(channel, msg["ts"])].extra.update(
+                        file_id=e["id"], title=f.get("title")
+                    )
         return {"files": out}
 
     def _m_files_info(self, p: dict[str, Any]) -> dict[str, Any]:
@@ -440,14 +590,41 @@ class SlackStandin(StandinServer):
     def dm_channel(self, user_id: str) -> str:
         return "D" + user_id[1:]
 
-    def message_event(self, channel: str, user_id: str, text: str, *, channel_type: str,
-                      thread_ts: Optional[str] = None, event_type: str = "message", ts: Optional[str] = None,
-                      **extra: Any) -> dict[str, Any]:
+    def message_event(
+        self,
+        channel: str,
+        user_id: str,
+        text: str,
+        *,
+        channel_type: str,
+        thread_ts: Optional[str] = None,
+        event_type: str = "message",
+        ts: Optional[str] = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
         ts = ts or self.next_ts()
-        event: dict[str, Any] = {"type": event_type, "user": user_id, "text": text, "ts": ts, "event_ts": ts,
-                                 "channel": channel, "team": TEAM_ID, "client_msg_id": str(uuid.uuid4()),
-                                 "blocks": [{"type": "rich_text", "block_id": "b1", "elements": [
-                                     {"type": "rich_text_section", "elements": [{"type": "text", "text": text}]}]}]}
+        event: dict[str, Any] = {
+            "type": event_type,
+            "user": user_id,
+            "text": text,
+            "ts": ts,
+            "event_ts": ts,
+            "channel": channel,
+            "team": TEAM_ID,
+            "client_msg_id": str(uuid.uuid4()),
+            "blocks": [
+                {
+                    "type": "rich_text",
+                    "block_id": "b1",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [{"type": "text", "text": text}],
+                        }
+                    ],
+                }
+            ],
+        }
         if event_type == "message":
             event["channel_type"] = channel_type
         if thread_ts:
@@ -455,36 +632,82 @@ class SlackStandin(StandinServer):
         event.update(extra)
         return event
 
-    def deliver(self, event: dict[str, Any], *, event_id: Optional[str] = None, retry_attempt: int = 0,
-                retry_reason: str = "") -> dict[str, Any]:
+    def deliver(
+        self,
+        event: dict[str, Any],
+        *,
+        event_id: Optional[str] = None,
+        retry_attempt: int = 0,
+        retry_reason: str = "",
+    ) -> dict[str, Any]:
         """Wrap ``event`` in an ``event_callback`` and push it over Socket Mode."""
-        if retry_attempt == 0 and event.get("type") in ("message", "app_mention") and "subtype" not in event:
-            self._remember(event["channel"], {k: v for k, v in event.items() if k != "blocks"})
-        payload = {"token": "verification-token", "team_id": TEAM_ID, "api_app_id": APP_ID, "event": event,
-                   "type": "event_callback", "event_id": event_id or f"Ev{next(self._ids):010d}",
-                   "event_time": int(float(event.get("event_ts") or time.time())),
-                   "authorizations": [{"enterprise_id": None, "team_id": TEAM_ID, "user_id": BOT_USER_ID,
-                                       "is_bot": True, "is_enterprise_install": False}],
-                   "is_ext_shared_channel": False, "event_context": f"4-standin-{uuid.uuid4().hex[:12]}"}
-        return self.push("events_api", payload, retry_attempt=retry_attempt, retry_reason=retry_reason)
+        if (
+            retry_attempt == 0
+            and event.get("type") in ("message", "app_mention")
+            and "subtype" not in event
+        ):
+            self._remember(
+                event["channel"], {k: v for k, v in event.items() if k != "blocks"}
+            )
+        payload = {
+            "token": "verification-token",
+            "team_id": TEAM_ID,
+            "api_app_id": APP_ID,
+            "event": event,
+            "type": "event_callback",
+            "event_id": event_id or f"Ev{next(self._ids):010d}",
+            "event_time": int(float(event.get("event_ts") or time.time())),
+            "authorizations": [
+                {
+                    "enterprise_id": None,
+                    "team_id": TEAM_ID,
+                    "user_id": BOT_USER_ID,
+                    "is_bot": True,
+                    "is_enterprise_install": False,
+                }
+            ],
+            "is_ext_shared_channel": False,
+            "event_context": f"4-standin-{uuid.uuid4().hex[:12]}",
+        }
+        return self.push(
+            "events_api",
+            payload,
+            retry_attempt=retry_attempt,
+            retry_reason=retry_reason,
+        )
 
     def redeliver(self, envelope: dict[str, Any]) -> dict[str, Any]:
         """Slack's at-least-once retry: same event_id/event, new envelope, ``retry_attempt`` + 1."""
         payload = envelope["payload"]
-        return self.deliver(payload["event"], event_id=payload["event_id"],
-                            retry_attempt=int(envelope.get("retry_attempt") or 0) + 1, retry_reason="timeout")
+        return self.deliver(
+            payload["event"],
+            event_id=payload["event_id"],
+            retry_attempt=int(envelope.get("retry_attempt") or 0) + 1,
+            retry_reason="timeout",
+        )
 
     def dm(self, user_id: str, text: str, **extra: Any) -> dict[str, Any]:
-        event = self.message_event(self.dm_channel(user_id), user_id, text, channel_type="im", **extra)
+        event = self.message_event(
+            self.dm_channel(user_id), user_id, text, channel_type="im", **extra
+        )
         return self.deliver(event)
 
-    def channel_post(self, channel: str, user_id: str, text: str, *, mention: bool,
-                     thread_ts: Optional[str] = None) -> list[dict[str, Any]]:
+    def channel_post(
+        self,
+        channel: str,
+        user_id: str,
+        text: str,
+        *,
+        mention: bool,
+        thread_ts: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
         """A human posts in a channel. With ``mention`` Slack emits BOTH ``app_mention`` and the
         ``message`` (channel_type=channel) event for the same ts, as separate envelopes."""
         if mention:
             text = f"<@{BOT_USER_ID}> {text}"
-        msg = self.message_event(channel, user_id, text, channel_type="channel", thread_ts=thread_ts)
+        msg = self.message_event(
+            channel, user_id, text, channel_type="channel", thread_ts=thread_ts
+        )
         out = [self.deliver(msg)]
         if mention:
             app_mention = dict(msg, type="app_mention")
@@ -492,67 +715,139 @@ class SlackStandin(StandinServer):
             out.insert(0, self.deliver(app_mention))
         return out
 
-    def dm_file(self, user_id: str, filename: str, data: bytes, mime: str, caption: str = "") -> dict[str, Any]:
+    def dm_file(
+        self, user_id: str, filename: str, data: bytes, mime: str, caption: str = ""
+    ) -> dict[str, Any]:
         fid = f"F{next(self._ids):08d}"
         path = f"{TEAM_ID}-{fid}/{filename}"
         url = f"{self.base_url}/files-pri/{path}"
-        self.files[fid] = {"id": fid, "name": filename, "title": filename, "mimetype": mime,
-                           "filetype": filename.rsplit(".", 1)[-1], "size": len(data), "url_private": url,
-                           "url_private_download": url, "mode": "hosted", "_path": path, "_data": data}
+        self.files[fid] = {
+            "id": fid,
+            "name": filename,
+            "title": filename,
+            "mimetype": mime,
+            "filetype": filename.rsplit(".", 1)[-1],
+            "size": len(data),
+            "url_private": url,
+            "url_private_download": url,
+            "mode": "hosted",
+            "_path": path,
+            "_data": data,
+        }
         public = {k: v for k, v in self.files[fid].items() if not k.startswith("_")}
-        event = self.message_event(self.dm_channel(user_id), user_id, caption, channel_type="im",
-                                   subtype="file_share", files=[public])
+        event = self.message_event(
+            self.dm_channel(user_id),
+            user_id,
+            caption,
+            channel_type="im",
+            subtype="file_share",
+            files=[public],
+        )
         return self.deliver(event)
 
-    def block_action(self, user_id: str, channel: str, message_ts: str, action: dict[str, Any]) -> dict[str, Any]:
+    def block_action(
+        self, user_id: str, channel: str, message_ts: str, action: dict[str, Any]
+    ) -> dict[str, Any]:
         with self._lock:
             vis = self._visible.get((channel, message_ts))
-        message = {"type": "message", "user": BOT_USER_ID, "bot_id": BOT_ID, "ts": message_ts,
-                   "text": vis.text if vis else "", "blocks": (vis.extra.get("blocks") if vis else None) or []}
+        message = {
+            "type": "message",
+            "user": BOT_USER_ID,
+            "bot_id": BOT_ID,
+            "ts": message_ts,
+            "text": vis.text if vis else "",
+            "blocks": (vis.extra.get("blocks") if vis else None) or [],
+        }
         if vis and vis.extra.get("thread_ts"):
             message["thread_ts"] = vis.extra["thread_ts"]
-        act = {"action_id": action["action_id"], "block_id": action.get("block_id") or "blk",
-               "type": action.get("type", "button"), "value": action.get("value", ""),
-               "text": action.get("text") or {"type": "plain_text", "text": action.get("value", "")},
-               "action_ts": f"{time.time():.6f}"}
-        payload = {"type": "block_actions", "team": {"id": TEAM_ID, "domain": "standin"},
-                   "user": {"id": user_id, "username": f"user{user_id.lower()}", "name": f"user{user_id.lower()}",
-                            "team_id": TEAM_ID},
-                   "api_app_id": APP_ID, "token": "verification-token", "trigger_id": f"trig-{uuid.uuid4().hex[:10]}",
-                   "container": {"type": "message", "message_ts": message_ts, "channel_id": channel,
-                                 "is_ephemeral": False},
-                   "channel": {"id": channel, "name": self._channel(channel).get("name", "directmessage")},
-                   "message": message, "state": {"values": {}},
-                   "response_url": self._new_response_url(channel, user_id), "actions": [act]}
+        act = {
+            "action_id": action["action_id"],
+            "block_id": action.get("block_id") or "blk",
+            "type": action.get("type", "button"),
+            "value": action.get("value", ""),
+            "text": action.get("text")
+            or {"type": "plain_text", "text": action.get("value", "")},
+            "action_ts": f"{time.time():.6f}",
+        }
+        payload = {
+            "type": "block_actions",
+            "team": {"id": TEAM_ID, "domain": "standin"},
+            "user": {
+                "id": user_id,
+                "username": f"user{user_id.lower()}",
+                "name": f"user{user_id.lower()}",
+                "team_id": TEAM_ID,
+            },
+            "api_app_id": APP_ID,
+            "token": "verification-token",
+            "trigger_id": f"trig-{uuid.uuid4().hex[:10]}",
+            "container": {
+                "type": "message",
+                "message_ts": message_ts,
+                "channel_id": channel,
+                "is_ephemeral": False,
+            },
+            "channel": {
+                "id": channel,
+                "name": self._channel(channel).get("name", "directmessage"),
+            },
+            "message": message,
+            "state": {"values": {}},
+            "response_url": self._new_response_url(channel, user_id),
+            "actions": [act],
+        }
         return self.push("interactive", payload, accepts_response_payload=False)
 
-    def slash(self, user_id: str, channel: str, command: str, text: str = "") -> dict[str, Any]:
-        payload = {"token": "verification-token", "team_id": TEAM_ID, "team_domain": "standin",
-                   "channel_id": channel, "channel_name": self._channel(channel).get("name", "directmessage"),
-                   "user_id": user_id, "user_name": f"user{user_id.lower()}", "command": command, "text": text,
-                   "api_app_id": APP_ID, "is_enterprise_install": "false",
-                   "response_url": self._new_response_url(channel, user_id),
-                   "trigger_id": f"trig-{uuid.uuid4().hex[:10]}"}
+    def slash(
+        self, user_id: str, channel: str, command: str, text: str = ""
+    ) -> dict[str, Any]:
+        payload = {
+            "token": "verification-token",
+            "team_id": TEAM_ID,
+            "team_domain": "standin",
+            "channel_id": channel,
+            "channel_name": self._channel(channel).get("name", "directmessage"),
+            "user_id": user_id,
+            "user_name": f"user{user_id.lower()}",
+            "command": command,
+            "text": text,
+            "api_app_id": APP_ID,
+            "is_enterprise_install": "false",
+            "response_url": self._new_response_url(channel, user_id),
+            "trigger_id": f"trig-{uuid.uuid4().hex[:10]}",
+        }
         return self.push("slash_commands", payload, accepts_response_payload=True)
 
     # ground truth ------------------------------------------------------------------------------
     def visible(self, channel: str) -> list[Visible]:
         with self._lock:
-            return [v for (c, _), v in self._visible.items() if c == str(channel) and not v.deleted]
+            return [
+                v
+                for (c, _), v in self._visible.items()
+                if c == str(channel) and not v.deleted
+            ]
 
     def buttons(self, channel: str) -> list[dict[str, Any]]:
         """Every button element in blocks the bot currently shows in ``channel`` (with ``message_id``)."""
         out = []
         with self._lock:
-            items = [(ts, v) for (c, ts), v in self._visible.items() if c == str(channel) and not v.deleted]
+            items = [
+                (ts, v)
+                for (c, ts), v in self._visible.items()
+                if c == str(channel) and not v.deleted
+            ]
         for ts, vis in items:
             for block in vis.extra.get("blocks") or []:
                 if not isinstance(block, dict):
                     continue
-                elements = block.get("elements") or ([block["accessory"]] if block.get("accessory") else [])
+                elements = block.get("elements") or (
+                    [block["accessory"]] if block.get("accessory") else []
+                )
                 for el in elements:
                     if isinstance(el, dict) and el.get("type") == "button":
-                        out.append({**el, "block_id": block.get("block_id"), "message_id": ts})
+                        out.append(
+                            {**el, "block_id": block.get("block_id"), "message_id": ts}
+                        )
         return out
 
 

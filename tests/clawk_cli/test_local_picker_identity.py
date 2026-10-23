@@ -24,10 +24,12 @@ def ctx(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     import clawk_cli.inventory as inv
 
-    monkeypatch.setattr("clawk_cli.local_runtime.bootstrap.staged_model_ids",
-                        lambda: set(STAGED))
-    monkeypatch.setattr("clawk_cli.local_runtime.endpoint._state_endpoint",
-                        lambda: dict(MANAGED))
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.bootstrap.staged_model_ids", lambda: set(STAGED)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.endpoint._state_endpoint", lambda: dict(MANAGED)
+    )
     context = inv.load_picker_context()
     return inv, context
 
@@ -39,14 +41,18 @@ def _rows(inv, context, **overrides):
 
 def test_managed_custom_session_shows_only_the_local_row(ctx):
     inv, context = ctx
-    rows = _rows(inv, context,
-                 current_provider="custom",
-                 current_model="Qwen-A-UD-Q4_K_M",
-                 current_base_url=MANAGED["base_url"])
+    rows = _rows(
+        inv,
+        context,
+        current_provider="custom",
+        current_model="Qwen-A-UD-Q4_K_M",
+        current_base_url=MANAGED["base_url"],
+    )
     slugs = [r["slug"] for r in rows]
     assert "llamacpp" in slugs
     assert "custom" not in slugs, (
-        "managed endpoint leaked a duplicate 'Custom endpoint' group")
+        "managed endpoint leaked a duplicate 'Custom endpoint' group"
+    )
     local = next(r for r in rows if r["slug"] == "llamacpp")
     assert local["is_current"] is True
     assert local["name"] == "Local"
@@ -54,10 +60,13 @@ def test_managed_custom_session_shows_only_the_local_row(ctx):
 
 def test_external_custom_endpoint_keeps_its_row(ctx):
     inv, context = ctx
-    rows = _rows(inv, context,
-                 current_provider="custom",
-                 current_model="some-model",
-                 current_base_url="http://my-vllm-box:8000/v1")
+    rows = _rows(
+        inv,
+        context,
+        current_provider="custom",
+        current_model="some-model",
+        current_base_url="http://my-vllm-box:8000/v1",
+    )
     slugs = [r["slug"] for r in rows]
     assert "custom" in slugs, "a real external endpoint must keep its row"
     custom = next(r for r in rows if r["slug"] == "custom")

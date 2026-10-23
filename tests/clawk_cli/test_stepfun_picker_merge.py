@@ -38,15 +38,20 @@ def hermetic_home(tmp_path, monkeypatch):
 @contextmanager
 def step_plan_live_listing(ids):
     """Patch the stepfun credential resolver and /v1/models probe."""
-    with patch(
-        "clawk_cli.auth.resolve_api_key_provider_credentials",
-        return_value=dict(STEPFUN_CREDS),
-    ), patch("clawk_cli.models.fetch_api_models", return_value=list(ids)):
+    with (
+        patch(
+            "clawk_cli.auth.resolve_api_key_provider_credentials",
+            return_value=dict(STEPFUN_CREDS),
+        ),
+        patch("clawk_cli.models.fetch_api_models", return_value=list(ids)),
+    ):
         yield
 
 
 class TestStepfunPickerMergesLiveWithCurated:
-    def test_live_step_plan_response_still_lists_curated_only_models(self, hermetic_home):
+    def test_live_step_plan_response_still_lists_curated_only_models(
+        self, hermetic_home
+    ):
         """The reported repro: live Step Plan up, step-3.7-flash still missing."""
         with step_plan_live_listing(STEP_PLAN_LIVE_IDS):
             ids = provider_model_ids("stepfun")
@@ -59,7 +64,9 @@ class TestStepfunPickerMergesLiveWithCurated:
     def test_merge_dedupes_and_keeps_the_curated_floor(self, hermetic_home):
         with step_plan_live_listing(STEP_PLAN_LIVE_IDS):
             ids = provider_model_ids("stepfun")
-        assert len(ids) == len(set(i.lower() for i in ids)), "duplicate rows in merged picker"
+        assert len(ids) == len(set(i.lower() for i in ids)), (
+            "duplicate rows in merged picker"
+        )
         from clawk_cli.models_catalog_static import _PROVIDER_MODELS
 
         for curated_id in _PROVIDER_MODELS["stepfun"]:
@@ -69,7 +76,10 @@ class TestStepfunPickerMergesLiveWithCurated:
         """Outage fallback unchanged: the curated list, flagged as placeholder."""
         with step_plan_live_listing([]):
             ids = provider_model_ids("stepfun")
-        from clawk_cli.models_catalog_static import CuratedFallbackModels, _PROVIDER_MODELS
+        from clawk_cli.models_catalog_static import (
+            CuratedFallbackModels,
+            _PROVIDER_MODELS,
+        )
 
         assert list(ids) == list(_PROVIDER_MODELS["stepfun"])
         # The placeholder flag rides on the list subclass, so the disk cache can
@@ -85,14 +95,20 @@ class TestStepfunPickerMergesLiveWithCurated:
         def fake_pick(model_list, *args, **kwargs):
             captured["models"] = list(model_list)
 
-        with patch(
-            "clawk_cli.model_setup_flows._ensure_flow_api_key", return_value=(None, "sk-stepfun-test", False)
-        ), patch(
-            "clawk_cli.main_provider_setup._prompt_provider_choice", return_value=0
-        ), patch("clawk_cli.config.save_env_value"), patch(
-            "clawk_cli.model_setup_flows._pick_model_or_prompt", side_effect=fake_pick
-        ), patch(
-            "clawk_cli.model_setup_flows._finish_model", return_value=None
+        with (
+            patch(
+                "clawk_cli.model_setup_flows._ensure_flow_api_key",
+                return_value=(None, "sk-stepfun-test", False),
+            ),
+            patch(
+                "clawk_cli.main_provider_setup._prompt_provider_choice", return_value=0
+            ),
+            patch("clawk_cli.config.save_env_value"),
+            patch(
+                "clawk_cli.model_setup_flows._pick_model_or_prompt",
+                side_effect=fake_pick,
+            ),
+            patch("clawk_cli.model_setup_flows._finish_model", return_value=None),
         ):
             _model_flow_stepfun({})
         assert "step-3.7-flash" in captured["models"], (

@@ -47,18 +47,16 @@ def clawk_home(tmp_path, monkeypatch):
     (home / "plugins").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_ENABLE_PROJECT_PLUGINS", "0")
-    monkeypatch.setenv(
-        "CLAWK_BUNDLED_PLUGINS", str(tmp_path / "empty-bundled")
-    )
+    monkeypatch.setenv("CLAWK_BUNDLED_PLUGINS", str(tmp_path / "empty-bundled"))
     (tmp_path / "empty-bundled").mkdir()
     return home
 
 
 class TestV1Regression:
-
     def test_v1_unknown_fields_do_not_warn_loudly(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "oldie",
+            clawk_home / "plugins",
+            "oldie",
             manifest_extra={"mystery_field": True},
         )
         _enable(clawk_home, ["oldie"])
@@ -72,7 +70,8 @@ class TestV1Regression:
 class TestV2Parsing:
     def test_v2_fields_parse(self, clawk_home):
         _write_plugin(
-            clawk_home / "plugins", "modern",
+            clawk_home / "plugins",
+            "modern",
             manifest_extra={
                 "manifest_version": 2,
                 "api_version": 1,
@@ -109,7 +108,8 @@ class TestV2Parsing:
 
     def test_unknown_field_in_v2_warns_but_loads(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "modern",
+            clawk_home / "plugins",
+            "modern",
             manifest_extra={"manifest_version": 2, "hovercraft": "eels"},
         )
         _enable(clawk_home, ["modern"])
@@ -121,7 +121,8 @@ class TestV2Parsing:
 
     def test_future_manifest_version_warns_but_loads(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "fromfuture",
+            clawk_home / "plugins",
+            "fromfuture",
             manifest_extra={
                 "manifest_version": SUPPORTED_MANIFEST_VERSION + 5,
             },
@@ -135,7 +136,8 @@ class TestV2Parsing:
 
     def test_malformed_v2_fields_warn_and_degrade(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "sloppy",
+            clawk_home / "plugins",
+            "sloppy",
             manifest_extra={
                 "manifest_version": 2,
                 "api_version": "banana",
@@ -163,7 +165,8 @@ class TestDependencyOrder:
         # would load AFTER base anyway, so invert: aaa-consumer requires
         # zzz-base, forcing the topo sort to override alpha order.
         _write_plugin(
-            clawk_home / "plugins", "aaa-consumer",
+            clawk_home / "plugins",
+            "aaa-consumer",
             manifest_extra={
                 "manifest_version": 2,
                 "requires_plugins": [{"id": "zzz-base"}],
@@ -171,7 +174,8 @@ class TestDependencyOrder:
             register_body="import sys; sys._m2_order.append('aaa-consumer')",
         )
         _write_plugin(
-            clawk_home / "plugins", "zzz-base",
+            clawk_home / "plugins",
+            "zzz-base",
             register_body="import sys; sys._m2_order.append('zzz-base')",
         )
         _enable(clawk_home, ["aaa-consumer", "zzz-base"])
@@ -187,7 +191,8 @@ class TestDependencyOrder:
 
     def test_missing_dep_warns_but_loads(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "needy",
+            clawk_home / "plugins",
+            "needy",
             manifest_extra={
                 "manifest_version": 2,
                 "requires_plugins": [{"id": "ghost-plugin"}],
@@ -203,7 +208,8 @@ class TestDependencyOrder:
 
     def test_cycle_warns_and_falls_back_alpha(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "cyc-a",
+            clawk_home / "plugins",
+            "cyc-a",
             manifest_extra={
                 "manifest_version": 2,
                 "requires_plugins": [{"id": "cyc-b"}],
@@ -211,7 +217,8 @@ class TestDependencyOrder:
             register_body="import sys; sys._m2_cycle.append('cyc-a')",
         )
         _write_plugin(
-            clawk_home / "plugins", "cyc-b",
+            clawk_home / "plugins",
+            "cyc-b",
             manifest_extra={
                 "manifest_version": 2,
                 "requires_plugins": [{"id": "cyc-a"}],
@@ -234,21 +241,18 @@ class TestDependencyOrder:
 
     def test_resolve_order_pure_function(self):
         manifests = {
-            "b": PluginManifest(name="b", key="b",
-                                requires_plugins=[{"id": "c"}]),
-            "a": PluginManifest(name="a", key="a",
-                                requires_plugins=[{"id": "b"}]),
+            "b": PluginManifest(name="b", key="b", requires_plugins=[{"id": "c"}]),
+            "a": PluginManifest(name="a", key="a", requires_plugins=[{"id": "b"}]),
             "c": PluginManifest(name="c", key="c"),
         }
         assert resolve_plugin_load_order(manifests) == ["c", "b", "a"]
 
     def test_resolve_order_matches_by_manifest_name(self):
         manifests = {
-            "cat/impl": PluginManifest(
-                name="impl-name", key="cat/impl"
-            ),
+            "cat/impl": PluginManifest(name="impl-name", key="cat/impl"),
             "user": PluginManifest(
-                name="user", key="user",
+                name="user",
+                key="user",
                 requires_plugins=[{"id": "impl-name"}],
             ),
         }
@@ -258,7 +262,8 @@ class TestDependencyOrder:
 class TestConfigSchema:
     def test_type_mismatch_warns_but_loads(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "cfgd",
+            clawk_home / "plugins",
+            "cfgd",
             manifest_extra={
                 "manifest_version": 2,
                 "config_schema": {
@@ -268,7 +273,8 @@ class TestConfigSchema:
             },
         )
         _enable(
-            clawk_home, ["cfgd"],
+            clawk_home,
+            ["cfgd"],
             entries={"cfgd": {"settings": {"api_url": 42, "retries": 3}}},
         )
         with caplog.at_level(logging.WARNING):
@@ -304,14 +310,16 @@ class TestConfigSchema:
 
     def test_unknown_declared_type_skips_check(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "weird",
+            clawk_home / "plugins",
+            "weird",
             manifest_extra={
                 "manifest_version": 2,
                 "config_schema": {"thing": {"type": "quaternion"}},
             },
         )
         _enable(
-            clawk_home, ["weird"],
+            clawk_home,
+            ["weird"],
             entries={"weird": {"settings": {"thing": 1}}},
         )
         with caplog.at_level(logging.WARNING):
@@ -336,7 +344,8 @@ class TestPythonDependenciesSeam:
         monkeypatch.setattr(subprocess, "run", _spy_run)
         monkeypatch.setattr(subprocess, "check_call", _spy_run)
         _write_plugin(
-            clawk_home / "plugins", "pipful",
+            clawk_home / "plugins",
+            "pipful",
             manifest_extra={
                 "manifest_version": 2,
                 "python_dependencies": [
@@ -355,7 +364,8 @@ class TestPythonDependenciesSeam:
 
     def test_satisfied_pip_dep_is_quiet(self, clawk_home, caplog):
         _write_plugin(
-            clawk_home / "plugins", "pipok",
+            clawk_home / "plugins",
+            "pipok",
             manifest_extra={
                 "manifest_version": 2,
                 "python_dependencies": ["pyyaml>=5,<7"],
@@ -373,7 +383,8 @@ class TestCtxHasPlugin:
     def test_has_plugin_probe(self, clawk_home):
         _write_plugin(clawk_home / "plugins", "probe-target")
         _write_plugin(
-            clawk_home / "plugins", "prober",
+            clawk_home / "plugins",
+            "prober",
             manifest_extra={
                 "manifest_version": 2,
                 "requires_plugins": [{"id": "probe-target"}],
@@ -399,33 +410,63 @@ class TestRequiresClawksis:
     def test_gate_reads_the_running_code_version_not_dist_metadata(self, monkeypatch):
         """Compatibility gates use the running code's base release version."""
         from clawk_cli import plugins_manifest
+
         monkeypatch.setattr(
             "clawk_cli.version_info.get_version_info",
             lambda: SimpleNamespace(base_version="0.21.4"),
         )
         assert plugins_manifest.running_clawk_version() == "0.21.4"
-        assert plugins_manifest.version_satisfies(">=0.21.4", plugins_manifest.running_clawk_version())
+        assert plugins_manifest.version_satisfies(
+            ">=0.21.4", plugins_manifest.running_clawk_version()
+        )
 
-    @pytest.mark.parametrize("spec, current, expected", [
-        (">=99.0.0rc1", "0.21.4", False),   # rc target used to parse as None -> clause silently dropped
-        (">=0.23.0", "0.22.0rc1", False),   # rc running version used to disable every gate
-        (">=0.21.0", "0.22.0rc1", True),
-        (">=1.2.3.post1", "1.2.3", True),
-        ("banana", "0.21.4", True),         # documented: unparseable target stays permissive
-    ])
+    @pytest.mark.parametrize(
+        "spec, current, expected",
+        [
+            (
+                ">=99.0.0rc1",
+                "0.21.4",
+                False,
+            ),  # rc target used to parse as None -> clause silently dropped
+            (
+                ">=0.23.0",
+                "0.22.0rc1",
+                False,
+            ),  # rc running version used to disable every gate
+            (">=0.21.0", "0.22.0rc1", True),
+            (">=1.2.3.post1", "1.2.3", True),
+            (
+                "banana",
+                "0.21.4",
+                True,
+            ),  # documented: unparseable target stays permissive
+        ],
+    )
     def test_prerelease_spellings_gate(self, spec, current, expected):
         from clawk_cli.plugins_manifest import version_satisfies
+
         assert version_satisfies(spec, current) is expected
 
-    def test_unsatisfied_requires_clawk_skips_without_importing(self, clawk_home, monkeypatch):
+    def test_unsatisfied_requires_clawk_skips_without_importing(
+        self, clawk_home, monkeypatch
+    ):
         """A too-new ``requires_clawk`` records an error and never runs register(); a satisfied one loads."""
         import sys
         from clawk_cli import plugins_manifest
+
         monkeypatch.setattr(plugins_manifest, "running_clawk_version", lambda: "1.2.3")
-        _write_plugin(clawk_home / "plugins", "future", manifest_extra={"requires_clawk": ">=99.0"},
-                      register_body="import sys; sys._rh_future = True")
-        _write_plugin(clawk_home / "plugins", "current", manifest_extra={"requires_clawk": ">=1.2,<2"},
-                      register_body="import sys; sys._rh_current = True")
+        _write_plugin(
+            clawk_home / "plugins",
+            "future",
+            manifest_extra={"requires_clawk": ">=99.0"},
+            register_body="import sys; sys._rh_future = True",
+        )
+        _write_plugin(
+            clawk_home / "plugins",
+            "current",
+            manifest_extra={"requires_clawk": ">=1.2,<2"},
+            register_body="import sys; sys._rh_current = True",
+        )
         _enable(clawk_home, ["future", "current"])
         try:
             mgr = PluginManager()
@@ -445,7 +486,9 @@ class TestLoadIsolation:
         registry emptied, ``_discovered`` reset and ``clawk chat`` exited 3 with no output. It must be
         recorded as that plugin's error while later plugins still load."""
         _write_plugin(clawk_home / "plugins", "b_exit")
-        (clawk_home / "plugins" / "b_exit" / "__init__.py").write_text("import sys\nsys.exit(0)\n")
+        (clawk_home / "plugins" / "b_exit" / "__init__.py").write_text(
+            "import sys\nsys.exit(0)\n"
+        )
         _write_plugin(clawk_home / "plugins", "c_after")
         _enable(clawk_home, ["b_exit", "c_after"])
         mgr = PluginManager()
@@ -458,26 +501,44 @@ class TestLoadIsolation:
 
     def test_keyboard_interrupt_still_propagates(self, clawk_home):
         _write_plugin(clawk_home / "plugins", "ctrlc")
-        (clawk_home / "plugins" / "ctrlc" / "__init__.py").write_text("raise KeyboardInterrupt\n")
+        (clawk_home / "plugins" / "ctrlc" / "__init__.py").write_text(
+            "raise KeyboardInterrupt\n"
+        )
         _enable(clawk_home, ["ctrlc"])
         with pytest.raises(KeyboardInterrupt):
             PluginManager().discover_and_load()
 
-    def test_register_overrunning_load_timeout_skips_only_that_plugin(self, clawk_home, caplog):
+    def test_register_overrunning_load_timeout_skips_only_that_plugin(
+        self, clawk_home, caplog
+    ):
         """A register() that never returns used to hang startup forever (#108139). Under
         ``plugins.load_timeout_seconds`` that plugin alone is recorded as failed with a named reason, its
         pre-hang registrations are disposed, later plugins still load, and anything the abandoned worker
         registers afterwards is ignored."""
         import sys
         import threading
+
         sys._deadline_gate, sys._deadline_done = threading.Event(), threading.Event()
-        _write_plugin(clawk_home / "plugins", "b_slow", register_body=(
-            "import sys; ctx.register_hook('pre_tool_call', lambda **kw: None); sys._deadline_gate.wait(5); "
-            "ctx.register_hook('post_tool_call', lambda **kw: None); sys._deadline_done.set()"))
+        _write_plugin(
+            clawk_home / "plugins",
+            "b_slow",
+            register_body=(
+                "import sys; ctx.register_hook('pre_tool_call', lambda **kw: None); sys._deadline_gate.wait(5); "
+                "ctx.register_hook('post_tool_call', lambda **kw: None); sys._deadline_done.set()"
+            ),
+        )
         _write_plugin(clawk_home / "plugins", "c_after")
         _enable(clawk_home, ["b_slow", "c_after"])
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump(
-            {"plugins": {"enabled": ["b_slow", "c_after"], "load_timeout_seconds": 0.3}}))
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "plugins": {
+                        "enabled": ["b_slow", "c_after"],
+                        "load_timeout_seconds": 0.3,
+                    }
+                }
+            )
+        )
         mgr = PluginManager()
         try:
             with caplog.at_level(logging.WARNING, logger="clawk_cli.plugins"):
@@ -485,7 +546,9 @@ class TestLoadIsolation:
                 assert mgr._plugins["c_after"].enabled
                 assert not mgr._plugins["b_slow"].enabled
                 assert mgr._plugins["b_slow"].error
-                assert mgr._hooks.get("pre_tool_call", []) == []  # registered before the hang → disposed
+                assert (
+                    mgr._hooks.get("pre_tool_call", []) == []
+                )  # registered before the hang → disposed
                 sys._deadline_gate.set()  # release the abandoned worker; its late registration must bounce
                 assert sys._deadline_done.wait(5)
             assert mgr._hooks.get("post_tool_call", []) == []
@@ -496,10 +559,17 @@ class TestLoadIsolation:
         """``plugins.load_timeout_seconds: 0`` disables the deadline: register() runs on the calling thread."""
         import sys
         import threading
-        _write_plugin(clawk_home / "plugins", "inline",
-                      register_body="import sys, threading; sys._load_thread = threading.current_thread()")
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump(
-            {"plugins": {"enabled": ["inline"], "load_timeout_seconds": 0}}))
+
+        _write_plugin(
+            clawk_home / "plugins",
+            "inline",
+            register_body="import sys, threading; sys._load_thread = threading.current_thread()",
+        )
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {"plugins": {"enabled": ["inline"], "load_timeout_seconds": 0}}
+            )
+        )
         try:
             mgr = PluginManager()
             mgr.discover_and_load()
@@ -511,7 +581,9 @@ class TestLoadIsolation:
 
 
 class TestBundledKeyShadowing:
-    def test_impostor_dir_cannot_claim_a_bundled_key(self, tmp_path, monkeypatch, caplog):
+    def test_impostor_dir_cannot_claim_a_bundled_key(
+        self, tmp_path, monkeypatch, caplog
+    ):
         """``~/.clawksis/plugins/impostor_dir/plugin.yaml`` with ``name: <bundled key>`` used to displace the
         bundled plugin silently, so ``clawk plugins enable <key>`` enabled unrelated code. The bundled
         manifest wins and the impostor is warned about; a same-named user copy still overrides (documented)."""
@@ -521,22 +593,44 @@ class TestBundledKeyShadowing:
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.setenv("CLAWK_ENABLE_PROJECT_PLUGINS", "0")
         monkeypatch.setenv("CLAWK_BUNDLED_PLUGINS", str(bundled))
-        _write_plugin(bundled, "genuine", register_body="import sys; sys._shadow_probe = 'bundled'")
-        _write_plugin(bundled, "overridable", register_body="import sys; sys._override_probe = 'bundled'")
-        _write_plugin(home / "plugins", "impostor_dir", manifest_extra={"name": "genuine"},
-                      register_body="import sys; sys._shadow_probe = 'impostor'")
+        _write_plugin(
+            bundled,
+            "genuine",
+            register_body="import sys; sys._shadow_probe = 'bundled'",
+        )
+        _write_plugin(
+            bundled,
+            "overridable",
+            register_body="import sys; sys._override_probe = 'bundled'",
+        )
+        _write_plugin(
+            home / "plugins",
+            "impostor_dir",
+            manifest_extra={"name": "genuine"},
+            register_body="import sys; sys._shadow_probe = 'impostor'",
+        )
         (home / "plugins" / "impostor_dir" / "plugin.yaml").write_text(
-            yaml.safe_dump({"name": "genuine", "version": "0.1.0", "description": "impostor"}))
-        _write_plugin(home / "plugins", "overridable", register_body="import sys; sys._override_probe = 'user'")
+            yaml.safe_dump(
+                {"name": "genuine", "version": "0.1.0", "description": "impostor"}
+            )
+        )
+        _write_plugin(
+            home / "plugins",
+            "overridable",
+            register_body="import sys; sys._override_probe = 'user'",
+        )
         _enable(home, ["genuine", "overridable"])
         import sys
+
         try:
             with caplog.at_level(logging.INFO, logger="clawk_cli.plugins"):
                 mgr = PluginManager()
                 mgr.discover_and_load()
             assert mgr._plugins["genuine"].manifest.source == "bundled"
             assert sys._shadow_probe == "bundled"
-            assert "impostor_dir" in caplog.text and "rename the directory" in caplog.text
+            assert (
+                "impostor_dir" in caplog.text and "rename the directory" in caplog.text
+            )
             assert mgr._plugins["overridable"].manifest.source == "user"
             assert sys._override_probe == "user"
             assert "shadows the bundled copy" in caplog.text
@@ -547,16 +641,23 @@ class TestBundledKeyShadowing:
 
 
 class TestManifestParsingRobustness:
-    def test_list_manifest_is_rejected_with_a_clear_reason_and_hooks_alias(self, clawk_home, caplog):
+    def test_list_manifest_is_rejected_with_a_clear_reason_and_hooks_alias(
+        self, clawk_home, caplog
+    ):
         """A list-typed plugin.yaml (#14066) names the actual problem instead of an AttributeError; the
         long-standing ``hooks:`` spelling still populates ``provides_hooks`` (#108371)."""
         from clawk_cli.plugins_discovery import scan_directory
+
         bad = clawk_home / "plugins" / "listy"
         bad.mkdir()
         (bad / "plugin.yaml").write_text("- name: listy\n")
-        good = _write_plugin(clawk_home / "plugins", "hooky", manifest_extra={"hooks": ["pre_tool_call"]})
+        good = _write_plugin(
+            clawk_home / "plugins", "hooky", manifest_extra={"hooks": ["pre_tool_call"]}
+        )
         with caplog.at_level(logging.WARNING, logger="clawk_cli.plugins"):
-            manifests = {m.name: m for m in scan_directory(clawk_home / "plugins", "user")}
+            manifests = {
+                m.name: m for m in scan_directory(clawk_home / "plugins", "user")
+            }
         assert "listy" not in manifests
         assert "top level must be a mapping" in caplog.text
         assert manifests["hooky"].provides_hooks == ["pre_tool_call"]
@@ -568,21 +669,37 @@ class TestDirectoryPluginKeepsIdentityOverEntryPoint:
     entry point under the SAME name. The installed directory must stay the plugin's identity (it
     carries catalog provenance and is what update/remove act on); the entry point must not displace it."""
 
-    def test_loader_and_listing_prefer_the_installed_directory(self, clawk_home, monkeypatch):
+    def test_loader_and_listing_prefer_the_installed_directory(
+        self, clawk_home, monkeypatch
+    ):
         from clawk_cli.plugins_manifest import PluginManifest
+
         _write_plugin(clawk_home / "plugins", "twin")
         _enable(clawk_home, ["twin"])
-        twin_ep = PluginManifest(name="twin", version="9.9.9", description="pip twin",
-                                 source="entrypoint", path="twin_pkg:register", key="twin")
+        twin_ep = PluginManifest(
+            name="twin",
+            version="9.9.9",
+            description="pip twin",
+            source="entrypoint",
+            path="twin_pkg:register",
+            key="twin",
+        )
         monkeypatch.setattr(PluginManager, "_scan_entry_points", lambda self: [twin_ep])
-        monkeypatch.setattr("clawk_cli.plugins_cmd.discover_entrypoint_manifests", lambda: [twin_ep], raising=False)
-        monkeypatch.setattr("clawk_cli.plugins.discover_entrypoint_manifests", lambda: [twin_ep])
+        monkeypatch.setattr(
+            "clawk_cli.plugins_cmd.discover_entrypoint_manifests",
+            lambda: [twin_ep],
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "clawk_cli.plugins.discover_entrypoint_manifests", lambda: [twin_ep]
+        )
 
         mgr = PluginManager()
         mgr.discover_and_load()
         assert mgr._plugins["twin"].manifest.source == "user"
 
         from clawk_cli.plugins_cmd import _discover_all_plugins
+
         rows = [r for r in _discover_all_plugins() if r[0] == "twin"]
         assert [r[3] for r in rows] == ["user"]
         assert str(rows[0][4]).endswith("plugins/twin")

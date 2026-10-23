@@ -95,13 +95,20 @@ def test_native_profile_supplies_the_auxiliary_client(registered, extra):
     assert isinstance(client, _FakeNativeClient)
     assert model == "probe-model"
     # The hook receives the same mapping the branch would have passed to openai.OpenAI.
-    assert client.kwargs == {"api_key": _PROBE_KEY, "base_url": "https://aux-seam-native.invalid"}
+    assert client.kwargs == {
+        "api_key": _PROBE_KEY,
+        "base_url": "https://aux-seam-native.invalid",
+    }
 
 
 @pytest.mark.parametrize(
-    "profile_cls", [_PassThroughProfile, _ExplodingProfile], ids=["returns-None", "raises"]
+    "profile_cls",
+    [_PassThroughProfile, _ExplodingProfile],
+    ids=["returns-None", "raises"],
 )
-def test_profile_without_a_client_falls_back_to_the_standard_client(registered, profile_cls):
+def test_profile_without_a_client_falls_back_to_the_standard_client(
+    registered, profile_cls
+):
     from openai import OpenAI
 
     from agent.auxiliary_client import resolve_provider_client

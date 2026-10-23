@@ -41,7 +41,9 @@ from tests.fakes.fake_llm_provider import Text
 from . import _helpers as H
 from ._pty_helpers import ProcessLedger, WsTerm, canon, poll
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX PTY dashboard")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX PTY dashboard"
+)
 
 _CANARY = re.compile(r"canary-[0-9a-f]{12}")
 ROWS, COLS = 40, 120
@@ -49,7 +51,10 @@ TURN_TIMEOUT = 90.0
 
 
 def _require_tui() -> None:
-    if shutil.which("node") and (H.REPO_ROOT / "ui-tui" / "dist" / "entry.js").is_file():
+    if (
+        shutil.which("node")
+        and (H.REPO_ROOT / "ui-tui" / "dist" / "entry.js").is_file()
+    ):
         return
     if os.environ.get("CLAWK_E2E_REQUIRE_TUI") == "1":
         pytest.fail("ui-tui/dist/entry.js or node missing but CLAWK_E2E_REQUIRE_TUI=1")
@@ -58,7 +63,9 @@ def _require_tui() -> None:
 
 def _text_of(content: Any) -> str:
     if isinstance(content, list):
-        return " ".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        return " ".join(
+            str(part.get("text", "")) for part in content if isinstance(part, dict)
+        )
     return str(content or "")
 
 
@@ -69,9 +76,11 @@ def _last_user(body: dict) -> str:
 
 def _echo_responder(p: H.Profile):
     """Main turns answer ``reply-from-<profile>-<tag> ack-<canary of the prompt>``."""
+
     def respond(record: dict) -> Text:
         m = _CANARY.search(_last_user(record["body"]))
         return Text(f"reply-from-{p.name}-{p.tag} ack-{m.group(0) if m else 'none'}")
+
     return respond
 
 
@@ -87,15 +96,25 @@ def _main_requests(p: H.Profile) -> list[dict]:
 def _user_rows(p: H.Profile, needle: str) -> list[tuple[str, str]]:
     if not p.db.exists():
         return []
-    return [(str(s), str(c)) for s, c in H.db_rows(
-        p.db, "SELECT session_id, COALESCE(content, '') FROM messages WHERE role = 'user' AND content LIKE ?",
-        (f"%{needle}%",))]
+    return [
+        (str(s), str(c))
+        for s, c in H.db_rows(
+            p.db,
+            "SELECT session_id, COALESCE(content, '') FROM messages WHERE role = 'user' AND content LIKE ?",
+            (f"%{needle}%",),
+        )
+    ]
 
 
 def _user_sessions(p: H.Profile) -> set[str]:
     if not p.db.exists():
         return set()
-    return {str(s) for (s,) in H.db_rows(p.db, "SELECT DISTINCT session_id FROM messages WHERE role = 'user'")}
+    return {
+        str(s)
+        for (s,) in H.db_rows(
+            p.db, "SELECT DISTINCT session_id FROM messages WHERE role = 'user'"
+        )
+    }
 
 
 class Chat:
@@ -108,8 +127,13 @@ class Chat:
         self.terms: list[WsTerm] = []
 
     def open(self, profile: str) -> WsTerm:
-        url = self.dash.ws_url("/api/pty", token=self.dash.token, profile=profile, attach=self.attach,
-                               channel=f"e2e-{profile}-{self.attach}")
+        url = self.dash.ws_url(
+            "/api/pty",
+            token=self.dash.token,
+            profile=profile,
+            attach=self.attach,
+            channel=f"e2e-{profile}-{self.attach}",
+        )
         term = WsTerm(url, rows=ROWS, cols=COLS)
         self.terms.append(term)
         return term
@@ -118,13 +142,21 @@ class Chat:
         """The TUI painted its composer prompt and session banner, and its status bar no longer
         reports a boot phase ("summoning clawk…", "starting agent…"). Profile-agnostic on purpose:
         which profile answered is judged by the provider/state.db assertions, not by this wait."""
+
         def ready() -> bool:
             s = term.text()
-            return term.closed or ("❯" in s and "Session:" in s
-                                   and "startingagent" not in s and "summoningclawk" not in s)
+            return term.closed or (
+                "❯" in s
+                and "Session:" in s
+                and "startingagent" not in s
+                and "summoningclawk" not in s
+            )
+
         try:
             poll(ready, 120, "the TUI composer to be ready")
-            assert not term.closed, f"/api/pty closed (code={term.close_code}) during TUI startup"
+            assert not term.closed, (
+                f"/api/pty closed (code={term.close_code}) during TUI startup"
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n--- screen ---\n{term.dump()}") from None
         term.wait_quiet(0.5)
@@ -136,15 +168,35 @@ class Chat:
         term.submit(f"please echo {canary}")
 
         def carriers() -> list[str]:
-            return [q.name for q in self.dash.sb.profiles.values()
-                    if any(canary in _last_user(r["body"]) for r in _main_requests(q))]
-        poll(lambda: carriers() or term.closed, TURN_TIMEOUT, f"a provider to receive the turn carrying {canary}")
-        rec = next((r for r in _main_requests(p)[n_main_before:] if canary in _last_user(r["body"])), None)
+            return [
+                q.name
+                for q in self.dash.sb.profiles.values()
+                if any(canary in _last_user(r["body"]) for r in _main_requests(q))
+            ]
+
+        poll(
+            lambda: carriers() or term.closed,
+            TURN_TIMEOUT,
+            f"a provider to receive the turn carrying {canary}",
+        )
+        rec = next(
+            (
+                r
+                for r in _main_requests(p)[n_main_before:]
+                if canary in _last_user(r["body"])
+            ),
+            None,
+        )
         assert rec is not None, (
             f"the profile={p.name} turn carrying {canary} reached provider(s) {carriers()} instead of "
-            f"{p.name}'s\n--- screen ---\n{term.dump()}")
+            f"{p.name}'s\n--- screen ---\n{term.dump()}"
+        )
         term.wait_for(_reply(p, canary), timeout=TURN_TIMEOUT)
-        poll(lambda: _user_rows(p, canary), TURN_TIMEOUT, f"{canary} persisted in {p.name}'s state.db")
+        poll(
+            lambda: _user_rows(p, canary),
+            TURN_TIMEOUT,
+            f"{canary} persisted in {p.name}'s state.db",
+        )
         self.ledger.snapshot()
         return rec
 
@@ -160,13 +212,29 @@ def _private_tui(tmp_path: Path) -> Path:
     dst.parent.mkdir(parents=True)
     # Same module type as ui-tui/package.json, so older Node versions without ESM syntax detection
     # load the copy exactly like the original.
-    (dst.parent.parent / "package.json").write_text('{"type": "module"}\n', encoding="utf-8")
+    (dst.parent.parent / "package.json").write_text(
+        '{"type": "module"}\n', encoding="utf-8"
+    )
+
     def copied_intact() -> bool:
         shutil.copyfile(src, dst)
-        return subprocess.run([shutil.which("node") or "node", "--check", str(dst)], capture_output=True,
-                              timeout=60, stdin=subprocess.DEVNULL, check=False).returncode == 0
-    poll(copied_intact, 180, "an intact copy of ui-tui/dist/entry.js (a concurrent build may be writing it)",
-         interval=1.0)
+        return (
+            subprocess.run(
+                [shutil.which("node") or "node", "--check", str(dst)],
+                capture_output=True,
+                timeout=60,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 0
+        )
+
+    poll(
+        copied_intact,
+        180,
+        "an intact copy of ui-tui/dist/entry.js (a concurrent build may be writing it)",
+        interval=1.0,
+    )
     return dst.parent.parent
 
 
@@ -174,8 +242,12 @@ def _private_tui(tmp_path: Path) -> Path:
 def dash_env(tmp_path: Path):
     _require_tui()
     tui_dir = _private_tui(tmp_path)
-    sb = H.make_sandbox(tmp_path, ("default", "alpha", "beta"), responder=_echo_responder)
-    dash = H.Dashboard(sb, tmp_path / "dashboard.log", extra_env={"CLAWK_TUI_DIR": str(tui_dir)})
+    sb = H.make_sandbox(
+        tmp_path, ("default", "alpha", "beta"), responder=_echo_responder
+    )
+    dash = H.Dashboard(
+        sb, tmp_path / "dashboard.log", extra_env={"CLAWK_TUI_DIR": str(tui_dir)}
+    )
     ledger = ProcessLedger(dash.proc.pid)
     try:
         yield sb, dash, ledger
@@ -188,22 +260,32 @@ def dash_env(tmp_path: Path):
 
 def _assert_labelled(term: WsTerm, profile: str) -> None:
     assert canon(f"{profile} ❯") in term.text(), (
-        f"the TUI composer is not labelled with profile {profile!r}\n--- screen ---\n{term.dump()}")
+        f"the TUI composer is not labelled with profile {profile!r}\n--- screen ---\n{term.dump()}"
+    )
 
 
-def _first_turn(chat: Chat, alpha: H.Profile, default: H.Profile, canary: str) -> WsTerm:
+def _first_turn(
+    chat: Chat, alpha: H.Profile, default: H.Profile, canary: str
+) -> WsTerm:
     """Scenario 1: one chat turn through /api/pty lands on alpha's provider, screen and state.db."""
     term = chat.open("alpha")
     chat.wait_composer(term)
     rec = chat.turn(term, alpha, canary, n_main_before=0)
-    assert rec["auth"] == f"Bearer {alpha.provider_key}", f"turn authenticated with {rec['auth']!r}, not alpha's key"
-    assert rec["body"].get("model") == alpha.model, f"turn used model {rec['body'].get('model')!r}, not alpha's"
+    assert rec["auth"] == f"Bearer {alpha.provider_key}", (
+        f"turn authenticated with {rec['auth']!r}, not alpha's key"
+    )
+    assert rec["body"].get("model") == alpha.model, (
+        f"turn used model {rec['body'].get('model')!r}, not alpha's"
+    )
     rows = _user_rows(alpha, canary)
     assert len({s for s, _ in rows}) == 1, f"alpha's state.db has the canary in {rows}"
     assert not _main_requests(default), (
         f"the DEFAULT profile's provider served a profile=alpha chat: "
-        f"{[_last_user(r['body'])[:80] for r in _main_requests(default)]}")
-    assert not _user_rows(default, canary), "profile=alpha's prompt was persisted in the DEFAULT profile's state.db"
+        f"{[_last_user(r['body'])[:80] for r in _main_requests(default)]}"
+    )
+    assert not _user_rows(default, canary), (
+        "profile=alpha's prompt was persisted in the DEFAULT profile's state.db"
+    )
     _assert_labelled(term, "alpha")
     return term
 
@@ -211,14 +293,22 @@ def _first_turn(chat: Chat, alpha: H.Profile, default: H.Profile, canary: str) -
 def _replayed_screen(term: WsTerm) -> str:
     """Render ONLY the first binary frame of a reattached socket: the server sends the ring-buffer
     snapshot as one frame before it asks the TUI for a redraw, so this is the replay on its own."""
-    poll(lambda: term.first_frames or term.closed, 30, "the first frame of the reattached socket")
-    assert term.first_frames, f"reattached socket closed (code={term.close_code}) before any output"
+    poll(
+        lambda: term.first_frames or term.closed,
+        30,
+        "the first frame of the reattached socket",
+    )
+    assert term.first_frames, (
+        f"reattached socket closed (code={term.close_code}) before any output"
+    )
     screen = Screen(ROWS, COLS)
     screen.feed(term.first_frames[0])
     return canon("".join(screen.transcript() + screen.display()))
 
 
-def _reconnect_turn(chat: Chat, first: WsTerm, alpha: H.Profile, canary1: str, canary2: str) -> WsTerm:
+def _reconnect_turn(
+    chat: Chat, first: WsTerm, alpha: H.Profile, canary1: str, canary2: str
+) -> WsTerm:
     """Scenario 2: a client-side close + reconnect with the same attach token resumes the SAME TUI."""
     session_id = _user_rows(alpha, canary1)[0][0]
     first.close()
@@ -226,46 +316,75 @@ def _reconnect_turn(chat: Chat, first: WsTerm, alpha: H.Profile, canary1: str, c
     term = chat.open("alpha")
     assert canon(_reply(alpha, canary1)) in _replayed_screen(term), (
         "reattach did not replay the buffered PTY output (the first frame lacks the earlier reply): "
-        f"{term.first_frames[0][:300]!r}")
+        f"{term.first_frames[0][:300]!r}"
+    )
     # ...and the forced redraw leaves the live screen showing the earlier turn and a usable composer.
     term.wait_for(_reply(alpha, canary1), timeout=60)
     chat.wait_composer(term)
     assert term.close_code is None, f"reattached socket closed with {term.close_code}"
     n_before = len(_main_requests(alpha))
     rec = chat.turn(term, alpha, canary2, n_main_before=n_before)
-    history = " ".join(_text_of(m.get("content")) for m in rec["body"].get("messages", []))
+    history = " ".join(
+        _text_of(m.get("content")) for m in rec["body"].get("messages", [])
+    )
     assert canary1 in history and _reply(alpha, canary1) in history, (
         "the post-reconnect turn did not carry the first turn in its history (a fresh TUI/session "
-        f"answered): {history[-600:]!r}")
+        f"answered): {history[-600:]!r}"
+    )
     sid2 = {s for s, _ in _user_rows(alpha, canary2)}
-    assert sid2 == {session_id}, f"post-reconnect prompt landed in session(s) {sid2}, not the original {session_id}"
+    assert sid2 == {session_id}, (
+        f"post-reconnect prompt landed in session(s) {sid2}, not the original {session_id}"
+    )
     assert _user_sessions(alpha) == {session_id}, (
-        f"reconnect created a second session in alpha's state.db: {_user_sessions(alpha)}")
+        f"reconnect created a second session in alpha's state.db: {_user_sessions(alpha)}"
+    )
     return term
 
 
-def _other_profile_same_token(chat: Chat, alpha: H.Profile, beta: H.Profile,
-                              alpha_canaries: tuple[str, ...], canary3: str) -> None:
+def _other_profile_same_token(
+    chat: Chat,
+    alpha: H.Profile,
+    beta: H.Profile,
+    alpha_canaries: tuple[str, ...],
+    canary3: str,
+) -> None:
     """Scenario 3: the same attach token under profile=beta must not reattach alpha's PTY."""
     alpha_main = len(_main_requests(alpha))
     term = chat.open("beta")
     chat.wait_composer(term)
     screen = term.text()
-    leaked = [c for c in (*alpha_canaries, f"reply-from-alpha-{alpha.tag}") if canon(c) in screen]
-    assert not leaked, (f"profile=beta with alpha's attach token reattached alpha's TUI (showed {leaked})"
-                        f"\n--- screen ---\n{term.dump()}")
+    leaked = [
+        c
+        for c in (*alpha_canaries, f"reply-from-alpha-{alpha.tag}")
+        if canon(c) in screen
+    ]
+    assert not leaked, (
+        f"profile=beta with alpha's attach token reattached alpha's TUI (showed {leaked})"
+        f"\n--- screen ---\n{term.dump()}"
+    )
     rec = chat.turn(term, beta, canary3, n_main_before=0)
-    assert rec["auth"] == f"Bearer {beta.provider_key}", f"beta's turn authenticated with {rec['auth']!r}"
-    assert len(_main_requests(alpha)) == alpha_main, "beta's prompt reached alpha's provider"
-    assert not _user_rows(alpha, canary3), "beta's prompt was persisted in alpha's state.db"
-    assert not any(c in _last_user(r["body"]) for r in _main_requests(beta) for c in alpha_canaries), (
-        "alpha's prompts reached beta's provider")
+    assert rec["auth"] == f"Bearer {beta.provider_key}", (
+        f"beta's turn authenticated with {rec['auth']!r}"
+    )
+    assert len(_main_requests(alpha)) == alpha_main, (
+        "beta's prompt reached alpha's provider"
+    )
+    assert not _user_rows(alpha, canary3), (
+        "beta's prompt was persisted in alpha's state.db"
+    )
+    assert not any(
+        c in _last_user(r["body"]) for r in _main_requests(beta) for c in alpha_canaries
+    ), "alpha's prompts reached beta's provider"
     _assert_labelled(term, "beta")
 
 
 def test_pty_chat_turn_reconnect_and_profile_scoped_keepalive(dash_env) -> None:
     sb, dash, ledger = dash_env
-    alpha, beta, default = sb.profiles["alpha"], sb.profiles["beta"], sb.profiles["default"]
+    alpha, beta, default = (
+        sb.profiles["alpha"],
+        sb.profiles["beta"],
+        sb.profiles["default"],
+    )
     chat = Chat(dash, ledger)
     c1, c2, c3 = (f"canary-{secrets.token_hex(6)}" for _ in range(3))
 
@@ -273,6 +392,10 @@ def test_pty_chat_turn_reconnect_and_profile_scoped_keepalive(dash_env) -> None:
     _reconnect_turn(chat, term, alpha, c1, c2)
     _other_profile_same_token(chat, alpha, beta, (c1, c2), c3)
 
-    assert not _main_requests(default), "the DEFAULT profile's provider saw traffic from profile-scoped chats"
-    assert not _user_rows(default, "canary-"), "a profile-scoped prompt landed in the DEFAULT profile's state.db"
+    assert not _main_requests(default), (
+        "the DEFAULT profile's provider saw traffic from profile-scoped chats"
+    )
+    assert not _user_rows(default, "canary-"), (
+        "a profile-scoped prompt landed in the DEFAULT profile's state.db"
+    )
     assert dash.proc.poll() is None, f"dashboard died:\n{dash.log_tail()}"

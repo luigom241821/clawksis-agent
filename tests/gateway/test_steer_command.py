@@ -10,6 +10,7 @@ interrupting. The gateway runner must:
   3. When no agent is active → strip the slash prefix and let the normal
      prompt pipeline handle it as a regular user message.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -161,7 +162,10 @@ async def test_steer_agent_without_steer_method_falls_back():
     runner._running_agents[sk] = running_agent
 
     result = await runner._handle_message(
-        _make_event("/steer fallback", channel_context="[Thread context]\nAlice: earlier request")
+        _make_event(
+            "/steer fallback",
+            channel_context="[Thread context]\nAlice: earlier request",
+        )
     )
 
     assert result is not None

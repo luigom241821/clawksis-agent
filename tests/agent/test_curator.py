@@ -24,8 +24,10 @@ def curator_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
     import tools.skill_usage as usage
+
     importlib.reload(usage)
     from agent import curator
+
     importlib.reload(curator)
 
     # Neutralize the real LLM pass by default — tests opt in per-case.
@@ -60,7 +62,8 @@ def _write_skill(skills_dir: Path, name: str):
     d = skills_dir / name
     d.mkdir(parents=True, exist_ok=True)
     (d / "SKILL.md").write_text(
-        f"---\nname: {name}\ndescription: x\n---\n", encoding="utf-8",
+        f"---\nname: {name}\ndescription: x\n---\n",
+        encoding="utf-8",
     )
     return d
 
@@ -70,30 +73,29 @@ def _write_skill(skills_dir: Path, name: str):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 def test_bundled_skills_are_off_limits_unless_opted_in(curator_env, monkeypatch):
     """Shipped skills vanishing after 30 idle days is opt-in: with no config the reader says off, and
     the same reader flips with the key. Both loaders see the same answer (DEFAULT_CONFIG agrees)."""
     import importlib
     import tools.skill_usage as usage
     from clawk_cli.config_defaults import DEFAULT_CONFIG
-    importlib.reload(usage)  # the fixture pins _prune_builtins_enabled; reload restores the real reader
+
+    importlib.reload(
+        usage
+    )  # the fixture pins _prune_builtins_enabled; reload restores the real reader
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"curator": {}})
     assert usage._prune_builtins_enabled() is False
     assert DEFAULT_CONFIG["curator"]["prune_builtins"] is False
-    monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"curator": {"prune_builtins": True}})
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config", lambda: {"curator": {"prune_builtins": True}}
+    )
     assert usage._prune_builtins_enabled() is True
-
-
-
 
 
 # ---------------------------------------------------------------------------
 # should_run_now
 # ---------------------------------------------------------------------------
+
 
 def test_first_run_defers(curator_env):
     """The FIRST observation of the curator (fresh install, no state file)
@@ -113,12 +115,6 @@ def test_first_run_defers(curator_env):
     assert c.should_run_now() is False
 
 
-
-
-
-
-
-
 def test_set_paused_roundtrip(curator_env):
     c = curator_env["curator"]
     c.set_paused(True)
@@ -132,11 +128,10 @@ def test_set_paused_roundtrip(curator_env):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 @pytest.mark.parametrize("bad_days", [0, -5])
-def test_non_positive_archive_after_days_falls_back_to_default(curator_env, monkeypatch, bad_days):
+def test_non_positive_archive_after_days_falls_back_to_default(
+    curator_env, monkeypatch, bad_days
+):
     """``curator.archive_after_days: 0`` (or negative) collapses archive_cutoff onto or past "now",
     which would mass-archive every skill with any past activity on the very next automatic pass.
     ``clawk curator prune --days`` already refuses the same value; apply_automatic_transitions()
@@ -156,7 +151,9 @@ def test_non_positive_archive_after_days_falls_back_to_default(curator_env, monk
 
 
 @pytest.mark.parametrize("bad_days", [0, -5])
-def test_non_positive_stale_after_days_falls_back_to_default(curator_env, monkeypatch, bad_days):
+def test_non_positive_stale_after_days_falls_back_to_default(
+    curator_env, monkeypatch, bad_days
+):
     """Same bound for ``stale_after_days`` — a non-positive value must not zero out the
     use_count==0 grace floor apply_automatic_transitions() relies on."""
     c = curator_env["curator"]
@@ -165,7 +162,9 @@ def test_non_positive_stale_after_days_falls_back_to_default(curator_env, monkey
 
 
 @pytest.mark.parametrize("bad_hours", [0, -3])
-def test_non_positive_interval_hours_falls_back_to_default(curator_env, monkeypatch, bad_hours):
+def test_non_positive_interval_hours_falls_back_to_default(
+    curator_env, monkeypatch, bad_hours
+):
     """``curator.interval_hours: 0`` (or negative) made should_run_now() true on every idle tick,
     re-running the review pass each time; it must fall back to the default interval instead."""
     c = curator_env["curator"]
@@ -177,7 +176,9 @@ def test_non_positive_interval_hours_falls_back_to_default(curator_env, monkeypa
     assert c.should_run_now(now=now) is False
 
 
-def test_bad_bounded_value_warns_once_per_distinct_value(curator_env, monkeypatch, caplog):
+def test_bad_bounded_value_warns_once_per_distinct_value(
+    curator_env, monkeypatch, caplog
+):
     """The dashboard status endpoint polls these getters, so a bad value logs once, not per poll;
     a different bad value (the user edited config again) logs again."""
     c = curator_env["curator"]
@@ -189,7 +190,9 @@ def test_bad_bounded_value_warns_once_per_distinct_value(curator_env, monkeypatc
         cfg["archive_after_days"] = -1
         c.get_archive_after_days()
         c.get_archive_after_days()
-    msgs = [r.getMessage() for r in caplog.records if "archive_after_days" in r.getMessage()]
+    msgs = [
+        r.getMessage() for r in caplog.records if "archive_after_days" in r.getMessage()
+    ]
     assert len(msgs) == 2, msgs
     assert "got 0" in msgs[0] and "got -1" in msgs[1]
 
@@ -217,10 +220,6 @@ def test_pinned_skill_is_never_touched(curator_env):
     assert rec["pinned"] is True
 
 
-
-
-
-
 def _backdate(u, name: str, days: int, *, use_count: int = 1):
     """Write an agent-created usage record whose activity is *days* old."""
     ts = (datetime.now(UTC) - timedelta(days=days)).isoformat()
@@ -232,14 +231,6 @@ def _backdate(u, name: str, days: int, *, use_count: int = 1):
     data[name]["last_activity_at"] = ts if use_count else None
     data[name]["use_count"] = use_count
     u.save_usage(data)
-
-
-
-
-
-
-
-
 
 
 def _write_cron_job(home: Path, skill_ref: str, monkeypatch):
@@ -254,22 +245,28 @@ def _write_cron_job(home: Path, skill_ref: str, monkeypatch):
     import json
 
     from tools import skills_tool
+
     monkeypatch.setattr(skills_tool, "SKILLS_DIR", home / "skills")
 
     cron_dir = home / "cron"
     cron_dir.mkdir(parents=True, exist_ok=True)
     (cron_dir / "jobs.json").write_text(
-        json.dumps([{
-            "id": "job1",
-            "name": "quarterly digest",
-            "enabled": True,
-            "prompt": "write the digest",
-            "skills": [skill_ref],
-            "schedule": {"kind": "cron", "expr": "0 9 1 */3 *"},
-        }]),
+        json.dumps(
+            [
+                {
+                    "id": "job1",
+                    "name": "quarterly digest",
+                    "enabled": True,
+                    "prompt": "write the digest",
+                    "skills": [skill_ref],
+                    "schedule": {"kind": "cron", "expr": "0 9 1 */3 *"},
+                }
+            ]
+        ),
         encoding="utf-8",
     )
     import cron.jobs as cron_jobs
+
     importlib.reload(cron_jobs)
     return cron_jobs
 
@@ -289,7 +286,9 @@ def test_cron_referenced_skill_by_name_survives_inactivity(curator_env, monkeypa
     assert u.load_usage()["quarterly-report"]["state"] == u.STATE_ACTIVE
 
 
-def test_cron_referenced_skill_by_absolute_path_survives_inactivity(curator_env, monkeypatch):
+def test_cron_referenced_skill_by_absolute_path_survives_inactivity(
+    curator_env, monkeypatch
+):
     """A job may store an absolute skill path — the scheduler resolves it
     before ``skill_view``. The protection set has to resolve it the same way,
     or the skill is archived out from under a live job and the next run
@@ -300,14 +299,14 @@ def test_cron_referenced_skill_by_absolute_path_survives_inactivity(curator_env,
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "quarterly-report")
     _backdate(u, "quarterly-report", 200)
-    _write_cron_job(curator_env["home"], str(skills_dir / "quarterly-report"), monkeypatch)
+    _write_cron_job(
+        curator_env["home"], str(skills_dir / "quarterly-report"), monkeypatch
+    )
 
     counts = c.apply_automatic_transitions()
 
     assert counts["archived"] == 0
     assert u.load_usage()["quarterly-report"]["state"] == u.STATE_ACTIVE
-
-
 
 
 def test_unresolvable_reference_is_kept_verbatim(curator_env, tmp_path, monkeypatch):
@@ -316,9 +315,7 @@ def test_unresolvable_reference_is_kept_verbatim(curator_env, tmp_path, monkeypa
     outside = tmp_path / "elsewhere" / "some-skill"
     cron_jobs = _write_cron_job(curator_env["home"], str(outside), monkeypatch)
 
-    assert cron_jobs.referenced_skill_names() == {
-        str(outside).strip().lstrip("/")
-    }
+    assert cron_jobs.referenced_skill_names() == {str(outside).strip().lstrip("/")}
 
 
 def test_unreferenced_skill_is_still_archived(curator_env, monkeypatch):
@@ -330,7 +327,9 @@ def test_unreferenced_skill_is_still_archived(curator_env, monkeypatch):
     _write_skill(skills_dir, "orphan")
     _backdate(u, "quarterly-report", 200)
     _backdate(u, "orphan", 200)
-    _write_cron_job(curator_env["home"], str(skills_dir / "quarterly-report"), monkeypatch)
+    _write_cron_job(
+        curator_env["home"], str(skills_dir / "quarterly-report"), monkeypatch
+    )
 
     c.apply_automatic_transitions()
 
@@ -339,13 +338,10 @@ def test_unreferenced_skill_is_still_archived(curator_env, monkeypatch):
     assert usage["orphan"]["state"] == u.STATE_ARCHIVED
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # prune_builtins: curator may archive bundled built-ins after inactivity
 # ---------------------------------------------------------------------------
+
 
 def _enable_prune_builtins(curator_env, monkeypatch):
     """Flip curator.prune_builtins on (skill_usage is the only reader now)."""
@@ -366,10 +362,12 @@ def _write_bundled_and_agent(curator_env, u):
     _write_skill(skills_dir, "disabled-fixture")
     _write_skill(skills_dir, "agent-fixture")
     (skills_dir / ".bundled_manifest").write_text(
-        "bundled-fixture:deadbeef\n", encoding="utf-8",
+        "bundled-fixture:deadbeef\n",
+        encoding="utf-8",
     )
     (curator_env["home"] / "config.yaml").write_text(
-        "skills:\n  disabled:\n    - disabled-fixture\n", encoding="utf-8",
+        "skills:\n  disabled:\n    - disabled-fixture\n",
+        encoding="utf-8",
     )
     u.mark_agent_created("disabled-fixture")
     u.mark_agent_created("agent-fixture")
@@ -377,7 +375,8 @@ def _write_bundled_and_agent(curator_env, u):
 
 
 def test_llm_candidate_list_omits_bundled_and_disabled_skills(
-    curator_env, monkeypatch,
+    curator_env,
+    monkeypatch,
 ):
     """The LLM pass is only offered candidates it can act on (#111608, #113013).
 
@@ -403,7 +402,8 @@ def test_llm_candidate_list_omits_bundled_and_disabled_skills(
 
 
 def test_llm_prompt_does_not_invite_bundled_writes_when_prune_builtins_on(
-    curator_env, monkeypatch,
+    curator_env,
+    monkeypatch,
 ):
     """The delivered review prompt must not override hard rule #1.
 
@@ -421,8 +421,14 @@ def test_llm_prompt_does_not_invite_bundled_writes_when_prune_builtins_on(
 
     def _stub(prompt):
         captured["prompt"] = prompt
-        return {"final": "", "summary": "s", "model": "", "provider": "",
-                "tool_calls": [], "error": None}
+        return {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        }
 
     monkeypatch.setattr(c, "_run_llm_review", _stub)
     c.run_curator_review(synchronous=True, consolidate=True, dry_run=True)
@@ -434,6 +440,7 @@ def test_llm_prompt_does_not_invite_bundled_writes_when_prune_builtins_on(
 
     # Only bundled + disabled candidates left: no fork at all.
     import shutil
+
     shutil.rmtree(skills_dir / "agent-fixture")
     captured.clear()
     c.run_curator_review(synchronous=True, consolidate=True, dry_run=True)
@@ -441,7 +448,8 @@ def test_llm_prompt_does_not_invite_bundled_writes_when_prune_builtins_on(
 
 
 def test_prune_builtins_still_archives_bundled_via_deterministic_pass(
-    curator_env, monkeypatch,
+    curator_env,
+    monkeypatch,
 ):
     """Flag on: a long-idle bundled skill is archived without the LLM list."""
     c = curator_env["curator"]
@@ -467,16 +475,6 @@ def test_prune_builtins_still_archives_bundled_via_deterministic_pass(
     assert counts["archived"] >= 1
     assert not (skills_dir / "bundled-fixture").exists()
     assert "bundled-fixture" in u.read_suppressed_names()
-
-
-
-
-
-
-
-
-
-
 
 
 def test_protected_builtin_never_archived_even_when_stale(curator_env, monkeypatch):
@@ -510,9 +508,9 @@ def test_protected_builtin_never_archived_even_when_stale(curator_env, monkeypat
     assert name not in u.read_suppressed_names()
 
 
-
-
-def test_preseeded_never_used_builtin_is_reanchored_not_staled(curator_env, monkeypatch):
+def test_preseeded_never_used_builtin_is_reanchored_not_staled(
+    curator_env, monkeypatch
+):
     """Telemetry records a bundled skill the moment it is seeded, months before the curator's first
     sight; anchoring on that created_at marked 71 built-ins stale on one first run (#79295). First
     sight re-anchors the clock (and reactivates a record the bug already staled); the skill then
@@ -520,11 +518,17 @@ def test_preseeded_never_used_builtin_is_reanchored_not_staled(curator_env, monk
     u, c = curator_env["usage"], curator_env["curator"]
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "bundled-helper")
-    (skills_dir / ".bundled_manifest").write_text("bundled-helper:abc\n", encoding="utf-8")
+    (skills_dir / ".bundled_manifest").write_text(
+        "bundled-helper:abc\n", encoding="utf-8"
+    )
     _enable_prune_builtins(curator_env, monkeypatch)
     super_old = (datetime.now(UTC) - timedelta(days=365)).isoformat()
     data = u.load_usage()
-    data["bundled-helper"] = {**u._empty_record(), "created_at": super_old, "state": u.STATE_STALE}
+    data["bundled-helper"] = {
+        **u._empty_record(),
+        "created_at": super_old,
+        "state": u.STATE_STALE,
+    }
     u.save_usage(data)
 
     t0 = datetime.now(UTC)
@@ -536,7 +540,10 @@ def test_preseeded_never_used_builtin_is_reanchored_not_staled(curator_env, monk
 
     # One-shot: 15 days of continued non-use (past stale_after_days=14) → stale, not deferred forever.
     counts = c.apply_automatic_transitions(now=t0 + timedelta(days=15))
-    assert counts["marked_stale"] == 1 and u.get_record("bundled-helper")["state"] == "stale"
+    assert (
+        counts["marked_stale"] == 1
+        and u.get_record("bundled-helper")["state"] == "stale"
+    )
 
 
 def test_prune_builtins_never_touches_hub_skills(curator_env, monkeypatch):
@@ -562,6 +569,7 @@ def test_prune_builtins_never_touches_hub_skills(curator_env, monkeypatch):
 # run_curator_review orchestration
 # ---------------------------------------------------------------------------
 
+
 def test_run_review_records_state(curator_env):
     c = curator_env["curator"]
     u = curator_env["usage"]
@@ -577,8 +585,6 @@ def test_run_review_records_state(curator_env):
     assert state["last_run_summary"] is not None
 
 
-
-
 def test_dry_run_injects_report_only_banner(curator_env, monkeypatch):
     """The dry-run prompt must carry a banner instructing the LLM not to
     call any mutating tool. This is defense in depth — the caller also
@@ -591,16 +597,22 @@ def test_dry_run_injects_report_only_banner(curator_env, monkeypatch):
     u.mark_agent_created("a")
 
     captured = {}
+
     def _stub(prompt):
         captured["prompt"] = prompt
-        return {"final": "", "summary": "s", "model": "", "provider": "",
-                "tool_calls": [], "error": None}
+        return {
+            "final": "",
+            "summary": "s",
+            "model": "",
+            "provider": "",
+            "tool_calls": [],
+            "error": None,
+        }
+
     monkeypatch.setattr(c, "_run_llm_review", _stub)
 
     c.run_curator_review(synchronous=True, dry_run=True, consolidate=True)
     assert c.CURATOR_DRY_RUN_BANNER in captured["prompt"]
-
-
 
 
 def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
@@ -611,6 +623,7 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
     u.mark_agent_created("a")
 
     calls = []
+
     def _stub(prompt):
         calls.append(prompt)
         return {
@@ -621,6 +634,7 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
             "tool_calls": [],
             "error": None,
         }
+
     monkeypatch.setattr(c, "_run_llm_review", _stub)
 
     captured = []
@@ -635,30 +649,9 @@ def test_run_review_synchronous_invokes_llm_stub(curator_env, monkeypatch):
     assert any("stubbed-summary" in s for s in captured)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Persistence
 # ---------------------------------------------------------------------------
-
 
 
 def test_state_atomic_write_no_tmp_leftovers(curator_env):
@@ -669,32 +662,14 @@ def test_state_atomic_write_no_tmp_leftovers(curator_env):
     assert tmp_files == []
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_cli_pin_refuses_bundled_skill(curator_env):
     from clawk_cli import curator as cli
+
     skills_dir = curator_env["home"] / "skills"
     _write_skill(skills_dir, "ship-skill")
     (skills_dir / ".bundled_manifest").write_text(
-        "ship-skill:abc\n", encoding="utf-8",
+        "ship-skill:abc\n",
+        encoding="utf-8",
     )
 
     class _A:
@@ -713,10 +688,6 @@ def test_cli_pin_refuses_bundled_skill(curator_env):
 # Voscko report: curator.auxiliary.{provider,model} was advertised but never
 # read. Fix wires curator through auxiliary.curator with a legacy fallback.
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 def test_review_runtime_passes_auxiliary_curator_credentials(curator_env):
@@ -756,8 +727,6 @@ def test_review_runtime_strips_blank_aux_credentials(curator_env):
     binding = curator._resolve_review_runtime(cfg)
     assert binding.explicit_api_key is None
     assert binding.explicit_base_url is None
-
-
 
 
 def test_review_runtime_ignores_auxiliary_credentials_when_using_main(curator_env):
@@ -821,18 +790,15 @@ def test_review_model_auxiliary_curator_partial_override_falls_back(curator_env)
     b = curator._resolve_review_runtime(cfg_model_only)
     assert (b.provider, b.model) == ("openrouter", "openai/gpt-5.5")
 
-
-
     # 4. web/src/pages/ModelsPage.tsx is checked at build time; the tsx
     #    array and this tuple share a ``Must match _AUX_TASK_SLOTS`` comment.
-
-
 
 
 def test_review_fork_forwards_runtime_pool_and_overrides(curator_env, monkeypatch):
     """Curator must pass credential_pool + request_overrides from resolve_runtime_provider."""
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
 
     fake_pool = object()
@@ -889,9 +855,13 @@ def test_review_fork_receives_configured_reasoning(curator_env, monkeypatch):
     must reach it through the shared ``resolve_reasoning_config`` chokepoint (resolved against the review model)."""
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
     captured = {}
-    cfg = {"model": {"provider": "openai-api", "default": "gpt-4o-mini"}, "agent": {"reasoning_effort": "none"}}
+    cfg = {
+        "model": {"provider": "openai-api", "default": "gpt-4o-mini"},
+        "agent": {"reasoning_effort": "none"},
+    }
 
     class _StubAgent:
         def __init__(self, *args, **kwargs):
@@ -911,8 +881,12 @@ def test_review_fork_receives_configured_reasoning(curator_env, monkeypatch):
     monkeypatch.setattr("clawk_cli.config.load_config_readonly", lambda: cfg)
     monkeypatch.setattr(
         "clawk_cli.runtime_provider.resolve_runtime_provider",
-        lambda **kwargs: {"provider": "openai-api", "api_key": "k", "base_url": "https://api.openai.com/v1",
-                          "api_mode": "codex_responses"},
+        lambda **kwargs: {
+            "provider": "openai-api",
+            "api_key": "k",
+            "base_url": "https://api.openai.com/v1",
+            "api_mode": "codex_responses",
+        },
     )
     monkeypatch.setattr("run_agent.AIAgent", _StubAgent)
 
@@ -925,6 +899,7 @@ def test_review_fork_receives_configured_reasoning(curator_env, monkeypatch):
 def test_review_fork_uses_runtime_model_and_output_cap(curator_env, monkeypatch):
     curator = curator_env["curator"]
     import importlib
+
     importlib.reload(curator)
     captured = {}
 
@@ -967,8 +942,6 @@ def test_review_fork_uses_runtime_model_and_output_cap(curator_env, monkeypatch)
     assert captured.get("max_tokens") is None
 
 
-
-
 def test_review_fork_restricts_toolsets_to_skills_only(curator_env, monkeypatch):
     """The curator LLM fork must advertise only the skills toolset.
 
@@ -988,6 +961,7 @@ def test_review_fork_restricts_toolsets_to_skills_only(curator_env, monkeypatch)
     # curator_env stubs _run_llm_review wholesale; exercise the real
     # implementation, so reload the module to restore it.
     import importlib
+
     importlib.reload(curator)
 
     captured = {}
@@ -1049,15 +1023,20 @@ def test_review_fork_toolset_surface_excludes_execution_tools():
     # The incident class stays out: no command execution, no background
     # process steering (stdin is a second unguarded write sink), and no
     # generic filesystem-write tool.
-    for tool in ("terminal", "process_manage", "write_file", "patch",
-                 "execute_code", "computer_use", "browser_exec"):
+    for tool in (
+        "terminal",
+        "process_manage",
+        "write_file",
+        "patch",
+        "execute_code",
+        "computer_use",
+        "browser_exec",
+    ):
         assert tool not in surface, (
             f"execution/write tool {tool!r} leaked into the curator fork's "
             "surface via the skills toolset — un-ledgered skill mutations "
             f"become possible again (issue #96962); surface={sorted(surface)}"
         )
-
-
 
 
 def test_review_fork_seeds_shared_read_marks(curator_env, monkeypatch):
@@ -1124,11 +1103,17 @@ def test_review_fork_seeds_shared_read_marks(curator_env, monkeypatch):
     )
 
 
-def test_threaded_llm_pass_keeps_callers_profile_scope(curator_env, tmp_path, monkeypatch):
+def test_threaded_llm_pass_keeps_callers_profile_scope(
+    curator_env, tmp_path, monkeypatch
+):
     """#125032: the daemon ``curator-review`` thread must inherit the caller's contextvars (home
     override + secret scope), else on a multiplexed gateway it runs unscoped against the ROOT home."""
     from agent import secret_scope as ss
-    from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     c, root = curator_env["curator"], curator_env["home"]
     profile = tmp_path / "profiles" / "served"
@@ -1143,7 +1128,9 @@ def test_threaded_llm_pass_keeps_callers_profile_scope(curator_env, tmp_path, mo
     monkeypatch.setattr(c, "_consolidation_pass", _pass)
     ss.set_multiplex_active(True)
     home_tok = set_clawk_home_override(profile)
-    scope_tok = ss.set_secret_scope({"CURATOR_PROBE_KEY": "served"}, profile_home=str(profile))
+    scope_tok = ss.set_secret_scope(
+        {"CURATOR_PROBE_KEY": "served"}, profile_home=str(profile)
+    )
     try:
         c.run_curator_review(synchronous=False, consolidate=True)
         for t in threading.enumerate():
@@ -1155,6 +1142,10 @@ def test_threaded_llm_pass_keeps_callers_profile_scope(curator_env, tmp_path, mo
         ss.set_multiplex_active(False)
 
     assert seen == {"home": profile, "secret": "served"}
-    assert not (root / "skills" / ".curator_state").exists(), "thread wrote the ROOT home's state"
-    state = json.loads((profile / "skills" / ".curator_state").read_text(encoding="utf-8-sig"))
+    assert not (root / "skills" / ".curator_state").exists(), (
+        "thread wrote the ROOT home's state"
+    )
+    state = json.loads(
+        (profile / "skills" / ".curator_state").read_text(encoding="utf-8-sig")
+    )
     assert state["last_run_summary"].endswith("llm: stub")

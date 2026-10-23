@@ -18,4 +18,7 @@ def unknown_command_lines(typed: str, known: Iterable[str]) -> tuple[str, str]:
     base = typed.split()[0] if typed.split() else typed
     close = difflib.get_close_matches(base, list(known), n=1, cutoff=0.6)
     hint = " " + t("cli.command.did_you_mean_one", suggestion=close[0]) if close else ""
-    return (t("cli.command.unknown_nothing_sent", command=base, hint=hint), t("cli.command.type_help"))
+    return (
+        t("cli.command.unknown_nothing_sent", command=base, hint=hint),
+        t("cli.command.type_help"),
+    )

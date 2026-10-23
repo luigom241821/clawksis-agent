@@ -29,11 +29,21 @@ from clawk_cli._subprocess_compat import windows_hide_flags
 from clawk_cli.sqlite_safe_read import LiveConnectionError, offline_file_access
 from clawk_cli.web_deps import late
 from clawk_cli.web_server_files import (
-    SANDBOX_NOT_FOUND, _agent_fs_path, _fs_path, _hosted_fs_read_guard, _is_unmapped_container_path,
-    _managed_file_entry, _managed_response_meta, _resolve_managed_path,
+    SANDBOX_NOT_FOUND,
+    _agent_fs_path,
+    _fs_path,
+    _hosted_fs_read_guard,
+    _is_unmapped_container_path,
+    _managed_file_entry,
+    _managed_response_meta,
+    _resolve_managed_path,
 )
 from clawk_cli.web_models import (
-    ChatImageUpload, FsWriteText, ManagedDirectoryCreate, ManagedFileDelete, ManagedFileUpload,
+    ChatImageUpload,
+    FsWriteText,
+    ManagedDirectoryCreate,
+    ManagedFileDelete,
+    ManagedFileUpload,
 )
 
 router = APIRouter()
@@ -47,18 +57,47 @@ _require_token = late("_require_token")
 # Image types GET /api/media serves — extension-allowlisted so an authenticated
 # caller can't pull non-image files through it.
 _MEDIA_CONTENT_TYPES = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-    ".webp": "image/webp", ".svg": "image/svg+xml", ".bmp": "image/bmp", ".ico": "image/x-icon",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
 }
 _MEDIA_MAX_BYTES = 25 * 1024 * 1024
 
-_STREAMABLE_MEDIA_EXTENSIONS = frozenset({
-    ".avi", ".flac", ".m4a", ".mkv", ".mov", ".mp3", ".mp4", ".ogg", ".opus", ".wav", ".webm",
-})
+_STREAMABLE_MEDIA_EXTENSIONS = frozenset(
+    {
+        ".avi",
+        ".flac",
+        ".m4a",
+        ".mkv",
+        ".mov",
+        ".mp3",
+        ".mp4",
+        ".ogg",
+        ".opus",
+        ".wav",
+        ".webm",
+    }
+)
 
 _FS_READDIR_HIDDEN = {
-    ".git", ".hg", ".svn", ".cache", ".next", ".turbo", ".venv", "__pycache__",
-    "build", "dist", "node_modules", "target", "venv",
+    ".git",
+    ".hg",
+    ".svn",
+    ".cache",
+    ".next",
+    ".turbo",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "target",
+    "venv",
 }
 
 # Basenames the managed-files API must never list, read or download: credential
@@ -68,12 +107,22 @@ _FS_READDIR_HIDDEN = {
 # ._ROOT_CREDENTIAL_FILES) so the Files tab never lags behind them.
 # These typically contain credentials (API keys, tokens) and exposing them through the dashboard file
 # browser is a security leak — see issue #57505.
-_SENSITIVE_MANAGED_FILE_BASENAMES = frozenset({
-    "auth.json", "auth.lock", "credentials", "config.yaml", ".anthropic_oauth.json",
-    "google_token.json", "google_oauth_pending.json", "google_oauth.json",
-    "webhook_subscriptions.json", "bws_cache.json", "bws_cache.enc.json",
-    ".git-credentials",  # git's credential-store cache (file_safety blocks it too)
-})
+_SENSITIVE_MANAGED_FILE_BASENAMES = frozenset(
+    {
+        "auth.json",
+        "auth.lock",
+        "credentials",
+        "config.yaml",
+        ".anthropic_oauth.json",
+        "google_token.json",
+        "google_oauth_pending.json",
+        "google_oauth.json",
+        "webhook_subscriptions.json",
+        "bws_cache.json",
+        "bws_cache.enc.json",
+        ".git-credentials",  # git's credential-store cache (file_safety blocks it too)
+    }
+)
 
 # Directory names whose whole subtree is credential material (the canonical
 # guards deny these as trees: _ROOT_CREDENTIAL_DIRS and the mcp-tokens/ prefix
@@ -115,20 +164,59 @@ _FS_TEXT_PREVIEW_MAX_BYTES = 512 * 1024
 _FS_TEXT_WRITE_MAX_BYTES = 8 * 1024 * 1024
 
 _FS_PREVIEW_LANGUAGE_BY_EXT = {
-    ".c": "c", ".conf": "ini", ".cpp": "cpp", ".css": "css", ".csv": "csv", ".go": "go",
-    ".graphql": "graphql", ".h": "c", ".hpp": "cpp", ".html": "html", ".java": "java",
-    ".js": "javascript", ".json": "json", ".jsx": "jsx", ".kt": "kotlin", ".lua": "lua",
-    ".md": "markdown", ".mjs": "javascript", ".py": "python", ".rb": "ruby", ".rs": "rust",
-    ".sh": "shell", ".sql": "sql", ".svg": "xml", ".toml": "toml", ".ts": "typescript",
-    ".tsx": "tsx", ".txt": "text", ".xml": "xml", ".yaml": "yaml", ".yml": "yaml", ".zsh": "shell",
+    ".c": "c",
+    ".conf": "ini",
+    ".cpp": "cpp",
+    ".css": "css",
+    ".csv": "csv",
+    ".go": "go",
+    ".graphql": "graphql",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".html": "html",
+    ".java": "java",
+    ".js": "javascript",
+    ".json": "json",
+    ".jsx": "jsx",
+    ".kt": "kotlin",
+    ".lua": "lua",
+    ".md": "markdown",
+    ".mjs": "javascript",
+    ".py": "python",
+    ".rb": "ruby",
+    ".rs": "rust",
+    ".sh": "shell",
+    ".sql": "sql",
+    ".svg": "xml",
+    ".toml": "toml",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".txt": "text",
+    ".xml": "xml",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".zsh": "shell",
 }
 
 _FS_MIME_TYPES = {
-    ".avi": "video/x-msvideo", ".bmp": "image/bmp", ".flac": "audio/flac", ".gif": "image/gif",
-    ".jpeg": "image/jpeg", ".jpg": "image/jpeg", ".m4a": "audio/mp4", ".mkv": "video/x-matroska",
-    ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".mp4": "video/mp4", ".ogg": "audio/ogg",
-    ".opus": "audio/ogg; codecs=opus", ".png": "image/png", ".svg": "image/svg+xml",
-    ".wav": "audio/wav", ".webm": "video/webm", ".webp": "image/webp",
+    ".avi": "video/x-msvideo",
+    ".bmp": "image/bmp",
+    ".flac": "audio/flac",
+    ".gif": "image/gif",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".m4a": "audio/mp4",
+    ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg; codecs=opus",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
+    ".webp": "image/webp",
 }
 
 
@@ -160,18 +248,24 @@ def _io_errors(denied: str, failed: str):
         raise HTTPException(status_code=500, detail=f"{failed}: {exc}")
 
 
-def _fs_sandbox_not_found_detail(path: Path, profile_home: Optional[Path] = None) -> str:
+def _fs_sandbox_not_found_detail(
+    path: Path, profile_home: Optional[Path] = None
+) -> str:
     """Distinguish an untranslated agent-sandbox path from a plain missing file."""
     unmapped = _is_unmapped_container_path(path.as_posix(), profile_home=profile_home)
     return SANDBOX_NOT_FOUND if unmapped else "File not found"
 
 
-def _fs_regular_file(path: Path, profile_home: Optional[Path] = None) -> tuple[Path, os.stat_result]:
+def _fs_regular_file(
+    path: Path, profile_home: Optional[Path] = None
+) -> tuple[Path, os.stat_result]:
     target = _fs_path(str(path))
     try:
         st = target.stat()
     except (FileNotFoundError, NotADirectoryError):
-        raise HTTPException(status_code=404, detail=_fs_sandbox_not_found_detail(target, profile_home))
+        raise HTTPException(
+            status_code=404, detail=_fs_sandbox_not_found_detail(target, profile_home)
+        )
     except PermissionError:
         raise HTTPException(status_code=403, detail="File is not readable")
     except OSError as exc:
@@ -181,7 +275,9 @@ def _fs_regular_file(path: Path, profile_home: Optional[Path] = None) -> tuple[P
     if not stat.S_ISREG(st.st_mode):
         raise HTTPException(status_code=400, detail="Only regular files can be read")
     if _is_sensitive_path(target):
-        raise HTTPException(status_code=403, detail="Access to sensitive files is not allowed")
+        raise HTTPException(
+            status_code=403, detail="Access to sensitive files is not allowed"
+        )
     return target, st
 
 
@@ -256,11 +352,18 @@ def _fs_git_branch(cwd: str) -> str:
     try:
         # git emits UTF-8 (branch names, localized "not a git repository" stderr); the locale codec
         # (cp936 on zh-CN Windows) raised inside communicate()'s reader threads on every poll (#83851).
-        run_kwargs: dict[str, Any] = {"capture_output": True, "text": True, "encoding": "utf-8",
-                                      "errors": "replace", "timeout": 2}
+        run_kwargs: dict[str, Any] = {
+            "capture_output": True,
+            "text": True,
+            "encoding": "utf-8",
+            "errors": "replace",
+            "timeout": 2,
+        }
         if sys.platform == "win32":
             run_kwargs["creationflags"] = windows_hide_flags()
-        result = subprocess.run(["git", "-C", cwd, "branch", "--show-current"], **run_kwargs, check=False)
+        result = subprocess.run(
+            ["git", "-C", cwd, "branch", "--show-current"], **run_kwargs, check=False
+        )
         return result.stdout.strip() if result.returncode == 0 else ""
     except Exception:
         return ""
@@ -354,7 +457,9 @@ async def get_media(path: str):
         raise HTTPException(status_code=413, detail="File too large")
 
     encoded = await asyncio.to_thread(_read_base64_file, target)
-    return {"data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"}
+    return {
+        "data_url": f"data:{_MEDIA_CONTENT_TYPES[target.suffix.lower()]};base64,{encoded}"
+    }
 
 
 # Remote image URLs an authenticated proxy may fetch for a client that cannot
@@ -363,8 +468,12 @@ async def get_media(path: str):
 # hosts a working route to the CDN and already holds the generation credentials).
 # Host-allowlisted + size-capped like the rest of the media surface.
 _MEDIA_PROXY_ALLOWED_HOSTS = (
-    "fal.media", "fal.run", "v3.fal.media", "storage.googleapis.com",
-    "*.fal.media", "*.fal.run",
+    "fal.media",
+    "fal.run",
+    "v3.fal.media",
+    "storage.googleapis.com",
+    "*.fal.media",
+    "*.fal.run",
 )
 _MEDIA_PROXY_TIMEOUT_S = 20.0
 
@@ -372,7 +481,8 @@ _MEDIA_PROXY_TIMEOUT_S = 20.0
 def _media_proxy_host_allowed(host: str) -> bool:
     host = host.lower().rstrip(".")
     return any(
-        host == allowed.lstrip("*.") or (allowed.startswith("*.") and host.endswith(allowed[1:]))
+        host == allowed.lstrip("*.")
+        or (allowed.startswith("*.") and host.endswith(allowed[1:]))
         for allowed in _MEDIA_PROXY_ALLOWED_HOSTS
     )
 
@@ -386,7 +496,9 @@ async def proxy_remote_media(url: str, request: Request):
     try:
         parsed = urllib.parse.urlparse((url or "").strip())
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="A remote image URL is required") from exc
+        raise HTTPException(
+            status_code=400, detail="A remote image URL is required"
+        ) from exc
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise HTTPException(status_code=400, detail="A remote image URL is required")
     if not _media_proxy_host_allowed(parsed.hostname):
@@ -395,20 +507,29 @@ async def proxy_remote_media(url: str, request: Request):
         # Generated-image CDN URLs are content-hash paths with no extension;
         # a missing extension is expected, so only reject explicit non-image
         # extensions and let content type be sniffed from the response.
-        if Path(parsed.path).suffix and Path(parsed.path).suffix.lower() not in _MEDIA_CONTENT_TYPES:
+        if (
+            Path(parsed.path).suffix
+            and Path(parsed.path).suffix.lower() not in _MEDIA_CONTENT_TYPES
+        ):
             raise HTTPException(status_code=415, detail="Unsupported media type")
 
     import httpx
 
     try:
-        async with httpx.AsyncClient(timeout=_MEDIA_PROXY_TIMEOUT_S, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=_MEDIA_PROXY_TIMEOUT_S, follow_redirects=True
+        ) as client:
             response = await client.get(url)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Image fetch failed: {exc}")
 
     if response.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Image fetch returned HTTP {response.status_code}")
-    content_type = (response.headers.get("content-type") or "").split(";")[0].strip().lower()
+        raise HTTPException(
+            status_code=502, detail=f"Image fetch returned HTTP {response.status_code}"
+        )
+    content_type = (
+        (response.headers.get("content-type") or "").split(";")[0].strip().lower()
+    )
     if content_type not in _MEDIA_CONTENT_TYPES.values():
         raise HTTPException(status_code=415, detail="Unsupported media type")
     data = response.content
@@ -421,27 +542,37 @@ async def proxy_remote_media(url: str, request: Request):
 
 def _decode_data_url(data_url: str) -> tuple[bytes, str]:
     from clawk_cli.web_server import _MANAGED_FILE_MAX_BYTES
+
     text = (data_url or "").strip()
     if not text.startswith("data:") or "," not in text:
         raise HTTPException(status_code=400, detail="Upload payload must be a data URL")
     header, encoded = text.split(",", 1)
     mime_type = header[5:].split(";", 1)[0] or "application/octet-stream"
     if ";base64" not in header:
-        raise HTTPException(status_code=400, detail="Upload payload must be base64 encoded")
+        raise HTTPException(
+            status_code=400, detail="Upload payload must be base64 encoded"
+        )
     try:
         data = base64.b64decode(encoded, validate=True)
     except (binascii.Error, ValueError):
-        raise HTTPException(status_code=400, detail="Upload payload is not valid base64")
+        raise HTTPException(
+            status_code=400, detail="Upload payload is not valid base64"
+        )
     if len(data) > _MANAGED_FILE_MAX_BYTES:
         raise HTTPException(status_code=413, detail="File is too large")
     return data, mime_type
 
 
 _CHAT_IMAGE_UPLOAD_MAX_BYTES = 25 * 1024 * 1024
-_CHAT_IMAGE_ALLOWED_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"})
+_CHAT_IMAGE_ALLOWED_EXTENSIONS = frozenset(
+    {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+)
 _CHAT_IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
-    (b"\x89PNG\r\n\x1a\n", ".png"), (b"\xff\xd8\xff", ".jpg"),
-    (b"GIF87a", ".gif"), (b"GIF89a", ".gif"), (b"BM", ".bmp"),
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"BM", ".bmp"),
 )
 
 
@@ -467,7 +598,9 @@ def _decode_chat_image_upload(payload: ChatImageUpload) -> tuple[bytes, str, str
         raise HTTPException(status_code=400, detail="Upload payload must be an image")
     if len(data) > _CHAT_IMAGE_UPLOAD_MAX_BYTES:
         mb = _CHAT_IMAGE_UPLOAD_MAX_BYTES // (1024 * 1024)
-        raise HTTPException(status_code=413, detail=f"Image is too large; cap is {mb} MB")
+        raise HTTPException(
+            status_code=413, detail=f"Image is too large; cap is {mb} MB"
+        )
     ext = _chat_image_extension(data)
     if ext not in _CHAT_IMAGE_ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported image type")
@@ -483,15 +616,22 @@ async def upload_chat_image(payload: ChatImageUpload, profile: Optional[str] = N
     the returned gateway-visible path under ``CLAWK_HOME/images/`` (the same
     dir ``clipboard.paste`` / ``image.attach`` use).
     """
+
     def _run():
         data, mime_type, ext = _decode_chat_image_upload(payload)
         with _profile_scope(profile):
             from gateway.platforms.base import get_image_cache_dir
+
             img_dir = get_image_cache_dir()
-            with _io_errors("Image directory is not writable", "Could not create image directory"):
+            with _io_errors(
+                "Image directory is not writable", "Could not create image directory"
+            ):
                 img_dir.mkdir(parents=True, exist_ok=True)
 
-            stem = Path(_sanitize_chat_image_filename(payload.filename)).stem or "pasted-image"
+            stem = (
+                Path(_sanitize_chat_image_filename(payload.filename)).stem
+                or "pasted-image"
+            )
             stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", stem).strip("._-") or "pasted-image"
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             target = img_dir / f"dashboard_{ts}_{secrets.token_hex(4)}_{stem}{ext}"
@@ -520,7 +660,10 @@ async def list_managed_files(request: Request, path: Optional[str] = None):
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Path is not a directory")
 
-    with _io_errors("Directory is not readable", "Could not read directory"), os.scandir(target) as scan:
+    with (
+        _io_errors("Directory is not readable", "Could not read directory"),
+        os.scandir(target) as scan,
+    ):
         entries = []
         for entry in scan:
             entry_path = Path(entry.path)
@@ -535,22 +678,34 @@ async def list_managed_files(request: Request, path: Optional[str] = None):
     parent = None
     if target.parent != target and (locked_root is None or target != locked_root):
         parent = str(target.parent)
-    return {"path": display_path, "parent": parent, "entries": entries, **_managed_response_meta(policy)}
+    return {
+        "path": display_path,
+        "parent": parent,
+        "entries": entries,
+        **_managed_response_meta(policy),
+    }
 
 
-def _managed_readable_file(request: Request, path: str) -> tuple[Any, Path, str, int, str]:
+def _managed_readable_file(
+    request: Request, path: str
+) -> tuple[Any, Path, str, int, str]:
     """Resolve + guard a managed file for reading: existence, regular file,
     sensitive-path denylist. Returns (policy, target, display_path, max_bytes,
     mime_type). Callers own the live-SQLite 409 (held through the read for
     /api/files/read, point-in-time for streamed responses)."""
     from clawk_cli.web_server import _MANAGED_FILE_MAX_BYTES
-    policy, target, display_path = _resolve_managed_path(path, request, for_agent_read=True)
+
+    policy, target, display_path = _resolve_managed_path(
+        path, request, for_agent_read=True
+    )
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
     if not target.is_file():
         raise HTTPException(status_code=400, detail="Path is not a file")
     if _is_sensitive_path(target):
-        raise HTTPException(status_code=403, detail="Access to sensitive files is not allowed")
+        raise HTTPException(
+            status_code=403, detail="Access to sensitive files is not allowed"
+        )
     mime_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
     return policy, target, display_path, _MANAGED_FILE_MAX_BYTES, mime_type
 
@@ -567,7 +722,9 @@ def _managed_file_size(target: Path, max_bytes: int) -> int:
 
 @router.get("/api/files/read")
 async def read_managed_file(request: Request, path: str):
-    policy, target, display_path, max_bytes, mime_type = _managed_readable_file(request, path)
+    policy, target, display_path, max_bytes, mime_type = _managed_readable_file(
+        request, path
+    )
     size = _managed_file_size(target, max_bytes)
     with _io_errors("File is not readable", "Could not read file"):
         encoded = await asyncio.to_thread(_read_base64_file, target)
@@ -589,7 +746,9 @@ async def _managed_file_response(
     media_only: bool = False,
 ) -> FileResponse:
     """Range-aware response after applying managed-file policy."""
-    _policy, target, _display_path, max_bytes, mime_type = _managed_readable_file(request, path)
+    _policy, target, _display_path, max_bytes, mime_type = _managed_readable_file(
+        request, path
+    )
     if media_only and target.suffix.lower() not in _STREAMABLE_MEDIA_EXTENSIONS:
         raise HTTPException(status_code=415, detail="Unsupported media type")
     _managed_file_size(target, max_bytes)
@@ -630,13 +789,17 @@ async def stream_managed_file(request: Request, path: str):
     media pipeline may reject an attachment response as an ``<audio>``/
     ``<video>`` source. Same auth, size cap, sensitive guard and MIME detection
     as download."""
-    return await _managed_file_response(request, path, content_disposition_type="inline", media_only=True)
+    return await _managed_file_response(
+        request, path, content_disposition_type="inline", media_only=True
+    )
 
 
 def _managed_write_target(path: str, request: Request, overwrite: bool):
     policy, target, display_path = _resolve_managed_path(path, request, for_write=True)
     if target.exists() and target.is_dir():
-        raise HTTPException(status_code=409, detail="A directory already exists at that path")
+        raise HTTPException(
+            status_code=409, detail="A directory already exists at that path"
+        )
     if target.exists() and not overwrite:
         raise HTTPException(status_code=409, detail="File already exists")
     return policy, target, display_path
@@ -653,7 +816,9 @@ def _managed_write_result(policy, target: Path, display_path: str) -> dict:
 
 @router.post("/api/files/upload")
 async def upload_managed_file(payload: ManagedFileUpload, request: Request):
-    policy, target, display_path = _managed_write_target(payload.path, request, payload.overwrite)
+    policy, target, display_path = _managed_write_target(
+        payload.path, request, payload.overwrite
+    )
     data, _mime_type = _decode_data_url(payload.data_url)
     with _io_errors("File is not writable", "Could not write file"):
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -678,7 +843,10 @@ async def stream_upload_to_path(
     browser aborts a large upload mid-stream.
     """
     from clawk_cli.web_server import _MANAGED_FILE_MAX_BYTES, _UPLOAD_CHUNK_BYTES
-    tmp_fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".upload", dir=str(target.parent))
+
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".upload", dir=str(target.parent)
+    )
     tmp_path = Path(tmp_name)
     total = 0
     renamed = False
@@ -718,7 +886,8 @@ async def upload_managed_file_stream(
     with _io_errors("File is not writable", "Could not create parent directory"):
         target.parent.mkdir(parents=True, exist_ok=True)
     await stream_upload_to_path(
-        file, target,
+        file,
+        target,
         too_large="File is too large",
         not_writable="File is not writable",
         write_failed="Could not write file",
@@ -728,9 +897,13 @@ async def upload_managed_file_stream(
 
 @router.post("/api/files/mkdir")
 async def create_managed_directory(payload: ManagedDirectoryCreate, request: Request):
-    policy, target, display_path = _resolve_managed_path(payload.path, request, for_write=True)
+    policy, target, display_path = _resolve_managed_path(
+        payload.path, request, for_write=True
+    )
     if target.exists() and not target.is_dir():
-        raise HTTPException(status_code=409, detail="A file already exists at that path")
+        raise HTTPException(
+            status_code=409, detail="A file already exists at that path"
+        )
     with _io_errors("Directory is not writable", "Could not create directory"):
         target.mkdir(parents=True, exist_ok=True)
     return _managed_write_result(policy, target, display_path)
@@ -740,7 +913,9 @@ async def create_managed_directory(payload: ManagedDirectoryCreate, request: Req
 async def delete_managed_file(payload: ManagedFileDelete, request: Request):
     policy, target, display_path = _resolve_managed_path(payload.path, request)
     if policy.locked_root is not None and target == policy.locked_root:
-        raise HTTPException(status_code=400, detail="Cannot delete the managed files root")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the managed files root"
+        )
     if target.parent == target:
         raise HTTPException(status_code=400, detail="Cannot delete the filesystem root")
     if not target.exists():
@@ -756,7 +931,9 @@ async def delete_managed_file(payload: ManagedFileDelete, request: Request):
             target.unlink()
     except OSError as exc:
         status_code = 409 if target.is_dir() and not payload.recursive else 500
-        raise HTTPException(status_code=status_code, detail=f"Could not delete path: {exc}")
+        raise HTTPException(
+            status_code=status_code, detail=f"Could not delete path: {exc}"
+        )
     return {"ok": True, "path": display_path, **_managed_response_meta(policy)}
 
 
@@ -781,14 +958,24 @@ async def fs_list(path: str, request: Request, profile: Optional[str] = None):
         entries = []
         with os.scandir(target) as scan:
             for entry in scan:
-                if entry.name in _FS_READDIR_HIDDEN or _is_sensitive_path(Path(entry.path)):
+                if entry.name in _FS_READDIR_HIDDEN or _is_sensitive_path(
+                    Path(entry.path)
+                ):
                     continue
-                entries.append({
-                    "name": entry.name,
-                    "path": str(target / entry.name),
-                    "isDirectory": entry.is_dir(follow_symlinks=False),
-                })
-        entries.sort(key=lambda item: (not item["isDirectory"], item["name"].lower(), item["name"]))
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "path": str(target / entry.name),
+                        "isDirectory": entry.is_dir(follow_symlinks=False),
+                    }
+                )
+        entries.sort(
+            key=lambda item: (
+                not item["isDirectory"],
+                item["name"].lower(),
+                item["name"],
+            )
+        )
         return {"entries": entries}
     except OSError as exc:
         for exc_type, code in _FS_LIST_ERRNO:
@@ -798,7 +985,9 @@ async def fs_list(path: str, request: Request, profile: Optional[str] = None):
 
 
 @router.get("/api/fs/read-text")
-async def fs_read_text(path: str, request: Request = None, profile: Optional[str] = None):
+async def fs_read_text(
+    path: str, request: Request = None, profile: Optional[str] = None
+):
     backend = await asyncio.to_thread(_fs_backend, profile)
     if backend is not None:
         try:
@@ -814,7 +1003,9 @@ async def fs_read_text(path: str, request: Request = None, profile: Optional[str
         return {
             "binary": _fs_looks_binary(data[:4096]),
             "byteSize": size,
-            "language": _FS_PREVIEW_LANGUAGE_BY_EXT.get(target_path.suffix.lower(), "text"),
+            "language": _FS_PREVIEW_LANGUAGE_BY_EXT.get(
+                target_path.suffix.lower(), "text"
+            ),
             "mimeType": _fs_mime_type(target_path),
             "path": target,
             "text": data.decode("utf-8", errors="replace"),
@@ -827,7 +1018,9 @@ async def fs_read_text(path: str, request: Request = None, profile: Optional[str
     if st.st_size > _FS_TEXT_SOURCE_MAX_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
     data = await asyncio.to_thread(
-        _fs_read_bytes, target, min(st.st_size, _FS_TEXT_PREVIEW_MAX_BYTES),
+        _fs_read_bytes,
+        target,
+        min(st.st_size, _FS_TEXT_PREVIEW_MAX_BYTES),
     )
     return {
         "binary": _fs_looks_binary(data[:4096]),
@@ -897,7 +1090,9 @@ async def fs_write_text(payload: FsWriteText, profile: Optional[str] = None):
     return {"ok": True, "path": str(target), "byteSize": len(text.encode("utf-8"))}
 
 
-async def _fs_download_path(path: str, profile: Optional[str], session_id: Optional[str]) -> Path:
+async def _fs_download_path(
+    path: str, profile: Optional[str], session_id: Optional[str]
+) -> Path:
     # Resolve container paths in the requested profile's sandbox, not the active one's.
     profile_home = _fs_profile_home(profile)
     if session_id is not None:
@@ -907,7 +1102,9 @@ async def _fs_download_path(path: str, profile: Optional[str], session_id: Optio
             raise HTTPException(status_code=404, detail="Session not found")
         session = await get_session_detail(session_id, profile)
         # Validate ownership even for absolute paths; never trust a client cwd.
-        return _agent_fs_path(path, cwd=session.get("cwd") or "", profile_home=profile_home)
+        return _agent_fs_path(
+            path, cwd=session.get("cwd") or "", profile_home=profile_home
+        )
     return _agent_fs_path(path, profile_home=profile_home)
 
 
@@ -925,9 +1122,13 @@ def _fs_profile_home(profile: Optional[str]) -> Optional[Path]:
 
 @router.get("/api/fs/read-data-url")
 async def fs_read_data_url(
-    path: str, request: Request, profile: Optional[str] = None, session_id: Optional[str] = None,
+    path: str,
+    request: Request,
+    profile: Optional[str] = None,
+    session_id: Optional[str] = None,
 ):
     from clawk_cli.web_server import _FS_DATA_URL_MAX_BYTES
+
     backend = await asyncio.to_thread(_fs_backend, profile)
     if backend is not None:
         try:
@@ -951,7 +1152,10 @@ async def fs_read_data_url(
 
 @router.get("/api/fs/download")
 async def fs_download(
-    path: str, request: Request = None, profile: Optional[str] = None, session_id: Optional[str] = None,
+    path: str,
+    request: Request = None,
+    profile: Optional[str] = None,
+    session_id: Optional[str] = None,
 ):
     backend = await asyncio.to_thread(_fs_backend, profile)
     if backend is not None:
@@ -961,7 +1165,9 @@ async def fs_download(
             _raise_fs_backend_error(exc)
         target_path = Path(target)
         if _is_sensitive_path(target_path):
-            raise HTTPException(status_code=403, detail="Access to sensitive files is not allowed")
+            raise HTTPException(
+                status_code=403, detail="Access to sensitive files is not allowed"
+            )
         filename = urllib.parse.quote(target_path.name)
         return StreamingResponse(
             backend.stream_file(target),

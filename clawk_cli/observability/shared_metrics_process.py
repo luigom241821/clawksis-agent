@@ -26,7 +26,9 @@ MARKER_DIRNAME = "process_markers"
 _REPORTING = ".reporting"
 # Most specific first: ModuleNotFoundError is an ImportError, RecursionError a RuntimeError.
 _CRASH_CLASSES = (
-    (MemoryError, "memory_error"), (ImportError, "import_error"), (OSError, "os_error"),
+    (MemoryError, "memory_error"),
+    (ImportError, "import_error"),
+    (OSError, "os_error"),
     (RuntimeError, "runtime_error"),
 )
 _STATE: dict[str, Any] = {}
@@ -34,7 +36,9 @@ _STATE_LOCK = threading.Lock()
 
 
 def crash_class(exc: BaseException | None) -> str:
-    return next((label for kind, label in _CRASH_CLASSES if isinstance(exc, kind)), "other")
+    return next(
+        (label for kind, label in _CRASH_CLASSES if isinstance(exc, kind)), "other"
+    )
 
 
 def markers_dir(home: Path) -> Path:
@@ -96,12 +100,22 @@ def begin_process(kind: str) -> None:
 
         if _STATE:
             return
-        _STATE["kind"] = kind  # watchdog turn rows name the surface even when this home is off
+        _STATE["kind"] = (
+            kind  # watchdog turn rows name the surface even when this home is off
+        )
         if not _collection_on():
             home = get_clawk_home()
-            purge_pending_receipts(home)  # parked while on / left by the installer, never counted once off
-            latches = home / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME  # an opt-out outside Desktop
-            for directory in (markers_dir(home), setup_markers_dir(home), latches):  # likewise pending exits/setups
+            purge_pending_receipts(
+                home
+            )  # parked while on / left by the installer, never counted once off
+            latches = (
+                home / "telemetry" / "shared_metrics" / ONBOARDING_LATCH_DIRNAME
+            )  # an opt-out outside Desktop
+            for directory in (
+                markers_dir(home),
+                setup_markers_dir(home),
+                latches,
+            ):  # likewise pending exits/setups
                 shutil.rmtree(directory, ignore_errors=True)
             return
         from gateway.status import get_process_start_time
@@ -111,14 +125,22 @@ def begin_process(kind: str) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         pid = os.getpid()
         path = directory / f"{kind}-{pid}.json"
-        record = {"kind": kind, "pid": pid, "start_time": get_process_start_time(pid), "state": "running"}
+        record = {
+            "kind": kind,
+            "pid": pid,
+            "start_time": get_process_start_time(pid),
+            "state": "running",
+        }
         with _STATE_LOCK:
             _write_marker(path, record)
             _STATE.update(path=path, record=record)
         sys.excepthook = _excepthook(sys.excepthook)
         atexit.register(stamp_exit, "clean")
         threading.Thread(
-            target=_report_dead_markers, args=(home, path), name="clawk-exit-metrics", daemon=True,
+            target=_report_dead_markers,
+            args=(home, path),
+            name="clawk-exit-metrics",
+            daemon=True,
         ).start()
     except Exception:
         logger.debug("Process exit marker not started", exc_info=True)
@@ -154,9 +176,15 @@ def _claim(path: Path) -> Path | None:
         return None
     if not isinstance(record, dict):
         return None
-    if record_path is None and record.get("state") == "running" and runtime_status_pid_is_live(record):
+    if (
+        record_path is None
+        and record.get("state") == "running"
+        and runtime_status_pid_is_live(record)
+    ):
         return None
-    claimed = path.with_name(f"{path.name.split('.json')[0]}.json.{os.getpid()}{_REPORTING}")
+    claimed = path.with_name(
+        f"{path.name.split('.json')[0]}.json.{os.getpid()}{_REPORTING}"
+    )
     try:
         os.replace(path, claimed)
     except OSError:  # a concurrent reporter won
@@ -165,10 +193,16 @@ def _claim(path: Path) -> Path | None:
 
 
 def process_exit_fields(record: dict[str, Any]) -> dict[str, str]:
-    from .shared_metrics_contract import CRASH_CLASSES, PROCESS_EXIT_KINDS, PROCESS_KINDS
+    from .shared_metrics_contract import (
+        CRASH_CLASSES,
+        PROCESS_EXIT_KINDS,
+        PROCESS_KINDS,
+    )
 
     state = record.get("state")
-    exit_kind = "killed" if state == "running" or state not in PROCESS_EXIT_KINDS else state
+    exit_kind = (
+        "killed" if state == "running" or state not in PROCESS_EXIT_KINDS else state
+    )
     crash = record.get("crash_class") if exit_kind == "crash" else "none"
     kind = record.get("kind")
     return {
@@ -195,7 +229,9 @@ def _report_dead_markers(home: Path, own: Path) -> None:
     from . import shared_metrics_contract as contract
     from .shared_metrics_events import emit_saved
 
-    token = set_clawk_home_override(home)  # a thread does not inherit the profile binding
+    token = set_clawk_home_override(
+        home
+    )  # a thread does not inherit the profile binding
     try:
         for path in sorted(markers_dir(home).iterdir()):
             if path == own or path.name.startswith(".") or ".json" not in path.name:
@@ -207,7 +243,11 @@ def _report_dead_markers(home: Path, own: Path) -> None:
                 record = json.loads(claimed.read_text(encoding="utf-8-sig"))
             except (OSError, ValueError):
                 record = None
-            rows = [(contract.PROCESS_EXIT_MARK, process_exit_fields(record))] if isinstance(record, dict) else []
+            rows = (
+                [(contract.PROCESS_EXIT_MARK, process_exit_fields(record))]
+                if isinstance(record, dict)
+                else []
+            )
             settle_claim(claimed, path, emit_saved(rows) == len(rows))
         from .shared_metrics_setup import report_abandoned_setups
         from .shared_metrics_update import report_pending_updates
@@ -252,9 +292,14 @@ def record_watchdog_turn_abort(agent: Any) -> None:
 
         token = set_clawk_home_override(home)
         try:
-            _emit(contract.PROCESS_EXIT_MARK, lambda: {
-                "crash_class": "none", "exit_kind": "watchdog", "process_kind": current_process_kind(),
-            })
+            _emit(
+                contract.PROCESS_EXIT_MARK,
+                lambda: {
+                    "crash_class": "none",
+                    "exit_kind": "watchdog",
+                    "process_kind": current_process_kind(),
+                },
+            )
         finally:
             reset_clawk_home_override(token)
     except Exception:

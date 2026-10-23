@@ -44,7 +44,10 @@ def test_pool_worker_release_clears_the_ticked_profiles_claim(tmp_path):
         ran_in["home"] = str(sched._get_clawk_home())
 
     # The launch home is what an unscoped pool worker thread resolves to.
-    with _Scope(launch_home), concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+    with (
+        _Scope(launch_home),
+        concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool,
+    ):
         with _Scope(profile_b):
             fut = sched._submit_with_guard(job, pool, _process_job)
         assert fut is not None, "the job must be dispatched"

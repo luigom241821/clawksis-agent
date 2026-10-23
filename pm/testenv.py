@@ -6,6 +6,7 @@ same way. It carries the locked project dependencies plus the ``dev`` and
 (``ensure_project_environment``), never the selected application generation:
 test-only dependencies must not enter PM facts or anything that ships.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -29,8 +30,14 @@ def ensure_testenv(project_root: Path, extras: Sequence[str] | None = None) -> P
     from pm import ensure_project_environment
 
     chosen = sorted(set(DEFAULT_TEST_EXTRAS if extras is None else extras))
-    return ensure_project_environment(NAME, project_root, extras=chosen, groups=GROUPS,
-                                      root=testenv_root(project_root), explicit=True)
+    return ensure_project_environment(
+        NAME,
+        project_root,
+        extras=chosen,
+        groups=GROUPS,
+        root=testenv_root(project_root),
+        explicit=True,
+    )
 
 
 def testenv_python(project_root: Path) -> Path | None:

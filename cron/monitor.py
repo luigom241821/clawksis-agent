@@ -50,7 +50,11 @@ def build_monitor_diff(old: str, new: str) -> str:
     """Unified diff of old vs new monitor output, capped at MAX_DIFF_CHARS."""
     diff = "\n".join(
         difflib.unified_diff(
-            old.splitlines(), new.splitlines(), fromfile="previous", tofile="current", lineterm="",
+            old.splitlines(),
+            new.splitlines(),
+            fromfile="previous",
+            tofile="current",
+            lineterm="",
         )
     )
     if len(diff) > MAX_DIFF_CHARS:
@@ -111,8 +115,11 @@ def _run_monitor_source(job: dict) -> tuple[bool, str]:
         # Same containment + interpreter rules as the existing `script` field.
         from cron.scheduler_script import _run_job_script
 
-        return _run_job_script(monitor_script, workdir=_field(job, "workdir") or None,
-                               interpreter=job.get("interpreter"))
+        return _run_job_script(
+            monitor_script,
+            workdir=_field(job, "workdir") or None,
+            interpreter=job.get("interpreter"),
+        )
     monitor_url = _field(job, "monitor_url")
     if monitor_url:
         return _fetch_monitor_url(monitor_url)
@@ -137,7 +144,9 @@ def check_monitor(job: dict) -> MonitorOutcome:
 
     new_hash = hash_monitor_output(output)
     raw_state = job.get("monitor_state")
-    last_hash = raw_state.get("last_output_hash") if isinstance(raw_state, dict) else None
+    last_hash = (
+        raw_state.get("last_output_hash") if isinstance(raw_state, dict) else None
+    )
 
     if last_hash is not None and new_hash == last_hash:
         return MonitorOutcome(ok=True, changed=False)
@@ -165,7 +174,9 @@ def check_monitor(job: dict) -> MonitorOutcome:
         )
 
     _persist_monitor_state(job_id, new_hash, output)
-    return MonitorOutcome(ok=True, changed=True, first_run=first_run, context_block=context_block)
+    return MonitorOutcome(
+        ok=True, changed=True, first_run=first_run, context_block=context_block
+    )
 
 
 def _persist_monitor_state(job_id: str, new_hash: str, output: str) -> None:

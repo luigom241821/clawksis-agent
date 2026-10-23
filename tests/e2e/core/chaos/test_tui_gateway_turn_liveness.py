@@ -79,7 +79,9 @@ from tests.fakes.fake_llm_provider import (
 )
 
 pytestmark = [
-    pytest.mark.skipif(sys.platform != "linux", reason="orphan scan reads /proc; POSIX stdio gateway"),
+    pytest.mark.skipif(
+        sys.platform != "linux", reason="orphan scan reads /proc; POSIX stdio gateway"
+    ),
 ]
 
 # The healthy dispatcher answers ping/session.status in ~1 ms; a dispatcher blocked by the
@@ -104,7 +106,9 @@ def _text_of(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return " ".join(str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content)
+        return " ".join(
+            str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content
+        )
     return str(content or "")
 
 
@@ -132,11 +136,15 @@ def _tools_then_text(first: Callable[[str], ToolCall]) -> Callable[[list, str], 
         if messages and messages[-1].get("role") == "tool":
             return Text(f"tools settled {nonce}")
         return first(nonce)
+
     return respond
 
 
 def _parallel_batch(nonce: str) -> ToolCall:
-    calls = [("terminal", {"command": f"echo {_token(nonce, i)}"}) for i in range(PARALLEL_CALLS)]
+    calls = [
+        ("terminal", {"command": f"echo {_token(nonce, i)}"})
+        for i in range(PARALLEL_CALLS)
+    ]
     return ToolCall(calls[0][0], calls[0][1], parallel=calls[1:])
 
 
@@ -148,9 +156,15 @@ FAULTS: dict[str, Callable[[list, str], Any]] = {
     "drop": lambda _m, _n: DropMidStream(),
     "parallel": _tools_then_text(_parallel_batch),
     "toolhang": _tools_then_text(
-        lambda _n: ToolCall("terminal", {"command": HUNG_COMMAND, "timeout": TOOL_TIMEOUT_S})),
+        lambda _n: ToolCall(
+            "terminal", {"command": HUNG_COMMAND, "timeout": TOOL_TIMEOUT_S}
+        )
+    ),
     "toolhang_long": _tools_then_text(
-        lambda _n: ToolCall("terminal", {"command": HUNG_COMMAND, "timeout": LONG_TIMEOUT_S})),
+        lambda _n: ToolCall(
+            "terminal", {"command": HUNG_COMMAND, "timeout": LONG_TIMEOUT_S}
+        )
+    ),
 }
 
 
@@ -166,8 +180,10 @@ def responder(record: dict[str, Any]):
 
 def _main_requests_for(srv: FakeLLMServer, needle: str) -> list[dict[str, Any]]:
     return [
-        r["body"] for r in list(srv.requests)
-        if r["kind"] == "main" and needle in _deciding_user_text(r["body"].get("messages") or [])
+        r["body"]
+        for r in list(srv.requests)
+        if r["kind"] == "main"
+        and needle in _deciding_user_text(r["body"].get("messages") or [])
     ]
 
 
@@ -191,21 +207,62 @@ SCENARIOS = [
     Scenario("provider_hang", "hang"),
     # Reasoning slug + long transport timeout: only the explicit stale_timeout_seconds can end
     # the stalled stream, and it must win over the reasoning-model floor.
-    Scenario("provider_stall_reasoning_model", "stall", model=REASONING_MODEL, long_request_timeout=True),
+    Scenario(
+        "provider_stall_reasoning_model",
+        "stall",
+        model=REASONING_MODEL,
+        long_request_timeout=True,
+    ),
     Scenario("provider_500_forever", "err500"),
     Scenario("provider_429_forever", "err429"),
     Scenario("provider_drop_mid_stream", "drop"),
     Scenario("parallel_8_terminal_calls", "parallel"),
     Scenario("tool_hang_past_timeout", "toolhang", reaps_hung_tool=True),
-    Scenario("interrupt_during_provider_hang", "hang", long_timeouts=True, wait_for="provider", action="interrupt"),
-    Scenario("interrupt_during_hung_tool", "toolhang_long", long_timeouts=True,
-             wait_for="tool", action="interrupt", reaps_hung_tool=True),
+    Scenario(
+        "interrupt_during_provider_hang",
+        "hang",
+        long_timeouts=True,
+        wait_for="provider",
+        action="interrupt",
+    ),
+    Scenario(
+        "interrupt_during_hung_tool",
+        "toolhang_long",
+        long_timeouts=True,
+        wait_for="tool",
+        action="interrupt",
+        reaps_hung_tool=True,
+    ),
     # The parent (TUI/Desktop) goes away while the turn is wedged: the gateway must still
     # leave on its own and take the hung request / tool process with it.
-    Scenario("stdin_eof_during_provider_hang", "hang", long_timeouts=True, wait_for="provider", action="eof"),
-    Scenario("stdin_eof_during_hung_tool", "toolhang_long", long_timeouts=True, wait_for="tool", action="eof"),
-    Scenario("sigterm_during_hung_tool", "toolhang_long", long_timeouts=True, wait_for="tool", action="sigterm"),
-    Scenario("sigterm_during_provider_hang", "hang", long_timeouts=True, wait_for="provider", action="sigterm"),
+    Scenario(
+        "stdin_eof_during_provider_hang",
+        "hang",
+        long_timeouts=True,
+        wait_for="provider",
+        action="eof",
+    ),
+    Scenario(
+        "stdin_eof_during_hung_tool",
+        "toolhang_long",
+        long_timeouts=True,
+        wait_for="tool",
+        action="eof",
+    ),
+    Scenario(
+        "sigterm_during_hung_tool",
+        "toolhang_long",
+        long_timeouts=True,
+        wait_for="tool",
+        action="sigterm",
+    ),
+    Scenario(
+        "sigterm_during_provider_hang",
+        "hang",
+        long_timeouts=True,
+        wait_for="provider",
+        action="sigterm",
+    ),
 ]
 EXIT_ACTIONS = ("eof", "sigterm")
 
@@ -218,7 +275,12 @@ def _hung_tool_pids(tag: str) -> list[int]:
     out = []
     for pid in tagged_pids(tag):
         try:
-            cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            cmd = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode(errors="replace")
+            )
         except OSError:
             continue
         if HUNG_COMMAND in cmd:
@@ -235,7 +297,9 @@ def _wait_until(pred: Callable[[], object], timeout: float) -> bool:
     return bool(pred())
 
 
-def _assert_parallel_results(messages: list[dict[str, Any]], nonce: str, where: str) -> None:
+def _assert_parallel_results(
+    messages: list[dict[str, Any]], nonce: str, where: str
+) -> None:
     results = tool_results_by_id(messages)
     seen = 0
     for msg in messages:
@@ -248,44 +312,76 @@ def _assert_parallel_results(messages: list[dict[str, Any]], nonce: str, where: 
             assert token.startswith(f"tok{nonce}"), (where, args)
             body = results.get(call["id"], "")
             assert token in body and "Result unavailable" not in body, (
-                f"{where}: tool_call {call['id']} ({token}) got {body[:200]!r}")
+                f"{where}: tool_call {call['id']} ({token}) got {body[:200]!r}"
+            )
             seen += 1
-    assert seen == PARALLEL_CALLS, f"{where}: {seen} tool calls, expected {PARALLEL_CALLS}"
+    assert seen == PARALLEL_CALLS, (
+        f"{where}: {seen} tool calls, expected {PARALLEL_CALLS}"
+    )
 
 
-def _wait_settled(gw: TuiGatewayProcess, sid: str, done: dict[str, Any], what: str) -> None:
+def _wait_settled(
+    gw: TuiGatewayProcess, sid: str, done: dict[str, Any], what: str
+) -> None:
     """``message.complete`` is emitted BEFORE the worker clears ``running``; the settled
     ``session.info`` (running=false) that follows is the idle signal a client waits for."""
     settled = gw.wait_event(
-        lambda e: _is(e, "session.info", sid) and (e.get("payload") or {}).get("running") is False,
-        timeout=SETTLE_TIMEOUT_S, start=done["_i"] + 1)
-    assert settled is not None, f"{what}: session never settled (running stays true){gw.tail()}"
+        lambda e: (
+            _is(e, "session.info", sid)
+            and (e.get("payload") or {}).get("running") is False
+        ),
+        timeout=SETTLE_TIMEOUT_S,
+        start=done["_i"] + 1,
+    )
+    assert settled is not None, (
+        f"{what}: session never settled (running stays true){gw.tail()}"
+    )
 
 
-def _answered_turn(gw: TuiGatewayProcess, sid: str, nonce: str, what: str,
-                   deadline: float = TURN_DEADLINE_S) -> float:
+def _answered_turn(
+    gw: TuiGatewayProcess,
+    sid: str,
+    nonce: str,
+    what: str,
+    deadline: float = TURN_DEADLINE_S,
+) -> float:
     """Submit a probe prompt to an idle session; it must start at once and be answered."""
     start = gw.event_count()
     t0 = time.monotonic()
-    reply = gw.call("prompt.submit", {"session_id": sid, "text": f"are you there [[probe:{nonce}]]"})
-    assert reply.get("status") == "streaming", f"{what}: session busy instead of starting the turn: {reply}"
-    done = gw.wait_event(lambda e: _is(e, "message.complete", sid), timeout=deadline, start=start)
-    assert done is not None, f"{what}: prompt never completed within {deadline}s{gw.tail()}"
+    reply = gw.call(
+        "prompt.submit", {"session_id": sid, "text": f"are you there [[probe:{nonce}]]"}
+    )
+    assert reply.get("status") == "streaming", (
+        f"{what}: session busy instead of starting the turn: {reply}"
+    )
+    done = gw.wait_event(
+        lambda e: _is(e, "message.complete", sid), timeout=deadline, start=start
+    )
+    assert done is not None, (
+        f"{what}: prompt never completed within {deadline}s{gw.tail()}"
+    )
     payload = done.get("payload") or {}
-    assert payload.get("status") == "complete" and f"alive {nonce}" in _text_of(payload.get("text")), (
-        f"{what}: {payload}")
+    assert payload.get("status") == "complete" and f"alive {nonce}" in _text_of(
+        payload.get("text")
+    ), f"{what}: {payload}"
     _wait_settled(gw, sid, done, what)
     return time.monotonic() - t0
 
 
-def _assert_heartbeat(scn: Scenario, hb: Heartbeat, stats: dict[str, Any], turn_s: float) -> None:
-    assert not hb.failures, f"{scn.id}: heartbeat RPC failed during the turn: {hb.failures}"
+def _assert_heartbeat(
+    scn: Scenario, hb: Heartbeat, stats: dict[str, Any], turn_s: float
+) -> None:
+    assert not hb.failures, (
+        f"{scn.id}: heartbeat RPC failed during the turn: {hb.failures}"
+    )
     stats["heartbeat_max_s"] = round(max(hb.latencies, default=0.0), 3)
     stats["heartbeats"] = len(hb.latencies)
     assert stats["heartbeat_max_s"] < HEARTBEAT_MAX_S, (
-        f"{scn.id}: dispatcher blocked {stats['heartbeat_max_s']}s during the wedged turn")
+        f"{scn.id}: dispatcher blocked {stats['heartbeat_max_s']}s during the wedged turn"
+    )
     assert len(hb.latencies) >= MIN_HEARTBEATS or turn_s < 2.0, (
-        f"{scn.id}: only {len(hb.latencies)} heartbeats answered in a {turn_s:.1f}s turn")
+        f"{scn.id}: only {len(hb.latencies)} heartbeats answered in a {turn_s:.1f}s turn"
+    )
 
 
 class ToolOutlivedGateway(Exception):
@@ -295,8 +391,15 @@ class ToolOutlivedGateway(Exception):
     failure, a crash or any other broken invariant (heartbeat, exit deadline, integrity) still fails."""
 
 
-def _exit_mid_turn(scn: Scenario, gw: TuiGatewayProcess, hb: Heartbeat, tag: str,
-                   state_db: Path, stored: str, stats: dict[str, Any]) -> dict[str, Any]:
+def _exit_mid_turn(
+    scn: Scenario,
+    gw: TuiGatewayProcess,
+    hb: Heartbeat,
+    tag: str,
+    state_db: Path,
+    stored: str,
+    stats: dict[str, Any],
+) -> dict[str, Any]:
     """The client vanishes (stdin EOF) or the supervisor stops us (SIGTERM) mid-wedge.
     Every other invariant is asserted first; the tool leftovers are checked together, last."""
     _assert_heartbeat(scn, hb, stats, turn_s=LONG_TIMEOUT_S)
@@ -309,16 +412,22 @@ def _exit_mid_turn(scn: Scenario, gw: TuiGatewayProcess, hb: Heartbeat, tag: str
             rc = None
     else:
         rc = gw.close_stdin_and_wait(EXIT_TIMEOUT_S)
-    assert rc is not None, f"{scn.id}: gateway still alive {EXIT_TIMEOUT_S}s after {scn.action} mid-turn{gw.tail()}"
+    assert rc is not None, (
+        f"{scn.id}: gateway still alive {EXIT_TIMEOUT_S}s after {scn.action} mid-turn{gw.tail()}"
+    )
     stats["exit_s"] = round(time.monotonic() - t0, 2)
     assert integrity_ok(state_db) == "ok"
     leftovers = []
     if dangling := unanswered_tool_calls(persisted_messages(state_db, stored)):
-        leftovers.append(f"state.db keeps tool_call(s) {dangling} with no result (next resume sends them)")
+        leftovers.append(
+            f"state.db keeps tool_call(s) {dangling} with no result (next resume sends them)"
+        )
     if survivors := wait_no_tagged(tag):
         leftovers.append(f"orphans: {describe_pids(survivors)}")
     if leftovers:
-        raise ToolOutlivedGateway(f"{scn.id} after {scn.action} mid-turn: " + "; ".join(leftovers))
+        raise ToolOutlivedGateway(
+            f"{scn.id} after {scn.action} mid-turn: " + "; ".join(leftovers)
+        )
     return stats
 
 
@@ -349,47 +458,82 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
     gw = TuiGatewayProcess(env, work, root / "gateway-stderr.log")
     stats: dict[str, Any] = {"scenario": scn.id}
     try:
-        assert gw.wait_event(lambda e: e.get("type") == "gateway.ready", timeout=READY_TIMEOUT_S), (
-            f"gateway never became ready{gw.tail()}")
+        assert gw.wait_event(
+            lambda e: e.get("type") == "gateway.ready", timeout=READY_TIMEOUT_S
+        ), f"gateway never became ready{gw.tail()}"
         created = gw.call("session.create", {"cols": 100})
         sid, stored = created["session_id"], created["stored_session_id"]
         # A healthy first turn builds the agent, so the fault lands mid-session and the
         # heartbeat measures the dispatcher during the fault, not the cold agent build.
-        stats["warm_s"] = round(_answered_turn(
-            gw, sid, uuid.uuid4().hex[:10], f"{scn.id} warm-up", WARMUP_DEADLINE_S), 2)
+        stats["warm_s"] = round(
+            _answered_turn(
+                gw, sid, uuid.uuid4().hex[:10], f"{scn.id} warm-up", WARMUP_DEADLINE_S
+            ),
+            2,
+        )
 
         # ── the faulted turn ──
         start = gw.event_count()
-        with Heartbeat(gw, [("ping", {}), ("session.status", {"session_id": sid})],
-                       interval=HEARTBEAT_INTERVAL_S, per_call_timeout=LONG_TIMEOUT_S) as hb:
+        with Heartbeat(
+            gw,
+            [("ping", {}), ("session.status", {"session_id": sid})],
+            interval=HEARTBEAT_INTERVAL_S,
+            per_call_timeout=LONG_TIMEOUT_S,
+        ) as hb:
             t0 = time.monotonic()
-            submitted = gw.call("prompt.submit", {"session_id": sid, "text": f"please work {marker}"})
+            submitted = gw.call(
+                "prompt.submit", {"session_id": sid, "text": f"please work {marker}"}
+            )
             assert submitted.get("status") == "streaming", submitted
             if scn.wait_for == "provider":
-                assert _wait_until(lambda: _main_requests_for(srv, marker), TURN_DEADLINE_S), (
-                    f"provider never saw the turn{gw.tail()}")
+                assert _wait_until(
+                    lambda: _main_requests_for(srv, marker), TURN_DEADLINE_S
+                ), f"provider never saw the turn{gw.tail()}"
             elif scn.wait_for == "tool":
-                assert gw.wait_event(lambda e: _is(e, "tool.start", sid), timeout=TURN_DEADLINE_S, start=start), (
-                    f"hung tool never started{gw.tail()}")
-                assert _wait_until(lambda: _hung_tool_pids(tag), TURN_DEADLINE_S), "hung tool process never spawned"
+                assert gw.wait_event(
+                    lambda e: _is(e, "tool.start", sid),
+                    timeout=TURN_DEADLINE_S,
+                    start=start,
+                ), f"hung tool never started{gw.tail()}"
+                assert _wait_until(lambda: _hung_tool_pids(tag), TURN_DEADLINE_S), (
+                    "hung tool process never spawned"
+                )
             deadline = TURN_DEADLINE_S
             if scn.action:
                 # Let the fault sit a moment so the heartbeat samples the wedged turn.
-                _wait_until(lambda: len(hb.latencies) >= MIN_HEARTBEATS, TURN_DEADLINE_S)
+                _wait_until(
+                    lambda: len(hb.latencies) >= MIN_HEARTBEATS, TURN_DEADLINE_S
+                )
             if scn.action == "interrupt":
                 t_int = time.monotonic()
-                assert gw.call("session.interrupt", {"session_id": sid}, timeout=INTERRUPT_DEADLINE_S)[
-                    "status"] == "interrupted"
+                assert (
+                    gw.call(
+                        "session.interrupt",
+                        {"session_id": sid},
+                        timeout=INTERRUPT_DEADLINE_S,
+                    )["status"]
+                    == "interrupted"
+                )
                 t0, deadline = t_int, INTERRUPT_DEADLINE_S
-            done = None if scn.action in EXIT_ACTIONS else gw.wait_event(
-                lambda e: _is(e, "message.complete", sid), timeout=deadline, start=start)
+            done = (
+                None
+                if scn.action in EXIT_ACTIONS
+                else gw.wait_event(
+                    lambda e: _is(e, "message.complete", sid),
+                    timeout=deadline,
+                    start=start,
+                )
+            )
             turn_s = time.monotonic() - t0
         if scn.action in EXIT_ACTIONS:
-            return _exit_mid_turn(scn, gw, hb, tag, clawk_home / "state.db", stored, stats)
+            return _exit_mid_turn(
+                scn, gw, hb, tag, clawk_home / "state.db", stored, stats
+            )
         seen_types = sorted({str(e.get("type")) for e in gw.events_since(start, sid)})
         assert done is not None, (
             f"{scn.id}: no terminal message.complete within {deadline}s "
-            f"(events: {seen_types}){gw.tail()}")
+            f"(events: {seen_types}){gw.tail()}"
+        )
         stats["turn_s"] = round(turn_s, 2)
         stats["status"] = (done.get("payload") or {}).get("status")
         if scn.action == "interrupt":
@@ -398,36 +542,53 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
 
         calls = len(_main_requests_for(srv, marker))
         stats["provider_calls"] = calls
-        assert 1 <= calls <= MAX_PROVIDER_CALLS_PER_FAILED_TURN, f"{scn.id}: {calls} provider calls"
+        assert 1 <= calls <= MAX_PROVIDER_CALLS_PER_FAILED_TURN, (
+            f"{scn.id}: {calls} provider calls"
+        )
 
         _assert_heartbeat(scn, hb, stats, turn_s)
 
         if scn.reaps_hung_tool:
             assert _wait_until(lambda: not _hung_tool_pids(tag), PROCESS_REAP_S), (
-                f"{scn.id}: hung tool survived its turn: {describe_pids(_hung_tool_pids(tag))}")
+                f"{scn.id}: hung tool survived its turn: {describe_pids(_hung_tool_pids(tag))}"
+            )
 
         # ── the same session must take and answer a new prompt ──
-        stats["probe_s"] = round(_answered_turn(gw, sid, nonce, f"{scn.id} after the fault"), 2)
+        stats["probe_s"] = round(
+            _answered_turn(gw, sid, nonce, f"{scn.id} after the fault"), 2
+        )
 
         probe_reqs = _main_requests_for(srv, probe_marker)
         assert probe_reqs, f"{scn.id}: follow-up never reached the provider"
         sent = probe_reqs[-1]["messages"]
-        assert any(m.get("role") == "user" and marker in _text_of(m.get("content")) for m in sent), (
-            f"{scn.id}: follow-up ran without the faulted turn in its history (not the same session)")
-        assert unanswered_tool_calls(sent) == [], f"{scn.id}: model was sent unanswered tool_calls"
+        assert any(
+            m.get("role") == "user" and marker in _text_of(m.get("content"))
+            for m in sent
+        ), (
+            f"{scn.id}: follow-up ran without the faulted turn in its history (not the same session)"
+        )
+        assert unanswered_tool_calls(sent) == [], (
+            f"{scn.id}: model was sent unanswered tool_calls"
+        )
 
         state_db = clawk_home / "state.db"
         persisted = persisted_messages(state_db, stored)
-        assert unanswered_tool_calls(persisted) == [], f"{scn.id}: state.db has unanswered tool_calls"
+        assert unanswered_tool_calls(persisted) == [], (
+            f"{scn.id}: state.db has unanswered tool_calls"
+        )
         if scn.fault == "parallel":
             _assert_parallel_results(persisted, nonce, "state.db")
             _assert_parallel_results(sent, nonce, "provider request")
 
         # ── EOF on stdin: the gateway leaves on its own and takes every child with it ──
         rc = gw.close_stdin_and_wait(EXIT_TIMEOUT_S)
-        assert rc is not None, f"{scn.id}: gateway ignored stdin EOF for {EXIT_TIMEOUT_S}s{gw.tail()}"
+        assert rc is not None, (
+            f"{scn.id}: gateway ignored stdin EOF for {EXIT_TIMEOUT_S}s{gw.tail()}"
+        )
         survivors = wait_no_tagged(tag)
-        assert survivors == [], f"{scn.id}: orphans after exit: {describe_pids(survivors)}"
+        assert survivors == [], (
+            f"{scn.id}: orphans after exit: {describe_pids(survivors)}"
+        )
         assert integrity_ok(state_db) == "ok"
         return stats
     finally:
@@ -438,16 +599,26 @@ def run_scenario(scn: Scenario, srv: FakeLLMServer, root: Path) -> dict[str, Any
 
 
 @pytest.fixture(scope="module")
-def scenario_futures(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory):
+def scenario_futures(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
+):
     selected = {
-        item.callspec.params["scn"].id for item in request.session.items
-        if isinstance(getattr(getattr(item, "callspec", None), "params", {}).get("scn"), Scenario)
+        item.callspec.params["scn"].id
+        for item in request.session.items
+        if isinstance(
+            getattr(getattr(item, "callspec", None), "params", {}).get("scn"), Scenario
+        )
     }
-    with FakeLLMServer(responder) as srv, ThreadPoolExecutor(
-            max_workers=max(1, len(selected)), thread_name_prefix="chaos-tui") as pool:
+    with (
+        FakeLLMServer(responder) as srv,
+        ThreadPoolExecutor(
+            max_workers=max(1, len(selected)), thread_name_prefix="chaos-tui"
+        ) as pool,
+    ):
         futures: dict[str, Future] = {
             scn.id: pool.submit(run_scenario, scn, srv, tmp_path_factory.mktemp(scn.id))
-            for scn in SCENARIOS if scn.id in selected
+            for scn in SCENARIOS
+            if scn.id in selected
         }
         try:
             yield futures
@@ -457,6 +628,10 @@ def scenario_futures(request: pytest.FixtureRequest, tmp_path_factory: pytest.Te
 
 
 @pytest.mark.parametrize("scn", [pytest.param(s, id=s.id) for s in SCENARIOS])
-def test_tui_gateway_turn_stays_live_under_fault(scn: Scenario, scenario_futures) -> None:
-    stats = scenario_futures[scn.id].result(timeout=WARMUP_DEADLINE_S + 3 * TURN_DEADLINE_S + 120)
+def test_tui_gateway_turn_stays_live_under_fault(
+    scn: Scenario, scenario_futures
+) -> None:
+    stats = scenario_futures[scn.id].result(
+        timeout=WARMUP_DEADLINE_S + 3 * TURN_DEADLINE_S + 120
+    )
     print(json.dumps(stats))

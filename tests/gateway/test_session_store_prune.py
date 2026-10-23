@@ -22,6 +22,7 @@ from unittest.mock import patch
 from gateway.config import GatewayConfig, Platform
 from gateway.session import SessionEntry, SessionStore
 
+
 def test_session_store_default_db_uses_runtime_clawk_home(tmp_path, monkeypatch):
     """SessionStore must honor runtime CLAWK_HOME when opening the default DB.
 
@@ -44,10 +45,10 @@ def test_session_store_default_db_uses_runtime_clawk_home(tmp_path, monkeypatch)
         if store._db is not None:
             store._db.close()
 
+
 def _make_store(tmp_path, max_age_days: int = 90, has_active_processes_fn=None):
     """Build a SessionStore bypassing SQLite/disk-load side effects."""
     config = GatewayConfig(
-
         session_store_max_age_days=max_age_days,
     )
     with patch("gateway.session.SessionStore._ensure_loaded"):
@@ -60,8 +61,10 @@ def _make_store(tmp_path, max_age_days: int = 90, has_active_processes_fn=None):
     store._loaded = True
     return store
 
-def _entry(key: str, age_days: float, *, suspended: bool = False,
-           session_id: str | None = None) -> SessionEntry:
+
+def _entry(
+    key: str, age_days: float, *, suspended: bool = False, session_id: str | None = None
+) -> SessionEntry:
     now = datetime.now()
     return SessionEntry(
         session_key=key,
@@ -73,8 +76,8 @@ def _entry(key: str, age_days: float, *, suspended: bool = False,
         suspended=suspended,
     )
 
-class TestPruneBasics:
 
+class TestPruneBasics:
     def test_prune_uses_updated_at_not_created_at(self, tmp_path):
         """A session created long ago but updated recently must be kept."""
         store = _make_store(tmp_path)
@@ -82,8 +85,8 @@ class TestPruneBasics:
         entry = SessionEntry(
             session_key="long-lived",
             session_id="sid",
-            created_at=now - timedelta(days=365),   # ancient
-            updated_at=now - timedelta(days=3),     # but just chatted
+            created_at=now - timedelta(days=365),  # ancient
+            updated_at=now - timedelta(days=3),  # but just chatted
             platform=Platform.TELEGRAM,
             chat_type="dm",
         )
@@ -114,9 +117,7 @@ class TestPruneBasics:
         store._entries["active"] = _entry(
             "active", age_days=1000, session_id="sid_active"
         )
-        store._entries["idle"] = _entry(
-            "idle", age_days=1000, session_id="sid_idle"
-        )
+        store._entries["idle"] = _entry("idle", age_days=1000, session_id="sid_idle")
 
         removed = store.prune_old_entries(max_age_days=90)
 
@@ -129,6 +130,7 @@ class TestPruneBasics:
         NOT protect entries during prune.  This pins the fix so a future
         refactor can't silently revert to passing session_id again.
         """
+
         def _recognises_only_ids(identifier: str) -> bool:
             return identifier.startswith("sid_")
 
@@ -176,11 +178,11 @@ class TestPruneBasics:
             if i % 2 == 1:  # fresh
                 assert f"s{i}" in store._entries
 
+
 class TestPrunePersistsToDisk:
     def test_prune_rewrites_sessions_json(self, tmp_path):
         """After prune, sessions.json on disk reflects the new dict."""
         config = GatewayConfig(
-
             session_store_max_age_days=90,
         )
         store = SessionStore(sessions_dir=tmp_path, config=config)
@@ -201,8 +203,8 @@ class TestPrunePersistsToDisk:
         saved_post = json.loads((tmp_path / "sessions.json").read_text())
         assert {k for k in saved_post if not k.startswith("_")} == {"fresh"}
 
-class TestGatewayConfigSerialization:
 
+class TestGatewayConfigSerialization:
     def test_session_store_max_age_days_roundtrips(self):
         cfg = GatewayConfig(session_store_max_age_days=30)
         restored = GatewayConfig.from_dict(cfg.to_dict())

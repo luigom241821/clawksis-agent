@@ -41,7 +41,6 @@ def _wire_event(message_type: str, **extra):
 
 
 class TestVoiceMessageType:
-
     def test_wire_voice_parses_to_message_type_voice(self):
         ev = _event_from_wire(_wire_event("voice"))
         assert ev.message_type == MessageType.VOICE
@@ -54,7 +53,6 @@ class TestVoiceMessageType:
 
 
 class TestMediaTypesMapping:
-
     def test_media_mimes_land_on_event_media_types(self):
         media = [
             {
@@ -133,7 +131,13 @@ class TestSttGate:
         ev = _event_from_wire(
             _wire_event(
                 "voice",
-                media=[{"url": "https://gw/relay/media/x", "kind": "voice", "mime": "audio/ogg"}],
+                media=[
+                    {
+                        "url": "https://gw/relay/media/x",
+                        "kind": "voice",
+                        "mime": "audio/ogg",
+                    }
+                ],
                 media_urls=["https://gw/relay/media/x"],
             )
         )
@@ -159,7 +163,13 @@ class TestSttGate:
         ev = _event_from_wire(
             _wire_event(
                 "audio",
-                media=[{"url": "https://gw/relay/media/x", "kind": "voice", "mime": "audio/ogg"}],
+                media=[
+                    {
+                        "url": "https://gw/relay/media/x",
+                        "kind": "voice",
+                        "mime": "audio/ogg",
+                    }
+                ],
                 media_urls=["https://gw/relay/media/x"],
             )
         )
@@ -171,11 +181,18 @@ class TestSttGate:
         ev = _event_from_wire(
             _wire_event(
                 "audio",
-                media=[{"url": "https://cdn/x/song.mp3", "kind": "audio", "mime": "audio/mpeg"}],
+                media=[
+                    {
+                        "url": "https://cdn/x/song.mp3",
+                        "kind": "audio",
+                        "mime": "audio/mpeg",
+                    }
+                ],
                 media_urls=["https://cdn/x/song.mp3"],
             )
         )
         assert _event_media_is_stt_input(ev, 0) is False
+
 
 class TestUrlMimePairingThroughLocalization:
     """The end-to-end invariant my unit tests originally missed.
@@ -254,10 +271,13 @@ class TestUrlMimePairingThroughLocalization:
     def test_media_without_media_urls_yields_no_types(self):
         """No URL list to align to ⇒ the indices are meaningless."""
         ev = _event_from_wire(
-            _wire_event("image", media=[{"url": "https://x/a.png", "mime": "image/png"}])
+            _wire_event(
+                "image", media=[{"url": "https://x/a.png", "mime": "image/png"}]
+            )
         )
         assert ev.media_urls == []
         assert ev.media_types == []
+
 
 class TestParallelArrayLengthInvariant:
     """media_types must ALWAYS have one slot per media_url.
@@ -283,7 +303,9 @@ class TestParallelArrayLengthInvariant:
         from gateway.run import _event_media_type_at
 
         untyped = _event_from_wire(
-            _wire_event("image", media_urls=["https://x/old1.png", "https://x/old2.png"])
+            _wire_event(
+                "image", media_urls=["https://x/old1.png", "https://x/old2.png"]
+            )
         )
         typed = _event_from_wire(
             _wire_event(

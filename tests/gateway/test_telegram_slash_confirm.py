@@ -23,7 +23,6 @@ def _make_adapter():
 
 
 class TestSendSlashConfirm:
-
     @pytest.mark.asyncio
     async def test_uses_markdown_v2_and_escapes_special_chars(self):
         """send_slash_confirm must pass preview through format_message and use
@@ -51,5 +50,3 @@ class TestSendSlashConfirm:
         # Underscores and dots must be escaped by format_message
         assert "script\\_name" in sent["text"]
         assert "\\." in sent["text"]
-
-

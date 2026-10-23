@@ -29,11 +29,17 @@ def _quiet(label: str, *args, exc=Exception, level: int = logging.DEBUG):
         logger.log(level, label, *args, exc_info=True)
 
 
-def _parse_env_var(name: str, default: str, converter: Any = int, type_label: str = "integer"):
+def _parse_env_var(
+    name: str, default: str, converter: Any = int, type_label: str = "integer"
+):
     """Parse an env var with *converter*, raising a clear ValueError on bad
     values (e.g. TERMINAL_TIMEOUT=5m) instead of an opaque crash. TERMINAL_*
     names are read scope-aware via :func:`_tenv`."""
-    raw = _tenv(name, default) if name.startswith("TERMINAL_") else os.getenv(name, default)
+    raw = (
+        _tenv(name, default)
+        if name.startswith("TERMINAL_")
+        else os.getenv(name, default)
+    )
     try:
         return converter(raw)
     except (ValueError, json.JSONDecodeError):
@@ -82,14 +88,20 @@ def _host_path_key(path: str) -> str:
     return text
 
 
-def translate_mounted_host_path(path: str, host_root: str, container_root: str) -> str | None:
+def translate_mounted_host_path(
+    path: str, host_root: str, container_root: str
+) -> str | None:
     """Map *path* onto *container_root* when it is *host_root* or a child of it.
 
     Returns None when *path* is not under that host directory. Slash style and
     drive-letter case do not matter; a sibling directory (``proj`` vs ``proj-other``)
     is not a child.
     """
-    if not isinstance(path, str) or not isinstance(host_root, str) or not isinstance(container_root, str):
+    if (
+        not isinstance(path, str)
+        or not isinstance(host_root, str)
+        or not isinstance(container_root, str)
+    ):
         return None
     if not path or not host_root or not container_root:
         return None
@@ -103,7 +115,7 @@ def translate_mounted_host_path(path: str, host_root: str, container_root: str) 
     prefix = root if root.endswith("/") else root + "/"
     if not key.startswith(prefix):
         return None
-    return f"{mount}/{key[len(prefix):]}"
+    return f"{mount}/{key[len(prefix) :]}"
 
 
 def cwd_follows_host_mount(cwd: str, mount: str) -> bool:
@@ -116,6 +128,7 @@ def cwd_follows_host_mount(cwd: str, mount: str) -> bool:
     if _is_unusable_container_cwd(cwd):
         return True
     return cwd == "/workspace" and mount != "/workspace"
+
 
 _CONTAINER_BACKENDS = frozenset({"docker", "modal", "daytona", "vercel_sandbox"})
 _BUILTIN_BACKENDS = _CONTAINER_BACKENDS | {"local", "ssh", "managed_modal"}
@@ -155,7 +168,11 @@ def plugin_sandbox_home(env: Any) -> str | None:
     """The home a plugin environment started in (``_build_plugin_env`` stamps it per environment, so two
     sandboxes of one backend never share it), or None."""
     home = getattr(env, "_clawk_sandbox_home", None)
-    return home if isinstance(home, str) and posixpath.isabs(home) and home != "/" else None
+    return (
+        home
+        if isinstance(home, str) and posixpath.isabs(home) and home != "/"
+        else None
+    )
 
 
 def _in_sandbox_home(cwd: Any, env: Any) -> bool:
@@ -191,7 +208,11 @@ def coerce_ssh_remote_cwd(cwd: str | None, env_type: str | None) -> str | None:
     from clawk_constants import get_real_home, get_subprocess_home
 
     home = get_subprocess_home()
-    if not home or not posixpath.isabs(text) or posixpath.normpath(home) == posixpath.normpath(get_real_home()):
+    if (
+        not home
+        or not posixpath.isabs(text)
+        or posixpath.normpath(home) == posixpath.normpath(get_real_home())
+    ):
         return text
     rel = posixpath.relpath(posixpath.normpath(text), posixpath.normpath(home))
     if rel == ".":

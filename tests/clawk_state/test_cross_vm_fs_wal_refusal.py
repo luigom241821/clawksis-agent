@@ -11,7 +11,11 @@ import sqlite3
 import pytest
 
 import clawk_state_wal
-from clawk_state_wal import WalUnsupportedError, _detect_cross_vm_fs, apply_wal_with_fallback
+from clawk_state_wal import (
+    WalUnsupportedError,
+    _detect_cross_vm_fs,
+    apply_wal_with_fallback,
+)
 
 
 def _mountinfo(tmp_path, lines):
@@ -29,28 +33,57 @@ SPACE_VIRTIOFS = "615 25 0:55 / /mnt/my\\040share rw,relatime - virtiofs share r
 
 
 class TestDetectCrossVmFs:
-    @pytest.mark.parametrize("path,expected", [
-        ("/data/agent", True),          # fuse.virtiofs bind mount
-        ("/mnt/host/db", True),         # 9p bind mount
-        ("/mnt/my share/db", True),     # octal-escaped mount point
-        ("/home/user/.clawksis", False),  # ext4 root
-        ("/data/native/db", False),     # ext4 mounted over the virtiofs tree — longest prefix wins
-        ("/datastore", False),          # sibling path sharing a prefix string, not a mount prefix
-    ])
+    @pytest.mark.parametrize(
+        "path,expected",
+        [
+            ("/data/agent", True),  # fuse.virtiofs bind mount
+            ("/mnt/host/db", True),  # 9p bind mount
+            ("/mnt/my share/db", True),  # octal-escaped mount point
+            ("/home/user/.clawksis", False),  # ext4 root
+            (
+                "/data/native/db",
+                False,
+            ),  # ext4 mounted over the virtiofs tree — longest prefix wins
+            (
+                "/datastore",
+                False,
+            ),  # sibling path sharing a prefix string, not a mount prefix
+        ],
+    )
     def test_only_virtiofs_and_9p_mounts_are_flagged(self, tmp_path, path, expected):
-        mi = _mountinfo(tmp_path, [ROOT_EXT4, BIND_VIRTIOFS, BIND_9P, NESTED_EXT4, SPACE_VIRTIOFS])
+        mi = _mountinfo(
+            tmp_path, [ROOT_EXT4, BIND_VIRTIOFS, BIND_9P, NESTED_EXT4, SPACE_VIRTIOFS]
+        )
         assert _detect_cross_vm_fs(path, mountinfo_path=mi) is expected
 
-    @pytest.mark.parametrize("fstype", [
-        "ext4", "xfs", "btrfs", "zfs", "tmpfs", "overlay", "nfs", "nfs4", "cifs", "fuse.sshfs", "apfs", "f2fs",
-    ])
+    @pytest.mark.parametrize(
+        "fstype",
+        [
+            "ext4",
+            "xfs",
+            "btrfs",
+            "zfs",
+            "tmpfs",
+            "overlay",
+            "nfs",
+            "nfs4",
+            "cifs",
+            "fuse.sshfs",
+            "apfs",
+            "f2fs",
+        ],
+    )
     def test_ordinary_filesystems_never_flagged(self, tmp_path, fstype):
         # A false positive here would put every session on DELETE mode — the class bug this pins absent.
-        mi = _mountinfo(tmp_path, [f"25 1 8:1 / / rw,relatime shared:1 - {fstype} /dev/sda1 rw"])
+        mi = _mountinfo(
+            tmp_path, [f"25 1 8:1 / / rw,relatime shared:1 - {fstype} /dev/sda1 rw"]
+        )
         assert _detect_cross_vm_fs("/home/user/.clawksis", mountinfo_path=mi) is False
 
     def test_missing_mountinfo_conservative_false(self, tmp_path):
-        assert _detect_cross_vm_fs("/data", mountinfo_path=str(tmp_path / "nope")) is False
+        assert (
+            _detect_cross_vm_fs("/data", mountinfo_path=str(tmp_path / "nope")) is False
+        )
 
 
 class TestWalRefusalOnCrossVmFs:
@@ -58,12 +91,16 @@ class TestWalRefusalOnCrossVmFs:
     def _isolate(self, monkeypatch):
         # Pin the WAL-reset vulnerability gate OFF: on builds bundling a vulnerable SQLite (3.50.4 on CI)
         # apply_wal_with_fallback returns via _apply_delete_for_wal_reset_bug before the cross-VM check.
-        monkeypatch.setattr(clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda *a, **k: False)
+        monkeypatch.setattr(
+            clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda *a, **k: False
+        )
         monkeypatch.setattr(clawk_state_wal, "resolve_journal_mode", lambda: "wal")
         clawk_state_wal._cross_vm_warned_paths.clear()
         clawk_state_wal._cross_vm_existing_wal_warned_paths.clear()
 
-    def test_fresh_db_on_cross_vm_fs_gets_delete_and_without_detection_gets_wal(self, tmp_path, monkeypatch):
+    def test_fresh_db_on_cross_vm_fs_gets_delete_and_without_detection_gets_wal(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr(clawk_state_wal, "_path_on_cross_vm_fs", lambda p: True)
         conn = sqlite3.connect(str(tmp_path / "a.db"))
         assert apply_wal_with_fallback(conn, db_label="a.db") == "delete"
@@ -98,12 +135,17 @@ class TestWalRefusalOnCrossVmFs:
         conn.close()
 
     @pytest.mark.parametrize("wal_reset_vulnerable", [False, True])
-    def test_existing_wal_db_on_cross_vm_fs_warns_operator_once(self, tmp_path, monkeypatch, caplog,
-                                                                wal_reset_vulnerable):
+    def test_existing_wal_db_on_cross_vm_fs_warns_operator_once(
+        self, tmp_path, monkeypatch, caplog, wal_reset_vulnerable
+    ):
         # #110848: the fresh-DB refusal cannot help a database that is already WAL, and staying silent left the
         # reporter with a corrupting state.db and no signal. Keep WAL (never live-downgrade) but say so, once.
         # The WAL-reset-vulnerable SQLite path (Debian/Ubuntu system Pythons) returns early too and must not be silent.
-        monkeypatch.setattr(clawk_state_wal, "is_sqlite_wal_reset_vulnerable", lambda *a, **k: wal_reset_vulnerable)
+        monkeypatch.setattr(
+            clawk_state_wal,
+            "is_sqlite_wal_reset_vulnerable",
+            lambda *a, **k: wal_reset_vulnerable,
+        )
         db = tmp_path / "already-wal.db"
         seed = sqlite3.connect(str(db))
         if str(seed.execute("PRAGMA journal_mode=WAL").fetchone()[0]).lower() != "wal":
@@ -118,5 +160,9 @@ class TestWalRefusalOnCrossVmFs:
                 conn = sqlite3.connect(str(db))
                 assert apply_wal_with_fallback(conn, db_label="state.db") == "wal"
                 conn.close()
-        errors = [r for r in caplog.records if r.levelno == logging.ERROR and "cross-VM" in r.getMessage()]
+        errors = [
+            r
+            for r in caplog.records
+            if r.levelno == logging.ERROR and "cross-VM" in r.getMessage()
+        ]
         assert len(errors) == 1

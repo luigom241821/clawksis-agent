@@ -65,12 +65,19 @@ class TestConcurrentReadersDoNotRaceTheWriter:
             n = 0
             while not stop.is_set():
                 try:
-                    db.append_messages_batch(sid, [
-                        {"role": "user", "content": f'u{n:d}'},
-                        {"role": "assistant", "content": f'a{n:d}'},
-                        {"role": "tool", "content": f't{n:d}',
-                         "tool_name": "x", "tool_call_id": f'c{n:d}'},
-                    ])
+                    db.append_messages_batch(
+                        sid,
+                        [
+                            {"role": "user", "content": f"u{n:d}"},
+                            {"role": "assistant", "content": f"a{n:d}"},
+                            {
+                                "role": "tool",
+                                "content": f"t{n:d}",
+                                "tool_name": "x",
+                                "tool_call_id": f"c{n:d}",
+                            },
+                        ],
+                    )
                     n += 1
                 except Exception as exc:
                     errors.append(("writer", type(exc).__name__, str(exc)))
@@ -100,24 +107,18 @@ class TestConcurrentReadersDoNotRaceTheWriter:
         return errors
 
     def test_compression_lock_holder_reads_race_free(self, db):
-        errors = self._run_race(
-            db, lambda d, sid: d.get_compression_lock_holder(sid)
-        )
+        errors = self._run_race(db, lambda d, sid: d.get_compression_lock_holder(sid))
         assert errors == []
 
     def test_pending_handoff_reads_race_free(self, db):
         errors = self._run_race(
-            db, lambda d, sid: (d.list_pending_handoffs(),
-                                d.get_handoff_state(sid))
+            db, lambda d, sid: (d.list_pending_handoffs(), d.get_handoff_state(sid))
         )
         assert errors == []
 
     def test_activity_label_noop_fast_path_race_free(self, db):
-        errors = self._run_race(
-            db, lambda d, sid: d.clear_session_activity_labels(sid)
-        )
+        errors = self._run_race(db, lambda d, sid: d.clear_session_activity_labels(sid))
         assert errors == []
-
 
 
 class TestSystemErrorTransactionBoundary:
@@ -158,8 +159,7 @@ class TestSystemErrorTransactionBoundary:
 
         message_id = db.append_message("s1", "user", "exactly-once")
         matching = [
-            row for row in db.get_messages("s1")
-            if row["content"] == "exactly-once"
+            row for row in db.get_messages("s1") if row["content"] == "exactly-once"
         ]
 
         assert isinstance(message_id, int)

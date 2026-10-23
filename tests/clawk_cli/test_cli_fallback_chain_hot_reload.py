@@ -27,8 +27,15 @@ def _chat_turn(monkeypatch, shell, config_text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(config_text, encoding="utf-8")
     monkeypatch.setattr(shell, "_ensure_runtime_credentials", lambda: True)
-    monkeypatch.setattr(shell, "_resolve_turn_agent_config",
-                        lambda message: {"signature": shell._active_agent_route_signature, "model": None, "runtime": None})
+    monkeypatch.setattr(
+        shell,
+        "_resolve_turn_agent_config",
+        lambda message: {
+            "signature": shell._active_agent_route_signature,
+            "model": None,
+            "runtime": None,
+        },
+    )
     monkeypatch.setattr(shell, "_init_agent", lambda **kw: True)
 
     def stop(message, images):
@@ -39,17 +46,29 @@ def _chat_turn(monkeypatch, shell, config_text: str) -> None:
         shell.chat("hello")
 
 
-def test_chat_turn_adopts_chain_added_after_the_cli_opened_and_keeps_it_on_torn_config(monkeypatch):
+def test_chat_turn_adopts_chain_added_after_the_cli_opened_and_keeps_it_on_torn_config(
+    monkeypatch,
+):
     shell = cli.ClawksisCLI(compact=True, max_turns=1)
     shell.agent = SimpleNamespace(
-        _fallback_chain=[], _fallback_model=None, _fallback_index=0,
-        _fallback_activated=False, _rate_limited_until=0, _unavailable_fallback_keys=set(),
+        _fallback_chain=[],
+        _fallback_model=None,
+        _fallback_index=0,
+        _fallback_activated=False,
+        _rate_limited_until=0,
+        _unavailable_fallback_keys=set(),
     )
 
-    _chat_turn(monkeypatch, shell, "fallback_providers:\n  - provider: xai-oauth\n    model: grok-4.6\n")
+    _chat_turn(
+        monkeypatch,
+        shell,
+        "fallback_providers:\n  - provider: xai-oauth\n    model: grok-4.6\n",
+    )
     assert shell.agent._fallback_chain == FALLBACK
     assert shell.agent._fallback_model == FALLBACK[0]
-    assert shell._fallback_model == FALLBACK  # a rebuilt agent starts from the fresh chain too
+    assert (
+        shell._fallback_model == FALLBACK
+    )  # a rebuilt agent starts from the fresh chain too
 
     # Torn mid-edit write: keep the last known-good chain rather than wiping it.
     _chat_turn(monkeypatch, shell, "fallback_providers: [\n  - provider: {{{\n")

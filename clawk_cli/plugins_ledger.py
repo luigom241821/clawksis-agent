@@ -40,7 +40,9 @@ class PluginRegistration:
     # See #91701.
     persistent: bool = False
     _disposed: bool = field(default=False, init=False, repr=False)
-    _on_dispose: Optional[Callable[[PluginRegistration], None]] = field(default=None, init=False, repr=False)
+    _on_dispose: Optional[Callable[[PluginRegistration], None]] = field(
+        default=None, init=False, repr=False
+    )
 
     @property
     def active(self) -> bool:
@@ -61,7 +63,12 @@ class PluginRegistration:
 
 class PluginLedgerMixin:
     def _track_registration(
-        self, manifest: PluginManifest, kind: str, key: str, release: Callable[[], None], *,
+        self,
+        manifest: PluginManifest,
+        kind: str,
+        key: str,
+        release: Callable[[], None],
+        *,
         persistent: bool = False,
     ) -> PluginRegistration:
         """Record one registration under its canonical plugin key. ``persistent`` ones (process-global host
@@ -71,31 +78,56 @@ class PluginLedgerMixin:
         See #91701.
         """
         registration = PluginRegistration(
-            kind=kind, key=key, release=release, plugin_key=manifest_key(manifest), persistent=persistent)
-        registration._on_dispose = lambda disposed: self._forget_registrations([disposed])
-        self._ownership_ledger.setdefault(registration.plugin_key, []).append(registration)
+            kind=kind,
+            key=key,
+            release=release,
+            plugin_key=manifest_key(manifest),
+            persistent=persistent,
+        )
+        registration._on_dispose = lambda disposed: self._forget_registrations(
+            [disposed]
+        )
+        self._ownership_ledger.setdefault(registration.plugin_key, []).append(
+            registration
+        )
         if not persistent:
             self._registration_order.append(registration)
         return registration
 
     def _track_scoped_registration(
-        self, manifest: PluginManifest, kind: str, name: str, registry: Any, current: Any,
-        previous: Any, *, finalize: Optional[Callable[[], None]] = None,
+        self,
+        manifest: PluginManifest,
+        kind: str,
+        name: str,
+        registry: Any,
+        current: Any,
+        previous: Any,
+        *,
+        finalize: Optional[Callable[[], None]] = None,
     ) -> PluginRegistration:
         """Lease one ``(kind, scope, name)`` slot of a scope-keyed process-global registry. Unload calls
         ``registry.restore_registration(name, current, replacement, scope=...)`` — identity-conditional, so a
         later generation is never removed by an earlier owner."""
         scope = self.scope_key
         lease = replacement_coordinator.acquire(
-            (kind, scope, name), current=current, previous=previous,
-            restore=lambda replacement: registry.restore_registration(name, current, replacement, scope=scope),
+            (kind, scope, name),
+            current=current,
+            previous=previous,
+            restore=lambda replacement: registry.restore_registration(
+                name, current, replacement, scope=scope
+            ),
             finalize=finalize,
         )
         return self._track_registration(manifest, kind, name, lease.dispose)
 
     def _active_persistent(self) -> list[PluginRegistration]:
         """Live persistent registrations across every plugin in the ownership ledger."""
-        return [r for owned in self._ownership_ledger.values() for r in owned if r.persistent and r.active]
+        return [
+            r
+            for owned in self._ownership_ledger.values()
+            for r in owned
+            if r.persistent and r.active
+        ]
 
     def _evict_stale_persistent_registrations(self) -> None:
         """After re-discovery, dispose parked persistent handles whose plugin did not re-register the same
@@ -114,20 +146,27 @@ class PluginLedgerMixin:
         for registration in stale:
             logger.info(
                 "Evicting persistent registration %s/%s: plugin '%s' no "
-                "longer supplies it after re-discovery", registration.kind, registration.key, registration.plugin_key,
+                "longer supplies it after re-discovery",
+                registration.kind,
+                registration.key,
+                registration.plugin_key,
             )
         self._dispose_registrations(stale)
 
     @staticmethod
     def _remove_identity(values: list, target: Any) -> bool:
         """Remove the last exact object match from a registration list."""
-        index = next((i for i in range(len(values) - 1, -1, -1) if values[i] is target), None)
+        index = next(
+            (i for i in range(len(values) - 1, -1, -1) if values[i] is target), None
+        )
         if index is None:
             return False
         del values[index]
         return True
 
-    def _remove_callback(self, mapping: dict[str, list[Callable]], key: str, callback: Callable) -> None:
+    def _remove_callback(
+        self, mapping: dict[str, list[Callable]], key: str, callback: Callable
+    ) -> None:
         callbacks = mapping.get(key)
         if callbacks is None:
             return
@@ -135,7 +174,9 @@ class PluginLedgerMixin:
         if not callbacks:
             mapping.pop(key, None)
 
-    def _restore_mapping(self, mapping: dict[str, Any], key: str, current: Any, previous: Optional[Any]) -> bool:
+    def _restore_mapping(
+        self, mapping: dict[str, Any], key: str, current: Any, previous: Optional[Any]
+    ) -> bool:
         """Restore a manager-local mapping only when *current* is still present."""
         if mapping.get(key) is not current:
             return False
@@ -154,7 +195,10 @@ class PluginLedgerMixin:
 
     def _remove_name_if_unowned(self, kind: str, names: set[str], name: str) -> None:
         """Drop *name* from the manager-local name set once no active ledger entry owns it."""
-        if not any(r.active and r.kind == kind and r.key == name for r in self._registration_order):
+        if not any(
+            r.active and r.kind == kind and r.key == name
+            for r in self._registration_order
+        ):
             names.discard(name)
 
     def _remove_tool_name_if_unowned(self, name: str) -> None:
@@ -167,7 +211,9 @@ class PluginLedgerMixin:
         if not registrations:
             return
         ids = {id(r) for r in registrations}
-        self._registration_order = [r for r in self._registration_order if id(r) not in ids]
+        self._registration_order = [
+            r for r in self._registration_order if id(r) not in ids
+        ]
         for ledger in (self._ownership_ledger, self._memory_hook_registrations):
             for plugin_key, owned in list(ledger.items()):
                 remaining = [r for r in owned if id(r) not in ids]
@@ -188,43 +234,64 @@ class PluginLedgerMixin:
             for handle in self._memory_hook_registrations.pop(hook_source, []):
                 handle.dispose()
 
-    def _register_fallback_hook(self, context: Any, hook_source: Optional[tuple], hook_name: str,
-                                callback: Callable) -> PluginRegistration:
+    def _register_fallback_hook(
+        self,
+        context: Any,
+        hook_source: Optional[tuple],
+        hook_name: str,
+        callback: Callable,
+    ) -> PluginRegistration:
         """Register ``callback`` unless the same source is already live through general discovery, in
         which case return an inert handle so the provider keeps its disposable-handle contract."""
         if hook_source is None:
             return context.register_hook(hook_name, callback)
-        owned = any(loaded.enabled and _hook_source_of(loaded.manifest.name, loaded.module) == hook_source
-                    for loaded in self._plugins.values())
-        handle = context._track("hook", hook_name, lambda: None) if owned else context.register_hook(hook_name, callback)
+        owned = any(
+            loaded.enabled
+            and _hook_source_of(loaded.manifest.name, loaded.module) == hook_source
+            for loaded in self._plugins.values()
+        )
+        handle = (
+            context._track("hook", hook_name, lambda: None)
+            if owned
+            else context.register_hook(hook_name, callback)
+        )
         self._memory_hook_registrations.setdefault(hook_source, []).append(handle)
         return handle
 
     def _dispose_registrations(self, registrations: list[PluginRegistration]) -> None:
         """Dispose registrations in reverse acquisition order, best effort."""
         from clawk_cli.plugins import _PLUGINS_DEBUG
+
         for registration in reversed(registrations):
             try:
                 registration.dispose()
             except Exception as exc:  # pragma: no cover - defensive cleanup
                 logger.warning(
-                    "Failed to unload plugin registration %s/%s: %s", registration.plugin_key,
-                    registration.key, exc, exc_info=_PLUGINS_DEBUG,
+                    "Failed to unload plugin registration %s/%s: %s",
+                    registration.plugin_key,
+                    registration.key,
+                    exc,
+                    exc_info=_PLUGINS_DEBUG,
                 )
 
     @staticmethod
     def _resolve_plugin_key(plugin: str | PluginManifest | LoadedPlugin) -> str:
         from clawk_cli.plugins import LoadedPlugin
+
         if isinstance(plugin, LoadedPlugin):
             return manifest_key(plugin.manifest)
-        return manifest_key(plugin) if isinstance(plugin, PluginManifest) else str(plugin)
+        return (
+            manifest_key(plugin) if isinstance(plugin, PluginManifest) else str(plugin)
+        )
 
     def unload(self, plugin: str | PluginManifest | LoadedPlugin | None = None) -> bool:
         """Unload registrations while excluding discovery/deferred loading."""
         with self._discovery_lock, _plugin_home_scope(self.home_path):
             return self._unload_scoped(plugin)
 
-    def _unload_scoped(self, plugin: str | PluginManifest | LoadedPlugin | None = None) -> bool:
+    def _unload_scoped(
+        self, plugin: str | PluginManifest | LoadedPlugin | None = None
+    ) -> bool:
         """Unload one plugin (or all when ``plugin=None``, as force rediscovery does). Every ledger registration
         — including on_unload callbacks and supervised tasks — is disposed in reverse acquisition order with
         identity-conditional inverses. Returns ``True`` when anything was found."""
@@ -234,13 +301,18 @@ class PluginLedgerMixin:
             registrations = list(self._registration_order)
         else:
             target_keys = self._unload_target_keys(self._resolve_plugin_key(plugin))
-            registrations = [r for r in self._registration_order if r.plugin_key in target_keys]
+            registrations = [
+                r for r in self._registration_order if r.plugin_key in target_keys
+            ]
             # Persistent registrations are absent from _registration_order (unload-all keeps them), but a
             # *targeted* unload is the disable/uninstall path: a disabled auth plugin's provider must NOT stay
             # live process-wide.
             # See #91701.
             registrations.extend(
-                r for key in target_keys for r in self._ownership_ledger.get(key, []) if r.persistent and r.active
+                r
+                for key in target_keys
+                for r in self._ownership_ledger.get(key, [])
+                if r.persistent and r.active
             )
         found = bool(target_keys or registrations)
         self._dispose_registrations(registrations)
@@ -256,7 +328,11 @@ class PluginLedgerMixin:
         """Resolve a targeted-unload request to canonical plugin keys (exact key, else by name)."""
         if requested in self._ownership_ledger or requested in self._plugins:
             return {requested}
-        return {key for key, loaded in self._plugins.items() if loaded.manifest.name == requested}
+        return {
+            key
+            for key, loaded in self._plugins.items()
+            if loaded.manifest.name == requested
+        }
 
     def _reset_after_unload_all(self, registrations: list[PluginRegistration]) -> None:
         """Sweep pre-ledger global state and clear every manager-local container."""
@@ -264,12 +340,15 @@ class PluginLedgerMixin:
         # ledger entry (pre-ledger or manually set state) are swept here so they do not survive a force reload
         # as zombies.
         from gateway.platform_registry import platform_registry
+
         for platform_name in tuple(self._plugin_platform_names):
             platform_registry.unregister(platform_name)
         # Ledger-owned tool names are excluded: their handles already restored the previous entry, and blanket
         # deregistration would remove what the ledger just restored.
         ledger_tool_names = {r.key for r in registrations if r.kind == "tool"}
-        preledger_tools = tuple(n for n in self._plugin_tool_names if n not in ledger_tool_names)
+        preledger_tools = tuple(
+            n for n in self._plugin_tool_names if n not in ledger_tool_names
+        )
         if preledger_tools:
             try:
                 from tools.registry import registry as tool_registry
@@ -280,17 +359,34 @@ class PluginLedgerMixin:
                     try:
                         tool_registry.deregister(tool_name)
                     except Exception as exc:
-                        logger.debug("unload: tool deregister %s failed: %s", tool_name, exc)
+                        logger.debug(
+                            "unload: tool deregister %s failed: %s", tool_name, exc
+                        )
         # Persistent registrations survive unload-all but must not be orphaned by the ledger clear: carry them
         # over so force re-discovery can evict the ones whose plugin does not come back.
         carryover_ids = {id(r) for r in self._persistent_carryover}
-        self._persistent_carryover.extend(r for r in self._active_persistent() if id(r) not in carryover_ids)
+        self._persistent_carryover.extend(
+            r for r in self._active_persistent() if id(r) not in carryover_ids
+        )
         for container in (
-            self._ownership_ledger, self._plugins, self._hooks, self._middleware,
-            self._plugin_tool_names, self._plugin_platform_names, self._cli_commands,
-            self._plugin_commands, self._plugin_skills, self._automation_blueprints, self._portable_mcp_servers,
-            self._portable_mcp_server_plugins, self._aux_tasks, self._system_prompt_sections, self._approval_transports,
-            self._slack_action_handlers, self._predeclared_modules, self._predeclared_tools,
+            self._ownership_ledger,
+            self._plugins,
+            self._hooks,
+            self._middleware,
+            self._plugin_tool_names,
+            self._plugin_platform_names,
+            self._cli_commands,
+            self._plugin_commands,
+            self._plugin_skills,
+            self._automation_blueprints,
+            self._portable_mcp_servers,
+            self._portable_mcp_server_plugins,
+            self._aux_tasks,
+            self._system_prompt_sections,
+            self._approval_transports,
+            self._slack_action_handlers,
+            self._predeclared_modules,
+            self._predeclared_tools,
             self._platform_handler_factories,
         ):
             container.clear()

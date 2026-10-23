@@ -16,6 +16,7 @@ def clean_env(monkeypatch):
 def clear_kittentts_cache():
     """Reset the module-level model cache between tests."""
     from tools import tts_tool_local as _tt
+
     _tt._kittentts_model_cache.clear()
     yield
     _tt._kittentts_model_cache.clear()
@@ -34,10 +35,13 @@ def mock_kittentts_module():
     # Stub soundfile — the real package isn't installed in CI venv, and
     # _generate_kittentts does `import soundfile as sf` at runtime.
     fake_sf = MagicMock()
+
     def _fake_write(path, audio, samplerate):
         # Emulate writing a real file so downstream path checks succeed.
         import pathlib
+
         pathlib.Path(path).write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt fake")
+
     fake_sf.write = _fake_write
 
     with patch.dict(
@@ -80,14 +84,11 @@ class TestGenerateKittenTts:
         assert call_kwargs["clean_text"] is False
 
 
-
-
-
-
 class TestDispatcherBranch:
     def test_kittentts_not_installed_returns_helpful_error(self, monkeypatch, tmp_path):
         """When provider=kittentts but package missing, return JSON error with setup hint."""
         import sys
+
         monkeypatch.setitem(sys.modules, "kittentts", None)
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -95,6 +96,7 @@ class TestDispatcherBranch:
 
         # Write a config telling it to use kittentts
         import clawk_yaml as yaml
+
         (tmp_path / "config.yaml").write_text(
             yaml.safe_dump({"tts": {"provider": "kittentts"}})
         )

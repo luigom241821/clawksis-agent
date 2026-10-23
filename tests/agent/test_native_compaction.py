@@ -78,9 +78,7 @@ class TestRouteGate:
 
 class TestRequestGate:
     def test_eligible_route_gets_payload(self):
-        payload = native_compaction_context_management(
-            _agent(), is_codex_backend=False
-        )
+        payload = native_compaction_context_management(_agent(), is_codex_backend=False)
         assert payload == [
             {"type": "compaction", "compact_threshold": DEFAULT_COMPACT_THRESHOLD}
         ]
@@ -210,9 +208,7 @@ class TestRejectionMatcher:
         assert is_native_compaction_rejection(
             "Error code: 400 - Unknown parameter: 'context_management'"
         )
-        assert is_native_compaction_rejection(
-            "invalid value for compact_threshold"
-        )
+        assert is_native_compaction_rejection("invalid value for compact_threshold")
 
     def test_generic_errors_do_not_match(self):
         # Generic failures must take the normal retry path — a transient
@@ -230,8 +226,7 @@ class TestRejectionMatcher:
         # A transient failure body that merely echoes the request (and so
         # contains the field name) must not downgrade the session (#82777).
         assert not is_native_compaction_rejection(
-            "upstream timeout while processing request with "
-            "context_management=[{...}]"
+            "upstream timeout while processing request with context_management=[{...}]"
         )
         assert not is_native_compaction_rejection(
             "connection reset; last request included compact_threshold=200000"
@@ -411,8 +406,6 @@ class TestResponseCapture:
 
 
 class TestAgentInitConfig:
-
-
     @pytest.mark.parametrize(
         ("threshold_yaml", "configured", "resolved"),
         [
@@ -453,7 +446,6 @@ class TestAgentInitConfig:
         assert kwargs["context_management"] == [
             {"type": "compaction", "compact_threshold": resolved}
         ]
-
 
     def test_kwargs_omit_field_for_ineligible_model_even_when_enabled(self):
         from run_agent import AIAgent
@@ -586,7 +578,9 @@ class TestPrunePreCheckpointItems:
         # in wire order (sidecar items lead the assistant branch), so it
         # survives in the post tail — call pairing for that turn is intact.
         assert {"type": "message", "role": "assistant", "content": "ok"} in items
-        assert items.index({"type": "message", "role": "assistant", "content": "ok"}) > 0
+        assert (
+            items.index({"type": "message", "role": "assistant", "content": "ok"}) > 0
+        )
 
     def test_adapter_without_checkpoint_unchanged_shape(self):
         from agent.codex_responses_adapter import _chat_messages_to_responses_input
@@ -653,7 +647,11 @@ class TestCheckpointGatedOnCurrentEligibility:
         assert items == pre_feature
         # Specifically: no checkpoint on the wire, no deleted history.
         assert all(i.get("type") != "compaction" for i in items)
-        assert {"type": "message", "role": "assistant", "content": _CODEX_ON_IT} in items
+        assert {
+            "type": "message",
+            "role": "assistant",
+            "content": _CODEX_ON_IT,
+        } in items
 
     def test_eligible_request_still_restructures(self):
         from agent.codex_responses_adapter import _chat_messages_to_responses_input
@@ -685,7 +683,9 @@ class TestCheckpointGatedOnCurrentEligibility:
         )
         assert "context_management" not in kwargs
         assert all(i.get("type") != "compaction" for i in kwargs["input"])
-        assert {"type": "message", "role": "assistant", "content": "on it"} in kwargs["input"]
+        assert {"type": "message", "role": "assistant", "content": "on it"} in kwargs[
+            "input"
+        ]
 
     def test_build_kwargs_with_field_prunes(self):
         from agent.transports.codex import ResponsesApiTransport
@@ -706,7 +706,11 @@ class TestCheckpointGatedOnCurrentEligibility:
             self._history(), is_codex_backend=True
         )
         assert all(i.get("type") != "compaction" for i in items)
-        assert {"type": "message", "role": "assistant", "content": _CODEX_ON_IT} in items
+        assert {
+            "type": "message",
+            "role": "assistant",
+            "content": _CODEX_ON_IT,
+        } in items
 
     def test_auxiliary_responses_adapter_never_prunes(self, monkeypatch):
         """Auxiliary calls (compression, flush_memories, MoA) replay real
@@ -744,4 +748,8 @@ class TestCheckpointGatedOnCurrentEligibility:
 
         assert seen.get("native_compaction_eligible") is False
         assert all(i.get("type") != "compaction" for i in seen["input"])
-        assert {"type": "message", "role": "assistant", "content": _CODEX_ON_IT} in seen["input"]
+        assert {
+            "type": "message",
+            "role": "assistant",
+            "content": _CODEX_ON_IT,
+        } in seen["input"]

@@ -76,7 +76,9 @@ class TestStampDrivenDetection:
         assert sealed_steward(root) == "unknown"
         assert classify_install(root) == ("unknown", False)
 
-    def test_executing_nix_tree_reads_the_stamp_the_wrapper_points_at(self, tmp_path, monkeypatch):
+    def test_executing_nix_tree_reads_the_stamp_the_wrapper_points_at(
+        self, tmp_path, monkeypatch
+    ):
         """A Nix package bakes the stamp outside the store's package dir; its wrapper
         carries CLAWK_INSTALL_ROOT. The executing tree must classify as nix (not
         "unknown"), the way version_info already reports it."""

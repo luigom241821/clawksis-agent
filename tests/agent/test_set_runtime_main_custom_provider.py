@@ -32,8 +32,12 @@ class TestResolveAutoCustomEndToEnd:
         import agent.auxiliary_client as mod
 
         # Hermetic: no aggregator creds, no stale OPENAI_BASE_URL.
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
@@ -71,8 +75,12 @@ class TestResolveAutoCustomEndToEnd:
         broke the named-custom branch and returned None here."""
         import agent.auxiliary_client as mod
 
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
@@ -102,7 +110,8 @@ class TestResolveAutoCustomEndToEnd:
             mod.clear_runtime_main()
 
     def test_named_custom_anthropic_messages_keeps_full_name_and_url(
-            self, tmp_path, monkeypatch):
+        self, tmp_path, monkeypatch
+    ):
         """PR #36043: a ``custom:<name>`` main provider whose config entry
         declares ``api_mode: anthropic_messages`` must reach the
         named-custom-provider arm of resolve_provider_client — NOT the
@@ -112,8 +121,12 @@ class TestResolveAutoCustomEndToEnd:
         AnthropicAuxiliaryClient pointed at the ORIGINAL /anthropic URL."""
         import agent.auxiliary_client as mod
 
-        for var in ("OPENROUTER_API_KEY", "NOUS_API_KEY", "OPENAI_API_KEY",
-                    "OPENAI_BASE_URL"):
+        for var in (
+            "OPENROUTER_API_KEY",
+            "NOUS_API_KEY",
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+        ):
             monkeypatch.delenv(var, raising=False)
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()

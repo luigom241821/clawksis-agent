@@ -25,6 +25,7 @@ def _group(*excs) -> BaseExceptionGroup:
 
 # ── Fatal signals must never be masked as a reconnect ────────────────────────
 
+
 class TestReconnectGroupFatalSignals:
     def test_keyboard_interrupt_leaf_reraises(self):
         task = MCPServerTask("t")
@@ -34,16 +35,19 @@ class TestReconnectGroupFatalSignals:
                 _group(ConnectionError("drop"), KeyboardInterrupt())
             )
 
-
     def test_plain_transient_drop_still_reconnects(self):
         task = MCPServerTask("t")
         task._ready.set()
-        assert task._reconnect_or_reraise_group(
-            _group(ConnectionError("sse stream dropped"))
-        ) == "reconnect"
+        assert (
+            task._reconnect_or_reraise_group(
+                _group(ConnectionError("sse stream dropped"))
+            )
+            == "reconnect"
+        )
 
 
 # ── _mark_session_proven semantics ───────────────────────────────────────────
+
 
 class TestMarkSessionProven:
     def test_proven_clears_budget(self):
@@ -55,8 +59,8 @@ class TestMarkSessionProven:
         assert task._reconnect_retries == 0
 
 
-
 # ── Integration: flapping transport must reach the park ─────────────────────
+
 
 @pytest.mark.no_isolate
 def test_flapping_transport_reaches_park_within_budget(monkeypatch, tmp_path):
@@ -188,8 +192,7 @@ def test_proven_session_does_not_burn_budget(monkeypatch, tmp_path):
                 break
 
         assert not state["parked"], (
-            "healthy-but-blipping server parked — proven sessions must "
-            "clear the budget"
+            "healthy-but-blipping server parked — proven sessions must clear the budget"
         )
         assert state["transport_calls"] > 10
 

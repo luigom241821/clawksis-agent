@@ -24,7 +24,6 @@ import subprocess
 from types import SimpleNamespace
 
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -35,6 +34,7 @@ def _make_run_dispatcher(behaviors):
     SimpleNamespace (returncode, stdout, stderr) or an Exception class
     instance to raise.
     """
+
     def _fake_run(cmd, **kwargs):
         key = cmd[0] if isinstance(cmd, (list, tuple)) and cmd else cmd
         action = behaviors.get(key)
@@ -43,6 +43,7 @@ def _make_run_dispatcher(behaviors):
         if isinstance(action, BaseException):
             raise action
         return action
+
     return _fake_run
 
 
@@ -60,91 +61,112 @@ class TestTermuxApiAppInstalledProbeLadder:
     def test_returns_false_outside_termux(self, monkeypatch):
         monkeypatch.setattr("tools.voice_mode._is_termux_environment", lambda: False)
         from tools.voice_mode import _termux_api_app_installed
+
         assert _termux_api_app_installed() is False
 
     def test_pm_confirms_package_returns_true(self, monkeypatch):
         _force_termux(monkeypatch)
-        run = _make_run_dispatcher({
-            "pm": SimpleNamespace(
-                returncode=0,
-                stdout="package:com.termux.api\n",
-                stderr="",
-            ),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": SimpleNamespace(
+                    returncode=0,
+                    stdout="package:com.termux.api\n",
+                    stderr="",
+                ),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
 
         from tools.voice_mode import _termux_api_app_installed
-        assert _termux_api_app_installed() is True
 
+        assert _termux_api_app_installed() is True
 
     def test_pm_timeout_then_cmd_confirms(self, monkeypatch):
         """A hung `pm` (5s timeout) must not block detection."""
         _force_termux(monkeypatch)
-        run = _make_run_dispatcher({
-            "pm": subprocess.TimeoutExpired(cmd="pm", timeout=5),
-            "cmd": SimpleNamespace(
-                returncode=0,
-                stdout="package:com.termux.api\n",
-                stderr="",
-            ),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": subprocess.TimeoutExpired(cmd="pm", timeout=5),
+                "cmd": SimpleNamespace(
+                    returncode=0,
+                    stdout="package:com.termux.api\n",
+                    stderr="",
+                ),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
 
         from tools.voice_mode import _termux_api_app_installed
+
         assert _termux_api_app_installed() is True
 
     def test_pm_nonzero_exit_then_cmd_confirms(self, monkeypatch):
         """Non-zero exit (e.g. permission denied for the calling user)
         is treated as inconclusive, not as a definitive "no"."""
         _force_termux(monkeypatch)
-        run = _make_run_dispatcher({
-            "pm": SimpleNamespace(returncode=1, stdout="", stderr="permission denied"),
-            "cmd": SimpleNamespace(
-                returncode=0,
-                stdout="package:com.termux.api\n",
-                stderr="",
-            ),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": SimpleNamespace(
+                    returncode=1, stdout="", stderr="permission denied"
+                ),
+                "cmd": SimpleNamespace(
+                    returncode=0,
+                    stdout="package:com.termux.api\n",
+                    stderr="",
+                ),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
 
         from tools.voice_mode import _termux_api_app_installed
+
         assert _termux_api_app_installed() is True
 
-    def test_both_probes_inconclusive_but_binary_present_returns_true(self, monkeypatch):
+    def test_both_probes_inconclusive_but_binary_present_returns_true(
+        self, monkeypatch
+    ):
         """Core #31015 case: both probes fail or are unavailable, but the
         `termux-microphone-record` binary is on PATH. Trust the binary —
         a false positive only surfaces a precise runtime error, while a
         false negative blocks /voice on entirely (the user-reported
         symptom)."""
         _force_termux(monkeypatch)
-        run = _make_run_dispatcher({
-            "pm": FileNotFoundError("pm: command not found"),
-            "cmd": FileNotFoundError("cmd: command not found"),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": FileNotFoundError("pm: command not found"),
+                "cmd": FileNotFoundError("cmd: command not found"),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
         monkeypatch.setattr(
             "tools.voice_mode.shutil.which",
-            lambda name: "/data/data/com.termux/files/usr/bin/termux-microphone-record"
-            if name == "termux-microphone-record" else None,
+            lambda name: (
+                "/data/data/com.termux/files/usr/bin/termux-microphone-record"
+                if name == "termux-microphone-record"
+                else None
+            ),
         )
 
         from tools.voice_mode import _termux_api_app_installed
-        assert _termux_api_app_installed() is True
 
+        assert _termux_api_app_installed() is True
 
     def test_match_is_case_insensitive(self, monkeypatch):
         """Defensive against ROMs that capitalise the prefix differently."""
         _force_termux(monkeypatch)
-        run = _make_run_dispatcher({
-            "pm": SimpleNamespace(
-                returncode=0,
-                stdout="Package:com.termux.api\n",
-                stderr="",
-            ),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": SimpleNamespace(
+                    returncode=0,
+                    stdout="Package:com.termux.api\n",
+                    stderr="",
+                ),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
 
         from tools.voice_mode import _termux_api_app_installed
+
         assert _termux_api_app_installed() is True
 
 
@@ -175,18 +197,24 @@ class TestDetectAudioEnvironmentTermuxFallback:
             lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record",
         )
         # Both probes fail (the #31015 reproduction).
-        run = _make_run_dispatcher({
-            "pm": FileNotFoundError("pm: command not found"),
-            "cmd": FileNotFoundError("cmd: command not found"),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": FileNotFoundError("pm: command not found"),
+                "cmd": FileNotFoundError("cmd: command not found"),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
         monkeypatch.setattr(
             "tools.voice_mode.shutil.which",
-            lambda name: "/data/data/com.termux/files/usr/bin/termux-microphone-record"
-            if name == "termux-microphone-record" else None,
+            lambda name: (
+                "/data/data/com.termux/files/usr/bin/termux-microphone-record"
+                if name == "termux-microphone-record"
+                else None
+            ),
         )
 
         from tools.voice_mode import detect_audio_environment
+
         result = detect_audio_environment()
 
         assert result["available"] is True, (
@@ -194,8 +222,7 @@ class TestDetectAudioEnvironmentTermuxFallback:
             f"and probes are inconclusive (issue #31015). Got: {result}"
         )
         assert not any(
-            "Termux:API Android app is not installed" in w
-            for w in result["warnings"]
+            "Termux:API Android app is not installed" in w for w in result["warnings"]
         ), (
             "The misleading 'app is not installed' warning must not fire "
             "when probes are inconclusive but the binary works (issue "
@@ -220,17 +247,19 @@ class TestDetectAudioEnvironmentTermuxFallback:
             "tools.voice_mode._termux_microphone_command",
             lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record",
         )
-        run = _make_run_dispatcher({
-            "pm": SimpleNamespace(returncode=0, stdout="", stderr=""),
-            "cmd": SimpleNamespace(returncode=0, stdout="", stderr=""),
-        })
+        run = _make_run_dispatcher(
+            {
+                "pm": SimpleNamespace(returncode=0, stdout="", stderr=""),
+                "cmd": SimpleNamespace(returncode=0, stdout="", stderr=""),
+            }
+        )
         monkeypatch.setattr("tools.voice_mode.subprocess.run", run)
 
         from tools.voice_mode import detect_audio_environment
+
         result = detect_audio_environment()
 
         assert result["available"] is False
         assert any(
-            "Termux:API Android app is not installed" in w
-            for w in result["warnings"]
+            "Termux:API Android app is not installed" in w for w in result["warnings"]
         )

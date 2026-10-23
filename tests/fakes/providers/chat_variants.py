@@ -75,7 +75,9 @@ class CError:
 class CStreamError:
     """HTTP 200, stream opens, then an in-stream ``error`` object."""
 
-    error: dict[str, Any] = field(default_factory=lambda: {"code": 403, "message": "scripted in-stream error"})
+    error: dict[str, Any] = field(
+        default_factory=lambda: {"code": 403, "message": "scripted in-stream error"}
+    )
 
 
 @dataclass
@@ -105,13 +107,22 @@ def validate_request(body: dict[str, Any]) -> str | None:
     return None
 
 
-def _chunk(delta: dict[str, Any], finish: str | None = None, usage: dict | None = None) -> dict[str, Any]:
-    payload = {"id": "chatcmpl-variant", "object": "chat.completion.chunk", "created": int(time.time()),
-               "model": MODEL_ID, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+def _chunk(
+    delta: dict[str, Any], finish: str | None = None, usage: dict | None = None
+) -> dict[str, Any]:
+    payload = {
+        "id": "chatcmpl-variant",
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": MODEL_ID,
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+    }
     if usage is not None:
         payload["usage"] = usage
     # Build through the SDK model (dialect extras survive as extra fields), then dump.
-    return ChatCompletionChunk.model_validate(payload).model_dump(mode="json", exclude_none=True)
+    return ChatCompletionChunk.model_validate(payload).model_dump(
+        mode="json", exclude_none=True
+    )
 
 
 def replayed_reasoning_chars(body: dict[str, Any]) -> int:
@@ -120,13 +131,21 @@ def replayed_reasoning_chars(body: dict[str, Any]) -> int:
     for m in body.get("messages") or []:
         for d in (m.get("reasoning_details") or []) if isinstance(m, dict) else []:
             if isinstance(d, dict):
-                total += len(str(d.get("text") or d.get("summary") or d.get("data") or ""))
+                total += len(
+                    str(d.get("text") or d.get("summary") or d.get("data") or "")
+                )
     return total
 
 
 class FakeChatVariantServer:
-    def __init__(self, script: list[Step] | Responder | None = None, *, default_text: str = "ok",
-                 strict_user_turn: bool = False, reasoning_budget_chars: int | None = None) -> None:
+    def __init__(
+        self,
+        script: list[Step] | Responder | None = None,
+        *,
+        default_text: str = "ok",
+        strict_user_turn: bool = False,
+        reasoning_budget_chars: int | None = None,
+    ) -> None:
         self._script: list[Step] = list(script) if isinstance(script, list) else []
         self._responder = script if callable(script) else None
         self.default_text = default_text
@@ -140,7 +159,9 @@ class FakeChatVariantServer:
     def __enter__(self) -> FakeChatVariantServer:
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(self))
         self._server.daemon_threads = True
-        threading.Thread(target=self._server.serve_forever, name="fake-chat-variant", daemon=True).start()
+        threading.Thread(
+            target=self._server.serve_forever, name="fake-chat-variant", daemon=True
+        ).start()
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -181,7 +202,11 @@ class FakeChatVariantServer:
         return [r["body"] for r in self.main_records()]
 
     def invalid_requests(self) -> list[tuple[int, str]]:
-        return [(i, r["invalid"]) for i, r in enumerate(self.main_records()) if r.get("invalid")]
+        return [
+            (i, r["invalid"])
+            for i, r in enumerate(self.main_records())
+            if r.get("invalid")
+        ]
 
 
 def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
@@ -191,7 +216,12 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
         def log_message(self, *_a: object) -> None:
             pass
 
-        def _json(self, status: int, payload: dict[str, Any], headers: dict[str, str] | None = None) -> None:
+        def _json(
+            self,
+            status: int,
+            payload: dict[str, Any],
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
@@ -207,8 +237,19 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:
             if self.path.rstrip("/").endswith("/models"):
-                self._json(200, {"object": "list", "data": [
-                    {"id": MODEL_ID, "object": "model", "context_length": 128000}]})
+                self._json(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [
+                            {
+                                "id": MODEL_ID,
+                                "object": "model",
+                                "context_length": 128000,
+                            }
+                        ],
+                    },
+                )
                 return
             self._json(404, {"error": {"message": "not found"}})
 
@@ -220,8 +261,14 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
                 self._json(400, {"error": {"message": "invalid json"}})
                 return
             kind = "main" if body.get("tools") else "aux"
-            record = {"path": self.path, "kind": kind, "body": body, "t": time.time(),
-                      "host": self.headers.get("Host", ""), "invalid": validate_request(body)}
+            record = {
+                "path": self.path,
+                "kind": kind,
+                "body": body,
+                "t": time.time(),
+                "host": self.headers.get("Host", ""),
+                "invalid": validate_request(body),
+            }
             with server._lock:
                 server.requests.append(record)
             if not self.path.rstrip("/").endswith("/chat/completions"):
@@ -239,14 +286,28 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
             record["response"] = type(step).__name__
             self._render(step, bool(body.get("stream")))
 
-        def _route_rejection(self, body: dict[str, Any]) -> tuple[int, dict[str, Any]] | None:
+        def _route_rejection(
+            self, body: dict[str, Any]
+        ) -> tuple[int, dict[str, Any]] | None:
             msgs = [m for m in body.get("messages") or [] if isinstance(m, dict)]
-            if server.strict_user_turn and not any(m.get("role") == "user" for m in msgs):
-                return 500, {"error": {"message": "no user query found in messages", "type": "api_error"}}
+            if server.strict_user_turn and not any(
+                m.get("role") == "user" for m in msgs
+            ):
+                return 500, {
+                    "error": {
+                        "message": "no user query found in messages",
+                        "type": "api_error",
+                    }
+                }
             budget = server.reasoning_budget_chars
             if budget is not None and replayed_reasoning_chars(body) > budget:
-                return 400, {"error": {"message": "Provider returned error", "code": 400,
-                                       "metadata": {"raw": "This request is not valid."}}}
+                return 400, {
+                    "error": {
+                        "message": "Provider returned error",
+                        "code": 400,
+                        "metadata": {"raw": "This request is not valid."},
+                    }
+                }
             return None
 
         def _start_sse(self) -> None:
@@ -262,9 +323,22 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
 
         def _render(self, step: Step, stream: bool) -> None:
             if isinstance(step, CError):
-                headers = {"Retry-After": str(step.retry_after)} if step.retry_after is not None else {}
-                self._json(step.status, {"error": {"message": step.message, "code": step.code,
-                                                   "type": "server_error"}}, headers)
+                headers = (
+                    {"Retry-After": str(step.retry_after)}
+                    if step.retry_after is not None
+                    else {}
+                )
+                self._json(
+                    step.status,
+                    {
+                        "error": {
+                            "message": step.message,
+                            "code": step.code,
+                            "type": "server_error",
+                        }
+                    },
+                    headers,
+                )
                 return
             if not stream:
                 self._render_json(step)
@@ -272,29 +346,77 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
             self._start_sse()
             self._sse(_chunk({"role": "assistant", "content": ""}))
             if isinstance(step, CStreamError):
-                self.wfile.write(f"data: {json.dumps({'error': step.error})}\n\n".encode())
+                self.wfile.write(
+                    f"data: {json.dumps({'error': step.error})}\n\n".encode()
+                )
                 self.wfile.flush()
                 self.close_connection = True
                 return
             if isinstance(step, CDropToolCall):
-                self._sse(_chunk({"tool_calls": [{"index": 0, "id": server.next_call_id(), "type": "function",
-                                                  "function": {"name": step.name, "arguments": ""}}]}))
-                self._sse(_chunk({"tool_calls": [{"index": 0, "function": {"arguments": step.partial_args}}]}))
+                self._sse(
+                    _chunk(
+                        {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": server.next_call_id(),
+                                    "type": "function",
+                                    "function": {"name": step.name, "arguments": ""},
+                                }
+                            ]
+                        }
+                    )
+                )
+                self._sse(
+                    _chunk(
+                        {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {"arguments": step.partial_args},
+                                }
+                            ]
+                        }
+                    )
+                )
                 self.close_connection = True
                 return
             self._stream_reasoning(step)
             if isinstance(step, CText):
                 for i in range(0, len(step.text), 8):
-                    self._sse(_chunk({"content": step.text[i:i + 8]}))
-                finish, usage = "stop", _usage(step.prompt_tokens, step.completion_tokens)
+                    self._sse(_chunk({"content": step.text[i : i + 8]}))
+                finish, usage = (
+                    "stop",
+                    _usage(step.prompt_tokens, step.completion_tokens),
+                )
             else:
                 if step.text:
                     self._sse(_chunk({"content": step.text}))
                 for i, (name, args) in enumerate(step.calls):
                     arg_s = args if isinstance(args, str) else json.dumps(args)
-                    self._sse(_chunk({"tool_calls": [{"index": i, "id": server.next_call_id(), "type": "function",
-                                                      "function": {"name": name, "arguments": ""}}]}))
-                    self._sse(_chunk({"tool_calls": [{"index": i, "function": {"arguments": arg_s}}]}))
+                    self._sse(
+                        _chunk(
+                            {
+                                "tool_calls": [
+                                    {
+                                        "index": i,
+                                        "id": server.next_call_id(),
+                                        "type": "function",
+                                        "function": {"name": name, "arguments": ""},
+                                    }
+                                ]
+                            }
+                        )
+                    )
+                    self._sse(
+                        _chunk(
+                            {
+                                "tool_calls": [
+                                    {"index": i, "function": {"arguments": arg_s}}
+                                ]
+                            }
+                        )
+                    )
                 finish, usage = step.finish_reason, _usage(100, 10)
             self._sse(_chunk({}, finish, usage))
             self.wfile.write(b"data: [DONE]\n\n")
@@ -314,20 +436,50 @@ def _handler_for(server: FakeChatVariantServer) -> type[BaseHTTPRequestHandler]:
                     msg["reasoning_details"] = step.reasoning_details
                 finish = "stop"
             elif isinstance(step, CTools):
-                msg = {"role": "assistant", "content": step.text, "tool_calls": [
-                    {"id": server.next_call_id(), "type": "function",
-                     "function": {"name": n, "arguments": a if isinstance(a, str) else json.dumps(a)}}
-                    for n, a in step.calls]}
+                msg = {
+                    "role": "assistant",
+                    "content": step.text,
+                    "tool_calls": [
+                        {
+                            "id": server.next_call_id(),
+                            "type": "function",
+                            "function": {
+                                "name": n,
+                                "arguments": a if isinstance(a, str) else json.dumps(a),
+                            },
+                        }
+                        for n, a in step.calls
+                    ],
+                }
                 finish = step.finish_reason
             else:
-                self._json(502, {"error": {"message": "stream-only fault on a non-streaming request"}})
+                self._json(
+                    502,
+                    {
+                        "error": {
+                            "message": "stream-only fault on a non-streaming request"
+                        }
+                    },
+                )
                 return
-            self._json(200, {"id": "chatcmpl-variant", "object": "chat.completion", "created": int(time.time()),
-                             "model": MODEL_ID, "usage": _usage(100, 20),
-                             "choices": [{"index": 0, "message": msg, "finish_reason": finish}]})
+            self._json(
+                200,
+                {
+                    "id": "chatcmpl-variant",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": MODEL_ID,
+                    "usage": _usage(100, 20),
+                    "choices": [{"index": 0, "message": msg, "finish_reason": finish}],
+                },
+            )
 
     return Handler
 
 
 def _usage(prompt: int, completion: int) -> dict[str, Any]:
-    return {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": prompt + completion}
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion,
+        "total_tokens": prompt + completion,
+    }

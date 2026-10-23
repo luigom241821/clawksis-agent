@@ -10,10 +10,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from agent.secret_scope import get_secret, get_secret_str
 from agent.image_gen_provider import (
-    DEFAULT_ASPECT_RATIO, resolve_aspect_ratio, save_b64_image, save_url_image, success_response)
+    DEFAULT_ASPECT_RATIO,
+    resolve_aspect_ratio,
+    save_b64_image,
+    save_url_image,
+    success_response,
+)
 from plugins.image_gen._common import (
-    StaticImageGenProvider, error_factory, import_openai, openai_importable, prompt_required_error,
-    resolve_static_model, size_for)
+    StaticImageGenProvider,
+    error_factory,
+    import_openai,
+    openai_importable,
+    prompt_required_error,
+    resolve_static_model,
+    size_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +61,11 @@ DEFAULT_MODEL = "muse-image-1.0"
 
 def _resolve_model(caller_model: Optional[str] = None) -> tuple[str, dict[str, Any]]:
     return resolve_static_model(
-        _MODELS, DEFAULT_MODEL, env_var="META_IMAGE_MODEL", config_key="meta-ai", explicit=caller_model,
+        _MODELS,
+        DEFAULT_MODEL,
+        env_var="META_IMAGE_MODEL",
+        config_key="meta-ai",
+        explicit=caller_model,
     )
 
 
@@ -62,8 +77,13 @@ class MetaImageGenProvider(StaticImageGenProvider):
     models = _MODELS
     default_model_id = DEFAULT_MODEL
     setup = dict(
-        name="Meta Model API", badge="paid", tag="Muse Image via Meta Model API (api.meta.ai)",
-        key=API_KEY_ENV, prompt="Meta Model API key (LLM|... token)", url="https://api.meta.ai")
+        name="Meta Model API",
+        badge="paid",
+        tag="Muse Image via Meta Model API (api.meta.ai)",
+        key=API_KEY_ENV,
+        prompt="Meta Model API key (LLM|... token)",
+        url="https://api.meta.ai",
+    )
 
     def is_available(self) -> bool:
         return bool(_resolve_api_key()) and openai_importable()
@@ -73,8 +93,12 @@ class MetaImageGenProvider(StaticImageGenProvider):
         return {"modalities": ["text"], "max_reference_images": 0}
 
     def generate(
-        self, prompt: str, aspect_ratio: str = DEFAULT_ASPECT_RATIO, *,
-        image_url: Optional[str] = None, reference_image_urls: Optional[list[str]] = None,
+        self,
+        prompt: str,
+        aspect_ratio: str = DEFAULT_ASPECT_RATIO,
+        *,
+        image_url: Optional[str] = None,
+        reference_image_urls: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         prompt = (prompt or "").strip()
@@ -86,7 +110,8 @@ class MetaImageGenProvider(StaticImageGenProvider):
             return error_factory("meta-ai", aspect)(
                 f"{API_KEY_ENV} not set. Run `clawk tools` -> Image "
                 "Generation -> Meta Model API to configure.",
-                "auth_required")
+                "auth_required",
+            )
 
         openai, err = import_openai("meta-ai", aspect)
         if err:
@@ -96,7 +121,9 @@ class MetaImageGenProvider(StaticImageGenProvider):
         fail = error_factory("meta-ai", aspect, model=model_id, prompt=prompt)
         client = openai.OpenAI(api_key=api_key, base_url=_resolve_base_url())
         try:
-            response = client.images.generate(model=model_id, prompt=prompt, size=size, n=1)
+            response = client.images.generate(
+                model=model_id, prompt=prompt, size=size, n=1
+            )
         except Exception as exc:
             logger.debug("Meta image generation failed", exc_info=True)
             return fail(f"Meta image generation failed: {exc}", "api_error")
@@ -114,15 +141,23 @@ class MetaImageGenProvider(StaticImageGenProvider):
             elif url:
                 image_ref = str(save_url_image(url, prefix="meta"))
             else:
-                return fail("Meta response contained neither b64_json nor URL", "empty_response")
+                return fail(
+                    "Meta response contained neither b64_json nor URL", "empty_response"
+                )
         except Exception as exc:
             return fail(f"Failed to save Meta image: {exc}", "io_error")
         extra: dict[str, Any] = {"size": size}
         if getattr(first, "revised_prompt", None):
             extra["revised_prompt"] = first.revised_prompt
         return success_response(
-            image=image_ref, model=model_id, prompt=prompt, aspect_ratio=aspect, provider="meta-ai",
-            modality="text", extra=extra)
+            image=image_ref,
+            model=model_id,
+            prompt=prompt,
+            aspect_ratio=aspect,
+            provider="meta-ai",
+            modality="text",
+            extra=extra,
+        )
 
 
 def register(ctx) -> None:

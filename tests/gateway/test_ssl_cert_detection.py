@@ -22,8 +22,12 @@ import gateway.run
 assert 'SSL_CERT_FILE' not in os.environ, os.environ.get('SSL_CERT_FILE')
 """
     child = subprocess.run(
-        [sys.executable, "-c", script], env=env, capture_output=True,
-        text=True, timeout=60, check=False,
+        [sys.executable, "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
     assert child.returncode == 0, child.stdout + child.stderr
 
@@ -38,7 +42,11 @@ def test_gateway_import_preserves_explicit_certificate_override(tmp_path):
     script = "import os, gateway.run; assert os.environ['SSL_CERT_FILE'] == os.environ['EXPECTED_CA']"
     env["EXPECTED_CA"] = str(bundle)
     child = subprocess.run(
-        [sys.executable, "-c", script], env=env, capture_output=True,
-        text=True, timeout=60, check=False,
+        [sys.executable, "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
     assert child.returncode == 0, child.stdout + child.stderr

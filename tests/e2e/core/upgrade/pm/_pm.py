@@ -35,7 +35,8 @@ TRACEBACK = I.TRACEBACK
 
 def ok(cp: subprocess.CompletedProcess, what: str = "") -> subprocess.CompletedProcess:
     assert cp.returncode == 0 and TRACEBACK not in cp.stdout + cp.stderr, (
-        (f"{what}\n" if what else "") + I.describe(cp))
+        f"{what}\n" if what else ""
+    ) + I.describe(cp)
     return cp
 
 
@@ -47,13 +48,26 @@ def install_head(root: Path) -> tuple[I.Sandbox, Path]:
     return sb, origin
 
 
-def configure(sb: I.Sandbox, base_url: str, extra: str = "", env_extra: str = "") -> None:
+def configure(
+    sb: I.Sandbox, base_url: str, extra: str = "", env_extra: str = ""
+) -> None:
     """The user's config at HEAD's schema version, pointing at the fake provider."""
-    ver = ok(sb.run([sb.python, "-c",
-                     "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])"]))
+    ver = ok(
+        sb.run(
+            [
+                sb.python,
+                "-c",
+                "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])",
+            ]
+        )
+    )
     version = int(ver.stdout.strip().splitlines()[-1])
-    (sb.clawk_home / "config.yaml").write_text(I.provider_config(base_url, version, extra), encoding="utf-8")
-    (sb.clawk_home / ".env").write_text(f"OPENAI_API_KEY={I.FAKE_KEY}\n{env_extra}", encoding="utf-8")
+    (sb.clawk_home / "config.yaml").write_text(
+        I.provider_config(base_url, version, extra), encoding="utf-8"
+    )
+    (sb.clawk_home / ".env").write_text(
+        f"OPENAI_API_KEY={I.FAKE_KEY}\n{env_extra}", encoding="utf-8"
+    )
 
 
 def state_dir(sb: I.Sandbox) -> Path:
@@ -88,32 +102,53 @@ def lazy_env(sb: I.Sandbox) -> dict[str, str]:
     return env
 
 
-def run_env(sb: I.Sandbox, argv: list[str], env: dict[str, str], *, timeout: float = 600,
-            input: str | None = None) -> subprocess.CompletedProcess:
-    return H.run(argv, env=env, cwd=sb.root, writable=[sb.root], timeout=timeout, input=input)
+def run_env(
+    sb: I.Sandbox,
+    argv: list[str],
+    env: dict[str, str],
+    *,
+    timeout: float = 600,
+    input: str | None = None,
+) -> subprocess.CompletedProcess:
+    return H.run(
+        argv, env=env, cwd=sb.root, writable=[sb.root], timeout=timeout, input=input
+    )
 
 
 def managed_imports(sb: I.Sandbox, *modules: str) -> dict[str, str]:
     """{module: "ok" | "<error>"} imported by the selected generation's interpreter, booted the way
     the launcher boots it (its own site; nothing from the test process)."""
-    code = ("import importlib, json, sys\nout = {}\n"
-            "for m in sys.argv[1:]:\n"
-            "    try:\n        importlib.import_module(m); out[m] = 'ok'\n"
-            "    except BaseException as e:\n        out[m] = f'{type(e).__name__}: {e}'\n"
-            "print(json.dumps(out))\n")
+    code = (
+        "import importlib, json, sys\nout = {}\n"
+        "for m in sys.argv[1:]:\n"
+        "    try:\n        importlib.import_module(m); out[m] = 'ok'\n"
+        "    except BaseException as e:\n        out[m] = f'{type(e).__name__}: {e}'\n"
+        "print(json.dumps(out))\n"
+    )
     cp = ok(sb.run([sb.python, "-c", code, *modules]))
     return json.loads(cp.stdout.strip().splitlines()[-1])
 
 
-def update(sb: I.Sandbox, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return run_env(sb, [sb.clawk, "update", "--yes", "--branch", "main"], env or sb.env, timeout=UPDATE_TIMEOUT)
+def update(
+    sb: I.Sandbox, *, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    return run_env(
+        sb,
+        [sb.clawk, "update", "--yes", "--branch", "main"],
+        env or sb.env,
+        timeout=UPDATE_TIMEOUT,
+    )
 
 
 def publish_dependency_release(origin: Path, scratch: Path, n: int) -> str:
     """Publish a release whose ``uv.lock`` bytes differ (same resolution): the next update must
     build and select a new dependency generation."""
-    lock = (I.git("show", "main:uv.lock", cwd=origin) + f"\n# e2e dependency release {n}\n")
-    return I.publish_commit(origin, scratch, f"release: e2e dependency release {n}", {"uv.lock": lock})
+    lock = (
+        I.git("show", "main:uv.lock", cwd=origin) + f"\n# e2e dependency release {n}\n"
+    )
+    return I.publish_commit(
+        origin, scratch, f"release: e2e dependency release {n}", {"uv.lock": lock}
+    )
 
 
 def diagnostics(sb: I.Sandbox, *cps: subprocess.CompletedProcess) -> str:
@@ -125,7 +160,11 @@ def diagnostics(sb: I.Sandbox, *cps: subprocess.CompletedProcess) -> str:
         parts.append(f"--- facts.json unreadable: {exc}")
     parts.append(f"--- generations --- {generations(sb)}")
     parts.append(f"--- pending marker --- {pending_marker(sb).exists()}")
-    receipts = sorted((sb.clawk_home / "logs").glob("*.log")) if (sb.clawk_home / "logs").is_dir() else []
+    receipts = (
+        sorted((sb.clawk_home / "logs").glob("*.log"))
+        if (sb.clawk_home / "logs").is_dir()
+        else []
+    )
     for log in receipts:
         text = log.read_text(encoding="utf-8", errors="replace")
         parts.append(f"--- {log.name} (tail) ---\n{text[-2500:]}")
@@ -159,19 +198,34 @@ def arm_pending_tail(sb: I.Sandbox) -> None:
 class Gateway:
     """``clawk gateway run`` in the sandbox (the user's foreground/systemd ``ExecStart``)."""
 
-    def __init__(self, sb: I.Sandbox, env: dict[str, str], log: Path, argv0: list[str] | None = None):
+    def __init__(
+        self,
+        sb: I.Sandbox,
+        env: dict[str, str],
+        log: Path,
+        argv0: list[str] | None = None,
+    ):
         self.sb, self.log = sb, log
         (sb.clawk_home / "gateway_state.json").unlink(missing_ok=True)
         self._out = log.open("w")
         self.proc = subprocess.Popen(
-            H.sandbox_argv([*(argv0 or []), sb.clawk, "gateway", "run"], writable=[sb.root]),
-            env=env, cwd=str(sb.root), stdin=subprocess.DEVNULL, stdout=self._out, stderr=subprocess.STDOUT,
-            text=True, start_new_session=True)
+            H.sandbox_argv(
+                [*(argv0 or []), sb.clawk, "gateway", "run"], writable=[sb.root]
+            ),
+            env=env,
+            cwd=str(sb.root),
+            stdin=subprocess.DEVNULL,
+            stdout=self._out,
+            stderr=subprocess.STDOUT,
+            text=True,
+            start_new_session=True,
+        )
 
     def state(self) -> str:
         try:
-            return json.loads((self.sb.clawk_home / "gateway_state.json").read_text(encoding="utf-8")).get(
-                "gateway_state", "")
+            return json.loads(
+                (self.sb.clawk_home / "gateway_state.json").read_text(encoding="utf-8")
+            ).get("gateway_state", "")
         except (OSError, ValueError):
             return ""
 
@@ -185,8 +239,10 @@ class Gateway:
             time.sleep(0.25)
         rc = self.proc.poll()
         self.stop()
-        raise AssertionError(f"gateway never reported running (rc={rc}, state={self.state()!r})\n"
-                             f"--- gateway output ---\n{self.output()[-5000:]}")
+        raise AssertionError(
+            f"gateway never reported running (rc={rc}, state={self.state()!r})\n"
+            f"--- gateway output ---\n{self.output()[-5000:]}"
+        )
 
     def pids(self) -> list[int]:
         """Host pids of every process in the gateway's sandbox (bwrap and its descendants)."""
@@ -226,10 +282,22 @@ def process_files(pid: int) -> tuple[str, list[str], dict[str, str]]:
     base = Path(f"/proc/{pid}")
     try:
         exe = os.readlink(base / "exe")
-        maps = sorted({line.split(None, 5)[5].strip() for line in (base / "maps").read_text().splitlines()
-                       if len(line.split(None, 5)) == 6 and line.split(None, 5)[5].startswith("/")})
-        environ = dict(kv.split("=", 1) for kv in (base / "environ").read_bytes().decode(errors="replace").split("\0")
-                       if "=" in kv)
+        maps = sorted(
+            {
+                line.split(None, 5)[5].strip()
+                for line in (base / "maps").read_text().splitlines()
+                if len(line.split(None, 5)) == 6
+                and line.split(None, 5)[5].startswith("/")
+            }
+        )
+        environ = dict(
+            kv.split("=", 1)
+            for kv in (base / "environ")
+            .read_bytes()
+            .decode(errors="replace")
+            .split("\0")
+            if "=" in kv
+        )
     except (OSError, ValueError):
         return "", [], {}
     return exe, maps, environ
@@ -240,7 +308,11 @@ def turn(sb: I.Sandbox, provider, marker: str) -> subprocess.CompletedProcess:
     n = len(provider.main_requests())
     cp = run_env(sb, [sb.clawk, "-z", marker], lazy_env(sb), timeout=600)
     new = provider.main_requests()[n:]
-    assert cp.returncode == 0 and len(new) == 1 and marker in json.dumps(new[0]["messages"]), (
-        f"`clawk -z` did not reach the provider ({len(new)} requests)\n"
-        + diagnostics(sb, cp))
+    assert (
+        cp.returncode == 0
+        and len(new) == 1
+        and marker in json.dumps(new[0]["messages"])
+    ), f"`clawk -z` did not reach the provider ({len(new)} requests)\n" + diagnostics(
+        sb, cp
+    )
     return cp

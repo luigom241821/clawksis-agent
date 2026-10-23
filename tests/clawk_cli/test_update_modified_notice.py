@@ -4,11 +4,15 @@ from tools import skills_sync
 from clawk_cli.update_cmd_maint import _print_bundled_skills_sync_report
 
 
-def test_kept_skill_edits_have_an_actionable_update_report(tmp_path, monkeypatch, capsys):
+def test_kept_skill_edits_have_an_actionable_update_report(
+    tmp_path, monkeypatch, capsys
+):
     bundled = tmp_path / "bundled"
     source = bundled / "example/SKILL.md"
     source.parent.mkdir(parents=True)
-    source.write_text("---\nname: example\ndescription: fixture\n---\nOriginal\n", encoding="utf-8")
+    source.write_text(
+        "---\nname: example\ndescription: fixture\n---\nOriginal\n", encoding="utf-8"
+    )
     installed = tmp_path / "skills"
     monkeypatch.setattr(skills_sync, "SKILLS_DIR", installed)
     monkeypatch.setattr(skills_sync, "MANIFEST_FILE", installed / ".manifest.json")
@@ -21,7 +25,9 @@ def test_kept_skill_edits_have_an_actionable_update_report(tmp_path, monkeypatch
     assert user_skill.read_text(encoding="utf-8") == source.read_text(encoding="utf-8")
     assert "list-modified" not in capsys.readouterr().out
     user_skill.write_text("My local instructions\n", encoding="utf-8")
-    source.write_text(source.read_text(encoding="utf-8") + "Upstream revision\n", encoding="utf-8")
+    source.write_text(
+        source.read_text(encoding="utf-8") + "Upstream revision\n", encoding="utf-8"
+    )
 
     _print_bundled_skills_sync_report()
     out = capsys.readouterr().out

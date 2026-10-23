@@ -50,18 +50,21 @@ class TestHasAllowlistShellOperator:
     # Genuinely compound commands still rejected
     # ------------------------------------------------------------------
 
-    @pytest.mark.parametrize("cmd", [
-        "git status; rm -rf /tmp/x",
-        "git status && make",
-        "git status || make",
-        "cat foo | grep bar",
-        "echo hi > /etc/passwd",
-        "cat < seed",
-        "echo `rm x`",
-        "echo $(rm x)",
-        "git status\nrm x",
-        "git status & disown",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "git status; rm -rf /tmp/x",
+            "git status && make",
+            "git status || make",
+            "cat foo | grep bar",
+            "echo hi > /etc/passwd",
+            "cat < seed",
+            "echo `rm x`",
+            "echo $(rm x)",
+            "git status\nrm x",
+            "git status & disown",
+        ],
+    )
     def test_unquoted_operators_compound(self, cmd):
         assert _has_allowlist_shell_operator(cmd)
 
@@ -78,14 +81,17 @@ class TestHasAllowlistShellOperator:
     # Reinterpreted-argument options: quoted payloads become executable
     # ------------------------------------------------------------------
 
-    @pytest.mark.parametrize("cmd", [
-        "sh -c 'rm -rf /tmp/x; echo done'",
-        'bash -c "make | tee log"',
-        "git -c alias.x='!touch /tmp/pwn; printf ok' x",
-        'git -c alias.x="!touch /tmp/pwn; printf ok" x',
-        "node --eval 'require(\"child_process\").exec(\"id\")>1'",
-        "perl -e 'system(\"id\");'",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "sh -c 'rm -rf /tmp/x; echo done'",
+            'bash -c "make | tee log"',
+            "git -c alias.x='!touch /tmp/pwn; printf ok' x",
+            'git -c alias.x="!touch /tmp/pwn; printf ok" x',
+            'node --eval \'require("child_process").exec("id")>1\'',
+            "perl -e 'system(\"id\");'",
+        ],
+    )
     def test_quoted_payload_with_interpreter_option(self, cmd):
         assert _has_allowlist_shell_operator(cmd)
 
@@ -99,6 +105,7 @@ class TestHasAllowlistShellOperator:
 class TestAllowlistGlobWithQuotedArgs:
     def test_cargo_glob_matches_quoted_regex_filter(self, monkeypatch):
         import tools.approval as mod
+
         monkeypatch.setattr(mod, "_permanent_approved", {"cargo *"})
         cmd = (
             "cargo bench --bench standardized_criterion -- "
@@ -108,11 +115,13 @@ class TestAllowlistGlobWithQuotedArgs:
 
     def test_glob_still_refuses_compound(self, monkeypatch):
         import tools.approval as mod
+
         monkeypatch.setattr(mod, "_permanent_approved", {"cargo *"})
         assert not _command_matches_permanent_allowlist("cargo build && rm -rf /tmp/x")
 
     def test_glob_refuses_git_alias_payload(self, monkeypatch):
         import tools.approval as mod
+
         monkeypatch.setattr(mod, "_permanent_approved", {"git *"})
         assert not _command_matches_permanent_allowlist(
             "git -c alias.x='!touch /tmp/pwn; printf ok' x"

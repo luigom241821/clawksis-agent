@@ -37,16 +37,27 @@ def fake_locale(tmp_path, monkeypatch):
     locales.mkdir()
     long_text = "L" * 300
     catalog = {
-        "gateway": {"exec_approval": {
-            "header": "Clawksis <wants> & runs", "reason_label": "Why <flag>",
-            "smart_deny_line": "Smart & <DENY>: one op only", "action_once": long_text,
-            "action_session": "S", "action_always": "A", "action_deny": "D",
-        }},
+        "gateway": {
+            "exec_approval": {
+                "header": "Clawksis <wants> & runs",
+                "reason_label": "Why <flag>",
+                "smart_deny_line": "Smart & <DENY>: one op only",
+                "action_once": long_text,
+                "action_session": "S",
+                "action_always": "A",
+                "action_deny": "D",
+            }
+        },
         "platform": {
-            "telegram": {"approval": {
-                "action_once": long_text, "action_session": "s", "action_always": "a", "action_deny": "d",
-                "toast_already_resolved": long_text,
-            }},
+            "telegram": {
+                "approval": {
+                    "action_once": long_text,
+                    "action_session": "s",
+                    "action_always": "a",
+                    "action_deny": "d",
+                    "toast_already_resolved": long_text,
+                }
+            },
             "discord": {
                 "approval": {"question": "Q?", "requested_command_label": "Cmd:"},
                 "command": {
@@ -56,11 +67,17 @@ def fake_locale(tmp_path, monkeypatch):
             },
         },
     }
-    (locales / "xx.yaml").write_text(yaml.safe_dump(catalog, allow_unicode=True), encoding="utf-8")
+    (locales / "xx.yaml").write_text(
+        yaml.safe_dump(catalog, allow_unicode=True), encoding="utf-8"
+    )
     real_dir = i18n._locales_dir()
-    (locales / "en.yaml").write_text((real_dir / "en.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    (locales / "en.yaml").write_text(
+        (real_dir / "en.yaml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
     monkeypatch.setattr(i18n, "_locales_dir", lambda: locales)
-    monkeypatch.setattr(i18n, "_normalize_lang", lambda lang, home=None: str(lang).lower())
+    monkeypatch.setattr(
+        i18n, "_normalize_lang", lambda lang, home=None: str(lang).lower()
+    )
     i18n.reset_language_cache()
 
     def activate(lang: str = "xx"):
@@ -74,34 +91,51 @@ def fake_locale(tmp_path, monkeypatch):
 
 # ── shared contract ──────────────────────────────────────────────────────────
 
+
 def test_exec_approval_contract_keys_exist_in_english():
-    for key in ("header", "reason_label", "smart_deny_line", "timed_out_notice",
-                "action_once", "action_session", "action_always", "action_deny"):
+    for key in (
+        "header",
+        "reason_label",
+        "smart_deny_line",
+        "timed_out_notice",
+        "action_once",
+        "action_session",
+        "action_always",
+        "action_deny",
+    ):
         assert t(f"gateway.exec_approval.{key}") != f"gateway.exec_approval.{key}"
 
 
 @pytest.mark.parametrize("module", [telegram_adapter, discord_adapter])
 def test_unauthorized_notice_is_resolved_per_call_not_at_import(module):
-    assert not hasattr(module, "_UNAUTHORIZED"), "import-bound notice would freeze the language"
+    assert not hasattr(module, "_UNAUTHORIZED"), (
+        "import-bound notice would freeze the language"
+    )
     assert callable(module._unauthorized)
     assert "allowed list" in module._unauthorized()
 
 
 # ── Telegram ─────────────────────────────────────────────────────────────────
 
+
 def test_telegram_card_escapes_translated_text_before_html_wrapping(fake_locale):
     fake_locale()
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     assert adapter._EA_HEADER == "⚠️ <b>Clawksis &lt;wants&gt; &amp; runs</b>\n\n"
     assert adapter._EA_REASON_LABEL == "Why &lt;flag&gt;: "
-    assert adapter._EA_SMART_DENY_LINE == "\n\n<b>Smart &amp; &lt;DENY&gt;:</b> one op only"
+    assert (
+        adapter._EA_SMART_DENY_LINE
+        == "\n\n<b>Smart &amp; &lt;DENY&gt;:</b> one op only"
+    )
 
 
 def test_telegram_card_english_matches_shared_contract():
     adapter = TelegramAdapter.__new__(TelegramAdapter)
     assert t("gateway.exec_approval.header") in adapter._EA_HEADER
     assert adapter._EA_ACTION_LABELS == {
-        c: t(f"platform.telegram.approval.action_{c}") for c in ("once", "session", "always", "deny")}
+        c: t(f"platform.telegram.approval.action_{c}")
+        for c in ("once", "session", "always", "deny")
+    }
 
 
 def test_telegram_toasts_are_cut_at_200(fake_locale):
@@ -124,16 +158,29 @@ def test_telegram_bot_command_descriptions_cut_at_256(monkeypatch):
     import sys
     from types import SimpleNamespace
 
-    telegram_mod = sys.modules["telegram"]  # the shared conftest stub (or the real package)
-    monkeypatch.setattr(telegram_mod, "BotCommand", lambda name, desc: SimpleNamespace(command=name, description=desc))
+    telegram_mod = sys.modules[
+        "telegram"
+    ]  # the shared conftest stub (or the real package)
+    monkeypatch.setattr(
+        telegram_mod,
+        "BotCommand",
+        lambda name, desc: SimpleNamespace(command=name, description=desc),
+    )
     rows = TelegramAdapter._bot_commands([("help", "x" * 400), ("status", None)])
     assert [len(c.description) for c in rows] == [256, 0]
 
 
 # ── Discord ──────────────────────────────────────────────────────────────────
 
+
 def test_discord_native_slash_specs_hold_catalog_keys_only():
-    for name, description_key, args, _template, followup_key in _NATIVE_SLASH_COMMAND_SPECS:
+    for (
+        name,
+        description_key,
+        args,
+        _template,
+        followup_key,
+    ) in _NATIVE_SLASH_COMMAND_SPECS:
         assert description_key.startswith(("platform.discord.command.", "slash.")), name
         assert t(description_key) != description_key, (name, description_key)
         if followup_key:
@@ -172,17 +219,24 @@ def test_discord_exec_approval_button_labels_localized_and_capped(fake_locale):
     fake_locale()
     view = ExecApprovalView(session_key="s", allowed_user_ids={"1"})
     labels = {}
-    view._localize_buttons(allow_once="gateway.exec_approval.action_once", deny="gateway.exec_approval.action_deny")
+    view._localize_buttons(
+        allow_once="gateway.exec_approval.action_once",
+        deny="gateway.exec_approval.action_deny",
+    )
     for child in getattr(view, "children", []):
         cb = getattr(child, "callback", None)
-        fn_name = getattr(cb, "__name__", None) or getattr(getattr(cb, "callback", None), "__name__", None)
+        fn_name = getattr(cb, "__name__", None) or getattr(
+            getattr(cb, "callback", None), "__name__", None
+        )
         if fn_name:
             labels[fn_name] = child.label
     once = getattr(view, "allow_once", None)
     if hasattr(once, "label"):
         labels["allow_once"] = once.label
         labels["deny"] = view.deny.label
-    if labels:  # real discord.py materialises the decorated buttons; the test stub may not
+    if (
+        labels
+    ):  # real discord.py materialises the decorated buttons; the test stub may not
         assert utf16_len(labels["allow_once"]) == _DISCORD_BUTTON_LABEL_LIMIT == 80
         assert labels["deny"] == "D"
 

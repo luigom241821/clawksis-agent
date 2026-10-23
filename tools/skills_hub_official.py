@@ -5,9 +5,21 @@ from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional, Tuple, Union
 
 from agent.skill_utils import is_excluded_skill_path
-from tools.skills_hub_github import GitHubAuth, GitHubSource, _skip_bundle_file, _tree_members
+from tools.skills_hub_github import (
+    GitHubAuth,
+    GitHubSource,
+    _skip_bundle_file,
+    _tree_members,
+)
 from tools.skills_hub_models import (
-    SkillBundle, SkillMeta, SkillSource, _clawk_tags, _matches_query, _memo_json, _parse_frontmatter, hub,
+    SkillBundle,
+    SkillMeta,
+    SkillSource,
+    _clawk_tags,
+    _matches_query,
+    _memo_json,
+    _parse_frontmatter,
+    hub,
 )
 
 logger = logging.getLogger("tools.skills_hub")
@@ -17,7 +29,7 @@ _INDEX_ID_PREFIXES = ("skills-sh/", "skills.sh/", "official/", "github/", "clawh
 
 
 def _strip_prefix(value: str, prefixes) -> str:
-    return next((value[len(p):] for p in prefixes if value.startswith(p)), value)
+    return next((value[len(p) :] for p in prefixes if value.startswith(p)), value)
 
 
 def _clean_rel_parts(path: str) -> Optional[list[str]]:
@@ -46,7 +58,9 @@ class OptionalSkillSource(SkillSource):
     def __init__(self, auth: Optional[GitHubAuth] = None):
         from clawk_constants import get_optional_skills_dir
 
-        self._optional_dir = get_optional_skills_dir(Path(__file__).parent.parent / "optional-skills")
+        self._optional_dir = get_optional_skills_dir(
+            Path(__file__).parent.parent / "optional-skills"
+        )
         self._auth = auth
         # GitHubSource for the live-repo fallback, created only when a skill is missing locally.
         self._github: Optional[GitHubSource] = None
@@ -55,14 +69,23 @@ class OptionalSkillSource(SkillSource):
 
     @staticmethod
     def _rel(identifier: str) -> str:
-        return identifier.split("/", 1)[-1] if identifier.startswith("official/") else identifier
+        return (
+            identifier.split("/", 1)[-1]
+            if identifier.startswith("official/")
+            else identifier
+        )
 
     def _meta(self, rel_dir: str, name: str, description: str, tags: list) -> SkillMeta:
         return SkillMeta(
-            name=name, description=description, source="official", identifier=f"official/{rel_dir}",
-            trust_level="builtin", repo=self.OFFICIAL_REPO,
+            name=name,
+            description=description,
+            source="official",
+            identifier=f"official/{rel_dir}",
+            trust_level="builtin",
+            repo=self.OFFICIAL_REPO,
             # The centralized skills index consumes repo-root-relative paths.
-            path=f"{self.OPTIONAL_SKILLS_PREFIX}/{rel_dir}", tags=tags,
+            path=f"{self.OPTIONAL_SKILLS_PREFIX}/{rel_dir}",
+            tags=tags,
         )
 
     def _remote_meta(self, rel_dir: str) -> SkillMeta:
@@ -72,8 +95,14 @@ class OptionalSkillSource(SkillSource):
 
     @staticmethod
     def _bundle(rel_id: str, files: dict[str, str | bytes], **kwargs) -> SkillBundle:
-        return SkillBundle(name=rel_id.rsplit("/", 1)[-1], files=files, source="official",
-                           identifier=f"official/{rel_id}", trust_level="builtin", **kwargs)
+        return SkillBundle(
+            name=rel_id.rsplit("/", 1)[-1],
+            files=files,
+            source="official",
+            identifier=f"official/{rel_id}",
+            trust_level="builtin",
+            **kwargs,
+        )
 
     def search(self, query: str, limit: int = 10) -> list[SkillMeta]:
         results: list[SkillMeta] = []
@@ -88,7 +117,9 @@ class OptionalSkillSource(SkillSource):
         # Also surface skills that landed on live main after this install was cut.
         if len(results) < limit:
             for rel_dir in sorted(self._list_remote_skill_dirs()):
-                if rel_dir in local_rels or (query_lower and query_lower not in rel_dir.lower()):
+                if rel_dir in local_rels or (
+                    query_lower and query_lower not in rel_dir.lower()
+                ):
                     continue
                 results.append(self._remote_meta(rel_dir))
                 if len(results) >= limit:
@@ -109,7 +140,11 @@ class OptionalSkillSource(SkillSource):
 
         # Else try by bare skill name; if still absent, the skill may have landed on main
         # after this install was cut — use the live repo.
-        skill_dir = resolved if resolved.is_dir() else self._find_skill_dir(rel.rsplit("/", 1)[-1])
+        skill_dir = (
+            resolved
+            if resolved.is_dir()
+            else self._find_skill_dir(rel.rsplit("/", 1)[-1])
+        )
         if not skill_dir:
             return self._fetch_from_live_repo(rel)
         rel_id = skill_dir.resolve().relative_to(optional_root).as_posix()
@@ -120,12 +155,16 @@ class OptionalSkillSource(SkillSource):
             skill_md = (skill_dir / "SKILL.md").read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             skill_md = None
-        upstream = None if skill_md is None else self._upstream_pointer_from_content(skill_md)
+        upstream = (
+            None if skill_md is None else self._upstream_pointer_from_content(skill_md)
+        )
         if upstream is not None:
             return self._fetch_from_upstream(upstream, rel_id)
         files: dict[str, str | bytes] = {}
         for f in skill_dir.rglob("*"):
-            if f.is_file() and not _skip_bundle_file(f.relative_to(skill_dir).as_posix()):
+            if f.is_file() and not _skip_bundle_file(
+                f.relative_to(skill_dir).as_posix()
+            ):
                 try:
                     files[str(f.relative_to(skill_dir))] = f.read_bytes()
                 except OSError:
@@ -137,7 +176,9 @@ class OptionalSkillSource(SkillSource):
         for meta in self._scan_all():
             if meta.name == skill_name:
                 return meta
-        matches = self._remote_matches(skill_name)  # not in the local checkout — check live main
+        matches = self._remote_matches(
+            skill_name
+        )  # not in the local checkout — check live main
         return self._remote_meta(matches[0]) if len(matches) == 1 else None
 
     def list_local(self) -> list[SkillMeta]:
@@ -151,7 +192,9 @@ class OptionalSkillSource(SkillSource):
         return self._github
 
     def _remote_matches(self, name: str) -> list[str]:
-        return [d for d in self._list_remote_skill_dirs() if d.rsplit("/", 1)[-1] == name]
+        return [
+            d for d in self._list_remote_skill_dirs() if d.rsplit("/", 1)[-1] == name
+        ]
 
     def _fetch_from_live_repo(self, rel: str) -> Optional[SkillBundle]:
         """Fetch an optional skill straight from the live default branch. Local installs lag
@@ -175,12 +218,16 @@ class OptionalSkillSource(SkillSource):
         if tree is None:
             return None
         files: dict[str, str | bytes] = {}
-        for rel_file, item_path, regular in _tree_members(tree[1], f"{self.OPTIONAL_SKILLS_PREFIX}/{rel}/"):
+        for rel_file, item_path, regular in _tree_members(
+            tree[1], f"{self.OPTIONAL_SKILLS_PREFIX}/{rel}/"
+        ):
             if not regular or _skip_bundle_file(rel_file):
                 continue
             content = github._fetch_file_bytes(self.OFFICIAL_REPO, item_path)
             if content is None:
-                logger.warning("Live-repo optional skill fetch failed for %s", item_path)
+                logger.warning(
+                    "Live-repo optional skill fetch failed for %s", item_path
+                )
                 return None
             files[rel_file] = content
         if "SKILL.md" not in files:
@@ -189,7 +236,9 @@ class OptionalSkillSource(SkillSource):
         upstream = self._upstream_pointer_from_content(files["SKILL.md"])
         if upstream is not None:
             return self._fetch_from_upstream(upstream, rel)
-        logger.info("Optional skill '%s' fetched from live repo (not in local checkout)", rel)
+        logger.info(
+            "Optional skill '%s' fetched from live repo (not in local checkout)", rel
+        )
         return self._bundle(rel, files)
 
     def _list_remote_skill_dirs(self) -> dict[str, bool]:
@@ -206,17 +255,31 @@ class OptionalSkillSource(SkillSource):
             prefix, suffix = f"{self.OPTIONAL_SKILLS_PREFIX}/", "/SKILL.md"
             for item in tree[1]:
                 path = item.get("path", "")
-                if item.get("type") == "blob" and path.startswith(prefix) and path.endswith(suffix):
-                    rel_dir = path[len(prefix):-len(suffix)]
-                    if rel_dir and not is_excluded_skill_path(PurePosixPath(rel_dir + suffix)):
+                if (
+                    item.get("type") == "blob"
+                    and path.startswith(prefix)
+                    and path.endswith(suffix)
+                ):
+                    rel_dir = path[len(prefix) : -len(suffix)]
+                    if rel_dir and not is_excluded_skill_path(
+                        PurePosixPath(rel_dir + suffix)
+                    ):
                         dirs[rel_dir] = True
             return dirs or None
 
-        self._remote_dirs = _memo_json("official_optional_dirs", compute,
-                                       valid=lambda c: isinstance(c, dict) and bool(c)) or {}
+        self._remote_dirs = (
+            _memo_json(
+                "official_optional_dirs",
+                compute,
+                valid=lambda c: isinstance(c, dict) and bool(c),
+            )
+            or {}
+        )
         return self._remote_dirs
 
-    def _upstream_pointer_from_content(self, content: str | bytes) -> Optional[dict[str, str]]:
+    def _upstream_pointer_from_content(
+        self, content: str | bytes
+    ) -> Optional[dict[str, str]]:
         """Parse ``metadata.clawk.upstream: {repo: owner/name, path: ...}`` out of SKILL.md content
         (a catalog stub); None for vendored skills."""
         if isinstance(content, bytes):
@@ -237,31 +300,50 @@ class OptionalSkillSource(SkillSource):
         parts = _clean_rel_parts(path)
         return None if parts is None else {"repo": repo, "path": "/".join(parts)}
 
-    def _fetch_from_upstream(self, upstream: dict[str, str], rel_id: str) -> Optional[SkillBundle]:
+    def _fetch_from_upstream(
+        self, upstream: dict[str, str], rel_id: str
+    ) -> Optional[SkillBundle]:
         """Fetch an upstream-maintained optional skill via GitHubSource.fetch() (full-tree download,
         symlink/unsafe-path rejection, quarantine + scan downstream) and re-label it as an official
         catalog entry."""
         bundle = self._get_github().fetch(f"{upstream['repo']}/{upstream['path']}")
         if bundle is None:
-            logger.warning("Upstream fetch failed for optional skill %s (%s:%s)",
-                           rel_id, upstream["repo"], upstream["path"])
+            logger.warning(
+                "Upstream fetch failed for optional skill %s (%s:%s)",
+                rel_id,
+                upstream["repo"],
+                upstream["path"],
+            )
             return None
         return SkillBundle(
-            name=bundle.name, files=bundle.files, source="official", identifier=f"official/{rel_id}",
+            name=bundle.name,
+            files=bundle.files,
+            source="official",
+            identifier=f"official/{rel_id}",
             # Curated endorsement, but the content is live third-party:
             # "trusted", not "builtin", so a dangerous scan verdict still blocks.
             trust_level="trusted",
-            metadata={**bundle.metadata, "upstream_repo": upstream["repo"], "upstream_path": upstream["path"]},
+            metadata={
+                **bundle.metadata,
+                "upstream_repo": upstream["repo"],
+                "upstream_path": upstream["path"],
+            },
         )
 
     def _local_skill_mds(self):
         root = self._optional_dir
-        return (md for md in (sorted(root.rglob("SKILL.md")) if root.is_dir() else [])
-                if not is_excluded_skill_path(md.relative_to(root), root=root))
+        return (
+            md
+            for md in (sorted(root.rglob("SKILL.md")) if root.is_dir() else [])
+            if not is_excluded_skill_path(md.relative_to(root), root=root)
+        )
 
     def _find_skill_dir(self, name: str) -> Optional[Path]:
         """Find a skill directory by name anywhere in optional-skills/."""
-        return next((md.parent for md in self._local_skill_mds() if md.parent.name == name), None)
+        return next(
+            (md.parent for md in self._local_skill_mds() if md.parent.name == name),
+            None,
+        )
 
     def _scan_all(self) -> list[SkillMeta]:
         """Enumerate all optional skills with metadata."""
@@ -274,8 +356,14 @@ class OptionalSkillSource(SkillSource):
                 continue
             fm = _parse_frontmatter(content)
             tags = _clawk_tags(fm)
-            results.append(self._meta(parent.relative_to(self._optional_dir).as_posix(), fm.get("name", parent.name),
-                                      fm.get("description", "")[:200], tags if isinstance(tags, list) else []))
+            results.append(
+                self._meta(
+                    parent.relative_to(self._optional_dir).as_posix(),
+                    fm.get("name", parent.name),
+                    fm.get("description", "")[:200],
+                    tags if isinstance(tags, list) else [],
+                )
+            )
         return results
 
 
@@ -296,6 +384,7 @@ class ClawksisIndexSource(SkillSource):
     def _ensure_loaded(self) -> dict:
         if not self._loaded:
             from tools.skills_hub_search import _load_clawk_index
+
             self._index, self._loaded = _load_clawk_index(), True
         return self._index or {}
 
@@ -313,10 +402,14 @@ class ClawksisIndexSource(SkillSource):
         return bool(self._skills())
 
     def trust_level_for(self, identifier: str) -> str:
-        entry = next((s for s in self._skills() if s.get("identifier") == identifier), None)
+        entry = next(
+            (s for s in self._skills() if s.get("identifier") == identifier), None
+        )
         return entry.get("trust_level", "community") if entry else "community"
 
-    def search(self, query: str, limit: int = 10, *, provider_filter: str = "") -> list[SkillMeta]:
+    def search(
+        self, query: str, limit: int = 10, *, provider_filter: str = ""
+    ) -> list[SkillMeta]:
         """Search the cached index (zero API calls). Matches name, description, tags, identifier and
         ``extra.provider`` (so ``nvidia`` finds ``NVIDIA/skills/...`` entries stored as source
         "github"). Ranked exact name > name prefix > provider > whole-word > name substring > other,
@@ -335,15 +428,24 @@ class ClawksisIndexSource(SkillSource):
         for i, s in enumerate(skills):
             name = str(s.get("name", "")).lower()
             provider = _entry_provider(s)
-            haystack = " ".join([
-                name, str(s.get("description", "")).lower(), " ".join(str(t).lower() for t in s.get("tags", [])),
-                str(s.get("identifier", "")).lower(), provider,
-            ])
+            haystack = " ".join(
+                [
+                    name,
+                    str(s.get("description", "")).lower(),
+                    " ".join(str(t).lower() for t in s.get("tags", [])),
+                    str(s.get("identifier", "")).lower(),
+                    provider,
+                ]
+            )
             if query_lower not in haystack:
                 continue
             ranks = (
-                name == query_lower, name.startswith(query_lower), provider == query_lower,
-                query_lower in name.split() or query_lower in provider.split(), query_lower in name, True,
+                name == query_lower,
+                name.startswith(query_lower),
+                provider == query_lower,
+                query_lower in name.split() or query_lower in provider.split(),
+                query_lower in name,
+                True,
             )
             scored.append((ranks.index(True), i, s))
         scored.sort(key=lambda x: (x[0], x[1]))
@@ -358,7 +460,9 @@ class ClawksisIndexSource(SkillSource):
         repo, path = entry.get("repo", ""), entry.get("path", "")
         github, slug = self._get_github(), path.rstrip("/").rsplit("/", 1)[-1]
         skills_sh = entry.get("source") in {"skills.sh", "skills-sh"}
-        candidates = [entry.get("resolved_github_id")] + ([f"{repo}/{path}"] if repo and path else [])
+        candidates = [entry.get("resolved_github_id")] + (
+            [f"{repo}/{path}"] if repo and path else []
+        )
         for github_id in filter(None, candidates):
             if bundle := github.fetch(github_id):
                 break
@@ -367,11 +471,20 @@ class ClawksisIndexSource(SkillSource):
             # the repo tree (a slug-named dir, a lone generic ``skills/``, or the repo root) instead
             # of reporting a live skill as a stale entry (#130129). A concrete GitHub path that is
             # gone stays gone: never substitute whatever skill remains in that repo.
-            found = skills_sh and repo and slug and (
-                github._find_skill_in_repo_tree(repo, slug) or github._find_repo_root_skill(repo))
+            found = (
+                skills_sh
+                and repo
+                and slug
+                and (
+                    github._find_skill_in_repo_tree(repo, slug)
+                    or github._find_repo_root_skill(repo)
+                )
+            )
             if not (found and (bundle := github.fetch(found))):
                 return None
-        if skills_sh and bundle.name == "skills":  # same name resolved or not, never a shared "skills/"
+        if (
+            skills_sh and bundle.name == "skills"
+        ):  # same name resolved or not, never a shared "skills/"
             bundle.name = slug
         bundle.source = entry.get("source", "clawk-index")
         bundle.identifier = identifier
@@ -386,15 +499,28 @@ class ClawksisIndexSource(SkillSource):
         """Exact identifier match first, then match with source prefixes stripped."""
         skills = self._skills()
         normalized = _strip_prefix(identifier, _INDEX_ID_PREFIXES)
-        return next((s for s in skills if s.get("identifier") == identifier), None) or next(
-            (s for s in skills if _strip_prefix(s.get("identifier", ""), _INDEX_ID_PREFIXES) == normalized), None,
+        return next(
+            (s for s in skills if s.get("identifier") == identifier), None
+        ) or next(
+            (
+                s
+                for s in skills
+                if _strip_prefix(s.get("identifier", ""), _INDEX_ID_PREFIXES)
+                == normalized
+            ),
+            None,
         )
 
     @staticmethod
     def _to_meta(entry: dict) -> SkillMeta:
         return SkillMeta(
-            name=entry.get("name", ""), description=entry.get("description", ""),
-            source=entry.get("source", "clawk-index"), identifier=entry.get("identifier", ""),
-            trust_level=entry.get("trust_level", "community"), repo=entry.get("repo"), path=entry.get("path"),
-            tags=entry.get("tags", []), extra=entry.get("extra", {}),
+            name=entry.get("name", ""),
+            description=entry.get("description", ""),
+            source=entry.get("source", "clawk-index"),
+            identifier=entry.get("identifier", ""),
+            trust_level=entry.get("trust_level", "community"),
+            repo=entry.get("repo"),
+            path=entry.get("path"),
+            tags=entry.get("tags", []),
+            extra=entry.get("extra", {}),
         )

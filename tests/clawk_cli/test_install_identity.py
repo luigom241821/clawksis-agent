@@ -24,6 +24,7 @@ def _race_first_install_id(
         start_barrier.wait(timeout=10)
     if writer_entered is not None:
         import utils
+
         original_mkstemp = utils.tempfile.mkstemp
 
         def held_mkstemp(*args, **kwargs):
@@ -37,7 +38,9 @@ def _race_first_install_id(
 
 def test_concurrent_first_use_returns_one_persisted_identity(tmp_path):
     with ThreadPoolExecutor(max_workers=16) as executor:
-        values = list(executor.map(lambda _: read_or_create_install_id(tmp_path), range(64)))
+        values = list(
+            executor.map(lambda _: read_or_create_install_id(tmp_path), range(64))
+        )
 
     assert len(set(values)) == 1
     assert values[0]
@@ -46,7 +49,9 @@ def test_concurrent_first_use_returns_one_persisted_identity(tmp_path):
 
 @pytest.mark.parametrize("transient_read_failure", [False, True])
 def test_existing_identity_survives_read_only_root_or_racing_publication(
-    tmp_path, monkeypatch, transient_read_failure,
+    tmp_path,
+    monkeypatch,
+    transient_read_failure,
 ):
     value = "a" * 32
     (tmp_path / "install_id").write_text(value, encoding="utf-8")
@@ -61,7 +66,9 @@ def test_existing_identity_survives_read_only_root_or_racing_publication(
         return original_read(path, *args, **kwargs)
 
     def refuse_lock(_root):
-        raise AssertionError("read-only identity lookup must not acquire a writable lock")
+        raise AssertionError(
+            "read-only identity lookup must not acquire a writable lock"
+        )
 
     monkeypatch.setattr(Path, "read_text", read)
     if not transient_read_failure:
@@ -69,7 +76,9 @@ def test_existing_identity_survives_read_only_root_or_racing_publication(
     assert read_or_create_install_id(tmp_path) == value
 
 
-def test_independent_first_callers_return_the_single_committed_identity(tmp_path, monkeypatch):
+def test_independent_first_callers_return_the_single_committed_identity(
+    tmp_path, monkeypatch
+):
     context = multiprocessing.get_context("spawn")
     results = context.Queue()
     writer_entered = context.Event()

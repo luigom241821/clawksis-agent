@@ -42,6 +42,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
     """Build the aiohttp Application from the adapter."""
     app = web.Application()
     from tests.gateway.fixtures.webhook_route_authority import mount_authority
+
     mount_authority(app, adapter)
     app.router.add_get("/health", adapter._handle_health)
     app.router.add_post("/webhooks/{route_name}", adapter._handle_webhook)
@@ -50,9 +51,7 @@ def _create_app(adapter: WebhookAdapter) -> web.Application:
 
 def _github_signature(body: bytes, secret: str) -> str:
     """Compute X-Hub-Signature-256 for *body* using *secret*."""
-    return "sha256=" + hmac.new(
-        secret.encode(), body, hashlib.sha256
-    ).hexdigest()
+    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 SIMPLE_PAYLOAD = {"event": "test", "data": "hello"}
@@ -140,5 +139,3 @@ class TestSignatureBeforeRateLimit:
 
         # The valid event should have been captured
         assert len(captured_events) == 1
-
-

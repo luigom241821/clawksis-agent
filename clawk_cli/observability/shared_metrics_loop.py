@@ -36,7 +36,13 @@ def _bound_home(clawk_home: Any) -> Iterator[None]:
         reset_clawk_home_override(token)
 
 
-def _emit(mark_attr: str, build: Callable[..., dict[str, str] | None], *, clawk_home: Any = None, **raw: Any) -> None:
+def _emit(
+    mark_attr: str,
+    build: Callable[..., dict[str, str] | None],
+    *,
+    clawk_home: Any = None,
+    **raw: Any,
+) -> None:
     try:
         from . import shared_metrics_contract as contract
         from .shared_metrics_events import _emit as emit_mark
@@ -74,11 +80,25 @@ def _current_home() -> str | None:
 
 _MEMORY_OP_WORDS = {
     **dict.fromkeys(
-        ("add", "conclude", "create", "ingest", "remember", "retain", "save", "store", "upload"), "add"
+        (
+            "add",
+            "conclude",
+            "create",
+            "ingest",
+            "remember",
+            "retain",
+            "save",
+            "store",
+            "upload",
+        ),
+        "add",
     ),
     **dict.fromkeys(("edit", "replace", "update"), "replace"),
     **dict.fromkeys(("delete", "forget", "remove"), "remove"),
-    **dict.fromkeys(("probe", "query", "reason", "reasoning", "recall", "related", "search"), "search"),
+    **dict.fromkeys(
+        ("probe", "query", "reason", "reasoning", "recall", "related", "search"),
+        "search",
+    ),
     **dict.fromkeys(("context", "get", "list", "profile", "read"), "read"),
 }
 # A batch can carry many operations; one call never exports more rows than this.
@@ -113,14 +133,29 @@ def _memory_origin() -> str:
     return "background_review" if is_background_review() else "foreground"
 
 
-def memory_op_fields(*, op: Any, provider: Any, outcome: Any, origin: Any, failure_class: Any) -> dict[str, str]:
-    from .shared_metrics_contract import MEMORY_OP_FAILURE_CLASSES, MEMORY_OP_ORIGINS, MEMORY_OP_OUTCOMES, MEMORY_OPS
+def memory_op_fields(
+    *, op: Any, provider: Any, outcome: Any, origin: Any, failure_class: Any
+) -> dict[str, str]:
+    from .shared_metrics_contract import (
+        MEMORY_OP_FAILURE_CLASSES,
+        MEMORY_OP_ORIGINS,
+        MEMORY_OP_OUTCOMES,
+        MEMORY_OPS,
+    )
 
-    outcome_value, origin_value, class_value = _norm(outcome), _norm(origin), _norm(failure_class)
+    outcome_value, origin_value, class_value = (
+        _norm(outcome),
+        _norm(origin),
+        _norm(failure_class),
+    )
     outcome_value = outcome_value if outcome_value in MEMORY_OP_OUTCOMES else "failed"
     return {
-        "failure_class": "none" if outcome_value == "success" else (
-            class_value if class_value in MEMORY_OP_FAILURE_CLASSES - {"none"} else "unknown"
+        "failure_class": "none"
+        if outcome_value == "success"
+        else (
+            class_value
+            if class_value in MEMORY_OP_FAILURE_CLASSES - {"none"}
+            else "unknown"
         ),
         "op": op if op in MEMORY_OPS else "other",
         "origin": origin_value if origin_value in MEMORY_OP_ORIGINS else "foreground",
@@ -129,29 +164,44 @@ def memory_op_fields(*, op: Any, provider: Any, outcome: Any, origin: Any, failu
     }
 
 
-def _record_memory_ops(ops: Iterable[str], *, provider: Any, outcome: str, failure_class: str) -> None:
+def _record_memory_ops(
+    ops: Iterable[str], *, provider: Any, outcome: str, failure_class: str
+) -> None:
     try:
         origin = _memory_origin()
     except Exception:
         origin = "foreground"
     for op in list(ops)[:_MAX_BATCH_OPS]:
         _emit(
-            "MEMORY_OP_MARK", memory_op_fields, op=op, provider=provider, outcome=outcome, origin=origin,
+            "MEMORY_OP_MARK",
+            memory_op_fields,
+            op=op,
+            provider=provider,
+            outcome=outcome,
+            origin=origin,
             failure_class=failure_class,
         )
 
 
 def builtin_memory_ops(action: Any, operations: Any) -> list[str]:
     if isinstance(operations, list) and operations:
-        return [memory_op(op.get("action") if isinstance(op, dict) else None) for op in operations]
+        return [
+            memory_op(op.get("action") if isinstance(op, dict) else None)
+            for op in operations
+        ]
     return [memory_op(action)]
 
 
-def record_builtin_memory_call(action: Any, operations: Any, *, outcome: str, failure_class: str = "unknown") -> None:
+def record_builtin_memory_call(
+    action: Any, operations: Any, *, outcome: str, failure_class: str = "unknown"
+) -> None:
     """One row per operation of a built-in ``memory`` tool call (a batch applies all or none).
     ``failure_class`` is the store's closed refusal/failure name, ``none`` on success."""
     _record_memory_ops(
-        builtin_memory_ops(action, operations), provider="builtin", outcome=outcome, failure_class=failure_class,
+        builtin_memory_ops(action, operations),
+        provider="builtin",
+        outcome=outcome,
+        failure_class=failure_class,
     )
 
 
@@ -162,11 +212,26 @@ def _provider_result_failed(result: Any) -> bool:
     return head.startswith('{"error"') or '"success": false' in head
 
 
-def record_provider_memory_call(provider: Any, tool_name: Any, args: Any, result: Any = None, *, raised: bool = False) -> None:
+def record_provider_memory_call(
+    provider: Any,
+    tool_name: Any,
+    args: Any,
+    result: Any = None,
+    *,
+    raised: bool = False,
+) -> None:
     """One row per memory-provider tool call (plugin providers expose their own tools)."""
-    failed = "exception" if raised else "provider_error" if _provider_result_failed(result) else None
+    failed = (
+        "exception"
+        if raised
+        else "provider_error"
+        if _provider_result_failed(result)
+        else None
+    )
     _record_memory_ops(
-        [memory_provider_op(tool_name, args)], provider=provider, outcome="failed" if failed else "success",
+        [memory_provider_op(tool_name, args)],
+        provider=provider,
+        outcome="failed" if failed else "success",
         failure_class=failed or "none",
     )
 
@@ -183,8 +248,11 @@ def curator_run_fields(*, trigger: Any, outcome: Any, counts: Any) -> dict[str, 
     resolved = resolved if isinstance(resolved, dict) else {}
     outcome_value = _norm(outcome)
     fields = {
-        f"{key}_bucket": count_bucket(value if isinstance(value, int) and not isinstance(value, bool) else 0)
-        for key in _CURATOR_COUNT_KEYS for value in (resolved.get(key),)
+        f"{key}_bucket": count_bucket(
+            value if isinstance(value, int) and not isinstance(value, bool) else 0
+        )
+        for key in _CURATOR_COUNT_KEYS
+        for value in (resolved.get(key),)
     }
     return {
         **fields,
@@ -194,12 +262,19 @@ def curator_run_fields(*, trigger: Any, outcome: Any, counts: Any) -> dict[str, 
 
 
 def record_curator_run(
-    *, trigger: str, outcome: str, counts: dict[str, int] | Callable[[], dict[str, int]] | None = None,
+    *,
+    trigger: str,
+    outcome: str,
+    counts: dict[str, int] | Callable[[], dict[str, int]] | None = None,
     clawk_home: Any = None,
 ) -> None:
     """One row per curator pass. ``counts`` may be a callable so the diff is only computed when on."""
     _emit(
-        "CURATOR_RUN_MARK", curator_run_fields, trigger=trigger, outcome=outcome, counts=counts or {},
+        "CURATOR_RUN_MARK",
+        curator_run_fields,
+        trigger=trigger,
+        outcome=outcome,
+        counts=counts or {},
         clawk_home=clawk_home,
     )
 
@@ -240,14 +315,18 @@ def delegation_outcome(statuses: Iterable[Any]) -> str:
     return "cancelled" if any(s in _CANCELLED_STATUSES for s in values) else "failed"
 
 
-def delegation_run_fields(*, statuses: Any, depth: Any, background: Any, subagents: Any) -> dict[str, str]:
+def delegation_run_fields(
+    *, statuses: Any, depth: Any, background: Any, subagents: Any
+) -> dict[str, str]:
     from .shared_metrics_contract import count_bucket
 
     return {
         "depth": delegation_depth(depth),
         "mode": "background" if background is True else "foreground",
         "outcome": delegation_outcome(statuses or ()),
-        "subagent_count_bucket": count_bucket(subagents if isinstance(subagents, int) else 0),
+        "subagent_count_bucket": count_bucket(
+            subagents if isinstance(subagents, int) else 0
+        ),
     }
 
 
@@ -262,7 +341,9 @@ def begin_delegation_run(call_key: object, *, subagents: int, depth: int) -> Non
         _DELEGATIONS[id(call_key)] = run
 
 
-def finish_delegation_unit(call_key: object, results: Iterable[Any], *, background: bool) -> None:
+def finish_delegation_unit(
+    call_key: object, results: Iterable[Any], *, background: bool
+) -> None:
     """Fold one joined unit into its call; the call's single row is emitted by its last unit."""
     statuses = [r.get("status") if isinstance(r, dict) else None for r in results]
     with _DELEGATIONS_LOCK:
@@ -275,15 +356,23 @@ def finish_delegation_unit(call_key: object, results: Iterable[Any], *, backgrou
             return
         del _DELEGATIONS[id(call_key)]
     _emit(
-        "DELEGATION_RUN_MARK", delegation_run_fields, statuses=run.statuses, depth=run.depth,
-        background=run.background, subagents=run.expected, clawk_home=run.clawk_home,
+        "DELEGATION_RUN_MARK",
+        delegation_run_fields,
+        statuses=run.statuses,
+        depth=run.depth,
+        background=run.background,
+        subagents=run.expected,
+        clawk_home=run.clawk_home,
     )
 
 
 # ---- execution backends ----------------------------------------------------------------------
 
 _STATUS_ERROR_CLASSES = {
-    "timeout": "timeout", "timed_out": "timeout", "interrupted": "interrupted", "cancelled": "interrupted",
+    "timeout": "timeout",
+    "timed_out": "timeout",
+    "interrupted": "interrupted",
+    "cancelled": "interrupted",
     "blocked": "blocked",
 }
 
@@ -310,20 +399,36 @@ def _browser_failure(data: dict[str, Any]) -> str | None:
     return "tool_error" if data.get("success") is False or data.get("error") else None
 
 
-_FAILURE_CLASSIFIERS = {"browser": _browser_failure, "code": _code_failure, "terminal": _terminal_failure}
+_FAILURE_CLASSIFIERS = {
+    "browser": _browser_failure,
+    "code": _code_failure,
+    "terminal": _terminal_failure,
+}
 
 
-def execution_backend_fields(*, kind: Any, backend: Any, result: Any, error_class: Any) -> dict[str, str] | None:
+def execution_backend_fields(
+    *, kind: Any, backend: Any, result: Any, error_class: Any
+) -> dict[str, str] | None:
     from .shared_metrics_contract import EXECUTION_BACKENDS_BY_KIND, TOOL_ERROR_CLASSES
 
     kind_value = _norm(kind)
     if kind_value not in EXECUTION_BACKENDS_BY_KIND:
         return None
     backend_value = _norm(backend() if callable(backend) else backend)
-    failure = error_class if error_class is not None else _FAILURE_CLASSIFIERS[kind_value](_parsed(result))
+    failure = (
+        error_class
+        if error_class is not None
+        else _FAILURE_CLASSIFIERS[kind_value](_parsed(result))
+    )
     return {
-        "backend": backend_value if backend_value in EXECUTION_BACKENDS_BY_KIND[kind_value] else "other",
-        "error_class": "none" if failure is None else failure if failure in TOOL_ERROR_CLASSES else "unknown",
+        "backend": backend_value
+        if backend_value in EXECUTION_BACKENDS_BY_KIND[kind_value]
+        else "other",
+        "error_class": "none"
+        if failure is None
+        else failure
+        if failure in TOOL_ERROR_CLASSES
+        else "unknown",
         "kind": kind_value,
         "outcome": "success" if failure is None else "failed",
     }
@@ -344,7 +449,9 @@ def unmetered_backend_calls() -> Iterator[None]:
         _UNMETERED.reset(token)
 
 
-def record_execution_backend(kind: str, backend: Any, result: Any = None, *, error_class: str | None = None) -> Any:
+def record_execution_backend(
+    kind: str, backend: Any, result: Any = None, *, error_class: str | None = None
+) -> Any:
     """Count one tool call that reached its backend; returns ``result`` unchanged. ``backend`` may be a
     callable so resolving it costs nothing while collection is off. Calls the background review /
     curator forks make are Clawksis' own work, not the user's (terminal.outcome skips them too)."""
@@ -353,20 +460,31 @@ def record_execution_backend(kind: str, backend: Any, result: Any = None, *, err
     if _UNMETERED.get() or is_background_review():
         return result
     _emit(
-        "EXECUTION_BACKEND_MARK", execution_backend_fields, kind=kind, backend=backend, result=result,
+        "EXECUTION_BACKEND_MARK",
+        execution_backend_fields,
+        kind=kind,
+        backend=backend,
+        result=result,
         error_class=error_class,
     )
     return result
 
 
-def record_terminal_backend(plan: Any, result: Any, *, error_class: str | None = None) -> Any:
+def record_terminal_backend(
+    plan: Any, result: Any, *, error_class: str | None = None
+) -> Any:
     """Terminal calls that got past planning; ``plan`` is None when planning itself failed."""
     if plan is None:
         return result
-    return record_execution_backend("terminal", getattr(plan, "env_type", None), result, error_class=error_class)
+    return record_execution_backend(
+        "terminal", getattr(plan, "env_type", None), result, error_class=error_class
+    )
 
 
-def record_browser_call(call: Callable[[Callable[[Callable[[], Any]], Any]], Any], resolve_backend: Callable[[], str]) -> Any:
+def record_browser_call(
+    call: Callable[[Callable[[Callable[[], Any]], Any]], Any],
+    resolve_backend: Callable[[], str],
+) -> Any:
     """Run one browser tool call and count it against the backend that served it. ``call`` receives a
     wrapper for the legacy-backend fallback: when the extension controller serves the call instead,
     the fallback never runs and the backend is ``extension``."""
@@ -388,7 +506,9 @@ def record_browser_call(call: Callable[[Callable[[Callable[[], Any]], Any]], Any
     return result
 
 
-def _safe_record_browser(backend: Callable[[], str], result: Any, error_class: str | None) -> None:
+def _safe_record_browser(
+    backend: Callable[[], str], result: Any, error_class: str | None
+) -> None:
     def name() -> str:
         try:
             return backend()

@@ -45,9 +45,7 @@ class TestKimiEffortVocabulary:
             "ultra": "max",
         }
         for clawk_level, wire_level in expected.items():
-            kw = _kimi_kwargs(
-                "kimi-k3", {"enabled": True, "effort": clawk_level}
-            )
+            kw = _kimi_kwargs("kimi-k3", {"enabled": True, "effort": clawk_level})
             assert kw["reasoning_effort"] == wire_level, clawk_level
 
     def test_k3_default_is_high(self):

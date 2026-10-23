@@ -182,7 +182,9 @@ def test_adopted_snapshot_rows_are_not_recloned_as_foreign_tail(tmp_path: Path) 
     assert child.count("LIVE USER INSTRUCTION") == 1
 
 
-def test_row_committed_after_adopted_snapshot_read_is_cloned_once(tmp_path: Path) -> None:
+def test_row_committed_after_adopted_snapshot_read_is_cloned_once(
+    tmp_path: Path,
+) -> None:
     """A row committed between the adopted snapshot read and its return is not in the snapshot.
 
     The lease watermark must come from the snapshot itself, not from a fresh MAX(id) read that would
@@ -197,7 +199,11 @@ def test_row_committed_after_adopted_snapshot_read_is_cloned_once(tmp_path: Path
 
     def _commit_after_snapshot_read(self, session_id, *args, **kwargs):
         result = original_loader(self, session_id, *args, **kwargs)
-        if kwargs.get("include_row_ids") and session_id == "SNAPSHOT_WINDOW_PARENT" and not committed:
+        if (
+            kwargs.get("include_row_ids")
+            and session_id == "SNAPSHOT_WINDOW_PARENT"
+            and not committed
+        ):
             other_writer.append_message(session_id, "user", "SNAPSHOT WINDOW ROW")
             committed.append(True)
         return result
@@ -211,7 +217,9 @@ def test_row_committed_after_adopted_snapshot_read_is_cloned_once(tmp_path: Path
     agent.context_compressor.compress.side_effect = _record_then_keep_tail
 
     try:
-        with patch.object(SessionDB, "get_messages_as_conversation", _commit_after_snapshot_read):
+        with patch.object(
+            SessionDB, "get_messages_as_conversation", _commit_after_snapshot_read
+        ):
             agent._compress_context(messages, "sys", approx_tokens=120_000)
     finally:
         other_writer.close()
@@ -271,9 +279,7 @@ def test_adoption_skipped_when_preflush_fails_keeps_live_input(
 
     assert len(seen) == 1
     compress_input = seen[0]
-    assert any(
-        m.get("content") == "LIVE USER INSTRUCTION" for m in compress_input
-    ), (
+    assert any(m.get("content") == "LIVE USER INSTRUCTION" for m in compress_input), (
         "Compression ran on the adopted durable snapshot instead of the "
         "in-memory transcript after the pre-adoption flush failed "
         f"(flush returned {flush_failure!r}) — the live user input would be "

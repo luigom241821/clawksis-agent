@@ -38,7 +38,7 @@ class TreeRecord:
     branch: str
     age_days: float
     size_mb: Optional[int]
-    verdict: str          # reap | reap-archive | keep
+    verdict: str  # reap | reap-archive | keep
     reason: str
     untracked: list[str] = field(default_factory=list)
 
@@ -46,14 +46,25 @@ class TreeRecord:
 @dataclass
 class BranchRecord:
     name: str
-    verdict: str          # delete | keep
+    verdict: str  # delete | keep
     reason: str
 
 
-def _run(cmd: list, timeout: int, cwd: Optional[str] = None,
-         env: Optional[dict] = None) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          timeout=timeout, cwd=cwd, env=env, stdin=subprocess.DEVNULL, check=False)
+def _run(
+    cmd: list, timeout: int, cwd: Optional[str] = None, env: Optional[dict] = None
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 @dataclass
@@ -63,9 +74,9 @@ class ExternalTreeRecord:
     visibility only; the reclaim paths never touch these."""
 
     path: str
-    branch: str           # branch name, or "detached @<sha>" when detached
+    branch: str  # branch name, or "detached @<sha>" when detached
     locked: bool
-    missing: bool         # registered but the directory no longer exists
+    missing: bool  # registered but the directory no longer exists
 
 
 def _git(args: list, cwd: str, timeout: int = 15) -> subprocess.CompletedProcess:
@@ -73,23 +84,36 @@ def _git(args: list, cwd: str, timeout: int = 15) -> subprocess.CompletedProcess
     on nonzero, so a slow ``git cherry`` on a huge repo degrades to keep instead of aborting the
     audit mid-list. :func:`noninteractive_repo_git_env` because ``status`` executes the repo's
     ``core.fsmonitor`` and clean filters (GHSA-7x36-8jrh-v4pw)."""
-    from clawk_cli._subprocess_compat import FILTER_DISCOVERY_FAILED, noninteractive_repo_git_env
+    from clawk_cli._subprocess_compat import (
+        FILTER_DISCOVERY_FAILED,
+        noninteractive_repo_git_env,
+    )
+
     env = noninteractive_repo_git_env(cwd)
     if env is None:
-        return subprocess.CompletedProcess(args=["git", *args], returncode=1, stdout="",
-                                           stderr=FILTER_DISCOVERY_FAILED)
+        return subprocess.CompletedProcess(
+            args=["git", *args], returncode=1, stdout="", stderr=FILTER_DISCOVERY_FAILED
+        )
     try:
         return _run(["git", *args], timeout, cwd, env=env)
     except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(args=["git", *args], returncode=124, stdout="",
-                                           stderr=f"timeout after {timeout}s")
+        return subprocess.CompletedProcess(
+            args=["git", *args],
+            returncode=124,
+            stdout="",
+            stderr=f"timeout after {timeout}s",
+        )
 
 
 def _tree_size_mb(path: Path, timeout: int = 30) -> Optional[int]:
     """Cheap directory size via ``du -sm`` — best-effort, None on failure."""
     try:
         result = _run(["du", "-sm", str(path)], timeout)
-        return int(result.stdout.split()[0]) if result.returncode == 0 and result.stdout.strip() else None
+        return (
+            int(result.stdout.split()[0])
+            if result.returncode == 0 and result.stdout.strip()
+            else None
+        )
     except Exception:
         return None
 
@@ -97,13 +121,16 @@ def _tree_size_mb(path: Path, timeout: int = 30) -> Optional[int]:
 def _dirty_split(path: str) -> tuple[bool, list[str]]:
     """(has_tracked_modifications, untracked_paths) — tracked = real work, untracked = archivable."""
     try:
-        result = _git(["status", "--porcelain", "--untracked-files=normal"], cwd=path, timeout=10)
+        result = _git(
+            ["status", "--porcelain", "--untracked-files=normal"], cwd=path, timeout=10
+        )
         if result.returncode != 0:
             return True, []  # fail safe: treat as real work
         lines = [line for line in result.stdout.splitlines() if line.strip()]
         untracked = [line[3:].strip() for line in lines if line.startswith("??")]
         if len(untracked) == len(lines):
             from clawk_cli.worktree_retention import hidden_index_edits
+
             if hidden_index_edits(path):  # skip-worktree / assume-unchanged edits
                 return True, []
         return len(untracked) != len(lines), untracked
@@ -115,6 +142,7 @@ def _archive_untracked(tree: Path, untracked: list[str]) -> Optional[Path]:
     """Copy untracked files out of a doomed tree; None on any failure (caller must then keep)."""
     stamp = time.strftime("%Y%m%d-%H%M%S")
     from clawk_constants import get_clawk_home
+
     dest = get_clawk_home() / "archive" / "worktree-prune" / f"{tree.name}-{stamp}"
     try:
         for rel in untracked:
@@ -132,7 +160,9 @@ def _archive_untracked(tree: Path, untracked: list[str]) -> Optional[Path]:
         return None
 
 
-def _classify_tree(_ops, repo_root: str, entry: Path, merge_cache, remote_heads) -> tuple[str, str, list[str]]:
+def _classify_tree(
+    _ops, repo_root: str, entry: Path, merge_cache, remote_heads
+) -> tuple[str, str, list[str]]:
     """Return (verdict, reason, untracked) for one tree under ``.worktrees/``."""
     path = str(entry)
     if _KANBAN_RE.match(entry.name):
@@ -143,8 +173,11 @@ def _classify_tree(_ops, repo_root: str, entry: Path, merge_cache, remote_heads)
     if tracked_dirty:
         return "keep", "uncommitted tracked changes (real work)", []
     archive_note = f"{len(untracked)} untracked file(s) will be archived"
-    if _ops._worktree_has_unpushed_commits(path, timeout=5) and not _ops._worktree_commits_all_merged_upstream(
-        path, timeout=30, cache=merge_cache, max_ahead=_MAX_CHERRY_AHEAD):
+    if _ops._worktree_has_unpushed_commits(
+        path, timeout=5
+    ) and not _ops._worktree_commits_all_merged_upstream(
+        path, timeout=30, cache=merge_cache, max_ahead=_MAX_CHERRY_AHEAD
+    ):
         # Pushed-branch tier: single-branch fetch refspecs (managed-install default) leave pushed
         # PR branches with no refs/remotes/* entry, so `git log HEAD --not --remotes` reads them
         # as unpushed forever. A head EXACTLY matching the remote branch has nothing origin lacks.
@@ -154,7 +187,11 @@ def _classify_tree(_ops, repo_root: str, entry: Path, merge_cache, remote_heads)
         if blocked:
             return "keep", blocked[1], []
         if untracked:
-            return "reap-keep-branch", f"pushed to origin (open-PR lane); branch kept; {archive_note}", untracked
+            return (
+                "reap-keep-branch",
+                f"pushed to origin (open-PR lane); branch kept; {archive_note}",
+                untracked,
+            )
         return "reap-keep-branch", "pushed to origin (open-PR lane); branch kept", []
     blocked = _ops.removal_blocked(path)
     if blocked:
@@ -197,12 +234,14 @@ def audit_external_trees(repo_root: str) -> list[ExternalTreeRecord]:
         branch = current.get("branch", "")
         if not branch and current.get("head"):
             branch = f"detached @{current['head'][:10]}"
-        records.append(ExternalTreeRecord(
-            path=path,
-            branch=branch,
-            locked=bool(current.get("locked")),
-            missing=not os.path.exists(path),
-        ))
+        records.append(
+            ExternalTreeRecord(
+                path=path,
+                branch=branch,
+                locked=bool(current.get("locked")),
+                missing=not os.path.exists(path),
+            )
+        )
 
     for line in result.stdout.splitlines():
         line = line.rstrip()
@@ -211,11 +250,11 @@ def audit_external_trees(repo_root: str) -> list[ExternalTreeRecord]:
             current = {}
             continue
         if line.startswith("worktree "):
-            current["path"] = line[len("worktree "):]
+            current["path"] = line[len("worktree ") :]
         elif line.startswith("branch refs/heads/"):
-            current["branch"] = line[len("branch refs/heads/"):]
+            current["branch"] = line[len("branch refs/heads/") :]
         elif line.startswith("HEAD "):
-            current["head"] = line[len("HEAD "):]
+            current["head"] = line[len("HEAD ") :]
         elif line == "locked" or line.startswith("locked "):
             current["locked"] = True
     _flush()
@@ -240,14 +279,16 @@ def prune_missing_registrations(repo_root: str, *, dry_run: bool = False) -> lis
     return [f"pruned stale registration {r.path}" for r in stale]
 
 
-def audit_worktrees(repo_root: str, *, with_sizes: bool = True,
-                    older_than_days: Optional[float] = None) -> list[TreeRecord]:
+def audit_worktrees(
+    repo_root: str, *, with_sizes: bool = True, older_than_days: Optional[float] = None
+) -> list[TreeRecord]:
     """Classify every tree under ``.worktrees/`` without mutating anything.
 
     ``older_than_days`` only ever RESTRICTS: a reapable tree younger than the threshold is kept
     ("too recent"). It never widens eligibility — age alone can't doom a tree carrying unmerged work.
     """
     from clawk_cli import worktree_ops as _ops
+
     worktrees_dir = Path(repo_root) / ".worktrees"
     if not worktrees_dir.exists():
         return []
@@ -270,17 +311,38 @@ def audit_worktrees(repo_root: str, *, with_sizes: bool = True,
         except Exception:
             continue
         try:
-            branch = _git(["branch", "--show-current"], cwd=str(entry), timeout=5).stdout.strip()
+            branch = _git(
+                ["branch", "--show-current"], cwd=str(entry), timeout=5
+            ).stdout.strip()
         except Exception:
             branch = ""
-        verdict, reason, untracked = _classify_tree(_ops, repo_root, entry, merge_cache, remote_heads)
-        if older_than_days is not None and verdict in _REAP_VERDICTS and age_days < older_than_days:
-            verdict, reason, untracked = "keep", (
-                f"reapable but only {age_days:.1f}d old (--older-than {older_than_days:g})"), []
-        records.append(TreeRecord(
-            name=entry.name, path=str(entry), branch=branch,
-            age_days=age_days, size_mb=_tree_size_mb(entry) if with_sizes else None,
-            verdict=verdict, reason=reason, untracked=untracked))
+        verdict, reason, untracked = _classify_tree(
+            _ops, repo_root, entry, merge_cache, remote_heads
+        )
+        if (
+            older_than_days is not None
+            and verdict in _REAP_VERDICTS
+            and age_days < older_than_days
+        ):
+            verdict, reason, untracked = (
+                "keep",
+                (
+                    f"reapable but only {age_days:.1f}d old (--older-than {older_than_days:g})"
+                ),
+                [],
+            )
+        records.append(
+            TreeRecord(
+                name=entry.name,
+                path=str(entry),
+                branch=branch,
+                age_days=age_days,
+                size_mb=_tree_size_mb(entry) if with_sizes else None,
+                verdict=verdict,
+                reason=reason,
+                untracked=untracked,
+            )
+        )
 
     if len(merge_cache) != cache_size_before:
         _ops._save_worktree_merge_cache(merge_cache)
@@ -309,20 +371,32 @@ def reclaim_worktrees(
         if record.untracked:
             archive = _archive_untracked(entry, record.untracked)
             if archive is None:
-                actions.append(f"kept {record.name} (archive of untracked files failed)")
+                actions.append(
+                    f"kept {record.name} (archive of untracked files failed)"
+                )
                 continue
-            actions.append(f"archived {len(record.untracked)} untracked file(s) → {archive}")
+            actions.append(
+                f"archived {len(record.untracked)} untracked file(s) → {archive}"
+            )
 
         # Dead-pid locks must be unlocked or `remove --force` refuses.
         with contextlib.suppress(Exception):
             _git(["worktree", "unlock", record.path], cwd=repo_root, timeout=10)
         try:
-            remove_result = _git(["worktree", "remove", record.path, "--force"], cwd=repo_root, timeout=30)
+            remove_result = _git(
+                ["worktree", "remove", record.path, "--force"],
+                cwd=repo_root,
+                timeout=30,
+            )
             if remove_result.returncode != 0:
-                actions.append(f"failed to remove {record.name}: {remove_result.stderr.strip()}")
+                actions.append(
+                    f"failed to remove {record.name}: {remove_result.stderr.strip()}"
+                )
                 continue
             if record.verdict == "reap-keep-branch":
-                actions.append(f"removed {record.name} (branch {record.branch} kept — pushed open-PR lane)")
+                actions.append(
+                    f"removed {record.name} (branch {record.branch} kept — pushed open-PR lane)"
+                )
                 continue
             if record.branch and record.branch not in _PROTECTED_BRANCHES:
                 _git(["branch", "-D", record.branch], cwd=repo_root, timeout=10)
@@ -340,6 +414,7 @@ def audit_branches(repo_root: str) -> list[BranchRecord]:
     """Classify EVERY local branch: deletable when fully merged OR every commit is patch-equivalent
     upstream (``git cherry``) and not checked out. The gate is content reachability, not name."""
     from clawk_cli import worktree_ops as _ops
+
     if _ops._repo_is_shallow(repo_root):
         _ops._deepen_shallow_repo(repo_root)
 
@@ -362,8 +437,18 @@ def audit_branches(repo_root: str) -> list[BranchRecord]:
     wt = _git(["worktree", "list", "--porcelain"], cwd=repo_root, timeout=10)
     active = {
         line.removeprefix("branch refs/heads/").strip()
-        for line in wt.stdout.splitlines() if line.startswith("branch refs/heads/")}
-    merged = set(_lines(_git(["branch", "--merged", upstream, "--format=%(refname:short)"], cwd=repo_root, timeout=15)))
+        for line in wt.stdout.splitlines()
+        if line.startswith("branch refs/heads/")
+    }
+    merged = set(
+        _lines(
+            _git(
+                ["branch", "--merged", upstream, "--format=%(refname:short)"],
+                cwd=repo_root,
+                timeout=15,
+            )
+        )
+    )
 
     def _classify_branch(branch: str) -> BranchRecord:
         if branch in _PROTECTED_BRANCHES or branch in active:
@@ -372,7 +457,9 @@ def audit_branches(repo_root: str) -> list[BranchRecord]:
             return BranchRecord(branch, "delete", "fully merged into " + upstream)
         # Rebase merges rewrite SHAs, so --merged misses them; cherry patch-equivalence catches
         # the dominant leak. Bounded: a branch far ahead is a stale-base lane, keep it.
-        ahead = _git(["rev-list", "--count", f"{upstream}..{branch}"], cwd=repo_root, timeout=10)
+        ahead = _git(
+            ["rev-list", "--count", f"{upstream}..{branch}"], cwd=repo_root, timeout=10
+        )
         try:
             ahead_count = int(ahead.stdout.strip() or "0")
         except ValueError:
@@ -380,22 +467,29 @@ def audit_branches(repo_root: str) -> list[BranchRecord]:
         if ahead_count == 0:
             return BranchRecord(branch, "delete", "no commits beyond " + upstream)
         if ahead_count > _MAX_CHERRY_AHEAD:
-            return BranchRecord(branch, "keep", f"{ahead_count} commits ahead (stale-base lane)")
+            return BranchRecord(
+                branch, "keep", f"{ahead_count} commits ahead (stale-base lane)"
+            )
         cherry = _git(["cherry", upstream, branch], cwd=repo_root, timeout=30)
         if cherry.returncode != 0:
             return BranchRecord(branch, "keep", "could not verify (git cherry failed)")
         lines = _lines(cherry)
         if lines and all(ln.startswith("-") for ln in lines):
-            return BranchRecord(branch, "delete", "all commits patch-equivalent upstream")
+            return BranchRecord(
+                branch, "delete", "all commits patch-equivalent upstream"
+            )
         unique = sum(1 for ln in lines if ln.startswith("+"))
         return BranchRecord(branch, "keep", f"{unique} unique commit(s) not upstream")
 
     # Read-only, so parallel: hundreds of local branches × ~0.2-1s cherry probes would be minutes.
     import concurrent.futures
+
     workers = max(1, min(8, (os.cpu_count() or 4), len(branches)))
     if workers > 1:
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=workers, thread_name_prefix="clawk-branch-gc") as pool:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=workers, thread_name_prefix="clawk-branch-gc"
+            ) as pool:
                 return list(pool.map(_classify_branch, branches))
         except Exception:
             pass
@@ -403,7 +497,10 @@ def audit_branches(repo_root: str) -> list[BranchRecord]:
 
 
 def reclaim_branches(
-    repo_root: str, *, dry_run: bool = False, records: Optional[list[BranchRecord]] = None
+    repo_root: str,
+    *,
+    dry_run: bool = False,
+    records: Optional[list[BranchRecord]] = None,
 ) -> list[str]:
     """Delete every delete-verdict branch from a frozen audit list."""
     if records is None:
@@ -417,8 +514,10 @@ def reclaim_branches(
             continue
         result = _git(["branch", "-D", record.name], cwd=repo_root, timeout=10)
         actions.append(
-            f"deleted branch {record.name}" if result.returncode == 0
-            else f"failed to delete {record.name}: {result.stderr.strip()}")
+            f"deleted branch {record.name}"
+            if result.returncode == 0
+            else f"failed to delete {record.name}: {result.stderr.strip()}"
+        )
     return actions
 
 

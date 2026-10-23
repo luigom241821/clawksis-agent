@@ -160,7 +160,9 @@ def test_sequential_tool_timeout_emits_result_and_continues(tmp_path, monkeypatc
     assert "timed out after 1.0s" in messages[0]["content"]
     assert messages[0]["effect_disposition"] == "unknown"
     assert messages[1]["content"] == "second result"
-    timeout_events = [event for event in terminal_events if event.get("error_type") == "tool_timeout"]
+    timeout_events = [
+        event for event in terminal_events if event.get("error_type") == "tool_timeout"
+    ]
     assert len(timeout_events) == 1
     assert timeout_events[0]["status"] == "timeout"
     agent._flush_messages_to_session_db.assert_called()
@@ -209,7 +211,9 @@ def test_sequential_tool_timeout_suppresses_late_terminal_event(tmp_path, monkey
     finally:
         release_first.set()
 
-    assert [(event["tool_call_id"], event.get("error_type")) for event in terminal_events] == [
+    assert [
+        (event["tool_call_id"], event.get("error_type")) for event in terminal_events
+    ] == [
         ("hung", "tool_timeout"),
         ("next", None),
     ]
@@ -278,14 +282,20 @@ def test_sequential_tool_interrupt_hides_lifecycle_cancel_detail(tmp_path, monke
                 handle,
                 reason="PRIVATE_LIFECYCLE_REASON_DO_NOT_COPY",
             ).accepted
-            assert lifecycle.wait(handle, timeout_seconds=5).state is SubagentState.CANCELLED
+            assert (
+                lifecycle.wait(handle, timeout_seconds=5).state
+                is SubagentState.CANCELLED
+            )
     finally:
         release_first.set()
 
     assert "subagent cancellation requested" in messages[0]["content"]
     assert "PRIVATE_LIFECYCLE_REASON_DO_NOT_COPY" not in messages[0]["content"]
     assert "user interrupt" not in messages[0]["content"]
-    assert "PRIVATE_LIFECYCLE_REASON_DO_NOT_COPY" not in terminal_events[0]["error_message"]
+    assert (
+        "PRIVATE_LIFECYCLE_REASON_DO_NOT_COPY"
+        not in terminal_events[0]["error_message"]
+    )
     assert terminal_events[0]["error_type"] == "tool_interrupted"
 
 
@@ -346,4 +356,6 @@ def test_sequential_timeout_does_not_cut_clarify_human_wait(
     assert payload["responses"][0]["user_response"] == "A"
     assert "timed out" not in messages[0]["content"]
     assert messages[1]["content"] == "second result"
-    assert not any(event.get("error_type") == "tool_timeout" for event in terminal_events)
+    assert not any(
+        event.get("error_type") == "tool_timeout" for event in terminal_events
+    )

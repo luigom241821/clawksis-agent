@@ -7,14 +7,21 @@ import pytest
 
 import clawk_cli.update_inventory as ui
 
-def _write_state(home: Path, pid: int, sha: str | None = None, version: str | None = None,
-                 gateway_state: str = "running"):
+
+def _write_state(
+    home: Path,
+    pid: int,
+    sha: str | None = None,
+    version: str | None = None,
+    gateway_state: str = "running",
+):
     record = {"pid": pid, "gateway_state": gateway_state}
     if sha:
         record["code_sha"] = sha
     if version:
         record["code_version"] = version
     (home / "gateway_state.json").write_text(json.dumps(record), encoding="utf-8")
+
 
 @pytest.fixture()
 def fleet(monkeypatch, tmp_path):
@@ -26,23 +33,47 @@ def fleet(monkeypatch, tmp_path):
     _write_state(work_home, 200)  # pre-stamp gateway: no code identity
 
     import re
-    monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: default_home)
-    monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: default_home / "profiles")
-    monkeypatch.setattr("clawk_cli.profiles._PROFILE_ID_RE", re.compile(r"^[a-z0-9][a-z0-9_-]*$"), raising=False)
+
+    monkeypatch.setattr(
+        "clawk_cli.profiles._get_default_clawk_home", lambda: default_home
+    )
+    monkeypatch.setattr(
+        "clawk_cli.profiles._get_profiles_root", lambda: default_home / "profiles"
+    )
+    monkeypatch.setattr(
+        "clawk_cli.profiles._PROFILE_ID_RE",
+        re.compile(r"^[a-z0-9][a-z0-9_-]*$"),
+        raising=False,
+    )
     monkeypatch.setattr("gateway.status._pid_exists", lambda pid: pid in (100, 200))
     # A runtime is a VERIFIED gateway identity: live PID whose command line is a gateway's for that home.
-    monkeypatch.setattr("gateway.status._read_process_cmdline", lambda pid: {
-        100: "clawk gateway run", 200: "clawk --profile work gateway run"}.get(pid))
-    monkeypatch.setattr("clawk_cli.gateway._get_service_pids", lambda all_profiles=False: {100})
+    monkeypatch.setattr(
+        "gateway.status._read_process_cmdline",
+        lambda pid: {
+            100: "clawk gateway run",
+            200: "clawk --profile work gateway run",
+        }.get(pid),
+    )
+    monkeypatch.setattr(
+        "clawk_cli.gateway._get_service_pids", lambda all_profiles=False: {100}
+    )
     monkeypatch.setattr("clawk_cli.gateway.supports_systemd_services", lambda: True)
-    monkeypatch.setattr("clawk_cli.gateway.find_profile_gateway_processes", lambda exclude_pids=None: [])
+    monkeypatch.setattr(
+        "clawk_cli.gateway.find_profile_gateway_processes", lambda exclude_pids=None: []
+    )
     monkeypatch.setattr(
         "clawk_cli.version_info.get_code_identity",
-        lambda refresh=False: {"sha": "a" * 40, "short_sha": "a" * 8, "version": "1.0", "source": "git"},
+        lambda refresh=False: {
+            "sha": "a" * 40,
+            "short_sha": "a" * 8,
+            "version": "1.0",
+            "source": "git",
+        },
     )
     monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "git")
     monkeypatch.setattr("clawk_cli.config.get_managed_system", lambda: None)
     return tmp_path
+
 
 class TestCollectInventory:
     def test_two_profile_fleet(self, fleet):
@@ -67,7 +98,9 @@ class TestCollectInventory:
         )
 
     def test_docker_install_not_updatable_in_place(self, fleet, monkeypatch):
-        monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "docker")
+        monkeypatch.setattr(
+            "clawk_cli.config.detect_install_method", lambda *a, **k: "docker"
+        )
         monkeypatch.setattr(
             "clawk_cli.config.recommended_update_command_for_method",
             lambda m: "docker pull nousresearch/clawksis-agent:latest",
@@ -82,13 +115,20 @@ class TestCollectInventory:
         plan = ui.collect_runtime_inventory()
         assert plan.runtimes == []
 
-    def test_stopped_record_with_recycled_pid_is_not_a_runtime(self, fleet, monkeypatch):
+    def test_stopped_record_with_recycled_pid_is_not_a_runtime(
+        self, fleet, monkeypatch
+    ):
         """#109680: a ``stopped`` record whose PID an unrelated process now holds must not fabricate a
         gateway the restart phase can never touch (that phantom made `clawk update` exit partial)."""
         work_home = fleet / "home" / "profiles" / "work"
         _write_state(work_home, 200, gateway_state="stopped")
-        monkeypatch.setattr("gateway.status._read_process_cmdline", lambda pid: {
-            100: "clawk gateway run", 200: "C:/Windows/system32/dllhost.exe /Processid:{X}"}.get(pid))
+        monkeypatch.setattr(
+            "gateway.status._read_process_cmdline",
+            lambda pid: {
+                100: "clawk gateway run",
+                200: "C:/Windows/system32/dllhost.exe /Processid:{X}",
+            }.get(pid),
+        )
         plan = ui.collect_runtime_inventory()
         assert [r.profile for r in plan.runtimes] == ["default"]
 
@@ -136,13 +176,16 @@ class TestCollectInventory:
         assert len(restored["runtimes"]) == 2
         assert restored["runtimes"][0]["kind"] == "gateway"
 
+
 class TestReceiptIntegration:
     def test_plan_recorded_into_active_receipt(self, fleet, monkeypatch, tmp_path):
         import clawk_cli.update_receipt as ur
 
         home = tmp_path / "receipt_home"
         home.mkdir()
-        monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: home, raising=False)
+        monkeypatch.setattr(
+            "clawk_cli.config.get_clawk_home", lambda: home, raising=False
+        )
         ur.begin_update_receipt()
         plan = ui.collect_runtime_inventory()
         ui.record_plan_in_receipt(plan)

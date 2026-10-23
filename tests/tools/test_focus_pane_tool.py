@@ -14,8 +14,6 @@ def _reset_emitter():
     desktop_ui.set_emitter(None)
 
 
-
-
 @pytest.mark.parametrize("pane", fp.PANES)
 def test_emits_pane_reveal(pane):
     calls = []

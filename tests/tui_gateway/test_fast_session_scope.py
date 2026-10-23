@@ -27,6 +27,7 @@ from tui_gateway import server
 
 FAST_OVERRIDES = {"service_tier": "priority"}
 
+
 def _agent(service_tier=None):
     return SimpleNamespace(
         reasoning_config=None,
@@ -37,11 +38,14 @@ def _agent(service_tier=None):
         session_id="sess-key",
     )
 
+
 def _set(params: dict) -> dict:
     return server._methods["config.set"]("rid-1", params)
 
+
 def _get(params: dict) -> dict:
     return server._methods["config.get"]("rid-1", params)
+
 
 class TestConfigSetFastSessionScope:
     """Session-targeted fast changes must never touch global config."""
@@ -49,14 +53,16 @@ class TestConfigSetFastSessionScope:
     def test_session_scoped_fast_skips_global_write(self) -> None:
         agent = _agent()
         session = {"session_key": "k1", "agent": agent}
-        with patch.dict(server._sessions, {"s1": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch.object(server, "_persist_live_session_runtime"), \
-                patch.object(server, "_emit"), \
-                patch(
-                    "clawk_cli.models.resolve_fast_mode_overrides",
-                    return_value=FAST_OVERRIDES,
-                ):
+        with (
+            patch.dict(server._sessions, {"s1": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch.object(server, "_persist_live_session_runtime"),
+            patch.object(server, "_emit"),
+            patch(
+                "clawk_cli.models.resolve_fast_mode_overrides",
+                return_value=FAST_OVERRIDES,
+            ),
+        ):
             resp = _set({"key": "fast", "session_id": "s1", "value": "fast"})
         assert resp["result"]["value"] == "fast"
         assert agent.service_tier == "priority"
@@ -71,12 +77,14 @@ class TestConfigSetFastSessionScope:
             "agent": None,
             "model_override": {"model": "gpt-6", "provider": "openai"},
         }
-        with patch.dict(server._sessions, {"s3": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key, \
-                patch(
-                    "clawk_cli.models.resolve_fast_mode_overrides",
-                    return_value=FAST_OVERRIDES,
-                ):
+        with (
+            patch.dict(server._sessions, {"s3": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+            patch(
+                "clawk_cli.models.resolve_fast_mode_overrides",
+                return_value=FAST_OVERRIDES,
+            ),
+        ):
             resp = _set({"key": "fast", "session_id": "s3", "value": "fast"})
         assert resp["result"]["value"] == "fast"
         assert session["create_service_tier_override"] == "priority"
@@ -89,8 +97,10 @@ class TestConfigSetFastSessionScope:
             "agent": None,
             "create_service_tier_override": "priority",
         }
-        with patch.dict(server._sessions, {"s5": session}, clear=False), \
-                patch.object(server, "_write_config_key") as write_key:
+        with (
+            patch.dict(server._sessions, {"s5": session}, clear=False),
+            patch.object(server, "_write_config_key") as write_key,
+        ):
             resp = _set({"key": "fast", "session_id": "s5", "value": ""})
         assert resp["result"]["value"] == "normal"
         assert session["create_service_tier_override"] == ""
@@ -105,11 +115,14 @@ class TestConfigSetFastSessionScope:
     def test_stale_session_id_is_refused_not_persisted_globally(self) -> None:
         """A runtime id the backend no longer holds (reaped / re-minted) is not "no session": it
         must 4001 so the client resumes, not rewrite the profile's tier for every surface."""
-        with patch.dict(server._sessions, {}, clear=True), \
-                patch.object(server, "_write_config_key") as write_key:
+        with (
+            patch.dict(server._sessions, {}, clear=True),
+            patch.object(server, "_write_config_key") as write_key,
+        ):
             resp = _set({"key": "fast", "session_id": "reaped-sid", "value": "normal"})
         assert resp.get("error", {}).get("code") == 4001, resp
         write_key.assert_not_called()
+
 
 class TestConfigGetFastSessionScope:
     def test_reads_prebuild_pin(self) -> None:
@@ -129,36 +142,73 @@ class TestSessionInfoFastFollowsTheRoute:
 
     @staticmethod
     def _info(**agent_fields) -> dict:
-        agent = SimpleNamespace(**{
-            "reasoning_config": None, "service_tier": "priority", "request_overrides": {},
-            "session_id": "sess-key", "api_mode": "chat_completions", **agent_fields,
-        })
+        agent = SimpleNamespace(
+            **{
+                "reasoning_config": None,
+                "service_tier": "priority",
+                "request_overrides": {},
+                "session_id": "sess-key",
+                "api_mode": "chat_completions",
+                **agent_fields,
+            }
+        )
         return server._session_info(agent, {"session_key": "k7", "agent": agent})
 
     def test_first_party_route_reports_fast(self) -> None:
-        info = self._info(model="gpt-5.4", provider="openai", base_url="https://api.openai.com/v1")
+        info = self._info(
+            model="gpt-5.4", provider="openai", base_url="https://api.openai.com/v1"
+        )
         assert (info["service_tier"], info["fast"]) == ("priority", True)
 
     def test_anthropic_route_reads_the_anthropic_base_url(self) -> None:
-        info = self._info(model="claude-opus-5", provider="anthropic", api_mode="anthropic_messages",
-                          base_url="", _anthropic_base_url="https://api.anthropic.com")
+        info = self._info(
+            model="claude-opus-5",
+            provider="anthropic",
+            api_mode="anthropic_messages",
+            base_url="",
+            _anthropic_base_url="https://api.anthropic.com",
+        )
         assert info["fast"] is True
 
     def test_local_model_keeps_the_tier_but_reports_no_fast(self) -> None:
-        info = self._info(model="Qwen3.8-27B-UD-Q4_K_M", provider="llamacpp", base_url="http://127.0.0.1:18434/v1")
+        info = self._info(
+            model="Qwen3.8-27B-UD-Q4_K_M",
+            provider="llamacpp",
+            base_url="http://127.0.0.1:18434/v1",
+        )
         assert (info["service_tier"], info["fast"]) == ("priority", False)
 
     def test_fast_capable_model_behind_a_proxy_reports_no_fast(self) -> None:
-        info = self._info(model="gpt-5.4", provider="openrouter", base_url="https://openrouter.ai/api/v1")
+        info = self._info(
+            model="gpt-5.4",
+            provider="openrouter",
+            base_url="https://openrouter.ai/api/v1",
+        )
         assert info["fast"] is False
 
     def test_pending_switch_is_judged_by_the_new_route(self) -> None:
         """Mid-turn the agent still holds the old base URL; the pending pick decides."""
         agent = SimpleNamespace(
-            reasoning_config=None, service_tier="priority", request_overrides={}, session_id="sess-key",
-            api_mode="chat_completions", model="gpt-5.4", provider="openai", base_url="https://api.openai.com/v1")
-        session = {"session_key": "k8", "agent": agent, "pending_model_switch": {
-            "display_model": "Qwen3.8-27B-UD-Q4_K_M", "display_provider": "llamacpp"}}
+            reasoning_config=None,
+            service_tier="priority",
+            request_overrides={},
+            session_id="sess-key",
+            api_mode="chat_completions",
+            model="gpt-5.4",
+            provider="openai",
+            base_url="https://api.openai.com/v1",
+        )
+        session = {
+            "session_key": "k8",
+            "agent": agent,
+            "pending_model_switch": {
+                "display_model": "Qwen3.8-27B-UD-Q4_K_M",
+                "display_provider": "llamacpp",
+            },
+        }
         assert server._session_info(agent, session)["fast"] is False
-        session["pending_model_switch"] = {"display_model": "claude-opus-5", "display_provider": "anthropic"}
+        session["pending_model_switch"] = {
+            "display_model": "claude-opus-5",
+            "display_provider": "anthropic",
+        }
         assert server._session_info(agent, session)["fast"] is True

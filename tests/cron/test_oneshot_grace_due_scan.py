@@ -88,7 +88,10 @@ class TestOneShotGraceDueScan:
             "claimed",
             FIXED_NOW - timedelta(hours=3),
             completed=1,
-            run_claim={"at": (FIXED_NOW - timedelta(hours=3)).isoformat(), "by": "other"},
+            run_claim={
+                "at": (FIXED_NOW - timedelta(hours=3)).isoformat(),
+                "by": "other",
+            },
         )
         save_jobs([claimed])
 

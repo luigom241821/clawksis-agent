@@ -66,7 +66,9 @@ def test_stale_plist_is_refreshed_before_any_kickstart(monkeypatch, launchd_seam
     """The update-restart path must repair the definition, not revive a stale one."""
     refreshed = []
     monkeypatch.setattr(
-        gateway_cli, "refresh_launchd_plist_if_needed", lambda: refreshed.append(1) or True
+        gateway_cli,
+        "refresh_launchd_plist_if_needed",
+        lambda: refreshed.append(1) or True,
     )
     # Even when the kickstart later wedges (TimeoutExpired escapes to the
     # caller, exactly as on the broken host), the refresh must already have
@@ -79,7 +81,9 @@ def test_stale_plist_is_refreshed_before_any_kickstart(monkeypatch, launchd_seam
     assert kickstarts, "a current definition still needs the kickstart relaunch"
 
 
-def test_failed_refresh_routes_to_bounded_bootstrap_not_the_90s_kickstart(monkeypatch, launchd_seam):
+def test_failed_refresh_routes_to_bounded_bootstrap_not_the_90s_kickstart(
+    monkeypatch, launchd_seam
+):
     """When the refresh couldn't re-register the job, kickstart would hang again.
 
     The bootstrap path (30s timeouts, loud failure) is the bounded revival.

@@ -17,7 +17,12 @@ def _macos_codesigning_identity_valid(security: str, identity: str) -> bool:
     shows untrusted certs codesign refuses. Idempotency probe + postcondition. Never raises."""
     try:
         result = subprocess.run(
-            [security, "find-identity", "-v", "-p", "codesigning"], capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+            [security, "find-identity", "-v", "-p", "codesigning"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
         )
     except Exception:
         return False
@@ -26,7 +31,8 @@ def _macos_codesigning_identity_valid(security: str, identity: str) -> bool:
 
 
 def _macos_create_signing_identity(
-    openssl: str, security: str, codesign: str, keychain: str, identity: str) -> bool:
+    openssl: str, security: str, codesign: str, keychain: str, identity: str
+) -> bool:
     """Create a self-signed code-signing cert (10 years), import it with codesign access, trust it for codeSign."""
     tmp_dir = Path(tempfile.mkdtemp(prefix="clawk-tcc-"))
     try:
@@ -35,15 +41,30 @@ def _macos_create_signing_identity(
         p12 = tmp_dir / "sign.p12"
         subprocess.run(
             [
-                openssl, "req", "-x509", "-newkey", "rsa:2048",
-                "-keyout", str(key), "-out", str(crt),
-                "-days", "3650", "-nodes",
-                "-subj", f"/CN={identity}",
-                "-addext", "basicConstraints=critical,CA:TRUE",
-                "-addext", "keyUsage=critical,digitalSignature,keyCertSign",
-                "-addext", "extendedKeyUsage=codeSigning",
+                openssl,
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-keyout",
+                str(key),
+                "-out",
+                str(crt),
+                "-days",
+                "3650",
+                "-nodes",
+                "-subj",
+                f"/CN={identity}",
+                "-addext",
+                "basicConstraints=critical,CA:TRUE",
+                "-addext",
+                "keyUsage=critical,digitalSignature,keyCertSign",
+                "-addext",
+                "extendedKeyUsage=codeSigning",
             ],
-            capture_output=True, check=True)
+            capture_output=True,
+            check=True,
+        )
 
         # OpenSSL 3 defaults to AES/SHA-2 PKCS#12 that `security import` rejects
         # with "MAC verification failed". `-legacy` restores the accepted
@@ -53,30 +74,58 @@ def _macos_create_signing_identity(
         def _export_p12(extra_args: list) -> None:
             subprocess.run(
                 [
-                    openssl, "pkcs12", "-export", *extra_args,
-                    "-inkey", str(key), "-in", str(crt),
-                    "-out", str(p12), "-passout", "pass:clawklocal",
+                    openssl,
+                    "pkcs12",
+                    "-export",
+                    *extra_args,
+                    "-inkey",
+                    str(key),
+                    "-in",
+                    str(crt),
+                    "-out",
+                    str(p12),
+                    "-passout",
+                    "pass:clawklocal",
                 ],
-                capture_output=True, check=True)
+                capture_output=True,
+                check=True,
+            )
 
         def _import_p12():
             return subprocess.run(
                 [
-                    security, "import", str(p12), "-k", keychain,
-                    "-P", "clawklocal",
-                    "-T", codesign, "-T", "/usr/bin/codesign_allocate",
+                    security,
+                    "import",
+                    str(p12),
+                    "-k",
+                    keychain,
+                    "-P",
+                    "clawklocal",
+                    "-T",
+                    codesign,
+                    "-T",
+                    "/usr/bin/codesign_allocate",
                 ],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
 
         _export_p12([])
         imported = _import_p12()
-        if imported.returncode != 0 and "MAC verification failed" in (imported.stderr or ""):
+        if imported.returncode != 0 and "MAC verification failed" in (
+            imported.stderr or ""
+        ):
             # older OpenSSL without -legacy: keep the original failure
             with contextlib.suppress(subprocess.CalledProcessError):
                 _export_p12(["-legacy"])
                 imported = _import_p12()
         if imported.returncode != 0:
-            print(f"  (could not import signing identity into keychain: {imported.stderr.strip()})")
+            print(
+                f"  (could not import signing identity into keychain: {imported.stderr.strip()})"
+            )
             return False
 
         # Without explicit trust for the codeSign policy `find-identity -v`
@@ -84,8 +133,23 @@ def _macos_create_signing_identity(
         # may prompt for the login password ONCE — the one-time cost this
         # command exists to front-load.
         trusted = subprocess.run(
-            [security, "add-trusted-cert", "-r", "trustRoot", "-p", "codeSign", "-k", keychain, str(crt)],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+            [
+                security,
+                "add-trusted-cert",
+                "-r",
+                "trustRoot",
+                "-p",
+                "codeSign",
+                "-k",
+                keychain,
+                str(crt),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         if trusted.returncode != 0:
             print(
                 "  (could not trust the certificate for code signing: "
@@ -107,7 +171,11 @@ def _desktop_macos_setup_tcc_identity(identity: str = "Clawksis Local Signing") 
     signing identity, so a certificate-anchored one is stable across rebuilds (the yabai/skhd
     mechanism). Idempotent; never raises."""
     from clawk_cli.main import PROJECT_ROOT
-    from clawk_cli.main_desktop import _desktop_macos_relaunchable_fixup, _desktop_packaged_executable
+    from clawk_cli.main_desktop import (
+        _desktop_macos_relaunchable_fixup,
+        _desktop_packaged_executable,
+    )
+
     if sys.platform != "darwin":
         print("  (--setup-tcc-identity is macOS-only; skipping)")
         return False
@@ -127,7 +195,9 @@ def _desktop_macos_setup_tcc_identity(identity: str = "Clawksis Local Signing") 
     # untrusted cert is repaired rather than reported as done.
     if _macos_codesigning_identity_valid(security, identity):
         print(f"  → identity {identity!r} already valid in keychain")
-    elif not _macos_create_signing_identity(openssl, security, codesign, keychain, identity):
+    elif not _macos_create_signing_identity(
+        openssl, security, codesign, keychain, identity
+    ):
         return False
 
     # Postcondition gate: name-in-output checks pass for invalid identities;
@@ -143,6 +213,7 @@ def _desktop_macos_setup_tcc_identity(identity: str = "Clawksis Local Signing") 
     # config.yaml, not .env — it's not a secret.
     try:
         from clawk_cli.config import set_config_value
+
         set_config_value("desktop.macos_signing_identity", identity)
         print(f"  → set desktop.macos_signing_identity = {identity!r}")
     except Exception as exc:

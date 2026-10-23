@@ -10,10 +10,14 @@ from typing import Optional, Tuple
 
 import requests
 
-REGISTRATION_BASE_URL = os.environ.get("DINGTALK_REGISTRATION_BASE_URL", "https://oapi.dingtalk.com").rstrip("/")
+REGISTRATION_BASE_URL = os.environ.get(
+    "DINGTALK_REGISTRATION_BASE_URL", "https://oapi.dingtalk.com"
+).rstrip("/")
 REGISTRATION_SOURCE = os.environ.get("DINGTALK_REGISTRATION_SOURCE", "openClaw")
 _POLL_STATUSES = {"WAITING", "SUCCESS", "FAIL", "EXPIRED"}
-_RETRY_WINDOW = 120  # seconds of transient errors / non-success statuses tolerated before giving up
+_RETRY_WINDOW = (
+    120  # seconds of transient errors / non-success statuses tolerated before giving up
+)
 
 
 class RegistrationError(Exception):
@@ -31,17 +35,26 @@ def _api_post(path: str, payload: dict) -> dict:
         raise RegistrationError(f"Network error calling {url}: {exc}") from exc
     errcode = data.get("errcode", -1)
     if errcode != 0:
-        raise RegistrationError(f"API error [{path}]: {data.get('errmsg', 'unknown error')} (errcode={errcode})")
+        raise RegistrationError(
+            f"API error [{path}]: {data.get('errmsg', 'unknown error')} (errcode={errcode})"
+        )
     return data
 
 
 def begin_registration() -> dict:
     """Start a device-flow registration: init → nonce, begin → device_code + verification URL."""
-    nonce = str(_api_post("/app/registration/init", {"source": REGISTRATION_SOURCE}).get("nonce", "")).strip()
+    nonce = str(
+        _api_post("/app/registration/init", {"source": REGISTRATION_SOURCE}).get(
+            "nonce", ""
+        )
+    ).strip()
     if not nonce:
         raise RegistrationError("init response missing nonce")
     begin_data = _api_post("/app/registration/begin", {"nonce": nonce})
-    reg = {key: str(begin_data.get(key, "")).strip() for key in ("device_code", "verification_uri_complete")}
+    reg = {
+        key: str(begin_data.get(key, "")).strip()
+        for key in ("device_code", "verification_uri_complete")
+    }
     for key, value in reg.items():
         if not value:
             raise RegistrationError(f"begin response missing {key}")
@@ -55,12 +68,20 @@ def poll_registration(device_code: str) -> dict:
     data = _api_post("/app/registration/poll", {"device_code": device_code})
     status_raw = str(data.get("status", "")).strip().upper()
     result = {"status": status_raw if status_raw in _POLL_STATUSES else "UNKNOWN"}
-    result.update({key: str(data.get(key, "")).strip() or None for key in ("client_id", "client_secret", "fail_reason")})
+    result.update(
+        {
+            key: str(data.get(key, "")).strip() or None
+            for key in ("client_id", "client_secret", "fail_reason")
+        }
+    )
     return result
 
 
 def wait_for_registration_success(
-    device_code: str, interval: int = 3, expires_in: int = 7200, on_waiting: Optional[callable] = None,
+    device_code: str,
+    interval: int = 3,
+    expires_in: int = 7200,
+    on_waiting: Optional[callable] = None,
 ) -> tuple[str, str]:
     """Block until the registration succeeds or times out.
 
@@ -92,10 +113,14 @@ def wait_for_registration_success(
         elif status == "SUCCESS":
             cid, csecret = result["client_id"], result["client_secret"]
             if not cid or not csecret:
-                raise RegistrationError("authorization succeeded but credentials are missing")
+                raise RegistrationError(
+                    "authorization succeeded but credentials are missing"
+                )
             return cid, csecret
         elif not _within_retry_window():
-            raise RegistrationError(f"authorization failed: {result.get('fail_reason') or status}")
+            raise RegistrationError(
+                f"authorization failed: {result.get('fail_reason') or status}"
+            )
     raise RegistrationError("authorization timed out, please retry")
 
 
@@ -103,8 +128,10 @@ def _ensure_qrcode_installed() -> bool:
     """Enable DingTalk dependencies; only render QR codes importable in this process."""
     with contextlib.suppress(ImportError):
         import qrcode
+
         return True
     import pm
+
     with contextlib.suppress(pm.InstallError, OSError, ValueError):
         pm.sync_venv(["dingtalk"], explicit=True)
     # PM selects a new generation for the next launch, never this process.
@@ -118,15 +145,31 @@ def render_qr_to_terminal(url: str) -> bool:
         import qrcode
     except ImportError:
         return False
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=1, border=1)
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=1,
+        border=1,
+    )
     qr.add_data(url)
     qr.make(fit=True)
     matrix = qr.get_matrix()
-    glyph = {(True, True): "\u2588", (True, False): "\u2580", (False, True): "\u2584", (False, False): " "}  # █ ▀ ▄ space
+    glyph = {
+        (True, True): "\u2588",
+        (True, False): "\u2580",
+        (False, True): "\u2584",
+        (False, False): " ",
+    }  # █ ▀ ▄ space
     lines = []
     for r in range(0, len(matrix), 2):
         bottom_row = matrix[r + 1] if r + 1 < len(matrix) else [False] * len(matrix[r])
-        lines.append("    " + "".join(glyph[(bool(top), bool(bottom))] for top, bottom in zip(matrix[r], bottom_row)))
+        lines.append(
+            "    "
+            + "".join(
+                glyph[(bool(top), bool(bottom))]
+                for top, bottom in zip(matrix[r], bottom_row)
+            )
+        )
     print("\n".join(lines))
     return True
 
@@ -134,6 +177,7 @@ def render_qr_to_terminal(url: str) -> bool:
 def dingtalk_qr_auth() -> Optional[tuple[str, str]]:
     """Run the interactive QR-code device-flow authorization (setup wizard entry point)."""
     from clawk_cli.setup import print_info, print_success, print_warning, print_error
+
     print()
     print_info("  Initializing DingTalk device authorization...")
     print_info("  Note: the scan page is branded 'OpenClaw' — DingTalk's")
@@ -145,12 +189,16 @@ def dingtalk_qr_auth() -> Optional[tuple[str, str]]:
         return None
     url = reg["verification_uri_complete"]
     if not _ensure_qrcode_installed():
-        print_warning("  QR rendering is unavailable in this process; using the authorization link.")
+        print_warning(
+            "  QR rendering is unavailable in this process; using the authorization link."
+        )
     print()
     print_info("  Please scan the QR code below with DingTalk to authorize:")
     print()
     if not render_qr_to_terminal(url):
-        print_warning("  QR code render failed, please open the link below to authorize:")
+        print_warning(
+            "  QR code render failed, please open the link below to authorize:"
+        )
     print()
     print_info(f"  Or open this link manually: {url}")
     print()
@@ -166,7 +214,9 @@ def dingtalk_qr_auth() -> Optional[tuple[str, str]]:
 
     try:
         client_id, client_secret = wait_for_registration_success(
-            device_code=reg["device_code"], interval=reg["interval"], expires_in=reg["expires_in"],
+            device_code=reg["device_code"],
+            interval=reg["interval"],
+            expires_in=reg["expires_in"],
             on_waiting=_on_waiting,
         )
     except RegistrationError as exc:
@@ -176,5 +226,7 @@ def dingtalk_qr_auth() -> Optional[tuple[str, str]]:
     print()
     print_success("  QR scan authorization successful!")
     print_success(f"  Client ID:     {client_id}")
-    print_success(f"  Client Secret: {client_secret[:8]}{'*' * (len(client_secret) - 8)}")
+    print_success(
+        f"  Client Secret: {client_secret[:8]}{'*' * (len(client_secret) - 8)}"
+    )
     return client_id, client_secret

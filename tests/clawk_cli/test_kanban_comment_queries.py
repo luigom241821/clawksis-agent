@@ -26,10 +26,16 @@ def fresh_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    for var in ("CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT", "CLAWK_KANBAN_HOME", "CLAWK_KANBAN_BOARD"):
+    for var in (
+        "CLAWK_KANBAN_DB",
+        "CLAWK_KANBAN_WORKSPACES_ROOT",
+        "CLAWK_KANBAN_HOME",
+        "CLAWK_KANBAN_BOARD",
+    ):
         monkeypatch.delenv(var, raising=False)
     try:
         import clawk_constants
+
         clawk_constants._cached_default_clawk_root = None  # type: ignore[attr-defined]
     except Exception:
         pass

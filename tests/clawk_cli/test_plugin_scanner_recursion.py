@@ -75,6 +75,7 @@ class TestCategoryNamespaceRecursion:
         """``<root>/image_gen/openai/plugin.yaml`` is discovered with key
         ``image_gen/openai`` when the ``image_gen`` parent has no manifest."""
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         user_plugins = clawk_home / "plugins"
 
@@ -90,7 +91,6 @@ class TestCategoryNamespaceRecursion:
         assert loaded.manifest.name == "openai"
         assert loaded.enabled is True
 
-
     def test_depth_cap_two(self, tmp_path, monkeypatch):
         """Plugins nested three levels deep are not discovered.
 
@@ -98,6 +98,7 @@ class TestCategoryNamespaceRecursion:
         two segments.
         """
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         user_plugins = clawk_home / "plugins"
 
@@ -107,8 +108,7 @@ class TestCategoryNamespaceRecursion:
         mgr.discover_and_load()
 
         non_bundled = [
-            k for k, p in mgr._plugins.items()
-            if p.manifest.source != "bundled"
+            k for k, p in mgr._plugins.items() if p.manifest.source != "bundled"
         ]
         assert non_bundled == []
 
@@ -127,6 +127,7 @@ class TestForeignHarnessManifestDirs:
         They must be skipped silently; the plugin's real Clawksis manifest
         (``.clawk-plugin/plugin.yaml``) is still discovered."""
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         sp = clawk_home / "plugins" / "superpowers"
         (sp / ".clawk-plugin").mkdir(parents=True)
@@ -166,6 +167,7 @@ class TestForeignHarnessManifestDirs:
         """A genuinely broken portable plugin.json (not a foreign-harness
         convention directory) must still surface its parse warning."""
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         broken = clawk_home / "plugins" / "broken-portable"
         broken.mkdir(parents=True)
@@ -187,6 +189,7 @@ class TestForeignHarnessManifestDirs:
 class TestKindField:
     def test_unknown_kind_falls_back_to_standalone(self, tmp_path, monkeypatch, caplog):
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         _write_plugin(
             clawk_home / "plugins",
@@ -200,9 +203,7 @@ class TestKindField:
             mgr.discover_and_load()
 
         assert mgr._plugins["p1"].manifest.kind == "standalone"
-        assert any(
-            "unknown kind" in rec.getMessage() for rec in caplog.records
-        )
+        assert any("unknown kind" in rec.getMessage() for rec in caplog.records)
 
 
 # ── Gate logic ─────────────────────────────────────────────────────────────
@@ -213,6 +214,7 @@ class TestBackendGate:
         """User-installed ``kind: backend`` plugins still require opt-in —
         they're not trusted by default."""
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         user_plugins = clawk_home / "plugins"
 
@@ -230,11 +232,11 @@ class TestBackendGate:
         assert loaded.enabled is False
         assert "not enabled" in (loaded.error or "")
 
-
     def test_exclusive_kind_skipped(self, tmp_path, monkeypatch):
         """``kind: exclusive`` plugins are recorded but not loaded — the
         category's own discovery system handles them (memory today)."""
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         _write_plugin(
             clawk_home / "plugins",
@@ -287,6 +289,7 @@ class TestRegisterImageGenProvider:
                 return {"success": True, "image": "test://fake"}
 
         import os
+
         clawk_home = Path(os.environ["CLAWK_HOME"])  # set by hermetic conftest fixture
         _write_plugin(
             clawk_home / "plugins",

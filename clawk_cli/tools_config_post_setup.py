@@ -9,14 +9,18 @@ import sys
 from typing import Set
 
 from clawk_cli.cli_output import (
-    print_error as _print_error, print_info as _print_info, print_success as _print_success,
-    print_warning as _print_warning)
+    print_error as _print_error,
+    print_info as _print_info,
+    print_success as _print_success,
+    print_warning as _print_warning,
+)
 from clawk_cli.config import get_env_value, recommended_update_command_for_method
 from clawk_cli.tools_config_cua import _cua_driver_install_ready, install_cua_driver
 from tools.transcription_common import DEFAULT_LOCAL_MODEL, STT_MODEL_CATALOG
 
 _LOCAL_STT_MODEL_SUMMARY = ", ".join(
-    f"{model} (default)" if model == DEFAULT_LOCAL_MODEL else model for model in STT_MODEL_CATALOG["local"]
+    f"{model} (default)" if model == DEFAULT_LOCAL_MODEL else model
+    for model in STT_MODEL_CATALOG["local"]
 )
 
 
@@ -33,13 +37,19 @@ def _ensure_browser_use_cli(*, verbose_hints: bool = False) -> None:
     from tools.browser_use_cli import _find_cli
 
     if _find_cli() is not None:
-        _print_success("    Browser Use CLI ready (browser-harness, bundled with Clawksis)")
+        _print_success(
+            "    Browser Use CLI ready (browser-harness, bundled with Clawksis)"
+        )
     else:
-        _print_warning("    browser-harness is missing from Clawksis's Python environment")
+        _print_warning(
+            "    browser-harness is missing from Clawksis's Python environment"
+        )
         _print_info("    Re-sync it with: clawk update")
     if verbose_hints:
-        _info_lines("Local Chrome needs remote debugging: chrome://inspect/#remote-debugging",
-                    "Cloud browsers: set BROWSER_USE_API_KEY")
+        _info_lines(
+            "Local Chrome needs remote debugging: chrome://inspect/#remote-debugging",
+            "Cloud browsers: set BROWSER_USE_API_KEY",
+        )
 
 
 def _post_setup_lightpanda() -> None:
@@ -51,10 +61,14 @@ def _post_setup_lightpanda() -> None:
     if lightpanda_bin:
         _print_success(f"    Lightpanda found: {lightpanda_bin}")
     else:
-        _print_warning("    lightpanda binary not found on PATH, ~/.lightpanda or ~/.local/bin")
+        _print_warning(
+            "    lightpanda binary not found on PATH, ~/.lightpanda or ~/.local/bin"
+        )
         _print_info(f"    {LIGHTPANDA_INSTALL_HINT}")
         if os.name == "nt":
-            _print_info("    Lightpanda has no native Windows build; run Clawksis under WSL2.")
+            _print_info(
+                "    Lightpanda has no native Windows build; run Clawksis under WSL2."
+            )
 
 
 def _post_setup_agent_browser(post_setup_key: str) -> None:
@@ -63,7 +77,11 @@ def _post_setup_agent_browser(post_setup_key: str) -> None:
     _ensure_browser_use_cli()
     try:
         from tools.browser_tool_install import (
-            _browser_install_hint, _chromium_installed, _running_in_docker, _find_agent_browser)
+            _browser_install_hint,
+            _chromium_installed,
+            _running_in_docker,
+            _find_agent_browser,
+        )
         from clawk_constants import is_termux
     except Exception as exc:  # pragma: no cover — defensive
         _print_warning(f"    Could not check Chromium status: {exc}")
@@ -75,17 +93,22 @@ def _post_setup_agent_browser(post_setup_key: str) -> None:
         try:
             _find_agent_browser(validate=False)
         except FileNotFoundError:
-            _print_warning(f"    agent-browser is missing. Install it explicitly: {_browser_install_hint()}")
+            _print_warning(
+                f"    agent-browser is missing. Install it explicitly: {_browser_install_hint()}"
+            )
             return
         if docker and post_setup_key == "agent_browser" and not _chromium_installed():
             _print_warning("    Chromium is missing but you're running in Docker.")
             # Clawksis publishes no image: the container is built locally from the checkout.
-            _info_lines("Rebuild the image from your clawksis-agent checkout to get the bundled Chromium:",
-                        f"  {recommended_update_command_for_method('docker')}")
+            _info_lines(
+                "Rebuild the image from your clawksis-agent checkout to get the bundled Chromium:",
+                f"  {recommended_update_command_for_method('docker')}",
+            )
         return
 
     try:
         import pm
+
         # Chromium is a declared dependency; do not acquire it a second time.
         pm.ensure("agent-browser", explicit=True)
     except Exception as exc:
@@ -96,51 +119,94 @@ def _post_setup_agent_browser(post_setup_key: str) -> None:
 
     # OS libraries are host-owned. Never download another package manager to install them.
     if post_setup_key == "agent_browser" and sys.platform == "linux":
-        _info_lines("Chromium also needs system libraries supplied by your distribution.")
+        _info_lines(
+            "Chromium also needs system libraries supplied by your distribution."
+        )
         if shutil.which("apt-get") and _module_installed("playwright"):
-            command = shlex.join([sys.executable, "-m", "playwright", "install-deps", "chromium"])
+            command = shlex.join(
+                [sys.executable, "-m", "playwright", "install-deps", "chromium"]
+            )
             _info_lines(f"Install missing system libraries with: {command}")
         else:
-            _info_lines("System dependency installation guide:",
-                        "  https://playwright.dev/python/docs/browsers#install-system-dependencies")
+            _info_lines(
+                "System dependency installation guide:",
+                "  https://playwright.dev/python/docs/browsers#install-system-dependencies",
+            )
 
 
 def _post_setup_camofox() -> None:
     from tools.browser_camofox import check_camofox_available
 
-    _info_lines("Camofox is an externally managed server; Clawksis does not install or start it.")
+    _info_lines(
+        "Camofox is an externally managed server; Clawksis does not install or start it."
+    )
     if check_camofox_available():
         _print_success("    Configured Camofox server is reachable")
         return
-    _print_warning("    Camofox server is not reachable. Start your server and check CAMOFOX_URL.")
-    _info_lines("Server setup: https://github.com/jo-inc/camofox-browser",
-                "Docker: docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser")
+    _print_warning(
+        "    Camofox server is not reachable. Start your server and check CAMOFOX_URL."
+    )
+    _info_lines(
+        "Server setup: https://github.com/jo-inc/camofox-browser",
+        "Docker: docker run -p 9377:9377 -e CAMOFOX_PORT=9377 jo-inc/camofox-browser",
+    )
 
 
 # The hook key is the UI provider identifier; extra names belong to pyproject.toml.
 def _python_hook(module, extra, label, installing, on_install=(), always=()) -> dict:
-    return {"module": module, "extra": extra, "label": label, "installing": installing,
-            "on_install": on_install, "always": always}
+    return {
+        "module": module,
+        "extra": extra,
+        "label": label,
+        "installing": installing,
+        "on_install": on_install,
+        "always": always,
+    }
 
 
 _PYTHON_POST_SETUP_HOOKS: dict = {
     "faster_whisper": _python_hook(
-        "faster_whisper", "stt-whisper", "faster-whisper", "Installing faster-whisper (model ~150MB downloads on first use)...",
-        on_install=(f"Model sizes: {_LOCAL_STT_MODEL_SUMMARY}",
-                    "Change via stt.local.model in config.yaml")),
+        "faster_whisper",
+        "stt-whisper",
+        "faster-whisper",
+        "Installing faster-whisper (model ~150MB downloads on first use)...",
+        on_install=(
+            f"Model sizes: {_LOCAL_STT_MODEL_SUMMARY}",
+            "Change via stt.local.model in config.yaml",
+        ),
+    ),
     "kittentts": _python_hook(
-        "kittentts", "kittentts", "kittentts", "Installing kittentts (~25-80MB model, CPU-only)...",
-        on_install=("Voices: Jasper, Bella, Luna, Bruno, Rosie, Hugo, Kiki, Leo",
-                    "Models: KittenML/kitten-tts-nano-0.8-int8 (25MB), micro (41MB), mini (80MB)")),
+        "kittentts",
+        "kittentts",
+        "kittentts",
+        "Installing kittentts (~25-80MB model, CPU-only)...",
+        on_install=(
+            "Voices: Jasper, Bella, Luna, Bruno, Rosie, Hugo, Kiki, Leo",
+            "Models: KittenML/kitten-tts-nano-0.8-int8 (25MB), micro (41MB), mini (80MB)",
+        ),
+    ),
     "piper": _python_hook(
-        "piper", "piper", "piper-tts", "Installing piper-tts (~14MB wheel, voices downloaded on first use)...",
-        always=("Default voice: en_US-lessac-medium (downloaded on first TTS call)",
-                "Full voice list: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md",
-                "Switch voices by setting tts.piper.voice in config.yaml")),
+        "piper",
+        "piper",
+        "piper-tts",
+        "Installing piper-tts (~14MB wheel, voices downloaded on first use)...",
+        always=(
+            "Default voice: en_US-lessac-medium (downloaded on first TTS call)",
+            "Full voice list: https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md",
+            "Switch voices by setting tts.piper.voice in config.yaml",
+        ),
+    ),
     "ddgs": _python_hook(
-        "ddgs", "ddgs", "ddgs", "Installing ddgs (DuckDuckGo search package)...",
-        always=("No API key required. DuckDuckGo enforces server-side rate limits.",
-                "Pair with an extract provider if you also need web_extract."))}
+        "ddgs",
+        "ddgs",
+        "ddgs",
+        "Installing ddgs (DuckDuckGo search package)...",
+        always=(
+            "No API key required. DuckDuckGo enforces server-side rate limits.",
+            "Pair with an extract provider if you also need web_extract.",
+        ),
+    ),
+}
 
 
 def _post_setup_python(spec: dict) -> None:
@@ -159,18 +225,20 @@ def _post_setup_python(spec: dict) -> None:
     _info_lines(*spec["on_install"], *spec["always"])
 
 
-
 def _post_setup_xai_grok() -> None:
     """Shared xAI credential bootstrap for any picker row that talks to xAI (TTS, STT, Video Gen, x_search
     …). Accepts a SuperGrok-tier OAuth token (preferred — billed to the existing subscription) or a raw
     XAI_API_KEY; the rows declare empty env_vars so the auth UX lives here."""
     try:
         from clawk_cli.auth import get_xai_oauth_auth_status
+
         oauth_logged_in = bool(get_xai_oauth_auth_status().get("logged_in"))
     except Exception:
         oauth_logged_in = False
     if oauth_logged_in:
-        _print_success("    xAI will use your xAI Grok OAuth (SuperGrok / Premium+) credentials")
+        _print_success(
+            "    xAI will use your xAI Grok OAuth (SuperGrok / Premium+) credentials"
+        )
         return
     if get_env_value("XAI_API_KEY"):
         _print_success("    xAI will use your existing XAI_API_KEY")
@@ -187,22 +255,30 @@ def _post_setup_xai_grok() -> None:
         return
 
     idx = prompt_choice(
-        "    How do you want xAI to authenticate?", default=0,
-        choices=["Sign in with xAI Grok OAuth (SuperGrok / Premium+) — browser login",
-                 "Paste an xAI API key (console.x.ai)",
-                 "Skip — configure later via `clawk auth add xai-oauth`"])
+        "    How do you want xAI to authenticate?",
+        default=0,
+        choices=[
+            "Sign in with xAI Grok OAuth (SuperGrok / Premium+) — browser login",
+            "Paste an xAI API key (console.x.ai)",
+            "Skip — configure later via `clawk auth add xai-oauth`",
+        ],
+    )
     if idx == 0:
         if _run_xai_oauth_login_from_setup():
             _print_success("    Logged in — xAI will use these OAuth credentials")
         else:
-            _print_warning("    xAI Grok OAuth login did not complete. Run later: clawk auth add xai-oauth")
+            _print_warning(
+                "    xAI Grok OAuth login did not complete. Run later: clawk auth add xai-oauth"
+            )
     elif idx == 1:
         api_key = _setup_prompt("    xAI API key", password=True)
         if api_key:
             save_env_value("XAI_API_KEY", api_key)
             _print_success("    XAI_API_KEY saved")
         else:
-            _print_warning("    No API key provided. Run later: clawk auth add xai-oauth")
+            _print_warning(
+                "    No API key provided. Run later: clawk auth add xai-oauth"
+            )
     else:
         _print_info("    xAI will remain inactive until credentials are configured.")
 
@@ -211,6 +287,7 @@ def _codex_credentials_present() -> bool:
     """Cheap offline check for Codex/ChatGPT OAuth credentials (auth store + pool only)."""
     try:
         from clawk_cli.auth import get_codex_auth_status
+
         return bool(get_codex_auth_status().get("logged_in"))
     except Exception:
         return False
@@ -221,7 +298,9 @@ def _post_setup_openai_codex() -> None:
     (image gen today). The rows declare empty env_vars so the sign-in UX lives here. Saves tokens only —
     never rewrites ``model.provider``: the user picked an image backend, not a chat model (#102144)."""
     if _codex_credentials_present():
-        _print_success("    Image generation will use your existing Codex/ChatGPT OAuth credentials")
+        _print_success(
+            "    Image generation will use your existing Codex/ChatGPT OAuth credentials"
+        )
         return
 
     relogin = "clawk auth add openai-codex"
@@ -240,23 +319,36 @@ def _post_setup_openai_codex() -> None:
         _info_lines(f"No terminal to sign in from. Run: {relogin}")
         return
     idx = prompt_choice(
-        "    How do you want to sign in?", default=0,
-        choices=["Sign in with ChatGPT/Codex OAuth — browser login",
-                 f"Skip — configure later via `{relogin}`"])
+        "    How do you want to sign in?",
+        default=0,
+        choices=[
+            "Sign in with ChatGPT/Codex OAuth — browser login",
+            f"Skip — configure later via `{relogin}`",
+        ],
+    )
     if idx != 0:
-        _print_info("    Codex image generation will remain inactive until you sign in.")
+        _print_info(
+            "    Codex image generation will remain inactive until you sign in."
+        )
         return
     try:
         creds = _codex_device_code_login()
         _save_codex_tokens(creds["tokens"], creds.get("last_refresh"), set_active=False)
     except (Exception, KeyboardInterrupt) as exc:
-        _print_warning(f"    Codex sign-in did not complete: {exc}. Run later: {relogin}")
+        _print_warning(
+            f"    Codex sign-in did not complete: {exc}. Run later: {relogin}"
+        )
         return
-    _print_success("    Logged in — image generation will use these Codex OAuth credentials")
+    _print_success(
+        "    Logged in — image generation will use these Codex OAuth credentials"
+    )
 
 
 def _xai_credentials_ready() -> bool:
-    from clawk_cli.tools_config import _xai_credentials_present  # facade binding: tests patch it there
+    from clawk_cli.tools_config import (
+        _xai_credentials_present,
+    )  # facade binding: tests patch it there
+
     return _xai_credentials_present()
 
 
@@ -278,7 +370,10 @@ _POST_SETUP_HOOKS: dict = {
     "cua_driver": lambda: install_cua_driver(upgrade=False),
     "xai_grok": _post_setup_xai_grok,
     "openai_codex": _post_setup_openai_codex,
-    **{key: (lambda spec=spec: _post_setup_python(spec)) for key, spec in _PYTHON_POST_SETUP_HOOKS.items()},
+    **{
+        key: (lambda spec=spec: _post_setup_python(spec))
+        for key, spec in _PYTHON_POST_SETUP_HOOKS.items()
+    },
 }
 
 
@@ -292,14 +387,24 @@ def valid_post_setup_keys() -> set[str]:
     plugin-registered providers). This is the allowlist ``post-setup`` and the dashboard endpoint
     validate against, so a caller cannot drive ``_run_post_setup`` with an arbitrary key."""
     from clawk_cli.tools_config import (
-        TOOL_CATEGORIES, _plugin_browser_providers, _plugin_image_gen_providers,
-        _plugin_video_gen_providers, _plugin_web_search_providers)
+        TOOL_CATEGORIES,
+        _plugin_browser_providers,
+        _plugin_image_gen_providers,
+        _plugin_video_gen_providers,
+        _plugin_web_search_providers,
+    )
 
     keys: set[str] = set()
     for cat in TOOL_CATEGORIES.values():
-        keys.update(ps for prov in cat.get("providers", []) if (ps := prov.get("post_setup")))
-    for builder in (_plugin_web_search_providers, _plugin_image_gen_providers,
-                    _plugin_video_gen_providers, _plugin_browser_providers):
+        keys.update(
+            ps for prov in cat.get("providers", []) if (ps := prov.get("post_setup"))
+        )
+    for builder in (
+        _plugin_web_search_providers,
+        _plugin_image_gen_providers,
+        _plugin_video_gen_providers,
+        _plugin_browser_providers,
+    ):
         try:
             keys.update(ps for prov in builder() if (ps := prov.get("post_setup")))
         except Exception:  # pragma: no cover — defensive; plugins optional
@@ -316,7 +421,9 @@ def run_post_setup_command(args) -> int:
         return 2
     valid = valid_post_setup_keys()
     if key not in valid:
-        _print_error(f"Unknown post-setup key: {key!r}. Valid keys: {', '.join(sorted(valid)) or '(none)'}")
+        _print_error(
+            f"Unknown post-setup key: {key!r}. Valid keys: {', '.join(sorted(valid)) or '(none)'}"
+        )
         return 2
     _print_info(f"Running post-setup hook: {key}")
     try:
@@ -348,6 +455,7 @@ def _post_setup_already_installed(post_setup_key: str) -> bool:
 def _module_installed(module_name: str) -> bool:
     """Cheap importable-without-importing check (no heavy side effects)."""
     import importlib.util
+
     try:
         return importlib.util.find_spec(module_name) is not None
     except Exception:
@@ -366,6 +474,7 @@ def _agent_browser_installed() -> bool:
 def _camofox_installed() -> bool:
     """Readiness belongs to the configured external server, not root node_modules."""
     from tools.browser_camofox import check_camofox_available
+
     return check_camofox_available()
 
 
@@ -373,6 +482,7 @@ def _lightpanda_installed() -> bool:
     """True when a lightpanda binary is on PATH or in a known install dir."""
     try:
         from tools.browser_lightpanda import find_lightpanda_binary
+
         return find_lightpanda_binary() is not None
     except Exception:
         return False
@@ -382,6 +492,7 @@ def _cloud_agent_browser_installed() -> bool:
     """Installed-check for the ``browserbase`` hook: cloud providers host their own Chromium, so
     presence of the agent-browser CLI is the whole contract."""
     from clawk_cli.nous_subscription import _has_agent_browser
+
     return _has_agent_browser()
 
 
@@ -390,9 +501,13 @@ def _cloud_agent_browser_installed() -> bool:
 # installed-checks the hooks perform. Credential bootstraps (``xai_grok``, ``openai_codex``) are absent —
 # they live in ``_POST_SETUP_AUTH_READY`` as auth checks. Late-bound lambdas so tests can monkeypatch the underlying predicates.
 _POST_SETUP_READY: dict = {
-    **{key: (lambda m=spec["module"]: _module_installed(m)) for key, spec in _PYTHON_POST_SETUP_HOOKS.items()},
+    **{
+        key: (lambda m=spec["module"]: _module_installed(m))
+        for key, spec in _PYTHON_POST_SETUP_HOOKS.items()
+    },
     "agent_browser": lambda: _agent_browser_installed(),
     "browserbase": lambda: _cloud_agent_browser_installed(),
     "camofox": lambda: _camofox_installed(),
     "lightpanda": lambda: _lightpanda_installed(),
-    "cua_driver": lambda: _cua_driver_install_ready()}
+    "cua_driver": lambda: _cua_driver_install_ready(),
+}

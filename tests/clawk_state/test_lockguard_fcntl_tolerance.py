@@ -58,7 +58,9 @@ def _constants_only_fcntl() -> types.ModuleType:
         pytest.param(_constants_only_fcntl(), id="constants-only"),
     ],
 )
-def test_guard_degrades_to_a_no_op_instead_of_killing_every_importer(monkeypatch, tmp_path, stub):
+def test_guard_degrades_to_a_no_op_instead_of_killing_every_importer(
+    monkeypatch, tmp_path, stub
+):
     guard = _reimport_with_fcntl(monkeypatch, stub)
 
     # An open descriptor on the file is what makes hold() reach fcntl.fcntl(); without one the
@@ -87,7 +89,9 @@ def test_windows_never_arms_the_guard_even_with_an_importable_fcntl(monkeypatch)
 
 
 def test_a_usable_fcntl_still_arms_the_guard(monkeypatch):
-    real_fcntl = pytest.importorskip("fcntl", reason="POSIX-only: nothing to arm on Windows")
+    real_fcntl = pytest.importorskip(
+        "fcntl", reason="POSIX-only: nothing to arm on Windows"
+    )
 
     guard = _reimport_with_fcntl(monkeypatch, real_fcntl)
 

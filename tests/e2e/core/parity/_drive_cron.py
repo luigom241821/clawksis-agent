@@ -39,26 +39,46 @@ _RESPONSE = re.compile(r"^## Response\s*\n(.*)\Z", re.DOTALL | re.MULTILINE)
 
 def _cron(ph: ParityHome, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        clawk_argv("cron", *args), cwd=ph.home, env=ph.env(), capture_output=True, text=True,
-        timeout=TURN_TIMEOUT, stdin=subprocess.DEVNULL,
+        clawk_argv("cron", *args),
+        cwd=ph.home,
+        env=ph.env(),
+        capture_output=True,
+        text=True,
+        timeout=TURN_TIMEOUT,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
 
 
 def drive_cron(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
-    created = _cron(ph, "create", "1d", prompt, "--name", "parity", "--deliver", "local",
-                    "--workdir", str(ph.project))
+    created = _cron(
+        ph,
+        "create",
+        "1d",
+        prompt,
+        "--name",
+        "parity",
+        "--deliver",
+        "local",
+        "--workdir",
+        str(ph.project),
+    )
     match = _JOB_ID.search(created.stdout)
     assert created.returncode == 0 and match, (
-        f"clawk cron create exited {created.returncode}: {created.stdout[-1000:]} {created.stderr[-2000:]}")
+        f"clawk cron create exited {created.returncode}: {created.stdout[-1000:]} {created.stderr[-2000:]}"
+    )
     job_id = match.group(1)
 
     ran = _cron(ph, "run", job_id)
     gateway_stopped = stop_profile_gateway(ph)
-    assert ran.returncode == 0, f"clawk cron run exited {ran.returncode}: {ran.stderr[-2000:]}"
+    assert ran.returncode == 0, (
+        f"clawk cron run exited {ran.returncode}: {ran.stderr[-2000:]}"
+    )
     # Anything but a synchronous verdict means the run was handed to a ticker/background
     # worker this driver cannot observe — a harness problem, not a parity result.
-    assert "Ran now:" in ran.stdout, f"clawk cron run did not execute synchronously: {ran.stdout[-1000:]}"
+    assert "Ran now:" in ran.stdout, (
+        f"clawk cron run did not execute synchronously: {ran.stdout[-1000:]}"
+    )
 
     outputs = sorted((ph.clawk_home / "cron" / "output" / job_id).glob("*.md"))
     final_text = None

@@ -89,9 +89,7 @@ def test_live_codex_native_threshold_applies_on_next_turn(monkeypatch):
     monkeypatch.setattr(
         server,
         "_load_cfg",
-        lambda: {
-            "compression": {"codex_responses_compact_threshold": 120_000}
-        },
+        lambda: {"compression": {"codex_responses_compact_threshold": 120_000}},
     )
 
     server._sync_agent_compression_with_config("sid-95151", session)
@@ -171,15 +169,20 @@ def test_absent_threshold_tokens_keeps_default_cap_on_1m_window(monkeypatch):
     # this one is about the cap, so keep the 1M window in scope for the bare test runtime.
     from agent import agent_init
 
-    monkeypatch.setattr(agent_init, "config_context_length_for_runtime", lambda _agent, _cfg=None: 1_000_000)
-    _sync_with_cfg(monkeypatch, session, {"model": {"context_length": 1_000_000}, "compression": {}})
+    monkeypatch.setattr(
+        agent_init,
+        "config_context_length_for_runtime",
+        lambda _agent, _cfg=None: 1_000_000,
+    )
+    _sync_with_cfg(
+        monkeypatch,
+        session,
+        {"model": {"context_length": 1_000_000}, "compression": {}},
+    )
 
     assert compressor.threshold_tokens_cap == _default_cap()
     # threshold is absent too, so the derived 0.50 ratio applies under the default cap.
     assert compressor.threshold_tokens == _with_default_cap(500_000)
-
-
-
 
 
 # ── Unset semantics (#94724 review finding on #95980) ────────────────────

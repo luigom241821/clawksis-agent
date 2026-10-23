@@ -94,6 +94,7 @@ def peer_gateway(tmp_path, monkeypatch):
             hidden_id=hidden_id,
         )
     finally:
+
         async def _stop():
             await state["runner"].cleanup()
 
@@ -105,14 +106,20 @@ def peer_gateway(tmp_path, monkeypatch):
             close()
 
 
-def test_peer_dm_reaches_hidden_canonical_bot_chat_e2e(peer_gateway, monkeypatch, capsys):
+def test_peer_dm_reaches_hidden_canonical_bot_chat_e2e(
+    peer_gateway, monkeypatch, capsys
+):
     """The stock peer dm client resolves the HIDDEN canonical Bot Chat on a
     real gateway, runs the chat turn on it, and creates no duplicate row."""
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": peer_gateway.url}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": peer_gateway.url}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: API_KEY)
 
     rc = peer_cmd.cmd_peer(
-        SimpleNamespace(peer_action="dm", target="spark", message="disk status?", json=True)
+        SimpleNamespace(
+            peer_action="dm", target="spark", message="disk status?", json=True
+        )
     )
 
     assert rc == 0
@@ -150,7 +157,8 @@ def peer_gateway_compressed_hidden(peer_gateway):
     lineage; the title lives only on the ended root."""
     db = peer_gateway.db
     tip_id = db.create_session(
-        "botchat_tip_1", "gateway_botmode", parent_session_id=peer_gateway.hidden_id)
+        "botchat_tip_1", "gateway_botmode", parent_session_id=peer_gateway.hidden_id
+    )
     db.end_session(peer_gateway.hidden_id, "compression")
     db.set_session_hidden(peer_gateway.hidden_id, True)  # lineage-hide root+tip
     peer_gateway.tip_id = tip_id
@@ -158,7 +166,8 @@ def peer_gateway_compressed_hidden(peer_gateway):
 
 
 def test_peer_dm_reaches_compressed_hidden_bot_chat_e2e(
-        peer_gateway_compressed_hidden, monkeypatch, capsys):
+    peer_gateway_compressed_hidden, monkeypatch, capsys
+):
     """Hidden canonical Bot Chat under compression: the peer lookup must still
     resolve (to the live tip) instead of missing it and colliding with
     UNIQUE(title) on create (HTTP 400, issue #106165)."""
@@ -167,7 +176,9 @@ def test_peer_dm_reaches_compressed_hidden_bot_chat_e2e(
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: API_KEY)
 
     rc = peer_cmd.cmd_peer(
-        SimpleNamespace(peer_action="dm", target="spark", message="disk status?", json=True)
+        SimpleNamespace(
+            peer_action="dm", target="spark", message="disk status?", json=True
+        )
     )
 
     assert rc == 0

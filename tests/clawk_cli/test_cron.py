@@ -23,7 +23,6 @@ def tmp_cron_dir(tmp_path, monkeypatch):
 
 
 class TestCronCommandLifecycle:
-
     def test_edit_persists_user_owned_inference_pins(self, tmp_cron_dir, capsys):
         job = create_job(prompt="Daily report", schedule="every 1h")
         parser = argparse.ArgumentParser(prog="clawk")
@@ -138,7 +137,9 @@ class TestUnverifiedDeliveryVisibility:
     not only in a WARNING log line."""
 
     def _seed(self):
-        job = create_job(prompt="Nightly brief", schedule="every 1h", deliver="slack:C0123456")
+        job = create_job(
+            prompt="Nightly brief", schedule="every 1h", deliver="slack:C0123456"
+        )
         jobs = load_jobs()
         jobs[0]["last_status"] = "ok"
         jobs[0]["last_delivery_unverified"] = ["slack:C0123456"]
@@ -155,7 +156,9 @@ class TestUnverifiedDeliveryVisibility:
         assert "without message_id/raw_response" in out
 
     def test_list_is_quiet_when_delivery_was_verified(self, tmp_cron_dir, capsys):
-        create_job(prompt="Nightly brief", schedule="every 1h", deliver="slack:C0123456")
+        create_job(
+            prompt="Nightly brief", schedule="every 1h", deliver="slack:C0123456"
+        )
         cron_command(Namespace(cron_command="list", all=True, json=False))
         assert "UNVERIFIED" not in capsys.readouterr().out
 
@@ -171,7 +174,9 @@ class TestUnverifiedDeliveryVisibility:
 
 class TestCronDoctor:
     def test_doctor_reports_cron_health_issues(self, tmp_cron_dir, capsys):
-        job = create_job(prompt="Daily digest", schedule="every 1h", script="missing.py")
+        job = create_job(
+            prompt="Daily digest", schedule="every 1h", script="missing.py"
+        )
         jobs = load_jobs()
         jobs[0]["last_status"] = "error"
         jobs[0]["last_error"] = "Provider returned error"
@@ -318,7 +323,6 @@ class TestGatewayNotRunningWarning:
     report was simply a gateway that was never started.
     """
 
-
     def test_list_warns_when_gateway_absent(self, tmp_cron_dir, capsys, monkeypatch):
         create_job(prompt="Daily report", schedule="0 11 * * *")
         monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", list)
@@ -356,7 +360,6 @@ class TestExternalCronProviderStatus:
         # Still surfaces the active-job summary.
         assert "active job(s)" in out
 
-
     def test_create_silent_for_chronos_even_without_gateway(
         self, tmp_cron_dir, capsys, monkeypatch
     ):
@@ -386,14 +389,14 @@ class TestExternalCronProviderStatus:
         assert "Scheduler is not ready" not in out
 
 
-
-
 def test_cron_tick_invokes_scheduler_tick_verbose_and_headless(monkeypatch):
     """The CLI tick runs outside any gateway: it must declare itself headless so agent jobs are
     refused, never spawned for."""
     calls = []
-    monkeypatch.setattr("cron.scheduler.tick",
-                        lambda verbose=False, headless=False: calls.append((verbose, headless)))
+    monkeypatch.setattr(
+        "cron.scheduler.tick",
+        lambda verbose=False, headless=False: calls.append((verbose, headless)),
+    )
 
     cron_cli.cron_tick()
 
@@ -401,7 +404,9 @@ def test_cron_tick_invokes_scheduler_tick_verbose_and_headless(monkeypatch):
 
 
 def test_cron_create_failure_returns_nonzero(monkeypatch, capsys):
-    monkeypatch.setattr(cron_cli, "_cron_api", lambda **kwargs: {"success": False, "error": "boom"})
+    monkeypatch.setattr(
+        cron_cli, "_cron_api", lambda **kwargs: {"success": False, "error": "boom"}
+    )
 
     args = SimpleNamespace(
         schedule="every day",
@@ -571,8 +576,10 @@ class TestSlashCronListLastStatus:
         save_jobs(jobs)
 
         out = self._run_list(tmp_cron_dir, capsys)
-        assert "Last run: 2026-09-01T07:00:00+00:00 (delivery_failed: telegram: 502 Bad Gateway)" in out
-
+        assert (
+            "Last run: 2026-09-01T07:00:00+00:00 (delivery_failed: telegram: 502 Bad Gateway)"
+            in out
+        )
 
 
 class TestStatusSurfacesDeadScheduler:
@@ -588,9 +595,12 @@ class TestStatusSurfacesDeadScheduler:
         monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(lock_dir))
         monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", list)
         monkeypatch.setattr(
-            "clawk_cli.gateway.named_profile_served_by_running_multiplexer", lambda: None
+            "clawk_cli.gateway.named_profile_served_by_running_multiplexer",
+            lambda: None,
         )
-        monkeypatch.setattr("gateway.status.is_gateway_runtime_lock_active", lambda: False)
+        monkeypatch.setattr(
+            "gateway.status.is_gateway_runtime_lock_active", lambda: False
+        )
 
     def _park_next_run(self, job_id, when):
         jobs = load_jobs()
@@ -603,7 +613,9 @@ class TestStatusSurfacesDeadScheduler:
         job = create_job(prompt="Hourly", schedule="every 60m")
         self._dead_gateway(monkeypatch, tmp_cron_dir / "locks")
         self._park_next_run(job["id"], datetime.now(UTC) - timedelta(hours=7))
-        (tmp_cron_dir / "cron" / "ticker_heartbeat").write_text(str(time.time() - 25 * 3600))
+        (tmp_cron_dir / "cron" / "ticker_heartbeat").write_text(
+            str(time.time() - 25 * 3600)
+        )
 
         cron_command(Namespace(cron_command="status"))
         status_out = capsys.readouterr().out
@@ -617,7 +629,9 @@ class TestStatusSurfacesDeadScheduler:
         assert "Next run:" not in status_out
         assert "Overdue:" in list_out and "Next run:" not in list_out
 
-    def test_overdue_within_doctor_grace_stays_plain(self, tmp_cron_dir, capsys, monkeypatch):
+    def test_overdue_within_doctor_grace_stays_plain(
+        self, tmp_cron_dir, capsys, monkeypatch
+    ):
         # status shares `cron doctor`'s 15-minute grace (_OVERDUE_GRACE_SECONDS): a job only
         # a few minutes behind the ticker's own cadence is not an outage yet, and status must
         # not flash OVERDUE while doctor calls the same job healthy.
@@ -631,10 +645,14 @@ class TestStatusSurfacesDeadScheduler:
         list_out = capsys.readouterr().out
 
         assert "Next run:" in status_out and "OVERDUE" not in status_out
-        assert "Scheduler last ticked" not in status_out  # no heartbeat file → nothing to date
+        assert (
+            "Scheduler last ticked" not in status_out
+        )  # no heartbeat file → nothing to date
         assert "Next run:" in list_out and "Overdue:" not in list_out
 
-    def test_slash_cron_and_list_flag_overdue_but_not_paused(self, tmp_cron_dir, capsys):
+    def test_slash_cron_and_list_flag_overdue_but_not_paused(
+        self, tmp_cron_dir, capsys
+    ):
         # The in-chat `/cron` overview and `/cron list` (classic CLI + Ink TUI forward to the
         # same handler) read the same rows; a 7h-past stamp must not read as an upcoming run,
         # while a paused job keeps its plain label — pausing is why it did not fire.
@@ -660,7 +678,9 @@ class TestStatusSurfacesDeadScheduler:
         for out in (overview_out, list_out):
             assert out.count("Overdue:") == 1 and "7h ago" in out
         assert "Next" not in overview_out  # the overview lists enabled jobs only
-        assert list_out.count("Next run:") == 1  # only the paused job's stamp stays plain
+        assert (
+            list_out.count("Next run:") == 1
+        )  # only the paused job's stamp stays plain
         assert list_out.index("Overdue:") < list_out.index("Next run:")
 
 

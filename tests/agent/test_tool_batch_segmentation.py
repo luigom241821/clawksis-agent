@@ -65,7 +65,11 @@ def _flatten_ids(segments):
 
 class TestPlanToolBatchSegments:
     def test_all_safe_batch_is_single_parallel_segment(self):
-        calls = [_tc("web_search"), _tc("read_file", '{"path":"a.py"}'), _tc("web_extract")]
+        calls = [
+            _tc("web_search"),
+            _tc("read_file", '{"path":"a.py"}'),
+            _tc("web_extract"),
+        ]
         segments = _plan_tool_batch_segments(calls)
         assert _kinds(segments) == ["parallel"]
         assert _flatten_ids(segments) == [c.id for c in calls]
@@ -108,7 +112,6 @@ class TestPlanToolBatchSegments:
         assert _kinds(segments) == ["parallel", "sequential"]
         assert [tc.id for tc in segments[1][1]] == ["b1", "r3"]
 
-
     def test_never_parallel_tool_is_a_barrier(self):
         calls = [
             _tc("web_search", call_id="r1"),
@@ -118,8 +121,6 @@ class TestPlanToolBatchSegments:
         segments = _plan_tool_batch_segments(calls)
         assert _kinds(segments) == ["parallel", "sequential"]
         assert [tc.id for tc in segments[1][1]] == ["c1"]
-
-
 
     def test_overlapping_paths_split_across_segments(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -144,18 +145,15 @@ class TestPlanToolBatchSegments:
         a parallel segment with write_file/read_file on real.py.
         """
         patch_body = (
-            "*** Begin Patch\n"
-            "*** Update File: real.py\n"
-            "@@\n"
-            "-old\n"
-            "+new\n"
-            "*** End Patch\n"
+            "*** Begin Patch\n*** Update File: real.py\n@@\n-old\n+new\n*** End Patch\n"
         )
-        patch_args = json.dumps({
-            "mode": "patch",
-            "path": "dummy.txt",
-            "patch": patch_body,
-        })
+        patch_args = json.dumps(
+            {
+                "mode": "patch",
+                "path": "dummy.txt",
+                "patch": patch_body,
+            }
+        )
         calls = [
             _tc("patch", patch_args, call_id="p1"),
             _tc("write_file", '{"path":"real.py","content":"x"}', call_id="w1"),
@@ -186,11 +184,13 @@ class TestPlanToolBatchSegments:
             "*** End Patch\n"
         )
         # Honest path= only names a.py — b.py still must be reserved.
-        patch_args = json.dumps({
-            "mode": "patch",
-            "path": "a.py",
-            "patch": patch_body,
-        })
+        patch_args = json.dumps(
+            {
+                "mode": "patch",
+                "path": "a.py",
+                "patch": patch_body,
+            }
+        )
         calls = [
             _tc("patch", patch_args, call_id="p1"),
             _tc("read_file", '{"path":"b.py"}', call_id="r1"),
@@ -211,10 +211,7 @@ class TestPlanToolBatchSegments:
     def test_v4a_without_path_arg_still_scopes_from_headers(self, tmp_path):
         """mode=patch with no path= must still parallel-scope from V4A headers."""
         patch_body = (
-            "*** Begin Patch\n"
-            "*** Update File: real.py\n"
-            "@@\n-old\n+new\n"
-            "*** End Patch\n"
+            "*** Begin Patch\n*** Update File: real.py\n@@\n-old\n+new\n*** End Patch\n"
         )
         patch_args = json.dumps({"mode": "patch", "patch": patch_body})
         calls = [
@@ -265,7 +262,11 @@ class TestReaderWriterPathRoles:
         """The exact smoke-test race: patch a file, search its directory."""
         monkeypatch.chdir(tmp_path)
         calls = [
-            _tc("patch", '{"path":"scratch/sample.txt","old_string":"a","new_string":"patched"}', call_id="w1"),
+            _tc(
+                "patch",
+                '{"path":"scratch/sample.txt","old_string":"a","new_string":"patched"}',
+                call_id="w1",
+            ),
             _tc("search_files", '{"pattern":"patched","path":"scratch"}', call_id="s1"),
         ]
         segments = _plan_tool_batch_segments(calls, execution_cwd=tmp_path)
@@ -278,7 +279,9 @@ class TestReaderWriterPathRoles:
                 "write and dependent search must not share a parallel segment"
             )
 
-    def test_search_files_default_root_conflicts_with_write_into_cwd(self, tmp_path, monkeypatch):
+    def test_search_files_default_root_conflicts_with_write_into_cwd(
+        self, tmp_path, monkeypatch
+    ):
         """search_files with NO path arg reserves the cwd — a write anywhere
         under the cwd must not share its segment."""
         monkeypatch.chdir(tmp_path)
@@ -303,7 +306,9 @@ class TestReaderWriterPathRoles:
         assert _kinds(segments) == ["parallel"]
         assert [tc.id for tc in segments[0][1]] == ["r1", "r2"]
 
-    def test_read_file_and_search_files_overlapping_stay_parallel(self, tmp_path, monkeypatch):
+    def test_read_file_and_search_files_overlapping_stay_parallel(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         calls = [
             _tc("read_file", '{"path":"src/a.py"}', call_id="r1"),
@@ -312,7 +317,9 @@ class TestReaderWriterPathRoles:
         segments = _plan_tool_batch_segments(calls, execution_cwd=tmp_path)
         assert _kinds(segments) == ["parallel"]
 
-    def test_search_files_disjoint_from_write_stays_parallel(self, tmp_path, monkeypatch):
+    def test_search_files_disjoint_from_write_stays_parallel(
+        self, tmp_path, monkeypatch
+    ):
         """A search rooted outside the written subtree has no conflict."""
         monkeypatch.chdir(tmp_path)
         calls = [
@@ -353,9 +360,6 @@ class TestShouldParallelizeBackwardCompat:
 
     def test_single_call_is_sequential(self):
         assert not _should_parallelize_tool_batch([_tc("web_search")])
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -465,10 +469,7 @@ class TestSegmentedDispatchIntegration:
         # Barrier ordering: t1 executed after {s1,s2} and before {s3,s4}.
         t1_pos = executed.index("t1")
         assert {"s1", "s2"} == set(executed[:t1_pos])
-        assert {"s3", "s4"} == set(executed[t1_pos + 1:])
-
-
-
+        assert {"s3", "s4"} == set(executed[t1_pos + 1 :])
 
     def test_interrupt_during_barrier_drains_later_segments(self, agent):
         """Interrupt raised while the barrier tool runs: the trailing parallel
@@ -545,21 +546,44 @@ class TestSegmentedDispatchIntegration:
             (
                 [
                     _tc("web_search", '{"query":"large"}', call_id="mixed-large"),
-                    _tc("web_search", '{"query":"small"}', call_id="mixed-search-small"),
-                    _tc("terminal", '{"command":"small"}', call_id="mixed-terminal-small"),
+                    _tc(
+                        "web_search", '{"query":"small"}', call_id="mixed-search-small"
+                    ),
+                    _tc(
+                        "terminal",
+                        '{"command":"small"}',
+                        call_id="mixed-terminal-small",
+                    ),
                 ],
                 ["parallel", "sequential"],
             ),
             (
                 [
-                    _tc("web_search", '{"query":"small"}', call_id="mixed-search-first-small"),
-                    _tc("web_search", '{"query":"small"}', call_id="mixed-search-second-small"),
-                    _tc("terminal", '{"command":"large"}', call_id="mixed-terminal-large"),
+                    _tc(
+                        "web_search",
+                        '{"query":"small"}',
+                        call_id="mixed-search-first-small",
+                    ),
+                    _tc(
+                        "web_search",
+                        '{"query":"small"}',
+                        call_id="mixed-search-second-small",
+                    ),
+                    _tc(
+                        "terminal",
+                        '{"command":"large"}',
+                        call_id="mixed-terminal-large",
+                    ),
                 ],
                 ["parallel", "sequential"],
             ),
         ],
-        ids=["parallel", "sequential", "mixed-parallel-large", "mixed-sequential-large"],
+        ids=[
+            "parallel",
+            "sequential",
+            "mixed-parallel-large",
+            "mixed-sequential-large",
+        ],
     )
     def test_steer_survives_turn_budget_in_every_dispatch_path(
         self, agent, calls, expected_segment_kinds
@@ -593,11 +617,16 @@ class TestSegmentedDispatchIntegration:
         ):
             agent._execute_tool_calls(msg, messages, "task-1")
 
-        large_result_index = next(i for i, call in enumerate(calls) if call.id.endswith("large"))
+        large_result_index = next(
+            i for i, call in enumerate(calls) if call.id.endswith("large")
+        )
         _assert_budget_replaced(messages[large_result_index]["content"])
         steer_messages = [m for m in messages if STEER_MARKER_OPEN in m["content"]]
         assert steer_messages == [messages[-1]]
-        assert "preserve this steer after budget enforcement" in steer_messages[0]["content"]
+        assert (
+            "preserve this steer after budget enforcement"
+            in steer_messages[0]["content"]
+        )
 
     def test_steer_survives_turn_budget_after_malformed_arguments(self, agent):
         """Malformed arguments still reach the shared post-budget finalizer.
@@ -623,10 +652,13 @@ class TestSegmentedDispatchIntegration:
 
         assert len(messages) == 2
         _assert_budget_replaced(messages[0]["content"])
-        assert STEER_MARKER_OPEN not in messages[0]["content"]   # tool row untouched
-        assert messages[1]["role"] == "user"                      # steer = new user msg
+        assert STEER_MARKER_OPEN not in messages[0]["content"]  # tool row untouched
+        assert messages[1]["role"] == "user"  # steer = new user msg
         assert messages[1]["content"].count(STEER_MARKER_OPEN) == 1
-        assert "preserve malformed-call steer after budget enforcement" in messages[1]["content"]
+        assert (
+            "preserve malformed-call steer after budget enforcement"
+            in messages[1]["content"]
+        )
 
 
 class TestPathCanonicalization:
@@ -676,8 +708,7 @@ class TestPathCanonicalization:
         alias_path = _canonical_path(str(alias_dir / "config.json"))
 
         assert _paths_overlap(real_path, alias_path), (
-            "Symlink alias and real path must overlap — "
-            "they must not be parallelized"
+            "Symlink alias and real path must overlap — they must not be parallelized"
         )
 
     def test_execution_cwd_used_over_process_cwd(self, tmp_path, monkeypatch):
@@ -710,7 +741,6 @@ class TestPathCanonicalization:
             "execution_cwd-relative path and absolute path must overlap; "
             "process cwd must not be used when execution_cwd is provided"
         )
-
 
     # ``platforms("windows")`` rather than ``skipif(sys.platform != "win32")``: the
     # Windows CI job greps for the marker to decide which files to import, so

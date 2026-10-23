@@ -75,8 +75,8 @@ class TestMinting:
             CommandTokenSource(secret_cmd, "dbx")()
         message = str(excinfo.value)
         assert "SENTINEL-SECRET" not in message
-        assert "dbx" in message          # names the provider to fix
-        assert "exited" in message       # states what happened
+        assert "dbx" in message  # names the provider to fix
+        assert "exited" in message  # states what happened
 
     def test_undecodable_output_does_not_raise(self):
         """One non-UTF-8 byte from the helper must not crash token minting.
@@ -139,7 +139,6 @@ class TestCaching:
         source._expires_at = time.monotonic() - 1  # cross the window
         assert source() != first  # re-minted after it
 
-
     def test_ttl_shorter_than_the_leeway_still_caches_briefly(self):
         """A leeway larger than the TTL must not disable caching entirely."""
         source = CommandTokenSource(
@@ -154,7 +153,6 @@ class TestBuilder:
     def test_returns_none_when_unset(self):
         assert build_command_token_provider("") is None
         assert build_command_token_provider("   ") is None
-
 
 
 class TestResolutionYieldsACallable:
@@ -223,9 +221,7 @@ class TestCallableKeyGetsBearerAuth:
             seen["callable"] = callable(api_key)
             return object()
 
-        monkeypatch.setattr(
-            aa, "_build_anthropic_client_with_bearer_hook", _fake_hook
-        )
+        monkeypatch.setattr(aa, "_build_anthropic_client_with_bearer_hook", _fake_hook)
         aa.build_anthropic_client(
             lambda: "minted-token", "https://gateway.invalid/anthropic"
         )
@@ -246,39 +242,43 @@ class TestAbsoluteExpiry:
     def _iso(seconds_from_now: float) -> str:
         from datetime import datetime, timedelta, timezone
 
-        return (
-            datetime.now(UTC) + timedelta(seconds=seconds_from_now)
-        ).isoformat()
+        return (datetime.now(UTC) + timedelta(seconds=seconds_from_now)).isoformat()
 
     def test_iso_expiry_yields_a_ttl(self):
         deadline = self._iso(3600)
-        _, ttl = _mint(f"printf '%s' '{{\"access_token\":\"t\",\"expiry\":\"{deadline}\"}}'", "p")
+        _, ttl = _mint(
+            f'printf \'%s\' \'{{"access_token":"t","expiry":"{deadline}"}}\'', "p"
+        )
         assert ttl is not None, "an advertised deadline must produce a TTL"
         assert 3500 < ttl <= 3600
 
     def test_azure_expires_on_spelling(self):
         deadline = self._iso(1800)
-        _, ttl = _mint(f"printf '%s' '{{\"access_token\":\"t\",\"expiresOn\":\"{deadline}\"}}'", "p")
+        _, ttl = _mint(
+            f'printf \'%s\' \'{{"access_token":"t","expiresOn":"{deadline}"}}\'', "p"
+        )
         assert ttl is not None and 1700 < ttl <= 1800
 
     def test_expires_in_still_wins_when_both_present(self):
         """The RFC 6749 field is authoritative where a helper sends both."""
         deadline = self._iso(3600)
         _, ttl = _mint(
-            f"printf '%s' '{{\"access_token\":\"t\",\"expires_in\":120,\"expiry\":\"{deadline}\"}}'",
+            f'printf \'%s\' \'{{"access_token":"t","expires_in":120,"expiry":"{deadline}"}}\'',
             "p",
         )
         assert ttl == 120.0
 
     def test_unparseable_expiry_is_not_a_ttl(self):
         """Junk must fall back to refresh-on-401, never to a guessed deadline."""
-        _, ttl = _mint('printf \'%s\' \'{"access_token":"t","expiry":"whenever"}\'', "p")
+        _, ttl = _mint(
+            'printf \'%s\' \'{"access_token":"t","expiry":"whenever"}\'', "p"
+        )
         assert ttl is None
 
     def test_already_past_expiry_is_not_a_ttl(self):
         """A stale deadline must not become a negative or zero TTL."""
         _, ttl = _mint(
-            f"printf '%s' '{{\"access_token\":\"t\",\"expiry\":\"{self._iso(-60)}\"}}'", "p"
+            f'printf \'%s\' \'{{"access_token":"t","expiry":"{self._iso(-60)}"}}\'', "p"
         )
         assert ttl is None
 
@@ -287,7 +287,7 @@ class TestAbsoluteExpiry:
         counter = tmp_path / "calls"
         cmd = (
             f"printf x >> {counter}; "
-            f"printf '%s' '{{\"access_token\":\"t\",\"expiry\":\"{self._iso(1)}\"}}'"
+            f'printf \'%s\' \'{{"access_token":"t","expiry":"{self._iso(1)}"}}\''
         )
         src = CommandTokenSource(cmd, "p")
         src()
@@ -314,7 +314,8 @@ class TestAuxiliaryResolverHonoursKeyCmd:
         from clawk_cli import runtime_provider as rp
 
         monkeypatch.setattr(
-            rp, "_get_named_custom_provider",
+            rp,
+            "_get_named_custom_provider",
             lambda name: dict(entry, name="dbx") if name == "dbx" else None,
         )
         seen = {}
@@ -330,7 +331,9 @@ class TestAuxiliaryResolverHonoursKeyCmd:
     BASE = {"base_url": "https://example.invalid/v1", "model": "m1"}
 
     def test_key_cmd_resolves_to_a_callable(self, monkeypatch):
-        api_key = self._resolve(monkeypatch, {**self.BASE, "key_cmd": "printf minted-token"})
+        api_key = self._resolve(
+            monkeypatch, {**self.BASE, "key_cmd": "printf minted-token"}
+        )
         assert callable(api_key), "auxiliary tasks must mint per request too"
         assert api_key() == "minted-token"
 
@@ -343,13 +346,16 @@ class TestAuxiliaryResolverHonoursKeyCmd:
         assert callable(api_key) and api_key() == "minted-token"
 
     def test_static_credentials_still_resolve(self, monkeypatch):
-        assert self._resolve(monkeypatch, {**self.BASE, "api_key": "static"}) == "static"
+        assert (
+            self._resolve(monkeypatch, {**self.BASE, "api_key": "static"}) == "static"
+        )
 
     def test_blank_key_cmd_keeps_the_placeholder(self, monkeypatch):
         """A blank command must not become a callable that mints nothing."""
-        assert self._resolve(
-            monkeypatch, {**self.BASE, "key_cmd": "   "}
-        ) == "no-key-required"
+        assert (
+            self._resolve(monkeypatch, {**self.BASE, "key_cmd": "   "})
+            == "no-key-required"
+        )
 
 
 class TestExplicitCallableSurvivesCustomResolution:
@@ -383,29 +389,49 @@ class TestExplicitCallableSurvivesCustomResolution:
 
         seen = self._spy_client(monkeypatch)
         if shape == "bare_custom":
-            ac.resolve_provider_client("custom", explicit_base_url=self.BASE, explicit_api_key=key)
+            ac.resolve_provider_client(
+                "custom", explicit_base_url=self.BASE, explicit_api_key=key
+            )
         elif shape == "local_server_alias":
-            ac.resolve_provider_client("ollama", explicit_base_url=self.BASE, explicit_api_key=key)
+            ac.resolve_provider_client(
+                "ollama", explicit_base_url=self.BASE, explicit_api_key=key
+            )
         elif shape == "main_runtime_reuse":
             ac.resolve_provider_client(
-                "custom", main_runtime={"base_url": self.BASE, "api_key": key, "model": "m1"},
+                "custom",
+                main_runtime={"base_url": self.BASE, "api_key": key, "model": "m1"},
             )
         elif shape == "named_custom":
             monkeypatch.setattr(
-                rp, "_get_named_custom_provider",
-                lambda name: {"base_url": self.BASE, "model": "m1", "name": "dbx"} if name == "dbx" else None,
+                rp,
+                "_get_named_custom_provider",
+                lambda name: (
+                    {"base_url": self.BASE, "model": "m1", "name": "dbx"}
+                    if name == "dbx"
+                    else None
+                ),
             )
             ac.resolve_provider_client("dbx", explicit_api_key=key)
         elif shape == "api_key_branch":
-            monkeypatch.setattr(hauth, "resolve_api_key_provider_credentials", lambda provider: {})
-            ac.resolve_provider_client("deepseek", explicit_base_url=self.BASE, explicit_api_key=key)
+            monkeypatch.setattr(
+                hauth, "resolve_api_key_provider_credentials", lambda provider: {}
+            )
+            ac.resolve_provider_client(
+                "deepseek", explicit_base_url=self.BASE, explicit_api_key=key
+            )
         else:  # pragma: no cover
             raise AssertionError(shape)
         return seen
 
     @pytest.mark.parametrize(
         "shape",
-        ["bare_custom", "local_server_alias", "main_runtime_reuse", "named_custom", "api_key_branch"],
+        [
+            "bare_custom",
+            "local_server_alias",
+            "main_runtime_reuse",
+            "named_custom",
+            "api_key_branch",
+        ],
     )
     def test_callable_key_reaches_the_client_uncalled(self, monkeypatch, shape):
         seen = self._resolve(monkeypatch, shape, self.TOK)
@@ -416,7 +442,13 @@ class TestExplicitCallableSurvivesCustomResolution:
 
     @pytest.mark.parametrize(
         "shape",
-        ["bare_custom", "local_server_alias", "main_runtime_reuse", "named_custom", "api_key_branch"],
+        [
+            "bare_custom",
+            "local_server_alias",
+            "main_runtime_reuse",
+            "named_custom",
+            "api_key_branch",
+        ],
     )
     def test_string_key_is_still_stripped(self, monkeypatch, shape):
         seen = self._resolve(monkeypatch, shape, " sk-x ")

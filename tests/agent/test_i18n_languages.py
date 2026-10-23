@@ -10,7 +10,9 @@ from agent.i18n_languages import BUNDLED_LANGUAGE_INFO, describe_language
 def test_bundled_table_matches_bundled_catalogs():
     assert set(BUNDLED_LANGUAGE_INFO) == set(i18n.SUPPORTED_LANGUAGES)
     for lang, (endonym, rtl) in BUNDLED_LANGUAGE_INFO.items():
-        assert endonym.strip() and endonym != lang, lang  # a real native name, never the bare id
+        assert endonym.strip() and endonym != lang, (
+            lang
+        )  # a real native name, never the bare id
         assert isinstance(rtl, bool)
     assert BUNDLED_LANGUAGE_INFO["ar"][1] is True
 
@@ -33,8 +35,25 @@ def test_describe_language_precedence():
     # re-declares it; an overlay-only language is reported as such and falls back to the bare id.
     pack = {"endonym": "Polski", "rtl": False, "source": "plugin:clawk-lang-pl"}
     assert describe_language("pl", pack=pack, overlay=False) == {
-        "id": "pl", "endonym": "Polski", "rtl": False, "source": "plugin:clawk-lang-pl"}
-    assert describe_language("ar", pack={**pack, "endonym": "Other", "rtl": False}, overlay=False)["endonym"] == "العربية"
-    assert describe_language("ar", pack={**pack, "rtl": False}, overlay=False)["rtl"] is True
-    assert describe_language("eo", pack=None, overlay=True) == {"id": "eo", "endonym": "eo", "rtl": False, "source": "overlay"}
+        "id": "pl",
+        "endonym": "Polski",
+        "rtl": False,
+        "source": "plugin:clawk-lang-pl",
+    }
+    assert (
+        describe_language(
+            "ar", pack={**pack, "endonym": "Other", "rtl": False}, overlay=False
+        )["endonym"]
+        == "العربية"
+    )
+    assert (
+        describe_language("ar", pack={**pack, "rtl": False}, overlay=False)["rtl"]
+        is True
+    )
+    assert describe_language("eo", pack=None, overlay=True) == {
+        "id": "eo",
+        "endonym": "eo",
+        "rtl": False,
+        "source": "overlay",
+    }
     assert describe_language("de", pack=None, overlay=True)["source"] == "bundled"

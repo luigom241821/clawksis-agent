@@ -36,12 +36,14 @@ def relay_turn(tmp_path, monkeypatch):
 def test_auxiliary_retries_share_logical_relay_identity(monkeypatch):
     attempts = []
     logical_completions = []
-    responses = iter([
-        SimpleNamespace(choices=[]),
-        SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
-        ),
-    ])
+    responses = iter(
+        [
+            SimpleNamespace(choices=[]),
+            SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
+            ),
+        ]
+    )
     client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
@@ -60,7 +62,14 @@ def test_auxiliary_retries_share_logical_relay_identity(monkeypatch):
         "complete_logical_call",
         lambda request_id, *, outcome, model_name, provider_name, response_model_name, error_class: (
             logical_completions.append(
-                (request_id, outcome, model_name, provider_name, response_model_name, error_class)
+                (
+                    request_id,
+                    outcome,
+                    model_name,
+                    provider_name,
+                    response_model_name,
+                    error_class,
+                )
             )
         ),
     )
@@ -91,8 +100,9 @@ def test_auxiliary_retries_share_logical_relay_identity(monkeypatch):
     result = run("compression")
 
     assert result.choices[0].message.content == "ok"
-    assert attempts[0]["metadata"]["api_request_id"] == (
-        attempts[1]["metadata"]["api_request_id"]
+    assert (
+        attempts[0]["metadata"]["api_request_id"]
+        == (attempts[1]["metadata"]["api_request_id"])
     )
     assert [attempt["metadata"]["retry_count"] for attempt in attempts] == [0, 1]
     assert attempts[0]["metadata"]["call_role"] == "auxiliary:compression"
@@ -124,12 +134,14 @@ def test_auxiliary_provider_fallback_closes_one_real_logical_call(
         return original_pop(*args, **kwargs)
 
     monkeypatch.setattr(relay.scope, "pop", record_pop)
-    responses = iter([
-        SimpleNamespace(choices=[]),
-        SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="recovered"))]
-        ),
-    ])
+    responses = iter(
+        [
+            SimpleNamespace(choices=[]),
+            SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="recovered"))]
+            ),
+        ]
+    )
     client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
@@ -202,13 +214,15 @@ def test_auxiliary_provider_fallback_records_one_terminal_model_route(
     subscriber_name = "test.auxiliary-model-route"
     relay.subscribers.register(subscriber_name, subscriber)
     turn.lease.host.retain_managed_execution(subscriber_name)
-    responses = iter([
-        SimpleNamespace(model="failed/model", choices=[]),
-        SimpleNamespace(
-            model="Accepted/Model",
-            choices=[SimpleNamespace(message=SimpleNamespace(content="recovered"))],
-        ),
-    ])
+    responses = iter(
+        [
+            SimpleNamespace(model="failed/model", choices=[]),
+            SimpleNamespace(
+                model="Accepted/Model",
+                choices=[SimpleNamespace(message=SimpleNamespace(content="recovered"))],
+            ),
+        ]
+    )
     client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
@@ -280,7 +294,9 @@ def _aux_route_rows(relay_turn, tmp_path, run):
     """Run ``run`` inside the turn with a real shared-metrics subscriber; the stored route rows."""
     relay, turn = relay_turn
     store = SharedMetricsStore(tmp_path / "metrics.sqlite3", tmp_path / "outbox")
-    subscriber = SharedMetricsSubscriber(store, "test-version", runtime_id=turn.lease.host.runtime_id)
+    subscriber = SharedMetricsSubscriber(
+        store, "test-version", runtime_id=turn.lease.host.runtime_id
+    )
     relay.subscribers.register("test.auxiliary-route-rows", subscriber)
     turn.lease.host.retain_managed_execution("test.auxiliary-route-rows")
     try:
@@ -291,7 +307,8 @@ def _aux_route_rows(relay_turn, tmp_path, run):
         relay.subscribers.deregister("test.auxiliary-route-rows")
     return sorted(
         (row["dimensions"]["outcome"], row["dimensions"]["error_class"], row["value"])
-        for row in store.counter_snapshot() if row["metric_name"] == MODEL_ROUTE_METRIC
+        for row in store.counter_snapshot()
+        if row["metric_name"] == MODEL_ROUTE_METRIC
     )
 
 
@@ -303,9 +320,14 @@ def _aux_attempts(*outcomes):
         outcome = next(pending)
         if isinstance(outcome, BaseException):
             raise outcome
-        return SimpleNamespace(model="m", choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))])
+        return SimpleNamespace(
+            model="m",
+            choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))],
+        )
 
-    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    return SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
 
 
 @auxiliary_client._relay_auxiliary_call
@@ -314,21 +336,37 @@ def _aux_call(task, client, attempts):
     for _ in range(attempts - 1):
         try:
             return auxiliary_client._validate_llm_response(
-                auxiliary_client._relay_sync_completion(client, {"model": "m", "messages": []}), task)
+                auxiliary_client._relay_sync_completion(
+                    client, {"model": "m", "messages": []}
+                ),
+                task,
+            )
         except Exception:
             continue
     return auxiliary_client._validate_llm_response(
-        auxiliary_client._relay_sync_completion(client, {"model": "m", "messages": []}), task)
+        auxiliary_client._relay_sync_completion(client, {"model": "m", "messages": []}),
+        task,
+    )
 
 
 def test_auxiliary_model_routes_carry_classified_error_class(relay_turn, tmp_path):
     """A failed aux call reports the classifier's reason for the error that ended it, and a
     recovered one the error it recovered from, never a blanket ``unknown``/``none``."""
+
     def run():
-        _aux_call("title_generation", _aux_attempts(_ProviderStatusError(429, "Rate limit exceeded"), "ok"), 2)
+        _aux_call(
+            "title_generation",
+            _aux_attempts(_ProviderStatusError(429, "Rate limit exceeded"), "ok"),
+            2,
+        )
         with pytest.raises(_ProviderStatusError):
-            _aux_call("title_generation", _aux_attempts(
-                _ProviderStatusError(404, "The model `m` does not exist")), 1)
+            _aux_call(
+                "title_generation",
+                _aux_attempts(
+                    _ProviderStatusError(404, "The model `m` does not exist")
+                ),
+                1,
+            )
 
     assert _aux_route_rows(relay_turn, tmp_path, run) == [
         ("failed", "model_not_found", 1),
@@ -336,11 +374,17 @@ def test_auxiliary_model_routes_carry_classified_error_class(relay_turn, tmp_pat
     ]
 
 
-@pytest.mark.parametrize("abort", [
-    auxiliary_client.AuxiliaryExplicitCancellation(), InterruptedError("aux stream interrupted"), KeyboardInterrupt(),
-])
+@pytest.mark.parametrize(
+    "abort",
+    [
+        auxiliary_client.AuxiliaryExplicitCancellation(),
+        InterruptedError("aux stream interrupted"),
+        KeyboardInterrupt(),
+    ],
+)
 def test_aborted_auxiliary_call_is_cancelled_not_failed(relay_turn, tmp_path, abort):
     """A Clawksis abort (/stop, interrupt, Ctrl+C) mid aux call is not a provider failure."""
+
     def run():
         with pytest.raises(type(abort)):
             _aux_call("compression", _aux_attempts(abort), 1)
@@ -348,7 +392,9 @@ def test_aborted_auxiliary_call_is_cancelled_not_failed(relay_turn, tmp_path, ab
     assert _aux_route_rows(relay_turn, tmp_path, run) == [("cancelled", "none", 1)]
 
 
-def test_auxiliary_call_finishing_under_the_turns_live_scope_is_counted(relay_turn, tmp_path):
+def test_auxiliary_call_finishing_under_the_turns_live_scope_is_counted(
+    relay_turn, tmp_path
+):
     """Title generation runs beside the turn, so the turn's own work is usually on top of its
     logical scope when it finishes. Its result must still become the route row."""
     relay, turn = relay_turn
@@ -357,15 +403,29 @@ def test_auxiliary_call_finishing_under_the_turns_live_scope_is_counted(relay_tu
 
     @auxiliary_client._relay_auxiliary_call
     def title(task):
-        auxiliary_client._set_relay_auxiliary_route("openrouter", "m", "chat_completions")
-        response = auxiliary_client._relay_sync_completion(_aux_attempts("A title"), {"model": "m", "messages": []})
-        turn_work.append(host.run_in_session(
-            session, relay.scope.push, "test.turn_work", relay.ScopeType.Function, handle=turn.handle, input={}))
+        auxiliary_client._set_relay_auxiliary_route(
+            "openrouter", "m", "chat_completions"
+        )
+        response = auxiliary_client._relay_sync_completion(
+            _aux_attempts("A title"), {"model": "m", "messages": []}
+        )
+        turn_work.append(
+            host.run_in_session(
+                session,
+                relay.scope.push,
+                "test.turn_work",
+                relay.ScopeType.Function,
+                handle=turn.handle,
+                input={},
+            )
+        )
         return auxiliary_client._validate_llm_response(response, task)
 
     def run():
         title("title_generation")
-        host.run_in_session(session, relay_runtime.pop_relay_scope, relay, turn_work[0], output={})
+        host.run_in_session(
+            session, relay_runtime.pop_relay_scope, relay, turn_work[0], output={}
+        )
         relay_runtime.SESSION_COORDINATOR.end_turn(turn, outcome="success")
 
     assert _aux_route_rows(relay_turn, tmp_path, run) == [("success", "none", 1)]
@@ -400,7 +460,14 @@ async def test_async_auxiliary_attempt_uses_inherited_relay_adapter(monkeypatch)
         "complete_logical_call",
         lambda request_id, *, outcome, model_name, provider_name, response_model_name, error_class: (
             logical_completions.append(
-                (request_id, outcome, model_name, provider_name, response_model_name, error_class)
+                (
+                    request_id,
+                    outcome,
+                    model_name,
+                    provider_name,
+                    response_model_name,
+                    error_class,
+                )
             )
         ),
     )
@@ -436,12 +503,6 @@ async def test_async_auxiliary_attempt_uses_inherited_relay_adapter(monkeypatch)
             "none",
         )
     ]
-
-
-
-
-
-
 
 
 def test_partial_auxiliary_stream_failure_closes_before_recovery(
@@ -562,6 +623,8 @@ def test_partial_auxiliary_stream_failure_closes_before_recovery(
         assert turn.logical_llm_calls == {}
     finally:
         turn.lease.host.release_managed_execution(consumer)
+
+
 def test_auxiliary_stream_unwraps_completed_response(relay_turn):
     """MoA aggregator on an Anthropic-protocol provider: the client returns a
     completed response for ``stream=True`` (the adapter ignores the flag), so
@@ -597,7 +660,6 @@ def test_auxiliary_stream_unwraps_completed_response(relay_turn):
         )
 
     assert run("moa_aggregator") is completed
-
 
 
 def test_call_llm_stream_unwraps_completed_response(relay_turn, monkeypatch):
@@ -652,8 +714,13 @@ def test_call_llm_stream_unwraps_completed_response(relay_turn, monkeypatch):
 def _chat_client(sent, *, is_async=False):
     response = SimpleNamespace(
         model="gpt-6-astra",
-        choices=[SimpleNamespace(index=0, message=SimpleNamespace(role="assistant", content="advice"),
-                                 finish_reason="stop")],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=SimpleNamespace(role="assistant", content="advice"),
+                finish_reason="stop",
+            )
+        ],
     )
 
     def create(**kwargs):
@@ -663,7 +730,11 @@ def _chat_client(sent, *, is_async=False):
     async def acreate(**kwargs):
         return create(**kwargs)
 
-    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=acreate if is_async else create)))
+    return SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=acreate if is_async else create)
+        )
+    )
 
 
 _MESSAGES = [{"role": "system", "content": "advise"}, {"role": "user", "content": "hi"}]
@@ -672,28 +743,39 @@ _MESSAGES = [{"role": "system", "content": "advise"}, {"role": "user", "content"
 @auxiliary_client._relay_auxiliary_call
 def _codex_mode_sync(task, sent):
     return auxiliary_client._relay_sync_completion(
-        _chat_client(sent), {"model": "gpt-6-astra", "messages": _MESSAGES},
-        provider="openai-codex", api_mode="codex_responses")
+        _chat_client(sent),
+        {"model": "gpt-6-astra", "messages": _MESSAGES},
+        provider="openai-codex",
+        api_mode="codex_responses",
+    )
 
 
 @auxiliary_client._relay_auxiliary_call
 def _codex_mode_stream(task, sent):
     return auxiliary_client._relay_sync_stream(
-        _chat_client(sent), {"model": "gpt-6-astra", "messages": _MESSAGES, "stream": True},
-        provider="openai-codex", api_mode="codex_responses")
+        _chat_client(sent),
+        {"model": "gpt-6-astra", "messages": _MESSAGES, "stream": True},
+        provider="openai-codex",
+        api_mode="codex_responses",
+    )
 
 
 def _codex_mode_async(task, sent):
     @auxiliary_client._relay_auxiliary_call_async
     async def run():
         return await auxiliary_client._relay_async_completion(
-            _chat_client(sent, is_async=True), {"model": "gpt-6-astra", "messages": _MESSAGES},
-            provider="openai-codex", api_mode="codex_responses")
+            _chat_client(sent, is_async=True),
+            {"model": "gpt-6-astra", "messages": _MESSAGES},
+            provider="openai-codex",
+            api_mode="codex_responses",
+        )
 
     return asyncio.run(run())
 
 
-@pytest.mark.parametrize("call", [_codex_mode_sync, _codex_mode_async, _codex_mode_stream])
+@pytest.mark.parametrize(
+    "call", [_codex_mode_sync, _codex_mode_async, _codex_mode_stream]
+)
 def test_native_api_mode_request_is_decoded_as_chat(relay_turn, call):
     """Relay intercepts ``chat.completions.create`` at every auxiliary seam, so a
     ``codex_responses`` attempt must reach the client instead of failing in the
@@ -707,4 +789,6 @@ def test_native_api_mode_request_is_decoded_as_chat(relay_turn, call):
         turn.lease.host.release_managed_execution("test.native-api-mode")
 
     assert result.choices[0].message.content == "advice"
-    assert [[m["content"] for m in kwargs["messages"]] for kwargs in sent] == [["advise", "hi"]]
+    assert [[m["content"] for m in kwargs["messages"]] for kwargs in sent] == [
+        ["advise", "hi"]
+    ]

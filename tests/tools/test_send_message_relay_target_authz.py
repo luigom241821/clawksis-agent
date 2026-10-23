@@ -38,7 +38,9 @@ def relay_env(tmp_path, monkeypatch):
 
     monkeypatch.setenv("GATEWAY_RELAY_URL", "wss://connector.example/relay")
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord")
-    monkeypatch.setenv("GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "b1"}}))
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_BOT_IDS", json.dumps({"discord": {"botId": "b1"}})
+    )
 
     directory = tmp_path / "channel_directory.json"
     directory.write_text(
@@ -78,17 +80,15 @@ def _send(target: str, sent):
         sent.append(chat_id)
         return {"success": True, "message_id": "m1"}
 
-    with patch("gateway.config.load_gateway_config", return_value=config), patch(
-        "tools.interrupt.is_interrupted", return_value=False
-    ), patch("model_tools._run_async", side_effect=lambda c: asyncio.run(c)), patch(
-        "tools.send_message_tool._send_to_platform", side_effect=_record
-    ), patch(
-        "gateway.mirror.mirror_to_session", return_value=False
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch("model_tools._run_async", side_effect=lambda c: asyncio.run(c)),
+        patch("tools.send_message_tool._send_to_platform", side_effect=_record),
+        patch("gateway.mirror.mirror_to_session", return_value=False),
     ):
         return json.loads(
-            send_message_tool(
-                {"action": "send", "target": target, "message": "hello"}
-            )
+            send_message_tool({"action": "send", "target": target, "message": "hello"})
         )
 
 
@@ -199,6 +199,7 @@ def test_react_refuses_an_arbitrary_relay_target(relay_env):
         )
     }
 
+
 # ── B-1: the guard must authorize the RESOLVED destination ──────────────────
 #
 # Slack `@handle` / `U...` targets are internal PSEUDO-ids
@@ -267,14 +268,15 @@ def _send_slack(target: str, sent, *, resolves_to: str | None = SLACK_DM):
         # resolver returns — the opened DM channel id.
         return (resolves_to, None)
 
-    with patch("gateway.config.load_gateway_config", return_value=config), patch(
-        "tools.interrupt.is_interrupted", return_value=False
-    ), patch("model_tools._run_async", side_effect=lambda c: asyncio.run(c)), patch(
-        "tools.send_message_tool._send_to_platform", side_effect=_record
-    ), patch(
-        "tools.send_message_tool._resolve_slack_user_target", side_effect=_resolve
-    ), patch(
-        "gateway.mirror.mirror_to_session", return_value=False
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch("model_tools._run_async", side_effect=lambda c: asyncio.run(c)),
+        patch("tools.send_message_tool._send_to_platform", side_effect=_record),
+        patch(
+            "tools.send_message_tool._resolve_slack_user_target", side_effect=_resolve
+        ),
+        patch("gateway.mirror.mirror_to_session", return_value=False),
     ):
         return json.loads(
             send_message_tool({"action": "send", "target": target, "message": "hello"})
@@ -474,7 +476,9 @@ def test_requested_platform_name_is_also_normalised(relay_env, monkeypatch, requ
 
 
 @pytest.mark.parametrize("requested", ["Discord", "DISCORD"])
-def test_mixed_case_request_still_reaches_attested_targets(relay_env, monkeypatch, requested):
+def test_mixed_case_request_still_reaches_attested_targets(
+    relay_env, monkeypatch, requested
+):
     """Control: normalising the requested name must not refuse real traffic.
 
     The attestation store is keyed by the LOWERCASE platform. If the lookup in
@@ -501,7 +505,9 @@ def test_mixed_case_request_still_reaches_attested_targets(relay_env, monkeypatc
 
 
 @pytest.mark.parametrize("requested", ["Discord", "DISCORD", " discord "])
-def test_attested_lookup_normalises_before_querying_the_sources(relay_env, monkeypatch, requested):
+def test_attested_lookup_normalises_before_querying_the_sources(
+    relay_env, monkeypatch, requested
+):
     """`attested_relay_targets` does its OWN normalisation, and every other
     test monkeypatches this function away — so that `.lower()` was covered by
     nothing. Dropping it made a mixed-case platform find an EMPTY attested set
@@ -512,7 +518,9 @@ def test_attested_lookup_normalises_before_querying_the_sources(relay_env, monke
     import gateway.relay.egress as eg
 
     monkeypatch.setattr(eg, "_home_channel_id", lambda n: None)
-    monkeypatch.setattr(eg, "_directory_ids", lambda n: {"999"} if n == "discord" else set())
+    monkeypatch.setattr(
+        eg, "_directory_ids", lambda n: {"999"} if n == "discord" else set()
+    )
     monkeypatch.setattr(eg, "_session_ids", lambda n: set())
 
     assert eg.attested_relay_targets(requested) == {"999"}
@@ -655,7 +663,9 @@ def test_egress_module_own_import_boundary_fails_closed(monkeypatch):
     real_import = builtins.__import__
 
     def fake_import(name, *a, **kw):
-        if name == "gateway.relay" and "relay_fronted_platforms" in (kw.get("fromlist") or a[2] if len(a) > 2 else []):
+        if name == "gateway.relay" and "relay_fronted_platforms" in (
+            kw.get("fromlist") or a[2] if len(a) > 2 else []
+        ):
             raise ModuleNotFoundError("broken dep", name="gateway.relay.broken_dep")
         return real_import(name, *a, **kw)
 
@@ -710,7 +720,9 @@ def test_disabled_native_adapter_is_not_treated_as_native(monkeypatch):
     )
     import gateway.run as gr_run
 
-    monkeypatch.setattr(gr_run, "_gateway_runner_ref", eg._gateway_runner_ref, raising=False)
+    monkeypatch.setattr(
+        gr_run, "_gateway_runner_ref", eg._gateway_runner_ref, raising=False
+    )
     monkeypatch.setattr(
         eg,
         "load_gateway_config",
@@ -1001,7 +1013,10 @@ def test_a_missing_relay_adapter_is_still_an_absence(monkeypatch):
     import gateway.run as gr_run
 
     monkeypatch.setattr(
-        gr_run, "_gateway_runner_ref", lambda: SimpleNamespace(adapters={}), raising=False
+        gr_run,
+        "_gateway_runner_ref",
+        lambda: SimpleNamespace(adapters={}),
+        raising=False,
     )
     monkeypatch.setattr(gr, "relay_fronted_platforms", lambda: {"discord"})
     monkeypatch.setattr(eg, "attested_relay_targets", lambda p: {"123"})
@@ -1336,9 +1351,12 @@ def test_dispatch_snapshot_token_withdraws_the_exemption(monkeypatch):
     monkeypatch.setattr(eg, "_has_native_credential", lambda p: False)
 
     # Dispatch will use this token, so the exemption must not be granted.
-    assert eg.authorize_relay_target(
-        "telegram", "@unattested", native_token="123456:dispatch-token"
-    ) is not None
+    assert (
+        eg.authorize_relay_target(
+            "telegram", "@unattested", native_token="123456:dispatch-token"
+        )
+        is not None
+    )
     # Converse: a genuinely tokenless dispatch still exempts the handle.
     assert eg.authorize_relay_target("telegram", "@public", native_token=None) is None
     # Controls unchanged in both modes.

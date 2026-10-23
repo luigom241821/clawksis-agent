@@ -16,10 +16,6 @@ def _write_env(path: Path, contents: str) -> None:
     path.write_text(contents, encoding="utf-8")
 
 
-
-
-
-
 def test_remove_env_value_invalidates_cache(tmp_path, monkeypatch):
     """remove_env_value() invalidates the cache so the removed key disappears."""
     from clawk_cli import config as config_mod
@@ -48,5 +44,3 @@ def test_remove_env_value_invalidates_cache(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("DOOMED_KEY", raising=False)
         invalidate_env_cache()
-
-

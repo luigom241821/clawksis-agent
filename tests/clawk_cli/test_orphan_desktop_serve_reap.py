@@ -160,7 +160,9 @@ def test_lock_owned_serve_pids_reads_valid_backend_lock(tmp_path):
     assert _lock_owned_serve_pids(base_dir=lock_root) == {7777}
 
 
-def test_lock_owned_serve_pids_sees_root_home_locks_from_a_profile_home(tmp_path, monkeypatch):
+def test_lock_owned_serve_pids_sees_root_home_locks_from_a_profile_home(
+    tmp_path, monkeypatch
+):
     """A profile backend (``CLAWK_HOME=<root>/profiles/<name>``) must still see the Desktop's SSH
     locks, which live under ``<root>/desktop-ssh`` — otherwise its reaper kills the sibling
     profile's live SSH backend on every profile switch (#89811)."""
@@ -176,8 +178,12 @@ def test_lock_owned_serve_pids_sees_root_home_locks_from_a_profile_home(tmp_path
         json.dumps(_valid_lock_payload(7777, oid, nonce))
     )
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))
-    monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: root)
-    monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None, raising=False)
+    monkeypatch.setattr(
+        clawk_constants, "_get_platform_default_clawk_home", lambda: root
+    )
+    monkeypatch.setattr(
+        clawk_constants, "_default_clawk_root_memo", None, raising=False
+    )
 
     assert _lock_owned_serve_pids() == {7777}
 
@@ -188,9 +194,9 @@ def test_valid_lockfile_payload_rejects_wrong_owner_and_shape():
     good = _valid_lockfile_payload(_valid_lock_payload(1, oid, nonce), oid)
     assert good is True
     # ownershipId must match the directory it lives in.
-    assert _valid_lockfile_payload(
-        _valid_lock_payload(1, "e" * 32, nonce), oid
-    ) is False
+    assert (
+        _valid_lockfile_payload(_valid_lock_payload(1, "e" * 32, nonce), oid) is False
+    )
     # pid out of range.
     bad_pid = _valid_lock_payload(1, oid, nonce)
     bad_pid["pid"] = 0
@@ -310,7 +316,10 @@ def test_reap_spares_backend_when_process_age_is_unknown():
             return_value=scanned,
         ),
         patch("clawk_cli.dashboard_procs._process_ppid", return_value=1),
-        patch("os.kill", side_effect=lambda pid, sig: terms.append(pid) if sig == 15 else None),
+        patch(
+            "os.kill",
+            side_effect=lambda pid, sig: terms.append(pid) if sig == 15 else None,
+        ),
     ):
         result = _reap_orphaned_desktop_local_serves(
             sleep_fn=lambda _s: None,
@@ -410,8 +419,14 @@ def test_reap_kills_descendants_of_killed_roots_but_spares_a_failed_roots_subtre
     surviving hosted-TUI children — but only for roots it actually killed. A root whose own kill
     raised (EPERM: not ours) keeps its subtree intact instead of being orphaned half-way."""
     scanned = [
-        (111, "clawk serve --host 127.0.0.1 --port 0"),  # ours: killed, child 1111 swept
-        (444, "clawk serve --host 127.0.0.1 --port 0"),  # not ours: EPERM, child 4444 spared
+        (
+            111,
+            "clawk serve --host 127.0.0.1 --port 0",
+        ),  # ours: killed, child 1111 swept
+        (
+            444,
+            "clawk serve --host 127.0.0.1 --port 0",
+        ),  # not ours: EPERM, child 4444 spared
     ]
     descendants = {1111: (111, 5.0), 4444: (444, 6.0)}
     start_times = {1111: 5.0, 4444: 6.0}
@@ -423,20 +438,30 @@ def test_reap_kills_descendants_of_killed_roots_but_spares_a_failed_roots_subtre
         sent.append((pid, sig))
 
     with (
-        patch("clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=scanned),
+        patch(
+            "clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=scanned
+        ),
         patch("clawk_cli.dashboard_procs._process_ppid", return_value=1),
-        patch("clawk_cli.dashboard_procs._posix_descendants", return_value=descendants) as snap,
+        patch(
+            "clawk_cli.dashboard_procs._posix_descendants", return_value=descendants
+        ) as snap,
         patch("gateway.status.get_process_start_time", side_effect=start_times.get),
         patch("psutil.pid_exists", return_value=True),
         patch("os.kill", side_effect=fake_kill),
     ):
         os.environ.pop("CLAWK_DESKTOP_CHILD_PID", None)
         result = _reap_orphaned_desktop_local_serves(
-            sleep_fn=lambda _s: None, signal_term=15, signal_kill=9,
+            sleep_fn=lambda _s: None,
+            signal_term=15,
+            signal_kill=9,
             process_age_seconds_fn=lambda _pid: 600.0,
         )
 
-    snap.assert_called_once_with([111, 444])  # snapshotted before the kill reparents them
+    snap.assert_called_once_with(
+        [111, 444]
+    )  # snapshotted before the kill reparents them
     assert result["killed"] == [111] and result["failed"] == [444]
     assert (1111, 9) in sent, "surviving child of the killed backend was not swept"
-    assert not any(pid == 4444 for pid, _ in sent), "child of a root we could not kill was swept"
+    assert not any(pid == 4444 for pid, _ in sent), (
+        "child of a root we could not kill was swept"
+    )

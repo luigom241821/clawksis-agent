@@ -17,7 +17,9 @@ from gateway.session import SessionEntry, SessionSource, build_session_key
 
 class CaptureSlackAdapter(BasePlatformAdapter):
     def __init__(self):
-        super().__init__(PlatformConfig(enabled=True, token="fake-token"), Platform.SLACK)
+        super().__init__(
+            PlatformConfig(enabled=True, token="fake-token"), Platform.SLACK
+        )
         self.sent = []
         self.processing_hooks = []
 
@@ -47,7 +49,9 @@ class CaptureSlackAdapter(BasePlatformAdapter):
     async def on_processing_start(self, event: MessageEvent) -> None:
         self.processing_hooks.append(("start", event.message_id))
 
-    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
+    async def on_processing_complete(
+        self, event: MessageEvent, outcome: ProcessingOutcome
+    ) -> None:
         self.processing_hooks.append(("complete", event.message_id, outcome))
 
 
@@ -125,12 +129,16 @@ def _make_event() -> MessageEvent:
 
 
 @pytest.mark.asyncio
-async def test_incomplete_codex_turn_closes_transcript_without_slack_delivery(monkeypatch, tmp_path):
+async def test_incomplete_codex_turn_closes_transcript_without_slack_delivery(
+    monkeypatch, tmp_path
+):
     adapter = CaptureSlackAdapter()
     runner = _make_runner(adapter)
 
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
     monkeypatch.setattr(
         "agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
@@ -151,8 +159,13 @@ async def test_incomplete_codex_turn_closes_transcript_without_slack_delivery(mo
         for call in runner.session_store.append_to_transcript.call_args_list
     ]
     assert transcript_roles == ["session_meta", "user", "assistant"]
-    assert runner.session_store.append_to_transcript.call_args_list[1].args[1]["content"] == "hello"
-    boundary = runner.session_store.append_to_transcript.call_args_list[2].args[1]["content"]
+    assert (
+        runner.session_store.append_to_transcript.call_args_list[1].args[1]["content"]
+        == "hello"
+    )
+    boundary = runner.session_store.append_to_transcript.call_args_list[2].args[1][
+        "content"
+    ]
     assert boundary == FAILED_TURN_NOTICE
     assert adapter.processing_hooks == [
         ("start", "m-1"),

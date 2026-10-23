@@ -24,8 +24,9 @@ def record_service_choice(choice: str, config: dict | None = None) -> None:
         config.setdefault("gateway", {})["service_install_choice"] = choice
 
 
-def wants_service_install(*, interactive: bool, install: bool = False,
-                          config: dict | None = None) -> bool:
+def wants_service_install(
+    *, interactive: bool, install: bool = False, config: dict | None = None
+) -> bool:
     from clawk_cli.config import load_config
     from clawk_cli.gateway import prompt_yes_no
 
@@ -33,7 +34,11 @@ def wants_service_install(*, interactive: bool, install: bool = False,
         return True
     if not interactive or not sys.stdin.isatty():
         return False
-    choice = (config if config is not None else load_config()).get("gateway", {}).get("service_install_choice")
+    choice = (
+        (config if config is not None else load_config())
+        .get("gateway", {})
+        .get("service_install_choice")
+    )
     if choice is None:
         if prompt_yes_no(SERVICE_INSTALL_QUESTION, False):
             return True
@@ -41,8 +46,13 @@ def wants_service_install(*, interactive: bool, install: bool = False,
     return choice == "install"
 
 
-def ensure_gateway_service(context: str = "setup", *, interactive: bool = False,
-                           install: bool = False, config: dict | None = None) -> bool:
+def ensure_gateway_service(
+    context: str = "setup",
+    *,
+    interactive: bool = False,
+    install: bool = False,
+    config: dict | None = None,
+) -> bool:
     """Start existing services; install only with explicit setup consent.
 
     Import and ordinary noninteractive callers cannot install, even with a saved
@@ -52,7 +62,9 @@ def ensure_gateway_service(context: str = "setup", *, interactive: bool = False,
     from clawk_constants import is_container
 
     if is_container():
-        gw.print_info("Run clawk gateway run as the container main process; use a Docker restart policy for persistence.")
+        gw.print_info(
+            "Run clawk gateway run as the container main process; use a Docker restart policy for persistence."
+        )
         return False
     supports_systemd = gw.supports_systemd_services()
     if not (supports_systemd or gw.is_macos() or gw.is_windows()):
@@ -68,7 +80,9 @@ def ensure_gateway_service(context: str = "setup", *, interactive: bool = False,
                 interactive=interactive, install=install, config=config
             ):
                 gw.print_info("No service installed. Run: clawk gateway run")
-                gw.print_info("Without a service, scheduled jobs and messaging stop at logout/reboot; jobs cannot run while the host is off.")
+                gw.print_info(
+                    "Without a service, scheduled jobs and messaging stop at logout/reboot; jobs cannot run while the host is off."
+                )
                 return False
             if supports_systemd and gw.has_conflicting_systemd_units():
                 gw.print_systemd_scope_conflict_warning()
@@ -78,10 +92,14 @@ def ensure_gateway_service(context: str = "setup", *, interactive: bool = False,
             elif gw.is_macos():
                 gw.launchd_install(force=False)
             else:
-                gw._gw_windows().install(force=False, start_now=True, start_on_login=True)
+                gw._gw_windows().install(
+                    force=False, start_now=True, start_on_login=True
+                )
             # Installers can refuse without raising (e.g. temporary-home guard).
             if not gw._is_service_installed():
-                gw.print_warning("Gateway service install did not complete. Retry: clawk gateway install")
+                gw.print_warning(
+                    "Gateway service install did not complete. Retry: clawk gateway install"
+                )
                 return False
             record_service_choice("install", config)
         if supports_systemd:
@@ -99,7 +117,9 @@ def ensure_gateway_service(context: str = "setup", *, interactive: bool = False,
         gw.print_warning(f"Gateway service needs root for this scope: {exc}")
         gw._print_system_scope_remediation("start")
     except SystemExit:
-        gw.print_warning("Gateway service install did not complete. Retry: clawk gateway install")
+        gw.print_warning(
+            "Gateway service install did not complete. Retry: clawk gateway install"
+        )
     except Exception as exc:
         # Setup/import boundary: a service-manager failure of any kind degrades to the printed
         # manual retry (False); it never aborts the setup wizard or a restore.
@@ -119,30 +139,44 @@ def _wizard_install_service(backend: str) -> None:
         return
     start_now = gw.prompt_yes_no("  Start the gateway now?", True)
     if not wants_service_install(interactive=True):
-        gw.print_info("Without a service, messaging and scheduled jobs stop at logout/reboot; jobs cannot run while the host is off.")
+        gw.print_info(
+            "Without a service, messaging and scheduled jobs stop at logout/reboot; jobs cannot run while the host is off."
+        )
         if start_now:
             result = ensure_gateway_runtime(gw.get_clawk_home(), timeout=5.0)
             if result.state == "ready":
                 gw.print_success("Gateway runtime ready; no service was installed.")
             else:
-                gw.print_info(f"Gateway runtime: {result.state} ({result.reason_code or 'pending'}). Check: clawk gateway status")
+                gw.print_info(
+                    f"Gateway runtime: {result.state} ({result.reason_code or 'pending'}). Check: clawk gateway status"
+                )
         else:
-            gw.print_info("Run later: clawk gateway run. Install later: clawk gateway install")
+            gw.print_info(
+                "Run later: clawk gateway run. Install later: clawk gateway install"
+            )
         return
     try:
         scope, did_install = None, True
         if backend == "systemd":
-            scope, did_install = gw.install_linux_gateway_from_setup(force=False, enable_on_startup=True)
+            scope, did_install = gw.install_linux_gateway_from_setup(
+                force=False, enable_on_startup=True
+            )
         elif backend == "launchd":
             gw.launchd_install(force=False)
         else:
-            gw._gw_windows().install(force=False, start_now=start_now, start_on_login=True)
+            gw._gw_windows().install(
+                force=False, start_now=start_now, start_on_login=True
+            )
         if not did_install or not gw._is_service_installed():
-            gw.print_warning("Gateway service install did not complete. Retry: clawk gateway install")
+            gw.print_warning(
+                "Gateway service install did not complete. Retry: clawk gateway install"
+            )
             return
         record_service_choice("install")
         if start_now and backend != "windows":
-            gw._setup_service_action("start", failed_label="Start failed", system=scope == "system")
+            gw._setup_service_action(
+                "start", failed_label="Start failed", system=scope == "system"
+            )
     except (subprocess.CalledProcessError, SystemExit) as exc:
         gw.print_error(f"Install failed: {exc}")
         gw.print_info("You can try manually: clawk gateway install")

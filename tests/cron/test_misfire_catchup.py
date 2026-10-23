@@ -44,8 +44,7 @@ class RecordingProvider(CronScheduler):
     def start(self, stop_event, **kw):  # pragma: no cover - unused
         return None
 
-    def fire_claimed(self, claimed_job, *, adapters=None, loop=None,
-                     cancel_event=None):
+    def fire_claimed(self, claimed_job, *, adapters=None, loop=None, cancel_event=None):
         self.fired.append(claimed_job["id"])
         self._done.set()
         return True
@@ -59,9 +58,7 @@ def _park_in_past(job_id, minutes):
     jobs = load_jobs()
     for j in jobs:
         if j["id"] == job_id:
-            j["next_run_at"] = (
-                _clawk_now() - timedelta(minutes=minutes)
-            ).isoformat()
+            j["next_run_at"] = (_clawk_now() - timedelta(minutes=minutes)).isoformat()
     save_jobs(jobs)
 
 
@@ -184,7 +181,9 @@ class TestFireOverdueJobs:
         estop.engage(reason="runaway fan-out")
         assert fire_overdue_jobs(provider) == 0
         assert provider.fired == []
-        assert get_job(job["id"])["next_run_at"] == parked_at  # nothing claimed or re-armed
+        assert (
+            get_job(job["id"])["next_run_at"] == parked_at
+        )  # nothing claimed or re-armed
 
         estop.disengage()
         assert fire_overdue_jobs(provider) == 1

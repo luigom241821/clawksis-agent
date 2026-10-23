@@ -23,9 +23,7 @@ class _FakeAdapter:
         self.sent = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.sent.append(
-            {"chat_id": chat_id, "content": content, "metadata": metadata}
-        )
+        self.sent.append({"chat_id": chat_id, "content": content, "metadata": metadata})
 
 
 class _FakeAgent:
@@ -116,8 +114,6 @@ def test_should_clear_holds_latch_when_idle_unknown():
     )
 
 
-
-
 def test_resolve_idle_uses_shared_activity_snapshot_only():
     now = 1_000_000.0
     snap = build_activity_snapshot(
@@ -160,7 +156,10 @@ def _runner_for_stall(adapter: _FakeAdapter) -> GatewayRunner:
 def _pending_event(chat_id: str = "chat-1", thread_id: str | None = None):
     from gateway.session import SessionSource
     from gateway.config import Platform
-    source = SessionSource(chat_id=chat_id, thread_id=thread_id, platform=Platform.TELEGRAM)
+
+    source = SessionSource(
+        chat_id=chat_id, thread_id=thread_id, platform=Platform.TELEGRAM
+    )
     return SimpleNamespace(text="follow-up", source=source, timestamp=time.time())
 
 
@@ -462,8 +461,6 @@ def test_resolve_idle_rejects_boolean_seconds_and_uses_timestamp():
     assert idle == 3.0
 
 
-
-
 class _NeverResolvingAdapter:
     """Adapter whose send() hangs forever (wedged transport)."""
 
@@ -486,9 +483,7 @@ async def test_check_session_stalls_bounds_wedged_send(monkeypatch):
     """
     import gateway.run as gateway_run
 
-    monkeypatch.setattr(
-        gateway_run, "_STALL_NOTIFY_SEND_TIMEOUT_SECONDS", 0.1
-    )
+    monkeypatch.setattr(gateway_run, "_STALL_NOTIFY_SEND_TIMEOUT_SECONDS", 0.1)
     wedged = _NeverResolvingAdapter()
     healthy = _FakeAdapter()
     runner = _runner_for_stall(wedged)
@@ -521,14 +516,32 @@ async def test_check_session_stalls_bounds_wedged_send(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("setting", [None, False, True])
-async def test_stall_policy_owner_latch_and_source_log_conservation(tmp_path, monkeypatch, caplog, setting):
+async def test_stall_policy_owner_latch_and_source_log_conservation(
+    tmp_path, monkeypatch, caplog, setting
+):
     import clawk_yaml as yaml
+
     owner, launch = tmp_path / "owner", tmp_path / "launch"
-    owner.mkdir(); launch.mkdir()
-    (owner / "config.yaml").write_text(yaml.safe_dump({} if setting is None else {"display": {"suppress_warning_notifications": setting}}))
-    (launch / "config.yaml").write_text(yaml.safe_dump({"display": {"suppress_warning_notifications": setting is not True}}))
+    owner.mkdir()
+    launch.mkdir()
+    (owner / "config.yaml").write_text(
+        yaml.safe_dump(
+            {}
+            if setting is None
+            else {"display": {"suppress_warning_notifications": setting}}
+        )
+    )
+    (launch / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"display": {"suppress_warning_notifications": setting is not True}}
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
-    for home, muted in [(owner, setting is True), (launch, setting is not True), (owner, setting is True)]:
+    for home, muted in [
+        (owner, setting is True),
+        (launch, setting is not True),
+        (owner, setting is True),
+    ]:
         adapter = _FakeAdapter()
         runner = _runner_for_stall(adapter)
         runner._resolve_profile_home_for_source = lambda source: home

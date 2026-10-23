@@ -135,12 +135,14 @@ class FakeSessionRPC:
         if receipt is None:
             raise AssertionError(f"no active session for {task_id}")
         if callback is not None:
-            callback({
-                "status": status,
-                "settlement_id": receipt["message_id"],
-                "message_id": receipt["message_id"],
-                "text": content,
-            })
+            callback(
+                {
+                    "status": status,
+                    "settlement_id": receipt["message_id"],
+                    "message_id": receipt["message_id"],
+                    "text": content,
+                }
+            )
 
     def resolve_exact(self, *, profile: str, title: str, source: str):
         self._assert_lock(profile)
@@ -177,7 +179,8 @@ class FakeSessionRPC:
         task: state.TaskIdentity,
         execution_generation: int,
         on_terminal,
-        member_id="", attachments=None,
+        member_id="",
+        attachments=None,
     ):
         self._assert_lock(profile)
         params = {
@@ -322,14 +325,16 @@ class TerminalPeerClient:
 
     def history(self, **_kwargs):
         self.history_calls += 1
-        return [{
-            "role": "assistant",
-            "task_id": self.task_id,
-            "execution_generation": self.execution_generation,
-            "status": "failed",
-            "message_id": "peer-interrupted",
-            "content": "interrupted",
-        }]
+        return [
+            {
+                "role": "assistant",
+                "task_id": self.task_id,
+                "execution_generation": self.execution_generation,
+                "status": "failed",
+                "message_id": "peer-interrupted",
+                "content": "interrupted",
+            }
+        ]
 
     def stop_receipt(self, **_kwargs):
         return {"status": "stopping"}
@@ -444,10 +449,6 @@ def test_room_concurrency_bound_must_be_a_positive_integer(db: Path, value):
         _runtime(db, FakeSessionRPC(), max_concurrent_rooms=value)
 
 
-
-
-
-
 def test_queued_task_routes_profile_and_credentials_without_overrides(db: Path):
     identity = _identity()
     _admit(db, identity, prompt="Use the configured profile credentials.")
@@ -500,11 +501,13 @@ def test_policy_hooks_prepare_and_publish_terminal_idempotently(db: Path):
         db,
         FakeSessionRPC(),
         prepare_room=lambda binding: prepared.append(binding.room_id),
-        publish_terminal=lambda binding, task: published.append((
-            binding.room_id,
-            task["identity"].task_id,
-            task["status"],
-        )),
+        publish_terminal=lambda binding, task: published.append(
+            (
+                binding.room_id,
+                task["identity"].task_id,
+                task["status"],
+            )
+        ),
     )
 
     runtime.start()
@@ -680,8 +683,7 @@ def test_waiting_room_does_not_block_an_independent_room(tmp_path: Path):
 def test_bounded_scheduler_eventually_runs_later_room(tmp_path: Path):
     db = tmp_path / "state.db"
     bindings = [
-        HostedRoomBinding(f"room-{index}", "gateway-a", 1)
-        for index in range(1, 4)
+        HostedRoomBinding(f"room-{index}", "gateway-a", 1) for index in range(1, 4)
     ]
     for binding in bindings:
         hosted_rooms.create_room(
@@ -1855,11 +1857,13 @@ def test_pending_local_approval_is_reported_with_safe_choices(db: Path):
     runtime = _runtime(
         db,
         rpc,
-        pending_action=lambda room_id, member_id, action: actions.append((
-            room_id,
-            member_id,
-            action,
-        )),
+        pending_action=lambda room_id, member_id, action: actions.append(
+            (
+                room_id,
+                member_id,
+                action,
+            )
+        ),
     )
 
     runtime.start()
@@ -1983,7 +1987,9 @@ def test_profile_turn_lock_covers_resolve_submit_and_terminal_observation(db: Pa
 
     # Balanced enter/exit pairs on the task's profile only (a loaded runner may run extra cycles).
     assert locks.events and all(profile == PROFILE for _event, profile in locks.events)
-    assert locks.events.count(("lock-enter", PROFILE)) == locks.events.count(("lock-exit", PROFILE))
+    assert locks.events.count(("lock-enter", PROFILE)) == locks.events.count(
+        ("lock-exit", PROFILE)
+    )
     methods = [method for method, _params in rpc.calls]
     assert methods.index("resolve_exact") < methods.index("submit")
     assert methods.index("submit") < methods.index("complete")

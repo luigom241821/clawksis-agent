@@ -53,7 +53,9 @@ class Fault:
     stall_max: float = 600.0
     path_has: str = "git-upload-pack"
     method: str | None = None
-    command: str | None = None  # protocol-v2 command in the request body ("fetch", "ls-refs")
+    command: str | None = (
+        None  # protocol-v2 command in the request body ("fetch", "ls-refs")
+    )
     times: int = 1
     skip: int = 0  # let this many matching requests through untouched first
     fired: int = 0
@@ -77,7 +79,9 @@ class Request:
     status: int = 0
     body_bytes: int = 0
     fault: str = ""
-    pack_bytes: int = -1  # faulted responses: pack payload delivered in whole pkt-lines before the drop
+    pack_bytes: int = (
+        -1
+    )  # faulted responses: pack payload delivered in whole pkt-lines before the drop
     at: float = field(default_factory=time.monotonic)
 
 
@@ -86,15 +90,15 @@ def _v2_command(body: bytes) -> str | None:
     i = 0
     while i + 4 <= len(body):
         try:
-            n = int(body[i:i + 4], 16)
+            n = int(body[i : i + 4], 16)
         except ValueError:
             return None
         if n < 4:
             i += 4
             continue
-        line = body[i + 4:i + n].rstrip(b"\n")
+        line = body[i + 4 : i + n].rstrip(b"\n")
         if line.startswith(b"command="):
-            return line[len(b"command="):].decode("ascii", "replace")
+            return line[len(b"command=") :].decode("ascii", "replace")
         i += n
     return None
 
@@ -110,7 +114,9 @@ class _Reframer:
         self._in_pack = False
         self._raw = False
         self._emitted = 0
-        self._pack_ends: list[tuple[int, int]] = []  # (end offset in output, pack payload bytes)
+        self._pack_ends: list[
+            tuple[int, int]
+        ] = []  # (end offset in output, pack payload bytes)
 
     def feed(self, data: bytes) -> bytes:
         if self._raw:
@@ -136,7 +142,7 @@ class _Reframer:
             del self._buf[:n]
             if self._in_pack and pkt[:1] == b"\x01":
                 for i in range(1, len(pkt), _FRAME):
-                    piece = pkt[i:i + _FRAME]
+                    piece = pkt[i : i + _FRAME]
                     out += b"%04x\x01" % (len(piece) + 5) + piece
                     self._pack_ends.append((self._emitted + len(out), len(piece)))
             else:
@@ -185,7 +191,9 @@ class GitHTTPServer:
                 if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
                     out = bytearray()
                     while True:
-                        size = int(self.rfile.readline().split(b";")[0].strip() or b"0", 16)
+                        size = int(
+                            self.rfile.readline().split(b";")[0].strip() or b"0", 16
+                        )
                         if size == 0:
                             self.rfile.readline()
                             return bytes(out)
@@ -236,9 +244,18 @@ class GitHTTPServer:
             return list(self.requests[mark:])
 
     def describe(self, mark: int = 0) -> str:
-        return "\n".join(f"  {r.method} {r.path} cmd={r.command} -> {r.status} {r.body_bytes}B {r.fault}"
-                         + (f" (pack bytes in whole pkt-lines: {r.pack_bytes})" if r.pack_bytes >= 0 else "")
-                         for r in self.since(mark)) or "  (no requests)"
+        return (
+            "\n".join(
+                f"  {r.method} {r.path} cmd={r.command} -> {r.status} {r.body_bytes}B {r.fault}"
+                + (
+                    f" (pack bytes in whole pkt-lines: {r.pack_bytes})"
+                    if r.pack_bytes >= 0
+                    else ""
+                )
+                for r in self.since(mark)
+            )
+            or "  (no requests)"
+        )
 
     # -- request handling ------------------------------------------------------------------
     def _take_fault(self, method: str, path: str, command: str | None) -> Fault | None:
@@ -295,8 +312,13 @@ class GitHTTPServer:
             env["HTTP_GIT_PROTOCOL"] = h.headers["Git-Protocol"]
         if h.headers.get("Content-Encoding"):
             env["HTTP_CONTENT_ENCODING"] = h.headers["Content-Encoding"]
-        proc = subprocess.Popen([self._git, "http-backend"], env=env, stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            [self._git, "http-backend"],
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
         feeder = threading.Thread(target=self._feed, args=(proc, raw_body), daemon=True)
         feeder.start()
         try:
@@ -315,7 +337,13 @@ class GitHTTPServer:
         except (BrokenPipeError, OSError):
             pass
 
-    def _relay(self, h: BaseHTTPRequestHandler, proc: subprocess.Popen, rec: Request, fault: Fault | None) -> None:
+    def _relay(
+        self,
+        h: BaseHTTPRequestHandler,
+        proc: subprocess.Popen,
+        rec: Request,
+        fault: Fault | None,
+    ) -> None:
         out = proc.stdout
         status, headers = 200, []
         while True:
@@ -331,13 +359,19 @@ class GitHTTPServer:
         rec.status = status
         h.send_response(status)
         for name, value in headers:
-            if name.lower() not in ("content-length", "transfer-encoding", "connection"):
+            if name.lower() not in (
+                "content-length",
+                "transfer-encoding",
+                "connection",
+            ):
                 h.send_header(name, value)
         h.send_header("Transfer-Encoding", "chunked")
         h.end_headers()
         limit = None
         if fault is not None:
-            limit = fault.cut_after if fault.cut_after is not None else fault.stall_after
+            limit = (
+                fault.cut_after if fault.cut_after is not None else fault.stall_after
+            )
         framer = _Reframer() if limit is not None else None
         sent, pending = 0, b""
         try:
@@ -352,8 +386,8 @@ class GitHTTPServer:
                         pending = framer.feed(data) if framer else data
                         if not pending:
                             continue
-                take = pending if limit is None else pending[:max(0, limit - sent)]
-                pending = pending[len(take):]
+                take = pending if limit is None else pending[: max(0, limit - sent)]
+                pending = pending[len(take) :]
                 if take:
                     h.wfile.write(b"%x\r\n%s\r\n" % (len(take), take))
                     sent += len(take)
@@ -395,24 +429,63 @@ def serve_bare(root: Path, name: str, source: Path, ref: str) -> Path:
     ``CLAWK_E2E_GIT_OBJECTS`` may name an extra complete object store: a developer checkout that
     is itself a partial clone lacks old blobs a full clone needs (CI's full checkout does not)."""
     bare = root / name
-    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True)
-    stores = [Path(subprocess.run(["git", "-C", str(source), "rev-parse", "--path-format=absolute",
-                                   "--git-common-dir"], check=True, capture_output=True, text=True)
-                   .stdout.strip()) / "objects"]
+    subprocess.run(
+        ["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True
+    )
+    stores = [
+        Path(
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(source),
+                    "rev-parse",
+                    "--path-format=absolute",
+                    "--git-common-dir",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+        )
+        / "objects"
+    ]
     extra = os.environ.get("CLAWK_E2E_GIT_OBJECTS")
     if extra:
         stores.append(Path(extra))
-    (bare / "objects" / "info" / "alternates").write_text("".join(f"{s}\n" for s in stores), encoding="utf-8")
-    tags = subprocess.run(["git", "-C", str(source), "for-each-ref", "--merged", ref,
-                           "--format=%(objectname) %(refname)", "refs/tags/v*"],
-                          check=True, capture_output=True, text=True).stdout.splitlines()
+    (bare / "objects" / "info" / "alternates").write_text(
+        "".join(f"{s}\n" for s in stores), encoding="utf-8"
+    )
+    tags = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "for-each-ref",
+            "--merged",
+            ref,
+            "--format=%(objectname) %(refname)",
+            "refs/tags/v*",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
     stdin = f"update refs/heads/main {ref}\n" + "".join(
-        f"update {line.split()[1]} {line.split()[0]}\n" for line in tags)
-    subprocess.run(["git", "-C", str(bare), "update-ref", "--stdin"], input=stdin, text=True, check=True,
-                   capture_output=True)
-    for args in (["symbolic-ref", "HEAD", "refs/heads/main"],
-                 ["config", "uploadpack.allowFilter", "true"],
-                 ["config", "uploadpack.allowAnySHA1InWant", "true"],
-                 ["config", "http.receivepack", "false"]):
+        f"update {line.split()[1]} {line.split()[0]}\n" for line in tags
+    )
+    subprocess.run(
+        ["git", "-C", str(bare), "update-ref", "--stdin"],
+        input=stdin,
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    for args in (
+        ["symbolic-ref", "HEAD", "refs/heads/main"],
+        ["config", "uploadpack.allowFilter", "true"],
+        ["config", "uploadpack.allowAnySHA1InWant", "true"],
+        ["config", "http.receivepack", "false"],
+    ):
         subprocess.run(["git", "-C", str(bare), *args], check=True, capture_output=True)
     return bare

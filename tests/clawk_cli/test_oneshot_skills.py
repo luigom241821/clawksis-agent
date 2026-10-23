@@ -10,6 +10,7 @@ import pytest
 
 from clawk_cli.oneshot import _build_preloaded_skills_prompt, _normalize_skills
 
+
 class TestNormalizeSkills:
     def test_none_and_empty(self):
         assert _normalize_skills(None) == []
@@ -22,6 +23,7 @@ class TestNormalizeSkills:
     def test_repeated_flags_deduped_order_preserved(self):
         assert _normalize_skills(["b", "a", "b"]) == ["b", "a"]
 
+
 class TestBuildPreloadedSkillsPrompt:
     def test_no_skills_returns_none(self):
         assert _build_preloaded_skills_prompt(None) is None
@@ -30,7 +32,8 @@ class TestBuildPreloadedSkillsPrompt:
         import agent.skill_commands as sc
 
         monkeypatch.setattr(
-            sc, "build_preloaded_skills_prompt",
+            sc,
+            "build_preloaded_skills_prompt",
             lambda parsed, **kw: ("", [], list(parsed)),
         )
         with pytest.raises(ValueError, match="Unknown skill"):
@@ -40,7 +43,8 @@ class TestBuildPreloadedSkillsPrompt:
         import agent.skill_commands as sc
 
         monkeypatch.setattr(
-            sc, "build_preloaded_skills_prompt",
+            sc,
+            "build_preloaded_skills_prompt",
             lambda parsed, **kw: ("PROMPT", ["good"], ["bad"]),
         )
         assert _build_preloaded_skills_prompt(["good", "bad"]) == "PROMPT"

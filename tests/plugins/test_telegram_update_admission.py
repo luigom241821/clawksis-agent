@@ -15,14 +15,24 @@ import pytest
 
 pytest.importorskip("telegram")
 from telegram import InlineQuery, Message, PhotoSize, Sticker, Update
-from telegram.ext import ApplicationHandlerStop, ConversationHandler, Defaults, MessageHandler, TypeHandler, filters
+from telegram.ext import (
+    ApplicationHandlerStop,
+    ConversationHandler,
+    Defaults,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
 from telegram.request import BaseRequest
 
 from gateway.config import PlatformConfig
 from gateway.platforms.event import MessageType
 from plugins.platforms.telegram import adapter as tg_adapter
 from plugins.platforms.telegram.adapter import TelegramAdapter
-from plugins.platforms.telegram.update_admission import DEFAULT_MAX_CONCURRENT_UPDATES, PerChatUpdateProcessor
+from plugins.platforms.telegram.update_admission import (
+    DEFAULT_MAX_CONCURRENT_UPDATES,
+    PerChatUpdateProcessor,
+)
 
 
 class NoNetwork(BaseRequest):
@@ -46,55 +56,121 @@ class NoNetwork(BaseRequest):
             self.answers.append(endpoint)
             return 200, b'{"ok":true,"result":true}'
         assert endpoint == "getMe", "No Telegram polls, sends or downloads allowed"
-        return 200, json.dumps({"ok": True, "result": {
-            "id": self.bot_id, "is_bot": True, "first_name": "Offline", "username": "offline_bot",
-        }}).encode()
+        return 200, json.dumps(
+            {
+                "ok": True,
+                "result": {
+                    "id": self.bot_id,
+                    "is_bot": True,
+                    "first_name": "Offline",
+                    "username": "offline_bot",
+                },
+            }
+        ).encode()
 
 
-def update(bot, uid=10, kind="text", *, edited=False, chat=42, text="hello", group=False, user=88):
+def update(
+    bot,
+    uid=10,
+    kind="text",
+    *,
+    edited=False,
+    chat=42,
+    text="hello",
+    group=False,
+    user=88,
+):
     sender = {"id": user, "is_bot": False, "first_name": "Human"}
     message = {
-        "message_id": 472, "date": 1800000000,
+        "message_id": 472,
+        "date": 1800000000,
         "chat": {"id": chat, "type": "supergroup" if group else "private"},
         "from": sender,
     }
     payloads = {
         "text": {"text": text},
-        "command": {"text": "/status", "entities": [{"type": "bot_command", "offset": 0, "length": 7}]},
+        "command": {
+            "text": "/status",
+            "entities": [{"type": "bot_command", "offset": 0, "length": 7}],
+        },
         "location": {"location": {"latitude": 37.77, "longitude": -122.42}},
-        "media": {"sticker": {"file_id": "offline", "file_unique_id": "offline", "type": "regular",
-                              "width": 128, "height": 128, "is_animated": True, "is_video": False}},
-        "photo": {"photo": [{"file_id": "offline", "file_unique_id": "offline", "width": 1, "height": 1}]},
+        "media": {
+            "sticker": {
+                "file_id": "offline",
+                "file_unique_id": "offline",
+                "type": "regular",
+                "width": 128,
+                "height": 128,
+                "is_animated": True,
+                "is_video": False,
+            }
+        },
+        "photo": {
+            "photo": [
+                {
+                    "file_id": "offline",
+                    "file_unique_id": "offline",
+                    "width": 1,
+                    "height": 1,
+                }
+            ]
+        },
     }
     if kind == "album":
         message["media_group_id"] = "album"
         kind = "photo"
     special = {
-        "callback": {"callback_query": {"id": "query", "from": sender, "chat_instance": "chat",
-                                        "data": "ea:yes:expired", "message": message}},
-        "inline": {"inline_query": {"id": "query", "from": sender, "query": "", "offset": ""}},
-        "reaction": {"message_reaction": {"chat": message["chat"], "message_id": 472, "date": 1800000010,
-                                          "user": sender, "old_reaction": [],
-                                          "new_reaction": [{"type": "emoji", "emoji": "👍"}]}},
+        "callback": {
+            "callback_query": {
+                "id": "query",
+                "from": sender,
+                "chat_instance": "chat",
+                "data": "ea:yes:expired",
+                "message": message,
+            }
+        },
+        "inline": {
+            "inline_query": {"id": "query", "from": sender, "query": "", "offset": ""}
+        },
+        "reaction": {
+            "message_reaction": {
+                "chat": message["chat"],
+                "message_id": 472,
+                "date": 1800000010,
+                "user": sender,
+                "old_reaction": [],
+                "new_reaction": [{"type": "emoji", "emoji": "👍"}],
+            }
+        },
     }
     if kind in special:
         return Update.de_json({"update_id": uid, **special[kind]}, bot)
     message.update(payloads[kind])
     if edited:
         message["edit_date"] = 1800000010
-    return Update.de_json({"update_id": uid, "edited_message" if edited else "message": message}, bot)
+    return Update.de_json(
+        {"update_id": uid, "edited_message" if edited else "message": message}, bot
+    )
 
 
 @asynccontextmanager
 async def connected(monkeypatch, *, extra=None, bot_id=111, is_reconnect=False):
-    adapter = TelegramAdapter(PlatformConfig(enabled=True, token=f"{bot_id}:offline-test", extra=extra or {}))
+    adapter = TelegramAdapter(
+        PlatformConfig(enabled=True, token=f"{bot_id}:offline-test", extra=extra or {})
+    )
     # Only transport/lifecycle services and the final model-work boundary are replaced.
     monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "88")
     monkeypatch.setenv("TELEGRAM_WEBHOOK_URL", "")
-    monkeypatch.setattr(adapter, "_build_ptb_requests", AsyncMock(return_value=(NoNetwork(bot_id), NoNetwork(bot_id))))
+    monkeypatch.setattr(
+        adapter,
+        "_build_ptb_requests",
+        AsyncMock(return_value=(NoNetwork(bot_id), NoNetwork(bot_id))),
+    )
     monkeypatch.setattr(adapter, "_start_polling_mode", AsyncMock())
     monkeypatch.setattr(adapter, "_start_post_connect_housekeeping", lambda: None)
-    monkeypatch.setattr(adapter, "_restart_task_attr", lambda name, coroutine: coroutine.close())
+    monkeypatch.setattr(
+        adapter, "_restart_task_attr", lambda name, coroutine: coroutine.close()
+    )
     monkeypatch.setattr(adapter, "_set_status_indicator", AsyncMock())
     delivered = []
     adapter._message_handler = AsyncMock()
@@ -115,14 +191,38 @@ async def connected(monkeypatch, *, extra=None, bot_id=111, is_reconnect=False):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind,mode", [
-    *[(kind, "normal") for kind in ("text", "command", "location", "media", "photo", "album", "callback", "inline", "reaction")],
-    ("text", "edit"), ("text", "observe"), ("media", "observe"), ("text", "hold"),
-    ("photo", "hold"), ("album", "hold"), ("text", "unauthorized"),
-    ("command", "retention"), ("text", "owners"),
-])
+@pytest.mark.parametrize(
+    "kind,mode",
+    [
+        *[
+            (kind, "normal")
+            for kind in (
+                "text",
+                "command",
+                "location",
+                "media",
+                "photo",
+                "album",
+                "callback",
+                "inline",
+                "reaction",
+            )
+        ],
+        ("text", "edit"),
+        ("text", "observe"),
+        ("media", "observe"),
+        ("text", "hold"),
+        ("photo", "hold"),
+        ("album", "hold"),
+        ("text", "unauthorized"),
+        ("command", "retention"),
+        ("text", "owners"),
+    ],
+)
 @pytest.mark.parametrize("concurrent", [False, True])
-async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, kind, mode, concurrent):
+async def test_replay_is_admitted_once_before_dispatch(
+    monkeypatch, tmp_path, kind, mode, concurrent
+):
     from gateway.config import GatewayConfig
     from gateway.session import SessionStore
     from clawk_constants import set_clawk_home_override, reset_clawk_home_override
@@ -130,12 +230,26 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
 
     monkeypatch.setattr(clawk_cli.lifecycle, "has_hook", lambda name: True)
     # Transport-only photo stand-in: no file or Telegram network operation.
-    download = AsyncMock(return_value=SimpleNamespace(
-        file_path="offline.png", download_as_bytearray=AsyncMock(return_value=bytearray(b"offline"))))
+    download = AsyncMock(
+        return_value=SimpleNamespace(
+            file_path="offline.png",
+            download_as_bytearray=AsyncMock(return_value=bytearray(b"offline")),
+        )
+    )
     monkeypatch.setattr(PhotoSize, "get_file", download)
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.cache_image_from_bytes_async", AsyncMock(return_value=str(tmp_path / "photo.png")))
-    async with connected(monkeypatch, extra={"observe_unmentioned_group_messages": True, "require_mention": True,
-                                            "allowed_chats": ["42"], "group_allowed_chats": ["42"]}) as (adapter, app, delivered):
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.cache_image_from_bytes_async",
+        AsyncMock(return_value=str(tmp_path / "photo.png")),
+    )
+    async with connected(
+        monkeypatch,
+        extra={
+            "observe_unmentioned_group_messages": True,
+            "require_mention": True,
+            "allowed_chats": ["42"],
+            "group_allowed_chats": ["42"],
+        },
+    ) as (adapter, app, delivered):
         observer = adapter._platform_event_handler = AsyncMock()
         adapter._media_batch_delay_seconds = adapter.MEDIA_GROUP_WAIT_SECONDS = 0.01
         if mode == "observe":
@@ -146,9 +260,16 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
         if mode == "hold":
             adapter._mark_disconnected()
         # Unauthorized inline queries test the real non-disclosing empty-answer path.
-        args = dict(kind=kind, edited=mode == "edit", group=mode == "observe", user=99 if mode == "unauthorized" or kind == "inline" else 88)
+        args = dict(
+            kind=kind,
+            edited=mode == "edit",
+            group=mode == "observe",
+            user=99 if mode == "unauthorized" or kind == "inline" else 88,
+        )
         if concurrent:
-            await asyncio.gather(*(app.process_update(update(app.bot, **args)) for _ in range(2)))
+            await asyncio.gather(
+                *(app.process_update(update(app.bot, **args)) for _ in range(2))
+            )
         else:
             for _ in range(2):
                 await app.process_update(update(app.bot, **args))
@@ -156,9 +277,16 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
             assert not delivered and len(adapter._held_inbound_events) == 1
             adapter._mark_connected()
             await adapter._held_inbound_redispatch_task
-        tasks = [*adapter._pending_text_batch_tasks.values(), *adapter._pending_photo_batch_tasks.values(), *adapter._media_group_tasks.values()]
+        tasks = [
+            *adapter._pending_text_batch_tasks.values(),
+            *adapter._pending_photo_batch_tasks.values(),
+            *adapter._media_group_tasks.values(),
+        ]
         await asyncio.gather(*tasks)
-        expected = int(mode not in ("observe", "unauthorized") and kind not in ("callback", "inline", "reaction"))
+        expected = int(
+            mode not in ("observe", "unauthorized")
+            and kind not in ("callback", "inline", "reaction")
+        )
         assert len(delivered) == expected
         if kind == "text" and expected:
             assert delivered[0].text == "hello"
@@ -169,9 +297,15 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
         assert len(app.bot.request.answers) == int(kind in ("callback", "inline"))
         assert adapter._updates_dispatched_total == 2
         if mode == "observe":
-            assert append.call_count == 1  # before persistence can mask a repeated writer
-            source = adapter._build_message_event(update(app.bot, **args).effective_message, MessageType.TEXT).source
-            entry = store.get_or_create_session(adapter._telegram_group_observe_shared_source(source))
+            assert (
+                append.call_count == 1
+            )  # before persistence can mask a repeated writer
+            source = adapter._build_message_event(
+                update(app.bot, **args).effective_message, MessageType.TEXT
+            ).source
+            entry = store.get_or_create_session(
+                adapter._telegram_group_observe_shared_source(source)
+            )
             rows = store.load_transcript(entry.session_id)
             assert len(rows) == 1 and rows[0]["observed"] is True
         if mode == "edit":
@@ -186,7 +320,9 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
             with monkeypatch.context() as clock:
                 clock.setattr(time, "time", lambda: now + 6.5 * 60 * 60)
                 await app.process_update(update(app.bot, **args))
-            assert len(delivered) == 1  # no TTL: elapsed time alone must not admit replay
+            assert (
+                len(delivered) == 1
+            )  # no TTL: elapsed time alone must not admit replay
             # Accepted-history eviction, not a numeric high-watermark. IDs may decrease after idle.
             for uid in range(100, 4196):
                 await app.process_update(Update(update_id=uid))
@@ -194,10 +330,18 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
             await app.process_update(update(app.bot, **args))
             assert len(delivered) == 2
         if mode == "owners":
-            for profile, bot_id, fresh in (("alpha", 222, 1), ("beta", 333, 1), ("alpha", 222, 0)):
+            for profile, bot_id, fresh in (
+                ("alpha", 222, 1),
+                ("beta", 333, 1),
+                ("alpha", 222, 0),
+            ):
                 token = set_clawk_home_override(tmp_path / profile)
                 try:
-                    async with connected(monkeypatch, bot_id=bot_id) as (other, other_app, other_delivered):
+                    async with connected(monkeypatch, bot_id=bot_id) as (
+                        other,
+                        other_app,
+                        other_delivered,
+                    ):
                         await other_app.process_update(update(other_app.bot))
                         await asyncio.gather(*other._pending_text_batch_tasks.values())
                         # A rebuilt adapter for the same bot and home reads that home's receipt.
@@ -209,7 +353,11 @@ async def test_replay_is_admitted_once_before_dispatch(monkeypatch, tmp_path, ki
             # Same owner can reconnect with a different bot; its update-ID space is independent.
             await adapter.disconnect()
             adapter.config.token = "444:offline-test"
-            monkeypatch.setattr(adapter, "_build_ptb_requests", AsyncMock(return_value=(NoNetwork(444), NoNetwork(444))))
+            monkeypatch.setattr(
+                adapter,
+                "_build_ptb_requests",
+                AsyncMock(return_value=(NoNetwork(444), NoNetwork(444))),
+            )
             assert await adapter.connect(is_reconnect=True)
             await adapter._app.process_update(update(adapter._app.bot))
             await asyncio.gather(*adapter._pending_text_batch_tasks.values())
@@ -224,8 +372,15 @@ async def _check_sticker_handoff(monkeypatch, adapter, app, delivered, stage):
     calls = []
     monkeypatch.setattr(sticker_cache, "get_cached_description", lambda _: None)
     monkeypatch.setattr(sticker_cache, "cache_sticker_description", Mock())
-    monkeypatch.setattr(Sticker, "get_file", AsyncMock(return_value=SimpleNamespace(
-        download_as_bytearray=AsyncMock(return_value=bytearray(b"offline")))))
+    monkeypatch.setattr(
+        Sticker,
+        "get_file",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                download_as_bytearray=AsyncMock(return_value=bytearray(b"offline"))
+            )
+        ),
+    )
 
     async def cache_image(*args, **kwargs):
         if stage == "sticker_prepare" and not entered.is_set():
@@ -240,7 +395,9 @@ async def _check_sticker_handoff(monkeypatch, adapter, app, delivered, stage):
             await asyncio.Event().wait()
         return json.dumps({"success": True, "analysis": "an offline sticker"})
 
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.cache_image_from_bytes_async", cache_image)
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.cache_image_from_bytes_async", cache_image
+    )
     monkeypatch.setattr(vision_tools, "vision_analyze_tool", vision)
     payload = update(app.bot, kind="media").to_dict()
     payload["message"]["sticker"]["is_animated"] = False
@@ -264,9 +421,15 @@ async def _check_caught_preparation(monkeypatch, tmp_path, adapter, app, stage):
     import sqlite3
 
     if stage == "observed_prepare":
-        adapter.config.extra.update(observe_unmentioned_group_messages=True, require_mention=True,
-                                    allowed_chats=["42"], group_allowed_chats=["42"])
-        store = adapter._session_store = SessionStore(tmp_path / "sessions", GatewayConfig())
+        adapter.config.extra.update(
+            observe_unmentioned_group_messages=True,
+            require_mention=True,
+            allowed_chats=["42"],
+            group_allowed_chats=["42"],
+        )
+        store = adapter._session_store = SessionStore(
+            tmp_path / "sessions", GatewayConfig()
+        )
         effect = Mock(wraps=store.append_to_transcript)
         monkeypatch.setattr(store, "append_to_transcript", effect)
         target, method = store, "get_or_create_session"
@@ -274,13 +437,19 @@ async def _check_caught_preparation(monkeypatch, tmp_path, adapter, app, stage):
     elif stage == "inline_prepare":
         effect = AsyncMock()
         monkeypatch.setattr(InlineQuery, "answer", effect)
-        monkeypatch.setattr(inline_picker, "build_inline_results", lambda *a, **kw: ([], ""))
+        monkeypatch.setattr(
+            inline_picker, "build_inline_results", lambda *a, **kw: ([], "")
+        )
         target, method = inline_picker, "build_inline_results"
         args = {"kind": "inline"}
     else:
         effect = adapter._platform_event_handler = AsyncMock()
         target = adapter
-        method = "_normalize_platform_event" if stage == "normalize_prepare" else "_source_for_platform_event_auth"
+        method = (
+            "_normalize_platform_event"
+            if stage == "normalize_prepare"
+            else "_source_for_platform_event_auth"
+        )
         args = {"kind": "reaction"}
     with monkeypatch.context() as broken:
         prepare = Mock(side_effect=sqlite3.OperationalError("preparation unavailable"))
@@ -319,7 +488,11 @@ async def _check_nonblocking_plugin(monkeypatch, adapter, app, stage, failure):
     if stage.startswith("conversation"):
         handler = ConversationHandler(entry_points=[handler], states={}, fallbacks=[])
     app.add_handler(handler, group=-1)
-    monkeypatch.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("preparation failed")))
+    monkeypatch.setattr(
+        adapter,
+        "_cache_replied_media",
+        AsyncMock(side_effect=OSError("preparation failed")),
+    )
     errors = []
 
     async def record_error(incoming, context):
@@ -342,7 +515,9 @@ async def _check_nonblocking_plugin(monkeypatch, adapter, app, stage, failure):
             for task in tasks:
                 task.cancel()
         release.set()
-        await app.stop()  # PTB awaits scheduled handlers, including ones not yet entered.
+        await (
+            app.stop()
+        )  # PTB awaits scheduled handlers, including ones not yet entered.
     await app.start()
     await app.process_update(update(app.bot))
     await app.stop()
@@ -369,11 +544,17 @@ async def _check_error_registration(monkeypatch, adapter, app):
     recorder = Recorder()
     async with connected(monkeypatch, bot_id=222) as (other, other_app, _):
         for owner, native in ((adapter, app), (other, other_app)):
-            monkeypatch.setattr(owner, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
+            monkeypatch.setattr(
+                owner,
+                "_cache_replied_media",
+                AsyncMock(side_effect=OSError("before enqueue")),
+            )
             native.add_error_handler(first, block=True)
             native.add_error_handler(recorder.stop, block=True)
             native.add_error_handler(last, block=True)
-            native.add_error_handler(first, block=False)  # duplicate must not alter block/order
+            native.add_error_handler(
+                first, block=False
+            )  # duplicate must not alter block/order
             assert native.error_handlers[first] is True
             assert list(native.error_handlers) == [first, recorder.stop, last]
             for _ in range(2):
@@ -381,8 +562,12 @@ async def _check_error_registration(monkeypatch, adapter, app):
             assert not owner._inflight_update_ids
             assert f"{native.bot.id}:10" in owner._seen_update_ids
         assert effects == [(111, "first"), (111, "stop"), (222, "first"), (222, "stop")]
-        app.remove_error_handler(recorder.stop)  # fresh bound-method object, same registration
-        app.remove_error_handler(recorder.stop)  # removing an absent handler is still a no-op
+        app.remove_error_handler(
+            recorder.stop
+        )  # fresh bound-method object, same registration
+        app.remove_error_handler(
+            recorder.stop
+        )  # removing an absent handler is still a no-op
         assert recorder.stop not in app.error_handlers
         app.add_error_handler(recorder.stop, block=True)
         assert list(app.error_handlers) == [first, last, recorder.stop]
@@ -410,8 +595,16 @@ async def _check_error_cancel_before_entry(monkeypatch, adapter, app, delivered)
 
     app.add_error_handler(notify, block=False)
     with monkeypatch.context() as broken:
-        broken.setattr(type(app), "_Application__create_task", lambda self, *a, **kw: cancel_on_schedule(*a, **kw))
-        broken.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
+        broken.setattr(
+            type(app),
+            "_Application__create_task",
+            lambda self, *a, **kw: cancel_on_schedule(*a, **kw),
+        )
+        broken.setattr(
+            adapter,
+            "_cache_replied_media",
+            AsyncMock(side_effect=OSError("before enqueue")),
+        )
         await app.process_update(update(app.bot))
         assert "111:10" in adapter._inflight_update_ids
         await app.process_update(update(app.bot))
@@ -455,18 +648,26 @@ async def _check_native_error_callback(monkeypatch, adapter, app, stage, failure
         else:
             native.add_error_handler(native_error, block=block)
 
-    manager = SimpleNamespace(get_platform_handler_factories=lambda platform: [(factory, "offline-error")])
+    manager = SimpleNamespace(
+        get_platform_handler_factories=lambda platform: [(factory, "offline-error")]
+    )
     monkeypatch.setattr("clawk_cli.plugins.get_plugin_manager", lambda: manager)
     adapter._wire_plugin_handlers(app)
     assert native_error in app.error_handlers
-    monkeypatch.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
+    monkeypatch.setattr(
+        adapter,
+        "_cache_replied_media",
+        AsyncMock(side_effect=OSError("before enqueue")),
+    )
     first = asyncio.create_task(app.process_update(update(app.bot)))
     try:
         await asyncio.wait_for(entered.wait(), 2)
         await asyncio.wait_for(app.process_update(update(app.bot)), 2)
         assert effects == [10]
         assert "111:10" in adapter._inflight_update_ids
-        assert (tasks[0] is first) == block  # PTB still owns explicit/default block resolution.
+        assert (
+            tasks[0] is first
+        ) == block  # PTB still owns explicit/default block resolution.
         for uid in range(100, 4196):
             await app.process_update(Update(uid))
         await app.process_update(update(app.bot))
@@ -486,25 +687,79 @@ async def _check_native_error_callback(monkeypatch, adapter, app, stage, failure
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("stage,failure", [
-    *[(stage, failure) for stage in ("prepare", "batch_prepare", "observer", "enqueued", "pressure", "native", "dispatch", "callback", "inline", "media_warning")
-      for failure in ("error", "cancel")],
-    *[(stage, failure) for stage in ("native_error_block", "native_error_async", "native_error_default", "native_error_default_async")
-      for failure in ("error", "cancel", "success")],
-    ("error_before_entry", "cancel"), ("error_registration", "error"), ("error_context", "error"),
-    ("context", "error"), ("conversation", "error"), ("conversation_owner", "error"), ("ingress", "error"),
-    ("sticker_vision", "cancel"), ("sticker_prepare", "cancel"),
-    *[(stage, "error") for stage in ("observed_prepare", "inline_prepare", "normalize_prepare", "source_prepare")],
-    *[(stage, failure) for stage in ("core_default", "native_async", "native_default", "conversation_async", "conversation_default")
-      for failure in ("error", "cancel")],
-])
-async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path, caplog, stage, failure):
+@pytest.mark.parametrize(
+    "stage,failure",
+    [
+        *[
+            (stage, failure)
+            for stage in (
+                "prepare",
+                "batch_prepare",
+                "observer",
+                "enqueued",
+                "pressure",
+                "native",
+                "dispatch",
+                "callback",
+                "inline",
+                "media_warning",
+            )
+            for failure in ("error", "cancel")
+        ],
+        *[
+            (stage, failure)
+            for stage in (
+                "native_error_block",
+                "native_error_async",
+                "native_error_default",
+                "native_error_default_async",
+            )
+            for failure in ("error", "cancel", "success")
+        ],
+        ("error_before_entry", "cancel"),
+        ("error_registration", "error"),
+        ("error_context", "error"),
+        ("context", "error"),
+        ("conversation", "error"),
+        ("conversation_owner", "error"),
+        ("ingress", "error"),
+        ("sticker_vision", "cancel"),
+        ("sticker_prepare", "cancel"),
+        *[
+            (stage, "error")
+            for stage in (
+                "observed_prepare",
+                "inline_prepare",
+                "normalize_prepare",
+                "source_prepare",
+            )
+        ],
+        *[
+            (stage, failure)
+            for stage in (
+                "core_default",
+                "native_async",
+                "native_default",
+                "conversation_async",
+                "conversation_default",
+            )
+            for failure in ("error", "cancel")
+        ],
+    ],
+)
+async def test_only_pre_handoff_failure_reopens_admission(
+    monkeypatch, tmp_path, caplog, stage, failure
+):
     import clawk_cli.lifecycle
 
     monkeypatch.setattr(clawk_cli.lifecycle, "has_hook", lambda name: True)
     async with connected(monkeypatch) as (adapter, app, delivered):
         if stage == "ingress":
-            monkeypatch.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
+            monkeypatch.setattr(
+                adapter,
+                "_cache_replied_media",
+                AsyncMock(side_effect=OSError("before enqueue")),
+            )
             adapter._updates_received_total = 2
             for _ in range(2):
                 await app.process_update(update(app.bot))
@@ -512,10 +767,14 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
             assert adapter._updates_dispatched_total == 2
             for _ in range(tg_adapter._INGRESS_DISPATCH_STALL_HEARTBEATS):
                 adapter._check_ingress_dispatch_stall()
-            assert not any("healthy but deaf" in record.message for record in caplog.records)
+            assert not any(
+                "healthy but deaf" in record.message for record in caplog.records
+            )
             return
         if stage.startswith("native_error_"):
-            await _check_native_error_callback(monkeypatch, adapter, app, stage, failure)
+            await _check_native_error_callback(
+                monkeypatch, adapter, app, stage, failure
+            )
             return
         if stage == "error_before_entry":
             await _check_error_cancel_before_entry(monkeypatch, adapter, app, delivered)
@@ -527,8 +786,16 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
             effect = AsyncMock()
             app.add_error_handler(effect)
             with monkeypatch.context() as broken:
-                broken.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
-                broken.setattr(app.context_types.context, "from_error", Mock(side_effect=OSError("no context")))
+                broken.setattr(
+                    adapter,
+                    "_cache_replied_media",
+                    AsyncMock(side_effect=OSError("before enqueue")),
+                )
+                broken.setattr(
+                    app.context_types.context,
+                    "from_error",
+                    Mock(side_effect=OSError("no context")),
+                )
                 await app.process_update(update(app.bot))
             assert not adapter._inflight_update_ids and not adapter._seen_update_ids
             app.remove_error_handler(effect)
@@ -577,10 +844,20 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
             assert len(delivered) == 1
             assert not adapter._inflight_update_ids
             return
-        if stage in ("observed_prepare", "inline_prepare", "normalize_prepare", "source_prepare"):
+        if stage in (
+            "observed_prepare",
+            "inline_prepare",
+            "normalize_prepare",
+            "source_prepare",
+        ):
             await _check_caught_preparation(monkeypatch, tmp_path, adapter, app, stage)
             return
-        if stage in ("native_async", "native_default", "conversation_async", "conversation_default"):
+        if stage in (
+            "native_async",
+            "native_default",
+            "conversation_async",
+            "conversation_default",
+        ):
             await _check_nonblocking_plugin(monkeypatch, adapter, app, stage, failure)
             return
         if stage == "conversation_owner":
@@ -590,7 +867,9 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
                 effects.append(context.bot.id)
                 raise OSError("plugin failed after handoff")
 
-            conversation = ConversationHandler(entry_points=[TypeHandler(Update, entry)], states={}, fallbacks=[])
+            conversation = ConversationHandler(
+                entry_points=[TypeHandler(Update, entry)], states={}, fallbacks=[]
+            )
             app.add_handler(conversation, group=-1)
             async with connected(monkeypatch, bot_id=222) as (_other, other_app, _):
                 other_app.add_handler(conversation, group=-1)
@@ -611,17 +890,32 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
 
             conversation = ConversationHandler(
                 entry_points=[MessageHandler(filters.Regex("^hello$"), enter)],
-                states={1: [MessageHandler(filters.Regex("^done$"), finish)]}, fallbacks=[])
+                states={1: [MessageHandler(filters.Regex("^done$"), finish)]},
+                fallbacks=[],
+            )
+
             def factory(native, owner):
                 assert native is app and owner is adapter
                 native.add_handler(conversation, group=-1)
 
-            manager = SimpleNamespace(get_platform_handler_factories=lambda platform: [(factory, "offline-conversation")])
+            manager = SimpleNamespace(
+                get_platform_handler_factories=lambda platform: [
+                    (factory, "offline-conversation")
+                ]
+            )
             monkeypatch.setattr("clawk_cli.plugins.get_plugin_manager", lambda: manager)
             adapter._wire_plugin_handlers(app)
-            assert -1 in app.handlers  # Factory errors are logged/swallowed, not connection failures.
+            assert (
+                -1 in app.handlers
+            )  # Factory errors are logged/swallowed, not connection failures.
             assert app.handlers[-1][0] is conversation
-            for uid, text in ((10, "hello"), (10, "hello"), (11, "done"), (11, "done"), (12, "hello")):
+            for uid, text in (
+                (10, "hello"),
+                (10, "hello"),
+                (11, "done"),
+                (11, "done"),
+                (12, "hello"),
+            ):
                 await app.process_update(update(app.bot, uid, text=text))
             assert transitions == ["enter", "finish", "enter"]
             app.remove_handler(conversation, group=-1)
@@ -631,8 +925,10 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
         if stage == "context":
             context_type = app.context_types.context
             with monkeypatch.context() as patch:
+
                 def unavailable_context(*args):
                     raise RuntimeError("context unavailable before any callback")
+
                 patch.setattr(context_type, "from_update", unavailable_context)
                 await app.process_update(update(app.bot))
             await app.process_update(update(app.bot))
@@ -642,8 +938,16 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
         entered, release = asyncio.Event(), asyncio.Event()
         observed = []
         native_calls = []
-        args = {"kind": {"dispatch": "command", "callback": "callback", "inline": "inline", "media_warning": "photo"}.get(stage, "text"),
-                "edited": stage != "media_warning", "user": 99 if stage == "inline" else 88}
+        args = {
+            "kind": {
+                "dispatch": "command",
+                "callback": "callback",
+                "inline": "inline",
+                "media_warning": "photo",
+            }.get(stage, "text"),
+            "edited": stage != "media_warning",
+            "user": 99 if stage == "inline" else 88,
+        }
 
         async def observer(event, source):
             observed.append(event)
@@ -660,18 +964,30 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
         batch_key = adapter._text_batch_key
 
         def key_failure(event):
-            raise RuntimeError("no batch key yet") if failure == "error" else asyncio.CancelledError()
+            raise (
+                RuntimeError("no batch key yet")
+                if failure == "error"
+                else asyncio.CancelledError()
+            )
 
         def enqueue_then_fail(event):
             enqueue(event)
             # Inject the failure immediately after the real batch mutation, before callback return.
-            raise RuntimeError("accepted test failure") if failure == "error" else asyncio.CancelledError()
+            raise (
+                RuntimeError("accepted test failure")
+                if failure == "error"
+                else asyncio.CancelledError()
+            )
 
         start = adapter._start_session_processing
 
         def start_then_fail(event, session_key):
             start(event, session_key)
-            raise RuntimeError("accepted dispatch failure") if failure == "error" else asyncio.CancelledError()
+            raise (
+                RuntimeError("accepted dispatch failure")
+                if failure == "error"
+                else asyncio.CancelledError()
+            )
 
         async def native(update, context):
             native_calls.append(update.update_id)
@@ -695,11 +1011,17 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
         if stage == "dispatch":
             monkeypatch.setattr(adapter, "_start_session_processing", start_then_fail)
         if stage == "callback":
-            monkeypatch.setattr(adapter, "_handle_exec_approval_callback", effect_then_fail)
+            monkeypatch.setattr(
+                adapter, "_handle_exec_approval_callback", effect_then_fail
+            )
         if stage == "inline":
             monkeypatch.setattr(InlineQuery, "answer", effect_then_fail)
         if stage == "media_warning":
-            monkeypatch.setattr(PhotoSize, "get_file", AsyncMock(side_effect=OSError("download unavailable")))
+            monkeypatch.setattr(
+                PhotoSize,
+                "get_file",
+                AsyncMock(side_effect=OSError("download unavailable")),
+            )
             monkeypatch.setattr(Message, "reply_text", effect_then_fail)
         first = asyncio.create_task(app.process_update(update(app.bot, **args)))
         await asyncio.wait_for(entered.wait(), 2)
@@ -725,7 +1047,10 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
             await first  # PTB swallows callback exceptions through process_error.
         if stage in ("prepare", "pressure", "batch_prepare"):
             assert not observed
-            logged = any(record.name == "telegram.ext.Application" and record.exc_info for record in caplog.records)
+            logged = any(
+                record.name == "telegram.ext.Application" and record.exc_info
+                for record in caplog.records
+            )
             assert logged == (failure == "error")
         monkeypatch.setattr(adapter, "_cache_replied_media", prepare)
         monkeypatch.setattr(adapter, "_enqueue_text_event", enqueue)
@@ -741,7 +1066,9 @@ async def test_only_pre_handoff_failure_reopens_admission(monkeypatch, tmp_path,
             return
         assert len(delivered) == 1
         assert delivered[0].text == ("/status" if stage == "dispatch" else "hello")
-        assert adapter._platform_event_handler.await_count == (1 if stage in ("prepare", "pressure", "batch_prepare") else 0)
+        assert adapter._platform_event_handler.await_count == (
+            1 if stage in ("prepare", "pressure", "batch_prepare") else 0
+        )
 
 
 @pytest.mark.asyncio
@@ -756,7 +1083,11 @@ async def test_redelivery_to_rebuilt_adapter_is_dropped(monkeypatch, tmp_path):
     async with connected(monkeypatch) as (adapter, app, delivered):
         await app.process_update(update(app.bot, 10))
         with monkeypatch.context() as broken:
-            broken.setattr(adapter, "_cache_replied_media", AsyncMock(side_effect=OSError("before enqueue")))
+            broken.setattr(
+                adapter,
+                "_cache_replied_media",
+                AsyncMock(side_effect=OSError("before enqueue")),
+            )
             await app.process_update(update(app.bot, 20, text="unaccepted"))
         await asyncio.gather(*adapter._pending_text_batch_tasks.values())
         assert [event.text for event in delivered] == ["hello"]
@@ -780,7 +1111,9 @@ async def test_redelivery_to_rebuilt_adapter_is_dropped(monkeypatch, tmp_path):
         await asyncio.gather(*adapter._pending_text_batch_tasks.values())
         assert len(delivered) == 1
     stale = time.time() - RECEIPT_TTL_SECONDS - 1
-    receipts.write_text(json.dumps({"update_ids": {"10": stale, "20": "bad", "x": time.time()}}))
+    receipts.write_text(
+        json.dumps({"update_ids": {"10": stale, "20": "bad", "x": time.time()}})
+    )
     async with connected(monkeypatch) as (adapter, app, delivered):
         await app.process_update(update(app.bot, 10))
         await asyncio.gather(*adapter._pending_text_batch_tasks.values())
@@ -804,11 +1137,19 @@ async def test_connect_builds_concurrent_update_processor(monkeypatch):
         assert isinstance(app.update_processor, PerChatUpdateProcessor)
         assert app.concurrent_updates == DEFAULT_MAX_CONCURRENT_UPDATES
 
-    async with connected(monkeypatch, extra={"max_concurrent_updates": 7}) as (_adapter, app, _delivered):
+    async with connected(monkeypatch, extra={"max_concurrent_updates": 7}) as (
+        _adapter,
+        app,
+        _delivered,
+    ):
         assert app.concurrent_updates == 7
 
     for bad in ("lots", float("inf")):  # .inf in YAML: int() raises OverflowError
-        async with connected(monkeypatch, extra={"max_concurrent_updates": bad}) as (_adapter, app, _delivered):
+        async with connected(monkeypatch, extra={"max_concurrent_updates": bad}) as (
+            _adapter,
+            app,
+            _delivered,
+        ):
             assert app.concurrent_updates == DEFAULT_MAX_CONCURRENT_UPDATES
 
     # Cancelling a waiting same-chat update must neither fail its running predecessor nor
@@ -831,7 +1172,12 @@ async def test_connect_builds_concurrent_update_processor(monkeypatch):
     gate.set()
     results = await asyncio.gather(*tasks, return_exceptions=True)
     assert results[0] is None and results[2] is None
-    assert order == ["start A", "end A", "start C", "end C"]  # C waits for A even after B is cancelled
+    assert order == [
+        "start A",
+        "end A",
+        "start C",
+        "end C",
+    ]  # C waits for A even after B is cancelled
 
 
 @pytest.mark.asyncio
@@ -845,6 +1191,7 @@ async def test_slow_update_does_not_block_other_chats(monkeypatch):
     gate = asyncio.Event()
 
     async with connected(monkeypatch) as (adapter, app, delivered):
+
         async def gate_keeper(update, context):
             if update.update_id == 10:
                 await gate.wait()
@@ -853,7 +1200,9 @@ async def test_slow_update_does_not_block_other_chats(monkeypatch):
         app.add_handler(TypeHandler(Update, gate_keeper), group=-1)
 
         app.update_queue.put_nowait(update(app.bot, uid=10, chat=42))
-        for _ in range(200):  # event-based: u10 has been dequeued and parked in the gate
+        for _ in range(
+            200
+        ):  # event-based: u10 has been dequeued and parked in the gate
             if adapter._inflight_update_ids:
                 break
             await asyncio.sleep(0.01)

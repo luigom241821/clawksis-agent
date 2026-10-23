@@ -114,9 +114,7 @@ class TestDueScanDispatchStamp:
         # A manual trigger stamps manual_run_at == next_run_at; there is no
         # scheduled instant to be late against, so no dispatch stamp.
         run_at = FIXED_NOW - timedelta(hours=5)
-        save_jobs([
-            _daily_job("manual", run_at, manual_run_at=run_at.isoformat())
-        ])
+        save_jobs([_daily_job("manual", run_at, manual_run_at=run_at.isoformat())])
 
         due = get_due_jobs()
 

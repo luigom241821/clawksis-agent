@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+
 @pytest.fixture
 def ollama_cloud_profile():
     """Resolve the registered Ollama Cloud profile.
@@ -30,6 +31,7 @@ def ollama_cloud_profile():
     profile = providers.get_provider_profile("ollama-cloud")
     assert profile is not None, "ollama-cloud provider profile must be registered"
     return profile
+
 
 class TestOllamaCloudReasoningEffort:
     """``build_api_kwargs_extras`` emits correct top-level ``reasoning_effort``."""
@@ -127,6 +129,7 @@ class TestOllamaCloudReasoningEffort:
         )
         assert top_level == {"reasoning_effort": "low"}
 
+
 class TestOllamaCloudFullKwargsIntegration:
     """End-to-end: the transport's full kwargs include reasoning_effort."""
 
@@ -146,7 +149,10 @@ class TestOllamaCloudFullKwargsIntegration:
         assert kwargs["model"] == "deepseek-v4-pro:cloud"
         assert kwargs["reasoning_effort"] == "max"
         # No extra_body — Ollama Cloud uses top-level reasoning_effort
-        assert "extra_body" not in kwargs or "reasoning" not in kwargs.get("extra_body", {})
+        assert "extra_body" not in kwargs or "reasoning" not in kwargs.get(
+            "extra_body", {}
+        )
+
 
 class TestOllamaCloudCapabilityGating:
     """reasoning_effort is gated on the model's thinking capability."""
@@ -163,17 +169,22 @@ class TestOllamaCloudCapabilityGating:
         assert extra_body == {}
         assert top_level == {}
 
+
 class TestOllamaModelSupportsThinking:
     """The /api/show capability probe used to resolve supports_reasoning."""
 
-    def _patch_show(self, monkeypatch, *, status=200, capabilities=None, raise_exc=None):
+    def _patch_show(
+        self, monkeypatch, *, status=200, capabilities=None, raise_exc=None
+    ):
         import httpx
 
         class _Resp:
             status_code = status
 
             def json(self):
-                return {"capabilities": capabilities} if capabilities is not None else {}
+                return (
+                    {"capabilities": capabilities} if capabilities is not None else {}
+                )
 
         class _Client:
             def __init__(self, *a, **k):

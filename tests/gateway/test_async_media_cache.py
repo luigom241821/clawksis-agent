@@ -77,7 +77,10 @@ async def test_cache_media_bytes_async_runs_off_loop_and_forwards_kwargs(monkeyp
     monkeypatch.setattr(base, "cache_media_bytes", fake_cache_media_bytes)
 
     result = await base.cache_media_bytes_async(
-        b"payload", filename="report.pdf", mime_type="application/pdf", default_kind="document"
+        b"payload",
+        filename="report.pdf",
+        mime_type="application/pdf",
+        default_kind="document",
     )
 
     assert result == "cached-media"

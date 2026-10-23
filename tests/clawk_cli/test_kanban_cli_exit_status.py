@@ -12,7 +12,9 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 
 
-def _run_clawk(home: Path, *args: str, marker: bool = False) -> subprocess.CompletedProcess[str]:
+def _run_clawk(
+    home: Path, *args: str, marker: bool = False
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["CLAWK_HOME"] = str(home)
     env["CLAWK_KANBAN_HOME"] = str(home)

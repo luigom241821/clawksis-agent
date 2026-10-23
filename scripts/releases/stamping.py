@@ -4,6 +4,7 @@ Python and npm package versions are inert source placeholders. Runtime identity
 comes from ``install-stamp.json``; this adapter exists only for builders that
 require a native version in their own project metadata.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +14,9 @@ import tomllib
 from pathlib import Path
 
 
-def _rewrite(path: Path, pattern: str, replacement: str, *, count: int = 0, flags: int = 0) -> bool:
+def _rewrite(
+    path: Path, pattern: str, replacement: str, *, count: int = 0, flags: int = 0
+) -> bool:
     if not path.exists():
         return False
     raw = path.read_bytes()
@@ -72,7 +75,9 @@ def validate_bootstrap_version(tree: Path, version: str) -> None:
     }
     mismatches = {name: value for name, value in values.items() if value != version}
     if mismatches:
-        raise ValueError(f"Bootstrap installer version differs from {version}: {mismatches}")
+        raise ValueError(
+            f"Bootstrap installer version differs from {version}: {mismatches}"
+        )
 
 
 def main(argv: list[str] | None = None) -> None:

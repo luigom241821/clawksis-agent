@@ -20,20 +20,27 @@ def _run_state_db_auto_maintenance(session_db) -> None:
         return
     try:
         from clawk_cli.config import load_config as _load_full_config
-        from clawk_constants import get_clawk_home as _get_clawk_home  # lazy: tests patch it
+        from clawk_constants import (
+            get_clawk_home as _get_clawk_home,
+        )  # lazy: tests patch it
+
         _clawk_home_maint = _get_clawk_home()
 
         # One-time repairs, each latched in state_meta once it has run.
         for meta_key, repair, done_msg, skip_msg in (
             (
                 "ghost_session_prune_v1",
-                lambda: session_db.prune_empty_ghost_sessions(sessions_dir=_clawk_home_maint / "sessions"),
-                "Pruned %d empty TUI ghost sessions", "Ghost session prune skipped: %s",
+                lambda: session_db.prune_empty_ghost_sessions(
+                    sessions_dir=_clawk_home_maint / "sessions"
+                ),
+                "Pruned %d empty TUI ghost sessions",
+                "Ghost session prune skipped: %s",
             ),
             (
                 "orphaned_compression_finalize_v1",
                 session_db.finalize_orphaned_compression_sessions,
-                "Finalized %d orphaned compression sessions", "Orphan compression finalize skipped: %s",
+                "Finalized %d orphaned compression sessions",
+                "Orphan compression finalize skipped: %s",
             ),
         ):
             if session_db.get_meta(meta_key):
@@ -51,7 +58,7 @@ def _run_state_db_auto_maintenance(session_db) -> None:
             if count:
                 logger.info(done_msg, count)
 
-        cfg = (_load_full_config().get("sessions") or {})
+        cfg = _load_full_config().get("sessions") or {}
 
         # Auto-archive is independent of auto_prune: run it before prune's early return.
         if cfg.get("auto_archive", False):
@@ -78,4 +85,7 @@ def _run_checkpoint_auto_maintenance() -> None:
     on a large store, which used to stall the prompt once a day. ``auto_prune_from_config`` owns the
     config gate and the 24h marker and never raises."""
     from tools.checkpoint_maintenance import auto_prune_from_config
-    threading.Thread(target=auto_prune_from_config, name="checkpoint-auto-prune", daemon=True).start()
+
+    threading.Thread(
+        target=auto_prune_from_config, name="checkpoint-auto-prune", daemon=True
+    ).start()

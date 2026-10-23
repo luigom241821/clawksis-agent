@@ -5,8 +5,17 @@ from dataclasses import dataclass, field, replace as dataclass_replace
 from typing import Any, Callable, Optional, Sequence
 
 from tools.connectors.gateway.config import connectors_available, guest_identity_pending
-from tools.connectors.gateway.errors import GatewayAuthError, GatewayUnavailable, ToolGatewayError
-from tools.connectors.gateway.files import FileInputError, model_parameters, save_outputs, stage_inputs
+from tools.connectors.gateway.errors import (
+    GatewayAuthError,
+    GatewayUnavailable,
+    ToolGatewayError,
+)
+from tools.connectors.gateway.files import (
+    FileInputError,
+    model_parameters,
+    save_outputs,
+    stage_inputs,
+)
 from tools.connectors.gateway.merge import fill_remote_failure, splice_remote_results
 from tools.connectors.gateway.names import parse_connector_name, vendor_slug_candidates
 from tools.managed_gateway_identity import CallRef
@@ -17,8 +26,10 @@ SIGN_IN_EXPIRED = "sign_in_expired"
 UNREACHABLE = "unreachable"
 # No Nous identity yet: the first hosted manage_connections action creates one.
 NOT_SET_UP = "not_set_up"
-NOT_SET_UP_MESSAGE = ("Hosted connectors are not set up for this user yet. "
-                      "Call manage_connections to connect the app first; that sets them up.")
+NOT_SET_UP_MESSAGE = (
+    "Hosted connectors are not set up for this user yet. "
+    "Call manage_connections to connect the app first; that sets them up."
+)
 
 __all__ = [
     "NOT_SET_UP",
@@ -34,7 +45,6 @@ __all__ = [
 
 @dataclass(frozen=True)
 class ConnectorLeg:
-
     payload: dict[str, Any] = field(default_factory=dict)
     failure: Optional[str] = None
 
@@ -109,19 +119,26 @@ def connector_describe(
             return ConnectorLeg()
         client = client_factory() if client_factory else _default_client_factory(call)
         response = client.schemas(request_slugs) or {}
-        schemas = response.get("schemas") if isinstance(response.get("schemas"), dict) else {}
+        schemas = (
+            response.get("schemas") if isinstance(response.get("schemas"), dict) else {}
+        )
         tools: dict[str, Any] = {}
         for composed, candidates in wanted.items():
             schema = next(
-                (schemas[slug] for slug in candidates
-                 if isinstance(schemas.get(slug), dict)),
+                (
+                    schemas[slug]
+                    for slug in candidates
+                    if isinstance(schemas.get(slug), dict)
+                ),
                 None,
             )
             if schema is None:
                 continue
             tools[composed] = {
                 "description": str(schema.get("description") or ""),
-                "parameters": model_parameters(composed, schema.get("input_schema") or {}),
+                "parameters": model_parameters(
+                    composed, schema.get("input_schema") or {}
+                ),
             }
         return ConnectorLeg(payload={"tools": tools})
     except GatewayUnavailable:
@@ -161,9 +178,16 @@ def run_remote(
         for plan in planned
     ]
     try:
-        client = client_factory() if client_factory else _default_client_factory(
-            CallRef(turn_id=turn_id, tool_call_id=dispatch_id))
-        entries = splice_remote_results(planned, _execute_with_files(client, wire_planned, task_id))
+        client = (
+            client_factory()
+            if client_factory
+            else _default_client_factory(
+                CallRef(turn_id=turn_id, tool_call_id=dispatch_id)
+            )
+        )
+        entries = splice_remote_results(
+            planned, _execute_with_files(client, wire_planned, task_id)
+        )
     except ToolGatewayError as exc:
         logger.warning(
             "Connector execute for dispatch %s failed (%s): %s",
@@ -202,7 +226,8 @@ def run_remote(
     # Retry confirmed misses once without disturbing successful sibling slots.
     try:
         fallback_entries = splice_remote_results(
-            fallback_planned, _execute_with_files(client, fallback_planned, task_id))
+            fallback_planned, _execute_with_files(client, fallback_planned, task_id)
+        )
     except ToolGatewayError as exc:
         logger.warning(
             "Connector execute fallback for dispatch %s failed (%s): %s",
@@ -227,8 +252,9 @@ def run_remote(
     return entries
 
 
-
-def _execute_with_files(client: Any, planned: Sequence[Any], task_id: Optional[str]) -> list[dict[str, Any]]:
+def _execute_with_files(
+    client: Any, planned: Sequence[Any], task_id: Optional[str]
+) -> list[dict[str, Any]]:
     """Execute ``planned`` with every file input staged first and every returned file saved.
 
     A call whose file input is refused or fails to stage gets that error as its result and is never
@@ -241,7 +267,9 @@ def _execute_with_files(client: Any, planned: Sequence[Any], task_id: Optional[s
         try:
             runnable.append((slot, stage_inputs(client, plan, task_id=task_id)))
         except FileInputError as exc:
-            logger.warning("Connector %s file input refused (%s): %s", plan.name, exc.code, exc)
+            logger.warning(
+                "Connector %s file input refused (%s): %s", plan.name, exc.code, exc
+            )
             results[slot] = exc.result()
     if runnable:
         # A CONNECTION_REQUIRED link minted by this call is the user's next click, so the call names

@@ -28,7 +28,9 @@ def _ts(seconds: float) -> str:
     return datetime.fromtimestamp(dt, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
-def _job(name: str, dur_s: float, start_s: float = 0.0, conclusion: str = "success") -> dict:
+def _job(
+    name: str, dur_s: float, start_s: float = 0.0, conclusion: str = "success"
+) -> dict:
     """Build a normalized job dict with realistic timestamps for wall-time math."""
     return {
         "name": name,

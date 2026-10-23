@@ -30,7 +30,9 @@ conn.execute("COMMIT")
 def delete_mode_db(tmp_path, monkeypatch):
     home = tmp_path / "clawk-home"
     home.mkdir()
-    (home / "config.yaml").write_text(yaml.safe_dump({"database": {"journal_mode": "delete"}}), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"database": {"journal_mode": "delete"}}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     db = SessionDB(db_path=home / "state.db")
     assert db._wal_active is False
@@ -41,15 +43,22 @@ def delete_mode_db(tmp_path, monkeypatch):
     db.close()
 
 
-@pytest.mark.parametrize("read_only", [True, False], ids=["read_only_handle", "writer_handle"])
+@pytest.mark.parametrize(
+    "read_only", [True, False], ids=["read_only_handle", "writer_handle"]
+)
 def test_delete_mode_read_waits_for_other_process_commit(delete_mode_db, read_only):
     holder = subprocess.Popen(
         [sys.executable, "-c", _HOLDER, str(delete_mode_db.db_path), str(_HOLD_S)],
-        stdout=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     try:
         assert holder.stdout.readline().strip() == "held"
-        reader = SessionDB(db_path=delete_mode_db.db_path, read_only=True) if read_only else delete_mode_db
+        reader = (
+            SessionDB(db_path=delete_mode_db.db_path, read_only=True)
+            if read_only
+            else delete_mode_db
+        )
         try:
             assert [s["id"] for s in reader.list_sessions_rich(limit=10)] == ["s1"]
             assert reader.session_count() == 1

@@ -1,4 +1,5 @@
 """Stream and verify release objects through the signed R2 transport."""
+
 from __future__ import annotations
 
 import hashlib
@@ -24,9 +25,10 @@ _CONTENT_TYPES_PATH = Path(__file__).resolve().parents[1] / "release-content-typ
 with _CONTENT_TYPES_PATH.open(encoding="utf-8") as _file:
     _CONTENT_TYPES = tuple(json.load(_file).items())
 
+
 def content_type_for(filename: str) -> str | None:
     lower = filename.lower()
-    base = lower[lower.rfind("/") + 1:]
+    base = lower[lower.rfind("/") + 1 :]
     for key, mime in _CONTENT_TYPES:
         if "." in key:
             if lower.endswith(key):
@@ -40,9 +42,7 @@ def content_type_for(filename: str) -> str | None:
 # SigV4 (pure; tests pin these against botocore-generated vectors)
 # ---------------------------------------------------------------------------
 
-_UNRESERVED = set(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
-)
+_UNRESERVED = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~")
 
 
 def rfc3986_encode(value: str) -> str:
@@ -102,7 +102,9 @@ def _hmac(key: bytes, msg: str) -> bytes:
     return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
 
 
-def signature(sts_text: str, secret_key: str, date: str, region: str, service: str) -> str:
+def signature(
+    sts_text: str, secret_key: str, date: str, region: str, service: str
+) -> str:
     k_date = _hmac(f"AWS4{secret_key}".encode(), date)
     k_region = _hmac(k_date, region)
     k_service = _hmac(k_region, service)
@@ -140,6 +142,7 @@ def auth_header(
 # R2 request plumbing
 # ---------------------------------------------------------------------------
 
+
 def s3_endpoint(account_id: str) -> str:
     return f"https://{account_id}.r2.cloudflarestorage.com"
 
@@ -156,7 +159,9 @@ def amz_timestamp() -> str:
 class R2RequestError(Exception):
     def __init__(self, method: str, path: str, status: int, body: str = ""):
         self.method, self.path, self.status, self.body = method, path, status, body
-        super().__init__(f"R2 {method} {path} -> {status}" + (f": {body[:300]}" if body else ""))
+        super().__init__(
+            f"R2 {method} {path} -> {status}" + (f": {body[:300]}" if body else "")
+        )
 
 
 class Response:
@@ -198,9 +203,15 @@ def r2_headers(
     if extra_headers:
         headers.update(extra_headers)
     headers["authorization"] = auth_header(
-        method=method, host=host, path=path, query=query, headers=headers,
-        payload_hash=body_hash, access_key_id=creds["access_key_id"],
-        secret_key=creds["secret_key"], now=now,
+        method=method,
+        host=host,
+        path=path,
+        query=query,
+        headers=headers,
+        payload_hash=body_hash,
+        access_key_id=creds["access_key_id"],
+        secret_key=creds["secret_key"],
+        now=now,
     )
     return headers
 
@@ -210,6 +221,7 @@ def _connection(url: str, timeout: float) -> http.client.HTTPConnection:
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     if parsed.scheme == "https":
         import ssl
+
         return http.client.HTTPSConnection(
             parsed.hostname, port, context=ssl.create_default_context(), timeout=timeout
         )
@@ -242,8 +254,15 @@ def signed_request(
     for attempt in range(1, tries + 1):
         body_iter = body_iter_factory() if body_iter_factory is not None else None
         headers = r2_headers(
-            method, parsed.netloc, parsed.path, query, body_hash, now, creds,
-            content_type=content_type, content_length=content_length,
+            method,
+            parsed.netloc,
+            parsed.path,
+            query,
+            body_hash,
+            now,
+            creds,
+            content_type=content_type,
+            content_length=content_length,
             extra_headers=extra_headers,
         )
         conn = _connection(url, timeout=600.0)
@@ -321,27 +340,57 @@ def verify_remote_artifact(
 
 
 def download_object(
-    creds: dict[str, str], base: str, bucket: str, key: str, file: Path, now: str,
-    *, expected_size: int, expected_sha256: str,
+    creds: dict[str, str],
+    base: str,
+    bucket: str,
+    key: str,
+    file: Path,
+    now: str,
+    *,
+    expected_size: int,
+    expected_sha256: str,
 ) -> None:
     url = R2Scope.configured().object_url(base, bucket, key)
     parsed = urlparse(url)
+
     def headers(attempt: int) -> dict[str, str]:
-        return r2_headers("GET", parsed.netloc, parsed.path, "", EMPTY_SHA,
-                          now if attempt == 1 else amz_timestamp(), creds)
-    _download_url(url, file, headers, expected_size=expected_size, expected_sha256=expected_sha256)
+        return r2_headers(
+            "GET",
+            parsed.netloc,
+            parsed.path,
+            "",
+            EMPTY_SHA,
+            now if attempt == 1 else amz_timestamp(),
+            creds,
+        )
+
+    _download_url(
+        url, file, headers, expected_size=expected_size, expected_sha256=expected_sha256
+    )
 
 
 def public_artifact_url(base: str, key: str) -> str:
     """Public reads never carry credentials or follow redirects out of the archive."""
     parsed = urlparse(base)
-    if (not parsed.hostname or parsed.username is not None or parsed.password is not None
-            or parsed.query or parsed.fragment or parsed.params
-            or any(c in base for c in ('%', '\\')) or any(ord(c) <= 32 for c in base)
-            or any(part in ('.', '..') for part in parsed.path.split('/'))
-            or not (parsed.scheme == 'https' or (parsed.scheme == 'http'
-                    and parsed.hostname in ('127.0.0.1', 'localhost', '::1')))):
-        raise ValueError('Invalid public artifact base URL')
+    if (
+        not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or parsed.params
+        or any(c in base for c in ("%", "\\"))
+        or any(ord(c) <= 32 for c in base)
+        or any(part in (".", "..") for part in parsed.path.split("/"))
+        or not (
+            parsed.scheme == "https"
+            or (
+                parsed.scheme == "http"
+                and parsed.hostname in ("127.0.0.1", "localhost", "::1")
+            )
+        )
+    ):
+        raise ValueError("Invalid public artifact base URL")
     return public_url_for(base, relative_artifact_path(key))
 
 
@@ -350,14 +399,14 @@ def read_public_receipt(base: str, key: str) -> dict:
     parsed = urlparse(url)
     conn = _connection(url, timeout=60.0)
     try:
-        conn.request('GET', parsed.path)
+        conn.request("GET", parsed.path)
         response = conn.getresponse()
         if response.status != 200:
-            raise R2RequestError('GET', parsed.path, response.status)
+            raise R2RequestError("GET", parsed.path, response.status)
         # Receipts are metadata, never an unbounded binary download.
         body = response.read(4 * 1024 * 1024 + 1)
         if len(body) > 4 * 1024 * 1024:
-            raise ValueError('Public handoff receipt exceeds metadata limit')
+            raise ValueError("Public handoff receipt exceeds metadata limit")
         return json.loads(body)
     finally:
         conn.close()
@@ -367,17 +416,34 @@ class _TransferMismatch(ValueError):
     """A completed download whose size or SHA256 disagrees with its receipt."""
 
 
-def download_public_object(base: str, key: str, file: Path, *, expected_size: int, expected_sha256: str) -> None:
-    _download_url(public_artifact_url(base, key), file, lambda _attempt: {},
-                  expected_size=expected_size, expected_sha256=expected_sha256)
+def download_public_object(
+    base: str, key: str, file: Path, *, expected_size: int, expected_sha256: str
+) -> None:
+    _download_url(
+        public_artifact_url(base, key),
+        file,
+        lambda _attempt: {},
+        expected_size=expected_size,
+        expected_sha256=expected_sha256,
+    )
 
 
-def _download_url(url: str, file: Path, request_headers: Callable[[int], dict[str, str]],
-                  *, expected_size: int, expected_sha256: str) -> None:
+def _download_url(
+    url: str,
+    file: Path,
+    request_headers: Callable[[int], dict[str, str]],
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> None:
     """Publish a download locally only after its exact receipt matches."""
     import tempfile
 
-    if type(expected_size) is not int or expected_size < 0 or not re.fullmatch(r"[a-f0-9]{64}", expected_sha256):
+    if (
+        type(expected_size) is not int
+        or expected_size < 0
+        or not re.fullmatch(r"[a-f0-9]{64}", expected_sha256)
+    ):
         raise ValueError("Invalid artifact size or SHA256")
     file = Path(file)
     file.parent.mkdir(parents=True, exist_ok=True)
@@ -391,13 +457,17 @@ def _download_url(url: str, file: Path, request_headers: Callable[[int], dict[st
             if response.status != 200:
                 raise R2RequestError("GET", parsed.path, response.status)
             digest, size = hashlib.sha256(), 0
-            with tempfile.NamedTemporaryFile(dir=file.parent, prefix=f".{file.name}.", delete=False) as output:
+            with tempfile.NamedTemporaryFile(
+                dir=file.parent, prefix=f".{file.name}.", delete=False
+            ) as output:
                 temporary = Path(output.name)
                 while chunk := response.read(1024 * 1024):
                     digest.update(chunk)
                     size += len(chunk)
                     if size > expected_size:
-                        raise _TransferMismatch(f"Artifact checksum mismatch: {parsed.path}")
+                        raise _TransferMismatch(
+                            f"Artifact checksum mismatch: {parsed.path}"
+                        )
                     output.write(chunk)
             if size != expected_size or digest.hexdigest() != expected_sha256:
                 raise _TransferMismatch(f"Artifact checksum mismatch: {parsed.path}")
@@ -432,7 +502,11 @@ def _stream_and_hash(url: str, creds: dict[str, str], now: str, algorithm: str):
     hash_obj = hashlib.new(algorithm)
     size = 0
     try:
-        conn.request("GET", parsed.path + ("?" + parsed.query if parsed.query else ""), headers=headers)
+        conn.request(
+            "GET",
+            parsed.path + ("?" + parsed.query if parsed.query else ""),
+            headers=headers,
+        )
         res = conn.getresponse()
         if res.status >= 400:
             raise R2RequestError("GET", parsed.path, res.status)
@@ -447,6 +521,7 @@ def _stream_and_hash(url: str, creds: dict[str, str], now: str, algorithm: str):
 # ---------------------------------------------------------------------------
 # Layout helpers (pure)
 # ---------------------------------------------------------------------------
+
 
 def channel_for_tag(tag: str) -> str:
     """Return the release channel encoded by a canonical tag."""
@@ -470,8 +545,10 @@ def is_full_sha(value: str) -> bool:
 # (COM² etc.) are reserved under NTFS namespace rules, same as the digit forms.
 _WIN_RESERVED_NAMES = frozenset(
     ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"]
-    + [f"COM{i}" for i in range(1, 10)] + ["COM¹", "COM²", "COM³"]
-    + [f"LPT{i}" for i in range(1, 10)] + ["LPT¹", "LPT²", "LPT³"]
+    + [f"COM{i}" for i in range(1, 10)]
+    + ["COM¹", "COM²", "COM³"]
+    + [f"LPT{i}" for i in range(1, 10)]
+    + ["LPT¹", "LPT²", "LPT³"]
 )
 
 
@@ -493,10 +570,15 @@ def _is_windows_reserved(value: str) -> bool:
 
 def relative_artifact_path(value: str) -> str:
     """Validate the original path before any filesystem normalization."""
-    if (not isinstance(value, str) or not value or value.startswith("/")
-            or any(part in ("", ".", "..") for part in value.split("/"))
-            or any(c in value for c in "\\:%?#") or any(ord(c) < 32 for c in value)
-            or _is_windows_reserved(value)):
+    if (
+        not isinstance(value, str)
+        or not value
+        or value.startswith("/")
+        or any(part in ("", ".", "..") for part in value.split("/"))
+        or any(c in value for c in "\\:%?#")
+        or any(ord(c) < 32 for c in value)
+        or _is_windows_reserved(value)
+    ):
         raise ValueError("Invalid release artifact path")
     return value
 
@@ -549,7 +631,11 @@ def cache_control_for(key: str) -> str | None:
         return "no-store"
     if key.startswith(("releases/channel-builds/", "releases/channel-identities/")):
         return "public, max-age=31536000, immutable"
-    if key.endswith((".appinstaller", ".html")) or key.startswith("releases/stable/") or (key.startswith("releases/darwin/") and key.endswith("-mac.yml")):
+    if (
+        key.endswith((".appinstaller", ".html"))
+        or key.startswith("releases/stable/")
+        or (key.startswith("releases/darwin/") and key.endswith("-mac.yml"))
+    ):
         return "no-store"
     if not key.startswith("releases/termux/"):
         return None
@@ -563,6 +649,7 @@ def cache_control_for(key: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Credentials / env
 # ---------------------------------------------------------------------------
+
 
 def required_env(name: str) -> str:
     value = os.environ.get(name)
@@ -590,6 +677,7 @@ def credentials() -> tuple[dict[str, str], str, str]:
 # ---------------------------------------------------------------------------
 # put
 # ---------------------------------------------------------------------------
+
 
 def put_object(
     creds: dict[str, str],
@@ -638,16 +726,37 @@ def put_object(
             if is_path and size > multipart_part_size:
                 from .r2_multipart import upload_file
 
-                upload_file(url, cast(str, payload), size, creds, content_type, extra, multipart_part_size)
+                upload_file(
+                    url,
+                    cast(str, payload),
+                    size,
+                    creds,
+                    content_type,
+                    extra,
+                    multipart_part_size,
+                )
                 break
             response = (
-                fetcher(method="PUT", url=url, body_hash=body_hash, body=body,
-                        content_length=size, extra_headers=extra)
+                fetcher(
+                    method="PUT",
+                    url=url,
+                    body_hash=body_hash,
+                    body=body,
+                    content_length=size,
+                    extra_headers=extra,
+                )
                 if fetcher is not None
                 else signed_request(
-                    "PUT", url, body=body, body_iter_factory=body_iter_factory,
-                    body_hash=body_hash, content_length=size, creds=creds, now=now,
-                    content_type=content_type, extra_headers=extra,
+                    "PUT",
+                    url,
+                    body=body,
+                    body_iter_factory=body_iter_factory,
+                    body_hash=body_hash,
+                    content_length=size,
+                    creds=creds,
+                    now=now,
+                    content_type=content_type,
+                    extra_headers=extra,
                 )
             )
             break
@@ -656,7 +765,13 @@ def put_object(
             if err.status == 412 and is_path and conditions.get("If-None-Match") == "*":
                 # Immutable conflict: verify the remote bytes ARE ours.
                 verify_remote_artifact(
-                    url, creds, now, size, body_hash, algorithm="sha256", encoding="hex",
+                    url,
+                    creds,
+                    now,
+                    size,
+                    body_hash,
+                    algorithm="sha256",
+                    encoding="hex",
                     fetcher=fetcher,
                 )
                 response = None
@@ -680,35 +795,60 @@ def put_object(
     remote_size = head.header("content-length")
     if remote_size is None:
         ranged = (
-            fetcher(method="GET", url=url, body_hash=EMPTY_SHA,
-                    extra_headers={"Range": "bytes=0-0"})
+            fetcher(
+                method="GET",
+                url=url,
+                body_hash=EMPTY_SHA,
+                extra_headers={"Range": "bytes=0-0"},
+            )
             if fetcher is not None
-            else signed_request("GET", url, creds=creds, now=now,
-                                extra_headers={"Range": "bytes=0-0"})
+            else signed_request(
+                "GET", url, creds=creds, now=now, extra_headers={"Range": "bytes=0-0"}
+            )
         )
         content_range = ranged.header("content-range") or ""
         match = re.search(r"bytes 0-0/(\d+)", content_range)
         if not match:
             raise R2RequestError(
-                "GET", key, ranged.status,
+                "GET",
+                key,
+                ranged.status,
                 f"could not determine remote size (content-range: {content_range!r})",
             )
         remote_size = match.group(1)
     if str(remote_size) != str(size):
-        raise R2RequestError("HEAD", key, head.status, f"size mismatch (remote {remote_size}, local {size})")
+        raise R2RequestError(
+            "HEAD",
+            key,
+            head.status,
+            f"size mismatch (remote {remote_size}, local {size})",
+        )
     from scripts.releases.upload_summary import note
+
     note(key)
     print(f"OK r2: {key} ({size} bytes)")
 
 
-def finalize(tag: str, dir: str, variant: str | None = None, archive: str | None = None,
-             arches: tuple[str, ...] | None = None, verify_bytes: bool = True) -> None:
+def finalize(
+    tag: str,
+    dir: str,
+    variant: str | None = None,
+    archive: str | None = None,
+    arches: tuple[str, ...] | None = None,
+    verify_bytes: bool = True,
+) -> None:
     """Lazy re-export of the Darwin finalize so callers can treat
     scripts.releases.r2 as the single transport surface."""
     from . import darwin as darwin_module
 
-    darwin_module.finalize(tag=tag, dir=dir, variant=variant, archive=archive, arches=arches,
-                           verify_bytes=verify_bytes)
+    darwin_module.finalize(
+        tag=tag,
+        dir=dir,
+        variant=variant,
+        archive=archive,
+        arches=arches,
+        verify_bytes=verify_bytes,
+    )
 
 
 def put(
@@ -725,12 +865,15 @@ def put(
     now = amz_timestamp()
     key_path = key if key_is_full else staging_key_for(tag, key)
     conditions = {"If-None-Match": "*"} if immutable else {}
-    put_object(creds, base, bucket, key_path, file, now, content_type_for(key), conditions)
+    put_object(
+        creds, base, bucket, key_path, file, now, content_type_for(key), conditions
+    )
 
 
 # ---------------------------------------------------------------------------
 # list + prune helpers (pure)
 # ---------------------------------------------------------------------------
+
 
 def parse_list_xml(xml: str) -> dict:
     """Parse a ListObjectsV2 XML body into keys/lastModified/truncated/nextToken."""
@@ -740,7 +883,9 @@ def parse_list_xml(xml: str) -> dict:
     keys = [html.unescape(k) for k in keys]
     last_modified: dict[str, int] = {}
     truncated = "<IsTruncated>true</IsTruncated>" in xml
-    token_match = re.search(r"<NextContinuationToken>([^<]+)</NextContinuationToken>", xml)
+    token_match = re.search(
+        r"<NextContinuationToken>([^<]+)</NextContinuationToken>", xml
+    )
 
     def _parse_epoch(text: str) -> int:
         # R2 emits both '...Z' and fractional '...mmmZ' forms; accept either.
@@ -761,7 +906,9 @@ def parse_list_xml(xml: str) -> dict:
         key_match = re.search(r"<Key>([^<]+)</Key>", block)
         lm_match = re.search(r"<LastModified>([^<]+)</LastModified>", block)
         if key_match and lm_match:
-            last_modified[html.unescape(key_match.group(1))] = _parse_epoch(lm_match.group(1))
+            last_modified[html.unescape(key_match.group(1))] = _parse_epoch(
+                lm_match.group(1)
+            )
     return {
         "keys": keys,
         "lastModified": last_modified,
@@ -805,12 +952,20 @@ def list_objects(
         if not parsed["truncated"] or not parsed["nextToken"]:
             break
         token = parsed["nextToken"]
-    return {"keys": [scope.logical_key(key) for key in keys],
-            "lastModified": {scope.logical_key(key): value for key, value in last_modified.items()}}
+    return {
+        "keys": [scope.logical_key(key) for key in keys],
+        "lastModified": {
+            scope.logical_key(key): value for key, value in last_modified.items()
+        },
+    }
 
 
 def get_object(
-    creds: dict[str, str], base: str, bucket: str, key: str, now: str,
+    creds: dict[str, str],
+    base: str,
+    bucket: str,
+    key: str,
+    now: str,
     fetcher: Callable[..., Response] | None = None,
 ) -> str | None:
     """GET one object's body, or None when it does not exist / cannot be read."""
@@ -855,6 +1010,7 @@ def feed_referenced_keys(dir_key: str, appinstaller_xml: str | None) -> list[str
         keys.append(f"{dir_key}/{uri.rsplit('/', 1)[-1]}")
         if "/" in uri and uri.startswith(("http://", "https://")):
             from urllib.parse import urlsplit, unquote
+
             path = urlsplit(uri).path
             if path.startswith("/releases/"):
                 keys.append(unquote(path[1:]))
@@ -875,7 +1031,9 @@ def _feed_bundle_uris(appinstaller_xml: str | None) -> list[str]:
     if len(elements) != 1:
         return []
     uri_match = re.search(r"\bUri=\"([^\"]+)\"", elements[0])
-    if uri_match and re.search(r"\.(?:msixbundle|msix)$", uri_match.group(1), re.IGNORECASE):
+    if uri_match and re.search(
+        r"\.(?:msixbundle|msix)$", uri_match.group(1), re.IGNORECASE
+    ):
         return [uri_match.group(1)]
     return []
 
@@ -902,7 +1060,9 @@ def stale_feed_bundle_keys(
             names = referenced_feed_bundle_filenames(xml)
             if not names:
                 blocked = True
-                print(f"::warning::feed manifest unreadable/unrecognized, skipping feed retention for {dir_key}/")
+                print(
+                    f"::warning::feed manifest unreadable/unrecognized, skipping feed retention for {dir_key}/"
+                )
                 break
             referenced.update(names)
         if blocked or not referenced:
@@ -913,7 +1073,7 @@ def stale_feed_bundle_keys(
                 continue
             if not re.search(r"\.(?:msixbundle|msix)$", key, re.IGNORECASE):
                 continue  # pointers + metadata stay
-            if key[len(prefix):] in referenced:
+            if key[len(prefix) :] in referenced:
                 continue
             lm = (last_modified_ms or {}).get(key)
             if lm is None or lm != lm or lm in (float("inf"),) or lm >= cutoff_ms:
@@ -926,6 +1086,7 @@ def stale_feed_bundle_keys(
 # prune-canaries
 # ---------------------------------------------------------------------------
 
+
 def prune(
     keep_days: int,
     dry_run: bool = False,
@@ -936,9 +1097,7 @@ def prune(
     never resets its clock). Live referenced objects are never deleted."""
     creds, base, bucket = credentials()
     current = now_epoch if now_epoch is not None else time.time()
-    cutoff_date = time.strftime(
-        "%Y%m%d", time.gmtime(current - keep_days * 86400)
-    )
+    cutoff_date = time.strftime("%Y%m%d", time.gmtime(current - keep_days * 86400))
     cutoff_ms = current - keep_days * 86400
     listing = list_objects(creds=creds, base=base, bucket=bucket, fetcher=fetcher)
     keys = listing["keys"]
@@ -951,7 +1110,9 @@ def prune(
         dir_key = key[: key.rfind("/")]
         xml = get_object(creds, base, bucket, key, now, fetcher=fetcher)
         if not _feed_bundle_uris(xml):
-            raise RuntimeError(f"Cannot establish live references from {key}; refusing to prune")
+            raise RuntimeError(
+                f"Cannot establish live references from {key}; refusing to prune"
+            )
         feed_xml_by_dir.setdefault(dir_key, []).append(xml or "")
         for protected_key in feed_referenced_keys(dir_key, xml):
             protected.add(protected_key)
@@ -959,7 +1120,9 @@ def prune(
     # Darwin feeds protect their artifacts (key + .blockmap) too.
     from . import darwin as darwin_module
 
-    for key in [k for k in keys if k.startswith("releases/darwin/") and k.endswith("-mac.yml")]:
+    for key in [
+        k for k in keys if k.startswith("releases/darwin/") and k.endswith("-mac.yml")
+    ]:
         text = get_object(creds, base, bucket, key, now, fetcher=fetcher)
         if text is None:
             # Fail closed: an unreadable Darwin feed might reference the very
@@ -1010,7 +1173,15 @@ USAGE = """usage:
   --immutable:   send If-None-Match: * (refuse to overwrite an existing object).
 """
 
-_VALUE_FLAGS = {"--tag", "--key", "--file", "--prefix", "--keep-days", "--dir", "--variant"}
+_VALUE_FLAGS = {
+    "--tag",
+    "--key",
+    "--file",
+    "--prefix",
+    "--keep-days",
+    "--dir",
+    "--variant",
+}
 _BOOL_FLAGS = {"--dry-run", "--key-is-full", "--immutable"}
 
 
@@ -1047,7 +1218,9 @@ def main(argv: list[str] | None = None) -> None:
         if not immutable:
             # Preserve the JS CLI's derivation: darwin artifact staging keys
             # are immutable per-release (rerun-safe via If-None-Match: *).
-            key_path = key if args.get("key-is-full") else staging_key_for(str(tag), str(key))
+            key_path = (
+                key if args.get("key-is-full") else staging_key_for(str(tag), str(key))
+            )
             immutable = key_path.startswith("releases/tag/") and bool(
                 re.search(r"-mac-(?:arm64|x64)\.(?:zip|dmg)(?:\.blockmap)?$", key_path)
             )

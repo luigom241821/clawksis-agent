@@ -25,16 +25,29 @@ class TokenHubProfile(ProviderProfile):
         return {"enabled": True, "effort": "high"}
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, **context: Any,
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        **context: Any,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         # No config (an auxiliary call with no effort configured): send nothing. Main-loop turns
         # reach here with ``default_reasoning_config`` filled in.
-        if not reasoning_config or not isinstance(reasoning_config, dict) or reasoning_config.get("enabled") is False:
+        if (
+            not reasoning_config
+            or not isinstance(reasoning_config, dict)
+            or reasoning_config.get("enabled") is False
+        ):
             return {}, {}
-        return {}, {"reasoning_effort": tokenhub_effort(requested_effort(reasoning_config))}
+        return {}, {
+            "reasoning_effort": tokenhub_effort(requested_effort(reasoning_config))
+        }
 
 
-register_provider(TokenHubProfile(
-    name="tencent-tokenhub", display_name="Tencent TokenHub", supports_health_check=False,
-    env_vars=("TOKENHUB_API_KEY", "TOKENHUB_BASE_URL"),
-))
+register_provider(
+    TokenHubProfile(
+        name="tencent-tokenhub",
+        display_name="Tencent TokenHub",
+        supports_health_check=False,
+        env_vars=("TOKENHUB_API_KEY", "TOKENHUB_BASE_URL"),
+    )
+)

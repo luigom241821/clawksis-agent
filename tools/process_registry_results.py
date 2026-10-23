@@ -20,9 +20,18 @@ logger = logging.getLogger("tools.process_registry")
 RESULT_RETENTION_SECONDS = 7 * 24 * 60 * 60
 MAX_RETAINED_RESULTS = 64
 _RESULT_FIELDS = (
-    "id", "command", "cwd", "task_id", "owner_task_id", "session_key",
-    "parent_session_id", "started_at", "exit_code", "completion_reason",
-    "termination_source", "notify_on_complete",
+    "id",
+    "command",
+    "cwd",
+    "task_id",
+    "owner_task_id",
+    "session_key",
+    "parent_session_id",
+    "started_at",
+    "exit_code",
+    "completion_reason",
+    "termination_source",
+    "notify_on_complete",
 )
 
 
@@ -54,18 +63,25 @@ def save_completed_result(session) -> None:
         record = {key: getattr(session, key) for key in _RESULT_FIELDS}
         record["output"] = session.output_buffer[-MAX_OUTPUT_CHARS:]
     # Live-output opt-out must not persist raw credentials in durable receipts.
-    record["output"] = redact_terminal_output(record["output"], record["command"], force=True)
-    record["command"] = redact_sensitive_text(record["command"], code_file=True, force=True)
+    record["output"] = redact_terminal_output(
+        record["output"], record["command"], force=True
+    )
+    record["command"] = redact_sensitive_text(
+        record["command"], code_file=True, force=True
+    )
     directory = get_clawk_home() / "logs" / "process-results"
     try:
         from clawk_constants import assert_named_profile_home_live
+
         assert_named_profile_home_live(directory)
         make_user_dir(directory, mode=0o700, parents=True, exist_ok=True)
         atomic_json_write(directory / f"{session.id}.json", record, mode=0o600)
         _result_paths()
     except OSError:
         # Preserve live delivery on disk failure, but never silently claim durability.
-        logger.warning("Could not retain completed process result %s", session.id, exc_info=True)
+        logger.warning(
+            "Could not retain completed process result %s", session.id, exc_info=True
+        )
 
 
 def _owns_result(owner: str, parent: str | None) -> bool:
@@ -104,16 +120,21 @@ def load_completed_results(prefix: str = "") -> dict:
             continue
         try:
             record = json.loads(path.read_text(encoding="utf-8-sig"))
-            if record["id"] != path.stem or not re.fullmatch(r"proc_[\w]+", record["id"]):
+            if record["id"] != path.stem or not re.fullmatch(
+                r"proc_[\w]+", record["id"]
+            ):
                 continue
             if not _owns_result(owner, record.get("parent_session_id")):
                 continue
             session = ProcessSession(
                 **{key: record[key] for key in _RESULT_FIELDS},
-                exited=True, output_buffer=record["output"],
+                exited=True,
+                output_buffer=record["output"],
             )
             session._completion_event.set()
             results[session.id] = session
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
-            logger.debug("Skipping unreadable process result %s", path.name, exc_info=True)
+            logger.debug(
+                "Skipping unreadable process result %s", path.name, exc_info=True
+            )
     return results

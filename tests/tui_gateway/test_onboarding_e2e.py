@@ -19,8 +19,13 @@ from clawk_cli.config import read_user_config_raw
 from tui_gateway import server, server_requests
 
 SID, STORED = "ui-onboarding", "onboarding-chat"
-FACTS = Facts(os="windows", arch="amd64", machine_kind="PC", nvidia_platform="discrete",
-              plugins=("nvidia-app", "nvidia-broadcast", "blender"))
+FACTS = Facts(
+    os="windows",
+    arch="amd64",
+    machine_kind="PC",
+    nvidia_platform="discrete",
+    plugins=("nvidia-app", "nvidia-broadcast", "blender"),
+)
 
 
 @pytest.fixture
@@ -33,17 +38,26 @@ def chat(tmp_path, monkeypatch):
     db = server._get_db()
     db.create_session(STORED, "desktop")
     onboarding_record.start(db, STORED, FACTS)
-    monkeypatch.setitem(server._sessions, SID, {"session_key": STORED, "source": "desktop"})
+    monkeypatch.setitem(
+        server._sessions, SID, {"session_key": STORED, "source": "desktop"}
+    )
     ended = []
-    agent = SimpleNamespace(_session_db=db, session_id=STORED, valid_tool_names={"setup_beat", "set_theme"},
-                            setup_beat_callback=server._agent_cbs(SID)["setup_beat_callback"],
-                            interrupt=lambda **kw: ended.append(kw), _gateway_turn_context_notes="")
+    agent = SimpleNamespace(
+        _session_db=db,
+        session_id=STORED,
+        valid_tool_names={"setup_beat", "set_theme"},
+        setup_beat_callback=server._agent_cbs(SID)["setup_beat_callback"],
+        interrupt=lambda **kw: ended.append(kw),
+        _gateway_turn_context_notes="",
+    )
     desktop = SimpleNamespace(cards=[], replies=[])
 
     def answer(frame):
         desktop.cards.append(frame["params"])
         result = desktop.replies.pop(0)
-        assert server_requests.resolve_response({"jsonrpc": "2.0", "id": frame["id"], "result": result})
+        assert server_requests.resolve_response(
+            {"jsonrpc": "2.0", "id": frame["id"], "result": result}
+        )
         return True
 
     monkeypatch.setattr(server_requests, "_answerable", lambda _sid: True)
@@ -55,7 +69,9 @@ def chat(tmp_path, monkeypatch):
 def beat(chat, reply=None, **args):
     if reply is not None:
         chat.desktop.replies.append(reply)
-    out = INLINE_TOOL_EXECUTORS["setup_beat"](chat.agent, args, InlineToolContext("task", f"call_{len(chat.desktop.cards)}"))
+    out = INLINE_TOOL_EXECUTORS["setup_beat"](
+        chat.agent, args, InlineToolContext("task", f"call_{len(chat.desktop.cards)}")
+    )
     return json.loads(out)
 
 
@@ -63,46 +79,90 @@ def test_every_beat_from_the_name_card_to_done(chat):
     named = beat(chat, {"answer": {"name": "Sid"}}, beat="name")
     assert named["next"] == "theme" and "Sid" in named["reminder"]
 
-    assert beat(chat, {"answer": {"accent": "Ultraviolet"}}, beat="next")["next"] == "layout"
+    assert (
+        beat(chat, {"answer": {"accent": "Ultraviolet"}}, beat="next")["next"]
+        == "layout"
+    )
 
     # Typed instead of picking: the card closes, the words are the next turn, the model applies the pick
     # itself through set_theme.
     typed = beat(chat, {"wrote_instead": True}, beat="next")
     assert typed["wrote_instead"] is True
-    observe_tool_result(chat.agent, "set_theme", {"layout": "terminal-deck"},
-                        json.dumps({"success": True, "applied": {"layout": "terminal-deck"}}))
+    observe_tool_result(
+        chat.agent,
+        "set_theme",
+        {"layout": "terminal-deck"},
+        json.dumps({"success": True, "applied": {"layout": "terminal-deck"}}),
+    )
 
-    connectors = beat(chat, {"answer": {"connected": ["slack"], "newly_connected": ["slack"]}},
-                      beat="connectors", suggest=["slack", "outlook"])
+    connectors = beat(
+        chat,
+        {"answer": {"connected": ["slack"], "newly_connected": ["slack"]}},
+        beat="connectors",
+        suggest=["slack", "outlook"],
+    )
     assert connectors["next"] == "plugins"
     plugins = beat(chat, {"answer": {"installed": ["nvidia-app"]}}, beat="next")
     assert plugins["next"] == "tour"
     tour = beat(chat, {"answer": {"tour": "quick"}}, beat="next")
     assert '"preset":"quick"' in tour["reminder"]
-    observe_tool_result(chat.agent, "gui_tour", {"action": "start", "preset": "quick"}, json.dumps({"success": True}))
+    observe_tool_result(
+        chat.agent,
+        "gui_tour",
+        {"action": "start", "preset": "quick"},
+        json.dumps({"success": True}),
+    )
 
-    build = beat(chat, {"answer": {"build": "games"}}, beat="next", options=[{"id": "games", "label": "Tune my games"}])
-    assert "--accept-package-agreements" in build["reminder"] and "How does this look?" in build["reminder"]
+    build = beat(
+        chat,
+        {"answer": {"build": "games"}},
+        beat="next",
+        options=[{"id": "games", "label": "Tune my games"}],
+    )
+    assert (
+        "--accept-package-agreements" in build["reminder"]
+        and "How does this look?" in build["reminder"]
+    )
     assert beat(chat, beat="done")["completed"] is True
 
     assert [card["beat"] for card in chat.desktop.cards] == [
-        "name", "theme", "layout", "connectors", "plugins", "tour", "build"]
+        "name",
+        "theme",
+        "layout",
+        "connectors",
+        "plugins",
+        "tour",
+        "build",
+    ]
     assert chat.desktop.cards[3]["card"] == {"suggested": ["slack", "outlook"]}
-    assert [row["id"] for row in chat.desktop.cards[6]["card"]["options"]][:1] == ["games"]
+    assert [row["id"] for row in chat.desktop.cards[6]["card"]["options"]][:1] == [
+        "games"
+    ]
     record = onboarding_record.load(chat.db, STORED)
-    assert record["phase"] == "complete" and record["picks"]["layout"] == "terminal-deck"
+    assert (
+        record["phase"] == "complete" and record["picks"]["layout"] == "terminal-deck"
+    )
     onboarding = read_user_config_raw(chat.home / "config.yaml")["onboarding"]
-    assert onboarding["run"] is False and onboarding["seen"]["profile_build_offered"] is True
+    assert (
+        onboarding["run"] is False
+        and onboarding["seen"]["profile_build_offered"] is True
+    )
     assert "error" in beat(chat, beat="next")
 
 
-def test_a_message_written_while_a_card_waits_ends_the_turn_and_the_next_turn_brings_the_card_back(chat):
+def test_a_message_written_while_a_card_waits_ends_the_turn_and_the_next_turn_brings_the_card_back(
+    chat,
+):
     beat(chat, {"answer": {"name": "Sid"}}, beat="name")
     beat(chat, {"answer": {"accent": "Ultraviolet"}}, beat="next")
 
     closed = beat(chat, {"wrote_instead": True}, beat="next")
 
-    assert closed["beat"] == "layout" and closed["wrote_instead"] is True and "said" not in closed
+    assert (
+        closed["beat"] == "layout"
+        and closed["wrote_instead"] is True
+        and "said" not in closed
+    )
     assert chat.ended == [{"tool_reason": "user sent a new message"}]
     # Their message starts the next turn; its note names the closed card, how a typed answer applies it,
     # and how to bring it back.
@@ -115,8 +175,14 @@ def test_a_message_written_while_a_card_waits_ends_the_turn_and_the_next_turn_br
 def test_skip_setup_on_the_card_ends_onboarding(chat, monkeypatch):
     def skip_on_show(frame):
         chat.desktop.cards.append(frame["params"])
-        assert server.handle_request({"jsonrpc": "2.0", "id": 9, "method": "onboarding.skip",
-                                      "params": {"session_id": SID}})["result"] == {"skipped": True}
+        assert server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "onboarding.skip",
+                "params": {"session_id": SID},
+            }
+        )["result"] == {"skipped": True}
         return True
 
     monkeypatch.setattr(server_requests, "_write", skip_on_show)

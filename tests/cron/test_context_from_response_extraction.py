@@ -26,6 +26,7 @@ def cron_env(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
 
     import cron.jobs as jobs_mod
+
     monkeypatch.setattr(jobs_mod, "CLAWK_DIR", clawk_home)
     monkeypatch.setattr(jobs_mod, "CRON_DIR", clawk_home / "cron")
     monkeypatch.setattr(jobs_mod, "JOBS_FILE", clawk_home / "cron" / "jobs.json")
@@ -44,6 +45,7 @@ def _write_archive(cron_env, job_id: str, filename: str, body: str) -> None:
 
 def _run_stub_job(monkeypatch, job, answer):
     """Run ``job`` through the real writer with a stub agent returning ``answer``."""
+
     class Agent:
         def __init__(self, *args, **kwargs):
             pass
@@ -52,8 +54,10 @@ def _run_stub_job(monkeypatch, job, answer):
             return {"final_response": answer, "completed": True, "failed": False}
 
     monkeypatch.setattr(run_agent, "AIAgent", Agent)
-    monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider",
-                        lambda **kwargs: {"provider": "openai", "api_key": "fixture"})
+    monkeypatch.setattr(
+        "clawk_cli.runtime_provider.resolve_runtime_provider",
+        lambda **kwargs: {"provider": "openai", "api_key": "fixture"},
+    )
     return cron.scheduler.run_job(job)
 
 
@@ -64,11 +68,16 @@ class TestResponseSurvivesLongPrompt:
         from cron.jobs import create_job
         from cron.scheduler import _build_job_prompt
 
-        job = create_job(prompt="Run the daily check", schedule="0 8 * * *", context_from="self")
+        job = create_job(
+            prompt="Run the daily check", schedule="0 8 * * *", context_from="self"
+        )
         _write_archive(
-            cron_env, job["id"], "2026-09-19_08-00-00.md",
-            "# Cron Job: probe\n\n## Prompt\n\n" + "SKILL LINE\n" * 1800 +
-            "\n\n## Response\n\nCONCLUSION-MARKER-42\n",
+            cron_env,
+            job["id"],
+            "2026-09-19_08-00-00.md",
+            "# Cron Job: probe\n\n## Prompt\n\n"
+            + "SKILL LINE\n" * 1800
+            + "\n\n## Response\n\nCONCLUSION-MARKER-42\n",
         )
 
         prompt = _build_job_prompt(job)
@@ -86,11 +95,15 @@ class TestUnusableAnswersFallThrough:
 
         job = create_job(prompt="Report", schedule="0 8 * * *", context_from="self")
         _write_archive(
-            cron_env, job["id"], "2026-09-18_08-00-00.md",
+            cron_env,
+            job["id"],
+            "2026-09-18_08-00-00.md",
             "# Cron Job: probe\n\n## Prompt\n\ndo the thing\n\n## Response\n\nOLDER-REAL-ANSWER\n",
         )
         _write_archive(
-            cron_env, job["id"], "2026-09-19_08-00-00.md",
+            cron_env,
+            job["id"],
+            "2026-09-19_08-00-00.md",
             "# Cron Job: probe\n\n## Prompt\n\ndo the thing\n\n## Response\n\n[SILENT]\n",
         )
 
@@ -100,6 +113,7 @@ class TestUnusableAnswersFallThrough:
         assert "OLDER-REAL-ANSWER" in prompt
         assert "[SILENT]" not in prompt
 
+
 class TestScriptModeArchives:
     """Archives without a ## Response heading (script-mode) stay whole-document."""
 
@@ -108,8 +122,12 @@ class TestScriptModeArchives:
         from cron.scheduler_prompt import _inject_context_from
 
         job = create_job(prompt="Report", schedule="0 8 * * *", context_from="self")
-        _write_archive(cron_env, job["id"], "2026-09-19_08-00-00.md",
-                       "\n\nplain script payload\nline two\n\n")
+        _write_archive(
+            cron_env,
+            job["id"],
+            "2026-09-19_08-00-00.md",
+            "\n\nplain script payload\nline two\n\n",
+        )
 
         prompt, injected = _inject_context_from(job, "Report")
 
@@ -118,14 +136,19 @@ class TestScriptModeArchives:
         assert "```\nplain script payload\nline two\n```" in prompt
 
 
-def test_writer_reader_preserve_response_with_nested_frames(cron_env, monkeypatch, cron_owner):
+def test_writer_reader_preserve_response_with_nested_frames(
+    cron_env, monkeypatch, cron_owner
+):
     from cron.jobs import create_job, save_job_output
     from cron.scheduler_prompt import _inject_context_from
 
     answer = "摘要 before heading\r\n\r\n## Response\nsubsection\n**Response Characters:** 4\n## Response\n\nbody\n\n  "
 
-    job = create_job(prompt="Original prompt noise\r\n**Response Characters:** 4\n## Response\n\nbody",
-                     schedule="0 8 * * *", context_from="self")
+    job = create_job(
+        prompt="Original prompt noise\r\n**Response Characters:** 4\n## Response\n\nbody",
+        schedule="0 8 * * *",
+        context_from="self",
+    )
     success, archive, _final, error = _run_stub_job(monkeypatch, job, answer)
     assert success, error
     save_job_output(job["id"], archive)
@@ -135,16 +158,19 @@ def test_writer_reader_preserve_response_with_nested_frames(cron_env, monkeypatc
     assert "Original prompt noise" not in prompt
 
 
-def test_truncated_outer_frame_cannot_promote_a_quoted_inner_frame(cron_env, monkeypatch, cron_owner):
+def test_truncated_outer_frame_cannot_promote_a_quoted_inner_frame(
+    cron_env, monkeypatch, cron_owner
+):
     import os
     from cron.jobs import create_job, save_job_output, OUTPUT_DIR
     from cron.scheduler_prompt import _inject_context_from
 
     quoted = "QUOTED INNER ANSWER"
     suffix = "\nThis tail will be lost."
-    answer = ("Outer response introduction\n"
-              f"**Response Characters:** {len(quoted)}\n## Response\n\n{quoted}"
-              + suffix)
+    answer = (
+        "Outer response introduction\n"
+        f"**Response Characters:** {len(quoted)}\n## Response\n\n{quoted}" + suffix
+    )
 
     job = create_job(prompt="Report", schedule="0 8 * * *", context_from="self")
     success, archive, _final, error = _run_stub_job(monkeypatch, job, answer)
@@ -155,13 +181,15 @@ def test_truncated_outer_frame_cannot_promote_a_quoted_inner_frame(cron_env, mon
     assert complete.endswith(suffix + "\n")
     # Simulate a partial write: the quoted inner frame now reaches EOF exactly,
     # but the enclosing writer-owned response is missing its declared suffix.
-    saved.write_text(complete[:-len(suffix + "\n")] + "\n", encoding="utf-8")
+    saved.write_text(complete[: -len(suffix + "\n")] + "\n", encoding="utf-8")
     os.utime(saved, (2, 2))
     prompt, injected = _inject_context_from(job, "Next task")
     assert not injected
     assert prompt == "Next task"
 
-    _write_archive(cron_env, job["id"], "older.md", "## Response\n\nOLDER COMPLETE ANSWER\n")
+    _write_archive(
+        cron_env, job["id"], "older.md", "## Response\n\nOLDER COMPLETE ANSWER\n"
+    )
     os.utime(OUTPUT_DIR / job["id"] / "older.md", (1, 1))
     prompt, injected = _inject_context_from(job, "Next task")
     assert injected

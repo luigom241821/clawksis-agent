@@ -31,6 +31,7 @@ from agent.credential_pool import (
 # Helpers
 # =============================================================================
 
+
 def _entry(
     provider="openrouter",
     id="cred-1",
@@ -96,7 +97,10 @@ def _make_tool_defs(*names):
 
 def _make_agent(fallback_model=None):
     with (
-        patch("model_tools.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_make_tool_defs("web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -129,14 +133,19 @@ def _activate_fallback(agent):
 # CredentialPool.next_available_at()
 # =============================================================================
 
+
 class TestNextAvailableAt:
     def test_all_exhausted_returns_earliest_reset(self):
         now = time.time()
         pool = CredentialPool(
             "openrouter",
             [
-                _entry(id="a", status=STATUS_EXHAUSTED, reset_at=now + 7200, error_code=429),
-                _entry(id="b", status=STATUS_EXHAUSTED, reset_at=now + 3600, error_code=429),
+                _entry(
+                    id="a", status=STATUS_EXHAUSTED, reset_at=now + 7200, error_code=429
+                ),
+                _entry(
+                    id="b", status=STATUS_EXHAUSTED, reset_at=now + 3600, error_code=429
+                ),
             ],
         )
         assert pool.next_available_at() == now + 3600
@@ -147,7 +156,9 @@ class TestNextAvailableAt:
             "openrouter",
             [
                 _entry(id="a", status=STATUS_OK),
-                _entry(id="b", status=STATUS_EXHAUSTED, reset_at=now + 3600, error_code=429),
+                _entry(
+                    id="b", status=STATUS_EXHAUSTED, reset_at=now + 3600, error_code=429
+                ),
             ],
         )
         assert pool.next_available_at() is None
@@ -158,7 +169,11 @@ class TestNextAvailableAt:
         now = time.time()
         pool = CredentialPool(
             "openrouter",
-            [_entry(id="a", status=STATUS_EXHAUSTED, reset_at=now - 10, error_code=429)],
+            [
+                _entry(
+                    id="a", status=STATUS_EXHAUSTED, reset_at=now - 10, error_code=429
+                )
+            ],
         )
         assert pool.next_available_at() is None
 
@@ -224,12 +239,15 @@ class TestNextAvailableAt:
 
         pool._available_entries = _probe
         pool.next_available_at()
-        assert held["locked"], "next_available_at called _available_entries without self._lock"
+        assert held["locked"], (
+            "next_available_at called _available_entries without self._lock"
+        )
 
 
 # =============================================================================
 # restore_primary_runtime() gate
 # =============================================================================
+
 
 class TestResetAwareRestoreGate:
     FB = {"provider": "openrouter", "model": "anthropic/claude-sonnet-4"}
@@ -301,8 +319,6 @@ class TestResetAwareRestoreGate:
         assert any(c.args == ("custom",) for c in lp.call_args_list)
         assert primary_pool.next_available_calls == 1
         assert agent._fallback_activated is True
-
-
 
     def test_transient_cooldown_still_respected(self):
         """The existing 60s monotonic gate fires before the reset-aware one."""

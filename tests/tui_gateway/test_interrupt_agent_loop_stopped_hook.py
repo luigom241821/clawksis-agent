@@ -97,7 +97,10 @@ def test_interrupt_hook_observer_sees_the_sessions_profile_a_b_a(tmp_path, monke
         for profile_home in (None, routed, None):
             session = _make_session(running=True)
             session["profile_home"] = str(profile_home) if profile_home else None
-            with patch("clawk_cli.plugins.invoke_hook", side_effect=observer), patch.object(server, "_clear_pending"):
+            with (
+                patch("clawk_cli.plugins.invoke_hook", side_effect=observer),
+                patch.object(server, "_clear_pending"),
+            ):
                 server._interrupt_session_turn("s1", session)
             assert get_clawk_home_override() is None
     finally:

@@ -53,7 +53,6 @@ def _arm(recorder, *, frames, peak_rms):
 
 
 class TestStopUsesConfiguredSilenceThreshold:
-
     def test_stop_keeps_recording_above_configured_threshold(self, mock_audio):
         """peak RMS above the CONFIGURED threshold (but below the 200 default) is
         valid speech and must be returned, not discarded as too quiet."""
@@ -72,7 +71,9 @@ class TestStopUsesConfiguredSilenceThreshold:
 
         assert recorder.stop() is None
 
-    def test_stop_threshold_tracks_reconfigured_threshold_between_recordings(self, mock_audio):
+    def test_stop_threshold_tracks_reconfigured_threshold_between_recordings(
+        self, mock_audio
+    ):
         """The discard gate follows the live attribute: the same peak RMS that was
         discarded under threshold 80 is kept after the CLI re-wires it to 60 before
         the next recording (per-recording reconfiguration, cli_voice_mixin)."""
@@ -85,7 +86,9 @@ class TestStopUsesConfiguredSilenceThreshold:
         _arm(recorder, frames=[_Frame(16000)], peak_rms=70)
         assert recorder.stop() is not None  # above 60: kept
 
-    def test_stop_still_discards_below_default_threshold_without_config(self, mock_audio):
+    def test_stop_still_discards_below_default_threshold_without_config(
+        self, mock_audio
+    ):
         """With no config override the constructor default (200) still applies: RMS
         160 stays a silent recording. Pins the default against the custom floor."""
         recorder = AudioRecorder()

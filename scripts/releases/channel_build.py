@@ -85,7 +85,9 @@ def prepare_build(
     version = commit_build.version_at(repo, commit)
     if not default_branch or default_branch.startswith("-"):
         raise ChannelError("Missing repository default branch")
-    command = dispatch_command(name, commit, repository, default_branch, bundle_env, branding)
+    command = dispatch_command(
+        name, commit, repository, default_branch, bundle_env, branding
+    )
     result = {
         "channel": name,
         "branding": branding,
@@ -104,13 +106,15 @@ def maintainer_authorizer(repository: str):
 
     def authorize(action: str, record: dict) -> None:
         actor = commit_build.output(["gh", "api", "user", "--jq", ".login"])
-        permission = commit_build.output([
-            "gh",
-            "api",
-            f"repos/{repository}/collaborators/{actor}/permission",
-            "--jq",
-            ".permission",
-        ])
+        permission = commit_build.output(
+            [
+                "gh",
+                "api",
+                f"repos/{repository}/collaborators/{actor}/permission",
+                "--jq",
+                ".permission",
+            ]
+        )
         if permission not in {"write", "maintain", "admin"}:
             raise ChannelError(
                 "Channel administration requires a repository maintainer"
@@ -129,13 +133,15 @@ def configured_publisher(repository: str) -> ChannelPublisher:
     validate_repository(repository)
     scope = R2Scope.configured(repository)
     if scope.prefix:
-        actual_id = commit_build.output([
-            "gh",
-            "api",
-            f"repos/{repository}",
-            "--jq",
-            ".id",
-        ])
+        actual_id = commit_build.output(
+            [
+                "gh",
+                "api",
+                f"repos/{repository}",
+                "--jq",
+                ".id",
+            ]
+        )
         if actual_id != os.environ.get("GITHUB_REPOSITORY_ID"):
             raise ChannelError("Disposable namespace belongs to another repository")
     base = channel_public_base()
@@ -190,9 +196,15 @@ def cmd_channel(args) -> None:
             if not args.publish:
                 print("Dry run: no workflow was dispatched. Add --publish to dispatch.")
                 return
-            print(f"Channel build for {args.channel} started at commit {result['commit']}.")
-            print(f"Workflow: https://github.com/{repository}/actions/workflows/desktop-bundled-release.yml")
-            print("Wait for that workflow to finish. It builds this commit and moves the channel when every native smoke passes.")
+            print(
+                f"Channel build for {args.channel} started at commit {result['commit']}."
+            )
+            print(
+                f"Workflow: https://github.com/{repository}/actions/workflows/desktop-bundled-release.yml"
+            )
+            print(
+                "Wait for that workflow to finish. It builds this commit and moves the channel when every native smoke passes."
+            )
             return
         publisher = configured_publisher(repository)
         operations = {
@@ -212,7 +224,9 @@ def cmd_channel(args) -> None:
         elif not args.publish:
             print("Dry run: no R2 object was written. Add --publish to execute.")
         elif selected == "retire_channel":
-            print(f"Retired {args.retire_channel}. New installs move to {args.to} at version {args.minimum_version} or newer.")
+            print(
+                f"Retired {args.retire_channel}. New installs move to {args.to} at version {args.minimum_version} or newer."
+            )
         else:
             print("Wrote the channel records. Check the JSON above for each record.")
     except (OSError, ValueError, subprocess.SubprocessError, r2.R2RequestError) as exc:
@@ -319,12 +333,14 @@ def validate_arguments(parser, args) -> bool:
         parser.error("--channel requires --build-commit")
     if args.retire_channel and not all(retirement):
         parser.error("--retire-channel requires --to and --minimum-version")
-    if (not args.channel and args.build_commit) or any((
-        args.canary,
-        args.prune_canaries,
-        args.date,
-        args.no_changelog,
-    )):
+    if (not args.channel and args.build_commit) or any(
+        (
+            args.canary,
+            args.prune_canaries,
+            args.date,
+            args.no_changelog,
+        )
+    ):
         parser.error(
             "Channel operations cannot be combined with release/tag operations"
         )

@@ -11,7 +11,8 @@ _UPDATE_CRITICAL_MODULES = "clawk_cli.main", "run_agent", "model_tools", "toolse
 
 
 def _critical_module_import_failures(
-    root, *, report_runtime_errors: bool = False) -> dict[str, tuple[str, str]]:
+    root, *, report_runtime_errors: bool = False
+) -> dict[str, tuple[str, str]]:
     """Import each ``_UPDATE_CRITICAL_MODULES`` entry in a subprocess; return failures in probe order.
 
     Syntax validation only *parses*: a partially-updated tree (Windows ZIP copy loop) parses yet
@@ -22,6 +23,7 @@ def _critical_module_import_failures(
     from clawk_cli.update_cmd import _UPDATE_CRITICAL_MODULES
     from clawk_constants import FIRST_PARTY_MODULE_ROOTS
     import secrets
+
     marker = f"__CLAWK_IMPORT_HEALTH_{secrets.token_hex(16)}__"
     probe = (
         "import importlib, json, sys\n"
@@ -46,13 +48,23 @@ def _critical_module_import_failures(
         "            failures.append((name, type(exc).__name__, str(exc)))\n"
         "    except BaseException as exc:\n"
         "        failures.append((name, type(exc).__name__, str(exc)))\n"
-        f"sys.stdout.write('\\n{marker}' + json.dumps(failures))\n")
+        f"sys.stdout.write('\\n{marker}' + json.dumps(failures))\n"
+    )
     try:
         result = subprocess.run(
-            runtime_command(Path(root), code=probe), cwd=str(root), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=120, check=False)
+            runtime_command(Path(root), code=probe),
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+            check=False,
+        )
     except subprocess.TimeoutExpired:
-        return _probe_failure("TimeoutExpired", "timed out before reporting import health")
+        return _probe_failure(
+            "TimeoutExpired", "timed out before reporting import health"
+        )
     except (OSError, subprocess.SubprocessError):
         # Can't run the probe — don't block the update on our own tooling.
         return {}
@@ -60,16 +72,24 @@ def _critical_module_import_failures(
     if marker not in output:
         return _probe_failure(
             "ProbeTerminated",
-            f"terminated before reporting import health (exit code {result.returncode})")
+            f"terminated before reporting import health (exit code {result.returncode})",
+        )
     try:
         failures = json.loads(output.rsplit(marker, 1)[1])
         if not isinstance(failures, list) or any(
-            not isinstance(item, list) or len(item) != 3 or not all(isinstance(v, str) for v in item)
-            for item in failures):
+            not isinstance(item, list)
+            or len(item) != 3
+            or not all(isinstance(v, str) for v in item)
+            for item in failures
+        ):
             raise ValueError("invalid import-health payload")
-        return {str(module): (str(kind), str(detail)) for module, kind, detail in failures}
+        return {
+            str(module): (str(kind), str(detail)) for module, kind, detail in failures
+        }
     except (TypeError, ValueError):
-        return _probe_failure("MalformedPayload", "reported malformed import health data")
+        return _probe_failure(
+            "MalformedPayload", "reported malformed import health data"
+        )
 
 
 def _probe_failure(kind: str, detail: str) -> dict[str, tuple[str, str]]:
@@ -78,11 +98,13 @@ def _probe_failure(kind: str, detail: str) -> dict[str, tuple[str, str]]:
 
 
 def _validate_critical_modules_import(
-    root, *, report_runtime_errors: bool = False) -> tuple[bool, str | None, str | None]:
+    root, *, report_runtime_errors: bool = False
+) -> tuple[bool, str | None, str | None]:
     """Return the first critical-module import failure, if any."""
-    failures = _critical_module_import_failures(root, report_runtime_errors=report_runtime_errors)
+    failures = _critical_module_import_failures(
+        root, report_runtime_errors=report_runtime_errors
+    )
     if failures:
         module = next(iter(failures))
         return False, module, failures[module][1]
     return True, None, None
-

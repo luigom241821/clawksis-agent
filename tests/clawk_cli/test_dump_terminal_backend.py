@@ -55,7 +55,9 @@ def test_dump_surfaces_terminal_env_override(monkeypatch, capsys, tmp_path):
     assert "terminal.backend=local" in line
 
 
-def test_dump_reports_config_backend_winning_over_stale_env(monkeypatch, capsys, tmp_path):
+def test_dump_reports_config_backend_winning_over_stale_env(
+    monkeypatch, capsys, tmp_path
+):
     """Regression for #29186: a stale TERMINAL_ENV=docker in .env no longer
     beats config.yaml terminal.backend=local — load_clawk_dotenv re-applies
     the explicit config keys, so the dump reports local with no override
@@ -67,7 +69,11 @@ def test_dump_reports_config_backend_winning_over_stale_env(monkeypatch, capsys,
     monkeypatch.setattr(dump, "get_project_root", lambda: tmp_path / "noproject")
 
     home = get_clawk_home()
-    _seed(home, config_yaml="terminal:\n  backend: local\n", env_text="TERMINAL_ENV=docker\n")
+    _seed(
+        home,
+        config_yaml="terminal:\n  backend: local\n",
+        env_text="TERMINAL_ENV=docker\n",
+    )
 
     dump.run_dump(SimpleNamespace(show_keys=False))
 
@@ -91,5 +97,3 @@ def test_dump_reports_config_backend_when_no_override(monkeypatch, capsys, tmp_p
     line = _terminal_line(capsys.readouterr().out)
     assert "docker" in line
     assert "overrides" not in line
-
-

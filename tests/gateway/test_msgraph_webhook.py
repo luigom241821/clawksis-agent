@@ -64,8 +64,6 @@ class TestMSGraphWebhookConfig:
 
 
 class TestMSGraphValidationHandshake:
-
-
     @pytest.mark.anyio
     async def test_connect_allows_loopback_without_source_allowlist(self):
         if not AIOHTTP_AVAILABLE:
@@ -164,7 +162,6 @@ class TestMSGraphNotifications:
 
         assert resp.status == 413
 
-
     @pytest.mark.anyio
     async def test_non_ascii_client_state_rejected_without_raising(self):
         """A non-ASCII clientState (attacker-controlled request body) must be
@@ -186,7 +183,6 @@ class TestMSGraphNotifications:
             _FakeRequest(json_payload=payload)
         )
         assert response.status == 403
-
 
     @pytest.mark.anyio
     async def test_resource_patterns_accept_leading_slash(self):
@@ -262,5 +258,3 @@ class TestMSGraphSourceIPAllowlist:
             _FakeRequest(json_payload=payload, remote="203.0.113.99")
         )
         assert resp.status == 403
-
-

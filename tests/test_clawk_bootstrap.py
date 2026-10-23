@@ -42,6 +42,7 @@ def _fresh_import():
     """
     sys.modules.pop("clawk_bootstrap", None)
     import clawk_bootstrap  # noqa: WPS433
+
     return clawk_bootstrap
 
 
@@ -122,7 +123,6 @@ class TestUserOptOut:
         )
 
 
-
 class TestPosixNoOp:
     """POSIX: zero behavior change.  We don't touch LANG, LC_*, or any
     stdio.  The goal is that Linux/macOS behave identically before and
@@ -146,10 +146,6 @@ class TestPosixNoOp:
         assert "PYTHONUTF8" not in os.environ
         assert "PYTHONIOENCODING" not in os.environ
         assert hb._bootstrap_applied is False
-
-
-
-
 
 
 class TestStdioReconfigureErrorHandling:
@@ -179,11 +175,17 @@ class TestStdioReconfigureErrorHandling:
             pytest.fail(f"bootstrap raised on non-reconfigurable stdout: {exc}")
 
 
-
-@pytest.mark.parametrize("path", [
-    "clawk_cli/main.py", "run_agent.py", "acp_adapter/entry.py",
-    "gateway/run.py", "batch_runner.py", "cli.py",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "clawk_cli/main.py",
+        "run_agent.py",
+        "acp_adapter/entry.py",
+        "gateway/run.py",
+        "batch_runner.py",
+        "cli.py",
+    ],
+)
 def test_entrypoint_executes_bootstrap_before_application_imports(tmp_path, path):
     import subprocess
     from pathlib import Path
@@ -223,9 +225,15 @@ except Boundary:
 else:
     raise AssertionError('entrypoint never reached the application import boundary')
 """
-    result = subprocess.run([sys.executable, "-I", "-S", "-c", program, str(root), str(entry)],
-                            cwd=tmp_path, env={**os.environ, "CLAWK_HOME": str(tmp_path / "home")},
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", program, str(root), str(entry)],
+        cwd=tmp_path,
+        env={**os.environ, "CLAWK_HOME": str(tmp_path / "home")},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "bootstrap-before-app"
 
@@ -245,11 +253,27 @@ def test_library_imports_of_dual_use_entry_modules_stay_side_effect_free(tmp_pat
         print(json.dumps({"bootstrapped": "clawk_bootstrap" in sys.modules, "changed": changed}))
     """)
     repo = Path(__file__).resolve().parents[1]
-    env = {k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "WINDIR") if k in os.environ}
-    env.update({"HOME": str(tmp_path), "USERPROFILE": str(tmp_path), "PYTHONPATH": str(repo),
-                "CLAWK_HOME": str(tmp_path / "home"), "PYTHONDONTWRITEBYTECODE": "1"})
-    child = subprocess.run([sys.executable, "-c", code], cwd=str(tmp_path), env=env,
-                           capture_output=True, text=True, timeout=120, check=False)
+    env = {
+        k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "WINDIR") if k in os.environ
+    }
+    env.update(
+        {
+            "HOME": str(tmp_path),
+            "USERPROFILE": str(tmp_path),
+            "PYTHONPATH": str(repo),
+            "CLAWK_HOME": str(tmp_path / "home"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
+    child = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert child.returncode == 0, child.stderr
     assert child.stdout.splitlines()[-1] == '{"bootstrapped": false, "changed": []}'
 
@@ -283,22 +307,43 @@ import clawk_bootstrap
 assert clawk_bootstrap._pm_repair is True
 print('reached-pm')
 """
-    result = subprocess.run([sys.executable, "-I", "-S", "-c", program, str(root)],
-                            cwd=tmp_path, env={**os.environ, "CLAWK_HOME": str(tmp_path / "home")},
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", program, str(root)],
+        cwd=tmp_path,
+        env={**os.environ, "CLAWK_HOME": str(tmp_path / "home")},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "reached-pm"
 
 
-@pytest.mark.parametrize("path", [
-    "clawk_cli/main.py", "run_agent.py", "acp_adapter/entry.py",
-    "gateway/run.py", "batch_runner.py", "cli.py",
-])
-@pytest.mark.parametrize("bootstrap,expected", [
-    (None, "proceeded"),
-    ("import clawk_missing_dependency_probe\n", "raised clawk_missing_dependency_probe"),
-])
-def test_entrypoint_tolerates_only_an_absent_bootstrap(tmp_path, path, bootstrap, expected):
+@pytest.mark.parametrize(
+    "path",
+    [
+        "clawk_cli/main.py",
+        "run_agent.py",
+        "acp_adapter/entry.py",
+        "gateway/run.py",
+        "batch_runner.py",
+        "cli.py",
+    ],
+)
+@pytest.mark.parametrize(
+    "bootstrap,expected",
+    [
+        (None, "proceeded"),
+        (
+            "import clawk_missing_dependency_probe\n",
+            "raised clawk_missing_dependency_probe",
+        ),
+    ],
+)
+def test_entrypoint_tolerates_only_an_absent_bootstrap(
+    tmp_path, path, bootstrap, expected
+):
     """The entry-point guard covers a bootstrap a partial update left unregistered.
 
     A bootstrap that exists but cannot import its own dependencies must surface:
@@ -329,8 +374,14 @@ except Boundary:
 except ModuleNotFoundError as exc:
     print('raised', exc.name)
 """
-    result = subprocess.run([sys.executable, "-I", "-S", "-c", program, str(fake_root), str(entry)],
-                            cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", program, str(fake_root), str(entry)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == expected
 
@@ -381,7 +432,6 @@ class TestHardenImportPath:
         # but only AFTER the Clawksis root.
         assert result.index("/opt/clawksis") < result.index("/home/user/tg-ws-proxy")
 
-
     def test_env_var_used_when_no_arg(self):
         hb = _fresh_import()
         original = sys.path[:]
@@ -397,7 +447,6 @@ class TestHardenImportPath:
                 os.environ.pop("CLAWK_PYTHON_SRC_ROOT", None)
             else:
                 os.environ["CLAWK_PYTHON_SRC_ROOT"] = original_env
-
 
 
 class TestEnableWindowsVt:
@@ -447,13 +496,13 @@ class TestEnableWindowsVt:
 class TestSuppressPlatformVerConsole:
     """suppress_platform_ver_console: stub applied on Windows, no-op on POSIX."""
 
-
     @pytest.mark.platforms("windows")
     def test_stub_applied_when_windows(self):
         # Faking _IS_WINDOWS on Linux asserted only that the stub was
         # installed; the reason it exists — ``platform.win32_ver()`` shelling
         # out ``cmd /c ver`` — has no counterpart off Windows.
         import platform
+
         hb = _fresh_import()
         original = getattr(platform, "_syscmd_ver", None)
         try:
@@ -483,19 +532,30 @@ class TestHappyEyeballsSocketConnect:
         hb = _fresh_import()
         assert socket.create_connection.__module__ == hb.__name__
         # urllib3 keeps its own serial connect walker; it is patched once imported (lazily).
-        assert getattr(urllib3_connection.create_connection, "_clawk_happy_eyeballs", False)
+        assert getattr(
+            urllib3_connection.create_connection, "_clawk_happy_eyeballs", False
+        )
         # Re-importing the bootstrap (or importing it after urllib3) never wraps the racer twice.
         racer = socket.create_connection
         _fresh_import()
         assert socket.create_connection is racer
         # The bootstrap must not pay urllib3's import (~50 ms) on every process start: a fresh
         # interpreter gets the patch the moment urllib3 loads, not before.
-        subprocess.run([sys.executable, "-c", textwrap.dedent("""
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                textwrap.dedent("""
             import sys, clawk_bootstrap
             assert "urllib3" not in sys.modules, "bootstrap imported urllib3 eagerly"
             import urllib3.util.connection as c
             assert c.create_connection._clawk_happy_eyeballs
-        """)], check=True, cwd=str(Path(hb.__file__).parent), timeout=60)
+        """),
+            ],
+            check=True,
+            cwd=str(Path(hb.__file__).parent),
+            timeout=60,
+        )
 
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -554,23 +614,45 @@ class TestHappyEyeballsSocketConnect:
             def close(self):
                 pass
 
-        monkeypatch.setattr(hb.socket, "getaddrinfo", lambda *_a, **_k: [
-            (socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("2001:db8::1", 443, 0, 0)),
-            (socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("192.0.2.1", 443)),
-        ])
+        monkeypatch.setattr(
+            hb.socket,
+            "getaddrinfo",
+            lambda *_a, **_k: [
+                (
+                    socket.AF_INET6,
+                    socket.SOCK_STREAM,
+                    socket.IPPROTO_TCP,
+                    "",
+                    ("2001:db8::1", 443, 0, 0),
+                ),
+                (
+                    socket.AF_INET,
+                    socket.SOCK_STREAM,
+                    socket.IPPROTO_TCP,
+                    "",
+                    ("192.0.2.1", 443),
+                ),
+            ],
+        )
         monkeypatch.setattr(hb.socket, "socket", FakeSocket)
         monkeypatch.setattr(hb.selectors, "DefaultSelector", FakeSelector)
         monkeypatch.setattr(hb.time, "monotonic", lambda: clock[0])
 
         # http.client passes the module timeout sentinel through positionally.
-        winner = socket.create_connection(("example.com", 443), socket._GLOBAL_DEFAULT_TIMEOUT, None)
+        winner = socket.create_connection(
+            ("example.com", 443), socket._GLOBAL_DEFAULT_TIMEOUT, None
+        )
 
         assert winner.family == socket.AF_INET
-        assert winner.timeout is None  # sentinel resolves to the process default, like stock
+        assert (
+            winner.timeout is None
+        )  # sentinel resolves to the process default, like stock
         assert clock[0] == hb._HAPPY_EYEBALLS_DELAY_SECONDS
         assert sockets[0].closed is True and sockets[1] is winner
 
-    def test_racer_bug_raises_instead_of_falling_back_to_the_serial_walk(self, monkeypatch):
+    def test_racer_bug_raises_instead_of_falling_back_to_the_serial_walk(
+        self, monkeypatch
+    ):
         """A non-OSError from the racer is a bug in the racer, not a network outcome: it must
         surface, never silently reroute the connect through the serial stock walker (which
         would reintroduce the exact stall the racer exists to remove). OSError still means
@@ -584,14 +666,18 @@ class TestHappyEyeballsSocketConnect:
 
         for racer in (socket.create_connection, urllib3_connection.create_connection):
             assert getattr(racer, "_clawk_happy_eyeballs", False)
-            monkeypatch.setitem(racer.__globals__, "_happy_eyeballs_create_connection", boom)
+            monkeypatch.setitem(
+                racer.__globals__, "_happy_eyeballs_create_connection", boom
+            )
             with pytest.raises(RuntimeError, match="racer bug"):
                 racer(("127.0.0.1", 1), 1.0)
 
 
 @pytest.mark.skipif(
-    sys.platform != "linux" or not (os.confstr("CS_GNU_LIBC_VERSION") or "").startswith("glibc"),
-    reason="environ array lifetime is a glibc property")
+    sys.platform != "linux"
+    or not (os.confstr("CS_GNU_LIBC_VERSION") or "").startswith("glibc"),
+    reason="environ array lifetime is a glibc property",
+)
 class TestNeverFreeEnviron:
     """A new ``os.environ`` name must never free the ``environ`` array another thread may be
     walking in C ``getenv`` (getaddrinfo, OpenSSL) — glibc < 2.41 did, and the tui_gateway
@@ -599,7 +685,11 @@ class TestNeverFreeEnviron:
 
     def test_arrays_superseded_by_new_names_stay_intact(self):
         # Fresh interpreter: the test process's own environ history must not matter.
-        subprocess.run([sys.executable, "-c", textwrap.dedent("""
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                textwrap.dedent("""
             import ctypes, os, clawk_bootstrap
             environ = ctypes.c_void_p.in_dll(ctypes.CDLL(None), "environ")
             def snapshot(addr):
@@ -618,11 +708,20 @@ class TestNeverFreeEnviron:
                 words = ctypes.cast(addr, ctypes.POINTER(ctypes.c_void_p))
                 assert [words[i] for i in range(len(entries))] == entries, "a superseded environ array was freed"
             assert os.environ["CLAWK_ENVIRON_PROBE_79"] == "1"
-        """)], check=True, cwd=str(Path(__file__).resolve().parents[1]), timeout=60)
+        """),
+            ],
+            check=True,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            timeout=60,
+        )
 
     def test_concurrent_writers_lose_no_name_in_the_c_environ(self):
         # Unserialized writers each copied the live array; the later publish dropped the others' names.
-        subprocess.run([sys.executable, "-c", textwrap.dedent("""
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                textwrap.dedent("""
             import ctypes, os, sys, threading, clawk_bootstrap
             getenv = ctypes.CDLL(None).getenv
             getenv.restype, getenv.argtypes = ctypes.c_char_p, [ctypes.c_char_p]
@@ -637,11 +736,20 @@ class TestNeverFreeEnviron:
             [t.start() for t in threads]; [t.join() for t in threads]
             lost = [n for b in batches for n in b if getenv(n.encode()) != n.encode()]
             assert not lost, f"{len(lost)}/1600 names in os.environ but missing from C getenv"
-        """)], check=True, cwd=str(Path(__file__).resolve().parents[1]), timeout=120)
+        """),
+            ],
+            check=True,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            timeout=120,
+        )
 
     def test_set_del_churn_of_the_same_names_keeps_memory_bounded(self):
         # Kanban ticks, the spinner pause and _restore_env set and pop the same names forever.
-        subprocess.run([sys.executable, "-c", textwrap.dedent("""
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                textwrap.dedent("""
             import os, tracemalloc, clawk_bootstrap
             def churn(cycles):
                 for _ in range(cycles):
@@ -655,4 +763,9 @@ class TestNeverFreeEnviron:
             churn(5000)
             grown = tracemalloc.get_traced_memory()[0] - before
             assert grown < 64 * 1024, f"20k set/del of 4 names grew the heap by {grown} bytes"
-        """)], check=True, cwd=str(Path(__file__).resolve().parents[1]), timeout=120)
+        """),
+            ],
+            check=True,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            timeout=120,
+        )

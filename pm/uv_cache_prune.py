@@ -7,6 +7,7 @@ entries for superseded pins (prefix restores across dependency changes);
 pruning to the lock keeps every consumer exact without discarding wheels
 the current lock still needs (unlike ``uv cache prune --ci``).
 """
+
 from __future__ import annotations
 
 import re

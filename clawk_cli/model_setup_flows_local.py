@@ -35,7 +35,13 @@ def _fmt_eta(seconds: int) -> str:
 
 def _rate(bytes_per_sec: float) -> str:
     mb = bytes_per_sec / (1 << 20)
-    return f"{mb / 1024:.1f} GB/s" if mb >= 1024 else f"{mb:.0f} MB/s" if mb >= 10 else f"{mb:.1f} MB/s"
+    return (
+        f"{mb / 1024:.1f} GB/s"
+        if mb >= 1024
+        else f"{mb:.0f} MB/s"
+        if mb >= 10
+        else f"{mb:.1f} MB/s"
+    )
 
 
 def _progress_line(lm, view: dict) -> str:
@@ -82,7 +88,9 @@ def _follow_job(lm, job_id: str) -> str:
         deadline = time.monotonic() + _PAUSE_WAIT_S
         while time.monotonic() < deadline and lm._JOBS[job_id]["status"] == "running":
             time.sleep(_POLL_S)
-        print("  Paused. Run `clawk model` → Local models again to resume; finished bytes are kept.")
+        print(
+            "  Paused. Run `clawk model` → Local models again to resume; finished bytes are kept."
+        )
         return "paused"
     if shown_phase is not None:
         print()
@@ -127,13 +135,19 @@ def _model_flow_local(config, current_model=""):
     hw = lm.local_models_hardware()
     status = lm.local_models_status()
     gpu = f"{hw['gpu_name']} · " if hw.get("gpu_name") else ""
-    print(f"  Machine:  {gpu}{hw.get('vram_label')} {'unified' if hw.get('uma') else 'GPU'} memory · "
-          f"{lm._human_gb(hw.get('ram_total_bytes') or 0)} RAM")
+    print(
+        f"  Machine:  {gpu}{hw.get('vram_label')} {'unified' if hw.get('uma') else 'GPU'} memory · "
+        f"{lm._human_gb(hw.get('ram_total_bytes') or 0)} RAM"
+    )
     if status["runtime_installed"]:
-        print(f"  Engine:   llama.cpp {status['tag']} ({status['runtime_backend']})"
-              + ("  (update available)" if status.get("update_available") else ""))
+        print(
+            f"  Engine:   llama.cpp {status['tag']} ({status['runtime_backend']})"
+            + ("  (update available)" if status.get("update_available") else "")
+        )
     else:
-        print(f"  Engine:   not installed; llama.cpp {status['configured_tag']} installs with your first model")
+        print(
+            f"  Engine:   not installed; llama.cpp {status['configured_tag']} installs with your first model"
+        )
     print()
 
     rows = lm.local_models_catalog()["models"]
@@ -142,31 +156,58 @@ def _model_flow_local(config, current_model=""):
     staged = [m for m in status["models"] if m["id"] not in catalog_ids]
     active_id = status.get("active_model_id")
     labels = [_row_label(r, active_id) for r in choices]
-    labels += [f"  {m['id']} — {m['size_label']} · on disk" + ("  ← currently active" if m["id"] == active_id else "")
-               for m in staged]
+    labels += [
+        f"  {m['id']} — {m['size_label']} · on disk"
+        + ("  ← currently active" if m["id"] == active_id else "")
+        for m in staged
+    ]
     labels.append("Leave unchanged")
     skipped = len(rows) - len(choices)
     if skipped:
-        print(f"  {skipped} catalog model(s) need more memory or a newer engine than this machine has.")
-    default = next((i for i, r in enumerate(choices)
-                    if active_id and active_id in (r.get("downloaded_model_id"), r.get("model_id"))),
-                   next((i for i, r in enumerate(choices) if r.get("recommended")), 0))
-    idx = _prompt_provider_choice(labels, default=default, title="Select a local model (★ recommended for this machine):")
+        print(
+            f"  {skipped} catalog model(s) need more memory or a newer engine than this machine has."
+        )
+    default = next(
+        (
+            i
+            for i, r in enumerate(choices)
+            if active_id
+            and active_id in (r.get("downloaded_model_id"), r.get("model_id"))
+        ),
+        next((i for i, r in enumerate(choices) if r.get("recommended")), 0),
+    )
+    idx = _prompt_provider_choice(
+        labels,
+        default=default,
+        title="Select a local model (★ recommended for this machine):",
+    )
     if idx is None or idx == len(labels) - 1:
         print("No change.")
         return
 
     if idx < len(choices):
         row = choices[idx]
-        name, use_downloaded = row["display_name"], row.get("downloaded") and status["runtime_installed"]
+        name, use_downloaded = (
+            row["display_name"],
+            row.get("downloaded") and status["runtime_installed"],
+        )
         if not use_downloaded:
-            need = [] if status["runtime_installed"] else [f"the llama.cpp engine ({status['configured_tag']})"]
+            need = (
+                []
+                if status["runtime_installed"]
+                else [f"the llama.cpp engine ({status['configured_tag']})"]
+            )
             if not row.get("downloaded"):
                 need.append(f"{name} ({row['size_label']})")
             if need and not prompt_yes_no(f"  Download {' and '.join(need)}?", True):
                 print("No change.")
                 return
-            job_id = _start(lm, lambda: lm.local_models_quickstart(lm.QuickstartBody(model_id=row["id"])))
+            job_id = _start(
+                lm,
+                lambda: lm.local_models_quickstart(
+                    lm.QuickstartBody(model_id=row["id"])
+                ),
+            )
             if job_id is None or _follow_job(lm, job_id) != "done":
                 return
             print(f"Default model set to: {name} (via Local models · llama.cpp)")
@@ -177,12 +218,18 @@ def _model_flow_local(config, current_model=""):
         name = model_id
 
     if not status["runtime_installed"]:
-        if not prompt_yes_no(f"  Download the llama.cpp engine ({status['configured_tag']})?", True):
+        if not prompt_yes_no(
+            f"  Download the llama.cpp engine ({status['configured_tag']})?", True
+        ):
             print("No change.")
             return
-        job_id = _start(lm, lambda: lm.local_models_runtime_install(lm.RuntimeInstallBody()))
+        job_id = _start(
+            lm, lambda: lm.local_models_runtime_install(lm.RuntimeInstallBody())
+        )
         if job_id is None or _follow_job(lm, job_id) != "done":
             return
-    job_id = _start(lm, lambda: lm.local_models_activate(lm.ModelActivateBody(model_id=model_id)))
+    job_id = _start(
+        lm, lambda: lm.local_models_activate(lm.ModelActivateBody(model_id=model_id))
+    )
     if job_id is not None and _follow_job(lm, job_id) == "done":
         print(f"Default model set to: {name} (via Local models · llama.cpp)")

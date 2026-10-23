@@ -107,9 +107,7 @@ def test_cwd_move_clears_metadata_in_same_claim(tmp_path):
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         db.create_session("session", "desktop", cwd="/repo/A")
-        generation = _require_generation(
-            db.update_session_cwd("session", "/repo/A")
-        )
+        generation = _require_generation(db.update_session_cwd("session", "/repo/A"))
         assert db.publish_session_git_metadata(
             "session", "/repo/A", generation, "main", "/repo/A"
         )
@@ -161,9 +159,7 @@ def test_explicit_move_replaces_metadata_and_claims_generation(tmp_path):
 def test_failed_new_probe_still_invalidates_older_worker(tmp_path):
     first, second = _open_pair(tmp_path)
     try:
-        baseline = _require_generation(
-            first.update_session_cwd("session", "/repo/A")
-        )
+        baseline = _require_generation(first.update_session_cwd("session", "/repo/A"))
         assert first.publish_session_git_metadata(
             "session", "/repo/A", baseline, "baseline", "/repo/A"
         )
@@ -230,15 +226,15 @@ def test_legacy_sessions_table_reconciles_generation_column(tmp_path):
         verify = sqlite3.connect(path)
         try:
             columns = {
-                row[1]
-                for row in verify.execute("PRAGMA table_info('sessions')")
+                row[1] for row in verify.execute("PRAGMA table_info('sessions')")
             }
         finally:
             verify.close()
         assert "git_metadata_generation" in columns
-        assert reopened._conn.execute(
-            "SELECT version FROM schema_version"
-        ).fetchone()[0] == SCHEMA_VERSION
+        assert (
+            reopened._conn.execute("SELECT version FROM schema_version").fetchone()[0]
+            == SCHEMA_VERSION
+        )
         reopened.create_session("session", "desktop", cwd="/repo")
         assert reopened.update_session_cwd("session", "/repo") == 1
     finally:

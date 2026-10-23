@@ -131,7 +131,8 @@ class TestKernelLifecycle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as home:
             host = subprocess.Popen(
                 [sys.executable, "-c", host_src, home],
-                stdout=subprocess.PIPE, text=True,
+                stdout=subprocess.PIPE,
+                text=True,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             try:
@@ -187,16 +188,26 @@ class TestModelFacingReset(unittest.TestCase):
         way out of poisoned state. A stale ``kernel_mode: per-call`` key must not
         drop it from the schema, and a model-shaped call routed through the
         registered handler must actually discard the kernel's state."""
-        from tools.code_execution_tool import _execute_code_handler, build_execute_code_schema
+        from tools.code_execution_tool import (
+            _execute_code_handler,
+            build_execute_code_schema,
+        )
 
         with _kernel_config(kernel_mode="per-call"):
             schema = build_execute_code_schema(mode="strict")
-            self.assertEqual(schema["parameters"]["properties"]["reset"]["type"], "boolean")
+            self.assertEqual(
+                schema["parameters"]["properties"]["reset"]["type"], "boolean"
+            )
             _execute_code_handler({"code": "x = 41"}, task_id="kernel-test")
-            kept = json.loads(_execute_code_handler({"code": "print(x + 1)"}, task_id="kernel-test"))
+            kept = json.loads(
+                _execute_code_handler({"code": "print(x + 1)"}, task_id="kernel-test")
+            )
             self.assertIn("42", kept["output"], kept)
-            reset = json.loads(_execute_code_handler(
-                {"code": "print(x + 1)", "reset": True}, task_id="kernel-test"))
+            reset = json.loads(
+                _execute_code_handler(
+                    {"code": "print(x + 1)", "reset": True}, task_id="kernel-test"
+                )
+            )
         self.assertEqual(reset["status"], "error", reset)
         self.assertIn("NameError", reset.get("error", ""))
 
@@ -217,7 +228,10 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
     """
 
     def _run_as(self, session_key, code, task_id, **kwargs):
-        from tools.approval_context import reset_current_session_key, set_current_session_key
+        from tools.approval_context import (
+            reset_current_session_key,
+            set_current_session_key,
+        )
 
         token = set_current_session_key(session_key)
         try:
@@ -296,17 +310,23 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
         with _kernel_config(max_session_kernels=2):
             contexts = []
             for index in range(5):
+
                 def _set(index=index):
                     with delegated_child_context(f"child-{index}"):
                         self._run_as("conv", f"v = {index}", task_id=f"child-{index}")
+
                 ctx = contextvars.copy_context()
                 ctx.run(_set)
                 contexts.append(ctx)
             outcomes = {}
             for index, ctx in enumerate(contexts):
+
                 def _read(index=index):
                     with delegated_child_context(f"child-{index}"):
-                        outcomes[index] = self._run_as("conv", "print(v)", task_id=f"child-{index}")
+                        outcomes[index] = self._run_as(
+                            "conv", "print(v)", task_id=f"child-{index}"
+                        )
+
                 ctx.run(_read)
         for index, outcome in outcomes.items():
             self.assertEqual(outcome["status"], "success", outcome)
@@ -324,10 +344,19 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
                 self._run_as("conv", "v = 1", task_id="child-done")
             with delegated_child_context("child-live"):
                 self._run_as("conv", "v = 2", task_id="child-live")
-            doomed = [k for k in _KERNELS.values() if k.owner.endswith("::child::child-done")]
+            doomed = [
+                k for k in _KERNELS.values() if k.owner.endswith("::child::child-done")
+            ]
             self.assertEqual(len(doomed), 1)
             shutdown_kernels_for_delegated_child("child-done")
-            self.assertEqual([k for k in _KERNELS.values() if k.owner.endswith("::child::child-done")], [])
+            self.assertEqual(
+                [
+                    k
+                    for k in _KERNELS.values()
+                    if k.owner.endswith("::child::child-done")
+                ],
+                [],
+            )
             doomed[0].proc.wait(timeout=10)
             self.assertFalse(doomed[0].alive())
             # The sibling's kernel is untouched.
@@ -407,8 +436,14 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
         results = []
         with patch("tools.code_kernel.subprocess.Popen", side_effect=_capturing_popen):
             with _kernel_config():
+
                 def _cell():
-                    results.append(self._run_as("conv-a", "import time; time.sleep(0.3)", task_id="t"))
+                    results.append(
+                        self._run_as(
+                            "conv-a", "import time; time.sleep(0.3)", task_id="t"
+                        )
+                    )
+
                 threads = [threading.Thread(target=_cell) for _ in range(6)]
                 for t in threads:
                     t.start()
@@ -416,8 +451,11 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
                     t.join()
         self.assertEqual([r["status"] for r in results], ["success"] * 6)
         self.assertEqual(len(_KERNELS), 1)
-        runners = [proc for proc, args in spawned
-                   if len(args) == 2 and Path(args[1]).name == "clawk_kernel_runner.py"]
+        runners = [
+            proc
+            for proc, args in spawned
+            if len(args) == 2 and Path(args[1]).name == "clawk_kernel_runner.py"
+        ]
         self.assertEqual(len(runners), 1, "parallel cells spawned an unowned kernel")
         kernel = next(iter(_KERNELS.values()))
         self.assertIs(kernel.proc, runners[0])
@@ -431,16 +469,22 @@ class TestKernelOwnershipAndLifecycle(unittest.TestCase):
 class TestInScriptToolErrors(unittest.TestCase):
     def test_ignored_helper_error_is_reported_for_that_cell_only(self):
         """A script that drops a helper's {"error": ...} return must not read as a clean success."""
+
         def _handle(tool_name, tool_args, task_id=None):
             if tool_name == "write_file":
                 return json.dumps({"error": "Refusing to overwrite a.py: never read"})
             return json.dumps({"ok": True})
 
         with _kernel_config(), patch("model_tools.handle_function_call", new=_handle):
-            failed = _run("import clawk_tools\nclawk_tools.write_file('a.py', 'x')\nprint('done')\n")
+            failed = _run(
+                "import clawk_tools\nclawk_tools.write_file('a.py', 'x')\nprint('done')\n"
+            )
             clean = _run("import clawk_tools\nclawk_tools.web_search(query='q')\n")
         self.assertEqual(failed["status"], "success", failed)
-        self.assertEqual(failed["tool_errors"], [{"tool": "write_file", "error": "Refusing to overwrite a.py: never read"}])
+        self.assertEqual(
+            failed["tool_errors"],
+            [{"tool": "write_file", "error": "Refusing to overwrite a.py: never read"}],
+        )
         self.assertNotIn("tool_errors", clean)
 
 
@@ -468,9 +512,11 @@ class TestPerCellRpcAuthority(unittest.TestCase):
 
         seen = []
         cell = "import clawk_tools\nclawk_tools.web_search(query='q')\n"
-        with _kernel_config(), patch(
-            "model_tools.handle_function_call", new=self._recorder(seen)
+        with (
+            _kernel_config(),
+            patch("model_tools.handle_function_call", new=self._recorder(seen)),
         ):
+
             def cb_one():
                 return "one"
 
@@ -500,9 +546,11 @@ class TestPerCellRpcAuthority(unittest.TestCase):
         from tools.terminal_tool import set_approval_callback
 
         seen = []
-        with _kernel_config(), patch(
-            "model_tools.handle_function_call", new=self._recorder(seen)
+        with (
+            _kernel_config(),
+            patch("model_tools.handle_function_call", new=self._recorder(seen)),
         ):
+
             def cb_one():
                 return "one"
 
@@ -547,7 +595,10 @@ class TestBackgroundIdleReaper(unittest.TestCase):
     on its own schedule, and staging dirs that outlived a dead host are swept by age."""
 
     def _run_as(self, session_key, code, task_id, **kwargs):
-        from tools.approval_context import reset_current_session_key, set_current_session_key
+        from tools.approval_context import (
+            reset_current_session_key,
+            set_current_session_key,
+        )
 
         token = set_current_session_key(session_key)
         try:
@@ -584,6 +635,7 @@ class TestBackgroundIdleReaper(unittest.TestCase):
                 self.assertTrue(kernel.alive())
             finally:
                 kernel.attached -= 1
+
 
 class TestStaleStagingDirSweep(unittest.TestCase):
     def test_week_old_kernel_dirs_go_and_fresh_ones_stay(self):

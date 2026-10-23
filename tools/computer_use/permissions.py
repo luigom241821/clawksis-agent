@@ -16,11 +16,17 @@ from typing import Any, Dict, Optional
 
 from clawk_cli._subprocess_compat import windows_hide_flags
 
-_RUNTIME_PLATFORMS = frozenset({"darwin", "win32", "linux"})  # mirrors the toolset platform_gate
+_RUNTIME_PLATFORMS = frozenset(
+    {"darwin", "win32", "linux"}
+)  # mirrors the toolset platform_gate
 _BOOLS = ("accessibility", "screen_recording", "screen_recording_capturable")
 CUA_DRIVER_BUNDLE_ID = "com.trycua.driver"  # the only identity TCC rows and the private daemon are keyed to
-_TCC_SERVICES = {"accessibility": "Accessibility", "screen_recording": "ScreenCapture"}  # status field -> tccutil service
+_TCC_SERVICES = {
+    "accessibility": "Accessibility",
+    "screen_recording": "ScreenCapture",
+}  # status field -> tccutil service
 TCC_FIELDS = tuple(_TCC_SERVICES)
+
 
 def stale_tcc_grant_hint(*missing: str) -> str:
     """Recovery text for grants the daemon reports missing while System Settings shows the CuaDriver toggle ON.
@@ -30,11 +36,18 @@ def stale_tcc_grant_hint(*missing: str) -> str:
     not rewrite the requirement (trycua/cua#3170). Only a reset + re-grant recovers it, so the hint names the
     exact rows for the *missing* status fields.
     """
-    resets = " && ".join(f"tccutil reset {_TCC_SERVICES[f]} {CUA_DRIVER_BUNDLE_ID}" for f in missing if f in _TCC_SERVICES)
+    resets = " && ".join(
+        f"tccutil reset {_TCC_SERVICES[f]} {CUA_DRIVER_BUNDLE_ID}"
+        for f in missing
+        if f in _TCC_SERVICES
+    )
     if not resets:
         return ""
-    return ("If System Settings already shows CuaDriver ON, the stored grant is stale (it no longer matches the installed "
-            f"driver's signature): run `{resets}`, then `clawk computer-use permissions grant`.")
+    return (
+        "If System Settings already shows CuaDriver ON, the stored grant is stale (it no longer matches the installed "
+        f"driver's signature): run `{resets}`, then `clawk computer-use permissions grant`."
+    )
+
 
 def _child_env() -> dict[str, str]:
     """cua-driver child env (telemetry policy + provider secrets stripped); ``os.environ`` on import error.
@@ -44,18 +57,32 @@ def _child_env() -> dict[str, str]:
     """
     try:
         from tools.computer_use.cua_backend import sanitized_cua_driver_env
+
         return sanitized_cua_driver_env()
     except Exception:
         return dict(os.environ)
 
+
 def _run(binary: str, *args: str, timeout: float) -> subprocess.CompletedProcess:
-    return subprocess.run([binary, *args], capture_output=True, text=True, encoding='utf-8', errors='replace',
-                          timeout=timeout, env=_child_env(), stdin=subprocess.DEVNULL, creationflags=windows_hide_flags(), check=False)
+    return subprocess.run(
+        [binary, *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        env=_child_env(),
+        stdin=subprocess.DEVNULL,
+        creationflags=windows_hide_flags(),
+        check=False,
+    )
+
 
 def _json_out(binary: str, *args: str, timeout: float) -> Any:
     """Run ``binary args`` and parse stdout as JSON (``None`` on empty output)."""
     raw = (_run(binary, *args, timeout=timeout).stdout or "").strip()
     return json.loads(raw) if raw else None
+
 
 def _doctor(binary: str) -> Optional[dict[str, Any]]:
     """``cua-driver doctor --json`` → ``{ok, checks:[{label,status,message}]}`` (None on any failure)."""
@@ -65,8 +92,13 @@ def _doctor(binary: str) -> Optional[dict[str, Any]]:
         data = None
     if not isinstance(data, dict):
         return None
-    checks = [{k: str(p.get(k, "")) for k in ("label", "status", "message")} for p in data.get("probes", []) if isinstance(p, dict)]
+    checks = [
+        {k: str(p.get(k, "")) for k in ("label", "status", "message")}
+        for p in data.get("probes", [])
+        if isinstance(p, dict)
+    ]
     return {"ok": bool(data.get("ok")), "checks": checks}
+
 
 def _mac_permissions(binary: str, out: dict[str, Any]) -> None:
     """Fold ``cua-driver permissions status --json`` booleans (+ ``source``) into ``out``."""
@@ -82,41 +114,68 @@ def _mac_permissions(binary: str, out: dict[str, Any]) -> None:
             if isinstance(data.get("source"), dict):
                 out["source"] = data["source"]
 
+
 def computer_use_status(driver_cmd: Optional[str] = None) -> dict[str, Any]:
     """OS-aware readiness for the desktop card; key order is an API payload contract. ``ready`` is the single signal the
     UI keys off: macOS = both TCC grants, elsewhere = driver health (no TCC model); ``None`` = unknown (binary missing /
     probe failed). ``can_grant`` is macOS-only."""
-    from plugins.computer_use import DEFAULT_BACKEND, configured_backend_name, get_active_provider
-    from tools.computer_use.cua_backend_driver import resolve_cua_driver_cmd  # same resolver as the tool itself
+    from plugins.computer_use import (
+        DEFAULT_BACKEND,
+        configured_backend_name,
+        get_active_provider,
+    )
+    from tools.computer_use.cua_backend_driver import (
+        resolve_cua_driver_cmd,
+    )  # same resolver as the tool itself
+
     plat, name = sys.platform, configured_backend_name()
     binary = resolve_cua_driver_cmd(driver_cmd) if name == DEFAULT_BACKEND else None
-    out: dict[str, Any] = {"platform": plat, "platform_supported": plat in _RUNTIME_PLATFORMS,
-                           "installed": bool(binary), "version": None, "ready": None, "can_grant": plat == "darwin",
-                           "checks": [], "source": None, "error": None, **{k: None for k in _BOOLS}}
-    if name != DEFAULT_BACKEND:  # another driver is selected: cua-driver probes and TCC grants do not apply
+    out: dict[str, Any] = {
+        "platform": plat,
+        "platform_supported": plat in _RUNTIME_PLATFORMS,
+        "installed": bool(binary),
+        "version": None,
+        "ready": None,
+        "can_grant": plat == "darwin",
+        "checks": [],
+        "source": None,
+        "error": None,
+        **{k: None for k in _BOOLS},
+    }
+    if (
+        name != DEFAULT_BACKEND
+    ):  # another driver is selected: cua-driver probes and TCC grants do not apply
         out.update(platform_supported=True, can_grant=False)
         try:
             provider = get_active_provider()
         except LookupError as e:
             out["error"] = str(e)
             return out
-        out.update(installed=True, version=f"{provider.display_name} (computer_use.backend: {provider.name})",
-                   ready=provider.is_available())
+        out.update(
+            installed=True,
+            version=f"{provider.display_name} (computer_use.backend: {provider.name})",
+            ready=provider.is_available(),
+        )
         return out
     if not binary:
         return out
     with suppress(Exception):
-        out["version"] = (_run(binary, "--version", timeout=5).stdout or "").strip() or None
+        out["version"] = (
+            _run(binary, "--version", timeout=5).stdout or ""
+        ).strip() or None
     doctor = _doctor(binary)
     if doctor is not None:
         out["checks"] = doctor["checks"]
     if plat == "darwin":
         _mac_permissions(binary, out)
         if out["error"] is None:
-            out["ready"] = out["accessibility"] is True and out["screen_recording"] is True
+            out["ready"] = (
+                out["accessibility"] is True and out["screen_recording"] is True
+            )
     elif doctor is not None:
         out["ready"] = doctor["ok"]  # no TCC model off macOS
     return out
+
 
 def request_permissions_grant(driver_cmd: Optional[str] = None) -> int:
     """Run ``cua-driver permissions grant`` (macOS), streaming its output. Returns the driver's exit code (0 ok), 2 if
@@ -125,14 +184,24 @@ def request_permissions_grant(driver_cmd: Optional[str] = None) -> int:
         print("Computer Use permissions are a macOS concept; nothing to grant here.")
         return 64
     from tools.computer_use.cua_backend_driver import resolve_cua_driver_cmd
+
     binary = resolve_cua_driver_cmd(driver_cmd)
     if not binary:
         print("cua-driver: not installed. Run: clawk computer-use install")
         return 2
-    print("Requesting Accessibility + Screen Recording for CuaDriver.\n"
-          f"macOS will show a dialog attributed to CuaDriver ({CUA_DRIVER_BUNDLE_ID}) — approve it, then return here.")
+    print(
+        "Requesting Accessibility + Screen Recording for CuaDriver.\n"
+        f"macOS will show a dialog attributed to CuaDriver ({CUA_DRIVER_BUNDLE_ID}) — approve it, then return here."
+    )
     try:
-        return int(subprocess.run([binary, "permissions", "grant"], env=_child_env(), stdin=subprocess.DEVNULL, check=False).returncode)
+        return int(
+            subprocess.run(
+                [binary, "permissions", "grant"],
+                env=_child_env(),
+                stdin=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+        )
     except KeyboardInterrupt:  # pragma: no cover - interactive
         return 130
     except Exception as exc:  # pragma: no cover - defensive

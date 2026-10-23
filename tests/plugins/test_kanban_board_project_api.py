@@ -24,7 +24,9 @@ from clawk_cli import projects_db as pdb
 def _load_plugin_router():
     repo_root = Path(__file__).resolve().parents[2]
     plugin_file = repo_root / "plugins" / "kanban" / "dashboard" / "plugin_api.py"
-    spec = importlib.util.spec_from_file_location("clawk_kanban_plugin_proj_test", plugin_file)
+    spec = importlib.util.spec_from_file_location(
+        "clawk_kanban_plugin_proj_test", plugin_file
+    )
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
     spec.loader.exec_module(mod)
@@ -78,14 +80,18 @@ def test_create_board_with_project_mirrors_workdir(client, project):
 
 
 def test_create_board_rejects_unknown_project(client):
-    r = client.post("/api/plugins/kanban/boards", json={"slug": "bad", "project_id": "p_nope"})
+    r = client.post(
+        "/api/plugins/kanban/boards", json={"slug": "bad", "project_id": "p_nope"}
+    )
     assert r.status_code == 400
 
 
 def test_patch_board_set_and_clear_project(client, project):
     client.post("/api/plugins/kanban/boards", json={"slug": "widget", "name": "Widget"})
 
-    r = client.patch("/api/plugins/kanban/boards/widget", json={"project_id": project["id"]})
+    r = client.patch(
+        "/api/plugins/kanban/boards/widget", json={"project_id": project["id"]}
+    )
     assert r.status_code == 200, r.text
     assert r.json()["board"]["project_id"] == project["id"]
 
@@ -99,7 +105,11 @@ def test_boards_list_surfaces_project(client, project):
         "/api/plugins/kanban/boards",
         json={"slug": "widget", "name": "Widget", "project_id": project["id"]},
     )
-    widget = next(b for b in client.get("/api/plugins/kanban/boards").json()["boards"] if b["slug"] == "widget")
+    widget = next(
+        b
+        for b in client.get("/api/plugins/kanban/boards").json()["boards"]
+        if b["slug"] == "widget"
+    )
     assert widget["project_id"] == project["id"]
     assert widget["project_name"] == "Widget"
 
@@ -109,7 +119,9 @@ def test_task_on_scoped_board_inherits_project(client, project):
         "/api/plugins/kanban/boards",
         json={"slug": "widget", "name": "Widget", "project_id": project["id"]},
     )
-    r = client.post("/api/plugins/kanban/tasks?board=widget", json={"title": "do the thing"})
+    r = client.post(
+        "/api/plugins/kanban/tasks?board=widget", json={"title": "do the thing"}
+    )
     assert r.status_code == 200, r.text
     task_id = r.json()["task"]["id"]
 

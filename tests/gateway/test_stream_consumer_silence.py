@@ -35,6 +35,7 @@ from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 # is_partial_silence_marker — mid-stream hold-back predicate
 # --------------------------------------------------------------------------
 
+
 def test_partial_predicate_agrees_with_exact_on_full_markers():
     """Every exact silence marker is also a (trivial) partial of itself."""
     from gateway.response_filters import LIVE_GATEWAY_SILENT_MARKERS
@@ -48,17 +49,24 @@ def test_partial_predicate_agrees_with_exact_on_full_markers():
 # GatewayStreamConsumer — end-to-end suppression through run()
 # --------------------------------------------------------------------------
 
+
 def _make_adapter(*, supports_delete: bool = True) -> MagicMock:
     """Minimal MagicMock adapter wired for send/edit/delete."""
     adapter = MagicMock()
     adapter.REQUIRES_EDIT_FINALIZE = False
     adapter.MAX_MESSAGE_LENGTH = 4096
-    adapter.send = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="preview_1",
-    ))
-    adapter.edit_message = AsyncMock(return_value=SimpleNamespace(
-        success=True, message_id="preview_1",
-    ))
+    adapter.send = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="preview_1",
+        )
+    )
+    adapter.edit_message = AsyncMock(
+        return_value=SimpleNamespace(
+            success=True,
+            message_id="preview_1",
+        )
+    )
     if supports_delete:
         adapter.delete_message = AsyncMock(return_value=True)
     else:
@@ -82,7 +90,8 @@ class TestStreamedSilenceSuppression:
         """A stream whose entire content is NO_REPLY sends nothing visible."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         consumer.on_delta("NO_REPLY")
@@ -104,7 +113,8 @@ class TestStreamedSilenceSuppression:
         """A marker flushed mid-stream as a preview is deleted on completion."""
         adapter = _make_adapter()
         consumer = GatewayStreamConsumer(
-            adapter, "chat_1",
+            adapter,
+            "chat_1",
             StreamConsumerConfig(edit_interval=0.01, buffer_threshold=1),
         )
         # Force a mid-stream preview: pretend "NO_REPLY" was already put on
@@ -121,5 +131,3 @@ class TestStreamedSilenceSuppression:
         adapter.delete_message.assert_awaited_once_with("chat_1", "preview_1")
         assert consumer.final_content_delivered is False
         assert consumer.already_sent is False
-
-

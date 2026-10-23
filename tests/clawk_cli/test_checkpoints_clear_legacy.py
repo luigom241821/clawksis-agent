@@ -28,7 +28,9 @@ def test_undeletable_archive_exits_two_and_is_reported(tmp_path, monkeypatch, ca
     import tools.checkpoint_manager as ckpt_mgr
     from clawk_cli import checkpoints as checkpoints_cli
 
-    base = _base_with_archives(tmp_path, monkeypatch, ["legacy-20200101-000000", "legacy-20200102-000000"])
+    base = _base_with_archives(
+        tmp_path, monkeypatch, ["legacy-20200101-000000", "legacy-20200102-000000"]
+    )
     stuck = base / "legacy-20200101-000000"
     real_rmtree = shutil.rmtree
 

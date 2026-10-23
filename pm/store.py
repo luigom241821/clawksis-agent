@@ -17,7 +17,6 @@ from typing import IO
 from pm.filesystem import is_junction, long_root, retry_held
 
 
-
 ALL_TARGETS = (
     "win32-x64",
     "win32-arm64",
@@ -51,8 +50,17 @@ def _native_machine() -> str:
 
             value = ctypes.c_int()
             size = ctypes.c_size_t(ctypes.sizeof(value))
-            if ctypes.CDLL(None).sysctlbyname(b"sysctl.proc_translated", ctypes.byref(value),
-                                              ctypes.byref(size), None, 0) == 0 and value.value == 1:
+            if (
+                ctypes.CDLL(None).sysctlbyname(
+                    b"sysctl.proc_translated",
+                    ctypes.byref(value),
+                    ctypes.byref(size),
+                    None,
+                    0,
+                )
+                == 0
+                and value.value == 1
+            ):
                 return "arm64"
         except (AttributeError, OSError):
             pass
@@ -63,11 +71,16 @@ def _native_machine() -> str:
 
             kernel = ctypes.WinDLL("kernel32", use_last_error=True)
             kernel.GetCurrentProcess.restype = wintypes.HANDLE
-            kernel.IsWow64Process2.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_ushort),
-                                                ctypes.POINTER(ctypes.c_ushort)]
+            kernel.IsWow64Process2.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(ctypes.c_ushort),
+                ctypes.POINTER(ctypes.c_ushort),
+            ]
             kernel.IsWow64Process2.restype = wintypes.BOOL
             process, native = ctypes.c_ushort(), ctypes.c_ushort()
-            if kernel.IsWow64Process2(kernel.GetCurrentProcess(), ctypes.byref(process), ctypes.byref(native)):
+            if kernel.IsWow64Process2(
+                kernel.GetCurrentProcess(), ctypes.byref(process), ctypes.byref(native)
+            ):
                 if native.value == 0xAA64:
                     return "arm64"
                 if native.value == 0x8664:
@@ -207,8 +220,11 @@ def _tar_filter(member, dest: str):
         for path in (placed, target):
             if os.path.commonpath([path, dest]) != dest:
                 raise tarfile.LinkOutsideDestinationError(member, path)
-        return member.replace(deep=False, uid=None, gid=None, uname=None, gname=None, mode=None)
+        return member.replace(
+            deep=False, uid=None, gid=None, uname=None, gname=None, mode=None
+        )
     return tarfile.data_filter(member, dest)
+
 
 def extract_tar(archive: Path | IO[bytes], dest: Path) -> None:
     """Extract a tarball (a path, or an open stream such as a .deb's data.tar)
@@ -219,7 +235,11 @@ def extract_tar(archive: Path | IO[bytes], dest: Path) -> None:
 
     dest.mkdir(parents=True, exist_ok=True)
     real_dest = os.path.realpath(dest)
-    opened = tarfile.open(archive) if isinstance(archive, (str, os.PathLike)) else tarfile.open(fileobj=archive)
+    opened = (
+        tarfile.open(archive)
+        if isinstance(archive, (str, os.PathLike))
+        else tarfile.open(fileobj=archive)
+    )
     with opened as tf:
         tf.extractall(dest, filter=lambda member, path: _tar_filter(member, real_dest))
 
@@ -356,13 +376,35 @@ class Store:
     def published(self, name: str) -> bool:
         return self.entry(name).is_dir()
 
-    def fetch(self, url: str, sha256: str, scratch: Path, progress=None, *, pause_event: threading.Event | None = None) -> Path:
-        tick = (lambda done, total, ranges: progress(done, total)) if progress is not None else None
-        return self.fetch_many([{"url": url, "sha256": sha256}], scratch,
-                               progress=tick, pause_event=pause_event)[0]
+    def fetch(
+        self,
+        url: str,
+        sha256: str,
+        scratch: Path,
+        progress=None,
+        *,
+        pause_event: threading.Event | None = None,
+    ) -> Path:
+        tick = (
+            (lambda done, total, ranges: progress(done, total))
+            if progress is not None
+            else None
+        )
+        return self.fetch_many(
+            [{"url": url, "sha256": sha256}],
+            scratch,
+            progress=tick,
+            pause_event=pause_event,
+        )[0]
 
-    def fetch_many(self, artifacts: list[dict], scratch: Path, *, progress=None,
-                   pause_event: threading.Event | None = None) -> list[Path]:
+    def fetch_many(
+        self,
+        artifacts: list[dict],
+        scratch: Path,
+        *,
+        progress=None,
+        pause_event: threading.Event | None = None,
+    ) -> list[Path]:
         """Fetch a pinned plan with one aggregate progress stream.
 
         Completed archives enter the cache even if a later source pauses.
@@ -388,7 +430,10 @@ class Store:
             sources.append(pinned_source(url, destination, digest))
 
         # Progress keeps the lockfile URL even when the transport is a mirror (#123132).
-        urls = {str(source.dest): artifact["url"] for source, artifact in zip(sources, artifacts)}
+        urls = {
+            str(source.dest): artifact["url"]
+            for source, artifact in zip(sources, artifacts)
+        }
 
         def tick(done, total, ranges):
             if progress is not None:
@@ -401,7 +446,10 @@ class Store:
             for source in sources:
                 if source.dest.is_relative_to(scratch) and source.dest.is_file():
                     self.publish(source.dest.parent, f"fetch-{source.sha256}")
-        return [self.entry(f"fetch-{source.sha256}") / source.dest.name for source in sources]
+        return [
+            self.entry(f"fetch-{source.sha256}") / source.dest.name
+            for source in sources
+        ]
 
     @contextmanager
     def scratch(self):
@@ -437,6 +485,7 @@ class Store:
     def install_lock(self):
         """Serialize writers using the same advisory lock as runtime publication."""
         from pm.filesystem import lock_fd
+
         self.root.mkdir(parents=True, exist_ok=True)
         lock = self.root / ".install.lock"
         fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
@@ -444,7 +493,11 @@ class Store:
             # A second `clawk pm install` behind an sdist build otherwise sits
             # silent for minutes; say what it is waiting on.
             if not lock_fd(fd, wait=True, timeout=2):
-                print(f"waiting for {lock} (another PM operation holds it)", file=sys.stderr, flush=True)
+                print(
+                    f"waiting for {lock} (another PM operation holds it)",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 lock_fd(fd, wait=True)
             yield
         finally:

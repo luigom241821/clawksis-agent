@@ -39,9 +39,14 @@ class _NoopAgent:
         self.context_compressor = None
         self.is_interrupted = False
 
-    def run_conversation(self, user_message, conversation_history=None,
-                         task_id=None, persist_user_message=None,
-                         persist_user_timestamp=None):
+    def run_conversation(
+        self,
+        user_message,
+        conversation_history=None,
+        task_id=None,
+        persist_user_message=None,
+        persist_user_timestamp=None,
+    ):
         return {
             "final_response": "Hello from the agent.",
             "messages": [],
@@ -94,7 +99,9 @@ def _make_voice_source() -> SessionSource:
 
 def _setup_monkeypatches(monkeypatch, tmp_path):
     _install_fake_agent(monkeypatch)
-    (tmp_path / "config.yaml").write_text("agent:\n  model: test-model\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "agent:\n  model: test-model\n", encoding="utf-8"
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.setattr(gateway_run, "_env_path", tmp_path / ".env")
     monkeypatch.setattr(
@@ -102,7 +109,9 @@ def _setup_monkeypatches(monkeypatch, tmp_path):
         "_load_gateway_config",
         lambda: {"agent": {"model": "test-model"}},
     )
-    monkeypatch.setattr(gateway_run, "_resolve_gateway_model", lambda config=None: "test-model")
+    monkeypatch.setattr(
+        gateway_run, "_resolve_gateway_model", lambda config=None: "test-model"
+    )
     monkeypatch.setattr(
         gateway_run,
         "_resolve_runtime_agent_kwargs",
@@ -115,7 +124,10 @@ def _setup_monkeypatches(monkeypatch, tmp_path):
     )
 
     from clawk_cli import tools_config
-    monkeypatch.setattr(tools_config, "_get_platform_tools", lambda user_config, platform_key: {"core"})
+
+    monkeypatch.setattr(
+        tools_config, "_get_platform_tools", lambda user_config, platform_key: {"core"}
+    )
 
 
 def test_run_agent_voice_turn_no_name_error(monkeypatch, tmp_path):
@@ -151,5 +163,3 @@ def test_run_agent_voice_turn_no_name_error(monkeypatch, tmp_path):
 
     result = asyncio.new_event_loop().run_until_complete(_run())
     assert result["final_response"] == "Hello from the agent."
-
-

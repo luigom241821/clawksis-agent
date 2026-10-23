@@ -164,17 +164,24 @@ class _PathReadBudget:
             # lock, close-time checkpoint). Read-only attaches (dashboard routers, status/lookup
             # one-shots) open per request by design and must not trip it.
             handles = sum(
-                1 for member in self._members
+                1
+                for member in self._members
                 if not member.read_only and member._conn is not None
             )
-            warn = (handles > _HANDLES_PER_PATH_WARN and not self._duplicate_handles_warned)
+            warn = (
+                handles > _HANDLES_PER_PATH_WARN and not self._duplicate_handles_warned
+            )
             if warn:
                 self._duplicate_handles_warned = True
                 # Same population as `handles`: the read-only attaches the count skips
                 # must not reappear in the list, or the list no longer explains the number.
-                creation_sites = ", ".join(sorted(
-                    member._creation_site for member in self._members if not member.read_only
-                ))
+                creation_sites = ", ".join(
+                    sorted(
+                        member._creation_site
+                        for member in self._members
+                        if not member.read_only
+                    )
+                )
         if warn:
             # Writer connections cannot be capped; the only bound is not opening
             # redundant handles, so make the duplicate visible before it's an incident.
@@ -187,7 +194,10 @@ class _PathReadBudget:
                 "its own writer connection (read connections are capped at %d "
                 "for the file). A long-lived process should share one handle per path. "
                 "Created at: %s",
-                handles, db.db_path, _READ_POOL_MAX, creation_sites,
+                handles,
+                db.db_path,
+                _READ_POOL_MAX,
+                creation_sites,
             )
 
     def unregister(self, db: "SessionDB") -> None:
@@ -219,12 +229,14 @@ class _PathReadBudget:
     def _acquire_process_permit(self) -> bool:
         # Another thread may take a freed permit first: legitimate loss, no looping.
         return _process_read_permits.acquire(blocking=False) or (
-            _reclaim_idle_read_conn_anywhere() and _process_read_permits.acquire(blocking=False)
+            _reclaim_idle_read_conn_anywhere()
+            and _process_read_permits.acquire(blocking=False)
         )
 
     def _acquire_path_permit(self, requester: "SessionDB") -> bool:
         return self.permits.acquire(blocking=False) or (
-            self.reclaim_idle(exclude=requester) and self.permits.acquire(blocking=False)
+            self.reclaim_idle(exclude=requester)
+            and self.permits.acquire(blocking=False)
         )
 
     def reclaim_idle(self, exclude: "Optional[SessionDB]" = None) -> bool:
@@ -237,7 +249,9 @@ class _PathReadBudget:
 
 # canonical db path -> permits for that file. Weak values: the budget lives only
 # while some SessionDB on the path holds it, so tmp_path churn can't grow this.
-_read_budgets: weakref.WeakValueDictionary[str, _PathReadBudget] = (weakref.WeakValueDictionary())
+_read_budgets: weakref.WeakValueDictionary[str, _PathReadBudget] = (
+    weakref.WeakValueDictionary()
+)
 _read_budgets_lock = threading.Lock()
 
 

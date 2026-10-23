@@ -12,8 +12,16 @@ from utils import fast_safe_load
 @pytest.mark.parametrize("load", [yaml.safe_load, fast_safe_load])
 def test_safe_load_accepts_existing_config_boolean_spellings(load):
     document = "flags: [on, off, yes, no, true, false]\nquoted: ['off', 'yes']\n"
-    expected = {"flags": [True, False, True, False, True, False], "quoted": ["off", "yes"]}
-    for stream in (document, document.encode(), io.StringIO(document), io.BytesIO(document.encode())):
+    expected = {
+        "flags": [True, False, True, False, True, False],
+        "quoted": ["off", "yes"],
+    }
+    for stream in (
+        document,
+        document.encode(),
+        io.StringIO(document),
+        io.BytesIO(document.encode()),
+    ):
         assert load(stream) == expected
     assert load("") is None
 
@@ -33,7 +41,8 @@ def test_safe_load_has_the_c_parser_where_its_wheel_ships():
     import sys
 
     wheel_ships = sys.platform == "darwin" or (
-        sys.platform == "linux" and platform.machine() in {"x86_64", "aarch64", "i686"})
+        sys.platform == "linux" and platform.machine() in {"x86_64", "aarch64", "i686"}
+    )
     if platform.python_implementation() != "CPython" or not wheel_ships:
         pytest.skip("ruamel.yaml.clib ships no wheel for this interpreter or machine")
     import _ruamel_yaml  # the module safe_load's pure=False parser binds to
@@ -57,7 +66,9 @@ def test_safe_dump_honors_the_options_used_by_callers():
     for sort_keys in (False, True):
         loaded = yaml.safe_load(yaml.safe_dump(data, sort_keys=sort_keys))
         assert list(loaded) == (sorted(data) if sort_keys else list(data))
-        assert list(loaded["zebra"]) == (sorted(data["zebra"]) if sort_keys else list(data["zebra"]))
+        assert list(loaded["zebra"]) == (
+            sorted(data["zebra"]) if sort_keys else list(data["zebra"])
+        )
     escaped = yaml.safe_dump(data, allow_unicode=False)
     assert "hé" not in escaped
     assert yaml.safe_load(escaped) == data
@@ -85,7 +96,9 @@ def test_native_yaml11_scalars_and_duplicate_key_policy():
         with pytest.raises(yaml.YAMLError):
             load("model: first\nmodel: second\n")
     # Merge keys override defaults, not duplicates in the mapping itself.
-    merged = yaml.safe_load("defaults: &defaults {enabled: true}\nlocal: {<<: *defaults, enabled: false}\n")
+    merged = yaml.safe_load(
+        "defaults: &defaults {enabled: true}\nlocal: {<<: *defaults, enabled: false}\n"
+    )
     assert merged["local"]["enabled"] is False
 
 
@@ -98,7 +111,9 @@ def test_parallel_calls_do_not_share_parser_or_emitter_state():
         return data
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        assert [data["index"] for data in pool.map(roundtrip, range(32))] == list(range(32))
+        assert [data["index"] for data in pool.map(roundtrip, range(32))] == list(
+            range(32)
+        )
     # A failed parse/dump must not poison the next operation.
     with pytest.raises(yaml.YAMLError):
         yaml.safe_load("key: [unterminated")

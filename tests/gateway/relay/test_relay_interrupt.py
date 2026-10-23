@@ -50,5 +50,3 @@ async def test_interrupt_sets_only_target_session_event(adapter):
 
     assert ev_a.is_set() is True, "target session's interrupt Event must be set"
     assert ev_b.is_set() is False, "sibling session must be untouched"
-
-

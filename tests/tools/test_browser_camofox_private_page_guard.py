@@ -32,7 +32,9 @@ def _block_active(monkeypatch):
 
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
     monkeypatch.setattr(
-        bt_eval_policy, "_camofox_current_page_private_url", lambda tab_id, user_id: PRIVATE_URL
+        bt_eval_policy,
+        "_camofox_current_page_private_url",
+        lambda tab_id, user_id: PRIVATE_URL,
     )
 
 
@@ -40,7 +42,9 @@ def _block_inactive_guard(monkeypatch):
     """SSRF guard inactive (local backend / allow_private_urls)."""
     from tools import browser_tool
 
-    monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: False)
+    monkeypatch.setattr(
+        bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: False
+    )
 
     def fail_probe(tab_id, user_id):
         raise AssertionError("must not probe page URL when the SSRF guard is inactive")
@@ -53,19 +57,32 @@ def _public_page(monkeypatch):
 
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
     monkeypatch.setattr(
-        bt_eval_policy, "_camofox_current_page_private_url", lambda tab_id, user_id: None
+        bt_eval_policy,
+        "_camofox_current_page_private_url",
+        lambda tab_id, user_id: None,
     )
 
 
 @pytest.mark.parametrize(
     ("tool_call", "action_phrase"),
     [
-        (lambda: browser_camofox.camofox_snapshot(task_id="t1"), "read a page snapshot"),
-        (lambda: browser_camofox.camofox_get_images(task_id="t1"), "extract page images"),
-        (lambda: browser_camofox.camofox_vision("what is here?", task_id="t1"), "capture a screenshot"),
+        (
+            lambda: browser_camofox.camofox_snapshot(task_id="t1"),
+            "read a page snapshot",
+        ),
+        (
+            lambda: browser_camofox.camofox_get_images(task_id="t1"),
+            "extract page images",
+        ),
+        (
+            lambda: browser_camofox.camofox_vision("what is here?", task_id="t1"),
+            "capture a screenshot",
+        ),
     ],
 )
-def test_private_page_blocks_camofox_reads(monkeypatch, _session, tool_call, action_phrase):
+def test_private_page_blocks_camofox_reads(
+    monkeypatch, _session, tool_call, action_phrase
+):
     _block_active(monkeypatch)
 
     # Any HTTP call would mean the guard failed to short-circuit before the read.
@@ -89,17 +106,23 @@ def test_private_page_blocks_camofox_reads(monkeypatch, _session, tool_call, act
     [
         (lambda: browser_camofox.camofox_click("@e1", task_id="t1"), "click"),
         (
-            lambda: browser_camofox.camofox_type("@e1", "do-not-send-this", task_id="t1"),
+            lambda: browser_camofox.camofox_type(
+                "@e1", "do-not-send-this", task_id="t1"
+            ),
             "type",
         ),
         (lambda: browser_camofox.camofox_press("Enter", task_id="t1"), "press"),
     ],
 )
-def test_private_page_blocks_camofox_input_actions(monkeypatch, _session, tool_call, action_phrase):
+def test_private_page_blocks_camofox_input_actions(
+    monkeypatch, _session, tool_call, action_phrase
+):
     _block_active(monkeypatch)
 
     def fail_post(*_args, **_kwargs):
-        raise AssertionError("Camofox action HTTP call should not run on a private page")
+        raise AssertionError(
+            "Camofox action HTTP call should not run on a private page"
+        )
 
     monkeypatch.setattr(browser_camofox, "_post", fail_post)
 
@@ -118,7 +141,7 @@ def test_snapshot_still_runs_when_page_is_public(monkeypatch, _session):
     monkeypatch.setattr(
         browser_camofox,
         "_get",
-        lambda path, params=None: {"snapshot": "- heading \"Hi\" [e1]", "refsCount": 1},
+        lambda path, params=None: {"snapshot": '- heading "Hi" [e1]', "refsCount": 1},
     )
 
     out = json.loads(browser_camofox.camofox_snapshot(task_id="t1"))
@@ -162,7 +185,7 @@ def test_guard_inactive_does_not_probe(monkeypatch, _session):
     monkeypatch.setattr(
         browser_camofox,
         "_get",
-        lambda path, params=None: {"snapshot": "- heading \"Hi\" [e1]", "refsCount": 1},
+        lambda path, params=None: {"snapshot": '- heading "Hi" [e1]', "refsCount": 1},
     )
 
     out = json.loads(browser_camofox.camofox_snapshot(task_id="t1"))

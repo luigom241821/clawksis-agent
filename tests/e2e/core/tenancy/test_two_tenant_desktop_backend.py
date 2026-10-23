@@ -43,7 +43,9 @@ def fleet(tmp_path_factory: pytest.TempPathFactory):
         assert t.srv is not None
         t.srv.start()
     home.mkdir(parents=True)
-    H.assert_profiles_root_under(root, home)  # HOME-anchored profile root: prove it is sandboxed first
+    H.assert_profiles_root_under(
+        root, home
+    )  # HOME-anchored profile root: prove it is sandboxed first
     for t in tenants.values():
         H.write_tenant_home(t)
     backends: list[H.ServeBackend] = []
@@ -52,7 +54,9 @@ def fleet(tmp_path_factory: pytest.TempPathFactory):
     finally:
         for b in backends:
             b.close()
-            assert not H.pid_alive(b.proc.pid), f"serve pid {b.proc.pid} survived teardown"
+            assert not H.pid_alive(b.proc.pid), (
+                f"serve pid {b.proc.pid} survived teardown"
+            )
         for t in tenants.values():
             assert t.srv is not None
             t.srv.stop()
@@ -63,53 +67,86 @@ def _profile_param(name: str) -> dict[str, str]:
 
 
 def _files(tenants: dict[str, H.Tenant]) -> dict[str, bytes]:
-    return {f"{t.name}/{n}": (t.home / n).read_bytes() for t in tenants.values() for n in ("config.yaml", ".env")}
+    return {
+        f"{t.name}/{n}": (t.home / n).read_bytes()
+        for t in tenants.values()
+        for n in ("config.yaml", ".env")
+    }
 
 
 def _changed(before: dict[str, bytes], after: dict[str, bytes]) -> set[str]:
     return {k for k in after if before.get(k) != after[k]}
 
 
-def _expect_only(before: dict[str, bytes], after: dict[str, bytes], expected: set[str], what: str) -> None:
+def _expect_only(
+    before: dict[str, bytes], after: dict[str, bytes], expected: set[str], what: str
+) -> None:
     if (changed := _changed(before, after)) != expected:
-        raise H.LaunchProfileBleed(f"{what} changed {sorted(changed)}, expected only {sorted(expected)}")
+        raise H.LaunchProfileBleed(
+            f"{what} changed {sorted(changed)}, expected only {sorted(expected)}"
+        )
 
 
-def _rpc_leaks(b: H.ServeBackend, owners: dict[str, str], tenants: dict[str, H.Tenant]) -> list[str]:
+def _rpc_leaks(
+    b: H.ServeBackend, owners: dict[str, str], tenants: dict[str, H.Tenant]
+) -> list[str]:
     """Replies/events bound to a session must carry no other tenant's canary."""
     out: list[str] = []
     for m in b.seen:
-        sid = (m.get("params") or {}).get("session_id") or (m.get("result") or {}).get("session_id")
+        sid = (m.get("params") or {}).get("session_id") or (m.get("result") or {}).get(
+            "session_id"
+        )
         if sid in owners:
             label = f"rpc {m.get('method') or 'reply'}:{(m.get('params') or {}).get('type', '')} for {owners[sid]}"
             out += H.text_leaks(label, json.dumps(m), tenants, owner=owners[sid])
     return out
 
 
-def _start(root: Path, tenants: dict[str, H.Tenant], backends: list[H.ServeBackend]) -> H.ServeBackend:
+def _start(
+    root: Path, tenants: dict[str, H.Tenant], backends: list[H.ServeBackend]
+) -> H.ServeBackend:
     for t in tenants.values():
-        H.seed_due_cron_job(t, root / "home")  # due now: the backend's first cron tick fires it
+        H.seed_due_cron_job(
+            t, root / "home"
+        )  # due now: the backend's first cron tick fires it
     b = H.ServeBackend(root / "home", root / "serve.log")
     backends.append(b)
     return b
 
 
-def _await_cron(tenants: dict[str, H.Tenant], fires: int, log: Path | None = None) -> None:
+def _await_cron(
+    tenants: dict[str, H.Tenant], fires: int, log: Path | None = None
+) -> None:
     try:
-        H.poll(lambda: all(H.cron_requests(t) >= 2 * fires for t in tenants.values()), 150,
-               f"cron fire #{fires} in every profile")
+        H.poll(
+            lambda: all(H.cron_requests(t) >= 2 * fires for t in tenants.values()),
+            150,
+            f"cron fire #{fires} in every profile",
+        )
     except AssertionError as exc:
         # The backend's own log and each tenant's job state are the only evidence of WHICH
         # profile's tick did not fire (or fired and never reached its provider).
         def text(path: Path) -> str:
-            return path.read_text(encoding="utf-8", errors="replace") if path.exists() else "<missing>"
-        state = {n: (H.cron_requests(t), text(t.home / "cron" / "jobs.json")[-1200:]) for n, t in tenants.items()}
+            return (
+                path.read_text(encoding="utf-8", errors="replace")
+                if path.exists()
+                else "<missing>"
+            )
+
+        state = {
+            n: (H.cron_requests(t), text(t.home / "cron" / "jobs.json")[-1200:])
+            for n, t in tenants.items()
+        }
         tail = text(log)[-12000:] if log is not None else ""
-        raise AssertionError(f"{exc}\nper-profile (cron requests, jobs.json tail): {state}\n"
-                             f"--- serve.log tail ---\n{tail}") from None
+        raise AssertionError(
+            f"{exc}\nper-profile (cron requests, jobs.json tail): {state}\n"
+            f"--- serve.log tail ---\n{tail}"
+        ) from None
 
 
-def test_desktop_backend_never_crosses_tenants(fleet, request: pytest.FixtureRequest) -> None:
+def test_desktop_backend_never_crosses_tenants(
+    fleet, request: pytest.FixtureRequest
+) -> None:
     root, tenants, backends = fleet
 
     # Phase 1: one backend, three profile sessions, interleaved turns, one cron fire per profile.
@@ -121,7 +158,9 @@ def test_desktop_backend_never_crosses_tenants(fleet, request: pytest.FixtureReq
         res = b.ok("session.create", _profile_param(name))
         sids[name], stored[name] = res["session_id"], res["stored_session_id"]
         if res["info"]["model"] != tenants[name].model:
-            raise H.LaunchProfileBleed(f"session.create for {name} reports model {res['info']['model']!r}")
+            raise H.LaunchProfileBleed(
+                f"session.create for {name} reports model {res['info']['model']!r}"
+            )
     owners = {sid: name for name, sid in sids.items()}
     for name in ("alpha", "default", "beta", "alpha", "beta"):
         b.turn(sids[name], f"turn for {name}")
@@ -132,20 +171,41 @@ def test_desktop_backend_never_crosses_tenants(fleet, request: pytest.FixtureReq
     for name, t in tenants.items():
         new_cwd = root / f"work2-{name}-{t.tag}"
         new_cwd.mkdir()
-        t.extra["workdir2"] = str(new_cwd)  # the live session may keep its cwd; both dirs are t's own
+        t.extra["workdir2"] = str(
+            new_cwd
+        )  # the live session may keep its cwd; both dirs are t's own
         before = _files(tenants)
-        b.ok("config.set", {"session_id": sids[name], "key": "cwd", "value": str(new_cwd)})
-        _expect_only(before, _files(tenants), {f"{name}/config.yaml"}, f"cwd write for {name}")
+        b.ok(
+            "config.set",
+            {"session_id": sids[name], "key": "cwd", "value": str(new_cwd)},
+        )
+        _expect_only(
+            before, _files(tenants), {f"{name}/config.yaml"}, f"cwd write for {name}"
+        )
     beta = tenants["beta"]
     beta.extra["custom_prompt"] = f"prompt-canary-beta-{beta.tag}"
     before = _files(tenants)
-    b.ok("config.set", {"profile": "beta", "key": "prompt", "value": beta.extra["custom_prompt"]})
-    _expect_only(before, _files(tenants), {"beta/config.yaml"}, "profile-bound prompt write")
+    b.ok(
+        "config.set",
+        {"profile": "beta", "key": "prompt", "value": beta.extra["custom_prompt"]},
+    )
+    _expect_only(
+        before, _files(tenants), {"beta/config.yaml"}, "profile-bound prompt write"
+    )
     alpha = tenants["alpha"]
     alpha.extra["saved_key"] = f"sk-savekey-alpha-{alpha.tag}"
     before = _files(tenants)
-    b.ok("model.save_key", {"session_id": sids["alpha"], "slug": "deepseek", "api_key": alpha.extra["saved_key"]})
-    _expect_only(before, _files(tenants), {"alpha/.env"}, "session-bound model.save_key write")
+    b.ok(
+        "model.save_key",
+        {
+            "session_id": sids["alpha"],
+            "slug": "deepseek",
+            "api_key": alpha.extra["saved_key"],
+        },
+    )
+    _expect_only(
+        before, _files(tenants), {"alpha/.env"}, "session-bound model.save_key write"
+    )
     for name in ("default", "beta", "alpha"):
         b.turn(sids[name], f"after settings for {name}")
     H.check_isolation(tenants, min_snapshots=3, extra=_rpc_leaks(b, owners, tenants))
@@ -154,7 +214,9 @@ def test_desktop_backend_never_crosses_tenants(fleet, request: pytest.FixtureReq
     b.ok("profiles.create", {"name": "gamma"})
     deleted = H.run_clawk(["profile", "delete", "gamma", "--yes"], root / "home")
     assert deleted.returncode == 0, deleted.stderr[-2000:]
-    assert b.proc.pid == pid and b.proc.poll() is None, "profile create/delete replaced the backend"
+    assert b.proc.pid == pid and b.proc.poll() is None, (
+        "profile create/delete replaced the backend"
+    )
     b.turn(sids["alpha"], "after profile churn")
     H.check_isolation(tenants, min_snapshots=3, extra=_rpc_leaks(b, owners, tenants))
 
@@ -163,7 +225,9 @@ def test_desktop_backend_never_crosses_tenants(fleet, request: pytest.FixtureReq
     assert not H.pid_alive(pid), "old backend still alive"
     b = _start(root, tenants, backends)
     for name in ("beta", "default", "alpha"):
-        res: dict[str, Any] = b.ok("session.resume", {"session_id": stored[name], **_profile_param(name)})
+        res: dict[str, Any] = b.ok(
+            "session.resume", {"session_id": stored[name], **_profile_param(name)}
+        )
         sids[name] = res["session_id"]
     owners = {sid: name for name, sid in sids.items()}
     for name in ("beta", "default", "alpha"):

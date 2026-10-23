@@ -51,37 +51,66 @@ def commit(root, message):
 
 def test_discovers_entrypoint_renames_extractions_and_deleted_helpers(audit):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/ancient.py", "def cmd_update():\n    from clawk_constants import first\n")
+    put(
+        root,
+        "clawk_cli/ancient.py",
+        "def cmd_update():\n    from clawk_constants import first\n",
+    )
     first = commit(root, "first updater at an unknown address")
     git(root, "mv", "clawk_cli/ancient.py", "clawk_cli/briefly.py")
     renamed = commit(root, "rename without editing the blob")
-    put(root, "clawk_cli/briefly.py", "from clawk_cli.gone import phase\ndef cmd_update():\n    phase()\n")
-    put(root, "clawk_cli/gone.py", "def phase():\n    from clawk_constants import extracted\n")
+    put(
+        root,
+        "clawk_cli/briefly.py",
+        "from clawk_cli.gone import phase\ndef cmd_update():\n    phase()\n",
+    )
+    put(
+        root,
+        "clawk_cli/gone.py",
+        "def phase():\n    from clawk_constants import extracted\n",
+    )
     extracted = commit(root, "extract a helper under an unrelated filename")
     git(root, "mv", "clawk_cli/gone.py", "clawk_cli/later.py")
-    put(root, "clawk_cli/briefly.py", "from clawk_cli.later import phase\ndef cmd_update():\n    phase()\n")
+    put(
+        root,
+        "clawk_cli/briefly.py",
+        "from clawk_cli.later import phase\ndef cmd_update():\n    phase()\n",
+    )
     commit(root, "rename the extracted helper")
     git(root, "rm", "clawk_cli/briefly.py", "clawk_cli/later.py")
-    put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    from clawk_constants import newest\n")
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        "def cmd_update():\n    from clawk_constants import newest\n",
+    )
     commit(root, "delete every historical filename")
 
     surface = audit.audit_history()
-    assert {("clawk_constants", s) for s in ("first", "extracted", "newest")} <= surface.required.keys()
     assert {
-        "clawk_cli/ancient.py:cmd_update", "clawk_cli/briefly.py:cmd_update"
+        ("clawk_constants", s) for s in ("first", "extracted", "newest")
+    } <= surface.required.keys()
+    assert {
+        "clawk_cli/ancient.py:cmd_update",
+        "clawk_cli/briefly.py:cmd_update",
     } <= surface.sites[("clawk_constants", "first")]
     assert first[:12] in surface.required[("clawk_constants", "first")]
     assert renamed[:12] in surface.required[("clawk_constants", "first")]
     assert extracted[:12] in surface.required[("clawk_constants", "extracted")]
-    assert {
-        "clawk_cli/gone.py:phase", "clawk_cli/later.py:phase"
-    } <= surface.sites[("clawk_constants", "extracted")]
-    assert surface.stats["commits"] == int(git(root, "rev-list", "--count", "origin/main"))
+    assert {"clawk_cli/gone.py:phase", "clawk_cli/later.py:phase"} <= surface.sites[
+        ("clawk_constants", "extracted")
+    ]
+    assert surface.stats["commits"] == int(
+        git(root, "rev-list", "--count", "origin/main")
+    )
     assert surface.stats["complete_history"] is True
     assert surface.stats["history_ref"] == git(root, "rev-parse", "origin/main")
     assert surface.stats["roots"] == [first]
-    assert {"clawk_cli/ancient.py", "clawk_cli/briefly.py"} <= set(surface.stats["entrypoint_paths"])
-    assert {"clawk_cli/gone.py", "clawk_cli/later.py"} <= set(surface.stats["files_analyzed"])
+    assert {"clawk_cli/ancient.py", "clawk_cli/briefly.py"} <= set(
+        surface.stats["entrypoint_paths"]
+    )
+    assert {"clawk_cli/gone.py", "clawk_cli/later.py"} <= set(
+        surface.stats["files_analyzed"]
+    )
     assert not any(root.glob("clawk_cli/*gone*"))
     assert audit.audit_tree().required.keys() == {("clawk_constants", "newest")}
 
@@ -111,39 +140,68 @@ def test_all_merge_parents_and_merge_result_but_not_unmerged_branches(audit):
     put(root, path, "def cmd_update():\n    from clawk_constants import merge_only\n")
     merged = commit(root, "updater code created only by merge resolution")
     git(root, "checkout", "-b", "unshipped", base)
-    put(root, path, "def cmd_update():\n    from clawk_constants import never_shipped\n")
+    put(
+        root, path, "def cmd_update():\n    from clawk_constants import never_shipped\n"
+    )
     commit(root, "unmerged branch")
     git(root, "update-ref", "refs/remotes/origin/main", merged)
 
     surface = audit.audit_history()
     assert {s for m, s in surface.required if m == "clawk_constants"} == {
-        "side_only", "main_only", "merge_only"
+        "side_only",
+        "main_only",
+        "merge_only",
     }
     assert merged[:12] in surface.required[("clawk_constants", "merge_only")]
-    assert surface.stats["commits"] == int(git(root, "rev-list", "--count", "origin/main"))
+    assert surface.stats["commits"] == int(
+        git(root, "rev-list", "--count", "origin/main")
+    )
 
 
 def test_deleted_siblings_and_renamed_seed_helper_are_not_tied_to_head(audit):
     root = audit.REPO_ROOT
     put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    pass\n")
-    put(root, "clawk_cli/old_support.py", "def old_phase():\n    from clawk_constants import before_rename\n")
+    put(
+        root,
+        "clawk_cli/old_support.py",
+        "def old_phase():\n    from clawk_constants import before_rename\n",
+    )
     commit(root, "support before its known name")
     git(root, "mv", "clawk_cli/old_support.py", "clawk_cli/post_update.py")
-    put(root, "clawk_cli/update_cmd_removed.py", "def phase():\n    from clawk_constants import deleted_sibling\n")
+    put(
+        root,
+        "clawk_cli/update_cmd_removed.py",
+        "def phase():\n    from clawk_constants import deleted_sibling\n",
+    )
     commit(root, "known helper and temporary extraction")
     git(root, "rm", "clawk_cli/post_update.py", "clawk_cli/update_cmd_removed.py")
     commit(root, "remove both helpers")
     surface = audit.audit_history()
-    assert {("clawk_constants", s) for s in ("before_rename", "deleted_sibling")} <= surface.required.keys()
-    assert "clawk_cli/old_support.py:old_phase" in surface.sites[("clawk_constants", "before_rename")]
+    assert {
+        ("clawk_constants", s) for s in ("before_rename", "deleted_sibling")
+    } <= surface.required.keys()
+    assert (
+        "clawk_cli/old_support.py:old_phase"
+        in surface.sites[("clawk_constants", "before_rename")]
+    )
     assert not audit.audit_tree().required
 
 
-def test_shallow_clone_refuses_freeze_without_overwriting_and_tree_still_works(audit, tmp_path, monkeypatch, capsys):
+def test_shallow_clone_refuses_freeze_without_overwriting_and_tree_still_works(
+    audit, tmp_path, monkeypatch, capsys
+):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/unknown.py", "def cmd_update():\n    from clawk_constants import old\n")
+    put(
+        root,
+        "clawk_cli/unknown.py",
+        "def cmd_update():\n    from clawk_constants import old\n",
+    )
     commit(root, "historical contract")
-    put(root, "clawk_cli/unknown.py", "def cmd_update():\n    from clawk_constants import current\n")
+    put(
+        root,
+        "clawk_cli/unknown.py",
+        "def cmd_update():\n    from clawk_constants import current\n",
+    )
     commit(root, "current contract")
     clone = tmp_path / "shallow"
     git(root, "clone", "--depth=1", root.as_uri(), str(clone))
@@ -163,25 +221,41 @@ def test_shallow_clone_refuses_freeze_without_overwriting_and_tree_still_works(a
 
 def test_freeze_requires_cutoff_and_keeps_only_shipped_loads(audit, tmp_path, capsys):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/update_cmd.py", """def cmd_update():
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        """def cmd_update():
     from clawk_constants import old_only, bare_then_guarded
     try:
         from clawk_constants import guarded_then_bare, always_guarded
     except ImportError:
         pass
-""")
+""",
+    )
     commit(root, "not a tag, still a shipped updater")
-    put(root, "clawk_cli/update_cmd.py", """def cmd_update():
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        """def cmd_update():
     from clawk_constants import guarded_then_bare
     try:
         from clawk_constants import bare_then_guarded, always_guarded
     except ImportError:
         pass
-""")
+""",
+    )
     cutoff = commit(root, "last updater before the PM migration")
-    put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    from clawk_constants import after_cutoff\n")
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        "def cmd_update():\n    from clawk_constants import after_cutoff\n",
+    )
     commit(root, "origin/main has advanced beyond the contract cutoff")
-    put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    from clawk_constants import uncommitted\n")
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        "def cmd_update():\n    from clawk_constants import uncommitted\n",
+    )
     output = tmp_path / "history.json"
     output.write_text("do not overwrite without a cutoff", encoding="utf-8")
     with pytest.raises(SystemExit) as failure:
@@ -194,7 +268,8 @@ def test_freeze_requires_cutoff_and_keeps_only_shipped_loads(audit, tmp_path, ca
     frozen = json.loads(output.read_text())
     assert set(frozen["bare"]) == {
         "clawk_constants::old_only",
-        "clawk_constants::bare_then_guarded", "clawk_constants::guarded_then_bare",
+        "clawk_constants::bare_then_guarded",
+        "clawk_constants::guarded_then_bare",
     }
     assert frozen["guarded_only"] == ["clawk_constants::always_guarded"]
     assert frozen["stats"]["mode"] == "history"
@@ -202,7 +277,9 @@ def test_freeze_requires_cutoff_and_keeps_only_shipped_loads(audit, tmp_path, ca
     assert frozen["stats"]["complete_history"] is True
 
 
-@pytest.mark.parametrize("malformed", [b"def cmd_update(:\n", b"def cmd_update():\n    # \xff\n    pass\n"])
+@pytest.mark.parametrize(
+    "malformed", [b"def cmd_update(:\n", b"def cmd_update():\n    # \xff\n    pass\n"]
+)
 def test_malformed_historical_entrypoint_fails_closed(audit, malformed):
     root = audit.REPO_ROOT
     target = root / "forgotten.py"
@@ -216,19 +293,26 @@ def test_malformed_historical_entrypoint_fails_closed(audit, malformed):
 
 def test_committed_merge_conflict_audits_both_arms_and_records_recovery(audit):
     root = audit.REPO_ROOT
-    put(root, "old.py", """<<<<<<< HEAD
+    put(
+        root,
+        "old.py",
+        """<<<<<<< HEAD
 def cmd_update():
     from clawk_constants import ours
 =======
 def cmd_update():
     from clawk_constants import theirs
 >>>>>>> incoming
-""")
+""",
+    )
     commit(root, "accidentally committed conflict")
     put(root, "old.py", "def cmd_update():\n    pass\n")
     commit(root, "fix conflict")
     surface = audit.audit_history()
-    assert {("clawk_constants", "ours"), ("clawk_constants", "theirs")} <= surface.required.keys()
+    assert {
+        ("clawk_constants", "ours"),
+        ("clawk_constants", "theirs"),
+    } <= surface.required.keys()
     assert any("old.py" in recovery for recovery in surface.parse_recoveries)
 
 
@@ -242,12 +326,17 @@ def test_identical_blobs_have_path_specific_relative_imports_and_seed_roles(audi
     surface = audit.audit_history()
     assert ("clawk_cli.constants", "important") in surface.required
     assert ("pm.constants", "important") in surface.required
-    assert surface.sites[("clawk_constants", "helper_only")] == {"clawk_cli/post_update.py:unrelated"}
+    assert surface.sites[("clawk_constants", "helper_only")] == {
+        "clawk_cli/post_update.py:unrelated"
+    }
 
 
 def test_only_swallowed_matching_load_failures_are_guarded(audit):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/update_cmd.py", """def cmd_update():
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        """def cmd_update():
     import sys
     try:
         from clawk_constants import wrong_exception
@@ -266,16 +355,23 @@ def test_only_swallowed_matching_load_failures_are_guarded(audit):
         getattr(module, "optional")
     except AttributeError:
         pass
-""")
+""",
+    )
     commit(root, "exception boundaries")
     surface = audit.audit_history()
     assert surface.guarded_only == {("clawk_constants", "optional")}
-    assert {("clawk_constants", s) for s in ("wrong_exception", "name_not_module", "reraised")} <= surface.required.keys()
+    assert {
+        ("clawk_constants", s)
+        for s in ("wrong_exception", "name_not_module", "reraised")
+    } <= surface.required.keys()
 
 
 def test_suppress_context_guards_like_a_swallowing_except(audit):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/update_cmd.py", """import contextlib
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        """import contextlib
 from contextlib import suppress
 
 
@@ -286,28 +382,44 @@ def cmd_update():
         from clawk_constants import via_qualified_suppress
     with suppress(AttributeError):
         from clawk_constants import wrong_suppress
-""")
+""",
+    )
     commit(root, "suppress boundaries")
     surface = audit.audit_history()
-    assert {("clawk_constants", "via_suppress"), ("clawk_constants", "via_qualified_suppress")} <= surface.guarded_only
+    assert {
+        ("clawk_constants", "via_suppress"),
+        ("clawk_constants", "via_qualified_suppress"),
+    } <= surface.guarded_only
     assert ("clawk_constants", "wrong_suppress") in surface.required.keys()
 
 
 def test_lazy_module_facade_follows_called_helper_not_unrelated_commands(audit):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/entry.py", """def _m():
+    put(
+        root,
+        "clawk_cli/entry.py",
+        """def _m():
     from clawk_cli import main
     return main
 
 def cmd_update():
     _m().phase()
-""")
-    put(root, "clawk_cli/main.py", """from clawk_cli.gone import phase as phase
+""",
+    )
+    put(
+        root,
+        "clawk_cli/main.py",
+        """from clawk_cli.gone import phase as phase
 
 def unrelated_command():
     from clawk_constants import not_an_updater_load
-""")
-    put(root, "clawk_cli/gone.py", "def phase():\n    from clawk_constants import actual_helper_load\n")
+""",
+    )
+    put(
+        root,
+        "clawk_cli/gone.py",
+        "def phase():\n    from clawk_constants import actual_helper_load\n",
+    )
     commit(root, "lazy facade and re-exported helper")
     surface = audit.audit_history()
     assert ("clawk_constants", "actual_helper_load") in surface.required
@@ -316,7 +428,10 @@ def unrelated_command():
 
 def test_resolver_requires_a_module_binding_not_a_nested_name(audit):
     root = audit.REPO_ROOT
-    put(root, "clawk_constants.py", """def owner():
+    put(
+        root,
+        "clawk_constants.py",
+        """def owner():
     from pathlib import Path as local_import
     local_assignment = 1
     def local_function():
@@ -329,7 +444,8 @@ class Owner:
 if True:
     from pathlib import Path as exported
     value = 1
-""")
+""",
+    )
     for symbol in ("local_import", "local_assignment", "local_function", "method"):
         assert not audit.resolve_in_tree("clawk_constants", symbol, root)[0], symbol
     for symbol in ("owner", "Owner", "exported", "value"):
@@ -337,7 +453,8 @@ if True:
 
 
 def test_same_named_functions_keep_requirements_from_every_definition(audit):
-    result = audit.analyse("""class First:
+    result = audit.analyse(
+        """class First:
     def phase(self):
         from clawk_constants import first
 
@@ -355,29 +472,64 @@ else:
 def cmd_update():
     Second().phase()
     platform_phase()
-""", "clawk_cli/update_cmd.py", entrypoints=True)
+""",
+        "clawk_cli/update_cmd.py",
+        entrypoints=True,
+    )
     assert {r.symbol for r in result.requirements} == {
-        "first", "second", "platform_a", "platform_b",
+        "first",
+        "second",
+        "platform_a",
+        "platform_b",
     }
 
 
-def test_reviewed_dynamic_loads_survive_history_freeze_within_cutoff(audit, monkeypatch):
+def test_reviewed_dynamic_loads_survive_history_freeze_within_cutoff(
+    audit, monkeypatch
+):
     root = audit.REPO_ROOT
-    put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    from clawk_constants import anchor\n")
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        "def cmd_update():\n    from clawk_constants import anchor\n",
+    )
     witness = commit(root, "module-object call manually reviewed")
-    put(root, "clawk_cli/update_cmd.py", "def cmd_update():\n    from clawk_constants import later\n")
+    put(
+        root,
+        "clawk_cli/update_cmd.py",
+        "def cmd_update():\n    from clawk_constants import later\n",
+    )
     later = commit(root, "module-object call after the contract cutoff")
-    monkeypatch.setattr(audit, "REVIEWED_DYNAMIC_LOADS", (
-        ("clawk_constants", "dynamic", witness[:12], "clawk_cli/update_cmd.py:cmd_update"),
-        ("clawk_constants", "after_cutoff", later[:12], "clawk_cli/update_cmd.py:cmd_update"),
-    ))
+    monkeypatch.setattr(
+        audit,
+        "REVIEWED_DYNAMIC_LOADS",
+        (
+            (
+                "clawk_constants",
+                "dynamic",
+                witness[:12],
+                "clawk_cli/update_cmd.py:cmd_update",
+            ),
+            (
+                "clawk_constants",
+                "after_cutoff",
+                later[:12],
+                "clawk_cli/update_cmd.py:cmd_update",
+            ),
+        ),
+    )
     surface = audit.audit_history(witness)
     assert surface.required[("clawk_constants", "dynamic")] == {witness[:12]}
     assert surface.kinds[("clawk_constants", "dynamic")] == {"reviewed-module-call"}
-    assert surface.sites[("clawk_constants", "dynamic")] == {"clawk_cli/update_cmd.py:cmd_update"}
+    assert surface.sites[("clawk_constants", "dynamic")] == {
+        "clawk_cli/update_cmd.py:cmd_update"
+    }
     assert ("clawk_constants", "dynamic") not in surface.guarded_only
     assert ("clawk_constants", "after_cutoff") not in surface.required
     output = root / "history.json"
     assert audit.main(["--ref", witness, "--history", "--freeze", str(output)]) == 0
     frozen = json.loads(output.read_text())
-    assert set(frozen["bare"]) == {"clawk_constants::anchor", "clawk_constants::dynamic"}
+    assert set(frozen["bare"]) == {
+        "clawk_constants::anchor",
+        "clawk_constants::dynamic",
+    }

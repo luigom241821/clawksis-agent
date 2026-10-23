@@ -61,7 +61,6 @@ class TestToolCallStripping:
         for out in (_strip_reasoning_tags(text), strip_think_blocks(None, text)):
             assert out.strip() == "Waiting."
 
-
     def test_empty_string(self):
         assert _strip_reasoning_tags("") == ""
 
@@ -71,14 +70,25 @@ class TestToolCallStripping:
         [
             (_CUT_FRAGMENT, "Both gates started."),
             (_CUT_FRAGMENT.split("\n", 1)[1], ""),
-            (_CUT_FRAGMENT + "\nThird line must survive.",
-             "Both gates started.\nThird line must survive."),
+            (
+                _CUT_FRAGMENT + "\nThird line must survive.",
+                "Both gates started.\nThird line must survive.",
+            ),
             ("Waiting.\n<tool_call>process_manage", "Waiting."),
-            ("Done.\nprocess_manage<arg_key>action</arg_key><arg_value>wait</arg_value>", "Done."),
+            (
+                "Done.\nprocess_manage<arg_key>action</arg_key><arg_value>wait</arg_value>",
+                "Done.",
+            ),
             ("Hi.\nterminal<arg_key>command</arg_key><arg_value>ls -la", "Hi."),
         ],
-        ids=["original-fragment", "fragment-only", "prose-after-fragment", "unclosed-call",
-             "name-prefixed-fragment", "name-prefixed-fragment-cut-value"],
+        ids=[
+            "original-fragment",
+            "fragment-only",
+            "prose-after-fragment",
+            "unclosed-call",
+            "name-prefixed-fragment",
+            "name-prefixed-fragment-cut-value",
+        ],
     )
     def test_cut_tool_call_stripped_to_visible_prefix(self, stripper, text, expected):
         """A cut call is unrecoverable, but unrelated prose must not be lost."""
@@ -95,8 +105,10 @@ class TestToolCallStripping:
         assert stripper(text) == text
 
     def test_complete_block_and_inline_prose_mentions_untouched(self):
-        for out in (_strip_reasoning_tags(_COMPLETE_WITH_PROSE),
-                    strip_think_blocks(None, _COMPLETE_WITH_PROSE)):
+        for out in (
+            _strip_reasoning_tags(_COMPLETE_WITH_PROSE),
+            strip_think_blocks(None, _COMPLETE_WITH_PROSE),
+        ):
             assert "Use <function> in JS. The arg_key field maps to arg_value." in out
             assert out.rstrip().endswith("Done.")
             assert "<tool_call>" not in out

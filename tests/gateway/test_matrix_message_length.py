@@ -1,6 +1,5 @@
 """Tests for Matrix outbound message length configuration (#53026)."""
 
-
 from gateway.config import PlatformConfig
 
 
@@ -20,7 +19,6 @@ def _make_adapter(**extra):
 
 
 class TestMatrixMaxMessageLength:
-
     def test_extra_override(self):
         adapter = _make_adapter(max_message_length=12000)
         assert adapter.max_message_length == 12000
@@ -30,5 +28,3 @@ class TestMatrixMaxMessageLength:
         monkeypatch.setenv("MATRIX_MAX_MESSAGE_LENGTH", "9000")
         adapter = _make_adapter()
         assert adapter.max_message_length == 9000
-
-

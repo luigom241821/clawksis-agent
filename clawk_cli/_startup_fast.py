@@ -94,8 +94,11 @@ def ensure_project_root_on_path() -> None:
     """Put the project root at sys.path[0], deduping realpath-equivalents."""
     project_root = project_root_str()
     normalized_root = os.path.normcase(_realpath_or_self(project_root))
-    sys.path[:] = [entry for entry in sys.path
-                   if not entry or os.path.normcase(_realpath_or_self(entry)) != normalized_root]
+    sys.path[:] = [
+        entry
+        for entry in sys.path
+        if not entry or os.path.normcase(_realpath_or_self(entry)) != normalized_root
+    ]
     sys.path.insert(0, project_root)
 
 
@@ -150,10 +153,13 @@ def container_mode_may_be_active() -> bool:
         if os.path.exists(os.path.join(clawk_home, ".container-mode")):
             return True
         parent_name = os.path.basename(os.path.dirname(os.path.normpath(clawk_home)))
-        return parent_name != "profiles" and active_profile_may_override_home(clawk_home)
+        return parent_name != "profiles" and active_profile_may_override_home(
+            clawk_home
+        )
     default_home = _default_home()
     return active_profile_may_override_home(default_home) or os.path.exists(
-        os.path.join(default_home, ".container-mode"))
+        os.path.join(default_home, ".container-mode")
+    )
 
 
 def read_openai_version() -> str | None:
@@ -216,7 +222,11 @@ def print_fast_version_info(*, check_updates: bool = True) -> None:
         print(f"Install method: {install_method}")
     print(f"Python: {sys.version.split()[0]}")
     openai_version = read_openai_version()
-    print(f"OpenAI SDK: {openai_version}" if openai_version else "OpenAI SDK: Not installed")
+    print(
+        f"OpenAI SDK: {openai_version}"
+        if openai_version
+        else "OpenAI SDK: Not installed"
+    )
     if not check_updates:
         return
     # Synchronous update status — bounded by check_for_updates' own subprocess/network timeouts
@@ -228,13 +238,17 @@ def print_fast_version_info(*, check_updates: bool = True) -> None:
         status = check_for_updates(passive=True)
         behind = status.get("behind")
         if status.get("rollback"):
-            print(f"Newer than stable release v{status.get('sourceVersion')} — "
-                  f"'{recommended_update_command()}' moves back to it")
+            print(
+                f"Newer than stable release v{status.get('sourceVersion')} — "
+                f"'{recommended_update_command()}' moves back to it"
+            )
         elif behind == UPDATE_AVAILABLE_NO_COUNT:
             print(f"Update available — run '{recommended_update_command()}'")
         elif behind and behind > 0:
             commits_word = "commit" if behind == 1 else "commits"
-            print(f"Update available: {behind} {commits_word} behind — run '{recommended_update_command()}'")
+            print(
+                f"Update available: {behind} {commits_word} behind — run '{recommended_update_command()}'"
+            )
         elif behind == 0:
             print("Up to date")
     except Exception:

@@ -50,6 +50,7 @@ from gateway.session import AsyncSessionStore, SessionEntry
 # 1. Classifier/resolver coherence (the falsely-acked-loss class)
 # ---------------------------------------------------------------------------
 
+
 def _entry(session_id, session_key="agent:main:slack:dm:U1"):
     return SessionEntry(
         session_key=session_key,
@@ -92,9 +93,7 @@ async def test_resolver_retargets_idle_ended_pin_to_current_session(end_reason):
         }
     )
 
-    resolved = await runner._resolve_async_delegation_session(
-        current, "sess_idle"
-    )
+    resolved = await runner._resolve_async_delegation_session(current, "sess_idle")
 
     assert resolved is current, (
         f"end_reason={end_reason!r}: idle-ended pin must retarget to the "
@@ -117,9 +116,7 @@ async def test_resolver_still_drops_user_boundary_ends(end_reason):
             }
         }
     )
-    resolved = await runner._resolve_async_delegation_session(
-        current, "sess_closed"
-    )
+    resolved = await runner._resolve_async_delegation_session(current, "sess_closed")
     assert resolved is None
 
 
@@ -158,6 +155,7 @@ async def test_classifier_and_resolver_agree_on_ended_parents(end_reason):
 # 2. Disconnect budget threading (adapter -> transport drain)
 # ---------------------------------------------------------------------------
 
+
 def test_drain_grace_uses_threaded_remaining_budget(monkeypatch):
     """An explicit remaining budget must override the env-mirrored default:
     the adapter has already spent monitor/go_idle time out of the runner's
@@ -172,8 +170,6 @@ def test_drain_grace_uses_threaded_remaining_budget(monkeypatch):
     assert _disconnect_drain_grace_s(0.0) == 0.0
     # Partial remainder: drain gets exactly the surplus.
     assert _disconnect_drain_grace_s(reserved + 1.0) == pytest.approx(1.0)
-
-
 
 
 @pytest.mark.asyncio
@@ -241,6 +237,7 @@ async def test_adapter_disconnect_tolerates_legacy_transport_signature():
 # 3. _request_response vs disconnect race
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_request_response_fails_fast_when_closing():
     """A request racing teardown must fail immediately instead of
@@ -254,14 +251,13 @@ async def test_request_response_fails_fast_when_closing():
     result = await transport._request_response({"a": 1})
 
     assert result == {"success": False, "error": "relay transport closed"}
-    assert not transport._pending, (
-        "no future may be registered once _closing is set"
-    )
+    assert not transport._pending, "no future may be registered once _closing is set"
 
 
 # ---------------------------------------------------------------------------
 # 4. scope_id in fallback source reconstruction
 # ---------------------------------------------------------------------------
+
 
 def _fallback_runner():
     runner = object.__new__(GatewayRunner)
@@ -315,6 +311,7 @@ def test_fallback_source_reconstruction_without_scope_still_routes():
 # 5. Cancellation-safe pending-future failure (round-3 finding 1)
 # ---------------------------------------------------------------------------
 
+
 def _bare_transport():
     t = object.__new__(WebSocketRelayTransport)
     t._closing = False
@@ -367,6 +364,7 @@ async def test_disconnect_idempotent_second_pass():
 # ---------------------------------------------------------------------------
 # 6. Durable routing origin: scope_id survives dispatch -> restart -> replay
 # ---------------------------------------------------------------------------
+
 
 def test_durable_dispatch_persists_and_recovers_scope_id(tmp_path, monkeypatch):
     """End-to-end restart shape: dispatch with a scoped session context bound,
@@ -457,9 +455,7 @@ def test_live_completion_event_carries_scope_id(tmp_path, monkeypatch):
         completion_queue = _Q()
 
     monkeypatch.setattr(ad, "_db_path", lambda: tmp_path / "state.db")
-    monkeypatch.setattr(
-        "tools.process_registry.process_registry", _PR(), raising=False
-    )
+    monkeypatch.setattr("tools.process_registry.process_registry", _PR(), raising=False)
     ad._push_completion_event(record, {"summary": "ok"}, "completed")
     assert captured.get("scope_id") == "G777"
     assert captured.get("user_id") == "U9"

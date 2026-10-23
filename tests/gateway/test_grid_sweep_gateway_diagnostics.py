@@ -1,6 +1,7 @@
 """Code-flow grid sweep (NOUS-368, wave 1): three pre-existing automatic gateway diagnostics that
 bypassed the warning boundary. absent/false = legacy bytes; true suppresses ONLY the diagnostic;
 requested outcomes (an in-chat /restart's own ack, the requested background result) are untouched."""
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ MODES = (None, False, True)
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("setting", MODES)
-async def test_shutdown_notice_to_active_chats_and_home_channel_honors_policy(tmp_path, monkeypatch, setting):
+async def test_shutdown_notice_to_active_chats_and_home_channel_honors_policy(
+    tmp_path, monkeypatch, setting
+):
     _configure(tmp_path, monkeypatch, setting)
     runner, adapter = make_restart_runner()
     source = make_restart_source(thread_id="42")
@@ -37,7 +40,8 @@ async def test_shutdown_notice_to_active_chats_and_home_channel_honors_policy(tm
     runner._running_agents = {session_key: MagicMock()}
     runner._cache_session_source(session_key, source)
     runner.config.platforms[Platform.TELEGRAM].home_channel = HomeChannel(
-        platform=Platform.TELEGRAM, chat_id="home-chat", name="Telegram Home")
+        platform=Platform.TELEGRAM, chat_id="home-chat", name="Telegram Home"
+    )
 
     await runner._notify_active_sessions_of_shutdown()
 
@@ -46,11 +50,15 @@ async def test_shutdown_notice_to_active_chats_and_home_channel_honors_policy(tm
         assert chats == [], adapter.sent_calls
     else:
         assert sorted(chats) == sorted([source.chat_id, "home-chat"])
-        assert all("Clawksis is shutting down" in m for _c, m, _meta in adapter.sent_calls)
+        assert all(
+            "Clawksis is shutting down" in m for _c, m, _meta in adapter.sent_calls
+        )
 
 
 @pytest.mark.asyncio
-async def test_in_chat_restart_ack_to_requester_is_never_suppressed(tmp_path, monkeypatch):
+async def test_in_chat_restart_ack_to_requester_is_never_suppressed(
+    tmp_path, monkeypatch
+):
     _configure(tmp_path, monkeypatch, True)
     runner, adapter = make_restart_runner()
     source = make_restart_source(thread_id="42")
@@ -62,7 +70,8 @@ async def test_in_chat_restart_ack_to_requester_is_never_suppressed(tmp_path, mo
     runner._restart_requested = True
     runner._restart_command_source = restart_source
     runner.config.platforms[Platform.TELEGRAM].home_channel = HomeChannel(
-        platform=Platform.TELEGRAM, chat_id="home-chat", name="Telegram Home")
+        platform=Platform.TELEGRAM, chat_id="home-chat", name="Telegram Home"
+    )
 
     await runner._notify_active_sessions_of_shutdown()
 
@@ -74,15 +83,26 @@ async def test_in_chat_restart_ack_to_requester_is_never_suppressed(tmp_path, mo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("setting", MODES)
-async def test_unauthorized_owner_hint_honors_policy_and_stranger_stays_silent(tmp_path, monkeypatch, setting):
+async def test_unauthorized_owner_hint_honors_policy_and_stranger_stays_silent(
+    tmp_path, monkeypatch, setting
+):
     _configure(tmp_path, monkeypatch, setting)
     runner, adapter = make_restart_runner()
     runner.pairing_store = PairingStore()
     runner.pairing_stores = {}
     runner.config.platforms[Platform.TELEGRAM].home_channel = HomeChannel(
-        platform=Platform.TELEGRAM, chat_id="home-1", name="Ops")
-    runner._hm_report_ignored_dm = GatewayRunner._hm_report_ignored_dm.__get__(runner, GatewayRunner)
-    stranger = SessionSource(platform=Platform.TELEGRAM, chat_id="dm-777", user_id="777", user_name="Eve", chat_type="dm")
+        platform=Platform.TELEGRAM, chat_id="home-1", name="Ops"
+    )
+    runner._hm_report_ignored_dm = GatewayRunner._hm_report_ignored_dm.__get__(
+        runner, GatewayRunner
+    )
+    stranger = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="dm-777",
+        user_id="777",
+        user_name="Eve",
+        chat_type="dm",
+    )
 
     await runner._hm_report_ignored_dm(stranger)
     await runner._hm_report_ignored_dm(stranger)
@@ -95,25 +115,45 @@ async def test_unauthorized_owner_hint_honors_policy_and_stranger_stays_silent(t
 
 def _bg_runner():
     from tests.gateway.test_background_command import _make_runner
+
     return _make_runner()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("setting", MODES)
-async def test_background_task_failure_notice_honors_policy(tmp_path, monkeypatch, setting):
+async def test_background_task_failure_notice_honors_policy(
+    tmp_path, monkeypatch, setting
+):
     _configure(tmp_path, monkeypatch, setting)
     runner = _bg_runner()
     from gateway.platforms.base import BasePlatformAdapter
+
     adapter = MagicMock(spec=BasePlatformAdapter)
     adapter.send = AsyncMock()
-    adapter.emit_warning = BasePlatformAdapter.emit_warning.__get__(adapter, BasePlatformAdapter)
-    adapter.warning_notifications_enabled = BasePlatformAdapter.warning_notifications_enabled.__get__(adapter, BasePlatformAdapter)
+    adapter.emit_warning = BasePlatformAdapter.emit_warning.__get__(
+        adapter, BasePlatformAdapter
+    )
+    adapter.warning_notifications_enabled = (
+        BasePlatformAdapter.warning_notifications_enabled.__get__(
+            adapter, BasePlatformAdapter
+        )
+    )
     adapter.platform = Platform.TELEGRAM
     runner.adapters[Platform.TELEGRAM] = adapter
-    source = SessionSource(platform=Platform.TELEGRAM, user_id="1", chat_id="c1", user_name="u")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, user_id="1", chat_id="c1", user_name="u"
+    )
 
-    with patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}), \
-         patch.object(runner, "_resolve_session_agent_runtime", side_effect=RuntimeError("BG_REAL_CRASH")):
+    with (
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}
+        ),
+        patch.object(
+            runner,
+            "_resolve_session_agent_runtime",
+            side_effect=RuntimeError("BG_REAL_CRASH"),
+        ),
+    ):
         await runner._run_background_task("do the thing", source, "bg_test")
 
     if setting is True:
@@ -126,10 +166,13 @@ async def test_background_task_failure_notice_honors_policy(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_background_task_requested_result_is_never_suppressed(tmp_path, monkeypatch):
+async def test_background_task_requested_result_is_never_suppressed(
+    tmp_path, monkeypatch
+):
     """Control: a successful background task's requested result is delivered under true."""
     _configure(tmp_path, monkeypatch, True)
     from tests.gateway import test_background_command as tbc
+
     # Reuse the existing success-path test body under the suppressing config.
     t = tbc.TestRunBackgroundTask()
     await t.test_successful_task_sends_result()

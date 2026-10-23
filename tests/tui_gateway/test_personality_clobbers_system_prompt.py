@@ -76,7 +76,9 @@ def _make_session(session_id: str):
         "agent": agent,
         "history": [],
         "history_version": 0,
-        "history_lock": MagicMock(__enter__=lambda self: None, __exit__=lambda self, *a: None),
+        "history_lock": MagicMock(
+            __enter__=lambda self: None, __exit__=lambda self, *a: None
+        ),
     }
 
 
@@ -91,18 +93,16 @@ def _run(home: str, session_id: str = ""):
     sid = session_id or "s1"
     session = _make_session(sid)
     with (
-        patch.dict(
-            server._sessions, {sid: session}, clear=False
+        patch.dict(server._sessions, {sid: session}, clear=False),
+        patch.object(
+            server, "_apply_personality_to_session", return_value=(False, None)
         ),
-        patch.object(server, "_apply_personality_to_session", return_value=(False, None)),
         # The handler calls these for the live-session pivot; not under test.
         patch.object(server, "_persist_live_session_runtime"),
         patch.object(server, "_emit"),
     ):
         resp = _set({"key": "personality", "value": "personality_1", "session_id": sid})
     return resp
-
-
 
 
 def test_switching_personality_leaves_no_stale_text(tmp_path, monkeypatch):
@@ -124,10 +124,10 @@ def test_switching_personality_leaves_no_stale_text(tmp_path, monkeypatch):
     # Now switch to a different personality.
     session = _make_session("a")
     with (
-        patch.dict(
-            server._sessions, {"a": session}, clear=False
+        patch.dict(server._sessions, {"a": session}, clear=False),
+        patch.object(
+            server, "_apply_personality_to_session", return_value=(False, None)
         ),
-        patch.object(server, "_apply_personality_to_session", return_value=(False, None)),
         patch.object(server, "_persist_live_session_runtime"),
         patch.object(server, "_emit"),
     ):

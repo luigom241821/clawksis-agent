@@ -47,8 +47,6 @@ def captured_hooks(monkeypatch):
         mgr._hooks = saved
 
 
-
-
 def test_claim_fires_hook(kanban_home, captured_hooks):
     conn = kbc.connect()
     try:
@@ -64,8 +62,6 @@ def test_claim_fires_hook(kanban_home, captured_hooks):
     assert kw["assignee"] == "worker"
     assert "profile_name" in kw
     assert kw["run_id"] is not None
-
-
 
 
 def test_misbehaving_hook_does_not_break_transition(kanban_home, monkeypatch):

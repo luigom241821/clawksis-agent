@@ -4,6 +4,7 @@ Usage:
   python3 evals/session_search_schema/report.py [--label ab]
   python3 evals/session_search_schema/report.py results/ab/*.jsonl
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,8 +19,7 @@ EVAL_DIR = Path(__file__).resolve().parent
 def summarize(files):
     grand = collections.defaultdict(lambda: [0, 0, 0, 0])  # ok, n, tok, calls
     for f in sorted(files):
-        agg = collections.defaultdict(
-            lambda: dict(ok=0, n=0, calls=0, tok=0, bad=0))
+        agg = collections.defaultdict(lambda: dict(ok=0, n=0, calls=0, tok=0, bad=0))
         for line in open(f, encoding="utf-8"):
             try:
                 r = json.loads(line)
@@ -33,8 +33,10 @@ def summarize(files):
             a["tok"] += r["total_tokens"]
             a["bad"] += r["bad_calls"]
             g = grand[r["arm"]]
-            g[0] += r["ok"]; g[1] += 1
-            g[2] += r["total_tokens"]; g[3] += r["n_tool_calls"]
+            g[0] += r["ok"]
+            g[1] += 1
+            g[2] += r["total_tokens"]
+            g[3] += r["n_tool_calls"]
         tasks = sorted({k[0] for k in agg})
         arms = sorted({k[1] for k in agg})
         print("=" * 72)
@@ -58,8 +60,10 @@ def summarize(files):
     print("=" * 72)
     for arm, (ok, n, tok, calls) in sorted(grand.items()):
         if n:
-            print(f"TOTAL {arm}: {ok}/{n} ok   "
-                  f"avg tok/task {tok // n}   avg calls {calls / n:.1f}")
+            print(
+                f"TOTAL {arm}: {ok}/{n} ok   "
+                f"avg tok/task {tok // n}   avg calls {calls / n:.1f}"
+            )
 
 
 def main():
@@ -67,8 +71,7 @@ def main():
     ap.add_argument("files", nargs="*", default=None)
     ap.add_argument("--label", default="ab")
     args = ap.parse_args()
-    files = args.files or glob.glob(
-        str(EVAL_DIR / "results" / args.label / "*.jsonl"))
+    files = args.files or glob.glob(str(EVAL_DIR / "results" / args.label / "*.jsonl"))
     if not files:
         raise SystemExit("no result files found")
     summarize(files)

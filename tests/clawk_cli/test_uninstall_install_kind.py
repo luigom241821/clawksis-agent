@@ -62,7 +62,9 @@ def test_all_refusals_point_at_the_data_mode():
 # ---------------------------------------------------------------------------
 
 
-def _fake_project_root(monkeypatch, tmp_path: Path, *, git: bool, distribution: str | None = None) -> Path:
+def _fake_project_root(
+    monkeypatch, tmp_path: Path, *, git: bool, distribution: str | None = None
+) -> Path:
     root = tmp_path / "clawksis-agent"
     root.mkdir()
     if git:
@@ -70,8 +72,9 @@ def _fake_project_root(monkeypatch, tmp_path: Path, *, git: bool, distribution: 
     if distribution is not None:
         # The code-scoped stamp (see pm.paths.install_stamp_path).
         (root / "install-stamp.json").write_text(
-            json.dumps({"distribution": distribution, "updateMechanism": "external"})
-        , encoding="utf-8")
+            json.dumps({"distribution": distribution, "updateMechanism": "external"}),
+            encoding="utf-8",
+        )
     monkeypatch.setattr(un, "get_project_root", lambda: root)
     return root
 
@@ -156,8 +159,9 @@ def test_run_data_uninstall_works_on_sealed_trees(monkeypatch, tmp_path):
     # The whole point of the data mode: no code-removal gate applies.
     home = _make_home(tmp_path)
     (home / "clawksis-agent" / "install-stamp.json").write_text(
-        json.dumps({"distribution": "nix", "updateMechanism": "external"})
-    , encoding="utf-8")
+        json.dumps({"distribution": "nix", "updateMechanism": "external"}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(un, "get_clawk_home", lambda: home)
     import clawk_cli.gui_uninstall as gu
 
@@ -203,7 +207,9 @@ def test_gui_summary_classifies_the_agent_root(tmp_path, monkeypatch):
     from clawk_cli import steward as st
 
     seen = []
-    monkeypatch.setattr(st, "classify_install", lambda root: seen.append(root) or ("git", True))
+    monkeypatch.setattr(
+        st, "classify_install", lambda root: seen.append(root) or ("git", True)
+    )
     monkeypatch.setattr(gu, "packaged_gui_app_paths", list)
     monkeypatch.setattr(gu, "desktop_userdata_dir", lambda: tmp_path / "none")
 
@@ -220,8 +226,12 @@ def test_gui_summary_classifies_the_agent_root(tmp_path, monkeypatch):
 
 def test_module_entrypoint_routes_data_mode(monkeypatch):
     calls = []
-    monkeypatch.setattr(un, "run_data_uninstall", lambda args: calls.append(("data", args)))
-    monkeypatch.setattr(un, "run_gui_uninstall", lambda args: calls.append(("gui", args)))
+    monkeypatch.setattr(
+        un, "run_data_uninstall", lambda args: calls.append(("data", args))
+    )
+    monkeypatch.setattr(
+        un, "run_gui_uninstall", lambda args: calls.append(("gui", args))
+    )
     monkeypatch.setattr(un, "run_uninstall", lambda args: calls.append(("agent", args)))
 
     assert un.main(["--mode", "data"]) == 0

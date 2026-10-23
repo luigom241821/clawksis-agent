@@ -6,6 +6,7 @@ import re
 
 from .method_ctx import bind_module
 
+
 def _wait_agent(session: dict, rid: str, timeout: float = 30.0) -> dict | None:
     ready = session.get("agent_ready")
     if ready is not None and not ready.wait(timeout=timeout):
@@ -50,23 +51,48 @@ def _wait_agent_for_prompt(session: dict, rid: str, sid: str) -> dict | None:
     start, cap, notified_slow = time.monotonic(), _agent_build_wait_cap(), False
     while not ready.wait(timeout=_AGENT_BUILD_WAIT_SLICE):
         with session["history_lock"]:
-            cancelled = session.get("_turn_cancel_requested") or not session.get("running")
+            cancelled = session.get("_turn_cancel_requested") or not session.get(
+                "running"
+            )
         if cancelled:
             return None
         waited = time.monotonic() - start
         if waited >= cap:
-            return _err(rid, 5032, f"agent initialization timed out after {int(waited)}s — "
-                        "your message was not sent; retry once the session is ready")
+            return _err(
+                rid,
+                5032,
+                f"agent initialization timed out after {int(waited)}s — "
+                "your message was not sent; retry once the session is ready",
+            )
         build_thread = session.get("_agent_build_thread")
-        if build_thread is not None and not build_thread.is_alive() and not ready.is_set():
+        if (
+            build_thread is not None
+            and not build_thread.is_alive()
+            and not ready.is_set()
+        ):
             # _build's finally guarantees ready.set(); dead thread + unset ready = died hard.
-            return _err(rid, 5032, session.get("agent_error") or "agent initialization failed before completing")
+            return _err(
+                rid,
+                5032,
+                session.get("agent_error")
+                or "agent initialization failed before completing",
+            )
         if not notified_slow and waited >= _AGENT_BUILD_SLOW_NOTICE_AFTER:
-            notified_slow = True  # one keyed, replace-in-place notice (toast / status bar)
-            _emit("notification.show", sid, {
-                "text": "Still starting the agent (tool discovery / model setup) — your message will be sent as soon as it's ready.",
-                "level": "info", "kind": "agent", "ttl_ms": None,
-                "key": _AGENT_BUILD_SLOW_NOTICE_KEY, "id": _AGENT_BUILD_SLOW_NOTICE_KEY})
+            notified_slow = (
+                True  # one keyed, replace-in-place notice (toast / status bar)
+            )
+            _emit(
+                "notification.show",
+                sid,
+                {
+                    "text": "Still starting the agent (tool discovery / model setup) — your message will be sent as soon as it's ready.",
+                    "level": "info",
+                    "kind": "agent",
+                    "ttl_ms": None,
+                    "key": _AGENT_BUILD_SLOW_NOTICE_KEY,
+                    "id": _AGENT_BUILD_SLOW_NOTICE_KEY,
+                },
+            )
     if notified_slow:
         _emit("notification.clear", sid, {"key": _AGENT_BUILD_SLOW_NOTICE_KEY})
     return _err(rid, 5032, err) if (err := session.get("agent_error")) else None
@@ -82,10 +108,13 @@ def _bind_build_profile_scopes(profile_home: str | None) -> _TurnScopes | None:
     scopes = _TurnScopes()
     with contextlib.suppress(Exception):
         return _profile_runtime_scope_tokens(profile_home)
-    if profile_home:  # secret/terminal helper failed: keep at least the home + terminal refusal scope
+    if (
+        profile_home
+    ):  # secret/terminal helper failed: keep at least the home + terminal refusal scope
         scopes.home = set_clawk_home_override(profile_home)
         with contextlib.suppress(Exception):
             from tools.terminal_scope import install_profile_terminal_scope
+
             scopes.terminal = install_profile_terminal_scope(Path(profile_home))
     return scopes
 
@@ -100,19 +129,40 @@ def _deferred_build_agent_kwargs(current: dict, session_db) -> dict:
     stored conversation id so the upgrade continues it; a cold deferred resume restores the full persisted
     runtime identity (like the eager resume's overrides splat) so the build can't drop the provider. No
     stored runtime, or an unroutable provider → this session's picked model/effort/tier, else the default."""
-    kw = {"session_db": session_db, "context_cwd_is_launch_artifact": _context_cwd_is_launch_artifact(current),
-          "platform_override": _session_source(current), "cwd_override": _session_cwd(current)}
+    kw = {
+        "session_db": session_db,
+        "context_cwd_is_launch_artifact": _context_cwd_is_launch_artifact(current),
+        "platform_override": _session_source(current),
+        "cwd_override": _session_cwd(current),
+    }
     if resume_sid := current.get("resume_session_id"):
         kw["session_id"] = resume_sid
     resume_overrides = current.get("resume_runtime_overrides")
-    if isinstance(resume_overrides, dict) and resume_overrides and _overrides_have_routable_provider(resume_overrides):
+    if (
+        isinstance(resume_overrides, dict)
+        and resume_overrides
+        and _overrides_have_routable_provider(resume_overrides)
+    ):
         kw.update(resume_overrides)
     else:
         if override := current.get("model_override"):
             kw["model_override"] = override
-        kw.update({k: v for k, v in (("reasoning_config_override", current.get("create_reasoning_override")),
-                                     ("service_tier_override", current.get("create_service_tier_override")))
-                   if v is not None})
+        kw.update(
+            {
+                k: v
+                for k, v in (
+                    (
+                        "reasoning_config_override",
+                        current.get("create_reasoning_override"),
+                    ),
+                    (
+                        "service_tier_override",
+                        current.get("create_service_tier_override"),
+                    ),
+                )
+                if v is not None
+            }
+        )
     return kw
 
 
@@ -123,12 +173,17 @@ def _wire_session_agent(sid: str, key: str, agent) -> bool:
     notify_registered = False
     with contextlib.suppress(Exception):
         from tools.approval import load_permanent_allowlist, register_gateway_notify
+
         register_gateway_notify(key, lambda data: _emit_approval_request(sid, data))
         notify_registered = True
         load_permanent_allowlist()
     _wire_callbacks(sid)
-    with contextlib.suppress(Exception):  # bare agents without the attribute must not break startup
-        agent.background_review_callback = lambda message, _sid=sid: _emit("review.summary", _sid, {"text": str(message)})
+    with contextlib.suppress(
+        Exception
+    ):  # bare agents without the attribute must not break startup
+        agent.background_review_callback = lambda message, _sid=sid: _emit(
+            "review.summary", _sid, {"text": str(message)}
+        )
         agent.memory_notifications = _load_memory_notifications()
     return notify_registered
 
@@ -184,6 +239,7 @@ def _announce_built_agent(sid: str, key: str, current: dict, agent) -> None:
     # Credits notices at session OPEN (notice_callback already wired) so depletion warnings show at "ready".
     with contextlib.suppress(Exception):
         from agent.credits_tracker import seed_credits_at_session_start
+
         seed_credits_at_session_start(agent)
     _start_session_services(sid, key, current)
     info = _session_info(agent, current)
@@ -191,10 +247,14 @@ def _announce_built_agent(sid: str, key: str, current: dict, agent) -> None:
         info["config_warning"] = cfg_warn
         logger.warning(cfg_warn)
     _emit("session.info", sid, info)
-    _schedule_mcp_late_refresh(sid, agent)  # servers slower than the bounded discovery wait land here
+    _schedule_mcp_late_refresh(
+        sid, agent
+    )  # servers slower than the bounded discovery wait land here
 
 
-def _finish_agent_build(sid: str, key: str, current: dict, *, notify_registered: bool, scopes, session_db) -> None:
+def _finish_agent_build(
+    sid: str, key: str, current: dict, *, notify_registered: bool, scopes, session_db
+) -> None:
     """Release build scopes and settle ownership of the late notify registration + dedicated db handle."""
     if scopes is not None:
         _release_build_profile_scopes(scopes)
@@ -205,10 +265,13 @@ def _finish_agent_build(sid: str, key: str, current: dict, *, notify_registered:
     if replaced and notify_registered:
         with contextlib.suppress(Exception):
             from tools.approval import unregister_gateway_notify
+
             unregister_gateway_notify(key)
     # Dedicated profile handle: hand it to the agent that will be torn down, else close it (build
     # failed, or `replaced`: this agent is discarded and _teardown_session never reaches it).
-    if session_db is not None and not _transfer_db_to_agent(None if replaced else current.get("agent"), session_db):
+    if session_db is not None and not _transfer_db_to_agent(
+        None if replaced else current.get("agent"), session_db
+    ):
         with contextlib.suppress(Exception):
             session_db.close()
 
@@ -223,13 +286,16 @@ def _start_agent_build(sid: str, session: dict) -> None:
     # A lazy watch session spectating an in-flight child must stay lazy so the subagent live-mirror keeps
     # flowing (it bails once agent is set); incidental RPCs via _sess() would upgrade it mid-stream.
     if session.get("lazy") and _child_run_active(
-            str(session.get("session_key") or ""), session.get("profile_home") or None):
+        str(session.get("session_key") or ""), session.get("profile_home") or None
+    ):
         return
     with session.setdefault("agent_build_lock", threading.Lock()):
         if ready.is_set() or session.get("agent_build_started"):
             return
         session["agent_build_started"] = True
-        session.pop("lazy", None)  # now genuinely mid-construction: restore the "still starting" eviction exemption
+        session.pop(
+            "lazy", None
+        )  # now genuinely mid-construction: restore the "still starting" eviction exemption
     key = session["session_key"]
 
     def _build() -> None:
@@ -258,11 +324,14 @@ def _start_agent_build(sid: str, session: dict) -> None:
                 session_db = _open_profile_session_db(profile_home)
             try:
                 from tui_gateway.entry import ensure_mcp_discovery_started
+
                 ensure_mcp_discovery_started()
             except Exception:
                 logger.warning("MCP discovery startup failed", exc_info=True)
             try:
-                agent = _make_agent(sid, key, **_deferred_build_agent_kwargs(current, session_db))
+                agent = _make_agent(
+                    sid, key, **_deferred_build_agent_kwargs(current, session_db)
+                )
             finally:
                 _clear_session_context(tokens)
             # Attach atomically against session teardown: ``session.close`` may have popped this
@@ -283,16 +352,32 @@ def _start_agent_build(sid: str, session: dict) -> None:
             _announce_built_agent(sid, key, current, agent)
         except Exception as e:
             from agent.auxiliary_unavailable import ProviderNotConfiguredError
+
             current["agent_error"] = str(e)
             # A client can route "no provider is set up" to its setup flow instead of a dead-end
             # error toast — but only if it can tell. The sentence is for the reader, the code is
             # for the client; older clients keep matching the text.
-            _emit("error", sid, {
-                "message": agent_init_failed_message(e),
-                **({"code": "provider_not_configured"} if isinstance(e, ProviderNotConfiguredError) else {})})
+            _emit(
+                "error",
+                sid,
+                {
+                    "message": agent_init_failed_message(e),
+                    **(
+                        {"code": "provider_not_configured"}
+                        if isinstance(e, ProviderNotConfiguredError)
+                        else {}
+                    ),
+                },
+            )
         finally:
             _finish_agent_build(
-                sid, key, current, notify_registered=notify_registered, scopes=scopes, session_db=session_db)
+                sid,
+                key,
+                current,
+                notify_registered=notify_registered,
+                scopes=scopes,
+                session_db=session_db,
+            )
             ready.set()
 
     build_thread = threading.Thread(target=_build, daemon=True)
@@ -308,15 +393,19 @@ def _sess_nowait(params, rid):
         return (s, None)
     # Stale runtime id (reaped/evicted/TTL): the client should session.resume the STORED id. Logged so
     # "message vanished" reads as "arrived and was rejected".
-    logger.warning("session-scoped RPC rejected: method=%s session_id=%r not in memory "
-                   # A session-scoped RPC hit a runtime id the gateway no longer holds (detached on WS
-                   # disconnect and orphan-reaped, LRU-evicted, or torn down after an idle TTL). The client
-                   # is expected to recover via session.resume on the STORED session id, but a plain
-                   # stale-id send leaves no trace anywhere when the resume never fires — every RPC in this
-                   # class returned a silent 4001. Log it so a "message vanished" report is diagnosable as
-                   # "request arrived and was rejected" instead of "request never arrived" (see #90428).
-                   "(detached/reaped runtime; client should resume the stored session), rid=%r",
-                   _current_rpc_method.get() or "?", sid, rid)
+    logger.warning(
+        "session-scoped RPC rejected: method=%s session_id=%r not in memory "
+        # A session-scoped RPC hit a runtime id the gateway no longer holds (detached on WS
+        # disconnect and orphan-reaped, LRU-evicted, or torn down after an idle TTL). The client
+        # is expected to recover via session.resume on the STORED session id, but a plain
+        # stale-id send leaves no trace anywhere when the resume never fires — every RPC in this
+        # class returned a silent 4001. Log it so a "message vanished" report is diagnosable as
+        # "request arrived and was rejected" instead of "request never arrived" (see #90428).
+        "(detached/reaped runtime; client should resume the stored session), rid=%r",
+        _current_rpc_method.get() or "?",
+        sid,
+        rid,
+    )
     return (None, _err(rid, 4001, "session not found"))
 
 
@@ -334,19 +423,42 @@ def _sess_building(params, rid):
         _start_agent_build(params.get("session_id") or "", s)
     return (None, err) if err else (s, None)
 
+
 def _init_session(
-    sid: str, key: str, agent, history: list, cols: int = 80, cwd: str | None = None,
-    session_db=None, source: str | None = None, profile_home: str | None = None,
-    explicit_cwd: bool = False):
+    sid: str,
+    key: str,
+    agent,
+    history: list,
+    cols: int = 80,
+    cwd: str | None = None,
+    session_db=None,
+    source: str | None = None,
+    profile_home: str | None = None,
+    explicit_cwd: bool = False,
+):
     now = time.time()
     with _sessions_lock:
         _sessions[sid] = {
-            "agent": agent, "session_key": key, "history": history, "history_lock": threading.Lock(),
-            "history_version": 0, "inflight_turn": None, "created_at": now, "last_active": now,
-            "running": False, "attached_images": [], "image_counter": 0, "cwd": cwd or _completion_cwd(),
-            "explicit_cwd": bool(explicit_cwd), "cols": cols, "slash_worker": None,
-            "show_reasoning": _load_show_reasoning(), "source": _resolve_session_source(source),
-            "tool_progress_mode": _load_tool_progress_mode(), "edit_snapshots": {}, "tool_started_at": {},
+            "agent": agent,
+            "session_key": key,
+            "history": history,
+            "history_lock": threading.Lock(),
+            "history_version": 0,
+            "inflight_turn": None,
+            "created_at": now,
+            "last_active": now,
+            "running": False,
+            "attached_images": [],
+            "image_counter": 0,
+            "cwd": cwd or _completion_cwd(),
+            "explicit_cwd": bool(explicit_cwd),
+            "cols": cols,
+            "slash_worker": None,
+            "show_reasoning": _load_show_reasoning(),
+            "source": _resolve_session_source(source),
+            "tool_progress_mode": _load_tool_progress_mode(),
+            "edit_snapshots": {},
+            "tool_started_at": {},
             # Profile-scoped CLAWK_HOME (None = launch); SessionBranch copies the parent's (same state.db).
             "profile_home": profile_home,
             # In-session /model switch, honored on rebuild (/new, resume) — never leaks to siblings via env vars.
@@ -358,7 +470,9 @@ def _init_session(
         _session_todo_state(_sessions[sid])
     _hydrate_session_cwd(sid, key, session_db, profile_home)
     _register_session_cwd(_sessions[sid])
-    _wire_session_agent(sid, key, agent)  # no eager slash-worker pre-warm (see _start_agent_build)
+    _wire_session_agent(
+        sid, key, agent
+    )  # no eager slash-worker pre-warm (see _start_agent_build)
     _start_session_services(sid, key, _sessions.get(sid, {}))
     _emit("session.info", sid, _session_info(agent, _sessions.get(sid, {})))
     _schedule_mcp_late_refresh(sid, agent)
@@ -373,6 +487,7 @@ def _maybe_notify_auto_prune(sid: str, profile_home: str | None) -> None:
     the DB estimate runs off-thread."""
     from clawk_cli import prune_advisor
     from clawk_constants import get_clawk_home
+
     home = Path(profile_home) if profile_home else get_clawk_home()
     if not prune_advisor.notice_due(home, _AUTO_PRUNE_NOTIFIED):
         return
@@ -380,12 +495,15 @@ def _maybe_notify_auto_prune(sid: str, profile_home: str | None) -> None:
 
     def _work() -> None:
         advice = prune_advisor.advise(home)
-        if advice is not None and prune_advisor.should_ask(home) is not None:  # not answered meanwhile
+        if (
+            advice is not None and prune_advisor.should_ask(home) is not None
+        ):  # not answered meanwhile
             _emit("notification.show", sid, prune_advisor.notice_payload(advice))
         else:
             _AUTO_PRUNE_NOTIFIED.pop(str(home), None)
 
     from agent.memory_provider import spawn_context_thread
+
     spawn_context_thread(_work, name="auto-prune-advice").start()
 
 
@@ -439,40 +557,83 @@ def _resolve_checkpoint_hash(mgr, cwd: str, ref: str) -> str:
 # ── Methods: session ─────────────────────────────────────────────────
 
 
-def _lazy_resume_info(cwd: str, *, model: str = "", provider: str = "", profile: str | None = None) -> dict:
+def _lazy_resume_info(
+    cwd: str, *, model: str = "", provider: str = "", profile: str | None = None
+) -> dict:
     """session.info for a not-yet-built session (session.create's shape); tools/skills land with the deferred build."""
     if not model:
-        model, default_provider = _session_default_route({"profile_home": _profile_home(profile)})
+        model, default_provider = _session_default_route(
+            {"profile_home": _profile_home(profile)}
+        )
         provider = provider or default_provider
     return {
-        "cwd": cwd, "branch": git_probe.branch(cwd), "project": _project_info_for_cwd(cwd),
-        **_lazy_info_route({"profile_home": _profile_home(profile)}, {"model": model, "provider": provider} if model else {}),
-        "tools": {}, "skills": {}, "lazy": True,
-        "desktop_contract": DESKTOP_BACKEND_CONTRACT, "profile_name": _response_profile_name(profile),
+        "cwd": cwd,
+        "branch": git_probe.branch(cwd),
+        "project": _project_info_for_cwd(cwd),
+        **_lazy_info_route(
+            {"profile_home": _profile_home(profile)},
+            {"model": model, "provider": provider} if model else {},
+        ),
+        "tools": {},
+        "skills": {},
+        "lazy": True,
+        "desktop_contract": DESKTOP_BACKEND_CONTRACT,
+        "profile_name": _response_profile_name(profile),
     }
 
 
 def _deferred_session_record(
-    session_key: str, *, cols: int, cwd: str, history: list, lease, source: str = "tui",
-    close_on_disconnect: bool = False, display_history_prefix: list | None = None,
-    profile_home: Path | None = None, lazy: bool = False, model_override=None,
-    resume_runtime_overrides: dict | None = None, todo_state: dict | None = None,
-    explicit_cwd: bool = False) -> dict:
+    session_key: str,
+    *,
+    cols: int,
+    cwd: str,
+    history: list,
+    lease,
+    source: str = "tui",
+    close_on_disconnect: bool = False,
+    display_history_prefix: list | None = None,
+    profile_home: Path | None = None,
+    lazy: bool = False,
+    model_override=None,
+    resume_runtime_overrides: dict | None = None,
+    todo_state: dict | None = None,
+    explicit_cwd: bool = False,
+) -> dict:
     """A live-session record whose AIAgent is built later (lazy watch / cold resume) — _init_session's shape minus the agent."""
     now = time.time()
     return {
-        "agent": None, "agent_error": None, "agent_ready": threading.Event(), "attached_images": [],
-        "close_on_disconnect": close_on_disconnect, "active_session_lease": lease, "cols": cols,
-        "created_at": now, "cwd": cwd, "display_history_prefix": display_history_prefix or [],
-        "edit_snapshots": {}, "explicit_cwd": bool(explicit_cwd), "history": history,
-        "history_lock": threading.Lock(), "history_version": 0, "image_counter": 0,
-        "inflight_turn": None, "last_active": now, "lazy": lazy, "model_override": model_override,
+        "agent": None,
+        "agent_error": None,
+        "agent_ready": threading.Event(),
+        "attached_images": [],
+        "close_on_disconnect": close_on_disconnect,
+        "active_session_lease": lease,
+        "cols": cols,
+        "created_at": now,
+        "cwd": cwd,
+        "display_history_prefix": display_history_prefix or [],
+        "edit_snapshots": {},
+        "explicit_cwd": bool(explicit_cwd),
+        "history": history,
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "image_counter": 0,
+        "inflight_turn": None,
+        "last_active": now,
+        "lazy": lazy,
+        "model_override": model_override,
         "pending_title": None,
         "profile_home": str(profile_home) if profile_home is not None else None,
-        "resume_runtime_overrides": resume_runtime_overrides, "resume_session_id": session_key,
-        "running": False, "session_key": session_key, "show_reasoning": _load_show_reasoning(),
-        "slash_worker": None, "source": source, "tool_progress_mode": _load_tool_progress_mode(),
-        "tool_started_at": {}, "todo_state": todo_state,
+        "resume_runtime_overrides": resume_runtime_overrides,
+        "resume_session_id": session_key,
+        "running": False,
+        "session_key": session_key,
+        "show_reasoning": _load_show_reasoning(),
+        "slash_worker": None,
+        "source": source,
+        "tool_progress_mode": _load_tool_progress_mode(),
+        "tool_started_at": {},
+        "todo_state": todo_state,
         "transport": current_transport() or _stdio_transport,
         "auth_user_id": _transport_auth_user_id(current_transport()),
     }
@@ -486,10 +647,14 @@ def _live_profile_matches(session: dict, profile_home) -> bool:
     ``profile_home`` is the launch profile's). ``_ANY_PROFILE`` disables the check."""
     if profile_home is _ANY_PROFILE:
         return True
-    return (session.get("profile_home") or None) == (str(profile_home) if profile_home else None)
+    return (session.get("profile_home") or None) == (
+        str(profile_home) if profile_home else None
+    )
 
 
-def _claim_or_reuse_live(sid: str, session_key: str, record: dict, lease) -> tuple[str, dict] | None:
+def _claim_or_reuse_live(
+    sid: str, session_key: str, record: dict, lease
+) -> tuple[str, dict] | None:
     """Register ``record`` as the live session for ``session_key`` under the resume lock, or — if a
     concurrent resume already won — release ``lease`` and return the winner for the caller to reuse."""
     # A live runtime of the same stored id under ANOTHER profile is not a winner to reuse.
@@ -509,21 +674,31 @@ def _claim_or_reuse_live(sid: str, session_key: str, record: dict, lease) -> tup
         # A PRIOR runtime for this stored id may still be sentinel-parked with a reap Timer armed; cancel +
         # finalize it quietly so the reap doesn't broadcast session.reclaimed (storm).
         _cancel_ws_orphan_reap(sid)
-        stale = _claim_parked_runtimes(session_key, keep_sid=sid, profile_home=profile_home)
-    _finalize_superseded_runtimes(stale)  # slow finalization stays OUTSIDE _session_resume_lock
+        stale = _claim_parked_runtimes(
+            session_key, keep_sid=sid, profile_home=profile_home
+        )
+    _finalize_superseded_runtimes(
+        stale
+    )  # slow finalization stays OUTSIDE _session_resume_lock
     return None
 
 
-def _claim_parked_runtimes(session_key: str, *, keep_sid: str, profile_home=_ANY_PROFILE) -> list[tuple[str, dict]]:
+def _claim_parked_runtimes(
+    session_key: str, *, keep_sid: str, profile_home=_ANY_PROFILE
+) -> list[tuple[str, dict]]:
     """Claim sentinel-parked stale runtimes of ``session_key`` for supersession: cancel their orphan-reap
     Timer and pop them here (under the caller's _session_resume_lock); the caller finalizes after release."""
     stale: list[tuple[str, dict]] = []
     with _sessions_lock:
         candidates = [
-            (old_sid, old) for old_sid, old in list(_sessions.items())
-            if old_sid != keep_sid and not old.get("_finalized")
+            (old_sid, old)
+            for old_sid, old in list(_sessions.items())
+            if old_sid != keep_sid
+            and not old.get("_finalized")
             and _session_lookup_key(old, fallback=old_sid) == session_key
-            and _live_profile_matches(old, profile_home) and old.get("transport") is _detached_ws_transport]
+            and _live_profile_matches(old, profile_home)
+            and old.get("transport") is _detached_ws_transport
+        ]
     for old_sid, _old in candidates:
         _cancel_ws_orphan_reap(old_sid)
         if (popped := _pop_session_by_id(old_sid)) is not None:
@@ -548,18 +723,23 @@ def _schedule_agent_build(sid: str, delay: float = 0.05) -> None:
         if (session := _sessions.get(sid)) is not None:
             _start_agent_build(sid, session)
             _maybe_notify_auto_prune(sid, session.get("profile_home"))
+
     timer = threading.Timer(delay, _run)
     timer.daemon = True
     timer.start()
 
 
-def _load_resume_transcript(db, stored_id: str, *, model_history_only: bool = False) -> tuple[list, list, list]:
+def _load_resume_transcript(
+    db, stored_id: str, *, model_history_only: bool = False
+) -> tuple[list, list, list]:
     """(raw_history, display_history, ancestor_prefix) for a cold resume. The full lineage is materialized
     only while it fits sessions.max_resume_messages (the transcript is REST-paginated), else the tip alone."""
     from clawk_state import SessionResumeTooLargeError
+
     if model_history_only:
         raw_history = db.get_messages_as_conversation(
-            stored_id, repair_alternation=True, include_row_ids=True)
+            stored_id, repair_alternation=True, include_row_ids=True
+        )
         return raw_history, [], []
     prefix_fits = True
     guard = getattr(db, "assert_resume_safe", None)
@@ -568,19 +748,32 @@ def _load_resume_transcript(db, stored_id: str, *, model_history_only: bool = Fa
             guard(stored_id)
         except SessionResumeTooLargeError as exc:
             prefix_fits = False
-            logger.info("resume %s: compression lineage exceeds the resume limit (%s); hydrating the tip segment only",
-                        stored_id, exc)
+            logger.info(
+                "resume %s: compression lineage exceeds the resume limit (%s); hydrating the tip segment only",
+                stored_id,
+                exc,
+            )
         except Exception:
-            logger.debug("resume lineage guard failed; loading full lineage", exc_info=True)
+            logger.debug(
+                "resume lineage guard failed; loading full lineage", exc_info=True
+            )
     if prefix_fits:
         raw_history, display_history = db.get_resume_conversations(stored_id)
         return raw_history, display_history, db.get_ancestor_display_prefix(stored_id)
-    raw_history = db.get_messages_as_conversation(stored_id, repair_alternation=True, include_row_ids=True)
+    raw_history = db.get_messages_as_conversation(
+        stored_id, repair_alternation=True, include_row_ids=True
+    )
     return raw_history, raw_history, []
 
 
-def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool = False,
-                               model_history_only: bool = False) -> None:
+def _schedule_resume_hydration(
+    sid: str,
+    stored_id: str,
+    db,
+    *,
+    close_db: bool = False,
+    model_history_only: bool = False,
+) -> None:
     """Load a cold resume's transcript off the JSON-RPC response path."""
 
     def _run() -> None:
@@ -588,7 +781,11 @@ def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool =
         try:
             if session is None:
                 return
-            _emit("session.resume_progress", sid, {"phase": "history", "status": "loading"})
+            _emit(
+                "session.resume_progress",
+                sid,
+                {"phase": "history", "status": "loading"},
+            )
             # Read-only mount (#85303): hydration is a read; an ended row stays ended —
             # the first real turn (prompt.submit) reopens it. But a restart discarded the
             # busy-queue, so retire never-drained accept rows (#125577) before the read —
@@ -598,14 +795,19 @@ def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool =
             if callable(retire):
                 retire(stored_id)
             raw_history, display_history, prefix = _load_resume_transcript(
-                db, stored_id, model_history_only=model_history_only)
+                db, stored_id, model_history_only=model_history_only
+            )
             # Display keeps the full transcript; the model-fed history uses the
             # same canonicalization as gateway resume and the send path.
             history = canonicalize_replay_history(raw_history)
             if _sessions.get(sid) is not session:
                 return
             with session["history_lock"]:
-                session.update(history=history, display_history_prefix=prefix, resume_hydrating=False)
+                session.update(
+                    history=history,
+                    display_history_prefix=prefix,
+                    resume_hydrating=False,
+                )
                 if not model_history_only:
                     session["resume_message_count"] = len(display_history)
             # Deferred resumes answered before the transcript existed; cache the derived todo snapshot now.
@@ -613,21 +815,38 @@ def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool =
             if todo_state is not None and session.get("todo_state") is None:
                 session["todo_state"] = todo_state
             session["resume_history_ready"].set()
-            _emit("session.resume_progress", sid,
-                  {"message_count": session["resume_message_count"], "phase": "history", "status": "complete"})
+            _emit(
+                "session.resume_progress",
+                sid,
+                {
+                    "message_count": session["resume_message_count"],
+                    "phase": "history",
+                    "status": "complete",
+                },
+            )
             _maybe_schedule_auto_continue(sid, session, stored_id)
             _start_agent_build(sid, session)
         except Exception as exc:
             if _sessions.get(sid) is not session:
                 return
             message = resume_failed_message(exc)
-            session.update(resume_hydrating=False, resume_history_error=message, agent_error=message)
+            session.update(
+                resume_hydrating=False,
+                resume_history_error=message,
+                agent_error=message,
+            )
             session["resume_history_ready"].set()
             session["agent_ready"].set()
-            _emit("session.resume_progress", sid, {"message": message, "phase": "history", "status": "failed"})
+            _emit(
+                "session.resume_progress",
+                sid,
+                {"message": message, "phase": "history", "status": "failed"},
+            )
             _emit("error", sid, {"message": message})
             with _sessions_lock:
-                discarded = _sessions.pop(sid, None) if _sessions.get(sid) is session else None
+                discarded = (
+                    _sessions.pop(sid, None) if _sessions.get(sid) is session else None
+                )
             if (lease := (discarded or {}).get("active_session_lease")) is not None:
                 lease.release()
         finally:
@@ -636,12 +855,14 @@ def _schedule_resume_hydration(sid: str, stored_id: str, db, *, close_db: bool =
                     db.close()
                 except Exception:
                     logger.debug("failed to close resume db for %s", sid, exc_info=True)
+
     threading.Thread(target=_run, daemon=True).start()
 
 
 def _session_pending_kind(sid: str) -> str:
     """Method of the server→client request *sid* is blocked on ("" when none)."""
     from tui_gateway import server_requests
+
     return server_requests.pending_kind(sid)
 
 
@@ -658,7 +879,11 @@ def _session_live_status(sid: str, session: dict) -> str:
 def _session_live_title(session: dict, key: str) -> str:
     title = str(session.get("pending_title") or "").strip()
     with contextlib.suppress(Exception), _session_db(session) as db:
-        title = str(db.get_session_title(key) or title or "").strip() if db is not None else title
+        title = (
+            str(db.get_session_title(key) or title or "").strip()
+            if db is not None
+            else title
+        )
     return title
 
 
@@ -669,35 +894,63 @@ def _session_live_item(sid: str, session: dict, current_sid: str = "") -> dict:
     status = _session_live_status(sid, session)
     inflight = _inflight_snapshot(session)
     queued = _queued_prompt_snapshot(session)
-    preview = next((" ".join(text.split())[:160] for msg in reversed(history)
-                    if (text := _content_display_text(msg.get("content", msg.get("text", ""))).strip())), "")
+    preview = next(
+        (
+            " ".join(text.split())[:160]
+            for msg in reversed(history)
+            if (
+                text := _content_display_text(
+                    msg.get("content", msg.get("text", ""))
+                ).strip()
+            )
+        ),
+        "",
+    )
     if queued:
         preview = " ".join(str(queued.get("user") or preview).split())[:160]
     elif inflight:
-        preview = " ".join(str(inflight.get("assistant") or inflight.get("user") or preview).split())[:160]
+        preview = " ".join(
+            str(inflight.get("assistant") or inflight.get("user") or preview).split()
+        )[:160]
     now = time.time()
     return {
-        "current": sid == current_sid, "id": sid,
-        "last_active": float(session.get("last_active") or session.get("created_at") or now),
+        "current": sid == current_sid,
+        "id": sid,
+        "last_active": float(
+            session.get("last_active") or session.get("created_at") or now
+        ),
         "message_count": len(history),
-        "model": str(getattr(agent, "model", "") or _resolve_model()), "preview": preview,
-        "session_key": key, "started_at": float(session.get("created_at") or now), "status": status,
+        "model": str(getattr(agent, "model", "") or _resolve_model()),
+        "preview": preview,
+        "session_key": key,
+        "started_at": float(session.get("created_at") or now),
+        "status": status,
         "title": _session_live_title(session, key),
     }
 
 
 def _session_lookup_key(session: dict, *, fallback: str = "") -> str:
-    return str(getattr(session.get("agent"), "session_id", None) or session.get("session_key") or fallback or "")
+    return str(
+        getattr(session.get("agent"), "session_id", None)
+        or session.get("session_key")
+        or fallback
+        or ""
+    )
 
 
-def _find_live_session_by_key(session_key: str, profile_home=_ANY_PROFILE) -> tuple[str, dict] | None:
+def _find_live_session_by_key(
+    session_key: str, profile_home=_ANY_PROFILE
+) -> tuple[str, dict] | None:
     # Timestamp-based stored ids can exist in several profiles' stores; a bare-id match would hand
     # profile B's resume profile A's runtime, so profile-aware callers match on (profile_home, key).
     # Profile-aware callers pass the home they resolved; the match must then be on (profile_home,
     # session_key). See #100029.
     for sid, session in list(_sessions.items()):
-        if (not session.get("_finalized") and _session_lookup_key(session, fallback=sid) == session_key
-                and _live_profile_matches(session, profile_home)):
+        if (
+            not session.get("_finalized")
+            and _session_lookup_key(session, fallback=sid) == session_key
+            and _live_profile_matches(session, profile_home)
+        ):
             return sid, session
     return None
 
@@ -715,8 +968,14 @@ def _fallback_session_info(session: dict) -> dict:
     # above already follows.
     cwd = _session_cwd(session)
     return {
-        "cwd": cwd, "branch": git_probe.branch(cwd), "project": _project_info_for_cwd(cwd), "lazy": True,
-        **_lazy_info_route(session, {}), "skills": {}, "tools": {}, "desktop_contract": DESKTOP_BACKEND_CONTRACT,
+        "cwd": cwd,
+        "branch": git_probe.branch(cwd),
+        "project": _project_info_for_cwd(cwd),
+        "lazy": True,
+        **_lazy_info_route(session, {}),
+        "skills": {},
+        "tools": {},
+        "desktop_contract": DESKTOP_BACKEND_CONTRACT,
     }
 
 
@@ -725,28 +984,43 @@ def _durable_ids(msg) -> set:
     if not isinstance(msg, dict):
         return set()
     from agent.message_metadata import ABSORBED_MESSAGE_UIDS, MESSAGE_UID
-    ids = {("uid", uid) for uid in [msg.get(MESSAGE_UID), *(msg.get(ABSORBED_MESSAGE_UIDS) or ())] if isinstance(uid, str) and uid}
+
+    ids = {
+        ("uid", uid)
+        for uid in [msg.get(MESSAGE_UID), *(msg.get(ABSORBED_MESSAGE_UIDS) or ())]
+        if isinstance(uid, str) and uid
+    }
     row_id = msg.get("_row_id")
-    return ids | ({("row", row_id)} if isinstance(row_id, int) and not isinstance(row_id, bool) else set())
+    return ids | (
+        {("row", row_id)}
+        if isinstance(row_id, int) and not isinstance(row_id, bool)
+        else set()
+    )
 
 
 def _legacy_display_anchor(display: list[dict], memory: list[dict]) -> int:
     """Align an identity-free model prefix without consuming later repeated turns."""
-    prefix = [(msg.get('role'), _coerce_message_text(msg.get('content'))) for msg in display]
+    prefix = [
+        (msg.get("role"), _coerce_message_text(msg.get("content"))) for msg in display
+    ]
     cursor = 0
     for index, msg in enumerate(memory):
         if not isinstance(msg, dict):
             continue
-        value = (msg.get('role'), _coerce_message_text(msg.get('content')))
+        value = (msg.get("role"), _coerce_message_text(msg.get("content")))
         if value not in prefix[cursor:]:
             continue  # live-only row (persist override, injected note): never exhausts the display prefix
-        cursor = prefix.index(value, cursor) + 1  # verification candidates may be absent from the model projection
+        cursor = (
+            prefix.index(value, cursor) + 1
+        )  # verification candidates may be absent from the model projection
         if cursor == len(prefix):
             return index
     return -1
 
 
-def _reconcile_display_with_live(db_display: list[dict], in_memory: list[dict]) -> list[dict]:
+def _reconcile_display_with_live(
+    db_display: list[dict], in_memory: list[dict]
+) -> list[dict]:
     """Merge the persisted DISPLAY lineage with the in-memory live history: ``db_display`` is verbatim and
     candidate-inclusive (verification rows the model history collapses out) but can lag by a flush;
     ``in_memory`` is the recency authority but the collapsed *model* projection. Keep the DB display as base,
@@ -760,7 +1034,10 @@ def _reconcile_display_with_live(db_display: list[dict], in_memory: list[dict]) 
         return db_display
 
     anchor_ids = _durable_ids(db_display[-1])
-    last_shared = max((idx for idx, msg in enumerate(in_memory) if _durable_ids(msg) & anchor_ids), default=-1)
+    last_shared = max(
+        (idx for idx, msg in enumerate(in_memory) if _durable_ids(msg) & anchor_ids),
+        default=-1,
+    )
     if last_shared == -1:
         if anchor_ids and any(_durable_ids(msg) for msg in in_memory):
             return db_display
@@ -770,7 +1047,9 @@ def _reconcile_display_with_live(db_display: list[dict], in_memory: list[dict]) 
     return list(db_display) + list(in_memory[last_shared + 1 :])
 
 
-def _live_visible_history(session: dict, db, in_memory_fallback: list[dict]) -> list[dict]:
+def _live_visible_history(
+    session: dict, db, in_memory_fallback: list[dict]
+) -> list[dict]:
     """User-visible DISPLAY projection for a live/warm session: the persisted display lineage (same read as
     resume/REST so the payloads agree) reconciled with the in-memory tail; in-memory when the DB is unavailable."""
     key = session.get("session_key")
@@ -779,7 +1058,11 @@ def _live_visible_history(session: dict, db, in_memory_fallback: list[dict]) -> 
             # include_compacted: a compacted session's archived turns are still the user's
             # conversation; without them a warm switch repainted the chat as summary + tail only.
             display = db.get_messages_as_conversation(
-                key, include_ancestors=True, include_row_ids=True, include_compacted=True)
+                key,
+                include_ancestors=True,
+                include_row_ids=True,
+                include_compacted=True,
+            )
             # See #92080.
             return _reconcile_display_with_live(display, in_memory_fallback)
         except Exception:
@@ -788,8 +1071,15 @@ def _live_visible_history(session: dict, db, in_memory_fallback: list[dict]) -> 
 
 
 def _live_session_payload(
-    sid: str, session: dict, *, cols: int | None = None, touch: bool = False,
-    transport: Transport | None = None, omit_messages: bool = False, inline_images: bool = True) -> dict:
+    sid: str,
+    session: dict,
+    *,
+    cols: int | None = None,
+    touch: bool = False,
+    transport: Transport | None = None,
+    omit_messages: bool = False,
+    inline_images: bool = True,
+) -> dict:
     with session["history_lock"]:
         if cols is not None:
             session["cols"] = cols
@@ -799,9 +1089,14 @@ def _live_session_payload(
             # #84417: do not re-fire the live turn's original user text from a stale server-queue
             # self-duplicate after settle.
             session["last_active"] = time.time()
-        in_memory_history = list(session.get("display_history_prefix") or []) + list(session.get("history") or [])
+        in_memory_history = list(session.get("display_history_prefix") or []) + list(
+            session.get("history") or []
+        )
         inflight, queued = _inflight_snapshot(session), _queued_prompt_snapshot(session)
-        running, turn_started_at = bool(session.get("running")), _turn_started_at(session)
+        running, turn_started_at = (
+            bool(session.get("running")),
+            _turn_started_at(session),
+        )
     # Persisted display lineage via the session's profile-aware DB (not the launch ``_get_db()``), read
     # outside the history lock (the DB has its own). ``omit_messages`` skips the read (fast path).
     if omit_messages:
@@ -811,20 +1106,35 @@ def _live_session_payload(
             history = _live_visible_history(session, db, in_memory_history)
     # message_count follows _resume_response: the stored size when messages are omitted, else the wire count
     # (a hidden seed row is in ``history`` but never on the wire).
-    messages = ([] if omit_messages else
-                _history_to_messages(history, profile_home=session.get("profile_home"), image_urls=inline_images))
+    messages = (
+        []
+        if omit_messages
+        else _history_to_messages(
+            history, profile_home=session.get("profile_home"), image_urls=inline_images
+        )
+    )
     payload = {
-        "info": _fallback_session_info(session), "message_count": len(history) if omit_messages else len(messages),
+        "info": _fallback_session_info(session),
+        "message_count": len(history) if omit_messages else len(messages),
         "messages": messages,
-        "messages_omitted": omit_messages, "running": running, "turn_started_at": turn_started_at,
-        "session_id": sid, "session_key": _session_lookup_key(session, fallback=sid),
+        "messages_omitted": omit_messages,
+        "running": running,
+        "turn_started_at": turn_started_at,
+        "session_id": sid,
+        "session_key": _session_lookup_key(session, fallback=sid),
         "started_at": float(session.get("created_at") or time.time()),
         "status": _session_live_status(sid, session),
     }
-    for key, value in (("inflight", inflight), ("queued", queued),
-                       ("pending_approval", _pending_approval_request_payload(str(session.get("session_key") or ""))),
-                       ("open_requests", _open_requests(sid)),
-                       ("pending_connection", _pending_connection_request_payload(sid))):
+    for key, value in (
+        ("inflight", inflight),
+        ("queued", queued),
+        (
+            "pending_approval",
+            _pending_approval_request_payload(str(session.get("session_key") or "")),
+        ),
+        ("open_requests", _open_requests(sid)),
+        ("pending_connection", _pending_connection_request_payload(sid)),
+    ):
         if value:
             payload[key] = value
     return _attach_todo_state(payload, session)
@@ -837,7 +1147,15 @@ def _main_runtime_from_agent(agent) -> dict | None:
     runtime: dict = {}
     # ``session_id`` rides along so a session-bound ``llm.oneshot`` (title, approval) on an OpenCode
     # route sends the conversation's ``x-opencode-session`` like the main turn does (#112717).
-    for field in ("provider", "model", "base_url", "api_key", "api_mode", "auth_mode", "session_id"):
+    for field in (
+        "provider",
+        "model",
+        "base_url",
+        "api_key",
+        "api_mode",
+        "auth_mode",
+        "session_id",
+    ):
         value = getattr(agent, field, None)
         if isinstance(value, str) and value.strip():
             runtime[field] = value.strip()

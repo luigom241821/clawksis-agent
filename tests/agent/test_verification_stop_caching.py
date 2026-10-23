@@ -45,12 +45,16 @@ def _restore_modules(saved):
 
 def _fresh_run_agent(clawk_home):
     for mod in list(sys.modules):
-        if mod == "run_agent" or mod.startswith("agent.") or mod.startswith("tools.") or mod.startswith("clawk_"):
+        if (
+            mod == "run_agent"
+            or mod.startswith("agent.")
+            or mod.startswith("tools.")
+            or mod.startswith("clawk_")
+        ):
             del sys.modules[mod]
     import run_agent
+
     return sys.modules["run_agent"]
-
-
 
 
 def _make_agent(ra, session_id, tmp_path):
@@ -84,7 +88,11 @@ def test_db_flush_drops_only_nudge_keeps_candidate(tmp_path, monkeypatch):
         # Assistant candidate — NOT flagged synthetic, persists.
         {"role": "assistant", "content": "premature done"},
         # Nudge — flagged synthetic, gets dropped.
-        {"role": "user", "content": "[System: run tests]", "_verification_stop_synthetic": True},
+        {
+            "role": "user",
+            "content": "[System: run tests]",
+            "_verification_stop_synthetic": True,
+        },
         {"role": "assistant", "content": "verified and clean"},
     ]
 

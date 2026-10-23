@@ -22,7 +22,9 @@ def _recording_agent(labels: list) -> SimpleNamespace:
         labels.append(kwargs.get("trigger"))
         return messages, system_message
 
-    return SimpleNamespace(context_compressor=None, _codex_session=object(), _compress_context=_record)
+    return SimpleNamespace(
+        context_compressor=None, _codex_session=object(), _compress_context=_record
+    )
 
 
 def _history() -> list:
@@ -30,10 +32,17 @@ def _history() -> list:
 
 
 async def _drive_codex_hygiene(agent: SimpleNamespace) -> None:
-    gateway = SimpleNamespace(_agent_cache={"tg:1": (agent, 0.0)}, _agent_cache_lock=None)
+    gateway = SimpleNamespace(
+        _agent_cache={"tg:1": (agent, 0.0)}, _agent_cache_lock=None
+    )
     await run_codex_hygiene_compaction(
-        gateway, "tg:1", "sess-1", auto_mode="clawk", history=_history(),
-        approx_tokens=100_000, timeout_seconds=5.0,
+        gateway,
+        "tg:1",
+        "sess-1",
+        auto_mode="clawk",
+        history=_history(),
+        approx_tokens=100_000,
+        timeout_seconds=5.0,
     )
 
 
@@ -51,15 +60,28 @@ async def _drive_detached_hygiene(agent: SimpleNamespace) -> None:
         return None
 
     gateway = SimpleNamespace(
-        _hmwa_hygiene_build_agent=_build_agent, _hmwa_hygiene_wait_for_summary=_wait_for_summary,
-        _hmwa_hygiene_apply_result=_apply_result, _track_deferred_agent_worker=lambda *_a: None,
-        _evict_cached_agent=lambda _key: None, _cleanup_agent_resources_off_loop=_cleanup,
+        _hmwa_hygiene_build_agent=_build_agent,
+        _hmwa_hygiene_wait_for_summary=_wait_for_summary,
+        _hmwa_hygiene_apply_result=_apply_result,
+        _track_deferred_agent_worker=lambda *_a: None,
+        _evict_cached_agent=lambda _key: None,
+        _cleanup_agent_resources_off_loop=_cleanup,
     )
     attempt = GatewayRunner._HygieneAttempt(agent=None, meta=None)
     await GatewayRunner._hmwa_hygiene_detached_attempt(
-        gateway, attempt, SimpleNamespace(total_ceiling_seconds=60.0),
-        SimpleNamespace(approx_tokens=100_000), _history(), _history(), "m", {}, None,
-        SimpleNamespace(session_id="sess-1"), "tg:1", "qk", 0,
+        gateway,
+        attempt,
+        SimpleNamespace(total_ceiling_seconds=60.0),
+        SimpleNamespace(approx_tokens=100_000),
+        _history(),
+        _history(),
+        "m",
+        {},
+        None,
+        SimpleNamespace(session_id="sess-1"),
+        "tg:1",
+        "qk",
+        0,
     )
 
 

@@ -6,6 +6,7 @@ the persisted ``model_override`` must ride along. ``reset_session()`` (/new) is 
 conversation boundary and must keep dropping it — otherwise the next turn's
 ``_rehydrate_session_model_override`` resurrects the override the user reset away.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -31,8 +32,13 @@ def store(tmp_path, monkeypatch):
 
 
 def _pinned_key(store):
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="c1", chat_type="dm",
-                           user_id="u1", user_name="tester")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="c1",
+        chat_type="dm",
+        user_id="u1",
+        user_name="tester",
+    )
     key = store.get_or_create_session(source).session_key
     store.set_model_override(key, OVERRIDE)
     assert store.get_model_override(key) == OVERRIDE

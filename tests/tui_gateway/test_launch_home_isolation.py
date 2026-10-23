@@ -1,4 +1,5 @@
 """The launch home the TUI server binds launch-profile turns to must follow the process home."""
+
 import os
 from pathlib import Path
 
@@ -16,5 +17,10 @@ def test_launch_home_follows_the_process_home_redirected_after_import():
     process env, like the launch ``state.db`` handle (#112692), never the import-time value."""
     sandbox = Path(os.environ["CLAWK_HOME"])
     assert server._launch_home() == sandbox
-    (sandbox / ".env").write_text("CLAWK_LAUNCH_HOME_PROBE=from-sandbox\n", encoding="utf-8")
-    assert launch_secret_scope(server._launch_home()).get("CLAWK_LAUNCH_HOME_PROBE") == "from-sandbox"
+    (sandbox / ".env").write_text(
+        "CLAWK_LAUNCH_HOME_PROBE=from-sandbox\n", encoding="utf-8"
+    )
+    assert (
+        launch_secret_scope(server._launch_home()).get("CLAWK_LAUNCH_HOME_PROBE")
+        == "from-sandbox"
+    )

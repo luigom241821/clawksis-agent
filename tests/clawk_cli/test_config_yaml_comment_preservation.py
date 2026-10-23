@@ -53,6 +53,7 @@ def home(tmp_path):
     (tmp_path / "config.yaml").write_text(COMMENTED, encoding="utf-8")
     with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
         from clawk_cli import config as config_mod
+
         config_mod._RAW_CONFIG_CACHE.clear()
         yield tmp_path
 
@@ -65,7 +66,9 @@ def _assert_preserved(path: Path) -> dict:
     top = [k for k in data if k in KEY_ORDER]
     assert top == KEY_ORDER, f"key order changed: {top}\n---\n{text}"
     assert data["approvals"]["mode"] == "off"  # not coerced to False
-    assert "── Security ──" not in text, "stock boilerplate was appended to an existing file"
+    assert "── Security ──" not in text, (
+        "stock boilerplate was appended to an existing file"
+    )
     return data
 
 
@@ -122,11 +125,12 @@ class TestEveryWriterPreservesComments:
         text = (home / "config.yaml").read_text(encoding="utf-8")
         assert "── Security ──" in text  # fresh file gets the commented examples once
         save_config({"model": {"provider": "test", "default": "m"}})
-        assert (home / "config.yaml").read_text(encoding="utf-8").count("── Security ──") == 1
+        assert (home / "config.yaml").read_text(encoding="utf-8").count(
+            "── Security ──"
+        ) == 1
 
 
 class TestStaticGuard:
-
     def test_guard_flags_pyyaml_dump_of_config_path(self, tmp_path):
         sys.path.insert(0, str(REPO / "scripts"))
         try:
@@ -140,7 +144,8 @@ class TestStaticGuard:
             "def a(config_path, cfg):\n    atomic_yaml_write(config_path, cfg)\n"
             "def b(cfg_path, cfg):\n    cfg_path.write_text(yaml.safe_dump(cfg))\n"
             "def c(other_path, cfg):\n    atomic_yaml_write(other_path, cfg)\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         with patch.object(guard, "ROOT", tmp_path):
             problems = guard.scan_file(bad)
         assert [p.split(":")[1] for p in problems] == ["4", "6"], problems

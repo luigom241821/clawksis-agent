@@ -43,7 +43,12 @@ def classify_disk_pressure(free_mb: Any, total_mb: Any) -> str:
 def collect_disk_status(home: Optional[Path] = None) -> dict[str, Any]:
     """``disk`` block for ``/api/status`` (same ``home`` contract as ``memory``).
     Never raises — an unreadable/unmounted filesystem yields ``pressure="unknown"``."""
-    status: dict[str, Any] = {"pressure": "unknown", "total_mb": None, "free_mb": None, "used_percent": None}
+    status: dict[str, Any] = {
+        "pressure": "unknown",
+        "total_mb": None,
+        "free_mb": None,
+        "used_percent": None,
+    }
     try:
         if home is None:
             from clawk_constants import get_clawk_home
@@ -55,6 +60,10 @@ def collect_disk_status(home: Optional[Path] = None) -> dict[str, Any]:
     if usage.total <= 0:
         return status
     total_mb, free_mb = usage.total // _BYTES_PER_MB, usage.free // _BYTES_PER_MB
-    status.update(total_mb=total_mb, free_mb=free_mb, used_percent=round((usage.used / usage.total) * 100, 1),
-                  pressure=classify_disk_pressure(free_mb, total_mb))
+    status.update(
+        total_mb=total_mb,
+        free_mb=free_mb,
+        used_percent=round((usage.used / usage.total) * 100, 1),
+        pressure=classify_disk_pressure(free_mb, total_mb),
+    )
     return status

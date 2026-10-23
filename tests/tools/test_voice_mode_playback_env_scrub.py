@@ -21,9 +21,11 @@ def test_play_audio_file_scrubbed_env(tmp_path, monkeypatch):
 
     import tools.voice_mode as vm
 
-    with patch.object(vm, "platform") as plat, patch.object(
-        vm.shutil, "which", return_value="/usr/bin/ffplay"
-    ), patch.object(vm.subprocess, "Popen", side_effect=fake_popen):
+    with (
+        patch.object(vm, "platform") as plat,
+        patch.object(vm.shutil, "which", return_value="/usr/bin/ffplay"),
+        patch.object(vm.subprocess, "Popen", side_effect=fake_popen),
+    ):
         plat.system.return_value = "Linux"
         ok = vm.play_audio_file(str(audio))
 

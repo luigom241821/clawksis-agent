@@ -1,4 +1,5 @@
 """Profile-local WhatsApp credentials and non-destructive secondary startup."""
+
 import socket
 import os
 from unittest.mock import AsyncMock
@@ -17,22 +18,34 @@ def test_credentials_follow_profile_home(tmp_path):
     (a / "platforms/whatsapp/session/creds.json").write_text("{}")
     for home, expected in ((a, True), (b, False), (a, True)):
         with _profile_runtime_scope(home, hydrate_secrets=False):
-            assert _platform_has_bot_credential(Platform.WHATSAPP, PlatformConfig()) is expected
-            overridden = PlatformConfig(extra={"session_path": str(a / "platforms/whatsapp/session")})
+            assert (
+                _platform_has_bot_credential(Platform.WHATSAPP, PlatformConfig())
+                is expected
+            )
+            overridden = PlatformConfig(
+                extra={"session_path": str(a / "platforms/whatsapp/session")}
+            )
             assert _platform_has_bot_credential(Platform.WHATSAPP, overridden)
     from gateway.status import write_runtime_status
     from clawk_cli import gateway_multiplex_served as served
     from unittest.mock import patch
-    write_runtime_status(platform="work:whatsapp", platform_state="disabled",
-                         error_code="whatsapp_unpaired", error_message="pair it: clawk -p work whatsapp")
+
+    write_runtime_status(
+        platform="work:whatsapp",
+        platform_state="disabled",
+        error_code="whatsapp_unpaired",
+        error_message="pair it: clawk -p work whatsapp",
+    )
     with patch.object(served, "live_default_gateway_pid", return_value=os.getpid()):
         assert served.served_profile_unserved_platforms("work") == {
-            "whatsapp": "pair it: clawk -p work whatsapp"}
+            "whatsapp": "pair it: clawk -p work whatsapp"
+        }
 
 
 @pytest.mark.asyncio
 async def test_secondary_ports_and_foreign_listener(tmp_path, monkeypatch):
     import plugins.platforms.whatsapp.adapter as module
+
     adapters = []
     listener = socket.socket()
     monkeypatch.setattr(module, "find_node_executable", lambda name: f"/usr/bin/{name}")
@@ -55,15 +68,19 @@ async def test_secondary_ports_and_foreign_listener(tmp_path, monkeypatch):
     # Reserve the first profile's actual listener before the next startup.
     with listener:
         with _profile_runtime_scope(tmp_path / "b", hydrate_secrets=False):
-            explicit = WhatsAppAdapter(PlatformConfig(extra={"bridge_port": adapters[0]._bridge_port}))
+            explicit = WhatsAppAdapter(
+                PlatformConfig(extra={"bridge_port": adapters[0]._bridge_port})
+            )
         explicit._clawk_profile_name = "b"
         explicit._runtime_status_platform_key = "b:whatsapp"
         monkeypatch.setattr(explicit, "_preflight", lambda: True)
         monkeypatch.setattr(explicit, "_ensure_bridge_deps", lambda path: True)
         probe = AsyncMock(side_effect=AssertionError("must not probe foreign bridge"))
         monkeypatch.setattr(explicit, "_probe_bridge_health", probe)
+
         def no_kill(*args):
             raise AssertionError("must not kill foreign bridge")
+
         monkeypatch.setattr(module, "_kill_port_process", no_kill)
         monkeypatch.setattr(module, "_kill_stale_bridge_by_pidfile", no_kill)
         assert not await explicit.connect()
@@ -75,7 +92,10 @@ async def test_secondary_ports_and_foreign_listener(tmp_path, monkeypatch):
         await explicit.disconnect()
     assert adapters[0]._bridge_port != adapters[1]._bridge_port
     for name, adapter in zip(("a", "b"), adapters):
-        assert int((tmp_path / name / "platforms/whatsapp/bridge_port").read_text()) == adapter._bridge_port
+        assert (
+            int((tmp_path / name / "platforms/whatsapp/bridge_port").read_text())
+            == adapter._bridge_port
+        )
         with _profile_runtime_scope(tmp_path / name, hydrate_secrets=False):
             restart = WhatsAppAdapter(PlatformConfig())
         restart._runtime_status_platform_key = f"{name}:whatsapp"
@@ -96,7 +116,11 @@ def test_time_wait_leftovers_are_not_a_foreign_listener(tmp_path):
     """Real kernel TIME-WAIT, no mocks: the stopped bridge closed its accepted connection first, so
     the port carries a TIME-WAIT entry and no listener. The ownership check must call it free (#139425),
     while a real listener on the same port still fails closed."""
-    from plugins.platforms.whatsapp.bridge_ownership import check_secondary_ownership, port_is_free
+    from plugins.platforms.whatsapp.bridge_ownership import (
+        check_secondary_ownership,
+        port_is_free,
+    )
+
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", 0))
@@ -125,7 +149,11 @@ def test_time_wait_leftovers_are_not_a_foreign_listener(tmp_path):
 def test_allocation_skips_ports_recorded_by_siblings(tmp_path):
     """A sibling whose bridge is down leaves its recorded port unbound; a new profile must not take it,
     or the sibling hits a non-retryable port conflict on its next start. A corrupt record names itself."""
-    from plugins.platforms.whatsapp.bridge_ownership import port_is_free, secondary_bridge_port
+    from plugins.platforms.whatsapp.bridge_ownership import (
+        port_is_free,
+        secondary_bridge_port,
+    )
+
     profiles = tmp_path / "profiles"
     sibling, fresh = profiles / "a", profiles / "b"
     recorded = next(p for p in range(3001, 4000) if port_is_free(p))
@@ -146,26 +174,40 @@ def test_ownership_verdicts(tmp_path):
     from gateway import status
     from plugins.platforms.whatsapp.adapter import _write_bridge_pidfile
     from plugins.platforms.whatsapp.bridge_ownership import check_secondary_ownership
+
     session = tmp_path / "session"
     session.mkdir()
     (session / "bridge.pid").write_text(str(os.getpid()))  # legacy, no start time
     sock, port = _hold_port()
     with sock:
         with pytest.raises(ValueError, match="does not own"):
-            check_secondary_ownership(session, port)  # bound, pidfile unverifiable: fail closed
-        _write_bridge_pidfile(session, os.getpid(), port)    # pid + start time + port of a live process
+            check_secondary_ownership(
+                session, port
+            )  # bound, pidfile unverifiable: fail closed
+        _write_bridge_pidfile(
+            session, os.getpid(), port
+        )  # pid + start time + port of a live process
         assert check_secondary_ownership(session, port) == "ours"
         _write_bridge_pidfile(session, os.getpid(), port + 1)
         with pytest.raises(ValueError, match="does not own"):
-            check_secondary_ownership(session, port)  # live recorded bridge, but spawned on another port
+            check_secondary_ownership(
+                session, port
+            )  # live recorded bridge, but spawned on another port
         _write_bridge_pidfile(session, os.getpid())
         with pytest.raises(ValueError, match="does not own"):
-            check_secondary_ownership(session, port)  # pre-port pidfile: endpoint unproven, fail closed
+            check_secondary_ownership(
+                session, port
+            )  # pre-port pidfile: endpoint unproven, fail closed
         (session / "bridge.pid").write_text(
-            f"{os.getpid()}\n{status.get_process_start_time(os.getpid()) + 1}\n{port}\n")
+            f"{os.getpid()}\n{status.get_process_start_time(os.getpid()) + 1}\n{port}\n"
+        )
         with pytest.raises(ValueError, match="does not own"):
-            check_secondary_ownership(session, port)  # recycled pid: fingerprint mismatch
-    assert check_secondary_ownership(session, port) == "free"  # unbound now, pidfile irrelevant
+            check_secondary_ownership(
+                session, port
+            )  # recycled pid: fingerprint mismatch
+    assert (
+        check_secondary_ownership(session, port) == "free"
+    )  # unbound now, pidfile irrelevant
     assert (session / "bridge.pid").exists()  # nothing was signalled or unlinked
 
 
@@ -175,6 +217,7 @@ async def test_secondary_adopts_its_own_orphaned_bridge(tmp_path, monkeypatch):
     instead of dying with a port conflict. Only the identity-checked pidfile path may reap it."""
     import plugins.platforms.whatsapp.adapter as module
     from plugins.platforms.whatsapp.adapter import _write_bridge_pidfile
+
     monkeypatch.setattr(module, "find_node_executable", lambda name: f"/usr/bin/{name}")
     home = tmp_path / "c"
     home.mkdir()
@@ -190,8 +233,10 @@ async def test_secondary_adopts_its_own_orphaned_bridge(tmp_path, monkeypatch):
     _write_bridge_pidfile(adapter._session_path, os.getpid(), port)
     reuse = AsyncMock(return_value=True)
     monkeypatch.setattr(adapter, "_reuse_running_bridge", reuse)
+
     def no_port_kill(*args):
         raise AssertionError("a secondary never clears a port by scan")
+
     monkeypatch.setattr(module, "_kill_port_process", no_port_kill)
     with sock:
         assert await adapter.connect()
@@ -201,11 +246,14 @@ async def test_secondary_adopts_its_own_orphaned_bridge(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_live_old_bridge_does_not_authorize_a_different_port(tmp_path, monkeypatch):
+async def test_live_old_bridge_does_not_authorize_a_different_port(
+    tmp_path, monkeypatch
+):
     """Crash leaves this profile's bridge alive on its old port; the operator then points bridge_port at a
     port another listener holds. The live pidfile must not make that foreign endpoint "ours"."""
     import plugins.platforms.whatsapp.adapter as module
     from plugins.platforms.whatsapp.adapter import _write_bridge_pidfile
+
     monkeypatch.setattr(module, "find_node_executable", lambda name: f"/usr/bin/{name}")
     old_sock, old_port = _hold_port()
     foreign_sock, foreign_port = _hold_port()
@@ -218,10 +266,14 @@ async def test_live_old_bridge_does_not_authorize_a_different_port(tmp_path, mon
     monkeypatch.setattr(adapter, "_ensure_bridge_deps", lambda path: True)
     adapter._session_path.mkdir(parents=True, exist_ok=True)
     _write_bridge_pidfile(adapter._session_path, os.getpid(), old_port)
-    reuse = AsyncMock(side_effect=AssertionError("must not probe or adopt a foreign endpoint"))
+    reuse = AsyncMock(
+        side_effect=AssertionError("must not probe or adopt a foreign endpoint")
+    )
     monkeypatch.setattr(adapter, "_reuse_running_bridge", reuse)
+
     def no_kill(*args):
         raise AssertionError("must not signal anything")
+
     monkeypatch.setattr(module, "_kill_port_process", no_kill)
     monkeypatch.setattr(module, "_kill_stale_bridge_by_pidfile", no_kill)
     with old_sock, foreign_sock:
@@ -233,18 +285,26 @@ async def test_live_old_bridge_does_not_authorize_a_different_port(tmp_path, mon
 
 
 @pytest.mark.asyncio
-async def test_launch_startup_and_standalone_send_agree_after_role_change(tmp_path, monkeypatch):
+async def test_launch_startup_and_standalone_send_agree_after_role_change(
+    tmp_path, monkeypatch
+):
     """A profile that recorded a port as a secondary and later launches its own gateway starts its bridge
     on the port `whatsapp send` resolves, instead of 3000 while sends go to the abandoned record."""
     import plugins.platforms.whatsapp.adapter as module
-    from plugins.platforms.whatsapp.bridge_ownership import secondary_bridge_port, standalone_bridge_port
+    from plugins.platforms.whatsapp.bridge_ownership import (
+        secondary_bridge_port,
+        standalone_bridge_port,
+    )
+
     monkeypatch.setattr(module, "find_node_executable", lambda name: f"/usr/bin/{name}")
     home = tmp_path / "profiles" / "e"
     home.mkdir(parents=True)
     recorded = secondary_bridge_port(home, None)
     with _profile_runtime_scope(home, hydrate_secrets=False):
         launch = WhatsAppAdapter(PlatformConfig())
-    monkeypatch.setattr(launch, "_preflight", lambda: False)  # stop before any bridge work
+    monkeypatch.setattr(
+        launch, "_preflight", lambda: False
+    )  # stop before any bridge work
     await launch.connect()
     assert launch._bridge_port == recorded == standalone_bridge_port(home, None)
     fresh = tmp_path / "profiles" / "f"
@@ -253,4 +313,6 @@ async def test_launch_startup_and_standalone_send_agree_after_role_change(tmp_pa
         default_like = WhatsAppAdapter(PlatformConfig())
     monkeypatch.setattr(default_like, "_preflight", lambda: False)
     await default_like.connect()
-    assert default_like._bridge_port == 3000 == standalone_bridge_port(fresh, None)  # no record: unchanged
+    assert (
+        default_like._bridge_port == 3000 == standalone_bridge_port(fresh, None)
+    )  # no record: unchanged

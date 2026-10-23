@@ -8,16 +8,6 @@ memory tool output.
 """
 
 
-
-
-
-
-
-
-
-
-
-
 class TestSourceLinesAreClamped:
     def test_gateway_run_clamped(self):
         # The /usage stats handler was extracted from gateway/run.py into
@@ -29,5 +19,3 @@ class TestSourceLinesAreClamped:
         assert _pct(210_000, 200_000) == 100
         assert _pct(30_000, 200_000) == 15
         assert _pct(5, 0) == 0
-
-

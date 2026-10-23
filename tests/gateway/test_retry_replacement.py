@@ -49,9 +49,7 @@ def test_rewrite_transcript_keeps_pending_recovery_state_when_lease_rejects(
     pending = _seed_pending_recovery(store, session_id)
     before = store._db.get_messages(session_id, include_inactive=True)
     holder = f"pid={os.getpid()}:turn=foreign"
-    assert store._db.try_acquire_session_turn_lease(
-        session_id, holder, ttl_seconds=60
-    )
+    assert store._db.try_acquire_session_turn_lease(session_id, holder, ttl_seconds=60)
 
     assert not store.rewrite_transcript(
         session_id,
@@ -89,22 +87,16 @@ def test_rewind_session_keeps_pending_recovery_state_when_lease_rejects(
     pending = _seed_pending_recovery(store, session_id)
     before = store._db.get_messages(session_id, include_inactive=True)
     holder = f"pid={os.getpid()}:turn=foreign"
-    assert store._db.try_acquire_session_turn_lease(
-        session_id, holder, ttl_seconds=60
-    )
+    assert store._db.try_acquire_session_turn_lease(session_id, holder, ttl_seconds=60)
 
-    assert (
-        store.rewind_session(session_id, require_retryable_composite=True) is None
-    )
+    assert store.rewind_session(session_id, require_retryable_composite=True) is None
 
     assert store._db.get_messages(session_id, include_inactive=True) == before
     assert store._dirty_transcripts[session_id] == [pending]
     assert store._transcript_append_failures[session_id] == 3
 
     store._db.release_session_turn_lease(session_id, holder)
-    result = store.rewind_session(
-        session_id, require_retryable_composite=True
-    )
+    result = store.rewind_session(session_id, require_retryable_composite=True)
     assert result is not None
     assert result["target_text"] == "REAL ASK"
     assert session_id not in store._dirty_transcripts
@@ -136,10 +128,17 @@ def test_rewind_session_retry_text_is_the_stored_bytes_for_multipart_carriers(
     result = store.rewind_session(session_id, require_retryable_composite=True)
 
     assert result is not None
-    expected = "".join(p["text"] for p in stored).split(_SUMMARY_END_MARKER, 1)[1].lstrip("\n")
+    expected = (
+        "".join(p["text"] for p in stored).split(_SUMMARY_END_MARKER, 1)[1].lstrip("\n")
+    )
     assert result["target_text"] == "REAL ASK\ncontinued" == expected
     assert result["target_text"] == retryable_user_text(
-        [{"type": "text", "text": "REAL"}, {"type": "text", "text": " ASK"}, {"type": "text", "text": "\ncontinued"}])
+        [
+            {"type": "text", "text": "REAL"},
+            {"type": "text", "text": " ASK"},
+            {"type": "text", "text": "\ncontinued"},
+        ]
+    )
 
 
 def test_rewind_session_surfaces_unretryable_media_before_mutation(
@@ -254,10 +253,13 @@ def test_transcript_mutation_serializes_pending_queue_drain(
 
 
 @pytest.mark.asyncio
-async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, monkeypatch):
+async def test_gateway_retry_replaces_last_user_turn_in_transcript(
+    tmp_path, monkeypatch
+):
     # Pin DEFAULT_DB_PATH so SessionDB() doesn't write to the real ~/.clawksis/state.db.
     # (Module-level constant snapshot, see test_load_transcript_db_only.)
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -285,11 +287,13 @@ async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, mon
     async def fake_handle_message(event):
         assert event.text == "retry me"
         transcript_before = store.load_transcript(session_id)
-        assert [m.get("content") for m in transcript_before if m.get("role") == "user"] == [
-            "first question"
-        ]
+        assert [
+            m.get("content") for m in transcript_before if m.get("role") == "user"
+        ] == ["first question"]
         store.append_to_transcript(session_id, {"role": "user", "content": event.text})
-        store.append_to_transcript(session_id, {"role": "assistant", "content": "new answer"})
+        store.append_to_transcript(
+            session_id, {"role": "assistant", "content": "new answer"}
+        )
         return "new answer"
 
     gw._handle_message = AsyncMock(side_effect=fake_handle_message)
@@ -304,7 +308,9 @@ async def test_gateway_retry_replaces_last_user_turn_in_transcript(tmp_path, mon
         "first question",
         "retry me",
     ]
-    assert [m.get("content") for m in transcript_after if m.get("role") == "assistant"] == [
+    assert [
+        m.get("content") for m in transcript_after if m.get("role") == "assistant"
+    ] == [
         "first answer",
         "new answer",
     ]
@@ -315,6 +321,7 @@ async def test_gateway_retry_redispatches_live_carrier_text_and_keeps_scaffold(
     tmp_path, monkeypatch
 ):
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -362,11 +369,10 @@ async def test_gateway_retry_redispatches_live_carrier_text_and_keeps_scaffold(
 
 
 @pytest.mark.asyncio
-async def test_gateway_retry_does_not_rewind_a_newer_plain_turn(
-    tmp_path, monkeypatch
-):
+async def test_gateway_retry_does_not_rewind_a_newer_plain_turn(tmp_path, monkeypatch):
     """The carrier selected for retry must still be latest at commit time."""
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -503,8 +509,7 @@ async def test_gateway_retry_stops_when_transcript_rewrite_fails():
     gw._handle_message.assert_not_awaited()
     facade.rewrite_transcript.assert_awaited_once()
     assert (
-        facade.rewrite_transcript.await_args.kwargs["reject_active_turn_lease"]
-        is True
+        facade.rewrite_transcript.await_args.kwargs["reject_active_turn_lease"] is True
     )
 
 
@@ -512,6 +517,7 @@ def test_gateway_undo_prefills_live_carrier_text_and_keeps_scaffold(
     tmp_path, monkeypatch
 ):
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     store = SessionStore(sessions_dir=tmp_path, config=GatewayConfig())
@@ -524,9 +530,7 @@ def test_gateway_undo_prefills_live_carrier_text_and_keeps_scaffold(
 
     assert result["target_text"] == "REAL ASK"
     assert result["rewound_count"] == 2
-    active = store._db.get_messages_as_conversation(
-        session_id, include_row_ids=True
-    )
+    active = store._db.get_messages_as_conversation(session_id, include_row_ids=True)
     assert len(active) == 1
     assert active[0]["display_kind"] == "hidden"
     assert "REAL ASK" not in active[0]["content"]
@@ -549,6 +553,7 @@ async def test_gateway_retry_preserves_archived_compaction_rows_when_probe_fails
     a separate existence probe can fail open or race with the rewrite.
     """
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -557,7 +562,9 @@ async def test_gateway_retry_preserves_archived_compaction_rows_when_probe_fails
     session_id = "retry_archived_session"
     store._db.create_session(session_id=session_id, source="test")
     store._db.append_message(session_id=session_id, role="user", content="old question")
-    store._db.append_message(session_id=session_id, role="assistant", content="old answer")
+    store._db.append_message(
+        session_id=session_id, role="assistant", content="old answer"
+    )
     # In-place compaction: the two rows above are soft-archived and the
     # compacted transcript becomes the live set under the same id.
     store._db.archive_and_compact(
@@ -587,7 +594,9 @@ async def test_gateway_retry_preserves_archived_compaction_rows_when_probe_fails
     async def fake_handle_message(event):
         assert event.text == "retry me"
         store.append_to_transcript(session_id, {"role": "user", "content": event.text})
-        store.append_to_transcript(session_id, {"role": "assistant", "content": "new answer"})
+        store.append_to_transcript(
+            session_id, {"role": "assistant", "content": "new answer"}
+        )
         return "new answer"
 
     gw._handle_message = AsyncMock(side_effect=fake_handle_message)
@@ -600,7 +609,8 @@ async def test_gateway_retry_preserves_archived_compaction_rows_when_probe_fails
     archived_probe.assert_not_called()
     # The archived pre-compaction rows survive the rewrite untouched.
     archived = [
-        m for m in store._db.get_messages(session_id, include_inactive=True)
+        m
+        for m in store._db.get_messages(session_id, include_inactive=True)
         if not m["active"]
     ]
     assert [(m["role"], m["content"]) for m in archived] == [
@@ -620,6 +630,7 @@ def _paused_runner_with_exchange(tmp_path, monkeypatch, session_id, rows):
     """Bare runner whose session holds one plain user/assistant exchange; returns
     ``(gw, store, session_entry)`` with the transcript snapshot taken before /retry."""
     import clawk_state
+
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", tmp_path / "state.db")
 
     config = GatewayConfig()
@@ -639,12 +650,16 @@ def _paused_runner_with_exchange(tmp_path, monkeypatch, session_id, rows):
 
 
 @pytest.mark.asyncio
-async def test_gateway_retry_paused_refusal_leaves_transcript_unchanged(tmp_path, monkeypatch):
+async def test_gateway_retry_paused_refusal_leaves_transcript_unchanged(
+    tmp_path, monkeypatch
+):
     """The estop pause refuses the re-sent plain-text turn (the /retry command itself passes the
     gate as a canonical command); /retry must answer it BEFORE the rewrite or the transcript
     ends up shorter and the user's turn is lost."""
     gw, store, session_entry = _paused_runner_with_exchange(
-        tmp_path, monkeypatch, "retry-paused-session",
+        tmp_path,
+        monkeypatch,
+        "retry-paused-session",
         [("user", "retry me"), ("assistant", "old answer")],
     )
     before = store._db.get_messages("retry-paused-session", include_inactive=True)
@@ -656,7 +671,9 @@ async def test_gateway_retry_paused_refusal_leaves_transcript_unchanged(tmp_path
     )
 
     assert result == paused_notice
-    assert store._db.get_messages("retry-paused-session", include_inactive=True) == before
+    assert (
+        store._db.get_messages("retry-paused-session", include_inactive=True) == before
+    )
     gw._handle_message.assert_not_awaited()
     assert session_entry.last_prompt_tokens == 111
 
@@ -668,10 +685,14 @@ async def test_gateway_retry_paused_refusal_leaves_carrier_rewind_untouched(
     """Same pause pre-check on the composite-carrier path: the carrier-aware rewind must not run
     either, or the retained scaffold is swapped for the pure scaffold with the ask gone."""
     gw, store, session_entry = _paused_runner_with_exchange(
-        tmp_path, monkeypatch, "retry-paused-carrier-session",
+        tmp_path,
+        monkeypatch,
+        "retry-paused-carrier-session",
         [("user", _composite_carrier()["content"]), ("assistant", "failed answer")],
     )
-    before = store._db.get_messages("retry-paused-carrier-session", include_inactive=True)
+    before = store._db.get_messages(
+        "retry-paused-carrier-session", include_inactive=True
+    )
     paused_notice = "⏸️ Clawksis is paused. New work is on hold; run `clawk resume`."
     monkeypatch.setattr("agent.estop.paused_reply", lambda: paused_notice)
 
@@ -680,17 +701,24 @@ async def test_gateway_retry_paused_refusal_leaves_carrier_rewind_untouched(
     )
 
     assert result == paused_notice
-    assert store._db.get_messages("retry-paused-carrier-session", include_inactive=True) == before
+    assert (
+        store._db.get_messages("retry-paused-carrier-session", include_inactive=True)
+        == before
+    )
     gw._handle_message.assert_not_awaited()
     assert session_entry.last_prompt_tokens == 111
 
 
 @pytest.mark.asyncio
-async def test_gateway_retry_draining_refusal_leaves_transcript_unchanged(tmp_path, monkeypatch):
+async def test_gateway_retry_draining_refusal_leaves_transcript_unchanged(
+    tmp_path, monkeypatch
+):
     """An externally drained gateway refuses NEW turns after canonical command dispatch, so the
     /retry re-send is refused; answering that refusal before the rewrite keeps the exchange."""
     gw, store, session_entry = _paused_runner_with_exchange(
-        tmp_path, monkeypatch, "retry-draining-session",
+        tmp_path,
+        monkeypatch,
+        "retry-draining-session",
         [("user", "retry me"), ("assistant", "old answer")],
     )
     before = store._db.get_messages("retry-draining-session", include_inactive=True)
@@ -701,7 +729,10 @@ async def test_gateway_retry_draining_refusal_leaves_transcript_unchanged(tmp_pa
     )
 
     assert result == t("gateway.busy.draining_maintenance")
-    assert store._db.get_messages("retry-draining-session", include_inactive=True) == before
+    assert (
+        store._db.get_messages("retry-draining-session", include_inactive=True)
+        == before
+    )
     gw._handle_message.assert_not_awaited()
     assert session_entry.last_prompt_tokens == 111
 
@@ -713,7 +744,9 @@ async def test_gateway_retry_session_cap_refusal_leaves_transcript_unchanged(
     """max_concurrent_sessions rejects the re-sent turn's slot claim; the same cap message must
     be answerable before the rewrite so the exchange survives for a later /retry."""
     gw, store, session_entry = _paused_runner_with_exchange(
-        tmp_path, monkeypatch, "retry-cap-session",
+        tmp_path,
+        monkeypatch,
+        "retry-cap-session",
         [("user", "retry me"), ("assistant", "old answer")],
     )
     before = store._db.get_messages("retry-cap-session", include_inactive=True)

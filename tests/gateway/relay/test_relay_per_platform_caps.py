@@ -35,7 +35,9 @@ from gateway.session import SessionSource
 from tests.gateway.relay.stub_connector import StubConnector
 
 
-def _descriptor(platform: str, max_len: int, len_unit: str = "chars") -> CapabilityDescriptor:
+def _descriptor(
+    platform: str, max_len: int, len_unit: str = "chars"
+) -> CapabilityDescriptor:
     return CapabilityDescriptor(
         contract_version=CONTRACT_VERSION,
         platform=platform,
@@ -56,7 +58,9 @@ TELEGRAM = _descriptor("telegram", 4096, len_unit="utf16")
 class MultiDescriptorStub(StubConnector):
     """StubConnector extended with the per-platform descriptor map."""
 
-    def __init__(self, primary: CapabilityDescriptor, *others: CapabilityDescriptor) -> None:
+    def __init__(
+        self, primary: CapabilityDescriptor, *others: CapabilityDescriptor
+    ) -> None:
         super().__init__(primary)
         self._by_platform = {d.platform: d for d in (primary, *others)}
 
@@ -97,7 +101,9 @@ async def test_transport_descriptor_map_resets_on_redial(monkeypatch):
     t = _make_transport()
     loop = asyncio.get_running_loop()
     t._descriptor_ready = loop.create_future()
-    await t._handle_frame(json.dumps({"type": "descriptor", "descriptor": DISCORD.__dict__}))
+    await t._handle_frame(
+        json.dumps({"type": "descriptor", "descriptor": DISCORD.__dict__})
+    )
     assert t.descriptor_for_platform("discord") is not None
 
     # Simulate _dial_and_start's reset preamble without a real socket.
@@ -115,7 +121,9 @@ async def test_transport_descriptor_map_resets_on_redial(monkeypatch):
 
     import gateway.relay.ws_transport as wst
 
-    monkeypatch.setattr(wst, "websockets", type("M", (), {"connect": staticmethod(_fake_connect)}))
+    monkeypatch.setattr(
+        wst, "websockets", type("M", (), {"connect": staticmethod(_fake_connect)})
+    )
     monkeypatch.setattr(t, "_send", _fake_send)
     monkeypatch.setattr(
         t, "_read_loop", lambda: asyncio.sleep(0)
@@ -153,5 +161,3 @@ async def test_adapter_resolves_per_chat_limits_from_inbound_platform():
 
 
 # ───────────────────── stream consumer integration ─────────────────────
-
-

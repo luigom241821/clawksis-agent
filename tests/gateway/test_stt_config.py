@@ -16,7 +16,9 @@ def test_gateway_config_stt_disabled_from_dict_nested():
     assert config.stt_enabled is False
 
 
-def test_load_gateway_config_bridges_stt_enabled_from_config_yaml(tmp_path, monkeypatch):
+def test_load_gateway_config_bridges_stt_enabled_from_config_yaml(
+    tmp_path, monkeypatch
+):
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
@@ -83,7 +85,11 @@ async def test_enrich_message_with_transcription_guards_empty_transcript():
 
     with patch(
         "tools.transcription_tools.transcribe_audio",
-        return_value={"success": True, "transcript": "   \n\t", "provider": "local_command"},
+        return_value={
+            "success": True,
+            "transcript": "   \n\t",
+            "provider": "local_command",
+        },
     ):
         result, transcripts = await runner._enrich_message_with_transcription(
             "caption",
@@ -93,5 +99,3 @@ async def test_enrich_message_with_transcription_guards_empty_transcript():
     assert "empty or inaudible" in result
     assert '""' not in result
     assert transcripts == []
-
-

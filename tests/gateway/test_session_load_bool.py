@@ -12,6 +12,7 @@ from pathlib import Path
 
 from gateway.session import SessionStore
 
+
 class TestSessionLoadBoolCorruption:
     """Verify that non-dict entries in sessions.json are skipped, not fatal."""
 
@@ -22,6 +23,7 @@ class TestSessionLoadBoolCorruption:
         (sessions_dir / "sessions.json").write_text(
             json.dumps(sessions_data), encoding="utf-8"
         )
+
         # Only routing configuration is needed for loading the index.
         class FakeConfig:
             group_sessions_per_user = True

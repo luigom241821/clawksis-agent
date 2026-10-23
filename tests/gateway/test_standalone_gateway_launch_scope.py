@@ -7,6 +7,7 @@ every unscoped read. The standalone gateway's turns and handler entry points mus
 profile's OWN scope (``.env`` over the env frozen at activation) — not skip binding because the
 config flag is off, and not rebuild from ``.env`` alone (systemd / ``op run`` injection has no file).
 """
+
 import asyncio
 from contextlib import nullcontext
 from unittest import mock
@@ -31,7 +32,9 @@ def standalone(tmp_path, monkeypatch):
     secondary.mkdir(parents=True)
     (secondary / ".env").write_text("OPENAI_API_KEY=secondary-key\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(launch))
-    monkeypatch.setenv(INJECTED, "launch-env-injected")  # systemd / `op run` style injection
+    monkeypatch.setenv(
+        INJECTED, "launch-env-injected"
+    )  # systemd / `op run` style injection
     monkeypatch.setattr(secret_scope, "_MULTIPLEX_ACTIVE", False)
     monkeypatch.setattr(launch_profile_policy, "_snapshot", None)
     runner = GatewayRunner.__new__(GatewayRunner)
@@ -51,15 +54,18 @@ def test_standalone_turn_binds_launch_profile_scope_after_hosted_activation(stan
     launch_profile_policy.activate_multi_profile_hosting()
     with _session_profile_runtime_scope({"profile_home": str(secondary)}):
         assert get_secret("OPENAI_API_KEY") == "secondary-key"
-        assert get_secret(INJECTED) is None  # the launch env never leaks into a secondary
+        assert (
+            get_secret(INJECTED) is None
+        )  # the launch env never leaks into a secondary
     assert secret_scope.is_multiplex_active()
 
     source = mock.MagicMock(profile=None)
     with runner._profile_scope_for_source(source):
         assert _keys() == ("launch-dotenv-key", "launch-env-injected")
     runner._handle_message = mock.AsyncMock(side_effect=lambda event: _keys())
-    assert asyncio.run(runner._primary_message_handler()(mock.MagicMock(source=source))) == (
-        "launch-dotenv-key", "launch-env-injected")
+    assert asyncio.run(
+        runner._primary_message_handler()(mock.MagicMock(source=source))
+    ) == ("launch-dotenv-key", "launch-env-injected")
     with pytest.raises(UnscopedSecretError):  # the guard itself is not weakened
         get_secret("OPENAI_API_KEY")
 
@@ -68,5 +74,10 @@ def test_standalone_without_hosted_activation_stays_unscoped(standalone):
     runner, _secondary = standalone
     source = mock.MagicMock(profile=None)
     assert isinstance(runner._profile_scope_for_source(source), nullcontext)
-    runner._handle_message = mock.AsyncMock(side_effect=lambda event: current_secret_scope())
-    assert asyncio.run(runner._primary_message_handler()(mock.MagicMock(source=source))) is None
+    runner._handle_message = mock.AsyncMock(
+        side_effect=lambda event: current_secret_scope()
+    )
+    assert (
+        asyncio.run(runner._primary_message_handler()(mock.MagicMock(source=source)))
+        is None
+    )

@@ -15,7 +15,9 @@ class _FakeResponse:
         if self.status_code >= 400:
             request = httpx.Request("GET", "https://chatgpt.com/backend-api/wham/usage")
             response = httpx.Response(self.status_code, request=request)
-            raise httpx.HTTPStatusError("request failed", request=request, response=response)
+            raise httpx.HTTPStatusError(
+                "request failed", request=request, response=response
+            )
 
     def json(self):
         return self._payload
@@ -55,7 +57,9 @@ def codex_usage_payload():
     }
 
 
-def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_usage_payload):
+def test_codex_usage_prefers_explicit_live_agent_credentials(
+    monkeypatch, codex_usage_payload
+):
     calls = []
     monkeypatch.setattr(
         account_usage.httpx,
@@ -65,7 +69,9 @@ def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_
     monkeypatch.setattr(
         account_usage,
         "resolve_codex_runtime_credentials",
-        lambda **kwargs: (_ for _ in ()).throw(AssertionError("legacy auth should not be used")),
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy auth should not be used")
+        ),
     )
 
     snapshot = account_usage.fetch_account_usage(
@@ -83,7 +89,9 @@ def test_codex_usage_prefers_explicit_live_agent_credentials(monkeypatch, codex_
     assert calls[0]["headers"]["Authorization"] == "Bearer live-agent-token"
 
 
-def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usage_payload):
+def test_codex_usage_falls_back_to_native_credential_pool(
+    monkeypatch, codex_usage_payload
+):
     calls = []
     monkeypatch.setattr(
         account_usage.httpx,
@@ -97,7 +105,9 @@ def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usa
         account_usage,
         "resolve_codex_runtime_credentials",
         lambda **kwargs: (_ for _ in ()).throw(
-            account_usage.AuthError("no singleton auth", provider="openai-codex", code="codex_auth_missing")
+            account_usage.AuthError(
+                "no singleton auth", provider="openai-codex", code="codex_auth_missing"
+            )
         ),
     )
 
@@ -123,54 +133,73 @@ def test_codex_usage_falls_back_to_native_credential_pool(monkeypatch, codex_usa
     assert "ChatGPT-Account-ID" not in calls[0]["headers"]
 
 
-
-
 def _explicit_creds_snapshot(monkeypatch, payload):
     calls = []
-    monkeypatch.setattr(account_usage.httpx, "Client", lambda timeout: _FakeClient(calls, payload))
+    monkeypatch.setattr(
+        account_usage.httpx, "Client", lambda timeout: _FakeClient(calls, payload)
+    )
     snapshot = account_usage.fetch_account_usage(
-        "openai-codex", base_url="https://chatgpt.com/backend-api/codex", api_key="live-agent-token",
+        "openai-codex",
+        base_url="https://chatgpt.com/backend-api/codex",
+        api_key="live-agent-token",
     )
     return snapshot, calls
 
 
 def test_codex_weekly_only_primary_window_is_labeled_weekly(monkeypatch):
     """#65387: a lone 604800s primary_window is the weekly limit, not the session one."""
-    payload = {"plan_type": "pro", "rate_limit": {
-        "primary_window": {"used_percent": 1, "limit_window_seconds": 604800},
-        "secondary_window": None,
-    }}
+    payload = {
+        "plan_type": "pro",
+        "rate_limit": {
+            "primary_window": {"used_percent": 1, "limit_window_seconds": 604800},
+            "secondary_window": None,
+        },
+    }
     snapshot, _ = _explicit_creds_snapshot(monkeypatch, payload)
     assert [(w.label, w.used_percent) for w in snapshot.windows] == [("Weekly", 1.0)]
 
 
 def test_codex_window_labels_follow_duration_with_positional_fallback(monkeypatch):
     # Swapped positions: labels must follow limit_window_seconds.
-    payload = {"rate_limit": {
-        "primary_window": {"used_percent": 4, "limit_window_seconds": 604800},
-        "secondary_window": {"used_percent": 21, "limit_window_seconds": 18000},
-    }}
+    payload = {
+        "rate_limit": {
+            "primary_window": {"used_percent": 4, "limit_window_seconds": 604800},
+            "secondary_window": {"used_percent": 21, "limit_window_seconds": 18000},
+        }
+    }
     snapshot, _ = _explicit_creds_snapshot(monkeypatch, payload)
     assert [w.label for w in snapshot.windows] == ["Weekly", "Session"]
     # Missing / unrecognized durations keep the legacy positional labels.
-    payload = {"rate_limit": {
-        "primary_window": {"used_percent": 4},
-        "secondary_window": {"used_percent": 21, "limit_window_seconds": 12345},
-    }}
+    payload = {
+        "rate_limit": {
+            "primary_window": {"used_percent": 4},
+            "secondary_window": {"used_percent": 21, "limit_window_seconds": 12345},
+        }
+    }
     snapshot, _ = _explicit_creds_snapshot(monkeypatch, payload)
     assert [w.label for w in snapshot.windows] == ["Session", "Weekly"]
 
 
-def test_codex_snapshot_exposes_exact_raw_payload_with_one_get(monkeypatch, codex_usage_payload):
+def test_codex_snapshot_exposes_exact_raw_payload_with_one_get(
+    monkeypatch, codex_usage_payload
+):
     """#79695: the decoded body rides along untouched (unknown fields included), from the single GET."""
     codex_usage_payload["future_field"] = {"nested": [1, 2]}
     snapshot, calls = _explicit_creds_snapshot(monkeypatch, codex_usage_payload)
     assert snapshot.raw == codex_usage_payload
     assert snapshot.raw["future_field"] == {"nested": [1, 2]}
     assert len(calls) == 1
-    assert [w.label for w in snapshot.windows] == ["Session", "Weekly"]  # normalized limits unchanged
+    assert [w.label for w in snapshot.windows] == [
+        "Session",
+        "Weekly",
+    ]  # normalized limits unchanged
     # Additive: existing constructor calls stay valid and default to no raw body.
-    assert account_usage.AccountUsageSnapshot(provider="anthropic", source="x", fetched_at=snapshot.fetched_at).raw is None
+    assert (
+        account_usage.AccountUsageSnapshot(
+            provider="anthropic", source="x", fetched_at=snapshot.fetched_at
+        ).raw
+        is None
+    )
 
 
 def test_codex_invalid_payload_fails_closed(monkeypatch):
@@ -178,7 +207,9 @@ def test_codex_invalid_payload_fails_closed(monkeypatch):
     assert snapshot is None
 
 
-def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, codex_usage_payload):
+def test_codex_usage_account_id_read_failure_keeps_singleton_token(
+    monkeypatch, codex_usage_payload
+):
     """When the resolver succeeds but the separate account_id read raises, the
     working singleton token must still be used (best-effort account_id), NOT
     abandoned in favor of a header-less pool credential."""
@@ -200,7 +231,11 @@ def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, 
         account_usage,
         "_read_codex_tokens",
         lambda *a, **k: (_ for _ in ()).throw(
-            account_usage.AuthError("partial store", provider="openai-codex", code="codex_auth_invalid_shape")
+            account_usage.AuthError(
+                "partial store",
+                provider="openai-codex",
+                code="codex_auth_invalid_shape",
+            )
         ),
     )
 
@@ -209,7 +244,9 @@ def test_codex_usage_account_id_read_failure_keeps_singleton_token(monkeypatch, 
     monkeypatch.setattr(
         credential_pool,
         "load_pool",
-        lambda provider: (_ for _ in ()).throw(AssertionError("pool must not be consulted")),
+        lambda provider: (_ for _ in ()).throw(
+            AssertionError("pool must not be consulted")
+        ),
     )
 
     snapshot = account_usage.fetch_account_usage("openai-codex")
@@ -278,7 +315,9 @@ class _FakeResetClient:
         return _FakeResponse(self.usage_payload)
 
     def post(self, url, headers=None, json=None):
-        self.calls.append({"method": "POST", "url": url, "headers": headers, "json": json})
+        self.calls.append(
+            {"method": "POST", "url": url, "headers": headers, "json": json}
+        )
         return _FakeResponse(self.consume_payload)
 
 
@@ -287,25 +326,14 @@ def _usage_payload_with_resets(primary_used, secondary_used, banked):
         "plan_type": "plus",
         "rate_limit": {
             "primary_window": {"used_percent": primary_used, "reset_at": 1779846359},
-            "secondary_window": {"used_percent": secondary_used, "reset_at": 1780230796},
+            "secondary_window": {
+                "used_percent": secondary_used,
+                "reset_at": 1780230796,
+            },
         },
         "rate_limit_reset_credits": {"available_count": banked},
         "credits": {"has_credits": False},
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_redeem_retries_401_with_forced_refresh(monkeypatch):
@@ -354,7 +382,9 @@ def test_redeem_missing_credentials_reports_unavailable(monkeypatch):
     monkeypatch.setattr(
         account_usage,
         "_resolve_codex_usage_credentials",
-        lambda base_url, api_key, **kwargs: (_ for _ in ()).throw(RuntimeError("no creds")),
+        lambda base_url, api_key, **kwargs: (_ for _ in ()).throw(
+            RuntimeError("no creds")
+        ),
     )
 
     result = account_usage.redeem_codex_reset_credit()
@@ -363,7 +393,9 @@ def test_redeem_missing_credentials_reports_unavailable(monkeypatch):
     assert "clawk auth" in result.message
 
 
-def test_codex_usage_401_retry_refreshes_the_explicit_credential_not_another_account(monkeypatch, codex_usage_payload):
+def test_codex_usage_401_retry_refreshes_the_explicit_credential_not_another_account(
+    monkeypatch, codex_usage_payload
+):
     """A live agent on pool entry B hands its own api_key in; after a 401 the retry must refresh B,
     not re-resolve and render the singleton/pool account A's usage."""
     request_calls = []
@@ -373,7 +405,9 @@ def test_codex_usage_401_retry_refreshes_the_explicit_credential_not_another_acc
     class Pool:
         def try_refresh_matching(self, api_key_hint=None, credential_id=None):
             refresh_hints.append(api_key_hint)
-            return SimpleNamespace(runtime_api_key="pool-B-fresh", runtime_base_url=None)
+            return SimpleNamespace(
+                runtime_api_key="pool-B-fresh", runtime_base_url=None
+            )
 
     class Client:
         def __enter__(self):
@@ -386,14 +420,26 @@ def test_codex_usage_401_retry_refreshes_the_explicit_credential_not_another_acc
             request_calls.append(headers["Authorization"])
             return responses.pop(0)
 
-    monkeypatch.setattr(account_usage, "resolve_codex_runtime_credentials",
-                        lambda **kwargs: pytest.fail("must not re-resolve another account's credential"))
-    monkeypatch.setattr(account_usage, "_read_codex_tokens", lambda: {"tokens": {"access_token": "singleton-A"}})
+    monkeypatch.setattr(
+        account_usage,
+        "resolve_codex_runtime_credentials",
+        lambda **kwargs: pytest.fail(
+            "must not re-resolve another account's credential"
+        ),
+    )
+    monkeypatch.setattr(
+        account_usage,
+        "_read_codex_tokens",
+        lambda: {"tokens": {"access_token": "singleton-A"}},
+    )
     monkeypatch.setattr("agent.credential_pool.load_pool", lambda provider: Pool())
     monkeypatch.setattr(account_usage.httpx, "Client", lambda timeout: Client())
 
     snapshot = account_usage.fetch_account_usage(
-        "openai-codex", base_url="https://chatgpt.com/backend-api/codex", api_key="pool-B-revoked")
+        "openai-codex",
+        base_url="https://chatgpt.com/backend-api/codex",
+        api_key="pool-B-revoked",
+    )
 
     assert snapshot is not None
     assert refresh_hints == ["pool-B-revoked"]

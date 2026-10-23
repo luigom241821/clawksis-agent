@@ -1155,7 +1155,6 @@ class TestMCPServerTask:
         )
 
     @requires_mcp_sdk
-
     def test_start_connects_and_discovers_tools(self):
         """start() creates a Task that connects, discovers tools, and waits."""
         from tools.mcp_tool import MCPServerTask
@@ -2353,6 +2352,8 @@ class TestConvertMessages:
         assert json.loads(result[0]["tool_calls"][0]["function"]["arguments"]) == {
             "city": "London"
         }
+
+
 class TestSamplingCallbackText:
     def setup_method(self):
         self.handler = SamplingHandler("txt", {})
@@ -2406,6 +2407,8 @@ class TestSamplingCallbackText:
                 },
             }
         ]
+
+
 class TestSamplingCallbackToolUse:
     def setup_method(self):
         self.handler = SamplingHandler("tu", {})
@@ -2431,6 +2434,8 @@ class TestSamplingCallbackToolUse:
         assert tc.name == "get_weather"
         assert tc.id == "call_1"
         assert tc.input == {"city": "London"}
+
+
 class TestToolLoopGovernance:
     def test_max_tool_rounds_enforcement(self):
         """After max_tool_rounds consecutive tool responses, an error is returned."""
@@ -2464,6 +2469,8 @@ class TestToolLoopGovernance:
         ):
             result = asyncio.run(handler(None, _make_sampling_params()))
             assert isinstance(result, ErrorData)
+
+
 class TestSamplingErrors:
     def test_rate_limit_error(self):
         handler = SamplingHandler("rle", {"max_rpm": 1})
@@ -2561,6 +2568,8 @@ class TestModelWhitelist:
             assert isinstance(result, ErrorData)
             assert "not allowed" in result.message
             assert handler.metrics["errors"] == 1
+
+
 class TestMalformedToolCallArgs:
     def test_invalid_json_wrapped_as_raw(self):
         """Malformed JSON arguments get wrapped in {"_raw": ...}."""
@@ -2580,6 +2589,8 @@ class TestMalformedToolCallArgs:
         tc = result.content[0]
         assert isinstance(tc, ToolUseContent)
         assert tc.input == {"_raw": "not valid json {{{"}
+
+
 class TestMetricsTracking:
     def test_request_and_token_metrics(self):
         handler = SamplingHandler("met", {})

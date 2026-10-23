@@ -48,7 +48,11 @@ from tests.fakes.fake_llm_provider import FakeLLMServer, Text
 
 # Real process-tree kills (taskkill /T /F, psutil) of children this test spawned with a
 # scratch USERPROFILE/CLAWK_HOME; the live-system guard would refuse the taskkill argv.
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration, pytest.mark.live_system_guard_bypass]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+]
 
 READY_TIMEOUT = 120.0
 
@@ -58,20 +62,28 @@ def test_version_reports_checkout_identity(tmp_path: Path) -> None:
     res = run([str(clawk_exe(home)), "--version"], home, timeout=120)
     assert res.returncode == 0, res.tail()
     version = get_version_info().derived_version
-    assert version != "unknown", "the checkout must have a readable release or commit identity"
+    assert version != "unknown", (
+        "the checkout must have a readable release or commit identity"
+    )
     assert f"Clawksis v{version} (" in res.stdout, (
-        f"--version does not report this checkout's {version}:\n{res.tail()}")
+        f"--version does not report this checkout's {version}:\n{res.tail()}"
+    )
 
 
 def test_chat_oneshot_turn_persists(tmp_path: Path) -> None:
     prompt_id, reply_id = nonce("PROMPT"), nonce("REPLY")
     with FakeLLMServer([Text(f"The answer is {reply_id}.")]) as srv:
         home = make_home(tmp_path, srv.base_url)
-        res = run([str(clawk_exe(home)), "chat", "-q", f"Say the code {prompt_id}", "-Q"], home)
+        res = run(
+            [str(clawk_exe(home)), "chat", "-q", f"Say the code {prompt_id}", "-Q"],
+            home,
+        )
         assert res.returncode == 0, res.tail()
         assert reply_id in res.stdout, f"reply not printed:\n{res.tail()}"
         mains = srv.main_requests()
-        assert mains and prompt_id in last_user(mains[0]), "the prompt never reached the provider"
+        assert mains and prompt_id in last_user(mains[0]), (
+            "the prompt never reached the provider"
+        )
 
     announced = re.search(r"session_id:\s*(\S+)", res.stdout + res.stderr)
     assert announced, f"CLI did not announce a session id:\n{res.tail()}"
@@ -80,7 +92,8 @@ def test_chat_oneshot_turn_persists(tmp_path: Path) -> None:
     assert prompt_id in (by_role.get("user") or {"content": ""})["content"], rows
     assert reply_id in (by_role.get("assistant") or {"content": ""})["content"], rows
     assert {r["session_id"] for r in rows} == {announced.group(1)}, (
-        f"persisted rows belong to {[r['session_id'] for r in rows]}, CLI announced {announced.group(1)}")
+        f"persisted rows belong to {[r['session_id'] for r in rows]}, CLI announced {announced.group(1)}"
+    )
 
 
 def _port_open(port: int) -> bool:
@@ -91,11 +104,18 @@ def _port_open(port: int) -> bool:
 
 def _spawn_serve(home: WinHome) -> subprocess.Popen:
     # Desktop spawn shape (electron/main.ts): token + desktop flag in env, stdin closed.
-    env = {"CLAWK_DESKTOP": "1", "CLAWK_DASHBOARD_SESSION_TOKEN": nonce("tok"),
-           "TERMINAL_CWD": str(home.project)}
+    env = {
+        "CLAWK_DESKTOP": "1",
+        "CLAWK_DASHBOARD_SESSION_TOKEN": nonce("tok"),
+        "TERMINAL_CWD": str(home.project),
+    }
     return subprocess.Popen(
-        clawk_argv("serve", "--host", "127.0.0.1", "--port", "0"), cwd=home.profile, env=home.env(env),
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        clawk_argv("serve", "--host", "127.0.0.1", "--port", "0"),
+        cwd=home.profile,
+        env=home.env(env),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
 
 
@@ -112,7 +132,11 @@ def _serve_ready(home: WinHome) -> tuple[subprocess.Popen, int]:
         for raw in proc.stdout:
             line = raw.decode("utf-8", errors="replace")
             seen.append(line)
-            m = None if announced else re.search(r"CLAWK_BACKEND_READY port=(\d+)", line)
+            m = (
+                None
+                if announced
+                else re.search(r"CLAWK_BACKEND_READY port=(\d+)", line)
+            )
             if m:
                 announced = True
                 found.put(int(m.group(1)))
@@ -123,7 +147,9 @@ def _serve_ready(home: WinHome) -> tuple[subprocess.Popen, int]:
         port = found.get(timeout=READY_TIMEOUT)
     except queue.Empty:
         port = None
-    assert port is not None, f"serve (rc={proc.poll()}) announced no READY port:\n{''.join(seen)[-3000:]}"
+    assert port is not None, (
+        f"serve (rc={proc.poll()}) announced no READY port:\n{''.join(seen)[-3000:]}"
+    )
     assert _port_open(port), f"READY announced port {port} but nothing accepts on it"
     return proc, port
 
@@ -137,7 +163,9 @@ def test_serve_tree_kill_leaves_no_orphans_and_reboots(tmp_path: Path) -> None:
             # Positive control: the ownership scan must see the backend itself, or an empty
             # scan after the kill would prove nothing.
             owned = {p.pid for p in owned_processes(home, since=started)}
-            assert first.pid in owned, f"ownership scan cannot see serve pid {first.pid} (saw {owned})"
+            assert first.pid in owned, (
+                f"ownership scan cannot see serve pid {first.pid} (saw {owned})"
+            )
 
             killed = taskkill_tree(first.pid)
             assert killed.returncode == 0, killed.stderr
@@ -145,7 +173,9 @@ def test_serve_tree_kill_leaves_no_orphans_and_reboots(tmp_path: Path) -> None:
             # parent link taskkill /T cannot follow) still carries this profile's
             # CLAWK_HOME / cwd, and is an orphan the Desktop quit leaves behind.
             left = owned_survivors(home, since=started, timeout=30)
-            assert not left, f"processes of the killed backend outlived taskkill /T /F: {left}"
+            assert not left, (
+                f"processes of the killed backend outlived taskkill /T /F: {left}"
+            )
             wait_until(lambda: not _port_open(port), 30, f"port {port} to be released")
 
             second, port2 = _serve_ready(home)
@@ -168,12 +198,26 @@ def test_gateway_stop_drains_gracefully(tmp_path: Path) -> None:
         log = tmp_path / "gateway.log"
         started = time.time()
         with log.open("wb") as fh:
-            gw = subprocess.Popen(clawk_argv("gateway", "run"), cwd=home.project, env=home.env(),
-                                  stdin=subprocess.DEVNULL, stdout=fh, stderr=subprocess.STDOUT)
+            gw = subprocess.Popen(
+                clawk_argv("gateway", "run"),
+                cwd=home.project,
+                env=home.env(),
+                stdin=subprocess.DEVNULL,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+            )
         try:
-            wait_until(lambda: _gateway_state(home).get("gateway_state") == "running" or gw.poll() is not None,
-                       READY_TIMEOUT, "gateway_state.json to report running")
-            assert gw.poll() is None, f"gateway exited {gw.returncode} during boot:\n{log.read_text(errors='replace')}"
+            wait_until(
+                lambda: (
+                    _gateway_state(home).get("gateway_state") == "running"
+                    or gw.poll() is not None
+                ),
+                READY_TIMEOUT,
+                "gateway_state.json to report running",
+            )
+            assert gw.poll() is None, (
+                f"gateway exited {gw.returncode} during boot:\n{log.read_text(errors='replace')}"
+            )
 
             res = clawk(home, "gateway", "stop")
             assert res.returncode == 0 and "Stopped" in res.stdout, res.tail()
@@ -181,8 +225,11 @@ def test_gateway_stop_drains_gracefully(tmp_path: Path) -> None:
             state = _gateway_state(home)
             assert state.get("gateway_state") == "stopped", (
                 f"gateway did not drain through its graceful path (rc={code}); last state {state}\n"
-                f"{log.read_text(errors='replace')[-3000:]}")
-            assert not (home.clawk_home / "gateway.pid").exists(), "gateway.pid left behind after stop"
+                f"{log.read_text(errors='replace')[-3000:]}"
+            )
+            assert not (home.clawk_home / "gateway.pid").exists(), (
+                "gateway.pid left behind after stop"
+            )
             left = owned_survivors(home, since=started, timeout=30)
             assert not left, f"processes of the gateway survived stop: {left}"
         finally:

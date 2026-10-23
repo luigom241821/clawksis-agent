@@ -13,7 +13,9 @@ from run_agent import AIAgent
 from agent.context_compressor import ContextCompressor
 
 
-def _make_agent(provider="copilot", base_url="https://api.githubcopilot.com") -> AIAgent:
+def _make_agent(
+    provider="copilot", base_url="https://api.githubcopilot.com"
+) -> AIAgent:
     """Minimal AIAgent with a context_compressor, skipping __init__."""
     agent = AIAgent.__new__(AIAgent)
 
@@ -59,8 +61,6 @@ def test_switch_to_openrouter_reapplies_attribution_headers(mock_ctx_len):
     headers = agent._client_kwargs.get("default_headers") or {}
     assert "HTTP-Referer" in headers
     assert headers.get("X-Title")
-
-
 
 
 @patch("agent.model_metadata.get_model_context_length", return_value=131_072)

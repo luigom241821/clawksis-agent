@@ -68,5 +68,3 @@ def test_moa_reference_relayed_with_label_and_index(server, emits):
     assert payload["text"] == "Paris is the capital of France."
     assert payload["index"] == 1
     assert payload["count"] == 2
-
-

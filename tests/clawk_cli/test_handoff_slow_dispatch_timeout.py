@@ -43,6 +43,7 @@ def db(tmp_path, monkeypatch):
 # 1. State layer: fail_handoff CAS
 # ---------------------------------------------------------------------------
 
+
 class TestFailHandoffCAS:
     def test_cas_fails_pending_row(self, db):
         db.ensure_session("s1", "cli")
@@ -81,6 +82,7 @@ class TestFailHandoffCAS:
 # ---------------------------------------------------------------------------
 # 2. CLI wait loop
 # ---------------------------------------------------------------------------
+
 
 def _run_handoff(db, session_id, monkeypatch, time_budget=30.0):
     """Drive the real _handle_handoff_command against a real SessionDB.
@@ -126,10 +128,12 @@ def _run_handoff(db, session_id, monkeypatch, time_budget=30.0):
 
     import cli as cli_mod
 
-    with patch.object(gwc, "load_gateway_config", return_value=gw_config), \
-         patch("time.time", side_effect=fake_time), \
-         patch("time.sleep", side_effect=fake_sleep), \
-         patch.object(cli_mod, "_cprint", side_effect=lambda s="": printed.append(s)):
+    with (
+        patch.object(gwc, "load_gateway_config", return_value=gw_config),
+        patch("time.time", side_effect=fake_time),
+        patch("time.sleep", side_effect=fake_sleep),
+        patch.object(cli_mod, "_cprint", side_effect=lambda s="": printed.append(s)),
+    ):
         keep_going = host._handle_handoff_command("/handoff discord")
     return keep_going, printed, host
 
@@ -213,6 +217,7 @@ class TestCLIWaitLoop:
 # 3. Desktop handoff.fail RPC
 # ---------------------------------------------------------------------------
 
+
 class TestDesktopHandoffFail:
     def _call(self, db, session_key):
         """Invoke the handoff.fail handler body with server-global stand-ins."""
@@ -239,8 +244,11 @@ class TestDesktopHandoffFail:
         globs["_ok"] = lambda rid, result: {"ok": True, **result}
         globs["_db_unavailable_error"] = lambda rid, code: {"error": code}
         rebound = types.FunctionType(
-            handler.__code__, globs, handler.__name__,
-            handler.__defaults__, handler.__closure__,
+            handler.__code__,
+            globs,
+            handler.__name__,
+            handler.__defaults__,
+            handler.__closure__,
         )
         return rebound("rid", {"error": "poll timeout"})
 

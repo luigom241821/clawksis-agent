@@ -31,17 +31,19 @@ OFFER_CHOICES = (
 )
 _NO_THANKS = len(OFFER_CHOICES) - 1
 DOCS_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/developer-guide/relay-shared-metrics"
-_OFFER_DESCRIPTION = "\n".join((
-    "Shared metrics are bounded counters: activity, outcomes, error classes (with a",
-    "fixed-list reason when a memory write, compression, update or install fails),",
-    "model routes, token totals, feature use and coarse machine facts. Never prompts,",
-    "files, paths, setting values or error text. Sharing sends them to Nous once a",
-    "day. Apart from a one-time install note, data from before you opt in is never",
-    "sent.",
-    f"Details: {DOCS_URL}",
-    "Change it any time: clawk setup telemetry",
-))
-_REASK_NOTE = "Asking once more: an earlier version could save \"No thanks\" before you saw this question."
+_OFFER_DESCRIPTION = "\n".join(
+    (
+        "Shared metrics are bounded counters: activity, outcomes, error classes (with a",
+        "fixed-list reason when a memory write, compression, update or install fails),",
+        "model routes, token totals, feature use and coarse machine facts. Never prompts,",
+        "files, paths, setting values or error text. Sharing sends them to Nous once a",
+        "day. Apart from a one-time install note, data from before you opt in is never",
+        "sent.",
+        f"Details: {DOCS_URL}",
+        "Change it any time: clawk setup telemetry",
+    )
+)
+_REASK_NOTE = 'Asking once more: an earlier version could save "No thanks" before you saw this question.'
 
 # Clawksis (BYOK): never volunteer the "Share with Nous" offer (end of ``clawk setup``, before the
 # first chat). Shared metrics stay off (the shipped default) unless the user opts in explicitly with
@@ -100,7 +102,11 @@ def save_consent(enabled: bool, send: bool, config: dict | None = None) -> None:
     profile was asked again on every surface. ``config`` (a caller's in-memory copy, e.g. the
     wizard's) gets the same answer so its later save agrees. Sending cannot outlive collection."""
     from clawk_cli.config import (
-        _write_user_config, get_config_path, is_managed, managed_error, require_readable_config_before_write,
+        _write_user_config,
+        get_config_path,
+        is_managed,
+        managed_error,
+        require_readable_config_before_write,
     )
     from clawk_cli.setup import _record_send_consent_change
 
@@ -135,20 +141,29 @@ def offer_consent(config: dict | None = None, *, reask: bool = False) -> bool:
     # answer it ("No thanks") before it was ever on screen, so the user was never really asked.
     flush_stdin()
     idx = curses_radiolist(
-        "Help improve Clawksis?", [label for label, _, _ in OFFER_CHOICES], selected=_NO_THANKS, cancel_returns=-1,
-        description=f"{_REASK_NOTE}\n{_OFFER_DESCRIPTION}" if reask else _OFFER_DESCRIPTION,
+        "Help improve Clawksis?",
+        [label for label, _, _ in OFFER_CHOICES],
+        selected=_NO_THANKS,
+        cancel_returns=-1,
+        description=f"{_REASK_NOTE}\n{_OFFER_DESCRIPTION}"
+        if reask
+        else _OFFER_DESCRIPTION,
     )
     if idx < 0 and reask:
         save_consent(False, False, config)
-        print_info("Kept \"No thanks\". Change it any time with `clawk setup telemetry`.")
+        print_info('Kept "No thanks". Change it any time with `clawk setup telemetry`.')
         return True
     if idx < 0:
-        print_info("Not answered; Clawksis will ask again. Decide any time with `clawk setup telemetry`.")
+        print_info(
+            "Not answered; Clawksis will ask again. Decide any time with `clawk setup telemetry`."
+        )
         return False
     _, enabled, send = OFFER_CHOICES[idx]
     save_consent(enabled, send, config)
     outcome = "sent to Nous once a day" if send else "off"
-    print_success(f"Shared metrics {outcome}. Change it any time with `clawk setup telemetry`.")
+    print_success(
+        f"Shared metrics {outcome}. Change it any time with `clawk setup telemetry`."
+    )
     return True
 
 
@@ -180,7 +195,10 @@ def offer_consent_before_chat(args: Any) -> None:
 
     if not UNSOLICITED_OFFER:
         return
-    if any(getattr(args, name, None) for name in ("query", "query_file", "oneshot", "oneshot_exit")):
+    if any(
+        getattr(args, name, None)
+        for name in ("query", "query_file", "oneshot", "oneshot_exit")
+    ):
         return
     if getattr(args, "safe_mode", False) or getattr(args, "ignore_user_config", False):
         return

@@ -1,4 +1,5 @@
 """One launch's hook consent and Kanban/terminal pins never reach the auto-started shared daemon."""
+
 import json
 import os
 from pathlib import Path
@@ -10,32 +11,52 @@ import pytest
 # Every launch-scoped value a client process may hold when it auto-starts the shared daemon
 # (SWEEP_daemon-launch-env.md): consent, Kanban worker pins, the launching turn's session identity,
 # human-presence and one-shot markers, a bot-to-bot turn author, a terminal's systemd markers.
-LEAKS = {'CLAWK_ACCEPT_HOOKS': '1', 'CLAWK_KANBAN_TASK': 't_1', 'CLAWK_KANBAN_BOARD': 'other',
-         'CLAWK_KANBAN_DB': '/x/kanban.db', 'CLAWK_SESSION_SOURCE': 'kanban', 'TERMINAL_CWD': '/x',
-         'CLAWK_TENANT': 'acme', 'CLAWK_SESSION_SOURCE_EXPLICIT': '1', 'CLAWK_TURN_AUTHOR': '{"handle":"x"}',
-         'CLAWK_INTERACTIVE': '1', 'CLAWK_GATEWAY_SESSION': '1', 'CLAWK_SINGLE_QUERY_SESSION': '1',
-         'CLAWK_SESSION_ID': 'launching-turn', 'CLAWK_SESSION_KEY': 'agent:main:tui:x',
-         'CLAWK_SESSION_PLATFORM': 'tui', 'CLAWK_SESSION_CHAT_ID': 'c1', 'CLAWK_CRON_SESSION': '1',
-         # A terminal running under a systemd service: not the daemon's own supervisor.
-         'INVOCATION_ID': 'terminal-scope', 'JOURNAL_STREAM': '8:1'}
+LEAKS = {
+    "CLAWK_ACCEPT_HOOKS": "1",
+    "CLAWK_KANBAN_TASK": "t_1",
+    "CLAWK_KANBAN_BOARD": "other",
+    "CLAWK_KANBAN_DB": "/x/kanban.db",
+    "CLAWK_SESSION_SOURCE": "kanban",
+    "TERMINAL_CWD": "/x",
+    "CLAWK_TENANT": "acme",
+    "CLAWK_SESSION_SOURCE_EXPLICIT": "1",
+    "CLAWK_TURN_AUTHOR": '{"handle":"x"}',
+    "CLAWK_INTERACTIVE": "1",
+    "CLAWK_GATEWAY_SESSION": "1",
+    "CLAWK_SINGLE_QUERY_SESSION": "1",
+    "CLAWK_SESSION_ID": "launching-turn",
+    "CLAWK_SESSION_KEY": "agent:main:tui:x",
+    "CLAWK_SESSION_PLATFORM": "tui",
+    "CLAWK_SESSION_CHAT_ID": "c1",
+    "CLAWK_CRON_SESSION": "1",
+    # A terminal running under a systemd service: not the daemon's own supervisor.
+    "INVOCATION_ID": "terminal-scope",
+    "JOURNAL_STREAM": "8:1",
+}
 
 
 @pytest.mark.platforms("linux")
 @pytest.mark.spawns_gateway_lookalike  # stub interpreter records env then exits; reaped below
 def test_daemon_does_not_inherit_hook_consent_or_worker_pins(tmp_path, monkeypatch):
     from clawk_cli import gateway_runtime_start as start
-    home = tmp_path / 'home'
+
+    home = tmp_path / "home"
     home.mkdir(mode=0o700)
-    witness = home / 'env.json'
-    executable = tmp_path / 'owned-interpreter'
+    witness = home / "env.json"
+    executable = tmp_path / "owned-interpreter"
     executable.write_text(
-        '#!' + sys.executable + '\nimport json, os\n'
+        "#!"
+        + sys.executable
+        + "\nimport json, os\n"
         + f'open({str(witness)!r}, "w").write(json.dumps('
-        + '{k: os.environ.get(k) for k in ' + repr([*LEAKS, 'CLAWK_INFERENCE_MODEL']) + '}))\n',
-        encoding='utf-8')
+        + "{k: os.environ.get(k) for k in "
+        + repr([*LEAKS, "CLAWK_INFERENCE_MODEL"])
+        + "}))\n",
+        encoding="utf-8",
+    )
     executable.chmod(0o700)
-    monkeypatch.setattr(sys, 'executable', str(executable))
-    for key, value in {**LEAKS, 'CLAWK_INFERENCE_MODEL': 'fallback'}.items():
+    monkeypatch.setattr(sys, "executable", str(executable))
+    for key, value in {**LEAKS, "CLAWK_INFERENCE_MODEL": "fallback"}.items():
         monkeypatch.setenv(key, value)
     child = start.spawn_unmanaged_gateway(home, deadline=time.monotonic() + 5)
     try:
@@ -45,5 +66,7 @@ def test_daemon_does_not_inherit_hook_consent_or_worker_pins(tmp_path, monkeypat
             child.kill()
             child.wait(timeout=5)
     seen = json.loads(Path(witness).read_text())
-    assert seen == {**dict.fromkeys(LEAKS), 'CLAWK_INFERENCE_MODEL': 'fallback'}
-    assert os.environ['CLAWK_ACCEPT_HOOKS'] == '1'  # the launching process keeps its own policy
+    assert seen == {**dict.fromkeys(LEAKS), "CLAWK_INFERENCE_MODEL": "fallback"}
+    assert (
+        os.environ["CLAWK_ACCEPT_HOOKS"] == "1"
+    )  # the launching process keeps its own policy

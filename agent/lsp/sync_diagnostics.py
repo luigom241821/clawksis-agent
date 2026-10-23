@@ -12,6 +12,7 @@ Returned diagnostics use the shape typescript-language-server pushes (0-based ra
 ``source`` "typescript"), so a sync verdict and a pushed baseline compare equal by
 ``agent.lsp.client._diagnostic_key``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,9 @@ def supported(client: Any) -> bool:
     return client.server_id in _TS_SERVERS and not getattr(client, _UNSUPPORTED, False)
 
 
-async def request(client: Any, abs_path: str, *, timeout: float) -> Optional[list[dict[str, Any]]]:
+async def request(
+    client: Any, abs_path: str, *, timeout: float
+) -> Optional[list[dict[str, Any]]]:
     """Diagnostics for the text last synced to ``client`` for ``abs_path``, or None when the server has
     no synchronous request (it failed): wait for a push then.  Raises ``TimeoutError`` when the server
     did not answer within ``timeout`` (a cold project still loading): there is no verdict in budget,
@@ -42,20 +45,34 @@ async def request(client: Any, abs_path: str, *, timeout: float) -> Optional[lis
     out: list[dict[str, Any]] = []
     for command in _TS_COMMANDS:
         try:
-            reply = await client._send_request_with_retry("workspace/executeCommand", {
-                "command": "typescript.tsserverRequest",
-                "arguments": [command, {"file": abs_path, "includeLinePosition": True}, {"executionTarget": 0}],
-            }, timeout=timeout)
+            reply = await client._send_request_with_retry(
+                "workspace/executeCommand",
+                {
+                    "command": "typescript.tsserverRequest",
+                    "arguments": [
+                        command,
+                        {"file": abs_path, "includeLinePosition": True},
+                        {"executionTarget": 0},
+                    ],
+                },
+                timeout=timeout,
+            )
         except TimeoutError:
             raise TimeoutError(f"{command} did not answer in {timeout:.1f}s") from None
-        except LSPRequestError as e:  # the server rejects the command: use the push wait from now on
+        except (
+            LSPRequestError
+        ) as e:  # the server rejects the command: use the push wait from now on
             logger.debug("[%s] %s rejected: %s", client.server_id, command, e)
             setattr(client, _UNSUPPORTED, True)
             return None
         except LSPProtocolError as e:  # connection trouble: the push wait reports it
             logger.debug("[%s] %s failed: %s", client.server_id, command, e)
             return None
-        body = reply.get("body") if isinstance(reply, dict) and reply.get("success", True) else None
+        body = (
+            reply.get("body")
+            if isinstance(reply, dict) and reply.get("success", True)
+            else None
+        )
         if not isinstance(body, list):
             setattr(client, _UNSUPPORTED, True)
             return None
@@ -70,8 +87,16 @@ def _from_tsserver(item: Any) -> Optional[dict[str, Any]]:
     if not isinstance(start, dict) or not isinstance(end, dict):
         return None
     diag: dict[str, Any] = {
-        "range": {"start": {"line": start.get("line", 1) - 1, "character": start.get("offset", 1) - 1},
-                  "end": {"line": end.get("line", 1) - 1, "character": end.get("offset", 1) - 1}},
+        "range": {
+            "start": {
+                "line": start.get("line", 1) - 1,
+                "character": start.get("offset", 1) - 1,
+            },
+            "end": {
+                "line": end.get("line", 1) - 1,
+                "character": end.get("offset", 1) - 1,
+            },
+        },
         "message": str(item.get("message") or ""),
         "severity": _TS_SEVERITY.get(str(item.get("category") or "error"), 1),
         "source": item.get("source") or "typescript",

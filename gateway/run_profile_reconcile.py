@@ -18,6 +18,7 @@ The same watcher tick (on every gateway, multiplexed or not) re-syncs a home's s
 afterwards must register them without a restart (#132993). That re-runs hook registration only, never
 an adapter rebuild.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -63,7 +64,11 @@ def _added_profile_blocker(launch: Path) -> Optional[str]:
     """Why a single-profile boot must not start multiplexing now that a second profile exists: the
     ``gateway.auto_multiplex_migration: false`` opt-out on the default profile, else boot's preflight."""
     from clawk_cli.gateway_migrate_guards import auto_migration_opted_out
-    from clawk_cli.gateway_multiplex_mode import AUTO_MIGRATION_OPTED_OUT_REASON, implicit_multiplex_blocker
+    from clawk_cli.gateway_multiplex_mode import (
+        AUTO_MIGRATION_OPTED_OUT_REASON,
+        implicit_multiplex_blocker,
+    )
+
     if auto_migration_opted_out(launch):
         return AUTO_MIGRATION_OPTED_OUT_REASON
     return implicit_multiplex_blocker()
@@ -91,19 +96,29 @@ class GatewayProfileReconcileMixin:
         """Profiles this multiplexer currently serves (active first), from the live bookkeeping."""
         homes = self._served_profile_homes or {}
         active = getattr(self, "_primary_profile_name", None) or "default"
-        return ([active] if active in homes or not homes else []) + sorted(n for n in homes if n != active)
+        return ([active] if active in homes or not homes else []) + sorted(
+            n for n in homes if n != active
+        )
 
     def _note_served_profiles(self, profile_homes) -> None:
         """Called by ``_record_served_profiles``: remember the served set and each home's signature."""
         homes = {str(name): Path(home) for name, home in profile_homes}
         self._served_profile_homes = homes
-        sigs = self._served_profile_signatures if isinstance(self._served_profile_signatures, dict) else {}
-        self._served_profile_signatures = {name: sigs.get(name) or profile_serve_signature(home)
-                                           for name, home in homes.items()}
+        sigs = (
+            self._served_profile_signatures
+            if isinstance(self._served_profile_signatures, dict)
+            else {}
+        )
+        self._served_profile_signatures = {
+            name: sigs.get(name) or profile_serve_signature(home)
+            for name, home in homes.items()
+        }
 
     # ── watcher ───────────────────────────────────────────────────────────────────────────────────
 
-    async def _profile_reconcile_watcher(self, interval: float = _PROFILE_RESCAN_INTERVAL_SECS) -> None:
+    async def _profile_reconcile_watcher(
+        self, interval: float = _PROFILE_RESCAN_INTERVAL_SECS
+    ) -> None:
         """Supervised safety net, every ``interval`` seconds: re-sync shell hooks whose consent changed
         (every gateway), then rescan ``profiles/`` when multiplexing (creators signal the control
         socket for an immediate rescan); a gateway standalone only because the host had one profile
@@ -121,7 +136,10 @@ class GatewayProfileReconcileMixin:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.warning("Served-profile reconcile failed; retrying next cycle", exc_info=True)
+                logger.warning(
+                    "Served-profile reconcile failed; retrying next cycle",
+                    exc_info=True,
+                )
 
     async def _sync_hooks_on_consent_change(self) -> None:
         """Re-sync the shell hooks of each home (launch + served) whose consent allowlist or config
@@ -129,9 +147,19 @@ class GatewayProfileReconcileMixin:
         firing. A home seen for the first time syncs once (consent may have landed after startup
         registered). Hook registration only: adapters and sessions are never touched."""
         from clawk_constants import get_process_clawk_home
-        homes = {Path(h) for h in (get_process_clawk_home(), *(self._served_profile_homes or {}).values())}
+
+        homes = {
+            Path(h)
+            for h in (
+                get_process_clawk_home(),
+                *(self._served_profile_homes or {}).values(),
+            )
+        }
         self._hook_consent_signatures = await asyncio.to_thread(
-            self._resync_changed_hook_consent, homes, self._hook_consent_signatures or {})
+            self._resync_changed_hook_consent,
+            homes,
+            self._hook_consent_signatures or {},
+        )
 
     def _resync_changed_hook_consent(self, homes, seen: dict) -> dict:
         """Blocking half of ``_sync_hooks_on_consent_change``; returns the signatures it applied. The
@@ -140,27 +168,42 @@ class GatewayProfileReconcileMixin:
         from agent.shell_hooks import ALLOWLIST_FILENAME, sync_from_config
         from gateway.run import _load_gateway_config, _profile_runtime_scope
         from gateway.run_turn import GatewayTurnMixin
+
         current = {}
         for home in (h.resolve() for h in homes):
-            sig = tuple(_stat_signature(home / name) for name in (ALLOWLIST_FILENAME, "config.yaml"))
+            sig = tuple(
+                _stat_signature(home / name)
+                for name in (ALLOWLIST_FILENAME, "config.yaml")
+            )
             if seen.get(str(home), ()) == sig:
                 current[str(home)] = sig
                 continue
             load = partial(_load_gateway_config, home / "config.yaml")
-            scope = (_profile_runtime_scope(home) if self._multiplex_on()
-                     else GatewayTurnMixin._standalone_launch_scope())
+            scope = (
+                _profile_runtime_scope(home)
+                if self._multiplex_on()
+                else GatewayTurnMixin._standalone_launch_scope()
+            )
             try:
                 with scope:
                     sync_from_config(load)
-            except Exception:  # health: allow BLE001 -- one home's failure never blocks the others
-                logger.warning("shell-hook re-sync failed for %s; retrying next cycle", home, exc_info=True)
+            except (
+                Exception
+            ):  # health: allow BLE001 -- one home's failure never blocks the others
+                logger.warning(
+                    "shell-hook re-sync failed for %s; retrying next cycle",
+                    home,
+                    exc_info=True,
+                )
                 continue
             current[str(home)] = sig
         return current
 
     # ── reconcile ─────────────────────────────────────────────────────────────────────────────────
 
-    async def reconcile_served_profiles(self, *, reason: str = "request") -> dict[str, Any]:
+    async def reconcile_served_profiles(
+        self, *, reason: str = "request"
+    ) -> dict[str, Any]:
         """Diff ``profiles/`` (what exists now) against the served set (the process reservation):
         reserve + build the runtime and start adapters for new profiles, tear down, unroute and
         unreserve deleted ones, (re)build adapters for served profiles whose config/.env changed.
@@ -169,16 +212,36 @@ class GatewayProfileReconcileMixin:
         Returns ``{"added", "removed", "rescanned", "parked", "served_profiles"}``."""
         from gateway.run import MultiplexConfigError
         from clawk_cli.profiles import profiles_to_serve
-        result: dict[str, Any] = {"added": [], "removed": [], "rescanned": [], "parked": [], "reason": reason}
+
+        result: dict[str, Any] = {
+            "added": [],
+            "removed": [],
+            "rescanned": [],
+            "parked": [],
+            "reason": reason,
+        }
         if not self._multiplex_on() and not await self._multiplex_for_added_profile():
-            return {**result, "multiplex": False, "served_profiles": self.served_profile_names()}
+            return {
+                **result,
+                "multiplex": False,
+                "served_profiles": self.served_profile_names(),
+            }
         if not self._running or self._served_profile_homes is None:
             # Startup enumerates profiles/ itself; a rescan before it finishes has nothing to diff against.
-            return {**result, "pending": True, "served_profiles": self.served_profile_names()}
+            return {
+                **result,
+                "pending": True,
+                "served_profiles": self.served_profile_names(),
+            }
         async with self._reconcile_lock():
             active = getattr(self, "_primary_profile_name", None) or "default"
-            live = {str(name): Path(home) for name, home in profiles_to_serve(multiplex=True)}
-            listed = set(live)  # a probe skip below is not a deletion: it never clears a parked verdict
+            live = {
+                str(name): Path(home)
+                for name, home in profiles_to_serve(multiplex=True)
+            }
+            listed = set(
+                live
+            )  # a probe skip below is not a deletion: it never clears a parked verdict
             known = dict(self._served_profile_homes or {})
             from gateway.status import live_gateway_pid_for_home
 
@@ -197,51 +260,89 @@ class GatewayProfileReconcileMixin:
                 # (wait_for cancels the still-queued await), never the event loop.
                 try:
                     pid = await asyncio.wait_for(
-                        self._run_housekeeping_in_executor(live_gateway_pid_for_home, live[name]),
-                        timeout=_OWN_GATEWAY_PROBE_TIMEOUT_SECS)
+                        self._run_housekeeping_in_executor(
+                            live_gateway_pid_for_home, live[name]
+                        ),
+                        timeout=_OWN_GATEWAY_PROBE_TIMEOUT_SECS,
+                    )
                 except TimeoutError:
                     # Unprovable is not "own gateway running": skip it this cycle without
                     # warning about (or remembering) a gateway that may not exist. Warn once
                     # per stall; a peer that stays wedged repeats at DEBUG every cycle.
                     timed_out.add(name)
                     log = logger.debug if name in timeout_warned else logger.warning
-                    log("[MULTIPLEX] Own-gateway probe for profile '%s' timed out; "
-                        "not serving it this cycle", name)
+                    log(
+                        "[MULTIPLEX] Own-gateway probe for profile '%s' timed out; "
+                        "not serving it this cycle",
+                        name,
+                    )
                     del live[name]
                     continue
                 if pid is not None:
                     blocked.add(name)
                     if name not in warned:
-                        logger.warning("[MULTIPLEX] Profile '%s' still runs its own gateway; "
-                                       "stop it before the host can serve this profile", name)
+                        logger.warning(
+                            "[MULTIPLEX] Profile '%s' still runs its own gateway; "
+                            "stop it before the host can serve this profile",
+                            name,
+                        )
                     del live[name]
             self._profile_own_gateway_warned = blocked
             self._profile_probe_timeout_warned = timed_out
             sigs = self._served_profile_signatures or {}
             from gateway.run_runtime import unpark_profile
+
             for name in [n for n in self._parked_profile_names() if n not in listed]:
                 unpark_profile(self, name)
             parked = self._parked_profile_names()
             # The watcher never re-parks the same profile every cycle; a creator's explicit signal does.
             retry_parked = reason == "control-socket"
-            added = [n for n in live if n not in known and n != active and (retry_parked or n not in parked)]
+            added = [
+                n
+                for n in live
+                if n not in known and n != active and (retry_parked or n not in parked)
+            ]
             removed = [n for n in known if n not in live and n != active]
-            changed = [n for n in live if n in known and n != active and n not in added
-                       and profile_serve_signature(live[n]) != sigs.get(n)]
+            changed = [
+                n
+                for n in live
+                if n in known
+                and n != active
+                and n not in added
+                and profile_serve_signature(live[n]) != sigs.get(n)
+            ]
             current = {n: h for n, h in live.items() if n in known or n == active}
             return await self._apply_profile_changes(
-                current, added, removed, changed, reason=reason, live=live, result=result)
+                current,
+                added,
+                removed,
+                changed,
+                reason=reason,
+                live=live,
+                result=result,
+            )
 
-    async def _apply_profile_changes(self, current, added, removed, changed, *, reason,
-                                     live=None, result=None):
+    async def _apply_profile_changes(
+        self, current, added, removed, changed, *, reason, live=None, result=None
+    ):
         """Apply a selected diff under the reconcile lock, shared by the watcher and the
         serve/unserve control verbs. New profiles first get a runtime (reservation + store); one
         whose home another gateway owns or whose store is unusable is parked, not served."""
         from gateway.run import MultiplexConfigError
         from gateway.run_runtime import park_profile, unpark_profile
         from clawk_cli.profiles import profiles_to_serve
+
         active = getattr(self, "_primary_profile_name", None) or "default"
-        result = dict(result or {"added": [], "removed": [], "rescanned": [], "parked": [], "reason": reason})
+        result = dict(
+            result
+            or {
+                "added": [],
+                "removed": [],
+                "rescanned": [],
+                "parked": [],
+                "reason": reason,
+            }
+        )
         result.setdefault("parked", [])
         live = live if live is not None else dict(current)
         known = dict(self._served_profile_homes or {})
@@ -268,7 +369,9 @@ class GatewayProfileReconcileMixin:
             # a setup save during an awaited handshake needs another scan.
             scan_signature = profile_serve_signature(current[name])
             try:
-                connected = await self._start_one_profile_adapters(name, current[name], claimed)
+                connected = await self._start_one_profile_adapters(
+                    name, current[name], claimed
+                )
             except MultiplexConfigError as exc:
                 # Runtime config refusal is a real park, not an adapter-less served profile:
                 # withdraw the authority/tickets, release the reservation and publish the
@@ -281,7 +384,11 @@ class GatewayProfileReconcileMixin:
                 config_parked.add(name)
                 continue
             except Exception:
-                logger.error("[MULTIPLEX] Failed to start adapters for profile '%s'", name, exc_info=True)
+                logger.error(
+                    "[MULTIPLEX] Failed to start adapters for profile '%s'",
+                    name,
+                    exc_info=True,
+                )
                 connected = 0
                 # A transient failure is not the deliberate park above: leave the signature
                 # unacknowledged so the next reconcile retries the connect.
@@ -289,10 +396,19 @@ class GatewayProfileReconcileMixin:
             else:
                 sigs[name] = scan_signature
             if name in added:
-                logger.info("[MULTIPLEX] Now serving profile '%s' (%s adapter(s) connected; %s)", name, connected, reason)
+                logger.info(
+                    "[MULTIPLEX] Now serving profile '%s' (%s adapter(s) connected; %s)",
+                    name,
+                    connected,
+                    reason,
+                )
                 result["added"].append(name)
             else:
-                logger.info("[MULTIPLEX] Re-scanned profile '%s' after config/.env change (%s adapter(s) connected)", name, connected)
+                logger.info(
+                    "[MULTIPLEX] Re-scanned profile '%s' after config/.env change (%s adapter(s) connected)",
+                    name,
+                    connected,
+                )
                 result["rescanned"].append(name)
         if config_parked:
             added = [name for name in added if name not in config_parked]
@@ -317,6 +433,7 @@ class GatewayProfileReconcileMixin:
                 configs.pop(name, None)
         if added:
             from gateway.run_runtime import recover_served_native_rows
+
             await recover_served_native_rows(self)
             await self._after_profiles_added([(n, current[n]) for n in added])
         result["served_profiles"] = self.served_profile_names()
@@ -326,6 +443,7 @@ class GatewayProfileReconcileMixin:
         """Profiles that exist but could not be served (unusable store, home owned elsewhere); boot's
         ``initialize_gateway_runtime`` parks into the same published ``name -> reason`` map."""
         from gateway.run_runtime import parked_profile_map
+
         return list(parked_profile_map(self))
 
     async def _multiplex_for_added_profile(self) -> bool:
@@ -344,10 +462,16 @@ class GatewayProfileReconcileMixin:
         automatic migration, so ``gateway.auto_multiplex_migration: false`` holds it back the same way
         (re-read on every rescan: setting it back to true converges without a restart). True when armed."""
         from clawk_cli.gateway_multiplex_mode import (
-            AUTO_MIGRATION_OPTED_OUT_REASON, SINGLE_PROFILE_REASON, MultiplexDecision, log_multiplex_decision,
-            record_multiplex_decision, recorded_standalone_reason)
+            AUTO_MIGRATION_OPTED_OUT_REASON,
+            SINGLE_PROFILE_REASON,
+            MultiplexDecision,
+            log_multiplex_decision,
+            record_multiplex_decision,
+            recorded_standalone_reason,
+        )
         from clawk_cli.profiles import profiles_to_serve
         from clawk_constants import get_default_clawk_root, get_process_clawk_home
+
         # Serialized with reconcile: a second rescan (watcher + creator) resuming mid-activation
         # reset the reservation the first one's reconcile had already grown.
         async with self._reconcile_lock():
@@ -355,28 +479,39 @@ class GatewayProfileReconcileMixin:
                 return True  # a concurrent rescan activated while this one waited
             if not self._running or getattr(self, "_draining", False):
                 return False  # shutdown began: never arm fail-closed secrets under drain-time work
-            if recorded_standalone_reason() not in (SINGLE_PROFILE_REASON, AUTO_MIGRATION_OPTED_OUT_REASON):
+            if recorded_standalone_reason() not in (
+                SINGLE_PROFILE_REASON,
+                AUTO_MIGRATION_OPTED_OUT_REASON,
+            ):
                 return False
             launch = get_process_clawk_home().resolve()
             if launch != get_default_clawk_root().resolve():
                 return False  # only the default home runs the multiplexer (``_launch_home_may_multiplex``)
             if len(profiles_to_serve(multiplex=True, include_parked=True)) < 2:
                 return False
-            blocker = await self._run_housekeeping_in_executor(_added_profile_blocker, launch)
+            blocker = await self._run_housekeeping_in_executor(
+                _added_profile_blocker, launch
+            )
             if blocker is not None:
                 if blocker != self._single_profile_blocker_logged:
-                    logger.warning("[MULTIPLEX] A new profile exists but this gateway stays standalone: %s", blocker)
+                    logger.warning(
+                        "[MULTIPLEX] A new profile exists but this gateway stays standalone: %s",
+                        blocker,
+                    )
                     self._single_profile_blocker_logged = blocker
                 if blocker == AUTO_MIGRATION_OPTED_OUT_REASON:
                     # Published so `gateway ensure` refuses the new profile naming the opt-out (Desktop shows
                     # that detail) instead of "only one profile exists".
-                    record_multiplex_decision(MultiplexDecision(False, "guard", blocker))
+                    record_multiplex_decision(
+                        MultiplexDecision(False, "guard", blocker)
+                    )
                 return False
             if not self._running or getattr(self, "_draining", False):
                 return False  # shutdown began during the preflight await
             from clawk_constants import clawk_home_key
             from tools.mcp_tool_scope import rekey_unscoped_connections
             from tui_gateway.launch_profile_policy import activate_multi_profile_hosting
+
             activate_multi_profile_hosting()
             rekey_unscoped_connections(clawk_home_key(launch))
             self.config.multiplex_profiles = True
@@ -387,10 +522,16 @@ class GatewayProfileReconcileMixin:
             for adapter in list(self.adapters.values()):
                 adapter.set_message_handler(self._primary_message_handler())
                 adapter.set_busy_session_handler(self._primary_busy_session_handler())
-                adapter.set_platform_event_handler(self._primary_platform_event_handler())
+                adapter.set_platform_event_handler(
+                    self._primary_platform_event_handler()
+                )
             self._record_served_profiles("default", [("default", launch)])
-            log_multiplex_decision(MultiplexDecision(True, "default", "a second profile was created"))
-            logger.info("[MULTIPLEX] A second profile exists; serving every profile from this process (no restart)")
+            log_multiplex_decision(
+                MultiplexDecision(True, "default", "a second profile was created")
+            )
+            logger.info(
+                "[MULTIPLEX] A second profile exists; serving every profile from this process (no restart)"
+            )
             return True
 
     async def _serve_profile_runtime(self, name: str, home: Path) -> Optional[str]:
@@ -398,8 +539,13 @@ class GatewayProfileReconcileMixin:
         steps). Returns the park reason — reservation released — when another gateway owns the home
         (a stray per-profile daemon) or its store cannot be opened; None when served. An
         adapters-only runner (no authority registry) grows the reservation alone."""
-        from gateway.run_runtime import release_profile_home, reserve_profile_home, serve_profile_runtime
+        from gateway.run_runtime import (
+            release_profile_home,
+            reserve_profile_home,
+            serve_profile_runtime,
+        )
         from gateway.runtime_ownership import OwnershipConflict
+
         try:
             reserve_profile_home(self, name, home)
         except (OwnershipConflict, OSError) as exc:
@@ -414,11 +560,21 @@ class GatewayProfileReconcileMixin:
                 # Retirement of the failed attempt missed its deadline: its writer may still use
                 # this home, so the reservation and authority stay; the profile is parked (no
                 # adapters) and the batch goes on for every other profile.
-                logger.error("[MULTIPLEX] Profile '%s' not served (%s); a turn outlived its Stop, "
-                             "ownership retained", name, exc, exc_info=True)
+                logger.error(
+                    "[MULTIPLEX] Profile '%s' not served (%s); a turn outlived its Stop, "
+                    "ownership retained",
+                    name,
+                    exc,
+                    exc_info=True,
+                )
                 return f"stopping after a failed serve; ownership retained: {exc}"
-            logger.error("[MULTIPLEX] Profile '%s' not served: its session store is unusable (%s): %s",
-                         name, home, exc, exc_info=True)
+            logger.error(
+                "[MULTIPLEX] Profile '%s' not served: its session store is unusable (%s): %s",
+                name,
+                home,
+                exc,
+                exc_info=True,
+            )
             release_profile_home(self, home)
             return f"session store unusable: {exc}"
         return None
@@ -428,10 +584,14 @@ class GatewayProfileReconcileMixin:
         secondary's credential/listener, so a hot-added profile reusing a token is parked, never a
         second poller."""
         claimed = self._primary_resource_claims(active)
-        for profile_name, adapters in (getattr(self, "_profile_adapters", None) or {}).items():
+        for profile_name, adapters in (
+            getattr(self, "_profile_adapters", None) or {}
+        ).items():
             for platform, adapter in list(adapters.items()):
-                for claim in (self._adapter_credential_claim(platform, adapter),
-                              self._adapter_listener_claim(platform, adapter)):
+                for claim in (
+                    self._adapter_credential_claim(platform, adapter),
+                    self._adapter_listener_claim(platform, adapter),
+                ):
                     if claim is not None:
                         claimed[claim] = profile_name
         return claimed
@@ -440,17 +600,31 @@ class GatewayProfileReconcileMixin:
         """Per-profile startup side effects for hot-added profiles: log routing + scoped MCP discovery."""
         from gateway.run import _enable_multiplex_log_routing, _profile_runtime_scope
         from contextvars import copy_context
-        with _log_suppressed(logging.DEBUG, "log routing refresh failed", exc_info=True):
+
+        with _log_suppressed(
+            logging.DEBUG, "log routing refresh failed", exc_info=True
+        ):
             _enable_multiplex_log_routing(self.config)
         from tools.mcp_oauth import suppress_interactive_oauth
+
         loop = asyncio.get_running_loop()
         for profile_name, profile_home in profile_homes:
             try:
                 from tools.mcp_tool_discovery import discover_mcp_tools
-                with _profile_runtime_scope(Path(profile_home)), suppress_interactive_oauth():
-                    await loop.run_in_executor(None, copy_context().run, discover_mcp_tools)
+
+                with (
+                    _profile_runtime_scope(Path(profile_home)),
+                    suppress_interactive_oauth(),
+                ):
+                    await loop.run_in_executor(
+                        None, copy_context().run, discover_mcp_tools
+                    )
             except Exception:
-                logger.warning("MCP tool discovery failed for profile '%s'", profile_name, exc_info=True)
+                logger.warning(
+                    "MCP tool discovery failed for profile '%s'",
+                    profile_name,
+                    exc_info=True,
+                )
 
     async def _unserve_profile(self, name: str, home: Path) -> None:
         """Stop and unroute one profile: cancel its reconnects, tear down its adapters, drop its
@@ -468,22 +642,37 @@ class GatewayProfileReconcileMixin:
         """
         from gateway.run import _profile_runtime_scope, _write_runtime_status_quiet
         from gateway.run_runtime import release_profile_home, unserve_profile_runtime
+
         # Retire before teardown; a False verdict (writer outlived its Stop) is honoured below.
-        retired = getattr(self, 'session_authorities', None) is None or await unserve_profile_runtime(self, home)
-        pending = (getattr(self, "_profile_failed_platforms", None) or {}).pop(name, None) or {}
-        tasks = [t for t in pending.values() if isinstance(t, asyncio.Task) and not t.done()]
+        retired = getattr(
+            self, "session_authorities", None
+        ) is None or await unserve_profile_runtime(self, home)
+        pending = (getattr(self, "_profile_failed_platforms", None) or {}).pop(
+            name, None
+        ) or {}
+        tasks = [
+            t for t in pending.values() if isinstance(t, asyncio.Task) and not t.done()
+        ]
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.wait(tasks, timeout=self._adapter_disconnect_timeout_secs())
         with _profile_runtime_scope(Path(home), hydrate_secrets=False):
-            adapters = (getattr(self, "_profile_adapters", None) or {}).pop(name, None) or {}
+            adapters = (getattr(self, "_profile_adapters", None) or {}).pop(
+                name, None
+            ) or {}
             for platform, adapter in list(adapters.items()):
                 await self._bounded_adapter_teardown(adapter, platform, profile=name)
             # Its ``<name>:<platform>`` runtime entries describe a profile that no longer exists.
             _write_runtime_status_quiet(drop_profile_platforms=name)
-            for attr in ("pairing_stores", "_busy_text_modes_by_profile", "_busy_input_modes_by_profile",
-                         "_busy_text_timing_by_profile", "_human_delay_by_profile", "_profile_configs"):
+            for attr in (
+                "pairing_stores",
+                "_busy_text_modes_by_profile",
+                "_busy_input_modes_by_profile",
+                "_busy_text_timing_by_profile",
+                "_human_delay_by_profile",
+                "_profile_configs",
+            ):
                 store = getattr(self, attr, None)
                 if isinstance(store, dict):
                     store.pop(name, None)
@@ -492,26 +681,42 @@ class GatewayProfileReconcileMixin:
             if isinstance(self._served_profile_signatures, dict):
                 self._served_profile_signatures.pop(name, None)
             from gateway.session import _session_key_namespace
+
             prefix = _session_key_namespace(name) + ":"
             cache = getattr(self, "_agent_cache", None)
             for key in [k for k in list(cache or {}) if str(k).startswith(prefix)]:
-                with _log_suppressed(logging.DEBUG, "agent eviction failed for %s", key, exc_info=True):
+                with _log_suppressed(
+                    logging.DEBUG, "agent eviction failed for %s", key, exc_info=True
+                ):
                     self._evict_cached_agent(key)
             if not retired:
                 # A writer outlived its Stop and may still write this home: the profile leaves the
                 # served set (ingress is gone above) but keeps its reservation and store handles until
                 # this process exits. Raising here aborted the reconcile for every other profile.
-                logger.error("[MULTIPLEX] Profile '%s' unrouted, but a turn outlived its Stop; ownership retained", name)
+                logger.error(
+                    "[MULTIPLEX] Profile '%s' unrouted, but a turn outlived its Stop; ownership retained",
+                    name,
+                )
                 return
             # The reservation (gateway.lock) is released LAST: a deleter waiting on it may rmtree the
             # home as soon as it goes, so every handle this process holds there must close first.
             try:
-                with _log_suppressed(logging.DEBUG, "profile handle release failed", exc_info=True):
+                with _log_suppressed(
+                    logging.DEBUG, "profile handle release failed", exc_info=True
+                ):
                     from clawk_state_registry import close_all_under
+
                     close_all_under(home)
-                with _log_suppressed(logging.DEBUG, "memory-store release failed", exc_info=True):
-                    from plugins.memory import import_provider_module  # catalog plugin since it left core
-                    import_provider_module("holographic", "store").MemoryStore.release_all_under(home)
+                with _log_suppressed(
+                    logging.DEBUG, "memory-store release failed", exc_info=True
+                ):
+                    from plugins.memory import (
+                        import_provider_module,
+                    )  # catalog plugin since it left core
+
+                    import_provider_module(
+                        "holographic", "store"
+                    ).MemoryStore.release_all_under(home)
                 # The gateway process is a second holder the CLI-side delete cannot reach: its routed
                 # log files (logs/.__agent.lock, logs/.__errors.lock) and its scoped MCP servers'
                 # mcp-stderr.log handle live HERE, so unserve must release them in this process too
@@ -522,16 +727,28 @@ class GatewayProfileReconcileMixin:
                 # worker thread — otherwise every other served profile's events stall behind them.
                 # ``asyncio.to_thread`` copies the context, so the surrounding
                 # ``_profile_runtime_scope`` home/secret override stays visible in the worker.
-                with _log_suppressed(logging.DEBUG, "scoped MCP shutdown failed", exc_info=True):
+                with _log_suppressed(
+                    logging.DEBUG, "scoped MCP shutdown failed", exc_info=True
+                ):
                     from clawk_constants import clawk_home_key
                     from tools.mcp_tool_lifecycle import shutdown_mcp_servers
-                    await asyncio.to_thread(shutdown_mcp_servers, scope=clawk_home_key(home))
-                with _log_suppressed(logging.DEBUG, "profile log handler release failed", exc_info=True):
+
+                    await asyncio.to_thread(
+                        shutdown_mcp_servers, scope=clawk_home_key(home)
+                    )
+                with _log_suppressed(
+                    logging.DEBUG, "profile log handler release failed", exc_info=True
+                ):
                     from clawk_logging import release_profile_log_handlers
+
                     await asyncio.to_thread(release_profile_log_handlers, home)
             finally:
                 release_profile_home(self, home)
-            logger.info("[MULTIPLEX] Profile '%s' unserved — %d adapter(s) stopped and unrouted", name, len(adapters))
+            logger.info(
+                "[MULTIPLEX] Profile '%s' unserved — %d adapter(s) stopped and unrouted",
+                name,
+                len(adapters),
+            )
 
 
 def _profile_lifecycle_verb(runner, *, serve: bool):
@@ -540,7 +757,12 @@ def _profile_lifecycle_verb(runner, *, serve: bool):
 
     async def apply(name):
         from clawk_cli.profiles import profiles_to_serve, profile_is_parked
-        if not runner._multiplex_on() or not runner._running or runner._served_profile_homes is None:
+
+        if (
+            not runner._multiplex_on()
+            or not runner._running
+            or runner._served_profile_homes is None
+        ):
             return {"error": "host multiplexer is not ready"}
         async with runner._reconcile_lock():
             active = getattr(runner, "_primary_profile_name", None) or "default"
@@ -552,7 +774,10 @@ def _profile_lifecycle_verb(runner, *, serve: bool):
                     return {"error": f"profile '{name}' is not served"}
                 await runner._unserve_profile(name, known.pop(name))
                 runner._record_served_profiles(active, list(known.items()))
-                return {"unserved": name, "served_profiles": runner.served_profile_names()}
+                return {
+                    "unserved": name,
+                    "served_profiles": runner.served_profile_names(),
+                }
             installed = dict(profiles_to_serve(True, include_parked=True))
             if name not in installed:
                 return {"error": f"unknown profile '{name}'"}
@@ -561,9 +786,13 @@ def _profile_lifecycle_verb(runner, *, serve: bool):
             if name in known:
                 return {"error": f"profile '{name}' is already served"}
             known[name] = installed[name]
-            result = await runner._apply_profile_changes(known, [name], [], [], reason="control-socket")
+            result = await runner._apply_profile_changes(
+                known, [name], [], [], reason="control-socket"
+            )
             if name not in result["served_profiles"]:
-                return {"error": f"profile '{name}' was removed or parked during startup"}
+                return {
+                    "error": f"profile '{name}' was removed or parked during startup"
+                }
             return {"served": name, "served_profiles": result["served_profiles"]}
 
     def handler(params):
@@ -604,14 +833,19 @@ def _mcp_config_reconciler(runner=None):
     def _reconcile_current(label: str) -> None:
         from tools.mcp_oauth import suppress_interactive_oauth
         from tools.mcp_tool_discovery import reconcile_mcp_servers_with_config
+
         if label not in primed:
             primed.add(label)
             return  # first tick: startup discovery already reflects this config (or is still running)
         with suppress_interactive_oauth():
             result = reconcile_mcp_servers_with_config()
         if result["removed"] or result["added"]:
-            logger.info("MCP servers reconciled with config (%s): removed=%s added=%s",
-                        label, result["removed"], result["added"])
+            logger.info(
+                "MCP servers reconciled with config (%s): removed=%s added=%s",
+                label,
+                result["removed"],
+                result["added"],
+            )
 
     return lambda: _for_each_served_profile(runner, _reconcile_current)
 
@@ -628,9 +862,11 @@ def _for_each_served_profile(runner, body) -> None:
     process-wide guard (#112878), in which case the launch profile's OWN scope is bound, as
     ``run_turn.py::_standalone_launch_scope`` does for turns."""
     from gateway.run import _multiplex_profile_homes, _profile_runtime_scope
+
     config = getattr(runner, "config", None)
     if not getattr(config, "multiplex_profiles", False):
         from gateway.run_turn import GatewayTurnMixin
+
         with GatewayTurnMixin._standalone_launch_scope():
             body("default")
         return
@@ -660,7 +896,10 @@ def migrate_profile_identity_verb(runner):
     Runs on the control-socket executor thread; ``rekey_profile_routing`` takes the store lock."""
 
     def _handler(params: dict) -> dict:
-        old, new = str(params.get("old") or "").strip(), str(params.get("new") or "").strip()
+        old, new = (
+            str(params.get("old") or "").strip(),
+            str(params.get("new") or "").strip(),
+        )
         if not old or not new or old == new:
             return {"ok": False, "error": "old/new required and must differ"}
         store = getattr(runner, "session_store", None)
@@ -669,12 +908,17 @@ def migrate_profile_identity_verb(runner):
         acquired = []
         try:
             from clawk_state_registry import acquire, release_or_close
+
             db_counts: dict[str, dict[str, int]] = {}
             routing_db = getattr(store, "_routing_db", None)
             if routing_db is not None and hasattr(routing_db, "rekey_profile_state"):
                 db_counts["routing"] = routing_db.rekey_profile_state(old, new)
             routing_home = getattr(store, "_routing_home", None)
-            profile_path = Path(routing_home) / "profiles" / new / "state.db" if routing_home else None
+            profile_path = (
+                Path(routing_home) / "profiles" / new / "state.db"
+                if routing_home
+                else None
+            )
             if profile_path is not None and profile_path.exists():
                 profile_db = acquire(profile_path)
                 acquired.append(profile_db)
@@ -682,14 +926,18 @@ def migrate_profile_identity_verb(runner):
             rekeyed = store.rekey_profile_routing(old, new)
             return {"ok": True, "rekeyed": rekeyed, "db": db_counts}
         except Exception as exc:
-            logger.warning("Profile identity migration failed for %r->%r: %s", old, new, exc)
+            logger.warning(
+                "Profile identity migration failed for %r->%r: %s", old, new, exc
+            )
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
         finally:
             for db in acquired:
                 try:
                     release_or_close(db)
                 except Exception:
-                    logger.debug("Failed to release renamed profile state DB", exc_info=True)
+                    logger.debug(
+                        "Failed to release renamed profile state DB", exc_info=True
+                    )
 
     return _handler
 

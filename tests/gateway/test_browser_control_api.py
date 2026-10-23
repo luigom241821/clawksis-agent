@@ -67,9 +67,7 @@ def _app(adapter):
     app.router.add_post(
         "/v1/browser-control/register", adapter._handle_browser_control_register
     )
-    app.router.add_get(
-        "/v1/browser-control/ws", adapter._handle_browser_control_ws
-    )
+    app.router.add_get("/v1/browser-control/ws", adapter._handle_browser_control_ws)
     return app
 
 
@@ -108,7 +106,9 @@ async def _wait_for_controller(ws, nonce: str) -> None:
 async def _receive_command(ws, pending: asyncio.Task) -> dict:
     """Wait for either the controller frame or an early dispatch failure."""
     receive = asyncio.create_task(ws.receive_json())
-    done, _ = await asyncio.wait((receive, pending), return_when=asyncio.FIRST_COMPLETED)
+    done, _ = await asyncio.wait(
+        (receive, pending), return_when=asyncio.FIRST_COMPLETED
+    )
     if receive in done:
         return receive.result()
     receive.cancel()
@@ -183,7 +183,9 @@ def test_route_table_advertises_registration_and_controller_ws_without_replacing
     assert ("POST", "/v1/chat/completions") in routes
 
 
-def test_ws_sender_treats_wait_timeout_as_in_flight_and_real_error_as_failure(monkeypatch):
+def test_ws_sender_treats_wait_timeout_as_in_flight_and_real_error_as_failure(
+    monkeypatch,
+):
     class WS:
         closed = False
 
@@ -207,6 +209,7 @@ def test_ws_sender_treats_wait_timeout_as_in_flight_and_real_error_as_failure(mo
             return self._done
 
     timeout_future = Future(concurrent.futures.TimeoutError())
+
     def return_timeout(coro, _loop):
         coro.close()
         return timeout_future
@@ -217,6 +220,7 @@ def test_ws_sender_treats_wait_timeout_as_in_flight_and_real_error_as_failure(mo
     assert len(timeout_future.callbacks) == 1
 
     error_future = Future(ConnectionError("socket write failed"))
+
     def return_error(coro, _loop):
         coro.close()
         return error_future
@@ -227,6 +231,7 @@ def test_ws_sender_treats_wait_timeout_as_in_flight_and_real_error_as_failure(mo
         sender({"method": "browser.controller.command"})
 
     completed_timeout = Future(concurrent.futures.TimeoutError(), done=True)
+
     def return_completed_timeout(coro, _loop):
         coro.close()
         return completed_timeout
@@ -251,14 +256,8 @@ def test_api_agent_context_binds_server_principal_and_transport_family():
         browser_control_transport_family="local-api",
     )
     try:
-        assert (
-            get_session_env("CLAWK_BROWSER_CONTROL_PRINCIPAL")
-            == "principal-fixture"
-        )
-        assert (
-            get_session_env("CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY")
-            == "local-api"
-        )
+        assert get_session_env("CLAWK_BROWSER_CONTROL_PRINCIPAL") == "principal-fixture"
+        assert get_session_env("CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY") == "local-api"
     finally:
         clear_session_vars(tokens)
 
@@ -277,7 +276,10 @@ async def test_capabilities_are_truthful_and_disabled_by_default(monkeypatch):
     control = data["features"]["browser_extension_control"]
     assert control["enabled"] is False
     assert control["protocol_version"] == 1
-    assert set(control["capabilities"]) == {"controller.noop", *REAL_BROWSER_CAPABILITIES}
+    assert set(control["capabilities"]) == {
+        "controller.noop",
+        *REAL_BROWSER_CAPABILITIES,
+    }
     assert control["real_browser_actions"] is True
     assert control["transports"] == {
         "local_vps": "websocket-subprotocol-ticket",
@@ -325,7 +327,9 @@ async def test_api_middleware_stamps_server_control_identity_for_agent_entry():
 
 
 @pytest.mark.asyncio
-async def test_registration_requires_enabled_feature_and_configured_bearer_auth(monkeypatch):
+async def test_registration_requires_enabled_feature_and_configured_bearer_auth(
+    monkeypatch,
+):
     disabled = _adapter()
     monkeypatch.setattr(disabled, "_browser_control_enabled", lambda: False)
     async with TestClient(TestServer(_app(disabled))) as client:
@@ -343,7 +347,9 @@ async def test_registration_requires_enabled_feature_and_configured_bearer_auth(
             "/v1/browser-control/register", json=_registration_body()
         )
         assert response.status == 403
-        assert (await response.json())["error"]["code"] == "browser_control_auth_required"
+        assert (await response.json())["error"][
+            "code"
+        ] == "browser_control_auth_required"
 
     keyed = _adapter()
     monkeypatch.setattr(keyed, "_browser_control_enabled", lambda: True)
@@ -403,7 +409,9 @@ async def test_controller_ws_rechecks_feature_flag_before_consuming_ticket(monke
 
 
 @pytest.mark.asyncio
-async def test_local_api_ticket_ws_noop_round_trip_filters_spoofed_identity_and_disabled_actions(monkeypatch):
+async def test_local_api_ticket_ws_noop_round_trip_filters_spoofed_identity_and_disabled_actions(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     async with TestClient(TestServer(_app(adapter))) as client:
@@ -481,7 +489,10 @@ async def test_local_api_ticket_ws_noop_round_trip_filters_spoofed_identity_and_
                 "params": {
                     "command_id": rejected_command["params"]["command_id"],
                     "ok": "false",
-                    "error": {"code": "controller_rejected", "message": "fixture rejection"},
+                    "error": {
+                        "code": "controller_rejected",
+                        "message": "fixture rejection",
+                    },
                 },
             }
         )
@@ -498,7 +509,9 @@ async def test_local_api_ticket_ws_noop_round_trip_filters_spoofed_identity_and_
 
 
 @pytest.mark.asyncio
-async def test_real_browser_action_routes_through_controller_without_legacy_fallback(monkeypatch):
+async def test_real_browser_action_routes_through_controller_without_legacy_fallback(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     async with TestClient(TestServer(_app(adapter))) as client:
@@ -557,7 +570,9 @@ async def test_real_browser_action_routes_through_controller_without_legacy_fall
 
 
 @pytest.mark.asyncio
-async def test_local_api_same_identity_reconnect_completes_command_started_on_old_socket(monkeypatch):
+async def test_local_api_same_identity_reconnect_completes_command_started_on_old_socket(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     async with TestClient(TestServer(_app(adapter))) as client:
@@ -618,7 +633,9 @@ async def test_local_api_same_identity_reconnect_completes_command_started_on_ol
 
 
 @pytest.mark.asyncio
-async def test_local_api_explicit_detach_is_hard_and_stale_socket_cannot_detach_refresh(monkeypatch):
+async def test_local_api_explicit_detach_is_hard_and_stale_socket_cannot_detach_refresh(
+    monkeypatch,
+):
     adapter = _adapter()
     monkeypatch.setattr(adapter, "_browser_control_enabled", lambda: True)
     async with TestClient(TestServer(_app(adapter))) as client:
@@ -645,9 +662,7 @@ async def test_local_api_explicit_detach_is_hard_and_stale_socket_cannot_detach_
         )
         await _wait_for_controller(second_ws, "detach-generation-ready")
 
-        await first_ws.send_json(
-            {"method": "browser.controller.detach", "params": {}}
-        )
+        await first_ws.send_json({"method": "browser.controller.detach", "params": {}})
 
         pending = asyncio.create_task(
             asyncio.to_thread(
@@ -666,9 +681,7 @@ async def test_local_api_explicit_detach_is_hard_and_stale_socket_cannot_detach_
             )
         )
         command = await _receive_command(second_ws, pending)
-        await second_ws.send_json(
-            {"method": "browser.controller.detach", "params": {}}
-        )
+        await second_ws.send_json({"method": "browser.controller.detach", "params": {}})
         detached = await second_ws.receive_json()
         assert detached == {
             "method": "browser.controller.detach",

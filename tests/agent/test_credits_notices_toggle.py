@@ -3,12 +3,14 @@
 The toggle suppresses notice EMISSION only — credits state capture and /usage
 stay live. Uses the bare-AIAgent pattern (object.__new__) from test_notice_spine.py.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
 
 from agent.credits_tracker import CreditsState
 from run_agent import AIAgent
+
 
 def _agent_with_state(*, paid_access: bool = False) -> AIAgent:
     """Bare agent with a depleted-shaped state that would normally emit."""
@@ -20,8 +22,10 @@ def _agent_with_state(*, paid_access: bool = False) -> AIAgent:
     agent.base_url = ""
     return agent
 
+
 def _cfg(enabled):
     return {"display": {"credits_notices": enabled}}
+
 
 class TestCreditsNoticesToggle:
     def test_disabled_emits_nothing(self):

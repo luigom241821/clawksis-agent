@@ -37,13 +37,24 @@ def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=root, check=True
+    )
     subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
     (root / "a.txt").write_text("one\n", encoding="utf-8")
     subprocess.run(["git", "add", "a.txt"], cwd=root, check=True)
     # No detached `maintenance run --auto` / `gc --auto` (git >= 2.55 spawns several per commit): one
     # still working in the checkout is a live git to the lock reclaim and races copytree. Flag, not config.
-    quiet = ["git", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-q", "-m"]
+    quiet = [
+        "git",
+        "-c",
+        "maintenance.auto=false",
+        "-c",
+        "gc.auto=0",
+        "commit",
+        "-q",
+        "-m",
+    ]
     subprocess.run([*quiet, "first"], cwd=root, check=True)
     (root / "b.txt").write_text("two\n", encoding="utf-8")
     subprocess.run(["git", "add", "b.txt"], cwd=root, check=True)
@@ -91,7 +102,9 @@ def test_clear_removes_all_stale_lock_kinds(repo: Path, no_git_running: None) ->
         assert not (repo / ".git" / name).exists()
 
 
-def test_clear_skips_sweep_while_git_running(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_clear_skips_sweep_while_git_running(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A running git process must block the sweep even for stale locks."""
     from clawk_cli import gitlock
 
@@ -161,14 +174,18 @@ _CRASH_STDERR_GIT_255 = (
 
 def test_crash_recognizer_rejects_unrelated_failures():
     assert not is_partial_clone_pack_objects_crash(
-        "fatal: Authentication failed for 'https://github.com/example.git'")
+        "fatal: Authentication failed for 'https://github.com/example.git'"
+    )
     assert not is_partial_clone_pack_objects_crash(
-        "error: pack-objects died of signal 6")  # one marker alone is not the crash
+        "error: pack-objects died of signal 6"
+    )  # one marker alone is not the crash
     assert not is_partial_clone_pack_objects_crash(
         "BUG: builtin/pack-objects.c:4842: should_include_obj should only be called on existing objects\n"
-        "fatal: index-pack failed\n")  # fingerprint without a terminator line: not this crash
+        "fatal: index-pack failed\n"
+    )  # fingerprint without a terminator line: not this crash
     assert not is_partial_clone_pack_objects_crash(
-        "fatal: fetch-pack: invalid index-pack output\n")  # 2.55 wrapper alone is not the crash
+        "fatal: fetch-pack: invalid index-pack output\n"
+    )  # 2.55 wrapper alone is not the crash
     assert not is_partial_clone_pack_objects_crash("")
     assert not is_partial_clone_pack_objects_crash(None)
 
@@ -178,7 +195,9 @@ def test_crash_recognizer_rejects_unrelated_failures():
     [_CRASH_STDERR, _CRASH_STDERR_WINDOWS, _CRASH_STDERR_GIT_255],
     ids=["posix", "windows", "git-255"],
 )
-def test_recovery_marks_unmarked_packs_and_retries_the_same_fetch(crash_stderr, tmp_path):
+def test_recovery_marks_unmarked_packs_and_retries_the_same_fetch(
+    crash_stderr, tmp_path
+):
     pack_dir = tmp_path / ".git" / "objects" / "pack"
     pack_dir.mkdir(parents=True)
     (pack_dir / "pack-local.pack").write_bytes(b"")
@@ -192,7 +211,9 @@ def test_recovery_marks_unmarked_packs_and_retries_the_same_fetch(crash_stderr, 
             return CompletedProcess(git_cmd + args, 1, stdout="", stderr=crash_stderr)
         return CompletedProcess(git_cmd + args, 0, stdout="", stderr="")
 
-    result = fetch_with_partial_clone_recovery(runner, ["git"], ["fetch", "origin", "main"], tmp_path)
+    result = fetch_with_partial_clone_recovery(
+        runner, ["git"], ["fetch", "origin", "main"], tmp_path
+    )
 
     assert calls == [(["git"], ["fetch", "origin", "main"])] * 2
     assert (pack_dir / "pack-local.promisor").exists()
@@ -206,14 +227,23 @@ def test_recovery_marks_unmarked_packs_and_retries_the_same_fetch(crash_stderr, 
 # `git gc --auto` (git's own gc.autoPackLimit decides when it is worth it). Real git against a
 # local blobless clone: these pin how the pieces interact, not their command lines.
 
-from clawk_cli.gitlock import settle_partial_clone_maintenance, disable_tree0_auto_maintenance
+from clawk_cli.gitlock import (
+    settle_partial_clone_maintenance,
+    disable_tree0_auto_maintenance,
+)
 
 _GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 
 def _run_git(*args: str, cwd: Path, env: dict = _GIT_ENV) -> str:
-    return subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, env=env,
-                          check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        cwd=cwd,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def _packs(repo: Path) -> list:
@@ -232,7 +262,15 @@ def _blobless_clone(tmp_path: Path, commits: int) -> tuple[Path, Path, Path]:
     _run_git("clone", "-q", "--bare", str(seed), str(up), cwd=tmp_path)
     _run_git("config", "uploadpack.allowFilter", "true", cwd=up)
     _run_git("config", "uploadpack.allowAnySHA1InWant", "true", cwd=up)
-    _run_git("clone", "-q", "--filter=tree:0", "--no-checkout", up.as_uri(), str(clone), cwd=tmp_path)
+    _run_git(
+        "clone",
+        "-q",
+        "--filter=tree:0",
+        "--no-checkout",
+        up.as_uri(),
+        str(clone),
+        cwd=tmp_path,
+    )
     return seed, up, clone
 
 
@@ -240,15 +278,24 @@ def _blobless_clone(tmp_path: Path, commits: int) -> tuple[Path, Path, Path]:
 def partial_clone(tmp_path: Path) -> Path:
     """Blobless clone that has lazy-fetched one pack per object it was asked for."""
     _seed, _up, clone = _blobless_clone(tmp_path, 3)
-    _run_git("config", "gc.autoPackLimit", "2", cwd=clone)  # the wild default (50) cannot be crossed here
+    _run_git(
+        "config", "gc.autoPackLimit", "2", cwd=clone
+    )  # the wild default (50) cannot be crossed here
     # Else each lazy fetch's detached auto-maintenance races the test and folds the packs itself.
     _run_git("config", "maintenance.auto", "false", cwd=clone)
     for name in ("d0/f.txt", "d1/f.txt", "d2/f.txt"):
-        _run_git("cat-file", "-p", _run_git("rev-parse", f"HEAD:{name}", cwd=clone), cwd=clone)
+        _run_git(
+            "cat-file",
+            "-p",
+            _run_git("rev-parse", f"HEAD:{name}", cwd=clone),
+            cwd=clone,
+        )
     return clone
 
 
-def test_gits_own_gc_does_not_lazy_fetch_the_trees_of_commits_a_bloom_graph_has_not_seen(tmp_path: Path) -> None:
+def test_gits_own_gc_does_not_lazy_fetch_the_trees_of_commits_a_bloom_graph_has_not_seen(
+    tmp_path: Path,
+) -> None:
     """A gc that folds the packs, left to write a commit-graph, adds one pack per unseen commit."""
     seed, up, clone = _blobless_clone(tmp_path, 12)
     full = tmp_path / "full"
@@ -280,18 +327,34 @@ def test_maintenance_keys_leave_gits_own_fold_running(tmp_path: Path) -> None:
     let the packs pile up until the next ``clawk update``. Compared against a stock-config clone
     because newer git (2.55) does not fold lazy-fetch packs on its own at all.
     """
+
     def lazy_packs(name: str, keys: bool) -> int:
         (tmp_path / name).mkdir()
         _seed, _up, clone = _blobless_clone(tmp_path / name, 3)
-        for key, value in (("gc.autoPackLimit", "2"), ("gc.autoDetach", "false"), ("maintenance.autoDetach", "false")):
-            _run_git("config", key, value, cwd=clone)  # git's own auto gc, in the foreground
+        for key, value in (
+            ("gc.autoPackLimit", "2"),
+            ("gc.autoDetach", "false"),
+            ("maintenance.autoDetach", "false"),
+        ):
+            _run_git(
+                "config", key, value, cwd=clone
+            )  # git's own auto gc, in the foreground
         if keys:
             # what the first cut persisted: all three keys together, none of the new one
-            for key in ("maintenance.auto", "gc.writeCommitGraph", "fetch.writeCommitGraph"):
+            for key in (
+                "maintenance.auto",
+                "gc.writeCommitGraph",
+                "fetch.writeCommitGraph",
+            ):
                 _run_git("config", key, "false", cwd=clone)
             disable_tree0_auto_maintenance(clone)
         for path in ("d0/f.txt", "d1/f.txt", "d2/f.txt"):
-            _run_git("cat-file", "-p", _run_git("rev-parse", f"HEAD:{path}", cwd=clone), cwd=clone)
+            _run_git(
+                "cat-file",
+                "-p",
+                _run_git("rev-parse", f"HEAD:{path}", cwd=clone),
+                cwd=clone,
+            )
         return len(_packs(clone))
 
     assert lazy_packs("keys", keys=True) <= lazy_packs("stock", keys=False)
@@ -303,7 +366,9 @@ def test_an_operators_own_maintenance_auto_false_is_never_erased(repo: Path) -> 
     disable_tree0_auto_maintenance(repo)
     disable_tree0_auto_maintenance(repo)
 
-    assert _run_git("config", "--local", "--get", "maintenance.auto", cwd=repo) == "false"
+    assert (
+        _run_git("config", "--local", "--get", "maintenance.auto", cwd=repo) == "false"
+    )
 
 
 def test_a_checkout_the_first_cut_configured_folds_again(partial_clone: Path) -> None:
@@ -317,15 +382,25 @@ def test_a_checkout_the_first_cut_configured_folds_again(partial_clone: Path) ->
     _run_git("-c", "gc.autoDetach=false", "gc", "--auto", cwd=partial_clone)
 
     assert len(_packs(partial_clone)) == 1
-    left = subprocess.run(["git", "config", "--local", "--get-regexp", r"^(maintenance\.auto|gc\.auto)$"],
-                          cwd=partial_clone, capture_output=True, text=True, check=False).stdout
+    left = subprocess.run(
+        ["git", "config", "--local", "--get-regexp", r"^(maintenance\.auto|gc\.auto)$"],
+        cwd=partial_clone,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
     assert left == ""
 
 
 def test_non_partial_checkout_is_left_alone(repo: Path) -> None:
     settle_partial_clone_maintenance(repo)
-    keys = subprocess.run(["git", "config", "--local", "--get-regexp", "maintenance|writecommitgraph"], cwd=repo,
-                          capture_output=True, text=True, check=False).stdout
+    keys = subprocess.run(
+        ["git", "config", "--local", "--get-regexp", "maintenance|writecommitgraph"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
     assert keys == "", "a full clone keeps git's stock maintenance"
 
 
@@ -339,12 +414,18 @@ def _status_blocked_on_a_fifo(repo: Path, *argv: str) -> subprocess.Popen:
     os.mkfifo(repo / "junk" / ".gitignore")
     (repo / "junk" / "x").touch()
     (repo / "a.txt").touch()  # stat-dirty: status refreshes (and so locks) the index
-    proc = subprocess.Popen(["git", *argv, "status", "--porcelain"], cwd=repo,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        ["git", *argv, "status", "--porcelain"],
+        cwd=repo,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     deadline = time.monotonic() + 20
     try:
         while not (repo / ".git" / "index.lock").exists():
-            assert proc.poll() is None and time.monotonic() < deadline, "git status never took index.lock"
+            assert proc.poll() is None and time.monotonic() < deadline, (
+                "git status never took index.lock"
+            )
             time.sleep(0.05)
     except BaseException:
         proc.kill()  # never leave the blocked git behind a failed setup
@@ -353,8 +434,12 @@ def _status_blocked_on_a_fifo(repo: Path, *argv: str) -> subprocess.Popen:
     return proc
 
 
-@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)")
-def test_a_killed_gits_index_lock_goes_at_once_and_a_live_ones_stays(repo: Path) -> None:
+@pytest.mark.skipif(
+    not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)"
+)
+def test_a_killed_gits_index_lock_goes_at_once_and_a_live_ones_stays(
+    repo: Path,
+) -> None:
     """The next update must not die on the lock a killed one left (the age floor kept it for 10
     minutes), and must never take the lock of a git that is still running."""
     from clawk_cli import update_receipt
@@ -397,11 +482,17 @@ def _killed_update_receipt() -> None:
     dead.wait()
     update_receipt.begin_update_receipt()
     current = update_receipt._current.get()
-    current.data.update(pid=dead.pid, pid_create_time=None, writer_pid=dead.pid, writer_create_time=None)
+    current.data.update(
+        pid=dead.pid, pid_create_time=None, writer_pid=dead.pid, writer_create_time=None
+    )
     payload = (json.dumps(current.data) + "\n").encode("utf-8")
-    for stale in update_receipt._receipt_dir().glob(f"update_*_{current.data['update_id']}.json"):
+    for stale in update_receipt._receipt_dir().glob(
+        f"update_*_{current.data['update_id']}.json"
+    ):
         stale.unlink()  # the run's own archive, as its dead process last wrote it
-    update_receipt._run_file(update_receipt._receipt_dir(), current.data).write_bytes(payload)
+    update_receipt._run_file(update_receipt._receipt_dir(), current.data).write_bytes(
+        payload
+    )
     update_receipt._write_latest(payload)
     update_receipt._current.set(None)
 
@@ -411,13 +502,21 @@ def _git_in_the_editor(repo: Path, tmp_path: Path, argv: list[str]) -> subproces
     import sys
 
     editor = tmp_path / "editor.py"
-    editor.write_text("import sys, time\nfrom pathlib import Path\n"
-                      "Path(sys.argv[1] + '.ready').write_text('')\n"
-                      "while not Path(sys.argv[1] + '.go').exists(): time.sleep(0.02)\n"
-                      "Path(sys.argv[1]).write_text('fixture\\n')\n", encoding="utf-8")
+    editor.write_text(
+        "import sys, time\nfrom pathlib import Path\n"
+        "Path(sys.argv[1] + '.ready').write_text('')\n"
+        "while not Path(sys.argv[1] + '.go').exists(): time.sleep(0.02)\n"
+        "Path(sys.argv[1]).write_text('fixture\\n')\n",
+        encoding="utf-8",
+    )
     (repo / "a.txt").write_text("changed\n", encoding="utf-8")
-    proc = subprocess.Popen(argv, cwd=repo, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            env={**os.environ, "GIT_EDITOR": f"{sys.executable} {editor}"})
+    proc = subprocess.Popen(
+        argv,
+        cwd=repo,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env={**os.environ, "GIT_EDITOR": f"{sys.executable} {editor}"},
+    )
     msg = repo / ".git" / "COMMIT_EDITMSG"
     deadline = time.monotonic() + 20
     while not Path(f"{msg}.ready").exists():
@@ -429,9 +528,15 @@ def _git_in_the_editor(repo: Path, tmp_path: Path, argv: list[str]) -> subproces
     return proc
 
 
-@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)")
-@pytest.mark.parametrize("form", ["dashed git-commit in the editor", "a reader git in the checkout"])
-def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(repo: Path, tmp_path: Path, form) -> None:
+@pytest.mark.skipif(
+    not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)"
+)
+@pytest.mark.parametrize(
+    "form", ["dashed git-commit in the editor", "a reader git in the checkout"]
+)
+def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(
+    repo: Path, tmp_path: Path, form
+) -> None:
     """Review P1: the killed-update receipt plus a younger lock let the reclaim delete the lock of a
     live ``/usr/lib/git-core/git-commit -a`` waiting in its editor (fd closed, and not ``comm == git``):
     the user's commit then died "unable to write new index file". No git of any form may be working in
@@ -441,7 +546,13 @@ def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(repo: P
     lock = repo / ".git" / "index.lock"
     _killed_update_receipt()
     if form.startswith("dashed"):
-        exec_path = subprocess.run(["git", "--exec-path"], capture_output=True, text=True, encoding="utf-8", check=True).stdout.strip()
+        exec_path = subprocess.run(
+            ["git", "--exec-path"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        ).stdout.strip()
         dashed = Path(exec_path) / "git-commit"
         if not dashed.exists():
             pytest.skip("this git ships no dashed git-commit")
@@ -449,8 +560,13 @@ def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(repo: P
         assert lock.exists(), "premise: git commit holds index.lock in its editor"
     else:
         lock.write_bytes(b"")
-        proc = subprocess.Popen(["git", "cat-file", "--batch"], cwd=repo, stdin=subprocess.PIPE,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(
+            ["git", "cat-file", "--batch"],
+            cwd=repo,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     try:
         assert release_dead_index_lock(repo) is False
         assert lock.exists(), f"{form}: the reclaim deleted a lock a live git may own"
@@ -464,16 +580,27 @@ def test_a_killed_updates_lock_stays_while_any_git_works_in_the_checkout(repo: P
     if not form.startswith("dashed"):
         released = release_dead_index_lock(repo)
         why = None
-        if not released:  # name which leg kept it: owner proof, an unreadable process, or a holder
+        if (
+            not released
+        ):  # name which leg kept it: owner proof, an unreadable process, or a holder
             from clawk_cli import _early_recovery as er
             from clawk_cli.gitlock import _killed_update_owns
-            why = {"killed_update_owns": _killed_update_owns(lock),
-                   "held_open": er._held_open(lock, repo, any_git=True)}
-        assert released is True, f"once the checkout's git is gone the killed update's lock goes: {why}"
+
+            why = {
+                "killed_update_owns": _killed_update_owns(lock),
+                "held_open": er._held_open(lock, repo, any_git=True),
+            }
+        assert released is True, (
+            f"once the checkout's git is gone the killed update's lock goes: {why}"
+        )
 
 
-@pytest.mark.skipif(not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)")
-def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(repo: Path, tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.skipif(
+    not Path("/proc/self/fd").is_dir(), reason="ownership proof via /proc (Linux)"
+)
+def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(
+    repo: Path, tmp_path: Path, monkeypatch
+) -> None:
     """A git in ANOTHER repository that exits between the scan reading its argv and its cwd/environ
     (unreadable once it has released its memory) is gone: it holds nothing and takes no lock. Read
     as a hidden git that may work here, any busy machine's git churn postponed the launch repair
@@ -493,9 +620,16 @@ def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(repo: Path
 
     def exits_after_its_argv_was_read(args: list[str], any_git: bool) -> bool:
         if marker in args and proc.returncode is None:
-            Path(f"{other / '.git' / 'COMMIT_EDITMSG'}.go").write_text("", encoding="utf-8")
-            wait_until(lambda: Path(f"/proc/{proc.pid}/stat").read_bytes().rsplit(b") ", 1)[1][:1] == b"Z",
-                       what="the other repository's git to exit (unreaped)")
+            Path(f"{other / '.git' / 'COMMIT_EDITMSG'}.go").write_text(
+                "", encoding="utf-8"
+            )
+            wait_until(
+                lambda: (
+                    Path(f"/proc/{proc.pid}/stat").read_bytes().rsplit(b") ", 1)[1][:1]
+                    == b"Z"
+                ),
+                what="the other repository's git to exit (unreaped)",
+            )
         return real(args, any_git)
 
     monkeypatch.setattr(er, "_counts_as_holder", exits_after_its_argv_was_read)
@@ -506,7 +640,9 @@ def test_a_git_elsewhere_exiting_mid_scan_is_gone_not_a_hidden_holder(repo: Path
         proc.wait(timeout=20)
 
 
-def test_lock_keeping_git_is_recognised_in_every_form_and_by_path_components(tmp_path: Path, monkeypatch) -> None:
+def test_lock_keeping_git_is_recognised_in_every_form_and_by_path_components(
+    tmp_path: Path, monkeypatch
+) -> None:
     """Review P1/secondary, the hosts with no /proc: the macOS branch had only an (empty) ``lsof``,
     and the Windows scan matched ``git.exe`` alone and compared paths with ``startswith``
     (``clawk-backup`` read as inside ``clawk``). Injected process metadata, not a native run."""
@@ -516,8 +652,16 @@ def test_lock_keeping_git_is_recognised_in_every_form_and_by_path_components(tmp
     from clawk_cli import gitlock
 
     assert er._git_subcommand_of(b"/usr/lib/git-core/git-commit\0-a\0") == "commit"
-    assert er._git_subcommand_of(["C:\\Git\\mingw64\\libexec\\git-core\\GIT-COMMIT.EXE"]) == "commit"
-    assert er._git_subcommand_of(["git", "-C", "x", "-c", "k=v", "--no-pager", "save", "-a"]) == "save"
+    assert (
+        er._git_subcommand_of(["C:\\Git\\mingw64\\libexec\\git-core\\GIT-COMMIT.EXE"])
+        == "commit"
+    )
+    assert (
+        er._git_subcommand_of(
+            ["git", "-C", "x", "-c", "k=v", "--no-pager", "save", "-a"]
+        )
+        == "save"
+    )
 
     root = tmp_path / "clawk"
     (root / ".git").mkdir(parents=True)
@@ -528,29 +672,62 @@ def test_lock_keeping_git_is_recognised_in_every_form_and_by_path_components(tmp
     def ps_lists(command: str, cwd: Path = root):
         def run(argv, **_kw):
             if argv[0] == "lsof":
-                return subprocess.CompletedProcess(argv, 0 if "cwd" in argv else 1,
-                                                   f"p4242\nn{cwd}\n" if "cwd" in argv else "", "")
-            rows = (f"4242 {getattr(os, 'getuid', lambda: 0)()} {command.split()[0]}" if "-ocomm=" in argv else f"4242 {command}")
+                return subprocess.CompletedProcess(
+                    argv,
+                    0 if "cwd" in argv else 1,
+                    f"p4242\nn{cwd}\n" if "cwd" in argv else "",
+                    "",
+                )
+            rows = (
+                f"4242 {getattr(os, 'getuid', lambda: 0)()} {command.split()[0]}"
+                if "-ocomm=" in argv
+                else f"4242 {command}"
+            )
             return subprocess.CompletedProcess(argv, 0, rows + "\n", "")
+
         return run
 
     monkeypatch.setattr("shutil.which", lambda name: name)
-    monkeypatch.setattr(er.subprocess, "run", ps_lists("/Library/Developer/CommandLineTools/usr/libexec/git-core/git-commit -a"))
-    assert er._held_open_lsof(lock, root, False), "macOS: a dashed git-commit with its fd closed keeps the lock"
-    monkeypatch.setattr(er.subprocess, "run", ps_lists("git commit -a", tmp_path / "clawk-backup"))
-    assert er._held_open_lsof(lock, root, False) is False, "a commit in another repository is not this checkout's"
+    monkeypatch.setattr(
+        er.subprocess,
+        "run",
+        ps_lists(
+            "/Library/Developer/CommandLineTools/usr/libexec/git-core/git-commit -a"
+        ),
+    )
+    assert er._held_open_lsof(lock, root, False), (
+        "macOS: a dashed git-commit with its fd closed keeps the lock"
+    )
+    monkeypatch.setattr(
+        er.subprocess, "run", ps_lists("git commit -a", tmp_path / "clawk-backup")
+    )
+    assert er._held_open_lsof(lock, root, False) is False, (
+        "a commit in another repository is not this checkout's"
+    )
     monkeypatch.setattr(er.subprocess, "run", ps_lists("git log --oneline"))
-    assert er._held_open_lsof(lock, root, False) is False and er._held_open_lsof(lock, root, True)
+    assert er._held_open_lsof(lock, root, False) is False and er._held_open_lsof(
+        lock, root, True
+    )
     monkeypatch.undo()
 
     def scan(cwd: Path, name: str = "git.exe"):
-        proc = types.SimpleNamespace(info={"pid": 4242, "name": name, "cwd": str(cwd), "cmdline": [name, "commit"],
-                                           "environ": {}}, is_running=lambda: True)
+        proc = types.SimpleNamespace(
+            info={
+                "pid": 4242,
+                "name": name,
+                "cwd": str(cwd),
+                "cmdline": [name, "commit"],
+                "environ": {},
+            },
+            is_running=lambda: True,
+        )
         psutil = types.SimpleNamespace(process_iter=lambda attrs: [proc])
         monkeypatch.setitem(__import__("sys").modules, "psutil", psutil)
         return gitlock._windows_git_in_checkout(root)
 
-    assert scan(tmp_path / "clawk-backup") is False, "a sibling directory is not this checkout"
+    assert scan(tmp_path / "clawk-backup") is False, (
+        "a sibling directory is not this checkout"
+    )
     assert scan(root / "sub") is True and scan(root, "git-commit.exe") is True
 
 

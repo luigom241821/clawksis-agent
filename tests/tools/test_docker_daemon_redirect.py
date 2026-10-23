@@ -16,36 +16,36 @@ from tools.approval import detect_dangerous_command
 class TestDockerDaemonRedirect:
     def test_docker_dash_h_remote_host(self):
         is_dangerous, key, desc = detect_dangerous_command(
-            "docker -H ssh://prod-host stop app")
+            "docker -H ssh://prod-host stop app"
+        )
         assert is_dangerous is True
         assert key is not None
         assert "daemon redirect" in desc
 
     def test_docker_long_host_flag_equals_form(self):
         is_dangerous, _, desc = detect_dangerous_command(
-            "docker --host=tcp://10.0.0.5:2375 ps")
+            "docker --host=tcp://10.0.0.5:2375 ps"
+        )
         assert is_dangerous is True
         assert "daemon redirect" in desc
 
-
     def test_container_host_env_prefix(self):
         is_dangerous, _, _ = detect_dangerous_command(
-            "CONTAINER_HOST=ssh://root@prod:22/run/podman/podman.sock podman ps")
+            "CONTAINER_HOST=ssh://root@prod:22/run/podman/podman.sock podman ps"
+        )
         assert is_dangerous is True
 
     def test_podman_url_flag(self):
         is_dangerous, _, desc = detect_dangerous_command(
-            "podman --url ssh://core@remote:22/run/podman.sock ps")
+            "podman --url ssh://core@remote:22/run/podman.sock ps"
+        )
         assert is_dangerous is True
         assert "daemon redirect" in desc
-
 
     # -- negatives: local docker usage stays out of the deny ----------------
 
     def test_plain_docker_ps_not_flagged(self):
         assert detect_dangerous_command("docker ps -a") == (False, None, None)
-
-
 
 
 class TestDockerLifecycleFlagInsertion:
@@ -56,7 +56,9 @@ class TestDockerLifecycleFlagInsertion:
         assert is_dangerous is True
         assert "container lifecycle" in desc
 
-
     def test_docker_run_restart_policy_not_flagged(self):
-        assert detect_dangerous_command(
-            "docker run --restart=always -d nginx") == (False, None, None)
+        assert detect_dangerous_command("docker run --restart=always -d nginx") == (
+            False,
+            None,
+            None,
+        )

@@ -72,42 +72,82 @@ class _FakeChat:
                 body = json.loads(self.rfile.read(n) or b"{}")
                 # Runtime capability probes are not model requests and must not consume usage.
                 if "messages" not in body:
-                    self.send_error(404, "Only chat completions are supported by this fixture")
+                    self.send_error(
+                        404, "Only chat completions are supported by this fixture"
+                    )
                     return
                 with server.lock:
                     server.requests.append(body)
-                    prompt = server.usage_script.pop(0) if server.usage_script else REAL_UNDER
+                    prompt = (
+                        server.usage_script.pop(0)
+                        if server.usage_script
+                        else REAL_UNDER
+                    )
                 if prompt == "overflow":
-                    data = json.dumps({"error": {"message": "maximum context length exceeded",
-                                                "type": "invalid_request_error",
-                                                "code": "context_length_exceeded"}}).encode()
+                    data = json.dumps(
+                        {
+                            "error": {
+                                "message": "maximum context length exceeded",
+                                "type": "invalid_request_error",
+                                "code": "context_length_exceeded",
+                            }
+                        }
+                    ).encode()
                     self.send_response(400)
                     self.send_header("content-type", "application/json")
                     self.send_header("content-length", str(len(data)))
                     self.end_headers()
                     self.wfile.write(data)
                     return
-                usage = ({"prompt_tokens": prompt, "completion_tokens": 5, "total_tokens": prompt + 5}
-                         if isinstance(prompt, int) else None)
+                usage = (
+                    {
+                        "prompt_tokens": prompt,
+                        "completion_tokens": 5,
+                        "total_tokens": prompt + 5,
+                    }
+                    if isinstance(prompt, int)
+                    else None
+                )
                 msg = {"role": "assistant", "content": "ok"}
                 if body.get("stream") is True:
                     self.send_response(200)
                     self.send_header("content-type", "text/event-stream")
                     self.end_headers()
                     for chunk in (
-                        {"id": "m", "object": "chat.completion.chunk", "model": body.get("model", "m"),
-                         "choices": [{"index": 0, "delta": msg, "finish_reason": None}]},
-                        {"id": "m", "object": "chat.completion.chunk", "model": body.get("model", "m"),
-                         "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}], "usage": usage},
+                        {
+                            "id": "m",
+                            "object": "chat.completion.chunk",
+                            "model": body.get("model", "m"),
+                            "choices": [
+                                {"index": 0, "delta": msg, "finish_reason": None}
+                            ],
+                        },
+                        {
+                            "id": "m",
+                            "object": "chat.completion.chunk",
+                            "model": body.get("model", "m"),
+                            "choices": [
+                                {"index": 0, "delta": {}, "finish_reason": "stop"}
+                            ],
+                            "usage": usage,
+                        },
                     ):
                         self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
                     self.wfile.write(b"data: [DONE]\n\n")
                     self.wfile.flush()
                     return
-                data = json.dumps({
-                    "id": "x", "object": "chat.completion", "created": 0, "model": body.get("model", "m"),
-                    "choices": [{"index": 0, "message": msg, "finish_reason": "stop"}], "usage": usage,
-                }).encode()
+                data = json.dumps(
+                    {
+                        "id": "x",
+                        "object": "chat.completion",
+                        "created": 0,
+                        "model": body.get("model", "m"),
+                        "choices": [
+                            {"index": 0, "message": msg, "finish_reason": "stop"}
+                        ],
+                        "usage": usage,
+                    }
+                ).encode()
                 self.send_response(200)
                 self.send_header("content-type", "application/json")
                 self.send_header("content-length", str(len(data)))
@@ -127,9 +167,17 @@ def _make_agent(base_url: str, session_id: str | None = None, session_db=None):
     from run_agent import AIAgent
 
     agent = AIAgent(
-        api_key="test-key", base_url=base_url, provider="custom", model="replay-model",
-        quiet_mode=True, skip_context_files=True, skip_memory=True, enabled_toolsets=[],
-        max_iterations=3, session_id=session_id, session_db=session_db,
+        api_key="test-key",
+        base_url=base_url,
+        provider="custom",
+        model="replay-model",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+        max_iterations=3,
+        session_id=session_id,
+        session_db=session_db,
     )
     agent.compression_enabled = True
     cc = agent.context_compressor
@@ -139,7 +187,11 @@ def _make_agent(base_url: str, session_id: str | None = None, session_db=None):
 
     def counting(messages, system_message, **kw):
         calls.append(int(kw.get("approx_tokens") or 0))
-        sys_prompt = system_message.get("content") if isinstance(system_message, dict) else system_message
+        sys_prompt = (
+            system_message.get("content")
+            if isinstance(system_message, dict)
+            else system_message
+        )
         return messages, kw.get("active_system_prompt") or sys_prompt
 
     agent._compress_context = counting  # type: ignore[method-assign]
@@ -155,7 +207,9 @@ def _seed_history(chars: int) -> list[dict]:
     ]
 
 
-def _run_turns(wire: _FakeChat, agent_factory, history: list[dict], *, reload: bool, real: int) -> dict:
+def _run_turns(
+    wire: _FakeChat, agent_factory, history: list[dict], *, reload: bool, real: int
+) -> dict:
     wire.requests.clear()
     wire.usage_script[:] = [real] * (TURNS + 2)
     compress_by_turn: list[int] = []
@@ -171,7 +225,8 @@ def _run_turns(wire: _FakeChat, agent_factory, history: list[dict], *, reload: b
         history = r["messages"]
         approx = list(agent._ab_compress_calls)
     return {
-        "threshold": THRESHOLD, "real_prompt_tokens": real,
+        "threshold": THRESHOLD,
+        "real_prompt_tokens": real,
         "rough_estimate_turn1_messages": _rough(history),
         "local_compress_calls_by_turn": compress_by_turn,
         "local_compress_approx_tokens": approx,
@@ -188,9 +243,13 @@ def _rough(messages) -> int:
 def scenario(wire: _FakeChat, *, shape: str, real: int, chars: int, tmp: Path) -> dict:
     history = _seed_history(chars)
     if shape == "cli":
-        return _run_turns(wire, lambda: _make_agent(wire.base_url), history, reload=False, real=real)
+        return _run_turns(
+            wire, lambda: _make_agent(wire.base_url), history, reload=False, real=real
+        )
     if shape == "gateway":
-        return _run_turns(wire, lambda: _make_agent(wire.base_url), history, reload=True, real=real)
+        return _run_turns(
+            wire, lambda: _make_agent(wire.base_url), history, reload=True, real=real
+        )
     # restore: turn 1 in one process/agent, persisted; fresh agent + reopened DB for the rest.
     from clawk_state import SessionDB
 
@@ -228,12 +287,14 @@ def scenario(wire: _FakeChat, *, shape: str, real: int, chars: int, tmp: Path) -
         hist = r["messages"]
     reopened.close()
     return {
-        "threshold": THRESHOLD, "real_prompt_tokens": real,
+        "threshold": THRESHOLD,
+        "real_prompt_tokens": real,
         "rough_estimate_turn1_messages": _rough(r1["messages"]),
         "persisted_messages": len(persisted),
         "anchor_restored_in_fresh_agent": anchor_restored,
         "local_compress_calls_by_turn": compress_by_turn,
-        "local_compress_approx_tokens": list(first._ab_compress_calls) + list(fresh._ab_compress_calls),
+        "local_compress_approx_tokens": list(first._ab_compress_calls)
+        + list(fresh._ab_compress_calls),
         "provider_requests": len(wire.requests),
     }
 
@@ -253,20 +314,39 @@ def recovery_scenario(wire: _FakeChat, *, usage_less: bool) -> dict:
         return original(*args, **kwargs)
 
     agent._compress_context = compress
-    agent.context_compressor._generate_summary = lambda *a, **kw: "Local fixture summary of prior work."
-    history = [{"role": "user" if i % 2 == 0 else "assistant",
-                "content": f"record {i} " + "x" * 32_000} for i in range(20)]
+    agent.context_compressor._generate_summary = lambda *a, **kw: (
+        "Local fixture summary of prior work."
+    )
+    history = [
+        {
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"record {i} " + "x" * 32_000,
+        }
+        for i in range(20)
+    ]
     first = agent.run_conversation("continue", conversation_history=history)
     first_calls = len(calls)
-    result = (agent.run_conversation("continue again", conversation_history=first["messages"])
-              if usage_less else first)
+    result = (
+        agent.run_conversation("continue again", conversation_history=first["messages"])
+        if usage_less
+        else first
+    )
     sizes = [len(json.dumps(r["messages"])) for r in wire.requests]
-    return {"completed": result.get("completed"), "response": result.get("final_response"),
-            "compression_after_provider_requests": calls, "first_turn_compressions": first_calls,
-            "provider_request_sizes": sizes, "provider_omits_usage": agent.context_compressor._provider_omits_usage,
-            "pass": bool(result.get("completed") and calls and calls[0] >= 1
-                         and min(sizes[1:]) < sizes[0]
-                         and (not usage_less or first_calls == 0))}
+    return {
+        "completed": result.get("completed"),
+        "response": result.get("final_response"),
+        "compression_after_provider_requests": calls,
+        "first_turn_compressions": first_calls,
+        "provider_request_sizes": sizes,
+        "provider_omits_usage": agent.context_compressor._provider_omits_usage,
+        "pass": bool(
+            result.get("completed")
+            and calls
+            and calls[0] >= 1
+            and min(sizes[1:]) < sizes[0]
+            and (not usage_less or first_calls == 0)
+        ),
+    }
 
 
 def main() -> int:
@@ -276,17 +356,34 @@ def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="ab-token-accounting-"))
     os.environ["CLAWK_HOME"] = str(tmp / "home")
     (tmp / "home").mkdir(parents=True)
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    ).stdout.strip()
     wire = _FakeChat()
-    result: dict = {"checkout": str(ROOT), "head": head,
-                    "compressor_sha256": hashlib.sha256(
-                        (ROOT / "agent/context_compressor.py").read_bytes()).hexdigest()}
+    result: dict = {
+        "checkout": str(ROOT),
+        "head": head,
+        "compressor_sha256": hashlib.sha256(
+            (ROOT / "agent/context_compressor.py").read_bytes()
+        ).hexdigest(),
+    }
     try:
         for shape in ("cli", "gateway", "restore"):
             result[f"{shape}_past_window_inflated"] = scenario(
-                wire, shape=shape, real=REAL_UNDER, chars=640_000, tmp=tmp)
-            result[f"{shape}_inflated"] = scenario(wire, shape=shape, real=REAL_UNDER, chars=INFLATED_CHARS, tmp=tmp)
-            result[f"{shape}_deflated"] = scenario(wire, shape=shape, real=REAL_OVER, chars=400, tmp=tmp)
+                wire, shape=shape, real=REAL_UNDER, chars=640_000, tmp=tmp
+            )
+            result[f"{shape}_inflated"] = scenario(
+                wire, shape=shape, real=REAL_UNDER, chars=INFLATED_CHARS, tmp=tmp
+            )
+            result[f"{shape}_deflated"] = scenario(
+                wire, shape=shape, real=REAL_OVER, chars=400, tmp=tmp
+            )
         result["overflow_recovery"] = recovery_scenario(wire, usage_less=False)
         result["usage_less_fallback"] = recovery_scenario(wire, usage_less=True)
     finally:
@@ -300,10 +397,15 @@ def main() -> int:
             continue
         fired = sum(v["local_compress_calls_by_turn"])
         # inflated: real under threshold → no gate may fire. deflated: real over → must fire ≥1 after turn 1.
-        verdict[k] = ("PASS" if fired == 0 else "FAIL") if k.endswith("inflated") else (
-            "PASS" if sum(v["local_compress_calls_by_turn"][1:]) >= 1 else "FAIL")
+        verdict[k] = (
+            ("PASS" if fired == 0 else "FAIL")
+            if k.endswith("inflated")
+            else ("PASS" if sum(v["local_compress_calls_by_turn"][1:]) >= 1 else "FAIL")
+        )
     result["verdict"] = verdict
-    Path(args.out).write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
+    Path(args.out).write_text(
+        json.dumps(result, indent=2, default=str), encoding="utf-8"
+    )
     print(json.dumps(result, indent=2, default=str))
     return 0 if all(v == "PASS" for v in verdict.values()) else 1
 

@@ -48,12 +48,22 @@ PEER = dict(
 )
 
 
-def _mk_session(db, session_id, *, key=True, started_at=None, last_activity_at=None,
-                ended_at=None, end_reason=None, msgs=0):
+def _mk_session(
+    db,
+    session_id,
+    *,
+    key=True,
+    started_at=None,
+    last_activity_at=None,
+    ended_at=None,
+    end_reason=None,
+    msgs=0,
+):
     kwargs = {"user_id": PEER["user_id"]}
     if key:
         kwargs.update(
-            session_key=PEER["session_key"], chat_id=PEER["chat_id"],
+            session_key=PEER["session_key"],
+            chat_id=PEER["chat_id"],
             chat_type=PEER["chat_type"],
         )
     db.create_session(session_id, "telegram", **kwargs)
@@ -61,9 +71,14 @@ def _mk_session(db, session_id, *, key=True, started_at=None, last_activity_at=N
         db.append_message(session_id, "user" if i % 2 == 0 else "assistant", f"m{i}")
     with db._lock:
         if started_at is not None:
-            db._conn.execute("UPDATE sessions SET started_at=? WHERE id=?", (started_at, session_id))
+            db._conn.execute(
+                "UPDATE sessions SET started_at=? WHERE id=?", (started_at, session_id)
+            )
         if last_activity_at is not None:
-            db._conn.execute("UPDATE sessions SET last_activity_at=? WHERE id=?", (last_activity_at, session_id))
+            db._conn.execute(
+                "UPDATE sessions SET last_activity_at=? WHERE id=?",
+                (last_activity_at, session_id),
+            )
         if ended_at is not None:
             db._conn.execute(
                 "UPDATE sessions SET ended_at=?, end_reason=? WHERE id=?",
@@ -76,9 +91,13 @@ class TestIdentityAtInsert:
     def test_insert_session_row_persists_origin_and_display_name(self, db):
         origin = json.dumps({"platform": "telegram", "chat_id": "6308981865"})
         db.create_session(
-            "s1", "telegram",
-            session_key=PEER["session_key"], chat_id=PEER["chat_id"],
-            chat_type="dm", origin_json=origin, display_name="Teknium",
+            "s1",
+            "telegram",
+            session_key=PEER["session_key"],
+            chat_id=PEER["chat_id"],
+            chat_type="dm",
+            origin_json=origin,
+            display_name="Teknium",
         )
         row = db.get_session("s1")
         assert row["origin_json"] == origin
@@ -148,10 +167,16 @@ class TestPeerResolutionRecency:
         activity, still open+keyed) must lose to the keyed row with newer
         activity."""
         now = time.time()
-        _mk_session(db, "zombie", started_at=now - 6 * 86400,
-                    last_activity_at=now - 3 * 86400, msgs=4)
-        _mk_session(db, "live", started_at=now - 3 * 86400,
-                    last_activity_at=now - 600, msgs=6)
+        _mk_session(
+            db,
+            "zombie",
+            started_at=now - 6 * 86400,
+            last_activity_at=now - 3 * 86400,
+            msgs=4,
+        )
+        _mk_session(
+            db, "live", started_at=now - 3 * 86400, last_activity_at=now - 600, msgs=6
+        )
         found = db.find_latest_gateway_session_for_peer(**PEER)
         assert found is not None
         assert found["id"] == "live"
@@ -173,8 +198,14 @@ class TestPeerResolutionRecency:
 
     def test_explicit_reset_rows_stay_unrecoverable(self, db):
         now = time.time()
-        _mk_session(db, "resetold", last_activity_at=now - 60,
-                    ended_at=now - 30, end_reason="session_reset", msgs=4)
+        _mk_session(
+            db,
+            "resetold",
+            last_activity_at=now - 60,
+            ended_at=now - 30,
+            end_reason="session_reset",
+            msgs=4,
+        )
         found = db.find_latest_gateway_session_for_peer(**PEER)
         assert found is None, "/new boundaries must never be resurrected"
 
@@ -184,16 +215,30 @@ class TestPeerResolutionRecency:
         (fixes 1-2) is load-bearing; but with the real session stamped by
         the self-heal, the resolver must pick it."""
         now = time.time()
-        _mk_session(db, "zombie2", started_at=now - 6 * 86400,
-                    last_activity_at=now - 3 * 86400, msgs=4)
-        _mk_session(db, "real", key=False, started_at=now - 3 * 86400,
-                    last_activity_at=now - 600, msgs=8)
+        _mk_session(
+            db,
+            "zombie2",
+            started_at=now - 6 * 86400,
+            last_activity_at=now - 3 * 86400,
+            msgs=4,
+        )
+        _mk_session(
+            db,
+            "real",
+            key=False,
+            started_at=now - 3 * 86400,
+            last_activity_at=now - 600,
+            msgs=8,
+        )
         found = db.find_latest_gateway_session_for_peer(**PEER)
         assert found["id"] == "zombie2"  # unstamped rows are invisible
         # Self-heal stamps the real row (any later peer refresh):
         db.record_gateway_session_peer(
-            "real", source="telegram", user_id=PEER["user_id"],
-            session_key=PEER["session_key"], chat_id=PEER["chat_id"],
+            "real",
+            source="telegram",
+            user_id=PEER["user_id"],
+            session_key=PEER["session_key"],
+            chat_id=PEER["chat_id"],
             chat_type="dm",
         )
         found = db.find_latest_gateway_session_for_peer(**PEER)
@@ -201,13 +246,17 @@ class TestPeerResolutionRecency:
 
 
 class TestLoadTranscriptReroutes:
-    def test_load_transcript_raises_when_message_read_fails(self, tmp_path, monkeypatch):
+    def test_load_transcript_raises_when_message_read_fails(
+        self, tmp_path, monkeypatch
+    ):
         from gateway.session import SessionStore
         from gateway.session_transcript import TranscriptReadError
 
         from gateway.config import GatewayConfig
 
-        store = SessionStore(sessions_dir=tmp_path / "gw-failed-read", config=GatewayConfig())
+        store = SessionStore(
+            sessions_dir=tmp_path / "gw-failed-read", config=GatewayConfig()
+        )
         db = store._db
         assert db is not None
         monkeypatch.setattr(db, "get_compression_tip", lambda _session_id: None)

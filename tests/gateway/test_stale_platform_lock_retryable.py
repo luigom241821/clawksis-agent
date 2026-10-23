@@ -26,6 +26,7 @@ import pytest
 
 from gateway.platforms.base import BasePlatformAdapter
 
+
 class _StubAdapter(BasePlatformAdapter):
     """Minimal concrete subclass for testing _acquire_platform_lock."""
 
@@ -43,6 +44,7 @@ class _StubAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         return {}
 
+
 @pytest.fixture()
 def adapter():
     """Create a stub adapter with __init__ bypassed."""
@@ -59,12 +61,16 @@ def adapter():
     obj._status_write_logged = None
     return obj
 
+
 def test_stale_lock_failure_is_retryable(adapter):
     """Lock failure must be retryable, not permanently fatal (#54167)."""
-    with patch(
-        "gateway.status.acquire_scoped_lock",
-        return_value=(False, {"pid": 99999, "start_time": "2026-01-01T00:00:00Z"}),
-    ), patch.object(adapter, "_write_runtime_status_safe"):
+    with (
+        patch(
+            "gateway.status.acquire_scoped_lock",
+            return_value=(False, {"pid": 99999, "start_time": "2026-01-01T00:00:00Z"}),
+        ),
+        patch.object(adapter, "_write_runtime_status_safe"),
+    ):
         result = adapter._acquire_platform_lock(
             "telegram-bot-token", "test-token", "Telegram bot token"
         )
@@ -72,6 +78,7 @@ def test_stale_lock_failure_is_retryable(adapter):
     assert result is False
     assert adapter._fatal_error_retryable is True
     assert adapter._fatal_error_code == "telegram-bot-token_lock"
+
 
 def test_explicit_replace_takeover_reacquires_lock_once(adapter):
     """Initial explicit --replace may hand off and re-acquire once (#65176)."""
@@ -84,11 +91,13 @@ def test_explicit_replace_takeover_reacquires_lock_once(adapter):
     acquire = MagicMock(side_effect=[(False, existing), (True, None)])
     adapter._platform_lock_takeover_allowed = True
 
-    with patch("gateway.status.acquire_scoped_lock", acquire), patch(
-        "gateway.status.take_over_scoped_lock_holder",
-        return_value=4242,
-    ) as takeover, patch.object(
-        adapter, "_write_runtime_status_safe"
+    with (
+        patch("gateway.status.acquire_scoped_lock", acquire),
+        patch(
+            "gateway.status.take_over_scoped_lock_holder",
+            return_value=4242,
+        ) as takeover,
+        patch.object(adapter, "_write_runtime_status_safe"),
     ):
         result = adapter._acquire_platform_lock(
             "telegram-bot-token", "test-token", "Telegram bot token"
@@ -100,6 +109,7 @@ def test_explicit_replace_takeover_reacquires_lock_once(adapter):
     takeover.assert_called_once_with(existing)
     assert acquire.call_count == 2
 
+
 def test_lock_conflict_names_owning_profile(adapter):
     """OOF-3: cross-profile conflicts must name the owning profile, not just a PID."""
     existing = {
@@ -109,10 +119,13 @@ def test_lock_conflict_names_owning_profile(adapter):
         "clawk_home": "/opt/data/profiles/lead-gen-outreach",
     }
 
-    with patch(
-        "gateway.status.acquire_scoped_lock",
-        return_value=(False, existing),
-    ), patch.object(adapter, "_write_runtime_status_safe"):
+    with (
+        patch(
+            "gateway.status.acquire_scoped_lock",
+            return_value=(False, existing),
+        ),
+        patch.object(adapter, "_write_runtime_status_safe"),
+    ):
         result = adapter._acquire_platform_lock(
             "telegram-bot-token",
             "test-token",
@@ -125,6 +138,7 @@ def test_lock_conflict_names_owning_profile(adapter):
     assert adapter._fatal_error_retryable is True
     assert adapter._fatal_error_code == "telegram-bot-token_lock"
 
+
 def test_lock_conflict_infers_profile_from_legacy_clawk_home(adapter):
     """Locks written before the profile field existed still attribute via clawk_home."""
     existing = {
@@ -133,10 +147,13 @@ def test_lock_conflict_infers_profile_from_legacy_clawk_home(adapter):
         "clawk_home": "/opt/data/profiles/lead-gen-outreach",
     }
 
-    with patch(
-        "gateway.status.acquire_scoped_lock",
-        return_value=(False, existing),
-    ), patch.object(adapter, "_write_runtime_status_safe"):
+    with (
+        patch(
+            "gateway.status.acquire_scoped_lock",
+            return_value=(False, existing),
+        ),
+        patch.object(adapter, "_write_runtime_status_safe"),
+    ):
         result = adapter._acquire_platform_lock(
             "telegram-bot-token",
             "test-token",

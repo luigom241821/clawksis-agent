@@ -36,7 +36,9 @@ def _log(msg: object) -> None:
         return
     items = msg if isinstance(msg, list) else [msg]
     with _LOG_LOCK, open(path, "a", encoding="utf-8") as fh:
-        fh.writelines(json.dumps({"pid": os.getpid(), "msg": item}) + "\n" for item in items)
+        fh.writelines(
+            json.dumps({"pid": os.getpid(), "msg": item}) + "\n" for item in items
+        )
 
 
 def _log_raw_line(line: bytes) -> None:
@@ -58,7 +60,10 @@ def _tee_stdin() -> None:
 
     def pump() -> None:
         pending = b""
-        with os.fdopen(upstream, "rb", buffering=0) as src, os.fdopen(write_end, "wb", buffering=0) as dst:
+        with (
+            os.fdopen(upstream, "rb", buffering=0) as src,
+            os.fdopen(write_end, "wb", buffering=0) as dst,
+        ):
             while True:
                 chunk = src.read(65536)
                 if not chunk:
@@ -80,7 +85,10 @@ _PNG = base64.b64decode(
 # Formats the image cache cannot store: (mime, raw bytes or None for "send the data string verbatim").
 IMAGE_FORMATS: dict[str, tuple[str, bytes | str]] = {
     "png": ("image/png", _PNG),
-    "svg": ("image/svg+xml", b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'),
+    "svg": (
+        "image/svg+xml",
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>',
+    ),
     "avif": ("image/avif", b"\x00\x00\x00\x1cftypavif\x00\x00\x00\x00avifmif1miaf"),
     "tiff": ("image/tiff", b"II*\x00\x08\x00\x00\x00\x00\x00"),
     "heic": ("image/heic", b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00mif1heic"),
@@ -96,17 +104,25 @@ def build_server():
     server = MCPServer(os.environ.get("MCPE2E_NAME", "e2e"))
 
     if os.environ.get("MCPE2E_RESOURCE_ONLY") == "1":
-        @server.resource("e2e://doc", name="doc", description="the only thing this server offers")
+
+        @server.resource(
+            "e2e://doc", name="doc", description="the only thing this server offers"
+        )
         def doc() -> str:
             return f"DOC:{canary}"
+
         return server
 
-    @server.tool(annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False))
+    @server.tool(
+        annotations=ToolAnnotations(read_only_hint=True, destructive_hint=False)
+    )
     def ro_probe(nonce: str = "") -> str:
         """Read-only probe (annotated readOnlyHint=true)."""
         return f"RO:{canary}:{nonce}"
 
-    @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True))
+    @server.tool(
+        annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True)
+    )
     def rw_probe(nonce: str = "") -> str:
         """Destructive probe (annotated destructiveHint=true)."""
         return f"RW:{canary}:{nonce}"
@@ -117,7 +133,9 @@ def build_server():
         return f"NOARGS:{canary}"
 
     @server.tool()
-    def optional_obj_probe(operation: str = "list", parameters: dict | None = None) -> str:
+    def optional_obj_probe(
+        operation: str = "list", parameters: dict | None = None
+    ) -> str:
         """No required params; ``parameters`` is an optional JSON object."""
         return f"OPT:{canary}:{operation}:{json.dumps(parameters, sort_keys=True)}"
 
@@ -125,9 +143,13 @@ def build_server():
     def image_probe(fmt: str = "png") -> list:
         """Return a status line plus one image block in the requested format."""
         mime, payload = IMAGE_FORMATS[fmt]
-        data = payload if isinstance(payload, str) else base64.b64encode(payload).decode()
-        return [TextContent(type="text", text=f"IMG-STATUS:{canary}:{fmt}"),
-                ImageContent(type="image", mime_type=mime, data=data)]
+        data = (
+            payload if isinstance(payload, str) else base64.b64encode(payload).decode()
+        )
+        return [
+            TextContent(type="text", text=f"IMG-STATUS:{canary}:{fmt}"),
+            ImageContent(type="image", mime_type=mime, data=data),
+        ]
 
     @server.tool()
     def env_echo() -> str:
@@ -180,9 +202,16 @@ def _recording_app(inner):
         is_call = isinstance(parsed, dict) and parsed.get("method") == "tools/call"
         if is_call and fault_file and _take_401(fault_file):
             _log({"injected_401_for": parsed.get("id")})
-            await send({"type": "http.response.start", "status": 401,
-                        "headers": [(b"content-type", b"application/json")]})
-            await send({"type": "http.response.body", "body": b'{"error":"unauthorized"}'})
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [(b"content-type", b"application/json")],
+                }
+            )
+            await send(
+                {"type": "http.response.body", "body": b'{"error":"unauthorized"}'}
+            )
             return
         replayed = False
 

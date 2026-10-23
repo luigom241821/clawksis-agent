@@ -9,8 +9,14 @@ method = _registry.method
 @method("session.foreign.list")
 def _foreign_list(rid, params):
     from clawk_cli.foreign_sessions_browser import list_foreign_sessions
+
     try:
-        return _ok(rid, list_foreign_sessions(params.get("source"), params.get("offset", 0), params.get("limit", 25)))
+        return _ok(
+            rid,
+            list_foreign_sessions(
+                params.get("source"), params.get("offset", 0), params.get("limit", 25)
+            ),
+        )
     except ValueError as exc:
         return _err(rid, -32602, str(exc))
     except OSError:
@@ -18,13 +24,22 @@ def _foreign_list(rid, params):
 
 
 def _foreign_history_request(rid, params, importing):
-    from clawk_cli.foreign_sessions_browser import import_browser_session, preview_foreign_session
+    from clawk_cli.foreign_sessions_browser import (
+        import_browser_session,
+        preview_foreign_session,
+    )
+
     try:
         with _profile_db(params, writer=importing) as db:
             if db is None:
                 return _db_unavailable_error(rid, code=-32000)
-            result = (import_browser_session(params.get("id"), db, _response_profile_name(params.get("profile")))
-                      if importing else preview_foreign_session(params.get("id"), db))
+            result = (
+                import_browser_session(
+                    params.get("id"), db, _response_profile_name(params.get("profile"))
+                )
+                if importing
+                else preview_foreign_session(params.get("id"), db)
+            )
             return _ok(rid, result)
     except ValueError as exc:
         return _err(rid, -32602, str(exc))

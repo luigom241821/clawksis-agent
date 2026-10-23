@@ -74,7 +74,12 @@ class Declaration:
 
 _APP_OS_FAMILIES = ("win32", "darwin", "linux")
 _APP_PRESENCE = ("executable", "bundle")
-_APP_VERSION_KINDS = {"pe_resource": "win32", "uninstall_registry": "win32", "plist": "darwin", "none": None}
+_APP_VERSION_KINDS = {
+    "pe_resource": "win32",
+    "uninstall_registry": "win32",
+    "plist": "darwin",
+    "none": None,
+}
 _APP_LIVENESS_KINDS = ("server_json", "none")
 _VERSION_RE = re.compile(r"^\d+(\.\d+)*$")
 # `requires.gpu` values and how a sentence names them. Only NVIDIA: `facts.gpu_class()` reports the
@@ -109,10 +114,17 @@ def _is_relative_name(value: Any, *, allow_dirs: bool) -> bool:
     if not isinstance(value, str) or not value.strip() or "://" in value:
         return False
     parts = value.strip().replace("\\", "/").split("/")
-    return ".." not in parts and "" not in parts and (allow_dirs or len(parts) == 1) and ":" not in parts[0]
+    return (
+        ".." not in parts
+        and "" not in parts
+        and (allow_dirs or len(parts) == 1)
+        and ":" not in parts[0]
+    )
 
 
-def _parse_location(where: str, osf: str, presence: str, label: str, raw: Any) -> AppLocation:
+def _parse_location(
+    where: str, osf: str, presence: str, label: str, raw: Any
+) -> AppLocation:
     """A string is a path, where `*` may stand for a versioned folder; a mapping names a location kind."""
     if isinstance(raw, str):
         path = raw.strip()
@@ -120,22 +132,35 @@ def _parse_location(where: str, osf: str, presence: str, label: str, raw: Any) -
             raise DeclarationError(f"{where}: {label} is required")
         if not _location_is_rooted(path, osf) or "**" in path:
             raise DeclarationError(
-                f"{where}: {label} must be absolute or start with ~ / %VAR% / $VAR, without '..', '**' or a URL scheme")
+                f"{where}: {label} must be absolute or start with ~ / %VAR% / $VAR, without '..', '**' or a URL scheme"
+            )
         return AppLocation("path", path)
-    if not isinstance(raw, dict) or not isinstance(raw.get("kind"), str) or raw["kind"] not in LOCATION_KINDS:
-        raise DeclarationError(f"{where}: {label} must be a path or a mapping with kind one of {sorted(LOCATION_KINDS)}")
+    if (
+        not isinstance(raw, dict)
+        or not isinstance(raw.get("kind"), str)
+        or raw["kind"] not in LOCATION_KINDS
+    ):
+        raise DeclarationError(
+            f"{where}: {label} must be a path or a mapping with kind one of {sorted(LOCATION_KINDS)}"
+        )
     kind = raw["kind"]
     spec = LOCATION_KINDS[kind]
     if spec.only_on and spec.only_on != osf:
-        raise DeclarationError(f"{where}: {label} kind {kind!r} is only valid under app.{spec.only_on}")
+        raise DeclarationError(
+            f"{where}: {label} kind {kind!r} is only valid under app.{spec.only_on}"
+        )
     if spec.yields != presence:
-        raise DeclarationError(f"{where}: {label} kind {kind!r} needs app.{osf}.presence {spec.yields}")
+        raise DeclarationError(
+            f"{where}: {label} kind {kind!r} needs app.{osf}.presence {spec.yields}"
+        )
     value = raw.get(spec.key)
     if not _is_relative_name(value, allow_dirs=False):
         raise DeclarationError(f"{where}: {label}.{spec.key} must be a bare name")
     file = raw.get("file", "")
     if spec.needs_file and not _is_relative_name(file, allow_dirs=True):
-        raise DeclarationError(f"{where}: {label}.file must be a relative path inside the install folder")
+        raise DeclarationError(
+            f"{where}: {label}.file must be a relative path inside the install folder"
+        )
     return AppLocation(kind, value.strip(), str(file).strip())
 
 
@@ -143,40 +168,61 @@ def _parse_app_os(where: str, name: str, osf: str, raw: Any) -> AppDef:
     _require_mapping(where, f"app.{osf}", raw)
     presence = raw.get("presence")
     if presence not in _APP_PRESENCE:
-        raise DeclarationError(f"{where}: app.{osf}.presence must be one of {_APP_PRESENCE}")
+        raise DeclarationError(
+            f"{where}: app.{osf}.presence must be one of {_APP_PRESENCE}"
+        )
     location = raw.get("location")
     if isinstance(location, list):
         if not location:
             raise DeclarationError(f"{where}: app.{osf}.location is required")
-        locations = tuple(_parse_location(where, osf, presence, f"app.{osf}.location[{i}]", item)
-                          for i, item in enumerate(location))
+        locations = tuple(
+            _parse_location(where, osf, presence, f"app.{osf}.location[{i}]", item)
+            for i, item in enumerate(location)
+        )
     elif isinstance(location, str):
-        locations = (_parse_location(where, osf, presence, f"app.{osf}.location", location),)
+        locations = (
+            _parse_location(where, osf, presence, f"app.{osf}.location", location),
+        )
     else:
         raise DeclarationError(f"{where}: app.{osf}.location is required")
     version = raw.get("version") or {"kind": "none"}
     _require_mapping(where, f"app.{osf}.version", version)
     vkind = version.get("kind", "none")
     if vkind not in _APP_VERSION_KINDS:
-        raise DeclarationError(f"{where}: app.{osf}.version.kind must be one of {sorted(_APP_VERSION_KINDS)}")
+        raise DeclarationError(
+            f"{where}: app.{osf}.version.kind must be one of {sorted(_APP_VERSION_KINDS)}"
+        )
     only_on = _APP_VERSION_KINDS[vkind]
     if only_on and only_on != osf:
-        raise DeclarationError(f"{where}: app.{osf}.version.kind {vkind!r} is only valid under app.{only_on}")
+        raise DeclarationError(
+            f"{where}: app.{osf}.version.kind {vkind!r} is only valid under app.{only_on}"
+        )
     varg = str(version.get("display_name_prefix") or "")
     if vkind == "uninstall_registry" and not varg:
-        raise DeclarationError(f"{where}: app.{osf}.version.display_name_prefix is required for uninstall_registry")
+        raise DeclarationError(
+            f"{where}: app.{osf}.version.display_name_prefix is required for uninstall_registry"
+        )
     liveness = raw.get("liveness") or {"kind": "none"}
     _require_mapping(where, f"app.{osf}.liveness", liveness)
     lkind = liveness.get("kind", "none")
     if lkind not in _APP_LIVENESS_KINDS:
-        raise DeclarationError(f"{where}: app.{osf}.liveness.kind must be one of {_APP_LIVENESS_KINDS}")
+        raise DeclarationError(
+            f"{where}: app.{osf}.liveness.kind must be one of {_APP_LIVENESS_KINDS}"
+        )
     lpath = str(liveness.get("path") or "")
     if lkind == "server_json" and not lpath:
-        raise DeclarationError(f"{where}: app.{osf}.liveness.path is required for server_json")
+        raise DeclarationError(
+            f"{where}: app.{osf}.liveness.path is required for server_json"
+        )
     return AppDef(
-        app_id=name, os_family=osf, presence=presence, locations=locations,
-        version_kind=vkind, version_arg=varg,
-        liveness_kind=lkind, liveness_path=lpath,
+        app_id=name,
+        os_family=osf,
+        presence=presence,
+        locations=locations,
+        version_kind=vkind,
+        version_arg=varg,
+        liveness_kind=lkind,
+        liveness_path=lpath,
         liveness_pid_key=str(liveness.get("pid_key") or "pid"),
         liveness_url_key=str(liveness.get("url_key") or "http"),
         liveness_token_key=str(liveness.get("token_key") or "token"),
@@ -191,10 +237,14 @@ def parse_app(raw: Any, *, name: str, where: str) -> Optional[AppSpec]:
     _require_mapping(where, "app", raw)
     unknown = set(raw) - set(_APP_OS_FAMILIES)
     if unknown:
-        raise DeclarationError(f"{where}: app has unknown OS keys {sorted(unknown)}; use {_APP_OS_FAMILIES}")
+        raise DeclarationError(
+            f"{where}: app has unknown OS keys {sorted(unknown)}; use {_APP_OS_FAMILIES}"
+        )
     if not raw:
         raise DeclarationError(f"{where}: app needs at least one OS block")
-    return AppSpec(per_os={osf: _parse_app_os(where, name, osf, raw[osf]) for osf in raw})
+    return AppSpec(
+        per_os={osf: _parse_app_os(where, name, osf, raw[osf]) for osf in raw}
+    )
 
 
 def parse_requires(raw: Any, app: Optional[AppSpec], *, where: str) -> RequiresSpec:
@@ -207,33 +257,50 @@ def parse_requires(raw: Any, app: Optional[AppSpec], *, where: str) -> RequiresS
         raise DeclarationError(f"{where}: requires has unknown keys {sorted(unknown)}")
     gpu = raw.get("gpu")
     if gpu is not None and (not isinstance(gpu, str) or gpu not in GPU_LABELS):
-        raise DeclarationError(f"{where}: requires.gpu must be one of {sorted(GPU_LABELS)}")
+        raise DeclarationError(
+            f"{where}: requires.gpu must be one of {sorted(GPU_LABELS)}"
+        )
     needs_app = raw.get("app", False)
     if not isinstance(needs_app, bool):
         raise DeclarationError(f"{where}: requires.app must be a boolean")
     if needs_app and app is None:
-        raise DeclarationError(f"{where}: requires.app is true but the declaration has no 'app' block")
+        raise DeclarationError(
+            f"{where}: requires.app is true but the declaration has no 'app' block"
+        )
     min_version = raw.get("min_version")
     if min_version is not None:
         if not isinstance(min_version, str) or not _VERSION_RE.fullmatch(min_version):
-            raise DeclarationError(f"{where}: requires.min_version must be a dotted numeric string")
+            raise DeclarationError(
+                f"{where}: requires.min_version must be a dotted numeric string"
+            )
         if not needs_app:
-            raise DeclarationError(f"{where}: requires.min_version needs requires.app: true")
+            raise DeclarationError(
+                f"{where}: requires.min_version needs requires.app: true"
+            )
         assert app is not None
         # Linux has no version source, so a Linux block is gated on presence only; Windows and macOS must read
         # one, and a Linux-only declaration has nothing to compare.
-        unversioned = [osf for osf in sorted(app.per_os) if app.per_os[osf].version_kind == "none"
-                       and (osf != "linux" or len(app.per_os) == 1)]
+        unversioned = [
+            osf
+            for osf in sorted(app.per_os)
+            if app.per_os[osf].version_kind == "none"
+            and (osf != "linux" or len(app.per_os) == 1)
+        ]
         if unversioned:
             raise DeclarationError(
-                f"{where}: requires.min_version needs a version source under app.{unversioned[0]} (kind is none)")
+                f"{where}: requires.min_version needs a version source under app.{unversioned[0]} (kind is none)"
+            )
     return RequiresSpec(app=needs_app, min_version=min_version, gpu=gpu)
 
 
-def parse_declaration(name: str, raw_app: Any, raw_requires: Any, *, where: str) -> Declaration:
+def parse_declaration(
+    name: str, raw_app: Any, raw_requires: Any, *, where: str
+) -> Declaration:
     """Parse both blocks of one declaration. ``where`` is the human label in error messages."""
     app = parse_app(raw_app, name=name, where=where)
-    return Declaration(name=name, app=app, requires=parse_requires(raw_requires, app, where=where))
+    return Declaration(
+        name=name, app=app, requires=parse_requires(raw_requires, app, where=where)
+    )
 
 
 _REGISTRY: dict[str, Declaration] = {}

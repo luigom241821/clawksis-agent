@@ -33,10 +33,14 @@ def _latest_version() -> int:
     return int(DEFAULT_CONFIG["_config_version"])
 
 
-def _setup(monkeypatch, tmp_path, active_home: Path, *, default_home: Path | None = None):
+def _setup(
+    monkeypatch, tmp_path, active_home: Path, *, default_home: Path | None = None
+):
     import clawk_cli.profiles as profiles_mod
 
-    monkeypatch.setattr(profiles_mod, "_get_profiles_root", lambda: tmp_path / "profiles")
+    monkeypatch.setattr(
+        profiles_mod, "_get_profiles_root", lambda: tmp_path / "profiles"
+    )
     # Default lives at the install root, not under profiles/; absent unless a test passes it,
     # so no test can reach the real ~/.clawksis.
     missing = tmp_path / "no-such-default-home"
@@ -47,9 +51,7 @@ def _setup(monkeypatch, tmp_path, active_home: Path, *, default_home: Path | Non
     )
     import clawk_constants
 
-    monkeypatch.setattr(
-        clawk_constants, "get_process_clawk_home", lambda: active_home
-    )
+    monkeypatch.setattr(clawk_constants, "get_process_clawk_home", lambda: active_home)
 
 
 def test_sibling_behind_is_migrated_on_disk(monkeypatch, tmp_path):
@@ -164,4 +166,7 @@ def test_default_active_still_migrates_named_siblings(monkeypatch, tmp_path):
     assert "research" in names
     on_disk = yaml.safe_load((sibling / "config.yaml").read_text())
     assert on_disk["_config_version"] == _latest_version()
-    assert yaml.safe_load((default_home / "config.yaml").read_text())["_config_version"] == _latest_version()
+    assert (
+        yaml.safe_load((default_home / "config.yaml").read_text())["_config_version"]
+        == _latest_version()
+    )

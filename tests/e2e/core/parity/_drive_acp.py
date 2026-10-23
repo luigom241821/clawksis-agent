@@ -29,7 +29,9 @@ from tests.e2e.core.parity._helpers import (
 )
 from tests.fakes.fake_llm_provider import FakeLLMServer
 
-ACP_TOOLSET = "clawk-acp"  # acp_adapter/session.py::_expand_acp_enabled_toolsets default
+ACP_TOOLSET = (
+    "clawk-acp"  # acp_adapter/session.py::_expand_acp_enabled_toolsets default
+)
 EOF_EXIT_TIMEOUT = 30.0
 
 
@@ -62,7 +64,9 @@ class _AcpClient:
         self.proc.stdin.write(json.dumps(msg) + "\n")  # type: ignore[union-attr]
         self.proc.stdin.flush()  # type: ignore[union-attr]
 
-    def request(self, method: str, params: dict[str, Any], timeout: float) -> dict[str, Any]:
+    def request(
+        self, method: str, params: dict[str, Any], timeout: float
+    ) -> dict[str, Any]:
         self._next_id += 1
         rid = self._next_id
         self._send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
@@ -76,7 +80,9 @@ class _AcpClient:
             except queue.Empty:
                 continue
             if msg is None:
-                raise AssertionError(f"ACP server closed stdout during {method} (rc={self.proc.poll()})")
+                raise AssertionError(
+                    f"ACP server closed stdout during {method} (rc={self.proc.poll()})"
+                )
             if "method" in msg:
                 self._handle_incoming(msg)
             elif msg.get("id") == rid:
@@ -91,29 +97,54 @@ class _AcpClient:
                 update = params.get("update") or {}
                 self.updates.append(update)
                 content = update.get("content") or {}
-                if update.get("sessionUpdate") == "agent_message_chunk" and content.get("type") == "text":
+                if (
+                    update.get("sessionUpdate") == "agent_message_chunk"
+                    and content.get("type") == "text"
+                ):
                     self.chunks.append(content.get("text", ""))
             return
         self.server_requests.append(method)
         if method == "session/request_permission":
             # An editor user clicking "allow once" (fall back to the first offered option).
             options = params.get("options") or []
-            pick = next((o for o in options if o.get("kind") == "allow_once"), options[0] if options else None)
-            outcome = ({"outcome": "selected", "optionId": pick["optionId"]} if pick
-                       else {"outcome": "cancelled"})
-            self._send({"jsonrpc": "2.0", "id": msg["id"], "result": {"outcome": outcome}})
+            pick = next(
+                (o for o in options if o.get("kind") == "allow_once"),
+                options[0] if options else None,
+            )
+            outcome = (
+                {"outcome": "selected", "optionId": pick["optionId"]}
+                if pick
+                else {"outcome": "cancelled"}
+            )
+            self._send(
+                {"jsonrpc": "2.0", "id": msg["id"], "result": {"outcome": outcome}}
+            )
             return
         # We advertise no fs/terminal client capabilities, so anything else is unexpected.
-        self._send({"jsonrpc": "2.0", "id": msg["id"],
-                    "error": {"code": -32601, "message": f"client does not implement {method}"}})
+        self._send(
+            {
+                "jsonrpc": "2.0",
+                "id": msg["id"],
+                "error": {
+                    "code": -32601,
+                    "message": f"client does not implement {method}",
+                },
+            }
+        )
 
 
 def drive_acp(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
     stderr_path = ph.root / "acp_stderr.log"
     with open(stderr_path, "w", encoding="utf-8") as stderr_fh:
         proc = subprocess.Popen(
-            clawk_argv("acp"), cwd=ph.project, env=ph.env(), stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=stderr_fh, text=True, bufsize=1,
+            clawk_argv("acp"),
+            cwd=ph.project,
+            env=ph.env(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr_fh,
+            text=True,
+            bufsize=1,
         )
         client = _AcpClient(proc)
         graceful = True
@@ -121,17 +152,30 @@ def drive_acp(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
         stop_reason = None
         init = None
         try:
-            init = client.request("initialize", {
-                "protocolVersion": 1,
-                "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False},
-                "clientInfo": {"name": "parity-suite", "version": "1.0"},
-            }, timeout=60)
-            session = client.request("session/new", {"cwd": str(ph.project), "mcpServers": []},
-                                     timeout=120)
+            init = client.request(
+                "initialize",
+                {
+                    "protocolVersion": 1,
+                    "clientCapabilities": {
+                        "fs": {"readTextFile": False, "writeTextFile": False},
+                        "terminal": False,
+                    },
+                    "clientInfo": {"name": "parity-suite", "version": "1.0"},
+                },
+                timeout=60,
+            )
+            session = client.request(
+                "session/new", {"cwd": str(ph.project), "mcpServers": []}, timeout=120
+            )
             session_id = session["sessionId"]
-            result = client.request("session/prompt", {
-                "sessionId": session_id, "prompt": [{"type": "text", "text": prompt}],
-            }, timeout=TURN_TIMEOUT)
+            result = client.request(
+                "session/prompt",
+                {
+                    "sessionId": session_id,
+                    "prompt": [{"type": "text", "text": prompt}],
+                },
+                timeout=TURN_TIMEOUT,
+            )
             stop_reason = result.get("stopReason")
         finally:
             # Normal host shutdown: close the pipe and let the server exit on EOF.

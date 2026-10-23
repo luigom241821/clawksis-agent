@@ -47,7 +47,9 @@ def test_bom_prefixed_env_first_key_is_detected_as_set(tmp_path, monkeypatch, ca
     # utf-8-sig write == UTF-8 with a leading BOM, exactly what Notepad emits.
     (profile / ".env").write_text("FOO_TOKEN=abc\nBAR=1\n", encoding="utf-8-sig")
 
-    plan = _make_plan(profile, [SimpleNamespace(name="FOO_TOKEN", required=True, description="")])
+    plan = _make_plan(
+        profile, [SimpleNamespace(name="FOO_TOKEN", required=True, description="")]
+    )
     _render_distribution_plan(plan)
 
     out = capsys.readouterr().out
@@ -63,7 +65,9 @@ def test_non_utf8_env_does_not_abort_the_preview(tmp_path, monkeypatch, capsys):
     # \xff is an invalid UTF-8 start byte -> UnicodeDecodeError on read.
     (profile / ".env").write_bytes(b"FOO_TOKEN=\xff\xfe bad\n")
 
-    plan = _make_plan(profile, [SimpleNamespace(name="FOO_TOKEN", required=True, description="")])
+    plan = _make_plan(
+        profile, [SimpleNamespace(name="FOO_TOKEN", required=True, description="")]
+    )
 
     # Must return normally (old `except OSError` let UnicodeDecodeError escape).
     _render_distribution_plan(plan)

@@ -52,7 +52,9 @@ def test_import_refuses_to_publish_over_a_deleted_but_held_database(tmp_path):
 
     holder = subprocess.Popen(
         [sys.executable, "-c", _HOLDER, str(target)],
-        stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
     )
     stdout = holder.stdout
     assert stdout is not None

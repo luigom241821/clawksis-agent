@@ -19,7 +19,9 @@ _DEFAULT_UPGRADE_TTL_SECONDS = 300  # connector makeUpgradeToken default
 
 def sign(payload: str, secret: str) -> str:
     """HMAC-SHA256 hex digest (UTF-8) — the connector's ``sign``."""
-    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
 
 
 def make_token(payload: str, secret: str, ttl_seconds: int = 0) -> str:

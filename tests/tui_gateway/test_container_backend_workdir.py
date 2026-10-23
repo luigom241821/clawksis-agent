@@ -75,18 +75,33 @@ def test_container_backend_host_cwd_keeps_host_path(launch_home, tmp_path):
     assert server._completion_cwd({}) == str(project)
 
 
-def test_named_container_profile_uses_its_container_cwd(launch_home, tmp_path, monkeypatch):
+def test_named_container_profile_uses_its_container_cwd(
+    launch_home, tmp_path, monkeypatch
+):
     container = _container_dir()
-    profile = _write_cfg(tmp_path / "box", f"terminal:\n  backend: docker\n  cwd: {container}\n")
-    monkeypatch.setattr(server, "_profile_home", lambda name: profile if name == "box" else None)
+    profile = _write_cfg(
+        tmp_path / "box", f"terminal:\n  backend: docker\n  cwd: {container}\n"
+    )
+    monkeypatch.setattr(
+        server, "_profile_home", lambda name: profile if name == "box" else None
+    )
     inherited = str(tmp_path / "user-home")
 
-    assert server._completion_cwd({"profile": "box", "cwd": inherited, "cwd_explicit": False}) == container
+    assert (
+        server._completion_cwd(
+            {"profile": "box", "cwd": inherited, "cwd_explicit": False}
+        )
+        == container
+    )
     assert server._completion_cwd({"profile": "box"}) == container
-    assert not server._session_is_local_backend({"cwd": container, "profile_home": str(profile)})
+    assert not server._session_is_local_backend(
+        {"cwd": container, "profile_home": str(profile)}
+    )
 
 
-def test_attached_host_file_is_staged_and_agent_sees_container_path(launch_home, monkeypatch):
+def test_attached_host_file_is_staged_and_agent_sees_container_path(
+    launch_home, monkeypatch
+):
     container = _container_dir()
     _write_cfg(launch_home, f"terminal:\n  backend: docker\n  cwd: {container}\n")
     report = Path.cwd() / "Downloads" / "report.pdf"
@@ -95,7 +110,8 @@ def test_attached_host_file_is_staged_and_agent_sees_container_path(launch_home,
     session = {"cwd": server._completion_cwd({}), "profile_home": None}
 
     stored, uploaded = server._stage_session_file_attachment(
-        session, raw_path=str(report), data_url="", name="")
+        session, raw_path=str(report), data_url="", name=""
+    )
 
     assert uploaded is True
     assert stored.parent == (launch_home / "attachments").resolve()
@@ -107,7 +123,13 @@ def test_attached_host_file_is_staged_and_agent_sees_container_path(launch_home,
     monkeypatch.setenv("TERMINAL_ENV", "docker")
     cwd = server._session_cwd(session)
     ctx = preprocess_context_references(
-        f"summarise @file:{server._format_ref_value(ref_path)}", cwd=cwd, allowed_root=cwd,
-        context_length=200_000)
+        f"summarise @file:{server._format_ref_value(ref_path)}",
+        cwd=cwd,
+        allowed_root=cwd,
+        context_length=200_000,
+    )
     assert not ctx.warnings, ctx.warnings
-    assert f"available on disk at `/root/.clawksis/attachments/{stored.name}`" in ctx.message
+    assert (
+        f"available on disk at `/root/.clawksis/attachments/{stored.name}`"
+        in ctx.message
+    )

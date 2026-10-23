@@ -2,6 +2,7 @@
 
 Patching ``time.monotonic`` itself also moves the running event loop's clock (its timers read the
 same function); this swaps only the module's ``time`` binding, so the loop keeps real time."""
+
 import time
 
 

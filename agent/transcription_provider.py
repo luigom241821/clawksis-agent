@@ -25,7 +25,12 @@ class TranscriptionProvider(CatalogProviderBase):
 
     @abc.abstractmethod
     def transcribe(
-        self, file_path: str, *, model: Optional[str] = None, language: Optional[str] = None, **extra: Any,
+        self,
+        file_path: str,
+        *,
+        model: Optional[str] = None,
+        language: Optional[str] = None,
+        **extra: Any,
     ) -> dict[str, Any]:
         """Transcribe ``file_path`` (existence + size already validated) into the module envelope.
 
@@ -42,10 +47,15 @@ class TranscriptionProvider(CatalogProviderBase):
         return False
 
     def open_stream_session(
-        self, *, language: Optional[str] = None, prompt: Optional[str] = None,
+        self,
+        *,
+        language: Optional[str] = None,
+        prompt: Optional[str] = None,
     ) -> TranscriptionStreamSession:
         """A single-use live session for one utterance (streaming-capable providers only)."""
-        raise NotImplementedError(f"{self.name} does not support live streaming transcription")
+        raise NotImplementedError(
+            f"{self.name} does not support live streaming transcription"
+        )
 
 
 class TranscriptionStreamSession(abc.ABC):

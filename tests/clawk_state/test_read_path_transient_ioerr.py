@@ -1,5 +1,6 @@
 """#100871: a transient SQLITE_IOERR on a warm pooled read connection is retried on the same
 connection, then surfaced -- never quarantined, never a close+reopen."""
+
 import sqlite3
 
 import pytest
@@ -8,7 +9,11 @@ import clawk_state
 from clawk_state import SessionDB
 
 
-_STATE = {"failures_left": 0, "attempts": 0, "fail_prefix": "SELECT"}  # module-level: the tracking factory subclasses _FlakyReads
+_STATE = {
+    "failures_left": 0,
+    "attempts": 0,
+    "fail_prefix": "SELECT",
+}  # module-level: the tracking factory subclasses _FlakyReads
 
 
 class _FlakyReads(sqlite3.Connection):
@@ -39,7 +44,9 @@ def db(tmp_path, monkeypatch):
         return real_connect(path, *args, **kwargs)
 
     monkeypatch.setattr(clawk_state, "_connect_tracked_db", flaky_connect)
-    while db._evict_one_idle_read_conn():  # the next read opens through the flaky factory
+    while (
+        db._evict_one_idle_read_conn()
+    ):  # the next read opens through the flaky factory
         pass
     _STATE.update(failures_left=0, attempts=0, fail_prefix="SELECT")
     yield db
@@ -55,14 +62,16 @@ def test_transient_ioerr_on_pooled_read_is_retried_on_the_same_connection(db):
 
 
 def test_persistent_ioerr_propagates_after_the_budget(db):
-    _STATE["failures_left"] = 10 ** 6
+    _STATE["failures_left"] = 10**6
     with pytest.raises(sqlite3.OperationalError, match="disk I/O error"):
         db.get_session("s")
     assert _STATE["attempts"] == clawk_state._READ_ONLY_IOERR_RETRY_ATTEMPTS + 1
     assert db._db_corrupt is False  # busy/EIO is not corruption: no quarantine
 
 
-@pytest.mark.parametrize("include_compacted, fail_prefix", [(False, "SELECT"), (True, "WITH page AS")])
+@pytest.mark.parametrize(
+    "include_compacted, fail_prefix", [(False, "SELECT"), (True, "WITH page AS")]
+)
 def test_transient_ioerr_on_get_messages_is_retried(db, include_compacted, fail_prefix):
     """Both message read paths -- live rows and the deduped display-history CTE -- replay a transient IOERR."""
     db.append_message("s", "user", "hi")
@@ -71,5 +80,7 @@ def test_transient_ioerr_on_get_messages_is_retried(db, include_compacted, fail_
     _STATE.update(failures_left=1, attempts=0, fail_prefix=fail_prefix)
     rows = db.get_messages("s", include_compacted=include_compacted)
     assert [r["content"] for r in rows] == ["hi"]
-    assert _STATE["failures_left"] == 0 and _STATE["attempts"] == 2  # one failure, one replay
+    assert (
+        _STATE["failures_left"] == 0 and _STATE["attempts"] == 2
+    )  # one failure, one replay
     assert db._db_corrupt is False and db._db_wal_generation_lost is False

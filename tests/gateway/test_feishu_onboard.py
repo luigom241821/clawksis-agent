@@ -18,13 +18,14 @@ def _mock_urlopen(response_data, status=200):
 class TestPostRegistration:
     """Tests for the low-level HTTP helper."""
 
-
     @patch("plugins.platforms.feishu.adapter.urlopen")
     def test_post_registration_sends_form_encoded_body(self, mock_urlopen_fn):
         from plugins.platforms.feishu.adapter import _post_registration
 
         mock_urlopen_fn.return_value = _mock_urlopen({})
-        _post_registration("https://accounts.feishu.cn", {"action": "init", "key": "val"})
+        _post_registration(
+            "https://accounts.feishu.cn", {"action": "init", "key": "val"}
+        )
         call_args = mock_urlopen_fn.call_args
         request = call_args[0][0]
         body = request.data.decode("utf-8")
@@ -40,20 +41,24 @@ class TestInitRegistration:
     def test_init_succeeds_when_client_secret_supported(self, mock_urlopen_fn):
         from plugins.platforms.feishu.adapter import _init_registration
 
-        mock_urlopen_fn.return_value = _mock_urlopen({
-            "nonce": "abc",
-            "supported_auth_methods": ["client_secret"],
-        })
+        mock_urlopen_fn.return_value = _mock_urlopen(
+            {
+                "nonce": "abc",
+                "supported_auth_methods": ["client_secret"],
+            }
+        )
         _init_registration("feishu")
 
     @patch("plugins.platforms.feishu.adapter.urlopen")
     def test_init_raises_when_client_secret_not_supported(self, mock_urlopen_fn):
         from plugins.platforms.feishu.adapter import _init_registration
 
-        mock_urlopen_fn.return_value = _mock_urlopen({
-            "nonce": "abc",
-            "supported_auth_methods": ["other_method"],
-        })
+        mock_urlopen_fn.return_value = _mock_urlopen(
+            {
+                "nonce": "abc",
+                "supported_auth_methods": ["other_method"],
+            }
+        )
         with pytest.raises(RuntimeError, match="client_secret"):
             _init_registration("feishu")
 
@@ -65,13 +70,15 @@ class TestBeginRegistration:
     def test_begin_returns_device_code_and_qr_url(self, mock_urlopen_fn):
         from plugins.platforms.feishu.adapter import _begin_registration
 
-        mock_urlopen_fn.return_value = _mock_urlopen({
-            "device_code": "dc_123",
-            "verification_uri_complete": "https://accounts.feishu.cn/qr/abc",
-            "user_code": "ABCD-1234",
-            "interval": 5,
-            "expire_in": 600,
-        })
+        mock_urlopen_fn.return_value = _mock_urlopen(
+            {
+                "device_code": "dc_123",
+                "verification_uri_complete": "https://accounts.feishu.cn/qr/abc",
+                "user_code": "ABCD-1234",
+                "interval": 5,
+                "expire_in": 600,
+            }
+        )
         result = _begin_registration("feishu")
         assert result["device_code"] == "dc_123"
         assert "qr_url" in result
@@ -92,11 +99,13 @@ class TestPollRegistration:
         mock_time.monotonic.side_effect = [0, 1]
         mock_time.sleep = MagicMock()
 
-        mock_urlopen_fn.return_value = _mock_urlopen({
-            "client_id": "cli_app123",
-            "client_secret": "secret456",
-            "user_info": {"open_id": "ou_owner", "tenant_brand": "feishu"},
-        })
+        mock_urlopen_fn.return_value = _mock_urlopen(
+            {
+                "client_id": "cli_app123",
+                "client_secret": "secret456",
+                "user_info": {"open_id": "ou_owner", "tenant_brand": "feishu"},
+            }
+        )
         result = _poll_registration(
             device_code="dc_123", interval=1, expire_in=60, domain="feishu"
         )
@@ -108,21 +117,27 @@ class TestPollRegistration:
 
     @patch("plugins.platforms.feishu.adapter.time")
     @patch("plugins.platforms.feishu.adapter.urlopen")
-    def test_poll_switches_domain_on_lark_tenant_brand(self, mock_urlopen_fn, mock_time):
+    def test_poll_switches_domain_on_lark_tenant_brand(
+        self, mock_urlopen_fn, mock_time
+    ):
         from plugins.platforms.feishu.adapter import _poll_registration
 
         mock_time.monotonic.side_effect = [0, 1, 2]
         mock_time.sleep = MagicMock()
 
-        pending_resp = _mock_urlopen({
-            "error": "authorization_pending",
-            "user_info": {"tenant_brand": "lark"},
-        })
-        success_resp = _mock_urlopen({
-            "client_id": "cli_lark",
-            "client_secret": "secret_lark",
-            "user_info": {"open_id": "ou_lark", "tenant_brand": "lark"},
-        })
+        pending_resp = _mock_urlopen(
+            {
+                "error": "authorization_pending",
+                "user_info": {"tenant_brand": "lark"},
+            }
+        )
+        success_resp = _mock_urlopen(
+            {
+                "client_id": "cli_lark",
+                "client_secret": "secret_lark",
+                "user_info": {"open_id": "ou_lark", "tenant_brand": "lark"},
+            }
+        )
         mock_urlopen_fn.side_effect = [pending_resp, success_resp]
 
         result = _poll_registration(
@@ -130,10 +145,6 @@ class TestPollRegistration:
         )
         assert result is not None
         assert result["domain"] == "lark"
-
-
-
-
 
 
 class TestQrRegister:
@@ -171,7 +182,6 @@ class TestQrRegister:
         assert result["bot_name"] == "MyBot"
         mock_init.assert_called_once()
         mock_render.assert_called_once()
-
 
     @patch("plugins.platforms.feishu.adapter._render_qr")
     @patch("plugins.platforms.feishu.adapter._poll_registration")
@@ -222,9 +232,7 @@ class TestQrRegister:
 
     # -- Contract: expected errors → None, unexpected errors → propagate --
 
-
     # -- Negative paths: partial/malformed server responses --
-
 
     @patch("plugins.platforms.feishu.adapter.probe_bot")
     @patch("plugins.platforms.feishu.adapter._render_qr")

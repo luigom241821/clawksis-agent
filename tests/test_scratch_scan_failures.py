@@ -9,7 +9,9 @@ import clawk_constants_scratch as scratch
 
 
 @pytest.mark.parametrize("failed_probe", ["root-stat", "directory-scan", "child-stat"])
-def test_unreadable_subtree_is_preserved_until_it_can_be_scanned(tmp_path, monkeypatch, failed_probe):
+def test_unreadable_subtree_is_preserved_until_it_can_be_scanned(
+    tmp_path, monkeypatch, failed_probe
+):
     root = tmp_path / "scratch"
     entry = root / "lane"
     entry.mkdir(parents=True)
@@ -23,12 +25,15 @@ def test_unreadable_subtree_is_preserved_until_it_can_be_scanned(tmp_path, monke
     real_lstat, real_scandir = os.lstat, os.scandir
     with monkeypatch.context() as probe:
         if failed_probe == "root-stat":
+
             def lstat(path, *args, **kwargs):
                 if path == entry:
                     raise PermissionError("cannot inspect entry")
                 return real_lstat(path, *args, **kwargs)
+
             probe.setattr(scratch.os, "lstat", lstat)
         else:
+
             def scandir(path):
                 if path == str(entry):
                     if failed_probe == "directory-scan":
@@ -52,9 +57,12 @@ def test_unreadable_subtree_is_preserved_until_it_can_be_scanned(tmp_path, monke
 
                     return Scan()
                 return real_scandir(path)
+
             probe.setattr(scratch.os, "scandir", scandir)
         assert scratch.prune_idle_entries(root, 24, frozenset()) == 0
-        assert result.read_text(encoding="utf-8") == "keep until activity can be checked"
+        assert (
+            result.read_text(encoding="utf-8") == "keep until activity can be checked"
+        )
     # Once observation succeeds, the same genuinely idle tree is reclaimable.
     assert scratch.prune_idle_entries(root, 24, frozenset()) == 1
     assert not entry.exists()
@@ -90,12 +98,15 @@ def test_post_selection_scan_failure_keeps_entry_with_honest_audit(
     real_lstat, real_scandir = os.lstat, os.scandir
     with monkeypatch.context() as probe:
         if failed_probe == "root-stat":
+
             def lstat(path, *args, **kwargs):
                 if state["selected"] and path == entry:
                     raise PermissionError("cannot inspect entry")
                 return real_lstat(path, *args, **kwargs)
+
             probe.setattr(scratch.os, "lstat", lstat)
         else:
+
             def scandir(path):
                 if state["selected"] and path == str(entry):
                     if failed_probe == "directory-scan":
@@ -119,11 +130,14 @@ def test_post_selection_scan_failure_keeps_entry_with_honest_audit(
 
                     return Scan()
                 return real_scandir(path)
+
             probe.setattr(scratch.os, "scandir", scandir)
         # Kept, never counted as removed, original bytes and mtime intact: no payload
         # write occurred, and none may be invented by the audit.
         assert scratch.prune_idle_entries(root, 24, frozenset(), log_file) == 0
-        assert result.read_text(encoding="utf-8") == "keep until activity can be checked"
+        assert (
+            result.read_text(encoding="utf-8") == "keep until activity can be checked"
+        )
         assert result.stat().st_mtime == old
     log = log_file.read_text(encoding="utf-8-sig")
     assert "touched since selection" not in log, log

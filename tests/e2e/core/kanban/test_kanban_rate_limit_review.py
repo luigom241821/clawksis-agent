@@ -44,14 +44,17 @@ pytestmark = [
 # with a marker in the scratch home tells a reviewer's prompt apart without reading prompt wording.
 REVIEW_SKILL = "sdlc-review"
 REVIEW_MARK = "E2E_REVIEW_LANE_SKILL_5d21c9"
-RATE_LIMIT_EXIT_CODE = 75  # KANBAN_RATE_LIMIT_EXIT_CODE — documented worker exit contract
+RATE_LIMIT_EXIT_CODE = (
+    75  # KANBAN_RATE_LIMIT_EXIT_CODE — documented worker exit contract
+)
 MAX_TICKS = 6  # a healthy rate-limited card is done on tick 3; the rest prove "forever"
 
 # Scenario -> (pattern, reason) for ``known_gate``; it only matches ``ReviewerNeverSpawned``.
 KNOWN: dict[str, tuple[str, str]] = {
     "rate_limited_then_review": (
         r"reviewer attempts=0, respawn_guarded=\[[^\]]*'blocker_auth'",
-        "#119070 stale rate-limit stamp parks the review handoff as blocker_auth"),
+        "#119070 stale rate-limit stamp parks the review handoff as blocker_auth",
+    ),
 }
 
 
@@ -68,7 +71,9 @@ def _seed_review_skill(board: Board) -> None:
     skill.mkdir(parents=True, exist_ok=True)
     (skill / "SKILL.md").write_text(
         f"---\nname: {REVIEW_SKILL}\ndescription: Review Kanban handoffs (e2e stand-in).\n---\n\n"
-        f"# {REVIEW_SKILL}\n\nFollow {REVIEW_MARK} before approving.\n", encoding="utf-8")
+        f"# {REVIEW_SKILL}\n\nFollow {REVIEW_MARK} before approving.\n",
+        encoding="utf-8",
+    )
 
 
 @dataclass
@@ -103,7 +108,9 @@ class TwoRoleModel:
             att = self.attempts[-1]
             att.requests += 1
             resp = self._answer(role, msgs)
-            att.answers.append(type(resp).__name__ if not isinstance(resp, ToolCall) else resp.name)
+            att.answers.append(
+                type(resp).__name__ if not isinstance(resp, ToolCall) else resp.name
+            )
             return resp
 
     def _answer(self, role: str, msgs: list) -> Any:
@@ -113,8 +120,14 @@ class TwoRoleModel:
             return ToolCall("kanban_complete", {"summary": "review: approved"})
         impl_no = sum(1 for a in self.attempts if a.role == "impl")
         if impl_no <= self.rate_limited_attempts:
-            return Error(status=429, message="Rate limit exceeded: quota for this key", retry_after=0)
-        return ToolCall("kanban_request_review", {"summary": "implementation ready for review"})
+            return Error(
+                status=429,
+                message="Rate limit exceeded: quota for this key",
+                retry_after=0,
+            )
+        return ToolCall(
+            "kanban_request_review", {"summary": "implementation ready for review"}
+        )
 
     def by_role(self, role: str) -> list[Attempt]:
         return [a for a in self.attempts if a.role == role]
@@ -123,8 +136,11 @@ class TwoRoleModel:
 def one_terminal_turn(att: Attempt, tool: str) -> bool:
     """Billing bound for a finishing attempt: its first answer IS the terminal board call, followed by
     at most one closing turn (dropping that closing call is an improvement, not a regression)."""
-    return (att.answers[:1] == [tool] and att.requests == len(att.answers) <= 2
-            and all(a == "Text" for a in att.answers[1:]))
+    return (
+        att.answers[:1] == [tool]
+        and att.requests == len(att.answers) <= 2
+        and all(a == "Text" for a in att.answers[1:])
+    )
 
 
 # board driving -----------------------------------------------------------------------------------
@@ -145,7 +161,9 @@ class Flow:
         return f"ticks={self.ticks}\nattempts={att}\n{self.board.diag(self.tid)}"
 
 
-def drive(board: Board, tid: str, model: TwoRoleModel, max_ticks: int = MAX_TICKS) -> list[dict]:
+def drive(
+    board: Board, tid: str, model: TwoRoleModel, max_ticks: int = MAX_TICKS
+) -> list[dict]:
     """Run real dispatcher ticks; after each spawn wait for THAT worker process to exit so the next
     tick sees its final state (a dead worker is reaped on the tick after it dies)."""
     ticks: list[dict] = []
@@ -157,11 +175,19 @@ def drive(board: Board, tid: str, model: TwoRoleModel, max_ticks: int = MAX_TICK
             pid = board.events(tid, "spawned")[-1]["payload"]["pid"]
             board.wait_worker_exit(tid, int(pid))
         t = board.task(tid)
-        ticks.append({
-            "tick": n, "spawned": spawned.count(tid), "status": t["status"],
-            "consecutive_failures": t["consecutive_failures"],
-            "guarded": [g.get("reason") for g in res.get("respawn_guarded", []) if g.get("task_id") == tid],
-        })
+        ticks.append(
+            {
+                "tick": n,
+                "spawned": spawned.count(tid),
+                "status": t["status"],
+                "consecutive_failures": t["consecutive_failures"],
+                "guarded": [
+                    g.get("reason")
+                    for g in res.get("respawn_guarded", [])
+                    if g.get("task_id") == tid
+                ],
+            }
+        )
         if t["status"] == "done":
             break
     return ticks
@@ -189,7 +215,9 @@ def rate_limited_flow(tmp_path_factory: pytest.TempPathFactory) -> Flow:
 # tests -------------------------------------------------------------------------------------------
 
 
-def test_rate_limited_attempt_is_billed_once_and_requeued_without_a_failure(rate_limited_flow: Flow) -> None:
+def test_rate_limited_attempt_is_billed_once_and_requeued_without_a_failure(
+    rate_limited_flow: Flow,
+) -> None:
     f = rate_limited_flow
     b, tid, diag = f.board, f.tid, f.diag()
     runs = b.runs(tid)
@@ -198,7 +226,10 @@ def test_rate_limited_attempt_is_billed_once_and_requeued_without_a_failure(rate
     assert runs[0]["outcome"] == "rate_limited", diag
     assert runs[1]["outcome"] == "review_requested", diag
     rl_events = b.events(tid, "rate_limited")
-    assert len(rl_events) == 1 and rl_events[0]["payload"]["exit_code"] == RATE_LIMIT_EXIT_CODE, diag
+    assert (
+        len(rl_events) == 1
+        and rl_events[0]["payload"]["exit_code"] == RATE_LIMIT_EXIT_CODE
+    ), diag
     assert rl_events[0]["run_id"] == runs[0]["id"], diag
     assert all(t["consecutive_failures"] == 0 for t in f.ticks), diag
     assert b.task(tid)["consecutive_failures"] == 0, diag
@@ -209,8 +240,12 @@ def test_rate_limited_attempt_is_billed_once_and_requeued_without_a_failure(rate
     # Provider-side billing: the 429 attempt is ONE request (api_max_retries: 1, no retry loop and
     # no fallback re-send); the retry opens with the handoff call and at most one closing turn.
     impl = f.model.by_role("impl")
-    assert [(a.tick, a.requests, a.answers) for a in impl[:1]] == [(1, 1, ["Error"])], diag
-    assert [a.tick for a in impl] == [1, 2] and one_terminal_turn(impl[1], "kanban_request_review"), diag
+    assert [(a.tick, a.requests, a.answers) for a in impl[:1]] == [(1, 1, ["Error"])], (
+        diag
+    )
+    assert [a.tick for a in impl] == [1, 2] and one_terminal_turn(
+        impl[1], "kanban_request_review"
+    ), diag
     assert len(runs) - 2 == len(f.model.by_role("review")), diag
 
 
@@ -223,14 +258,21 @@ def test_clean_handoff_spawns_the_reviewer_on_the_next_tick(tmp_path: Path) -> N
     assert f.run_outcomes() == ["review_requested", "completed"], diag
     assert [t["spawned"] for t in f.ticks] == [1, 1], diag
     assert not any(t["guarded"] for t in f.ticks), diag
-    assert [(a.role, a.tick) for a in f.model.attempts] == [("impl", 1), ("review", 2)], diag
+    assert [(a.role, a.tick) for a in f.model.attempts] == [
+        ("impl", 1),
+        ("review", 2),
+    ], diag
     impl, review = f.model.attempts
-    assert one_terminal_turn(impl, "kanban_request_review") and one_terminal_turn(review, "kanban_complete"), diag
+    assert one_terminal_turn(impl, "kanban_request_review") and one_terminal_turn(
+        review, "kanban_complete"
+    ), diag
     assert b.task(tid)["consecutive_failures"] == 0, diag
 
 
 @pytest.mark.parametrize("scenario", ["rate_limited_then_review"])
-def test_rate_limited_then_review_handoff_reaches_the_reviewer(rate_limited_flow: Flow, scenario: str) -> None:
+def test_rate_limited_then_review_handoff_reaches_the_reviewer(
+    rate_limited_flow: Flow, scenario: str
+) -> None:
     f = rate_limited_flow
     b, tid, diag = f.board, f.tid, f.diag()
     # Precondition (harness, stays red if broken): the card really got to the review lane via a
@@ -242,10 +284,15 @@ def test_rate_limited_then_review_handoff_reaches_the_reviewer(rate_limited_flow
         if not reviewers or b.task(tid)["status"] != "done":
             raise ReviewerNeverSpawned(
                 f"{scenario}: status={b.task(tid)['status']} after {len(f.ticks)} ticks, "
-                f"reviewer attempts={len(reviewers)}, respawn_guarded={guarded}\n{diag}")
+                f"reviewer attempts={len(reviewers)}, respawn_guarded={guarded}\n{diag}"
+            )
     # Once fixed, the whole contract must hold, not just "something spawned".
     assert f.run_outcomes() == ["rate_limited", "review_requested", "completed"], diag
     # The reviewer starts on the tick right after the handoff (cooldown 0), billed one tool turn.
-    assert [a.tick for a in reviewers] == [3] and one_terminal_turn(reviewers[0], "kanban_complete"), diag
+    assert [a.tick for a in reviewers] == [3] and one_terminal_turn(
+        reviewers[0], "kanban_complete"
+    ), diag
     assert "blocker_auth" not in guarded, diag
-    assert not b.events(tid, "gave_up") and b.task(tid)["consecutive_failures"] == 0, diag
+    assert not b.events(tid, "gave_up") and b.task(tid)["consecutive_failures"] == 0, (
+        diag
+    )

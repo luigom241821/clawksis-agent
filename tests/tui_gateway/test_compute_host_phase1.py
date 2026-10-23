@@ -49,6 +49,7 @@ def test_compute_host_routes_relayed_response_and_lock_to_its_open_request(monke
     """The child owns the server request's wait: a relayed client response frame resolves it in-process,
     and a relayed ``clarify.lock`` is answered with that method's result for the parent to ack."""
     from tui_gateway import server_requests
+
     out = io.StringIO()
     host = ComputeHost(stdout=out, heartbeat_secs=0)
     sid = "host-clarify"
@@ -57,51 +58,99 @@ def test_compute_host_routes_relayed_response_and_lock_to_its_open_request(monke
     with server_requests._lock:
         server_requests._open[req.id] = req
     locks = []
-    monkeypatch.setitem(server._methods, "clarify.lock",
-                        lambda rid, params: locks.append((rid, dict(params))) or {"result": {"status": "ok", "remaining": []}})
+    monkeypatch.setitem(
+        server._methods,
+        "clarify.lock",
+        lambda rid, params: (
+            locks.append((rid, dict(params)))
+            or {"result": {"status": "ok", "remaining": []}}
+        ),
+    )
 
     try:
-        host._handle_respond({"sid": sid, "request_id": "relay-lock",
-                              "params": {"lock": {"request_id": req.id, "question_id": "q0", "answer": "a"}}})
-        assert locks == [("relay-lock", {"request_id": req.id, "question_id": "q0", "answer": "a"})]
-        assert _json_lines(out)[-1]["response"] == {"result": {"status": "ok", "remaining": []}}
+        host._handle_respond(
+            {
+                "sid": sid,
+                "request_id": "relay-lock",
+                "params": {
+                    "lock": {"request_id": req.id, "question_id": "q0", "answer": "a"}
+                },
+            }
+        )
+        assert locks == [
+            ("relay-lock", {"request_id": req.id, "question_id": "q0", "answer": "a"})
+        ]
+        assert _json_lines(out)[-1]["response"] == {
+            "result": {"status": "ok", "remaining": []}
+        }
 
-        host._handle_respond({"sid": sid, "request_id": "relay-response",
-                              "params": {"frame": {"jsonrpc": "2.0", "id": req.id, "result": {"answer": "yes"}}}})
+        host._handle_respond(
+            {
+                "sid": sid,
+                "request_id": "relay-response",
+                "params": {
+                    "frame": {
+                        "jsonrpc": "2.0",
+                        "id": req.id,
+                        "result": {"answer": "yes"},
+                    }
+                },
+            }
+        )
         assert req.answered and req.result == {"answer": "yes"} and req.event.is_set()
         frame = _json_lines(out)[-1]
-        assert frame["type"] == "respond.ack" and frame["response"]["result"] == {"status": "ok"}
+        assert frame["type"] == "respond.ack" and frame["response"]["result"] == {
+            "status": "ok"
+        }
     finally:
         server._sessions.pop(sid, None)
         server_requests.reset_for_tests()
         host.close()
 
 
-
-
-def test_compute_host_withdraws_its_open_request_when_the_parent_relays_a_cancel(monkeypatch):
+def test_compute_host_withdraws_its_open_request_when_the_parent_relays_a_cancel(
+    monkeypatch,
+):
     """Skip setup in the parent withdraws the card the child waits on: the wait returns and every
     renderer gets the ``request.cancel``."""
     from tui_gateway import server_requests
+
     out = io.StringIO()
     host = ComputeHost(stdout=out, heartbeat_secs=0)
     sid = "host-setup"
     server._sessions[sid] = {"history_lock": threading.Lock()}
     events = []
-    monkeypatch.setattr(server_requests, "_emit", lambda kind, _sid, payload: events.append((kind, _sid, payload)))
+    monkeypatch.setattr(
+        server_requests,
+        "_emit",
+        lambda kind, _sid, payload: events.append((kind, _sid, payload)),
+    )
     beat = server_requests.ServerRequest(sid, "setup_beat", {"beat": "theme"})
     other = server_requests.ServerRequest(sid, "clarify", {"question": "?"})
     with server_requests._lock:
         server_requests._open.update({beat.id: beat, other.id: other})
 
     try:
-        host._handle_respond({"sid": sid, "request_id": "relay-cancel",
-                              "params": {"cancel": {"method": "setup_beat", "reason": "resolved"}}})
+        host._handle_respond(
+            {
+                "sid": sid,
+                "request_id": "relay-cancel",
+                "params": {"cancel": {"method": "setup_beat", "reason": "resolved"}},
+            }
+        )
         assert beat.event.is_set() and not beat.answered
         assert not other.event.is_set()
-        assert events == [("request.cancel", sid, {"id": beat.id, "method": "setup_beat", "reason": "resolved"})]
+        assert events == [
+            (
+                "request.cancel",
+                sid,
+                {"id": beat.id, "method": "setup_beat", "reason": "resolved"},
+            )
+        ]
         frame = _json_lines(out)[-1]
-        assert frame["type"] == "respond.ack" and frame["response"]["result"] == {"cancelled": 1}
+        assert frame["type"] == "respond.ack" and frame["response"]["result"] == {
+            "cancelled": 1
+        }
     finally:
         server._sessions.pop(sid, None)
         server_requests.reset_for_tests()
@@ -122,18 +171,26 @@ def test_append_log_record_single_write_lines(tmp_path):
 
     lines = path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 32
-    assert sorted(line.split("-", 2)[1] for line in lines) == [f"{i:03d}" for i in range(32)]
+    assert sorted(line.split("-", 2)[1] for line in lines) == [
+        f"{i:03d}" for i in range(32)
+    ]
     assert all(line.endswith("x" * 2000) for line in lines)
 
 
 def test_supervisor_startup_reconcile_pid_reuse_guard(tmp_path, monkeypatch):
     registry = tmp_path / "dashboard-compute-host.json"
-    registry.write_text(json.dumps({"host_pid": os.getpid(), "boot_id": "stale"}), encoding="utf-8")
+    registry.write_text(
+        json.dumps({"host_pid": os.getpid(), "boot_id": "stale"}), encoding="utf-8"
+    )
 
     killed: list[int] = []
-    supervisor = HostSupervisor(registry_path=registry, argv=[sys.executable, "-c", ""], autostart=False)
+    supervisor = HostSupervisor(
+        registry_path=registry, argv=[sys.executable, "-c", ""], autostart=False
+    )
     monkeypatch.setattr(supervisor, "_pid_matches_compute_host", lambda _pid: False)
-    monkeypatch.setattr(supervisor, "_terminate_pid", lambda pid, **_kw: killed.append(pid))
+    monkeypatch.setattr(
+        supervisor, "_terminate_pid", lambda pid, **_kw: killed.append(pid)
+    )
 
     result = supervisor.reconcile_startup_orphan()
 
@@ -158,8 +215,8 @@ def _make_compress_host_session(events: list) -> dict:
 
     agent = _Agent()
     agent.context_compressor = type("ContextEngineStub", (), {})()
-    agent.context_compressor.on_session_start = (
-        lambda *_args, **_kwargs: events.append("notify")
+    agent.context_compressor.on_session_start = lambda *_args, **_kwargs: events.append(
+        "notify"
     )
     return {
         "agent": agent,
@@ -230,7 +287,9 @@ def test_shutdown_drains_in_flight_turn_before_finalizing_sessions(monkeypatch):
     assert host._turn_futures == {}, "in-flight turns must not accumulate"
 
 
-def test_shutdown_retains_a_live_turns_session_when_the_drain_deadline_expires(monkeypatch):
+def test_shutdown_retains_a_live_turns_session_when_the_drain_deadline_expires(
+    monkeypatch,
+):
     wait = 1.0
     events: list[str] = []
     _record_finalize(monkeypatch, events, "live", "idle")

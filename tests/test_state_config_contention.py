@@ -90,7 +90,8 @@ def test_partial_config_import_cannot_invert_config_and_module_locks(tmp_path):
         },
         capture_output=True,
         text=True,
-        timeout=15, check=False
+        timeout=15,
+        check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
@@ -123,9 +124,13 @@ def test_existing_database_does_not_wait_for_config_writer(
 
     def writer():
         with config._CONFIG_LOCK:
-            atomic_yaml_write(config.get_config_path(), {
-                "database": {"journal_mode": "delete"}, "marker": "after replacement",
-            })
+            atomic_yaml_write(
+                config.get_config_path(),
+                {
+                    "database": {"journal_mode": "delete"},
+                    "marker": "after replacement",
+                },
+            )
             entered.set()
             assert release.wait(10)
 
@@ -171,7 +176,9 @@ def test_existing_database_does_not_wait_for_config_writer(
 
 
 @pytest.mark.parametrize("state", ["empty", "unknown", "required_wal"])
-def test_unestablished_or_strict_modes_still_wait_for_real_policy(tmp_path, monkeypatch, state):
+def test_unestablished_or_strict_modes_still_wait_for_real_policy(
+    tmp_path, monkeypatch, state
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -194,7 +201,9 @@ def test_unestablished_or_strict_modes_still_wait_for_real_policy(tmp_path, monk
 
     def opener():
         with closing(sqlite3.connect(path)) as conn:
-            return wal.apply_wal_with_fallback(conn, require_wal=state == "required_wal")
+            return wal.apply_wal_with_fallback(
+                conn, require_wal=state == "required_wal"
+            )
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         with config._CONFIG_LOCK:

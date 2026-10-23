@@ -30,6 +30,7 @@ def db(tmp_path):
 # Pure classifier
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "role,has_tool_calls,finish_reason,expected",
     [
@@ -53,6 +54,7 @@ def test_classify_session_status(role, has_tool_calls, finish_reason, expected):
 # ---------------------------------------------------------------------------
 # DB-backed batch classification
 # ---------------------------------------------------------------------------
+
 
 def test_session_lifecycle_statuses_shapes(db):
     # complete: normal user → assistant exchange
@@ -137,17 +139,19 @@ def test_session_lifecycle_statuses_empty_input(db):
 
 def test_session_lifecycle_statuses_unknown_id(db):
     # Unknown ids classify as 'empty' (no messages), never raise.
-    assert db.session_lifecycle_statuses(["nope"]) == {
-        "nope": SESSION_STATUS_EMPTY
-    }
+    assert db.session_lifecycle_statuses(["nope"]) == {"nope": SESSION_STATUS_EMPTY}
 
 
 # ---------------------------------------------------------------------------
 # Picker helpers (status annotation + delete wiring)
 # ---------------------------------------------------------------------------
 
+
 def test_annotate_session_statuses(db):
-    from clawk_cli.sessions_cmd_browse import _annotate_session_statuses, _session_status_tag
+    from clawk_cli.sessions_cmd_browse import (
+        _annotate_session_statuses,
+        _session_status_tag,
+    )
 
     db.create_session("s1", source="cli")
     db.append_message("s1", "user", "hi")

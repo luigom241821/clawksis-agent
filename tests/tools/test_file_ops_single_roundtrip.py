@@ -21,10 +21,12 @@ pytestmark = pytest.mark.platforms("posix")  # POSIX shell probes
 
 READ_PROBE_MARK = "__CLAWK_RF_"
 
+
 @pytest.fixture(scope="module")
 def _local_env(tmp_path_factory):
     """One real LocalEnvironment per module; constructing one costs ~0.8 s."""
     return LocalEnvironment(cwd=str(tmp_path_factory.mktemp("file-ops")))
+
 
 @pytest.fixture
 def _ops(_local_env, tmp_path):
@@ -44,11 +46,13 @@ def _ops(_local_env, tmp_path):
     finally:
         env.__dict__.pop("execute", None)
 
+
 @pytest.fixture
 def shell(_ops, monkeypatch):
     """Pin the shell path even where a native fast path exists."""
     monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
     return _ops
+
 
 @pytest.fixture
 def native(_ops, monkeypatch):
@@ -56,10 +60,12 @@ def native(_ops, monkeypatch):
     monkeypatch.delenv("CLAWK_NATIVE_FILE_READ", raising=False)
     return _ops
 
+
 def _write(tmp_path, name, data: bytes):
     p = tmp_path / name
     p.write_bytes(data)
     return str(p)
+
 
 class TestReadFileOneRoundTrip:
     def test_text_read_is_one_round_trip(self, shell, tmp_path):
@@ -141,6 +147,7 @@ class TestReadFileOneRoundTrip:
         assert r.error is None and r.total_lines == 3
         assert r.content == f"1|x\n2|{lookalike}\n3|y"
 
+
 class TestReadFileNonTextPaths:
     def test_missing_file_probes_once_then_suggests(self, shell, tmp_path):
         ops, calls = shell
@@ -203,6 +210,7 @@ class TestReadFileNonTextPaths:
         assert "not a regular file" in box["r"].error
         assert len(calls) == 1
 
+
 class TestWriteFileRoundTrips:
     """write_file: one probe, one atomic write, one hash check (three calls)."""
 
@@ -255,7 +263,9 @@ class TestWriteFileRoundTrips:
         assert len(calls) == 3
         assert p.read_bytes() == b"hi\n"
 
-    def test_unparseable_probe_reply_falls_back_to_separate_probes(self, shell, tmp_path):
+    def test_unparseable_probe_reply_falls_back_to_separate_probes(
+        self, shell, tmp_path
+    ):
         ops, _calls = shell
         p = tmp_path / "crlf.txt"
         p.write_bytes(b"a\r\nb\r\n")
@@ -263,7 +273,9 @@ class TestWriteFileRoundTrips:
 
         def garbled(command, *args, **kwargs):
             if "__CLAWK_WF_" in command:
-                return ExecuteResult(stdout="[Command timed out after 1s]\n", exit_code=124)
+                return ExecuteResult(
+                    stdout="[Command timed out after 1s]\n", exit_code=124
+                )
             return real_exec(command, *args, **kwargs)
 
         with patch.object(ops, "_exec", side_effect=garbled):
@@ -283,12 +295,15 @@ class TestHeredocStdinBackends:
         monkeypatch.setattr(ops.env, "_stdin_mode", "heredoc")
         return ops
 
-    @pytest.mark.parametrize("content", [
-        "no trailing newline",
-        "one trailing newline\n",
-        "blank tail\n\n\n",
-        "q ' \" ) ( $(x) `y` ${z} \\\ncontinued\\",
-    ])
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "no trailing newline",
+            "one trailing newline\n",
+            "blank tail\n\n\n",
+            "q ' \" ) ( $(x) `y` ${z} \\\ncontinued\\",
+        ],
+    )
     def test_write_file_is_byte_exact(self, heredoc_ops, tmp_path, content):
         p = tmp_path / "existing.txt"
         p.write_bytes(b"keep me\n")
@@ -361,6 +376,7 @@ class TestNativeRead:
         assert "not a regular file" in box["r"].error
         assert calls == []
 
+
 # The native reader scans 1 MiB chunks and clamps each page line to
 # ``4 * get_max_line_length() + 1`` bytes (8001 by default), exactly as
 # ``sed | cut -b1-N`` does. These shapes put a newline, a line, the clamp
@@ -404,18 +420,27 @@ PARITY_CASES = [
         {"offset": _CHUNK // 2 + 3, "limit": 4},
     ),
     ("window", b"".join(b"l%d\n" % i for i in range(1, 11)), {"offset": 3, "limit": 2}),
-    ("window_reaches_eof", b"".join(b"l%d\n" % i for i in range(1, 11)), {"offset": 9, "limit": 5}),
+    (
+        "window_reaches_eof",
+        b"".join(b"l%d\n" % i for i in range(1, 11)),
+        {"offset": 9, "limit": 5},
+    ),
     ("past_eof", b"".join(b"l%d\n" % i for i in range(1, 6)), {"offset": 50}),
     ("nul_binary", b"\x00\x01\x02" * 20, {}),
     ("latin1_tail", b"caf\xe9\n", {}),
     ("sentinel_lookalike", b"x\n__CLAWK_RF_" + b"ab" * 16 + b"__\ny\n", {}),
 ]
 
+
 class TestNativeReadParity:
     """The native path must be indistinguishable from the shell path."""
 
-    @pytest.mark.parametrize("name,data,kwargs", PARITY_CASES, ids=[c[0] for c in PARITY_CASES])
-    def test_shell_and_native_agree(self, native, tmp_path, monkeypatch, name, data, kwargs):
+    @pytest.mark.parametrize(
+        "name,data,kwargs", PARITY_CASES, ids=[c[0] for c in PARITY_CASES]
+    )
+    def test_shell_and_native_agree(
+        self, native, tmp_path, monkeypatch, name, data, kwargs
+    ):
         ops, calls = native
         p = _write(tmp_path, f"{name}.txt", data)
         monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
@@ -441,8 +466,8 @@ class TestNativeReadParity:
             str(tmp_path / "dangling.txt"),
             str(tmp_path / "sub"),
             str(tmp_path / "pic.png"),
-            str(tmp_path / "note.txt"),   # missing → similar-file suggestions
-            "real.txt",                   # relative to env.cwd
+            str(tmp_path / "note.txt"),  # missing → similar-file suggestions
+            "real.txt",  # relative to env.cwd
         ):
             monkeypatch.setenv("CLAWK_NATIVE_FILE_READ", "0")
             via_shell = ops.read_file(p).to_dict()
@@ -452,6 +477,7 @@ class TestNativeReadParity:
             assert via_native == via_shell, p
             assert not any(READ_PROBE_MARK in c for c in calls), p
 
+
 class TestCompoundFallback:
     def test_unparseable_reply_falls_back_to_sequential_probes(self, shell, tmp_path):
         ops, _calls = shell
@@ -460,7 +486,9 @@ class TestCompoundFallback:
 
         def garbled(command, *args, **kwargs):
             if READ_PROBE_MARK in command:
-                return ExecuteResult(stdout="[Command timed out after 1s]\n", exit_code=124)
+                return ExecuteResult(
+                    stdout="[Command timed out after 1s]\n", exit_code=124
+                )
             return real_exec(command, *args, **kwargs)
 
         with patch.object(ops, "_exec", side_effect=garbled):

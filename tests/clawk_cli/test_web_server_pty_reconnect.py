@@ -55,10 +55,6 @@ def _url(token: str, **params: str) -> str:
     return f"/api/pty?{urlencode({'token': token, **params})}"
 
 
-
-
-
-
 def test_fresh_param_ignores_channel_active_session_file(pty_client, monkeypatch):
     """Explicit fresh starts must not resurrect the prior channel session."""
     ws, client, token = pty_client
@@ -67,7 +63,9 @@ def test_fresh_param_ignores_channel_active_session_file(pty_client, monkeypatch
     active_file.write_text(json.dumps({"session_id": "sess-old"}), encoding="utf-8")
     captured = {}
 
-    def fake_resolve(resume=None, sidecar_url=None, profile=None, active_session_file=None):
+    def fake_resolve(
+        resume=None, sidecar_url=None, profile=None, active_session_file=None
+    ):
         captured["active_session_file"] = active_session_file
         captured["resume"] = resume
         return (["fake-clawk-tui"], None, None)
@@ -97,7 +95,9 @@ def test_active_session_fallback_sends_resume_control_message(pty_client, monkey
     active_file.write_text(json.dumps({"session_id": "sess-old"}), encoding="utf-8")
 
     monkeypatch.setattr(
-        _web_server_chat, "_resolve_chat_argv", lambda **kw: (["fake-clawk-tui"], None, None)
+        _web_server_chat,
+        "_resolve_chat_argv",
+        lambda **kw: (["fake-clawk-tui"], None, None),
     )
 
     with client.websocket_connect(_url(token, channel=channel)) as conn:
@@ -111,7 +111,9 @@ def test_explicit_resume_sends_no_control_message(pty_client, monkeypatch):
     channel = "explicit-resume-chan"
 
     monkeypatch.setattr(
-        _web_server_chat, "_resolve_chat_argv", lambda **kw: (["fake-clawk-tui"], None, None)
+        _web_server_chat,
+        "_resolve_chat_argv",
+        lambda **kw: (["fake-clawk-tui"], None, None),
     )
 
     with client.websocket_connect(
@@ -142,7 +144,9 @@ def test_child_eof_closes_socket_and_bridge(pty_client, monkeypatch):
 
     monkeypatch.setattr(_web_server_chat.PtyBridge, "spawn", _RecordingBridge.spawn)
     monkeypatch.setattr(
-        _web_server_chat, "_resolve_chat_argv", lambda **kw: (["fake-clawk-tui"], None, None)
+        _web_server_chat,
+        "_resolve_chat_argv",
+        lambda **kw: (["fake-clawk-tui"], None, None),
     )
 
     # The client never sends a disconnect of its own — it only reads the one
@@ -197,15 +201,23 @@ def test_profile_switch_closes_previous_profile_keepalive_pty(pty_client, monkey
 
     monkeypatch.setattr(_web_server_chat.PtyBridge, "spawn", _IdleBridge.spawn)
     monkeypatch.setattr(
-        _web_server_chat, "_resolve_chat_argv", lambda **kw: (["fake-clawk-tui"], None, None)
+        _web_server_chat,
+        "_resolve_chat_argv",
+        lambda **kw: (["fake-clawk-tui"], None, None),
     )
     attach = "attach-125287"
     try:
-        with client.websocket_connect(_url(token, channel="chan-a", attach=attach, profile="alpha")) as conn:
+        with client.websocket_connect(
+            _url(token, channel="chan-a", attach=attach, profile="alpha")
+        ) as conn:
             assert conn.receive_bytes() == b"ready"
-        assert len(bridges) == 1 and bridges[0].closed is False  # keep-alive survives the detach
+        assert (
+            len(bridges) == 1 and bridges[0].closed is False
+        )  # keep-alive survives the detach
 
-        with client.websocket_connect(_url(token, channel="chan-b", attach=attach, profile="beta")) as conn:
+        with client.websocket_connect(
+            _url(token, channel="chan-b", attach=attach, profile="beta")
+        ) as conn:
             assert conn.receive_bytes() == b"ready"
             assert len(bridges) == 2
             deadline = time.monotonic() + 5.0
@@ -214,5 +226,7 @@ def test_profile_switch_closes_previous_profile_keepalive_pty(pty_client, monkey
             assert bridges[0].closed is True
             assert bridges[1].closed is False
     finally:
-        for key in [k for k in _web_server_chat.PTY_REGISTRY._sessions if k.startswith(attach)]:
+        for key in [
+            k for k in _web_server_chat.PTY_REGISTRY._sessions if k.startswith(attach)
+        ]:
             _web_server_chat.PTY_REGISTRY._sessions.pop(key).bridge.close()

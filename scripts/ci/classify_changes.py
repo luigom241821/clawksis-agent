@@ -94,9 +94,14 @@ _FRONTEND = ("ui-tui/", "web/", "apps/")  # TS typecheck-matrix packages
 # Shipped page outside those packages, exercised by the desktop Electron suite.
 _FRONTEND_FILES = {"scripts/desktop-update/ui.html"}
 _ROOT_NPM = {"package.json", "package-lock.json"}  # shifts every package's tree
-_DOCKER_META = ("docker/", ".hadolint.yaml", "Dockerfile", ".dockerignore") # docker setup
-_NIX_PATHS = ("nix/",) # nix files
-_NIX_FILES = {"flake.nix", "flake.lock"} # base nix files
+_DOCKER_META = (
+    "docker/",
+    ".hadolint.yaml",
+    "Dockerfile",
+    ".dockerignore",
+)  # docker setup
+_NIX_PATHS = ("nix/",)  # nix files
+_NIX_FILES = {"flake.nix", "flake.lock"}  # base nix files
 _SITE = ("website/", "skills/", "optional-skills/")  # docs site + skill pages
 # Prose/frontend trees that can't touch Python. skills/ is excluded on purpose.
 _PY_SKIP = ("docs/", "website/") + _FRONTEND
@@ -380,23 +385,25 @@ _UPDATE_DEPENDENCIES = (
 # routing each config.py / utils.py edit through the update suites would make
 # them run on most PRs. Never an update-specific module: own those above.
 HUB_MIN_IMPORTERS = 25
-_SHARED_HUBS = frozenset({
-    "clawk_cli/__init__.py",
-    "clawk_cli/config.py",
-    "clawk_cli/profiles.py",
-    "clawk_cli/version_info.py",
-    "utils.py",
-    "clawk_state.py",
-    "agent/__init__.py",
-    "cron/jobs.py",
-    "tools/environments/local.py",
-    # Desktop lane only (the upgrade lane owns these outright):
-    "clawk_constants.py",
-    "gateway/status.py",
-    "pm/__init__.py",
-    "pm/paths.py",
-    "pm/environments.py",
-})
+_SHARED_HUBS = frozenset(
+    {
+        "clawk_cli/__init__.py",
+        "clawk_cli/config.py",
+        "clawk_cli/profiles.py",
+        "clawk_cli/version_info.py",
+        "utils.py",
+        "clawk_state.py",
+        "agent/__init__.py",
+        "cron/jobs.py",
+        "tools/environments/local.py",
+        # Desktop lane only (the upgrade lane owns these outright):
+        "clawk_constants.py",
+        "gateway/status.py",
+        "pm/__init__.py",
+        "pm/paths.py",
+        "pm/environments.py",
+    }
+)
 _E2E_LANES: dict[str, tuple[str, ...]] = {
     "e2e": (
         *_PY_TEST_HARNESS,
@@ -502,11 +509,25 @@ def _with_package_inits(paths: tuple[str, ...]) -> tuple[str, ...]:
     routes the package inits above it. A shared hub's inits run whenever the hub is imported, so
     they are routed too; only an init that is itself a hub stays out."""
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    inits = [f"{'/'.join(parts[:i])}/__init__.py"
-             for p in (*paths, *sorted(_SHARED_HUBS)) if p.endswith(".py")
-             for parts in [p.split("/")[:-1]] for i in range(1, len(parts) + 1)]
-    return tuple(dict.fromkeys([*paths, *(i for i in inits if i not in _SHARED_HUBS
-                                          and os.path.isfile(os.path.join(root, i)))]))
+    inits = [
+        f"{'/'.join(parts[:i])}/__init__.py"
+        for p in (*paths, *sorted(_SHARED_HUBS))
+        if p.endswith(".py")
+        for parts in [p.split("/")[:-1]]
+        for i in range(1, len(parts) + 1)
+    ]
+    return tuple(
+        dict.fromkeys(
+            [
+                *paths,
+                *(
+                    i
+                    for i in inits
+                    if i not in _SHARED_HUBS and os.path.isfile(os.path.join(root, i))
+                ),
+            ]
+        )
+    )
 
 
 for _lane in ("e2e_upgrade", "e2e_desktop_update"):
@@ -517,16 +538,25 @@ _E2E_LANE_EXCLUDES = {
     "e2e": ("tests/e2e/core/upgrade/", "tests/e2e/core/windows_update/"),
     "e2e_desktop_core": ("apps/desktop/e2e/update/",),
 }
-_DOCKER_PATHS = (*_DOCKER_META, *_DEP_MANIFESTS, *_NPM_MANIFESTS, "pm/", "tests/docker/")
+_DOCKER_PATHS = (
+    *_DOCKER_META,
+    *_DEP_MANIFESTS,
+    *_NPM_MANIFESTS,
+    "pm/",
+    "tests/docker/",
+)
 _NIX_LANE_PATHS = (*_NIX_PATHS, *_NIX_FILES, *_DEP_MANIFESTS, *_NPM_MANIFESTS)
 
 # A pull request with this label runs every slow lane, whatever it touches.
 RUN_E2E_LABEL = "run-e2e"
 
+
 def _is_docs(p: str) -> bool:
     if p.startswith(("skills/", "optional-skills/")):
         return False
-    return p.endswith((".md", ".mdx")) or p.startswith("docs/") or p.startswith("LICENSE")
+    return (
+        p.endswith((".md", ".mdx")) or p.startswith("docs/") or p.startswith("LICENSE")
+    )
 
 
 def _is_nix(p: str) -> bool:
@@ -607,7 +637,9 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
     python = any(not _py_irrelevant(f) for f in code)
     python_prod = any(not _py_irrelevant(f) and not _py_test_only(f) for f in code)
     frontend = any(
-        f.startswith(_FRONTEND) or f in _ROOT_NPM or f in _FRONTEND_FILES
+        f.startswith(_FRONTEND)
+        or f in _ROOT_NPM
+        or f in _FRONTEND_FILES
         or f.startswith("tests-js/")
         or (f.startswith("scripts/build/") and f.endswith((".mjs", ".js", ".ts")))
         for f in files
@@ -615,7 +647,7 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
     deps = any(f == "pyproject.toml" for f in files)
     npm_lock = any(f.split("/")[-1] == "package-lock.json" for f in files)
     docker_meta = any(f.startswith(_DOCKER_META) for f in files)
-    
+
     ret = {
         "python": python,
         "python_prod": python_prod,
@@ -713,7 +745,16 @@ def pull_request_changed_files() -> list[str]:
     pr = _pull_request_number()
     if not repo or not pr:
         return []
-    return _gh_lines("api", "--paginate", f"repos/{repo}/pulls/{pr}/files", "--jq", ".[].filename") or []
+    return (
+        _gh_lines(
+            "api",
+            "--paginate",
+            f"repos/{repo}/pulls/{pr}/files",
+            "--jq",
+            ".[].filename",
+        )
+        or []
+    )
 
 
 def pull_request_labels() -> list[str]:
@@ -732,7 +773,11 @@ def pull_request_labels() -> list[str]:
         if live is not None:
             return live
     labels = (_event_payload().get("pull_request") or {}).get("labels") or []
-    return [label["name"] for label in labels if isinstance(label, dict) and label.get("name")]
+    return [
+        label["name"]
+        for label in labels
+        if isinstance(label, dict) and label.get("name")
+    ]
 
 
 def main() -> int:

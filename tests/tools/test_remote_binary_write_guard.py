@@ -33,9 +33,16 @@ def _binary_payload(ext: str) -> bytes:
         # Pure-text PDF body: raw PDF syntax is text-authorable, and the
         # text-vs-binary read sniff must NOT be what saves the file — only the
         # write guard does.
-        return (b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
-                + _KEEP.encode() + b"\nend\n%%EOF\n")
-    return b"SQLite format 3\x00\x01\x02\x03\xff\xfe\n" + _KEEP.encode() + b"\nend\n\x00\x07tail\n"
+        return (
+            b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+            + _KEEP.encode()
+            + b"\nend\n%%EOF\n"
+        )
+    return (
+        b"SQLite format 3\x00\x01\x02\x03\xff\xfe\n"
+        + _KEEP.encode()
+        + b"\nend\n\x00\x07tail\n"
+    )
 
 
 class VercelSandboxEnvironment:
@@ -90,8 +97,10 @@ def remote_target(tmp_path: Path, monkeypatch):
     target.mkdir()
     # Scoped config claims 'local' — it must not decide locality (T2c pin).
     monkeypatch.setattr(
-        terminal_tool, "_get_env_config",
-        lambda *a, **k: {"env_type": "local", "cwd": None})
+        terminal_tool,
+        "_get_env_config",
+        lambda *a, **k: {"env_type": "local", "cwd": None},
+    )
     inner = LocalEnvironment(cwd=str(target))
     env = VercelSandboxEnvironment(view, target, inner)
     task_id = f"guard-{uuid.uuid4().hex}"
@@ -115,26 +124,36 @@ def _dispatch(name: str, args: dict, task_id: str) -> dict:
     return json.loads(result) if isinstance(result, str) else result
 
 
-def _write_file(view_path: Path, task_id: str,
-                content: str = "plain text replacement") -> dict:
-    return _dispatch("write_file", {"path": str(view_path), "content": content},
-                     task_id)
+def _write_file(
+    view_path: Path, task_id: str, content: str = "plain text replacement"
+) -> dict:
+    return _dispatch(
+        "write_file", {"path": str(view_path), "content": content}, task_id
+    )
 
 
 def _patch_replace(view_path: Path, task_id: str) -> dict:
-    return _dispatch("patch",
-                     {"mode": "replace", "path": str(view_path),
-                      "old_string": _KEEP, "new_string": _BROKEN},
-                     task_id)
+    return _dispatch(
+        "patch",
+        {
+            "mode": "replace",
+            "path": str(view_path),
+            "old_string": _KEEP,
+            "new_string": _BROKEN,
+        },
+        task_id,
+    )
 
 
 def _patch_v4a_update(view_path: Path, task_id: str) -> dict:
-    patch = ("*** Begin Patch\n"
-             f"*** Update File: {view_path}\n"
-             "@@\n"
-             f"-{_KEEP}\n"
-             f"+{_BROKEN}\n"
-             "*** End Patch")
+    patch = (
+        "*** Begin Patch\n"
+        f"*** Update File: {view_path}\n"
+        "@@\n"
+        f"-{_KEEP}\n"
+        f"+{_BROKEN}\n"
+        "*** End Patch"
+    )
     return _dispatch("patch", {"mode": "patch", "patch": patch}, task_id)
 
 
@@ -161,7 +180,9 @@ class TestRemoteExistingBinaryRefused:
         result = _OPERATIONS[op](view_path, remote_target.task_id)
 
         error = result.get("error") or ""
-        assert "Refusing" in error, f"{op} must refuse a remote-only binary overwrite: {result}"
+        assert "Refusing" in error, (
+            f"{op} must refuse a remote-only binary overwrite: {result}"
+        )
         if ext == ".pdf":
             assert "Refusing to overwrite existing PDF" in error, error
         else:
@@ -172,8 +193,12 @@ class TestRemoteExistingBinaryRefused:
         # A proven-absent sibling is NOT refused: creating a NEW file with a
         # binary extension on the remote backend stays allowed.
         created = _write_file(remote_target.view / f"new{ext}", remote_target.task_id)
-        assert not created.get("error"), f"creating a NEW remote {ext} must be allowed: {created}"
-        assert (remote_target.target / f"new{ext}").read_text() == "plain text replacement"
+        assert not created.get("error"), (
+            f"creating a NEW remote {ext} must be allowed: {created}"
+        )
+        assert (
+            remote_target.target / f"new{ext}"
+        ).read_text() == "plain text replacement"
         assert not (remote_target.view / f"new{ext}").exists()
 
 

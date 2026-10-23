@@ -43,7 +43,8 @@ _profile_scoped = _registry.profile_scoped
 #   settles, so the next poll starts a fresh probe and never reads a stale one.
 _readiness_pool = concurrent.futures.ThreadPoolExecutor(
     max_workers=max(2, min(4, env_int("CLAWK_TUI_RPC_POOL_WORKERS", 8))),
-    thread_name_prefix="tui-readiness")
+    thread_name_prefix="tui-readiness",
+)
 atexit.register(lambda: _readiness_pool.shutdown(wait=False, cancel_futures=True))
 _readiness_lock = threading.Lock()
 _readiness_inflight: dict[tuple, concurrent.futures.Future] = {}
@@ -67,19 +68,23 @@ _READINESS_IN_PROGRESS_ERR = 5097
 
 def _projects_handler(name: str):
     """``@method(name)`` (profile-scoped) whose body's uncaught exception becomes ``_err(rid, 5061)``."""
+
     def deco(fn):
         def handler(rid, params: dict) -> dict:
             try:
                 return fn(rid, params)
             except Exception as e:
                 return _err(rid, 5061, str(e))
+
         return method(name)(_profile_scoped(handler))
+
     return deco
 
 
 def _reconcile_repo_discovery(pdb, conn, policy, policy_key):
-    pdb.reconcile_discovered_repos_policy(conn, policy_key,
-                                          preserve_unversioned=_repo_discovery_policy_is_default(policy))
+    pdb.reconcile_discovered_repos_policy(
+        conn, policy_key, preserve_unversioned=_repo_discovery_policy_is_default(policy)
+    )
 
 
 @_projects_handler("projects.discover_repos")
@@ -88,15 +93,20 @@ def _(rid, params: dict) -> dict:
     session store was never initialized still answers from its scan cache (``db`` is None then)."""
     with _profile_db(params) as db:
         from clawk_cli import projects_db as pdb
+
         policy = _repo_discovery_policy()
         with pdb.connect_closing() as conn:
-            _reconcile_repo_discovery(pdb, conn, policy, _repo_discovery_policy_key(policy))
+            _reconcile_repo_discovery(
+                pdb, conn, policy, _repo_discovery_policy_key(policy)
+            )
             # `scan=true` (remote-gateway desktop): its native scan only sees its own filesystem,
             # so the host scans the policy roots so zero-session repos surface.
             # See #81723.
             if params.get("scan") and policy["enabled"]:
                 _scan_discovered_repos_remote(conn, policy)
-            repos = _discover_repos_payload(db, conn=conn, include_cached=policy["enabled"])
+            repos = _discover_repos_payload(
+                db, conn=conn, include_cached=policy["enabled"]
+            )
         return _ok(rid, {"repos": repos, "discovery_policy": policy})
 
 
@@ -104,31 +114,45 @@ def _(rid, params: dict) -> dict:
 def _(rid, params: dict) -> dict:
     """Persist repo roots found by the client's (desktop-side) scan; return the merged list."""
     from clawk_cli import projects_db as pdb
+
     policy = _repo_discovery_policy()
     policy_key = _repo_discovery_policy_key(policy)
     incoming = params.get("discovery_policy")
     if isinstance(incoming, dict):
-        accepted = _repo_discovery_policy_key(_repo_discovery_policy(incoming)) == policy_key
+        accepted = (
+            _repo_discovery_policy_key(_repo_discovery_policy(incoming)) == policy_key
+        )
     else:
-        accepted = _repo_discovery_policy_is_default(policy)  # legacy client without a policy
+        accepted = _repo_discovery_policy_is_default(
+            policy
+        )  # legacy client without a policy
     accepted = bool(policy["enabled"] and accepted)
-    pairs = [(item, None) if isinstance(item, str) else (str(item["root"]), item.get("label"))
-             for item in params.get("repos") or []
-             if isinstance(item, str) or (isinstance(item, dict) and item.get("root"))]
+    pairs = [
+        (item, None)
+        if isinstance(item, str)
+        else (str(item["root"]), item.get("label"))
+        for item in params.get("repos") or []
+        if isinstance(item, str) or (isinstance(item, dict) and item.get("root"))
+    ]
     with pdb.connect_closing() as conn:
         _reconcile_repo_discovery(pdb, conn, policy, policy_key)
         if accepted:
-            pdb.record_discovered_repos(conn, pairs, replace=True, policy_key=policy_key)
+            pdb.record_discovered_repos(
+                conn, pairs, replace=True, policy_key=policy_key
+            )
         elif not policy["enabled"]:
             pdb.clear_discovered_repos(conn, policy_key=policy_key)
     with _profile_db(params) as db:
         repos = _discover_repos_payload(db, include_cached=policy["enabled"])
-        return _ok(rid, {"repos": repos, "accepted": accepted, "discovery_policy": policy})
+        return _ok(
+            rid, {"repos": repos, "accepted": accepted, "discovery_policy": policy}
+        )
 
 
 def _stamped_project_tree(db, params, **kwargs):
     """``_build_project_tree`` + profile stamping shared by the two tree RPCs."""
     from tui_gateway.project_tree import stamp_profile
+
     tree, active_id = _build_project_tree(db, **kwargs)
     stamp_profile(tree["projects"], _response_profile_name(params.get("profile")))
     return tree, active_id
@@ -141,12 +165,25 @@ def _(rid, params: dict) -> dict:
     session rows; drill-in uses ``projects.project_sessions``."""
     with _profile_db(params) as db:
         if db is None:
-            return _ok(rid, {"projects": [], "active_id": None, "scoped_session_ids": []})
+            return _ok(
+                rid, {"projects": [], "active_id": None, "scoped_session_ids": []}
+            )
         tree, active_id = _stamped_project_tree(
-            db, params, preview_limit=int(params.get("preview_limit") or 3), hydrate=False,
-            session_limit=int(params.get("session_limit") or 2000), include_discovered=True)
-        return _ok(rid, {"projects": tree["projects"], "active_id": active_id,
-                         "scoped_session_ids": tree["scoped_session_ids"]})
+            db,
+            params,
+            preview_limit=int(params.get("preview_limit") or 3),
+            hydrate=False,
+            session_limit=int(params.get("session_limit") or 2000),
+            include_discovered=True,
+        )
+        return _ok(
+            rid,
+            {
+                "projects": tree["projects"],
+                "active_id": active_id,
+                "scoped_session_ids": tree["scoped_session_ids"],
+            },
+        )
 
 
 @_projects_handler("projects.project_sessions")
@@ -160,12 +197,25 @@ def _(rid, params: dict) -> dict:
             return _ok(rid, {"project": None})
         # Drill-in only needs the entered project: skip the zero-session discovery tier.
         tree, _active = _stamped_project_tree(
-            db, params, preview_limit=0, hydrate=True,
-            session_limit=int(params.get("session_limit") or 5000), include_discovered=False)
-        return _ok(rid, {"project": next((p for p in tree["projects"] if p["id"] == project_id), None)})
+            db,
+            params,
+            preview_limit=0,
+            hydrate=True,
+            session_limit=int(params.get("session_limit") or 5000),
+            include_discovered=False,
+        )
+        return _ok(
+            rid,
+            {
+                "project": next(
+                    (p for p in tree["projects"] if p["id"] == project_id), None
+                )
+            },
+        )
 
 
 # ── config.get — one getter per key returning the result payload.
+
 
 def _display_raw() -> dict:
     return _load_cfg().get("display") or {}
@@ -182,23 +232,38 @@ _THINKING_MODES = frozenset({"collapsed", "truncated", "full"})
 
 def _cfg_get_provider(params):
     from clawk_cli.models import list_available_providers, normalize_provider
+
     model = _resolve_model()
     parts = model.split("/", 1)
-    return {"model": model, "provider": normalize_provider(parts[0]) if len(parts) > 1 else "unknown",
-            "providers": list_available_providers()}
+    return {
+        "model": model,
+        "provider": normalize_provider(parts[0]) if len(parts) > 1 else "unknown",
+        "providers": list_available_providers(),
+    }
 
 
 def _cfg_get_project(params):
-    raw = str(params.get("cwd", "") or (_load_cfg().get("terminal") or {}).get("cwd", "") or "").strip()
+    raw = str(
+        params.get("cwd", "")
+        or (_load_cfg().get("terminal") or {}).get("cwd", "")
+        or ""
+    ).strip()
     # A picked path is explicit (the profile's terminal.cwd must not replace it); the profile picks the backend,
     # so a remote project dir is kept instead of being dropped to the launch cwd by the host isdir check.
-    cwd = _completion_cwd({"cwd": raw, "cwd_explicit": bool(params.get("cwd")), "profile": params.get("profile")})
+    cwd = _completion_cwd(
+        {
+            "cwd": raw,
+            "cwd_explicit": bool(params.get("cwd")),
+            "profile": params.get("profile"),
+        }
+    )
     return {"cwd": cwd, "branch": git_probe.branch(cwd)}
 
 
 def _cfg_get_personality(params):
     # EFFECTIVE personality via the single owner — a stale/unknown name must not show as active.
     from clawk_cli.personality import active_personality_name
+
     return {"value": active_personality_name(_load_cfg()) or "none"}
 
 
@@ -208,19 +273,29 @@ def _cfg_get_reasoning(params):
     reasoning_config = session.get("create_reasoning_override")
     if session and not isinstance(reasoning_config, dict):
         from agent.voice_turn_route import session_runtime_view
-        reasoning_config = getattr(session_runtime_view(session.get("agent")), "reasoning_config", None)
+
+        reasoning_config = getattr(
+            session_runtime_view(session.get("agent")), "reasoning_config", None
+        )
     if isinstance(reasoning_config, dict):
         enabled = reasoning_config.get("enabled") is not False
         effort = str(reasoning_config.get("effort") or "medium") if enabled else "none"
     else:
         raw_effort = (cfg.get("agent") or {}).get("reasoning_effort", "")
-        if isinstance(raw_effort, dict):  # {enabled, effort} form: render the tier, never str(dict)
+        if isinstance(
+            raw_effort, dict
+        ):  # {enabled, effort} form: render the tier, never str(dict)
             from clawk_constants import parse_reasoning_effort
+
             parsed = parse_reasoning_effort(raw_effort) or {}
-            raw_effort = False if parsed.get("enabled") is False else parsed.get("effort")
+            raw_effort = (
+                False if parsed.get("enabled") is False else parsed.get("effort")
+            )
         # YAML `reasoning_effort: false` means thinking disabled, not "unset".
         effort = "none" if raw_effort is False else str(raw_effort or "medium")
-    display = "show" if (cfg.get("display") or {}).get("show_reasoning", True) else "hide"
+    display = (
+        "show" if (cfg.get("display") or {}).get("show_reasoning", True) else "hide"
+    )
     return {"value": effort, "display": display}
 
 
@@ -229,8 +304,11 @@ def _cfg_get_fast(params):
     # global key (a pre-build session keeps its pin in create_service_tier_override).
     session = _sessions.get(params.get("session_id", "")) or {}
     agent = session.get("agent")
-    tier = (getattr(agent, "service_tier", None) if agent is not None
-            else session.get("create_service_tier_override"))
+    tier = (
+        getattr(agent, "service_tier", None)
+        if agent is not None
+        else session.get("create_service_tier_override")
+    )
     if tier is None:
         tier = _load_service_tier()
     return {"value": {"priority": "fast", "ultrafast": "ultrafast"}.get(tier, "normal")}
@@ -239,7 +317,11 @@ def _cfg_get_fast(params):
 def _cfg_get_thinking_mode(params):
     raw = _display_word("thinking_mode", "", _THINKING_MODES)
     if not raw:  # legacy details_mode fallback
-        raw = "full" if _display_word("details_mode", "collapsed", _DETAIL_MODES) == "expanded" else "collapsed"
+        raw = (
+            "full"
+            if _display_word("details_mode", "collapsed", _DETAIL_MODES) == "expanded"
+            else "collapsed"
+        )
     return {"value": raw}
 
 
@@ -257,29 +339,48 @@ def _cfg_get_mtime(params):
 # key -> getter(params); bind_module rebinds the table's functions onto server.py's globals.
 _CONFIG_GETTERS = {
     "provider": _cfg_get_provider,
-    "profile": lambda params: {"home": str(_clawk_home), "display": _display_clawk_home()},
+    "profile": lambda params: {
+        "home": str(_clawk_home),
+        "display": _display_clawk_home(),
+    },
     "project": _cfg_get_project,
     "full": lambda params: {"config": _load_cfg()},
     "prompt": lambda params: {"prompt": _load_cfg().get("custom_prompt", "")},
     "skin": lambda params: {"value": _display_raw().get("skin", "default")},
     # Normalised like the TUI renders it (frontend falls back to the default for the same inputs).
     "indicator": lambda params: {
-        "value": _display_word("tui_status_indicator", DEFAULT_INDICATOR_STYLE, INDICATOR_STYLES)},
+        "value": _display_word(
+            "tui_status_indicator", DEFAULT_INDICATOR_STYLE, INDICATOR_STYLES
+        )
+    },
     "personality": _cfg_get_personality,
     "reasoning": _cfg_get_reasoning,
     "fast": _cfg_get_fast,
     "busy": lambda params: {"value": _load_busy_input_mode()},
     "approval_mode": lambda params: {"value": _load_approval_mode()},
     "approvals.mode": lambda params: {"value": _load_approval_mode()},
-    "details_mode": lambda params: {"value": _display_word("details_mode", "collapsed", _DETAIL_MODES)},
+    "details_mode": lambda params: {
+        "value": _display_word("details_mode", "collapsed", _DETAIL_MODES)
+    },
     "thinking_mode": _cfg_get_thinking_mode,
-    "density": lambda params: {"value": "on" if bool(_display_raw().get("tui_compact", False)) else "off"},
-    "theme": lambda params: {"value": _display_word("tui_theme", "auto", {"auto", "light", "dark"})},
-    "statusbar": lambda params: {"value": _coerce_statusbar(_display_cfg().get("tui_statusbar", "top"))},
-    "focus": lambda params: {"value": "on" if bool(_display_cfg().get("focus_view", False)) else "off",
-                             "tool_progress": _load_tool_progress_mode()},
-    "mouse": lambda params: {"value": _display_mouse_tracking(_load_cfg().get("display"))},
-    "mtime": _cfg_get_mtime}
+    "density": lambda params: {
+        "value": "on" if bool(_display_raw().get("tui_compact", False)) else "off"
+    },
+    "theme": lambda params: {
+        "value": _display_word("tui_theme", "auto", {"auto", "light", "dark"})
+    },
+    "statusbar": lambda params: {
+        "value": _coerce_statusbar(_display_cfg().get("tui_statusbar", "top"))
+    },
+    "focus": lambda params: {
+        "value": "on" if bool(_display_cfg().get("focus_view", False)) else "off",
+        "tool_progress": _load_tool_progress_mode(),
+    },
+    "mouse": lambda params: {
+        "value": _display_mouse_tracking(_load_cfg().get("display"))
+    },
+    "mtime": _cfg_get_mtime,
+}
 # Getters whose failure is a JSON-RPC error of this code (others propagate to dispatch).
 _CONFIG_GET_ERR = {"provider": 5013, "approval_mode": 5001, "approvals.mode": 5001}
 
@@ -301,17 +402,23 @@ def _(rid, params: dict) -> dict:
 
 # ── setup readiness
 
+
 def _readiness_cleared(key):
     """Done-callback for a single-flighted probe: forget the entry (the next poll
     re-probes — completed answers are never cached), and surface a failure nobody
     waited for (every caller timed out) in the log instead of dropping it."""
+
     def _clear(future):
         with _readiness_lock:
             if _readiness_inflight.get(key) is future:
                 _readiness_inflight.pop(key, None)
         if not future.cancelled() and future.exception() is not None:
-            logger.debug("readiness probe %s failed after its callers returned: %s",
-                         key, future.exception())
+            logger.debug(
+                "readiness probe %s failed after its callers returned: %s",
+                key,
+                future.exception(),
+            )
+
     return _clear
 
 
@@ -341,13 +448,25 @@ def _readiness_share(rid, key, run_probe, wait_seconds):
         # hangs answering setup.status / setup.runtime_check at all).
         future.add_done_callback(_readiness_cleared(key))
     try:
-        return _ok(rid, future.result(timeout=wait_seconds if owner else
-                                      min(wait_seconds, _READINESS_JOIN_GRACE_SECONDS)))
+        return _ok(
+            rid,
+            future.result(
+                timeout=wait_seconds
+                if owner
+                else min(wait_seconds, _READINESS_JOIN_GRACE_SECONDS)
+            ),
+        )
     except concurrent.futures.TimeoutError:
-        logger.warning("readiness probe %s exceeded its budget (%.1fs); it continues in the background",
-                       key, wait_seconds)
-        return _err(rid, _READINESS_IN_PROGRESS_ERR,
-                    "readiness check still in progress; retrying next tick")
+        logger.warning(
+            "readiness probe %s exceeded its budget (%.1fs); it continues in the background",
+            key,
+            wait_seconds,
+        )
+        return _err(
+            rid,
+            _READINESS_IN_PROGRESS_ERR,
+            "readiness check still in progress; retrying next tick",
+        )
 
 
 def _readiness_check(rid, params, probe, *, probe_key, wait_seconds):
@@ -357,14 +476,24 @@ def _readiness_check(rid, params, probe, *, probe_key, wait_seconds):
     profile). An unknown profile answers ``ok=False`` (never a JSON-RPC error, never a quiet answer
     for the launch profile instead). ``probe_key`` + the profile single-flight the probe, and
     ``wait_seconds`` bounds how long this shared-RPC worker waits for it (#65151)."""
-    profile = str(params.get("profile") or "").strip() if isinstance(params, dict) else ""
+    profile = (
+        str(params.get("profile") or "").strip() if isinstance(params, dict) else ""
+    )
     home = None
     if profile:
         from clawk_cli import profiles as profiles_mod
+
         if not profiles_mod.profile_exists(profile):
-            return _ok(rid, {"ok": False, "profile": params.get("profile"),
-                             "error": f"Profile '{profile}' does not exist on this backend."})
+            return _ok(
+                rid,
+                {
+                    "ok": False,
+                    "profile": params.get("profile"),
+                    "error": f"Profile '{profile}' does not exist on this backend.",
+                },
+            )
         home = _profile_home(profile)
+
     # ``profile_home=None`` is the launch profile: once this process multiplexes its probe must
     # run under its own frozen secret scope too (``_profile_runtime_scope_tokens`` binds nothing in
     # a single-profile process), or the first profile-scoped read inside the resolver
@@ -373,7 +502,9 @@ def _readiness_check(rid, params, probe, *, probe_key, wait_seconds):
         # Applied on the readiness pool thread: ContextVars do not cross threads, and
         # concurrent probes (different profiles) stay isolated exactly as they did when
         # each ran on its caller's handler thread.
-        with _session_profile_runtime_scope({"profile_home": str(home) if home is not None else None}):
+        with _session_profile_runtime_scope(
+            {"profile_home": str(home) if home is not None else None}
+        ):
             return probe(profile, {"profile": profile} if profile else {})
 
     return _readiness_share(rid, (probe_key, profile), run_probe, wait_seconds)
@@ -405,18 +536,41 @@ def _(rid, params: dict) -> dict:
                 # Since one host backend serves every profile (#118246), the desktop's
                 # named-profile probe lands here too.
                 launch = wait_for_record() if profile else None
-                return {"provider_configured": bool(_has_any_provider_configured(strict_profile_scope=bool(profile))),
-                        **({"ready": True, "free_tier_account": launch.free_tier_account,
-                            "free_tier_route": free_tier_route()} if launch is not None else {}),
-                        **scoped}
+                return {
+                    "provider_configured": bool(
+                        _has_any_provider_configured(strict_profile_scope=bool(profile))
+                    ),
+                    **(
+                        {
+                            "ready": True,
+                            "free_tier_account": launch.free_tier_account,
+                            "free_tier_route": free_tier_route(),
+                        }
+                        if launch is not None
+                        else {}
+                    ),
+                    **scoped,
+                }
             # ``failure_fields`` rides along only when the free-tier mint did not happen: the code,
             # the sentence, and whether / when a retry can succeed (``free_tier.provision``).
-            return {"provider_configured": record.provider_configured, "ready": True,
-                    "free_tier_account": record.free_tier_account, "free_tier_route": record.free_tier_route,
-                    "other_providers": record.other_providers,
-                    "inference_provider": record.inference_provider, **record.failure_fields(), **scoped}
-        return _readiness_check(rid, params, probe, probe_key="status",
-                                wait_seconds=_READINESS_STATUS_SHARE_WAIT_SECONDS)
+            return {
+                "provider_configured": record.provider_configured,
+                "ready": True,
+                "free_tier_account": record.free_tier_account,
+                "free_tier_route": record.free_tier_route,
+                "other_providers": record.other_providers,
+                "inference_provider": record.inference_provider,
+                **record.failure_fields(),
+                **scoped,
+            }
+
+        return _readiness_check(
+            rid,
+            params,
+            probe,
+            probe_key="status",
+            wait_seconds=_READINESS_STATUS_SHARE_WAIT_SECONDS,
+        )
     except Exception as e:
         return _err(rid, 5016, str(e))
 
@@ -436,16 +590,23 @@ def _(rid, params: dict) -> dict:
         from clawk_cli.runtime_provider import resolve_runtime_provider
         from clawk_cli.auth import has_usable_secret
         from clawk_cli.main import _has_any_provider_configured
+
         requested = str(params.get("provider") or "").strip() or None
 
         def probe(profile, scoped):
             startup_model, startup_provider = _resolve_startup_runtime()
             if requested:
-                model, runtime = startup_model, resolve_runtime_provider(
-                    requested=requested, target_model=startup_model or None)
+                model, runtime = (
+                    startup_model,
+                    resolve_runtime_provider(
+                        requested=requested, target_model=startup_model or None
+                    ),
+                )
             else:
                 model, runtime = _resolve_agent_model_runtime(None, None)
-            provider_configured = bool(_has_any_provider_configured(strict_profile_scope=bool(profile)))
+            provider_configured = bool(
+                _has_any_provider_configured(strict_profile_scope=bool(profile))
+            )
             provider = runtime.get("provider") or "provider"
             source = str(runtime.get("source") or "")
             # Without an explicit ``provider`` this probe ran the startup pin and then the
@@ -453,30 +614,65 @@ def _(rid, params: dict) -> dict:
             # stops there and the failure blames a provider the user never pinned (#124939).
             # Attribute failures to the pin (startup pin, else the config model pin).
             cfg_model = _load_cfg().get("model")
-            pinned = (requested or startup_provider
-                      or (str(cfg_model.get("provider") or "").strip() if isinstance(cfg_model, dict) else ""))
+            pinned = (
+                requested
+                or startup_provider
+                or (
+                    str(cfg_model.get("provider") or "").strip()
+                    if isinstance(cfg_model, dict)
+                    else ""
+                )
+            )
             blamed = pinned or provider
 
             def fail(error, src):
-                return {"ok": False, "provider": blamed, "model": model,
-                        "source": src, "error": error, **scoped}
-            if (not provider_configured and provider == "bedrock"
-                    and source in {"iam-role", "aws-sdk-default-chain"}):
+                return {
+                    "ok": False,
+                    "provider": blamed,
+                    "model": model,
+                    "source": src,
+                    "error": error,
+                    **scoped,
+                }
+
+            if (
+                not provider_configured
+                and provider == "bedrock"
+                and source in {"iam-role", "aws-sdk-default-chain"}
+            ):
                 return fail("No Clawksis provider is configured.", source)
             api_key = runtime.get("api_key")
             api_key_text = "" if callable(api_key) else str(api_key or "").strip()
-            if not (callable(api_key) or api_key_text in {"aws-sdk", "no-key-required"}
-                    or has_usable_secret(api_key_text) or bool(runtime.get("command"))):
-                return fail(f"No usable credentials found for {blamed}.", runtime.get("source"))
+            if not (
+                callable(api_key)
+                or api_key_text in {"aws-sdk", "no-key-required"}
+                or has_usable_secret(api_key_text)
+                or bool(runtime.get("command"))
+            ):
+                return fail(
+                    f"No usable credentials found for {blamed}.", runtime.get("source")
+                )
             from clawk_cli.anon_auth import route_is_welcome_host
+
             # free_tier_route is keyed on the SELECTED route (the welcome host serves only nous/welcome), not
             # on profile state: a paid Nous key beside a free-tier identity must not read as free.
-            return {"ok": True, "provider": runtime.get("provider"), "model": model,
-                    "source": runtime.get("source"),
-                    "free_tier_route": provider == "nous" and route_is_welcome_host(runtime.get("base_url")),
-                    **scoped}
-        return _readiness_check(rid, params, probe, probe_key=f"runtime:{requested or ''}",
-                                wait_seconds=_READINESS_SHARE_WAIT_SECONDS)
+            return {
+                "ok": True,
+                "provider": runtime.get("provider"),
+                "model": model,
+                "source": runtime.get("source"),
+                "free_tier_route": provider == "nous"
+                and route_is_welcome_host(runtime.get("base_url")),
+                **scoped,
+            }
+
+        return _readiness_check(
+            rid,
+            params,
+            probe,
+            probe_key=f"runtime:{requested or ''}",
+            wait_seconds=_READINESS_SHARE_WAIT_SECONDS,
+        )
     except Exception as e:
         return _ok(rid, {"ok": False, "error": str(e)})
 

@@ -51,7 +51,9 @@ def _tree() -> str:
     return str(Path(__file__).resolve().parents[2])
 
 
-def test_two_homes_take_their_own_per_home_lock_but_only_one_host_lock(host_dir, monkeypatch):
+def test_two_homes_take_their_own_per_home_lock_but_only_one_host_lock(
+    host_dir, monkeypatch
+):
     """The per-home lock is per CLAWK_HOME (N profiles = N locks); the host lock is not.
 
     This is the whole point of the host layer: before it, a second profile's gateway took its
@@ -62,10 +64,19 @@ def test_two_homes_take_their_own_per_home_lock_but_only_one_host_lock(host_dir,
     for home in (home_a, home_b):
         home.mkdir()
 
-    env = {**os.environ, "CLAWK_HOME": str(home_a), "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks")}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home_a),
+        "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks"),
+    }
     child = subprocess.Popen(
-        [sys.executable, "-c", _CHILD.format(tree=tree)], env=env, cwd=tree,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        [sys.executable, "-c", _CHILD.format(tree=tree)],
+        env=env,
+        cwd=tree,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     assert child.stdout is not None
     try:
         deadline = time.time() + 60
@@ -78,9 +89,12 @@ def test_two_homes_take_their_own_per_home_lock_but_only_one_host_lock(host_dir,
         monkeypatch.setenv("CLAWK_HOME", str(home_b))
         from gateway import status
 
-        assert status.acquire_gateway_runtime_lock() is True, "second home must get its OWN lock"
-        assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.HELD_BY_OTHER, \
-            "host lock is not per-home"
+        assert status.acquire_gateway_runtime_lock() is True, (
+            "second home must get its OWN lock"
+        )
+        assert (
+            hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.HELD_BY_OTHER
+        ), "host lock is not per-home"
     finally:
         child.kill()
         child.wait(timeout=10)
@@ -98,11 +112,20 @@ def test_stale_record_is_never_attachable(host_dir, pid, create_time):
     """A dead PID and a live PID from another incarnation are both stale — attaching to either
     dials whatever now owns that port."""
     record = hr.HostRecord(
-        role=hr.ROLE_SERVE, pid=pid, create_time=create_time, host="127.0.0.1", port=9119,
-        protocol_version=hr.HOST_PROTOCOL_VERSION, token_fingerprint="", profiles=("default",),
-        updated_at="2026-01-01T00:00:00+00:00")
+        role=hr.ROLE_SERVE,
+        pid=pid,
+        create_time=create_time,
+        host="127.0.0.1",
+        port=9119,
+        protocol_version=hr.HOST_PROTOCOL_VERSION,
+        token_fingerprint="",
+        profiles=("default",),
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
     hr.record_path(hr.ROLE_SERVE).parent.mkdir(parents=True, exist_ok=True)
-    hr.record_path(hr.ROLE_SERVE).write_text(json.dumps(record.to_json()), encoding="utf-8")
+    hr.record_path(hr.ROLE_SERVE).write_text(
+        json.dumps(record.to_json()), encoding="utf-8"
+    )
 
     assert hr.record_is_stale(record) is True
     assert hr.read_record(hr.ROLE_SERVE) is None
@@ -116,7 +139,9 @@ def test_live_host_record_survives_wall_clock_create_time_drift(host_dir, monkey
     The host record must keep recognizing that owner, but a changed stable start fingerprint must
     still be rejected as PID reuse.
     """
-    record = hr.publish_record(hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir))
+    record = hr.publish_record(
+        hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir)
+    )
     assert record is not None
 
     # Model the exact WSL failure family: the recorded epoch create_time drifted away from the
@@ -129,7 +154,8 @@ def test_live_host_record_survives_wall_clock_create_time_drift(host_dir, monkey
     from gateway import status
 
     monkeypatch.setattr(
-        status, "get_process_start_time",
+        status,
+        "get_process_start_time",
         lambda _pid: record.start_time + status.START_TIME_DRIFT_TOLERANCE + 1,
     )
     assert hr.record_is_stale(record) is True
@@ -187,10 +213,19 @@ def test_live_legacy_owner_survives_a_clock_step_past_its_create_time(host_dir):
 
     from gateway.status import get_process_start_time
 
-    env = {**os.environ, "CLAWK_HOME": str(host_dir / "home"), "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks")}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(host_dir / "home"),
+        "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks"),
+    }
     child = subprocess.Popen(
-        [sys.executable, "-c", _CHILD.format(tree=_tree())], env=env, cwd=_tree(),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        [sys.executable, "-c", _CHILD.format(tree=_tree())],
+        env=env,
+        cwd=_tree(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     assert child.stdout is not None
     try:
         assert json.loads(child.stdout.readline())["host"] is True
@@ -217,7 +252,9 @@ def test_live_legacy_owner_survives_a_clock_step_past_its_create_time(host_dir):
 
 @pytest.mark.platforms("linux")
 def test_boot_epoch_mismatch_rejects_a_tick_match(host_dir):
-    record = hr.publish_record(hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir))
+    record = hr.publish_record(
+        hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir)
+    )
     assert record is not None and record.boot_epoch
     foreign = dataclasses.replace(record, boot_epoch=record.boot_epoch + "-other-boot")
     assert hr.liveness_is_proven(record) is True
@@ -226,8 +263,12 @@ def test_boot_epoch_mismatch_rejects_a_tick_match(host_dir):
 
 
 @pytest.mark.platforms("linux")
-def test_recorded_epoch_with_unreadable_current_epoch_is_unprovable(host_dir, monkeypatch):
-    record = hr.publish_record(hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir))
+def test_recorded_epoch_with_unreadable_current_epoch_is_unprovable(
+    host_dir, monkeypatch
+):
+    record = hr.publish_record(
+        hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir)
+    )
     assert record is not None and record.boot_epoch
     monkeypatch.setattr(hr, "_current_boot_epoch", lambda: "")
     assert hr._record_incarnation_matches(record) is None
@@ -237,7 +278,9 @@ def test_recorded_epoch_with_unreadable_current_epoch_is_unprovable(host_dir, mo
 
 @pytest.mark.platforms("posix")
 def test_empty_boot_epoch_does_not_stale_a_live_owner(host_dir):
-    record = hr.publish_record(hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir))
+    record = hr.publish_record(
+        hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir)
+    )
     assert record is not None
     empty = dataclasses.replace(record, boot_epoch="")
     assert hr.liveness_is_proven(empty) is True
@@ -251,8 +294,13 @@ def test_sigterm_removes_the_record_and_its_live_session_token(host_dir):
     on disk indefinitely, so the next launch attached to something that was gone."""
     env = {**os.environ, "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks")}
     child = subprocess.Popen(
-        [sys.executable, "-c", _SIGTERM_CHILD.format(tree=_tree())], env=env, cwd=_tree(),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        [sys.executable, "-c", _SIGTERM_CHILD.format(tree=_tree())],
+        env=env,
+        cwd=_tree(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     assert child.stdout is not None
     try:
         assert child.stdout.readline().strip() == "published"
@@ -267,8 +315,12 @@ def test_sigterm_removes_the_record_and_its_live_session_token(host_dir):
             child.wait(timeout=10)
 
     assert not hr.record_path(hr.ROLE_SERVE).exists(), "record outlived its process"
-    assert not hr.token_path(hr.ROLE_SERVE).exists(), "live session token outlived its process"
-    assert hr.claim_host_lock(hr.ROLE_SERVE)[0] is hr.HostLockOutcome.ACQUIRED, "host lock not released"
+    assert not hr.token_path(hr.ROLE_SERVE).exists(), (
+        "live session token outlived its process"
+    )
+    assert hr.claim_host_lock(hr.ROLE_SERVE)[0] is hr.HostLockOutcome.ACQUIRED, (
+        "host lock not released"
+    )
 
 
 def test_unopenable_lock_dir_is_not_reported_as_another_owner(host_dir, monkeypatch):
@@ -307,9 +359,16 @@ def test_probe_owner_refuses_a_closed_port_and_a_foreign_listener(host_dir):
     dead_port = closed.getsockname()[1]
     closed.close()
     record = hr.HostRecord(
-        role=hr.ROLE_SERVE, pid=os.getpid(), create_time=hr.process_create_time(),
-        host="127.0.0.1", port=dead_port, protocol_version=hr.HOST_PROTOCOL_VERSION,
-        token_fingerprint="", profiles=(), updated_at="2026-01-01T00:00:00+00:00")
+        role=hr.ROLE_SERVE,
+        pid=os.getpid(),
+        create_time=hr.process_create_time(),
+        host="127.0.0.1",
+        port=dead_port,
+        protocol_version=hr.HOST_PROTOCOL_VERSION,
+        token_fingerprint="",
+        profiles=(),
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
 
     assert hr.probe_owner(record, timeout=1.0) is None
 
@@ -317,8 +376,12 @@ def test_probe_owner_refuses_a_closed_port_and_a_foreign_listener(host_dir):
     foreign.bind(("127.0.0.1", 0))
     foreign.listen(1)
     try:
-        assert hr.probe_owner(
-            dataclasses.replace(record, port=foreign.getsockname()[1]), timeout=1.0) is None
+        assert (
+            hr.probe_owner(
+                dataclasses.replace(record, port=foreign.getsockname()[1]), timeout=1.0
+            )
+            is None
+        )
     finally:
         foreign.close()
 
@@ -334,7 +397,10 @@ def test_relative_xdg_state_home_is_ignored(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
 
     assert status._get_lock_dir().is_absolute()
-    assert status._get_lock_dir() == tmp_path / ".local" / "state" / "clawk" / status._LOCKS_DIRNAME
+    assert (
+        status._get_lock_dir()
+        == tmp_path / ".local" / "state" / "clawk" / status._LOCKS_DIRNAME
+    )
 
 
 def _gateway_record(*, pid: int, create_time, start_time, home: str) -> hr.HostRecord:
@@ -361,12 +427,17 @@ def test_missing_incarnation_fields_do_not_prove_a_live_pid(host_dir):
     this shape; the shared liveness predicate did not.
     """
     record = _gateway_record(
-        pid=os.getpid(), create_time=None, start_time=None, home=str(host_dir),
+        pid=os.getpid(),
+        create_time=None,
+        start_time=None,
+        home=str(host_dir),
     )
     assert hr.liveness_is_proven(record) is False
 
 
-def test_free_host_lock_means_attach_does_not_treat_a_recycled_pid_as_owner(host_dir, monkeypatch):
+def test_free_host_lock_means_attach_does_not_treat_a_recycled_pid_as_owner(
+    host_dir, monkeypatch
+):
     """Every live publisher holds ``host-gateway.lock`` for its lifetime; the OS releases it on death.
 
     A leftover record can still name a live pid (recycle, or start-tick collision after reboot).
@@ -388,7 +459,9 @@ def test_free_host_lock_means_attach_does_not_treat_a_recycled_pid_as_owner(host
             home=str(home),
         )
         hr.ensure_host_state_dir()
-        hr.record_path(hr.ROLE_GATEWAY).write_text(json.dumps(record.to_json()), encoding="utf-8")
+        hr.record_path(hr.ROLE_GATEWAY).write_text(
+            json.dumps(record.to_json()), encoding="utf-8"
+        )
         monkeypatch.setattr("gateway.host_attach._identify", lambda home: None)
         invalidate_host_gateway_cache()
         decision = decide(home)
@@ -402,13 +475,17 @@ def test_free_host_lock_means_attach_does_not_treat_a_recycled_pid_as_owner(host
 def test_holding_the_host_lock_keeps_a_matching_incarnation_live(host_dir):
     """The boot-race window: lock is claimed before the socket binds, so a silent socket stays transient."""
     assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
-    record = hr.publish_record(hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir))
+    record = hr.publish_record(
+        hr.ROLE_GATEWAY, profiles=("default",), home=str(host_dir)
+    )
     assert record is not None
     assert hr.host_lock_is_held(hr.ROLE_GATEWAY) is True
     assert hr.liveness_is_proven(record) is True
 
 
-def test_null_create_time_record_on_a_recycled_pid_starts_instead_of_refusing_forever(host_dir, monkeypatch):
+def test_null_create_time_record_on_a_recycled_pid_starts_instead_of_refusing_forever(
+    host_dir, monkeypatch
+):
     """The outage shape: a SIGKILLed owner left ``createTime: null``, its pid now an unrelated process.
 
     ``decide()`` must START (take the host over), not the transient REFUSE a supervisor retries forever.
@@ -419,10 +496,14 @@ def test_null_create_time_record_on_a_recycled_pid_starts_instead_of_refusing_fo
     try:
         home = host_dir / "home"
         home.mkdir()
-        record = _gateway_record(pid=child.pid, create_time=None, start_time=None, home=str(home))
+        record = _gateway_record(
+            pid=child.pid, create_time=None, start_time=None, home=str(home)
+        )
         record = dataclasses.replace(record, updated_at="2020-01-01T00:00:00+00:00")
         hr.ensure_host_state_dir()
-        hr.record_path(hr.ROLE_GATEWAY).write_text(json.dumps(record.to_json()), encoding="utf-8")
+        hr.record_path(hr.ROLE_GATEWAY).write_text(
+            json.dumps(record.to_json()), encoding="utf-8"
+        )
         monkeypatch.setattr("gateway.host_attach._identify", lambda home: None)
         invalidate_host_gateway_cache()
         assert decide(home).outcome == START
@@ -431,7 +512,9 @@ def test_null_create_time_record_on_a_recycled_pid_starts_instead_of_refusing_fo
         child.wait(timeout=10)
 
 
-def test_discard_dead_record_retracts_a_live_looking_pid_only_once_the_host_lock_is_free(host_dir):
+def test_discard_dead_record_retracts_a_live_looking_pid_only_once_the_host_lock_is_free(
+    host_dir,
+):
     """`gateway restart --all` retracts a corpse's record; a recycled pid can still match its incarnation.
 
     Lock held: the recorded owner may be alive, keep the record. Lock free: the owner is gone.
@@ -447,7 +530,9 @@ def test_discard_dead_record_retracts_a_live_looking_pid_only_once_the_host_lock
             home=str(host_dir),
         )
         hr.ensure_host_state_dir()
-        hr.record_path(hr.ROLE_GATEWAY).write_text(json.dumps(record.to_json()), encoding="utf-8")
+        hr.record_path(hr.ROLE_GATEWAY).write_text(
+            json.dumps(record.to_json()), encoding="utf-8"
+        )
         assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
         assert hr.discard_dead_record(hr.ROLE_GATEWAY) is False
         assert hr.record_path(hr.ROLE_GATEWAY).exists()
@@ -472,7 +557,9 @@ time.sleep(60)
 
 
 @pytest.mark.platforms("posix")
-def test_another_process_holding_the_host_lock_is_observed_and_its_exit_frees_the_file(host_dir):
+def test_another_process_holding_the_host_lock_is_observed_and_its_exit_frees_the_file(
+    host_dir,
+):
     """The parent never owns the lock here, so every answer comes from probing the lock file.
 
     Held by a child: the probe reports held and restart cleanup keeps a live-looking record.
@@ -483,9 +570,13 @@ def test_another_process_holding_the_host_lock_is_observed_and_its_exit_frees_th
     tree = _tree()
     sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     holder = subprocess.Popen(
-        [sys.executable, "-u", "-c", _HOLDER_CHILD.format(tree=tree)], cwd=tree,
+        [sys.executable, "-u", "-c", _HOLDER_CHILD.format(tree=tree)],
+        cwd=tree,
         env={**os.environ, "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks")},
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert holder.stdout.readline().strip() == "held"
         record = _gateway_record(
@@ -495,7 +586,9 @@ def test_another_process_holding_the_host_lock_is_observed_and_its_exit_frees_th
             home=str(host_dir),
         )
         hr.ensure_host_state_dir()
-        hr.record_path(hr.ROLE_GATEWAY).write_text(json.dumps(record.to_json()), encoding="utf-8")
+        hr.record_path(hr.ROLE_GATEWAY).write_text(
+            json.dumps(record.to_json()), encoding="utf-8"
+        )
         assert not hr.owns_host_lock(hr.ROLE_GATEWAY)
         assert hr.host_lock_is_held(hr.ROLE_GATEWAY) is True
         assert hr.discard_dead_record(hr.ROLE_GATEWAY) is False
@@ -529,7 +622,9 @@ for line in sys.stdin:
 
 
 @pytest.mark.platforms("posix")
-def test_restart_cleanup_never_deletes_a_gateway_that_claimed_the_lock_mid_cleanup(host_dir, monkeypatch):
+def test_restart_cleanup_never_deletes_a_gateway_that_claimed_the_lock_mid_cleanup(
+    host_dir, monkeypatch
+):
     """A free-lock probe released before the unlink let a new gateway publish in the gap.
 
     The restart's record cleanup then deleted the NEW owner's record and token while it held
@@ -541,9 +636,14 @@ def test_restart_cleanup_never_deletes_a_gateway_that_claimed_the_lock_mid_clean
     tree = _tree()
     sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     claimer = subprocess.Popen(
-        [sys.executable, "-u", "-c", _CLAIMER_CHILD.format(tree=tree)], cwd=tree,
+        [sys.executable, "-u", "-c", _CLAIMER_CHILD.format(tree=tree)],
+        cwd=tree,
         env={**os.environ, "CLAWK_GATEWAY_LOCK_DIR": str(host_dir / "locks")},
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert claimer.stdout.readline().strip() == "ready"
 
@@ -559,7 +659,9 @@ def test_restart_cleanup_never_deletes_a_gateway_that_claimed_the_lock_mid_clean
             home=str(host_dir),
         )
         hr.ensure_host_state_dir()
-        hr.record_path(hr.ROLE_GATEWAY).write_text(json.dumps(record.to_json()), encoding="utf-8")
+        hr.record_path(hr.ROLE_GATEWAY).write_text(
+            json.dumps(record.to_json()), encoding="utf-8"
+        )
 
         won_in_gap = []
         real_unlink = Path.unlink

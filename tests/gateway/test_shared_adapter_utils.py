@@ -44,7 +44,9 @@ def test_bounded_put_refreshes_and_caps():
     for i in range(5):
         helpers.bounded_put(store, f"k{i}", i, cap=3)
     assert list(store) == ["k2", "k3", "k4"]
-    helpers.bounded_put(store, "k2", "again", cap=3)  # refresh moves it to the newest slot
+    helpers.bounded_put(
+        store, "k2", "again", cap=3
+    )  # refresh moves it to the newest slot
     assert list(store) == ["k3", "k4", "k2"]
 
 
@@ -67,6 +69,6 @@ def test_dedup_sites_keep_their_own_window(monkeypatch):
     for name, (cap, ttl) in windows.items():
         d = helpers.MessageDeduplicator(max_size=cap, ttl_seconds=ttl)
         assert d.is_duplicate("m") is False and d.is_duplicate("m") is True, name
-        now[0] += ttl if ttl != float("inf") else 10 ** 9
+        now[0] += ttl if ttl != float("inf") else 10**9
         assert d.is_duplicate("m") is (ttl == float("inf")), name
     assert line.MessageDeduplicator is helpers.MessageDeduplicator

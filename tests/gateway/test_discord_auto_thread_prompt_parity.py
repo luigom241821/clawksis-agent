@@ -5,6 +5,7 @@ while the thread's next message read the thread's own topic (none outside forums
 is part of the pinned session-context prompt, so turn 2 re-rendered it. Clawksis's title rename
 between the turns is included, so both inputs that change on turn 2 are covered.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone, UTC
@@ -24,7 +25,12 @@ _BOT = SimpleNamespace(id=999)
 
 class _Thread:
     def __init__(self, parent: SimpleNamespace) -> None:
-        self.id, self.name, self.parent, self.parent_id = 800, "what-broke", parent, parent.id
+        self.id, self.name, self.parent, self.parent_id = (
+            800,
+            "what-broke",
+            parent,
+            parent.id,
+        )
         self.guild = parent.guild
         self.archived = False
 
@@ -34,14 +40,21 @@ class _Thread:
 
 def _message(channel: object, message_id: int, *, mention: bool) -> SimpleNamespace:
     return SimpleNamespace(
-        id=message_id, content=("<@999> " if mention else "") + "what broke?",
-        mentions=[_BOT] if mention else [], attachments=[], reference=None,
-        created_at=datetime.now(UTC), channel=channel,
-        author=SimpleNamespace(id=42, display_name="Alice", name="alice"))
+        id=message_id,
+        content=("<@999> " if mention else "") + "what broke?",
+        mentions=[_BOT] if mention else [],
+        attachments=[],
+        reference=None,
+        created_at=datetime.now(UTC),
+        channel=channel,
+        author=SimpleNamespace(id=42, display_name="Alice", name="alice"),
+    )
 
 
 @pytest.mark.asyncio
-async def test_auto_thread_first_turn_pins_the_threads_topic(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_auto_thread_first_turn_pins_the_threads_topic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(discord_platform.discord, "Thread", _Thread, raising=False)
     monkeypatch.delenv("DISCORD_REQUIRE_MENTION", raising=False)
     monkeypatch.setenv("DISCORD_AUTO_THREAD", "true")
@@ -55,19 +68,31 @@ async def test_auto_thread_first_turn_pins_the_threads_topic(monkeypatch: pytest
     adapter._auto_create_thread = AsyncMock(return_value=thread)
     adapter.handle_message = AsyncMock()
     runner = object.__new__(gateway_run.GatewayRunner)
-    config = GatewayConfig(platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")})
+    config = GatewayConfig(
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")}
+    )
 
     assert not await adapter._handle_message(_message(parent, 99, mention=False))
     adapter._auto_create_thread.assert_not_awaited()
     adapter.handle_message.assert_not_awaited()
     prompts = []
     for channel, message_id, mention in ((parent, 100, True), (thread, 101, False)):
-        assert await adapter._handle_message(_message(channel, message_id, mention=mention))
+        assert await adapter._handle_message(
+            _message(channel, message_id, mention=mention)
+        )
         source = adapter.handle_message.await_args.args[0].source
         assert source.chat_id == "800"
-        prompts.append(runner._pinned_session_context_prompt(build_session_context(source, config), False, "k"))
+        prompts.append(
+            runner._pinned_session_context_prompt(
+                build_session_context(source, config), False, "k"
+            )
+        )
         if message_id == 100:
-            assert await adapter.rename_thread("800", "Database outage", only_if_current_name="what-broke")
-            await adapter._on_platform_raw_thread_update(SimpleNamespace(thread_id=800, data={"name": "Database outage"}))
+            assert await adapter.rename_thread(
+                "800", "Database outage", only_if_current_name="what-broke"
+            )
+            await adapter._on_platform_raw_thread_update(
+                SimpleNamespace(thread_id=800, data={"name": "Database outage"})
+            )
     adapter._auto_create_thread.assert_awaited_once()
     assert prompts[0] == prompts[1]

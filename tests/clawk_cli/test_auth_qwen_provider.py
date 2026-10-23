@@ -23,6 +23,7 @@ from clawk_cli.auth import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_qwen_tokens(
     access_token="test-access-token",
     refresh_token="test-refresh-token",
@@ -59,9 +60,7 @@ def _write_qwen_creds(tmp_path, tokens=None):
 def qwen_env(tmp_path, monkeypatch):
     """Redirect _qwen_cli_auth_path to tmp_path/.qwen/oauth_creds.json."""
     creds_path = tmp_path / ".qwen" / "oauth_creds.json"
-    monkeypatch.setattr(
-        "clawk_cli.auth._qwen_cli_auth_path", lambda: creds_path
-    )
+    monkeypatch.setattr("clawk_cli.auth._qwen_cli_auth_path", lambda: creds_path)
     return tmp_path
 
 
@@ -70,13 +69,9 @@ def qwen_env(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # _read_qwen_cli_tokens
 # ---------------------------------------------------------------------------
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -84,15 +79,9 @@ def qwen_env(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # _qwen_access_token_is_expiring
 # ---------------------------------------------------------------------------
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -100,12 +89,10 @@ def qwen_env(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # resolve_qwen_runtime_credentials
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_qwen_runtime_credentials_fresh_token(qwen_env):
     tokens = _make_qwen_tokens(access_token="fresh-at")
@@ -130,6 +117,7 @@ def test_resolve_qwen_runtime_credentials_missing_access_token(qwen_env):
 # ---------------------------------------------------------------------------
 # get_qwen_auth_status
 # ---------------------------------------------------------------------------
+
 
 def test_get_qwen_auth_status_logged_in(qwen_env):
     tokens = _make_qwen_tokens(access_token="status-at")
@@ -157,7 +145,9 @@ def test_get_qwen_auth_status_refreshes_expired_token(qwen_env):
     assert status["api_key"] == "refreshed-at"
 
 
-def test_model_flow_qwen_oauth_stale_token_shows_reauth_guidance(qwen_env, monkeypatch, capsys):
+def test_model_flow_qwen_oauth_stale_token_shows_reauth_guidance(
+    qwen_env, monkeypatch, capsys
+):
     from clawk_cli.model_setup_flows import _model_flow_qwen_oauth
 
     expired_ms = int((time.time() - 3600) * 1000)

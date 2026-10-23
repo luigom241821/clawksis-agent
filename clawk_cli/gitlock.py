@@ -49,10 +49,21 @@ def _git_proc_running() -> bool:
         # One shared spawn for both probes: the argv is the platform fork, the
         # hide-flags wiring is common, so a console-less parent (pythonw backend)
         # never flashes a console for either (#117781).
-        argv = (["tasklist", "/FI", "IMAGENAME eq git.exe", "/FO", "CSV"]
-                if os.name == "nt" else ["pgrep", "-x", "git"])
-        proc = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                               timeout=10, creationflags=windows_hide_flags(), check=False)
+        argv = (
+            ["tasklist", "/FI", "IMAGENAME eq git.exe", "/FO", "CSV"]
+            if os.name == "nt"
+            else ["pgrep", "-x", "git"]
+        )
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            creationflags=windows_hide_flags(),
+            check=False,
+        )
         if os.name == "nt":
             return "git.exe" in proc.stdout.lower()
         return proc.returncode == 0
@@ -61,15 +72,24 @@ def _git_proc_running() -> bool:
         return False
 
 
-def _sweep_stale(directory: Path, candidates: Callable[[], Iterable[Path]], *, min_age_seconds: Optional[int],
-                 default_age: int, skip_msg: str, log_removed: Callable[[Path, int], None]) -> list[str]:
+def _sweep_stale(
+    directory: Path,
+    candidates: Callable[[], Iterable[Path]],
+    *,
+    min_age_seconds: Optional[int],
+    default_age: int,
+    skip_msg: str,
+    log_removed: Callable[[Path, int], None],
+) -> list[str]:
     """Shared guard + age-floor sweep. Never raises; skips anything it cannot stat/unlink."""
     if not directory.is_dir():
         return []
     if _git_proc_running():
         logger.debug(skip_msg)
         return []
-    cutoff = time.time() - (min_age_seconds if min_age_seconds is not None else default_age)
+    cutoff = time.time() - (
+        min_age_seconds if min_age_seconds is not None else default_age
+    )
     removed: list[str] = []
     for entry in candidates():
         try:
@@ -92,7 +112,9 @@ def _sweep_stale(directory: Path, candidates: Callable[[], Iterable[Path]], *, m
     return removed
 
 
-def clear_stale_git_locks(repo_root: Path, *, min_age_seconds: Optional[int] = None) -> list[str]:
+def clear_stale_git_locks(
+    repo_root: Path, *, min_age_seconds: Optional[int] = None
+) -> list[str]:
     """Remove abandoned ``.git`` lock files under ``repo_root``; returns the removed paths.
 
     Removes only when older than the age floor AND no git process is running. Never raises: a lock we cannot
@@ -100,8 +122,10 @@ def clear_stale_git_locks(repo_root: Path, *, min_age_seconds: Optional[int] = N
     """
     git_dir = Path(repo_root) / ".git"
     return _sweep_stale(
-        git_dir, lambda: [git_dir / name for name in LOCK_NAMES],
-        min_age_seconds=min_age_seconds, default_age=STALE_LOCK_MIN_AGE_SECONDS,
+        git_dir,
+        lambda: [git_dir / name for name in LOCK_NAMES],
+        min_age_seconds=min_age_seconds,
+        default_age=STALE_LOCK_MIN_AGE_SECONDS,
         skip_msg="git process running; skipping stale-lock sweep",
         log_removed=lambda p, _size: logger.info("Removed stale git lock %s", p),
     )
@@ -125,7 +149,11 @@ def release_dead_index_lock(repo_root: Path) -> bool:
     with psutil (:func:`_windows_git_in_checkout`). Whatever cannot be read keeps the lock. An
     interrupted tree move owns its own lock judgement, so its marker defers to that repair.
     """
-    from clawk_cli._early_recovery import _git_dir, _release_dead_index_lock, interrupted_pull_marker
+    from clawk_cli._early_recovery import (
+        _git_dir,
+        _release_dead_index_lock,
+        interrupted_pull_marker,
+    )
 
     root = Path(repo_root)
     git_dir = _git_dir(root)
@@ -187,13 +215,18 @@ def _killed_update_owns(lock: Path) -> bool:
         key = str(record.get("update_id") or id(record))
         held = runs.get(key)
         # One run, several copies (its archive, latest.json, a profile mirror): a terminal copy wins.
-        if held is None or (held[1].get("outcome") in ("running", "interrupted")
-                            and record.get("outcome") not in ("running", "interrupted")):
+        if held is None or (
+            held[1].get("outcome") in ("running", "interrupted")
+            and record.get("outcome") not in ("running", "interrupted")
+        ):
             runs[key] = (started, record)
     if not runs:
         return False
     _started, last = max(runs.values(), key=lambda run: run[0])
-    return last.get("outcome") in ("running", "interrupted") and not update_receipt._owner_alive(last)
+    return last.get("outcome") in (
+        "running",
+        "interrupted",
+    ) and not update_receipt._owner_alive(last)
 
 
 def _windows_git_in_checkout(root: Path) -> bool | None:
@@ -204,8 +237,14 @@ def _windows_git_in_checkout(root: Path) -> bool | None:
     the checkout: a system-wide check would keep the lock whenever any editor or terminal elsewhere
     runs git, which on Windows is most of the time. A git whose cwd cannot be read keeps the lock.
     """
-    from clawk_cli._early_recovery import _NEVER_LOCKS, _checkout_places, _git_dir, _git_program, \
-        _git_subcommand_of, git_works_in
+    from clawk_cli._early_recovery import (
+        _NEVER_LOCKS,
+        _checkout_places,
+        _git_dir,
+        _git_program,
+        _git_subcommand_of,
+        git_works_in,
+    )
 
     try:
         import psutil
@@ -218,16 +257,22 @@ def _windows_git_in_checkout(root: Path) -> bool | None:
             if info.get("pid") == os.getpid():
                 continue
             args = [str(a) for a in info.get("cmdline") or () if a]
-            if _git_program(info.get("name") or "") is None and not (args and _git_program(args[0])):
+            if _git_program(info.get("name") or "") is None and not (
+                args and _git_program(args[0])
+            ):
                 continue
             if _git_subcommand_of(args or [info.get("name") or ""]) in _NEVER_LOCKS:
                 continue
             cwd = info.get("cwd")
-            if git_works_in(args or [info.get("name") or "git"], cwd, info.get("environ"), places):
+            if git_works_in(
+                args or [info.get("name") or "git"], cwd, info.get("environ"), places
+            ):
                 return True
             if not cwd and proc.is_running():
                 return None  # a git we cannot inspect may be working here
-    except Exception:  # health: allow BLE001 -- a failed scan keeps the lock, never drops it
+    except (
+        Exception
+    ):  # health: allow BLE001 -- a failed scan keeps the lock, never drops it
         return None
     return False
 
@@ -288,18 +333,28 @@ def disable_tree0_auto_maintenance(repo_root: Path) -> None:
     for key, value in _TREE0_MAINTENANCE_OFF:
         try:
             current = run_git(
-                ["git"], ["config", "--local", "--get", key],
-                cwd=str(repo_root), capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=30,
+                ["git"],
+                ["config", "--local", "--get", key],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
                 creationflags=windows_hide_flags(),
             ).stdout.strip()
             if current == value:
                 continue
             run_git(
-                ["git"], ["config", "--local", key, value],
-                cwd=str(repo_root), check=True,
-                capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=30,
+                ["git"],
+                ["config", "--local", key, value],
+                cwd=str(repo_root),
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
                 creationflags=windows_hide_flags(),
             )
         except Exception:
@@ -317,23 +372,45 @@ def _migrate_earlier_maintenance_keys(repo_root: Path) -> None:
     that key, so this runs once; an operator's own lone setting never matches.
     """
     try:
-        local = dict(line.split(None, 1) for line in _git_stdout_lines(repo_root, [
-            "config", "--local", "--get-regexp",
-            r"^(maintenance\.auto|maintenance\.commit-graph\.enabled|fetch\.writecommitgraph|gc\.auto)$"]))
-        if (local.get("maintenance.auto") != "false" or local.get("fetch.writecommitgraph") != "false"
-                or "maintenance.commit-graph.enabled" in local):
+        local = dict(
+            line.split(None, 1)
+            for line in _git_stdout_lines(
+                repo_root,
+                [
+                    "config",
+                    "--local",
+                    "--get-regexp",
+                    r"^(maintenance\.auto|maintenance\.commit-graph\.enabled|fetch\.writecommitgraph|gc\.auto)$",
+                ],
+            )
+        )
+        if (
+            local.get("maintenance.auto") != "false"
+            or local.get("fetch.writecommitgraph") != "false"
+            or "maintenance.commit-graph.enabled" in local
+        ):
             return
-        for key in ("maintenance.auto", "gc.auto") if local.get("gc.auto") == "0" else ("maintenance.auto",):
+        for key in (
+            ("maintenance.auto", "gc.auto")
+            if local.get("gc.auto") == "0"
+            else ("maintenance.auto",)
+        ):
             run_git(
-                ["git"], ["config", "--local", "--unset", key],
-                cwd=str(repo_root), check=True, capture_output=True, timeout=30,
+                ["git"],
+                ["config", "--local", "--unset", key],
+                cwd=str(repo_root),
+                check=True,
+                capture_output=True,
+                timeout=30,
                 creationflags=windows_hide_flags(),
             )
     except Exception:
         logger.warning("Could not migrate earlier maintenance keys in %s", repo_root)
 
 
-def clear_stale_tmp_packs(repo_root: Path, *, min_age_seconds: Optional[int] = None) -> list[str]:
+def clear_stale_tmp_packs(
+    repo_root: Path, *, min_age_seconds: Optional[int] = None
+) -> list[str]:
     """Remove aborted-transfer temp pack files; same contract as clear_stale_git_locks.
 
     Resolves ``.git/objects/pack`` for a checkout and ``objects/pack`` for a bare repo such as
@@ -342,15 +419,21 @@ def clear_stale_tmp_packs(repo_root: Path, *, min_age_seconds: Optional[int] = N
 
     def _candidates():
         try:
-            return [e for e in pack_dir.iterdir() if e.name.startswith(_TMP_PACK_PREFIXES)]
+            return [
+                e for e in pack_dir.iterdir() if e.name.startswith(_TMP_PACK_PREFIXES)
+            ]
         except OSError:
             return []
 
     return _sweep_stale(
-        pack_dir, _candidates,
-        min_age_seconds=min_age_seconds, default_age=STALE_TMP_PACK_MIN_AGE_SECONDS,
+        pack_dir,
+        _candidates,
+        min_age_seconds=min_age_seconds,
+        default_age=STALE_TMP_PACK_MIN_AGE_SECONDS,
         skip_msg="git process running; skipping tmp-pack sweep",
-        log_removed=lambda p, size: logger.info("Removed aborted-fetch pack debris %s (%d bytes)", p, size),
+        log_removed=lambda p, size: logger.info(
+            "Removed aborted-fetch pack debris %s (%d bytes)", p, size
+        ),
     )
 
 
@@ -358,8 +441,14 @@ def _git_stdout_lines(repo_root: Path, args: list[str]) -> list[str]:
     """Run a read-only git query in ``repo_root``; [] on any failure."""
     try:
         result = run_git(
-            ["git"], [*args], cwd=str(repo_root),
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+            ["git"],
+            [*args],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
             creationflags=windows_hide_flags(),
         )
         if result.returncode != 0:
@@ -384,7 +473,8 @@ def _batch_missing_parents(repo_root: Path, candidates: list[str]) -> set[str]:
         parents = set()
         request = "\n".join(candidates) + "\n"
         result = run_git(
-            ["git"], ["cat-file", "--batch"],
+            ["git"],
+            ["cat-file", "--batch"],
             cwd=str(repo_root),
             input=request.encode(),
             capture_output=True,
@@ -403,9 +493,9 @@ def _batch_missing_parents(repo_root: Path, candidates: list[str]) -> set[str]:
             cursor = header_end + 1
             if len(header) >= 3 and header[1] == b"commit":
                 size = int(header[2])
-                body = data[cursor:cursor + size]
+                body = data[cursor : cursor + size]
                 cursor += size
-                if data[cursor:cursor + 1] != b"\n":
+                if data[cursor : cursor + 1] != b"\n":
                     return set()
                 cursor += 1
                 commit_parents = set()
@@ -422,7 +512,8 @@ def _batch_missing_parents(repo_root: Path, candidates: list[str]) -> set[str]:
         if not parents:
             return set()
         check = run_git(
-            ["git"], ["cat-file", "--batch-check"],
+            ["git"],
+            ["cat-file", "--batch-check"],
             cwd=str(repo_root),
             input=("\n".join(sorted(parents)) + "\n").encode(),
             capture_output=True,
@@ -436,7 +527,11 @@ def _batch_missing_parents(repo_root: Path, candidates: list[str]) -> set[str]:
             for line in check.stdout.decode(errors="replace").splitlines()
             if line.endswith(" missing")
         }
-        return {commit for commit, commit_parents in parents_by_commit.items() if commit_parents & missing}
+        return {
+            commit
+            for commit, commit_parents in parents_by_commit.items()
+            if commit_parents & missing
+        }
     except Exception:
         logger.debug("parent-object probe failed for %s", repo_root, exc_info=True)
         return set()
@@ -506,8 +601,11 @@ def repair_broken_shallow_boundaries(repo_root: Path) -> int:
             return 0
         # Cheap gate: repair only when the walk the corruption breaks already fails.
         probe = run_git(
-            ["git"], ["rev-list", "--count", "--all", "--reflog"],
-            cwd=str(repo_root), capture_output=True, timeout=10,
+            ["git"],
+            ["rev-list", "--count", "--all", "--reflog"],
+            cwd=str(repo_root),
+            capture_output=True,
+            timeout=10,
             creationflags=windows_hide_flags(),
         )
         if probe.returncode == 0:
@@ -515,7 +613,9 @@ def repair_broken_shallow_boundaries(repo_root: Path) -> int:
         with _ShallowLock(shallow_path):
             # Keep the rollback image byte-exact, including BOM and line endings.
             original = shallow_path.read_bytes()
-            existing = {line for line in original.decode("utf-8-sig").splitlines() if line}
+            existing = {
+                line for line in original.decode("utf-8-sig").splitlines() if line
+            }
             if not existing:
                 return 0
             # Boundary candidates: commits recorded as *fetch tips* in remote-tracking
@@ -529,26 +629,36 @@ def repair_broken_shallow_boundaries(repo_root: Path) -> int:
             # and are NOT candidates — new corruption of that shape is prevented by
             # the prune's reflog fail-safe instead.
             reflog = _git_stdout_lines(
-                repo_root, ["reflog", "show", "--all", "--format=%H%x00%gD"])
-            candidates = sorted({
-                sha
-                for entry in reflog
-                for sha, selector in [entry.split("\x00", 1)]
-                if selector.startswith("refs/remotes/")
-            })
+                repo_root, ["reflog", "show", "--all", "--format=%H%x00%gD"]
+            )
+            candidates = sorted(
+                {
+                    sha
+                    for entry in reflog
+                    for sha, selector in [entry.split("\x00", 1)]
+                    if selector.startswith("refs/remotes/")
+                }
+            )
             broken = _batch_missing_parents(repo_root, candidates)
             repaired = broken - existing
             if not repaired:
                 return 0
-            _write_shallow(shallow_path, "\n".join(sorted(existing | repaired)) + "\n",
-                           suffix=".clawk-repair")
+            _write_shallow(
+                shallow_path,
+                "\n".join(sorted(existing | repaired)) + "\n",
+                suffix=".clawk-repair",
+            )
             # Self-check under the same lock hold (rev-list never takes
             # shallow.lock): the rollback cannot be defeated by lock contention.
-            if not _git_stdout_lines(repo_root, ["rev-list", "--count", "--all", "--reflog"]):
+            if not _git_stdout_lines(
+                repo_root, ["rev-list", "--count", "--all", "--reflog"]
+            ):
                 shallow_path.write_bytes(original)
                 logger.debug("shallow boundary repair self-check failed; file restored")
                 return 0
-        logger.info("Restored %d broken shallow boundary(ies) in %s", len(repaired), repo_root)
+        logger.info(
+            "Restored %d broken shallow boundary(ies) in %s", len(repaired), repo_root
+        )
         return len(repaired)
     except Exception:
         logger.debug("shallow boundary repair failed for %s", repo_root, exc_info=True)
@@ -582,8 +692,15 @@ def prune_stale_shallow_grafts(repo_root: Path) -> int:
                 return 0
             keep = set(lines) & {
                 *(_git_stdout_lines(repo_root, ["rev-parse", "HEAD"]) or []),
-                *(_git_stdout_lines(repo_root, ["rev-parse", "--verify", "--quiet", "FETCH_HEAD"]) or []),
-                *_git_stdout_lines(repo_root, ["for-each-ref", "--format=%(objectname)"]),
+                *(
+                    _git_stdout_lines(
+                        repo_root, ["rev-parse", "--verify", "--quiet", "FETCH_HEAD"]
+                    )
+                    or []
+                ),
+                *_git_stdout_lines(
+                    repo_root, ["for-each-ref", "--format=%(objectname)"]
+                ),
             }
             if len(keep) == len(lines):
                 return 0
@@ -597,26 +714,39 @@ def prune_stale_shallow_grafts(repo_root: Path) -> int:
             for ref in _git_stdout_lines(
                 repo_root, ["for-each-ref", "--format=%(refname)", "refs/remotes/"]
             ):
-                entries = _git_stdout_lines(repo_root, ["reflog", "show", "--format=%H", ref])
+                entries = _git_stdout_lines(
+                    repo_root, ["reflog", "show", "--format=%H", ref]
+                )
                 if set(entries) & dropped:
                     run_git(
-                        ["git"], ["reflog", "expire", "--expire=now", ref],
-                        cwd=str(repo_root), capture_output=True, timeout=10,
+                        ["git"],
+                        ["reflog", "expire", "--expire=now", ref],
+                        cwd=str(repo_root),
+                        capture_output=True,
+                        timeout=10,
                         creationflags=windows_hide_flags(),
                     )
-            _write_shallow(shallow_path, "\n".join(sorted(keep)) + "\n", suffix=".clawk-prune")
+            _write_shallow(
+                shallow_path, "\n".join(sorted(keep)) + "\n", suffix=".clawk-prune"
+            )
             # Fail-safe: if any reachable walk now crosses a boundary we wrongly
             # removed, put the grafts back — a growing file beats a broken repo.
             # Runs under the same lock hold (rev-list never takes shallow.lock) so
             # the rollback cannot be defeated by lock contention.
-            still_walks = _git_stdout_lines(repo_root, ["rev-list", "--count", "HEAD"]) and \
-                _git_stdout_lines(repo_root, ["rev-list", "--count", "--all"]) and \
-                _git_stdout_lines(repo_root, ["rev-list", "--count", "--all", "--reflog"])
+            still_walks = (
+                _git_stdout_lines(repo_root, ["rev-list", "--count", "HEAD"])
+                and _git_stdout_lines(repo_root, ["rev-list", "--count", "--all"])
+                and _git_stdout_lines(
+                    repo_root, ["rev-list", "--count", "--all", "--reflog"]
+                )
+            )
             if not still_walks:
                 shallow_path.write_bytes(original)
                 logger.debug("shallow prune self-check failed; grafts restored")
                 return 0
-        logger.info("Pruned %d stale shallow graft(s) in %s", len(lines) - len(keep), repo_root)
+        logger.info(
+            "Pruned %d stale shallow graft(s) in %s", len(lines) - len(keep), repo_root
+        )
         return len(lines) - len(keep)
     except Exception:
         logger.debug("shallow graft prune failed for %s", repo_root, exc_info=True)
@@ -626,16 +756,28 @@ def prune_stale_shallow_grafts(repo_root: Path) -> int:
 def _partial_clone_filter(repo_root: Path, **run_kwargs) -> str | None:
     """The checkout's own ``remote.origin.partialclonefilter``, or None for a non-partial clone."""
     result = run_git(
-        ["git"], ["config", "--get", "remote.origin.promisor"],
-        cwd=str(repo_root), capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=30, **run_kwargs,
+        ["git"],
+        ["config", "--get", "remote.origin.promisor"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        **run_kwargs,
     )
     if result.returncode != 0 or result.stdout.strip().lower() != "true":
         return None
     configured = run_git(
-        ["git"], ["config", "--get", "remote.origin.partialclonefilter"],
-        cwd=str(repo_root), capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=30, **run_kwargs,
+        ["git"],
+        ["config", "--get", "remote.origin.partialclonefilter"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        **run_kwargs,
     )
     return configured.stdout.strip() or None
 
@@ -649,7 +791,9 @@ def heal_shallow_history(repo_root: Path, branch: str, **run_kwargs) -> bool:
     the commit graph first (900s budget), pulling ``branch`` along so the bounded fetch that
     follows is small. Returns whether the checkout was shallow; raises on fetch failure.
     """
-    return _shallow_file_path(repo_root) is not None and fetch_full_commit_graph(repo_root, branch, **run_kwargs)
+    return _shallow_file_path(repo_root) is not None and fetch_full_commit_graph(
+        repo_root, branch, **run_kwargs
+    )
 
 
 # A tags-only refresh is a ref listing plus a few small tag objects; when GitHub is slow it can
@@ -659,7 +803,9 @@ _TAG_REFRESH_TIMEOUT_SECONDS = 30
 _HISTORY_FETCH_TIMEOUT_SECONDS = 900
 
 
-def fetch_full_commit_graph(repo_root: Path, *extra_refspecs: str, **run_kwargs) -> bool:
+def fetch_full_commit_graph(
+    repo_root: Path, *extra_refspecs: str, **run_kwargs
+) -> bool:
     """Refresh release tags and fill shallow history before publishing identity.
 
     A full commit graph does not imply current tags, especially after a --no-tags
@@ -679,20 +825,44 @@ def fetch_full_commit_graph(repo_root: Path, *extra_refspecs: str, **run_kwargs)
     # Callers already inject creationflags via no_prompt_git_kwargs(); OR the
     # hide flag into the shared kwargs instead of passing the keyword twice
     # (TypeError: got multiple values) — the config probes below inherit it.
-    run_kwargs["creationflags"] = run_kwargs.get("creationflags", 0) | windows_hide_flags()
+    run_kwargs["creationflags"] = (
+        run_kwargs.get("creationflags", 0) | windows_hide_flags()
+    )
     fetch_filter = _partial_clone_filter(repo_root, **run_kwargs)
-    converts = fetch_filter is None and shallow and bool(_batch_missing_parents(
-        repo_root, shallow_path.read_text(encoding="utf-8-sig").split()))
+    converts = (
+        fetch_filter is None
+        and shallow
+        and bool(
+            _batch_missing_parents(
+                repo_root, shallow_path.read_text(encoding="utf-8-sig").split()
+            )
+        )
+    )
     if converts:
         fetch_filter = "blob:none"
     try:
         run_git(
-            ["git"], ["fetch", "--quiet", *(["--unshallow"] if shallow else []),
-             *([f"--filter={fetch_filter}"] if fetch_filter else []),
-             "--no-tags", "origin", "refs/tags/v*:refs/tags/v*", *extra_refspecs],
-            cwd=str(repo_root), check=True, capture_output=True, text=True,
-            encoding="utf-8", errors="replace",
-            timeout=_HISTORY_FETCH_TIMEOUT_SECONDS if shallow else _TAG_REFRESH_TIMEOUT_SECONDS, **run_kwargs,
+            ["git"],
+            [
+                "fetch",
+                "--quiet",
+                *(["--unshallow"] if shallow else []),
+                *([f"--filter={fetch_filter}"] if fetch_filter else []),
+                "--no-tags",
+                "origin",
+                "refs/tags/v*:refs/tags/v*",
+                *extra_refspecs,
+            ],
+            cwd=str(repo_root),
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_HISTORY_FETCH_TIMEOUT_SECONDS
+            if shallow
+            else _TAG_REFRESH_TIMEOUT_SECONDS,
+            **run_kwargs,
         )
     finally:
         # git writes the partial-clone config before it fetches, so a failed fetch converts too.
@@ -709,7 +879,9 @@ def fetch_full_commit_graph(repo_root: Path, *extra_refspecs: str, **run_kwargs)
 # lines vary by build (POSIX "died of signal 6", Windows "could not finish pack-objects to repack
 # local links", git 2.55 "fetch-pack: invalid index-pack output", #125138), so a new git wording
 # needs a new terminator here.
-_PACK_OBJECTS_CRASH_FINGERPRINT = "should_include_obj should only be called on existing objects"
+_PACK_OBJECTS_CRASH_FINGERPRINT = (
+    "should_include_obj should only be called on existing objects"
+)
 _PACK_OBJECTS_CRASH_TERMINATORS = (
     "pack-objects died of signal 6",
     "could not finish pack-objects to repack local links",
@@ -725,9 +897,12 @@ def is_partial_clone_pack_objects_crash(stderr: str) -> bool:
     return any(terminator in text for terminator in _PACK_OBJECTS_CRASH_TERMINATORS)
 
 
-def fetch_with_partial_clone_recovery(runner: Callable[..., subprocess.CompletedProcess],
-                                      git_cmd: list[str], fetch_args: list[str],
-                                      repo_root: Path) -> subprocess.CompletedProcess:
+def fetch_with_partial_clone_recovery(
+    runner: Callable[..., subprocess.CompletedProcess],
+    git_cmd: list[str],
+    fetch_args: list[str],
+    repo_root: Path,
+) -> subprocess.CompletedProcess:
     """Run a fetch; on the pack-objects BUG, mark the unmarked packs and retry it once.
 
     ``runner(git_cmd, args) -> CompletedProcess`` and ``git_cmd + fetch_args`` is the plain
@@ -737,7 +912,9 @@ def fetch_with_partial_clone_recovery(runner: Callable[..., subprocess.Completed
     registers promisor remotes additively, so the repo's own ``true`` still wins.)
     """
     result = runner(git_cmd, fetch_args)
-    if result.returncode == 0 or not is_partial_clone_pack_objects_crash(getattr(result, "stderr", "") or ""):
+    if result.returncode == 0 or not is_partial_clone_pack_objects_crash(
+        getattr(result, "stderr", "") or ""
+    ):
         return result
     mark_unmarked_packs_promisor(repo_root)
     logger.info("pack-objects crash on a partial clone; retrying the fetch")
@@ -760,28 +937,63 @@ def convert_treeless_checkout(repo_root: Path, **run_kwargs) -> bool:
     2.36 has no ``--refetch`` and is left as it is. Returns whether it converted; fetch failures
     raise subprocess errors.
     """
-    run_kwargs["creationflags"] = run_kwargs.get("creationflags", 0) | windows_hide_flags()
-    if _partial_clone_filter(repo_root, **run_kwargs) != "tree:0" or _git_version(**run_kwargs) < (2, 36):
+    run_kwargs["creationflags"] = (
+        run_kwargs.get("creationflags", 0) | windows_hide_flags()
+    )
+    if _partial_clone_filter(repo_root, **run_kwargs) != "tree:0" or _git_version(
+        **run_kwargs
+    ) < (2, 36):
         return False
     # A fetch spawns a detached gc/maintenance that would repack the whole refetch outside the
     # update's time limit; the per-command keys leave the user's own settings alone.
-    refetch = ["git", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "fetch", "--quiet", "--refetch",
-               "--filter=blob:none", "origin"]
-    fetch_kwargs = dict(cwd=str(repo_root), capture_output=True, text=True,
-                        encoding="utf-8", errors="replace", timeout=900, **run_kwargs)
+    refetch = [
+        "git",
+        "-c",
+        "gc.auto=0",
+        "-c",
+        "maintenance.auto=false",
+        "fetch",
+        "--quiet",
+        "--refetch",
+        "--filter=blob:none",
+        "origin",
+    ]
+    fetch_kwargs = dict(
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=900,
+        **run_kwargs,
+    )
     subprocess.run([*refetch, "--tags"], **fetch_kwargs)  # noqa: PLW1510 -- forwarding wrapper: callers pass subprocess kwargs via **run_kwargs; an explicit check=False would raise TypeError
     if not _history_trees_complete(repo_root, **run_kwargs):
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(repo_root), check=True,
-                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
-                              **run_kwargs).stdout.strip()
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            **run_kwargs,
+        ).stdout.strip()
         subprocess.run([*refetch, head], check=True, **fetch_kwargs)
         if not _history_trees_complete(repo_root, **run_kwargs):
-            raise subprocess.CalledProcessError(1, refetch, stderr="the checked-out history is still missing trees")
+            raise subprocess.CalledProcessError(
+                1, refetch, stderr="the checked-out history is still missing trees"
+            )
     # A refetch into an existing partial clone leaves its configured filter alone; record the
     # new one only now, so a failed or interrupted refetch is retried by the next update.
     subprocess.run(
         ["git", "config", "remote.origin.partialclonefilter", "blob:none"],
-        cwd=str(repo_root), check=True, capture_output=True, timeout=30, **run_kwargs,
+        cwd=str(repo_root),
+        check=True,
+        capture_output=True,
+        timeout=30,
+        **run_kwargs,
     )
     return True
 
@@ -799,30 +1011,60 @@ def convert_treeless_checkout_first(repo_root: Path) -> None:
 
     try:
         if convert_treeless_checkout(repo_root, **no_prompt_git_kwargs()):
-            print("  ✓ Fetched this checkout's directory history once; updates stop re-downloading it",
-                  flush=True)
+            print(
+                "  ✓ Fetched this checkout's directory history once; updates stop re-downloading it",
+                flush=True,
+            )
     except (OSError, subprocess.SubprocessError) as exc:
-        detail = (getattr(exc, "stderr", None) or str(exc)).strip().splitlines()[-1:] or [type(exc).__name__]
-        print(f"  ⚠ Could not fetch this checkout's directory history ({detail[0]}); retrying next update",
-              flush=True)
+        detail = (getattr(exc, "stderr", None) or str(exc)).strip().splitlines()[
+            -1:
+        ] or [type(exc).__name__]
+        print(
+            f"  ⚠ Could not fetch this checkout's directory history ({detail[0]}); retrying next update",
+            flush=True,
+        )
 
 
 def _git_version(**run_kwargs) -> tuple:
-    out = subprocess.run(["git", "--version"], capture_output=True, text=True, encoding="utf-8",  # noqa: PLW1510 -- forwarding wrapper: **run_kwargs may carry check
-                         errors="replace", timeout=30, **run_kwargs).stdout
+    out = subprocess.run(  # noqa: PLW1510 -- forwarding wrapper: **run_kwargs may carry check
+        ["git", "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+        **run_kwargs,
+    ).stdout
     match = re.search(r"(\d+)\.(\d+)", out)
     return (int(match[1]), int(match[2])) if match else (0, 0)
 
 
 def _history_trees_complete(repo_root: Path, **run_kwargs) -> bool:
     """Whether every tree in HEAD's history is local, checked without fetching (~3 s for this repo)."""
-    env = dict(run_kwargs.pop("env", None) or noninteractive_git_env(), GIT_NO_LAZY_FETCH="1")
-    walk = subprocess.run(  # noqa: PLW1510 -- forwarding wrapper: **run_kwargs may carry check
-        ["git", "rev-list", "--objects", "--filter=blob:none", "--missing=print", "HEAD"],
-        cwd=str(repo_root), capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=300, env=env, **run_kwargs,
+    env = dict(
+        run_kwargs.pop("env", None) or noninteractive_git_env(), GIT_NO_LAZY_FETCH="1"
     )
-    return walk.returncode == 0 and not any(line.startswith("?") for line in walk.stdout.splitlines())
+    walk = subprocess.run(  # noqa: PLW1510 -- forwarding wrapper: **run_kwargs may carry check
+        [
+            "git",
+            "rev-list",
+            "--objects",
+            "--filter=blob:none",
+            "--missing=print",
+            "HEAD",
+        ],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+        env=env,
+        **run_kwargs,
+    )
+    return walk.returncode == 0 and not any(
+        line.startswith("?") for line in walk.stdout.splitlines()
+    )
 
 
 def settle_partial_clone_maintenance(repo_root: Path) -> None:
@@ -831,7 +1073,12 @@ def settle_partial_clone_maintenance(repo_root: Path) -> None:
     Runs on every update so checkouts that predate the installer change converge. Never raises.
     """
     try:
-        if _partial_clone_filter(repo_root, creationflags=windows_hide_flags()) is not None:
+        if (
+            _partial_clone_filter(repo_root, creationflags=windows_hide_flags())
+            is not None
+        ):
             disable_tree0_auto_maintenance(repo_root)
     except Exception:
-        logger.debug("partial-clone maintenance settings failed for %s", repo_root, exc_info=True)
+        logger.debug(
+            "partial-clone maintenance settings failed for %s", repo_root, exc_info=True
+        )

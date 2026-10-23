@@ -8,6 +8,7 @@ import concurrent.futures
 import threading
 import time
 
+
 class TestRunningJobGuard:
     """_running_job_ids prevents double-dispatch of active jobs."""
 
@@ -36,7 +37,11 @@ class TestRunningJobGuard:
         dispatched = []
         monkeypatch.setattr(sched, "get_due_jobs", lambda: [job])
         monkeypatch.setattr(sched, "claim_job_for_fire", lambda *_a, **_kw: True)
-        monkeypatch.setattr(sched, "run_job", lambda j, **_kw: dispatched.append(j["id"]) or (True, "out", "resp", None))
+        monkeypatch.setattr(
+            sched,
+            "run_job",
+            lambda j, **_kw: dispatched.append(j["id"]) or (True, "out", "resp", None),
+        )
         monkeypatch.setattr(sched, "save_job_output", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)
@@ -72,7 +77,9 @@ class TestRunningJobGuard:
                 return future
 
         monkeypatch.setattr(sched, "get_due_jobs", lambda: [job])
-        monkeypatch.setattr(sched, "_get_parallel_pool", lambda _workers: DeferredPool())
+        monkeypatch.setattr(
+            sched, "_get_parallel_pool", lambda _workers: DeferredPool()
+        )
         monkeypatch.setattr(
             sched,
             "create_execution",
@@ -81,8 +88,10 @@ class TestRunningJobGuard:
         monkeypatch.setattr(
             sched,
             "claim_job_for_fire",
-            lambda job_id, **kwargs: claim_calls.append((job_id, kwargs))
-            or {**job, "fire_claim": {"by": "worker-owner", "at": "now"}},
+            lambda job_id, **kwargs: (
+                claim_calls.append((job_id, kwargs))
+                or {**job, "fire_claim": {"by": "worker-owner", "at": "now"}}
+            ),
         )
         monkeypatch.setattr(sched, "run_one_job", lambda *_a, **_kw: True)
 
@@ -97,7 +106,9 @@ class TestRunningJobGuard:
         assert claim_calls == [("queued-job", {"return_job": True})]
         assert sched._inflight_key("queued-job") not in sched._running_job_ids
 
-    def test_create_execution_failure_does_not_wedge_running_set(self, tmp_path, monkeypatch):
+    def test_create_execution_failure_does_not_wedge_running_set(
+        self, tmp_path, monkeypatch
+    ):
         """create_execution failures clear the running lock and still allow next jobs."""
         import cron.scheduler as sched
 
@@ -134,7 +145,11 @@ class TestRunningJobGuard:
         monkeypatch.setattr(sched, "get_due_jobs", lambda: [failing_job, healthy_job])
         monkeypatch.setattr(sched, "advance_next_runs", lambda *_a, **_kw: 0)
         monkeypatch.setattr(sched, "create_execution", create_execution_side_effect)
-        monkeypatch.setattr(sched, "run_job", lambda j, **_kw: called.append(j["id"]) or (True, "out", "resp", None))
+        monkeypatch.setattr(
+            sched,
+            "run_job",
+            lambda j, **_kw: called.append(j["id"]) or (True, "out", "resp", None),
+        )
         monkeypatch.setattr(sched, "save_job_output", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)
@@ -143,11 +158,11 @@ class TestRunningJobGuard:
         monkeypatch.setattr(
             sched,
             "claim_job_for_fire",
-            lambda job_id, **_kw: dict(
-                healthy_job, fire_claim={"by": "test-owner", "at": "now"}
-            )
-            if job_id == "healthy-job"
-            else None,
+            lambda job_id, **_kw: (
+                dict(healthy_job, fire_claim={"by": "test-owner", "at": "now"})
+                if job_id == "healthy-job"
+                else None
+            ),
         )
         monkeypatch.setattr(sched, "mark_execution_running", lambda *_a, **_kw: {})
         monkeypatch.setattr(sched, "heartbeat_fire_claim", lambda *_a, **_kw: True)
@@ -161,6 +176,7 @@ class TestRunningJobGuard:
 
         sched._shutdown_parallel_pool()
 
+
 class TestSyncMode:
     """tick() blocks by default (sync=True); tick(sync=False) returns immediately."""
 
@@ -173,15 +189,23 @@ class TestSyncMode:
         sched._running_job_ids.clear()
 
         jobs = [
-            {"id": f"job-{i}", "name": f"Job {i}", "prompt": "test",
-             "schedule": "every 5m", "enabled": True,
-             "next_run_at": "2020-01-01T00:00:00", "deliver": "local"}
+            {
+                "id": f"job-{i}",
+                "name": f"Job {i}",
+                "prompt": "test",
+                "schedule": "every 5m",
+                "enabled": True,
+                "next_run_at": "2020-01-01T00:00:00",
+                "deliver": "local",
+            }
             for i in range(3)
         ]
 
         monkeypatch.setattr(sched, "get_due_jobs", lambda: jobs)
         monkeypatch.setattr(sched, "claim_job_for_fire", lambda *_a, **_kw: True)
-        monkeypatch.setattr(sched, "run_job", lambda j, **_kw: (True, "out", "resp", None))
+        monkeypatch.setattr(
+            sched, "run_job", lambda j, **_kw: (True, "out", "resp", None)
+        )
         monkeypatch.setattr(sched, "save_job_output", lambda *_a, **_kw: "/tmp/out")
         monkeypatch.setattr(sched, "mark_job_run", lambda *_a, **_kw: None)
         monkeypatch.setattr(sched, "_deliver_result", lambda *_a, **_kw: None)

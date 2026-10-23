@@ -16,7 +16,9 @@ def historical_main(no_external_work):
     return main
 
 
-def test_historical_main_data_and_skipped_probes_preserve_caller_shapes(historical_main, tmp_path):
+def test_historical_main_data_and_skipped_probes_preserve_caller_shapes(
+    historical_main, tmp_path
+):
     main = historical_main
     from clawk_cli import main_web_build
 
@@ -49,7 +51,9 @@ def test_historical_main_data_and_skipped_probes_preserve_caller_shapes(historic
     assert set(tmp_path.rglob("*")) == before_files
 
 
-def test_historical_marker_cleanup_preserves_path_and_is_idempotent(historical_main, tmp_path, monkeypatch):
+def test_historical_marker_cleanup_preserves_path_and_is_idempotent(
+    historical_main, tmp_path, monkeypatch
+):
     # The retired writer now hands off. Cleanup of an existing legacy marker
     # remains supported; PM's recovery lifecycle is covered in test_early_recovery.
     monkeypatch.setattr(historical_main, "PROJECT_ROOT", tmp_path)

@@ -38,37 +38,111 @@ _LAUNCHER = Path(__file__).with_name("launcher.sh")
 _DISPLAY_MIN, _DISPLAY_MAX = 20, 89
 
 # Binaries the launcher execs; the package hint is per distro family.
-REQUIRED_BINARIES = ("Xvnc", "xfwm4", "xfce4-panel", "xfdesktop", "xfsettingsd", "dbus-run-session",
-                     "xauth", "xdpyinfo", "setxkbmap", "xprop")
+REQUIRED_BINARIES = (
+    "Xvnc",
+    "xfwm4",
+    "xfce4-panel",
+    "xfdesktop",
+    "xfsettingsd",
+    "dbus-run-session",
+    "xauth",
+    "xdpyinfo",
+    "setxkbmap",
+    "xprop",
+)
 
 # Which package in each distro list ships each required binary. Fedora retired the xorg-x11-utils /
 # xorg-x11-server-utils umbrellas (per-binary packages since F35) and dnf5 refuses the whole transaction on
 # one unknown name, so every binary must map to a package that still resolves; the test suite checks that
 # each mapped package is in PACKAGES for its manager.
 BINARY_PACKAGES = {
-    "apt": {"Xvnc": "tigervnc-standalone-server", "xfwm4": "xfwm4", "xfce4-panel": "xfce4-panel",
-            "xfdesktop": "xfdesktop4", "xfsettingsd": "xfce4-settings", "dbus-run-session": "dbus-x11",
-            "xauth": "xauth", "xdpyinfo": "x11-utils", "setxkbmap": "x11-xkb-utils", "xprop": "x11-utils"},
+    "apt": {
+        "Xvnc": "tigervnc-standalone-server",
+        "xfwm4": "xfwm4",
+        "xfce4-panel": "xfce4-panel",
+        "xfdesktop": "xfdesktop4",
+        "xfsettingsd": "xfce4-settings",
+        "dbus-run-session": "dbus-x11",
+        "xauth": "xauth",
+        "xdpyinfo": "x11-utils",
+        "setxkbmap": "x11-xkb-utils",
+        "xprop": "x11-utils",
+    },
     # tigervnc-x11-server is the real package (tigervnc-server-minimal is only a Provides on it); dbus-run-session
     # is in dbus-daemon (dbus-x11 ships dbus-launch only).
-    "dnf": {"Xvnc": "tigervnc-x11-server", "xfwm4": "xfwm4", "xfce4-panel": "xfce4-panel",
-            "xfdesktop": "xfdesktop", "xfsettingsd": "xfce4-settings", "dbus-run-session": "dbus-daemon",
-            "xauth": "xorg-x11-xauth", "xdpyinfo": "xdpyinfo", "setxkbmap": "setxkbmap", "xprop": "xprop"},
-    "pacman": {"Xvnc": "tigervnc", "xfwm4": "xfwm4", "xfce4-panel": "xfce4-panel", "xfdesktop": "xfdesktop",
-               "xfsettingsd": "xfce4-settings", "dbus-run-session": "dbus",
-               "xauth": "xorg-xauth", "xdpyinfo": "xorg-xdpyinfo", "setxkbmap": "xorg-setxkbmap", "xprop": "xorg-xprop"},
+    "dnf": {
+        "Xvnc": "tigervnc-x11-server",
+        "xfwm4": "xfwm4",
+        "xfce4-panel": "xfce4-panel",
+        "xfdesktop": "xfdesktop",
+        "xfsettingsd": "xfce4-settings",
+        "dbus-run-session": "dbus-daemon",
+        "xauth": "xorg-x11-xauth",
+        "xdpyinfo": "xdpyinfo",
+        "setxkbmap": "setxkbmap",
+        "xprop": "xprop",
+    },
+    "pacman": {
+        "Xvnc": "tigervnc",
+        "xfwm4": "xfwm4",
+        "xfce4-panel": "xfce4-panel",
+        "xfdesktop": "xfdesktop",
+        "xfsettingsd": "xfce4-settings",
+        "dbus-run-session": "dbus",
+        "xauth": "xorg-xauth",
+        "xdpyinfo": "xorg-xdpyinfo",
+        "setxkbmap": "xorg-setxkbmap",
+        "xprop": "xorg-xprop",
+    },
 }
 
 PACKAGES = {
-    "apt": ["tigervnc-standalone-server", "xfce4-panel", "xfwm4", "xfdesktop4", "xfce4-settings",
-            "xfce4-terminal", "dbus-x11", "x11-xserver-utils", "x11-utils", "x11-xkb-utils", "xauth",
-            "fonts-dejavu-core"],
-    "dnf": ["tigervnc-x11-server", "xfce4-panel", "xfwm4", "xfdesktop", "xfce4-settings",
-            "xfce4-terminal", "dbus-daemon", "xsetroot", "xset", "xdpyinfo", "xprop", "xorg-x11-xauth", "setxkbmap",
-            "dejavu-sans-fonts"],
-    "pacman": ["tigervnc", "xfce4-panel", "xfwm4", "xfdesktop", "xfce4-settings", "xfce4-terminal", "dbus",
-               "xorg-xsetroot", "xorg-xset", "xorg-xdpyinfo", "xorg-xprop", "xorg-xauth", "xorg-setxkbmap",
-               "ttf-dejavu"],
+    "apt": [
+        "tigervnc-standalone-server",
+        "xfce4-panel",
+        "xfwm4",
+        "xfdesktop4",
+        "xfce4-settings",
+        "xfce4-terminal",
+        "dbus-x11",
+        "x11-xserver-utils",
+        "x11-utils",
+        "x11-xkb-utils",
+        "xauth",
+        "fonts-dejavu-core",
+    ],
+    "dnf": [
+        "tigervnc-x11-server",
+        "xfce4-panel",
+        "xfwm4",
+        "xfdesktop",
+        "xfce4-settings",
+        "xfce4-terminal",
+        "dbus-daemon",
+        "xsetroot",
+        "xset",
+        "xdpyinfo",
+        "xprop",
+        "xorg-x11-xauth",
+        "setxkbmap",
+        "dejavu-sans-fonts",
+    ],
+    "pacman": [
+        "tigervnc",
+        "xfce4-panel",
+        "xfwm4",
+        "xfdesktop",
+        "xfce4-settings",
+        "xfce4-terminal",
+        "dbus",
+        "xorg-xsetroot",
+        "xorg-xset",
+        "xorg-xdpyinfo",
+        "xorg-xprop",
+        "xorg-xauth",
+        "xorg-setxkbmap",
+        "ttf-dejavu",
+    ],
 }
 
 
@@ -141,12 +215,18 @@ class DesktopStatus:
     socket: Optional[str]
     geometry: str
     install_command: Optional[str]
-    browser: Optional[str]  # headed Chromium the dock's Browser icon and agent-browser share; None = no headed browser
-    blocker: Optional[str] = None  # why start() would refuse right now (memory); None = may start
+    browser: Optional[
+        str
+    ]  # headed Chromium the dock's Browser icon and agent-browser share; None = no headed browser
+    blocker: Optional[str] = (
+        None  # why start() would refuse right now (memory); None = may start
+    )
     memory_available_mb: Optional[int] = None
     memory_limit_mb: Optional[int] = None
     placement: str = "gateway"  # "gateway" | "terminal:<backend>" — where Xvnc runs
-    image_switch: Optional[dict[str, object]] = None  # pending default-image switch the pane can approve
+    image_switch: Optional[dict[str, object]] = (
+        None  # pending default-image switch the pane can approve
+    )
 
     def as_dict(self) -> dict[str, object]:
         return dict(self.__dict__)
@@ -163,6 +243,7 @@ def _pid_alive(pid: int) -> bool:
     """A zombie is dead for our purposes: a SIGKILLed launcher stays a zombie in the gateway until the next
     Popen reaps it, and reporting it as running would hide its orphaned X server behind a live status."""
     import psutil
+
     try:
         return psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
     except psutil.Error:
@@ -171,6 +252,7 @@ def _pid_alive(pid: int) -> bool:
 
 def _create_time(pid: int) -> Optional[float]:
     import psutil
+
     try:
         return psutil.Process(pid).create_time()
     except (psutil.Error, OverflowError, ValueError):
@@ -190,7 +272,11 @@ def _launcher_pid() -> Optional[int]:
     except ValueError:
         return None
     actual = _create_time(pid)
-    return pid if actual is not None and abs(actual - born) < 0.01 and _pid_alive(pid) else None
+    return (
+        pid
+        if actual is not None and abs(actual - born) < 0.01 and _pid_alive(pid)
+        else None
+    )
 
 
 def _recorded_launcher_pid() -> Optional[int]:
@@ -199,13 +285,19 @@ def _recorded_launcher_pid() -> Optional[int]:
     return int(pid_s) if pid_s.isdigit() and born_s else None
 
 
-_X_LOCK_DIR = Path("/tmp")  # no-tmp: ok — X servers write .X<n>-lock here by protocol (tests point it at a scratch dir)
-_X_UNIX_TABLE = Path("/proc/net/unix")  # the kernel's list of bound Unix sockets (tests point it at a fixture)
+_X_LOCK_DIR = Path(
+    "/tmp"
+)  # no-tmp: ok — X servers write .X<n>-lock here by protocol (tests point it at a scratch dir)
+_X_UNIX_TABLE = Path(
+    "/proc/net/unix"
+)  # the kernel's list of bound Unix sockets (tests point it at a fixture)
 
 
 def _x_lock_pid(num: int) -> Optional[int]:
     try:
-        return int((_X_LOCK_DIR / f".X{num}-lock").read_text(encoding="utf-8-sig").strip())
+        return int(
+            (_X_LOCK_DIR / f".X{num}-lock").read_text(encoding="utf-8-sig").strip()
+        )
     except (OSError, ValueError):
         return None
 
@@ -219,7 +311,11 @@ def _x_socket_bound(num: int) -> bool:
     except OSError:
         return False
     # no-tmp: ok — detects the X server's display socket at the path the X11 protocol fixes
-    return any(line.split()[-1].lstrip("@") == f"/tmp/.X11-unix/X{num}" for line in lines if line.strip())
+    return any(
+        line.split()[-1].lstrip("@") == f"/tmp/.X11-unix/X{num}"
+        for line in lines
+        if line.strip()
+    )
 
 
 def _display_in_use(num: int) -> bool:
@@ -241,24 +337,40 @@ def _reap_orphaned_server(sd: Path) -> bool:
     import psutil
 
     def _binds_our_socket(cmdline: list) -> bool:
-        return "Xvnc" in Path(cmdline[0] if cmdline else "").name and str(sd / "rfb.sock") in cmdline
+        return (
+            "Xvnc" in Path(cmdline[0] if cmdline else "").name
+            and str(sd / "rfb.sock") in cmdline
+        )
 
     recorded = _read(sd / "display")
     pid = _x_lock_pid(int(recorded)) if recorded and recorded.isdigit() else None
     if pid is None or not _pid_alive(pid):
-        pid = next((p.pid for p in psutil.process_iter(["cmdline"]) if _binds_our_socket(p.info["cmdline"] or [])), None)
+        pid = next(
+            (
+                p.pid
+                for p in psutil.process_iter(["cmdline"])
+                if _binds_our_socket(p.info["cmdline"] or [])
+            ),
+            None,
+        )
         if pid is None:
             return False
     launcher = _recorded_launcher_pid()
     try:
-        pgid = os.getpgid(pid)  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
+        pgid = os.getpgid(
+            pid
+        )  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
         cmdline = psutil.Process(pid).cmdline()
     except (ProcessLookupError, psutil.Error):
         return False
     if pgid != launcher and not _binds_our_socket(cmdline):
         return False  # somebody else's server took the number after we died; never touch it
-    logger.warning("Bot Desktop launcher %s is gone but its X server (pid %s) survived on :%s; reaping",
-                   launcher, pid, recorded or "?")
+    logger.warning(
+        "Bot Desktop launcher %s is gone but its X server (pid %s) survived on :%s; reaping",
+        launcher,
+        pid,
+        recorded or "?",
+    )
     _kill_group_then_wait(pgid if pgid == launcher else None, pid)
     if recorded:
         (_X_LOCK_DIR / f".X{recorded}-lock").unlink(missing_ok=True)
@@ -269,19 +381,25 @@ def _reap_orphaned_server(sd: Path) -> bool:
 
 def _kill_group_then_wait(pgid: Optional[int], pid: int, grace: float = 2.0) -> None:
     """SIGTERM the group (or the lone pid), SIGKILL whatever is still there after ``grace``."""
+
     def _signal(sig: int) -> None:
         with contextlib.suppress(ProcessLookupError, PermissionError):
             if pgid is not None:
-                os.killpg(pgid, sig)  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
+                os.killpg(
+                    pgid, sig
+                )  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
             else:
                 os.kill(pid, sig)
+
     def _anything_left() -> bool:
         # The leader dying first is the common case (bash exits on TERM, Xvnc traps it); the group is
         # done only when killpg(0) finds nobody, else a TERM-ignoring descendant keeps the display.
         if pgid is None:
             return _pid_alive(pid)
         try:
-            os.killpg(pgid, 0)  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
+            os.killpg(
+                pgid, 0
+            )  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
         except ProcessLookupError:
             return False
         except PermissionError:
@@ -292,7 +410,9 @@ def _kill_group_then_wait(pgid: Optional[int], pid: int, grace: float = 2.0) -> 
         # The launcher was Popen'd by whichever gateway started it; a later gateway that stops it holds
         # no Popen, so the dead leader would sit as a zombie in our table (and count as "left").
         with contextlib.suppress(ChildProcessError, OSError):
-            os.waitpid(pid, os.WNOHANG)  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
+            os.waitpid(
+                pid, os.WNOHANG
+            )  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
 
     _signal(signal.SIGTERM)
     deadline = time.monotonic() + grace
@@ -301,7 +421,9 @@ def _kill_group_then_wait(pgid: Optional[int], pid: int, grace: float = 2.0) -> 
         if not _anything_left():
             return
         time.sleep(0.05)
-    _signal(signal.SIGKILL)  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
+    _signal(
+        signal.SIGKILL
+    )  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start/stop)
     time.sleep(0.1)
     _reap_if_ours()
 
@@ -309,13 +431,19 @@ def _kill_group_then_wait(pgid: Optional[int], pid: int, grace: float = 2.0) -> 
 # Host-wide (every profile allocates from one band), so it lives outside any profile home. A predictable
 # name must not be squattable: XDG_RUNTIME_DIR is the boundary — 0700 from logind, or from
 # docker/stage2-hook.sh in containers, which have none.
-_ALLOC_LOCK = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "clawk-bot-desktop-alloc.lock"
+_ALLOC_LOCK = (
+    Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+    / "clawk-bot-desktop-alloc.lock"
+)
 
 
 @contextlib.contextmanager
 def _flocked(path: Path):
     import fcntl  # windows-footgun: ok — Linux-only runtime (is_supported_host gates start)
-    with open(path, "a+", encoding="utf-8") as fh:  # windows-footgun: ok — Linux-only runtime
+
+    with open(
+        path, "a+", encoding="utf-8"
+    ) as fh:  # windows-footgun: ok — Linux-only runtime
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
         try:
             yield fh
@@ -350,8 +478,11 @@ def desktop_env(base_env: Optional[dict[str, str]] = None) -> dict[str, str]:
     if published:
         touch_activity()  # a browser / cua-driver spawn is the agent using its screen
         env.update(published)
-        env.pop("WAYLAND_DISPLAY", None)  # X11 desktop; a leaked Wayland socket flips GTK/Chromium backends
+        env.pop(
+            "WAYLAND_DISPLAY", None
+        )  # X11 desktop; a leaked Wayland socket flips GTK/Chromium backends
         from tools.bot_desktop.browser import env_for_agent
+
         env_for_agent(env)  # same binary + user-data-dir as the dock's Browser icon
     return env
 
@@ -407,6 +538,7 @@ def _should_auto_start(env: dict[str, str]) -> bool:
     if missing_binaries():
         return False
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("bot_desktop") or {}
     return bool(cfg.get("auto_start", False))
 
@@ -441,6 +573,7 @@ def idle_seconds() -> Optional[float]:
 
 def idle_stop_seconds() -> float:
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("bot_desktop") or {}
     try:
         minutes = float(cfg.get("idle_stop_minutes", DEFAULT_IDLE_STOP_MINUTES))
@@ -459,9 +592,14 @@ def stop_if_idle() -> bool:
     if idle is None or idle < limit:
         return False
     from tools.bot_desktop import lease as _bd_lease
+
     if _bd_lease.get().holder == _bd_lease.HUMAN:
         return False
-    logger.info("Bot Desktop for profile %s idle for %.0f min; stopping", _profile_name(), idle / 60)
+    logger.info(
+        "Bot Desktop for profile %s idle for %.0f min; stopping",
+        _profile_name(),
+        idle / 60,
+    )
     return stop()
 
 
@@ -472,6 +610,7 @@ def published_env() -> dict[str, str]:
     must not load config (that initializes CLAWK_HOME). A sandbox-hosted screen leaves a host-side marker at
     start; only its presence routes to the sandbox probe."""
     from tools.bot_desktop import sandbox_host
+
     if sandbox_host._read_marker():
         return _sandbox_published_env()
     if _launcher_pid() is None:
@@ -491,6 +630,7 @@ def rfb_socket_path() -> Optional[Path]:
     """Host path of the RFB socket; None when down OR when the screen lives in a sandbox (use
     :func:`open_rfb_stream` there: the socket is not on this filesystem)."""
     from tools.bot_desktop import sandbox_host
+
     if sandbox_host._read_marker():
         return None
     sock = state_dir() / "rfb.sock"
@@ -510,6 +650,7 @@ def sandbox_screen_running() -> bool:
     dead container; an unregistered-but-alive one is re-attached by ``_sandbox_env(create=True)`` at the
     next spawn (the terminal planner reuses the persisted container by label)."""
     from tools.bot_desktop import sandbox_host
+
     marker = sandbox_host._read_marker()
     if not marker:
         return False
@@ -526,6 +667,7 @@ def _owned_sandbox_env():
     sandbox is still alive; None when there is no marker or its sandbox is gone. Never builds a sandbox for
     a screen that is not there."""
     from tools.bot_desktop import sandbox_host
+
     marker = sandbox_host._read_marker()
     if not marker:
         return None
@@ -544,6 +686,7 @@ def is_running() -> bool:
 def open_rfb_stream() -> subprocess.Popen:
     """Popen whose stdin/stdout carry RFB bytes for a sandbox-hosted screen (``in_sandbox()`` only)."""
     from tools.bot_desktop import sandbox_host
+
     env = _sandbox_env(create=False)
     if env is None:
         raise RuntimeError("the sandbox hosting this screen is not running")
@@ -552,6 +695,7 @@ def open_rfb_stream() -> subprocess.Popen:
 
 def geometry() -> str:
     from clawk_cli.config import load_config_readonly
+
     cfg = load_config_readonly().get("bot_desktop") or {}
     return str(cfg.get("geometry") or "1440x900")
 
@@ -560,16 +704,23 @@ def status(profile: Optional[str] = None) -> DesktopStatus:
     from tools.bot_desktop import browser as _bd_browser
     from tools.bot_desktop import resources
     from tools.bot_desktop import sandbox_host
+
     where = placement.resolve()
     if where.where == placement.TERMINAL or sandbox_host._read_marker():
         # A screen already running inside a sandbox is reported (and stoppable) even after the placement
         # setting moved: the recorded owner wins over the current policy until it is stopped.
         return _sandbox_status(profile, where)
-    missing: list[str] = missing_binaries() if is_supported_host() else list(REQUIRED_BINARIES)
+    missing: list[str] = (
+        missing_binaries() if is_supported_host() else list(REQUIRED_BINARIES)
+    )
     pid = _launcher_pid()
     env = published_env()
     running = pid is not None and bool(env.get("DISPLAY"))
-    mem = resources.memory_info() if is_supported_host() else resources.MemoryInfo(None, None)
+    mem = (
+        resources.memory_info()
+        if is_supported_host()
+        else resources.MemoryInfo(None, None)
+    )
     return DesktopStatus(
         profile=profile or _profile_name(),
         supported=is_supported_host(),
@@ -583,7 +734,9 @@ def status(profile: Optional[str] = None) -> DesktopStatus:
         install_command=install_command() if missing else None,
         browser=_bd_browser.executable() if is_supported_host() else None,
         # A running screen is never "blocked": the check guards the allocation, not the session.
-        blocker=None if running or missing or not is_supported_host() else resources.memory_blocker(mem),
+        blocker=None
+        if running or missing or not is_supported_host()
+        else resources.memory_blocker(mem),
         memory_available_mb=mem.available_mb,
         memory_limit_mb=mem.limit_mb,
     )
@@ -593,9 +746,14 @@ def _sandbox_status(profile: Optional[str], where) -> DesktopStatus:
     """Status of a sandbox-placed screen. Package presence is only known once the sandbox exists; before
     that the pane shows "installed" with the image hint carried in ``install_command`` so Start can explain."""
     from tools.bot_desktop import sandbox_host
+
     env = _owned_sandbox_env() or _sandbox_env(create=False)
     missing = sandbox_host.missing_binaries(env) if env is not None else []
-    published = sandbox_host.published_env(env, profile or _profile_name()) if env is not None else {}
+    published = (
+        sandbox_host.published_env(env, profile or _profile_name())
+        if env is not None
+        else {}
+    )
     running = bool(published.get("DISPLAY"))
     # No install_command: the pane's Install button runs apt on the HOST, which is the wrong machine here.
     # A sandbox missing the stack is a blocker (shown in place of Start) naming the image that has it.
@@ -604,20 +762,29 @@ def _sandbox_status(profile: Optional[str], where) -> DesktopStatus:
     if missing:
         advice = sandbox_host.plugin_image_advice(where.backend) or (
             f"use {sandbox_host.SANDBOX_IMAGE_HINT} as terminal.{where.backend}_image (the default sandbox base "
-            f"plus the desktop stack)")
-        blocker = (f"The terminal backend's sandbox image lacks {', '.join(missing)}. {advice[0].upper()}{advice[1:]}, "
-                   f"or set bot_desktop.placement: gateway.")
+            f"plus the desktop stack)"
+        )
+        blocker = (
+            f"The terminal backend's sandbox image lacks {', '.join(missing)}. {advice[0].upper()}{advice[1:]}, "
+            f"or set bot_desktop.placement: gateway."
+        )
         if where.backend == "docker":
             # The usual reason on an upgraded install: the persisted container predates the default
             # flip and was kept on purpose. The pane offers the switch instead of a config hint.
             from clawk_cli.sandbox_image_switch import pending
+
             sw = pending()
             if sw is not None:
-                image_switch = {"current_image": sw.current_image, "target_image": sw.target_image,
-                                "containers": len(sw.containers)}
-                blocker = (f"Your sandbox container still runs {sw.current_image}, which has no desktop. "
-                           f"Switch it to {sw.target_image}: files in /root and /workspace stay, packages "
-                           f"installed inside the container are reinstalled on demand.")
+                image_switch = {
+                    "current_image": sw.current_image,
+                    "target_image": sw.target_image,
+                    "containers": len(sw.containers),
+                }
+                blocker = (
+                    f"Your sandbox container still runs {sw.current_image}, which has no desktop. "
+                    f"Switch it to {sw.target_image}: files in /root and /workspace stay, packages "
+                    f"installed inside the container are reinstalled on demand."
+                )
     return DesktopStatus(
         profile=profile or _profile_name(),
         supported=True,
@@ -641,6 +808,7 @@ def _sandbox_status(profile: Optional[str], where) -> DesktopStatus:
 def _profile_name() -> str:
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         return get_active_profile_name() or "default"
     except Exception:
         return "default"
@@ -679,12 +847,14 @@ def start(*, wait_seconds: float = 15.0) -> DesktopStatus:
         if package_manager() is None:
             raise RuntimeError(
                 f"{need}, and no supported package manager (apt/dnf/pacman) is available to install them. "
-                "Install TigerVNC (Xvnc) and the Xfce core components with this distro's own tooling.")
+                "Install TigerVNC (Xvnc) and the Xfce core components with this distro's own tooling."
+            )
         if not installable():
             raise RuntimeError(
                 f"{need}, and this host cannot install them: the process is unprivileged and there is no "
                 "sudo. On the published Docker image the packages have to be baked in, so this needs a "
-                "newer image rather than an install.")
+                "newer image rather than an install."
+            )
         raise RuntimeError(f"{need}. Install: {install_command()}")
     sd = state_dir()
     sd.mkdir(parents=True, exist_ok=True)
@@ -693,14 +863,20 @@ def start(*, wait_seconds: float = 15.0) -> DesktopStatus:
         if _launcher_pid() is not None and published_env().get("DISPLAY"):
             return status()
         from tools.bot_desktop import resources
+
         floor = resources.min_free_mb()
         mem = resources.memory_info()
         if (blocker := resources.memory_blocker(mem, need=floor)) is not None:
             raise RuntimeError(blocker)
-        if mem.available_mb is not None and mem.available_mb < resources.tight_headroom_mb(floor):
+        if (
+            mem.available_mb is not None
+            and mem.available_mb < resources.tight_headroom_mb(floor)
+        ):
             logger.warning(
                 "Bot Desktop starting with %d MB available; a browser with a few pages open can use most "
-                "of that.", mem.available_mb)
+                "of that.",
+                mem.available_mb,
+            )
         if _launcher_pid() is None:
             _reap_orphaned_server(sd)
         _ALLOC_LOCK.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -725,20 +901,30 @@ def _spawn_and_wait(sd: Path, wait_seconds: float) -> DesktopStatus:
         # The agent drives this desktop and its dock opens a terminal, so it starts from the
         # scrubbed child env like any other agent child, keeping the user's HOME.
         from tools.environments.local import served_profile_child_env
+
         child_env = served_profile_child_env(inherit_credentials=False)
         child_env["HOME"] = child_env["CLAWK_REAL_HOME"]
-        for key in ("DISPLAY", "XAUTHORITY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "SESSION_MANAGER"):
+        for key in (
+            "DISPLAY",
+            "XAUTHORITY",
+            "WAYLAND_DISPLAY",
+            "DBUS_SESSION_BUS_ADDRESS",
+            "SESSION_MANAGER",
+        ):
             child_env.pop(key, None)
-        child_env.update({
-            "CLAWK_BD_PROFILE": _profile_name(),
-            "CLAWK_BD_DISPLAY_NUM": str(num),
-            "CLAWK_BD_SOCKET": str(sd / "rfb.sock"),
-            "CLAWK_BD_XAUTH": str(sd / "Xauthority"),
-            "CLAWK_BD_ENV_FILE": str(env_file),
-            "CLAWK_BD_CONFIG_HOME": str(sd / "xdg"),
-            "CLAWK_BD_GEOMETRY": geometry(),
-        })
+        child_env.update(
+            {
+                "CLAWK_BD_PROFILE": _profile_name(),
+                "CLAWK_BD_DISPLAY_NUM": str(num),
+                "CLAWK_BD_SOCKET": str(sd / "rfb.sock"),
+                "CLAWK_BD_XAUTH": str(sd / "Xauthority"),
+                "CLAWK_BD_ENV_FILE": str(env_file),
+                "CLAWK_BD_CONFIG_HOME": str(sd / "xdg"),
+                "CLAWK_BD_GEOMETRY": geometry(),
+            }
+        )
         from tools.bot_desktop.browser import dock_exec_line, dock_launch
+
         if (browser := dock_launch()) is not None:
             # The bare executable (the launcher checks it exists) and the ready-made, spec-quoted Exec= line.
             child_env["CLAWK_BD_BROWSER_EXEC"] = browser[0]
@@ -746,21 +932,37 @@ def _spawn_and_wait(sd: Path, wait_seconds: float) -> DesktopStatus:
         # Truncated per start: the log is a diagnostic for THIS launch, and nothing rotates it otherwise.
         log = open(sd / "launcher.log", "wb")
         proc = subprocess.Popen(  # windows-footgun: ok — Linux-only runtime (is_supported_host)
-            ["bash", str(_LAUNCHER)], env=child_env, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-            start_new_session=True, close_fds=True)
+            ["bash", str(_LAUNCHER)],
+            env=child_env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+            close_fds=True,
+        )
         log.close()
         born = _create_time(proc.pid)
-        (sd / "launcher.pid").write_text(f"{proc.pid} {born if born is not None else 0}", encoding="utf-8")
+        (sd / "launcher.pid").write_text(
+            f"{proc.pid} {born if born is not None else 0}", encoding="utf-8"
+        )
 
         deadline = time.monotonic() + wait_seconds
         while time.monotonic() < deadline:
             if _x_lock_pid(num) is not None:
                 alloc.close()  # the number is Xvnc's now; other profiles may allocate (idempotent)
             if proc.poll() is not None:
-                tail = (sd / "launcher.log").read_bytes()[-2000:].decode("utf-8", "replace")
-                raise RuntimeError(f"Bot Desktop launcher exited with {proc.returncode}:\n{tail}")
+                tail = (
+                    (sd / "launcher.log")
+                    .read_bytes()[-2000:]
+                    .decode("utf-8", "replace")
+                )
+                raise RuntimeError(
+                    f"Bot Desktop launcher exited with {proc.returncode}:\n{tail}"
+                )
             if env_file.exists() and (sd / "rfb.sock").exists():
-                logger.info("Bot Desktop for profile %s up on :%s", _profile_name(), num)
+                logger.info(
+                    "Bot Desktop for profile %s up on :%s", _profile_name(), num
+                )
                 touch_activity()
                 return status()
             time.sleep(0.1)
@@ -771,7 +973,9 @@ def _spawn_and_wait(sd: Path, wait_seconds: float) -> DesktopStatus:
         proc.wait()
         for name in ("launcher.pid", "env", "rfb.sock"):
             (sd / name).unlink(missing_ok=True)
-        raise RuntimeError(f"Bot Desktop did not publish its display within {wait_seconds:.0f}s (see {sd / 'launcher.log'})")
+        raise RuntimeError(
+            f"Bot Desktop did not publish its display within {wait_seconds:.0f}s (see {sd / 'launcher.log'})"
+        )
 
 
 def _sandbox_env(*, create: bool):
@@ -782,9 +986,12 @@ def _sandbox_env(*, create: bool):
 
 def _start_in_sandbox(wait_seconds: float) -> DesktopStatus:
     from tools.bot_desktop import sandbox_host
+
     env = _sandbox_env(create=True)
     if env is None:
-        raise RuntimeError("the terminal backend's sandbox could not be started, so there is nowhere to put the screen")
+        raise RuntimeError(
+            "the terminal backend's sandbox could not be started, so there is nowhere to put the screen"
+        )
     sd = state_dir()
     sd.mkdir(parents=True, exist_ok=True)
     os.chmod(sd, 0o700)
@@ -792,11 +999,29 @@ def _start_in_sandbox(wait_seconds: float) -> DesktopStatus:
         # The dock's Browser icon runs the sandbox's own Playwright Chromium on the profile agent-browser
         # uses there: the human's browser is the bot's browser, as on the host.
         from tools.bot_desktop.browser import dock_exec_line
+
         exe = sandbox_host.chromium_executable(env)
-        browser = (exe, dock_exec_line(exe, sandbox_host.browser_profile_dir(env), sandbox_bypass=True)) if exe else (None, None)
-        published = sandbox_host.start(env, _profile_name(), geometry=geometry(), wait_seconds=max(wait_seconds, 20.0),
-                                       browser_exec=browser[0], browser_exec_line=browser[1])
-    (sd / "env").write_text("".join(f"{k}={v}\n" for k, v in published.items()), encoding="utf-8")
+        browser = (
+            (
+                exe,
+                dock_exec_line(
+                    exe, sandbox_host.browser_profile_dir(env), sandbox_bypass=True
+                ),
+            )
+            if exe
+            else (None, None)
+        )
+        published = sandbox_host.start(
+            env,
+            _profile_name(),
+            geometry=geometry(),
+            wait_seconds=max(wait_seconds, 20.0),
+            browser_exec=browser[0],
+            browser_exec_line=browser[1],
+        )
+    (sd / "env").write_text(
+        "".join(f"{k}={v}\n" for k, v in published.items()), encoding="utf-8"
+    )
     touch_activity()
     return status()
 
@@ -804,6 +1029,7 @@ def _start_in_sandbox(wait_seconds: float) -> DesktopStatus:
 def _sandbox_published_env() -> dict[str, str]:
     """Published env of a sandbox-hosted screen (the caller saw the host-side marker written at start)."""
     from tools.bot_desktop import sandbox_host
+
     env = _sandbox_env(create=False)
     if env is None:
         return {}
@@ -814,6 +1040,7 @@ def stop() -> bool:
     """Stop this profile's desktop; True when a running launcher (or the X server a dead one left behind)
     was signalled."""
     from tools.bot_desktop import sandbox_host
+
     if sandbox_host._read_marker() or placement.resolve().where == placement.TERMINAL:
         # The marker names the sandbox that owns the screen; stop THAT one (re-attaching after a restart),
         # whatever the placement setting says now. A marker whose sandbox is gone is simply dropped.

@@ -23,11 +23,16 @@ from typing import List, Optional, Tuple
 from clawk_state_holders import read_only_db_uri
 from clawk_cli.backup_sqlite import _safe_copy_db
 from utils import (
-    _preserve_file_mode, _preserve_file_owner, _restore_file_mode, _restore_file_owner, atomic_replace,
+    _preserve_file_mode,
+    _preserve_file_owner,
+    _restore_file_mode,
+    _restore_file_owner,
+    atomic_replace,
     mkstemp_beside,
 )
 
 logger = logging.getLogger(__name__)
+
 
 def _foreign_db_holder_pids(db_path: Path) -> Optional[list[int]]:
     """PIDs of OTHER processes holding *db_path* or its WAL/SHM open.
@@ -42,9 +47,7 @@ def _foreign_db_holder_pids(db_path: Path) -> Optional[list[int]]:
         return None
 
     def _canonical(path: str) -> str:
-        return os.path.normcase(
-            os.path.abspath(path.removesuffix(" (deleted)"))
-        )
+        return os.path.normcase(os.path.abspath(path.removesuffix(" (deleted)")))
 
     canonical_db = _canonical(os.fspath(db_path))
     watched = {canonical_db, canonical_db + "-wal", canonical_db + "-shm"}
@@ -95,7 +98,11 @@ def _auth_restore_target(dst: Path) -> Optional[Path]:
                 return None
         return dst.resolve(strict=False) if dst.is_symlink() else dst
     except (OSError, RuntimeError) as exc:
-        logger.error("Refusing auth.json restore to %s: cannot resolve store identity: %s", dst, exc)
+        logger.error(
+            "Refusing auth.json restore to %s: cannot resolve store identity: %s",
+            dst,
+            exc,
+        )
         return None
 
 
@@ -111,14 +118,18 @@ def _restore_auth_json(src: Path, dst: Path) -> bool:
         logger.error("Refusing auth.json restore from %s: %s", src, exc)
         return False
     if not isinstance(snapshot_store, dict):
-        logger.error("Refusing auth.json restore from %s: top level is not an object", src)
+        logger.error(
+            "Refusing auth.json restore from %s: top level is not an object", src
+        )
         return False
     if not (
         isinstance(snapshot_store.get("providers"), dict)
         or isinstance(snapshot_store.get("credential_pool"), dict)
         or isinstance(snapshot_store.get("systems"), dict)
     ):
-        logger.error("Refusing auth.json restore from %s: unrecognized auth-store shape", src)
+        logger.error(
+            "Refusing auth.json restore from %s: unrecognized auth-store shape", src
+        )
         return False
     # Legacy "systems" stores are still valid snapshot input. Mirror auth._load_auth_store's
     # migration without asking that loader to create a .corrupt sidecar inside the snapshot.
@@ -172,7 +183,9 @@ def _safe_restore_db(src: Path, dst: Path) -> bool:
     # destination until the snapshot passes the existing bounded integrity policy.
     source_check = verify_sqlite_integrity(src)
     if not source_check["valid"]:
-        logger.error("Refusing SQLite restore from %s: %s", src, source_check["message"])
+        logger.error(
+            "Refusing SQLite restore from %s: %s", src, source_check["message"]
+        )
         return False
     try:
         with exclusive_maintenance([dst.absolute().parent, dst.resolve().parent]):
@@ -187,9 +200,13 @@ def _restore_epoch(path: Path) -> int:
     if not path.exists():
         return 0
     with closing(sqlite3.connect(read_only_db_uri(path), uri=True)) as conn:
-        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='runtime_epoch'").fetchone():
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='runtime_epoch'"
+        ).fetchone():
             return 0
-        row = conn.execute("SELECT epoch FROM runtime_epoch WHERE singleton=1").fetchone()
+        row = conn.execute(
+            "SELECT epoch FROM runtime_epoch WHERE singleton=1"
+        ).fetchone()
         return int(row[0]) if row else 0
 
 
@@ -215,24 +232,27 @@ def _restore_epoch_source(src: Path, dst: Path):
     An unreadable destination cannot prove its epoch floor: use transcript salvage
     into a separate output rather than silently restoring with a recycled epoch.
     """
-    if dst.name != 'state.db' and dst.resolve().name != 'state.db':
+    if dst.name != "state.db" and dst.resolve().name != "state.db":
         yield src
         return
     floor = _restore_destination_epoch(dst)
     if floor <= _restore_epoch(src):
         yield src
         return
-    with tempfile.TemporaryDirectory(prefix='.restore-epoch-', dir=dst.parent) as work:
-        prepared = Path(work) / 'state.db'
+    with tempfile.TemporaryDirectory(prefix=".restore-epoch-", dir=dst.parent) as work:
+        prepared = Path(work) / "state.db"
         if not _safe_copy_db(src, prepared):
-            raise OSError('Unable to stage a restore with a safe runtime epoch')
+            raise OSError("Unable to stage a restore with a safe runtime epoch")
         with closing(sqlite3.connect(prepared)) as conn:
             conn.execute("""CREATE TABLE IF NOT EXISTS runtime_epoch (
                 singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
                 epoch INTEGER NOT NULL CHECK (epoch > 0), instance_id TEXT NOT NULL)""")
-            conn.execute("""INSERT INTO runtime_epoch VALUES(1,?, 'offline-restore')
+            conn.execute(
+                """INSERT INTO runtime_epoch VALUES(1,?, 'offline-restore')
                 ON CONFLICT(singleton) DO UPDATE SET epoch=excluded.epoch,
-                instance_id=excluded.instance_id""", (floor,))
+                instance_id=excluded.instance_id""",
+                (floor,),
+            )
             conn.commit()
         prepared.chmod(src.stat().st_mode)
         yield prepared
@@ -289,9 +309,15 @@ def _restore_db_pages(src: Path, dst: Path) -> bool:
             dst.chmod(mode)
         except OSError as exc:
             # The data is restored; only the snapshot's file mode could not be carried over.
-            logger.warning("Restored %s but could not apply the snapshot's file mode: %s", dst, exc)
+            logger.warning(
+                "Restored %s but could not apply the snapshot's file mode: %s", dst, exc
+            )
         return True
-    except (sqlite3.Error, OSError, ValueError) as exc:  # ValueError: an unrepresentable path
+    except (
+        sqlite3.Error,
+        OSError,
+        ValueError,
+    ) as exc:  # ValueError: an unrepresentable path
         logger.warning("SQLite safe restore failed for %s -> %s: %s", src, dst, exc)
         # Release our own handle on *dst* before the fallback: on Windows an
         # open connection blocks unlink() with WinError 32, which would make
@@ -300,7 +326,9 @@ def _restore_db_pages(src: Path, dst: Path) -> bool:
             try:
                 dst_conn.close()
             except sqlite3.Error as close_exc:
-                logger.debug("Closing %s before the fallback restore failed: %s", dst, close_exc)
+                logger.debug(
+                    "Closing %s before the fallback restore failed: %s", dst, close_exc
+                )
         # Fallback: unlink+move (the old approach).  This still works for
         # the common case where no other process holds the DB open.
         from clawk_cli.sqlite_safe_read import (
@@ -320,7 +348,8 @@ def _restore_db_pages(src: Path, dst: Path) -> bool:
                 logger.error(
                     "Refusing unlink+move restore of %s: process(es) %s still "
                     "hold the database or its WAL open. Stop them and retry.",
-                    dst, holders,
+                    dst,
+                    holders,
                 )
                 return False
             # The foreign-pid scan above deliberately excludes THIS process,
@@ -357,11 +386,17 @@ def _restore_db_pages(src: Path, dst: Path) -> bool:
             logger.error(
                 "Refusing unlink+move restore of %s: %s Close the in-process "
                 "database handles (or restart Clawksis) and retry.",
-                dst, exc2,
+                dst,
+                exc2,
             )
             return False
-        except (OSError, ValueError) as exc2:  # ValueError: a path the OS cannot represent
-            logger.error("Fallback restore also failed for %s -> %s: %s", src, dst, exc2)
+        except (
+            OSError,
+            ValueError,
+        ) as exc2:  # ValueError: a path the OS cannot represent
+            logger.error(
+                "Fallback restore also failed for %s -> %s: %s", src, dst, exc2
+            )
             return False
 
 
@@ -504,7 +539,9 @@ def _extract_member_atomically(
 
     # Truncate the stem: mkstemp adds ~16 characters, and a member already near
     # NAME_MAX would otherwise fail here on a write that used to succeed.
-    fd, tmp_name = mkstemp_beside(target, prefix=f".{target.name[:80]}.", suffix=".partial")
+    fd, tmp_name = mkstemp_beside(
+        target, prefix=f".{target.name[:80]}.", suffix=".partial"
+    )
     try:
         with os.fdopen(fd, "wb") as dst:
             if mode is not None:
@@ -570,6 +607,7 @@ def _import_db_member(
     new_file_mode: Optional[int] = None,
 ) -> None:
     from gateway.runtime_ownership import OwnershipConflict, exclusive_maintenance
+
     try:
         with exclusive_maintenance([target.absolute().parent, target.resolve().parent]):
             _import_db_member_exclusive(zf, member, target, new_file_mode)

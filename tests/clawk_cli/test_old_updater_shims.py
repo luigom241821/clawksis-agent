@@ -19,88 +19,217 @@ from tests.compat.old_updater_support import (
 @pytest.mark.parametrize(
     "module,name,args,kwargs,cached",
     [
-        *((f"clawk_cli.{module}", name, args, kwargs, None) for module, name, args, kwargs in [
-        ("managed_uv", "ensure_uv", (), {}),
-        ("managed_uv", "ensure_uv", (), {"repair_observer": lambda result: pytest.fail("repair observer ran")}),
-        ("managed_uv", "update_managed_uv", (), {}),
-        ("managed_uv", "update_managed_uv", (), {"force": True}),
-        ("managed_uv", "resolve_uv", (), {}),
-        ("managed_uv", "managed_python_env", (), {}),
-        ("managed_uv", "managed_python_env", (Path("checkout"),), {"install_dir": Path("python"), "base_env": {}}),
-        ("managed_uv", "rebuild_venv", ("uv", Path("venv")), {}),
-        ("managed_uv", "rebuild_venv", ("uv", Path("venv"), "3.11"), {}),
-        ("psutil_android", "prepare_patched_psutil_sdist", (Path("psutil.tar.gz"), Path("src")), {}),
-        ("update_cmd", "_ensure_uv_for_termux", (["python", "-m", "pip"],), {}),
-        ("update_cmd", "_ensure_venv_pip", (["python", "-m", "pip"], "python"), {}),
-        ("update_cmd", "_pip_install_prefix", (None,), {}),
-        ("update_cmd", "_pip_install_prefix", ("uv",), {}),
-        ("update_cmd", "_refuse_update_for_contended_shims", (RuntimeError("locked"),), {}),
-        ("tools_config", "install_cua_driver", (),
-         {"upgrade": True, "require_confirmed_update": True, "show_installer_progress": False}),
-        ("update_cmd", "_capture_active_lazy_features", (), {}),
-        ("update_cmd", "_refresh_active_lazy_features", (), {}),
-        ("update_cmd", "_refresh_active_lazy_features", (["browser"],), {}),
-        ("update_cmd", "_refresh_active_lazy_features", (["uv", "pip"],),
-         {"env": {"VIRTUAL_ENV": "venv"}, "features": ["browser"]}),
-        ("update_cmd", "_refresh_active_memory_provider_dependencies", (), {}),
-        ("update_cmd", "_npm_lockfile_changed", (Path("checkout"),), {}),
-        ("update_cmd", "_update_node_dependencies", (), {}),
-        ("update_cmd", "_rebuild_desktop_after_update", (Path("desktop"),),
-         {"had_desktop_app_before_update": True}),
-        ("update_cmd", "_rebuild_desktop_after_update", (Path("desktop"),),
-         {"had_desktop_app_before_update": False}),
-        ("update_cmd", "_path_uid", (Path("venv"),), {}),
-        ("update_cmd", "_write_update_incomplete_marker", (), {}),
-        ("update_cmd", "_write_lazy_refresh_incomplete_marker", (), {}),
-        ("update_cmd", "_reload_updated_runtime_modules", (), {}),
-        ("update_cmd_maint", "_reload_updated_runtime_modules", (), {}),
-    ]),
-        *(("clawk_cli.main", name, args, kwargs, None) for name, args, kwargs in [
-        ("_desktop_stamp_path", (), {}),
-        ("_expected_windows_pe_machines", (), {}),
-        ("_clawk_exe_shims", (Path("venv"),), {}),
-        ("_insert_python_pin", (["uv", "pip", "install", "-e", "."],), {}),
-        ("_interpreter_scripts_dir", (), {}),
-        ("_load_installable_optional_extras", (), {"group": "termux-all"}),
-        ("_parse_pe_machine", (Path("Clawksis.exe"),), {}),
-        ("_quarantine_running_clawk_exe", (Path("venv"),), {"max_attempts": 1, "failed_out": []}),
-        ("_repair_broken_lazy_refresh_imports", (["uv", "pip"], ["certifi"]), {"env": {"VIRTUAL_ENV": "venv"}}),
-        ("_run_install_with_heartbeat", (["uv", "pip", "install", "-e", "."],),
-         {"env": {"VIRTUAL_ENV": "venv"}, "heartbeat_interval_seconds": 1}),
-        ("_run_package_only_install", (["uv", "pip", "install", "-e", "."],), {"env": {"VIRTUAL_ENV": "venv"}}),
-        ("_run_quarantined_install", (["uv", "pip", "install", "-e", "."],),
-         {"env": {"VIRTUAL_ENV": "venv"}, "scripts_dir": Path("venv"), "strict_quarantine": True}),
-        ("_run_quarantined_install", (["uv", "pip", "install", "-e", "."],), {}),
-        ("_run_with_idle_timeout", (["uv", "pip", "install", "-e", "."], Path("venv")),
-         {"env": {"VIRTUAL_ENV": "venv"}, "idle_timeout_seconds": 1, "indent": ""}),
-        ("_self", (), {}),
-        ("_verify_console_scripts_installed", (["uv", "pip"],), {"env": {"VIRTUAL_ENV": "venv"}}),
-        ("_verify_core_dependencies_installed", (["uv", "pip"],), {"env": {"VIRTUAL_ENV": "venv"}, "group": "all"}),
-        ("_web_ui_build_needed", (Path("web"),), {}),
-        ("_windows_native_machine", (), {}),
-        ("_windows_shim_in_process_chain", (), {}),
-    ]),
-        *(("clawk_cli.main", name, args, kwargs, cached) for name, args, kwargs in [
-        ("_capture_active_lazy_features", (), {}),
-        ("_refresh_active_lazy_features", (), {}),
-        ("_refresh_active_lazy_features", (["browser"],), {}),
-        ("_refresh_active_lazy_features", (["uv", "pip"],),
-         {"env": {"VIRTUAL_ENV": "venv"}, "features": ["browser"]}),
-        ("_refresh_active_memory_provider_dependencies", (), {}),
-        ("_npm_lockfile_changed", (Path("checkout"),), {}),
-        ("_write_update_incomplete_marker", (), {}),
-        ("_reload_updated_runtime_modules", (), {}),
-    ] for cached in (False, True)),
-        ("clawk_cli.main_web_build", "_run_with_idle_timeout", (["npm", "ci"], Path("web")), {}, None),
-        ("clawk_cli.main_web_build", "_run_npm_install_deterministic", ("npm", Path("web")), {}, None),
+        *(
+            (f"clawk_cli.{module}", name, args, kwargs, None)
+            for module, name, args, kwargs in [
+                ("managed_uv", "ensure_uv", (), {}),
+                (
+                    "managed_uv",
+                    "ensure_uv",
+                    (),
+                    {
+                        "repair_observer": lambda result: pytest.fail(
+                            "repair observer ran"
+                        )
+                    },
+                ),
+                ("managed_uv", "update_managed_uv", (), {}),
+                ("managed_uv", "update_managed_uv", (), {"force": True}),
+                ("managed_uv", "resolve_uv", (), {}),
+                ("managed_uv", "managed_python_env", (), {}),
+                (
+                    "managed_uv",
+                    "managed_python_env",
+                    (Path("checkout"),),
+                    {"install_dir": Path("python"), "base_env": {}},
+                ),
+                ("managed_uv", "rebuild_venv", ("uv", Path("venv")), {}),
+                ("managed_uv", "rebuild_venv", ("uv", Path("venv"), "3.11"), {}),
+                (
+                    "psutil_android",
+                    "prepare_patched_psutil_sdist",
+                    (Path("psutil.tar.gz"), Path("src")),
+                    {},
+                ),
+                ("update_cmd", "_ensure_uv_for_termux", (["python", "-m", "pip"],), {}),
+                (
+                    "update_cmd",
+                    "_ensure_venv_pip",
+                    (["python", "-m", "pip"], "python"),
+                    {},
+                ),
+                ("update_cmd", "_pip_install_prefix", (None,), {}),
+                ("update_cmd", "_pip_install_prefix", ("uv",), {}),
+                (
+                    "update_cmd",
+                    "_refuse_update_for_contended_shims",
+                    (RuntimeError("locked"),),
+                    {},
+                ),
+                (
+                    "tools_config",
+                    "install_cua_driver",
+                    (),
+                    {
+                        "upgrade": True,
+                        "require_confirmed_update": True,
+                        "show_installer_progress": False,
+                    },
+                ),
+                ("update_cmd", "_capture_active_lazy_features", (), {}),
+                ("update_cmd", "_refresh_active_lazy_features", (), {}),
+                ("update_cmd", "_refresh_active_lazy_features", (["browser"],), {}),
+                (
+                    "update_cmd",
+                    "_refresh_active_lazy_features",
+                    (["uv", "pip"],),
+                    {"env": {"VIRTUAL_ENV": "venv"}, "features": ["browser"]},
+                ),
+                ("update_cmd", "_refresh_active_memory_provider_dependencies", (), {}),
+                ("update_cmd", "_npm_lockfile_changed", (Path("checkout"),), {}),
+                ("update_cmd", "_update_node_dependencies", (), {}),
+                (
+                    "update_cmd",
+                    "_rebuild_desktop_after_update",
+                    (Path("desktop"),),
+                    {"had_desktop_app_before_update": True},
+                ),
+                (
+                    "update_cmd",
+                    "_rebuild_desktop_after_update",
+                    (Path("desktop"),),
+                    {"had_desktop_app_before_update": False},
+                ),
+                ("update_cmd", "_path_uid", (Path("venv"),), {}),
+                ("update_cmd", "_write_update_incomplete_marker", (), {}),
+                ("update_cmd", "_write_lazy_refresh_incomplete_marker", (), {}),
+                ("update_cmd", "_reload_updated_runtime_modules", (), {}),
+                ("update_cmd_maint", "_reload_updated_runtime_modules", (), {}),
+            ]
+        ),
+        *(
+            ("clawk_cli.main", name, args, kwargs, None)
+            for name, args, kwargs in [
+                ("_desktop_stamp_path", (), {}),
+                ("_expected_windows_pe_machines", (), {}),
+                ("_clawk_exe_shims", (Path("venv"),), {}),
+                ("_insert_python_pin", (["uv", "pip", "install", "-e", "."],), {}),
+                ("_interpreter_scripts_dir", (), {}),
+                ("_load_installable_optional_extras", (), {"group": "termux-all"}),
+                ("_parse_pe_machine", (Path("Clawksis.exe"),), {}),
+                (
+                    "_quarantine_running_clawk_exe",
+                    (Path("venv"),),
+                    {"max_attempts": 1, "failed_out": []},
+                ),
+                (
+                    "_repair_broken_lazy_refresh_imports",
+                    (["uv", "pip"], ["certifi"]),
+                    {"env": {"VIRTUAL_ENV": "venv"}},
+                ),
+                (
+                    "_run_install_with_heartbeat",
+                    (["uv", "pip", "install", "-e", "."],),
+                    {"env": {"VIRTUAL_ENV": "venv"}, "heartbeat_interval_seconds": 1},
+                ),
+                (
+                    "_run_package_only_install",
+                    (["uv", "pip", "install", "-e", "."],),
+                    {"env": {"VIRTUAL_ENV": "venv"}},
+                ),
+                (
+                    "_run_quarantined_install",
+                    (["uv", "pip", "install", "-e", "."],),
+                    {
+                        "env": {"VIRTUAL_ENV": "venv"},
+                        "scripts_dir": Path("venv"),
+                        "strict_quarantine": True,
+                    },
+                ),
+                (
+                    "_run_quarantined_install",
+                    (["uv", "pip", "install", "-e", "."],),
+                    {},
+                ),
+                (
+                    "_run_with_idle_timeout",
+                    (["uv", "pip", "install", "-e", "."], Path("venv")),
+                    {
+                        "env": {"VIRTUAL_ENV": "venv"},
+                        "idle_timeout_seconds": 1,
+                        "indent": "",
+                    },
+                ),
+                ("_self", (), {}),
+                (
+                    "_verify_console_scripts_installed",
+                    (["uv", "pip"],),
+                    {"env": {"VIRTUAL_ENV": "venv"}},
+                ),
+                (
+                    "_verify_core_dependencies_installed",
+                    (["uv", "pip"],),
+                    {"env": {"VIRTUAL_ENV": "venv"}, "group": "all"},
+                ),
+                ("_web_ui_build_needed", (Path("web"),), {}),
+                ("_windows_native_machine", (), {}),
+                ("_windows_shim_in_process_chain", (), {}),
+            ]
+        ),
+        *(
+            ("clawk_cli.main", name, args, kwargs, cached)
+            for name, args, kwargs in [
+                ("_capture_active_lazy_features", (), {}),
+                ("_refresh_active_lazy_features", (), {}),
+                ("_refresh_active_lazy_features", (["browser"],), {}),
+                (
+                    "_refresh_active_lazy_features",
+                    (["uv", "pip"],),
+                    {"env": {"VIRTUAL_ENV": "venv"}, "features": ["browser"]},
+                ),
+                ("_refresh_active_memory_provider_dependencies", (), {}),
+                ("_npm_lockfile_changed", (Path("checkout"),), {}),
+                ("_write_update_incomplete_marker", (), {}),
+                ("_reload_updated_runtime_modules", (), {}),
+            ]
+            for cached in (False, True)
+        ),
+        (
+            "clawk_cli.main_web_build",
+            "_run_with_idle_timeout",
+            (["npm", "ci"], Path("web")),
+            {},
+            None,
+        ),
+        (
+            "clawk_cli.main_web_build",
+            "_run_npm_install_deterministic",
+            ("npm", Path("web")),
+            {},
+            None,
+        ),
         ("clawk_cli.main_web_build", "_nixos_build_env", (), {}, None),
         ("clawk_cli.main", "_reexec_dependency_sync_off_windows_shim", (), {}, None),
         ("clawk_cli.update_cmd", "get_default_clawk_root", (), {}, None),
-        ("clawk_cli.tools_config", "_pip_install", (["--quiet", "honcho-ai"],), {}, None),
-        ("clawk_cli.tools_config", "_pip_install", (["--quiet", "honcho-ai"],), {"timeout": 120, "capture_output": False}, None),
+        (
+            "clawk_cli.tools_config",
+            "_pip_install",
+            (["--quiet", "honcho-ai"],),
+            {},
+            None,
+        ),
+        (
+            "clawk_cli.tools_config",
+            "_pip_install",
+            (["--quiet", "honcho-ai"],),
+            {"timeout": 120, "capture_output": False},
+            None,
+        ),
     ],
 )
-def test_retired_dependency_entrypoints_handoff_without_fallback(module, name, args, kwargs, cached, fresh_child, monkeypatch):
+def test_retired_dependency_entrypoints_handoff_without_fallback(
+    module, name, args, kwargs, cached, fresh_child, monkeypatch
+):
     # Some boundaries (notably psutil_android) hand off during import itself.
     # Resolve ordinary modules before the guard: their CLI startup is not a shim.
     if module != "clawk_cli.psutil_android":
@@ -119,13 +248,18 @@ def test_retired_dependency_entrypoints_handoff_without_fallback(module, name, a
     assert (args, kwargs) == before
 
 
-@pytest.mark.parametrize("module,name,specs,declares_version", [
-    ("clawk_cli.main", "cmd_update", [], True),
-    ("clawk_cli.update_cmd", "_cmd_update_impl", ["honcho-ai"], True),
-    # 2026-07-26..08-16 updaters predate the pre_update_version local
-    ("clawk_cli.update_cmd", "_cmd_update_impl", [], False),
-])
-def test_lazy_installer_inside_historical_update_hands_off(module, name, specs, declares_version, fresh_child):
+@pytest.mark.parametrize(
+    "module,name,specs,declares_version",
+    [
+        ("clawk_cli.main", "cmd_update", [], True),
+        ("clawk_cli.update_cmd", "_cmd_update_impl", ["honcho-ai"], True),
+        # 2026-07-26..08-16 updaters predate the pre_update_version local
+        ("clawk_cli.update_cmd", "_cmd_update_impl", [], False),
+    ],
+)
+def test_lazy_installer_inside_historical_update_hands_off(
+    module, name, specs, declares_version, fresh_child
+):
     from tools.lazy_deps import install_specs
 
     # Run a frozen old-caller-shaped function, not a mocked context detector.
@@ -164,7 +298,10 @@ def test_current_updater_entrypoints_declare_the_handoff_sentinel():
         "clawk_main.cmd_update.__wrapped__.__code__.co_varnames)\n"
     )
     out = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, check=True,
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.split()
     assert out == ["True", "True"], out
 
@@ -181,7 +318,10 @@ def test_ensure_uv_stops_both_historical_return_contracts(unpack, status, fresh_
         else:
             uv = ensure_uv()
         # A falsy result is NOT inert: old callers install through pip instead.
-        subprocess.run([uv, "pip", "install"] if uv else [sys.executable, "-m", "pip", "install"], check=False)
+        subprocess.run(
+            [uv, "pip", "install"] if uv else [sys.executable, "-m", "pip", "install"],
+            check=False,
+        )
 
 
 def test_retired_probes_and_refreshes_do_no_work(no_external_work, tmp_path):
@@ -229,7 +369,9 @@ def test_old_android_updater_handoffs_before_download(old_updater, fresh_child):
         old_updater._install_psutil_android_compat(["uv", "pip"])
 
 
-def test_old_updater_retains_its_code_but_loads_new_managed_uv(old_updater, fresh_child, no_external_work, tmp_path):
+def test_old_updater_retains_its_code_but_loads_new_managed_uv(
+    old_updater, fresh_child, no_external_work, tmp_path
+):
     """The real pre-PM post-pull function must hand off at its new lazy import."""
     old = old_updater
     # Already-imported pre-swap collaborators. Leave frozen lazy imports real.
@@ -249,8 +391,12 @@ def test_old_updater_retains_its_code_but_loads_new_managed_uv(old_updater, fres
     before_files = set(tmp_path.rglob("*"))
     with fresh_child.exits():
         old._sync_python_dependencies_after_pull(
-            ["git"], "main", "before-pull", active_lazy_features=[],
-            active_tool_dependencies=[], _windows_gateway_resume=resume,
+            ["git"],
+            "main",
+            "before-pull",
+            active_lazy_features=[],
+            active_tool_dependencies=[],
+            _windows_gateway_resume=resume,
         )
     assert prefix == ["ownership", "self-lock", "old-marker"]
     assert fresh_child.requests[0]["windows_resume"] == before
@@ -259,7 +405,9 @@ def test_old_updater_retains_its_code_but_loads_new_managed_uv(old_updater, fres
     assert set(tmp_path.rglob("*")) == before_files
 
 
-def test_live_windows_scan_does_not_use_the_retired_main_alias(monkeypatch, no_external_work):
+def test_live_windows_scan_does_not_use_the_retired_main_alias(
+    monkeypatch, no_external_work
+):
     from clawk_cli import main, process_identity, update_cmd_windows
 
     # Routing, not OS emulation: lifecycle fallback accepts rows on any host.
@@ -267,7 +415,8 @@ def test_live_windows_scan_does_not_use_the_retired_main_alias(monkeypatch, no_e
     monkeypatch.setattr(process_identity, "ledger_entries", list)
     monkeypatch.setattr(update_cmd_windows, "_psutil", lambda: None)
     monkeypatch.setattr(
-        update_cmd_windows, "_detect_venv_python_processes",
+        update_cmd_windows,
+        "_detect_venv_python_processes",
         lambda: [(123, "python", "python -m clawk_cli.main serve")],
     )
     assert update_cmd_windows._desktop_owns_gateway_lifecycle() is True

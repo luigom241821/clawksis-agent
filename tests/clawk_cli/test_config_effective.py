@@ -1,6 +1,7 @@
 """Invariants for ``clawk_cli.config_effective.load_user_config_effective`` — the one loader every
 defaults-free config reader (gateway runtime, TUI gateway, cron, ``clawk send`` bridge, doctor,
 bootstrap modules) goes through."""
+
 import textwrap
 
 import pytest
@@ -93,7 +94,9 @@ def test_broken_yaml_serves_last_good_and_fail_closed_raises(homes):
     _reset_caches_keep_last_good()
 
     assert load_user_config_effective(home / "config.yaml") == good
-    with pytest.raises(yaml.YAMLError):  # the type _refresh_fallback_model's own last-good path keys on
+    with pytest.raises(
+        yaml.YAMLError
+    ):  # the type _refresh_fallback_model's own last-good path keys on
         load_user_config_effective(home / "config.yaml", fail_closed=True)
 
 

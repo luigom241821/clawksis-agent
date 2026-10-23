@@ -25,12 +25,6 @@ def fake_home(tmp_path, monkeypatch):
     return bin_dir
 
 
-
-
-
-
-
-
 @pytest.mark.require_symlinks
 def test_does_not_follow_symlink_into_venv(fake_home, tmp_path):
     """#21454 failure mode: never write through a symlinked clawk-acp."""
@@ -45,10 +39,6 @@ def test_does_not_follow_symlink_into_venv(fake_home, tmp_path):
 
     assert console_script.read_text(encoding="utf-8") == marker
     assert (fake_home / "clawk-acp").is_symlink()
-
-
-
-
 
 
 def test_unwritable_bin_dir_is_skipped(fake_home):

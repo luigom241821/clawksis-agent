@@ -7,7 +7,11 @@ from time import time as wall_time
 from uuid import uuid4
 from typing import Any, List, Mapping, MutableMapping, Optional, TypeVar
 
-from agent.conversation_compression_archive import MERGED_DURABLE_ROWS, RETIRED_DURABLE_ROWS, UNNAMED_DURABLE_ROWS
+from agent.conversation_compression_archive import (
+    MERGED_DURABLE_ROWS,
+    RETIRED_DURABLE_ROWS,
+    UNNAMED_DURABLE_ROWS,
+)
 
 
 # These fields describe Clawksis' durable record and timeline display, not
@@ -39,15 +43,30 @@ ABSORBED_MESSAGE_UIDS = "_absorbed_message_uids"
 # (``messages.tool_call_uid``). The provider-facing ``id`` is untouched; these never reach the wire.
 TOOL_CALL_UIDS = "_tool_call_uids"
 TOOL_CALL_UID = "_tool_call_uid"
-PERSISTENCE_ONLY_MESSAGE_FIELDS = frozenset(
-    # Membership is the real contract, NOT the leading underscore: the chat-completions transport happens
-    # to sweep underscore keys, but turn_context.py pops this set from every outgoing copy and a strict
-    # backend 400s on any key it does not know.
-    {"timestamp", "display_kind", "display_metadata", "_row_id", "_submit_row_session_id",
-     MERGED_TURN_PREFIX, MESSAGE_UID, ABSORBED_MESSAGE_UIDS, TOOL_CALL_UIDS, TOOL_CALL_UID,
-     # The alternation repair's row counts: an in-place compaction reads them off the live dict.
-     MERGED_DURABLE_ROWS, UNNAMED_DURABLE_ROWS, RETIRED_DURABLE_ROWS}
-) | REPAIR_BOOKKEEPING_FIELDS
+PERSISTENCE_ONLY_MESSAGE_FIELDS = (
+    frozenset(
+        # Membership is the real contract, NOT the leading underscore: the chat-completions transport happens
+        # to sweep underscore keys, but turn_context.py pops this set from every outgoing copy and a strict
+        # backend 400s on any key it does not know.
+        {
+            "timestamp",
+            "display_kind",
+            "display_metadata",
+            "_row_id",
+            "_submit_row_session_id",
+            MERGED_TURN_PREFIX,
+            MESSAGE_UID,
+            ABSORBED_MESSAGE_UIDS,
+            TOOL_CALL_UIDS,
+            TOOL_CALL_UID,
+            # The alternation repair's row counts: an in-place compaction reads them off the live dict.
+            MERGED_DURABLE_ROWS,
+            UNNAMED_DURABLE_ROWS,
+            RETIRED_DURABLE_ROWS,
+        }
+    )
+    | REPAIR_BOOKKEEPING_FIELDS
+)
 
 
 # Connector data-use requirement on a tool message; persisted inside ``display_metadata``, never sent to a model.
@@ -56,7 +75,12 @@ DATA_USE = "data_use"
 
 def data_use_requirement(messages: Any) -> frozenset[str]:
     """The union of ``data_use`` over *messages*: what the model receiving them must guarantee."""
-    return frozenset(r for m in messages or () if isinstance(m, Mapping) for r in m.get(DATA_USE) or ())
+    return frozenset(
+        r
+        for m in messages or ()
+        if isinstance(m, Mapping)
+        for r in m.get(DATA_USE) or ()
+    )
 
 
 def stamp_data_use(message: MutableMapping[str, Any], requires: list[str]) -> None:
@@ -66,7 +90,10 @@ def stamp_data_use(message: MutableMapping[str, Any], requires: list[str]) -> No
         return
     message[DATA_USE] = list(requires)
     metadata = message.get("display_metadata")
-    message["display_metadata"] = {**(metadata if isinstance(metadata, dict) else {}), DATA_USE: list(requires)}
+    message["display_metadata"] = {
+        **(metadata if isinstance(metadata, dict) else {}),
+        DATA_USE: list(requires),
+    }
 
 
 def lift_data_use(message: MutableMapping[str, Any]) -> None:
@@ -78,8 +105,17 @@ def lift_data_use(message: MutableMapping[str, Any]) -> None:
 
 # Replay carriers the preflight estimate prices at 0, exactly as the compaction tail walk does (opaque signatures,
 # duplicate reasoning copies, ordered sidecars); a mismatch between the two estimates loops compaction.
-UNPRICED_REPLAY_FIELDS = frozenset({"_anthropic_content_blocks", "reasoning_details", "extra_content",
-                                    "reasoning_opaque", "reasoning_text", "bedrock_content_blocks", DATA_USE})
+UNPRICED_REPLAY_FIELDS = frozenset(
+    {
+        "_anthropic_content_blocks",
+        "reasoning_details",
+        "extra_content",
+        "reasoning_opaque",
+        "reasoning_text",
+        "bedrock_content_blocks",
+        DATA_USE,
+    }
+)
 
 
 def without_persistence_fields(msg: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -96,7 +132,13 @@ def mint_uid() -> str:
 
 def uid_list(value: Any) -> list[str]:
     """The unique non-empty string uids of a live list, in order; anything else is ``[]``."""
-    return list(dict.fromkeys(u for u in (value if isinstance(value, list) else ()) if isinstance(u, str) and u))
+    return list(
+        dict.fromkeys(
+            u
+            for u in (value if isinstance(value, list) else ())
+            if isinstance(u, str) and u
+        )
+    )
 
 
 def message_uid_or_none(msg: Mapping[str, Any]) -> Optional[str]:
@@ -127,14 +169,19 @@ INFLIGHT_TASK_RESTATEMENT = "compaction_inflight_task_restatement"
 
 def mark_inflight_restatement(msg: MutableMapping[str, Any]) -> None:
     metadata = msg.get("display_metadata")
-    msg["display_metadata"] = {**(metadata if isinstance(metadata, dict) else {}), INFLIGHT_TASK_RESTATEMENT: True}
+    msg["display_metadata"] = {
+        **(metadata if isinstance(metadata, dict) else {}),
+        INFLIGHT_TASK_RESTATEMENT: True,
+    }
 
 
 def scaffolding_replay_fields(msg: Mapping[str, Any]) -> dict:
     """The compaction-provenance fields replay keeps (summary flag, restatement flag), else ``{}``. A proactive
     prune re-persists the replayed view, so a dropped flag would get the row stamped on the next replay."""
     metadata = msg.get("display_metadata")
-    fields: dict = {"_compressed_summary": True} if msg.get("_compressed_summary") else {}
+    fields: dict = (
+        {"_compressed_summary": True} if msg.get("_compressed_summary") else {}
+    )
     if isinstance(metadata, dict) and metadata.get(INFLIGHT_TASK_RESTATEMENT):
         fields["display_metadata"] = {INFLIGHT_TASK_RESTATEMENT: True}
     return fields
@@ -145,7 +192,12 @@ def is_compaction_scaffolding(msg: Mapping[str, Any]) -> bool:
     return bool(scaffolding_replay_fields(msg))
 
 
-_IDENTITY_FIELD_TYPES = ((MESSAGE_UID, str), (ABSORBED_MESSAGE_UIDS, list), (TOOL_CALL_UIDS, dict), (TOOL_CALL_UID, str))
+_IDENTITY_FIELD_TYPES = (
+    (MESSAGE_UID, str),
+    (ABSORBED_MESSAGE_UIDS, list),
+    (TOOL_CALL_UIDS, dict),
+    (TOOL_CALL_UID, str),
+)
 
 
 def copy_identity_fields(src: Mapping[str, Any], dst: MutableMapping[str, Any]) -> None:
@@ -157,7 +209,9 @@ def copy_identity_fields(src: Mapping[str, Any], dst: MutableMapping[str, Any]) 
             dst[key] = kind(value)
 
 
-def message_identity(msg: MutableMapping[str, Any], *, with_tool_uids: bool = False) -> dict:
+def message_identity(
+    msg: MutableMapping[str, Any], *, with_tool_uids: bool = False
+) -> dict:
     """The identity fields a new row copied from *msg* must carry, minting *msg*'s uid first when it has none:
     a branch/seed copy writes fresh rows from the live dicts the new session keeps using, and a row without
     them would restore with a different uid than the live dict carries. ``with_tool_uids`` only for a copy
@@ -172,7 +226,10 @@ def message_identity(msg: MutableMapping[str, Any], *, with_tool_uids: bool = Fa
 
 
 def record_absorbed_message(
-    survivor: MutableMapping[str, Any], dropped: Mapping[str, Any], *, dropped_leads: bool = False,
+    survivor: MutableMapping[str, Any],
+    dropped: Mapping[str, Any],
+    *,
+    dropped_leads: bool = False,
 ) -> None:
     """Merge-witness bookkeeping for every host fold of *dropped* into *survivor*.
 
@@ -192,7 +249,9 @@ def record_absorbed_message(
         ordered = theirs + ([survivor_uid] if survivor_uid else []) + own
     else:
         ordered = own + ([dropped_uid] if dropped_uid else []) + theirs
-    if absorbed := [uid for uid in dict.fromkeys(ordered) if uid != survivor.get(MESSAGE_UID)]:
+    if absorbed := [
+        uid for uid in dict.fromkeys(ordered) if uid != survivor.get(MESSAGE_UID)
+    ]:
         survivor[ABSORBED_MESSAGE_UIDS] = absorbed
 
 
@@ -202,7 +261,11 @@ def merge_tool_call_uids(into: Mapping[str, Any], extra: Mapping[str, Any]) -> d
     to every occurrence's uid, in call order, as a list. Provider ids themselves are never rewritten."""
     merged = dict(into)
     for call_id, uid in extra.items():
-        merged[call_id] = _uid_occurrences(merged[call_id]) + _uid_occurrences(uid) if call_id in merged else uid
+        merged[call_id] = (
+            _uid_occurrences(merged[call_id]) + _uid_occurrences(uid)
+            if call_id in merged
+            else uid
+        )
     return merged
 
 
@@ -210,14 +273,18 @@ def _uid_occurrences(value: Any) -> list:
     return list(value) if isinstance(value, list) else [value]
 
 
-def per_occurrence_tool_call_uids(uids: Mapping[str, Any], tool_calls: list[Mapping[str, Any]]) -> dict:
+def per_occurrence_tool_call_uids(
+    uids: Mapping[str, Any], tool_calls: list[Mapping[str, Any]]
+) -> dict:
     """*uids* with every provider id this row names more than once spelled out as one uid per occurrence. A
     single response that repeats an id shares ONE uid (its results carry it, so every call stays paired);
     before a fold appends another turn's occurrences, the shared uid must fill each of this row's slots or
     the appended uids would align with the wrong calls."""
     from agent.message_sanitization import coalesce_tool_call_id
 
-    counts = Counter(call_id for tc in tool_calls if (call_id := coalesce_tool_call_id(tc)))
+    counts = Counter(
+        call_id for tc in tool_calls if (call_id := coalesce_tool_call_id(tc))
+    )
     expanded = dict(uids)
     for call_id, count in counts.items():
         if count > 1 and isinstance(uid := uids.get(call_id), str):
@@ -225,7 +292,9 @@ def per_occurrence_tool_call_uids(uids: Mapping[str, Any], tool_calls: list[Mapp
     return expanded
 
 
-def index_tool_call_uids(index: MutableMapping[str, str], assistant: Mapping[str, Any]) -> frozenset:
+def index_tool_call_uids(
+    index: MutableMapping[str, str], assistant: Mapping[str, Any]
+) -> frozenset:
     """Register an assistant dict's ``_tool_call_uids`` under every pairing-id variant of its tool calls, so a
     later tool-result row can be resolved by any spelling of its ``tool_call_id``. Provider ids repeat, so
     every id this assistant names first shadows an earlier occurrence's entry: a result pairs with the
@@ -234,7 +303,9 @@ def index_tool_call_uids(index: MutableMapping[str, str], assistant: Mapping[str
     Returns every pairing-id variant the assistant names."""
     from agent.message_sanitization import coalesce_tool_call_id, tool_call_id_variants
 
-    calls = [(tc, tool_call_id_variants(tc)) for tc in assistant.get("tool_calls") or ()]
+    calls = [
+        (tc, tool_call_id_variants(tc)) for tc in assistant.get("tool_calls") or ()
+    ]
     named = frozenset(variant for _, variants in calls for variant in variants)
     for variant in named:
         index.pop(variant, None)
@@ -254,7 +325,9 @@ def index_tool_call_uids(index: MutableMapping[str, str], assistant: Mapping[str
     return named
 
 
-def resolve_tool_call_uid(index: MutableMapping[str, str], tool_call_id: Any) -> Optional[str]:
+def resolve_tool_call_uid(
+    index: MutableMapping[str, str], tool_call_id: Any
+) -> Optional[str]:
     """The uid an indexed assistant dict minted for ``tool_call_id`` (any variant), else ``None``."""
     from agent.message_sanitization import tool_result_id_variants
 
@@ -267,7 +340,9 @@ def resolve_tool_call_uid(index: MutableMapping[str, str], tool_call_id: Any) ->
     return None
 
 
-def tool_call_uid_from_history(messages: list[dict], tool_index: int, owners: dict) -> Optional[str]:
+def tool_call_uid_from_history(
+    messages: list[dict], tool_index: int, owners: dict
+) -> Optional[str]:
     """Resolve a tool-result dict's uid from the nearest preceding assistant dict in ``messages`` that
     named its ``tool_call_id`` (the cross-flush case: the assistant row landed in an earlier batch).
     ``owners`` memoizes each assistant's (named variants, uid index) across one flush's results, so K
@@ -278,7 +353,9 @@ def tool_call_uid_from_history(messages: list[dict], tool_index: int, owners: di
     from agent.message_sanitization import tool_result_id_variants
 
     result_variants = set(tool_result_id_variants(tool_call_id))
-    for prior_index in range(tool_index - 1, -1, -1):  # no messages[:i] copy: this runs per flushed result
+    for prior_index in range(
+        tool_index - 1, -1, -1
+    ):  # no messages[:i] copy: this runs per flushed result
         prior = messages[prior_index]
         if not isinstance(prior, dict):
             continue
@@ -295,6 +372,7 @@ def tool_call_uid_from_history(messages: list[dict], tool_index: int, owners: di
         # The nearest assistant naming this id owns the result: its uid, or none if it has no map (legacy).
         return resolve_tool_call_uid(index, tool_call_id)
     return None
+
 
 _Message = TypeVar("_Message", bound=MutableMapping[str, Any])
 

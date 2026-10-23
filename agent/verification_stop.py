@@ -19,10 +19,31 @@ _MAX_STATUS_SUMMARY_CHARS = 1200
 # no verifiable runtime behavior: a turn touching ONLY these suppresses the nudge
 # (a SKILL.md/README edit must never demand a /tmp verification script).
 _NON_CODE_VERIFY_EXTENSIONS = frozenset(
-    {".md", ".markdown", ".mdx", ".rst", ".txt", ".text", ".adoc", ".asciidoc", ".org", ".log", ".csv", ".tsv"}
+    {
+        ".md",
+        ".markdown",
+        ".mdx",
+        ".rst",
+        ".txt",
+        ".text",
+        ".adoc",
+        ".asciidoc",
+        ".org",
+        ".log",
+        ".csv",
+        ".tsv",
+    }
 )
 _NON_CODE_VERIFY_FILENAMES = frozenset(
-    {"license", "licence", "notice", "authors", "contributors", "changelog", "codeowners"}
+    {
+        "license",
+        "licence",
+        "notice",
+        "authors",
+        "contributors",
+        "changelog",
+        "codeowners",
+    }
 )
 
 _FALSY_TOKENS = {"0", "false", "no", "off"}
@@ -36,7 +57,9 @@ def _is_non_code_path(raw: str) -> bool:
     except Exception:
         return False
     suffix = p.suffix.lower()
-    return suffix in _NON_CODE_VERIFY_EXTENSIONS or (not suffix and p.name.lower() in _NON_CODE_VERIFY_FILENAMES)
+    return suffix in _NON_CODE_VERIFY_EXTENSIONS or (
+        not suffix and p.name.lower() in _NON_CODE_VERIFY_FILENAMES
+    )
 
 
 def _session_is_messaging_surface() -> bool:
@@ -142,7 +165,9 @@ def _workspace_has_runnable_recipe(root: Any) -> bool:
 
 def _status_detail(status: dict[str, Any]) -> str:
     state = str(status.get("status") or "unverified")
-    evidence = status.get("evidence") if isinstance(status.get("evidence"), dict) else None
+    evidence = (
+        status.get("evidence") if isinstance(status.get("evidence"), dict) else None
+    )
     if not evidence:
         return state
 
@@ -158,7 +183,11 @@ def _status_detail(status: dict[str, Any]) -> str:
 
 
 def build_verify_on_stop_nudge(
-    *, session_id: str | None, changed_paths: Iterable[str], attempts: int=0, max_attempts: int=2,
+    *,
+    session_id: str | None,
+    changed_paths: Iterable[str],
+    attempts: int = 0,
+    max_attempts: int = 2,
 ) -> str | None:
     """Return a synthetic follow-up when edited code lacks fresh verification."""
     # Prose-only turns (markdown, skills, README, LICENSE, ...) have nothing to verify.
@@ -172,7 +201,11 @@ def build_verify_on_stop_nudge(
     status, facts = snapshot
     if str(status.get("status") or "unverified") == "passed":
         return None
-    verify_commands = [str(cmd).strip() for cmd in (facts.get("verifyCommands") or []) if str(cmd).strip()]
+    verify_commands = [
+        str(cmd).strip()
+        for cmd in (facts.get("verifyCommands") or [])
+        if str(cmd).strip()
+    ]
     has_recipe = _workspace_has_runnable_recipe(facts.get("root"))
 
     # Optional shipped coding guidance, only paid when this evidence gate fires.

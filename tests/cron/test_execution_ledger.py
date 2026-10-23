@@ -13,7 +13,9 @@ from pathlib import Path
 def _point_ledger(monkeypatch, tmp_path):
     from cron import executions
 
-    monkeypatch.setattr(executions, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
     return executions
 
 
@@ -76,9 +78,11 @@ def test_stale_external_handoff_is_recovered_unknown(monkeypatch, tmp_path):
     monkeypatch.setattr(
         executions.time,
         "time",
-        lambda: pending["handoff_started_at"]
-        + executions.HANDOFF_ADOPTION_GRACE_SECONDS
-        + 1,
+        lambda: (
+            pending["handoff_started_at"]
+            + executions.HANDOFF_ADOPTION_GRACE_SECONDS
+            + 1
+        ),
     )
 
     assert executions.recover_interrupted_executions() == 1
@@ -96,9 +100,11 @@ def test_recovery_does_not_overwrite_concurrent_worker_adoption(monkeypatch, tmp
     monkeypatch.setattr(
         executions.time,
         "time",
-        lambda: pending["handoff_started_at"]
-        + executions.HANDOFF_ADOPTION_GRACE_SECONDS
-        + 1,
+        lambda: (
+            pending["handoff_started_at"]
+            + executions.HANDOFF_ADOPTION_GRACE_SECONDS
+            + 1
+        ),
     )
 
     def adopt_while_liveness_is_checked(_pid, _started_at):
@@ -159,13 +165,16 @@ def test_terminal_execution_cannot_be_rewritten(monkeypatch, tmp_path):
     executions.mark_execution_running(record["id"])
     executions.finish_execution(record["id"], success=True)
 
-    assert executions.finish_execution(
-        record["id"], success=False, error="late writer"
-    ) is None
+    assert (
+        executions.finish_execution(record["id"], success=False, error="late writer")
+        is None
+    )
     assert executions.latest_execution("immutable")["status"] == "completed"
 
 
-def test_retention_bounds_terminal_history_but_preserves_inflight(monkeypatch, tmp_path):
+def test_retention_bounds_terminal_history_but_preserves_inflight(
+    monkeypatch, tmp_path
+):
     executions = _point_ledger(monkeypatch, tmp_path)
     monkeypatch.setattr(executions, "MAX_TERMINAL_EXECUTIONS", 3)
     inflight = executions.create_execution("live", source="builtin")
@@ -231,7 +240,9 @@ def test_failed_execution_keeps_error(monkeypatch, tmp_path):
     executions = _point_ledger(monkeypatch, tmp_path)
 
     record = executions.create_execution("job-2", source="external")
-    failed = executions.finish_execution(record["id"], success=False, error="provider exploded")
+    failed = executions.finish_execution(
+        record["id"], success=False, error="provider exploded"
+    )
 
     assert failed["status"] == "failed"
     assert failed["error"] == "provider exploded"
@@ -306,11 +317,13 @@ def test_generic_submit_failure_finishes_attempt_and_releases_guard(monkeypatch)
 
     finished = []
     monkeypatch.setattr(
-        scheduler, "create_execution",
+        scheduler,
+        "create_execution",
         lambda *_args, **_kwargs: {"id": "exec-submit-fail"},
     )
     monkeypatch.setattr(
-        scheduler, "finish_execution",
+        scheduler,
+        "finish_execution",
         lambda execution_id, **kwargs: finished.append((execution_id, kwargs)),
     )
     monkeypatch.setattr(scheduler, "get_due_jobs", lambda: [{"id": "submit-fail"}])
@@ -319,10 +332,13 @@ def test_generic_submit_failure_finishes_attempt_and_releases_guard(monkeypatch)
 
     assert scheduler.tick(verbose=False, sync=False) == 0
     assert finished == [
-        ("exec-submit-fail", {
-            "success": False,
-            "error": "Executor dispatch failed: executor rejected",
-        })
+        (
+            "exec-submit-fail",
+            {
+                "success": False,
+                "error": "Executor dispatch failed: executor rejected",
+            },
+        )
     ]
     assert "submit-fail" not in scheduler.get_running_job_ids()
 
@@ -373,7 +389,10 @@ def test_provider_start_recovers_interrupted_records_before_tick(monkeypatch):
         lambda: events.append("recover") or 0,
         raising=False,
     )
-    monkeypatch.setattr("cron.jobs.record_ticker_heartbeat", lambda **_kwargs: events.append("heartbeat"))
+    monkeypatch.setattr(
+        "cron.jobs.record_ticker_heartbeat",
+        lambda **_kwargs: events.append("heartbeat"),
+    )
 
     provider.InProcessCronScheduler().start(stop, interval=1)
 
@@ -483,10 +502,6 @@ def test_early_return_still_closes_connection(monkeypatch, tmp_path):
     assert len(closed) == 1
 
 
-
-
-
-
 def test_job_listing_exposes_latest_execution(monkeypatch, tmp_path):
     from cron import jobs
 
@@ -522,7 +537,10 @@ def test_history_orders_by_instant_across_dst_fall_back(monkeypatch, tmp_path):
     assert executions.latest_execution("dst-job")["id"] == later["id"]
     assert executions.latest_executions(["dst-job"])["dst-job"]["id"] == later["id"]
     assert [r["id"] for r in executions.list_executions(job_id="dst-job")] == [
-        later["id"], earlier["id"],
+        later["id"],
+        earlier["id"],
     ]
-    page = executions.list_executions(job_id="dst-job", before_claimed_at=later["claimed_at"])
+    page = executions.list_executions(
+        job_id="dst-job", before_claimed_at=later["claimed_at"]
+    )
     assert [r["id"] for r in page] == [earlier["id"]]

@@ -49,8 +49,6 @@ def test_with_block_closes_the_handle(tmp_path):
     assert _live_count(path) == 0
 
 
-
-
 def test_exception_inside_the_block_still_closes_and_propagates(tmp_path):
     """Exception safety is the reason to prefer ``with`` over a bare close().
 

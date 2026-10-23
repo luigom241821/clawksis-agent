@@ -7,6 +7,7 @@ kanban_create(board="other-board") / kanban_show(board="other-board")
 silently landed on the caller's own board instead of the requested one —
 exactly the failure mode that stalled t_8239fc9c / t_09015699.
 """
+
 import os
 import tempfile
 from pathlib import Path
@@ -96,7 +97,9 @@ def test_workspaces_root_also_honors_explicit_board_over_env(monkeypatch, tmp_pa
     """The same ambient-env-vs-explicit-board priority bug applied to every
     _board_path() caller, not just kanban_db_path — workspaces_root must
     honor board= over CLAWK_KANBAN_WORKSPACES_ROOT too."""
-    monkeypatch.setenv("CLAWK_KANBAN_WORKSPACES_ROOT", str(tmp_path / "pinned-workspaces"))
+    monkeypatch.setenv(
+        "CLAWK_KANBAN_WORKSPACES_ROOT", str(tmp_path / "pinned-workspaces")
+    )
     path = kb.workspaces_root(board="sycode-trading")
     assert "sycode-trading" in str(path), (
         f"explicit board should override CLAWK_KANBAN_WORKSPACES_ROOT, got {path}"
@@ -111,6 +114,7 @@ def test_workspaces_root_also_honors_explicit_board_over_env(monkeypatch, tmp_pa
 # original fix only prioritized the direct argument; --board went through
 # _board_path(..., board=None) and so still lost to the env pin.
 # ---------------------------------------------------------------------------
+
 
 def test_scoped_current_board_context_trumps_kanban_db_env(monkeypatch, tmp_path):
     """kb.scoped_current_board() (what CLI --board and the dashboard
@@ -151,7 +155,9 @@ def test_cli_board_flag_trumps_worker_env_pin_end_to_end(monkeypatch, tmp_path):
     parser = argparse.ArgumentParser(prog="clawk", add_help=False)
     sub = parser.add_subparsers(dest="command")
     kc.build_parser(sub)
-    args = parser.parse_args(["kanban", "--board", "target-board", "create", "cross-board task"])
+    args = parser.parse_args(
+        ["kanban", "--board", "target-board", "create", "cross-board task"]
+    )
     rc = kc.kanban_command(args)
     assert rc == 0
 
@@ -159,6 +165,7 @@ def test_cli_board_flag_trumps_worker_env_pin_end_to_end(monkeypatch, tmp_path):
     assert target_db != worker_pinned_db
 
     from clawk_cli import kanban_db_connect as kbc
+
     with kbc.connect(board="target-board") as conn:
         rows = conn.execute("SELECT title FROM tasks").fetchall()
     assert any(r[0] == "cross-board task" for r in rows), (
@@ -191,6 +198,7 @@ def test_cli_board_flag_trumps_worker_env_pin_end_to_end(monkeypatch, tmp_path):
 # caller intent.
 # ---------------------------------------------------------------------------
 
+
 def test_dispatched_worker_board_arg_stays_pinned(monkeypatch, tmp_path):
     """A dispatched worker (CLAWK_KANBAN_TASK, the dispatcher's own injection)
     cannot resolve its way to another board: each env pin wins over board= for
@@ -208,7 +216,10 @@ def test_delegated_child_board_arg_stays_pinned(monkeypatch, tmp_path):
     """A delegated child / spawned descendant (CLAWK_DELEGATED_CHILD_CONTEXT
     marker) passing an explicit board= resolves through the pin, so
     kanban_path_is_fenced still catches the resolved path."""
-    from agent.delegation_context import DELEGATED_CHILD_ENV_MARKER, kanban_path_is_fenced
+    from agent.delegation_context import (
+        DELEGATED_CHILD_ENV_MARKER,
+        kanban_path_is_fenced,
+    )
 
     pinned = tmp_path / "worker-pinned.db"
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(pinned))
@@ -234,7 +245,9 @@ def test_pin_first_board_resolution_maps_every_slug_to_the_pin(monkeypatch, tmp_
     assert "sycode-trading" in str(kb.kanban_db_path(board="sycode-trading"))
 
 
-def test_pin_first_board_resolution_without_pin_keeps_explicit_board(monkeypatch, tmp_path):
+def test_pin_first_board_resolution_without_pin_keeps_explicit_board(
+    monkeypatch, tmp_path
+):
     """pin_first_board_resolution() is a no-op when no pin is set: multi-board
     notifier/dispatcher ticks on an unpinned box must keep resolving each slug
     to its own physical DB."""

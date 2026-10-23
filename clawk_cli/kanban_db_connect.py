@@ -51,7 +51,9 @@ def _resolve_busy_timeout_ms() -> int:
     shared cross-profile dispatch bus, so worker stampedes are expected; a
     long timeout lets WAL serialize writers instead of surfacing transient
     ``database is locked`` failures."""
-    return _kb._env_int("CLAWK_KANBAN_BUSY_TIMEOUT_MS", DEFAULT_BUSY_TIMEOUT_MS, minimum=1)
+    return _kb._env_int(
+        "CLAWK_KANBAN_BUSY_TIMEOUT_MS", DEFAULT_BUSY_TIMEOUT_MS, minimum=1
+    )
 
 
 def _sqlite_connect(path: Path) -> sqlite3.Connection:
@@ -146,7 +148,8 @@ def _cross_process_init_lock(path: Path):
                 "without the cross-process lock (in-process lock + idempotent "
                 "init are the correctness backstop). A stuck holder is no longer "
                 "able to block this connect indefinitely (#36644).",
-                lock_path, _INIT_LOCK_TIMEOUT_SECONDS,
+                lock_path,
+                _INIT_LOCK_TIMEOUT_SECONDS,
             )
         yield
     finally:
@@ -242,7 +245,8 @@ def _maybe_checkpoint_wal(conn: sqlite3.Connection, db_path: Path) -> None:
         _kb._log.debug(
             "kanban WAL checkpoint (PASSIVE) on %s -> %s "
             "(busy, wal_frames, checkpointed_frames)",
-            key, tuple(row) if row is not None else None,
+            key,
+            tuple(row) if row is not None else None,
         )
     except sqlite3.Error as exc:
         _kb._log.debug("kanban WAL checkpoint on %s skipped: %s", key, exc)
@@ -253,7 +257,7 @@ def _looks_like_tls_record_at(data: bytes, offset: int) -> bool:
     if len(data) < offset + 5:
         return False
     content_type, major, minor = data[offset], data[offset + 1], data[offset + 2]
-    length = int.from_bytes(data[offset + 3:offset + 5], "big")
+    length = int.from_bytes(data[offset + 3 : offset + 5], "big")
     return (
         content_type in {0x14, 0x15, 0x16, 0x17}
         and major == 0x03
@@ -311,7 +315,9 @@ def _backup_label(backup_path: Optional[Path]) -> str:
     return str(backup_path) if backup_path is not None else "<backup failed>"
 
 
-def _prune_corrupt_backups(parent: Path, base_name: str, keep: Optional[Path] = None) -> None:
+def _prune_corrupt_backups(
+    parent: Path, base_name: str, keep: Optional[Path] = None
+) -> None:
     """Keep only the ``_CORRUPT_BACKUP_RETENTION`` newest (by mtime)
     ``<db>.corrupt.<hash>.bak`` files plus their ``-wal``/``-shm`` copies.
     ``keep`` (the just-created backup) is never pruned regardless of mtime —
@@ -338,7 +344,11 @@ def _prune_corrupt_backups(parent: Path, base_name: str, keep: Optional[Path] = 
 
     backups.sort(key=_mtime, reverse=True)
     for stale in backups[budget:]:
-        for victim in (stale, stale.with_name(stale.name + "-wal"), stale.with_name(stale.name + "-shm")):
+        for victim in (
+            stale,
+            stale.with_name(stale.name + "-wal"),
+            stale.with_name(stale.name + "-shm"),
+        ):
             with contextlib.suppress(OSError):
                 victim.unlink(missing_ok=True)
 
@@ -393,8 +403,10 @@ def _backup_corrupt_db(path: Path) -> Optional[Path]:
         sidecar = parent / (base_name + suffix)
         sidecar_backup = parent / (candidate.name + suffix)
         if (
-            sidecar.parent != parent or not sidecar.exists()
-            or sidecar_backup.parent != parent or sidecar_backup.exists()
+            sidecar.parent != parent
+            or not sidecar.exists()
+            or sidecar_backup.parent != parent
+            or sidecar_backup.exists()
         ):
             continue
         with contextlib.suppress(OSError):
@@ -455,7 +467,9 @@ def _repairable_index_names(messages: list[str]) -> Optional[list[str]]:
     return names or None
 
 
-def _attempt_index_reindex_repair(path: Path, index_names: list[str]) -> tuple[bool, list[str]]:
+def _attempt_index_reindex_repair(
+    path: Path, index_names: list[str]
+) -> tuple[bool, list[str]]:
     """REINDEX the named indexes (per-index first; bare ``REINDEX`` fallback if
     a parsed name is an internal/auto index), then re-run integrity_check.
     Returns ``(clean, post_repair_messages)``; never raises. Callers must hold
@@ -501,7 +515,10 @@ def _probe_for_corruption(resolved: Path) -> tuple[Optional[list[str]], Optional
         return None, f"sqlite refused to open file: {exc}"
     if _integrity_messages_ok(messages):
         return messages, None
-    return messages, f"integrity_check returned {messages[0] if messages else '<no row>'!r}"
+    return (
+        messages,
+        f"integrity_check returned {messages[0] if messages else '<no row>'!r}",
+    )
 
 
 def _guard_existing_db_is_healthy(path: Path) -> None:
@@ -534,14 +551,18 @@ def _guard_existing_db_is_healthy(path: Path) -> None:
         _kb._log.warning(
             "kanban DB %s failed integrity_check with index-only errors "
             "(%s); pre-repair backup at %s — attempting REINDEX auto-repair.",
-            resolved, ", ".join(index_names), _backup_label(backup),
+            resolved,
+            ", ".join(index_names),
+            _backup_label(backup),
         )
         repaired, post = _attempt_index_reindex_repair(resolved, index_names)
         if repaired:
             _kb._log.warning(
                 "kanban DB %s auto-repaired via REINDEX (%s); "
                 "integrity_check now clean. Pre-repair copy kept at %s.",
-                resolved, ", ".join(index_names), _backup_label(backup),
+                resolved,
+                ", ".join(index_names),
+                _backup_label(backup),
             )
             return
         reason = (
@@ -566,7 +587,9 @@ class RepairResult:
     reindexed: list[str] = field(default_factory=list)
 
 
-def repair_db(db_path: Optional[Path] = None, *, board: Optional[str] = None) -> RepairResult:
+def repair_db(
+    db_path: Optional[Path] = None, *, board: Optional[str] = None
+) -> RepairResult:
     """Probe a kanban DB and apply the narrow index-REINDEX repair if needed.
     Same policy as :func:`_guard_existing_db_is_healthy` (quarantine BEFORE
     any mutation; REINDEX under the init flock; anything non-index stays
@@ -588,7 +611,9 @@ def repair_db(db_path: Optional[Path] = None, *, board: Optional[str] = None) ->
             # Same quarantine the connect-time guard takes when sqlite
             # refuses to open the file at all.
             return RepairResult(
-                status="corrupt", db_path=resolved, messages=[str(reason)],
+                status="corrupt",
+                db_path=resolved,
+                messages=[str(reason)],
                 backup_path=_backup_corrupt_db(resolved),
             )
         if reason is None:
@@ -598,7 +623,12 @@ def repair_db(db_path: Optional[Path] = None, *, board: Optional[str] = None) ->
         backup = _backup_corrupt_db(resolved)
         index_names = _repairable_index_names(messages)
         if not index_names:
-            return RepairResult(status="corrupt", db_path=resolved, messages=messages, backup_path=backup)
+            return RepairResult(
+                status="corrupt",
+                db_path=resolved,
+                messages=messages,
+                backup_path=backup,
+            )
         repaired, post = _attempt_index_reindex_repair(resolved, index_names)
         # The file changed on disk; force the next connect() in this process
         # to re-probe instead of trusting the stale healthy-path cache.
@@ -644,6 +674,7 @@ def _open_configured(path: Path, under_lock) -> tuple[sqlite3.Connection, Any]:
             # WAL doesn't work on network filesystems; the helper falls back to
             # DELETE with one ERROR log (see clawk_state_wal._WAL_INCOMPAT_MARKERS).
             from clawk_state_wal import apply_wal_with_fallback
+
             apply_wal_with_fallback(conn, db_label=f"kanban.db ({path.name})")
             # FULL (not NORMAL): fsync before each checkpoint to narrow the
             # crash window that can leave a b-tree page header torn.
@@ -690,6 +721,7 @@ def _refuse_dead_board_resurrection(path: Path, board: Optional[str]) -> None:
         tombstone = path.parent / "board.json"
         if tombstone.exists():
             import json
+
             try:
                 raw = json.loads(tombstone.read_text(encoding="utf-8-sig"))
             except (OSError, ValueError):
@@ -708,12 +740,18 @@ def _refuse_dead_board_resurrection(path: Path, board: Optional[str]) -> None:
         return
     meta = _kb.read_board_metadata(slug)
     if meta.get("archived"):
-        raise ValueError(f"kanban board {slug!r} is archived; refusing to recreate its database")
+        raise ValueError(
+            f"kanban board {slug!r} is archived; refusing to recreate its database"
+        )
     if not _kb.board_metadata_path(slug).exists():
-        raise ValueError(f"kanban board {slug!r} does not exist; create it with `clawk kanban boards create {slug}`")
+        raise ValueError(
+            f"kanban board {slug!r} does not exist; create it with `clawk kanban boards create {slug}`"
+        )
 
 
-def connect(db_path: Optional[Path] = None, *, board: Optional[str] = None) -> sqlite3.Connection:
+def connect(
+    db_path: Optional[Path] = None, *, board: Optional[str] = None
+) -> sqlite3.Connection:
     """Open (and initialize if needed) the kanban DB. WAL is (re)enabled on
     every connection so a re-created file stays robust; the first connection
     per path auto-runs :func:`init_db`, later ones skip via
@@ -722,6 +760,7 @@ def connect(db_path: Optional[Path] = None, *, board: Optional[str] = None) -> s
     ``<root>/kanban/current`` -> ``default``)."""
     path = db_path if db_path is not None else _kb.kanban_db_path(board=board)
     from agent.delegation_context import kanban_path_is_fenced
+
     if kanban_path_is_fenced(path):
         # Reads must not enter schema/backfill write transactions. Never create a
         # missing board or migrate on a descendant's behalf; the owner initializes it.
@@ -730,7 +769,9 @@ def connect(db_path: Optional[Path] = None, *, board: Optional[str] = None) -> s
         conn.text_factory = _kb._lossy_text
         if not _schema_is_present(conn):
             conn.close()
-            raise PermissionError("Kanban descendants require an initialized board; ask its owner to initialize it")
+            raise PermissionError(
+                "Kanban descendants require an initialized board; ask its owner to initialize it"
+            )
         return conn
     _refuse_dead_board_resurrection(path, board)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -765,6 +806,7 @@ def connect(db_path: Optional[Path] = None, *, board: Optional[str] = None) -> s
         # fails actionably instead of "attempt to write a readonly database".
         # See #12508.
         from clawk_state import preflight_db_writability
+
         preflight_db_writability(path, db_label=f"kanban.db ({path.name})")
         # Cheap byte-level header check before any sqlite connection, then the
         # full integrity probe (cached per path via _INITIALIZED_PATHS).
@@ -851,13 +893,17 @@ _EARLY_TASK_COLUMNS = (
 # RENAME-avoidance note in ``_migrate_add_optional_columns``.
 _RENAMED_TASK_COLUMNS = (
     (
-        "consecutive_failures", "consecutive_failures INTEGER NOT NULL DEFAULT 0",
-        "spawn_failures", "UPDATE tasks SET consecutive_failures = COALESCE(spawn_failures, 0)",
+        "consecutive_failures",
+        "consecutive_failures INTEGER NOT NULL DEFAULT 0",
+        "spawn_failures",
+        "UPDATE tasks SET consecutive_failures = COALESCE(spawn_failures, 0)",
     ),
     ("worker_pid", "worker_pid INTEGER", None, None),
     (
-        "last_failure_error", "last_failure_error TEXT",
-        "last_spawn_error", "UPDATE tasks SET last_failure_error = last_spawn_error",
+        "last_failure_error",
+        "last_failure_error TEXT",
+        "last_spawn_error",
+        "UPDATE tasks SET last_failure_error = last_spawn_error",
     ),
 )
 
@@ -913,9 +959,12 @@ def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
-    return conn.execute(
-        f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
+        ).fetchone()
+        is not None
+    )
 
 
 def _migrate_add_optional_columns(conn: sqlite3.Connection) -> None:
@@ -948,9 +997,13 @@ def _migrate_add_optional_columns(conn: sqlite3.Connection) -> None:
     # so a ``CREATE INDEX`` over a missing column in SCHEMA_SQL would abort
     # init on legacy boards before the ALTER TABLE pass runs. ``IF NOT EXISTS``
     # keeps re-running here cheap and correct on fresh DBs.
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status ON tasks(assignee, status)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status ON tasks(assignee, status)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_tenant ON tasks(tenant)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_idempotency ON tasks(idempotency_key)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tasks_idempotency ON tasks(idempotency_key)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_session_id ON tasks(session_id)")
 
     # task_events.run_id back-fills as NULL for historical events (they predate
@@ -1023,9 +1076,13 @@ def _backfill_legacy_inflight_runs(conn: sqlite3.Connection) -> None:
                 ) VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    row["id"], row["assignee"], row["claim_lock"],
-                    row["claim_expires"], row["worker_pid"],
-                    row["max_runtime_seconds"], row["last_heartbeat_at"],
+                    row["id"],
+                    row["assignee"],
+                    row["claim_lock"],
+                    row["claim_expires"],
+                    row["worker_pid"],
+                    row["max_runtime_seconds"],
+                    row["last_heartbeat_at"],
                     started,
                 ),
             )
@@ -1143,7 +1200,9 @@ def _rebuild_drifted_tables(conn: sqlite3.Connection) -> None:
         for table in drifted:
             create_sql, index_sqls = _REBUILD_SPECS[table]
             old_cols = [c["name"] for c in conn.execute(f"PRAGMA table_info({table})")]
-            _kb._log.info("kanban migration: rebuilding %s to match current schema", table)
+            _kb._log.info(
+                "kanban migration: rebuilding %s to match current schema", table
+            )
             conn.execute(f"ALTER TABLE {table} RENAME TO {table}_legacy")
             conn.execute(create_sql)
             new_cols = _column_names(conn, table)

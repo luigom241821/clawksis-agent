@@ -61,13 +61,15 @@ def _tracked_python_files(root: Path) -> list[str]:
     names = proc.stdout.decode(errors="replace").split("\0")
     deleted = subprocess.run(
         ["git", "-C", str(root), "ls-files", "--deleted", "-z", "--", "*.py"],
-        capture_output=True, check=True,
+        capture_output=True,
+        check=True,
     )
     removed = set(deleted.stdout.decode(errors="replace").split("\0"))
     files = sorted(
         n.replace("\\", "/")
         for n in names
-        if n.endswith(".py") and n not in removed
+        if n.endswith(".py")
+        and n not in removed
         and not n.replace("\\", "/").startswith("tests/")
     )
     if not files:
@@ -105,25 +107,26 @@ def _import_sites(tree: ast.AST, relpath: str) -> list[str]:
                     _STUB_MODULE + "."
                 ):
                     sites.append(
-                        f"{relpath}:{node.lineno}: import of stub module "
-                        f"'{alias.name}'"
+                        f"{relpath}:{node.lineno}: import of stub module '{alias.name}'"
                     )
         elif isinstance(node, ast.ImportFrom):
             names = ", ".join(a.name for a in node.names)
             kind: str | None = None
             if node.level == 0:
-                if node.module == _STUB_MODULE or (
-                    node.module and node.module.startswith(_STUB_MODULE + ".")
-                ) or node.module == _DELETED_PARENT and any(
-                    a.name == "lazy_deps" for a in node.names
+                if (
+                    node.module == _STUB_MODULE
+                    or (node.module and node.module.startswith(_STUB_MODULE + "."))
+                    or node.module == _DELETED_PARENT
+                    and any(a.name == "lazy_deps" for a in node.names)
                 ):
                     kind = f"'{node.module} ({names})'"
             else:
                 resolved = _relative_target(relpath, node)
-                if resolved == _DELETED_PARENT and any(
-                    a.name == "lazy_deps" for a in node.names
-                ) or resolved == _STUB_MODULE or (
-                    resolved and resolved.startswith(_STUB_MODULE + ".")
+                if (
+                    resolved == _DELETED_PARENT
+                    and any(a.name == "lazy_deps" for a in node.names)
+                    or resolved == _STUB_MODULE
+                    or (resolved and resolved.startswith(_STUB_MODULE + "."))
                 ):
                     kind = f"'{resolved} ({names})' (relative)"
             if kind is not None:

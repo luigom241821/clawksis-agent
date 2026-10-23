@@ -31,6 +31,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_credential_cache():
     from agent.azure_identity_adapter import reset_credential_cache
+
     reset_credential_cache()
     yield
     reset_credential_cache()
@@ -50,12 +51,16 @@ def fake_azure_identity(monkeypatch):
     fake_module = SimpleNamespace(
         DefaultAzureCredential=lambda **kw: SimpleNamespace(
             kwargs=kw,
-            get_token=lambda scope: SimpleNamespace(token="fake", expires_on=9999999999),
+            get_token=lambda scope: SimpleNamespace(
+                token="fake", expires_on=9999999999
+            ),
         ),
         get_bearer_token_provider=lambda credential, scope: (
             last.__setitem__("scope", scope),
             last.__setitem__("kwargs", credential.kwargs),
-            last.__setitem__("credential_count", cast(int, last["credential_count"]) + 1),
+            last.__setitem__(
+                "credential_count", cast(int, last["credential_count"]) + 1
+            ),
             _provider(scope),
         )[-1],
     )
@@ -72,6 +77,7 @@ def fake_azure_identity(monkeypatch):
 class TestResolveAzureFoundryRuntimeEntra:
     def test_returns_callable_api_key_for_entra(self, fake_azure_identity):
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         runtime = _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
             model_cfg={
@@ -88,7 +94,6 @@ class TestResolveAzureFoundryRuntimeEntra:
         assert callable(runtime["api_key"])
         assert runtime["source"] == "entra_id"
 
-
     def test_entra_propagates_scope_only(self, fake_azure_identity):
         """``model.entra.scope`` is the only Clawksis-managed Azure SDK
         setting. Identity selection (client ID, tenant, authority,
@@ -97,6 +102,7 @@ class TestResolveAzureFoundryRuntimeEntra:
         Legacy ``model.entra.client_id`` / ``tenant_id`` / ``authority``
         keys in config.yaml are silently ignored."""
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
             model_cfg={
@@ -121,14 +127,14 @@ class TestResolveAzureFoundryRuntimeEntra:
         assert "interactive_browser_tenant_id" not in kw
         assert "authority" not in kw
 
-
-
-
-    def test_entra_with_explicit_api_key_uses_string_escape_hatch(self, fake_azure_identity):
+    def test_entra_with_explicit_api_key_uses_string_escape_hatch(
+        self, fake_azure_identity
+    ):
         """Passing --api-key on the CLI overrides the entra path so a
         user can debug a single request with a static key without
         editing config.yaml."""
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         runtime = _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
             model_cfg={
@@ -143,7 +149,9 @@ class TestResolveAzureFoundryRuntimeEntra:
         assert runtime["auth_mode"] == "api_key"
         assert runtime["source"] == "explicit"
 
-    def test_forwarded_entra_callable_preserves_identity_and_metadata(self, fake_azure_identity):
+    def test_forwarded_entra_callable_preserves_identity_and_metadata(
+        self, fake_azure_identity
+    ):
         """A live provider re-resolution must not stringify its token source or
         relabel Entra authentication as a static-key override."""
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
@@ -176,6 +184,7 @@ class TestResolveAzureFoundryRuntimeEntra:
 class TestResolveAzureFoundryRuntimeApiKey:
     def test_default_auth_mode_uses_static_key(self, monkeypatch):
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "sk-azure-static-key")
         runtime = _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
@@ -191,6 +200,7 @@ class TestResolveAzureFoundryRuntimeApiKey:
 
     def test_explicit_auth_mode_api_key(self, monkeypatch):
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "sk-static")
         runtime = _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
@@ -206,6 +216,7 @@ class TestResolveAzureFoundryRuntimeApiKey:
 
     def test_anthropic_messages_strips_v1_suffix(self, monkeypatch):
         from clawk_cli.runtime_provider import _resolve_azure_foundry_runtime
+
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "k")
         runtime = _resolve_azure_foundry_runtime(
             requested_provider="azure-foundry",
@@ -228,6 +239,7 @@ class TestAzureFoundryAuthStatus:
     def test_entra_status_does_not_mint_token(self, monkeypatch, installed):
         """Status checks availability and gives an explicit PM command for missing dependencies."""
         from clawk_cli import auth as _auth
+
         # Force load_config to return our entra config.
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
@@ -255,9 +267,9 @@ class TestAzureFoundryAuthStatus:
             assert install_hint("azure-identity") in info["hint"]
             assert "restart" in info["hint"].lower()
 
-
     def test_api_key_status_false_when_missing(self, monkeypatch):
         from clawk_cli import auth as _auth
+
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
             lambda: {

@@ -29,28 +29,37 @@ from agent.auxiliary_client import (
 class TestIsUnsupportedParameterError:
     """The generic detector must match real provider phrasings for any param."""
 
-    @pytest.mark.parametrize("param,message", [
-        # temperature phrasings (regression coverage via the generic API)
-        ("temperature", "HTTP 400: Unsupported parameter: temperature"),
-        ("temperature", "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}"),
-        ("temperature", "this model does not support temperature"),
-        # Bedrock Converse wordings (xAI Grok contraction, inference-profile Claude deprecation, #111043)
-        ("temperature", "An error occurred (ValidationException) when calling the Converse operation: "
-                        "This model doesn't support the temperature field. Remove temperature and try again."),
-        ("temperature", "ValidationException: `temperature` is deprecated for this model."),
-        # max_tokens phrasings
-        ("max_tokens", "HTTP 400: Unsupported parameter: max_tokens"),
-        ("max_tokens", "Unknown parameter: max_tokens — use max_completion_tokens"),
-        ("max_tokens", "Invalid parameter: max_tokens is not supported"),
-        # arbitrary future params
-        ("seed", "HTTP 400: unrecognized parameter: seed"),
-        ("top_p", "Error: top_p is not supported for this model"),
-    ])
+    @pytest.mark.parametrize(
+        "param,message",
+        [
+            # temperature phrasings (regression coverage via the generic API)
+            ("temperature", "HTTP 400: Unsupported parameter: temperature"),
+            (
+                "temperature",
+                "Error code: 400 - {'error': {'code': 'unsupported_parameter', 'param': 'temperature'}}",
+            ),
+            ("temperature", "this model does not support temperature"),
+            # Bedrock Converse wordings (xAI Grok contraction, inference-profile Claude deprecation, #111043)
+            (
+                "temperature",
+                "An error occurred (ValidationException) when calling the Converse operation: "
+                "This model doesn't support the temperature field. Remove temperature and try again.",
+            ),
+            (
+                "temperature",
+                "ValidationException: `temperature` is deprecated for this model.",
+            ),
+            # max_tokens phrasings
+            ("max_tokens", "HTTP 400: Unsupported parameter: max_tokens"),
+            ("max_tokens", "Unknown parameter: max_tokens — use max_completion_tokens"),
+            ("max_tokens", "Invalid parameter: max_tokens is not supported"),
+            # arbitrary future params
+            ("seed", "HTTP 400: unrecognized parameter: seed"),
+            ("top_p", "Error: top_p is not supported for this model"),
+        ],
+    )
     def test_matches_real_provider_messages(self, param, message):
         assert _is_unsupported_parameter_error(RuntimeError(message), param) is True
-
-
-
 
 
 def _dummy_response():
@@ -76,12 +85,18 @@ class TestMaxTokensRetryHardening:
         client.chat.completions.create.side_effect = err
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
         ):
             with pytest.raises(RuntimeError):
                 call_llm(
@@ -94,7 +109,6 @@ class TestMaxTokensRetryHardening:
         # Only the initial attempt — no retry because the gate blocked it
         assert client.chat.completions.create.call_count == 1
 
-
     @pytest.mark.asyncio
     async def test_async_max_tokens_retry_skipped_when_max_tokens_is_none(self):
         client = MagicMock()
@@ -103,12 +117,18 @@ class TestMaxTokensRetryHardening:
         client.chat.completions.create = AsyncMock(side_effect=err)
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
         ):
             with pytest.raises(RuntimeError):
                 await async_call_llm(
@@ -118,4 +138,3 @@ class TestMaxTokensRetryHardening:
                 )
 
         assert client.chat.completions.create.call_count == 1
-

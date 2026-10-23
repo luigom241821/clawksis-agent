@@ -11,6 +11,7 @@ import logging
 import agent.auxiliary_client as ac
 from agent.auxiliary_client import resolve_provider_client
 
+
 class TestUnknownProviderDedup:
     def setup_method(self):
         ac._LOGGED_UNKNOWN_PROVIDER_KEYS.clear()
@@ -19,10 +20,7 @@ class TestUnknownProviderDedup:
         with caplog.at_level(logging.DEBUG, logger="agent.auxiliary_client"):
             client, model = resolve_provider_client("no_such_provider_xyz", "")
         assert (client, model) == (None, None)
-        recs = [
-            r for r in caplog.records
-            if "unknown provider" in r.getMessage()
-        ]
+        recs = [r for r in caplog.records if "unknown provider" in r.getMessage()]
         # Exactly one record, and it is DEBUG (never WARNING).
         assert len(recs) == 1
         assert recs[0].levelno == logging.DEBUG
@@ -33,12 +31,10 @@ class TestUnknownProviderDedup:
             resolve_provider_client("no_such_provider_xyz", "")
             resolve_provider_client("no_such_provider_xyz", "")
             resolve_provider_client("no_such_provider_xyz", "")
-        recs = [
-            r for r in caplog.records
-            if "unknown provider" in r.getMessage()
-        ]
+        recs = [r for r in caplog.records if "unknown provider" in r.getMessage()]
         # Three calls, one log line — dedup suppressed the repeats.
         assert len(recs) == 1
+
 
 class TestUnhandledAuthTypeDedup:
     def setup_method(self):
@@ -64,10 +60,7 @@ class TestUnhandledAuthTypeDedup:
             resolve_provider_client("bogus_authtype", "")  # repeat → suppressed
 
         assert (client, model) == (None, None)
-        recs = [
-            r for r in caplog.records
-            if "unhandled auth_type" in r.getMessage()
-        ]
+        recs = [r for r in caplog.records if "unhandled auth_type" in r.getMessage()]
         # Two calls, one DEBUG record, never WARNING.
         assert len(recs) == 1
         assert recs[0].levelno == logging.DEBUG

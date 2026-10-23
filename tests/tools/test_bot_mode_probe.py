@@ -47,10 +47,15 @@ def test_roster_excludes_infra_dirs_and_tombstones(tmp_path):
     ghost = _make_bot_profile(home, "ghost", managed=True)
     mark_named_profile_deleted(ghost)
 
-    assert [name for name, _ in bot_mode_probe._roster(home)] == ["default", "researcher"]
+    assert [name for name, _ in bot_mode_probe._roster(home)] == [
+        "default",
+        "researcher",
+    ]
     section = bot_mode_probe.get_bot_mode_protocol_section(home)
     assert "`@researcher`" in section
-    assert not any(f"`@{s}`" in section for s in ("sessions", "logs", "ghost", ".deleted"))
+    assert not any(
+        f"`@{s}`" in section for s in ("sessions", "logs", "ghost", ".deleted")
+    )
 
 
 def test_roster_excludes_dirs_failing_the_profile_id_regex(tmp_path):
@@ -65,10 +70,15 @@ def test_roster_excludes_dirs_failing_the_profile_id_regex(tmp_path):
         d.mkdir()
         (d / "config.yaml").write_text("model:\n  name: test\n", encoding="utf-8")
 
-    assert [name for name, _ in bot_mode_probe._roster(home)] == ["default", "researcher"]
+    assert [name for name, _ in bot_mode_probe._roster(home)] == [
+        "default",
+        "researcher",
+    ]
     section = bot_mode_probe.get_bot_mode_protocol_section(home)
     assert "`@researcher`" in section
-    assert not any(f"`@{s}`" in section for s in ("_backup_removed_20260920", ".staging-area"))
+    assert not any(
+        f"`@{s}`" in section for s in ("_backup_removed_20260920", ".staging-area")
+    )
 
 
 def test_silent_when_no_profile_is_bot_managed(tmp_path):
@@ -140,7 +150,9 @@ def test_soul_legacy_protocol_no_longer_suppresses_live_section(tmp_path):
         "# Me\n\n## Messaging other agents\nold plugin text\n", encoding="utf-8"
     )
     assert "`@coder`" in bot_mode_probe.get_bot_mode_protocol_section(home)
-    assert bot_mode_probe.strip_legacy_protocol((home / "SOUL.md").read_text()) == "# Me\n"
+    assert (
+        bot_mode_probe.strip_legacy_protocol((home / "SOUL.md").read_text()) == "# Me\n"
+    )
 
 
 def test_deterministic_across_calls(tmp_path):
@@ -163,14 +175,14 @@ def test_never_raises_on_garbage(tmp_path, monkeypatch):
     (profiles / "profile.yaml").write_text("ui_meta: [unclosed", encoding="utf-8")
     assert isinstance(bot_mode_probe.get_bot_mode_protocol_section(home), str)
 
-    monkeypatch.setattr(bot_mode_probe, "_roster", lambda root: (_ for _ in ()).throw(OSError("boom")))
+    monkeypatch.setattr(
+        bot_mode_probe, "_roster", lambda root: (_ for _ in ()).throw(OSError("boom"))
+    )
     bot_mode_probe._reset_cache_for_tests()
     assert bot_mode_probe.get_bot_mode_protocol_section(home) == ""
 
 
 # ── capability epoch ─────────────────────────────────────────────────────────
-
-
 
 
 def test_fingerprint_changes_on_each_capability_axis(tmp_path):
@@ -188,7 +200,8 @@ def test_fingerprint_changes_on_each_capability_axis(tmp_path):
 
     # toolset pin changed (the key `clawk tools enable/disable` writes, #124211)
     (home / "config.yaml").write_text(
-        "platform_toolsets:\n  desktop: [clawk-desktop, computer_use]\n", encoding="utf-8"
+        "platform_toolsets:\n  desktop: [clawk-desktop, computer_use]\n",
+        encoding="utf-8",
     )
     after_tools = bot_mode_probe.capability_fingerprint(home)
     assert after_tools != after_skill
@@ -308,7 +321,13 @@ def test_legacy_bot_chat_upgrade(tmp_path):
     assert bot_mode_probe.stored_bot_chat_prompt_needs_upgrade(legacy, home)
 
     # a rebuilt prompt (stamped) never re-fires
-    upgraded = legacy + "\n\n" + bot_mode_probe.get_bot_mode_protocol_section(home) + "\n\n" + bot_mode_probe.epoch_line(home)
+    upgraded = (
+        legacy
+        + "\n\n"
+        + bot_mode_probe.get_bot_mode_protocol_section(home)
+        + "\n\n"
+        + bot_mode_probe.epoch_line(home)
+    )
     assert not bot_mode_probe.stored_bot_chat_prompt_needs_upgrade(upgraded, home)
 
     # SOUL-era prompt (frozen roster rode in from SOUL.md, no stamp) → upgrade once
@@ -324,8 +343,6 @@ def test_legacy_bot_chat_upgrade(tmp_path):
 
 
 # ── peer gateways (cross-machine DMs) ────────────────────────────────────────
-
-
 
 
 def test_peer_paragraph_lists_registered_peers(tmp_path):

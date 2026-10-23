@@ -56,44 +56,50 @@ _TITLE_RESPONSE_FORMAT = {
 class TestIsStructuredOutputRejection:
     """The detector must match the phrasings providers actually return."""
 
-    @pytest.mark.parametrize("message", [
-        # vLLM guided_grammar / xgrammar (#82816, verbatim from the report)
-        (
-            "Error code: 400 - {'error': {'message': 'guided_grammar "
-            '\'{"additionalProperties":false}\' has compile_grammar_error: '
-            "No module named 'xgrammar'', 'type': 'invalid_request_error'}}"
-        ),
-        # Second endpoint from the same report
-        "HTTP 400: This response_format type is unavailable now",
-        # Strict Anthropic-wire gateways rejecting the raw OpenAI field
-        "HTTP 400: response_format: Extra inputs are not permitted",
-        # Gateways that predate output_config (bedrock-mantle documented case)
-        "HTTP 400: output_config: Extra inputs are not permitted",
-        # Generic unsupported-parameter phrasings for both field names
-        "Unsupported parameter: response_format",
-        "output_config is not supported",
-        # Strict pydantic gateway rejecting the object-form json_schema by SHAPE
-        # (422, verbatim body from the gateway) -- no unsupported-parameter wording
-        'HTTP 422: {"detail":[{"loc":["body","response_format","json_schema"],'
-        '"msg":"str type expected","type":"type_error.str"}]}',
-        # Gemini native generationConfig wording (verbatim 400s from generativelanguage)
-        "Gemini HTTP 400 (INVALID_ARGUMENT): Function calling with a response mime type: 'application/json' is unsupported",
-        "Gemini HTTP 400 (INVALID_ARGUMENT): Invalid JSON payload received. Unknown name \"response_json_schema\" at 'generation_config'",
-        "Gemini HTTP 400 (INVALID_ARGUMENT): Invalid value at 'generation_config.response_schema.properties[0].value.type'",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            # vLLM guided_grammar / xgrammar (#82816, verbatim from the report)
+            (
+                "Error code: 400 - {'error': {'message': 'guided_grammar "
+                "'{\"additionalProperties\":false}' has compile_grammar_error: "
+                "No module named 'xgrammar'', 'type': 'invalid_request_error'}}"
+            ),
+            # Second endpoint from the same report
+            "HTTP 400: This response_format type is unavailable now",
+            # Strict Anthropic-wire gateways rejecting the raw OpenAI field
+            "HTTP 400: response_format: Extra inputs are not permitted",
+            # Gateways that predate output_config (bedrock-mantle documented case)
+            "HTTP 400: output_config: Extra inputs are not permitted",
+            # Generic unsupported-parameter phrasings for both field names
+            "Unsupported parameter: response_format",
+            "output_config is not supported",
+            # Strict pydantic gateway rejecting the object-form json_schema by SHAPE
+            # (422, verbatim body from the gateway) -- no unsupported-parameter wording
+            'HTTP 422: {"detail":[{"loc":["body","response_format","json_schema"],'
+            '"msg":"str type expected","type":"type_error.str"}]}',
+            # Gemini native generationConfig wording (verbatim 400s from generativelanguage)
+            "Gemini HTTP 400 (INVALID_ARGUMENT): Function calling with a response mime type: 'application/json' is unsupported",
+            "Gemini HTTP 400 (INVALID_ARGUMENT): Invalid JSON payload received. Unknown name \"response_json_schema\" at 'generation_config'",
+            "Gemini HTTP 400 (INVALID_ARGUMENT): Invalid value at 'generation_config.response_schema.properties[0].value.type'",
+        ],
+    )
     def test_matches_real_provider_messages(self, message):
         assert _is_structured_output_rejection(RuntimeError(message)) is True
 
-    @pytest.mark.parametrize("message", [
-        # Unrelated 400s must NOT trigger a silent schema downgrade
-        "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'",
-        "HTTP 400: Unsupported parameter: temperature",
-        "max_tokens is too large for this model",
-        "Rate limit exceeded",
-        "Connection reset by peer",
-        # Alternation errors that happen to mention messages
-        "messages: Extra inputs are not permitted",
-    ])
+    @pytest.mark.parametrize(
+        "message",
+        [
+            # Unrelated 400s must NOT trigger a silent schema downgrade
+            "HTTP 400: Invalid value: 'tool'. Supported values are: 'assistant'",
+            "HTTP 400: Unsupported parameter: temperature",
+            "max_tokens is too large for this model",
+            "Rate limit exceeded",
+            "Connection reset by peer",
+            # Alternation errors that happen to mention messages
+            "messages: Extra inputs are not permitted",
+        ],
+    )
     def test_does_not_match_unrelated_errors(self, message):
         assert _is_structured_output_rejection(RuntimeError(message)) is False
 
@@ -137,9 +143,12 @@ class TestWithoutStructuredOutputFormat:
 
     def test_returns_none_when_nothing_to_remove(self):
         assert _without_structured_output_format({"model": "m"}) is None
-        assert _without_structured_output_format(
-            {"model": "m", "extra_body": {"metadata": {}}}
-        ) is None
+        assert (
+            _without_structured_output_format(
+                {"model": "m", "extra_body": {"metadata": {}}}
+            )
+            is None
+        )
 
 
 def _dummy_response():
@@ -153,29 +162,39 @@ class TestCallLlmStructuredOutputRetry:
         client = MagicMock()
         client.base_url = "https://api.openai.com/v1"
         client.chat.completions.create.side_effect = [
-            first_exc, _dummy_response(),
+            first_exc,
+            _dummy_response(),
         ]
         return client
 
-    @pytest.mark.parametrize("error_message", [
-        # vLLM guided_grammar (#82816)
-        "Error code: 400 - guided_grammar has compile_grammar_error: "
-        "No module named 'xgrammar'",
-        # Second endpoint flavor from the same report
-        "HTTP 400: This response_format type is unavailable now",
-        # Strict gateway that rejects the translated Anthropic field
-        "HTTP 400: output_config: Extra inputs are not permitted",
-    ])
+    @pytest.mark.parametrize(
+        "error_message",
+        [
+            # vLLM guided_grammar (#82816)
+            "Error code: 400 - guided_grammar has compile_grammar_error: "
+            "No module named 'xgrammar'",
+            # Second endpoint flavor from the same report
+            "HTTP 400: This response_format type is unavailable now",
+            # Strict gateway that rejects the translated Anthropic field
+            "HTTP 400: output_config: Extra inputs are not permitted",
+        ],
+    )
     def test_retries_once_without_response_format(self, error_message):
         client = self._setup(RuntimeError(error_message))
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
         ):
             result = call_llm(
                 task="title_generation",
@@ -204,14 +223,19 @@ class TestCallLlmStructuredOutputRetry:
         )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError, match="Invalid value"):
                 call_llm(
@@ -233,14 +257,19 @@ class TestCallLlmStructuredOutputRetry:
         )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError):
                 call_llm(
@@ -258,21 +287,29 @@ class TestAsyncCallLlmStructuredOutputRetry:
     async def test_async_retries_once_without_response_format(self):
         client = MagicMock()
         client.base_url = "https://api.openai.com/v1"
-        client.chat.completions.create = AsyncMock(side_effect=[
-            RuntimeError(
-                "Error code: 400 - guided_grammar has compile_grammar_error: "
-                "No module named 'xgrammar'"
-            ),
-            _dummy_response(),
-        ])
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                RuntimeError(
+                    "Error code: 400 - guided_grammar has compile_grammar_error: "
+                    "No module named 'xgrammar'"
+                ),
+                _dummy_response(),
+            ]
+        )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
         ):
             result = await async_call_llm(
                 task="title_generation",
@@ -298,14 +335,19 @@ class TestAsyncCallLlmStructuredOutputRetry:
         )
 
         with (
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("openai-codex", "gpt-5.5", None, None, None)),
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(client, "gpt-5.5")),
-            patch("agent.auxiliary_client._validate_llm_response",
-                  side_effect=lambda resp, _task, **_kw: resp),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=None),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("openai-codex", "gpt-5.5", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(client, "gpt-5.5"),
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _task, **_kw: resp,
+            ),
+            patch("agent.auxiliary_client._try_payment_fallback", return_value=None),
         ):
             with pytest.raises(RuntimeError, match="Invalid value"):
                 await async_call_llm(

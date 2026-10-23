@@ -39,8 +39,7 @@ def _resolve_clawk_executable(clawk_repo: Path) -> Path:
     if discovered:
         return Path(discovered)
     raise SystemExit(
-        "Clawksis executable not found in the repository virtual environment "
-        "or on PATH"
+        "Clawksis executable not found in the repository virtual environment or on PATH"
     )
 
 
@@ -54,17 +53,19 @@ class _ModelHandler(BaseHTTPRequestHandler):
         if self.path.rstrip("/") != "/v1/models":
             self.send_error(404)
             return
-        self._write_json({
-            "object": "list",
-            "data": [
-                {
-                    "id": MODEL_CANARY,
-                    "object": "model",
-                    "created": 0,
-                    "owned_by": "smoke-test",
-                }
-            ],
-        })
+        self._write_json(
+            {
+                "object": "list",
+                "data": [
+                    {
+                        "id": MODEL_CANARY,
+                        "object": "model",
+                        "created": 0,
+                        "owned_by": "smoke-test",
+                    }
+                ],
+            }
+        )
 
     def do_POST(self) -> None:
         if self.path.rstrip("/") != "/v1/chat/completions":
@@ -153,72 +154,80 @@ class _ModelHandler(BaseHTTPRequestHandler):
             }
         ]
         if request_tool:
-            chunks.append({
-                "id": "chatcmpl-relay-smoke",
-                "object": "chat.completion.chunk",
-                "created": now,
-                "model": MODEL_CANARY,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {
-                            "tool_calls": [
-                                {
-                                    "index": 0,
-                                    "id": TOOL_CALL_CANARY,
-                                    "type": "function",
-                                    "function": {
-                                        "name": "read_file",
-                                        "arguments": json.dumps({"path": TOOL_FILE}),
-                                    },
-                                }
-                            ]
-                        },
-                        "finish_reason": None,
-                    }
-                ],
-            })
+            chunks.append(
+                {
+                    "id": "chatcmpl-relay-smoke",
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": MODEL_CANARY,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "tool_calls": [
+                                    {
+                                        "index": 0,
+                                        "id": TOOL_CALL_CANARY,
+                                        "type": "function",
+                                        "function": {
+                                            "name": "read_file",
+                                            "arguments": json.dumps(
+                                                {"path": TOOL_FILE}
+                                            ),
+                                        },
+                                    }
+                                ]
+                            },
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            )
         else:
-            chunks.append({
-                "id": "chatcmpl-relay-smoke",
-                "object": "chat.completion.chunk",
-                "created": now,
-                "model": MODEL_CANARY,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {"content": RESPONSE_CANARY},
-                        "finish_reason": None,
-                    }
-                ],
-            })
-        chunks.extend([
-            {
-                "id": "chatcmpl-relay-smoke",
-                "object": "chat.completion.chunk",
-                "created": now,
-                "model": MODEL_CANARY,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {},
-                        "finish_reason": "tool_calls" if request_tool else "stop",
-                    }
-                ],
-            },
-            {
-                "id": "chatcmpl-relay-smoke",
-                "object": "chat.completion.chunk",
-                "created": now,
-                "model": MODEL_CANARY,
-                "choices": [],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 1,
-                    "total_tokens": 11,
+            chunks.append(
+                {
+                    "id": "chatcmpl-relay-smoke",
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": MODEL_CANARY,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": RESPONSE_CANARY},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+            )
+        chunks.extend(
+            [
+                {
+                    "id": "chatcmpl-relay-smoke",
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": MODEL_CANARY,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "tool_calls" if request_tool else "stop",
+                        }
+                    ],
                 },
-            },
-        ])
+                {
+                    "id": "chatcmpl-relay-smoke",
+                    "object": "chat.completion.chunk",
+                    "created": now,
+                    "model": MODEL_CANARY,
+                    "choices": [],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 1,
+                        "total_tokens": 11,
+                    },
+                },
+            ]
+        )
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
@@ -280,12 +289,20 @@ telemetry:
 # update run (its fetch failed before the checkout moved), identical in SQLite and in the export.
 FAILURE_EXPECTED_DIMENSIONS = {
     "clawk.extension.install.count": {
-        "failure_class": "clone_failed", "kind": "plugin", "name": "custom", "outcome": "failed",
-        "registry": "none", "source": "local",
+        "failure_class": "clone_failed",
+        "kind": "plugin",
+        "name": "custom",
+        "outcome": "failed",
+        "registry": "none",
+        "source": "local",
     },
     "clawk.update.run": {
-        "apply_mode": "unknown", "duration_bucket": "lt_30s", "failed_stage": "apply",
-        "failure_class": "fetch_failed", "from_version_age_bucket": "unknown", "kind": "cli",
+        "apply_mode": "unknown",
+        "duration_bucket": "lt_30s",
+        "failed_stage": "apply",
+        "failure_class": "fetch_failed",
+        "from_version_age_bucket": "unknown",
+        "kind": "cli",
         "outcome": "failed",
     },
 }
@@ -293,11 +310,18 @@ FAILURE_EXPECTED_DIMENSIONS = {
 
 def _validate_failure_rows(rows: dict[str, list[dict[str, Any]]]) -> None:
     for name, dimensions in FAILURE_EXPECTED_DIMENSIONS.items():
-        if [row["dimensions"] for row in rows[name]] != [dimensions] or rows[name][0]["value"] != 1:
+        if [row["dimensions"] for row in rows[name]] != [dimensions] or rows[name][0][
+            "value"
+        ] != 1:
             raise AssertionError(f"Unexpected {name}: {rows[name]}")
-    stages = sorted((row["dimensions"]["stage"], row["dimensions"]["outcome"]) for row in rows["clawk.update.stage"])
+    stages = sorted(
+        (row["dimensions"]["stage"], row["dimensions"]["outcome"])
+        for row in rows["clawk.update.stage"]
+    )
     if stages != [("plan", "success"), ("snapshot", "skipped")]:
         raise AssertionError(f"Unexpected update stages: {rows['clawk.update.stage']}")
+
+
 # ---- end iuf c1 ----
 
 
@@ -306,19 +330,31 @@ def _validate_failure_rows(rows: dict[str, list[dict[str, Any]]]) -> None:
 # skill is Clawksis' own work, so it records no feature_adoption row (the exact name sets assert that).
 V5_EXPECTED_DIMENSIONS = {
     "clawk.task_cost.count": {
-        "api_calls_bucket": "2", "model": "custom", "outcome": "completed", "provider": "custom",
-        "tokens_bucket": "lt_2k", "tool_calls_bucket": "1",
+        "api_calls_bucket": "2",
+        "model": "custom",
+        "outcome": "completed",
+        "provider": "custom",
+        "tokens_bucket": "lt_2k",
+        "tool_calls_bucket": "1",
     },
-    "clawk.tool_output_truncation.count": {"original_size_bucket": "lt_1k", "tool": "read_file", "truncated": "no"},
+    "clawk.tool_output_truncation.count": {
+        "original_size_bucket": "lt_1k",
+        "tool": "read_file",
+        "truncated": "no",
+    },
     "clawk.tool_enabled_unused.count": {"toolset": "file", "used": "yes"},
 }
 
 
 def _validate_v5_rows(rows: dict[str, list[dict[str, Any]]]) -> None:
     for name, dimensions in V5_EXPECTED_DIMENSIONS.items():
-        if [row["dimensions"] for row in rows[name]] != [dimensions] or rows[name][0]["value"] != 1:
+        if [row["dimensions"] for row in rows[name]] != [dimensions] or rows[name][0][
+            "value"
+        ] != 1:
             raise AssertionError(f"Unexpected {name}: {rows[name]}")
-    [overhead] = rows["clawk.tool_overhead.count"]  # the file toolset's 4 tools, schema tokens estimated
+    [overhead] = rows[
+        "clawk.tool_overhead.count"
+    ]  # the file toolset's 4 tools, schema tokens estimated
     if (
         overhead["value"] != 1
         or overhead["dimensions"]["execution_surface"] != "cli"
@@ -395,11 +431,18 @@ def _validate_store(database_path: Path) -> list[dict[str, Any]]:
     # Two primary calls; each lands in whatever TTFT bucket the host's load put it in.
     models = by_name["clawk.model_route.count"]
     expected_model = {
-        "call_role": "primary", "error_class": "none", "model": "custom", "outcome": "success",
+        "call_role": "primary",
+        "error_class": "none",
+        "model": "custom",
+        "outcome": "success",
         "provider": "custom",
     }
     if (
-        any({k: v for k, v in m["dimensions"].items() if k != "ttft_bucket"} != expected_model for m in models)
+        any(
+            {k: v for k, v in m["dimensions"].items() if k != "ttft_bucket"}
+            != expected_model
+            for m in models
+        )
         or sum(m["value"] for m in models) != 2
         or sum(m["packaged_value"] for m in models) != 2
     ):
@@ -437,55 +480,102 @@ def _validate_store(database_path: Path) -> list[dict[str, Any]]:
     ):
         raise AssertionError(f"Unexpected task terminal counter: {terminal}")
     [duration] = by_name["clawk.task_run.duration"]
-    if duration["dimensions"] != {
-        "duration_bucket": duration["dimensions"].get("duration_bucket"),
-        "execution_surface": "cli", "outcome": "success", "retry_count_bucket": "0",
-    } or duration["value"] != 1:
+    if (
+        duration["dimensions"]
+        != {
+            "duration_bucket": duration["dimensions"].get("duration_bucket"),
+            "execution_surface": "cli",
+            "outcome": "success",
+            "retry_count_bucket": "0",
+        }
+        or duration["value"] != 1
+    ):
         raise AssertionError(f"Unexpected task duration counter: {duration}")
     [cost] = by_name["clawk.task_cost.count"]
-    if (cost["dimensions"]["api_calls_bucket"], cost["dimensions"]["tool_calls_bucket"]) != ("2", "1"):
+    if (
+        cost["dimensions"]["api_calls_bucket"],
+        cost["dimensions"]["tool_calls_bucket"],
+    ) != ("2", "1"):
         raise AssertionError(f"Unexpected task cost counter: {cost}")
     if [c["dimensions"] for c in by_name["clawk.tool.usage.count"]] != [
         {"error_class": "none", "outcome": "success", "tool_name": "read_file"}
     ]:
-        raise AssertionError(f"Unexpected tool usage: {by_name['clawk.tool.usage.count']}")
+        raise AssertionError(
+            f"Unexpected tool usage: {by_name['clawk.tool.usage.count']}"
+        )
     [snapshot] = by_name["clawk.install.snapshot"]
     if snapshot["value"] != 1 or snapshot["dimensions"]["memory_provider"] != "builtin":
         raise AssertionError(f"Unexpected install snapshot: {snapshot}")
     [session] = by_name["clawk.session.count"]
-    if (session["dimensions"]["turn_count_bucket"], session["dimensions"]["last_outcome"]) != (
-        "1", "success",
+    if (
+        session["dimensions"]["turn_count_bucket"],
+        session["dimensions"]["last_outcome"],
+    ) != (
+        "1",
+        "success",
     ):
         raise AssertionError(f"Unexpected session summary: {session}")
-    tokens = {c["dimensions"]["token_type"]: c["value"] for c in by_name["clawk.model_tokens.sum"]}
+    tokens = {
+        c["dimensions"]["token_type"]: c["value"]
+        for c in by_name["clawk.model_tokens.sum"]
+    }
     if tokens != {"input": 20, "output": 2}:
-        raise AssertionError(f"Unexpected token sums: {by_name['clawk.model_tokens.sum']}")
+        raise AssertionError(
+            f"Unexpected token sums: {by_name['clawk.model_tokens.sum']}"
+        )
     [quality] = by_name["clawk.model_tool_quality.count"]
-    if quality["dimensions"] != {"call_role": "primary", "issue": "none", "model": "custom", "provider": "custom"}:
+    if quality["dimensions"] != {
+        "call_role": "primary",
+        "issue": "none",
+        "model": "custom",
+        "provider": "custom",
+    }:
         raise AssertionError(f"Unexpected tool-call quality: {quality}")
-    [reply] = by_name["clawk.model_reply_issue.count"]  # both scripted replies are usable
-    if (reply["dimensions"], reply["value"]) != ({"issue": "none", "model": "custom", "provider": "custom"}, 2):
+    [reply] = by_name[
+        "clawk.model_reply_issue.count"
+    ]  # both scripted replies are usable
+    if (reply["dimensions"], reply["value"]) != (
+        {"issue": "none", "model": "custom", "provider": "custom"},
+        2,
+    ):
         raise AssertionError(f"Unexpected model reply issues: {reply}")
     [peak] = by_name["clawk.context_peak.count"]
-    if (peak["dimensions"]["provider"], peak["dimensions"]["model"], peak["dimensions"]["limit_hit"]) != (
-        "custom", "custom", "no",
+    if (
+        peak["dimensions"]["provider"],
+        peak["dimensions"]["model"],
+        peak["dimensions"]["limit_hit"],
+    ) != (
+        "custom",
+        "custom",
+        "no",
     ):
         raise AssertionError(f"Unexpected context peak: {peak}")
     [startup] = by_name["clawk.startup.latency"]
     if startup["dimensions"]["surface"] != "cli":
         raise AssertionError(f"Unexpected startup latency: {startup}")
-    milestones = {c["dimensions"]["milestone"] for c in by_name["clawk.install.milestone"]}
-    if not {"first_task_started", "first_task_success", "first_tool_success"} <= milestones:
+    milestones = {
+        c["dimensions"]["milestone"] for c in by_name["clawk.install.milestone"]
+    }
+    if (
+        not {"first_task_started", "first_task_success", "first_tool_success"}
+        <= milestones
+    ):
         raise AssertionError(f"Missing install milestones: {sorted(milestones)}")
     [tool] = by_name["clawk.tool_call.count"]
     expected_tool_dimensions = {
-        "approval_outcome": "not_required", "outcome": "success", "tool_category": "file",
+        "approval_outcome": "not_required",
+        "outcome": "success",
+        "tool_category": "file",
     }
     [latency] = by_name["clawk.tool_call.latency"]
     if (
         tool["dimensions"] != expected_tool_dimensions
         or latency["dimensions"]["latency_bucket"] == "unknown"
-        or (latency["dimensions"]["retry_count_bucket"], latency["dimensions"]["tool_category"]) != ("unknown", "file")
+        or (
+            latency["dimensions"]["retry_count_bucket"],
+            latency["dimensions"]["tool_category"],
+        )
+        != ("unknown", "file")
         or tool["value"] != 1
         or tool["packaged_value"] != 1
     ):
@@ -621,13 +711,20 @@ def _validate_packages(
             f"Unexpected client-active metric: {metrics['clawk.client.active']}"
         )
     models = metrics["clawk.model_route.count"]
-    if any(
-        {k: v for k, v in m["dimensions"].items() if k != "ttft_bucket"} != {
-            "call_role": "primary", "error_class": "none", "model": "custom", "outcome": "success",
-            "provider": "custom",
-        }
-        for m in models
-    ) or sum(m["value"] for m in models) != 2:
+    if (
+        any(
+            {k: v for k, v in m["dimensions"].items() if k != "ttft_bucket"}
+            != {
+                "call_role": "primary",
+                "error_class": "none",
+                "model": "custom",
+                "outcome": "success",
+                "provider": "custom",
+            }
+            for m in models
+        )
+        or sum(m["value"] for m in models) != 2
+    ):
         raise AssertionError(
             f"Unexpected model metric: {metrics['clawk.model_route.count']}"
         )
@@ -645,8 +742,13 @@ def _validate_packages(
     [tool] = metrics["clawk.tool_call.count"]
     if (
         tool["dimensions"]
-        != {"approval_outcome": "not_required", "outcome": "success", "tool_category": "file"}
-        or metrics["clawk.tool_call.latency"][0]["dimensions"]["latency_bucket"] == "unknown"
+        != {
+            "approval_outcome": "not_required",
+            "outcome": "success",
+            "tool_category": "file",
+        }
+        or metrics["clawk.tool_call.latency"][0]["dimensions"]["latency_bucket"]
+        == "unknown"
     ):
         raise AssertionError(f"Unexpected tool metric: {tool}")
     lifecycle = metrics["clawk.skill.lifecycle.count"]
@@ -720,12 +822,14 @@ def main() -> int:
     hub_state = home / "skills" / ".hub"
     hub_state.mkdir()
     (hub_state / "lock.json").write_text(
-        json.dumps({
-            "version": 1,
-            "installed": {
-                INSTALLED_SKILL_CANARY: {"source": "smoke/local"},
-            },
-        }),
+        json.dumps(
+            {
+                "version": 1,
+                "installed": {
+                    INSTALLED_SKILL_CANARY: {"source": "smoke/local"},
+                },
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -797,52 +901,54 @@ def main() -> int:
         [
             sys.executable,
             "-c",
-            "\n".join([
-                "from clawk_cli.observability import relay_shared_metrics",
-                "from tools.skill_usage import (",
-                "    STATE_ACTIVE, STATE_ARCHIVED, STATE_STALE, bump_patch,",
-                "    bump_use, record_created, record_installed, set_state,",
-                ")",
-                f"skill = {SKILL_CANARY!r}",
-                f"installed = {INSTALLED_SKILL_CANARY!r}",
-                "record_created(skill, agent_created=True)",
-                "bump_use(skill)",
-                "bump_use(skill)",
-                "bump_patch(skill)",
-                "bump_use(skill)",
-                "bump_patch(skill, action='edit')",
-                "set_state(skill, STATE_STALE)",
-                "set_state(skill, STATE_ACTIVE)",
-                "set_state(skill, STATE_ARCHIVED)",
-                "set_state(skill, STATE_ACTIVE)",
-                "record_installed(installed)",
-                # A real failing plugin install (offline: a file:// repo that does not exist) and a
-                # final update receipt whose fetch failed: each emits one row with a failure_class.
-                "from pathlib import Path",
-                "from clawk_cli.plugins_cmd import PluginOperationError, _install_plugin_core",
-                "from clawk_cli.plugins_cmd_install import recorded_install",
-                "missing = (Path.cwd() / 'no-such-plugin-repo').as_uri()",
-                "try:",
-                "    recorded_install(lambda: _install_plugin_core(missing, force=False),",
-                "                     catalog_name=None, identifier=missing)",
-                "    raise SystemExit('bogus plugin install succeeded')",
-                "except PluginOperationError:",
-                "    pass",
-                "from clawk_cli.observability.shared_metrics_update import record_update_receipt",
-                "record_update_receipt({'schema': 1, 'update_id': '0123456789abcdef',",
-                "    'started_at': '2026-10-06T10:00:00+00:00', 'finished_at': '2026-10-06T10:00:01+00:00',",
-                "    'outcome': 'failed', 'exit_code': 1, 'stop_reason': 'sys.exit(1)', 'pre_update': {},",
-                "    'stop_class': 'fetch_failed',",
-                "    'stages': [{'name': 'plan', 'outcome': 'success', 'at': '2026-10-06T10:00:00+00:00'},",
-                "               {'name': 'snapshot', 'outcome': 'skipped', 'at': '2026-10-06T10:00:00+00:00'}],",
-                "    'steps': [], 'fleet': []})",
-                "runtime = relay_shared_metrics._get_runtime()",
-                "assert runtime is not None",
-                "runtime.shutdown()",
-                # Production leaves same-day deltas pending. Force a package so
-                # this smoke can validate them without waiting for the next day.
-                "runtime.subscriber.store.create_and_export_package()",
-            ]),
+            "\n".join(
+                [
+                    "from clawk_cli.observability import relay_shared_metrics",
+                    "from tools.skill_usage import (",
+                    "    STATE_ACTIVE, STATE_ARCHIVED, STATE_STALE, bump_patch,",
+                    "    bump_use, record_created, record_installed, set_state,",
+                    ")",
+                    f"skill = {SKILL_CANARY!r}",
+                    f"installed = {INSTALLED_SKILL_CANARY!r}",
+                    "record_created(skill, agent_created=True)",
+                    "bump_use(skill)",
+                    "bump_use(skill)",
+                    "bump_patch(skill)",
+                    "bump_use(skill)",
+                    "bump_patch(skill, action='edit')",
+                    "set_state(skill, STATE_STALE)",
+                    "set_state(skill, STATE_ACTIVE)",
+                    "set_state(skill, STATE_ARCHIVED)",
+                    "set_state(skill, STATE_ACTIVE)",
+                    "record_installed(installed)",
+                    # A real failing plugin install (offline: a file:// repo that does not exist) and a
+                    # final update receipt whose fetch failed: each emits one row with a failure_class.
+                    "from pathlib import Path",
+                    "from clawk_cli.plugins_cmd import PluginOperationError, _install_plugin_core",
+                    "from clawk_cli.plugins_cmd_install import recorded_install",
+                    "missing = (Path.cwd() / 'no-such-plugin-repo').as_uri()",
+                    "try:",
+                    "    recorded_install(lambda: _install_plugin_core(missing, force=False),",
+                    "                     catalog_name=None, identifier=missing)",
+                    "    raise SystemExit('bogus plugin install succeeded')",
+                    "except PluginOperationError:",
+                    "    pass",
+                    "from clawk_cli.observability.shared_metrics_update import record_update_receipt",
+                    "record_update_receipt({'schema': 1, 'update_id': '0123456789abcdef',",
+                    "    'started_at': '2026-10-06T10:00:00+00:00', 'finished_at': '2026-10-06T10:00:01+00:00',",
+                    "    'outcome': 'failed', 'exit_code': 1, 'stop_reason': 'sys.exit(1)', 'pre_update': {},",
+                    "    'stop_class': 'fetch_failed',",
+                    "    'stages': [{'name': 'plan', 'outcome': 'success', 'at': '2026-10-06T10:00:00+00:00'},",
+                    "               {'name': 'snapshot', 'outcome': 'skipped', 'at': '2026-10-06T10:00:00+00:00'}],",
+                    "    'steps': [], 'fleet': []})",
+                    "runtime = relay_shared_metrics._get_runtime()",
+                    "assert runtime is not None",
+                    "runtime.shutdown()",
+                    # Production leaves same-day deltas pending. Force a package so
+                    # this smoke can validate them without waiting for the next day.
+                    "runtime.subscriber.store.create_and_export_package()",
+                ]
+            ),
         ],
         cwd=workdir,
         env=env,

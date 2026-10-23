@@ -6,6 +6,7 @@ Auxiliary clients (vision, title generation, etc.) must mirror the main
 agent: explicit ``HTTPS_PROXY`` / ``NO_PROXY`` env vars only, via a custom
 keepalive transport that suppresses automatic system-proxy detection.
 """
+
 from unittest.mock import patch
 
 import httpx
@@ -24,8 +25,16 @@ def _pool_types(http_client) -> list:
 
 @patch("agent.auxiliary_client.OpenAI")
 def test_create_openai_client_routes_via_env_proxy(mock_openai, monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7897")
 
@@ -40,18 +49,22 @@ def test_create_openai_client_routes_via_env_proxy(mock_openai, monkeypatch):
     http_client.close()
 
 
-
-
-
-
 def test_get_proxy_for_base_url_respects_no_proxy(monkeypatch):
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-                "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy"):
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:7897")
     monkeypatch.setenv("NO_PROXY", "internal.example.com")
 
     assert _get_proxy_for_base_url("https://litellm.internal.example.com/v1") is None
-    assert _get_proxy_for_base_url("https://api.openai.com/v1") == "http://127.0.0.1:7897"
-
-
+    assert (
+        _get_proxy_for_base_url("https://api.openai.com/v1") == "http://127.0.0.1:7897"
+    )

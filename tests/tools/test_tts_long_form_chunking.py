@@ -14,6 +14,7 @@ from tools.tts_tool_delivery import (
     _split_oversized_sentence,
 )
 
+
 class TestSplitTextForTts:
     def test_short_text_returns_single_chunk(self):
         result = _split_text_for_tts("Hello world.", 4096)
@@ -44,6 +45,7 @@ class TestSplitTextForTts:
         assert all(len(c) <= 30 for c in chunks)
         assert "".join(chunks) == text
 
+
 class TestSplitOversizedSentence:
     def test_short_sentence_returns_as_is(self):
         assert _split_oversized_sentence("Hello world.", 100) == ["Hello world."]
@@ -52,6 +54,7 @@ class TestSplitOversizedSentence:
         words = " ".join(["word"] * 50)
         chunks = _split_oversized_sentence(words, 30)
         assert all(len(c) <= 30 for c in chunks)
+
 
 class TestPackAudioFilesForDelivery:
     def test_single_file_returns_one_group(self, tmp_path):
@@ -69,7 +72,9 @@ class TestPackAudioFilesForDelivery:
             f.write_bytes(b"x" * 300)
             files.append(str(f))
         # Target is 500 bytes, each file is 300 → at most 1 file per group
-        profile = AudioDeliveryProfile(platform="default", max_file_bytes=1000, safety_ratio=0.5)
+        profile = AudioDeliveryProfile(
+            platform="default", max_file_bytes=1000, safety_ratio=0.5
+        )
         groups = _pack_audio_files_for_delivery(files, profile)
         assert len(groups) == 5
         for group in groups:
@@ -83,6 +88,7 @@ class TestPackAudioFilesForDelivery:
         profile = AudioDeliveryProfile(platform="default", max_file_bytes=10000)
         groups = _pack_audio_files_for_delivery([str(f1), str(f2)], profile)
         assert len(groups) == 2
+
 
 class TestBuildAudioDeliveryFiles:
     def test_single_file_passes_through(self, tmp_path):

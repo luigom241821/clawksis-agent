@@ -1,4 +1,5 @@
 """The standalone stdio entry is never a second state.db writer beside a gateway."""
+
 from __future__ import annotations
 
 import io
@@ -14,7 +15,11 @@ def _stub_startup(monkeypatch, opened):
     monkeypatch.setattr(entry.server, "_stdio_is_rpc_channel", False, raising=False)
     monkeypatch.setattr(entry, "ensure_mcp_discovery_started", lambda: None)
     monkeypatch.setattr(entry, "resolve_skin", lambda: "default")
-    monkeypatch.setattr(entry.server, "_start_backend_heartbeat_refresher", lambda: opened.append("state.db"))
+    monkeypatch.setattr(
+        entry.server,
+        "_start_backend_heartbeat_refresher",
+        lambda: opened.append("state.db"),
+    )
     monkeypatch.setattr(entry.server, "_schedule_startup_orphan_sweep", lambda: None)
     monkeypatch.setattr(entry.server, "_ensure_skin_watcher", lambda: None)
     monkeypatch.setattr(entry, "handle_spurious_eof", lambda *_a: False)
@@ -49,7 +54,9 @@ def test_entry_refuses_an_owned_home_and_owns_a_free_one(monkeypatch, tmp_path):
         return {"jsonrpc": "2.0", "id": req["id"], "result": {}}
 
     monkeypatch.setattr(entry, "dispatch", dispatch)
-    monkeypatch.setattr(entry.sys, "stdin", io.StringIO('{"jsonrpc":"2.0","id":1,"method":"ping"}\n'))
+    monkeypatch.setattr(
+        entry.sys, "stdin", io.StringIO('{"jsonrpc":"2.0","id":1,"method":"ping"}\n')
+    )
     entry.main()
     assert contender == ["refused"]
     after = ProfileOwnership()

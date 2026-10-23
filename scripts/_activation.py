@@ -44,7 +44,11 @@ def activation_command() -> str:
         return POSIX_COMMAND
     # A bash-family shell on Windows (Git Bash, MSYS, WSL interop) sources the
     # POSIX script; only a native host gets the PowerShell one.
-    if os.environ.get("MSYSTEM") or os.path.basename(os.environ.get("SHELL", "")) in {"bash", "sh", "zsh"}:
+    if os.environ.get("MSYSTEM") or os.path.basename(os.environ.get("SHELL", "")) in {
+        "bash",
+        "sh",
+        "zsh",
+    }:
         return POSIX_COMMAND
     return WINDOWS_COMMAND
 

@@ -5,7 +5,9 @@ import subprocess
 import sys
 
 
-def test_enqueue_during_retention_never_recreates_delivered_request(tmp_path, monkeypatch):
+def test_enqueue_during_retention_never_recreates_delivered_request(
+    tmp_path, monkeypatch
+):
     from cron import delivery_queue as queue
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -20,12 +22,17 @@ def test_enqueue_during_retention_never_recreates_delivered_request(tmp_path, mo
     class InterleavedConnection(sqlite3.Connection):
         def execute(self, sql, parameters=()):
             cursor = super().execute(sql, parameters)
-            if sql.startswith("SELECT terminal_status, finished_at FROM delivery_tombstones"):
+            if sql.startswith(
+                "SELECT terminal_status, finished_at FROM delivery_tombstones"
+            ):
                 # Pause after the real tombstone lookup, before enqueue can
                 # INSERT. A separate process exercises SQLite's actual lock
                 # boundary rather than the module's process-local RLock.
                 result = subprocess.run(
-                    [sys.executable, "-c", """
+                    [
+                        sys.executable,
+                        "-c",
+                        """
 import sqlite3
 import sys
 from cron import delivery_queue as queue
@@ -37,8 +44,13 @@ except sqlite3.OperationalError as exc:
     if 'locked' not in str(exc):
         raise
     sys.exit(75)
-""", str(db)], capture_output=True, text=True, timeout=30,
-check=False,
+""",
+                        str(db),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
                 )
                 assert result.returncode in (0, 75), result.stderr
                 prunes.append(result.returncode)
@@ -46,8 +58,11 @@ check=False,
 
     with monkeypatch.context() as patch:
         patch.setattr(
-            queue.sqlite3, "connect",
-            lambda *args, **kwargs: connect(*args, **kwargs, factory=InterleavedConnection),
+            queue.sqlite3,
+            "connect",
+            lambda *args, **kwargs: connect(
+                *args, **kwargs, factory=InterleavedConnection
+            ),
         )
         replay = queue.enqueue("execution", {"id": "job"}, "duplicate")
 

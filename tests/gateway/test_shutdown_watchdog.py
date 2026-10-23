@@ -32,8 +32,11 @@ from gateway.shutdown_watchdog import (
     write_loop_heartbeat,
 )
 
+
 def test_resolve_shutdown_watchdog_delay_adds_grace():
-    assert resolve_shutdown_watchdog_delay(180) == 180 + DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
+    assert (
+        resolve_shutdown_watchdog_delay(180) == 180 + DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
+    )
     assert resolve_shutdown_watchdog_delay(0) == DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
     assert resolve_shutdown_watchdog_delay("bad") == DEFAULT_SHUTDOWN_WATCHDOG_GRACE_S
     assert resolve_shutdown_watchdog_delay(10, grace_s=5) == 15.0
@@ -70,9 +73,10 @@ def test_arm_shutdown_watchdog_fires_with_dump_and_exit(tmp_path):
     text = dump.read_text(encoding="utf-8")
     assert "shutdown_watchdog_fired" in text
     assert "faulthandler dump" in text
-    assert get_shutdown_watchdog_dump_path(tmp_path).name == "gateway-shutdown-watchdog.log"
-
-
+    assert (
+        get_shutdown_watchdog_dump_path(tmp_path).name
+        == "gateway-shutdown-watchdog.log"
+    )
 
 
 async def _run_heartbeat_until_payload(tmp_path, timeout_s=10.0):
@@ -81,9 +85,7 @@ async def _run_heartbeat_until_payload(tmp_path, timeout_s=10.0):
     Returns (task, payload). Cancels the task and awaits it (suppressing
     CancelledError) before returning so the tick server is closed cleanly.
     """
-    task = asyncio.ensure_future(
-        loop_heartbeat_forever(interval_s=1.0, home=tmp_path)
-    )
+    task = asyncio.ensure_future(loop_heartbeat_forever(interval_s=1.0, home=tmp_path))
     heartbeat_path = get_loop_heartbeat_path(tmp_path)
     deadline = time.monotonic() + timeout_s
     payload = None
@@ -100,8 +102,7 @@ async def _run_heartbeat_until_payload(tmp_path, timeout_s=10.0):
         await task
     if payload is None:
         pytest.fail(
-            f"heartbeat payload did not appear at {heartbeat_path} within "
-            f"{timeout_s}s"
+            f"heartbeat payload did not appear at {heartbeat_path} within {timeout_s}s"
         )
     return payload
 
@@ -138,16 +139,19 @@ async def test_loop_tick_witness_arms_over_tcp_on_windows(short_home, caplog):
         start_unix_server_calls.append((args, kwargs))
         raise AssertionError("start_unix_server must not be called on non-POSIX")
 
-    with patch.object(
-        shutdown_watchdog_module.asyncio,
-        "start_unix_server",
-        side_effect=_forbid_start_unix_server,
-        # ``asyncio.start_unix_server`` does not exist on native Windows, so
-        # without create=True patch.object itself raises AttributeError.
-        # create=True arms the forbidden-call tripwire anyway and mock
-        # deletes the created attribute on exit.
-        create=True,
-    ), caplog.at_level(logging.DEBUG, logger="gateway.shutdown_watchdog"):
+    with (
+        patch.object(
+            shutdown_watchdog_module.asyncio,
+            "start_unix_server",
+            side_effect=_forbid_start_unix_server,
+            # ``asyncio.start_unix_server`` does not exist on native Windows, so
+            # without create=True patch.object itself raises AttributeError.
+            # create=True arms the forbidden-call tripwire anyway and mock
+            # deletes the created attribute on exit.
+            create=True,
+        ),
+        caplog.at_level(logging.DEBUG, logger="gateway.shutdown_watchdog"),
+    ):
         payload = await _run_heartbeat_until_payload(tmp_path)
 
     # (a) the AF_UNIX server was never attempted
@@ -156,8 +160,7 @@ async def test_loop_tick_witness_arms_over_tcp_on_windows(short_home, caplog):
     assert not [
         r
         for r in caplog.records
-        if r.levelname == "WARNING"
-        and "Loop tick socket unavailable" in r.getMessage()
+        if r.levelname == "WARNING" and "Loop tick socket unavailable" in r.getMessage()
     ]
     # (c) the witness is armed over TCP and the port is published
     assert payload["loop_tick_socket"] is True

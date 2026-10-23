@@ -22,7 +22,9 @@ import pytest
 from clawk_cli.update_lock import UpdateLock, marker_mutex_path, process_create_time
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals / fd inheritance")
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX signals / fd inheritance"
+)
 
 
 def _script(tmp_path: Path, code: str) -> Path:
@@ -32,20 +34,29 @@ def _script(tmp_path: Path, code: str) -> Path:
 
 
 def _python(tmp_path: Path, code: str, *args, **kwargs) -> subprocess.Popen:
-    return subprocess.Popen([sys.executable, str(_script(tmp_path, code)), str(REPO_ROOT), *map(str, args)],
-                            stdin=subprocess.DEVNULL, **kwargs)
+    return subprocess.Popen(
+        [sys.executable, str(_script(tmp_path, code)), str(REPO_ROOT), *map(str, args)],
+        stdin=subprocess.DEVNULL,
+        **kwargs,
+    )
 
 
-def _wait_for(path: Path, proc: subprocess.Popen | None = None, timeout: float = 30.0) -> str:
+def _wait_for(
+    path: Path, proc: subprocess.Popen | None = None, timeout: float = 30.0
+) -> str:
     end = time.monotonic() + timeout
     while not path.exists():
-        assert proc is None or proc.poll() is None, f"child exited {proc.returncode} before {path.name}"
+        assert proc is None or proc.poll() is None, (
+            f"child exited {proc.returncode} before {path.name}"
+        )
         assert time.monotonic() < end, f"timed out waiting for {path}"
         time.sleep(0.02)
     return path.read_text(encoding="utf-8")
 
 
-def _wait_for_pid(path: Path, proc: subprocess.Popen | None = None, timeout: float = 30.0) -> int:
+def _wait_for_pid(
+    path: Path, proc: subprocess.Popen | None = None, timeout: float = 30.0
+) -> int:
     """A child's ``write_text(str(pid))`` creates the file before it writes the pid: under load
     the file can exist and still be empty, so wait for the digits, not just the path."""
     end = time.monotonic() + timeout
@@ -106,8 +117,9 @@ def test_a_stale_reclaim_never_deletes_a_claim_published_after_its_read(tmp_path
         os.kill(reader.pid, signal.SIGCONT)
         assert reader.wait(timeout=30) == 0
         _wait_for(tmp_path / "claimed", claimant)
-        assert marker.read_text(encoding="utf-8").startswith(f"{claimant.pid}\n"), \
+        assert marker.read_text(encoding="utf-8").startswith(f"{claimant.pid}\n"), (
             "a stale reader deleted a live claim published after its read"
+        )
         assert marker_mutex_path(marker).exists(), "the sidecar is never deleted"
     finally:
         if reader.poll() is None:
@@ -155,22 +167,38 @@ def test_a_reader_reports_the_live_claim_that_replaced_its_stale_snapshot(tmp_pa
     install.mkdir()
     marker = home / ".clawk-update-in-progress"
     _dead_marker(marker)
-    reader = _python(tmp_path, _RECLAIM_PAUSED_READER, marker, install, stdout=subprocess.PIPE, text=True)
+    reader = _python(
+        tmp_path,
+        _RECLAIM_PAUSED_READER,
+        marker,
+        install,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     claimant = None
     try:
         _pid, status = os.waitpid(reader.pid, os.WUNTRACED)
         assert os.WIFSTOPPED(status)
-        claimant = _python(tmp_path, _MARKER_ONLY_CLAIMANT, marker, install, tmp_path / "claimed")
+        claimant = _python(
+            tmp_path, _MARKER_ONLY_CLAIMANT, marker, install, tmp_path / "claimed"
+        )
         _wait_for(tmp_path / "claimed", claimant)
         claim = marker.read_bytes()
         os.kill(reader.pid, signal.SIGCONT)
         out, _err = reader.communicate(timeout=30)
         assert reader.returncode == 0
-        assert out.strip() == "True", "the reader reported a live replacement claim as no update"
-        assert marker.read_bytes() == claim, "the live replacement claim was not preserved byte-for-byte"
+        assert out.strip() == "True", (
+            "the reader reported a live replacement claim as no update"
+        )
+        assert marker.read_bytes() == claim, (
+            "the live replacement claim was not preserved byte-for-byte"
+        )
         from clawk_cli.update_lock import checkout_lock_held
+
         # update_in_progress() is this answer OR the checkout lease, which a marker-only claim lacks.
-        assert checkout_lock_held(install) is False, "the claim is marker-only: no checkout lease answers for it"
+        assert checkout_lock_held(install) is False, (
+            "the claim is marker-only: no checkout lease answers for it"
+        )
     finally:
         if reader.poll() is None:
             os.kill(reader.pid, signal.SIGCONT)
@@ -203,7 +231,9 @@ def test_marker_mutations_wait_for_the_mutex_another_process_holds(tmp_path):
         started = time.monotonic()
         lock = UpdateLock(path=marker)
         assert lock.acquire() and lock.acquired
-        assert time.monotonic() - started >= 0.9, "the reclaim ran inside another process's hold"
+        assert time.monotonic() - started >= 0.9, (
+            "the reclaim ran inside another process's hold"
+        )
         lock.release()
         assert marker_mutex_path(marker).exists(), "the sidecar is never deleted"
     finally:
@@ -246,7 +276,9 @@ def test_an_orphaned_delegate_removes_its_killed_owners_marker(tmp_path):
     update` child as delegate, and is killed alone. Pre-A7 the child adopted the claim without
     writing it, so its exit released nothing: '<dead owner> … delegate:<exited child>' survived
     (native artifact crash-12db). The delegate's release now removes a claim whose owner died."""
-    owner = _python(tmp_path, _HANDOFF_OWNER, tmp_path, _script(tmp_path, _ORPHAN_UPDATE))
+    owner = _python(
+        tmp_path, _HANDOFF_OWNER, tmp_path, _script(tmp_path, _ORPHAN_UPDATE)
+    )
     try:
         child = _wait_for_pid(tmp_path / "delegate-written", owner)
         _wait_for(tmp_path / "ready", owner)
@@ -257,7 +289,9 @@ def test_an_orphaned_delegate_removes_its_killed_owners_marker(tmp_path):
         while _alive(child) and time.monotonic() < end:
             time.sleep(0.05)
         assert not _alive(child)
-        assert not (tmp_path / "marker").exists(), "the orphaned update's exit left its dead claim behind"
+        assert not (tmp_path / "marker").exists(), (
+            "the orphaned update's exit left its dead claim behind"
+        )
     finally:
         owner.kill()
         owner.wait()
@@ -268,15 +302,23 @@ def test_owner_release_hands_the_claim_to_a_live_delegate(tmp_path):
     """A7 rule 5, the other half: the owner's release never deletes the claim a live delegate
     still runs under; it rewrites it with that delegate as owner (and keeps the run line)."""
     marker = tmp_path / "marker"
-    delegate = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], stdin=subprocess.DEVNULL)
+    delegate = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], stdin=subprocess.DEVNULL
+    )
     try:
         lock = UpdateLock(path=marker)
         assert lock.acquire() and lock.acquired
         ct = f"{process_create_time(delegate.pid):.3f}"
-        marker.write_bytes(marker.read_bytes() + f"delegate:{delegate.pid} ct:{ct}\nrun:desk-1\n".encode())
+        marker.write_bytes(
+            marker.read_bytes()
+            + f"delegate:{delegate.pid} ct:{ct}\nrun:desk-1\n".encode()
+        )
         started = marker.read_text(encoding="utf-8").splitlines()[1]
         lock.release()
-        assert marker.read_text(encoding="utf-8") == f"{delegate.pid}\n{started}\nct:{ct}\nrun:desk-1\n"
+        assert (
+            marker.read_text(encoding="utf-8")
+            == f"{delegate.pid}\n{started}\nct:{ct}\nrun:desk-1\n"
+        )
     finally:
         delegate.kill()
         delegate.wait()
@@ -296,7 +338,9 @@ _git_run(["git"], ["add", "tracked"], cwd=root, check=True)
 
 def _git(root: Path, *args: str) -> str:
     env = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
-    return subprocess.check_output(["git", "-C", str(root), *args], text=True, env=env).strip()
+    return subprocess.check_output(
+        ["git", "-C", str(root), *args], text=True, env=env
+    ).strip()
 
 
 @posix_only
@@ -313,22 +357,30 @@ def test_git_keeps_checkout_custody_after_its_updater_is_killed(tmp_path):
     _git(root, "add", "tracked")
     _git(root, "commit", "-qm", "before")
     stall = tmp_path / "stall.py"
-    stall.write_text(f"import os, sys, time\nfrom pathlib import Path\nr = Path({str(tmp_path)!r})\n"
-                     "(r / 'stalled').write_text(str(os.getpid()))\n"
-                     "while not (r / 'go').exists(): time.sleep(0.02)\n"
-                     "sys.stdout.buffer.write(sys.stdin.buffer.read())\n")
+    stall.write_text(
+        f"import os, sys, time\nfrom pathlib import Path\nr = Path({str(tmp_path)!r})\n"
+        "(r / 'stalled').write_text(str(os.getpid()))\n"
+        "while not (r / 'go').exists(): time.sleep(0.02)\n"
+        "sys.stdout.buffer.write(sys.stdin.buffer.read())\n"
+    )
     _git(root, "config", "filter.stall.clean", f"'{sys.executable}' '{stall}'")
     (root / ".git/info/attributes").write_text("tracked filter=stall\n")
     (root / "tracked").write_text("after\n")
-    owner = _python(tmp_path, _GIT_OWNER, root, env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1",
-                                           "GIT_CONFIG_GLOBAL": os.devnull})
+    owner = _python(
+        tmp_path,
+        _GIT_OWNER,
+        root,
+        env={**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull},
+    )
     contender = UpdateLock(path=tmp_path / "contender-marker", install_root=root)
     try:
         stalled_pid = _wait_for_pid(tmp_path / "stalled", owner)
         owner.kill()
         owner.wait()
         assert _alive(stalled_pid)
-        assert contender.acquire() is False, "a contender owns the checkout while git still writes"
+        assert contender.acquire() is False, (
+            "a contender owns the checkout while git still writes"
+        )
         (tmp_path / "go").touch()
         end = time.monotonic() + 30
         while not contender.acquire():
@@ -362,9 +414,11 @@ def test_the_source_build_keeps_checkout_custody_after_its_updater_is_killed(tmp
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     node = bin_dir / "node"
-    node.write_text(f"#!{sys.executable}\nimport os, time\nfrom pathlib import Path\nr = Path({str(tmp_path)!r})\n"
-                    "(r / 'node').write_text(str(os.getpid()))\n"
-                    "while not (r / 'go').exists(): time.sleep(0.02)\n")
+    node.write_text(
+        f"#!{sys.executable}\nimport os, time\nfrom pathlib import Path\nr = Path({str(tmp_path)!r})\n"
+        "(r / 'node').write_text(str(os.getpid()))\n"
+        "while not (r / 'go').exists(): time.sleep(0.02)\n"
+    )
     node.chmod(0o700)
     owner = _python(tmp_path, _BUILD_OWNER, root, bin_dir)
     contender = UpdateLock(path=tmp_path / "contender-marker", install_root=root)
@@ -373,7 +427,9 @@ def test_the_source_build_keeps_checkout_custody_after_its_updater_is_killed(tmp
         owner.kill()
         owner.wait()
         assert _alive(node_pid)
-        assert contender.acquire() is False, "a contender owns the checkout while the build still writes"
+        assert contender.acquire() is False, (
+            "a contender owns the checkout while the build still writes"
+        )
     finally:
         (tmp_path / "go").touch()
         contender.release()
@@ -392,7 +448,9 @@ time.sleep(120)
 """
 
 
-def test_a_completion_from_another_home_never_builds_an_owned_checkout(tmp_path, monkeypatch):
+def test_a_completion_from_another_home_never_builds_an_owned_checkout(
+    tmp_path, monkeypatch
+):
     """R2 admission: `complete_source_checkout` ACQUIRES the checkout lock. Pre-fix it claimed
     only its own home's marker and entered the build body beside the owning update."""
     from clawk_cli import source_completion
@@ -401,15 +459,31 @@ def test_a_completion_from_another_home_never_builds_an_owned_checkout(tmp_path,
     (root / ".git").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "other-home"))
     entered = []
-    monkeypatch.setattr(source_completion, "_complete_locked", lambda *a, **k: entered.append(a))
-    holder = subprocess.Popen([sys.executable, str(_script(tmp_path, _HOLDER)), str(REPO_ROOT), str(root),
-                               str(tmp_path / "owner-marker")],
-                              stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, encoding="utf-8")
+    monkeypatch.setattr(
+        source_completion, "_complete_locked", lambda *a, **k: entered.append(a)
+    )
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            str(_script(tmp_path, _HOLDER)),
+            str(REPO_ROOT),
+            str(root),
+            str(tmp_path / "owner-marker"),
+        ],
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+    )
     try:
         assert holder.stdout is not None and holder.stdout.readline().strip() == "held"
         with pytest.raises(RuntimeError, match="an update is still running"):
-            source_completion.complete_source_checkout(root, desktop=False, assume_yes=True)
-        assert entered == [], "the completion body ran while another update owned the checkout"
+            source_completion.complete_source_checkout(
+                root, desktop=False, assume_yes=True
+            )
+        assert entered == [], (
+            "the completion body ran while another update owned the checkout"
+        )
     finally:
         holder.kill()
         holder.wait()
@@ -423,9 +497,13 @@ def test_a_live_legacy_profile_claim_is_honored(tmp_path, monkeypatch):
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(profile))
-    legacy = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], stdin=subprocess.DEVNULL)
+    legacy = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], stdin=subprocess.DEVNULL
+    )
     try:
-        (profile / ".clawk-update-in-progress").write_text(f"{legacy.pid}\n{int(time.time())}\n")
+        (profile / ".clawk-update-in-progress").write_text(
+            f"{legacy.pid}\n{int(time.time())}\n"
+        )
         lock = UpdateLock(path=root / ".clawk-update-in-progress")
         assert lock.acquire() is False
         assert lock.holder is not None and lock.holder.pid == legacy.pid
@@ -453,7 +531,9 @@ time.sleep(120)
 """
 
 
-def test_dead_marker_is_kept_and_reported_held_while_the_checkout_lock_is_held(tmp_path):
+def test_dead_marker_is_kept_and_reported_held_while_the_checkout_lock_is_held(
+    tmp_path,
+):
     from clawk_cli import update_lock
 
     install = tmp_path / "install"
@@ -466,8 +546,12 @@ def test_dead_marker_is_kept_and_reported_held_while_the_checkout_lock_is_held(t
     try:
         _wait_for(tmp_path / "ready", holder)
         verdict = update_lock.read_live_update(path=marker, install_root=install)
-        assert marker.exists(), "a reader deleted the dead marker while the update tree still held the checkout"
-        assert verdict is not None and verdict.held, f"expected the hand-off scripts' 'held', got {verdict!r}"
+        assert marker.exists(), (
+            "a reader deleted the dead marker while the update tree still held the checkout"
+        )
+        assert verdict is not None and verdict.held, (
+            f"expected the hand-off scripts' 'held', got {verdict!r}"
+        )
     finally:
         holder.kill()
         holder.wait()
@@ -481,7 +565,9 @@ def _dead_marker(marker: Path) -> None:
     marker.write_text(f"{dead.pid}\n{int(time.time())}\nct:1.5\n", encoding="utf-8")
 
 
-def test_a_claimer_never_reclaims_a_dead_marker_while_the_checkout_lock_is_held(tmp_path):
+def test_a_claimer_never_reclaims_a_dead_marker_while_the_checkout_lock_is_held(
+    tmp_path,
+):
     """M1 (round 7): the launch path claims the marker before it takes the checkout lock
     (venv_sync). Its claim step deleted the dead marker over a held lock, then dropped its own
     claim when the checkout refused: the marker was gone while the killed update's tree ran."""
@@ -496,19 +582,29 @@ def test_a_claimer_never_reclaims_a_dead_marker_while_the_checkout_lock_is_held(
     try:
         _wait_for(tmp_path / "ready", holder)
         claim = UpdateLock(path=marker, install_root=install)
-        assert claim._claim_marker() is False, "claimed over a dead marker while the checkout lock is held"
-        assert marker.read_bytes() == dead_bytes, "the claim step replaced the held update's marker"
+        assert claim._claim_marker() is False, (
+            "claimed over a dead marker while the checkout lock is held"
+        )
+        assert marker.read_bytes() == dead_bytes, (
+            "the claim step replaced the held update's marker"
+        )
         assert claim.holder is not None and claim.holder.held
-        launch = UpdateLock(path=marker, install_root=install, checkout_first=False)  # venv_sync
+        launch = UpdateLock(
+            path=marker, install_root=install, checkout_first=False
+        )  # venv_sync
         assert launch.acquire() is False
         launch.release()
-        assert launch.holder is not None and launch.holder.held and launch.holder.pid == 0
+        assert (
+            launch.holder is not None and launch.holder.held and launch.holder.pid == 0
+        )
         assert marker.read_bytes() == dead_bytes
     finally:
         holder.kill()
         holder.wait()
     with UpdateLock(path=marker, install_root=install, checkout_first=False) as launch:
-        assert launch.acquired, "with the tree gone the dead marker is reclaimed and claimed"
+        assert launch.acquired, (
+            "with the tree gone the dead marker is reclaimed and claimed"
+        )
     assert not marker.exists()
     assert update_lock.checkout_lock_held(install) is False
 
@@ -542,7 +638,9 @@ def test_a_refusal_over_a_dead_updaters_lock_uses_the_held_wording(tmp_path):
     dead_pid = updater.pid
     _wait_for(tmp_path / "child")
     try:
-        lock = UpdateLock(path=tmp_path / ".clawk-update-in-progress", install_root=install)
+        lock = UpdateLock(
+            path=tmp_path / ".clawk-update-in-progress", install_root=install
+        )
         assert lock.acquire() is False
         assert lock.holder is not None and lock.holder.held and lock.holder.pid == 0
         text = update_lock.describe_holder(lock.holder)
@@ -584,7 +682,15 @@ def test_held_probe_never_fails_a_concurrent_acquire(tmp_path):
     install.mkdir()
     lock_path = update_lock.checkout_lock_path(install)
     lock_path.touch()
-    prober = _python(tmp_path, _PROBER, lock_path, 4, tmp_path / "go", stdout=subprocess.PIPE, text=True)
+    prober = _python(
+        tmp_path,
+        _PROBER,
+        lock_path,
+        4,
+        tmp_path / "go",
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     _wait_for(tmp_path / "go", prober)
     attempts = refused = 0
     try:
@@ -598,10 +704,13 @@ def test_held_probe_never_fails_a_concurrent_acquire(tmp_path):
         prober.kill()
         prober.wait()
     assert attempts > 50
-    assert refused == 0, f"{refused}/{attempts} acquires failed against a probe with no real holder"
+    assert refused == 0, (
+        f"{refused}/{attempts} acquires failed against a probe with no real holder"
+    )
 
 
 # --- oversized numeric marker fields never raise ---------------------------------------------
+
 
 def test_oversized_marker_numbers_never_raise_and_are_reclaimed(tmp_path):
     from clawk_cli import update_lock
@@ -609,8 +718,11 @@ def test_oversized_marker_numbers_never_raise_and_are_reclaimed(tmp_path):
     install = tmp_path / "install"
     install.mkdir()
     marker = tmp_path / ".clawk-update-in-progress"
-    for text in ("1" * 5000 + "\n1\nct:1.5\n", "4242\n" + "9" * 5000 + "\nct:1.5\n",
-                 "4242\n1\nct:1.5\ndelegate:" + "7" * 5000 + " ct:1.5\n"):
+    for text in (
+        "1" * 5000 + "\n1\nct:1.5\n",
+        "4242\n" + "9" * 5000 + "\nct:1.5\n",
+        "4242\n1\nct:1.5\ndelegate:" + "7" * 5000 + " ct:1.5\n",
+    ):
         marker.write_text(text, encoding="utf-8")
         assert update_lock.read_live_update(path=marker, install_root=install) is None
         marker.write_text(text, encoding="utf-8")

@@ -82,7 +82,13 @@ def test_live_child_session_gets_native_stream(server, emits):
     # A window resumed the child session: live sid differs from the stored key.
     server._sessions["live-1"] = {"session_key": "child-1", "agent": None}
 
-    _relay(server, "subagent.tool", tool_name="terminal", preview="ls", child_session_id="child-1")
+    _relay(
+        server,
+        "subagent.tool",
+        tool_name="terminal",
+        preview="ls",
+        child_session_id="child-1",
+    )
     _relay(server, "subagent.thinking", preview="hmm", child_session_id="child-1")
     _relay(server, "subagent.tool", tool_name="read_file", child_session_id="child-1")
     _relay(
@@ -182,12 +188,20 @@ def test_prompt_submit_rejected_while_child_run_active(server, emits):
     }
     _relay(server, "subagent.tool", tool_name="terminal", child_session_id="child-1")
 
-    result = server._methods["prompt.submit"]("rid-1", {"session_id": "live-1", "text": "hi"})
+    result = server._methods["prompt.submit"](
+        "rid-1", {"session_id": "live-1", "text": "hi"}
+    )
     assert result["error"]["code"] == 4009
 
     # Run completes → the same submit upgrades into a real conversation
     # (passes the guard; fails later only because this test stubs no agent).
-    _relay(server, "subagent.complete", child_session_id="child-1", status="completed", summary="ok")
+    _relay(
+        server,
+        "subagent.complete",
+        child_session_id="child-1",
+        status="completed",
+        summary="ok",
+    )
     assert server._child_run_active("child-1", None) is False
 
 
@@ -201,7 +215,13 @@ def test_active_child_runs_registry_tracks_liveness(server, emits):
     _relay(server, "subagent.tool", tool_name="terminal", child_session_id="child-1")
     assert (None, "child-1") in server._active_child_runs
 
-    _relay(server, "subagent.complete", child_session_id="child-1", status="completed", summary="ok")
+    _relay(
+        server,
+        "subagent.complete",
+        child_session_id="child-1",
+        status="completed",
+        summary="ok",
+    )
     assert (None, "child-1") not in server._active_child_runs
 
 
@@ -212,7 +232,12 @@ def test_start_mirrors_as_immediate_header_line(server, emits):
     # window shows context immediately. subagent.progress (batched tool-name
     # rollups) no longer pollutes the message body — tools mirror natively via
     # tool.start and the reply streams via subagent.text.
-    _relay(server, "subagent.start", preview="starting child branch", child_session_id="child-1")
+    _relay(
+        server,
+        "subagent.start",
+        preview="starting child branch",
+        child_session_id="child-1",
+    )
     _relay(server, "subagent.progress", preview="step 1/3", child_session_id="child-1")
 
     child = [(e, p) for e, s, p in emits if s == "live-1"]
@@ -237,5 +262,3 @@ def test_text_mirrors_as_message_delta(server, emits):
         ("message.delta", {"text": "Here is "}),
         ("message.delta", {"text": "the answer."}),
     ]
-
-

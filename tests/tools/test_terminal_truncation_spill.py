@@ -14,18 +14,30 @@ def small_cap(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     from clawk_constants import clawk_home_key
     import tools.tool_output_limits as lim
-    monkeypatch.setattr(lim, "_cached_limits", {clawk_home_key(): {
-        "max_bytes": 2000, "max_lines": 2000, "max_line_length": 2000,
-    }})
+
+    monkeypatch.setattr(
+        lim,
+        "_cached_limits",
+        {
+            clawk_home_key(): {
+                "max_bytes": 2000,
+                "max_lines": 2000,
+                "max_line_length": 2000,
+            }
+        },
+    )
     return tmp_path
 
 
 class TestTruncationSpill:
     @pytest.mark.platforms("linux")
     def test_truncated_output_has_metadata_and_spill(self, small_cap):
-        r = json.loads(terminal_tool(
-            "python3 -c \"print('marker_head'); [print(f'row_{i}', 'x'*80) for i in range(200)]; print('marker_tail')\"",
-            task_id="t-spill-1"))
+        r = json.loads(
+            terminal_tool(
+                "python3 -c \"print('marker_head'); [print(f'row_{i}', 'x'*80) for i in range(200)]; print('marker_tail')\"",
+                task_id="t-spill-1",
+            )
+        )
         assert r["exit_code"] == 0
         assert "OUTPUT TRUNCATED" in r["output"]
         assert r["output_total_chars"] > 2000
@@ -45,9 +57,12 @@ class TestTruncationSpill:
 
     @pytest.mark.platforms("linux")
     def test_spill_is_redacted(self, small_cap):
-        r = json.loads(terminal_tool(
-            "python3 -c \"print('sk-proj-' + 'a1B2c3D4e5F6g7H8i9J0' * 3); [print('pad', 'y'*90) for i in range(200)]\"",
-            task_id="t-spill-3"))
+        r = json.loads(
+            terminal_tool(
+                "python3 -c \"print('sk-proj-' + 'a1B2c3D4e5F6g7H8i9J0' * 3); [print('pad', 'y'*90) for i in range(200)]\"",
+                task_id="t-spill-3",
+            )
+        )
         p = Path(r["full_output_path"])
         full = p.read_text()
         assert "a1B2c3D4e5F6g7H8i9J0a1B2c3D4e5F6g7H8i9J0" not in full
@@ -58,14 +73,21 @@ class TestTruncationSpill:
         stale = spill_dir / "out-1-2-dead.log"
         stale.write_text("old")
         os.utime(stale, (1, 1))
-        json.loads(terminal_tool(
-            "python3 -c \"[print('z'*90) for i in range(200)]\"", task_id="t-spill-4"))
+        json.loads(
+            terminal_tool(
+                "python3 -c \"[print('z'*90) for i in range(200)]\"",
+                task_id="t-spill-4",
+            )
+        )
         assert not stale.exists()
 
     @pytest.mark.platforms("linux")
     def test_failed_command_still_gets_spill(self, small_cap):
-        r = json.loads(terminal_tool(
-            "python3 -c \"[print('e'*90) for i in range(200)]; import sys; sys.exit(3)\"",
-            task_id="t-spill-5"))
+        r = json.loads(
+            terminal_tool(
+                "python3 -c \"[print('e'*90) for i in range(200)]; import sys; sys.exit(3)\"",
+                task_id="t-spill-5",
+            )
+        )
         assert r["exit_code"] == 3
         assert Path(r["full_output_path"]).exists()

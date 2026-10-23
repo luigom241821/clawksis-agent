@@ -8,7 +8,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.config import Platform, _PLATFORM_CONNECTED_CHECKERS, _BUILTIN_PLATFORM_VALUES
+from gateway.config import (
+    Platform,
+    _PLATFORM_CONNECTED_CHECKERS,
+    _BUILTIN_PLATFORM_VALUES,
+)
 
 
 def test_all_builtins_have_checker_or_generic_token_path():
@@ -21,13 +25,16 @@ def test_all_builtins_have_checker_or_generic_token_path():
     a built-in just because nobody added it to the checker dict.
     """
     # Platforms covered by the generic token/api_key branch
-    generic_token_values = {p.value for p in {
-        Platform.TELEGRAM,
-        Platform.DISCORD,
-        Platform.SLACK,
-        Platform.MATRIX,
-        Platform.MATTERMOST,
-    }}
+    generic_token_values = {
+        p.value
+        for p in {
+            Platform.TELEGRAM,
+            Platform.DISCORD,
+            Platform.SLACK,
+            Platform.MATRIX,
+            Platform.MATTERMOST,
+        }
+    }
 
     # Platforms with a bespoke checker
     checker_values = {p.value for p in set(_PLATFORM_CONNECTED_CHECKERS.keys())}
@@ -41,6 +48,7 @@ def test_all_builtins_have_checker_or_generic_token_path():
     try:
         from clawk_cli.plugins import discover_plugins
         from gateway.platform_registry import platform_registry
+
         discover_plugins()
         for _entry in platform_registry.all_entries():
             if _entry.is_connected is not None or _entry.validate_config is not None:
@@ -63,5 +71,3 @@ def test_all_builtins_have_checker_or_generic_token_path():
         f"{sorted(missing)}.  "
         f"Add them to _PLATFORM_CONNECTED_CHECKERS or generic_token_platforms."
     )
-
-

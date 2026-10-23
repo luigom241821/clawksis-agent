@@ -33,7 +33,9 @@ _CYCLE_125650 = (
 _STATUS_LINE_78551 = "- **Texture** : `TEXTURE_LOCAL.md` (trace creative, emergence). Pas dans un Clawksis stock.\n"
 
 # Asked-for repetition stays below the stop path's scale floor (#121600's repeat-on-request case).
-_ASKED_FOR_REPEAT = "Hello world, this is a sentence the user asked me to repeat many times.\n" * 50
+_ASKED_FOR_REPEAT = (
+    "Hello world, this is a sentence the user asked me to repeat many times.\n" * 50
+)
 # Distinct rows sharing a long suffix: repeated windows dominate, yet every line differs.
 _DISTINCT_ROWS = "".join(
     f"| {i:05d} | status: pending review by the on-call engineer before the next release window |\n"
@@ -41,15 +43,24 @@ _DISTINCT_ROWS = "".join(
 )
 assert len(_ASKED_FOR_REPEAT) < STOP_PATH_MIN_CHARS <= len(_DISTINCT_ROWS)
 # ~100K of distinct legitimate text before a loop starts: the cut must not wait for the reply to double.
-_LONG_PREFIX = "".join(hashlib.sha256(str(i).encode()).hexdigest() + "\n" for i in range(1540))
+_LONG_PREFIX = "".join(
+    hashlib.sha256(str(i).encode()).hexdigest() + "\n" for i in range(1540)
+)
 _LOOP_BUDGET = 100_000
 
 
 class _FakeEndpoint:
     """Local endpoint streaming one reply per request, on the chat or the Anthropic wire."""
 
-    def __init__(self, channel: str, text: str, *, endless: bool, prefix: str = "") -> None:
-        self.channel, self.text, self.endless, self.prefix = channel, text, endless, prefix
+    def __init__(
+        self, channel: str, text: str, *, endless: bool, prefix: str = ""
+    ) -> None:
+        self.channel, self.text, self.endless, self.prefix = (
+            channel,
+            text,
+            endless,
+            prefix,
+        )
         self.requests = 0
         self._stop = threading.Event()
         endpoint = self
@@ -58,8 +69,18 @@ class _FakeEndpoint:
             protocol_version = "HTTP/1.1"
 
             def do_GET(self):  # model metadata probes
-                body = json.dumps({"object": "list", "data": [
-                    {"id": "fixture-local", "object": "model", "context_length": 131072}]}).encode()
+                body = json.dumps(
+                    {
+                        "object": "list",
+                        "data": [
+                            {
+                                "id": "fixture-local",
+                                "object": "model",
+                                "context_length": 131072,
+                            }
+                        ],
+                    }
+                ).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -73,7 +94,11 @@ class _FakeEndpoint:
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Connection", "close")
                 self.end_headers()
-                frames = endpoint._anthropic_frames() if self.path.endswith("/messages") else endpoint._chat_frames()
+                frames = (
+                    endpoint._anthropic_frames()
+                    if self.path.endswith("/messages")
+                    else endpoint._chat_frames()
+                )
                 try:
                     for frame in frames:
                         self.wfile.write(frame.encode())
@@ -91,9 +116,9 @@ class _FakeEndpoint:
 
     def _pieces(self):
         if not self.endless:
-            yield from (self.text[i:i + 200] for i in range(0, len(self.text), 200))
+            yield from (self.text[i : i + 200] for i in range(0, len(self.text), 200))
             return
-        yield from (self.prefix[i:i + 2000] for i in range(0, len(self.prefix), 2000))
+        yield from (self.prefix[i : i + 2000] for i in range(0, len(self.prefix), 2000))
         looped = 0
         while not self._stop.is_set():
             if self.prefix and looped >= _LOOP_BUDGET:
@@ -107,15 +132,36 @@ class _FakeEndpoint:
         field = "reasoning_content" if self.channel == "reasoning" else "content"
 
         def chunk(delta, finish_reason=None):
-            return "data: " + json.dumps({
-                "id": "chatcmpl-fixture", "object": "chat.completion.chunk", "created": 0, "model": "fixture-local",
-                "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
-            }) + "\n\n"
+            return (
+                "data: "
+                + json.dumps(
+                    {
+                        "id": "chatcmpl-fixture",
+                        "object": "chat.completion.chunk",
+                        "created": 0,
+                        "model": "fixture-local",
+                        "choices": [
+                            {"index": 0, "delta": delta, "finish_reason": finish_reason}
+                        ],
+                    }
+                )
+                + "\n\n"
+            )
 
         for n, piece in enumerate(self._pieces()):
             if self.channel == _LOOP_BEHIND_DETAILS:
-                yield chunk({"reasoning_content": piece, "reasoning_details": [
-                    {"type": "reasoning.text", "text": f"Step {n}: weighing option {n * 7919}. ", "index": 0}]})
+                yield chunk(
+                    {
+                        "reasoning_content": piece,
+                        "reasoning_details": [
+                            {
+                                "type": "reasoning.text",
+                                "text": f"Step {n}: weighing option {n * 7919}. ",
+                                "index": 0,
+                            }
+                        ],
+                    }
+                )
             else:
                 yield chunk({field: piece})
         yield chunk({}, "stop")
@@ -127,17 +173,44 @@ class _FakeEndpoint:
         def event(kind, **payload):
             return f"event: {kind}\ndata: {json.dumps({'type': kind, **payload})}\n\n"
 
-        yield event("message_start", message={
-            "id": "msg_fixture", "type": "message", "role": "assistant", "model": "fixture-local", "content": [],
-            "stop_reason": None, "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 0}})
-        yield event("content_block_start", index=0, content_block=(
-            {"type": "thinking", "thinking": "", "signature": ""} if thinking else {"type": "text", "text": ""}))
+        yield event(
+            "message_start",
+            message={
+                "id": "msg_fixture",
+                "type": "message",
+                "role": "assistant",
+                "model": "fixture-local",
+                "content": [],
+                "stop_reason": None,
+                "stop_sequence": None,
+                "usage": {"input_tokens": 1, "output_tokens": 0},
+            },
+        )
+        yield event(
+            "content_block_start",
+            index=0,
+            content_block=(
+                {"type": "thinking", "thinking": "", "signature": ""}
+                if thinking
+                else {"type": "text", "text": ""}
+            ),
+        )
         for piece in self._pieces():
-            yield event("content_block_delta", index=0, delta=(
-                {"type": "thinking_delta", "thinking": piece} if thinking else {"type": "text_delta", "text": piece}))
+            yield event(
+                "content_block_delta",
+                index=0,
+                delta=(
+                    {"type": "thinking_delta", "thinking": piece}
+                    if thinking
+                    else {"type": "text_delta", "text": piece}
+                ),
+            )
         yield event("content_block_stop", index=0)
-        yield event("message_delta", delta={"stop_reason": "end_turn", "stop_sequence": None},
-                    usage={"output_tokens": 1})
+        yield event(
+            "message_delta",
+            delta={"stop_reason": "end_turn", "stop_sequence": None},
+            usage={"output_tokens": 1},
+        )
         yield event("message_stop")
 
     def close(self) -> None:
@@ -148,12 +221,21 @@ class _FakeEndpoint:
 
 @pytest.fixture()
 def endpoint(monkeypatch):
-    for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
+    for var in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
     started = []
 
-    def start(channel: str, text: str, *, endless: bool, prefix: str = "") -> _FakeEndpoint:
+    def start(
+        channel: str, text: str, *, endless: bool, prefix: str = ""
+    ) -> _FakeEndpoint:
         started.append(_FakeEndpoint(channel, text, endless=endless, prefix=prefix))
         return started[-1]
 
@@ -166,8 +248,16 @@ def _run_turn(server: _FakeEndpoint, api_mode: str) -> dict:
     from run_agent import AIAgent
 
     agent = AIAgent(
-        model="fixture-local", provider="custom", base_url=server.url, api_key="fixture", api_mode=api_mode,
-        quiet_mode=True, skip_memory=True, skip_context_files=True, enabled_toolsets=[], max_iterations=3,
+        model="fixture-local",
+        provider="custom",
+        base_url=server.url,
+        api_key="fixture",
+        api_mode=api_mode,
+        quiet_mode=True,
+        skip_memory=True,
+        skip_context_files=True,
+        enabled_toolsets=[],
+        max_iterations=3,
     )
     outcome: dict = {}
 
@@ -198,22 +288,37 @@ def _run_turn(server: _FakeEndpoint, api_mode: str) -> dict:
         ("anthropic_messages", "reasoning", _CYCLE_125650, ""),
         ("chat_completions", "content", _CYCLE_125650, _LONG_PREFIX),
     ],
-    ids=["chat-content", "chat-reasoning-behind-details", "anthropic-text", "anthropic-thinking",
-         "chat-loop-after-long-prefix"],
+    ids=[
+        "chat-content",
+        "chat-reasoning-behind-details",
+        "anthropic-text",
+        "anthropic-thinking",
+        "chat-loop-after-long-prefix",
+    ],
 )
-def test_looping_stream_is_cut_without_a_stream_callback(endpoint, api_mode, channel, loop, prefix):
+def test_looping_stream_is_cut_without_a_stream_callback(
+    endpoint, api_mode, channel, loop, prefix
+):
     server = endpoint(channel, loop, endless=True, prefix=prefix)
 
     result = _run_turn(server, api_mode)
 
     assert (result["completed"], result["failure_reason"]) == (False, "truncated")
     assert "Repetition Detected" in result["final_response"]
-    assert server.requests == 1  # cut once; never continued or retried into the same loop
+    assert (
+        server.requests == 1
+    )  # cut once; never continued or retried into the same loop
     unit = loop.strip()[:40]
-    assert not any(unit in json.dumps(m, ensure_ascii=False) for m in result["messages"])
+    assert not any(
+        unit in json.dumps(m, ensure_ascii=False) for m in result["messages"]
+    )
 
 
-@pytest.mark.parametrize("text", [_ASKED_FOR_REPEAT, _DISTINCT_ROWS], ids=["asked-for-repeat", "distinct-rows"])
+@pytest.mark.parametrize(
+    "text",
+    [_ASKED_FOR_REPEAT, _DISTINCT_ROWS],
+    ids=["asked-for-repeat", "distinct-rows"],
+)
 def test_repetitive_but_legitimate_stream_is_delivered(endpoint, text):
     server = endpoint("content", text, endless=False)
 

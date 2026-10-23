@@ -56,8 +56,17 @@ def record_check_results(results: list, checked_installs: dict) -> None:
         rows = []
         for r in results:
             row = r.to_json() if hasattr(r, "to_json") else dict(r)
-            rows.append({**row, "checked_install": _install_fingerprint(checked_installs.get(row.get("name")))})
-        atomic_write_text(_markers_dir() / "results.json", json.dumps(rows, indent=2) + "\n")
+            rows.append(
+                {
+                    **row,
+                    "checked_install": _install_fingerprint(
+                        checked_installs.get(row.get("name"))
+                    ),
+                }
+            )
+        atomic_write_text(
+            _markers_dir() / "results.json", json.dumps(rows, indent=2) + "\n"
+        )
     except (OSError, TypeError, ValueError):
         pass
 
@@ -66,7 +75,11 @@ def _install_fingerprint(record) -> dict | None:
     """The parts of an install record an update check depends on."""
     if not isinstance(record, dict):
         return None
-    return {"source": record.get("source"), "revision": record.get("revision"), "pinned": record.get("pinned") is True}
+    return {
+        "source": record.get("source"),
+        "revision": record.get("revision"),
+        "pinned": record.get("pinned") is True,
+    }
 
 
 def cached_git_updates(install_metadata: dict) -> dict[str, str]:
@@ -82,10 +95,19 @@ def cached_git_updates(install_metadata: dict) -> dict[str, str]:
         return {}
     out: dict[str, str] = {}
     for row in rows if isinstance(rows, list) else ():
-        if not isinstance(row, dict) or row.get("class") != "git" or row.get("update_available") is not True:
+        if (
+            not isinstance(row, dict)
+            or row.get("class") != "git"
+            or row.get("update_available") is not True
+        ):
             continue
         current = _install_fingerprint(install_metadata.get(row.get("name")))
-        if current and not current["pinned"] and current == row.get("checked_install") and row.get("latest"):
+        if (
+            current
+            and not current["pinned"]
+            and current == row.get("checked_install")
+            and row.get("latest")
+        ):
             out[str(row["name"])] = str(row["latest"])
     return out
 
@@ -132,8 +154,11 @@ def _default_config_get(section: str, key: str):
         return None
 
 
-def check_due(now: Optional[float] = None, interval_hours: Optional[float] = None,
-              config_get: Callable | None = None) -> bool:
+def check_due(
+    now: Optional[float] = None,
+    interval_hours: Optional[float] = None,
+    config_get: Callable | None = None,
+) -> bool:
     """The clock gate: last-run marker vs the interval."""
     if interval_hours is None:
         interval_hours = check_interval_hours(config_get)
@@ -215,13 +240,17 @@ def _run_check_locked(
 
     try:
         from pm import receipt
+
         token = receipt.begin("plugin-check")
         receipt.record_plugin_checks(results)
         if warning:
             receipt.record_warning(warning)
         updates = [r for r in results if getattr(r, "update_available", None) is True]
-        receipt.finalize("failed" if not check_ok else "updates-available" if updates else "ok",
-                         exit_code=0 if check_ok else 1, token=token)
+        receipt.finalize(
+            "failed" if not check_ok else "updates-available" if updates else "ok",
+            exit_code=0 if check_ok else 1,
+            token=token,
+        )
     except Exception:
         log.debug("plugin-check receipt write failed", exc_info=True)
 
@@ -268,6 +297,7 @@ def _run_check_locked(
 # the production caller: real seams for the gateway boot/housekeeping tick
 # ---------------------------------------------------------------------------
 
+
 def maybe_run_gateway_check(
     *,
     run_checks_fn: Optional[Callable[..., list]] = None,
@@ -305,6 +335,7 @@ def maybe_run_gateway_check(
         from clawk_cli import plugins_cmd
 
         from functools import partial
+
         apply_updates_fn = partial(plugins_cmd.cmd_update, interactive=False)
     return run_scheduled_check(
         run_checks_fn=run_checks_fn,

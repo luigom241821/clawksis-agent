@@ -5,6 +5,7 @@ Covers two robustness gaps left unaddressed when #54843 merged:
   2. _truncate_with_footer emits a CONCRETE read_file offset for the omitted
      middle (was a literal `offset=<line>` placeholder the model had to guess).
 """
+
 from __future__ import annotations
 
 import re
@@ -17,7 +18,10 @@ def test_store_full_text_is_bounded(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Force the cache dir under the temp home.
     from clawk_constants import get_clawk_dir
-    huge = "x\n" * (web_tools_truncate.MAX_STORED_TEXT_CHARS)  # > MAX_STORED_TEXT_CHARS chars
+
+    huge = "x\n" * (
+        web_tools_truncate.MAX_STORED_TEXT_CHARS
+    )  # > MAX_STORED_TEXT_CHARS chars
     assert len(huge) > web_tools_truncate.MAX_STORED_TEXT_CHARS
     path = web_tools_truncate._store_full_text("https://example.com/big", huge)
     assert path is not None

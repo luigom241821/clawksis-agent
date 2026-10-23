@@ -25,8 +25,9 @@ def _bypass_chat_launch(args) -> bool:
     """--safe-mode / --ignore-user-config chat: the gateway owner freezes code defaults and runs
     the turn out of process, so the profile's display.interface must not pick a surface and the
     client performs no discovery. Explicit --tui forwards the flags in its session.create policy."""
-    return bool(getattr(args, "safe_mode", False) or getattr(args, "ignore_user_config", False)) \
-        and not getattr(args, "tui", False)
+    return bool(
+        getattr(args, "safe_mode", False) or getattr(args, "ignore_user_config", False)
+    ) and not getattr(args, "tui", False)
 
 
 def _read_tui_active_session_file(path: Optional[str]) -> Optional[str]:
@@ -66,7 +67,9 @@ def _branch_lineage(db, session: dict) -> list:
         except (TypeError, ValueError):
             break
         parent_id = config.get("_branched_from") if isinstance(config, dict) else None
-        parent = db.get_session(parent_id) if parent_id and parent_id not in seen else None
+        parent = (
+            db.get_session(parent_id) if parent_id and parent_id not in seen else None
+        )
         if not parent:
             break
         seen.add(parent_id)
@@ -74,11 +77,16 @@ def _branch_lineage(db, session: dict) -> list:
     return rows
 
 
-def _print_tui_exit_summary(session_id: Optional[str], active_session_file: Optional[str] = None) -> None:
+def _print_tui_exit_summary(
+    session_id: Optional[str], active_session_file: Optional[str] = None
+) -> None:
     """Print a shell-visible epilogue after TUI exits."""
     from clawk_cli.main import _resolve_last_session
+
     target = (
-        _read_tui_active_session_file(active_session_file) or session_id or _resolve_last_session(source="tui")
+        _read_tui_active_session_file(active_session_file)
+        or session_id
+        or _resolve_last_session(source="tui")
     )
     if not target:
         return
@@ -87,6 +95,7 @@ def _print_tui_exit_summary(session_id: Optional[str], active_session_file: Opti
     try:
         from clawk_state import SessionDB
         from clawk_cli.config import get_clawk_home
+
         db = SessionDB(db_path=get_clawk_home() / "state.db", read_only=True)
         session = db.get_session(target)
         if not session:
@@ -97,7 +106,9 @@ def _print_tui_exit_summary(session_id: Optional[str], active_session_file: Opti
         message_count = int(session.get("message_count") or 0)
         if message_count == 0:
             return  # No real conversation — don't show resume info
-        tokens = {k: 0 for k in ("input", "output", "cache_read", "cache_write", "reasoning")}
+        tokens = {
+            k: 0 for k in ("input", "output", "cache_read", "cache_write", "reasoning")
+        }
         for row in _branch_lineage(db, session):
             for k in tokens:
                 tokens[k] += int(row.get(f"{k}_tokens") or 0)
@@ -109,9 +120,14 @@ def _print_tui_exit_summary(session_id: Optional[str], active_session_file: Opti
 
     # Sessions live under the profile's CLAWK_HOME — mirror cli_session_mixin::_print_exit_summary.
     from clawk_cli.profiles import get_active_profile_name
+
     active_profile = get_active_profile_name()
-    profile_flag = "" if active_profile in ("default", "custom") else f" -p {active_profile}"
-    print(f"\n{t('cli.session.exit_resume_hint')}\n  clawk --tui --resume {resume_id}{profile_flag}")
+    profile_flag = (
+        "" if active_profile in ("default", "custom") else f" -p {active_profile}"
+    )
+    print(
+        f"\n{t('cli.session.exit_resume_hint')}\n  clawk --tui --resume {resume_id}{profile_flag}"
+    )
     if title:
         print(f'  clawk --tui -c "{title}"{profile_flag}')
     print(f"\nSession:        {resume_id}")
@@ -129,7 +145,9 @@ def _tui_need_rebuild(root: Path) -> bool:
     from clawk_cli.source_build import source_product_current
 
     force = (os.environ.get("CLAWK_TUI_FORCE_BUILD") or "").strip().lower()
-    return force in {"1", "true", "yes", "on"} or not source_product_current(root.parent, "tui", root / "dist")
+    return force in {"1", "true", "yes", "on"} or not source_product_current(
+        root.parent, "tui", root / "dist"
+    )
 
 
 def _find_bundled_tui(clawk_cli_dir: Path | None = None) -> Path | None:
@@ -155,8 +173,14 @@ def _restore_tui_workspace(tui_dir: Path) -> bool:
         return False
     try:
         subprocess.run(
-            [git, "restore", "--", tui_dir.name], cwd=str(tui_dir.parent), capture_output=True,
-            text=True, encoding="utf-8", errors="replace", check=False)
+            [git, "restore", "--", tui_dir.name],
+            cwd=str(tui_dir.parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
     except OSError:
         return False
     return tui_dir.is_dir()
@@ -188,7 +212,8 @@ def _ensure_tui_workspace(tui_dir: Path) -> None:
         "  2. Run `npm install --silent --no-fund --no-audit --progress=false`\n"
         "  3. Retry `clawk --tui`\n"
         "If the checkout is still inconsistent, run `clawk update --force`.",
-        file=sys.stderr)
+        file=sys.stderr,
+    )
     sys.exit(1)
 
 
@@ -199,6 +224,7 @@ def _tui_node_bin(bin: str) -> str:
         if env_node and os.path.isfile(env_node) and os.access(env_node, os.X_OK):
             return env_node
     from pm import ensure
+
     path = shutil.which(bin, path=ensure(bin).env["PATH"])
     if not path:
         print(
@@ -220,7 +246,8 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
             f"Error: --dev is incompatible with CLAWK_TUI_DIR={ext_dir}\n"
             f"The prebuilt TUI has no source code to hot-reload.\n"
             f"Unset CLAWK_TUI_DIR (e.g. `unset CLAWK_TUI_DIR`) to use --dev from a checkout.",
-            file=sys.stderr)
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # 1. Prebuilt bundle (nix / packaged release / Docker image): just run it.
@@ -235,7 +262,11 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
         if ext_dir:
             p = Path(ext_dir)
             if (p / "dist" / "entry.js").is_file():
-                return [_tui_node_bin("node"), "--expose-gc", str(p / "dist" / "entry.js")], p
+                return [
+                    _tui_node_bin("node"),
+                    "--expose-gc",
+                    str(p / "dist" / "entry.js"),
+                ], p
 
         bundled = _find_bundled_tui()
         if bundled is not None:
@@ -246,9 +277,17 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
         _ensure_tui_workspace(tui_dir)
 
     if not tui_dev and not _tui_need_rebuild(tui_dir):
-        return [_tui_node_bin("node"), "--expose-gc", str(tui_dir / "dist/entry.js")], tui_dir
+        return [
+            _tui_node_bin("node"),
+            "--expose-gc",
+            str(tui_dir / "dist/entry.js"),
+        ], tui_dir
 
-    from clawk_cli.source_build import build_source_tui, prepare_launch_dependencies, source_build_env
+    from clawk_cli.source_build import (
+        build_source_tui,
+        prepare_launch_dependencies,
+        source_build_env,
+    )
 
     project_root = tui_dir.parent
     env = source_build_env()
@@ -257,9 +296,16 @@ def _make_tui_argv(tui_dir: Path, tui_dev: bool) -> tuple[list[str], Path]:
         # tsx imports @clawk/ink's built exports; the production bundle instead
         # compiles its source directly through scripts/build/tui.mjs.
         npm = shutil.which("npm", path=env["PATH"])
-        subprocess.run([npm, "run", "build"], cwd=tui_dir / "packages/clawk-ink", env=env, check=True)
+        subprocess.run(
+            [npm, "run", "build"],
+            cwd=tui_dir / "packages/clawk-ink",
+            env=env,
+            check=True,
+        )
         tsx = tui_dir / "node_modules/.bin/tsx"
-        return ([str(tsx), "src/entry.tsx"] if tsx.exists() else [npm, "start"]), tui_dir
+        return (
+            [str(tsx), "src/entry.tsx"] if tsx.exists() else [npm, "start"]
+        ), tui_dir
 
     build_source_tui(project_root, env=env)
     node = shutil.which("node", path=env["PATH"])
@@ -284,6 +330,7 @@ def _normalize_tui_toolsets(toolsets: object) -> list[str]:
     """Normalize argparse/Fire-style toolset input for the TUI subprocess."""
     try:
         from clawk_cli.oneshot import _normalize_toolsets
+
         return _normalize_toolsets(toolsets) or []
     except (AttributeError, ImportError):
         return _split_comma_items(toolsets, split_non_str=False) if toolsets else []
@@ -340,6 +387,7 @@ def _resolve_tui_heap_mb(default_mb: int = 8192) -> int:
 def _safe_tui_cwd(env: Optional[dict] = None) -> str:
     """Return a stable cwd value for the Node TUI child environment."""
     from clawk_cli.main import PROJECT_ROOT
+
     try:
         return os.getcwd()
     except FileNotFoundError:
@@ -352,6 +400,7 @@ def _safe_tui_cwd(env: Optional[dict] = None) -> str:
 def _apply_tui_python_env(env: dict) -> None:
     """Seed/repair Python-related env vars shared by CLI and dashboard TUI launches."""
     from clawk_cli.main import PROJECT_ROOT
+
     src_root = str(env.get("CLAWK_PYTHON_SRC_ROOT") or "").strip()
     if not src_root or not Path(src_root).is_dir():
         env["CLAWK_PYTHON_SRC_ROOT"] = str(PROJECT_ROOT)
@@ -376,7 +425,13 @@ def _setup_tui_worktree() -> dict:
     """Create the ``--worktree`` checkout for a TUI launch (prune + async pack maintenance); exits on failure."""
     wt_info = None
     try:
-        from cli import _git_repo_root, _maintain_pack_health, _prune_stale_worktrees, _setup_worktree
+        from cli import (
+            _git_repo_root,
+            _maintain_pack_health,
+            _prune_stale_worktrees,
+            _setup_worktree,
+        )
+
         repo = _git_repo_root()
         if repo:
             _prune_stale_worktrees(repo)
@@ -385,8 +440,13 @@ def _setup_tui_worktree() -> dict:
             import threading as _threading
 
             _threading.Thread(
-                target=_maintain_pack_health, args=(repo,), name="pack-maintenance", daemon=True).start()
+                target=_maintain_pack_health,
+                args=(repo,),
+                name="pack-maintenance",
+                daemon=True,
+            ).start()
         from clawk_cli.config import get_clawk_home
+
         # The session's frozen cwd keeps this checkout; name the store from creation so a
         # launcher killed with its terminal still leaves the tree to its sessions.
         wt_info = _setup_worktree(retain_db=get_clawk_home() / "state.db")
@@ -423,6 +483,7 @@ def _remove_idle_clean_tui_worktree(wt_info: dict) -> bool:
         if _tree_still_served(db_path, path):
             return False
         from cli import _cleanup_worktree
+
         _cleanup_worktree(wt_info)
     except Exception:
         logger.debug("TUI worktree cleanup failed; keeping %s", path, exc_info=True)
@@ -430,51 +491,85 @@ def _remove_idle_clean_tui_worktree(wt_info: dict) -> bool:
     return not Path(path).exists()
 
 
-def _require_bypass_model(env: dict, model: Optional[str], resume_session_id: Optional[str]) -> None:
+def _require_bypass_model(
+    env: dict, model: Optional[str], resume_session_id: Optional[str]
+) -> None:
     """A --safe-mode / --ignore-user-config session reads no profile default model, so the owner
     refuses its session.create without one (bare invalid_params). Say so before the TUI starts,
     as classic chat does; a resume reuses the frozen route and needs none."""
     from utils import is_truthy_value
-    bypass = any(is_truthy_value(env.get(name)) for name in ("CLAWK_SAFE_MODE", "CLAWK_IGNORE_USER_CONFIG"))
-    if bypass and not resume_session_id and not (model or env.get("CLAWK_MODEL", "").strip()):
-        print("Error: --safe-mode / --ignore-user-config (or CLAWK_IGNORE_USER_CONFIG=1) read no profile "
-              "default model: pass --model explicitly.\n"
-              "  Example: clawk --tui --safe-mode --provider openrouter --model anthropic/claude-sonnet-4",
-              file=sys.stderr)
+
+    bypass = any(
+        is_truthy_value(env.get(name))
+        for name in ("CLAWK_SAFE_MODE", "CLAWK_IGNORE_USER_CONFIG")
+    )
+    if (
+        bypass
+        and not resume_session_id
+        and not (model or env.get("CLAWK_MODEL", "").strip())
+    ):
+        print(
+            "Error: --safe-mode / --ignore-user-config (or CLAWK_IGNORE_USER_CONFIG=1) read no profile "
+            "default model: pass --model explicitly.\n"
+            "  Example: clawk --tui --safe-mode --provider openrouter --model anthropic/claude-sonnet-4",
+            file=sys.stderr,
+        )
         raise SystemExit(1)
 
 
 # Launch flags the Ink client cannot carry into session.create yet. Refused (exit 2, as classic
 # chat refuses unsupported flags), never dropped: a dropped --api-key/--base-url would silently
 # run the session on the profile's own endpoint and credentials.
-_TUI_UNFORWARDED = {"api_key": "--api-key", "base_url": "--base-url", "reasoning": "--reasoning"}
+_TUI_UNFORWARDED = {
+    "api_key": "--api-key",
+    "base_url": "--base-url",
+    "reasoning": "--reasoning",
+}
 
 
 def _refuse_unforwarded_tui_flags(args) -> None:
-    flags = [flag for name, flag in _TUI_UNFORWARDED.items() if getattr(args, name, None)]
+    flags = [
+        flag for name, flag in _TUI_UNFORWARDED.items() if getattr(args, name, None)
+    ]
     if flags:
-        print(f"Error: Unsupported --tui options: {', '.join(flags)}. No session was started.\n"
-              f"  Use classic chat for this launch: clawk chat --cli {' '.join(flags)} ...\n"
-              "  Or set model.base_url / agent.reasoning_effort in config.yaml (/reasoning in the TUI).",
-              file=sys.stderr)
+        print(
+            f"Error: Unsupported --tui options: {', '.join(flags)}. No session was started.\n"
+            f"  Use classic chat for this launch: clawk chat --cli {' '.join(flags)} ...\n"
+            "  Or set model.base_url / agent.reasoning_effort in config.yaml (/reasoning in the TUI).",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
 
 
 def _launch_tui(
-    resume_session_id: Optional[str] = None, tui_dev: bool = False, native_mode: Optional[bool] = None,
+    resume_session_id: Optional[str] = None,
+    tui_dev: bool = False,
+    native_mode: Optional[bool] = None,
     model: Optional[str] = None,
-    provider: Optional[str] = None, toolsets: object = None, skills: object = None,
-    verbose: Optional[bool] = None, quiet: bool = False, query: Optional[str] = None,
-    image: Optional[str] = None, worktree: bool = False, checkpoints: bool = False,
-    pass_session_id: bool = False, max_turns: Optional[int] = None, accept_hooks: bool = False):
+    provider: Optional[str] = None,
+    toolsets: object = None,
+    skills: object = None,
+    verbose: Optional[bool] = None,
+    quiet: bool = False,
+    query: Optional[str] = None,
+    image: Optional[str] = None,
+    worktree: bool = False,
+    checkpoints: bool = False,
+    pass_session_id: bool = False,
+    max_turns: Optional[int] = None,
+    accept_hooks: bool = False,
+):
     """Replace current process with the TUI."""
     from clawk_cli.main import PROJECT_ROOT
+
     tui_dir = PROJECT_ROOT / "ui-tui"
 
     import tempfile
+
     # TUI child is a clawk process: propagate the profile-home contract via
     # the single factory; keep secrets (the TUI/agent needs provider creds).
     from tools.environments.local import build_subprocess_env
+
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=True)
     _require_bypass_model(env, model, resume_session_id)
     # The directory this launch was invoked from is the source of truth. An inherited
@@ -483,6 +578,7 @@ def _launch_tui(
     # and the gateway starts in last session's project. `--worktree` still wins below.
     env["CLAWK_CWD"] = _safe_tui_cwd(env)
     from clawk_cli.shared_session_attach import configure_tui_attachment
+
     try:
         configure_tui_attachment(env, resume_session_id)
     except (ValueError, RuntimeError) as exc:
@@ -490,11 +586,15 @@ def _launch_tui(
         raise SystemExit(1) from None
     try:
         from clawk_cli.config import apply_terminal_config_to_env
+
         apply_terminal_config_to_env(env=env)
     except Exception:
-        logger.debug("Failed to apply terminal config bridge for TUI launch", exc_info=True)
+        logger.debug(
+            "Failed to apply terminal config bridge for TUI launch", exc_info=True
+        )
     active_session_fd, active_session_file = tempfile.mkstemp(
-        prefix="clawk-tui-active-session-", suffix=".json")
+        prefix="clawk-tui-active-session-", suffix=".json"
+    )
     os.close(active_session_fd)
     env["CLAWK_TUI_ACTIVE_SESSION_FILE"] = active_session_file
     env.setdefault("NODE_ENV", "development" if tui_dev else "production")
@@ -502,8 +602,13 @@ def _launch_tui(
         try:
             from clawk_cli.config import load_config
             from utils import is_truthy_value
+
             display = load_config().get("display", {})
-            native_mode = is_truthy_value(display.get("tui_native", False)) if isinstance(display, dict) else False
+            native_mode = (
+                is_truthy_value(display.get("tui_native", False))
+                if isinstance(display, dict)
+                else False
+            )
         except Exception:
             native_mode = False
     env["CLAWK_TUI_NATIVE"] = "1" if native_mode else "0"
@@ -527,23 +632,31 @@ def _launch_tui(
     # the shell before the launcher's own edits (NODE_OPTIONS heap, TUI pins) so the session gets the
     # PATH / venv / CLAWK_* values the user exported.
     from clawk_cli.gateway_chat import shell_client_env
+
     env["CLAWK_TUI_CLIENT_ENV"] = json.dumps(shell_client_env())
 
     skills_value = ""
     if skills:
         skills_value = (
-            ",".join(_split_comma_items(skills)) if isinstance(skills, (list, tuple)) else str(skills).strip())
+            ",".join(_split_comma_items(skills))
+            if isinstance(skills, (list, tuple))
+            else str(skills).strip()
+        )
     for key, value in (
-        ("CLAWK_MODEL", model), ("CLAWK_INFERENCE_MODEL", model),
-        ("CLAWK_TUI_PROVIDER", provider), ("CLAWK_INFERENCE_PROVIDER", provider),
+        ("CLAWK_MODEL", model),
+        ("CLAWK_INFERENCE_MODEL", model),
+        ("CLAWK_TUI_PROVIDER", provider),
+        ("CLAWK_INFERENCE_PROVIDER", provider),
         ("CLAWK_TUI_TOOLSETS", ",".join(_normalize_tui_toolsets(toolsets))),
         ("CLAWK_TUI_SKILLS", skills_value),
-        ("CLAWK_TUI_QUERY", query), ("CLAWK_TUI_IMAGE", image),
+        ("CLAWK_TUI_QUERY", query),
+        ("CLAWK_TUI_IMAGE", image),
         ("CLAWK_TUI_CHECKPOINTS", "1" if checkpoints else None),
         ("CLAWK_TUI_PASS_SESSION_ID", "1" if pass_session_id else None),
         ("CLAWK_TUI_MAX_TURNS", str(max_turns) if max_turns is not None else None),
         ("CLAWK_TUI_TOOL_PROGRESS", "verbose" if verbose else "off" if quiet else None),
-        ("CLAWK_ACCEPT_HOOKS", "1" if accept_hooks else None)):
+        ("CLAWK_ACCEPT_HOOKS", "1" if accept_hooks else None),
+    ):
         if value:
             env[key] = value
     # Generous V8 heap (8GB target; default cap can fatal-OOM on long sessions),
@@ -574,13 +687,17 @@ def _launch_tui(
         if code in {0, 130}:
             _print_tui_exit_summary(resume_session_id, active_session_file)
     finally:
-        attached_session = _read_tui_active_session_file(active_session_file) or resume_session_id
+        attached_session = (
+            _read_tui_active_session_file(active_session_file) or resume_session_id
+        )
         with contextlib.suppress(OSError):
             os.unlink(active_session_file)
         if wt_info and code in {0, 130}:
             from clawk_cli.worktree_exit import ask_exit_choice
+
             ask_exit_choice(wt_info)
         from clawk_cli.worktree_exit import apply_exit_choice
+
         if wt_info and apply_exit_choice(wt_info, print):
             wt_info = None  # archived or discarded at the user's request
         if wt_info and _remove_idle_clean_tui_worktree(wt_info):
@@ -593,14 +710,23 @@ def _launch_tui(
                 # launch's stale prune keeps the tree while the session is resumable.
                 from clawk_cli.config import get_clawk_home
                 from clawk_cli.worktree_ops import _retain_worktree_for_session
-                _retain_worktree_for_session(wt_info["repo_root"], wt_info["path"], attached_session,
-                                             get_clawk_home() / "state.db")
-            print(f"Worktree retained for this session: {wt_info['path']}", file=sys.stderr)
+
+                _retain_worktree_for_session(
+                    wt_info["repo_root"],
+                    wt_info["path"],
+                    attached_session,
+                    get_clawk_home() / "state.db",
+                )
+            print(
+                f"Worktree retained for this session: {wt_info['path']}",
+                file=sys.stderr,
+            )
 
     # Exit code 42 = TUI requested an update. Relaunch as `clawk update`;
     # preserve_inherited=False keeps --tui and other flags out of the subcommand.
     if code == 42:
         from clawk_cli.relaunch import relaunch
+
         print("\n∇ Launching update...\n")
         relaunch(["update"], preserve_inherited=False)
 
@@ -621,6 +747,7 @@ def _pin_kanban_board_env() -> None:
         return
     with contextlib.suppress(Exception):
         from clawk_cli.kanban_db import get_current_board
+
         os.environ["CLAWK_KANBAN_BOARD"] = get_current_board()
 
 
@@ -629,6 +756,7 @@ def _sync_bundled_skills_quietly() -> None:
     Failures are swallowed: skills are an enhancement, not a hard dependency."""
     with contextlib.suppress(Exception):
         from tools.skills_sync import sync_skills
+
         sync_skills(quiet=True)
 
 
@@ -653,6 +781,7 @@ def _resolve_use_tui(args) -> bool:
         return True
     try:
         from clawk_cli.config import load_config
+
         iface = (load_config().get("display", {}) or {}).get("interface", "cli")
         return isinstance(iface, str) and iface.strip().lower() == "tui"
     except Exception:

@@ -17,7 +17,10 @@ import pytest
 import agent.file_safety as fs
 
 SECRET_STORES = (
-    "auth/google_oauth.json", "cache/bws_cache.json", "vault/vault.key", "browser-profile/Default/Cookies",
+    "auth/google_oauth.json",
+    "cache/bws_cache.json",
+    "vault/vault.key",
+    "browser-profile/Default/Cookies",
 )
 WRITABLE_CONTROL_FILES = ("auth.json", "config.yaml", "webhook_subscriptions.json")
 
@@ -45,17 +48,29 @@ def test_read_denied_secret_stores_are_write_denied_on_profile_and_root(clawk_la
     for base in (profile, root):
         for rel in SECRET_STORES:
             path = _touch(base, rel)
-            assert fs.get_read_block_error(str(path)), f"fixture drift: not read-denied: {path}"
+            assert fs.get_read_block_error(str(path)), (
+                f"fixture drift: not read-denied: {path}"
+            )
             assert fs.is_write_denied(str(path)), f"write allowed: {path}"
 
 
-def test_control_files_and_lookalikes_outside_home_stay_writable(clawk_layout, tmp_path):
+def test_control_files_and_lookalikes_outside_home_stay_writable(
+    clawk_layout, tmp_path
+):
     root, profile = clawk_layout
     for base in (profile, root):
         for rel in WRITABLE_CONTROL_FILES:
-            assert fs.is_write_denied(str(_touch(base, rel))) is False, f"#45947 regression: {rel}"
-    assert fs.is_write_denied(str(_touch(tmp_path / "myproject", "cache/bws_cache.json"))) is False
-    assert fs.is_write_denied(str(_touch(tmp_path / "myproject", "vault/vault.key"))) is False
+            assert fs.is_write_denied(str(_touch(base, rel))) is False, (
+                f"#45947 regression: {rel}"
+            )
+    assert (
+        fs.is_write_denied(str(_touch(tmp_path / "myproject", "cache/bws_cache.json")))
+        is False
+    )
+    assert (
+        fs.is_write_denied(str(_touch(tmp_path / "myproject", "vault/vault.key")))
+        is False
+    )
 
 
 class TestProfileHomeProcessHome:
@@ -77,7 +92,12 @@ class TestProfileHomeProcessHome:
         import pwd
 
         real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
-        for rel in (".aws/credentials", ".ssh/id_ed25519", ".netrc", ".config/gh/hosts.yml"):
+        for rel in (
+            ".aws/credentials",
+            ".ssh/id_ed25519",
+            ".netrc",
+            ".config/gh/hosts.yml",
+        ):
             assert fs.is_write_denied(str(real_home / rel)), rel
             assert fs.is_write_denied(str(profile_home_env / "home" / rel)), rel
         assert fs.is_write_denied("~/.aws/credentials")
@@ -90,7 +110,10 @@ class TestProfileHomeProcessHome:
         import pwd
 
         real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
-        for benign in (tmp_path / "scratch" / "notes.txt", real_home / "projects" / "notes.md"):
+        for benign in (
+            tmp_path / "scratch" / "notes.txt",
+            real_home / "projects" / "notes.md",
+        ):
             assert fs.is_write_denied(str(benign)) is False, benign
             assert fs.is_write_approval_required(str(benign)) is False, benign
         assert fs.is_write_denied("~nosuchuser-hopefully/.ssh/authorized_keys") is False

@@ -1,4 +1,5 @@
 """Collect real cron completion producer + durable delivery, without inference."""
+
 import asyncio
 import json
 import os
@@ -23,10 +24,22 @@ with tempfile.TemporaryDirectory(prefix="markdown-producer-") as temporary:
     from tools.process_registry_notifications import format_process_notification
 
     report = "# Generated inspection\n\n**Conclusion:** attention needed.\n\n| Strategy | Status |\n|---|---|\n| Canary | running |\n\nFirst line  \nSecond line\n\n```python\nvalue = 1  \nvalue = 2 \n```"
-    job = create_job(prompt="Offline fixture; never run", schedule="0 0 * * *", name="Markdown probe", deliver="local")
+    job = create_job(
+        prompt="Offline fixture; never run",
+        schedule="0 0 * * *",
+        name="Markdown probe",
+        deliver="local",
+    )
     save_job_output(job["id"], report)
-    result = _manual_run_completion({"success": True}, job["id"], job["name"], "local", time.time())
-    event = dict(result, type="async_delegation", delegation_id="markdown-probe", goal="Inspect a generated report")
+    result = _manual_run_completion(
+        {"success": True}, job["id"], job["name"], "local", time.time()
+    )
+    event = dict(
+        result,
+        type="async_delegation",
+        delegation_id="markdown-probe",
+        goal="Inspect a generated report",
+    )
     envelope = format_process_notification(event)
     assert envelope is not None
     db = SessionDB(db_path=home / "delivery.db")
@@ -36,8 +49,28 @@ with tempfile.TemporaryDirectory(prefix="markdown-producer-") as temporary:
         def _ensure_session_db(self):
             return db
 
-    asyncio.run(persist_delegation_delivery(DeliveryStore(), text=envelope, session_id="markdown-probe", evt=event))
+    asyncio.run(
+        persist_delegation_delivery(
+            DeliveryStore(), text=envelope, session_id="markdown-probe", evt=event
+        )
+    )
     rows = db.get_messages_as_conversation("markdown-probe", include_row_ids=True)
-    output.write_text(json.dumps({"report": report, "result": result, "envelope": envelope, "rows": rows}, indent=2), encoding="utf-8")
-    print(json.dumps({"producer": "save_job_output -> _manual_run_completion -> format_process_notification -> persist_delegation_delivery -> SessionDB readback", "rows": len(rows), "report_preserved": report in rows[0]["content"], "display_kind": rows[0].get("display_kind"), "model_requests": 0}))
+    output.write_text(
+        json.dumps(
+            {"report": report, "result": result, "envelope": envelope, "rows": rows},
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print(
+        json.dumps(
+            {
+                "producer": "save_job_output -> _manual_run_completion -> format_process_notification -> persist_delegation_delivery -> SessionDB readback",
+                "rows": len(rows),
+                "report_preserved": report in rows[0]["content"],
+                "display_kind": rows[0].get("display_kind"),
+                "model_requests": 0,
+            }
+        )
+    )
     db.close()

@@ -76,7 +76,9 @@ class TestSaveJobsOwnershipPreservation:
         monkeypatch.setattr(jobs.os, "geteuid", lambda: 0)
         monkeypatch.setattr(jobs.os, "getegid", lambda: 0)
         monkeypatch.setattr(
-            jobs.os, "chown", lambda path, uid, gid: chown_calls.append((str(path), uid, gid))
+            jobs.os,
+            "chown",
+            lambda path, uid, gid: chown_calls.append((str(path), uid, gid)),
         )
 
         jobs.save_jobs([{"id": "seed", "prompt": "updated"}])
@@ -85,7 +87,6 @@ class TestSaveJobsOwnershipPreservation:
             "root rewrite must hand jobs.json back to the previous owner "
             "(uid/gid 1000) instead of leaving it root:600 (#68483)"
         )
-
 
     def test_unprivileged_writer_never_chowns(self, cron_store, monkeypatch):
         """A same-uid (non-root) writer must not attempt chown at all —
@@ -217,7 +218,7 @@ class TestCronStatusSurfacesError:
         from clawk_cli import cron as cron_cli
 
         monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", lambda: [4321])
-        monkeypatch.setattr(jobs, "get_ticker_heartbeat_age", lambda: 5.0)   # alive
+        monkeypatch.setattr(jobs, "get_ticker_heartbeat_age", lambda: 5.0)  # alive
         monkeypatch.setattr(jobs, "get_ticker_success_age", lambda: 9_999.0)  # failing
         monkeypatch.setattr(
             jobs,
@@ -232,4 +233,3 @@ class TestCronStatusSurfacesError:
         cron_cli.cron_status()
         out = capsys.readouterr().out
         assert "Permission denied" in out
-

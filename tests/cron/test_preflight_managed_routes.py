@@ -22,8 +22,18 @@ def _routes(*entries):
     return {"gateway": {"multiplex_profiles": True, "profile_routes": list(entries)}}
 
 
-WA_ROUTE = {"name": "sat-wa", "platform": "whatsapp", "chat_id": "123@g.us", "profile": "sat"}
-TG_ROUTE = {"name": "sat-tg", "platform": "telegram", "chat_id": "-100", "profile": "sat"}
+WA_ROUTE = {
+    "name": "sat-wa",
+    "platform": "whatsapp",
+    "chat_id": "123@g.us",
+    "profile": "sat",
+}
+TG_ROUTE = {
+    "name": "sat-tg",
+    "platform": "telegram",
+    "chat_id": "-100",
+    "profile": "sat",
+}
 
 
 @pytest.fixture
@@ -48,18 +58,29 @@ def satellite_home(tmp_path, monkeypatch):
 def test_managed_scope_routes_reach_satellite_preflight_and_delivery(satellite_home):
     root, managed_dir = satellite_home
     (root / "config.yaml").write_text(
-        yaml.safe_dump({"platforms": {"whatsapp": {"enabled": True}}}), encoding="utf-8")
-    (managed_dir / "config.yaml").write_text(yaml.safe_dump(_routes(WA_ROUTE)), encoding="utf-8")
+        yaml.safe_dump({"platforms": {"whatsapp": {"enabled": True}}}), encoding="utf-8"
+    )
+    (managed_dir / "config.yaml").write_text(
+        yaml.safe_dump(_routes(WA_ROUTE)), encoding="utf-8"
+    )
 
     assert _delivery_platform_routed_from_primary_gateway("whatsapp")
-    shared = SharedRouteAdapters({"whatsapp": object()}, _primary_profile_routes_for_current_home())
+    shared = SharedRouteAdapters(
+        {"whatsapp": object()}, _primary_profile_routes_for_current_home()
+    )
     assert shared  # delivery-time fallback no longer fails closed
     assert shared.get("whatsapp", {"chat_id": "123@g.us"}) is not None
 
 
 def test_managed_routes_replace_user_file_routes(satellite_home):
     root, managed_dir = satellite_home
-    (root / "config.yaml").write_text(yaml.safe_dump(_routes(TG_ROUTE)), encoding="utf-8")
-    (managed_dir / "config.yaml").write_text(yaml.safe_dump(_routes(WA_ROUTE)), encoding="utf-8")
+    (root / "config.yaml").write_text(
+        yaml.safe_dump(_routes(TG_ROUTE)), encoding="utf-8"
+    )
+    (managed_dir / "config.yaml").write_text(
+        yaml.safe_dump(_routes(WA_ROUTE)), encoding="utf-8"
+    )
 
-    assert [r.platform for r in _primary_profile_routes_for_current_home()] == ["whatsapp"]
+    assert [r.platform for r in _primary_profile_routes_for_current_home()] == [
+        "whatsapp"
+    ]

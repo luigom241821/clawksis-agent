@@ -6,6 +6,7 @@ a bill that grows with them, so gateway startup and ``clawk doctor`` say so. The
 ``clawk-session-reset-policy`` catalog plugin reads the top-level block unchanged, which is why
 this module reports and never rewrites or drops the key.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional, Tuple
@@ -24,7 +25,10 @@ def retired_reset_policy(config: Any) -> Optional[tuple[str, str]]:
     gateway = config.get("gateway")
     for path, block in (
         ("session_reset", config.get("session_reset")),
-        ("gateway.session_reset", gateway.get("session_reset") if isinstance(gateway, dict) else None),
+        (
+            "gateway.session_reset",
+            gateway.get("session_reset") if isinstance(gateway, dict) else None,
+        ),
     ):
         if isinstance(block, dict):
             mode = str(block.get("mode") or "").strip().lower()
@@ -36,12 +40,20 @@ def retired_reset_policy(config: Any) -> Optional[tuple[str, str]]:
 def reset_plugin_enabled() -> bool:
     """Whether the restoring plugin is installed and enabled in this process's plugin set."""
     from clawk_cli.plugins import discover_plugins, get_plugin_manager
+
     discover_plugins()
-    return any(p["name"] == PLUGIN_NAME and p["enabled"] for p in get_plugin_manager().list_plugins())
+    return any(
+        p["name"] == PLUGIN_NAME and p["enabled"]
+        for p in get_plugin_manager().list_plugins()
+    )
 
 
 def format_notice(path: str, mode: str) -> str:
-    move = "" if path == "session_reset" else " (move the block to top-level session_reset first)"
+    move = (
+        ""
+        if path == "session_reset"
+        else " (move the block to top-level session_reset first)"
+    )
     return (
         f"{path}.mode: {mode} is no longer applied: gateway conversations reset only on /new or "
         f"/reset. To keep idle/daily resets, run `clawk plugins install {PLUGIN_NAME}`{move}."

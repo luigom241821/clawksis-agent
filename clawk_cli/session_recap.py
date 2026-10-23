@@ -1,5 +1,6 @@
 """Session recap — summarize the current session from in-memory history. Pure local computation: no
 LLM call, no auxiliary model, no prompt-cache invalidation. A recap should be instant and free."""
+
 from __future__ import annotations
 
 import json
@@ -16,8 +17,11 @@ _MAX_FILES_LISTED = 5
 
 # File-touching tool name -> argument key holding the path.
 _FILE_EDIT_TOOLS: Mapping[str, str] = {
-    "write_file": "path", "patch": "path", "read_file": "path",
-    "skill_manage": "file_path", "skill_view": "file_path",
+    "write_file": "path",
+    "patch": "path",
+    "read_file": "path",
+    "skill_manage": "file_path",
+    "skill_view": "file_path",
 }
 
 
@@ -31,7 +35,13 @@ def _coerce_text(value: Any) -> str:
         return str(value)
     parts: list[str] = []
     for block in value:
-        text = block if isinstance(block, str) else block.get("text") if isinstance(block, Mapping) else None
+        text = (
+            block
+            if isinstance(block, str)
+            else block.get("text")
+            if isinstance(block, Mapping)
+            else None
+        )
         if isinstance(text, str) and (text or isinstance(block, str)):
             parts.append(text)
     return "\n".join(parts)
@@ -52,7 +62,9 @@ def _tool_call_name_and_args(tool_call: Any) -> tuple[str, Mapping[str, Any]]:
     return name, raw_args if isinstance(raw_args, Mapping) else {}
 
 
-def _iter_assistant_tool_calls(messages: Sequence[Mapping[str, Any]]) -> Iterable[tuple[str, Mapping[str, Any]]]:
+def _iter_assistant_tool_calls(
+    messages: Sequence[Mapping[str, Any]],
+) -> Iterable[tuple[str, Mapping[str, Any]]]:
     for msg in messages:
         if not isinstance(msg, Mapping) or msg.get("role") != "assistant":
             continue
@@ -85,7 +97,10 @@ def _recent_window(
     """Tail slice covering at most ``window`` user+assistant turns (tool messages ride along)."""
     count = 0
     for i in range(len(messages) - 1, -1, -1):
-        if isinstance(messages[i], Mapping) and messages[i].get("role") in {"user", "assistant"}:
+        if isinstance(messages[i], Mapping) and messages[i].get("role") in {
+            "user",
+            "assistant",
+        }:
             count += 1
             if count >= window:
                 return list(messages[i:])
@@ -116,12 +131,16 @@ def _summarise_tool_activity(
     """``(tool_counts_sorted_desc, recently_edited_files)`` — files are distinct paths, newest first."""
     counter: Counter[str] = Counter()
     files_seen: dict[str, str] = {}  # raw path -> shortened, insertion ordered
-    for name, args in reversed(list(tool_calls)):  # reversed so files_seen comes out newest -> oldest
+    for name, args in reversed(
+        list(tool_calls)
+    ):  # reversed so files_seen comes out newest -> oldest
         counter[name] += 1
         path = args.get(_FILE_EDIT_TOOLS[name]) if name in _FILE_EDIT_TOOLS else None
         if isinstance(path, str) and path and path not in files_seen:
             files_seen[path] = _shortened_path(path)
-    return sorted(counter.items(), key=lambda kv: (-kv[1], kv[0])), list(files_seen.values())
+    return sorted(counter.items(), key=lambda kv: (-kv[1], kv[0])), list(
+        files_seen.values()
+    )
 
 
 def _join_capped(items: list[str], limit: int) -> str:
@@ -134,12 +153,17 @@ def _join_capped(items: list[str], limit: int) -> str:
 def _truncate(text: str, limit: int) -> str:
     # Stored history is untrusted for display: strip escapes/control chars so a recap line can't clear
     # the screen or retitle the window when echoed to a terminal.
-    text = " ".join(sanitize_display_text(text).split())  # collapse newlines for a compact one-liner
+    text = " ".join(
+        sanitize_display_text(text).split()
+    )  # collapse newlines for a compact one-liner
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def build_recap(
-    messages: Sequence[Mapping[str, Any]], *, session_title: Optional[str] = None, session_id: Optional[str] = None,
+    messages: Sequence[Mapping[str, Any]],
+    *,
+    session_title: Optional[str] = None,
+    session_id: Optional[str] = None,
     platform: Optional[str] = None,
 ) -> str:
     """Multi-line plain-text recap of recent activity (80-col terminal / gateway bubble friendly).
@@ -159,7 +183,9 @@ def build_recap(
     )
     if (users, assistants) != (win_users, win_assistants):
         scope += f" (of {users}/{assistants} total)"
-    lines.append(f"  Recent: {scope}, {tool_msgs} tool result{'s' if tool_msgs != 1 else ''}")
+    lines.append(
+        f"  Recent: {scope}, {tool_msgs} tool result{'s' if tool_msgs != 1 else ''}"
+    )
     tool_calls = list(_iter_assistant_tool_calls(window))
     tool_counts, files = _summarise_tool_activity(tool_calls)
     if tool_counts:
@@ -167,7 +193,10 @@ def build_recap(
         lines.append(f"  Tools used: {top}")
     if files:
         lines.append(f"  Files touched: {_join_capped(files, _MAX_FILES_LISTED)}")
-    previews = (("user", "Last ask", _PROMPT_PREVIEW_CHARS), ("assistant", "Last reply", _ASSISTANT_PREVIEW_CHARS))
+    previews = (
+        ("user", "Last ask", _PROMPT_PREVIEW_CHARS),
+        ("assistant", "Last reply", _ASSISTANT_PREVIEW_CHARS),
+    )
     for role, label, limit in previews:
         latest = _latest_text(window, role)
         if latest:

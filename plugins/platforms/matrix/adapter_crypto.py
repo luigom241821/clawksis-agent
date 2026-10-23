@@ -24,7 +24,11 @@ class _CryptoStateStore:
         return (await self.get_encryption_info(room_id)) is not None
 
     async def get_encryption_info(self, room_id: str):
-        info = await self._ss.get_encryption_info(room_id) if hasattr(self._ss, "get_encryption_info") else None
+        info = (
+            await self._ss.get_encryption_info(room_id)
+            if hasattr(self._ss, "get_encryption_info")
+            else None
+        )
         if info is not None:
             return info
         if room_id in self._enc_info_cache:
@@ -32,15 +36,27 @@ class _CryptoStateStore:
         if self._client is None:
             return None
         try:
-            from mautrix.types import EventType as _ET, RoomEncryptionStateEventContent as _Enc, RoomID as _RID
+            from mautrix.types import (
+                EventType as _ET,
+                RoomEncryptionStateEventContent as _Enc,
+                RoomID as _RID,
+            )
+
             raw = await self._client.get_state_event(_RID(room_id), _ET.ROOM_ENCRYPTION)
         except Exception as exc:
-            logger.debug("Matrix: homeserver encryption-info query failed for %s: %s", room_id, exc)
+            logger.debug(
+                "Matrix: homeserver encryption-info query failed for %s: %s",
+                room_id,
+                exc,
+            )
             return None
         if not raw:
             return None
-        content = raw if isinstance(raw, _Enc) else _Enc.deserialize(
-            raw.serialize() if hasattr(raw, "serialize") else raw)
+        content = (
+            raw
+            if isinstance(raw, _Enc)
+            else _Enc.deserialize(raw.serialize() if hasattr(raw, "serialize") else raw)
+        )
         if hasattr(self._ss, "set_encryption_info"):
             with suppress(Exception):
                 await self._ss.set_encryption_info(_RID(room_id), content)
@@ -48,4 +64,6 @@ class _CryptoStateStore:
         return content
 
     async def find_shared_rooms(self, user_id: str) -> list:
-        return list(self._joined_rooms)  # all joined rooms: correct for a single-user bot
+        return list(
+            self._joined_rooms
+        )  # all joined rooms: correct for a single-user bot

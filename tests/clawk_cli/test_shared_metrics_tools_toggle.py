@@ -30,8 +30,6 @@ class TestState:
 
 
 class TestMenuLabel:
-
-
     def test_sending_state_names_the_destination(self):
         label = _shared_metrics_menu_label(_config(enabled=True, send=True))
         assert "(sending to Nous)" in label
@@ -48,9 +46,7 @@ class TestToggle:
     def test_enabling_send_persists(self, monkeypatch):
         config = _config(enabled=True)
         saved = {}
-        monkeypatch.setattr(
-            "clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: True
-        )
+        monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: True)
         monkeypatch.setattr(
             "clawk_cli.setup._record_send_consent_change", lambda **_k: None
         )
@@ -65,9 +61,7 @@ class TestToggle:
     def test_no_write_when_nothing_changed(self, monkeypatch):
         config = _config(enabled=False, send=False)
         saved = []
-        monkeypatch.setattr(
-            "clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: False
-        )
+        monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: False)
         monkeypatch.setattr(
             "clawk_cli.tools_config.save_config", lambda cfg: saved.append(cfg)
         )
@@ -77,12 +71,8 @@ class TestToggle:
     def test_disabling_collection_also_disables_sending(self, monkeypatch):
         """The toggle must not leave send=true with nothing to send."""
         config = _config(enabled=True, send=True)
-        monkeypatch.setattr(
-            "clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: False
-        )
-        monkeypatch.setattr(
-            "clawk_cli.tools_config.save_config", lambda cfg: None
-        )
+        monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda *_a, **_k: False)
+        monkeypatch.setattr("clawk_cli.tools_config.save_config", lambda cfg: None)
         _configure_shared_metrics_interactive(config)
         shared = config["telemetry"]["shared_metrics"]
         assert shared["enabled"] is False

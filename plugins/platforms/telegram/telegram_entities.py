@@ -52,7 +52,10 @@ def expand_link_entities(message: Any) -> str:
             continue
         if offset < 0 or length <= 0 or offset + length > utf16_length:
             continue
-        start, end = _code_point_index(text, offset), _code_point_index(text, offset + length)
+        start, end = (
+            _code_point_index(text, offset),
+            _code_point_index(text, offset + length),
+        )
         if start is None or end is None or end <= start:
             continue
         if text[start:end].strip() == url:

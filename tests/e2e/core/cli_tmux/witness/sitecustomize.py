@@ -38,11 +38,20 @@ def _role():
 
 def _emit(kind, detail=""):
     try:
-        line = json.dumps({"pid": os.getpid(), "ppid": os.getppid(), "role": _role(), "kind": kind,
-                           "detail": str(detail)[:200]})
+        line = json.dumps(
+            {
+                "pid": os.getpid(),
+                "ppid": os.getppid(),
+                "role": _role(),
+                "kind": kind,
+                "detail": str(detail)[:200],
+            }
+        )
         with _lock, open(_PATH, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
-    except Exception:  # health: allow BLE001 -- a witness must never break the process it watches
+    except (
+        Exception
+    ):  # health: allow BLE001 -- a witness must never break the process it watches
         pass
 
 
@@ -59,11 +68,21 @@ if _PATH:
         conn = _connect(database, *args, **kwargs)
         name = str(database).split("?", 1)[0].rsplit("/", 1)[-1]
         if name.endswith(".db"):
+
             def authorizer(action, table, *_rest):
-                if action in (sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE) \
-                        and table and not str(table).startswith("sqlite_"):
+                if (
+                    action
+                    in (
+                        sqlite3.SQLITE_INSERT,
+                        sqlite3.SQLITE_UPDATE,
+                        sqlite3.SQLITE_DELETE,
+                    )
+                    and table
+                    and not str(table).startswith("sqlite_")
+                ):
                     _emit("sqlite_write", f"{name}:{table}")
                 return sqlite3.SQLITE_OK
+
             try:
                 conn.set_authorizer(authorizer)
             except Exception:  # health: allow BLE001 -- witness only
@@ -81,6 +100,7 @@ if _PATH:
         def init(self, *args, **kwargs):
             _emit("agent_init", type(self).__name__)
             return original(self, *args, **kwargs)
+
         cls.__init__ = init
 
     def _patch_registry(mod):
@@ -92,6 +112,7 @@ if _PATH:
         def dispatch(self, name, args, *rest, **kwargs):
             _emit("tool", name)
             return original(self, name, args, *rest, **kwargs)
+
         cls.dispatch = dispatch
 
     _PATCHES = {"run_agent": _patch_run_agent, "tools.registry": _patch_registry}
@@ -107,7 +128,9 @@ if _PATH:
             self._inner.exec_module(module)
             try:
                 self._patch(module)
-            except Exception as exc:  # health: allow BLE001 -- witness only; recorded for the test
+            except (
+                Exception
+            ) as exc:  # health: allow BLE001 -- witness only; recorded for the test
                 _emit("witness_error", f"{module.__name__}: {exc!r}")
 
     class _Finder(importlib.abc.MetaPathFinder):

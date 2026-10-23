@@ -31,7 +31,9 @@ from tools.connectors.operation import ConnectionOperation, IllegalTransition, T
 logger = logging.getLogger(__name__)
 
 # The Advanced modal's own keys (CATALOG-ROW-CONTRACT.md); every other answer key is a credential.
-_OPTION_KEYS = frozenset({"target_profile", "agent_half", "desktop_half", "enable", "force", "ref"})
+_OPTION_KEYS = frozenset(
+    {"target_profile", "agent_half", "desktop_half", "enable", "force", "ref"}
+)
 _COMMIT_SHA = re.compile(r"^[0-9a-fA-F]{40}$")
 _TIERS = frozenset({"official", "verified", "community"})
 
@@ -48,7 +50,10 @@ def _first_sentence(text: str) -> str:
 
 def _display(identifier: str) -> str:
     leaf = identifier.rstrip("/").rsplit("/", 1)[-1]
-    return " ".join(part.capitalize() for part in re.split(r"[-_]+", leaf) if part) or identifier
+    return (
+        " ".join(part.capitalize() for part in re.split(r"[-_]+", leaf) if part)
+        or identifier
+    )
 
 
 @contextlib.contextmanager
@@ -61,8 +66,11 @@ def target_scope(home: Path):
     from tui_gateway.launch_profile_policy import launch_profile_runtime_scope
 
     launch = home.resolve() == Path(server._clawk_home).resolve()
-    scope = (launch_profile_runtime_scope(server._clawk_home) if launch
-             else server._session_profile_runtime_scope({"profile_home": str(home)}))
+    scope = (
+        launch_profile_runtime_scope(server._clawk_home)
+        if launch
+        else server._session_profile_runtime_scope({"profile_home": str(home)})
+    )
     with scope:
         yield
 
@@ -85,16 +93,28 @@ class HostInstaller:
 
     def refuse(self, entry: Any) -> None:
         """Raise with the installer's own text when the catalog would refuse this entry here."""
-        from clawk_cli.plugins_cmd_catalog import _refuse_unsupported_catalog_platform, raise_if_removed
+        from clawk_cli.plugins_cmd_catalog import (
+            _refuse_unsupported_catalog_platform,
+            raise_if_removed,
+        )
 
         raise_if_removed(entry.name, entry.repo)
         _refuse_unsupported_catalog_platform(entry)
 
-    def install_plugin(self, name: str, *, force: bool, enable: bool, ref: Optional[str],
-                       on_step: Callable[[InstallPhase], None]) -> dict[str, Any]:
+    def install_plugin(
+        self,
+        name: str,
+        *,
+        force: bool,
+        enable: bool,
+        ref: Optional[str],
+        on_step: Callable[[InstallPhase], None],
+    ) -> dict[str, Any]:
         from clawk_cli.plugins_cmd import dashboard_install_plugin
 
-        return dashboard_install_plugin("", force=force, enable=enable, catalog_name=name, ref=ref, on_step=on_step)
+        return dashboard_install_plugin(
+            "", force=force, enable=enable, catalog_name=name, ref=ref, on_step=on_step
+        )
 
     def skill_meta(self, identifier: str) -> Optional[dict[str, Any]]:
         """The first hub source that knows the identifier; metadata only, no bundle download."""
@@ -108,8 +128,12 @@ class HostInstaller:
                 except Exception:
                     continue
                 if meta is not None:
-                    return {"name": meta.name, "description": meta.description, "source": meta.source,
-                            "identifier": meta.identifier or identifier}
+                    return {
+                        "name": meta.name,
+                        "description": meta.description,
+                        "source": meta.source,
+                        "identifier": meta.identifier or identifier,
+                    }
         return None
 
     def install_skill(self, identifier: str, *, force: bool) -> dict[str, Any]:
@@ -122,20 +146,43 @@ class HostInstaller:
         from tools.skills_hub import HubLockFile
 
         def entry() -> Optional[dict[str, Any]]:
-            return next((e for e in HubLockFile().list_installed() if e.get("identifier") == identifier), None)
+            return next(
+                (
+                    e
+                    for e in HubLockFile().list_installed()
+                    if e.get("identifier") == identifier
+                ),
+                None,
+            )
 
         before = entry()
         if before is not None and not force:
             return {"name": str(before["name"]), "already_installed": True}
         out = io.StringIO()
-        verdict = do_install(identifier, force=force, skip_confirm=True,
-                             console=Console(file=out, width=200, no_color=True, highlight=False))
+        verdict = do_install(
+            identifier,
+            force=force,
+            skip_confirm=True,
+            console=Console(file=out, width=200, no_color=True, highlight=False),
+        )
         after = entry()
         from tools.skills_sync_bundled_ops import bundled_skill_for_install
-        if after is None and verdict is not False and (builtin := bundled_skill_for_install(identifier)):
-            return {"name": builtin, "already_installed": verdict is None}  # shipped skill, no hub lock entry
-        if after is None or (before is not None and after.get("updated_at") == before.get("updated_at")):
-            lines = [line.strip() for line in out.getvalue().splitlines() if line.strip()]
+
+        if (
+            after is None
+            and verdict is not False
+            and (builtin := bundled_skill_for_install(identifier))
+        ):
+            return {
+                "name": builtin,
+                "already_installed": verdict is None,
+            }  # shipped skill, no hub lock entry
+        if after is None or (
+            before is not None and after.get("updated_at") == before.get("updated_at")
+        ):
+            lines = [
+                line.strip() for line in out.getvalue().splitlines() if line.strip()
+            ]
             raise RuntimeError(lines[-1] if lines else "the skill was not installed")
         return {"name": str(after["name"]), "already_installed": False}
 
@@ -153,7 +200,9 @@ class _Runner:
     def __init__(self, installer: HostInstaller):
         self.installer = installer
         self.op_id: Optional[str] = None
-        self.facts: dict[str, Any] = {}  # row name -> PluginCatalogEntry | skill meta; never on the wire
+        self.facts: dict[
+            str, Any
+        ] = {}  # row name -> PluginCatalogEntry | skill meta; never on the wire
         self.work: dict[str, _Work] = {}
         # The Advanced values the user approved per row; Try again (env null) reuses them. Values
         # are credentials in part, so they stay here, off the target.
@@ -169,7 +218,10 @@ class _Runner:
         _RUNNERS[operation.op_id] = self
         self.op_id = operation.op_id
         for target in operation.targets:
-            target.extra = {"display": _display(target.name), "target_profile": self.label}
+            target.extra = {
+                "display": _display(target.name),
+                "target_profile": self.label,
+            }
             try:
                 self._resolve(target)
             except Exception as exc:
@@ -179,11 +231,15 @@ class _Runner:
         if target.kind == "plugin":
             entry = self.installer.plugin_entry(target.name)
             if entry is None:
-                raise LookupError(f"'{target.name}' is not in the Clawksis plugin catalog")
+                raise LookupError(
+                    f"'{target.name}' is not in the Clawksis plugin catalog"
+                )
             self.facts[target.name] = entry
             target.extra = _plugin_row(entry, self.label)
-            target.required_env = [{"name": name, "required": False, "secret": True, "default": ""}
-                                   for name in entry.capabilities.requires_env]
+            target.required_env = [
+                {"name": name, "required": False, "secret": True, "default": ""}
+                for name in entry.capabilities.requires_env
+            ]
             self.installer.refuse(entry)
             return
         meta = self.installer.skill_meta(target.name)
@@ -199,10 +255,19 @@ class _Runner:
 
     # -- the card's answer ------------------------------------------------------------------------
 
-    def approve(self, operation: ConnectionOperation, target: Target, env: Optional[dict[str, str]]) -> None:
+    def approve(
+        self,
+        operation: ConnectionOperation,
+        target: Target,
+        env: Optional[dict[str, str]],
+    ) -> None:
         approved = {**self.approved_env.get(target.name, {}), **(env or {})}
-        actor = Actor.user if target.state == TargetState.failed else Actor.backend_watcher
-        if target.name not in self.facts:  # failed at prepare: Try again resolves once more
+        actor = (
+            Actor.user if target.state == TargetState.failed else Actor.backend_watcher
+        )
+        if (
+            target.name not in self.facts
+        ):  # failed at prepare: Try again resolves once more
             try:
                 self._resolve(target)
             except Exception as exc:
@@ -215,36 +280,63 @@ class _Runner:
         self.approved_env[target.name] = approved
         # The non-secret choices go on the row, so a Try again after the operation settled repeats
         # what the user approved; the credentials are already in the target profile's .env by then.
-        options = {"force": _flag(approved.get("force"), False), "enable": _flag(approved.get("enable"), True),
-                   "ref": approved.get("ref") or None}
+        options = {
+            "force": _flag(approved.get("force"), False),
+            "enable": _flag(approved.get("enable"), True),
+            "ref": approved.get("ref") or None,
+        }
         profile = (approved.get("target_profile") or "").strip()
-        if not _move(operation, target, TargetState.initiated, actor, detail="",
-                     **{**target.extra, "target_profile": profile or self.label, "approved": options}):
+        if not _move(
+            operation,
+            target,
+            TargetState.initiated,
+            actor,
+            detail="",
+            **{
+                **target.extra,
+                "target_profile": profile or self.label,
+                "approved": options,
+            },
+        ):
             return
         self._spawn(operation, target, approved, options)
 
     def _check_answer(self, target: Target, env: dict[str, str]) -> str:
         if target.kind == "plugin" and env.get("agent_half") == "0":
-            return "only the desktop half was selected; install it from Settings, Plugins"
+            return (
+                "only the desktop half was selected; install it from Settings, Plugins"
+            )
         ref = env.get("ref")
         if ref and not _COMMIT_SHA.match(ref):
             return "the pin must be a full 40-character commit SHA"
         declared = set(target_declared_env(self.facts.get(target.name)))
-        undeclared = sorted(k for k in env if k not in _OPTION_KEYS and k not in declared)
+        undeclared = sorted(
+            k for k in env if k not in _OPTION_KEYS and k not in declared
+        )
         if undeclared:
             return f"'{target.name}' does not declare {', '.join(undeclared)}"
         return ""
 
-    def _spawn(self, operation: ConnectionOperation, target: Target, env: dict[str, str],
-               options: dict[str, Any]) -> None:
+    def _spawn(
+        self,
+        operation: ConnectionOperation,
+        target: Target,
+        env: dict[str, str],
+        options: dict[str, Any],
+    ) -> None:
         work = _Work()
         self.work[target.name] = work
 
         def step(phase: InstallPhase) -> None:
             # A row that left ``initiated`` keeps its own state.
             if not operation.settled and target.state == TargetState.initiated:
-                operation.refresh(target.name, connect_url=None, detail="", actor=Actor.backend_watcher,
-                                  phase=phase.value)
+                operation.refresh(
+                    target.name,
+                    connect_url=None,
+                    detail="",
+                    actor=Actor.backend_watcher,
+                    phase=phase.value,
+                )
 
         def body() -> None:
             try:
@@ -255,20 +347,38 @@ class _Runner:
             operation.wake.set()
 
         # A copy of the answering thread's context; the install binds the target profile itself.
-        threading.Thread(target=contextvars.copy_context().run, args=(body,), daemon=True,
-                         name=f"catalog-install-{target.name}").start()
+        threading.Thread(
+            target=contextvars.copy_context().run,
+            args=(body,),
+            daemon=True,
+            name=f"catalog-install-{target.name}",
+        ).start()
 
-    def _install(self, target: Target, env: dict[str, str], options: dict[str, Any],
-                 step: Callable[[InstallPhase], None]) -> dict[str, Any]:
+    def _install(
+        self,
+        target: Target,
+        env: dict[str, str],
+        options: dict[str, Any],
+        step: Callable[[InstallPhase], None],
+    ) -> dict[str, Any]:
         named = (env.get("target_profile") or "").strip()
         with target_scope(_named_home(named) if named else self.home):
-            _save_credentials({k: v for k, v in env.items() if k not in _OPTION_KEYS and v})
+            _save_credentials(
+                {k: v for k, v in env.items() if k not in _OPTION_KEYS and v}
+            )
             if target.kind == "skill":
-                identifier = str(self.facts[target.name].get("identifier") or target.name)
+                identifier = str(
+                    self.facts[target.name].get("identifier") or target.name
+                )
                 step(InstallPhase.downloading)
                 return self.installer.install_skill(identifier, force=options["force"])
-            result = self.installer.install_plugin(target.name, force=options["force"], enable=options["enable"],
-                                                   ref=options["ref"], on_step=step)
+            result = self.installer.install_plugin(
+                target.name,
+                force=options["force"],
+                enable=options["enable"],
+                ref=options["ref"],
+                on_step=step,
+            )
         if not result.get("ok"):
             raise RuntimeError(result.get("error") or "the install failed")
         return {"enabled": options["enable"], **result}
@@ -278,14 +388,26 @@ class _Runner:
     def observe(self, operation: ConnectionOperation) -> None:
         for target in operation.targets:
             work = self.work.get(target.name)
-            if operation.settled or target.state != TargetState.initiated or work is None or not work.done.is_set():
+            if (
+                operation.settled
+                or target.state != TargetState.initiated
+                or work is None
+                or not work.done.is_set()
+            ):
                 continue
             self.work.pop(target.name, None)
             if work.error:
                 _fail(operation, target, work.error)
                 continue
             extra, detail = _installed_row(target, work.outcome)
-            _move(operation, target, TargetState.connected, Actor.backend_watcher, detail=detail, **extra)
+            _move(
+                operation,
+                target,
+                TargetState.connected,
+                Actor.backend_watcher,
+                detail=detail,
+                **extra,
+            )
 
     def close(self) -> None:
         if self.op_id is not None:
@@ -334,15 +456,36 @@ def _installed_row(target: Target, outcome: dict[str, Any]) -> tuple:
     extra = dict(target.extra)
     if target.kind == "skill":
         already = bool(outcome.get("already_installed"))
-        detail = "already installed; left as it is (Advanced, force reinstall replaces it)" if already else ""
-        return {**extra, "skill": outcome["name"], "tools": [], "already_installed": already}, detail
+        detail = (
+            "already installed; left as it is (Advanced, force reinstall replaces it)"
+            if already
+            else ""
+        )
+        return {
+            **extra,
+            "skill": outcome["name"],
+            "tools": [],
+            "already_installed": already,
+        }, detail
     live = (outcome.get("activation") or {}).get("live_now") or {}
     servers = live.get("mcp_servers") or []
-    tools = [name for server in servers if server.get("connected") for name in server.get("tools") or ()]
-    server_errors = [{"name": s["name"], "error": s.get("error") or ""} for s in servers if not s.get("connected")]
+    tools = [
+        name
+        for server in servers
+        if server.get("connected")
+        for name in server.get("tools") or ()
+    ]
+    server_errors = [
+        {"name": s["name"], "error": s.get("error") or ""}
+        for s in servers
+        if not s.get("connected")
+    ]
     enabled = bool(outcome.get("enabled", True))
     missing_env = list(outcome.get("missing_env") or ())
-    notes = [f"MCP server {e['name']} not connected: {e['error'] or 'unknown error'}" for e in server_errors]
+    notes = [
+        f"MCP server {e['name']} not connected: {e['error'] or 'unknown error'}"
+        for e in server_errors
+    ]
     if not enabled:
         notes.append("installed but not enabled")
     if missing_env:
@@ -350,7 +493,12 @@ def _installed_row(target: Target, outcome: dict[str, Any]) -> tuple:
     skills = [s["name"] for s in live.get("skills") or () if s.get("name")]
     if skills:
         extra["skill"] = skills[0]
-    facts = {"tools": tools, "enabled": enabled, "missing_env": missing_env, "server_errors": server_errors}
+    facts = {
+        "tools": tools,
+        "enabled": enabled,
+        "missing_env": missing_env,
+        "server_errors": server_errors,
+    }
     return {**extra, **facts}, "; ".join(notes)
 
 
@@ -392,10 +540,23 @@ def apply_answer(operation: ConnectionOperation, raw: str) -> None:
             except IllegalTransition:
                 if not target.resolved and not operation.settled:
                     raise
-        elif status == "approved" and runner is not None and target.state in (TargetState.pending, TargetState.failed):
+        elif (
+            status == "approved"
+            and runner is not None
+            and target.state in (TargetState.pending, TargetState.failed)
+        ):
             env = entry.get("env")
-            runner.approve(operation, target, {str(k): str(v) for k, v in env.items()} if isinstance(env, dict) else None)
-    if answer.get("settled_by") == SettleReason.continue_.value and not operation.all_resolved:
+            runner.approve(
+                operation,
+                target,
+                {str(k): str(v) for k, v in env.items()}
+                if isinstance(env, dict)
+                else None,
+            )
+    if (
+        answer.get("settled_by") == SettleReason.continue_.value
+        and not operation.all_resolved
+    ):
         operation.settle(SettleReason.continue_)
 
 

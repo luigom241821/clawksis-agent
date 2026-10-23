@@ -68,20 +68,29 @@ def test_launch_yolo_revocation_survives_the_next_turn(monkeypatch):
     from gateway.turn_context import TurnContext
 
     runner = _make_runner()
-    source = SessionSource(platform=Platform.LOCAL, chat_id="launch-yolo", user_id="u", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.LOCAL, chat_id="launch-yolo", user_id="u", chat_type="dm"
+    )
     key = "agent:main:local:dm:launch-yolo"
-    monkeypatch.setattr(session_policy, "policy_for_source",
-                        lambda _runner, _source: SimpleNamespace(yolo=True, platform="cli", max_turns=5,
-                                                                        skills_prompt=None))
+    monkeypatch.setattr(
+        session_policy,
+        "policy_for_source",
+        lambda _runner, _source: SimpleNamespace(
+            yolo=True, platform="cli", max_turns=5, skills_prompt=None
+        ),
+    )
 
     def _stop(**_kw):
         raise RuntimeError("stop after the yolo seam")
+
     runner._resolve_session_agent_runtime = _stop
     runner._pre_agent_fallback_notice = None
     runner._get_system_prompt_for_channel = lambda *a, **k: ""
 
     def turn():
-        TurnRunner(runner, TurnContext(source=source, session_key=key))._run_sync_scoped()
+        TurnRunner(
+            runner, TurnContext(source=source, session_key=key)
+        )._run_sync_scoped()
 
     try:
         turn()
@@ -91,6 +100,7 @@ def test_launch_yolo_revocation_survives_the_next_turn(monkeypatch):
         assert is_session_yolo_enabled(key) is False
     finally:
         from tools.approval import clear_session
+
         clear_session(key)
 
 
@@ -104,8 +114,12 @@ async def test_yolo_survives_gateway_restart_and_dies_at_session_boundary(tmp_pa
 
     def _runner():
         runner = _make_runner()
-        runner.session_store = SessionStore(sessions_dir=tmp_path, config=GatewayConfig())
-        runner.session_store._db = None  # JSON routing index: the restart reads it back from disk
+        runner.session_store = SessionStore(
+            sessions_dir=tmp_path, config=GatewayConfig()
+        )
+        runner.session_store._db = (
+            None  # JSON routing index: the restart reads it back from disk
+        )
         return runner
 
     event = _make_event("chat-a")
@@ -114,15 +128,21 @@ async def test_yolo_survives_gateway_restart_and_dies_at_session_boundary(tmp_pa
     await first._handle_yolo_command(event)
     assert is_session_yolo_enabled(key) is True
 
-    disable_session_yolo(key)  # a new process starts with an empty in-memory approval set
+    disable_session_yolo(
+        key
+    )  # a new process starts with an empty in-memory approval set
     second = _runner()
-    restore_session_yolo(key, second.session_store.get_or_create_session(event.source).yolo)
+    restore_session_yolo(
+        key, second.session_store.get_or_create_session(event.source).yolo
+    )
     assert is_session_yolo_enabled(key) is True
 
     second._clear_session_boundary_security_state(key)
     assert is_session_yolo_enabled(key) is False
     third = _runner()
-    restore_session_yolo(key, third.session_store.get_or_create_session(event.source).yolo)
+    restore_session_yolo(
+        key, third.session_store.get_or_create_session(event.source).yolo
+    )
     assert is_session_yolo_enabled(key) is False
 
 
@@ -142,11 +162,22 @@ async def test_owner_yolo_off_is_not_revived_by_the_persisted_restore(tmp_path):
     event = _make_event("chat-a")
     key = runner._session_key_for_source(event.source)
     await runner._handle_yolo_command(event)
-    authority = SimpleNamespace(authorize=lambda *_a: None, profile_id=str(tmp_path), runner=runner,
-                                sessions={"sid": SimpleNamespace(route=key, source=event.source)})
-    connection, ref = SimpleNamespace(actor="a", authority=authority), SimpleNamespace(session_id="sid")
+    authority = SimpleNamespace(
+        authorize=lambda *_a: None,
+        profile_id=str(tmp_path),
+        runner=runner,
+        sessions={"sid": SimpleNamespace(route=key, source=event.source)},
+    )
+    connection, ref = (
+        SimpleNamespace(actor="a", authority=authority),
+        SimpleNamespace(session_id="sid"),
+    )
 
-    off = await busy_config(connection, ref, {"session_id": "sid", "key": "yolo", "value": "0"}, write=True)
+    off = await busy_config(
+        connection, ref, {"session_id": "sid", "key": "yolo", "value": "0"}, write=True
+    )
     assert off["value"] == "0" and is_session_yolo_enabled(key) is False
-    restore_session_yolo(key, runner.session_store.get_or_create_session(event.source).yolo)
+    restore_session_yolo(
+        key, runner.session_store.get_or_create_session(event.source).yolo
+    )
     assert is_session_yolo_enabled(key) is False

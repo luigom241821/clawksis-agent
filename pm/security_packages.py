@@ -1,4 +1,5 @@
 """Optional security executables. Acquisition and publication belong to PM."""
+
 from __future__ import annotations
 
 import logging
@@ -48,6 +49,7 @@ class _SignedBinary(BinaryPackage):
     or corrupt signature/key/certificate cannot silently reduce the pinned
     closure. Verifier execution remains optional; explicit rejection is fatal.
     """
+
     optional = True
     gaps = {
         "win32-x64": "this integration requires a Linux/macOS host (or WSL)",
@@ -73,10 +75,24 @@ class _SignedBinary(BinaryPackage):
         artifacts = Lockfile(paths.lockfile_path()).artifacts(self.name, target)
         archive = artifacts[0]
         filename = Path(urlparse(archive["url"]).path).name
-        rows = (line.split() for line in (provenance / "checksums.txt").read_text(encoding="utf-8-sig").splitlines())
-        expected = next((row[0] for row in rows if len(row) == 2 and row[1].lstrip("*") == filename), None)
+        rows = (
+            line.split()
+            for line in (provenance / "checksums.txt")
+            .read_text(encoding="utf-8-sig")
+            .splitlines()
+        )
+        expected = next(
+            (
+                row[0]
+                for row in rows
+                if len(row) == 2 and row[1].lstrip("*") == filename
+            ),
+            None,
+        )
         if expected != archive["sha256"]:
-            raise InstallError(self.name, "release checksums do not cover the pinned archive")
+            raise InstallError(
+                self.name, "release checksums do not cover the pinned archive"
+            )
         self.verify_provenance(provenance)
 
     def verify_provenance(self, directory: Path) -> None:
@@ -98,7 +114,9 @@ class IronProxy(_SignedBinary):
     def fetch_url(self, version: str, target: str) -> str:
         # Linux releases are built with CGO_ENABLED=0, so the same signed
         # archive is portable across glibc and musl userlands.
-        lookup_target = target.removesuffix("-musl") if target in MUSL_TARGETS else target
+        lookup_target = (
+            target.removesuffix("-musl") if target in MUSL_TARGETS else target
+        )
         platform, arch = lookup_target.split("-")
         arch = "amd64" if arch == "x64" else arch
         return f"https://github.com/paradigmxyz/iron-proxy/releases/download/v{version}/iron-proxy_{version}_{platform}_{arch}.tar.gz"
@@ -106,14 +124,21 @@ class IronProxy(_SignedBinary):
     def fetch_urls(self, version: str, target: str) -> list[str]:
         archive = self.fetch_url(version, target)
         base = archive.rsplit("/", 1)[0]
-        return [archive, f"{base}/checksums.txt", f"{base}/checksums.txt.asc", self.signing_key_url]
+        return [
+            archive,
+            f"{base}/checksums.txt",
+            f"{base}/checksums.txt.asc",
+            self.signing_key_url,
+        ]
 
     def verify_provenance(self, directory: Path) -> None:
         # Keep package provenance inside PM rather than calling a private
         # helper in the running proxy (which also owns runtime subprocesses).
         gpg = shutil.which("gpg")
         if not gpg:
-            logging.getLogger(__name__).warning("gpg unavailable; iron-proxy archive checksum remains enforced")
+            logging.getLogger(__name__).warning(
+                "gpg unavailable; iron-proxy archive checksum remains enforced"
+            )
             return
         with tempfile.TemporaryDirectory(prefix="clawk-iron-signature-") as home:
             args = [gpg, "--homedir", home, "--batch", "--no-tty"]
@@ -121,12 +146,29 @@ class IronProxy(_SignedBinary):
             key = directory / "public-key.asc"
             if not signature.is_file() or not key.is_file():
                 raise InstallError(self.name, "pinned signature assets missing")
-            imported = subprocess.run([*args, "--import", native(key)], stdin=subprocess.DEVNULL,
-                                      capture_output=True, timeout=60, check=False)
+            imported = subprocess.run(
+                [*args, "--import", native(key)],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
             if imported.returncode:
-                logging.getLogger(__name__).warning("Could not import iron-proxy signing key; archive checksum remains enforced")
+                logging.getLogger(__name__).warning(
+                    "Could not import iron-proxy signing key; archive checksum remains enforced"
+                )
                 return
-            verified = subprocess.run([*args, "--verify", native(signature), native(directory / "checksums.txt")],
-                                      stdin=subprocess.DEVNULL, capture_output=True, timeout=60, check=False)
+            verified = subprocess.run(
+                [
+                    *args,
+                    "--verify",
+                    native(signature),
+                    native(directory / "checksums.txt"),
+                ],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
             if verified.returncode:
                 raise InstallError(self.name, "GPG signature verification failed")

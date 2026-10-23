@@ -78,9 +78,9 @@ class Browserbase:
     def create(self, name):
         req = urllib.request.Request(
             "https://api.browserbase.com/v1/sessions",
-            data=json.dumps({
-                "projectId": os.environ["BROWSERBASE_PROJECT_ID"]
-            }).encode(),
+            data=json.dumps(
+                {"projectId": os.environ["BROWSERBASE_PROJECT_ID"]}
+            ).encode(),
             headers={
                 "x-bb-api-key": os.environ["BROWSERBASE_API_KEY"],
                 "Content-Type": "application/json",
@@ -97,10 +97,12 @@ class Browserbase:
     def close(self, sess):
         req = urllib.request.Request(
             f"https://api.browserbase.com/v1/sessions/{sess['id']}",
-            data=json.dumps({
-                "projectId": os.environ["BROWSERBASE_PROJECT_ID"],
-                "status": "REQUEST_RELEASE",
-            }).encode(),
+            data=json.dumps(
+                {
+                    "projectId": os.environ["BROWSERBASE_PROJECT_ID"],
+                    "status": "REQUEST_RELEASE",
+                }
+            ).encode(),
             headers={
                 "x-bb-api-key": os.environ["BROWSERBASE_API_KEY"],
                 "Content-Type": "application/json",

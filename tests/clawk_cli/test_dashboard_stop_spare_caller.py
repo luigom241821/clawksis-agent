@@ -23,10 +23,15 @@ def test_scan_spares_only_the_callers_wrapper_shell(capsys):
         (333, "bash -c clawk serve"),
     ]
     with (
-        patch("clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=processes),
+        patch(
+            "clawk_cli.dashboard_procs._scan_dashboard_processes",
+            return_value=processes,
+        ),
         patch("clawk_cli.dashboard_procs._caller_ancestor_pids", return_value={222}),
-        patch("clawk_cli.dashboard_procs._argv_head_command",
-              side_effect=lambda pid: "bash" if pid in (222, 333) else "python3.12"),
+        patch(
+            "clawk_cli.dashboard_procs._argv_head_command",
+            side_effect=lambda pid: "bash" if pid in (222, 333) else "python3.12",
+        ),
     ):
         assert _find_stale_dashboard_pids() == [111, 333]
 
@@ -34,7 +39,9 @@ def test_scan_spares_only_the_callers_wrapper_shell(capsys):
 def test_python_headed_or_unreadable_ancestor_stays_killed():
     """A python-headed ancestor is a real backend (hosted TUI case) and must stay stoppable —
     ``--stop`` from inside the dashboard's own TUI — and an unreadable argv head is never spared."""
-    with patch("clawk_cli.dashboard_procs._argv_head_command", return_value="python3.12"):
+    with patch(
+        "clawk_cli.dashboard_procs._argv_head_command", return_value="python3.12"
+    ):
         assert _is_caller_wrapper_shell(4242, {4242}) is False
     with patch("clawk_cli.dashboard_procs._argv_head_command", return_value=None):
         assert _is_caller_wrapper_shell(4242, {4242}) is False

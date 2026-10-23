@@ -7,8 +7,6 @@ state in initialize() (Hindsight, and any plugin that stores session_id
 for scoped writes) keep writing into the old session's record.
 """
 
-
-
 from agent.memory_manager import MemoryManager
 from agent.memory_provider import MemoryProvider
 
@@ -75,7 +73,9 @@ def test_manager_fans_out_to_all_providers():
     mm.add_provider(p1)
     mm.add_provider(p2)
 
-    mm.on_session_switch("new-sid", parent_session_id="old-sid", reset=False, reason="resume")
+    mm.on_session_switch(
+        "new-sid", parent_session_id="old-sid", reset=False, reason="resume"
+    )
 
     assert len(p1.switch_calls) == 1
     assert len(p2.switch_calls) == 1

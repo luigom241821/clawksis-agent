@@ -5,6 +5,7 @@ Regression coverage for #49561: in the Docker image the install tree
 with EACCES. The resolver must detect the read-only install dir and mirror the
 bridge source into a writable CLAWK_HOME location instead.
 """
+
 import importlib
 from pathlib import Path
 
@@ -30,12 +31,11 @@ def test_readonly_install_mirrors_to_clawk_home(tmp_path, monkeypatch):
     clawk_home.mkdir()
 
     monkeypatch.setattr(
-        whatsapp_common, "__file__",
+        whatsapp_common,
+        "__file__",
         str(install_root / "gateway" / "platforms" / "whatsapp_common.py"),
     )
-    monkeypatch.setattr(
-        "clawk_constants.get_clawk_home", lambda: clawk_home
-    )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: clawk_home)
 
     # Simulate a read-only install tree. chmod(0o555) is unreliable under
     # root (CI/Docker bypass permission bits), so force the write probe to
@@ -56,5 +56,3 @@ def test_readonly_install_mirrors_to_clawk_home(tmp_path, monkeypatch):
     # Source was mirrored, not symlinked.
     assert (expected / "bridge.js").read_text() == "// bridge\n"
     assert (expected / "package.json").exists()
-
-

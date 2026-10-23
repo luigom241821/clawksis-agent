@@ -18,7 +18,13 @@ from clawk_constants import get_clawk_home
 
 DEFAULT_TEAMS_PIPELINE_STORE_FILENAME = "teams_pipeline_store.json"
 # Persisted top-level buckets; the on-disk JSON shape must stay stable for existing user stores.
-_BUCKETS = ("subscriptions", "notification_receipts", "event_timestamps", "jobs", "sink_records")
+_BUCKETS = (
+    "subscriptions",
+    "notification_receipts",
+    "event_timestamps",
+    "jobs",
+    "sink_records",
+)
 
 
 def _utc_now_iso() -> str:
@@ -28,7 +34,11 @@ def _utc_now_iso() -> str:
 def resolve_teams_pipeline_store_path(path: str | Path | None = None) -> Path:
     explicit = str(path).strip() if path is not None else ""
     env_path = os.getenv("MSGRAPH_WEBHOOK_STORE_PATH", "").strip()
-    return Path(explicit or env_path) if (explicit or env_path) else get_clawk_home() / DEFAULT_TEAMS_PIPELINE_STORE_FILENAME
+    return (
+        Path(explicit or env_path)
+        if (explicit or env_path)
+        else get_clawk_home() / DEFAULT_TEAMS_PIPELINE_STORE_FILENAME
+    )
 
 
 class TeamsPipelineStore:
@@ -51,7 +61,9 @@ class TeamsPipelineStore:
 
     def _persist(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with NamedTemporaryFile("w", encoding="utf-8", dir=str(self.path.parent), delete=False) as tmp:
+        with NamedTemporaryFile(
+            "w", encoding="utf-8", dir=str(self.path.parent), delete=False
+        ) as tmp:
             json.dump(self._state, tmp, indent=2, sort_keys=True)
             tmp.flush()
             tmp_path = Path(tmp.name)
@@ -66,13 +78,17 @@ class TeamsPipelineStore:
             record = self._state[bucket].get(key)
             return deepcopy(record) if isinstance(record, dict) else None
 
-    def _upsert(self, bucket: str, id_field: str, key: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _upsert(
+        self, bucket: str, id_field: str, key: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         """Merge ``payload`` over the existing record, stamping ``id_field`` and created/updated timestamps."""
         with self._lock:
             existing = self._state[bucket].get(key, {})
             merged = {**existing, **deepcopy(payload)}
             merged[id_field] = key
-            merged.setdefault("created_at", existing.get("created_at") or _utc_now_iso())
+            merged.setdefault(
+                "created_at", existing.get("created_at") or _utc_now_iso()
+            )
             merged["updated_at"] = _utc_now_iso()
             self._state[bucket][key] = merged
             self._persist()
@@ -101,13 +117,21 @@ class TeamsPipelineStore:
         canonical = json.dumps(notification, sort_keys=True, separators=(",", ":"))
         return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
-    def record_notification_receipt(self, receipt_key: str, payload: Optional[dict[str, Any]] = None, *, received_at: Optional[str] = None) -> bool:
+    def record_notification_receipt(
+        self,
+        receipt_key: str,
+        payload: Optional[dict[str, Any]] = None,
+        *,
+        received_at: Optional[str] = None,
+    ) -> bool:
         """Record a receipt once; returns False when the key was already seen (duplicate delivery)."""
         with self._lock:
             if receipt_key in self._state["notification_receipts"]:
                 return False
-            self._state["notification_receipts"][receipt_key] = {"received_at": received_at or _utc_now_iso(),
-                                                                 "payload": deepcopy(payload) if isinstance(payload, dict) else payload}
+            self._state["notification_receipts"][receipt_key] = {
+                "received_at": received_at or _utc_now_iso(),
+                "payload": deepcopy(payload) if isinstance(payload, dict) else payload,
+            }
             self._persist()
             return True
 

@@ -14,12 +14,22 @@ from agent.usage_anchor import anchored_context_tokens, capture_usage_anchor
 
 
 def _img():
-    return {"role": "user", "content": [{"type": "text", "text": "look"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + "A" * 4000}}]}
+    return {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "look"},
+            {
+                "type": "image_url",
+                "image_url": {"url": "data:image/png;base64," + "A" * 4000},
+            },
+        ],
+    }
 
 
 def _agent(anchor):
-    return SimpleNamespace(_usage_anchor=anchor, model="vision-local", base_url="http://127.0.0.1:8080/v1")
+    return SimpleNamespace(
+        _usage_anchor=anchor, model="vision-local", base_url="http://127.0.0.1:8080/v1"
+    )
 
 
 def _isolate(monkeypatch, tmp_path):
@@ -33,7 +43,10 @@ def test_residual_on_an_image_delta_teaches_the_per_image_cost(monkeypatch, tmp_
     more than the text-only projection -> 4,000 per image, and every estimator prices images at
     that from now on (trigger and budget walk read the same bound value)."""
     _isolate(monkeypatch, tmp_path)
-    history = [{"role": "user", "content": "start"}, {"role": "assistant", "content": "ok"}]
+    history = [
+        {"role": "user", "content": "start"},
+        {"role": "assistant", "content": "ok"},
+    ]
     anchor = capture_usage_anchor(10_000, 5, history)
     history += [_img(), {"role": "assistant", "content": "looking"}, _img()]
     agent = _agent(anchor)
@@ -47,19 +60,30 @@ def test_residual_on_an_image_delta_teaches_the_per_image_cost(monkeypatch, tmp_
     # Persisted per model@host: a fresh process starts calibrated.
     monkeypatch.setattr(itc, "_LEARNED", {})
     monkeypatch.setattr(itc, "_LOADED", False)
-    assert itc.learned_image_token_cost("vision-local", "http://127.0.0.1:8080/v1") == 4_000
-    assert itc.learned_image_token_cost("other-model", "http://127.0.0.1:8080/v1") == itc.DEFAULT_IMAGE_TOKEN_COST
+    assert (
+        itc.learned_image_token_cost("vision-local", "http://127.0.0.1:8080/v1")
+        == 4_000
+    )
+    assert (
+        itc.learned_image_token_cost("other-model", "http://127.0.0.1:8080/v1")
+        == itc.DEFAULT_IMAGE_TOKEN_COST
+    )
 
 
 def test_nothing_learned_without_images_or_anchor(monkeypatch, tmp_path):
     """Text-only deltas, missing anchors and implausible residuals teach nothing: a text-estimate
     error must never be mistaken for an image price."""
     _isolate(monkeypatch, tmp_path)
-    history = [{"role": "user", "content": "start"}, {"role": "assistant", "content": "ok"}]
+    history = [
+        {"role": "user", "content": "start"},
+        {"role": "assistant", "content": "ok"},
+    ]
     anchor = capture_usage_anchor(10_000, 5, history)
     history += [{"role": "user", "content": "no image here"}]
     assert itc.calibrate_from_usage(_agent(anchor), history, 50_000) is None
     history += [_img()]
     assert itc.calibrate_from_usage(_agent(None), history, 50_000) is None
-    assert itc.calibrate_from_usage(_agent(anchor), history, 10_001) is None  # residual < plausible floor
+    assert (
+        itc.calibrate_from_usage(_agent(anchor), history, 10_001) is None
+    )  # residual < plausible floor
     assert itc._LEARNED == {}

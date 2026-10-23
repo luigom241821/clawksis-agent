@@ -4,6 +4,7 @@ Proves (a) N concurrent stale-RT requests on BOTH refresh paths rotate exactly o
 (b) /api/status answers while a slow provider refresh is in flight (the event-loop wedge).
 Run against origin/main to see both fail; against the fix to see both pass.
 """
+
 import json
 import os
 import socket
@@ -39,7 +40,11 @@ class SlowRotatingIdP(StubAuthProvider):
         self.lock = threading.Lock()
 
     def verify_session(self, *, access_token):
-        return None if access_token.startswith("expired") else super().verify_session(access_token=access_token)
+        return (
+            None
+            if access_token.startswith("expired")
+            else super().verify_session(access_token=access_token)
+        )
 
     def refresh_session(self, *, refresh_token):
         with self.lock:
@@ -48,9 +53,16 @@ class SlowRotatingIdP(StubAuthProvider):
                 raise RefreshExpiredError("reuse detected -> session revoked")
             self.rotated.add(refresh_token)
         time.sleep(self.delay)
-        return Session(user_id="u1", email="u@x.test", display_name="U", org_id="o", provider="stub",
-                       expires_at=int(time.time()) + 900, access_token="fresh-" + refresh_token,
-                       refresh_token="rotated-" + refresh_token)
+        return Session(
+            user_id="u1",
+            email="u@x.test",
+            display_name="U",
+            org_id="o",
+            provider="stub",
+            expires_at=int(time.time()) + 900,
+            access_token="fresh-" + refresh_token,
+            refresh_token="rotated-" + refresh_token,
+        )
 
 
 idp = SlowRotatingIdP()
@@ -59,20 +71,30 @@ app = web_server.app
 app.state.bound_host = "127.0.0.1"
 app.state.auth_required = True
 
-s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
-server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+port = s.getsockname()[1]
+s.close()
+server = uvicorn.Server(
+    uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+)
 threading.Thread(target=server.run, daemon=True).start()
 base = f"http://127.0.0.1:{port}"
 for _ in range(100):
     try:
-        urllib.request.urlopen(base + "/api/status", timeout=1); break
+        urllib.request.urlopen(base + "/api/status", timeout=1)
+        break
     except Exception:
         time.sleep(0.1)
 
 
 def http(path, *, method="GET", body=None, headers=None):
-    req = urllib.request.Request(base + path, method=method, headers=headers or {},
-                                 data=json.dumps(body).encode() if body is not None else None)
+    req = urllib.request.Request(
+        base + path,
+        method=method,
+        headers=headers or {},
+        data=json.dumps(body).encode() if body is not None else None,
+    )
     if body is not None:
         req.add_header("content-type", "application/json")
     try:
@@ -87,29 +109,50 @@ results = {}
 # (1) native bearer path: 4 concurrent refreshes with the same stale RT
 idp.calls = 0
 with ThreadPoolExecutor(4) as pool:
-    codes = sorted(pool.map(lambda _: http("/auth/native/refresh", method="POST",
-                                            body={"refresh_token": "native-stale", "provider": "stub"}), range(4)))
+    codes = sorted(
+        pool.map(
+            lambda _: http(
+                "/auth/native/refresh",
+                method="POST",
+                body={"refresh_token": "native-stale", "provider": "stub"},
+            ),
+            range(4),
+        )
+    )
 results["native_burst"] = {"codes": codes, "provider_calls": idp.calls}
 
 # (2) cookie gate path: 4 concurrent gated requests with an expired AT + one stale RT
 idp.calls = 0
 ck = "clawk_session_at=expired-at; clawk_session_rt=cookie-stale; clawk_session_provider=stub"
 with ThreadPoolExecutor(4) as pool:
-    codes = sorted(pool.map(lambda _: http("/api/auth/me", headers={"cookie": ck}), range(4)))
+    codes = sorted(
+        pool.map(lambda _: http("/api/auth/me", headers={"cookie": ck}), range(4))
+    )
 results["cookie_burst"] = {"codes": codes, "provider_calls": idp.calls}
 
 # (3) event-loop wedge: a 3s provider refresh must not block /api/status
 idp.delay = 3.0
-slow = threading.Thread(target=lambda: http("/auth/native/refresh", method="POST",
-                                             body={"refresh_token": "slow-stale", "provider": "stub"}))
-slow.start(); time.sleep(0.3)
-t0 = time.monotonic(); code = http("/api/status"); dt = time.monotonic() - t0
+slow = threading.Thread(
+    target=lambda: http(
+        "/auth/native/refresh",
+        method="POST",
+        body={"refresh_token": "slow-stale", "provider": "stub"},
+    )
+)
+slow.start()
+time.sleep(0.3)
+t0 = time.monotonic()
+code = http("/api/status")
+dt = time.monotonic() - t0
 slow.join()
 results["status_during_slow_refresh"] = {"code": code, "seconds": round(dt, 2)}
 
-ok = (results["native_burst"] == {"codes": [200] * 4, "provider_calls": 1}
-      and results["cookie_burst"] == {"codes": [200] * 4, "provider_calls": 1}
-      and code == 200 and dt < 1.0)
+ok = (
+    results["native_burst"] == {"codes": [200] * 4, "provider_calls": 1}
+    and results["cookie_burst"] == {"codes": [200] * 4, "provider_calls": 1}
+    and code == 200
+    and dt < 1.0
+)
 print(json.dumps(results, indent=1))
 print("VERDICT:", "PASS" if ok else "FAIL")
 server.should_exit = True

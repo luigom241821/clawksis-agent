@@ -42,7 +42,13 @@ class _Api:
         class Handler(BaseHTTPRequestHandler):
             def _answer(self):
                 length = int(self.headers.get("Content-Length") or 0)
-                api.seen.append({"path": self.path, "headers": dict(self.headers), "body": self.rfile.read(length)})
+                api.seen.append(
+                    {
+                        "path": self.path,
+                        "headers": dict(self.headers),
+                        "body": self.rfile.read(length),
+                    }
+                )
                 self.send_response(status)
                 if location:
                     self.send_header("Location", location)
@@ -70,9 +76,16 @@ def _home() -> Path:
 
 
 def _entry(idp: FakeIdP, **overrides) -> dict:
-    entry = {"id": "google", "authorize_url": f"{idp.base}/authorize", "token_url": f"{idp.base}/token",
-             "scopes": SCOPES, "client_id_env": "VOICE_CLIENT_ID", "client_secret_env": "VOICE_CLIENT_SECRET",
-             "hosts": ["api.example.com"], "authorize_params": {"access_type": "offline", "prompt": "consent"}}
+    entry = {
+        "id": "google",
+        "authorize_url": f"{idp.base}/authorize",
+        "token_url": f"{idp.base}/token",
+        "scopes": SCOPES,
+        "client_id_env": "VOICE_CLIENT_ID",
+        "client_secret_env": "VOICE_CLIENT_SECRET",
+        "hosts": ["api.example.com"],
+        "authorize_params": {"access_type": "offline", "prompt": "consent"},
+    }
     return {**entry, **overrides}
 
 
@@ -81,16 +94,26 @@ def _plugin(name: str = "voice", oauth: list | None = None, display: str | None 
     *display* is a manifest ``name`` other than the directory."""
     root = _home() / "plugins" / name
     root.mkdir(parents=True, exist_ok=True)
-    manifest = {"name": display or name, "version": "1.0.0", "description": "test plugin",
-                "requires_env": [{"name": "VOICE_CLIENT_ID"}, {"name": "VOICE_CLIENT_SECRET"}]}
+    manifest = {
+        "name": display or name,
+        "version": "1.0.0",
+        "description": "test plugin",
+        "requires_env": [{"name": "VOICE_CLIENT_ID"}, {"name": "VOICE_CLIENT_SECRET"}],
+    }
     if oauth is not None:
         manifest["oauth"] = oauth
-    (root / "plugin.yaml").write_text(json.dumps(manifest), encoding="utf-8")  # JSON is valid YAML
+    (root / "plugin.yaml").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )  # JSON is valid YAML
     (root / "api.py").write_text(
         "from clawk_cli.plugin_provider_requests import credentialed_provider_request\n"
         "def call(provider, url, method='POST', **kwargs):\n"
-        "    return credentialed_provider_request(provider, method, url, **kwargs)\n", encoding="utf-8")
-    spec = importlib.util.spec_from_file_location(f"clawk_plugins_{name}_api", root / "api.py")
+        "    return credentialed_provider_request(provider, method, url, **kwargs)\n",
+        encoding="utf-8",
+    )
+    spec = importlib.util.spec_from_file_location(
+        f"clawk_plugins_{name}_api", root / "api.py"
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -122,7 +145,9 @@ def _refreshes(idp: FakeIdP) -> int:
 def idp(monkeypatch, tmp_path):
     monkeypatch.setenv("VOICE_CLIENT_ID", CLIENT_ID)
     monkeypatch.setenv("VOICE_CLIENT_SECRET", SECRET)
-    server = FakeIdP().start(tls_dir=tmp_path / "idp-ca")  # https: plugin OAuth endpoints are https-only
+    server = FakeIdP().start(
+        tls_dir=tmp_path / "idp-ca"
+    )  # https: plugin OAuth endpoints are https-only
     trust = ssl.create_default_context(cafile=str(server.ca_pem))
     monkeypatch.setattr("clawk_cli.auth._default_verify", lambda: trust)
     server.opened = []
@@ -130,11 +155,15 @@ def idp(monkeypatch, tmp_path):
     def browser(url: str) -> bool:
         # A real browser runs beside Clawksis; the fake IdP 302s straight to the loopback callback.
         server.opened.append(url)
-        threading.Thread(target=lambda: urlopen(url, timeout=10, context=trust).close(), daemon=True).start()
+        threading.Thread(
+            target=lambda: urlopen(url, timeout=10, context=trust).close(), daemon=True
+        ).start()
         return True
 
     monkeypatch.setattr(pkce.webbrowser, "open", browser)
-    monkeypatch.setattr("clawk_cli.auth_device_flow._can_open_graphical_browser", lambda: True)
+    monkeypatch.setattr(
+        "clawk_cli.auth_device_flow._can_open_graphical_browser", lambda: True
+    )
     yield server
     server.stop()
 
@@ -144,7 +173,9 @@ def api(monkeypatch):
     """Test-only: the stub joins the declared hosts' origins; a second stub stays outside them."""
     allowed, other = _Api(), _Api()
     declared = plugin_oauth._origins
-    monkeypatch.setattr(plugin_oauth, "_origins", lambda client: declared(client) | {allowed.origin})
+    monkeypatch.setattr(
+        plugin_oauth, "_origins", lambda client: declared(client) | {allowed.origin}
+    )
     yield allowed, other
     allowed.close()
     other.close()
@@ -163,12 +194,18 @@ def test_sign_in_stores_the_grant_then_status_refresh_and_logout(idp, capsys):
     args = SimpleNamespace(provider=KEY, no_browser=False, timeout=None)
     auth_commands.auth_add_command(args)
 
-    assert "access_type=offline" in idp.opened[-1] and "prompt=consent" in idp.opened[-1]
+    assert (
+        "access_type=offline" in idp.opened[-1] and "prompt=consent" in idp.opened[-1]
+    )
     exchange = idp.token_requests[-1]
     assert exchange["grant_type"] == "authorization_code" and exchange["code_verifier"]
     assert (exchange["client_id"], exchange["client_secret"]) == (CLIENT_ID, SECRET)
     grant = _grant()
-    assert grant["refresh_token"] in idp.refresh_tokens and grant["access_token"] and grant["expires_at_ms"]
+    assert (
+        grant["refresh_token"] in idp.refresh_tokens
+        and grant["access_token"]
+        and grant["expires_at_ms"]
+    )
     assert SECRET not in (_home() / "auth.json").read_text(encoding="utf-8-sig")
 
     auth_commands.auth_status_command(args)
@@ -185,29 +222,45 @@ def test_bearer_reaches_the_declared_host_and_never_the_plugin(idp, api):
     plugin = _signed_in(idp)
     token = _grant()["access_token"]
 
-    result = plugin.call("google", allowed.url + "/v1/items?x=1", json={"title": "t"},
-                         headers={"X-Plugin": "1", "authorization": "Bearer plugin-made"})
+    result = plugin.call(
+        "google",
+        allowed.url + "/v1/items?x=1",
+        json={"title": "t"},
+        headers={"X-Plugin": "1", "authorization": "Bearer plugin-made"},
+    )
 
     assert result.status == 200 and result.json() == {"ok": True}
     seen = allowed.seen[0]
-    assert seen["path"] == "/v1/items?x=1" and json.loads(seen["body"]) == {"title": "t"}
-    assert seen["headers"]["Authorization"] == f"Bearer {token}" and seen["headers"]["X-Plugin"] == "1"
+    assert seen["path"] == "/v1/items?x=1" and json.loads(seen["body"]) == {
+        "title": "t"
+    }
+    assert (
+        seen["headers"]["Authorization"] == f"Bearer {token}"
+        and seen["headers"]["X-Plugin"] == "1"
+    )
     assert token not in repr(result) and token not in json.dumps(result.headers)
 
 
-def test_foreign_origin_userinfo_and_redirect_never_carry_the_token(idp, api, monkeypatch):
+def test_foreign_origin_userinfo_and_redirect_never_carry_the_token(
+    idp, api, monkeypatch
+):
     allowed, other = api
     plugin = _signed_in(idp)
     with pytest.raises(PermissionError, match="Refusing"):
         plugin.call("google", other.url + "/steal")
     host = allowed.url.split("//", 1)[1]
-    for url in (f"http://user@{host}/x", f"http://{host}@127.0.0.1:{other.origin[2]}/x"):
+    for url in (
+        f"http://user@{host}/x",
+        f"http://{host}@127.0.0.1:{other.origin[2]}/x",
+    ):
         with pytest.raises(PermissionError):
             plugin.call("google", url)
 
     redirecting = _Api(status=302, location=other.url + "/steal")
     declared = plugin_oauth._origins
-    monkeypatch.setattr(plugin_oauth, "_origins", lambda client: declared(client) | {redirecting.origin})
+    monkeypatch.setattr(
+        plugin_oauth, "_origins", lambda client: declared(client) | {redirecting.origin}
+    )
     try:
         assert plugin.call("google", redirecting.url + "/v1").status == 302
     finally:
@@ -215,12 +268,16 @@ def test_foreign_origin_userinfo_and_redirect_never_carry_the_token(idp, api, mo
     assert other.seen == [] and allowed.seen == []
 
 
-def test_undeclared_id_another_plugins_grant_and_non_plugin_callers_are_refused(idp, api):
+def test_undeclared_id_another_plugins_grant_and_non_plugin_callers_are_refused(
+    idp, api
+):
     allowed, _ = api
     _signed_in(idp)
     with pytest.raises(ValueError, match="google"):
         _plugin("bare").call("google", allowed.url)
-    twin = _plugin("twin", oauth=[_entry(idp)])  # the same declaration, but no grant of its own
+    twin = _plugin(
+        "twin", oauth=[_entry(idp)]
+    )  # the same declaration, but no grant of its own
     with pytest.raises(ppr.ProviderNotSignedIn, match="clawk auth add twin:google"):
         twin.call("google", allowed.url)
     with pytest.raises(PermissionError, match="installed plugin"):
@@ -233,11 +290,18 @@ def test_own_oauth_id_wins_over_a_core_provider_of_the_same_name(idp, api, monke
     plugin = _signed_in(idp)
 
     def core_resolver(url):
-        raise AssertionError("a core provider's credential must not answer the plugin's own oauth id")
+        raise AssertionError(
+            "a core provider's credential must not answer the plugin's own oauth id"
+        )
 
-    monkeypatch.setitem(ppr._PROVIDERS, "google", (frozenset({allowed.origin}), core_resolver))
+    monkeypatch.setitem(
+        ppr._PROVIDERS, "google", (frozenset({allowed.origin}), core_resolver)
+    )
     assert plugin.call("google", allowed.url).status == 200
-    assert allowed.seen[0]["headers"]["Authorization"] == f"Bearer {_grant()['access_token']}"
+    assert (
+        allowed.seen[0]["headers"]["Authorization"]
+        == f"Bearer {_grant()['access_token']}"
+    )
 
 
 def test_not_signed_in_names_the_command_and_sends_nothing(idp, api):
@@ -252,16 +316,29 @@ def test_expiring_token_is_refreshed_once_and_the_rotation_kept(idp, api):
     allowed, _ = api
     plugin = _signed_in(idp)
     old_refresh = _grant()["refresh_token"]
-    _set_grant(expires_at_ms=int(time.time() * 1000) + 60_000)  # inside the 120 s margin
+    _set_grant(
+        expires_at_ms=int(time.time() * 1000) + 60_000
+    )  # inside the 120 s margin
 
     plugin.call("google", allowed.url)
     plugin.call("google", allowed.url)
 
-    assert [r for r in idp.token_requests if r["grant_type"] == "refresh_token"] == [{
-        "grant_type": "refresh_token", "refresh_token": old_refresh, "client_id": CLIENT_ID, "client_secret": SECRET}]
+    assert [r for r in idp.token_requests if r["grant_type"] == "refresh_token"] == [
+        {
+            "grant_type": "refresh_token",
+            "refresh_token": old_refresh,
+            "client_id": CLIENT_ID,
+            "client_secret": SECRET,
+        }
+    ]
     grant = _grant()
-    assert grant["refresh_token"] != old_refresh and grant["refresh_token"] in idp.refresh_tokens
-    assert [s["headers"]["Authorization"] for s in allowed.seen] == [f"Bearer {grant['access_token']}"] * 2
+    assert (
+        grant["refresh_token"] != old_refresh
+        and grant["refresh_token"] in idp.refresh_tokens
+    )
+    assert [s["headers"]["Authorization"] for s in allowed.seen] == [
+        f"Bearer {grant['access_token']}"
+    ] * 2
 
 
 def test_refresh_without_a_new_refresh_token_keeps_the_old_one(idp, api):
@@ -270,18 +347,31 @@ def test_refresh_without_a_new_refresh_token_keeps_the_old_one(idp, api):
     plugin = _signed_in(idp)
     old_refresh = _grant()["refresh_token"]
     _set_grant(expires_at_ms=0)
-    idp.token_answer = (200, {"access_token": "at-google-style", "expires_in": 3599, "token_type": "Bearer"})
+    idp.token_answer = (
+        200,
+        {"access_token": "at-google-style", "expires_in": 3599, "token_type": "Bearer"},
+    )
 
     assert plugin.call("google", allowed.url).status == 200
 
     grant = _grant()
-    assert (grant["access_token"], grant["refresh_token"]) == ("at-google-style", old_refresh)
+    assert (grant["access_token"], grant["refresh_token"]) == (
+        "at-google-style",
+        old_refresh,
+    )
     assert allowed.seen[-1]["headers"]["Authorization"] == "Bearer at-google-style"
 
 
 def test_a_redirect_from_the_token_endpoint_is_a_failure_not_a_token(idp, api):
     allowed, _ = api
-    redirect = (302, {"access_token": "at-from-a-redirect", "refresh_token": "rt-x", "expires_in": 3600})
+    redirect = (
+        302,
+        {
+            "access_token": "at-from-a-redirect",
+            "refresh_token": "rt-x",
+            "expires_in": 3600,
+        },
+    )
     _plugin(oauth=[_entry(idp)])
     idp.token_answer = redirect
     with pytest.raises(SystemExit, match="HTTP 302"):
@@ -295,7 +385,11 @@ def test_a_redirect_from_the_token_endpoint_is_a_failure_not_a_token(idp, api):
     idp.token_answer = redirect
     with pytest.raises(AuthError) as excinfo:
         plugin.call("google", allowed.url)
-    assert excinfo.value.code == "oauth_refresh_failed" and _grant() == before and allowed.seen == []
+    assert (
+        excinfo.value.code == "oauth_refresh_failed"
+        and _grant() == before
+        and allowed.seen == []
+    )
 
 
 def test_two_threads_with_an_expiring_token_refresh_once(idp, api):
@@ -304,7 +398,9 @@ def test_two_threads_with_an_expiring_token_refresh_once(idp, api):
     _set_grant(expires_at_ms=0)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        statuses = list(pool.map(lambda _: plugin.call("google", allowed.url).status, range(2)))
+        statuses = list(
+            pool.map(lambda _: plugin.call("google", allowed.url).status, range(2))
+        )
 
     assert statuses == [200, 200] and _refreshes(idp) == 1 and "dead" not in _grant()
 
@@ -344,7 +440,11 @@ def test_revoked_grant_is_marked_dead_and_stops_touching_the_network(idp, api, c
     with pytest.raises(ppr.ProviderNotSignedIn, match="revoked"):
         plugin.call("google", allowed.url)
 
-    assert len(idp.token_requests) == posts and allowed.seen == [] and _grant()["dead"] == "invalid_grant"
+    assert (
+        len(idp.token_requests) == posts
+        and allowed.seen == []
+        and _grant()["dead"] == "invalid_grant"
+    )
     capsys.readouterr()
     assert _auth("status") is True and "revoked" in capsys.readouterr().out
 
@@ -353,7 +453,13 @@ def test_rejected_client_is_an_auth_error_that_leaves_the_grant(idp, api):
     allowed, _ = api
     plugin = _signed_in(idp)
     _set_grant(expires_at_ms=0)
-    idp.token_answer = (401, {"error": "invalid_client", "error_description": "The OAuth client was not found."})
+    idp.token_answer = (
+        401,
+        {
+            "error": "invalid_client",
+            "error_description": "The OAuth client was not found.",
+        },
+    )
     for _ in range(2):
         with pytest.raises(AuthError) as excinfo:
             plugin.call("google", allowed.url)
@@ -369,23 +475,31 @@ def test_missing_client_env_fails_before_any_request(idp, api, monkeypatch):
     posts = len(idp.token_requests)
     with pytest.raises(AuthError) as excinfo:
         plugin.call("google", allowed.url)
-    assert excinfo.value.code == "oauth_client_secret_missing" and "VOICE_CLIENT_SECRET" in str(excinfo.value)
+    assert (
+        excinfo.value.code == "oauth_client_secret_missing"
+        and "VOICE_CLIENT_SECRET" in str(excinfo.value)
+    )
     assert len(idp.token_requests) == posts and allowed.seen == []
 
 
-@pytest.mark.parametrize("change", [
-    {"token_url": "https://collect.example.net/token"},
-    {"hosts": ["api.example.com", "collect.example.net"]},
-    {"scopes": SCOPES[:1]},
-    {"client_id_env": "OTHER_CLIENT_ID"},
-    {"client_secret_env": "OTHER_CLIENT_SECRET"},
-    {"authorize_url": "https://login.example.net/authorize"},
-    {"authorize_params": {"access_type": "online"}},
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"token_url": "https://collect.example.net/token"},
+        {"hosts": ["api.example.com", "collect.example.net"]},
+        {"scopes": SCOPES[:1]},
+        {"client_id_env": "OTHER_CLIENT_ID"},
+        {"client_secret_env": "OTHER_CLIENT_SECRET"},
+        {"authorize_url": "https://login.example.net/authorize"},
+        {"authorize_params": {"access_type": "online"}},
+    ],
+)
 def test_entry_changed_since_sign_in_is_not_used(idp, api, change):
     allowed, _ = api
     _signed_in(idp)
-    changed = _plugin(oauth=[_entry(idp, **change)])  # a later version of the same plugin
+    changed = _plugin(
+        oauth=[_entry(idp, **change)]
+    )  # a later version of the same plugin
     posts = len(idp.token_requests)
     with pytest.raises(ppr.ProviderNotSignedIn, match="changed"):
         changed.call("google", allowed.url)
@@ -412,10 +526,14 @@ def test_grant_belongs_to_one_profile(idp, api, monkeypatch, tmp_path):
     assert allowed.seen == []
 
 
-def test_client_secret_stays_out_of_config_repr_logs_and_errors(idp, api, caplog, capsys):
+def test_client_secret_stays_out_of_config_repr_logs_and_errors(
+    idp, api, caplog, capsys
+):
     allowed, _ = api
     plugin = _signed_in(idp)
-    manifest = json.loads((_home() / "plugins" / "voice" / "plugin.yaml").read_text(encoding="utf-8-sig"))
+    manifest = json.loads(
+        (_home() / "plugins" / "voice" / "plugin.yaml").read_text(encoding="utf-8-sig")
+    )
     client = plugin_oauth.parse_oauth_clients(manifest)[0][0]
     assert SECRET not in repr(plugin_oauth._pkce_config(client, KEY))
 
@@ -443,29 +561,62 @@ def test_other_auth_store_writes_keep_the_plugin_grant(idp):
 
 
 def test_install_notice_and_repin_delta_name_the_oauth_entry(idp, tmp_path):
-    from clawk_cli.plugins_cmd_catalog import plugin_surface, surface_delta, surface_delta_lines
+    from clawk_cli.plugins_cmd_catalog import (
+        plugin_surface,
+        surface_delta,
+        surface_delta_lines,
+    )
 
     manifest = {"name": "voice", "oauth": [_entry(idp)]}
     notice = ppr.requires_auth_notice(manifest)
-    assert "google" in notice and "api.example.com" in notice and "clawk auth add voice:google" in notice
+    assert (
+        "google" in notice
+        and "api.example.com" in notice
+        and "clawk auth add voice:google" in notice
+    )
 
-    widened = {"name": "voice", "oauth": [_entry(idp, hosts=["api.example.com", "collect.example.net"])]}
-    lines = surface_delta_lines(surface_delta(plugin_surface(manifest, tmp_path), plugin_surface(widened, tmp_path)))
-    assert len(lines) == 1 and lines[0].startswith("your OAuth sign-in for") and "collect.example.net" in lines[0]
+    widened = {
+        "name": "voice",
+        "oauth": [_entry(idp, hosts=["api.example.com", "collect.example.net"])],
+    }
+    lines = surface_delta_lines(
+        surface_delta(
+            plugin_surface(manifest, tmp_path), plugin_surface(widened, tmp_path)
+        )
+    )
+    assert (
+        len(lines) == 1
+        and lines[0].startswith("your OAuth sign-in for")
+        and "collect.example.net" in lines[0]
+    )
 
     installed = plugin_surface(manifest, tmp_path)
-    moved = {"name": "voice", "oauth": [_entry(idp, authorize_url="https://signin.example.net/authorize")]}
-    lines = surface_delta_lines(surface_delta(installed, plugin_surface(moved, tmp_path)))
+    moved = {
+        "name": "voice",
+        "oauth": [_entry(idp, authorize_url="https://signin.example.net/authorize")],
+    }
+    lines = surface_delta_lines(
+        surface_delta(installed, plugin_surface(moved, tmp_path))
+    )
     assert len(lines) == 1 and "signin.example.net" in lines[0]
 
-    same_host = {"name": "voice", "oauth": [_entry(idp, authorize_url=f"{idp.base}/v2/authorize")]}
+    same_host = {
+        "name": "voice",
+        "oauth": [_entry(idp, authorize_url=f"{idp.base}/v2/authorize")],
+    }
     assert surface_delta(installed, plugin_surface(same_host, tmp_path)) == {}
 
 
-def test_the_notice_command_finds_a_plugin_whose_name_differs_from_its_directory(idp, api):
+def test_the_notice_command_finds_a_plugin_whose_name_differs_from_its_directory(
+    idp, api
+):
     allowed, _ = api
     plugin = _plugin("voice-dir", oauth=[_entry(idp)], display="gemini-voice")
-    manifest = json.loads((_home() / "plugins" / "voice-dir" / "plugin.yaml").read_text(encoding="utf-8-sig"))
+    manifest = json.loads(
+        (_home() / "plugins" / "voice-dir" / "plugin.yaml").read_text(
+            encoding="utf-8-sig"
+        )
+    )
     assert "clawk auth add gemini-voice:google" in ppr.requires_auth_notice(manifest)
 
     assert _auth("add", "gemini-voice:google") is True
@@ -483,13 +634,22 @@ def _reachable_text(exc: BaseException) -> str:
     parts, seen = [], set()
     while exc is not None and id(exc) not in seen:
         seen.add(id(exc))
-        parts.append("".join(traceback.TracebackException.from_exception(exc, capture_locals=True).format()))
+        parts.append(
+            "".join(
+                traceback.TracebackException.from_exception(
+                    exc, capture_locals=True
+                ).format()
+            )
+        )
         try:
             request = exc.request  # httpx errors carry the request they sent
         except (AttributeError, RuntimeError):
             request = None
         if request is not None:
-            parts += [repr(dict(request.headers)), request.content.decode("utf-8", "replace")]
+            parts += [
+                repr(dict(request.headers)),
+                request.content.decode("utf-8", "replace"),
+            ]
         exc = exc.__cause__ or exc.__context__
     return "\n".join(parts)
 
@@ -514,19 +674,29 @@ def test_errors_raised_to_the_plugin_carry_no_token_refresh_token_or_secret(idp,
     import httpx  # a core resolver (Codex) whose own refresh POST fails raises httpx with that request attached
 
     def resolver(url):
-        httpx.post(f"http://127.0.0.1:{allowed.origin[2]}/token", data={"refresh_token": "rt-core-canary"}, timeout=2)
+        httpx.post(
+            f"http://127.0.0.1:{allowed.origin[2]}/token",
+            data={"refresh_token": "rt-core-canary"},
+            timeout=2,
+        )
 
     _ppr_providers = dict(ppr._PROVIDERS)
     ppr._PROVIDERS["core-x"] = (frozenset({allowed.origin}), resolver)
     try:
         bare = _plugin("bare-core")
-        (_home() / "plugins" / "bare-core" / "plugin.yaml").write_text(json.dumps(
-            {"name": "bare-core", "version": "1", "requires_auth": ["core-x"]}), encoding="utf-8")
+        (_home() / "plugins" / "bare-core" / "plugin.yaml").write_text(
+            json.dumps(
+                {"name": "bare-core", "version": "1", "requires_auth": ["core-x"]}
+            ),
+            encoding="utf-8",
+        )
         exc = _caught(lambda: bare.call("core-x", allowed.url + "/v1"))
     finally:
         ppr._PROVIDERS.clear()
         ppr._PROVIDERS.update(_ppr_providers)
-    assert type(exc).__name__ == "ConnectError" and "rt-core-canary" not in _reachable_text(exc)
+    assert type(
+        exc
+    ).__name__ == "ConnectError" and "rt-core-canary" not in _reachable_text(exc)
 
 
 def _caught(fn) -> BaseException:
@@ -552,15 +722,22 @@ def test_revoked_grant_keeps_no_tokens_and_uninstall_drops_the_grant(idp, api):
     assert _auth("add") is True and _grant()["access_token"]
     manifest = _home() / "plugins" / "voice" / "plugin.yaml"
     good = manifest.read_text(encoding="utf-8-sig")
-    manifest.write_text(good.replace('"hosts": ["api.example.com"]', '"hosts": ["http://bad"]'), encoding="utf-8")
+    manifest.write_text(
+        good.replace('"hosts": ["api.example.com"]', '"hosts": ["http://bad"]'),
+        encoding="utf-8",
+    )
     assert _auth("logout") is True and _grant() is None
     manifest.write_text(good, encoding="utf-8")
 
     # Uninstall drops the grant, also when the manifest name differs from the directory it is stored under.
     _plugin("voice-dir", oauth=[_entry(idp)], display="gemini-voice")
     assert _auth("add", "gemini-voice:google") is True and _grant("voice-dir:google")
-    _remove_user_plugin(_home() / "plugins", "gemini-voice", _home() / "plugins" / "voice-dir")
-    assert _grant("voice-dir:google") is None  # a later plugin under that key does not inherit the sign-in
+    _remove_user_plugin(
+        _home() / "plugins", "gemini-voice", _home() / "plugins" / "voice-dir"
+    )
+    assert (
+        _grant("voice-dir:google") is None
+    )  # a later plugin under that key does not inherit the sign-in
 
 
 def test_sign_in_is_refused_where_nobody_can_answer_the_browser(idp, monkeypatch):

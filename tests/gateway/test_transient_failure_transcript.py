@@ -15,13 +15,14 @@ The gateway classifier must distinguish:
 * everything else that fails → transient → persist the user message
 """
 
-
 from gateway.run_turn import is_context_overflow_failure_result
 
 
 def _classify(agent_result: dict, history_len: int) -> tuple[bool, bool]:
     """``(agent_failed_early, is_context_overflow_failure)`` as the gateway computes them."""
-    return bool(agent_result.get("failed")), is_context_overflow_failure_result(agent_result, history_len)
+    return bool(agent_result.get("failed")), is_context_overflow_failure_result(
+        agent_result, history_len
+    )
 
 
 class TestContextOverflowStillSkipsTranscript:

@@ -26,13 +26,21 @@ from tests.pm.test_pm_core import FakeTool, pm_env as core_env
 @pytest.fixture
 def pm_env(core_env, tmp_path, monkeypatch):
     lock, runtime, docroot, base_url = core_env
-    return {"lockfile_path": lock, "runtime": runtime, "docroot": docroot,
-            "base_url": base_url, "tmp_path": tmp_path, "monkeypatch": monkeypatch,
-            "digest": Lockfile(lock).artifacts("faketool", current_target())[0]["sha256"]}
+    return {
+        "lockfile_path": lock,
+        "runtime": runtime,
+        "docroot": docroot,
+        "base_url": base_url,
+        "tmp_path": tmp_path,
+        "monkeypatch": monkeypatch,
+        "digest": Lockfile(lock).artifacts("faketool", current_target())[0]["sha256"],
+    }
 
 
 @pytest.mark.parametrize("route", ["install", "stage"])
-def test_same_version_different_sha_is_not_installed_and_repaired(pm_env, caplog, route):
+def test_same_version_different_sha_is_not_installed_and_repaired(
+    pm_env, caplog, route
+):
     """The witness: same version, different artifact sha. Version/path
     matching cannot see this; identity matching must — check() reports
     it and ensure() replaces the entry bytes."""
@@ -40,8 +48,12 @@ def test_same_version_different_sha_is_not_installed_and_repaired(pm_env, caplog
 
     env = pm_env
     from pm.install import stage_only
-    realize = (lambda: ensure("faketool", explicit=True, base_env={})) if route == "install" else (
-        lambda: stage_only("faketool", "linux-arm64-bionic"))
+
+    realize = (
+        (lambda: ensure("faketool", explicit=True, base_env={}))
+        if route == "install"
+        else (lambda: stage_only("faketool", "linux-arm64-bionic"))
+    )
     realize()
     if route == "install":
         assert is_installed("faketool")
@@ -51,13 +63,21 @@ def test_same_version_different_sha_is_not_installed_and_repaired(pm_env, caplog
         assert realize() == entry
         assert (entry / "sentinel").read_text() == "published"
 
-    _, digest_b = make_tar(env["docroot"], "faketool-1.0-b.tar.gz", {"bin/faketool": "#!B"})
+    _, digest_b = make_tar(
+        env["docroot"], "faketool-1.0-b.tar.gz", {"bin/faketool": "#!B"}
+    )
     # Same VERSION, different archive (different url + sha) — the
     # version-only check would accept this re-pin.
     lockfile = Lockfile(env["lockfile_path"])
     lockfile.set_pin(
-        "faketool", "1.0",
-        {"any": {"url": f"{env['base_url']}/faketool-1.0-b.tar.gz", "sha256": digest_b}},
+        "faketool",
+        "1.0",
+        {
+            "any": {
+                "url": f"{env['base_url']}/faketool-1.0-b.tar.gz",
+                "sha256": digest_b,
+            }
+        },
     )
     lockfile.save()
     if route == "stage":
@@ -72,7 +92,9 @@ def test_same_version_different_sha_is_not_installed_and_repaired(pm_env, caplog
 
     with caplog.at_level(logging.INFO, logger="pm.install"):
         realize()
-    assert any("1.0" in r.message and env["digest"][:12] in r.message for r in caplog.records)
+    assert any(
+        "1.0" in r.message and env["digest"][:12] in r.message for r in caplog.records
+    )
     assert is_installed("faketool")
     fact = Facts(paths.facts_path()).get("faketool")
     entry_bin = paths.store_root() / fact["entry"] / "bin" / "faketool"
@@ -86,8 +108,12 @@ def test_same_version_different_sha_is_not_installed_and_repaired(pm_env, caplog
 
 
 @pytest.mark.parametrize("matching_fact", [False, True])
-@pytest.mark.parametrize("damage", ["missing-binary", "changed-bytes", "entry-is-file", "missing-entry"])
-def test_install_repairs_corrupt_entry_from_verified_archive(pm_env, matching_fact, damage, caplog):
+@pytest.mark.parametrize(
+    "damage", ["missing-binary", "changed-bytes", "entry-is-file", "missing-entry"]
+)
+def test_install_repairs_corrupt_entry_from_verified_archive(
+    pm_env, matching_fact, damage, caplog
+):
     from pm.cli import cmd_doctor
     from pm.install import ensure
 
@@ -114,24 +140,44 @@ def test_install_repairs_corrupt_entry_from_verified_archive(pm_env, matching_fa
     assert any("repair: faketool re-realized" in r.message for r in caplog.records)
     assert binary.read_bytes() == b"#!x"
     assert cmd_doctor(None) == 0
-    assert Facts(facts_path).get("faketool")["digest"] == tree_digest(binary.parent.parent)
+    assert Facts(facts_path).get("faketool")["digest"] == tree_digest(
+        binary.parent.parent
+    )
 
 
-@pytest.mark.parametrize("route,failure", [
-    (route, failure) for route in ("install", "stage")
-    for failure in ("invalid", "fetch", "unpack", "verify", "publish", "published-verify", "interrupt", "facts")
-    if route == "install" or failure != "facts"
-])
+@pytest.mark.parametrize(
+    "route,failure",
+    [
+        (route, failure)
+        for route in ("install", "stage")
+        for failure in (
+            "invalid",
+            "fetch",
+            "unpack",
+            "verify",
+            "publish",
+            "published-verify",
+            "interrupt",
+            "facts",
+        )
+        if route == "install" or failure != "facts"
+    ],
+)
 @pytest.mark.parametrize("initial", [False, True], ids=["replacement", "first-install"])
-def test_failed_replacement_preserves_entry_and_facts(pm_env, monkeypatch, route, initial, failure):
+def test_failed_replacement_preserves_entry_and_facts(
+    pm_env, monkeypatch, route, initial, failure
+):
     from functools import partial
     from pm.install import ensure, stage_only
     from pm.package import InstallError
 
     env = pm_env
     target = current_target() if route == "install" else "linux-arm64-bionic"
-    realize = partial(ensure, "faketool", explicit=True, base_env={}) if route == "install" else partial(
-        stage_only, "faketool", target)
+    realize = (
+        partial(ensure, "faketool", explicit=True, base_env={})
+        if route == "install"
+        else partial(stage_only, "faketool", target)
+    )
     if not initial:
         realize()
     facts_path = paths.facts_path()
@@ -139,14 +185,26 @@ def test_failed_replacement_preserves_entry_and_facts(pm_env, monkeypatch, route
     entry = paths.store_root() / FakeTool().store_entry("1.0", target)
     marker = entry / ".pm-stage-pin.json"
     old_marker = marker.read_bytes() if marker.exists() else None
-    files = {"bin/unrelated": "bad layout"} if failure == "invalid" else {"bin/faketool": "#!new"}
+    files = (
+        {"bin/unrelated": "bad layout"}
+        if failure == "invalid"
+        else {"bin/faketool": "#!new"}
+    )
     _, digest = make_tar(env["docroot"], "replacement.tar.gz", files)
-    _, extra_digest = make_tar(env["docroot"], "data.tar.gz", {"share/data": "second archive"})
+    _, extra_digest = make_tar(
+        env["docroot"], "data.tar.gz", {"share/data": "second archive"}
+    )
     lockfile = Lockfile(env["lockfile_path"])
-    lockfile.set_pin("faketool", "1.0", {"any": [
-        {"url": f"{env['base_url']}/replacement.tar.gz", "sha256": digest},
-        {"url": f"{env['base_url']}/data.tar.gz", "sha256": extra_digest},
-    ]})
+    lockfile.set_pin(
+        "faketool",
+        "1.0",
+        {
+            "any": [
+                {"url": f"{env['base_url']}/replacement.tar.gz", "sha256": digest},
+                {"url": f"{env['base_url']}/data.tar.gz", "sha256": extra_digest},
+            ]
+        },
+    )
     lockfile.save()
     package = registry._packages["faketool"]
 
@@ -160,6 +218,7 @@ def test_failed_replacement_preserves_entry_and_facts(pm_env, monkeypatch, route
     with monkeypatch.context() as fault:
         if failure in ("publish", "published-verify", "interrupt"):
             original = Store.publish
+
             def publish(self, staged, name):
                 if name != entry.name:
                     return original(self, staged, name)
@@ -168,6 +227,7 @@ def test_failed_replacement_preserves_entry_and_facts(pm_env, monkeypatch, route
                     (published / "bin/faketool").unlink()
                     return published
                 fail()
+
             fault.setattr(Store, "publish", publish)
         elif failure == "facts":
             fault.setattr(Facts, "record", fail)
@@ -175,19 +235,25 @@ def test_failed_replacement_preserves_entry_and_facts(pm_env, monkeypatch, route
             fault.setattr(Store, "fetch_many", fail)
         elif failure == "verify":
             original_verify = package.verify
+
             def verify(path, target):
                 if path != entry:
                     fail()
                 return original_verify(path, target)
+
             fault.setattr(package, "verify", verify)
         elif failure == "unpack":
             original_unpack = package.unpack
+
             def unpack(archive, staged, target):
                 original_unpack(archive, staged, target)
                 if (staged / "share/data").exists():
                     fail()
+
             fault.setattr(package, "unpack", unpack)
-        with pytest.raises(KeyboardInterrupt if failure == "interrupt" else InstallError):
+        with pytest.raises(
+            KeyboardInterrupt if failure == "interrupt" else InstallError
+        ):
             realize()
     if not initial:
         assert (entry / "bin/faketool").read_bytes() == b"#!x"
@@ -220,17 +286,29 @@ def test_killed_replacement_recovers_on_next_install(pm_env, route, interruption
 
     env = pm_env
     target = current_target() if route == "install" else "linux-arm64-bionic"
-    realize = partial(ensure, "faketool", explicit=True, base_env={}) if route == "install" else partial(
-        stage_only, "faketool", target)
+    realize = (
+        partial(ensure, "faketool", explicit=True, base_env={})
+        if route == "install"
+        else partial(stage_only, "faketool", target)
+    )
     realize()
     old_fact = Facts(paths.facts_path()).get("faketool")
     entry = paths.store_root() / FakeTool().store_entry("1.0", target)
     old_digest = tree_digest(entry)
-    _, digest = make_tar(env["docroot"], "replacement.tar.gz", {"bin/faketool": "#!new"})
+    _, digest = make_tar(
+        env["docroot"], "replacement.tar.gz", {"bin/faketool": "#!new"}
+    )
     lockfile = Lockfile(env["lockfile_path"])
-    lockfile.set_pin("faketool", "1.0", {"any": {
-        "url": f"{env['base_url']}/replacement.tar.gz", "sha256": digest,
-    }})
+    lockfile.set_pin(
+        "faketool",
+        "1.0",
+        {
+            "any": {
+                "url": f"{env['base_url']}/replacement.tar.gz",
+                "sha256": digest,
+            }
+        },
+    )
     lockfile.save()
     code = textwrap.dedent("""
         import os, sys
@@ -257,12 +335,17 @@ def test_killed_replacement_recovers_on_next_install(pm_env, route, interruption
     """)
     child = subprocess.run(
         [sys.executable, "-c", code, str(env["lockfile_path"]), route, interruption],
-        env=dict(os.environ), capture_output=True, text=True, timeout=30,
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert child.returncode == 17, child.stderr
     assert Facts(paths.facts_path()).get("faketool") == old_fact
-    previous = entry.with_name(f".previous-{'stage-' if route == 'stage' else ''}{entry.name}")
+    previous = entry.with_name(
+        f".previous-{'stage-' if route == 'stage' else ''}{entry.name}"
+    )
     assert tree_digest(previous) == old_digest
     realize()
     assert (entry / "bin/faketool").read_bytes() == b"#!new"
@@ -272,7 +355,9 @@ def test_killed_replacement_recovers_on_next_install(pm_env, route, interruption
         assert fact["digest"] == tree_digest(entry)
     else:
         assert not paths.facts_path().exists()
-        assert json.loads((entry / ".pm-stage-pin.json").read_text())["sha256"] == [digest]
+        assert json.loads((entry / ".pm-stage-pin.json").read_text())["sha256"] == [
+            digest
+        ]
 
 
 def test_failed_restore_preserves_both_interrupted_versions(pm_env, monkeypatch):
@@ -287,10 +372,12 @@ def test_failed_restore_preserves_both_interrupted_versions(pm_env, monkeypatch)
     (previous / "saved").write_text("previous")
     (entry / "bin" / "faketool").write_text("uncommitted replacement")
     real_rename = Path.rename
+
     def fail_restore(self, target):
         if self == previous:
             raise PermissionError("restore refused")
         return real_rename(self, target)
+
     monkeypatch.setattr(Path, "rename", fail_restore)
     with pytest.raises((PermissionError, InstallError), match="restore refused"):
         ensure("faketool", explicit=True, base_env={})
@@ -347,6 +434,7 @@ def test_legacy_fact_without_identity_is_not_installed(pm_env, capsys):
 
     assert not is_installed("faketool")
     from pm.cli import cmd_doctor
+
     assert cmd_doctor(None) == 1
     assert "legacy fact: no recorded identity" in capsys.readouterr().out
     # ensure() repairs it: reinstalls and records the full identity.
@@ -358,6 +446,7 @@ def test_legacy_fact_without_identity_is_not_installed(pm_env, capsys):
 
 def test_unproven_entry_without_facts_is_rebuilt(pm_env):
     from pm.install import ensure
+
     entry = paths.store_root() / FakeTool().store_entry("1.0", current_target())
     (entry / "bin").mkdir(parents=True)
     (entry / "bin/faketool").write_bytes(b"unproven")

@@ -40,11 +40,16 @@ def _reset_mcp_state():
         yield
     finally:
         (servers, connecting, errs, retry_after, failures) = snapshot
-        mcp_mod._servers.clear(); mcp_mod._servers.update(servers)
-        mcp_mod._server_connecting.clear(); mcp_mod._server_connecting.update(connecting)
-        mcp_mod._server_connect_errors.clear(); mcp_mod._server_connect_errors.update(errs)
-        mcp_mod._server_connect_retry_after.clear(); mcp_mod._server_connect_retry_after.update(retry_after)
-        mcp_mod._server_connect_failures.clear(); mcp_mod._server_connect_failures.update(failures)
+        mcp_mod._servers.clear()
+        mcp_mod._servers.update(servers)
+        mcp_mod._server_connecting.clear()
+        mcp_mod._server_connecting.update(connecting)
+        mcp_mod._server_connect_errors.clear()
+        mcp_mod._server_connect_errors.update(errs)
+        mcp_mod._server_connect_retry_after.clear()
+        mcp_mod._server_connect_retry_after.update(retry_after)
+        mcp_mod._server_connect_failures.clear()
+        mcp_mod._server_connect_failures.update(failures)
 
 
 class TestConnectCooldownHelpers:
@@ -74,7 +79,9 @@ class TestRegisterMcpServersIsolation:
             server._tools = []
             return server
 
-        return patch("tools.mcp_tool_discovery._connect_server", side_effect=fake_connect)
+        return patch(
+            "tools.mcp_tool_discovery._connect_server", side_effect=fake_connect
+        )
 
     def test_failing_server_skipped_on_second_pass(self):
         attempts = []
@@ -82,9 +89,16 @@ class TestRegisterMcpServersIsolation:
             "good": {"command": "good-cmd"},
             "bad": {"command": "bad-cmd"},
         }
-        with self._run_with_mocked_connect(attempts), \
-                patch("tools.mcp_tool_registration._register_server_tools", return_value=[]), \
-                patch("tools.mcp_tool_config._filter_suspicious_mcp_servers", side_effect=lambda x: x):
+        with (
+            self._run_with_mocked_connect(attempts),
+            patch(
+                "tools.mcp_tool_registration._register_server_tools", return_value=[]
+            ),
+            patch(
+                "tools.mcp_tool_config._filter_suspicious_mcp_servers",
+                side_effect=lambda x: x,
+            ),
+        ):
             _mcp_discovery.register_mcp_servers(cfg)
             assert "good" in mcp_mod._servers
             assert "bad" not in mcp_mod._servers
@@ -101,9 +115,16 @@ class TestRegisterMcpServersIsolation:
     def test_cooldown_expiry_allows_retry(self):
         attempts = []
         cfg = {"bad": {"command": "bad-cmd"}}
-        with self._run_with_mocked_connect(attempts), \
-                patch("tools.mcp_tool_registration._register_server_tools", return_value=[]), \
-                patch("tools.mcp_tool_config._filter_suspicious_mcp_servers", side_effect=lambda x: x):
+        with (
+            self._run_with_mocked_connect(attempts),
+            patch(
+                "tools.mcp_tool_registration._register_server_tools", return_value=[]
+            ),
+            patch(
+                "tools.mcp_tool_config._filter_suspicious_mcp_servers",
+                side_effect=lambda x: x,
+            ),
+        ):
             _mcp_discovery.register_mcp_servers(cfg)
             assert _mcp_discovery._connect_cooldown_active("bad") is True
 

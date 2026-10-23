@@ -60,6 +60,7 @@ def _origin_from_env(
     schedule: str | dict[str, Any] | None = None,
 ) -> Optional[dict[str, str]]:
     from gateway.session_context import async_delivery_supported, get_session_env
+
     origin_platform = get_session_env("CLAWK_SESSION_PLATFORM")
     origin_chat_id = get_session_env("CLAWK_SESSION_CHAT_ID")
     if not (origin_platform and origin_chat_id):
@@ -95,10 +96,15 @@ def _origin_from_env(
     if thread_id:
         logger.debug(
             "Cron origin captured thread_id=%s for %s:%s",
-            thread_id, origin_platform, origin_chat_id)
+            thread_id,
+            origin_platform,
+            origin_chat_id,
+        )
     return {
-        "platform": origin_platform, "chat_id": origin_chat_id,
-        "chat_name": get_session_env("CLAWK_SESSION_CHAT_NAME") or None, "thread_id": thread_id,
+        "platform": origin_platform,
+        "chat_id": origin_chat_id,
+        "chat_name": get_session_env("CLAWK_SESSION_CHAT_NAME") or None,
+        "thread_id": thread_id,
         # Lets a delivery mirror resolve the participant's session in per-user-isolated groups.
         "user_id": get_session_env("CLAWK_SESSION_USER_ID") or None,
         # Workspace/server scope (Slack team, Discord guild...): Slack session keys embed it,
@@ -107,7 +113,9 @@ def _origin_from_env(
     }
 
 
-def _local_delivery_notice(job: dict[str, Any], user_deliver: Optional[str]) -> Optional[str]:
+def _local_delivery_notice(
+    job: dict[str, Any], user_deliver: Optional[str]
+) -> Optional[str]:
     """Notice when a created job won't deliver anywhere: CLI/TUI sessions have no capturable
     origin, so deliver='origin' (or omitted) saves output but never delivers it. None when the
     user explicitly asked for ``local`` or the job resolves to a real target.
@@ -123,16 +131,29 @@ def _local_delivery_notice(job: dict[str, Any], user_deliver: Optional[str]) -> 
         return None
     try:
         from cron.scheduler import _resolve_delivery_targets
+
         targets = _resolve_delivery_targets(job)
         if targets:
             # _origin_from_env() dropped a non-push origin (api_server) and the job rerouted to a
             # home channel: tell the creating client where the report goes (#69304).
-            from gateway.session_context import async_delivery_supported, get_session_env
-            fallback = [t for t in targets if t.get("_resolved_from") == "origin_fallback"]
-            if fallback and get_session_env("CLAWK_SESSION_PLATFORM") and not async_delivery_supported():
-                return ("Note: this stateless HTTP API session cannot receive cron delivery, so this "
-                        f"job will report to the home channel {fallback[0]['platform']}:"
-                        f"{fallback[0]['chat_id']} instead of back here.")
+            from gateway.session_context import (
+                async_delivery_supported,
+                get_session_env,
+            )
+
+            fallback = [
+                t for t in targets if t.get("_resolved_from") == "origin_fallback"
+            ]
+            if (
+                fallback
+                and get_session_env("CLAWK_SESSION_PLATFORM")
+                and not async_delivery_supported()
+            ):
+                return (
+                    "Note: this stateless HTTP API session cannot receive cron delivery, so this "
+                    f"job will report to the home channel {fallback[0]['platform']}:"
+                    f"{fallback[0]['chat_id']} instead of back here."
+                )
             return None
     except Exception:  # resolution unavailable — fall back to the origin signal
         if job.get("origin"):
@@ -142,7 +163,8 @@ def _local_delivery_notice(job: dict[str, Any], user_deliver: Optional[str]) -> 
         "cronjob(action='list')) but will NOT be delivered back into this "
         "session — CLI/TUI and stateless HTTP API sessions have no live-delivery channel. To be "
         "notified when it runs, recreate or update the job with deliver set to "
-        "a gateway-connected platform, e.g. deliver='telegram' or deliver='all'.")
+        "a gateway-connected platform, e.g. deliver='telegram' or deliver='all'."
+    )
 
 
 def _mode_guidance_notes(job: dict[str, Any], user_deliver: Optional[str]) -> list[str]:
@@ -156,22 +178,27 @@ def _mode_guidance_notes(job: dict[str, Any], user_deliver: Optional[str]) -> li
             "(silent no_change tick), changed output injects a MONITOR CHANGE "
             "DETECTED diff into the prompt. The first tick always runs as "
             "baseline. The source must emit STABLE output (no timestamps, no "
-            "random ordering) or every tick will look changed.")
+            "random ordering) or every tick will look changed."
+        )
     if job.get("no_agent"):
         notes.append(
             "no_agent mode: stdout is delivered verbatim; EMPTY stdout sends "
             "nothing at all (watchdog pattern — script should stay quiet when "
             "there is nothing to report). Non-zero exit or timeout sends an "
-            "error alert. prompt/skills are ignored.")
+            "error alert. prompt/skills are ignored."
+        )
     _deliver = (user_deliver or "").strip().lower()
     if _deliver:
         if "all" in _deliver.split(","):
             notes.append(
                 "deliver='all' resolves at fire time and never includes "
                 "bot-chat targets — channels connected later are picked up "
-                "automatically.")
+                "automatically."
+            )
         if _deliver.startswith("bot-chat:"):
-            notes.append("Targeting another profile's Bot Chat costs that bot an agent turn per run.")
+            notes.append(
+                "Targeting another profile's Bot Chat costs that bot an agent turn per run."
+            )
         # platform:chat_id with no thread segment loses topic targeting.
         for target in _deliver.split(","):
             parts = target.strip().split(":")
@@ -179,19 +206,20 @@ def _mode_guidance_notes(job: dict[str, Any], user_deliver: Optional[str]) -> li
                 len(parts) == 2
                 and parts[0] not in ("bot-chat", "sms")
                 and parts[1]
-                and not parts[1].startswith("#")):
+                and not parts[1].startswith("#")
+            ):
                 notes.append(
                     f"deliver target '{target.strip()}' has no :thread_id "
                     "segment — on thread/topic platforms the delivery lands in "
-                    "the main chat, not a topic.")
+                    "the main chat, not a topic."
+                )
                 break
     return notes
 
 
 def _split_monitor_arg(
-    monitor: Optional[str],
-    monitor_script: Optional[str],
-    monitor_url: Optional[str]) -> tuple:
+    monitor: Optional[str], monitor_script: Optional[str], monitor_url: Optional[str]
+) -> tuple:
     """Resolve the model-facing ``monitor`` field into the stored ``(monitor_script,
     monitor_url)`` pair. http(s):// is a URL, anything else a script path (a legal script path
     never starts with a URL scheme). None = unchanged, '' = clear; setting one source clears
@@ -226,7 +254,9 @@ def _clean_str_list(items: Any) -> list[str]:
     return [s for s in (str(i).strip() for i in items) if s]
 
 
-def _canonical_skills(skill: Optional[str] = None, skills: Optional[Any] = None) -> list[str]:
+def _canonical_skills(
+    skill: Optional[str] = None, skills: Optional[Any] = None
+) -> list[str]:
     if skills is None:
         skills = [skill] if skill else []
     elif isinstance(skills, str):
@@ -235,7 +265,9 @@ def _canonical_skills(skill: Optional[str] = None, skills: Optional[Any] = None)
     return list(dict.fromkeys(_clean_str_list(item or "" for item in skills)))
 
 
-def _normalize_optional_job_value(value: Optional[Any], *, strip_trailing_slash: bool = False) -> Optional[str]:
+def _normalize_optional_job_value(
+    value: Optional[Any], *, strip_trailing_slash: bool = False
+) -> Optional[str]:
     if value is None:
         return None
     text = str(value).strip()
@@ -278,7 +310,8 @@ def _validate_bot_chat_deliver(deliver: Optional[str]) -> Optional[str]:
                 f"bot-chat delivery profile '{profile_arg}' not found on this "
                 "gateway's machine. Bot Chat delivery is machine-local — use a "
                 "profile that exists here (clawk profile list), or omit the "
-                "name (deliver='bot-chat') for the job's own profile.")
+                "name (deliver='bot-chat') for the job's own profile."
+            )
     return None
 
 
@@ -290,6 +323,7 @@ def _resolve_cron_context_deliver(deliver: Optional[str]) -> Optional[str]:
     elements pass through. Otherwise the scheduler would guess a home channel."""
     from gateway.session_context import get_session_env
     from utils import is_truthy_value
+
     if not is_truthy_value(get_session_env("CLAWK_CRON_SESSION", "")):
         return deliver
 
@@ -299,11 +333,18 @@ def _resolve_cron_context_deliver(deliver: Optional[str]) -> Optional[str]:
         if not platform or not chat_id:
             return "local"
         thread_id = get_session_env("CLAWK_CRON_AUTO_DELIVER_THREAD_ID", "").strip()
-        return f"{platform}:{chat_id}:{thread_id}" if thread_id else f"{platform}:{chat_id}"
+        return (
+            f"{platform}:{chat_id}:{thread_id}"
+            if thread_id
+            else f"{platform}:{chat_id}"
+        )
 
     if deliver is None:
         return _creator_target()
-    resolved = [_creator_target() if p.lower() == "origin" else p for p in _clean_str_list(str(deliver).split(","))]
+    resolved = [
+        _creator_target() if p.lower() == "origin" else p
+        for p in _clean_str_list(str(deliver).split(","))
+    ]
     # Order-preserving de-dup: 'origin,local' with a local creator -> 'local'.
     return ",".join(dict.fromkeys(resolved)) or None
 
@@ -313,6 +354,7 @@ def _same_origin(base_url: str, configured: str) -> bool:
     new URL: a host-only or subdomain match would let a job send the stored key over plain
     HTTP, to another port, or to a host the operator never configured."""
     from utils import base_url_origin
+
     try:
         want, got = base_url_origin(configured), base_url_origin(base_url)
     except ValueError:  # malformed URL (e.g. unclosed IPv6 bracket) cannot match
@@ -339,19 +381,24 @@ def _custom_stored_key_error(bu: str) -> Optional[str]:
     custom_why = (
         "A stored API key matches its hostname, and a stored credential may only be sent to a "
         "configured endpoint (same scheme, host and port); configure the endpoint as a custom "
-        "provider to use it.")
+        "provider to use it."
+    )
     try:  # a URL urlparse rejects (unclosed IPv6 bracket) would raise in the key lookup below
         base_url_origin(bu)
     except ValueError:
         return _base_url_refused(bu, "custom", "It is not a valid URL.")
-    if not any(rp.has_usable_secret(key) for key in rp._host_gated_env_key_candidates(bu, ollama=True)):
+    if not any(
+        rp.has_usable_secret(key)
+        for key in rp._host_gated_env_key_candidates(bu, ollama=True)
+    ):
         return None
     # The RAW configured model.base_url: _get_model_config() may network-probe a local model.
     cfg = rp.load_config()
     model_cfg = cfg.get("model")
     configured = [
         model_cfg.get("base_url") if isinstance(model_cfg, dict) else None,
-        get_secret_str("OPENAI_BASE_URL", ""), OPENROUTER_BASE_URL,
+        get_secret_str("OPENAI_BASE_URL", ""),
+        OPENROUTER_BASE_URL,
         # PROVIDER_REGISTRY already carries the direct OpenAI origin (openai-api).
         *(getattr(p, "inference_base_url", "") for p in PROVIDER_REGISTRY.values()),
         *(entry.get("base_url") for entry in rp.get_compatible_custom_providers(cfg)),
@@ -362,7 +409,8 @@ def _custom_stored_key_error(bu: str) -> Optional[str]:
 
 
 def _validate_cron_base_url(
-    provider: Optional[Any], base_url: Optional[Any]) -> Optional[str]:
+    provider: Optional[Any], base_url: Optional[Any]
+) -> Optional[str]:
     """Reject pairing a stored credential with an off-origin base_url (a prompt-injected job
     could exfil the key). Allowed: no override; bare 'custom' while no stored key would go with
     it, or at a configured origin; an override with the same origin as the named provider's
@@ -371,15 +419,19 @@ def _validate_cron_base_url(
     if not bu:
         return None
     prov = _normalize_optional_job_value(provider)
-    if not prov:  # no provider inherits the default provider's stored key — same primitive
+    if (
+        not prov
+    ):  # no provider inherits the default provider's stored key — same primitive
         return (
             "base_url override requires an explicit provider. Set provider to a "
-            "configured custom provider to use a custom endpoint.")
+            "configured custom provider to use a custom endpoint."
+        )
     try:
         from clawk_cli.runtime_provider import (
             has_named_custom_provider,
             resolve_requested_provider,
-            _get_named_custom_provider)
+            _get_named_custom_provider,
+        )
         from clawk_cli.auth import PROVIDER_REGISTRY
     except Exception:
         return f"Unable to validate base_url override for provider {prov!r}; refused."
@@ -396,8 +448,11 @@ def _validate_cron_base_url(
         if cfg_url and _same_origin(bu, cfg_url):
             return None
         return _base_url_refused(
-            bu, prov, "A named custom provider's stored credential may only be sent to its own "
-            f"configured endpoint ({cfg_url or 'unknown'}): same scheme, host and port.")
+            bu,
+            prov,
+            "A named custom provider's stored credential may only be sent to its own "
+            f"configured endpoint ({cfg_url or 'unknown'}): same scheme, host and port.",
+        )
     try:
         resolved = resolve_requested_provider(prov)
     except Exception:
@@ -408,9 +463,12 @@ def _validate_cron_base_url(
         return None
     # Fail closed: named providers with stored credentials AND unknown names we cannot origin-match.
     return _base_url_refused(
-        bu, prov, "A named provider's stored credential may only be sent to its own endpoint "
+        bu,
+        prov,
+        "A named provider's stored credential may only be sent to its own endpoint "
         '(same scheme, host and port); use a configured custom provider (provider="custom") '
-        "for a custom base_url.")
+        "for a custom base_url.",
+    )
 
 
 def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
@@ -420,15 +478,18 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
         return None
 
     from clawk_constants import get_clawk_home
+
     raw = script.strip()
     scripts_dir = get_clawk_home() / "scripts"
     if raw.startswith(("/", "~")) or (len(raw) >= 2 and raw[1] == ":"):
         return (
             f"Script path must be relative to {scripts_dir}/. "
             f"Got absolute or home-relative path: {raw!r}. "
-            f"Place scripts in {scripts_dir}/ and use just the filename.")
+            f"Place scripts in {scripts_dir}/ and use just the filename."
+        )
 
     from tools.path_security import validate_within_dir
+
     scripts_dir.mkdir(parents=True, exist_ok=True)
     resolved_script = scripts_dir / raw
     if validate_within_dir(resolved_script, scripts_dir):
@@ -436,13 +497,14 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
     if not resolved_script.is_file():
         return (
             f"Script file not found: {resolved_script}. "
-            f"Create it in {scripts_dir}/ first.")
+            f"Create it in {scripts_dir}/ first."
+        )
     return None
 
 
 def _apply_continuity(
-    context_from: Optional[str | list[str]],
-    continuity: bool) -> Optional[list[str]]:
+    context_from: Optional[str | list[str]], continuity: bool
+) -> Optional[list[str]]:
     """continuity=True ensures "self" is in context_from; False removes it; others untouched."""
     refs = _clean_str_list(context_from)
     has_self = any(r.lower() == "self" for r in refs)
@@ -457,21 +519,32 @@ def _validate_context_from_refs(refs: list[Any]) -> Optional[str]:
     """Error string if any non-"self" ref names a missing job ("self" resolves to the job's
     own id at run time, so it can't be checked — the job doesn't exist yet at create)."""
     from cron.jobs import get_job as _get_job
+
     for ref_id in refs:
         if isinstance(ref_id, str) and ref_id.strip().lower() == "self":
             continue
         if not _get_job(ref_id):
             return (
                 f"context_from job '{ref_id}' not found. "
-                "Use cronjob(action='list') to see available jobs.")
+                "Use cronjob(action='list') to see available jobs."
+            )
     return None
 
 
 # Optional fields echoed by _format_job only when truthy (order = JSON key order).
 _FORMAT_JOB_OPTIONAL_KEYS = (
-    "script", "reasoning_effort", "monitor_script", "monitor_url",
-    "monitor_state", "no_agent", "enabled_toolsets", "workdir", "interpreter",
-    "stop_after_alert", "profile")
+    "script",
+    "reasoning_effort",
+    "monitor_script",
+    "monitor_url",
+    "monitor_state",
+    "no_agent",
+    "enabled_toolsets",
+    "workdir",
+    "interpreter",
+    "stop_after_alert",
+    "profile",
+)
 
 
 def _format_job(job: dict[str, Any]) -> dict[str, Any]:
@@ -480,7 +553,13 @@ def _format_job(job: dict[str, Any]) -> dict[str, Any]:
     prompt = str(job.get("prompt") or "")
     skills = _canonical_skills(job.get("skill"), job.get("skills"))
     job_id = str(job.get("id") or "unknown")
-    name = str(job.get("name") or prompt[:50] or (skills[0] if skills else "") or job_id or "cron job")
+    name = str(
+        job.get("name")
+        or prompt[:50]
+        or (skills[0] if skills else "")
+        or job_id
+        or "cron job"
+    )
     result = {
         "job_id": job_id,
         "name": name,
@@ -502,8 +581,12 @@ def _format_job(job: dict[str, Any]) -> dict[str, Any]:
         "last_delivery_unverified": job.get("last_delivery_unverified"),
         "last_fire_error": job.get("last_fire_error"),
         "last_error": redact_sensitive_text(
-            job["last_error"], force=True, redact_url_credentials=True,
-        ) if job.get("last_error") else job.get("last_error"),
+            job["last_error"],
+            force=True,
+            redact_url_credentials=True,
+        )
+        if job.get("last_error")
+        else job.get("last_error"),
         "enabled": job.get("enabled", True),
         # Derive from enabled so half-paused records never render as paused.
         "state": effective_job_state(job),
@@ -537,6 +620,7 @@ def _gateway_liveness_notice(plural: bool = False) -> dict:
     """
     try:
         from clawk_cli.cron import _builtin_gateway_liveness
+
         _gw = _builtin_gateway_liveness()
     except Exception:
         return {"gateway_running": None}
@@ -548,6 +632,7 @@ def _gateway_liveness_notice(plural: bool = False) -> dict:
                 f"The Clawksis gateway is not running — {subject} "
                 "but will NOT fire until the gateway is started "
                 "(clawk gateway install / clawk gateway start). "
-                "Tell the user the task is scheduled but not active yet."),
+                "Tell the user the task is scheduled but not active yet."
+            ),
         }
     return {"gateway_running": None if _gw is None else True}

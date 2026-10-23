@@ -8,6 +8,7 @@ blocked read settles with EOF/EPIPE and the worker can unwind (bounded drain).
 Cross-thread FD release under a live SSL BIO is the #29507/#67142/#70773
 native-corruption family.
 """
+
 from __future__ import annotations
 
 import threading
@@ -32,7 +33,7 @@ class _SslBlockedChild:
         self.session_completion_tokens = 0
         self.session_estimated_cost_usd = 0.0
         self.session_cost_status = "unknown"
-        self.read_settled = threading.Event()   # drain "EOF" signal
+        self.read_settled = threading.Event()  # drain "EOF" signal
         self.unwound = threading.Event()
         self.closed = threading.Event()
         self.close_while_blocked = False

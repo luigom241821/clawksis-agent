@@ -3,6 +3,7 @@
 The legacy start helpers refresh units, regenerate plists, or fall back to
 unmanaged processes. Client startup must not call those helpers.
 """
+
 from __future__ import annotations
 
 import csv
@@ -44,6 +45,7 @@ def service_suffix(home: Path) -> str:
     """
     from clawk_constants import account_default_clawk_home
     from clawk_cli.gateway import _profile_name_from_home
+
     default = account_default_clawk_home().resolve()
     home = home.resolve()
     if home == default:
@@ -65,10 +67,23 @@ class ExistingService:
     running: bool = False
 
 
-def _run(argv: list[str] | tuple[str, ...], deadline: float, *, encoding: str | None = "utf-8"):
-    return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
-                          text=encoding is not None, encoding=encoding, errors="strict" if encoding else None,
-                          creationflags=windows_hide_flags(), timeout=remaining(deadline), check=False)
+def _run(
+    argv: list[str] | tuple[str, ...],
+    deadline: float,
+    *,
+    encoding: str | None = "utf-8",
+):
+    return subprocess.run(
+        argv,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=encoding is not None,
+        encoding=encoding,
+        errors="strict" if encoding else None,
+        creationflags=windows_hide_flags(),
+        timeout=remaining(deadline),
+        check=False,
+    )
 
 
 def _verify_binding(verify, *args, **kwargs):
@@ -76,9 +91,12 @@ def _verify_binding(verify, *args, **kwargs):
         return verify(*args, **kwargs)
     except (ValueError, TypeError, KeyError, AttributeError, ExpatError) as exc:
         reason = str(exc)
-        raise RuntimeStartError(reason if reason in {
-            "profile_mismatch", "service_account_mismatch", "service_disabled"
-        } else "service_identity_unverified") from None
+        raise RuntimeStartError(
+            reason
+            if reason
+            in {"profile_mismatch", "service_account_mismatch", "service_disabled"}
+            else "service_identity_unverified"
+        ) from None
 
 
 def _exists(path: Path) -> bool:
@@ -92,27 +110,53 @@ def _exists(path: Path) -> bool:
 def _systemd(home: Path, deadline: float) -> ExistingService | None:
     from clawk_cli import gateway as gw
     from clawk_cli.service_manager import _s6_running
-    from clawk_cli.gateway_runtime_service_identity import ForeignRoot, SYSTEMD_IDENTITY_PROPERTIES, verify_systemd
+    from clawk_cli.gateway_runtime_service_identity import (
+        ForeignRoot,
+        SYSTEMD_IDENTITY_PROPERTIES,
+        verify_systemd,
+    )
+
     if _s6_running():
         raise RuntimeStartError("external_supervisor")
     suffix = service_suffix(home)
     unit = f"clawk-gateway{'-' + suffix if suffix else ''}.service"
-    paths = (Path.home() / ".config/systemd/user" / unit, Path("/etc/systemd/system") / unit)
+    paths = (
+        Path.home() / ".config/systemd/user" / unit,
+        Path("/etc/systemd/system") / unit,
+    )
     # On non-systemd hosts there is no manager to own transient units. Installed
     # definitions still count: a broken manager is not permission to bypass one.
     # Every Clawksis entrypoint ensures the gateway, so a host with no installed unit must not
     # touch the service manager at all (a headless runner has no user bus to answer it).
     # With a unit installed anywhere, both scopes are asked: two claiming the name is a conflict.
-    installed = (*paths, Path("/usr/lib/systemd/system") / unit, Path("/lib/systemd/system") / unit)
+    installed = (
+        *paths,
+        Path("/usr/lib/systemd/system") / unit,
+        Path("/lib/systemd/system") / unit,
+    )
     if not any(_exists(p) for p in installed):
         return None
     found = []
     for system in (False, True):
         command = gw._systemctl_cmd(system)
-        result = _run([*command, "show", unit, "--no-pager", "--all",
-                       "--property=LoadState,ActiveState,SubState,UnitFileState," + ",".join(SYSTEMD_IDENTITY_PROPERTIES)], deadline)
-        props = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
-        if not _exists(paths[int(system)]) and (result.returncode or props.get("LoadState") == "not-found"):
+        result = _run(
+            [
+                *command,
+                "show",
+                unit,
+                "--no-pager",
+                "--all",
+                "--property=LoadState,ActiveState,SubState,UnitFileState,"
+                + ",".join(SYSTEMD_IDENTITY_PROPERTIES),
+            ],
+            deadline,
+        )
+        props = dict(
+            line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+        )
+        if not _exists(paths[int(system)]) and (
+            result.returncode or props.get("LoadState") == "not-found"
+        ):
             # Nothing installed in this scope: an unreachable or empty manager there has no
             # unit that could serve or block this home.
             continue
@@ -139,11 +183,18 @@ def _systemd(home: Path, deadline: float) -> ExistingService | None:
             continue
         except ValueError as exc:
             reason = str(exc)
-            raise RuntimeStartError(reason if reason in {
-                "profile_mismatch", "service_account_mismatch"
-            } else "service_identity_unverified") from None
-        found.append(ExistingService("systemd", tuple([*command, "--no-ask-password", "start", unit]),
-                                     state != "inactive"))
+            raise RuntimeStartError(
+                reason
+                if reason in {"profile_mismatch", "service_account_mismatch"}
+                else "service_identity_unverified"
+            ) from None
+        found.append(
+            ExistingService(
+                "systemd",
+                tuple([*command, "--no-ask-password", "start", unit]),
+                state != "inactive",
+            )
+        )
     if len(found) > 1:
         raise RuntimeStartError("service_scope_conflict", "conflict")
     return found[0] if found else None
@@ -162,7 +213,11 @@ def _s6(home: Path, deadline: float) -> ExistingService | None:
     # with-contenv is also the service run script's authority. The initiating
     # client may have selected a named profile or a different install root.
     try:
-        container_home = Path("/run/s6/container_environment/CLAWK_HOME").read_text(encoding="utf-8-sig").strip()
+        container_home = (
+            Path("/run/s6/container_environment/CLAWK_HOME")
+            .read_text(encoding="utf-8-sig")
+            .strip()
+        )
     except (OSError, UnicodeError):
         raise RuntimeStartError("service_identity_unverified") from None
     if not container_home:
@@ -185,22 +240,36 @@ def _s6(home: Path, deadline: float) -> ExistingService | None:
 
 def _launchd(home: Path, deadline: float) -> ExistingService | None:
     import pwd
+
     suffix = service_suffix(home)
     label = f"ai.clawk.gateway{'-' + suffix if suffix else ''}"
     account = pwd.getpwuid(os.getuid())  # windows-footgun: ok — native launchd only
     account_home = Path(account.pw_dir)
     plist = account_home / "Library/LaunchAgents" / f"{label}.plist"
-    from clawk_cli.gateway_runtime_service_identity import verify_launchd_loaded, verify_launchd_plist, read_definition
+    from clawk_cli.gateway_runtime_service_identity import (
+        verify_launchd_loaded,
+        verify_launchd_plist,
+        read_definition,
+    )
+
     installed = _exists(plist)
-    domains = [f"gui/{os.getuid()}", f"user/{os.getuid()}"]  # windows-footgun: ok — native launchd only
+    domains = [
+        f"gui/{os.getuid()}",
+        f"user/{os.getuid()}",
+    ]  # windows-footgun: ok — native launchd only
     found = []
     loaded = []
     for domain in domains:
         result = _run(["launchctl", "print", f"{domain}/{label}"], deadline)
         if result.returncode == 0:
             loaded.append(result.stdout)
-            found.append(ExistingService("launchd", ("launchctl", "kickstart", f"{domain}/{label}"),
-                                         "state = running" in result.stdout))
+            found.append(
+                ExistingService(
+                    "launchd",
+                    ("launchctl", "kickstart", f"{domain}/{label}"),
+                    "state = running" in result.stdout,
+                )
+            )
             continue
         # launchctl's native absent-service code; other errors retain uncertainty.
         if result.returncode != 113:
@@ -208,18 +277,27 @@ def _launchd(home: Path, deadline: float) -> ExistingService | None:
     if len(found) > 1:
         raise RuntimeStartError("service_scope_conflict", "conflict")
     if found:
-        _verify_binding(verify_launchd_loaded, loaded[0], home, uid=os.getuid(), username=account.pw_name)  # windows-footgun: ok — native launchd only
+        _verify_binding(
+            verify_launchd_loaded,
+            loaded[0],
+            home,
+            uid=os.getuid(),
+            username=account.pw_name,
+        )  # windows-footgun: ok — native launchd only
         return found[0]
     if installed:
         definition = _verify_binding(plistlib.loads, read_definition(plist))
         _verify_binding(verify_launchd_plist, definition, label, home)
         # Load ONLY the existing file, never bootout/rewrite or kickstart -k.
-        return ExistingService("launchd", ("launchctl", "bootstrap", domains[0], str(plist)))
+        return ExistingService(
+            "launchd", ("launchctl", "bootstrap", domains[0], str(plist))
+        )
     return None
 
 
 def _windows(home: Path, deadline: float) -> ExistingService | None:
     from clawk_cli.gateway_windows import _decode_schtasks_output
+
     suffix = service_suffix(home)
     name = f"Clawksis_Gateway{'_' + suffix if suffix else ''}"
 
@@ -231,14 +309,34 @@ def _windows(home: Path, deadline: float) -> ExistingService | None:
             raise RuntimeStartError(refusal)
         return _decode_schtasks_output(result.stdout or b"")
 
-    rows = list(csv.reader(io.StringIO(query("service_manager_unavailable", "schtasks.exe", "/Query", "/FO", "CSV", "/NH"))))
+    rows = list(
+        csv.reader(
+            io.StringIO(
+                query(
+                    "service_manager_unavailable",
+                    "schtasks.exe",
+                    "/Query",
+                    "/FO",
+                    "CSV",
+                    "/NH",
+                )
+            )
+        )
+    )
     if any(len(row) != 3 for row in rows if row):
         raise RuntimeStartError("service_state_unknown")
     if any(row and row[0].lstrip("\\") == name for row in rows):
         from clawk_cli.gateway_runtime_service_identity import verify_windows_task
+
         unverified = "service_identity_unverified"
         definition = query(unverified, "schtasks.exe", "/Query", "/TN", name, "/XML")
-        accounts = list(csv.reader(io.StringIO(query(unverified, "whoami.exe", "/USER", "/FO", "CSV", "/NH"))))
+        accounts = list(
+            csv.reader(
+                io.StringIO(
+                    query(unverified, "whoami.exe", "/USER", "/FO", "CSV", "/NH")
+                )
+            )
+        )
         if len(accounts) != 1 or len(accounts[0]) != 2:
             raise RuntimeStartError("service_identity_unverified")
         _verify_binding(verify_windows_task, definition, home, *accounts[0])
@@ -258,11 +356,21 @@ def _no_supervisor(home: Path, deadline: float) -> None:
     systemd probe, which finds no unit and lands on the same unmanaged start."""
 
 
-def discover_existing_gateway_service(home: Path, *, deadline: float) -> ExistingService | None:
+def discover_existing_gateway_service(
+    home: Path, *, deadline: float
+) -> ExistingService | None:
     from clawk_cli.service_manager import _s6_running
 
-    backend = _s6 if _s6_running() else {"linux": _systemd, "darwin": _launchd, "win32": _windows,
-                                         "android": _no_supervisor}.get(sys.platform)
+    backend = (
+        _s6
+        if _s6_running()
+        else {
+            "linux": _systemd,
+            "darwin": _launchd,
+            "win32": _windows,
+            "android": _no_supervisor,
+        }.get(sys.platform)
+    )
     if backend is None:
         raise RuntimeStartError("unsupported_supervisor_platform")
     try:
@@ -273,12 +381,15 @@ def discover_existing_gateway_service(home: Path, *, deadline: float) -> Existin
         raise RuntimeStartError("service_manager_unavailable") from exc
 
 
-def start_existing_gateway_service(service: ExistingService, *, deadline: float) -> None:
+def start_existing_gateway_service(
+    service: ExistingService, *, deadline: float
+) -> None:
     """Request start once; only live control readiness can establish success."""
     if service.running:
         return
     if service.backend == "s6":
         from clawk_cli.service_manager import S6ServiceManager
+
         try:
             S6ServiceManager().start(service.start_argv[0])
         except subprocess.TimeoutExpired:

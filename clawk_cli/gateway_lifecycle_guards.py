@@ -27,14 +27,25 @@ INTERRUPT_FLAG = "--yes"
 
 def _live_work_from_state(home: Path) -> Optional[dict[str, Any]]:
     """``active_agents`` from a fresh ``gateway_state.json`` whose writer is alive (older gateways)."""
-    from gateway.status import parse_active_agents, read_runtime_status, runtime_status_is_stale, runtime_status_pid_is_live
+    from gateway.status import (
+        parse_active_agents,
+        read_runtime_status,
+        runtime_status_is_stale,
+        runtime_status_pid_is_live,
+    )
 
     record = read_runtime_status(home / "gateway_state.json")
-    if not record or runtime_status_is_stale(record) or not runtime_status_pid_is_live(record):
+    if (
+        not record
+        or runtime_status_is_stale(record)
+        or not runtime_status_pid_is_live(record)
+    ):
         return None
     work = record.get("active_work")
-    return {"active_agents": parse_active_agents(record.get("active_agents")),
-            "active_work": work if isinstance(work, list) else []}
+    return {
+        "active_agents": parse_active_agents(record.get("active_agents")),
+        "active_work": work if isinstance(work, list) else [],
+    }
 
 
 def live_work(home: Path, profile: Optional[str] = None) -> Optional[dict[str, Any]]:
@@ -43,7 +54,9 @@ def live_work(home: Path, profile: Optional[str] = None) -> Optional[dict[str, A
     ``profile`` narrows the answer to one served profile's work (the state file cannot, so it is skipped)."""
     from gateway.control_socket import query_gateway_control
 
-    answer = query_gateway_control(home, "active-work", params={"profile": profile} if profile else None)
+    answer = query_gateway_control(
+        home, "active-work", params={"profile": profile} if profile else None
+    )
     if isinstance(answer, dict) and isinstance(answer.get("active_work"), list):
         return answer
     return None if profile else _live_work_from_state(home)
@@ -57,10 +70,17 @@ def _candidate_homes(system: bool = False) -> list[Path]:
     from clawk_cli import gateway as gw, gateway_service_owner
 
     homes = [gw.get_clawk_home()]
-    if (gw.supports_systemd_services() and gw._select_systemd_scope(system)
-            and gateway_service_owner.foreign_systemd_unit_home(True) is None
-            and (unit_home := gateway_service_owner.service_home_for_unit(gw.get_systemd_unit_path(system=True), True))
-            not in homes):
+    if (
+        gw.supports_systemd_services()
+        and gw._select_systemd_scope(system)
+        and gateway_service_owner.foreign_systemd_unit_home(True) is None
+        and (
+            unit_home := gateway_service_owner.service_home_for_unit(
+                gw.get_systemd_unit_path(system=True), True
+            )
+        )
+        not in homes
+    ):
         homes.insert(0, unit_home)
     owner = gw._host_multiplexer_for_all_verb()
     if owner is not None and Path(owner.home) not in homes:
@@ -68,8 +88,13 @@ def _candidate_homes(system: bool = False) -> list[Path]:
     return homes
 
 
-def refusal_lines(verb: str, homes: list[Path], *, flag_hint: str = f"clawk gateway {{verb}} {INTERRUPT_FLAG}",
-                  profile: Optional[str] = None) -> list[str]:
+def refusal_lines(
+    verb: str,
+    homes: list[Path],
+    *,
+    flag_hint: str = f"clawk gateway {{verb}} {INTERRUPT_FLAG}",
+    profile: Optional[str] = None,
+) -> list[str]:
     """Refusal text for ``verb`` while the first answering gateway among ``homes`` has live work, else []."""
     for home in homes:
         work = live_work(home, profile)
@@ -78,23 +103,33 @@ def refusal_lines(verb: str, homes: list[Path], *, flag_hint: str = f"clawk gate
     return []
 
 
-def _work_lines(verb: str, home: Path, work: dict[str, Any], flag_hint: str) -> list[str]:
+def _work_lines(
+    verb: str, home: Path, work: dict[str, Any], flag_hint: str
+) -> list[str]:
     from clawk_cli.update_cmd_drain_report import describe_active_work_unit
 
     units = [u for u in work.get("active_work") or [] if isinstance(u, dict)]
     count = max(len(units), int(work.get("active_agents") or 0))
     if not count:
         return []
-    lines = [f"Refusing to {verb} the gateway: {count} live session(s) would be interrupted."]
+    lines = [
+        f"Refusing to {verb} the gateway: {count} live session(s) would be interrupted."
+    ]
     lines += [f"  • {describe_active_work_unit(u, home)}" for u in units]
     if not units:
-        lines.append(f"  • {count} active agent run(s) (this gateway does not name them)")
-    lines += ["  Let them finish, or interrupt them deliberately:",
-              f"    {flag_hint.format(verb=verb)}   # interrupts {count} live session(s)"]
+        lines.append(
+            f"  • {count} active agent run(s) (this gateway does not name them)"
+        )
+    lines += [
+        "  Let them finish, or interrupt them deliberately:",
+        f"    {flag_hint.format(verb=verb)}   # interrupts {count} live session(s)",
+    ]
     return lines
 
 
-def refuse_while_sessions_live(verb: str, args, *, host_home: Optional[Path] = None, profile: Optional[str] = None) -> None:
+def refuse_while_sessions_live(
+    verb: str, args, *, host_home: Optional[Path] = None, profile: Optional[str] = None
+) -> None:
     """Exit 1 naming the live work unless ``--interrupt`` was passed; with it, say what is interrupted.
     ``host_home``/``profile``: a served profile's stop/restart unserves only that profile in the host,
     so only its work counts."""
@@ -109,19 +144,29 @@ def refuse_while_sessions_live(verb: str, args, *, host_home: Optional[Path] = N
     from clawk_cli.gateway import print_error, print_warning
 
     if getattr(args, "interrupt", False):
-        print_warning(lines[0].replace(f"Refusing to {verb} the gateway", f"--yes: {verb} proceeds"))
+        print_warning(
+            lines[0].replace(
+                f"Refusing to {verb} the gateway", f"--yes: {verb} proceeds"
+            )
+        )
         for line in lines[1:-2]:
             print(line)
         return
     if sys.stdin.isatty() and sys.stdout.isatty():
         from clawk_cli.cli_output import prompt_yes_no
 
-        print_warning(lines[0].replace(f"Refusing to {verb} the gateway", f"{verb.capitalize()} the gateway"))
+        print_warning(
+            lines[0].replace(
+                f"Refusing to {verb} the gateway", f"{verb.capitalize()} the gateway"
+            )
+        )
         for line in lines[1:-2]:
             print(line)
         if prompt_yes_no(f"Interrupt them and {verb} the gateway?", default=False):
             return
-        print(f"  Cancelled: the gateway was not {'stopped' if verb == 'stop' else 'restarted'}.")
+        print(
+            f"  Cancelled: the gateway was not {'stopped' if verb == 'stop' else 'restarted'}."
+        )
         sys.exit(1)
     print_error(lines[0])
     for line in lines[1:]:

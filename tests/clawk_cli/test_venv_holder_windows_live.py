@@ -38,7 +38,9 @@ pytestmark = [
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _spawn(args: list[str], cwd: Path | None = None, python: str | None = None) -> subprocess.Popen:
+def _spawn(
+    args: list[str], cwd: Path | None = None, python: str | None = None
+) -> subprocess.Popen:
     """Spawn a real sleeper process whose argv carries the given tail.
 
     ``python <sleeper.py> <tail...>`` — the tail is inert data to the child
@@ -94,7 +96,7 @@ class TestDetection:
         lives in the checkout's ``.venv``, which ``project_venv_dir`` resolves since
         7a94b1fbf77, so a ``sys.executable`` child IS a venv holder by design. The base
         interpreter the venv was created from is the foreign python."""
-        
+
         from clawk_constants import project_venv_dir
 
         base = getattr(sys, "_base_executable", None) or sys.executable
@@ -102,7 +104,9 @@ class TestDetection:
         if venv_dir is not None and str(Path(base).resolve()).lower().startswith(
             str(venv_dir.resolve()).lower()
         ):
-            pytest.skip("no interpreter outside the project venv available on this runner")
+            pytest.skip(
+                "no interpreter outside the project venv available on this runner"
+            )
 
         outside = Path(tempfile.mkdtemp())
         proc = _spawn(["totally", "unrelated"], cwd=outside, python=base)

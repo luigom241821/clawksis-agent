@@ -123,6 +123,7 @@ def test_prime_routing_cache_never_raises_on_malformed_event():
 # Staleness cap on restored completions
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def _isolated_delegation_db(tmp_path, monkeypatch):
     import tools.async_delegation as ad
@@ -146,8 +147,13 @@ def _insert_pending(ad, delegation_id, completed_at):
                 delivery_state, event_json, updated_at)
                VALUES (?, ?, '', ?, 'completed', ?, ?, 'pending', ?, ?)""",
             (
-                delegation_id, "agent:main:slack:dm:D1:2", "parent-1",
-                completed_at, completed_at, json.dumps(evt), completed_at,
+                delegation_id,
+                "agent:main:slack:dm:D1:2",
+                "parent-1",
+                completed_at,
+                completed_at,
+                json.dumps(evt),
+                completed_at,
             ),
         )
 

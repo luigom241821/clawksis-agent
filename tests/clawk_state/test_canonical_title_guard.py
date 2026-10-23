@@ -11,6 +11,7 @@ every rename surface funnels through (gateway session.title RPC, /title,
 CLI rename, REST) — and keys on hidden + exact canonical title so ordinary
 sessions a user happens to call "Bot Chat" stay freely renameable.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -86,7 +87,9 @@ def test_auto_archive_sweep_skips_the_canonical_chat(db):
     forever = _make_canonical(db)
     db.create_session("ordinary", source="desktop")
     stale = time.time() - 10 * 86400
-    db._write_sql("UPDATE sessions SET started_at = ?, last_activity_at = ?", (stale, stale))
+    db._write_sql(
+        "UPDATE sessions SET started_at = ?, last_activity_at = ?", (stale, stale)
+    )
 
     assert db.archive_stale_sessions(3) == 1
     assert db.get_session("ordinary")["archived"]
@@ -99,7 +102,9 @@ def test_auto_titler_still_cannot_touch_the_canonical_row(db):
     # outranks derived/llm, so the turn-start auto-titler can never displace
     # the registry name.
     sid = _make_canonical(db)
-    assert not db.set_auto_title(sid, "Chat about groceries", source=SessionDB.TITLE_SOURCE_LLM)
+    assert not db.set_auto_title(
+        sid, "Chat about groceries", source=SessionDB.TITLE_SOURCE_LLM
+    )
     row = db.get_session_by_title(SessionDB.CANONICAL_BOT_CHAT_TITLE)
     assert row and row["id"] == sid
 

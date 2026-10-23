@@ -116,9 +116,7 @@ def test_doctor_blocks_live_network(tmp_path: Path) -> None:
     assert "network access is disabled while Plugin Doctor runs" in report.format_text()
 
 
-def test_doctor_default_target_does_not_copy_cwd(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_doctor_default_target_does_not_copy_cwd(tmp_path: Path, monkeypatch) -> None:
     """``clawk plugins doctor`` with no argument defaults to ``.``.
 
     Before the manifest guard, that copied the whole working directory into
@@ -189,7 +187,6 @@ def test_doctor_removes_temp_home_when_staging_copy_fails(
     import shutil
     import tempfile
 
-
     from clawk_cli import plugin_dev
 
     plugin = tmp_path / "sample"
@@ -224,7 +221,9 @@ def test_doctor_removes_temp_home_when_staging_copy_fails(
     assert leftovers == [], f"stranded doctor temp dirs: {leftovers}"
 
 
-def test_doctor_loads_model_provider_plugins_through_provider_discovery(tmp_path: Path) -> None:
+def test_doctor_loads_model_provider_plugins_through_provider_discovery(
+    tmp_path: Path,
+) -> None:
     """`kind: model-provider` registers a ProviderProfile at import and has no register(ctx);
     doctor must judge it by that contract and leave the live registry untouched."""
     import providers
@@ -232,12 +231,15 @@ def test_doctor_loads_model_provider_plugins_through_provider_discovery(tmp_path
 
     plugin = tmp_path / "acme-provider"
     plugin.mkdir()
-    (plugin / "plugin.yaml").write_text("name: acme-provider\nkind: model-provider\n", encoding="utf-8")
+    (plugin / "plugin.yaml").write_text(
+        "name: acme-provider\nkind: model-provider\n", encoding="utf-8"
+    )
     (plugin / "__init__.py").write_text(
         "from providers import register_provider\nfrom providers.base import ProviderProfile\n"
         "register_provider(ProviderProfile(name='acme-doctor-probe', auth_type='external_process',\n"
         "                                  process_command='acme', aliases=('acme-alias',)))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     registry_before = dict(providers._REGISTRY)
 
     report = doctor_plugin(plugin)

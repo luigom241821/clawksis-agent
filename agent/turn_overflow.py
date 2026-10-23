@@ -16,14 +16,19 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from agent.conversation_compression import (
-    COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE, COMPRESSION_RETRY_TOKENS_STATUS_TEMPLATE,
-    COMPRESSION_RETRY_TOO_LARGE_STATUS_TEMPLATE, compression_blocked_transiently,
-    compression_skipped_due_to_lock, context_compression_timed_out,
+    COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE,
+    COMPRESSION_RETRY_TOKENS_STATUS_TEMPLATE,
+    COMPRESSION_RETRY_TOO_LARGE_STATUS_TEMPLATE,
+    compression_blocked_transiently,
+    compression_skipped_due_to_lock,
+    context_compression_timed_out,
 )
 from agent.error_classifier import FailoverReason
 from agent.message_sanitization import serialized_messages_bytes
 from agent.model_metadata import (
-    get_context_length_from_provider_error, is_local_endpoint, is_output_cap_error,
+    get_context_length_from_provider_error,
+    is_local_endpoint,
+    is_output_cap_error,
     parse_available_output_tokens_from_error,
 )
 from agent.turn_failure_copy import site_copy, stamp_failure
@@ -32,7 +37,9 @@ from utils import base_url_host_matches
 
 logger = logging.getLogger("agent.conversation_loop")
 
-_RETRY_HINT = "   💡 Try /new to start a fresh conversation, or /compress to retry compression."
+_RETRY_HINT = (
+    "   💡 Try /new to start a fresh conversation, or /compress to retry compression."
+)
 
 # A provider "context exceeded" whose request (incl. the output reservation) is under this share
 # of the known window is not explained by the transcript; the rough estimator is ±30%, so a real
@@ -47,7 +54,10 @@ _GITHUB_MODELS_HINT = (
     "      setup` → GitHub Copilot), or pick any other provider.",
 )
 
-_MINIMAX_ANTHROPIC_URLS = ("https://api.minimax.io/anthropic", "https://api.minimaxi.com/anthropic")
+_MINIMAX_ANTHROPIC_URLS = (
+    "https://api.minimax.io/anthropic",
+    "https://api.minimaxi.com/anthropic",
+)
 
 
 @dataclass
@@ -83,20 +93,30 @@ class _Recovery(OverflowVerdict):
     effective_task_id: Any
     api_call_count: int
     max_compression_attempts: int
-    overflow_reason: Optional[str] = None  # the classifier's reason, recorded on each compression attempt
+    overflow_reason: Optional[str] = (
+        None  # the classifier's reason, recorded on each compression attempt
+    )
     action: str = "fallthrough"
     result: Optional[dict[str, Any]] = None
     provider_overflow_recovery_pending: bool = False
     is_context_length_error: bool = False
 
-    def done(self, action: str, result: Optional[dict[str, Any]] = None) -> OverflowVerdict:
+    def done(
+        self, action: str, result: Optional[dict[str, Any]] = None
+    ) -> OverflowVerdict:
         self.action, self.result = action, result
         return self
 
     def fail_turn(
-        self, final_response: str, *, notices: tuple = (), log: Optional[tuple] = None,
-        compression_exhausted: bool = True, reason: str = "context_overflow",
-        retryable: bool = False, **extra: Any,
+        self,
+        final_response: str,
+        *,
+        notices: tuple = (),
+        log: Optional[tuple] = None,
+        compression_exhausted: bool = True,
+        reason: str = "context_overflow",
+        retryable: bool = False,
+        **extra: Any,
     ) -> OverflowVerdict:
         """End the turn as failed/partial. ``notices`` flush the buffered retry trace
         first so the user sees what compression attempts were made."""
@@ -108,15 +128,19 @@ class _Recovery(OverflowVerdict):
         if log:
             logger.error(*log)
         agent._persist_session(self.messages, self.conversation_history)
-        result = stamp_failure({
-            "final_response": final_response,
-            "messages": self.messages,
-            "completed": False,
-            "api_calls": self.api_call_count,
-            "error": final_response,
-            "partial": True,
-            "failed": True,
-        }, reason, retryable)
+        result = stamp_failure(
+            {
+                "final_response": final_response,
+                "messages": self.messages,
+                "completed": False,
+                "api_calls": self.api_call_count,
+                "error": final_response,
+                "partial": True,
+                "failed": True,
+            },
+            reason,
+            retryable,
+        )
         if compression_exhausted:
             # Reuse the gateway's existing context-recovery contract (#98722, salvaged from #98741). The
             # bloated transcript remains intact while future input can move to a clean session instead of
@@ -125,7 +149,9 @@ class _Recovery(OverflowVerdict):
         result.update(extra)
         return self.done("return", result)
 
-    def count_attempt(self, *, payload_too_large: bool = False) -> Optional[OverflowVerdict]:
+    def count_attempt(
+        self, *, payload_too_large: bool = False
+    ) -> Optional[OverflowVerdict]:
         """Bump ``compression_attempts``; the terminal verdict once the cap is exceeded."""
         self.compression_attempts += 1
         cap = self.max_compression_attempts
@@ -138,15 +164,25 @@ class _Recovery(OverflowVerdict):
                     f"❌ Max compression attempts ({cap}) reached for payload-too-large error.",
                     _RETRY_HINT,
                 ),
-                log=("%s413 compression failed after %d attempts.", self.agent.log_prefix, cap),
+                log=(
+                    "%s413 compression failed after %d attempts.",
+                    self.agent.log_prefix,
+                    cap,
+                ),
             )
         return self.fail_turn(
             site_copy("context_overflow", model=self.agent.model),
             notices=(f"❌ Max compression attempts ({cap}) reached.", _RETRY_HINT),
-            log=("%sContext compression failed after %d attempts.", self.agent.log_prefix, cap),
+            log=(
+                "%sContext compression failed after %d attempts.",
+                self.agent.log_prefix,
+                cap,
+            ),
         )
 
-    def compress(self, request_tokens: int, *, fail_on_timeout: bool = False) -> Optional[OverflowVerdict]:
+    def compress(
+        self, request_tokens: int, *, fail_on_timeout: bool = False
+    ) -> Optional[OverflowVerdict]:
         """One compression pass with the summary-failure cooldown bypassed (the
         provider proved the request doesn't fit). Returns ``None`` when history was
         compressed, or a soft-defer verdict when another path holds the compression
@@ -155,23 +191,37 @@ class _Recovery(OverflowVerdict):
         ``fail_on_timeout`` a host timeout (recovery spent its wait budget with no
         committed summary) ends the turn via the typed contract, since re-sending would
         hit the same overflow."""
-        from agent.conversation_compression import conversation_history_after_compression
-        from agent.conversation_loop import _COMPRESSION_TIMEOUT_FINAL_RESPONSE, _compression_deferred_result
+        from agent.conversation_compression import (
+            conversation_history_after_compression,
+        )
+        from agent.conversation_loop import (
+            _COMPRESSION_TIMEOUT_FINAL_RESPONSE,
+            _compression_deferred_result,
+        )
 
         agent = self.agent
         before = self.messages
         self.messages, self.active_system_prompt = agent._compress_context(
-            before, self.system_message, approx_tokens=request_tokens,
-            task_id=self.effective_task_id, bypass_cooldown=True, trigger="overflow",
+            before,
+            self.system_message,
+            approx_tokens=request_tokens,
+            task_id=self.effective_task_id,
+            bypass_cooldown=True,
+            trigger="overflow",
             overflow_reason=self.overflow_reason,
         )
         if self.messages is before:
             deferred = None
             if compression_skipped_due_to_lock(agent):
-                deferred = _compression_deferred_result(agent, self.messages, self.api_call_count)
+                deferred = _compression_deferred_result(
+                    agent, self.messages, self.api_call_count
+                )
             elif compression_blocked_transiently(agent):
                 deferred = _compression_deferred_result(
-                    agent, self.messages, self.api_call_count, reason="transient_block",
+                    agent,
+                    self.messages,
+                    self.api_call_count,
+                    reason="transient_block",
                 )
             if deferred is not None:
                 self.compression_attempts -= 1
@@ -179,7 +229,8 @@ class _Recovery(OverflowVerdict):
                 return self.done("return", deferred)
         if fail_on_timeout and context_compression_timed_out(agent):
             return self.fail_turn(
-                _COMPRESSION_TIMEOUT_FINAL_RESPONSE, turn_exit_reason="context_compression_timeout"
+                _COMPRESSION_TIMEOUT_FINAL_RESPONSE,
+                turn_exit_reason="context_compression_timeout",
             )
         self.conversation_history = conversation_history_after_compression(
             agent, self.messages, self.conversation_history
@@ -187,7 +238,10 @@ class _Recovery(OverflowVerdict):
         return None
 
     def compress_scored_by_tokens(
-        self, request_tokens: int, *, fail_on_timeout: bool = False,
+        self,
+        request_tokens: int,
+        *,
+        fail_on_timeout: bool = False,
     ) -> tuple[Optional[OverflowVerdict], bool, int]:
         """``compress`` scored in message count / tokens (context-overflow errors ARE
         token-budget errors). Same-message-count compression (tool-result pruning,
@@ -212,9 +266,17 @@ class _Recovery(OverflowVerdict):
         new_tokens = estimate_messages_tokens_rough(messages)
         shrank_tokens = new_tokens > 0 and new_tokens < original_tokens * 0.95
         if len(messages) < original_len:
-            self.agent._buffer_diagnostic_status(COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE.format(before=original_len, after=len(messages)))
+            self.agent._buffer_diagnostic_status(
+                COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE.format(
+                    before=original_len, after=len(messages)
+                )
+            )
         elif shrank_tokens:
-            self.agent._buffer_diagnostic_status(COMPRESSION_RETRY_TOKENS_STATUS_TEMPLATE.format(before=original_tokens, after=new_tokens))
+            self.agent._buffer_diagnostic_status(
+                COMPRESSION_RETRY_TOKENS_STATUS_TEMPLATE.format(
+                    before=original_tokens, after=new_tokens
+                )
+            )
         return None, len(messages) < original_len or shrank_tokens, new_tokens
 
     def request_tokens(self) -> int:
@@ -222,10 +284,14 @@ class _Recovery(OverflowVerdict):
         recovery arms on the TRUE request, not the tool-blind message count."""
         from agent.model_metadata import estimate_request_tokens_rough
 
-        return estimate_request_tokens_rough(self.api_messages, tools=self.agent.tools or None)
+        return estimate_request_tokens_rough(
+            self.api_messages, tools=self.agent.tools or None
+        )
 
 
-def _recover_payload_too_large(st: _Recovery, _retry: TurnRetryState) -> OverflowVerdict:
+def _recover_payload_too_large(
+    st: _Recovery, _retry: TurnRetryState
+) -> OverflowVerdict:
     """413: compress and retry. A 413 is a BYTE-size error, so progress is scored in
     payload bytes — never the token estimate, which is deliberately byte-blind to images
     and wedged sessions on "no progress"."""
@@ -259,18 +325,27 @@ def _recover_payload_too_large(st: _Recovery, _retry: TurnRetryState) -> Overflo
     messages = st.messages
     st.approx_tokens = estimate_messages_tokens_rough(messages)
     new_bytes = serialized_messages_bytes(messages)
-    if len(messages) < original_len or (new_bytes > 0 and new_bytes < original_bytes * 0.95):
+    if len(messages) < original_len or (
+        new_bytes > 0 and new_bytes < original_bytes * 0.95
+    ):
         if len(messages) < original_len:
-            agent._buffer_diagnostic_status(COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE.format(before=original_len, after=len(messages)))
+            agent._buffer_diagnostic_status(
+                COMPRESSION_RETRY_MESSAGES_STATUS_TEMPLATE.format(
+                    before=original_len, after=len(messages)
+                )
+            )
         else:
             agent._buffer_diagnostic_status(
-                f"🗜️ Compressed {original_bytes:,} → {new_bytes:,} " f"payload bytes, retrying..."
+                f"🗜️ Compressed {original_bytes:,} → {new_bytes:,} "
+                f"payload bytes, retrying..."
             )
         time.sleep(2)  # Brief pause between compression retries
         _retry.restart_with_compressed_messages = True
         return st.done("break")
 
-    if agent._try_strip_image_parts_from_tool_messages(st.api_messages, remember_model=False):
+    if agent._try_strip_image_parts_from_tool_messages(
+        st.api_messages, remember_model=False
+    ):
         agent._buffer_diagnostic_status(
             "📐 Compression could not reduce the request further — "
             "removed retained vision payloads and retrying..."
@@ -284,7 +359,9 @@ def _recover_payload_too_large(st: _Recovery, _retry: TurnRetryState) -> Overflo
     )
 
 
-def _clamp_output_cap(st: _Recovery, _retry: TurnRetryState, available_out: int, old_ctx: int) -> OverflowVerdict:
+def _clamp_output_cap(
+    st: _Recovery, _retry: TurnRetryState, available_out: int, old_ctx: int
+) -> OverflowVerdict:
     """Output-cap error ("max_tokens too large": input fits but input + max_tokens >
     window). The provider's available_tokens is the authoritative bound; also estimate
     the real request shape (API-only content) and use the smaller minus a margin."""
@@ -310,18 +387,23 @@ def _clamp_output_cap(st: _Recovery, _retry: TurnRetryState, available_out: int,
     # middle window makes the total fit. Compression must never turn an output-cap error
     # fatal — on error, fall through and retry on max_tokens alone.
     try:
-        deferred, _shrank, _new_tokens = st.compress_scored_by_tokens(request_input_estimate)
+        deferred, _shrank, _new_tokens = st.compress_scored_by_tokens(
+            request_input_estimate
+        )
         if deferred is not None:
             return deferred
     except Exception:
         logger.warning(
-            "%sOutput-cap compression hit an error; retrying on max_tokens only.", agent.log_prefix
+            "%sOutput-cap compression hit an error; retrying on max_tokens only.",
+            agent.log_prefix,
         )
     _retry.restart_with_compressed_messages = True
     return st.done("break")
 
 
-def _adopt_provider_context_limit(st: _Recovery, error_msg: str, old_ctx: int) -> Optional[int]:
+def _adopt_provider_context_limit(
+    st: _Recovery, error_msg: str, old_ctx: int
+) -> Optional[int]:
     """Shrink context_length only when the provider reports the real limit; else keep
     the window and compress. Guessed probe tiers can turn a configured 1M window into
     256K/128K/64K. Returns the provider-reported limit, or ``None``."""
@@ -331,26 +413,38 @@ def _adopt_provider_context_limit(st: _Recovery, error_msg: str, old_ctx: int) -
     compressor = agent.context_compressor
     new_ctx = get_context_length_from_provider_error(error_msg, old_ctx)
     if new_ctx is not None:
-        agent._buffer_vprint(f"Context limit detected from API: {new_ctx:,} tokens (was {old_ctx:,})")
+        agent._buffer_vprint(
+            f"Context limit detected from API: {new_ctx:,} tokens (was {old_ctx:,})"
+        )
         compressor.update_model(
-            model=agent.model, context_length=new_ctx, base_url=agent.base_url,
-            api_key=getattr(agent, "api_key", ""), provider=agent.provider, api_mode=agent.api_mode,
+            model=agent.model,
+            context_length=new_ctx,
+            base_url=agent.base_url,
+            api_key=getattr(agent, "api_key", ""),
+            provider=agent.provider,
+            api_mode=agent.api_mode,
         )
         # Persist the provider-reported limit BEFORE compression/retry: rate limit,
         # missing usage, or restart must not lose confirmed metadata. Probe flags
         # remain a fallback if this write fails.
-        save_provider_context_length(agent.model, agent.base_url, new_ctx, agent.provider)
+        save_provider_context_length(
+            agent.model, agent.base_url, new_ctx, agent.provider
+        )
         # Probe flags only on the built-in compressor (plugin engines manage their
         # own); provider-sourced value, so safe to cache.
         if hasattr(compressor, "_context_probed"):
             compressor._context_probed = True
             compressor._context_probe_persistable = True
-        agent._buffer_vprint(f"⚠️  Context length exceeded — using provider limit: {old_ctx:,} → {new_ctx:,} tokens")
+        agent._buffer_vprint(
+            f"⚠️  Context length exceeded — using provider limit: {old_ctx:,} → {new_ctx:,} tokens"
+        )
         return new_ctx
 
-    is_minimax_provider = (
-        (getattr(agent, "provider", "") or "").lower() in {"minimax", "minimax-cn"}
-        or (getattr(agent, "base_url", "") or "").rstrip("/").lower().startswith(_MINIMAX_ANTHROPIC_URLS)
+    is_minimax_provider = (getattr(agent, "provider", "") or "").lower() in {
+        "minimax",
+        "minimax-cn",
+    } or (getattr(agent, "base_url", "") or "").rstrip("/").lower().startswith(
+        _MINIMAX_ANTHROPIC_URLS
     )
     if is_minimax_provider and "context window exceeds limit (" in error_msg:
         agent._buffer_vprint(
@@ -365,7 +459,9 @@ def _adopt_provider_context_limit(st: _Recovery, error_msg: str, old_ctx: int) -
     return None
 
 
-def _recover_context_length(st: _Recovery, _retry: TurnRetryState, error_msg: str) -> OverflowVerdict:
+def _recover_context_length(
+    st: _Recovery, _retry: TurnRetryState, error_msg: str
+) -> OverflowVerdict:
     """Context-length error. Two shapes: "prompt too long" = INPUT overflows the window
     (shrink context_length + compress); "max_tokens too large" = input fits but
     input + max_tokens > window (shrink the OUTPUT cap only)."""
@@ -408,15 +504,23 @@ def _recover_context_length(st: _Recovery, _retry: TurnRetryState, error_msg: st
     # route has no shared slot, so the same rejection means its real window is smaller than the one
     # Clawksis assumes, and "wait and /retry" would fail identically forever; compress instead.
     window = agent.context_compressor.context_length
-    request_tokens = st.request_tokens() + max(0, int(getattr(agent, "max_tokens", 0) or 0))
+    request_tokens = st.request_tokens() + max(
+        0, int(getattr(agent, "max_tokens", 0) or 0)
+    )
     if (
         is_local_endpoint(agent.base_url)
         and not re.search(r"\d{4,}", error_msg)
-        and isinstance(window, int) and window > 0
+        and isinstance(window, int)
+        and window > 0
         and request_tokens < window * _UNEXPLAINED_REJECTION_FRACTION
     ):
         return st.fail_turn(
-            site_copy("server_context_rejection", model=agent.model, tokens=request_tokens, window=window),
+            site_copy(
+                "server_context_rejection",
+                model=agent.model,
+                tokens=request_tokens,
+                window=window,
+            ),
             notices=(
                 f"❌ The server rejected the request as too large, but it is only ~{request_tokens:,} "
                 f"tokens against a {window:,}-token window — not compressing.",
@@ -425,19 +529,31 @@ def _recover_context_length(st: _Recovery, _retry: TurnRetryState, error_msg: st
             ),
             log=(
                 "%sProvider context rejection not explained by request size (~%s of %s tokens); "
-                "skipping compression: %s", agent.log_prefix, f"{request_tokens:,}", f"{window:,}", error_msg[:200],
+                "skipping compression: %s",
+                agent.log_prefix,
+                f"{request_tokens:,}",
+                f"{window:,}",
+                error_msg[:200],
             ),
-            compression_exhausted=False, reason=FailoverReason.server_error.value, retryable=True,
+            compression_exhausted=False,
+            reason=FailoverReason.server_error.value,
+            retryable=True,
         )
 
     exhausted = st.count_attempt()
     if exhausted is not None:
         return exhausted
-    agent._buffer_diagnostic_status(COMPRESSION_RETRY_TOO_LARGE_STATUS_TEMPLATE.format(
-        tokens=st.approx_tokens, attempt=st.compression_attempts, cap=st.max_compression_attempts,
-    ))
+    agent._buffer_diagnostic_status(
+        COMPRESSION_RETRY_TOO_LARGE_STATUS_TEMPLATE.format(
+            tokens=st.approx_tokens,
+            attempt=st.compression_attempts,
+            cap=st.max_compression_attempts,
+        )
+    )
 
-    deferred, shrank, new_tokens = st.compress_scored_by_tokens(st.request_tokens(), fail_on_timeout=True)
+    deferred, shrank, new_tokens = st.compress_scored_by_tokens(
+        st.request_tokens(), fail_on_timeout=True
+    )
     if deferred is not None:
         return deferred
     st.approx_tokens = new_tokens
@@ -456,16 +572,32 @@ def _recover_context_length(st: _Recovery, _retry: TurnRetryState, error_msg: st
             f"❌ The conversation is too long for the model ({new_tokens:,} tokens) and cannot be shrunk further.",
             _RETRY_HINT,
         ),
-        log=("%sContext length exceeded: %s tokens. Cannot compress further.", agent.log_prefix, f"{new_tokens:,}"),
+        log=(
+            "%sContext length exceeded: %s tokens. Cannot compress further.",
+            agent.log_prefix,
+            f"{new_tokens:,}",
+        ),
     )
 
 
 def recover_from_overflow(
-    agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState, *,
-    status_code: Optional[int], error_msg: str, wrapped_output_cap_budget: Optional[int],
-    messages: list[dict[str, Any]], api_messages: Any, system_message: Any,
-    active_system_prompt: Any, conversation_history: Any, approx_tokens: int,
-    compression_attempts: int, max_compression_attempts: int, api_call_count: int,
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    _retry: TurnRetryState,
+    *,
+    status_code: Optional[int],
+    error_msg: str,
+    wrapped_output_cap_budget: Optional[int],
+    messages: list[dict[str, Any]],
+    api_messages: Any,
+    system_message: Any,
+    active_system_prompt: Any,
+    conversation_history: Any,
+    approx_tokens: int,
+    compression_attempts: int,
+    max_compression_attempts: int,
+    api_call_count: int,
     effective_task_id: Any,
 ) -> OverflowVerdict:
     """413 payload-too-large and context-length recovery (compress + retry, output-cap
@@ -475,11 +607,17 @@ def recover_from_overflow(
     Compression progress is scored in payload BYTES for 413 (never the byte-blind token
     estimate) and in tokens/message count for context overflow."""
     st = _Recovery(
-        agent=agent, api_messages=api_messages, system_message=system_message,
-        effective_task_id=effective_task_id, api_call_count=api_call_count,
-        max_compression_attempts=max_compression_attempts, messages=messages,
-        active_system_prompt=active_system_prompt, conversation_history=conversation_history,
-        approx_tokens=approx_tokens, compression_attempts=compression_attempts,
+        agent=agent,
+        api_messages=api_messages,
+        system_message=system_message,
+        effective_task_id=effective_task_id,
+        api_call_count=api_call_count,
+        max_compression_attempts=max_compression_attempts,
+        messages=messages,
+        active_system_prompt=active_system_prompt,
+        conversation_history=conversation_history,
+        approx_tokens=approx_tokens,
+        compression_attempts=compression_attempts,
         overflow_reason=getattr(classified.reason, "value", None),
     )
 

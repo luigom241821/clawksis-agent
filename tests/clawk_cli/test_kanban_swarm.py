@@ -17,8 +17,14 @@ def test_create_swarm_builds_parallel_workers_verifier_and_synthesizer(tmp_path)
             conn,
             goal="Map the target market and produce a decision memo.",
             workers=[
-                SwarmWorkerSpec(profile="researcher-a", title="Market scan", body="Find competitors"),
-                SwarmWorkerSpec(profile="researcher-b", title="Customer scan", body="Find customer pains"),
+                SwarmWorkerSpec(
+                    profile="researcher-a", title="Market scan", body="Find competitors"
+                ),
+                SwarmWorkerSpec(
+                    profile="researcher-b",
+                    title="Customer scan",
+                    body="Find customer pains",
+                ),
             ],
             verifier_assignee="reviewer",
             synthesizer_assignee="writer",
@@ -91,9 +97,7 @@ def test_create_swarm_graph_is_atomic_and_rolls_back_partial_build(
         import clawk_cli.kanban_swarm as ks
 
         original_activate = ks._activate_root_inline
-        monkeypatch.setattr(
-            ks, "_activate_root_inline", lambda *args, **kwargs: False
-        )
+        monkeypatch.setattr(ks, "_activate_root_inline", lambda *args, **kwargs: False)
         with pytest.raises(RuntimeError, match="could not activate"):
             create_swarm(
                 writer,
@@ -169,9 +173,7 @@ def test_plain_write_txn_nesting_raises_and_allow_nested_composes(tmp_path):
         task = kb.get_task(conn, tid)
         assert task is not None
         assert task.status == "ready"  # inner 'done' flip was discarded
-        assert not any(
-            e.kind == "completed" for e in kb.list_events(conn, tid)
-        )
+        assert not any(e.kind == "completed" for e in kb.list_events(conn, tid))
         assert workspace.is_dir()  # no _cleanup_workspace side effect fired
     finally:
         conn.close()
@@ -183,7 +185,11 @@ def test_swarm_blackboard_merges_structured_updates(tmp_path):
         created = create_swarm(
             conn,
             goal="Collect evidence.",
-            workers=[SwarmWorkerSpec(profile="researcher", title="Evidence", body="Find proof")],
+            workers=[
+                SwarmWorkerSpec(
+                    profile="researcher", title="Evidence", body="Find proof"
+                )
+            ],
             verifier_assignee="reviewer",
             synthesizer_assignee="writer",
         )

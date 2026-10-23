@@ -5,17 +5,22 @@ import json
 import pytest
 
 
-@pytest.mark.parametrize("enabled,disabled,allowed", [
-    ([], [], False),
-    (["safe"], [], False),
-    (["clawksis-webhook"], [], False),
-    (["connections"], [], True),
-    (["clawk-cli"], ["connections"], False),
-    (["safe"], ["connections"], False),
-    (None, ["connections"], False),
-    (None, [], True),
-])
-def test_connector_scope_controls_schema_discovery_and_execution(monkeypatch, enabled, disabled, allowed):
+@pytest.mark.parametrize(
+    "enabled,disabled,allowed",
+    [
+        ([], [], False),
+        (["safe"], [], False),
+        (["clawksis-webhook"], [], False),
+        (["connections"], [], True),
+        (["clawk-cli"], ["connections"], False),
+        (["safe"], ["connections"], False),
+        (None, ["connections"], False),
+        (None, [], True),
+    ],
+)
+def test_connector_scope_controls_schema_discovery_and_execution(
+    monkeypatch, enabled, disabled, allowed
+):
     import model_tools
     from tools.connectors import managed
     from tools.connectors.gateway import bridge, config
@@ -23,6 +28,7 @@ def test_connector_scope_controls_schema_discovery_and_execution(monkeypatch, en
     monkeypatch.setattr(config, "connectors_available", lambda: True)
     monkeypatch.setattr(bridge, "connectors_available", lambda: True)
     from tools.registry import invalidate_check_fn_cache
+
     invalidate_check_fn_cache()
     remote = []
     name = "connectors__gmail__SEND_EMAIL"
@@ -30,12 +36,24 @@ def test_connector_scope_controls_schema_discovery_and_execution(monkeypatch, en
     class Client:
         def search(self, queries):
             remote.append("search")
-            return {"results": [{"tools": ["GMAIL_SEND_EMAIL"]}], "schemas": {
-                "GMAIL_SEND_EMAIL": {"connector": "gmail", "description": "Send mail", "input_schema": {}}}}
+            return {
+                "results": [{"tools": ["GMAIL_SEND_EMAIL"]}],
+                "schemas": {
+                    "GMAIL_SEND_EMAIL": {
+                        "connector": "gmail",
+                        "description": "Send mail",
+                        "input_schema": {},
+                    }
+                },
+            }
 
         def schemas(self, names):
             remote.append("describe")
-            return {"schemas": {"GMAIL_SEND_EMAIL": {"description": "Send mail", "input_schema": {}}}}
+            return {
+                "schemas": {
+                    "GMAIL_SEND_EMAIL": {"description": "Send mail", "input_schema": {}}
+                }
+            }
 
         def execute(self, planned):
             remote.append("execute")
@@ -48,7 +66,9 @@ def test_connector_scope_controls_schema_discovery_and_execution(monkeypatch, en
     monkeypatch.setattr(bridge, "_default_client_factory", lambda call=None: Client())
     monkeypatch.setattr(managed, "managed_client", lambda **_: Client())
     scope = {"enabled_toolsets": enabled, "disabled_toolsets": disabled}
-    defs = model_tools.get_tool_definitions(**scope, quiet_mode=True, skip_tool_search_assembly=True)
+    defs = model_tools.get_tool_definitions(
+        **scope, quiet_mode=True, skip_tool_search_assembly=True
+    )
     assert ("manage_connections" in {td["function"]["name"] for td in defs}) is allowed
     if enabled == []:
         assert model_tools.get_tool_definitions(**scope, quiet_mode=True) == []
@@ -80,7 +100,11 @@ def test_ordinary_platform_defaults_grant_connections_without_widening_webhook()
     for platform in ("cli", "telegram"):
         enabled = _get_platform_tools({}, platform)
         assert "connections" in enabled
-        assert "manage_connections" in {name for ts in enabled for name in resolve_toolset(ts)}
+        assert "manage_connections" in {
+            name for ts in enabled for name in resolve_toolset(ts)
+        }
     assert "connections" not in _get_platform_tools({}, "webhook")
     for selection in ([], ["safe"], ["file"]):
-        assert "connections" not in _get_platform_tools({"platform_toolsets": {"cli": selection}}, "cli")
+        assert "connections" not in _get_platform_tools(
+            {"platform_toolsets": {"cli": selection}}, "cli"
+        )

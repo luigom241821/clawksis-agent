@@ -6,6 +6,7 @@ result read from a job that was never declared: `needs.build-win32-release.resul
 resolves to nothing when the result job's `needs` list only names itself, and the
 dispatch burns its whole fan-out before anything reports a problem.
 """
+
 import re
 from pathlib import Path
 
@@ -52,7 +53,9 @@ def test_jobs_only_read_declared_dependencies():
                 declared = [declared]
             for read in sorted(set(_referenced_jobs(job))):
                 if read not in declared:
-                    violations.append(f"{filename}: {name} reads '{read}' without needing it")
+                    violations.append(
+                        f"{filename}: {name} reads '{read}' without needing it"
+                    )
     assert not violations, "workflow job graph:\n" + "\n".join(violations)
 
 
@@ -66,6 +69,10 @@ def test_no_workflow_runs_from_a_tag_push():
         # This nightly canary also gates releases with dedicated spend-capped keys.
         if filename == "live-providers.yml" and push == {"tags": ["v*"]}:
             continue
-        if not isinstance(push, dict) or not ({"branches", "branches-ignore"} & set(push)) or {"tags", "tags-ignore"} & set(push):
+        if (
+            not isinstance(push, dict)
+            or not ({"branches", "branches-ignore"} & set(push))
+            or {"tags", "tags-ignore"} & set(push)
+        ):
             violations.append(filename)
     assert not violations, "tag-triggered workflows: " + ", ".join(violations)

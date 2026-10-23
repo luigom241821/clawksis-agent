@@ -5,6 +5,7 @@ it through real LSP traffic, and asserts diagnostic flow.  This is
 the closest thing we have to integration coverage without requiring
 pyright/gopls/etc. to be installed in CI.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +24,11 @@ MOCK_SERVER = str(Path(__file__).parent / "_mock_lsp_server.py")
 
 
 def _client(workspace: Path, script: str = "clean", **extra_env: str) -> LSPClient:
-    env = {"MOCK_LSP_SCRIPT": script, "PYTHONPATH": os.environ.get("PYTHONPATH", ""), **extra_env}
+    env = {
+        "MOCK_LSP_SCRIPT": script,
+        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+        **extra_env,
+    }
     return LSPClient(
         server_id=f"mock-{script}",
         workspace_root=str(workspace),
@@ -112,8 +117,6 @@ async def test_initialize_error_response_keeps_its_exception_type(tmp_path: Path
     assert "bad init" in message
     assert "server exited" in message
     await client.shutdown()
-
-
 
 
 @pytest.mark.asyncio
@@ -246,7 +249,9 @@ async def test_shutdown_never_signals_a_server_that_honours_exit(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_docs_cache_is_lru_bounded_and_reopens_evicted(tmp_path: Path, monkeypatch):
+async def test_docs_cache_is_lru_bounded_and_reopens_evicted(
+    tmp_path: Path, monkeypatch
+):
     """`_docs` never exceeds MAX_TRACKED_FILES; an evicted file is didClose'd and re-didOpen'ed
     (version 0) with diagnostics flowing again, so the cap is invisible to callers."""
     import agent.lsp.client as client_mod
@@ -272,8 +277,13 @@ async def test_docs_cache_is_lru_bounded_and_reopens_evicted(tmp_path: Path, mon
         assert len(client._docs) == 3
         assert str(files[0]) not in client._docs  # least recently touched went first
         # The server releases its mirror too: every evicted doc got a didClose on the wire.
-        closed = [p["textDocument"]["uri"] for m, p in sent if m == "textDocument/didClose"]
-        assert closed == [client_mod.file_uri(str(files[0])), client_mod.file_uri(str(files[1]))]
+        closed = [
+            p["textDocument"]["uri"] for m, p in sent if m == "textDocument/didClose"
+        ]
+        assert closed == [
+            client_mod.file_uri(str(files[0])),
+            client_mod.file_uri(str(files[1])),
+        ]
         version = await client.open_file(str(files[0]), language_id="python")
         assert version == 0  # fresh didOpen, not a didChange against dropped state
         assert len(client._docs) == 3
@@ -309,7 +319,9 @@ async def test_client_handles_stderr_line_over_stream_limit(tmp_path: Path):
     f = tmp_path / "x.py"
     f.write_text("print('hi')\n", encoding="utf-8")
 
-    client = _client(tmp_path, "oversized_stderr", MOCK_LSP_STDERR_BYTES=str(_STREAM_LIMIT + 1))
+    client = _client(
+        tmp_path, "oversized_stderr", MOCK_LSP_STDERR_BYTES=str(_STREAM_LIMIT + 1)
+    )
     await client.start()
     try:
         assert client.is_running

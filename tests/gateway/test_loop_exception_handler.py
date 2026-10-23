@@ -26,30 +26,39 @@ from gateway.run import (
 # We avoid importing telegram / httpx here so the test runs in environments
 # without those packages installed (the classifier matches on class name).
 
+
 class TimedOut(Exception):
     """Stand-in for ``telegram.error.TimedOut``."""
+
 
 class NetworkError(Exception):
     """Stand-in for ``telegram.error.NetworkError``."""
 
+
 class ConnectError(Exception):
     """Stand-in for ``httpx.ConnectError``."""
+
 
 class ReadTimeout(Exception):
     """Stand-in for ``httpx.ReadTimeout``."""
 
+
 class PoolTimeout(Exception):
     """Stand-in for ``httpx.PoolTimeout``."""
+
 
 class ClientConnectorError(Exception):
     """Stand-in for ``aiohttp.ClientConnectorError``."""
 
+
 class SomeUnrelatedBug(Exception):
     """A non-transient error that should NOT be swallowed."""
+
 
 # ---------------------------------------------------------------------
 # Classifier
 # ---------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "exc_cls",
@@ -66,9 +75,11 @@ def test_transient_classifier_matches_known_network_errors(exc_cls):
     """Every well-known transient network exception class is classified."""
     assert _is_transient_network_error(exc_cls("boom")) is True
 
+
 # ---------------------------------------------------------------------
 # Loop handler
 # ---------------------------------------------------------------------
+
 
 def test_handler_delegates_unknown_errors_to_default(monkeypatch):
     """A non-transient error is forwarded to ``loop.default_exception_handler``."""
@@ -89,6 +100,7 @@ def test_handler_delegates_unknown_errors_to_default(monkeypatch):
         assert forwarded == [context]
     finally:
         loop.close()
+
 
 # ---------------------------------------------------------------------
 # End-to-end: task-level

@@ -26,7 +26,9 @@ def _clean_text(value: Any) -> Optional[str]:
     Format characters and non-breaking spaces stay so emoji sequences and display names survive."""
     if not isinstance(value, str):
         return None
-    text = "".join(ch for ch in value if unicodedata.category(ch) not in _DROPPED_CATEGORIES).strip()
+    text = "".join(
+        ch for ch in value if unicodedata.category(ch) not in _DROPPED_CATEGORIES
+    ).strip()
     if not text:
         return None
     return text[:_MAX_FIELD_LEN]
@@ -74,19 +76,30 @@ def parse_turn_author(raw: Any) -> Optional[dict[str, Any]]:
         if author["id"] is None and author["name"] is None:
             return None
         origin = _clean_text(raw.get("origin"))
-        if origin and author["id"] and author["id"].startswith("bot:") and "/" not in author["id"]:
-            author["id"] = _clean_text(bot_author_id(author["id"][len("bot:"):], origin))
+        if (
+            origin
+            and author["id"]
+            and author["id"].startswith("bot:")
+            and "/" not in author["id"]
+        ):
+            author["id"] = _clean_text(
+                bot_author_id(author["id"][len("bot:") :], origin)
+            )
         return author
     except Exception:
         return None
 
 
-def turn_author_from_env(environ: Mapping[str, str] = os.environ) -> Optional[dict[str, Any]]:
+def turn_author_from_env(
+    environ: Mapping[str, str] = os.environ,
+) -> Optional[dict[str, Any]]:
     """The author the dispatcher placed in ``CLAWK_TURN_AUTHOR``, or None."""
     return parse_turn_author(environ.get(TURN_AUTHOR_ENV))
 
 
-def take_turn_author_from_env(environ: MutableMapping[str, str] = os.environ) -> Optional[dict[str, Any]]:
+def take_turn_author_from_env(
+    environ: MutableMapping[str, str] = os.environ,
+) -> Optional[dict[str, Any]]:
     """Read and remove ``CLAWK_TURN_AUTHOR`` so subprocesses started during the turn do not inherit it."""
     return parse_turn_author(environ.pop(TURN_AUTHOR_ENV, None))
 

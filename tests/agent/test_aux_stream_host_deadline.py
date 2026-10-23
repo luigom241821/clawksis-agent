@@ -83,8 +83,6 @@ class _AsyncStream(_Stream):
 # ── The structural gap the bug lives in ──────────────────────────────────
 
 
-
-
 # ── The fence must publish the deadline it already owns ──────────────────
 
 
@@ -128,9 +126,7 @@ def test_streamed_summary_stops_at_an_elapsed_host_deadline():
 def test_streamed_summary_runs_to_completion_under_a_live_host_deadline():
     stream = _Stream(count=5)
     with aux.aux_stream_deadline(time.monotonic() + 600.0):
-        response = aux._aggregate_chat_stream(
-            stream, model="m", total_ceiling=2400.0
-        )
+        response = aux._aggregate_chat_stream(stream, model="m", total_ceiling=2400.0)
     assert response.choices[0].message.content == "xxxxx"
     assert stream.yielded == 5
 
@@ -147,9 +143,9 @@ def test_no_host_deadline_keeps_the_historical_ceiling_behaviour():
         pass
     stream2 = _Stream(count=3)
     assert (
-        aux._aggregate_chat_stream(
-            stream2, model="m", total_ceiling=2400.0
-        ).choices[0].message.content
+        aux._aggregate_chat_stream(stream2, model="m", total_ceiling=2400.0)
+        .choices[0]
+        .message.content
         == "xxx"
     )
 
@@ -158,9 +154,7 @@ def test_none_deadline_is_a_no_op_passthrough():
     """Callers wire the scope unconditionally; a fenceless call must not break."""
     stream = _Stream(count=3)
     with aux.aux_stream_deadline(None):
-        response = aux._aggregate_chat_stream(
-            stream, model="m", total_ceiling=2400.0
-        )
+        response = aux._aggregate_chat_stream(stream, model="m", total_ceiling=2400.0)
     assert response.choices[0].message.content == "xxx"
 
 
@@ -226,9 +220,11 @@ def test_protected_provider_daemon_inherits_the_host_deadline():
 
     deadline = time.monotonic() + 42.0
     cancel_event = threading.Event()
-    with aux.aux_progress_hook(lambda: None), aux.aux_interrupt_protection(
-        cancel_event=cancel_event
-    ), aux.aux_stream_deadline(deadline):
+    with (
+        aux.aux_progress_hook(lambda: None),
+        aux.aux_interrupt_protection(cancel_event=cancel_event),
+        aux.aux_stream_deadline(deadline),
+    ):
         assert aux._run_protected_sync_provider_call(_callback, {}) == "ok"
 
     assert seen["thread"] != threading.current_thread().name

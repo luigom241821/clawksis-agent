@@ -26,15 +26,18 @@ import pytest
 
 from tools.skills_guard import scan_skill
 
+
 def _scan(tmp_path: Path, content: str):
     skill_dir = tmp_path / "skill"
     skill_dir.mkdir(exist_ok=True)
     (skill_dir / "SKILL.md").write_text(content)
     return scan_skill(skill_dir, source="community/test")
 
+
 # The scanner version moved past v1 precisely so cached v1 dangerous verdicts
 # for previously-blocked skills are invalidated and re-scanned. Later bumps
 # are expected whenever rules change; only regressing to v1 is a bug.
+
 
 class TestFalsePositivesUnblocked:
     """The three real-world false-positive shapes from #92021."""
@@ -73,8 +76,12 @@ class TestFalsePositivesUnblocked:
         result = _scan(tmp_path, "Read CLAUDE.md before answering.")
         ids = {f.pattern_id for f in result.findings}
         assert "agent_config_ref" in ids
-        assert all(f.severity != "critical" and f.severity != "high"
-                   for f in result.findings if f.pattern_id == "agent_config_ref")
+        assert all(
+            f.severity != "critical" and f.severity != "high"
+            for f in result.findings
+            if f.pattern_id == "agent_config_ref"
+        )
+
 
 class TestTruePositivesStillCaught:
     """Real persistence mechanisms keep their teeth."""
@@ -125,8 +132,8 @@ class TestTruePositivesStillCaught:
     @pytest.mark.parametrize(
         "line",
         [
-            "sed -Ei 's/a/b/' AGENTS.md",       # combined flags, i last
-            "sed -iE 's/a/b/' CLAUDE.md",       # combined flags, i first
+            "sed -Ei 's/a/b/' AGENTS.md",  # combined flags, i last
+            "sed -iE 's/a/b/' CLAUDE.md",  # combined flags, i first
             "sed --in-place 's/a/b/' AGENTS.md",  # GNU long form
         ],
     )

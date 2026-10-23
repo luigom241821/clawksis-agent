@@ -61,6 +61,7 @@ class TestDecodeHeaderValue:
     def test_qq_mail_gbk_subject(self):
         # =?gbk?B?...?= with GBK bytes; gbk→gb18030 alias covers extensions.
         import base64
+
         encoded = base64.b64encode("你好".encode("gbk")).decode()
         assert _decode_header_value(f"=?gbk?B?{encoded}?=") == "你好"
 

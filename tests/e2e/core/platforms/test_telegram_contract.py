@@ -18,13 +18,16 @@ from tests.e2e.core.platforms._suite import rig_fixtures, run_scenario, scenario
 
 pytestmark = [
     pytest.mark.spawns_gateway_lookalike,
-    pytest.mark.skipif(sys.platform == "win32", reason="POSIX process-group gateway harness"),
+    pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX process-group gateway harness"
+    ),
 ]
 
 KNOWN: dict[str, tuple[str, str]] = {
     "heic_as_image": (
         r"a HEIC photo sent as a file did not reach the model as an image",
-        "#119593 HEIC photo sent as a file is refused by the image cache (never reaches the model)"),
+        "#119593 HEIC photo sent as a file is refused by the image cache (never reaches the model)",
+    ),
 }
 SKIP: dict[str, str] = {}
 

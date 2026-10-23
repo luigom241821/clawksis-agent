@@ -5,6 +5,7 @@ invoked for a dangerous command, that non-zero exit codes surface, and the
 load-bearing invariant: a bang command leaves conversation_history
 byte-identical because it never becomes a turn.
 """
+
 import builtins
 import copy
 import json
@@ -23,68 +24,90 @@ from clawk_cli.bang_shell import (
 
 # ── detection / parsing ────────────────────────────────────────────────────
 
+
 class TestBangDetection:
-    @pytest.mark.parametrize("text", [
-        "!ls",
-        "!git status",
-        "  !ls -la",          # leading whitespace still counts
-        "!  spaced out",      # `!` followed by spaces
-        "!!",                 # double bang
-        "!",                  # bare bang
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "!ls",
+            "!git status",
+            "  !ls -la",  # leading whitespace still counts
+            "!  spaced out",  # `!` followed by spaces
+            "!!",  # double bang
+            "!",  # bare bang
+        ],
+    )
     def test_leading_bang_is_bang(self, text):
         assert is_bang_command(text) is True
 
-    @pytest.mark.parametrize("text", [
-        "fix the bug!",                 # trailing `!` in prose
-        "echo hi! please",              # mid-text `!`
-        "run this: !ls",                # `!` not at the start
-        "/help",
-        "hello world",
-        "",
-        "   ",
-        None,
-        123,
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "fix the bug!",  # trailing `!` in prose
+            "echo hi! please",  # mid-text `!`
+            "run this: !ls",  # `!` not at the start
+            "/help",
+            "hello world",
+            "",
+            "   ",
+            None,
+            123,
+        ],
+    )
     def test_non_leading_bang_is_not_bang(self, text):
         assert is_bang_command(text) is False
 
-    @pytest.mark.parametrize("text,expected", [
-        ("!ls", "ls"),
-        ("!git status", "git status"),
-        ("  !ls -la  ", "ls -la"),
-        ("!   echo hi", "echo hi"),
-        ("!!", "!"),                     # second bang belongs to the command
-        ("!!ls", "!ls"),
-        ("!", ""),                       # bare bang → no command
-        ("!   ", ""),
-        ("not a bang", ""),
-    ])
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("!ls", "ls"),
+            ("!git status", "git status"),
+            ("  !ls -la  ", "ls -la"),
+            ("!   echo hi", "echo hi"),
+            ("!!", "!"),  # second bang belongs to the command
+            ("!!ls", "!ls"),
+            ("!", ""),  # bare bang → no command
+            ("!   ", ""),
+            ("not a bang", ""),
+        ],
+    )
     def test_parse_strips_exactly_one_bang(self, text, expected):
         assert parse_bang_command(text) == expected
+
 
 class TestBangContextGating:
     """Bang mode is CLI-only — gateway/cron users have their own shells."""
 
     def test_enabled_in_plain_cli(self, monkeypatch):
-        for var in ("CLAWK_GATEWAY_SESSION", "CLAWK_CRON_SESSION",
-                    "CLAWK_SESSION_PLATFORM"):
+        for var in (
+            "CLAWK_GATEWAY_SESSION",
+            "CLAWK_CRON_SESSION",
+            "CLAWK_SESSION_PLATFORM",
+        ):
             monkeypatch.delenv(var, raising=False)
         assert bang_shell_enabled() is True
 
-    @pytest.mark.parametrize("var,value", [
-        ("CLAWK_GATEWAY_SESSION", "1"),
-        ("CLAWK_CRON_SESSION", "true"),
-        ("CLAWK_SESSION_PLATFORM", "discord"),
-    ])
+    @pytest.mark.parametrize(
+        "var,value",
+        [
+            ("CLAWK_GATEWAY_SESSION", "1"),
+            ("CLAWK_CRON_SESSION", "true"),
+            ("CLAWK_SESSION_PLATFORM", "discord"),
+        ],
+    )
     def test_disabled_in_non_cli_contexts(self, monkeypatch, var, value):
-        for v in ("CLAWK_GATEWAY_SESSION", "CLAWK_CRON_SESSION",
-                  "CLAWK_SESSION_PLATFORM"):
+        for v in (
+            "CLAWK_GATEWAY_SESSION",
+            "CLAWK_CRON_SESSION",
+            "CLAWK_SESSION_PLATFORM",
+        ):
             monkeypatch.delenv(v, raising=False)
         monkeypatch.setenv(var, value)
         assert bang_shell_enabled() is False
 
+
 # ── execution ──────────────────────────────────────────────────────────────
+
 
 class TestBangExecution:
     @pytest.mark.platforms("linux")
@@ -131,15 +154,19 @@ class TestBangExecution:
                 raise ImportError("environment sanitizer unavailable")
             return real_import(name, *args, **kwargs)
 
-        with patch("builtins.__import__", block_sanitizer), \
-             patch("clawk_cli.bang_shell.subprocess.Popen") as popen:
+        with (
+            patch("builtins.__import__", block_sanitizer),
+            patch("clawk_cli.bang_shell.subprocess.Popen") as popen,
+        ):
             code = run_bang_command("echo must-not-run", writer=lines.append)
 
         assert code == 127
         popen.assert_not_called()
         assert any("failed to run command" in line for line in lines)
 
+
 # ── CLI handler: approval gate, usage hint, exit codes ─────────────────────
+
 
 def _make_cli(history=None):
     """Build a ClawksisCLI shell with only what handle_bang_shell touches."""
@@ -154,6 +181,7 @@ def _make_cli(history=None):
     cli._app = None
     return cli
 
+
 def _printed(cli):
     """All text the CLI printed, flattened to plain strings."""
     out = []
@@ -163,6 +191,7 @@ def _printed(cli):
         arg = call.args[0]
         out.append(getattr(arg, "plain", None) or str(arg))
     return out
+
 
 class TestBangHandlerDispatch:
     def test_non_bang_text_is_not_handled(self):
@@ -195,14 +224,17 @@ class TestBangHandlerDispatch:
             assert cli.handle_bang_shell("!echo nope") is False
         runner.assert_not_called()
 
+
 class TestBangApprovalGate:
     """A user-typed command still goes through the terminal tool's gate."""
 
     def test_approval_gate_is_invoked_for_a_dangerous_command(self):
         cli = _make_cli()
         gate = MagicMock(return_value={"approved": True, "message": None})
-        with patch("tools.terminal_tool._check_all_guards", gate), \
-             patch("clawk_cli.bang_shell.run_bang_command", return_value=0):
+        with (
+            patch("tools.terminal_tool._check_all_guards", gate),
+            patch("clawk_cli.bang_shell.run_bang_command", return_value=0),
+        ):
             cli.handle_bang_shell("!rm -rf ./build")
 
         gate.assert_called_once()
@@ -211,19 +243,25 @@ class TestBangApprovalGate:
     def test_gate_is_invoked_for_every_command_not_just_dangerous_ones(self):
         cli = _make_cli()
         gate = MagicMock(return_value={"approved": True, "message": None})
-        with patch("tools.terminal_tool._check_all_guards", gate), \
-             patch("clawk_cli.bang_shell.run_bang_command", return_value=0):
+        with (
+            patch("tools.terminal_tool._check_all_guards", gate),
+            patch("clawk_cli.bang_shell.run_bang_command", return_value=0),
+        ):
             cli.handle_bang_shell("!ls")
         gate.assert_called_once()
 
     def test_denied_command_is_not_executed(self):
         cli = _make_cli()
-        gate = MagicMock(return_value={
-            "approved": False,
-            "message": "Command denied: recursive delete",
-        })
-        with patch("tools.terminal_tool._check_all_guards", gate), \
-             patch("clawk_cli.bang_shell.run_bang_command") as runner:
+        gate = MagicMock(
+            return_value={
+                "approved": False,
+                "message": "Command denied: recursive delete",
+            }
+        )
+        with (
+            patch("tools.terminal_tool._check_all_guards", gate),
+            patch("clawk_cli.bang_shell.run_bang_command") as runner,
+        ):
             assert cli.handle_bang_shell("!rm -rf /important") is True
 
         runner.assert_not_called()
@@ -236,6 +274,7 @@ class TestBangApprovalGate:
             assert cli.handle_bang_shell("!rm -rf /") is True
         runner.assert_not_called()
 
+
 # ── THE load-bearing invariant ─────────────────────────────────────────────
 
 _SEED_HISTORY = [
@@ -246,14 +285,17 @@ _SEED_HISTORY = [
     {
         "role": "assistant",
         "content": "",
-        "tool_calls": [{
-            "id": "call_1",
-            "type": "function",
-            "function": {"name": "terminal", "arguments": '{"command": "ls"}'},
-        }],
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "terminal", "arguments": '{"command": "ls"}'},
+            }
+        ],
     },
     {"role": "tool", "tool_call_id": "call_1", "content": "a.py b.py"},
 ]
+
 
 class TestBangLeavesHistoryByteIdentical:
     """Nothing about a bang command may enter conversation history.
@@ -263,12 +305,15 @@ class TestBangLeavesHistoryByteIdentical:
     removed, or mutated message anywhere in the list fails the assertion.
     """
 
-    @pytest.mark.parametrize("submission", [
-        "!echo history-check",     # succeeds
-        "!exit 7",                 # non-zero exit
-        "!",                       # bare bang / usage hint
-        "!definitely-not-a-real-binary-xyz",  # command not found
-    ])
+    @pytest.mark.parametrize(
+        "submission",
+        [
+            "!echo history-check",  # succeeds
+            "!exit 7",  # non-zero exit
+            "!",  # bare bang / usage hint
+            "!definitely-not-a-real-binary-xyz",  # command not found
+        ],
+    )
     def test_history_is_byte_identical_before_and_after(self, submission):
         cli = _make_cli(history=copy.deepcopy(_SEED_HISTORY))
         before = json.dumps(cli.conversation_history, sort_keys=True)

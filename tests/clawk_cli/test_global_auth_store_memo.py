@@ -24,13 +24,9 @@ def _reset_cache(monkeypatch):
     # raising=False: on pre-fix code the memo attribute doesn't exist (that
     # IS the fix); the reset is a no-op there so the measured-work assertions
     # fail genuinely instead of erroring.
-    monkeypatch.setattr(
-        auth_mod, "_global_auth_store_cache", None, raising=False
-    )
+    monkeypatch.setattr(auth_mod, "_global_auth_store_cache", None, raising=False)
     yield
-    monkeypatch.setattr(
-        auth_mod, "_global_auth_store_cache", None, raising=False
-    )
+    monkeypatch.setattr(auth_mod, "_global_auth_store_cache", None, raising=False)
 
 
 def _make_global_store(tmp_path) -> os.PathLike[str]:
@@ -57,13 +53,10 @@ def _make_global_store(tmp_path) -> os.PathLike[str]:
 
 
 class TestLoadGlobalAuthStoreMemo:
-
     def test_mtime_change_re_reads_once(self, tmp_path, monkeypatch):
         """A store file change on disk invalidates the memo."""
         global_path = _make_global_store(tmp_path)
-        monkeypatch.setattr(
-            auth_mod, "_global_auth_file_path", lambda: global_path
-        )
+        monkeypatch.setattr(auth_mod, "_global_auth_file_path", lambda: global_path)
         reads = {"n": 0}
         orig = auth_mod._load_auth_store
 
@@ -81,11 +74,11 @@ class TestLoadGlobalAuthStoreMemo:
         auth_mod._load_global_auth_store()
         assert reads["n"] == 2, "mtime change must force exactly one re-read"
 
-    def test_absent_global_store_returns_empty_without_error(self, tmp_path, monkeypatch):
+    def test_absent_global_store_returns_empty_without_error(
+        self, tmp_path, monkeypatch
+    ):
         """No global fallback (classic mode) returns {} and stays cheap."""
         missing = tmp_path / "no-such" / "auth.json"
-        monkeypatch.setattr(
-            auth_mod, "_global_auth_file_path", lambda: missing
-        )
+        monkeypatch.setattr(auth_mod, "_global_auth_file_path", lambda: missing)
         assert auth_mod._load_global_auth_store() == {}
         assert auth_mod._global_auth_store_cache is None

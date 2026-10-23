@@ -27,7 +27,13 @@ def _tar(tmp_path, members):
 
 
 def test_relative_symlinks_resolve_from_their_own_directory(tmp_path):
-    archive = _tar(tmp_path, [("python/share/terminfo/a/adm1178", None), ("python/share/terminfo/1/1178", "../a/adm1178")])
+    archive = _tar(
+        tmp_path,
+        [
+            ("python/share/terminfo/a/adm1178", None),
+            ("python/share/terminfo/1/1178", "../a/adm1178"),
+        ],
+    )
     dest = tmp_path / "out"
     extract(archive, dest)
     link = dest / "python/share/terminfo/1/1178"
@@ -61,7 +67,9 @@ def _fake_run(monkeypatch, returncode=0, calls=None):
     monkeypatch.setattr(subprocess, "run", run)
 
 
-def test_git_unpack_executes_a_scratch_copy_never_the_cached_bytes(tmp_path, monkeypatch):
+def test_git_unpack_executes_a_scratch_copy_never_the_cached_bytes(
+    tmp_path, monkeypatch
+):
     """An executed PE can stay handle-held past pm's download-cleanup retry
     (WinError 32), so the extractor runs from a disposable copy beside the
     staging tree, never from the cached fetch-<sha> entry."""
@@ -76,7 +84,7 @@ def test_git_unpack_executes_a_scratch_copy_never_the_cached_bytes(tmp_path, mon
     archive = _portable_git(tmp_path)
     staged = tmp_path / "scratch" / "tree"
     Git().unpack(archive, staged, "win32-x64")
-    (argv, kwargs), = calls
+    ((argv, kwargs),) = calls
     assert argv[1:] == [f"-o{staged}", "-y"]
     exe = Path(argv[0])
     assert archive.parent not in exe.parents
@@ -95,7 +103,9 @@ def test_git_unpack_names_the_extractor_exit_code(tmp_path, monkeypatch):
     monkeypatch.setattr(pm.packages, "_HOST_IS_WINDOWS", True)
     _fake_run(monkeypatch, returncode=7)
     with pytest.raises(InstallError, match="exited 7"):
-        Git().unpack(_portable_git(tmp_path), tmp_path / "scratch" / "tree", "win32-x64")
+        Git().unpack(
+            _portable_git(tmp_path), tmp_path / "scratch" / "tree", "win32-x64"
+        )
 
 
 def test_git_unpack_timeout_is_a_package_error(tmp_path, monkeypatch):
@@ -110,7 +120,9 @@ def test_git_unpack_timeout_is_a_package_error(tmp_path, monkeypatch):
     monkeypatch.setattr(pm.packages, "_HOST_IS_WINDOWS", True)
     monkeypatch.setattr(subprocess, "run", hang)
     with pytest.raises(InstallError, match="did not finish"):
-        Git().unpack(_portable_git(tmp_path), tmp_path / "scratch" / "tree", "win32-x64")
+        Git().unpack(
+            _portable_git(tmp_path), tmp_path / "scratch" / "tree", "win32-x64"
+        )
 
 
 def test_git_unpack_requires_a_windows_host(tmp_path, monkeypatch):

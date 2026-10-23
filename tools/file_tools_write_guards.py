@@ -23,17 +23,29 @@ from tools.binary_extensions import (
     is_sqlite_sidecar,
 )
 from tools.file_tools_paths import (
-    _expand_tilde, _resolve_path_for_task, _ssh_path_escapes_home, _terminal_env_type_for_task)
-from tools.file_tools_read_tracking import _has_full_write_baseline, _is_own_blind_patch, _read_mtime_drifted
+    _expand_tilde,
+    _resolve_path_for_task,
+    _ssh_path_escapes_home,
+    _terminal_env_type_for_task,
+)
+from tools.file_tools_read_tracking import (
+    _has_full_write_baseline,
+    _is_own_blind_patch,
+    _read_mtime_drifted,
+)
 import itertools
 
 # Prefixes matched after realpath. macOS: /private/var mirrors /var — block the
 # sensitive subtrees only; a blanket "/private/var/" refuses every temp-file
 # write because $TMPDIR, /tmp and /var/folders all realpath there.
 _SENSITIVE_PATH_PREFIXES = (
-    "/etc/", "/boot/", "/usr/lib/systemd/",
+    "/etc/",
+    "/boot/",
+    "/usr/lib/systemd/",
     "/private/etc/",
-    "/private/var/db/", "/private/var/root/")
+    "/private/var/db/",
+    "/private/var/root/",
+)
 _SENSITIVE_EXACT_PATHS = {"/var/run/docker.sock", "/run/docker.sock"}
 
 # NOTE: these four are a TEST-OVERRIDE surface, not a process cache. Both getters
@@ -53,11 +65,13 @@ _real_clawk_home_loaded = False
 
 def _config_path_resolved() -> str:
     from clawk_cli.config import get_config_path
+
     return str(get_config_path().resolve())
 
 
 def _clawk_home_real() -> str:
     from clawk_constants import get_clawk_home
+
     return os.path.realpath(str(get_clawk_home()))
 
 
@@ -81,6 +95,7 @@ def _get_clawk_config_resolved() -> str | None:
         # unrelated home if even that is gone (#107327 follow-up; PR #107335).
         try:
             from clawk_constants import get_clawk_home
+
             return str((Path(str(get_clawk_home())) / "config.yaml").resolve())
         except Exception:
             return None
@@ -107,6 +122,7 @@ def _get_real_clawk_home() -> str | None:
         # the consumer: the ``~/.clawksis`` exemption is skipped, so the gate runs.
         try:
             from clawk_constants import get_clawk_home
+
             return os.path.realpath(str(get_clawk_home()))
         except Exception:
             return None
@@ -127,6 +143,7 @@ def _clawk_exempt_homes() -> tuple[str, ...]:
         return ()
     try:
         from clawk_constants import named_profile_home
+
         profile_home = named_profile_home(home)
     except Exception:
         profile_home = None
@@ -154,15 +171,26 @@ def _check_sensitive_path(filepath: str, task_id: str = "default") -> str | None
     nt_err = get_nt_namespace_error(filepath, verb="Write")
     if nt_err:
         return nt_err
-    candidates = (_resolved_or_raw(filepath, task_id), os.path.normpath(_expand_tilde(filepath)))
-    if _ssh_path_escapes_home(candidates[0]) and _terminal_env_type_for_task(task_id) == "ssh":
+    candidates = (
+        _resolved_or_raw(filepath, task_id),
+        os.path.normpath(_expand_tilde(filepath)),
+    )
+    if (
+        _ssh_path_escapes_home(candidates[0])
+        and _terminal_env_type_for_task(task_id) == "ssh"
+    ):
         return (
             f"Refusing to write to {filepath}: it climbs above the SSH home and the remote "
-            "home could not be detected, so its target cannot be checked. Pass an absolute path.")
-    if any(c.startswith(_SENSITIVE_PATH_PREFIXES) or c in _SENSITIVE_EXACT_PATHS for c in candidates):
+            "home could not be detected, so its target cannot be checked. Pass an absolute path."
+        )
+    if any(
+        c.startswith(_SENSITIVE_PATH_PREFIXES) or c in _SENSITIVE_EXACT_PATHS
+        for c in candidates
+    ):
         return (
             f"Refusing to write to sensitive system path: {filepath}\n"
-            "Use the terminal tool with sudo if you need to modify system files.")
+            "Use the terminal tool with sudo if you need to modify system files."
+        )
     # approvals.mode and other security settings live in config.yaml; a
     # prompt-injected agent could silently disable exec approval by editing it.
     clawk_config = _get_clawk_config_resolved()
@@ -170,7 +198,8 @@ def _check_sensitive_path(filepath: str, task_id: str = "default") -> str | None
         return (
             f"Refusing to write to Clawksis config file: {filepath}\n"
             "Agent cannot modify security-sensitive configuration. "
-            "Edit ~/.clawksis/config.yaml directly or use 'clawk config' instead.")
+            "Edit ~/.clawksis/config.yaml directly or use 'clawk config' instead."
+        )
     return None
 
 
@@ -186,8 +215,9 @@ def _check_sensitive_path(filepath: str, task_id: str = "default") -> str | None
 # run from is a live target. Basenames match case-insensitively so case-variant spellings on
 # case-insensitive filesystems (macOS/Windows) cannot slip past; on case-sensitive filesystems most loaders
 # probe common case variants too, so the stricter behavior is kept uniform.
-_PROTECTED_INSTRUCTION_BASENAMES = frozenset({
-    "agents.md", "claude.md", "soul.md", ".cursorrules"})
+_PROTECTED_INSTRUCTION_BASENAMES = frozenset(
+    {"agents.md", "claude.md", "soul.md", ".cursorrules"}
+)
 
 
 def _protected_instruction_config() -> tuple[bool, list[str]]:
@@ -196,9 +226,12 @@ def _protected_instruction_config() -> tuple[bool, list[str]]:
     failures keep the gate ON — fail-safe for a security boundary."""
     try:
         from clawk_cli.config import load_config, cfg_get
+
         cfg = load_config()
         enabled = cfg_get(cfg, "security", "protected_instruction_files", default=True)
-        extra = cfg_get(cfg, "security", "protected_instruction_extra_patterns", default=[])
+        extra = cfg_get(
+            cfg, "security", "protected_instruction_extra_patterns", default=[]
+        )
     except Exception:
         return True, []
     if not isinstance(enabled, bool):
@@ -208,9 +241,13 @@ def _protected_instruction_config() -> tuple[bool, list[str]]:
     return enabled, [str(p) for p in extra if p]
 
 
-def _protected_instruction_reason(filepath: str, task_id: str = "default",
-                                  *, enabled: bool | None = None,
-                                  extra_patterns: list[str] | None = None) -> str | None:
+def _protected_instruction_reason(
+    filepath: str,
+    task_id: str = "default",
+    *,
+    enabled: bool | None = None,
+    extra_patterns: list[str] | None = None,
+) -> str | None:
     """Return a short label when ``filepath`` targets a protected instruction file, else ``None``.
     Matches BOTH the normalized input and its realpath so no symlink direction escapes.
 
@@ -242,7 +279,8 @@ def _protected_instruction_reason(filepath: str, task_id: str = "default",
         base = os.path.basename(candidate)
         base_lower = base.lower()
         if base_lower in _PROTECTED_INSTRUCTION_BASENAMES or any(
-                fnmatch.fnmatch(base_lower, pattern.lower()) for pattern in extra_patterns):
+            fnmatch.fnmatch(base_lower, pattern.lower()) for pattern in extra_patterns
+        ):
             return base
         # Project-local .clawk config dirs (<repo>/.clawk/config.yaml) steer
         # behavior too. Only the IMMEDIATE parent counts — matching any ancestor
@@ -254,10 +292,14 @@ def _protected_instruction_reason(filepath: str, task_id: str = "default",
 
 
 _APPROVAL_UNAVAILABLE = "requires approval but the approval subsystem is unavailable."
-_NO_HUMAN = "requires approval but no interactive user or gateway is present to approve it."
+_NO_HUMAN = (
+    "requires approval but no interactive user or gateway is present to approve it."
+)
 
 
-def _request_protected_instruction_approval(reasons: list[str], task_id: str = "default") -> str | None:
+def _request_protected_instruction_approval(
+    reasons: list[str], task_id: str = "default"
+) -> str | None:
     """Ask the human to approve a write to protected instruction file(s); ``None`` when approved.
 
     Deliberately NOT routed through ``_run_approval_gate`` (honors --yolo and
@@ -268,14 +310,18 @@ def _request_protected_instruction_approval(reasons: list[str], task_id: str = "
     description = (
         f"Write to protected agent-instruction file(s): {targets}. "
         "These files steer future agent behavior; approval is always "
-        "required (not bypassed by auto-approve).")
+        "required (not bypassed by auto-approve)."
+    )
     display = f"<write to {targets}>"
     blocked = (
         f"BLOCKED: write to protected agent-instruction file(s) ({targets}) "
         "{why} The user has NOT consented to this write. Do NOT retry it or "
         "attempt the same edit via another path (terminal, execute_code, "
-        "etc.).")
-    timed_out = blocked.format(why="approval prompt timed out without a user response. Silence is not consent.")
+        "etc.)."
+    )
+    timed_out = blocked.format(
+        why="approval prompt timed out without a user response. Silence is not consent."
+    )
     denied = blocked.format(why="was denied by the user.")
 
     try:
@@ -302,17 +348,25 @@ def _request_protected_instruction_approval(reasons: list[str], task_id: str = "
             "pattern_keys": ["protected_instruction_file"],
             "description": description,
             "allow_permanent": False,
-            "allow_session": False}
-        decision = _await_gateway_decision(session_key, notify_cb, approval_data, surface="gateway")
+            "allow_session": False,
+        }
+        decision = _await_gateway_decision(
+            session_key, notify_cb, approval_data, surface="gateway"
+        )
         if decision.get("notify_failed"):
-            return blocked.format(why="requires approval but the approval request could not be delivered.")
+            return blocked.format(
+                why="requires approval but the approval request could not be delivered."
+            )
         if decision.get("cancelled"):
-            return blocked.format(why=f"approval was withdrawn before the user answered ({decision['cancelled']}).")
+            return blocked.format(
+                why=f"approval was withdrawn before the user answered ({decision['cancelled']})."
+            )
         choice, timed = decision.get("choice"), not decision.get("resolved")
     else:
         # CLI surface: per-thread approval callback (prompt_toolkit panel).
         try:
             from tools.terminal_tool import _get_approval_callback
+
             callback = _get_approval_callback()
         except Exception:
             callback = None
@@ -323,19 +377,33 @@ def _request_protected_instruction_approval(reasons: list[str], task_id: str = "
         # -q (every kanban worker), cron and unattended platforms can have a callback registered that nobody
         # answers: fail closed now, and never auto-approve, whatever approvals.<context>_mode says.
         from tools.approval_context import _no_user_can_answer
+
         if _no_user_can_answer():
             return blocked.format(why=_NO_HUMAN)
         # Same observer payload as the gateway branch (#131876), fired like the
         # dangerous-command CLI prompt in tools/approval.py.
-        hook_kwargs = dict(command=display, description=description, pattern_key="protected_instruction_file",
-                           pattern_keys=["protected_instruction_file"], session_key=session_key, surface="cli")
+        hook_kwargs = dict(
+            command=display,
+            description=description,
+            pattern_key="protected_instruction_file",
+            pattern_keys=["protected_instruction_file"],
+            session_key=session_key,
+            surface="cli",
+        )
         _fire_approval_hook("pre_approval_request", **hook_kwargs)
         choice = prompt_dangerous_approval(
-            display, description, allow_permanent=False, allow_session=False, approval_callback=callback)
+            display,
+            description,
+            allow_permanent=False,
+            allow_session=False,
+            approval_callback=callback,
+        )
         _fire_approval_hook("post_approval_response", **hook_kwargs, choice=choice)
         if choice == "cancelled":
-            return blocked.format(why="approval prompt could not be delivered or was not answered "
-                                      f"({getattr(choice, 'cause', 'no answer')}).")
+            return blocked.format(
+                why="approval prompt could not be delivered or was not answered "
+                f"({getattr(choice, 'cause', 'no answer')})."
+            )
         timed = choice == "timeout"
     # Any tapped scope is a one-operation grant; nothing is persisted.
     if not timed and choice in {"once", "session", "always"}:
@@ -343,20 +411,32 @@ def _request_protected_instruction_approval(reasons: list[str], task_id: str = "
     return timed_out if timed else denied
 
 
-def _check_protected_instruction_write(paths: list[str], task_id: str = "default") -> str | None:
+def _check_protected_instruction_write(
+    paths: list[str], task_id: str = "default"
+) -> str | None:
     """Gate a write/patch touching protected instruction files. ONE protected file gates
     the ENTIRE multi-file patch (one prompt, all-or-nothing)."""
     enabled, extra = _protected_instruction_config()
     if not enabled:
         return None
-    reasons = [r for r in (_protected_instruction_reason(p, task_id, enabled=enabled, extra_patterns=extra)
-                           for p in paths) if r]
+    reasons = [
+        r
+        for r in (
+            _protected_instruction_reason(
+                p, task_id, enabled=enabled, extra_patterns=extra
+            )
+            for p in paths
+        )
+        if r
+    ]
     if not reasons:
         return None
     return _request_protected_instruction_approval(reasons, task_id)
 
 
-def _check_approval_required_write(paths: list[str], task_id: str = "default") -> str | None:
+def _check_approval_required_write(
+    paths: list[str], task_id: str = "default"
+) -> str | None:
     """Gate a write/patch touching an approval-required path (``~/.ssh/config`` can steer
     execution via ``ProxyCommand``). Routine gate: once/session/always, honors --yolo,
     fail-closed without an interactive/gateway channel."""
@@ -367,7 +447,9 @@ def _check_approval_required_write(paths: list[str], task_id: str = "default") -
 
     # Resolve against the task's cwd, not the process's: a gateway-hosted turn runs in a
     # process whose cwd is not the session workspace, so a relative path would miss the gate.
-    targets = [p for p in paths if is_write_approval_required(_resolved_or_raw(p, task_id))]
+    targets = [
+        p for p in paths if is_write_approval_required(_resolved_or_raw(p, task_id))
+    ]
     if not targets:
         return None
 
@@ -375,11 +457,13 @@ def _check_approval_required_write(paths: list[str], task_id: str = "default") -
     description = (
         f"Write to SSH client config file(s): {display_targets}. "
         "The SSH config can carry ProxyCommand / Match exec directives that "
-        "run commands, so writes require your approval.")
+        "run commands, so writes require your approval."
+    )
     blocked = (
         f"BLOCKED: write to SSH config file(s) ({display_targets}) "
         "{why} Do NOT retry it via another path (terminal, execute_code) "
-        "without the user's explicit consent.")
+        "without the user's explicit consent."
+    )
 
     try:
         import tools.approval as _approval
@@ -390,15 +474,19 @@ def _check_approval_required_write(paths: list[str], task_id: str = "default") -
         pattern_key="ssh_config_write",
         description=description,
         display_target=f"<write to {display_targets}>",
-        cron_deny_message=blocked.format(why="requires approval but this cron session denies it."),
+        cron_deny_message=blocked.format(
+            why="requires approval but this cron session denies it."
+        ),
         single_query_deny_message=blocked.format(
             why="requires approval but single-query (-q) sessions run "
-                "without a user present to approve it. To allow flagged "
-                "actions in single-query mode, set approvals.single_query_mode: "
-                "approve in config.yaml."),
+            "without a user present to approve it. To allow flagged "
+            "actions in single-query mode, set approvals.single_query_mode: "
+            "approve in config.yaml."
+        ),
         autoapprove_log_prefix="ssh_config_write",
         fail_closed_when_no_human=True,
-        no_human_block_message=blocked.format(why=_NO_HUMAN))
+        no_human_block_message=blocked.format(why=_NO_HUMAN),
+    )
     if result.get("approved"):
         return None
     return result.get("message") or blocked.format(why="was denied.")
@@ -408,13 +496,21 @@ def _get_container_mirror_prefix_for_task(task_id: str = "default") -> str | Non
     """Return the container-side Clawksis mirror prefix for persistent Docker file tools."""
     try:
         from tools.terminal_tool import (
-            _active_environments, _env_lock, _get_env_config, _resolve_container_task_id)
+            _active_environments,
+            _env_lock,
+            _get_env_config,
+            _resolve_container_task_id,
+        )
+
         container_key = _resolve_container_task_id(task_id)
         with _env_lock:
-            env = _active_environments.get(container_key) or _active_environments.get(task_id)
+            env = _active_environments.get(container_key) or _active_environments.get(
+                task_id
+            )
         if env is not None:
-            persistent_docker = (env.__class__.__name__ == "DockerEnvironment"
-                                 and bool(getattr(env, "_persistent", False)))
+            persistent_docker = env.__class__.__name__ == "DockerEnvironment" and bool(
+                getattr(env, "_persistent", False)
+            )
             return "/root/.clawksis" if persistent_docker else None
         config = _get_env_config()
     except Exception:
@@ -429,14 +525,19 @@ def _check_cross_profile_path(filepath: str, task_id: str = "default") -> str | 
     Clawksis state (a write the host never reads). Not profile isolation — that guard was
     removed; ``cross_profile=True`` keeps bypassing this one for replay compat. Fails open."""
     try:
-        from agent.file_safety import get_container_mirror_warning, get_sandbox_mirror_warning
+        from agent.file_safety import (
+            get_container_mirror_warning,
+            get_sandbox_mirror_warning,
+        )
     except Exception:
         return None
     resolved = _resolved_or_raw(filepath, task_id)
     warning = get_sandbox_mirror_warning(resolved)
     if warning is not None:
         return warning
-    return get_container_mirror_warning(resolved, mirror_prefix=_get_container_mirror_prefix_for_task(task_id))
+    return get_container_mirror_warning(
+        resolved, mirror_prefix=_get_container_mirror_prefix_for_task(task_id)
+    )
 
 
 def _target_regular_file_state(filepath: str, task_id: str = "default") -> str:
@@ -448,6 +549,7 @@ def _target_regular_file_state(filepath: str, task_id: str = "default") -> str:
     ``"unavailable"`` and callers must fail closed.
     """
     from tools.file_tools import _file_ops_uses_host_paths, _get_file_ops
+
     try:
         resolved = str(_resolve_path_for_task(filepath, task_id))
     except Exception:
@@ -467,7 +569,9 @@ def _target_regular_file_state(filepath: str, task_id: str = "default") -> str:
     try:
         # Backend writes land on ``_expand_path(_resolved or path)``: the
         # backend's own home for a tilde fallback, never the host's.
-        _size, status = file_ops._probe_regular_file(file_ops._expand_path(resolved or filepath))
+        _size, status = file_ops._probe_regular_file(
+            file_ops._expand_path(resolved or filepath)
+        )
     except Exception:
         return "unavailable"
     if status in ("ok", "bad_size"):
@@ -502,7 +606,8 @@ def _check_binary_document_write(filepath: str, task_id: str = "default") -> str
             "corrupt the file (read_file showed you EXTRACTED text, not the real "
             "bytes). Use the docx/xlsx/powerpoint skills or a library like "
             "python-docx/openpyxl/python-pptx via the terminal to create or edit "
-            "this document.")
+            "this document."
+        )
     # A -wal/-shm/-journal path is never a legitimate text target, even when
     # no sidecar exists yet: a checkpointed db has none on disk, and a garbage
     # WAL dropped next to a live database is picked up on the next open.
@@ -512,7 +617,8 @@ def _check_binary_document_write(filepath: str, task_id: str = "default") -> str
             "A -wal/-shm/-journal file holds raw database pages that SQLite "
             "reads on the next open; text there corrupts the database. Use the "
             "sqlite3 CLI or a SQLite library via the terminal to modify the "
-            "database instead.")
+            "database instead."
+        )
     # Overwriting an existing binary (PDF, image, archive, SQLite db, ...)
     # with text destroys it — the model only ever saw extracted or mojibake
     # text. Creating a NEW file with such an extension stays allowed: raw PDF
@@ -527,14 +633,16 @@ def _check_binary_document_write(filepath: str, task_id: str = "default") -> str
                     "read_file showed you EXTRACTED text, not the real bytes — writing "
                     "text back would destroy the document. Use the pdf skill or a PDF "
                     "library via the terminal to modify it. (Creating a NEW .pdf file "
-                    "is allowed.)")
+                    "is allowed.)"
+                )
             return (
                 f"Refusing to overwrite existing binary file '{filepath}' ({ext}) "
                 "with plain text — read_file showed you extracted or mojibake "
                 "text, not the real bytes, and writing text back would destroy "
                 "the file. Use a binary-aware tool via the terminal to modify it "
                 "(for SQLite databases, the sqlite3 CLI or a SQLite library). "
-                "(Creating a NEW file with this extension is allowed.)")
+                "(Creating a NEW file with this extension is allowed.)"
+            )
         if state == "unavailable":
             # Fail closed: absence not proven on the filesystem the write would
             # hit, so proceeding could destroy a binary the guard never saw.
@@ -543,7 +651,8 @@ def _check_binary_document_write(filepath: str, task_id: str = "default") -> str
                 "the target file already exists where this write would execute "
                 "(the terminal environment may be starting, unreachable, or was "
                 "removed). The file was NOT modified — retry once the environment "
-                "is reachable.")
+                "is reachable."
+            )
     return None
 
 
@@ -551,10 +660,13 @@ def _check_binary_document_write(filepath: str, task_id: str = "default") -> str
 _READ_DEDUP_STATUS_MESSAGE = (
     "File unchanged since last read. The content from "
     "the earlier read_file result in this conversation is "
-    "still current — refer to that instead of re-reading.")
+    "still current — refer to that instead of re-reading."
+)
 
 
-def _stale_overwrite_blocker(filepath: str, resolved: str | None, task_id: str) -> str | None:
+def _stale_overwrite_blocker(
+    filepath: str, resolved: str | None, task_id: str
+) -> str | None:
     """Reason write_file must NOT replace the existing file, else ``None``.
 
     Refuses BEFORE any disk mutation (the pre-#65604 warning arrived after the
@@ -573,7 +685,8 @@ def _stale_overwrite_blocker(filepath: str, resolved: str | None, task_id: str) 
     if _read_mtime_drifted(filepath, task_id):
         return (
             f"{filepath} was modified since you last read it (external edit or "
-            "concurrent agent). Re-read the file before writing.")
+            "concurrent agent). Re-read the file before writing."
+        )
     if not resolved or _has_full_write_baseline(resolved, task_id):
         return None
     try:
@@ -585,16 +698,20 @@ def _stale_overwrite_blocker(filepath: str, resolved: str | None, task_id: str) 
     if _is_own_blind_patch(resolved, task_id):
         return (
             "Your patch changed this file without a full view of its current content. Read the current file "
-            "in full before a whole-file overwrite, or continue with targeted patches.")
+            "in full before a whole-file overwrite, or continue with targeted patches."
+        )
     return (
         f"{resolved} exists but this task has not seen its full current content "
         "(never read, patched without a prior full read, or only a redacted/partial view). Read the "
         "file — every page of it, if it needs offset/limit — or use patch for a "
         "targeted edit; a stale conversation copy must not overwrite the current "
-        "disk content.")
+        "disk content."
+    )
 
 
-def _stale_write_refusal(filepath: str, reason: str, resolved: str | None = None) -> dict:
+def _stale_write_refusal(
+    filepath: str, reason: str, resolved: str | None = None
+) -> dict:
     """Model-facing refusal payload for write_file; ``stale_write_blocked`` lets
     callers tell it apart from I/O errors."""
     result = {
@@ -603,7 +720,8 @@ def _stale_write_refusal(filepath: str, reason: str, resolved: str | None = None
             "The file was NOT modified. Reload the current contents with read_file "
             "(every page, for a file that needs offset/limit), merge the requested "
             "change, then call write_file again. For small edits, prefer patch so "
-            "existing unrelated changes are preserved."),
+            "existing unrelated changes are preserved."
+        ),
         "stale_write_blocked": True,
         "path": filepath,
     }
@@ -618,8 +736,11 @@ def _is_internal_file_status_text(content: str) -> bool:
     if not isinstance(content, str):
         return False
     stripped = content.strip()
-    return bool(stripped) and _READ_DEDUP_STATUS_MESSAGE in stripped and (
-        len(stripped) <= 2 * len(_READ_DEDUP_STATUS_MESSAGE))
+    return (
+        bool(stripped)
+        and _READ_DEDUP_STATUS_MESSAGE in stripped
+        and (len(stripped) <= 2 * len(_READ_DEDUP_STATUS_MESSAGE))
+    )
 
 
 def _looks_like_read_file_line_numbered_content(content: str) -> bool:
@@ -637,10 +758,14 @@ def _looks_like_read_file_line_numbered_content(content: str) -> bool:
             numbered.append(int(prefix))
     if len(numbered) < 2 or len(numbered) / len(lines) < 0.6:
         return False
-    consecutive_pairs = sum(1 for prev, current in itertools.pairwise(numbered) if current == prev + 1)
+    consecutive_pairs = sum(
+        1 for prev, current in itertools.pairwise(numbered) if current == prev + 1
+    )
     return consecutive_pairs >= len(numbered) - 1
 
 
 def _is_internal_file_tool_content(content: str) -> bool:
     """Return True when content is file-tool display text, not intended file bytes."""
-    return _is_internal_file_status_text(content) or _looks_like_read_file_line_numbered_content(content)
+    return _is_internal_file_status_text(
+        content
+    ) or _looks_like_read_file_line_numbered_content(content)

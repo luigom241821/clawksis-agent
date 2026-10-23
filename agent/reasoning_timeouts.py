@@ -18,18 +18,31 @@ from typing import Optional
 _REASONING_STALE_TIMEOUT_FLOORS: dict[int, tuple[str, ...]] = {
     600: (
         # NVIDIA Nemotron behind hosted NIM: documented 60-180s upstream idle kill.
-        "nemotron-3-ultra", "nemotron-3-super", "nemotron-3.5-super-vl",
+        "nemotron-3-ultra",
+        "nemotron-3-super",
+        "nemotron-3.5-super-vl",
         # DeepSeek R1 / V4 (reasoning_content streamed before final content).
         # ``deepseek-flash`` is the version-less canonical Flash id (2026-09 Flash refresh);
         # ``deepseek-v4-flash`` still aliases onto it server-side.
-        "deepseek-r1", "deepseek-reasoner", "deepseek-flash", "deepseek-v4-flash", "deepseek-v4.1-flash", "deepseek-v4-pro",
+        "deepseek-r1",
+        "deepseek-reasoner",
+        "deepseek-flash",
+        "deepseek-v4-flash",
+        "deepseek-v4.1-flash",
+        "deepseek-v4-pro",
         # OpenAI o-series: each variant enumerated so bare ``o1`` cannot over-match ``olmo-1``.
-        "o1", "o1-mini", "o1-pro", "o1-preview", "o3", "o3-pro",
+        "o1",
+        "o1-mini",
+        "o1-pro",
+        "o1-preview",
+        "o3",
+        "o3-pro",
         # OpenAI named reasoning lines (gpt-5.6-sol/-terra/-luna, gpt-6-astra, their -pro/-900k
         # variants): minutes-long thinking at xhigh/max/ultra; sub-10k-token requests sit below the
         # Codex context-size floor, so this is their only protection. Anchored so gpt-5.5 and the
         # gpt-4.x / gpt-5.1-chat lines keep the effort-tier defaults (#112909).
-        "gpt-5.6", "gpt-6",
+        "gpt-5.6",
+        "gpt-6",
         # Mythos-class named models (claude-fable-5): 1M ctx + 128K output, a heavier thinking
         # phase than the numbered line — otherwise the stale detector trips the circuit breaker.
         "claude-fable",
@@ -38,13 +51,22 @@ _REASONING_STALE_TIMEOUT_FLOORS: dict[int, tuple[str, ...]] = {
         "gemini-4",
     ),
     300: (
-        "nemotron-3-nano", "nemotron-3.5-lightning", "qwq-32b", "o3-mini", "o4-mini",
+        "nemotron-3-nano",
+        "nemotron-3.5-lightning",
+        "qwq-32b",
+        "o3-mini",
+        "o4-mini",
         # xAI Grok: explicit reasoning pairs only, so bare ``grok-3``/``grok-4`` fast variants
         # don't inherit the floor.
-        "grok-4-fast-reasoning", "grok-4.20-reasoning", "grok-4.5", "grok-4.6",
+        "grok-4-fast-reasoning",
+        "grok-4.20-reasoning",
+        "grok-4.5",
+        "grok-4.6",
         # "Ox Alpha" stealth reasoning model (OpenRouter / OpenCode Zen slugs); Thinking
         # Machines Inkling (covers inkling-small and :free SKUs).
-        "ox-alpha", "x-preview-f-free", "inkling",
+        "ox-alpha",
+        "x-preview-f-free",
+        "inkling",
         # MiniMax M2.x (m2.5/m2.7): reasoning_content before first content token; 240s
         # mid-think stalls observed (#62353).
         "minimax-m2",
@@ -53,7 +75,13 @@ _REASONING_STALE_TIMEOUT_FLOORS: dict[int, tuple[str, ...]] = {
     240: ("claude-opus-4", "claude-opus-5"),
     # qwen3 family: instruct variants also match — a slightly longer wait on a hung provider
     # beats a pattern (``qwen3-.*-thinking``) that breaks on the next naming shape.
-    180: ("qwen3", "claude-sonnet-5", "claude-sonnet-4.5", "claude-sonnet-4.6", "grok-4-fast-non-reasoning"),
+    180: (
+        "qwen3",
+        "claude-sonnet-5",
+        "claude-sonnet-4.5",
+        "claude-sonnet-4.6",
+        "grok-4-fast-non-reasoning",
+    ),
 }
 
 
@@ -63,7 +91,11 @@ _REASONING_STALE_TIMEOUT_FLOORS: dict[int, tuple[str, ...]] = {
 _SORTED_REASONING_FLOORS: list[tuple[str, float, re.Pattern[str]]] = [
     (slug, floor, re.compile(r"^" + re.escape(slug) + r"(?:$|[\-._:])"))
     for slug, floor in sorted(
-        ((slug, floor) for floor, slugs in _REASONING_STALE_TIMEOUT_FLOORS.items() for slug in slugs),
+        (
+            (slug, floor)
+            for floor, slugs in _REASONING_STALE_TIMEOUT_FLOORS.items()
+            for slug in slugs
+        ),
         key=lambda kv: -len(kv[0]),
     )
 ]

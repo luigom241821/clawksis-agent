@@ -100,11 +100,19 @@ def _run_booked_job(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cron_scheduler, "_guard_job_credential_exfil", lambda _job: None
     )
-    token = session_cron._execution.set((owner, "verify-session", "verify-complete", "verify-fire"))
+    token = session_cron._execution.set(
+        (owner, "verify-session", "verify-complete", "verify-fire")
+    )
     try:
         result = cron_scheduler.run_job(
-            {"id": "verify-complete", "name": "Verification", "prompt": "Do the thing",
-             "schedule_display": "manual"}, execution_id="verify-fire")
+            {
+                "id": "verify-complete",
+                "name": "Verification",
+                "prompt": "Do the thing",
+                "schedule_display": "manual",
+            },
+            execution_id="verify-fire",
+        )
     finally:
         session_cron._execution.reset(token)
     assert result[0] and result[2] == "done", result

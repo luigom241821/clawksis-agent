@@ -3,6 +3,7 @@
 Mirrors the image-gen / memory-provider hooks (see plugins.py:531 for prior
 art).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,7 +12,9 @@ import pytest
 
 from clawk_cli.dashboard_auth import clear_providers, get_provider
 from clawk_cli.dashboard_auth.base import (
-    DashboardAuthProvider, LoginStart, Session,
+    DashboardAuthProvider,
+    LoginStart,
+    Session,
 )
 from clawk_cli.plugins import PluginContext, PluginManager, PluginManifest
 from clawk_cli.dashboard_auth import registry as _auth_registry
@@ -64,21 +67,19 @@ def _make_ctx(name: str = "dashboard-auth-stub") -> PluginContext:
     return PluginContext(manifest=manifest, manager=_MinimalManager())  # type: ignore[arg-type]
 
 
-
-
 def test_plugin_ctx_silently_ignores_non_provider(caplog):
     """Mirror image_gen behaviour: log warning, leave registry empty.
 
     We do NOT raise — a misbehaving plugin must not crash the host.
     """
     import logging
+
     ctx = _make_ctx("dashboard-auth-bad")
     with caplog.at_level(logging.WARNING):
         ctx.register_dashboard_auth_provider("not a provider")  # type: ignore[arg-type]
     assert get_provider("stub") is None
     assert any(
-        "dashboard-auth-bad" in rec.message
-        and "DashboardAuthProvider" in rec.message
+        "dashboard-auth-bad" in rec.message and "DashboardAuthProvider" in rec.message
         for rec in caplog.records
     )
 
@@ -125,9 +126,7 @@ def test_auth_provider_registers_globally_not_in_home_overlay():
     manager, ctx = _real_ctx()
     ctx.register_dashboard_auth_provider(_Basic())
     assert "basic" in _auth_registry._providers
-    assert "basic" not in _auth_registry._scoped_providers.get(
-        manager.scope_key, {}
-    )
+    assert "basic" not in _auth_registry._scoped_providers.get(manager.scope_key, {})
     assert [p.name for p in _auth_registry.list_session_providers()] == ["basic"]
 
 
@@ -279,7 +278,7 @@ def test_persistent_dispose_is_idempotent_after_targeted_unload():
     manager, ctx = _real_ctx()
     ctx.register_dashboard_auth_provider(_Basic())
 
-    manager.unload("basic")   # targeted unload disposes + forgets the handle
+    manager.unload("basic")  # targeted unload disposes + forgets the handle
     assert get_provider("basic") is None
 
     # A later unload-all parks nothing (the handle is gone from the ledger),

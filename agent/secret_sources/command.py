@@ -25,7 +25,13 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional
 
-from agent.secret_sources.base import ErrorKind, FetchResult, SecretSource, coerce_float, source_child_env
+from agent.secret_sources.base import (
+    ErrorKind,
+    FetchResult,
+    SecretSource,
+    coerce_float,
+    source_child_env,
+)
 
 __all__ = ["FetchResult", "unquote_dotenv_value"]
 
@@ -58,7 +64,9 @@ def unquote_dotenv_value(raw: str) -> str:
     return t
 
 
-def _run_helper(command: str, secret_key: str, timeout_seconds: float, max_output_bytes: int) -> Optional[str]:
+def _run_helper(
+    command: str, secret_key: str, timeout_seconds: float, max_output_bytes: int
+) -> Optional[str]:
     """Run the helper via ``/bin/sh -c`` and return its stdout, or None.
 
     The key travels as DATA in ``CLAWK_SECRET_KEY``. stdout/stderr are piped
@@ -66,7 +74,9 @@ def _run_helper(command: str, secret_key: str, timeout_seconds: float, max_outpu
     only and returns None — never raises.
     """
     if _is_windows():
-        _log("the 'command' provider is POSIX-only (needs /bin/sh); resolving no value on Windows")
+        _log(
+            "the 'command' provider is POSIX-only (needs /bin/sh); resolving no value on Windows"
+        )
         return None
 
     # The helper legitimately gets the user's shell env (it may need any
@@ -76,8 +86,11 @@ def _run_helper(command: str, secret_key: str, timeout_seconds: float, max_outpu
 
     try:
         proc = subprocess.Popen(
-            ["/bin/sh", "-c", command], env=env, stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,  # stderr captured and DISCARDED — never inherited
+            ["/bin/sh", "-c", command],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,  # stderr captured and DISCARDED — never inherited
             start_new_session=True,  # so the hard timeout can kill the whole group
         )
     except OSError as exc:
@@ -112,7 +125,9 @@ def _run_helper(command: str, secret_key: str, timeout_seconds: float, max_outpu
         return None
 
     if len(stdout_bytes) > max_output_bytes:
-        _log(f"helper output exceeded the {max_output_bytes}-byte cap; resolving no value")
+        _log(
+            f"helper output exceeded the {max_output_bytes}-byte cap; resolving no value"
+        )
         return None
 
     return stdout_bytes.decode("utf-8", errors="replace")
@@ -149,20 +164,27 @@ class CommandSource(SecretSource):
     shape = "bulk"
     remediation_hints = {
         ErrorKind.NOT_CONFIGURED: "Set secrets.command.command in config.yaml to a fast, "
-                                  "non-interactive helper that prints KEY=VALUE lines.",
+        "non-interactive helper that prints KEY=VALUE lines.",
         ErrorKind.INTERNAL: "Run the helper manually in a shell to see its real error — "
-                            "Clawksis discards helper stderr so diagnostics can't leak "
-                            "secret material.",
+        "Clawksis discards helper stderr so diagnostics can't leak "
+        "secret material.",
     }
 
     def config_schema(self) -> dict:
         return {
             "enabled": {"description": "Master switch", "default": False},
-            "command": {"description": "Helper run via /bin/sh -c; must print a KEY=VALUE blob on stdout",
-                        "default": ""},
-            "helper_timeout_seconds": {"description": "Hard timeout for one helper run",
-                                       "default": _COMMAND_TIMEOUT_SECONDS},
-            "override_existing": {"description": "Helper values overwrite .env/shell values", "default": False},
+            "command": {
+                "description": "Helper run via /bin/sh -c; must print a KEY=VALUE blob on stdout",
+                "default": "",
+            },
+            "helper_timeout_seconds": {
+                "description": "Hard timeout for one helper run",
+                "default": _COMMAND_TIMEOUT_SECONDS,
+            },
+            "override_existing": {
+                "description": "Helper values overwrite .env/shell values",
+                "default": False,
+            },
         }
 
     def fetch(self, cfg: dict, home_path: Path) -> FetchResult:
@@ -171,22 +193,33 @@ class CommandSource(SecretSource):
 
         command = str(cfg.get("command") or "").strip()
         if not command:
-            return result.fail("secrets.command.enabled is true but secrets.command.command "
-                               "is empty.  Set the helper command in config.yaml.", ErrorKind.NOT_CONFIGURED)
+            return result.fail(
+                "secrets.command.enabled is true but secrets.command.command "
+                "is empty.  Set the helper command in config.yaml.",
+                ErrorKind.NOT_CONFIGURED,
+            )
         if _is_windows():
-            return result.fail("the 'command' secret source is POSIX-only (needs /bin/sh); skipping on Windows",
-                               ErrorKind.NOT_CONFIGURED)
+            return result.fail(
+                "the 'command' secret source is POSIX-only (needs /bin/sh); skipping on Windows",
+                ErrorKind.NOT_CONFIGURED,
+            )
 
-        timeout = coerce_float(cfg.get("helper_timeout_seconds", _COMMAND_TIMEOUT_SECONDS),
-                               _COMMAND_TIMEOUT_SECONDS)
+        timeout = coerce_float(
+            cfg.get("helper_timeout_seconds", _COMMAND_TIMEOUT_SECONDS),
+            _COMMAND_TIMEOUT_SECONDS,
+        )
         stdout = _run_helper(command, "", timeout, _MAX_OUTPUT_BYTES)
         if stdout is None:  # _run_helper already logged structured fields
-            return result.fail("helper command failed (see structured fields above); no secrets applied",
-                               ErrorKind.INTERNAL)
+            return result.fail(
+                "helper command failed (see structured fields above); no secrets applied",
+                ErrorKind.INTERNAL,
+            )
 
         secrets = _parse_dotenv_map(stdout)
         if not secrets:
-            result.warnings.append("helper output was not a KEY=VALUE map; nothing to apply")
+            result.warnings.append(
+                "helper output was not a KEY=VALUE map; nothing to apply"
+            )
             return result
         result.secrets = secrets
         return result

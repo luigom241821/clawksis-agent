@@ -2,6 +2,7 @@
 through the real mount path: the launch profile's copy in-process, a ``?profile=`` profile's own copy
 in its plugin host (PLG-3). Moved out of ``test_web_server.py``.
 """
+
 import shutil
 
 import pytest
@@ -50,9 +51,15 @@ class TestPluginAPISecretScopeProductionMount:
         # Named profile B: a live profile with its OWN probe key value in ``.env`` (also its identity
         # marker); ``?profile=`` runs B's own installed copy in B's plugin host (PLG-3, #134889).
         (worker_home := profiles_root / "workerb").mkdir(parents=True, exist_ok=True)
-        (worker_home / ".env").write_text(f"{self._PROBE_KEY}=sk-workerb\n", encoding="utf-8")
-        (worker_home / "config.yaml").write_text("plugins:\n  enabled: [example]\n", encoding="utf-8")
-        shutil.copytree(_EXAMPLE_PLUGIN_FIXTURE, worker_home / "plugins" / "example-dashboard")
+        (worker_home / ".env").write_text(
+            f"{self._PROBE_KEY}=sk-workerb\n", encoding="utf-8"
+        )
+        (worker_home / "config.yaml").write_text(
+            "plugins:\n  enabled: [example]\n", encoding="utf-8"
+        )
+        shutil.copytree(
+            _EXAMPLE_PLUGIN_FIXTURE, worker_home / "plugins" / "example-dashboard"
+        )
 
         # Launch profile A: an env-only credential (systemd ``Environment=`` style), frozen
         # into the launch scope when multi-profile hosting activates.
@@ -72,6 +79,7 @@ class TestPluginAPISecretScopeProductionMount:
         finally:
             set_multiplex_active(self._previous_multiplex)
             from clawk_cli import plugins as plugins_mod
+
             for manager in list(plugins_mod._plugin_managers_by_home.values()):
                 host = getattr(manager, "_plugin_host_instance", None)
                 if host is not None:

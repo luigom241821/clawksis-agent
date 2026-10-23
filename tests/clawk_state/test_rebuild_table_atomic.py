@@ -39,20 +39,32 @@ def test_sibling_opener_between_rename_and_create_cannot_strand_rows(tmp_path):
                 # shows the uncommitted-away ``t``, so IF NOT EXISTS is a no-op, and any real write
                 # must be refused (busy) while the rebuild holds the write lock — never applied.
                 try:
-                    sibling.execute("CREATE TABLE IF NOT EXISTS t (a INTEGER, b TEXT, c INTEGER)")
+                    sibling.execute(
+                        "CREATE TABLE IF NOT EXISTS t (a INTEGER, b TEXT, c INTEGER)"
+                    )
                     sibling.execute("INSERT INTO t (a, b) VALUES (3, 'z')")
                     seen["sibling"] = "applied"
                 except sqlite3.OperationalError as exc:
-                    seen["sibling"] = "busy" if ("locked" in str(exc) or "busy" in str(exc)) else str(exc)
+                    seen["sibling"] = (
+                        "busy"
+                        if ("locked" in str(exc) or "busy" in str(exc))
+                        else str(exc)
+                    )
             return result
 
-    SessionSchemaMixin._rebuild_table(conn.cursor(InterleavingCursor), "t", "t_legacy", DDL, COPY)
+    SessionSchemaMixin._rebuild_table(
+        conn.cursor(InterleavingCursor), "t", "t_legacy", DDL, COPY
+    )
     assert seen["sibling"] == "busy"
     assert not conn.in_transaction
-    names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    names = {
+        r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
     assert names == {"t"}
     assert conn.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 2
-    assert conn.execute("SELECT c FROM t WHERE a = 1").fetchone()[0] == 0  # new shape landed
+    assert (
+        conn.execute("SELECT c FROM t WHERE a = 1").fetchone()[0] == 0
+    )  # new shape landed
     sibling.close()
     conn.close()
 
@@ -60,8 +72,19 @@ def test_sibling_opener_between_rename_and_create_cannot_strand_rows(tmp_path):
 def test_rebuild_failure_rolls_back_rename(tmp_path):
     conn = _db(tmp_path)
     with pytest.raises(sqlite3.OperationalError):
-        SessionSchemaMixin._rebuild_table(conn.cursor(), "t", "t_legacy", DDL, "INSERT INTO nope SELECT * FROM t_legacy")
+        SessionSchemaMixin._rebuild_table(
+            conn.cursor(),
+            "t",
+            "t_legacy",
+            DDL,
+            "INSERT INTO nope SELECT * FROM t_legacy",
+        )
     assert not conn.in_transaction
     assert conn.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 2
-    assert conn.execute("SELECT name FROM sqlite_master WHERE name = 't_legacy'").fetchone() is None
+    assert (
+        conn.execute(
+            "SELECT name FROM sqlite_master WHERE name = 't_legacy'"
+        ).fetchone()
+        is None
+    )
     conn.close()

@@ -23,8 +23,6 @@ def _has_cache_control(obj) -> bool:
 
 
 class TestPromptCachingDisabledFromConfig:
-
-
     def test_shared_predicate_matches_agent_init_semantics(self):
         """agent_init and the stub paths must share one disable predicate.
 
@@ -135,9 +133,7 @@ class TestMoASlotDecorationHonorsDisable:
             "base_url": "",
             "api_mode": "anthropic_messages",
         }
-        out = _maybe_apply_moa_cache_control(
-            messages, runtime, cache_disabled=True
-        )
+        out = _maybe_apply_moa_cache_control(messages, runtime, cache_disabled=True)
         assert not _has_cache_control(out)
         # Inputs must not be mutated.
         assert not _has_cache_control(messages)
@@ -180,13 +176,18 @@ class TestPreparedAggregatorNoAgentConfigOff:
             patch.object(
                 moa_loop,
                 "call_llm",
-                side_effect=lambda **kwargs: calls.append(kwargs) or SimpleNamespace(
-                    choices=[SimpleNamespace(
-                        message=SimpleNamespace(content="ok", tool_calls=[]),
-                        finish_reason="stop",
-                    )],
-                    usage=None,
-                    model="fake",
+                side_effect=lambda **kwargs: (
+                    calls.append(kwargs)
+                    or SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="ok", tool_calls=[]),
+                                finish_reason="stop",
+                            )
+                        ],
+                        usage=None,
+                        model="fake",
+                    )
                 ),
             ),
             patch.object(
@@ -216,10 +217,12 @@ class TestPreparedAggregatorNoAgentConfigOff:
                     {
                         "role": "assistant",
                         "content": "",
-                        "tool_calls": [{
-                            "id": "lookup",
-                            "function": {"name": "lookup", "arguments": "{}"},
-                        }],
+                        "tool_calls": [
+                            {
+                                "id": "lookup",
+                                "function": {"name": "lookup", "arguments": "{}"},
+                            }
+                        ],
                     },
                     {
                         "role": "tool",
@@ -234,13 +237,15 @@ class TestPreparedAggregatorNoAgentConfigOff:
                 },
                 "aggregator_temperature": None,
             }
-            tools = [{
-                "type": "function",
-                "function": {
-                    "name": "lookup",
-                    "parameters": {"type": "object", "properties": {}},
-                },
-            }]
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup",
+                        "parameters": {"type": "object", "properties": {}},
+                    },
+                }
+            ]
             canonical_tools = copy.deepcopy(tools)
 
             completions._call_prepared_aggregator(prepared, {"tools": tools})
@@ -252,8 +257,6 @@ class TestPreparedAggregatorNoAgentConfigOff:
         )
         assert not _has_cache_control(calls[0].get("messages") or [])
         assert tools == canonical_tools
-
-
 
 
 class TestOneShotSynthesisAgentDisable:
@@ -269,13 +272,18 @@ class TestOneShotSynthesisAgentDisable:
             patch.object(
                 moa_loop,
                 "call_llm",
-                side_effect=lambda **kwargs: calls.append(kwargs) or SimpleNamespace(
-                    choices=[SimpleNamespace(
-                        message=SimpleNamespace(content="synth", tool_calls=[]),
-                        finish_reason="stop",
-                    )],
-                    usage=None,
-                    model="fake",
+                side_effect=lambda **kwargs: (
+                    calls.append(kwargs)
+                    or SimpleNamespace(
+                        choices=[
+                            SimpleNamespace(
+                                message=SimpleNamespace(content="synth", tool_calls=[]),
+                                finish_reason="stop",
+                            )
+                        ],
+                        usage=None,
+                        model="fake",
+                    )
                 ),
             ),
             patch.object(
@@ -302,7 +310,9 @@ class TestOneShotSynthesisAgentDisable:
             moa_loop.aggregate_moa_context(
                 user_prompt="what should I do next?",
                 api_messages=[{"role": "user", "content": "help me plan"}],
-                reference_models=[{"provider": "openrouter", "model": "openai/gpt-5.5"}],
+                reference_models=[
+                    {"provider": "openrouter", "model": "openai/gpt-5.5"}
+                ],
                 aggregator={"provider": "anthropic", "model": "claude-opus-4.8"},
                 agent=SimpleNamespace(_cache_disabled=True),
             )

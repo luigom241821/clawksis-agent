@@ -19,20 +19,23 @@ from email.mime.multipart import MIMEMultipart
 from unittest.mock import patch, MagicMock, ANY
 
 
-
 class TestConfigEnvOverrides(unittest.TestCase):
     """Verify email config is loaded from environment variables."""
 
-
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-        "EMAIL_HOME_ADDRESS": "user@test.com",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+            "EMAIL_HOME_ADDRESS": "user@test.com",
+        },
+        clear=False,
+    )
     def test_email_home_channel_loaded(self):
         from gateway.config import GatewayConfig, Platform, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
         home = config.platforms[Platform.EMAIL].home_channel
@@ -43,23 +46,28 @@ class TestConfigEnvOverrides(unittest.TestCase):
 class TestCheckRequirements(unittest.TestCase):
     """Verify check_email_requirements function."""
 
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "a@b.com",
-        "EMAIL_PASSWORD": "pw",
-        "EMAIL_IMAP_HOST": "imap.b.com",
-        "EMAIL_SMTP_HOST": "smtp.b.com",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "a@b.com",
+            "EMAIL_PASSWORD": "pw",
+            "EMAIL_IMAP_HOST": "imap.b.com",
+            "EMAIL_SMTP_HOST": "smtp.b.com",
+        },
+        clear=False,
+    )
     def test_requirements_met(self):
         from plugins.platforms.email.adapter import check_email_requirements
+
         self.assertTrue(check_email_requirements())
 
 
 class TestHelperFunctions(unittest.TestCase):
     """Test email parsing helper functions."""
 
-
     def test_decode_header_encoded(self):
         from plugins.platforms.email.adapter import _decode_header_value
+
         # RFC 2047 encoded subject
         encoded = "=?utf-8?B?TWVyaGFiYQ==?="  # "Merhaba" in base64
         result = _decode_header_value(encoded)
@@ -67,39 +75,61 @@ class TestHelperFunctions(unittest.TestCase):
 
     def test_extract_email_address_with_name(self):
         from plugins.platforms.email.adapter import _extract_email_address
+
         self.assertEqual(
-            _extract_email_address("John Doe <john@example.com>"),
-            "john@example.com"
+            _extract_email_address("John Doe <john@example.com>"), "john@example.com"
         )
         # Unquoted forms strict parseaddr rejects still resolve to their single bracketed address.
-        for raw in ("john@example.com <john@example.com>", "Doe, John <John@example.com>",
-                    "Doe, John (CEO) <John@example.com>"):
+        for raw in (
+            "john@example.com <john@example.com>",
+            "Doe, John <John@example.com>",
+            "Doe, John (CEO) <John@example.com>",
+        ):
             self.assertEqual(_extract_email_address(raw), "john@example.com", raw)
         # ...but never when the display part could hold another mailbox, group or comment.
-        for raw in ("a@x.com, b@y.com", "Group: a@x.com, b@y.com;", "<>", "a@x.test <john@example.com>",
-                    "attacker@evil.test, <victim@x>", "attacker@evil.test,\r\n <victim@x>",
-                    "attacker@evil.test (c) <victim@x>", "attacker@evil.test; <victim@x>",
-                    "Grp: attacker@evil.test; <victim@x>", "undisclosed-recipients:; <victim@x>",
-                    "John", 'a\\"b <victim@x>',
-                    # over _MAX_FROM_LEN (uncapped parseaddr would return a@example.com)
-                    "x" * 3000 + " <a@example.com>",
-                    # >=500 nested comments make stdlib parseaddr raise RecursionError
-                    "Doe, " + "(" * 500 + ")" * 500 + " <v@example.com>"):
+        for raw in (
+            "a@x.com, b@y.com",
+            "Group: a@x.com, b@y.com;",
+            "<>",
+            "a@x.test <john@example.com>",
+            "attacker@evil.test, <victim@x>",
+            "attacker@evil.test,\r\n <victim@x>",
+            "attacker@evil.test (c) <victim@x>",
+            "attacker@evil.test; <victim@x>",
+            "Grp: attacker@evil.test; <victim@x>",
+            "undisclosed-recipients:; <victim@x>",
+            "John",
+            'a\\"b <victim@x>',
+            # over _MAX_FROM_LEN (uncapped parseaddr would return a@example.com)
+            "x" * 3000 + " <a@example.com>",
+            # >=500 nested comments make stdlib parseaddr raise RecursionError
+            "Doe, " + "(" * 500 + ")" * 500 + " <v@example.com>",
+        ):
             self.assertEqual(_extract_email_address(raw), "", raw)
         # A From with no usable address is dropped at parse time, before dispatch.
         from plugins.platforms.email.adapter import EmailAdapter
-        self.assertIsNone(EmailAdapter._parse_fetched_message(
-            object.__new__(EmailAdapter), b"2", b"From: a@x.com, b@y.com\r\nSubject: x\r\n\r\nbody"))
+
+        self.assertIsNone(
+            EmailAdapter._parse_fetched_message(
+                object.__new__(EmailAdapter),
+                b"2",
+                b"From: a@x.com, b@y.com\r\nSubject: x\r\n\r\nbody",
+            )
+        )
 
     def test_extract_email_address_ignores_angle_brackets_in_display_name(self):
         from plugins.platforms.email.adapter import _extract_email_address
+
         self.assertEqual(
-            _extract_email_address('"Victim <victim@example.com>" <attacker@evil.test>'),
+            _extract_email_address(
+                '"Victim <victim@example.com>" <attacker@evil.test>'
+            ),
             "attacker@evil.test",
         )
 
     def test_extract_email_address_unfolds_display_name_before_parsing(self):
         from plugins.platforms.email.adapter import _extract_email_address
+
         self.assertEqual(
             _extract_email_address(
                 '"Some Very Long Display Name That Exceeds The Line\r\n Limit" <real@example.com>'
@@ -107,12 +137,14 @@ class TestHelperFunctions(unittest.TestCase):
             "real@example.com",
         )
         # Ordinary forms must keep resolving the same way.
-        self.assertEqual(_extract_email_address("Plain <user@example.com>"), "user@example.com")
+        self.assertEqual(
+            _extract_email_address("Plain <user@example.com>"), "user@example.com"
+        )
         self.assertEqual(_extract_email_address("bare@example.com"), "bare@example.com")
-
 
     def test_strip_html_basic(self):
         from plugins.platforms.email.adapter import _strip_html
+
         html = "<p>Hello <b>world</b></p>"
         result = _strip_html(html)
         self.assertIn("Hello", result)
@@ -126,20 +158,19 @@ class TestExtractTextBody(unittest.TestCase):
 
     def test_plain_text_body(self):
         from plugins.platforms.email.adapter import _extract_text_body
+
         msg = MIMEText("Hello, this is a test.", "plain", "utf-8")
         result = _extract_text_body(msg)
         self.assertEqual(result, "Hello, this is a test.")
 
-
     def test_multipart_prefers_plain(self):
         from plugins.platforms.email.adapter import _extract_text_body
+
         msg = MIMEMultipart("alternative")
         msg.attach(MIMEText("<p>HTML version</p>", "html", "utf-8"))
         msg.attach(MIMEText("Plain version", "plain", "utf-8"))
         result = _extract_text_body(msg)
         self.assertEqual(result, "Plain version")
-
-
 
 
 class TestDispatchMessage(unittest.TestCase):
@@ -163,22 +194,28 @@ class TestDispatchMessage(unittest.TestCase):
     def _make_adapter(self):
         """Create an EmailAdapter with mocked env vars."""
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_IMAP_PORT": "993",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-            "EMAIL_SMTP_PORT": "587",
-            "EMAIL_POLL_INTERVAL": "15",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_IMAP_PORT": "993",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+                "EMAIL_SMTP_PORT": "587",
+                "EMAIL_POLL_INTERVAL": "15",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
 
     def test_self_message_filtered(self):
         """Messages from the agent's own address should be skipped."""
         import asyncio
+
         adapter = self._make_adapter()
         adapter._message_handler = MagicMock()
 
@@ -200,6 +237,7 @@ class TestDispatchMessage(unittest.TestCase):
     def test_subject_included_in_text(self):
         """Subject should be prepended to body for non-reply emails."""
         import asyncio
+
         adapter = self._make_adapter()
         captured_events = []
 
@@ -235,6 +273,7 @@ class TestDispatchMessage(unittest.TestCase):
     def test_reply_subject_not_duplicated(self):
         """Re: subjects should not be prepended to body."""
         import asyncio
+
         adapter = self._make_adapter()
         captured_events = []
 
@@ -261,11 +300,11 @@ class TestDispatchMessage(unittest.TestCase):
         self.assertNotIn("[Subject:", captured_events[0].text)
         self.assertEqual(captured_events[0].text, "Thanks for the help!")
 
-
     def test_image_attachment_sets_photo_type(self):
         """Email with image attachment should set message type to PHOTO."""
         import asyncio
         from gateway.platforms.event import MessageType
+
         adapter = self._make_adapter()
         captured_events = []
 
@@ -282,7 +321,14 @@ class TestDispatchMessage(unittest.TestCase):
             "message_id": "<msg5@test.com>",
             "in_reply_to": "",
             "body": "Check this photo",
-            "attachments": [{"path": "/tmp/img.jpg", "filename": "img.jpg", "type": "image", "media_type": "image/jpeg"}],
+            "attachments": [
+                {
+                    "path": "/tmp/img.jpg",
+                    "filename": "img.jpg",
+                    "type": "image",
+                    "media_type": "image/jpeg",
+                }
+            ],
             "date": "",
             "sender_authenticated": True,
         }
@@ -292,14 +338,17 @@ class TestDispatchMessage(unittest.TestCase):
         self.assertEqual(captured_events[0].message_type, MessageType.PHOTO)
         self.assertEqual(captured_events[0].media_urls, ["/tmp/img.jpg"])
 
-
     def test_empty_allowlist_denies_without_optin(self):
         """No allowlist and no allow-all opt-in → adapter fails closed (2.6)."""
         import asyncio
+
         with patch.dict(os.environ, {}, clear=False):
             # No allowlist, and explicitly no allow-all opt-in.
-            for k in ("EMAIL_ALLOWED_USERS", "EMAIL_ALLOW_ALL_USERS",
-                      "GATEWAY_ALLOW_ALL_USERS"):
+            for k in (
+                "EMAIL_ALLOWED_USERS",
+                "EMAIL_ALLOW_ALL_USERS",
+                "GATEWAY_ALLOW_ALL_USERS",
+            ):
                 os.environ.pop(k, None)
 
             adapter = self._make_adapter()
@@ -331,14 +380,27 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
     def setUp(self):
         self._env = patch.dict(os.environ, {}, clear=False)
         self._env.start()
-        for key in ("EMAIL_ALLOWED_USERS", "EMAIL_ALLOW_ALL_USERS", "GATEWAY_ALLOWED_USERS",
-                    "GATEWAY_ALLOW_ALL_USERS", "EMAIL_TRUST_FROM_HEADER"):
+        for key in (
+            "EMAIL_ALLOWED_USERS",
+            "EMAIL_ALLOW_ALL_USERS",
+            "GATEWAY_ALLOWED_USERS",
+            "GATEWAY_ALLOW_ALL_USERS",
+            "EMAIL_TRUST_FROM_HEADER",
+        ):
             os.environ.pop(key, None)
 
     def tearDown(self):
         self._env.stop()
 
-    def _reached_gateway(self, *, extra=None, env=None, paired=False, authenticated=True, auth_reason=None):
+    def _reached_gateway(
+        self,
+        *,
+        extra=None,
+        env=None,
+        paired=False,
+        authenticated=True,
+        auth_reason=None,
+    ):
         """Dispatch one mail from STRANGER with the real GatewayRunner auth callback wired, as startup does;
         return the events handed to the gateway. Each call gets its own pairing store."""
         import asyncio
@@ -347,20 +409,39 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
         from gateway.config import GatewayConfig, Platform, PlatformConfig
         from gateway.pairing import PairingStore
         from gateway.run import GatewayRunner
-        from plugins.platforms.email.adapter import _NO_AUTH_RESULTS_REASON, EmailAdapter
-        with tempfile.TemporaryDirectory() as pairing_dir, \
-                patch("gateway.pairing.PAIRING_DIR", Path(pairing_dir)), \
-                patch.dict(os.environ, {"EMAIL_ADDRESS": "clawk@test.com", "EMAIL_PASSWORD": "secret",
-                                        "EMAIL_IMAP_HOST": "imap.test.com", "EMAIL_SMTP_HOST": "smtp.test.com",
-                                        **(env or {})}):
-            adapter = EmailAdapter(PlatformConfig(enabled=True, extra=dict(extra or {})))
+        from plugins.platforms.email.adapter import (
+            _NO_AUTH_RESULTS_REASON,
+            EmailAdapter,
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as pairing_dir,
+            patch("gateway.pairing.PAIRING_DIR", Path(pairing_dir)),
+            patch.dict(
+                os.environ,
+                {
+                    "EMAIL_ADDRESS": "clawk@test.com",
+                    "EMAIL_PASSWORD": "secret",
+                    "EMAIL_IMAP_HOST": "imap.test.com",
+                    "EMAIL_SMTP_HOST": "smtp.test.com",
+                    **(env or {}),
+                },
+            ),
+        ):
+            adapter = EmailAdapter(
+                PlatformConfig(enabled=True, extra=dict(extra or {}))
+            )
             runner = object.__new__(GatewayRunner)
             runner.config = GatewayConfig(platforms={Platform.EMAIL: adapter.config})
             runner.adapters = {Platform.EMAIL: adapter}
             runner.pairing_store = PairingStore()
-            adapter.set_authorization_check(runner._make_adapter_auth_check(Platform.EMAIL))
+            adapter.set_authorization_check(
+                runner._make_adapter_auth_check(Platform.EMAIL)
+            )
             if paired:
-                code = runner.pairing_store.generate_code("email", self.STRANGER, "Stranger")
+                code = runner.pairing_store.generate_code(
+                    "email", self.STRANGER, "Stranger"
+                )
                 self.assertIsNotNone(runner.pairing_store.approve_code("email", code))
             captured = []
 
@@ -368,11 +449,24 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
                 captured.append(event)
 
             adapter.handle_message = capture
-            asyncio.run(adapter._dispatch_message({
-                "uid": b"301", "sender_addr": self.STRANGER, "sender_name": "Stranger", "subject": "Hello",
-                "message_id": "<m301@example.com>", "in_reply_to": "", "body": "Hi there", "attachments": [],
-                "date": "", "sender_authenticated": authenticated,
-                "auth_reason": auth_reason or ("dmarc=pass" if authenticated else _NO_AUTH_RESULTS_REASON)}))
+            asyncio.run(
+                adapter._dispatch_message(
+                    {
+                        "uid": b"301",
+                        "sender_addr": self.STRANGER,
+                        "sender_name": "Stranger",
+                        "subject": "Hello",
+                        "message_id": "<m301@example.com>",
+                        "in_reply_to": "",
+                        "body": "Hi there",
+                        "attachments": [],
+                        "date": "",
+                        "sender_authenticated": authenticated,
+                        "auth_reason": auth_reason
+                        or ("dmarc=pass" if authenticated else _NO_AUTH_RESULTS_REASON),
+                    }
+                )
+            )
         return captured
 
     def test_only_a_missing_auth_results_header_warns_with_the_opt_out_hint(self):
@@ -383,15 +477,30 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
         reconnect after a failed initial connect."""
         import asyncio
         from gateway.config import PlatformConfig
-        from plugins.platforms.email.adapter import _MISSING_AUTHSERV_REASON, _UNTRUSTED_AUTHSERV_REASON, EmailAdapter
+        from plugins.platforms.email.adapter import (
+            _MISSING_AUTHSERV_REASON,
+            _UNTRUSTED_AUTHSERV_REASON,
+            EmailAdapter,
+        )
 
         adapter_log = "plugins.platforms.email.adapter"
         with self.assertLogs(adapter_log, level="WARNING") as logs:
-            self.assertEqual(self._reached_gateway(authenticated=False, env={"EMAIL_ALLOW_ALL_USERS": "true"}), [])
+            self.assertEqual(
+                self._reached_gateway(
+                    authenticated=False, env={"EMAIL_ALLOW_ALL_USERS": "true"}
+                ),
+                [],
+            )
         self.assertIn("require_authenticated_sender: false", logs.output[0])
         with self.assertLogs(adapter_log, level="WARNING") as logs:
-            self.assertEqual(self._reached_gateway(authenticated=False, auth_reason=_UNTRUSTED_AUTHSERV_REASON,
-                                                   env={"EMAIL_ALLOWED_USERS": self.STRANGER}), [])
+            self.assertEqual(
+                self._reached_gateway(
+                    authenticated=False,
+                    auth_reason=_UNTRUSTED_AUTHSERV_REASON,
+                    env={"EMAIL_ALLOWED_USERS": self.STRANGER},
+                ),
+                [],
+            )
         self.assertIn("authserv_id", logs.output[0])
         self.assertNotIn("require_authenticated_sender", logs.output[0])
         # No pin drops every message of the account, so connect() names the fix (pin, or the explicit opt-out) once
@@ -400,14 +509,27 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
         EmailAdapter._missing_pin_warned.clear()
 
         def connect(address, extra=None, is_reconnect=False, fail=False):
-            with patch.dict(os.environ, {"EMAIL_ADDRESS": address, "EMAIL_PASSWORD": "secret",
-                                         "EMAIL_IMAP_HOST": "imap.test.com", "EMAIL_SMTP_HOST": "smtp.test.com"}):
+            with patch.dict(
+                os.environ,
+                {
+                    "EMAIL_ADDRESS": address,
+                    "EMAIL_PASSWORD": "secret",
+                    "EMAIL_IMAP_HOST": "imap.test.com",
+                    "EMAIL_SMTP_HOST": "smtp.test.com",
+                },
+            ):
                 adapter = EmailAdapter(PlatformConfig(enabled=True, extra=extra or {}))
             imap = MagicMock()
             imap.uid.return_value = ("OK", [b""])
-            imap_patch = patch("imaplib.IMAP4_SSL", side_effect=OSError("down")) if fail else patch("imaplib.IMAP4_SSL", return_value=imap)
+            imap_patch = (
+                patch("imaplib.IMAP4_SSL", side_effect=OSError("down"))
+                if fail
+                else patch("imaplib.IMAP4_SSL", return_value=imap)
+            )
             with imap_patch, patch.object(adapter, "_connect_smtp"):
-                self.assertEqual(asyncio.run(adapter.connect(is_reconnect=is_reconnect)), not fail)
+                self.assertEqual(
+                    asyncio.run(adapter.connect(is_reconnect=is_reconnect)), not fail
+                )
 
         with self.assertLogs(adapter_log, level="WARNING") as logs:
             connect("one@test.com", fail=True)
@@ -416,20 +538,39 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
             connect("two@test.com")
             connect("pinned@test.com", {"authserv_id": "mx.ourserver.com"})
             connect("optout@test.com", {"require_authenticated_sender": False})
-        logs.output[:] = [line for line in logs.output if _MISSING_AUTHSERV_REASON in line]
-        self.assertEqual([line.split(": ")[0] for line in logs.output],
-                         ["WARNING:plugins.platforms.email.adapter:[Email] one@test.com",
-                          "WARNING:plugins.platforms.email.adapter:[Email] two@test.com"], logs.output)
+        logs.output[:] = [
+            line for line in logs.output if _MISSING_AUTHSERV_REASON in line
+        ]
+        self.assertEqual(
+            [line.split(": ")[0] for line in logs.output],
+            [
+                "WARNING:plugins.platforms.email.adapter:[Email] one@test.com",
+                "WARNING:plugins.platforms.email.adapter:[Email] two@test.com",
+            ],
+            logs.output,
+        )
         self.assertIn(_MISSING_AUTHSERV_REASON, logs.output[1])
         self.assertIn("EMAIL_AUTHSERV_ID", logs.output[1])
         self.assertIn("EMAIL_TRUST_FROM_HEADER=true", logs.output[1])
         with self.assertNoLogs(adapter_log, level="WARNING"):
-            self.assertEqual(self._reached_gateway(authenticated=False, auth_reason="dmarc=fail",
-                                                   env={"EMAIL_ALLOW_ALL_USERS": "true"}), [])
+            self.assertEqual(
+                self._reached_gateway(
+                    authenticated=False,
+                    auth_reason="dmarc=fail",
+                    env={"EMAIL_ALLOW_ALL_USERS": "true"},
+                ),
+                [],
+            )
         # A listed contact's failing mail (broken DKIM, a forwarder) is worth seeing, but the opt-out is wrong advice.
         with self.assertLogs(adapter_log, level="WARNING") as logs:
-            self.assertEqual(self._reached_gateway(authenticated=False, auth_reason="dmarc=fail",
-                                                   env={"EMAIL_ALLOWED_USERS": self.STRANGER}), [])
+            self.assertEqual(
+                self._reached_gateway(
+                    authenticated=False,
+                    auth_reason="dmarc=fail",
+                    env={"EMAIL_ALLOWED_USERS": self.STRANGER},
+                ),
+                [],
+            )
         self.assertIn("dmarc=fail", logs.output[0])
         self.assertNotIn("require_authenticated_sender", logs.output[0])
 
@@ -438,15 +579,24 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
             "pair opt-in": {"extra": {"unauthorized_dm_behavior": "pair"}},
             "decline opt-in": {"extra": {"unauthorized_dm_behavior": "decline"}},
             "GATEWAY_ALLOWED_USERS": {"env": {"GATEWAY_ALLOWED_USERS": self.STRANGER}},
-            "EMAIL_ALLOWED_USERS JSON list literal": {"env": {"EMAIL_ALLOWED_USERS": f'["{self.STRANGER}"]'}},
+            "EMAIL_ALLOWED_USERS JSON list literal": {
+                "env": {"EMAIL_ALLOWED_USERS": f'["{self.STRANGER}"]'}
+            },
             "approved pairing": {"paired": True},
             # Open access admits any sender whose From: authenticates, or any From: once the operator opts out.
             "allow-all, authenticated From": {"env": {"EMAIL_ALLOW_ALL_USERS": "true"}},
             "allow-all, EMAIL_TRUST_FROM_HEADER=true, unauthenticated From": {
-                "authenticated": False, "env": {"EMAIL_ALLOW_ALL_USERS": "true", "EMAIL_TRUST_FROM_HEADER": "true"}},
+                "authenticated": False,
+                "env": {
+                    "EMAIL_ALLOW_ALL_USERS": "true",
+                    "EMAIL_TRUST_FROM_HEADER": "true",
+                },
+            },
             "allow-all, require_authenticated_sender: false, unauthenticated From": {
-                "authenticated": False, "env": {"EMAIL_ALLOW_ALL_USERS": "true"},
-                "extra": {"require_authenticated_sender": False}},
+                "authenticated": False,
+                "env": {"EMAIL_ALLOW_ALL_USERS": "true"},
+                "extra": {"require_authenticated_sender": False},
+            },
         }
         for label, kwargs in cases.items():
             with self.subTest(label):
@@ -455,28 +605,60 @@ class TestDispatchDefersToGatewayAuthorization(unittest.TestCase):
     def test_mail_the_gateway_would_ignore_or_that_forges_from_is_dropped(self):
         cases = {
             "default ignore": {},
-            "pair opt-in, unauthenticated From": {"extra": {"unauthorized_dm_behavior": "pair"}, "authenticated": False},
-            "approved pairing, unauthenticated From": {"paired": True, "authenticated": False},
+            "pair opt-in, unauthenticated From": {
+                "extra": {"unauthorized_dm_behavior": "pair"},
+                "authenticated": False,
+            },
+            "approved pairing, unauthenticated From": {
+                "paired": True,
+                "authenticated": False,
+            },
             # Open access admits any sender, not any From:: a forged one would land in that address's session.
-            "EMAIL_ALLOW_ALL_USERS, unauthenticated From": {"authenticated": False, "env": {"EMAIL_ALLOW_ALL_USERS": "true"}},
+            "EMAIL_ALLOW_ALL_USERS, unauthenticated From": {
+                "authenticated": False,
+                "env": {"EMAIL_ALLOW_ALL_USERS": "true"},
+            },
             "GATEWAY_ALLOW_ALL_USERS, unauthenticated From": {
-                "authenticated": False, "env": {"GATEWAY_ALLOW_ALL_USERS": "true"}},
+                "authenticated": False,
+                "env": {"GATEWAY_ALLOW_ALL_USERS": "true"},
+            },
             # Open access grants a stranger nothing beside a list, so a pairing code must not go to a forged From:.
             "pair opt-in, allow-all beside EMAIL list, unauthenticated From": {
-                "extra": {"unauthorized_dm_behavior": "pair"}, "authenticated": False,
-                "env": {"GATEWAY_ALLOW_ALL_USERS": "true", "EMAIL_ALLOWED_USERS": "boss@example.com"}},
+                "extra": {"unauthorized_dm_behavior": "pair"},
+                "authenticated": False,
+                "env": {
+                    "GATEWAY_ALLOW_ALL_USERS": "true",
+                    "EMAIL_ALLOWED_USERS": "boss@example.com",
+                },
+            },
             # GATEWAY_ALLOW_ALL_USERS is inert beside a list, so a listed address still has to authenticate its From:.
             "listed sender, GATEWAY allow-all beside the list, unauthenticated From": {
-                "authenticated": False, "env": {"GATEWAY_ALLOW_ALL_USERS": "true", "EMAIL_ALLOWED_USERS": self.STRANGER}},
+                "authenticated": False,
+                "env": {
+                    "GATEWAY_ALLOW_ALL_USERS": "true",
+                    "EMAIL_ALLOWED_USERS": self.STRANGER,
+                },
+            },
             "pair opt-in, allow-all beside GATEWAY list, unauthenticated From": {
-                "extra": {"unauthorized_dm_behavior": "pair"}, "authenticated": False,
-                "env": {"GATEWAY_ALLOW_ALL_USERS": "true", "GATEWAY_ALLOWED_USERS": "boss@example.com"}},
+                "extra": {"unauthorized_dm_behavior": "pair"},
+                "authenticated": False,
+                "env": {
+                    "GATEWAY_ALLOW_ALL_USERS": "true",
+                    "GATEWAY_ALLOWED_USERS": "boss@example.com",
+                },
+            },
             # A bare entry (a chat username, say) names one principal, never stranger@<any domain>: the
             # domain is the sender's to choose, so such mail is dropped rather than admitted or paired.
-            "GATEWAY_ALLOWED_USERS bare entry": {"env": {"GATEWAY_ALLOWED_USERS": "stranger"}},
-            "EMAIL_ALLOWED_USERS bare entry, JSON list literal": {"env": {"EMAIL_ALLOWED_USERS": '["stranger"]'}},
-            "bare entry, pair opt-in": {"env": {"GATEWAY_ALLOWED_USERS": "stranger"},
-                                        "extra": {"unauthorized_dm_behavior": "pair"}},
+            "GATEWAY_ALLOWED_USERS bare entry": {
+                "env": {"GATEWAY_ALLOWED_USERS": "stranger"}
+            },
+            "EMAIL_ALLOWED_USERS bare entry, JSON list literal": {
+                "env": {"EMAIL_ALLOWED_USERS": '["stranger"]'}
+            },
+            "bare entry, pair opt-in": {
+                "env": {"GATEWAY_ALLOWED_USERS": "stranger"},
+                "extra": {"unauthorized_dm_behavior": "pair"},
+            },
         }
         for label, kwargs in cases.items():
             with self.subTest(label):
@@ -501,16 +683,20 @@ class TestThreadContext(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
-
 
     def test_reply_uses_re_prefix(self):
         """Reply subject should have Re: prefix."""
@@ -539,21 +725,26 @@ class TestSendMethods(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
-
 
     def test_send_document_with_attachment(self):
         """send_document should send email with file attachment."""
         import asyncio
         import tempfile
+
         adapter = self._make_adapter()
 
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
@@ -575,20 +766,22 @@ class TestSendMethods(unittest.TestCase):
                 # Should be multipart with attachment
                 parts = list(sent_msg.walk())
                 has_attachment = any(
-                    "attachment" in str(p.get("Content-Disposition", ""))
-                    for p in parts
+                    "attachment" in str(p.get("Content-Disposition", "")) for p in parts
                 )
                 self.assertTrue(has_attachment)
         finally:
             os.unlink(tmp_path)
 
-
     def test_send_document_threads_on_explicit_reply_to(self):
         """An explicit reply_to wins over the cached thread context for attachment sends (#10131)."""
         import asyncio
         import tempfile
+
         adapter = self._make_adapter()
-        adapter._thread_context["user@test.com"] = {"subject": "Old", "message_id": "<cached@test.com>"}
+        adapter._thread_context["user@test.com"] = {
+            "subject": "Old",
+            "message_id": "<cached@test.com>",
+        }
         with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as f:
             f.write(b"doc")
             tmp_path = f.name
@@ -596,7 +789,11 @@ class TestSendMethods(unittest.TestCase):
             with patch("smtplib.SMTP") as mock_smtp:
                 mock_server = MagicMock()
                 mock_smtp.return_value = mock_server
-                result = asyncio.run(adapter.send_document("user@test.com", tmp_path, reply_to="<explicit@test.com>"))
+                result = asyncio.run(
+                    adapter.send_document(
+                        "user@test.com", tmp_path, reply_to="<explicit@test.com>"
+                    )
+                )
                 self.assertTrue(result.success)
                 sent_msg = mock_server.send_message.call_args[0][0]
                 self.assertEqual(sent_msg["In-Reply-To"], "<explicit@test.com>")
@@ -605,32 +802,39 @@ class TestSendMethods(unittest.TestCase):
             os.unlink(tmp_path)
 
 
-
 class TestConnectDisconnect(unittest.TestCase):
     """Test IMAP/SMTP connection lifecycle."""
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
 
     def test_connect_success(self):
         """Successful IMAP + SMTP connection returns True."""
         import asyncio
+
         adapter = self._make_adapter()
 
         mock_imap = MagicMock()
         mock_imap.uid.return_value = ("OK", [b"1 2 3"])
 
-        with patch("imaplib.IMAP4_SSL", return_value=mock_imap), \
-             patch("smtplib.SMTP") as mock_smtp:
+        with (
+            patch("imaplib.IMAP4_SSL", return_value=mock_imap),
+            patch("smtplib.SMTP") as mock_smtp,
+        ):
             mock_server = MagicMock()
             mock_smtp.return_value = mock_server
 
@@ -651,13 +855,18 @@ class TestFetchNewMessages(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
 
@@ -696,14 +905,19 @@ class TestPollLoop(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-            "EMAIL_POLL_INTERVAL": "1",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+                "EMAIL_POLL_INTERVAL": "1",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         # _check_inbox gates every UID on _sender_accepted before the RFC822 fetch; authorize the
         # unauthenticated test senders so these tests exercise the fetch/dispatch loop itself.
@@ -714,6 +928,7 @@ class TestPollLoop(unittest.TestCase):
     def test_check_inbox_dispatches_messages(self):
         """_check_inbox should fetch and dispatch new messages."""
         import asyncio
+
         adapter = self._make_adapter()
         dispatched = []
 
@@ -778,11 +993,17 @@ class TestPollLoop(unittest.TestCase):
             b"From: Owner <owner@example.com>\r\nAuthentication-Results: mx.trusted.test; "
             + b"x" * _MAX_PREAUTH_HEADER_BYTES
         )
-        headers = {b"9": forged_headers, b"10": trusted_headers, b"11": oversized_headers}
+        headers = {
+            b"9": forged_headers,
+            b"10": trusted_headers,
+            b"11": oversized_headers,
+        }
         full_messages = {
-            b"9": forged_headers + (
+            b"9": forged_headers
+            + (
                 b"--x\r\nContent-Disposition: attachment; filename=payload.bin\r\n\r\n"
-                + b"x" * 200_000 + b"\r\n--x--\r\n"
+                + b"x" * 200_000
+                + b"\r\n--x--\r\n"
             ),
             b"10": trusted_headers + b"authorized body",
             b"11": oversized_headers + b"unauthorized body",
@@ -795,7 +1016,11 @@ class TestPollLoop(unittest.TestCase):
             if command == "fetch":
                 uid, spec = args
                 fetch_specs.append((uid, spec))
-                payload = headers[uid] if "BODY.PEEK[HEADER.FIELDS" in spec else full_messages[uid]
+                payload = (
+                    headers[uid]
+                    if "BODY.PEEK[HEADER.FIELDS" in spec
+                    else full_messages[uid]
+                )
                 return ("OK", [(uid, payload)])
             if command == "store":
                 return ("OK", [b""])
@@ -804,23 +1029,38 @@ class TestPollLoop(unittest.TestCase):
         mock_imap.uid.side_effect = uid_handler
         gates, fetch = [], adapter._fetch_new_messages
         adapter._fetch_new_messages = lambda gate: (gates.append(gate), fetch(gate))[1]
-        with patch.dict(os.environ, {
-            "EMAIL_ALLOWED_USERS": "owner@example.com",
-            "EMAIL_ALLOW_ALL_USERS": "",
-            "GATEWAY_ALLOWED_USERS": "",
-            "GATEWAY_ALLOW_ALL_USERS": "",
-        }, clear=False), patch("imaplib.IMAP4_SSL", return_value=mock_imap), patch(
-            "plugins.platforms.email.adapter._extract_attachments", return_value=[],
-        ) as extract_attachments:
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "EMAIL_ALLOWED_USERS": "owner@example.com",
+                    "EMAIL_ALLOW_ALL_USERS": "",
+                    "GATEWAY_ALLOWED_USERS": "",
+                    "GATEWAY_ALLOW_ALL_USERS": "",
+                },
+                clear=False,
+            ),
+            patch("imaplib.IMAP4_SSL", return_value=mock_imap),
+            patch(
+                "plugins.platforms.email.adapter._extract_attachments",
+                return_value=[],
+            ) as extract_attachments,
+        ):
             asyncio.run(adapter._check_inbox())
 
-        self.assertEqual([message["message_id"] for message in dispatched], ["<trusted@example.com>"])
+        self.assertEqual(
+            [message["message_id"] for message in dispatched], ["<trusted@example.com>"]
+        )
         self.assertNotIn((b"9", "(RFC822)"), fetch_specs)
         self.assertNotIn((b"11", "(RFC822)"), fetch_specs)
         self.assertIn((b"10", "(RFC822)"), fetch_specs)
-        header_specs = [spec for _, spec in fetch_specs if "BODY.PEEK[HEADER.FIELDS" in spec]
+        header_specs = [
+            spec for _, spec in fetch_specs if "BODY.PEEK[HEADER.FIELDS" in spec
+        ]
         self.assertEqual(len(header_specs), 3)
-        self.assertTrue(all(f"<0.{_MAX_PREAUTH_HEADER_BYTES + 1}>" in spec for spec in header_specs))
+        self.assertTrue(
+            all(f"<0.{_MAX_PREAUTH_HEADER_BYTES + 1}>" in spec for spec in header_specs)
+        )
         extract_attachments.assert_called_once()
         self.assertTrue({b"9", b"10", b"11"}.issubset(adapter._seen_uids))
         # Once the poll's loop is closed (stop race) the gate fails closed instead of raising.
@@ -832,6 +1072,7 @@ class TestPollLoop(unittest.TestCase):
         instead of silently treating the failed check as an empty inbox
         (#80016)."""
         import asyncio
+
         adapter = self._make_adapter()
         notified = []
 
@@ -856,6 +1097,7 @@ class TestPollLoop(unittest.TestCase):
         fetched BEFORE escalating — dropping them would lose mail, since
         their UIDs are marked seen (#80032 review)."""
         import asyncio
+
         adapter = self._make_adapter()
         dispatched, notified = [], []
 
@@ -928,7 +1170,7 @@ class TestPollLoop(unittest.TestCase):
             results = adapter._fetch_new_messages(lambda _c: True)
 
         self.assertEqual(len(results), 1)
-        self.assertIn(b"1", adapter._seen_uids)     # fetched → seen
+        self.assertIn(b"1", adapter._seen_uids)  # fetched → seen
         self.assertNotIn(b"2", adapter._seen_uids)  # fetch raised → retry next poll
         self.assertNotIn(b"3", adapter._seen_uids)  # never reached → retry next poll
         self.assertTrue(adapter._last_fetch_failed)
@@ -960,9 +1202,12 @@ class TestPollLoop(unittest.TestCase):
 
         mock_imap.uid.side_effect = uid_handler
 
-        with patch("imaplib.IMAP4_SSL", return_value=mock_imap), patch(
-            "plugins.platforms.email.adapter.EmailAdapter._parse_fetched_message",
-            side_effect=[ValueError("unparseable"), {"subject": "good"}],
+        with (
+            patch("imaplib.IMAP4_SSL", return_value=mock_imap),
+            patch(
+                "plugins.platforms.email.adapter.EmailAdapter._parse_fetched_message",
+                side_effect=[ValueError("unparseable"), {"subject": "good"}],
+            ),
         ):
             results = adapter._fetch_new_messages(lambda _c: True)
 
@@ -978,18 +1223,24 @@ class TestReconnectSeenUidsRestore(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
 
     def setUp(self):
         from plugins.platforms.email.adapter import EmailAdapter
+
         EmailAdapter._seen_uids_snapshot.clear()
 
     tearDown = setUp
@@ -1007,8 +1258,9 @@ class TestReconnectSeenUidsRestore(unittest.TestCase):
         mock_imap.uid.side_effect = uid_handler
         smtp = MagicMock()
 
-        with patch("imaplib.IMAP4_SSL", return_value=mock_imap), patch.object(
-            adapter, "_connect_smtp", return_value=smtp
+        with (
+            patch("imaplib.IMAP4_SSL", return_value=mock_imap),
+            patch.object(adapter, "_connect_smtp", return_value=smtp),
         ):
             return asyncio.run(adapter.connect(is_reconnect=is_reconnect))
 
@@ -1018,6 +1270,7 @@ class TestReconnectSeenUidsRestore(unittest.TestCase):
         self.assertTrue(self._run_connect(first, b"1 2", is_reconnect=False))
         self.assertEqual(first._seen_uids, {b"1", b"2"})
         import asyncio
+
         asyncio.run(first.disconnect())
 
         # Outage: UID 3 arrives. The reconnect watcher builds a FRESH adapter
@@ -1033,6 +1286,7 @@ class TestReconnectSeenUidsRestore(unittest.TestCase):
         self.assertTrue(self._run_connect(adapter, b"7 8 9", is_reconnect=False))
         self.assertEqual(adapter._seen_uids, {b"7", b"8", b"9"})
         import asyncio
+
         asyncio.run(adapter.disconnect())
 
     def test_reconnect_without_snapshot_falls_back_to_mark_all_seen(self):
@@ -1041,33 +1295,46 @@ class TestReconnectSeenUidsRestore(unittest.TestCase):
         self.assertTrue(self._run_connect(adapter, b"4 5", is_reconnect=True))
         self.assertEqual(adapter._seen_uids, {b"4", b"5"})
         import asyncio
+
         asyncio.run(adapter.disconnect())
 
 
 class TestSendEmailStandalone(unittest.TestCase):
     """Test the standalone _send_email function in send_message_tool."""
 
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-        "EMAIL_SMTP_PORT": "587",
-    })
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+            "EMAIL_SMTP_PORT": "587",
+        },
+    )
     def test_send_email_tool_success(self):
         """_send_email should use verified STARTTLS when sending."""
         import asyncio
         import ssl
         from plugins.platforms.email.adapter import _standalone_send as _email_send
         from types import SimpleNamespace
+
         async def _send_email(extra, chat_id, message):
-            return await _email_send(SimpleNamespace(token=None, api_key=None, extra=extra or {}), chat_id, message)
+            return await _email_send(
+                SimpleNamespace(token=None, api_key=None, extra=extra or {}),
+                chat_id,
+                message,
+            )
 
         with patch("smtplib.SMTP") as mock_smtp:
             mock_server = MagicMock()
             mock_smtp.return_value = mock_server
 
             result = asyncio.run(
-                _send_email({"address": "clawk@test.com", "smtp_host": "smtp.test.com"}, "user@test.com", "Hello")
+                _send_email(
+                    {"address": "clawk@test.com", "smtp_host": "smtp.test.com"},
+                    "user@test.com",
+                    "Hello",
+                )
             )
 
             self.assertTrue(result["success"])
@@ -1076,7 +1343,10 @@ class TestSendEmailStandalone(unittest.TestCase):
             self.assertIsInstance(kwargs["context"], ssl.SSLContext)
             send_call = mock_server.send_message.call_args[0][0]
             from agent.i18n import t
-            self.assertEqual(send_call["Subject"], t("platform.email.standalone_subject"))
+
+            self.assertEqual(
+                send_call["Subject"], t("platform.email.standalone_subject")
+            )
             self.assertIn("Date", send_call)
             self.assertEqual(send_call["To"], "user@test.com")
             self.assertEqual(send_call["From"], "clawk@test.com")
@@ -1085,26 +1355,34 @@ class TestSendEmailStandalone(unittest.TestCase):
 class TestSmtpConnectionCleanup(unittest.TestCase):
     """Verify SMTP connections are closed even when send_message raises."""
 
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-        "EMAIL_SMTP_PORT": "587",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+            "EMAIL_SMTP_PORT": "587",
+        },
+        clear=False,
+    )
     def _make_adapter(self):
         from gateway.config import PlatformConfig
         from plugins.platforms.email.adapter import EmailAdapter
+
         return EmailAdapter(PlatformConfig(enabled=True))
 
-
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-        "EMAIL_SMTP_PORT": "587",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+            "EMAIL_SMTP_PORT": "587",
+        },
+        clear=False,
+    )
     def test_smtp_close_called_when_quit_also_fails(self):
         """If both send_message() and quit() fail, close() is the fallback."""
         adapter = self._make_adapter()
@@ -1122,25 +1400,34 @@ class TestSmtpConnectionCleanup(unittest.TestCase):
 class TestImapConnectionCleanup(unittest.TestCase):
     """Verify IMAP connections are closed even when fetch raises."""
 
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_IMAP_PORT": "993",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_IMAP_PORT": "993",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+        clear=False,
+    )
     def _make_adapter(self):
         from gateway.config import PlatformConfig
         from plugins.platforms.email.adapter import EmailAdapter
+
         return EmailAdapter(PlatformConfig(enabled=True))
 
-    @patch.dict(os.environ, {
-        "EMAIL_ADDRESS": "clawk@test.com",
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_IMAP_PORT": "993",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-    }, clear=False)
+    @patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_IMAP_PORT": "993",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+        clear=False,
+    )
     def test_imap_logout_called_on_uid_fetch_failure(self):
         """IMAP logout() must be called even when uid fetch raises."""
         adapter = self._make_adapter()
@@ -1171,34 +1458,44 @@ class TestImapIdExtensionForNetEase(unittest.TestCase):
 
     def _make_adapter(self):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@163.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.163.com",
-            "EMAIL_SMTP_HOST": "smtp.163.com",
-        }):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@163.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.163.com",
+                "EMAIL_SMTP_HOST": "smtp.163.com",
+            },
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
+
             adapter = EmailAdapter(PlatformConfig(enabled=True))
         return adapter
 
     def test_connect_sends_imap_id_after_login(self):
         """connect() must call xatom('ID', ...) after LOGIN for 163 support."""
         import asyncio
+
         adapter = self._make_adapter()
 
         mock_imap = MagicMock()
         mock_imap.capabilities = ("IMAP4REV1", "ID", "UIDPLUS")
         mock_imap.uid.return_value = ("OK", [b""])
 
-        with patch("imaplib.IMAP4_SSL", return_value=mock_imap), \
-             patch("smtplib.SMTP") as mock_smtp:
+        with (
+            patch("imaplib.IMAP4_SSL", return_value=mock_imap),
+            patch("smtplib.SMTP") as mock_smtp,
+        ):
             mock_smtp.return_value = MagicMock()
             asyncio.run(adapter.connect())
             adapter._running = False
             if adapter._poll_task:
                 adapter._poll_task.cancel()
 
-        id_calls = [c for c in mock_imap.xatom.call_args_list if c.args and c.args[0] == "ID"]
+        id_calls = [
+            c for c in mock_imap.xatom.call_args_list if c.args and c.args[0] == "ID"
+        ]
         self.assertTrue(
             id_calls,
             "EmailAdapter.connect() must call imap.xatom('ID', ...) after "
@@ -1217,16 +1514,20 @@ class TestConnectSmtp(unittest.TestCase):
 
     def _make_adapter(self, port="587"):
         from gateway.config import PlatformConfig
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "imap.test.com",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-            "EMAIL_SMTP_PORT": port,
-        }):
-            from plugins.platforms.email.adapter import EmailAdapter
-            return EmailAdapter(PlatformConfig(enabled=True))
 
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "imap.test.com",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+                "EMAIL_SMTP_PORT": port,
+            },
+        ):
+            from plugins.platforms.email.adapter import EmailAdapter
+
+            return EmailAdapter(PlatformConfig(enabled=True))
 
     def test_ipv6_timeout_falls_back_to_ipv4(self):
         """When default connection times out, retry with an IPv4-only SMTP path."""
@@ -1235,8 +1536,10 @@ class TestConnectSmtp(unittest.TestCase):
 
         adapter = self._make_adapter("587")
 
-        with patch("smtplib.SMTP", side_effect=TimeoutError("timed out")), \
-             patch.object(email_mod, "_IPv4SMTP") as mock_ipv4_smtp:
+        with (
+            patch("smtplib.SMTP", side_effect=TimeoutError("timed out")),
+            patch.object(email_mod, "_IPv4SMTP") as mock_ipv4_smtp,
+        ):
             mock_server = MagicMock()
             mock_ipv4_smtp.return_value = mock_server
 
@@ -1253,8 +1556,10 @@ class TestConnectSmtp(unittest.TestCase):
 
         adapter = self._make_adapter("465")
 
-        with patch("smtplib.SMTP_SSL", side_effect=TimeoutError("timed out")), \
-             patch.object(email_mod, "_IPv4SMTP_SSL") as mock_ipv4_smtp_ssl:
+        with (
+            patch("smtplib.SMTP_SSL", side_effect=TimeoutError("timed out")),
+            patch.object(email_mod, "_IPv4SMTP_SSL") as mock_ipv4_smtp_ssl,
+        ):
             mock_server = MagicMock()
             mock_ipv4_smtp_ssl.return_value = mock_server
 
@@ -1262,13 +1567,15 @@ class TestConnectSmtp(unittest.TestCase):
 
             self.assertIs(result, mock_server)
             mock_ipv4_smtp_ssl.assert_called_once_with(
-                "smtp.test.com", 465, timeout=30, context=ANY,
+                "smtp.test.com",
+                465,
+                timeout=30,
+                context=ANY,
             )
 
 
 class TestConnectionConfigResolution(unittest.TestCase):
     """Host/address resolution and pre-connect validation (#49736)."""
-
 
     def test_connect_aborts_without_attempting_imap_when_host_missing(self):
         """A missing host returns False without the cryptic DNS error, and marks
@@ -1276,12 +1583,17 @@ class TestConnectionConfigResolution(unittest.TestCase):
         import asyncio
         from gateway.config import PlatformConfig
         from plugins.platforms.email.adapter import EmailAdapter
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com",
-            "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "",
-            "EMAIL_SMTP_HOST": "smtp.test.com",
-        }, clear=False):
+
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "",
+                "EMAIL_SMTP_HOST": "smtp.test.com",
+            },
+            clear=False,
+        ):
             adapter = EmailAdapter(PlatformConfig(enabled=True))
 
         with patch("imaplib.IMAP4_SSL") as mock_imap:
@@ -1300,11 +1612,18 @@ class TestConnectionConfigResolution(unittest.TestCase):
         """Blank/whitespace EMAIL_* values must read as missing (#40715) — an
         abandoned setup with empty keys must not enable the platform."""
         from plugins.platforms.email.adapter import check_email_requirements
+
         for blank in ("", "   ", "\n"):
-            with patch.dict(os.environ, {
-                "EMAIL_ADDRESS": blank, "EMAIL_PASSWORD": blank,
-                "EMAIL_IMAP_HOST": blank, "EMAIL_SMTP_HOST": blank,
-            }, clear=False):
+            with patch.dict(
+                os.environ,
+                {
+                    "EMAIL_ADDRESS": blank,
+                    "EMAIL_PASSWORD": blank,
+                    "EMAIL_IMAP_HOST": blank,
+                    "EMAIL_SMTP_HOST": blank,
+                },
+                clear=False,
+            ):
                 self.assertFalse(check_email_requirements())
 
 
@@ -1327,6 +1646,7 @@ class TestSenderAuthentication(unittest.TestCase):
             _verify_sender_authentication,
             _extract_email_address,
         )
+
         msg = self._msg(from_addr, auth_results)
         addr = _extract_email_address(from_addr)
         return _verify_sender_authentication(msg, addr, authserv_id=authserv_id)
@@ -1340,54 +1660,57 @@ class TestSenderAuthentication(unittest.TestCase):
         # A dmarc=pass issued for another domain must not vouch for this From,
         # even when a later dkim clause carries an aligned header.from.
         # Verdict and header.from are read from the one dmarc clause, with (comments) stripped first.
-        for ar in ("mx.ourserver.com; dmarc=pass header.from=evil.test",
-                   "mx.ourserver.com; dmarc=pass header.from=evil.test; dkim=pass header.d=x.test header.from=example.com",
-                   "mx.ourserver.com; dmarc=pass (p=none; sp=none) header.from=evil.test",
-                   "mx.ourserver.com; dmarc=fail header.from=example.com; dmarc=pass header.from=evil.test",
-                   # every header.from in the dmarc clause must align, not just one
-                   "mx.ourserver.com; dmarc=pass header.from=evil.test header.from=example.com",
-                   # ';' inside quoted-strings / nested comments must not split or smuggle a dmarc clause
-                   'mx.ourserver.com; spf=pass smtp.mailfrom="x;dmarc=pass header.from=example.com x"@evil.test; '
-                   "dmarc=fail header.from=example.com",
-                   "mx.ourserver.com; dmarc=pass (a (b) ; header.from=example.com) header.from=evil.test",
-                   'mx.ourserver.com; dmarc=pass reason="a;b" header.from=evil.test',
-                   "mx.ourserver.com; dmarc=pass a) ; header.from=evil.test",  # stray ')' is unbalanced
-                   "mx.ourserver.com; dmarc=pass header.from=example.com; dmarc=pass header.from=evil.test",
-                   "mx.ourserver.com; dmarc=pass (a ; header.from=evil.test",
-                   r'mx.ourserver.com; spf=pass smtp.mailfrom="x\\";dmarc=pass header.from=example.com;x="y"; '
-                   "dmarc=fail header.from=example.com",
-                   # spf/dkim verdicts and domains come only from their own clause, never quoted text or comments
-                   'mx.ourserver.com; spf=fail smtp.mailfrom="x spf=pass smtp.mailfrom=example.com "@evil.test; '
-                   "dmarc=fail header.from=example.com",
-                   "mx.ourserver.com; spf=fail (spf=pass) smtp.mailfrom=a@example.com",
-                   "mx.ourserver.com; spf=fail smtp.mailfrom=a.spf=pass@example.com; dmarc=fail header.from=example.com",
-                   'mx.ourserver.com; dkim=pass header.d=evil.test header.i="x header.d=example.com y"@evil.test',
-                   "mx.ourserver.com; spf=pass smtp.mailfrom=example.com; spf=fail smtp.mailfrom=evil.test",
-                   "mx.ourserver.com; spf=fail smtp.mailfrom=evil.test; spf=pass smtp.mailfrom=example.com",
-                   "mx.ourserver.com; dkim=pass header.d=evil.test; dkim=fail header.d=example.com",
-                   'mx.ourserver.com; dkim=pass header.i="x header.d=example.com"@evil.test',
-                   # an escaped quote keeps the quoted-string open, so no dmarc clause is smuggled out of it
-                   r'mx.ourserver.com; spf=fail smtp.mailfrom="a\";dmarc=pass header.from=example.com;x=\""@evil.test'):
+        for ar in (
+            "mx.ourserver.com; dmarc=pass header.from=evil.test",
+            "mx.ourserver.com; dmarc=pass header.from=evil.test; dkim=pass header.d=x.test header.from=example.com",
+            "mx.ourserver.com; dmarc=pass (p=none; sp=none) header.from=evil.test",
+            "mx.ourserver.com; dmarc=fail header.from=example.com; dmarc=pass header.from=evil.test",
+            # every header.from in the dmarc clause must align, not just one
+            "mx.ourserver.com; dmarc=pass header.from=evil.test header.from=example.com",
+            # ';' inside quoted-strings / nested comments must not split or smuggle a dmarc clause
+            'mx.ourserver.com; spf=pass smtp.mailfrom="x;dmarc=pass header.from=example.com x"@evil.test; '
+            "dmarc=fail header.from=example.com",
+            "mx.ourserver.com; dmarc=pass (a (b) ; header.from=example.com) header.from=evil.test",
+            'mx.ourserver.com; dmarc=pass reason="a;b" header.from=evil.test',
+            "mx.ourserver.com; dmarc=pass a) ; header.from=evil.test",  # stray ')' is unbalanced
+            "mx.ourserver.com; dmarc=pass header.from=example.com; dmarc=pass header.from=evil.test",
+            "mx.ourserver.com; dmarc=pass (a ; header.from=evil.test",
+            r'mx.ourserver.com; spf=pass smtp.mailfrom="x\\";dmarc=pass header.from=example.com;x="y"; '
+            "dmarc=fail header.from=example.com",
+            # spf/dkim verdicts and domains come only from their own clause, never quoted text or comments
+            'mx.ourserver.com; spf=fail smtp.mailfrom="x spf=pass smtp.mailfrom=example.com "@evil.test; '
+            "dmarc=fail header.from=example.com",
+            "mx.ourserver.com; spf=fail (spf=pass) smtp.mailfrom=a@example.com",
+            "mx.ourserver.com; spf=fail smtp.mailfrom=a.spf=pass@example.com; dmarc=fail header.from=example.com",
+            'mx.ourserver.com; dkim=pass header.d=evil.test header.i="x header.d=example.com y"@evil.test',
+            "mx.ourserver.com; spf=pass smtp.mailfrom=example.com; spf=fail smtp.mailfrom=evil.test",
+            "mx.ourserver.com; spf=fail smtp.mailfrom=evil.test; spf=pass smtp.mailfrom=example.com",
+            "mx.ourserver.com; dkim=pass header.d=evil.test; dkim=fail header.d=example.com",
+            'mx.ourserver.com; dkim=pass header.i="x header.d=example.com"@evil.test',
+            # an escaped quote keeps the quoted-string open, so no dmarc clause is smuggled out of it
+            r'mx.ourserver.com; spf=fail smtp.mailfrom="a\";dmarc=pass header.from=example.com;x=\""@evil.test',
+        ):
             ok, reason = self._verify("Admin <admin@example.com>", [ar])
             self.assertFalse(ok, ar)
         # Real MTA headers (multi-signature DKIM, comments, quoted values) keep authenticating.
-        for ar in ("mx.ourserver.com; arc=pass (dmarc=fail header.from=evil.test); dmarc=pass header.from=example.com",
-                   'mx.ourserver.com; dmarc=pass reason="a;b" header.from="example.com"',
-                   'mx.ourserver.com; dmarc=pass reason="header.from=evil.test" header.from=example.com',
-                   "mx.ourserver.com; dkim=pass header.i=@example.com header.s=s1 header.b=AbC; spf=pass (google.com: "
-                   "domain of admin@example.com designates 1.2.3.4 as permitted sender) smtp.mailfrom=admin@example.com; "
-                   "dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=example.com",
-                   "mx.ourserver.com; spf=pass (sender IP is 1.2.3.4) smtp.mailfrom=example.com; dkim=pass (signature was verified) "
-                   "header.d=example.com;dmarc=pass action=none header.from=example.com;compauth=pass reason=100",
-                   "mx.ourserver.com; dmarc=pass (p=none dis=none) header.from=example.com",
-                   'mx.ourserver.com; dkim=pass (2048-bit key; unprotected) header.d=example.com header.i=@example.com '
-                   'header.b="AbC+/1"; spf=pass smtp.mailfrom=example.com',
-                   "mx.ourserver.com; dkim=pass (1024-bit key) header.d=esp.test header.i=@esp.test; "
-                   "dkim=pass (2048-bit key) header.d=example.com header.i=@example.com; spf=softfail "
-                   "smtp.mailfrom=bounce@esp.test"):
+        for ar in (
+            "mx.ourserver.com; arc=pass (dmarc=fail header.from=evil.test); dmarc=pass header.from=example.com",
+            'mx.ourserver.com; dmarc=pass reason="a;b" header.from="example.com"',
+            'mx.ourserver.com; dmarc=pass reason="header.from=evil.test" header.from=example.com',
+            "mx.ourserver.com; dkim=pass header.i=@example.com header.s=s1 header.b=AbC; spf=pass (google.com: "
+            "domain of admin@example.com designates 1.2.3.4 as permitted sender) smtp.mailfrom=admin@example.com; "
+            "dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=example.com",
+            "mx.ourserver.com; spf=pass (sender IP is 1.2.3.4) smtp.mailfrom=example.com; dkim=pass (signature was verified) "
+            "header.d=example.com;dmarc=pass action=none header.from=example.com;compauth=pass reason=100",
+            "mx.ourserver.com; dmarc=pass (p=none dis=none) header.from=example.com",
+            "mx.ourserver.com; dkim=pass (2048-bit key; unprotected) header.d=example.com header.i=@example.com "
+            'header.b="AbC+/1"; spf=pass smtp.mailfrom=example.com',
+            "mx.ourserver.com; dkim=pass (1024-bit key) header.d=esp.test header.i=@esp.test; "
+            "dkim=pass (2048-bit key) header.d=example.com header.i=@example.com; spf=softfail "
+            "smtp.mailfrom=bounce@esp.test",
+        ):
             ok, reason = self._verify("Admin <admin@example.com>", [ar])
             self.assertTrue(ok, (ar, reason))
-
 
     def test_dkim_pass_aligned_authenticates(self):
         ok, reason = self._verify(
@@ -1404,7 +1727,6 @@ class TestSenderAuthentication(unittest.TestCase):
         )
         self.assertFalse(ok, reason)
 
-
     def test_only_topmost_exact_authserv_id_is_trusted(self):
         """Never search below the authoritative field or relax an authserv-id pin.
         The subdomain and comment-smuggled rows carry dmarc=pass, so only the exact pin rejects them."""
@@ -1419,13 +1741,17 @@ class TestSenderAuthentication(unittest.TestCase):
         ):
             with self.subTest(topmost=topmost):
                 ok, reason = self._verify(
-                    "admin@example.com", [topmost, forged_lower],
+                    "admin@example.com",
+                    [topmost, forged_lower],
                     authserv_id="mx.ourserver.com",
                 )
                 self.assertFalse(ok, reason)
         # No pin at all: the topmost header may be one the sender wrote (a self-hosted MTA that stamps nothing).
-        ok, reason = self._verify("owner@allowed.example", ["attacker.self; dmarc=pass header.from=allowed.example"],
-                                  authserv_id="")
+        ok, reason = self._verify(
+            "owner@allowed.example",
+            ["attacker.self; dmarc=pass header.from=allowed.example"],
+            authserv_id="",
+        )
         self.assertEqual((ok, reason), (False, _MISSING_AUTHSERV_REASON))
 
         # Matching remains case-insensitive and accepts RFC 8601 CFWS comments,
@@ -1445,16 +1771,28 @@ def test_oversized_cron_output_is_delivered_as_one_whole_email():
     from gateway.config import GatewayConfig, PlatformConfig
     from gateway.delivery import DeliveryRouter
 
-    with patch.dict(os.environ, {"EMAIL_ADDRESS": "clawk@test.com", "EMAIL_PASSWORD": "secret",
-                                 "EMAIL_IMAP_HOST": "imap.test.com", "EMAIL_SMTP_HOST": "smtp.test.com"}):
+    with patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": "clawk@test.com",
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+    ):
         from plugins.platforms.email.adapter import EmailAdapter
+
         adapter = EmailAdapter(PlatformConfig(enabled=True))
     sent = []
     smtp = MagicMock()
-    smtp.send_message.side_effect = lambda msg: sent.append(msg.get_payload()[0].get_payload(decode=True).decode())
+    smtp.send_message.side_effect = lambda msg: sent.append(
+        msg.get_payload()[0].get_payload(decode=True).decode()
+    )
     adapter._connect_smtp = lambda: smtp
     content = "\n\n".join(f"line {i} " + "x" * 200 for i in range(60))
-    payload = DeliveryRouter(GatewayConfig())._cap_oversized_output(adapter, content, "job")
+    payload = DeliveryRouter(GatewayConfig())._cap_oversized_output(
+        adapter, content, "job"
+    )
     result = asyncio.run(adapter.send("user@test.com", payload))
 
     assert result.success

@@ -14,7 +14,6 @@ from unittest.mock import MagicMock
 import pytest
 
 
-
 def _ensure_slack_mock(monkeypatch):
     """Install lightweight Slack modules when optional Slack deps are absent."""
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
@@ -32,14 +31,15 @@ def _ensure_slack_mock(monkeypatch):
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler", slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
-
-
 
 
 class _SlackResponse:
@@ -103,9 +103,7 @@ def test_standalone_send_stops_on_non_token_error(monkeypatch, _standalone_send)
             )
 
     fake_session = _FatalSession()
-    monkeypatch.setattr(
-        "aiohttp.ClientSession", lambda *args, **kwargs: fake_session
-    )
+    monkeypatch.setattr("aiohttp.ClientSession", lambda *args, **kwargs: fake_session)
 
     pconfig = SimpleNamespace(enabled=True, token="tok-a,tok-b", extra={})
     result = asyncio.run(_standalone_send(pconfig, "C123", "hello"))

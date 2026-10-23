@@ -4,6 +4,7 @@ No filesystem mocks: a real tiny .deb fixture (ar archive + data.tar) is
 served over loopback HTTP and fetched through pm's hardened Download,
 then unpacked through pm's DebPackage — the same production path.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -28,9 +29,13 @@ PREFIX = srl.PREFIX_REL
 
 # ---------------------------------------------------------------- fixtures
 
+
 def _build_deb(path: Path, lib_name: str, content: bytes) -> None:
-    build_deb(path, {"Package": f"pkg-{lib_name}", "Version": "1.0"},
-              {f"{PREFIX}/lib/{lib_name}": f"FAKE-ELF {lib_name}\n".encode() + content})
+    build_deb(
+        path,
+        {"Package": f"pkg-{lib_name}", "Version": "1.0"},
+        {f"{PREFIX}/lib/{lib_name}": f"FAKE-ELF {lib_name}\n".encode() + content},
+    )
 
 
 class _Server:
@@ -91,15 +96,21 @@ def lib_source(tmp_path: Path):
 
     server = _Server(src)
     table = {
-        "liba": {"url": f"{server.url}/liba.deb",
-                 "sha256": hashlib.sha256((src / "liba.deb").read_bytes()).hexdigest(),
-                 "version": "1.0"},
-        "libb": {"url": f"{server.url}/libb.deb",
-                 "sha256": hashlib.sha256((src / "libb.deb").read_bytes()).hexdigest(),
-                 "version": "2.0"},
-        "libc": {"url": f"{server.url}/libc.deb",
-                 "sha256": hashlib.sha256((src / "libc.deb").read_bytes()).hexdigest(),
-                 "version": "3.0"},
+        "liba": {
+            "url": f"{server.url}/liba.deb",
+            "sha256": hashlib.sha256((src / "liba.deb").read_bytes()).hexdigest(),
+            "version": "1.0",
+        },
+        "libb": {
+            "url": f"{server.url}/libb.deb",
+            "sha256": hashlib.sha256((src / "libb.deb").read_bytes()).hexdigest(),
+            "version": "2.0",
+        },
+        "libc": {
+            "url": f"{server.url}/libc.deb",
+            "sha256": hashlib.sha256((src / "libc.deb").read_bytes()).hexdigest(),
+            "version": "3.0",
+        },
     }
     yield server, table
     server.stop()
@@ -110,6 +121,7 @@ def _stage(tmp_path: Path, table: dict) -> Path:
 
 
 # ------------------------------------------------------------------ tests
+
 
 @pytest.mark.parametrize("corruption", ["missing", "extra", "stale"])
 def test_stage_cache_correctness(tmp_path, lib_source, corruption):
@@ -127,6 +139,7 @@ def test_stage_cache_correctness(tmp_path, lib_source, corruption):
     # not accidentally trigger the independent table-identity check.
     server.available = False
     import shutil
+
     shutil.rmtree(tmp_path / "payload" / ".work")
     requests = list(server.requests)
     assert srl.stage(tmp_path / "payload", table) == out
@@ -142,8 +155,10 @@ def test_stage_cache_correctness(tmp_path, lib_source, corruption):
     assert len(server.requests) > len(requests)
     assert {p.name for p in out.glob("*.so*")} == names
     for name in names:
-        assert hashlib.sha256((out / name).read_bytes()).hexdigest() == \
-            manifest["files"][name]
+        assert (
+            hashlib.sha256((out / name).read_bytes()).hexdigest()
+            == manifest["files"][name]
+        )
 
 
 def test_collision_identical_ok_conflicting_raises(tmp_path, lib_source):
@@ -156,7 +171,8 @@ def test_collision_identical_ok_conflicting_raises(tmp_path, lib_source):
     # Now a conflicting rebuild: same soname, different bytes.
     _build_deb(tmp_path / "debs" / "libc.deb", "libb.so", b"DIFFERENT-IMPL")
     table["libc"]["sha256"] = hashlib.sha256(
-        (tmp_path / "debs" / "libc.deb").read_bytes()).hexdigest()
+        (tmp_path / "debs" / "libc.deb").read_bytes()
+    ).hexdigest()
 
     # Force a miss: current manifest no longer validates for libc's bytes.
     with pytest.raises(srl.StageError, match="soname collision.*libb.so"):
@@ -193,7 +209,9 @@ def test_stale_scratch_cannot_poison_a_rebuilt_cache(tmp_path, lib_source):
     _, table = lib_source
     out = _stage(tmp_path, table)
     expected = (out / "liba.so").read_bytes()
-    scratch = tmp_path / "payload/.work/runtime-libs/extract/liba" / PREFIX / "lib/liba.so"
+    scratch = (
+        tmp_path / "payload/.work/runtime-libs/extract/liba" / PREFIX / "lib/liba.so"
+    )
     scratch.write_bytes(b"corrupted scratch bytes")
     (out / "liba.so").unlink()
     srl.stage(tmp_path / "payload", table)

@@ -25,9 +25,15 @@ def test_silent_on_unrelated_models():
 
 def test_fires_regardless_of_provider_string():
     # id-keyed: must fire even if selected via custom/gateway (no meta-ai provider)
-    assert data_training_warning("muse-spark-1.2-contributor", provider="custom") is not None
+    assert (
+        data_training_warning("muse-spark-1.2-contributor", provider="custom")
+        is not None
+    )
     assert data_training_warning("muse-spark-1.2-contributor") is not None
 
 
 def test_case_insensitive():
-    assert data_training_warning("MUSE-SPARK-1.2-CONTRIBUTOR", provider="meta-ai") is not None
+    assert (
+        data_training_warning("MUSE-SPARK-1.2-CONTRIBUTOR", provider="meta-ai")
+        is not None
+    )

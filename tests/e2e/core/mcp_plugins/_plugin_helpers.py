@@ -13,7 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
-from tests.e2e.core.mcp_plugins._helpers import FIXTURE_SERVER, TURN_TIMEOUT, E2EHome, tagged_pids
+from tests.e2e.core.mcp_plugins._helpers import (
+    FIXTURE_SERVER,
+    TURN_TIMEOUT,
+    E2EHome,
+    tagged_pids,
+)
 from tests.e2e.core.parity._drive_rpc import READY_TIMEOUT, RpcClient, StreamCapture
 from tests.e2e.core.parity._helpers import terminate
 
@@ -27,13 +32,23 @@ LAUNCHER = "run-fixture"
 def portable_stdio(log: Path, tag: str, **env: str) -> dict[str, Any]:
     """A portable ``mcp.json`` stdio entry for the fixture server. v1 only allows a bare executable or a
     ``./`` in-root path as ``command``, so it points at the package's launcher script."""
-    return {"type": "stdio", "command": f"./{LAUNCHER}", "args": [],
-            "env": {"MCPE2E_LOG": str(log), "PARITY_TREE_TAG": tag, **env}}
+    return {
+        "type": "stdio",
+        "command": f"./{LAUNCHER}",
+        "args": [],
+        "env": {"MCPE2E_LOG": str(log), "PARITY_TREE_TAG": tag, **env},
+    }
 
 
-def write_portable_plugin(eh: E2EHome, dirname: str, servers: dict[str, dict[str, Any]], *,
-                          name: str | None = None, version: str = "1.0.0",
-                          extensions: dict[str, Any] | None = None) -> Path:
+def write_portable_plugin(
+    eh: E2EHome,
+    dirname: str,
+    servers: dict[str, dict[str, Any]],
+    *,
+    name: str | None = None,
+    version: str = "1.0.0",
+    extensions: dict[str, Any] | None = None,
+) -> Path:
     """``<CLAWK_HOME>/plugins/<dirname>/`` with ``plugin.json`` (manifest ``name``), ``mcp.json`` and an
     in-root launcher that execs the fixture MCP server with this interpreter."""
     root = eh.clawk_home / "plugins" / dirname
@@ -42,9 +57,14 @@ def write_portable_plugin(eh: E2EHome, dirname: str, servers: dict[str, dict[str
     if extensions:
         manifest["extensions"] = extensions
     (root / "plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (root / "mcp.json").write_text(json.dumps({"$schema": MCP_SCHEMA, "mcpServers": servers}), encoding="utf-8")
+    (root / "mcp.json").write_text(
+        json.dumps({"$schema": MCP_SCHEMA, "mcpServers": servers}), encoding="utf-8"
+    )
     launcher = root / LAUNCHER
-    launcher.write_text(f"#!/bin/sh\nexec '{sys.executable}' '{FIXTURE_SERVER}' \"$@\"\n", encoding="utf-8")
+    launcher.write_text(
+        f"#!/bin/sh\nexec '{sys.executable}' '{FIXTURE_SERVER}' \"$@\"\n",
+        encoding="utf-8",
+    )
     launcher.chmod(0o755)
     return root
 
@@ -61,12 +81,19 @@ class TuiHost:
     def turn(self, sid: str, text: str, timeout: float = TURN_TIMEOUT) -> str:
         """Submit one prompt and wait for THIS turn's ``message.complete`` (not an earlier turn's)."""
         earlier = {id(ev) for ev in self.rpc.events}
-        self.rpc.call("prompt.submit", {"session_id": sid, "text": text}, timeout=READY_TIMEOUT)
+        self.rpc.call(
+            "prompt.submit", {"session_id": sid, "text": text}, timeout=READY_TIMEOUT
+        )
         try:
-            ev = self.rpc.wait_event("message.complete", lambda e: e.get("session_id") == sid
-                                     and id(e) not in earlier, timeout=timeout)
+            ev = self.rpc.wait_event(
+                "message.complete",
+                lambda e: e.get("session_id") == sid and id(e) not in earlier,
+                timeout=timeout,
+            )
         except AssertionError as exc:
-            raise AssertionError(f"{exc}\nhost stderr:\n{self.cap.stderr[-2000:]}") from exc
+            raise AssertionError(
+                f"{exc}\nhost stderr:\n{self.cap.stderr[-2000:]}"
+            ) from exc
         out = (ev.get("payload") or {}).get("text")
         return out if isinstance(out, str) else json.dumps(out)
 
@@ -74,9 +101,16 @@ class TuiHost:
 @contextlib.contextmanager
 def tui_host(eh: E2EHome, env: dict[str, str] | None = None) -> Iterator[TuiHost]:
     """``python -m tui_gateway.entry`` exactly as the Ink TUI spawns it, in the fake home."""
-    proc = subprocess.Popen([sys.executable, "-m", "tui_gateway.entry"], cwd=eh.project, env=eh.env(env),
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, bufsize=1)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "tui_gateway.entry"],
+        cwd=eh.project,
+        env=eh.env(env),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+    )
     cap = StreamCapture().start(proc)
 
     def send(line: str) -> None:
@@ -104,4 +138,6 @@ def reap_tagged(eh: E2EHome) -> None:
     """Cleanup: SIGKILL any process still carrying this home's unique tag (reparented orphans too)."""
     for pid in tagged_pids(eh.tag):
         with contextlib.suppress(OSError):
-            os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — callers are skipif(not linux); /proc scan
+            os.kill(
+                pid, signal.SIGKILL
+            )  # windows-footgun: ok — callers are skipif(not linux); /proc scan

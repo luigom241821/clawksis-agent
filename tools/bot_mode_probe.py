@@ -19,12 +19,19 @@ from pathlib import Path
 
 _PROTOCOL_HEADING = "## Messaging other agents"
 # The legacy section through the next H2 heading (or EOF), plus the blank lines before it.
-_LEGACY_PROTOCOL_RE = re.compile(r"\n*" + re.escape(_PROTOCOL_HEADING) + r"[ \t]*\n.*?(?=\n## |\Z)", re.DOTALL)
+_LEGACY_PROTOCOL_RE = re.compile(
+    r"\n*" + re.escape(_PROTOCOL_HEADING) + r"[ \t]*\n.*?(?=\n## |\Z)", re.DOTALL
+)
 
 
 def strip_legacy_protocol(text: str) -> str:
     """SOUL text without the plugin-era "## Messaging other agents" section (idempotent)."""
-    return _LEGACY_PROTOCOL_RE.sub("\n", text).strip() + "\n" if _PROTOCOL_HEADING in text else text
+    return (
+        _LEGACY_PROTOCOL_RE.sub("\n", text).strip() + "\n"
+        if _PROTOCOL_HEADING in text
+        else text
+    )
+
 
 # The only session title that receives the protocol section. Must match the
 # desktop plugin's createCanonicalChat title and the `-c "Bot Chat"` resume target.
@@ -40,6 +47,7 @@ _cached: dict[str, str] = {}
 def _default_home() -> str:
     """Ambient process CLAWK_HOME (env, else the platform default) as a string."""
     from clawk_constants import get_process_clawk_home
+
     return str(get_process_clawk_home())
 
 
@@ -78,13 +86,17 @@ def _roster(root: Path) -> list[tuple[str, Path]]:
 
     profiles = root / "profiles"
     named = _swallow(
-        lambda: [
-            (c.name, c)
-            for c in sorted(profiles.iterdir())
-            if c.name != "default" and PROFILE_ID_RE.match(c.name) and named_profile_is_live(c)
-        ]
-        if profiles.is_dir()
-        else [],
+        lambda: (
+            [
+                (c.name, c)
+                for c in sorted(profiles.iterdir())
+                if c.name != "default"
+                and PROFILE_ID_RE.match(c.name)
+                and named_profile_is_live(c)
+            ]
+            if profiles.is_dir()
+            else []
+        ),
         [],
     )
     return [("default", root), *named]
@@ -93,6 +105,7 @@ def _roster(root: Path) -> list[tuple[str, Path]]:
 def _read_yaml_dict(path: Path, needle: str | None = None) -> dict | None:
     """YAML mapping at ``path``, or None when missing / not a mapping / unreadable. ``needle``:
     cheap substring precheck that skips the YAML parse on the dominant (unmanaged) path."""
+
     def _load():
         if not path.is_file():
             return None
@@ -115,7 +128,10 @@ def _bots_meta(data: dict | None) -> dict | None:
 
 
 def _is_bot_managed(profile_dir: Path) -> bool:
-    return _bots_meta(_read_yaml_dict(profile_dir / "profile.yaml", "clawk-bots")) is not None
+    return (
+        _bots_meta(_read_yaml_dict(profile_dir / "profile.yaml", "clawk-bots"))
+        is not None
+    )
 
 
 def _any_managed(root: Path) -> bool:
@@ -145,6 +161,7 @@ def _profile_role(profile_dir: Path) -> str:
     differs from both the folder id and the title leads the line, so an untagged
     "talk to Scribe" maps to the folder handle without a disk search (#100671).
     Single-line, ≤160 chars, "" when nothing. Never raises."""
+
     def _role() -> str:
         data = _read_yaml_dict(profile_dir / "profile.yaml") or {}
         title = str((_bots_meta(data) or {}).get("title") or "").strip()
@@ -159,10 +176,13 @@ def _profile_role(profile_dir: Path) -> str:
 
 def _friendly_names(profile_dir: Path) -> tuple[str, str]:
     """(Bot Mode title, profile.yaml ``display_name``) for a profile, "" when unset. Never raises."""
+
     def _read() -> tuple[str, str]:
         data = _read_yaml_dict(profile_dir / "profile.yaml") or {}
-        return (str((_bots_meta(data) or {}).get("title") or "").strip(),
-                str(data.get("display_name") or "").strip())
+        return (
+            str((_bots_meta(data) or {}).get("title") or "").strip(),
+            str(data.get("display_name") or "").strip(),
+        )
 
     return _swallow(_read, ("", ""))
 
@@ -185,8 +205,11 @@ def alias_forms(value: str) -> set[str]:
     name = str(value or "").strip().lower()
     slug = re.sub(r"[^a-z0-9_-]+", "-", name).strip("-")
     collapsed = re.sub(r"[^a-z0-9_-]+", "", name)
-    return {f for f in (slug, collapsed)
-            if f and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", f) and f not in _RESERVED_ALIASES}
+    return {
+        f
+        for f in (slug, collapsed)
+        if f and re.fullmatch(r"[a-z0-9][a-z0-9_-]*", f) and f not in _RESERVED_ALIASES
+    }
 
 
 def local_alias_map(root: Path) -> dict[str, set[str]]:
@@ -195,10 +218,13 @@ def local_alias_map(root: Path) -> dict[str, set[str]]:
     caller matches those first, so a target that is an exact folder id always addresses that
     folder — a friendly name colliding with ANOTHER folder id never steals it. Ambiguity
     (one alias form shared by several profiles) surfaces as a multi-id set. Never raises."""
+
     def _build() -> dict[str, set[str]]:
         aliases: dict[str, set[str]] = {}
         for name, profile_dir in _roster(root):
-            for form in set().union(*(alias_forms(f) for f in _friendly_names(profile_dir))):
+            for form in set().union(
+                *(alias_forms(f) for f in _friendly_names(profile_dir))
+            ):
                 aliases.setdefault(form, set()).add(name)
         return aliases
 
@@ -208,15 +234,23 @@ def local_alias_map(root: Path) -> dict[str, set[str]]:
 def _peers(root: Path) -> list[str]:
     """Registered peer gateway names (``clawk peer``) from config.yaml, read
     directly (no config-loader import; the section is absent on most installs). Never raises."""
+
     def _names() -> list[str]:
-        peers = (_read_yaml_dict(root / "config.yaml", "bot_peers") or {}).get("bot_peers")
-        return sorted(str(n) for n in peers if str(n).strip()) if isinstance(peers, dict) else []
+        peers = (_read_yaml_dict(root / "config.yaml", "bot_peers") or {}).get(
+            "bot_peers"
+        )
+        return (
+            sorted(str(n) for n in peers if str(n).strip())
+            if isinstance(peers, dict)
+            else []
+        )
 
     return _swallow(_names, [])
 
 
 def _remote_roster(root: Path) -> list[dict]:
     """Desktop relay roster (``tools/bot_relay.py``); [] on any failure."""
+
     def _read():
         from tools.bot_relay import read_remote_roster
 
@@ -239,14 +273,21 @@ def _remote_paragraph(root: Path) -> str:
     from tools.bot_relay import remote_target_forms
 
     lines = [
-        _bullet(f"@{form}", f"on {row['connection_label'] or row['connection_id']}", row["title"], row["description"])
-        for row, form in zip(roster, remote_target_forms(roster, local_taken_forms(root)))
+        _bullet(
+            f"@{form}",
+            f"on {row['connection_label'] or row['connection_id']}",
+            row["title"],
+            row["description"],
+        )
+        for row, form in zip(
+            roster, remote_target_forms(roster, local_taken_forms(root))
+        )
     ]
     return (
         "\n\nTeammates on OTHER connected machines (reachable through the "
         "Desktop relay — message them with message_agent exactly like local "
         "teammates; replies arrive as completion notifications the same "
-        "way, or via reply_delivery=\"poll\" as below):\n" + "\n".join(lines)
+        'way, or via reply_delivery="poll" as below):\n' + "\n".join(lines)
     )
 
 
@@ -271,7 +312,11 @@ def _build_section(home: Path) -> str:
     if not _any_managed(root):
         return ""
 
-    roster_lines = [_bullet(f"@{_handle(name)}", _profile_role(d)) for name, d in _roster(root) if name != me]
+    roster_lines = [
+        _bullet(f"@{_handle(name)}", _profile_role(d))
+        for name, d in _roster(root)
+        if name != me
+    ]
     roster_block = "\n".join(roster_lines) or "- (no teammates yet)"
 
     return (
@@ -283,11 +328,11 @@ def _build_section(home: Path) -> str:
         "immediately — it never returns the reply. Send it, finish your turn, and "
         "the reply arrives later as a background-process completion notification "
         "that wakes you; relay it to the user then, attributed to that agent — unless "
-        "the ack returns reply_delivery=\"poll\", in which case follow its "
-        "process(action=\"wait\") instruction before ending the turn. "
+        'the ack returns reply_delivery="poll", in which case follow its '
+        'process(action="wait") instruction before ending the turn. '
         "COMPOSE every message yourself — say what YOU need from that agent; never "
         "forward the user's words verbatim, and never reveal private 1:1 chat "
-        "content. When the user says \"ask <name>\" or \"tell <name> ...\", that is "
+        'content. When the user says "ask <name>" or "tell <name> ...", that is '
         "a handoff: pick the right teammate from the roster below, message them "
         "with message_agent, and report back naming which agent replied. Message "
         "ONE clearly relevant teammate; don't fan out to several unless the user "
@@ -299,13 +344,13 @@ def _build_section(home: Path) -> str:
         "acknowledgements.\n"
         f"You are `@{_handle(me)}`. Your teammates (live roster; roles from their "
         "profiles):\n"
-        f"{roster_block}"
-        + _remote_paragraph(home)
-        + _peer_paragraph(root)
+        f"{roster_block}" + _remote_paragraph(home) + _peer_paragraph(root)
     )
 
 
-def get_bot_mode_protocol_section(home: str | os.PathLike | None = None, *, force_refresh: bool = False) -> str:
+def get_bot_mode_protocol_section(
+    home: str | os.PathLike | None = None, *, force_refresh: bool = False
+) -> str:
     """Cached probe entry point — one filesystem pass per (process, home). ``home`` should be
     the AGENT'S OWN resolved home (session-db derived), not ambient CLAWK_HOME — build threads
     can lose the ContextVar override and the env var would then name the wrong profile."""
@@ -383,16 +428,26 @@ def capability_fingerprint(home: str | os.PathLike | None = None) -> str:
         skills_cfg = cfg.get("skills") if isinstance(cfg.get("skills"), dict) else {}
         model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
         surface["model_capabilities"] = _model_prompt_capability_surface(model_cfg)
-        surface["disabled_skills"] = sorted(str(s).lower() for s in (skills_cfg.get("disabled") or []))
+        surface["disabled_skills"] = sorted(
+            str(s).lower() for s in (skills_cfg.get("disabled") or [])
+        )
         # The live selection is platform_toolsets.<platform> minus agent.disabled_toolsets;
         # tools.enabled_toolsets is written by no surface, so watching it left Bot Chats
         # blind to `clawk tools enable/disable` (#124211). Raw slices: an edit that leaves
         # the effective selection unchanged costs one spurious rebuild at most.
         agent_cfg = cfg.get("agent") if isinstance(cfg.get("agent"), dict) else {}
-        surface["platform_toolsets"] = json.dumps(cfg.get("platform_toolsets") or {}, sort_keys=True, default=str)
-        surface["disabled_toolsets"] = sorted(parse_config_string_list(agent_cfg.get("disabled_toolsets")))
+        surface["platform_toolsets"] = json.dumps(
+            cfg.get("platform_toolsets") or {}, sort_keys=True, default=str
+        )
+        surface["disabled_toolsets"] = sorted(
+            parse_config_string_list(agent_cfg.get("disabled_toolsets"))
+        )
         mcp = cfg.get("mcp_servers")
-        surface["mcp"] = json.dumps(mcp, sort_keys=True, default=str) if isinstance(mcp, dict) else ""
+        surface["mcp"] = (
+            json.dumps(mcp, sort_keys=True, default=str)
+            if isinstance(mcp, dict)
+            else ""
+        )
     except Exception:
         pass
 
@@ -413,8 +468,10 @@ def capability_fingerprint(home: str | os.PathLike | None = None) -> str:
         # intended: a different org sees a different skills index, so it needs a different prompt.
         from agent.skill_utils import iter_skill_index_files
 
-        return sorted(str(p.parent.relative_to(skills_root))
-                      for p in iter_skill_index_files(skills_root, "SKILL.md"))
+        return sorted(
+            str(p.parent.relative_to(skills_root))
+            for p in iter_skill_index_files(skills_root, "SKILL.md")
+        )
 
     surface["soul"] = _swallow(_soul, "")
     surface["skills"] = _swallow(_skills, [])
@@ -433,10 +490,13 @@ def capability_fingerprint(home: str | os.PathLike | None = None) -> str:
     # surface too: registering a peer or (dis)connecting a machine must show up.
     surface["peers"] = _peers(root)
     surface["remote_roster"] = sorted(
-        f"{r['connection_id']}:{r['profile']}:{r['title']}" for r in _remote_roster(resolved)
+        f"{r['connection_id']}:{r['profile']}:{r['title']}"
+        for r in _remote_roster(resolved)
     )
     return _swallow(
-        lambda: hashlib.sha256(json.dumps(surface, sort_keys=True).encode("utf-8")).hexdigest()[:12],
+        lambda: hashlib.sha256(
+            json.dumps(surface, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:12],
         "unavailable",
     )
 
@@ -446,7 +506,9 @@ def epoch_line(home: str | os.PathLike | None = None) -> str:
     return f"{_EPOCH_PREFIX}{capability_fingerprint(home)}"
 
 
-def stored_prompt_capability_stale(stored_prompt: str, home: str | os.PathLike | None = None) -> bool:
+def stored_prompt_capability_stale(
+    stored_prompt: str, home: str | os.PathLike | None = None
+) -> bool:
     """True when ``stored_prompt`` is a Bot Chat prompt whose embedded epoch no
     longer matches disk. Unstamped prompts are never stale. Fails closed to
     "not stale" — a broken probe must not become a rebuild-every-turn cache burner."""
@@ -459,7 +521,9 @@ def stored_prompt_capability_stale(stored_prompt: str, home: str | os.PathLike |
     return current != "unavailable" and m.group(1) != current
 
 
-def stored_bot_chat_prompt_needs_upgrade(stored_prompt: str, home: str | os.PathLike | None = None) -> bool:
+def stored_bot_chat_prompt_needs_upgrade(
+    stored_prompt: str, home: str | os.PathLike | None = None
+) -> bool:
     """True when a Bot Chat session's stored prompt PREDATES the epoch mechanism (no stamp —
     including SOUL-era prompts whose frozen roster rode in from SOUL.md). The caller must only
     ask for sessions titled "Bot Chat"; we rebuild only when the probe would actually emit a

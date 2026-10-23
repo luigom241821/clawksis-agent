@@ -27,10 +27,13 @@ class TestRepetitionGuard:
 
     def test_multiline_paragraph_run_uses_true_period_coverage(self):
         rng = random.Random(11)
-        paragraph = "\n".join(
-            "".join(rng.choice("abcdefghijklmnopqrstuvwxyz ") for _ in range(151))
-            for _ in range(5)
-        ) + "\n"
+        paragraph = (
+            "\n".join(
+                "".join(rng.choice("abcdefghijklmnopqrstuvwxyz ") for _ in range(151))
+                for _ in range(5)
+            )
+            + "\n"
+        )
 
         # The incident unit was approximately 764 characters. Detection must
         # remain scale-free as the number of exact repeats grows.

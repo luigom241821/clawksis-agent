@@ -33,8 +33,6 @@ FIXTURE_TARGET_SCOPE_DETAILED = (
 )
 
 
-
-
 @pytest.mark.parametrize(
     ("text", "code"),
     [

@@ -17,12 +17,21 @@ import os
 import re
 from urllib.parse import urlsplit
 
-PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy")
+PROXY_ENV_KEYS = (
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "ALL_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "all_proxy",
+)
 
 
 def first_proxy_env_value() -> str:
     """First non-empty HTTPS_PROXY / HTTP_PROXY / ALL_PROXY value (any case), or ''."""
-    return next((v for k in PROXY_ENV_KEYS if (v := (os.environ.get(k) or "").strip())), "")
+    return next(
+        (v for k in PROXY_ENV_KEYS if (v := (os.environ.get(k) or "").strip())), ""
+    )
 
 
 def split_host_port(value: str) -> tuple[str, int | None]:
@@ -37,7 +46,9 @@ def split_host_port(value: str) -> tuple[str, int | None]:
         host = parsed.hostname or ""
         try:
             port = parsed.port
-        except ValueError:  # ``host:abc`` / ``host:99999``: keep the host, drop the port
+        except (
+            ValueError
+        ):  # ``host:abc`` / ``host:99999``: keep the host, drop the port
             port = None
     elif raw.startswith("[") and "]" in raw:
         host, _, rest = raw[1:].partition("]")
@@ -54,7 +65,9 @@ def no_proxy_entries(no_proxy_value: str | None = None) -> list[str]:
     """Comma/whitespace-separated NO_PROXY entries; from the environment (both casings) when
     ``no_proxy_value`` is None."""
     if no_proxy_value is None:
-        no_proxy_value = ",".join(os.environ.get(key, "") for key in ("NO_PROXY", "no_proxy"))
+        no_proxy_value = ",".join(
+            os.environ.get(key, "") for key in ("NO_PROXY", "no_proxy")
+        )
     return [part for part in re.split(r"[\s,]+", no_proxy_value.strip()) if part]
 
 
@@ -87,14 +100,20 @@ def loopback_request_kwargs(url: str) -> dict:
     """``requests.get`` kwargs for an in-process HTTP dial (CDP ``/json/version`` discovery /
     readiness): ``{"proxies": {"http": None, "https": None}}`` when ``url`` targets loopback so
     ``requests`` skips ``getproxies()`` (env and macOS system proxy), else ``{}``."""
-    return {"proxies": {"http": None, "https": None}} if is_loopback_host(split_host_port(url)[0]) else {}
+    return (
+        {"proxies": {"http": None, "https": None}}
+        if is_loopback_host(split_host_port(url)[0])
+        else {}
+    )
 
 
 def add_loopback_no_proxy(env: dict) -> dict:
     """Append the loopback hosts to ``NO_PROXY`` / ``no_proxy`` in ``env`` (both casings),
     keeping every operator-provided entry; returns ``env``. An operator ``*`` (bypass everything)
     already covers loopback and would stop being the wildcard once anything is appended to it."""
-    if any("*" in no_proxy_entries(env.get(key) or "") for key in ("NO_PROXY", "no_proxy")):
+    if any(
+        "*" in no_proxy_entries(env.get(key) or "") for key in ("NO_PROXY", "no_proxy")
+    ):
         return env  # both casings: requests/urllib read ``no_proxy`` first, so a loopback-only one would win
     for key in ("NO_PROXY", "no_proxy"):
         entries = no_proxy_entries(env.get(key) or "")
@@ -119,7 +138,9 @@ def no_proxy_entry_matches(entry: str, host: str, port: int | None = None) -> bo
     if token == "*":
         return True
     token_host, token_port = split_host_port(token)
-    if not token_host or (token_port is not None and (port is None or token_port != port)):
+    if not token_host or (
+        token_port is not None and (port is None or token_port != port)
+    ):
         return False
     host_ip = _ip_or_none(host)
     network = _ip_or_none(token_host, lambda v: ipaddress.ip_network(v, strict=False))
@@ -132,7 +153,9 @@ def no_proxy_entry_matches(entry: str, host: str, port: int | None = None) -> bo
 
 
 def should_bypass_proxy(
-    target_hosts: str | list[str] | tuple[str, ...] | set[str] | None, *, no_proxy_value: str | None = None,
+    target_hosts: str | list[str] | tuple[str, ...] | set[str] | None,
+    *,
+    no_proxy_value: str | None = None,
 ) -> bool:
     """True when NO_PROXY (the environment, or ``no_proxy_value``) matches at least one target
     host (a URL, ``host:port`` or bare host)."""
@@ -142,4 +165,5 @@ def should_bypass_proxy(
     candidates = [target_hosts] if isinstance(target_hosts, str) else list(target_hosts)
     return any(
         host and any(no_proxy_entry_matches(entry, host, port) for entry in entries)
-        for host, port in map(split_host_port, map(str, candidates)))
+        for host, port in map(split_host_port, map(str, candidates))
+    )

@@ -6,6 +6,7 @@ The multiplex ticker hands such a profile a ``SharedRouteAdapters`` view over
 the primary adapter map; ``_deliver_result`` resolves a transport from it per
 target using the same ``ProfileRoute.matches`` predicate as inbound routing.
 """
+
 import asyncio
 from concurrent.futures import Future
 from unittest.mock import MagicMock, patch
@@ -13,7 +14,10 @@ from unittest.mock import MagicMock, patch
 import clawk_yaml as yaml
 
 from cron.scheduler import _deliver_result
-from cron.scheduler_preflight import SharedRouteAdapters, _primary_profile_routes_for_current_home
+from cron.scheduler_preflight import (
+    SharedRouteAdapters,
+    _primary_profile_routes_for_current_home,
+)
 from gateway.config import Platform, PlatformConfig
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
@@ -21,9 +25,25 @@ PRIMARY_YAML = {
     "gateway": {
         "multiplex_profiles": True,
         "profile_routes": [
-            {"name": "fit", "platform": "discord", "chat_id": "1543065293755256852", "profile": "fitness"},
-            {"name": "off", "platform": "discord", "chat_id": "999", "profile": "fitness", "enabled": False},
-            {"name": "other", "platform": "discord", "chat_id": "777", "profile": "other"},
+            {
+                "name": "fit",
+                "platform": "discord",
+                "chat_id": "1543065293755256852",
+                "profile": "fitness",
+            },
+            {
+                "name": "off",
+                "platform": "discord",
+                "chat_id": "999",
+                "profile": "fitness",
+                "enabled": False,
+            },
+            {
+                "name": "other",
+                "platform": "discord",
+                "chat_id": "777",
+                "profile": "other",
+            },
         ],
     }
 }
@@ -52,10 +72,15 @@ def _run(job, adapters):
     config = MagicMock()
     config.platforms = {Platform.DISCORD: PlatformConfig(enabled=True)}
     config.get_home_channel = lambda p: None
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}), \
-         patch("tools.send_message_tool._send_to_platform", _fake_send_to_platform), \
-         patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro):
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch(
+            "cron.scheduler.load_config",
+            return_value={"cron": {"wrap_response": False}},
+        ),
+        patch("tools.send_message_tool._send_to_platform", _fake_send_to_platform),
+        patch("asyncio.run_coroutine_threadsafe", side_effect=fake_run_coro),
+    ):
         error = _deliver_result(job, "hello", adapters=adapters, loop=loop)
     return error, standalone
 
@@ -106,11 +131,15 @@ def test_satellite_routes_exact_target_through_primary_adapter(tmp_path, monkeyp
 
 def test_shared_view_is_falsy_without_routes_or_primary_adapters():
     assert not SharedRouteAdapters({}, [])
-    assert SharedRouteAdapters({Platform.DISCORD: object()}, []).get(Platform.DISCORD) is None
+    assert (
+        SharedRouteAdapters({Platform.DISCORD: object()}, []).get(Platform.DISCORD)
+        is None
+    )
 
 
 def test_guild_scoped_route_authorizes_cron_target_even_when_satellite_has_no_platform_block(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """The documented Discord route shape is ``guild_id + chat_id``. A cron target carries no guild
     anchor, so the route must be matched on its target-exact discriminators; and the satellite's
@@ -119,17 +148,36 @@ def test_guild_scoped_route_authorizes_cron_target_even_when_satellite_has_no_pl
     root = tmp_path / "root"
     sat_home = root / "profiles" / "fitness"
     sat_home.mkdir(parents=True)
-    (root / "config.yaml").write_text(yaml.safe_dump({
-        "gateway": {"multiplex_profiles": True, "profile_routes": [
-            {"platform": "discord", "guild_id": "G1", "chat_id": "C1", "profile": "fitness"}]},
-    }), encoding="utf-8")
+    (root / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "gateway": {
+                    "multiplex_profiles": True,
+                    "profile_routes": [
+                        {
+                            "platform": "discord",
+                            "guild_id": "G1",
+                            "chat_id": "C1",
+                            "profile": "fitness",
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     primary = _primary_adapter()
 
     token = set_clawk_home_override(str(sat_home))
     try:
-        shared = SharedRouteAdapters({Platform.DISCORD: primary}, _primary_profile_routes_for_current_home())
-        for satellite_platforms in ({}, {Platform.DISCORD: PlatformConfig(enabled=False)}):
+        shared = SharedRouteAdapters(
+            {Platform.DISCORD: primary}, _primary_profile_routes_for_current_home()
+        )
+        for satellite_platforms in (
+            {},
+            {Platform.DISCORD: PlatformConfig(enabled=False)},
+        ):
             primary.sent.clear()
             config = MagicMock()
             config.platforms = satellite_platforms
@@ -151,12 +199,22 @@ def test_live_native_adapter_without_platform_block_is_not_treated_as_disabled()
     config.platforms = {}
     adapter = object()
     resolved, err = _resolve_target_transport(
-        {"id": "j"}, Platform.DISCORD, "discord", {"platform": "discord", "chat_id": "C1"},
-        {Platform.DISCORD: adapter}, config)
+        {"id": "j"},
+        Platform.DISCORD,
+        "discord",
+        {"platform": "discord", "chat_id": "C1"},
+        {Platform.DISCORD: adapter},
+        config,
+    )
     assert err is None and resolved[2] is adapter and resolved[1].enabled
     # an explicitly disabled block still vetoes
     config.platforms = {Platform.DISCORD: PlatformConfig(enabled=False)}
     resolved, err = _resolve_target_transport(
-        {"id": "j"}, Platform.DISCORD, "discord", {"platform": "discord", "chat_id": "C1"},
-        {Platform.DISCORD: adapter}, config)
+        {"id": "j"},
+        Platform.DISCORD,
+        "discord",
+        {"platform": "discord", "chat_id": "C1"},
+        {Platform.DISCORD: adapter},
+        config,
+    )
     assert resolved is None and "not configured/enabled" in err

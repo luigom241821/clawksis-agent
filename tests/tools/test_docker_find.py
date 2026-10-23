@@ -16,21 +16,22 @@ def _reset_cache():
 
 
 class TestFindDocker:
-
     def test_not_in_path_falls_back_to_known_locations(self, tmp_path):
         # Create a fake docker binary at a known path
         fake_docker = tmp_path / "docker"
         fake_docker.write_text("#!/bin/sh\n")
         fake_docker.chmod(0o755)
 
-        with patch("tools.environments.docker.shutil.which", return_value=None), \
-             patch("tools.environments.docker._DOCKER_SEARCH_PATHS", [str(fake_docker)]):
+        with (
+            patch("tools.environments.docker.shutil.which", return_value=None),
+            patch("tools.environments.docker._DOCKER_SEARCH_PATHS", [str(fake_docker)]),
+        ):
             result = docker_mod.find_docker()
         assert result == str(fake_docker)
 
-
     def test_docker_preferred_over_podman(self):
         """When both docker and podman are on PATH, docker wins."""
+
         def which_side_effect(name):
             if name == "docker":
                 return "/usr/bin/docker"
@@ -38,7 +39,9 @@ class TestFindDocker:
                 return "/usr/bin/podman"
             return None
 
-        with patch("tools.environments.docker.shutil.which", side_effect=which_side_effect):
+        with patch(
+            "tools.environments.docker.shutil.which", side_effect=which_side_effect
+        ):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/docker"
 

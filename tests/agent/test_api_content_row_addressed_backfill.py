@@ -52,7 +52,9 @@ class TestSetMessageApiContent:
             rows = db.get_messages("s1")
             turn_1_id, turn_2_id = rows[0]["id"], rows[2]["id"]
 
-            assert db.set_message_api_content("s1", turn_2_id, "ok", "ok\n\nTURN-2") == 1
+            assert (
+                db.set_message_api_content("s1", turn_2_id, "ok", "ok\n\nTURN-2") == 1
+            )
             rows = {r["id"]: r for r in db.get_messages("s1")}
             assert rows[turn_1_id]["api_content"] == "ok\n\nTURN-1"
             assert rows[turn_2_id]["api_content"] == "ok\n\nTURN-2"
@@ -60,7 +62,9 @@ class TestSetMessageApiContent:
         finally:
             db.close()
 
-    def test_guards_refuse_wrong_session_or_mismatched_content_or_archived_row(self, tmp_path):
+    def test_guards_refuse_wrong_session_or_mismatched_content_or_archived_row(
+        self, tmp_path
+    ):
         db = self._open(tmp_path)
         try:
             db.create_session("s2", source="cli")
@@ -77,6 +81,7 @@ class TestSetMessageApiContent:
             assert db.set_message_api_content("s1", row_id, "hello", "x") == 0
         finally:
             db.close()
+
 
 class TestPrologueRowAddressedBackfill:
     """The prologue gate: backfill iff a durable row exists for this dict."""
@@ -99,6 +104,7 @@ class TestPrologueRowAddressedBackfill:
         )
         agent._session_db.set_message_api_content.assert_not_called()
         agent._session_db.set_latest_user_api_content.assert_not_called()
+
 
 class _RealPersistenceAgent(SessionPersistenceMixin, _FakeAgent):
     """Stand-in agent with the real SessionPersistenceMixin flush implementation."""
@@ -151,7 +157,9 @@ class TestRealEarlyFlushAndOverrideLifecycle:
         finally:
             db.close()
 
-    def test_pre_flushed_api_only_turn_without_injections_preserves_sidecar(self, tmp_path):
+    def test_pre_flushed_api_only_turn_without_injections_preserves_sidecar(
+        self, tmp_path
+    ):
         """[ehz0ah bug 1]: Pre-flushed clean input where the API turn has an API-only
         variant (e.g. voice prefix) and NO memory/plugin injection is composed.
         compose_user_api_content returns None, but the differing API-only bytes must
@@ -196,6 +204,7 @@ class TestRealEarlyFlushAndOverrideLifecycle:
             assert conv[0]["content"] == clean_text
             assert conv[0]["api_content"] == api_text
             from agent.turn_context import substitute_api_content
+
             substitute_api_content(conv[0])
             assert conv[0]["content"] == api_text
         finally:

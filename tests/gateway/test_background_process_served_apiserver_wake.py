@@ -18,7 +18,10 @@ from types import SimpleNamespace
 from gateway.config import Platform
 from gateway.run import GatewayRunner
 from tests.gateway.test_kanban_notifier_served_apiserver_wake import (
-    RecordingApiServerAdapter, _FakeHttpSession, _own_session, served,
+    RecordingApiServerAdapter,
+    _FakeHttpSession,
+    _own_session,
+    served,
 )
 
 SESSION = "20260918_090000_aa11bb"  # a served profile's api_server session (raw id)
@@ -36,46 +39,84 @@ def _make_runner(*, adapter):
 
 def _completion_event(session_id, session_key=None):
     """Exactly what ``_bind_api_server_session`` leaves on a process event: the raw id, no profile."""
-    return {"type": "completion", "session_id": "proc_1", "command": "make build", "exit_code": 0,
-            "session_key": session_key if session_key is not None else session_id,
-            "platform": "api_server", "chat_id": session_id, "user_id": "", "user_name": "", "thread_id": ""}
+    return {
+        "type": "completion",
+        "session_id": "proc_1",
+        "command": "make build",
+        "exit_code": 0,
+        "session_key": session_key if session_key is not None else session_id,
+        "platform": "api_server",
+        "chat_id": session_id,
+        "user_id": "",
+        "user_name": "",
+        "thread_id": "",
+    }
 
 
 def _wake(runner, evt):
-    return asyncio.run(runner._inject_watch_notification("[SYSTEM: make build exited 0]", evt))
+    return asyncio.run(
+        runner._inject_watch_notification("[SYSTEM: make build exited 0]", evt)
+    )
 
 
-def test_served_profile_completion_wakes_in_process_only_for_the_session_it_owns(served, monkeypatch):
+def test_served_profile_completion_wakes_in_process_only_for_the_session_it_owns(
+    served, monkeypatch
+):
     import aiohttp
 
     _own_session(served.builder, SESSION, "builder")
     _FakeHttpSession.calls = []
     monkeypatch.setattr(aiohttp, "ClientSession", _FakeHttpSession)
     adapter = RecordingApiServerAdapter()
-    adapter._api_key, adapter._host, adapter._port, adapter._model_name = "k" * 20, "127.0.0.1", 8642, "clawk"
+    adapter._api_key, adapter._host, adapter._port, adapter._model_name = (
+        "k" * 20,
+        "127.0.0.1",
+        8642,
+        "clawk",
+    )
 
     # Raw event (no profile anywhere): the owning store is the proof.
     assert _wake(_make_runner(adapter=adapter), _completion_event(SESSION)) is True
     assert [t["session_id"] for t in adapter.turns] == [SESSION]
     assert adapter.homes == [str(served.builder)] and adapter.profiles == ["builder"]
-    assert _FakeHttpSession.calls == []  # no HTTP self-post, so no secondary API_SERVER_KEY
+    assert (
+        _FakeHttpSession.calls == []
+    )  # no HTTP self-post, so no secondary API_SERVER_KEY
 
     # Event whose source names the route-only served profile: same in-process wake, not deferred.
     adapter.turns.clear()
-    assert _wake(_make_runner(adapter=adapter), _completion_event(SESSION, f"agent:builder:api_server:dm:{SESSION}")) is True
-    assert [t["session_id"] for t in adapter.turns] == [SESSION] and adapter.profiles[-1] == "builder"
+    assert (
+        _wake(
+            _make_runner(adapter=adapter),
+            _completion_event(SESSION, f"agent:builder:api_server:dm:{SESSION}"),
+        )
+        is True
+    )
+    assert [t["session_id"] for t in adapter.turns] == [SESSION] and adapter.profiles[
+        -1
+    ] == "builder"
 
     # A served profile that does not own the session: no wake in anyone's store (retryable False).
     adapter.turns.clear()
     _own_session(served.atlas, "atlas-owned", "atlas")
-    assert _wake(_make_runner(adapter=adapter), _completion_event("atlas-owned", "agent:builder:api_server:dm:atlas-owned")) is False
+    assert (
+        _wake(
+            _make_runner(adapter=adapter),
+            _completion_event("atlas-owned", "agent:builder:api_server:dm:atlas-owned"),
+        )
+        is False
+    )
     assert adapter.turns == [] and _FakeHttpSession.calls == []
 
     # Control: the default profile's own session keeps the HTTP self-post.
     _own_session(served.root, "default-owned", "default")
-    assert _wake(_make_runner(adapter=adapter), _completion_event("default-owned")) is True
+    assert (
+        _wake(_make_runner(adapter=adapter), _completion_event("default-owned")) is True
+    )
     assert adapter.turns == []
-    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == ["default-owned"]
+    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == [
+        "default-owned"
+    ]
     assert _FakeHttpSession.calls[0]["url"].endswith("/v1/chat/completions")
 
 
@@ -87,9 +128,16 @@ def test_single_profile_gateway_keeps_the_http_self_post(served, monkeypatch):
     _FakeHttpSession.calls = []
     monkeypatch.setattr(aiohttp, "ClientSession", _FakeHttpSession)
     adapter = RecordingApiServerAdapter()
-    adapter._api_key, adapter._host, adapter._port, adapter._model_name = "k" * 20, "127.0.0.1", 8642, "clawk"
+    adapter._api_key, adapter._host, adapter._port, adapter._model_name = (
+        "k" * 20,
+        "127.0.0.1",
+        8642,
+        "clawk",
+    )
     runner = _make_runner(adapter=adapter)
     runner.config = SimpleNamespace(multiplex_profiles=False, profile_routes=())
     assert _wake(runner, _completion_event(SESSION)) is True
     assert adapter.turns == []
-    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == [SESSION]
+    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == [
+        SESSION
+    ]

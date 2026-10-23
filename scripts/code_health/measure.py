@@ -21,7 +21,9 @@ from scripts.code_health.ts_measure import measure_ts
 _PATTERNS_FILE = Path("scripts/ci/profile_scope_patterns.json")
 
 
-def _regex_rules(repo: Path) -> list[tuple[str, re.Pattern[str], re.Pattern[str] | None]]:
+def _regex_rules(
+    repo: Path,
+) -> list[tuple[str, re.Pattern[str], re.Pattern[str] | None]]:
     data = json.loads((repo / _PATTERNS_FILE).read_text(encoding="utf-8-sig"))
     by_id = {p["id"]: p for p in data["patterns"]}
     out = []
@@ -64,8 +66,11 @@ _LINE_BREAKS = frozenset("\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029")
 def _string_statements(tree: ast.Module):
     """Docstrings and other bare string statements: prose, never executed."""
     for node in ast.walk(tree):
-        if (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
-                and isinstance(node.value.value, str)):
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
             yield node
 
 
@@ -76,7 +81,9 @@ def _executable_lines(text: str, tree: ast.Module) -> list[str]:
     docstring that mentions one must not count as doing it. String literals inside code stay:
     `os.getenv("DISCORD_TOKEN")` is matched by its argument.
     """
-    rows = [list(line) for line in io.StringIO(text).readlines()]  # ast/tokenize line numbering
+    rows = [
+        list(line) for line in io.StringIO(text).readlines()
+    ]  # ast/tokenize line numbering
 
     def blank(line: int, start: int, end: int | None = None) -> None:
         row = rows[line - 1]
@@ -85,7 +92,9 @@ def _executable_lines(text: str, tree: ast.Module) -> list[str]:
                 row[col] = " "
 
     def char_col(line: int, byte_col: int) -> int:  # ast columns are UTF-8 byte offsets
-        return len("".join(rows[line - 1]).encode("utf-8")[:byte_col].decode("utf-8", "ignore"))
+        return len(
+            "".join(rows[line - 1]).encode("utf-8")[:byte_col].decode("utf-8", "ignore")
+        )
 
     try:
         for tok in tokenize.generate_tokens(io.StringIO(text).readline):
@@ -132,8 +141,13 @@ class Measurer:
                 dest.write_text(text, encoding="utf-8", newline="")
             return self._measure_in(root, contents)
 
-    def _measure_in(self, root: Path, contents: dict[str, str]) -> dict[str, FileMeasure]:
-        result = {path: FileMeasure(path, lines=text.splitlines()) for path, text in contents.items()}
+    def _measure_in(
+        self, root: Path, contents: dict[str, str]
+    ) -> dict[str, FileMeasure]:
+        result = {
+            path: FileMeasure(path, lines=text.splitlines())
+            for path, text in contents.items()
+        }
         py = sorted(p for p in contents if in_scope(p) == "py")
         ts = sorted(p for p in contents if in_scope(p) == "ts")
         ruff_out = run_ruff(self.ruff, root, py) if py else {}
@@ -157,7 +171,9 @@ class Measurer:
             return
         scopes = py_structure.measure_structure(fm, tree)
         if ruff_file is None or ruff_file.errors:
-            fm.error = "ruff could not measure it: " + "; ".join((ruff_file.errors if ruff_file else ["no result"])[:3])
+            fm.error = "ruff could not measure it: " + "; ".join(
+                (ruff_file.errors if ruff_file else ["no result"])[:3]
+            )
         else:
             _own_complexity(fm, ruff_file.cc_by_line)
             for code, row in ruff_file.hits:
@@ -186,14 +202,20 @@ class Measurer:
     def _typescript(fm: FileMeasure, data: dict | None) -> None:
         fm.metrics["FILE_LINES"] = len(fm.lines)
         if data is None or "error" in data:
-            fm.error = (data or {}).get("error", "the TypeScript measurer returned nothing for it")
+            fm.error = (data or {}).get(
+                "error", "the TypeScript measurer returned nothing for it"
+            )
             return
         fm.comments = {line: text for line, text in data.get("comments", [])}
         for unit in data.get("units", []):
             fm.units[unit["q"]] = Unit(
                 qualname=unit["q"],
                 line=unit["line"],
-                metrics={"CC": unit["cc"], "FUNC_LINES": unit["lines"], "NESTING": unit["nesting"]},
+                metrics={
+                    "CC": unit["cc"],
+                    "FUNC_LINES": unit["lines"],
+                    "NESTING": unit["nesting"],
+                },
                 body_hash=unit["hash"],
                 end_line=unit.get("end"),
             )

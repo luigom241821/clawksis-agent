@@ -13,6 +13,7 @@ complete record of what the model was told. A fresh agent (the gateway builds on
 from the transcript once; a long-lived agent (CLI, TUI, Desktop) keeps it on itself. A note is sent
 only when the difference changes.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,7 +51,9 @@ def index_entries(prompt: Any) -> dict[str, str]:
         if line.strip().startswith("- ") and (name := _row_name(line)):
             entries.setdefault(name, line.rstrip())
         elif names_only := _NAMES_ONLY_RE.search(line):
-            for name in filter(None, (n.strip() for n in names_only.group(1).split(","))):
+            for name in filter(
+                None, (n.strip() for n in names_only.group(1).split(","))
+            ):
                 entries.setdefault(name, "")
     return entries
 
@@ -60,7 +63,10 @@ def _render(added: dict[str, str], removed: set[str]) -> str:
         return f"{_NOTE_PREFIX}{_ACCURATE_AGAIN}]"
     parts = [_NOTE_PREFIX]
     if added:
-        parts += [_ADDED_HEAD, *(added[name] or f"{_ROW}{name}" for name in sorted(added))]
+        parts += [
+            _ADDED_HEAD,
+            *(added[name] or f"{_ROW}{name}" for name in sorted(added)),
+        ]
     if removed:
         parts.append(f"{_REMOVED_HEAD} {', '.join(sorted(removed))}")
     return "\n".join(parts) + "]"
@@ -78,7 +84,7 @@ def _parse(note: str) -> _Delta:
     removed: set[str] = set()
     for line in lines[1:]:
         if line.startswith(_REMOVED_HEAD):
-            tail = line[len(_REMOVED_HEAD):].removesuffix("]")
+            tail = line[len(_REMOVED_HEAD) :].removesuffix("]")
             removed = {n.strip() for n in tail.split(",") if n.strip()}
             break
     return frozenset(added), frozenset(removed)
@@ -91,7 +97,11 @@ def _announced(conversation_history: Any) -> _Delta:
         if not isinstance(msg, dict) or msg.get("role") != "user":
             continue
         sidecar = msg.get("api_content")
-        text = (sidecar if isinstance(sidecar, str) else "") + "\n" + flatten_message_text(msg.get("content"))
+        text = (
+            (sidecar if isinstance(sidecar, str) else "")
+            + "\n"
+            + flatten_message_text(msg.get("content"))
+        )
         if _NOTE_PREFIX in text:
             return _parse(text.rsplit(_NOTE_PREFIX, 1)[1])
     return frozenset(), frozenset()
@@ -105,20 +115,28 @@ def stage_skills_index_note(agent: Any, prompt: Any, conversation_history: Any) 
     embedder-supplied prompt), and announcing the whole catalog there would only add noise. MoA and
     codex_app_server turns never stamp the ``api_content`` sidecar, so the note could not be read
     back from the transcript; those modes skip it, like the surface-switch note."""
-    if getattr(agent, "provider", None) == "moa" or getattr(agent, "api_mode", None) == "codex_app_server":
+    if (
+        getattr(agent, "provider", None) == "moa"
+        or getattr(agent, "api_mode", None) == "codex_app_server"
+    ):
         return False
     stored = index_entries(prompt)
     if not stored:
         return False
     try:
         from agent.system_prompt import _skills_prompt
+
         current = index_entries(_skills_prompt(agent))
     except Exception:
         logger.debug("skills index delta: current index unavailable", exc_info=True)
         return False
     told = getattr(agent, "_skills_index_told", None)
     key = hash(prompt)
-    told_added, told_removed = told[1] if isinstance(told, tuple) and told[0] == key else _announced(conversation_history)
+    told_added, told_removed = (
+        told[1]
+        if isinstance(told, tuple) and told[0] == key
+        else _announced(conversation_history)
+    )
     # What the model believes it can load: the prompt's index as amended by the newest note. A rebuilt
     # prompt (compaction) that now lists what an earlier note announced needs no further note.
     if (set(stored) | told_added) - told_removed == set(current):
@@ -131,6 +149,8 @@ def stage_skills_index_note(agent: Any, prompt: Any, conversation_history: Any) 
     logger.info(
         "Session %s: skills changed (+%d/-%d) since the system prompt was built; delivering the "
         "change as a turn note (prefix cache preserved).",
-        getattr(agent, "session_id", None), len(added), len(removed),
+        getattr(agent, "session_id", None),
+        len(added),
+        len(removed),
     )
     return True

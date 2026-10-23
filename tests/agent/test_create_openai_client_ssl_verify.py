@@ -27,25 +27,29 @@ def clean_tls_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_build_keepalive_http_client_ssl_cert_file_uses_shared_context(clean_tls_env, monkeypatch):
+def test_build_keepalive_http_client_ssl_cert_file_uses_shared_context(
+    clean_tls_env, monkeypatch
+):
     # The PM resolver passes a platform context when SSL_CERT_FILE is set
     # (httpx reads CA env vars before the injected verifier gets control).
     monkeypatch.setenv("SSL_CERT_FILE", certifi.where())
     verify = resolve_httpx_verify()
     assert isinstance(verify, (ssl.SSLContext, _AnyTlsContext))
     client = AIAgent._build_keepalive_http_client(
-        "https://ollama.example.com/v1", verify=verify,
+        "https://ollama.example.com/v1",
+        verify=verify,
     )
     assert isinstance(client, httpx.Client)
-    assert isinstance(client._transport._pool._ssl_context, (ssl.SSLContext, _AnyTlsContext))
-
-
+    assert isinstance(
+        client._transport._pool._ssl_context, (ssl.SSLContext, _AnyTlsContext)
+    )
 
 
 def test_build_keepalive_http_client_ssl_verify_false(clean_tls_env):
     verify = resolve_httpx_verify(ssl_verify=False)
     client = AIAgent._build_keepalive_http_client(
-        "https://ollama.example.com/v1", verify=verify,
+        "https://ollama.example.com/v1",
+        verify=verify,
     )
     assert isinstance(client, httpx.Client)
     assert client._transport._pool._ssl_context.check_hostname is False

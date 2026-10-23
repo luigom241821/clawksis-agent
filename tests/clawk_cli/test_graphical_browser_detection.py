@@ -62,5 +62,3 @@ def test_browser_env_pointing_at_console_browser_refuses(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setenv("BROWSER", "/usr/bin/w3m")
     assert _can_open_graphical_browser() is False
-
-

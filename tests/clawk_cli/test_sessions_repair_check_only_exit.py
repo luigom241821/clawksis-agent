@@ -3,6 +3,7 @@
 Automation gates on the exit status; printing the reason and exiting 0 read as "healthy"
 (#63386, PR #103321).
 """
+
 import argparse
 from pathlib import Path
 

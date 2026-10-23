@@ -25,11 +25,12 @@ class TestAnthropicPoolExhaustedFallsBackToEnv:
     def test_pool_present_no_entry_falls_back_to_resolve_token(self, monkeypatch):
         """pool=(True, None) but a valid env token exists → client is built."""
         monkeypatch.setenv("ANTHROPIC_TOKEN", "«redacted:sk-…»-oauth-token")
-        with patch(
-            "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
-        ), patch(
-            "agent.anthropic_adapter.build_anthropic_client"
-        ) as mock_build:
+        with (
+            patch(
+                "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
+            ),
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
+        ):
             mock_build.return_value = MagicMock()
             from agent.auxiliary_client import _try_anthropic, AnthropicAuxiliaryClient
 
@@ -49,10 +50,13 @@ class TestAnthropicPoolExhaustedFallsBackToEnv:
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        with patch(
-            "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
-        ), patch(
-            "agent.anthropic_credentials.resolve_anthropic_token", return_value=None
+        with (
+            patch(
+                "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
+            ),
+            patch(
+                "agent.anthropic_credentials.resolve_anthropic_token", return_value=None
+            ),
         ):
             from agent.auxiliary_client import _try_anthropic
 
@@ -71,10 +75,14 @@ class TestAnthropicPoolExhaustedFallsBackToEnv:
             captured["base_url"] = base_url
             return MagicMock()
 
-        with patch(
-            "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
-        ), patch(
-            "agent.anthropic_adapter.build_anthropic_client", side_effect=_fake_build
+        with (
+            patch(
+                "agent.auxiliary_client._select_pool_entry", return_value=(True, None)
+            ),
+            patch(
+                "agent.anthropic_adapter.build_anthropic_client",
+                side_effect=_fake_build,
+            ),
         ):
             from agent.auxiliary_client import _try_anthropic
 

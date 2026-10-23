@@ -21,7 +21,9 @@ class _ControlledRequest:
         """Match PTB's response authority used by the progress observer."""
         return json.loads(payload.decode("utf-8", "replace"))
 
-    def __init__(self, *args, result=None, error=None, entered=None, release=None, **kwargs):
+    def __init__(
+        self, *args, result=None, error=None, entered=None, release=None, **kwargs
+    ):
         self.result = result
         self.error = error
         self.entered = entered
@@ -140,7 +142,9 @@ async def _request_for_generation(generation, request, *args):
 
 
 @pytest.mark.asyncio
-async def test_polling_disconnect_webhook_reconnect_heals_webhook_send_path(monkeypatch):
+async def test_polling_disconnect_webhook_reconnect_heals_webhook_send_path(
+    monkeypatch,
+):
     adapter = _make_adapter()
     polling_app = _lifecycle_app()
     webhook_app = _lifecycle_app()
@@ -297,7 +301,10 @@ async def test_non_finite_fallback_discovery_timeout_uses_finite_default(monkeyp
     original_deadline = tg_adapter._await_with_thread_deadline
 
     async def deadline(awaitable, timeout, **_kwargs):
-        if getattr(getattr(awaitable, "cr_code", None), "co_name", "") == "stuck_discovery":
+        if (
+            getattr(getattr(awaitable, "cr_code", None), "co_name", "")
+            == "stuck_discovery"
+        ):
             assert timeout == 5.0
             awaitable.close()
             raise TimeoutError()
@@ -315,7 +322,9 @@ async def test_non_finite_fallback_discovery_timeout_uses_finite_default(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_fallback_disabled_excludes_configured_ips_from_proxy_targets(monkeypatch):
+async def test_fallback_disabled_excludes_configured_ips_from_proxy_targets(
+    monkeypatch,
+):
     """Disabled fallback IPs must not affect proxy bypass decisions."""
     adapter = _make_adapter()
     polling_app = _lifecycle_app()
@@ -463,7 +472,9 @@ async def test_general_request_success_cannot_record_polling_progress(monkeypatc
     assert builder.polling_request is _ControlledRequest.instances[1]
 
     builder.general_request.result = (200, b'{"ok":true}')
-    result = await builder.general_request.do_request("https://api.telegram.org/sendMessage")
+    result = await builder.general_request.do_request(
+        "https://api.telegram.org/sendMessage"
+    )
 
     assert result == (200, b'{"ok":true}')
     assert not progress.is_set()
@@ -502,9 +513,7 @@ async def test_disconnect_cancels_recovery_before_it_can_rearm_progress(monkeypa
 
     monkeypatch.setattr(tg_adapter.asyncio, "sleep", immediate_backoff)
     monkeypatch.setattr(adapter, "_drain_polling_connections", blocked_drain)
-    monkeypatch.setattr(
-        adapter._app.updater, "start_polling", blocked_start_polling
-    )
+    monkeypatch.setattr(adapter._app.updater, "start_polling", blocked_start_polling)
     monkeypatch.setattr(adapter, "_set_status_indicator", blocked_status_indicator)
 
     recovery = asyncio.create_task(

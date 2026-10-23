@@ -26,14 +26,22 @@ def _config_text(capsys, api_key) -> str:
     return capsys.readouterr().out
 
 
-def test_config_labels_vertex_callable_as_google_oauth_without_minting(capsys, monkeypatch):
+def test_config_labels_vertex_callable_as_google_oauth_without_minting(
+    capsys, monkeypatch
+):
     import agent.vertex_adapter as va
 
     mints: list[int] = []
-    monkeypatch.setattr(va, "get_vertex_credentials", lambda *_a, **_k: mints.append(1) or ("ya29.x", "p"))
+    monkeypatch.setattr(
+        va,
+        "get_vertex_credentials",
+        lambda *_a, **_k: mints.append(1) or ("ya29.x", "p"),
+    )
     out = _config_text(capsys, va.vertex_access_token)
 
-    api_line = next(line for line in out.splitlines() if t("cli.config.label_api_key") in line)
+    api_line = next(
+        line for line in out.splitlines() if t("cli.config.label_api_key") in line
+    )
     assert t("cli.config.google_vertex_oauth") in api_line, out
     assert t("cli.config.microsoft_entra_id") not in out, out
     assert mints == [], "/config minted a Vertex token just to display it"

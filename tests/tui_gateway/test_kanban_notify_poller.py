@@ -87,9 +87,7 @@ class TestCollectKanbanNotifications:
         conn = kbc.connect()
         try:
             with kb.write_txn(conn):
-                conn.execute(
-                    "UPDATE tasks SET status = 'ready' WHERE id = ?", (tid,)
-                )
+                conn.execute("UPDATE tasks SET status = 'ready' WHERE id = ?", (tid,))
                 kb._append_event(conn, tid, "status", {"status": "ready"})
             assert kb.complete_task(conn, tid, summary="review corrections")
         finally:
@@ -243,9 +241,10 @@ class TestFormatKanbanEventText:
             ev = SimpleNamespace(kind=kind, payload={})
             assert _format_kanban_event_text(self.SUB, self.TASK, ev, "main") is None
 
-
     def test_timed_out_with_bad_payload_does_not_raise(self):
-        ev = SimpleNamespace(kind="timed_out", payload={"limit_seconds": "not-a-number"})
+        ev = SimpleNamespace(
+            kind="timed_out", payload={"limit_seconds": "not-a-number"}
+        )
         text = _format_kanban_event_text(self.SUB, self.TASK, ev, "")
         assert "timed out" in text
 
@@ -266,13 +265,17 @@ class TestNotificationPollerLoopKanbanWiring:
         submits: list = []
         monkeypatch.setattr(server, "_KANBAN_POLL_SECONDS", 0.01)
         monkeypatch.setattr(
-            server, "_emit", lambda event, sid, payload=None: emits.append((event, payload))
+            server,
+            "_emit",
+            lambda event, sid, payload=None: emits.append((event, payload)),
         )
+
         def accept(rid, sid, sess, text):
             # Model execution is replaced, including its concrete admission receipt.
             server._emit("message.start", sid)
             submits.append(text)
             return True
+
         monkeypatch.setattr(server, "_run_prompt_submit", accept)
         stop = threading.Event()
         thread = threading.Thread(
@@ -332,8 +335,10 @@ class TestNotificationPollerLoopKanbanWiring:
             # Busy: the status line appears and the event is buffered, but no
             # agent turn is dispatched while another turn is running.
             assert self._wait_for(
-                lambda: any(e == "status.update" for e, _ in emits)
-                and session.get("_kanban_pending")
+                lambda: (
+                    any(e == "status.update" for e, _ in emits)
+                    and session.get("_kanban_pending")
+                )
             )
             assert not submits
 

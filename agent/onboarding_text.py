@@ -12,13 +12,21 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from agent.onboarding_first_tasks import (
-    FIXED_ID, MAX_LABEL, MAX_PICKS, OWN_TASK, TASK_BY_ID, eligible_tasks, task_skills,
+    FIXED_ID,
+    MAX_LABEL,
+    MAX_PICKS,
+    OWN_TASK,
+    TASK_BY_ID,
+    eligible_tasks,
+    task_skills,
 )
 from agent.onboarding_flow import Facts, next_beat
 from tools.set_theme_tool import ACCENT_SWATCHES
 
 CHAT_TITLE = "Getting started"
-GREETING = "Hi, I'm Clawksis. Let's set things up for you. Then we'll get something cool done."
+GREETING = (
+    "Hi, I'm Clawksis. Let's set things up for you. Then we'll get something cool done."
+)
 
 # The scripted opening in each desktop UI language (apps/desktop/src/i18n/languages.ts), played before
 # the model speaks; the model writes the rest of the run in the user's language itself. Each greeting
@@ -69,6 +77,7 @@ def question(beat: str, locale: str | None) -> str:
         return _NAME_QUESTIONS.get(ui_language(locale), QUESTIONS["name"])
     return QUESTIONS[beat]
 
+
 QUESTIONS = {
     "name": "What should I call you?",
     "theme": "Pick a colour.",
@@ -79,15 +88,23 @@ QUESTIONS = {
     "build": "Know what you'd like me to make?",
 }
 
-_SET_THEME = 'tool_call {"calls":[{"name":"set_theme","arguments":{"accent":"violet"}}]}'
+_SET_THEME = (
+    'tool_call {"calls":[{"name":"set_theme","arguments":{"accent":"violet"}}]}'
+)
 _TOUR_CALL = 'tool_call {"calls":[{"name":"gui_tour","arguments":{"action":"start","preset":"%s"}}]}'
 
 PROFILE_DIMENSIONS = (
-    ("agent experience", "new to AI apps / chat apps only / has used local agents / builds agents"),
+    (
+        "agent experience",
+        "new to AI apps / chat apps only / has used local agents / builds agents",
+    ),
     ("technical depth", "non-developer / tinkerer / developer"),
     ("creative work", "none / hobby / regular"),
     ("gaming", "none / casual / enthusiast"),
-    ("local compute", "cloud only / small local models / strong local (Spark, large GPU or unified memory)"),
+    (
+        "local compute",
+        "cloud only / small local models / strong local (Spark, large GPU or unified memory)",
+    ),
     ("work context", "personal / work / mixed"),
     ("machine role", "daily driver / dedicated AI box / remote server"),
 )
@@ -100,22 +117,31 @@ _NVIDIA = {
 
 
 def facts_block(facts: Facts) -> str:
-    whose = ("the computer running Clawksis, which is not the one in front of the user"
-             if facts.facts_source == "remote" else "this computer")
-    lines = [f"What you know about {whose}: {facts.os} on {facts.arch or 'an unknown architecture'}, "
-             f"a {facts.machine_kind}."]
+    whose = (
+        "the computer running Clawksis, which is not the one in front of the user"
+        if facts.facts_source == "remote"
+        else "this computer"
+    )
+    lines = [
+        f"What you know about {whose}: {facts.os} on {facts.arch or 'an unknown architecture'}, "
+        f"a {facts.machine_kind}."
+    ]
     if facts.nvidia_platform in _NVIDIA:
         lines.append(_NVIDIA[facts.nvidia_platform])
     if facts.locale:
         lines.append(f"Locale: {facts.locale}.")
-    lines.append("Never recite these. A fact that is missing is unknown. When the user says otherwise, "
-                 "believe the user.")
+    lines.append(
+        "Never recite these. A fact that is missing is unknown. When the user says otherwise, "
+        "believe the user."
+    )
     return " ".join(lines)
 
 
 def opening_prompt(facts: Facts) -> str:
     """The hidden first turn of the onboarding chat: every rule of the run."""
-    dimensions = "\n".join(f"- {name}: {buckets}" for name, buckets in PROFILE_DIMENSIONS)
+    dimensions = "\n".join(
+        f"- {name}: {buckets}" for name, buckets in PROFILE_DIMENSIONS
+    )
     return f"""[System note: This is the user's first time opening the Clawksis desktop app. You run their first-run onboarding in this chat. The beats, in order: their name, the theme (accent colour; light or dark only if they ask), the layout, connectors, plugins, a tour, then the first thing you build for them.
 
 How it works:
@@ -153,7 +179,8 @@ _LOOK_AROUND = (
     "only installed apps, developer tools, the OS and the hardware; never personal files, documents, browser "
     "data or messages without a specific ask. Then show the card with what you suggest: "
     'setup_beat(beat="connectors", suggest=[<connector slugs>]). If they say no, show it with '
-    'setup_beat(beat="connectors").')
+    'setup_beat(beat="connectors").'
+)
 
 # How a typed answer settles each beat without the card.
 _TYPED_ANSWER = {
@@ -163,13 +190,17 @@ _TYPED_ANSWER = {
     "connectors": 'setup_beat(beat="connectors", value="continue") for "done" or "continue", skip=true for "skip"',
     "plugins": 'setup_beat(beat="plugins", value="continue") for "done" or "continue", skip=true for "skip"',
     "tour": 'setup_beat(beat="tour", value="quick", "full" or "skip"), bucketing their words into one of the three',
-    "build": ('setup_beat(beat="build", value=<id>) for an option on the card; a task of their own is '
-              'setup_beat(beat="build", value="own"), then build it'),
+    "build": (
+        'setup_beat(beat="build", value=<id>) for an option on the card; a task of their own is '
+        'setup_beat(beat="build", value="own"), then build it'
+    ),
 }
 
-_CLOSE = ('When the first thing is built and shown, ask with clarify: "How does this look?" with the choices '
-          '"Looks right", "Change something" and "Take it further", exactly. Put the next-step idea in your text. '
-          'After they answer, call setup_beat(beat="done").')
+_CLOSE = (
+    'When the first thing is built and shown, ask with clarify: "How does this look?" with the choices '
+    '"Looks right", "Change something" and "Take it further", exactly. Put the next-step idea in your text. '
+    'After they answer, call setup_beat(beat="done").'
+)
 
 _HOW_TO_WORK = (
     "Real data only: this computer, their connected apps, the live web. Never mock or invent data.",
@@ -185,12 +216,16 @@ _PREVIEW_CALL = 'tool_call {"calls":[{"name":"desktop_preview","arguments":{"act
 
 def _preview_line(facts: Facts) -> str:
     """Every host shows results in the app's preview pane, which watches a local file but not a remote one."""
-    reload = ("On this host it does not reload by itself: open it again after each change."
-              if facts.facts_source == "remote" else
-              "Open it once, early: it reloads when the file changes, so keep improving the same file while they "
-              "watch.")
-    return (f"Show results in the preview pane beside the chat with {_PREVIEW_CALL}; it shows HTML, images and "
-            f"PDFs. {reload} Say it is open only after the call succeeds.")
+    reload = (
+        "On this host it does not reload by itself: open it again after each change."
+        if facts.facts_source == "remote"
+        else "Open it once, early: it reloads when the file changes, so keep improving the same file while they "
+        "watch."
+    )
+    return (
+        f"Show results in the preview pane beside the chat with {_PREVIEW_CALL}; it shows HTML, images and "
+        f"PDFs. {reload} Say it is open only after the call succeeds."
+    )
 
 
 _NPM = "https://cdn.jsdelivr.net/npm/"
@@ -216,42 +251,69 @@ _CONNECTORS = (
     "using the app slug, then the slug plus an action (a bare slug misses actions). tool_describe every action you "
     'need in one batch, then call them through tool_call(calls=[{"name": "connectors__<slug>__<ACTION>", '
     '"arguments": {...}}]). Resolve names to ids before acting. Read only; ask before any write, and say that a '
-    "write may run as the connector's bot.")
+    "write may run as the connector's bot."
+)
 _CONNECTOR_TASKS = ("brief", "week")
 
 _OS_LINES = {
-    "macos": ("This Mac: check with `which brew` and `ls -d /Applications/<App>.app`; install with "
-              "`brew install --cask <app>`; on Apple silicon check `lipo -archs` for a binary's architecture."),
-    "windows": ("This PC: check with `winget list --accept-source-agreements`; install with `winget install <id> "
-                "--accept-source-agreements --accept-package-agreements` (without both flags a fresh profile hangs "
-                "on an agreements prompt)."),
-    "linux": ("This Linux machine: check with `which`, and `flatpak list` when flatpak is there; install with "
-              "`flatpak install -y flathub <id>`. Anything that needs sudo is listed for the user, never run."),
+    "macos": (
+        "This Mac: check with `which brew` and `ls -d /Applications/<App>.app`; install with "
+        "`brew install --cask <app>`; on Apple silicon check `lipo -archs` for a binary's architecture."
+    ),
+    "windows": (
+        "This PC: check with `winget list --accept-source-agreements`; install with `winget install <id> "
+        "--accept-source-agreements --accept-package-agreements` (without both flags a fresh profile hangs "
+        "on an agreements prompt)."
+    ),
+    "linux": (
+        "This Linux machine: check with `which`, and `flatpak list` when flatpak is there; install with "
+        "`flatpak install -y flathub <id>`. Anything that needs sudo is listed for the user, never run."
+    ),
 }
-_ARM_WINDOWS = ("On Windows on Arm, read arm64 vs x64 from winget's install output, not the manifest, and say when "
-                "an app is x64 only.")
-_SPARK_LINE = "This machine is built for local models; say so once when it fits what they asked."
+_ARM_WINDOWS = (
+    "On Windows on Arm, read arm64 vs x64 from winget's install output, not the manifest, and say when "
+    "an app is x64 only."
+)
+_SPARK_LINE = (
+    "This machine is built for local models; say so once when it fits what they asked."
+)
 _REMOTE_LINE = "Clawksis runs on another computer than the user's: say which machine anything is installed on."
 
 
-def _task_prompt(option: str, label: str, resolve_skill: Callable[[str], str | None]) -> list[str]:
+def _task_prompt(
+    option: str, label: str, resolve_skill: Callable[[str], str | None]
+) -> list[str]:
     task = TASK_BY_ID.get(option, OWN_TASK)
     picked = f'They picked "{label or task.label}". ' if (label or task.label) else ""
     steps = [f"{n}. {step}" for n, step in enumerate(task.steps, 1)]
-    return [f"{picked}Your job: {task.goal}.",
-            f"Load these skills with skill_view first: {', '.join(task_skills(option, resolve_skill))}.",
-            "Steps:", *steps, f"Output: {task.output}", f"Quality bar: {task.quality}", f"Done when: {task.done}"]
+    return [
+        f"{picked}Your job: {task.goal}.",
+        f"Load these skills with skill_view first: {', '.join(task_skills(option, resolve_skill))}.",
+        "Steps:",
+        *steps,
+        f"Output: {task.output}",
+        f"Quality bar: {task.quality}",
+        f"Done when: {task.done}",
+    ]
 
 
 def _bullets(title: str, lines) -> str:
     return "\n".join([f"{title}:", *(f"- {line}" for line in lines)])
 
 
-def build_guidance(option: str, facts: Facts, resolve_skill: Callable[[str], str | None] = lambda name: name,
-                   label: str = "") -> str:
+def build_guidance(
+    option: str,
+    facts: Facts,
+    resolve_skill: Callable[[str], str | None] = lambda name: name,
+    label: str = "",
+) -> str:
     """The prompt once a first task is picked; ``label`` is the card text they clicked, ``resolve_skill``
     names a skill as this install loads it (None: missing here)."""
-    work = [*_HOW_TO_WORK, _preview_line(facts), *((_CONNECTORS,) if option in _CONNECTOR_TASKS else ())]
+    work = [
+        *_HOW_TO_WORK,
+        _preview_line(facts),
+        *((_CONNECTORS,) if option in _CONNECTOR_TASKS else ()),
+    ]
     page = [_bullets("When you make a page", _PAGE)] if option in _PAGE_TASKS else []
     host = [_OS_LINES.get(facts.os, _OS_LINES["linux"])]
     if facts.os == "windows" and facts.arch == "arm64":
@@ -260,8 +322,15 @@ def build_guidance(option: str, facts: Facts, resolve_skill: Callable[[str], str
         host.append(_SPARK_LINE)
     if facts.facts_source == "remote":
         host.append(_REMOTE_LINE)
-    return "\n\n".join(["\n".join(_task_prompt(option, label, resolve_skill)), _bullets("How to work", work), *page,
-                         _bullets("This computer", host), f"When it is shown:\n{_CLOSE}"])
+    return "\n\n".join(
+        [
+            "\n".join(_task_prompt(option, label, resolve_skill)),
+            _bullets("How to work", work),
+            *page,
+            _bullets("This computer", host),
+            f"When it is shown:\n{_CLOSE}",
+        ]
+    )
 
 
 def _names(values) -> str:
@@ -272,11 +341,13 @@ def _build_menu(record: Mapping[str, Any]) -> str:
     """The rows the model picks the build card from."""
     rows = eligible_tasks(Facts.from_stored(record["facts"]), record["picks"])
     listed = "\n".join(f"- {task.id} ({task.label}): {task.goal}." for task in rows)
-    return (f"For the build card, pick up to {MAX_PICKS} of these that fit what you learned about them, earlier rows "
-            f'first when they fit, and call setup_beat(beat="build", options=[{{"id": ..., "label": ...}}]). Reword '
-            f"each label to fit them and keep its energy: a short, specific action they would want to click, "
-            f"{MAX_LABEL} characters max. Ids only from this list. \"{TASK_BY_ID[FIXED_ID].label}\" is added last "
-            f"by itself.\n{listed}")
+    return (
+        f"For the build card, pick up to {MAX_PICKS} of these that fit what you learned about them, earlier rows "
+        f'first when they fit, and call setup_beat(beat="build", options=[{{"id": ..., "label": ...}}]). Reword '
+        f"each label to fit them and keep its energy: a short, specific action they would want to click, "
+        f'{MAX_LABEL} characters max. Ids only from this list. "{TASK_BY_ID[FIXED_ID].label}" is added last '
+        f"by itself.\n{listed}"
+    )
 
 
 def _next(record: Mapping[str, Any]) -> str:
@@ -288,27 +359,38 @@ def _next(record: Mapping[str, Any]) -> str:
 
 
 def _after_layout(record, facts) -> str:
-    label = {"sidebar-left": "Basic", "terminal-deck": "Elite"}.get(record["picks"]["layout"], record["picks"]["layout"])
+    label = {"sidebar-left": "Basic", "terminal-deck": "Elite"}.get(
+        record["picks"]["layout"], record["picks"]["layout"]
+    )
     return f"Layout {label} is on, already applied. Do not call set_theme for it again. {_next(record)}"
 
 
 def _after_connectors(record, facts) -> str:
     picks = record["picks"]
-    again = " These are already connected; do not connect them again." if picks["connected"] else ""
-    return (f"Connected: {_names(picks['connected'])}; newly connected: {_names(picks['newly_connected'])}."
-            f"{again} {_next(record)}")
+    again = (
+        " These are already connected; do not connect them again."
+        if picks["connected"]
+        else ""
+    )
+    return (
+        f"Connected: {_names(picks['connected'])}; newly connected: {_names(picks['newly_connected'])}."
+        f"{again} {_next(record)}"
+    )
 
 
 def _after_plugins(record, facts) -> str:
     installed = record["picks"]["installed"]
-    again = " They are already installed; do not install them again." if installed else ""
+    again = (
+        " They are already installed; do not install them again." if installed else ""
+    )
     return f"Installed plugins: {_names(installed)}.{again} {_next(record)}"
 
 
 def _tour(preset: str):
     return lambda record, facts: (
         f'Say "Here\'s where things live." Then, in this same turn, call {_TOUR_CALL % preset} and then show the '
-        f"build card: it waits under the tour. Never bring the tour up again. {_build_menu(record)}")
+        f"build card: it waits under the tour. Never bring the tour up again. {_build_menu(record)}"
+    )
 
 
 def _waiting_beat(record) -> str | None:
@@ -316,61 +398,97 @@ def _waiting_beat(record) -> str | None:
 
 
 _REMINDERS = {
-    "after_name": lambda r, f: f"They go by {r['picks']['name']}. Greet them by name in a few words. {_next(r)}",
-    "after_theme": lambda r, f: (f"Accent {r['picks']['accent'] or 'Nous blue'} is on, already applied. Do not call "
-                                 f"set_theme for it again. React in three words or fewer. {_next(r)}"),
+    "after_name": lambda r, f: (
+        f"They go by {r['picks']['name']}. Greet them by name in a few words. {_next(r)}"
+    ),
+    "after_theme": lambda r, f: (
+        f"Accent {r['picks']['accent'] or 'Nous blue'} is on, already applied. Do not call "
+        f"set_theme for it again. React in three words or fewer. {_next(r)}"
+    ),
     "after_layout": _after_layout,
     "offer_first": lambda r, f: f"The connectors card is not shown yet. {_LOOK_AROUND}",
     "after_connectors": _after_connectors,
     "after_plugins": _after_plugins,
-    "after_tour": lambda r, f: f"The tour is already running; do not start it again. {_next(r)}",
+    "after_tour": lambda r, f: (
+        f"The tour is already running; do not start it again. {_next(r)}"
+    ),
     "after_build": lambda r, f: _next(r),
     "tour_quick": _tour("quick"),
     "tour_full": _tour("full"),
-    "tour_skip": lambda r, f: f"No tour. In this same turn, show the build card. {_build_menu(r)}",
-    "moved_on": lambda r, f: f"That beat is skipped; take its default and do not ask it again. {_next(r)}",
-    "skip_all": lambda r, f: ("They ended setup. In one line, say they can ask you anything any time, then stop "
-                              "guiding. The onboarding rules no longer apply; this is a normal chat."),
-    "complete": lambda r, f: ("Onboarding is complete. Its rules no longer apply; this is a normal chat. Close in "
-                              "one short line: whenever they are stuck, they can just ask."),
+    "tour_skip": lambda r, f: (
+        f"No tour. In this same turn, show the build card. {_build_menu(r)}"
+    ),
+    "moved_on": lambda r, f: (
+        f"That beat is skipped; take its default and do not ask it again. {_next(r)}"
+    ),
+    "skip_all": lambda r, f: (
+        "They ended setup. In one line, say they can ask you anything any time, then stop "
+        "guiding. The onboarding rules no longer apply; this is a normal chat."
+    ),
+    "complete": lambda r, f: (
+        "Onboarding is complete. Its rules no longer apply; this is a normal chat. Close in "
+        "one short line: whenever they are stuck, they can just ask."
+    ),
 }
 
 
 def _already(record, beat: str) -> str:
     """A repeat apply of a settled beat: steer the model forward instead of drawing another receipt."""
-    return (f"The {beat} was already set by the card or an earlier call. Do not apply it again unless they ask "
-            f"for a change. {_next(record)}")
+    return (
+        f"The {beat} was already set by the card or an earlier call. Do not apply it again unless they ask "
+        f"for a change. {_next(record)}"
+    )
 
 
 def _wrote(record, facts, beat: str) -> str:
     # The turn ends on this result; the turn note on their message says how to go on.
-    text = (f"The {beat} card closed unanswered: they wrote a message instead. It comes next as their own turn; "
-            "write nothing until it does.")
+    text = (
+        f"The {beat} card closed unanswered: they wrote a message instead. It comes next as their own turn; "
+        "write nothing until it does."
+    )
     if beat in ("theme", "layout"):
         # "What do you think?" asks for a pick: a look around without one leaves them asking again.
-        text += (f" If it asks what you think or which one fits, pick the {beat} yourself: look around first if "
-                 f"they asked, then say your pick and why in one line and apply it ({_TYPED_ANSWER[beat]}).")
+        text += (
+            f" If it asks what you think or which one fits, pick the {beat} yourself: look around first if "
+            f"they asked, then say your pick and why in one line and apply it ({_TYPED_ANSWER[beat]})."
+        )
     return text
 
 
 def _timed_out(record, facts, beat: str) -> str:
     # Also the result when they ran a slash command while the card waited.
-    return (f"The {beat} card closed without an answer. If a message from them comes next, answer it first. "
-            f"Otherwise say one short line that they can pick up whenever they are back, then stop. When they "
-            f'return, bring it back with setup_beat(beat="{beat}").')
+    return (
+        f"The {beat} card closed without an answer. If a message from them comes next, answer it first. "
+        f"Otherwise say one short line that they can pick up whenever they are back, then stop. When they "
+        f'return, bring it back with setup_beat(beat="{beat}").'
+    )
 
 
-def reminder(key: str, record: Mapping[str, Any], facts: Facts, beat: str | None = None,
-             resolve_skill: Callable[[str], str | None] = lambda name: name) -> str:
+def reminder(
+    key: str,
+    record: Mapping[str, Any],
+    facts: Facts,
+    beat: str | None = None,
+    resolve_skill: Callable[[str], str | None] = lambda name: name,
+) -> str:
     """The text for a reminder key; ``beat`` names the card a ``wrote`` / ``timed_out`` result is about;
     ``resolve_skill`` names a first task's skill as this install loads it, None dropping a missing one."""
     if not key:
         return ""
     if key in ("wrote", "timed_out"):
-        return (_wrote if key == "wrote" else _timed_out)(record, facts, beat or _waiting_beat(record) or "build")
+        return (_wrote if key == "wrote" else _timed_out)(
+            record, facts, beat or _waiting_beat(record) or "build"
+        )
     if key.startswith("build_"):
         option = key.removeprefix("build_")
-        label = next((o["label"] for o in record["picks"].get("build_options") or () if o["id"] == option), "")
+        label = next(
+            (
+                o["label"]
+                for o in record["picks"].get("build_options") or ()
+                if o["id"] == option
+            ),
+            "",
+        )
         return build_guidance(option, facts, resolve_skill, label)
     if key.startswith("already_"):
         return _already(record, key.removeprefix("already_"))
@@ -383,9 +501,11 @@ def turn_note(record: Mapping[str, Any]) -> str:
     way and nothing is left to reopen."""
     if (beat := _waiting_beat(record)) is None:
         return ""
-    return (f"[System note: Onboarding continues; the {beat} card is closed. If their message answers it, apply it "
-            f"yourself ({_TYPED_ANSWER[beat]}) and move on. Otherwise answer their message first, then bring the card "
-            f'back in one line with setup_beat(beat="{beat}").]')
+    return (
+        f"[System note: Onboarding continues; the {beat} card is closed. If their message answers it, apply it "
+        f"yourself ({_TYPED_ANSWER[beat]}) and move on. Otherwise answer their message first, then bring the card "
+        f'back in one line with setup_beat(beat="{beat}").]'
+    )
 
 
 def finish_reminder(record: Mapping[str, Any]) -> str:

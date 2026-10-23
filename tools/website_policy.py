@@ -36,7 +36,11 @@ class WebsitePolicyError(Exception):
 
 def _normalize_rule(rule: Any) -> Optional[str]:
     """Reduce a rule (bare host, URL, or ``host/path``) to a lowercase host; None for blanks/comments."""
-    if not isinstance(rule, str) or not (value := rule.strip().lower()) or value.startswith("#"):
+    if (
+        not isinstance(rule, str)
+        or not (value := rule.strip().lower())
+        or value.startswith("#")
+    ):
         return None
     if "://" in value:
         parsed = urlparse(value)
@@ -53,7 +57,9 @@ def _iter_blocklist_file_rules(path: Path) -> list[str]:
         logger.warning("Shared blocklist file not found (skipping): %s", path)
         return []
     except (OSError, UnicodeDecodeError) as exc:
-        logger.warning("Failed to read shared blocklist file %s (skipping): %s", path, exc)
+        logger.warning(
+            "Failed to read shared blocklist file %s (skipping): %s", path, exc
+        )
         return []
     return [rule for rule in map(_normalize_rule, raw.splitlines()) if rule]
 
@@ -76,13 +82,19 @@ def _load_policy_config(config_path: Path) -> dict[str, Any]:
     try:
         config = yaml.safe_load(config_path.read_text(encoding="utf-8-sig")) or {}
     except yaml.YAMLError as exc:
-        raise WebsitePolicyError(f"Invalid config YAML at {config_path}: {exc}") from exc
+        raise WebsitePolicyError(
+            f"Invalid config YAML at {config_path}: {exc}"
+        ) from exc
     except OSError as exc:
-        raise WebsitePolicyError(f"Failed to read config file {config_path}: {exc}") from exc
+        raise WebsitePolicyError(
+            f"Failed to read config file {config_path}: {exc}"
+        ) from exc
     if not isinstance(config, dict):
         raise WebsitePolicyError("config root must be a mapping")
     security = _require_mapping(config.get("security", {}), "security")
-    website_blocklist = _require_mapping(security.get("website_blocklist", {}), "security.website_blocklist")
+    website_blocklist = _require_mapping(
+        security.get("website_blocklist", {}), "security.website_blocklist"
+    )
     return {**_DEFAULT_WEBSITE_BLOCKLIST, **website_blocklist}
 
 
@@ -93,7 +105,9 @@ def _require_type(policy: dict[str, Any], key: str, kind: type, default: Any) ->
         value = value or []
     if not isinstance(value, kind):
         kind_name = "boolean" if kind is bool else "list"
-        raise WebsitePolicyError(f"security.website_blocklist.{key} must be a {kind_name}")
+        raise WebsitePolicyError(
+            f"security.website_blocklist.{key} must be a {kind_name}"
+        )
     return value
 
 
@@ -106,7 +120,10 @@ def load_website_blocklist(config_path: Optional[Path] = None) -> dict[str, Any]
     now = time.monotonic()
     if config_path is None:
         with _cache_lock:
-            fresh = _cached_policy_path == resolved_path and (now - _cached_policy_time) < _CACHE_TTL_SECONDS
+            fresh = (
+                _cached_policy_path == resolved_path
+                and (now - _cached_policy_time) < _CACHE_TTL_SECONDS
+            )
             if _cached_policy is not None and fresh:
                 return _cached_policy
     config_path = config_path or default_path
@@ -120,12 +137,21 @@ def load_website_blocklist(config_path: Optional[Path] = None) -> dict[str, Any]
             continue
         path = Path(shared_file).expanduser()
         path = path if path.is_absolute() else (get_clawk_home() / path).resolve()
-        pairs += [(normalized, str(path)) for normalized in _iter_blocklist_file_rules(path)]
+        pairs += [
+            (normalized, str(path)) for normalized in _iter_blocklist_file_rules(path)
+        ]
     # dict.fromkeys dedupes (pattern, source) while keeping first-seen order.
-    result = {"enabled": enabled, "rules": [{"pattern": p, "source": s} for p, s in dict.fromkeys(pairs)]}
+    result = {
+        "enabled": enabled,
+        "rules": [{"pattern": p, "source": s} for p, s in dict.fromkeys(pairs)],
+    }
     if config_path == default_path:  # explicit paths are tests — never cache them
         with _cache_lock:
-            _cached_policy, _cached_policy_path, _cached_policy_time = result, resolved_path, now
+            _cached_policy, _cached_policy_path, _cached_policy_time = (
+                result,
+                resolved_path,
+                now,
+            )
     return result
 
 
@@ -148,7 +174,9 @@ def _extract_host_from_urlish(url: str) -> str:
     return host
 
 
-def check_website_access(url: str, config_path: Optional[Path] = None) -> Optional[dict[str, str]]:
+def check_website_access(
+    url: str, config_path: Optional[Path] = None
+) -> Optional[dict[str, str]]:
     """``None`` if the URL is allowed by the blocklist policy, else block metadata (host/rule/source/message).
 
     Fails open on policy errors (warn + ``None``) so a config typo can't break all web tools — except with
@@ -170,16 +198,23 @@ def check_website_access(url: str, config_path: Optional[Path] = None) -> Option
         logger.warning("Website policy config error (failing open): %s", exc)
         return None
     except Exception as exc:
-        logger.warning("Unexpected error loading website policy (failing open): %s", exc)
+        logger.warning(
+            "Unexpected error loading website policy (failing open): %s", exc
+        )
         return None
     if not policy.get("enabled"):
         return None
     for rule in policy.get("rules", []):
         pattern, source = rule.get("pattern", ""), rule.get("source", "config")
         if _match_host_against_rule(host, pattern):
-            logger.info("Blocked URL %s — matched rule '%s' from %s", url, pattern, source)
+            logger.info(
+                "Blocked URL %s — matched rule '%s' from %s", url, pattern, source
+            )
             return {
-                "url": url, "host": host, "rule": pattern, "source": source,
+                "url": url,
+                "host": host,
+                "rule": pattern,
+                "source": source,
                 "message": f"Blocked by website policy: '{host}' matched rule '{pattern}' from {source}",
             }
     return None

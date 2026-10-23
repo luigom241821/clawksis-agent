@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+
 @pytest.fixture
 def kimi_profile():
     """Resolve the registered Kimi profile via the provider registry.
@@ -29,6 +30,7 @@ def kimi_profile():
     assert profile is not None, "kimi-coding provider profile must be registered"
     return profile
 
+
 class TestKimiReasoningWireShape:
     """``build_api_kwargs_extras`` never emits thinking + reasoning_effort together."""
 
@@ -39,7 +41,9 @@ class TestKimiReasoningWireShape:
         ``reasoning_effort="medium"``, pairing thinking + effort on every
         default call.
         """
-        extra_body, top_level = kimi_profile.build_api_kwargs_extras(reasoning_config=None)
+        extra_body, top_level = kimi_profile.build_api_kwargs_extras(
+            reasoning_config=None
+        )
         assert extra_body == {"thinking": {"type": "enabled"}}
         assert top_level == {}
 
@@ -105,6 +109,7 @@ class TestKimiReasoningWireShape:
         )
         assert not ("thinking" in extra_body and "reasoning_effort" in top_level)
 
+
 class TestKimiModelDiscovery:
     def test_malformed_base_url_is_unconfirmed_and_filters_k3(self, kimi_profile):
         """Malformed user URLs must fall through safely, never authorize K3."""
@@ -125,10 +130,6 @@ class TestKimiModelDiscovery:
         assert models == ["kimi-k2.6"]
 
 
-
-
-
-
 @pytest.mark.parametrize("name", ["kimi-coding", "kimi-coding-cn"])
 def test_moonshot_profiles_exclude_brotli(name):
     """#28043: httpx/brotlicffi mis-decodes Moonshot's br-encoded SSE stream,
@@ -138,5 +139,7 @@ def test_moonshot_profiles_exclude_brotli(name):
 
     profile = providers.get_provider_profile(name)
     assert profile is not None
-    enc = {k.lower(): v for k, v in profile.default_headers.items()}.get("accept-encoding", "")
+    enc = {k.lower(): v for k, v in profile.default_headers.items()}.get(
+        "accept-encoding", ""
+    )
     assert "br" not in enc.lower() and "gzip" in enc.lower()

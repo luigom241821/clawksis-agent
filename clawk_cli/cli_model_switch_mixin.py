@@ -27,8 +27,16 @@ logger = logging.getLogger(__name__)
 # resolved per model: a failed swap or `/model X --reasoning high --once` must not leave the
 # new model's effort behind with the old route.
 _RUNTIME_FIELDS = (
-    "model", "provider", "requested_provider", "_explicit_api_key", "_explicit_base_url",
-    "api_key", "base_url", "api_mode", "reasoning_config")
+    "model",
+    "provider",
+    "requested_provider",
+    "_explicit_api_key",
+    "_explicit_base_url",
+    "api_key",
+    "base_url",
+    "api_mode",
+    "reasoning_config",
+)
 
 
 def _runtime_fields(cli) -> dict:
@@ -44,8 +52,11 @@ def _resolve_cli_reasoning(cli) -> None:
     copy for the live-agent path."""
     from cli import CLI_CONFIG
     from clawk_constants import resolve_reasoning_config
+
     # getattr: tests drive /new unbound on a SimpleNamespace without ``model`` (blank -> config default).
-    cli.reasoning_config = resolve_reasoning_config(CLI_CONFIG, getattr(cli, "model", None) or "")
+    cli.reasoning_config = resolve_reasoning_config(
+        CLI_CONFIG, getattr(cli, "model", None) or ""
+    )
     cli._reasoning_user_set = False
 
 
@@ -59,11 +70,14 @@ def stored_session_route(session_meta, *, current_model, current_provider):
     if not stored_model:
         return None
     from clawk_state import SessionDB as _SessionDB
+
     runtime = _SessionDB.session_gateway_runtime(session_meta)
     base_url = runtime.get("base_url") or None
     api_mode = runtime.get("api_mode") or None
     stored_provider = runtime.get("provider") or None
-    provider = _heal_bare_custom_provider(stored_provider, base_url=base_url, model=stored_model)
+    provider = _heal_bare_custom_provider(
+        stored_provider, base_url=base_url, model=stored_model
+    )
     if provider != stored_provider:
         # A healed entry resolves its own current endpoint. A route that didn't heal is gone with its
         # endpoint and wire, which must not ride on the ambient provider.
@@ -74,6 +88,7 @@ def stored_session_route(session_meta, *, current_model, current_provider):
     if stored_model == current_model and not provider_changed:
         return None
     from clawk_cli.runtime_provider import is_foreign_provider_endpoint
+
     if is_foreign_provider_endpoint(provider, base_url):
         # The endpoint and its wire belong to the provider this chat left; resolve the stored one's own.
         base_url = api_mode = None
@@ -82,9 +97,11 @@ def stored_session_route(session_meta, *, current_model, current_provider):
     # resumed opencode-go session keeps a MiniMax-era anthropic_messages route for a chat_completions
     # model (#96066) — the CLI/oneshot twin of tui_gateway's _rederive_per_model_route.
     from clawk_cli.model_switch import model_derived_api_mode
+
     derived = model_derived_api_mode(provider or "", stored_model)
     if derived is not None:
         from clawk_cli.models import normalize_opencode_base_url
+
         api_mode = derived
         base_url = normalize_opencode_base_url(provider, api_mode, base_url) or None
     return stored_model, provider, base_url, api_mode, provider_changed
@@ -101,7 +118,11 @@ def _heal_bare_custom_provider(provider, *, base_url, model):
         # a routable identity. (Stricter than the TUI gateway's recovery, which keeps bare "custom" when a
         # base_url exists — the CLI's resolve path would hard-fail on it, #14676.)
         from clawk_cli.runtime_provider import canonical_custom_identity
-        return canonical_custom_identity(base_url=base_url or None, model=model or None) or None
+
+        return (
+            canonical_custom_identity(base_url=base_url or None, model=model or None)
+            or None
+        )
     except Exception:
         return None
 
@@ -109,24 +130,30 @@ def _heal_bare_custom_provider(provider, *, base_url, model):
 def _merge_preflight_warning(cli, result, custom_providers) -> None:
     """Fold the context-compression preflight warning into ``result`` (fail-soft)."""
     from cli import logger
+
     if cli.agent is None:
         return
     try:
         from clawk_cli.context_switch_guard import merge_preflight_compression_warning
+
         # Prefer the fresh inventory list (same source as switch_model / TUI); fall back
         # to the agent-init snapshot.
         merge_preflight_compression_warning(
             result,
             agent=cli.agent,
             messages=list(cli.conversation_history or []),
-            custom_providers=custom_providers if custom_providers is not None
+            custom_providers=custom_providers
+            if custom_providers is not None
             else getattr(cli.agent, "_custom_providers", None),
-            config_context_length=getattr(cli.agent, "_config_context_length", None))
+            config_context_length=getattr(cli.agent, "_config_context_length", None),
+        )
     except Exception as exc:
         logger.debug("preflight-compression switch warning failed: %s", exc)
 
 
-def _print_switch_summary(cli, result, old_model, *, one_turn: bool, strict_context: bool) -> None:
+def _print_switch_summary(
+    cli, result, old_model, *, one_turn: bool, strict_context: bool
+) -> None:
     """Record the next-turn switch note and print the "Model switched" block.
 
     The note is prepended to the next user message (a mid-history system message would break
@@ -134,21 +161,34 @@ def _print_switch_summary(cli, result, old_model, *, one_turn: bool, strict_cont
     context-resolution errors propagate; the picker path swallows them.
     """
     from cli import _cprint
-    from clawk_cli.model_switch import format_model_for_display, resolve_display_context_length
+    from clawk_cli.model_switch import (
+        format_model_for_display,
+        resolve_display_context_length,
+    )
+
     _display_old = format_model_for_display(old_model)
     _display_new = format_model_for_display(result.new_model)
     cli._pending_model_switch_note = (
         f"[Note: model was just switched from {_display_old} to {_display_new} "
         f"via {result.provider_label or result.target_provider}. "
         f"{'This override applies to the next turn only. ' if one_turn else ''}"
-        f"Adjust your self-identification accordingly.]")
+        f"Adjust your self-identification accordingly.]"
+    )
     _cprint(f"  {t('cli.model.switched', model=_display_new)}")
-    _cprint(f"    {t('gateway.model.provider_label', provider=result.provider_label or result.target_provider)}")
+    _cprint(
+        f"    {t('gateway.model.provider_label', provider=result.provider_label or result.target_provider)}"
+    )
     if result.target_provider == "moa":
         # The preset name hides who pays: the aggregator runs every tool-loop step (#112359).
         from clawk_cli.moa_config import normalize_moa_config
+
         moa_cfg = cli.config.get("moa") if isinstance(cli.config, dict) else {}
-        agg = normalize_moa_config(moa_cfg)["presets"].get(result.new_model, {}).get("aggregator") or {}
+        agg = (
+            normalize_moa_config(moa_cfg)["presets"]
+            .get(result.new_model, {})
+            .get("aggregator")
+            or {}
+        )
         if agg:
             _acting = f"{agg.get('provider')}:{agg.get('model')}"
             _cprint(f"    {t('cli.model.acting_model', model=_acting)}")
@@ -159,26 +199,41 @@ def _print_switch_summary(cli, result, old_model, *, one_turn: bool, strict_cont
     agent = cli.agent
     try:
         ctx = resolve_display_context_length(
-            result.new_model, result.target_provider,
+            result.new_model,
+            result.target_provider,
             base_url=result.base_url or cli.base_url or "",
-            api_key=result.api_key or cli.api_key or "", model_info=mi,
-            config_context_length=getattr(agent, "_config_context_length", None) if agent else None,
-            custom_providers=getattr(agent, "_custom_providers", None) if agent else None)
+            api_key=result.api_key or cli.api_key or "",
+            model_info=mi,
+            config_context_length=getattr(agent, "_config_context_length", None)
+            if agent
+            else None,
+            custom_providers=getattr(agent, "_custom_providers", None)
+            if agent
+            else None,
+        )
     except Exception:
         if strict_context:
             raise
         ctx = None
     if ctx:
         from agent.context_pin import context_pin_suffix
-        _cprint(f"    {t('gateway.model.context_label', tokens=f'{ctx:,}')}"
-                f"{context_pin_suffix(ctx, getattr(agent, '_config_context_length', None) if agent else None)}")
+
+        _cprint(
+            f"    {t('gateway.model.context_label', tokens=f'{ctx:,}')}"
+            f"{context_pin_suffix(ctx, getattr(agent, '_config_context_length', None) if agent else None)}"
+        )
     if mi:
         if mi.max_output:
-            _cprint(f"    {t('gateway.model.max_output_label', tokens=f'{mi.max_output:,}')}")
-        _cprint(f"    {t('gateway.model.capabilities_label', capabilities=mi.format_capabilities())}")
+            _cprint(
+                f"    {t('gateway.model.max_output_label', tokens=f'{mi.max_output:,}')}"
+            )
+        _cprint(
+            f"    {t('gateway.model.capabilities_label', capabilities=mi.format_capabilities())}"
+        )
     cache_enabled = (
-        (base_url_host_matches(result.base_url or "", "openrouter.ai") and "claude" in result.new_model.lower())
-        or result.api_mode == "anthropic_messages")
+        base_url_host_matches(result.base_url or "", "openrouter.ai")
+        and "claude" in result.new_model.lower()
+    ) or result.api_mode == "anthropic_messages"
     if cache_enabled:
         _cprint(f"    {t('gateway.model.prompt_caching_enabled')}")
     if result.warning_message:
@@ -188,14 +243,22 @@ def _print_switch_summary(cli, result, old_model, *, one_turn: bool, strict_cont
 
 
 def _switch_model_from(
-    cli, raw_input, *, is_global, explicit_provider, user_providers, custom_providers):
+    cli, raw_input, *, is_global, explicit_provider, user_providers, custom_providers
+):
     """``switch_model`` seeded with this CLI's live route."""
     from clawk_cli.model_switch import switch_model
+
     return switch_model(
-        raw_input=raw_input, current_provider=cli.provider or "", current_model=cli.model or "",
-        current_base_url=cli.base_url or "", current_api_key=cli.api_key or "", is_global=is_global,
-        explicit_provider=explicit_provider, user_providers=user_providers,
-        custom_providers=custom_providers)
+        raw_input=raw_input,
+        current_provider=cli.provider or "",
+        current_model=cli.model or "",
+        current_base_url=cli.base_url or "",
+        current_api_key=cli.api_key or "",
+        is_global=is_global,
+        explicit_provider=explicit_provider,
+        user_providers=user_providers,
+        custom_providers=custom_providers,
+    )
 
 
 def _run_confirm_and_apply(cli, target, *args) -> None:
@@ -217,7 +280,11 @@ def _one_turn_selection_context(cli):
     A live compressor measurement wins. Otherwise refresh ``session.stats``, then the session row's
     persisted usage anchor (a resume, before this process has run a turn).
     """
-    from clawk_cli.model_selection_guards import SelectionContext, selection_context_for_agent
+    from clawk_cli.model_selection_guards import (
+        SelectionContext,
+        selection_context_for_agent,
+    )
+
     agent = getattr(cli, "agent", None)
     if agent is not None and hasattr(agent, "_refresh_stats"):
         agent._refresh_stats()
@@ -225,9 +292,14 @@ def _one_turn_selection_context(cli):
     if live is not None:
         return live
     from agent.usage_anchor import persisted_anchor_tokens
+
     db = getattr(cli, "_session_db", None)
     sid = getattr(cli, "session_id", None)
-    if db is None or not sid or not callable(getattr(db, "get_messages_as_conversation", None)):
+    if (
+        db is None
+        or not sid
+        or not callable(getattr(db, "get_messages_as_conversation", None))
+    ):
         return None
     try:
         messages = db.get_messages_as_conversation(sid)
@@ -237,15 +309,28 @@ def _one_turn_selection_context(cli):
     tokens = persisted_anchor_tokens(db, sid, messages)
     if not tokens:
         return None
-    return SelectionContext(context_tokens=tokens, current_model=getattr(cli, "model", None) or None)
+    return SelectionContext(
+        context_tokens=tokens, current_model=getattr(cli, "model", None) or None
+    )
 
 
 def _ask_switch_anyway(cli, title: str, detail: str) -> bool:
     """The model-guard prompt (switch anyway once, or cancel): True only on an explicit yes."""
     choices = [
-        ("once", t("cli.model.choice_switch_anyway"), t("cli.model.desc_switch_anyway")),
-        ("cancel", t("cli.model.choice_cancel"), t("cli.model.desc_keep_current_model"))]
-    raw = cli._prompt_text_input_modal(title=f"!!! {title} !!!", detail=detail, choices=choices, timeout=120)
+        (
+            "once",
+            t("cli.model.choice_switch_anyway"),
+            t("cli.model.desc_switch_anyway"),
+        ),
+        (
+            "cancel",
+            t("cli.model.choice_cancel"),
+            t("cli.model.desc_keep_current_model"),
+        ),
+    ]
+    raw = cli._prompt_text_input_modal(
+        title=f"!!! {title} !!!", detail=detail, choices=choices, timeout=120
+    )
     return cli._normalize_slash_confirm_choice(raw, choices) == "once"
 
 
@@ -259,7 +344,8 @@ _MODEL_USAGE_ROWS = (
     ("/model <name> --provider <slug>", "cli.model.usage_switch_provider_model"),
     ("/model <name> --reasoning <level>", "cli.model.usage_switch_reasoning"),
     ("/model --provider <slug>", "cli.model.usage_switch_provider"),
-    ("/model --refresh", "cli.model.usage_refresh"))
+    ("/model --refresh", "cli.model.usage_refresh"),
+)
 _MODEL_USAGE_COL = 36
 
 
@@ -267,6 +353,7 @@ def _picker_reasoning_rows() -> list[tuple[str, str]]:
     """``(value, label)`` rows for the picker's effort step: the canonical ladder, the off state,
     then a keep-current row (empty value = leave the effort alone)."""
     from clawk_constants import VALID_REASONING_EFFORTS
+
     rows = [(lvl, lvl) for lvl in VALID_REASONING_EFFORTS]
     rows.append(("none", t("cli.model.effort_none")))
     rows.append(("", t("cli.model.effort_keep_current")))
@@ -281,7 +368,9 @@ def _picker_offers_reasoning(provider_data: dict, model: str) -> bool:
     return not (isinstance(entry, dict) and entry.get("reasoning") is False)
 
 
-def _apply_reasoning_after_switch(cli, effort: str, *, persist_global: bool, one_turn: bool = False) -> None:
+def _apply_reasoning_after_switch(
+    cli, effort: str, *, persist_global: bool, one_turn: bool = False
+) -> None:
     """Apply a ``--reasoning <level>`` that rode along with a model pick. Runs AFTER the swap: the
     agent's ``switch_model`` re-resolves ``reasoning_config`` from config.yaml, so an earlier write
     would be clobbered. Session-scoped unless the pick itself persists (``--global``).
@@ -289,15 +378,19 @@ def _apply_reasoning_after_switch(cli, effort: str, *, persist_global: bool, one
     ``one_turn`` (``--once``): the level rides the one-turn admission (``model_override.reasoning``)
     and the restore snapshot puts the CLI's own level back. It is never a session pin."""
     from cli import CLI_CONFIG, _cprint, _parse_reasoning_config, save_config_value
+
     parsed = _parse_reasoning_config(effort)
     if parsed is None:
         return
     cli.reasoning_config = parsed
     if one_turn:
         from clawk_cli.gateway_agent import GatewayAgent
+
         pending = getattr(cli, "_pending_one_turn_model_restore", None)
         if isinstance(pending, dict):
-            pending["one_turn_reasoning"] = effort  # the agent chat rebuilds carries it too
+            pending["one_turn_reasoning"] = (
+                effort  # the agent chat rebuilds carries it too
+            )
         if isinstance(cli.agent, GatewayAgent):
             cli.agent.stage_turn_reasoning(parsed)
         elif cli.agent is not None:
@@ -315,26 +408,44 @@ def _apply_reasoning_after_switch(cli, effort: str, *, persist_global: bool, one
     saved = persist_global and save_config_value("agent.reasoning_effort", effort)
     if saved:
         CLI_CONFIG.setdefault("agent", {})["reasoning_effort"] = effort
-    _cprint(f"    {t('cli.model.reasoning_effort_saved' if saved else 'cli.model.reasoning_effort', effort=effort)}")
+    _cprint(
+        f"    {t('cli.model.reasoning_effort_saved' if saved else 'cli.model.reasoning_effort', effort=effort)}"
+    )
 
 
 def _commit_model_switch(
-    cli, result, *, persist_global: bool, one_turn: bool = False, picker: bool = False,
-    reasoning_effort: str = "") -> None:
+    cli,
+    result,
+    *,
+    persist_global: bool,
+    one_turn: bool = False,
+    picker: bool = False,
+    reasoning_effort: str = "",
+) -> None:
     """Stage + swap, print the summary, persist (session row unless --once; config on --global).
     ``picker``: tolerate context-resolution errors and label the config write "(--global)"; the
     typed path additionally records the one-turn restore snapshot. ``reasoning_effort`` (from
     ``--reasoning`` or the picker's effort step) is applied after the swap."""
     from cli import ClawksisCLI, _cprint
+
     old_model, old_provider = cli.model, getattr(cli, "provider", None)
     # A second ``--once`` before the turn restores to the route before the first one.
-    snapshot = (getattr(cli, "_pending_one_turn_model_restore", None)
-                or cli._snapshot_model_runtime()) if one_turn else None
+    snapshot = (
+        (
+            getattr(cli, "_pending_one_turn_model_restore", None)
+            or cli._snapshot_model_runtime()
+        )
+        if one_turn
+        else None
+    )
     if snapshot is not None:
         # The level belongs to this --once pick only: a second pick without --reasoning drops it.
         # So does the alias it resolved through.
-        snapshot = {key: value for key, value in snapshot.items()
-                    if key not in ("one_turn_reasoning", "one_turn_alias")}
+        snapshot = {
+            key: value
+            for key, value in snapshot.items()
+            if key not in ("one_turn_reasoning", "one_turn_alias")
+        }
     # ``--once`` must not session.mutate.
     cli._model_switch_one_turn = bool(one_turn)
     try:
@@ -346,19 +457,34 @@ def _commit_model_switch(
     # A TUI slash worker replays /model on its shadow CLI; the tui_gateway mirror counts the real switch.
     if not getattr(cli, "is_slash_worker", False):
         from clawk_cli.observability.shared_metrics_events import record_model_switch
+
         record_model_switch(
-            from_provider=old_provider, to_provider=result.target_provider, surface="cli", from_model=old_model,
-            session_id=getattr(getattr(cli, "agent", None), "session_id", None) or getattr(cli, "session_id", None))
+            from_provider=old_provider,
+            to_provider=result.target_provider,
+            surface="cli",
+            from_model=old_model,
+            session_id=getattr(getattr(cli, "agent", None), "session_id", None)
+            or getattr(cli, "session_id", None),
+        )
     if not picker:
         cli._pending_one_turn_model_restore = snapshot
         if snapshot is not None and getattr(result, "resolved_via_alias", ""):
-            snapshot["one_turn_alias"] = result.resolved_via_alias  # the agent chat rebuilds carries it
-    _print_switch_summary(cli, result, old_model, one_turn=one_turn, strict_context=not picker)
+            snapshot["one_turn_alias"] = (
+                result.resolved_via_alias
+            )  # the agent chat rebuilds carries it
+    _print_switch_summary(
+        cli, result, old_model, one_turn=one_turn, strict_context=not picker
+    )
     if reasoning_effort:
-        _apply_reasoning_after_switch(cli, reasoning_effort, persist_global=persist_global and not one_turn,
-                                      one_turn=one_turn)
+        _apply_reasoning_after_switch(
+            cli,
+            reasoning_effort,
+            persist_global=persist_global and not one_turn,
+            one_turn=one_turn,
+        )
     if persist_global:
         from clawk_cli.model_switch import persist_model_selection
+
         persist_model_selection(result)
         _cprint(f"    {t('cli.model.saved_global' if picker else 'cli.model.saved')}")
     elif one_turn:
@@ -376,11 +502,13 @@ def _show_model_picker(cli, ctx, force_refresh: bool) -> None:
     from cli import _cprint
     from clawk_cli.inventory import build_models_payload
     from clawk_cli.providers import get_label
+
     try:
         if ctx is None:
             raise RuntimeError("inventory context unavailable")
         providers = build_models_payload(
-            ctx, probe_custom_providers=force_refresh,
+            ctx,
+            probe_custom_providers=force_refresh,
             probe_current_custom_provider=not force_refresh,
             capabilities=True,  # the effort step hides itself on reasoning-free routes
             # Keep providers whose pool is entirely in cooldown visible: limits are
@@ -400,9 +528,12 @@ def _show_model_picker(cli, ctx, force_refresh: bool) -> None:
             _cprint(f"  {form.ljust(_MODEL_USAGE_COL)} {t(desc_key)}")
         return
     cli._open_model_picker(
-        providers, cli.model or "unknown", get_label(cli.provider) if cli.provider else "unknown",
+        providers,
+        cli.model or "unknown",
+        get_label(cli.provider) if cli.provider else "unknown",
         user_provs=ctx.user_providers if ctx is not None else None,
-        custom_provs=ctx.custom_providers if ctx is not None else None)
+        custom_provs=ctx.custom_providers if ctx is not None else None,
+    )
 
 
 class CLIModelSwitchMixin:
@@ -411,6 +542,7 @@ class CLIModelSwitchMixin:
     def _normalize_model_for_provider(self, resolved_provider: str) -> bool:
         """Normalize provider-specific model IDs and routing."""
         from cli import _split_model_config_default
+
         current_model = str(self.model or "").strip()
         if isinstance(self.model, dict):
             current_model, _ = _split_model_config_default(self.model)
@@ -441,28 +573,55 @@ class CLIModelSwitchMixin:
 
         try:
             from clawk_cli.model_normalize import (
-                _AGGREGATOR_PROVIDERS, normalize_model_for_provider)
+                _AGGREGATOR_PROVIDERS,
+                normalize_model_for_provider,
+            )
+
             if resolved_provider not in _AGGREGATOR_PROVIDERS:
                 _adopt(
                     normalize_model_for_provider(current_model, resolved_provider),
-                    lambda new: t("cli.model.normalized_model", old=current_model, new=new, provider=resolved_provider))
+                    lambda new: t(
+                        "cli.model.normalized_model",
+                        old=current_model,
+                        new=new,
+                        provider=resolved_provider,
+                    ),
+                )
         except Exception:
             pass
 
         if resolved_provider == "copilot":
-            from clawk_cli.models import copilot_model_api_mode, normalize_copilot_model_id
+            from clawk_cli.models import (
+                copilot_model_api_mode,
+                normalize_copilot_model_id,
+            )
+
             return _adopt_with_mode(
                 lambda m: normalize_copilot_model_id(m, api_key=self.api_key),
                 lambda m: copilot_model_api_mode(m, api_key=self.api_key),
-                lambda new: t("cli.model.normalized_copilot_model", old=current_model, new=new))
+                lambda new: t(
+                    "cli.model.normalized_copilot_model", old=current_model, new=new
+                ),
+            )
 
         from clawk_cli.models import opencode_provider_family
+
         if opencode_provider_family(resolved_provider) is not None:
-            from clawk_cli.models import normalize_opencode_model_id, opencode_model_api_mode
+            from clawk_cli.models import (
+                normalize_opencode_model_id,
+                opencode_model_api_mode,
+            )
+
             return _adopt_with_mode(
                 lambda m: normalize_opencode_model_id(resolved_provider, m),
                 lambda m: opencode_model_api_mode(resolved_provider, m),
-                lambda new: t("cli.model.stripped_provider_prefix", old=current_model, new=new, provider=resolved_provider))
+                lambda new: t(
+                    "cli.model.stripped_provider_prefix",
+                    old=current_model,
+                    new=new,
+                    provider=resolved_provider,
+                ),
+            )
 
         if resolved_provider != "openai-codex":
             return changed
@@ -472,7 +631,17 @@ class CLIModelSwitchMixin:
             slug = current_model.split("/", 1)[1]
             if not self._model_is_default:
                 self._console_print(
-                    "[yellow]⚠️  " + _escape(t("cli.model.stripped_provider_prefix", old=current_model, new=slug, provider="OpenAI Codex")) + "[/]")
+                    "[yellow]⚠️  "
+                    + _escape(
+                        t(
+                            "cli.model.stripped_provider_prefix",
+                            old=current_model,
+                            new=slug,
+                            provider="OpenAI Codex",
+                        )
+                    )
+                    + "[/]"
+                )
             self.model = slug
             current_model = slug
             changed = True
@@ -485,7 +654,9 @@ class CLIModelSwitchMixin:
             try:
                 # self.base_url is the route resolved with self.api_key (#121486).
                 available = get_codex_model_ids(
-                    access_token=self.api_key if self.api_key else None, base_url=self.base_url or None)
+                    access_token=self.api_key if self.api_key else None,
+                    base_url=self.base_url or None,
+                )
                 if available:
                     fallback_model = available[0]
             except Exception:
@@ -510,14 +681,18 @@ class CLIModelSwitchMixin:
         getattr: tests drive the switch paths with ``object.__new__`` stubs.
         """
         from cli import logger
+
         db = getattr(self, "_session_db", None)
         sid = getattr(self, "session_id", None)
         if not db or not sid:
             return
         route = {
             "provider": _heal_bare_custom_provider(
-                result.target_provider, base_url=result.base_url, model=result.new_model,
-            ) or None,
+                result.target_provider,
+                base_url=result.base_url,
+                model=result.new_model,
+            )
+            or None,
             # Both shapes use the same or-None discipline so stale keys from a previous switch are deleted
             # (not merely omitted) in BOTH the nested gateway_runtime dict (CLI reader) and the top-level
             # keys (TUI gateway reader). _merge_model_config_json only deletes on explicit None, so falsy
@@ -525,14 +700,17 @@ class CLIModelSwitchMixin:
             # shapes can never diverge — the asymmetry that caused the original stale-key bug (#85261
             # simplify-code review).
             "base_url": result.base_url or None,
-            "api_mode": result.api_mode or None}
+            "api_mode": result.api_mode or None,
+        }
         try:
             db.update_session_model(sid, result.new_model)
             db.patch_session_model_config(sid, {"gateway_runtime": route, **route})
         except Exception:
             logger.debug("Failed to persist model switch to session DB", exc_info=True)
 
-    def _restore_session_model(self, session_meta: dict, *, quiet: bool = False) -> None:
+    def _restore_session_model(
+        self, session_meta: dict, *, quiet: bool = False
+    ) -> None:
         """Restore model/provider from the session DB row on every resume path.
 
         Skips when no model is recorded or the CLI got an explicit ``-m`` (user intent wins).
@@ -541,13 +719,25 @@ class CLIModelSwitchMixin:
         so the session still opens (the first turn surfaces the auth error).
         """
         from cli import logger
-        if not (session_meta or {}).get("model") or getattr(self, "_explicit_model_override", False):
+
+        if not (session_meta or {}).get("model") or getattr(
+            self, "_explicit_model_override", False
+        ):
             return
-        route = stored_session_route(session_meta, current_model=self.model, current_provider=self.provider)
+        route = stored_session_route(
+            session_meta, current_model=self.model, current_provider=self.provider
+        )
         if route is None:
             return
-        stored_model, stored_provider, stored_base_url, stored_api_mode, provider_changed = route
+        (
+            stored_model,
+            stored_provider,
+            stored_base_url,
+            stored_api_mode,
+            provider_changed,
+        ) = route
         from clawk_cli.local_runtime.endpoint import LLAMACPP_ALIASES
+
         managed = str(stored_provider or "").strip().lower() in LLAMACPP_ALIASES
         self.model = stored_model
         if stored_provider:
@@ -557,7 +747,9 @@ class CLIModelSwitchMixin:
                 self.base_url = stored_base_url
             if stored_api_mode:
                 self.api_mode = stored_api_mode
-        if managed and not (getattr(self, "_explicit_base_url", None) and not provider_changed):
+        if managed and not (
+            getattr(self, "_explicit_base_url", None) and not provider_changed
+        ):
             # The supervisor owns the live port: last boot's loopback URL (an ephemeral fallback when
             # 18434 was busy) must not pin the resume onto a dead endpoint. A launch-time --base-url
             # for this same provider is user intent and keeps winning.
@@ -565,7 +757,10 @@ class CLIModelSwitchMixin:
             self._explicit_base_url = None
             try:
                 from clawk_cli.runtime_provider import resolve_runtime_provider
-                resolved = resolve_runtime_provider(requested=stored_provider, target_model=self.model or None)
+
+                resolved = resolve_runtime_provider(
+                    requested=stored_provider, target_model=self.model or None
+                )
                 if resolved.get("api_key"):
                     self.api_key = resolved["api_key"]
                     self._credential_pool = resolved.get("credential_pool")
@@ -579,7 +774,9 @@ class CLIModelSwitchMixin:
                 logger.debug(
                     "Credential re-resolution for resumed session provider "
                     "%s failed; keeping ambient credentials",
-                    stored_provider, exc_info=True)
+                    stored_provider,
+                    exc_info=True,
+                )
         elif provider_changed:
             # Launch-time explicit overrides belong to the AMBIENT provider and would poison
             # _ensure_runtime_credentials for the restored one. api_key is never persisted to
@@ -588,7 +785,10 @@ class CLIModelSwitchMixin:
             self._explicit_base_url = stored_base_url
             try:
                 from clawk_cli.runtime_provider import resolve_runtime_provider
-                resolved = resolve_runtime_provider(requested=stored_provider, target_model=self.model or None)
+
+                resolved = resolve_runtime_provider(
+                    requested=stored_provider, target_model=self.model or None
+                )
                 if resolved.get("api_key"):
                     self.api_key = resolved["api_key"]
                     self._credential_pool = resolved.get("credential_pool")
@@ -600,17 +800,25 @@ class CLIModelSwitchMixin:
                 logger.debug(
                     "Credential re-resolution for resumed session provider "
                     "%s failed; keeping ambient credentials",
-                    stored_provider, exc_info=True)
+                    stored_provider,
+                    exc_info=True,
+                )
         _resolve_cli_reasoning(self)
         # Mid-chat /resume swaps the live agent; on startup --resume _init_agent picks up
         # self.model / self.provider / self.reasoning_config.
         if self.agent is not None:
             try:
                 self.agent.switch_model(
-                    new_model=self.model, new_provider=self.provider, api_key=self.api_key or "",
-                    base_url=self.base_url or "", api_mode=self.api_mode or "")
+                    new_model=self.model,
+                    new_provider=self.provider,
+                    api_key=self.api_key or "",
+                    base_url=self.base_url or "",
+                    api_mode=self.api_mode or "",
+                )
             except Exception:
-                logger.debug("In-place agent model swap on resume failed", exc_info=True)
+                logger.debug(
+                    "In-place agent model swap on resume failed", exc_info=True
+                )
         msg = t("cli.model.restored_from_session", model=stored_model)
         if stored_provider:
             msg += f" ({stored_provider})"
@@ -619,18 +827,28 @@ class CLIModelSwitchMixin:
         else:
             self._console_print(f"[dim]{_escape(msg)}[/dim]")
 
-    def _open_model_picker(self, providers: list, current_model: str, current_provider: str, user_provs=None, custom_provs=None) -> None:
+    def _open_model_picker(
+        self,
+        providers: list,
+        current_model: str,
+        current_provider: str,
+        user_provs=None,
+        custom_provs=None,
+    ) -> None:
         """Open prompt_toolkit-native /model picker modal."""
         self._capture_modal_input_snapshot()
         self._model_picker_state = {
             "stage": "provider",
             "providers": providers,
-            "selected": next((i for i, p in enumerate(providers) if p.get("is_current")), 0),
+            "selected": next(
+                (i for i, p in enumerate(providers) if p.get("is_current")), 0
+            ),
             "current_model": current_model,
             "current_provider": current_provider,
             "user_provs": user_provs,
             "custom_provs": custom_provs,
-            "filter": ""}
+            "filter": "",
+        }
         self._invalidate(min_interval=0.0)
 
     def _confirm_expensive_model_switch(self, result) -> bool:
@@ -640,14 +858,21 @@ class CLIModelSwitchMixin:
             return True
         try:
             from clawk_cli.model_selection_guards import (
-                combined_selection_warning, selection_context_for_agent)
+                combined_selection_warning,
+                selection_context_for_agent,
+            )
+
             primed = getattr(self, "_one_turn_selection_context", None)
             warning = combined_selection_warning(
-                result.new_model, provider=result.target_provider,
+                result.new_model,
+                provider=result.target_provider,
                 base_url=result.base_url or self.base_url or "",
-                api_key=result.api_key or self.api_key or "", model_info=result.model_info,
-                selection_context=primed if primed is not None else selection_context_for_agent(
-                    getattr(self, "agent", None)))
+                api_key=result.api_key or self.api_key or "",
+                model_info=result.model_info,
+                selection_context=primed
+                if primed is not None
+                else selection_context_for_agent(getattr(self, "agent", None)),
+            )
         except Exception:
             warning = None
         if warning is None:
@@ -663,21 +888,35 @@ class CLIModelSwitchMixin:
         ``_confirm_expensive_model_switch``. Only a yes re-sends with the owner's token. The identical
         warning the user just confirmed for this switch is not asked twice."""
         from clawk_cli.gateway_mutations import confirmation_title
+
         message = refusal.get("confirm_message") or ""
-        confirmed, self._confirmed_switch_warning = getattr(self, "_confirmed_switch_warning", None), None
+        confirmed, self._confirmed_switch_warning = (
+            getattr(self, "_confirmed_switch_warning", None),
+            None,
+        )
         if message and message == confirmed:
             return True
         return _ask_switch_anyway(self, confirmation_title(refusal), message)
 
     def _confirm_and_apply_model_switch_result(
-        self, result, persist_global: bool, custom_providers=None, reasoning_effort: str = "") -> None:
+        self,
+        result,
+        persist_global: bool,
+        custom_providers=None,
+        reasoning_effort: str = "",
+    ) -> None:
         from cli import _cprint
+
         try:
             if result.success and not self._confirm_expensive_model_switch(result):
                 _cprint(f"  {t('cli.model.switch_cancelled')}")
                 return
             self._apply_model_switch_result(
-                result, persist_global, custom_providers=custom_providers, reasoning_effort=reasoning_effort)
+                result,
+                persist_global,
+                custom_providers=custom_providers,
+                reasoning_effort=reasoning_effort,
+            )
         except Exception as exc:
             _cprint(f"  {t('cli.model.selection_failed', error=exc)}")
 
@@ -695,11 +934,15 @@ class CLIModelSwitchMixin:
             "reasoning_config": copy.deepcopy(getattr(self, "reasoning_config", None)),
             "agent_primary_runtime": copy.deepcopy(
                 getattr(agent, "_primary_runtime", None)
-            ) if agent is not None else None}
+            )
+            if agent is not None
+            else None,
+        }
 
     def _restore_model_runtime_snapshot(self, snapshot: dict | None) -> None:
         """Restore a model runtime captured before a one-turn override."""
         from cli import _cprint, logger
+
         if not snapshot:
             return
         one_turn = _runtime_fields(self)
@@ -711,9 +954,13 @@ class CLIModelSwitchMixin:
         if agent is None:
             return
         from clawk_cli.gateway_agent import GatewayAgent
+
         # A gateway agent's one-turn level only rode the admission: put it back locally, write nothing.
-        restore_reasoning = (agent.restore_reasoning if isinstance(agent, GatewayAgent)
-                             else lambda config: setattr(agent, "reasoning_config", config))
+        restore_reasoning = (
+            agent.restore_reasoning
+            if isinstance(agent, GatewayAgent)
+            else lambda config: setattr(agent, "reasoning_config", config)
+        )
         if "reasoning_config" in snapshot:
             restore_reasoning(snapshot["reasoning_config"])
         primary = snapshot.get("agent_primary_runtime")
@@ -725,16 +972,24 @@ class CLIModelSwitchMixin:
                 if agent._restore_primary_runtime():
                     return
             except Exception:
-                logger.debug("CLI one-turn model restore via primary runtime failed", exc_info=True)
+                logger.debug(
+                    "CLI one-turn model restore via primary runtime failed",
+                    exc_info=True,
+                )
         if hasattr(agent, "switch_model"):
             try:
                 # The classic CLI only builds a GatewayAgent (``_init_agent``): its ``once`` / ``restore`` are
                 # named, so a rename fails loudly instead of turning the restore into a session mutate.
                 restored = agent.switch_model(
-                    new_model=snapshot.get("model", ""), new_provider=snapshot.get("provider", ""),
-                    api_key=snapshot.get("api_key", ""), base_url=snapshot.get("base_url", ""),
+                    new_model=snapshot.get("model", ""),
+                    new_provider=snapshot.get("provider", ""),
+                    api_key=snapshot.get("api_key", ""),
+                    base_url=snapshot.get("base_url", ""),
                     api_mode=snapshot.get("api_mode", ""),
-                    capabilities=snapshot.get("capabilities"), once=True, restore=True)
+                    capabilities=snapshot.get("capabilities"),
+                    once=True,
+                    restore=True,
+                )
             except Exception as exc:  # health: allow BLE001 -- runs in the turn's finally; reported below
                 logger.warning("CLI one-turn model restore failed: %s", exc)
                 restored = exc
@@ -743,8 +998,16 @@ class CLIModelSwitchMixin:
                 # claiming the restore.
                 for key, value in one_turn.items():
                     setattr(self, key, value)
-                notice = t("cli.model.switch_cancelled") if restored is False else t(
-                    "cli.model.switch_failed", model=snapshot.get("model", ""), error=restored, old_model=agent.model)
+                notice = (
+                    t("cli.model.switch_cancelled")
+                    if restored is False
+                    else t(
+                        "cli.model.switch_failed",
+                        model=snapshot.get("model", ""),
+                        error=restored,
+                        old_model=agent.model,
+                    )
+                )
                 _cprint(f"  {notice}")
                 return
             if "reasoning_config" in snapshot:
@@ -768,8 +1031,14 @@ class CLIModelSwitchMixin:
 
     @staticmethod
     def _compute_model_picker_viewport(
-        selected: int, scroll_offset: int, n: int, term_rows: int, reserved_below: int = 6,
-        panel_chrome: int = 6, min_visible: int = 3) -> tuple[int, int]:
+        selected: int,
+        scroll_offset: int,
+        n: int,
+        term_rows: int,
+        reserved_below: int = 6,
+        panel_chrome: int = 6,
+        min_visible: int = 3,
+    ) -> tuple[int, int]:
         """Resolve (scroll_offset, visible) for the /model picker viewport. ``reserved_below``
         matches the approval/clarify panels (input, status bar, separators); ``panel_chrome`` is
         borders + blanks + hint row. The offset slides to keep ``selected`` on screen."""
@@ -791,7 +1060,12 @@ class CLIModelSwitchMixin:
         rolled back. Returns False after printing the failure (a failed switch is a no-op).
         """
         from cli import _cprint
-        if self.agent is None and getattr(self, "_gateway_session_open", False) and not self._init_agent():
+
+        if (
+            self.agent is None
+            and getattr(self, "_gateway_session_open", False)
+            and not self._init_agent()
+        ):
             # Before the first turn: the stand-in built for that turn reads the gateway session's model,
             # so the switch must commit on the session now; _init_agent printed why it could not.
             self._confirmed_switch_warning = None
@@ -815,12 +1089,18 @@ class CLIModelSwitchMixin:
         if self.agent is not None:
             try:
                 fields = dict(
-                    new_model=result.new_model, new_provider=result.target_provider,
-                    api_key=result.api_key, base_url=result.base_url, api_mode=result.api_mode,
-                    capabilities=getattr(result, "runtime_capabilities", None))
+                    new_model=result.new_model,
+                    new_provider=result.target_provider,
+                    api_key=result.api_key,
+                    base_url=result.base_url,
+                    api_mode=result.api_mode,
+                    capabilities=getattr(result, "runtime_capabilities", None),
+                )
                 if getattr(self, "_model_switch_one_turn", False):
                     # The CLI and agent show the resolved model; the admission sends the alias.
-                    fields.update(once=True, alias=getattr(result, "resolved_via_alias", "") or "")
+                    fields.update(
+                        once=True, alias=getattr(result, "resolved_via_alias", "") or ""
+                    )
                 if self.agent.switch_model(**fields) is False:
                     # Declined at the gateway owner's guard prompt: nothing was committed.
                     for _k, _v in _cli_snapshot.items():
@@ -835,22 +1115,35 @@ class CLIModelSwitchMixin:
                 # rather than a dead session (#50163).
                 for _k, _v in _cli_snapshot.items():
                     setattr(self, _k, _v)
-                _cprint(f"  {t('cli.model.switch_failed', model=result.new_model, error=exc, old_model=old_model)}")
+                _cprint(
+                    f"  {t('cli.model.switch_failed', model=result.new_model, error=exc, old_model=old_model)}"
+                )
                 return False
             finally:
                 self._confirmed_switch_warning = None  # this switch's confirmation only
         return True
 
     def _apply_model_switch_result(
-        self, result, persist_global: bool, custom_providers=None, reasoning_effort: str = "") -> None:
+        self,
+        result,
+        persist_global: bool,
+        custom_providers=None,
+        reasoning_effort: str = "",
+    ) -> None:
         """Picker-path commit (see _commit_model_switch)."""
         from cli import _cprint
+
         if not result.success:
             _cprint(f"  ✗ {result.error_message}")
             return
         _merge_preflight_warning(self, result, custom_providers)
-        _commit_model_switch(self, result, persist_global=persist_global, picker=True,
-                             reasoning_effort=reasoning_effort)
+        _commit_model_switch(
+            self,
+            result,
+            persist_global=persist_global,
+            picker=True,
+            reasoning_effort=reasoning_effort,
+        )
 
     def _handle_model_picker_selection(self, persist_global: bool = False) -> None:
         state = self._model_picker_state
@@ -872,15 +1165,25 @@ class CLIModelSwitchMixin:
             if not model_list:
                 try:
                     from clawk_cli.models import cached_provider_model_ids
-                    model_list = cached_provider_model_ids(provider_data["slug"]) or model_list
+
+                    model_list = (
+                        cached_provider_model_ids(provider_data["slug"]) or model_list
+                    )
                 except Exception:
                     pass
             from clawk_cli.models_validate import offered_model_ids
+
             model_list = offered_model_ids(
-                model_list, provider_data.get("slug"), provider_data.get("api_url"))
+                model_list, provider_data.get("slug"), provider_data.get("api_url")
+            )
             state.update(
-                stage="model", provider_data=provider_data, model_list=model_list,
-                selected=0, filter="", _filtered_pairs=None)
+                stage="model",
+                provider_data=provider_data,
+                model_list=model_list,
+                selected=0,
+                filter="",
+                _filtered_pairs=None,
+            )
             self._invalidate(min_interval=0.0)
             return
         if stage == "model":
@@ -894,9 +1197,18 @@ class CLIModelSwitchMixin:
             back_idx = len(visible_labels)
             if selected == back_idx:
                 state.update(
-                    stage="provider", filter="", _filtered_pairs=None,
-                    selected=next((i for i, p in enumerate(state.get("providers") or [])
-                                   if p.get("slug") == provider_data.get("slug")), 0))
+                    stage="provider",
+                    filter="",
+                    _filtered_pairs=None,
+                    selected=next(
+                        (
+                            i
+                            for i, p in enumerate(state.get("providers") or [])
+                            if p.get("slug") == provider_data.get("slug")
+                        ),
+                        0,
+                    ),
+                )
                 self._invalidate(min_interval=0.0)
                 return
             if selected > back_idx:  # cancel row (and anything past it)
@@ -904,14 +1216,24 @@ class CLIModelSwitchMixin:
                 return
             if 0 <= selected < back_idx:
                 result = _switch_model_from(
-                    self, visible_labels[selected], is_global=persist_global,
+                    self,
+                    visible_labels[selected],
+                    is_global=persist_global,
                     explicit_provider=provider_data.get("slug"),
                     user_providers=state.get("user_provs"),
-                    custom_providers=state.get("custom_provs"))
-                if result.success and _picker_offers_reasoning(provider_data, result.new_model):
+                    custom_providers=state.get("custom_provs"),
+                )
+                if result.success and _picker_offers_reasoning(
+                    provider_data, result.new_model
+                ):
                     # Third step: effort for the picked model (skipped for routes the catalog
                     # marks reasoning-free). Rows come from the canonical level set.
-                    state.update(stage="reasoning", switch_result=result, selected=0, _scroll_offset=0)
+                    state.update(
+                        stage="reasoning",
+                        switch_result=result,
+                        selected=0,
+                        _scroll_offset=0,
+                    )
                     self._invalidate(min_interval=0.0)
                     return
                 self._commit_picker_result(result, persist_global)
@@ -921,15 +1243,21 @@ class CLIModelSwitchMixin:
             rows = _picker_reasoning_rows()
             result = state.get("switch_result")
             if selected == len(rows):  # ← Back to the model list
-                state.update(stage="model", selected=0, _scroll_offset=0, switch_result=None)
+                state.update(
+                    stage="model", selected=0, _scroll_offset=0, switch_result=None
+                )
                 self._invalidate(min_interval=0.0)
                 return
             if selected > len(rows) or result is None:
                 self._close_model_picker()
                 return
-            self._commit_picker_result(result, persist_global, reasoning_effort=rows[selected][0])
+            self._commit_picker_result(
+                result, persist_global, reasoning_effort=rows[selected][0]
+            )
 
-    def _commit_picker_result(self, result, persist_global: bool, reasoning_effort: str = "") -> None:
+    def _commit_picker_result(
+        self, result, persist_global: bool, reasoning_effort: str = ""
+    ) -> None:
         """Close the picker and run the confirm+apply sequence for ``result``."""
         state = self._model_picker_state or {}
         # Capture before close — picker state is cleared on close.
@@ -938,8 +1266,13 @@ class CLIModelSwitchMixin:
         # The effort is appended only when picked: stubs/tests pin the historical arity.
         extra = (reasoning_effort,) if reasoning_effort else ()
         _run_confirm_and_apply(
-            self, self._confirm_and_apply_model_switch_result,
-            result, persist_global, _picker_custom_provs, *extra)
+            self,
+            self._confirm_and_apply_model_switch_result,
+            result,
+            persist_global,
+            _picker_custom_provs,
+            *extra,
+        )
 
     def _handle_model_switch(self, cmd_original: str):
         """Handle /model command — switch model.
@@ -957,7 +1290,10 @@ class CLIModelSwitchMixin:
         Switches are session-scoped unless ``model.persist_switch_by_default`` or ``--global``.
         """
         from cli import _cprint
-        from clawk_cli.model_switch import parse_model_switch_args, resolve_persist_behavior
+        from clawk_cli.model_switch import (
+            parse_model_switch_args,
+            resolve_persist_behavior,
+        )
 
         parts = cmd_original.split(None, 1)  # split off '/model'
         request = parse_model_switch_args(parts[1].strip() if len(parts) > 1 else "")
@@ -967,13 +1303,17 @@ class CLIModelSwitchMixin:
             return
         one_turn = request.is_once
         persist_global = resolve_persist_behavior(
-            request.is_global, request.is_session, is_once=one_turn,
-            explicit_provider=request.explicit_provider)
+            request.is_global,
+            request.is_session,
+            is_once=one_turn,
+            explicit_provider=request.explicit_provider,
+        )
 
         # --refresh: wipe the picker cache so every authed provider's /v1/models is re-fetched.
         if request.force_refresh:
             try:
                 from clawk_cli.models import clear_provider_models_cache
+
                 clear_provider_models_cache()
                 _cprint(f"  {t('cli.model.cleared_picker_cache')}")
             except Exception:
@@ -981,10 +1321,13 @@ class CLIModelSwitchMixin:
 
         # Live session state is overlaid truthy-only so empty self.* attrs don't clobber config.
         from clawk_cli.inventory import load_picker_context
+
         try:
             ctx = load_picker_context().with_overrides(
-                current_provider=self.provider or "", current_model=self.model or "",
-                current_base_url=self.base_url or "")
+                current_provider=self.provider or "",
+                current_model=self.model or "",
+                current_base_url=self.base_url or "",
+            )
         except Exception:
             ctx = None
         # switch_model() + _open_model_picker still need the raw provider dicts.
@@ -995,32 +1338,56 @@ class CLIModelSwitchMixin:
             return _show_model_picker(self, ctx, request.force_refresh)
 
         result = _switch_model_from(
-            self, request.target, is_global=persist_global,
+            self,
+            request.target,
+            is_global=persist_global,
             explicit_provider=request.explicit_provider,
-            user_providers=user_provs, custom_providers=custom_provs)
+            user_providers=user_provs,
+            custom_providers=custom_provs,
+        )
         if not result.success:
             _cprint(f"  ✗ {result.error_message}")
             return
         _merge_preflight_warning(self, result, custom_provs)
         extra = (request.reasoning_effort,) if request.reasoning_effort else ()
         _run_confirm_and_apply(
-            self, self._confirm_and_apply_cli_model_switch,
-            result, persist_global, one_turn, custom_provs, *extra)
+            self,
+            self._confirm_and_apply_cli_model_switch,
+            result,
+            persist_global,
+            one_turn,
+            custom_provs,
+            *extra,
+        )
 
     def _confirm_and_apply_cli_model_switch(
-        self, result, persist_global: bool, one_turn: bool, custom_provs=None, reasoning_effort: str = "") -> None:
+        self,
+        result,
+        persist_global: bool,
+        one_turn: bool,
+        custom_provs=None,
+        reasoning_effort: str = "",
+    ) -> None:
         """Confirm an expensive model switch and apply it (typed /model path). Runs on a worker
         thread when the TUI is active (see _run_confirm_and_apply) so the modal can render."""
         from cli import _cprint
+
         # ``--once`` does not reach the owner's mutate guard. A resumed session's compressor is
         # still cold; the persisted anchor is what that guard would have measured.
-        self._one_turn_selection_context = _one_turn_selection_context(self) if one_turn else None
+        self._one_turn_selection_context = (
+            _one_turn_selection_context(self) if one_turn else None
+        )
         try:
             if not self._confirm_expensive_model_switch(result):
                 _cprint(f"  {t('cli.model.switch_cancelled')}")
                 return
-            _commit_model_switch(self, result, persist_global=persist_global, one_turn=one_turn,
-                                 reasoning_effort=reasoning_effort)
+            _commit_model_switch(
+                self,
+                result,
+                persist_global=persist_global,
+                one_turn=one_turn,
+                reasoning_effort=reasoning_effort,
+            )
         finally:
             self._one_turn_selection_context = None
 
@@ -1048,22 +1415,32 @@ class CLIModelSwitchMixin:
             _cprint(t("cli.model.could_not_load_config", error=exc))
             return
         result = crs.apply(
-            load_config(), new_value,
-            persist_callback=(save_config if new_value is not None else None))
+            load_config(),
+            new_value,
+            persist_callback=(save_config if new_value is not None else None),
+        )
         prefix = "✓" if result.success else "✗"
         for line in result.message.splitlines():
-            _cprint(f"  {prefix} {line}" if line.startswith("openai_runtime") else f"    {line}")
+            _cprint(
+                f"  {prefix} {line}"
+                if line.startswith("openai_runtime")
+                else f"    {line}"
+            )
         if result.success and result.requires_new_session:
             _cprint(f"    {t('cli.model.tip_reset_new_session')}")
 
-    def _should_handle_model_command_inline(self, text: str, has_images: bool = False) -> bool:
+    def _should_handle_model_command_inline(
+        self, text: str, has_images: bool = False
+    ) -> bool:
         """Return True when /model should be handled immediately on the UI thread."""
         from cli import _looks_like_slash_command
+
         if not text or has_images or not _looks_like_slash_command(text):
             return False
         try:
             from clawk_cli.commands import resolve_command
-            cmd = resolve_command(text.split(None, 1)[0].lower().lstrip('/'))
+
+            cmd = resolve_command(text.split(None, 1)[0].lower().lstrip("/"))
             return bool(cmd and cmd.name == "model")
         except Exception:
             return False
@@ -1083,7 +1460,14 @@ class CLIModelSwitchMixin:
         self._pending_moa_restore_model = {
             key: getattr(self, key, None)
             for key in (
-                "requested_provider", "provider", "model", "api_key", "base_url", "api_mode")}
+                "requested_provider",
+                "provider",
+                "model",
+                "api_key",
+                "base_url",
+                "api_mode",
+            )
+        }
         self.requested_provider = "moa"
         self.provider = "moa"
         self.model = preset

@@ -4,6 +4,7 @@ Mirrors the TUI's writeClipboardText fallback chain: pbcopy /
 PowerShell Set-Clipboard / wl-copy / xclip / xsel, with OSC 52 left to
 the caller when every backend fails.
 """
+
 import base64
 import subprocess
 from unittest.mock import patch
@@ -35,18 +36,14 @@ def test_linux_falls_through_backends_until_success():
         # xclip fails, xsel succeeds
         return _completed(returncode=0 if argv[0] == "xsel" else 1)
 
-    with patch.object(clip, "_is_wsl", return_value=False), \
-         patch.dict(clip.os.environ, {}, clear=False), \
-         patch.object(clip.os.environ, "get", lambda k, d=None: None), \
-         patch.object(clip.subprocess, "run", side_effect=fake_run):
+    with (
+        patch.object(clip, "_is_wsl", return_value=False),
+        patch.dict(clip.os.environ, {}, clear=False),
+        patch.object(clip.os.environ, "get", lambda k, d=None: None),
+        patch.object(clip.subprocess, "run", side_effect=fake_run),
+    ):
         assert clip.write_clipboard_text("x") is True
     assert calls == ["xclip", "xsel"]
-
-
-
-
-
-
 
 
 class TestOsc52MultiplexerWrapping:
@@ -61,8 +58,10 @@ class TestOsc52MultiplexerWrapping:
         cli_obj = ClawksisCLI.__new__(ClawksisCLI)
         cli_obj._app = None
         buf = io.StringIO()
-        with _patch.dict(clip.os.environ, env, clear=False), \
-             _patch("cli.sys.stdout", buf):
+        with (
+            _patch.dict(clip.os.environ, env, clear=False),
+            _patch("cli.sys.stdout", buf),
+        ):
             for var in ("TMUX", "STY"):
                 if var not in env:
                     clip.os.environ.pop(var, None)
@@ -76,5 +75,3 @@ class TestOsc52MultiplexerWrapping:
         assert seq.startswith("\x1bPtmux;")
         assert "]52;c;" in seq
         assert seq.endswith("\x1b\\")
-
-

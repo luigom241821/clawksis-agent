@@ -17,7 +17,9 @@ def isolated_profiles(tmp_path, monkeypatch, _isolate_clawk_home):
     )
 
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: default_home)
-    monkeypatch.setattr(profiles, "_get_profiles_root", lambda: default_home / "profiles")
+    monkeypatch.setattr(
+        profiles, "_get_profiles_root", lambda: default_home / "profiles"
+    )
     return default_home
 
 
@@ -97,13 +99,18 @@ def test_create_rejects_invalid_repeat_count(client, repeat):
             error.get("loc", [None])[-1] == "repeat" or "repeat" in str(error).lower()
             for error in detail
         )
-    assert client.get(
-        "/api/cron/jobs",
-        params={"profile": "default"},
-    ).json() == []
+    assert (
+        client.get(
+            "/api/cron/jobs",
+            params={"profile": "default"},
+        ).json()
+        == []
+    )
 
 
-@pytest.mark.parametrize("repeat,expected_times", [("2", 2), ("once", 1), ("forever", None)])
+@pytest.mark.parametrize(
+    "repeat,expected_times", [("2", 2), ("once", 1), ("forever", None)]
+)
 def test_create_accepts_cli_string_repeat_forms(client, repeat, expected_times):
     """The dashboard create path validates repeat through the same normalize_repeat_value
     the CLI uses: numeric strings coerce, 'once' → 1, 'forever' → unlimited."""

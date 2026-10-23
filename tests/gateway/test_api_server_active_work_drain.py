@@ -48,9 +48,11 @@ def _make_api_adapter(*, inflight: int = 0, queued_ids=()):
     )
 
     def active_agent_work_count() -> int:
-        return int(getattr(adapter, "_pending_agent_requests", 0)) + int(
-            adapter._inflight_agent_runs
-        ) + sum(not task.done() for task in adapter._active_run_tasks.values())
+        return (
+            int(getattr(adapter, "_pending_agent_requests", 0))
+            + int(adapter._inflight_agent_runs)
+            + sum(not task.done() for task in adapter._active_run_tasks.values())
+        )
 
     adapter.active_agent_work_count = active_agent_work_count
     return adapter
@@ -76,7 +78,6 @@ class TestActiveApiRunCount:
 
 
 class TestAPIServerAdapterWorkCount:
-
     @pytest.mark.asyncio
     async def test_concurrency_limit_excludes_current_pending_admission(self):
         adapter = APIServerAdapter(PlatformConfig(enabled=True))
@@ -84,14 +85,15 @@ class TestAPIServerAdapterWorkCount:
         app = _make_admission_app(adapter)
 
         async with TestClient(TestServer(app)) as client:
-            with patch.object(adapter, "_run_agent", new=AsyncMock(return_value=({}, {}))):
+            with patch.object(
+                adapter, "_run_agent", new=AsyncMock(return_value=({}, {}))
+            ):
                 response = await client.post(
                     "/api/sessions/s/chat",
                     json={"message": "hello"},
                 )
 
         assert response.status == 404
-
 
     def test_counts_live_run_task_before_agent_creation(self):
         adapter = APIServerAdapter(PlatformConfig(enabled=True))
@@ -113,10 +115,7 @@ class TestAPIServerAdapterWorkCount:
         assert adapter.active_agent_work_count() == 1
 
 
-
-
 class TestDrainWaitsForApiWork:
-
     @pytest.mark.asyncio
     async def test_drain_waits_for_real_queued_run_before_agent_creation(self):
         """A live /v1/runs task must block drain before it has an agent."""
@@ -151,10 +150,13 @@ class TestDrainWaitsForApiWork:
         mock_agent.session_completion_tokens = 0
         mock_agent.session_total_tokens = 0
 
-        with patch(
-            "gateway.platforms.api_server.asyncio.create_task",
-            side_effect=delayed_create_task,
-        ), patch.object(api, "_create_agent", return_value=mock_agent):
+        with (
+            patch(
+                "gateway.platforms.api_server.asyncio.create_task",
+                side_effect=delayed_create_task,
+            ),
+            patch.object(api, "_create_agent", return_value=mock_agent),
+        ):
             async with TestClient(TestServer(app)) as client:
                 response = await client.post("/v1/runs", json={"input": "hello"})
                 assert response.status == 202
@@ -189,7 +191,9 @@ class TestDrainWaitsForApiWork:
 
         runner._interrupt_running_agents("gateway shutdown")
 
-        agent.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
+        agent.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
 
     @pytest.mark.asyncio
     async def test_drain_still_waits_for_chat_cron_and_api_work(self):
@@ -341,7 +345,12 @@ class TestRunAgentRegistersForShutdownInterrupt:
 
         def _record(user_message=None, conversation_history=None, task_id=None):
             observed["during"] = dict(adapter._shutdown_interruptible_agents)
-            return {"final_response": "done", "messages": [], "api_calls": 0, "tools": []}
+            return {
+                "final_response": "done",
+                "messages": [],
+                "api_calls": 0,
+                "tools": [],
+            }
 
         agent.run_conversation.side_effect = _record
 
@@ -356,7 +365,9 @@ class TestRunAgentRegistersForShutdownInterrupt:
         assert adapter._shutdown_interruptible_agents == {}
 
     @pytest.mark.asyncio
-    async def test_cancelled_handler_keeps_the_worker_counted_until_the_turn_exits(self):
+    async def test_cancelled_handler_keeps_the_worker_counted_until_the_turn_exits(
+        self,
+    ):
         """Cancelling the ``_run_agent`` handler task must not drop the worker count (#116535).
 
         The handler-side ``_inflight_agent_runs`` legitimately drops in the handler's
@@ -372,7 +383,10 @@ class TestRunAgentRegistersForShutdownInterrupt:
 
         with patch.object(adapter, "_create_agent", return_value=agent):
             task = asyncio.ensure_future(
-                adapter._run_agent(user_message="hello", conversation_history=[], session_id="s1"))
+                adapter._run_agent(
+                    user_message="hello", conversation_history=[], session_id="s1"
+                )
+            )
             await asyncio.wait_for(started.wait(), _TURN_UNBLOCK_TIMEOUT)
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
@@ -380,14 +394,17 @@ class TestRunAgentRegistersForShutdownInterrupt:
 
             assert adapter._inflight_agent_runs == 0
             assert _api_runs.api_worker_live_count() == baseline + 1, (
-                "cancelled handler dropped the worker-scoped count while the turn was still running")
+                "cancelled handler dropped the worker-scoped count while the turn was still running"
+            )
 
             release.set()
             for _ in range(200):
                 if _api_runs.api_worker_live_count() == baseline:
                     break
                 await asyncio.sleep(0.01)
-        assert _api_runs.api_worker_live_count() == baseline, "worker exit did not release the count"
+        assert _api_runs.api_worker_live_count() == baseline, (
+            "worker exit did not release the count"
+        )
 
     @pytest.mark.asyncio
     async def test_agent_is_unregistered_when_the_turn_raises(self):
@@ -414,7 +431,9 @@ class TestInterruptActiveRuns:
         adapter._active_run_agents = {"run-1": agent}
 
         assert adapter.interrupt_active_runs("gateway shutdown") == 1
-        agent.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
+        agent.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
 
     def test_interrupts_each_agent_exactly_once_across_both_registries(self):
         adapter = APIServerAdapter(PlatformConfig(enabled=True))
@@ -428,9 +447,15 @@ class TestInterruptActiveRuns:
         }
 
         assert adapter.interrupt_active_runs("gateway shutdown") == 3
-        shared.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
-        run_only.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
-        turn_only.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
+        shared.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
+        run_only.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
+        turn_only.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
 
     def test_one_bad_agent_does_not_strand_the_others(self):
         adapter = APIServerAdapter(PlatformConfig(enabled=True))
@@ -445,8 +470,9 @@ class TestInterruptActiveRuns:
         }
 
         assert adapter.interrupt_active_runs("gateway shutdown") == 1
-        healthy.interrupt.assert_called_once_with("gateway shutdown", tool_reason="gateway shutdown")
-
+        healthy.interrupt.assert_called_once_with(
+            "gateway shutdown", tool_reason="gateway shutdown"
+        )
 
 
 class TestShutdownInterruptReachesEveryApiTurn:
@@ -467,7 +493,10 @@ class TestShutdownInterruptReachesEveryApiTurn:
         release = threading.Event()
         agent = _parked_agent(loop, started, release)
         if late_outcome == "failure":
-            def _late_failure(user_message=None, conversation_history=None, task_id=None):
+
+            def _late_failure(
+                user_message=None, conversation_history=None, task_id=None
+            ):
                 loop.call_soon_threadsafe(started.set)
                 release.wait(_TURN_UNBLOCK_TIMEOUT)
                 raise RuntimeError("late failure")
@@ -546,7 +575,10 @@ class TestShutdownInterruptReachesEveryApiTurn:
 
                     runner._interrupt_running_agents(_INTERRUPT_REASON_GATEWAY_SHUTDOWN)
 
-                    agent.interrupt.assert_called_once_with(_INTERRUPT_REASON_GATEWAY_SHUTDOWN, tool_reason="gateway shutdown")
+                    agent.interrupt.assert_called_once_with(
+                        _INTERRUPT_REASON_GATEWAY_SHUTDOWN,
+                        tool_reason="gateway shutdown",
+                    )
                     response = await asyncio.wait_for(request, _TURN_UNBLOCK_TIMEOUT)
                     assert response.status == 200
         finally:
@@ -586,7 +618,10 @@ class TestShutdownInterruptReachesEveryApiTurn:
 
                     runner._interrupt_running_agents(_INTERRUPT_REASON_GATEWAY_SHUTDOWN)
 
-                    agent.interrupt.assert_called_once_with(_INTERRUPT_REASON_GATEWAY_SHUTDOWN, tool_reason="gateway shutdown")
+                    agent.interrupt.assert_called_once_with(
+                        _INTERRUPT_REASON_GATEWAY_SHUTDOWN,
+                        tool_reason="gateway shutdown",
+                    )
                     response = await asyncio.wait_for(request, _TURN_UNBLOCK_TIMEOUT)
                     assert response.status == 200
                     await asyncio.wait_for(response.text(), _TURN_UNBLOCK_TIMEOUT)
@@ -639,12 +674,16 @@ class TestShutdownSettleWindow:
 
         monkeypatch.setattr(_pr.process_registry, "kill_all", _spy_kill_all)
         monkeypatch.setattr(_tt, "cleanup_all_environments", lambda: None)
-        monkeypatch.setattr(terminal_tool_lifecycle, "cleanup_all_environments", lambda: None)
+        monkeypatch.setattr(
+            terminal_tool_lifecycle, "cleanup_all_environments", lambda: None
+        )
         monkeypatch.setattr(bt_lifecycle, "cleanup_all_browsers", lambda: None)
 
-        with patch("gateway.status.remove_pid_file"), \
-             patch("gateway.status.publish_runtime_status"), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("gateway.status.remove_pid_file"),
+            patch("gateway.status.publish_runtime_status"),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             await runner.stop()
 
         assert api.interrupt_reasons == [_INTERRUPT_REASON_GATEWAY_SHUTDOWN]
@@ -678,7 +717,9 @@ class TestShutdownSettleWindow:
 
         monkeypatch.setattr(_pr.process_registry, "kill_all", lambda task_id=None: 0)
         monkeypatch.setattr(_tt, "cleanup_all_environments", lambda: None)
-        monkeypatch.setattr(terminal_tool_lifecycle, "cleanup_all_environments", lambda: None)
+        monkeypatch.setattr(
+            terminal_tool_lifecycle, "cleanup_all_environments", lambda: None
+        )
         monkeypatch.setattr(bt_lifecycle, "cleanup_all_browsers", lambda: None)
 
         # Accelerate the loop clock: each time() call advances 1s of virtual
@@ -694,9 +735,11 @@ class TestShutdownSettleWindow:
 
         monkeypatch.setattr(type(loop), "time", _fast_time)
         try:
-            with patch("gateway.status.remove_pid_file"), \
-                 patch("gateway.status.publish_runtime_status"), \
-                 patch("cron.scheduler.mark_job_run"):
+            with (
+                patch("gateway.status.remove_pid_file"),
+                patch("gateway.status.publish_runtime_status"),
+                patch("cron.scheduler.mark_job_run"),
+            ):
                 await runner.stop()
         finally:
             monkeypatch.undo()

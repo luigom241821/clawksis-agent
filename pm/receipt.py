@@ -66,11 +66,11 @@ _completed_by_update: contextvars.ContextVar[Optional[dict[str, dict[str, Any]]]
 )
 
 
-_worker_update: contextvars.ContextVar[tuple[Optional[str]] | None] = contextvars.ContextVar(
-    "pm_worker_update", default=None
+_worker_update: contextvars.ContextVar[tuple[Optional[str]] | None] = (
+    contextvars.ContextVar("pm_worker_update", default=None)
 )
-_last_completed: contextvars.ContextVar[Optional[dict[str, Any]]] = contextvars.ContextVar(
-    "pm_last_completed", default=None
+_last_completed: contextvars.ContextVar[Optional[dict[str, Any]]] = (
+    contextvars.ContextVar("pm_last_completed", default=None)
 )
 
 
@@ -90,7 +90,9 @@ def last_completed() -> Optional[dict[str, Any]]:
     return copy.deepcopy(_last_completed.get())
 
 
-def accept_worker_receipt(data: Optional[dict[str, Any]], update_id: Optional[str]) -> None:
+def accept_worker_receipt(
+    data: Optional[dict[str, Any]], update_id: Optional[str]
+) -> None:
     if data is None:
         return
     if data.get("update_id") != update_id:
@@ -167,8 +169,14 @@ def _record(mutate) -> None:
 
 
 def record_step(name: str, ok: bool, detail: str = "") -> None:
-    _record(lambda r: r.update(steps=[*r["steps"],
-        {"name": name, "ok": ok, "detail": detail, "at": _utc_now_iso()}]))
+    _record(
+        lambda r: r.update(
+            steps=[
+                *r["steps"],
+                {"name": name, "ok": ok, "detail": detail, "at": _utc_now_iso()},
+            ]
+        )
+    )
 
 
 def record_venv_rebuild(ok: bool, reason: str = "") -> None:
@@ -188,7 +196,8 @@ def record_plugin_checks(results: list) -> None:
     Each item is a plugins_updates.CheckResult.to_json() dict."""
     _record(
         lambda r: r.__setitem__(
-            "plugin_checks", [r.to_json() if hasattr(r, "to_json") else r for r in results]
+            "plugin_checks",
+            [r.to_json() if hasattr(r, "to_json") else r for r in results],
         )
     )
 
@@ -198,8 +207,10 @@ def record_warning(message: str) -> None:
     that reached the operator's eyes must reach the receipt too."""
     _record(
         lambda r: r.update(
-            warnings=[*r.get("warnings", []),
-                      {"message": str(message), "at": _utc_now_iso()}]
+            warnings=[
+                *r.get("warnings", []),
+                {"message": str(message), "at": _utc_now_iso()},
+            ]
         )
     )
 
@@ -258,7 +269,9 @@ def finalize(
     return path
 
 
-def last_for_update(update_id: Optional[str], *, consume: bool = False) -> Optional[dict[str, Any]]:
+def last_for_update(
+    update_id: Optional[str], *, consume: bool = False
+) -> Optional[dict[str, Any]]:
     """The last sync receipt completed in THIS context under ``update_id``
     — the correlation surface for an invoking update's embed. A sync from
     before this update, a standalone sync, or one from a concurrent

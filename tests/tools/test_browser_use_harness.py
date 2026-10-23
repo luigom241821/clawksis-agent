@@ -1,4 +1,5 @@
 """Browser Use caller -> browser-harness on Clawksis's own interpreter -> actual child."""
+
 import importlib.metadata
 import json
 import subprocess
@@ -19,8 +20,14 @@ def test_harness_runs_on_an_interpreter_without_its_own_site_packages(monkeypatc
     monkeypatch.setenv("PYTHONHOME", "/wrong-python")
     cmd = bu._find_cli()
     assert cmd == [sys.executable, "-m", "browser_harness.run"]
-    result = subprocess.run([cmd[0], "-S", *cmd[1:], "--version"], env=bu._base_subprocess_env(),
-                            capture_output=True, text=True, timeout=120, check=False)
+    result = subprocess.run(
+        [cmd[0], "-S", *cmd[1:], "--version"],
+        env=bu._base_subprocess_env(),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == importlib.metadata.version("browser-harness")
 
@@ -30,29 +37,43 @@ def test_browser_exec_child_environment(tmp_path, monkeypatch):
     from tools import browser_tool_session, browser_supervisor
 
     probe = tmp_path / "probe.py"
-    probe.write_text("import json, os, sys\n"
-                     "print(json.dumps({'argv': sys.argv, 'stdin': sys.stdin.read(), 'env': dict(os.environ)}))\n",
-                     encoding="utf-8")
+    probe.write_text(
+        "import json, os, sys\n"
+        "print(json.dumps({'argv': sys.argv, 'stdin': sys.stdin.read(), 'env': dict(os.environ)}))\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(bu, "_find_cli", lambda: [sys.executable, str(probe)])
-    monkeypatch.setattr("clawk_cli.config.read_raw_config", lambda: {"browser": {"backend": "browser-use"}})
+    monkeypatch.setattr(
+        "clawk_cli.config.read_raw_config",
+        lambda: {"browser": {"backend": "browser-use"}},
+    )
     monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
     monkeypatch.setattr("tools.browser_tool_cdp._resolve_cdp_override", lambda url: url)
     monkeypatch.setattr("tools.browser_tool_cloud._get_cloud_provider", lambda: None)
-    monkeypatch.setattr("tools.browser_tool_lightpanda_fallback._using_lightpanda_engine", lambda: False)
+    monkeypatch.setattr(
+        "tools.browser_tool_lightpanda_fallback._using_lightpanda_engine", lambda: False
+    )
+
     def local_browser(task_id, command, args, **kwargs):
         assert (task_id, command, args) == ("bu-named-research", "get", ["cdp-url"])
         return {"success": True, "data": {"cdpUrl": "ws://127.0.0.1:47000/private"}}
+
     monkeypatch.setattr(browser_tool_session, "_run_browser_command", local_browser)
     attached = []
-    monkeypatch.setattr(browser_supervisor.SUPERVISOR_REGISTRY, "get_or_start",
-                        lambda task_id, cdp_url, **kw: attached.append((task_id, cdp_url)))
+    monkeypatch.setattr(
+        browser_supervisor.SUPERVISOR_REGISTRY,
+        "get_or_start",
+        lambda task_id, cdp_url, **kw: attached.append((task_id, cdp_url)),
+    )
     monkeypatch.setenv("PYTHONPATH", "/wrong-abi")
     monkeypatch.setenv("PYTHONHOME", "/wrong-python")
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
     monkeypatch.setenv("BROWSERBASE_API_KEY", "browser-key")
     monkeypatch.setenv("KEEP_BROWSER_PROBE", "kept")
     monkeypatch.delenv("ANONYMIZED_TELEMETRY", raising=False)
-    result = json.loads(bu.browser_exec("print('payload')", session="research", task_id="owner"))
+    result = json.loads(
+        bu.browser_exec("print('payload')", session="research", task_id="owner")
+    )
     assert result["success"], result
     child = json.loads(result["output"])
     assert child["stdin"] == "print('payload')"

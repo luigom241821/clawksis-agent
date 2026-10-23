@@ -4,6 +4,7 @@ With ``streaming.enabled`` the local route's stream consumer "delivers" the repl
 ``LocalSessionAdapter`` (every send acknowledges), the turn is marked ``already_sent`` and the
 completion frame used to carry no text. A finite viewer drops ``message.delta`` frames and prints
 only that text, so `-z` printed a bare newline and exited 1 while the answer sat in state.db."""
+
 import json
 from http.server import ThreadingHTTPServer
 import os
@@ -32,36 +33,78 @@ def test_streamed_oneshot_prints_the_reply(tmp_path):
     peer.blocked, peer.release = threading.Event(), threading.Event()
     threading.Thread(target=peer.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{peer.server_port}/v1"
-    (home / "config.yaml").write_text(json.dumps({
-        "gateway": {"multiplex_profiles": False},
-        "streaming": {"enabled": True},
-        "model": {"provider": "custom", "default": "oneshot-model", "base_url": url},
-        "auxiliary": {"title_generation": {"enabled": False}}}))
+    (home / "config.yaml").write_text(
+        json.dumps(
+            {
+                "gateway": {"multiplex_profiles": False},
+                "streaming": {"enabled": True},
+                "model": {
+                    "provider": "custom",
+                    "default": "oneshot-model",
+                    "base_url": url,
+                },
+                "auxiliary": {"title_generation": {"enabled": False}},
+            }
+        )
+    )
     env = {k: os.environ[k] for k in ("PATH", "LANG", "TZ") if k in os.environ}
-    env.update(HOME=str(user), USERPROFILE=str(user), CLAWK_HOME=str(home), PYTHONPATH=str(root),
-               PYTHONUNBUFFERED="1", OPENAI_API_KEY="loopback-only", OPENAI_BASE_URL=url)
+    env.update(
+        HOME=str(user),
+        USERPROFILE=str(user),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(root),
+        PYTHONUNBUFFERED="1",
+        OPENAI_API_KEY="loopback-only",
+        OPENAI_BASE_URL=url,
+    )
 
     def clawk(*args):
-        return subprocess.run([sys.executable, "-m", "clawk_cli.main", *args], cwd=work, env=env,
-                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120, check=False)
+        return subprocess.run(
+            [sys.executable, "-m", "clawk_cli.main", *args],
+            cwd=work,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
 
     with (home / "gw.log").open("w") as log:
-        daemon = subprocess.Popen([sys.executable, "-m", "gateway.run"], cwd=root, env=env,
-                                  stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+        daemon = subprocess.Popen(
+            [sys.executable, "-m", "gateway.run"],
+            cwd=root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
         try:
             deadline, desc = time.monotonic() + 60, {}
-            while daemon.poll() is None and time.monotonic() < deadline and desc.get("state") != "ready":
+            while (
+                daemon.poll() is None
+                and time.monotonic() < deadline
+                and desc.get("state") != "ready"
+            ):
                 try:
                     desc = control(home, "identify")
                 except (OSError, ValueError):
-                    time.sleep(.1)
+                    time.sleep(0.1)
             assert desc.get("state") == "ready", (home / "gw.log").read_text()
 
             oneshot = clawk("-z", "streamed one shot")
-            assert peer.requests and peer.requests[-1].get("stream"), "the turn must stream"
-            assert (oneshot.returncode, oneshot.stdout) == (0, "RECOVERY_ACK_streamed one shot\n"), oneshot
+            assert peer.requests and peer.requests[-1].get("stream"), (
+                "the turn must stream"
+            )
+            assert (oneshot.returncode, oneshot.stdout) == (
+                0,
+                "RECOVERY_ACK_streamed one shot\n",
+            ), oneshot
             quiet = clawk("chat", "-q", "streamed quiet query", "-Q")
-            assert quiet.returncode == 0 and quiet.stdout.strip() == "RECOVERY_ACK_streamed quiet query", quiet
+            assert (
+                quiet.returncode == 0
+                and quiet.stdout.strip() == "RECOVERY_ACK_streamed quiet query"
+            ), quiet
         finally:
             if daemon.poll() is None:
                 daemon.send_signal(signal.SIGINT)

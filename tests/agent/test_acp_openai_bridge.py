@@ -15,7 +15,9 @@ import os
 import sys
 from types import SimpleNamespace
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -28,8 +30,14 @@ from agent.acp_openai_bridge import (
 )
 
 _TOOLS = [
-    {"type": "function", "function": {"name": "memory", "description": "d1", "parameters": {"a": 1}}},
-    {"type": "function", "function": {"name": "read_file", "description": "d2", "parameters": {}}},
+    {
+        "type": "function",
+        "function": {"name": "memory", "description": "d1", "parameters": {"a": 1}},
+    },
+    {
+        "type": "function",
+        "function": {"name": "read_file", "description": "d2", "parameters": {}},
+    },
 ]
 
 
@@ -113,7 +121,7 @@ def test_bare_json_is_a_fallback_only_when_no_block_matched():
     assert cleaned == "before\nafter"
 
     # With a real block present the bare-JSON scan must not double-count.
-    both = f'<tool_call>{bare}</tool_call> and {bare}'
+    both = f"<tool_call>{bare}</tool_call> and {bare}"
     calls, _ = extract_tool_calls_from_text(both)
     assert len(calls) == 1
 
@@ -121,11 +129,15 @@ def test_bare_json_is_a_fallback_only_when_no_block_matched():
 def test_malformed_and_empty_input_never_raises():
     assert extract_tool_calls_from_text("") == ([], "")
     assert extract_tool_calls_from_text(None) == ([], "")
-    calls, cleaned = extract_tool_calls_from_text("<tool_call>{not json}</tool_call>plain")
+    calls, cleaned = extract_tool_calls_from_text(
+        "<tool_call>{not json}</tool_call>plain"
+    )
     assert calls == []
     assert cleaned == "plain"
     # Well-formed JSON that isn't a tool call is ignored, text preserved.
-    calls, cleaned = extract_tool_calls_from_text('<tool_call>{"function": 5}</tool_call>hi')
+    calls, cleaned = extract_tool_calls_from_text(
+        '<tool_call>{"function": 5}</tool_call>hi'
+    )
     assert calls == []
     assert cleaned == "hi"
 
@@ -138,7 +150,8 @@ def _completion(**extras):
         content="hello",
         tool_calls=[
             SimpleNamespace(
-                id="c1", type="function",
+                id="c1",
+                type="function",
                 function=SimpleNamespace(name="memory", arguments="{}"),
             )
         ],
@@ -195,7 +208,9 @@ def test_copilot_prompt_still_carries_the_contract_and_the_tools():
     from agent.copilot_acp_client import _format_messages_as_prompt
 
     prompt = _format_messages_as_prompt(
-        [{"role": "user", "content": "hi"}], model="gpt-5", tools=_TOOLS,
+        [{"role": "user", "content": "hi"}],
+        model="gpt-5",
+        tools=_TOOLS,
     )
     assert "<tool_call>{...}</tool_call>" in prompt
     assert '"name": "memory"' in prompt

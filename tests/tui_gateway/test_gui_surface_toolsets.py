@@ -41,7 +41,6 @@ def no_desktop_env(monkeypatch):
 
 
 class TestDesktopUiToolset:
-
     def test_stays_off_the_core_tool_list(self):
         """Core ships on every API call — a GUI-only tool must not be there."""
         from toolsets import _CLAWK_CORE_TOOLS
@@ -99,7 +98,9 @@ class TestResolverPlumbing:
 
         no_desktop_env.setattr(cc, "coding_selection", lambda **_: None)
         no_desktop_env.setattr(
-            config_mod, "load_config", lambda: {"platform_toolsets": {"cli": ["memory"]}}
+            config_mod,
+            "load_config",
+            lambda: {"platform_toolsets": {"cli": ["memory"]}},
         )
 
         desktop = server._load_enabled_toolsets("desktop")
@@ -144,7 +145,9 @@ class TestExplicitEmptySelection:
         self._config(no_desktop_env, {})
 
         result = server._load_enabled_toolsets("tui")
-        assert result  # the platform default applies — not the zero state, not None-as-all
+        assert (
+            result
+        )  # the platform default applies — not the zero state, not None-as-all
 
     def test_named_selection_is_honored(self, no_desktop_env):
         self._config(no_desktop_env, {"cli": ["memory"]})

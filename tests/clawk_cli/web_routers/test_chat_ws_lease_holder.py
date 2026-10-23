@@ -13,7 +13,10 @@ from clawk_cli.web_routers.chat_ws import _lease_holder_pid
 
 def _claim(home, session_id):
     lease, refusal = try_acquire_active_session(
-        session_id=session_id, surface="tui", config={}, registry_home=home,
+        session_id=session_id,
+        surface="tui",
+        config={},
+        registry_home=home,
         metadata={"live_session_id": "x"},
     )
     assert lease is not None, refusal
@@ -27,7 +30,9 @@ def test_lease_holder_is_read_from_the_chats_profile_home(tmp_path):
     launch_home.mkdir()
     lease = _claim(profile_home, "sess-a")
     try:
-        assert _lease_holder_pid("sess-a", registry_home=str(profile_home)) == os.getpid()
+        assert (
+            _lease_holder_pid("sess-a", registry_home=str(profile_home)) == os.getpid()
+        )
         assert _lease_holder_pid("sess-a", registry_home=str(launch_home)) is None
         assert _lease_holder_pid("sess-b", registry_home=str(profile_home)) is None
         assert _lease_holder_pid(None, registry_home=str(profile_home)) is None

@@ -19,5 +19,3 @@ def test_aliases_resolve_on_modern_platforms_layout(tmp_path, monkeypatch):
         "999999999999999",
         "15551234567",
     }
-
-

@@ -1,4 +1,5 @@
 """Regression tests for delegate_task isolation from parent Kanban workers."""
+
 from __future__ import annotations
 
 import json
@@ -62,7 +63,9 @@ def _make_running_kanban_task(monkeypatch, tmp_path):
     return kb, tid, workspace, attachments_root
 
 
-def test_delegated_child_context_suppresses_env_gated_kanban_tools(monkeypatch, tmp_path):
+def test_delegated_child_context_suppresses_env_gated_kanban_tools(
+    monkeypatch, tmp_path
+):
     """A delegate_task child must not inherit the parent's Kanban tool schema.
 
     The parent process may be a dispatcher worker with CLAWK_KANBAN_TASK set;
@@ -89,7 +92,9 @@ def test_delegated_child_context_suppresses_env_gated_kanban_tools(monkeypatch, 
     assert {n for n in names if n and n.startswith("kanban_")} == set()
 
 
-def test_build_child_agent_strips_kanban_toolset_even_when_parent_is_worker(monkeypatch):
+def test_build_child_agent_strips_kanban_toolset_even_when_parent_is_worker(
+    monkeypatch,
+):
     """Child construction must fail closed even if the parent exposes kanban."""
     captured = {}
 
@@ -166,7 +171,9 @@ def test_delegate_child_execute_code_env_bridges_contextvar_and_scrubs_kanban(
 
     assert os.environ.get("CLAWK_DELEGATED_CHILD_CONTEXT") is None
     assert env["CLAWK_HOME"] == str(home)
-    assert env["CLAWK_DELEGATED_CHILD_CONTEXT"]  # fenced board root (path), not a bare flag
+    assert env[
+        "CLAWK_DELEGATED_CHILD_CONTEXT"
+    ]  # fenced board root (path), not a bare flag
     assert "CLAWK_KANBAN_TASK" not in env
     assert "CLAWK_KANBAN_RUN_ID" not in env
     assert "CLAWK_KANBAN_CLAIM_LOCK" not in env
@@ -183,7 +190,9 @@ def test_auto_heartbeat_reports_failure_without_mutating_fenced_child_board(
     """An inherited child marker fences both bridge writes instead of faking success, and says
     so once at WARNING (the DEBUG-only refusal hid a starving claim for a day). An in-process
     delegate child stays fenced too, quietly, without consuming the worker's heartbeat window."""
-    kb, tid, _workspace, _attachments_root = _make_running_kanban_task(monkeypatch, tmp_path)
+    kb, tid, _workspace, _attachments_root = _make_running_kanban_task(
+        monkeypatch, tmp_path
+    )
     from agent.delegation_context import delegated_child_context
     from clawk_cli import kanban_db_connect as kbc
     from tools import kanban_tools
@@ -196,13 +205,19 @@ def test_auto_heartbeat_reports_failure_without_mutating_fenced_child_board(
         monkeypatch.setattr(kanban_tools, "_auto_heartbeat_last_attempt", 0.0)
         # raising=False: a regression that drops the module flag must fail on the
         # symptom assertions below, not on this attribute probe.
-        monkeypatch.setattr(kanban_tools, "_auto_heartbeat_fence_warned", False, raising=False)
+        monkeypatch.setattr(
+            kanban_tools, "_auto_heartbeat_fence_warned", False, raising=False
+        )
 
         with caplog.at_level(logging.WARNING, logger="tools.kanban_tools"):
             assert kanban_tools.heartbeat_current_worker_from_env() is False
             monkeypatch.setattr(kanban_tools, "_auto_heartbeat_last_attempt", 0.0)
             assert kanban_tools.heartbeat_current_worker_from_env() is False
-        fence_warnings = [r for r in caplog.records if "CLAWK_DELEGATED_CHILD_CONTEXT" in r.getMessage()]
+        fence_warnings = [
+            r
+            for r in caplog.records
+            if "CLAWK_DELEGATED_CHILD_CONTEXT" in r.getMessage()
+        ]
         assert len(fence_warnings) == 1 and tid in fence_warnings[0].getMessage()
 
         monkeypatch.delenv("CLAWK_DELEGATED_CHILD_CONTEXT")
@@ -259,7 +274,9 @@ def test_delegate_child_kanban_cli_cannot_delete_parent_board(
 
 
 def test_delegate_child_attach_url_guard_leaves_no_row_or_file(monkeypatch, tmp_path):
-    kb, tid, _workspace, attachments_root = _make_running_kanban_task(monkeypatch, tmp_path)
+    kb, tid, _workspace, attachments_root = _make_running_kanban_task(
+        monkeypatch, tmp_path
+    )
     from clawk_cli import kanban_db_connect as kbc
 
     from agent.delegation_context import delegated_child_context
@@ -271,10 +288,12 @@ def test_delegate_child_attach_url_guard_leaves_no_row_or_file(monkeypatch, tmp_
     monkeypatch.setattr(kanban_tools, "_download_url_with_cap", forbidden_download)
 
     with delegated_child_context():
-        raw = kanban_tools._handle_attach_url({
-            "task_id": tid,
-            "url": "https://example.com/leak.txt",
-        })
+        raw = kanban_tools._handle_attach_url(
+            {
+                "task_id": tid,
+                "url": "https://example.com/leak.txt",
+            }
+        )
 
     payload = json.loads(raw)
     assert payload["error"]
@@ -294,7 +313,9 @@ def test_child_attempting_default_complete_does_not_finish_parent_or_delete_work
     tmp_path,
 ):
     """Deterministic E2E: a delegated child cannot complete its parent task."""
-    kb, tid, workspace, _attachments_root = _make_running_kanban_task(monkeypatch, tmp_path)
+    kb, tid, workspace, _attachments_root = _make_running_kanban_task(
+        monkeypatch, tmp_path
+    )
     from clawk_cli import kanban_db_connect as kbc
     from tools import delegate_tool
     from tools import kanban_tools
@@ -322,7 +343,9 @@ def test_child_attempting_default_complete_does_not_finish_parent_or_delete_work
             return {"api_call_count": 0, "max_iterations": 1, "current_tool": None}
 
         def run_conversation(self, user_message, task_id, **_kwargs):
-            attempted = kanban_tools._handle_complete({"summary": "wrong child completion"})
+            attempted = kanban_tools._handle_complete(
+                {"summary": "wrong child completion"}
+            )
             return {
                 "final_response": attempted,
                 "completed": True,
@@ -333,7 +356,9 @@ def test_child_attempting_default_complete_does_not_finish_parent_or_delete_work
         def close(self):
             return None
 
-    result = delegate_tool._run_single_child(0, "try to complete parent", Child(), Parent())
+    result = delegate_tool._run_single_child(
+        0, "try to complete parent", Child(), Parent()
+    )
 
     conn = kbc.connect()
     try:

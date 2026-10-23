@@ -69,7 +69,9 @@ PROMPT_TEMPLATES: dict[str, PromptTemplate] = {
 }
 
 
-def render_template(name: str, variables: Optional[dict[str, Any]] = None) -> tuple[str, str]:
+def render_template(
+    name: str, variables: Optional[dict[str, Any]] = None
+) -> tuple[str, str]:
     """Resolve a registered template into (instructions, user_input); KeyError if unknown."""
     template = PROMPT_TEMPLATES.get(name)
     if template is None:

@@ -13,6 +13,7 @@ legitimately owns ``os.environ``, so the resolver must fall back to
 otherwise the active profile's adapter would raise ``UnscopedSecretError`` on
 construction and fail to start.
 """
+
 import pytest
 
 from agent import secret_scope as ss

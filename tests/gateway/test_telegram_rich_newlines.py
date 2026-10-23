@@ -49,7 +49,6 @@ class TestRichMessageNewlineNormalization:
         assert "Paragraph 1\n\nParagraph 2" == md
 
 
-
 class TestRichMessageTableProtection:
     """Hard-break injection must not corrupt GFM tables (rendered natively)."""
 
@@ -59,4 +58,3 @@ class TestRichMessageTableProtection:
         md = adapter._rich_message_payload(content)["markdown"]
         assert "  \n" not in md
         assert md == content
-

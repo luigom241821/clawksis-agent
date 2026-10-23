@@ -13,7 +13,11 @@ import subprocess
 
 import pytest
 
-from clawk_cli.update_cmd import _for_each_systemd_gateway_unit, _service_unit_supports_graceful_sigusr1_restart, _warn_incomplete_gateway_fleet_restart
+from clawk_cli.update_cmd import (
+    _for_each_systemd_gateway_unit,
+    _service_unit_supports_graceful_sigusr1_restart,
+    _warn_incomplete_gateway_fleet_restart,
+)
 
 
 def _list_units_stdout(names: list[str]) -> str:
@@ -39,7 +43,13 @@ class TestFleetRestartTimeoutIsolation:
         def process_unit(svc_name: str) -> None:
             if svc_name == "clawk-gateway-xiaomo5":
                 raise subprocess.TimeoutExpired(
-                    cmd=["systemctl", "--user", "--no-ask-password", "restart", svc_name],
+                    cmd=[
+                        "systemctl",
+                        "--user",
+                        "--no-ask-password",
+                        "restart",
+                        svc_name,
+                    ],
                     timeout=15,
                 )
             restarted.append(svc_name)
@@ -66,7 +76,13 @@ class TestFleetRestartTimeoutIsolation:
         ]
         assert set(restarted) | set(failed) == set(units)
         assert timeout_cmds == [
-            ["systemctl", "--user", "--no-ask-password", "restart", "clawk-gateway-xiaomo5"]
+            [
+                "systemctl",
+                "--user",
+                "--no-ask-password",
+                "restart",
+                "clawk-gateway-xiaomo5",
+            ]
         ]
 
     def test_non_gateway_units_in_list_output_are_ignored(self):
@@ -178,18 +194,14 @@ class TestFleetRestartTimeoutIsolation:
 class TestGracefulSigusr1Eligibility:
     def test_gateway_units_are_eligible(self):
         assert _service_unit_supports_graceful_sigusr1_restart("clawk-gateway")
-        assert _service_unit_supports_graceful_sigusr1_restart(
-            "clawk-gateway-work"
-        )
+        assert _service_unit_supports_graceful_sigusr1_restart("clawk-gateway-work")
 
     def test_serve_units_are_not_eligible(self):
         # clawk-serve doesn't run gateway/run.py, so it never installs the
         # SIGUSR1 handler — sending it the signal would just terminate the
         # process (the default action) instead of draining gracefully.
         assert not _service_unit_supports_graceful_sigusr1_restart("clawk-serve")
-        assert not _service_unit_supports_graceful_sigusr1_restart(
-            "clawk-serve-work"
-        )
+        assert not _service_unit_supports_graceful_sigusr1_restart("clawk-serve-work")
 
     def test_process_errors_other_than_timeout_still_propagate(self):
         def process_unit(_svc_name: str) -> None:
@@ -213,4 +225,3 @@ class TestIncompleteFleetRestartWarning:
         assert out.count("clawk-gateway-xiaomo5") == 1
         assert "clawk-gateway-xiaomo6" in out
         assert "pre-update code" in out
-

@@ -16,7 +16,9 @@ from tools.microsoft_graph_client import (
 
 
 def _make_provider() -> MicrosoftGraphTokenProvider:
-    provider = MicrosoftGraphTokenProvider(GraphCredentials("tenant", "client", "secret"))
+    provider = MicrosoftGraphTokenProvider(
+        GraphCredentials("tenant", "client", "secret")
+    )
     provider._cached_token = type(  # type: ignore[attr-defined]
         "Token",
         (),

@@ -19,13 +19,19 @@ from tools.environments.local import _find_bash, _find_shell
 def _pid_alive(pid: int) -> bool:
     try:
         import psutil
+
         try:
-            return psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+            return (
+                psutil.pid_exists(pid)
+                and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE
+            )
         except psutil.NoSuchProcess:
             return False
     except ImportError:
         try:
-            os.kill(pid, 0)  # windows-footgun: ok — psutil fallback only on POSIX hosts without it
+            os.kill(
+                pid, 0
+            )  # windows-footgun: ok — psutil fallback only on POSIX hosts without it
         except OSError:
             return False
         return True
@@ -62,7 +68,6 @@ class TestFindShellPrefersUserShell:
         with patch.dict(os.environ, {"SHELL": str(fake_fish)}):
             assert _find_shell() == _find_bash()
 
-
     @pytest.mark.platforms("linux")
     def test_honours_allowlisted_bash_and_dash(self, tmp_path):
         """Every allowlisted POSIX-sh-family shell is honoured."""
@@ -72,7 +77,6 @@ class TestFindShellPrefersUserShell:
             fake.chmod(0o755)
             with patch.dict(os.environ, {"SHELL": str(fake)}):
                 assert _find_shell() == str(fake), name
-
 
     def test_falls_back_to_find_bash_when_shell_empty(self):
         """When $SHELL is empty string, _find_shell delegates."""
@@ -122,7 +126,6 @@ class TestFindBashCollapsedToPmShell:
         assert "clawk pm install" in str(exc_info.value)
 
 
-
 @pytest.mark.platforms("macos")
 @pytest.mark.skipif(
     not os.path.isfile("/bin/bash"),
@@ -137,6 +140,7 @@ class TestMacosLoginShellSwallowRegression:
 
     def _spawn_like_registry(self, shell, command, home, tmp_path):
         import subprocess
+
         env = dict(os.environ)
         env["HOME"] = str(home)
         # Mirror process_registry.spawn_local: [shell, "-lic", "set +m; <cmd>"]
@@ -150,7 +154,6 @@ class TestMacosLoginShellSwallowRegression:
             check=False,
         )
 
-
     def test_find_shell_selects_working_shell_on_this_box(self, tmp_path):
         """_find_shell's choice must actually execute a background-style
         command (regression against returning a swallow-prone shell)."""
@@ -158,7 +161,9 @@ class TestMacosLoginShellSwallowRegression:
         marker = tmp_path / "ok_marker"
         subprocess.run(
             [shell, "-lic", f"set +m; echo ok > {marker}"],
-            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
             check=False,
         )
         assert marker.exists(), f"_find_shell()={shell} swallowed the command"

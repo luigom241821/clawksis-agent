@@ -33,7 +33,9 @@ def llamacpp_context(client, server_url: str, model: str) -> Optional[int]:
         if resp.status_code != 200:
             continue
         settings = _json_object(resp).get("default_generation_settings")
-        n_ctx = _positive_int(settings.get("n_ctx")) if isinstance(settings, dict) else None
+        n_ctx = (
+            _positive_int(settings.get("n_ctx")) if isinstance(settings, dict) else None
+        )
         if n_ctx is not None:
             return n_ctx
     return router_launch_ctx(client, server_url, model)
@@ -53,7 +55,9 @@ def router_launch_ctx(client, server_url: str, model: str) -> Optional[int]:
         return None
     entries = _json_object(resp).get("data")
     for entry in entries if isinstance(entries, list) else []:
-        if not isinstance(entry, dict) or not _model_id_matches(str(entry.get("id", "")), model):
+        if not isinstance(entry, dict) or not _model_id_matches(
+            str(entry.get("id", "")), model
+        ):
             continue
         status = entry.get("status")
         raw_args = status.get("args") if isinstance(status, dict) else None

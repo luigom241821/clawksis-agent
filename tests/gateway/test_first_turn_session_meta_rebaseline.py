@@ -152,13 +152,11 @@ def _source():
 
 def _live_count(db, session_id):
     row = db.get_session(session_id)
-    return (row.get("message_count", 0) if row else 0)
+    return row.get("message_count", 0) if row else 0
 
 
 @pytest.mark.asyncio
-async def test_first_turn_session_meta_is_captured_by_rebaseline(
-    monkeypatch, tmp_path
-):
+async def test_first_turn_session_meta_is_captured_by_rebaseline(monkeypatch, tmp_path):
     """After a fresh first turn, the cache snapshot must equal the live
     message_count — including the first-turn ``session_meta`` row.
 
@@ -216,5 +214,3 @@ async def test_first_turn_session_meta_is_captured_by_rebaseline(
     )
     # And the cached agent instance must be untouched (never rebuilt).
     assert cached[0] is agent_obj
-
-

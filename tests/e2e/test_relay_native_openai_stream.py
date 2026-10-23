@@ -16,7 +16,10 @@ _CHUNK_PREFIX = b'data: {"id":"chatcmpl-test","object":"chat.completion.chunk","
 
 
 def _sse(*chunk_bodies: bytes) -> bytes:
-    return b"".join(_CHUNK_PREFIX + body + b"}\n\n" for body in chunk_bodies) + b"data: [DONE]\n\n"
+    return (
+        b"".join(_CHUNK_PREFIX + body + b"}\n\n" for body in chunk_bodies)
+        + b"data: [DONE]\n\n"
+    )
 
 
 def _running_on(loop) -> bool:
@@ -28,7 +31,9 @@ def _running_on(loop) -> bool:
         return False
 
 
-def _stream_through_relay(tmp_path, monkeypatch, response_body: bytes, *, finalize_before):
+def _stream_through_relay(
+    tmp_path, monkeypatch, response_body: bytes, *, finalize_before
+):
     """Stream ``response_body`` through Relay; Relay's finalizer is forced to complete before
     the consumer thread processes the first chunk matching ``finalize_before(chunk)``.
     Returns ``(clawk_result, relay_llm_end_event)``."""
@@ -43,22 +48,40 @@ def _stream_through_relay(tmp_path, monkeypatch, response_body: bytes, *, finali
     monkeypatch.setenv("CLAWK_STREAM_RETRIES", "0")
 
     def respond(request):
-        return httpx.Response(200, headers={"content-type": "text/event-stream"},
-                              content=response_body, request=request)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=response_body,
+            request=request,
+        )
 
-    client = openai.OpenAI(api_key="test-key", base_url="https://example.com/v1",
-                           http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+    client = openai.OpenAI(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        http_client=httpx.Client(transport=httpx.MockTransport(respond)),
+    )
     relay_runtime._reset_for_tests()
-    agent = AIAgent(api_key="test-key", base_url="https://example.com/v1", provider="test-provider",
-                    model="test/model", quiet_mode=True, skip_context_files=True, skip_memory=True)
+    agent = AIAgent(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        provider="test-provider",
+        model="test/model",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
     agent.api_mode = "chat_completions"
     agent.session_id = "openai-relay-session"
     agent._interrupt_requested = False
     agent._create_request_openai_client = lambda *args, **kwargs: client
     lease = relay_runtime.SESSION_COORDINATOR.acquire_conversation(
-        profile_key=relay_runtime.current_profile_key(), session_id=agent.session_id, platform="cli")
+        profile_key=relay_runtime.current_profile_key(),
+        session_id=agent.session_id,
+        platform="cli",
+    )
     turn = relay_runtime.SESSION_COORDINATOR.begin_turn(
-        lease, turn_id="openai-relay-turn", task_id="openai-relay-task")
+        lease, turn_id="openai-relay-turn", task_id="openai-relay-task"
+    )
     consumer = "test.openai_relay"
     subscriber_name = "test.openai_stream"
     events = []
@@ -75,12 +98,16 @@ def _stream_through_relay(tmp_path, monkeypatch, response_body: bytes, *, finali
             # ``__next__``: the consumer cannot release it from there, and the forced ordering
             # (finalizer before the chosen chunk) already holds. Waiting would self-deadlock.
             if not _running_on(managed_stream._loop):
-                assert allow_relay_finalizer.wait(30), "consumer did not release Relay's finalizer"
+                assert allow_relay_finalizer.wait(30), (
+                    "consumer did not release Relay's finalizer"
+                )
             return run_relay_finalizer(managed_stream, attempt)
         finally:
             relay_finalizer_finished.set()
 
-    monkeypatch.setattr(relay_llm.ManagedLlmStream, "_relay_finalizer", run_synchronized_relay_finalizer)
+    monkeypatch.setattr(
+        relay_llm.ManagedLlmStream, "_relay_finalizer", run_synchronized_relay_finalizer
+    )
 
     count_chunk = chat_completion_helpers._StreamingCall._count_chunk
 
@@ -105,16 +132,23 @@ def _stream_through_relay(tmp_path, monkeypatch, response_body: bytes, *, finali
             async def finalizer_done():
                 return await asyncio.to_thread(relay_finalizer_finished.wait, 30)
 
-            assert stream._loop.run_until_complete(finalizer_done()), "Relay's finalizer did not finish"
+            assert stream._loop.run_until_complete(finalizer_done()), (
+                "Relay's finalizer did not finish"
+            )
             assert relay_finalizer_started.is_set()
         return count_chunk(self, diag, chunk)
 
-    monkeypatch.setattr(chat_completion_helpers._StreamingCall, "_count_chunk", count_chunk_after_relay_finalizes)
+    monkeypatch.setattr(
+        chat_completion_helpers._StreamingCall,
+        "_count_chunk",
+        count_chunk_after_relay_finalizes,
+    )
     lease.host.retain_managed_execution(consumer)
     lease.host.relay.subscribers.register(subscriber_name, events.append)
     try:
-        result = agent._interruptible_streaming_api_call({
-            "model": "test/model", "messages": [{"role": "user", "content": "hi"}]})
+        result = agent._interruptible_streaming_api_call(
+            {"model": "test/model", "messages": [{"role": "user", "content": "hi"}]}
+        )
         lease.host.relay.subscribers.flush()
     finally:
         lease.host.relay.subscribers.deregister(subscriber_name)
@@ -125,9 +159,12 @@ def _stream_through_relay(tmp_path, monkeypatch, response_body: bytes, *, finali
         client.close()
 
     llm_end_events = [
-        event for event in events
-        if isinstance(event, nemo_relay.ScopeEvent) and event.name == "openai.chat_completions"
-        and event.category == "llm" and event.scope_category == "end"
+        event
+        for event in events
+        if isinstance(event, nemo_relay.ScopeEvent)
+        and event.name == "openai.chat_completions"
+        and event.category == "llm"
+        and event.scope_category == "end"
     ]
     assert len(llm_end_events) == 1
     assert llm_end_events[0].annotated_response is not None
@@ -142,16 +179,30 @@ def test_openai_stream_usage_reaches_relay_parent_event(tmp_path, monkeypatch):
         b'"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":10,"total_tokens":110}',
     )
     result, llm_end = _stream_through_relay(
-        tmp_path, monkeypatch, body,
-        finalize_before=lambda chunk: not chunk.choices and getattr(chunk, "usage", None) is not None)
+        tmp_path,
+        monkeypatch,
+        body,
+        finalize_before=lambda chunk: (
+            not chunk.choices and getattr(chunk, "usage", None) is not None
+        ),
+    )
     assert result.usage is not None
-    assert (result.usage.prompt_tokens, result.usage.completion_tokens, result.usage.total_tokens) == (100, 10, 110)
+    assert (
+        result.usage.prompt_tokens,
+        result.usage.completion_tokens,
+        result.usage.total_tokens,
+    ) == (100, 10, 110)
     assert llm_end.annotated_response.usage == {
-        "prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 110}
+        "prompt_tokens": 100,
+        "completion_tokens": 10,
+        "total_tokens": 110,
+    }
     assert llm_end.annotated_response.message == "done"
 
 
-def test_openai_stream_final_tool_call_delta_reaches_relay_parent_event(tmp_path, monkeypatch):
+def test_openai_stream_final_tool_call_delta_reaches_relay_parent_event(
+    tmp_path, monkeypatch
+):
     """The last chunk's tool-call arguments and finish_reason are retained on Relay's parent
     LLM event — the same finalizer-before-consumer race as the usage frame, without one."""
     body = _sse(
@@ -162,12 +213,23 @@ def test_openai_stream_final_tool_call_delta_reaches_relay_parent_event(tmp_path
         b'"finish_reason":"tool_calls"}]',
     )
     result, llm_end = _stream_through_relay(
-        tmp_path, monkeypatch, body,
-        finalize_before=lambda chunk: bool(chunk.choices) and chunk.choices[0].finish_reason == "tool_calls")
+        tmp_path,
+        monkeypatch,
+        body,
+        finalize_before=lambda chunk: (
+            bool(chunk.choices) and chunk.choices[0].finish_reason == "tool_calls"
+        ),
+    )
     clawk_call = result.choices[0].message.tool_calls[0]
-    assert (clawk_call.function.name, clawk_call.function.arguments) == ("read_file", '{"path": "/tmp/x"}')
+    assert (clawk_call.function.name, clawk_call.function.arguments) == (
+        "read_file",
+        '{"path": "/tmp/x"}',
+    )
     assert result.choices[0].finish_reason == "tool_calls"
     assert llm_end.annotated_response.message is None
     (relay_call,) = llm_end.annotated_response.tool_calls
-    assert (relay_call["name"], relay_call["arguments"]) == ("read_file", {"path": "/tmp/x"})
+    assert (relay_call["name"], relay_call["arguments"]) == (
+        "read_file",
+        {"path": "/tmp/x"},
+    )
     assert llm_end.annotated_response.finish_reason == "tool_use"

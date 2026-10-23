@@ -19,33 +19,56 @@ def test_script_termination_reaps_descendants(tmp_path, monkeypatch, trigger, to
     from cron import scheduler, scheduler_script
 
     monkeypatch.setattr(scheduler, "_get_clawk_home", lambda: tmp_path)
-    monkeypatch.setattr(scheduler_script, "_get_script_timeout", lambda: 3 if trigger == "timeout" else 60)
+    monkeypatch.setattr(
+        scheduler_script,
+        "_get_script_timeout",
+        lambda: 3 if trigger == "timeout" else 60,
+    )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     ready = tmp_path / "child.pid"
     # Publish atomically: the parent polls for existence, and write_text
     # creates the file before it writes the pid.
-    child = ("import os, signal, time; from pathlib import Path; "
-             + ("signal.signal(signal.SIGTERM, signal.SIG_IGN); " if topology == "stubborn-pipe" else "")
-             + f"Path({str(ready) + '.tmp'!r}).write_text(str(os.getpid())); "
-             + f"os.replace({str(ready) + '.tmp'!r}, {str(ready)!r}); time.sleep(60)")
+    child = (
+        "import os, signal, time; from pathlib import Path; "
+        + (
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+            if topology == "stubborn-pipe"
+            else ""
+        )
+        + f"Path({str(ready) + '.tmp'!r}).write_text(str(os.getpid())); "
+        + f"os.replace({str(ready) + '.tmp'!r}, {str(ready)!r}); time.sleep(60)"
+    )
     script = scripts / "blocking.py"
-    script.write_text("import subprocess, sys, time\n"
-                      + f"subprocess.Popen([sys.executable, '-c', {child!r}], start_new_session={topology == 'detached'})\n"
-                      + "time.sleep(60)\n", encoding="utf-8")
+    script.write_text(
+        "import subprocess, sys, time\n"
+        + f"subprocess.Popen([sys.executable, '-c', {child!r}], start_new_session={topology == 'detached'})\n"
+        + "time.sleep(60)\n",
+        encoding="utf-8",
+    )
     cancel, results, errors = threading.Event(), [], []
+
     def run():
         try:
-            results.append(scheduler_script._run_job_script(str(script), workdir=str(tmp_path), cancel_event=cancel))
+            results.append(
+                scheduler_script._run_job_script(
+                    str(script), workdir=str(tmp_path), cancel_event=cancel
+                )
+            )
         except BaseException as exc:
             errors.append(exc)
+
     def live(pid):
         # 'dead' is the instant a parent is reaping the zombie: exited, not alive. Counting it
         # alive flips a gone child back to "survived" on the read after the loop saw a zombie.
         try:
-            return psutil.Process(pid).status() not in (psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD)
+            return psutil.Process(pid).status() not in (
+                psutil.STATUS_ZOMBIE,
+                psutil.STATUS_DEAD,
+            )
         except psutil.NoSuchProcess:
             return False
+
     thread = threading.Thread(target=run)
     thread.start()
     pid = None
@@ -230,15 +253,17 @@ def test_script_heartbeat_uses_captured_claim_owner(tmp_path, monkeypatch):
     }
 
     with jobs.use_cron_store(profile_home):
-        jobs.save_jobs([
-            {
-                **job,
-                "run_claim": {
-                    "at": replacement_timestamp,
-                    "by": "replacement-owner",
-                },
-            }
-        ])
+        jobs.save_jobs(
+            [
+                {
+                    **job,
+                    "run_claim": {
+                        "at": replacement_timestamp,
+                        "by": "replacement-owner",
+                    },
+                }
+            ]
+        )
 
     heartbeat_seen = threading.Event()
     real_heartbeat = jobs.heartbeat_run_claim
@@ -354,9 +379,11 @@ def test_lost_fire_claim_stops_stale_delivery(monkeypatch):
     monkeypatch.setattr(scheduler, "_deliver_result", deliver_result)
     monkeypatch.setattr(scheduler, "mark_job_run", mark_run)
 
-    with patch("agent.secret_scope.set_secret_scope", return_value=None), \
-         patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-         patch("agent.secret_scope.reset_secret_scope"):
+    with (
+        patch("agent.secret_scope.set_secret_scope", return_value=None),
+        patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+        patch("agent.secret_scope.reset_secret_scope"),
+    ):
         assert scheduler.run_one_job(job) is True
 
     save_output.assert_not_called()
@@ -365,7 +392,13 @@ def test_lost_fire_claim_stops_stale_delivery(monkeypatch):
 
 
 def _run_claimed_job_with_mid_run_action(
-    tmp_path, monkeypatch, mid_run, *, execution_id, stub_output=True, crash=None,
+    tmp_path,
+    monkeypatch,
+    mid_run,
+    *,
+    execution_id,
+    stub_output=True,
+    crash=None,
     expect_result=True,
 ):
     """Fire a claimed job through run_one_job with a stubbed agent run that performs ``mid_run``
@@ -385,7 +418,10 @@ def _run_claimed_job_with_mid_run_action(
     # wins the race against the run's bookkeeping sends it through ``_deliver_result``. A crash
     # alerts inline through the same stubbed door.
     from cron import delivery_queue
-    monkeypatch.setattr(delivery_queue, "DELIVERY_DB", tmp_path / "cron" / "deliveries.db")
+
+    monkeypatch.setattr(
+        delivery_queue, "DELIVERY_DB", tmp_path / "cron" / "deliveries.db"
+    )
     real_enqueue = delivery_queue.enqueue
 
     def _enqueue_then_drain(*args, **kwargs):
@@ -407,32 +443,42 @@ def _run_claimed_job_with_mid_run_action(
 
     with jobs.use_cron_store(tmp_path):
         job = jobs.create_job(
-            prompt="work", schedule="every 5m", name="remove self", deliver="telegram")
+            prompt="work", schedule="every 5m", name="remove self", deliver="telegram"
+        )
         assert jobs.claim_job_for_fire(job["id"])
         claimed = jobs.get_job(job["id"])
         claimed["execution_id"] = execution_id
 
-        with patch("agent.secret_scope.set_secret_scope", return_value=None), \
-             patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-             patch("agent.secret_scope.reset_secret_scope"):
+        with (
+            patch("agent.secret_scope.set_secret_scope", return_value=None),
+            patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+            patch("agent.secret_scope.reset_secret_scope"),
+        ):
             assert scheduler.run_one_job(claimed) is expect_result
     return delivered, finished
 
 
-def test_self_removed_job_still_delivers_after_post_removal_heartbeat(tmp_path, monkeypatch):
+def test_self_removed_job_still_delivers_after_post_removal_heartbeat(
+    tmp_path, monkeypatch
+):
     """A run that removes its own job (cronjob remove on its own id) and keeps working past a
     heartbeat tick must still deliver its final response and complete its ledger row (#111039)."""
     from cron import jobs
 
     delivered, finished = _run_claimed_job_with_mid_run_action(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         lambda jobs_mod, job: jobs_mod.remove_job(job["id"]),
-        execution_id="self-removal-heartbeat-execution")
+        execution_id="self-removal-heartbeat-execution",
+    )
 
     delivered.assert_called_once()
     finished.assert_called_once_with(
         "self-removal-heartbeat-execution",
-        success=True, error=None, delivery_outcome="delivered")
+        success=True,
+        error=None,
+        delivery_outcome="delivered",
+    )
     with jobs.use_cron_store(tmp_path):
         assert jobs.load_jobs() == []
 
@@ -443,9 +489,12 @@ def test_self_removed_job_leaves_no_output_directory(tmp_path, monkeypatch):
     from cron import jobs
 
     delivered, _finished = _run_claimed_job_with_mid_run_action(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         lambda jobs_mod, job: jobs_mod.remove_job(job["id"]),
-        execution_id="self-removal-output-execution", stub_output=False)
+        execution_id="self-removal-output-execution",
+        stub_output=False,
+    )
 
     delivered.assert_called_once()
     with jobs.use_cron_store(tmp_path):
@@ -461,34 +510,51 @@ def test_self_removed_job_crash_skips_mark_job_run(tmp_path, monkeypatch):
     marked = MagicMock(return_value=True)
     monkeypatch.setattr(scheduler, "mark_job_run", marked)
     _delivered, finished = _run_claimed_job_with_mid_run_action(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         lambda jobs_mod, job: jobs_mod.remove_job(job["id"]),
         execution_id="self-removal-crash-execution",
-        crash=RuntimeError("boom after self-removal"), expect_result=False)
+        crash=RuntimeError("boom after self-removal"),
+        expect_result=False,
+    )
 
     marked.assert_not_called()
     finished.assert_called_once_with(
-        "self-removal-crash-execution", success=False,
-        error="boom after self-removal", delivery_outcome="delivered")
+        "self-removal-crash-execution",
+        success=False,
+        error="boom after self-removal",
+        delivery_outcome="delivered",
+    )
 
 
-def test_self_removal_followed_by_replacement_record_stays_fail_closed(tmp_path, monkeypatch):
+def test_self_removal_followed_by_replacement_record_stays_fail_closed(
+    tmp_path, monkeypatch
+):
     """Self-removal only excuses a MISSING record: once another owner's record reclaims the id,
     the run is stale again and its result must be discarded, never delivered."""
 
     def _remove_then_replace(jobs_mod, job):
         assert jobs_mod.remove_job(job["id"])
         replacement = {k: v for k, v in job.items() if k != "execution_id"}
-        replacement["fire_claim"] = {"at": job["fire_claim"]["at"], "by": "other-machine:owner"}
+        replacement["fire_claim"] = {
+            "at": job["fire_claim"]["at"],
+            "by": "other-machine:owner",
+        }
         jobs_mod.save_jobs(jobs_mod.load_jobs() + [replacement])
 
     delivered, finished = _run_claimed_job_with_mid_run_action(
-        tmp_path, monkeypatch, _remove_then_replace, execution_id="replacement-execution")
+        tmp_path,
+        monkeypatch,
+        _remove_then_replace,
+        execution_id="replacement-execution",
+    )
 
     delivered.assert_not_called()
     finished.assert_called_once_with(
-        "replacement-execution", success=False,
-        error="Fire claim ownership lost; stale result was discarded.")
+        "replacement-execution",
+        success=False,
+        error="Fire claim ownership lost; stale result was discarded.",
+    )
 
 
 def test_initially_lost_fire_claim_finishes_execution_without_running(monkeypatch):
@@ -503,7 +569,9 @@ def test_initially_lost_fire_claim_finishes_execution_without_running(monkeypatc
         "execution_id": "stale-execution",
         "fire_claim": {"at": "2026-07-12T12:00:00+00:00", "by": "stale-owner"},
     }
-    monkeypatch.setattr(scheduler, "heartbeat_fire_claim", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        scheduler, "heartbeat_fire_claim", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(scheduler, "_run_one_job_body", run_body)
     monkeypatch.setattr(scheduler, "finish_execution", finish)
 
@@ -528,7 +596,9 @@ def test_initially_lost_claim_does_not_run_when_ledger_write_fails(monkeypatch):
         "execution_id": "stale-execution",
         "fire_claim": {"at": "2026-07-12T12:00:00+00:00", "by": "stale-owner"},
     }
-    monkeypatch.setattr(scheduler, "heartbeat_fire_claim", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        scheduler, "heartbeat_fire_claim", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(scheduler, "_run_one_job_body", run_body)
     monkeypatch.setattr(
         scheduler,
@@ -679,9 +749,11 @@ def test_terminal_owner_cas_failure_marks_ledger_ownership_lost(monkeypatch):
     monkeypatch.setattr(scheduler, "mark_job_run", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(scheduler, "finish_execution", finish)
 
-    with patch("agent.secret_scope.set_secret_scope", return_value=None), \
-         patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-         patch("agent.secret_scope.reset_secret_scope"):
+    with (
+        patch("agent.secret_scope.set_secret_scope", return_value=None),
+        patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+        patch("agent.secret_scope.reset_secret_scope"),
+    ):
         assert scheduler.run_one_job(job) is True
 
     finish.assert_called_once_with(

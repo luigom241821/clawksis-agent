@@ -33,7 +33,9 @@ def _make_runner(recovered_thread_id=None):
     runner._agent_cache_lock = threading.Lock()
     # Stub topic recovery: returns the bound topic id for a lobby message,
     # None otherwise (the real method's contract).
-    runner._recover_telegram_topic_thread_id = MagicMock(return_value=recovered_thread_id)
+    runner._recover_telegram_topic_thread_id = MagicMock(
+        return_value=recovered_thread_id
+    )
     return runner
 
 
@@ -59,5 +61,3 @@ def test_normalize_rewrites_lobby_thread_to_bound_topic():
     assert normalized.thread_id == "42"
     # Original source is left untouched (we return a copy).
     assert src.thread_id == ""
-
-

@@ -10,7 +10,13 @@ from pm import install_hint
 from dataclasses import dataclass, field
 
 from clawk_cli.config import clear_model_endpoint_credentials
-from clawk_cli.model_setup_flows_common import _HTTP, _ask, _commit_model_config, _load_config_model_section, _say
+from clawk_cli.model_setup_flows_common import (
+    _HTTP,
+    _ask,
+    _commit_model_config,
+    _load_config_model_section,
+    _say,
+)
 
 
 def _azure_mode_label(mode: str) -> str:
@@ -20,6 +26,7 @@ def _azure_mode_label(mode: str) -> str:
 @dataclass
 class _AzureCurrent:
     """The active Azure Foundry settings shown as prompt defaults."""
+
     base_url: str = ""
     api_mode: str = ""
     auth_mode: str = "api_key"
@@ -35,7 +42,9 @@ def _azure_current(config) -> _AzureCurrent:
     if isinstance(model_cfg, dict) and model_cfg.get("provider") == "azure-foundry":
         cur.base_url = str(model_cfg.get("base_url", "") or "")
         cur.api_mode = str(model_cfg.get("api_mode", "") or "")
-        cur.auth_mode = str(model_cfg.get("auth_mode") or "api_key").strip().lower() or "api_key"
+        cur.auth_mode = (
+            str(model_cfg.get("auth_mode") or "api_key").strip().lower() or "api_key"
+        )
         _cur_entra = model_cfg.get("entra") or {}
         cur.entra = _cur_entra if isinstance(_cur_entra, dict) else {}
     return cur
@@ -46,19 +55,29 @@ def _azure_entra_preflight(current_entra: dict):
     when the user cancelled; ``False`` when the adapter is missing (fall back to API key)."""
     try:
         from agent.azure_identity_adapter import (
-            EntraIdentityConfig, SCOPE_AI_AZURE_DEFAULT, build_token_provider, describe_active_credential,
-            has_azure_identity_installed)
+            EntraIdentityConfig,
+            SCOPE_AI_AZURE_DEFAULT,
+            build_token_provider,
+            describe_active_credential,
+            has_azure_identity_installed,
+        )
     except ImportError as exc:
-        _say("", f"⚠ Could not import azure-identity adapter: {exc}", "  Falling back to API key auth.")
+        _say(
+            "",
+            f"⚠ Could not import azure-identity adapter: {exc}",
+            "  Falling back to API key auth.",
+        )
         return False
 
     print()
     if not has_azure_identity_installed():
-        _say("◐ The 'azure-identity' package is not installed yet.",
-             "  The preflight requests it through PM if lazy installs are enabled.",
-             "  To install explicitly, run from the Clawksis environment:",
-             f"    {install_hint('azure-identity')}",
-             "  Then restart Clawksis.")
+        _say(
+            "◐ The 'azure-identity' package is not installed yet.",
+            "  The preflight requests it through PM if lazy installs are enabled.",
+            "  To install explicitly, run from the Clawksis environment:",
+            f"    {install_hint('azure-identity')}",
+            "  Then restart Clawksis.",
+        )
 
     # Only the optional scope override is persisted; identity selection (tenant,
     # user-assigned MI, workload identity, SP) stays in AZURE_* SDK env vars.
@@ -101,15 +120,22 @@ def _azure_entra_preflight(current_entra: dict):
 def _azure_pick_model(discovered_models: list, current_model: str):
     """Model/deployment step of the Azure flow; None when cancelled."""
     if not discovered_models:
-        model_name = _ask(f"Model / deployment name [{current_model or 'e.g. gpt-5.4, claude-sonnet-4-6'}]: ")
+        model_name = _ask(
+            f"Model / deployment name [{current_model or 'e.g. gpt-5.4, claude-sonnet-4-6'}]: "
+        )
         return None if model_name is None else (model_name or current_model)
     print("Available models on this endpoint:")
     for i, mid in enumerate(discovered_models[:30], start=1):
         print(f"  {i:>2}. {mid}")
     if len(discovered_models) > 30:
-        print(f"  ... and {len(discovered_models) - 30} more (type name manually if not shown)")
+        print(
+            f"  ... and {len(discovered_models) - 30} more (type name manually if not shown)"
+        )
     print()
-    pick = _ask(f"Pick by number, or type a deployment name [{current_model or discovered_models[0]}]: ", raw=True)
+    pick = _ask(
+        f"Pick by number, or type a deployment name [{current_model or discovered_models[0]}]: ",
+        raw=True,
+    )
     if pick is None:
         return None
     if not pick:
@@ -119,13 +145,17 @@ def _azure_pick_model(discovered_models: list, current_model: str):
     return pick
 
 
-def _azure_detect_transport(effective_url: str, effective_key: str, token_provider, current_api_mode: str):
+def _azure_detect_transport(
+    effective_url: str, effective_key: str, token_provider, current_api_mode: str
+):
     """Probe the endpoint; returns ``(api_mode, discovered_models)`` (manual pick of the API
     format when detection is incomplete) or None when cancelled."""
     from clawk_cli import azure_detect
 
     _say("", "◐ Probing endpoint to auto-detect transport and models...")
-    detection = azure_detect.detect(effective_url, api_key=effective_key, token_provider=token_provider)
+    detection = azure_detect.detect(
+        effective_url, api_key=effective_key, token_provider=token_provider
+    )
     discovered_models: list[str] = list(detection.models)
     api_mode: str = detection.api_mode or ""
     if api_mode:
@@ -133,19 +163,28 @@ def _azure_detect_transport(effective_url: str, effective_key: str, token_provid
         if detection.reason:
             print(f"    ({detection.reason})")
         if discovered_models:
-            print(f"✓ Found {len(discovered_models)} deployed model(s) on this endpoint")
+            print(
+                f"✓ Found {len(discovered_models)} deployed model(s) on this endpoint"
+            )
         return api_mode, discovered_models
-    _say(f"⚠ Auto-detection incomplete: {detection.reason}", "",
-         "Select the API format your Azure Foundry endpoint uses:",
-         "  1. OpenAI-style  (POST /v1/chat/completions)",
-         "     For: GPT models, Llama, Mistral, and most open models",
-         "  2. Anthropic-style  (POST /v1/messages)",
-         "     For: Claude models deployed via Anthropic API format")
+    _say(
+        f"⚠ Auto-detection incomplete: {detection.reason}",
+        "",
+        "Select the API format your Azure Foundry endpoint uses:",
+        "  1. OpenAI-style  (POST /v1/chat/completions)",
+        "     For: GPT models, Llama, Mistral, and most open models",
+        "  2. Anthropic-style  (POST /v1/messages)",
+        "     For: Claude models deployed via Anthropic API format",
+    )
     default_choice = "2" if current_api_mode == "anthropic_messages" else "1"
     mode_choice = _ask(f"API format [1/2] ({default_choice}): ", raw=True)
     if mode_choice is None:
         return None
-    return ("anthropic_messages" if (mode_choice or default_choice) == "2" else "chat_completions"), discovered_models
+    return (
+        "anthropic_messages"
+        if (mode_choice or default_choice) == "2"
+        else "chat_completions"
+    ), discovered_models
 
 
 def _model_flow_azure_foundry(config, current_model=""):
@@ -158,11 +197,17 @@ def _model_flow_azure_foundry(config, current_model=""):
     from clawk_cli import azure_detect
 
     cur = _azure_current(config)
-    _say("", "Azure Foundry Configuration", "=" * 50, "",
-         "Azure Foundry can host models with either OpenAI-style or",
-         "Anthropic-style API endpoints.  Clawksis will probe your",
-         "endpoint to auto-detect the transport and the deployed",
-         "models when possible.", "")
+    _say(
+        "",
+        "Azure Foundry Configuration",
+        "=" * 50,
+        "",
+        "Azure Foundry can host models with either OpenAI-style or",
+        "Anthropic-style API endpoints.  Clawksis will probe your",
+        "endpoint to auto-detect the transport and the deployed",
+        "models when possible.",
+        "",
+    )
     if cur.base_url:
         print(f"  Current endpoint:  {cur.base_url}")
     if cur.api_mode:
@@ -175,7 +220,8 @@ def _model_flow_azure_foundry(config, current_model=""):
 
     # Step 1: endpoint URL
     _placeholder = cur.base_url or (
-        "e.g. https://<resource>.openai.azure.com/openai/v1 or https://<resource>.services.ai.azure.com/anthropic")
+        "e.g. https://<resource>.openai.azure.com/openai/v1 or https://<resource>.services.ai.azure.com/anthropic"
+    )
     base_url = _ask(f"API endpoint URL [{_placeholder}]: ")
     if base_url is None:
         return
@@ -188,10 +234,14 @@ def _model_flow_azure_foundry(config, current_model=""):
         return
 
     # Step 2: authentication mode
-    _say("", "Authentication:", "  1. API key                  (AZURE_FOUNDRY_API_KEY in .env)",
-         "  2. Microsoft Entra ID       (managed identity / workload identity / az login)",
-         "     Recommended by Microsoft. Works for both OpenAI-style and Anthropic-style endpoints.",
-         "     Requires the 'Azure AI User' role on the Foundry resource.")
+    _say(
+        "",
+        "Authentication:",
+        "  1. API key                  (AZURE_FOUNDRY_API_KEY in .env)",
+        "  2. Microsoft Entra ID       (managed identity / workload identity / az login)",
+        "     Recommended by Microsoft. Works for both OpenAI-style and Anthropic-style endpoints.",
+        "     Requires the 'Azure AI User' role on the Foundry resource.",
+    )
     _auth_default = "2" if cur.auth_mode == "entra_id" else "1"
     auth_choice = _ask(f"Authentication mode [1/2] ({_auth_default}): ", raw=True)
     if auth_choice is None:
@@ -212,7 +262,10 @@ def _model_flow_azure_foundry(config, current_model=""):
             token_provider, entra_overrides = preflight
     if not use_entra:
         print()
-        api_key = _ask(f"API key [{cur.api_key[:8] + '...' if cur.api_key else 'required'}]: ", secret=True)
+        api_key = _ask(
+            f"API key [{cur.api_key[:8] + '...' if cur.api_key else 'required'}]: ",
+            secret=True,
+        )
         if api_key is None:
             return
         effective_key = api_key or cur.api_key
@@ -221,7 +274,9 @@ def _model_flow_azure_foundry(config, current_model=""):
             return
 
     # Step 4: auto-detect transport + models
-    detected = _azure_detect_transport(effective_url, effective_key, token_provider, cur.api_mode)
+    detected = _azure_detect_transport(
+        effective_url, effective_key, token_provider, cur.api_mode
+    )
     if detected is None:
         return
     api_mode, discovered_models = detected
@@ -236,7 +291,12 @@ def _model_flow_azure_foundry(config, current_model=""):
         return
 
     # Step 6: context-length lookup
-    ctx_len = azure_detect.lookup_context_length(effective_model, effective_url, api_key=effective_key, token_provider=token_provider)
+    ctx_len = azure_detect.lookup_context_length(
+        effective_model,
+        effective_url,
+        api_key=effective_key,
+        token_provider=token_provider,
+    )
 
     # Step 7: persist
     if not use_entra:
@@ -264,9 +324,15 @@ def _model_flow_azure_foundry(config, current_model=""):
         if get_env_value(var):
             save_env_value(var, "")
 
-    _say("", "✓ Azure Foundry configured:", f"    Endpoint:       {effective_url}",
-         f"    API mode:       {_azure_mode_label(api_mode)}",
-         f"    Auth:           {'Microsoft Entra ID (keyless)' if use_entra else 'API key'}",
-         f"    Model:          {effective_model}",
-         f"    Context length: {ctx_len:,} tokens" if ctx_len else "    Context length: not auto-detected (will fall back at runtime)",
-         "")
+    _say(
+        "",
+        "✓ Azure Foundry configured:",
+        f"    Endpoint:       {effective_url}",
+        f"    API mode:       {_azure_mode_label(api_mode)}",
+        f"    Auth:           {'Microsoft Entra ID (keyless)' if use_entra else 'API key'}",
+        f"    Model:          {effective_model}",
+        f"    Context length: {ctx_len:,} tokens"
+        if ctx_len
+        else "    Context length: not auto-detected (will fall back at runtime)",
+        "",
+    )

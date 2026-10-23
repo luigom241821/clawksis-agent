@@ -25,7 +25,10 @@ def test_default_home_aliases_are_reported_as_default(tmp_path, monkeypatch):
 
     for alias in (default_home.name, "clawk"):
         assert server._response_profile_name(alias) == "default"
-    assert server._session_info(None, {"profile_home": str(default_home)})["profile_name"] == "default"
+    assert (
+        server._session_info(None, {"profile_home": str(default_home)})["profile_name"]
+        == "default"
+    )
     # "clawk" is a legal profile id: a REAL named profile of that name is never swallowed by the alias.
     (default_home / "profiles" / "clawk").mkdir(parents=True)
     assert server._response_profile_name("clawk") == "clawk"
@@ -45,7 +48,10 @@ def test_profile_home_resolution_stamps_default_rows(tmp_path, monkeypatch):
 
     assert profile_name_for_home(default_home) == "default"
     assert profile_name_for_home(named_home) == "writer"
-    assert server._session_info(None, {"profile_home": str(named_home)})["profile_name"] == "writer"
+    assert (
+        server._session_info(None, {"profile_home": str(named_home)})["profile_name"]
+        == "writer"
+    )
 
     class CaptureDB:
         profile_name = None
@@ -72,7 +78,9 @@ def test_profile_home_resolution_stamps_default_rows(tmp_path, monkeypatch):
         yield captured
 
     monkeypatch.setattr(server, "_workdir_owner_db", owner_db)
-    monkeypatch.setattr(server, "_workdir_row_model_config", lambda _session: ("test-model", {}))
+    monkeypatch.setattr(
+        server, "_workdir_row_model_config", lambda _session: ("test-model", {})
+    )
     monkeypatch.setattr(server, "_session_source", lambda _session: "desktop")
     monkeypatch.setattr(server, "_persisted_session_cwd", lambda _session: None)
 
@@ -82,8 +90,14 @@ def test_profile_home_resolution_stamps_default_rows(tmp_path, monkeypatch):
 
     monkeypatch.setattr(server, "_session_db", owner_db)
     record = {"cwd": str(tmp_path), "pending_title": "branch"}
-    server._seed_branch_row(record, "seeded-row", "parent-row", [{"role": "user", "content": "hi"}], "desktop",
-                            str(default_home))
+    server._seed_branch_row(
+        record,
+        "seeded-row",
+        "parent-row",
+        [{"role": "user", "content": "hi"}],
+        "desktop",
+        str(default_home),
+    )
     assert captured.profile_name == "default"
     assert captured.title_source == "derived"
     assert record["pending_title"] is None
@@ -108,8 +122,14 @@ def test_custom_default_root_real_session_db_owner_stamping(tmp_path, monkeypatc
     # 1. Custom default root path resolution
     assert profile_name_for_home(default_home) == "default"
     assert profile_name_for_home(launch_home) == "worker"
-    assert server._session_info(None, {"profile_home": str(default_home)})["profile_name"] == "default"
-    assert server._session_info(None, {"profile_home": str(launch_home)})["profile_name"] == "worker"
+    assert (
+        server._session_info(None, {"profile_home": str(default_home)})["profile_name"]
+        == "default"
+    )
+    assert (
+        server._session_info(None, {"profile_home": str(launch_home)})["profile_name"]
+        == "worker"
+    )
 
     # 2. Real SessionDB owner stamping
     with SessionDB(default_home / "state.db") as db:
@@ -149,7 +169,8 @@ def test_custom_default_root_real_session_db_owner_stamping(tmp_path, monkeypatc
             [{"role": "user", "content": "hello"}],
             source="desktop",
             cwd=str(tmp_path),
-            profile_name=profile_name_for_home(str(default_home)) or server._current_profile_name(),
+            profile_name=profile_name_for_home(str(default_home))
+            or server._current_profile_name(),
             model="branch-model",
         )
 

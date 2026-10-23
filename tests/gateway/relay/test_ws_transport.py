@@ -19,7 +19,9 @@ import pytest_asyncio
 
 from gateway.relay.ws_transport import WebSocketRelayTransport, WEBSOCKETS_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
+pytestmark = pytest.mark.skipif(
+    not WEBSOCKETS_AVAILABLE, reason="websockets not installed"
+)
 
 if WEBSOCKETS_AVAILABLE:
     import websockets
@@ -71,7 +73,9 @@ class _StubConnectorServer:
     async def _on_frame(self, ws, frame):
         ftype = frame.get("type")
         if ftype == "hello":
-            await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+            await ws.send(
+                json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+            )
             # Deliver any queued inbound frames right after handshake.
             for f in self._to_push:
                 await ws.send(json.dumps(f) + "\n")
@@ -80,7 +84,13 @@ class _StubConnectorServer:
             # Echo a successful result correlated by requestId.
             result = {"success": True, "message_id": f"srv-{action.get('op')}"}
             await ws.send(
-                json.dumps({"type": "outbound_result", "requestId": frame["requestId"], "result": result})
+                json.dumps(
+                    {
+                        "type": "outbound_result",
+                        "requestId": frame["requestId"],
+                        "result": result,
+                    }
+                )
                 + "\n"
             )
 
@@ -117,7 +127,12 @@ async def test_inbound_frame_reaches_handler(server):
             "event": {
                 "text": "hello from connector",
                 "message_type": "text",
-                "source": {"platform": "discord", "chat_id": "chan1", "chat_type": "group", "scope_id": "guildA"},
+                "source": {
+                    "platform": "discord",
+                    "chat_id": "chan1",
+                    "chat_type": "group",
+                    "scope_id": "guildA",
+                },
             },
             "bufferId": "buf-1",
         }
@@ -169,7 +184,8 @@ class _Revoking4401Server:
                 if frame.get("type") == "hello":
                     if self._send_descriptor_first:
                         await ws.send(
-                            json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+                            json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR})
+                            + "\n"
                         )
                         # Let the descriptor flush + be processed before the close.
                         await asyncio.sleep(0.05)
@@ -190,9 +206,13 @@ async def test_4401_after_handshake_is_terminal_no_reconnect():
     await srv.start()
     try:
         t = WebSocketRelayTransport(
-            srv.url, "discord", "appShared",
-            gateway_id="gw-x", upgrade_secret="secret-x",
-            reconnect=True, reconnect_backoff_s=0.05,
+            srv.url,
+            "discord",
+            "appShared",
+            gateway_id="gw-x",
+            upgrade_secret="secret-x",
+            reconnect=True,
+            reconnect_backoff_s=0.05,
         )
         await t.connect()
         await t.handshake()  # records _handshake_succeeded
@@ -248,7 +268,10 @@ class _ExpiredToken4401Server:
                     continue
                 frame = json.loads(line)
                 if frame.get("type") == "hello":
-                    await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+                    await ws.send(
+                        json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR})
+                        + "\n"
+                    )
                     if self._close_on is None or dial in self._close_on:
                         await asyncio.sleep(0.05)  # let the descriptor land first
                         await ws.close(code=4401, reason=self._reason)
@@ -257,9 +280,13 @@ class _ExpiredToken4401Server:
 
 def _transport(url: str) -> WebSocketRelayTransport:
     return WebSocketRelayTransport(
-        url, "discord", "appShared",
-        gateway_id="gw-x", upgrade_secret="secret-x",
-        reconnect=True, reconnect_backoff_s=5.0,  # slow: proves the retry bypasses backoff
+        url,
+        "discord",
+        "appShared",
+        gateway_id="gw-x",
+        upgrade_secret="secret-x",
+        reconnect=True,
+        reconnect_backoff_s=5.0,  # slow: proves the retry bypasses backoff
     )
 
 
@@ -360,10 +387,10 @@ async def test_4401_with_reason_expired_repeated_still_never_latches():
         await srv.stop()
 
 
-
-
 @pytest.mark.asyncio
-async def test_provisional_4401_never_starts_a_second_dialer_while_the_supervisor_is_mid_dial(monkeypatch):
+async def test_provisional_4401_never_starts_a_second_dialer_while_the_supervisor_is_mid_dial(
+    monkeypatch,
+):
     """Only ONE dialer may be live. A reader that dies with a provisional 4401
     while the backoff supervisor is already mid-dial (socket installed, hello in
     flight) must not start the fresh-token retry as a second concurrent dialer
@@ -429,8 +456,12 @@ async def test_provisional_4401_never_starts_a_second_dialer_while_the_superviso
 
     monkeypatch.setattr(mod.websockets, "connect", fake_connect)
     t = WebSocketRelayTransport(
-        "ws://unused", "discord", "bot", reconnect=True,
-        reconnect_backoff_s=0, reconnect_max_backoff_s=0,
+        "ws://unused",
+        "discord",
+        "bot",
+        reconnect=True,
+        reconnect_backoff_s=0,
+        reconnect_max_backoff_s=0,
     )
     t._handshake_succeeded = True
     t._supervisor = asyncio.create_task(t._reconnect_loop())
@@ -509,15 +540,21 @@ def _scripted_connect(monkeypatch, outcomes: list):
 
 def _fake_transport() -> WebSocketRelayTransport:
     t = WebSocketRelayTransport(
-        "ws://unused", "discord", "bot", reconnect=True,
-        reconnect_backoff_s=0, reconnect_max_backoff_s=0,
+        "ws://unused",
+        "discord",
+        "bot",
+        reconnect=True,
+        reconnect_backoff_s=0,
+        reconnect_max_backoff_s=0,
     )
     t._handshake_succeeded = True
     return t
 
 
 @pytest.mark.asyncio
-async def test_fresh_token_retry_socket_dropping_during_hello_still_reconnects(monkeypatch):
+async def test_fresh_token_retry_socket_dropping_during_hello_still_reconnects(
+    monkeypatch,
+):
     """Mirror of the supervisor race: the auth-retry is the only live dialer and
     its fresh socket's reader dies (non-4401) after the hello was sent but before
     the dial returns. The reader must not arm a dialer (one is live) — so the
@@ -553,13 +590,17 @@ async def test_network_failure_on_the_retry_dial_does_not_unmark_it(monkeypatch)
     and its 4401 read as another first strike, so a real revocation would never
     latch (unbounded provisional retries)."""
     refused = _FakeWS(reader=_FakeCloseError(4401, "unauthorized"))
-    dials = _scripted_connect(monkeypatch, [RuntimeError("network blip"), refused, _FakeWS(), _FakeWS()])
+    dials = _scripted_connect(
+        monkeypatch, [RuntimeError("network blip"), refused, _FakeWS(), _FakeWS()]
+    )
     t = _fake_transport()
     t._auth_retry_pending = True
     t._auth_retry = asyncio.create_task(t._redial_with_fresh_token())
     try:
         assert await _wait_until(lambda: t.auth_revoked)
-        assert len(dials) == 2, "the 4401 on the first judged fresh token must be terminal"
+        assert len(dials) == 2, (
+            "the 4401 on the first judged fresh token must be terminal"
+        )
         assert not t._dialer_running()
     finally:
         await t.disconnect(budget_s=0)

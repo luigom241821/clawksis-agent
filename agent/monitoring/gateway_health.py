@@ -35,8 +35,16 @@ class GatewayHealthSnapshot:
 
 _RUNNING_PLATFORM_STATES = {"running", "connected", "ok", "ready"}
 _FATAL_PLATFORM_STATES = {"fatal", "degraded", "error", "failed"}
-_KNOWN_GATEWAY_STATES = _RUNNING_PLATFORM_STATES | _FATAL_PLATFORM_STATES | {"starting", "draining", "stopping", "stopped", "startup_failed", "unknown"}
-_KNOWN_PLATFORM_STATES = _RUNNING_PLATFORM_STATES | _FATAL_PLATFORM_STATES | {"connecting", "disconnected", "disabled", "paused", "retrying", "unknown"}
+_KNOWN_GATEWAY_STATES = (
+    _RUNNING_PLATFORM_STATES
+    | _FATAL_PLATFORM_STATES
+    | {"starting", "draining", "stopping", "stopped", "startup_failed", "unknown"}
+)
+_KNOWN_PLATFORM_STATES = (
+    _RUNNING_PLATFORM_STATES
+    | _FATAL_PLATFORM_STATES
+    | {"connecting", "disconnected", "disabled", "paused", "retrying", "unknown"}
+)
 _SUPERVISION_MODES = {"systemd", "s6", "container", "launchd", "manual", "unknown"}
 _SOURCE_LOGGER_RE = re.compile(r"^gateway(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 
@@ -53,11 +61,26 @@ def _contains_any(*needles: str) -> Callable[[str], bool]:
 
 # Ordered (predicate, class) rules; first match wins, so auth outranks rate-limit etc.
 _GATEWAY_ERROR_RULES: tuple[tuple[Callable[[str], bool], str], ...] = (
-    (_contains_any("auth", "token", "unauthorized", "forbidden", "401", "403"), "auth_failed"),
+    (
+        _contains_any("auth", "token", "unauthorized", "forbidden", "401", "403"),
+        "auth_failed",
+    ),
     (lambda s: "rate" in s and "limit" in s, "rate_limited"),
     (_contains_any("timeout", "timed out"), "timeout"),
-    (_contains_any("network", "connection", "dns", "socket", "connect call failed", "failed to connect", "cannot connect",
-                   "unreachable", "name resolution"), "network_error"),
+    (
+        _contains_any(
+            "network",
+            "connection",
+            "dns",
+            "socket",
+            "connect call failed",
+            "failed to connect",
+            "cannot connect",
+            "unreachable",
+            "name resolution",
+        ),
+        "network_error",
+    ),
     (_contains_any("config", "missing", "invalid"), "invalid_config"),
     (_contains_any("startup"), "startup_failed"),
     (_contains_any("fatal"), "platform_fatal"),
@@ -69,7 +92,9 @@ def classify_gateway_error(raw: Any) -> str:
     return next((label for match, label in _GATEWAY_ERROR_RULES if match(s)), "unknown")
 
 
-def classify_exit_reason(raw: Any, *, state: Any, restart_requested: bool) -> Optional[str]:
+def classify_exit_reason(
+    raw: Any, *, state: Any, restart_requested: bool
+) -> Optional[str]:
     """Reduce free-form shutdown text to a bounded operational class."""
     if restart_requested:
         return "restart_requested"
@@ -117,7 +142,11 @@ def subsystem_for_logger(logger_name: str) -> str:
 
 
 def platform_for_subsystem(subsystem: str) -> Optional[str]:
-    return (subsystem.split(".", 1)[1] or None) if subsystem.startswith("platform.") else None
+    return (
+        (subsystem.split(".", 1)[1] or None)
+        if subsystem.startswith("platform.")
+        else None
+    )
 
 
 def _coerce_pid(raw: Any) -> Optional[int]:
@@ -132,6 +161,7 @@ def _gateway_status(name: str, fallback: Callable[[], Any], /, **kwargs: Any) ->
     """Prefer ``gateway.status.<name>`` (the runtime-status contract); fall back to the local approximation."""
     try:
         from gateway import status
+
         return getattr(status, name)(**kwargs)
     except Exception:
         return fallback()
@@ -156,20 +186,33 @@ def _platforms_of(runtime: Optional[dict[str, Any]]) -> dict[str, Any]:
 
 
 def build_gateway_health_snapshot(
-    runtime: Optional[dict[str, Any]], *, gateway_running: bool, profile: str, install_id: str, version: str,
+    runtime: Optional[dict[str, Any]],
+    *,
+    gateway_running: bool,
+    profile: str,
+    install_id: str,
+    version: str,
     supervision_mode: str = "unknown",
 ) -> GatewayHealthSnapshot:
     """Convert gateway_state.json-compatible runtime state into P0 signals."""
     runtime = runtime or {}
-    gateway_state = _bounded_state(runtime.get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES)
+    gateway_state = _bounded_state(
+        runtime.get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES
+    )
     active_agents = _parse_active_agents(runtime.get("active_agents", 0))
     running = gateway_running and gateway_state == "running"
     busy = _gateway_status(
-        "derive_gateway_busy", lambda: bool(running and _parse_active_agents(active_agents) > 0),
-        gateway_running=gateway_running, gateway_state=gateway_state, active_agents=active_agents,
+        "derive_gateway_busy",
+        lambda: bool(running and _parse_active_agents(active_agents) > 0),
+        gateway_running=gateway_running,
+        gateway_state=gateway_state,
+        active_agents=active_agents,
     )
     drainable = _gateway_status(
-        "derive_gateway_drainable", lambda: bool(running), gateway_running=gateway_running, gateway_state=gateway_state
+        "derive_gateway_drainable",
+        lambda: bool(running),
+        gateway_running=gateway_running,
+        gateway_state=gateway_state,
     )
     platforms = _platforms_of(runtime)
     mode = str(supervision_mode or "unknown").lower()
@@ -191,7 +234,10 @@ def build_gateway_health_snapshot(
         metric("clawk.gateway.active_agents", active_agents),
         metric("clawk.gateway.busy", int(bool(busy))),
         metric("clawk.gateway.drainable", int(bool(drainable))),
-        metric("clawk.gateway.restart_requested", int(bool(runtime.get("restart_requested")))),
+        metric(
+            "clawk.gateway.restart_requested",
+            int(bool(runtime.get("restart_requested"))),
+        ),
         metric("clawk.gateway.state", 1, **{"clawk.gateway.state": gateway_state}),
     ]
     fatal_count = 0
@@ -200,29 +246,62 @@ def build_gateway_health_snapshot(
     for platform, pdata in platforms.items():
         pdata = _dict_or_empty(pdata)
         state = _bounded_state(pdata.get("state"), allowed=_KNOWN_PLATFORM_STATES)
-        error_code = classify_gateway_error(pdata.get("error_code") or pdata.get("error_message"))
+        error_code = classify_gateway_error(
+            pdata.get("error_code") or pdata.get("error_message")
+        )
         is_degraded = state in _FATAL_PLATFORM_STATES
         fatal_count += is_degraded
         pattrs = {"clawk.platform": str(platform), "clawk.platform.state": state}
-        metrics.append(metric("clawk.platform.up", int(state in _RUNNING_PLATFORM_STATES), **pattrs))
-        metrics.append(metric("clawk.platform.degraded", int(is_degraded), **pattrs, **{"clawk.error_code": error_code}))
+        metrics.append(
+            metric(
+                "clawk.platform.up", int(state in _RUNNING_PLATFORM_STATES), **pattrs
+            )
+        )
+        metrics.append(
+            metric(
+                "clawk.platform.degraded",
+                int(is_degraded),
+                **pattrs,
+                **{"clawk.error_code": error_code},
+            )
+        )
         if is_degraded:
-            events.append(GatewayDiagnosticEvent(
-                name="platform.fatal", subsystem=f"platform.{platform}", platform=str(platform),
-                error_code=error_code, error_class=error_code, profile=profile, version=version,
-                severity="error" if state == "fatal" else "warning",
-            ))
-    events.insert(0, GatewayHealthEvent(
-        name="gateway.health_snapshot", gateway_state=gateway_state, active_agents=active_agents, gateway_busy=busy,
-        gateway_drainable=drainable, platform_count=len(platforms), fatal_platform_count=fatal_count, profile=profile,
-        install_id=install_id, version=version, supervision_mode=supervision_mode, pid=_coerce_pid(runtime.get("pid")),
-    ))
+            events.append(
+                GatewayDiagnosticEvent(
+                    name="platform.fatal",
+                    subsystem=f"platform.{platform}",
+                    platform=str(platform),
+                    error_code=error_code,
+                    error_class=error_code,
+                    profile=profile,
+                    version=version,
+                    severity="error" if state == "fatal" else "warning",
+                )
+            )
+    events.insert(
+        0,
+        GatewayHealthEvent(
+            name="gateway.health_snapshot",
+            gateway_state=gateway_state,
+            active_agents=active_agents,
+            gateway_busy=busy,
+            gateway_drainable=drainable,
+            platform_count=len(platforms),
+            fatal_platform_count=fatal_count,
+            profile=profile,
+            install_id=install_id,
+            version=version,
+            supervision_mode=supervision_mode,
+            pid=_coerce_pid(runtime.get("pid")),
+        ),
+    )
     return GatewayHealthSnapshot(metrics=metrics, events=events)
 
 
 def _safe_profile() -> str:
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         return str(get_active_profile_name() or "default")
     except Exception:
         return "default"
@@ -231,43 +310,77 @@ def _safe_profile() -> str:
 def _safe_version() -> str:
     try:
         from clawk_cli.version_info import get_version_info
+
         return get_version_info().base_version
     except Exception:
         return "unknown"
 
 
 def _lifecycle_events(
-    previous: Optional[dict[str, Any]], current: dict[str, Any], *, profile: str, version: str
+    previous: Optional[dict[str, Any]],
+    current: dict[str, Any],
+    *,
+    profile: str,
+    version: str,
 ) -> list[GatewayHealthEvent | GatewayDiagnosticEvent]:
     """Gateway-level transition events: lifecycle, startup_failed diagnostic, exit."""
-    old_state = _optional_state((previous or {}).get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES)
-    new_state = _optional_state(current.get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES)
+    old_state = _optional_state(
+        (previous or {}).get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES
+    )
+    new_state = _optional_state(
+        current.get("gateway_state"), allowed=_KNOWN_GATEWAY_STATES
+    )
     if old_state == new_state or not new_state:
         return []
     restart_requested = bool(current.get("restart_requested"))
 
     def health(name: str) -> GatewayHealthEvent:
         return GatewayHealthEvent(
-            name=name, gateway_state=new_state, old_state=old_state, new_state=new_state,
-            exit_reason=classify_exit_reason(current.get("exit_reason"), state=new_state, restart_requested=restart_requested),
-            restart_requested=restart_requested, active_agents=_parse_active_agents(current.get("active_agents", 0)),
-            profile=profile, version=version, pid=_coerce_pid(current.get("pid")),
+            name=name,
+            gateway_state=new_state,
+            old_state=old_state,
+            new_state=new_state,
+            exit_reason=classify_exit_reason(
+                current.get("exit_reason"),
+                state=new_state,
+                restart_requested=restart_requested,
+            ),
+            restart_requested=restart_requested,
+            active_agents=_parse_active_agents(current.get("active_agents", 0)),
+            profile=profile,
+            version=version,
+            pid=_coerce_pid(current.get("pid")),
         )
 
-    out: list[GatewayHealthEvent | GatewayDiagnosticEvent] = [health("gateway.lifecycle")]
+    out: list[GatewayHealthEvent | GatewayDiagnosticEvent] = [
+        health("gateway.lifecycle")
+    ]
     if new_state == "startup_failed":
-        error_class = classify_gateway_error(current.get("exit_reason") or "startup_failed")
-        out.append(GatewayDiagnosticEvent(
-            name="gateway.startup_failed", subsystem="gateway", error_class=error_class, error_code=error_class,
-            profile=profile, version=version, severity="error",
-        ))
+        error_class = classify_gateway_error(
+            current.get("exit_reason") or "startup_failed"
+        )
+        out.append(
+            GatewayDiagnosticEvent(
+                name="gateway.startup_failed",
+                subsystem="gateway",
+                error_class=error_class,
+                error_code=error_class,
+                profile=profile,
+                version=version,
+                severity="error",
+            )
+        )
     if new_state == "stopped":
         out.append(health("gateway.exit"))
     return out
 
 
 def _platform_events(
-    previous: Optional[dict[str, Any]], current: dict[str, Any], *, profile: str, version: str
+    previous: Optional[dict[str, Any]],
+    current: dict[str, Any],
+    *,
+    profile: str,
+    version: str,
 ) -> list[GatewayDiagnosticEvent]:
     """Per-platform state_change diagnostics, plus platform.fatal when the new state is fatal."""
     old_platforms = _platforms_of(previous)
@@ -279,23 +392,43 @@ def _platform_events(
         new_state = _optional_state(pdata.get("state"), allowed=_KNOWN_PLATFORM_STATES)
         if old_state == new_state or not new_state:
             continue
-        error_code = classify_gateway_error(pdata.get("error_code") or pdata.get("error_message"))
-        common: dict[str, Any] = dict(
-            subsystem=f"platform.{platform}", platform=str(platform), error_code=error_code, error_class=error_code,
-            profile=profile, version=version, severity="error" if new_state in {"fatal", "failed", "error"} else "warning",
+        error_code = classify_gateway_error(
+            pdata.get("error_code") or pdata.get("error_message")
         )
-        out.append(GatewayDiagnosticEvent(name="platform.state_change", old_state=old_state, new_state=new_state, **common))
+        common: dict[str, Any] = dict(
+            subsystem=f"platform.{platform}",
+            platform=str(platform),
+            error_code=error_code,
+            error_class=error_code,
+            profile=profile,
+            version=version,
+            severity="error"
+            if new_state in {"fatal", "failed", "error"}
+            else "warning",
+        )
+        out.append(
+            GatewayDiagnosticEvent(
+                name="platform.state_change",
+                old_state=old_state,
+                new_state=new_state,
+                **common,
+            )
+        )
         if new_state in _FATAL_PLATFORM_STATES:
             out.append(GatewayDiagnosticEvent(name="platform.fatal", **common))
     return out
 
 
-def emit_runtime_status_transition(previous: Optional[dict[str, Any]], current: dict[str, Any]) -> None:
+def emit_runtime_status_transition(
+    previous: Optional[dict[str, Any]], current: dict[str, Any]
+) -> None:
     """Emit immediate content-free gateway events for runtime status changes.  Called by
     gateway.status.write_runtime_status after persisting; fully fail-open."""
     try:
         ctx = dict(profile=_safe_profile(), version=_safe_version())
-        for ev in _lifecycle_events(previous, current, **ctx) + _platform_events(previous, current, **ctx):
+        for ev in _lifecycle_events(previous, current, **ctx) + _platform_events(
+            previous, current, **ctx
+        ):
             emitter.emit(ev)
     except Exception:
         logger.debug("gateway runtime status transition emit failed", exc_info=True)
@@ -311,16 +444,25 @@ class GatewayDiagnosticLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            if record.levelno < logging.WARNING or not (record.name == "gateway" or record.name.startswith("gateway.")):
+            if record.levelno < logging.WARNING or not (
+                record.name == "gateway" or record.name.startswith("gateway.")
+            ):
                 return
             subsystem = subsystem_for_logger(record.name)
             error_class = classify_gateway_error(record.getMessage())
-            emitter.get_emitter().emit(GatewayDiagnosticEvent(
-                name=f"gateway.log.{record.levelname.lower()}", subsystem=subsystem,
-                source_logger=source_logger_for_export(record.name), platform=platform_for_subsystem(subsystem),
-                error_class=error_class, error_code=error_class, profile=self.profile, version=self.version,
-                severity=record.levelname.lower(),
-            ))
+            emitter.get_emitter().emit(
+                GatewayDiagnosticEvent(
+                    name=f"gateway.log.{record.levelname.lower()}",
+                    subsystem=subsystem,
+                    source_logger=source_logger_for_export(record.name),
+                    platform=platform_for_subsystem(subsystem),
+                    error_class=error_class,
+                    error_code=error_class,
+                    profile=self.profile,
+                    version=self.version,
+                    severity=record.levelname.lower(),
+                )
+            )
         except Exception:
             logger.debug("gateway diagnostic emit failed", exc_info=True)
 

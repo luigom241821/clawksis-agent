@@ -14,13 +14,27 @@ import pytest
 from clawk_state import SessionDB
 
 
-def _db(tmp_path, *, source="cli", flip_source_to=None, parent=None, end_reason=None,
-        session_id="sess-plain", with_message=True):
+def _db(
+    tmp_path,
+    *,
+    source="cli",
+    flip_source_to=None,
+    parent=None,
+    end_reason=None,
+    session_id="sess-plain",
+    with_message=True,
+):
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session(session_id, source, parent_session_id=parent)
-    if flip_source_to:  # simulate a later surface flipping live ``source`` (created_source stays)
-        db._execute_write(lambda conn: conn.execute(
-            "UPDATE sessions SET source = ? WHERE id = ?", (flip_source_to, session_id)))
+    if (
+        flip_source_to
+    ):  # simulate a later surface flipping live ``source`` (created_source stays)
+        db._execute_write(
+            lambda conn: conn.execute(
+                "UPDATE sessions SET source = ? WHERE id = ?",
+                (flip_source_to, session_id),
+            )
+        )
     if with_message:
         db.append_message(session_id, "user", "hello")
         db.append_message(session_id, "assistant", "hi")
@@ -30,6 +44,7 @@ def _db(tmp_path, *, source="cli", flip_source_to=None, parent=None, end_reason=
 
 
 # ── SessionDB.is_kanban_owned_session ────────────────────────────────
+
 
 def test_kanban_source_row_is_kanban_owned(tmp_path):
     db = _db(tmp_path, source="kanban", session_id="worker-1")
@@ -51,7 +66,9 @@ def test_created_source_survives_surface_flip(tmp_path):
 def test_compression_lineage_of_kanban_worker_is_owned(tmp_path):
     """Resuming the compression child of a worker transcript is resuming the worker's
     conversation — it must classify as kanban-owned."""
-    db = _db(tmp_path, source="kanban", session_id="worker-root", end_reason="compression")
+    db = _db(
+        tmp_path, source="kanban", session_id="worker-root", end_reason="compression"
+    )
     db.create_session("worker-tip", "cli", parent_session_id="worker-root")
     db.append_message("worker-tip", "user", "continued")
     assert db.is_kanban_owned_session("worker-tip") is True
@@ -60,15 +77,21 @@ def test_compression_lineage_of_kanban_worker_is_owned(tmp_path):
 def test_branch_child_of_kanban_worker_is_not_owned(tmp_path):
     """A delegate/branch child is a DIFFERENT conversation — not swept into the guard."""
     db = _db(tmp_path, source="kanban", session_id="worker-root", end_reason="blocked")
-    db.create_session("branch-child", "cli", parent_session_id="worker-root",
-                      model_config={"_branched_from": "worker-root"})
+    db.create_session(
+        "branch-child",
+        "cli",
+        parent_session_id="worker-root",
+        model_config={"_branched_from": "worker-root"},
+    )
     assert db.is_kanban_owned_session("branch-child") is False
 
 
 # ── the centralized guard ────────────────────────────────────────────
 
+
 def _refusal(db, sid):
     from clawk_cli.kanban_resume_guard import kanban_resume_refusal
+
     return kanban_resume_refusal(db, sid)
 
 
@@ -105,20 +128,26 @@ def test_guard_fails_open_on_probe_error(tmp_path):
 
 # ── CLI startup --resume / -c ────────────────────────────────────────
 
+
 def _make_cli(resume=None):
     from cli import ClawksisCLI
     import cli as _cli_mod
 
     _clean_config = {
-        "model": {"default": "anthropic/claude-opus-4.6", "base_url": "https://openrouter.ai/api/v1",
-                  "provider": "auto"},
+        "model": {
+            "default": "anthropic/claude-opus-4.6",
+            "base_url": "https://openrouter.ai/api/v1",
+            "provider": "auto",
+        },
         "display": {"compact": False, "tool_progress": "all", "resume_display": "full"},
         "agent": {},
         "terminal": {"env_type": "local"},
     }
     with (
         patch("cli.get_tool_definitions", return_value=[]),
-        patch.dict("os.environ", {"LLM_MODEL": "", "CLAWK_MAX_ITERATIONS": ""}, clear=False),
+        patch.dict(
+            "os.environ", {"LLM_MODEL": "", "CLAWK_MAX_ITERATIONS": ""}, clear=False
+        ),
         patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
     ):
         return ClawksisCLI(resume=resume)
@@ -128,7 +157,9 @@ def test_startup_resume_refuses_kanban_session_and_starts_fresh(tmp_path):
     db = _db(tmp_path, source="kanban", session_id="worker-1")
     reopened = []
     orig_reopen = db.reopen_session
-    db.reopen_session = lambda session_id: reopened.append(session_id) or orig_reopen(session_id)
+    db.reopen_session = lambda session_id: (
+        reopened.append(session_id) or orig_reopen(session_id)
+    )
 
     cli = _make_cli(resume="worker-1")
     cli._session_db = db
@@ -141,7 +172,9 @@ def test_startup_resume_refuses_kanban_session_and_starts_fresh(tmp_path):
     # The worker row must never receive this process's writes: fresh id, no resume state.
     assert cli._resumed is False
     assert cli.session_id != "worker-1"
-    assert reopened == [], "the kanban worker row must not be reopened by an ordinary resume"
+    assert reopened == [], (
+        "the kanban worker row must not be reopened by an ordinary resume"
+    )
 
 
 def test_startup_resume_ordinary_session_still_works(tmp_path):
@@ -157,6 +190,7 @@ def test_startup_resume_ordinary_session_still_works(tmp_path):
 
 
 # ── mid-chat /resume ─────────────────────────────────────────────────
+
 
 def test_midchat_resume_refuses_kanban_target(tmp_path):
     db = _db(tmp_path, source="cli", session_id="chat-1")
@@ -179,8 +213,10 @@ def test_midchat_resume_refuses_kanban_target(tmp_path):
 
 # ── quiet one-shot resume ────────────────────────────────────────────
 
+
 def test_oneshot_resume_refuses_kanban_session(tmp_path):
     from clawk_cli.oneshot import _load_resume_target
+
     db = _db(tmp_path, source="kanban", session_id="worker-1")
     with pytest.raises(RuntimeError, match="cannot resume session worker-1"):
         _load_resume_target(db, "worker-1")
@@ -188,6 +224,7 @@ def test_oneshot_resume_refuses_kanban_session(tmp_path):
 
 def test_oneshot_resume_ordinary_session_still_works(tmp_path):
     from clawk_cli.oneshot import _load_resume_target
+
     db = _db(tmp_path, source="cli", session_id="chat-1")
     sid, history, _meta = _load_resume_target(db, "chat-1")
     assert sid == "chat-1"

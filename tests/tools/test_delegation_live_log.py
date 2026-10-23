@@ -77,12 +77,24 @@ def test_observe_maps_child_callback_events_to_lines():
     w.observe("_thinking", "first line of thinking")
     w.observe("reasoning.available", "_thinking", "deep reasoning text", None)
     w.observe("tool.started", "terminal", "ls /tmp", {"command": "ls /tmp"})
-    w.observe("tool.completed", "terminal", None, None,
-              duration=0.5, is_error=False, result="ok output")
+    w.observe(
+        "tool.completed",
+        "terminal",
+        None,
+        None,
+        duration=0.5,
+        is_error=False,
+        result="ok output",
+    )
     w.observe("subagent.text", preview="final reply ")
     w.observe("subagent.text", preview="streamed in parts")
-    w.observe("subagent.complete", preview="short", status="completed",
-              duration_seconds=3.2, summary="did the thing")
+    w.observe(
+        "subagent.complete",
+        preview="short",
+        status="completed",
+        duration_seconds=3.2,
+        summary="did the thing",
+    )
     text = w.path.read_text(encoding="utf-8")
     assert "kick off the goal" in text
     assert "first line of thinking" in text
@@ -96,8 +108,13 @@ def test_observe_maps_child_callback_events_to_lines():
 
 def test_finalize_records_budget_exhaustion_and_errors():
     w = LiveTranscriptWriter("deleg_final", 0, "g")
-    w.finalize({"status": "failed", "exit_reason": "max_iterations",
-                "error": "Subagent did not produce a response."})
+    w.finalize(
+        {
+            "status": "failed",
+            "exit_reason": "max_iterations",
+            "error": "Subagent did not produce a response.",
+        }
+    )
     text = w.path.read_text(encoding="utf-8")
     assert "end status=failed" in text
     assert "exit_reason=max_iterations" in text
@@ -156,21 +173,31 @@ def _make_parent():
 
 
 _CREDS = {
-    "model": "m", "provider": None, "base_url": None, "api_key": None,
-    "api_mode": None, "command": None, "args": None,
+    "model": "m",
+    "provider": None,
+    "base_url": None,
+    "api_key": None,
+    "api_mode": None,
+    "command": None,
+    "args": None,
 }
 
 
 def _fake_run(task_index, goal, child=None, parent_agent=None, **kw):
     return {
-        "task_index": task_index, "status": "completed",
-        "summary": f"done: {goal}", "api_calls": 1,
-        "duration_seconds": 0.1, "model": "m", "exit_reason": "completed",
+        "task_index": task_index,
+        "status": "completed",
+        "summary": f"done: {goal}",
+        "api_calls": 1,
+        "duration_seconds": 0.1,
+        "model": "m",
+        "exit_reason": "completed",
     }
 
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(pytest.main([__file__, "-v"]))
 
 
@@ -259,7 +286,10 @@ def test_manifest_goal_is_redacted():
 # Explicit profile home (#91996)
 # ---------------------------------------------------------------------------
 
-def test_explicit_home_pins_transcripts_across_raw_thread_boundary(tmp_path, monkeypatch):
+
+def test_explicit_home_pins_transcripts_across_raw_thread_boundary(
+    tmp_path, monkeypatch
+):
     """Ambient resolve falls through to process CLAWK_HOME when the session's
     ContextVar override is dropped by a raw threading.Thread boundary; an
     explicit home keeps transcripts + manifest under the originating profile."""
@@ -274,9 +304,11 @@ def test_explicit_home_pins_transcripts_across_raw_thread_boundary(tmp_path, mon
     token = set_clawk_home_override(session_home)
     out = {}
     try:
+
         def worker():
             _id, _writers, paths = create_live_transcripts(
-                [{"goal": "profile-pinned repro"}], home=session_home,
+                [{"goal": "profile-pinned repro"}],
+                home=session_home,
             )
             out["paths"] = paths
 
@@ -306,7 +338,8 @@ def test_manifest_update_uses_same_explicit_home(tmp_path, monkeypatch):
     home.mkdir()
 
     deleg_id, _writers, paths = create_live_transcripts(
-        [{"goal": "pin me"}], home=home,
+        [{"goal": "pin me"}],
+        home=home,
     )
     update_manifest_statuses(
         deleg_id,
@@ -321,10 +354,20 @@ def test_manifest_update_uses_same_explicit_home(tmp_path, monkeypatch):
 
 def test_manifest_records_inherited_child_model(tmp_path):
     """With delegation.model blank the dispatch-time model is None; the manifest must still name what ran (#123452)."""
-    deleg_id, _writers, paths = create_live_transcripts([{"goal": "a"}, {"goal": "b"}], home=tmp_path)
-    update_manifest_statuses(deleg_id, [{"task_index": 0, "status": "completed", "model": "parent/model"},
-                                        {"task_index": 1, "status": "completed", "model": "parent/model"}], home=tmp_path)
-    manifest = json.loads((Path(paths[0]).parent / "manifest.json").read_text(encoding="utf-8"))
+    deleg_id, _writers, paths = create_live_transcripts(
+        [{"goal": "a"}, {"goal": "b"}], home=tmp_path
+    )
+    update_manifest_statuses(
+        deleg_id,
+        [
+            {"task_index": 0, "status": "completed", "model": "parent/model"},
+            {"task_index": 1, "status": "completed", "model": "parent/model"},
+        ],
+        home=tmp_path,
+    )
+    manifest = json.loads(
+        (Path(paths[0]).parent / "manifest.json").read_text(encoding="utf-8")
+    )
     assert manifest["model"] == "parent/model"
     assert [t["model"] for t in manifest["tasks"]] == ["parent/model", "parent/model"]
 
@@ -431,8 +474,6 @@ def test_manifest_includes_model_and_provider():
     assert len(manifest["tasks"]) == 2
 
 
-
-
 def test_no_file_in_the_dispatch_directory_carries_the_raw_key():
     """Whole-directory sweep: every artefact dispatch writes is covered."""
     delegation_id, _writers, _paths = create_live_transcripts(
@@ -473,7 +514,14 @@ def test_benign_transcript_content_is_untouched():
     """Redaction must not mangle ordinary transcript text."""
     w = LiveTranscriptWriter("deleg_redact_benign", 0, "refactor the parser")
     w.observe("tool.started", "read_file", "src/parser.py", None)
-    w.observe("tool.completed", "read_file", None, None, result="def parse(x): ...", duration=1.5)
+    w.observe(
+        "tool.completed",
+        "read_file",
+        None,
+        None,
+        result="def parse(x): ...",
+        duration=1.5,
+    )
     body = w.path.read_text(encoding="utf-8")
     assert "src/parser.py" in body
     assert "def parse(x)" in body

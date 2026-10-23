@@ -55,8 +55,16 @@ ALLOWLIST = {
 
 # Directories that never count (tests may build fixture configs freely).
 EXCLUDED_DIR_PARTS = {
-    "tests", ".venv", ".git", ".worktrees", "node_modules", "website",
-    "docs", "scripts", "examples", "apps",
+    "tests",
+    ".venv",
+    ".git",
+    ".worktrees",
+    "node_modules",
+    "website",
+    "docs",
+    "scripts",
+    "examples",
+    "apps",
     # Compiled bytecode is not source. Sibling test processes also create
     # and delete these directories while this scan walks the tree.
     "__pycache__",

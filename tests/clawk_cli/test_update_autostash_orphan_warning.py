@@ -36,9 +36,7 @@ def _make_repo_with_autostash(tmp_path, age_days: float):
     _git(tmp_path, "commit", "-qm", "init")
 
     (tmp_path / "tracked.txt").write_text("local change\n")
-    stamp = (
-        datetime.now(UTC) - timedelta(days=age_days)
-    ).strftime("%Y%m%d-%H%M%S")
+    stamp = (datetime.now(UTC) - timedelta(days=age_days)).strftime("%Y%m%d-%H%M%S")
     name = f"clawk-update-autostash-{stamp}"
     _git(tmp_path, "stash", "push", "--include-untracked", "-m", name)
     return name

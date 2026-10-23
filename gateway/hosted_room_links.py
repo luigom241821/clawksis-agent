@@ -17,21 +17,42 @@ from typing import Any, Mapping
 
 from gateway import hosted_rooms
 from gateway.hosted_room_peer import (
-    GatewayRoomCatalog, HostedRoomPeerError, TransportSecurity, validate_room_link_url)
+    GatewayRoomCatalog,
+    HostedRoomPeerError,
+    TransportSecurity,
+    validate_room_link_url,
+)
 from gateway.hosted_rooms_common import DbPath, compact_json, exact_fields, identifier
 
 
 MAX_LINKS = 512
 MAX_GRANT_CHARS = 16 * 1024
 _LEGACY_FIELDS = {
-    "room_id", "member_id", "target_url", "target_profile", "grant", "catalog", "cancellation_scope_id", "trace_id",
-    "updated_at"}
+    "room_id",
+    "member_id",
+    "target_url",
+    "target_profile",
+    "grant",
+    "catalog",
+    "cancellation_scope_id",
+    "trace_id",
+    "updated_at",
+}
 _OPTIONAL_FIELDS = {"transport_security", "status"}
 # SQLite record columns that map 1:1 onto mapping fields, in record order
 # (``catalog_json`` is the serialized ``catalog``).
 _RECORD_FIELDS = (
-    "room_id", "member_id", "target_url", "target_profile", "grant", "cancellation_scope_id", "trace_id",
-    "transport_security", "status", "updated_at")
+    "room_id",
+    "member_id",
+    "target_url",
+    "target_profile",
+    "grant",
+    "cancellation_scope_id",
+    "trace_id",
+    "transport_security",
+    "status",
+    "updated_at",
+)
 _STATUSES = {"ready", "unavailable", "needs_reauthorization"}
 
 
@@ -69,11 +90,20 @@ class StoredRoomLink:
         if not updated_at > 0:
             raise HostedRoomPeerError("updated_at must be positive")
         return cls(
-            room_id=room_id, member_id=member_id, target_url=target_url, target_profile=target_profile,
-            grant=grant, catalog=GatewayRoomCatalog.from_mapping(value["catalog"]),
-            cancellation_scope_id=_short_string(value["cancellation_scope_id"], "cancellation_scope_id"),
-            trace_id=_short_string(value["trace_id"], "trace_id"), transport_security=transport_security,
-            status=status, updated_at=updated_at)
+            room_id=room_id,
+            member_id=member_id,
+            target_url=target_url,
+            target_profile=target_profile,
+            grant=grant,
+            catalog=GatewayRoomCatalog.from_mapping(value["catalog"]),
+            cancellation_scope_id=_short_string(
+                value["cancellation_scope_id"], "cancellation_scope_id"
+            ),
+            trace_id=_short_string(value["trace_id"], "trace_id"),
+            transport_security=transport_security,
+            status=status,
+            updated_at=updated_at,
+        )
 
     @classmethod
     def from_record(cls, value: Mapping[str, Any]) -> StoredRoomLink:
@@ -81,27 +111,42 @@ class StoredRoomLink:
             catalog = json.loads(str(value["catalog_json"]))
         except Exception as exc:
             raise HostedRoomPeerError("stored room link catalog is unreadable") from exc
-        return cls.from_mapping({**{name: value[name] for name in _RECORD_FIELDS}, "catalog": catalog})
+        return cls.from_mapping(
+            {**{name: value[name] for name in _RECORD_FIELDS}, "catalog": catalog}
+        )
 
     def catalog_mapping(self) -> dict[str, Any]:
         return self.catalog.as_mapping()
 
     def as_record(self) -> dict[str, Any]:
         record = {name: getattr(self, name) for name in _RECORD_FIELDS}
-        record["catalog_json"] = compact_json(self.catalog_mapping(), ensure_ascii=False)
+        record["catalog_json"] = compact_json(
+            self.catalog_mapping(), ensure_ascii=False
+        )
         return record
 
 
 _link_fields = partial(
-    exact_fields, label="stored room link", required=_LEGACY_FIELDS, optional=_OPTIONAL_FIELDS,
-    error=HostedRoomPeerError, not_object="stored room link fields are invalid",
-    missing_fmt="stored room link fields are invalid", unknown_fmt="stored room link fields are invalid")
+    exact_fields,
+    label="stored room link",
+    required=_LEGACY_FIELDS,
+    optional=_OPTIONAL_FIELDS,
+    error=HostedRoomPeerError,
+    not_object="stored room link fields are invalid",
+    missing_fmt="stored room link fields are invalid",
+    unknown_fmt="stored room link fields are invalid",
+)
 
 
 def _short_string(value: Any, field: str) -> str:
     return identifier(
-        str(value or ""), label=field, error=HostedRoomPeerError, max_chars=256, pattern=None,
-        invalid=f"{field} is invalid")
+        str(value or ""),
+        label=field,
+        error=HostedRoomPeerError,
+        max_chars=256,
+        pattern=None,
+        invalid=f"{field} is invalid",
+    )
 
 
 def _link_rows(db_path: DbPath) -> list[dict[str, Any]]:
@@ -115,37 +160,67 @@ def load_room_links(db_path: DbPath) -> tuple[StoredRoomLink, ...]:
     return tuple(StoredRoomLink.from_record(row) for row in _link_rows(db_path))
 
 
-def load_room_links_tolerant(db_path: DbPath) -> tuple[tuple[StoredRoomLink, ...], tuple[str, ...]]:
+def load_room_links_tolerant(
+    db_path: DbPath,
+) -> tuple[tuple[StoredRoomLink, ...], tuple[str, ...]]:
     """Load healthy routes while quarantining malformed rows by identity."""
     links, errors = [], []
     for row in _link_rows(db_path):
         try:
             links.append(StoredRoomLink.from_record(row))
         except Exception:
-            errors.append(f"{row.get('room_id') or 'unknown'}:{row.get('member_id') or 'unknown'}:invalid")
+            errors.append(
+                f"{row.get('room_id') or 'unknown'}:{row.get('member_id') or 'unknown'}:invalid"
+            )
     return tuple(links), tuple(errors)
 
 
 def save_room_link(db_path: DbPath, link: StoredRoomLink) -> None:
-    hosted_rooms.upsert_room_link_record(db_path, record=link.as_record(), max_links=MAX_LINKS)
+    hosted_rooms.upsert_room_link_record(
+        db_path, record=link.as_record(), max_links=MAX_LINKS
+    )
     if os.name == "posix":
         with contextlib.suppress(OSError):
             Path(db_path).chmod(0o600)
 
 
-def mark_room_link_status(db_path: DbPath, *, room_id: str, member_id: str, status: str) -> bool:
+def mark_room_link_status(
+    db_path: DbPath, *, room_id: str, member_id: str, status: str
+) -> bool:
     if status not in _STATUSES:
         raise HostedRoomPeerError("stored room link status is invalid")
     return hosted_rooms.update_room_link_status(
-        db_path, room_id=_short_string(room_id, "room_id"), member_id=_short_string(member_id, "member_id"),
-        status=status)
+        db_path,
+        room_id=_short_string(room_id, "room_id"),
+        member_id=_short_string(member_id, "member_id"),
+        status=status,
+    )
 
 
 def make_stored_link(
-    *, room_id: str, member_id: str, target_url: str, target_profile: str, grant: str, catalog: GatewayRoomCatalog,
-    cancellation_scope_id: str, trace_id: str) -> StoredRoomLink:
+    *,
+    room_id: str,
+    member_id: str,
+    target_url: str,
+    target_profile: str,
+    grant: str,
+    catalog: GatewayRoomCatalog,
+    cancellation_scope_id: str,
+    trace_id: str,
+) -> StoredRoomLink:
     target_url, transport_security = validate_room_link_url(target_url)
-    return StoredRoomLink.from_mapping({
-        "room_id": room_id, "member_id": member_id, "target_url": target_url, "target_profile": target_profile,
-        "grant": grant, "catalog": catalog.as_mapping(), "cancellation_scope_id": cancellation_scope_id,
-        "trace_id": trace_id, "transport_security": transport_security, "status": "ready", "updated_at": time.time()})
+    return StoredRoomLink.from_mapping(
+        {
+            "room_id": room_id,
+            "member_id": member_id,
+            "target_url": target_url,
+            "target_profile": target_profile,
+            "grant": grant,
+            "catalog": catalog.as_mapping(),
+            "cancellation_scope_id": cancellation_scope_id,
+            "trace_id": trace_id,
+            "transport_security": transport_security,
+            "status": "ready",
+            "updated_at": time.time(),
+        }
+    )

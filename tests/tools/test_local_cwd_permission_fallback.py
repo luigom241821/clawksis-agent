@@ -28,7 +28,8 @@ def denied_dir(tmp_path):
 
 
 needs_non_root = pytest.mark.skipif(
-    getattr(os, "geteuid", lambda: 1)() == 0, reason="chmod-based access denial needs non-root"
+    getattr(os, "geteuid", lambda: 1)() == 0,
+    reason="chmod-based access denial needs non-root",
 )
 
 
@@ -38,7 +39,6 @@ class TestInaccessibleCwdFallback:
     def test_cwd_usable_rejects_unenterable_directory(self, denied_dir):
         assert os.path.isdir(denied_dir)  # the trap: stat succeeds
         assert _cwd_usable(str(denied_dir)) is False
-
 
     def test_resolve_safe_cwd_climbs_past_denied_ancestor(self, denied_dir, tmp_path):
         missing_child = str(denied_dir / "sub" / "dir")
@@ -66,7 +66,6 @@ class TestInaccessibleCwdFallback:
 class TestUsableCwdBehaviorUnchanged:
     def test_existing_accessible_cwd_returned_verbatim(self, tmp_path):
         assert _resolve_safe_cwd(str(tmp_path)) == str(tmp_path)
-
 
     def test_hopeless_path_falls_back_to_tempdir(self):
         # A path whose every component is missing outside any real tree.

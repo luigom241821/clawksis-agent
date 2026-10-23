@@ -28,7 +28,7 @@ def test_dead_ipv6_route_warns_and_names_force_ipv4(monkeypatch):
         raise TimeoutError("timed out")
 
     result = _run(monkeypatch, timed_out)
-    (glyph, _label, detail), = result.lines
+    ((glyph, _label, detail),) = result.lines
     assert "⚠" in glyph and "network.force_ipv4" in detail
     assert result.issues and "network.force_ipv4" in result.issues[0]
 

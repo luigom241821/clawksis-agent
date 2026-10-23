@@ -10,14 +10,22 @@ from clawk_cli.config import DEFAULT_CONFIG
 
 
 def _agent():
-    return SimpleNamespace(model="m", provider="openrouter", api_mode="chat_completions", quiet_mode=True)
+    return SimpleNamespace(
+        model="m", provider="openrouter", api_mode="chat_completions", quiet_mode=True
+    )
 
 
 @pytest.mark.parametrize(
     ("agent_cfg", "expected"),
     [
-        ({}, DEFAULT_CONFIG["compression"]["threshold_tokens"]),  # config-load failure → shipped default
-        ({"compression": {"threshold_tokens": None}}, None),  # explicit null → ratio-only opt-out
+        (
+            {},
+            DEFAULT_CONFIG["compression"]["threshold_tokens"],
+        ),  # config-load failure → shipped default
+        (
+            {"compression": {"threshold_tokens": None}},
+            None,
+        ),  # explicit null → ratio-only opt-out
     ],
 )
 def test_threshold_tokens_default_and_null_opt_out(agent_cfg, expected):

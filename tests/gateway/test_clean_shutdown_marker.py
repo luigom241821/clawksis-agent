@@ -17,6 +17,7 @@ from gateway.session import SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_source(platform=Platform.TELEGRAM, chat_id="123", user_id="u1"):
     return SessionSource(platform=platform, chat_id=chat_id, user_id=user_id)
 
@@ -30,6 +31,7 @@ def _make_store(tmp_path):
 # Clean shutdown marker integration
 # ---------------------------------------------------------------------------
 
+
 class TestCleanShutdownMarker:
     """Test that the marker file controls session suspension on startup."""
 
@@ -41,6 +43,7 @@ class TestCleanShutdownMarker:
 
         # Create a minimal runner and call the shutdown logic directly
         from gateway.run import GatewayRunner
+
         runner = object.__new__(GatewayRunner)
         runner._restart_requested = False
         runner._restart_detached = False
@@ -61,19 +64,28 @@ class TestCleanShutdownMarker:
         runner.config = GatewayConfig()
 
         # Mock heavy dependencies
-        with patch("gateway.run.GatewayRunner._drain_active_agents", new_callable=AsyncMock, return_value=([], False)), \
-             patch("gateway.run.GatewayRunner._finalize_shutdown_agents"), \
-             patch("gateway.run.GatewayRunner._update_runtime_status"), \
-             patch("gateway.status.remove_pid_file"), \
-             patch("tools.process_registry.process_registry") as mock_proc_reg, \
-             patch("tools.terminal_tool.cleanup_all_environments"), \
-             patch("tools.browser_tool_lifecycle.cleanup_all_browsers"):
+        with (
+            patch(
+                "gateway.run.GatewayRunner._drain_active_agents",
+                new_callable=AsyncMock,
+                return_value=([], False),
+            ),
+            patch("gateway.run.GatewayRunner._finalize_shutdown_agents"),
+            patch("gateway.run.GatewayRunner._update_runtime_status"),
+            patch("gateway.status.remove_pid_file"),
+            patch("tools.process_registry.process_registry") as mock_proc_reg,
+            patch("tools.terminal_tool.cleanup_all_environments"),
+            patch("tools.browser_tool_lifecycle.cleanup_all_browsers"),
+        ):
             mock_proc_reg.kill_all = MagicMock()
 
             import asyncio
+
             asyncio.get_event_loop().run_until_complete(runner.stop())
 
-        assert marker.exists(), ".clean_shutdown marker should exist after graceful stop"
+        assert marker.exists(), (
+            ".clean_shutdown marker should exist after graceful stop"
+        )
 
 
 # ---------------------------------------------------------------------------

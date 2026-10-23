@@ -10,6 +10,7 @@ target through ``os.path.realpath`` when it is a symlink, so the real file is
 overwritten in-place while the symlink survives.  All atomic-write sites in
 the codebase were migrated to the helper; these tests pin that invariant.
 """
+
 from __future__ import annotations
 
 import errno
@@ -74,8 +75,6 @@ def test_atomic_replace_regular_file(tmp_path: Path) -> None:
     assert not target.is_symlink()
 
 
-
-
 def test_atomic_replace_accepts_pathlike_and_str(tmp_path: Path) -> None:
     target = tmp_path / "dual.json"
     target.write_text("{}", encoding="utf-8")
@@ -110,7 +109,9 @@ def test_atomic_json_write_preserves_symlink(tmp_path: Path) -> None:
 
 @pytest.mark.require_symlinks
 @pytest.mark.platforms("posix")  # read-only dir via chmod
-@pytest.mark.parametrize("target_dir_writable", [True, False], ids=["rename", "readonly-dir-copy"])
+@pytest.mark.parametrize(
+    "target_dir_writable", [True, False], ids=["rename", "readonly-dir-copy"]
+)
 def test_mkstemp_beside_symlink_into_other_fs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target_dir_writable: bool
 ) -> None:
@@ -128,7 +129,9 @@ def test_mkstemp_beside_symlink_into_other_fs(
     copies = []
 
     def replace_same_dir_only(src, dst):
-        if os.path.dirname(os.path.realpath(src)) != os.path.dirname(os.path.realpath(dst)):
+        if os.path.dirname(os.path.realpath(src)) != os.path.dirname(
+            os.path.realpath(dst)
+        ):
             raise OSError(errno.EXDEV, os.strerror(errno.EXDEV))
         return real_replace(src, dst)
 
@@ -137,6 +140,7 @@ def test_mkstemp_beside_symlink_into_other_fs(
         return real_copy(src, dst)
 
     import utils
+
     real_copy = utils._copy_fallback
     monkeypatch.setattr("utils.os.replace", replace_same_dir_only)
     monkeypatch.setattr("utils._copy_fallback", record_copy)
@@ -183,6 +187,7 @@ def test_atomic_json_write_preserves_symlink_permissions(tmp_path: Path) -> None
     atomic_json_write(link, {"x": 1})
 
     import stat as _stat
+
     mode = _stat.S_IMODE(real.stat().st_mode)
     assert mode == 0o644, f"permissions drifted after symlinked write: {oct(mode)}"
 
@@ -216,8 +221,6 @@ def test_atomic_yaml_write_restores_owner_on_real_symlink_target(
     assert chown_calls == [(real, 123, 456)]
 
 
-
-
 def test_atomic_roundtrip_yaml_save_restores_owner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -239,7 +242,10 @@ def test_atomic_roundtrip_yaml_save_restores_owner(
     atomic_roundtrip_yaml_save(target, {"model": {"provider": "nvidia"}})
 
     assert chown_calls == [(target, 345, 678)]
-    assert yaml.safe_load(target.read_text(encoding="utf-8"))["model"]["provider"] == "nvidia"
+    assert (
+        yaml.safe_load(target.read_text(encoding="utf-8"))["model"]["provider"]
+        == "nvidia"
+    )
 
 
 # ─── Broken-symlink edge case ─────────────────────────────────────────────
@@ -268,8 +274,6 @@ def test_atomic_replace_broken_symlink_creates_target(tmp_path: Path) -> None:
 # ─── EXDEV / EBUSY copy fallback ───────────────────────────────────────────
 
 
-
-
 @pytest.mark.require_symlinks
 def test_atomic_replace_copy_fallback_preserves_symlink(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -289,10 +293,6 @@ def test_atomic_replace_copy_fallback_preserves_symlink(
     assert link.is_symlink()
     assert real.read_text(encoding="utf-8") == "new\n"
     assert not tmp.exists()
-
-
-
-
 
 
 def test_atomic_replace_real_cross_device(tmp_path: Path) -> None:
@@ -436,9 +436,7 @@ def test_genuine_denial_propagates_after_budget(
     target.write_text("old", encoding="utf-8")
     tmp = _write_tmp(tmp_path, "new")
 
-    monkeypatch.setattr(
-        "utils.os.replace", MagicMock(side_effect=_sharing_error(5))
-    )
+    monkeypatch.setattr("utils.os.replace", MagicMock(side_effect=_sharing_error(5)))
 
     denial = PermissionError(errno.EACCES, "access is denied")
 
@@ -565,9 +563,7 @@ def test_symlinked_target_survives_a_contended_rename(
     link.symlink_to(real)
     tmp = _write_tmp(tmp_path, "new\n")
 
-    monkeypatch.setattr(
-        "utils.os.replace", MagicMock(side_effect=_sharing_error(5))
-    )
+    monkeypatch.setattr("utils.os.replace", MagicMock(side_effect=_sharing_error(5)))
 
     assert Path(atomic_replace(tmp, link)) == real
     assert link.is_symlink(), "symlink must survive the rewrite fallback"

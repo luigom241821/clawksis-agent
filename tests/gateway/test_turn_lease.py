@@ -99,8 +99,6 @@ def test_distinct_sessions_do_not_contend():
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_timeout_fails_closed_instead_of_authorizing_an_unserialized_turn():
     """A timed-out waiter must never run against the still-live holder.
 
@@ -399,7 +397,9 @@ def test_rebind_moves_serialization_to_new_session_id():
 
     async def scenario():
         registry = SessionTurnLeaseRegistry()
-        token = await registry.acquire("parent", owner_key="key-a", generation=1, timeout=5)
+        token = await registry.acquire(
+            "parent", owner_key="key-a", generation=1, timeout=5
+        )
         assert registry.rebind(token, "child") is True
         assert token is not None and token.session_id == "child"
 
@@ -483,5 +483,3 @@ def test_runner_release_turn_lease_is_token_scoped_and_bare_safe():
         assert runner._release_turn_lease("", 1) is False
 
     _run(scenario())
-
-

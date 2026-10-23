@@ -5,6 +5,7 @@ MEDIA attachment. The Matrix adapter used to reject that kwarg, so all non-image
 MEDIA delivery raised ``TypeError: MatrixAdapter.send_voice() got an unexpected
 keyword argument 'is_voice'`` and the attachment was silently dropped.
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -37,8 +38,14 @@ def test_dispatch_call_with_is_voice_false_sends_plain_audio():
     adapter = _make_adapter()
     spy = _spy_send_local_file(adapter)
 
-    result = asyncio.run(adapter.send_voice(
-        chat_id="!room:example.org", audio_path="/tmp/clip.mp3", metadata=None, is_voice=False))
+    result = asyncio.run(
+        adapter.send_voice(
+            chat_id="!room:example.org",
+            audio_path="/tmp/clip.mp3",
+            metadata=None,
+            is_voice=False,
+        )
+    )
 
     assert result.success is True
     spy.assert_awaited_once()
@@ -53,8 +60,14 @@ def test_voice_tagged_attachment_gets_voice_bubble():
     adapter = _make_adapter()
     spy = _spy_send_local_file(adapter)
 
-    asyncio.run(adapter.send_voice(
-        chat_id="!room:example.org", audio_path="/tmp/clip.ogg", metadata=None, is_voice=True))
+    asyncio.run(
+        adapter.send_voice(
+            chat_id="!room:example.org",
+            audio_path="/tmp/clip.ogg",
+            metadata=None,
+            is_voice=True,
+        )
+    )
 
     args, kwargs = spy.call_args
     assert args[1] == "/tmp/clip.ogg"
@@ -67,7 +80,9 @@ def test_legacy_caller_without_flag_keeps_voice_bubble():
     adapter = _make_adapter()
     spy = _spy_send_local_file(adapter)
 
-    asyncio.run(adapter.send_voice(chat_id="!room:example.org", audio_path="/tmp/tts.ogg"))
+    asyncio.run(
+        adapter.send_voice(chat_id="!room:example.org", audio_path="/tmp/tts.ogg")
+    )
 
     _args, kwargs = spy.call_args
     assert kwargs["is_voice"] is True
@@ -76,10 +91,15 @@ def test_legacy_caller_without_flag_keeps_voice_bubble():
 def test_voice_bubble_transcodes_non_ogg():
     adapter = _make_adapter()
     spy = _spy_send_local_file(adapter)
-    with patch("plugins.platforms.matrix.adapter.transcode_to_ogg_opus",
-               MagicMock(return_value="/tmp/clip_converted.ogg")):
-        asyncio.run(adapter.send_voice(
-            chat_id="!room:example.org", audio_path="/tmp/clip.mp3", is_voice=True))
+    with patch(
+        "plugins.platforms.matrix.adapter.transcode_to_ogg_opus",
+        MagicMock(return_value="/tmp/clip_converted.ogg"),
+    ):
+        asyncio.run(
+            adapter.send_voice(
+                chat_id="!room:example.org", audio_path="/tmp/clip.mp3", is_voice=True
+            )
+        )
 
     args, kwargs = spy.call_args
     assert args[1] == "/tmp/clip_converted.ogg"

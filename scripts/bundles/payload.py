@@ -1,4 +1,5 @@
 """Distribution snapshots, PM facts and portable link sealing."""
+
 from __future__ import annotations
 
 import argparse
@@ -25,22 +26,46 @@ if str(ROOT) not in sys.path:
 # not packaged, not compiled, not baked. Frontend product staging
 # (scripts/bundles/stage.py) needs its full tree and passes no exclusions.
 INERT_SNAPSHOT_DIRS = (
-    "tests", "tests-js", "website", "evals", ".github", "nix", "docker",
-    "apps", "ui-tui", "web", "scripts",
+    "tests",
+    "tests-js",
+    "website",
+    "evals",
+    ".github",
+    "nix",
+    "docker",
+    "apps",
+    "ui-tui",
+    "web",
+    "scripts",
 )
 
 
-def snapshot(repo: Path, ref: str, destination: Path, exclude: tuple[str, ...] = ()) -> None:
+def snapshot(
+    repo: Path, ref: str, destination: Path, exclude: tuple[str, ...] = ()
+) -> None:
     """Archive a resolved git revision without carrying checkout metadata."""
     repo, destination = repo.resolve(), destination.resolve()
     if repo == destination or repo.is_relative_to(destination):
-        raise ValueError("the snapshot destination must not contain the source checkout")
+        raise ValueError(
+            "the snapshot destination must not contain the source checkout"
+        )
     with tempfile.TemporaryDirectory(prefix="clawk-archive-") as temp:
         archive = Path(temp) / "source.tar"
         pathspecs = [f":(exclude){name}" for name in exclude]
         subprocess.run(
-            ["git", "archive", "--format=tar", "--output", str(archive), ref, "--", *pathspecs],
-            cwd=repo, check=True)
+            [
+                "git",
+                "archive",
+                "--format=tar",
+                "--output",
+                str(archive),
+                ref,
+                "--",
+                *pathspecs,
+            ],
+            cwd=repo,
+            check=True,
+        )
         if destination.exists():
             shutil.rmtree(destination)
         destination.mkdir(parents=True)
@@ -67,7 +92,9 @@ def _discard_build_locks(root: Path) -> None:
         _payload_file(root, f"{name}/.lock").unlink(missing_ok=True)
 
 
-def record_tools(root: Path, lock_path: Path, target: str, entries: dict[str, str]) -> None:
+def record_tools(
+    root: Path, lock_path: Path, target: str, entries: dict[str, str]
+) -> None:
     from pm.lock import Facts, Lockfile
     from pm.registry import get_package
     from pm.store import tree_digest
@@ -79,8 +106,16 @@ def record_tools(root: Path, lock_path: Path, target: str, entries: dict[str, st
         version, artifacts = lock.version(name), lock.artifacts(name, target)
         if not entry.is_dir() or not version or not artifacts:
             raise ValueError(f"incomplete payload tool: {name}")
-        facts.record(name, version, entry_name, get_package(name).env(entry, target), store,
-                     target=target, artifacts=[a["sha256"] for a in artifacts], digest=tree_digest(entry))
+        facts.record(
+            name,
+            version,
+            entry_name,
+            get_package(name).env(entry, target),
+            store,
+            target=target,
+            artifacts=[a["sha256"] for a in artifacts],
+            digest=tree_digest(entry),
+        )
     if entries:
         _share_metadata(facts.path)
 
@@ -106,7 +141,9 @@ def seal_pm_runtime(root: Path, python: Path) -> dict:
     if not python.is_relative_to(root) or not python.is_file():
         raise ValueError(f"PM interpreter must belong to the payload: {python}")
     runtime = root / "pm-runtime"
-    sites = list(runtime.glob("lib/python*/site-packages")) + list(runtime.glob("Lib/site-packages"))
+    sites = list(runtime.glob("lib/python*/site-packages")) + list(
+        runtime.glob("Lib/site-packages")
+    )
     if len(sites) != 1:
         raise ValueError(f"PM dependency directory missing or ambiguous: {runtime}")
     marker = {
@@ -116,8 +153,19 @@ def seal_pm_runtime(root: Path, python: Path) -> dict:
     cfg = _payload_file(root, "pm-runtime/pyvenv.cfg")
     marker_path = _payload_file(root, "pm-runtime/pm-runtime.json")
     lines = cfg.read_text(encoding="utf-8-sig").splitlines()
-    lines = [line for line in lines if line.partition("=")[0].strip() not in
-             {"home", "executable", "base-executable", "base-prefix", "base-exec-prefix", "command"}]
+    lines = [
+        line
+        for line in lines
+        if line.partition("=")[0].strip()
+        not in {
+            "home",
+            "executable",
+            "base-executable",
+            "base-prefix",
+            "base-exec-prefix",
+            "command",
+        }
+    ]
     lines.insert(0, f"home = {os.path.relpath(python.parent, runtime)}")
     cfg.write_text("\n".join(lines) + "\n", encoding="utf-8")
     # A sealed runtime is not activated, and copied Windows redirectors cannot
@@ -138,7 +186,10 @@ def relativize_links(root: Path) -> int:
     """Only dependency-venv links move; framework links belong to codesign."""
     root = root.resolve()
     _discard_build_locks(root)
-    return sum(_relativize_bin_links(root, root / name / "bin") for name in ("venv", "pm-runtime"))
+    return sum(
+        _relativize_bin_links(root, root / name / "bin")
+        for name in ("venv", "pm-runtime")
+    )
 
 
 def _relativize_bin_links(root: Path, directory: Path) -> int:
@@ -159,7 +210,7 @@ def _relativize_bin_links(root: Path, directory: Path) -> int:
             parts = Path(target).parts
             if "tools" not in parts:
                 raise ValueError(f"link escapes payload: {link} -> {target}")
-            resolved = root.joinpath(*parts[parts.index("tools"):]).resolve()
+            resolved = root.joinpath(*parts[parts.index("tools") :]).resolve()
         if not resolved.is_relative_to(root) or not resolved.exists():
             raise ValueError(f"missing payload link target: {link} -> {target}")
         relative = os.path.relpath(resolved, directory)
@@ -168,7 +219,9 @@ def _relativize_bin_links(root: Path, directory: Path) -> int:
             link.symlink_to(relative)
             count += 1
     for link in directory.iterdir():
-        if link.is_symlink() and (not link.resolve().is_relative_to(root) or not link.exists()):
+        if link.is_symlink() and (
+            not link.resolve().is_relative_to(root) or not link.exists()
+        ):
             raise ValueError(f"invalid relative payload link: {link}")
     return count
 

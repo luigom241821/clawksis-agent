@@ -24,7 +24,12 @@ def _reset_swr_state():
 
 
 def _row(models, age_seconds, **extra):
-    return {"fp": "fp", "at": time.time() - age_seconds, "models": list(models), **extra}
+    return {
+        "fp": "fp",
+        "at": time.time() - age_seconds,
+        "models": list(models),
+        **extra,
+    }
 
 
 LIVE = ["claude-opus-5", "kimi-k3", "gpt-5.6-sol"]
@@ -35,10 +40,14 @@ def test_fallback_does_not_overwrite_the_same_credentials_live_row():
     # 2h-old live row (past the 1h TTL, inside the SWR window) + a live fetch that degrades to the
     # curated list: the account's real catalog must survive, in the cache AND in the return value.
     cache = {"copilot": _row(LIVE, age_seconds=7200)}
-    with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-         patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-         patch.object(mod, "_save_provider_models_cache") as save, \
-         patch.object(mod, "provider_model_ids", return_value=mod.CuratedFallbackModels(STATIC)):
+    with (
+        patch.object(mod, "_load_provider_models_cache", return_value=cache),
+        patch.object(mod, "_credential_fingerprint", return_value="fp"),
+        patch.object(mod, "_save_provider_models_cache") as save,
+        patch.object(
+            mod, "provider_model_ids", return_value=mod.CuratedFallbackModels(STATIC)
+        ),
+    ):
         out = mod.cached_provider_model_ids("copilot", force_refresh=True)
 
     assert out == LIVE
@@ -50,21 +59,27 @@ def test_fallback_row_is_recorded_as_fallback_and_never_served_stale():
     # Cold cache: the curated list is served (the picker must not be empty) but recorded as a
     # fallback row, which the SWR stale window must not resurrect — a stale fallback re-probes.
     cache: dict = {}
-    with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-         patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-         patch.object(mod, "_save_provider_models_cache"), \
-         patch.object(mod, "provider_model_ids", return_value=mod.CuratedFallbackModels(STATIC)):
+    with (
+        patch.object(mod, "_load_provider_models_cache", return_value=cache),
+        patch.object(mod, "_credential_fingerprint", return_value="fp"),
+        patch.object(mod, "_save_provider_models_cache"),
+        patch.object(
+            mod, "provider_model_ids", return_value=mod.CuratedFallbackModels(STATIC)
+        ),
+    ):
         assert mod.cached_provider_model_ids("copilot") == STATIC
     assert cache["copilot"]["fallback"] is True
 
     # Same row, now past the fallback TTL: the live fetch runs instead of the stale-serve path,
     # and a real catalog replaces the fallback row.
     cache["copilot"]["at"] = time.time() - mod._PROVIDER_MODELS_FALLBACK_TTL - 1
-    with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-         patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-         patch.object(mod, "_save_provider_models_cache"), \
-         patch.object(mod, "_spawn_swr_refresh") as spawn, \
-         patch.object(mod, "provider_model_ids", return_value=list(LIVE)) as live:
+    with (
+        patch.object(mod, "_load_provider_models_cache", return_value=cache),
+        patch.object(mod, "_credential_fingerprint", return_value="fp"),
+        patch.object(mod, "_save_provider_models_cache"),
+        patch.object(mod, "_spawn_swr_refresh") as spawn,
+        patch.object(mod, "provider_model_ids", return_value=list(LIVE)) as live,
+    ):
         assert mod.cached_provider_model_ids("copilot") == LIVE
     live.assert_called_once()
     spawn.assert_not_called()
@@ -73,9 +88,11 @@ def test_fallback_row_is_recorded_as_fallback_and_never_served_stale():
 
 
 def test_copilot_catalog_marks_the_static_list_as_fallback_on_a_failed_live_fetch():
-    with patch.object(mod, "_copilot_acp_session_models", return_value=None), \
-         patch.object(mod, "_resolve_copilot_catalog_api_key", return_value="tok"), \
-         patch.object(mod, "_fetch_github_models", side_effect=OSError("503")):
+    with (
+        patch.object(mod, "_copilot_acp_session_models", return_value=None),
+        patch.object(mod, "_resolve_copilot_catalog_api_key", return_value="tok"),
+        patch.object(mod, "_fetch_github_models", side_effect=OSError("503")),
+    ):
         for slug in ("copilot", "copilot-acp"):
             rows = mod.provider_model_ids(slug)
             assert isinstance(rows, mod.CuratedFallbackModels), slug
@@ -86,18 +103,26 @@ def test_codex_cold_fallback_retries_after_short_ttl(monkeypatch, tmp_path):
     from clawk_cli import auth, codex_models
 
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
-    monkeypatch.setattr(auth, "resolve_codex_runtime_credentials", lambda **_: {"api_key": "test-token"})
+    monkeypatch.setattr(
+        auth, "resolve_codex_runtime_credentials", lambda **_: {"api_key": "test-token"}
+    )
     monkeypatch.setattr(auth, "_codex_access_token_is_expiring", lambda *_: False)
     responses = iter([[], ["gpt-6-astra"]])
-    monkeypatch.setattr(codex_models, "_fetch_models_from_api", lambda *_args, **_kw: next(responses))
+    monkeypatch.setattr(
+        codex_models, "_fetch_models_from_api", lambda *_args, **_kw: next(responses)
+    )
     cache = {}
-    with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-         patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-         patch.object(mod, "_save_provider_models_cache"), \
-         patch.object(mod, "_spawn_swr_refresh") as spawn:
+    with (
+        patch.object(mod, "_load_provider_models_cache", return_value=cache),
+        patch.object(mod, "_credential_fingerprint", return_value="fp"),
+        patch.object(mod, "_save_provider_models_cache"),
+        patch.object(mod, "_spawn_swr_refresh") as spawn,
+    ):
         mod.cached_provider_model_ids("openai-codex")
         assert cache["openai-codex"]["fallback"] is True
-        cache["openai-codex"]["at"] = time.time() - mod._PROVIDER_MODELS_FALLBACK_TTL - 1
+        cache["openai-codex"]["at"] = (
+            time.time() - mod._PROVIDER_MODELS_FALLBACK_TTL - 1
+        )
         assert "gpt-6-astra" in mod.cached_provider_model_ids("openai-codex")
         assert "fallback" not in cache["openai-codex"]
     spawn.assert_not_called()
@@ -107,8 +132,10 @@ def test_anthropic_catalog_marks_the_curated_list_as_fallback_on_a_failed_live_f
     # _anthropic_catalog used to `return curated` (a plain list) on a failed live fetch, so a
     # transient outage on a proxy base_url cached the generic curated list over the account's/
     # proxy's real catalog for a full hour (same class of bug as #107391, just missed by 3fb8b3f6).
-    with patch.object(mod, "_get_model_config_dict", return_value={}), \
-         patch.object(mod, "_fetch_anthropic_models", return_value=None):
+    with (
+        patch.object(mod, "_get_model_config_dict", return_value={}),
+        patch.object(mod, "_fetch_anthropic_models", return_value=None),
+    ):
         rows = mod.provider_model_ids("anthropic")
     assert isinstance(rows, mod.CuratedFallbackModels)
     assert rows == list(mod._PROVIDER_MODELS["anthropic"])

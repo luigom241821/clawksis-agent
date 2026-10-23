@@ -14,13 +14,17 @@ from tools.registry import registry
 
 def read_window_below_tool(callback: Optional[Callable] = None) -> str:
     """Return the window underneath the Clawksis window as a JSON string."""
-    return read_pane(callback, (), (
-        "read_window_below is only available in the Clawksis desktop app.",
-        "",
-        "Failed to read the window below: ",
-        "Could not determine the window underneath (the desktop app did "
-        "not answer, or window enumeration is unavailable on this system).",
-    ))
+    return read_pane(
+        callback,
+        (),
+        (
+            "read_window_below is only available in the Clawksis desktop app.",
+            "",
+            "Failed to read the window below: ",
+            "Could not determine the window underneath (the desktop app did "
+            "not answer, or window enumeration is unavailable on this system).",
+        ),
+    )
 
 
 READ_WINDOW_BELOW_SCHEMA = {
@@ -33,9 +37,7 @@ READ_WINDOW_BELOW_SCHEMA = {
         "{error, platform} says what would fix it — relay that instead of "
         "retrying. Metadata only; never captures pixels."
     ),
-    "parameters": {
-        "type": "object", "properties": {}
-    },
+    "parameters": {"type": "object", "properties": {}},
 }
 
 

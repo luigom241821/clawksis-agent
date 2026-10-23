@@ -20,7 +20,10 @@ class TestSwitchModelReasoningOverride:
         agent.base_url = "https://api.openai.com/v1"
         agent.api_mode = "openai"
         agent.api_key = "test-key"
-        agent._client_kwargs = {"api_key": "test-key", "base_url": "https://api.openai.com/v1"}
+        agent._client_kwargs = {
+            "api_key": "test-key",
+            "base_url": "https://api.openai.com/v1",
+        }
         agent._use_prompt_caching = False
         agent._use_native_cache_layout = False
         agent.reasoning_config = {"enabled": True, "effort": "medium"}
@@ -35,15 +38,10 @@ class TestSwitchModelReasoningOverride:
         agent._anthropic_api_key = ""
         agent._anthropic_base_url = None
         agent._is_anthropic_oauth = False
-        agent._anthropic_prompt_cache_policy = MagicMock(
-            return_value=(False, False)
-        )
+        agent._anthropic_prompt_cache_policy = MagicMock(return_value=(False, False))
         agent._ensure_lmstudio_runtime_loaded = MagicMock()
         agent._create_openai_client = MagicMock(return_value=MagicMock())
         return agent
-
-
-
 
     def test_restore_primary_runtime_restores_reasoning(self):
         """restore_primary_runtime should restore reasoning_config from snapshot."""
@@ -91,4 +89,3 @@ class TestSwitchModelReasoningOverride:
         result = restore_primary_runtime(agent)
         assert result is True
         assert agent.reasoning_config == {"enabled": True, "effort": "xhigh"}
-

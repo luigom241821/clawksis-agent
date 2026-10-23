@@ -19,20 +19,25 @@ class _Resp:
 
 
 class TestRelayFrontedDeliveryPlatforms:
-
     def test_detects_fronted_delivery_platform(self):
         job = {"id": "j1", "deliver": "discord"}
-        with patch("gateway.relay.relay_fronted_platforms", return_value={"discord"}), patch(
-            "cron.scheduler._resolve_delivery_targets",
-            return_value=[{"platform": "discord", "chat_id": "123"}],
+        with (
+            patch("gateway.relay.relay_fronted_platforms", return_value={"discord"}),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[{"platform": "discord", "chat_id": "123"}],
+            ),
         ):
             assert cronjob_tools._relay_fronted_delivery_platforms(job) == {"discord"}
 
     def test_ignores_non_fronted_platform(self):
         job = {"id": "j1", "deliver": "discord"}
-        with patch("gateway.relay.relay_fronted_platforms", return_value={"telegram"}), patch(
-            "cron.scheduler._resolve_delivery_targets",
-            return_value=[{"platform": "discord", "chat_id": "123"}],
+        with (
+            patch("gateway.relay.relay_fronted_platforms", return_value={"telegram"}),
+            patch(
+                "cron.scheduler._resolve_delivery_targets",
+                return_value=[{"platform": "discord", "chat_id": "123"}],
+            ),
         ):
             assert cronjob_tools._relay_fronted_delivery_platforms(job) == set()
 
@@ -45,25 +50,40 @@ class TestForwardRelayFrontedRun:
             assert cronjob_tools._forward_relay_fronted_run({"id": "j1"}) is None
 
     def test_forwards_on_success(self):
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", return_value=_Resp(200)):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", return_value=_Resp(200)),
+        ):
             out = json.loads(cronjob_tools._forward_relay_fronted_run({"id": "j1"}))
         assert out["success"] is True
         assert out["forwarded_to_gateway"] is True
 
     def test_errors_when_gateway_unreachable(self):
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", side_effect=Exception("down")):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", side_effect=Exception("down")),
+        ):
             out = json.loads(cronjob_tools._forward_relay_fronted_run({"id": "j1"}))
         assert out["success"] is False
         assert "relay-fronted" in out["error"]
 
     def test_errors_on_gateway_4xx(self):
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", return_value=_Resp(401)):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", return_value=_Resp(401)),
+        ):
             out = json.loads(cronjob_tools._forward_relay_fronted_run({"id": "j1"}))
         assert out["success"] is False
         assert "relay-fronted" in out["error"]
@@ -76,10 +96,14 @@ class TestForwardRelayFrontedRun:
             sent["headers"] = headers
             return _Resp(200)
 
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", side_effect=fake_post), patch(
-            "agent.secret_scope.get_secret", return_value="secret-key-16chars"
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", side_effect=fake_post),
+            patch("agent.secret_scope.get_secret", return_value="secret-key-16chars"),
         ):
             cronjob_tools._forward_relay_fronted_run({"id": "abc123"})
         assert sent["url"].endswith("/api/jobs/abc123/run")
@@ -95,9 +119,14 @@ class TestForwardRelayFrontedRun:
             sent["url"] = url
             return _Resp(200)
 
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", side_effect=fake_post):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", side_effect=fake_post),
+        ):
             cronjob_tools._forward_relay_fronted_run({"id": "j1"})
         assert sent["url"].startswith("http://10.9.8.7:")
 
@@ -110,9 +139,14 @@ class TestForwardRelayFrontedRun:
             sent["url"] = url
             return _Resp(200)
 
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", side_effect=fake_post):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", side_effect=fake_post),
+        ):
             cronjob_tools._forward_relay_fronted_run({"id": "j1"})
         assert sent["url"].startswith("http://127.0.0.1:")
 
@@ -124,14 +158,18 @@ class TestForwardRelayFrontedRun:
             sent["json"] = json
             return _Resp(200)
 
-        with patch.object(
-            cronjob_tools, "_relay_fronted_delivery_platforms", return_value={"discord"}
-        ), patch("httpx.post", side_effect=fake_post):
+        with (
+            patch.object(
+                cronjob_tools,
+                "_relay_fronted_delivery_platforms",
+                return_value={"discord"},
+            ),
+            patch("httpx.post", side_effect=fake_post),
+        ):
             cronjob_tools._forward_relay_fronted_run(
                 {"id": "j1"}, extra_prompt="focus on EU numbers"
             )
         assert sent["json"] == {"prompt": "focus on EU numbers"}
-
 
 
 class TestManualRunPromptConsumption:
@@ -152,8 +190,13 @@ class TestManualRunPromptConsumption:
             "manual_run_at": "2026-08-28T00:00:00+00:00",
             "manual_run_prompt": "focus on EU numbers",
         }
-        with patch.object(scheduler, "_run_one_job_body", side_effect=fake_body), patch.object(
-            scheduler, "_run_with_fire_claim_heartbeat", side_effect=lambda j, fn: fn(None)
+        with (
+            patch.object(scheduler, "_run_one_job_body", side_effect=fake_body),
+            patch.object(
+                scheduler,
+                "_run_with_fire_claim_heartbeat",
+                side_effect=lambda j, fn: fn(None),
+            ),
         ):
             assert scheduler.run_one_job(job) is True
         assert captured["extra_prompt"] == "focus on EU numbers"
@@ -172,8 +215,13 @@ class TestManualRunPromptConsumption:
             "manual_run_at": "2026-08-28T00:00:00+00:00",
             "manual_run_prompt": "stale stamp",
         }
-        with patch.object(scheduler, "_run_one_job_body", side_effect=fake_body), patch.object(
-            scheduler, "_run_with_fire_claim_heartbeat", side_effect=lambda j, fn: fn(None)
+        with (
+            patch.object(scheduler, "_run_one_job_body", side_effect=fake_body),
+            patch.object(
+                scheduler,
+                "_run_with_fire_claim_heartbeat",
+                side_effect=lambda j, fn: fn(None),
+            ),
         ):
             scheduler.run_one_job(job, extra_prompt="direct context")
         assert captured["extra_prompt"] == "direct context"
@@ -189,8 +237,13 @@ class TestManualRunPromptConsumption:
             return True
 
         job = {"id": "j1", "manual_run_prompt": "orphaned"}
-        with patch.object(scheduler, "_run_one_job_body", side_effect=fake_body), patch.object(
-            scheduler, "_run_with_fire_claim_heartbeat", side_effect=lambda j, fn: fn(None)
+        with (
+            patch.object(scheduler, "_run_one_job_body", side_effect=fake_body),
+            patch.object(
+                scheduler,
+                "_run_with_fire_claim_heartbeat",
+                side_effect=lambda j, fn: fn(None),
+            ),
         ):
             scheduler.run_one_job(job)
         assert captured["extra_prompt"] is None

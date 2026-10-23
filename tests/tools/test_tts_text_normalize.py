@@ -37,7 +37,10 @@ def test_prepare_spoken_text_expands_celsius_and_weather_units():
 
 def test_prepare_spoken_text_polish_edge_cases():
     # Heading folds into the next sentence as a lead-in, not a bare label.
-    assert prepare_spoken_text("## Weather\nIt will be sunny") == "Weather, It will be sunny."
+    assert (
+        prepare_spoken_text("## Weather\nIt will be sunny")
+        == "Weather, It will be sunny."
+    )
     # Bare degree unit (no leading number) still expands.
     assert "degrees Celsius" in prepare_spoken_text("measured in °C")
     # Trailing comma is not swallowed into the amount.

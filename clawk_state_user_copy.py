@@ -9,15 +9,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from clawk_state_errors import STORAGE_RECOVERY_DOCS_URL, classify_persistence_error, is_disk_full_error
+from clawk_state_errors import (
+    STORAGE_RECOVERY_DOCS_URL,
+    classify_persistence_error,
+    is_disk_full_error,
+)
 
 
 @dataclass(frozen=True)
 class StorageFailure:
-    cause: str      # classify_persistence_error bucket
-    code: str       # machine-readable, stable: storage_locked | storage_readonly | storage_corrupt | disk_full | ...
-    gloss: str      # what happened, one clause, lowercase start
-    action: str     # what to do, one sentence naming the exact command
+    cause: str  # classify_persistence_error bucket
+    code: str  # machine-readable, stable: storage_locked | storage_readonly | storage_corrupt | disk_full | ...
+    gloss: str  # what happened, one clause, lowercase start
+    action: str  # what to do, one sentence naming the exact command
 
 
 _DOCTOR = "Run `clawk {profile_arg}doctor --fix` to diagnose and repair."
@@ -43,7 +47,8 @@ _STORAGE_FAILURES: dict[str, tuple[str, str, str]] = {
     "corrupt": (
         "storage_corrupt",
         "the session database file is damaged",
-        _DOCTOR + " Recovery: `clawk {profile_arg}sessions recover --source <state.db> --inspect-only`.",
+        _DOCTOR
+        + " Recovery: `clawk {profile_arg}sessions recover --source <state.db> --inspect-only`.",
     ),
     "session_row_missing": (
         "storage_session_missing",
@@ -103,7 +108,10 @@ def describe_storage_failure(exc_or_str) -> StorageFailure:
     from clawk_constants import profile_cli_selector
 
     return StorageFailure(
-        cause=cause, code=code, gloss=gloss, action=action.replace("{profile_arg}", profile_cli_selector())
+        cause=cause,
+        code=code,
+        gloss=gloss,
+        action=action.replace("{profile_arg}", profile_cli_selector()),
     )
 
 

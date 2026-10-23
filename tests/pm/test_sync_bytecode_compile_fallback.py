@@ -31,7 +31,9 @@ def _env(tmp_path: Path, output=None) -> PythonEnvironment:
     )
 
 
-def test_streamed_sync_retries_without_bytecode_compile_and_reports_no_failure(tmp_path, monkeypatch):
+def test_streamed_sync_retries_without_bytecode_compile_and_reports_no_failure(
+    tmp_path, monkeypatch
+):
     """Repair streams uv through LiveTail, and verbose output after the compile error can
     evict it from the 2000-character tail. The marker must survive, the retry must drop only
     --compile-bytecode, and the recovered sync must not paint a failure banner."""
@@ -67,8 +69,12 @@ def test_sync_does_not_retry_an_unrelated_uv_failure(tmp_path, monkeypatch):
 
     def fake_run(self, args, *, cwd, timeout):
         calls.append(list(args))
-        return subprocess.CompletedProcess(args, 1, stdout="",
-                                           stderr="error: No solution found for the requested dependencies")
+        return subprocess.CompletedProcess(
+            args,
+            1,
+            stdout="",
+            stderr="error: No solution found for the requested dependencies",
+        )
 
     monkeypatch.setattr(PythonEnvironment, "_run", fake_run)
     with pytest.raises(InstallError):

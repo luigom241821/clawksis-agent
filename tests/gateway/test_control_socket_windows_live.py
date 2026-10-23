@@ -65,6 +65,7 @@ def _argv_visible(pid: int, marker: str) -> bool:
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
 
+
 _CHILD_CODE = r"""
 import asyncio, os, sys
 sys.path.insert(0, sys.argv[1])
@@ -130,7 +131,13 @@ def test_named_pipe_identify_status_and_fleet_consumer(live_server, monkeypatch)
     assert ident["pid"] == server_pid
     assert ident["protocol"] == 1
     assert ident["kind"] == "clawk-gateway"
-    assert ident["supervisor"] in {"systemd", "launchd", "desktop", "external", "manual"}
+    assert ident["supervisor"] in {
+        "systemd",
+        "launchd",
+        "desktop",
+        "external",
+        "manual",
+    }
 
     status = query_gateway_control(home, "status", timeout=5.0)
     assert status is not None
@@ -185,8 +192,10 @@ def test_pipe_gone_after_kill_falls_back(live_server, monkeypatch):
         (home / "gateway_state.json").write_text(
             json.dumps(
                 {
-                    "pid": pid, "gateway_state": "running",
-                    "code_sha": "OLD", "kind": "clawk-gateway",
+                    "pid": pid,
+                    "gateway_state": "running",
+                    "code_sha": "OLD",
+                    "kind": "clawk-gateway",
                 }
             ),
             encoding="utf-8",
@@ -202,7 +211,9 @@ def test_pipe_gone_after_kill_falls_back(live_server, monkeypatch):
         stderr=subprocess.DEVNULL,
     )
     try:
-        assert _wait_until(lambda: _argv_visible(standin.pid, "gateway")), "stand-in argv never visible"
+        assert _wait_until(lambda: _argv_visible(standin.pid, "gateway")), (
+            "stand-in argv never visible"
+        )
         _write_state(standin.pid)
         fleet = ur.collect_fleet_versions()
         assert len(fleet) == 1, fleet

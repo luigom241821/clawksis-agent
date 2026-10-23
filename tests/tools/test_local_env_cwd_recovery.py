@@ -7,6 +7,7 @@ subsequent terminal/file-tool call until the gateway restarts.
 
 Regression coverage for https://github.com/samuelgradientai-sys/clawksis-agent/issues/17558.
 """
+
 import pytest
 
 import os
@@ -26,7 +27,6 @@ class TestResolveSafeCwd:
     def test_returns_cwd_when_directory_exists(self, tmp_path):
         path = str(tmp_path)
         assert _resolve_safe_cwd(path) == path
-
 
     @pytest.mark.platforms("linux")
     def test_returns_root_when_only_root_exists(self, monkeypatch):
@@ -50,6 +50,7 @@ def _make_fake_popen(captured: dict, fds: list):
     the first iteration.  Every fd handed out is appended to ``fds`` so the
     caller can clean up after the test.
     """
+
     def fake_popen(cmd, **kwargs):
         captured["cwd"] = kwargs.get("cwd")
         captured["env"] = kwargs.get("env", {})
@@ -63,6 +64,7 @@ def _make_fake_popen(captured: dict, fds: list):
         proc.stdout = stdout
         proc.stdin = MagicMock()
         return proc
+
     return fake_popen
 
 
@@ -84,7 +86,9 @@ class TestRunBashCwdRecovery:
         wedged = tmp_path / "wedge-repro"
         wedged.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(wedged), timeout=10)
 
         # The previous tool call deleted the working directory.
@@ -94,9 +98,11 @@ class TestRunBashCwdRecovery:
         captured = {}
         fds: list = []
         try:
-            with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
-                 patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)), \
-                 caplog.at_level("WARNING", logger="tools.environments.local"):
+            with (
+                patch("tools.environments.local._find_bash", return_value="/bin/bash"),
+                patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)),
+                caplog.at_level("WARNING", logger="tools.environments.local"),
+            ):
                 env.execute("echo hello")
         finally:
             _close_fds(fds)
@@ -112,15 +118,19 @@ class TestRunBashCwdRecovery:
         assert any("missing on disk" in rec.message for rec in caplog.records)
 
     def test_no_warning_when_cwd_still_exists(self, tmp_path, caplog):
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(tmp_path), timeout=10)
 
         captured = {}
         fds: list = []
         try:
-            with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
-                 patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)), \
-                 caplog.at_level("WARNING", logger="tools.environments.local"):
+            with (
+                patch("tools.environments.local._find_bash", return_value="/bin/bash"),
+                patch("subprocess.Popen", side_effect=_make_fake_popen(captured, fds)),
+                caplog.at_level("WARNING", logger="tools.environments.local"),
+            ):
                 env.execute("echo hello")
         finally:
             _close_fds(fds)
@@ -137,7 +147,9 @@ class TestUpdateCwdRejectsMissingPaths:
         original = tmp_path / "starting"
         original.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(original), timeout=10)
 
         # Simulate the stale-marker case: the prior command emitted a cwd
@@ -145,9 +157,7 @@ class TestUpdateCwdRejectsMissingPaths:
         deleted = tmp_path / "wedge-repro"
         marker = env._cwd_marker
 
-        env._update_cwd(
-            {"output": f"x\n{marker}{deleted}{marker}\n", "returncode": 0}
-        )
+        env._update_cwd({"output": f"x\n{marker}{deleted}{marker}\n", "returncode": 0})
 
         assert env.cwd == str(original)
 
@@ -157,12 +167,12 @@ class TestUpdateCwdRejectsMissingPaths:
         new_dir = tmp_path / "next"
         new_dir.mkdir()
 
-        with patch.object(LocalEnvironment, "init_session", autospec=True, return_value=None):
+        with patch.object(
+            LocalEnvironment, "init_session", autospec=True, return_value=None
+        ):
             env = LocalEnvironment(cwd=str(original), timeout=10)
         marker = env._cwd_marker
 
-        env._update_cwd(
-            {"output": f"x\n{marker}{new_dir}{marker}\n", "returncode": 0}
-        )
+        env._update_cwd({"output": f"x\n{marker}{new_dir}{marker}\n", "returncode": 0})
 
         assert env.cwd == str(new_dir)

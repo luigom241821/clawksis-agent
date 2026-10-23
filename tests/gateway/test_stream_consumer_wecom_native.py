@@ -58,23 +58,27 @@ def _make_native_streaming_adapter(
 
     def _supports(chat_type=None, metadata=None):
         return bool(supports_native)
+
     adapter.supports_native_streaming = _supports
 
     async def _send_stream_frame(
         text, *, finalize=False, chat_id=None, reply_to=None, **kwargs
     ):
-        adapter.frames.append({
-            "text": text,
-            "finalize": finalize,
-            "chat_id": chat_id,
-            "reply_to": reply_to,
-        })
+        adapter.frames.append(
+            {
+                "text": text,
+                "finalize": finalize,
+                "chat_id": chat_id,
+                "reply_to": reply_to,
+            }
+        )
         if finalize:
             return finalize_succeeds
         # First frame is the seed (empty content).
         if text == "" and len(adapter.frames) == 1:
             return seed_succeeds
         return frames_succeed
+
     adapter.send_stream_frame = _send_stream_frame
 
     # send / edit_message: count fallback usage so we can assert native
@@ -122,7 +126,6 @@ class TestNativeStreamingResolver:
         assert consumer._resolve_native_streaming() is False
 
 
-
 # === LIFECYCLE ===
 
 
@@ -134,8 +137,10 @@ class TestNativeStreamingLifecycle:
         """The first thing the consumer does is a seed frame for typing UI."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -155,8 +160,10 @@ class TestNativeStreamingLifecycle:
         """No mid-stream call to send() / edit_message() in native mode."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -182,8 +189,10 @@ class TestNativeStreamingLifecycle:
     async def test_consumer_marks_final_response_sent(self):
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -208,8 +217,10 @@ class TestNativeStreamingThrottling:
         """No throttling — each distinct cumulative text produces a frame."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=1,  # aggressive flush
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=1,  # aggressive flush
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -240,7 +251,6 @@ class TestNativeStreamingThrottling:
         assert finalize_frames[0]["text"] == "abcdefghij"
 
 
-
 # === FALLBACK ===
 
 
@@ -253,8 +263,10 @@ class TestNativeStreamingFallback:
         """If even the seed frame fails, native is off for the run."""
         adapter = _make_native_streaming_adapter(seed_succeeds=False)
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -278,8 +290,11 @@ class TestNativeStreamingFallback:
         )
 
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            transport="auto",
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -302,8 +317,10 @@ class TestNativeStreamingSegmentBreak:
         """Tool boundary keeps pre+post text in one stream, single finalize."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -321,23 +338,28 @@ class TestNativeStreamingSegmentBreak:
 
         # Should only have ONE finalize frame (the final one)
         finalize_frames = [f for f in adapter.frames if f.get("finalize")]
-        assert len(finalize_frames) == 1, \
+        assert len(finalize_frames) == 1, (
             f"Should have exactly 1 finalize, got {len(finalize_frames)}"
+        )
 
         # The finalize frame must contain BOTH pre-tool and post-tool text
         final_text = finalize_frames[0]["text"]
-        assert "Pre-tool content" in final_text, \
+        assert "Pre-tool content" in final_text, (
             "Final frame must include pre-tool text (not lost by reset)"
-        assert "Post-tool result" in final_text, \
+        )
+        assert "Post-tool result" in final_text, (
             "Final frame must include post-tool text"
+        )
 
     @pytest.mark.asyncio
     async def test_segment_break_no_extra_finalize(self):
         """Segment break should NOT produce a finalize frame."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="",
-            edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -352,15 +374,19 @@ class TestNativeStreamingSegmentBreak:
 
         # Count finalize frames — should be exactly 1 (only at finish)
         finalize_count = sum(1 for f in adapter.frames if f.get("finalize"))
-        assert finalize_count == 1, \
+        assert finalize_count == 1, (
             f"Expected 1 finalize (only at end), got {finalize_count}"
+        )
 
         # Non-finalize frames should show cumulative growth
-        content_frames = [f for f in adapter.frames if not f.get("finalize") and f["text"]]
+        content_frames = [
+            f for f in adapter.frames if not f.get("finalize") and f["text"]
+        ]
         if len(content_frames) >= 2:
             # Later frames should be longer (cumulative)
-            assert len(content_frames[-1]["text"]) >= len(content_frames[0]["text"]), \
+            assert len(content_frames[-1]["text"]) >= len(content_frames[0]["text"]), (
                 "Content frames should grow cumulatively"
+            )
 
 
 class TestClarifyReopenBoundary:
@@ -381,7 +407,10 @@ class TestClarifyReopenBoundary:
         never disabled."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -394,7 +423,9 @@ class TestClarifyReopenBoundary:
 
         # Clarify boundary with reopen=True.
         boundary = consumer.close_for_approval_prompt(
-            "💬 等待你的选择...", reason="Clarify", reopen=True,
+            "💬 等待你的选择...",
+            reason="Clarify",
+            reopen=True,
         )
         fut = boundary[0] if isinstance(boundary, tuple) else boundary
         await asyncio.wait_for(fut, timeout=1.0)
@@ -411,7 +442,9 @@ class TestClarifyReopenBoundary:
         await task
 
         finalize_frames = [f for f in adapter.frames if f.get("finalize")]
-        seed_frames = [f for f in adapter.frames if f["text"] == "" and not f.get("finalize")]
+        seed_frames = [
+            f for f in adapter.frames if f["text"] == "" and not f.get("finalize")
+        ]
 
         # Two finalizes: one at the boundary, one at got_done for the reopened stream.
         assert len(finalize_frames) == 2, (
@@ -433,7 +466,10 @@ class TestClarifyReopenBoundary:
         re-seed a fresh stream just to emit a lone '✅' bubble."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -444,7 +480,9 @@ class TestClarifyReopenBoundary:
         await self._drain(consumer, 0.05)
 
         boundary = consumer.close_for_approval_prompt(
-            "💬 等待你的选择...", reason="Clarify", reopen=True,
+            "💬 等待你的选择...",
+            reason="Clarify",
+            reopen=True,
         )
         fut = boundary[0] if isinstance(boundary, tuple) else boundary
         await asyncio.wait_for(fut, timeout=1.0)
@@ -470,7 +508,10 @@ class TestClarifyReopenBoundary:
         native and buffers post-prompt output — unchanged behaviour."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -537,7 +578,9 @@ class TestClarifyEagerReseed:
         await self._drain(consumer, 0.05)
 
         boundary = consumer.close_for_approval_prompt(
-            "💬 等待你的选择...", reason="Clarify", reopen=True,
+            "💬 等待你的选择...",
+            reason="Clarify",
+            reopen=True,
         )
         fut = boundary[0] if isinstance(boundary, tuple) else boundary
         await asyncio.wait_for(fut, timeout=1.0)
@@ -552,7 +595,10 @@ class TestClarifyEagerReseed:
         answers and request_reopen_seed() is called."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -585,7 +631,10 @@ class TestClarifyEagerReseed:
         """
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -625,16 +674,19 @@ class TestClarifyEagerReseed:
         """
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
         task = await self._to_reopen_pending(consumer, adapter)
         consumer.request_reopen_seed()
         await self._drain(consumer, 0.05)
-        assert await self._wait_until(
-            lambda: consumer._native_stream_opened
-        ), "eager seed must open the stream"
+        assert await self._wait_until(lambda: consumer._native_stream_opened), (
+            "eager seed must open the stream"
+        )
 
         frames_before = len(adapter.frames)
 
@@ -665,7 +717,10 @@ class TestClarifyEagerReseed:
         the user has not yet replied."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -715,19 +770,21 @@ class TestClarifyEagerReseed:
         adapter._typing_paused = set()
         adapter._fatal_error_message = None
         adapter.frames = []
-        adapter.supports_native_streaming = (
-            lambda chat_type=None, metadata=None: True
-        )
+        adapter.supports_native_streaming = lambda chat_type=None, metadata=None: True
 
         empty_seed_count = {"n": 0}
 
         async def _send_stream_frame(
             text, *, finalize=False, chat_id=None, reply_to=None, **kwargs
         ):
-            adapter.frames.append({
-                "text": text, "finalize": finalize,
-                "chat_id": chat_id, "reply_to": reply_to,
-            })
+            adapter.frames.append(
+                {
+                    "text": text,
+                    "finalize": finalize,
+                    "chat_id": chat_id,
+                    "reply_to": reply_to,
+                }
+            )
             if finalize:
                 return True
             if text == "":
@@ -736,6 +793,7 @@ class TestClarifyEagerReseed:
                 # fails to exercise the degrade path.
                 return empty_seed_count["n"] == 1
             return True
+
         adapter.send_stream_frame = _send_stream_frame
         adapter.send = AsyncMock(
             return_value=SimpleNamespace(success=True, message_id="fallback_msg"),
@@ -743,7 +801,10 @@ class TestClarifyEagerReseed:
         adapter.edit_message = AsyncMock(return_value=SimpleNamespace(success=True))
 
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -771,7 +832,10 @@ class TestClarifyEagerReseed:
         second bubble (it's gated on _native_stream_opened being False)."""
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -785,7 +849,9 @@ class TestClarifyEagerReseed:
         assert await self._wait_until(lambda: consumer._native_stream_opened)
 
         # Now the LLM produces post-answer content.
-        consumer.on_delta("根据你的选择，这是后续的完整回答内容，足够长以触发一次刷新。")
+        consumer.on_delta(
+            "根据你的选择，这是后续的完整回答内容，足够长以触发一次刷新。"
+        )
         await self._drain(consumer, 0.05)
         consumer.finish()
         await task
@@ -817,7 +883,10 @@ class TestClarifyEagerReseed:
         """
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -875,19 +944,21 @@ class TestClarifyEagerReseed:
         adapter._typing_paused = set()
         adapter._fatal_error_message = None
         adapter.frames = []
-        adapter.supports_native_streaming = (
-            lambda chat_type=None, metadata=None: True
-        )
+        adapter.supports_native_streaming = lambda chat_type=None, metadata=None: True
 
         empty_seed_count = {"n": 0}
 
         async def _send_stream_frame(
             text, *, finalize=False, chat_id=None, reply_to=None, **kwargs
         ):
-            adapter.frames.append({
-                "text": text, "finalize": finalize,
-                "chat_id": chat_id, "reply_to": reply_to,
-            })
+            adapter.frames.append(
+                {
+                    "text": text,
+                    "finalize": finalize,
+                    "chat_id": chat_id,
+                    "reply_to": reply_to,
+                }
+            )
             if finalize:
                 return True
             if text == "":
@@ -895,6 +966,7 @@ class TestClarifyEagerReseed:
                 # 初始 seed（run-start）成功；第二次空 seed（eager 再 seed）失败。
                 return empty_seed_count["n"] == 1
             return True
+
         adapter.send_stream_frame = _send_stream_frame
         adapter.send = AsyncMock(
             return_value=SimpleNamespace(success=True, message_id="fallback_msg"),
@@ -902,7 +974,10 @@ class TestClarifyEagerReseed:
         adapter.edit_message = AsyncMock(return_value=SimpleNamespace(success=True))
 
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -944,16 +1019,19 @@ class TestClarifyEagerReseed:
         """
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
         task = await self._to_reopen_pending(consumer, adapter)
         consumer.request_reopen_seed()
         await self._drain(consumer, 0.05)
-        assert await self._wait_until(
-            lambda: consumer._native_stream_opened
-        ), "eager seed 应已开流"
+        assert await self._wait_until(lambda: consumer._native_stream_opened), (
+            "eager seed 应已开流"
+        )
 
         frames_before = len(adapter.frames)
 
@@ -993,7 +1071,10 @@ class TestClarifyEagerReseed:
         """
         adapter = _make_native_streaming_adapter()
         cfg = StreamConsumerConfig(
-            chat_type="dm", cursor="", edit_interval=0.01, buffer_threshold=5,
+            chat_type="dm",
+            cursor="",
+            edit_interval=0.01,
+            buffer_threshold=5,
         )
         consumer = GatewayStreamConsumer(adapter, "chat-1", cfg)
 
@@ -1004,7 +1085,9 @@ class TestClarifyEagerReseed:
         assert await self._wait_until(lambda: consumer._native_stream_opened)
         assert consumer._reopen_seeded_eagerly is True
 
-        consumer.on_delta("根据你的选择，这是后续的完整回答内容，足够长以触发一次流式刷新的补充。")
+        consumer.on_delta(
+            "根据你的选择，这是后续的完整回答内容，足够长以触发一次流式刷新的补充。"
+        )
         await self._drain(consumer, 0.05)
 
         seeds_before_second_boundary = len(
@@ -1013,7 +1096,9 @@ class TestClarifyEagerReseed:
 
         # 第二轮 clarify boundary（reopen=True）。
         boundary = consumer.close_for_approval_prompt(
-            "💬 等待你的选择...", reason="Clarify", reopen=True,
+            "💬 等待你的选择...",
+            reason="Clarify",
+            reopen=True,
         )
         fut = boundary[0] if isinstance(boundary, tuple) else boundary
         await asyncio.wait_for(fut, timeout=1.0)

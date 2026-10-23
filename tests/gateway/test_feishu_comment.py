@@ -24,20 +24,22 @@ def _make_event(
     is_mentioned=True,
 ):
     """Build a minimal drive comment event SimpleNamespace."""
-    return SimpleNamespace(event={
-        "event_id": "evt_1",
-        "comment_id": comment_id,
-        "reply_id": reply_id,
-        "is_mentioned": is_mentioned,
-        "timestamp": "1713200000",
-        "notice_meta": {
-            "file_token": file_token,
-            "file_type": file_type,
-            "notice_type": notice_type,
-            "from_user_id": {"open_id": from_open_id},
-            "to_user_id": {"open_id": to_open_id},
-        },
-    })
+    return SimpleNamespace(
+        event={
+            "event_id": "evt_1",
+            "comment_id": comment_id,
+            "reply_id": reply_id,
+            "is_mentioned": is_mentioned,
+            "timestamp": "1713200000",
+            "notice_meta": {
+                "file_token": file_token,
+                "file_type": file_type,
+                "notice_type": notice_type,
+                "from_user_id": {"open_id": from_open_id},
+                "to_user_id": {"open_id": to_open_id},
+            },
+        }
+    )
 
 
 class TestParseEvent(unittest.TestCase):
@@ -84,16 +86,26 @@ class TestAccessControlIntegration(unittest.TestCase):
     def _run(self, coro):
         return asyncio.get_event_loop().run_until_complete(coro)
 
-    @patch("plugins.platforms.feishu.feishu_comment_rules.has_wiki_keys", return_value=False)
-    @patch("plugins.platforms.feishu.feishu_comment_rules.is_user_allowed", return_value=False)
+    @patch(
+        "plugins.platforms.feishu.feishu_comment_rules.has_wiki_keys",
+        return_value=False,
+    )
+    @patch(
+        "plugins.platforms.feishu.feishu_comment_rules.is_user_allowed",
+        return_value=False,
+    )
     @patch("plugins.platforms.feishu.feishu_comment_rules.resolve_rule")
     @patch("plugins.platforms.feishu.feishu_comment_rules.load_config")
-    def test_denied_user_no_side_effects(self, mock_load, mock_resolve, mock_allowed, mock_wiki_keys):
+    def test_denied_user_no_side_effects(
+        self, mock_load, mock_resolve, mock_allowed, mock_wiki_keys
+    ):
         """Denied user should not trigger typing reaction or agent."""
         from plugins.platforms.feishu.feishu_comment import handle_drive_comment_event
         from plugins.platforms.feishu.feishu_comment_rules import ResolvedCommentRule
 
-        mock_resolve.return_value = ResolvedCommentRule(True, "allowlist", frozenset(), "top")
+        mock_resolve.return_value = ResolvedCommentRule(
+            True, "allowlist", frozenset(), "top"
+        )
         mock_load.return_value = Mock()
 
         client = Mock()
@@ -126,9 +138,13 @@ class TestWikiReverseLookup(unittest.TestCase):
     def test_reverse_lookup_success(self, mock_exec):
         from plugins.platforms.feishu.feishu_comment import _reverse_lookup_wiki_token
 
-        mock_exec.return_value = (0, "Success", {
-            "node": {"node_token": "WIKI_TOKEN_123", "obj_token": "docx_abc"},
-        })
+        mock_exec.return_value = (
+            0,
+            "Success",
+            {
+                "node": {"node_token": "WIKI_TOKEN_123", "obj_token": "docx_abc"},
+            },
+        )
         result = self._run(_reverse_lookup_wiki_token(Mock(), "docx", "docx_abc"))
         self.assertEqual(result, "WIKI_TOKEN_123")
         # Verify correct API params
@@ -144,18 +160,35 @@ class TestResolveModelAndRuntime(unittest.TestCase):
         """#85153 sibling: the comment agent is an ``AIAgent()`` built from gateway config like every other
         surface, so ``agent.reasoning_effort: none`` must ride ``runtime_kwargs`` (resolved against the
         comment agent's model, so per-model overrides apply)."""
-        cfg = {"agent": {"reasoning_effort": "none", "reasoning_overrides": {"gpt-5.6": "high"}}}
-        with patch("gateway.run._load_gateway_config", return_value=cfg), \
-             patch("gateway.run._resolve_gateway_model", return_value="gpt-4o-mini"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"provider": "openai-api", "api_key": "k"}):
+        cfg = {
+            "agent": {
+                "reasoning_effort": "none",
+                "reasoning_overrides": {"gpt-5.6": "high"},
+            }
+        }
+        with (
+            patch("gateway.run._load_gateway_config", return_value=cfg),
+            patch("gateway.run._resolve_gateway_model", return_value="gpt-4o-mini"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={"provider": "openai-api", "api_key": "k"},
+            ),
+        ):
             model, runtime_kwargs = _resolve_model_and_runtime()
         self.assertEqual(model, "gpt-4o-mini")
         self.assertEqual(runtime_kwargs["reasoning_config"], {"enabled": False})
-        with patch("gateway.run._load_gateway_config", return_value=cfg), \
-             patch("gateway.run._resolve_gateway_model", return_value="gpt-5.6"), \
-             patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"provider": "openai-api", "api_key": "k"}):
+        with (
+            patch("gateway.run._load_gateway_config", return_value=cfg),
+            patch("gateway.run._resolve_gateway_model", return_value="gpt-5.6"),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={"provider": "openai-api", "api_key": "k"},
+            ),
+        ):
             _model, runtime_kwargs = _resolve_model_and_runtime()
-        self.assertEqual(runtime_kwargs["reasoning_config"], {"enabled": True, "effort": "high"})
+        self.assertEqual(
+            runtime_kwargs["reasoning_config"], {"enabled": True, "effort": "high"}
+        )
 
 
 if __name__ == "__main__":

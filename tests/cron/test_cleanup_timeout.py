@@ -28,8 +28,11 @@ _RUNTIME = {
 @contextmanager
 def _owner_execution(db, job, execution_id=None):
     from gateway import session_cron
+
     owner = SimpleNamespace(db=db)
-    token = session_cron._execution.set((owner, "cleanup-session", job["id"], execution_id))
+    token = session_cron._execution.set(
+        (owner, "cleanup-session", job["id"], execution_id)
+    )
     try:
         yield
     finally:
@@ -69,15 +72,20 @@ def test_run_job_bounds_sessiondb_finalization(tmp_path):
     job = {"id": "cleanup-sessiondb-hang", "name": "test", "prompt": "hello"}
 
     try:
-        with _owner_execution(fake_db, job), \
-             patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-             patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-             patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-             patch("clawk_state_registry.acquire", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value=_RUNTIME), \
-             patch("run_agent.AIAgent") as mock_agent_cls, \
-             patch("cron.scheduler._cron_cleanup_timeout_seconds", return_value=0.02):
+        with (
+            _owner_execution(fake_db, job),
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+            patch("clawk_cli.env_loader.load_clawk_dotenv"),
+            patch("clawk_cli.env_loader.reset_secret_source_cache"),
+            patch("clawk_state_registry.acquire", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=_RUNTIME,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+            patch("cron.scheduler._cron_cleanup_timeout_seconds", return_value=0.02),
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent
@@ -116,20 +124,46 @@ def test_detached_worker_teardown_waits_for_future():
     fake_db = MagicMock()
     agent = MagicMock()
 
-    with patch("cron.scheduler._finalize_cron_session") as finalize, \
-         patch("cron.scheduler._teardown_cron_agent") as teardown_agent:
-        assert defer_teardown_to_running_worker(
-            future, fake_db, agent, "detached-worker", "detached worker", "cron_detached-worker") is True
+    with (
+        patch("cron.scheduler._finalize_cron_session") as finalize,
+        patch("cron.scheduler._teardown_cron_agent") as teardown_agent,
+    ):
+        assert (
+            defer_teardown_to_running_worker(
+                future,
+                fake_db,
+                agent,
+                "detached-worker",
+                "detached worker",
+                "cron_detached-worker",
+            )
+            is True
+        )
         finalize.assert_not_called()
         teardown_agent.assert_not_called()
 
         future.set_result({"final_response": "late"})
 
-        finalize.assert_called_once_with(fake_db, agent, "detached-worker", "detached worker",
-                                         "cron_detached-worker", workdir=None)
+        finalize.assert_called_once_with(
+            fake_db,
+            agent,
+            "detached-worker",
+            "detached worker",
+            "cron_detached-worker",
+            workdir=None,
+        )
         teardown_agent.assert_called_once_with(agent, "detached-worker")
-    assert defer_teardown_to_running_worker(
-        future, fake_db, agent, "detached-worker", "detached worker", "cron_detached-worker") is False
+    assert (
+        defer_teardown_to_running_worker(
+            future,
+            fake_db,
+            agent,
+            "detached-worker",
+            "detached worker",
+            "cron_detached-worker",
+        )
+        is False
+    )
 
 
 def test_dispatch_guard_releases_after_sessiondb_finalization_hang(tmp_path):
@@ -159,22 +193,27 @@ def test_dispatch_guard_releases_after_sessiondb_finalization_hang(tmp_path):
     sched._running_job_ids.clear()
 
     try:
-        with jobs.use_cron_store(tmp_path), \
-             patch("cron.scheduler_authority.run_canonical_job", side_effect=admitted), \
-             patch("cron.scheduler_authority.reconcile_pending"), \
-             patch("cron.scheduler._clawk_home", tmp_path), \
-             patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-             patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-             patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-             patch("clawk_state_registry.acquire", return_value=fake_db), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value=_RUNTIME), \
-             patch("run_agent.AIAgent") as mock_agent_cls, \
-             patch("cron.scheduler._cron_cleanup_timeout_seconds", return_value=0.02), \
-             patch.object(sched, "get_due_jobs", return_value=[job]), \
-             patch.object(sched, "claim_job_for_fire", return_value=True), \
-             patch.object(sched, "save_job_output", return_value="/tmp/out"), \
-             patch.object(sched, "mark_job_run"), \
-             patch.object(sched, "_deliver_result", return_value=None):
+        with (
+            jobs.use_cron_store(tmp_path),
+            patch("cron.scheduler_authority.run_canonical_job", side_effect=admitted),
+            patch("cron.scheduler_authority.reconcile_pending"),
+            patch("cron.scheduler._clawk_home", tmp_path),
+            patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+            patch("clawk_cli.env_loader.load_clawk_dotenv"),
+            patch("clawk_cli.env_loader.reset_secret_source_cache"),
+            patch("clawk_state_registry.acquire", return_value=fake_db),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value=_RUNTIME,
+            ),
+            patch("run_agent.AIAgent") as mock_agent_cls,
+            patch("cron.scheduler._cron_cleanup_timeout_seconds", return_value=0.02),
+            patch.object(sched, "get_due_jobs", return_value=[job]),
+            patch.object(sched, "claim_job_for_fire", return_value=True),
+            patch.object(sched, "save_job_output", return_value="/tmp/out"),
+            patch.object(sched, "mark_job_run"),
+            patch.object(sched, "_deliver_result", return_value=None),
+        ):
             mock_agent = MagicMock()
             mock_agent.run_conversation.return_value = {"final_response": "ok"}
             mock_agent_cls.return_value = mock_agent

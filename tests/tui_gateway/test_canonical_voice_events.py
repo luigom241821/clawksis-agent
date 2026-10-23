@@ -26,10 +26,18 @@ class _Sink:
         pass
 
 
-def test_voice_transcript_for_an_unregistered_session_goes_to_the_capturing_client(monkeypatch):
+def test_voice_transcript_for_an_unregistered_session_goes_to_the_capturing_client(
+    monkeypatch,
+):
     callbacks = {}
-    monkeypatch.setitem(sys.modules, "clawk_cli.voice", types.SimpleNamespace(
-        start_continuous=lambda **kw: callbacks.update(kw), stop_continuous=lambda **kw: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.voice",
+        types.SimpleNamespace(
+            start_continuous=lambda **kw: callbacks.update(kw),
+            stop_continuous=lambda **kw: None,
+        ),
+    )
     monkeypatch.setenv("CLAWK_VOICE", "1")
     monkeypatch.setattr(server, "_load_cfg", dict)
     ws, stdio = _Sink(), _Sink()
@@ -39,8 +47,13 @@ def test_voice_transcript_for_an_unregistered_session_goes_to_the_capturing_clie
 
     token = bind_transport(ws)
     try:
-        resp = server.handle_request({"id": "r", "method": "voice.record",
-                                      "params": {"action": "start", "session_id": "owner-sid"}})
+        resp = server.handle_request(
+            {
+                "id": "r",
+                "method": "voice.record",
+                "params": {"action": "start", "session_id": "owner-sid"},
+            }
+        )
     finally:
         reset_transport(token)
     assert resp["result"]["status"] == "recording"
@@ -49,6 +62,14 @@ def test_voice_transcript_for_an_unregistered_session_goes_to_the_capturing_clie
     worker.start()
     worker.join()
 
-    transcripts = [f["params"] for f in ws.frames if f.get("params", {}).get("type") == "voice.transcript"]
-    assert [(t["session_id"], t["payload"]["text"]) for t in transcripts] == [("owner-sid", "hello there")]
-    assert not [f for f in stdio.frames if f.get("params", {}).get("type") == "voice.transcript"]
+    transcripts = [
+        f["params"]
+        for f in ws.frames
+        if f.get("params", {}).get("type") == "voice.transcript"
+    ]
+    assert [(t["session_id"], t["payload"]["text"]) for t in transcripts] == [
+        ("owner-sid", "hello there")
+    ]
+    assert not [
+        f for f in stdio.frames if f.get("params", {}).get("type") == "voice.transcript"
+    ]

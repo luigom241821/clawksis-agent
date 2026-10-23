@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def _pc():
     """The facade, read at call time: tests patch ``plugins_cmd.<name>`` and sibling calls must see it."""
     from clawk_cli import plugins_cmd
+
     return plugins_cmd
 
 
@@ -24,6 +25,7 @@ def _discover_memory_providers() -> list[tuple[str, str]]:
     """``[(name, description), ...]`` for available memory providers."""
     try:
         from plugins.memory import discover_memory_providers
+
         return [(name, desc) for name, desc, _avail in discover_memory_providers()]
     except Exception:
         return []
@@ -35,12 +37,14 @@ def _discover_context_engines() -> list[tuple[str, str]]:
     engines: dict[str, str] = {}
     try:
         from plugins.context_engine import discover_context_engines
+
         for name, desc, _avail in discover_context_engines():
             engines.setdefault(name, desc)
     except Exception:
         pass
     try:
         from clawk_cli.plugins import discover_plugins, get_plugin_context_engine
+
         discover_plugins()
         plugin_engine = get_plugin_context_engine()
         if plugin_engine and getattr(plugin_engine, "name", None):
@@ -53,10 +57,22 @@ def _discover_context_engines() -> list[tuple[str, str]]:
 # (title, default label, default name, current-value reader, discovery fn, saver) per provider
 # category. Readers/savers are looked up at call time so module-level patching still applies.
 _PROVIDER_CATEGORY_SPECS = (
-    ("Memory Provider", "built-in", "", lambda: _pc()._get_current_memory_provider(),
-     lambda: _discover_memory_providers(), lambda v: _pc()._save_memory_provider(v)),
-    ("Context Engine", "compressor", "compressor", lambda: _pc()._get_current_context_engine(),
-     lambda: _pc()._discover_context_engines(), lambda v: _pc()._save_context_engine(v)),
+    (
+        "Memory Provider",
+        "built-in",
+        "",
+        lambda: _pc()._get_current_memory_provider(),
+        lambda: _discover_memory_providers(),
+        lambda v: _pc()._save_memory_provider(v),
+    ),
+    (
+        "Context Engine",
+        "compressor",
+        "compressor",
+        lambda: _pc()._get_current_context_engine(),
+        lambda: _pc()._discover_context_engines(),
+        lambda v: _pc()._save_context_engine(v),
+    ),
 )
 
 
@@ -65,16 +81,21 @@ def _configure_category_spec(spec) -> bool:
     discovered choices; a current value not among them is appended as ``(not found)``. Saves and
     returns True when the choice changed."""
     from clawk_cli.curses_ui import curses_radiolist
+
     title, default_label, default_name, current, discover, save = spec
     current = current()
     choices = discover()
     names = [default_name] + [name for name, _desc in choices]
-    items = [f"{default_label} (default)"] + [f"{name} \u2014 {desc}" if desc else name for name, desc in choices]
+    items = [f"{default_label} (default)"] + [
+        f"{name} \u2014 {desc}" if desc else name for name, desc in choices
+    ]
     if current not in names:
         names.append(current)
         items.append(f"{current} (not found)")
     selected = max(i for i, name in enumerate(names) if name == current)
-    new_value = names[curses_radiolist(title=f"{title} (select one)", items=items, selected=selected)]
+    new_value = names[
+        curses_radiolist(title=f"{title} (select one)", items=items, selected=selected)
+    ]
     if new_value == current:
         return False
     save(new_value)
@@ -83,7 +104,10 @@ def _configure_category_spec(spec) -> bool:
 
 def _provider_categories() -> list:
     """``[(title, current_label, configure_fn), ...]`` rows for the composite UI."""
-    return [(s[0], s[3]() or s[1], functools.partial(_configure_category_spec, s)) for s in _PROVIDER_CATEGORY_SPECS]
+    return [
+        (s[0], s[3]() or s[1], functools.partial(_configure_category_spec, s))
+        for s in _PROVIDER_CATEGORY_SPECS
+    ]
 
 
 def cmd_toggle() -> None:
@@ -100,7 +124,8 @@ def cmd_toggle() -> None:
     plugin_keys = [entry[5] for entry in entries]
     # Keys keep every surface aligned. See #40190.
     plugin_labels = [
-        (f"{name} \u2014 {description}" if description else name) + (" [bundled]" if source == "bundled" else "")
+        (f"{name} \u2014 {description}" if description else name)
+        + (" [bundled]" if source == "bundled" else "")
         for name, _version, description, source, _d, _key in entries
     ]
     plugin_selected = _effective_plugin_selection(entries, enabled_set, disabled_set)
@@ -111,20 +136,45 @@ def cmd_toggle() -> None:
         return
     try:
         import curses
-        _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disabled_set, categories, console, expected_config=expected_config)
+
+        _run_composite_ui(
+            curses,
+            plugin_keys,
+            plugin_labels,
+            plugin_selected,
+            disabled_set,
+            categories,
+            console,
+            expected_config=expected_config,
+        )
     except ImportError:
-        _run_composite_fallback(plugin_keys, plugin_labels, plugin_selected, disabled_set, categories, console, expected_config=expected_config)
+        _run_composite_fallback(
+            plugin_keys,
+            plugin_labels,
+            plugin_selected,
+            disabled_set,
+            categories,
+            console,
+            expected_config=expected_config,
+        )
 
 
 def _effective_plugin_selection(entries, enabled: set, disabled: set) -> set:
     """Row indices ticked on open: the load-time rule, not list membership — bundled platforms,
     backends and model providers are active without a ``plugins.enabled`` entry."""
     from clawk_cli.plugins_cmd_listing import _entry_status
+
     active = _pc()._category_active_names()
-    return {i for i, entry in enumerate(entries) if _entry_status(entry, enabled, disabled, active) == "enabled"}
+    return {
+        i
+        for i, entry in enumerate(entries)
+        if _entry_status(entry, enabled, disabled, active) == "enabled"
+    }
 
 
-def _persist_plugin_selection(plugin_keys, chosen, disabled, initial, *, expected_config=None) -> tuple[list, list]:
+def _persist_plugin_selection(
+    plugin_keys, chosen, disabled, initial, *, expected_config=None
+) -> tuple[list, list]:
     """Write only the rows flipped this session; returns the ``(turned_on, turned_off)`` keys.
 
     Untouched rows are never persisted, so a never-ticked row is not mistaken for an explicit untick
@@ -141,20 +191,48 @@ def _persist_plugin_selection(plugin_keys, chosen, disabled, initial, *, expecte
     entries = _pc()._discover_all_plugins()
     for keys, enable in ((turned_on, True), (turned_off, False)):
         for key in keys:
-            _pc()._apply_activation(new_enabled, new_disabled, key, _pc()._plugin_aliases(key, entries), enable=enable)
+            _pc()._apply_activation(
+                new_enabled,
+                new_disabled,
+                key,
+                _pc()._plugin_aliases(key, entries),
+                enable=enable,
+            )
     # C13: the composite UI's candidate goes through the ONE admission authority — refusal raises
     # AdmissionRefused BEFORE any config write; the caller surfaces it and the selection stays unsaved.
-    _pc()._admit_and_save_plugin_sets(new_enabled, new_disabled, action="Save plugin selection", expected_config=expected_config)
-    logger.info("plugins picker: enabled %s; disabled %s", turned_on or "none", turned_off or "none")
+    _pc()._admit_and_save_plugin_sets(
+        new_enabled,
+        new_disabled,
+        action="Save plugin selection",
+        expected_config=expected_config,
+    )
+    logger.info(
+        "plugins picker: enabled %s; disabled %s",
+        turned_on or "none",
+        turned_off or "none",
+    )
     return turned_on, turned_off
 
 
-def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disabled, categories, console, *, expected_config=None):
+def _run_composite_ui(
+    curses,
+    plugin_keys,
+    plugin_labels,
+    plugin_selected,
+    disabled,
+    categories,
+    console,
+    *,
+    expected_config=None,
+):
     """Custom curses screen with checkboxes + category action rows."""
     from clawk_cli.curses_ui import _addnstr, flush_stdin
+
     chosen = set(plugin_selected)
     n_plugins, n_categories = len(plugin_keys), len(categories)
-    total_items = n_plugins + n_categories  # navigable rows (headers/separator are skipped)
+    total_items = (
+        n_plugins + n_categories
+    )  # navigable rows (headers/separator are skipped)
     providers_changed = False
     nav = {  # key -> new cursor, given (cursor, page_size)
         key: move
@@ -174,7 +252,12 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
             curses.start_color()
             curses.use_default_colors()
             gray = 8 if curses.COLORS > 8 else curses.COLOR_WHITE
-            for pair, fg in ((1, curses.COLOR_GREEN), (2, curses.COLOR_YELLOW), (3, curses.COLOR_CYAN), (4, gray)):
+            for pair, fg in (
+                (1, curses.COLOR_GREEN),
+                (2, curses.COLOR_YELLOW),
+                (3, curses.COLOR_CYAN),
+                (4, gray),
+            ):
                 curses.init_pair(pair, fg, -1)
 
     def _attr(base, pair):
@@ -183,7 +266,10 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
     def _row(text, idx, cursor, pair):
         """One navigable body row: arrow marker + bold color when *idx* is the cursor."""
         arrow = "\u2192" if idx == cursor else " "
-        return (f" {arrow} {text}", _attr(curses.A_BOLD, pair) if idx == cursor else curses.A_NORMAL)
+        return (
+            f" {arrow} {text}",
+            _attr(curses.A_BOLD, pair) if idx == cursor else curses.A_NORMAL,
+        )
 
     def _configure_category(ci):
         """Leave curses, run the category's picker, refresh its row, re-enter curses."""
@@ -206,14 +292,18 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
         lines = []
         if n_plugins > 0:
             lines.append(("  General Plugins", _attr(curses.A_BOLD, 2)))
-            for i in range(scroll_offset, min(n_plugins, scroll_offset + max(visible_rows, 0))):
+            for i in range(
+                scroll_offset, min(n_plugins, scroll_offset + max(visible_rows, 0))
+            ):
                 check = "\u2713" if i in chosen else " "
                 lines.append(_row(f"[{check}] {plugin_labels[i]}", i, cursor, 1))
         lines.append(("", curses.A_NORMAL))
         if n_categories > 0:
             lines.append(("  Provider Plugins", _attr(curses.A_BOLD, 2)))
             lines += [
-                _row(f"  {cat_name:<24} \u25b8 {cat_current}", n_plugins + ci, cursor, 3)
+                _row(
+                    f"  {cat_name:<24} \u25b8 {cat_current}", n_plugins + ci, cursor, 3
+                )
                 for ci, (cat_name, cat_current, _cat_fn) in enumerate(categories)
             ]
         return lines
@@ -227,8 +317,13 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
             max_y, max_x = stdscr.getmaxyx()
             _addnstr(stdscr, 0, 0, "Plugins", max_x - 1, _attr(curses.A_BOLD, 2))
             _addnstr(
-                stdscr, 1, 0, "  ↑↓/j/k navigate  PgUp/PgDn page  SPACE toggle  ENTER configure/confirm  ESC done",
-                max_x - 1, curses.A_DIM)
+                stdscr,
+                1,
+                0,
+                "  ↑↓/j/k navigate  PgUp/PgDn page  SPACE toggle  ENTER configure/confirm  ESC done",
+                max_x - 1,
+                curses.A_DIM,
+            )
             visible_rows = max_y - 4
             if cursor < scroll_offset:
                 scroll_offset = cursor
@@ -262,8 +357,13 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
     from clawk_cli.plugins_admission import AdmissionRefused
 
     try:
-        turned_on, turned_off = _persist_plugin_selection(plugin_keys, chosen, disabled, plugin_selected,
-                                                          expected_config=expected_config)
+        turned_on, turned_off = _persist_plugin_selection(
+            plugin_keys,
+            chosen,
+            disabled,
+            plugin_selected,
+            expected_config=expected_config,
+        )
     except AdmissionRefused as exc:
         console.print(f"[red]✗[/red] Plugin selection refused, not saved: {exc}")
         console.print(
@@ -273,21 +373,33 @@ def _run_composite_ui(curses, plugin_keys, plugin_labels, plugin_selected, disab
         return
     if turned_on or turned_off:
         console.print(
-            f"\n[green]\u2713[/green] General plugins: {len(turned_on)} turned on, {len(turned_off)} turned off.")
+            f"\n[green]\u2713[/green] General plugins: {len(turned_on)} turned on, {len(turned_off)} turned off."
+        )
     elif n_plugins > 0:
         console.print("\n[dim]General plugins unchanged.[/dim]")
     if providers_changed:
         console.print(
             f"[green]\u2713[/green] Memory provider: [bold]{_pc()._get_current_memory_provider() or 'built-in'}[/bold]  "
-            f"Context engine: [bold]{_pc()._get_current_context_engine()}[/bold]")
+            f"Context engine: [bold]{_pc()._get_current_context_engine()}[/bold]"
+        )
     if n_plugins > 0 or providers_changed:
         console.print("[dim]Changes take effect on next session.[/dim]")
     console.print()
 
 
-def _run_composite_fallback(plugin_keys, plugin_labels, plugin_selected, disabled, categories, console, *, expected_config=None):
+def _run_composite_fallback(
+    plugin_keys,
+    plugin_labels,
+    plugin_selected,
+    disabled,
+    categories,
+    console,
+    *,
+    expected_config=None,
+):
     """Text-based fallback for the composite plugins UI."""
     from clawk_cli.colors import Colors, color
+
     print(color("\n  Plugins", Colors.YELLOW))
     if plugin_keys:
         chosen = set(plugin_selected)
@@ -299,7 +411,9 @@ def _run_composite_fallback(plugin_keys, plugin_labels, plugin_selected, disable
                 print(f"  {marker} {i + 1:>2}. {label}")
             print()
             try:
-                val = input(color("  Toggle # (or Enter to confirm): ", Colors.DIM)).strip()
+                val = input(
+                    color("  Toggle # (or Enter to confirm): ", Colors.DIM)
+                ).strip()
                 if not val:
                     break
                 idx = int(val) - 1
@@ -308,7 +422,13 @@ def _run_composite_fallback(plugin_keys, plugin_labels, plugin_selected, disable
             except (ValueError, KeyboardInterrupt, EOFError):
                 return
             print()
-        _save_plugin_selection_fallback(plugin_keys, chosen, disabled, plugin_selected, expected_config=expected_config)
+        _save_plugin_selection_fallback(
+            plugin_keys,
+            chosen,
+            disabled,
+            plugin_selected,
+            expected_config=expected_config,
+        )
 
     if categories:
         print(color("\n  Provider Plugins", Colors.YELLOW))
@@ -326,12 +446,16 @@ def _run_composite_fallback(plugin_keys, plugin_labels, plugin_selected, disable
     print()
 
 
-def _save_plugin_selection_fallback(plugin_keys, chosen, disabled, initial, *, expected_config=None) -> None:
+def _save_plugin_selection_fallback(
+    plugin_keys, chosen, disabled, initial, *, expected_config=None
+) -> None:
     """The text fallback's save: same admission authority, refusal printed."""
     from clawk_cli.plugins_admission import AdmissionRefused
 
     try:
-        _persist_plugin_selection(plugin_keys, chosen, disabled, initial, expected_config=expected_config)
+        _persist_plugin_selection(
+            plugin_keys, chosen, disabled, initial, expected_config=expected_config
+        )
     except AdmissionRefused as exc:
         print(f"  Plugin selection refused, not saved: {exc}")
         print("  config.yaml and the active environment are unchanged.")

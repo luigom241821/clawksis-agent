@@ -43,9 +43,7 @@ def _load_lib():
     """Import the plugin's library module directly from the repo path."""
     repo_root = Path(__file__).resolve().parents[2]
     lib_path = repo_root / "plugins" / "disk-cleanup" / "disk_cleanup.py"
-    spec = importlib.util.spec_from_file_location(
-        "disk_cleanup_under_test", lib_path
-    )
+    spec = importlib.util.spec_from_file_location("disk_cleanup_under_test", lib_path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -61,7 +59,9 @@ def _run_tool(pi, tool_name, args, create=None, result="OK", **ids):
     pi._on_pre_tool_call(tool_name=tool_name, args=args, tool_call_id=call_id, **ids)
     if create is not None:
         create()
-    pi._on_post_tool_call(tool_name=tool_name, args=args, result=result, tool_call_id=call_id, **ids)
+    pi._on_post_tool_call(
+        tool_name=tool_name, args=args, result=result, tool_call_id=call_id, **ids
+    )
 
 
 def _load_plugin_init():
@@ -76,6 +76,7 @@ def _load_plugin_init():
     )
     # Ensure parent namespace package exists for the relative `. import disk_cleanup`
     import types
+
     if "clawk_plugins" not in sys.modules:
         ns = types.ModuleType("clawk_plugins")
         ns.__path__ = []
@@ -91,6 +92,7 @@ def _load_plugin_init():
 # ---------------------------------------------------------------------------
 # Library tests
 # ---------------------------------------------------------------------------
+
 
 class TestIsSafePath:
     def test_accepts_path_under_clawk_home(self, _isolate_env):
@@ -208,7 +210,6 @@ class TestGuessCategory:
         p.write_text("x")
         assert dg.guess_category(p) == "cron-output"
 
-
     def test_cronjobs_top_level_not_tracked(self, _isolate_env):
         """The legacy ``cronjobs`` alias is also control-plane at the top."""
         dg = _load_lib()
@@ -242,12 +243,20 @@ class TestProfileUserTreesNeverCleaned:
         keep.parent.mkdir(parents=True)
         scratch = _isolate_env / "tmp_scratch.py"
         for p in (keep, scratch):
-            _run_tool(pi, "write_file", {"path": str(p), "content": "x"},
-                      create=lambda p=p: p.write_text("x"), task_id="t_ws", session_id="s_ws")
+            _run_tool(
+                pi,
+                "write_file",
+                {"path": str(p), "content": "x"},
+                create=lambda p=p: p.write_text("x"),
+                task_id="t_ws",
+                session_id="s_ws",
+            )
         assert dg.guess_category(keep) is None
         assert dg.guess_category(scratch) == "test"
         pi._on_session_end(session_id="s_ws", completed=True, interrupted=False)
-        assert keep.exists(), "session-end cleanup must not touch workspace project files"
+        assert keep.exists(), (
+            "session-end cleanup must not touch workspace project files"
+        )
         assert not scratch.exists(), "root-level scratch files are still cleaned up"
 
     def test_empty_dir_sweep_skips_workspace(self, _isolate_env):
@@ -270,26 +279,48 @@ class TestProtectedDirsNeverRmtreed:
     must never be rmtree'd by the tracked-item path, only by-file aging; ``kanban/`` is never
     tracked at all (its attachments/workspaces have their own lifecycle)."""
 
-    def test_stale_cache_dir_entry_is_skipped_but_its_old_files_still_age_out(self, _isolate_env):
+    def test_stale_cache_dir_entry_is_skipped_but_its_old_files_still_age_out(
+        self, _isolate_env
+    ):
         dg = _load_lib()
         cache = _isolate_env / "cache"
         (cache / "terminal").mkdir(parents=True)
         old_file = cache / "scratch.txt"
         old_file.write_text("x")
         assert dg.guess_category(cache) is None, "the cache dir itself is never tracked"
-        assert dg.guess_category(old_file) == "temp", "files under cache/ still age out as temp"
+        assert dg.guess_category(old_file) == "temp", (
+            "files under cache/ still age out as temp"
+        )
         old_ts = (datetime.now(UTC) - timedelta(days=8)).isoformat()
-        dg.save_tracked([
-            {"path": str(cache), "category": "temp", "timestamp": old_ts, "size": 0},
-            {"path": str(old_file), "category": "temp", "timestamp": old_ts, "size": 1},
-        ])
+        dg.save_tracked(
+            [
+                {
+                    "path": str(cache),
+                    "category": "temp",
+                    "timestamp": old_ts,
+                    "size": 0,
+                },
+                {
+                    "path": str(old_file),
+                    "category": "temp",
+                    "timestamp": old_ts,
+                    "size": 1,
+                },
+            ]
+        )
 
         summary = dg.quick()
 
-        assert (cache / "terminal").is_dir(), "protected top-level dir must survive a stale tracked entry"
-        assert not old_file.exists(), "old temp FILE under cache/ is still pruned (control)"
+        assert (cache / "terminal").is_dir(), (
+            "protected top-level dir must survive a stale tracked entry"
+        )
+        assert not old_file.exists(), (
+            "old temp FILE under cache/ is still pruned (control)"
+        )
         assert summary["deleted"] == 1
-        assert dg.load_tracked() == [], "the stale dir entry is dropped, not retried every session"
+        assert dg.load_tracked() == [], (
+            "the stale dir entry is dropped, not retried every session"
+        )
         assert "SKIPPED" in (_isolate_env / "disk-cleanup" / "cleanup.log").read_text()
 
     def test_kanban_test_files_are_never_tracked_or_deleted(self, _isolate_env):
@@ -300,21 +331,45 @@ class TestProtectedDirsNeverRmtreed:
         att.write_text("x")
         assert dg.guess_category(att) is None
         # A stale pre-fix entry must be dropped by re-validation instead of deleted.
-        dg.save_tracked([{"path": str(att), "category": "test",
-                          "timestamp": datetime.now(UTC).isoformat(), "size": 1}])
+        dg.save_tracked(
+            [
+                {
+                    "path": str(att),
+                    "category": "test",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "size": 1,
+                }
+            ]
+        )
         # A kanban file the call itself CREATES must not be tracked either.
         new_att = att.with_name("test_new.sh")
-        _run_tool(pi, "write_file", {"path": str(new_att), "content": "x"},
-                  create=lambda: new_att.write_text("y"), task_id="t1", session_id="s_kb")
+        _run_tool(
+            pi,
+            "write_file",
+            {"path": str(new_att), "content": "x"},
+            create=lambda: new_att.write_text("y"),
+            task_id="t1",
+            session_id="s_kb",
+        )
         scratch = _isolate_env / "test_scratch.py"
-        _run_tool(pi, "write_file", {"path": str(scratch), "content": "x"},
-                  create=lambda: scratch.write_text("x"), task_id="t1", session_id="s_kb")
+        _run_tool(
+            pi,
+            "write_file",
+            {"path": str(scratch), "content": "x"},
+            create=lambda: scratch.write_text("x"),
+            task_id="t1",
+            session_id="s_kb",
+        )
 
         pi._on_session_end(session_id="s_kb", completed=True, interrupted=False)
 
         assert att.exists(), "kanban attachments are task-managed, never auto-deleted"
-        assert new_att.exists(), "kanban files a call created are never tracked or deleted"
-        assert not scratch.exists(), "root-level scratch files are still cleaned up (control)"
+        assert new_att.exists(), (
+            "kanban files a call created are never tracked or deleted"
+        )
+        assert not scratch.exists(), (
+            "root-level scratch files are still cleaned up (control)"
+        )
         assert dg.load_tracked() == []
 
 
@@ -323,7 +378,9 @@ class TestGitWorktreeFilesNeverCleaned:
     inside worktrees/checkouts) are never tracked or auto-deleted; scratch files outside
     git trees still are."""
 
-    def test_quick_drops_stale_tracked_worktree_entry_instead_of_deleting(self, _isolate_env):
+    def test_quick_drops_stale_tracked_worktree_entry_instead_of_deleting(
+        self, _isolate_env
+    ):
         """A test_* file inside a linked git worktree ($CLAWK_HOME/worktrees/, .git is a
         pointer FILE) is not classified as disposable, and a stale pre-fix tracked entry
         (category "test") is dropped by quick()'s re-validation, not deleted."""
@@ -334,8 +391,16 @@ class TestGitWorktreeFilesNeverCleaned:
         f = wt / "test_durable.py"
         f.write_text("x")
         assert dg.guess_category(f) is None
-        dg.save_tracked([{"path": str(f), "category": "test",
-                          "timestamp": datetime.now(UTC).isoformat(), "size": 1}])
+        dg.save_tracked(
+            [
+                {
+                    "path": str(f),
+                    "category": "test",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "size": 1,
+                }
+            ]
+        )
         result = dg.quick()
         assert f.exists(), "git-owned test files must never be auto-deleted"
         assert result["deleted"] == 0
@@ -351,13 +416,23 @@ class TestGitWorktreeFilesNeverCleaned:
         scratch = _isolate_env / "test_scratch.py"
         scratch.write_text("x")
         assert dg.guess_category(scratch) == "test"
-        dg.save_tracked([{"path": str(scratch), "category": "test",
-                          "timestamp": datetime.now(UTC).isoformat(), "size": 1}])
+        dg.save_tracked(
+            [
+                {
+                    "path": str(scratch),
+                    "category": "test",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "size": 1,
+                }
+            ]
+        )
         result = dg.quick()
         assert not scratch.exists()
         assert result["deleted"] == 1
 
-    def test_tracked_file_in_clawk_home_checkout_is_never_disposable(self, _isolate_env, monkeypatch):
+    def test_tracked_file_in_clawk_home_checkout_is_never_disposable(
+        self, _isolate_env, monkeypatch
+    ):
         """CLAWK_HOME itself is a git checkout: a file git TRACKS is Git-owned, so a
         ``test_*``/``tmp_*`` name must not classify it as disposable.
 
@@ -375,15 +450,21 @@ class TestGitWorktreeFilesNeverCleaned:
         tracked.write_text("x")
         scratch = _isolate_env / "test_untracked.py"
         scratch.write_text("x")
-        subprocess.run(["git", "-C", str(_isolate_env), "add", "scripts/test_committed.py"],
-                       check=True)
+        subprocess.run(
+            ["git", "-C", str(_isolate_env), "add", "scripts/test_committed.py"],
+            check=True,
+        )
 
         assert dg._inside_git_worktree(tracked) is True
         assert dg._inside_git_worktree(scratch) is False
         assert dg.guess_category(tracked) is None
         assert dg.guess_category(scratch) == "test"
         # An inherited pathspec mode must not make the tracked-file probe miss.
-        for mode in ("GIT_LITERAL_PATHSPECS", "GIT_GLOB_PATHSPECS", "GIT_ICASE_PATHSPECS"):
+        for mode in (
+            "GIT_LITERAL_PATHSPECS",
+            "GIT_GLOB_PATHSPECS",
+            "GIT_ICASE_PATHSPECS",
+        ):
             monkeypatch.setenv(mode, "1")
             assert dg._inside_git_worktree(tracked) is True, mode
             monkeypatch.delenv(mode)
@@ -391,8 +472,12 @@ class TestGitWorktreeFilesNeverCleaned:
         # A stale pre-fix entry is dropped by quick()'s re-validation, not deleted, while
         # untracked scratch beside it in the same repo is still cleaned.
         now = datetime.now(UTC).isoformat()
-        dg.save_tracked([{"path": str(p), "category": "test", "timestamp": now, "size": 1}
-                         for p in (tracked, scratch)])
+        dg.save_tracked(
+            [
+                {"path": str(p), "category": "test", "timestamp": now, "size": 1}
+                for p in (tracked, scratch)
+            ]
+        )
         result = dg.quick()
         assert tracked.exists(), "a git-tracked test file must never be auto-deleted"
         assert not scratch.exists()
@@ -401,7 +486,9 @@ class TestGitWorktreeFilesNeverCleaned:
         # Committed AFTER first classification in the same process: seen immediately.
         scratch.write_text("x")
         assert dg.guess_category(scratch) == "test"
-        subprocess.run(["git", "-C", str(_isolate_env), "add", "test_untracked.py"], check=True)
+        subprocess.run(
+            ["git", "-C", str(_isolate_env), "add", "test_untracked.py"], check=True
+        )
         assert dg.guess_category(scratch) is None
 
         # CLAWK_HOME nested in an enclosing repo (a ~/.git dotfiles repo) that tracks it.
@@ -437,12 +524,18 @@ class TestStaleCronEntryMigration:
         # directly writing the tracked file (track() would reject it).
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
-        tracked_file.write_text(json.dumps([{
-            "path": str(jobs_json),
-            "category": "cron-output",
-            "timestamp": "2025-01-01T00:00:00+00:00",  # very old
-            "size": 123,
-        }]))
+        tracked_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(jobs_json),
+                        "category": "cron-output",
+                        "timestamp": "2025-01-01T00:00:00+00:00",  # very old
+                        "size": 123,
+                    }
+                ]
+            )
+        )
 
         summary = dg.quick()
         assert summary["deleted"] == 0, "cron/jobs.json must not be deleted"
@@ -450,7 +543,6 @@ class TestStaleCronEntryMigration:
         # The stale entry should have been dropped from tracking.
         remaining = json.loads(tracked_file.read_text())
         assert len(remaining) == 0
-
 
     def test_dry_run_omits_stale_cron_output(self, _isolate_env):
         """dry_run() should also skip stale cron-output entries."""
@@ -462,12 +554,18 @@ class TestStaleCronEntryMigration:
 
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
-        tracked_file.write_text(json.dumps([{
-            "path": str(jobs_json),
-            "category": "cron-output",
-            "timestamp": "2025-01-01T00:00:00+00:00",
-            "size": 123,
-        }]))
+        tracked_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(jobs_json),
+                        "category": "cron-output",
+                        "timestamp": "2025-01-01T00:00:00+00:00",
+                        "size": 123,
+                    }
+                ]
+            )
+        )
 
         auto, prompt = dg.dry_run()
         assert len(auto) == 0, "stale cron-output for jobs.json must not appear"
@@ -483,16 +581,23 @@ class TestStaleCronEntryMigration:
 
         # Old enough to be deleted (>14 days)
         from datetime import datetime, timedelta
+
         old_ts = (datetime.now(UTC) - timedelta(days=20)).isoformat()
 
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         tracked_file.parent.mkdir(parents=True, exist_ok=True)
-        tracked_file.write_text(json.dumps([{
-            "path": str(run_md),
-            "category": "cron-output",
-            "timestamp": old_ts,
-            "size": 10,
-        }]))
+        tracked_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(run_md),
+                        "category": "cron-output",
+                        "timestamp": old_ts,
+                        "size": 10,
+                    }
+                ]
+            )
+        )
 
         summary = dg.quick()
         assert summary["deleted"] == 1, "valid old cron-output should be deleted"
@@ -508,7 +613,6 @@ class TestTrackForgetQuick:
         summary = dg.quick()
         assert summary["deleted"] == 1
         assert not p.exists()
-
 
     def test_forget_removes_entry(self, _isolate_env):
         dg = _load_lib()
@@ -557,23 +661,36 @@ class TestDryRun:
 # Plugin hooks tests
 # ---------------------------------------------------------------------------
 
+
 class TestPostToolCallHook:
     def test_write_file_test_pattern_tracked(self, _isolate_env):
         pi = _load_plugin_init()
         p = _isolate_env / "test_created.py"
-        _run_tool(pi, "write_file", {"path": str(p), "content": "x"},
-                  create=lambda: p.write_text("x"), task_id="t1", session_id="s1")
+        _run_tool(
+            pi,
+            "write_file",
+            {"path": str(p), "content": "x"},
+            create=lambda: p.write_text("x"),
+            task_id="t1",
+            session_id="s1",
+        )
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         data = json.loads(tracked_file.read_text())
         assert len(data) == 1
         assert data[0]["category"] == "test"
 
-
     def test_terminal_command_picks_up_paths(self, _isolate_env):
         pi = _load_plugin_init()
         p = _isolate_env / "tmp_created.log"
-        _run_tool(pi, "terminal", {"command": f"touch {p}"}, create=lambda: p.write_text("x"),
-                  result=f"created {p}\n", task_id="t3", session_id="s3")
+        _run_tool(
+            pi,
+            "terminal",
+            {"command": f"touch {p}"},
+            create=lambda: p.write_text("x"),
+            result=f"created {p}\n",
+            task_id="t3",
+            session_id="s3",
+        )
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         data = json.loads(tracked_file.read_text())
         assert any(Path(i["path"]) == p.resolve() for i in data)
@@ -584,12 +701,12 @@ class TestPostToolCallHook:
             tool_name="read_file",
             args={"path": str(_isolate_env / "test_x.py")},
             result="contents",
-            task_id="t4", session_id="s4",
+            task_id="t4",
+            session_id="s4",
         )
         # read_file should never trigger tracking.
         tracked_file = _isolate_env / "disk-cleanup" / "tracked.json"
         assert not tracked_file.exists() or tracked_file.read_text().strip() == "[]"
-
 
     def test_paths_the_call_did_not_create_are_never_tracked(self, _isolate_env):
         """'test' items are deleted at age 0 when the turn ends (rmtree for dirs), so only what a
@@ -605,12 +722,27 @@ class TestPostToolCallHook:
         os.utime(script, (old, old))
         os.utime(hook_dir, (old, old))
 
-        _run_tool(pi, "patch", {"path": str(script), "old_string": "up", "new_string": "ok"},
-                  create=lambda: script.write_text("print('ok')\n"), session_id="s_keep")
-        _run_tool(pi, "terminal", {"command": f"ls -la {hook_dir}"}, result="total 0\n",
-                  session_id="s_keep")
-        _run_tool(pi, "terminal", {"command": f"find {_isolate_env} -name 'test_*'"},
-                  result=f"{script}\n{hook_dir}\n", session_id="s_keep")
+        _run_tool(
+            pi,
+            "patch",
+            {"path": str(script), "old_string": "up", "new_string": "ok"},
+            create=lambda: script.write_text("print('ok')\n"),
+            session_id="s_keep",
+        )
+        _run_tool(
+            pi,
+            "terminal",
+            {"command": f"ls -la {hook_dir}"},
+            result="total 0\n",
+            session_id="s_keep",
+        )
+        _run_tool(
+            pi,
+            "terminal",
+            {"command": f"find {_isolate_env} -name 'test_*'"},
+            result=f"{script}\n{hook_dir}\n",
+            session_id="s_keep",
+        )
         pi._on_session_end(session_id="s_keep", completed=True, interrupted=False)
 
         assert script.exists() and hook_dir.is_dir()
@@ -630,8 +762,12 @@ class TestPostToolCallHook:
         pi._on_pre_tool_call(tool_name="patch", args={"path": str(user_file)}, **a)
         pi._on_pre_tool_call(tool_name="write_file", args={"path": str(new_file)}, **b)
         new_file.write_text("x")
-        pi._on_post_tool_call(tool_name="patch", args={"path": str(user_file)}, result="OK", **a)
-        pi._on_post_tool_call(tool_name="write_file", args={"path": str(new_file)}, result="OK", **b)
+        pi._on_post_tool_call(
+            tool_name="patch", args={"path": str(user_file)}, result="OK", **a
+        )
+        pi._on_post_tool_call(
+            tool_name="write_file", args={"path": str(new_file)}, result="OK", **b
+        )
         pi._on_session_end(session_id="sA", completed=True, interrupted=False)
 
         assert user_file.read_text() == "keep"
@@ -642,12 +778,17 @@ class TestOnSessionEndHook:
     def test_runs_quick_when_test_files_tracked(self, _isolate_env):
         pi = _load_plugin_init()
         p = _isolate_env / "test_cleanup.py"
-        _run_tool(pi, "write_file", {"path": str(p), "content": "x"},
-                  create=lambda: p.write_text("x"), task_id="", session_id="s1")
+        _run_tool(
+            pi,
+            "write_file",
+            {"path": str(p), "content": "x"},
+            create=lambda: p.write_text("x"),
+            task_id="",
+            session_id="s1",
+        )
         assert p.exists()
         pi._on_session_end(session_id="s1", completed=True, interrupted=False)
         assert not p.exists(), "test file should be auto-deleted"
-
 
 
 # ---------------------------------------------------------------------------
@@ -655,21 +796,23 @@ class TestOnSessionEndHook:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Bundled-plugin discovery
 # ---------------------------------------------------------------------------
+
 
 class TestBundledDiscovery:
     def _write_enabled_config(self, clawk_home, names):
         """Write plugins.enabled allow-list to config.yaml."""
         import clawk_yaml as yaml
+
         cfg_path = clawk_home / "config.yaml"
         cfg_path.write_text(yaml.safe_dump({"plugins": {"enabled": list(names)}}))
 
     def test_disk_cleanup_discovered_but_not_loaded_by_default(self, _isolate_env):
         """Bundled plugins are discovered but NOT loaded without opt-in."""
         from clawk_cli import plugins as pmod
+
         mgr = pmod.PluginManager()
         mgr.discover_and_load()
         # Discovered — appears in the registry
@@ -680,18 +823,23 @@ class TestBundledDiscovery:
         assert not loaded.enabled
         assert loaded.error and "not enabled" in loaded.error
 
-
     def test_disabled_beats_enabled(self, _isolate_env):
         """plugins.disabled wins even if the plugin is also in plugins.enabled."""
         import clawk_yaml as yaml
+
         cfg_path = _isolate_env / "config.yaml"
-        cfg_path.write_text(yaml.safe_dump({
-            "plugins": {
-                "enabled": ["disk-cleanup"],
-                "disabled": ["disk-cleanup"],
-            }
-        }))
+        cfg_path.write_text(
+            yaml.safe_dump(
+                {
+                    "plugins": {
+                        "enabled": ["disk-cleanup"],
+                        "disabled": ["disk-cleanup"],
+                    }
+                }
+            )
+        )
         from clawk_cli import plugins as pmod
+
         mgr = pmod.PluginManager()
         mgr.discover_and_load()
         loaded = mgr._plugins["disk-cleanup"]
@@ -705,6 +853,7 @@ class TestBundledDiscovery:
             _isolate_env, ["memory", "context_engine", "disk-cleanup"]
         )
         from clawk_cli import plugins as pmod
+
         mgr = pmod.PluginManager()
         mgr.discover_and_load()
         assert "memory" not in mgr._plugins

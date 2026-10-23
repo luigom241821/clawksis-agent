@@ -35,11 +35,16 @@ def mod():
     return module
 
 
-@pytest.mark.parametrize("directory,source,prefix", [
-    ("skills", "built-in", "samuelgradientai-sys/clawksis-agent/skills"),
-    ("optional-skills", "optional", "official"),
-])
-def test_local_skills_publish_exact_install_target(mod, tmp_path, monkeypatch, directory, source, prefix):
+@pytest.mark.parametrize(
+    "directory,source,prefix",
+    [
+        ("skills", "built-in", "samuelgradientai-sys/clawksis-agent/skills"),
+        ("optional-skills", "optional", "official"),
+    ],
+)
+def test_local_skills_publish_exact_install_target(
+    mod, tmp_path, monkeypatch, directory, source, prefix
+):
     skill = tmp_path / directory / "creative" / "nested" / "example"
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("---\nname: Different Display Name\n---\nExample.")
@@ -52,17 +57,23 @@ def test_local_skills_publish_exact_install_target(mod, tmp_path, monkeypatch, d
 
 
 @pytest.mark.parametrize("directory", ["skills", "optional-skills"])
-def test_local_skills_publish_mapped_artwork_only(mod, tmp_path, monkeypatch, directory):
+def test_local_skills_publish_mapped_artwork_only(
+    mod, tmp_path, monkeypatch, directory
+):
     for name in ("illustrated", "plain"):
         skill = tmp_path / directory / "creative" / name
         skill.mkdir(parents=True)
         (skill / "SKILL.md").write_text(f"---\nname: {name}\n---\nExample.")
     manifest = tmp_path / "apps/shared/src/catalog-curation.json"
     manifest.parent.mkdir(parents=True)
-    manifest.write_text(json.dumps({
-        "artwork": {"skills": {"creative/illustrated": "art.jpg"}},
-        "featured": {"skills": ["creative/plain", "creative/illustrated"]},
-    }))
+    manifest.write_text(
+        json.dumps(
+            {
+                "artwork": {"skills": {"creative/illustrated": "art.jpg"}},
+                "featured": {"skills": ["creative/plain", "creative/illustrated"]},
+            }
+        )
+    )
     monkeypatch.setattr(mod, "REPO_ROOT", str(tmp_path))
 
     entries = {entry["name"]: entry for entry in mod.extract_local_skills()}
@@ -76,10 +87,15 @@ def test_local_skills_publish_mapped_artwork_only(mod, tmp_path, monkeypatch, di
     assert entries["illustrated"]["featured"] == 2
 
 
-def test_unified_skills_keep_source_identifiers_and_match_cli_install_targets(mod, tmp_path, monkeypatch):
+def test_unified_skills_keep_source_identifiers_and_match_cli_install_targets(
+    mod, tmp_path, monkeypatch
+):
     entries = [
         {"source": "clawhub", "identifier": "apple-design", "name": "Display name"},
-        {"source": "skills-sh", "identifier": "skills-sh/owner/repo/a skill?mode=one&two#readme"},
+        {
+            "source": "skills-sh",
+            "identifier": "skills-sh/owner/repo/a skill?mode=one&two#readme",
+        },
         {"source": "github", "identifier": "anthropics/skills/skills/pdf"},
         {"source": "well-known", "identifier": "https://example.com/skills/example"},
     ]
@@ -91,7 +107,9 @@ def test_unified_skills_keep_source_identifiers_and_match_cli_install_targets(mo
     assert len(extracted) == len(entries)
     for source, published in zip(entries, extracted):
         identifier = source["identifier"]
-        expected = f"clawhub/{identifier}" if source["source"] == "clawhub" else identifier
+        expected = (
+            f"clawhub/{identifier}" if source["source"] == "clawhub" else identifier
+        )
         assert published["identifier"] == identifier
         assert published["installIdentifier"] == expected
         assert published["installCmd"] == f"clawk skills install {expected}"
@@ -100,6 +118,7 @@ def test_unified_skills_keep_source_identifiers_and_match_cli_install_targets(mo
 # --------------------------------------------------------------------------
 # _source_url
 # --------------------------------------------------------------------------
+
 
 def test_source_url_prefers_explicit_detail_url(mod):
     extra = {"detail_url": "https://skills.sh/owner/repo/skill"}
@@ -120,11 +139,15 @@ def test_source_url_prefers_browse_sh_source_url(mod):
 
 def test_source_url_synthesizes_github_tree_url(mod):
     url = mod._source_url("github", "anthropics/skills/skills/algorithmic-art", {})
-    assert url == "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art"
+    assert (
+        url == "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art"
+    )
 
 
 def test_source_url_synthesizes_github_root_when_no_subpath(mod):
-    assert mod._source_url("github", "owner/repo", {}) == "https://github.com/owner/repo"
+    assert (
+        mod._source_url("github", "owner/repo", {}) == "https://github.com/owner/repo"
+    )
 
 
 def test_source_url_synthesizes_clawhub(mod):
@@ -135,10 +158,7 @@ def test_source_url_synthesizes_clawhub(mod):
 
 def test_source_url_synthesizes_clawhub_strips_prefix(mod):
     # identifier may arrive already prefixed; we must not double-prefix.
-    assert (
-        mod._source_url("clawhub", "clawhub/go-music-skill", {})
-        == ""
-    )
+    assert mod._source_url("clawhub", "clawhub/go-music-skill", {}) == ""
 
 
 def test_source_url_synthesizes_clawhub_with_owner(mod):
@@ -158,7 +178,10 @@ def test_source_url_synthesizes_clawhub_with_owner_strips_prefix(mod):
 
 
 def test_source_url_synthesizes_lobehub(mod):
-    assert mod._source_url("lobehub", "lobehub/chinese-paper", {}) == "https://lobehub.com/agent/chinese-paper"
+    assert (
+        mod._source_url("lobehub", "lobehub/chinese-paper", {})
+        == "https://lobehub.com/agent/chinese-paper"
+    )
 
 
 def test_source_url_empty_for_unknown_source_without_identifier(mod):
@@ -168,9 +191,6 @@ def test_source_url_empty_for_unknown_source_without_identifier(mod):
 # --------------------------------------------------------------------------
 # _guess_category
 # --------------------------------------------------------------------------
-
-
-
 
 
 def test_guess_category_rejects_junk_tag(mod):

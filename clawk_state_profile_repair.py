@@ -19,6 +19,7 @@ delete from the source — because a crash between them leaves a *duplicate*, wh
 settles idempotently (:meth:`import_moved_session` reports ``present``; the delete only proceeds when
 the target holds at least as many messages). The reverse order would lose the row.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,6 +43,7 @@ def session_key_profile(session_key: Any) -> Optional[str]:
     if len(parts) < 3 or parts[0] != "agent" or not parts[1]:
         return None
     from clawk_state_keys import profile_from_session_key_namespace
+
     return profile_from_session_key_namespace(parts[1])
 
 
@@ -66,7 +68,9 @@ class SessionLedgeredError(RuntimeError):
     """A session with gateway admission/worker history cannot be moved between stores."""
 
     def __init__(self, session_id: str) -> None:
-        super().__init__(f"{session_id} has gateway admission/worker history; not moved")
+        super().__init__(
+            f"{session_id} has gateway admission/worker history; not moved"
+        )
 
 
 class SessionProfileRepairMixin:
@@ -74,7 +78,9 @@ class SessionProfileRepairMixin:
 
     # ── finders ────────────────────────────────────────────────────────────────
 
-    def find_crossed_profile_sessions(self, owner: str) -> dict[str, list[dict[str, Any]]]:
+    def find_crossed_profile_sessions(
+        self, owner: str
+    ) -> dict[str, list[dict[str, Any]]]:
         """Keyed session rows whose identity disagrees with itself or with this store.
 
         ``mislabelled``: ``profile_name`` names a profile other than the one in the row's own key
@@ -88,28 +94,49 @@ class SessionProfileRepairMixin:
             "SELECT s.id, s.session_key, s.profile_name, s.parent_session_id, s.message_count, "
             "       p.session_key AS parent_session_key "
             "FROM sessions s LEFT JOIN sessions p ON p.id = s.parent_session_id "
-            "WHERE s.session_key LIKE 'agent:%' ORDER BY s.started_at, s.id")
+            "WHERE s.session_key LIKE 'agent:%' ORDER BY s.started_at, s.id"
+        )
         ledgered = self._ledgered_session_ids()
-        found: dict[str, list[dict[str, Any]]] = {"mislabelled": [], "foreign": [], "crossed_parents": []}
+        found: dict[str, list[dict[str, Any]]] = {
+            "mislabelled": [],
+            "foreign": [],
+            "crossed_parents": [],
+        }
         for row in rows:
             key_profile = session_key_profile(row["session_key"])
             if key_profile is None:
                 continue
             label = _stored_profile(row["profile_name"])
             if label is not None and label != key_profile:
-                found["mislabelled"].append({
-                    "id": row["id"], "session_key": row["session_key"],
-                    "profile_name": label, "key_profile": key_profile})
+                found["mislabelled"].append(
+                    {
+                        "id": row["id"],
+                        "session_key": row["session_key"],
+                        "profile_name": label,
+                        "key_profile": key_profile,
+                    }
+                )
             if key_profile != owner:
-                found["foreign"].append({
-                    "id": row["id"], "session_key": row["session_key"], "key_profile": key_profile,
-                    "message_count": int(row["message_count"] or 0),
-                    "parent_session_id": row["parent_session_id"], "ledgered": row["id"] in ledgered})
+                found["foreign"].append(
+                    {
+                        "id": row["id"],
+                        "session_key": row["session_key"],
+                        "key_profile": key_profile,
+                        "message_count": int(row["message_count"] or 0),
+                        "parent_session_id": row["parent_session_id"],
+                        "ledgered": row["id"] in ledgered,
+                    }
+                )
             parent_profile = session_key_profile(row["parent_session_key"])
             if parent_profile is not None and parent_profile != key_profile:
-                found["crossed_parents"].append({
-                    "id": row["id"], "key_profile": key_profile,
-                    "parent_session_id": row["parent_session_id"], "parent_profile": parent_profile})
+                found["crossed_parents"].append(
+                    {
+                        "id": row["id"],
+                        "key_profile": key_profile,
+                        "parent_session_id": row["parent_session_id"],
+                        "parent_profile": parent_profile,
+                    }
+                )
         return found
 
     def _ledgered_session_ids(self) -> set[str]:
@@ -117,35 +144,67 @@ class SessionProfileRepairMixin:
         ``worker_executions``, both ``ON DELETE RESTRICT``). A move copies only the transcript, so
         such a row could never leave the source: report it instead of copying it. A store whose
         schema predates the ledger has none."""
+
         def _read(conn):
-            tables = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' "
-                "AND name IN ('session_admissions', 'worker_executions')")}
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' "
+                    "AND name IN ('session_admissions', 'worker_executions')"
+                )
+            }
             ids: set[str] = set()
             if "session_admissions" in tables:
-                ids.update(r[0] for r in conn.execute("SELECT DISTINCT target_session_id FROM session_admissions"))
+                ids.update(
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT DISTINCT target_session_id FROM session_admissions"
+                    )
+                )
             if "worker_executions" in tables:
-                ids.update(r[0] for r in conn.execute("SELECT DISTINCT session_id FROM worker_executions"))
+                ids.update(
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT DISTINCT session_id FROM worker_executions"
+                    )
+                )
             return ids
+
         return self._read_retrying_ioerr(_read)
 
     def list_gateway_routing_rows(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._read_all(
-            "SELECT scope, session_key, entry_json, updated_at FROM gateway_routing "
-            "ORDER BY scope, session_key")]
+        return [
+            dict(row)
+            for row in self._read_all(
+                "SELECT scope, session_key, entry_json, updated_at FROM gateway_routing "
+                "ORDER BY scope, session_key"
+            )
+        ]
 
     def find_profile_less_telegram_topic_rows(self) -> list[dict[str, Any]]:
         """``telegram_dm_topic_bindings`` rows labelled ``default`` whose ``session_key`` names a named
         profile: written by a multiplexer that had not yet learned to stamp the routed profile
         (#76423). Stores whose topic tables predate ``profile_name`` have nothing to relabel."""
+
         def _read(conn):
-            existing = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name = 'telegram_dm_topic_bindings'")}
-            if not existing or "profile_name" not in _table_columns(conn, "telegram_dm_topic_bindings"):
+            existing = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name = 'telegram_dm_topic_bindings'"
+                )
+            }
+            if not existing or "profile_name" not in _table_columns(
+                conn, "telegram_dm_topic_bindings"
+            ):
                 return []
-            return [dict(row) for row in conn.execute(
-                "SELECT chat_id, thread_id, session_key FROM telegram_dm_topic_bindings "
-                "WHERE profile_name = 'default' ORDER BY chat_id, thread_id")]
+            return [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT chat_id, thread_id, session_key FROM telegram_dm_topic_bindings "
+                    "WHERE profile_name = 'default' ORDER BY chat_id, thread_id"
+                )
+            ]
+
         out = []
         for row in self._read_retrying_ioerr(_read):
             key_profile = session_key_profile(row["session_key"])
@@ -154,7 +213,9 @@ class SessionProfileRepairMixin:
         return out
 
     def count_messages_all(self, session_id: str) -> int:
-        row = self._read_one("SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,))
+        row = self._read_one(
+            "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
+        )
         return int(row[0]) if row else 0
 
     # ── in-store fixers ───────────────────────────────────────────────────────
@@ -171,15 +232,18 @@ class SessionProfileRepairMixin:
             for chunk in _id_chunks(wanted):
                 rows = conn.execute(
                     f"SELECT id, session_key FROM sessions WHERE id IN ({_session_ids_placeholders(chunk)})",
-                    chunk).fetchall()
+                    chunk,
+                ).fetchall()
                 for session_id, session_key in rows:
                     target = session_key_profile(session_key)
                     if target is None:
                         continue
                     changed += conn.execute(
                         "UPDATE sessions SET profile_name = ? WHERE id = ? AND profile_name IS NOT ?",
-                        (target, session_id, target)).rowcount
+                        (target, session_id, target),
+                    ).rowcount
             return changed
+
         return self._execute_write(_do)
 
     def sever_crossed_parents(self, ids: Iterable[str]) -> int:
@@ -196,13 +260,21 @@ class SessionProfileRepairMixin:
                 rows = conn.execute(
                     "SELECT s.id, s.session_key, p.session_key FROM sessions s "
                     "JOIN sessions p ON p.id = s.parent_session_id "
-                    f"WHERE s.id IN ({_session_ids_placeholders(chunk)})", chunk).fetchall()
+                    f"WHERE s.id IN ({_session_ids_placeholders(chunk)})",
+                    chunk,
+                ).fetchall()
                 for session_id, key, parent_key in rows:
-                    mine, theirs = session_key_profile(key), session_key_profile(parent_key)
+                    mine, theirs = (
+                        session_key_profile(key),
+                        session_key_profile(parent_key),
+                    )
                     if mine is not None and theirs is not None and mine != theirs:
                         severed += conn.execute(
-                            "UPDATE sessions SET parent_session_id = NULL WHERE id = ?", (session_id,)).rowcount
+                            "UPDATE sessions SET parent_session_id = NULL WHERE id = ?",
+                            (session_id,),
+                        ).rowcount
             return severed
+
         return self._execute_write(_do)
 
     # ── cross-store move ──────────────────────────────────────────────────────
@@ -211,22 +283,49 @@ class SessionProfileRepairMixin:
         """Everything the target store needs to hold *session_id* as its own: the row (every column),
         the resolved system prompt, EVERY message row (inactive and compacted generations included —
         a move is not an export) and its usage rows."""
+
         def _read(conn):
-            session = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            session = conn.execute(
+                "SELECT * FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
             if session is None:
                 return None
+
             def _stored(prompt_hash):
-                row = conn.execute("SELECT prompt FROM system_prompts WHERE hash = ?", (prompt_hash,)).fetchone()
+                row = conn.execute(
+                    "SELECT prompt FROM system_prompts WHERE hash = ?", (prompt_hash,)
+                ).fetchone()
                 return row[0] if row else None
-            prompt = _stored(session["system_prompt_hash"]) if session["system_prompt_hash"] else None
+
+            prompt = (
+                _stored(session["system_prompt_hash"])
+                if session["system_prompt_hash"]
+                else None
+            )
             # The tools[] pin is content-addressed the same way; a legacy inline list resolves to None.
             tool_pin = _stored(session["tool_names"]) if session["tool_names"] else None
-            messages = [dict(r) for r in conn.execute(
-                "SELECT * FROM messages WHERE session_id = ? ORDER BY id", (session_id,))]
-            usage = [dict(r) for r in conn.execute(
-                "SELECT * FROM session_model_usage WHERE session_id = ?", (session_id,))]
-            return {"session": dict(session), "system_prompt": prompt, "tool_pin": tool_pin, "messages": messages,
-                    "usage": usage}
+            messages = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM messages WHERE session_id = ? ORDER BY id",
+                    (session_id,),
+                )
+            ]
+            usage = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM session_model_usage WHERE session_id = ?",
+                    (session_id,),
+                )
+            ]
+            return {
+                "session": dict(session),
+                "system_prompt": prompt,
+                "tool_pin": tool_pin,
+                "messages": messages,
+                "usage": usage,
+            }
+
         payload = self._read_retrying_ioerr(_read)
         if payload is not None and session_id in self._ledgered_session_ids():
             # Re-checked at apply time: the scan may predate a turn, and copying first would leave
@@ -234,7 +333,9 @@ class SessionProfileRepairMixin:
             raise SessionLedgeredError(session_id)
         return payload
 
-    def import_moved_session(self, payload: dict[str, Any], *, profile_name: str) -> str:
+    def import_moved_session(
+        self, payload: dict[str, Any], *, profile_name: str
+    ) -> str:
         """Insert a moved session into THIS store as *profile_name*'s. ``present`` when the id already
         exists (an earlier run copied but did not delete), else ``imported``. The parent link survives
         only when the parent is already here — a moved row must never point across stores or at a
@@ -246,48 +347,96 @@ class SessionProfileRepairMixin:
         session_id = session["id"]
 
         def _do(conn) -> str:
-            if conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone():
+            if conn.execute(
+                "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone():
                 return "present"
             session["profile_name"] = profile_name
             parent_id = session.get("parent_session_id")
-            if parent_id and conn.execute("SELECT 1 FROM sessions WHERE id = ?", (parent_id,)).fetchone() is None:
+            if (
+                parent_id
+                and conn.execute(
+                    "SELECT 1 FROM sessions WHERE id = ?", (parent_id,)
+                ).fetchone()
+                is None
+            ):
                 session["parent_session_id"] = None
             title = session.get("title")
-            if title is not None and conn.execute("SELECT 1 FROM sessions WHERE title = ?", (title,)).fetchone():
+            if (
+                title is not None
+                and conn.execute(
+                    "SELECT 1 FROM sessions WHERE title = ?", (title,)
+                ).fetchone()
+            ):
                 suffix = f" ({session_id[-12:]})"
-                session["title"] = title[:self.MAX_TITLE_LENGTH - len(suffix)] + suffix
-            session["system_prompt_hash"] = self._store_system_prompt(conn, payload.get("system_prompt"))
-            if payload.get("tool_pin") is not None or len(session.get("tool_names") or "") == 64:
+                session["title"] = title[: self.MAX_TITLE_LENGTH - len(suffix)] + suffix
+            session["system_prompt_hash"] = self._store_system_prompt(
+                conn, payload.get("system_prompt")
+            )
+            if (
+                payload.get("tool_pin") is not None
+                or len(session.get("tool_names") or "") == 64
+            ):
                 # A pin hash means nothing in this store: re-store the pin, or drop an unresolvable ref.
-                session["tool_names"] = self._store_system_prompt(conn, payload.get("tool_pin"))
+                session["tool_names"] = self._store_system_prompt(
+                    conn, payload.get("tool_pin")
+                )
             self._insert_row(conn, "sessions", session, skip=frozenset())
             for message in payload.get("messages") or []:
-                self._insert_row(conn, "messages", {**message, "session_id": session_id}, skip=_MESSAGE_MOVE_SKIP)
+                self._insert_row(
+                    conn,
+                    "messages",
+                    {**message, "session_id": session_id},
+                    skip=_MESSAGE_MOVE_SKIP,
+                )
             for usage in payload.get("usage") or []:
-                self._insert_row(conn, "session_model_usage", {**usage, "session_id": session_id}, skip=frozenset())
+                self._insert_row(
+                    conn,
+                    "session_model_usage",
+                    {**usage, "session_id": session_id},
+                    skip=frozenset(),
+                )
             return "imported"
+
         return self._execute_write(_do)
 
     @staticmethod
-    def _insert_row(conn, table: str, values: dict[str, Any], *, skip: frozenset) -> None:
-        columns = [c for c in _table_columns(conn, table) if c in values and c not in skip]
+    def _insert_row(
+        conn, table: str, values: dict[str, Any], *, skip: frozenset
+    ) -> None:
+        columns = [
+            c for c in _table_columns(conn, table) if c in values and c not in skip
+        ]
         conn.execute(
             f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
-            [values[c] for c in columns])
+            [values[c] for c in columns],
+        )
 
     def delete_moved_session(self, session_id: str) -> bool:
         """Remove a session this store no longer owns after the target confirmed it. Children left
         behind are detached (same FK rule as :meth:`delete_session`); topic bindings on the row
         cascade with it."""
+
         def _do(conn) -> bool:
-            if conn.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
+            if (
+                conn.execute(
+                    "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
+                ).fetchone()
+                is None
+            ):
                 return False
-            conn.execute("UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = ?", (session_id,))
+            conn.execute(
+                "UPDATE sessions SET parent_session_id = NULL WHERE parent_session_id = ?",
+                (session_id,),
+            )
             conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-            conn.execute("DELETE FROM session_model_usage WHERE session_id = ?", (session_id,))
+            conn.execute(
+                "DELETE FROM session_model_usage WHERE session_id = ?", (session_id,)
+            )
             conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             self._delete_unreferenced_system_prompts(conn)
             return True
+
         deleted = self._execute_write(_do)
         if deleted:
             emit_session_deleted(self, [session_id], reason="profile_repair")
@@ -300,6 +449,7 @@ class SessionProfileRepairMixin:
         gateway wrote before this store's profile was multiplexed (#113884). Only rows still under
         the legacy namespace change; a ``main``-named profile is written in its marked form."""
         from gateway.session import _session_key_namespace
+
         wanted = list(ids)
         if not wanted:
             return 0
@@ -311,8 +461,10 @@ class SessionProfileRepairMixin:
                 changed += conn.execute(
                     "UPDATE sessions SET session_key = ? || substr(session_key, 12), profile_name = ? "
                     f"WHERE id IN ({_session_ids_placeholders(chunk)}) AND substr(session_key, 1, 11) = 'agent:main:'",
-                    (new_ns, profile, *chunk)).rowcount
+                    (new_ns, profile, *chunk),
+                ).rowcount
             return changed
+
         return self._execute_write(_do)
 
     def delete_gateway_routing_rows(self, rows: Iterable[tuple[str, str]]) -> int:
@@ -321,12 +473,19 @@ class SessionProfileRepairMixin:
             return 0
 
         def _do(conn) -> int:
-            return sum(conn.execute(
-                "DELETE FROM gateway_routing WHERE scope = ? AND session_key = ?", (scope, key)).rowcount
-                for scope, key in wanted)
+            return sum(
+                conn.execute(
+                    "DELETE FROM gateway_routing WHERE scope = ? AND session_key = ?",
+                    (scope, key),
+                ).rowcount
+                for scope, key in wanted
+            )
+
         return self._execute_write(_do)
 
-    def insert_gateway_routing_rows_if_absent(self, rows: Iterable[tuple[str, str, str, float]]) -> int:
+    def insert_gateway_routing_rows_if_absent(
+        self, rows: Iterable[tuple[str, str, str, float]]
+    ) -> int:
         """Adopt ``(scope, session_key, entry_json, updated_at)`` rows another store held for this
         one's routing index. An existing key wins — the row the gateway actually loads stays."""
         wanted = list(rows)
@@ -334,24 +493,38 @@ class SessionProfileRepairMixin:
             return 0
 
         def _do(conn) -> int:
-            return sum(conn.execute(
-                "INSERT OR IGNORE INTO gateway_routing (scope, session_key, entry_json, updated_at) "
-                "VALUES (?, ?, ?, ?)", row).rowcount for row in wanted)
+            return sum(
+                conn.execute(
+                    "INSERT OR IGNORE INTO gateway_routing (scope, session_key, entry_json, updated_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    row,
+                ).rowcount
+                for row in wanted
+            )
+
         return self._execute_write(_do)
 
     # ── telegram topic tables ─────────────────────────────────────────────────
 
-    def relabel_telegram_topic_rows(self, rows: Iterable[dict[str, Any]]) -> dict[str, int]:
+    def relabel_telegram_topic_rows(
+        self, rows: Iterable[dict[str, Any]]
+    ) -> dict[str, int]:
         """Stamp the key's profile onto ``default``-labelled bindings (and the chat's mode row when
         only the default one exists). A binding that would collide with one the named profile already
         wrote is the stale duplicate and is removed."""
         wanted = list(rows)
-        counts = {"bindings_relabelled": 0, "bindings_duplicates_removed": 0, "mode_rows_relabelled": 0}
+        counts = {
+            "bindings_relabelled": 0,
+            "bindings_duplicates_removed": 0,
+            "mode_rows_relabelled": 0,
+        }
         if not wanted:
             return counts
 
         def _do(conn) -> dict[str, int]:
-            mode_has_profile = "profile_name" in _table_columns(conn, "telegram_dm_topic_mode")
+            mode_has_profile = "profile_name" in _table_columns(
+                conn, "telegram_dm_topic_mode"
+            )
             for row in wanted:
                 target = session_key_profile(row["session_key"])
                 if target in (None, "default"):
@@ -359,22 +532,36 @@ class SessionProfileRepairMixin:
                 chat_id, thread_id = row["chat_id"], row["thread_id"]
                 collides = conn.execute(
                     "SELECT 1 FROM telegram_dm_topic_bindings WHERE profile_name = ? AND chat_id = ? "
-                    "AND thread_id = ?", (target, chat_id, thread_id)).fetchone()
+                    "AND thread_id = ?",
+                    (target, chat_id, thread_id),
+                ).fetchone()
                 if collides:
                     counts["bindings_duplicates_removed"] += conn.execute(
                         "DELETE FROM telegram_dm_topic_bindings WHERE profile_name = 'default' "
-                        "AND chat_id = ? AND thread_id = ?", (chat_id, thread_id)).rowcount
+                        "AND chat_id = ? AND thread_id = ?",
+                        (chat_id, thread_id),
+                    ).rowcount
                 else:
                     counts["bindings_relabelled"] += conn.execute(
                         "UPDATE telegram_dm_topic_bindings SET profile_name = ? WHERE profile_name = 'default' "
-                        "AND chat_id = ? AND thread_id = ?", (target, chat_id, thread_id)).rowcount
-                if mode_has_profile and conn.execute(
+                        "AND chat_id = ? AND thread_id = ?",
+                        (target, chat_id, thread_id),
+                    ).rowcount
+                if (
+                    mode_has_profile
+                    and conn.execute(
                         "SELECT 1 FROM telegram_dm_topic_mode WHERE profile_name = ? AND chat_id = ?",
-                        (target, chat_id)).fetchone() is None:
+                        (target, chat_id),
+                    ).fetchone()
+                    is None
+                ):
                     counts["mode_rows_relabelled"] += conn.execute(
                         "UPDATE telegram_dm_topic_mode SET profile_name = ? WHERE profile_name = 'default' "
-                        "AND chat_id = ?", (target, chat_id)).rowcount
+                        "AND chat_id = ?",
+                        (target, chat_id),
+                    ).rowcount
             return counts
+
         return self._execute_write(_do)
 
     # ── evidence for JSON-file repairs ────────────────────────────────────────
@@ -384,5 +571,11 @@ class SessionProfileRepairMixin:
         who owns a profile-less ``gateway_voice_mode.json`` entry."""
         rows = self._read_all(
             "SELECT DISTINCT session_key FROM sessions WHERE source = ? AND chat_id = ? "
-            "AND session_key LIKE 'agent:%'", (platform, str(chat_id)))
-        return {p for p in (session_key_profile(r["session_key"]) for r in rows) if p is not None}
+            "AND session_key LIKE 'agent:%'",
+            (platform, str(chat_id)),
+        )
+        return {
+            p
+            for p in (session_key_profile(r["session_key"]) for r in rows)
+            if p is not None
+        }

@@ -33,14 +33,22 @@ def _is_cron_provider_dir(path: Path) -> bool:
 def _user_provider_dirs() -> list[Path]:
     """User-installed ``$CLAWK_HOME/plugins/<name>/`` dirs that look like cron providers."""
     user_dir = _loader.user_plugins_dir()
-    return [c for c in _loader.iter_plugin_dirs(user_dir) if _is_cron_provider_dir(c)] if user_dir else []
+    return (
+        [c for c in _loader.iter_plugin_dirs(user_dir) if _is_cron_provider_dir(c)]
+        if user_dir
+        else []
+    )
 
 
 def _iter_provider_dirs() -> list[tuple[str, Path]]:
     """``(name, path)`` for bundled then user providers; bundled wins on collisions."""
-    dirs = [(child.name, child) for child in _loader.iter_plugin_dirs(_CRON_PLUGINS_DIR)]
+    dirs = [
+        (child.name, child) for child in _loader.iter_plugin_dirs(_CRON_PLUGINS_DIR)
+    ]
     seen = {name for name, _ in dirs}
-    dirs.extend((child.name, child) for child in _user_provider_dirs() if child.name not in seen)
+    dirs.extend(
+        (child.name, child) for child in _user_provider_dirs() if child.name not in seen
+    )
     return dirs
 
 
@@ -56,9 +64,14 @@ def find_provider_dir(name: str) -> Optional[Path]:
 
 def discover_cron_schedulers() -> list[tuple[str, str, bool]]:
     """Return ``[(name, description, is_available), ...]`` for all discovered providers."""
-    return [(name, _loader.read_plugin_description(child),
-             _loader.probe_availability(lambda c=child: _load_provider_from_dir(c)))
-            for name, child in _iter_provider_dirs()]
+    return [
+        (
+            name,
+            _loader.read_plugin_description(child),
+            _loader.probe_availability(lambda c=child: _load_provider_from_dir(c)),
+        )
+        for name, child in _iter_provider_dirs()
+    ]
 
 
 def load_cron_scheduler(name: str) -> Optional[CronScheduler]:
@@ -68,27 +81,52 @@ def load_cron_scheduler(name: str) -> Optional[CronScheduler]:
         logger.debug("Cron provider '%s' not found in bundled or user plugins", name)
         return None
     return _loader.load_named(
-        name, provider_dir, _load_provider_from_dir,
-        kind="Cron provider", noun="provider", logger=logger)
+        name,
+        provider_dir,
+        _load_provider_from_dir,
+        kind="Cron provider",
+        noun="provider",
+        logger=logger,
+    )
 
 
 def _load_provider_from_dir(provider_dir: Path) -> Optional[CronScheduler]:
     """Import a provider module and extract its CronScheduler (register(ctx) or subclass)."""
     from cron.scheduler_provider import CronScheduler
+
     name = provider_dir.name
-    is_bundled = _CRON_PLUGINS_DIR in provider_dir.parents or provider_dir.parent == _CRON_PLUGINS_DIR
-    module_name = f"plugins.cron_providers.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}"
+    is_bundled = (
+        _CRON_PLUGINS_DIR in provider_dir.parents
+        or provider_dir.parent == _CRON_PLUGINS_DIR
+    )
+    module_name = (
+        f"plugins.cron_providers.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}"
+    )
     from clawk_cli.plugin_isolation import user_plugin_host
+
     host = None if is_bundled else user_plugin_host()
     if host is not None:
-        return host.load_instance(provider_dir, module_name=module_name, capture="register_cron_scheduler",
-                                  base_ref="cron.scheduler_provider:CronScheduler")
+        return host.load_instance(
+            provider_dir,
+            module_name=module_name,
+            capture="register_cron_scheduler",
+            base_ref="cron.scheduler_provider:CronScheduler",
+        )
     mod = _loader.load_plugin_module(
-        module_name, provider_dir, parents=("plugins", "plugins.cron_providers"), logger=logger,
-        synthetic_namespace=None if is_bundled else _USER_NAMESPACE)
+        module_name,
+        provider_dir,
+        parents=("plugins", "plugins.cron_providers"),
+        logger=logger,
+        synthetic_namespace=None if is_bundled else _USER_NAMESPACE,
+    )
     return mod and _loader.instance_from_module(
-        mod, collector=_ProviderCollector(), collected_attr="provider",
-        base_cls=CronScheduler, name=name, logger=logger)
+        mod,
+        collector=_ProviderCollector(),
+        collected_attr="provider",
+        base_cls=CronScheduler,
+        name=name,
+        logger=logger,
+    )
 
 
 class _ProviderCollector(_loader.NoopPluginContext):

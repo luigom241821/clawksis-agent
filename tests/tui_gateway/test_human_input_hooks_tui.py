@@ -27,7 +27,9 @@ def test_tui_sudo_request_fires_human_input_hooks(monkeypatch):
     monkeypatch.setattr(terminal_tool_sudo, "_sudo_password_cache", {})
 
     sid, session_key = "human-input-tui", "human-input-conversation"
-    monkeypatch.setitem(server._sessions, sid, {"session_key": session_key, "source": "desktop"})
+    monkeypatch.setitem(
+        server._sessions, sid, {"session_key": session_key, "source": "desktop"}
+    )
 
     def answer(frame):
         assert server_requests.resolve_response(
@@ -47,12 +49,20 @@ def test_tui_sudo_request_fires_human_input_hooks(monkeypatch):
     try:
         server._wire_callbacks(sid)
         with patch("clawk_cli.plugins.invoke_hook", side_effect=capture):
-            assert terminal_tool_sudo._prompt_for_sudo_password(command="sudo systemctl restart nginx") == PASSWORD
+            assert (
+                terminal_tool_sudo._prompt_for_sudo_password(
+                    command="sudo systemctl restart nginx"
+                )
+                == PASSWORD
+            )
     finally:
         server._clear_session_context(tokens)
         server_requests.reset_for_tests()
 
-    assert [name for name, _ in calls] == ["on_human_input_request", "on_human_input_resolved"]
+    assert [name for name, _ in calls] == [
+        "on_human_input_request",
+        "on_human_input_resolved",
+    ]
     request, resolved = calls[0][1], calls[1][1]
     assert request["kind"] == "sudo" and request["request_id"] == resolved["request_id"]
     assert request["platform"] == "desktop" and request["session_key"] == session_key

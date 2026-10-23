@@ -22,10 +22,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-
 # ---------------------------------------------------------------------------
 # Part 1: Agent-side — _flush_messages_to_session_db after compression
 # ---------------------------------------------------------------------------
+
 
 class TestFlushAfterCompression:
     """Verify that compressed messages are flushed to the new session's SQLite
@@ -35,6 +35,7 @@ class TestFlushAfterCompression:
     def _make_agent(self, session_db):
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
@@ -65,8 +66,10 @@ class TestFlushAfterCompression:
 
             # Simulate the original long history (200 messages)
             original_history = [
-                {"role": "user" if i % 2 == 0 else "assistant",
-                 "content": f"message {i}"}
+                {
+                    "role": "user" if i % 2 == 0 else "assistant",
+                    "content": f"message {i}",
+                }
                 for i in range(200)
             ]
 
@@ -139,7 +142,9 @@ class TestFlushAfterCompression:
         conversation_history=None and _flush_messages_to_session_db() appended
         the compacted dicts again, doubling live context.
         """
-        from agent.conversation_compression import conversation_history_after_compression
+        from agent.conversation_compression import (
+            conversation_history_after_compression,
+        )
         from clawk_state import SessionDB
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -249,9 +254,7 @@ class TestFlushAfterCompression:
             compacted, _ = compress_context(
                 agent, original, "system", approx_tokens=100_000
             )
-            history = conversation_history_after_compression(
-                agent, compacted, None
-            )
+            history = conversation_history_after_compression(agent, compacted, None)
 
             messages = compacted + [
                 {"role": "user", "content": "new request"},
@@ -261,16 +264,15 @@ class TestFlushAfterCompression:
             returned, _ = compress_context(
                 agent, messages, "system", approx_tokens=100_000
             )
-            history = conversation_history_after_compression(
-                agent, returned, history
-            )
+            history = conversation_history_after_compression(agent, returned, history)
             agent._flush_messages_to_session_db(returned, history)
 
             db.close()
             resumed_db = SessionDB(db_path=db_path)
-            assert [message["content"] for message in resumed_db.get_messages_as_conversation(
-                agent.session_id
-            )] == [
+            assert [
+                message["content"]
+                for message in resumed_db.get_messages_as_conversation(agent.session_id)
+            ] == [
                 "[summary] earlier state",
                 "retained tail",
                 "new request",
@@ -278,7 +280,9 @@ class TestFlushAfterCompression:
             ]
             resumed_db.close()
 
-    def test_rotation_child_session_flushes_full_compressed_transcript_with_markers(self):
+    def test_rotation_child_session_flushes_full_compressed_transcript_with_markers(
+        self,
+    ):
         """Regression for #57491: live cached-agent markers must not block child flush."""
         from agent.conversation_compression import compress_context
         from clawk_state import SessionDB
@@ -315,7 +319,10 @@ class TestFlushAfterCompression:
                 for i in range(40)
             ]
 
-            with patch("agent.context_compressor.call_llm", side_effect=RuntimeError("no provider")):
+            with patch(
+                "agent.context_compressor.call_llm",
+                side_effect=RuntimeError("no provider"),
+            ):
                 compressed, _ = compress_context(
                     agent, messages, approx_tokens=100_000, system_message="sys"
                 )
@@ -333,12 +340,9 @@ class TestFlushAfterCompression:
             db.close()
 
 
-
 # ---------------------------------------------------------------------------
 # Part 2: Gateway-side — history_offset after session split
 # ---------------------------------------------------------------------------
-
-
 
 
 class TestStoredPromptCwdDrift:
@@ -376,8 +380,7 @@ class TestStoredPromptCwdDrift:
 
         agent = self._make_agent()
         stored_prompt = (
-            self._host_block("/project/old")
-            + "Model: test/model\n"
+            self._host_block("/project/old") + "Model: test/model\n"
             "Provider: openrouter\n"
         )
 
@@ -394,9 +397,7 @@ class TestStoredPromptCwdDrift:
         agent = self._make_agent()
         current_cwd = str(Path("/project/current"))
         stored_prompt = (
-            self._host_block(current_cwd)
-            + "Model: test/model\n"
-            "Provider: openrouter\n"
+            self._host_block(current_cwd) + "Model: test/model\nProvider: openrouter\n"
         )
 
         with patch("os.getcwd", return_value=current_cwd):
@@ -422,8 +423,7 @@ class TestStoredPromptCwdDrift:
         agent = self._make_agent()
         current_cwd = str(Path("/project/current"))
         stored_prompt = (
-            self._host_block(current_cwd)
-            + "\n# AGENTS.md\n\n"
+            self._host_block(current_cwd) + "\n# AGENTS.md\n\n"
             "Our deploy convention:\n\n"
             "Current working directory: /srv/decoy\n\n"
             "Always run make before pushing.\n\n"
@@ -450,8 +450,7 @@ class TestStoredPromptCwdDrift:
 
         agent = self._make_agent()
         stored_prompt = (
-            self._host_block("/project/old")
-            + "\n# AGENTS.md\n\n"
+            self._host_block("/project/old") + "\n# AGENTS.md\n\n"
             "Current working directory: /project/new\n\n"
             "Model: test/model\n"
             "Provider: openrouter\n"
@@ -462,10 +461,6 @@ class TestStoredPromptCwdDrift:
                 "Embedded project text naming the new cwd must not mask real "
                 "drift in the host-info block"
             )
-
-
-
-
 
     def test_built_prompt_contains_platform_line(self):
         """The built system prompt must carry a Platform: line so drift detection works."""

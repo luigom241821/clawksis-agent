@@ -246,9 +246,9 @@ def test_concurrent_tool_call_heartbeat(monkeypatch):
     touches: list = []
     agent._touch_activity = lambda desc: touches.append(time.time())
 
-    agent._execute_tool_calls_concurrent = (
-        __import__("run_agent").AIAgent._execute_tool_calls_concurrent.__get__(agent)
-    )
+    agent._execute_tool_calls_concurrent = __import__(
+        "run_agent"
+    ).AIAgent._execute_tool_calls_concurrent.__get__(agent)
 
     class _FakeToolCall:
         def __init__(self, name, call_id):
@@ -304,7 +304,9 @@ def test_heartbeat_exits_once_worker_tid_is_interrupted():
         assert touches, "heartbeat never stamped while the worker was live"
         set_interrupt(True, fake_worker_tid)
         thread.join(timeout=1.0)
-        assert not thread.is_alive(), "heartbeat kept running after its worker was abandoned"
+        assert not thread.is_alive(), (
+            "heartbeat kept running after its worker was abandoned"
+        )
         n = len(touches)
         time.sleep(0.12)
         assert len(touches) == n
@@ -324,10 +326,16 @@ def test_sequential_timeout_stops_abandoned_workers_heartbeat(monkeypatch):
     monkeypatch.setattr(te, "_emit_terminal_post_tool_call", lambda agent, **kw: None)
     # The middleware's execution seam: ``_run_with_activity_heartbeat`` around ``execute`` on the worker.
     monkeypatch.setattr(
-        te, "_run_agent_tool_execution_middleware",
+        te,
+        "_run_agent_tool_execution_middleware",
         lambda agent, execute, function_name="terminal", **kw: te._ManagedToolResult(
-            result=te._run_with_activity_heartbeat(agent, function_name, lambda: execute({})),
-            args={}, middleware_trace=[], blocked=False, dispatched=True,
+            result=te._run_with_activity_heartbeat(
+                agent, function_name, lambda: execute({})
+            ),
+            args={},
+            middleware_trace=[],
+            blocked=False,
+            dispatched=True,
         ),
     )
 
@@ -350,13 +358,21 @@ def test_sequential_timeout_stops_abandoned_workers_heartbeat(monkeypatch):
     release = threading.Event()
     try:
         managed = te._run_sequential_tool_execution_middleware(
-            agent, function_name="terminal", function_args={}, effective_task_id="t",
-            tool_call_id="tc1", execute=lambda args: release.wait() or "late",
+            agent,
+            function_name="terminal",
+            function_args={},
+            effective_task_id="t",
+            tool_call_id="tc1",
+            execute=lambda args: release.wait() or "late",
         )
         abandoned_at = time.monotonic()
         assert isinstance(managed.result, te._ToolTimeoutResult)
         time.sleep(0.3)  # several heartbeat intervals past abandonment
-        late = [d for ts, d in agent.stamps if ts > abandoned_at + 0.06 and d.startswith("tool running:")]
+        late = [
+            d
+            for ts, d in agent.stamps
+            if ts > abandoned_at + 0.06 and d.startswith("tool running:")
+        ]
         assert not late, f"abandoned tool kept stamping activity: {late[:3]}"
     finally:
         release.set()

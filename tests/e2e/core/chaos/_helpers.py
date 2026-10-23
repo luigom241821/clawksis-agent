@@ -93,8 +93,7 @@ def chaos_config(
         # Offline: the passive update check does a GitHub round-trip and, on a partial clone
         # whose objects lag upstream, spawns a git lazy fetch that outlives the gateway.
         "updates:\n"
-        "  check: false\n"
-        + extra
+        "  check: false\n" + extra
     )
 
 
@@ -103,7 +102,9 @@ def write_chaos_home(root: Path, base_url: str, **cfg: Any) -> tuple[Path, Path]
     home = root / "home"
     clawk_home = home / ".clawksis"
     clawk_home.mkdir(parents=True, exist_ok=True)
-    (clawk_home / "config.yaml").write_text(chaos_config(base_url, **cfg), encoding="utf-8")
+    (clawk_home / "config.yaml").write_text(
+        chaos_config(base_url, **cfg), encoding="utf-8"
+    )
     (clawk_home / ".env").write_text("OPENAI_API_KEY=sk-fake-chaos\n", encoding="utf-8")
     return home, clawk_home
 
@@ -112,27 +113,30 @@ def hermetic_env(home: Path, clawk_home: Path, tag: str) -> dict[str, str]:
     """Child env: fake HOME/CLAWK_HOME, no real credentials, repo importable, and a
     tag every descendant inherits so the orphan scan can find it after reparenting."""
     env = {
-        k: v for k, v in os.environ.items()
+        k: v
+        for k, v in os.environ.items()
         if not (
             k.endswith(("_API_KEY", "_TOKEN", "_SECRET"))
             or k.startswith(("CLAWK_", "OPENROUTER", "ANTHROPIC", "OPENAI", "NOUS_"))
             or k in {"PYTEST_CURRENT_TEST"}
         )
     }
-    env.update({
-        "HOME": str(home),
-        "CLAWK_HOME": str(clawk_home),
-        "OPENAI_API_KEY": "sk-fake-chaos",
-        "PYTHONPATH": str(REPO_ROOT),
-        "PYTHONUNBUFFERED": "1",
-        "PYTHONFAULTHANDLER": "1",
-        "CHAOS_TAG": tag,
-        # HOME *is* the tmp root, so the live-DB guard (pytest ancestry) would read the
-        # tmp state.db as "production"; the documented child opt-out is safe here.
-        "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        "TZ": "UTC",
-        "NO_COLOR": "1",
-    })
+    env.update(
+        {
+            "HOME": str(home),
+            "CLAWK_HOME": str(clawk_home),
+            "OPENAI_API_KEY": "sk-fake-chaos",
+            "PYTHONPATH": str(REPO_ROOT),
+            "PYTHONUNBUFFERED": "1",
+            "PYTHONFAULTHANDLER": "1",
+            "CHAOS_TAG": tag,
+            # HOME *is* the tmp root, so the live-DB guard (pytest ancestry) would read the
+            # tmp state.db as "production"; the documented child opt-out is safe here.
+            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            "TZ": "UTC",
+            "NO_COLOR": "1",
+        }
+    )
     return env
 
 
@@ -165,7 +169,12 @@ def describe_pids(pids: Iterable[int]) -> list[str]:
     out = []
     for pid in pids:
         try:
-            cmd = Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            cmd = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\0", b" ")
+                .decode(errors="replace")
+            )
         except OSError:
             cmd = "?"
         out.append(f"{pid}: {cmd[:160]}")
@@ -219,7 +228,11 @@ def _call_ids(msg: dict[str, Any]) -> list[str]:
             calls = json.loads(calls)
         except json.JSONDecodeError:
             return ["<unparseable tool_calls>"]
-    return [c.get("id") or c.get("call_id") or "<missing id>" for c in calls if isinstance(c, dict)]
+    return [
+        c.get("id") or c.get("call_id") or "<missing id>"
+        for c in calls
+        if isinstance(c, dict)
+    ]
 
 
 def unanswered_tool_calls(messages: list[dict[str, Any]]) -> list[str]:
@@ -236,7 +249,7 @@ def unanswered_tool_calls(messages: list[dict[str, Any]]) -> list[str]:
         if not ids:
             continue
         answered = set()
-        for follow in messages[i + 1:]:
+        for follow in messages[i + 1 :]:
             if follow.get("role") != "tool":
                 break
             answered.add(follow.get("tool_call_id"))
@@ -255,7 +268,9 @@ def tool_results_by_id(messages: list[dict[str, Any]]) -> dict[str, str]:
     return out
 
 
-def persisted_messages(state_db: Path, session_id: str | None = None) -> list[dict[str, Any]]:
+def persisted_messages(
+    state_db: Path, session_id: str | None = None
+) -> list[dict[str, Any]]:
     """Active message rows from a real state.db, oldest first, OpenAI-shaped.
 
     With ``session_id=None`` the newest session that has messages is used."""
@@ -264,13 +279,16 @@ def persisted_messages(state_db: Path, session_id: str | None = None) -> list[di
         conn.row_factory = sqlite3.Row
         if session_id is None:
             row = conn.execute(
-                "SELECT session_id FROM messages ORDER BY id DESC LIMIT 1").fetchone()
+                "SELECT session_id FROM messages ORDER BY id DESC LIMIT 1"
+            ).fetchone()
             if row is None:
                 return []
             session_id = row["session_id"]
         rows = conn.execute(
             "SELECT role, content, tool_call_id, tool_calls FROM messages "
-            "WHERE session_id = ? AND active = 1 ORDER BY id", (session_id,)).fetchall()
+            "WHERE session_id = ? AND active = 1 ORDER BY id",
+            (session_id,),
+        ).fetchall()
     finally:
         conn.close()
     msgs = []

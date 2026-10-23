@@ -11,6 +11,7 @@ forever-chats, gateway channels). New contract:
 3. plugin sections re-render at the same boundary; a RAISING plugin falls
    back to its last good bytes (fail-open), never silently vanishes
 """
+
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -40,9 +41,10 @@ class TestInvalidateClearsPluginFreeze(unittest.TestCase):
         agent._plugin_system_prompt_sections_snapshot = ("frozen-section",)
         invalidate_system_prompt(agent)
         self.assertFalse(hasattr(agent, "_plugin_system_prompt_sections_snapshot"))
-        self.assertEqual(agent._plugin_system_prompt_sections_previous, ("frozen-section",))
+        self.assertEqual(
+            agent._plugin_system_prompt_sections_previous, ("frozen-section",)
+        )
         self.assertIsNone(agent._cached_system_prompt)
-
 
 
 class TestPluginRerenderFailOpen(unittest.TestCase):
@@ -51,8 +53,10 @@ class TestPluginRerenderFailOpen(unittest.TestCase):
 
         agent = _agent(_cached_system_prompt=None)
         agent._plugin_system_prompt_sections_previous = ("last-good",)
-        with patch("clawk_cli.plugins.render_system_prompt_sections",
-                   side_effect=RuntimeError("plugin exploded")):
+        with patch(
+            "clawk_cli.plugins.render_system_prompt_sections",
+            side_effect=RuntimeError("plugin exploded"),
+        ):
             rendered = _frozen_plugin_prompt_sections(agent)
         self.assertEqual(rendered, ("last-good",))
 
@@ -60,14 +64,17 @@ class TestPluginRerenderFailOpen(unittest.TestCase):
         from agent.system_prompt import _frozen_plugin_prompt_sections
 
         agent = _agent(_cached_system_prompt=None)
-        with patch("clawk_cli.plugins.render_system_prompt_sections",
-                   side_effect=RuntimeError("plugin exploded")):
+        with patch(
+            "clawk_cli.plugins.render_system_prompt_sections",
+            side_effect=RuntimeError("plugin exploded"),
+        ):
             rendered = _frozen_plugin_prompt_sections(agent)
         self.assertEqual(rendered, ())
 
 
 def _init_repo(path, first_commit):
     import subprocess
+
     path.mkdir()
     for cmd in (
         ["git", "init", "-q", "-b", "main"],
@@ -80,8 +87,6 @@ def _init_repo(path, first_commit):
     subprocess.run(["git", "add", "-A"], cwd=path, check=True)
     subprocess.run(["git", "commit", "-qm", first_commit], cwd=path, check=True)
     return path
-
-
 
 
 class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
@@ -116,10 +121,14 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
                 _emit_status=lambda *a, **k: None,
             )
 
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints", return_value="ENV HINTS"), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo):
-
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value="ENV HINTS",
+                ),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo),
+            ):
                 # First build: pins the snapshot
                 p1 = build_system_prompt(agent)
                 self.assertIn("Workspace (snapshot at session start", p1)
@@ -127,7 +136,9 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
                 # Now repo mutates (agent touched and committed new files)
                 (repo / "new_file.py").write_text("print(2)\n")
                 subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
-                subprocess.run(["git", "commit", "-qm", "second commit"], cwd=repo, check=True)
+                subprocess.run(
+                    ["git", "commit", "-qm", "second commit"], cwd=repo, check=True
+                )
                 (repo / "untracked.txt").write_text("wip\n")
 
                 # Invalidate prompt (as happens during context compression)
@@ -135,8 +146,12 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
 
                 # Second build: must replay pinned snapshot without re-probing git
                 p2 = build_system_prompt(agent)
-                self.assertEqual(p1, p2, "Prompt must remain byte-identical despite repo mutations")
-                self.assertNotIn("second commit", p2, "Rebuilt prompt must not leak mutated git log")
+                self.assertEqual(
+                    p1, p2, "Prompt must remain byte-identical despite repo mutations"
+                )
+                self.assertNotIn(
+                    "second commit", p2, "Rebuilt prompt must not leak mutated git log"
+                )
 
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
@@ -171,15 +186,25 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
                 _emit_status=lambda *a, **k: None,
             )
 
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints", return_value="ENV HINTS"), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo1):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value="ENV HINTS",
+                ),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo1),
+            ):
                 p1 = build_system_prompt(agent)
                 self.assertIn(f"init {repo1.name}", p1)
 
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints", return_value="ENV HINTS"), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo2):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value="ENV HINTS",
+                ),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo2),
+            ):
                 p2 = build_system_prompt(agent)
                 self.assertIn(f"init {repo2.name}", p2)
 
@@ -197,19 +222,40 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
         try:
             repo = _init_repo(tmp / "proj", "init commit")
             agent = _agent(
-                load_soul_identity=False, skip_context_files=True, valid_tool_names={"terminal"},
-                platform="cli", model="gpt-4o", _task_completion_guidance=False,
-                _parallel_tool_call_guidance=False, _tool_use_enforcement=False, _execution_guidance=False,
-                _environment_probe=False, _bot_mode_protocol=False, _kanban_worker_guidance="",
-                pass_session_id=False, session_id="s1", _emit_status=lambda *a, **k: None,
-                _frozen_workspace_snapshot=None, context_compressor=None, _session_db=None,
+                load_soul_identity=False,
+                skip_context_files=True,
+                valid_tool_names={"terminal"},
+                platform="cli",
+                model="gpt-4o",
+                _task_completion_guidance=False,
+                _parallel_tool_call_guidance=False,
+                _tool_use_enforcement=False,
+                _execution_guidance=False,
+                _environment_probe=False,
+                _bot_mode_protocol=False,
+                _kanban_worker_guidance="",
+                pass_session_id=False,
+                session_id="s1",
+                _emit_status=lambda *a, **k: None,
+                _frozen_workspace_snapshot=None,
+                context_compressor=None,
+                _session_db=None,
                 _transition_context_engine_session=lambda **kw: None,
             )
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints", return_value="ENV HINTS"), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value="ENV HINTS",
+                ),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo),
+            ):
                 build_system_prompt(agent)
-                subprocess.run(["git", "commit", "-qm", "second commit", "--allow-empty"], cwd=repo, check=True)
+                subprocess.run(
+                    ["git", "commit", "-qm", "second commit", "--allow-empty"],
+                    cwd=repo,
+                    check=True,
+                )
                 # The CLI session boundary (cli_session_mixin.new_session) on the same agent object.
                 AIAgent.reset_session_state(agent)
                 invalidate_system_prompt(agent)
@@ -219,11 +265,22 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
 
     def _pin_agent(self, **over):
         return _agent(
-            load_soul_identity=False, skip_context_files=True, valid_tool_names={"terminal"},
-            platform="cli", model="gpt-4o", _task_completion_guidance=False,
-            _parallel_tool_call_guidance=False, _tool_use_enforcement=False, _execution_guidance=False,
-            _environment_probe=False, _bot_mode_protocol=False, _kanban_worker_guidance="",
-            pass_session_id=False, session_id="s1", _emit_status=lambda *a, **k: None, **over,
+            load_soul_identity=False,
+            skip_context_files=True,
+            valid_tool_names={"terminal"},
+            platform="cli",
+            model="gpt-4o",
+            _task_completion_guidance=False,
+            _parallel_tool_call_guidance=False,
+            _tool_use_enforcement=False,
+            _execution_guidance=False,
+            _environment_probe=False,
+            _bot_mode_protocol=False,
+            _kanban_worker_guidance="",
+            pass_session_id=False,
+            session_id="s1",
+            _emit_status=lambda *a, **k: None,
+            **over,
         )
 
     def test_binding_the_launch_dir_explicitly_replays_the_pin(self):
@@ -239,14 +296,23 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
             repo = _init_repo(tmp / "proj", "init commit")
             os.chdir(repo)
             agent = self._pin_agent()
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints", return_value="ENV HINTS"):
-                with patch("agent.system_prompt.resolve_context_cwd", return_value=None):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value="ENV HINTS",
+                ),
+            ):
+                with patch(
+                    "agent.system_prompt.resolve_context_cwd", return_value=None
+                ):
                     p1 = build_system_prompt(agent)
                 self.assertIn("Status: clean", p1)
                 (repo / "untracked.txt").write_text("wip\n")
                 invalidate_system_prompt(agent)
-                with patch("agent.system_prompt.resolve_context_cwd", return_value=repo):
+                with patch(
+                    "agent.system_prompt.resolve_context_cwd", return_value=repo
+                ):
                     self.assertEqual(build_system_prompt(agent), p1)
         finally:
             os.chdir(old_cwd)
@@ -262,22 +328,33 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
 
         tmp = Path(tempfile.mkdtemp(prefix="test-pinned-resume-"))
         try:
-            repo, other = _init_repo(tmp / "proj", "init commit"), _init_repo(tmp / "other", "init other")
+            repo, other = (
+                _init_repo(tmp / "proj", "init commit"),
+                _init_repo(tmp / "other", "init other"),
+            )
 
             def env(cwd):
-                return patch("agent.prompt_builder.build_environment_hints",
-                             return_value=f"Host: x\nUser home directory: /h\nCurrent working directory: {cwd}")
+                return patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value=f"Host: x\nUser home directory: /h\nCurrent working directory: {cwd}",
+                )
 
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), env(repo), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                env(repo),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo),
+            ):
                 stored = build_system_prompt(self._pin_agent())
                 self.assertIn("Status: clean", stored)
                 (repo / "untracked.txt").write_text("wip\n")
                 db = SimpleNamespace(get_session=lambda sid: {"system_prompt": stored})
                 resumed = self._pin_agent(_cached_system_prompt=None, _session_db=db)
                 self.assertEqual(build_system_prompt(resumed), stored)
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), env(other), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=other):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                env(other),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=other),
+            ):
                 moved = self._pin_agent(_cached_system_prompt=None, _session_db=db)
                 self.assertIn(f"- Root: {other}", build_system_prompt(moved))
         finally:
@@ -295,10 +372,14 @@ class TestWorkspaceSnapshotPinnedAcrossCompaction(unittest.TestCase):
             repo = _init_repo(tmp / "proj", "init commit")
             stored = f"Host: x\nUser home directory: /h\nCurrent working directory: {repo}\n\nBODY"
             db = SimpleNamespace(get_session=lambda sid: {"system_prompt": stored})
-            with patch("agent.prompt_builder.load_soul_md", return_value=""), \
-                 patch("agent.prompt_builder.build_environment_hints",
-                       return_value=f"Host: x\nUser home directory: /h\nCurrent working directory: {repo}"), \
-                 patch("agent.system_prompt.resolve_context_cwd", return_value=repo):
+            with (
+                patch("agent.prompt_builder.load_soul_md", return_value=""),
+                patch(
+                    "agent.prompt_builder.build_environment_hints",
+                    return_value=f"Host: x\nUser home directory: /h\nCurrent working directory: {repo}",
+                ),
+                patch("agent.system_prompt.resolve_context_cwd", return_value=repo),
+            ):
                 resumed = self._pin_agent(_cached_system_prompt=None, _session_db=db)
                 self.assertIn(f"- Root: {repo}", build_system_prompt(resumed))
         finally:

@@ -28,6 +28,7 @@ def _clear_vt100_prefix_cache() -> None:
     """
     try:
         from prompt_toolkit.input.vt100_parser import _IS_PREFIX_OF_LONGER_MATCH_CACHE
+
         _IS_PREFIX_OF_LONGER_MATCH_CACHE.clear()
     except Exception:
         pass
@@ -47,7 +48,11 @@ def _install(build, *, overwrite: bool) -> int:
         return 0
     changed = 0
     for seq, key in build(ANSI_SEQUENCES, Keys).items():
-        if (ANSI_SEQUENCES.get(seq) != key) if overwrite else (seq not in ANSI_SEQUENCES):
+        if (
+            (ANSI_SEQUENCES.get(seq) != key)
+            if overwrite
+            else (seq not in ANSI_SEQUENCES)
+        ):
             ANSI_SEQUENCES[seq] = key
             changed += 1
     if changed:
@@ -79,8 +84,13 @@ def install_keypress_data_normalization() -> int:
     def _patched_call_handler(self, key, insert_text):
         # A single plain character mapped from an extended sequence must carry the mapped
         # character as its data — self-insert inserts event.data and the raw CSI would leak.
-        if (isinstance(key, str) and len(key) == 1 and not isinstance(key, _PtKeys)
-                and isinstance(insert_text, str) and insert_text.startswith("\x1b")):
+        if (
+            isinstance(key, str)
+            and len(key) == 1
+            and not isinstance(key, _PtKeys)
+            and isinstance(insert_text, str)
+            and insert_text.startswith("\x1b")
+        ):
             insert_text = key
         return _orig_call_handler(self, key, insert_text)
 
@@ -96,9 +106,13 @@ def _install_enter_alias(modifier: int) -> int:
     Stock prompt_toolkit maps the tilde form to plain ControlM (i.e. Shift+Enter == Enter, the very
     bug this fixes), so these keys are overwritten unconditionally.
     """
+
     def build(_seqs, keys):
         alt_enter = (keys.Escape, keys.ControlM)
-        seqs = [f"\x1b[13;{m}u" for m in _lock_variants(modifier)] + [f"\x1b[27;{modifier};13~", f"\x1b[27;{modifier};13u"]
+        seqs = [f"\x1b[13;{m}u" for m in _lock_variants(modifier)] + [
+            f"\x1b[27;{modifier};13~",
+            f"\x1b[27;{modifier};13u",
+        ]
         return dict.fromkeys(seqs, alt_enter)
 
     return _install(build, overwrite=True)
@@ -128,8 +142,11 @@ def install_cmd_backspace_alias() -> int:
     Kitty/modifyOtherKeys report Cmd as the super bit (8), yielding unmapped sequences that insert
     literally. Forward-delete is not a CSI-u codepoint, so it uses the CSI tilde form ``ESC[3;9~``.
     """
+
     def build(_seqs, keys):
-        mods = [mod for base in (9, 10) for mod in _lock_variants(base)]  # super / super+shift
+        mods = [
+            mod for base in (9, 10) for mod in _lock_variants(base)
+        ]  # super / super+shift
         aliases = {f"\x1b[127;{mod}u": keys.ControlU for mod in mods}
         aliases.update({f"\x1b[3;{mod}~": keys.ControlK for mod in mods})
         aliases["\x1b[27;9;127~"] = keys.ControlU
@@ -141,20 +158,46 @@ def install_cmd_backspace_alias() -> int:
 # Kitty functional keys (Private Use Area codepoints) that have prompt_toolkit equivalents.
 # kitty emits these CSI-u encodings even in LEGACY mode, so unmapped they leak as literal text.
 _KITTY_FUNCTIONAL_NAMED = {
-    57409: ".", 57410: "/", 57411: "*", 57412: "-", 57413: "+", 57414: "ControlM",  # KP ops
-    57415: "=", 57416: ",",
-    57417: "Left", 57418: "Right", 57419: "Up", 57420: "Down", 57421: "PageUp",  # KP nav
-    57422: "PageDown", 57423: "Home", 57424: "End", 57425: "Insert", 57426: "Delete",
+    57409: ".",
+    57410: "/",
+    57411: "*",
+    57412: "-",
+    57413: "+",
+    57414: "ControlM",  # KP ops
+    57415: "=",
+    57416: ",",
+    57417: "Left",
+    57418: "Right",
+    57419: "Up",
+    57420: "Down",
+    57421: "PageUp",  # KP nav
+    57422: "PageDown",
+    57423: "Home",
+    57424: "End",
+    57425: "Insert",
+    57426: "Delete",
 }
 # No prompt_toolkit equivalent: locks/PrintScreen/Pause/Menu, F25-F35, KP_BEGIN, media keys and
 # bare modifier events — consumed as Ignore instead of leaking literal text.
-_KITTY_FUNCTIONAL_IGNORED = (*range(57358, 57364), *range(57388, 57399), 57427, *range(57428, 57455))
+_KITTY_FUNCTIONAL_IGNORED = (
+    *range(57358, 57364),
+    *range(57388, 57399),
+    57427,
+    *range(57428, 57455),
+)
 
 
 def _kitty_functional_map(Keys) -> dict[int, object]:
     fm: dict[int, object] = {57399 + d: str(d) for d in range(10)}  # KP_0..KP_9
-    fm.update({cp: getattr(Keys, v) if v[0].isupper() else v for cp, v in _KITTY_FUNCTIONAL_NAMED.items()})
-    fm.update({57376 + (n - 13): getattr(Keys, f"F{n}") for n in range(13, 25)})  # F13..F24
+    fm.update(
+        {
+            cp: getattr(Keys, v) if v[0].isupper() else v
+            for cp, v in _KITTY_FUNCTIONAL_NAMED.items()
+        }
+    )
+    fm.update(
+        {57376 + (n - 13): getattr(Keys, f"F{n}") for n in range(13, 25)}
+    )  # F13..F24
     for code in _KITTY_FUNCTIONAL_IGNORED:
         fm.setdefault(code, Keys.Ignore)
     return fm
@@ -217,13 +260,14 @@ def _modify_other_keys_aliases(ANSI_SEQUENCES: dict, Keys) -> dict[str, object]:
     # Ctrl+<ch>: the extended sequence maps to whatever Keys value the raw control byte
     # chr(ord(ch) & 0x1f) already maps to, so existing bindings fire identically. Covers a-z and
     # the control-producing symbols @ [ \ ] ^ _ and Space (\x00 -> ControlAt).
-    letters = range(ord('a'), ord('z') + 1)
+    letters = range(ord("a"), ord("z") + 1)
     ctrl_key_map: dict[int, object] = {
-        cp: key for cp in (*letters, 64, 91, 92, 93, 94, 95, 32)
+        cp: key
+        for cp in (*letters, 64, 91, 92, 93, 94, 95, 32)
         if (key := ANSI_SEQUENCES.get(chr(cp & 0x1F))) is not None
     }
     # Ctrl+digit has no useful raw byte (chr(ord('0') & 0x1F) is ControlP), so map directly.
-    ctrl_key_map.update({ord('0') + d: getattr(Keys, f"Control{d}") for d in range(10)})
+    ctrl_key_map.update({ord("0") + d: getattr(Keys, f"Control{d}") for d in range(10)})
     _install_paired(5, ctrl_key_map)
 
     # Letter combos. Alt+a -> (Escape, 'a') like bare Alt. Shift+a -> 'A' (safe on every Latin
@@ -235,13 +279,18 @@ def _modify_other_keys_aliases(ANSI_SEQUENCES: dict, Keys) -> dict[str, object]:
     for ch in letters:
         upper_char = chr(ch - 32)
         ctrl_key = ctrl_key_map.get(ch)
-        _install_paired(3, {ch: (Keys.Escape, chr(ch)), ch - 32: (Keys.Escape, upper_char)})
+        _install_paired(
+            3, {ch: (Keys.Escape, chr(ch)), ch - 32: (Keys.Escape, upper_char)}
+        )
         for cp in (ch, ch - 32):
             _install_paired(2, {cp: upper_char})
             _install_paired(4, {cp: (Keys.Escape, upper_char)})
             if ctrl_key is not None:
                 _install_paired(6, {cp: ctrl_key})
-                for modifier in (7, 8):  # Ctrl+Alt and Ctrl+Alt+Shift — same normalization
+                for modifier in (
+                    7,
+                    8,
+                ):  # Ctrl+Alt and Ctrl+Alt+Shift — same normalization
                     _install_paired(modifier, {cp: (Keys.Escape, ctrl_key)})
 
     # Shift+printable ASCII under modifyOtherKeys (tilde form only, never CSI-u): xterm's own key
@@ -268,19 +317,43 @@ def _modify_other_keys_aliases(ANSI_SEQUENCES: dict, Keys) -> dict[str, object]:
     # Modified Enter/Tab/Backspace/Space (Shift/Ctrl+Enter are owned by the enter aliases, which run
     # first and win). Modifier 1 = unmodified keys kitty CSI-u-encodes on their own when a lock bit
     # is set (plain Backspace arrives as ESC[127;129u rather than \x7f).
-    alt_backspace = (Keys.Escape, Keys.ControlH)  # backward-kill-word, matching Ink TUI + Desktop
+    alt_backspace = (
+        Keys.Escape,
+        Keys.ControlH,
+    )  # backward-kill-word, matching Ink TUI + Desktop
     _install_paired(2, {9: Keys.BackTab, 127: Keys.ControlH, 32: " "})
-    _install_paired(3, {13: (Keys.Escape, Keys.ControlM), 127: alt_backspace, 32: (Keys.Escape, " ")})
-    _install_paired(5, {9: Keys.ControlI, 127: alt_backspace})  # Ctrl+Tab degrades to Tab
-    _install_paired(1, {9: Keys.ControlI, 13: Keys.ControlM, 32: " ", 127: Keys.ControlH})
+    _install_paired(
+        3,
+        {13: (Keys.Escape, Keys.ControlM), 127: alt_backspace, 32: (Keys.Escape, " ")},
+    )
+    _install_paired(
+        5, {9: Keys.ControlI, 127: alt_backspace}
+    )  # Ctrl+Tab degrades to Tab
+    _install_paired(
+        1, {9: Keys.ControlI, 13: Keys.ControlM, 32: " ", 127: Keys.ControlH}
+    )
 
     # Lock twins for the legacy CSI-letter / CSI-tilde forms kitty keeps using under the
     # disambiguate push (Down with NumLock on = ESC[1;129B; Alt+Left = ESC[1;131D). Derived from
     # whatever the table already maps for the base modifier, stock entries included.
     for m in range(1, 17):
-        legacy = [(f"\x1b[1;{m}{t}" if m > 1 else f"\x1b[{t}", f"\x1b[1;{{mod}}{t}", f"\x1bO{t}") for t in "ABCDFHPQRS"]
-        legacy += [(f"\x1b[{n};{m}~" if m > 1 else f"\x1b[{n}~", f"\x1b[{n};{{mod}}~", None) for n in range(1, 9)]
-        for base_seq, twin_fmt, ss3_seq in legacy:  # CSI-letter nav/F1-F4, then CSI-tilde nav keys
+        legacy = [
+            (
+                f"\x1b[1;{m}{t}" if m > 1 else f"\x1b[{t}",
+                f"\x1b[1;{{mod}}{t}",
+                f"\x1bO{t}",
+            )
+            for t in "ABCDFHPQRS"
+        ]
+        legacy += [
+            (f"\x1b[{n};{m}~" if m > 1 else f"\x1b[{n}~", f"\x1b[{n};{{mod}}~", None)
+            for n in range(1, 9)
+        ]
+        for (
+            base_seq,
+            twin_fmt,
+            ss3_seq,
+        ) in legacy:  # CSI-letter nav/F1-F4, then CSI-tilde nav keys
             key = ANSI_SEQUENCES.get(base_seq)
             if key is None and m == 1 and ss3_seq:
                 key = ANSI_SEQUENCES.get(ss3_seq)  # plain F1-F4 live as SS3 forms
@@ -289,17 +362,29 @@ def _modify_other_keys_aliases(ANSI_SEQUENCES: dict, Keys) -> dict[str, object]:
 
     keypad_twins = {
         57414: "\x1b[13;{mod}u",  # Enter
-        **{code: "\x1b[1;{mod}" + suffix for code, suffix in
-           zip((57417, 57418, 57419, 57420, 57423, 57424), "DCABHF")},
-        **{code: f"\x1b[{number};{{mod}}~" for code, number in
-           ((57421, 5), (57422, 6), (57425, 2), (57426, 3))},
+        **{
+            code: "\x1b[1;{mod}" + suffix
+            for code, suffix in zip(
+                (57417, 57418, 57419, 57420, 57423, 57424), "DCABHF"
+            )
+        },
+        **{
+            code: f"\x1b[{number};{{mod}}~"
+            for code, number in ((57421, 5), (57422, 6), (57425, 2), (57426, 3))
+        },
     }
     for code, key_val in _kitty_functional_map(Keys).items():
         _put(f"\x1b[{code}u", key_val)
-        for mod in _lock_twins(1):  # with a lock on these arrive as ESC[<code>;129u etc.
+        for mod in _lock_twins(
+            1
+        ):  # with a lock on these arrive as ESC[<code>;129u etc.
             _put(f"\x1b[{code};{mod}u", key_val)
         twin = keypad_twins.get(code)
-        if isinstance(key_val, str) and not isinstance(key_val, Keys) and len(key_val) == 1:
+        if (
+            isinstance(key_val, str)
+            and not isinstance(key_val, Keys)
+            and len(key_val) == 1
+        ):
             twin = f"\x1b[{ord(key_val)};{{mod}}u"
         # Modified keypad keys inherit existing non-keypad semantics, not new bindings.
         # Some twins (Alt+Enter, lock variants) are still in this builder's pending aliases.
@@ -322,4 +407,7 @@ def install_ignored_terminal_sequences() -> int:
     Parser-level handling beats post-hoc regex stripping because the bytes never reach the buffer.
     ``setdefault`` lets user/downstream registrations win.
     """
-    return _install(lambda _seqs, keys: {"\x1b[I": keys.Ignore, "\x1b[O": keys.Ignore}, overwrite=False)
+    return _install(
+        lambda _seqs, keys: {"\x1b[I": keys.Ignore, "\x1b[O": keys.Ignore},
+        overwrite=False,
+    )

@@ -25,7 +25,9 @@ def test_models_download_once_per_profile_and_reject_bad_bytes(tmp_path, monkeyp
         def log_message(self, fmt, *args):
             requests.append(args)
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), partial(Handler, directory=str(served)))
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0), partial(Handler, directory=str(served))
+    )
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/model.bin"
@@ -33,9 +35,11 @@ def test_models_download_once_per_profile_and_reject_bad_bytes(tmp_path, monkeyp
     monkeypatch.setattr(cpp, "_MODEL_FILES", (("model.bin", url, digest),))
     hashes = []
     original_hash = downloader._sha256_file
+
     def hash_file(path):
         hashes.append(path)
         return original_hash(path)
+
     monkeypatch.setattr(downloader, "_sha256_file", hash_file)
     try:
         for profile in ("A", "B", "A"):
@@ -70,15 +74,24 @@ def test_local_resolution_is_passive_and_command_override_wins(tmp_path, monkeyp
     from pm.store import ALL_TARGETS
 
     package = WhisperCppCpu()
-    assert [t for t in ALL_TARGETS if package.missing_reason(t) is None] == ["win32-arm64"]
+    assert [t for t in ALL_TARGETS if package.missing_reason(t) is None] == [
+        "win32-arm64"
+    ]
     monkeypatch.delenv("CLAWK_LOCAL_STT_COMMAND", raising=False)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "profile with spaces"))
     binary = tmp_path / "program files" / "whisper-cli.exe"
-    monkeypatch.setattr(pm, "installed_package",
-                        lambda name: SimpleNamespace(binary=binary) if name == "whispercpp-cpu" else None)
+    monkeypatch.setattr(
+        pm,
+        "installed_package",
+        lambda name: (
+            SimpleNamespace(binary=binary) if name == "whispercpp-cpu" else None
+        ),
+    )
     monkeypatch.setattr(stt, "_HAS_FASTER_WHISPER", False)
     calls = []
-    monkeypatch.setattr(cpp, "ensure_whisper_cpp_models", lambda model: calls.append(model))
+    monkeypatch.setattr(
+        cpp, "ensure_whisper_cpp_models", lambda model: calls.append(model)
+    )
     assert stt._detect_local_backend() == "local_command"
     assert calls == []
     assert not cpp._model_dir().exists()

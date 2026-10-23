@@ -26,12 +26,20 @@ _lock = threading.RLock()
 DEFAULT_TIMEOUT_SECONDS = 300
 
 
-def register(session_key: str, confirm_id: str, command: str,
-             handler: Callable[[str], Awaitable[Optional[str]]]) -> None:
+def register(
+    session_key: str,
+    confirm_id: str,
+    command: str,
+    handler: Callable[[str], Awaitable[Optional[str]]],
+) -> None:
     """Register a pending confirm, superseding any prior one for the session."""
     with _lock:
-        _pending[session_key] = {"confirm_id": confirm_id, "command": command,
-                                 "handler": handler, "created_at": time.time()}
+        _pending[session_key] = {
+            "confirm_id": confirm_id,
+            "command": command,
+            "handler": handler,
+            "created_at": time.time(),
+        }
 
 
 def get_pending(session_key: str) -> Optional[dict[str, Any]]:
@@ -61,8 +69,12 @@ def clear_if_stale(session_key: str, timeout: float = DEFAULT_TIMEOUT_SECONDS) -
         return stale
 
 
-async def resolve(session_key: str, confirm_id: str, choice: str,
-                  timeout: float = DEFAULT_TIMEOUT_SECONDS) -> Optional[str]:
+async def resolve(
+    session_key: str,
+    confirm_id: str,
+    choice: str,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> Optional[str]:
     """Run the pending handler with ``choice`` ("once" / "always" / "cancel").
 
     Returns the handler's output string, or None if the confirm was stale, already resolved,
@@ -84,6 +96,8 @@ async def resolve(session_key: str, confirm_id: str, choice: str,
     try:
         result = await handler(choice)
     except Exception as exc:
-        logger.error("Slash-confirm handler for /%s raised: %s", command, exc, exc_info=True)
+        logger.error(
+            "Slash-confirm handler for /%s raised: %s", command, exc, exc_info=True
+        )
         return f"❌ Error handling confirmation: {exc}"
     return result if isinstance(result, str) else None

@@ -4,6 +4,7 @@
 Usage: worker.py <arm:base|pr> <model_slug> <task_id> <rep> <out_json>
 Env: OPENROUTER_API_KEY must be set. Exit 3 = infra/config error (do not score).
 """
+
 import json
 import os
 import shutil
@@ -12,14 +13,22 @@ import tempfile
 import time
 import traceback
 
-ARM, MODEL, TASK_ID, REP, OUT = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), sys.argv[5]
+ARM, MODEL, TASK_ID, REP, OUT = (
+    sys.argv[1],
+    sys.argv[2],
+    sys.argv[3],
+    int(sys.argv[4]),
+    sys.argv[5],
+)
 # Arm trees: plain checkouts of the two SHAs under test (git worktree/clone —
 # NEVER `pip install -e .` from them). Set both env vars before running:
 #   ABDEFER_BASE_TREE=/path/to/checkout-of-baseline-sha
 #   ABDEFER_PR_TREE=/path/to/checkout-of-pr-sha
 TREE = os.environ.get(f"ABDEFER_{ARM.upper()}_TREE") or ""
 if not TREE or not os.path.isdir(TREE):
-    print(f"ABORT: ABDEFER_{ARM.upper()}_TREE not set or not a directory", file=sys.stderr)
+    print(
+        f"ABORT: ABDEFER_{ARM.upper()}_TREE not set or not a directory", file=sys.stderr
+    )
     sys.exit(3)
 HARNESS = os.path.dirname(os.path.abspath(__file__))
 
@@ -52,39 +61,79 @@ sys.path.insert(0, HARNESS)
 sys.path.insert(0, TREE)
 
 import tasks as taskmod
+
 TASK = taskmod.TASKS_BY_ID[TASK_ID]
+
 
 # --- seed session DB for recall tasks (both arms, always — cheap) ---------
 def seed_sessions():
     from clawk_state import SessionDB
+
     db = SessionDB()
     month_ago = time.time() - 30 * 86400
+
     def sess(sid, msgs, t0):
         db.create_session(sid, source="cli")
         t = t0
         for role, content in msgs:
             db.append_message(sid, role, content=content, timestamp=t)
             t += 60
-    sess("seed_shadow_vet", [
-        ("user", "Back from the vet with Shadow. They put him on carprofen for the leg inflammation."),
-        ("assistant", "Got it — what dose did they prescribe for Shadow?"),
-        ("user", "Shadow's carprofen dose is 12.5 mg, twice a day with food. Two week course."),
-        ("assistant", "Noted: Shadow takes 12.5 mg carprofen twice daily with food, for two weeks."),
-    ], month_ago)
-    sess("seed_backup_talk", [
-        ("user", "I keep worrying about my repos. The sparks-data repo really needs nightly backups, it has irreplaceable training data."),
-        ("assistant", "Agreed — sparks-data should get a nightly backup job. The toybox repo is scratch space so it can be skipped."),
-        ("user", "Right, toybox doesn't matter. Just sparks-data."),
-    ], month_ago + 3 * 86400)
-    sess("seed_decoy_cat", [
-        ("user", "My cat Biscuit is on 5 mg cetirizine for allergies."),
-        ("assistant", "Noted — Biscuit: 5 mg cetirizine daily."),
-    ], month_ago + 5 * 86400)
-    sess("seed_decoy_dose", [
-        ("user", "I bumped the server worker count from 8 to 25 mg— sorry, to 25 workers. Typo."),
-        ("assistant", "25 workers, got it."),
-    ], month_ago + 6 * 86400)
+
+    sess(
+        "seed_shadow_vet",
+        [
+            (
+                "user",
+                "Back from the vet with Shadow. They put him on carprofen for the leg inflammation.",
+            ),
+            ("assistant", "Got it — what dose did they prescribe for Shadow?"),
+            (
+                "user",
+                "Shadow's carprofen dose is 12.5 mg, twice a day with food. Two week course.",
+            ),
+            (
+                "assistant",
+                "Noted: Shadow takes 12.5 mg carprofen twice daily with food, for two weeks.",
+            ),
+        ],
+        month_ago,
+    )
+    sess(
+        "seed_backup_talk",
+        [
+            (
+                "user",
+                "I keep worrying about my repos. The sparks-data repo really needs nightly backups, it has irreplaceable training data.",
+            ),
+            (
+                "assistant",
+                "Agreed — sparks-data should get a nightly backup job. The toybox repo is scratch space so it can be skipped.",
+            ),
+            ("user", "Right, toybox doesn't matter. Just sparks-data."),
+        ],
+        month_ago + 3 * 86400,
+    )
+    sess(
+        "seed_decoy_cat",
+        [
+            ("user", "My cat Biscuit is on 5 mg cetirizine for allergies."),
+            ("assistant", "Noted — Biscuit: 5 mg cetirizine daily."),
+        ],
+        month_ago + 5 * 86400,
+    )
+    sess(
+        "seed_decoy_dose",
+        [
+            (
+                "user",
+                "I bumped the server worker count from 8 to 25 mg— sorry, to 25 workers. Typo.",
+            ),
+            ("assistant", "25 workers, got it."),
+        ],
+        month_ago + 6 * 86400,
+    )
     db.close()
+
 
 seed_sessions()
 
@@ -96,8 +145,12 @@ EVENTS = []
 CALLBACK_LOG = []
 
 from tools import desktop_ui
-desktop_ui.set_emitter(lambda sid, event, payload: EVENTS.append(
-    {"sid": sid, "event": event, "payload": payload}))
+
+desktop_ui.set_emitter(
+    lambda sid, event, payload: EVENTS.append(
+        {"sid": sid, "event": event, "payload": payload}
+    )
+)
 
 FOCUSED = taskmod.FOCUSED_APP
 PREVIEW_TITLE = taskmod.PREVIEW_TITLE
@@ -107,78 +160,173 @@ IMG_URL = taskmod.IMG_URL
 
 _clarify_answers = list(TASK.get("clarify_answers") or [])
 
+
 def clarify_cb(questions):
     answers = {}
     for entry in questions:
-        CALLBACK_LOG.append({"name": "clarify", "question": entry["question"], "choices": entry["choices"]})
-        ans = _clarify_answers.pop(0) if _clarify_answers else "Use your best judgement."
-        match = next((str(c) for c in entry["choices"] or [] if ans.lower() in str(c).lower()), None)
+        CALLBACK_LOG.append(
+            {
+                "name": "clarify",
+                "question": entry["question"],
+                "choices": entry["choices"],
+            }
+        )
+        ans = (
+            _clarify_answers.pop(0) if _clarify_answers else "Use your best judgement."
+        )
+        match = next(
+            (str(c) for c in entry["choices"] or [] if ans.lower() in str(c).lower()),
+            None,
+        )
         answers[entry["qid"]] = match or ans
     return {"answers": answers, "outcome": "submitted"}
 
+
 def theme_cb(payload):
     CALLBACK_LOG.append({"name": "theme", "payload": payload})
-    return {"success": True, "applied": {k: v for k, v in payload.items() if k != "picker"}}
+    return {
+        "success": True,
+        "applied": {k: v for k, v in payload.items() if k != "picker"},
+    }
 
 
 def tour_cb(payload):
     CALLBACK_LOG.append({"name": "tour", "payload": payload})
     action = payload.get("action", "")
     if action == "targets":
-        return json.dumps({"success": True, "targets": [
-            {"selector": "[data-tour='settings']", "label": "Settings button", "stable": True},
-            {"selector": "[data-tour='composer']", "label": "Message composer", "stable": True},
-            {"selector": "[data-tour='sidebar']", "label": "Session sidebar", "stable": True},
-            {"selector": "[data-tour='model-picker']", "label": "Model picker", "stable": True},
-        ]})
+        return json.dumps(
+            {
+                "success": True,
+                "targets": [
+                    {
+                        "selector": "[data-tour='settings']",
+                        "label": "Settings button",
+                        "stable": True,
+                    },
+                    {
+                        "selector": "[data-tour='composer']",
+                        "label": "Message composer",
+                        "stable": True,
+                    },
+                    {
+                        "selector": "[data-tour='sidebar']",
+                        "label": "Session sidebar",
+                        "stable": True,
+                    },
+                    {
+                        "selector": "[data-tour='model-picker']",
+                        "label": "Model picker",
+                        "stable": True,
+                    },
+                ],
+            }
+        )
     if action in ("start", "steps", "show"):
-        return json.dumps({"success": True, "shown": True,
-                           "steps_total": len(payload.get("steps") or []) or 1,
-                           "completed": True})
+        return json.dumps(
+            {
+                "success": True,
+                "shown": True,
+                "steps_total": len(payload.get("steps") or []) or 1,
+                "completed": True,
+            }
+        )
     return json.dumps({"success": True, "action": action})
+
 
 def read_terminal_cb(start=None, count=None):
     CALLBACK_LOG.append({"name": "read_terminal", "start": start, "count": count})
     lines = ["$ make build", "compiling core...", "linking...", TERMINAL_TAIL]
-    return json.dumps({"total_lines": 4, "start": 0, "end": 3,
-                       "viewport_rows": 24, "cursor_row": 3,
-                       "text": "\n".join(lines)})
+    return json.dumps(
+        {
+            "total_lines": 4,
+            "start": 0,
+            "end": 3,
+            "viewport_rows": 24,
+            "cursor_row": 3,
+            "text": "\n".join(lines),
+        }
+    )
+
 
 def read_preview_cb(start=None, count=None):
     CALLBACK_LOG.append({"name": "read_preview", "start": start, "count": count})
-    return json.dumps({"title": PREVIEW_TITLE, "url": "https://example.com/docs/",
-                       "text": ("Example Domain\nThis domain is for use in documents.\n"
-                                "[Docs] link -> /docs/\nSearch: input#docs-search [ref=e12]\n")})
+    return json.dumps(
+        {
+            "title": PREVIEW_TITLE,
+            "url": "https://example.com/docs/",
+            "text": (
+                "Example Domain\nThis domain is for use in documents.\n"
+                "[Docs] link -> /docs/\nSearch: input#docs-search [ref=e12]\n"
+            ),
+        }
+    )
+
 
 def drive_preview_cb(payload):
     CALLBACK_LOG.append({"name": "drive_preview", "payload": payload})
     action = payload.get("action", "")
-    if "annotate" in json.dumps(payload) or action in ("highlight", "point", "underline", "clear", "hold"):
-        return json.dumps({"success": True, "annotated": payload.get("selector") or payload.get("ref")})
+    if "annotate" in json.dumps(payload) or action in (
+        "highlight",
+        "point",
+        "underline",
+        "clear",
+        "hold",
+    ):
+        return json.dumps(
+            {
+                "success": True,
+                "annotated": payload.get("selector") or payload.get("ref"),
+            }
+        )
     if action in ("click", "goto", "navigate"):
-        return json.dumps({"success": True, "title": PREVIEW_TITLE,
-                           "url": "https://example.com/docs/",
-                           "text": "Docs index. Search box: input#docs-search [ref=e12]"})
+        return json.dumps(
+            {
+                "success": True,
+                "title": PREVIEW_TITLE,
+                "url": "https://example.com/docs/",
+                "text": "Docs index. Search box: input#docs-search [ref=e12]",
+            }
+        )
     if action in ("snapshot", "read", "links"):
-        return json.dumps({"success": True, "title": PREVIEW_TITLE,
-                           "url": "https://example.com/docs/",
-                           "text": (f"Page: {PREVIEW_TITLE}\nLinks: [Docs]->/docs/ [ref=e3]\n"
-                                    "Search box: input#docs-search [ref=e12]")})
+        return json.dumps(
+            {
+                "success": True,
+                "title": PREVIEW_TITLE,
+                "url": "https://example.com/docs/",
+                "text": (
+                    f"Page: {PREVIEW_TITLE}\nLinks: [Docs]->/docs/ [ref=e3]\n"
+                    "Search box: input#docs-search [ref=e12]"
+                ),
+            }
+        )
     return json.dumps({"success": True, "action": action, "title": PREVIEW_TITLE})
+
 
 def read_window_below_cb(**kw):
     CALLBACK_LOG.append({"name": "read_window_below", "kw": kw})
     return json.dumps({"title": "Invoices — draft", "text": WINDOW_BELOW})
 
+
 def connection_cb(payload):
     # Answer every manage_connections MCP target as installed.
-    CALLBACK_LOG.append({"name": "manage_connections", "targets": payload.get("targets", [])})
-    return json.dumps({"settled_by": "all_resolved", "targets": [
-        {"name": t["name"], "status": "installed"} for t in payload.get("targets", [])]})
+    CALLBACK_LOG.append(
+        {"name": "manage_connections", "targets": payload.get("targets", [])}
+    )
+    return json.dumps(
+        {
+            "settled_by": "all_resolved",
+            "targets": [
+                {"name": t["name"], "status": "installed"}
+                for t in payload.get("targets", [])
+            ],
+        }
+    )
+
 
 # --- import the tree's model_tools + patch registry stubs ------------------
 import model_tools
 from tools.registry import registry
+
 
 def _stub_entry(name, handler):
     entry = registry.get_entry(name)
@@ -189,30 +337,57 @@ def _stub_entry(name, handler):
     entry.check_fn = None
     entry.is_async = False
 
+
 def computer_use_stub(args, **kw):
     CALLBACK_LOG.append({"name": "computer_use", "args": args})
     action = (args or {}).get("action", "screenshot")
     shot = os.path.join(tmp_root, "screen.png")
     with open(shot, "wb") as f:
         f.write(b"\x89PNG\r\n\x1a\nstub")
-    return json.dumps({
-        "success": True, "action": action, "screenshot": shot,
-        "analysis": (f"Focused window: {FOCUSED}. It shows a note titled 'Shadow feeding "
-                     "schedule' with a table of meal times. No error dialogs visible."),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "action": action,
+            "screenshot": shot,
+            "analysis": (
+                f"Focused window: {FOCUSED}. It shows a note titled 'Shadow feeding "
+                "schedule' with a table of meal times. No error dialogs visible."
+            ),
+        }
+    )
+
 
 def image_generate_stub(args, **kw):
     CALLBACK_LOG.append({"name": "image_generate", "args": args})
-    return json.dumps({"success": True, "image": IMG_URL,
-                       "prompt_used": (args or {}).get("prompt", "")})
+    return json.dumps(
+        {
+            "success": True,
+            "image": IMG_URL,
+            "prompt_used": (args or {}).get("prompt", ""),
+        }
+    )
+
 
 _stub_entry("computer_use", computer_use_stub)
 _stub_entry("image_generate", image_generate_stub)
 
 # --- build agent -----------------------------------------------------------
-TOOLSETS = ["file", "terminal", "search", "web", "todo", "session_search",
-            "clarify", "image_gen", "computer_use", "cronjob", "memory",
-            "desktop_ui", "project", "code_execution"]
+TOOLSETS = [
+    "file",
+    "terminal",
+    "search",
+    "web",
+    "todo",
+    "session_search",
+    "clarify",
+    "image_gen",
+    "computer_use",
+    "cronjob",
+    "memory",
+    "desktop_ui",
+    "project",
+    "code_execution",
+]
 
 from run_agent import AIAgent
 
@@ -237,8 +412,10 @@ agent = AIAgent(
     connection_callback=connection_cb,
 )
 
-PREAMBLE = ("You are running inside the Clawksis desktop app on the user's machine. "
-            f"Your working directory (the workspace) is: {workspace}\n\nTask: ")
+PREAMBLE = (
+    "You are running inside the Clawksis desktop app on the user's machine. "
+    f"Your working directory (the workspace) is: {workspace}\n\nTask: "
+)
 
 t0 = time.time()
 error = None
@@ -272,15 +449,22 @@ except BaseException as e:
 wall = time.time() - t0
 
 msg_txt = ""
-if error and any(s in error for s in ("auth", "Authentication", "No LLM provider", "401")):
+if error and any(
+    s in error for s in ("auth", "Authentication", "No LLM provider", "401")
+):
     print("ABORT: auth/config error: " + error, file=sys.stderr)
     sys.exit(3)
 
 messages = (convo or {}).get("messages") or getattr(agent, "messages", []) or []
 
 # --- metrics ----------------------------------------------------------------
-LEGACY = {"todo": "todo_list", "cronjob": "cronjob_manage", "process": "process_manage",
-          "tour": "gui_tour", "tip": "show_tip"}
+LEGACY = {
+    "todo": "todo_list",
+    "cronjob": "cronjob_manage",
+    "process": "process_manage",
+    "tour": "gui_tour",
+    "tip": "show_tip",
+}
 tool_counts = {}
 tool_args = {}
 bridge_calls = 0
@@ -291,7 +475,7 @@ for m in messages:
         api_turns += 1
         if "<function=" in (m.get("content") or ""):
             raw_xml_noise = True
-        for tc in (m.get("tool_calls") or []):
+        for tc in m.get("tool_calls") or []:
             fn = tc.get("function", {})
             name = fn.get("name", "")
             try:
@@ -330,10 +514,14 @@ except Exception:
     pass
 
 ctx = {
-    "workspace": workspace, "clawk_home": clawk_home,
-    "events": EVENTS, "callback_log": CALLBACK_LOG,
-    "tool_counts": tool_counts, "messages_tool_args": tool_args,
-    "messages": messages, "final_answer": final_answer,
+    "workspace": workspace,
+    "clawk_home": clawk_home,
+    "events": EVENTS,
+    "callback_log": CALLBACK_LOG,
+    "tool_counts": tool_counts,
+    "messages_tool_args": tool_args,
+    "messages": messages,
+    "final_answer": final_answer,
     "todo_dump": todo_dump,
 }
 
@@ -347,8 +535,13 @@ else:
     score, notes = 0.0, [f"run errored: {error}"]
 
 record = {
-    "arm": ARM, "model": MODEL, "task": TASK_ID, "rep": REP,
-    "score": round(float(score), 3), "notes": notes, "error": error,
+    "arm": ARM,
+    "model": MODEL,
+    "task": TASK_ID,
+    "rep": REP,
+    "score": round(float(score), 3),
+    "notes": notes,
+    "error": error,
     "api_turns": api_turns,
     "tool_calls_total": int(sum(tool_counts.values())) + bridge_calls,
     "bridge_calls": bridge_calls,
@@ -365,13 +558,32 @@ record = {
 
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(OUT + ".transcript.json", "w", encoding="utf-8") as f:
-    json.dump({"messages": messages, "events": EVENTS, "callback_log": CALLBACK_LOG},
-              f, default=str)
+    json.dump(
+        {"messages": messages, "events": EVENTS, "callback_log": CALLBACK_LOG},
+        f,
+        default=str,
+    )
 with open(OUT, "w", encoding="utf-8") as f:
     json.dump(record, f, indent=1, default=str)
-print(json.dumps({k: record[k] for k in ("arm", "model", "task", "rep", "score",
-                                          "api_turns", "total_tokens", "wall_s",
-                                          "bridge_calls", "error")}))
+print(
+    json.dumps(
+        {
+            k: record[k]
+            for k in (
+                "arm",
+                "model",
+                "task",
+                "rep",
+                "score",
+                "api_turns",
+                "total_tokens",
+                "wall_s",
+                "bridge_calls",
+                "error",
+            )
+        }
+    )
+)
 try:
     agent.close()
 except Exception:

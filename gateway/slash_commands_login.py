@@ -29,7 +29,9 @@ class _SignInAttempt:
     key: tuple
     source: Any
     cancelled: bool = False
-    saving: bool = False   # past the final cancel check: the save is committed, a replacement waits
+    saving: bool = (
+        False  # past the final cancel check: the save is committed, a replacement waits
+    )
 
 
 # These adapters use "dm" for a broadcast topic, a channel, or an agent peer. Sending a sign-in
@@ -42,16 +44,25 @@ def _publish_local_notice(runner, source, text: str) -> bool:
     sign-in link/code/result reach its viewers as a sticky ``notification.show``. False when
     *source* is not a live local session (the platform push applies)."""
     from gateway.config import Platform
+
     if getattr(source, "platform", None) != Platform.LOCAL:
         return False
     from gateway.session_authorities import active_authority
+
     authority = active_authority(runner)
     live = authority.sessions.get(source.chat_id) if authority is not None else None
     if live is None:
         return False
-    live.event_stream.publish(source.chat_id, {"text": text, "level": "info", "kind": "sticky",
-                                               "key": "login:" + uuid4().hex[:8]},
-                              event_type="notification.show")
+    live.event_stream.publish(
+        source.chat_id,
+        {
+            "text": text,
+            "level": "info",
+            "kind": "sticky",
+            "key": "login:" + uuid4().hex[:8],
+        },
+        event_type="notification.show",
+    )
     return True
 
 
@@ -72,7 +83,8 @@ class GatewayLoginCommandsMixin:
         executor = getattr(self, "_login_exec", None)
         if executor is None or getattr(executor, "_shutdown", False):
             executor = self._login_exec = concurrent.futures.ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="clawk-login")
+                max_workers=1, thread_name_prefix="clawk-login"
+            )
         return executor
 
     async def _run_login_blocking(self, func):
@@ -95,8 +107,11 @@ class GatewayLoginCommandsMixin:
         if policy.enabled and not policy.is_admin(getattr(src, "user_id", None)):
             return anon_auth.LOGIN_NOT_ALLOWED
 
-        key = (str(getattr(src.platform, "value", src.platform)), str(src.chat_id),
-               str(getattr(src, "user_id", "") or ""))
+        key = (
+            str(getattr(src.platform, "value", src.platform)),
+            str(src.chat_id),
+            str(getattr(src, "user_id", "") or ""),
+        )
         lock, attempts = self._login_registry()
         # The private executor has one worker and the live attempt may be polling on it for the
         # code's full lifetime. Trip its hook before queueing the local state read, otherwise a
@@ -118,8 +133,7 @@ class GatewayLoginCommandsMixin:
                 return anon_auth.LOGIN_BUSY_ELSEWHERE
             if live is not None:
                 live.cancelled = True
-            attempt = _SignInAttempt(
-                attempt_id=uuid4().hex[:8], key=key, source=src)
+            attempt = _SignInAttempt(attempt_id=uuid4().hex[:8], key=key, source=src)
             attempts[_LOGIN_SINGLE] = attempt
 
         self._retain_background_task(asyncio.create_task(self._run_login(attempt)))
@@ -143,7 +157,9 @@ class GatewayLoginCommandsMixin:
                 may_persist = attempt.saving
             yield may_persist
 
-        gen = anon_auth.run_sign_in(timeout_seconds=15.0, cancelled=_cancelled, persist_guard=_persist_guard)
+        gen = anon_auth.run_sign_in(
+            timeout_seconds=15.0, cancelled=_cancelled, persist_guard=_persist_guard
+        )
         pushed_terminal = False
         try:
             while True:
@@ -151,7 +167,10 @@ class GatewayLoginCommandsMixin:
                     state = await self._run_login_blocking(lambda: next(gen, None))
                 except RuntimeError as exc:
                     logger.warning(
-                        "/login %s: executor unavailable, stopping: %s", attempt.attempt_id, exc)
+                        "/login %s: executor unavailable, stopping: %s",
+                        attempt.attempt_id,
+                        exc,
+                    )
                     return
                 if state is None:
                     return
@@ -164,7 +183,9 @@ class GatewayLoginCommandsMixin:
                 attempt.cancelled = True
             raise
         except Exception:
-            logger.warning("/login attempt %s failed", attempt.attempt_id, exc_info=True)
+            logger.warning(
+                "/login attempt %s failed", attempt.attempt_id, exc_info=True
+            )
             if not pushed_terminal:
                 with contextlib.suppress(Exception):
                     await self._push_login(attempt, anon_auth.UPGRADE_NOT_COMPLETED)
@@ -206,10 +227,11 @@ class GatewayLoginCommandsMixin:
         """Clear durable overrides before eviction; return the number of failed clears."""
         lock = getattr(self, "_agent_cache_lock", None)
         cache = getattr(self, "_agent_cache", None) or {}
-        with (lock or contextlib.nullcontext()):
+        with lock or contextlib.nullcontext():
             entries = list(cache.items())
         keys = [
-            key for key, entry in entries
+            key
+            for key, entry in entries
             if (agent := _first_agent(entry)) is not None
             and str(getattr(agent, "provider", "")) == "nous"
             and str(getattr(agent, "model", "")) == anon_auth.GUEST_MODEL
@@ -226,7 +248,10 @@ class GatewayLoginCommandsMixin:
                     except Exception:
                         if attempt == 1:
                             logger.warning(
-                                "/login: failed to clear free-tier override for %s", key, exc_info=True)
+                                "/login: failed to clear free-tier override for %s",
+                                key,
+                                exc_info=True,
+                            )
                 else:
                     # Retain the live route while disk still pins it, including on a rebuild.
                     failed += 1
@@ -235,5 +260,7 @@ class GatewayLoginCommandsMixin:
             try:
                 self._evict_cached_agent(key)
             except Exception:
-                logger.warning("/login: failed to evict free-tier session %s", key, exc_info=True)
+                logger.warning(
+                    "/login: failed to evict free-tier session %s", key, exc_info=True
+                )
         return failed

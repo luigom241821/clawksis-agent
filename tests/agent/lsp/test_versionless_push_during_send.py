@@ -5,6 +5,7 @@
 tagged with the OLD version and then rejected as stale once the send resumed.  The mock replies
 versionless; the paused send wrapper holds the await open until its reply has been read.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,13 +21,20 @@ MOCK_SERVER = str(Path(__file__).parent / "_mock_lsp_server.py")
 
 
 @pytest.mark.asyncio
-async def test_versionless_push_read_during_didchange_send_is_fresh(tmp_path, monkeypatch):
+async def test_versionless_push_read_during_didchange_send_is_fresh(
+    tmp_path, monkeypatch
+):
     src = tmp_path / "x.py"
     src.write_text("bad\n", encoding="utf-8")
     client = LSPClient(
-        server_id="mock-versionless", workspace_root=str(tmp_path),
-        command=[sys.executable, MOCK_SERVER], cwd=str(tmp_path),
-        env={"MOCK_LSP_SCRIPT": "versionless", "PYTHONPATH": os.environ.get("PYTHONPATH", "")},
+        server_id="mock-versionless",
+        workspace_root=str(tmp_path),
+        command=[sys.executable, MOCK_SERVER],
+        cwd=str(tmp_path),
+        env={
+            "MOCK_LSP_SCRIPT": "versionless",
+            "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+        },
     )
     await client.start()
     try:

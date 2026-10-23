@@ -15,7 +15,9 @@ from clawk_cli import kanban_db_dispatch as kbd
 
 
 @pytest.fixture
-def worker_setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, kb.Task]:
+def worker_setup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, kb.Task]:
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "coder"
     profile.mkdir(parents=True)
@@ -72,21 +74,35 @@ def test_managed_gateway_worker_is_spawned_in_restart_safe_scope(
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-cross-profile")
     monkeypatch.setattr("agent.secret_scope.is_multiplex_active", lambda: True)
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr("tools.process_registry._is_supervised_gateway_process", lambda: True)
-    monkeypatch.setattr("tools.process_registry._systemd_run_user_scope_available", lambda: True)
-    monkeypatch.setattr("tools.process_registry._worker_memory_max_bytes", lambda: 536_870_912)
+    monkeypatch.setattr(
+        "tools.process_registry._is_supervised_gateway_process", lambda: True
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._systemd_run_user_scope_available", lambda: True
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._worker_memory_max_bytes", lambda: 536_870_912
+    )
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemd-run")
 
     assert kbd._default_spawn(task, str(workspace)) == 4242
     assert captured_cmd[:4] == ["/usr/bin/systemd-run", "--user", "--scope", "--quiet"]
     unit_index = captured_cmd.index("--unit")
-    assert captured_cmd[unit_index + 1] == "clawk-worker-kanban-t_candidate_restart-run-23"
+    assert (
+        captured_cmd[unit_index + 1] == "clawk-worker-kanban-t_candidate_restart-run-23"
+    )
     assert "MemoryMax=536870912" in captured_cmd
     separator = captured_cmd.index("--")
-    assert captured_cmd[separator + 1 :] == [sys.executable, "-m", "clawk_cli.kanban_worker_client"]
+    assert captured_cmd[separator + 1 :] == [
+        sys.executable,
+        "-m",
+        "clawk_cli.kanban_worker_client",
+    ]
     assert task.assignee is not None
     assert captured_env["CLAWK_PROFILE"] == task.assignee
-    assert captured_env["CLAWK_HOME"] == str(workspace.parent / ".clawk" / "profiles" / task.assignee)
+    assert captured_env["CLAWK_HOME"] == str(
+        workspace.parent / ".clawk" / "profiles" / task.assignee
+    )
     assert captured_cwd == str(workspace)
     assert captured_env["CLAWK_KANBAN_TASK"] == task.id
     assert captured_env["CLAWK_KANBAN_RUN_ID"] == "23"
@@ -100,9 +116,15 @@ def test_managed_gateway_worker_spawn_fails_closed_without_scope(
     workspace, task = worker_setup
     popen_calls: list[list[str]] = []
     monkeypatch.setenv("INVOCATION_ID", "managed-gateway-test")
-    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kwargs: popen_calls.append(list(cmd)))
-    monkeypatch.setattr("tools.process_registry._is_supervised_gateway_process", lambda: True)
-    monkeypatch.setattr("tools.process_registry._systemd_run_user_scope_available", lambda: False)
+    monkeypatch.setattr(
+        subprocess, "Popen", lambda cmd, **kwargs: popen_calls.append(list(cmd))
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._is_supervised_gateway_process", lambda: True
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._systemd_run_user_scope_available", lambda: False
+    )
 
     with pytest.raises(RuntimeError, match="restart-safe systemd scope"):
         kbd._default_spawn(task, str(workspace))
@@ -115,10 +137,18 @@ def test_managed_gateway_scope_builder_fails_closed_if_binary_disappears(
 ) -> None:
     workspace, task = worker_setup
     monkeypatch.setenv("INVOCATION_ID", "managed-gateway-test")
-    monkeypatch.setattr("tools.process_registry._is_supervised_gateway_process", lambda: True)
-    monkeypatch.setattr("tools.process_registry._systemd_run_user_scope_available", lambda: True)
+    monkeypatch.setattr(
+        "tools.process_registry._is_supervised_gateway_process", lambda: True
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._systemd_run_user_scope_available", lambda: True
+    )
     monkeypatch.setattr("shutil.which", lambda _name: None)
-    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_kwargs: pytest.fail("unsafe direct spawn"))
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: pytest.fail("unsafe direct spawn"),
+    )
 
     with pytest.raises(RuntimeError, match="restart-safe systemd scope"):
         kbd._default_spawn(task, str(workspace))
@@ -135,8 +165,14 @@ def test_standalone_dispatcher_keeps_direct_worker_spawn(
 
     # Standalone = no systemd unit at all (CI runners inherit INVOCATION_ID).
     monkeypatch.delenv("INVOCATION_ID", raising=False)
-    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kwargs: captured_cmd.extend(cmd) or FakeProc())
-    monkeypatch.setattr("tools.process_registry._is_supervised_gateway_process", lambda: False)
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda cmd, **kwargs: captured_cmd.extend(cmd) or FakeProc(),
+    )
+    monkeypatch.setattr(
+        "tools.process_registry._is_supervised_gateway_process", lambda: False
+    )
     monkeypatch.setattr(
         "tools.process_registry._systemd_run_user_scope_available",
         lambda: pytest.fail("scope probe must not run outside managed gateway"),
@@ -148,7 +184,9 @@ def test_standalone_dispatcher_keeps_direct_worker_spawn(
 
 @pytest.mark.platforms("linux")
 def test_oneshot_unit_dispatcher_scope_wraps_or_warns_never_dooms_silently(
-    worker_setup: tuple[Path, kb.Task], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    worker_setup: tuple[Path, kb.Task],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A dispatcher under any systemd unit that is NOT the supervised gateway (a
     ``Type=oneshot`` dispatch timer, #113612) loses its cgroup at unit exit. With a
@@ -164,38 +202,61 @@ def test_oneshot_unit_dispatcher_scope_wraps_or_warns_never_dooms_silently(
     class FakeProc:
         pid = 4243
 
-    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kwargs: spawned.append(list(cmd)) or FakeProc())
-    monkeypatch.setenv("INVOCATION_ID", "oneshot-dispatch-timer")
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: False)
-    monkeypatch.setattr(process_registry, "_systemd_run_user_scope_available", lambda: True)
     monkeypatch.setattr(
-        process_registry, "_build_systemd_scope_argv",
-        lambda cmd, unit_suffix: ["systemd-run", "--user", "--scope", "--unit", f"clawk-worker-{unit_suffix}", *cmd],
+        subprocess,
+        "Popen",
+        lambda cmd, **kwargs: spawned.append(list(cmd)) or FakeProc(),
+    )
+    monkeypatch.setenv("INVOCATION_ID", "oneshot-dispatch-timer")
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: False
+    )
+    monkeypatch.setattr(
+        process_registry, "_systemd_run_user_scope_available", lambda: True
+    )
+    monkeypatch.setattr(
+        process_registry,
+        "_build_systemd_scope_argv",
+        lambda cmd, unit_suffix: [
+            "systemd-run",
+            "--user",
+            "--scope",
+            "--unit",
+            f"clawk-worker-{unit_suffix}",
+            *cmd,
+        ],
     )
 
     kbd._default_spawn(task, str(workspace))
     assert spawned[-1][:3] == ["systemd-run", "--user", "--scope"]
     assert f"clawk-worker-kanban-{task.id}-run-{task.current_run_id}" in spawned[-1]
 
-    monkeypatch.setattr(process_registry, "_systemd_run_user_scope_available", lambda: False)
+    monkeypatch.setattr(
+        process_registry, "_systemd_run_user_scope_available", lambda: False
+    )
     monkeypatch.setattr(process_registry, "_scope_degraded_warned", False)
     with caplog.at_level("WARNING", logger=process_registry.logger.name):
         kbd._default_spawn(task, str(workspace))
     # Unwrapped: the bare worker argv (the profile owner executes; this client waits for its receipt).
     assert spawned[-1] == [sys.executable, "-m", "clawk_cli.kanban_worker_client"]
-    warned = [r.getMessage() for r in caplog.records if "KILLED when the unit exits" in r.getMessage()]
+    warned = [
+        r.getMessage()
+        for r in caplog.records
+        if "KILLED when the unit exits" in r.getMessage()
+    ]
     assert len(warned) == 1 and "KillMode=process" in warned[0]
 
     cron = process_registry.restart_safe_gateway_child_argv(
-        ["clawk", "cron"], unit_suffix="cron-job-1", require_restart_safe_scope=True,
+        ["clawk", "cron"],
+        unit_suffix="cron-job-1",
+        require_restart_safe_scope=True,
     )
     assert cron.mode == "in_process"
 
 
 @pytest.mark.platforms("linux")
 def test_real_user_systemd_scope_preserves_worker_context(
-    request,
-    worker_setup: tuple[Path, kb.Task], monkeypatch: pytest.MonkeyPatch
+    request, worker_setup: tuple[Path, kb.Task], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from tools import process_registry
 
@@ -205,6 +266,7 @@ def test_real_user_systemd_scope_preserves_worker_context(
     workspace, task = worker_setup
     from dataclasses import replace
     from uuid import uuid4
+
     # User-manager transient units outlive pytest's temporary directories.
     task = replace(task, id=f"t_candidate_{uuid4().hex}")
     unit = f"clawk-worker-kanban-{task.id}-run-{task.current_run_id}.scope"
@@ -228,11 +290,19 @@ def test_real_user_systemd_scope_preserves_worker_context(
     )
     # Replace only the worker payload; keep real scope creation and env handoff.
     monkeypatch.setattr(
-        kbd, "_worker_argv",
-        lambda task, profile_arg, clawk_home: [sys.executable, "-c", script, str(receipt)],
+        kbd,
+        "_worker_argv",
+        lambda task, profile_arg, clawk_home: [
+            sys.executable,
+            "-c",
+            script,
+            str(receipt),
+        ],
     )
     monkeypatch.setenv("INVOCATION_ID", "managed-gateway-test")
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: True)
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: True
+    )
 
     pid = kbd._default_spawn(task, str(workspace))
     try:
@@ -249,22 +319,38 @@ def test_real_user_systemd_scope_preserves_worker_context(
         assert payload["run"] == "23"
         assert payload["claim"] == task.claim_lock
         assert payload["board"] == kb.get_current_board()
-        assert payload["home"] == str(workspace.parent / '.clawk' / 'profiles' / task.assignee)
+        assert payload["home"] == str(
+            workspace.parent / ".clawk" / "profiles" / task.assignee
+        )
         assert payload["profile"] == task.assignee
-        assert payload["source"] == 'kanban'
+        assert payload["source"] == "kanban"
         assert payload["terminal_cwd"] == str(workspace)
         assert unit in payload["cgroup"]
         assert "clawk-gateway.service" not in payload["cgroup"]
         import psutil
+
         assert psutil.Process(pid).wait(timeout=5) == 0
     finally:
         # Stop only this test's freshly named scope, never the historical fixed
         # name or another producer's unit. The live-system guard stays enabled.
-        subprocess.run(["systemctl", "--user", "stop", unit], stdin=subprocess.DEVNULL,
-                       capture_output=True, timeout=10, check=False,
-                       env=process_registry.systemd_user_bus_env())
-        state = subprocess.run(["systemctl", "--user", "show", unit, "--property=ActiveState", "--value"],
-                               stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10,
-                               env=process_registry.systemd_user_bus_env(), check=False)
-        assert state.stdout.strip() in ('inactive', 'failed'), state.stdout + state.stderr
-    print(json.dumps({'worker': payload, 'scope_after_cleanup': state.stdout.strip()}))
+        subprocess.run(
+            ["systemctl", "--user", "stop", unit],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=10,
+            check=False,
+            env=process_registry.systemd_user_bus_env(),
+        )
+        state = subprocess.run(
+            ["systemctl", "--user", "show", unit, "--property=ActiveState", "--value"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=process_registry.systemd_user_bus_env(),
+            check=False,
+        )
+        assert state.stdout.strip() in ("inactive", "failed"), (
+            state.stdout + state.stderr
+        )
+    print(json.dumps({"worker": payload, "scope_after_cleanup": state.stdout.strip()}))

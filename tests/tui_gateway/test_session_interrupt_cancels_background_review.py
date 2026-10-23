@@ -35,7 +35,9 @@ def server():
     with patch.dict(
         "sys.modules",
         {
-            "clawk_constants": MagicMock(get_clawk_home=MagicMock(return_value="/tmp/clawk_test")),
+            "clawk_constants": MagicMock(
+                get_clawk_home=MagicMock(return_value="/tmp/clawk_test")
+            ),
             "clawk_cli.env_loader": MagicMock(),
             "clawk_cli.banner": MagicMock(),
             "clawk_state": MagicMock(),

@@ -34,9 +34,9 @@ def test_missing_db_counts_zero_and_creates_nothing(kanban_home):
     db_path = kb.kanban_db_path(board="default")
     assert not db_path.exists()
     assert kbn.count_notify_subs(board="default") == 0
-    assert kbn.count_notify_subs(
-        board="default", platform="tui", chat_id="session-1"
-    ) == 0
+    assert (
+        kbn.count_notify_subs(board="default", platform="tui", chat_id="session-1") == 0
+    )
     assert not db_path.exists(), "read-only probe must not create the DB"
 
 
@@ -52,9 +52,7 @@ def test_optional_filters_narrow_count_without_changing_unfiltered_count(kanban_
             chat_id="session-2",
             thread_id="thread-2",
         )
-        kbn.add_notify_sub(
-            conn, task_id=tid, platform="telegram", chat_id="session-1"
-        )
+        kbn.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="session-1")
     finally:
         conn.close()
 
@@ -62,21 +60,28 @@ def test_optional_filters_narrow_count_without_changing_unfiltered_count(kanban_
     assert kbn.count_notify_subs(board="default", platform="tui") == 2
     assert kbn.count_notify_subs(board="default", chat_id="session-1") == 2
     assert kbn.count_notify_subs(board="default", thread_id="thread-2") == 1
-    assert kbn.count_notify_subs(
-        board="default", platform="tui", chat_id="session-1"
-    ) == 1
-    assert kbn.count_notify_subs(
-        board="default", platform="tui", chat_id="session-1", thread_id=""
-    ) == 1
-    assert kbn.count_notify_subs(
-        board="default",
-        platform="tui",
-        chat_id="session-2",
-        thread_id="thread-2",
-    ) == 1
-    assert kbn.count_notify_subs(
-        board="default", platform="tui", chat_id="other-session"
-    ) == 0
+    assert (
+        kbn.count_notify_subs(board="default", platform="tui", chat_id="session-1") == 1
+    )
+    assert (
+        kbn.count_notify_subs(
+            board="default", platform="tui", chat_id="session-1", thread_id=""
+        )
+        == 1
+    )
+    assert (
+        kbn.count_notify_subs(
+            board="default",
+            platform="tui",
+            chat_id="session-2",
+            thread_id="thread-2",
+        )
+        == 1
+    )
+    assert (
+        kbn.count_notify_subs(board="default", platform="tui", chat_id="other-session")
+        == 0
+    )
 
 
 def test_legacy_db_without_subs_table_counts_zero_and_stays_unmigrated(tmp_path):
@@ -88,16 +93,15 @@ def test_legacy_db_without_subs_table_counts_zero_and_stays_unmigrated(tmp_path)
     finally:
         conn.close()
     assert kbn.count_notify_subs(db_path=legacy) == 0
-    assert kbn.count_notify_subs(
-        db_path=legacy, platform="tui", chat_id="session-1"
-    ) == 0
+    assert (
+        kbn.count_notify_subs(db_path=legacy, platform="tui", chat_id="session-1") == 0
+    )
     # The probe must not have run schema init on the foreign/legacy DB.
     conn = sqlite3.connect(legacy)
     try:
         tables = {
-            r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
     finally:
         conn.close()
@@ -123,11 +127,18 @@ def test_count_notify_subs_filters_profile_owners(tmp_path):
     finally:
         conn.close()
 
-    assert kbn.count_notify_subs(
-        db_path=db_path, notifier_profiles={"writer"},
-    ) == 1
-    assert kbn.count_notify_subs(
-        db_path=db_path,
-        notifier_profiles={"default"},
-        include_unowned=True,
-    ) == 2
+    assert (
+        kbn.count_notify_subs(
+            db_path=db_path,
+            notifier_profiles={"writer"},
+        )
+        == 1
+    )
+    assert (
+        kbn.count_notify_subs(
+            db_path=db_path,
+            notifier_profiles={"default"},
+            include_unowned=True,
+        )
+        == 2
+    )

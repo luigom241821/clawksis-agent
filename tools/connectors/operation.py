@@ -10,7 +10,13 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, ClassVar, Dict, List, Optional
 
-from tools.connectors.contract import Actor, SettleReason, TargetState, allowed, resolves
+from tools.connectors.contract import (
+    Actor,
+    SettleReason,
+    TargetState,
+    allowed,
+    resolves,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +61,13 @@ class Target:
         return resolves(self.kind, self.state)
 
     def snapshot(self, *, with_url: bool = True) -> dict[str, Any]:
-        out: dict[str, Any] = {"name": self.name, "kind": self.kind, "action": self.action, "state": self.state.value,
-                               "resolved": self.resolved}
+        out: dict[str, Any] = {
+            "name": self.name,
+            "kind": self.kind,
+            "action": self.action,
+            "state": self.state.value,
+            "resolved": self.resolved,
+        }
         if self.alias:
             out["alias"] = self.alias
         if self.phase and self.state == TargetState.initiated:
@@ -81,7 +92,11 @@ class Target:
 class ConnectionOperation:
     # The gateway installs its ``connection.update`` emitter here once; pure data otherwise.
     on_change: ClassVar[
-        Optional[Callable[[ConnectionOperation, Optional[dict[str, Any]], dict[str, Any]], None]]
+        Optional[
+            Callable[
+                [ConnectionOperation, Optional[dict[str, Any]], dict[str, Any]], None
+            ]
+        ]
     ] = None
 
     targets: list[Target]
@@ -113,8 +128,15 @@ class ConnectionOperation:
         return next((t for t in self.targets if t.name == name), None)
 
     def transition(
-        self, name: str, to: TargetState, actor: Actor, *, detail: Optional[str] = None,
-        connect_url: Optional[str] = None, connection_id: Optional[str] = None, attempt: Optional[str] = None,
+        self,
+        name: str,
+        to: TargetState,
+        actor: Actor,
+        *,
+        detail: Optional[str] = None,
+        connect_url: Optional[str] = None,
+        connection_id: Optional[str] = None,
+        attempt: Optional[str] = None,
         **extra: Any,
     ) -> Optional[dict[str, Any]]:
         """Move one target; the contract decides whether ``actor`` may. Returns the change, or None
@@ -126,8 +148,15 @@ class ConnectionOperation:
             if target.state == to:
                 return None
             if allowed(target.kind, target.state, to) != actor:
-                raise IllegalTransition(f"{target.kind} {name}: {target.state.value} -> {to.value} by {actor.value}")
-            change = {"target": name, "from": target.state.value, "to": to.value, "actor": actor.value}
+                raise IllegalTransition(
+                    f"{target.kind} {name}: {target.state.value} -> {to.value} by {actor.value}"
+                )
+            change = {
+                "target": name,
+                "from": target.state.value,
+                "to": to.value,
+                "actor": actor.value,
+            }
             target.state = to
             if detail is not None:
                 target.detail = detail
@@ -141,13 +170,27 @@ class ConnectionOperation:
             if extra:
                 target.extra = dict(extra)
             snapshot = self._bump_locked()
-        logger.info("connection op %s: %s %s -> %s by %s", self.op_id, name, change["from"], to.value, actor.value)
+        logger.info(
+            "connection op %s: %s %s -> %s by %s",
+            self.op_id,
+            name,
+            change["from"],
+            to.value,
+            actor.value,
+        )
         self.wake.set()
         self._changed(change, snapshot)
         return change
 
-    def refresh(self, name: str, *, connect_url: Optional[str], detail: str, actor: Actor = Actor.user,
-                phase: Optional[str] = None) -> None:
+    def refresh(
+        self,
+        name: str,
+        *,
+        connect_url: Optional[str],
+        detail: str,
+        actor: Actor = Actor.user,
+        phase: Optional[str] = None,
+    ) -> None:
         """Replace a target's link, detail and install phase without a state change (a repeated
         failure, or the next step of an install).
 
@@ -160,8 +203,13 @@ class ConnectionOperation:
             target.connect_url = connect_url
             target.detail = detail
             target.phase = phase
-            change = {"target": name, "from": target.state.value, "to": target.state.value, "actor": actor.value,
-                      "detail": detail}
+            change = {
+                "target": name,
+                "from": target.state.value,
+                "to": target.state.value,
+                "actor": actor.value,
+                "detail": detail,
+            }
             snapshot = self._bump_locked()
         self.wake.set()
         self._changed(change, snapshot)
@@ -177,7 +225,9 @@ class ConnectionOperation:
             self.seq += 1
         return self._result_locked()
 
-    def _changed(self, change: Optional[dict[str, Any]], snapshot: dict[str, Any]) -> None:
+    def _changed(
+        self, change: Optional[dict[str, Any]], snapshot: dict[str, Any]
+    ) -> None:
         hook = type(self).on_change
         if hook is not None:
             hook(self, change, snapshot)
@@ -205,7 +255,9 @@ class ConnectionOperation:
                     target.state = TargetState.not_connected
             self._settled_snapshot = self._bump_locked()
             outcomes = ", ".join(f"{t.name}={t.state.value}" for t in self.targets)
-        logger.info("connection op %s settled by %s: %s", self.op_id, by.value, outcomes)
+        logger.info(
+            "connection op %s settled by %s: %s", self.op_id, by.value, outcomes
+        )
         self.wake.set()
         self._changed(None, self._settled_snapshot)
         return True
@@ -256,7 +308,9 @@ class ConnectionOperation:
             if not names:
                 continue
             definitions = registry.get_definitions(set(names), quiet=True)
-            listing, _form = build_catalog_listing_with_form(definitions, max_tokens=1500)
+            listing, _form = build_catalog_listing_with_form(
+                definitions, max_tokens=1500
+            )
             if listing:
                 target["tools_listing"] = listing
         return result
@@ -280,5 +334,4 @@ class ConnectionOperation:
 
 
 class DetachedOperation(ConnectionOperation):
-
     on_change = None

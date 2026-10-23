@@ -17,11 +17,13 @@ logger = logging.getLogger("clawk_cli.main")
 def _pyproject_project(debug_fmt: str | None = None) -> dict | None:
     """``[project]`` table of pyproject.toml, or ``None`` when absent/unreadable."""
     from clawk_cli.main import PROJECT_ROOT
+
     pyproject = PROJECT_ROOT / "pyproject.toml"
     if not pyproject.is_file():
         return None
     try:
         import tomllib
+
         with pyproject.open("rb") as handle:
             project = tomllib.load(handle).get("project", {})
     except Exception as exc:
@@ -41,11 +43,13 @@ def _pyproject_project(debug_fmt: str | None = None) -> dict | None:
 # See #58004.
 def _update_marker_path() -> Path:
     from clawk_cli.main import PROJECT_ROOT
+
     return PROJECT_ROOT / ".update-incomplete"
 
 
 def _lazy_refresh_marker_path() -> Path:
     from clawk_cli.main import PROJECT_ROOT
+
     return PROJECT_ROOT / ".lazy-refresh-incomplete"
 
 
@@ -53,7 +57,10 @@ def _pytest_owns_live_checkout(root: Path) -> bool:
     """True under pytest when ``root`` is this checkout: unsandboxed update/recovery tests must
     neither litter the live repo root with breadcrumbs (false-arming the developer's next launch)
     nor run a real reinstall against the executing venv (cf. ``managed_scope._under_pytest``)."""
-    return "PYTEST_CURRENT_TEST" in os.environ and root == Path(__file__).resolve().parent.parent
+    return (
+        "PYTEST_CURRENT_TEST" in os.environ
+        and root == Path(__file__).resolve().parent.parent
+    )
 
 
 def _clear_marker_file(path: Path, *, label: str) -> None:
@@ -83,6 +90,7 @@ _UPDATE_REEXEC_ENV = "CLAWK_UPDATE_REEXEC"
 def _reexec_dependency_sync_off_windows_shim() -> NoReturn:
     """Stop a mixed old-code/new-files updater at the retired sync boundary."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
@@ -95,6 +103,7 @@ def _venv_scripts_dir() -> Path | None:
     from clawk_cli.main import PROJECT_ROOT
     from clawk_constants import project_venv_dir
     from pm.environments import venv_bin_dir
+
     venv_dir = project_venv_dir(PROJECT_ROOT)
     if venv_dir is None:
         return None
@@ -107,7 +116,11 @@ def _clawk_exe_shims(scripts_dir: Path) -> list[Path]:
     only; POSIX shims are plain scripts replaced atomically."""
     if not _is_windows():
         return []
-    names = set(_load_console_script_names()) or {"clawk", "clawksis-agent", "clawk-acp"}
+    names = set(_load_console_script_names()) or {
+        "clawk",
+        "clawksis-agent",
+        "clawk-acp",
+    }
     # Not a [project.scripts] entry point, but older update/install paths still
     # rewrite and quarantine it.
     names.add("clawk-gateway")
@@ -118,7 +131,9 @@ _PENDING_RENAME_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager"
 _PENDING_RENAME_VALUE = "PendingFileRenameOperations"
 
 
-def _filter_pending_shim_renames(entries: list[str], shims: list[Path]) -> tuple[list[str], int]:
+def _filter_pending_shim_renames(
+    entries: list[str], shims: list[Path]
+) -> tuple[list[str], int]:
     """Drop our ``<shim>`` -> ``<shim>.old.<stamp>`` pairs from a PendingFileRenameOperations
     value (a flat REG_MULTI_SZ of (source, target) pairs shared with other installers).
     Returns the entries to keep and how many pairs were dropped."""
@@ -135,7 +150,9 @@ def _filter_pending_shim_renames(entries: list[str], shims: list[Path]) -> tuple
     for index in range(0, len(entries) - 1, 2):
         source, target = entries[index], entries[index + 1]
         source_norm = _norm(source)
-        if source_norm in shim_paths and _norm(target).startswith(f"{source_norm}.old."):
+        if source_norm in shim_paths and _norm(target).startswith(
+            f"{source_norm}.old."
+        ):
             removed += 1
         else:
             kept.extend((source, target))
@@ -152,18 +169,25 @@ def _cleanup_pending_shim_renames(scripts_dir: Path) -> int:
         return 0
     try:
         import winreg
+
         with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE, _PENDING_RENAME_KEY, 0,
+            winreg.HKEY_LOCAL_MACHINE,
+            _PENDING_RENAME_KEY,
+            0,
             winreg.KEY_QUERY_VALUE | winreg.KEY_SET_VALUE,
         ) as key:
             entries, value_type = winreg.QueryValueEx(key, _PENDING_RENAME_VALUE)
             if value_type != winreg.REG_MULTI_SZ or not isinstance(entries, list):
                 return 0
-            kept, removed = _filter_pending_shim_renames(entries, _clawk_exe_shims(scripts_dir))
+            kept, removed = _filter_pending_shim_renames(
+                entries, _clawk_exe_shims(scripts_dir)
+            )
             if not removed:
                 return 0
             if kept:
-                winreg.SetValueEx(key, _PENDING_RENAME_VALUE, 0, winreg.REG_MULTI_SZ, kept)
+                winreg.SetValueEx(
+                    key, _PENDING_RENAME_VALUE, 0, winreg.REG_MULTI_SZ, kept
+                )
             else:
                 winreg.DeleteValue(key, _PENDING_RENAME_VALUE)
             return removed
@@ -191,12 +215,15 @@ def _recover_update_debts_on_startup() -> None:
     # still owed by a previous update without restarting services here.
     if "update" not in sys.argv[1:]:
         try:
-            from clawk_cli.update_cmd_fleet import _warn_pending_fleet_restart_on_startup
+            from clawk_cli.update_cmd_fleet import (
+                _warn_pending_fleet_restart_on_startup,
+            )
 
             _warn_pending_fleet_restart_on_startup()
         except Exception:  # a startup warning never blocks the launch it warns about
             logger.debug("pending fleet restart check failed", exc_info=True)
     from clawk_cli.update_pause_record import recover as _recover_paused_gateways
+
     # Unconditional: recover() itself skips the PARSED `update`/`gateway run` commands; a raw argv
     # value equal to "update" (`--resume update`) is no reason to strand paused gateways.
     _recover_paused_gateways()  # a killed `clawk update` left gateways paused (Windows)
@@ -228,8 +255,10 @@ def _cleanup_quarantined_exes(scripts_dir: Path | None = None) -> None:
     now = _time.time()
     try:
         candidates = [
-            (stamp, stale) for stale in scripts_dir.glob("*.exe.old.*")
-            if (stamp := _quarantine_stamp_ms(stale)) is not None]
+            (stamp, stale)
+            for stale in scripts_dir.glob("*.exe.old.*")
+            if (stamp := _quarantine_stamp_ms(stale)) is not None
+        ]
     except OSError:
         return
     # Newest first by PARSED stamp: lexicographic order breaks when a stray ``.old.999`` exists.
@@ -263,16 +292,25 @@ def _configured_features_missing_deps() -> list[tuple[str, str, str]]:
         for platform in load_gateway_config().get_connected_platforms():
             entry = platform_registry.get(platform.value)
             if entry is not None and not entry.check_fn():
-                missing.append((entry.label, entry.install_hint or "Run `clawk setup` to install support.",
-                                entry.name))
+                missing.append(
+                    (
+                        entry.label,
+                        entry.install_hint or "Run `clawk setup` to install support.",
+                        entry.name,
+                    )
+                )
     except Exception as exc:
         logger.debug("configured-platform dependency check skipped: %s", exc)
     try:
         import importlib.util
         from clawk_cli.config import load_config_readonly
 
-        if (load_config_readonly().get("mcp_servers") or {}) and importlib.util.find_spec("mcp") is None:
-            missing.append(("MCP servers", "Run `clawk pm install` to install MCP support.", "mcp"))
+        if (
+            load_config_readonly().get("mcp_servers") or {}
+        ) and importlib.util.find_spec("mcp") is None:
+            missing.append(
+                ("MCP servers", "Run `clawk pm install` to install MCP support.", "mcp")
+            )
     except Exception as exc:
         logger.debug("configured-MCP dependency check skipped: %s", exc)
     return missing
@@ -292,30 +330,47 @@ def _install_configured_features_missing_deps(project_root: Path) -> None:
     if not missing:
         return
     declared = set(declared_extras(project_root))
-    extras = sorted({extra for *_, name in missing
-                     if (extra := name.replace("_", "-")) in declared and extra_supported(extra)})
+    extras = sorted(
+        {
+            extra
+            for *_, name in missing
+            if (extra := name.replace("_", "-")) in declared and extra_supported(extra)
+        }
+    )
     if extras:
         try:
-            pm.sync_venv(extras, explicit=True, project_root=project_root, evict_incompatible_plugins=True)
+            pm.sync_venv(
+                extras,
+                explicit=True,
+                project_root=project_root,
+                evict_incompatible_plugins=True,
+            )
         except Exception as exc:
-            print(f"  ⚠ Could not install {', '.join(extras)} for configured features: {exc}")
+            print(
+                f"  ⚠ Could not install {', '.join(extras)} for configured features: {exc}"
+            )
         else:
             missing = [row for row in missing if row[2].replace("_", "-") not in extras]
     if missing:
-        print("  ⚠ Configured features whose dependencies are still missing — the gateway will fail to load them on restart:")
+        print(
+            "  ⚠ Configured features whose dependencies are still missing — the gateway will fail to load them on restart:"
+        )
         for feature, hint, _extra in missing:
             print(f"    - {feature}: {hint}")
 
 
 def _load_console_script_names() -> list[str]:
     """Return ``[project.scripts]`` entry-point names from pyproject.toml."""
-    project = _pyproject_project("console script verification: failed to read pyproject.toml: %s")
+    project = _pyproject_project(
+        "console script verification: failed to read pyproject.toml: %s"
+    )
     scripts = (project or {}).get("scripts", {}) or {}
     return [str(name) for name in scripts if name]
 
 
 def _is_termux_env(env: dict[str, str] | None = None) -> bool:
     from clawk_cli.main import _is_termux_startup_environment
+
     return _is_termux_startup_environment(env)
 
 
@@ -339,6 +394,7 @@ def _resolve_node_runtime_npm() -> str | None:
     Never re-scans the user's PATH for another npm: Clawksis runs only its PM-managed toolchain.
     """
     from clawk_constants import find_node_executable
+
     npm = find_node_executable("npm")
     if _is_windows() or not npm:
         return npm

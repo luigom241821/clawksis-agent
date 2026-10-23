@@ -57,7 +57,9 @@ class CaptureQueuedNativeImageAgent:
         self.tools = []
         self.tool_progress_callback = kwargs.get("tool_progress_callback")
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **kwargs
+    ):
         # The real AIAgent.run_conversation accepts the persist_* kwargs the gateway adds for a
         # message with a raw inbound id (queued follow-ups now carry theirs); tolerate them.
         type(self).calls.append(message)
@@ -109,7 +111,9 @@ def _make_runner(adapter):
 
 
 @pytest.mark.asyncio
-async def test_queued_followup_uses_pending_event_session_key_for_native_images(monkeypatch, tmp_path):
+async def test_queued_followup_uses_pending_event_session_key_for_native_images(
+    monkeypatch, tmp_path
+):
     CaptureQueuedNativeImageAgent.calls = []
 
     fake_dotenv = types.ModuleType("dotenv")
@@ -122,7 +126,9 @@ async def test_queued_followup_uses_pending_event_session_key_for_native_images(
 
     gateway_run = importlib.import_module("gateway.run")
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
 
     adapter = CaptureAdapter()
     runner = _make_runner(adapter)

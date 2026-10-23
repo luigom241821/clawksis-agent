@@ -1,4 +1,5 @@
 """Process startup phases; diagnostics remain in the gateway facade."""
+
 from __future__ import annotations
 
 import logging
@@ -18,43 +19,67 @@ def _start_deferred_state_db_integrity_check(evidence: dict) -> None:
     refused. A daemon thread nothing waits on; it only appends the forensic exit-diag record.
     """
     from agent.memory_provider import spawn_context_thread
-    from gateway.lifecycle_ledger import STATE_DB_INTEGRITY_DEADLINE_S, run_deferred_integrity_check
+    from gateway.lifecycle_ledger import (
+        STATE_DB_INTEGRITY_DEADLINE_S,
+        run_deferred_integrity_check,
+    )
+
     # Under the caller's profile scope: the scan resolves this gateway's state.db through it.
     spawn_context_thread(
-        run_deferred_integrity_check, args=(evidence,),
-        kwargs={"deadline_s": STATE_DB_INTEGRITY_DEADLINE_S}, name="state-db-integrity-check").start()
+        run_deferred_integrity_check,
+        args=(evidence,),
+        kwargs={"deadline_s": STATE_DB_INTEGRITY_DEADLINE_S},
+        name="state-db-integrity-check",
+    ).start()
+
 
 # Log-record parity with the origin module.
 logger = logging.getLogger("gateway.run")
 
-async def _start_gateway_replace_existing_instance(existing_pid: int, replace: bool) -> bool:
+
+async def _start_gateway_replace_existing_instance(
+    existing_pid: int, replace: bool
+) -> bool:
     """Handle a live gateway PID under this CLAWK_HOME: replace it (``--replace``) or refuse.
     Returns False when startup must abort (refused, permission denied, target still alive)."""
-    from gateway.run import (_clear_takeover_marker_quiet, _replace_target_belongs_to_other_profile, _wait_for_pid_exit, get_clawk_home, suppress)
+    from gateway.run import (
+        _clear_takeover_marker_quiet,
+        _replace_target_belongs_to_other_profile,
+        _wait_for_pid_exit,
+        get_clawk_home,
+        suppress,
+    )
     from gateway.status import get_process_start_time, remove_pid_file, terminate_pid
+
     if not replace:
         clawk_home = str(get_clawk_home())
         logger.error(
             "Another gateway instance is already running (PID %d, CLAWK_HOME=%s) and did not "
             "publish a host record this process could attach to.",
-            existing_pid, clawk_home)
+            existing_pid,
+            clawk_home,
+        )
         print(
             f"\n❌ A gateway already owns this host (PID {existing_pid}).\n"
             f"   One gateway per host serves every profile, so there is nothing to start here.\n"
             f"   Attach is impossible: PID {existing_pid} published no usable host record\n"
             f"   (an older build, or an unwritable lock directory).\n"
             f"   Take the host over:  clawk gateway run --replace\n"
-            f"   Or stop it first:    clawk gateway stop\n")
+            f"   Or stop it first:    clawk gateway stop\n"
+        )
         return False
 
     # Never signal a process not provably ours (a poisoned PID record → cross-profile restart loop).
     if _replace_target_belongs_to_other_profile(existing_pid):
         from gateway.status import _get_process_clawk_home, write_runtime_status
+
         logger.error(
             "Refusing --replace: PID %d cannot be proven to belong "
             "to this profile's gateway (CLAWK_HOME %s). Remove the "
             "stale PID record or stop the owning profile explicitly.",
-            existing_pid, _get_process_clawk_home())
+            existing_pid,
+            _get_process_clawk_home(),
+        )
         # The stamp must be ON DISK before this process exits: every CLI exit path funnels
         # through _exit_after_graceful_shutdown(), whose os._exit() never flushes the queued
         # runtime-status writer. A fire-and-forget stamp can die in the queue, the supervisor
@@ -70,19 +95,26 @@ async def _start_gateway_replace_existing_instance(existing_pid: int, replace: b
         except Exception:
             # Persistence must never abort the start; the traceback (DEBUG) keeps the
             # failure visible for the next bug report.
-            logger.debug("Could not stamp runtime status after the ownership refusal", exc_info=True)
+            logger.debug(
+                "Could not stamp runtime status after the ownership refusal",
+                exc_info=True,
+            )
         return False
     existing_start_time = get_process_start_time(existing_pid)
-    logger.info("Replacing existing gateway instance (PID %d) with --replace.", existing_pid)
+    logger.info(
+        "Replacing existing gateway instance (PID %d) with --replace.", existing_pid
+    )
     # Takeover marker: target exits 0 on our SIGTERM (exit 1 → systemd Restart=on-failure flap loop).
     try:
         from gateway.status import write_takeover_marker
+
         write_takeover_marker(existing_pid)
     except Exception as e:
         logger.debug("Could not write takeover marker: %s", e)
     # Snapshot children BEFORE signalling: reparented orphans are invisible yet hold scoped token locks.
     try:
         from gateway.status import _snapshot_gateway_children
+
         _old_gateway_children = _snapshot_gateway_children(existing_pid)
     except Exception:
         _old_gateway_children = []
@@ -96,27 +128,39 @@ async def _start_gateway_replace_existing_instance(existing_pid: int, replace: b
         return False
     # Up to 10s for SIGTERM, then SIGKILL.
     if not await _wait_for_pid_exit(existing_pid, 20, 0.5):
-        logger.warning("Old gateway (PID %d) did not exit after SIGTERM, sending SIGKILL.", existing_pid)
+        logger.warning(
+            "Old gateway (PID %d) did not exit after SIGTERM, sending SIGKILL.",
+            existing_pid,
+        )
         old_gateway_exited = False
         try:
-            terminate_pid(existing_pid, force=True, expected_start_time=existing_start_time)
+            terminate_pid(
+                existing_pid, force=True, expected_start_time=existing_start_time
+            )
         except ProcessLookupError:
             old_gateway_exited = True
         except (PermissionError, OSError):
             pass
         # Confirm SIGKILL took (D-state/zombie) before clearing PID/locks, or two gateways share a token.
-        if not old_gateway_exited and not await _wait_for_pid_exit(existing_pid, 20, 0.25):
+        if not old_gateway_exited and not await _wait_for_pid_exit(
+            existing_pid, 20, 0.25
+        ):
             logger.error(
                 "Old gateway (PID %d) still appears alive after SIGKILL; "
-                "aborting replacement to avoid a duplicate gateway.", existing_pid)
+                "aborting replacement to avoid a duplicate gateway.",
+                existing_pid,
+            )
             _clear_takeover_marker_quiet()
             return False
     # Reap orphaned children (POSIX; mirrors Windows taskkill /T) so they stop holding scoped token locks.
     try:
         from gateway.status import reap_gateway_children
+
         reap_gateway_children(_old_gateway_children, parent_pid=existing_pid)
     except Exception:
-        logger.debug("Child reap for replaced gateway PID %d failed", existing_pid, exc_info=True)
+        logger.debug(
+            "Child reap for replaced gateway PID %d failed", existing_pid, exc_info=True
+        )
     remove_pid_file()
     # remove_pid_file() is a no-op when the PID doesn't match; force-unlink covers a crashed old process.
     with suppress(Exception):
@@ -126,25 +170,40 @@ async def _start_gateway_replace_existing_instance(existing_pid: int, replace: b
     # Stopped (Ctrl+Z) processes don't release scoped locks on exit; stale lock files block the new gateway.
     try:
         from gateway.status_scoped_locks import release_all_scoped_locks
-        _released = release_all_scoped_locks(owner_pid=existing_pid, owner_start_time=existing_start_time)
+
+        _released = release_all_scoped_locks(
+            owner_pid=existing_pid, owner_start_time=existing_start_time
+        )
         if _released:
             logger.info("Released %d stale scoped lock(s) from old gateway.", _released)
     except Exception:
-        logger.debug("Stale scoped lock release for replaced gateway PID %d failed", existing_pid, exc_info=True)
+        logger.debug(
+            "Stale scoped lock release for replaced gateway PID %d failed",
+            existing_pid,
+            exc_info=True,
+        )
     return True
 
 
 def _start_gateway_configure_logging(verbosity: Optional[int]) -> None:
     """Sync bundled skills, set up file logging + startup security audit, and the -v/-q stderr handler."""
-    from gateway.run import (_best_effort, _gateway_stderr_formatter, _clawk_home, logging)
+    from gateway.run import (
+        _best_effort,
+        _gateway_stderr_formatter,
+        _clawk_home,
+        logging,
+    )
+
     def _sync_skills() -> None:
         from tools.skills_sync import sync_skills
+
         sync_skills(quiet=True)
 
     _best_effort(_sync_skills)
 
     # Centralized logging (agent.log INFO+, errors.log WARNING+, gateway.log gateway-only); idempotent.
     from clawk_logging import setup_logging, _safe_stderr
+
     setup_logging(clawk_home=_clawk_home, mode="gateway")
 
     def _security_audit() -> None:
@@ -153,15 +212,20 @@ def _start_gateway_configure_logging(verbosity: Optional[int]) -> None:
 
         def _raw_cfg():
             from clawk_cli.config import read_raw_config
+
             return read_raw_config()
 
-        log_startup_security_warnings(clawk_home=_clawk_home, config=_best_effort(_raw_cfg))
+        log_startup_security_warnings(
+            clawk_home=_clawk_home, config=_best_effort(_raw_cfg)
+        )
 
     _best_effort(_security_audit, "Startup security audit failed (non-fatal): %s")
 
     # Optional stderr handler from -v/-q: None (quiet) = none; 0 = WARNING; 1 = INFO; 2+ = DEBUG.
     if verbosity is not None:
-        _stderr_level = {0: logging.WARNING, 1: logging.INFO}.get(verbosity, logging.DEBUG)
+        _stderr_level = {0: logging.WARNING, 1: logging.INFO}.get(
+            verbosity, logging.DEBUG
+        )
         _stderr_handler = logging.StreamHandler(_safe_stderr())
         _stderr_handler.setLevel(_stderr_level)
         _stderr_handler.setFormatter(_gateway_stderr_formatter())
@@ -171,30 +235,42 @@ def _start_gateway_configure_logging(verbosity: Optional[int]) -> None:
             root.setLevel(_stderr_level)
 
 
-def _start_gateway_make_shutdown_signal_handler(runner, _signal_initiated_shutdown: list):
+def _start_gateway_make_shutdown_signal_handler(
+    runner, _signal_initiated_shutdown: list
+):
     """Build the SIGINT/SIGTERM handler; ``_signal_initiated_shutdown[0]`` records an unplanned signal."""
-    from gateway.run import (_best_effort, _clawk_home, asyncio, logger, signal)
+    from gateway.run import _best_effort, _clawk_home, asyncio, logger, signal
+
     planned_stop_seen = [False]
 
     def shutdown_signal_handler(received_signal=None):
         # Planned --replace takeover (sibling marked this PID): exit 0 so systemd won't revive us.
         def _takeover() -> bool:
             from gateway.status import consume_takeover_marker_for_self
+
             return consume_takeover_marker_for_self()
 
         # Planned stop: CLI marks first, else its SIGTERM looks like an external kill. SIGINT = Ctrl+C.
         def _planned_stop() -> bool:
             from gateway.status import consume_planned_stop_marker_for_self
+
             return consume_planned_stop_marker_for_self()
 
         # Fast (<10ms) sync snapshot: stdlib + /proc, no subprocesses (`ps aux` here once blocked ~3s).
         def _snapshot():
             from gateway.shutdown_forensics import snapshot_shutdown_context
+
             return snapshot_shutdown_context(received_signal)
 
-        planned_takeover = bool(_best_effort(_takeover, "Takeover marker check failed: %s"))
+        planned_takeover = bool(
+            _best_effort(_takeover, "Takeover marker check failed: %s")
+        )
         planned_stop = received_signal == signal.SIGINT or (
-            not planned_takeover and bool(_best_effort(_planned_stop, "Planned stop marker check failed: %s")))
+            not planned_takeover
+            and bool(
+                _best_effort(_planned_stop, "Planned stop marker check failed: %s")
+            )
+        )
         # `clawk gateway stop` writes the marker, THEN signals: the planned-stop watcher can consume
         # the marker in between, and the CLI's own SIGTERM must not then read as an external kill.
         if planned_stop:
@@ -205,27 +281,43 @@ def _start_gateway_make_shutdown_signal_handler(runner, _signal_initiated_shutdo
         sig_name = _shutdown_ctx["signal"] if _shutdown_ctx else None
 
         if planned_takeover:
-            logger.info("Received %s as a planned --replace takeover — exiting cleanly", sig_name or "SIGTERM")
+            logger.info(
+                "Received %s as a planned --replace takeover — exiting cleanly",
+                sig_name or "SIGTERM",
+            )
         elif planned_stop:
-            logger.info("Received %s as a planned gateway stop — exiting cleanly", sig_name or "SIGTERM/SIGINT")
+            logger.info(
+                "Received %s as a planned gateway stop — exiting cleanly",
+                sig_name or "SIGTERM/SIGINT",
+            )
         else:
             # Mirrored onto the runner so _stop_impl suppresses the gateway_state=stopped persist for
             # unexpected signals; operator stops take the `planned_stop` branch and leave it False (DO persist).
             _signal_initiated_shutdown[0] = runner._signal_initiated_shutdown = True
-            logger.info("Received %s — initiating shutdown", sig_name or "SIGTERM/SIGINT")
+            logger.info(
+                "Received %s — initiating shutdown", sig_name or "SIGTERM/SIGINT"
+            )
 
         if _shutdown_ctx is not None:
+
             def _log_context() -> None:
                 # The most useful line for "gateway keeps dying" tickets.
                 from gateway.shutdown_forensics import format_context_for_log
-                logger.warning("Shutdown context: %s", format_context_for_log(_shutdown_ctx))
+
+                logger.warning(
+                    "Shutdown context: %s", format_context_for_log(_shutdown_ctx)
+                )
 
             def _diagnostic() -> None:
                 # Heavyweight (ps auxf, pstree, dmesg), detached so it finishes even if our cgroup is torn
                 # down; bounded by an internal timeout, never blocks.
                 from gateway.shutdown_forensics import spawn_async_diagnostic
+
                 spawn_async_diagnostic(
-                    _clawk_home / "logs" / "gateway-shutdown-diag.log", _shutdown_ctx["signal"], timeout_seconds=5.0)
+                    _clawk_home / "logs" / "gateway-shutdown-diag.log",
+                    _shutdown_ctx["signal"],
+                    timeout_seconds=5.0,
+                )
 
             _best_effort(_log_context, "format_context_for_log failed: %s")
             _best_effort(_diagnostic, "spawn_async_diagnostic failed: %s")
@@ -236,23 +328,34 @@ def _start_gateway_make_shutdown_signal_handler(runner, _signal_initiated_shutdo
             # keep the configured drain. _stop_impl uses this to cap the drain to the live budget.
             runner._stop_requested_by_signal = True
         asyncio.create_task(runner.stop())
+
     return shutdown_signal_handler
 
 
 def _start_gateway_claim_pid_file(force: bool = False) -> bool:
     """Claim the runtime lock + PID file (O_EXCL winner is the authoritative gateway). False = lost."""
-    from gateway.run import (_claim_host_gateway_role, logger, os)
+    from gateway.run import _claim_host_gateway_role, logger, os
     import atexit
     from gateway.status import (
-        acquire_gateway_runtime_lock, get_running_pid, release_gateway_runtime_lock,
-        remove_pid_file, write_pid_file)
+        acquire_gateway_runtime_lock,
+        get_running_pid,
+        release_gateway_runtime_lock,
+        remove_pid_file,
+        write_pid_file,
+    )
+
     _current_pid = get_running_pid()
     if _current_pid is not None and _current_pid != os.getpid():
-        logger.error("Another gateway instance (PID %d) started during our startup. "
-                     "Exiting to avoid double-running.", _current_pid)
+        logger.error(
+            "Another gateway instance (PID %d) started during our startup. "
+            "Exiting to avoid double-running.",
+            _current_pid,
+        )
         return False
     if not acquire_gateway_runtime_lock():
-        logger.error("Gateway runtime lock is already held by another instance. Exiting.")
+        logger.error(
+            "Gateway runtime lock is already held by another instance. Exiting."
+        )
         return False
     try:
         write_pid_file()
@@ -263,6 +366,7 @@ def _start_gateway_claim_pid_file(force: bool = False) -> bool:
     atexit.register(remove_pid_file)
     atexit.register(release_gateway_runtime_lock)
     from clawk_cli.gateway_multiplex_mode import publish_pending_multiplex_decision
+
     publish_pending_multiplex_decision()
     _claim_host_gateway_role(force=force)
     return True
@@ -270,9 +374,10 @@ def _start_gateway_claim_pid_file(force: bool = False) -> bool:
 
 async def _start_gateway_start_control_socket(runner):
     """Start the gateway control socket (identify/status/pause-for-update); None when unavailable."""
-    from gateway.run import (asyncio, logger, os, threading)
+    from gateway.run import asyncio, logger, os, threading
     import atexit
     import concurrent.futures
+
     _control_server = None
     try:
         # Started immediately after the PID-file claim: winning that O_EXCL race is the moment this process
@@ -282,30 +387,48 @@ async def _start_gateway_start_control_socket(runner):
         # gateway without it can serve no local session. See #92091.
         from gateway.control_socket import GatewayControlServer, build_identify_payload
         from gateway.run_profile_reconcile import (
-            migrate_profile_identity_verb, purge_profile_identity_verb,
-            unserve_profile_verb, serve_profile_verb,
+            migrate_profile_identity_verb,
+            purge_profile_identity_verb,
+            unserve_profile_verb,
+            serve_profile_verb,
         )
         from gateway.run_plugin_rewire import reload_plugins_verb
         from gateway.run_active_work_verb import active_work_verb
         from gateway.drain_control import RESTART_WAIT_REASON
+
         descriptor = runner.session_runtime_descriptor
 
         def _identify_runtime():
             payload = build_identify_payload()
-            payload.update({key: descriptor[key] for key in (
-                "instance_id", "runtime_protocol", "authority_epoch", "state", "api_origin",
-                "served_profiles", "parked_profiles", "capabilities") if key in descriptor})
-            if getattr(runner, '_draining', False):
-                payload.update(state='draining')
+            payload.update(
+                {
+                    key: descriptor[key]
+                    for key in (
+                        "instance_id",
+                        "runtime_protocol",
+                        "authority_epoch",
+                        "state",
+                        "api_origin",
+                        "served_profiles",
+                        "parked_profiles",
+                        "capabilities",
+                    )
+                    if key in descriptor
+                }
+            )
+            if getattr(runner, "_draining", False):
+                payload.update(state="draining")
                 # The restart's after-turn wait still owns its turns: clients reach it to answer a
                 # parked approval/clarify (#139041), so the endpoint stays dialable until stop().
-                if descriptor.get('drain_reason') != RESTART_WAIT_REASON:
-                    payload['capabilities'] = []
-            if payload.get('state') == 'draining' and descriptor.get('drain_reason'):
-                payload['drain_reason'] = descriptor['drain_reason']
+                if descriptor.get("drain_reason") != RESTART_WAIT_REASON:
+                    payload["capabilities"] = []
+            if payload.get("state") == "draining" and descriptor.get("drain_reason"):
+                payload["drain_reason"] = descriptor["drain_reason"]
             payload["supervisor"] = {"manual": "none", "desktop": "none"}.get(
-                payload.get("supervisor"), payload.get("supervisor", "none"))
+                payload.get("supervisor"), payload.get("supervisor", "none")
+            )
             return payload
+
         # pause-for-update: the updater asks us to drain + exit (freeing venv handles) vs. a tree-kill
         # (same path as SIGUSR1). Handler runs on the socket executor thread, so marshal onto the loop.
         # pause-for-update (#92091 step 2): the updater asks this gateway to drain in-flight turns and exit
@@ -317,6 +440,7 @@ async def _start_gateway_start_control_socket(runner):
         def _pause_for_update_handler() -> dict:
             try:
                 from clawk_cli.gateway import _get_restart_drain_timeout
+
                 _drain = float(_get_restart_drain_timeout())
             except Exception:
                 _drain = 30.0
@@ -325,7 +449,9 @@ async def _start_gateway_start_control_socket(runner):
 
             def _request() -> None:
                 try:
-                    accepted_box.append(runner.request_restart(detached=False, via_service=True))
+                    accepted_box.append(
+                        runner.request_restart(detached=False, via_service=True)
+                    )
                 finally:
                     _done.set()
 
@@ -333,8 +459,11 @@ async def _start_gateway_start_control_socket(runner):
             _done.wait(timeout=5.0)
             accepted = bool(accepted_box and accepted_box[0])
             return {
-                "pausing": accepted, "already_stopping": not accepted,
-                "pid": os.getpid(), "drain_timeout": _drain}
+                "pausing": accepted,
+                "already_stopping": not accepted,
+                "pid": os.getpid(),
+                "drain_timeout": _drain,
+            }
 
         def _rescan_profiles_handler() -> dict:
             """``clawk profile create/delete`` asks the multiplexer to reconcile ``profiles/`` now
@@ -342,27 +471,38 @@ async def _start_gateway_start_control_socket(runner):
             and wait briefly so the caller learns whether the profile is served. A gateway standalone
             only because the host had one profile starts multiplexing in place on this rescan."""
             future = asyncio.run_coroutine_threadsafe(
-                runner.reconcile_served_profiles(reason="control-socket"), _main_loop)
+                runner.reconcile_served_profiles(reason="control-socket"), _main_loop
+            )
             try:
                 # Bounded: a token-less create reconciles in milliseconds; a credential-add whose adapter
                 # connect outlasts this keeps running and the caller sees ``pending`` (not an error).
                 result = future.result(timeout=5.0)
             except concurrent.futures.TimeoutError:
-                result = {"pending": True, "served_profiles": runner.served_profile_names()}
-            return {"multiplex": bool(getattr(runner.config, "multiplex_profiles", False)), **result}
+                result = {
+                    "pending": True,
+                    "served_profiles": runner.served_profile_names(),
+                }
+            return {
+                "multiplex": bool(getattr(runner.config, "multiplex_profiles", False)),
+                **result,
+            }
 
         _control_server = GatewayControlServer(
-            verb_handlers={"pause-for-update": _pause_for_update_handler, "identify": _identify_runtime,
-                           "rescan-profiles": _rescan_profiles_handler,
-                           "migrate-profile-identity": migrate_profile_identity_verb(runner),
-                           "unserve-profile": unserve_profile_verb(runner),
-                           "serve-profile": serve_profile_verb(runner),
-                           "purge-profile-identity": purge_profile_identity_verb(runner),
-                           # `clawk gateway stop/restart` refuse while this names live work.
-                           "active-work": active_work_verb(runner, _main_loop),
-                           # A plugin installed/enabled by another process loads now and re-wires the
-                           # live adapters' handlers (#87770); tools/prompt still wait for the next session.
-                           "reload-plugins": reload_plugins_verb(runner, _main_loop)})
+            verb_handlers={
+                "pause-for-update": _pause_for_update_handler,
+                "identify": _identify_runtime,
+                "rescan-profiles": _rescan_profiles_handler,
+                "migrate-profile-identity": migrate_profile_identity_verb(runner),
+                "unserve-profile": unserve_profile_verb(runner),
+                "serve-profile": serve_profile_verb(runner),
+                "purge-profile-identity": purge_profile_identity_verb(runner),
+                # `clawk gateway stop/restart` refuse while this names live work.
+                "active-work": active_work_verb(runner, _main_loop),
+                # A plugin installed/enabled by another process loads now and re-wires the
+                # live adapters' handlers (#87770); tools/prompt still wait for the next session.
+                "reload-plugins": reload_plugins_verb(runner, _main_loop),
+            }
+        )
         _control_server.ticket_store = runner.session_ticket_store
         if not await _control_server.start():
             _control_server = None
@@ -372,7 +512,10 @@ async def _start_gateway_start_control_socket(runner):
             # that starts the control socket (not only start_gateway) exposes it.
             runner.session_control_server = _control_server
     except Exception as _cs_exc:
-        logger.error("Control socket startup failed; the gateway cannot start without it: %s", _cs_exc)
+        logger.error(
+            "Control socket startup failed; the gateway cannot start without it: %s",
+            _cs_exc,
+        )
         _control_server = None
     return _control_server
 
@@ -380,10 +523,24 @@ async def _start_gateway_start_control_socket(runner):
 def _start_gateway_start_cron_and_housekeeping(runner):
     """Start the cron scheduler thread + gateway housekeeping thread; returns
     ``(cron_stop, cron_provider, cron_thread, housekeeping_thread)``."""
-    from gateway.run import (Dict, Platform, _cron_profile_gate, _cron_tick_profile_homes, _start_gateway_housekeeping, asyncio, logger, threading)
+    from gateway.run import (
+        Dict,
+        Platform,
+        _cron_profile_gate,
+        _cron_tick_profile_homes,
+        _start_gateway_housekeeping,
+        asyncio,
+        logger,
+        threading,
+    )
+
     # The event loop is passed so cron delivery can use live adapters (E2EE support).
     from cron.scheduler_provider import (
-        InProcessCronScheduler, resolve_cron_scheduler, scheduler_for_profile_mode)
+        InProcessCronScheduler,
+        resolve_cron_scheduler,
+        scheduler_for_profile_mode,
+    )
+
     cron_stop = threading.Event()
     # ONE gateway process per host multiplexes every profile, so its cron ticker owns EVERY
     # profile's store — `gateway.multiplex_profiles` gates adapters, not cron. Gating the tick set
@@ -396,36 +553,53 @@ def _start_gateway_start_cron_and_housekeeping(runner):
         cron_profile_homes = []
     # External providers own one unscoped remote registry, so they can only serve a single home.
     cron_provider = scheduler_for_profile_mode(
-        resolve_cron_scheduler(), multiplex_profiles=len(cron_profile_homes) > 1)
-    cron_start_kwargs: Dict[str, Any] = {"adapters": runner.adapters, "loop": asyncio.get_running_loop()}
+        resolve_cron_scheduler(), multiplex_profiles=len(cron_profile_homes) > 1
+    )
+    cron_start_kwargs: Dict[str, Any] = {
+        "adapters": runner.adapters,
+        "loop": asyncio.get_running_loop(),
+    }
 
     if isinstance(cron_provider, InProcessCronScheduler) and cron_profile_homes:
         # Live enumerator: the ticker re-reads profiles/ every cycle so a profile created while
         # the gateway runs gets its jobs fired without a restart (hot-serve).
-        cron_start_kwargs["profile_homes"] = lambda: _cron_tick_profile_homes(runner.config)
+        cron_start_kwargs["profile_homes"] = lambda: _cron_tick_profile_homes(
+            runner.config
+        )
         # Stand down, per tick, for a profile whose OWN gateway process ticks it.
         cron_start_kwargs["profile_gate"] = _cron_profile_gate
         # Per-profile adapters so each profile's cron output goes via its own bot, not the
         # default's. Absent (no multiplexed adapters), delivery for a secondary profile falls
         # back to the primary's routed adapters or fails closed — the job still FIRES.
-        cron_start_kwargs["profile_adapters"] = getattr(runner, "_profile_adapters", None)
+        cron_start_kwargs["profile_adapters"] = getattr(
+            runner, "_profile_adapters", None
+        )
         # runner.adapters belongs to the LAUNCH profile (``default``, or the ``--profile``
         # name); naming it keeps the ticker from routing a secondary's cron through that bot
         # and lets a named multiplexer's own jobs reuse its live adapters.
         cron_start_kwargs["default_profile"] = runner._primary_profile_name
         logger.info(
-            "Cron scheduler will tick %d profile(s): %s", len(cron_profile_homes),
-            [p[0] if isinstance(p, tuple) else p for p in cron_profile_homes])
+            "Cron scheduler will tick %d profile(s): %s",
+            len(cron_profile_homes),
+            [p[0] if isinstance(p, tuple) else p for p in cron_profile_homes],
+        )
 
     # Only the in-process ticker polls local due jobs, so only it gets the external-drain dispatch gate.
     if isinstance(cron_provider, InProcessCronScheduler):
-        cron_start_kwargs["can_dispatch"] = lambda: not (
-            runner._draining or runner._external_drain_active)
+        cron_start_kwargs["can_dispatch"] = lambda: (
+            not (runner._draining or runner._external_drain_active)
+        )
     # Supervised: a ticker that dies without a stop request is respawned by housekeeping (#111010).
     from cron.scheduler_thread import SupervisedTickerThread
+
     cron_thread = SupervisedTickerThread(
-        cron_provider.start, args=(cron_stop,), kwargs=cron_start_kwargs, stop_event=cron_stop)
+        cron_provider.start,
+        args=(cron_stop,),
+        kwargs=cron_start_kwargs,
+        stop_event=cron_stop,
+    )
     from gateway.runtime_ownership import process_ownership
+
     process_ownership.start_writer(cron_thread)
 
     # External providers fire over loopback HTTP to THIS process's api_server; if it never came up (usually
@@ -444,25 +618,49 @@ def _start_gateway_start_cron_and_housekeeping(runner):
                 "missing from this gateway process's environment. Restart "
                 "the gateway through its supervisor (`clawk gateway "
                 "restart`) so the profile env loads.",
-                getattr(cron_provider, "name", "external"))
+                getattr(cron_provider, "name", "external"),
+            )
 
     # Gateway-only housekeeping runs independently of the cron provider; shares cron_stop for shutdown.
     housekeeping_thread = threading.Thread(
-        target=_start_gateway_housekeeping, args=(cron_stop,),
-        kwargs={"adapters": runner.adapters, "loop": asyncio.get_running_loop(),
-                "cron_provider": cron_provider, "runner": runner, "cron_thread": cron_thread},
-        daemon=True, name="gateway-housekeeping")
+        target=_start_gateway_housekeeping,
+        args=(cron_stop,),
+        kwargs={
+            "adapters": runner.adapters,
+            "loop": asyncio.get_running_loop(),
+            "cron_provider": cron_provider,
+            "runner": runner,
+            "cron_thread": cron_thread,
+        },
+        daemon=True,
+        name="gateway-housekeeping",
+    )
     process_ownership.start_writer(housekeeping_thread)
     return cron_stop, cron_provider, cron_thread, housekeeping_thread
 
 
 async def _start_gateway_shutdown_tail(
-    runner, _control_server, cron_stop: threading.Event, cron_provider,
-    cron_thread: Any, housekeeping_thread: threading.Thread,
-    _planned_stop_watcher_stop: threading.Event, _planned_stop_watcher_thread: threading.Thread,
-    _signal_initiated_shutdown: list) -> bool:
+    runner,
+    _control_server,
+    cron_stop: threading.Event,
+    cron_provider,
+    cron_thread: Any,
+    housekeeping_thread: threading.Thread,
+    _planned_stop_watcher_stop: threading.Event,
+    _planned_stop_watcher_thread: threading.Thread,
+    _signal_initiated_shutdown: list,
+) -> bool:
     """Post-``wait_for_shutdown`` teardown; returns the process exit verdict (True = exit 0)."""
-    from gateway.run import (_CRON_SHUTDOWN_DRAIN_TIMEOUT, _HOUSEKEEPING_SHUTDOWN_DRAIN_TIMEOUT, _await_thread_exit, _best_effort, _resolve_gateway_exit_verdict, _shutdown_mcp_servers_nonblocking, _stop_cron_provider)
+    from gateway.run import (
+        _CRON_SHUTDOWN_DRAIN_TIMEOUT,
+        _HOUSEKEEPING_SHUTDOWN_DRAIN_TIMEOUT,
+        _await_thread_exit,
+        _best_effort,
+        _resolve_gateway_exit_verdict,
+        _shutdown_mcp_servers_nonblocking,
+        _stop_cron_provider,
+    )
+
     # Control socket first: once shutdown begins we are no longer a truthful "serving here" answer and a
     # successor must be able to bind. Early-exit paths rely on the atexit cleanup_files hook instead.
     if _control_server is not None:
@@ -474,6 +672,7 @@ async def _start_gateway_shutdown_tail(
     def _stop_keepalive() -> None:
         # No-op unless an agent configured with the dormant ``nous`` provider started it.
         from clawk_cli.nous_auth_keepalive import stop_nous_auth_keepalive
+
         stop_nous_auth_keepalive()
 
     _best_effort(_stop_keepalive)
@@ -488,9 +687,14 @@ async def _start_gateway_shutdown_tail(
     cron_stop.set()
     _stop_cron_provider(cron_provider)
     if not await _await_thread_exit(cron_thread, timeout=_CRON_SHUTDOWN_DRAIN_TIMEOUT):
-        logger.warning("Cron ticker did not exit within %.0fs of shutdown — an in-flight "
-                       "delivery may have been dropped.", _CRON_SHUTDOWN_DRAIN_TIMEOUT)
-    await _await_thread_exit(housekeeping_thread, timeout=_HOUSEKEEPING_SHUTDOWN_DRAIN_TIMEOUT)
+        logger.warning(
+            "Cron ticker did not exit within %.0fs of shutdown — an in-flight "
+            "delivery may have been dropped.",
+            _CRON_SHUTDOWN_DRAIN_TIMEOUT,
+        )
+    await _await_thread_exit(
+        housekeeping_thread, timeout=_HOUSEKEEPING_SHUTDOWN_DRAIN_TIMEOUT
+    )
 
     # Stop the planned-stop watcher (daemon=True so this is belt-and-suspenders).
     _planned_stop_watcher_stop.set()
@@ -501,12 +705,13 @@ async def _start_gateway_shutdown_tail(
     try:
         await _shutdown_mcp_servers_nonblocking(config=getattr(runner, "config", None))
     except Exception:
-        logger.warning("MCP shutdown failed; connections may be left open", exc_info=True)
+        logger.warning(
+            "MCP shutdown failed; connections may be left open", exc_info=True
+        )
 
     # The failure verdict comes AFTER the cooperative teardown: returning early here leaked the
     # cron ticker + housekeeping threads (and open MCP connections) for embedded callers (#12175).
     return _resolve_gateway_exit_verdict(runner, _signal_initiated_shutdown[0])
-
 
 
 def _launch_home_may_multiplex(config=None) -> bool:
@@ -522,33 +727,50 @@ def _launch_home_may_multiplex(config=None) -> bool:
     reserves and serves only the launch profile."""
     from clawk_constants import profile_name_for_home
     from gateway.run import get_clawk_home, logger
+
     name = profile_name_for_home(get_clawk_home())
     if name in (None, "default"):
         return True
     from clawk_cli.gateway_multiplex_mode import explicit_multiplex_flag
+
     if config is not None and not explicit_multiplex_flag(get_clawk_home()):
-        from clawk_cli.gateway_multiplex_mode import MultiplexDecision, log_multiplex_decision
+        from clawk_cli.gateway_multiplex_mode import (
+            MultiplexDecision,
+            log_multiplex_decision,
+        )
+
         decision = MultiplexDecision(
-            False, "guard",
+            False,
+            "guard",
             f"profile {name!r} launched the gateway, and only the default profile runs the multiplexer "
-            "(start it with `clawk gateway run` from the default profile to serve every profile)")
+            "(start it with `clawk gateway run` from the default profile to serve every profile)",
+        )
         config.multiplex_profiles = False
         log_multiplex_decision(decision)
         return True
     from gateway.restart import GATEWAY_FATAL_CONFIG_EXIT_CODE
     from gateway.run import _write_runtime_status_quiet
+
     logger.error(
         "gateway.multiplex_profiles is set on profile %r, but only the default profile can run the "
         "multiplexer. Unset the flag in this profile's config.yaml, or start the gateway from the "
-        "default profile (`clawk gateway run`), which serves this profile too.", name)
-    _write_runtime_status_quiet(gateway_state="startup_failed", exit_reason="multiplex_requires_default_profile")
+        "default profile (`clawk gateway run`), which serves this profile too.",
+        name,
+    )
+    _write_runtime_status_quiet(
+        gateway_state="startup_failed", exit_reason="multiplex_requires_default_profile"
+    )
     raise SystemExit(GATEWAY_FATAL_CONFIG_EXIT_CODE)
 
 
 def _start_gateway_resolve_terminal_cwd() -> None:
     """Messaging-only defaults belong to startup, not incidental imports by the TUI."""
     import os
-    from gateway.cwd_placeholder import CWD_PLACEHOLDERS, resolve_placeholder_terminal_cwd
+    from gateway.cwd_placeholder import (
+        CWD_PLACEHOLDERS,
+        resolve_placeholder_terminal_cwd,
+    )
+
     configured_cwd = os.environ.get("TERMINAL_CWD", "")
     if not configured_cwd or configured_cwd in CWD_PLACEHOLDERS:
         resolved_cwd = resolve_placeholder_terminal_cwd(
@@ -556,9 +778,11 @@ def _start_gateway_resolve_terminal_cwd() -> None:
             terminal_backend=os.environ.get("TERMINAL_ENV", ""),
             messaging_cwd=os.getenv("MESSAGING_CWD"),
             docker_mount_cwd_to_workspace=os.getenv(
-                "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "false").lower()
+                "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "false"
+            ).lower()
             in {"true", "1", "yes"},
-            home_fallback=str(Path.home()))
+            home_fallback=str(Path.home()),
+        )
         if resolved_cwd is None:
             os.environ.pop("TERMINAL_CWD", None)
         else:
@@ -572,6 +796,7 @@ def _start_gateway_resolve_terminal_cwd() -> None:
 # publication and the drift probes, instead of exiting as if another gateway owned the profile.
 def _browse_reconcile_reserve_wait_s() -> float:
     from clawk_state_reconcile import BROWSE_RECONCILE_BUDGET_S
+
     return BROWSE_RECONCILE_BUDGET_S + 2.0
 
 
@@ -580,6 +805,7 @@ def _conflicting_homes(homes):
     file description and released at once (the all-or-nothing reserve does not say which failed).
     A home freed meanwhile is simply not listed; the next reserve attempt takes it."""
     from gateway.runtime_ownership import OwnershipConflict, ProfileOwnership
+
     conflicting = []
     for home in homes:
         probe = ProfileOwnership()
@@ -592,12 +818,19 @@ def _conflicting_homes(homes):
     return conflicting
 
 
-def _reserve_waiting_out_browse_reconcile(ownership, homes, *, wait_s: float | None = None):
+def _reserve_waiting_out_browse_reconcile(
+    ownership, homes, *, wait_s: float | None = None
+):
     """Reserve *homes*, waiting (bounded) while a contender is a browse reconcile or has not yet
     published its lock record (flock taken, record unwritten). Only a positively identified holder
     that is not browse maintenance refuses at once; the flock exclusion itself is never weakened."""
-    from gateway.runtime_ownership import OwnershipConflict, lock_record_unpublished, maintenance_holder
+    from gateway.runtime_ownership import (
+        OwnershipConflict,
+        lock_record_unpublished,
+        maintenance_holder,
+    )
     from clawk_state_reconcile import BROWSE_RECONCILE_PURPOSE
+
     if wait_s is None:
         wait_s = _browse_reconcile_reserve_wait_s()
     deadline = time.monotonic() + wait_s
@@ -609,13 +842,24 @@ def _reserve_waiting_out_browse_reconcile(ownership, homes, *, wait_s: float | N
             # Only the homes that actually conflict decide: a real owner on any of them refuses at
             # once, even while another home is mid-browse (multiplexer boot, all-or-nothing).
             conflicting = _conflicting_homes(homes)
-            holders = [h for h in conflicting
-                       if maintenance_holder(h, BROWSE_RECONCILE_PURPOSE) or lock_record_unpublished(h)]
-            if not holders or len(holders) < len(conflicting) or time.monotonic() >= deadline:
+            holders = [
+                h
+                for h in conflicting
+                if maintenance_holder(h, BROWSE_RECONCILE_PURPOSE)
+                or lock_record_unpublished(h)
+            ]
+            if (
+                not holders
+                or len(holders) < len(conflicting)
+                or time.monotonic() >= deadline
+            ):
                 raise
             if not logged:
-                logger.info("Profile %s is held by a short session-store schema catch-up; waiting up to %.0fs",
-                            holders[0], wait_s)
+                logger.info(
+                    "Profile %s is held by a short session-store schema catch-up; waiting up to %.0fs",
+                    holders[0],
+                    wait_s,
+                )
                 logged = True
             time.sleep(0.1)
 
@@ -624,6 +868,7 @@ def _start_gateway_reserve_profiles(profile_homes) -> bool:
     """Reserve the launch home plus every served profile home; False when startup must abort."""
     from gateway.run import get_clawk_home
     from gateway.runtime_ownership import process_ownership, OwnershipConflict
+
     homes = [get_clawk_home(), *(home for _, home in profile_homes)]
     try:
         _reserve_waiting_out_browse_reconcile(process_ownership, homes)
@@ -634,14 +879,19 @@ def _start_gateway_reserve_profiles(profile_homes) -> bool:
         # RestartPreventExitStatus=78 parks the unit instead of restart-looping (#51228, #97120).
         # Any other same-user contender keeps the ordinary "already running" exit 1.
         from clawk_cli.gateway import named_profile_served_by_running_multiplexer
+
         if named_profile_served_by_running_multiplexer():
             from gateway.restart import GATEWAY_FATAL_CONFIG_EXIT_CODE
             from gateway.run import _write_runtime_status_quiet
+
             logger.error(
                 "The default gateway is running as a profile multiplexer and already serves this profile. "
                 "Manage it with `clawk gateway restart` from the default profile instead of starting a "
-                "second gateway for the profile.")
-            _write_runtime_status_quiet(gateway_state="startup_failed", exit_reason=str(exc))
+                "second gateway for the profile."
+            )
+            _write_runtime_status_quiet(
+                gateway_state="startup_failed", exit_reason=str(exc)
+            )
             raise SystemExit(GATEWAY_FATAL_CONFIG_EXIT_CODE)
         return False
     except OSError as exc:
@@ -650,27 +900,44 @@ def _start_gateway_reserve_profiles(profile_homes) -> bool:
     return True
 
 
-def _start_gateway_install_signal_handlers(loop, shutdown_signal_handler, restart_signal_handler) -> None:
+def _start_gateway_install_signal_handlers(
+    loop, shutdown_signal_handler, restart_signal_handler
+) -> None:
     """SIGINT/SIGTERM drain, SIGUSR1 restart; main thread only."""
     import signal
     from contextlib import suppress
+
     if threading.current_thread() is threading.main_thread():
         # add_signal_handler raises NotImplementedError on Windows; SIGUSR1 is POSIX-only.
-        handlers = [(sig, shutdown_signal_handler, (sig,)) for sig in (signal.SIGINT, signal.SIGTERM)]
+        handlers = [
+            (sig, shutdown_signal_handler, (sig,))
+            for sig in (signal.SIGINT, signal.SIGTERM)
+        ]
         if hasattr(signal, "SIGUSR1"):
-            handlers.append((signal.SIGUSR1, restart_signal_handler, ()))  # windows-footgun: ok — hasattr-guarded
+            handlers.append(
+                (signal.SIGUSR1, restart_signal_handler, ())
+            )  # windows-footgun: ok — hasattr-guarded
         for sig, handler, args in handlers:
             with suppress(NotImplementedError):
-                loop.add_signal_handler(sig, handler, *args)  # windows-footgun: ok — suppress(NotImplementedError)
+                loop.add_signal_handler(
+                    sig, handler, *args
+                )  # windows-footgun: ok — suppress(NotImplementedError)
     else:
         logger.info("Skipping signal handlers (not running in main thread).")
 
 
-async def _start_gateway_run_runner(runner, _signal_initiated_shutdown: list) -> Optional[bool]:
+async def _start_gateway_run_runner(
+    runner, _signal_initiated_shutdown: list
+) -> Optional[bool]:
     """MCP discovery, then ``runner.start()``. Returns the exit verdict when the process must end
     before running mode (start failed, clean exit, aborted startup); None to continue into cron."""
-    from gateway.run import (_discover_gateway_mcp_tools, _resolve_gateway_exit_verdict,
-                             _shutdown_gateway_health_export, _shutdown_mcp_servers_nonblocking)
+    from gateway.run import (
+        _discover_gateway_mcp_tools,
+        _resolve_gateway_exit_verdict,
+        _shutdown_gateway_health_export,
+        _shutdown_mcp_servers_nonblocking,
+    )
+
     # discover_mcp_tools() blocks up to 120s; on the loop thread it would freeze platform heartbeats.
     try:
         # MCP tool discovery — run in an executor so the asyncio event loop stays responsive even when a
@@ -703,9 +970,13 @@ async def _start_gateway_run_runner(runner, _signal_initiated_shutdown: list) ->
         try:
             await runner.wait_for_shutdown()
             try:
-                await _shutdown_mcp_servers_nonblocking(config=getattr(runner, "config", None))
+                await _shutdown_mcp_servers_nonblocking(
+                    config=getattr(runner, "config", None)
+                )
             except Exception:
-                logger.warning("MCP shutdown failed; connections may be left open", exc_info=True)
+                logger.warning(
+                    "MCP shutdown failed; connections may be left open", exc_info=True
+                )
             return _resolve_gateway_exit_verdict(runner, _signal_initiated_shutdown[0])
         finally:
             _shutdown_gateway_health_export(runner)
@@ -717,17 +988,24 @@ def _start_gateway_early_environment_probe() -> None:
     honours ``agent.environment_probe: false``). Never raises: the warm-up still runs it lazily."""
     try:
         from clawk_cli.config import load_config_readonly
+
         agent_cfg = load_config_readonly().get("agent")
         if isinstance(agent_cfg, dict) and not agent_cfg.get("environment_probe", True):
             return
         from tools.env_probe import warm_environment_probe_async
+
         warm_environment_probe_async()
     except Exception:
         logger.debug("early environment probe did not start", exc_info=True)
 
 
-async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = False,
-                        verbosity: Optional[int] = 0, force: bool = False, idle_exit: bool = False) -> bool:
+async def start_gateway(
+    config: Optional[GatewayConfig] = None,
+    replace: bool = False,
+    verbosity: Optional[int] = 0,
+    force: bool = False,
+    idle_exit: bool = False,
+) -> bool:
     """Start the gateway and run until interrupted; False if it failed to start (non-zero exit so
     systemd can auto-restart). ``replace`` kills any existing instance first (avoids restart-loop
     deadlocks); ``force`` starts without consulting the host owner at all; ``idle_exit`` arms the
@@ -749,15 +1027,18 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         os,
         threading,
     )
+
     # Set here (not at import) so incidental gateway.run imports from CLI code don't poison it.
     os.environ["CLAWK_EXEC_ASK"] = "1"
     _start_gateway_resolve_terminal_cwd()
 
     from clawk_cli.resource_limits import apply_nofile_soft_limit
+
     apply_nofile_soft_limit()
 
     # Snapshot the revision while sys.modules matches disk so a later `git pull` is detected safely.
     from gateway.code_skew import record_boot_fingerprint
+
     record_boot_fingerprint()
 
     # Config verdicts come before the duplicate-instance guard: `--replace` must not stop a healthy
@@ -766,11 +1047,14 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # The first turn's prompt needs the host toolchain probe (five subprocess calls); start it now
     # so it runs beside the boot imports instead of serially inside the pre-READY warm-up.
     _start_gateway_early_environment_probe()
-    profile_homes = (_multiplex_profile_homes(resolved_config)
-                     if getattr(resolved_config, 'multiplex_profiles', False) else [])
+    profile_homes = (
+        _multiplex_profile_homes(resolved_config)
+        if getattr(resolved_config, "multiplex_profiles", False)
+        else []
+    )
     if profile_homes and not _launch_home_may_multiplex(resolved_config):
         return False
-    if profile_homes and not getattr(resolved_config, 'multiplex_profiles', False):
+    if profile_homes and not getattr(resolved_config, "multiplex_profiles", False):
         profile_homes = []  # implicit default downgraded: this named launch serves only itself
 
     # Multiplex-only: the ONE host gateway decides first. Attach to it, make it serve this profile,
@@ -781,12 +1065,17 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
 
     # Duplicate-instance guard scoped to CLAWK_HOME (the host record is absent or unusable here).
     from gateway.status import get_running_pid
+
     existing_pid = get_running_pid()
-    if (existing_pid is not None and existing_pid != os.getpid()
-            and not await _start_gateway_replace_existing_instance(existing_pid, replace)):
+    if (
+        existing_pid is not None
+        and existing_pid != os.getpid()
+        and not await _start_gateway_replace_existing_instance(existing_pid, replace)
+    ):
         return False
 
     from gateway.status import remove_pid_file, release_gateway_runtime_lock
+
     if not _start_gateway_reserve_profiles(profile_homes):
         return False
     # Freeze discovery: later profile additions must restart and reserve before opening stores.
@@ -807,10 +1096,14 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         _start_gateway_configure_logging(verbosity)
 
         from gateway.run_startup import recover_left_core_at_gateway_start
-        await asyncio.to_thread(recover_left_core_at_gateway_start)  # before the runner loads platform config
+
+        await asyncio.to_thread(
+            recover_left_core_at_gateway_start
+        )  # before the runner loads platform config
 
         runner = GatewayRunner(resolved_config)
         from gateway.run_runtime import initialize_gateway_runtime
+
         await initialize_gateway_runtime(runner)
         # Multiplex: swap the launch-home file handlers for per-profile routers so each profile's records
         # land in its own logs/. Must run after the runner resolved (possibly None) config and setup_logging.
@@ -824,7 +1117,8 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         _signal_initiated_shutdown = [False]
 
         shutdown_signal_handler = _start_gateway_make_shutdown_signal_handler(
-            runner, _signal_initiated_shutdown)
+            runner, _signal_initiated_shutdown
+        )
 
         restart_signal_handler = _start_gateway_make_restart_signal_handler(runner)
 
@@ -839,7 +1133,9 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         # discoverable). Anything else is forwarded to the default handler so real bugs still surface.
         loop.set_exception_handler(_gateway_loop_exception_handler)
 
-        _start_gateway_install_signal_handlers(loop, shutdown_signal_handler, restart_signal_handler)
+        _start_gateway_install_signal_handlers(
+            loop, shutdown_signal_handler, restart_signal_handler
+        )
 
         # Windows has no add_signal_handler, so `clawk gateway stop`'s SIGTERM would never drain; poll the
         # planned-stop marker (written BEFORE the kill) instead. Runs everywhere so masked-SIGTERM drains.
@@ -854,8 +1150,10 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         _planned_stop_watcher_stop = threading.Event()
         _planned_stop_watcher_thread = threading.Thread(
             target=_run_planned_stop_watcher,
-            args=(_planned_stop_watcher_stop, runner, loop, shutdown_signal_handler), daemon=True,
-            name="planned-stop-watcher")
+            args=(_planned_stop_watcher_stop, runner, loop, shutdown_signal_handler),
+            daemon=True,
+            name="planned-stop-watcher",
+        )
         _planned_stop_watcher_thread.start()
 
         # Right after the PID claim (which makes us authoritative). Fatal: local clients attach only
@@ -867,6 +1165,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         _refresh_host_gateway_record(runner)
         _log_standalone_profiles_at_boot(runner)
         from gateway.run_runtime import start_gateway_runtime_api
+
         await start_gateway_runtime_api(runner)
 
         def _lifecycle_record_startup() -> Optional[dict]:
@@ -874,37 +1173,49 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             # sentinel for this life. After the PID-file claim so a --replace loser can't clobber it.
             # The store scan that report used to run here is deferred: see below.
             from gateway.lifecycle_ledger import record_startup
+
             return record_startup()
 
-        _unclean_exit = _best_effort(_lifecycle_record_startup, "Lifecycle ledger startup record failed: %s")
+        _unclean_exit = _best_effort(
+            _lifecycle_record_startup, "Lifecycle ledger startup record failed: %s"
+        )
         # Clawksis is BYOK: the gateway does not start the Nous auth keepalive at boot. An agent
         # explicitly configured with the dormant ``nous`` provider still starts it itself
         # (agent/agent_init.py); the shutdown path below stops it either way.
         _ensure_windows_gateway_venv_imports()
 
-        _early_verdict = await _start_gateway_run_runner(runner, _signal_initiated_shutdown)
+        _early_verdict = await _start_gateway_run_runner(
+            runner, _signal_initiated_shutdown
+        )
         if _early_verdict is not None:
             return _early_verdict
         if _unclean_exit is not None:
             _start_deferred_state_db_integrity_check(_unclean_exit)
 
         cron_stop, cron_provider, cron_thread, housekeeping_thread = (
-            _start_gateway_start_cron_and_housekeeping(runner))
+            _start_gateway_start_cron_and_housekeeping(runner)
+        )
         # From here every exit (a READY publication that raises included) runs the shutdown tail,
         # which stops the cron ticker and housekeeping before the adapters they deliver through close.
-        from gateway.run_runtime import publish_gateway_runtime_ready, wait_gateway_runtime
+        from gateway.run_runtime import (
+            publish_gateway_runtime_ready,
+            wait_gateway_runtime,
+        )
+
         try:
             # READY only once adapters, cron and housekeeping run; missing systemd state just disables watchdog.
             publish_gateway_runtime_ready(runner)
             runner._start_systemd_watchdog()
             if idle_exit:
                 from gateway.run_idle_exit import arm_unmanaged_idle_exit
+
                 arm_unmanaged_idle_exit(runner)
             else:
                 # A supervised/explicit gateway serves Desktop and the dashboard SPA, which call the
                 # dashboard routes right away: mount them now, after READY. A client's own idle-exit
                 # gateway (chat -q, TUI) only uses the native WebSocket; it mounts on first request.
                 from gateway.run_api import warm_gateway_dashboard
+
                 warm_gateway_dashboard(runner)
             await wait_gateway_runtime(runner)
         finally:
@@ -912,19 +1223,30 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
                 await runner.stop()
             finally:
                 verdict = await _start_gateway_shutdown_tail(
-                    runner, _control_server, cron_stop, cron_provider, cron_thread, housekeeping_thread,
-                    _planned_stop_watcher_stop, _planned_stop_watcher_thread, _signal_initiated_shutdown)
+                    runner,
+                    _control_server,
+                    cron_stop,
+                    cron_provider,
+                    cron_thread,
+                    housekeeping_thread,
+                    _planned_stop_watcher_stop,
+                    _planned_stop_watcher_thread,
+                    _signal_initiated_shutdown,
+                )
         return verdict
 
     finally:
         try:
             if runner is not None:
                 from gateway.run_runtime import drain_gateway_runtime
+
                 await drain_gateway_runtime(runner)
                 # Startup may have opened adapters before an exception or an early exit verdict. The
                 # same stop path owns their writers and DB handles on every exit, but when no stop ran
                 # yet this is cleanup, not a shutdown: keep startup_failed and the crash markers.
-                if getattr(runner, "_stop_task", None) is None and not getattr(runner, "_running", False):
+                if getattr(runner, "_stop_task", None) is None and not getattr(
+                    runner, "_running", False
+                ):
                     runner._startup_cleanup_only = True
                 await runner.stop()
         finally:

@@ -15,6 +15,7 @@ wiring (``activate_multi_profile_hosting_eagerly``) or by the lazy backstop insi
 thing the whole 400 branch rests on — untested, so the tests drive the real path and the
 autouse fixture below puts the process-global flag back (activation is one-way per process).
 """
+
 import json
 import zipfile
 
@@ -55,15 +56,25 @@ def homes(tmp_path, monkeypatch, _isolate_clawk_home):
     beta = profiles_root / "worker_beta"
     for home in (launch_home, beta):
         (home / "memories").mkdir(parents=True, exist_ok=True)
-        (home / "memories" / "MEMORY.md").write_text(f"memory of {home.name}\n", encoding="utf-8")
-        (home / "memories" / "USER.md").write_text(f"user of {home.name}\n", encoding="utf-8")
+        (home / "memories" / "MEMORY.md").write_text(
+            f"memory of {home.name}\n", encoding="utf-8"
+        )
+        (home / "memories" / "USER.md").write_text(
+            f"user of {home.name}\n", encoding="utf-8"
+        )
         (home / "webhook_subscriptions.json").write_text(
-            json.dumps({"alerts": {"secret": "s", "events": []}}), encoding="utf-8")
-        (home / "config.yaml").write_text(yaml.safe_dump({
-            "hooks": {"pre_tool_call": [{"command": "/bin/true"}]},
-            # A per-home marker every scoped READ path can be identified by.
-            "proxy": {"label": home.name},
-        }), encoding="utf-8")
+            json.dumps({"alerts": {"secret": "s", "events": []}}), encoding="utf-8"
+        )
+        (home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "hooks": {"pre_tool_call": [{"command": "/bin/true"}]},
+                    # A per-home marker every scoped READ path can be identified by.
+                    "proxy": {"label": home.name},
+                }
+            ),
+            encoding="utf-8",
+        )
         (home / ".update_check").write_text("cached\n", encoding="utf-8")
     # Non-empty: an empty ``.env`` is the crashed-``profile create`` shell that
     # ``named_profile_has_servable_identity`` deliberately refuses to count as a tenant.
@@ -164,7 +175,9 @@ def multiplexed(homes):
     from agent.secret_scope import is_multiplex_active
     from tui_gateway.launch_profile_policy import activate_multi_profile_hosting_eagerly
 
-    assert activate_multi_profile_hosting_eagerly() is True, "boot probe did not see two homes"
+    assert activate_multi_profile_hosting_eagerly() is True, (
+        "boot probe did not see two homes"
+    )
     assert is_multiplex_active()
 
 
@@ -195,24 +208,38 @@ def _body_profile(profile):
 
 # Every destructive/privileged route, as a call taking (client, profile-name-or-"", tmp_path).
 DESTRUCTIVE = {
-    "memory-reset": lambda c, p, t: c.post(f"/api/memory/reset{_q(p)}", json={"target": "all"}),
+    "memory-reset": lambda c, p, t: c.post(
+        f"/api/memory/reset{_q(p)}", json={"target": "all"}
+    ),
     "webhook-delete": lambda c, p, t: c.delete(f"/api/webhooks/alerts{_q(p)}"),
     "hook-delete": lambda c, p, t: c.request(
-        "DELETE", f"/api/ops/hooks{_q(p)}", json={"event": "pre_tool_call", "command": "/bin/true"}),
+        "DELETE",
+        f"/api/ops/hooks{_q(p)}",
+        json={"event": "pre_tool_call", "command": "/bin/true"},
+    ),
     "hook-create": lambda c, p, t: c.post(
-        f"/api/ops/hooks{_q(p)}", json={"event": "pre_tool_call", "command": "/bin/armed"}),
+        f"/api/ops/hooks{_q(p)}",
+        json={"event": "pre_tool_call", "command": "/bin/armed"},
+    ),
     "checkpoints-prune": lambda c, p, t: c.post(f"/api/ops/checkpoints/prune{_q(p)}"),
-    "import": lambda c, p, t: c.post(f"/api/ops/import{_q(p)}", json={"archive": str(_zip(t))}),
+    "import": lambda c, p, t: c.post(
+        f"/api/ops/import{_q(p)}", json={"archive": str(_zip(t))}
+    ),
     "import-upload": lambda c, p, t: c.post(
         f"/api/ops/import-upload{_q(p)}",
-        files={"file": ("backup.zip", _zip(t).read_bytes(), "application/zip")}),
-    "credentials-pool-delete": lambda c, p, t: c.delete(f"/api/credentials/pool/anthropic/0{_q(p)}"),
+        files={"file": ("backup.zip", _zip(t).read_bytes(), "application/zip")},
+    ),
+    "credentials-pool-delete": lambda c, p, t: c.delete(
+        f"/api/credentials/pool/anthropic/0{_q(p)}"
+    ),
     "curator-run": lambda c, p, t: c.post(f"/api/curator/run{_q(p)}"),
     "sessions-prune": lambda c, p, t: c.post(
-        "/api/sessions/prune", json={"dry_run": False, **_body_profile(p)}),
+        "/api/sessions/prune", json={"dry_run": False, **_body_profile(p)}
+    ),
     "sessions-empty": lambda c, p, t: c.delete(f"/api/sessions/empty{_q(p)}"),
     "sessions-bulk-delete": lambda c, p, t: c.post(
-        "/api/sessions/bulk-delete", json={"ids": ["abc"], **_body_profile(p)}),
+        "/api/sessions/bulk-delete", json={"ids": ["abc"], **_body_profile(p)}
+    ),
 }
 
 
@@ -224,7 +251,9 @@ def test_destructive_route_refuses_an_unnamed_profile_while_multiplexing(
     resp = DESTRUCTIVE[route](client, "", tmp_path)
 
     assert resp.status_code == 400, resp.text
-    assert seams == {"spawn": [], "db": [], "pool_home": []}, f"{route} reached a backend anyway"
+    assert seams == {"spawn": [], "db": [], "pool_home": []}, (
+        f"{route} reached a backend anyway"
+    )
     for home in homes.values():
         assert (home / "memories" / "MEMORY.md").exists()
         assert "alerts" in json.loads((home / "webhook_subscriptions.json").read_text())
@@ -233,14 +262,25 @@ def test_destructive_route_refuses_an_unnamed_profile_while_multiplexing(
 
 # Routes whose effect is a file inside the target home: (call, "did it happen here?").
 FILE_EFFECTS = {
-    "memory-reset": (DESTRUCTIVE["memory-reset"],
-                     lambda home: not (home / "memories" / "MEMORY.md").exists()),
-    "webhook-delete": (DESTRUCTIVE["webhook-delete"],
-                       lambda home: "alerts" not in json.loads((home / "webhook_subscriptions.json").read_text())),
+    "memory-reset": (
+        DESTRUCTIVE["memory-reset"],
+        lambda home: not (home / "memories" / "MEMORY.md").exists(),
+    ),
+    "webhook-delete": (
+        DESTRUCTIVE["webhook-delete"],
+        lambda home: (
+            "alerts"
+            not in json.loads((home / "webhook_subscriptions.json").read_text())
+        ),
+    ),
     "hook-delete": (DESTRUCTIVE["hook-delete"], lambda home: not _hooks(home)),
-    "hook-create": (DESTRUCTIVE["hook-create"],
-                    lambda home: any(e.get("command") == "/bin/armed"
-                                     for e in _hooks(home).get("pre_tool_call", []))),
+    "hook-create": (
+        DESTRUCTIVE["hook-create"],
+        lambda home: any(
+            e.get("command") == "/bin/armed"
+            for e in _hooks(home).get("pre_tool_call", [])
+        ),
+    ),
 }
 
 
@@ -264,22 +304,30 @@ SPAWNING = {
 
 
 @pytest.mark.parametrize("route", sorted(SPAWNING))
-def test_spawned_action_carries_the_named_profile(client, homes, seams, tmp_path, route):
+def test_spawned_action_carries_the_named_profile(
+    client, homes, seams, tmp_path, route
+):
     resp = SPAWNING[route](client, "worker_beta", tmp_path)
 
     assert resp.status_code == 200, resp.text
     assert [argv[:2] for _name, argv in seams["spawn"]] == [["-p", "worker_beta"]]
 
 
-@pytest.mark.parametrize("route", ["sessions-prune", "sessions-empty", "sessions-bulk-delete"])
-def test_session_route_opens_the_named_profiles_store(client, homes, seams, tmp_path, route):
+@pytest.mark.parametrize(
+    "route", ["sessions-prune", "sessions-empty", "sessions-bulk-delete"]
+)
+def test_session_route_opens_the_named_profiles_store(
+    client, homes, seams, tmp_path, route
+):
     resp = DESTRUCTIVE[route](client, "worker_beta", tmp_path)
 
     assert resp.status_code == 200, resp.text
     assert seams["db"] == ["worker_beta"]
 
 
-def test_session_prune_dry_run_still_works_unnamed_while_multiplexing(client, seams, multiplexed):
+def test_session_prune_dry_run_still_works_unnamed_while_multiplexing(
+    client, seams, multiplexed
+):
     """A preview deletes nothing, so the confirm dialog must keep working without a profile."""
     resp = client.post("/api/sessions/prune", json={"dry_run": True})
 
@@ -335,8 +383,10 @@ def test_unnamed_profile_still_means_the_launch_profile_on_a_single_profile_host
 
 
 def test_plugin_providers_writes_the_named_profiles_config(client, homes):
-    resp = client.put("/api/dashboard/plugin-providers?profile=worker_beta",
-                      json={"context_engine": "compaction-v2"})
+    resp = client.put(
+        "/api/dashboard/plugin-providers?profile=worker_beta",
+        json={"context_engine": "compaction-v2"},
+    )
 
     assert resp.status_code == 200, resp.text
     assert _cfg(homes["worker_beta"]).get("context") == {"engine": "compaction-v2"}
@@ -359,16 +409,29 @@ def readiness_only_in_beta(homes, monkeypatch):
         ready = get_clawk_home().resolve() == homes["worker_beta"].resolve()
         return [{"name": "mem0", "status": "ready" if ready else "not_configured"}]
 
-    monkeypatch.setattr(web_server_memory, "_discover_memory_provider_statuses", _statuses)
+    monkeypatch.setattr(
+        web_server_memory, "_discover_memory_provider_statuses", _statuses
+    )
 
 
-@pytest.mark.parametrize("call", [
-    pytest.param(lambda c: c.put("/api/memory/provider?profile=worker_beta", json={"provider": "mem0"}),
-                 id="memory-provider"),
-    pytest.param(lambda c: c.put("/api/dashboard/plugin-providers?profile=worker_beta",
-                                 json={"memory_provider": "mem0"}),
-                 id="plugin-providers"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(
+            lambda c: c.put(
+                "/api/memory/provider?profile=worker_beta", json={"provider": "mem0"}
+            ),
+            id="memory-provider",
+        ),
+        pytest.param(
+            lambda c: c.put(
+                "/api/dashboard/plugin-providers?profile=worker_beta",
+                json={"memory_provider": "mem0"},
+            ),
+            id="plugin-providers",
+        ),
+    ],
+)
 def test_memory_provider_readiness_is_judged_in_the_profile_being_written(
     client, homes, readiness_only_in_beta, call
 ):
@@ -379,26 +442,36 @@ def test_memory_provider_readiness_is_judged_in_the_profile_being_written(
     assert "memory" not in _cfg(homes["launch"])
 
 
-def test_local_models_quickstart_activates_into_the_named_profile(client, homes, monkeypatch):
+def test_local_models_quickstart_activates_into_the_named_profile(
+    client, homes, monkeypatch
+):
     """Quickstart is ``activate`` plus a download; its config writes must follow ``?profile=``."""
     from clawk_cli.config import get_clawk_home
     from clawk_cli.web_routers import local_models as lm
 
-    entry = type("_Entry", (), {"id": "m1", "display_name": "M One", "min_engine": None})()
+    entry = type(
+        "_Entry", (), {"id": "m1", "display_name": "M One", "min_engine": None}
+    )()
     variant = type("_Variant", (), {"model_id": "m1-q4"})()
     seen = []
 
     monkeypatch.setattr(lm.hardware, "probe_budget", lambda **_kw: None)
-    monkeypatch.setattr(lm, "_quickstart_target", lambda _body, _budget: (entry, variant))
+    monkeypatch.setattr(
+        lm, "_quickstart_target", lambda _body, _budget: (entry, variant)
+    )
     monkeypatch.setattr(lm, "_runtime_target", lambda *_a: ("b1", "cpu"))
     monkeypatch.setattr(lm, "_download_plan", lambda *_a: [])
     monkeypatch.setattr(lm.binaries, "installed_engine", lambda _backend: "installed")
     monkeypatch.setattr(lm.bootstrap, "staged_model_ids", lambda: {"m1-q4"})
-    monkeypatch.setattr(lm, "_set_runtime_enabled", lambda _on: (lambda: None))
+    monkeypatch.setattr(lm, "_set_runtime_enabled", lambda _on: lambda: None)
     monkeypatch.setattr(lm, "_ensure_server", lambda *_a, **_k: None)
-    monkeypatch.setattr(lm, "_assign_default", lambda *_a: seen.append(str(get_clawk_home())))
+    monkeypatch.setattr(
+        lm, "_assign_default", lambda *_a: seen.append(str(get_clawk_home()))
+    )
     # Run the job body inline; the real spawner's ``on_exit`` is what frees the quickstart lock.
-    monkeypatch.setattr(lm, "_spawn_job", lambda job, name, body, **kw: (body(), kw["on_exit"]()))
+    monkeypatch.setattr(
+        lm, "_spawn_job", lambda job, name, body, **kw: (body(), kw["on_exit"]())
+    )
 
     resp = client.post("/api/local-models/quickstart?profile=worker_beta", json={})
 
@@ -413,11 +486,18 @@ def test_curator_pause_writes_the_named_profiles_state(client, homes):
     resp = client.put("/api/curator/paused?profile=worker_beta", json={"paused": True})
 
     assert resp.status_code == 200, resp.text
-    assert json.loads((homes["worker_beta"] / "skills" / ".curator_state").read_text())["paused"] is True
+    assert (
+        json.loads((homes["worker_beta"] / "skills" / ".curator_state").read_text())[
+            "paused"
+        ]
+        is True
+    )
     assert not (homes["launch"] / "skills" / ".curator_state").exists()
 
 
-def test_forced_update_check_runs_in_the_named_profiles_scope(client, homes, monkeypatch):
+def test_forced_update_check_runs_in_the_named_profiles_scope(
+    client, homes, monkeypatch
+):
     from clawk_cli import source_check
     from clawk_cli.config import get_clawk_home
     from clawk_cli.web_routers import actions
@@ -429,7 +509,9 @@ def test_forced_update_check_runs_in_the_named_profiles_scope(client, homes, mon
         return {"behind": 0, "commits": []}
 
     monkeypatch.setattr(source_check, "check_for_updates", check)
-    monkeypatch.setattr(actions, "_dashboard_local_update_managed_externally", lambda: False)
+    monkeypatch.setattr(
+        actions, "_dashboard_local_update_managed_externally", lambda: False
+    )
     monkeypatch.setattr(actions, "detect_install_method", lambda _root: "git")
 
     resp = client.get("/api/clawk/update/check?force=true&profile=worker_beta")
@@ -443,8 +525,11 @@ def test_egress_status_reads_the_named_profiles_config(client, homes, monkeypatc
     from clawk_cli import proxy_cli
     from clawk_cli.config import load_config
 
-    monkeypatch.setattr(proxy_cli, "format_status_text",
-                        lambda **_kw: str((load_config().get("proxy") or {}).get("label")))
+    monkeypatch.setattr(
+        proxy_cli,
+        "format_status_text",
+        lambda **_kw: str((load_config().get("proxy") or {}).get("label")),
+    )
 
     resp = client.get("/api/egress/status?profile=worker_beta")
 
@@ -452,14 +537,19 @@ def test_egress_status_reads_the_named_profiles_config(client, homes, monkeypatc
     assert resp.json()["text"] == "worker_beta"
 
 
-def test_memory_provider_setup_runs_in_the_named_profiles_home(client, homes, monkeypatch):
+def test_memory_provider_setup_runs_in_the_named_profiles_home(
+    client, homes, monkeypatch
+):
     from clawk_cli.config import get_clawk_home
     from clawk_cli.web_routers import memory_providers as mp
 
     monkeypatch.setattr(mp, "_memory_provider_manifest", lambda _name: {"name": "mem0"})
     monkeypatch.setattr(mp, "_load_memory_provider", lambda _name: None)
-    monkeypatch.setattr(mp, "_install_memory_provider_setup",
-                        lambda name: {"ok": True, "provider": name, "home": str(get_clawk_home())})
+    monkeypatch.setattr(
+        mp,
+        "_install_memory_provider_setup",
+        lambda name: {"ok": True, "provider": name, "home": str(get_clawk_home())},
+    )
 
     resp = client.post("/api/memory/providers/mem0/setup?profile=worker_beta", json={})
 

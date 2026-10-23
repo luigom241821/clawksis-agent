@@ -14,7 +14,9 @@ from __future__ import annotations
 from typing import Optional
 
 # Container id -> canonical file extension.
-CONTAINER_TO_EXT = {c: f".{c}" for c in ("m4a", "mp4", "ogg", "flac", "wav", "mp3", "aac", "webm")}
+CONTAINER_TO_EXT = {
+    c: f".{c}" for c in ("m4a", "mp4", "ogg", "flac", "wav", "mp3", "aac", "webm")
+}
 
 # MP4 ftyp brands that mean "this is audio" (iOS voice notes use M4A ).
 _MP4_AUDIO_BRANDS = (b"m4a ", b"m4b ")

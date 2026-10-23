@@ -46,11 +46,13 @@ def validate_copilot_token(token: str) -> tuple[bool, str]:
             "Copilot API. Use one of:\n"
             "  → `copilot login` or `clawk model` to authenticate via OAuth\n"
             "  → A fine-grained PAT (github_pat_*) with Copilot Requests permission\n"
-            "  → `gh auth login` with the default device code flow (produces gho_* tokens)")
+            "  → `gh auth login` with the default device code flow (produces gho_* tokens)"
+        )
     if not token.startswith(_SUPPORTED_PREFIXES):
         return False, (
             "Unsupported GitHub token format for the Copilot API. "
-            f"Supported token prefixes: {', '.join(_SUPPORTED_PREFIXES)}.")
+            f"Supported token prefixes: {', '.join(_SUPPORTED_PREFIXES)}."
+        )
     return True, "OK"
 
 
@@ -73,15 +75,19 @@ def resolve_copilot_token() -> tuple[str, str]:
     # (even a classic PAT) means the user intends *that* token; skipping also avoids a slow
     # subprocess (up to 5s on Windows) on every cold start.
     if any_env_var_set:
-        logger.debug("Copilot env var(s) set but none held a supported token; skipping `gh auth "
-                     "token` fallback to honor explicit env-var intent (and avoid the subprocess "
-                     "cost on cold start, #60800).")
+        logger.debug(
+            "Copilot env var(s) set but none held a supported token; skipping `gh auth "
+            "token` fallback to honor explicit env-var intent (and avoid the subprocess "
+            "cost on cold start, #60800)."
+        )
         return "", ""
     token = _try_gh_cli_token()
     if token:
         valid, msg = validate_copilot_token(token)
         if not valid:
-            raise ValueError(f"Token from `gh auth token` is not usable with Copilot. {msg}")
+            raise ValueError(
+                f"Token from `gh auth token` is not usable with Copilot. {msg}"
+            )
         return token, "gh auth token"
     return "", ""
 
@@ -129,7 +135,9 @@ def _probe_gh_cli_token() -> Optional[str]:
     """Uncached ``gh auth token`` subprocess probe (see ``_try_gh_cli_token``)."""
     hostname = os.getenv("COPILOT_GH_HOST", "").strip()
     # gh must not short-circuit on GITHUB_TOKEN / GH_TOKEN, nor prompt from a backend process.
-    clean_env = {k: v for k, v in os.environ.items() if k not in {"GITHUB_TOKEN", "GH_TOKEN"}}
+    clean_env = {
+        k: v for k, v in os.environ.items() if k not in {"GITHUB_TOKEN", "GH_TOKEN"}
+    }
     clean_env.setdefault("GH_PROMPT_DISABLED", "1")
     clean_env.setdefault("GH_NO_UPDATE_NOTIFIER", "1")
     _popen_kwargs = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {}
@@ -137,9 +145,18 @@ def _probe_gh_cli_token() -> Optional[str]:
     for gh_path in _gh_cli_candidates():
         cmd = [gh_path, "auth", "token", *host_args]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8',
-                                    errors='replace', timeout=5, env=clean_env,
-                                    stdin=subprocess.DEVNULL, **_popen_kwargs, check=False)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                env=clean_env,
+                stdin=subprocess.DEVNULL,
+                **_popen_kwargs,
+                check=False,
+            )
         except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
             logger.debug("gh CLI token lookup failed (%s): %s", gh_path, exc)
             continue
@@ -148,48 +165,68 @@ def _probe_gh_cli_token() -> Optional[str]:
     return None
 
 
-_DEVICE_CODE_TERMINAL_ERRORS = {"expired_token": "  ✗ Device code expired. Please try again.",
-                                "access_denied": "  ✗ Authorization was denied."}
+_DEVICE_CODE_TERMINAL_ERRORS = {
+    "expired_token": "  ✗ Device code expired. Please try again.",
+    "access_denied": "  ✗ Authorization was denied.",
+}
 
 
 def _post_form(url: str, fields: dict, timeout: float) -> dict:
     req = urllib.request.Request(
-        url, data=urllib.parse.urlencode(fields).encode(),
-        headers={"Accept": "application/json", "User-Agent": "ClawksisAgent/1.0",
-                 "Content-Type": "application/x-www-form-urlencoded"})
+        url,
+        data=urllib.parse.urlencode(fields).encode(),
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "ClawksisAgent/1.0",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode())
 
 
 def copilot_device_code_login(
-    *, host: str = "github.com", timeout_seconds: float = 300) -> Optional[str]:
+    *, host: str = "github.com", timeout_seconds: float = 300
+) -> Optional[str]:
     """Run the GitHub OAuth device code flow for Copilot."""
     domain = host.rstrip("/")
     try:
-        device_data = _post_form(f"https://{domain}/login/device/code",
-                                 {"client_id": COPILOT_OAUTH_CLIENT_ID, "scope": "read:user"}, 15)
+        device_data = _post_form(
+            f"https://{domain}/login/device/code",
+            {"client_id": COPILOT_OAUTH_CLIENT_ID, "scope": "read:user"},
+            15,
+        )
     except Exception as exc:
         logger.error("Failed to initiate device authorization: %s", exc)
         print(f"  ✗ Failed to start device authorization: {exc}")
         return None
 
-    verification_uri = device_data.get("verification_uri", "https://github.com/login/device")
+    verification_uri = device_data.get(
+        "verification_uri", "https://github.com/login/device"
+    )
     user_code = device_data.get("user_code", "")
     device_code = device_data.get("device_code", "")
     interval = max(device_data.get("interval", _DEVICE_CODE_POLL_INTERVAL), 1)
     if not device_code or not user_code:
         print("  ✗ GitHub did not return a device code.")
         return None
-    print(f"\n  Open this URL in your browser: {verification_uri}\n"
-          f"  Enter this code: {user_code}\n")
+    print(
+        f"\n  Open this URL in your browser: {verification_uri}\n"
+        f"  Enter this code: {user_code}\n"
+    )
     print("  Waiting for authorization...", end="", flush=True)
-    poll_fields = {"client_id": COPILOT_OAUTH_CLIENT_ID, "device_code": device_code,
-                   "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}
+    poll_fields = {
+        "client_id": COPILOT_OAUTH_CLIENT_ID,
+        "device_code": device_code,
+        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+    }
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         time.sleep(interval + _DEVICE_CODE_POLL_SAFETY_MARGIN)
         try:
-            result = _post_form(f"https://{domain}/login/oauth/access_token", poll_fields, 10)
+            result = _post_form(
+                f"https://{domain}/login/oauth/access_token", poll_fields, 10
+            )
         except Exception:
             print(".", end="", flush=True)
             continue
@@ -206,8 +243,12 @@ def copilot_device_code_login(
             print(".", end="", flush=True)
             continue
         if error:
-            print("\n" + _DEVICE_CODE_TERMINAL_ERRORS.get(error,
-                                                       f"  ✗ Authorization failed: {error}"))
+            print(
+                "\n"
+                + _DEVICE_CODE_TERMINAL_ERRORS.get(
+                    error, f"  ✗ Authorization failed: {error}"
+                )
+            )
             return None
     print("\n  ✗ Timed out waiting for authorization.")
     return None
@@ -247,8 +288,8 @@ def _exchange_lock_for(fp: str) -> threading.Lock:
         return lock
 
 
-_EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS = 60.0     # network blips: retry soon
-_EXCHANGE_FAILURE_TTL_PERMANENT_SECONDS = 1800.0   # 401/403/404: won't heal
+_EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS = 60.0  # network blips: retry soon
+_EXCHANGE_FAILURE_TTL_PERMANENT_SECONDS = 1800.0  # 401/403/404: won't heal
 # The token itself is rejected — retrying with backoff just blocks the caller.
 _EXCHANGE_PERMANENT_HTTP_STATUSES = frozenset({401, 403, 404})
 
@@ -265,8 +306,10 @@ def _read_jwt_store(path: Path) -> Optional[dict]:
         return None
     try:
         if path.stat().st_size > _JWT_DISK_MAX_BYTES:
-            logger.debug("Persisted Copilot JWT store exceeds %d bytes; ignoring",
-                         _JWT_DISK_MAX_BYTES)
+            logger.debug(
+                "Persisted Copilot JWT store exceeds %d bytes; ignoring",
+                _JWT_DISK_MAX_BYTES,
+            )
             return None
         loaded = json.loads(path.read_text(encoding="utf-8-sig"))
         return loaded if isinstance(loaded, dict) else None
@@ -279,6 +322,7 @@ def _jwt_disk_path() -> Optional[Path]:
     """Path to the on-disk exchanged-JWT cache (profile-aware), or None."""
     try:
         from clawk_constants import get_clawk_home
+
         return Path(get_clawk_home()) / _JWT_DISK_FILENAME
     except Exception:
         return None
@@ -316,25 +360,39 @@ def evict_cached_exchanged_token(raw_token: str) -> None:
 
 def _load_jwt_from_disk(fp: str) -> Optional[tuple[str, float, Optional[str]]]:
     """Persisted exchanged JWT for ``fp`` → (api_token, expires_at, base_url), or None."""
+
     def _load(path, store):
         entry = (store or {}).get(fp)
         if not isinstance(entry, dict):
             return None
         api_token = entry.get("api_token", "")
         expires_at = float(entry.get("expires_at", 0) or 0)
-        return (api_token, expires_at, entry.get("base_url")) if api_token and expires_at else None
+        return (
+            (api_token, expires_at, entry.get("base_url"))
+            if api_token and expires_at
+            else None
+        )
 
     return _with_jwt_store("load persisted", _load)
 
 
-def _save_jwt_to_disk(fp: str, api_token: str, expires_at: float, base_url: Optional[str]) -> None:
+def _save_jwt_to_disk(
+    fp: str, api_token: str, expires_at: float, base_url: Optional[str]
+) -> None:
     """Persist an exchanged JWT (0o600), pruning expired entries."""
+
     def _save(path, store):
         now = time.time()
         kept = {
-            k: v for k, v in (store or {}).items()
-            if isinstance(v, dict) and float(v.get("expires_at", 0) or 0) > now}
-        kept[fp] = {"api_token": api_token, "expires_at": expires_at, "base_url": base_url}
+            k: v
+            for k, v in (store or {}).items()
+            if isinstance(v, dict) and float(v.get("expires_at", 0) or 0) > now
+        }
+        kept[fp] = {
+            "api_token": api_token,
+            "expires_at": expires_at,
+            "base_url": base_url,
+        }
         atomic_json_write(path, kept, indent=None, mode=0o600)
 
     _with_jwt_store("persist", _save)
@@ -368,8 +426,10 @@ def _urlopen_bounded(req, timeout: float):
     t.join(timeout + _DNS_GRACE_SECONDS)
     if t.is_alive():
         abandoned.set()
-        raise TimeoutError("copilot token exchange exceeded hard cap of "
-                           f"{timeout + _DNS_GRACE_SECONDS:.0f}s (DNS/getaddrinfo hang?)")
+        raise TimeoutError(
+            "copilot token exchange exceeded hard cap of "
+            f"{timeout + _DNS_GRACE_SECONDS:.0f}s (DNS/getaddrinfo hang?)"
+        )
     if "exc" in box:
         raise box["exc"]
     if "resp" not in box:
@@ -396,18 +456,29 @@ def _fetch_exchange_with_retry(req, timeout: float, fp: str) -> dict:
             status = getattr(exc, "code", None) or getattr(exc, "status", None)
             permanent_failure = status in _EXCHANGE_PERMANENT_HTTP_STATUSES
             if permanent_failure:
-                logger.debug("Copilot token exchange rejected (HTTP %s); not retrying", status)
+                logger.debug(
+                    "Copilot token exchange rejected (HTTP %s); not retrying", status
+                )
                 break
             if attempt < _EXCHANGE_MAX_ATTEMPTS:
                 sleep_s = _EXCHANGE_BACKOFF_BASE_SECONDS * attempt
-                logger.debug("Copilot token exchange attempt %d/%d failed (%s); retrying in %.1fs",
-                             attempt, _EXCHANGE_MAX_ATTEMPTS, exc, sleep_s)
+                logger.debug(
+                    "Copilot token exchange attempt %d/%d failed (%s); retrying in %.1fs",
+                    attempt,
+                    _EXCHANGE_MAX_ATTEMPTS,
+                    exc,
+                    sleep_s,
+                )
                 time.sleep(sleep_s)
     _exchange_failure_cache[fp] = time.time() + (
-        _EXCHANGE_FAILURE_TTL_PERMANENT_SECONDS if permanent_failure
-        else _EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS)
-    raise ValueError(f"Copilot token exchange failed after {_EXCHANGE_MAX_ATTEMPTS} attempts: "
-                     f"{last_exc}") from last_exc
+        _EXCHANGE_FAILURE_TTL_PERMANENT_SECONDS
+        if permanent_failure
+        else _EXCHANGE_FAILURE_TTL_TRANSIENT_SECONDS
+    )
+    raise ValueError(
+        f"Copilot token exchange failed after {_EXCHANGE_MAX_ATTEMPTS} attempts: "
+        f"{last_exc}"
+    ) from last_exc
 
 
 def _cache_entry_fresh(cached) -> bool:
@@ -415,7 +486,8 @@ def _cache_entry_fresh(cached) -> bool:
 
 
 def exchange_copilot_token(
-    raw_token: str, *, timeout: float = 10.0) -> tuple[str, float, Optional[str]]:
+    raw_token: str, *, timeout: float = 10.0
+) -> tuple[str, float, Optional[str]]:
     """Exchange a raw GitHub token for a Copilot API token → (token, expires_at, base_url).
 
     The token is a semicolon-separated string (not a JWT) used as a Bearer token. ``base_url``
@@ -432,8 +504,10 @@ def exchange_copilot_token(
         return cached
     _fail_until = _exchange_failure_cache.get(fp, 0.0)
     if time.time() < _fail_until:
-        raise ValueError("Copilot token exchange recently failed; skipping re-attempt "
-                         f"for another {int(_fail_until - time.time())}s")
+        raise ValueError(
+            "Copilot token exchange recently failed; skipping re-attempt "
+            f"for another {int(_fail_until - time.time())}s"
+        )
     # Note: a waiter's own ``timeout`` is not honoured across the lock wait — by design of
     # single-flight, it observes the holder's outcome instead.
     with _exchange_lock_for(fp):
@@ -441,7 +515,8 @@ def exchange_copilot_token(
 
 
 def _exchange_copilot_token_locked(
-    raw_token: str, fp: str, *, timeout: float) -> tuple[str, float, Optional[str]]:
+    raw_token: str, fp: str, *, timeout: float
+) -> tuple[str, float, Optional[str]]:
     # Re-check in-process under the lock (a queued-behind caller may have just exchanged), then
     # on-disk: a fresh process may hold a still-valid persisted JWT, avoiding a network
     # round-trip precisely when the network is most likely flaky.
@@ -453,12 +528,20 @@ def _exchange_copilot_token_locked(
     # Negative cache: fail fast so provider discovery / picker opens don't block.
     _fail_until = _exchange_failure_cache.get(fp, 0.0)
     if time.time() < _fail_until:
-        raise ValueError("Copilot token exchange recently failed; skipping re-attempt "
-                         f"for another {int(_fail_until - time.time())}s")
+        raise ValueError(
+            "Copilot token exchange recently failed; skipping re-attempt "
+            f"for another {int(_fail_until - time.time())}s"
+        )
     req = urllib.request.Request(
-        _TOKEN_EXCHANGE_URL, method="GET",
-        headers={"Authorization": f"token {raw_token}", "User-Agent": _EXCHANGE_USER_AGENT,
-                 "Accept": "application/json", "Editor-Version": _EDITOR_VERSION})
+        _TOKEN_EXCHANGE_URL,
+        method="GET",
+        headers={
+            "Authorization": f"token {raw_token}",
+            "User-Agent": _EXCHANGE_USER_AGENT,
+            "Accept": "application/json",
+            "Editor-Version": _EDITOR_VERSION,
+        },
+    )
     data = _fetch_exchange_with_retry(req, timeout, fp)
     api_token = data.get("token", "")
     if not api_token:
@@ -468,17 +551,21 @@ def _exchange_copilot_token_locked(
     # the token's ``proxy-ep``. Individual accounts have neither → None (registry default).
     endpoints = data.get("endpoints")
     base_url: Optional[str] = (
-        str(endpoints.get("api") or "").strip().rstrip("/") if isinstance(endpoints, dict) else ""
+        str(endpoints.get("api") or "").strip().rstrip("/")
+        if isinstance(endpoints, dict)
+        else ""
     ) or _derive_base_url_from_proxy_ep(api_token)
     _jwt_cache[fp] = (api_token, expires_at, base_url)
     _save_jwt_to_disk(fp, api_token, expires_at, base_url)
-    logger.debug("Copilot token exchanged, expires_at=%s, base_url=%s", expires_at, base_url)
+    logger.debug(
+        "Copilot token exchanged, expires_at=%s, base_url=%s", expires_at, base_url
+    )
     return api_token, expires_at, base_url
 
 
 def _derive_base_url_from_proxy_ep(token: str) -> Optional[str]:
     """Copilot API base URL from the token's ``proxy-ep=proxy.<host>`` field (→ ``api.``)."""
-    m = re.search(r'(?:^|;)\s*proxy-ep=([^;\s]+)', token)
+    m = re.search(r"(?:^|;)\s*proxy-ep=([^;\s]+)", token)
     if not m:
         return None
     proxy_ep = re.sub(r"^https?://", "", m.group(1), count=1).rstrip("/")
@@ -500,12 +587,16 @@ def get_copilot_api_token(raw_token: str) -> tuple[str, Optional[str]]:
 
 
 def copilot_request_headers(
-    *, is_agent_turn: bool = True, is_vision: bool = False) -> dict[str, str]:
+    *, is_agent_turn: bool = True, is_vision: bool = False
+) -> dict[str, str]:
     """Build the standard headers for Copilot API requests."""
-    headers: dict[str, str] = {"Editor-Version": _EDITOR_VERSION, "User-Agent": "ClawksisAgent/1.0",
-                               "Copilot-Integration-Id": "vscode-chat",
-                               "Openai-Intent": "conversation-edits",
-                               "x-initiator": "agent" if is_agent_turn else "user"}
+    headers: dict[str, str] = {
+        "Editor-Version": _EDITOR_VERSION,
+        "User-Agent": "ClawksisAgent/1.0",
+        "Copilot-Integration-Id": "vscode-chat",
+        "Openai-Intent": "conversation-edits",
+        "x-initiator": "agent" if is_agent_turn else "user",
+    }
     if is_vision:
         headers["Copilot-Vision-Request"] = "true"
     return headers

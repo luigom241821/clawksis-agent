@@ -10,7 +10,10 @@ import time
 THEME_TIMEOUT_S = 15
 THEME_PICK_TIMEOUT_S = 300
 
-_UNANSWERED = {"success": False, "error": "No Clawksis Desktop window answered the theme request."}
+_UNANSWERED = {
+    "success": False,
+    "error": "No Clawksis Desktop window answered the theme request.",
+}
 
 
 def theme_request(sid: str, payload: dict) -> dict:
@@ -22,9 +25,15 @@ def theme_request(sid: str, payload: dict) -> dict:
         answer = _ask("theme.apply", sid, dict(payload), timeout=THEME_TIMEOUT_S)
         return json.loads(answer) if answer else dict(_UNANSWERED)
     started = time.monotonic()
-    result = server_requests.send("theme.pick", sid, dict(payload), timeout=THEME_PICK_TIMEOUT_S)
+    result = server_requests.send(
+        "theme.pick", sid, dict(payload), timeout=THEME_PICK_TIMEOUT_S
+    )
     if result is None:
-        return {"timed_out": True} if time.monotonic() - started >= THEME_PICK_TIMEOUT_S else {"cancelled": True}
+        return (
+            {"timed_out": True}
+            if time.monotonic() - started >= THEME_PICK_TIMEOUT_S
+            else {"cancelled": True}
+        )
     if isinstance(result.get("picked"), dict):
         return {"success": True, "picked": result["picked"]}
     if isinstance(result.get("said"), str) and result["said"].strip():

@@ -39,7 +39,10 @@ def test_waiter_argv_uses_forward_slashes_on_windows():
     parts = shlex.split(bot_relay.waiter_command("C:\\Users\\joshu\\.clawk", ENV))
 
     assert "-c" not in parts and "--wait-reply" in parts
-    assert parts[parts.index("--wait-reply") + 1] == f"C:/Users/joshu/.clawksis/bot_relay/replies/{ENV['id']}.json"
+    assert (
+        parts[parts.index("--wait-reply") + 1]
+        == f"C:/Users/joshu/.clawksis/bot_relay/replies/{ENV['id']}.json"
+    )
     assert not any("\\" in part for part in parts)
 
 
@@ -53,7 +56,9 @@ def test_local_delivery_resolves_sibling_clawk(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.executable", str(bin_dir / "python"))
     # The checkout's own published launcher (.clawk/bin, written by scripts/run_tests.sh's venv
     # step) outranks the sibling by design (#124868): keep it out of this probe.
-    monkeypatch.setattr(bot_relay, "__file__", str(tmp_path / "checkout" / "tools" / "bot_relay.py"))
+    monkeypatch.setattr(
+        bot_relay, "__file__", str(tmp_path / "checkout" / "tools" / "bot_relay.py")
+    )
 
     assert bot_relay._clawk_cli() == str(sibling)
 

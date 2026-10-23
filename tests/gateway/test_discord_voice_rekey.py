@@ -55,7 +55,9 @@ def _make_conn(
 
 def _make_vc(conn, members=()):
     channel = SimpleNamespace(members=list(members))
-    return SimpleNamespace(_connection=conn, channel=channel, user=SimpleNamespace(id=1))
+    return SimpleNamespace(
+        _connection=conn, channel=channel, user=SimpleNamespace(id=1)
+    )
 
 
 def _make_receiver(conn, members=()):
@@ -288,7 +290,9 @@ class TestDaveUnmappedDrop:
         hook = conn.hook
 
         assert receiver._dave_passthrough_until == 0.0
-        asyncio.run(hook(None, {"op": 21, "d": {"protocol_version": 0, "transition_id": 3}}))
+        asyncio.run(
+            hook(None, {"op": 21, "d": {"protocol_version": 0, "transition_id": 3}})
+        )
         assert receiver._dave_passthrough_until > 0.0
 
         # op 22 executing the downgrade: the protocol version changed —

@@ -25,7 +25,9 @@ pytestmark = pytest.mark.platforms("posix")
 
 
 def git(root, *args) -> str:
-    return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", "-C", str(root), *args], check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def commit(root, message, **files) -> str:
@@ -45,7 +47,9 @@ def repo(tmp_path, monkeypatch):
     git(root, "config", "user.email", "fixture@example.com")
     monkeypatch.setattr(update_cmd._m(), "PROJECT_ROOT", root)
     monkeypatch.setattr(pause_record, "install_root", lambda: root)
-    a = commit(root, "A", **{"a.py": "A=1\n", "mine.py": "M=1\n", "package-lock.json": "{}\n"})
+    a = commit(
+        root, "A", **{"a.py": "A=1\n", "mine.py": "M=1\n", "package-lock.json": "{}\n"}
+    )
     t = commit(root, "T", **{"a.py": "A=2\n"})
     git(root, "reset", "-q", "--hard", a)
     # A fetched ref that never touches the files these steps write: what the gate fell back to.
@@ -63,19 +67,24 @@ def interrupting_git(tmp_path, match: str, tear) -> list[str]:
         f'  "{shutil.which("git")}" "$@"\n'
         f"  printf 'M=' > \"{tear}\"; kill -INT $PPID; sleep 5; exit 130;;\n"
         f'esac\nexec "{shutil.which("git")}" "$@"\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     wrapper.chmod(0o755)
     return [str(wrapper)]
 
 
 def pause(root) -> dict:
-    token = pause_record.stamp_tree({"resume_needed": True, "profiles": {"default": 999999}}, root)
+    token = pause_record.stamp_tree(
+        {"resume_needed": True, "profiles": {"default": 999999}}, root
+    )
     pause_record.write(token)
     return token
 
 
 def gate(root) -> bool:
-    return pause_record.tree_is_whole(pause_record.read(pause_record.record_path())["token"], root)[0]
+    return pause_record.tree_is_whole(
+        pause_record.read(pause_record.record_path())["token"], root
+    )[0]
 
 
 def at_start(tmp_path, head) -> dict:
@@ -90,10 +99,14 @@ def test_an_interrupted_stash_push_stays_held(repo, tmp_path):
     token = pause(root)
     with pytest.raises(KeyboardInterrupt):
         update_cmd_stash._stash_local_changes_if_needed(
-            interrupting_git(tmp_path, "stash push", root / "mine.py"), root,
-            checkout_move=update_cmd._moves_for(token))
+            interrupting_git(tmp_path, "stash push", root / "mine.py"),
+            root,
+            checkout_move=update_cmd._moves_for(token),
+        )
     started = at_start(tmp_path, a)
-    assert "mine.py" in started["move_paths"] and started["dirty_at_pause"] == ["mine.py"]
+    assert "mine.py" in started["move_paths"] and started["dirty_at_pause"] == [
+        "mine.py"
+    ]
     assert gate(root) is False, "a stash push interrupted mid-write was admitted"
 
 
@@ -103,29 +116,47 @@ def test_an_interrupted_lockfile_churn_cleanup_stays_held(repo, tmp_path):
     token = pause(root)
     with pytest.raises(KeyboardInterrupt):
         update_cmd_git._discard_lockfile_churn(
-            interrupting_git(tmp_path, "checkout --", root / "package-lock.json"), root,
-            checkout_move=update_cmd._moves_for(token))
+            interrupting_git(tmp_path, "checkout --", root / "package-lock.json"),
+            root,
+            checkout_move=update_cmd._moves_for(token),
+        )
     assert at_start(tmp_path, a)["move_paths"] == ["package-lock.json"]
     assert gate(root) is False, "a lockfile cleanup interrupted mid-write was admitted"
 
 
 @pytest.mark.parametrize("interrupted", [True, False])
-def test_a_stash_restore_at_the_moved_head_is_gated_from_that_head(repo, tmp_path, interrupted):
+def test_a_stash_restore_at_the_moved_head_is_gated_from_that_head(
+    repo, tmp_path, interrupted
+):
     root, _a, t = repo
     (root / "mine.py").write_text("M=2  # my edit\n", encoding="utf-8")
     token = pause(root)
     moves = update_cmd._moves_for(token)
-    stash = update_cmd_stash._stash_local_changes_if_needed(["git"], root, checkout_move=moves)
+    stash = update_cmd_stash._stash_local_changes_if_needed(
+        ["git"], root, checkout_move=moves
+    )
     with update_cmd._checkout_move(token, t):
         git(root, "merge", "-q", "--ff-only", t)  # the pull lands whole
-    git_cmd = interrupting_git(tmp_path, "stash apply", root / "mine.py") if interrupted else ["git"]
+    git_cmd = (
+        interrupting_git(tmp_path, "stash apply", root / "mine.py")
+        if interrupted
+        else ["git"]
+    )
     if interrupted:
         with pytest.raises(KeyboardInterrupt):
-            update_cmd_stash._restore_stashed_changes(git_cmd, root, stash, checkout_move=moves)
+            update_cmd_stash._restore_stashed_changes(
+                git_cmd, root, stash, checkout_move=moves
+            )
         started = at_start(tmp_path, t)
         assert started["move_targets"] == [stash] and started["dirty_at_pause"] == []
-        assert gate(root) is False, "a stash restore interrupted mid-write at the moved HEAD was admitted"
+        assert gate(root) is False, (
+            "a stash restore interrupted mid-write at the moved HEAD was admitted"
+        )
     else:
-        assert update_cmd_stash._restore_stashed_changes(git_cmd, root, stash, checkout_move=moves)
+        assert update_cmd_stash._restore_stashed_changes(
+            git_cmd, root, stash, checkout_move=moves
+        )
         assert (root / "mine.py").read_text() == "M=2  # my edit\n"
-        assert gate(root) is True, "a stash restore that applied cleanly held the paused set"
+        assert gate(root) is True, (
+            "a stash restore that applied cleanly held the paused set"
+        )

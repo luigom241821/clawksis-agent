@@ -199,10 +199,15 @@ class SubagentStatus(WireEnum):
     interrupted = "interrupted"
 
 
-TERMINAL_SUBAGENT_STATUSES = frozenset({
-    SubagentStatus.completed, SubagentStatus.failed, SubagentStatus.error,
-    SubagentStatus.timeout, SubagentStatus.interrupted,
-})
+TERMINAL_SUBAGENT_STATUSES = frozenset(
+    {
+        SubagentStatus.completed,
+        SubagentStatus.failed,
+        SubagentStatus.error,
+        SubagentStatus.timeout,
+        SubagentStatus.interrupted,
+    }
+)
 
 
 class PendingApproval(OpenModel):
@@ -301,8 +306,28 @@ class PlanUsage(Result):
 
 
 __all__ = [
-    "TERMINAL_SUBAGENT_STATUSES", "AccountOwner", "ConnectorOwner", "EmptyPayload", "EmptyResult", "McpServerStatus",
-    "MessageReaction", "OkResult", "OpenModel", "PendingApproval", "PlanUsage", "PlanUsageGauge",
-    "ProfileParams", "ProjectRef", "SessionLiveInfo", "SessionOwner", "SessionParams", "StatusResult", "StoredSessionRow",
-    "SubagentStatus", "ToolLabel", "ToolLabelKind", "TranscriptMessage", "Usage",
+    "TERMINAL_SUBAGENT_STATUSES",
+    "AccountOwner",
+    "ConnectorOwner",
+    "EmptyPayload",
+    "EmptyResult",
+    "McpServerStatus",
+    "MessageReaction",
+    "OkResult",
+    "OpenModel",
+    "PendingApproval",
+    "PlanUsage",
+    "PlanUsageGauge",
+    "ProfileParams",
+    "ProjectRef",
+    "SessionLiveInfo",
+    "SessionOwner",
+    "SessionParams",
+    "StatusResult",
+    "StoredSessionRow",
+    "SubagentStatus",
+    "ToolLabel",
+    "ToolLabelKind",
+    "TranscriptMessage",
+    "Usage",
 ]

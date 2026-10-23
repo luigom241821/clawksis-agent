@@ -12,6 +12,7 @@ managed/container/CLAWK_UID policy) that reads the env vars and applies chown af
 ``mkdir``, invoked from ``_secure_dir`` via ``apply_secure_dir_policy`` (which already
 runs after every directory creation in the home-init path).
 """
+
 from __future__ import annotations
 
 import sys
@@ -31,10 +32,10 @@ class TestResolveClawksisUidGid:
         monkeypatch.setenv("CLAWK_UID", "1000")
         monkeypatch.setenv("CLAWK_GID", "911")
         from clawk_constants import _resolve_clawk_uid_gid
+
         uid, gid = _resolve_clawk_uid_gid()
         assert uid == 1000
         assert gid == 911
-
 
     # ``platforms("windows")`` rather than ``skipif(sys.platform != "win32")``: the
     # Windows CI job selects ``-m platforms("windows")``, so a bare skipif would leave
@@ -45,6 +46,7 @@ class TestResolveClawksisUidGid:
         monkeypatch.setenv("CLAWK_UID", "1000")
         monkeypatch.setenv("CLAWK_GID", "911")
         from clawk_constants import _resolve_clawk_uid_gid
+
         uid, gid = _resolve_clawk_uid_gid()
         assert uid is None
         assert gid is None
@@ -57,8 +59,6 @@ class TestResolveClawksisUidGid:
 
 @pytest.mark.platforms("linux")
 class TestChownToClawksisUid:
-
-
     def test_eperm_is_silently_swallowed(self, tmp_path, monkeypatch):
         """When running as non-root, os.chown raises EPERM. That's fine —
         the entrypoint's startup chown -R will pick it up on restart, and
@@ -77,7 +77,6 @@ class TestChownToClawksisUid:
         with patch.object(cfg.os, "chown", side_effect=_raises_eperm):
             # Must not raise — the catch is non-fatal.
             cfg._chown_to_clawk_uid(d)
-
 
 
 # ---------------------------------------------------------------------------

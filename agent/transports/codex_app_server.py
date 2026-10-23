@@ -54,6 +54,7 @@ def _snapshot_descendants(pid: int) -> list[Any]:
     """psutil handles for ``pid``'s current descendants ([] when psutil is unavailable)."""
     try:
         import psutil
+
         return psutil.Process(int(pid)).children(recursive=True)
     except Exception:
         return []
@@ -65,6 +66,7 @@ def _reap_snapshotted(descendants: list[Any]) -> None:
     if not descendants:
         return
     import psutil
+
     live = []
     for child in reversed(descendants):
         with contextlib.suppress(Exception):
@@ -89,8 +91,11 @@ class CodexAppServerClient:
     """
 
     def __init__(
-        self, codex_bin: str = "codex", codex_home: Optional[str] = None,
-        extra_args: Optional[list[str]] = None, env: Optional[dict[str, str]] = None,
+        self,
+        codex_bin: str = "codex",
+        codex_home: Optional[str] = None,
+        extra_args: Optional[list[str]] = None,
+        env: Optional[dict[str, str]] = None,
     ) -> None:
         self._codex_bin = codex_bin
         # codex needs LLM provider creds but must not receive Tier-1 Clawksis secrets (gateway/GitHub/infra tokens).
@@ -110,30 +115,50 @@ class CodexAppServerClient:
 
         cmd = [codex_bin, "app-server", *(extra_args or [])]
         from agent.delegation_context import (
-            DELEGATED_CHILD_ENV_MARKER, KANBAN_ENV_KEYS,
-            delegated_child_subprocess_env, is_dispatcher_owned_worker_context,
+            DELEGATED_CHILD_ENV_MARKER,
+            KANBAN_ENV_KEYS,
+            delegated_child_subprocess_env,
+            is_dispatcher_owned_worker_context,
         )
+
         # Native shell children remain unowned. Only Clawksis' managed MCP tool
         # endpoint acts for this worker; grant it scope via its existing per-server
         # environment (the entry the runtime migration registers), never by granting
         # the whole executor process ownership.
-        owned_task = os.environ.get("CLAWK_KANBAN_TASK") and is_dispatcher_owned_worker_context()
+        owned_task = (
+            os.environ.get("CLAWK_KANBAN_TASK") and is_dispatcher_owned_worker_context()
+        )
         if owned_task:
             for key in (*KANBAN_ENV_KEYS, "CLAWK_KANBAN_DB", "CLAWK_KANBAN_BOARD"):
                 if key in os.environ:
-                    cmd += ["-c", f"mcp_servers.{CLAWK_TOOLS_MCP_SERVER_NAME}.env.{key}={json.dumps(os.environ[key])}"]
-            cmd += ["-c", f'mcp_servers.{CLAWK_TOOLS_MCP_SERVER_NAME}.env.{DELEGATED_CHILD_ENV_MARKER}=""']
+                    cmd += [
+                        "-c",
+                        f"mcp_servers.{CLAWK_TOOLS_MCP_SERVER_NAME}.env.{key}={json.dumps(os.environ[key])}",
+                    ]
+            cmd += [
+                "-c",
+                f'mcp_servers.{CLAWK_TOOLS_MCP_SERVER_NAME}.env.{DELEGATED_CHILD_ENV_MARKER}=""',
+            ]
         spawn_env = delegated_child_subprocess_env(spawn_env)
         # Kanban workers must write handoff/status to the board DB outside the
         # workspace: keep the sandbox on, add the Kanban root as writable.
         if owned_task:
             kanban_db = spawn_env.get("CLAWK_KANBAN_DB")
-            default_root = os.path.join(spawn_env.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "kanban")
-            kanban_root = os.path.dirname(kanban_db) if kanban_db else spawn_env.get("CLAWK_KANBAN_ROOT", default_root)
+            default_root = os.path.join(
+                spawn_env.get("CLAWK_HOME", os.path.expanduser("~/.clawksis")), "kanban"
+            )
+            kanban_root = (
+                os.path.dirname(kanban_db)
+                if kanban_db
+                else spawn_env.get("CLAWK_KANBAN_ROOT", default_root)
+            )
             cmd += [
-                "-c", 'sandbox_mode="workspace-write"',
-                "-c", f'sandbox_workspace_write.writable_roots=["{kanban_root}"]',
-                "-c", "sandbox_workspace_write.network_access=false",
+                "-c",
+                'sandbox_mode="workspace-write"',
+                "-c",
+                f'sandbox_workspace_write.writable_roots=["{kanban_root}"]',
+                "-c",
+                "sandbox_workspace_write.network_access=false",
             ]
         # Codex emits tracing to stderr; default WARN keeps it quiet for users.
         spawn_env.setdefault("RUST_LOG", "warn")
@@ -144,11 +169,18 @@ class CodexAppServerClient:
         from clawk_cli._subprocess_compat import windows_hide_flags
 
         self._proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            bufsize=0, env=spawn_env, creationflags=windows_hide_flags(),
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            env=spawn_env,
+            creationflags=windows_hide_flags(),
         )
         self._next_id = 1
-        self._pending: dict[int, queue.Queue] = {}  # request id -> single-slot reply queue
+        self._pending: dict[
+            int, queue.Queue
+        ] = {}  # request id -> single-slot reply queue
         self._pending_lock = threading.Lock()
         self._notifications: queue.Queue = queue.Queue()
         self._server_requests: queue.Queue = queue.Queue()
@@ -163,14 +195,22 @@ class CodexAppServerClient:
         self._stderr_reader.start()
 
     def initialize(
-        self, client_name: str = "clawk", client_title: str = "Clawksis",
-        client_version: str = "0.1", capabilities: Optional[dict] = None, timeout: float = 10.0,
+        self,
+        client_name: str = "clawk",
+        client_title: str = "Clawksis",
+        client_version: str = "0.1",
+        capabilities: Optional[dict] = None,
+        timeout: float = 10.0,
     ) -> dict:
         """Send ``initialize`` + ``initialized``; return the server's InitializeResponse."""
         if self._initialized:
             raise RuntimeError("already initialized")
         params = {
-            "clientInfo": {"name": client_name, "title": client_title, "version": client_version},
+            "clientInfo": {
+                "name": client_name,
+                "title": client_title,
+                "version": client_version,
+            },
             "capabilities": capabilities or {},
         }
         result = self.request("initialize", params, timeout=timeout)
@@ -215,7 +255,10 @@ class CodexAppServerClient:
             self._pending.clear()
         if not pending_items:
             return
-        synthetic = {"error": {"code": _TRANSPORT_LOST_CODE, "message": reason}, "transportLost": True}
+        synthetic = {
+            "error": {"code": _TRANSPORT_LOST_CODE, "message": reason},
+            "transportLost": True,
+        }
         for _rid, pending in pending_items:
             pending.put_nowait(synthetic)
 
@@ -225,7 +268,9 @@ class CodexAppServerClient:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def request(self, method: str, params: Optional[dict] = None, timeout: float = 30.0) -> dict:
+    def request(
+        self, method: str, params: Optional[dict] = None, timeout: float = 30.0
+    ) -> dict:
         """Send a request and block for ``result``; raise CodexAppServerError on ``error``."""
         rid, self._next_id = self._next_id, self._next_id + 1
         q: queue.Queue = queue.Queue(maxsize=1)
@@ -242,11 +287,21 @@ class CodexAppServerClient:
         except queue.Empty:
             with self._pending_lock:
                 self._pending.pop(rid, None)
-            raise TimeoutError(f"codex app-server method {method!r} timed out after {timeout}s")
+            raise TimeoutError(
+                f"codex app-server method {method!r} timed out after {timeout}s"
+            )
         if "error" in msg:
             err = msg["error"]
-            cls = CodexAppServerTransportError if msg.get("transportLost") else CodexAppServerError
-            raise cls(code=err.get("code", -1), message=err.get("message", ""), data=err.get("data"))
+            cls = (
+                CodexAppServerTransportError
+                if msg.get("transportLost")
+                else CodexAppServerError
+            )
+            raise cls(
+                code=err.get("code", -1),
+                message=err.get("message", ""),
+                data=err.get("data"),
+            )
         return msg.get("result", {})
 
     def notify(self, method: str, params: Optional[dict] = None) -> None:
@@ -257,7 +312,9 @@ class CodexAppServerClient:
         """Reply to a server-initiated request (e.g. approval prompts)."""
         self._send({"id": request_id, "result": result})
 
-    def respond_error(self, request_id: Any, code: int, message: str, data: Optional[Any] = None) -> None:
+    def respond_error(
+        self, request_id: Any, code: int, message: str, data: Optional[Any] = None
+    ) -> None:
         """Reply to a server-initiated request with an error."""
         err: dict[str, Any] = {"code": code, "message": message}
         if data is not None:
@@ -292,15 +349,24 @@ class CodexAppServerClient:
 
     def _send(self, obj: dict) -> None:
         if self._closed:
-            raise CodexAppServerTransportError(code=_TRANSPORT_LOST_CODE, message="codex app-server client is closed")
+            raise CodexAppServerTransportError(
+                code=_TRANSPORT_LOST_CODE, message="codex app-server client is closed"
+            )
         if self._proc.stdin is None:
-            raise CodexAppServerTransportError(code=_TRANSPORT_LOST_CODE, message="codex app-server stdin not available")
+            raise CodexAppServerTransportError(
+                code=_TRANSPORT_LOST_CODE,
+                message="codex app-server stdin not available",
+            )
         try:
             self._proc.stdin.write((json.dumps(obj) + "\n").encode("utf-8"))
             self._proc.stdin.flush()
-        except (OSError, ValueError) as exc:  # BrokenPipe, EINVAL on a torn-down pipe, write on closed file
+        except (
+            OSError,
+            ValueError,
+        ) as exc:  # BrokenPipe, EINVAL on a torn-down pipe, write on closed file
             raise CodexAppServerTransportError(
-                code=_TRANSPORT_LOST_CODE, message=f"codex app-server stdin closed unexpectedly: {exc}",
+                code=_TRANSPORT_LOST_CODE,
+                message=f"codex app-server stdin closed unexpectedly: {exc}",
             ) from exc
 
     def _append_stderr(self, line: str) -> None:
@@ -362,12 +428,20 @@ def check_codex_binary(
     """Verify codex CLI is installed and meets minimum version. Returns (ok, message)."""
     try:
         proc = subprocess.run(
-            [codex_bin, "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace',
-            timeout=10, stdin=subprocess.DEVNULL,
+            [codex_bin, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            stdin=subprocess.DEVNULL,
             check=False,
         )
     except FileNotFoundError:
-        return False, f"codex CLI not found at {codex_bin!r}. Install with: npm i -g @openai/codex"
+        return (
+            False,
+            f"codex CLI not found at {codex_bin!r}. Install with: npm i -g @openai/codex",
+        )
     except subprocess.TimeoutExpired:
         return False, "codex --version timed out"
     if proc.returncode != 0:
@@ -377,5 +451,8 @@ def check_codex_binary(
         return False, f"could not parse codex version from: {proc.stdout!r}"
     have = ".".join(map(str, version))
     if version < min_version:
-        return False, f"codex {have} is older than required {'.'.join(map(str, min_version))}. Run: npm i -g @openai/codex"
+        return (
+            False,
+            f"codex {have} is older than required {'.'.join(map(str, min_version))}. Run: npm i -g @openai/codex",
+        )
     return True, have

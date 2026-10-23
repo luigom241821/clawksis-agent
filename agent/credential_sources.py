@@ -39,10 +39,13 @@ def adopt_external_logins_enabled() -> bool:
     global _notice_logged
     try:
         from clawk_cli.config import load_config_readonly
+
         auth_cfg = (load_config_readonly() or {}).get("auth")
     except Exception:
         return True
-    enabled = not isinstance(auth_cfg, dict) or bool(auth_cfg.get("adopt_external_logins", True))
+    enabled = not isinstance(auth_cfg, dict) or bool(
+        auth_cfg.get("adopt_external_logins", True)
+    )
     if not enabled and not _notice_logged:
         _notice_logged = True
         logger.info(EXTERNAL_LOGINS_NOT_ADOPTED_NOTICE)
@@ -97,7 +100,7 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
     from clawk_cli.config import get_env_path, remove_env_value
 
     result = RemovalResult()
-    env_var = removed.source[len("env:"):]
+    env_var = removed.source[len("env:") :]
     if not env_var:
         return result
 
@@ -111,7 +114,9 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
         if env_path.exists():
             env_in_dotenv = any(
                 line.strip().startswith(f"{env_var}=")
-                for line in env_path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+                for line in env_path.read_text(
+                    encoding="utf-8-sig", errors="replace"
+                ).splitlines()
             )
     except OSError:
         pass
@@ -120,14 +125,16 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
         result.cleaned.append(f"Cleared {env_var} from .env")
 
     if env_in_process and not env_in_dotenv:
-        result.hints.extend([
-            f"Note: {env_var} is still set in your shell environment "
-            f"(not in ~/.clawksis/.env).",
-            "  Unset it there (shell profile, systemd EnvironmentFile, "
-            "launchd plist, etc.) or it will keep being visible to Clawksis.",
-            f"  The pool entry is now suppressed — Clawksis will ignore "
-            f"{env_var} until you run `clawk auth add {provider}`.",
-        ])
+        result.hints.extend(
+            [
+                f"Note: {env_var} is still set in your shell environment "
+                f"(not in ~/.clawksis/.env).",
+                "  Unset it there (shell profile, systemd EnvironmentFile, "
+                "launchd plist, etc.) or it will keep being visible to Clawksis.",
+                f"  The pool entry is now suppressed — Clawksis will ignore "
+                f"{env_var} until you run `clawk auth add {provider}`.",
+            ]
+        )
     else:
         result.hints.append(
             f"Suppressed env:{env_var} — it will not be re-seeded even "
@@ -188,11 +195,13 @@ def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
 
     result = _remove_auth_store_oauth(provider, removed)
     suppress_credential_source(provider, "device_code")
-    result.hints.extend([
-        "Suppressed openai-codex device_code source — it will not be re-seeded.",
-        "Note: Codex CLI credentials still live in ~/.codex/auth.json",
-        "Run `clawk auth add openai-codex` to re-enable if needed.",
-    ])
+    result.hints.extend(
+        [
+            "Suppressed openai-codex device_code source — it will not be re-seeded.",
+            "Note: Codex CLI credentials still live in ~/.codex/auth.json",
+            "Run `clawk auth add openai-codex` to re-enable if needed.",
+        ]
+    )
     return result
 
 
@@ -205,19 +214,23 @@ def _remove_copilot_gh(provider: str, removed) -> RemovalResult:
     suppress_credential_source(provider, "gh_cli")
     for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
         suppress_credential_source(provider, f"env:{env_var}")
-    return RemovalResult(hints=[
-        "Suppressed all copilot token sources (gh_cli + env vars) — they will not be re-seeded.",
-        "Note: Your gh CLI / shell environment is unchanged.",
-        "Run `clawk auth add copilot` to re-enable if needed.",
-    ])
+    return RemovalResult(
+        hints=[
+            "Suppressed all copilot token sources (gh_cli + env vars) — they will not be re-seeded.",
+            "Note: Your gh CLI / shell environment is unchanged.",
+            "Run `clawk auth add copilot` to re-enable if needed.",
+        ]
+    )
 
 
 def _suppress_only(*hints: str) -> Callable[..., RemovalResult]:
     """remove_fn for sources whose backing file/config belongs to another tool
     (Claude Code, Qwen CLI, config.yaml): never delete it, just suppress and
     explain. ``{source}`` in a hint is the removed entry's source string."""
+
     def remove_fn(provider: str, removed) -> RemovalResult:
         return RemovalResult(hints=[h.format(source=removed.source) for h in hints])
+
     return remove_fn
 
 
@@ -226,19 +239,22 @@ def _suppress_only(*hints: str) -> Callable[..., RemovalResult]:
 # takes the copilot path (no .env edits) rather than the generic env-var removal.
 _REGISTRY: list[RemovalStep] = [
     RemovalStep(
-        provider="copilot", source_id="gh_cli",
+        provider="copilot",
+        source_id="gh_cli",
         match_fn=lambda src: src == "gh_cli" or src.startswith("env:"),
         remove_fn=_remove_copilot_gh,
         description="gh auth token / COPILOT_GITHUB_TOKEN / GH_TOKEN",
     ),
     RemovalStep(
-        provider="*", source_id="env:",
+        provider="*",
+        source_id="env:",
         match_fn=lambda src: src.startswith("env:"),
         remove_fn=_remove_env_source,
         description="Any env-seeded credential (XAI_API_KEY, DEEPSEEK_API_KEY, etc.)",
     ),
     RemovalStep(
-        provider="anthropic", source_id="claude_code",
+        provider="anthropic",
+        source_id="claude_code",
         remove_fn=_suppress_only(
             "Suppressed claude_code credential — it will not be re-seeded.",
             "Note: Claude Code credentials still live in ~/.claude/.credentials.json",
@@ -247,28 +263,33 @@ _REGISTRY: list[RemovalStep] = [
         description="~/.claude/.credentials.json",
     ),
     RemovalStep(
-        provider="anthropic", source_id="clawk_pkce",
+        provider="anthropic",
+        source_id="clawk_pkce",
         remove_fn=_remove_clawk_pkce,
         description="~/.clawksis/.anthropic_oauth.json",
     ),
     RemovalStep(
-        provider="nous", source_id="device_code",
+        provider="nous",
+        source_id="device_code",
         remove_fn=_remove_auth_store_oauth,
         description="auth.json providers.nous",
     ),
     RemovalStep(
-        provider="openai-codex", source_id="device_code",
+        provider="openai-codex",
+        source_id="device_code",
         match_fn=lambda src: src == "device_code" or src.endswith(":device_code"),
         remove_fn=_remove_codex_device_code,
         description="auth.json providers.openai-codex + ~/.codex/auth.json",
     ),
     RemovalStep(
-        provider="xai-oauth", source_id="device_code",
+        provider="xai-oauth",
+        source_id="device_code",
         remove_fn=_remove_xai_oauth_device_code,
         description="auth.json providers.xai-oauth",
     ),
     RemovalStep(
-        provider="qwen-oauth", source_id="qwen-cli",
+        provider="qwen-oauth",
+        source_id="qwen-cli",
         remove_fn=_suppress_only(
             "Suppressed qwen-cli credential — it will not be re-seeded.",
             "Note: Qwen CLI credentials still live in ~/.qwen/oauth_creds.json",
@@ -277,12 +298,14 @@ _REGISTRY: list[RemovalStep] = [
         description="~/.qwen/oauth_creds.json",
     ),
     RemovalStep(
-        provider="minimax-oauth", source_id="oauth",
+        provider="minimax-oauth",
+        source_id="oauth",
         remove_fn=_remove_auth_store_oauth,
         description="auth.json providers.minimax-oauth",
     ),
     RemovalStep(
-        provider="*", source_id="config:",
+        provider="*",
+        source_id="config:",
         match_fn=lambda src: src.startswith("config:") or src == "model_config",
         remove_fn=_suppress_only(
             "Suppressed {source} — it will not be re-seeded.",

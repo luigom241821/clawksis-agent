@@ -91,7 +91,9 @@ def test_acp_background_discovery_does_not_block_startup(monkeypatch):
         "clawk_cli.config",
         _mod(
             "clawk_cli.config",
-            read_raw_config=lambda: {"mcp_servers": {"slow": {"url": "https://mcp.example.test"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"slow": {"url": "https://mcp.example.test"}}
+            },
         ),
     )
     monkeypatch.setitem(
@@ -140,7 +142,9 @@ def test_acp_late_refresh_adds_tools_when_discovery_lands_after_build(monkeypatc
         "clawk_cli.config",
         _mod(
             "clawk_cli.config",
-            read_raw_config=lambda: {"mcp_servers": {"slow": {"url": "https://mcp.example.test"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"slow": {"url": "https://mcp.example.test"}}
+            },
         ),
     )
     monkeypatch.setitem(
@@ -217,7 +221,9 @@ def test_acp_late_refresh_skips_after_first_turn(monkeypatch):
         "clawk_cli.config",
         _mod(
             "clawk_cli.config",
-            read_raw_config=lambda: {"mcp_servers": {"slow": {"url": "https://mcp.example.test"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"slow": {"url": "https://mcp.example.test"}}
+            },
         ),
     )
     monkeypatch.setitem(
@@ -262,7 +268,9 @@ def test_acp_late_refresh_skips_after_first_turn(monkeypatch):
     # Give the daemon time to run (if it were going to).
     time.sleep(0.5)
 
-    assert not refreshed, "late-refresh rebuilt tools after the first turn — cache broken!"
+    assert not refreshed, (
+        "late-refresh rebuilt tools after the first turn — cache broken!"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +292,9 @@ def test_acp_late_refresh_skips_while_turn_running(monkeypatch):
         "clawk_cli.config",
         _mod(
             "clawk_cli.config",
-            read_raw_config=lambda: {"mcp_servers": {"slow": {"url": "https://mcp.example.test"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"slow": {"url": "https://mcp.example.test"}}
+            },
         ),
     )
     monkeypatch.setitem(

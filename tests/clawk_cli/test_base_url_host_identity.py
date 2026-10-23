@@ -36,26 +36,42 @@ def _ready_with(runtime: dict) -> bool:
 
 def test_keyless_real_openrouter_not_ready():
     # OpenRouter itself requires a key: keyless => not ready.
-    assert _ready_with({"api_key": None, "base_url": "https://openrouter.ai/api/v1"}) is False
+    assert (
+        _ready_with({"api_key": None, "base_url": "https://openrouter.ai/api/v1"})
+        is False
+    )
 
 
 def test_keyless_uppercase_openrouter_not_ready():
     # Case variants of the real host are still the real host (pi#7933 class).
-    assert _ready_with({"api_key": None, "base_url": "https://OpenRouter.AI/api/v1"}) is False
+    assert (
+        _ready_with({"api_key": None, "base_url": "https://OpenRouter.AI/api/v1"})
+        is False
+    )
 
 
 def test_keyless_proxy_with_openrouter_in_path_is_ready():
     # A custom proxy whose *path* contains the substring is NOT OpenRouter —
     # it's a keyless custom endpoint and must count as ready.
-    assert _ready_with({"api_key": None, "base_url": "https://proxy.internal/openrouter.ai/v1"}) is True
+    assert (
+        _ready_with(
+            {"api_key": None, "base_url": "https://proxy.internal/openrouter.ai/v1"}
+        )
+        is True
+    )
 
 
 def test_keyless_lookalike_domain_is_ready():
-    assert _ready_with({"api_key": None, "base_url": "https://openrouter.ai.evil.com/v1"}) is True
+    assert (
+        _ready_with({"api_key": None, "base_url": "https://openrouter.ai.evil.com/v1"})
+        is True
+    )
 
 
 def test_keyless_local_endpoint_is_ready():
-    assert _ready_with({"api_key": None, "base_url": "http://localhost:11434/v1"}) is True
+    assert (
+        _ready_with({"api_key": None, "base_url": "http://localhost:11434/v1"}) is True
+    )
 
 
 def test_validate_requested_model_proxy_url_routes_to_custom():
@@ -65,8 +81,12 @@ def test_validate_requested_model_proxy_url_routes_to_custom():
 
     assert base_url_host_matches("https://openrouter.ai/api/v1", "openrouter.ai")
     assert base_url_host_matches("https://OPENROUTER.AI/api/v1", "openrouter.ai")
-    assert not base_url_host_matches("https://proxy.internal/openrouter.ai/v1", "openrouter.ai")
-    assert not base_url_host_matches("https://openrouter.ai.evil.com/v1", "openrouter.ai")
+    assert not base_url_host_matches(
+        "https://proxy.internal/openrouter.ai/v1", "openrouter.ai"
+    )
+    assert not base_url_host_matches(
+        "https://openrouter.ai.evil.com/v1", "openrouter.ai"
+    )
 
 
 def test_local_endpoint_hostname_detection():
@@ -85,10 +105,16 @@ def test_local_endpoint_hostname_detection():
 def test_nous_portal_host_detection():
     from utils import base_url_host_matches
 
-    assert base_url_host_matches("https://inference-api.nousresearch.com/v1", "nousresearch.com")
+    assert base_url_host_matches(
+        "https://inference-api.nousresearch.com/v1", "nousresearch.com"
+    )
     assert base_url_host_matches("https://portal.nousresearch.com", "nousresearch.com")
-    assert not base_url_host_matches("https://nousresearch.com.evil.io/v1", "nousresearch.com")
-    assert not base_url_host_matches("https://proxy.example/nousresearch.com/v1", "nousresearch.com")
+    assert not base_url_host_matches(
+        "https://nousresearch.com.evil.io/v1", "nousresearch.com"
+    )
+    assert not base_url_host_matches(
+        "https://proxy.example/nousresearch.com/v1", "nousresearch.com"
+    )
 
 
 # ── Widened class coverage (follow-up to #85737) ─────────────────────────────
@@ -99,9 +125,15 @@ def test_azure_endpoint_detection_host_anchored():
     a path or lookalike containing 'azure.com'/'openai.azure.com' is not Azure."""
     from utils import base_url_host_matches
 
-    assert base_url_host_matches("https://myres.openai.azure.com/openai/v1", "azure.com")
-    assert base_url_host_matches("https://myres.openai.azure.com/openai/v1", "openai.azure.com")
-    assert not base_url_host_matches("https://proxy.corp/openai.azure.com/v1", "azure.com")
+    assert base_url_host_matches(
+        "https://myres.openai.azure.com/openai/v1", "azure.com"
+    )
+    assert base_url_host_matches(
+        "https://myres.openai.azure.com/openai/v1", "openai.azure.com"
+    )
+    assert not base_url_host_matches(
+        "https://proxy.corp/openai.azure.com/v1", "azure.com"
+    )
     assert not base_url_host_matches("https://azure.com.evil.net/v1", "azure.com")
     assert not base_url_host_matches("https://notazure.com/v1", "azure.com")
 
@@ -110,8 +142,13 @@ def test_run_agent_azure_url_predicate():
     from run_agent import AIAgent
 
     probe = object.__new__(AIAgent)
-    assert probe._is_azure_openai_url("https://myres.openai.azure.com/openai/v1") is True
-    assert probe._is_azure_openai_url("https://proxy.internal/openai.azure.com/v1") is False
+    assert (
+        probe._is_azure_openai_url("https://myres.openai.azure.com/openai/v1") is True
+    )
+    assert (
+        probe._is_azure_openai_url("https://proxy.internal/openai.azure.com/v1")
+        is False
+    )
     assert probe._is_azure_openai_url("https://openai.azure.com.evil.io/v1") is False
 
 
@@ -149,8 +186,16 @@ def test_figma_remote_mcp_host_anchored():
 
     assert _is_figma_remote_mcp(server_url="https://mcp.figma.com/mcp") is True
     assert _is_figma_remote_mcp(server_url="https://www.figma.com/mcp") is True
-    assert _is_figma_remote_mcp(server_url="https://evil.example/mcp.figma.com/mcp") is False
+    assert (
+        _is_figma_remote_mcp(server_url="https://evil.example/mcp.figma.com/mcp")
+        is False
+    )
     assert _is_figma_remote_mcp(server_url="https://figma.com.evil.io/mcp") is False
     # Name fallback still host-checks the URL when one is present.
-    assert _is_figma_remote_mcp(server_name="figma", server_url="https://phish.example/figma") is False
+    assert (
+        _is_figma_remote_mcp(
+            server_name="figma", server_url="https://phish.example/figma"
+        )
+        is False
+    )
     assert _is_figma_remote_mcp(server_name="figma") is True

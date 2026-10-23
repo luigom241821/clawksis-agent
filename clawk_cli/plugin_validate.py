@@ -43,7 +43,9 @@ class ValidationReport:
 
     checks: list[tuple[str, bool, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    isolation: Optional[dict[str, Any]] = None  # plugin-host readiness; informational, never fails
+    isolation: Optional[dict[str, Any]] = (
+        None  # plugin-host readiness; informational, never fails
+    )
 
     @property
     def failures(self) -> list[str]:
@@ -99,9 +101,7 @@ def _requires_clawk_spec_valid(spec: str) -> bool:
 
 
 def _check_manifest_fields(report: ValidationReport, manifest: dict) -> None:
-    missing = [
-        f for f in ("name", "version", "description") if not manifest.get(f)
-    ]
+    missing = [f for f in ("name", "version", "description") if not manifest.get(f)]
     if missing:
         report.add(
             "manifest fields",
@@ -124,7 +124,7 @@ def _check_requires_clawk(report: ValidationReport, manifest: dict) -> None:
             "requires_clawk",
             False,
             f"requires_clawk spec {spec!r} does not parse "
-            "(expected e.g. \">=0.19\" or \">=0.19, <1.0\")",
+            '(expected e.g. ">=0.19" or ">=0.19, <1.0")',
         )
 
 
@@ -152,9 +152,7 @@ def _check_config_spec(report: ValidationReport, manifest: dict) -> None:
                 )
             required = spec.get("required")
             if required is not None and not isinstance(required, bool):
-                problems.append(
-                    f"config_schema.{skey}: required must be a boolean"
-                )
+                problems.append(f"config_schema.{skey}: required must be a boolean")
     if problems:
         report.add("config schema", False, "; ".join(problems))
     else:
@@ -176,9 +174,7 @@ def _check_requires_env(report: ValidationReport, manifest: dict) -> None:
             problems.append(f"requires_env[{i}]: must be a string or mapping")
             continue
         if not _UPPER_SNAKE_RE.match(name):
-            problems.append(
-                f"requires_env[{i}]: {name!r} is not UPPER_SNAKE_CASE"
-            )
+            problems.append(f"requires_env[{i}]: {name!r} is not UPPER_SNAKE_CASE")
     if problems:
         report.add("requires_env", False, "; ".join(problems))
     else:
@@ -188,7 +184,10 @@ def _check_requires_env(report: ValidationReport, manifest: dict) -> None:
 def _check_oauth(report: ValidationReport, manifest: dict, plugin_dir: Path) -> None:
     """``oauth:`` clients (clawk_cli.plugin_oauth): shape, https and declared variables fail admission; a
     host outside the IdP's domains and plugin code that names a token URL are reviewer warnings."""
-    from clawk_cli.plugin_oauth import oauth_admission_problems, oauth_admission_warnings
+    from clawk_cli.plugin_oauth import (
+        oauth_admission_problems,
+        oauth_admission_warnings,
+    )
 
     if manifest.get("oauth") in (None, []):
         report.add("oauth", True, "not declared")
@@ -333,14 +332,17 @@ def _probe_options(manifest: dict) -> dict:
     return {
         "kind": str(manifest.get("kind") or ""),
         "context_methods": sorted(
-            n for n in dir(PluginContext)
+            n
+            for n in dir(PluginContext)
             if not n.startswith("_") and callable(getattr(PluginContext, n))
         ),
     }
 
 
 def _run_capability_probe(
-    plugin_dir: Path, manifest: dict, probe: Optional[tuple[list[str], dict[str, str]]] = None,
+    plugin_dir: Path,
+    manifest: dict,
+    probe: Optional[tuple[list[str], dict[str, str]]] = None,
 ) -> tuple[Optional[dict], str]:
     """Run the recording probe in a scratch subprocess.
 
@@ -365,7 +367,9 @@ def _run_capability_probe(
                     json.dumps(_probe_options(manifest)),
                 ],
                 capture_output=True,
-                text=True, encoding="utf-8", errors="replace",
+                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=_PROBE_TIMEOUT,
                 env=env,
                 check=False,
@@ -377,7 +381,7 @@ def _run_capability_probe(
     for line in (result.stdout or "").splitlines():
         if line.startswith(_PROBE_SENTINEL):
             try:
-                payload = json.loads(line[len(_PROBE_SENTINEL):])
+                payload = json.loads(line[len(_PROBE_SENTINEL) :])
             except json.JSONDecodeError:
                 payload = None
 
@@ -400,7 +404,9 @@ def _declared_list(manifest: dict, key: str) -> list[str]:
 
 
 def _check_capabilities(
-    report: ValidationReport, manifest: dict, plugin_dir: Path,
+    report: ValidationReport,
+    manifest: dict,
+    plugin_dir: Path,
     probe: Optional[tuple[Path, dict[str, str]]] = None,
 ) -> Optional[dict]:
     """Probe actual registrations and diff against declared capabilities.
@@ -409,9 +415,7 @@ def _check_capabilities(
     when the probe failed / was skipped.
     """
     if not (plugin_dir / "__init__.py").is_file():
-        report.warn(
-            "no __init__.py — capability probe skipped (manifest-only plugin)"
-        )
+        report.warn("no __init__.py — capability probe skipped (manifest-only plugin)")
         report.add("capability probe", True, "skipped (no __init__.py)")
         return None
 
@@ -421,7 +425,8 @@ def _check_capabilities(
         return None
     if recorded.get("providers"):
         report.add(
-            "capability probe", True,
+            "capability probe",
+            True,
             "import registered provider(s): " + ", ".join(recorded["providers"]),
         )
     else:
@@ -484,8 +489,7 @@ def _check_builtin_collisions(
         report.add(
             "built-in tool collisions",
             False,
-            "tool name(s) collide with built-in tools: "
-            f"{', '.join(collisions)}",
+            f"tool name(s) collide with built-in tools: {', '.join(collisions)}",
         )
     else:
         report.add("built-in tool collisions", True, "no collisions")
@@ -495,7 +499,8 @@ def _check_builtin_collisions(
 
 
 def validate_plugin_dir(
-    plugin_dir: Path, probe: Optional[tuple[list[str], dict[str, str]]] = None,
+    plugin_dir: Path,
+    probe: Optional[tuple[list[str], dict[str, str]]] = None,
 ) -> ValidationReport:
     """Run every admission check against *plugin_dir* and return the report. *probe* is
     ``(python argv prefix, env)`` for the capability probe (see ``_run_capability_probe``)."""
@@ -503,9 +508,7 @@ def validate_plugin_dir(
     plugin_dir = Path(plugin_dir)
 
     if not plugin_dir.is_dir():
-        report.add(
-            "plugin directory", False, f"{plugin_dir} is not a directory"
-        )
+        report.add("plugin directory", False, f"{plugin_dir} is not a directory")
         return report
 
     manifest_file = plugin_dir / "plugin.yaml"
@@ -520,7 +523,8 @@ def validate_plugin_dir(
         if portable_file.is_file():
             return _validate_portable_plugin(report, plugin_dir)
         report.add(
-            "manifest", False,
+            "manifest",
+            False,
             "no plugin.yaml (or portable plugin.json) in the plugin directory",
         )
         return report
@@ -528,9 +532,7 @@ def validate_plugin_dir(
     import clawk_yaml as yaml
 
     try:
-        manifest = yaml.safe_load(
-            manifest_file.read_text(encoding="utf-8-sig")
-        )
+        manifest = yaml.safe_load(manifest_file.read_text(encoding="utf-8-sig"))
     except Exception as exc:
         report.add("manifest", False, f"plugin.yaml failed to parse: {exc}")
         return report
@@ -555,6 +557,7 @@ def validate_plugin_dir(
     check_desktop_surface(report, plugin_dir)
     check_language_packs(report, manifest, plugin_dir)
     from clawk_cli.plugin_isolation_audit import audit_plugin_dir
+
     report.isolation = audit_plugin_dir(plugin_dir, manifest).to_dict()
     return report
 
@@ -563,17 +566,28 @@ def _check_trusted_inbound(report: ValidationReport, recorded: Optional[dict]) -
     """Surface ``trusted_inbound`` platforms (their events skip user allowlists and pairing); one
     naming a core platform fails, as the loader refuses it."""
     from gateway.platform_registry import core_ships_platform
+
     for name in (recorded or {}).get("trusted_inbound") or []:
         if core_ships_platform(name):
-            report.add("trusted inbound", False, f"platform '{name}' ships with core; trusted_inbound is refused for it")
+            report.add(
+                "trusted inbound",
+                False,
+                f"platform '{name}' ships with core; trusted_inbound is refused for it",
+            )
         else:
-            report.add("trusted inbound", True, f"platform '{name}' is trusted_inbound: its events skip user allowlists and pairing")
+            report.add(
+                "trusted inbound",
+                True,
+                f"platform '{name}' is trusted_inbound: its events skip user allowlists and pairing",
+            )
 
 
 _LOADABLE_ENTRYPOINTS = ("__init__.py", "desktop/plugin.js", "plugin.json")
 
 
-def _check_loadable(report: ValidationReport, plugin_dir: Path, manifest: Optional[dict] = None) -> None:
+def _check_loadable(
+    report: ValidationReport, plugin_dir: Path, manifest: Optional[dict] = None
+) -> None:
     """A plugin.yaml with nothing beside it that Clawksis can load (no ``register()`` module, no
     desktop bundle, no portable manifest, no declared language pack) installs "successfully" and does
     nothing — a pip-layout repo whose code lives under ``src/`` behind an entry point is the usual shape."""
@@ -581,9 +595,11 @@ def _check_loadable(report: ValidationReport, plugin_dir: Path, manifest: Option
     if (manifest or {}).get("provides_locales") and (plugin_dir / "locales").is_dir():
         present.append("locales/ (language pack)")
     report.add(
-        "loadable", bool(present),
-        f"entry: {', '.join(present)}" if present else
-        "nothing to load: no __init__.py, desktop/plugin.js, plugin.json or provides_locales + locales/ beside "
+        "loadable",
+        bool(present),
+        f"entry: {', '.join(present)}"
+        if present
+        else "nothing to load: no __init__.py, desktop/plugin.js, plugin.json or provides_locales + locales/ beside "
         "plugin.yaml (pip-layout packages need a directory-plugin wrapper with a pyproject.toml declaring the deps)",
     )
 
@@ -597,7 +613,9 @@ def _check_python_dependencies(report: ValidationReport, plugin_dir: Path) -> No
     try:
         decl = read_python_declaration(plugin_dir)
         if decl.external:
-            report.add("python dependencies", True, "external runtime (plugin manages its own)")
+            report.add(
+                "python dependencies", True, "external runtime (plugin manages its own)"
+            )
             return
         urls = unsupported_requirements(decl.requirements)
         installable = decl.install_requirements
@@ -605,12 +623,17 @@ def _check_python_dependencies(report: ValidationReport, plugin_dir: Path) -> No
         report.add("python dependencies", False, f"declaration invalid: {exc}")
         return
     if urls:
-        report.warn("python dependencies: direct URL requirement(s) are not managed by PM; "
-                    f"use a plugin-owned external runtime: {', '.join(urls)}")
+        report.warn(
+            "python dependencies: direct URL requirement(s) are not managed by PM; "
+            f"use a plugin-owned external runtime: {', '.join(urls)}"
+        )
     source = "pyproject" if decl.pyproject is not None else "manifest"
-    detail = f"{len(installable)} requirements from {source}" if decl.requirements else "none declared"
+    detail = (
+        f"{len(installable)} requirements from {source}"
+        if decl.requirements
+        else "none declared"
+    )
     report.add("python dependencies", True, detail)
-
 
 
 def _check_security_scan(report: ValidationReport, plugin_dir: Path) -> None:
@@ -621,7 +644,12 @@ def _check_security_scan(report: ValidationReport, plugin_dir: Path) -> None:
 
     result = scan_plugin(plugin_dir)
     flagged = [f for f in result.findings if f.severity in ("critical", "high")]
-    summary = ", ".join(sorted({f"{f.pattern_id} ({Path(f.file).name}:{f.line})" for f in flagged})) or "no findings"
+    summary = (
+        ", ".join(
+            sorted({f"{f.pattern_id} ({Path(f.file).name}:{f.line})" for f in flagged})
+        )
+        or "no findings"
+    )
     if result.verdict == "dangerous":
         report.add("security scan", False, f"dangerous: {summary}")
         return
@@ -630,7 +658,9 @@ def _check_security_scan(report: ValidationReport, plugin_dir: Path) -> None:
         report.warn(f"security scan caution: {summary}")
 
 
-def _validate_portable_plugin(report: ValidationReport, plugin_dir: Path) -> ValidationReport:
+def _validate_portable_plugin(
+    report: ValidationReport, plugin_dir: Path
+) -> ValidationReport:
     """Admission checks for a portable Agent Plugins v1 (plugin.json) package.
 
     Portable packages have no register() entry point, so the capability
@@ -662,17 +692,27 @@ def _validate_portable_plugin(report: ValidationReport, plugin_dir: Path) -> Val
         "name present" if name else "plugin.json missing required 'name'",
     )
     from clawk_cli.agent_plugins import manifest_config_schema
+
     _check_config_spec(report, {"config_schema": manifest_config_schema(manifest)})
     for server_name, config in package.mcp_servers.items():
         if config.get("trust") == "untrusted":
-            report.add(f"server trust: {server_name}", True,
-                       "untrusted (Clawksis asks before every write-capable tool call)")
+            report.add(
+                f"server trust: {server_name}",
+                True,
+                "untrusted (Clawksis asks before every write-capable tool call)",
+            )
         if config.get("tool_costs"):
             limit = config.get("spend_limit") or 0
-            report.add(f"server costs: {server_name}", True,
-                       f"{len(config['tool_costs'])} costed tool(s), "
-                       + (f"spend limit {limit} {config.get('cost_unit') or 'credits'} per chat" if limit
-                          else "no spend limit"))
+            report.add(
+                f"server costs: {server_name}",
+                True,
+                f"{len(config['tool_costs'])} costed tool(s), "
+                + (
+                    f"spend limit {limit} {config.get('cost_unit') or 'credits'} per chat"
+                    if limit
+                    else "no spend limit"
+                ),
+            )
     for server_name, server_decl in package.server_declarations.items():
         result = availability(server_decl.declaration)
         detail = result.state
@@ -684,5 +724,6 @@ def _validate_portable_plugin(report: ValidationReport, plugin_dir: Path) -> Val
     _check_security_scan(report, plugin_dir)
     check_desktop_surface(report, plugin_dir)
     from clawk_cli.plugin_isolation_audit import audit_plugin_dir
+
     report.isolation = audit_plugin_dir(plugin_dir, manifest).to_dict()
     return report

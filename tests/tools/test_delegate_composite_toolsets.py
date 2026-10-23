@@ -17,8 +17,6 @@ class TestExpandParentToolsets(unittest.TestCase):
         # Original composite is preserved
         self.assertIn("clawk-cli", expanded)
 
-
-
     def test_included_toolsets_of_composite_parent_are_grantable(self):
         """A composite parent holds its ``includes`` too (#111700): ``debugging`` = terminal/process_manage +
         includes web/file, so a child may request ``web``/``file`` — but never a toolset the parent lacks."""

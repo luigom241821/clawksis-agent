@@ -12,6 +12,7 @@ from clawk_cli.moa_config import DEFAULT_MOA_PRESET_NAME, normalize_moa_config
 def _prompt_choice(title: str, rows: list[str], default: int = 0) -> int:
     try:
         from clawk_cli.curses_ui import curses_radiolist
+
         return curses_radiolist(title, rows, selected=default, cancel_returns=default)
     except Exception:
         for idx, row in enumerate(rows, start=1):
@@ -41,25 +42,44 @@ def _model_options() -> list[dict[str, Any]]:
         canonical_order=True,
         pricing=True,
         capabilities=True,
-        max_models=200)
+        max_models=200,
+    )
     providers = payload.get("providers") or []
-    return [p for p in providers if p.get("slug") and str(p.get("slug")).strip().lower() != "moa" and p.get("models")]
+    return [
+        p
+        for p in providers
+        if p.get("slug")
+        and str(p.get("slug")).strip().lower() != "moa"
+        and p.get("models")
+    ]
 
 
 def _pick_slot(current: dict[str, str] | None = None) -> dict[str, str]:
     providers = _model_options()
     if not providers:
-        raise RuntimeError("No configured model providers found. Run `clawk model` first.")
+        raise RuntimeError(
+            "No configured model providers found. Run `clawk model` first."
+        )
     current_provider = (current or {}).get("provider", "")
-    provider_default = next((idx for idx, p in enumerate(providers) if p.get("slug") == current_provider), 0)
-    provider_rows = [f"{p.get('name') or p.get('slug')}  ({p.get('slug')})" for p in providers]
-    provider = providers[_prompt_choice("Select provider", provider_rows, provider_default)]
+    provider_default = next(
+        (idx for idx, p in enumerate(providers) if p.get("slug") == current_provider), 0
+    )
+    provider_rows = [
+        f"{p.get('name') or p.get('slug')}  ({p.get('slug')})" for p in providers
+    ]
+    provider = providers[
+        _prompt_choice("Select provider", provider_rows, provider_default)
+    ]
     models = list(provider.get("models") or [])
     if not models:
         raise RuntimeError(f"Provider {provider.get('slug')} has no selectable models")
     current_model = (current or {}).get("model", "")
     model_default = models.index(current_model) if current_model in models else 0
-    model = models[_prompt_choice(f"Select model for {provider.get('slug')}", models, model_default)]
+    model = models[
+        _prompt_choice(
+            f"Select model for {provider.get('slug')}", models, model_default
+        )
+    ]
     return {"provider": str(provider.get("slug") or ""), "model": str(model)}
 
 
@@ -81,7 +101,8 @@ def _provider_mismatch_notice(
     if (
         not main_provider
         or not agg_provider
-        or main_provider in ("moa", "auto")  # "auto" is a routing pseudo-provider, not a billing seat
+        or main_provider
+        in ("moa", "auto")  # "auto" is a routing pseudo-provider, not a billing seat
         or main_provider == agg_provider
     ):
         return None
@@ -125,7 +146,11 @@ def _cmd_list(cfg: dict, args) -> None:
 
 def _cmd_configure(cfg: dict, args) -> None:
     moa = _moa_section(cfg)
-    preset_name = (getattr(args, "name", None) or moa.get("default_preset") or DEFAULT_MOA_PRESET_NAME).strip()
+    preset_name = (
+        getattr(args, "name", None)
+        or moa.get("default_preset")
+        or DEFAULT_MOA_PRESET_NAME
+    ).strip()
     current = moa["presets"].get(preset_name, moa["presets"][moa["default_preset"]])
     print(f"Configure MoA preset: {preset_name}")
     print("Pick at least one reference model; choose Done when finished.")
@@ -136,7 +161,10 @@ def _cmd_configure(cfg: dict, args) -> None:
         picked = _pick_slot(base)
         picked["enabled"] = bool((base or {}).get("enabled", True))
         refs.append(picked)
-        if _prompt_choice("Add another reference model?", ["Add another", "Done"], 1) == 1:
+        if (
+            _prompt_choice("Add another reference model?", ["Add another", "Done"], 1)
+            == 1
+        ):
             break
     print("Configure aggregator model.")
     print(
@@ -178,7 +206,8 @@ _SUBCOMMANDS = {
     "ls": _cmd_list,
     "config": _cmd_configure,
     "configure": _cmd_configure,
-    "delete": _cmd_delete}
+    "delete": _cmd_delete,
+}
 
 
 def cmd_moa(args) -> None:

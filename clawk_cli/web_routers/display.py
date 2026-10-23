@@ -49,6 +49,7 @@ def _should_evict(held: dict, lease, viewer_id: str) -> bool:
     hand-back also forgets that this viewer ever held: after it, they are a plain watcher again and a
     later takeover by someone else must not evict them. ``held`` is the per-connection memory."""
     from tools.bot_desktop import lease as _lease
+
     if lease.holder != _lease.HUMAN:
         held["ever"] = False
         return False
@@ -60,6 +61,7 @@ def _should_evict(held: dict, lease, viewer_id: str) -> bool:
 
 def _consume_display_ticket(ws: WebSocket) -> Optional[dict]:
     from clawk_cli.dashboard_auth.ws_tickets import TicketInvalid, consume_ticket
+
     ticket = ws.query_params.get("display_ticket", "")
     if not ticket:
         return None
@@ -85,7 +87,9 @@ async def display_ws(ws: WebSocket) -> None:
     await ws.accept()
     info = _consume_display_ticket(ws)
     if info is None:
-        await ws.close(code=_CLOSE_BAD_TICKET, reason="display ticket missing, expired or used")
+        await ws.close(
+            code=_CLOSE_BAD_TICKET, reason="display ticket missing, expired or used"
+        )
         return
     await _bridge(ws, info)
 
@@ -96,6 +100,7 @@ async def _open_rfb(profile_home: Path):
     Popen; None for a socket). Raises OSError when nothing is running."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
     from tools.bot_desktop import runtime as _bd_runtime
+
     token = set_clawk_home_override(profile_home)
     try:
         if _bd_runtime.sandbox_screen_running():
@@ -110,10 +115,14 @@ async def _open_rfb(profile_home: Path):
         reset_clawk_home_override(token)
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader()
-    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), relay.stdout)
+    await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), relay.stdout
+    )
     # StreamReaderProtocol (not the bare FlowControlMixin) so ``writer.wait_closed()`` in the bridge's teardown has
     # a close waiter to await; on the bare mixin it raises NotImplementedError.
-    w_transport, w_protocol = await loop.connect_write_pipe(lambda: asyncio.StreamReaderProtocol(asyncio.StreamReader()), relay.stdin)
+    w_transport, w_protocol = await loop.connect_write_pipe(
+        lambda: asyncio.StreamReaderProtocol(asyncio.StreamReader()), relay.stdin
+    )
     writer = asyncio.StreamWriter(w_transport, w_protocol, None, loop)
     return reader, writer, relay
 
@@ -131,7 +140,9 @@ async def _bridge(ws: WebSocket, info: dict) -> None:
     try:
         reader, writer, relay = await _open_rfb(Path(profile_home))
     except OSError as exc:
-        _log.warning("display ws: cannot reach RFB endpoint for %s: %s", profile_home, exc)
+        _log.warning(
+            "display ws: cannot reach RFB endpoint for %s: %s", profile_home, exc
+        )
         await ws.close(code=_CLOSE_DESKTOP_GONE, reason="Bot Desktop is not running")
         return
 
@@ -160,6 +171,7 @@ async def _bridge(ws: WebSocket, info: dict) -> None:
         loop.call_soon_threadsafe(_refresh_allowed, lease)
         if _should_evict(held, lease, viewer_id):
             loop.call_soon_threadsafe(evicted.set)
+
     unsubscribe = _lease.on_change(_on_lease)
 
     rfb_filter = RfbClientFilter(_may_send_input)
@@ -184,7 +196,9 @@ async def _bridge(ws: WebSocket, info: dict) -> None:
             if not chunk:
                 return
             _stamp_activity()
-            await ws.send_bytes(chunk)  # awaiting the send is the backpressure toward Xvnc
+            await ws.send_bytes(
+                chunk
+            )  # awaiting the send is the backpressure toward Xvnc
 
     async def ws_to_rfb() -> None:
         while True:
@@ -211,8 +225,11 @@ async def _bridge(ws: WebSocket, info: dict) -> None:
         await evicted.wait()
         await ws.close(code=_CLOSE_CONTROL_TAKEN, reason="control-taken")
 
-    tasks = [asyncio.create_task(rfb_to_ws()), asyncio.create_task(ws_to_rfb()),
-             asyncio.create_task(watch_eviction())]
+    tasks = [
+        asyncio.create_task(rfb_to_ws()),
+        asyncio.create_task(ws_to_rfb()),
+        asyncio.create_task(watch_eviction()),
+    ]
     try:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for t in pending:
@@ -236,7 +253,9 @@ async def _bridge(ws: WebSocket, info: dict) -> None:
         # Closing the viewer window hands control back. A DROPPED link (laptop lid, Wi-Fi, 1006)
         # keeps the human's exclusion: they may be mid-login on that screen and the agent must not
         # resume into it. The Desktop reconnects into the same lease, or the human hands back.
-        if viewer_closed.is_set() and _lease.viewer_may_send_input(viewer_id, profile_key=profile_home):
+        if viewer_closed.is_set() and _lease.viewer_may_send_input(
+            viewer_id, profile_key=profile_home
+        ):
             _lease.release(viewer_id, profile_key=profile_home)
         try:
             await ws.close()

@@ -58,7 +58,9 @@ def test_persist_disabled_fork_skips_session_and_turn_lifecycle_hooks():
         output_calls.append(name)
         return ["transformed"] if name == "transform_llm_output" else []
 
-    with patch("agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook):
+    with patch(
+        "agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook
+    ):
         response, transformed, _original = _apply_hooks(agent)
 
     lifecycle_hook.assert_not_called()
@@ -94,7 +96,9 @@ def test_persisted_agent_still_fires_session_and_turn_lifecycle_hooks():
         output_calls.append(name)
         return []
 
-    with patch("agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook):
+    with patch(
+        "agent.turn_finalizer._invoke_hook_safely", side_effect=invoke_output_hook
+    ):
         _apply_hooks(agent)
 
     assert [call.args[0] for call in lifecycle_hook.call_args_list] == [

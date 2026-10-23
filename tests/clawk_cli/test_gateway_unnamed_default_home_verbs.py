@@ -22,15 +22,23 @@ def default_home_process(tmp_path, monkeypatch):
     (root / "active_profile").write_text("coder")  # sticky: points at a named profile
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    for var in ("CLAWK_SUPERVISED_CHILD", "CLAWK_S6_SUPERVISED_CHILD", "INVOCATION_ID",
-                "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR", "CLAWK_UPDATE_POST_SWAP"):
+    for var in (
+        "CLAWK_SUPERVISED_CHILD",
+        "CLAWK_S6_SUPERVISED_CHILD",
+        "INVOCATION_ID",
+        "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR",
+        "CLAWK_UPDATE_POST_SWAP",
+    ):
         monkeypatch.delenv(var, raising=False)
     import clawk_constants
+
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     return root
 
 
-def test_unnamed_lifecycle_verbs_from_default_home_always_name_default(default_home_process):
+def test_unnamed_lifecycle_verbs_from_default_home_always_name_default(
+    default_home_process,
+):
     """Every unnamed verb pins ``-p default``: the child argv names a profile and the env
     pins the default home even though the sticky ``active_profile`` names ``coder``."""
     from clawk_cli.web_server_gateway import (

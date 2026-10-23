@@ -12,6 +12,7 @@ test does, for every optional skill, at CI time.
 Only *self*-references are checked (the reference names the skill itself),
 so cross-skill references and foreign-repo paths in port notes are immune.
 """
+
 import re
 from pathlib import Path
 

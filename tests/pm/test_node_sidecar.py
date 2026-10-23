@@ -18,20 +18,27 @@ _REAL_CLAWK_HOME = Path.home() / ".clawksis"  # Captured before per-test HOME is
 def test_no_package_json_never_acquires_npm(tmp_path, monkeypatch):
     def unexpected(*args, **kwargs):
         pytest.fail("a dependency-free plugin must not acquire npm")
+
     monkeypatch.setattr(pm, "ensure", unexpected)
     assert install_node_sidecar(tmp_path) is None
 
 
 @pytest.mark.parametrize("explicit", [False, True])
-def test_acquisition_receives_consent_and_reports_refusal(tmp_path, monkeypatch, explicit):
+def test_acquisition_receives_consent_and_reports_refusal(
+    tmp_path, monkeypatch, explicit
+):
     import importlib
 
-    monkeypatch.setattr(importlib.import_module("pm.install"), "lazy_installs_allowed", lambda: True)
-    (tmp_path / "package.json").write_text('{}')
+    monkeypatch.setattr(
+        importlib.import_module("pm.install"), "lazy_installs_allowed", lambda: True
+    )
+    (tmp_path / "package.json").write_text("{}")
     calls = []
+
     def refused(name, **kwargs):
         calls.append((name, kwargs))
         raise InstallError(name, "acquisition refused")
+
     monkeypatch.setattr(pm, "ensure", refused)
     reason = install_node_sidecar(tmp_path, explicit=explicit)
     assert "acquisition refused" in reason
@@ -43,12 +50,17 @@ def test_real_npm_uses_paired_node_with_empty_ambient_path(tmp_path, monkeypatch
     npm, node = shutil.which("npm"), shutil.which("node")
     if not npm or not node:
         pytest.skip("npm and node are required")
-    if any(Path(executable).absolute().is_relative_to(_REAL_CLAWK_HOME)
-           for executable in (npm, node)):
+    if any(
+        Path(executable).absolute().is_relative_to(_REAL_CLAWK_HOME)
+        for executable in (npm, node)
+    ):
         pytest.skip("requires npm and Node outside the real Clawksis home")
     # npm's real JS entrypoint uses /usr/bin/env node. Its paired Node lives
     # in a different PATH entry, just as the two PM packages do.
-    npm_cli = next(iter(Path(npm).resolve().parent.parent.glob("lib/npm*/bin/npm-cli.js")), Path(npm).resolve())
+    npm_cli = next(
+        iter(Path(npm).resolve().parent.parent.glob("lib/npm*/bin/npm-cli.js")),
+        Path(npm).resolve(),
+    )
     npm_bin, node_bin = tmp_path / "npm/bin", tmp_path / "node/bin"
     npm_bin.mkdir(parents=True)
     node_bin.mkdir(parents=True)
@@ -61,20 +73,34 @@ def test_real_npm_uses_paired_node_with_empty_ambient_path(tmp_path, monkeypatch
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("PATH", "")
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
-    context = Runner("npm", compose_env([
-        {"PATH": [str(node_bin)]}, {"PATH": [str(npm_bin)]},
-    ]))
+    context = Runner(
+        "npm",
+        compose_env(
+            [
+                {"PATH": [str(node_bin)]},
+                {"PATH": [str(npm_bin)]},
+            ]
+        ),
+    )
     calls = []
+
     def acquire(name, **kwargs):
         calls.append((name, kwargs))
         return context
+
     monkeypatch.setattr(pm, "ensure", acquire)
     dependency, plugin = tmp_path / "side-dep", tmp_path / "plugin"
     dependency.mkdir()
     plugin.mkdir()
-    (dependency / "package.json").write_text(json.dumps({"name": "side-dep", "version": "1.0.0", "main": "index.js"}))
+    (dependency / "package.json").write_text(
+        json.dumps({"name": "side-dep", "version": "1.0.0", "main": "index.js"})
+    )
     (dependency / "index.js").write_text("module.exports = 'isolated';")
-    manifest = {"name": "plugin", "version": "1.0.0", "dependencies": {"side-dep": "file:../side-dep"}}
+    manifest = {
+        "name": "plugin",
+        "version": "1.0.0",
+        "dependencies": {"side-dep": "file:../side-dep"},
+    }
     (plugin / "package.json").write_text(json.dumps(manifest))
     ambient = dict(os.environ)
     assert install_node_sidecar(plugin, explicit=True) is None
@@ -86,7 +112,13 @@ def test_real_npm_uses_paired_node_with_empty_ambient_path(tmp_path, monkeypatch
     assert install_node_sidecar(plugin, explicit=True) is None
     assert not stale.exists()
     assert (plugin / "package-lock.json").read_bytes() == lock
-    result = context.run(["node", "-e", "console.log(require('side-dep'))"], cwd=plugin, capture_output=True, text=True, timeout=30)
+    result = context.run(
+        ["node", "-e", "console.log(require('side-dep'))"],
+        cwd=plugin,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "isolated"
     assert not (tmp_path / "node_modules").exists()
@@ -97,17 +129,21 @@ def test_real_npm_uses_paired_node_with_empty_ambient_path(tmp_path, monkeypatch
     assert "exited" in reason and "JSON" in reason
 
 
-
 def test_on_demand_sidecar_install_respects_lazy_refusal(tmp_path, monkeypatch):
-    (tmp_path / "package.json").write_text('{}')
+    (tmp_path / "package.json").write_text("{}")
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
     binary = tmp_path / ("npm.cmd" if os.name == "nt" else "npm")
     binary.write_text("process boundary fixture")
     binary.chmod(0o755)
+
     class InstalledRunner:
         env = {"PATH": str(tmp_path)}
+
         def run(self, *args, **kwargs):
-            pytest.fail("installed npm must not mutate sidecars when on-demand installs are disabled")
+            pytest.fail(
+                "installed npm must not mutate sidecars when on-demand installs are disabled"
+            )
+
     monkeypatch.setattr(pm, "ensure", lambda *args, **kwargs: InstalledRunner())
     reason = install_node_sidecar(tmp_path)
     assert reason and "disabled" in reason

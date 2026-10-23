@@ -31,19 +31,23 @@ def legacy_env(request, tmp_path, monkeypatch):
         pytest.skip(f"{package.name} has no build for {target}")
     urls = package.fetch_urls("10964", target)
     lock = Lockfile(lock_path)
-    lock.set_pin(package.name, "10964", {target: [{"url": u, "sha256": s} for u, s in zip(urls, PINNED)]})
+    lock.set_pin(
+        package.name,
+        "10964",
+        {target: [{"url": u, "sha256": s} for u, s in zip(urls, PINNED)]},
+    )
     lock.save()
     # verify() runs `llama-server --version`; the fixture binary is not executable.
     monkeypatch.setattr(type(package), "verify", lambda self, entry, target: "")
     from clawk_cli.local_runtime import binaries
 
     monkeypatch.setattr(binaries, "_LEFT_IN_PLACE", set())
-    return home, store, package, target, backend, list(PINNED[:len(urls)])
+    return home, store, package, target, backend, list(PINNED[: len(urls)])
 
 
 def legacy_digests(package, target, pinned):
     """What a pre-PM manifest records: llama.cpp's own release assets, never PM's extra archives."""
-    return pinned[:len(package._asset_names("10964", target))]
+    return pinned[: len(package._asset_names("10964", target))]
 
 
 def legacy_install(home, package, target, backend, tag, digests, *, verified=True):
@@ -75,15 +79,23 @@ def test_matching_legacy_engine_moves_into_the_store_as_current(legacy_env):
     fact = Facts(store / "facts.json").get(package.name)
     assert fact["version"] == "10964" and fact["artifacts"] == legacy
     # Current exactly when the legacy install carries every archive PM pins.
-    assert (binaries.installed_engine(backend, allow_outdated=False) == engine) == (legacy == pinned)
+    assert (binaries.installed_engine(backend, allow_outdated=False) == engine) == (
+        legacy == pinned
+    )
 
 
 def test_older_legacy_engine_counts_as_installed_but_outdated(legacy_env):
     from clawk_cli.local_runtime import binaries
 
     home, _, package, target, backend, pinned = legacy_env
-    legacy_install(home, package, target, backend, "b10679",
-                   ["d" * 64, *legacy_digests(package, target, pinned)[1:]])
+    legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10679",
+        ["d" * 64, *legacy_digests(package, target, pinned)[1:]],
+    )
 
     assert binaries.installed_engine(backend).tag == "b10679"
     assert pm.installed_package(package.name) is None  # the pane offers the update
@@ -94,23 +106,44 @@ def test_newest_legacy_engine_wins_and_older_stays(legacy_env):
     from clawk_cli.local_runtime import binaries
 
     home, _, package, target, backend, pinned = legacy_env
-    old = legacy_install(home, package, target, backend, "b10679",
-                         ["d" * 64, *legacy_digests(package, target, pinned)[1:]])
-    legacy_install(home, package, target, backend, "b10964", legacy_digests(package, target, pinned))
+    old = legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10679",
+        ["d" * 64, *legacy_digests(package, target, pinned)[1:]],
+    )
+    legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10964",
+        legacy_digests(package, target, pinned),
+    )
 
     assert binaries.installed_engine(backend).tag == "b10964"
     assert old.is_dir()
 
 
-@pytest.mark.parametrize("damage", ["unverified", "missing_digest", "wrong_backend", "tag_mismatch"])
+@pytest.mark.parametrize(
+    "damage", ["unverified", "missing_digest", "wrong_backend", "tag_mismatch"]
+)
 def test_unverified_or_damaged_legacy_engine_is_left_alone(legacy_env, damage):
     from clawk_cli.local_runtime import binaries
 
     home, store, package, target, backend, pinned = legacy_env
     legacy = legacy_digests(package, target, pinned)
-    install = legacy_install(home, package, target, backend, "b10964",
-                             ["not-a-digest", *legacy[1:]] if damage == "missing_digest" else legacy,
-                             verified=damage != "unverified")
+    install = legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10964",
+        ["not-a-digest", *legacy[1:]] if damage == "missing_digest" else legacy,
+        verified=damage != "unverified",
+    )
     manifest = json.loads((install / "manifest.json").read_bytes())
     if damage == "wrong_backend":
         manifest["backend"] = "vulkan"
@@ -123,11 +156,20 @@ def test_unverified_or_damaged_legacy_engine_is_left_alone(legacy_env, damage):
     assert Facts(store / "facts.json").get(package.name) is None
 
 
-def test_engine_that_fails_verification_stays_and_is_not_retried(legacy_env, monkeypatch):
+def test_engine_that_fails_verification_stays_and_is_not_retried(
+    legacy_env, monkeypatch
+):
     from clawk_cli.local_runtime import binaries
 
     home, _, package, target, backend, pinned = legacy_env
-    install = legacy_install(home, package, target, backend, "b10964", legacy_digests(package, target, pinned))
+    install = legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10964",
+        legacy_digests(package, target, pinned),
+    )
     probes = []
 
     def failing(self, entry, target):
@@ -148,9 +190,24 @@ def test_existing_pm_engine_is_never_replaced(legacy_env):
     entry = store / package.store_entry("10964", target)
     entry.mkdir(parents=True)
     package.binary(entry, target).write_bytes(b"pm engine")
-    Facts(store / "facts.json").record(package.name, "10964", entry.name, {}, store, target=target,
-                                       artifacts=pinned, digest=tree_digest(entry))
-    install = legacy_install(home, package, target, backend, "b10964", legacy_digests(package, target, pinned))
+    Facts(store / "facts.json").record(
+        package.name,
+        "10964",
+        entry.name,
+        {},
+        store,
+        target=target,
+        artifacts=pinned,
+        digest=tree_digest(entry),
+    )
+    install = legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10964",
+        legacy_digests(package, target, pinned),
+    )
 
     assert binaries.installed_engine(backend).binary.read_bytes() == b"pm engine"
     assert install.is_dir()
@@ -161,7 +218,14 @@ def test_busy_store_leaves_the_engine_for_a_later_call(legacy_env):
     from pm.filesystem import lock_fd
 
     home, store, package, target, backend, pinned = legacy_env
-    install = legacy_install(home, package, target, backend, "b10964", legacy_digests(package, target, pinned))
+    install = legacy_install(
+        home,
+        package,
+        target,
+        backend,
+        "b10964",
+        legacy_digests(package, target, pinned),
+    )
     store.mkdir(parents=True, exist_ok=True)
     held, release = threading.Event(), threading.Event()
 
@@ -193,10 +257,14 @@ def test_status_route_reports_the_moved_engine(legacy_env, monkeypatch):
     home, _, package, target, backend, pinned = legacy_env
     legacy = legacy_digests(package, target, pinned)
     legacy_install(home, package, target, backend, "b10964", legacy)
-    monkeypatch.setattr(lm, "_runtime_section", lambda: {"enabled": True, "backend": backend})
+    monkeypatch.setattr(
+        lm, "_runtime_section", lambda: {"enabled": True, "backend": backend}
+    )
     monkeypatch.setattr(lm, "_state_endpoint", lambda: None)
 
     status = lm.local_models_status()
 
     assert status["runtime_installed"] and status["runtime_backend"] == backend
-    assert status["tag"] == "b10964" and status["update_available"] == (legacy != pinned)
+    assert status["tag"] == "b10964" and status["update_available"] == (
+        legacy != pinned
+    )

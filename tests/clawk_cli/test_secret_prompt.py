@@ -29,8 +29,6 @@ def test_collect_masked_input_shows_feedback_without_echoing_secret():
     assert "secret" not in output
 
 
-
-
 def test_collect_masked_input_raises_keyboard_interrupt():
     output: list[str] = []
 

@@ -31,11 +31,16 @@ def _consumer(run_still_current=None):
     t = RecordingTransport()
     adapter._transport = t
     cfg = StreamConsumerConfig(
-        transport="auto", chat_type="dm",
-        edit_interval=0.01, buffer_threshold=1, cursor="",
+        transport="auto",
+        chat_type="dm",
+        edit_interval=0.01,
+        buffer_threshold=1,
+        cursor="",
     )
     sc = GatewayStreamConsumer(
-        adapter, "C1", cfg,
+        adapter,
+        "C1",
+        cfg,
         metadata={"thread_ts": "1700.8", "message_id": "1700.801"},
         run_still_current=run_still_current,
     )

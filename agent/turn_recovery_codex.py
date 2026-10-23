@@ -1,4 +1,5 @@
 """Codex Responses recovery rungs: stale encrypted-reasoning strip and the replay verdict reset."""
+
 from __future__ import annotations
 
 import logging
@@ -28,7 +29,10 @@ def reset_codex_reasoning_replay(agent: Any) -> None:
 
 
 def _recover_stale_codex_reasoning(
-    agent: Any, _retry: TurnRetryState, messages: list[dict[str, Any]], api_messages: Any,
+    agent: Any,
+    _retry: TurnRetryState,
+    messages: list[dict[str, Any]],
+    api_messages: Any,
 ) -> bool:
     """Stale ``codex_reasoning_items`` blob rejected by the provider: strip cached items (mutates
     persisted ``messages``) and retry once. The first rung drops only the replayed blobs not stamped by
@@ -49,21 +53,34 @@ def _recover_stale_codex_reasoning(
         )
     ):
         return False
-    from agent.turn_recovery import _vlines  # facade owns the verbose printer; late import breaks the cycle
+    from agent.turn_recovery import (
+        _vlines,
+    )  # facade owns the verbose printer; late import breaks the cycle
 
     transport = agent._get_transport()
-    if transport is not None and (removed := transport.drop_unverified_replay(messages, api_messages)):
-        _vlines(agent, f"⚠️  Encrypted reasoning replay was rejected — dropped {removed} item(s) minted elsewhere, retrying...")
+    if transport is not None and (
+        removed := transport.drop_unverified_replay(messages, api_messages)
+    ):
+        _vlines(
+            agent,
+            f"⚠️  Encrypted reasoning replay was rejected — dropped {removed} item(s) minted elsewhere, retrying...",
+        )
         return True
     _retry.invalid_encrypted_content_retry_attempted = True
     keep_replay = not getattr(agent, "_codex_reasoning_replay_rejected", False)
     agent._codex_reasoning_replay_rejected = True
-    replay_stats = agent._disable_codex_reasoning_replay(messages, keep_replay=keep_replay)
+    replay_stats = agent._disable_codex_reasoning_replay(
+        messages, keep_replay=keep_replay
+    )
     # The retry is rebuilt from the request copy; with replay kept on it would resend the stale blob.
     for _m in api_messages if isinstance(api_messages, list) else []:
         if isinstance(_m, dict):
             _m.pop("codex_reasoning_items", None)
-    action = "stripped stale" if keep_replay else "disabled replay for this session and stripped"
+    action = (
+        "stripped stale"
+        if keep_replay
+        else "disabled replay for this session and stripped"
+    )
     _vlines(
         agent,
         f"⚠️  Encrypted reasoning replay was rejected by the provider — "
@@ -71,6 +88,9 @@ def _recover_stale_codex_reasoning(
     )
     logger.warning(
         "%sInvalid encrypted reasoning recovery: %s %d items from %d messages",
-        agent.log_prefix, action, replay_stats["items"], replay_stats["messages"],
+        agent.log_prefix,
+        action,
+        replay_stats["items"],
+        replay_stats["messages"],
     )
     return True

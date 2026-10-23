@@ -89,9 +89,7 @@ class TestRecordAuthority:
         with (
             patch(
                 "gateway.status._read_pid_record",
-                return_value=_record(
-                    home="/home/other/.clawksis/profiles/timothy"
-                ),
+                return_value=_record(home="/home/other/.clawksis/profiles/timothy"),
             ),
             patch(
                 "gateway.status._get_pid_path",
@@ -234,8 +232,7 @@ class TestArgvConsistencyCheck:
             is False
         )
         assert (
-            conflict("python -m clawk_cli.main -p tim gateway run", tim_home)
-            is False
+            conflict("python -m clawk_cli.main -p tim gateway run", tim_home) is False
         )
 
     def test_explicit_home_flag_exact_compare(self, profile_env):
@@ -369,6 +366,7 @@ class TestSignalBoundary:
         """The refusal publishes the retained fatal state + an exit reason, so
         /api/status reports startup_failed instead of a stale heartbeat and the
         next start no longer trusts the stale PID record."""
+
         def configure(stack):
             stack.enter_context(
                 patch(
@@ -388,6 +386,7 @@ class TestSignalBoundary:
         """Counterpart: bound same-home target still enters the replace flow
         (terminate attempted) — the fail-closed gate must not disable legit
         Windows-style replaces."""
+
         def configure(stack):
             stack.enter_context(
                 patch(
@@ -425,7 +424,7 @@ async def _swallow(coro):
         return "raised"
 
 
-_CHILD_SCRIPT = '''
+_CHILD_SCRIPT = """
 import asyncio, sys, time
 sys.path.insert(0, r"@@REPO@@")
 
@@ -452,7 +451,7 @@ except SystemExit as exc:
 print(f"start_gateway -> {result!r}", file=sys.stderr)
 # The real CLI exit path (gateway/run.py main()): False -> exit 1 -> os._exit.
 gateway_run._exit_after_graceful_shutdown(0 if result is True else (1 if result is False else 2))
-'''
+"""
 
 
 class TestStampDurability:
@@ -470,7 +469,8 @@ class TestStampDurability:
         home = tmp_path / "scratch-home"
         home.mkdir()
         (home / "gateway_state.json").write_text(
-            json.dumps({"gateway_state": "running", "pid": 424242}), encoding="utf-8")
+            json.dumps({"gateway_state": "running", "pid": 424242}), encoding="utf-8"
+        )
         repo_root = str(Path(__file__).resolve().parents[2])
         child = tmp_path / "refusal_child.py"
         child.write_text(_CHILD_SCRIPT.replace("@@REPO@@", repo_root), encoding="utf-8")
@@ -478,7 +478,11 @@ class TestStampDurability:
 
         proc = subprocess.run(
             [sys.executable, str(child)],
-            env=env, capture_output=True, text=True, timeout=120, check=False,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
 
         assert proc.returncode == 1, f"child stderr: {proc.stderr[-2000:]}"
@@ -487,9 +491,17 @@ class TestStampDurability:
         assert stamped.get("exit_reason") == "gateway_replace_ownership_unproven"
 
         verify = subprocess.run(
-            [sys.executable, "-c",
-             "import gateway.status as s; print(s.get_runtime_status_running_pid())"],
-            env=env, capture_output=True, text=True, timeout=60, cwd=repo_root, check=False,
+            [
+                sys.executable,
+                "-c",
+                "import gateway.status as s; print(s.get_runtime_status_running_pid())",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=repo_root,
+            check=False,
         )
         assert verify.stdout.strip() == "None", (
             "a fresh process must no longer trust the stale PID after the refusal"

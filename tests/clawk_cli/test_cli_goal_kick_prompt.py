@@ -3,6 +3,7 @@
 In one run `/goal <2,000-char handoff note>` was issued 16 minutes after the same note had been pasted as
 a user message; the kickoff re-sent it and the agent spent 11 API calls / 6 min deciding it was a replay.
 """
+
 import queue
 
 from clawk_cli.cli_commands_mixin import CLICommandsMixin
@@ -14,6 +15,7 @@ def _cli(history):
     cli.conversation_history = history
     cli._pending_input = queue.Queue()
     from clawk_cli.goals import GoalManager
+
     cli._get_goal_manager = lambda: GoalManager("kick-test")
     return cli
 
@@ -23,12 +25,19 @@ def _kick(cli, text):
     return cli._pending_input.get_nowait()
 
 
-HANDOFF = "HANDOFF: resume round 3 integration.\n" + "\n".join(f"  - step {i}: merge r3-{i} and run its targeted suite, then the full suite" for i in range(8))
+HANDOFF = "HANDOFF: resume round 3 integration.\n" + "\n".join(
+    f"  - step {i}: merge r3-{i} and run its targeted suite, then the full suite"
+    for i in range(8)
+)
 
 
 def test_goal_that_the_user_just_pasted_kicks_with_a_pointer_not_the_text():
-    cli = _cli([{"role": "user", "content": HANDOFF + "\n\nGo."},
-                {"role": "assistant", "content": "ok"}])
+    cli = _cli(
+        [
+            {"role": "user", "content": HANDOFF + "\n\nGo."},
+            {"role": "assistant", "content": "ok"},
+        ]
+    )
     assert _kick(cli, HANDOFF) == GOAL_ALREADY_SEEN_KICK
     # block-style content is handled too
     cli = _cli([{"role": "user", "content": [{"type": "text", "text": HANDOFF}]}])
@@ -36,12 +45,17 @@ def test_goal_that_the_user_just_pasted_kicks_with_a_pointer_not_the_text():
 
 
 def test_a_new_goal_or_a_goal_from_an_older_turn_is_kicked_verbatim():
-    assert _kick(_cli([]), "Ship the release")  == "Ship the release"
+    assert _kick(_cli([]), "Ship the release") == "Ship the release"
     cli = _cli([{"role": "user", "content": "Something unrelated"}])
     assert _kick(cli, HANDOFF) == " ".join(HANDOFF.split())
     # only the LAST user message counts: the agent has moved on since an older paste
-    cli = _cli([{"role": "user", "content": HANDOFF}, {"role": "assistant", "content": "done"},
-                {"role": "user", "content": "now something else"}])
+    cli = _cli(
+        [
+            {"role": "user", "content": HANDOFF},
+            {"role": "assistant", "content": "done"},
+            {"role": "user", "content": "now something else"},
+        ]
+    )
     assert _kick(cli, HANDOFF) == " ".join(HANDOFF.split())
 
 
@@ -62,8 +76,12 @@ def test_a_short_goal_that_selects_one_option_from_the_last_message_is_kicked_ve
 def test_gateway_and_tui_surfaces_use_the_same_rule(tmp_path, monkeypatch):
     """Independent review: other surfaces still duplicated the full goal. One shared function now."""
     from clawk_cli import goals
+
     long_goal = "HANDOFF " + "step; " * 120
     assert goals.goal_kick_prompt(long_goal, long_goal) == goals.GOAL_ALREADY_SEEN_KICK
-    assert goals.goal_kick_prompt("ship the API", "ship the API or ship the UI? " * 8) == "ship the API"
+    assert (
+        goals.goal_kick_prompt("ship the API", "ship the API or ship the UI? " * 8)
+        == "ship the API"
+    )
     # DB-backed lookup fails safe to "" (goal kicked verbatim) when no session/db
     assert goals.last_user_message_from_db(None) == ""

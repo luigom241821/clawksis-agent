@@ -40,14 +40,25 @@ def notification_env(monkeypatch, tmp_path):
 
 def _session(notification_env, monkeypatch, kind):
     home, loop, _submit = notification_env
-    stdio = TeeTransport(StdioTransport(io.StringIO, threading.Lock()),
-                         StdioTransport(io.StringIO, threading.Lock()))  # dashboard-sidecar-wrapped
+    stdio = TeeTransport(
+        StdioTransport(io.StringIO, threading.Lock()),
+        StdioTransport(io.StringIO, threading.Lock()),
+    )  # dashboard-sidecar-wrapped
     monkeypatch.setattr(server, "_stdio_transport", stdio)
     monkeypatch.setattr(server, "_stdio_is_rpc_channel", kind == "stdio")
-    transport = {"stdio": stdio, "websocket": WSTransport(None, loop),
-                 "detached": server._detached_ws_transport}[kind]
-    session = {"session_key": "chat", "transport": transport, "profile_home": str(home),
-               "history_lock": threading.RLock(), "running": False, "_finalized": False}
+    transport = {
+        "stdio": stdio,
+        "websocket": WSTransport(None, loop),
+        "detached": server._detached_ws_transport,
+    }[kind]
+    session = {
+        "session_key": "chat",
+        "transport": transport,
+        "profile_home": str(home),
+        "history_lock": threading.RLock(),
+        "running": False,
+        "_finalized": False,
+    }
     server._sessions["ui1"] = session
     return session
 
@@ -56,16 +67,23 @@ def _orphan_owner(home):
     """The owner died while this process runs: pid 0 never passes the liveness probe."""
     conn = sqlite3.connect(home / "state.db")
     with conn:
-        conn.execute("UPDATE async_delegations SET owner_pid=0, updated_at=?", (time.time() - 3600,))
+        conn.execute(
+            "UPDATE async_delegations SET owner_pid=0, updated_at=?",
+            (time.time() - 3600,),
+        )
     conn.close()
 
 
 def _completion(home, *, via):
     event = {
-        "type": "async_delegation", "delegation_id": "completed-child",
-        "session_key": "chat", "origin_ui_session_id": "ui1",
-        "dispatched_at": time.time(), "completed_at": time.time(),
-        "status": "completed", "summary": "child result",
+        "type": "async_delegation",
+        "delegation_id": "completed-child",
+        "session_key": "chat",
+        "origin_ui_session_id": "ui1",
+        "dispatched_at": time.time(),
+        "completed_at": time.time(),
+        "status": "completed",
+        "summary": "child result",
         "results": [{"status": "completed", "summary": "child result"}],
     }
     ad._persist_dispatch(event)
@@ -79,24 +97,44 @@ def _completion(home, *, via):
     return offered.get_nowait()
 
 
-@pytest.mark.parametrize("kind,via,owns", [
-    ("detached", "startup", False),  # the reported shape: no client, lease survived the restart
-    ("websocket", "startup", True),  # live WS peer
-    ("stdio", "startup", True),      # this process's real TUI stdio RPC channel
-    ("detached", "sweep", True),     # in-process orphan sweep keeps its routing
-])
-def test_startup_replay_requires_a_live_consumer(notification_env, monkeypatch, kind, via, owns):
+@pytest.mark.parametrize(
+    "kind,via,owns",
+    [
+        (
+            "detached",
+            "startup",
+            False,
+        ),  # the reported shape: no client, lease survived the restart
+        ("websocket", "startup", True),  # live WS peer
+        ("stdio", "startup", True),  # this process's real TUI stdio RPC channel
+        ("detached", "sweep", True),  # in-process orphan sweep keeps its routing
+    ],
+)
+def test_startup_replay_requires_a_live_consumer(
+    notification_env, monkeypatch, kind, via, owns
+):
     home, _loop, submit = notification_env
     session = _session(notification_env, monkeypatch, kind)
     event = _completion(home, via=via)
-    assert event["restored"] is True and bool(event.get("startup_replay")) is (via == "startup")
+    assert event["restored"] is True and bool(event.get("startup_replay")) is (
+        via == "startup"
+    )
 
     server._notif_handle_ready(
-        "ui1", session, [event], set(), process_registry, format_process_notification, None)
+        "ui1",
+        session,
+        [event],
+        set(),
+        process_registry,
+        format_process_notification,
+        None,
+    )
 
     assert submit.call_count == int(owns)
     row = ad.get_durable_delegation(event["delegation_id"])
-    assert (row["delivery_state"], row["delivery_attempts"]) == (("delivered", 1) if owns else ("pending", 0))
+    assert (row["delivery_state"], row["delivery_attempts"]) == (
+        ("delivered", 1) if owns else ("pending", 0)
+    )
     if not owns:
         # Refusal hands the offer back; the sweep's re-offer stays gated until a client attaches.
         _orphan_owner(home)

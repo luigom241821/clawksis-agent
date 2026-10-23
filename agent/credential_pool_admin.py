@@ -1,4 +1,5 @@
 """Locked credential-pool administration and target resolution."""
+
 from __future__ import annotations
 
 import time
@@ -14,8 +15,13 @@ def _cleared_status_copy(entry: PooledCredential) -> PooledCredential:
 
     # The reset marker lets a live pool in another process tell "reset after my cooldown" from
     # "never had a status" — both read as bare None on disk (#89415).
-    return replace(entry, **_CLEAR_STATUS, model_cooldowns=None, status_cleared_at=time.time(),
-                   extra={k: v for k, v in entry.extra.items() if k != "failure_reason"})
+    return replace(
+        entry,
+        **_CLEAR_STATUS,
+        model_cooldowns=None,
+        status_cleared_at=time.time(),
+        extra={k: v for k, v in entry.extra.items() if k != "failure_reason"},
+    )
 
 
 class CredentialNotSavedError(RuntimeError):
@@ -33,6 +39,7 @@ class CredentialPoolAdminMixin:
             self._replace_entry(entry, cleared)
             self._persist(status_cleared_ids=[cleared.id])
             return cleared
+
     def reset_statuses(self) -> int:
         """Clear exhaustion state on every entry. Returns how many were cleared.
 
@@ -45,8 +52,13 @@ class CredentialPoolAdminMixin:
 
         with self._lock:
             stale = [
-                e for e in self._entries
-                if e.last_status or e.last_status_at or e.last_error_code or e.failure_reason or e.model_cooldowns
+                e
+                for e in self._entries
+                if e.last_status
+                or e.last_status_at
+                or e.last_error_code
+                or e.failure_reason
+                or e.model_cooldowns
             ]
             if stale:
                 stale_ids = {e.id for e in stale}
@@ -62,13 +74,17 @@ class CredentialPoolAdminMixin:
             if index < 1 or index > len(self._entries):
                 return None
             removed = self._entries.pop(index - 1)
-            self._entries = [replace(e, priority=p) for p, e in enumerate(self._entries)]
+            self._entries = [
+                replace(e, priority=p) for p, e in enumerate(self._entries)
+            ]
             self._persist(removed_ids=[removed.id])
             if self._current_id == removed.id:
                 self._current_id = None
             return removed
 
-    def move_entry(self, credential_id: str, priority: int) -> Optional[PooledCredential]:
+    def move_entry(
+        self, credential_id: str, priority: int
+    ) -> Optional[PooledCredential]:
         """Place an entry at a clamped zero-based position and persist contiguous priorities."""
         from agent.credential_pool import _normalize_pool_priorities
 
@@ -85,7 +101,9 @@ class CredentialPoolAdminMixin:
             self._persist()
             return self._find(lambda e: e.id == credential_id)
 
-    def resolve_target(self, target: Any) -> tuple[Optional[int], Optional[PooledCredential], Optional[str]]:
+    def resolve_target(
+        self, target: Any
+    ) -> tuple[Optional[int], Optional[PooledCredential], Optional[str]]:
         raw = str(target or "").strip()
         if not raw:
             return None, None, "No credential target provided."
@@ -103,7 +121,11 @@ class CredentialPoolAdminMixin:
             if len(label_matches) == 1:
                 return label_matches[0][0], label_matches[0][1], None
             if len(label_matches) > 1:
-                return None, None, f'Ambiguous credential label "{raw}". Use the numeric index or entry id instead.'
+                return (
+                    None,
+                    None,
+                    f'Ambiguous credential label "{raw}". Use the numeric index or entry id instead.',
+                )
             if raw.isdigit():
                 index = int(raw)
                 if 1 <= index <= len(self._entries):
@@ -113,7 +135,9 @@ class CredentialPoolAdminMixin:
 
     def add_entry(self, entry: PooledCredential) -> PooledCredential:
         from agent.credential_pool import (
-            _borrowed_single_use_pool_root, _next_priority, _profile_owns_pool_provider,
+            _borrowed_single_use_pool_root,
+            _next_priority,
+            _profile_owns_pool_provider,
             write_credential_pool,
         )
         from clawk_cli import auth as auth_mod
@@ -144,7 +168,8 @@ class CredentialPoolAdminMixin:
                 # provider is shadowed.
                 self._entries = [entry]
                 written = write_credential_pool(
-                    self.provider, [entry.to_dict()],
+                    self.provider,
+                    [entry.to_dict()],
                     token_bases=self._persisted_token_pairs,
                 )
                 self._persisted_token_pairs = auth_mod._token_pairs_by_id(written)
@@ -153,8 +178,10 @@ class CredentialPoolAdminMixin:
                 self._persist()
             # Callers print "Added" on return; a row the store did not keep
             # must fail loudly instead.
-            if not any(isinstance(row, dict) and row.get("id") == entry.id
-                       for row in auth_mod.read_credential_pool(self.provider)):
+            if not any(
+                isinstance(row, dict) and row.get("id") == entry.id
+                for row in auth_mod.read_credential_pool(self.provider)
+            ):
                 self._entries = [e for e in self._entries if e.id != entry.id]
                 raise CredentialNotSavedError(
                     f"The {self.provider} credential was not saved: {auth_mod._auth_file_path()} "

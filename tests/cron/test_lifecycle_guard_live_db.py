@@ -12,6 +12,7 @@ def test_referenced_script_read_refuses_live_sqlite_connection(tmp_path, monkeyp
     db = tmp_path / "state.db"
     conn = connect_tracked(db)
     try:
+
         def must_not_open(*_args, **_kwargs):
             raise AssertionError("raw-opened a live SQLite database")
 
@@ -36,9 +37,7 @@ def test_referenced_script_read_preserves_normal_script_behavior(tmp_path):
 
 
 def test_invalid_referenced_script_path_is_still_tolerated():
-    text, unsafe = lifecycle_guard._read_referenced_script(
-        Path("/tmp/clawk\x00binary")
-    )
+    text, unsafe = lifecycle_guard._read_referenced_script(Path("/tmp/clawk\x00binary"))
 
     assert text is None
     assert unsafe is False

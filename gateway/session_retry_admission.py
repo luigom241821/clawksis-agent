@@ -9,6 +9,7 @@ runs the rewrite as a write guard after its own admission gate and queue cap, in
 ``BEGIN IMMEDIATE`` that inserts the row. A refusal rolls both back; a transcript that changed since
 the read refuses both (``RetryRewriteRefused``).
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -18,7 +19,7 @@ from typing import Any, Callable, Optional
 
 from clawk_state_runtime import RuntimeStoreError
 
-_bound: ContextVar[Optional[RetryRewrite]] = ContextVar('retry_rewrite', default=None)
+_bound: ContextVar[Optional[RetryRewrite]] = ContextVar("retry_rewrite", default=None)
 
 
 class RetryRewriteRefused(RuntimeError):
@@ -29,11 +30,14 @@ class RetryRewriteRefused(RuntimeError):
 @dataclass
 class RetryRewrite:
     """One ``/retry`` rewrite, applied at most once inside the re-send's admission write."""
+
     db: Any
     session_id: str
     source: Any  # the re-send's own SessionSource object: only that admission takes the binding
     write: Callable[[Any], None]  # (conn) -> None, inside the admission transaction
-    on_commit: Callable[[], None]  # on the loop, once the admission that applied it committed
+    on_commit: Callable[
+        [], None
+    ]  # on the loop, once the admission that applied it committed
     applied: bool = False
     taken: bool = field(default=False, repr=False)
 
@@ -60,8 +64,12 @@ def take(event, db) -> Optional[RetryRewrite]:
     """The bound rewrite for this native admission, once, and only for the re-send itself (the same
     source object on the same store). A drain task inheriting the context never takes it."""
     rewrite = _bound.get()
-    if (rewrite is None or rewrite.taken or getattr(event, 'source', None) is not rewrite.source
-            or rewrite.db is not db):
+    if (
+        rewrite is None
+        or rewrite.taken
+        or getattr(event, "source", None) is not rewrite.source
+        or rewrite.db is not db
+    ):
         return None
     rewrite.taken = True
     return rewrite
@@ -75,4 +83,5 @@ def compose(rewrite: Optional[RetryRewrite], authorize):
     def guard(conn):
         authorize(conn)
         rewrite.guard(conn)
+
     return guard

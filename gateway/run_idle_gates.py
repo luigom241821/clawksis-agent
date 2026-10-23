@@ -6,6 +6,7 @@ to do. Each gate answers "does this profile's store hold work?" from the goals-c
 ONLY the CLAWK_HOME contextvar installed. Every gate fails OPEN: an unavailable store, a failing
 read or a corrupt row is "cannot prove emptiness", never "idle".
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,7 +38,11 @@ def _gate(profile_home: Path, store_has_work: Callable[[Any], bool]) -> bool:
     try:
         return store_has_work(db)
     except Exception:
-        logger.debug("idle probe failed for %s; keeping the full sweep", profile_home, exc_info=True)
+        logger.debug(
+            "idle probe failed for %s; keeping the full sweep",
+            profile_home,
+            exc_info=True,
+        )
         return True
 
 

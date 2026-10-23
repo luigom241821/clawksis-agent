@@ -59,7 +59,9 @@ def test_prune_include_pinned_opts_in(db):
     cands = db.list_prune_candidates(title_like="me", include_pinned=True)
     assert {c["id"] for c in cands} == {"20260101_000000_aaaaaa"}
 
-    deleted = db.prune_sessions(older_than_days=None, title_like="me", include_pinned=True)
+    deleted = db.prune_sessions(
+        older_than_days=None, title_like="me", include_pinned=True
+    )
     assert deleted == 1
     assert db.get_session("20260101_000000_aaaaaa") is None
 

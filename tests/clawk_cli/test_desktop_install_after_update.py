@@ -32,12 +32,16 @@ def _asar(app: Path) -> bytes:
 @pytest.fixture
 def rebuilt(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        main_desktop, "_stage_macos_bundle_copy",
-        lambda src, dst: shutil.copytree(src, dst, symlinks=True))
+        main_desktop,
+        "_stage_macos_bundle_copy",
+        lambda src, dst: shutil.copytree(src, dst, symlinks=True),
+    )
     return _bundle(tmp_path / "apps" / "desktop" / "release" / "mac-arm64", b"rebuilt")
 
 
-def test_stale_and_missing_bundles_are_installed_current_and_running_are_left_alone(rebuilt, tmp_path):
+def test_stale_and_missing_bundles_are_installed_current_and_running_are_left_alone(
+    rebuilt, tmp_path
+):
     stale = _bundle(tmp_path / "Applications", b"stale")
     current = _bundle(tmp_path / "home" / "Applications", b"rebuilt")
     running = _bundle(tmp_path / "Volumes" / "Applications", b"older")
@@ -46,7 +50,8 @@ def test_stale_and_missing_bundles_are_installed_current_and_running_are_left_al
 
     missing = tmp_path / "missing" / "Clawksis.app"
     installed, problems = main_desktop._install_rebuilt_macos_bundles(
-        rebuilt, [stale, current, running, missing], running={running.resolve()})
+        rebuilt, [stale, current, running, missing], running={running.resolve()}
+    )
 
     assert installed == [stale, missing]
     assert _asar(stale) == b"rebuilt" and _asar(missing) == b"rebuilt"
@@ -61,16 +66,22 @@ def test_stale_and_missing_bundles_are_installed_current_and_running_are_left_al
 def _patch_sigs(monkeypatch, summaries):
     """Stub the codesign probe: ``summaries(app) -> dict | None``."""
     monkeypatch.setattr(
-        main_desktop.shutil, "which",
-        lambda name: "/usr/bin/codesign" if name == "codesign" else None)
-    monkeypatch.setattr(main_desktop, "_macos_signature_summary", lambda codesign, app: summaries(app))
+        main_desktop.shutil,
+        "which",
+        lambda name: "/usr/bin/codesign" if name == "codesign" else None,
+    )
+    monkeypatch.setattr(
+        main_desktop, "_macos_signature_summary", lambda codesign, app: summaries(app)
+    )
 
 
 def _publisher_sig(app, team="TEAM0123", ident="com.nousresearch.clawk", verified=True):
     return {"team": team, "identifier": ident, "verified": verified}
 
 
-def test_publisher_signed_install_is_never_replaced_by_local_build(rebuilt, tmp_path, monkeypatch):
+def test_publisher_signed_install_is_never_replaced_by_local_build(
+    rebuilt, tmp_path, monkeypatch
+):
     """#123748: a Team-ID-signed installation must survive an ad-hoc local rebuild.
 
     Swapping a publisher-signed app for a locally signed build invalidates the
@@ -78,9 +89,13 @@ def test_publisher_signed_install_is_never_replaced_by_local_build(rebuilt, tmp_
     update must retain the working app and report it instead.
     """
     stale = _bundle(tmp_path / "Applications", b"stale")
-    _patch_sigs(monkeypatch, lambda app: None if app == rebuilt else _publisher_sig(stale))
+    _patch_sigs(
+        monkeypatch, lambda app: None if app == rebuilt else _publisher_sig(stale)
+    )
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == []
     assert len(problems) == 1
@@ -93,10 +108,15 @@ def test_publisher_signed_install_is_never_replaced_by_local_build(rebuilt, tmp_
 
 def test_team_id_mismatch_refuses_swap(rebuilt, tmp_path, monkeypatch):
     stale = _bundle(tmp_path / "Applications", b"stale")
-    sigs = {rebuilt: _publisher_sig(rebuilt, team="TEAM9999"), stale: _publisher_sig(stale)}
+    sigs = {
+        rebuilt: _publisher_sig(rebuilt, team="TEAM9999"),
+        stale: _publisher_sig(stale),
+    }
     _patch_sigs(monkeypatch, lambda app: sigs.get(app))
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == [] and len(problems) == 1
     assert "Team ID TEAM0123 does not match rebuilt TEAM9999" in problems[0]
@@ -111,7 +131,9 @@ def test_bundle_identifier_mismatch_refuses_swap(rebuilt, tmp_path, monkeypatch)
     }
     _patch_sigs(monkeypatch, lambda app: sigs.get(app))
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == [] and len(problems) == 1
     assert "bundle identifier" in problems[0]
@@ -126,7 +148,9 @@ def test_unverifiable_rebuilt_refuses_swap(rebuilt, tmp_path, monkeypatch):
     }
     _patch_sigs(monkeypatch, lambda app: sigs.get(app))
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == [] and len(problems) == 1
     assert "strict signature verification" in problems[0]
@@ -139,7 +163,9 @@ def test_matching_publisher_signing_swaps(rebuilt, tmp_path, monkeypatch):
     sigs = {rebuilt: _publisher_sig(rebuilt), stale: _publisher_sig(stale)}
     _patch_sigs(monkeypatch, lambda app: sigs.get(app))
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == [stale] and problems == []
     assert _asar(stale) == b"rebuilt"
@@ -148,16 +174,22 @@ def test_matching_publisher_signing_swaps(rebuilt, tmp_path, monkeypatch):
 def test_adhoc_installed_still_swaps(rebuilt, tmp_path, monkeypatch):
     """Ad-hoc installs (the local development flow) keep swapping regardless of rebuild sig."""
     stale = _bundle(tmp_path / "Applications", b"stale")
-    sigs = {stale: {"team": None, "identifier": "com.nousresearch.clawk", "verified": True}}
+    sigs = {
+        stale: {"team": None, "identifier": "com.nousresearch.clawk", "verified": True}
+    }
     _patch_sigs(monkeypatch, lambda app: sigs.get(app))
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == [stale] and problems == []
     assert _asar(stale) == b"rebuilt"
 
 
-def test_failed_swap_keeps_the_previous_bundle_launchable(rebuilt, tmp_path, monkeypatch):
+def test_failed_swap_keeps_the_previous_bundle_launchable(
+    rebuilt, tmp_path, monkeypatch
+):
     stale = _bundle(tmp_path / "Applications", b"stale")
     real_rename = Path.rename
 
@@ -165,9 +197,12 @@ def test_failed_swap_keeps_the_previous_bundle_launchable(rebuilt, tmp_path, mon
         if self.name.endswith(".clawk-update-new"):
             raise OSError("simulated rename failure")
         return real_rename(self, target)
+
     monkeypatch.setattr(Path, "rename", fail_final_rename)
 
-    installed, problems = main_desktop._install_rebuilt_macos_bundles(rebuilt, [stale], running=set())
+    installed, problems = main_desktop._install_rebuilt_macos_bundles(
+        rebuilt, [stale], running=set()
+    )
 
     assert installed == []
     assert len(problems) == 1
@@ -176,7 +211,9 @@ def test_failed_swap_keeps_the_previous_bundle_launchable(rebuilt, tmp_path, mon
 
 
 @pytest.mark.platforms("macos")
-def test_recorded_app_that_went_missing_comes_back_until_gui_uninstall(rebuilt, tmp_path, monkeypatch):
+def test_recorded_app_that_went_missing_comes_back_until_gui_uninstall(
+    rebuilt, tmp_path, monkeypatch
+):
     from clawk_cli import gui_uninstall
     from clawk_cli import main as clawk_main
 
@@ -184,18 +221,29 @@ def test_recorded_app_that_went_missing_comes_back_until_gui_uninstall(rebuilt, 
     (home / "clawksis-agent").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", home / "clawksis-agent")
-    (rebuilt / "Contents" / "Resources" / "install-stamp.json").write_text('{"updateMechanism": "self"}', encoding="utf-8")
+    (rebuilt / "Contents" / "Resources" / "install-stamp.json").write_text(
+        '{"updateMechanism": "self"}', encoding="utf-8"
+    )
     app = tmp_path / "Applications" / "Clawksis.app"
     shutil.copytree(rebuilt, app)
     user_app = tmp_path / "user" / "Applications" / "Clawksis.app"
     user_app.parent.mkdir(parents=True)
-    monkeypatch.setattr(gui_uninstall, "packaged_gui_app_paths", lambda: [app, user_app])
-    monkeypatch.setattr(gui_uninstall, "desktop_userdata_dir", lambda: tmp_path / "userdata")
-    monkeypatch.setattr(main_desktop, "_desktop_packaged_executable",
-                        lambda _d: rebuilt / "Contents" / "MacOS" / "Clawksis")
+    monkeypatch.setattr(
+        gui_uninstall, "packaged_gui_app_paths", lambda: [app, user_app]
+    )
+    monkeypatch.setattr(
+        gui_uninstall, "desktop_userdata_dir", lambda: tmp_path / "userdata"
+    )
+    monkeypatch.setattr(
+        main_desktop,
+        "_desktop_packaged_executable",
+        lambda _d: rebuilt / "Contents" / "MacOS" / "Clawksis",
+    )
     monkeypatch.setattr(main_desktop, "_running_macos_app_bundles", set)
 
-    main_desktop._refresh_installed_desktop_apps(tmp_path)  # current copy: recorded, untouched
+    main_desktop._refresh_installed_desktop_apps(
+        tmp_path
+    )  # current copy: recorded, untouched
     app.rename(user_app)  # moved by the user: found by its stamp, never doubled
     main_desktop._refresh_installed_desktop_apps(tmp_path)
     assert not app.exists()
@@ -203,7 +251,9 @@ def test_recorded_app_that_went_missing_comes_back_until_gui_uninstall(rebuilt, 
     main_desktop._refresh_installed_desktop_apps(tmp_path)
     assert _asar(user_app) == b"rebuilt" and not app.exists()
     gui_uninstall.desktop_install_record().unlink()  # the reinstalled copy carries its own stamp,
-    main_desktop._refresh_installed_desktop_apps(tmp_path)  # so it is recorded again from the copy
+    main_desktop._refresh_installed_desktop_apps(
+        tmp_path
+    )  # so it is recorded again from the copy
     shutil.rmtree(user_app)
     main_desktop._refresh_installed_desktop_apps(tmp_path)
     assert _asar(user_app) == b"rebuilt"

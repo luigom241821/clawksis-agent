@@ -25,6 +25,7 @@ _holder = threading.local()
 
 def registry_path() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / _REGISTRY_NAME
 
 
@@ -34,8 +35,13 @@ def _repo_exists(repo: str) -> bool:
 
 def _read(path: Path) -> list[str]:
     from utils import read_json_or_empty
+
     repos = read_json_or_empty(path).get("repos")
-    return [r for r in repos if isinstance(r, str) and r] if isinstance(repos, list) else []
+    return (
+        [r for r in repos if isinstance(r, str) and r]
+        if isinstance(repos, list)
+        else []
+    )
 
 
 def registered_repos() -> list[str]:
@@ -57,8 +63,12 @@ def record_worktree_repo(repo_root) -> None:
 
         repo = os.path.realpath(str(repo_root))
         path = registry_path()
-        with _file_lock(path.with_name(path.name + ".lock"), _holder, 5.0,
-                        "Timed out waiting for the worktree registry lock"):
+        with _file_lock(
+            path.with_name(path.name + ".lock"),
+            _holder,
+            5.0,
+            "Timed out waiting for the worktree registry lock",
+        ):
             current = _read(path)
             kept = [r for r in dict.fromkeys(current) if _repo_exists(r)]
             if repo in kept and kept == current:

@@ -21,8 +21,6 @@ def _set_activity(db, session_id, when):
     db._conn.commit()
 
 
-
-
 def test_writable_startup_reconciles_legacy_activity_column_before_index(tmp_path):
     """A pre-last_activity_at store must heal through the real startup path."""
     path = tmp_path / "legacy-state.db"

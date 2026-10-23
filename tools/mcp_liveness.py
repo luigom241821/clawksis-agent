@@ -76,12 +76,21 @@ def parse_liveness(raw: Any) -> Liveness:
     if set(raw) - {"kind", "path", "fields"}:
         raise ValueError("server_json liveness has unknown fields")
     path = raw.get("path")
-    fields = {"url": "http", "token": "token", "pid": "pid", **(raw.get("fields") or {})}
+    fields = {
+        "url": "http",
+        "token": "token",
+        "pid": "pid",
+        **(raw.get("fields") or {}),
+    }
     if not isinstance(path, str) or not path.strip():
         raise ValueError("server_json liveness requires a non-empty path")
     if set(fields) != {"url", "token", "pid"}:
-        raise ValueError("server_json liveness fields may only override url, token, and pid")
-    if any(not isinstance(value, str) or not value.strip() for value in fields.values()):
+        raise ValueError(
+            "server_json liveness fields may only override url, token, and pid"
+        )
+    if any(
+        not isinstance(value, str) or not value.strip() for value in fields.values()
+    ):
         raise ValueError("server_json liveness field names must be non-empty strings")
     return Liveness(
         "server_json",
@@ -104,19 +113,35 @@ def liveness_for(server_name: str) -> Liveness:
     try:
         return parse_liveness(raw)
     except ValueError as exc:
-        logger.warning("MCP server '%s' has an invalid liveness declaration (%s); treating it as static", server_name, exc)
+        logger.warning(
+            "MCP server '%s' has an invalid liveness declaration (%s); treating it as static",
+            server_name,
+            exc,
+        )
         return Liveness("static")
 
 
 def _action(state: LivenessState, app_name: str, gpu_label: str) -> tuple[str, Retry]:
     actions: dict[LivenessState, tuple[str, Retry]] = {
         "app_not_running": (f"Start {app_name}, then try again.", "after_user_action"),
-        "clawk_not_connected": (f"Reconnect {app_name} in Clawksis, then try again.", "after_user_action"),
-        "endpoint_unavailable": (f"Open {app_name} and enable its local connection, then try again.", "after_user_action"),
-        "no_interactive_session": (f"Open an interactive desktop session and start {app_name}, then try again.", "never_here"),
+        "clawk_not_connected": (
+            f"Reconnect {app_name} in Clawksis, then try again.",
+            "after_user_action",
+        ),
+        "endpoint_unavailable": (
+            f"Open {app_name} and enable its local connection, then try again.",
+            "after_user_action",
+        ),
+        "no_interactive_session": (
+            f"Open an interactive desktop session and start {app_name}, then try again.",
+            "never_here",
+        ),
         "version_too_old": (f"Update {app_name}, then try again.", "after_user_action"),
         "missing_app": (f"Install {app_name}, then try again.", "after_user_action"),
-        "unsupported_gpu": (f"Use {app_name} on a machine with {gpu_label}.", "never_here"),
+        "unsupported_gpu": (
+            f"Use {app_name} on a machine with {gpu_label}.",
+            "never_here",
+        ),
     }
     return actions[state]
 
@@ -142,7 +167,8 @@ def status(server_name: str) -> Status | None:
             state = "missing_app"
         else:
             probe = AppResolver(live.app_definition(definition)).probe(
-                AppResolver(live.app_definition(definition)).locate(), effort=Effort.LOCAL
+                AppResolver(live.app_definition(definition)).locate(),
+                effort=Effort.LOCAL,
             )
             if probe.running.value is not True:
                 state = "app_not_running"
@@ -161,8 +187,12 @@ def status(server_name: str) -> Status | None:
     return Status(state, available, live, action, retry)
 
 
-def describe(decl: declaration.Declaration, available: Availability, liveness_state: LivenessState,
-             display_name: str | None = None) -> str:
+def describe(
+    decl: declaration.Declaration,
+    available: Availability,
+    liveness_state: LivenessState,
+    display_name: str | None = None,
+) -> str:
     """Compose one unavailable-state sentence with one user action.
 
     ``display_name`` overrides the declaration's slug when the caller knows the plugin's
@@ -176,7 +206,11 @@ def describe(decl: declaration.Declaration, available: Availability, liveness_st
         reason = f"{app_name} needs {gpu}; none was found on this machine."
     elif liveness_state == "version_too_old":
         found = f" version {available.version}" if available.version else ""
-        minimum = f"; version {available.min_version} or newer is required" if available.min_version else ""
+        minimum = (
+            f"; version {available.min_version} or newer is required"
+            if available.min_version
+            else ""
+        )
         reason = f"{app_name}{found} is too old{minimum}."
     elif liveness_state == "no_interactive_session":
         reason = f"{app_name} needs an interactive desktop session."
@@ -189,7 +223,9 @@ def describe(decl: declaration.Declaration, available: Availability, liveness_st
     return f"{reason} {action}"
 
 
-def unavailable_details(server_name: str) -> tuple[declaration.Declaration, Status, str] | None:
+def unavailable_details(
+    server_name: str,
+) -> tuple[declaration.Declaration, Status, str] | None:
     """Return declaration, structured state, and its composed sentence."""
     decl = declaration.lookup(server_name)
     current = status(server_name)

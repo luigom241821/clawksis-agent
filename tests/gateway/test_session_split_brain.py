@@ -63,16 +63,12 @@ def _make_adapter():
 
 
 def _make_event(text="hello", chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return MessageEvent(text=text, message_type=MessageType.TEXT, source=source)
 
 
 def _session_key(chat_id="12345"):
-    source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm"
-    )
+    source = SessionSource(platform=Platform.TELEGRAM, chat_id=chat_id, chat_type="dm")
     return build_session_key(source)
 
 
@@ -209,7 +205,6 @@ class TestStaleSessionLockSelfHeal:
             "stale lock trapped a normal message — split-brain not healed"
         )
 
-
     @pytest.mark.asyncio
     async def test_cleanup_releases_and_deletes_when_guard_matches(self):
         """Positive path for #48300: when the guard still matches (normal
@@ -233,7 +228,9 @@ class TestStaleSessionLockSelfHeal:
         adapter._cleanup_finished_session_task(sk, event_a)
 
         assert sk not in adapter._active_sessions, "guard must be released on match"
-        assert sk not in adapter._session_tasks, "task entry must be dropped after release"
+        assert sk not in adapter._session_tasks, (
+            "task entry must be dropped after release"
+        )
 
 
 # ===========================================================================
@@ -242,8 +239,6 @@ class TestStaleSessionLockSelfHeal:
 
 
 class TestRunnerSessionGenerationGuard:
-
-
     def test_release_with_stale_generation_blocks(self):
         runner = _make_runner()
         sk = "agent:main:telegram:dm:12345"
@@ -294,4 +289,3 @@ class TestOldTaskCannotClobberNewerGuard:
         # Now the command itself releases using the matching guard.
         adapter._release_session_guard(sk, guard=new_guard)
         assert sk not in adapter._active_sessions
-

@@ -1,4 +1,5 @@
 """Non-destructive bridge allocation for multiplexed secondary profiles."""
+
 import os
 import socket
 from contextlib import suppress
@@ -37,7 +38,9 @@ def _read_port_record(record: Path) -> int:
     try:
         return int(record.read_text(encoding="utf-8-sig").strip())
     except ValueError:
-        raise ValueError(f"Bridge port record {record} is not a port number; delete it to allocate a new port") from None
+        raise ValueError(
+            f"Bridge port record {record} is not a port number; delete it to allocate a new port"
+        ) from None
 
 
 def _sibling_claims(home: Path) -> set:
@@ -59,10 +62,18 @@ def secondary_bridge_port(home: Path, explicit) -> int:
         port = _read_port_record(record)
     else:
         claimed = _sibling_claims(home)
-        port = next((p for p in range(SECONDARY_PORT_FIRST, SECONDARY_PORT_LAST + 1)
-                     if p not in claimed and port_is_free(p)), None)
+        port = next(
+            (
+                p
+                for p in range(SECONDARY_PORT_FIRST, SECONDARY_PORT_LAST + 1)
+                if p not in claimed and port_is_free(p)
+            ),
+            None,
+        )
         if port is None:
-            raise ValueError(f"No free bridge port in {SECONDARY_PORT_FIRST}..{SECONDARY_PORT_LAST}")
+            raise ValueError(
+                f"No free bridge port in {SECONDARY_PORT_FIRST}..{SECONDARY_PORT_LAST}"
+            )
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(str(port), encoding="utf-8")
     if not 1 <= port <= 65535:
@@ -100,7 +111,14 @@ def check_secondary_ownership(session: Path, port: int) -> str:
     if port_is_free(port):
         return "free"
     from .adapter import _bridge_pid_is_ours, _read_bridge_pidfile
+
     pid, recorded_start, recorded_port = _read_bridge_pidfile(session)
-    if pid is not None and recorded_port == port and _bridge_pid_is_ours(pid, recorded_start):
+    if (
+        pid is not None
+        and recorded_port == port
+        and _bridge_pid_is_ours(pid, recorded_start)
+    ):
         return "ours"
-    raise ValueError(f"Bridge port {port} is bound by a process this profile does not own")
+    raise ValueError(
+        f"Bridge port {port} is bound by a process this profile does not own"
+    )

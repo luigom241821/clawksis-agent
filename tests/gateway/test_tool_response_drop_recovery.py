@@ -57,7 +57,9 @@ class _DummyAdapter(BasePlatformAdapter):
         return {"id": chat_id}
 
 
-def _make_event(platform: Platform, chat_id: str = "111", message_id: str = "m1") -> MessageEvent:
+def _make_event(
+    platform: Platform, chat_id: str = "111", message_id: str = "m1"
+) -> MessageEvent:
     return MessageEvent(
         text="hello",
         source=SessionSource(platform=platform, chat_id=chat_id, chat_type="dm"),
@@ -121,8 +123,7 @@ class TestExtractStripRecoveryAllPlatforms:
         assert adapter.sent[0]["content"] == tool_response.strip()
         # And the recovery is observable via the stable event key.
         assert any(
-            "response_delivery_recovered" in r.getMessage()
-            for r in caplog.records
+            "response_delivery_recovered" in r.getMessage() for r in caplog.records
         ), [r.getMessage() for r in caplog.records]
 
 
@@ -164,14 +165,18 @@ class TestRecoveryDoesNotLeakMediaFragments:
 
         # No fragment of the media path may reach the user.
         leaked = [
-            s for s in adapter.sent
-            if "vacation" in s["content"] or "photo" in s["content"] or "MEDIA" in s["content"]
+            s
+            for s in adapter.sent
+            if "vacation" in s["content"]
+            or "photo" in s["content"]
+            or "MEDIA" in s["content"]
         ]
         assert leaked == [], f"media-path fragment leaked to user: {leaked}"
         # The genuinely-undeliverable response is logged loudly, not silent.
         assert any(
             "response_delivery_dropped" in r.getMessage()
-            for r in caplog.records if r.levelno == logging.ERROR
+            for r in caplog.records
+            if r.levelno == logging.ERROR
         ), [r.getMessage() for r in caplog.records]
 
 
@@ -201,13 +206,15 @@ class TestUnrecoverableDropIsLoud:
         assert adapter.sent == []
         assert any(
             "response_delivery_dropped" in r.getMessage()
-            for r in caplog.records if r.levelno == logging.ERROR
+            for r in caplog.records
+            if r.levelno == logging.ERROR
         ), [r.getMessage() for r in caplog.records]
 
 
 # ===========================================================================
 # Issue #44212: post-/stop stale interrupt silently swallows the next message
 # ===========================================================================
+
 
 class TestPostStopInterruptSwallow:
     """A `/stop` sets ``_interrupt_requested`` on the session's cached agent,
@@ -236,8 +243,9 @@ class TestPostStopInterruptSwallow:
 
         response = _normalize_empty_agent_response(agent_result, "", history_len=10)
 
-        assert response.strip(), "A turn killed before doing any work must not be silent"
-
+        assert response.strip(), (
+            "A turn killed before doing any work must not be silent"
+        )
 
     def test_uninterrupted_zero_api_calls_surfaces_retry_hint(self):
         """No interrupt and no work — #31884 (landed after this PR was
@@ -257,9 +265,7 @@ class TestPostStopInterruptSwallow:
         assert response.strip(), "a zero-work turn must not be silent"
 
     @pytest.mark.asyncio
-    async def test_interrupt_and_clear_session_evicts_cached_agent(
-        self, monkeypatch
-    ):
+    async def test_interrupt_and_clear_session_evicts_cached_agent(self, monkeypatch):
         """The control-interrupt path must evict the session's cached agent
         so its ``_interrupt_requested`` flag cannot leak into the next turn."""
         import threading
@@ -289,13 +295,11 @@ class TestPostStopInterruptSwallow:
         runner._pending_messages = {}
 
         invalidated = []
-        runner._invalidate_session_run_generation = (
-            lambda key, reason=None: invalidated.append((key, reason))
+        runner._invalidate_session_run_generation = lambda key, reason=None: (
+            invalidated.append((key, reason))
         )
         released = []
-        runner._release_running_agent_state = (
-            lambda key, **kw: released.append(key)
-        )
+        runner._release_running_agent_state = lambda key, **kw: released.append(key)
         reaped = []
         reaped_event = threading.Event()
         from tools.process_registry import process_registry

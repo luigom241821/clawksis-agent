@@ -26,6 +26,7 @@ def _load_checkpoints_enabled(cfg: dict | None = None) -> bool:
     elif not isinstance(cp_cfg, dict):
         cp_cfg = {}
     from clawk_cli.config import DEFAULT_CONFIG
+
     return bool(cp_cfg.get("enabled", DEFAULT_CONFIG["checkpoints"]["enabled"]))
 
 

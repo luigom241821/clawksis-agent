@@ -40,6 +40,7 @@ def _live_serve_ledger_entry() -> dict:
         "spawner_create": 0.5,
     }
 
+
 def test_control_plane_argv_is_not_a_gateway():
     from gateway.status import looks_like_gateway_command_line
 
@@ -51,13 +52,16 @@ def test_control_plane_argv_is_not_a_gateway():
     assert update_cmd._looks_like_desktop_control_plane(run) is False
     assert looks_like_gateway_command_line(run) is True
 
+
 def test_control_plane_classifier_is_token_based_not_substring():
     """#90778/#91869 class: flag values and lookalike tokens must not read
     as a control plane. The salvage swapped the original substring check
     for the parser-derived subcommand classifier."""
     py = "C:\\Clawksis\\.venv\\Scripts\\python.exe -m clawk_cli.main"
     # "dashboard" as a FLAG VALUE, real subcommand is chat
-    assert update_cmd._looks_like_desktop_control_plane(f"{py} -m dashboard chat") is False
+    assert (
+        update_cmd._looks_like_desktop_control_plane(f"{py} -m dashboard chat") is False
+    )
     # "--preserve-cache" contains "serve"; real subcommand is kanban
     assert (
         update_cmd._looks_like_desktop_control_plane(f"{py} kanban --preserve-cache")
@@ -71,23 +75,32 @@ def test_control_plane_classifier_is_token_based_not_substring():
     # dashboard as the real subcommand
     assert update_cmd._looks_like_desktop_control_plane(f"{py} dashboard") is True
     # undeterminable subcommand → NOT a control plane (never guess ownership)
-    assert update_cmd._looks_like_desktop_control_plane("python.exe -c import time") is False
+    assert (
+        update_cmd._looks_like_desktop_control_plane("python.exe -c import time")
+        is False
+    )
+
 
 def test_ledger_live_serve_with_live_spawner_owns_lifecycle(monkeypatch):
     monkeypatch.setattr(
         process_identity, "ledger_entries", lambda **_k: [_live_serve_ledger_entry()]
     )
     monkeypatch.setattr(process_identity, "spawner_is_dead", lambda _e: False)
-    monkeypatch.setattr("clawk_cli.update_cmd_windows._detect_venv_python_processes", list)
+    monkeypatch.setattr(
+        "clawk_cli.update_cmd_windows._detect_venv_python_processes", list
+    )
 
     assert update_cmd._desktop_owns_gateway_lifecycle() is True
+
 
 def test_orphaned_control_plane_does_not_own_lifecycle(monkeypatch):
     monkeypatch.setattr(
         process_identity, "ledger_entries", lambda **_k: [_live_serve_ledger_entry()]
     )
     monkeypatch.setattr(process_identity, "spawner_is_dead", lambda _e: True)
-    monkeypatch.setattr("clawk_cli.update_cmd_windows._detect_venv_python_processes", list)
+    monkeypatch.setattr(
+        "clawk_cli.update_cmd_windows._detect_venv_python_processes", list
+    )
 
     assert update_cmd._desktop_owns_gateway_lifecycle() is False
 
@@ -101,35 +114,66 @@ def _running_beta_pause_fixture(monkeypatch, tmp_path):
     homes["beta"].mkdir(parents=True)
     monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: str(tmp_path))
     monkeypatch.setattr(update_cmd, "_desktop_owns_gateway_lifecycle", lambda: True)
-    monkeypatch.setattr(update_cmd_windows, "_desktop_owns_gateway_lifecycle", lambda: True)
+    monkeypatch.setattr(
+        update_cmd_windows, "_desktop_owns_gateway_lifecycle", lambda: True
+    )
     beta = SimpleNamespace(pid=777, profile="beta")
-    monkeypatch.setattr(update_cmd_windows, "_discover_windows_gateways", lambda: ({777: beta}, [], set(), [777]))
-    monkeypatch.setattr(update_cmd_windows, "_request_socket_pauses", lambda *a, **k: ({"beta": 777}, [777], []))
+    monkeypatch.setattr(
+        update_cmd_windows,
+        "_discover_windows_gateways",
+        lambda: ({777: beta}, [], set(), [777]),
+    )
+    monkeypatch.setattr(
+        update_cmd_windows,
+        "_request_socket_pauses",
+        lambda *a, **k: ({"beta": 777}, [777], []),
+    )
     monkeypatch.setattr(cli_main, "_venv_launcher_ancestors", lambda pids: [])
-    monkeypatch.setattr(cli_main, "_wait_for_windows_update_gateway_exit", lambda pids, timeout: set())
+    monkeypatch.setattr(
+        cli_main, "_wait_for_windows_update_gateway_exit", lambda pids, timeout: set()
+    )
     monkeypatch.setattr(profiles_mod, "get_active_profile_name", lambda: "default")
-    monkeypatch.setattr(profiles_mod, "profiles_to_serve", lambda multiplex, **_kw: [(n, h) for n, h in homes.items() if n in ("default", "beta")])
+    monkeypatch.setattr(
+        profiles_mod,
+        "profiles_to_serve",
+        lambda multiplex, **_kw: [
+            (n, h) for n, h in homes.items() if n in ("default", "beta")
+        ],
+    )
     monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda name: homes[name])
     # Resume side.
     monkeypatch.setattr(cli_main, "_refresh_windows_gateway_launchers", lambda: None)
     relaunched: set = set()
-    monkeypatch.setattr(clawk_gateway, "launch_detached_profile_gateway_restart",
-                        lambda p, o: relaunched.add(p) or True)
+    monkeypatch.setattr(
+        clawk_gateway,
+        "launch_detached_profile_gateway_restart",
+        lambda p, o: relaunched.add(p) or True,
+    )
     ready_probes: list = []
-    monkeypatch.setattr(gateway_windows, "_wait_for_gateway_ready", lambda *a, **k: ready_probes.append(k) or [4242])
+    monkeypatch.setattr(
+        gateway_windows,
+        "_wait_for_gateway_ready",
+        lambda *a, **k: ready_probes.append(k) or [4242],
+    )
     # The relaunch verifier polls this probe: a home answers only once its profile was relaunched
     # (a fresh PID), so a not-yet-started profile still reads as down and is cold-started.
     by_home = {str(h): n for n, h in homes.items()}
-    monkeypatch.setattr(gateway_windows, "_live_gateway_pids",
-                        lambda home=None, pid_filter=None, **_k: (pid_filter or list)(
-                            [888] if by_home.get(str(home)) in relaunched else []))
+    monkeypatch.setattr(
+        gateway_windows,
+        "_live_gateway_pids",
+        lambda home=None, pid_filter=None, **_k: (pid_filter or list)(
+            [888] if by_home.get(str(home)) in relaunched else []
+        ),
+    )
     monkeypatch.setattr(update_cmd_windows, "_READY_CONFIRM_S", 0.0)
     homes["_ready_probes"] = ready_probes
     return homes
 
 
 @pytest.mark.platforms("windows")
-def test_dead_attested_default_is_cold_started_beside_running_beta(monkeypatch, tmp_path, capsys):
+def test_dead_attested_default_is_cold_started_beside_running_beta(
+    monkeypatch, tmp_path, capsys
+):
     """#110959: the all-or-nothing plan never ran while ``beta`` was alive, so a default gateway
     that died after a ✓ stayed down after the update. Its dead attestation must become a per-profile
     cold-start obligation on the token; resume spawns it under the default home and consumes only
@@ -146,7 +190,9 @@ def test_dead_attested_default_is_cold_started_beside_running_beta(monkeypatch, 
     assert marker.exists()  # plan-time probe is read-only
 
     spawned = []
-    monkeypatch.setattr(gateway_windows, "_spawn_detached", lambda **k: spawned.append(k) or 4242)
+    monkeypatch.setattr(
+        gateway_windows, "_spawn_detached", lambda **k: spawned.append(k) or 4242
+    )
     update_cmd._resume_windows_gateways_after_update(token)
 
     assert spawned == [{"home": homes["default"]}]
@@ -155,23 +201,34 @@ def test_dead_attested_default_is_cold_started_beside_running_beta(monkeypatch, 
     # The authorizing generation is consumed and the NEW PID is attested in the same profile home,
     # so a death after this CLI exits stays visible to the next update.
     reattested = json.loads(marker.read_text(encoding="utf-8"))
-    assert (reattested["pids"], reattested["generation"] != generation) == ([4242], True)
+    assert (reattested["pids"], reattested["generation"] != generation) == (
+        [4242],
+        True,
+    )
     assert "cold_start_profiles" not in token
     assert token["relaunched_profiles"] == ["beta"]
     assert token["resume_needed"] is False
     out = capsys.readouterr().out
-    assert "Gateway profile default started via cold-start after update (PID: 4242)" in out
+    assert (
+        "Gateway profile default started via cold-start after update (PID: 4242)" in out
+    )
 
 
 @pytest.mark.platforms("windows")
-def test_every_dead_attested_profile_is_cold_started_when_nothing_runs(monkeypatch, tmp_path):
+def test_every_dead_attested_profile_is_cold_started_when_nothing_runs(
+    monkeypatch, tmp_path
+):
     """Nothing running, active profile exited cleanly (plan → None), ``beta`` dead-attested: beta still
     gets a token and a spawn. And when BOTH owe a spawn, the fleet-wide active cold-start runs FIRST —
     a beta spawned earlier would satisfy its any-live-gateway guard and the active profile would stay down."""
     homes = _running_beta_pause_fixture(monkeypatch, tmp_path)
-    monkeypatch.setattr(update_cmd_windows, "_discover_windows_gateways", lambda: ({}, [], set(), []))
+    monkeypatch.setattr(
+        update_cmd_windows, "_discover_windows_gateways", lambda: ({}, [], set(), [])
+    )
     monkeypatch.setattr(update_cmd_windows, "_windows_cold_start_plan", lambda: None)
-    gateway_windows._write_start_attestation([556], "direct spawn (PID 556)", home=homes["beta"])
+    gateway_windows._write_start_attestation(
+        [556], "direct spawn (PID 556)", home=homes["beta"]
+    )
     beta_marker = homes["beta"] / "state" / "gateway.start-attestation.json"
     beta_generation = json.loads(beta_marker.read_text(encoding="utf-8"))["generation"]
 
@@ -180,13 +237,23 @@ def test_every_dead_attested_profile_is_cold_started_when_nothing_runs(monkeypat
     assert token["profiles"] == {}
 
     order = []
-    monkeypatch.setattr(gateway_windows, "_spawn_detached", lambda **k: order.append(k.get("home")) or 4242)
     monkeypatch.setattr(
-        cli_main, "_cold_start_windows_gateway_after_update", lambda token=None: order.append("active") or True)
+        gateway_windows,
+        "_spawn_detached",
+        lambda **k: order.append(k.get("home")) or 4242,
+    )
+    monkeypatch.setattr(
+        cli_main,
+        "_cold_start_windows_gateway_after_update",
+        lambda token=None: order.append("active") or True,
+    )
     token["cold_start_if_installed"] = True  # both owe a spawn
     update_cmd._resume_windows_gateways_after_update(token)
     assert order == ["active", homes["beta"]]
-    assert json.loads(beta_marker.read_text(encoding="utf-8"))["generation"] != beta_generation
+    assert (
+        json.loads(beta_marker.read_text(encoding="utf-8"))["generation"]
+        != beta_generation
+    )
     assert token["resume_needed"] is False
 
 
@@ -200,12 +267,29 @@ def test_service_supervised_running_profile_is_not_cold_started(monkeypatch, tmp
 
     homes = _running_beta_pause_fixture(monkeypatch, tmp_path)
     svc_proc = SimpleNamespace(pid=900, profile="beta", path=homes["beta"])
-    service = SimpleNamespace(name="ClawksisGw-beta", profile="beta", service_pid=800, gateway_pid=900,
-                              descendant_identities=(), service_create_time=1.0, gateway_create_time=2.0)
-    monkeypatch.setattr(update_cmd_windows, "_discover_windows_gateways", lambda: ({900: svc_proc}, [service], {900}, [900]))
-    monkeypatch.setattr(update_cmd_windows, "_request_socket_pauses", lambda *a, **k: ({}, [], []))
-    monkeypatch.setattr(update_cmd, "_stop_windows_gateway_service", lambda *a, **k: None)
-    gateway_windows._write_start_attestation([900], "direct spawn (PID 900)", home=homes["beta"])
+    service = SimpleNamespace(
+        name="ClawksisGw-beta",
+        profile="beta",
+        service_pid=800,
+        gateway_pid=900,
+        descendant_identities=(),
+        service_create_time=1.0,
+        gateway_create_time=2.0,
+    )
+    monkeypatch.setattr(
+        update_cmd_windows,
+        "_discover_windows_gateways",
+        lambda: ({900: svc_proc}, [service], {900}, [900]),
+    )
+    monkeypatch.setattr(
+        update_cmd_windows, "_request_socket_pauses", lambda *a, **k: ({}, [], [])
+    )
+    monkeypatch.setattr(
+        update_cmd, "_stop_windows_gateway_service", lambda *a, **k: None
+    )
+    gateway_windows._write_start_attestation(
+        [900], "direct spawn (PID 900)", home=homes["beta"]
+    )
 
     token = update_cmd._pause_windows_gateways_for_update()
 

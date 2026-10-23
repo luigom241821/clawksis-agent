@@ -4,6 +4,7 @@ stampless installs.
 Blessed root + .git + no stamp → write {updateMechanism: self} atomically.
 Anything else — untouched. A read-only tree fails soft (nix-like layouts).
 """
+
 import json
 import os
 import stat
@@ -47,7 +48,9 @@ def test_adoption_is_idempotent(blessed_checkout):
 def test_existing_stamp_is_never_touched(blessed_checkout):
     """Any pre-existing stamp wins — adoption must not clobber richer
     provenance (an installer-written or build-baked stamp)."""
-    original = json.dumps({"schemaVersion": 2, "updateMechanism": "self", "source": "installer"})
+    original = json.dumps(
+        {"schemaVersion": 2, "updateMechanism": "self", "source": "installer"}
+    )
     (blessed_checkout / "install-stamp.json").write_text(original)
     result = step_adopt_blessed_checkout()
     assert result.get("skipped") == "already-stamped"
@@ -82,7 +85,10 @@ def test_sealed_tree_untouched(tmp_path, monkeypatch):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason='chmod-based read-only dirs are not enforceable on Windows or as root')
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 1)() == 0,
+    reason="chmod-based read-only dirs are not enforceable on Windows or as root",
+)
 def test_read_only_tree_fails_soft(blessed_checkout):
     """nix-like read-only tree: debug-log skip, never a crash."""
     mode = stat.S_IMODE(os.stat(blessed_checkout).st_mode)
@@ -119,8 +125,9 @@ def test_adoption_of_real_checkout_records_full_identity(tmp_path, monkeypatch):
     root.mkdir(parents=True)
 
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=root, env=git_env, check=True,
-                       capture_output=True)
+        subprocess.run(
+            ["git", *args], cwd=root, env=git_env, check=True, capture_output=True
+        )
 
     git("init", "-q")
     git("config", "user.name", "Clawksis Test")
@@ -138,6 +145,12 @@ def test_adoption_of_real_checkout_records_full_identity(tmp_path, monkeypatch):
     stamp = json.loads((root / "install-stamp.json").read_text())
     assert stamp["updateMechanism"] == "self"
     assert stamp["baseVersion"] == "0.21.4"
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, env=git_env,
-                          check=True, capture_output=True, text=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        env=git_env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     assert stamp["commit"] == head

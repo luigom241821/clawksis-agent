@@ -130,7 +130,11 @@ _PROPERTIES: dict[str, Any] = {
         "maxItems": 2,
         "description": "Target [x,y] (drag; use when no element available).",
     },
-    "direction": {"type": "string", "enum": ["up", "down", "left", "right"], "description": "Scroll direction."},
+    "direction": {
+        "type": "string",
+        "enum": ["up", "down", "left", "right"],
+        "description": "Scroll direction.",
+    },
     "amount": {"type": "integer", "description": "Scroll wheel ticks. Default 3."},
     "value": {
         "type": "string",
@@ -140,7 +144,10 @@ _PROPERTIES: dict[str, Any] = {
             "AXValue-settable elements, pass the numeric or string value."
         ),
     },
-    "text": {"type": "string", "description": "Text to type (respects the current layout)."},
+    "text": {
+        "type": "string",
+        "description": "Text to type (respects the current layout).",
+    },
     "keys": {
         "type": "string",
         "description": (
@@ -202,6 +209,7 @@ COMPUTER_USE_SCHEMA: dict[str, Any] = {
     ),
     "parameters": {"type": "object", "properties": _PROPERTIES, "required": ["action"]},
 }
+
 
 def get_computer_use_schema() -> dict[str, Any]:
     """Return the generic OpenAI function-calling schema."""

@@ -44,24 +44,43 @@ class _Lease:
 
 def _session(source: str, lease: _Lease):
     agent = types.SimpleNamespace(
-        session_id="agent-sid-1", run_conversation=lambda *a, **k: {"final_response": "done"},
-        clear_interrupt=lambda: None)
+        session_id="agent-sid-1",
+        run_conversation=lambda *a, **k: {"final_response": "done"},
+        clear_interrupt=lambda: None,
+    )
     return {
-        "agent": agent, "agent_error": None, "session_key": "gw-session-key", "history": [],
-        "history_lock": threading.RLock(), "history_version": 0, "running": True, "attached_images": [],
-        "image_counter": 0, "cols": 80, "slash_worker": None, "show_reasoning": False,
-        "tool_progress_mode": "all", "inflight_turn": None, "source": source, "active_session_lease": lease}
+        "agent": agent,
+        "agent_error": None,
+        "session_key": "gw-session-key",
+        "history": [],
+        "history_lock": threading.RLock(),
+        "history_version": 0,
+        "running": True,
+        "attached_images": [],
+        "image_counter": 0,
+        "cols": 80,
+        "slash_worker": None,
+        "show_reasoning": False,
+        "tool_progress_mode": "all",
+        "inflight_turn": None,
+        "source": source,
+        "active_session_lease": lease,
+    }
 
 
 def _turn_env(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
     monkeypatch.setattr(server, "_emit", lambda event_type, sid, payload=None: None)
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    monkeypatch.setattr(server, "_sync_agent_model_with_config", lambda sid, session: None)
+    monkeypatch.setattr(
+        server, "_sync_agent_model_with_config", lambda sid, session: None
+    )
     monkeypatch.setattr(server, "_session_cwd", lambda session: str(tmp_path))
     monkeypatch.setattr(server, "_register_session_cwd", lambda session: None)
     monkeypatch.setattr(server, "_tts_stream_begin", lambda: None)
-    monkeypatch.setattr(server, "_sync_session_key_after_compress", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_sync_session_key_after_compress", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_get_usage", lambda agent: {})
 
 

@@ -10,6 +10,7 @@ Usage: reconstruct_lineage.py <state_db_copy> <root_session_id> <out_json>
 
 ALWAYS run against a COPY of state.db, never the live file.
 """
+
 import hashlib
 import json
 import sqlite3
@@ -24,6 +25,7 @@ db.row_factory = sqlite3.Row
 
 # collect the whole descendant tree, chronological by started_at
 import collections
+
 children = collections.defaultdict(list)
 for r in db.execute(
     "SELECT id, parent_session_id FROM sessions WHERE parent_session_id IS NOT NULL"
@@ -35,13 +37,20 @@ while frontier:
     sid = frontier.pop(0)
     chain.append(sid)
     frontier.extend(children.get(sid, []))
-starts = {r["id"]: r["started_at"] or "" for r in db.execute(
-    f"SELECT id, started_at FROM sessions WHERE id IN ({','.join('?'*len(chain))})", chain)}
+starts = {
+    r["id"]: r["started_at"] or ""
+    for r in db.execute(
+        f"SELECT id, started_at FROM sessions WHERE id IN ({','.join('?' * len(chain))})",
+        chain,
+    )
+}
 chain.sort(key=lambda s: starts.get(s, ""))
 print(f"chain: {len(chain)} sessions")
 
 SYNTH_MARKERS = (
-    "[CONTEXT COMPACTION", "[CONTEXT SUMMARY", "[PRIOR CONTEXT",
+    "[CONTEXT COMPACTION",
+    "[CONTEXT SUMMARY",
+    "[PRIOR CONTEXT",
     "preserved across context compression",
 )
 
@@ -53,7 +62,9 @@ for sid in chain:
         row = db.execute(
             "SELECT s.system_prompt, sp.prompt AS dedup_prompt FROM sessions s "
             "LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash "
-            "WHERE s.id=?", (sid,)).fetchone()
+            "WHERE s.id=?",
+            (sid,),
+        ).fetchone()
         if row:
             sysprompt = row["system_prompt"] or row["dedup_prompt"] or None
     for r in db.execute(
@@ -64,7 +75,8 @@ for sid in chain:
             continue  # synthetic compaction artifact, not organic history
         h = hashlib.md5(
             (r["role"] + "\x00" + c + "\x00" + (r["tool_calls"] or "")).encode(
-                "utf-8", "replace")
+                "utf-8", "replace"
+            )
         ).hexdigest()
         if h in seen:
             continue
@@ -82,7 +94,14 @@ for sid in chain:
         out.append(m)
 
 msgs = [{"role": "system", "content": sysprompt or ""}] + out
-chars = sum(len(m.get("content") or "") + len(json.dumps(m.get("tool_calls", ""), default=str)) for m in msgs)
-print(f"reconstructed: {len(msgs)} msgs, {chars:,} chars (~{chars//4:,} tok)")
-json.dump({"root": ROOT, "chain": chain, "messages": msgs}, open(OUT, "w", encoding="utf-8"), default=str)
+chars = sum(
+    len(m.get("content") or "") + len(json.dumps(m.get("tool_calls", ""), default=str))
+    for m in msgs
+)
+print(f"reconstructed: {len(msgs)} msgs, {chars:,} chars (~{chars // 4:,} tok)")
+json.dump(
+    {"root": ROOT, "chain": chain, "messages": msgs},
+    open(OUT, "w", encoding="utf-8"),
+    default=str,
+)
 print(f"wrote {OUT}")

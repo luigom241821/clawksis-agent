@@ -17,8 +17,15 @@ from clawk_cli.inventory import build_model_options_payload, load_picker_context
 def _snapshot(used: float) -> AccountUsageSnapshot:
     reset = datetime.now(UTC) + timedelta(hours=2)
     return AccountUsageSnapshot(
-        provider="openrouter", source="test", fetched_at=datetime.now(UTC),
-        windows=(AccountUsageWindow(label="Current session", used_percent=used, reset_at=reset),))
+        provider="openrouter",
+        source="test",
+        fetched_at=datetime.now(UTC),
+        windows=(
+            AccountUsageWindow(
+                label="Current session", used_percent=used, reset_at=reset
+            ),
+        ),
+    )
 
 
 def test_picker_reads_cached_usage_and_refreshes_without_waiting(monkeypatch):
@@ -35,7 +42,11 @@ def test_picker_reads_cached_usage_and_refreshes_without_waiting(monkeypatch):
     ctx = load_picker_context()
 
     started = time.monotonic()
-    first = next(r for r in build_model_options_payload(ctx)["providers"] if r["slug"] == "openrouter")
+    first = next(
+        r
+        for r in build_model_options_payload(ctx)["providers"]
+        if r["slug"] == "openrouter"
+    )
     assert time.monotonic() - started < 5, "the picker waited on the usage API"
     assert "usage" not in first, "nothing cached yet, so nothing to show"
     assert called.wait(5), "opening the picker must start a background usage refresh"
@@ -45,7 +56,11 @@ def test_picker_reads_cached_usage_and_refreshes_without_waiting(monkeypatch):
     while cached_account_usage("openrouter") is None and time.monotonic() < deadline:
         time.sleep(0.05)
 
-    row = next(r for r in build_model_options_payload(ctx)["providers"] if r["slug"] == "openrouter")
+    row = next(
+        r
+        for r in build_model_options_payload(ctx)["providers"]
+        if r["slug"] == "openrouter"
+    )
     (window,) = row["usage"]["windows"]
     assert window["label"] == "Current session" and window["used_percent"] == 92.0
     assert datetime.fromisoformat(window["resets_at"]) > datetime.now(UTC)

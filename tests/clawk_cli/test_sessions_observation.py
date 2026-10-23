@@ -1,4 +1,5 @@
 """Session listings must not initialize or migrate canonical storage."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -7,13 +8,22 @@ import sys
 import pytest
 
 
-@pytest.mark.parametrize('populated', [False, True])
+@pytest.mark.parametrize("populated", [False, True])
 def test_session_observation_preserves_storage(tmp_path, populated):
     repo = Path(__file__).resolve().parents[2]
-    env = {k: os.environ[k] for k in ('PATH', 'SYSTEMROOT', 'LANG', 'TZ') if k in os.environ}
-    env.update(HOME=str(tmp_path), USERPROFILE=str(tmp_path), CLAWK_HOME=str(tmp_path / 'profile'), PYTHONPATH=str(repo))
-    (tmp_path / 'profile').mkdir()
-    code = '''
+    env = {
+        k: os.environ[k]
+        for k in ("PATH", "SYSTEMROOT", "LANG", "TZ")
+        if k in os.environ
+    }
+    env.update(
+        HOME=str(tmp_path),
+        USERPROFILE=str(tmp_path),
+        CLAWK_HOME=str(tmp_path / "profile"),
+        PYTHONPATH=str(repo),
+    )
+    (tmp_path / "profile").mkdir()
+    code = """
 from pathlib import Path
 from types import SimpleNamespace
 from contextlib import redirect_stdout
@@ -44,7 +54,15 @@ for action in ('list', 'stats', 'pinned', 'export'):
         assert ('observation-fixture' if POPULATED else 'No sessions found.') in text, text
     after = path.read_bytes() if path.exists() else None
     assert after == before, action + ' created or mutated state.db'
-'''.replace('POPULATED', repr(populated))
-    result = subprocess.run([sys.executable, '-c', code], cwd=repo, env=env, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=30, check=False)
+""".replace("POPULATED", repr(populated))
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr

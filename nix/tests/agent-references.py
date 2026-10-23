@@ -1,4 +1,5 @@
 """Check the shipped Nix agent, not a reconstruction of its assembly recipe."""
+
 import json
 import os
 from pathlib import Path
@@ -48,27 +49,46 @@ with tempfile.TemporaryDirectory() as temporary:
         "print(json.dumps(observed), flush=True)\n"
         "os._exit(0)\n"
     )
-    env = {"HOME": str(home), "CLAWK_HOME": str(home / ".clawksis"),
-           "PATH": os.defpath, "LANG": "C.UTF-8", "TZ": "UTC"}
+    env = {
+        "HOME": str(home),
+        "CLAWK_HOME": str(home / ".clawksis"),
+        "PATH": os.defpath,
+        "LANG": "C.UTF-8",
+        "TZ": "UTC",
+    }
     for name, entry in entries.items():
         command = command_map["commands"][name]
         assert command["entry"] == entry
         assert Path(command["source"]).samefile(Path(inputs["command_dir"]) / name)
         executable = package / command["destination"]
         assert os.access(executable, os.X_OK), executable
-        result = subprocess.run([str(executable), "--help"], cwd=home,
-                                env={**env, "PYTHONPATH": str(probe), "NIX_CHECK_ENTRY": entry},
-                                text=True, capture_output=True, check=True, timeout=60)
+        result = subprocess.run(
+            [str(executable), "--help"],
+            cwd=home,
+            env={**env, "PYTHONPATH": str(probe), "NIX_CHECK_ENTRY": entry},
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=60,
+        )
         observed = json.loads(result.stdout)
         for key, value in command_map["env"].items():
             assert observed[key] == value, (name, key, observed.get(key), value)
         assert observed["CLAWK_BIN"] == str(package / "bin/clawk")
-        print(f"PASS: {name} imports from a clean cwd and receives the shared environment")
+        print(
+            f"PASS: {name} imports from a clean cwd and receives the shared environment"
+        )
 
     # These public interfaces parse --help without starting an agent session.
     for name in ("clawk", "clawk-acp"):
-        subprocess.run([str(package / "bin" / name), "--help"], cwd=home, env=env,
-                       check=True, timeout=60, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            [str(package / "bin" / name), "--help"],
+            cwd=home,
+            env=env,
+            check=True,
+            timeout=60,
+            stdout=subprocess.DEVNULL,
+        )
         print(f"PASS: {name} --help")
 
 print("PASS: referenced resources, independent PM runtime, and uv2nix code placement")

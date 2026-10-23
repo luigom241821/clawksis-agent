@@ -7,6 +7,7 @@ _mirror_slash_side_effects) — each must surface the lock-skip reason
 instead of the misleading "No changes from compression" no-op text or a
 generic "compress failed" error.
 """
+
 import threading
 from unittest.mock import MagicMock, patch
 
@@ -61,9 +62,7 @@ def test_compress_session_history_raises_on_lock_skip():
     session = _make_session(agent, history)
 
     with (
-        patch(
-            "agent.model_metadata.estimate_request_tokens_rough", return_value=100
-        ),
+        patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
         pytest.raises(CompressionLockHeld) as exc_info,
     ):
         _compress_session_history(session)
@@ -165,5 +164,3 @@ def test_mirror_slash_side_effects_reports_lock_skip():
     assert "pid=6161" in output
     assert "No changes from compression" not in output
     assert "live session sync failed" not in output
-
-

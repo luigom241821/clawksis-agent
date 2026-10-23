@@ -114,7 +114,7 @@ def package_of(url: str) -> Optional[str]:
         return None
     if not parsed.path.startswith(POOL_PATH_PREFIX):
         return None
-    parts = parsed.path[len(POOL_PATH_PREFIX):].split("/")
+    parts = parsed.path[len(POOL_PATH_PREFIX) :].split("/")
     if len(parts) != 3 or not all(parts):
         return None
     return parts[1]
@@ -159,12 +159,26 @@ def pins(table: dict, lockfile) -> list[Pin]:
     ]
     licenses = table.get("licenses")
     if licenses:
-        out.append(Pin("license", "termux-licenses", licenses["url"], licenses.get("version", "")))
+        out.append(
+            Pin(
+                "license",
+                "termux-licenses",
+                licenses["url"],
+                licenses.get("version", ""),
+            )
+        )
     for name in lockfile.names():
         for target, rows in lockfile.pinned_artifacts(name).items():
             for row in rows if isinstance(rows, list) else [rows]:
                 if isinstance(row, dict) and package_of(row.get("url", "")):
-                    out.append(Pin("tool", f"{name}@{target}", row["url"], lockfile.version(name) or ""))
+                    out.append(
+                        Pin(
+                            "tool",
+                            f"{name}@{target}",
+                            row["url"],
+                            lockfile.version(name) or "",
+                        )
+                    )
     return out
 
 

@@ -37,6 +37,7 @@ from unittest.mock import MagicMock, patch
 # _resolve_identity_header helper
 # ---------------------------------------------------------------------------
 
+
 class TestResolveIdentityHeader:
     def test_returns_none_when_unset(self):
         from tools.mcp_tool_errors import _resolve_identity_header
@@ -47,21 +48,27 @@ class TestResolveIdentityHeader:
     def test_static_mode_returns_name_value(self):
         from tools.mcp_tool_errors import _resolve_identity_header
 
-        result = _resolve_identity_header("srv", {
-            "identity_header": {
-                "name": "X-User-Id",
-                "value_from": "static",
-                "value": "alice",
+        result = _resolve_identity_header(
+            "srv",
+            {
+                "identity_header": {
+                    "name": "X-User-Id",
+                    "value_from": "static",
+                    "value": "alice",
+                },
             },
-        })
+        )
         assert result == ("X-User-Id", "alice")
 
     def test_static_is_default_value_from(self):
         from tools.mcp_tool_errors import _resolve_identity_header
 
-        result = _resolve_identity_header("srv", {
-            "identity_header": {"name": "X-User-Id", "value": "bob"},
-        })
+        result = _resolve_identity_header(
+            "srv",
+            {
+                "identity_header": {"name": "X-User-Id", "value": "bob"},
+            },
+        )
         assert result == ("X-User-Id", "bob")
 
     def test_profile_mode_uses_active_profile_name(self):
@@ -71,21 +78,27 @@ class TestResolveIdentityHeader:
             "clawk_cli.profiles.get_active_profile_name",
             return_value="workbot",
         ):
-            result = _resolve_identity_header("srv", {
-                "identity_header": {
-                    "name": "X-Clawksis-Profile",
-                    "value_from": "profile",
+            result = _resolve_identity_header(
+                "srv",
+                {
+                    "identity_header": {
+                        "name": "X-Clawksis-Profile",
+                        "value_from": "profile",
+                    },
                 },
-            })
+            )
         assert result == ("X-Clawksis-Profile", "workbot")
 
     def test_missing_name_warns_and_returns_none(self, caplog):
         from tools.mcp_tool_errors import _resolve_identity_header
 
         with caplog.at_level(logging.WARNING):
-            result = _resolve_identity_header("srv", {
-                "identity_header": {"value": "alice"},
-            })
+            result = _resolve_identity_header(
+                "srv",
+                {
+                    "identity_header": {"value": "alice"},
+                },
+            )
         assert result is None
         assert any("identity_header" in r.message for r in caplog.records)
 
@@ -93,9 +106,12 @@ class TestResolveIdentityHeader:
         from tools.mcp_tool_errors import _resolve_identity_header
 
         with caplog.at_level(logging.WARNING):
-            result = _resolve_identity_header("srv", {
-                "identity_header": {"name": "X-User-Id"},
-            })
+            result = _resolve_identity_header(
+                "srv",
+                {
+                    "identity_header": {"name": "X-User-Id"},
+                },
+            )
         assert result is None
         assert any("identity_header" in r.message for r in caplog.records)
 
@@ -103,13 +119,16 @@ class TestResolveIdentityHeader:
         from tools.mcp_tool_errors import _resolve_identity_header
 
         with caplog.at_level(logging.WARNING):
-            result = _resolve_identity_header("srv", {
-                "identity_header": {
-                    "name": "X-User-Id",
-                    "value_from": "per_call",
-                    "value": "x",
+            result = _resolve_identity_header(
+                "srv",
+                {
+                    "identity_header": {
+                        "name": "X-User-Id",
+                        "value_from": "per_call",
+                        "value": "x",
+                    },
                 },
-            })
+            )
         assert result is None
         assert any("identity_header" in r.message for r in caplog.records)
 
@@ -117,15 +136,20 @@ class TestResolveIdentityHeader:
         from tools.mcp_tool_errors import _resolve_identity_header
 
         with caplog.at_level(logging.WARNING):
-            result = _resolve_identity_header("srv", {
-                "identity_header": "X-User-Id: alice",
-            })
+            result = _resolve_identity_header(
+                "srv",
+                {
+                    "identity_header": "X-User-Id: alice",
+                },
+            )
         assert result is None
         assert any("identity_header" in r.message for r in caplog.records)
+
 
 # ---------------------------------------------------------------------------
 # HTTP transport — header attached to httpx.AsyncClient
 # ---------------------------------------------------------------------------
+
 
 def _drive_http(server, config):
     """Run ``_run_http`` with the SDK boundary mocked out, capturing the
@@ -170,30 +194,38 @@ def _drive_http(server, config):
         self._shutdown_event.set()
 
     async def _drive():
-        with patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True), \
-             patch("tools.mcp_tool._MCP_NEW_HTTP", True), \
-             patch.object(sdk_httpx(), "AsyncClient", DummyAsyncClient), \
-             patch("tools.mcp_tool.streamable_http_client",
-                   return_value=DummyTransportCtx()), \
-             patch("tools.mcp_tool.ClientSession", DummySession), \
-             patch.object(MCPServerTask, "_discover_tools", _discover_tools):
+        with (
+            patch("tools.mcp_tool._MCP_HTTP_AVAILABLE", True),
+            patch("tools.mcp_tool._MCP_NEW_HTTP", True),
+            patch.object(sdk_httpx(), "AsyncClient", DummyAsyncClient),
+            patch(
+                "tools.mcp_tool.streamable_http_client",
+                return_value=DummyTransportCtx(),
+            ),
+            patch("tools.mcp_tool.ClientSession", DummySession),
+            patch.object(MCPServerTask, "_discover_tools", _discover_tools),
+        ):
             await server._run_http(config)
 
     asyncio.run(_drive())
     return captured
+
 
 class TestHTTPIdentityHeader:
     def test_header_attached_when_configured(self):
         from tools.mcp_tool import MCPServerTask
 
         server = MCPServerTask("remote")
-        captured = _drive_http(server, {
-            "url": "https://example.com/mcp",
-            "identity_header": {
-                "name": "X-User-Id",
-                "value": "alice",
+        captured = _drive_http(
+            server,
+            {
+                "url": "https://example.com/mcp",
+                "identity_header": {
+                    "name": "X-User-Id",
+                    "value": "alice",
+                },
             },
-        })
+        )
         headers = captured.get("headers") or {}
         assert headers.get("X-User-Id") == "alice"
 
@@ -201,9 +233,12 @@ class TestHTTPIdentityHeader:
         from tools.mcp_tool import MCPServerTask
 
         server = MCPServerTask("remote")
-        captured = _drive_http(server, {
-            "url": "https://example.com/mcp",
-        })
+        captured = _drive_http(
+            server,
+            {
+                "url": "https://example.com/mcp",
+            },
+        )
         headers = captured.get("headers") or {}
         assert not any(k.lower() == "x-user-id" for k in headers)
 
@@ -213,17 +248,21 @@ class TestHTTPIdentityHeader:
         from tools.mcp_tool import MCPServerTask
 
         server = MCPServerTask("remote")
-        captured = _drive_http(server, {
-            "url": "https://example.com/mcp",
-            "headers": {"x-user-id": "explicit-wins"},
-            "identity_header": {
-                "name": "X-User-Id",
-                "value": "alice",
+        captured = _drive_http(
+            server,
+            {
+                "url": "https://example.com/mcp",
+                "headers": {"x-user-id": "explicit-wins"},
+                "identity_header": {
+                    "name": "X-User-Id",
+                    "value": "alice",
+                },
             },
-        })
+        )
         headers = captured.get("headers") or {}
         assert headers.get("x-user-id") == "explicit-wins"
         assert "X-User-Id" not in headers
+
 
 # ---------------------------------------------------------------------------
 # stdio transport — identity_header is warn-and-ignore

@@ -1,4 +1,5 @@
 """Native Linux launcher management through real config and filesystem I/O."""
+
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,9 @@ from clawk_cli.linux_desktop_entry import DESKTOP_ENTRY_NAME, install_desktop_en
 
 
 @pytest.mark.platforms("linux")
-def test_launcher_optout_preserves_custom_entry_but_creates_missing(tmp_path, monkeypatch):
+def test_launcher_optout_preserves_custom_entry_but_creates_missing(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
@@ -23,7 +26,9 @@ def test_launcher_optout_preserves_custom_entry_but_creates_missing(tmp_path, mo
     entry.parent.mkdir(parents=True)
     custom = b"[Desktop Entry]\nType=Application\nName=Custom Clawksis\nExec=/opt/custom-clawk desktop\n"
     for setting in ("false", '"false"'):
-        config.write_text(f"desktop:\n  manage_launcher_entry: {setting}\n", encoding="utf-8")
+        config.write_text(
+            f"desktop:\n  manage_launcher_entry: {setting}\n", encoding="utf-8"
+        )
         entry.write_bytes(custom)
         assert install_desktop_entry(root) == entry
         assert entry.read_bytes() == custom

@@ -18,7 +18,10 @@ class SessionCoverageMixin:
     """Coverage helpers for SessionDB; relies on SessionMessagesMixin's codec/identity helpers."""
 
     def _resolve_carried_row_ids(
-        self, conn, session_id: str, carried_messages: list[dict[str, Any]],
+        self,
+        conn,
+        session_id: str,
+        carried_messages: list[dict[str, Any]],
     ) -> list[int]:
         """Resolve byte-identical carried-forward live dicts to their ACTIVE durable originals.
 
@@ -34,10 +37,15 @@ class SessionCoverageMixin:
             if not isinstance(message, dict):
                 continue
             identity = self._row_identity(
-                message.get("role", "unknown"), message.get("content"), message.get("tool_call_id"),
-                _parse_tool_calls(message.get("tool_calls")))
+                message.get("role", "unknown"),
+                message.get("content"),
+                message.get("tool_call_id"),
+                _parse_tool_calls(message.get("tool_calls")),
+            )
             row_id = message.get("_row_id")
-            if not (isinstance(row_id, int) and not isinstance(row_id, bool) and row_id > 0):
+            if not (
+                isinstance(row_id, int) and not isinstance(row_id, bool) and row_id > 0
+            ):
                 row_id = None
             carried.append((identity, row_id, message.get("timestamp")))
 
@@ -52,8 +60,11 @@ class SessionCoverageMixin:
             ).fetchall():
                 rid = int(row["id"])
                 by_id[rid] = self._row_identity(
-                    row["role"], self._decode_content(row["content"]), row["tool_call_id"],
-                    _parse_tool_calls(row["tool_calls"]))
+                    row["role"],
+                    self._decode_content(row["content"]),
+                    row["tool_call_id"],
+                    _parse_tool_calls(row["tool_calls"]),
+                )
                 ts = coerce_epoch(row["timestamp"], field="message timestamp")
                 if ts is not None:
                     by_key.setdefault((*by_id[rid], ts), []).append(rid)
@@ -63,7 +74,9 @@ class SessionCoverageMixin:
         # check only needs those rows; a full active-row scan is reserved for the fallbacks.
         row_ids = [row_id for _, row_id, _ in carried if row_id is not None]
         by_id, by_key = _index(row_ids if len(row_ids) == len(carried) else None)
-        if len(row_ids) == len(carried) and any(by_id.get(rid) != ident for ident, rid, _ in carried):
+        if len(row_ids) == len(carried) and any(
+            by_id.get(rid) != ident for ident, rid, _ in carried
+        ):
             by_id, by_key = _index(None)
 
         resolved: list[int] = []
@@ -79,18 +92,30 @@ class SessionCoverageMixin:
                 resolved.append(matches[0])
         return list(dict.fromkeys(resolved))
 
-    def _matching_active_ids(self, conn, session_id: str, message: dict[str, Any]) -> list[int]:
+    def _matching_active_ids(
+        self, conn, session_id: str, message: dict[str, Any]
+    ) -> list[int]:
         """Active row ids whose stored role and content equal *message*. Empty when it was never persisted."""
         content = message.get("content")
         if not isinstance(content, str):
             return []
-        stored = self._encode_content(self._loaded_view_content(message.get("role", "unknown"), content))
-        return [int(row["id"]) for row in conn.execute(
-            "SELECT id FROM messages WHERE session_id = ? AND active = 1 AND role = ? AND content = ?",
-            (session_id, message.get("role"), stored)).fetchall()]
+        stored = self._encode_content(
+            self._loaded_view_content(message.get("role", "unknown"), content)
+        )
+        return [
+            int(row["id"])
+            for row in conn.execute(
+                "SELECT id FROM messages WHERE session_id = ? AND active = 1 AND role = ? AND content = ?",
+                (session_id, message.get("role"), stored),
+            ).fetchall()
+        ]
 
     def _matching_retired_ids(
-        self, conn, session_id: str, retired: dict[str, Any], watermark: Optional[int] = None,
+        self,
+        conn,
+        session_id: str,
+        retired: dict[str, Any],
+        watermark: Optional[int] = None,
     ) -> list[int]:
         """Active rows equal to a row the alternation repair retired without an id.
 
@@ -103,24 +128,35 @@ class SessionCoverageMixin:
         rows = conn.execute(
             "SELECT id, content, tool_call_id, tool_calls FROM messages WHERE session_id = ? AND active = 1 "
             f"AND role = ?{' AND id <= ?' if bound else ''} ORDER BY id",
-            (session_id, role, *((int(watermark),) if bound else ()))).fetchall()
+            (session_id, role, *((int(watermark),) if bound else ())),
+        ).fetchall()
         want_calls = list(retired.get("tool_call_ids") or ())
         matches = []
         for row in rows:
-            content = self._loaded_view_content(role, self._decode_content(row["content"]))
+            content = self._loaded_view_content(
+                role, self._decode_content(row["content"])
+            )
             if (content or None) != (retired.get("content") or None):
                 continue
             if (row["tool_call_id"] or None) != (retired.get("tool_call_id") or None):
                 continue
             calls = _parse_tool_calls(row["tool_calls"]) or []
-            ids = [call.get("id") for call in calls if isinstance(call, dict)] if isinstance(calls, list) else []
+            ids = (
+                [call.get("id") for call in calls if isinstance(call, dict)]
+                if isinstance(calls, list)
+                else []
+            )
             if ids != want_calls:
                 continue
             matches.append(int(row["id"]))
         return matches
 
     def _merged_user_run(
-        self, conn, session_id: str, message: dict[str, Any], watermark: Optional[int] = None,
+        self,
+        conn,
+        session_id: str,
+        message: dict[str, Any],
+        watermark: Optional[int] = None,
     ) -> Optional[list[int]]:
         """Active rows an alternation repair merged into *message*: ``[]`` for none, None when ambiguous.
 
@@ -132,21 +168,38 @@ class SessionCoverageMixin:
         Only rows at or below *watermark*: the repair ran on a load taken before the snapshot, so a
         run appended later that joins to the same text is another surface's, not the merged one.
         """
-        from agent.conversation_compression_archive import MERGED_DURABLE_ROWS, OWN_ROW, RETIRED_DURABLE_ROWS
+        from agent.conversation_compression_archive import (
+            MERGED_DURABLE_ROWS,
+            OWN_ROW,
+            RETIRED_DURABLE_ROWS,
+        )
 
         content, width = message.get("content"), message.get(MERGED_DURABLE_ROWS)
-        if message.get("role") != "user" or not isinstance(content, str) or type(width) is not int or width < 2:
+        if (
+            message.get("role") != "user"
+            or not isinstance(content, str)
+            or type(width) is not int
+            or width < 2
+        ):
             return []
         from gateway.message_timestamps import strip_leading_message_timestamps
 
         content, _ = strip_leading_message_timestamps(content)
         bound = watermark is not None
         rows = [
-            (int(row["id"]), row["role"], self._loaded_view_content(row["role"], self._decode_content(row["content"])))
+            (
+                int(row["id"]),
+                row["role"],
+                self._loaded_view_content(
+                    row["role"], self._decode_content(row["content"])
+                ),
+            )
             for row in conn.execute(
                 f"SELECT id, role, content FROM messages WHERE session_id = ? AND active = 1"
                 f"{' AND id <= ?' if bound else ''} ORDER BY id",
-                (session_id, *((int(watermark),) if bound else ()))).fetchall()]
+                (session_id, *((int(watermark),) if bound else ())),
+            ).fetchall()
+        ]
         # Dropping an orphan can make user rows adjacent only in the repaired view.
         # Skip only uniquely proved retired originals, never arbitrary intervening rows.
         retired_ids = set()
@@ -177,8 +230,12 @@ class SessionCoverageMixin:
         return runs[0] if runs else []
 
     def _proved_coverage(
-        self, conn, session_id: str, covered_ids: Optional[list[int]],
-        unresolved_held: Optional[list[dict[str, Any]]], watermark: Optional[int] = None,
+        self,
+        conn,
+        session_id: str,
+        covered_ids: Optional[list[int]],
+        unresolved_held: Optional[list[dict[str, Any]]],
+        watermark: Optional[int] = None,
     ) -> Optional[tuple[list[int], set[int]]]:
         """``(ids safe to archive as summarized, ids merged into another held dict)``, or None when
         a durable held row cannot be named.
@@ -196,9 +253,18 @@ class SessionCoverageMixin:
             return None
         from agent.context_compressor import _DB_PERSISTED_MARKER
         from agent.conversation_compression_archive import (
-            ABSORBED_ROW_IDS, MERGED_DURABLE_ROWS, OWN_ROW, RETIRED_DURABLE_ROWS, RETIRED_ROW)
+            ABSORBED_ROW_IDS,
+            MERGED_DURABLE_ROWS,
+            OWN_ROW,
+            RETIRED_DURABLE_ROWS,
+            RETIRED_ROW,
+        )
 
-        proved = [int(row_id) for row_id in covered_ids if isinstance(row_id, int) and row_id > 0]
+        proved = [
+            int(row_id)
+            for row_id in covered_ids
+            if isinstance(row_id, int) and row_id > 0
+        ]
         merged_away: set[int] = set()
         for message in unresolved_held or ():
             if not isinstance(message, dict):
@@ -206,7 +272,9 @@ class SessionCoverageMixin:
             if message.get(RETIRED_ROW):
                 # A row the repair dropped behind another held dict: that dict stands for it in the tail.
                 # The dict's own row, recorded before a fold rewrote its text, is its own tail slot.
-                matches = self._matching_retired_ids(conn, session_id, message, watermark)
+                matches = self._matching_retired_ids(
+                    conn, session_id, message, watermark
+                )
                 if len(matches) != 1:
                     return None
                 proved.extend(matches)
@@ -215,7 +283,10 @@ class SessionCoverageMixin:
                 continue
             # A folded assistant's own row is named by its OWN_ROW record above. Its combined text never
             # existed in storage, so matching it by content could only claim another surface's row.
-            if any(isinstance(row, dict) and row.get(OWN_ROW) for row in message.get(RETIRED_DURABLE_ROWS) or ()):
+            if any(
+                isinstance(row, dict) and row.get(OWN_ROW)
+                for row in message.get(RETIRED_DURABLE_ROWS) or ()
+            ):
                 continue
             # The stamp is provenance and text is not: a surface may have re-rendered the dict since the
             # repair (gateway timestamps), and a later row can equal the merged text. So the run is
@@ -223,9 +294,12 @@ class SessionCoverageMixin:
             run = self._merged_user_run(conn, session_id, message, watermark)
             if message.get(MERGED_DURABLE_ROWS) and not run:
                 return None
-            matches = [] if run else self._matching_active_ids(conn, session_id, message)
+            matches = (
+                [] if run else self._matching_active_ids(conn, session_id, message)
+            )
             if len(matches) > 1 or (
-                    message.get(_DB_PERSISTED_MARKER) and len(matches) != 1 and not run):
+                message.get(_DB_PERSISTED_MARKER) and len(matches) != 1 and not run
+            ):
                 return None
             proved.extend(matches or run)
             merged_away.update(set(run[1:]) - set(message.get(ABSORBED_ROW_IDS) or ()))
@@ -241,24 +315,41 @@ class SessionCoverageMixin:
         without ids are in neither, so their count is added. A dict that holds a ``_row_id`` was
         written back as a single row by an earlier compaction.
         """
-        from agent.conversation_compression_archive import ABSORBED_ROW_IDS, MERGED_DURABLE_ROWS, UNNAMED_DURABLE_ROWS
+        from agent.conversation_compression_archive import (
+            ABSORBED_ROW_IDS,
+            MERGED_DURABLE_ROWS,
+            UNNAMED_DURABLE_ROWS,
+        )
 
         def behind(message: dict[str, Any]) -> int:
-            merged, unnamed = message.get(MERGED_DURABLE_ROWS), message.get(UNNAMED_DURABLE_ROWS)
-            unlisted = merged - 1 - len(message.get(ABSORBED_ROW_IDS) or ()) if type(merged) is int else 0
+            merged, unnamed = (
+                message.get(MERGED_DURABLE_ROWS),
+                message.get(UNNAMED_DURABLE_ROWS),
+            )
+            unlisted = (
+                merged - 1 - len(message.get(ABSORBED_ROW_IDS) or ())
+                if type(merged) is int
+                else 0
+            )
             return max(0, unlisted) + (unnamed if type(unnamed) is int else 0)
 
         return sum(
-            behind(message) for message in tail
-            if isinstance(message, dict) and not isinstance(message.get("_row_id"), int))
+            behind(message)
+            for message in tail
+            if isinstance(message, dict) and not isinstance(message.get("_row_id"), int)
+        )
 
     @staticmethod
-    def _tail_originals(covered_active: list[int], tail_count: int, merged_away: set[int]) -> list[int]:
+    def _tail_originals(
+        covered_active: list[int], tail_count: int, merged_away: set[int]
+    ) -> list[int]:
         """Newest rows behind *tail_count* carried dicts; a dict that merged rows stands for each of them."""
         width = int(tail_count)
         while True:
             window = covered_active[-width:]
-            need = int(tail_count) + sum(1 for row_id in window if row_id in merged_away)
+            need = int(tail_count) + sum(
+                1 for row_id in window if row_id in merged_away
+            )
             if need <= width or width >= len(covered_active):
                 return window
             width = need

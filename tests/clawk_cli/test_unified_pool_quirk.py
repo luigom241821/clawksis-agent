@@ -64,8 +64,7 @@ def test_discrete_card_agreeing_within_rounding_stays_discrete(monkeypatch):
     """A healthy discrete card: allocator and smi agree within rounding.
     Fails the disagreement gate regardless of box RAM."""
     smi = 24 * GIB
-    monkeypatch.setattr(hw, "_device_pool_view",
-                        lambda: (smi + (200 << 20), None))
+    monkeypatch.setattr(hw, "_device_pool_view", lambda: (smi + (200 << 20), None))
     assert hw._unified_pool_bytes(smi, 24 * GIB) is None
     assert hw._unified_pool_bytes(smi, 256 * GIB) is None
 
@@ -97,10 +96,10 @@ def test_no_probe_available_stays_discrete(monkeypatch):
 
 def _uma_machine(monkeypatch, *, view):
     _no_cache(monkeypatch)
-    monkeypatch.setattr(hw, "_nvidia_vram",
-                        lambda: (UMA_SMI_TOTAL, 14848 << 20, "", None))
-    monkeypatch.setattr(hw, "_ram_bytes",
-                        lambda: (UMA_RAM, 32 * GIB))
+    monkeypatch.setattr(
+        hw, "_nvidia_vram", lambda: (UMA_SMI_TOTAL, 14848 << 20, "", None)
+    )
+    monkeypatch.setattr(hw, "_ram_bytes", lambda: (UMA_RAM, 32 * GIB))
     monkeypatch.setattr(hw, "_device_pool_view", lambda: view)
 
 
@@ -128,8 +127,9 @@ def test_budget_unified_pool_live_counts_dedicated_free_plus_os_available(monkey
     b = hw.probe_budget(planning=False)
     assert b.uma is True
     live = (14848 << 20) + 32 * GIB
-    assert b.usable_vram_bytes == int(min(UMA_POOL, live)
-                                      * (1 - hw._UMA_HEADROOM_FRACTION))
+    assert b.usable_vram_bytes == int(
+        min(UMA_POOL, live) * (1 - hw._UMA_HEADROOM_FRACTION)
+    )
 
 
 def test_budget_unified_no_smi_still_classifies(monkeypatch):
@@ -143,8 +143,7 @@ def test_budget_unified_no_smi_still_classifies(monkeypatch):
     planning = hw.probe_budget(planning=True)
     assert planning.uma is True
     assert planning.total_device_bytes == UMA_POOL
-    assert planning.usable_vram_bytes == int(
-        UMA_POOL * (1 - hw._UMA_HEADROOM_FRACTION))
+    assert planning.usable_vram_bytes == int(UMA_POOL * (1 - hw._UMA_HEADROOM_FRACTION))
     live = hw.probe_budget(planning=False)
     assert live.usable_vram_bytes == int(32 * GIB * (1 - hw._UMA_HEADROOM_FRACTION))
 
@@ -182,10 +181,10 @@ def test_engine_fallback_without_smi_stays_conservative(monkeypatch):
     assert b.total_device_bytes == UMA_RAM  # RAM path, not the pool
 
 
-
-
 @pytest.mark.parametrize("device_type, discrete", [(1, True), (2, False)])
-def test_vulkan_device_type_decides_discrete_vs_unified(monkeypatch, tmp_path, device_type, discrete):
+def test_vulkan_device_type_decides_discrete_vs_unified(
+    monkeypatch, tmp_path, device_type, discrete
+):
     """A discrete AMD/Intel card behind a Vulkan engine budgets its own memory with RAM as spill;
     an integrated one (ggml IGPU) keeps the RAM-as-unified budget, never both pools. The engine is
     the one config.yaml names, read through the real config loader."""
@@ -195,14 +194,29 @@ def test_vulkan_device_type_decides_discrete_vs_unified(monkeypatch, tmp_path, d
     total = 16304 << 20
     home = tmp_path / ".clawk"
     home.mkdir()
-    (home / "config.yaml").write_text("local_runtime:\n  backend: vulkan\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "local_runtime:\n  backend: vulkan\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     requested = []
     engine = binaries.Engine("vulkan", "b10964", tmp_path / "engine" / "llama-server")
-    monkeypatch.setattr(binaries, "installed_engine",
-                        lambda backend="auto", **_: requested.append(backend) or engine)
-    monkeypatch.setattr(devices, "probe_devices", lambda directory, backend: [{
-        "description": "AMD Radeon RX 9060 XT", "type": device_type, "free": total, "total": total}])
+    monkeypatch.setattr(
+        binaries,
+        "installed_engine",
+        lambda backend="auto", **_: requested.append(backend) or engine,
+    )
+    monkeypatch.setattr(
+        devices,
+        "probe_devices",
+        lambda directory, backend: [
+            {
+                "description": "AMD Radeon RX 9060 XT",
+                "type": device_type,
+                "free": total,
+                "total": total,
+            }
+        ],
+    )
     monkeypatch.setattr(hw, "_accelerator_cache", {})
     monkeypatch.setattr(hw, "_nvidia_vram", lambda: None)
     monkeypatch.setattr(hw, "_device_pool_view", lambda: None)
@@ -258,13 +272,11 @@ def test_memory_probe_carries_identity_without_another_process(monkeypatch):
     assert budget.gpu_pci_id == 0x2E0310DE
     assert budget.platform == sys.platform
     assert budget.total_device_bytes == UMA_POOL
-    assert budget.usable_vram_bytes == int(UMA_POOL * .8)
+    assert budget.usable_vram_bytes == int(UMA_POOL * 0.8)
     assert len(calls) == 1
 
 
 # ── probe cache ──────────────────────────────────────────────
-
-
 
 
 def test_pool_probe_miss_retries_after_ttl(monkeypatch):
@@ -278,7 +290,7 @@ def test_pool_probe_miss_retries_after_ttl(monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(hw.time, "monotonic", lambda: now[0])
     assert hw._device_pool_view() is None
-    now[0] += 1.0          # inside TTL: cached miss, no re-probe
+    now[0] += 1.0  # inside TTL: cached miss, no re-probe
     assert hw._device_pool_view() is None
     now[0] += hw._POOL_NEGATIVE_TTL_S + 1.0
     assert hw._device_pool_view() == (UMA_POOL, None)
@@ -291,7 +303,9 @@ def test_pool_probe_miss_retries_after_ttl(monkeypatch):
 def test_device_line_regex_handles_parenthesized_names():
     """Device names may contain their own parentheses — the LAST
     parenthesized group must win."""
-    line = ("  CUDA0: NVIDIA Example Device (1234-core Example GPU) "
-            "(46464 MiB, 46284 MiB free)")
+    line = (
+        "  CUDA0: NVIDIA Example Device (1234-core Example GPU) "
+        "(46464 MiB, 46284 MiB free)"
+    )
     m = hw._DEVICE_LINE_RE.search(line)
     assert m and int(m.group(1)) == 46464

@@ -46,7 +46,9 @@ def _corrupt_sessions_btree(db_path):
         if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
-        root = conn.execute("SELECT rootpage FROM sqlite_master WHERE name = 'sessions'").fetchone()[0]
+        root = conn.execute(
+            "SELECT rootpage FROM sqlite_master WHERE name = 'sessions'"
+        ).fetchone()[0]
     finally:
         conn.close()
     with open(db_path, "r+b") as fh:
@@ -60,18 +62,35 @@ def _corrupt_sessions_btree(db_path):
 class TestLatch:
     def test_only_structural_corruption_latches(self, tmp_path):
         path = tmp_path / "state.db"
-        assert note_storage_error(path, sqlite3.OperationalError("database is locked")) is False
-        assert note_storage_error(path, sqlite3.DatabaseError("malformed database schema (messages_fts)")) is False
+        assert (
+            note_storage_error(path, sqlite3.OperationalError("database is locked"))
+            is False
+        )
+        assert (
+            note_storage_error(
+                path, sqlite3.DatabaseError("malformed database schema (messages_fts)")
+            )
+            is False
+        )
         fts = sqlite3.DatabaseError("database disk image is malformed")
-        fts.sqlite_errorcode = 267  # SQLITE_CORRUPT_VTAB: FTS-scoped, has its own fail-open path
+        fts.sqlite_errorcode = (
+            267  # SQLITE_CORRUPT_VTAB: FTS-scoped, has its own fail-open path
+        )
         assert note_storage_error(path, fts) is False
         assert storage_state(path) == "ok"
 
-        assert note_storage_error(path, sqlite3.DatabaseError("database disk image is malformed")) is True
+        assert (
+            note_storage_error(
+                path, sqlite3.DatabaseError("database disk image is malformed")
+            )
+            is True
+        )
         assert storage_state(path) == "corrupt"
 
     def test_not_a_database_is_structural(self):
-        assert is_structural_corruption_error(sqlite3.DatabaseError("file is not a database"))
+        assert is_structural_corruption_error(
+            sqlite3.DatabaseError("file is not a database")
+        )
 
     def test_a_real_read_on_a_damaged_btree_latches(self, tmp_path):
         path = tmp_path / "state.db"
@@ -94,12 +113,16 @@ class TestPeerWritesAfterLatch:
     def test_fresh_handle_refuses_writes_with_state_db_corrupt_error(self, tmp_path):
         path = tmp_path / "state.db"
         _seed(path, count=1)
-        note_storage_error(path, sqlite3.DatabaseError("database disk image is malformed"))
+        note_storage_error(
+            path, sqlite3.DatabaseError("database disk image is malformed")
+        )
 
         peer = SessionDB(db_path=path)
         try:
             with pytest.raises(StateDbCorruptError) as excinfo:
-                peer.append_message(session_id="s000", role="user", content="after the latch")
+                peer.append_message(
+                    session_id="s000", role="user", content="after the latch"
+                )
             assert classify_persistence_error(excinfo.value) == "corrupt"
             assert peer._db_corrupt is True
         finally:
@@ -144,15 +167,22 @@ def test_readiness_state_db_and_session_store_agree_on_corrupt(_isolate_clawk_ho
 
     path = get_clawk_home() / "state.db"
     _seed(path, count=1)
-    healthy = collect_runtime_readiness(configured_model="m", runtime_status={"session_store": {"status": "ok"}})
+    healthy = collect_runtime_readiness(
+        configured_model="m", runtime_status={"session_store": {"status": "ok"}}
+    )
     assert healthy["checks"]["state_db"]["status"] == "ok"
 
     note_storage_error(path, sqlite3.DatabaseError("database disk image is malformed"))
-    ready = collect_runtime_readiness(configured_model="m", runtime_status={"session_store": {"status": "ok"}})
+    ready = collect_runtime_readiness(
+        configured_model="m", runtime_status={"session_store": {"status": "ok"}}
+    )
     assert ready["status"] == "degraded"
     assert ready["checks"]["state_db"] == {"status": "degraded", "detail": "corrupt"}
     # The gateway's handle cache says "ok"; an open handle on a damaged file is not a working store.
-    assert ready["checks"]["session_store"] == {"status": "unavailable", "detail": "corrupt"}
+    assert ready["checks"]["session_store"] == {
+        "status": "unavailable",
+        "detail": "corrupt",
+    }
 
 
 def test_readiness_probe_latches_a_file_that_is_not_a_database(_isolate_clawk_home):
@@ -216,6 +246,11 @@ def test_corrupt_state_db_is_published_to_every_desktop_surface(client):
 
     # Status (what Desktop polls) and readiness now say the same thing.
     status = client.get("/api/status").json()
-    assert status["components"]["storage"] == {"status": "degraded", "reason": "corrupt"}
+    assert status["components"]["storage"] == {
+        "status": "degraded",
+        "reason": "corrupt",
+    }
     assert status["overall"] == "degraded"
-    assert client.get("/api/profiles/sessions?profile=all").json()["storage"] == {"default": "corrupt"}
+    assert client.get("/api/profiles/sessions?profile=all").json()["storage"] == {
+        "default": "corrupt"
+    }

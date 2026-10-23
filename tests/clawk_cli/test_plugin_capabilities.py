@@ -48,12 +48,10 @@ class TestRegistry:
             assert spec.description
 
 
-
 # ── Declaration parsing ──────────────────────────────────────────────────────
 
 
 class TestDeclarationParsing:
-
     def test_drops_unknown_ids(self):
         got = parse_declared_capabilities(["tools.override", "root.everything"])
         assert got == ["tools.override"]
@@ -96,9 +94,7 @@ class TestDeclarationParsing:
 
         plugin_dir = tmp_path / "plainplug"
         plugin_dir.mkdir()
-        (plugin_dir / "plugin.yaml").write_text(
-            "name: plainplug\n", encoding="utf-8"
-        )
+        (plugin_dir / "plugin.yaml").write_text("name: plainplug\n", encoding="utf-8")
         manifest = parse_manifest_file(
             plugin_dir / "plugin.yaml", plugin_dir, "user", ""
         )
@@ -162,12 +158,9 @@ class TestConsentPersistence:
         assert entry["allow_tool_override"] is True
 
     def test_record_consent_mirrors_nested_legacy_key(self, clawk_home):
-        record_consent(
-            "capplug", ["llm.model_override"], ["llm.model_override"]
-        )
+        record_consent("capplug", ["llm.model_override"], ["llm.model_override"])
         entry = _read_cfg(clawk_home)["plugins"]["entries"]["capplug"]
         assert entry["llm"]["allow_model_override"] is True
-
 
     def test_grant_is_union_with_previous(self, clawk_home):
         record_consent("capplug", ["tools.override"], ["tools.override"])
@@ -180,13 +173,10 @@ class TestConsentPersistence:
             {"tools.override", "llm.model_override"}
         )
 
-
     def test_declined_stays_off(self, clawk_home):
         # No record_consent call — nothing granted.
         assert plugin_capability_granted("capplug", "tools.override") is False
-        assert pending_capabilities("capplug", ["tools.override"]) == [
-            "tools.override"
-        ]
+        assert pending_capabilities("capplug", ["tools.override"]) == ["tools.override"]
 
 
 # ── Update re-consent ────────────────────────────────────────────────────────
@@ -198,9 +188,7 @@ class TestUpdateReconsent:
         record_consent("capplug", ["tools.override"], ["tools.override"])
         # v2 adds llm.model_override.
         declared_v2 = ["tools.override", "llm.model_override"]
-        assert pending_capabilities("capplug", declared_v2) == [
-            "llm.model_override"
-        ]
+        assert pending_capabilities("capplug", declared_v2) == ["llm.model_override"]
         assert declared_set_changed("capplug", declared_v2) is True
         # The added capability stays ungranted until re-consent.
         assert plugin_capability_granted("capplug", "llm.model_override") is False
@@ -268,8 +256,7 @@ class TestFailClosed:
 
     def test_corrupt_consent_hash_counts_as_changed(self, clawk_home):
         (clawk_home / "config.yaml").write_text(
-            "plugins:\n  entries:\n    capplug:\n"
-            "      capabilities_consent: broken\n",
+            "plugins:\n  entries:\n    capplug:\n      capabilities_consent: broken\n",
             encoding="utf-8",
         )
         assert consent_hash("capplug") is None
@@ -282,8 +269,7 @@ class TestFailClosed:
 class TestLegacyGateCompat:
     def test_legacy_allow_tool_override_still_works(self, clawk_home):
         (clawk_home / "config.yaml").write_text(
-            "plugins:\n  entries:\n    oldplug:\n"
-            "      allow_tool_override: true\n",
+            "plugins:\n  entries:\n    oldplug:\n      allow_tool_override: true\n",
             encoding="utf-8",
         )
         assert plugin_capability_granted("oldplug", "tools.override") is True
@@ -298,8 +284,7 @@ class TestLegacyGateCompat:
 
     def test_legacy_false_stays_denied(self, clawk_home):
         (clawk_home / "config.yaml").write_text(
-            "plugins:\n  entries:\n    oldplug:\n"
-            "      allow_tool_override: false\n",
+            "plugins:\n  entries:\n    oldplug:\n      allow_tool_override: false\n",
             encoding="utf-8",
         )
         assert plugin_capability_granted("oldplug", "tools.override") is False
@@ -324,8 +309,7 @@ class TestLegacyGateCompat:
         from clawk_cli.plugins import PluginContext, PluginManifest, PluginManager
 
         (clawk_home / "config.yaml").write_text(
-            "plugins:\n  entries:\n    oldplug:\n"
-            "      allow_tool_override: true\n",
+            "plugins:\n  entries:\n    oldplug:\n      allow_tool_override: true\n",
             encoding="utf-8",
         )
         manifest = PluginManifest(name="oldplug", source="user", key="oldplug")

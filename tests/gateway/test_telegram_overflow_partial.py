@@ -24,7 +24,9 @@ def telegram_adapter() -> TelegramAdapter:
 
 
 @pytest.mark.asyncio
-async def test_edit_overflow_split_reports_later_partial_failure_after_some_continuations_land(telegram_adapter):
+async def test_edit_overflow_split_reports_later_partial_failure_after_some_continuations_land(
+    telegram_adapter,
+):
     """Partial metadata tracks the last delivered continuation before failure."""
     content = "word " * 120
     telegram_adapter._bot.edit_message_text = AsyncMock(return_value=True)
@@ -46,5 +48,3 @@ async def test_edit_overflow_split_reports_later_partial_failure_after_some_cont
     assert result.raw_response["delivered_chunks"] == 2
     assert result.raw_response["last_message_id"] == "202"
     assert result.continuation_message_ids == ("202",)
-
-

@@ -14,6 +14,7 @@ while the same gateway's inbound filter has just accepted it.
 Without the fix ``capture_provenance`` raises ``profile_mismatch``; with it, the same
 route the ingress stamping used resolves the runtime profile.
 """
+
 import weakref
 from pathlib import Path
 
@@ -27,7 +28,10 @@ from gateway.run_runtime import initialize_gateway_runtime
 from gateway.runtime_ownership import process_ownership
 from gateway.session import SessionSource
 from gateway.session_ingress_context import (
-    capture_provenance, native_callback, register_transport_home)
+    capture_provenance,
+    native_callback,
+    register_transport_home,
+)
 
 from clawk_state_runtime import RuntimeStoreError
 
@@ -46,8 +50,10 @@ def _reserve_homes(tmp_path, monkeypatch, names=("guest",)):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("CLAWK_HOME", str(root))
     import clawk_state
+
     monkeypatch.setattr(
-        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     homes = [("default", root)]
     for name in names:
         home = root / "profiles" / name
@@ -61,10 +67,17 @@ def _runner(root, homes):
     config = GatewayConfig()
     config.multiplex_profiles = True
     config._runtime_profile_homes = tuple(homes)
-    config.profile_routes = parse_profile_routes([
-        {"name": "alice-dm", "platform": "bluebubbles", "user_id": ALICE, "profile": "guest"},
-        {"name": "everyone-else", "platform": "bluebubbles", "profile": "default"},
-    ])
+    config.profile_routes = parse_profile_routes(
+        [
+            {
+                "name": "alice-dm",
+                "platform": "bluebubbles",
+                "user_id": ALICE,
+                "profile": "guest",
+            },
+            {"name": "everyone-else", "platform": "bluebubbles", "profile": "default"},
+        ]
+    )
     return GatewayRunner(config)
 
 
@@ -82,8 +95,12 @@ async def _admit_and_read_provenance(tmp_path, monkeypatch, user_id):
 
         stamped = None
         source = SessionSource(
-            platform=Platform.BLUEBUBBLES, chat_id=f"any;-;{user_id}", chat_type="dm",
-            user_id=user_id, user_name=user_id)
+            platform=Platform.BLUEBUBBLES,
+            chat_id=f"any;-;{user_id}",
+            chat_type="dm",
+            user_id=user_id,
+            user_name=user_id,
+        )
         # session_identity.identity_of stamps the routed profile onto the primary's source and
         # keeps the receiving adapter as provenance; hand-built sources need both, exactly as
         # build_source leaves them.
@@ -92,7 +109,11 @@ async def _admit_and_read_provenance(tmp_path, monkeypatch, user_id):
         source._transport_adapter_ref = weakref.ref(adapter)
 
         event = MessageEvent(
-            text="hello", message_type=MessageType.TEXT, source=source, message_id="probe-msg")
+            text="hello",
+            message_type=MessageType.TEXT,
+            source=source,
+            message_id="probe-msg",
+        )
         with native_callback(runner, event, root, None):
             provenance = capture_provenance(runner, event)
         return provenance, homes, stamped
@@ -104,9 +125,13 @@ async def _admit_and_read_provenance(tmp_path, monkeypatch, user_id):
 
 
 @pytest.mark.asyncio
-async def test_user_id_route_resolves_the_profile_ingress_stamped(tmp_path, monkeypatch):
+async def test_user_id_route_resolves_the_profile_ingress_stamped(
+    tmp_path, monkeypatch
+):
     """A DM from the routed sender is admitted on the route's profile, not refused."""
-    provenance, homes, stamped = await _admit_and_read_provenance(tmp_path, monkeypatch, ALICE)
+    provenance, homes, stamped = await _admit_and_read_provenance(
+        tmp_path, monkeypatch, ALICE
+    )
 
     assert stamped == "guest", "the ingress stamping is the reference for this route"
     assert provenance is not None
@@ -115,9 +140,12 @@ async def test_user_id_route_resolves_the_profile_ingress_stamped(tmp_path, monk
 
 @pytest.mark.asyncio
 async def test_a_sender_outside_the_user_id_route_still_follows_the_catch_all(
-        tmp_path, monkeypatch):
+    tmp_path, monkeypatch
+):
     """The sender's own ``user_id`` is matched — the route does not apply to everybody."""
-    provenance, homes, stamped = await _admit_and_read_provenance(tmp_path, monkeypatch, BOB)
+    provenance, homes, stamped = await _admit_and_read_provenance(
+        tmp_path, monkeypatch, BOB
+    )
 
     assert stamped == "default"
     assert provenance is not None

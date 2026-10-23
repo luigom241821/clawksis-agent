@@ -29,6 +29,7 @@ def _home(tmp_path, monkeypatch):
     layout ``referenced_spillover_names`` derives from the spill dir."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import tools.tool_result_storage as trs
+
     monkeypatch.setattr(trs, "_spillover_pruned_homes", set())
     return tmp_path
 
@@ -46,18 +47,27 @@ def _spill(home, name, age_hours=0.0):
 
 def _pointer(home, name, size=150_000):
     return _build_persisted_message(
-        preview="preview", has_more=True, original_size=size,
-        file_path=str(home / "cache" / "spillover" / name))
+        preview="preview",
+        has_more=True,
+        original_size=size,
+        file_path=str(home / "cache" / "spillover" / name),
+    )
 
 
 def _aged_session(db, sid, name, ended=True):
     db.create_session(sid, "cli")
-    db.append_message(sid, "tool", _pointer(db.db_path.parent, name), timestamp=time.time() - THREE_DAYS_S)
+    db.append_message(
+        sid,
+        "tool",
+        _pointer(db.db_path.parent, name),
+        timestamp=time.time() - THREE_DAYS_S,
+    )
     if ended:
         db.end_session(sid, "completed")
     db._write_sql(
         "UPDATE sessions SET started_at = ?, last_activity_at = ? WHERE id = ?",
-        (time.time() - THREE_DAYS_S, time.time() - THREE_DAYS_S, sid))
+        (time.time() - THREE_DAYS_S, time.time() - THREE_DAYS_S, sid),
+    )
 
 
 def test_retained_sessions_spill_survives_the_age_sweep(_home):
@@ -68,13 +78,19 @@ def test_retained_sessions_spill_survives_the_age_sweep(_home):
     try:
         db.create_session("s_recent", "cli")
         db.append_message("s_recent", "tool", _pointer(_home, "recent.txt"))
-        db.end_session("s_recent", "completed")  # ended, unpinned, active 1h ago: not prunable
-        db._write_sql("UPDATE sessions SET last_activity_at = ? WHERE id = ?",
-                      (time.time() - 3600, "s_recent"))
+        db.end_session(
+            "s_recent", "completed"
+        )  # ended, unpinned, active 1h ago: not prunable
+        db._write_sql(
+            "UPDATE sessions SET last_activity_at = ? WHERE id = ?",
+            (time.time() - 3600, "s_recent"),
+        )
         aged = _spill(_home, "recent.txt", age_hours=49)
 
         assert db.prune_sessions(older_than_days=2) == 0  # session retained...
-        assert cleanup_spillover_cache(max_age_hours=48) == 0  # ...so the sweep keeps the archive
+        assert (
+            cleanup_spillover_cache(max_age_hours=48) == 0
+        )  # ...so the sweep keeps the archive
         assert aged.exists()
     finally:
         db.close()
@@ -87,10 +103,21 @@ def test_structured_and_backslashed_pointers_are_owned(_home):
     db = SessionDB(db_path=_home / "state.db")
     try:
         db.create_session("s", "cli")
-        db.append_message("s", "tool", [{"type": "text", "text": _pointer(_home, "parts.txt")},
-                                        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA"}}])
-        db.append_message("s", "tool", "Full output saved to: C:\\h\\cache\\spillover\\win.txt")
-        files = [_spill(_home, "parts.txt", age_hours=200 * 24), _spill(_home, "win.txt", age_hours=200 * 24)]
+        db.append_message(
+            "s",
+            "tool",
+            [
+                {"type": "text", "text": _pointer(_home, "parts.txt")},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA"}},
+            ],
+        )
+        db.append_message(
+            "s", "tool", "Full output saved to: C:\\h\\cache\\spillover\\win.txt"
+        )
+        files = [
+            _spill(_home, "parts.txt", age_hours=200 * 24),
+            _spill(_home, "win.txt", age_hours=200 * 24),
+        ]
 
         assert cleanup_spillover_cache(max_age_hours=24) == 0
         assert all(f.exists() for f in files)
@@ -162,15 +189,27 @@ def test_canonical_delete_retires_the_spill_for_collection(_home):
     collection unlinks it."""
     import clawk_state_runtime as rt
     from clawk_state_media import collect_retired_media
+
     db = SessionDB(db_path=_home / "state.db")
     try:
         _aged_session(db, "s_web", "web.txt")
         spill = _spill(_home, "web.txt")
         epoch = rt.begin_runtime_epoch(db, instance_id="owner")
-        rt.mutate_runtime_session(db, epoch=epoch, principal_id="human", session_id="s_web", request_id="del",
-                                  expected_revision=0, expected_generation=0, operation="delete", payload={})
+        rt.mutate_runtime_session(
+            db,
+            epoch=epoch,
+            principal_id="human",
+            session_id="s_web",
+            request_id="del",
+            expected_revision=0,
+            expected_generation=0,
+            operation="delete",
+            payload={},
+        )
         assert spill.exists()  # the transaction only records the candidate
-        collect_retired_media(db)  # gateway/session_mutations.py runs this after every delete
+        collect_retired_media(
+            db
+        )  # gateway/session_mutations.py runs this after every delete
         assert not spill.exists()
     finally:
         db.close()

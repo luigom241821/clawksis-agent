@@ -103,7 +103,9 @@ def test_resume_latest_resolves_to_mru_session(main_mod, launched, monkeypatch):
     monkeypatch.setattr(
         main_mod,
         "_resolve_session_by_name_or_id",
-        lambda val: val if val != "latest" else pytest.fail("'latest' hit title resolution"),
+        lambda val: (
+            val if val != "latest" else pytest.fail("'latest' hit title resolution")
+        ),
     )
 
     with pytest.raises(SystemExit) as exc:
@@ -130,7 +132,9 @@ def test_resume_latest_tui_falls_back_to_cli_source(main_mod, launched, monkeypa
 
 
 def test_resume_latest_is_case_insensitive(main_mod, launched, monkeypatch):
-    monkeypatch.setattr(main_mod, "_resolve_last_session", lambda source="cli": "sess_1")
+    monkeypatch.setattr(
+        main_mod, "_resolve_last_session", lambda source="cli": "sess_1"
+    )
     monkeypatch.setattr(main_mod, "_resolve_session_by_name_or_id", lambda v: v)
 
     with pytest.raises(SystemExit):
@@ -166,7 +170,9 @@ def test_resume_real_id_untouched_by_latest_keyword(main_mod, launched, monkeypa
 # ---------------------------------------------------------------------------
 
 
-def test_in_dir_chdirs_before_session_resolution(main_mod, launched, monkeypatch, tmp_path):
+def test_in_dir_chdirs_before_session_resolution(
+    main_mod, launched, monkeypatch, tmp_path
+):
     import os
 
     target = tmp_path / "projdir"

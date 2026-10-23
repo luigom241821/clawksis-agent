@@ -20,12 +20,15 @@ def _skins():
 
 
 def _activate(name: str) -> None:
-    (get_clawk_home() / "config.yaml").write_text(f"display:\n  skin: {name}\n", encoding="utf-8")
+    (get_clawk_home() / "config.yaml").write_text(
+        f"display:\n  skin: {name}\n", encoding="utf-8"
+    )
 
 
 def test_set_edits_active_user_skin_in_place_preserving_everything_else():
     (_skins() / "oasis.yaml").write_text(
-        'name: oasis\ncolors:\n  background: "#08201f"\n  banner_title: "#f2dfb3"\n', encoding="utf-8"
+        'name: oasis\ncolors:\n  background: "#08201f"\n  banner_title: "#f2dfb3"\n',
+        encoding="utf-8",
     )
     _activate("oasis")
 
@@ -110,9 +113,7 @@ def test_set_preserves_a_symlinked_skin_file():
     real_dir = _skins().parent / "dotfiles"
     real_dir.mkdir(parents=True, exist_ok=True)
     real = real_dir / "oasis.yaml"
-    real.write_text(
-        'name: oasis\ncolors:\n  background: "#08201f"\n', encoding="utf-8"
-    )
+    real.write_text('name: oasis\ncolors:\n  background: "#08201f"\n', encoding="utf-8")
     link = _skins() / "oasis.yaml"
     link.symlink_to(real)
     _activate("oasis")

@@ -16,6 +16,7 @@ Coverage targets:
     even with empty user_allowed_commands.
   - DM vs group scope isolation.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -53,9 +54,12 @@ def _make_event(text: str, source: SessionSource) -> MessageEvent:
     return MessageEvent(text=text, source=source, message_id="m1")
 
 
-def _make_runner(*, platform_extra: dict | None = None,
-                 platform: Platform = Platform.DISCORD,
-                 multiplex_profiles: bool = False):
+def _make_runner(
+    *,
+    platform_extra: dict | None = None,
+    platform: Platform = Platform.DISCORD,
+    multiplex_profiles: bool = False,
+):
     from gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
@@ -67,7 +71,7 @@ def _make_runner(*, platform_extra: dict | None = None,
                 token="***",
                 extra=platform_extra or {},
             )
-        }
+        },
     )
     adapter = MagicMock()
     adapter.send = AsyncMock()
@@ -133,10 +137,12 @@ async def test_whoami_non_admin_lists_runnable_commands():
             "user_allowed_commands": ["status", "model"],
         }
     )
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "Tier: user" in result
-    assert "/help" in result      # always-allowed floor
-    assert "/whoami" in result    # always-allowed floor
+    assert "/help" in result  # always-allowed floor
+    assert "/whoami" in result  # always-allowed floor
     assert "/status" in result
     assert "/model" in result
 
@@ -150,14 +156,19 @@ async def test_secondary_profile_slash_policy_uses_its_own_config():
         platforms={
             Platform.DISCORD: PlatformConfig(
                 enabled=True,
-                extra={"allow_admin_from": ["admin"], "user_allowed_commands": ["status"]},
+                extra={
+                    "allow_admin_from": ["admin"],
+                    "user_allowed_commands": ["status"],
+                },
             )
         }
     )
     user = _make_source(user_id="user", profile="beta")
     denied = runner._check_slash_access(user, "restart")
     assert denied is not None and "⛔" in denied
-    assert "Tier: user" in await runner._handle_whoami_command(_make_event("/whoami", user))
+    assert "Tier: user" in await runner._handle_whoami_command(
+        _make_event("/whoami", user)
+    )
     assert runner._resume_caller_is_admin(user) is False
 
     admin = _make_source(user_id="admin", profile="beta")
@@ -170,8 +181,10 @@ async def test_secondary_profile_slash_policy_uses_its_own_config():
     # (transport) profile's config decides, the owner ``authorization_home`` already names.
     routed = _make_source(user_id="user", profile="beta")
     routed._identity = RoutingIdentity(
-        transport_profile="primary", runtime_profile="beta",
-        authorization_home=Path("/profiles/primary"), runtime_home=Path("/profiles/beta"),
+        transport_profile="primary",
+        runtime_profile="beta",
+        authorization_home=Path("/profiles/primary"),
+        runtime_home=Path("/profiles/beta"),
     )
     assert runner._check_slash_access(routed, "restart") is None
 
@@ -179,9 +192,14 @@ async def test_secondary_profile_slash_policy_uses_its_own_config():
 def test_missing_secondary_profile_config_fails_closed():
     """A served profile whose config is not cached must not inherit the launch profile's open policy."""
     runner = _make_runner(multiplex_profiles=True)
-    denied = runner._check_slash_access(_make_source(user_id="user", profile="beta"), "restart")
+    denied = runner._check_slash_access(
+        _make_source(user_id="user", profile="beta"), "restart"
+    )
     assert denied is not None and "⛔" in denied
-    assert runner._check_slash_access(_make_source(user_id="user", profile="beta"), "help") is None
+    assert (
+        runner._check_slash_access(_make_source(user_id="user", profile="beta"), "help")
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -194,10 +212,14 @@ async def test_help_non_admin_lists_only_runnable_commands():
             "user_allowed_commands": ["status"],
         }
     )
-    user = await runner._handle_message(_make_event("/help", _make_source(user_id="999")))
+    user = await runner._handle_message(
+        _make_event("/help", _make_source(user_id="999"))
+    )
     assert "`/help" in user and "`/whoami" in user and "`/status" in user
     assert "`/model" not in user and "`/restart" not in user
-    admin = await runner._handle_message(_make_event("/help", _make_source(user_id="111")))
+    admin = await runner._handle_message(
+        _make_event("/help", _make_source(user_id="111"))
+    )
     assert "`/model" in admin and "`/restart" in admin
 
 
@@ -215,11 +237,15 @@ async def test_non_admin_with_empty_user_commands_gets_floor_only():
         }
     )
     # /stop denied
-    result = await runner._handle_message(_make_event("/stop", _make_source(user_id="999")))
+    result = await runner._handle_message(
+        _make_event("/stop", _make_source(user_id="999"))
+    )
     assert "⛔" in result
     assert "No slash commands are enabled" in result
     # /whoami still works (always-allowed floor)
-    whoami_result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="999")))
+    whoami_result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="999"))
+    )
     assert "Tier: user" in whoami_result
 
 
@@ -246,7 +272,9 @@ async def test_group_only_gating_leaves_dm_unrestricted():
             "group_allow_admin_from": ["222"],
         }
     )
-    result = await runner._handle_message(_make_event("/whoami", _make_source(user_id="anyone", chat_type="dm")))
+    result = await runner._handle_message(
+        _make_event("/whoami", _make_source(user_id="anyone", chat_type="dm"))
+    )
     assert "Tier: unrestricted" in result
 
 
@@ -397,9 +425,7 @@ async def test_gating_isolated_per_platform():
                     "user_allowed_commands": [],
                 },
             ),
-            Platform.TELEGRAM: PlatformConfig(
-                enabled=True, token="***", extra={}
-            ),
+            Platform.TELEGRAM: PlatformConfig(enabled=True, token="***", extra={}),
         }
     )
     runner.adapters = {

@@ -24,8 +24,6 @@ from clawk_cli.main import (
 # ── _resolve_deferred_platform_cli_command (issue #54678) ──────────────────
 
 
-
-
 def test_deferred_platform_loader_registers_cli_command_before_parser_table():
     """Fake deferred loader must resolve through real registry + register CLI
     before argparse builds plugin command subparsers (issue #54678 review).

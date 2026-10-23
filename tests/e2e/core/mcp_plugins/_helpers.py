@@ -26,8 +26,18 @@ from typing import Any, Callable, Iterator
 import pytest
 import clawk_yaml as yaml
 
-from tests.e2e.core.parity._helpers import clawk_argv, kill_tagged, tagged_pids, wait_until
-from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall, write_clawk_home
+from tests.e2e.core.parity._helpers import (
+    clawk_argv,
+    kill_tagged,
+    tagged_pids,
+    wait_until,
+)
+from tests.fakes.fake_llm_provider import (
+    FakeLLMServer,
+    Text,
+    ToolCall,
+    write_clawk_home,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_SERVER = Path(__file__).with_name("mcp_fixture_server.py")
@@ -35,7 +45,9 @@ FINAL = "MCPE2E-TURN-COMPLETE"
 TURN_TIMEOUT = 240.0
 
 _SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_ACCESS_KEY")
-_PASSTHROUGH_ENV = frozenset({"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"})
+_PASSTHROUGH_ENV = frozenset(
+    {"PATH", "LANG", "LANGUAGE", "USER", "LOGNAME", "SHELL", "TMPDIR", "TZ"}
+)
 
 __all__ = [
     "FINAL",
@@ -106,18 +118,32 @@ class E2EHome:
         """Hermetic child env: fake HOME (so no ``~/.clawksis`` of the real user is reachable)."""
         import pwd  # the suite is Linux-gated
 
-        real_root = Path(pwd.getpwuid(os.getuid()).pw_dir, ".clawk").resolve()  # windows-footgun: ok — module is skipif(not linux)
+        real_root = Path(
+            pwd.getpwuid(os.getuid()).pw_dir, ".clawk"
+        ).resolve()  # windows-footgun: ok — module is skipif(not linux)
         fixture = self.clawk_home.resolve()
-        assert fixture != real_root and fixture.parent != real_root / "profiles", fixture
+        assert fixture != real_root and fixture.parent != real_root / "profiles", (
+            fixture
+        )
         assert fixture == (self.home / ".clawksis").resolve(), fixture
-        env = {k: v for k, v in os.environ.items()
-               if (k in _PASSTHROUGH_ENV or k.startswith("LC_")) and not k.endswith(_SECRET_ENV_SUFFIXES)}
-        env.update({
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home), "PYTHONPATH": str(REPO_ROOT),
-            "PYTHONUNBUFFERED": "1", "NO_COLOR": "1", "TERM": "dumb",
-            "PARITY_TREE_TAG": self.tag,  # orphan-scan tag inherited by the whole tree
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",  # child HOME is tmp_path by construction
-        })
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if (k in _PASSTHROUGH_ENV or k.startswith("LC_"))
+            and not k.endswith(_SECRET_ENV_SUFFIXES)
+        }
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                "PYTHONUNBUFFERED": "1",
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                "PARITY_TREE_TAG": self.tag,  # orphan-scan tag inherited by the whole tree
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",  # child HOME is tmp_path by construction
+            }
+        )
         env.update(self.extra_env)
         env.update(extra or {})
         return env
@@ -129,7 +155,9 @@ class E2EHome:
     def update_config(self, mutate: Callable[[dict], None]) -> None:
         cfg = yaml.safe_load(self.config_path.read_text(encoding="utf-8"))
         mutate(cfg)
-        self.config_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+        self.config_path.write_text(
+            yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8"
+        )
 
 
 def _select_test_dependencies(eh: E2EHome) -> None:
@@ -138,14 +166,25 @@ def _select_test_dependencies(eh: E2EHome) -> None:
     select_test_dependencies(eh.clawk_home, REPO_ROOT)
 
 
-def build_home(root: Path, base_url: str, *, mcp_servers: dict[str, dict] | None = None,
-               extra: dict[str, Any] | None = None) -> E2EHome:
+def build_home(
+    root: Path,
+    base_url: str,
+    *,
+    mcp_servers: dict[str, dict] | None = None,
+    extra: dict[str, Any] | None = None,
+) -> E2EHome:
     home = root / "home"
     clawk_home = home / ".clawksis"
     project = root / "project"
     for d in (clawk_home, project):
         d.mkdir(parents=True, exist_ok=True)
-    eh = E2EHome(root=root, home=home, clawk_home=clawk_home, project=project, tag=uuid.uuid4().hex)
+    eh = E2EHome(
+        root=root,
+        home=home,
+        clawk_home=clawk_home,
+        project=project,
+        tag=uuid.uuid4().hex,
+    )
     write_clawk_home(clawk_home, base_url)
     cfg = yaml.safe_load(eh.config_path.read_text(encoding="utf-8"))
     cfg["mcp_servers"] = dict(mcp_servers or {})
@@ -165,8 +204,13 @@ def stdio_server(name: str, log: Path, tag: str, **env: str) -> dict[str, Any]:
     return {
         "command": sys.executable,
         "args": [str(FIXTURE_SERVER)],
-        "env": {"MCPE2E_LOG": str(log), "MCPE2E_NAME": name, "PARITY_TREE_TAG": tag,
-                "PYTHONPATH": str(REPO_ROOT), **env},
+        "env": {
+            "MCPE2E_LOG": str(log),
+            "MCPE2E_NAME": name,
+            "PARITY_TREE_TAG": tag,
+            "PYTHONPATH": str(REPO_ROOT),
+            **env,
+        },
         "connect_timeout": 60,
         "timeout": 60,
     }
@@ -197,14 +241,33 @@ class HttpMcpServer:
         with contextlib.suppress(FileNotFoundError):
             self.port_file.unlink()
         env = {k: v for k, v in os.environ.items() if k in _PASSTHROUGH_ENV}
-        env.update({"PYTHONPATH": str(REPO_ROOT), "MCPE2E_TRANSPORT": "http", "MCPE2E_LOG": str(self.log),
-                    "MCPE2E_PORT_FILE": str(self.port_file), "MCPE2E_PORT": str(self.port),
-                    "PARITY_TREE_TAG": self.tag, **self.env})
+        env.update(
+            {
+                "PYTHONPATH": str(REPO_ROOT),
+                "MCPE2E_TRANSPORT": "http",
+                "MCPE2E_LOG": str(self.log),
+                "MCPE2E_PORT_FILE": str(self.port_file),
+                "MCPE2E_PORT": str(self.port),
+                "PARITY_TREE_TAG": self.tag,
+                **self.env,
+            }
+        )
         with open(self.stderr_path, "ab") as err:
-            self.proc = subprocess.Popen([sys.executable, str(FIXTURE_SERVER)], env=env,
-                                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err)
-        text = wait_until(lambda: self.port_file.exists() and self.port_file.read_text(encoding="utf-8").strip(), 60,
-                          f"HTTP MCP server bind ({self.stderr_path})")
+            self.proc = subprocess.Popen(
+                [sys.executable, str(FIXTURE_SERVER)],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=err,
+            )
+        text = wait_until(
+            lambda: (
+                self.port_file.exists()
+                and self.port_file.read_text(encoding="utf-8").strip()
+            ),
+            60,
+            f"HTTP MCP server bind ({self.stderr_path})",
+        )
         self.port = int(text.split()[0])
         return self
 
@@ -227,8 +290,10 @@ class HttpMcpServer:
 
 def _tool_msgs_this_turn(body: dict[str, Any]) -> list[dict]:
     msgs = body.get("messages") or []
-    last_user = max((i for i, m in enumerate(msgs) if m.get("role") == "user"), default=-1)
-    return [m for m in msgs[last_user + 1:] if m.get("role") == "tool"]
+    last_user = max(
+        (i for i, m in enumerate(msgs) if m.get("role") == "user"), default=-1
+    )
+    return [m for m in msgs[last_user + 1 :] if m.get("role") == "tool"]
 
 
 def script(*calls: tuple[str, dict[str, Any] | str]) -> Callable[[dict[str, Any]], Any]:
@@ -255,10 +320,23 @@ def call_tool(body: dict[str, Any], name: str, args: dict[str, Any] | str) -> To
     return ToolCall("tool_call", {"calls": [{"name": name, "arguments": args}]})
 
 
-def run_chat_q(eh: E2EHome, prompt: str, *, timeout: float = TURN_TIMEOUT,
-               env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(clawk_argv("chat", "-q", prompt, "-Q"), cwd=eh.project, env=eh.env(env),
-                          capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
+def run_chat_q(
+    eh: E2EHome,
+    prompt: str,
+    *,
+    timeout: float = TURN_TIMEOUT,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        clawk_argv("chat", "-q", prompt, "-Q"),
+        cwd=eh.project,
+        env=eh.env(env),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 # Observation ------------------------------------------------------------------------------------
@@ -267,14 +345,22 @@ def run_chat_q(eh: E2EHome, prompt: str, *, timeout: float = TURN_TIMEOUT,
 def inbound(log: Path) -> list[dict[str, Any]]:
     if not log.exists():
         return []
-    return [json.loads(line)["msg"] for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [
+        json.loads(line)["msg"]
+        for line in log.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def calls_received(log: Path, tool: str) -> list[dict[str, Any]]:
     """``tools/call`` request params the server received for ``tool`` (bare MCP tool name)."""
-    return [m.get("params") or {} for m in inbound(log)
-            if isinstance(m, dict) and m.get("method") == "tools/call"
-            and (m.get("params") or {}).get("name") == tool]
+    return [
+        m.get("params") or {}
+        for m in inbound(log)
+        if isinstance(m, dict)
+        and m.get("method") == "tools/call"
+        and (m.get("params") or {}).get("name") == tool
+    ]
 
 
 def _text(content: Any) -> str:
@@ -290,7 +376,11 @@ def tool_results(srv: FakeLLMServer) -> list[str]:
     mains = srv.main_requests()
     if not mains:
         return []
-    return [_text(m.get("content")) for m in mains[-1].get("messages") or [] if m.get("role") == "tool"]
+    return [
+        _text(m.get("content"))
+        for m in mains[-1].get("messages") or []
+        if m.get("role") == "tool"
+    ]
 
 
 @contextlib.contextmanager
@@ -301,4 +391,3 @@ def provider(responder: Callable[[dict[str, Any]], Any]) -> Iterator[FakeLLMServ
         yield srv
     finally:
         srv.stop()
-

@@ -8,18 +8,27 @@ def test_successful_historical_completion_stamps_before_restart(tmp_path, monkey
     from clawk_cli import update_cmd
 
     events = []
-    monkeypatch.setattr(update_cmd, "_run_post_update_maintenance", lambda **kwargs: True)
     monkeypatch.setattr(
-        source_stamp, "write_source_stamp", lambda root: events.append(("stamp", root)),
+        update_cmd, "_run_post_update_maintenance", lambda **kwargs: True
     )
     monkeypatch.setattr(
-        update_cmd, "_restart_gateway_fleet_after_update",
+        source_stamp,
+        "write_source_stamp",
+        lambda root: events.append(("stamp", root)),
+    )
+    monkeypatch.setattr(
+        update_cmd,
+        "_restart_gateway_fleet_after_update",
         lambda plan, gateway_mode: events.append(("restart", plan)) or object(),
     )
     monkeypatch.setattr(
-        update_cmd, "_resume_windows_gateways_and_merge_outcome", lambda *args: None,
+        update_cmd,
+        "_resume_windows_gateways_and_merge_outcome",
+        lambda *args: None,
     )
-    monkeypatch.setattr(update_cmd, "_verify_fleet_after_update", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        update_cmd, "_verify_fleet_after_update", lambda *args, **kwargs: None
+    )
 
     finish_update(
         root=tmp_path,

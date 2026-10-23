@@ -39,7 +39,6 @@ class TestSessionPaginationClamps:
         r = client.get("/api/sessions", params={"limit": 10_000})
         assert r.status_code == 422
 
-
     def test_profile_fanout_limit_clamped(self, client):
         r = client.get("/api/profiles/sessions", params={"limit": 10_000})
         assert r.status_code == 422

@@ -4,6 +4,7 @@ proved by ``test_clawk_dir_acl_windows.py`` on Windows CI).
 No test pretends to be on Windows: elevation is a host fact the functions take as data (or the
 process_is_elevated probe stands in for it on a production path), and only the native writer
 (``_grant_with_pywin32``) is replaced, to record what an elevated grant would have touched."""
+
 import os
 from pathlib import Path
 
@@ -15,7 +16,9 @@ import clawk_dir_acl
 @pytest.mark.platforms("posix")
 def test_off_windows_it_is_plain_mkdir(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setattr(clawk_dir_acl, "grant_user_access", lambda p, **_k: calls.append(p))
+    monkeypatch.setattr(
+        clawk_dir_acl, "grant_user_access", lambda p, **_k: calls.append(p)
+    )
     target = clawk_dir_acl.make_user_dir(tmp_path / "a" / "b", 0o700, parents=True)
     assert target.is_dir() and calls == []
     assert (target.stat().st_mode & 0o777) == 0o700
@@ -25,14 +28,23 @@ def test_off_windows_it_is_plain_mkdir(tmp_path, monkeypatch):
         clawk_dir_acl.make_user_dir(tmp_path / "x" / "y")
 
 
-def test_elevated_grants_every_created_dir_and_an_existing_leaf_once(tmp_path, monkeypatch):
+def test_elevated_grants_every_created_dir_and_an_existing_leaf_once(
+    tmp_path, monkeypatch
+):
     granted = []
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
-    monkeypatch.setattr(clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True)
+    monkeypatch.setattr(
+        clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True
+    )
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
 
-    leaf = clawk_dir_acl.make_user_dir(tmp_path / "state" / "gateway-locks", parents=True, exist_ok=True)
-    assert granted == [tmp_path / "state", leaf]  # parents first, so the leaf inherits from a granted parent
+    leaf = clawk_dir_acl.make_user_dir(
+        tmp_path / "state" / "gateway-locks", parents=True, exist_ok=True
+    )
+    assert granted == [
+        tmp_path / "state",
+        leaf,
+    ]  # parents first, so the leaf inherits from a granted parent
     clawk_dir_acl.make_user_dir(leaf, exist_ok=True)
     assert granted == [tmp_path / "state", leaf]  # memoized per process
 
@@ -42,11 +54,15 @@ def test_elevated_grants_every_created_dir_and_an_existing_leaf_once(tmp_path, m
     assert granted[-1] == existing  # the repair case: re-grant an existing leaf
 
 
-def test_elevated_existing_leaf_without_exist_ok_is_repaired_then_raises(tmp_path, monkeypatch):
+def test_elevated_existing_leaf_without_exist_ok_is_repaired_then_raises(
+    tmp_path, monkeypatch
+):
     """Path.mkdir contract stays (FileExistsError), but the left-behind dir is granted first."""
     granted = []
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
-    monkeypatch.setattr(clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True)
+    monkeypatch.setattr(
+        clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True
+    )
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
     left = tmp_path / "state"
     left.mkdir()
@@ -74,7 +90,10 @@ def test_a_failed_grant_never_fails_the_mkdir_and_is_retried(tmp_path, monkeypat
 
 def test_remedy_names_the_platform_repair():
     remedy = clawk_dir_acl.unusable_dir_remedy
-    assert remedy("C:\\x", windows=True) == 'from an elevated prompt run: icacls "C:\\x" /reset /t'
+    assert (
+        remedy("C:\\x", windows=True)
+        == 'from an elevated prompt run: icacls "C:\\x" /reset /t'
+    )
     assert "chown" in remedy("/x", windows=False)
 
 
@@ -93,16 +112,23 @@ def elevated_windows(tmp_path, monkeypatch):
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
     touched = []
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32",
-                        lambda path, *_a, **_k: touched.append(os.path.realpath(path)))
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "_grant_with_pywin32",
+        lambda path, *_a, **_k: touched.append(os.path.realpath(path)),
+    )
     return home, outside, touched
 
 
 def _escapes(touched, outside):
-    return [p for p in touched if p == str(outside) or p.startswith(str(outside) + os.sep)]
+    return [
+        p for p in touched if p == str(outside) or p.startswith(str(outside) + os.sep)
+    ]
 
 
-def test_make_user_dir_refuses_an_existing_leaf_that_is_a_link(elevated_windows, caplog):
+def test_make_user_dir_refuses_an_existing_leaf_that_is_a_link(
+    elevated_windows, caplog
+):
     home, outside, touched = elevated_windows
     (home / "cache").mkdir()
     planted = home / "cache" / "images"
@@ -117,8 +143,12 @@ def test_make_user_dir_refuses_an_existing_leaf_that_is_a_link(elevated_windows,
 def test_make_user_dir_refuses_a_link_among_its_ancestors_in_the_home(elevated_windows):
     home, outside, touched = elevated_windows
     (home / "cache").symlink_to(outside, target_is_directory=True)
-    made = clawk_dir_acl.make_user_dir(home / "cache" / "images" / "x", parents=True, exist_ok=True)
-    assert made.is_dir()  # the mkdir itself still happens (it lands where the user's own link points)
+    made = clawk_dir_acl.make_user_dir(
+        home / "cache" / "images" / "x", parents=True, exist_ok=True
+    )
+    assert (
+        made.is_dir()
+    )  # the mkdir itself still happens (it lands where the user's own link points)
     assert touched == [], "a grant went through a planted link"
 
 
@@ -131,7 +161,9 @@ def test_grant_user_access_refuses_a_link_directly(elevated_windows):
     assert touched == []
 
 
-def test_make_user_dir_still_grants_real_dirs_under_a_linked_home(tmp_path, monkeypatch):
+def test_make_user_dir_still_grants_real_dirs_under_a_linked_home(
+    tmp_path, monkeypatch
+):
     """CLAWK_HOME itself is the user's own choice; only entries INSIDE it are swappable."""
     real = tmp_path / "real-home"
     real.mkdir()
@@ -141,8 +173,11 @@ def test_make_user_dir_still_grants_real_dirs_under_a_linked_home(tmp_path, monk
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
     calls = []
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32",
-                        lambda path, is_dir, expected=None: calls.append((path, expected)))
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "_grant_with_pywin32",
+        lambda path, is_dir, expected=None: calls.append((path, expected)),
+    )
     clawk_dir_acl.make_user_dir(linked / "state", exist_ok=True)
     assert calls == [(linked / "state", os.path.join(str(real), "state"))]
 
@@ -156,7 +191,10 @@ def test_tree_walk_skips_symlinks_and_never_enters_them(tmp_path):
     (root / "a" / "jn").symlink_to(outside, target_is_directory=True)
     (root / "flink").symlink_to(outside / "deep")
     skipped = []
-    seen = {p.relative_to(root).as_posix(): d for p, d in clawk_dir_acl.iter_tree_without_reparse_points(root, skipped)}
+    seen = {
+        p.relative_to(root).as_posix(): d
+        for p, d in clawk_dir_acl.iter_tree_without_reparse_points(root, skipped)
+    }
     assert seen == {".": True, "a": True, "a/b": True, "a/f.txt": False}
     assert sorted(p.name for p in skipped) == ["flink", "jn"]
 
@@ -170,13 +208,21 @@ def test_tree_walk_treats_a_reparse_attribute_as_a_link(tmp_path, monkeypatch):
     class Junction:
         def __init__(self, st):
             self._st = st
-            self.st_file_attributes = clawk_dir_acl.FILE_ATTRIBUTE_REPARSE_POINT | clawk_dir_acl.FILE_ATTRIBUTE_DIRECTORY
+            self.st_file_attributes = (
+                clawk_dir_acl.FILE_ATTRIBUTE_REPARSE_POINT
+                | clawk_dir_acl.FILE_ATTRIBUTE_DIRECTORY
+            )
 
         def __getattr__(self, name):
             return getattr(self._st, name)
 
-    monkeypatch.setattr(clawk_dir_acl.os, "lstat",
-                        lambda p, *a, **k: Junction(real_lstat(p)) if str(p).endswith("junction") else real_lstat(p))
+    monkeypatch.setattr(
+        clawk_dir_acl.os,
+        "lstat",
+        lambda p, *a, **k: (
+            Junction(real_lstat(p)) if str(p).endswith("junction") else real_lstat(p)
+        ),
+    )
     skipped = []
     seen = [p for p, _ in clawk_dir_acl.iter_tree_without_reparse_points(root, skipped)]
     assert seen == [root] and skipped == [root / "junction"]
@@ -195,12 +241,21 @@ def test_tree_grant_never_touches_a_target_outside_the_home(elevated_windows):
 
 
 def test_tree_grant_is_a_noop_unelevated(tmp_path, monkeypatch):
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32", lambda *_a, **_k: pytest.fail("granted"))
+    monkeypatch.setattr(
+        clawk_dir_acl, "_grant_with_pywin32", lambda *_a, **_k: pytest.fail("granted")
+    )
     assert clawk_dir_acl.grant_tree_user_access(tmp_path, elevated=False) == (0, [], [])
-    assert clawk_dir_acl.grant_tree_user_access(tmp_path) == (0, [], [])  # the probe off an elevated Windows host
+    assert clawk_dir_acl.grant_tree_user_access(tmp_path) == (
+        0,
+        [],
+        [],
+    )  # the probe off an elevated Windows host
 
 
-@pytest.mark.parametrize("shape", ["symlink-only", "symlink-before-a-file", "hardlink-only", "nested-hardlink"])
+@pytest.mark.parametrize(
+    "shape",
+    ["symlink-only", "symlink-before-a-file", "hardlink-only", "nested-hardlink"],
+)
 def test_icacls_fallback_refuses_any_link_in_the_subtree(tmp_path, monkeypatch, shape):
     """Review-9 (b): the prewalk checked inside the loop, so a link met after the last yield
     (a root holding only a link) was admitted, and a hard-linked file was never checked."""
@@ -220,7 +275,9 @@ def test_icacls_fallback_refuses_any_link_in_the_subtree(tmp_path, monkeypatch, 
         (root / "d" / "alias").hardlink_to(outside / "file")
     monkeypatch.setattr(clawk_dir_acl, "_whoami_sid", lambda: "S-1-5-21-1-2-3-1001")
     calls = []
-    monkeypatch.setattr(clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(argv))
+    monkeypatch.setattr(
+        clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(argv)
+    )
     with pytest.raises(clawk_dir_acl.ReparsePointRefused):
         clawk_dir_acl._grant_with_icacls(root, True, str(root))
     assert calls == []
@@ -232,7 +289,9 @@ def test_icacls_fallback_still_grants_a_plain_subtree(tmp_path, monkeypatch):
     (root / "d" / "f").write_text("x")
     monkeypatch.setattr(clawk_dir_acl, "_whoami_sid", lambda: "S-1-5-21-1-2-3-1001")
     calls = []
-    monkeypatch.setattr(clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(argv))
+    monkeypatch.setattr(
+        clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(argv)
+    )
     clawk_dir_acl._grant_with_icacls(root, True, str(root))
     assert [c[0] for c in calls] == ["icacls"] and "/L" in calls[0]
 
@@ -242,7 +301,9 @@ def test_a_recreated_dir_is_granted_again(tmp_path, monkeypatch):
     and the next capture recreating it at the same path left the new dir without the grant."""
     granted = []
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
-    monkeypatch.setattr(clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True)
+    monkeypatch.setattr(
+        clawk_dir_acl, "grant_user_access", lambda p, **_k: granted.append(p) or True
+    )
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
     target = tmp_path / "native-inputs" / ("0" * 64)
     clawk_dir_acl.make_user_dir(target, 0o700, parents=True, exist_ok=True)
@@ -253,7 +314,9 @@ def test_a_recreated_dir_is_granted_again(tmp_path, monkeypatch):
     assert granted.count(target) == 2, "the recreated directory never got the grant"
 
 
-def test_media_release_then_recapture_grants_the_recreated_digest_dir(tmp_path, monkeypatch):
+def test_media_release_then_recapture_grants_the_recreated_digest_dir(
+    tmp_path, monkeypatch
+):
     """The production lifecycle behind (c): capture -> release_unheld_media -> capture again."""
     from gateway import session_ingress_media as media
     from clawk_state import SessionDB
@@ -264,7 +327,11 @@ def test_media_release_then_recapture_grants_the_recreated_digest_dir(tmp_path, 
     monkeypatch.setattr(clawk_dir_acl, "process_is_elevated", lambda: True)
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
     grants = []
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32", lambda path, *_a, **_k: grants.append(str(path)))
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "_grant_with_pywin32",
+        lambda path, *_a, **_k: grants.append(str(path)),
+    )
     source = tmp_path / "sample.txt"
     source.write_text("same attachment bytes")
     db = SessionDB(db_path=home / "state.db")
@@ -279,7 +346,9 @@ def test_media_release_then_recapture_grants_the_recreated_digest_dir(tmp_path, 
     assert grants.count(directory) == 2
 
 
-def test_repairing_an_existing_dir_also_grants_what_is_already_inside_it(tmp_path, monkeypatch):
+def test_repairing_an_existing_dir_also_grants_what_is_already_inside_it(
+    tmp_path, monkeypatch
+):
     """Review #140490 (pastels minor 1): the pywin32 write (SetKernelObjectSecurity) does not
     propagate, so an old token lock already inside a dir an earlier elevated run left stayed
     Administrators-only after make_user_dir repaired the dir. A write on the dir now walks its
@@ -302,12 +371,23 @@ def test_repairing_an_existing_dir_also_grants_what_is_already_inside_it(tmp_pat
     monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32", native)
     clawk_dir_acl.make_user_dir(locks, parents=True, exist_ok=True, elevated=True)
     touched = sorted(p.relative_to(home).as_posix() for p, _ in writes)
-    assert touched == ["gateway-locks", "gateway-locks/old", "gateway-locks/telegram-bot-token-x.lock"]
-    assert all(expected == os.path.join(os.path.realpath(home), *p.relative_to(home).parts) for p, expected in writes)
+    assert touched == [
+        "gateway-locks",
+        "gateway-locks/old",
+        "gateway-locks/telegram-bot-token-x.lock",
+    ]
+    assert all(
+        expected == os.path.join(os.path.realpath(home), *p.relative_to(home).parts)
+        for p, expected in writes
+    )
 
     writes.clear()
     monkeypatch.setattr(clawk_dir_acl, "_granted", set())
-    monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32", lambda p, *_a, **_k: writes.append(p) and False)
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "_grant_with_pywin32",
+        lambda p, *_a, **_k: writes.append(p) and False,
+    )
     clawk_dir_acl.make_user_dir(locks, exist_ok=True, elevated=True)
     assert writes == [locks]  # already granted: no write, so no child walk
 
@@ -328,18 +408,37 @@ def test_icacls_tree_fallback_walks_the_tree_once(tmp_path, monkeypatch):
     monkeypatch.setattr(clawk_dir_acl, "_grant_with_pywin32", _no_pywin32)
     monkeypatch.setattr(clawk_dir_acl, "_whoami_sid", lambda: "S-1-5-21-1-2-3-1001")
     calls = []
-    monkeypatch.setattr(clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(Path(argv[1])))
+    monkeypatch.setattr(
+        clawk_dir_acl.subprocess, "run", lambda argv, **_k: calls.append(Path(argv[1]))
+    )
     walks = []
     real_iter = clawk_dir_acl.iter_tree_without_reparse_points
-    monkeypatch.setattr(clawk_dir_acl, "iter_tree_without_reparse_points",
-                        lambda root, skipped: walks.append(root) or real_iter(root, skipped))
+    monkeypatch.setattr(
+        clawk_dir_acl,
+        "iter_tree_without_reparse_points",
+        lambda root, skipped: walks.append(root) or real_iter(root, skipped),
+    )
 
     granted, skipped, failed = clawk_dir_acl.grant_tree_user_access(home, elevated=True)
 
     assert walks == [home], "one walk, not one per directory"
-    clean = ["a", "a/b", "a/b/c", "a/b/c/f3", "a/b/f2", "a/f1", "dirty/f4", "dirty/sub", "dirty/sub/f5"]
+    clean = [
+        "a",
+        "a/b",
+        "a/b/c",
+        "a/b/c/f3",
+        "a/b/f2",
+        "a/f1",
+        "dirty/f4",
+        "dirty/sub",
+        "dirty/sub/f5",
+    ]
     assert sorted(p.relative_to(home).as_posix() for p in calls) == clean
-    assert sorted(p.relative_to(tmp_path).as_posix() for p in skipped) == ["home", "home/dirty", "home/dirty/jn"]
+    assert sorted(p.relative_to(tmp_path).as_posix() for p in skipped) == [
+        "home",
+        "home/dirty",
+        "home/dirty/jn",
+    ]
     assert failed == [] and granted == len(clean)
 
 

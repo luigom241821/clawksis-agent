@@ -34,7 +34,12 @@ _STRICTNESS_TOOLS = [
     _strict_tool("non_strict", False),
     _strict_tool("invalid", "true"),
 ]
-_EXPECTED_STRICTNESS = [("default", False), ("strict", True), ("non_strict", False), ("invalid", False)]
+_EXPECTED_STRICTNESS = [
+    ("default", False),
+    ("strict", True),
+    ("non_strict", False),
+    ("invalid", False),
+]
 
 
 def _main_transport_wire_tools():
@@ -48,20 +53,30 @@ def _main_transport_wire_tools():
 def _auxiliary_adapter_wire_tools():
     from agent.auxiliary_client import _CodexCompletionsAdapter
 
-    adapter = _CodexCompletionsAdapter(SimpleNamespace(base_url="https://example.com/v1"), "gpt-5.5")
+    adapter = _CodexCompletionsAdapter(
+        SimpleNamespace(base_url="https://example.com/v1"), "gpt-5.5"
+    )
     resp_kwargs, _, _ = adapter._build_responses_kwargs(
-        {"model": "gpt-5.5", "messages": [{"role": "user", "content": "hi"}], "tools": _STRICTNESS_TOOLS}
+        {
+            "model": "gpt-5.5",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tools": _STRICTNESS_TOOLS,
+        }
     )
     return resp_kwargs["tools"]
 
 
 @pytest.mark.parametrize(
-    "wire_tools", [_main_transport_wire_tools, _auxiliary_adapter_wire_tools], ids=["main_transport", "auxiliary"]
+    "wire_tools",
+    [_main_transport_wire_tools, _auxiliary_adapter_wire_tools],
+    ids=["main_transport", "auxiliary"],
 )
 def test_responses_wire_tools_preserve_explicit_boolean_strictness(wire_tools):
     # Drives the production entry points (main-loop build_kwargs and the auxiliary adapter), not the
     # helper: an explicit ``strict: True`` must reach kwargs["tools"] on both routes (#105401 parity).
-    assert [(item["name"], item["strict"]) for item in wire_tools()] == _EXPECTED_STRICTNESS
+    assert [
+        (item["name"], item["strict"]) for item in wire_tools()
+    ] == _EXPECTED_STRICTNESS
 
 
 def test_chat_content_drops_images_from_assistant_role():
@@ -79,16 +94,20 @@ def test_chat_content_drops_images_from_assistant_role():
 
 
 def test_chat_content_keeps_images_on_user_role():
-    content = [{
-        "type": "image_url",
-        "image_url": {"url": "https://example.invalid/p.png", "detail": "high"},
-    }]
+    content = [
+        {
+            "type": "image_url",
+            "image_url": {"url": "https://example.invalid/p.png", "detail": "high"},
+        }
+    ]
 
-    assert _chat_content_to_responses_parts(content, role="user") == [{
-        "type": "input_image",
-        "image_url": "https://example.invalid/p.png",
-        "detail": "high",
-    }]
+    assert _chat_content_to_responses_parts(content, role="user") == [
+        {
+            "type": "input_image",
+            "image_url": "https://example.invalid/p.png",
+            "detail": "high",
+        }
+    ]
 
 
 _SVG_DATA_URL = "data:image/svg+xml;base64,PHN2Zy8+"
@@ -97,36 +116,67 @@ _PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgo="
 
 def _no_rasterizer(monkeypatch):
     import tools.vision_tools_image_prep as prep
+
     monkeypatch.setattr(prep, "_rasterize_svg_to_png", lambda svg_path, out_path: False)
 
 
-def test_unsupported_inline_image_downgrades_to_text_in_message_and_tool_output(monkeypatch):
+def test_unsupported_inline_image_downgrades_to_text_in_message_and_tool_output(
+    monkeypatch,
+):
     """#29711: a data:image/svg+xml part 400s the whole Codex request ('does not represent a valid
     image') on every replay. Both carriers — user message content and the persisted vision_analyze
     function_call_output — must send a text placeholder while the valid PNG still goes as input_image."""
     _no_rasterizer(monkeypatch)
     messages = [
-        {"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": _PNG_DATA_URL, "detail": "high"}},
-            {"type": "image_url", "image_url": {"url": _SVG_DATA_URL}},
-        ]},
-        {"role": "assistant", "content": None, "tool_calls": [
-            {"id": "call_v1", "type": "function", "function": {"name": "vision_analyze", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "call_v1", "content": [
-            {"type": "text", "text": "rendered"}, {"type": "image_url", "image_url": {"url": _SVG_DATA_URL}}]},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": _PNG_DATA_URL, "detail": "high"},
+                },
+                {"type": "image_url", "image_url": {"url": _SVG_DATA_URL}},
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call_v1",
+                    "type": "function",
+                    "function": {"name": "vision_analyze", "arguments": "{}"},
+                }
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_v1",
+            "content": [
+                {"type": "text", "text": "rendered"},
+                {"type": "image_url", "image_url": {"url": _SVG_DATA_URL}},
+            ],
+        },
     ]
     items = _chat_messages_to_responses_input(messages)
     user, tool_output = items[0], items[-1]
     assert user["content"] == [
         {"type": "input_image", "image_url": _PNG_DATA_URL, "detail": "high"},
-        {"type": "input_text", "text": "[image omitted: image/svg+xml is not a supported image format]"},
+        {
+            "type": "input_text",
+            "text": "[image omitted: image/svg+xml is not a supported image format]",
+        },
     ]
     assert tool_output["type"] == "function_call_output"
     assert [p["type"] for p in tool_output["output"]] == ["input_text", "input_text"]
     assert "image/svg+xml" in tool_output["output"][1]["text"]
     # ``image/jpg`` is the JPEG alias every other image site accepts — it must still go as input_image.
-    jpg = _chat_content_to_responses_parts([{"type": "image_url", "image_url": "data:image/jpg;base64,/9j/4AAQ"}])
-    assert jpg == [{"type": "input_image", "image_url": "data:image/jpg;base64,/9j/4AAQ"}]
+    jpg = _chat_content_to_responses_parts(
+        [{"type": "image_url", "image_url": "data:image/jpg;base64,/9j/4AAQ"}]
+    )
+    assert jpg == [
+        {"type": "input_image", "image_url": "data:image/jpg;base64,/9j/4AAQ"}
+    ]
 
 
 def test_inline_svg_is_rasterized_to_png_when_a_rasterizer_exists(monkeypatch):
@@ -138,26 +188,54 @@ def test_inline_svg_is_rasterized_to_png_when_a_rasterizer_exists(monkeypatch):
         assert svg_path.read_bytes() == b"<svg/>"
         out_path.write_bytes(b"\x89PNG\r\n\x1a\n")
         return True
+
     monkeypatch.setattr(prep, "_rasterize_svg_to_png", fake_rasterize)
     parts = _chat_content_to_responses_parts(
-        [{"type": "image_url", "image_url": {"url": _SVG_DATA_URL, "detail": "high"}}], role="user")
-    assert parts == [{"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgo=", "detail": "high"}]
+        [{"type": "image_url", "image_url": {"url": _SVG_DATA_URL, "detail": "high"}}],
+        role="user",
+    )
+    assert parts == [
+        {
+            "type": "input_image",
+            "image_url": "data:image/png;base64,iVBORw0KGgo=",
+            "detail": "high",
+        }
+    ]
 
 
-def test_preflight_downgrades_unsupported_inline_image_but_keeps_remote_urls(monkeypatch):
+def test_preflight_downgrades_unsupported_inline_image_but_keeps_remote_urls(
+    monkeypatch,
+):
     """The preflight validator is the last seam before the wire: an svg data URL in already
     Responses-shaped input becomes text; https URLs are the provider's to validate and pass through."""
     _no_rasterizer(monkeypatch)
-    items = _preflight_codex_input_items([
-        {"role": "user", "content": [
-            {"type": "input_image", "image_url": _SVG_DATA_URL},
-            {"type": "input_image", "image_url": "https://example.invalid/p.svg"},
-        ]},
-        {"type": "function_call_output", "call_id": "call_1", "output": [{"type": "input_image", "image_url": _SVG_DATA_URL}]},
-    ])
+    items = _preflight_codex_input_items(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_image", "image_url": _SVG_DATA_URL},
+                    {
+                        "type": "input_image",
+                        "image_url": "https://example.invalid/p.svg",
+                    },
+                ],
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": [{"type": "input_image", "image_url": _SVG_DATA_URL}],
+            },
+        ]
+    )
     assert [p["type"] for p in items[0]["content"]] == ["input_text", "input_image"]
     assert items[0]["content"][1]["image_url"] == "https://example.invalid/p.svg"
-    assert items[1]["output"] == [{"type": "input_text", "text": "[image omitted: image/svg+xml is not a supported image format]"}]
+    assert items[1]["output"] == [
+        {
+            "type": "input_text",
+            "text": "[image omitted: image/svg+xml is not a supported image format]",
+        }
+    ]
 
 
 @pytest.mark.parametrize("part_type", ["video_url", "video", "input_video"])
@@ -171,22 +249,30 @@ def test_chat_content_rejects_video_instead_of_sending_text_only(part_type):
 
 
 def test_preflight_rewrites_raw_assistant_images_to_text_markers():
-    raw = [{
-        "role": "assistant",
-        "content": [{
-            "type": "input_image",
-            "image_url": "https://example.invalid/p.png",
-        }],
-    }]
+    raw = [
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "input_image",
+                    "image_url": "https://example.invalid/p.png",
+                }
+            ],
+        }
+    ]
 
-    assert _preflight_codex_input_items(raw) == [{
-        "type": "message",
-        "role": "assistant",
-        "content": [{
-            "type": "output_text",
-            "text": "[Assistant image omitted during replay]",
-        }],
-    }]
+    assert _preflight_codex_input_items(raw) == [
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "output_text",
+                    "text": "[Assistant image omitted during replay]",
+                }
+            ],
+        }
+    ]
 
 
 def _harmony_token(name: str) -> str:
@@ -195,11 +281,13 @@ def _harmony_token(name: str) -> str:
 
 
 def test_codex_preflight_gate_off_preserves_harmony_tokens_byte_for_byte():
-    raw = [{
-        "type": "function_call_output",
-        "call_id": "call_1",
-        "output": _HARMONY_SOURCE_SNIPPET,
-    }]
+    raw = [
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": _HARMONY_SOURCE_SNIPPET,
+        }
+    ]
 
     normalized = _preflight_codex_input_items(raw)
 
@@ -249,19 +337,21 @@ def test_codex_api_preflight_sanitizes_tuple_values_in_tool_schemas():
         "model": "gpt-5-codex",
         "instructions": "test",
         "input": [{"role": "user", "content": "hello"}],
-        "tools": [{
-            "type": "function",
-            "name": "choose_mode",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "mode": {
-                        "type": "string",
-                        "enum": (_harmony_token("call"), "plain"),
+        "tools": [
+            {
+                "type": "function",
+                "name": "choose_mode",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {
+                            "type": "string",
+                            "enum": (_harmony_token("call"), "plain"),
+                        },
                     },
                 },
-            },
-        }],
+            }
+        ],
         "store": False,
     }
 
@@ -278,16 +368,18 @@ def test_codex_api_preflight_rejects_reserved_token_in_structural_key():
         "model": "gpt-5-codex",
         "instructions": "test",
         "input": [{"role": "user", "content": "hello"}],
-        "tools": [{
-            "type": "function",
-            "name": "unsafe_schema",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    _harmony_token("start"): {"type": "string"},
+        "tools": [
+            {
+                "type": "function",
+                "name": "unsafe_schema",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        _harmony_token("start"): {"type": "string"},
+                    },
                 },
-            },
-        }],
+            }
+        ],
         "store": False,
     }
 
@@ -311,10 +403,12 @@ def test_codex_api_preflight_defangs_every_outbound_text_carrier():
         {
             "type": "reasoning",
             "encrypted_content": "opaque-reasoning-carrier",
-            "summary": [{
-                "type": "summary_text",
-                "text": "Summary containing " + _harmony_token("constrain"),
-            }],
+            "summary": [
+                {
+                    "type": "summary_text",
+                    "text": "Summary containing " + _harmony_token("constrain"),
+                }
+            ],
         },
         {
             "type": "message",
@@ -337,20 +431,23 @@ def test_codex_api_preflight_defangs_every_outbound_text_carrier():
         "model": "gpt-5-codex",
         "instructions": "Inspect this wire token: " + _harmony_token("start"),
         "input": raw,
-        "tools": [{
-            "type": "function",
-            "name": "inspect_wire_format",
-            "description": "Inspect " + _harmony_token("message"),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "source": {
-                        "type": "string",
-                        "description": "Source containing " + _harmony_token("return"),
+        "tools": [
+            {
+                "type": "function",
+                "name": "inspect_wire_format",
+                "description": "Inspect " + _harmony_token("message"),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "description": "Source containing "
+                            + _harmony_token("return"),
+                        },
                     },
                 },
-            },
-        }],
+            }
+        ],
         "store": False,
     }
 
@@ -362,7 +459,10 @@ def test_codex_api_preflight_defangs_every_outbound_text_carrier():
     serialized = str(normalized)
     for name in ("start", "end", "channel", "message", "constrain", "return"):
         assert _harmony_token(name) not in serialized
-    assert serialized.count("Need to generate one image according to the description.") == 5
+    assert (
+        serialized.count("Need to generate one image according to the description.")
+        == 5
+    )
     assert normalized["instructions"] == "Inspect this wire token: <｜start｜>"
     assert "<｜message｜>" in str(normalized["tools"])
     assert "<|im_start|>" in serialized
@@ -590,7 +690,10 @@ def test_chat_messages_to_responses_input_uniquifies_call_id_reused_across_turns
             "tool_calls": [
                 {
                     "call_id": "terminal:0",
-                    "function": {"name": "terminal", "arguments": '{"command":"first"}'},
+                    "function": {
+                        "name": "terminal",
+                        "arguments": '{"command":"first"}',
+                    },
                 }
             ],
         },
@@ -605,7 +708,10 @@ def test_chat_messages_to_responses_input_uniquifies_call_id_reused_across_turns
             "tool_calls": [
                 {
                     "call_id": "terminal:0",
-                    "function": {"name": "terminal", "arguments": '{"command":"second"}'},
+                    "function": {
+                        "name": "terminal",
+                        "arguments": '{"command":"second"}',
+                    },
                 }
             ],
         },
@@ -727,24 +833,44 @@ def test_chat_messages_to_responses_input_drops_foreign_id_for_codex_backend():
 def test_message_id_is_dropped_when_its_turn_replays_reasoning_without_id():
     """#97427/#97442: a ``msg_*`` id bound to a stripped ``rs_*`` id is an orphan the API rejects with 400;
     the message survives as content/status/phase. A reasoning-free turn keeps its id (prefix-cache affinity)."""
+
     def _turn(text, *, reasoning):
         msg = {
             "role": "assistant",
             "content": text,
-            "codex_message_items": [{
-                "type": "message", "role": "assistant", "status": "completed", "id": f"msg_{text}",
-                "phase": "final_answer", "content": [{"type": "output_text", "text": text}],
-            }],
+            "codex_message_items": [
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "status": "completed",
+                    "id": f"msg_{text}",
+                    "phase": "final_answer",
+                    "content": [{"type": "output_text", "text": text}],
+                }
+            ],
         }
         if reasoning:
-            msg["codex_reasoning_items"] = [{"type": "reasoning", "id": "rs_1", "encrypted_content": "BLOB", "summary": []}]
+            msg["codex_reasoning_items"] = [
+                {
+                    "type": "reasoning",
+                    "id": "rs_1",
+                    "encrypted_content": "BLOB",
+                    "summary": [],
+                }
+            ]
         return msg
 
-    items = _chat_messages_to_responses_input([_turn("linked", reasoning=True), _turn("alone", reasoning=False)])
+    items = _chat_messages_to_responses_input(
+        [_turn("linked", reasoning=True), _turn("alone", reasoning=False)]
+    )
 
-    reasoning, linked, alone = (i for i in items if i.get("type") in {"reasoning", "message"})
+    reasoning, linked, alone = (
+        i for i in items if i.get("type") in {"reasoning", "message"}
+    )
     assert "id" not in reasoning and "id" not in linked
-    assert linked["phase"] == "final_answer" and linked["content"] == [{"type": "output_text", "text": "linked"}]
+    assert linked["phase"] == "final_answer" and linked["content"] == [
+        {"type": "output_text", "text": "linked"}
+    ]
     assert alone["id"] == "msg_alone"
 
 
@@ -762,23 +888,36 @@ def test_reasoning_replay_requires_matching_issuer_model_on_same_endpoint():
         SimpleNamespace(
             status="completed",
             output=[
-                SimpleNamespace(type="reasoning", id="rs_a", encrypted_content="model-a-blob", summary=[]),
                 SimpleNamespace(
-                    type="message", role="assistant", status="completed", id="msg_a",
+                    type="reasoning",
+                    id="rs_a",
+                    encrypted_content="model-a-blob",
+                    summary=[],
+                ),
+                SimpleNamespace(
+                    type="message",
+                    role="assistant",
+                    status="completed",
+                    id="msg_a",
                     content=[SimpleNamespace(type="output_text", text="done")],
                 ),
             ],
         ),
-        issuer_kind=issuer, issuer_model="gpt-5.6-sol",
+        issuer_kind=issuer,
+        issuer_model="gpt-5.6-sol",
     )
     captured = normalized.codex_reasoning_items[0]
     assert captured["_issuer_model"] == "gpt-5.6-sol"
 
     same = _chat_messages_to_responses_input(
-        _reasoning_history(captured), current_issuer_kind=issuer, current_issuer_model="gpt-5.6-sol"
+        _reasoning_history(captured),
+        current_issuer_kind=issuer,
+        current_issuer_model="gpt-5.6-sol",
     )
     other = _chat_messages_to_responses_input(
-        _reasoning_history(captured), current_issuer_kind=issuer, current_issuer_model="gpt-5.7-sol"
+        _reasoning_history(captured),
+        current_issuer_kind=issuer,
+        current_issuer_model="gpt-5.7-sol",
     )
     replayed = [i for i in same if i.get("type") == "reasoning"]
     assert [i["encrypted_content"] for i in replayed] == ["model-a-blob"]
@@ -790,15 +929,23 @@ def test_legacy_endpoint_stamped_item_without_model_replays_on_same_issuer():
     # WHY: native compaction checkpoints and reasoning persisted before model stamping carry only the
     # endpoint stamp; dropping them would erase every existing session's context once after upgrade.
     issuer = "other:https://responses.example.com/v1"
-    legacy = {"type": "reasoning", "encrypted_content": "legacy-blob", "_issuer_kind": issuer}
+    legacy = {
+        "type": "reasoning",
+        "encrypted_content": "legacy-blob",
+        "_issuer_kind": issuer,
+    }
     items = _chat_messages_to_responses_input(
-        _reasoning_history(legacy), current_issuer_kind=issuer, current_issuer_model="gpt-5.6-sol"
+        _reasoning_history(legacy),
+        current_issuer_kind=issuer,
+        current_issuer_model="gpt-5.6-sol",
     )
     replayed = [i for i in items if i.get("type") == "reasoning"]
     assert [i["encrypted_content"] for i in replayed] == ["legacy-blob"]
     # A different endpoint stamp still drops.
     foreign = _chat_messages_to_responses_input(
-        _reasoning_history(legacy), current_issuer_kind="codex_backend", current_issuer_model="gpt-5.6-sol"
+        _reasoning_history(legacy),
+        current_issuer_kind="codex_backend",
+        current_issuer_model="gpt-5.6-sol",
     )
     assert not any(i.get("type") == "reasoning" for i in foreign)
 
@@ -815,13 +962,23 @@ def test_issuer_kind_is_canonical_across_trailing_slash_and_host_case():
 def test_legacy_raw_endpoint_stamp_replays_on_canonical_issuer():
     # WHY: items persisted before issuer canonicalisation carry the raw ``agent.base_url`` (trailing slash,
     # host case); they must still replay on the same endpoint instead of being dropped as foreign.
-    legacy = {"type": "reasoning", "encrypted_content": "legacy-blob", "_issuer_kind": "other:https://H/v1/"}
+    legacy = {
+        "type": "reasoning",
+        "encrypted_content": "legacy-blob",
+        "_issuer_kind": "other:https://H/v1/",
+    }
     items = _chat_messages_to_responses_input(
-        _reasoning_history(legacy), current_issuer_kind="other:https://h/v1", current_issuer_model="gpt-5.6-sol"
+        _reasoning_history(legacy),
+        current_issuer_kind="other:https://h/v1",
+        current_issuer_model="gpt-5.6-sol",
     )
-    assert [i["encrypted_content"] for i in items if i.get("type") == "reasoning"] == ["legacy-blob"]
+    assert [i["encrypted_content"] for i in items if i.get("type") == "reasoning"] == [
+        "legacy-blob"
+    ]
     foreign = _chat_messages_to_responses_input(
-        _reasoning_history(legacy), current_issuer_kind="other:https://other/v1", current_issuer_model="gpt-5.6-sol"
+        _reasoning_history(legacy),
+        current_issuer_kind="other:https://other/v1",
+        current_issuer_model="gpt-5.6-sol",
     )
     assert not any(i.get("type") == "reasoning" for i in foreign)
 
@@ -847,7 +1004,9 @@ def test_preflight_codex_api_kwargs_drops_oversized_message_id_end_to_end():
         }
     )
 
-    message_item = next(item for item in kwargs["input"] if item.get("type") == "message")
+    message_item = next(
+        item for item in kwargs["input"] if item.get("type") == "message"
+    )
     assert "id" not in message_item
 
 
@@ -867,15 +1026,21 @@ def test_preflight_passes_native_web_search_tool_through():
         "input": [{"role": "user", "content": [{"type": "input_text", "text": "hi"}]}],
         "store": False,
         "tools": [
-            {"type": "function", "name": "read_file", "description": "Read.",
-             "parameters": {"type": "object", "properties": {}}},
+            {
+                "type": "function",
+                "name": "read_file",
+                "description": "Read.",
+                "parameters": {"type": "object", "properties": {}},
+            },
             {"type": "web_search"},
         ],
     }
     out = _preflight_codex_api_kwargs(kwargs, allow_stream=True)
     tools = out["tools"]
     assert {"type": "web_search"} in tools
-    assert any(t.get("type") == "function" and t.get("name") == "read_file" for t in tools)
+    assert any(
+        t.get("type") == "function" and t.get("name") == "read_file" for t in tools
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -887,30 +1052,40 @@ def test_preflight_passes_native_web_search_tool_through():
 # ---------------------------------------------------------------------------
 
 
-
-
 def _final_text_response(text):
     return SimpleNamespace(
-        status="completed", incomplete_details=None, output_text=text,
-        output=[SimpleNamespace(
-            type="message", role="assistant", status="completed", id="msg_1",
-            content=[SimpleNamespace(type="output_text", text=text)],
-        )],
+        status="completed",
+        incomplete_details=None,
+        output_text=text,
+        output=[
+            SimpleNamespace(
+                type="message",
+                role="assistant",
+                status="completed",
+                id="msg_1",
+                content=[SimpleNamespace(type="output_text", text=text)],
+            )
+        ],
     )
 
 
-@pytest.mark.parametrize("text", [
-    'Creating the PowerShell script now.\n{"cmd": "mkdir -p /c/Temp && cat > /c/Temp/x.ps1 <<\'EOF\'"}',
-    'Sure, let me run the tests.\n{"cmd": "pytest -q", "workdir": "/repo", "timeout": 120}',
-    'Next, I\'ll create the script.\n{"cmd": "cat > x.sh"}',
-    'Okay — running the tests.\n{"cmd": "pytest -q"}',
-    "Calling tool now to=functions.terminal {\"command\": \"ls\"}",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        'Creating the PowerShell script now.\n{"cmd": "mkdir -p /c/Temp && cat > /c/Temp/x.ps1 <<\'EOF\'"}',
+        'Sure, let me run the tests.\n{"cmd": "pytest -q", "workdir": "/repo", "timeout": 120}',
+        'Next, I\'ll create the script.\n{"cmd": "cat > x.sh"}',
+        'Okay — running the tests.\n{"cmd": "pytest -q"}',
+        'Calling tool now to=functions.terminal {"command": "ls"}',
+    ],
+)
 def test_normalize_codex_response_treats_leaked_tool_call_text_as_incomplete(text):
     """#56920: Codex-CLI shell JSON (or Harmony ``to=functions``) leaked as assistant text is a failed tool call,
     not a final answer — classify incomplete so the continuation re-elicits a structured ``function_call``, and
     drop the message items so the leak is never replayed as a completed assistant turn."""
-    assistant_message, finish_reason = _normalize_codex_response(_final_text_response(text), issuer_kind="codex_backend")
+    assistant_message, finish_reason = _normalize_codex_response(
+        _final_text_response(text), issuer_kind="codex_backend"
+    )
 
     assert finish_reason == "incomplete"
     assert assistant_message.content == ""
@@ -918,15 +1093,20 @@ def test_normalize_codex_response_treats_leaked_tool_call_text_as_incomplete(tex
     assert assistant_message.codex_message_items is None
 
 
-@pytest.mark.parametrize("text", [
-    'Here is the JSON payload the CLI expects:\n{"cmd": "mkdir -p /c/Temp"}',
-    '{"cmd": "ls"}',
-    'Creating the file now.\n{"cmd": "ls"}\nDone — the file is in place.',
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        'Here is the JSON payload the CLI expects:\n{"cmd": "mkdir -p /c/Temp"}',
+        '{"cmd": "ls"}',
+        'Creating the file now.\n{"cmd": "ls"}\nDone — the file is in place.',
+    ],
+)
 def test_normalize_codex_response_keeps_legitimate_cmd_json_answer(text):
     """#56920 false-positive guard: ``{"cmd": ...}`` without an action lead-in, or not closing the message,
     is an answer about JSON and stays a completed response with its replay items intact."""
-    assistant_message, finish_reason = _normalize_codex_response(_final_text_response(text), issuer_kind="codex_backend")
+    assistant_message, finish_reason = _normalize_codex_response(
+        _final_text_response(text), issuer_kind="codex_backend"
+    )
 
     assert finish_reason == "stop"
     assert assistant_message.content == text
@@ -981,6 +1161,7 @@ def _xai_reasoning_only_response(reasoning_text):
         ],
     )
 
+
 def test_codex_preflight_passes_text_verbosity_through():
     """The preflight whitelist must let the Responses ``text`` block reach the wire (#20203).
 
@@ -988,7 +1169,9 @@ def test_codex_preflight_passes_text_verbosity_through():
     "unsupported field(s): text" before the request ever left the process.
     """
     kwargs = {
-        "model": "gpt-5.1", "instructions": "system", "store": False,
+        "model": "gpt-5.1",
+        "instructions": "system",
+        "store": False,
         "input": [{"role": "user", "content": [{"type": "input_text", "text": "hi"}]}],
         "text": {"verbosity": "low"},
     }
@@ -1001,23 +1184,39 @@ def test_codex_preflight_passes_text_verbosity_through():
 def test_converter_role_items_are_typed_and_survive_preflight(issuer):
     """llama.cpp's /v1/responses rejects typeless message items; preflight must accept every
     item the converter emits, including user image parts."""
-    items = _chat_messages_to_responses_input([
-        {"role": "user", "content": [
-            {"type": "text", "text": "what is this"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-        ]},
-        {"role": "assistant", "content": "a cat"},
-        {"role": "assistant", "content": "", "codex_reasoning_items": [
-            {"type": "reasoning", "encrypted_content": "opaque", "summary": []},
-        ]},
-        {"role": "user", "content": "thanks"},
-    ], current_issuer_kind=issuer)
+    items = _chat_messages_to_responses_input(
+        [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "what is this"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAAA"},
+                    },
+                ],
+            },
+            {"role": "assistant", "content": "a cat"},
+            {
+                "role": "assistant",
+                "content": "",
+                "codex_reasoning_items": [
+                    {"type": "reasoning", "encrypted_content": "opaque", "summary": []},
+                ],
+            },
+            {"role": "user", "content": "thanks"},
+        ],
+        current_issuer_kind=issuer,
+    )
 
     normalized = _preflight_codex_input_items(items)
 
     role_items = [i for i in normalized if i.get("role")]
     assert role_items and all(i["type"] == "message" for i in role_items)
-    assert {"type": "input_image", "image_url": "data:image/png;base64,AAAA"} in role_items[0]["content"]
+    assert {
+        "type": "input_image",
+        "image_url": "data:image/png;base64,AAAA",
+    } in role_items[0]["content"]
     assert normalized == items
 
 
@@ -1032,18 +1231,22 @@ def test_role_message_phase_survives_conversion_and_preflight(issuer, structured
     ]
     converted = _chat_messages_to_responses_input(history, current_issuer_kind=issuer)
 
-    normalized = _preflight_codex_api_kwargs({"model": "m", "instructions": "i", "input": converted, "store": False})
+    normalized = _preflight_codex_api_kwargs(
+        {"model": "m", "instructions": "i", "input": converted, "store": False}
+    )
 
     assert converted[-1]["phase"] == "commentary"
     assert normalized["input"] == converted
 
 
 def test_role_message_phase_is_kept_only_for_assistant_values_the_api_accepts():
-    wire = _preflight_codex_input_items([
-        {"role": "assistant", "content": "a", "phase": "final_answer"},
-        {"role": "assistant", "content": "b", "phase": "analysis"},
-        {"role": "assistant", "content": "c", "phase": 42},
-        {"role": "user", "content": "d", "phase": "commentary"},
-    ])
+    wire = _preflight_codex_input_items(
+        [
+            {"role": "assistant", "content": "a", "phase": "final_answer"},
+            {"role": "assistant", "content": "b", "phase": "analysis"},
+            {"role": "assistant", "content": "c", "phase": 42},
+            {"role": "user", "content": "d", "phase": "commentary"},
+        ]
+    )
 
     assert [item.get("phase") for item in wire] == ["final_answer", None, None, None]

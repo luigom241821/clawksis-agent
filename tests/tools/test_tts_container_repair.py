@@ -23,8 +23,10 @@ MP3_FRAME = b"\xff\xfb\x90\x00" + b"\x00" * 64
 OGG = b"OggS\x00\x02" + b"\x00" * 64
 FLAC = b"fLaC" + b"\x00" * 64
 
+
 def _wav_bytes() -> bytes:
     return b"RIFF" + struct.pack("<I", 36) + b"WAVE" + b"\x00" * 64
+
 
 class TestSniffAudioContainer:
     @pytest.mark.parametrize(
@@ -47,6 +49,7 @@ class TestSniffAudioContainer:
         assert _sniff_audio_container(str(p)) == "unknown"
         assert _sniff_audio_container(str(tmp_path / "missing")) == "unknown"
 
+
 class TestRepairOggContainer:
     def test_real_ogg_untouched(self, tmp_path):
         p = tmp_path / "v.ogg"
@@ -65,16 +68,31 @@ class TestRepairOggContainer:
         # runs AND carries the encoder: CI runners have shipped an ffmpeg on PATH that exits 127.
         p = tmp_path / "v.ogg"
         synth = _sp.run(
-            ["ffmpeg", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.3",
-             "-acodec", "libmp3lame", "-f", "mp3", str(p), "-y"],
-            capture_output=True, check=False,
+            [
+                "ffmpeg",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.3",
+                "-acodec",
+                "libmp3lame",
+                "-f",
+                "mp3",
+                str(p),
+                "-y",
+            ],
+            capture_output=True,
+            check=False,
         )
         if synth.returncode != 0:
-            pytest.skip(f"ffmpeg on PATH cannot synthesize mp3 (exit {synth.returncode})")
+            pytest.skip(
+                f"ffmpeg on PATH cannot synthesize mp3 (exit {synth.returncode})"
+            )
         assert _sniff_audio_container(str(p)) == "mp3"
         result = _repair_ogg_container(str(p))
         assert result == str(p)
         assert _sniff_audio_container(str(p)) == "ogg"
+
 
 class TestOpusPlatformSet:
     def test_opus_platforms_cover_voice_bubble_platforms(self):

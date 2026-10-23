@@ -31,13 +31,21 @@ def db(tmp_path, monkeypatch):
 
 _ROUTE_COMMITS = {
     "model": lambda db: db.update_session_model(
-        SESSION_ID, "anthropic/claude-opus-4.8", provider="anthropic", base_url="https://a/v1",
+        SESSION_ID,
+        "anthropic/claude-opus-4.8",
+        provider="anthropic",
+        base_url="https://a/v1",
     ),
     "runtime_lock": lambda db: db.update_session_runtime_lock(
-        SESSION_ID, model="anthropic/claude-opus-4.8", provider="anthropic", confirmed=True,
+        SESSION_ID,
+        model="anthropic/claude-opus-4.8",
+        provider="anthropic",
+        confirmed=True,
     ),
     "billing_route": lambda db: db.update_session_billing_route(
-        SESSION_ID, provider="openrouter", base_url="https://o/v1",
+        SESSION_ID,
+        provider="openrouter",
+        base_url="https://o/v1",
     ),
 }
 
@@ -74,10 +82,14 @@ def test_compression_tip_adoption_applies_the_identity_check(db):
     parent_prompt = _stored_prompt("parent-model", "parent-provider")
     db.create_session("parent", source="discord", model="model-a")
     db.end_session("parent", "compression")
-    db.create_session("child", source="discord", model="model-a", parent_session_id="parent")
+    db.create_session(
+        "child", source="discord", model="model-a", parent_session_id="parent"
+    )
     db.update_system_prompt("child", stale)
     db.append_message("child", "user", "hi")
-    db.update_session_model("child", "model-b", provider="prov-b", base_url="https://b/v1")
+    db.update_session_model(
+        "child", "model-b", provider="prov-b", base_url="https://b/v1"
+    )
 
     def _adopt(model: str, provider: str) -> MagicMock:
         agent = MagicMock()
@@ -115,7 +127,9 @@ def _turn_agent(db, model: str, provider: str, prose: str = "") -> MagicMock:
     agent._surface_switch_note = ""
     agent._gateway_turn_context_notes = ""
     agent.enabled_toolsets = agent.disabled_toolsets = None
-    agent._build_system_prompt = MagicMock(side_effect=lambda _sm: f"You are Clawksis.\n\n{prose}{_timestamp_line(agent)}")
+    agent._build_system_prompt = MagicMock(
+        side_effect=lambda _sm: f"You are Clawksis.\n\n{prose}{_timestamp_line(agent)}"
+    )
     return agent
 
 
@@ -142,7 +156,9 @@ def test_emptied_live_identity_rebuilds_once_then_reuses(db, live_model, live_pr
     db.create_session(SESSION_ID, source="discord", model="x-ai/grok-4.5")
     db.update_system_prompt(SESSION_ID, stale)
 
-    _run_turn(db, live_model, live_provider, prose)._build_system_prompt.assert_called_once()
+    _run_turn(
+        db, live_model, live_provider, prose
+    )._build_system_prompt.assert_called_once()
     rebuilt = db.get_session(SESSION_ID)["system_prompt"]
     assert rebuilt != stale
 

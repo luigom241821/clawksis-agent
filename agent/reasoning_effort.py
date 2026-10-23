@@ -22,10 +22,27 @@ _KIMI_K3_SLUG_RE = re.compile(r"(?:^|[^a-z0-9])k3(?:[^a-z0-9]|$)")
 # Canonical low→high ordering for nearest-level clamping. Includes "none" so an explicit
 # disable can be clamped when a provider publishes it as a level. ``ultra`` is Clawksis-internal
 # (the Codex product tier): no wire accepts it, every declared set stops at ``max``.
-EFFORT_LADDER: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+EFFORT_LADDER: tuple[str, ...] = (
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra",
+)
 
 #: Widest OpenAI-compatible wire vocabulary (OpenRouter, Nous Portal).
-OPENAI_COMPAT_WIRE_EFFORTS: tuple[str, ...] = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+OPENAI_COMPAT_WIRE_EFFORTS: tuple[str, ...] = (
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+)
 
 #: OpenAI/Codex Responses per model generation (live-verified): ``minimal`` is rejected by
 #: both (clamps to low); ``max`` is gpt-5.6 / gpt-6-tier only (legacy = 5.5 and older).
@@ -108,7 +125,9 @@ def codex_supported_efforts(model: Optional[str]) -> tuple[str, ...]:
         return CODEX_ASTRA_EFFORTS
     return (
         CODEX_GPT56_EFFORTS
-        if "gpt-5.6" in bare or bare.startswith(GPT6_TIER_PREFIXES) or bare in DAYBREAK_MODEL_IDS
+        if "gpt-5.6" in bare
+        or bare.startswith(GPT6_TIER_PREFIXES)
+        or bare in DAYBREAK_MODEL_IDS
         else CODEX_LEGACY_EFFORTS
     )
 
@@ -125,7 +144,9 @@ def kimi_supported_efforts(model: Optional[str]) -> tuple[str, ...]:
 
 
 def clamp_effort(
-    effort: Optional[str], supported: Optional[Sequence[str]], overrides: Optional[dict[str, str]] = None,
+    effort: Optional[str],
+    supported: Optional[Sequence[str]],
+    overrides: Optional[dict[str, str]] = None,
 ) -> Optional[str]:
     """Clamp a requested reasoning effort onto a wire's supported levels.
 
@@ -140,7 +161,11 @@ def clamp_effort(
     requested = str(effort or "").strip().lower()
     if not requested or not supported:
         return effort
-    supported_norm = [lvl for lvl in (str(s).strip().lower() for s in supported) if lvl in EFFORT_LADDER]
+    supported_norm = [
+        lvl
+        for lvl in (str(s).strip().lower() for s in supported)
+        if lvl in EFFORT_LADDER
+    ]
     if not supported_norm or requested in supported_norm:
         return effort
     if overrides and overrides.get(requested) in supported_norm:
@@ -153,12 +178,20 @@ def clamp_effort(
     if not candidates:
         return effort
     requested_idx = EFFORT_LADDER.index(requested)
-    below = [level for level in candidates if EFFORT_LADDER.index(level) < requested_idx]
-    return max(below, key=EFFORT_LADDER.index) if below else min(candidates, key=EFFORT_LADDER.index)
+    below = [
+        level for level in candidates if EFFORT_LADDER.index(level) < requested_idx
+    ]
+    return (
+        max(below, key=EFFORT_LADDER.index)
+        if below
+        else min(candidates, key=EFFORT_LADDER.index)
+    )
 
 
 def route_supported_efforts(
-    provider: Optional[str], model: Optional[str], api_mode: Optional[str] = None,
+    provider: Optional[str],
+    model: Optional[str],
+    api_mode: Optional[str] = None,
 ) -> tuple[str, ...]:
     """Levels the (provider, model) route's ENTRY clamp accepts: the Codex/OpenAI Responses set per
     model generation, else the widest OpenAI-compatible vocabulary (narrower providers clamp again
@@ -167,26 +200,41 @@ def route_supported_efforts(
     ``max`` rejects it), so it is sent verbatim there."""
     if (provider or "").strip().lower() == "openai-codex":
         supported = codex_supported_efforts(model)
-        return (*supported, "ultra") if api_mode == "codex_app_server" and "max" in supported else supported
+        return (
+            (*supported, "ultra")
+            if api_mode == "codex_app_server" and "max" in supported
+            else supported
+        )
     return OPENAI_COMPAT_WIRE_EFFORTS
 
 
 def effort_display_label(
-    effort: Optional[str], provider: Optional[str] = None, model: Optional[str] = None,
+    effort: Optional[str],
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
     api_mode: Optional[str] = None,
 ) -> str:
     """Picker / ``/reasoning`` status label for a ladder level: the level itself when the route sends
     it verbatim, else ``"<level> (sends <clamped> on this route)"`` so a Clawksis-internal step such as
     ``ultra`` (#61634) is never presented as a distinct wire level the route does not have."""
     requested = str(effort or "").strip().lower()
-    clamped = clamp_effort(requested, route_supported_efforts(provider, model, api_mode))
-    return requested if not requested or clamped == requested else f"{requested} (sends {clamped} on this route)"
+    clamped = clamp_effort(
+        requested, route_supported_efforts(provider, model, api_mode)
+    )
+    return (
+        requested
+        if not requested or clamped == requested
+        else f"{requested} (sends {clamped} on this route)"
+    )
 
 
 def requested_effort(reasoning_config: Optional[dict]) -> Optional[str]:
     """The user's explicit effort, or None (absent/malformed config, no effort, or reasoning
     disabled) — callers then omit the wire field."""
-    if not isinstance(reasoning_config, dict) or reasoning_config.get("enabled") is False:
+    if (
+        not isinstance(reasoning_config, dict)
+        or reasoning_config.get("enabled") is False
+    ):
         return None
     return str(reasoning_config.get("effort") or "").strip().lower() or None
 
@@ -208,10 +256,18 @@ def generic_nested_reasoning(reasoning_config: Optional[dict]) -> dict:
         return {}
     if reasoning_config.get("enabled") is False:
         return {"reasoning": {"enabled": False}}
-    return {"reasoning": {"enabled": True, "effort": reasoning_config.get("effort") or "medium"}}
+    return {
+        "reasoning": {
+            "enabled": True,
+            "effort": reasoning_config.get("effort") or "medium",
+        }
+    }
 
 
-def clamp_reasoning_config(reasoning_config: Optional[dict], supported: Sequence[str] = OPENAI_COMPAT_WIRE_EFFORTS) -> Optional[dict]:
+def clamp_reasoning_config(
+    reasoning_config: Optional[dict],
+    supported: Sequence[str] = OPENAI_COMPAT_WIRE_EFFORTS,
+) -> Optional[dict]:
     """Return ``reasoning_config`` with its ``effort`` clamped onto ``supported`` (non-dicts and
     configs without an effort pass through untouched).
 
@@ -223,7 +279,11 @@ def clamp_reasoning_config(reasoning_config: Optional[dict], supported: Sequence
         return reasoning_config
     effort = str(reasoning_config.get("effort") or "").strip().lower()
     clamped = clamp_effort(effort, supported) if effort else effort
-    return {**reasoning_config, "effort": clamped} if clamped != effort else reasoning_config
+    return (
+        {**reasoning_config, "effort": clamped}
+        if clamped != effort
+        else reasoning_config
+    )
 
 
 def thinking_toggle_extras(
@@ -247,7 +307,9 @@ def thinking_toggle_extras(
     effort = requested_effort(reasoning_config)
     clamped = clamp_effort(None if effort == "none" else effort, efforts, overrides)
     if clamped in efforts:
-        return ({"thinking": {"type": "enabled"}} if always_emit_toggle else {}), {"reasoning_effort": clamped}
+        return ({"thinking": {"type": "enabled"}} if always_emit_toggle else {}), {
+            "reasoning_effort": clamped
+        }
     return {"thinking": {"type": "enabled"}}, {}
 
 
@@ -268,11 +330,17 @@ def dashscope_preserve_thinking_extras(model: Optional[str]) -> dict:
     return {}
 
 
-def ox_alpha_reasoning_extras(reasoning_config: Optional[dict], model: Optional[str]) -> tuple[dict, dict]:
+def ox_alpha_reasoning_extras(
+    reasoning_config: Optional[dict], model: Optional[str]
+) -> tuple[dict, dict]:
     """Ox Alpha (``x-preview-f-free``) ``reasoning_effort`` translation for the
     opencode-zen profile (low/high/max only; anything else 400s)."""
     if (model or "").strip().rsplit("/", 1)[-1].lower() != "x-preview-f-free":
         return {}, {}
     effort = requested_effort(reasoning_config)
-    clamped = clamp_effort(None if effort == "none" else effort, OX_ALPHA_EFFORTS, OX_ALPHA_OVERRIDES)
-    return ({}, {"reasoning_effort": clamped}) if clamped in OX_ALPHA_EFFORTS else ({}, {})
+    clamped = clamp_effort(
+        None if effort == "none" else effort, OX_ALPHA_EFFORTS, OX_ALPHA_OVERRIDES
+    )
+    return (
+        ({}, {"reasoning_effort": clamped}) if clamped in OX_ALPHA_EFFORTS else ({}, {})
+    )

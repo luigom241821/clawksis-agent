@@ -35,8 +35,13 @@ class ProviderRegistry(Generic[P]):
     """
 
     def __init__(
-        self, *, label: str, provider_cls: type, logger: logging.Logger,
-        normalize: Callable[[str], str] = str.strip, builtin_names: frozenset[str] = frozenset(),
+        self,
+        *,
+        label: str,
+        provider_cls: type,
+        logger: logging.Logger,
+        normalize: Callable[[str], str] = str.strip,
+        builtin_names: frozenset[str] = frozenset(),
         on_builtin_collision: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.label = label
@@ -91,11 +96,15 @@ class ProviderRegistry(Generic[P]):
             self._bump(scope)
         if existing is not None:
             self.logger.debug(
-                f"{self.label} provider '%s' re-registered (was %r)", key, type(existing).__name__,
+                f"{self.label} provider '%s' re-registered (was %r)",
+                key,
+                type(existing).__name__,
             )
         else:
             self.logger.debug(
-                f"Registered {self._log_label} provider '%s' (%s)", key, type(provider).__name__,
+                f"Registered {self._log_label} provider '%s' (%s)",
+                key,
+                type(provider).__name__,
             )
 
     def merged(self, scope: Optional[str] = None) -> dict[str, P]:
@@ -115,10 +124,9 @@ class ProviderRegistry(Generic[P]):
             return None
         key = self.normalize(name)
         with self._lock:
-            return (
-                self._scoped_providers.get(clawk_home_key(scope), {}).get(key)
-                or self._providers.get(key)
-            )
+            return self._scoped_providers.get(clawk_home_key(scope), {}).get(
+                key
+            ) or self._providers.get(key)
 
     def registry_generation(self, *, scope: Optional[str] = None) -> tuple:
         """Cache fingerprint ``(global_generation, scoped_generation)``."""
@@ -126,13 +134,20 @@ class ProviderRegistry(Generic[P]):
         with self._lock:
             return self._generation, self._scoped_generations.get(active_scope, 0)
 
-    def snapshot_registration(self, name: str, *, scope: Optional[str] = None) -> Optional[P]:
+    def snapshot_registration(
+        self, name: str, *, scope: Optional[str] = None
+    ) -> Optional[P]:
         """Exact-slot lookup (no global fallback) used to detect plugin ownership."""
         with self._lock:
             return self._target(scope, create=False).get(self.normalize(name))
 
     def restore_registration(
-        self, name: str, current: P, previous: Optional[P], *, scope: Optional[str] = None
+        self,
+        name: str,
+        current: P,
+        previous: Optional[P],
+        *,
+        scope: Optional[str] = None,
     ) -> bool:
         """Restore *previous* only when *current* is still installed under *name*."""
         key = self.normalize(name)
@@ -162,16 +177,26 @@ class ProviderRegistry(Generic[P]):
         """Bind the historical module-level API (+ ``_providers``/``_scoped_providers``/
         ``_lock`` test hooks) into a ``*_registry`` module namespace."""
         namespace.update(
-            _providers=self._providers, _scoped_providers=self._scoped_providers, _lock=self._lock,
-            register_provider=self.register, list_providers=self.list_providers,
-            get_provider=self.get_provider, snapshot_registration=self.snapshot_registration,
+            _providers=self._providers,
+            _scoped_providers=self._scoped_providers,
+            _lock=self._lock,
+            register_provider=self.register,
+            list_providers=self.list_providers,
+            get_provider=self.get_provider,
+            snapshot_registration=self.snapshot_registration,
             restore_registration=self.restore_registration,
-            registry_generation=self.registry_generation, _reset_for_tests=self.reset_for_tests,
+            registry_generation=self.registry_generation,
+            _reset_for_tests=self.reset_for_tests,
         )
 
 
 def is_available_safe(
-    provider: Any, logger: logging.Logger, fmt: str, *, level: int = logging.DEBUG, exc_info: bool = False,
+    provider: Any,
+    logger: logging.Logger,
+    fmt: str,
+    *,
+    level: int = logging.DEBUG,
+    exc_info: bool = False,
 ) -> bool:
     """``bool(provider.is_available())`` that treats a raising provider as unavailable."""
     try:
@@ -187,6 +212,7 @@ def configured_provider_name(section: str, logger: logging.Logger) -> Optional[s
     configured: Optional[str] = None
     try:
         from clawk_cli.config import load_config_readonly
+
         cfg = load_config_readonly()
         block = cfg.get(section) if isinstance(cfg, dict) else None
         raw = block.get("provider") if isinstance(block, dict) else None
@@ -197,6 +223,7 @@ def configured_provider_name(section: str, logger: logging.Logger) -> Optional[s
     if configured:
         try:
             from tools.tool_backend_helpers import NOUS_MANAGED_PROVIDER
+
             if configured.lower() == NOUS_MANAGED_PROVIDER:
                 configured = "fal"
         except Exception:  # pragma: no cover — helpers are in-repo

@@ -10,7 +10,15 @@ import pytest
 from tui_gateway import server
 
 
-@pytest.mark.parametrize("phase", ["before_callback", "before_continuation", "before_initial_timer", "cold_resume_claim"])
+@pytest.mark.parametrize(
+    "phase",
+    [
+        "before_callback",
+        "before_continuation",
+        "before_initial_timer",
+        "cold_resume_claim",
+    ],
+)
 def test_obsolete_orphan_cannot_replace_new_detachment(monkeypatch, phase):
     timers = []
 
@@ -26,8 +34,13 @@ def test_obsolete_orphan_cannot_replace_new_detachment(monkeypatch, phase):
             pass  # A dispatched callback can still execute after cancel().
 
     sid = "generation-race"
-    session = dict(transport=server._detached_ws_transport, running=True,
-                   agent=SimpleNamespace(get_activity_summary=lambda: {"seconds_since_activity": 0}))
+    session = dict(
+        transport=server._detached_ws_transport,
+        running=True,
+        agent=SimpleNamespace(
+            get_activity_summary=lambda: {"seconds_since_activity": 0}
+        ),
+    )
     monkeypatch.setattr(server, "_sessions", {sid: session})
     monkeypatch.setattr(server, "_pending_ws_reaps", {})
     monkeypatch.setattr(server.threading, "Timer", Timer)
@@ -89,10 +102,12 @@ def test_obsolete_orphan_cannot_replace_new_detachment(monkeypatch, phase):
         # Interrupt I/O runs outside the resume lock. A reconnect/redetach
         # can win before the old callback registers its next poll.
         monkeypatch.setattr(server, "_WS_ORPHAN_ACTIVITY_STALE_S", 0)
+
         def interrupt(*a, **kw):
             nonlocal newest
             session.pop("_client_gone_interrupt_requested", None)
             newest = redetach()
+
         monkeypatch.setattr(server, "_interrupt_session_turn", interrupt)
         newest = None
     old.callback()
@@ -101,7 +116,9 @@ def test_obsolete_orphan_cannot_replace_new_detachment(monkeypatch, phase):
 
 
 @pytest.mark.parametrize("transition", ["retire", "redetach"])
-def test_orphan_interrupt_claim_clears_when_session_leaves_detached_state(monkeypatch, transition):
+def test_orphan_interrupt_claim_clears_when_session_leaves_detached_state(
+    monkeypatch, transition
+):
     timers = []
 
     class Timer:
@@ -149,13 +166,21 @@ def test_orphan_interrupt_claim_clears_when_session_leaves_detached_state(monkey
     assert sid not in server._pending_ws_reaps
 
 
-@pytest.mark.parametrize("path", ["unpersisted", "reuse", "eager", "activate", "prompt"])
+@pytest.mark.parametrize(
+    "path", ["unpersisted", "reuse", "eager", "activate", "prompt"]
+)
 @pytest.mark.parametrize("claim", ["already_claimed", "wins_lock", "retired"])
 def test_reconnect_cannot_cross_orphan_interrupt_claim(monkeypatch, path, claim):
     sid = "interrupt-race"
-    session = dict(transport=server._detached_ws_transport, running=True,
-                   history_lock=threading.Lock(), history=[], session_key="stored",
-                   agent=SimpleNamespace(model="test"), queued_prompt=None)
+    session = dict(
+        transport=server._detached_ws_transport,
+        running=True,
+        history_lock=threading.Lock(),
+        history=[],
+        session_key="stored",
+        agent=SimpleNamespace(model="test"),
+        queued_prompt=None,
+    )
     session["_client_gone_interrupt_requested"] = claim == "already_claimed"
     monkeypatch.setattr(server, "_sessions", {sid: session})
     monkeypatch.setattr(server, "_pending_ws_reaps", {sid: Mock()})
@@ -166,14 +191,18 @@ def test_reconnect_cannot_cross_orphan_interrupt_claim(monkeypatch, path, claim)
     monkeypatch.setattr(server, "_legacy_group_fence_error", lambda *a: None)
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda *a: False)
     monkeypatch.setattr(server, "_load_dashboard_process_isolation_config", dict)
-    monkeypatch.setattr(server, "_handle_busy_submit", lambda *a, **kw: {"result": {"queued": True}})
+    monkeypatch.setattr(
+        server, "_handle_busy_submit", lambda *a, **kw: {"result": {"queued": True}}
+    )
     monkeypatch.setattr(server, "_sess", lambda *a: (session, None))
 
     class ResumeLock:
         held = False
 
         def __enter__(self):
-            assert not self.held, "resume path recursively acquired a non-reentrant lock"
+            assert not self.held, (
+                "resume path recursively acquired a non-reentrant lock"
+            )
             self.held = True
             if claim == "wins_lock":
                 session["_client_gone_interrupt_requested"] = True
@@ -184,27 +213,51 @@ def test_reconnect_cannot_cross_orphan_interrupt_claim(monkeypatch, path, claim)
             self.held = False
 
     monkeypatch.setattr(server, "_session_resume_lock", ResumeLock())
-    ctx = SimpleNamespace(rid=1, owns_db=False, db=None, cols=80, omit_messages=True,
-                          defer_history=False, target="stored", profile=None,
-                          profile_home=None, profile_resume_cwd=None, found={},
-                          messages=lambda history: [], mint=lambda: ("unused", "tui", "."),
-                          restore=lambda: ([], [], []), display_prefix=list,
-                          inline_images=True)
+    ctx = SimpleNamespace(
+        rid=1,
+        owns_db=False,
+        db=None,
+        cols=80,
+        omit_messages=True,
+        defer_history=False,
+        target="stored",
+        profile=None,
+        profile_home=None,
+        profile_resume_cwd=None,
+        found={},
+        messages=lambda history: [],
+        mint=lambda: ("unused", "tui", "."),
+        restore=lambda: ([], [], []),
+        display_prefix=list,
+        inline_images=True,
+    )
     if path == "eager":
         monkeypatch.setattr(server, "_profile_build_scope", lambda *a: nullcontext())
         monkeypatch.setattr(server, "_make_agent_in_context", lambda *a, **kw: Mock())
-        monkeypatch.setattr(server, "_find_live_session_by_key", lambda *a: (sid, session))
+        monkeypatch.setattr(
+            server, "_find_live_session_by_key", lambda *a: (sid, session)
+        )
         response = server._resume_eager(ctx)
     elif path == "unpersisted":
         response = server._resume_live_unpersisted(ctx, sid, session)
     elif path == "reuse":
         response = server._resume_reuse_live(ctx, sid, session)
     else:
-        name, extra = {"activate": ("session.activate", {"omit_messages": True}),
-                       "prompt": ("prompt.submit", {"text": "continue"})}[path]
-        response = server.handle_request({"jsonrpc": "2.0", "id": 1, "method": name,
-                                          "params": {"session_id": sid, **extra}})
-    assert response.get("error", {}).get("code") == (4007 if claim == "retired" else 4009)
+        name, extra = {
+            "activate": ("session.activate", {"omit_messages": True}),
+            "prompt": ("prompt.submit", {"text": "continue"}),
+        }[path]
+        response = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": name,
+                "params": {"session_id": sid, **extra},
+            }
+        )
+    assert response.get("error", {}).get("code") == (
+        4007 if claim == "retired" else 4009
+    )
     assert session["transport"] is server._detached_ws_transport
     assert sid in server._pending_ws_reaps
     assert session["queued_prompt"] is None
@@ -216,8 +269,15 @@ def test_late_rpc_from_closed_socket_keeps_orphan_reap_armed(monkeypatch, path, 
     """A resume/submit whose socket already closed (disconnect cleanup ran first, so nothing detaches it
     again) must not cancel the orphan reap: the client is not back. A live socket still cancels it."""
     sid = "late-rebind"
-    session = dict(transport=server._detached_ws_transport, running=True, history_lock=threading.Lock(),
-                   history=[], session_key="stored", agent=SimpleNamespace(model="test"), queued_prompt=None)
+    session = dict(
+        transport=server._detached_ws_transport,
+        running=True,
+        history_lock=threading.Lock(),
+        history=[],
+        session_key="stored",
+        agent=SimpleNamespace(model="test"),
+        queued_prompt=None,
+    )
     timers = []
 
     class Timer:
@@ -247,25 +307,47 @@ def test_late_rpc_from_closed_socket_keeps_orphan_reap_armed(monkeypatch, path, 
     monkeypatch.setattr(server, "_legacy_group_fence_error", lambda *a: None)
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda *a: False)
     monkeypatch.setattr(server, "_load_dashboard_process_isolation_config", dict)
-    monkeypatch.setattr(server, "_handle_busy_submit", lambda *a, **kw: {"result": {"status": "queued"}})
+    monkeypatch.setattr(
+        server, "_handle_busy_submit", lambda *a, **kw: {"result": {"status": "queued"}}
+    )
     monkeypatch.setattr(server, "_sess", lambda *a: (session, None))
-    ctx = SimpleNamespace(rid=1, owns_db=False, db=None, cols=80, omit_messages=True,
-                          defer_history=False, target="stored", profile=None,
-                          profile_home=None, profile_resume_cwd=None, found={},
-                          messages=lambda history: [], mint=lambda: ("unused", "tui", "."),
-                          restore=lambda: ([], [], []), display_prefix=list,
-                          inline_images=True)
+    ctx = SimpleNamespace(
+        rid=1,
+        owns_db=False,
+        db=None,
+        cols=80,
+        omit_messages=True,
+        defer_history=False,
+        target="stored",
+        profile=None,
+        profile_home=None,
+        profile_resume_cwd=None,
+        found={},
+        messages=lambda history: [],
+        mint=lambda: ("unused", "tui", "."),
+        restore=lambda: ([], [], []),
+        display_prefix=list,
+        inline_images=True,
+    )
     if path == "unpersisted":
         response = server._resume_live_unpersisted(ctx, sid, session)
     elif path == "reuse":
         response = server._resume_reuse_live(ctx, sid, session)
     else:
-        response = server.handle_request({"jsonrpc": "2.0", "id": 1, "method": "prompt.submit",
-                                          "params": {"session_id": sid, "text": "continue"}})
+        response = server.handle_request(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "prompt.submit",
+                "params": {"session_id": sid, "text": "continue"},
+            }
+        )
     assert "error" not in response
     if socket == "closed":
         assert session["transport"] is server._detached_ws_transport
-        assert sid in server._pending_ws_reaps  # left armed (unpersisted/prompt) or re-armed (reuse cancels first)
+        assert (
+            sid in server._pending_ws_reaps
+        )  # left armed (unpersisted/prompt) or re-armed (reuse cancels first)
     else:
         assert session["transport"] is transport
         assert sid not in server._pending_ws_reaps
@@ -315,7 +397,9 @@ def test_ws_orphan_reap_rearms_after_system_sleep(monkeypatch):
     monkeypatch.setattr(server.time, "monotonic", lambda: clocks["monotonic"])
     monkeypatch.setattr(server.time, "time", lambda: clocks["wall"])
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 20)
-    monkeypatch.setattr(server, "_pop_session_by_id", lambda s: reaped.append(s) or session)
+    monkeypatch.setattr(
+        server, "_pop_session_by_id", lambda s: reaped.append(s) or session
+    )
 
     server._schedule_ws_orphan_reap(sid)
     assert len(timers) == 1
@@ -368,7 +452,9 @@ def test_ws_orphan_reap_rearm_spares_post_wake_reconnect(monkeypatch):
     monkeypatch.setattr(server.time, "monotonic", lambda: clocks["monotonic"])
     monkeypatch.setattr(server.time, "time", lambda: clocks["wall"])
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 20)
-    monkeypatch.setattr(server, "_pop_session_by_id", lambda s: reaped.append(s) or session)
+    monkeypatch.setattr(
+        server, "_pop_session_by_id", lambda s: reaped.append(s) or session
+    )
 
     server._schedule_ws_orphan_reap(sid)
     clocks["monotonic"] += 2.0

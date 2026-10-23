@@ -43,7 +43,9 @@ def test_save_url_forwards_headers_and_streams_to_cache(monkeypatch, tmp_path):
 
     def handler(request):
         calls.append(request)
-        return httpx.Response(200, headers={"Content-Type": "video/mp4"}, content=b"clip")
+        return httpx.Response(
+            200, headers={"Content-Type": "video/mp4"}, content=b"clip"
+        )
 
     _stub_fetch(monkeypatch, handler)
 
@@ -66,7 +68,9 @@ def test_save_url_strict_content_type_rejects_non_video(monkeypatch, tmp_path):
 
     _stub_fetch(
         monkeypatch,
-        lambda request: httpx.Response(200, headers={"Content-Type": "text/html"}, content=b"not a video"),
+        lambda request: httpx.Response(
+            200, headers={"Content-Type": "text/html"}, content=b"not a video"
+        ),
     )
 
     with pytest.raises(ValueError, match="unexpected Content-Type text/html"):
@@ -78,7 +82,9 @@ def test_save_url_strict_content_type_rejects_non_video(monkeypatch, tmp_path):
     assert not list(provider_media.cache_dir("videos").iterdir())
 
 
-def test_save_url_redirect_scopes_caller_headers_to_first_hop_and_fails_closed(monkeypatch, tmp_path):
+def test_save_url_redirect_scopes_caller_headers_to_first_hop_and_fails_closed(
+    monkeypatch, tmp_path
+):
     """Caller auth headers (provider base_url fetches) go to the first hop only — a
     redirect target must never receive them — and a 3xx without ``Location`` is an
     error, never a cached body."""
@@ -93,7 +99,9 @@ def test_save_url_redirect_scopes_caller_headers_to_first_hop_and_fails_closed(m
             return httpx.Response(302, headers={"Location": "/final"})
         if request.url.path == "/no-location":
             return httpx.Response(302, content=b"<html>3xx body</html>")
-        return httpx.Response(200, headers={"Content-Type": "video/mp4"}, content=b"clip")
+        return httpx.Response(
+            200, headers={"Content-Type": "video/mp4"}, content=b"clip"
+        )
 
     _stub_fetch(monkeypatch, handler)
 
@@ -113,7 +121,9 @@ def test_save_url_redirect_scopes_caller_headers_to_first_hop_and_fails_closed(m
     assert list(provider_media.cache_dir("videos").iterdir()) == [path]
 
 
-def test_save_url_trusted_origin_skips_private_check_on_first_hop_only(monkeypatch, tmp_path):
+def test_save_url_trusted_origin_skips_private_check_on_first_hop_only(
+    monkeypatch, tmp_path
+):
     """``trusted_origin=True`` (the caller built the URL from the operator's own
     provider ``base_url``) must let a LAN/loopback relay serve the first hop, but the
     cloud-metadata floor still applies and every redirect target is re-validated in
@@ -146,15 +156,25 @@ def test_save_url_trusted_origin_skips_private_check_on_first_hop_only(monkeypat
     try:
         base = f"http://127.0.0.1:{server.server_port}"
 
-        path = _save_video(f"{base}/content", headers={"Authorization": "Bearer test"},
-                           require_known_content_type=True, trusted_origin=True)
+        path = _save_video(
+            f"{base}/content",
+            headers={"Authorization": "Bearer test"},
+            require_known_content_type=True,
+            trusted_origin=True,
+        )
         assert path.read_bytes() == b"clip"
         assert hits == [("/content", "Bearer test")]
 
         with pytest.raises(ValueError, match="SSRF safety check"):
-            _save_video(f"{base}/bounce", headers={"Authorization": "Bearer test"},
-                        require_known_content_type=True, trusted_origin=True)
-        assert hits[1:] == [("/bounce", "Bearer test")]  # hop 2 (loopback) refused before connecting
+            _save_video(
+                f"{base}/bounce",
+                headers={"Authorization": "Bearer test"},
+                require_known_content_type=True,
+                trusted_origin=True,
+            )
+        assert hits[1:] == [
+            ("/bounce", "Bearer test")
+        ]  # hop 2 (loopback) refused before connecting
 
         with pytest.raises(ValueError, match="always-blocked"):
             _save_video("http://169.254.169.254/latest/meta-data", trusted_origin=True)

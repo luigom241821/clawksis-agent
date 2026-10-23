@@ -27,7 +27,9 @@ def _stale_bot_chat_agent(platform: str):
     agent._build_system_prompt = MagicMock(return_value="NEW_PROMPT")
     agent.enabled_toolsets = ["web"]
     agent.disabled_toolsets = None
-    agent.tools = [{"type": "function", "function": {"name": "web_search", "parameters": {}}}]
+    agent.tools = [
+        {"type": "function", "function": {"name": "web_search", "parameters": {}}}
+    ]
     agent.valid_tool_names = {"web_search"}
     agent._bot_mode_protocol = True
     agent._session_title_hint = "Bot Chat"
@@ -41,10 +43,16 @@ def _run_stale_refresh(agent):
     with (
         patch("tools.bot_mode_probe.stored_prompt_capability_stale", return_value=True),
         patch("tui_gateway.server._load_enabled_toolsets", builder),
-        patch("tui_gateway.server._load_disabled_toolsets", return_value=["computer_use"]),
-        patch("tools.mcp_tool_agent.refresh_agent_mcp_tools", return_value=set()) as refresh,
+        patch(
+            "tui_gateway.server._load_disabled_toolsets", return_value=["computer_use"]
+        ),
+        patch(
+            "tools.mcp_tool_agent.refresh_agent_mcp_tools", return_value=set()
+        ) as refresh,
     ):
-        _restore_or_build_system_prompt(agent, None, [{"role": "user", "content": "hi"}])
+        _restore_or_build_system_prompt(
+            agent, None, [{"role": "user", "content": "hi"}]
+        )
     assert agent._cached_system_prompt == "NEW_PROMPT"
     return builder, refresh
 
@@ -80,6 +88,7 @@ def test_frozen_session_policy_wins_over_live_surface_config():
     """A gateway-owned session runs under its frozen launch policy: the refresh re-pins the
     policy's toolsets and never consults the live-config surface builder."""
     from gateway.session_policy import _ACTIVE_POLICY
+
     agent, _db = _stale_bot_chat_agent("desktop")
     token = _ACTIVE_POLICY.set(MagicMock(toolsets=("file", "web")))
     try:

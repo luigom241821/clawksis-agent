@@ -10,7 +10,12 @@ from tools import approval_gateway_wait as wait_mod
 
 
 SESSION_KEY = "approval-late-choice"
-APPROVAL = {"command": "rm -rf build", "description": "d", "pattern_key": "dangerous", "pattern_keys": ["dangerous"]}
+APPROVAL = {
+    "command": "rm -rf build",
+    "description": "d",
+    "pattern_key": "dangerous",
+    "pattern_keys": ["dangerous"],
+}
 
 
 def _clear():
@@ -21,7 +26,11 @@ def _clear():
 def test_choice_landing_after_the_deadline_check_is_resolved(monkeypatch):
     _clear()
     hooks: list[tuple[str, dict]] = []
-    monkeypatch.setattr(wait_mod._ctx, "_fire_approval_hook", lambda name, **kw: hooks.append((name, kw)))
+    monkeypatch.setattr(
+        wait_mod._ctx,
+        "_fire_approval_hook",
+        lambda name, **kw: hooks.append((name, kw)),
+    )
 
     def deadline_passed_then_user_answered(event, session_key, *, interrupt_log):
         # The poll loop has already decided "timeout"; the user's /approve lands before the entry leaves the queue.
@@ -30,7 +39,9 @@ def test_choice_landing_after_the_deadline_check_is_resolved(monkeypatch):
 
     monkeypatch.setattr(wait_mod, "_poll_event", deadline_passed_then_user_answered)
 
-    decision = wait_mod._await_gateway_decision(SESSION_KEY, lambda data: None, APPROVAL)
+    decision = wait_mod._await_gateway_decision(
+        SESSION_KEY, lambda data: None, APPROVAL
+    )
 
     assert decision == {"resolved": True, "choice": "once", "reason": None}
     assert hooks[-1][0] == "post_approval_response" and hooks[-1][1]["choice"] == "once"
@@ -40,9 +51,13 @@ def test_choice_landing_after_the_deadline_check_is_resolved(monkeypatch):
 def test_plain_timeout_still_reports_unresolved(monkeypatch):
     _clear()
     monkeypatch.setattr(wait_mod._ctx, "_fire_approval_hook", lambda name, **kw: None)
-    monkeypatch.setattr(wait_mod, "_poll_event", lambda event, session_key, *, interrupt_log: "timeout")
+    monkeypatch.setattr(
+        wait_mod, "_poll_event", lambda event, session_key, *, interrupt_log: "timeout"
+    )
 
-    decision = wait_mod._await_gateway_decision(SESSION_KEY, lambda data: None, APPROVAL)
+    decision = wait_mod._await_gateway_decision(
+        SESSION_KEY, lambda data: None, APPROVAL
+    )
 
     assert decision == {"resolved": False, "choice": None, "reason": None}
     # Nothing is left for a late /approve to hit: the client learns nothing was pending.
@@ -65,7 +80,10 @@ def test_resolve_commits_the_choice_before_releasing_the_approval_lock(monkeypat
             return real_lock.__enter__()
 
         def __exit__(self, *exc):
-            seen["result_at_release"], seen["event_at_release"] = entry.result, entry.event.is_set()
+            seen["result_at_release"], seen["event_at_release"] = (
+                entry.result,
+                entry.event.is_set(),
+            )
             return real_lock.__exit__(*exc)
 
     monkeypatch.setattr(mod, "_lock", _Instrumented())
@@ -82,11 +100,17 @@ def test_withdrawn_entry_settles_with_a_wire_reason(monkeypatch):
     reasons: list[str] = []
 
     def torn_down(event, session_key, *, interrupt_log):
-        mod.register_gateway_settle(session_key, mod._gateway_queues[session_key][0].data["request_id"], reasons.append)
+        mod.register_gateway_settle(
+            session_key,
+            mod._gateway_queues[session_key][0].data["request_id"],
+            reasons.append,
+        )
         mod.clear_session(session_key)
         return "set"
 
     monkeypatch.setattr(wait_mod, "_poll_event", torn_down)
-    decision = wait_mod._await_gateway_decision(SESSION_KEY, lambda data: None, APPROVAL)
+    decision = wait_mod._await_gateway_decision(
+        SESSION_KEY, lambda data: None, APPROVAL
+    )
     assert decision["choice"] is None and decision["cancelled"]
     assert reasons == ["session_closed"]

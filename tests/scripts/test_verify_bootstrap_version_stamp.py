@@ -50,7 +50,12 @@ def _git(repo: Path, *args: str) -> str:
     )
     return out.stdout.strip()
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "verify-bootstrap-version-stamp.py"
+
+_SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "scripts"
+    / "verify-bootstrap-version-stamp.py"
+)
 
 
 def _install_repo(tmp_path: Path) -> Path:
@@ -62,54 +67,96 @@ def _install_repo(tmp_path: Path) -> Path:
     _git(repo, "config", "user.name", "ci")
     (repo / "clawk_cli").mkdir()
     (repo / "clawk_cli" / "__init__.py").write_text(
-        '"""Clawksis CLI."""\n', encoding="utf-8")
+        '"""Clawksis CLI."""\n', encoding="utf-8"
+    )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-m", "seed")
-    (repo / "install-stamp.json").write_text(json.dumps({
-        "schemaVersion": 2, "commit": _git(repo, "rev-parse", "HEAD"),
-        "baseVersion": "0.1.2", "updateMechanism": "self",
-    }), encoding="utf-8")
+    (repo / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "commit": _git(repo, "rev-parse", "HEAD"),
+                "baseVersion": "0.1.2",
+                "updateMechanism": "self",
+            }
+        ),
+        encoding="utf-8",
+    )
     return repo
 
 
-@pytest.mark.parametrize("changes,expect,error", [
-    ({}, [], None),
-    ({"pinnedCommit": "a" * 40}, [], "installed HEAD"),
-    ({}, ["--expect-commit", "b" * 40], "expected"),
-    ({}, ["--expect-branch", "release"], "pinnedBranch"),
-    ({"schemaVersion": 2}, [], "schemaVersion"),
-    ({"pinnedCommit": "deadbeef"}, [], "40-char"),
-    ({"completedAt": "not-a-time"}, [], "ISO-8601"),
-    ({"completedAt": "2026-08-30T12:00:00+01:00"}, [], "not UTC"),
-    ({"missing": "stamp"}, [], "cannot read stamp"),
-    ({"missing": "version"}, [], "no source identity stamp"),
-    ({"canonicalCommit": "c" * 40}, [], "canonical"),
-    # A checkout with no reachable release tag honestly stamps a null base.
-    ({"canonicalBase": None}, [], None),
-    # The protocol lane never runs the products stage that writes the stamp.
-    ({"missing": "version"}, ["--no-source-stamp"], None),
-])
+@pytest.mark.parametrize(
+    "changes,expect,error",
+    [
+        ({}, [], None),
+        ({"pinnedCommit": "a" * 40}, [], "installed HEAD"),
+        ({}, ["--expect-commit", "b" * 40], "expected"),
+        ({}, ["--expect-branch", "release"], "pinnedBranch"),
+        ({"schemaVersion": 2}, [], "schemaVersion"),
+        ({"pinnedCommit": "deadbeef"}, [], "40-char"),
+        ({"completedAt": "not-a-time"}, [], "ISO-8601"),
+        ({"completedAt": "2026-08-30T12:00:00+01:00"}, [], "not UTC"),
+        ({"missing": "stamp"}, [], "cannot read stamp"),
+        ({"missing": "version"}, [], "no source identity stamp"),
+        ({"canonicalCommit": "c" * 40}, [], "canonical"),
+        # A checkout with no reachable release tag honestly stamps a null base.
+        ({"canonicalBase": None}, [], None),
+        # The protocol lane never runs the products stage that writes the stamp.
+        ({"missing": "version"}, ["--no-source-stamp"], None),
+    ],
+)
 def test_verifier_cli(tmp_path, changes, expect, error):
     repo = _install_repo(tmp_path)
-    stamp = {"schemaVersion": 1, "pinnedCommit": _git(repo, "rev-parse", "HEAD"),
-             "pinnedBranch": "main", "completedAt": "2026-08-30T12:00:00.000Z", **changes}
+    stamp = {
+        "schemaVersion": 1,
+        "pinnedCommit": _git(repo, "rev-parse", "HEAD"),
+        "pinnedBranch": "main",
+        "completedAt": "2026-08-30T12:00:00.000Z",
+        **changes,
+    }
     path = repo / ".clawk-bootstrap-complete"
     if changes.get("missing") != "stamp":
         path.write_text(json.dumps(stamp), encoding="utf-8")
     if changes.get("missing") == "version":
         (repo / "install-stamp.json").unlink()
     if "canonicalCommit" in changes or "canonicalBase" in changes:
-        canonical = json.loads((repo / "install-stamp.json").read_text(encoding="utf-8"))
+        canonical = json.loads(
+            (repo / "install-stamp.json").read_text(encoding="utf-8")
+        )
         canonical["commit"] = changes.get("canonicalCommit", canonical["commit"])
-        canonical["baseVersion"] = changes.get("canonicalBase", canonical["baseVersion"])
-        (repo / "install-stamp.json").write_text(json.dumps(canonical), encoding="utf-8")
+        canonical["baseVersion"] = changes.get(
+            "canonicalBase", canonical["baseVersion"]
+        )
+        (repo / "install-stamp.json").write_text(
+            json.dumps(canonical), encoding="utf-8"
+        )
     if not error:
-        expect = ["--expect-commit", stamp["pinnedCommit"], "--expect-branch", "main", *expect]
+        expect = [
+            "--expect-commit",
+            stamp["pinnedCommit"],
+            "--expect-branch",
+            "main",
+            *expect,
+        ]
     env = dict(os.environ)
     if os.name == "nt":
         env.setdefault("SystemRoot", r"C:\Windows")
         env.setdefault("ComSpec", r"C:\Windows\system32\cmd.exe")
-    result = subprocess.run([sys.executable, str(_SCRIPT), "--repo", str(repo), "--stamp", str(path), *expect],
-                            env=env, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_SCRIPT),
+            "--repo",
+            str(repo),
+            "--stamp",
+            str(path),
+            *expect,
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == (1 if error else 0), result.stderr
     assert error in result.stderr if error else "stamp verified" in result.stdout

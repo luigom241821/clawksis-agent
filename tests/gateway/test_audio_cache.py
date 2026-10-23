@@ -20,6 +20,7 @@ from gateway.platforms.base import (
 # Fixture: redirect AUDIO_CACHE_DIR to a temp directory for every test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _redirect_cache(tmp_path, monkeypatch):
     """Point the module-level AUDIO_CACHE_DIR to a fresh tmp_path."""
@@ -33,10 +34,10 @@ def _redirect_cache(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # TestCacheAudioFromBytes
 # ---------------------------------------------------------------------------
+
 
 class TestCacheAudioFromBytes:
     def test_basic_caching(self):
@@ -46,10 +47,10 @@ class TestCacheAudioFromBytes:
         assert Path(path).read_bytes() == data
 
 
-
 # ---------------------------------------------------------------------------
 # TestCleanupAudioCache
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupAudioCache:
     def test_removes_old_files(self):
@@ -78,8 +79,8 @@ class TestCleanupAudioCache:
 # TestUnifiedMediaCacheCleanup — video + screenshot ride the same shared loop
 # ---------------------------------------------------------------------------
 
-class TestUnifiedMediaCacheCleanup:
 
+class TestUnifiedMediaCacheCleanup:
     def test_cleanup_screenshot_cache_removes_old_files(self, tmp_path, monkeypatch):
         from gateway.platforms.base import (
             cleanup_screenshot_cache,
@@ -101,4 +102,3 @@ class TestUnifiedMediaCacheCleanup:
         assert removed == 1
         assert not old_file.exists()
         assert fresh.exists()
-

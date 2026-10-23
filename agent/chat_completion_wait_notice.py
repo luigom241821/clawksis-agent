@@ -30,8 +30,12 @@ _PHASE_TEXT = {
 }
 
 
-def wait_notice_text(model: str, silence_secs: float, phase: str,
-                     watchdog: Optional[tuple[str, float]] = None) -> str:
+def wait_notice_text(
+    model: str,
+    silence_secs: float,
+    phase: str,
+    watchdog: Optional[tuple[str, float]] = None,
+) -> str:
     """One neutral status line. ``watchdog`` is ``(label, seconds_until_it_fires)``."""
     lead = "still waiting on" if _near_deadline(watchdog) else "waiting on"
     text = f"⏳ {lead} {model} — " + _PHASE_TEXT[phase].format(n=int(silence_secs))
@@ -41,24 +45,42 @@ def wait_notice_text(model: str, silence_secs: float, phase: str,
     return text
 
 
-def codex_watchdog_deadline(*, stale_timeout: float, ttfb_enabled: bool, ttfb_timeout: float,
-    last_event_ts: Optional[float], last_progress_ts: Optional[float],
-    retry_started_ts: Optional[float], call_start: float, idle_enabled: bool,
-    idle_timeout: float, idle_requires_progress: bool, elapsed: float,
-    progress_timeout: float = 0.0) -> Optional[tuple[str, float]]:
+def codex_watchdog_deadline(
+    *,
+    stale_timeout: float,
+    ttfb_enabled: bool,
+    ttfb_timeout: float,
+    last_event_ts: Optional[float],
+    last_progress_ts: Optional[float],
+    retry_started_ts: Optional[float],
+    call_start: float,
+    idle_enabled: bool,
+    idle_timeout: float,
+    idle_requires_progress: bool,
+    elapsed: float,
+    progress_timeout: float = 0.0,
+) -> Optional[tuple[str, float]]:
     """Earliest enabled Codex watchdog as ``(label, seconds_until_it_fires)``; None when
     none applies (disabled/infinite, or its deadline already passed)."""
     deadlines: list[tuple[str, float]] = []
     if math.isfinite(stale_timeout):
         deadlines.append(("wall-clock stale", stale_timeout))
-    attempt_offset = max(0.0, retry_started_ts - call_start) if retry_started_ts is not None else 0.0
+    attempt_offset = (
+        max(0.0, retry_started_ts - call_start) if retry_started_ts is not None else 0.0
+    )
     if last_event_ts is None:
         if ttfb_enabled and math.isfinite(ttfb_timeout):
             deadlines.append(("TTFB", attempt_offset + ttfb_timeout))
     elif progress_timeout > 0 and last_progress_ts is None:
         deadlines.append(("first progress", attempt_offset + progress_timeout))
-    elif (not idle_requires_progress or last_progress_ts is not None) and idle_enabled and math.isfinite(idle_timeout):
-        deadlines.append(("stream idle", max(0.0, last_event_ts - call_start) + idle_timeout))
+    elif (
+        (not idle_requires_progress or last_progress_ts is not None)
+        and idle_enabled
+        and math.isfinite(idle_timeout)
+    ):
+        deadlines.append(
+            ("stream idle", max(0.0, last_event_ts - call_start) + idle_timeout)
+        )
     if not deadlines:
         return None
     label, deadline = min(deadlines, key=lambda d: d[1])
@@ -87,7 +109,11 @@ class WaitNoticeState:
     def should_emit(self, phase: str, watchdog: Optional[tuple[str, float]]) -> bool:
         label = watchdog[0] if watchdog is not None else None
         near = _near_deadline(watchdog)
-        emit = self.phase != phase or self.watchdog_label != label or (near and not self.near_shown)
+        emit = (
+            self.phase != phase
+            or self.watchdog_label != label
+            or (near and not self.near_shown)
+        )
         self.phase, self.watchdog_label = phase, label
         if near:
             self.near_shown = True

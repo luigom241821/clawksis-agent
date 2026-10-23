@@ -4,6 +4,7 @@
 # Resolver: resolution order
 # ---------------------------------------------------------------------------
 
+
 class TestToolProgressProvenance:
     def test_winning_source_controls_mode_and_intent(self):
         from gateway.display_config import resolve_tool_progress
@@ -17,12 +18,31 @@ class TestToolProgressProvenance:
             ({"platforms": {"slack": {"tool_progress": None}}}, "off", ("off", True)),
             ({"tool_progress_overrides": {"slack": None}}, "new", ("new", True)),
             ({"tool_progress": False}, "all", ("off", True)),
-            ({"tool_progress": "all", "platforms": {"slack": {"tool_progress": None}}}, "off", ("all", True)),
-            ({"tool_progress": "off", "tool_progress_overrides": {"slack": "new"}}, "all", ("new", True)),
-            ({"tool_progress_overrides": {"slack": "off"}, "platforms": {"slack": {"tool_progress": "all"}}}, None, ("all", True)),
+            (
+                {
+                    "tool_progress": "all",
+                    "platforms": {"slack": {"tool_progress": None}},
+                },
+                "off",
+                ("all", True),
+            ),
+            (
+                {"tool_progress": "off", "tool_progress_overrides": {"slack": "new"}},
+                "all",
+                ("new", True),
+            ),
+            (
+                {
+                    "tool_progress_overrides": {"slack": "off"},
+                    "platforms": {"slack": {"tool_progress": "all"}},
+                },
+                None,
+                ("all", True),
+            ),
         ]
         for display, env, expected in cases:
             assert resolve_tool_progress({"display": display}, "slack", env) == expected
+
 
 class TestResolveDisplaySetting:
     """resolve_display_setting() resolves with correct priority."""
@@ -68,9 +88,11 @@ class TestResolveDisplaySetting:
         assert resolve_display_setting(config, "slack", "tool_progress") == "off"
         assert resolve_display_setting(config, "telegram", "tool_progress") == "all"
 
+
 # ---------------------------------------------------------------------------
 # Backward compatibility: tool_progress_overrides
 # ---------------------------------------------------------------------------
+
 
 class TestBackwardCompat:
     """Legacy tool_progress_overrides is still respected as a fallback."""
@@ -91,9 +113,11 @@ class TestBackwardCompat:
         assert resolve_display_setting(config, "signal", "tool_progress") == "off"
         assert resolve_display_setting(config, "telegram", "tool_progress") == "verbose"
 
+
 # ---------------------------------------------------------------------------
 # YAML normalisation
 # ---------------------------------------------------------------------------
+
 
 class TestYAMLNormalisation:
     """YAML 1.1 quirks (bare off → False, on → True) are handled."""
@@ -120,14 +144,23 @@ class TestYAMLNormalisation:
             }
         }
         assert resolve_display_setting(config, "whatsapp", "thinking_progress") is False
-        assert resolve_display_setting(config, "whatsapp", "interim_assistant_messages") is False
-        assert resolve_display_setting(config, "whatsapp", "long_running_notifications") == "generic"
+        assert (
+            resolve_display_setting(config, "whatsapp", "interim_assistant_messages")
+            is False
+        )
+        assert (
+            resolve_display_setting(config, "whatsapp", "long_running_notifications")
+            == "generic"
+        )
 
     def test_thinking_progress_string_false_normalised_to_false(self):
         from gateway.display_config import resolve_display_setting
 
-        config = {"display": {"platforms": {"whatsapp": {"thinking_progress": "false"}}}}
+        config = {
+            "display": {"platforms": {"whatsapp": {"thinking_progress": "false"}}}
+        }
         assert resolve_display_setting(config, "whatsapp", "thinking_progress") is False
+
 
 # ---------------------------------------------------------------------------
 # Built-in platform defaults (tier system)
@@ -139,19 +172,29 @@ def assert_keeps_platform_display_defaults(cfg):
 
     Shared by every config seeder's regression test: a seeded global ``display.<key>`` beats each
     platform tier, because the gateway loader merges no DEFAULT_CONFIG (#121230)."""
-    from gateway.display_config import _PLATFORM_DEFAULTS, _platform_defaults, resolve_display_setting, resolve_tool_progress
+    from gateway.display_config import (
+        _PLATFORM_DEFAULTS,
+        _platform_defaults,
+        resolve_display_setting,
+        resolve_tool_progress,
+    )
     from gateway.platform_registry import platform_registry
     from clawk_cli.plugins import discover_plugins
 
     # Core-only rows plus every plugin platform that declares display defaults on its PlatformEntry.
     discover_plugins()
-    platforms = set(_PLATFORM_DEFAULTS) | {e.name for e in platform_registry.all_entries() if e.display_tier}
+    platforms = set(_PLATFORM_DEFAULTS) | {
+        e.name for e in platform_registry.all_entries() if e.display_tier
+    }
     tier_keys = {key for platform in platforms for key in _platform_defaults(platform)}
     for platform in sorted(platforms):
-        assert resolve_tool_progress(cfg, platform) == resolve_tool_progress({}, platform), platform
+        assert resolve_tool_progress(cfg, platform) == resolve_tool_progress(
+            {}, platform
+        ), platform
         for key in tier_keys:
-            assert resolve_display_setting(cfg, platform, key) == resolve_display_setting({}, platform, key), (
-                platform, key)
+            assert resolve_display_setting(
+                cfg, platform, key
+            ) == resolve_display_setting({}, platform, key), (platform, key)
 
 
 class TestInstallerSeededConfigThroughGatewayResolver:
@@ -176,15 +219,26 @@ class TestInstallerSeededConfigThroughGatewayResolver:
         from gateway.config import Platform
         from gateway.run import _load_gateway_config, _resolve_gateway_display_bool
 
-        seeded = _load_gateway_config(self._seed_like_installer(tmp_path / "clawk-home"))
-        assert "display" in seeded  # the loader fails open to {}, which would pass vacuously
+        seeded = _load_gateway_config(
+            self._seed_like_installer(tmp_path / "clawk-home")
+        )
+        assert (
+            "display" in seeded
+        )  # the loader fails open to {}, which would pass vacuously
 
         assert_keeps_platform_display_defaults(seeded)
         # ...and through the resolver the gateway turn actually calls (same arguments as gateway/run_turn.py).
-        assert _resolve_gateway_display_bool(
-            seeded, "qqbot", "show_reasoning", default=False, platform=Platform.QQBOT,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is False
+        assert (
+            _resolve_gateway_display_bool(
+                seeded,
+                "qqbot",
+                "show_reasoning",
+                default=False,
+                platform=Platform.QQBOT,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is False
+        )
 
     def test_explicit_global_opt_in_still_reaches_gateway_platforms(self, tmp_path):
         """Control: an operator who deliberately writes ``display.show_reasoning: true`` still gets it (#7148)."""
@@ -193,15 +247,23 @@ class TestInstallerSeededConfigThroughGatewayResolver:
 
         (tmp_path / "config.yaml").write_text("display:\n  show_reasoning: true\n")
         cfg = _load_gateway_config(tmp_path / "config.yaml")
-        assert _resolve_gateway_display_bool(
-            cfg, "qqbot", "show_reasoning", default=False, platform=Platform.QQBOT,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
+        assert (
+            _resolve_gateway_display_bool(
+                cfg,
+                "qqbot",
+                "show_reasoning",
+                default=False,
+                platform=Platform.QQBOT,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------
 # Config migration: tool_progress_overrides → display.platforms
 # ---------------------------------------------------------------------------
+
 
 class TestConfigMigration:
     """Version 16 migration moves tool_progress_overrides into display.platforms."""
@@ -226,6 +288,7 @@ class TestConfigMigration:
         # Re-import to pick up the new CLAWK_HOME
         import importlib
         import clawk_cli.config as cfg_mod
+
         importlib.reload(cfg_mod)
 
         cfg_mod.migrate_config(interactive=False, quiet=True)
@@ -235,9 +298,11 @@ class TestConfigMigration:
         assert platforms.get("signal", {}).get("tool_progress") == "off"
         assert platforms.get("telegram", {}).get("tool_progress") == "all"
 
+
 # ---------------------------------------------------------------------------
 # Streaming per-platform (None = follow global)
 # ---------------------------------------------------------------------------
+
 
 class TestStreamingPerPlatform:
     """Streaming per-platform override semantics."""
@@ -253,9 +318,11 @@ class TestStreamingPerPlatform:
         }
         assert resolve_display_setting(config, "telegram", "streaming") is False
 
+
 # ---------------------------------------------------------------------------
 # cleanup_progress — opt-in deletion of temporary progress bubbles
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupProgress:
     """``cleanup_progress`` is off by default and resolvable per-platform."""
@@ -270,4 +337,6 @@ class TestCleanupProgress:
                     "platforms": {"telegram": {"cleanup_progress": val}},
                 }
             }
-            assert resolve_display_setting(config, "telegram", "cleanup_progress") is True, val
+            assert (
+                resolve_display_setting(config, "telegram", "cleanup_progress") is True
+            ), val

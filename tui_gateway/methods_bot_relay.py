@@ -20,12 +20,15 @@ def _relay_root() -> Path:
     writers (``tools/bot_relay``, ``tools/bot_mode_dm``): both ends of the mailbox must agree for
     every CLAWK_HOME, including non-``profiles/`` subdirs of ``~/.clawksis``."""
     from tools.bot_mode_probe import _default_home, _clawk_root
+
     return _clawk_root(Path(_default_home()))
 
 
 # Desktop deadline mirror; no retry runs here. The owner gateway retries a transiently failed
 # admission once (``gateway.session_bot._maybe_retry``). Remove with the renderer relay deadline migration.
-TURN_MAX_ATTEMPTS = 2  # first admission + the owner's one transient-failure retry (gateway.session_bot)
+TURN_MAX_ATTEMPTS = (
+    2  # first admission + the owner's one transient-failure retry (gateway.session_bot)
+)
 
 
 @method("bot_relay.roster.sync")
@@ -40,14 +43,22 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
 
         def trace() -> str:
             rows = read_remote_roster(_root())
-            return f"n={len(rows)} [" + " ".join(
-                f"{r.get('connection_id')}/{r.get('profile')}={r.get('title')!r}" for r in rows) + "]"
+            return (
+                f"n={len(rows)} ["
+                + " ".join(
+                    f"{r.get('connection_id')}/{r.get('profile')}={r.get('title')!r}"
+                    for r in rows
+                )
+                + "]"
+            )
 
         before = trace()
         count = write_remote_roster(_root(), params.get("agents"))
         after = trace()
         if after != before:
-            logging.getLogger(__name__).info("bot_relay roster changed: %s -> %s", before, after)
+            logging.getLogger(__name__).info(
+                "bot_relay roster changed: %s -> %s", before, after
+            )
         return _ok(rid, {"count": count})
     except Exception as e:
         return _err(rid, 5090, str(e))
@@ -59,6 +70,7 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
     envelopes move to ``claimed/`` atomically so concurrent drains can't double-deliver."""
     try:
         from tools.bot_relay import claim_pending_envelopes
+
         return _ok(rid, {"envelopes": claim_pending_envelopes(_root())})
     except Exception as e:
         return _err(rid, 5091, str(e))
@@ -69,15 +81,20 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
     """Legacy transport bridge only: canonical admission or an explicit refusal."""
     from tools.bot_live_delivery import _delivery_id, authority_delivery
     from tools.bot_relay import _HANDLE_RE
+
     try:
-        _delivery_id(params.get('id'))
-        profile = params.get('profile')
+        _delivery_id(params.get("id"))
+        profile = params.get("profile")
         if not isinstance(profile, str) or not _HANDLE_RE.fullmatch(profile):
-            raise ValueError('invalid profile')
+            raise ValueError("invalid profile")
     except ValueError:
-        return _err(rid, 4090, 'invalid_params', data={'reason': 'invalid_params'})
+        return _err(rid, 4090, "invalid_params", data={"reason": "invalid_params"})
     from tools.bot_relay import delivery_turn_author, relaying_principal_author
-    from tui_gateway.methods_browser_control import _is_authenticated_identity, _principal_digest
+    from tui_gateway.methods_browser_control import (
+        _is_authenticated_identity,
+        _principal_digest,
+    )
+
     sender_fields = ("from_profile", "from_handle", "from_connection")
     identity = getattr(current_transport(), "auth_identity", None)
     if _is_authenticated_identity(identity):
@@ -93,32 +110,47 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
         author = relaying_principal_author(_principal_digest(identity))
     else:
         author = delivery_turn_author(*(params.get(key) for key in sender_fields))
-    forwarded = {key: value for key, value in params.items() if key not in sender_fields}
+    forwarded = {
+        key: value for key, value in params.items() if key not in sender_fields
+    }
     if author:
         forwarded["author"] = author
-    resolved = 'default' if profile.lower() == 'clawk' else profile
+    resolved = "default" if profile.lower() == "clawk" else profile
     root = _root()
     # Same identity predicate as `profile list`: infra dirs and tombstones under profiles/ are
     # not teammates (#99392), so a DM never targets one.
     from tools.bot_mode_probe import _roster
+
     home = dict(_roster(root)).get(resolved)
     if home is None:
-        return _err(rid, 4092, f"no profile '{profile}' on this gateway", data={'reason': 'unknown_profile'})
+        return _err(
+            rid,
+            4092,
+            f"no profile '{profile}' on this gateway",
+            data={"reason": "unknown_profile"},
+        )
     if isinstance(forwarded.get("message"), str):
         # The sender stamped itself with its bare @handle; a relayed "@clawk" is ANOTHER machine's
         # default, so re-stamp it with the form this gateway can reply to (#103731).
         from tools.bot_mode_probe import local_taken_forms
         from tools.bot_relay import qualify_sender_stamp, read_remote_roster
+
         forwarded["message"] = qualify_sender_stamp(
-            forwarded["message"], params.get("from_handle"), params.get("from_connection"),
-            read_remote_roster(root), local_taken_forms(root))
+            forwarded["message"],
+            params.get("from_handle"),
+            params.get("from_connection"),
+            read_remote_roster(root),
+            local_taken_forms(root),
+        )
     try:
-        return _ok(rid, authority_delivery(home, {**forwarded, 'profile': resolved}))
+        return _ok(rid, authority_delivery(home, {**forwarded, "profile": resolved}))
     except Exception as exc:
         # Boundary: every way the target authority can be unreachable (discovery, ticket, WS,
         # RPC refusal) is the same typed ``runtime_unavailable`` refusal the sender retries on.
-        logging.getLogger(__name__).debug("bot_relay.deliver to %s refused", resolved, exc_info=True)
-        return _err(rid, 5094, str(exc), data={'reason': 'runtime_unavailable'})
+        logging.getLogger(__name__).debug(
+            "bot_relay.deliver to %s refused", resolved, exc_info=True
+        )
+        return _err(rid, 5094, str(exc), data={"reason": "runtime_unavailable"})
 
 
 @method("bot_relay.reply")
@@ -130,8 +162,14 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
         return _err(rid, 4093, "id required")
     try:
         from tools.bot_relay import write_reply
-        write_reply(_root(), envelope_id, reply=str(params.get("reply") or ""),
-                    error=str(params.get("error") or ""), reason=str(params.get("reason") or ""))
+
+        write_reply(
+            _root(),
+            envelope_id,
+            reply=str(params.get("reply") or ""),
+            error=str(params.get("error") or ""),
+            reason=str(params.get("reason") or ""),
+        )
         return _ok(rid, {"ok": True})
     except ValueError as e:
         return _err(rid, 4094, str(e))
@@ -142,10 +180,16 @@ def _(rid, params: dict, _root=_relay_root) -> dict:
 def register(server) -> None:
     _registry.install(server)
     from . import methods_groups
+
     server._LONG_HANDLERS = server._LONG_HANDLERS | methods_groups.LONG_HANDLERS
     for name in (
-        "get_hosted_room_service", "_WORKER_UNAVAILABLE", "_profile_name", "_requested_profile",
-        "_api_server_key", "_room_link_run_storage_durable"):
+        "get_hosted_room_service",
+        "_WORKER_UNAVAILABLE",
+        "_profile_name",
+        "_requested_profile",
+        "_api_server_key",
+        "_room_link_run_storage_durable",
+    ):
         setattr(server, name, getattr(methods_groups, name))
     methods_groups.bind_server(server)
     methods_groups.register(server)

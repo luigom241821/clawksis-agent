@@ -51,9 +51,7 @@ def _seed_compacted_session(db, session_id: str) -> None:
 
 def _archived_count(db, session_id: str) -> int:
     return sum(
-        1
-        for m in db.get_messages(session_id, include_inactive=True)
-        if not m["active"]
+        1 for m in db.get_messages(session_id, include_inactive=True) if not m["active"]
     )
 
 
@@ -74,11 +72,11 @@ class TestAcpPersistPreservesArchives:
 
         assert _archived_count(state_db, sid) == 4
         live = [
-            m for m in state_db.get_messages_as_conversation(sid)
+            m
+            for m in state_db.get_messages_as_conversation(sid)
             if m.get("role") in ("user", "assistant")
         ]
         assert [m["content"] for m in live] == ["rewritten", "rewritten answer"]
-
 
     def test_fresh_session_active_only_equals_full_replace(self, state_db):
         """On a never-compacted session active_only=True must behave exactly
@@ -97,13 +95,12 @@ class TestAcpPersistPreservesArchives:
             sid, [{"role": "user", "content": "only"}], active_only=True
         )
         rows = [
-            m for m in state_db.get_messages_as_conversation(sid)
+            m
+            for m in state_db.get_messages_as_conversation(sid)
             if m.get("role") in ("user", "assistant")
         ]
         assert [m["content"] for m in rows] == ["only"]
         assert _archived_count(state_db, sid) == 0
-
-
 
 
 class TestArchiveDroppedIsRecoverable:
@@ -142,7 +139,8 @@ class TestArchiveDroppedIsRecoverable:
 
         # The live transcript is exactly what a destructive replace would leave.
         live = [
-            m for m in state_db.get_messages_as_conversation(sid)
+            m
+            for m in state_db.get_messages_as_conversation(sid)
             if m.get("role") in ("user", "assistant")
         ]
         assert [m["content"] for m in live] == ["first", "first reply"]
@@ -181,7 +179,8 @@ class TestArchiveDroppedIsRecoverable:
         )
 
         archived = [
-            m for m in state_db.get_messages(sid, include_inactive=True)
+            m
+            for m in state_db.get_messages(sid, include_inactive=True)
             if not m["active"]
         ]
         assert archived, "the replaced rows must still be on disk"
@@ -202,6 +201,7 @@ class TestArchiveDroppedIsRecoverable:
         state_db.replace_messages(sid, [{"role": "user", "content": "fresh"}])
 
         assert not [
-            m for m in state_db.get_messages(sid, include_inactive=True)
+            m
+            for m in state_db.get_messages(sid, include_inactive=True)
             if not m["active"]
         ]

@@ -34,7 +34,10 @@ def _get_rss_mb() -> Optional[int]:
         import resource
 
         # ru_maxrss is KB on Linux but bytes on macOS.
-        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (_BYTES_TO_MB if sys.platform == "darwin" else 1024))
+        return int(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            / (_BYTES_TO_MB if sys.platform == "darwin" else 1024)
+        )
     except Exception:
         pass
     try:
@@ -49,8 +52,11 @@ def log_memory_usage(prefix: str = "") -> None:
     """Log ``[MEMORY] [<prefix> ]rss=... gc=... threads=... uptime=...``; safe from any thread."""
     rss = _get_rss_mb()
     logger.info(
-        "[MEMORY] %srss=%s gc=%s threads=%d uptime=%ds", f"{prefix} " if prefix else "",
-        "unavailable" if rss is None else f"{rss}MB", gc.get_count(), threading.active_count(),
+        "[MEMORY] %srss=%s gc=%s threads=%d uptime=%ds",
+        f"{prefix} " if prefix else "",
+        "unavailable" if rss is None else f"{rss}MB",
+        gc.get_count(),
+        threading.active_count(),
         int(time.monotonic() - _start_time) if _start_time else 0,
     )
 
@@ -82,10 +88,16 @@ def start_memory_monitoring(interval_seconds: float = 300.0) -> bool:
         _stop_event = threading.Event()
         log_memory_usage(prefix="baseline")
         _monitor_thread = threading.Thread(
-            target=_monitor_loop, args=(_stop_event, float(interval_seconds)), name="gateway-memory-monitor", daemon=True
+            target=_monitor_loop,
+            args=(_stop_event, float(interval_seconds)),
+            name="gateway-memory-monitor",
+            daemon=True,
         )
         _monitor_thread.start()
-        logger.info("[MEMORY] Periodic memory monitoring started (interval: %ds)", int(interval_seconds))
+        logger.info(
+            "[MEMORY] Periodic memory monitoring started (interval: %ds)",
+            int(interval_seconds),
+        )
         return True
 
 
@@ -100,7 +112,9 @@ def stop_memory_monitoring(timeout: float = 2.0) -> None:
             log_memory_usage(prefix="shutdown")
         _stop_event.set()
         thread, _monitor_thread, _stop_event = _monitor_thread, None, None
-    with contextlib.suppress(Exception):  # join outside the lock so a stuck log call can't deadlock the stop path
+    with contextlib.suppress(
+        Exception
+    ):  # join outside the lock so a stuck log call can't deadlock the stop path
         thread.join(timeout=timeout)
     logger.info("[MEMORY] Periodic memory monitoring stopped")
 

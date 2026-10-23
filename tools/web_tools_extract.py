@@ -20,9 +20,7 @@ logger = logging.getLogger("tools.web_tools")
 _NO_RESULT_ERROR = "Extract backend returned no result for this URL"
 _DEFAULT_EXTRACT_TIMEOUT_S = 120.0
 _EXTRACT_BACKENDS_HINT = "firecrawl, tavily, keenable, exa, or parallel."
-_INVALID_ITEM_ERROR = (
-    "Invalid URL item at index {}: expected a URL string or an object with a string 'url' or 'href' field"
-)
+_INVALID_ITEM_ERROR = "Invalid URL item at index {}: expected a URL string or an object with a string 'url' or 'href' field"
 
 
 def _web_extract_url(value: Any) -> Optional[str]:
@@ -49,15 +47,20 @@ def _disabled_plugin_error(capability: str, disabled_key: str) -> str:
 def _no_provider_error(capability: str, fallback: str) -> str:
     """Error when no provider resolved: point at a disabled bundled plugin if that is the real cause."""
     from agent.web_search_registry import _disabled_web_plugin_for
+
     disabled_key = _disabled_web_plugin_for(capability=capability)
-    return _disabled_plugin_error(capability, disabled_key) if disabled_key else fallback
+    return (
+        _disabled_plugin_error(capability, disabled_key) if disabled_key else fallback
+    )
 
 
 def _strict_selection_error(capability: str, backend: str) -> str:
     """Error for a stored-but-unregistered backend: name the disabled plugin, else the bad selection.
     Strict selection never silently switches to whatever the availability walk finds."""
     failure = f"no registered web {capability} provider has that name"
-    return _no_provider_error(capability, selection_error("web", f"'{backend}'", failure))
+    return _no_provider_error(
+        capability, selection_error("web", f"'{backend}'", failure)
+    )
 
 
 def _result_entry(url: str, error: Optional[str]) -> dict[str, Any]:
@@ -74,7 +77,11 @@ def _refuse_all(error: str):
 
 
 def _merge_in_order(
-    total: int, fixed: dict[int, dict], fetch_positions: list[int], fetch_urls: list[str], results: list[dict]
+    total: int,
+    fixed: dict[int, dict],
+    fetch_positions: list[int],
+    fetch_urls: list[str],
+    results: list[dict],
 ) -> list[dict]:
     """Rebuild a ``total``-long result list: *fixed* entries by position, fetched *results* at
     *fetch_positions* (a short provider list yields ``_NO_RESULT_ERROR`` entries for the rest)."""
@@ -99,7 +106,10 @@ def _validate_extract_urls(urls: list[Any]):
             invalid_urls[index] = _result_entry("", _INVALID_ITEM_ERROR.format(index))
             continue
         normalized_url = normalize_url_for_request(_url)
-        if any(_PREFIX_RE.search(c) for c in (_url, unquote(_url), normalized_url, unquote(normalized_url))):
+        if any(
+            _PREFIX_RE.search(c)
+            for c in (_url, unquote(_url), normalized_url, unquote(normalized_url))
+        ):
             return _refuse_all(
                 "Blocked: URL contains what appears to be an API key or token. "
                 "Secrets must not be sent in URLs."
@@ -115,7 +125,11 @@ def _resolve_extract_provider(backend: str):
     A registered search-only backend is a typed error (never a silent switch). An unregistered name with
     a stored web selection is a strict-selection error; with no selection, fall through to the walk.
     """
-    from agent.web_search_registry import get_active_extract_provider, get_provider as _wsp_get_provider
+    from agent.web_search_registry import (
+        get_active_extract_provider,
+        get_provider as _wsp_get_provider,
+    )
+
     provider = _wsp_get_provider(backend) if backend else None
     if provider is not None and provider.supports_extract():
         return provider, None
@@ -128,7 +142,10 @@ def _resolve_extract_provider(backend: str):
         return None, _extract_error_json(_strict_selection_error("extract", backend))
     provider = get_active_extract_provider()
     if provider is None:
-        fallback = "No web extract provider configured. Set web.extract_backend to " + _EXTRACT_BACKENDS_HINT
+        fallback = (
+            "No web extract provider configured. Set web.extract_backend to "
+            + _EXTRACT_BACKENDS_HINT
+        )
         return None, _extract_error_json(_no_provider_error("extract", fallback))
     return provider, None
 
@@ -140,13 +157,18 @@ def _extract_timeout_seconds() -> float:
     tool call indefinitely. 0 or a negative value disables the cap.
     """
     from tools.web_tools import _load_web_config
+
     try:
-        return float(_load_web_config().get("extract_timeout", _DEFAULT_EXTRACT_TIMEOUT_S))
+        return float(
+            _load_web_config().get("extract_timeout", _DEFAULT_EXTRACT_TIMEOUT_S)
+        )
     except (TypeError, ValueError):
         return _DEFAULT_EXTRACT_TIMEOUT_S
 
 
-async def _dispatch_extract(provider, fetch_urls: list[str], format: Optional[str]) -> list[dict]:
+async def _dispatch_extract(
+    provider, fetch_urls: list[str], format: Optional[str]
+) -> list[dict]:
     """Call ``provider.extract`` (async or sync-in-thread), with one-shot keyless rescue.
 
     Rescue fires on a raised exception — including a dispatch timeout — or when the WHOLE batch
@@ -154,6 +176,7 @@ async def _dispatch_extract(provider, fetch_urls: list[str], format: Optional[st
     """
     import inspect
     from tools.web_result_cache import extract_cache_put
+
     timeout = _extract_timeout_seconds()
     try:
         if inspect.iscoroutinefunction(provider.extract):
@@ -165,20 +188,34 @@ async def _dispatch_extract(provider, fetch_urls: list[str], format: Optional[st
         else:
             results = await coro
     except TimeoutError:  # hanging backend — bounded, never a stalled tool call
-        logger.warning("web_extract provider '%s' timed out after %.0fs for %d URL(s)",
-                       provider.name, timeout, len(fetch_urls))
-        failed = [_result_entry(u, f"Extract timed out after {timeout:.0f}s via {provider.name}")
-                  for u in fetch_urls]
+        logger.warning(
+            "web_extract provider '%s' timed out after %.0fs for %d URL(s)",
+            provider.name,
+            timeout,
+            len(fetch_urls),
+        )
+        failed = [
+            _result_entry(
+                u, f"Extract timed out after {timeout:.0f}s via {provider.name}"
+            )
+            for u in fetch_urls
+        ]
         if not _rescue_eligible(provider):
             return failed
-        return await asyncio.to_thread(_rescue_extract, provider.name, fetch_urls, failed)
+        return await asyncio.to_thread(
+            _rescue_extract, provider.name, fetch_urls, failed
+        )
     except Exception as exc:
         if not _rescue_eligible(provider):
             raise
         failed = [_result_entry(u, str(exc)) for u in fetch_urls]
-        return await asyncio.to_thread(_rescue_extract, provider.name, fetch_urls, failed)
+        return await asyncio.to_thread(
+            _rescue_extract, provider.name, fetch_urls, failed
+        )
     if results and all(r.get("error") for r in results) and _rescue_eligible(provider):
-        return await asyncio.to_thread(_rescue_extract, provider.name, fetch_urls, results)
+        return await asyncio.to_thread(
+            _rescue_extract, provider.name, fetch_urls, results
+        )
 
     # Cache each successful fetch under the REQUESTED url it reports as its own — never by list
     # position: providers omit failed URLs or return successes out of request order, and a positional
@@ -192,11 +229,19 @@ async def _dispatch_extract(provider, fetch_urls: list[str], format: Optional[st
         url = next((u for u in (fetched.get("url"), source) if u in requested), None)
         _content = fetched.get("raw_content", "") or fetched.get("content", "")
         if url and _content and not fetched.get("error"):
-            extract_cache_put(url, _content, fetched.get("title", ""), format=format, provider=provider.name)
+            extract_cache_put(
+                url,
+                _content,
+                fetched.get("title", ""),
+                format=format,
+                provider=provider.name,
+            )
     return results
 
 
-async def _extract_safe_urls(provider, safe_urls: list[str], format: Optional[str]) -> list[dict]:
+async def _extract_safe_urls(
+    provider, safe_urls: list[str], format: Optional[str]
+) -> list[dict]:
     """Serve cache hits, fetch the rest, and merge back in ``safe_urls`` order.
 
     The disk cache (tools/web_result_cache.py) sits AFTER the secret-URL gate, SSRF gate, and provider
@@ -205,13 +250,18 @@ async def _extract_safe_urls(provider, safe_urls: list[str], format: Optional[st
     within the TTL never serves the other's content."""
     from tools.web_result_cache import extract_cache_get
     from tools.website_policy import check_website_access as _check_site
+
     cached_results, fetch_urls, fetch_positions = {}, [], []
     for position, url in enumerate(safe_urls):
         try:
             _policy_block = _check_site(url)
         except Exception:
             _policy_block = None
-        hit = extract_cache_get(url, format=format, provider=provider.name) if _policy_block is None else None
+        hit = (
+            extract_cache_get(url, format=format, provider=provider.name)
+            if _policy_block is None
+            else None
+        )
         if hit is not None:
             cached_results[position] = hit
         else:
@@ -224,4 +274,6 @@ async def _extract_safe_urls(provider, safe_urls: list[str], format: Optional[st
     results = await _dispatch_extract(provider, fetch_urls, format)
     if not cached_results:
         return results
-    return _merge_in_order(len(safe_urls), cached_results, fetch_positions, fetch_urls, results)
+    return _merge_in_order(
+        len(safe_urls), cached_results, fetch_positions, fetch_urls, results
+    )

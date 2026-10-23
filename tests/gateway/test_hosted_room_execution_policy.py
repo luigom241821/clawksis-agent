@@ -48,25 +48,27 @@ def _dispatch(policy: dict) -> HostedMemberDispatch:
             execution_policy=policy,
         )
     )
-    return HostedMemberDispatch.from_mapping({
-        "protocol_version": 2,
-        "room_id": "room-1",
-        "home_install_id": "install-home",
-        "authority_gateway_id": "gateway-home",
-        "authority_epoch": 1,
-        "member_id": "member-reviewer",
-        "target_install_id": "install-peer",
-        "target_profile": "reviewer",
-        "task_id": "task-1",
-        "execution_generation": 1,
-        "source_event_seq": 1,
-        "cancellation_scope_id": "cancel-1",
-        "prompt": prompt,
-        "prompt_digest": hashlib.sha256(prompt.encode()).hexdigest(),
-        "capability_digest": catalog.catalog_digest,
-        "execution_policy_digest": policy["policy_digest"],
-        "trace_id": "trace-1",
-    })
+    return HostedMemberDispatch.from_mapping(
+        {
+            "protocol_version": 2,
+            "room_id": "room-1",
+            "home_install_id": "install-home",
+            "authority_gateway_id": "gateway-home",
+            "authority_epoch": 1,
+            "member_id": "member-reviewer",
+            "target_install_id": "install-peer",
+            "target_profile": "reviewer",
+            "task_id": "task-1",
+            "execution_generation": 1,
+            "source_event_seq": 1,
+            "cancellation_scope_id": "cancel-1",
+            "prompt": prompt,
+            "prompt_digest": hashlib.sha256(prompt.encode()).hexdigest(),
+            "capability_digest": catalog.catalog_digest,
+            "execution_policy_digest": policy["policy_digest"],
+            "trace_id": "trace-1",
+        }
+    )
 
 
 def test_execution_policy_digest_covers_tools_approvals_and_iteration_limit():
@@ -102,7 +104,9 @@ def test_unlimited_policy_survives_the_catalog_json_round_trip_exactly():
 
 def test_room_policy_overrides_broader_live_approval_config(monkeypatch):
     policy = RoomExecutionPolicy.from_mapping(_policy(approval_mode="manual"))
-    monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"mode": "off"})
+    monkeypatch.setattr(
+        approval_context, "_get_approval_config", lambda: {"mode": "off"}
+    )
     token = bind_room_execution_policy(policy)
     try:
         assert approval_context._get_approval_mode() == "manual"
@@ -241,10 +245,12 @@ def _two_profile_homes(tmp_path, monkeypatch) -> None:
         home.mkdir(parents=True)
         (home / "config.yaml").write_text(
             f"agent:\n  max_turns: {turns}\napprovals:\n  mode: manual\n"
-            "platform_toolsets:\n  api_server: [clawk-api-server, web]\n")
+            "platform_toolsets:\n  api_server: [clawk-api-server, web]\n"
+        )
         (home / ".env").write_text("")
     from clawk_cli import profiles
     import gateway.run as gateway_run
+
     alpha = root / "profiles" / "alpha"
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: root)
     monkeypatch.setattr(gateway_run, "_clawk_home", alpha)
@@ -253,17 +259,23 @@ def _two_profile_homes(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
 
-def test_catalog_policy_comes_from_the_served_profile_not_the_launch_env(tmp_path, monkeypatch):
+def test_catalog_policy_comes_from_the_served_profile_not_the_launch_env(
+    tmp_path, monkeypatch
+):
     _two_profile_homes(tmp_path, monkeypatch)
 
     def turns(profile: str) -> int:
-        catalog = catalog_mapping(installation_id="install-peer", persistent_process=True, target_profile=profile)
+        catalog = catalog_mapping(
+            installation_id="install-peer",
+            persistent_process=True,
+            target_profile=profile,
+        )
         assert catalog["execution_policy"]["target_profile"] == profile
         return catalog["execution_policy"]["max_iterations"]
 
-    assert turns("alpha") == 12                      # control: the active home
-    assert turns("beta") == 7                        # precedence: beta's config, not alpha's (env/active)
-    assert turns("alpha") == 12                      # A->B->A: no bleed back
+    assert turns("alpha") == 12  # control: the active home
+    assert turns("beta") == 7  # precedence: beta's config, not alpha's (env/active)
+    assert turns("alpha") == 12  # A->B->A: no bleed back
     with pytest.raises(ValueError, match="'ghost' is not a live profile"):
         execution_policy_mapping(target_profile="ghost")
 
@@ -273,8 +285,13 @@ def test_catalog_requires_the_served_profile_and_never_reads_clawk_profile(monke
     with pytest.raises(TypeError, match="target_profile"):
         catalog_mapping(installation_id="install-peer", persistent_process=True)  # type: ignore[call-arg]
     with pytest.raises(ValueError, match="target_profile"):
-        catalog_mapping(installation_id="install-peer", persistent_process=True, target_profile="")
+        catalog_mapping(
+            installation_id="install-peer", persistent_process=True, target_profile=""
+        )
     with pytest.raises(ValueError, match="target_profile does not match"):
         catalog_mapping(
-            installation_id="install-peer", persistent_process=True, target_profile="other",
-            execution_policy=_policy())
+            installation_id="install-peer",
+            persistent_process=True,
+            target_profile="other",
+            execution_policy=_policy(),
+        )

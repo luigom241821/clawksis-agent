@@ -33,7 +33,9 @@ from websockets.sync.client import connect
 
 from . import _helpers as H
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="POSIX PTY dashboard")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="POSIX PTY dashboard"
+)
 
 _INVENTORY = r"""
 import json
@@ -47,7 +49,11 @@ print(json.dumps({"http": http, "ws": ws, "public": sorted(PUBLIC_API_PATHS)}))
 # The OAuth redirect lands from the identity provider's page: no header can ride on it by design.
 _BROWSER_REDIRECT_PREFIXES = ("/api/mcp/oauth/callback/",)
 _PARAM = re.compile(r"\{([^}:]+)(?::[^}]+)?\}")
-_CHAT_WS = ("/api/ws", "/api/events", "/api/console")  # accept a token-bearing loopback client
+_CHAT_WS = (
+    "/api/ws",
+    "/api/events",
+    "/api/console",
+)  # accept a token-bearing loopback client
 # The contract for the ``?token=`` channel, owned by this test (not read from production): only a
 # download URL opened outside the SPA may carry the token in its query string.
 _QUERY_TOKEN_ROUTES = frozenset({"/api/files/download"})
@@ -75,70 +81,123 @@ def inventory(dash: H.Dashboard) -> dict:
     inv = json.loads(r.stdout.strip().splitlines()[-1])
     live = dash.http.get("/openapi.json").json().get("paths", {})
     http = {tuple(x) for x in inv["http"]}
-    http |= {(m.upper(), p) for p, ops in live.items() for m in ops if m.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}}
+    http |= {
+        (m.upper(), p)
+        for p, ops in live.items()
+        for m in ops
+        if m.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}
+    }
     inv["http"] = sorted(http)
     return inv
 
 
 def _gated_http(inv: dict) -> list[tuple[str, str]]:
     public = set(inv["public"])
-    return [(m, p) for m, p in inv["http"]
-            if p.startswith("/api/") and p not in public and not p.startswith(_BROWSER_REDIRECT_PREFIXES)]
+    return [
+        (m, p)
+        for m, p in inv["http"]
+        if p.startswith("/api/")
+        and p not in public
+        and not p.startswith(_BROWSER_REDIRECT_PREFIXES)
+    ]
 
 
 def _bad_credentials(dash: H.Dashboard, path: str) -> list[tuple[str, dict, dict]]:
     """``(label, headers, query)`` for every credential a caller without the token could send."""
-    cases = [("no token", {}, {}),
-             ("wrong token", {H.TOKEN_HEADER: "not-the-token"}, {}),
-             ("wrong bearer", {"Authorization": "Bearer not-the-token"}, {}),
-             ("wrong query token", {}, {"token": "not-the-token"})]
+    cases = [
+        ("no token", {}, {}),
+        ("wrong token", {H.TOKEN_HEADER: "not-the-token"}, {}),
+        ("wrong bearer", {"Authorization": "Bearer not-the-token"}, {}),
+        ("wrong query token", {}, {"token": "not-the-token"}),
+    ]
     if path not in _QUERY_TOKEN_ROUTES:
-        cases.append(("real token in ?token= off the download route", {}, {"token": dash.token}))
+        cases.append(
+            ("real token in ?token= off the download route", {}, {"token": dash.token})
+        )
     return cases
 
 
-def test_every_api_route_refuses_missing_and_wrong_token(dash: H.Dashboard, inventory: dict) -> None:
+def test_every_api_route_refuses_missing_and_wrong_token(
+    dash: H.Dashboard, inventory: dict
+) -> None:
     gated = _gated_http(inventory)
-    assert len(gated) > 150, f"route inventory implausibly small ({len(gated)}): enumeration broke"
+    assert len(gated) > 150, (
+        f"route inventory implausibly small ({len(gated)}): enumeration broke"
+    )
     leaks: list[str] = []
     for method, path in gated:
         url = _concrete(path)
         for label, headers, query in _bad_credentials(dash, path):
-            r = dash.http.request(method, url, headers=headers, params=query,
-                                  json={} if method != "GET" else None)
+            r = dash.http.request(
+                method,
+                url,
+                headers=headers,
+                params=query,
+                json={} if method != "GET" else None,
+            )
             if r.status_code != 401:
-                leaks.append(f"{method} {path} ({label}) -> {r.status_code} {r.text[:120]!r}")
-    assert not leaks, f"{len(leaks)} gated route(s) served a caller without the session token:\n  " + "\n  ".join(leaks[:40])
+                leaks.append(
+                    f"{method} {path} ({label}) -> {r.status_code} {r.text[:120]!r}"
+                )
+    assert not leaks, (
+        f"{len(leaks)} gated route(s) served a caller without the session token:\n  "
+        + "\n  ".join(leaks[:40])
+    )
     assert dash.proc.poll() is None, "dashboard died during the unauthenticated sweep"
     # Control: the query channel is live where it belongs, so its refusal everywhere else is auth.
     for path in _QUERY_TOKEN_ROUTES:
-        assert ("GET", path) in gated, f"{path} is no longer a gated GET route: {sorted(_QUERY_TOKEN_ROUTES)}"
+        assert ("GET", path) in gated, (
+            f"{path} is no longer a gated GET route: {sorted(_QUERY_TOKEN_ROUTES)}"
+        )
         r = dash.http.get(path, params={"token": dash.token, "path": "e2e-missing"})
-        assert r.status_code != 401, f"GET {path}?token=<real token> refused: {r.status_code} {r.text[:200]}"
+        assert r.status_code != 401, (
+            f"GET {path}?token=<real token> refused: {r.status_code} {r.text[:200]}"
+        )
 
 
-def test_public_exemptions_hold_their_own_contract(dash: H.Dashboard, inventory: dict) -> None:
+def test_public_exemptions_hold_their_own_contract(
+    dash: H.Dashboard, inventory: dict
+) -> None:
     """The allowlist is production's, so check what it grants: every public route is GET-only or
     refuses an uncredentialed call itself (401/403), and no public GET leaks a sandbox secret."""
     public = set(inventory["public"])
     routes = [(m, p) for m, p in inventory["http"] if p in public]
-    assert any(m == "GET" for m, _ in routes), f"no public GET route mounted: {sorted(public)}"
+    assert any(m == "GET" for m, _ in routes), (
+        f"no public GET route mounted: {sorted(public)}"
+    )
     p = dash.sb.profiles["default"]
-    secrets = {"provider key": p.provider_key, "config marker": p.marker, "session token": dash.token}
+    secrets = {
+        "provider key": p.provider_key,
+        "config marker": p.marker,
+        "session token": dash.token,
+    }
     bad = []
     for method, path in routes:
-        r = dash.http.request(method, _concrete(path), json={} if method != "GET" else None)
+        r = dash.http.request(
+            method, _concrete(path), json={} if method != "GET" else None
+        )
         if method != "GET":
             if r.status_code not in (401, 403):
-                bad.append(f"{method} {path} (public, no credential) -> {r.status_code} {r.text[:120]!r}")
+                bad.append(
+                    f"{method} {path} (public, no credential) -> {r.status_code} {r.text[:120]!r}"
+                )
             continue
         if r.status_code != 200:
             bad.append(f"GET {path} is declared public but answered {r.status_code}")
-        bad += [f"GET {path} (public) leaked the {what}" for what, value in secrets.items() if value in r.text]
-    assert not bad, "public allowlist grants more than read-only, secret-free access:\n  " + "\n  ".join(bad)
+        bad += [
+            f"GET {path} (public) leaked the {what}"
+            for what, value in secrets.items()
+            if value in r.text
+        ]
+    assert not bad, (
+        "public allowlist grants more than read-only, secret-free access:\n  "
+        + "\n  ".join(bad)
+    )
 
 
-def test_scraped_token_opens_every_get_route(dash: H.Dashboard, inventory: dict) -> None:
+def test_scraped_token_opens_every_get_route(
+    dash: H.Dashboard, inventory: dict
+) -> None:
     """Control: the 401s above are auth, not a dead router — the SPA's token passes every GET gate."""
     refused = []
     for method, path in _gated_http(inventory):
@@ -156,7 +215,9 @@ def _ws_outcome(url: str, origin: str | None = None) -> str:
     policy code, else a refusal description."""
     headers = {"Origin": origin} if origin else None
     try:
-        with connect(url, open_timeout=30, additional_headers=headers, max_size=None) as ws:
+        with connect(
+            url, open_timeout=30, additional_headers=headers, max_size=None
+        ) as ws:
             try:
                 ws.recv(timeout=1.5)
             except TimeoutError:
@@ -171,7 +232,9 @@ def _ws_outcome(url: str, origin: str | None = None) -> str:
         return f"closed {exc.rcvd.code if exc.rcvd else '?'}"
 
 
-def test_every_websocket_refuses_missing_wrong_and_cross_origin_credentials(dash: H.Dashboard, inventory: dict) -> None:
+def test_every_websocket_refuses_missing_wrong_and_cross_origin_credentials(
+    dash: H.Dashboard, inventory: dict
+) -> None:
     ws_paths = inventory["ws"]
     assert set(_CHAT_WS) <= set(ws_paths) and "/api/pty" in ws_paths, ws_paths
     q = {"channel": "e2e-auth", "profile": None}
@@ -182,12 +245,19 @@ def test_every_websocket_refuses_missing_wrong_and_cross_origin_credentials(dash
             if outcome == "accepted":
                 leaks.append(f"{path} ({label}) accepted")
     for path in ("/api/pty", "/api/ws", "/api/console"):
-        outcome = _ws_outcome(dash.ws_url(path, token=dash.token, **q), origin="http://evil.example")
+        outcome = _ws_outcome(
+            dash.ws_url(path, token=dash.token, **q), origin="http://evil.example"
+        )
         if outcome == "accepted":
             leaks.append(f"{path} (valid token, cross-origin page) accepted")
-    assert not leaks, "websocket upgrade(s) accepted without a valid same-origin credential:\n  " + "\n  ".join(leaks)
+    assert not leaks, (
+        "websocket upgrade(s) accepted without a valid same-origin credential:\n  "
+        + "\n  ".join(leaks)
+    )
     # Control: the same URLs with the scraped token open.
     for path in _CHAT_WS:
-        assert _ws_outcome(dash.ws_url(path, token=dash.token, **q)) == "accepted", f"{path} refused the real token"
+        assert _ws_outcome(dash.ws_url(path, token=dash.token, **q)) == "accepted", (
+            f"{path} refused the real token"
+        )
     log = Path(dash.log_path).read_text(encoding="utf-8", errors="replace")
     assert dash.token not in log, "the session token was written to the dashboard log"

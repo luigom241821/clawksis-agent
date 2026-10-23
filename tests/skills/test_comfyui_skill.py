@@ -37,8 +37,6 @@ _ENCODING_SENSITIVE_READS = [
 ]
 
 
-
-
 def _run_under_c_locale(snippet: str) -> subprocess.CompletedProcess:
     """Execute a snippet in a child interpreter forced to a non-UTF-8 locale.
 
@@ -48,12 +46,14 @@ def _run_under_c_locale(snippet: str) -> subprocess.CompletedProcess:
     PEP 540 UTF-8 mode, which would otherwise mask the bug entirely.
     """
     env = dict(os.environ)
-    env.update({
-        "LC_ALL": "C",
-        "LANG": "C",
-        "PYTHONUTF8": "0",
-        "PYTHONIOENCODING": "utf-8",
-    })
+    env.update(
+        {
+            "LC_ALL": "C",
+            "LANG": "C",
+            "PYTHONUTF8": "0",
+            "PYTHONIOENCODING": "utf-8",
+        }
+    )
     return subprocess.run(
         [sys.executable, "-c", snippet],
         capture_output=True,

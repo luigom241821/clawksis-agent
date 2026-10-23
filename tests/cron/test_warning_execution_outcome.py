@@ -1,4 +1,5 @@
 """Suppressed automatic diagnostics retain failed jobs without invented delivery receipts."""
+
 import pytest
 
 from cron import executions, incidents, jobs, scheduler
@@ -10,7 +11,9 @@ def delivery_queue_rows():
 
     conn = _connect()
     try:
-        return [dict(r) for r in conn.execute("SELECT execution_id, status FROM deliveries")]
+        return [
+            dict(r) for r in conn.execute("SELECT execution_id, status FROM deliveries")
+        ]
     finally:
         conn.close()
 
@@ -18,7 +21,9 @@ def delivery_queue_rows():
 @pytest.mark.parametrize("mode", ["failure", "crash", "success"])
 @pytest.mark.parametrize("suppress", [False, True])
 @pytest.mark.parametrize("external_worker", [False, True])
-def test_real_run_ledger_and_incident_match_actual_presentation(tmp_path, monkeypatch, mode, suppress, external_worker):
+def test_real_run_ledger_and_incident_match_actual_presentation(
+    tmp_path, monkeypatch, mode, suppress, external_worker
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(
         f"display: {{suppress_warning_notifications: {str(suppress).lower()}}}\n"
@@ -37,12 +42,20 @@ def test_real_run_ledger_and_incident_match_actual_presentation(tmp_path, monkey
     def run(job, **kwargs):
         if mode == "crash":
             raise RuntimeError("isolated provider failure")
-        return (mode == "success", "retained raw output", "required result", None if mode == "success" else "isolated provider failure")
+        return (
+            mode == "success",
+            "retained raw output",
+            "required result",
+            None if mode == "success" else "isolated provider failure",
+        )
 
     monkeypatch.setattr(scheduler, "run_job", run)
-    job = jobs.create_job(prompt="fixture only", schedule="every 1h", deliver="telegram:fixture")
+    job = jobs.create_job(
+        prompt="fixture only", schedule="every 1h", deliver="telegram:fixture"
+    )
     if external_worker:
         from cron import delivery_queue
+
         execution = executions.create_execution(job["id"], source="fixture")
         job["execution_id"] = execution["id"]
         monkeypatch.setenv("_CLAWK_CRON_EXTERNAL_WORKER", execution["id"])
@@ -66,15 +79,23 @@ def test_real_run_ledger_and_incident_match_actual_presentation(tmp_path, monkey
         assert row["delivery_outcome"] == "queued"
         assert scheduler.drain_delivery_queue({}, None) == 1
         (queued,) = delivery_queue_rows()
-        assert queued["status"] == ("suppressed" if expected_suppression else "delivered")
-        row = executions.latest_execution(job["id"])  # the drain writes its outcome back
+        assert queued["status"] == (
+            "suppressed" if expected_suppression else "delivered"
+        )
+        row = executions.latest_execution(
+            job["id"]
+        )  # the drain writes its outcome back
     assert len(sent) == (0 if expected_suppression else 1)
-    assert row["delivery_outcome"] == ("suppressed" if expected_suppression else "delivered")
+    assert row["delivery_outcome"] == (
+        "suppressed" if expected_suppression else "delivered"
+    )
     saved = jobs.get_job(job["id"])
     assert saved["last_status"] == ("ok" if mode == "success" else "error")
     if mode != "success":
         assert "isolated provider failure" in saved["last_error"]
-        incident = next(i for i in incidents.list_incidents() if i["job_id"] == job["id"])
+        incident = next(
+            i for i in incidents.list_incidents() if i["job_id"] == job["id"]
+        )
         assert incident["state"] == ("detected" if suppress else "alerted")
     if mode != "crash":
         outputs = list((tmp_path / "cron" / "output" / job["id"]).glob("*.md"))

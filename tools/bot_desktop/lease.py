@@ -33,7 +33,7 @@ from clawk_constants import get_clawk_home, clawk_home_key, secure_parent_dir
 try:
     import fcntl
 except ImportError:  # Windows/macOS without fcntl: computer_use imports this module on every call, and no
-    fcntl = None     # multi-process Bot Desktop exists there, so the cross-process lock degrades to a no-op.
+    fcntl = None  # multi-process Bot Desktop exists there, so the cross-process lock degrades to a no-op.
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,14 @@ def public_view(lease: Lease) -> dict[str, object]:
     the CLI): the holder's viewer id is a capability — whoever presents it co-drives or releases the lease —
     so it is replaced by a short hash the holder can match against its own id to know it is in control."""
     import hashlib
+
     d = lease.as_dict()
     d["viewer_id"] = None
-    d["viewer_hash"] = hashlib.sha256(lease.viewer_id.encode()).hexdigest()[:12] if lease.viewer_id else None
+    d["viewer_hash"] = (
+        hashlib.sha256(lease.viewer_id.encode()).hexdigest()[:12]
+        if lease.viewer_id
+        else None
+    )
     return d
 
 
@@ -88,17 +93,25 @@ def _read(path: Path) -> Lease:
     except FileNotFoundError:
         return Lease()
     except OSError:
-        return Lease(holder=HUMAN, viewer_id="unreadable-lease", reason="lease file unreadable")
+        return Lease(
+            holder=HUMAN, viewer_id="unreadable-lease", reason="lease file unreadable"
+        )
     try:
         data = json.loads(raw)
     except ValueError:
         data = None
     if not isinstance(data, dict) or data.get("holder") not in (AGENT, HUMAN):
-        return Lease(holder=HUMAN, viewer_id="unreadable-lease", reason="lease file corrupt")
+        return Lease(
+            holder=HUMAN, viewer_id="unreadable-lease", reason="lease file corrupt"
+        )
     try:
-        return Lease(**{k: v for k, v in data.items() if k in Lease.__dataclass_fields__})
+        return Lease(
+            **{k: v for k, v in data.items() if k in Lease.__dataclass_fields__}
+        )
     except TypeError:
-        return Lease(holder=HUMAN, viewer_id="unreadable-lease", reason="lease file corrupt")
+        return Lease(
+            holder=HUMAN, viewer_id="unreadable-lease", reason="lease file corrupt"
+        )
 
 
 def _private_dir(path: Path) -> None:
@@ -157,6 +170,7 @@ def on_change(listener: Callable[[str, Lease], None]) -> Callable[[], None]:
         with _lock:
             if listener in _listeners:
                 _listeners.remove(listener)
+
     return _off
 
 
@@ -174,7 +188,10 @@ def _notify(key: str, lease: Lease) -> None:
 
 
 def _transition(profile_key: Optional[str], mutate: Callable[[Lease], bool]) -> Lease:
-    key, path = clawk_home_key(profile_key) if profile_key else clawk_home_key(), _path(profile_key)
+    key, path = (
+        clawk_home_key(profile_key) if profile_key else clawk_home_key(),
+        _path(profile_key),
+    )
     with _locked(path):
         lease = _read(path)
         if not mutate(lease):
@@ -187,9 +204,12 @@ def _transition(profile_key: Optional[str], mutate: Callable[[Lease], bool]) -> 
     return lease
 
 
-def acquire(viewer_id: str, *, profile_key: Optional[str] = None, reason: str = "") -> Lease:
+def acquire(
+    viewer_id: str, *, profile_key: Optional[str] = None, reason: str = ""
+) -> Lease:
     """Human ``viewer_id`` takes control. Last writer wins: a second viewer evicts the first, and the
     RFB bridge closes the evicted socket so its UI drops to view-only."""
+
     def _m(lease: Lease) -> bool:
         if lease.holder == HUMAN and lease.viewer_id == viewer_id:
             return False  # already theirs: no epoch bump, `since` and the reason on screen stay put
@@ -198,31 +218,50 @@ def acquire(viewer_id: str, *, profile_key: Optional[str] = None, reason: str = 
         lease.holder, lease.viewer_id, lease.since = HUMAN, viewer_id, time.time()
         lease.reason = reason or ""
         return True
+
     return _transition(profile_key, _m)
 
 
-def release(viewer_id: Optional[str] = None, *, profile_key: Optional[str] = None,
-            unless_human: bool = False) -> Lease:
+def release(
+    viewer_id: Optional[str] = None,
+    *,
+    profile_key: Optional[str] = None,
+    unless_human: bool = False,
+) -> Lease:
     """Return control to the agent. With ``viewer_id`` only that holder may release (a stale viewer
     closing its window must not yank control from the one who took over after it). ``unless_human``
     makes a bare release a no-op while any human holds: the decision is taken under the file lock,
     so a takeover racing a check-then-release cannot be silently revoked. Callers read the returned
     lease's holder to learn whether anything happened."""
+
     def _m(lease: Lease) -> bool:
         if unless_human and lease.holder == HUMAN:
             logger.info("bot-desktop lease: bare release ignored, a human holds")
             return False
-        if viewer_id is not None and lease.holder == HUMAN and lease.viewer_id != viewer_id:
+        if (
+            viewer_id is not None
+            and lease.holder == HUMAN
+            and lease.viewer_id != viewer_id
+        ):
             # Ignored, not an error: the returned lease still shows the real holder. Logged so a
             # caller that never inspects the return value leaves a trace.
-            logger.info("bot-desktop lease: release by %r ignored, another viewer holds", viewer_id)
+            logger.info(
+                "bot-desktop lease: release by %r ignored, another viewer holds",
+                viewer_id,
+            )
             return False
         if lease.holder == AGENT:
             # Already the agent's. Bumping the epoch here would make a legitimately admitted in-flight
             # agent action (a double-clicked Hand back, a stray CLI stop) look overtaken and get voided.
             return False
-        lease.holder, lease.viewer_id, lease.since, lease.reason = AGENT, None, time.time(), ""
+        lease.holder, lease.viewer_id, lease.since, lease.reason = (
+            AGENT,
+            None,
+            time.time(),
+            "",
+        )
         return True
+
     return _transition(profile_key, _m)
 
 
@@ -242,7 +281,8 @@ def assert_agent_may_act(profile_key: Optional[str] = None) -> Lease:
     if lease.holder == HUMAN:
         raise HumanHasControl(
             "A human has taken over this desktop (they may be entering a credential). Screen actions and "
-            "captures are refused until they hand control back. Tell the user what you need in your reply.")
+            "captures are refused until they hand control back. Tell the user what you need in your reply."
+        )
     return lease
 
 

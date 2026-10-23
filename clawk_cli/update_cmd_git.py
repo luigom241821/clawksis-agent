@@ -15,10 +15,16 @@ from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Optional
 
-from clawk_cli._subprocess_compat import NO_LAZY_FETCH_ENV, noninteractive_git_env, windows_hide_flags
+from clawk_cli._subprocess_compat import (
+    NO_LAZY_FETCH_ENV,
+    noninteractive_git_env,
+    windows_hide_flags,
+)
 from clawk_cli.update_cmd_common import _record_stop
 
-logger = logging.getLogger("clawk_cli.update_cmd")  # log-record parity with the origin module
+logger = logging.getLogger(
+    "clawk_cli.update_cmd"
+)  # log-record parity with the origin module
 
 _ORPHAN_RESCUE_REFS_TO_KEEP = 10
 _ORPHAN_RESCUE_REF_MAX_AGE_DAYS = 30
@@ -26,10 +32,17 @@ _ORPHAN_RESCUE_REF_MAX_AGE_DAYS = 30
 # creationflags is folded in here so every ``**_GIT_TEXT_KW`` spawn (rev-parse label,
 # fork-bomb probe, EOL churn normalization) hides its console under the console-less
 # desktop backend (#117781).
-_GIT_TEXT_KW = dict(capture_output=True, text=True, encoding="utf-8", errors="replace",
-                   creationflags=windows_hide_flags())
+_GIT_TEXT_KW = dict(
+    capture_output=True,
+    text=True,
+    encoding="utf-8",
+    errors="replace",
+    creationflags=windows_hide_flags(),
+)
 _BAR = "=" * 68
-_UPSTREAM_ADD_CMD = "git remote add upstream https://github.com/samuelgradientai-sys/clawksis-agent.git"
+_UPSTREAM_ADD_CMD = (
+    "git remote add upstream https://github.com/samuelgradientai-sys/clawksis-agent.git"
+)
 
 
 def _git_ok(git_cmd, args, cwd, **kw) -> bool:
@@ -48,10 +61,13 @@ def _git_run(git_cmd, args, cwd=None, *, check=False, env=None):
 
     # THE custody policy (R2): stash push / reset --hard keep the update's lock fd, fetch does not.
     return run_git(
-        git_cmd, list(args),
+        git_cmd,
+        list(args),
         cwd=cwd,
         capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         check=check,
         creationflags=windows_hide_flags(),
         env=env,
@@ -61,6 +77,7 @@ def _git_run(git_cmd, args, cwd=None, *, check=False, env=None):
 def _git_stdout(git_cmd, args, cwd, **kw) -> Optional[str]:
     """Stripped stdout of a successful ``_git_run``; ``None`` on non-zero exit or any exception."""
     from clawk_cli.update_cmd import _git_run
+
     with suppress(Exception):
         result = _git_run(git_cmd, args, cwd, **kw)
         if result.returncode == 0:
@@ -69,7 +86,11 @@ def _git_stdout(git_cmd, args, cwd, **kw) -> Optional[str]:
 
 
 def _prune_orphan_rescue_refs(
-    git_cmd, cwd, branch, keep=_ORPHAN_RESCUE_REFS_TO_KEEP, max_age_days=_ORPHAN_RESCUE_REF_MAX_AGE_DAYS
+    git_cmd,
+    cwd,
+    branch,
+    keep=_ORPHAN_RESCUE_REFS_TO_KEEP,
+    max_age_days=_ORPHAN_RESCUE_REF_MAX_AGE_DAYS,
 ) -> None:
     """Expire old rescue refs (``refs/clawk-update-backups/<kind>-<branch>-<ts>-<sha>``).
 
@@ -88,21 +109,29 @@ def _prune_orphan_rescue_refs(
     when the tree holds large stray files. See #87694.
     """
     from clawk_cli.update_cmd_git import _git_run
+
     with suppress(OSError):
         stale: set[str] = set()
         for kind in ("orphan", "diverged", "detached"):
             prefix = f"refs/clawk-update-backups/{kind}-{branch}-"
             list_result = _git_run(
-                git_cmd, ["for-each-ref", "--format=%(refname)", "--sort=refname", f"{prefix}*"], cwd)
+                git_cmd,
+                ["for-each-ref", "--format=%(refname)", "--sort=refname", f"{prefix}*"],
+                cwd,
+            )
             if list_result.returncode != 0:
                 continue
-            refs = [line.strip() for line in list_result.stdout.splitlines() if line.strip()]
+            refs = [
+                line.strip() for line in list_result.stdout.splitlines() if line.strip()
+            ]
             stale |= set(refs[:-keep] if keep > 0 else refs)
             if max_age_days > 0:
                 cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
                 for ref in refs:
                     with suppress(ValueError):
-                        stamp = datetime.strptime(ref[len(prefix):][:15], "%Y%m%d-%H%M%S")
+                        stamp = datetime.strptime(
+                            ref[len(prefix) :][:15], "%Y%m%d-%H%M%S"
+                        )
                         if stamp.replace(tzinfo=UTC) < cutoff:
                             stale.add(ref)
         for ref in sorted(stale):
@@ -120,29 +149,44 @@ def _park_detached_head(git_cmd, cwd, branch) -> None:
     orphan the work. Attached HEADs and already-reachable commits are left alone.
     """
     from clawk_cli.update_cmd import _git_run
+
     if _git_run(git_cmd, ["symbolic-ref", "-q", "HEAD"], cwd).returncode == 0:
         return  # on a branch
     head = _git_run(git_cmd, ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], cwd)
     sha = (head.stdout or "").strip()
     if head.returncode != 0 or not sha:
         return
-    contains = _git_run(git_cmd, ["for-each-ref", "--contains", sha, "--format=%(refname)"], cwd)
+    contains = _git_run(
+        git_cmd, ["for-each-ref", "--contains", sha, "--format=%(refname)"], cwd
+    )
     holders = [r for r in (contains.stdout or "").split() if r != "refs/stash"]
     if contains.returncode == 0 and holders:
         return  # already reachable from a branch, tag, remote or backup ref
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     rescue_ref = f"refs/clawk-update-backups/detached-{branch}-{stamp}-{sha[:12]}"
     if _git_run(git_cmd, ["update-ref", rescue_ref, sha], cwd).returncode != 0:
-        print(f"✗ HEAD is detached at {sha[:12]}, which no branch or tag contains, and backing it up "
-              f"to {rescue_ref} failed.")
-        print(f"  Update stopped so those commits are not orphaned. Keep them with: "
-              f"git -C {cwd} branch <name> {sha[:12]}")
+        print(
+            f"✗ HEAD is detached at {sha[:12]}, which no branch or tag contains, and backing it up "
+            f"to {rescue_ref} failed."
+        )
+        print(
+            f"  Update stopped so those commits are not orphaned. Keep them with: "
+            f"git -C {cwd} branch <name> {sha[:12]}"
+        )
         _record_stop("detached_head")
         sys.exit(1)
-    count = (_git_run(git_cmd, ["rev-list", "--count", sha, "--not", "--branches", "--tags", "--remotes"],
-                      cwd).stdout or "").strip()
-    print(f"  ⚠ {count or 'Some'} commit(s) made on the detached HEAD are on no branch — backed up to "
-          f"{rescue_ref} before moving HEAD. This backup expires after {_ORPHAN_RESCUE_REF_MAX_AGE_DAYS} days.")
+    count = (
+        _git_run(
+            git_cmd,
+            ["rev-list", "--count", sha, "--not", "--branches", "--tags", "--remotes"],
+            cwd,
+        ).stdout
+        or ""
+    ).strip()
+    print(
+        f"  ⚠ {count or 'Some'} commit(s) made on the detached HEAD are on no branch — backed up to "
+        f"{rescue_ref} before moving HEAD. This backup expires after {_ORPHAN_RESCUE_REF_MAX_AGE_DAYS} days."
+    )
     print(f"    List them with: git log {rescue_ref} --not --branches --tags --remotes")
     _prune_orphan_rescue_refs(git_cmd, cwd, branch)
 
@@ -153,6 +197,7 @@ def _branch_head_label(git_cmd=None, cwd=None) -> str | None:
     Appended to summary lines so a checkout parked on a stale branch is visible."""
     from clawk_cli.update_cmd import _m
     from clawk_cli.update_custody import run_git
+
     try:
         cmd = list(git_cmd) if git_cmd else ["git"]
         root = cwd if cwd is not None else _m().PROJECT_ROOT
@@ -162,7 +207,12 @@ def _branch_head_label(git_cmd=None, cwd=None) -> str | None:
 
         branch, sha = _rev_parse("--abbrev-ref", "HEAD"), _rev_parse("--short", "HEAD")
         branch_name, sha_text = branch.stdout.strip(), sha.stdout.strip()
-        if branch.returncode != 0 or sha.returncode != 0 or not sha_text or not branch_name:
+        if (
+            branch.returncode != 0
+            or sha.returncode != 0
+            or not sha_text
+            or not branch_name
+        ):
             return None
         return f"{'detached' if branch_name == 'HEAD' else branch_name} @ {sha_text}"
     except Exception:
@@ -175,7 +225,9 @@ def _branch_head_suffix(git_cmd=None, cwd=None) -> str:
     return f" [{label}]" if label else ""
 
 
-def _assess_parked_branch_switch(git_cmd: list[str], cwd: Path, current_branch: str, target_branch: str) -> tuple[bool, str]:
+def _assess_parked_branch_switch(
+    git_cmd: list[str], cwd: Path, current_branch: str, target_branch: str
+) -> tuple[bool, str]:
     """Decide whether a parked feature branch may be auto-switched back to the update target.
 
     - (True, "") — tree clean and every parked commit is in ``origin/<target>`` (no ``git cherry +``).
@@ -186,10 +238,14 @@ def _assess_parked_branch_switch(git_cmd: list[str], cwd: Path, current_branch: 
       genuinely unsafe case: uncommitted work riding an autostash across branches.
     A config read failure must not disable the safety checks: fall through with the default."""
     from clawk_cli.update_cmd_git import _git_run
+
     try:
         from clawk_cli.config import load_config
+
         _update_cfg = (load_config() or {}).get("updates", {})
-        if isinstance(_update_cfg, dict) and not bool(_update_cfg.get("auto_switch_parked_branch", True)):
+        if isinstance(_update_cfg, dict) and not bool(
+            _update_cfg.get("auto_switch_parked_branch", True)
+        ):
             return False, "disabled"
     except Exception as exc:
         logger.debug("Could not read updates.auto_switch_parked_branch: %s", exc)
@@ -203,7 +259,9 @@ def _assess_parked_branch_switch(git_cmd: list[str], cwd: Path, current_branch: 
     # patch-id walk needs upstream-side trees and lazy-fetches them in many promisor
     # batches; one failed batch failed the whole verification and skipped a clean
     # checkout (#124767).
-    ahead = _git_run(git_cmd, ["rev-list", "--count", f"origin/{target_branch}..HEAD"], cwd)
+    ahead = _git_run(
+        git_cmd, ["rev-list", "--count", f"origin/{target_branch}..HEAD"], cwd
+    )
     if ahead.returncode != 0 or not ahead.stdout.strip().isdigit():
         return False, "unverifiable"
     ahead_count = int(ahead.stdout.strip())
@@ -212,15 +270,29 @@ def _assess_parked_branch_switch(git_cmd: list[str], cwd: Path, current_branch: 
     # Git before 2.44 ignores GIT_NO_LAZY_FETCH, so on a partial clone cherry still lazy-fetches
     # without bound (git 2.43 on WSL hung here, #124767). Its patch-ids need blobs a partial clone
     # keeps on the remote, so it rarely refines anything there: settle for the commit count.
-    promisor = _git_run(git_cmd, ["config", "--get-regexp", r"^(remote\..*\.promisor|extensions\.partialclone)$"], cwd)
-    if any(line.split()[-1].lower() != "false" for line in promisor.stdout.splitlines()):
+    promisor = _git_run(
+        git_cmd,
+        [
+            "config",
+            "--get-regexp",
+            r"^(remote\..*\.promisor|extensions\.partialclone)$",
+        ],
+        cwd,
+    )
+    if any(
+        line.split()[-1].lower() != "false" for line in promisor.stdout.splitlines()
+    ):
         return True, f"unmerged:{ahead_count}"
     # The patch-id refinement must never fetch: on a tree:0 clone `git cherry` lazy-fetches
     # a tree batch per commit and, with nothing bounding it, one such walk wrote 332 packs /
     # 180 GiB over 7 h on Windows (#131444). With lazy fetch off a missing object fails the
     # command fast and the commit count below stands in.
-    cherry = _git_run(git_cmd, ["cherry", f"origin/{target_branch}"], cwd,
-                      env={**noninteractive_git_env(), **NO_LAZY_FETCH_ENV})
+    cherry = _git_run(
+        git_cmd,
+        ["cherry", f"origin/{target_branch}"],
+        cwd,
+        env={**noninteractive_git_env(), **NO_LAZY_FETCH_ENV},
+    )
     if cherry.returncode != 0:
         # Patch-equivalence only refines the count for rebase/squash-merged branches;
         # a partial clone whose lazy fetch failed must not block a clean checkout,
@@ -236,18 +308,26 @@ _PARKED_SKIP_WHY = {
 }
 
 
-def _print_parked_branch_skip_warning(git_cmd: list[str], cwd: Path, current_branch: str, target_branch: str, reason: str) -> None:
+def _print_parked_branch_skip_warning(
+    git_cmd: list[str], cwd: Path, current_branch: str, target_branch: str, reason: str
+) -> None:
     """LOUD block: why the update was skipped on a parked branch, behind-count, fix commands."""
     behind = None
     with suppress(Exception):
-        behind_text = _git_stdout(git_cmd, ["rev-list", f"HEAD..origin/{target_branch}", "--count"], cwd)
+        behind_text = _git_stdout(
+            git_cmd, ["rev-list", f"HEAD..origin/{target_branch}", "--count"], cwd
+        )
         if behind_text:
             behind = int(behind_text)
-    why = _PARKED_SKIP_WHY.get(reason, f"the branch state could not be verified against origin/{target_branch}")
+    why = _PARKED_SKIP_WHY.get(
+        reason, f"the branch state could not be verified against origin/{target_branch}"
+    )
     print(f"\n{_BAR}\n⚠ CODE UPDATE SKIPPED — checkout is parked on '{current_branch}'")
     print(f"  Not auto-switching to {target_branch}: {why}.")
     if behind is not None and behind > 0:
-        print(f"  This checkout is {behind} commit(s) BEHIND origin/{target_branch} — the code you are running is stale.")
+        print(
+            f"  This checkout is {behind} commit(s) BEHIND origin/{target_branch} — the code you are running is stale."
+        )
     print(
         f"\n  To resolve, inspect the branch and switch back yourself:\n"
         f"    git -C {cwd} status\n"
@@ -256,7 +336,9 @@ def _print_parked_branch_skip_warning(git_cmd: list[str], cwd: Path, current_bra
     )
 
 
-def _print_parked_branch_kept_notice(current_branch: str, target_branch: str, unmerged_count: str) -> None:
+def _print_parked_branch_kept_notice(
+    current_branch: str, target_branch: str, unmerged_count: str
+) -> None:
     """LOUD notice when a clean parked branch with unmerged commits is auto-switched.
 
     Non-interactive callers can't resolve a skip, so we proceed — but the unmerged work
@@ -320,6 +402,7 @@ def _count_commits_between(git_cmd: list[str], cwd: Path, base: str, head: str) 
 def _should_skip_upstream_prompt() -> bool:
     """Check if user previously declined to add upstream."""
     from clawk_constants import get_clawk_home
+
     return (get_clawk_home() / SKIP_UPSTREAM_PROMPT_FILE).exists()
 
 
@@ -327,31 +410,47 @@ def _mark_skip_upstream_prompt():
     """Create marker file to skip future upstream prompts."""
     with suppress(Exception):
         from clawk_constants import get_clawk_home
+
         (get_clawk_home() / SKIP_UPSTREAM_PROMPT_FILE).touch()
 
 
 def _sync_fork_with_upstream(git_cmd: list[str], cwd: Path) -> bool:
     """Push updated main to origin (sync fork); True on success."""
-    return _git_ok(git_cmd, ["push", "origin", "main", "--force-with-lease"], cwd, network=True)
+    return _git_ok(
+        git_cmd, ["push", "origin", "main", "--force-with-lease"], cwd, network=True
+    )
 
 
-def _offer_upstream_remote(git_cmd: list[str], cwd: Path, *, assume_yes: bool, input_fn) -> bool:
+def _offer_upstream_remote(
+    git_cmd: list[str], cwd: Path, *, assume_yes: bool, input_fn
+) -> bool:
     """Prompt to add ``upstream`` and add it; False when the user declined, the run is non-interactive, or add failed.
 
     ``--yes`` means "don't block", not "mutate my remotes", so a non-interactive skip is NOT persisted."""
     from clawk_cli.update_cmd import _add_upstream_remote, _mark_skip_upstream_prompt
+
     print(
         "\nℹ Your fork is not tracking the official Clawksis repository.\n"
         "  This means you may miss updates from samuelgradientai-sys/clawksis-agent.\n"
     )
-    if assume_yes or (input_fn is None and not (sys.stdin.isatty() and sys.stdout.isatty())):
-        print(f"  Skipping upstream setup (non-interactive run).\n  Add it later with: {_UPSTREAM_ADD_CMD}")
+    if assume_yes or (
+        input_fn is None and not (sys.stdin.isatty() and sys.stdout.isatty())
+    ):
+        print(
+            f"  Skipping upstream setup (non-interactive run).\n  Add it later with: {_UPSTREAM_ADD_CMD}"
+        )
         return False
     if input_fn is not None:
-        response = input_fn("Add official repo as 'upstream' remote? [y/N]", "n").strip().lower()
+        response = (
+            input_fn("Add official repo as 'upstream' remote? [y/N]", "n")
+            .strip()
+            .lower()
+        )
     else:
         try:
-            response = input("Add official repo as 'upstream' remote? [Y/n]: ").strip().lower()
+            response = (
+                input("Add official repo as 'upstream' remote? [Y/n]: ").strip().lower()
+            )
         except (EOFError, KeyboardInterrupt, UnicodeDecodeError):
             print()
             response = "n"
@@ -363,7 +462,9 @@ def _offer_upstream_remote(git_cmd: list[str], cwd: Path, *, assume_yes: bool, i
     if not _add_upstream_remote(git_cmd, cwd):
         print("  ✗ Failed to add upstream remote. Skipping upstream sync.")
         return False
-    print("  ✓ Added upstream: https://github.com/samuelgradientai-sys/clawksis-agent.git")
+    print(
+        "  ✓ Added upstream: https://github.com/samuelgradientai-sys/clawksis-agent.git"
+    )
     return True
 
 
@@ -375,8 +476,14 @@ class UpstreamTargetBroken(Exception):
         self.sha, self.path, self.error = sha, path, error
 
 
-def _sync_with_upstream_if_needed(git_cmd: list[str], cwd: Path, *, assume_yes: bool = False, input_fn=None,
-                                  checkout_move=None) -> bool:
+def _sync_with_upstream_if_needed(
+    git_cmd: list[str],
+    cwd: Path,
+    *,
+    assume_yes: bool = False,
+    input_fn=None,
+    checkout_move=None,
+) -> bool:
     """Offer to add ``upstream``, compare origin/main vs upstream/main, ff-pull when strictly behind, then push origin.
 
     Returns True only when origin/main was actually verified against upstream/main; False when the check never
@@ -389,24 +496,52 @@ def _sync_with_upstream_if_needed(git_cmd: list[str], cwd: Path, *, assume_yes: 
 
     See #97052.
     """
-    from clawk_cli.update_cmd import _count_commits_between, _has_upstream_remote, _no_prompt_git_kwargs, _should_skip_upstream_prompt
+    from clawk_cli.update_cmd import (
+        _count_commits_between,
+        _has_upstream_remote,
+        _no_prompt_git_kwargs,
+        _should_skip_upstream_prompt,
+    )
     from clawk_cli.update_cmd_check import tracking_refspec
     from clawk_cli.update_custody import run_git
+
     if not _has_upstream_remote(git_cmd, cwd) and (
-        _should_skip_upstream_prompt() or not _offer_upstream_remote(git_cmd, cwd, assume_yes=assume_yes, input_fn=input_fn)
+        _should_skip_upstream_prompt()
+        or not _offer_upstream_remote(
+            git_cmd, cwd, assume_yes=assume_yes, input_fn=input_fn
+        )
     ):
         return False
     print("\n→ Fetching upstream...")
     try:
-        run_git(git_cmd, ["fetch", "upstream", tracking_refspec("upstream", "main"), "--quiet"], cwd=cwd, capture_output=True, check=True, **_no_prompt_git_kwargs())
+        run_git(
+            git_cmd,
+            ["fetch", "upstream", tracking_refspec("upstream", "main"), "--quiet"],
+            cwd=cwd,
+            capture_output=True,
+            check=True,
+            **_no_prompt_git_kwargs(),
+        )
     except subprocess.CalledProcessError:
         print("  ✗ Failed to fetch upstream. Skipping upstream sync.")
         return False
     # One commit for the whole sync (m2): the short `upstream/main` also names a local branch of
     # that name, so the count and the merge could each see a different commit.
-    upstream = _git_stdout(git_cmd, ["rev-parse", "-q", "--verify", "refs/remotes/upstream/main^{commit}"], cwd)
-    origin_ahead = _count_commits_between(git_cmd, cwd, upstream, "refs/remotes/origin/main") if upstream else -1
-    upstream_ahead = _count_commits_between(git_cmd, cwd, "refs/remotes/origin/main", upstream) if upstream else -1
+    upstream = _git_stdout(
+        git_cmd,
+        ["rev-parse", "-q", "--verify", "refs/remotes/upstream/main^{commit}"],
+        cwd,
+    )
+    origin_ahead = (
+        _count_commits_between(git_cmd, cwd, upstream, "refs/remotes/origin/main")
+        if upstream
+        else -1
+    )
+    upstream_ahead = (
+        _count_commits_between(git_cmd, cwd, "refs/remotes/origin/main", upstream)
+        if upstream
+        else -1
+    )
     if origin_ahead < 0 or upstream_ahead < 0:
         print("  ✗ Could not compare branches. Skipping upstream sync.")
         return False
@@ -420,11 +555,14 @@ def _sync_with_upstream_if_needed(git_cmd: list[str], cwd: Path, *, assume_yes: 
     if upstream_ahead == 0:
         print("  ✓ Fork is up to date with upstream")
         return True
-    print(f"\n→ Fork is {upstream_ahead} commit(s) behind upstream\n→ Pulling from upstream...")
+    print(
+        f"\n→ Fork is {upstream_ahead} commit(s) behind upstream\n→ Pulling from upstream..."
+    )
     # A tree move like the pull itself: the marker and the owed tail are armed before git writes,
     # and the just-fetched ref is merged (a second `git pull` fetch could move past the marker's target).
     from clawk_cli import update_cmd_commit as _commit
     from clawk_cli._early_recovery import interrupted_pull_marker, is_object_id
+
     pre = _git_stdout(git_cmd, ["rev-parse", "HEAD"], cwd)
     if not is_object_id(pre):
         # The marker's ``pre`` is what a killed move is restored to: never arm ``pre=``.
@@ -434,36 +572,69 @@ def _sync_with_upstream_if_needed(git_cmd: list[str], cwd: Path, *, assume_yes: 
     # Judged BEFORE the move, like the origin target's preflight: the marker goes on git's exit 0,
     # so a broken target must never land on the strength of the caller's later guard (review G1).
     from clawk_cli.update_cmd import _UPDATE_CRITICAL_FILES
-    if broken := _commit.target_syntax_error(git_cmd, cwd, target, _UPDATE_CRITICAL_FILES):
+
+    if broken := _commit.target_syntax_error(
+        git_cmd, cwd, target, _UPDATE_CRITICAL_FILES
+    ):
         raise UpstreamTargetBroken(target, *broken)
-    refused = _commit.arm_commit_point(git_cmd, cwd, _commit.debt_sha_for_move(pre, target), pre=pre,
-                                       target=target, stash=None)
+    refused = _commit.arm_commit_point(
+        git_cmd,
+        cwd,
+        _commit.debt_sha_for_move(pre, target),
+        pre=pre,
+        target=target,
+        stash=None,
+    )
     try:
         # The fetch above already brought upstream/main: a local fast-forward (no network, so no
         # credential helper is started under the checkout lock fd a mutator inherits) to the
         # very commit counted above.
         if refused:
-            raise subprocess.CalledProcessError(1, "merge", stderr=refused)  # no marker, no move
+            raise subprocess.CalledProcessError(
+                1, "merge", stderr=refused
+            )  # no marker, no move
         with (checkout_move or _no_move)(upstream):
-            run_git(git_cmd, ["merge", "--ff-only", upstream], cwd=cwd, check=True, **_no_prompt_git_kwargs())
-    except (OSError, subprocess.SubprocessError) as exc:  # CustodyRefused is an OSError; a timeout too
+            run_git(
+                git_cmd,
+                ["merge", "--ff-only", upstream],
+                cwd=cwd,
+                check=True,
+                **_no_prompt_git_kwargs(),
+            )
+    except (
+        OSError,
+        subprocess.SubprocessError,
+    ) as exc:  # CustodyRefused is an OSError; a timeout too
         if refused or _commit.settle_failed_tree_move(cwd):
             # Back at ``pre``; that is still new code when the origin pull moved first, and disarm
             # then owes the restart for it instead of ``target`` (it hands obligations back only at
             # the run's start commit).
             _commit.disarm_commit_obligations()
         else:
-            _commit.owe_restore_of(cwd, pre)  # torn under its marker: the restore lands on ``pre``
-        print("  ✗ Failed to pull from upstream. You may need to resolve conflicts manually.")
-        if detail := (getattr(exc, "stderr", None) or ("" if isinstance(exc, subprocess.CalledProcessError) else str(exc))):
+            _commit.owe_restore_of(
+                cwd, pre
+            )  # torn under its marker: the restore lands on ``pre``
+        print(
+            "  ✗ Failed to pull from upstream. You may need to resolve conflicts manually."
+        )
+        if detail := (
+            getattr(exc, "stderr", None)
+            or ("" if isinstance(exc, subprocess.CalledProcessError) else str(exc))
+        ):
             print(f"    ({detail})")
         return False
-    interrupted_pull_marker(cwd).unlink(missing_ok=True)  # git exited 0: whole at what it landed on
-    if (landed := _git_stdout(git_cmd, ["rev-parse", "-q", "--verify", "HEAD"], cwd)) != upstream:
+    interrupted_pull_marker(cwd).unlink(
+        missing_ok=True
+    )  # git exited 0: whole at what it landed on
+    if (
+        landed := _git_stdout(git_cmd, ["rev-parse", "-q", "--verify", "HEAD"], cwd)
+    ) != upstream:
         # Not the commit the debt was armed for (O3's check, here): owed for the HEAD it is on, or
         # handed back at the run's start commit; the caller's HEAD check refuses the update.
         _commit.disarm_commit_obligations()
-        print(f"  ✗ HEAD is on {(landed or '?')[:10]} after the upstream merge, not {upstream[:10]}.")
+        print(
+            f"  ✗ HEAD is on {(landed or '?')[:10]} after the upstream merge, not {upstream[:10]}."
+        )
         return False
     print("  ✓ Updated from upstream")
     # The fork push waits for a validated update: ``_push_synced_fork`` after the syntax guard.
@@ -478,11 +649,21 @@ def _push_synced_fork(git_cmd: list[str], cwd: Path) -> None:
     """
     head = _git_stdout(git_cmd, ["rev-parse", "HEAD"], cwd)
     # Full ref names: a local branch called upstream/main or origin/main must not answer (m2).
-    upstream = _git_stdout(git_cmd, ["rev-parse", "-q", "--verify", "refs/remotes/upstream/main^{commit}"], cwd)
-    origin = _git_stdout(git_cmd, ["rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}"], cwd)
+    upstream = _git_stdout(
+        git_cmd,
+        ["rev-parse", "-q", "--verify", "refs/remotes/upstream/main^{commit}"],
+        cwd,
+    )
+    origin = _git_stdout(
+        git_cmd,
+        ["rev-parse", "-q", "--verify", "refs/remotes/origin/main^{commit}"],
+        cwd,
+    )
     if not head or head != upstream or head == origin:
         return
-    if origin and not _git_ok(git_cmd, ["merge-base", "--is-ancestor", origin, head], cwd):
+    if origin and not _git_ok(
+        git_cmd, ["merge-base", "--is-ancestor", origin, head], cwd
+    ):
         return
     print("→ Syncing fork...")
     if _sync_fork_with_upstream(git_cmd, cwd):
@@ -495,7 +676,10 @@ def _push_synced_fork(git_cmd: list[str], cwd: Path) -> None:
 
 
 def _has_http_code(stderr: str, *codes: str) -> bool:
-    return any(f"HTTP {code}" in stderr or f"returned error: {code}" in stderr for code in codes)
+    return any(
+        f"HTTP {code}" in stderr or f"returned error: {code}" in stderr
+        for code in codes
+    )
 
 
 def _damaged_checkout_message(root: Path) -> str:
@@ -503,14 +687,18 @@ def _damaged_checkout_message(root: Path) -> str:
     would rebuild the default directory and leave a ``--dir`` install broken)."""
     if sys.platform == "win32":
         quoted = "'" + str(root).replace("'", "''") + "'"
-        repair = ("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)))"
-                  f" -InstallDir {quoted}")
+        repair = (
+            "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.ps1)))"
+            f" -InstallDir {quoted}"
+        )
     else:
         repair = f"curl -fsSL https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent/main/scripts/install.sh | bash -s -- --dir {shlex.quote(str(root))}"
-    return (f"✗ This Clawksis checkout's git data is damaged (git no longer recognizes {root / '.git'}),"
-            " so it cannot be updated in place.\n"
-            "  Run the installer again to repair it; it moves the damaged checkout aside and keeps"
-            f" your config and chats:\n    {repair}")
+    return (
+        f"✗ This Clawksis checkout's git data is damaged (git no longer recognizes {root / '.git'}),"
+        " so it cannot be updated in place.\n"
+        "  Run the installer again to repair it; it moves the damaged checkout aside and keeps"
+        f" your config and chats:\n    {repair}"
+    )
 
 
 def _checkout_rejected_by_git(stderr: str, git_cmd, root: Path) -> bool:
@@ -519,11 +707,14 @@ def _checkout_rejected_by_git(stderr: str, git_cmd, root: Path) -> bool:
     git prints the same ``fatal: not a git repository`` for a remote whose ``.git`` is broken, so the
     stderr line alone is not proof: the checkout must also fail to resolve as its own top level.
     """
-    if not any(line.startswith("fatal: not a git repository") for line in stderr.splitlines()):
+    if not any(
+        line.startswith("fatal: not a git repository") for line in stderr.splitlines()
+    ):
         return False
     top = _git_run(git_cmd, ["rev-parse", "--show-toplevel"], cwd=root)
-    return top.returncode != 0 or os.path.normcase(os.path.realpath(top.stdout.strip())) != os.path.normcase(
-        os.path.realpath(root))
+    return top.returncode != 0 or os.path.normcase(
+        os.path.realpath(top.stdout.strip())
+    ) != os.path.normcase(os.path.realpath(root))
 
 
 # Ordered (predicate, diagnosis): curl reports HTTP errors as ``unable to access '<url>': ... error: 429``,
@@ -531,41 +722,66 @@ def _checkout_rejected_by_git(stderr: str, git_cmd, root: Path) -> bool:
 # answered with HTTP 401 ("could not read Username") is GitHub during an outage (or a renamed/private
 # repo), not a user credentials problem.
 _FETCH_FAILURE_RULES = (
-    (lambda s: _has_http_code(s, "429") or "rate limit" in s.lower(),
-     "✗ GitHub is rate limiting requests or having an outage (HTTP 429) — try again in 5 minutes."),
-    (lambda s: _has_http_code(s, "500", "502", "503", "504"),
-     "✗ GitHub appears to be having an outage — try again in a few minutes (https://www.githubstatus.com)."),
-    (lambda s: "Could not resolve host" in s or "unable to access" in s,
-     "✗ Network error — cannot reach the remote repository."),
-    (lambda s: "could not read Username" in s or "terminal prompts disabled" in s,
-     "✗ GitHub rejected the anonymous fetch (asked for a login) — this usually means a GitHub outage;"
-     " try again in a few minutes (https://www.githubstatus.com). If it persists, check"
-     " `git remote -v` points at a public repo."),
-    (lambda s: "Authentication failed" in s,
-     "✗ Authentication failed — check your git credentials or SSH key."),
+    (
+        lambda s: _has_http_code(s, "429") or "rate limit" in s.lower(),
+        "✗ GitHub is rate limiting requests or having an outage (HTTP 429) — try again in 5 minutes.",
+    ),
+    (
+        lambda s: _has_http_code(s, "500", "502", "503", "504"),
+        "✗ GitHub appears to be having an outage — try again in a few minutes (https://www.githubstatus.com).",
+    ),
+    (
+        lambda s: "Could not resolve host" in s or "unable to access" in s,
+        "✗ Network error — cannot reach the remote repository.",
+    ),
+    (
+        lambda s: "could not read Username" in s or "terminal prompts disabled" in s,
+        "✗ GitHub rejected the anonymous fetch (asked for a login) — this usually means a GitHub outage;"
+        " try again in a few minutes (https://www.githubstatus.com). If it persists, check"
+        " `git remote -v` points at a public repo.",
+    ),
+    (
+        lambda s: "Authentication failed" in s,
+        "✗ Authentication failed — check your git credentials or SSH key.",
+    ),
     # SSH auth failures never say "Authentication failed" — OpenSSH prints its own
     # "Permission denied (publickey)"/"Host key verification failed" and git wraps
     # it as "Could not read from remote repository", which otherwise fell through
     # to the generic message below and left an SSH-remote user with no idea their
     # key (or lack of one) was the cause (#82169).
-    (lambda s: "Permission denied (publickey)" in s or "Host key verification failed" in s,
-     "✗ SSH authentication failed — check your SSH key is added to GitHub, or switch"
-     " `origin` to HTTPS: `git remote set-url origin https://github.com/samuelgradientai-sys/clawksis-agent.git`."),
+    (
+        lambda s: (
+            "Permission denied (publickey)" in s or "Host key verification failed" in s
+        ),
+        "✗ SSH authentication failed — check your SSH key is added to GitHub, or switch"
+        " `origin` to HTTPS: `git remote set-url origin https://github.com/samuelgradientai-sys/clawksis-agent.git`.",
+    ),
 )
 
 
 def _classify_fetch_failure(stderr: str) -> str:
     """Map git-fetch stderr to a one-line diagnosis (caller also prints the raw first line)."""
-    return next((message for matches, message in _FETCH_FAILURE_RULES if matches(stderr)), "✗ Failed to fetch updates from origin.")
+    return next(
+        (message for matches, message in _FETCH_FAILURE_RULES if matches(stderr)),
+        "✗ Failed to fetch updates from origin.",
+    )
 
 
-def _print_fetch_failure(stderr: str, *, git_cmd=None, root: Optional[Path] = None) -> None:
+def _print_fetch_failure(
+    stderr: str, *, git_cmd=None, root: Optional[Path] = None
+) -> None:
     """Print the classified diagnosis plus bounded raw stderr for diagnosis. With *root*, a checkout
     git rejects (no fetch can ever work; the ZIP fallback cannot tell user edits apart) gets the
     installer repair instead."""
     stderr = (stderr or "").strip()
-    damaged = root is not None and _checkout_rejected_by_git(stderr, git_cmd, Path(root))
-    print(_damaged_checkout_message(Path(root)) if damaged else _classify_fetch_failure(stderr))
+    damaged = root is not None and _checkout_rejected_by_git(
+        stderr, git_cmd, Path(root)
+    )
+    print(
+        _damaged_checkout_message(Path(root))
+        if damaged
+        else _classify_fetch_failure(stderr)
+    )
     if stderr:
         lines = stderr.splitlines()
         for line in lines[:15]:
@@ -607,9 +823,13 @@ def _portable_git_candidates() -> list:
     there (monerostar review, #87876).
     """
     from clawk_constants import get_default_clawk_root, get_clawk_home
+
     candidates = []
     with suppress(Exception):
-        candidates += [root / "git" / "mingw64" / "libexec" / "git-core" / "git.exe" for root in (get_default_clawk_root(), Path(get_clawk_home()))]
+        candidates += [
+            root / "git" / "mingw64" / "libexec" / "git-core" / "git.exe"
+            for root in (get_default_clawk_root(), Path(get_clawk_home()))
+        ]
     return candidates
 
 
@@ -627,7 +847,10 @@ def _locate_real_git() -> Optional[Path]:
         for base in (r"C:\Program Files", r"C:\Program Files (x86)")
         for arch in ("clangarm64", "mingw64", "mingw32")
     ] + _portable_git_candidates()
-    return next((c for c in candidates if c.exists() and _probe_fork_bomb([str(c)]) is False), None)
+    return next(
+        (c for c in candidates if c.exists() and _probe_fork_bomb([str(c)]) is False),
+        None,
+    )
 
 
 def _ensure_non_trampoline_git(git_cmd: list) -> list:
@@ -635,11 +858,14 @@ def _ensure_non_trampoline_git(git_cmd: list) -> list:
     if none is found leave the command untouched (fetch-failure handler falls back to ZIP). No-op off
     Windows and when git is healthy."""
     from clawk_cli.update_cmd import _locate_real_git
+
     if sys.platform != "win32" or not _git_is_trampoline(git_cmd):
         return git_cmd
     real_git = _locate_real_git()
     if real_git is None:
-        print("⚠ Detected a broken git trampoline and could not locate a real git binary — the update will fall back to the ZIP path.")
+        print(
+            "⚠ Detected a broken git trampoline and could not locate a real git binary — the update will fall back to the ZIP path."
+        )
         return git_cmd
     print(f"⚠ Detected a broken git trampoline; switching to real git at {real_git}")
     return [str(real_git)] + list(git_cmd[1:])
@@ -652,7 +878,10 @@ def _npm_lockfile_owners(repo_root: Path) -> set[Path]:
     owners = {Path(".")}
     try:
         import json
-        package = json.loads((repo_root / "package.json").read_text(encoding="utf-8-sig"))
+
+        package = json.loads(
+            (repo_root / "package.json").read_text(encoding="utf-8-sig")
+        )
         workspaces = package.get("workspaces", [])
         if isinstance(workspaces, dict):
             workspaces = workspaces.get("packages", [])
@@ -682,21 +911,24 @@ def _discard_lockfile_churn(git_cmd, repo_root, *, checkout_move=None):
     manifest desyncs spec and lock and every later ``npm ci`` fails, #112378); a nested lock is kept only
     with its sibling manifest. Best-effort."""
     from clawk_cli.update_cmd_git import _git_run
+
     with suppress(Exception):
         diff = _git_run(git_cmd, ["diff", "--name-only"], repo_root)
         if diff.returncode != 0:
             return
         changed = [line.strip() for line in diff.stdout.splitlines()]
-        dirty_manifests = {Path(p).parent for p in changed if p.endswith("package.json")}
+        dirty_manifests = {
+            Path(p).parent for p in changed if p.endswith("package.json")
+        }
         root_owners = _npm_lockfile_owners(Path(repo_root))
         dirty = []
         for path in changed:
             if not path.endswith("package-lock.json"):
                 continue
             lock_dir = Path(path).parent
-            protected = (lock_dir == Path(".") and bool(dirty_manifests & root_owners)) or (
-                lock_dir != Path(".") and lock_dir in dirty_manifests
-            )
+            protected = (
+                lock_dir == Path(".") and bool(dirty_manifests & root_owners)
+            ) or (lock_dir != Path(".") and lock_dir in dirty_manifests)
             if not protected:
                 dirty.append(path)
         if not dirty:
@@ -722,6 +954,7 @@ def _normalize_managed_eol(git_cmd, repo_root, *, checkout_move=None):
     """
     from clawk_cli.update_cmd_git import _git_run
     from clawk_cli.update_custody import run_git
+
     # -c, not config: evaluate the tree as it WOULD look pinned, persisting nothing.
     probe = git_cmd + ["-c", "core.autocrlf=false"]
 
@@ -734,17 +967,28 @@ def _normalize_managed_eol(git_cmd, repo_root, *, checkout_move=None):
         # Files with a *content* change ignoring CRLF. ``--name-only --ignore-cr-at-eol`` still LISTS
         # CR-only files; ``--numstat`` honors the filter (no record for them). Records are
         # "<added>\\t<deleted>\\t<path>"; rename detection is off, so exactly one path.
-        real_dirty = _probe_run("-c", "core.quotepath=false", "diff", "--numstat", "--ignore-cr-at-eol")
+        real_dirty = _probe_run(
+            "-c", "core.quotepath=false", "diff", "--numstat", "--ignore-cr-at-eol"
+        )
         if all_dirty.returncode != 0 or real_dirty.returncode != 0:
             return None
         return {p for p in all_dirty.stdout.split("\0") if p} - {
             parts[2]
-            for parts in (line.split("\t", 2) for line in real_dirty.stdout.splitlines() if line.strip())
+            for parts in (
+                line.split("\t", 2)
+                for line in real_dirty.stdout.splitlines()
+                if line.strip()
+            )
             if len(parts) == 3 and parts[2]
         }
 
     with suppress(Exception):
-        if _git_run(git_cmd, ["config", "--get", "core.autocrlf"], repo_root).stdout.strip().lower() != "true":
+        if (
+            _git_run(git_cmd, ["config", "--get", "core.autocrlf"], repo_root)
+            .stdout.strip()
+            .lower()
+            != "true"
+        ):
             return
         eol_only = _eol_only()
         if eol_only is None:
@@ -752,10 +996,24 @@ def _normalize_managed_eol(git_cmd, repo_root, *, checkout_move=None):
         if eol_only:
             # Pathspec via stdin: thousands of paths exceed the Windows argv limit.
             with (checkout_move or _no_move)(paths=sorted(eol_only)):
-                _probe_run("checkout", "--pathspec-from-file=-", "--pathspec-file-nul", "--",
-                           input="\0".join(sorted(eol_only)), check=False)
-            if _eol_only():  # still dirty: pinning would only surface churn we failed to clear
+                _probe_run(
+                    "checkout",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                    "--",
+                    input="\0".join(sorted(eol_only)),
+                    check=False,
+                )
+            if (
+                _eol_only()
+            ):  # still dirty: pinning would only surface churn we failed to clear
                 return
             print(f"→ Normalized line-ending churn ({len(eol_only)} file(s))")
-        run_git(git_cmd, ["config", "core.autocrlf", "false"], cwd=repo_root, capture_output=True, check=False,
-                creationflags=windows_hide_flags())
+        run_git(
+            git_cmd,
+            ["config", "core.autocrlf", "false"],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+            creationflags=windows_hide_flags(),
+        )

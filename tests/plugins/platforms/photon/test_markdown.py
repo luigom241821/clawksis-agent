@@ -4,6 +4,7 @@ Markdown is on by default (the sidecar sends it via spectrum-ts'
 ``markdown()`` builder and iMessage renders it); ``PHOTON_MARKDOWN=false``
 reverts to the stripped-plain-text path.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
@@ -121,10 +122,15 @@ async def test_url_bearing_markdown_is_stripped_before_the_text_builder(
     adapter = _make_adapter(monkeypatch)
     calls = _capture_sidecar(adapter)
 
-    await adapter.send("space-1", "**Release 1.2.0** is out\n[Read the notes](https://example.com/notes)")
+    await adapter.send(
+        "space-1",
+        "**Release 1.2.0** is out\n[Read the notes](https://example.com/notes)",
+    )
 
     path, body = calls[-1]
     assert path == "/send"
-    assert body["format"] == "markdown"  # the sidecar owns the builder choice (test_rich_links.py)
+    assert (
+        body["format"] == "markdown"
+    )  # the sidecar owns the builder choice (test_rich_links.py)
     assert "**" not in body["text"] and "](" not in body["text"]
     assert "\nhttps://example.com/notes" in body["text"]

@@ -13,7 +13,11 @@ def test_register_declares_the_former_core_wiring(monkeypatch):
     captured = {}
     register(SimpleNamespace(register_platform=lambda **kw: captured.update(kw)))
 
-    assert captured["name"] == "signal" and captured["label"] == "Signal" and captured["emoji"] == "📡"
+    assert (
+        captured["name"] == "signal"
+        and captured["label"] == "Signal"
+        and captured["emoji"] == "📡"
+    )
     assert captured["adapter_factory"] is adapter.SignalAdapter
     assert captured["max_message_length"] == adapter.MAX_MESSAGE_LENGTH == 8000
     assert captured["allowed_users_env"] == "SIGNAL_ALLOWED_USERS"
@@ -25,4 +29,9 @@ def test_register_declares_the_former_core_wiring(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     validate = captured["validate_config"]
     assert validate(PlatformConfig(enabled=True)) is False
-    assert validate(PlatformConfig(enabled=True, extra={"http_url": "http://127.0.0.1:1", "account": "+15550001"}))
+    assert validate(
+        PlatformConfig(
+            enabled=True,
+            extra={"http_url": "http://127.0.0.1:1", "account": "+15550001"},
+        )
+    )

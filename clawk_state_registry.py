@@ -69,7 +69,9 @@ class _Generation:
 
     __slots__ = ("db", "identity", "path", "refcount", "retired")
 
-    def __init__(self, path: Path, db: SessionDB, identity: Optional[tuple[int, int]]) -> None:
+    def __init__(
+        self, path: Path, db: SessionDB, identity: Optional[tuple[int, int]]
+    ) -> None:
         self.path = path
         self.db = db
         self.refcount = 1
@@ -119,8 +121,11 @@ def _close_quietly(db: SessionDB, debug_message: str) -> None:
         db.close()
     except Exception as exc:
         from clawk_state_dbfile import RetiredGenerationCaptureError
+
         if isinstance(exc, RetiredGenerationCaptureError):
-            logger.error("SessionDB for %s did not settle at close: %s", _db_path_of(db), exc)
+            logger.error(
+                "SessionDB for %s did not settle at close: %s", _db_path_of(db), exc
+            )
         else:
             logger.debug(debug_message, exc_info=True)
 
@@ -212,7 +217,11 @@ def acquire(db_path: Optional[Path] = None) -> SessionDB:
             generation = _generations.get(path)
             if generation is not None:
                 current = _stat_db_file_identity(path)
-                if current is not None and generation.identity is not None and current != generation.identity:
+                if (
+                    current is not None
+                    and generation.identity is not None
+                    and current != generation.identity
+                ):
                     # File replaced: retire this generation so it is never lent again, then elect one
                     # caller to open the replacement. It stays alive for its holders, tracked in
                     # ``_retired`` by ``id(db)`` so their releases find it after the path remaps.
@@ -254,7 +263,9 @@ def acquire(db_path: Optional[Path] = None) -> SessionDB:
             teardown = _tearing_down.get(path)
             if teardown is None:
                 existing = _generations.get(path)
-                if existing is not None:  # Defensive: installed by explicit registry manipulation mid-open.
+                if (
+                    existing is not None
+                ):  # Defensive: installed by explicit registry manipulation mid-open.
                     existing.refcount += 1
                     winner = existing.db
                 else:
@@ -384,7 +395,8 @@ def close_all_under(directory: str | Path) -> int:
         # Collect by directory, not by remaining generations: a last release already
         # popped the generation and left only ``_tearing_down``.
         active_teardowns = [
-            barrier for path, barrier in _tearing_down.items()
+            barrier
+            for path, barrier in _tearing_down.items()
             if _path_is_under(path, root)
         ]
         selected_paths = {generation.path for generation in generations}
@@ -466,7 +478,8 @@ def stats() -> dict[str, int]:
     """Registry census for tests and diagnostics (no locks held long)."""
     with _lock:
         return {
-            "live_generations": len(_generations), "retired_generations": len(_retired),
+            "live_generations": len(_generations),
+            "retired_generations": len(_retired),
             "total_refcounts": sum(g.refcount for g in _generations.values()),
         }
 

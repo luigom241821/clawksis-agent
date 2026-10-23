@@ -40,14 +40,21 @@ def server():
     import tui_gateway.server_requests
     import tui_gateway.transport
     import clawk_constants  # real get_process_clawk_home: a mocked one put state.db under the cwd (repo)
-    with patch.dict("sys.modules", {
-        "clawk_constants": MagicMock(get_clawk_home=MagicMock(return_value="/tmp/clawk_test"),
-                                      get_process_clawk_home=clawk_constants.get_process_clawk_home),
-        "clawk_cli.env_loader": MagicMock(),
-        "clawk_cli.banner": MagicMock(),
-        "clawk_state": MagicMock(),
-    }):
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "clawk_constants": MagicMock(
+                get_clawk_home=MagicMock(return_value="/tmp/clawk_test"),
+                get_process_clawk_home=clawk_constants.get_process_clawk_home,
+            ),
+            "clawk_cli.env_loader": MagicMock(),
+            "clawk_cli.banner": MagicMock(),
+            "clawk_state": MagicMock(),
+        },
+    ):
         import importlib
+
         mod = importlib.import_module("tui_gateway.server")
 
     # Snapshot the RPC registry: several tests below stub handlers
@@ -68,6 +75,7 @@ def server():
     for sid in list(mod._sessions):
         mod._close_session_by_id(sid, end_reason="test_cleanup")
     from tui_gateway import server_requests
+
     server_requests.reset_for_tests()
     mod._live_transports.clear()
 
@@ -86,10 +94,6 @@ def capture(server):
 def test_unknown_method(server):
     resp = server.handle_request({"id": "1", "method": "bogus"})
     assert resp["error"]["code"] == -32601
-
-
-
-
 
 
 @pytest.mark.parametrize("kind", ["legacy", "hard-only", "dynamic-getattr"])
@@ -142,8 +146,6 @@ def test_session_interrupt_uses_explicit_stop_compatibility(server, monkeypatch,
 # ── write_json ────────────────────────────────────────────────
 
 
-
-
 def test_live_session_payload_replays_pending_approval(server, monkeypatch):
     """A reattached client receives the approval that was emitted while detached."""
     from tools import approval
@@ -169,7 +171,9 @@ def test_live_session_payload_replays_pending_approval(server, monkeypatch):
         approval_gateway_wait._ApprovalEntry(first),
         approval_gateway_wait._ApprovalEntry(second),
     ]
-    monkeypatch.setattr(server, "_approval_request_payload", lambda data: dict(data or {}))
+    monkeypatch.setattr(
+        server, "_approval_request_payload", lambda data: dict(data or {})
+    )
 
     try:
         payload = server._live_session_payload("runtime-session", session)
@@ -190,11 +194,19 @@ def test_live_session_payload_replays_open_requests(server):
     """A reattached client receives the server→client request still blocking the session (a clarify sent
     while detached), scoped to the owning runtime session only, as a snapshot not a live reference."""
     from tui_gateway import server_requests
+
     session = {
-        "agent": types.SimpleNamespace(), "cols": 80, "created_at": 1.0, "history": [],
-        "history_lock": threading.Lock(), "running": True, "session_key": "stored-session",
+        "agent": types.SimpleNamespace(),
+        "cols": 80,
+        "created_at": 1.0,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "running": True,
+        "session_key": "stored-session",
     }
-    req = server_requests.ServerRequest("runtime-session", "clarify", {"question": "Which?", "choices": ["a", "b"]})
+    req = server_requests.ServerRequest(
+        "runtime-session", "clarify", {"question": "Which?", "choices": ["a", "b"]}
+    )
     server_requests._open[req.id] = req
     try:
         payload = server._live_session_payload("runtime-session", session)
@@ -202,12 +214,19 @@ def test_live_session_payload_replays_open_requests(server):
     finally:
         server_requests._open.pop(req.id, None)
 
-    assert payload["open_requests"] == [{"id": req.id, "method": "clarify",
-                                         "params": {"session_id": "runtime-session", "question": "Which?", "choices": ["a", "b"]}}]
+    assert payload["open_requests"] == [
+        {
+            "id": req.id,
+            "method": "clarify",
+            "params": {
+                "session_id": "runtime-session",
+                "question": "Which?",
+                "choices": ["a", "b"],
+            },
+        }
+    ]
     assert payload["open_requests"][0]["params"] is not req.params
     assert "open_requests" not in other
-
-
 
 
 # ── _emit ────────────────────────────────────────────────────────────
@@ -240,8 +259,10 @@ def _wait_open(server_requests, buf=None, timeout=10.0, windows=()):
     while time.monotonic() < deadline:
         with server_requests._lock:
             req = next(iter(server_requests._open.values()), None)
-        if req is not None and (buf is None or req.id in buf.getvalue()) and all(
-            req.frame() in window.frames for window in windows
+        if (
+            req is not None
+            and (buf is None or req.id in buf.getvalue())
+            and all(req.frame() in window.frames for window in windows)
         ):
             return req
         time.sleep(0.01)
@@ -252,29 +273,56 @@ def test_server_request_round_trip_uses_response_frame(capture):
     """The backend sends a real JSON-RPC request (string id, method, params.session_id) and the client's
     response frame — not a method call — resolves it; the response frame itself gets no reply."""
     from tui_gateway import server_requests
+
     server, buf = capture
     box = {}
-    thread = threading.Thread(target=lambda: box.__setitem__("r", server._ask("sudo", "s1", {}, timeout=5)), daemon=True)
+    thread = threading.Thread(
+        target=lambda: box.__setitem__("r", server._ask("sudo", "s1", {}, timeout=5)),
+        daemon=True,
+    )
     thread.start()
     req = _wait_open(server_requests, buf)
     frame = _frames(buf)[-1]
-    assert frame == {"jsonrpc": "2.0", "id": req.id, "method": "sudo", "params": {"session_id": "s1"}}
+    assert frame == {
+        "jsonrpc": "2.0",
+        "id": req.id,
+        "method": "sudo",
+        "params": {"session_id": "s1"},
+    }
     assert req.id.startswith("srq-")
 
-    assert server.dispatch({"jsonrpc": "2.0", "id": req.id, "result": {"value": "hunter2"}}) is None
+    assert (
+        server.dispatch(
+            {"jsonrpc": "2.0", "id": req.id, "result": {"value": "hunter2"}}
+        )
+        is None
+    )
     thread.join(timeout=5)
     assert box["r"] == "hunter2"
     with server_requests._lock:
         assert not server_requests._open
 
 
-@pytest.mark.parametrize("method, qids, settle, expected", [
-    ("sudo", None,
-     lambda sr, req: sr.resolve_response({"id": req.id, "result": {"value": "yes"}}) is True,
-     {"value": "yes"}),
-    # Batch clarify's lock-based resolution follows the same first-settlement rule.
-    ("clarify", ["q1"], lambda sr, req: sr.lock_answer(req.id, "q1", "yes") == [], {"answers": {"q1": "yes"}, "outcome": "submitted"}),
-])
+@pytest.mark.parametrize(
+    "method, qids, settle, expected",
+    [
+        (
+            "sudo",
+            None,
+            lambda sr, req: (
+                sr.resolve_response({"id": req.id, "result": {"value": "yes"}}) is True
+            ),
+            {"value": "yes"},
+        ),
+        # Batch clarify's lock-based resolution follows the same first-settlement rule.
+        (
+            "clarify",
+            ["q1"],
+            lambda sr, req: sr.lock_answer(req.id, "q1", "yes") == [],
+            {"answers": {"q1": "yes"}, "outcome": "submitted"},
+        ),
+    ],
+)
 def test_settlement_wins_over_a_later_cancel(capture, method, qids, settle, expected):
     """A response and cancellation may race; the first settlement owns the result."""
     from tui_gateway import server_requests
@@ -290,14 +338,18 @@ def test_settlement_wins_over_a_later_cancel(capture, method, qids, settle, expe
     assert req.event.is_set()
 
 
-def test_send_returns_an_answer_committed_after_the_deadline_expired(capture, monkeypatch):
+def test_send_returns_an_answer_committed_after_the_deadline_expired(
+    capture, monkeypatch
+):
     """An answer accepted by resolve_response is never reported as a timeout (#112548): the
     response frame can land after event.wait() gave up and before send() withdraws the request,
     and the renderer must not get a bogus request.cancel for a card the user just answered."""
     from tui_gateway import server_requests
 
     cancels: list[dict] = []
-    monkeypatch.setattr(server_requests, "_emit", lambda event, sid, payload: cancels.append(payload))
+    monkeypatch.setattr(
+        server_requests, "_emit", lambda event, sid, payload: cancels.append(payload)
+    )
 
     real_wait = server_requests.threading.Event.wait
 
@@ -308,7 +360,9 @@ def test_send_returns_an_answer_committed_after_the_deadline_expired(capture, mo
         assert server_requests.resolve_response({"id": rid, "result": {"value": "yes"}})
         return expired
 
-    monkeypatch.setattr(server_requests.threading.Event, "wait", answered_during_the_gap)
+    monkeypatch.setattr(
+        server_requests.threading.Event, "wait", answered_during_the_gap
+    )
 
     assert server_requests.send("sudo", "s1", {}, timeout=0.001) == {"value": "yes"}
     assert cancels == []
@@ -321,7 +375,12 @@ def _silent_ws():
 
     class _SilentWS(WSTransport):
         def __init__(self):
-            self._ws, self._loop, self._peer, self._auth_identity = object(), None, "test", None
+            self._ws, self._loop, self._peer, self._auth_identity = (
+                object(),
+                None,
+                "test",
+                None,
+            )
             self.frames: list[dict] = []
 
         def write(self, obj):
@@ -335,8 +394,13 @@ def _silent_ws():
 
 
 def _ws_session(server, sid, peer):
-    server._sessions[sid] = {"session_key": sid, "transport": peer, "history": [], "history_lock": threading.Lock(),
-                             "agent_ready": None}
+    server._sessions[sid] = {
+        "session_key": sid,
+        "transport": peer,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "agent_ready": None,
+    }
 
 
 def test_server_request_fails_fast_for_a_ws_client_that_never_advertised(server):
@@ -348,14 +412,31 @@ def test_server_request_fails_fast_for_a_ws_client_that_never_advertised(server)
     peer = _silent_ws()
     _ws_session(server, "ws-old", peer)
     t0 = time.monotonic()
-    assert server_requests.send("clarify", "ws-old", {"question": "q?", "choices": None, "multi_select": False},
-                                timeout=5) is None
+    assert (
+        server_requests.send(
+            "clarify",
+            "ws-old",
+            {"question": "q?", "choices": None, "multi_select": False},
+            timeout=5,
+        )
+        is None
+    )
     assert time.monotonic() - t0 < 1
     assert peer.frames == []
     assert server_requests.open_requests("ws-old") == []
     settled = []
-    server_requests.send_async("approval", "ws-old", {"request_id": "r1", "command": "rm", "description": "",
-                                                      "pattern_key": "", "pattern_keys": []}, settled.append)
+    server_requests.send_async(
+        "approval",
+        "ws-old",
+        {
+            "request_id": "r1",
+            "command": "rm",
+            "description": "",
+            "pattern_key": "",
+            "pattern_keys": [],
+        },
+        settled.append,
+    )
     assert settled == [None]
 
 
@@ -369,18 +450,31 @@ def test_server_request_waits_for_a_ws_client_that_advertised(server):
     _ws_session(server, "ws-new", peer)
     token = bind_transport(peer)
     try:
-        response = server.handle_request({"id": 1, "method": "client.capabilities", "params": {"server_requests": True}})
+        response = server.handle_request(
+            {
+                "id": 1,
+                "method": "client.capabilities",
+                "params": {"server_requests": True},
+            }
+        )
     finally:
         reset_transport(token)
     assert "clarify" in response["result"]["server_requests"]
 
     box = {}
-    thread = threading.Thread(target=lambda: box.setdefault("r", server_requests.send("sudo", "ws-new", {}, timeout=5)),
-                              daemon=True)
+    thread = threading.Thread(
+        target=lambda: box.setdefault(
+            "r", server_requests.send("sudo", "ws-new", {}, timeout=5)
+        ),
+        daemon=True,
+    )
     thread.start()
     req = _wait_open(server_requests)
     assert peer.frames[-1]["id"] == req.id
-    assert server.dispatch({"jsonrpc": "2.0", "id": req.id, "result": {"value": "yes"}}) is None
+    assert (
+        server.dispatch({"jsonrpc": "2.0", "id": req.id, "result": {"value": "yes"}})
+        is None
+    )
     thread.join(timeout=5)
     assert box["r"] == {"value": "yes"}
     # Disconnect forgets the advertisement; the next connection must advertise again.
@@ -394,8 +488,12 @@ def test_server_request_error_response_fails_fast(server):
     from tui_gateway import server_requests
 
     box = {}
-    thread = threading.Thread(target=lambda: box.setdefault("result", server_requests.send("sudo", "s1", {}, timeout=5)),
-                              daemon=True)
+    thread = threading.Thread(
+        target=lambda: box.setdefault(
+            "result", server_requests.send("sudo", "s1", {}, timeout=5)
+        ),
+        daemon=True,
+    )
     thread.start()
     req = _wait_open(server_requests)
     t0 = time.monotonic()
@@ -417,9 +515,14 @@ def _two_window_session(server, sid):
     threading.Thread(target=loop.run_forever, daemon=True).start()
     windows = (_silent_ws(), _silent_ws())
     for window in windows:
+
         async def _write_many_if_current_async(frames, is_current, window=window):
             return all(not is_current() or window.write(frame) for frame in frames)
-        window._loop, window.write_many_if_current_async = loop, _write_many_if_current_async
+
+        window._loop, window.write_many_if_current_async = (
+            loop,
+            _write_many_if_current_async,
+        )
         server_requests.advertise(window, True)
     _ws_session(server, sid, FanoutTransport(*windows))
     return windows
@@ -427,7 +530,12 @@ def _two_window_session(server, sid):
 
 def _not_shown(req):
     from tui_gateway import server_requests
-    return {"jsonrpc": "2.0", "id": req.id, "error": {"code": server_requests.NOT_SHOWN_CODE, "message": "not here"}}
+
+    return {
+        "jsonrpc": "2.0",
+        "id": req.id,
+        "error": {"code": server_requests.NOT_SHOWN_CODE, "message": "not here"},
+    }
 
 
 def test_window_owned_request_refuses_at_once_when_no_window_shows_the_session(server):
@@ -437,8 +545,12 @@ def test_window_owned_request_refuses_at_once_when_no_window_shows_the_session(s
 
     windows = _two_window_session(server, "s-none")
     box = {}
-    thread = threading.Thread(target=lambda: box.setdefault("r", server._ask("preview.read", "s-none", {}, timeout=30)),
-                              daemon=True)
+    thread = threading.Thread(
+        target=lambda: box.setdefault(
+            "r", server._ask("preview.read", "s-none", {}, timeout=30)
+        ),
+        daemon=True,
+    )
     thread.start()
     req = _wait_open(server_requests, windows=windows)
     t0 = time.monotonic()
@@ -449,7 +561,10 @@ def test_window_owned_request_refuses_at_once_when_no_window_shows_the_session(s
     server.dispatch(_not_shown(req), windows[1])
     thread.join(timeout=2)
     assert not thread.is_alive() and time.monotonic() - t0 < 2
-    assert json.loads(box["r"]) == {"success": False, "error": server_requests.NOT_SHOWN_MESSAGE}
+    assert json.loads(box["r"]) == {
+        "success": False,
+        "error": server_requests.NOT_SHOWN_MESSAGE,
+    }
     assert server_requests.open_requests("s-none") == []
 
 
@@ -460,15 +575,23 @@ def test_window_owned_request_decline_does_not_beat_the_owner_window(server):
 
     bystander, owner = _two_window_session(server, "s-own")
     box = {}
-    thread = threading.Thread(target=lambda: box.setdefault("r", server._ask("preview.read", "s-own", {}, timeout=5)),
-                              daemon=True)
+    thread = threading.Thread(
+        target=lambda: box.setdefault(
+            "r", server._ask("preview.read", "s-own", {}, timeout=5)
+        ),
+        daemon=True,
+    )
     thread.start()
     req = _wait_open(server_requests, windows=(bystander, owner))
     server.dispatch(_not_shown(req), bystander)
     # An unattributed decline (proxied / relayed frame) is not a window's vote either.
     assert server_requests.resolve_response(_not_shown(req)) is True
-    assert thread.is_alive() and [r["id"] for r in server_requests.open_requests("s-own")] == [req.id]
-    server.dispatch({"jsonrpc": "2.0", "id": req.id, "result": {"value": '{"text": "page"}'}}, owner)
+    assert thread.is_alive() and [
+        r["id"] for r in server_requests.open_requests("s-own")
+    ] == [req.id]
+    server.dispatch(
+        {"jsonrpc": "2.0", "id": req.id, "result": {"value": '{"text": "page"}'}}, owner
+    )
     thread.join(timeout=2)
     assert box["r"] == '{"text": "page"}'
 
@@ -479,7 +602,13 @@ def test_client_capabilities_advertises_counting_not_shown_declines(server):
     peer = _silent_ws()
     token = bind_transport(peer)
     try:
-        response = server.handle_request({"id": 1, "method": "client.capabilities", "params": {"server_requests": True}})
+        response = server.handle_request(
+            {
+                "id": 1,
+                "method": "client.capabilities",
+                "params": {"server_requests": True},
+            }
+        )
     finally:
         reset_transport(token)
     assert response["result"]["declines_not_shown"] is True
@@ -488,33 +617,60 @@ def test_client_capabilities_advertises_counting_not_shown_declines(server):
 @pytest.mark.parametrize("method", ["secret", "sudo", "terminal.read", "tour"])
 def test_server_request_timeout_emits_one_request_cancel(capture, method):
     from tui_gateway import server_requests
+
     _server, buf = capture
     assert server_requests.send(method, "s1", {}, timeout=0) is None
     request, cancel = _frames(buf)
     assert request["method"] == method
     assert cancel["params"]["type"] == "request.cancel"
     assert cancel["params"]["session_id"] == "s1"
-    assert cancel["params"]["payload"] == {"id": request["id"], "method": method, "reason": "timeout"}
+    assert cancel["params"]["payload"] == {
+        "id": request["id"],
+        "method": method,
+        "reason": "timeout",
+    }
 
 
 def test_late_response_and_lock_are_dropped_quietly(server):
     """A response for an id that already ended is ignored (no reply, no error); a late clarify.lock
     answers `expired` instead of a protocol error a card would surface verbatim."""
-    assert server.dispatch({"jsonrpc": "2.0", "id": "srq-gone", "result": {"value": ""}}) is None
-    response = server.handle_request({"id": "late", "method": "clarify.lock",
-                                      "params": {"request_id": "srq-gone", "question_id": "q0", "answer": ""}})
+    assert (
+        server.dispatch({"jsonrpc": "2.0", "id": "srq-gone", "result": {"value": ""}})
+        is None
+    )
+    response = server.handle_request(
+        {
+            "id": "late",
+            "method": "clarify.lock",
+            "params": {"request_id": "srq-gone", "question_id": "q0", "answer": ""},
+        }
+    )
     assert response["result"] == {"status": "expired"}
 
 
 def _start_batch_clarify(server, buf, qids, timeout=None):
     from tui_gateway import server_requests
+
     box = {}
-    normalized = [{"qid": q, "id": "", "question": q, "choices": None, "choices_offered": [], "multi_select": False}
-                  for q in qids]
+    normalized = [
+        {
+            "qid": q,
+            "id": "",
+            "question": q,
+            "choices": None,
+            "choices_offered": [],
+            "multi_select": False,
+        }
+        for q in qids
+    ]
     if timeout is not None:
         server._clarify_timeout_seconds = lambda: timeout
     thread = threading.Thread(
-        target=lambda: box.__setitem__("answer", server._clarify_block("s1", normalized)), daemon=True)
+        target=lambda: box.__setitem__(
+            "answer", server._clarify_block("s1", normalized)
+        ),
+        daemon=True,
+    )
     thread.start()
     return thread, box, _wait_open(server_requests, buf)
 
@@ -527,18 +683,38 @@ def test_clarify_batch_locks_resolve_in_order_and_keep_partial_on_timeout(captur
     sent = _frames(buf)[-1]["params"]["questions"][0]
     assert set(sent) == {"qid", "question", "choices", "multi_select"}
 
-    first = server.handle_request({"id": "a1", "method": "clarify.lock",
-                                   "params": {"request_id": req.id, "question_id": "q0", "answer": "x"}})
+    first = server.handle_request(
+        {
+            "id": "a1",
+            "method": "clarify.lock",
+            "params": {"request_id": req.id, "question_id": "q0", "answer": "x"},
+        }
+    )
     assert first["result"] == {"status": "ok", "remaining": ["q1"]}
-    redo = server.handle_request({"id": "a1b", "method": "clarify.lock",
-                                  "params": {"request_id": req.id, "question_id": "q0", "answer": "y"}})
+    redo = server.handle_request(
+        {
+            "id": "a1b",
+            "method": "clarify.lock",
+            "params": {"request_id": req.id, "question_id": "q0", "answer": "y"},
+        }
+    )
     assert redo["result"] == {"status": "ok", "remaining": ["q1"]}
-    bad = server.handle_request({"id": "bad", "method": "clarify.lock",
-                                 "params": {"request_id": req.id, "question_id": "nope", "answer": ""}})
+    bad = server.handle_request(
+        {
+            "id": "bad",
+            "method": "clarify.lock",
+            "params": {"request_id": req.id, "question_id": "nope", "answer": ""},
+        }
+    )
     assert bad["error"]["code"] == 4002
     assert server._open_requests("s1")[0]["params"]["answers"] == {"q0": "y"}
-    last = server.handle_request({"id": "a2", "method": "clarify.lock",
-                                  "params": {"request_id": req.id, "question_id": "q1", "answer": ""}})
+    last = server.handle_request(
+        {
+            "id": "a2",
+            "method": "clarify.lock",
+            "params": {"request_id": req.id, "question_id": "q1", "answer": ""},
+        }
+    )
     assert last["result"] == {"status": "ok", "remaining": []}
     thread.join(timeout=5)
     assert box["answer"] == {"answers": {"q0": "y", "q1": ""}, "outcome": "submitted"}
@@ -547,14 +723,23 @@ def test_clarify_batch_locks_resolve_in_order_and_keep_partial_on_timeout(captur
     original_timeout = server._clarify_timeout_seconds
     try:
         thread, box, req = _start_batch_clarify(server, buf, ["q0", "q1"], timeout=1.5)
-        locked = server.handle_request({"id": "b1", "method": "clarify.lock",
-                                        "params": {"request_id": req.id, "question_id": "q0", "answer": "kept"}})
+        locked = server.handle_request(
+            {
+                "id": "b1",
+                "method": "clarify.lock",
+                "params": {"request_id": req.id, "question_id": "q0", "answer": "kept"},
+            }
+        )
         assert locked["result"]["status"] == "ok"
         thread.join(timeout=5)
     finally:
         server._clarify_timeout_seconds = original_timeout
     assert box["answer"] == {"answers": {"q0": "kept"}, "outcome": "timed_out"}
-    cancels = [f for f in _frames(buf) if f.get("method") == "event" and f["params"]["type"] == "request.cancel"]
+    cancels = [
+        f
+        for f in _frames(buf)
+        if f.get("method") == "event" and f["params"]["type"] == "request.cancel"
+    ]
     assert [c["params"]["payload"]["id"] for c in cancels] == [req.id]
 
 
@@ -568,10 +753,18 @@ def test_clarify_batch_cancel_all_is_a_response_without_answers(capture):
 
 def test_clear_pending_cancels_only_that_session(capture):
     from tui_gateway import server_requests
+
     server, buf = capture
-    a = threading.Thread(target=lambda: server_requests.send("sudo", "sid-a", {}, timeout=None), daemon=True)
-    b = threading.Thread(target=lambda: server_requests.send("sudo", "sid-b", {}, timeout=None), daemon=True)
-    a.start(); b.start()
+    a = threading.Thread(
+        target=lambda: server_requests.send("sudo", "sid-a", {}, timeout=None),
+        daemon=True,
+    )
+    b = threading.Thread(
+        target=lambda: server_requests.send("sudo", "sid-b", {}, timeout=None),
+        daemon=True,
+    )
+    a.start()
+    b.start()
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline and len(server_requests._open) < 2:
         time.sleep(0.01)
@@ -579,11 +772,18 @@ def test_clear_pending_cancels_only_that_session(capture):
     server._clear_pending("sid-a")
     a.join(timeout=2)
     assert not a.is_alive() and b.is_alive()
-    assert server._session_pending_kind("sid-a") == "" and server._session_pending_kind("sid-b") == "sudo"
+    assert (
+        server._session_pending_kind("sid-a") == ""
+        and server._session_pending_kind("sid-b") == "sudo"
+    )
     server._clear_pending()
     b.join(timeout=2)
     assert not b.is_alive()
-    reasons = [f["params"]["payload"]["reason"] for f in _frames(buf) if f.get("method") == "event"]
+    reasons = [
+        f["params"]["payload"]["reason"]
+        for f in _frames(buf)
+        if f.get("method") == "event"
+    ]
     assert reasons == ["interrupted", "shutdown"]
 
 
@@ -592,7 +792,11 @@ def test_approval_pending_replays_unresolved_requests(server, monkeypatch):
 
     server._sessions["ui-1"] = {"session_key": "agent-1", "history": []}
     pending = [{"request_id": "req-1", "command": "danger"}]
-    monkeypatch.setattr(approval, "list_gateway_approvals", lambda key: pending if key == "agent-1" else [])
+    monkeypatch.setattr(
+        approval,
+        "list_gateway_approvals",
+        lambda key: pending if key == "agent-1" else [],
+    )
 
     response = server.handle_request(
         {"id": "r1", "method": "approval.pending", "params": {"session_id": "ui-1"}}
@@ -730,8 +934,6 @@ def test_approval_respond_4001_when_nothing_resolves(server, monkeypatch):
 # ── Session lookup ───────────────────────────────────────────────────
 
 
-
-
 # ── session.resume payload ────────────────────────────────────────────
 
 
@@ -755,7 +957,9 @@ def test_session_resume_returns_hydrated_messages(server, monkeypatch):
         def get_ancestor_display_prefix(self, _sid):
             return []
 
-        def get_messages_as_conversation(self, _sid, include_ancestors=False, repair_alternation=False):
+        def get_messages_as_conversation(
+            self, _sid, include_ancestors=False, repair_alternation=False
+        ):
             return [
                 {"role": "user", "content": "hello"},
                 {"role": "assistant", "content": "yo", "reasoning": "thoughts"},
@@ -766,9 +970,19 @@ def test_session_resume_returns_hydrated_messages(server, monkeypatch):
             ]
 
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
-    monkeypatch.setattr(server, "_make_agent", lambda sid, key, session_id=None, session_db=None, **_kwargs: object())
-    monkeypatch.setattr(server, "_init_session", lambda sid, key, agent, history, cols=80, **_kwargs: None)
-    monkeypatch.setattr(server, "_session_info", lambda _agent, _session=None: {"model": "test/model"})
+    monkeypatch.setattr(
+        server,
+        "_make_agent",
+        lambda sid, key, session_id=None, session_db=None, **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        server,
+        "_init_session",
+        lambda sid, key, agent, history, cols=80, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        server, "_session_info", lambda _agent, _session=None: {"model": "test/model"}
+    )
 
     resp = server.handle_request(
         {
@@ -776,7 +990,11 @@ def test_session_resume_returns_hydrated_messages(server, monkeypatch):
             "method": "session.resume",
             # eager_build: exercise the synchronous build path (this test
             # monkeypatches _make_agent/_init_session/_session_info).
-            "params": {"session_id": "20260409_010101_abc123", "cols": 100, "eager_build": True},
+            "params": {
+                "session_id": "20260409_010101_abc123",
+                "cols": 100,
+                "eager_build": True,
+            },
         }
     )
 
@@ -821,7 +1039,9 @@ def test_session_resume_rejects_runaway_transcript_before_history_load(
     assert response["error"]["code"] == 4130
 
 
-def test_session_resume_deferred_and_omitted_paths_guard_the_tip_only(server, monkeypatch):
+def test_session_resume_deferred_and_omitted_paths_guard_the_tip_only(
+    server, monkeypatch
+):
     """A deep compression lineage behind a small tip must open on Desktop.
 
     Desktop's cold resume sends ``defer_history`` + ``omit_messages`` and pages
@@ -877,13 +1097,19 @@ def test_session_resume_deferred_and_omitted_paths_guard_the_tip_only(server, mo
     # memory, so it keeps the lineage-wide bound.
     calls.clear()
     response = server.handle_request(
-        {"id": "r-full", "method": "session.resume", "params": {"session_id": "deep-lineage"}}
+        {
+            "id": "r-full",
+            "method": "session.resume",
+            "params": {"session_id": "deep-lineage"},
+        }
     )
     assert response["error"]["code"] == 4130
     assert calls == [False]
 
 
-def test_deferred_hydration_falls_back_to_tip_when_lineage_exceeds_limit(server, monkeypatch):
+def test_deferred_hydration_falls_back_to_tip_when_lineage_exceeds_limit(
+    server, monkeypatch
+):
     """The hydration worker never loads a lineage the guard would refuse."""
     import threading
 
@@ -914,7 +1140,9 @@ def test_deferred_hydration_falls_back_to_tip_when_lineage_exceeds_limit(server,
             return list(tip)
 
     built = threading.Event()
-    monkeypatch.setattr(server, "_start_agent_build", lambda _sid, _session: built.set())
+    monkeypatch.setattr(
+        server, "_start_agent_build", lambda _sid, _session: built.set()
+    )
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *_a, **_k: None)
 
     session = server._deferred_session_record(
@@ -988,12 +1216,14 @@ def test_session_resume_guard_failure_fails_open(server, monkeypatch):
     assert "tip" in reads, "history read must have run"
 
 
-def test_session_resume_active_turn_payload_matches_desktop_fixture(server, monkeypatch):
+def test_session_resume_active_turn_payload_matches_desktop_fixture(
+    server, monkeypatch
+):
     """A live resume serializes the exact timer payload consumed by Desktop."""
     fixture = json.loads(
-        (Path(__file__).parents[1] / "fixtures" / "session-resume-active-turn.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            Path(__file__).parents[1] / "fixtures" / "session-resume-active-turn.json"
+        ).read_text(encoding="utf-8")
     )
 
     class _DB:
@@ -1022,7 +1252,9 @@ def test_session_resume_active_turn_payload_matches_desktop_fixture(server, monk
         "session_key": fixture["session_key"],
     }
     monkeypatch.setattr(server, "_get_db", lambda: _DB())
-    monkeypatch.setattr(server, "_session_info", lambda _agent, _session=None: fixture["info"])
+    monkeypatch.setattr(
+        server, "_session_info", lambda _agent, _session=None: fixture["info"]
+    )
 
     # JSON round-trip the real RPC envelope: the desktop fixture must stay
     # faithful to what the gateway actually serializes, not a copied shape.
@@ -1067,15 +1299,27 @@ def test_enforce_session_cap_evicts_oldest_detached_only(server, monkeypatch):
     server._sessions.clear()
     server._sessions.update(
         {
-            "old_detached": {"transport": detached, "last_active": 100.0, "agent_ready": _ready()},
-            "new_detached": {"transport": detached, "last_active": 300.0, "agent_ready": _ready()},
+            "old_detached": {
+                "transport": detached,
+                "last_active": 100.0,
+                "agent_ready": _ready(),
+            },
+            "new_detached": {
+                "transport": detached,
+                "last_active": 300.0,
+                "agent_ready": _ready(),
+            },
             "running_detached": {
                 "transport": detached,
                 "last_active": 50.0,
                 "running": True,
                 "agent_ready": _ready(),
             },
-            "focused_live": {"transport": live, "last_active": 200.0, "agent_ready": _ready()},
+            "focused_live": {
+                "transport": live,
+                "last_active": 200.0,
+                "agent_ready": _ready(),
+            },
         }
     )
 
@@ -1087,7 +1331,9 @@ def test_enforce_session_cap_evicts_oldest_detached_only(server, monkeypatch):
 
 
 @pytest.mark.parametrize("closed_transport", [False, True])
-def test_idle_reaper_rearms_missing_ws_orphan_timer(server, monkeypatch, tmp_path, closed_transport):
+def test_idle_reaper_rearms_missing_ws_orphan_timer(
+    server, monkeypatch, tmp_path, closed_transport
+):
     """A detached lane cannot keep its lease forever if initial timer setup was lost."""
     from clawk_cli.active_sessions import (
         active_session_registry_snapshot,
@@ -1128,14 +1374,19 @@ def test_idle_reaper_rearms_missing_ws_orphan_timer(server, monkeypatch, tmp_pat
         }
 
     server._sessions.clear()
+
     class ClosedTransport:
         _closed = True
 
-    dead_transport = ClosedTransport() if closed_transport else server._detached_ws_transport
-    server._sessions.update({
-        sid: _session(sid, orphan_lease, dead_transport),
-        sibling_sid: _session(sibling_sid, sibling_lease, object()),
-    })
+    dead_transport = (
+        ClosedTransport() if closed_transport else server._detached_ws_transport
+    )
+    server._sessions.update(
+        {
+            sid: _session(sid, orphan_lease, dead_transport),
+            sibling_sid: _session(sibling_sid, sibling_lease, object()),
+        }
+    )
     server._pending_ws_reaps.clear()
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0.05)
     monkeypatch.setattr(server, "_SESSION_TTL_S", 3600.0)
@@ -1145,12 +1396,16 @@ def test_idle_reaper_rearms_missing_ws_orphan_timer(server, monkeypatch, tmp_pat
     server._reap_idle_sessions()
 
     deadline = time.monotonic() + 2.0
-    while (sid in server._sessions or not orphan_lease.released) and time.monotonic() < deadline:
+    while (
+        sid in server._sessions or not orphan_lease.released
+    ) and time.monotonic() < deadline:
         time.sleep(0.01)
     assert sid not in server._sessions
     assert orphan_lease.released is True
     assert sibling_sid in server._sessions
-    assert [entry["session_id"] for entry in active_session_registry_snapshot(home)] == [sibling_sid]
+    assert [
+        entry["session_id"] for entry in active_session_registry_snapshot(home)
+    ] == [sibling_sid]
 
     repo_root = Path(__file__).resolve().parents[2]
     env = os.environ.copy()
@@ -1178,7 +1433,9 @@ def test_idle_reaper_rearms_missing_ws_orphan_timer(server, monkeypatch, tmp_pat
         check=False,
     )
     assert successor.returncode == 0, successor.stderr
-    assert [entry["session_id"] for entry in active_session_registry_snapshot(home)] == [sibling_sid]
+    assert [
+        entry["session_id"] for entry in active_session_registry_snapshot(home)
+    ] == [sibling_sid]
 
 
 def test_sync_session_key_after_compress_reanchors_active_session_lease(
@@ -1246,8 +1503,12 @@ def test_make_agent_accepts_list_system_prompt(server, monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(server, "_load_cfg", lambda: {"agent": {"system_prompt": ["one", "two"]}})
-    monkeypatch.setattr(server, "_resolve_startup_runtime", lambda: ("test/model", "test"))
+    monkeypatch.setattr(
+        server, "_load_cfg", lambda: {"agent": {"system_prompt": ["one", "two"]}}
+    )
+    monkeypatch.setattr(
+        server, "_resolve_startup_runtime", lambda: ("test/model", "test")
+    )
     monkeypatch.setattr(server, "_get_db", lambda: None)
 
     server._make_agent("sid", "session-key", session_id="session-key")
@@ -1269,13 +1530,16 @@ def test_config_roundtrip(server, tmp_path, monkeypatch):
 # ── _cli_exec_blocked ────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("argv", [
-    [],
-    ["setup"],
-    ["gateway"],
-    ["sessions", "browse"],
-    ["config", "edit"],
-])
+@pytest.mark.parametrize(
+    "argv",
+    [
+        [],
+        ["setup"],
+        ["gateway"],
+        ["sessions", "browse"],
+        ["config", "edit"],
+    ],
+)
 def test_cli_exec_blocked(server, argv):
     assert server._cli_exec_blocked(argv) is not None
 
@@ -1290,14 +1554,21 @@ def test_slash_exec_rejects_skill_commands(server):
     server._sessions[sid] = {"session_key": sid, "agent": None}
 
     # Mock scan_skill_commands to return a known skill
-    fake_skills = {"/clawksis-agent-dev": {"name": "clawksis-agent-dev", "description": "Dev workflow"}}
+    fake_skills = {
+        "/clawksis-agent-dev": {
+            "name": "clawksis-agent-dev",
+            "description": "Dev workflow",
+        }
+    }
 
     with patch("agent.skill_commands.get_skill_commands", return_value=fake_skills):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "clawksis-agent-dev", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "clawksis-agent-dev", "session_id": sid},
+            }
+        )
 
     # Should return an error so the TUI's .catch() fires command.dispatch
     assert "error" in resp
@@ -1341,11 +1612,13 @@ def test_slash_exec_scopes_skill_lookup_to_session_profile(server, tmp_path):
         patch("tools.skills_tool.SKILLS_DIR", empty_local_dir),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "b-only", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "b-only", "session_id": sid},
+            }
+        )
 
     # The gateway's own CLAWK_HOME (the test-isolation tempdir, no
     # skills.external_dirs) has no "b-only" skill — the only way this
@@ -1354,7 +1627,9 @@ def test_slash_exec_scopes_skill_lookup_to_session_profile(server, tmp_path):
     assert resp["error"]["code"] == 4018
 
 
-def test_command_dispatch_expands_stacked_skills_from_temp_home(server, tmp_path, monkeypatch):
+def test_command_dispatch_expands_stacked_skills_from_temp_home(
+    server, tmp_path, monkeypatch
+):
     """#74705: Desktop/TUI command.dispatch must expand every real leading
     /skill token (CLI cli.py and the messaging gateway already do), so
     '/nature-figure /academic-plotting Plot the results' loads BOTH skills
@@ -1382,15 +1657,17 @@ def test_command_dispatch_expands_stacked_skills_from_temp_home(server, tmp_path
 
     sid = "test-session"
     server._sessions[sid] = {"session_key": sid, "agent": None}
-    resp = server.handle_request({
-        "id": "stacked-skills",
-        "method": "command.dispatch",
-        "params": {
-            "name": "nature-figure",
-            "arg": "/academic-plotting Plot the results",
-            "session_id": sid,
-        },
-    })
+    resp = server.handle_request(
+        {
+            "id": "stacked-skills",
+            "method": "command.dispatch",
+            "params": {
+                "name": "nature-figure",
+                "arg": "/academic-plotting Plot the results",
+                "session_id": sid,
+            },
+        }
+    )
 
     assert "error" not in resp
     result = resp["result"]
@@ -1402,12 +1679,12 @@ def test_command_dispatch_expands_stacked_skills_from_temp_home(server, tmp_path
     assert "Label every axis and include units." in result["message"]
     assert "Plot the results" in result["message"]
     # UIs render `display`: the projection shows the invocation the user typed.
-    assert result["display"] == (
-        "/nature-figure /academic-plotting Plot the results"
-    )
+    assert result["display"] == ("/nature-figure /academic-plotting Plot the results")
 
 
-def test_command_dispatch_stacked_split_keeps_unknown_tokens_as_instruction(server, tmp_path, monkeypatch):
+def test_command_dispatch_stacked_split_keeps_unknown_tokens_as_instruction(
+    server, tmp_path, monkeypatch
+):
     """A non-skill or repeated token stops the stack and stays instruction text —
     the split must never eat content the user meant as the prompt."""
     from agent import skill_commands
@@ -1428,15 +1705,17 @@ def test_command_dispatch_stacked_split_keeps_unknown_tokens_as_instruction(serv
 
     sid = "test-session-unknown"
     server._sessions[sid] = {"session_key": sid, "agent": None}
-    resp = server.handle_request({
-        "id": "stacked-unknown",
-        "method": "command.dispatch",
-        "params": {
-            "name": "nature-figure",
-            "arg": "/not-a-skill-command but /model is a registry command",
-            "session_id": sid,
-        },
-    })
+    resp = server.handle_request(
+        {
+            "id": "stacked-unknown",
+            "method": "command.dispatch",
+            "params": {
+                "name": "nature-figure",
+                "arg": "/not-a-skill-command but /model is a registry command",
+                "session_id": sid,
+            },
+        }
+    )
 
     assert "error" not in resp
     result = resp["result"]
@@ -1458,21 +1737,35 @@ def test_sessionless_slash_palette_follows_profile_param(server, tmp_path, monke
     for name in ("s6probe-a", "s6probe-b"):
         skill_dir = tmp_path / f"external_{name}" / f"{name}-only"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text(f"---\nname: {name}-only\ndescription: Only in {name}.\n---\n\n# x\n")
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nname: {name}-only\ndescription: Only in {name}.\n---\n\n# x\n"
+        )
         (root / "profiles" / name).mkdir(parents=True)
         (root / "profiles" / name / "config.yaml").write_text(
             f"skills:\n  external_dirs:\n    - {skill_dir.parent}\n"
-            f"quick_commands:\n  {name}-qc:\n    type: exec\n    command: echo {name}\n")
+            f"quick_commands:\n  {name}-qc:\n    type: exec\n    command: echo {name}\n"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setattr(server, "_clawk_home", str(root))
 
     def palette(profile):
-        catalog = server.handle_request({"id": "r1", "method": "commands.catalog", "params": {"profile": profile}})
-        typed = server.handle_request({
-            "id": "r2", "method": "complete.slash", "params": {"text": "/s6probe", "profile": profile}})
+        catalog = server.handle_request(
+            {"id": "r1", "method": "commands.catalog", "params": {"profile": profile}}
+        )
+        typed = server.handle_request(
+            {
+                "id": "r2",
+                "method": "complete.slash",
+                "params": {"text": "/s6probe", "profile": profile},
+            }
+        )
         assert "result" in catalog and "result" in typed, (catalog, typed)
         quick = {key for key, _ in catalog["result"]["pairs"] if key.endswith("-qc")}
-        return set(catalog["result"]["skills"]), {item["text"].strip("/") for item in typed["result"]["items"]}, quick
+        return (
+            set(catalog["result"]["skills"]),
+            {item["text"].strip("/") for item in typed["result"]["items"]},
+            quick,
+        )
 
     previous = is_multiplex_active()
     set_multiplex_active(True)
@@ -1481,11 +1774,25 @@ def test_sessionless_slash_palette_follows_profile_param(server, tmp_path, monke
             patch("tools.skills_tool.SKILLS_DIR", tmp_path / "no-local-skills"),
             patch.object(sc_mod, "_skill_commands_by_key", {}),
         ):
-            assert palette("s6probe-a") == ({"/s6probe-a-only"}, {"s6probe-a-only"}, {"/s6probe-a-qc"})
-            assert palette("s6probe-b") == ({"/s6probe-b-only"}, {"s6probe-b-only"}, {"/s6probe-b-qc"})
-            assert palette("s6probe-a") == ({"/s6probe-a-only"}, {"s6probe-a-only"}, {"/s6probe-a-qc"})
+            assert palette("s6probe-a") == (
+                {"/s6probe-a-only"},
+                {"s6probe-a-only"},
+                {"/s6probe-a-qc"},
+            )
+            assert palette("s6probe-b") == (
+                {"/s6probe-b-only"},
+                {"s6probe-b-only"},
+                {"/s6probe-b-qc"},
+            )
+            assert palette("s6probe-a") == (
+                {"/s6probe-a-only"},
+                {"s6probe-a-only"},
+                {"/s6probe-a-qc"},
+            )
             for method in ("commands.catalog", "skills.reload"):
-                bad = server.handle_request({"id": "r3", "method": method, "params": {"profile": "../x"}})
+                bad = server.handle_request(
+                    {"id": "r3", "method": method, "params": {"profile": "../x"}}
+                )
                 assert bad.get("error", {}).get("code") == 4064, (method, bad)
     finally:
         set_multiplex_active(previous)
@@ -1518,15 +1825,21 @@ def _grilling_profile(tmp_path):
     (skill_dir / "SKILL.md").write_text(
         "---\nname: grilling\ndescription: Grill the plan.\n---\n\n# grilling\n\nAsk hard questions.\n"
     )
-    (profile / "config.yaml").write_text(f"skills:\n  external_dirs:\n    - {external}\n")
+    (profile / "config.yaml").write_text(
+        f"skills:\n  external_dirs:\n    - {external}\n"
+    )
     sid = "skill-failopen-session"
     worker = _BannerWorker()
-    return empty_local_dir, {
-        "session_key": sid,
-        "agent": None,
-        "profile_home": str(profile),
-        "slash_worker": worker,
-    }, worker
+    return (
+        empty_local_dir,
+        {
+            "session_key": sid,
+            "agent": None,
+            "profile_home": str(profile),
+            "slash_worker": worker,
+        },
+        worker,
+    )
 
 
 def _assert_not_ok_banner(resp, worker):
@@ -1542,7 +1855,9 @@ def _assert_not_ok_banner(resp, worker):
     assert resp["error"]["code"] != 0
 
 
-def test_slash_exec_skill_scan_raise_returns_dispatch_payload_not_banner(server, tmp_path):
+def test_slash_exec_skill_scan_raise_returns_dispatch_payload_not_banner(
+    server, tmp_path
+):
     """A skill-scan exception must not fail open into an ok loading banner.
 
     The client gets command.dispatch's skill payload (the expanded prompt), never
@@ -1567,18 +1882,22 @@ def test_slash_exec_skill_scan_raise_returns_dispatch_payload_not_banner(server,
         patch.object(sc_mod, "get_skill_commands", flaky),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "grilling tighten this", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "grilling tighten this", "session_id": sid},
+            }
+        )
 
     _assert_not_ok_banner(resp, worker)
     assert resp["result"]["type"] == "skill"
     assert "tighten this" in resp["result"]["message"]
 
 
-def test_slash_exec_skill_scan_raise_is_hard_error_not_banner_when_dispatch_misses(server, tmp_path):
+def test_slash_exec_skill_scan_raise_is_hard_error_not_banner_when_dispatch_misses(
+    server, tmp_path
+):
     """If the scan keeps failing, slash.exec still must not ok-reply the banner."""
     import agent.skill_commands as sc_mod
 
@@ -1594,11 +1913,13 @@ def test_slash_exec_skill_scan_raise_is_hard_error_not_banner_when_dispatch_miss
         patch.object(sc_mod, "get_skill_commands", always_raise),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "/grilling", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "/grilling", "session_id": sid},
+            }
+        )
 
     _assert_not_ok_banner(resp, worker)
     assert "error" in resp
@@ -1623,12 +1944,16 @@ def test_slash_exec_skill_scan_raise_still_runs_registry_commands(server):
     worker = _StatusWorker()
     server._sessions[sid] = {"session_key": sid, "agent": None, "slash_worker": worker}
 
-    with patch.object(sc_mod, "get_skill_commands", side_effect=OSError("external_dirs hiccup")):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "/verbose", "session_id": sid},
-        })
+    with patch.object(
+        sc_mod, "get_skill_commands", side_effect=OSError("external_dirs hiccup")
+    ):
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "/verbose", "session_id": sid},
+            }
+        )
 
     assert worker.calls == ["/verbose"]
     assert resp.get("result", {}).get("output") == "verbose ok"
@@ -1668,11 +1993,13 @@ def test_slash_exec_worker_skill_refuse_returns_dispatch_payload(server, tmp_pat
         patch.object(sc_mod, "get_skill_commands", stale_then_real),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "slash.exec",
-            "params": {"command": "/grilling", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "/grilling", "session_id": sid},
+            }
+        )
 
     assert worker.closed is False
     assert resp.get("result", {}).get("type") == "skill"
@@ -1710,18 +2037,26 @@ def test_command_dispatch_scopes_skill_lookup_to_session_profile(server, tmp_pat
         patch("tools.skills_tool.SKILLS_DIR", empty_local_dir),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1",
-            "method": "command.dispatch",
-            "params": {"name": "b-only", "arg": "with an argument", "session_id": sid},
-        })
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "command.dispatch",
+                "params": {
+                    "name": "b-only",
+                    "arg": "with an argument",
+                    "session_id": sid,
+                },
+            }
+        )
 
     assert "error" not in resp
     assert resp["result"]["type"] == "skill"
     assert resp["result"]["name"] == "b-only"
 
 
-def test_slash_exec_routes_a_secondary_only_bundle_to_dispatch(server, tmp_path, monkeypatch):
+def test_slash_exec_routes_a_secondary_only_bundle_to_dispatch(
+    server, tmp_path, monkeypatch
+):
     """A skill bundle that exists only under the session profile's ``skill-bundles/`` must be
     resolved (and routed to command.dispatch) against that profile, not the launch home (#110695)."""
     import agent.skill_bundles as sb_mod
@@ -1733,12 +2068,22 @@ def test_slash_exec_routes_a_secondary_only_bundle_to_dispatch(server, tmp_path,
     for name in ("one", "two"):
         d = external_b / name
         d.mkdir(parents=True)
-        (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {name}.\n---\n\n# {name}\n")
+        (d / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: {name}.\n---\n\n# {name}\n"
+        )
     (profile_b / "skill-bundles").mkdir(parents=True)
-    (profile_b / "skill-bundles" / "b-pack.yaml").write_text("name: b-pack\nskills: [one, two]\n")
-    (profile_b / "config.yaml").write_text(f"skills:\n  external_dirs:\n    - {external_b}\n")
+    (profile_b / "skill-bundles" / "b-pack.yaml").write_text(
+        "name: b-pack\nskills: [one, two]\n"
+    )
+    (profile_b / "config.yaml").write_text(
+        f"skills:\n  external_dirs:\n    - {external_b}\n"
+    )
     sid = "test-session-profile-b-bundle"
-    server._sessions[sid] = {"session_key": sid, "agent": None, "profile_home": str(profile_b)}
+    server._sessions[sid] = {
+        "session_key": sid,
+        "agent": None,
+        "profile_home": str(profile_b),
+    }
 
     with (
         patch("tools.skills_tool.SKILLS_DIR", tmp_path / "no-local-skills"),
@@ -1746,8 +2091,13 @@ def test_slash_exec_routes_a_secondary_only_bundle_to_dispatch(server, tmp_path,
         patch.object(sb_mod, "_bundles_cache_mtime", None),
         patch.object(sc_mod, "_skill_commands_by_key", {}),
     ):
-        resp = server.handle_request({
-            "id": "r1", "method": "slash.exec", "params": {"command": "/b-pack go", "session_id": sid}})
+        resp = server.handle_request(
+            {
+                "id": "r1",
+                "method": "slash.exec",
+                "params": {"command": "/b-pack go", "session_id": sid},
+            }
+        )
 
     assert "error" not in resp, resp
     assert resp["result"]["type"] == "send" and "b-pack" in resp["result"]["notice"]
@@ -1758,18 +2108,22 @@ def test_command_dispatch_queue_sends_message(server):
     sid = "test-session"
     server._sessions[sid] = {"session_key": sid}
 
-    resp = server.handle_request({
-        "id": "r1",
-        "method": "command.dispatch",
-        "params": {"name": "queue", "arg": "tell me about quantum computing", "session_id": sid},
-    })
+    resp = server.handle_request(
+        {
+            "id": "r1",
+            "method": "command.dispatch",
+            "params": {
+                "name": "queue",
+                "arg": "tell me about quantum computing",
+                "session_id": sid,
+            },
+        }
+    )
 
     assert "error" not in resp
     result = resp["result"]
     assert result["type"] == "send"
     assert result["message"] == "tell me about quantum computing"
-
-
 
 
 # ── dispatch(): pool routing for long handlers (#12546) ──────────────
@@ -1786,7 +2140,15 @@ def test_dispatch_runs_short_handlers_inline(server):
 
 @pytest.mark.parametrize(
     "slow_method",
-    ["complete.path", "complete.slash", "voice.toggle", "voice.record", "voice.tts", "wake.start", "wake.status"],
+    [
+        "complete.path",
+        "complete.slash",
+        "voice.toggle",
+        "voice.record",
+        "voice.tts",
+        "wake.start",
+        "wake.status",
+    ],
 )
 def test_slow_handlers_run_off_the_reader_thread(slow_method, server, monkeypatch):
     """dispatch() must hand these RPCs to the pool and return at once, so a stalled handler never blocks
@@ -1814,7 +2176,9 @@ def test_slow_handlers_run_off_the_reader_thread(slow_method, server, monkeypatc
     monkeypatch.setitem(server._methods, slow_method, _stalled)
 
     t0 = time.monotonic()
-    resp = server.dispatch({"id": "slow", "method": slow_method, "params": {}}, _Transport())
+    resp = server.dispatch(
+        {"id": "slow", "method": slow_method, "params": {}}, _Transport()
+    )
     elapsed = time.monotonic() - t0
     release.set()
 
@@ -1844,17 +2208,25 @@ def test_skin_live_switch_end_to_end(server, tmp_path, monkeypatch):
     server._cfg_cache = server._cfg_sig = server._cfg_path = None
 
     emitted = []
-    monkeypatch.setattr(server, "_stdio_is_rpc_channel", True)  # stdio TUI: no WS peers, stdout is the client
-    monkeypatch.setattr(server, "_emit", lambda ev, sid, payload=None: emitted.append((ev, payload)))
+    monkeypatch.setattr(
+        server, "_stdio_is_rpc_channel", True
+    )  # stdio TUI: no WS peers, stdout is the client
+    monkeypatch.setattr(
+        server, "_emit", lambda ev, sid, payload=None: emitted.append((ev, payload))
+    )
 
     # Baseline (default) — seeds the signature.
-    (tmp_path / "config.yaml").write_text("display:\n  skin: default\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "display:\n  skin: default\n", encoding="utf-8"
+    )
     server._broadcast_skin_if_changed()
     emitted.clear()
 
     # Activate midnight, as `clawk config set display.skin midnight` would.
     time.sleep(0.01)  # ensure the config mtime moves
-    (tmp_path / "config.yaml").write_text("display:\n  skin: midnight\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "display:\n  skin: midnight\n", encoding="utf-8"
+    )
     server._broadcast_skin_if_changed()
 
     assert [ev for ev, _ in emitted] == ["skin.changed"]
@@ -1872,8 +2244,12 @@ def test_broadcast_skin_if_changed_on_any_signature_move(server, monkeypatch):
     emitted = []
     # switch, no-op, switch, then a color edit (same name, bumped mtime).
     sigs = iter([("neon", 1.0), ("neon", 1.0), ("forest", 1.0), ("forest", 2.0)])
-    monkeypatch.setattr(server, "_stdio_is_rpc_channel", True)  # stdio TUI: no WS peers, stdout is the client
-    monkeypatch.setattr(server, "_emit", lambda ev, sid, payload=None: emitted.append((ev, payload)))
+    monkeypatch.setattr(
+        server, "_stdio_is_rpc_channel", True
+    )  # stdio TUI: no WS peers, stdout is the client
+    monkeypatch.setattr(
+        server, "_emit", lambda ev, sid, payload=None: emitted.append((ev, payload))
+    )
     monkeypatch.setattr(server, "_last_skin_sig", None, raising=False)
     monkeypatch.setattr(server, "_skin_sig", lambda: next(sigs))
     monkeypatch.setattr(server, "resolve_skin", lambda: {"name": "x", "colors": {}})
@@ -1917,7 +2293,9 @@ def test_unregister_live_transport_stops_delivery(capture, monkeypatch):
     assert json.loads(buf.getvalue())["params"]["type"] == "skin.changed"
 
 
-def test_approval_for_a_ws_client_that_never_advertised_settles_the_queue_entry(server, monkeypatch):
+def test_approval_for_a_ws_client_that_never_advertised_settles_the_queue_entry(
+    server, monkeypatch
+):
     """The approval wait is owned by ``tools.approval``'s queue, not by ``server_requests``. When the request
     cannot be sent (the only client predates server→client requests) the queue entry must be withdrawn too,
     otherwise ``_await_gateway_decision`` idles for the whole approvals.timeout with no prompt anywhere
@@ -1929,12 +2307,22 @@ def test_approval_for_a_ws_client_that_never_advertised_settles_the_queue_entry(
     _ws_session(server, "ws-old-approval", peer)
     monkeypatch.setattr(wait_mod._ctx, "_get_approval_timeout", lambda: 3)
     monkeypatch.setattr(wait_mod._ctx, "_fire_approval_hook", lambda name, **kw: None)
-    approval_mod.register_gateway_notify("ws-old-approval", lambda data: server._emit_approval_request("ws-old-approval", data))
+    approval_mod.register_gateway_notify(
+        "ws-old-approval",
+        lambda data: server._emit_approval_request("ws-old-approval", data),
+    )
     try:
         t0 = time.monotonic()
         decision = wait_mod._await_gateway_decision(
-            "ws-old-approval", approval_mod._gateway_notify_cbs["ws-old-approval"],
-            {"command": "rm -rf build", "description": "", "pattern_key": "dangerous", "pattern_keys": ["dangerous"]})
+            "ws-old-approval",
+            approval_mod._gateway_notify_cbs["ws-old-approval"],
+            {
+                "command": "rm -rf build",
+                "description": "",
+                "pattern_key": "dangerous",
+                "pattern_keys": ["dangerous"],
+            },
+        )
         waited = time.monotonic() - t0
     finally:
         approval_mod.unregister_gateway_notify("ws-old-approval")
@@ -1955,14 +2343,28 @@ def test_approval_that_ends_before_its_settle_hook_attaches_is_still_withdrawn(s
     _ws_session(server, "ws-raced", peer)
     token = bind_transport(peer)
     try:
-        server.handle_request({"id": 1, "method": "client.capabilities", "params": {"server_requests": True}})
+        server.handle_request(
+            {
+                "id": 1,
+                "method": "client.capabilities",
+                "params": {"server_requests": True},
+            }
+        )
     finally:
         reset_transport(token)
     try:
         # No queue entry carries this request id: the wait already ended when the hook tries to attach.
-        server._emit_approval_request("ws-raced", {"command": "rm -rf build", "description": "",
-                                                   "request_id": "appr-already-resolved"})
-        assert len(peer.frames) == 2, f"the sent approval was never withdrawn: {peer.frames}"
+        server._emit_approval_request(
+            "ws-raced",
+            {
+                "command": "rm -rf build",
+                "description": "",
+                "request_id": "appr-already-resolved",
+            },
+        )
+        assert len(peer.frames) == 2, (
+            f"the sent approval was never withdrawn: {peer.frames}"
+        )
         sent, cancel = peer.frames
         assert sent["method"] == "approval"
         assert cancel["params"]["type"] == "request.cancel"
@@ -1972,7 +2374,9 @@ def test_approval_that_ends_before_its_settle_hook_attaches_is_still_withdrawn(s
         server.unregister_live_transport(peer)
 
 
-def test_peerless_global_broadcast_never_reaches_stdout_in_ws_backend(capture, monkeypatch):
+def test_peerless_global_broadcast_never_reaches_stdout_in_ws_backend(
+    capture, monkeypatch
+):
     """`clawk serve` / dashboard speak JSON-RPC over WS only; Desktop captures their stdout
     into desktop.log. After the last WS client leaves, the change watcher keeps ticking —
     its sessions.changed / setup.ready / session.reclaimed frames must be dropped, not
@@ -2003,7 +2407,9 @@ def _stub_session_create_dependencies(server, monkeypatch):
     # covers everything the create path touches.
     monkeypatch.setattr(server, "_register_session_cwd", lambda *a, **kw: None)
     monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **kw: None)
-    monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        server, "_schedule_session_cap_enforcement", lambda *a, **kw: None
+    )
     monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
     monkeypatch.setattr(server, "_load_show_reasoning", lambda: False)
     monkeypatch.setattr(server, "_load_tool_progress_mode", lambda: None)
@@ -2042,25 +2448,43 @@ def test_session_create_idempotency_key_dedupes_retry(server, monkeypatch):
         "parent_session_id": "parent-1",
         "idempotency_key": "branch-retry-abc",
     }
-    first = server.handle_request({"id": "c1", "method": "session.create", "params": dict(params)})
+    first = server.handle_request(
+        {"id": "c1", "method": "session.create", "params": dict(params)}
+    )
     assert "error" not in first, first.get("error")
     first_sid = first["result"]["session_id"]
     assert first_sid
     assert len(server._sessions) == 1
 
     # Client retries after a lost response: same key, same params.
-    second = server.handle_request({"id": "c2", "method": "session.create", "params": dict(params)})
+    second = server.handle_request(
+        {"id": "c2", "method": "session.create", "params": dict(params)}
+    )
     assert "error" not in second, second.get("error")
     assert second["result"]["session_id"] == first_sid
     assert len(server._sessions) == 1
 
 
-def test_session_create_no_idempotency_key_creates_distinct_sessions(server, monkeypatch):
+def test_session_create_no_idempotency_key_creates_distinct_sessions(
+    server, monkeypatch
+):
     """Without an idempotency_key, repeated creates keep the historic behavior."""
     _stub_session_create_dependencies(server, monkeypatch)
 
-    first = server.handle_request({"id": "c1", "method": "session.create", "params": {"cols": 96, "source": "desktop"}})
-    second = server.handle_request({"id": "c2", "method": "session.create", "params": {"cols": 96, "source": "desktop"}})
+    first = server.handle_request(
+        {
+            "id": "c1",
+            "method": "session.create",
+            "params": {"cols": 96, "source": "desktop"},
+        }
+    )
+    second = server.handle_request(
+        {
+            "id": "c2",
+            "method": "session.create",
+            "params": {"cols": 96, "source": "desktop"},
+        }
+    )
 
     assert "error" not in first and "error" not in second
     assert first["result"]["session_id"] != second["result"]["session_id"]
@@ -2073,16 +2497,30 @@ def test_session_create_idempotency_key_expires_with_session(server, monkeypatch
     _stub_session_create_dependencies(server, monkeypatch)
 
     first = server.handle_request(
-        {"id": "c1", "method": "session.create",
-         "params": {"cols": 96, "source": "desktop", "idempotency_key": "branch-retry-xyz"}}
+        {
+            "id": "c1",
+            "method": "session.create",
+            "params": {
+                "cols": 96,
+                "source": "desktop",
+                "idempotency_key": "branch-retry-xyz",
+            },
+        }
     )
     first_sid = first["result"]["session_id"]
 
     server._sessions.pop(first_sid, None)
 
     second = server.handle_request(
-        {"id": "c2", "method": "session.create",
-         "params": {"cols": 96, "source": "desktop", "idempotency_key": "branch-retry-xyz"}}
+        {
+            "id": "c2",
+            "method": "session.create",
+            "params": {
+                "cols": 96,
+                "source": "desktop",
+                "idempotency_key": "branch-retry-xyz",
+            },
+        }
     )
     assert "error" not in second
     assert second["result"]["session_id"] != first_sid
@@ -2124,13 +2562,17 @@ def test_session_branch_stored_accepts_idempotency_key(server, monkeypatch):
         "source": "desktop",
         "idempotency_key": "branch-stored-retry-abc",
     }
-    first = server.handle_request({"id": "b1", "method": "session.branch_stored", "params": dict(params)})
+    first = server.handle_request(
+        {"id": "b1", "method": "session.branch_stored", "params": dict(params)}
+    )
     assert "error" not in first, first.get("error")
     first_sid = first["result"]["session_id"]
     assert len(server._sessions) == 1
 
     # A lost-response retry: same key, same params, same child.
-    second = server.handle_request({"id": "b2", "method": "session.branch_stored", "params": dict(params)})
+    second = server.handle_request(
+        {"id": "b2", "method": "session.branch_stored", "params": dict(params)}
+    )
     assert "error" not in second, second.get("error")
     assert second["result"]["session_id"] == first_sid
     assert len(server._sessions) == 1

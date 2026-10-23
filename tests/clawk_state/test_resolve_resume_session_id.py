@@ -10,6 +10,7 @@ used to load zero rows and show a blank chat.
 and redirects to the first descendant that actually has messages. These
 tests pin that behaviour.
 """
+
 import time
 
 import pytest
@@ -42,14 +43,6 @@ def test_returns_self_when_only_parent_has_messages(db):
     assert db.resolve_resume_session_id("root") == "root"
 
 
-
-
-
-
-
-
-
-
 def test_walks_from_middle_of_chain(db):
     # If the user happens to know an intermediate ID, we still find the msg-bearing descendant.
     _make_chain(db, [("a", None), ("b", "a"), ("c", "b"), ("d", "c")])
@@ -77,28 +70,27 @@ def test_follows_compression_tip_when_parent_retains_messages(db):
     # at/after the parent's ended_at (the get_compression_tip discriminator).
     conn = db._conn
     assert conn is not None
-    conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'", (base, base + 50))
+    conn.execute(
+        "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = 'root'",
+        (base, base + 50),
+    )
     conn.execute("UPDATE sessions SET started_at = ? WHERE id = 'cont'", (base + 100,))
     conn.commit()
 
     assert db.resolve_resume_session_id("root") == "cont"
 
 
-
-
 def test_prefers_most_recent_child_when_fork_exists(db):
     # If a session was somehow forked (two children), pick the latest one.
     # In practice, compression only produces single-chain shape, but the helper
     # should degrade gracefully.
-    _make_chain(db, [
-        ("parent", None),
-        ("older_fork", "parent"),
-        ("newer_fork", "parent"),
-    ])
+    _make_chain(
+        db,
+        [
+            ("parent", None),
+            ("older_fork", "parent"),
+            ("newer_fork", "parent"),
+        ],
+    )
     db.append_message("newer_fork", role="user", content="x")
     assert db.resolve_resume_session_id("parent") == "newer_fork"
-
-
-
-
-

@@ -59,7 +59,10 @@ def attachable(result: GatewayDiscovery) -> bool:
     if result.endpoint is None:
         return False
     from gateway.drain_control import RESTART_WAIT_REASON
-    return result.state == "ready" or (result.state == "draining" and result.reason_code == RESTART_WAIT_REASON)
+
+    return result.state == "ready" or (
+        result.state == "draining" and result.reason_code == RESTART_WAIT_REASON
+    )
 
 
 def _canonical_home(home: str | Path) -> str:
@@ -78,7 +81,12 @@ def _overlay_owner_home(home: Path) -> Path:
     """Return the owner named by a private overlay's gateway lock, if it has one."""
     if os.name == "nt":
         return home
-    from clawk_cli.gateway_runtime_discovery import DiscoveryError, _private_lock, _private_node
+    from clawk_cli.gateway_runtime_discovery import (
+        DiscoveryError,
+        _private_lock,
+        _private_node,
+    )
+
     lock = home / "gateway.lock"
     try:
         # An overlay home intentionally shares only the owner's lock.  Do not turn an arbitrary
@@ -95,8 +103,13 @@ def _overlay_owner_home(home: Path) -> Path:
     return target.parent
 
 
-def _endpoint(payload: dict, home: Path, control_home: Path | None = None) -> GatewayDiscovery:
-    if type(payload.get("runtime_protocol")) is not int or payload["runtime_protocol"] != 1:
+def _endpoint(
+    payload: dict, home: Path, control_home: Path | None = None
+) -> GatewayDiscovery:
+    if (
+        type(payload.get("runtime_protocol")) is not int
+        or payload["runtime_protocol"] != 1
+    ):
         return GatewayDiscovery("incompatible", reason_code="runtime_protocol")
     profiles = payload.get("served_profiles")
     if not isinstance(profiles, list):
@@ -104,16 +117,28 @@ def _endpoint(payload: dict, home: Path, control_home: Path | None = None) -> Ga
     # Canonicalize BOTH sides: on Windows normcase lower-cases the served spelling, so a
     # caller's mixed-case Path (WorkerRPC) never matched and every worker saw owner_unavailable.
     wanted = _canonical_home(home)
-    matches = [p for p in profiles if isinstance(p, dict)
-               and isinstance(p.get("home"), str) and _canonical_home(p["home"]) == wanted]
-    if len(matches) != 1 or not isinstance(matches[0].get("profile_id"), str) or not matches[0]["profile_id"]:
+    matches = [
+        p
+        for p in profiles
+        if isinstance(p, dict)
+        and isinstance(p.get("home"), str)
+        and _canonical_home(p["home"]) == wanted
+    ]
+    if (
+        len(matches) != 1
+        or not isinstance(matches[0].get("profile_id"), str)
+        or not matches[0]["profile_id"]
+    ):
         return GatewayDiscovery("inaccessible", reason_code="profile_mismatch")
     state = payload.get("state")
     # A graceful restart's after-turn wait still owns its in-flight turns (#139041): it stays
     # ``draining`` (exit 6, never a fresh-start target) but carries its endpoint, so an interactive
     # client can attach to answer a turn parked on approval/clarify. New input queues for the next owner.
     from gateway.drain_control import RESTART_WAIT_REASON
-    restart_wait = state == "draining" and payload.get("drain_reason") == RESTART_WAIT_REASON
+
+    restart_wait = (
+        state == "draining" and payload.get("drain_reason") == RESTART_WAIT_REASON
+    )
     if state in {"starting", "draining", "conflict"} and not restart_wait:
         # An auto-started gateway ending through its idle exit names that, so its clients wait
         # for it to go and start a fresh one instead of reporting a refusal.
@@ -122,34 +147,61 @@ def _endpoint(payload: dict, home: Path, control_home: Path | None = None) -> Ga
     if state != "ready" and not restart_wait:
         return GatewayDiscovery("inaccessible", reason_code="invalid_runtime_state")
     capabilities = payload.get("capabilities")
-    if (not isinstance(capabilities, list) or not all(isinstance(c, str) for c in capabilities)
-            or "session-authority-v1" not in capabilities):
-        return GatewayDiscovery("incompatible", reason_code="session_authority_unavailable")
+    if (
+        not isinstance(capabilities, list)
+        or not all(isinstance(c, str) for c in capabilities)
+        or "session-authority-v1" not in capabilities
+    ):
+        return GatewayDiscovery(
+            "incompatible", reason_code="session_authority_unavailable"
+        )
     epoch, instance = payload.get("authority_epoch"), payload.get("instance_id")
-    if type(epoch) is not int or epoch <= 0 or not isinstance(instance, str) or not instance:
+    if (
+        type(epoch) is not int
+        or epoch <= 0
+        or not isinstance(instance, str)
+        or not instance
+    ):
         return GatewayDiscovery("inaccessible", reason_code="invalid_runtime_identity")
     origin = payload.get("api_origin")
     if not isinstance(origin, str):
         return GatewayDiscovery("inaccessible", reason_code="invalid_api_origin")
     try:
         parsed = urlsplit(origin)
-        if (parsed.scheme not in {"http", "https"} or not parsed.hostname
-                or parsed.username is not None or parsed.password is not None
-                or parsed.path or parsed.query or parsed.fragment or not parsed.port
-                or not ipaddress.ip_address(parsed.hostname).is_loopback):
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or not parsed.port
+            or not ipaddress.ip_address(parsed.hostname).is_loopback
+        ):
             return GatewayDiscovery("inaccessible", reason_code="invalid_api_origin")
     except ValueError:
         return GatewayDiscovery("inaccessible", reason_code="invalid_api_origin")
     supervisor = payload.get("supervisor")
     if supervisor not in {"none", "systemd", "launchd", "windows", "external"}:
         return GatewayDiscovery("inaccessible", reason_code="invalid_supervisor")
-    return GatewayDiscovery("draining" if restart_wait else "ready", GatewayEndpoint(
-        profile_id=matches[0]["profile_id"], instance_id=instance,
-        authority_epoch=epoch, runtime_protocol=1, api_origin=origin,
-        supervisor=supervisor, capabilities=frozenset(capabilities),
-        control_home=str(control_home) if control_home is not None else None,
-        code_sha=code_sha if isinstance(code_sha := payload.get("code_sha"), str) and code_sha else None,
-    ), reason_code=RESTART_WAIT_REASON if restart_wait else None)
+    return GatewayDiscovery(
+        "draining" if restart_wait else "ready",
+        GatewayEndpoint(
+            profile_id=matches[0]["profile_id"],
+            instance_id=instance,
+            authority_epoch=epoch,
+            runtime_protocol=1,
+            api_origin=origin,
+            supervisor=supervisor,
+            capabilities=frozenset(capabilities),
+            control_home=str(control_home) if control_home is not None else None,
+            code_sha=code_sha
+            if isinstance(code_sha := payload.get("code_sha"), str) and code_sha
+            else None,
+        ),
+        reason_code=RESTART_WAIT_REASON if restart_wait else None,
+    )
 
 
 def control_home_for(home: Path, endpoint: GatewayEndpoint | None) -> Path:
@@ -166,8 +218,11 @@ def _starting_multiplexer_root(home: Path) -> Path | None:
     One uncached config parse plus a lock probe: call it once per ensure iteration."""
     from clawk_cli.gateway_runtime_discovery import missing_owner_state
     from clawk_cli.gateway_runtime_multiplex import implied_host_root
+
     root = implied_host_root(home)
-    return root if root is not None and missing_owner_state(root) == "starting" else None
+    return (
+        root if root is not None and missing_owner_state(root) == "starting" else None
+    )
 
 
 def _standalone_multiplexer_reason(root: Path) -> str | None:
@@ -179,6 +234,7 @@ def _standalone_multiplexer_reason(root: Path) -> str | None:
     with the same liveness rules as ``clawk gateway status``'s standalone box.
     """
     from clawk_cli.gateway_multiplex_mode import recorded_standalone_reason
+
     reason = recorded_standalone_reason(root / "gateway_state.json")
     return reason[:500] if reason else None
 
@@ -191,18 +247,26 @@ def _parked_by_multiplexer(payload: dict, home: Path) -> GatewayDiscovery | None
     if not isinstance(parked, dict):
         return None
     from clawk_cli.profiles import normalize_profile_name
+
     name = normalize_profile_name(home.name)
-    reason = next((r for n, r in parked.items() if normalize_profile_name(str(n)) == name), None)
+    reason = next(
+        (r for n, r in parked.items() if normalize_profile_name(str(n)) == name), None
+    )
     if reason is None:
         return None
-    return GatewayDiscovery("inaccessible", reason_code="profile_parked", detail=str(reason)[:500] or None)
+    return GatewayDiscovery(
+        "inaccessible", reason_code="profile_parked", detail=str(reason)[:500] or None
+    )
 
 
 def _refused_owner_verdict(exc: PermissionError) -> GatewayDiscovery | None:
     """The named refusal when the client proved the boundary from the control pipe, else None."""
     from gateway.runtime_bootstrap_windows import RefusedOwner
+
     if isinstance(exc, RefusedOwner):
-        return GatewayDiscovery("inaccessible", reason_code=exc.reason_code, detail=str(exc))
+        return GatewayDiscovery(
+            "inaccessible", reason_code=exc.reason_code, detail=str(exc)
+        )
     return None
 
 
@@ -212,6 +276,7 @@ def _served_by_multiplexer(home: Path, *, timeout: float) -> GatewayDiscovery | 
     multiplexer's live descriptor proves service; a held ``gateway.lock`` alone does not."""
     from clawk_cli.gateway_runtime_discovery import DiscoveryError, query_identify
     from clawk_cli.gateway_runtime_multiplex import multiplexer_root_for
+
     root = multiplexer_root_for(home)
     if root is None:
         return None
@@ -225,15 +290,25 @@ def _served_by_multiplexer(home: Path, *, timeout: float) -> GatewayDiscovery | 
         if named is None:
             return None
         from clawk_cli.gateway_multiplex_mode import host_serves_named_profile
+
         if host_serves_named_profile(root, home) is False:
             return None
         return named
-    except (FileNotFoundError, ConnectionRefusedError, TimeoutError, DiscoveryError,
-            OSError, ValueError, TypeError):
+    except (
+        FileNotFoundError,
+        ConnectionRefusedError,
+        TimeoutError,
+        DiscoveryError,
+        OSError,
+        ValueError,
+        TypeError,
+    ):
         return None
     result = _endpoint(payload, home, control_home=root)
     if result.state == "inaccessible" and result.reason_code == "profile_mismatch":
-        return _parked_by_multiplexer(payload, home)  # else: the multiplexer does not serve this profile
+        return _parked_by_multiplexer(
+            payload, home
+        )  # else: the multiplexer does not serve this profile
     return result
 
 
@@ -255,6 +330,7 @@ def _owner_pid(home: Path) -> int | None:
         _record_matches_live_gateway_pid,
         recorded_gateway_home_conflicts,
     )
+
     for name in ("gateway.pid", "gateway.lock"):
         record = _read_json_file(home / name, bare_pid_ok=True)
         pid = _live_pid_from_record(record)
@@ -277,22 +353,31 @@ def _refused(home: Path, *, windows: bool = _NATIVE_WINDOWS) -> GatewayDiscovery
     instead of the generic ``authorization`` that reads as a credential failure (#139845, #140252)."""
     if windows and (pid := _owner_pid(home)) is not None:
         from gateway.runtime_bootstrap_windows import probe_refused_owner
+
         try:
             named = probe_refused_owner(pid)
         except OSError:
             named = None
         if named is not None:
-            return GatewayDiscovery("inaccessible", reason_code=named[0], detail=named[1])
+            return GatewayDiscovery(
+                "inaccessible", reason_code=named[0], detail=named[1]
+            )
     return GatewayDiscovery("inaccessible", reason_code="authorization")
 
 
-def discover_gateway_endpoint(profile_home: str | Path, *, timeout: float = 2.0) -> GatewayDiscovery:
+def discover_gateway_endpoint(
+    profile_home: str | Path, *, timeout: float = 2.0
+) -> GatewayDiscovery:
     """Read live control identity, preserving uncertainty instead of spawning.
 
     A named profile served by the default multiplexer resolves to the multiplexer's endpoint
     with ``profile_id`` = the profile's own home, so clients attach to it with that identity.
     """
-    from clawk_cli.gateway_runtime_discovery import DiscoveryError, missing_owner_state, query_identify
+    from clawk_cli.gateway_runtime_discovery import (
+        DiscoveryError,
+        missing_owner_state,
+        query_identify,
+    )
 
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout must be finite and positive")
@@ -306,16 +391,23 @@ def discover_gateway_endpoint(profile_home: str | Path, *, timeout: float = 2.0)
         state = missing_owner_state(home)
         if state == "inaccessible" and os.name != "nt":
             from gateway.runtime_ownership import unreadable_lock_recovery
+
             if detail := unreadable_lock_recovery(home / "gateway.lock"):
-                return GatewayDiscovery(state, reason_code="foreign_stale_lock", detail=detail)
+                return GatewayDiscovery(
+                    state, reason_code="foreign_stale_lock", detail=detail
+                )
         return GatewayDiscovery(state)
     except TimeoutError:
         return GatewayDiscovery("inaccessible", reason_code="control_timeout")
     except DiscoveryError as exc:
         # The code stays bounded; the detail names the local node, its owner or mode, and the fix.
-        return GatewayDiscovery("inaccessible", reason_code=exc.reason, detail=exc.bounded_detail(500))
+        return GatewayDiscovery(
+            "inaccessible", reason_code=exc.reason, detail=exc.bounded_detail(500)
+        )
     except PermissionError as exc:
-        named = _refused_owner_verdict(exc)  # the client proved the boundary from the control pipe (#140706)
+        named = _refused_owner_verdict(
+            exc
+        )  # the client proved the boundary from the control pipe (#140706)
         return named if named is not None else _refused(home)
     except (OSError, ValueError, TypeError):
         # Raw peer data, paths and URLs may contain secrets; report bounded codes.
@@ -341,13 +433,19 @@ def _update_fenced(homes) -> bool:
             raw = path.read_bytes()
             if not raw:
                 # An exclusive first publish in flight (contract A3), not yet a dead claim.
-                if time.time() - path.stat().st_mtime < update_lock.EMPTY_MARKER_GRACE_SECONDS:
+                if (
+                    time.time() - path.stat().st_mtime
+                    < update_lock.EMPTY_MARKER_GRACE_SECONDS
+                ):
                     return True
         except FileNotFoundError:
             continue
         except OSError:
             return True
-        if update_lock.judge_marker(raw)[0] in {"live", "ours"} or update_lock.checkout_lock_held():
+        if (
+            update_lock.judge_marker(raw)[0] in {"live", "ours"}
+            or update_lock.checkout_lock_held()
+        ):
             return True
     return False
 
@@ -369,26 +467,41 @@ _REPLACE_FAILED_DETAIL = "an older Clawksis gateway still owns this profile afte
 _RETIRING = frozenset({"idle_exit", "replaced"})
 
 
-def _observe_replacing_stale(home: Path, deadline: float, replaced: set[Path]) -> GatewayDiscovery:
+def _observe_replacing_stale(
+    home: Path, deadline: float, replaced: set[Path]
+) -> GatewayDiscovery:
     """Discovery, except that a gateway an older Clawksis left on this home is stopped once (like
     ``clawk gateway stop``) and reported as retiring; a refusal keeps ``incompatible`` + its remedy."""
     from clawk_cli.gateway_runtime_service import remaining
+
     observed = discover_gateway_endpoint(home, timeout=remaining(deadline))
     if observed.state != "incompatible" or observed.reason_code != "runtime_protocol":
         return observed
     if home in replaced:
-        return GatewayDiscovery("incompatible", reason_code="runtime_protocol", detail=_REPLACE_FAILED_DETAIL)
+        return GatewayDiscovery(
+            "incompatible",
+            reason_code="runtime_protocol",
+            detail=_REPLACE_FAILED_DETAIL,
+        )
     from clawk_cli import gateway_runtime_replace as replace
+
     replaced.add(home)
     refusal = replace.replace_incompatible_owner(home, deadline=deadline)
     if refusal is not None:
-        return GatewayDiscovery("incompatible", reason_code="runtime_protocol",
-                                detail=replace.REFUSAL_DETAIL.get(refusal, _REPLACE_FAILED_DETAIL))
+        return GatewayDiscovery(
+            "incompatible",
+            reason_code="runtime_protocol",
+            detail=replace.REFUSAL_DETAIL.get(refusal, _REPLACE_FAILED_DETAIL),
+        )
     return GatewayDiscovery("draining", reason_code="replaced")
 
 
-def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT_ENSURE_TIMEOUT,
-                           idle_exit: bool = False) -> GatewayDiscovery:
+def ensure_gateway_runtime(
+    profile_home: str | Path,
+    *,
+    timeout: float = DEFAULT_ENSURE_TIMEOUT,
+    idle_exit: bool = False,
+) -> GatewayDiscovery:
     """Ensure once; pending remains pending at deadline.
 
     Never installs anything. The one owner it replaces is a gateway an older Clawksis left running on
@@ -405,7 +518,9 @@ def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT
     """
     import time
     from clawk_cli.gateway_runtime_service import (
-        RuntimeStartError, discover_existing_gateway_service, remaining,
+        RuntimeStartError,
+        discover_existing_gateway_service,
+        remaining,
         start_existing_gateway_service,
     )
     from clawk_constants import get_default_clawk_root, get_process_clawk_home
@@ -426,7 +541,9 @@ def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT
     try:
         while True:
             # The install-root marker also covers profiles.
-            if _update_fenced({home, get_process_clawk_home(), get_default_clawk_root()}):
+            if _update_fenced(
+                {home, get_process_clawk_home(), get_default_clawk_root()}
+            ):
                 return _fenced_verdict(home, remaining(deadline))
             # Poll BEFORE discovering: an exit observed first, then "absent", cannot be a child that
             # published its owner a moment later. A winning racer shows up as starting/ready instead.
@@ -445,15 +562,29 @@ def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT
                 # out the deadline cannot change that, and this call never launches a second one.
                 # Its own (redacted) output is the answer the user needs, not a pointer to a file.
                 from clawk_cli.gateway_runtime_start import startup_failure_report
-                return GatewayDiscovery("inaccessible", reason_code="runtime_exited",
-                                        detail=startup_failure_report(child_home, child_offset, status, child.pid))
+
+                return GatewayDiscovery(
+                    "inaccessible",
+                    reason_code="runtime_exited",
+                    detail=startup_failure_report(
+                        child_home, child_offset, status, child.pid
+                    ),
+                )
             if observed.state == "starting" and not retiring:
                 requested = True
             if observed.state == "absent":
                 retiring = False
-            reserved = _starting_multiplexer_root(home) if observed.state == "absent" and not requested else None
-            if reserved is not None and (reason := _standalone_multiplexer_reason(reserved)):
-                return GatewayDiscovery("inaccessible", reason_code="profile_parked", detail=reason)
+            reserved = (
+                _starting_multiplexer_root(home)
+                if observed.state == "absent" and not requested
+                else None
+            )
+            if reserved is not None and (
+                reason := _standalone_multiplexer_reason(reserved)
+            ):
+                return GatewayDiscovery(
+                    "inaccessible", reason_code="profile_parked", detail=reason
+                )
             # A default multiplexer that is still starting will serve this named profile; never
             # spawn a competing per-profile daemon while its reservation is pending.
             if reserved is not None:
@@ -462,14 +593,24 @@ def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT
                 # A named profile the default multiplexer serves has no daemon of its own: start
                 # (or await) the MULTIPLEXER. A per-profile spawn here would become a second owner
                 # that blocks the multiplexer's next all-or-nothing reserve.
-                from clawk_cli.gateway_runtime_multiplex import implied_host_root, multiplexer_serves_home
+                from clawk_cli.gateway_runtime_multiplex import (
+                    implied_host_root,
+                    multiplexer_serves_home,
+                )
+
                 target = multiplexer_serves_home(home) or home
                 service = discover_existing_gateway_service(target, deadline=deadline)
-                if service is None and target == home and (host := implied_host_root(home)) is not None:
+                if (
+                    service is None
+                    and target == home
+                    and (host := implied_host_root(home)) is not None
+                ):
                     # Main's guard refuses a named profile a gateway of its own unless it is standalone
                     # or already installed; with no multiplexer evidence yet, the host is still its owner.
                     target = host
-                    service = discover_existing_gateway_service(target, deadline=deadline)
+                    service = discover_existing_gateway_service(
+                        target, deadline=deadline
+                    )
                 # Runtime locks settle races remaining after this second probe.
                 observed = discover_gateway_endpoint(home, timeout=remaining(deadline))
                 if observed.state != "absent":
@@ -477,9 +618,15 @@ def ensure_gateway_runtime(profile_home: str | Path, *, timeout: float = DEFAULT
                 if service is not None:
                     start_existing_gateway_service(service, deadline=deadline)
                 else:
-                    from clawk_cli.gateway_runtime_start import spawn_unmanaged_gateway, stdio_log_size
+                    from clawk_cli.gateway_runtime_start import (
+                        spawn_unmanaged_gateway,
+                        stdio_log_size,
+                    )
+
                     child_home, child_offset = target, stdio_log_size(target)
-                    child = spawn_unmanaged_gateway(target, deadline=deadline, idle_exit=idle_exit)
+                    child = spawn_unmanaged_gateway(
+                        target, deadline=deadline, idle_exit=idle_exit
+                    )
                 requested = True
             time.sleep(min(delay, remaining(deadline)))
             # Capped low: each probe is a lock-file read or one local identify, and READY is noticed

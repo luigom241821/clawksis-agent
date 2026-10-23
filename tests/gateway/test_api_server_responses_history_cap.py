@@ -17,15 +17,33 @@ PRIOR = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "he
 
 
 def _result():
-    return {"messages": [
-        *PRIOR,
-        {"role": "user", "content": "read it", "timestamp": 1.0},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c1", "type": "function",
-             "function": {"name": "write_file", "arguments": json.dumps({"path": "/tmp/f", "content": BIG})}}]},
-        {"role": "tool", "tool_call_id": "c1", "name": "write_file", "content": BIG},
-        {"role": "assistant", "content": "done " + BIG},
-    ]}
+    return {
+        "messages": [
+            *PRIOR,
+            {"role": "user", "content": "read it", "timestamp": 1.0},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "c1",
+                        "type": "function",
+                        "function": {
+                            "name": "write_file",
+                            "arguments": json.dumps({"path": "/tmp/f", "content": BIG}),
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "c1",
+                "name": "write_file",
+                "content": BIG,
+            },
+            {"role": "assistant", "content": "done " + BIG},
+        ]
+    }
 
 
 def test_default_stores_tool_outputs_verbatim():
@@ -34,9 +52,17 @@ def test_default_stores_tool_outputs_verbatim():
     assert adapter._history_tool_output_max_chars == 0
     result = _result()
     history = adapter._build_response_conversation_history(
-        PRIOR, "read it", result, "done", tool_output_max_chars=adapter._history_tool_output_max_chars)
+        PRIOR,
+        "read it",
+        result,
+        "done",
+        tool_output_max_chars=adapter._history_tool_output_max_chars,
+    )
     assert history[4]["content"] == BIG
-    assert json.loads(history[3]["tool_calls"][0]["function"]["arguments"])["content"] == BIG
+    assert (
+        json.loads(history[3]["tool_calls"][0]["function"]["arguments"])["content"]
+        == BIG
+    )
 
 
 def test_cap_trims_only_tool_rows_and_leaves_agent_transcript_intact():
@@ -46,13 +72,29 @@ def test_cap_trims_only_tool_rows_and_leaves_agent_transcript_intact():
     assert adapter._history_tool_output_max_chars == 1000
     result = _result()
     history = adapter._build_response_conversation_history(
-        PRIOR, "read it", result, "done", tool_output_max_chars=adapter._history_tool_output_max_chars)
+        PRIOR,
+        "read it",
+        result,
+        "done",
+        tool_output_max_chars=adapter._history_tool_output_max_chars,
+    )
     tool_row = history[4]
-    assert tool_row["content"].startswith("x" * 1000) and tool_row["content"].endswith("...[19000 more chars]")
+    assert tool_row["content"].startswith("x" * 1000) and tool_row["content"].endswith(
+        "...[19000 more chars]"
+    )
     assert len(tool_row["content"]) < 1100
     args = json.loads(history[3]["tool_calls"][0]["function"]["arguments"])
-    assert args["path"] == "/tmp/f" and args["content"].endswith("...[19000 more chars]")
+    assert args["path"] == "/tmp/f" and args["content"].endswith(
+        "...[19000 more chars]"
+    )
     # Non-tool rows are untouched, and the agent's own transcript rows were copied, not mutated.
     assert history[5]["content"] == "done " + BIG
     assert result["messages"][4]["content"] == BIG
-    assert [m["role"] for m in history] == ["user", "assistant", "user", "assistant", "tool", "assistant"]
+    assert [m["role"] for m in history] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+        "tool",
+        "assistant",
+    ]

@@ -51,9 +51,7 @@ def test_sibling_delegates_are_late_bound_too():
     import clawk_cli.runtime_provider as rp
 
     marker = [{"name": "marker", "base_url": "http://m/v1"}]
-    with patch(
-        "clawk_cli.config.get_compatible_custom_providers", return_value=marker
-    ):
+    with patch("clawk_cli.config.get_compatible_custom_providers", return_value=marker):
         assert rp.get_compatible_custom_providers({}) is marker
     assert rp.get_compatible_custom_providers({}) is not marker
 

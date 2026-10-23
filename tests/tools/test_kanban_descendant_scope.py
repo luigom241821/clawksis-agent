@@ -1,4 +1,5 @@
 """Real shell/CLI ingress: inherited context is not a board-write grant."""
+
 import json
 import os
 from pathlib import Path
@@ -23,16 +24,21 @@ def _worker_board(tmp_path, monkeypatch):
         kb.claim_task(conn, tid)
     task = kb.get_task(conn, own)
     for key, value in {
-        "CLAWK_KANBAN_DB": str(db), "CLAWK_KANBAN_BOARD": "default",
-        "CLAWK_KANBAN_TASK": own, "CLAWK_KANBAN_RUN_ID": str(task.current_run_id),
-        "CLAWK_KANBAN_CLAIM_LOCK": task.claim_lock, "HOME": str(tmp_path),
+        "CLAWK_KANBAN_DB": str(db),
+        "CLAWK_KANBAN_BOARD": "default",
+        "CLAWK_KANBAN_TASK": own,
+        "CLAWK_KANBAN_RUN_ID": str(task.current_run_id),
+        "CLAWK_KANBAN_CLAIM_LOCK": task.claim_lock,
+        "HOME": str(tmp_path),
     }.items():
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("CLAWK_DELEGATED_CHILD_CONTEXT", raising=False)
     return conn, own, foreign
 
 
-def test_terminal_descendants_cannot_mutate_even_after_task_is_removed(tmp_path, monkeypatch):
+def test_terminal_descendants_cannot_mutate_even_after_task_is_removed(
+    tmp_path, monkeypatch
+):
     conn, own, foreign = _worker_board(tmp_path, monkeypatch)
     script = tmp_path / "descendant.py"
     script.write_text(
@@ -52,7 +58,9 @@ def test_terminal_descendants_cannot_mutate_even_after_task_is_removed(tmp_path,
     )
     terminal = LocalEnvironment(cwd=str(tmp_path))
     try:
-        result = terminal.execute(f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}")
+        result = terminal.execute(
+            f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}"
+        )
     finally:
         terminal.cleanup()
     from agent.skill_preprocessing import run_inline_shell
@@ -61,26 +69,55 @@ def test_terminal_descendants_cannot_mutate_even_after_task_is_removed(tmp_path,
     from tools.mcp_tool_config import _build_safe_env
 
     command = f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}"
-    outputs = [result.get("output", ""), run_inline_shell(command, tmp_path, 45),
-               _spawn(ShellHookSpec(event="session:start", command=command, timeout=45), "{}")['stdout']]
+    outputs = [
+        result.get("output", ""),
+        run_inline_shell(command, tmp_path, 45),
+        _spawn(ShellHookSpec(event="session:start", command=command, timeout=45), "{}")[
+            "stdout"
+        ],
+    ]
     child_envs = [
-        _build_child_env(rpc_endpoint="fixture", rpc_token="fixture", tmpdir=str(tmp_path), child_python=sys.executable),
+        _build_child_env(
+            rpc_endpoint="fixture",
+            rpc_token="fixture",
+            tmpdir=str(tmp_path),
+            child_python=sys.executable,
+        ),
         _build_safe_env({"CLAWK_HOME": os.environ["CLAWK_HOME"]}),
     ]
     for env in child_envs:
-        proc = subprocess.run([sys.executable, str(script)], env=env, cwd=tmp_path,
-                              stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=45, check=False)
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            env=env,
+            cwd=tmp_path,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=45,
+            check=False,
+        )
         assert proc.returncode == 0, proc.stderr
         outputs.append(proc.stdout)
     for output in outputs:
-        row = json.loads(next(line.split("SCOPE_RESULT=", 1)[1] for line in output.splitlines() if "SCOPE_RESULT=" in line))
+        row = json.loads(
+            next(
+                line.split("SCOPE_RESULT=", 1)[1]
+                for line in output.splitlines()
+                if "SCOPE_RESULT=" in line
+            )
+        )
         assert row["show"]["task"]["id"] == own, row
         assert not row["owner"] and row["default"] is None, row
         assert row["db"] == str(tmp_path / "assigned.db") and row["board"] == "default"
         assert all("error" in value for value in row["tools"]), row
         assert row["later_cli"]["rc"] != 0, row
-    assert [kb.get_task(conn, t).status for t in (own, foreign)] == ["running", "running"]
-    assert json.loads(kanban_tools._handle_complete({"summary": "parent handoff"}))["ok"]
+    assert [kb.get_task(conn, t).status for t in (own, foreign)] == [
+        "running",
+        "running",
+    ]
+    assert json.loads(kanban_tools._handle_complete({"summary": "parent handoff"}))[
+        "ok"
+    ]
     assert kb.get_task(conn, own).status == "done"
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()
@@ -88,29 +125,58 @@ def test_terminal_descendants_cannot_mutate_even_after_task_is_removed(tmp_path,
 
 def test_worker_cli_cannot_use_foreign_task_to_drop_run_scope(tmp_path, monkeypatch):
     conn, own, foreign = _worker_board(tmp_path, monkeypatch)
-    assert "error" in json.loads(kanban_tools._handle_complete({"task_id": foreign, "summary": "no"}))
+    assert "error" in json.loads(
+        kanban_tools._handle_complete({"task_id": foreign, "summary": "no"})
+    )
     proc = subprocess.run(
-        [sys.executable, "-m", "clawk_cli.main", "kanban", "complete", foreign, "--result", "no"],
-        cwd=ROOT, env=dict(os.environ), stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=45,
+        [
+            sys.executable,
+            "-m",
+            "clawk_cli.main",
+            "kanban",
+            "complete",
+            foreign,
+            "--result",
+            "no",
+        ],
+        cwd=ROOT,
+        env=dict(os.environ),
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=45,
         check=False,
     )
-    assert proc.returncode != 0 and "worker is scoped to task" in proc.stderr, (proc.stdout, proc.stderr)
+    assert proc.returncode != 0 and "worker is scoped to task" in proc.stderr, (
+        proc.stdout,
+        proc.stderr,
+    )
     assert kb.get_task(conn, foreign).status == "running"
     attachment = tmp_path / "note.txt"
     attachment.write_text("fixture")
     assert kb.block_task(conn, foreign, reason="fixture awaiting orchestrator")
     for arguments in (["attach", foreign, str(attachment)], ["unblock", foreign]):
-        proc = subprocess.run([sys.executable, "-m", "clawk_cli.main", "kanban", *arguments],
-                              cwd=ROOT, env=dict(os.environ), stdin=subprocess.DEVNULL,
-                              capture_output=True, text=True, timeout=45, check=False)
+        proc = subprocess.run(
+            [sys.executable, "-m", "clawk_cli.main", "kanban", *arguments],
+            cwd=ROOT,
+            env=dict(os.environ),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=45,
+            check=False,
+        )
         assert proc.returncode != 0, (arguments, proc.stdout, proc.stderr)
     assert not kb.list_attachments(conn, foreign)
-    assert json.loads(kanban_tools._handle_complete({"task_id": own, "summary": "parent"}))["ok"]
+    assert json.loads(
+        kanban_tools._handle_complete({"task_id": own, "summary": "parent"})
+    )["ok"]
     conn.close()
 
 
-def test_child_shell_can_write_a_kanban_board_outside_its_lineage_root(tmp_path, monkeypatch):
+def test_child_shell_can_write_a_kanban_board_outside_its_lineage_root(
+    tmp_path, monkeypatch
+):
     """The fence a delegate_task child inherits applies to ITS lineage's board, not to every Kanban
     DB its shell touches: a repro run against a scratch CLAWK_HOME got a silently read-only board
     (``connect`` opened ``?mode=ro``; ``write_txn`` raised PermissionError). Real ``terminal``
@@ -124,7 +190,12 @@ def test_child_shell_can_write_a_kanban_board_outside_its_lineage_root(tmp_path,
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(lineage_home))
     monkeypatch.delenv("CLAWK_DELEGATED_CHILD_CONTEXT", raising=False)
-    for key in ("CLAWK_KANBAN_DB", "CLAWK_KANBAN_BOARD", "CLAWK_KANBAN_TASK", "CLAWK_KANBAN_HOME"):
+    for key in (
+        "CLAWK_KANBAN_DB",
+        "CLAWK_KANBAN_BOARD",
+        "CLAWK_KANBAN_TASK",
+        "CLAWK_KANBAN_HOME",
+    ):
         monkeypatch.delenv(key, raising=False)
     connect(kb.kanban_db_path()).close()  # the owner initializes the lineage board
     script = tmp_path / "repro.py"
@@ -146,11 +217,19 @@ def test_child_shell_can_write_a_kanban_board_outside_its_lineage_root(tmp_path,
     with delegated_child_context("child-repro"):
         terminal = LocalEnvironment(cwd=str(tmp_path))
         try:
-            result = terminal.execute(f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}")
+            result = terminal.execute(
+                f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}"
+            )
         finally:
             terminal.cleanup()
     output = result.get("output", "")
-    row = json.loads(next(line.split("SCOPE_RESULT=", 1)[1] for line in output.splitlines() if "SCOPE_RESULT=" in line))
+    row = json.loads(
+        next(
+            line.split("SCOPE_RESULT=", 1)[1]
+            for line in output.splitlines()
+            if "SCOPE_RESULT=" in line
+        )
+    )
     assert row["marker"] and row["marker"] != "1", row
     assert row["lineage"].startswith("fenced"), row
     assert row["scratch"], row

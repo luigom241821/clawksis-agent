@@ -23,6 +23,7 @@ from tools import approval_context
 def _capture_hook(captured):
     def _invoke(hook_name, **kwargs):
         captured.append((hook_name, kwargs))
+
     return _invoke
 
 

@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     import httpx
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
@@ -27,10 +28,14 @@ except ImportError:
 from gateway.config import Platform, PlatformConfig
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 from gateway.platforms.event import MessageEvent, MessageType
-from gateway.platforms._shared import get_scoped_secret as _get_scoped_secret, send_error
+from gateway.platforms._shared import (
+    get_scoped_secret as _get_scoped_secret,
+    send_error,
+)
 from gateway.platforms.helpers import MessageDeduplicator
 from gateway.platforms._shared import (
-    extra_or_secret as _extra_or_secret, seed_extra_from_env as _seed_extra_from_env
+    extra_or_secret as _extra_or_secret,
+    seed_extra_from_env as _seed_extra_from_env,
 )
 from gateway.platforms.send_targets import parse_nonempty
 
@@ -62,11 +67,14 @@ def _build_auth_header(token: str) -> dict[str, str]:
         return {}
     if ":" in token:
         import base64
+
         return {"Authorization": f"Basic {base64.b64encode(token.encode()).decode()}"}
     return {"Authorization": f"Bearer {token}"}
 
 
-def _publish_headers(token: str, markdown: bool, *, auth_first: bool = True) -> dict[str, str]:
+def _publish_headers(
+    token: str, markdown: bool, *, auth_first: bool = True
+) -> dict[str, str]:
     """Headers for a publish POST: auth (if any), plain-text body, echo tag, optional X-Markdown.
 
     ``auth_first`` pins the header order each call site has always sent on the wire.
@@ -84,7 +92,10 @@ def _truncate_body(message: str, *, context: str) -> bytes:
     if len(message) > MAX_MESSAGE_LENGTH:
         logger.warning(
             "%s: truncating message from %d to %d chars (ntfy limit)",
-            context, len(message), MAX_MESSAGE_LENGTH)
+            context,
+            len(message),
+            MAX_MESSAGE_LENGTH,
+        )
     return message[:MAX_MESSAGE_LENGTH].encode("utf-8")
 
 
@@ -97,7 +108,9 @@ def _response_message_id(resp) -> str:
 
 
 def _server_url(extra: dict[str, Any]) -> str:
-    return _extra_or_secret(extra, "server", "NTFY_SERVER_URL", DEFAULT_SERVER).rstrip("/")
+    return _extra_or_secret(extra, "server", "NTFY_SERVER_URL", DEFAULT_SERVER).rstrip(
+        "/"
+    )
 
 
 def check_requirements() -> bool:
@@ -107,37 +120,51 @@ def check_requirements() -> bool:
 
 def validate_config(config) -> bool:
     """True when a topic is configured (config.yaml ``extra`` or env)."""
-    return bool(_extra_or_secret(getattr(config, "extra", {}) or {}, "topic", "NTFY_TOPIC"))
+    return bool(
+        _extra_or_secret(getattr(config, "extra", {}) or {}, "topic", "NTFY_TOPIC")
+    )
 
 
 def is_connected(config) -> bool:
     """Check whether ntfy is configured (env or config.yaml)."""
-    return bool(_get_scoped_secret("NTFY_TOPIC") or (getattr(config, "extra", {}) or {}).get("topic", ""))
+    return bool(
+        _get_scoped_secret("NTFY_TOPIC")
+        or (getattr(config, "extra", {}) or {}).get("topic", "")
+    )
 
 
 class NtfyAdapter(BasePlatformAdapter):
     """ntfy adapter: HTTP-streaming subscription in, HTTP POST publish out."""
 
     MAX_MESSAGE_LENGTH = MAX_MESSAGE_LENGTH
-    serial_receive_loop = True  # the stream loop awaits each message before reading the next line
+    serial_receive_loop = (
+        True  # the stream loop awaits each message before reading the next line
+    )
 
     def __init__(self, config: PlatformConfig):
         super().__init__(config=config, platform=Platform("ntfy"))
         extra = config.extra or {}
         self._server: str = _server_url(extra)
         self._topic: str = _extra_or_secret(extra, "topic", "NTFY_TOPIC")
-        self._publish_topic: str = _extra_or_secret(extra, "publish_topic", "NTFY_PUBLISH_TOPIC") or self._topic
+        self._publish_topic: str = (
+            _extra_or_secret(extra, "publish_topic", "NTFY_PUBLISH_TOPIC")
+            or self._topic
+        )
         self._token: str = _extra_or_secret(extra, "token", "NTFY_TOKEN")
         self._stream_task: Optional[asyncio.Task] = None
         self._http_client: Optional[httpx.AsyncClient] = None
-        self._dedup = MessageDeduplicator(max_size=DEDUP_MAX_SIZE, ttl_seconds=DEDUP_WINDOW_SECONDS)
+        self._dedup = MessageDeduplicator(
+            max_size=DEDUP_MAX_SIZE, ttl_seconds=DEDUP_WINDOW_SECONDS
+        )
 
     # -- Connection lifecycle -----------------------------------------------
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Connect to ntfy by starting the streaming subscription task."""
         if not HTTPX_AVAILABLE:
-            logger.warning("[%s] httpx not installed. Run: pip install httpx", self.name)
+            logger.warning(
+                "[%s] httpx not installed. Run: pip install httpx", self.name
+            )
             return False
         if not self._topic:
             logger.warning("[%s] NTFY_TOPIC not configured", self.name)
@@ -146,7 +173,12 @@ class NtfyAdapter(BasePlatformAdapter):
             self._http_client = httpx.AsyncClient(timeout=None)
             self._stream_task = asyncio.create_task(self._run_stream())
             self._mark_connected()
-            logger.info("[%s] Connected — subscribing to %s/%s", self.name, self._server, self._topic)
+            logger.info(
+                "[%s] Connected — subscribing to %s/%s",
+                self.name,
+                self._server,
+                self._topic,
+            )
             self._wire_plugin_handlers(None)
             return True
         except Exception as e:
@@ -187,12 +219,24 @@ class NtfyAdapter(BasePlatformAdapter):
         """401/404 are unrecoverable: log, set the fatal state and raise ``_FatalStreamError``."""
         if status_code == 401:
             logger.error(
-                "[%s] Authentication failed (401) — stopping reconnect loop. Check NTFY_TOKEN.", self.name)
-            code, detail = "ntfy_unauthorized", "ntfy server rejected auth (401). Check NTFY_TOKEN."
+                "[%s] Authentication failed (401) — stopping reconnect loop. Check NTFY_TOKEN.",
+                self.name,
+            )
+            code, detail = (
+                "ntfy_unauthorized",
+                "ntfy server rejected auth (401). Check NTFY_TOKEN.",
+            )
             reason = "401 Unauthorized"
         elif status_code == 404:
-            logger.error("[%s] Topic not found (404): %s — stopping reconnect loop.", self.name, self._topic)
-            code, detail = "ntfy_topic_not_found", f"ntfy topic '{self._topic}' returned 404. Check NTFY_TOPIC."
+            logger.error(
+                "[%s] Topic not found (404): %s — stopping reconnect loop.",
+                self.name,
+                self._topic,
+            )
+            code, detail = (
+                "ntfy_topic_not_found",
+                f"ntfy topic '{self._topic}' returned 404. Check NTFY_TOPIC.",
+            )
             reason = "404 Not Found"
         else:
             return
@@ -203,8 +247,13 @@ class NtfyAdapter(BasePlatformAdapter):
         """Open an HTTP streaming connection and dispatch events."""
         # poll=false keeps a persistent streaming connection alive with keepalive events
         async with self._http_client.stream(
-            "GET", url, headers=headers, params={"poll": "false"},
-            timeout=httpx.Timeout(connect=15.0, read=STREAM_TIMEOUT_SECONDS, write=15.0, pool=15.0),
+            "GET",
+            url,
+            headers=headers,
+            params={"poll": "false"},
+            timeout=httpx.Timeout(
+                connect=15.0, read=STREAM_TIMEOUT_SECONDS, write=15.0, pool=15.0
+            ),
         ) as response:
             self._fatal_status(response.status_code)
             response.raise_for_status()
@@ -257,41 +306,76 @@ class NtfyAdapter(BasePlatformAdapter):
         # NOT drive authorization, so user_id is fixed to the topic name.
         topic = event.get("topic") or self._topic
         source = self.build_source(
-            chat_id=topic, chat_name=topic, chat_type="dm", user_id=topic, user_name=topic, message_id=msg_id)
+            chat_id=topic,
+            chat_name=topic,
+            chat_type="dm",
+            user_id=topic,
+            user_name=topic,
+            message_id=msg_id,
+        )
         unix_ts, timestamp = event.get("time"), datetime.now(tz=UTC)
         try:
-            timestamp = datetime.fromtimestamp(int(unix_ts), tz=UTC) if unix_ts else timestamp
+            timestamp = (
+                datetime.fromtimestamp(int(unix_ts), tz=UTC) if unix_ts else timestamp
+            )
         except (ValueError, OSError, TypeError):
             pass
         message_event = MessageEvent(
-            text=text, message_type=MessageType.TEXT, source=source, message_id=msg_id,
-            raw_message=event, timestamp=timestamp)
+            text=text,
+            message_type=MessageType.TEXT,
+            source=source,
+            message_id=msg_id,
+            raw_message=event,
+            timestamp=timestamp,
+        )
         logger.debug("[%s] Message on topic %s: %s", self.name, topic, text[:80])
         await self.handle_message(message_event)
 
     # -- Outbound messaging -------------------------------------------------
 
     async def send(
-        self, chat_id: str, content: str, reply_to: Optional[str] = None, metadata: Optional[dict[str, Any]] = None,
+        self,
+        chat_id: str,
+        content: str,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> SendResult:
         """Publish a message to the configured publish topic."""
-        publish_topic = (metadata or {}).get("publish_topic") or self._publish_topic or chat_id
+        publish_topic = (
+            (metadata or {}).get("publish_topic") or self._publish_topic or chat_id
+        )
         if not self._http_client:
             return SendResult(success=False, error="HTTP client not initialized")
-        headers = _publish_headers(self._token, bool((self.config.extra or {}).get("markdown", False)))
+        headers = _publish_headers(
+            self._token, bool((self.config.extra or {}).get("markdown", False))
+        )
         if len(content) > self.MAX_MESSAGE_LENGTH:
             logger.warning(
                 "[%s] Message truncated from %d to %d chars (ntfy limit)",
-                self.name, len(content), self.MAX_MESSAGE_LENGTH)
-        body = content[:self.MAX_MESSAGE_LENGTH].encode("utf-8")
+                self.name,
+                len(content),
+                self.MAX_MESSAGE_LENGTH,
+            )
+        body = content[: self.MAX_MESSAGE_LENGTH].encode("utf-8")
         try:
             resp = await self._http_client.post(
-                f"{self._server}/{publish_topic}", content=body, headers=headers, timeout=15.0)
+                f"{self._server}/{publish_topic}",
+                content=body,
+                headers=headers,
+                timeout=15.0,
+            )
             if resp.status_code < 300:
                 return SendResult(success=True, message_id=_response_message_id(resp))
             body_text = resp.text
-            logger.warning("[%s] Send failed HTTP %d: %s", self.name, resp.status_code, body_text[:200])
-            return SendResult(success=False, error=f"HTTP {resp.status_code}: {body_text[:200]}")
+            logger.warning(
+                "[%s] Send failed HTTP %d: %s",
+                self.name,
+                resp.status_code,
+                body_text[:200],
+            )
+            return SendResult(
+                success=False, error=f"HTTP {resp.status_code}: {body_text[:200]}"
+            )
         except httpx.TimeoutException:
             return SendResult(success=False, error="Timeout publishing to ntfy")
         except Exception as e:
@@ -314,17 +398,27 @@ def _env_enablement() -> dict | None:
     topic = _get_scoped_secret("NTFY_TOPIC", "").strip()
     if not topic:
         return None
-    seed = _seed_extra_from_env((
-        ("NTFY_SERVER_URL", "server", lambda v: v.rstrip("/")), ("NTFY_PUBLISH_TOPIC", "publish_topic", None),
-        ("NTFY_TOKEN", "token", None), ("NTFY_MARKDOWN", "markdown", lambda v: v.lower() in _MARKDOWN_TRUTHY),
-    ), home_env="NTFY_HOME_CHANNEL", home_default=topic)
+    seed = _seed_extra_from_env(
+        (
+            ("NTFY_SERVER_URL", "server", lambda v: v.rstrip("/")),
+            ("NTFY_PUBLISH_TOPIC", "publish_topic", None),
+            ("NTFY_TOKEN", "token", None),
+            ("NTFY_MARKDOWN", "markdown", lambda v: v.lower() in _MARKDOWN_TRUTHY),
+        ),
+        home_env="NTFY_HOME_CHANNEL",
+        home_default=topic,
+    )
     return {"topic": topic, "server": seed.pop("server", DEFAULT_SERVER), **seed}
 
 
-
 async def _standalone_send(
-    pconfig, chat_id: str, message: str, *,
-    thread_id: Optional[str] = None, media_files: Optional[list[str]] = None, force_document: bool = False,
+    pconfig,
+    chat_id: str,
+    message: str,
+    *,
+    thread_id: Optional[str] = None,
+    media_files: Optional[list[str]] = None,
+    force_document: bool = False,
 ) -> dict[str, Any]:
     """Out-of-process publish for cron / send_message_tool when no gateway adapter is live.
 
@@ -337,8 +431,12 @@ async def _standalone_send(
     extra = getattr(pconfig, "extra", {}) or {}
     server = _server_url(extra)
     publish_topic = (
-        chat_id or extra.get("publish_topic") or _get_scoped_secret("NTFY_PUBLISH_TOPIC", "").strip()
-        or extra.get("topic") or _get_scoped_secret("NTFY_TOPIC", "").strip())
+        chat_id
+        or extra.get("publish_topic")
+        or _get_scoped_secret("NTFY_PUBLISH_TOPIC", "").strip()
+        or extra.get("topic")
+        or _get_scoped_secret("NTFY_TOPIC", "").strip()
+    )
     if not publish_topic:
         return send_error("ntfy standalone send: NTFY_TOPIC not configured")
     token = _extra_or_secret(extra, "token", "NTFY_TOKEN")
@@ -348,10 +446,17 @@ async def _standalone_send(
     body = _truncate_body(message, context="ntfy standalone")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(f"{server}/{publish_topic}", content=body, headers=headers)
+            resp = await client.post(
+                f"{server}/{publish_topic}", content=body, headers=headers
+            )
         if resp.status_code >= 300:
             return send_error(f"ntfy HTTP {resp.status_code}: {resp.text[:200]}")
-        return {"success": True, "platform": "ntfy", "chat_id": publish_topic, "message_id": _response_message_id(resp)}
+        return {
+            "success": True,
+            "platform": "ntfy",
+            "chat_id": publish_topic,
+            "message_id": _response_message_id(resp),
+        }
     except Exception as e:
         return send_error(f"ntfy standalone send failed: {e}")
 
@@ -360,16 +465,23 @@ def register(ctx) -> None:
     """Plugin entry point — called by the Clawksis plugin system at startup."""
     ctx.register_platform(
         target_ref_syntax_fn=parse_nonempty,
-        name="ntfy", label="ntfy", adapter_factory=lambda cfg: NtfyAdapter(cfg),
+        name="ntfy",
+        label="ntfy",
+        adapter_factory=lambda cfg: NtfyAdapter(cfg),
         dashboard_description="Chat with Clawksis over ntfy push topics (ntfy.sh or self-hosted).",
         docs_url="https://samuelgradientai-sys.github.io/clawksis-agent/user-guide/messaging/ntfy",
-        check_fn=check_requirements, validate_config=validate_config, is_connected=is_connected,
-        required_env=["NTFY_TOPIC"], install_hint="pip install httpx   # already a Clawksis dependency",
+        check_fn=check_requirements,
+        validate_config=validate_config,
+        is_connected=is_connected,
+        required_env=["NTFY_TOPIC"],
+        install_hint="pip install httpx   # already a Clawksis dependency",
         env_enablement_fn=_env_enablement,  # env-only setups show in `gateway status`
         cron_deliver_env_var="NTFY_HOME_CHANNEL",
         standalone_sender_fn=_standalone_send,  # out-of-process cron delivery
-        allowed_users_env="NTFY_ALLOWED_USERS", allow_all_env="NTFY_ALLOW_ALL_USERS",
-        max_message_length=MAX_MESSAGE_LENGTH, emoji="🔔",
+        allowed_users_env="NTFY_ALLOWED_USERS",
+        allow_all_env="NTFY_ALLOW_ALL_USERS",
+        max_message_length=MAX_MESSAGE_LENGTH,
+        emoji="🔔",
         pii_safe=True,  # topic names only — no phone numbers / emails to redact
         allow_update_command=True,
         platform_hint=(
@@ -378,4 +490,5 @@ def register(ctx) -> None:
             "(set markdown: true in config or NTFY_MARKDOWN=true). "
             "Keep responses concise; ntfy is a push notification service "
             "with a 4096-character per-message limit."
-        ))
+        ),
+    )

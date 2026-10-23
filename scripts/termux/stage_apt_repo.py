@@ -56,6 +56,7 @@ def die(msg: str, code: int = 2) -> NoReturn:
 # .deb control parsing (stdlib ar + tar, no dpkg-deb)
 # ---------------------------------------------------------------------------
 
+
 def read_ar_entries(data: bytes):
     """Yield (name, size, payload) for each member of an ar archive."""
     if data[:8] != b"!<arch>\n":
@@ -82,7 +83,12 @@ def deb_control_fields_and_bytes(deb_path: Path) -> tuple[dict, bytes]:
     data = deb_path.read_bytes()
     control_tar = None
     for name, size, payload in read_ar_entries(data):
-        if name in ("control.tar", "control.tar.gz", "control.tar.xz", "control.tar.zst"):
+        if name in (
+            "control.tar",
+            "control.tar.gz",
+            "control.tar.xz",
+            "control.tar.zst",
+        ):
             control_tar = (name, payload)
             break
     if control_tar is None:
@@ -99,7 +105,9 @@ def deb_control_fields_and_bytes(deb_path: Path) -> tuple[dict, bytes]:
         # the host has a zstd binary.
         try:
             raw = subprocess.run(
-                ["zstd", "-d", "-c"], input=payload, check=True,
+                ["zstd", "-d", "-c"],
+                input=payload,
+                check=True,
                 capture_output=True,
             ).stdout
         except (FileNotFoundError, subprocess.CalledProcessError) as e:
@@ -152,6 +160,7 @@ def _parse_debian_control(text: str) -> dict:
 # dpkg version ordering: '~' sorts before end-of-version (and before empty)
 # ---------------------------------------------------------------------------
 
+
 def _order_char(ch: str) -> int:
     if ch == "~":
         return -1
@@ -202,9 +211,12 @@ def deb_version_key(version: str):
 # Staging
 # ---------------------------------------------------------------------------
 
+
 def existing_published(out_dir: Path, suite: str) -> set:
     """(package, version) pairs already published in dists/<suite>/Packages."""
-    packages_file = out_dir / "dists" / suite / COMPONENT / f"binary-{ARCH}" / "Packages"
+    packages_file = (
+        out_dir / "dists" / suite / COMPONENT / f"binary-{ARCH}" / "Packages"
+    )
     published = set()
     if packages_file.exists():
         text = packages_file.read_text(encoding="utf-8-sig")
@@ -214,9 +226,9 @@ def existing_published(out_dir: Path, suite: str) -> set:
             pkg = ver = None
             for line in stanza.splitlines():
                 if line.startswith("Package: "):
-                    pkg = line[len("Package: "):].strip()
+                    pkg = line[len("Package: ") :].strip()
                 elif line.startswith("Version: "):
-                    ver = line[len("Version: "):].strip()
+                    ver = line[len("Version: ") :].strip()
             if pkg and ver:
                 published.add((pkg, ver))
     return published
@@ -234,7 +246,9 @@ def stage(
     # (which names the build, not the version) may prefix the pool, and it
     # doubles as the guard against path escapes.
     if pool_subdir and parse_attempt_ref(pool_subdir) is None:
-        die(f"--pool-subdir must be an attempt ref (rc.<N>-vX.Y.Z), got {pool_subdir!r}")
+        die(
+            f"--pool-subdir must be an attempt ref (rc.<N>-vX.Y.Z), got {pool_subdir!r}"
+        )
     debs = sorted(pool_dir.glob("*.deb"))
     if not debs:
         die(f"no .deb files found in pool {pool_dir}")
@@ -269,7 +283,9 @@ def stage(
                 "Package": fields["Package"],
                 "Version": fields["Version"],
                 "Architecture": arch,
-                "Maintainer": fields.get("Maintainer", "Clawksis <noreply@nousresearch.com>"),
+                "Maintainer": fields.get(
+                    "Maintainer", "Clawksis <noreply@nousresearch.com>"
+                ),
                 "Installed-Size": fields.get("Installed-Size", "0"),
                 "Description": fields.get("Description", "Clawksis"),
                 "Filename": filename,
@@ -283,15 +299,15 @@ def stage(
     # into one garbled stanza (biting exactly when the repo carries multiple
     # versions of the same package -- the first thing a canary+stable repo
     # has). existing_published() below relies on the same blank-line layout.
-    stanzas.sort(
-        key=lambda s: (s["Package"], deb_version_key(s["Version"]))
-    )
+    stanzas.sort(key=lambda s: (s["Package"], deb_version_key(s["Version"])))
     packages_text = "\n\n".join(
         "\n".join(f"{k}: {v}" for k, v in stanza.items()) for stanza in stanzas
     ) + ("\n" if stanzas else "")
 
     (binary_dir / "Packages").write_text(packages_text, encoding="utf-8")
-    with gzip.GzipFile(filename="", mode="wb", fileobj=open(binary_dir / "Packages.gz", "wb"), mtime=0) as gz:
+    with gzip.GzipFile(
+        filename="", mode="wb", fileobj=open(binary_dir / "Packages.gz", "wb"), mtime=0
+    ) as gz:
         gz.write(packages_text.encode("utf-8"))
 
     # Date is REQUIRED by apt (it refuses a Release without one) and the
@@ -332,7 +348,10 @@ def stage(
     if gpg_key_file is not None and shutil.which("gpg"):
         sign(dists, release_path, gpg_key_file)
         return 0
-    print("warning: gpg binary or key file unavailable; emitted unsigned Release", file=sys.stderr)
+    print(
+        "warning: gpg binary or key file unavailable; emitted unsigned Release",
+        file=sys.stderr,
+    )
     return 3
 
 
@@ -367,7 +386,9 @@ def _gpg_run(
     if passphrase is not None:
         cmd += ["--pinentry-mode", "loopback", "--passphrase-fd", "0"]
         if stdin is not None:
-            raise StageError("internal error: passphrase and data stdin are the same fd")
+            raise StageError(
+                "internal error: passphrase and data stdin are the same fd"
+            )
         stdin = passphrase.encode("utf-8")
 
     # File-backed capture, not pipes: gpg's spawned gpg-agent can outlive
@@ -388,7 +409,9 @@ def _gpg_run(
                 [*cmd, *args],
                 input=stdin,
                 stdin=subprocess.DEVNULL if stdin is None else None,
-                stdout=fo, stderr=fe, env=env,
+                stdout=fo,
+                stderr=fe,
+                env=env,
                 check=False,
             )
         result.stdout = out_path.read_bytes()
@@ -409,9 +432,9 @@ def _sole_secret_key_fingerprint(homedir: Path) -> str:
     multiple keys we fail closed rather than silently signing with the
     first one.
     """
-    listing = _gpg_run(
-        homedir, ["--with-colons", "--list-secret-keys"]
-    ).stdout.decode("utf-8", "replace")
+    listing = _gpg_run(homedir, ["--with-colons", "--list-secret-keys"]).stdout.decode(
+        "utf-8", "replace"
+    )
     fingerprints = []
     primary = False
     for line in listing.splitlines():
@@ -449,7 +472,9 @@ def _verify_signature(
             fields = line.split()
             valid.append(fields[2])
             if len(fields) > 11:
-                valid.append(fields[11])  # Primary key when a signing subkey made the signature.
+                valid.append(
+                    fields[11]
+                )  # Primary key when a signing subkey made the signature.
     if expected_fpr not in valid:
         raise StageError(
             f"post-sign verification failed for {sig_path.name}: no VALIDSIG "
@@ -478,8 +503,11 @@ def sign(dists: Path, release_path: Path, gpg_key_file: Path) -> None:
         _gpg_run(
             homedir,
             [
-                "--clearsign", "--local-user", key_id,
-                "--output", str(dists / "InRelease"),
+                "--clearsign",
+                "--local-user",
+                key_id,
+                "--output",
+                str(dists / "InRelease"),
                 str(release_path),
             ],
             passphrase=passphrase,
@@ -487,8 +515,12 @@ def sign(dists: Path, release_path: Path, gpg_key_file: Path) -> None:
         _gpg_run(
             homedir,
             [
-                "--detach-sign", "--armor", "--local-user", key_id,
-                "--output", str(dists / "Release.gpg"),
+                "--detach-sign",
+                "--armor",
+                "--local-user",
+                key_id,
+                "--output",
+                str(dists / "Release.gpg"),
                 str(release_path),
             ],
             passphrase=passphrase,
@@ -523,7 +555,8 @@ def main(argv: list | None = None) -> int:
     # verified 2026-09-06); clawk-stable/clawk-canary are what CI stages
     # for the stable/canary channels.
     ap.add_argument(
-        "--suite", required=True,
+        "--suite",
+        required=True,
         choices=["clawk-stable", "clawk-canary", "clawk-nightly"],
     )
     ap.add_argument("--gpg-key-file", type=Path, default=None)
@@ -534,7 +567,9 @@ def main(argv: list | None = None) -> int:
         die(f"pool dir not found: {args.pool}")
     args.out.mkdir(parents=True, exist_ok=True)
     try:
-        return stage(args.pool, args.out, args.suite, args.gpg_key_file, args.pool_subdir)
+        return stage(
+            args.pool, args.out, args.suite, args.gpg_key_file, args.pool_subdir
+        )
     except StageError as e:
         die(str(e))
 

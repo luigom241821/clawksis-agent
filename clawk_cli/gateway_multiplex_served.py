@@ -27,18 +27,24 @@ def live_default_gateway_pid() -> Optional[int]:
     """
     from clawk_constants import get_default_clawk_root
     from gateway.status import live_gateway_pid_for_home
+
     return live_gateway_pid_for_home(get_default_clawk_root())
 
 
-def recorded_served_profiles(default_root: Optional[Path] = None) -> Optional[list[str]]:
+def recorded_served_profiles(
+    default_root: Optional[Path] = None,
+) -> Optional[list[str]]:
     """``served_profiles`` the live default gateway recorded, or None when the key is absent (a record
     from before the multiplexer recorded it, or a stopped/absent gateway). Callers fall back to config
     derivation only on None: an empty list is an authoritative "serves nobody else"."""
     from clawk_constants import get_default_clawk_root
     from gateway.status import read_runtime_status
+
     if live_default_gateway_pid() is None:
         return None
-    runtime = read_runtime_status((default_root or get_default_clawk_root()) / "gateway_state.json")
+    runtime = read_runtime_status(
+        (default_root or get_default_clawk_root()) / "gateway_state.json"
+    )
     served = (runtime or {}).get("served_profiles")
     return [str(p) for p in served] if isinstance(served, list) else None
 
@@ -54,6 +60,7 @@ def served_profile_unserved_platforms(profile: str) -> dict[str, str]:
     ``<profile>:<platform>`` as ``disabled`` with a reason and remedy)."""
     from clawk_constants import get_default_clawk_root
     from gateway.status import read_runtime_status
+
     if not profile or live_default_gateway_pid() is None:
         return {}
     runtime = read_runtime_status(get_default_clawk_root() / "gateway_state.json") or {}
@@ -62,19 +69,26 @@ def served_profile_unserved_platforms(profile: str) -> dict[str, str]:
         return {}
     prefix = f"{profile}:"
     return {
-        key[len(prefix):]: str(entry.get("error_message") or "not served under multiplex")
+        key[len(prefix) :]: str(
+            entry.get("error_message") or "not served under multiplex"
+        )
         for key, entry in platforms.items()
-        if isinstance(key, str) and key.startswith(prefix) and isinstance(entry, dict)
+        if isinstance(key, str)
+        and key.startswith(prefix)
+        and isinstance(entry, dict)
         and entry.get("error_code") in {"multiplex_shared_ingress", "whatsapp_unpaired"}
     }
 
 
-def served_profile_ingress_urls(profile: Optional[str] = None) -> dict[str, dict[str, str]]:
+def served_profile_ingress_urls(
+    profile: Optional[str] = None,
+) -> dict[str, dict[str, str]]:
     """``{profile: {platform: url}}`` for every secondary inbound-port platform the live multiplexer
     serves on its shared listener (``<profile>:<platform>`` entries carrying ``ingress_url``). This is
     what the user pastes into the vendor console (Twilio, LINE, Teams, ...). ``profile`` narrows the map."""
     from clawk_constants import get_default_clawk_root
     from gateway.status import read_runtime_status, shared_listener_mirror_platforms
+
     if live_default_gateway_pid() is None:
         return {}
     runtime = read_runtime_status(get_default_clawk_root() / "gateway_state.json") or {}
@@ -93,7 +107,9 @@ def served_profile_ingress_urls(profile: Optional[str] = None) -> dict[str, dict
             continue
         urls.setdefault(name, {})[platform] = str(url)
     # api_server/webhook are the default's adapters mirrored at /p/<profile>/ (no entry of their own).
-    served = [str(p) for p in (runtime.get("served_profiles") or []) if p and p != "default"]
+    served = [
+        str(p) for p in (runtime.get("served_profiles") or []) if p and p != "default"
+    ]
     for name in served if not profile else [p for p in served if p == profile]:
         for platform, entry in shared_listener_mirror_platforms(runtime, name).items():
             if entry.get("ingress_url"):
@@ -106,7 +122,9 @@ def format_ingress_url_lines(urls: dict[str, str], indent: str = "  ") -> list[s
     return [f"{indent}{platform}: {url}" for platform, url in sorted(urls.items())]
 
 
-def notify_multiplexer_profiles_changed(profile_name: str, *, timeout: float = 8.0) -> Optional[list[str]]:
+def notify_multiplexer_profiles_changed(
+    profile_name: str, *, timeout: float = 8.0
+) -> Optional[list[str]]:
     """Tell the live default multiplexer that ``profiles/`` changed (``profile_name`` was created or
     deleted) so it hot-serves / unroutes it now instead of at its next periodic rescan. Returns the
     served-profile list the gateway answered with, or None when no multiplexer answered (no live default
@@ -114,11 +132,14 @@ def notify_multiplexer_profiles_changed(profile_name: str, *, timeout: float = 8
     try:
         from clawk_constants import get_default_clawk_root
         from gateway.control_socket import rescan_gateway_profiles
+
         if live_default_gateway_pid() is None:
             return None
         answer = rescan_gateway_profiles(get_default_clawk_root(), timeout=timeout)
     except Exception:
-        logger.debug("multiplexer rescan notification failed for %r", profile_name, exc_info=True)
+        logger.debug(
+            "multiplexer rescan notification failed for %r", profile_name, exc_info=True
+        )
         return None
     if not isinstance(answer, dict) or answer.get("multiplex") is False:
         return None

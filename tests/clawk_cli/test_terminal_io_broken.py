@@ -11,7 +11,6 @@ import errno
 from unittest.mock import MagicMock
 
 
-
 def _make_cli_stub():
     from cli import ClawksisCLI
 
@@ -25,7 +24,6 @@ def _make_cli_stub():
 
 
 class TestTerminalIoBrokenFreeze:
-
     def test_invalidate_stops_after_eio(self):
         cli = _make_cli_stub()
         cli._app.invalidate.side_effect = OSError(errno.EIO, "Input/output error")

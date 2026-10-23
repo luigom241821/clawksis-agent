@@ -5,6 +5,7 @@ adapter wrappers (Systemd / Launchd / Windows).
 The s6 backend is added in Phase 3; its tests live alongside the
 implementation in this same file once that phase ships.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -21,17 +22,9 @@ from clawk_cli.service_manager import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # detect_service_manager
 # ---------------------------------------------------------------------------
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -39,17 +32,9 @@ from clawk_cli.service_manager import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Backend wrappers — kind + registration unsupported on hosts
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -57,17 +42,9 @@ from clawk_cli.service_manager import (
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # get_service_manager factory
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +74,10 @@ def fake_subprocess_run(monkeypatch: pytest.MonkeyPatch):
 
     def _fake(cmd, **kw):
         import subprocess as _sp
+
         seq = list(cmd) if isinstance(cmd, (list, tuple)) else [str(cmd)]
         if seq and seq[0].startswith("/command/"):
-            seq[0] = seq[0][len("/command/"):]
+            seq[0] = seq[0][len("/command/") :]
         calls.append(seq)
         return _sp.CompletedProcess(cmd, 0, "", "")
 
@@ -147,9 +125,7 @@ def test_seed_supervise_skeleton_creates_expected_layout(tmp_path) -> None:
     # supervise/control FIFO.
     control = supervise / "control"
     assert control.exists(), "missing supervise/control FIFO"
-    assert stat.S_ISFIFO(control.stat().st_mode), (
-        "supervise/control must be a FIFO"
-    )
+    assert stat.S_ISFIFO(control.stat().st_mode), "supervise/control must be a FIFO"
     assert stat.S_IMODE(control.stat().st_mode) == 0o660
 
 
@@ -178,14 +154,6 @@ def test_seed_supervise_skeleton_sets_setgid_on_event_dirs(tmp_path) -> None:
         assert mode == 0o3730, f"{rel}/ mode = {oct(mode)}, want 0o3730"
 
 
-
-
-
-
-
-
-
-
 def test_render_run_script_uses_replace_to_take_over_stale_holder() -> None:
     """NS-505: the supervised gateway must exec ``gateway run --replace``.
 
@@ -207,8 +175,7 @@ def test_render_run_script_uses_replace_to_take_over_stale_holder() -> None:
     # Every exec line that launches the gateway must carry --replace, so
     # neither the non-root nor the privilege-drop branch can spin.
     gateway_execs = [
-        line for line in default_text.splitlines()
-        if "gateway run" in line
+        line for line in default_text.splitlines() if "gateway run" in line
     ]
     assert gateway_execs, "no gateway run exec line rendered"
     assert all("--replace" in line for line in gateway_execs), (
@@ -216,15 +183,11 @@ def test_render_run_script_uses_replace_to_take_over_stale_holder() -> None:
     )
 
     named_text = S6ServiceManager._render_run_script("coder", {})
-    named_execs = [
-        line for line in named_text.splitlines() if "gateway run" in line
-    ]
+    named_execs = [line for line in named_text.splitlines() if "gateway run" in line]
     assert named_execs
     assert all("--replace" in line for line in named_execs), (
         f"a named-profile gateway run line is missing --replace: {named_execs}"
     )
-
-
 
 
 def test_render_finish_script_does_not_restart_on_clean_exit(tmp_path) -> None:
@@ -239,31 +202,20 @@ def test_render_finish_script_does_not_restart_on_clean_exit(tmp_path) -> None:
     script.chmod(0o755)
 
     def finish_exit(run_exit_code: int) -> int:
-        proc = subprocess.run(["sh", str(script), str(run_exit_code)],
-                              capture_output=True, check=False)
+        proc = subprocess.run(
+            ["sh", str(script), str(run_exit_code)], capture_output=True, check=False
+        )
         return proc.returncode
 
-    assert finish_exit(0) == 125   # clean stop — no restart
+    assert finish_exit(0) == 125  # clean stop — no restart
     assert finish_exit(78) == 125  # fatal config — no restart
-    assert finish_exit(1) == 0     # crash — s6 restarts
-    assert finish_exit(137) == 0   # SIGKILL crash — s6 restarts
-
-
-
-
+    assert finish_exit(1) == 0  # crash — s6 restarts
+    assert finish_exit(137) == 0  # SIGKILL crash — s6 restarts
 
 
 # ---------------------------------------------------------------------------
 # Lifecycle errors — friendly messages, not raw CalledProcessError
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -319,8 +271,12 @@ def real_s6(monkeypatch: pytest.MonkeyPatch):
                 "pgid": str(_S6_PID) if up else "-1",
                 "exitcode": "-1" if up else "0",
             }
-            assert all(f in table for f in fields), f"unknown s6-svstat field in {fields}"
-            return _sp.CompletedProcess(cmd, 0, " ".join(table[f] for f in fields) + "\n", "")
+            assert all(f in table for f in fields), (
+                f"unknown s6-svstat field in {fields}"
+            )
+            return _sp.CompletedProcess(
+                cmd, 0, " ".join(table[f] for f in fields) + "\n", ""
+            )
         line = (
             f"up (pid {_S6_PID} pgid {_S6_PID}) 5 seconds\n"
             if up
@@ -336,7 +292,8 @@ def real_s6(monkeypatch: pytest.MonkeyPatch):
 def marker_calls(monkeypatch: pytest.MonkeyPatch):
     marked: list[int] = []
     monkeypatch.setattr(
-        "gateway.status.write_planned_stop_marker", lambda pid: marked.append(pid) or True
+        "gateway.status.write_planned_stop_marker",
+        lambda pid: marked.append(pid) or True,
     )
     return marked
 
@@ -355,7 +312,9 @@ def test_s6_stop_writes_planned_stop_marker_for_supervised_pid(
 
     assert marker_calls == [_S6_PID]
     assert _svc_down_issued(real_s6)
-    svc_idx = next(i for i, c in enumerate(real_s6["calls"]) if c[:2] == ["s6-svc", "-d"])
+    svc_idx = next(
+        i for i, c in enumerate(real_s6["calls"]) if c[:2] == ["s6-svc", "-d"]
+    )
     assert any(c[0] == "s6-svstat" for c in real_s6["calls"][:svc_idx])
 
 
@@ -436,7 +395,8 @@ def _log_run_setup_fragment(rendered: str) -> str:
 
 @pytest.mark.platforms("linux")
 def test_s6_log_run_creates_leaf_as_clawk_without_chown(
-    s6_scandir, fake_subprocess_run,
+    s6_scandir,
+    fake_subprocess_run,
 ) -> None:
     """log/run must not root-chown/unlink volume paths; create leaf as clawk.
 
@@ -449,7 +409,9 @@ def test_s6_log_run_creates_leaf_as_clawk_without_chown(
 
     log_text = (s6_scandir / "gateway-coder" / "log" / "run").read_text()
 
-    assert not any(line.lstrip().startswith("chown ") for line in log_text.splitlines()), (
+    assert not any(
+        line.lstrip().startswith("chown ") for line in log_text.splitlines()
+    ), (
         "restartable log/run must not invoke chown on clawk-writable paths; "
         f"saw: {log_text!r}"
     )
@@ -498,24 +460,18 @@ def test_s6_log_run_never_invokes_chown_with_symlinked_log_dir(tmp_path) -> None
     bin_dir.mkdir()
     recorder = tmp_path / "chown_calls.txt"
     (bin_dir / "chown").write_text(
-        "#!/bin/sh\n"
-        f'printf "%s\\n" "$*" >> "{recorder.as_posix()}"\n'
-        "exit 0\n",
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{recorder.as_posix()}"\nexit 0\n',
         encoding="utf-8",
     )
     # Pretend we are root so the script takes the s6-setuidgid setup path.
     # Mark the drop so fake rm can refuse unlink outside CLAWK_HOME the way
     # a real clawk uid cannot delete a foreign root-owned lock.
     (bin_dir / "id").write_text(
-        "#!/bin/sh\n"
-        'if [ "$1" = "-u" ]; then echo 0; exit 0; fi\n'
-        "exit 1\n",
+        '#!/bin/sh\nif [ "$1" = "-u" ]; then echo 0; exit 0; fi\nexit 1\n',
         encoding="utf-8",
     )
     (bin_dir / "s6-setuidgid").write_text(
-        "#!/bin/sh\n"
-        "shift\n"
-        'CLAWK_TEST_DROPPED=1 exec "$@"\n',
+        '#!/bin/sh\nshift\nCLAWK_TEST_DROPPED=1 exec "$@"\n',
         encoding="utf-8",
     )
     real_rm = "/bin/rm"
@@ -583,7 +539,9 @@ def test_s6_log_run_never_invokes_chown_with_symlinked_log_dir(tmp_path) -> None
                 check=False,
             )
             assert proc.returncode == 0, (proc.stdout, proc.stderr)
-            assert (victim / "lock").is_file(), "symlinked leaf must not let root unlink victim/lock"
+            assert (victim / "lock").is_file(), (
+                "symlinked leaf must not let root unlink victim/lock"
+            )
     finally:
         stop.set()
         racer.join(timeout=2)
@@ -594,5 +552,3 @@ def test_s6_log_run_never_invokes_chown_with_symlinked_log_dir(tmp_path) -> None
     assert after.st_gid == before.st_gid
     assert (victim / "marker").read_text(encoding="utf-8") == "keep"
     assert (victim / "lock").read_text(encoding="utf-8") == "keep-lock"
-
-

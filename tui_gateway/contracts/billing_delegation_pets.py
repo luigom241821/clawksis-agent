@@ -70,8 +70,12 @@ class UsageModel(Result):
     topup_bar: UsageBar | None = None
 
 
-method("usage.bars", params=ProfileParams, result=UsageModel,
-       doc="Two-bar dollar usage view shared by /usage, /topup and /subscription; fail-open to unavailable.")
+method(
+    "usage.bars",
+    params=ProfileParams,
+    result=UsageModel,
+    doc="Two-bar dollar usage view shared by /usage, /topup and /subscription; fail-open to unavailable.",
+)
 
 
 # ── billing.state ─────────────────────────────────────────────────────────────────────────────
@@ -171,8 +175,12 @@ class BillingStateResult(Result):
     plan_usage: PlanUsage | None = None
 
 
-method("billing.state", params=ProfileParams, result=BillingStateResult,
-       doc="Read-only billing view (no scope); the Nous free tier is answered locally without a portal call.")
+method(
+    "billing.state",
+    params=ProfileParams,
+    result=BillingStateResult,
+    doc="Read-only billing view (no scope); the Nous free tier is answered locally without a portal call.",
+)
 
 
 # ── subscription.state / preview / change / resume / upgrade ──────────────────────────────────
@@ -226,8 +234,12 @@ class SubscriptionStateResult(Result):
     plan_usage: PlanUsage | None = None
 
 
-method("subscription.state", params=ProfileParams, result=SubscriptionStateResult,
-       doc="Current plan, tier catalog and usage for the picker; fail-open when logged out.")
+method(
+    "subscription.state",
+    params=ProfileParams,
+    result=SubscriptionStateResult,
+    doc="Current plan, tier catalog and usage for the picker; fail-open when logged out.",
+)
 
 
 class SubscriptionPreviewParams(ProfileParams):
@@ -255,8 +267,12 @@ class SubscriptionPreviewResult(BillingEnvelope):
     effective_at: str | None = None
 
 
-method("subscription.preview", params=SubscriptionPreviewParams, result=SubscriptionPreviewResult,
-       doc="Chargeless quote of what a plan change would do (billing:manage).")
+method(
+    "subscription.preview",
+    params=SubscriptionPreviewParams,
+    result=SubscriptionPreviewResult,
+    doc="Chargeless quote of what a plan change would do (billing:manage).",
+)
 
 
 class SubscriptionChangeParams(ProfileParams):
@@ -270,10 +286,18 @@ class BillingPendingChangeResult(BillingEnvelope):
     """``_billing_pending_change``: ``message`` + the raw NAS body in ``payload`` on success."""
 
 
-method("subscription.change", params=SubscriptionChangeParams, result=BillingPendingChangeResult,
-       doc="Schedule a downgrade / same-price change or a period-end cancellation.")
-method("subscription.resume", params=ProfileParams, result=BillingPendingChangeResult,
-       doc="Clear a scheduled downgrade / cancellation (re-enables recurring spend).")
+method(
+    "subscription.change",
+    params=SubscriptionChangeParams,
+    result=BillingPendingChangeResult,
+    doc="Schedule a downgrade / same-price change or a period-end cancellation.",
+)
+method(
+    "subscription.resume",
+    params=ProfileParams,
+    result=BillingPendingChangeResult,
+    doc="Clear a scheduled downgrade / cancellation (re-enables recurring spend).",
+)
 
 
 class SubscriptionUpgradeParams(ProfileParams):
@@ -293,8 +317,12 @@ class SubscriptionUpgradeResult(BillingEnvelope):
     idempotency_key: str | None = None
 
 
-method("subscription.upgrade", params=SubscriptionUpgradeParams, result=SubscriptionUpgradeResult,
-       doc="Prorate, charge and flip the plan (billing:manage, idempotent).")
+method(
+    "subscription.upgrade",
+    params=SubscriptionUpgradeParams,
+    result=SubscriptionUpgradeResult,
+    doc="Prorate, charge and flip the plan (billing:manage, idempotent).",
+)
 
 
 # ── billing.charge / charge_status / auto_reload / step_up ───────────────────────────────────
@@ -312,8 +340,12 @@ class BillingChargeResult(BillingEnvelope):
     idempotency_key: str | None = None
 
 
-method("billing.charge", params=BillingChargeParams, result=BillingChargeResult,
-       doc="Start a one-off top-up charge (billing:manage, idempotent).")
+method(
+    "billing.charge",
+    params=BillingChargeParams,
+    result=BillingChargeResult,
+    doc="Start a one-off top-up charge (billing:manage, idempotent).",
+)
 
 
 class BillingChargeStatusParams(ProfileParams):
@@ -329,8 +361,12 @@ class BillingChargeStatusResult(BillingEnvelope):
     reason: str | None = None
 
 
-method("billing.charge_status", params=BillingChargeStatusParams, result=BillingChargeStatusResult,
-       doc="Poll one charge by id.")
+method(
+    "billing.charge_status",
+    params=BillingChargeStatusParams,
+    result=BillingChargeStatusResult,
+    doc="Poll one charge by id.",
+)
 
 
 class BillingAutoReloadParams(ProfileParams):
@@ -343,16 +379,24 @@ class BillingMutationResult(BillingEnvelope):
     """A write with no success payload beyond ``ok``."""
 
 
-method("billing.auto_reload", params=BillingAutoReloadParams, result=BillingMutationResult,
-       doc="Enable/disable auto top-up with its threshold and reload amount (billing:manage).")
+method(
+    "billing.auto_reload",
+    params=BillingAutoReloadParams,
+    result=BillingMutationResult,
+    doc="Enable/disable auto top-up with its threshold and reload amount (billing:manage).",
+)
 
 
 class BillingKeepGoingOnCreditsParams(ProfileParams):
     enabled: bool = False
 
 
-method("billing.keep_going_on_credits", params=BillingKeepGoingOnCreditsParams, result=BillingMutationResult,
-       doc="Window plans: turn 'Keep going on credits' on/off (billing:manage).")
+method(
+    "billing.keep_going_on_credits",
+    params=BillingKeepGoingOnCreditsParams,
+    result=BillingMutationResult,
+    doc="Window plans: turn 'Keep going on credits' on/off (billing:manage).",
+)
 
 
 class BillingStepUpParams(ProfileParams):
@@ -365,8 +409,12 @@ class BillingStepUpResult(BillingEnvelope):
     granted: bool | None = None
 
 
-method("billing.step_up", params=BillingStepUpParams, result=BillingStepUpResult,
-       doc="Run the billing:manage device flow; the URL/code arrive via billing.step_up.verification.")
+method(
+    "billing.step_up",
+    params=BillingStepUpParams,
+    result=BillingStepUpResult,
+    doc="Run the billing:manage device flow; the URL/code arrive via billing.step_up.verification.",
+)
 
 
 # ── delegation / subagent.steer ───────────────────────────────────────────────────────────────
@@ -395,8 +443,12 @@ class DelegationStatusResult(Result):
     max_concurrent_children: int
 
 
-method("delegation.status", params=ProfileParams, result=DelegationStatusResult,
-       doc="Running subagent tree plus the spawn pause flag and limits.")
+method(
+    "delegation.status",
+    params=ProfileParams,
+    result=DelegationStatusResult,
+    doc="Running subagent tree plus the spawn pause flag and limits.",
+)
 
 
 class DelegationPauseParams(ProfileParams):
@@ -407,8 +459,12 @@ class DelegationPauseResult(Result):
     paused: bool
 
 
-method("delegation.pause", params=DelegationPauseParams, result=DelegationPauseResult,
-       doc="Block/unblock NEW spawns globally (active children keep running); returns the new state.")
+method(
+    "delegation.pause",
+    params=DelegationPauseParams,
+    result=DelegationPauseResult,
+    doc="Block/unblock NEW spawns globally (active children keep running); returns the new state.",
+)
 
 
 class SubagentSteerParams(SessionParams):
@@ -429,8 +485,12 @@ class SubagentSteerResult(Result):
     text: str
 
 
-method("subagent.steer", params=SubagentSteerParams, result=SubagentSteerResult,
-       doc="Queue steering text into a live delegated child owned by this session.")
+method(
+    "subagent.steer",
+    params=SubagentSteerParams,
+    result=SubagentSteerResult,
+    doc="Queue steering text into a live delegated child owned by this session.",
+)
 
 
 # ── handoff ───────────────────────────────────────────────────────────────────────────────────
@@ -447,8 +507,12 @@ class HandoffRequestResult(Result):
     home_name: str
 
 
-method("handoff.request", params=HandoffRequestParams, result=HandoffRequestResult,
-       doc="Queue a handoff to a messaging platform's home channel; the gateway watcher claims it.")
+method(
+    "handoff.request",
+    params=HandoffRequestParams,
+    result=HandoffRequestResult,
+    doc="Queue a handoff to a messaging platform's home channel; the gateway watcher claims it.",
+)
 
 
 class HandoffStateResult(Result):
@@ -459,8 +523,12 @@ class HandoffStateResult(Result):
     error: str
 
 
-method("handoff.state", params=SessionParams, result=HandoffStateResult,
-       doc="Poll the handoff row for this session.")
+method(
+    "handoff.state",
+    params=SessionParams,
+    result=HandoffStateResult,
+    doc="Poll the handoff row for this session.",
+)
 
 
 class HandoffFailParams(SessionParams):
@@ -474,8 +542,12 @@ class HandoffFailResult(Result):
     state: str
 
 
-method("handoff.fail", params=HandoffFailParams, result=HandoffFailResult,
-       doc="Fail a not-yet-claimed handoff (client poll timeout); CAS against the watcher.")
+method(
+    "handoff.fail",
+    params=HandoffFailParams,
+    result=HandoffFailResult,
+    doc="Fail a not-yet-claimed handoff (client poll timeout); CAS against the watcher.",
+)
 
 
 # ── message.react ─────────────────────────────────────────────────────────────────────────────
@@ -501,8 +573,12 @@ class MessageReactResult(Result):
     reactions: list[MessageReaction]
 
 
-method("message.react", params=MessageReactParams, result=MessageReactResult,
-       doc="Set/clear one author's emoji reaction on a message; returns the row's full reaction list.")
+method(
+    "message.react",
+    params=MessageReactParams,
+    result=MessageReactResult,
+    doc="Set/clear one author's emoji reaction on a message; returns the row's full reaction list.",
+)
 
 
 # ── pets: generate / hatch / cancel / status ──────────────────────────────────────────────────
@@ -516,8 +592,12 @@ class PetCancelResult(Result):
     ok: bool
 
 
-method("pet.cancel", params=PetCancelParams, result=PetCancelResult,
-       doc="Stop an in-flight pet generate/hatch by token (idempotent).")
+method(
+    "pet.cancel",
+    params=PetCancelParams,
+    result=PetCancelResult,
+    doc="Stop an in-flight pet generate/hatch by token (idempotent).",
+)
 
 
 class PetGenProvider(Result):
@@ -533,8 +613,12 @@ class PetGenerateStatusResult(Result):
     providers: list[PetGenProvider]
 
 
-method("pet.generate.status", params=ProfileParams, result=PetGenerateStatusResult,
-       doc="Whether pet generation is possible (a reference-capable image backend) and which providers.")
+method(
+    "pet.generate.status",
+    params=ProfileParams,
+    result=PetGenerateStatusResult,
+    doc="Whether pet generation is possible (a reference-capable image backend) and which providers.",
+)
 
 
 class PetGenerateParams(ProfileParams):
@@ -558,8 +642,12 @@ class PetGenerateResult(Result):
     drafts: list[PetDraft]
 
 
-method("pet.generate", params=PetGenerateParams, result=PetGenerateResult,
-       doc="Candidate base looks for a new pet (draft step); drafts also stream via pet.generate.progress.")
+method(
+    "pet.generate",
+    params=PetGenerateParams,
+    result=PetGenerateResult,
+    doc="Candidate base looks for a new pet (draft step); drafts also stream via pet.generate.progress.",
+)
 
 
 class PetHatchParams(ProfileParams):
@@ -602,8 +690,12 @@ class PetHatchResult(Result):
     pet: PetSpritePayload
 
 
-method("pet.hatch", params=PetHatchParams, result=PetHatchResult,
-       doc="Turn a base draft into a full spritesheet pet; progress streams via pet.hatch.progress.")
+method(
+    "pet.hatch",
+    params=PetHatchParams,
+    result=PetHatchResult,
+    doc="Turn a base draft into a full spritesheet pet; progress streams via pet.hatch.progress.",
+)
 
 
 # ── project.facts ─────────────────────────────────────────────────────────────────────────────
@@ -629,5 +721,9 @@ class ProjectFactsResult(Result):
     facts: ProjectFacts | None = None
 
 
-method("project.facts", params=ProjectFactsParams, result=ProjectFactsResult,
-       doc="Structured project facts for a cwd so UIs don't re-sniff the workspace.")
+method(
+    "project.facts",
+    params=ProjectFactsParams,
+    result=ProjectFactsResult,
+    doc="Structured project facts for a cwd so UIs don't re-sniff the workspace.",
+)

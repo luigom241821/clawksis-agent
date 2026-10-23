@@ -1,4 +1,5 @@
 """Fallback rebuilds retain the credential source, not its last token."""
+
 from types import SimpleNamespace
 
 import httpx
@@ -21,13 +22,21 @@ def test_fallback_rebuild_preserves_rotating_and_static_credentials(mode, dynami
 
     client = OpenAI(api_key=source, base_url="http://localhost:1234/v1")
     agent = SimpleNamespace()
-    _swap_fallback_clients(agent, client, "fixture", "fixture", str(client.base_url), mode)
-    rebuilt = OpenAI(**agent._client_kwargs, http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+    _swap_fallback_clients(
+        agent, client, "fixture", "fixture", str(client.base_url), mode
+    )
+    rebuilt = OpenAI(
+        **agent._client_kwargs,
+        http_client=httpx.Client(transport=httpx.MockTransport(respond)),
+    )
     try:
         for value in ("first-token", "rotated-token"):
             token[0] = value
             rebuilt.chat.completions.create(model="fixture", messages=[])
-        expected = ["Bearer first-token", "Bearer rotated-token" if dynamic else "Bearer first-token"]
+        expected = [
+            "Bearer first-token",
+            "Bearer rotated-token" if dynamic else "Bearer first-token",
+        ]
         assert captured == expected
         assert agent.api_key is source
     finally:
@@ -40,7 +49,14 @@ def test_anthropic_fallback_keeps_callable_without_treating_it_as_oauth_text():
     client = OpenAI(api_key=source, base_url="http://localhost:1234/v1")
     agent = SimpleNamespace()
     try:
-        _swap_fallback_clients(agent, client, "anthropic", "fixture", str(client.base_url), "anthropic_messages")
+        _swap_fallback_clients(
+            agent,
+            client,
+            "anthropic",
+            "fixture",
+            str(client.base_url),
+            "anthropic_messages",
+        )
         assert agent.api_key is source
         assert agent._anthropic_api_key is source
         assert agent._is_anthropic_oauth is False

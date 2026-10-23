@@ -117,7 +117,9 @@ async def test_recovery_does_not_hide_real_admission_lookup_failure(tmp_path, ca
 
 
 @pytest.mark.asyncio
-async def test_legacy_migration_skips_structurally_corrupt_neighbor(monkeypatch, tmp_path):
+async def test_legacy_migration_skips_structurally_corrupt_neighbor(
+    monkeypatch, tmp_path
+):
     healthy_key = "d" * 32
     damaged_key = "e" * 32
     owner = {
@@ -147,8 +149,10 @@ async def test_legacy_migration_skips_structurally_corrupt_neighbor(monkeypatch,
         ref = SimpleNamespace(session_id="tip")
         live = object()
         entry = SimpleNamespace(session_id="tip")
+
         async def target(authority, actor):
             return ref, live, entry
+
         monkeypatch.setattr("gateway.session_bot._target", target)
 
         @contextmanager

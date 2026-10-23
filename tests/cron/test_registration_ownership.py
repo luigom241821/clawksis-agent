@@ -2,6 +2,7 @@
 
 Narrow regressions for the in-memory ownership portion of #88688.
 """
+
 from concurrent.futures import Future
 import threading
 import time
@@ -28,17 +29,28 @@ def test_live_direct_run_survives_stale_sweep(tmp_path, monkeypatch):
         "print('direct-run-ok')\n"
     )
     with jobs.use_cron_store(tmp_path):
-        job = jobs.create_job(None, "every 15m", script=str(scripts / "live.py"),
-                              no_agent=True, deliver="local")
+        job = jobs.create_job(
+            None,
+            "every 15m",
+            script=str(scripts / "live.py"),
+            no_agent=True,
+            deliver="local",
+        )
         result = {}
+
         def run():
             with jobs.use_cron_store(tmp_path):
                 result.update(tools._execute_job_now(job))
+
         thread = threading.Thread(target=run)
         thread.start()
         try:
             deadline = time.monotonic() + 15
-            while not started.exists() and thread.is_alive() and time.monotonic() < deadline:
+            while (
+                not started.exists()
+                and thread.is_alive()
+                and time.monotonic() < deadline
+            ):
                 time.sleep(0.02)
             assert started.exists(), result
             key = sched._inflight_key(job["id"])
@@ -61,10 +73,13 @@ def test_live_direct_run_survives_stale_sweep(tmp_path, monkeypatch):
         outputs = (tmp_path / "cron" / "output").rglob("*.md")
         assert any("direct-run-ok" in output.read_text() for output in outputs)
         from cron.executions import latest_executions
+
         assert latest_executions([job["id"]])[job["id"]]["status"] == "completed"
 
 
-@pytest.mark.parametrize("path", ["direct", "direct-error", "ticker", "submit-error", "setup-error"])
+@pytest.mark.parametrize(
+    "path", ["direct", "direct-error", "ticker", "submit-error", "setup-error"]
+)
 def test_dispatch_cleanup_preserves_successor(path):
     job = jobs.create_job("offline", "every 15m", deliver="local")
     key = sched._inflight_key(job["id"])

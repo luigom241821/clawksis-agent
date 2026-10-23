@@ -40,26 +40,14 @@ def _boto_sys_modules_hygiene():
     _sys.modules.update(saved)
 
 
-
-
-
-
-
-
-
-
-
-
-
 class TestModelCatalog:
     """Verify Bedrock has a static model fallback list."""
 
     def test_bedrock_has_curated_models(self):
         from clawk_cli.models import _PROVIDER_MODELS
+
         models = _PROVIDER_MODELS.get("bedrock", [])
         assert len(models) > 0
-
-
 
 
 class TestResolveProvider:
@@ -69,14 +57,15 @@ class TestResolveProvider:
         """When user explicitly requests 'bedrock', it should resolve."""
         # bedrock is in the registry, so resolve_provider should return it
         from clawk_cli.auth import resolve_provider
+
         result = resolve_provider("bedrock")
         assert result == "bedrock"
 
     def test_aws_alias_resolves_to_bedrock(self):
         from clawk_cli.auth import resolve_provider
+
         result = resolve_provider("aws")
         assert result == "bedrock"
-
 
     def test_auto_detect_with_aws_credentials(self, monkeypatch):
         """When AWS credentials are present and no other provider is configured,
@@ -84,13 +73,21 @@ class TestResolveProvider:
         from clawk_cli.auth import resolve_provider
 
         # Clear all other provider env vars
-        for var in ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "GOOGLE_API_KEY", "DEEPSEEK_API_KEY"]:
+        for var in [
+            "OPENAI_API_KEY",
+            "OPENROUTER_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_TOKEN",
+            "GOOGLE_API_KEY",
+            "DEEPSEEK_API_KEY",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
         # Set AWS credentials
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
         # Mock the auth store to have no active provider
         with patch("clawk_cli.auth._load_auth_store", return_value={}):
@@ -101,8 +98,6 @@ class TestResolveProvider:
 class TestRuntimeProvider:
     """Verify resolve_runtime_provider() handles bedrock correctly."""
 
-
-
     def test_bedrock_runtime_no_credentials_raises_on_auto_detect(self, monkeypatch):
         """When bedrock is auto-detected (not explicitly requested) and no
         credentials are found, runtime resolution should raise AuthError."""
@@ -110,19 +105,38 @@ class TestRuntimeProvider:
         from clawk_cli.auth import AuthError
 
         # Clear all AWS env vars
-        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
-                     "AWS_BEARER_TOKEN_BEDROCK", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-                     "AWS_WEB_IDENTITY_TOKEN_FILE"]:
+        for var in [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_PROFILE",
+            "AWS_BEARER_TOKEN_BEDROCK",
+            "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+            "AWS_WEB_IDENTITY_TOKEN_FILE",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
         # Mock both the provider resolution and boto3's credential chain
         mock_session = MagicMock()
         mock_session.get_credentials.return_value = None
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}), \
-             patch("clawk_cli.runtime_provider.resolve_requested_provider", return_value="auto"), \
-             patch.dict("sys.modules", {"botocore": MagicMock(), "botocore.session": MagicMock()}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+            patch(
+                "clawk_cli.runtime_provider.resolve_requested_provider",
+                return_value="auto",
+            ),
+            patch.dict(
+                "sys.modules",
+                {"botocore": MagicMock(), "botocore.session": MagicMock()},
+            ),
+        ):
             import botocore.session as _bs
+
             _bs.get_session = MagicMock(return_value=mock_session)
             with pytest.raises(AuthError, match="No AWS credentials"):
                 resolve_runtime_provider(requested="auto")
@@ -133,12 +147,23 @@ class TestRuntimeProvider:
         from clawk_cli.runtime_provider import resolve_runtime_provider
 
         # No AWS env vars set — but explicit bedrock request should not raise
-        for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
-                     "AWS_BEARER_TOKEN_BEDROCK"]:
+        for var in [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_PROFILE",
+            "AWS_BEARER_TOKEN_BEDROCK",
+        ]:
             monkeypatch.delenv(var, raising=False)
 
-        with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("clawk_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with (
+            patch(
+                "clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"
+            ),
+            patch(
+                "clawk_cli.runtime_provider._get_model_config",
+                return_value={"provider": "bedrock"},
+            ),
+        ):
             result = resolve_runtime_provider(requested="bedrock")
         assert result["provider"] == "bedrock"
         assert result["api_mode"] == "bedrock_converse"
@@ -151,22 +176,35 @@ class TestRuntimeProvider:
         from clawk_cli.runtime_provider import resolve_runtime_provider
 
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-east-2")
 
         assert BEDROCK_OPENAI_RESPONSES_MODEL_IDS
 
         for model_id in BEDROCK_OPENAI_RESPONSES_MODEL_IDS:
-            with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-                 patch("clawk_cli.runtime_provider._get_model_config", return_value={
-                     "provider": "bedrock",
-                     "default": model_id,
-                 }):
+            with (
+                patch(
+                    "clawk_cli.runtime_provider.resolve_provider",
+                    return_value="bedrock",
+                ),
+                patch(
+                    "clawk_cli.runtime_provider._get_model_config",
+                    return_value={
+                        "provider": "bedrock",
+                        "default": model_id,
+                    },
+                ),
+            ):
                 result = resolve_runtime_provider(requested="bedrock")
 
             assert result["api_mode"] == "codex_responses", model_id
             assert result["model"] == model_id
-            assert result["base_url"] == "https://bedrock-mantle.us-east-2.api.aws/openai/v1"
+            assert (
+                result["base_url"]
+                == "https://bedrock-mantle.us-east-2.api.aws/openai/v1"
+            )
             assert result["api_key"] == "aws-sdk"
             assert result["bedrock_openai"] is True, model_id
 
@@ -178,19 +216,33 @@ class TestRuntimeProvider:
         from clawk_cli.runtime_provider import resolve_runtime_provider
 
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-east-2")
 
         for model_id in BEDROCK_OPENAI_RESPONSES_MODEL_IDS:
             for profile_id in (f"us.{model_id}", f"global.{model_id}"):
-                with patch("clawk_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-                     patch("clawk_cli.runtime_provider._get_model_config", return_value={
-                         "provider": "bedrock", "default": profile_id,
-                     }):
+                with (
+                    patch(
+                        "clawk_cli.runtime_provider.resolve_provider",
+                        return_value="bedrock",
+                    ),
+                    patch(
+                        "clawk_cli.runtime_provider._get_model_config",
+                        return_value={
+                            "provider": "bedrock",
+                            "default": profile_id,
+                        },
+                    ),
+                ):
                     result = resolve_runtime_provider(requested="bedrock")
 
                 assert result["api_mode"] == "bedrock_converse", profile_id
-                assert result["base_url"] == "https://bedrock-runtime.us-east-2.amazonaws.com", profile_id
+                assert (
+                    result["base_url"]
+                    == "https://bedrock-runtime.us-east-2.amazonaws.com"
+                ), profile_id
                 assert not result.get("bedrock_openai"), profile_id
 
     def test_bedrock_openai_models_do_not_fall_back_to_default_context(self):
@@ -201,54 +253,69 @@ class TestRuntimeProvider:
             BEDROCK_OPENAI_RESPONSES_MODEL_IDS,
             get_bedrock_context_length,
         )
+
         for model_id in BEDROCK_OPENAI_RESPONSES_MODEL_IDS:
-            assert get_bedrock_context_length(model_id) > BEDROCK_DEFAULT_CONTEXT_LENGTH, model_id
+            assert (
+                get_bedrock_context_length(model_id) > BEDROCK_DEFAULT_CONTEXT_LENGTH
+            ), model_id
 
 
 # ---------------------------------------------------------------------------
 # providers.py integration
 # ---------------------------------------------------------------------------
 
+
 class TestProvidersModule:
     """Verify bedrock is wired into clawk_cli/providers.py."""
 
-
-
     def test_determine_api_mode_from_bedrock_url(self):
         from clawk_cli.providers import determine_api_mode
-        assert determine_api_mode(
-            "unknown", "https://bedrock-runtime.us-east-1.amazonaws.com"
-        ) == "bedrock_converse"
 
+        assert (
+            determine_api_mode(
+                "unknown", "https://bedrock-runtime.us-east-1.amazonaws.com"
+            )
+            == "bedrock_converse"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Error classifier integration
 # ---------------------------------------------------------------------------
 
+
 class TestErrorClassifierBedrock:
     """Verify Bedrock error patterns are in the global error classifier."""
 
     def test_bedrock_throttling_classified_as_rate_limit(self):
         from agent.error_classifier import FailoverReason, classify_api_error
+
         err = Exception(
             "An error occurred (ThrottlingException) when calling the ConverseStream "
             "operation: Too many requests, please wait before trying again."
         )
-        assert classify_api_error(err, provider="bedrock").reason == FailoverReason.rate_limit
+        assert (
+            classify_api_error(err, provider="bedrock").reason
+            == FailoverReason.rate_limit
+        )
 
     def test_bedrock_input_too_long_classified_as_context_overflow(self):
         from agent.error_classifier import FailoverReason, classify_api_error
+
         err = Exception(
             "An error occurred (ValidationException) when calling the ConverseStream "
             "operation: Input is too long for requested model."
         )
-        assert classify_api_error(err, provider="bedrock").reason == FailoverReason.context_overflow
+        assert (
+            classify_api_error(err, provider="bedrock").reason
+            == FailoverReason.context_overflow
+        )
 
 
 # ---------------------------------------------------------------------------
 # pyproject.toml bedrock extra
 # ---------------------------------------------------------------------------
+
 
 class TestPackaging:
     """Verify Bedrock remains a declared lazy optional dependency."""
@@ -301,11 +368,11 @@ class TestBedrockPreserveDotsFlag:
 
     def test_bedrock_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="bedrock", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
-
-
 
     def test_non_bedrock_aws_url_does_not_preserve_dots(self):
         """Unrelated AWS endpoints (e.g. ``s3.us-east-1.amazonaws.com``)
@@ -313,13 +380,14 @@ class TestBedrockPreserveDotsFlag:
         the heuristic is scoped to the ``bedrock-runtime.`` substring
         specifically."""
         from types import SimpleNamespace
+
         agent = SimpleNamespace(
             provider="custom",
             base_url="https://s3.us-east-1.amazonaws.com",
         )
         from run_agent import AIAgent
-        assert AIAgent._anthropic_preserve_dots(agent) is False
 
+        assert AIAgent._anthropic_preserve_dots(agent) is False
 
 
 class TestBedrockModelNameNormalization:
@@ -327,19 +395,19 @@ class TestBedrockModelNameNormalization:
     reproduce the exact production request shape for each Bedrock model
     family, confirming the fix resolves the reporter's HTTP 400."""
 
-
-
-
     def test_bedrock_prefix_preserved_without_preserve_dots(self):
         """Bedrock inference profile IDs are auto-detected by prefix and
         always returned unmangled -- ``preserve_dots`` is irrelevant for
         these IDs because the dots are namespace separators, not version
         separators.  Regression for #12295."""
         from agent.anthropic_message_convert import normalize_model_name
-        assert normalize_model_name(
-            "global.anthropic.claude-opus-4-7", preserve_dots=False
-        ) == "global.anthropic.claude-opus-4-7"
 
+        assert (
+            normalize_model_name(
+                "global.anthropic.claude-opus-4-7", preserve_dots=False
+            )
+            == "global.anthropic.claude-opus-4-7"
+        )
 
 
 class TestBedrockBuildAnthropicKwargsEndToEnd:
@@ -349,13 +417,13 @@ class TestBedrockBuildAnthropicKwargsEndToEnd:
     ``bedrock-runtime.`` endpoint.  This is the integration-level
     regression for the reporter's HTTP 400."""
 
-
     def test_bedrock_model_preserved_without_preserve_dots(self):
         """Bedrock inference profile IDs survive ``build_anthropic_kwargs``
         even without ``preserve_dots=True`` -- the prefix auto-detection
         in ``normalize_model_name`` is the load-bearing piece.
         Regression for #12295."""
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="global.anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],
@@ -372,22 +440,16 @@ class TestBedrockModelIdDetection:
     makes ``normalize_model_name`` preserve dots for Bedrock IDs
     regardless of ``preserve_dots``.  Regression for #12295."""
 
-
-
-
-
-
-
     def test_bare_bedrock_id_preserved_without_flag(self):
         """The primary bug from #12295: ``anthropic.claude-opus-4-7``
         sent to bedrock-mantle via auxiliary clients that don't pass
         ``preserve_dots=True``."""
         from agent.anthropic_message_convert import normalize_model_name
-        assert normalize_model_name(
-            "anthropic.claude-opus-4-7", preserve_dots=False
-        ) == "anthropic.claude-opus-4-7"
 
-
+        assert (
+            normalize_model_name("anthropic.claude-opus-4-7", preserve_dots=False)
+            == "anthropic.claude-opus-4-7"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -404,13 +466,21 @@ class TestAuxiliaryClientBedrockResolution:
     def test_bedrock_returns_client_with_credentials(self, monkeypatch):
         """With valid AWS credentials, Bedrock should return a usable client."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-west-2")
 
         mock_anthropic_bedrock = MagicMock()
-        with patch("agent.anthropic_adapter.build_anthropic_bedrock_client",
-                   return_value=mock_anthropic_bedrock):
-            from agent.auxiliary_client import resolve_provider_client, AnthropicAuxiliaryClient
+        with patch(
+            "agent.anthropic_adapter.build_anthropic_bedrock_client",
+            return_value=mock_anthropic_bedrock,
+        ):
+            from agent.auxiliary_client import (
+                resolve_provider_client,
+                AnthropicAuxiliaryClient,
+            )
+
             client, model = resolve_provider_client("bedrock", None)
 
         assert client is not None, (
@@ -426,19 +496,11 @@ class TestAuxiliaryClientBedrockResolution:
         """Without AWS credentials, Bedrock should return (None, None) gracefully."""
         with patch("agent.bedrock_adapter.has_aws_credentials", return_value=False):
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("bedrock", None)
 
         assert client is None
         assert model is None
-
-
-
-
-
-
-
-
-
 
     def test_bedrock_shim_uncapped_when_caller_omits_max_tokens(self, monkeypatch):
         """No caller max_tokens → the shim passes None through and the wire
@@ -449,15 +511,21 @@ class TestAuxiliaryClientBedrockResolution:
         kept aux vision descriptions capped after the vision call sites
         dropped their own caps."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIO...MPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
 
         from agent.auxiliary_client import BedrockAuxiliaryClient
 
         client = BedrockAuxiliaryClient("us-east-1", "openai.gpt-oss-20b-1:0")
         boto3_client = MagicMock()
-        with patch("agent.bedrock_adapter._get_bedrock_runtime_client",
-                   return_value=boto3_client), \
-             patch("agent.bedrock_adapter.normalize_converse_response"):
+        with (
+            patch(
+                "agent.bedrock_adapter._get_bedrock_runtime_client",
+                return_value=boto3_client,
+            ),
+            patch("agent.bedrock_adapter.normalize_converse_response"),
+        ):
             # Aux vision-style call: no max_tokens key at all.
             client.chat.completions.create(
                 model="openai.gpt-oss-20b-1:0",
@@ -482,7 +550,9 @@ class TestAuxiliaryClientBedrockResolution:
         review: aux resolution previously derived its region env-first and
         could leave the primary runtime's configured region)."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "eu-central-1")
         monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "test-bearer")
 
@@ -497,10 +567,15 @@ class TestAuxiliaryClientBedrockResolution:
             def close(self):
                 pass
 
-        with patch("clawk_cli.config.load_config_readonly",
-                   return_value={"bedrock": {"region": "us-west-2"}}), \
-             patch("agent.auxiliary_client.OpenAI", _FakeOpenAI):
+        with (
+            patch(
+                "clawk_cli.config.load_config_readonly",
+                return_value={"bedrock": {"region": "us-west-2"}},
+            ),
+            patch("agent.auxiliary_client.OpenAI", _FakeOpenAI),
+        ):
             from agent.auxiliary_client import resolve_provider_client
+
             client, model = resolve_provider_client("bedrock", "openai.gpt-5.6-sol")
 
         assert client is not None
@@ -513,32 +588,61 @@ class TestAuxiliaryClientBedrockResolution:
         """Auxiliary tasks on Bedrock GPT models use the Mantle Responses
         path (SigV4 http client + aws-sdk sentinel), not the Anthropic shim."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-east-2")
 
-        with patch("agent.auxiliary_client.OpenAI", return_value=MagicMock()) as mock_openai, \
-             patch("agent.bedrock_adapter.build_bedrock_openai_http_client", return_value=MagicMock()):
-            from agent.auxiliary_client import resolve_provider_client, CodexAuxiliaryClient
+        with (
+            patch(
+                "agent.auxiliary_client.OpenAI", return_value=MagicMock()
+            ) as mock_openai,
+            patch(
+                "agent.bedrock_adapter.build_bedrock_openai_http_client",
+                return_value=MagicMock(),
+            ),
+        ):
+            from agent.auxiliary_client import (
+                resolve_provider_client,
+                CodexAuxiliaryClient,
+            )
+
             client, model = resolve_provider_client("bedrock", "openai.gpt-5.5")
 
         assert model == "openai.gpt-5.5"
         assert isinstance(client, CodexAuxiliaryClient)
         kwargs = mock_openai.call_args.kwargs
         assert kwargs["api_key"] == "aws-sdk"
-        assert kwargs["base_url"] == "https://bedrock-mantle.us-east-2.api.aws/openai/v1"
+        assert (
+            kwargs["base_url"] == "https://bedrock-mantle.us-east-2.api.aws/openai/v1"
+        )
         assert "http_client" in kwargs
 
-    @pytest.mark.parametrize("profile_id", ["us.openai.gpt-6.1-sol", "global.openai.gpt-6-astra",
-                                            "us.openai.gpt-5.6-terra"])
-    def test_bedrock_openai_profile_aux_uses_runtime_converse(self, monkeypatch, profile_id):
+    @pytest.mark.parametrize(
+        "profile_id",
+        [
+            "us.openai.gpt-6.1-sol",
+            "global.openai.gpt-6-astra",
+            "us.openai.gpt-5.6-terra",
+        ],
+    )
+    def test_bedrock_openai_profile_aux_uses_runtime_converse(
+        self, monkeypatch, profile_id
+    ):
         """Auxiliary calls (compression) on a cross-Region OpenAI profile take the same wire as the
         primary turn: Converse on bedrock-runtime, model ID unchanged, no Mantle client built."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
-        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        monkeypatch.setenv(
+            "AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        )
         monkeypatch.setenv("AWS_REGION", "us-east-2")
 
         with patch("agent.auxiliary_client.OpenAI") as mock_openai:
-            from agent.auxiliary_client import resolve_provider_client, BedrockAuxiliaryClient
+            from agent.auxiliary_client import (
+                resolve_provider_client,
+                BedrockAuxiliaryClient,
+            )
+
             client, model = resolve_provider_client("bedrock", profile_id)
 
         assert model == profile_id

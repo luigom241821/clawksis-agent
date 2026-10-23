@@ -59,7 +59,10 @@ async def test_follow_up_wire_action_carries_no_credential(wired):
     adapter, stub = wired
     await adapter.connect()
     await adapter.send_follow_up(
-        session_key="sess-1", kind="discord.interaction_token", content="x", metadata={"a": 1}
+        session_key="sess-1",
+        kind="discord.interaction_token",
+        content="x",
+        metadata={"a": 1},
     )
     action = stub.follow_ups[0]
     # Exactly the token-less semantic fields (+ metadata); no value/secret field.
@@ -69,5 +72,3 @@ async def test_follow_up_wire_action_carries_no_credential(wired):
     assert "token" not in action
     assert "secret" not in action
     assert "credential" not in action
-
-

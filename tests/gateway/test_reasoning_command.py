@@ -13,7 +13,9 @@ from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(text="/reasoning", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"):
+def _make_event(
+    text="/reasoning", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -53,7 +55,9 @@ class _CapturingAgent:
         type(self).last_init = dict(kwargs)
         self.tools = []
 
-    def run_conversation(self, user_message: str, conversation_history=None, task_id=None):
+    def run_conversation(
+        self, user_message: str, conversation_history=None, task_id=None
+    ):
         return {
             "final_response": "ok",
             "messages": [],
@@ -62,14 +66,18 @@ class _CapturingAgent:
 
 
 class TestReasoningCommand:
-
-
     def test_parse_reasoning_command_args_accepts_ascii_and_smart_global_flags(self):
-        assert gateway_run.GatewayRunner._parse_reasoning_command_args("high --global") == ("high", True)
-        assert gateway_run.GatewayRunner._parse_reasoning_command_args("—global xhigh") == ("xhigh", True)
+        assert gateway_run.GatewayRunner._parse_reasoning_command_args(
+            "high --global"
+        ) == ("high", True)
+        assert gateway_run.GatewayRunner._parse_reasoning_command_args(
+            "—global xhigh"
+        ) == ("xhigh", True)
 
     @pytest.mark.asyncio
-    async def test_reasoning_command_reloads_current_state_from_config(self, tmp_path, monkeypatch):
+    async def test_reasoning_command_reloads_current_state_from_config(
+        self, tmp_path, monkeypatch
+    ):
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
@@ -88,7 +96,6 @@ class TestReasoningCommand:
 
         assert runner._reasoning_config == {"enabled": False}
         assert runner._show_reasoning is True
-
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("effort", ["max", "ultra"])
@@ -113,23 +120,33 @@ class TestReasoningCommand:
             "effort": effort,
         }
 
-
-    def test_resolve_session_reasoning_prefers_session_override(self, tmp_path, monkeypatch):
+    def test_resolve_session_reasoning_prefers_session_override(
+        self, tmp_path, monkeypatch
+    ):
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
-        (clawk_home / "config.yaml").write_text("agent:\n  reasoning_effort: low\n", encoding="utf-8")
+        (clawk_home / "config.yaml").write_text(
+            "agent:\n  reasoning_effort: low\n", encoding="utf-8"
+        )
 
         monkeypatch.setattr(gateway_run, "_clawk_home", clawk_home)
 
         runner = _make_runner()
         source = _make_event("/reasoning").source
         session_key = runner._session_key_for_source(source)
-        runner._session_reasoning_overrides[session_key] = {"enabled": True, "effort": "xhigh"}
+        runner._session_reasoning_overrides[session_key] = {
+            "enabled": True,
+            "effort": "xhigh",
+        }
 
-        assert runner._resolve_session_reasoning_config(source=source) == {"enabled": True, "effort": "xhigh"}
+        assert runner._resolve_session_reasoning_config(source=source) == {
+            "enabled": True,
+            "effort": "xhigh",
+        }
 
-
-    def test_run_agent_includes_enabled_mcp_servers_in_gateway_toolsets(self, tmp_path, monkeypatch):
+    def test_run_agent_includes_enabled_mcp_servers_in_gateway_toolsets(
+        self, tmp_path, monkeypatch
+    ):
         clawk_home = tmp_path / "clawk"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
@@ -201,15 +218,21 @@ class TestLoadShowReasoningCoercion:
         return gateway_run.GatewayRunner._load_show_reasoning()
 
     def test_quoted_false_is_false(self, tmp_path, monkeypatch):
-        assert self._load_with_config(
-            tmp_path, monkeypatch,
-            'display:\n  show_reasoning: "false"\n',
-        ) is False
-
+        assert (
+            self._load_with_config(
+                tmp_path,
+                monkeypatch,
+                'display:\n  show_reasoning: "false"\n',
+            )
+            is False
+        )
 
     def test_bare_true_is_true(self, tmp_path, monkeypatch):
-        assert self._load_with_config(
-            tmp_path, monkeypatch,
-            'display:\n  show_reasoning: true\n',
-        ) is True
-
+        assert (
+            self._load_with_config(
+                tmp_path,
+                monkeypatch,
+                "display:\n  show_reasoning: true\n",
+            )
+            is True
+        )

@@ -38,7 +38,9 @@ def _runner_with(adapters: dict):
     return patch("gateway.run._gateway_runner_ref", lambda: runner)
 
 
-def _multiplex_runner_with(*, default: dict, profiles: dict, active_profile: str = "default"):
+def _multiplex_runner_with(
+    *, default: dict, profiles: dict, active_profile: str = "default"
+):
     """A runner using the REAL GatewayAuthorizationMixin resolution ladder."""
     from gateway.authz_mixin import GatewayAuthorizationMixin
 
@@ -73,7 +75,7 @@ class TestGateDefaultOff:
 
         with _grant(False), _runner_with({Platform.TELEGRAM: adapter}):
             result = asyncio.run(
-                actions.add_reaction("telegram", "123", "456", "\U0001F44D")
+                actions.add_reaction("telegram", "123", "456", "\U0001f44d")
             )
 
         assert result["ok"] is False
@@ -83,12 +85,8 @@ class TestGateDefaultOff:
     def test_default_config_is_off_via_real_capability_check(self):
         """No patching of the check itself: an empty config entry denies."""
         actions = PlatformActions("some-plugin")
-        with patch(
-            "clawk_cli.plugin_capabilities._plugin_entry", return_value={}
-        ):
-            result = asyncio.run(
-                actions.set_thread_title("telegram", "1", "2", "t")
-            )
+        with patch("clawk_cli.plugin_capabilities._plugin_entry", return_value={}):
+            result = asyncio.run(actions.set_thread_title("telegram", "1", "2", "t"))
         assert result == {
             "ok": False,
             "error": "capability_not_granted",
@@ -98,24 +96,30 @@ class TestGateDefaultOff:
     def test_legacy_allow_platform_actions_key_grants(self):
         actions = PlatformActions("some-plugin")
         adapter = _telegram_adapter()
-        with patch(
-            "clawk_cli.plugin_capabilities._plugin_entry",
-            return_value={"allow_platform_actions": True},
-        ), _runner_with({Platform.TELEGRAM: adapter}):
+        with (
+            patch(
+                "clawk_cli.plugin_capabilities._plugin_entry",
+                return_value={"allow_platform_actions": True},
+            ),
+            _runner_with({Platform.TELEGRAM: adapter}),
+        ):
             result = asyncio.run(
-                actions.add_reaction("telegram", "123", "456", "\U0001F44D")
+                actions.add_reaction("telegram", "123", "456", "\U0001f44d")
             )
         assert result["ok"] is True
 
     def test_granted_capabilities_list_grants(self):
         actions = PlatformActions("some-plugin")
         adapter = _telegram_adapter()
-        with patch(
-            "clawk_cli.plugin_capabilities._plugin_entry",
-            return_value={"granted_capabilities": ["gateway.platform_actions"]},
-        ), _runner_with({Platform.TELEGRAM: adapter}):
+        with (
+            patch(
+                "clawk_cli.plugin_capabilities._plugin_entry",
+                return_value={"granted_capabilities": ["gateway.platform_actions"]},
+            ),
+            _runner_with({Platform.TELEGRAM: adapter}),
+        ):
             result = asyncio.run(
-                actions.add_reaction("telegram", "123", "456", "\U0001F44D")
+                actions.add_reaction("telegram", "123", "456", "\U0001f44d")
             )
         assert result["ok"] is True
 
@@ -125,9 +129,7 @@ class TestGateDefaultOff:
             "clawk_cli.plugin_capabilities.plugin_capability_granted",
             side_effect=RuntimeError("corrupt config"),
         ):
-            result = asyncio.run(
-                actions.add_reaction("telegram", "1", "2", "x")
-            )
+            result = asyncio.run(actions.add_reaction("telegram", "1", "2", "x"))
         assert result["error"] == "capability_not_granted"
 
 
@@ -191,10 +193,10 @@ class TestVerbRouting:
         adapter = _telegram_adapter()
         with _grant(True), _runner_with({Platform.TELEGRAM: adapter}):
             result = asyncio.run(
-                actions.add_reaction("telegram", "-100123", "456", "\U0001F44D")
+                actions.add_reaction("telegram", "-100123", "456", "\U0001f44d")
             )
         assert result == {"ok": True, "action": "add_reaction"}
-        adapter._set_reaction.assert_awaited_once_with("-100123", "456", "\U0001F44D")
+        adapter._set_reaction.assert_awaited_once_with("-100123", "456", "\U0001f44d")
 
     def test_telegram_set_reaction_false_is_action_failed(self):
         actions = PlatformActions("p")
@@ -246,11 +248,11 @@ class TestVerbRouting:
         adapter._client = client
         with _grant(True), _runner_with({Platform.DISCORD: adapter}):
             result = asyncio.run(
-                actions.add_reaction("discord", "555", "456", "\U0001F44D")
+                actions.add_reaction("discord", "555", "456", "\U0001f44d")
             )
         assert result == {"ok": True, "action": "add_reaction"}
         channel.fetch_message.assert_awaited_once_with(456)
-        message.add_reaction.assert_awaited_once_with("\U0001F44D")
+        message.add_reaction.assert_awaited_once_with("\U0001f44d")
 
     def test_discord_add_reaction_non_numeric_ids(self):
         actions = PlatformActions("p")
@@ -288,7 +290,7 @@ class TestMultiplexProfileRouting:
     @pytest.mark.parametrize(
         "resolver",
         [
-            {"return_value": "team-b"},              # stamped profile, no registry entry
+            {"return_value": "team-b"},  # stamped profile, no registry entry
             {"side_effect": RuntimeError("boom")},  # profile resolution itself fails
         ],
         ids=["no-registry-entry", "resolution-error"],
@@ -298,7 +300,9 @@ class TestMultiplexProfileRouting:
         default_adapter = _telegram_adapter()
         with (
             _grant(True),
-            _multiplex_runner_with(default={Platform.TELEGRAM: default_adapter}, profiles={}),
+            _multiplex_runner_with(
+                default={Platform.TELEGRAM: default_adapter}, profiles={}
+            ),
             patch("clawk_cli.profiles.get_active_profile_name", **resolver),
         ):
             result = asyncio.run(actions.add_reaction("telegram", "1", "2", "x"))
@@ -312,7 +316,8 @@ class TestPluginContextWiring:
 
         manager = PluginManager()
         ctx = PluginContext(
-            PluginManifest(name="actions-fixture", source="user"), manager,
+            PluginManifest(name="actions-fixture", source="user"),
+            manager,
         )
         facade = ctx.platform_actions
         assert isinstance(facade, PlatformActions)

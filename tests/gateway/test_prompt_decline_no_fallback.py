@@ -62,9 +62,7 @@ def test_success_and_timeout_verdicts_unchanged():
     """No collateral change to the two settled verdicts."""
     from gateway.run import _approval_send_outcome
 
-    assert (
-        _approval_send_outcome(_future(_result(success=True)), timeout=5) == "sent"
-    )
+    assert _approval_send_outcome(_future(_result(success=True)), timeout=5) == "sent"
 
     pending: concurrent.futures.Future = concurrent.futures.Future()
     assert _approval_send_outcome(pending, timeout=0.05) == "ambiguous"
@@ -128,7 +126,8 @@ def _result_raw(raw, *, error=None):
     from gateway.relay.egress import decline_error
 
     return SimpleNamespace(
-        success=False, error=error if error is not None else decline_error(raw),
+        success=False,
+        error=error if error is not None else decline_error(raw),
         raw_response=raw,
     )
 

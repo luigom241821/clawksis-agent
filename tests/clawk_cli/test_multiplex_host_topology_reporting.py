@@ -30,7 +30,9 @@ def served_host(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(locks))
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     monkeypatch.setattr("clawk_cli.gateway.find_gateway_pids", list)
-    monkeypatch.setattr("gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False)
+    monkeypatch.setattr(
+        "gateway.status.is_gateway_runtime_lock_active", lambda lock_path=None: False
+    )
     # A live owner holds the host lock for its lifetime (run.py claims before it publishes).
     assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
     hr.publish_record(hr.ROLE_GATEWAY, profiles=("default", "served"))
@@ -38,12 +40,16 @@ def served_host(tmp_path, monkeypatch):
     hr.release_host_lock(hr.ROLE_GATEWAY)
 
 
-def test_cron_status_names_the_host_gateway_for_a_served_profile(served_host, capsys, monkeypatch):
+def test_cron_status_names_the_host_gateway_for_a_served_profile(
+    served_host, capsys, monkeypatch
+):
     from cron import jobs
     from clawk_cli import cron
 
     monkeypatch.setattr(jobs, "CRON_DIR", served_host / "profiles/served/cron")
-    monkeypatch.setattr(jobs, "JOBS_FILE", served_host / "profiles/served/cron/jobs.json")
+    monkeypatch.setattr(
+        jobs, "JOBS_FILE", served_host / "profiles/served/cron/jobs.json"
+    )
     cron.cron_status()
     out = capsys.readouterr().out
 
@@ -54,7 +60,9 @@ def test_cron_status_names_the_host_gateway_for_a_served_profile(served_host, ca
     assert "sudo clawk gateway install --system" not in out
 
 
-def test_doctor_reports_the_single_host_gateway_not_per_profile_slots(served_host, capsys, monkeypatch):
+def test_doctor_reports_the_single_host_gateway_not_per_profile_slots(
+    served_host, capsys, monkeypatch
+):
     from clawk_cli import doctor_platform
 
     class _Mgr:
@@ -64,7 +72,9 @@ def test_doctor_reports_the_single_host_gateway_not_per_profile_slots(served_hos
         def list_profile_gateways(self):
             return ["default", "served", "legacy"]
 
-    monkeypatch.setattr("clawk_cli.service_manager.detect_service_manager", lambda: "s6")
+    monkeypatch.setattr(
+        "clawk_cli.service_manager.detect_service_manager", lambda: "s6"
+    )
     monkeypatch.setattr("clawk_cli.service_manager.S6ServiceManager", _Mgr)
     issues: list[str] = []
     doctor_platform._check_s6_supervision(issues)
@@ -76,7 +86,9 @@ def test_doctor_reports_the_single_host_gateway_not_per_profile_slots(served_hos
     assert any("migrate --multiplex" in i for i in issues)
 
 
-def test_doctor_raises_an_issue_when_nothing_owns_the_gateway_role(served_host, capsys, monkeypatch):
+def test_doctor_raises_an_issue_when_nothing_owns_the_gateway_role(
+    served_host, capsys, monkeypatch
+):
     """The WORST state must produce remediation: slots exist, nothing serves them. The strictly
     less severe LEGACY case already appended an issue, so `doctor` exited 0 with `issues: []`
     on the outage and non-zero on the mere leftover."""
@@ -90,24 +102,32 @@ def test_doctor_raises_an_issue_when_nothing_owns_the_gateway_role(served_host, 
             return ["default", "served", "legacy"]
 
     monkeypatch.setattr("gateway.host_topology.host_gateway_topology", lambda: None)
-    monkeypatch.setattr("clawk_cli.service_manager.detect_service_manager", lambda: "s6")
+    monkeypatch.setattr(
+        "clawk_cli.service_manager.detect_service_manager", lambda: "s6"
+    )
     monkeypatch.setattr("clawk_cli.service_manager.S6ServiceManager", _Mgr)
     issues: list[str] = []
     doctor_platform._check_s6_supervision(issues)
 
     assert "No host gateway owns the gateway role" in capsys.readouterr().out
-    assert any("gateway start" in i for i in issues), "the outage state produced no remediation"
+    assert any("gateway start" in i for i in issues), (
+        "the outage state produced no remediation"
+    )
 
 
 @pytest.mark.parametrize("xdg", [False, True])
-def test_doctor_checks_host_unit_linger_under_a_served_profile(served_host, tmp_path, capsys, monkeypatch, xdg):
+def test_doctor_checks_host_unit_linger_under_a_served_profile(
+    served_host, tmp_path, capsys, monkeypatch, xdg
+):
     from clawk_cli import doctor_platform
 
     fake_home = tmp_path / "fakehome"
     config_home = (tmp_path / "xdgconfig") if xdg else (fake_home / ".config")
     unit_dir = config_home / "systemd" / "user"
     unit_dir.mkdir(parents=True)
-    (unit_dir / "clawk-gateway.service").write_text("[Unit]\n")  # the HOST unit; no per-profile unit
+    (unit_dir / "clawk-gateway.service").write_text(
+        "[Unit]\n"
+    )  # the HOST unit; no per-profile unit
     monkeypatch.setenv("HOME", str(fake_home))
     # A host that moves XDG_CONFIG_HOME keeps its units there; probing ~/.config false-negatives.
     if xdg:
@@ -115,8 +135,12 @@ def test_doctor_checks_host_unit_linger_under_a_served_profile(served_host, tmp_
     else:
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr("clawk_cli.gateway.is_linux", lambda: True)
-    monkeypatch.setattr("clawk_cli.service_manager.detect_service_manager", lambda: "systemd")
-    monkeypatch.setattr("clawk_cli.gateway.get_systemd_linger_status", lambda *a, **k: (False, "off"))
+    monkeypatch.setattr(
+        "clawk_cli.service_manager.detect_service_manager", lambda: "systemd"
+    )
+    monkeypatch.setattr(
+        "clawk_cli.gateway.get_systemd_linger_status", lambda *a, **k: (False, "off")
+    )
 
     issues: list[str] = []
     doctor_platform._check_gateway_service_linger(issues)
@@ -129,8 +153,11 @@ def test_state_db_holder_line_names_the_shared_host_gateway(served_host):
     from clawk_cli import doctor_state
 
     rows = doctor_state._render_state_db_stats(
-        {"messages": 5}, holders=3, host_note=doctor_state.host_gateway_note())
+        {"messages": 5}, holders=3, host_note=doctor_state.host_gateway_note()
+    )
     text = " ".join(t for _kind, t, _detail in rows)
 
-    assert f"3 process(es) holding the DB open (the host gateway (PID {os.getpid()}) " \
-           "serving profiles default, served)" in text
+    assert (
+        f"3 process(es) holding the DB open (the host gateway (PID {os.getpid()}) "
+        "serving profiles default, served)" in text
+    )

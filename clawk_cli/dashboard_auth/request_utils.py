@@ -1,4 +1,5 @@
 """Request-level helpers shared by the auth routes and both middlewares."""
+
 from __future__ import annotations
 
 import logging
@@ -51,14 +52,21 @@ def access_token_max_age(session) -> int:
 
 def unreachable_response(provider_name: str) -> JSONResponse:
     """503 for a transient IDP/backing-store outage (never a forced re-login)."""
-    return JSONResponse({"detail": f"Auth provider {provider_name!r} unreachable"}, status_code=503)
+    return JSONResponse(
+        {"detail": f"Auth provider {provider_name!r} unreachable"}, status_code=503
+    )
 
 
 def scan_session_providers(
-    provider_hint: Optional[str], call: Callable[[DashboardAuthProvider], object], *, phase: str,
-    log: logging.Logger, swallow: tuple[type[BaseException], ...] = (),
+    provider_hint: Optional[str],
+    call: Callable[[DashboardAuthProvider], object],
+    *,
+    phase: str,
+    log: logging.Logger,
+    swallow: tuple[type[BaseException], ...] = (),
     on_swallow: Optional[Callable[[DashboardAuthProvider], None]] = None,
-    on_unreachable: Optional[Callable[[DashboardAuthProvider], None]] = None):
+    on_unreachable: Optional[Callable[[DashboardAuthProvider], None]] = None,
+):
     """Run ``call`` across the session providers; first non-``None`` result or ``None``.
 
     The hinted provider goes first (stable sort; a stale/unknown hint leaves registration order
@@ -79,8 +87,12 @@ def scan_session_providers(
                 on_swallow(provider)
             continue
         except ProviderError as e:
-            log.warning("dashboard-auth: provider %r unreachable during %s: %s",
-                        provider.name, phase, e)
+            log.warning(
+                "dashboard-auth: provider %r unreachable during %s: %s",
+                provider.name,
+                phase,
+                e,
+            )
             if on_unreachable is not None:
                 on_unreachable(provider)
             if unreachable is None:

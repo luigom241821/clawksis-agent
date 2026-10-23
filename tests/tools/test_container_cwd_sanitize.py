@@ -19,6 +19,7 @@ behaviour so neither path can regress.
 
 import tools.terminal_tool as tt
 
+
 class TestIsUnusableContainerCwd:
     def test_windows_backslash_host_path_rejected(self):
         # The exact shape from the bug report: a Windows host cwd reaching a
@@ -27,6 +28,7 @@ class TestIsUnusableContainerCwd:
 
     def test_posix_home_host_path_rejected(self):
         assert tt._is_unusable_container_cwd("/home/ben/projects") is True
+
 
 class TestOverrideCwdSanitizedAtCallSite:
     """E2E pin: a per-task cwd OVERRIDE that is a host path must NOT reach the
@@ -75,7 +77,9 @@ class TestOverrideCwdSanitizedAtCallSite:
         monkeypatch.setattr(tt, "_get_env_config", lambda: config)
         monkeypatch.setattr(tt, "_start_cleanup_thread", lambda: None)
         monkeypatch.setattr(tt, "_check_all_guards", lambda *a, **k: {"approved": True})
-        monkeypatch.setattr("tools.terminal_tool_backends._create_environment", fake_create_environment)
+        monkeypatch.setattr(
+            "tools.terminal_tool_backends._create_environment", fake_create_environment
+        )
         # Force a fresh environment build so _create_environment is invoked.
         monkeypatch.setattr(tt, "_active_environments", {})
         monkeypatch.setattr(tt, "_last_activity", {})
@@ -103,6 +107,7 @@ class TestOverrideCwdSanitizedAtCallSite:
         cwd = self._run_and_capture_cwd(monkeypatch, "/workspace/task42")
         assert cwd == "/workspace/task42"
 
+
 class TestFileOpsCwdSanitizedAtCallSite:
     """E2E pin: file tools (_get_file_ops) must sanitize a host/relative cwd
     override before it reaches _create_environment on a container backend —
@@ -111,8 +116,9 @@ class TestFileOpsCwdSanitizedAtCallSite:
     ``docker run -w`` and ``search_files`` returns an empty workspace (#54447).
     """
 
-    def _run_and_capture_cwd(self, monkeypatch, override_cwd, env_type="docker",
-                             config_cwd="/workspace"):
+    def _run_and_capture_cwd(
+        self, monkeypatch, override_cwd, env_type="docker", config_cwd="/workspace"
+    ):
         """Drive ``_get_file_ops()`` on a container backend with a host-path cwd
         override registered, and return the cwd that reached
         ``_create_environment`` (i.e. the cwd passed to ``docker run -w``).
@@ -162,7 +168,9 @@ class TestFileOpsCwdSanitizedAtCallSite:
 
         monkeypatch.setattr(tt, "_get_env_config", lambda: config)
         monkeypatch.setattr(tt, "_start_cleanup_thread", lambda: None)
-        monkeypatch.setattr("tools.terminal_tool_backends._create_environment", fake_create_environment)
+        monkeypatch.setattr(
+            "tools.terminal_tool_backends._create_environment", fake_create_environment
+        )
         # Force a fresh environment build.
         monkeypatch.setattr(tt, "_active_environments", {})
         monkeypatch.setattr(tt, "_last_activity", {})
@@ -192,5 +200,6 @@ class TestFileOpsCwdSanitizedAtCallSite:
 
     def test_host_override_sanitized_on_daytona(self, monkeypatch):
         cwd = self._run_and_capture_cwd(
-            monkeypatch, "/Users/me/workspace", env_type="daytona")
+            monkeypatch, "/Users/me/workspace", env_type="daytona"
+        )
         assert cwd == "/workspace"

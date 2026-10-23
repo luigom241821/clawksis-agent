@@ -25,7 +25,8 @@ def test_first_cli_message_in_a_fresh_home_reaches_the_model_unchanged(tmp_path)
     home = tmp_path / "clawk"
     with FakeLLMServer([Text("done")]) as srv:
         write_clawk_home(
-            home, srv.base_url,
+            home,
+            srv.base_url,
             extra_config="updates:\n  check: false\nmodels_dev:\n  url: http://127.0.0.1:9/api.json\n",
         )
         env = {**os.environ, "CLAWK_HOME": str(home), "PYTHONUTF8": "1"}
@@ -34,8 +35,14 @@ def test_first_cli_message_in_a_fresh_home_reaches_the_model_unchanged(tmp_path)
             env.pop(name, None)
         proc = subprocess.run(
             [sys.executable, "-m", "clawk_cli.main", "chat", "-q", PROMPT],
-            cwd=ROOT, env=env, stdin=subprocess.DEVNULL, capture_output=True,
-            text=True, encoding="utf-8", timeout=240, check=False,
+            cwd=ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=240,
+            check=False,
         )
         requests = srv.main_requests()
 
@@ -43,4 +50,6 @@ def test_first_cli_message_in_a_fresh_home_reaches_the_model_unchanged(tmp_path)
     assert requests, f"the model was never called; stderr tail: {proc.stderr[-2000:]}"
     users = [m["content"] for m in requests[0]["messages"] if m.get("role") == "user"]
     assert users == [PROMPT]
-    assert not is_seen(load_user_config_effective(home / "config.yaml"), PROFILE_BUILD_FLAG)
+    assert not is_seen(
+        load_user_config_effective(home / "config.yaml"), PROFILE_BUILD_FLAG
+    )

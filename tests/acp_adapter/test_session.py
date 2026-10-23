@@ -37,9 +37,9 @@ class TestCreateSession:
         assert state.history == []
         assert state.agent is not None
 
-
-
-    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(self, monkeypatch):
+    def test_register_task_cwd_translates_windows_drive_for_wsl_tools(
+        self, monkeypatch
+    ):
         captured = {}
 
         def fake_register_task_env_overrides(task_id, overrides):
@@ -58,9 +58,6 @@ class TestCreateSession:
             "task_id": "session-1",
             "overrides": {"cwd": "/mnt/e/Projects/AI/paperclip"},
         }
-
-
-
 
     def test_make_agent_uses_session_cwd_during_init_and_stamps_runtime(
         self, monkeypatch, tmp_path
@@ -107,8 +104,13 @@ class TestCreateSession:
                 "api_key": "test-key",
             },
         )
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
 
         SessionManager(db=None).create_session(cwd=str(workspace))
 
@@ -123,29 +125,57 @@ class TestCreateSession:
             def __init__(self, **kwargs):
                 seen.append(kwargs)
 
-        config = {"model": {"default": "m", "provider": "p"}, "mcp_servers": {"cfg-server": {}}}
+        config = {
+            "model": {"default": "m", "provider": "p"},
+            "mcp_servers": {"cfg-server": {}},
+        }
         monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
         monkeypatch.setattr("clawk_cli.config.load_config", lambda: config)
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {})
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {}
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
         manager = SessionManager(db=None)
 
         manager._make_agent(session_id="fresh", cwd=".")
         manager._make_agent(
-            session_id="rebuilt", cwd=".", enabled_toolsets=["clawk-acp", "mcp-acp-server"], disabled_toolsets=["browser"],
+            session_id="rebuilt",
+            cwd=".",
+            enabled_toolsets=["clawk-acp", "mcp-acp-server"],
+            disabled_toolsets=["browser"],
         )
 
-        assert "mcp-cfg-server" in seen[0]["enabled_toolsets"] and seen[0]["disabled_toolsets"] is None
-        assert (seen[1]["enabled_toolsets"], seen[1]["disabled_toolsets"]) == (["clawk-acp", "mcp-acp-server"], ["browser"])
+        assert (
+            "mcp-cfg-server" in seen[0]["enabled_toolsets"]
+            and seen[0]["disabled_toolsets"] is None
+        )
+        assert (seen[1]["enabled_toolsets"], seen[1]["disabled_toolsets"]) == (
+            ["clawk-acp", "mcp-acp-server"],
+            ["browser"],
+        )
 
-    @pytest.mark.parametrize("config, offered, withheld", [
-        # agent.disabled_toolsets, in the JSON-string shape `clawk config set` stores (#74582).
-        ({"agent": {"disabled_toolsets": "['code_execution']"}}, "file", "code_execution"),
-        # platform_toolsets.acp narrows the surface like every other platform (#79516).
-        ({"platform_toolsets": {"acp": ["file"]}}, "file", "code_execution"),
-    ])
-    def test_fresh_agent_tool_surface_honours_toolset_config(self, monkeypatch, config, offered, withheld):
+    @pytest.mark.parametrize(
+        "config, offered, withheld",
+        [
+            # agent.disabled_toolsets, in the JSON-string shape `clawk config set` stores (#74582).
+            (
+                {"agent": {"disabled_toolsets": "['code_execution']"}},
+                "file",
+                "code_execution",
+            ),
+            # platform_toolsets.acp narrows the surface like every other platform (#79516).
+            ({"platform_toolsets": {"acp": ["file"]}}, "file", "code_execution"),
+        ],
+    )
+    def test_fresh_agent_tool_surface_honours_toolset_config(
+        self, monkeypatch, config, offered, withheld
+    ):
         """A fresh ACP agent resolves its tools like the gateway/cron: the real tool surface built from its
         kwargs carries the offered toolset and none of the withheld one."""
         from model_tools import get_tool_definitions
@@ -158,28 +188,54 @@ class TestCreateSession:
                 seen.append(kwargs)
 
         monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "m"}, **config})
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {})
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"default": "m"}, **config},
+        )
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {}
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
 
         SessionManager(db=None)._make_agent(session_id="fresh", cwd=".")
 
         def surface(enabled, disabled=None) -> set:
-            return {t["function"]["name"] for t in get_tool_definitions(
-                enabled_toolsets=enabled, disabled_toolsets=disabled, quiet_mode=True)}
+            return {
+                t["function"]["name"]
+                for t in get_tool_definitions(
+                    enabled_toolsets=enabled,
+                    disabled_toolsets=disabled,
+                    quiet_mode=True,
+                )
+            }
 
-        assert set(resolve_toolset(withheld)) <= surface(["clawk-acp"])  # non-vacuous: offered by default
+        assert set(resolve_toolset(withheld)) <= surface(
+            ["clawk-acp"]
+        )  # non-vacuous: offered by default
         names = surface(seen[0]["enabled_toolsets"], seen[0]["disabled_toolsets"])
         assert set(resolve_toolset(offered)) <= names
         assert not names & set(resolve_toolset(withheld))
 
-    @pytest.mark.parametrize("acp_toolsets, expected_mcp", [
-        (None, {"mcp-alpha", "mcp-beta"}),              # default: every enabled config server
-        (["clawk-acp", "alpha"], {"mcp-alpha"}),       # listed server names are an allowlist
-        (["clawk-acp", "no_mcp"], set()),              # the no_mcp sentinel drops them all
-    ])
-    def test_fresh_agent_mcp_servers_follow_platform_toolsets(self, monkeypatch, acp_toolsets, expected_mcp):
+    @pytest.mark.parametrize(
+        "acp_toolsets, expected_mcp",
+        [
+            (None, {"mcp-alpha", "mcp-beta"}),  # default: every enabled config server
+            (
+                ["clawk-acp", "alpha"],
+                {"mcp-alpha"},
+            ),  # listed server names are an allowlist
+            (["clawk-acp", "no_mcp"], set()),  # the no_mcp sentinel drops them all
+        ],
+    )
+    def test_fresh_agent_mcp_servers_follow_platform_toolsets(
+        self, monkeypatch, acp_toolsets, expected_mcp
+    ):
         """Config MCP servers reach a fresh ACP agent by the gateway's rules for ``platform_toolsets.<platform>``,
         not unconditionally; a disabled server never does."""
         seen: list[dict] = []
@@ -188,15 +244,28 @@ class TestCreateSession:
             def __init__(self, **kwargs):
                 seen.append(kwargs)
 
-        config = {"model": {"default": "m"},
-                  "mcp_servers": {"alpha": {"command": "a"}, "beta": {"command": "b"}, "off": {"enabled": False}}}
+        config = {
+            "model": {"default": "m"},
+            "mcp_servers": {
+                "alpha": {"command": "a"},
+                "beta": {"command": "b"},
+                "off": {"enabled": False},
+            },
+        }
         if acp_toolsets is not None:
             config["platform_toolsets"] = {"acp": acp_toolsets}
         monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
         monkeypatch.setattr("clawk_cli.config.load_config", lambda: config)
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {})
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {}
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
 
         SessionManager(db=None)._make_agent(session_id="fresh", cwd=".")
 
@@ -208,8 +277,11 @@ class TestCreateSession:
         """#91090: when ``resolve_runtime_provider`` fails, the bare-AIAgent fallback dies with the
         first-run "No LLM provider configured" text; the operator must get the swallowed cause
         instead. The fallback still stands when the bare build succeeds."""
+
         def _no_creds(**_kw):
-            raise RuntimeError("No Codex credentials stored. Run `clawk auth add openai-codex`")
+            raise RuntimeError(
+                "No Codex credentials stored. Run `clawk auth add openai-codex`"
+            )
 
         class BareFails:
             def __init__(self, **kwargs):
@@ -219,20 +291,31 @@ class TestCreateSession:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "m", "provider": "openai-codex"}})
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", _no_creds)
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"default": "m", "provider": "openai-codex"}},
+        )
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", _no_creds
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
         manager = SessionManager(db=None)
 
         monkeypatch.setattr("run_agent.AIAgent", BareFails)
         with pytest.raises(RuntimeError, match="No Codex credentials stored") as exc:
-            manager._make_agent(session_id="rebuilt", cwd=".", requested_provider="openai-codex")
+            manager._make_agent(
+                session_id="rebuilt", cwd=".", requested_provider="openai-codex"
+            )
         assert "No LLM provider configured" in str(exc.value.__cause__)
 
         monkeypatch.setattr("run_agent.AIAgent", BareWorks)
         assert "provider" not in manager._make_agent(session_id="fresh", cwd=".").kwargs
-
 
     def test_make_agent_forwards_resolved_credential_pool(self, monkeypatch):
         """#70292: the provider-scoped credential pool selected by resolve_runtime_provider reaches the
@@ -245,18 +328,30 @@ class TestCreateSession:
                 seen.append(kwargs)
 
         monkeypatch.setattr("run_agent.AIAgent", FakeAgent)
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "m", "provider": "openai-codex"}})
-        monkeypatch.setattr("clawk_cli.runtime_provider.resolve_runtime_provider", lambda **_kw: {
-            "provider": "openai-codex", "api_mode": "codex_app_server", "api_key": "test-key", "credential_pool": sentinel_pool,
-        })
-        monkeypatch.setattr("clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build", lambda **_kw: None)
-        monkeypatch.setattr("acp_adapter.session._register_task_cwd", lambda task_id, cwd: None)
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"default": "m", "provider": "openai-codex"}},
+        )
+        monkeypatch.setattr(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            lambda **_kw: {
+                "provider": "openai-codex",
+                "api_mode": "codex_app_server",
+                "api_key": "test-key",
+                "credential_pool": sentinel_pool,
+            },
+        )
+        monkeypatch.setattr(
+            "clawk_cli.mcp_startup.ensure_mcp_discovery_before_agent_build",
+            lambda **_kw: None,
+        )
+        monkeypatch.setattr(
+            "acp_adapter.session._register_task_cwd", lambda task_id, cwd: None
+        )
 
         SessionManager(db=None)._make_agent(session_id="s", cwd=".")
 
         assert seen[0]["credential_pool"] is sentinel_pool
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -268,11 +363,10 @@ class TestWslCwdTranslation:
     def test_translate_acp_cwd_converts_windows_drive_path_when_wsl(self, monkeypatch):
         monkeypatch.setattr("clawk_platform.host.runtime._wsl_detected", True)
 
-        assert acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip") == "/mnt/e/Projects/AI/paperclip"
-
-
-
-
+        assert (
+            acp_session._translate_acp_cwd(r"E:\Projects\AI\paperclip")
+            == "/mnt/e/Projects/AI/paperclip"
+        )
 
     def test_fork_session_stores_translated_cwd_on_wsl(self, manager, monkeypatch):
         monkeypatch.setattr("clawk_platform.host.runtime._wsl_detected", True)
@@ -292,11 +386,10 @@ class TestWslCwdTranslation:
         assert updated is not None
         assert updated.cwd == "/mnt/c/Users/foo/project"
 
+
 # ---------------------------------------------------------------------------
 # fork
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -358,8 +451,6 @@ class TestListAndCleanup:
     def test_list_sessions_empty(self, manager):
         assert manager.list_sessions() == []
 
-
-
     def test_save_session_preserves_existing_messages_on_encode_failure(self, manager):
         """Regression for #13675: a bad message in state.history must not
         clobber the previously-persisted transcript.  replace_messages()
@@ -401,8 +492,10 @@ class TestPersistence:
         """The FIRST row written for an ACP session carries provider/base_url/api_mode,
         so a restart before any later save restores the same route (#9812)."""
         agent = SimpleNamespace(
-            model="test-model", provider="anthropic",
-            base_url="https://anthropic.example/v1", api_mode="anthropic_messages",
+            model="test-model",
+            provider="anthropic",
+            base_url="https://anthropic.example/v1",
+            api_mode="anthropic_messages",
         )
         db = SessionDB(tmp_path / "state.db")
         manager = SessionManager(agent_factory=lambda: agent, db=db)
@@ -411,21 +504,12 @@ class TestPersistence:
         manager.save_session(state.session_id)
 
         mc = json.loads(db.get_session(state.session_id)["model_config"])
-        assert mc == {"cwd": "/work", "provider": "anthropic",
-                      "base_url": "https://anthropic.example/v1", "api_mode": "anthropic_messages"}
-
-
-
-
-
-
-
-
-
-
-
-
-
+        assert mc == {
+            "cwd": "/work",
+            "provider": "anthropic",
+            "base_url": "https://anthropic.example/v1",
+            "api_mode": "anthropic_messages",
+        }
 
     def test_only_restores_acp_sessions(self, manager):
         """get_session should not restore non-ACP sessions from DB."""
@@ -440,7 +524,9 @@ class TestPersistence:
         ended_at writer, source='acp' rows are invisible to prune/archive forever (the
         maintenance filter only ever selects ended sessions) and the desktop sidebar
         accumulates one auto-titled row per editor wake."""
-        agent = SimpleNamespace(model="test-model", provider=None, base_url=None, api_mode=None)
+        agent = SimpleNamespace(
+            model="test-model", provider=None, base_url=None, api_mode=None
+        )
         db = SessionDB(tmp_path / "state.db")
         manager = SessionManager(agent_factory=lambda: agent, db=db)
         ended_earlier = manager.create_session(cwd="/work")
@@ -455,14 +541,22 @@ class TestPersistence:
 
         # Before the shutdown writer, only the already-ended row is a prune
         # candidate — the two live acp rows are invisible to maintenance.
-        assert {row["id"] for row in db.list_prune_candidates(source="acp", older_than_days=0)} == {
-            ended_earlier.session_id}
+        assert {
+            row["id"]
+            for row in db.list_prune_candidates(source="acp", older_than_days=0)
+        } == {ended_earlier.session_id}
 
         ended = manager.end_all_sessions()
 
         assert ended == 3
-        rows = {sid: db.get_session(sid) for sid in
-                (ended_earlier.session_id, live_one.session_id, live_two.session_id)}
+        rows = {
+            sid: db.get_session(sid)
+            for sid in (
+                ended_earlier.session_id,
+                live_one.session_id,
+                live_two.session_id,
+            )
+        }
         assert all(row is not None for row in rows.values())
         assert rows[ended_earlier.session_id]["end_reason"] == "compression"
         for sid in (live_one.session_id, live_two.session_id):
@@ -470,13 +564,18 @@ class TestPersistence:
             assert rows[sid]["end_reason"] == "acp_disconnect"
         candidates = db.list_prune_candidates(source="acp", older_than_days=0)
         assert {row["id"] for row in candidates} == {
-            ended_earlier.session_id, live_one.session_id, live_two.session_id}
+            ended_earlier.session_id,
+            live_one.session_id,
+            live_two.session_id,
+        }
 
     def test_restore_reopens_a_session_ended_by_previous_process(self, tmp_path):
         """#118216: an ACP row stamped ended at a previous adapter's shutdown is
         reopened when a later process resumes it — the same contract as the TUI
         gateway's cold resume."""
-        agent = SimpleNamespace(model="test-model", provider=None, base_url=None, api_mode=None)
+        agent = SimpleNamespace(
+            model="test-model", provider=None, base_url=None, api_mode=None
+        )
         db = SessionDB(tmp_path / "state.db")
         first = SessionManager(agent_factory=lambda: agent, db=db)
         state = first.create_session(cwd="/work")
@@ -508,7 +607,9 @@ class TestPersistence:
         """ACP sessions stored in SessionDB are searchable via FTS5."""
         state = manager.create_session()
         state.history.append({"role": "user", "content": "how do I configure nginx"})
-        state.history.append({"role": "assistant", "content": "Here is the nginx config..."})
+        state.history.append(
+            {"role": "assistant", "content": "Here is the nginx config..."}
+        )
         manager.save_session(state.session_id)
 
         db = manager._get_db()
@@ -517,21 +618,26 @@ class TestPersistence:
         session_ids = {r["session_id"] for r in results}
         assert state.session_id in session_ids
 
-
     def test_assistant_reasoning_fields_persisted(self, manager):
         """ACP session restore should preserve assistant reasoning context."""
         state = manager.create_session()
-        state.history.append({
-            "role": "assistant",
-            "content": "hello",
-            "reasoning": "step-by-step",
-            "reasoning_details": [
-                {"type": "thinking", "thinking": "first thought"},
-            ],
-            "codex_reasoning_items": [
-                {"type": "reasoning", "id": "rs_123", "encrypted_content": "enc_blob"},
-            ],
-        })
+        state.history.append(
+            {
+                "role": "assistant",
+                "content": "hello",
+                "reasoning": "step-by-step",
+                "reasoning_details": [
+                    {"type": "thinking", "thinking": "first thought"},
+                ],
+                "codex_reasoning_items": [
+                    {
+                        "type": "reasoning",
+                        "id": "rs_123",
+                        "encrypted_content": "enc_blob",
+                    },
+                ],
+            }
+        )
         manager.save_session(state.session_id)
 
         with manager._lock:
@@ -548,18 +654,23 @@ class TestPersistence:
         assert re.fullmatch(r"[0-9a-f]{32}", msg.pop("message_uid", ""))
         # Repair bookkeeping (underscore-prefixed, stripped before the wire) rides restored rows too.
         assert isinstance(msg.pop("_db_row_snapshot", None), str)
-        assert restored.history == [{
-            "role": "assistant",
-            "content": "hello",
-            "reasoning": "step-by-step",
-            "reasoning_details": [
-                {"type": "thinking", "thinking": "first thought"},
-            ],
-            "codex_reasoning_items": [
-                {"type": "reasoning", "id": "rs_123", "encrypted_content": "enc_blob"},
-            ],
-        }]
-
+        assert restored.history == [
+            {
+                "role": "assistant",
+                "content": "hello",
+                "reasoning": "step-by-step",
+                "reasoning_details": [
+                    {"type": "thinking", "thinking": "first thought"},
+                ],
+                "codex_reasoning_items": [
+                    {
+                        "type": "reasoning",
+                        "id": "rs_123",
+                        "encrypted_content": "enc_blob",
+                    },
+                ],
+            }
+        ]
 
     def test_acp_agents_route_human_output_to_stderr(self, tmp_path, monkeypatch):
         """ACP agents must keep stdout clean for JSON-RPC stdio transport."""
@@ -577,9 +688,10 @@ class TestPersistence:
         def fake_agent(**kwargs):
             return SimpleNamespace(model=kwargs.get("model"), _print_fn=None)
 
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: {
-            "model": {"provider": "openrouter", "default": "test-model"}
-        })
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: {"model": {"provider": "openrouter", "default": "test-model"}},
+        )
         monkeypatch.setattr(
             "clawk_cli.runtime_provider.resolve_runtime_provider",
             fake_resolve_runtime_provider,
@@ -592,7 +704,10 @@ class TestPersistence:
 
         stdout_buf = io.StringIO()
         stderr_buf = io.StringIO()
-        with contextlib.redirect_stdout(stdout_buf), contextlib.redirect_stderr(stderr_buf):
+        with (
+            contextlib.redirect_stdout(stdout_buf),
+            contextlib.redirect_stderr(stderr_buf),
+        ):
             state.agent._print_fn("ACP noise")
 
         assert stdout_buf.getvalue() == ""

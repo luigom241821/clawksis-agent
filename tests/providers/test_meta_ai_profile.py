@@ -5,7 +5,6 @@ https://github.com/albertodepaola/clawk-meta-provider — the plugin is now
 bundled, so profiles resolve through normal registry discovery.
 """
 
-
 from providers import get_provider_profile
 from providers.base import ProviderProfile
 
@@ -42,7 +41,6 @@ class TestMetaAIProfile:
 
         assert p.fetch_models() == ["muse-spark-latest", "muse-nova-test"]
         assert seen
-
 
 
 def _effort(cfg):

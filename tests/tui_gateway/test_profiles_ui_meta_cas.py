@@ -32,9 +32,9 @@ def _configure(ui_meta, expected=None):
 
 
 def _default_profile():
-    rows = srv._methods["profiles.list"](
-        "list", {"include_sessions": False}
-    )["result"]["profiles"]
+    rows = srv._methods["profiles.list"]("list", {"include_sessions": False})["result"][
+        "profiles"
+    ]
     return next(row for row in rows if row["name"] == "default")
 
 
@@ -55,9 +55,7 @@ def test_ui_meta_revision_advances_and_stale_compare_and_swap_is_rejected(home):
         {"shared-room": 1},
     )
     assert stale["ui_meta"] is False
-    assert stale["ui_meta_conflicts"] == {
-        "shared-room": {"expected": 1, "actual": 2}
-    }
+    assert stale["ui_meta_conflicts"] == {"shared-room": {"expected": 1, "actual": 2}}
 
     row = _default_profile()
     assert row["ui_meta"]["shared-room"] == {"messages": ["one", "two"]}

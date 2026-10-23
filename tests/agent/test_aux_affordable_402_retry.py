@@ -40,7 +40,9 @@ _OPENROUTER_402 = (
 
 class TestAffordableExtraction:
     def test_extracts_budget_minus_margin(self):
-        assert _affordable_max_tokens_from_error(_Payment402(_OPENROUTER_402)) == 7117 - 64
+        assert (
+            _affordable_max_tokens_from_error(_Payment402(_OPENROUTER_402)) == 7117 - 64
+        )
 
     def test_plain_exhaustion_returns_none(self):
         err = _Payment402("Error code: 402 - insufficient funds")
@@ -51,9 +53,14 @@ class TestAffordableExtraction:
         assert _affordable_max_tokens_from_error(err) is None
 
     def test_non_payment_error_returns_none(self):
-        assert _affordable_max_tokens_from_error(TimeoutError(
-            "Codex auxiliary Responses stream stalled: no new output for 60.0s"
-        )) is None
+        assert (
+            _affordable_max_tokens_from_error(
+                TimeoutError(
+                    "Codex auxiliary Responses stream stalled: no new output for 60.0s"
+                )
+            )
+            is None
+        )
 
     def test_comma_grouped_count(self):
         err = _Payment402("can only afford 12,345 tokens")
@@ -66,9 +73,7 @@ class _FlakyClient:
     def __init__(self, affordable=7117):
         self.calls = []
         self._affordable = affordable
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
         self.calls.append(kwargs)
@@ -76,12 +81,15 @@ class _FlakyClient:
         if cap is None or cap > self._affordable:
             raise _Payment402(_OPENROUTER_402)
         return SimpleNamespace(
-            choices=[SimpleNamespace(
-                index=0,
-                message=SimpleNamespace(role="assistant", content="summary"),
-                finish_reason="stop",
-            )],
-            model=kwargs.get("model"), usage=None,
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=SimpleNamespace(role="assistant", content="summary"),
+                    finish_reason="stop",
+                )
+            ],
+            model=kwargs.get("model"),
+            usage=None,
         )
 
 
@@ -90,8 +98,10 @@ class TestCreateWithProgressAffordableRetry:
         client = _FlakyClient()
         response = _create_with_progress(
             client,
-            {"model": "google/gemini-3.6-flash",
-             "messages": [{"role": "user", "content": "summarize"}]},
+            {
+                "model": "google/gemini-3.6-flash",
+                "messages": [{"role": "user", "content": "summarize"}],
+            },
             "compression",
         )
         assert response.choices[0].message.content == "summary"
@@ -104,8 +114,11 @@ class TestCreateWithProgressAffordableRetry:
         with pytest.raises(_Payment402):
             _create_with_progress(
                 client,
-                {"model": "m", "max_tokens": 5000,
-                 "messages": [{"role": "user", "content": "x"}]},
+                {
+                    "model": "m",
+                    "max_tokens": 5000,
+                    "messages": [{"role": "user", "content": "x"}],
+                },
                 "compression",
             )
         # 5000 > 7053 is false → within stated budget → single attempt.
@@ -166,7 +179,10 @@ class TestOpenRouterMaxTokensPreserved:
             messages=[{"role": "user", "content": "test"}],
             max_tokens=2000,
         )
-        assert kwargs.get("max_tokens") == 2000 or kwargs.get("max_completion_tokens") == 2000
+        assert (
+            kwargs.get("max_tokens") == 2000
+            or kwargs.get("max_completion_tokens") == 2000
+        )
 
     def test_openrouter_base_url_includes_max_tokens(self):
         kwargs = _build_call_kwargs(
@@ -176,7 +192,10 @@ class TestOpenRouterMaxTokensPreserved:
             max_tokens=2000,
             base_url="https://openrouter.ai/api/v1",
         )
-        assert kwargs.get("max_tokens") == 2000 or kwargs.get("max_completion_tokens") == 2000
+        assert (
+            kwargs.get("max_tokens") == 2000
+            or kwargs.get("max_completion_tokens") == 2000
+        )
 
     def test_generic_provider_still_omits_max_tokens(self):
         kwargs = _build_call_kwargs(

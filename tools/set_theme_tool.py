@@ -28,28 +28,52 @@ _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 def _accent_error(accent: str) -> Optional[str]:
     if accent in ACCENT_SWATCHES or accent == THEME_ACCENT or _HEX.match(accent):
         return None
-    return json.dumps({"success": False, "error": f"Unknown accent {accent!r}: use a swatch id, 'theme' or #rrggbb.",
-                       "available": [*ACCENT_SWATCHES, THEME_ACCENT]}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "success": False,
+            "error": f"Unknown accent {accent!r}: use a swatch id, 'theme' or #rrggbb.",
+            "available": [*ACCENT_SWATCHES, THEME_ACCENT],
+        },
+        ensure_ascii=False,
+    )
 
 
-def set_theme_tool(accent: Optional[str] = None, mode: Optional[str] = None, layout: Optional[str] = None,
-                   picker: Optional[str] = None, callback: Optional[Callable[[dict], dict]] = None) -> str:
+def set_theme_tool(
+    accent: Optional[str] = None,
+    mode: Optional[str] = None,
+    layout: Optional[str] = None,
+    picker: Optional[str] = None,
+    callback: Optional[Callable[[dict], dict]] = None,
+) -> str:
     """Apply the given appearance values, or show one picker card and wait for the pick."""
     if callback is None:
         return tool_error("set_theme is only available in the Clawksis desktop app.")
-    values = {key: value.strip() for key, value in (("accent", accent), ("mode", mode), ("layout", layout))
-              if isinstance(value, str) and value.strip()}
+    values = {
+        key: value.strip()
+        for key, value in (("accent", accent), ("mode", mode), ("layout", layout))
+        if isinstance(value, str) and value.strip()
+    }
     if picker is not None:
         if picker not in PICKERS:
             return tool_error(f"picker must be one of: {', '.join(PICKERS)}.")
         if values:
-            return tool_error("picker shows a card for the user to choose; pass picker alone, without values.")
+            return tool_error(
+                "picker shows a card for the user to choose; pass picker alone, without values."
+            )
         return json.dumps(callback({"picker": picker}), ensure_ascii=False)
     if not values:
-        return tool_error("Pass at least one of accent, mode or layout, or picker to let the user choose.")
+        return tool_error(
+            "Pass at least one of accent, mode or layout, or picker to let the user choose."
+        )
     if "mode" in values and values["mode"] not in MODES:
-        return json.dumps({"success": False, "error": f"Unknown mode {values['mode']!r}.", "available": list(MODES)},
-                          ensure_ascii=False)
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"Unknown mode {values['mode']!r}.",
+                "available": list(MODES),
+            },
+            ensure_ascii=False,
+        )
     if "accent" in values and (error := _accent_error(values["accent"])):
         return error
     return json.dumps(callback(values), ensure_ascii=False)
@@ -68,14 +92,18 @@ SET_THEME_SCHEMA = {
         "properties": {
             "accent": {
                 "type": "string",
-                "description": (f"A swatch id ({', '.join(ACCENT_SWATCHES)}), 'theme' for the theme's own "
-                                "accent, or a hex colour '#rrggbb'."),
+                "description": (
+                    f"A swatch id ({', '.join(ACCENT_SWATCHES)}), 'theme' for the theme's own "
+                    "accent, or a hex colour '#rrggbb'."
+                ),
             },
             "mode": {"type": "string", "enum": list(MODES)},
             "layout": {
                 "type": "string",
-                "description": (f"Layout preset id. Simple mode: {', '.join(SIMPLE_LAYOUTS)}. Advanced mode: "
-                                f"{', '.join(ADVANCED_LAYOUTS)}. The user's saved layouts by id."),
+                "description": (
+                    f"Layout preset id. Simple mode: {', '.join(SIMPLE_LAYOUTS)}. Advanced mode: "
+                    f"{', '.join(ADVANCED_LAYOUTS)}. The user's saved layouts by id."
+                ),
             },
             "picker": {
                 "type": "string",
@@ -92,6 +120,8 @@ registry.register(
     toolset="desktop_ui",
     schema=SET_THEME_SCHEMA,
     handler=lambda args, **kw: set_theme_tool(
-        callback=kw.get("callback"), **{k: args.get(k) for k in ("accent", "mode", "layout", "picker")}),
+        callback=kw.get("callback"),
+        **{k: args.get(k) for k in ("accent", "mode", "layout", "picker")},
+    ),
     emoji="🎨",
 )

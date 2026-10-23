@@ -25,13 +25,20 @@ def server():
     # to cover the initial import of tui_gateway.server.
     import tui_gateway.server_requests
     import tui_gateway.transport
-    with patch.dict("sys.modules", {
-        "clawk_constants": MagicMock(get_clawk_home=MagicMock(return_value="/tmp/clawk_test")),
-        "clawk_cli.env_loader": MagicMock(),
-        "clawk_cli.banner": MagicMock(),
-        "clawk_state": MagicMock(),
-    }):
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "clawk_constants": MagicMock(
+                get_clawk_home=MagicMock(return_value="/tmp/clawk_test")
+            ),
+            "clawk_cli.env_loader": MagicMock(),
+            "clawk_cli.banner": MagicMock(),
+            "clawk_state": MagicMock(),
+        },
+    ):
         import importlib
+
         mod = importlib.import_module("tui_gateway.server")
 
     methods = dict(mod._methods)
@@ -43,6 +50,7 @@ def server():
     for sid in list(mod._sessions):
         mod._close_session_by_id(sid, end_reason="test_cleanup")
     from tui_gateway import server_requests
+
     server_requests.reset_for_tests()
     mod._live_transports.clear()
 
@@ -83,11 +91,13 @@ class _KanbanDB:
 
 def _resume(server, monkeypatch, db, session_id):
     monkeypatch.setattr(server, "_get_db", lambda: db)
-    return server.handle_request({
-        "id": f"r-{session_id}",
-        "method": "session.resume",
-        "params": {"session_id": session_id, "omit_messages": True},
-    })
+    return server.handle_request(
+        {
+            "id": f"r-{session_id}",
+            "method": "session.resume",
+            "params": {"session_id": session_id, "omit_messages": True},
+        }
+    )
 
 
 def test_gateway_resume_refuses_kanban_worker_session(server, monkeypatch):

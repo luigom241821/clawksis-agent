@@ -10,10 +10,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
+
 def _response(content="ok"):
     message = SimpleNamespace(content=content, tool_calls=[])
     choice = SimpleNamespace(message=message, finish_reason="stop")
     return SimpleNamespace(choices=[choice], usage=None, model="fake")
+
 
 class TestSlotRuntimeApiMode:
     """_slot_runtime should include api_mode when resolve_runtime_provider returns it."""
@@ -34,6 +36,7 @@ class TestSlotRuntimeApiMode:
         assert result["api_mode"] == "codex_responses"
         assert result["base_url"] == "https://api.githubcopilot.com"
         assert result["api_key"] == "test-key"
+
 
 def test_run_reference_passes_slot_extra_body(monkeypatch):
     """Reference advisors should receive custom provider extra_body."""
@@ -57,7 +60,11 @@ def test_run_reference_passes_slot_extra_body(monkeypatch):
         },
     )
     monkeypatch.setattr(moa_loop, "call_llm", fake_call_llm)
-    monkeypatch.setattr(moa_loop, "_maybe_apply_moa_cache_control", lambda messages, runtime, **kwargs: messages)
+    monkeypatch.setattr(
+        moa_loop,
+        "_maybe_apply_moa_cache_control",
+        lambda messages, runtime, **kwargs: messages,
+    )
 
     label, text, _usage = moa_loop._run_reference(
         {"provider": "dashscope", "model": "qwen3.7-max"},
@@ -68,7 +75,10 @@ def test_run_reference_passes_slot_extra_body(monkeypatch):
     assert text == "advisor"
     assert captured["extra_body"] == {"enable_thinking": False}
 
-def test_moa_aggregator_merges_slot_extra_body_with_caller_override(tmp_path, monkeypatch):
+
+def test_moa_aggregator_merges_slot_extra_body_with_caller_override(
+    tmp_path, monkeypatch
+):
     """Aggregator calls should merge slot defaults without duplicate kwargs."""
     home = tmp_path / ".clawk"
     home.mkdir()
@@ -128,6 +138,7 @@ moa:
         "reasoning": {"effort": "none"},
     }
 
+
 def test_one_shot_aggregate_moa_context_passes_slot_extra_body(monkeypatch):
     """The one-shot `/moa <prompt>` synthesis call (aggregate_moa_context) is
     the third independent MoA call path — its aggregator call receives the
@@ -154,7 +165,9 @@ def test_one_shot_aggregate_moa_context_passes_slot_extra_body(monkeypatch):
     )
     monkeypatch.setattr(moa_loop, "call_llm", fake_call_llm)
     monkeypatch.setattr(
-        moa_loop, "_maybe_apply_moa_cache_control", lambda messages, runtime, **kwargs: messages
+        moa_loop,
+        "_maybe_apply_moa_cache_control",
+        lambda messages, runtime, **kwargs: messages,
     )
 
     result = moa_loop.aggregate_moa_context(

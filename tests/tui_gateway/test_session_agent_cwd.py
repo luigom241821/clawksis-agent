@@ -44,7 +44,9 @@ def workspace_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr("clawk_cli.banner.prefetch_update_check", lambda: None)
     from tui_gateway import server
 
-    old, new, other = (tmp_path / name for name in ("old-repo", "new-repo", "other-repo"))
+    old, new, other = (
+        tmp_path / name for name in ("old-repo", "new-repo", "other-repo")
+    )
     for path in (old, new, other):
         path.mkdir()
     monkeypatch.chdir(other)
@@ -53,13 +55,18 @@ def workspace_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(terminal_tool, "_task_env_overrides", {})
     monkeypatch.setattr(server, "_load_cfg", dict)
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session: {"cwd": session["cwd"]})
+    monkeypatch.setattr(
+        server, "_session_info", lambda agent, session: {"cwd": session["cwd"]}
+    )
     monkeypatch.setattr(server, "_persist_session_git_meta", lambda *a, **k: None)
     monkeypatch.setattr("tools.terminal_tool_lifecycle.cleanup_vm", lambda *a: None)
     monkeypatch.setattr("model_tools.get_tool_definitions", lambda *a, **k: [])
     monkeypatch.setattr("model_tools.check_toolset_requirements", lambda *a, **k: {})
     monkeypatch.setattr("agent.process_bootstrap.OpenAI", MagicMock())
-    monkeypatch.setattr("clawk_cli.config.load_config_readonly", lambda: {"memory": {"provider": "cwd-recording"}})
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config_readonly",
+        lambda: {"memory": {"provider": "cwd-recording"}},
+    )
     providers, agents, starts, network_attempts = [], [], [], []
 
     def load_provider(*a, **k):
@@ -94,9 +101,16 @@ def workspace_runtime(monkeypatch, tmp_path):
 
     def build(cwd, key="conversation"):
         agent = AIAgent(
-            model="test-model", api_key="test-key", base_url="https://example.invalid/v1",
-            quiet_mode=True, skip_context_files=True, skip_background_review=True,
-            save_trajectories=False, platform="gui", session_id=key, session_db=db,
+            model="test-model",
+            api_key="test-key",
+            base_url="https://example.invalid/v1",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_background_review=True,
+            save_trajectories=False,
+            platform="gui",
+            session_id=key,
+            session_db=db,
             cwd=cwd,
         )
         agents.append(agent)
@@ -107,15 +121,28 @@ def workspace_runtime(monkeypatch, tmp_path):
         if action == "project-tool":
             server._apply_project_workspace(session["session_key"], str(cwd))
         else:
-            response = server._methods[action]("move", {
-                "session_id": "ui-session", "session_key": session["session_key"], "cwd": str(cwd),
-            })
+            response = server._methods[action](
+                "move",
+                {
+                    "session_id": "ui-session",
+                    "session_key": session["session_key"],
+                    "cwd": str(cwd),
+                },
+            )
             assert "error" not in response, response
         assert session["cwd"] == str(cwd)
 
     try:
-        yield SimpleNamespace(old=old, new=new, other=other, build=build, move=move,
-                              providers=providers, starts=starts, server=server)
+        yield SimpleNamespace(
+            old=old,
+            new=new,
+            other=other,
+            build=build,
+            move=move,
+            providers=providers,
+            starts=starts,
+            server=server,
+        )
     finally:
         for agent in agents:
             codex_runtime._close_codex_session(agent)
@@ -124,14 +151,25 @@ def workspace_runtime(monkeypatch, tmp_path):
         assert not network_attempts
 
 
-@pytest.mark.parametrize("action", ["project-tool", "session.cwd.set", "session.workspace.move"])
-@pytest.mark.parametrize("restart", [False, True], ids=["first-thread", "restarted-thread"])
-def test_explicit_workspace_moves_reach_new_codex_threads(workspace_runtime, action, restart):
+@pytest.mark.parametrize(
+    "action", ["project-tool", "session.cwd.set", "session.workspace.move"]
+)
+@pytest.mark.parametrize(
+    "restart", [False, True], ids=["first-thread", "restarted-thread"]
+)
+def test_explicit_workspace_moves_reach_new_codex_threads(
+    workspace_runtime, action, restart
+):
     runtime = workspace_runtime
     server = runtime.server
     agent = runtime.build(str(runtime.old))
     neighbor = runtime.build(str(runtime.other), key="neighbor")
-    session = {"agent": agent, "session_key": agent.session_id, "cwd": str(runtime.old), "source": "desktop"}
+    session = {
+        "agent": agent,
+        "session_key": agent.session_id,
+        "cwd": str(runtime.old),
+        "source": "desktop",
+    }
     server._sessions["ui-session"] = session
     provider = runtime.providers[0]
     prompt, memory_key = agent._cached_system_prompt, provider._session_key
@@ -156,7 +194,9 @@ def test_explicit_workspace_moves_reach_new_codex_threads(workspace_runtime, act
         assert runtime.starts[-1] == str(runtime.new)
     finally:
         server._clear_session_context(tokens)
-    assert terminal_tool._task_env_overrides[agent.session_id]["cwd"] == str(runtime.new)
+    assert terminal_tool._task_env_overrides[agent.session_id]["cwd"] == str(
+        runtime.new
+    )
     assert neighbor.session_cwd == str(runtime.other)
     assert runtime_cwd.resolve_agent_cwd() == runtime.other
     assert provider._session_key == memory_key
@@ -164,12 +204,23 @@ def test_explicit_workspace_moves_reach_new_codex_threads(workspace_runtime, act
     assert agent._cached_system_prompt == prompt
 
 
-def test_workspace_move_during_deferred_build_reaches_first_codex_thread(workspace_runtime, monkeypatch):
+def test_workspace_move_during_deferred_build_reaches_first_codex_thread(
+    workspace_runtime, monkeypatch
+):
     runtime = workspace_runtime
     server = runtime.server
-    constructed, release, ready = threading.Event(), threading.Event(), threading.Event()
-    session = {"agent": None, "agent_ready": ready, "session_key": "deferred",
-               "cwd": str(runtime.old), "source": "desktop"}
+    constructed, release, ready = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
+    session = {
+        "agent": None,
+        "agent_ready": ready,
+        "session_key": "deferred",
+        "cwd": str(runtime.old),
+        "source": "desktop",
+    }
     server._sessions["ui-session"] = session
 
     def make_agent(sid, key, **kwargs):

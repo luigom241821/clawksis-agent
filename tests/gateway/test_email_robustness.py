@@ -16,12 +16,15 @@ from unittest.mock import MagicMock, patch
 def _make_adapter(address="clawk@test.com"):
     from gateway.config import PlatformConfig
 
-    with patch.dict(os.environ, {
-        "EMAIL_ADDRESS": address,
-        "EMAIL_PASSWORD": "secret",
-        "EMAIL_IMAP_HOST": "imap.test.com",
-        "EMAIL_SMTP_HOST": "smtp.test.com",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "EMAIL_ADDRESS": address,
+            "EMAIL_PASSWORD": "secret",
+            "EMAIL_IMAP_HOST": "imap.test.com",
+            "EMAIL_SMTP_HOST": "smtp.test.com",
+        },
+    ):
         from plugins.platforms.email.adapter import EmailAdapter
 
         adapter = EmailAdapter(PlatformConfig(enabled=True))
@@ -41,9 +44,7 @@ class TestImapResponseGuard(unittest.TestCase):
 
     def _fetch_with(self, fetch_responses):
         adapter = _make_adapter()
-        uids = b" ".join(
-            str(i + 1).encode() for i in range(len(fetch_responses))
-        )
+        uids = b" ".join(str(i + 1).encode() for i in range(len(fetch_responses)))
         fetch_iter = iter(fetch_responses)
 
         def uid_handler(command, *args):
@@ -70,19 +71,24 @@ class TestImapResponseGuard(unittest.TestCase):
         self.assertEqual(results, [])
 
 
-
-
 class TestTransportSecurity(unittest.TestCase):
     """platforms.email.extra.imap_security / smtp_security select the transport (#99641)."""
 
     def _adapter(self, **extra):
         from gateway.config import PlatformConfig
 
-        with patch.dict(os.environ, {
-            "EMAIL_ADDRESS": "clawk@test.com", "EMAIL_PASSWORD": "secret",
-            "EMAIL_IMAP_HOST": "127.0.0.1", "EMAIL_IMAP_PORT": "1143",
-            "EMAIL_SMTP_HOST": "127.0.0.1", "EMAIL_SMTP_PORT": "1025",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "EMAIL_ADDRESS": "clawk@test.com",
+                "EMAIL_PASSWORD": "secret",
+                "EMAIL_IMAP_HOST": "127.0.0.1",
+                "EMAIL_IMAP_PORT": "1143",
+                "EMAIL_SMTP_HOST": "127.0.0.1",
+                "EMAIL_SMTP_PORT": "1025",
+            },
+            clear=True,
+        ):
             from plugins.platforms.email.adapter import EmailAdapter
 
             return EmailAdapter(PlatformConfig(enabled=True, extra=extra))
@@ -90,8 +96,10 @@ class TestTransportSecurity(unittest.TestCase):
     def test_starttls_builds_plain_imap_then_upgrades(self):
         adapter = self._adapter(imap_security="starttls", imap_tls_verify=False)
         imap = MagicMock()
-        with patch("imaplib.IMAP4", return_value=imap) as imap_cls, \
-             patch("imaplib.IMAP4_SSL") as imap_ssl_cls:
+        with (
+            patch("imaplib.IMAP4", return_value=imap) as imap_cls,
+            patch("imaplib.IMAP4_SSL") as imap_ssl_cls,
+        ):
             self.assertIs(adapter._connect_imap(), imap)
         imap_cls.assert_called_once_with("127.0.0.1", 1143, timeout=30)
         imap_ssl_cls.assert_not_called()

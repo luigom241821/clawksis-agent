@@ -3,6 +3,7 @@
 These are document contracts, not proof that an agent obeys the instructions.
 Section ordering, step counts and other prose quality remain review-owned.
 """
+
 from pathlib import Path
 import re
 
@@ -28,12 +29,22 @@ def _document(skill):
     return parse_frontmatter((REPO / skill / "SKILL.md").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("skill,contributor", [
-    (GITHUB, "benbarclay"), (MEETING, "benbarclay"), (PRICE, "benbarclay"),
-    (WEEKLY, "benbarclay"), (EMAIL, "benbarclay"), (SOCIAL, "benbarclay"),
-    (ACTUAL, "shl0ms"), (DARWINIAN, "Bihruze"),
-    (QUESTIONNAIRE, "mattpocock"), (PINECONE, None), (MCP, None),
-])
+@pytest.mark.parametrize(
+    "skill,contributor",
+    [
+        (GITHUB, "benbarclay"),
+        (MEETING, "benbarclay"),
+        (PRICE, "benbarclay"),
+        (WEEKLY, "benbarclay"),
+        (EMAIL, "benbarclay"),
+        (SOCIAL, "benbarclay"),
+        (ACTUAL, "shl0ms"),
+        (DARWINIAN, "Bihruze"),
+        (QUESTIONNAIRE, "mattpocock"),
+        (PINECONE, None),
+        (MCP, None),
+    ],
+)
 def test_required_document_and_credit(skill, contributor):
     metadata, _ = _document(skill)  # A corpus glob alone cannot catch a deleted skill.
     if contributor:
@@ -42,11 +53,23 @@ def test_required_document_and_credit(skill, contributor):
         assert not metadata["author"].startswith("Clawksis")
 
 
-@pytest.mark.parametrize("skill,references", [
-    (GITHUB, ("auth.md", "issues.md", "pr-workflow.md", "issue-to-pr.md",
-              "code-review.md", "repo-management.md")),
-    (ACTUAL, ("opencode.md",)),
-])
+@pytest.mark.parametrize(
+    "skill,references",
+    [
+        (
+            GITHUB,
+            (
+                "auth.md",
+                "issues.md",
+                "pr-workflow.md",
+                "issue-to-pr.md",
+                "code-review.md",
+                "repo-management.md",
+            ),
+        ),
+        (ACTUAL, ("opencode.md",)),
+    ],
+)
 def test_required_references_are_present_and_routed(skill, references):
     _, body = _document(skill)
     for reference in references:
@@ -55,20 +78,57 @@ def test_required_references_are_present_and_routed(skill, references):
         assert relative in body, relative
 
 
-@pytest.mark.parametrize("skill,required,forbidden", [
-    (QUESTIONNAIRE, ("## Context", "## How to answer", "## Anything else?",
-                     "decision-questionnaire-<slug>.md", "Interview the Send"),
-     ("claude", "slash command", "disable-model-invocation")),
-    (ACTUAL, ("--provider actual",), ("clawk config set providers.actual.api ", "key_env")),
-    (MEETING, ("never invent", "before creating anything", "`unresolved`"), (r"\bLinear\b",)),
-    (PRICE, ("Setup (foreground, once)", "Tick (each scheduled run)", "cronjob(action=",
-             "Do not schedule until one foreground fetch works",
-             "never overwrite the last good observation", "fingerprint"), ("flight-research",)),
-    (EMAIL, ("read + draft", "does not imply permission", "Calibrate the user's voice",
-             "sent replies", "fall back to matching the incoming thread's register",
-             "generic-professional"), ()),
-    (SOCIAL, (), ("image-generation-workflow",)),
-])
+@pytest.mark.parametrize(
+    "skill,required,forbidden",
+    [
+        (
+            QUESTIONNAIRE,
+            (
+                "## Context",
+                "## How to answer",
+                "## Anything else?",
+                "decision-questionnaire-<slug>.md",
+                "Interview the Send",
+            ),
+            ("claude", "slash command", "disable-model-invocation"),
+        ),
+        (
+            ACTUAL,
+            ("--provider actual",),
+            ("clawk config set providers.actual.api ", "key_env"),
+        ),
+        (
+            MEETING,
+            ("never invent", "before creating anything", "`unresolved`"),
+            (r"\bLinear\b",),
+        ),
+        (
+            PRICE,
+            (
+                "Setup (foreground, once)",
+                "Tick (each scheduled run)",
+                "cronjob(action=",
+                "Do not schedule until one foreground fetch works",
+                "never overwrite the last good observation",
+                "fingerprint",
+            ),
+            ("flight-research",),
+        ),
+        (
+            EMAIL,
+            (
+                "read + draft",
+                "does not imply permission",
+                "Calibrate the user's voice",
+                "sent replies",
+                "fall back to matching the incoming thread's register",
+                "generic-professional",
+            ),
+            (),
+        ),
+        (SOCIAL, (), ("image-generation-workflow",)),
+    ],
+)
 def test_document_obligations(skill, required, forbidden):
     _, body = _document(skill)
     for text in required:
@@ -79,13 +139,18 @@ def test_document_obligations(skill, required, forbidden):
         assert "handed-off, not published" in body or "handed-off slots" in body
 
 
-@pytest.mark.parametrize("relative", [
-    f"{GITHUB}/references/issue-to-pr.md",
-    *(f"{skill}/SKILL.md" for skill in (MEETING, PRICE, WEEKLY, EMAIL, SOCIAL)),
-])
+@pytest.mark.parametrize(
+    "relative",
+    [
+        f"{GITHUB}/references/issue-to-pr.md",
+        *(f"{skill}/SKILL.md" for skill in (MEETING, PRICE, WEEKLY, EMAIL, SOCIAL)),
+    ],
+)
 def test_procedure_steps_have_completion_criteria(relative):
     body = (REPO / relative).read_text(encoding="utf-8")
-    steps = re.findall(r"^### \d+\..*?(?=^### \d+\.|^## |\Z)", body, re.MULTILINE | re.DOTALL)
+    steps = re.findall(
+        r"^### \d+\..*?(?=^### \d+\.|^## |\Z)", body, re.MULTILINE | re.DOTALL
+    )
     assert steps, relative
     for step in steps:
         assert "Done when" in step, step[:80]
@@ -95,7 +160,13 @@ def test_procedure_steps_have_completion_criteria(relative):
 
 def test_issue_to_pr_disciplines():
     body = (REPO / GITHUB / "references/issue-to-pr.md").read_text(encoding="utf-8")
-    for text in ("--comments", "pr list --search", "git log -p -S", "sibling", "dispatches CI"):
+    for text in (
+        "--comments",
+        "pr list --search",
+        "git log -p -S",
+        "sibling",
+        "dispatches CI",
+    ):
         assert text in body, text
     assert "sabotage" in body.lower() or "FAILS" in body
     assert "/home/" not in body and not re.search(r"[A-Z]:\\+Users", body)
@@ -103,7 +174,9 @@ def test_issue_to_pr_disciplines():
 
 def test_optional_platform_declarations():
     darwinian, _ = _document(DARWINIAN)
-    assert "windows" not in darwinian["platforms"]  # func_timeout relies on POSIX signals.
+    assert (
+        "windows" not in darwinian["platforms"]
+    )  # func_timeout relies on POSIX signals.
     assert {"linux", "macos"} <= set(darwinian["platforms"])
     assert _document(MCP)[0]["platforms"]
 

@@ -73,7 +73,17 @@ def _overlapping_attempts(agent, messages):
         except Exception as exc:
             errors.append(exc)
 
-    return fence_a, fence_b, entered_a, entered_b, release_a, release_b, errors, _fake_compress, _attempt
+    return (
+        fence_a,
+        fence_b,
+        entered_a,
+        entered_b,
+        release_a,
+        release_b,
+        errors,
+        _fake_compress,
+        _attempt,
+    )
 
 
 class TestCommitFenceCompletionOrder:
@@ -85,8 +95,17 @@ class TestCommitFenceCompletionOrder:
         agent = _build_agent(db, "S")
         messages = [{"role": "user", "content": "live question"}]
 
-        (fence_a, fence_b, entered_a, entered_b, release_a, release_b,
-         errors, fake, attempt) = _overlapping_attempts(agent, messages)
+        (
+            fence_a,
+            fence_b,
+            entered_a,
+            entered_b,
+            release_a,
+            release_b,
+            errors,
+            fake,
+            attempt,
+        ) = _overlapping_attempts(agent, messages)
         monkeypatch.setattr(conversation_compression, "compress_context", fake)
 
         thread_a = threading.Thread(target=attempt, args=(fence_a,), daemon=True)
@@ -115,8 +134,17 @@ class TestCommitFenceCompletionOrder:
         agent = _build_agent(db, "S")
         messages = [{"role": "user", "content": "live question"}]
 
-        (fence_a, fence_b, entered_a, entered_b, release_a, release_b,
-         errors, fake, attempt) = _overlapping_attempts(agent, messages)
+        (
+            fence_a,
+            fence_b,
+            entered_a,
+            entered_b,
+            release_a,
+            release_b,
+            errors,
+            fake,
+            attempt,
+        ) = _overlapping_attempts(agent, messages)
         monkeypatch.setattr(conversation_compression, "compress_context", fake)
 
         thread_a = threading.Thread(target=attempt, args=(fence_a,), daemon=True)
@@ -146,9 +174,13 @@ def _capture_new_fence(monkeypatch):
         return (["m"], "p")
 
     monkeypatch.setattr(
-        conversation_compression, "run_compress_context_with_progress_timeout", _stub_runner)
+        conversation_compression,
+        "run_compress_context_with_progress_timeout",
+        _stub_runner,
+    )
     monkeypatch.setattr(
-        conversation_compression, "request_exceeds_model_window", lambda *a, **k: False)
+        conversation_compression, "request_exceeds_model_window", lambda *a, **k: False
+    )
     return captured
 
 
@@ -159,9 +191,16 @@ class TestStallFallbackFencePublication:
     def _drive(self, monkeypatch, agent, registration, fence, lock):
         captured = _capture_new_fence(monkeypatch)
         compression_facade._run_under_progress_timeout(
-            agent, lambda *a, **k: (["m"], "p"), [{"role": "user", "content": "x"}], "sys",
-            active_fence=fence, registration=registration, fence_registration_lock=lock,
-            idle_timeout=1, total_ceiling=2)
+            agent,
+            lambda *a, **k: (["m"], "p"),
+            [{"role": "user", "content": "x"}],
+            "sys",
+            active_fence=fence,
+            registration=registration,
+            fence_registration_lock=lock,
+            idle_timeout=1,
+            total_ceiling=2,
+        )
         return captured["new_fence"]
 
     def test_retry_fence_publishes_while_attempt_owns_slot(self, monkeypatch):

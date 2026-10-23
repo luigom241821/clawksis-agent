@@ -18,22 +18,30 @@ def _adapter(extra):
 
 def _group_msg(chat_id):
     return SimpleNamespace(
-        message_id=42, text="hello", caption=None, entities=[], caption_entities=[],
-        message_thread_id=None, reply_to_message=None, date=None,
+        message_id=42,
+        text="hello",
+        caption=None,
+        entities=[],
+        caption_entities=[],
+        message_thread_id=None,
+        reply_to_message=None,
+        date=None,
         chat=SimpleNamespace(id=chat_id, type="group", title="G", is_forum=False),
         from_user=SimpleNamespace(id=111, full_name="A B", first_name="A"),
     )
 
 
 def test_json_string_allowlists_decode_across_every_key():
-    adapter = _adapter({
-        "allowed_chats": '["-100","-200"]',
-        "group_allowed_chats": '["-300"]',
-        "allowed_topics": '["5"]',
-        "free_response_chats": '["-400"]',
-        "free_response_topics": '["-100:3"]',
-        "ignored_threads": '["7", "9"]',
-    })
+    adapter = _adapter(
+        {
+            "allowed_chats": '["-100","-200"]',
+            "group_allowed_chats": '["-300"]',
+            "allowed_topics": '["5"]',
+            "free_response_chats": '["-400"]',
+            "free_response_topics": '["-100:3"]',
+            "ignored_threads": '["7", "9"]',
+        }
+    )
     assert adapter._telegram_allowed_chats() == {"-100", "-200"}
     assert adapter._telegram_group_allowed_chats() == {"-300"}
     assert adapter._telegram_allowed_topics() == {"5"}
@@ -47,9 +55,18 @@ def test_json_string_allowlists_decode_across_every_key():
 
 
 def test_comma_and_malformed_strings_keep_the_legacy_split():
-    assert _adapter({"allowed_chats": "-100, -200"})._telegram_allowed_chats() == {"-100", "-200"}
-    assert _adapter({"allowed_chats": ["-100", "-200"]})._telegram_allowed_chats() == {"-100", "-200"}
-    assert _adapter({"allowed_chats": '["-100", "-200'})._telegram_allowed_chats() == {'["-100"', '"-200'}
+    assert _adapter({"allowed_chats": "-100, -200"})._telegram_allowed_chats() == {
+        "-100",
+        "-200",
+    }
+    assert _adapter({"allowed_chats": ["-100", "-200"]})._telegram_allowed_chats() == {
+        "-100",
+        "-200",
+    }
+    assert _adapter({"allowed_chats": '["-100", "-200'})._telegram_allowed_chats() == {
+        '["-100"',
+        '"-200',
+    }
 
 
 def test_runner_side_allow_set_decodes_json_string(monkeypatch):
@@ -60,6 +77,9 @@ def test_runner_side_allow_set_decodes_json_string(monkeypatch):
     monkeypatch.setenv("TELEGRAM_GROUP_ALLOWED_CHATS", '["-100","-200"]')
     from gateway.platforms._shared import platform_gate_env
 
-    assert _coerce_allow_set(platform_gate_env("TELEGRAM_GROUP_ALLOWED_CHATS")) == {"-100", "-200"}
+    assert _coerce_allow_set(platform_gate_env("TELEGRAM_GROUP_ALLOWED_CHATS")) == {
+        "-100",
+        "-200",
+    }
     assert _coerce_allow_set("-100, -200") == {"-100", "-200"}
     assert _coerce_allow_set(["-100"]) == {"-100"}

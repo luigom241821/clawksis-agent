@@ -4,6 +4,7 @@ Regression for #122548: ``clawk uninstall`` option 1 (Keep data) wiped
 ``desktop_userdata_dir()`` (connections.json, OAuth partitions, renderer state)
 because ``_perform_uninstall`` never forwarded ``remove_userdata``.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -36,9 +37,14 @@ def homes(tmp_path, monkeypatch):
 
     monkeypatch.setattr(uninstall, "_is_windows", lambda: False)
     monkeypatch.setattr(uninstall, "uninstall_gateway_service", lambda: True)
-    for name in ("remove_path_from_shell_configs", "remove_wrapper_script",
-                 "remove_node_symlinks", "remove_legacy_runtime_trees",
-                 "remove_dashboard_launchd_jobs", "_macos_cache_leftover_dirs"):
+    for name in (
+        "remove_path_from_shell_configs",
+        "remove_wrapper_script",
+        "remove_node_symlinks",
+        "remove_legacy_runtime_trees",
+        "remove_dashboard_launchd_jobs",
+        "_macos_cache_leftover_dirs",
+    ):
         monkeypatch.setattr(uninstall, name, lambda *a, **k: [])
     monkeypatch.setattr(gui_uninstall, "packaged_gui_app_paths", list)
     monkeypatch.setattr(gui_uninstall, "desktop_userdata_dir", lambda: userdata)
@@ -66,7 +72,11 @@ def test_uninstall_desktop_userdata_kept_unless_full(homes, full_uninstall):
     """Keep-data preserves Electron userData; only the full wipe removes it."""
     home, project_root, userdata, violations = homes
     uninstall._perform_uninstall(
-        project_root=project_root, clawk_home=home, full_uninstall=full_uninstall,
-        remove_profiles=False, named_profiles=[])
+        project_root=project_root,
+        clawk_home=home,
+        full_uninstall=full_uninstall,
+        remove_profiles=False,
+        named_profiles=[],
+    )
     assert violations == []
     assert (userdata / "connections.json").exists() is not full_uninstall

@@ -4,6 +4,7 @@ Plugin hooks and tools run in the gateway process, whose own cwd is the install 
 by every session (it is never ``os.chdir``-ed). These read the calling session's key, client surface
 and recorded working directory instead.
 """
+
 from __future__ import annotations
 
 import os
@@ -11,12 +12,14 @@ import os
 
 def _active_policy():
     from gateway.session_policy import active_policy
+
     return active_policy()
 
 
 def session_key() -> str:
     """Route key of the session whose turn is running in this context, ``""`` outside one."""
     from gateway.session_context import get_session_env
+
     return get_session_env("CLAWK_SESSION_KEY", "")
 
 
@@ -27,6 +30,7 @@ def session_surface() -> str:
     if policy is not None:
         return policy.platform
     from gateway.session_context import get_session_env
+
     return get_session_env("CLAWK_SESSION_PLATFORM", "")
 
 
@@ -36,8 +40,13 @@ def session_cwd() -> str:
     In ingress hooks (``pre_gateway_dispatch``), which run before any session, it is the profile's
     terminal cwd, not the workspace of the session the message will reach."""
     from agent.runtime_cwd import scope_terminal_cwd, scoped_session_cwd
+
     policy = _active_policy()
-    return scoped_session_cwd() or (policy.cwd if policy is not None else "") or scope_terminal_cwd().strip()
+    return (
+        scoped_session_cwd()
+        or (policy.cwd if policy is not None else "")
+        or scope_terminal_cwd().strip()
+    )
 
 
 def context_surface(manager) -> str:

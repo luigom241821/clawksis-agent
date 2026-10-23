@@ -30,7 +30,9 @@ CONTROL_PROTOCOL_VERSION = 1
 _SOCKET_FILENAME = "gateway.sock"
 _POINTER_FILENAME = "gateway.sock.path"
 _IS_WINDOWS = sys.platform == "win32"
-_MAX_UNIX_PATH = 100  # sun_path limit is 104 on macOS/BSD, 108 on Linux; margin for the NUL
+_MAX_UNIX_PATH = (
+    100  # sun_path limit is 104 on macOS/BSD, 108 on Linux; margin for the NUL
+)
 # Single-line JSON in/out; bounded so a misbehaving peer can't balloon memory.
 _MAX_REQUEST_BYTES = 64 * 1024
 _MAX_RESPONSE_BYTES = 512 * 1024
@@ -38,7 +40,11 @@ _DEFAULT_CLIENT_TIMEOUT = 2.0
 
 
 def _home_hash(home: Path) -> str:
-    return hashlib.sha256(os.path.normcase(str(Path(home).expanduser().resolve(strict=False))).encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(
+        os.path.normcase(str(Path(home).expanduser().resolve(strict=False))).encode(
+            "utf-8"
+        )
+    ).hexdigest()[:16]
 
 
 def windows_pipe_name(home: Path) -> str:
@@ -69,14 +75,21 @@ def _fallback_socket_path(home: Path) -> Path:
     (``_squat_proof_fallback``)."""
     name = f"clawk-gw-{_home_hash(home)}/control.sock"
     runtime = _private_runtime_dir()
-    candidates = ([runtime / name] if runtime else []) + [Path(tempfile.gettempdir()) / name] + (
-        [] if _IS_WINDOWS else [Path("/tmp") / name])  # no-tmp: ok — AF_UNIX 104-byte path limit needs the short /tmp candidate
+    candidates = (
+        ([runtime / name] if runtime else [])
+        + [Path(tempfile.gettempdir()) / name]
+        + ([] if _IS_WINDOWS else [Path("/tmp") / name])
+    )  # no-tmp: ok — AF_UNIX 104-byte path limit needs the short /tmp candidate
     return next((c for c in candidates if _fits_sun_path(c)), candidates[0])
 
 
 def _private_directory(path: Path) -> bool:
     info = path.lstat()
-    return stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid() and not info.st_mode & 0o077  # windows-footgun: ok — POSIX only
+    return (
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == os.getuid()
+        and not info.st_mode & 0o077
+    )  # windows-footgun: ok — POSIX only
 
 
 def _squat_proof_fallback(bind_path: Path) -> Path:
@@ -86,7 +99,9 @@ def _squat_proof_fallback(bind_path: Path) -> Path:
     path = root / bind_path.parent.name / bind_path.name
     if not _fits_sun_path(path):
         root.rmdir()
-        raise PermissionError("fallback control directory is squatted and no private path fits sun_path")
+        raise PermissionError(
+            "fallback control directory is squatted and no private path fits sun_path"
+        )
     path.parent.mkdir(mode=0o700)
     return path
 
@@ -111,7 +126,11 @@ def _publish_pointer(pointer_file: Path, bind_path: Path) -> None:
 def resolve_server_socket_path(home: Path) -> tuple[Path, Optional[Path]]:
     """Return ``(bind_path, pointer_file)``; pointer_file is set only for the temp-dir fallback."""
     direct = Path(home) / _SOCKET_FILENAME
-    return (direct, None) if _fits_sun_path(direct) else (_fallback_socket_path(home), Path(home) / _POINTER_FILENAME)
+    return (
+        (direct, None)
+        if _fits_sun_path(direct)
+        else (_fallback_socket_path(home), Path(home) / _POINTER_FILENAME)
+    )
 
 
 def resolve_client_socket_path(home: Path) -> Optional[Path]:
@@ -121,7 +140,9 @@ def resolve_client_socket_path(home: Path) -> Optional[Path]:
         return direct
     with contextlib.suppress(OSError):
         pointer = Path(home) / _POINTER_FILENAME
-        target = pointer.read_text(encoding="utf-8-sig").strip() if pointer.is_file() else ""
+        target = (
+            pointer.read_text(encoding="utf-8-sig").strip() if pointer.is_file() else ""
+        )
         if target and Path(target).exists():
             return Path(target)
     return None
@@ -138,7 +159,10 @@ def _detect_supervisor() -> str:
     if env.get("INVOCATION_ID"):
         return "systemd"
     from gateway.restart import launchd_job_label
-    if sys.platform == "darwin" and (launchd_job_label(env) or env.get("LAUNCHD_SOCKET")):
+
+    if sys.platform == "darwin" and (
+        launchd_job_label(env) or env.get("LAUNCHD_SOCKET")
+    ):
         return "launchd"
     if env.get("CLAWK_DESKTOP_MANAGED"):
         return "desktop"
@@ -151,6 +175,7 @@ def _structured_login_subject(value: str) -> bool:
     a same-user peer may forward a ticket for. Bare labels (``admin``, ``uid:501``) fail:
     they can collide with another stored owner representation."""
     from gateway.session_identity import parse_authenticated_subject
+
     return parse_authenticated_subject(value) is not None
 
 
@@ -170,14 +195,23 @@ def launch_supervisor(identity: dict[str, Any]) -> Optional[str]:
 
 def build_identify_payload() -> dict[str, Any]:
     """Default ``identify`` answer, built from gateway.status primitives."""
-    from gateway.status import _build_pid_record, _get_code_identity_fields, _profile_label_for_home, read_runtime_status
+    from gateway.status import (
+        _build_pid_record,
+        _get_code_identity_fields,
+        _profile_label_for_home,
+        read_runtime_status,
+    )
+
     record = _build_pid_record()
     supervisor = _detect_supervisor()
     payload: dict[str, Any] = {
         "protocol": CONTROL_PROTOCOL_VERSION,
         **{k: record.get(k) for k in ("kind", "pid", "start_time", "clawk_home")},
         "profile": _profile_label_for_home(record.get("clawk_home") or ""),
-        "supervisor": supervisor, "launch_supervisor": supervisor, **_get_code_identity_fields()}
+        "supervisor": supervisor,
+        "launch_supervisor": supervisor,
+        **_get_code_identity_fields(),
+    }
     with contextlib.suppress(Exception):
         # served_profiles (multiplex mode) is stamped into runtime status by the runner.
         served = (read_runtime_status() or {}).get("served_profiles")
@@ -189,8 +223,13 @@ def build_identify_payload() -> dict[str, Any]:
 def build_status_payload() -> dict[str, Any]:
     """Default ``status`` answer — current runtime status, answered live."""
     from gateway.status import read_runtime_status
-    return {**(read_runtime_status() or {}), "protocol": CONTROL_PROTOCOL_VERSION,
-            "answered_at": time.time(), "answering_pid": os.getpid()}
+
+    return {
+        **(read_runtime_status() or {}),
+        "protocol": CONTROL_PROTOCOL_VERSION,
+        "answered_at": time.time(),
+        "answering_pid": os.getpid(),
+    }
 
 
 class GatewayControlServer:
@@ -198,10 +237,15 @@ class GatewayControlServer:
     ``stop()`` on shutdown. All failures are non-fatal — the gateway never refuses to serve messaging
     because its control socket couldn't bind; consumers fall back to the scan layer."""
 
-    def __init__(self, home: Optional[Path] = None, *,
-                 verb_handlers: Optional[dict[str, Callable[..., dict[str, Any]]]] = None) -> None:
+    def __init__(
+        self,
+        home: Optional[Path] = None,
+        *,
+        verb_handlers: Optional[dict[str, Callable[..., dict[str, Any]]]] = None,
+    ) -> None:
         if home is None:
             from gateway.status import _get_process_clawk_home
+
             home = _get_process_clawk_home()
         # The real directory, as clients canonicalize it: the peer check below refuses any
         # symlinked component, so an unresolved symlinked ~/.clawksis would never mint tickets.
@@ -212,10 +256,15 @@ class GatewayControlServer:
         self._pipe_server: Any = None  # Windows proactor pipe server
         self._bind_path: Optional[Path] = None
         self._pointer_file: Optional[Path] = None
-        self._fallback_root: Optional[Path] = None  # mkdtemp root created for a squatted fallback
+        self._fallback_root: Optional[Path] = (
+            None  # mkdtemp root created for a squatted fallback
+        )
         self._file_identities = {}
         self._handlers: dict[str, Callable[..., dict[str, Any]]] = {
-            "identify": build_identify_payload, "status": build_status_payload, **(verb_handlers or {})}
+            "identify": build_identify_payload,
+            "status": build_status_payload,
+            **(verb_handlers or {}),
+        }
 
     async def start(self) -> bool:
         """Bind and start serving. Returns True on success, False otherwise."""
@@ -223,7 +272,9 @@ class GatewayControlServer:
             return await (self._start_windows() if _IS_WINDOWS else self._start_posix())
         except Exception as exc:
             await self.stop()
-            logger.warning("Gateway control socket failed to start (non-fatal): %s", exc)
+            logger.warning(
+                "Gateway control socket failed to start (non-fatal): %s", exc
+            )
             return False
 
     async def _start_posix(self) -> bool:
@@ -234,7 +285,10 @@ class GatewayControlServer:
             if not _private_directory(bind_path.parent):
                 # Another local user pre-created the predictable shared-temp name; bootstrap treats
                 # a missing listener as fatal, so move to an unpredictable private root instead.
-                logger.warning("Fallback control directory %s is not private; using a fresh one", bind_path.parent)
+                logger.warning(
+                    "Fallback control directory %s is not private; using a fresh one",
+                    bind_path.parent,
+                )
                 bind_path = _squat_proof_fallback(bind_path)
                 self._fallback_root = bind_path.parent.parent
         if bind_path.is_symlink():
@@ -242,13 +296,17 @@ class GatewayControlServer:
         # We only get here after winning the PID-file O_EXCL race, so any existing
         # file is stale or a collision — never a live sibling.
         if bind_path.exists():
-            if bind_path.lstat().st_uid != os.getuid():  # windows-footgun: ok — POSIX listener
+            if (
+                bind_path.lstat().st_uid != os.getuid()
+            ):  # windows-footgun: ok — POSIX listener
                 raise PermissionError("control socket belongs to another user")
             bind_path.unlink()
         # Restrictive umask so the socket is never world-connectable, even for the instant before chmod.
         old_umask = os.umask(0o177)
         try:
-            self._server = await asyncio.start_unix_server(self._handle_connection, path=str(bind_path))
+            self._server = await asyncio.start_unix_server(
+                self._handle_connection, path=str(bind_path)
+            )
         finally:
             os.umask(old_umask)
         with contextlib.suppress(OSError):
@@ -267,9 +325,11 @@ class GatewayControlServer:
 
     async def _start_windows(self) -> bool:
         from gateway.runtime_bootstrap_windows import NativeControlServer
+
         self._pipe_server = NativeControlServer(self._home, self.handle_request_line)
         await asyncio.to_thread(self._pipe_server.start)
         return True
+
     async def stop(self) -> None:
         """Stop serving and remove the socket/pointer files."""
         if self.ticket_store is not None:
@@ -298,7 +358,9 @@ class GatewayControlServer:
                 self._fallback_root.rmdir()
             self._fallback_root = None
 
-    def handle_request_line(self, raw: bytes, peer_subject: Optional[str] = None) -> bytes:
+    def handle_request_line(
+        self, raw: bytes, peer_subject: Optional[str] = None
+    ) -> bytes:
         """One JSON request line -> one JSON response line. Never raises (shared by POSIX + pipe)."""
         request_id: Any = None
         try:
@@ -308,27 +370,53 @@ class GatewayControlServer:
             request_id, verb = request.get("id"), request.get("verb")
             handler = self._handlers.get(verb) if isinstance(verb, str) else None
             if isinstance(verb, str) and verb in self.private_handlers:
-                if (not peer_subject or request.get("protocol") != 1
-                        or set(request) - {"protocol", "verb", "id", "params"}
-                        or not isinstance(request.get("params"), dict)):
+                if (
+                    not peer_subject
+                    or request.get("protocol") != 1
+                    or set(request) - {"protocol", "verb", "id", "params"}
+                    or not isinstance(request.get("params"), dict)
+                ):
                     raise PermissionError("authenticated private request required")
-                response = {"ok": True, "protocol": CONTROL_PROTOCOL_VERSION,
-                            "result": self.private_handlers[verb](request["params"], peer_subject)}
+                response = {
+                    "ok": True,
+                    "protocol": CONTROL_PROTOCOL_VERSION,
+                    "result": self.private_handlers[verb](
+                        request["params"], peer_subject
+                    ),
+                }
             elif verb == "session-ticket":
-                response = {"ok": True, "protocol": CONTROL_PROTOCOL_VERSION,
-                            "result": self._session_ticket(request, peer_subject)}
+                response = {
+                    "ok": True,
+                    "protocol": CONTROL_PROTOCOL_VERSION,
+                    "result": self._session_ticket(request, peer_subject),
+                }
             elif handler is None:
-                response: dict[str, Any] = {"ok": False, "error": f"unknown verb: {verb!r}",
-                                            "protocol": CONTROL_PROTOCOL_VERSION, "supported_verbs": sorted(self._handlers)}
+                response: dict[str, Any] = {
+                    "ok": False,
+                    "error": f"unknown verb: {verb!r}",
+                    "protocol": CONTROL_PROTOCOL_VERSION,
+                    "supported_verbs": sorted(self._handlers),
+                }
             else:
                 # Verbs that carry arguments (e.g. migrate-profile-identity) declare a ``params``
                 # parameter; argument-less verbs (identify/status/rescan) keep their bare signature.
-                params = request.get("params") if isinstance(request.get("params"), dict) else {}
+                params = (
+                    request.get("params")
+                    if isinstance(request.get("params"), dict)
+                    else {}
+                )
                 wants_params = "params" in inspect.signature(handler).parameters
-                response = {"ok": True, "protocol": CONTROL_PROTOCOL_VERSION,
-                            "result": handler(params) if wants_params else handler()}
+                response = {
+                    "ok": True,
+                    "protocol": CONTROL_PROTOCOL_VERSION,
+                    "result": handler(params) if wants_params else handler(),
+                }
         except Exception as exc:
-            response = {"ok": False, "error": f"{type(exc).__name__}: {exc}", "protocol": CONTROL_PROTOCOL_VERSION}
+            response = {
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+                "protocol": CONTROL_PROTOCOL_VERSION,
+            }
         if request_id is not None:
             response["id"] = request_id
         try:
@@ -337,8 +425,13 @@ class GatewayControlServer:
             encoded = b'{"ok": false, "error": "response serialization failed"}'
         if len(encoded) > _MAX_RESPONSE_BYTES:
             # Structured and distinct: a caller must not read an oversized answer as a drain.
-            too_large: dict[str, Any] = {"ok": False, "error": "response_too_large", "code": "response_too_large",
-                                         "limit": _MAX_RESPONSE_BYTES, "protocol": CONTROL_PROTOCOL_VERSION}
+            too_large: dict[str, Any] = {
+                "ok": False,
+                "error": "response_too_large",
+                "code": "response_too_large",
+                "limit": _MAX_RESPONSE_BYTES,
+                "protocol": CONTROL_PROTOCOL_VERSION,
+            }
             if isinstance(request_id, (int, str)) and len(str(request_id)) <= 128:
                 too_large["id"] = request_id
             encoded = json.dumps(too_large).encode("utf-8")
@@ -347,11 +440,18 @@ class GatewayControlServer:
     def _session_ticket(self, request: dict, peer_subject: Optional[str]) -> dict:
         if not peer_subject or self.ticket_store is None:
             raise PermissionError("authenticated runtime bootstrap unavailable")
-        if set(request) - {"protocol", "verb", "id", "params"} or request.get("protocol") != 1:
+        if (
+            set(request) - {"protocol", "verb", "id", "params"}
+            or request.get("protocol") != 1
+        ):
             raise PermissionError("invalid bootstrap envelope")
         params = request.get("params")
-        if (not isinstance(params, dict) or not {"profile_id", "instance_id", "purpose"} <= set(params)
-                or set(params) - {"profile_id", "instance_id", "purpose", "scope", "subject"}):
+        if (
+            not isinstance(params, dict)
+            or not {"profile_id", "instance_id", "purpose"} <= set(params)
+            or set(params)
+            - {"profile_id", "instance_id", "purpose", "scope", "subject"}
+        ):
             raise PermissionError("invalid bootstrap parameters")
         if params["instance_id"] != self.ticket_store.instance_id:
             raise PermissionError("stale runtime instance")
@@ -366,37 +466,63 @@ class GatewayControlServer:
             raise PermissionError("invalid bootstrap subject")
         if subject is not peer_subject and not _structured_login_subject(subject):
             raise PermissionError("invalid bootstrap subject")
-        ticket = self.ticket_store.mint(profile_id=params["profile_id"], subject=subject,
-                                       purpose=params["purpose"], scope=params.get("scope", "profile"))
-        return {"ticket": ticket, "expires_in_seconds": 30,
-                "instance_id": self.ticket_store.instance_id,
-                "profile_id": params["profile_id"], "runtime_protocol": 1}
+        ticket = self.ticket_store.mint(
+            profile_id=params["profile_id"],
+            subject=subject,
+            purpose=params["purpose"],
+            scope=params.get("scope", "profile"),
+        )
+        return {
+            "ticket": ticket,
+            "expires_in_seconds": 30,
+            "instance_id": self.ticket_store.instance_id,
+            "profile_id": params["profile_id"],
+            "runtime_protocol": 1,
+        }
 
     def _posix_peer_subject(self, writer) -> Optional[str]:
         # The legacy diagnostic channel may operate without bootstrap-safe metadata.
         if os.name == "nt":
             return None
         try:
-            from clawk_cli.gateway_runtime_discovery import home_mode_unsafe, socket_peer_uid
+            from clawk_cli.gateway_runtime_discovery import (
+                home_mode_unsafe,
+                socket_peer_uid,
+            )
+
             home = self._home
             info = home.lstat()
-            if (home.absolute() != home.resolve() or not stat.S_ISDIR(info.st_mode)
-                    or info.st_uid != os.getuid() or home_mode_unsafe(info, home)):  # windows-footgun: ok — POSIX-only helper
+            if (
+                home.absolute() != home.resolve()
+                or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.getuid()
+                or home_mode_unsafe(info, home)
+            ):  # windows-footgun: ok — POSIX-only helper
                 return None
             uid = socket_peer_uid(writer.get_extra_info("socket"))
-            return f"uid:{uid}" if uid == os.getuid() else None  # windows-footgun: ok — POSIX-only helper
+            return (
+                f"uid:{uid}" if uid == os.getuid() else None
+            )  # windows-footgun: ok — POSIX-only helper
         except OSError:
             return None
 
-    async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _handle_connection(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         try:
-            raw = await asyncio.wait_for(reader.readline(), timeout=_DEFAULT_CLIENT_TIMEOUT)
+            raw = await asyncio.wait_for(
+                reader.readline(), timeout=_DEFAULT_CLIENT_TIMEOUT
+            )
             if not raw or len(raw) > _MAX_REQUEST_BYTES:
                 return
             # Handlers read disk; keep that off the loop that drives every platform
             # adapter so a fast-polling consumer can't stall heartbeats.
             response = await asyncio.get_running_loop().run_in_executor(
-                None, self.handle_request_line, raw.rstrip(b"\n"), self._posix_peer_subject(writer))
+                None,
+                self.handle_request_line,
+                raw.rstrip(b"\n"),
+                self._posix_peer_subject(writer),
+            )
             writer.write(response)
             await asyncio.wait_for(writer.drain(), timeout=_DEFAULT_CLIENT_TIMEOUT)
         except (TimeoutError, ConnectionError, OSError):
@@ -410,6 +536,7 @@ class GatewayControlServer:
 
 class _PipeControlProtocol(asyncio.Protocol):
     """One-shot request/response protocol for the Windows named pipe."""
+
     def __init__(self, server: GatewayControlServer) -> None:
         self._server = server
         self._transport: Any = None
@@ -424,17 +551,30 @@ class _PipeControlProtocol(asyncio.Protocol):
             self._transport.close()
         elif b"\n" in self._buffer:
             try:
-                self._transport.write(self._server.handle_request_line(bytes(self._buffer).partition(b"\n")[0]))
+                self._transport.write(
+                    self._server.handle_request_line(
+                        bytes(self._buffer).partition(b"\n")[0]
+                    )
+                )
             finally:
                 self._transport.close()
 
 
-def query_gateway_control(home: Path, verb: str, *, params: Optional[dict[str, Any]] = None,
-                          timeout: float = _DEFAULT_CLIENT_TIMEOUT) -> Optional[dict[str, Any]]:
+def query_gateway_control(
+    home: Path,
+    verb: str,
+    *,
+    params: Optional[dict[str, Any]] = None,
+    timeout: float = _DEFAULT_CLIENT_TIMEOUT,
+) -> Optional[dict[str, Any]]:
     """Ask the gateway serving ``home`` a control verb; returns its ``result`` payload. Any failure (no/stale
     socket, timeout, malformed answer, ``ok: false``) returns None so callers fall back to the scan layer.
     ``params`` carries verb arguments (e.g. ``{"old": ..., "new": ...}``). Never raises."""
-    payload: dict[str, Any] = {"verb": verb, "id": 1, "protocol": CONTROL_PROTOCOL_VERSION}
+    payload: dict[str, Any] = {
+        "verb": verb,
+        "id": 1,
+        "protocol": CONTROL_PROTOCOL_VERSION,
+    }
     if params:
         payload["params"] = params
     request = json.dumps(payload).encode("utf-8") + b"\n"
@@ -444,7 +584,11 @@ def query_gateway_control(home: Path, verb: str, *, params: Optional[dict[str, A
         response = json.loads(raw.decode("utf-8")) if raw else None
     except Exception:
         return None
-    result = response.get("result") if isinstance(response, dict) and response.get("ok") is True else None
+    result = (
+        response.get("result")
+        if isinstance(response, dict) and response.get("ok") is True
+        else None
+    )
     return result if isinstance(result, dict) else None
 
 
@@ -466,7 +610,10 @@ def _query_unix_socket(home: Path, request: bytes, timeout: float) -> Optional[b
     if path is None:
         return None
     # OSError covers ConnectionRefusedError / FileNotFoundError on connect and socket.timeout on read.
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock, contextlib.suppress(OSError):
+    with (
+        socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock,
+        contextlib.suppress(OSError),
+    ):
         sock.settimeout(timeout)
         sock.connect(str(path))
         sock.sendall(request)
@@ -480,11 +627,18 @@ def _query_windows_pipe(home: Path, request: bytes, timeout: float) -> Optional[
     abandoned-at-deadline worker so a peer that never answers costs ``timeout``, never forever —
     the bound ``_query_unix_socket`` already gets from ``sock.settimeout`` (#132547)."""
     from agent.deadline import run_bounded_sync
-    outcome = run_bounded_sync(lambda: _windows_pipe_exchange(home, request, timeout), timeout, label="control-pipe")
+
+    outcome = run_bounded_sync(
+        lambda: _windows_pipe_exchange(home, request, timeout),
+        timeout,
+        label="control-pipe",
+    )
     return None if outcome.timed_out else outcome.value
 
 
-def _windows_pipe_exchange(home: Path, request: bytes, timeout: float) -> Optional[bytes]:  # pragma: no cover - wine2e lane
+def _windows_pipe_exchange(
+    home: Path, request: bytes, timeout: float
+) -> Optional[bytes]:  # pragma: no cover - wine2e lane
     # The server is the native overlapped pipe worker; its client verifies the server's SID and
     # speaks the same framing (a plain open() got no answer in the live Windows pipe test).
     from gateway.runtime_bootstrap_windows import query_runtime_control
@@ -492,12 +646,16 @@ def _windows_pipe_exchange(home: Path, request: bytes, timeout: float) -> Option
     return query_runtime_control(Path(home), request, timeout)
 
 
-def identify_gateway(home: Path, *, timeout: float = _DEFAULT_CLIENT_TIMEOUT) -> Optional[dict[str, Any]]:
+def identify_gateway(
+    home: Path, *, timeout: float = _DEFAULT_CLIENT_TIMEOUT
+) -> Optional[dict[str, Any]]:
     """Convenience wrapper: ``identify`` the gateway serving ``home``."""
     return query_gateway_control(home, "identify", timeout=timeout)
 
 
-def pause_gateway_for_update(home: Path, *, timeout: float = _DEFAULT_CLIENT_TIMEOUT) -> Optional[dict[str, Any]]:
+def pause_gateway_for_update(
+    home: Path, *, timeout: float = _DEFAULT_CLIENT_TIMEOUT
+) -> Optional[dict[str, Any]]:
     """Ask the gateway serving ``home`` to drain and exit for an update. Returns the ACK ``{"pausing",
     "already_stopping", "pid", "drain_timeout"}`` or None when no gateway answers (old gateway without
     the verb, no/dead socket) — the caller then uses the legacy signal/tree-kill pause path.
@@ -507,7 +665,9 @@ def pause_gateway_for_update(home: Path, *, timeout: float = _DEFAULT_CLIENT_TIM
     return query_gateway_control(home, "pause-for-update", timeout=timeout)
 
 
-def rescan_gateway_profiles(home: Path, *, timeout: float = 8.0) -> Optional[dict[str, Any]]:
+def rescan_gateway_profiles(
+    home: Path, *, timeout: float = 8.0
+) -> Optional[dict[str, Any]]:
     """Ask the multiplexer serving ``home`` to reconcile ``profiles/`` now (hot-serve a created profile,
     unroute a deleted one). Returns its ``{"served_profiles", "added", "removed", ...}`` answer, or None
     when no gateway answers / the gateway predates the verb — callers then rely on the periodic rescan
@@ -516,35 +676,48 @@ def rescan_gateway_profiles(home: Path, *, timeout: float = 8.0) -> Optional[dic
 
 
 def request_unserve_profile(home: Path, name: str) -> Optional[dict[str, Any]]:
-    return query_gateway_control(home, "unserve-profile", params={"name": name}, timeout=8.0)
+    return query_gateway_control(
+        home, "unserve-profile", params={"name": name}, timeout=8.0
+    )
 
 
 def request_serve_profile_hot(home: Path, name: str) -> Optional[dict[str, Any]]:
-    return query_gateway_control(home, "serve-profile", params={"name": name}, timeout=8.0)
+    return query_gateway_control(
+        home, "serve-profile", params={"name": name}, timeout=8.0
+    )
 
 
-def migrate_gateway_profile_identity(home: Path, old_name: str, new_name: str, *,
-                                     timeout: float = 8.0) -> Optional[dict[str, Any]]:
+def migrate_gateway_profile_identity(
+    home: Path, old_name: str, new_name: str, *, timeout: float = 8.0
+) -> Optional[dict[str, Any]]:
     """Ask the multiplexer serving ``home`` to rekey a renamed profile's in-memory + on-disk routing
     from ``agent:<old>:`` to ``agent:<new>:`` now. Returns its ``{"rekeyed": N, ...}`` answer, or None
     when no gateway answers / the gateway predates the verb — the CLI's durable DB rewrite still lands,
     and a restart reconciles the in-memory copy."""
-    return query_gateway_control(home, "migrate-profile-identity",
-                                 params={"old": old_name, "new": new_name}, timeout=timeout)
+    return query_gateway_control(
+        home,
+        "migrate-profile-identity",
+        params={"old": old_name, "new": new_name},
+        timeout=timeout,
+    )
 
 
-def purge_gateway_profile_identity(home: Path, name: str, *,
-                                   timeout: float = 8.0) -> Optional[dict[str, Any]]:
+def purge_gateway_profile_identity(
+    home: Path, name: str, *, timeout: float = 8.0
+) -> Optional[dict[str, Any]]:
     """Ask the multiplexer serving ``home`` to drop a deleted profile's routing identity now — the
     in-memory index AND the durable rows, neither of which a CLI-side delete can settle: this process
     writes its in-memory copy back, so it re-creates what the CLI removed. Returns its
     ``{"ok": True, "dropped": N, ...}`` answer, or None when no gateway answers / the gateway predates
     the verb."""
-    return query_gateway_control(home, "purge-profile-identity", params={"name": name}, timeout=timeout)
+    return query_gateway_control(
+        home, "purge-profile-identity", params={"name": name}, timeout=timeout
+    )
 
 
-def reload_gateway_plugins(home: Path, *, profile_home: Optional[Path] = None,
-                           timeout: float = 30.0) -> Optional[dict[str, Any]]:
+def reload_gateway_plugins(
+    home: Path, *, profile_home: Optional[Path] = None, timeout: float = 30.0
+) -> Optional[dict[str, Any]]:
     """Ask the gateway serving ``home`` to force plugin re-discovery for ``profile_home`` (default: ``home``)
     and re-wire its live adapters' plugin handlers now (#87770). Returns ``{"reloaded", "plugins",
     "adapters_rewired", ...}`` or None when no gateway answers / it predates the verb — callers then

@@ -16,7 +16,9 @@ def home(tmp_path, monkeypatch):
     path = tmp_path / ".clawk"
     path.mkdir()
     (path / "profiles" / "ops").mkdir(parents=True)
-    (path / "profiles" / "ops" / "config.yaml").write_text("{}\n")  # identity marker: local roster
+    (path / "profiles" / "ops" / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker: local roster
     monkeypatch.setenv("CLAWK_HOME", str(path))
     methods_groups.stop_hosted_room_service(timeout=1.0)
     methods_groups.start_hosted_room_service()
@@ -59,8 +61,6 @@ def _authority_page(tmp_path, gateway_id="install:" + "a" * 32, n=3):
             authority_epoch=1,
         )
     return rooms.read_events(db, room_id="room-1", since_seq=0, limit=100)
-
-
 
 
 def test_replicate_then_state_roundtrip(home, tmp_path):

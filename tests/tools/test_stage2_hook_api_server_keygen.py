@@ -8,6 +8,7 @@ was supposed to create ``.env`` silently no-oped (``.env.example`` was
 excluded from the image by ``.dockerignore``), leaving 40%+ of the hosted
 fleet with no api_server and every scheduled cron fire silently lost.
 """
+
 from __future__ import annotations
 
 import re
@@ -106,9 +107,7 @@ def test_keygen_appends_to_existing_env_without_key(
     assert len(re.findall(r"^API_SERVER_KEY=..+$", content, re.MULTILINE)) == 1
 
 
-def test_keygen_never_overwrites_operator_key(
-    stage2_text: str, tmp_path: Path
-) -> None:
+def test_keygen_never_overwrites_operator_key(stage2_text: str, tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     (home / ".env").write_text("API_SERVER_KEY=operator-provided-key-123\n")
@@ -194,7 +193,10 @@ def test_keygen_env_key_drops_stale_empty_assignment(
 def _sed_is_gnu() -> bool:
     try:
         probe = subprocess.run(
-            ["sed", "--version"], capture_output=True, text=True, timeout=10,
+            ["sed", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

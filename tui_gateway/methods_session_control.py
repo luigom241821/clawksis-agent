@@ -34,14 +34,16 @@ _ACTION_COMMAND_MAP: dict[str, tuple[str, str]] = {
     "loop.stop": ("loop", "stop"),
 }
 
-_MANAGER_ACTIONS = frozenset({
-    "subgoal.add",
-    "subgoal.remove",
-    "subgoal.clear",
-    "heartbeat.pause",
-    "heartbeat.resume",
-    "heartbeat.clear",
-})
+_MANAGER_ACTIONS = frozenset(
+    {
+        "subgoal.add",
+        "subgoal.remove",
+        "subgoal.clear",
+        "heartbeat.pause",
+        "heartbeat.resume",
+        "heartbeat.clear",
+    }
+)
 
 _VALID_ACTIONS = frozenset(_ACTION_COMMAND_MAP) | _MANAGER_ACTIONS
 
@@ -182,7 +184,9 @@ def _snapshot_updated_at(goal_state, loop_state, heartbeat_state):
         (heartbeat_state, ("created_at", "last_fired_at")),
     ):
         if state is not None:
-            candidates.extend(value for field in fields if (value := getattr(state, field, 0)))
+            candidates.extend(
+                value for field in fields if (value := getattr(state, field, 0))
+            )
     return max(candidates) if candidates else 0
 
 
@@ -230,8 +234,13 @@ def _session_publish_lock(session: dict) -> threading.Lock:
     return lock
 
 
-def _publish_session_control_snapshot(sid: str, session: dict | None, *, only_if_present: bool = False,
-                                      only_if_changed: bool = False) -> None:
+def _publish_session_control_snapshot(
+    sid: str,
+    session: dict | None,
+    *,
+    only_if_present: bool = False,
+    only_if_changed: bool = False,
+) -> None:
     """Best-effort ``session.control.update`` for one live session. Also called after the post-turn hooks,
     because the goal judge and loop tick evaluation mutate persisted state AFTER ``message.complete`` — a
     client refresh keyed on that event reads the pre-judge turn count. ``only_if_present`` keeps the
@@ -244,7 +253,9 @@ def _publish_session_control_snapshot(sid: str, session: dict | None, *, only_if
             with _session_profile_runtime_scope(session):
                 control = _snapshot_control(session_key)
             if (only_if_present and not control["revision"]) or (
-                    only_if_changed and control["revision"] == session.get("control_revision", "")):
+                only_if_changed
+                and control["revision"] == session.get("control_revision", "")
+            ):
                 return
             session["control_revision"] = control["revision"]
             _emit("session.control.update", sid, {"control": control})
@@ -301,7 +312,9 @@ def _(rid, params: dict) -> dict:
     try:
         if action in _ACTION_COMMAND_MAP:
             name, arg = _ACTION_COMMAND_MAP[action]
-            action_result = _dispatch_command(rid, session_id=params.get("session_id") or "", name=name, arg=arg)
+            action_result = _dispatch_command(
+                rid, session_id=params.get("session_id") or "", name=name, arg=arg
+            )
         else:
             action_result = _execute_manager_action(session_key, action, validated)
     except (RuntimeError, ValueError, IndexError) as exc:
@@ -313,7 +326,9 @@ def _(rid, params: dict) -> dict:
     try:
         control = _snapshot_control(session_key)
     except Exception as exc:
-        logger.debug("session.control snapshot after %s failed: %s", action, exc, exc_info=True)
+        logger.debug(
+            "session.control snapshot after %s failed: %s", action, exc, exc_info=True
+        )
         return _err(rid, 5031, f"session.control snapshot failed: {exc}")
 
     # command.dispatch already published the update for goal/loop actions; manager actions publish here,
@@ -365,13 +380,24 @@ def _execute_subgoal_action(session_key: str, action: str, args: dict) -> dict:
     manager = GoalManager(session_id=session_key)
     if action == "subgoal.add":
         text = manager.add_subgoal(args["text"])
-        return {"result": {"type": "exec", "output": f"✓ Added subgoal {len(manager.state.subgoals)}: {text}"}}
+        return {
+            "result": {
+                "type": "exec",
+                "output": f"✓ Added subgoal {len(manager.state.subgoals)}: {text}",
+            }
+        }
     if action == "subgoal.remove":
         index = args["index"]
         text = manager.remove_subgoal(index)
-        return {"result": {"type": "exec", "output": f"✓ Removed subgoal {index}: {text}"}}
+        return {
+            "result": {"type": "exec", "output": f"✓ Removed subgoal {index}: {text}"}
+        }
     count = manager.clear_subgoals()
-    output = f"✓ Cleared {count} subgoal{'s' if count != 1 else ''}." if count else "No subgoals to clear."
+    output = (
+        f"✓ Cleared {count} subgoal{'s' if count != 1 else ''}."
+        if count
+        else "No subgoals to clear."
+    )
     return {"result": {"type": "exec", "output": output}}
 
 
@@ -386,7 +412,8 @@ def _execute_heartbeat_action(session_key: str, action: str) -> dict:
         state = manager.resume()
         output = (
             f"▶ Heartbeat resumed (every {format_interval(state.interval_seconds)}): {state.prompt}"
-            if state else "No heartbeat to resume."
+            if state
+            else "No heartbeat to resume."
         )
     elif action == "heartbeat.clear":
         output = "✓ Heartbeat cleared." if manager.clear() else "No heartbeat set."

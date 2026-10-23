@@ -41,7 +41,12 @@ from tests.e2e.core.history._helpers import (
     tools_breaks,
     views,
 )
-from tests.fakes.fake_llm_provider import FakeLLMServer, Text, ToolCall, write_clawk_home
+from tests.fakes.fake_llm_provider import (
+    FakeLLMServer,
+    Text,
+    ToolCall,
+    write_clawk_home,
+)
 
 # A hop is (surface, cwd, turns); a turn is its prompt, "TOOLS:<prompt>" (parallel tool batch
 # first) or "/compress" (gateway only). Every hop is a FRESH process.
@@ -50,9 +55,22 @@ Hop = tuple[str, str, list[str]]
 JOURNEYS: dict[str, list[Hop]] = {
     # Same surface, four gateway processes, two cwds, compaction mid-way, resume after it.
     "tui_gateway_restarts": [
-        ("gw", "a", ["gw1 first turn", "TOOLS:gw1 runs a parallel batch", "gw1 third turn"]),
+        (
+            "gw",
+            "a",
+            ["gw1 first turn", "TOOLS:gw1 runs a parallel batch", "gw1 third turn"],
+        ),
         ("gw", "b", ["gw2 resumed turn", "gw2 another turn"]),
-        ("gw", "a", ["gw3 turn before compress", "/compress", "gw3 turn after compress", "gw3 more"]),
+        (
+            "gw",
+            "a",
+            [
+                "gw3 turn before compress",
+                "/compress",
+                "gw3 turn after compress",
+                "gw3 more",
+            ],
+        ),
         ("gw", "b", ["gw4 resumed after compaction", "gw4 last turn"]),
     ],
     # Same surface, eight oneshot processes, cwd flips between them.
@@ -68,15 +86,24 @@ JOURNEYS: dict[str, list[Hop]] = {
     ],
     # Surface switch on one session: TUI <-> oneshot, cwd change, compaction, resume after it.
     "surface_switch": [
-        ("gw", "a", ["sw1 first turn", "TOOLS:sw1 runs a parallel batch", "sw1 third turn"]),
+        (
+            "gw",
+            "a",
+            ["sw1 first turn", "TOOLS:sw1 runs a parallel batch", "sw1 third turn"],
+        ),
         ("cli", "a", ["sw2 oneshot turn"]),
         ("cli", "b", ["sw3 oneshot from another cwd"]),
         ("gw", "b", ["sw4 gateway resumes", "sw4 another turn"]),
         ("cli", "a", ["sw5 oneshot turn"]),
-        ("gw", "a", ["sw6 before compress", "/compress", "sw6 after compress", "sw6 more"]),
+        (
+            "gw",
+            "a",
+            ["sw6 before compress", "/compress", "sw6 after compress", "sw6 more"],
+        ),
         ("cli", "b", ["sw7 oneshot after compaction"]),
     ],
 }
+
 
 class ToolsArrayDrift(Exception):
     """The tools array changed between requests of one session. Its own type, so a future tools-drift
@@ -88,16 +115,26 @@ class ToolsArrayDrift(Exception):
 def world(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
-    clawk_home = Path(os.environ["CLAWK_HOME"])  # hermetic per-test tmp dir from the conftest
+    clawk_home = Path(
+        os.environ["CLAWK_HOME"]
+    )  # hermetic per-test tmp dir from the conftest
     cwds = {"a": tmp_path / "work-a", "b": tmp_path / "work-b"}
     for d in cwds.values():
         d.mkdir()
     script = Script()
     spawned = Spawned()
     with FakeLLMServer(script) as srv:
-        write_clawk_home(clawk_home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW)
-        yield {"srv": srv, "script": script, "home": home, "clawk_home": clawk_home,
-               "cwds": cwds, "spawned": spawned}
+        write_clawk_home(
+            clawk_home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW
+        )
+        yield {
+            "srv": srv,
+            "script": script,
+            "home": home,
+            "clawk_home": clawk_home,
+            "cwds": cwds,
+            "spawned": spawned,
+        }
         leaked = spawned.reap()
         assert not leaked, f"subprocesses outlived the test: {leaked}"
 
@@ -105,19 +142,32 @@ def world(tmp_path):
 def _queue_turn(script: Script, prompt: str) -> str:
     """Script the model for one turn; returns the text the user types."""
     if prompt.startswith("TOOLS:"):
-        prompt = prompt[len("TOOLS:"):]
+        prompt = prompt[len("TOOLS:") :]
         tag = prompt.split()[0]
-        script.actions.append(ToolCall("terminal", {"command": f"echo {tag}-a"},
-                                       parallel=[("terminal", {"command": f"echo {tag}-b"})]))
+        script.actions.append(
+            ToolCall(
+                "terminal",
+                {"command": f"echo {tag}-a"},
+                parallel=[("terminal", {"command": f"echo {tag}-b"})],
+            )
+        )
     # Bulky answers so the later /compress genuinely shrinks the context; distinct usage per
     # answer so a double-counted or dropped request is visible.
     n = len(prompt)
-    script.actions.append(Text(big(f"answer-{prompt.replace(' ', '-')}", 12000),
-                               prompt_tokens=2000 + n, completion_tokens=40 + n, cached_tokens=1500))
+    script.actions.append(
+        Text(
+            big(f"answer-{prompt.replace(' ', '-')}", 12000),
+            prompt_tokens=2000 + n,
+            completion_tokens=40 + n,
+            cached_tokens=1500,
+        )
+    )
     return prompt
 
 
-def run_journey(world: dict, hops: list[Hop]) -> tuple[str, list[tuple[int, str]], int | None]:
+def run_journey(
+    world: dict, hops: list[Hop]
+) -> tuple[str, list[tuple[int, str]], int | None]:
     """Drive the hops; returns (durable sid, [(first request idx, hop label)], compaction idx)."""
     srv, script, home = world["srv"], world["script"], world["clawk_home"]
     sid: str | None = None
@@ -135,29 +185,50 @@ def run_journey(world: dict, hops: list[Hop]) -> tuple[str, list[tuple[int, str]
                 live = gw.resume(sid) if sid else gw.create()
                 for turn in turns:
                     if turn == "/compress":
-                        res = gw.call_when_idle("session.compress", {"session_id": live}) or {}
+                        res = (
+                            gw.call_when_idle("session.compress", {"session_id": live})
+                            or {}
+                        )
                         summary = res.get("summary") or {}
-                        flags = {k: summary.get(k) for k in ("noop", "aborted", "refused_would_grow")}
-                        assert res.get("status") == "compressed" and not any(flags.values()) and (
-                            (res.get("after_messages") or 0) < (res.get("before_messages") or 0)), (
+                        flags = {
+                            k: summary.get(k)
+                            for k in ("noop", "aborted", "refused_would_grow")
+                        }
+                        assert (
+                            res.get("status") == "compressed"
+                            and not any(flags.values())
+                            and (
+                                (res.get("after_messages") or 0)
+                                < (res.get("before_messages") or 0)
+                            )
+                        ), (
                             f"{label}: session.compress did not compact: "
-                            f"{ {k: v for k, v in res.items() if k != 'messages'} }")
+                            f"{ {k: v for k, v in res.items() if k != 'messages'} }"
+                        )
                         compaction_idx = len(srv.main_requests())
                         continue
                     gw.submit(live, _queue_turn(script, turn))
                 sid = sid or gw.stored[live]
         else:
             for turn in turns:
-                _out, got = run_oneshot(env, cwd, _queue_turn(script, turn), world["spawned"], resume=sid)
-                assert sid is None or got == sid, f"{label}: --resume {sid} continued {got}"
+                _out, got = run_oneshot(
+                    env, cwd, _queue_turn(script, turn), world["spawned"], resume=sid
+                )
+                assert sid is None or got == sid, (
+                    f"{label}: --resume {sid} continued {got}"
+                )
                 sid = got
         main = srv.main_requests()
         assert len(main) > opened_at, f"{label}: sent no model request"
         if persisted is not None:
-            assert_replay_equals_persisted(main[opened_at], persisted, f"{label} opening request")
+            assert_replay_equals_persisted(
+                main[opened_at], persisted, f"{label} opening request"
+            )
         assert_rows_exactly_once(home, sid, label)
         total = row_counts(home, sid)["total"]
-        assert total >= rows_total, f"{label}: durable rows shrank {rows_total} -> {total}"
+        assert total >= rows_total, (
+            f"{label}: durable rows shrank {rows_total} -> {total}"
+        )
         rows_total = total
         openings.append((opened_at, label))
     assert not script.actions, f"scripted responses never consumed: {script.actions}"
@@ -178,16 +249,23 @@ def test_request_prefix_is_byte_stable_across_processes(world, journey):
     # tools-drift bug cannot mask a message-prefix, usage or integrity regression.
     breaks = prefix_breaks(main, tools=False)
     unexpected = [(i, why) for i, why in breaks if i != compaction_idx]
-    assert not unexpected, "prompt-cache prefix broke outside the compaction boundary:\n" + "\n".join(
-        f"  {where(i)}: {why}" for i, why in unexpected)
+    assert not unexpected, (
+        "prompt-cache prefix broke outside the compaction boundary:\n"
+        + "\n".join(f"  {where(i)}: {why}" for i, why in unexpected)
+    )
     if compaction_idx is not None:
         assert [i for i, _ in breaks] == [compaction_idx], (
-            f"the manual /compress must break the prefix exactly once, at request {compaction_idx}: {breaks}")
+            f"the manual /compress must break the prefix exactly once, at request {compaction_idx}: {breaks}"
+        )
 
-    assert_usage_matches(home, lineage(home, sid), srv.requests, f"after journey {journey}")
+    assert_usage_matches(
+        home, lineage(home, sid), srv.requests, f"after journey {journey}"
+    )
     integrity_ok(home)
 
     drift = [(i, why) for i, why in tools_breaks(main) if i != compaction_idx]
     if drift:
-        raise ToolsArrayDrift("tools array changed within one session:\n" + "\n".join(
-            f"  {where(i)}: {why}" for i, why in drift))
+        raise ToolsArrayDrift(
+            "tools array changed within one session:\n"
+            + "\n".join(f"  {where(i)}: {why}" for i, why in drift)
+        )

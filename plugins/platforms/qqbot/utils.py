@@ -13,6 +13,7 @@ def _get_clawk_version() -> str:
     """Return the clawksis-agent package version, or 'dev' if unavailable."""
     try:
         from importlib.metadata import version
+
         return version("clawksis-agent")
     except Exception:
         return "dev"
@@ -21,19 +22,31 @@ def _get_clawk_version() -> str:
 def build_user_agent() -> str:
     """``QQBotAdapter/<qqbot_version> (Python/<py_version>; <os>; Clawksis/<clawk_version>)``."""
     v = sys.version_info
-    return (f"QQBotAdapter/{QQBOT_VERSION} (Python/{v.major}.{v.minor}.{v.micro}; "
-            f"{platform.system().lower()}; Clawksis/{_get_clawk_version()})")
+    return (
+        f"QQBotAdapter/{QQBOT_VERSION} (Python/{v.major}.{v.minor}.{v.micro}; "
+        f"{platform.system().lower()}; Clawksis/{_get_clawk_version()})"
+    )
 
 
 def get_api_headers() -> dict[str, str]:
     """Standard QQBot API headers. ``q.qq.com`` requires ``Accept: application/json``
     — without it the server returns a JavaScript anti-bot challenge page."""
-    return {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": build_user_agent()}
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": build_user_agent(),
+    }
 
 
 def coerce_list(value: Any) -> list[str]:
     """Coerce a comma-separated string / list / tuple / set / scalar into a trimmed string list."""
     if value is None:
         return []
-    items = value.split(",") if isinstance(value, str) else value if isinstance(value, (list, tuple, set)) else [value]
+    items = (
+        value.split(",")
+        if isinstance(value, str)
+        else value
+        if isinstance(value, (list, tuple, set))
+        else [value]
+    )
     return [s for s in (str(item).strip() for item in items) if s]

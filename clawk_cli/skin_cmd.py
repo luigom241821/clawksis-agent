@@ -23,6 +23,7 @@ def _skins_dir() -> Path:
 
 def _active_skin() -> str:
     from clawk_cli.config import load_config
+
     display = (load_config() or {}).get("display") or {}
     return str(display.get("skin") or "default")
 
@@ -30,11 +31,17 @@ def _active_skin() -> str:
 def _use(name: str) -> None:
     """Activate a skin (persists display.skin via the shared config writer)."""
     from clawk_cli.config import config_command
-    config_command(argparse.Namespace(config_command="set", key="display.skin", value=name, force=True))
+
+    config_command(
+        argparse.Namespace(
+            config_command="set", key="display.skin", value=name, force=True
+        )
+    )
 
 
 def _skin_set(key: str, value: str, skin: str | None) -> int:
     import clawk_yaml as yaml
+
     if not _HEX_RE.match(value):
         print(f"✗ {value!r} is not a #rrggbb hex color", file=sys.stderr)
         return 1
@@ -49,12 +56,17 @@ def _skin_set(key: str, value: str, skin: str | None) -> int:
         # Built-in (or missing): fork into an editable copy that keeps its full palette, under a
         # fresh name so the built-in stays intact for revert.
         from clawk_cli.skin_engine import load_skin
+
         resolved = load_skin(name)
         target = f"{name}-custom"
         path = _skins_dir() / f"{target}.yaml"
-        data = {"name": target, "description": f"{name} + custom {key}",
-                "colors": dict(resolved.colors), "branding": dict(resolved.branding),
-                "tool_prefix": resolved.tool_prefix}
+        data = {
+            "name": target,
+            "description": f"{name} + custom {key}",
+            "colors": dict(resolved.colors),
+            "branding": dict(resolved.branding),
+            "tool_prefix": resolved.tool_prefix,
+        }
     if not isinstance(data.get("colors"), dict):
         data["colors"] = {}
     data["colors"][key] = value
@@ -63,19 +75,25 @@ def _skin_set(key: str, value: str, skin: str | None) -> int:
     # permanently lose the palette on the next set.
     # See #51356.
     from utils import atomic_yaml_write
+
     atomic_yaml_write(path, data, sort_keys=False)
     if target != name:
         _use(target)
-    print(f"✓ {key} = {value} in {display_clawk_home()}/skins/{target}.yaml (live within ~1s)")
+    print(
+        f"✓ {key} = {value} in {display_clawk_home()}/skins/{target}.yaml (live within ~1s)"
+    )
     return 0
 
 
 def _skin_list() -> int:
     from clawk_cli.skin_engine import list_skins
+
     active = _active_skin()
     for s in list_skins():
         mark = "*" if s["name"] == active else " "
-        print(f"{mark} {s['name']:<16} {s.get('source', ''):<8} {s.get('description', '')}")
+        print(
+            f"{mark} {s['name']:<16} {s.get('source', ''):<8} {s.get('description', '')}"
+        )
     return 0
 
 

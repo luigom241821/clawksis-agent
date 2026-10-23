@@ -15,15 +15,17 @@ from prompt_toolkit.keys import Keys
 from clawk_cli.pt_input_extras import install_shift_enter_alias
 
 SHIFT_ENTER_SEQUENCES = (
-    "\x1b[13;2u",      # Kitty / CSI-u, modifier=2 (Shift)
-    "\x1b[27;2;13~",   # xterm modifyOtherKeys=2
+    "\x1b[13;2u",  # Kitty / CSI-u, modifier=2 (Shift)
+    "\x1b[27;2;13~",  # xterm modifyOtherKeys=2
     "\x1b[27;2;13u",
 )
+
 
 @pytest.fixture(autouse=True)
 def _ensure_alias_installed():
     """Make every test idempotent — install the alias once per test run."""
     install_shift_enter_alias()
+
 
 def _parse(byte_seq: str):
     out = []
@@ -33,10 +35,12 @@ def _parse(byte_seq: str):
     parser.flush()
     return [kp.key for kp in out]
 
+
 def test_install_registers_all_three_sequences():
     for seq in SHIFT_ENTER_SEQUENCES:
         assert seq in ANSI_SEQUENCES, f"missing mapping for {seq!r}"
         assert ANSI_SEQUENCES[seq] == (Keys.Escape, Keys.ControlM)
+
 
 def test_csi_u_shift_enter_parses_as_alt_enter():
     """Kitty keyboard protocol Shift+Enter must parse to the same key tuple

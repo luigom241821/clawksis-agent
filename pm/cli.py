@@ -230,13 +230,17 @@ def _live_progress(name: str):
             elif done - last < 4 * 1024 * 1024:
                 return
         last = done
-        write(f"  {name}: {done / total * 100:5.1f}%  {_fmt_bytes(done)} / {_fmt_bytes(total)}")
+        write(
+            f"  {name}: {done / total * 100:5.1f}%  {_fmt_bytes(done)} / {_fmt_bytes(total)}"
+        )
 
     report.finish = finish  # type: ignore[attr-defined]
     return report
 
 
-def _install_names(names: list[str], target: str | None = None, *, verify: bool = True) -> int:
+def _install_names(
+    names: list[str], target: str | None = None, *, verify: bool = True
+) -> int:
     from pm.install import _install_operation
 
     failed = 0
@@ -249,7 +253,13 @@ def _install_names(names: list[str], target: str | None = None, *, verify: bool 
                     entry = stage_only(name, target)
                     print(f"✓ {name} (staged for {target}: {entry.name})")
                 else:
-                    ensure(name, explicit=True, verify=verify, progress=progress, _operation=operation)
+                    ensure(
+                        name,
+                        explicit=True,
+                        verify=verify,
+                        progress=progress,
+                        _operation=operation,
+                    )
                     if name == "python":
                         from clawk_cli.venv_sync import publish_launchers
 
@@ -263,17 +273,24 @@ def _install_names(names: list[str], target: str | None = None, *, verify: bool 
     return failed
 
 
-
-
-def _install_flag_error(args, *, extras: list[str], cross_target, tools_only: bool,
-                        trust_recorded: bool, test_environment) -> str | None:
+def _install_flag_error(
+    args,
+    *,
+    extras: list[str],
+    cross_target,
+    tools_only: bool,
+    trust_recorded: bool,
+    test_environment,
+) -> str | None:
     """The first incompatible flag combination, as its user-facing message."""
     if cross_target:
         if cross_target not in ALL_TARGETS:
             return f"unknown target {cross_target!r}; known: {', '.join(ALL_TARGETS)}"
         if not args.names:
             return "--target requires explicit package names"
-    if test_environment is not None and (extras or cross_target or args.names or tools_only):
+    if test_environment is not None and (
+        extras or cross_target or args.names or tools_only
+    ):
         return "--test-environment builds beside the default closure; it does not take names, --extra, --target, or --tools-only"
     if tools_only and (extras or cross_target or args.names):
         return "--tools-only installs the tool closure and then stops; it does not take names, --extra, or --target"
@@ -290,8 +307,10 @@ def _install_flag_error(args, *, extras: list[str], cross_target, tools_only: bo
         allowed = default_package_names()
         unknown = [name for name in without if name not in allowed]
         if unknown:
-            return (f"--without accepts only optional default packages ({', '.join(allowed)}); "
-                    f"not {', '.join(unknown)}")
+            return (
+                f"--without accepts only optional default packages ({', '.join(allowed)}); "
+                f"not {', '.join(unknown)}"
+            )
     return None
 
 
@@ -304,11 +323,16 @@ def _install_defaults(names: list[str], *, verify: bool) -> None:
     """
     for name in names:
         if _install_names([name], verify=verify):
-            print(f"⚠ optional {name} was not installed; its tools stay unavailable until "
-                  f"`clawk pm install {name}` succeeds", flush=True)
+            print(
+                f"⚠ optional {name} was not installed; its tools stay unavailable until "
+                f"`clawk pm install {name}` succeeds",
+                flush=True,
+            )
 
 
-def _install_python_environments(extras: list[str], *, sync: bool, test_environment) -> int:
+def _install_python_environments(
+    extras: list[str], *, sync: bool, test_environment
+) -> int:
     """Sync the venv and build the side test environment; return the failure count."""
     failed = 0
     if sync:
@@ -349,12 +373,22 @@ def cmd_install(args) -> int:
     tools_only = bool(getattr(args, "tools_only", False))
     trust_recorded = bool(getattr(args, "trust_recorded", False))
     test_environment = getattr(args, "test_environment", None)
-    error = _install_flag_error(args, extras=extras, cross_target=cross_target, tools_only=tools_only,
-                                trust_recorded=trust_recorded, test_environment=test_environment)
+    error = _install_flag_error(
+        args,
+        extras=extras,
+        cross_target=cross_target,
+        tools_only=tools_only,
+        trust_recorded=trust_recorded,
+        test_environment=test_environment,
+    )
     if error:
         print(f"✗ {error}")
         return 1
-    names = args.names if args.names or extras else source_install_packages(_lockfile().names())
+    names = (
+        args.names
+        if args.names or extras
+        else source_install_packages(_lockfile().names())
+    )
     without = list(dict.fromkeys(getattr(args, "without", None) or ()))
     if without:
         from pm.defaults import record_declined
@@ -390,13 +424,17 @@ def cmd_install(args) -> int:
 
         problems = activate(allow_incomplete=True)
         if problems:
-            print(f"✗ tools not on PATH before venv sync: {'; '.join(problems)}", flush=True)
+            print(
+                f"✗ tools not on PATH before venv sync: {'; '.join(problems)}",
+                flush=True,
+            )
             return 1
     if tools_only:
         _install_defaults(defaults, verify=not trust_recorded)
         return 0
-    failed = _install_python_environments(extras, sync=bool(extras or not args.names),
-                                          test_environment=test_environment)
+    failed = _install_python_environments(
+        extras, sync=bool(extras or not args.names), test_environment=test_environment
+    )
     # Defaults are optional and large (agent-browser + Chromium, cua-driver): fetch them
     # only once the venv, and on Windows ARM64 its build tools, succeeded.
     if not failed:
@@ -404,8 +442,12 @@ def cmd_install(args) -> int:
     if full_closure and not failed:
         from pm.environments import activation_inputs_dir, record_activation_inputs
 
-        record_activation_inputs(activation_inputs_dir(repo_root()), input_mtimes, repo_root(),
-                                 test_environment=test_environment is not None)
+        record_activation_inputs(
+            activation_inputs_dir(repo_root()),
+            input_mtimes,
+            repo_root(),
+            test_environment=test_environment is not None,
+        )
     return 1 if failed else 0
 
 
@@ -434,7 +476,10 @@ def cmd_doctor(args) -> int:
         if reason is not None:
             print(f"- {name}: n/a on {target} ({reason})")
             continue
-        facts, store = _installed_location(package, lockfile, target) or (_facts(), _store())
+        facts, store = _installed_location(package, lockfile, target) or (
+            _facts(),
+            _store(),
+        )
         fact = facts.get(name)
         soft = package.optional or package.internal
         identity = _identity(lockfile, name, target)
@@ -445,7 +490,9 @@ def cmd_doctor(args) -> int:
         ):
             # Legacy fact: pre-dates digest-bound identity; installed()
             # treats it as not installed and forces one reinstall.
-            print(f"{'?' if soft else '✗'} {name}: legacy fact: no recorded identity, run `clawk pm install`")
+            print(
+                f"{'?' if soft else '✗'} {name}: legacy fact: no recorded identity, run `clawk pm install`"
+            )
             bad += 0 if soft else 1
             continue
         if not facts.installed(name, lockfile.version(name), store.root, identity):
@@ -513,20 +560,29 @@ def cmd_gc(args) -> int:
     from pm.paths import writable_store_root
     from pm.lock import Facts
     from pm.store import Store
+
     store = Store(writable_store_root())
-    facts = _facts() if store.root == _store().root else Facts(store.root / "facts.json")
+    facts = (
+        _facts() if store.root == _store().root else Facts(store.root / "facts.json")
+    )
     removed, kept = _gc_store(store, facts)
     from clawk_cli.runtime_state import collect_generations
     from pm.environments import install_state_dir
     from pm.paths import repo_root
     from pm.runtime import collect_runtime_generations
+
     generations = collect_generations(repo_root())
-    runtimes = collect_runtime_generations(install_state_dir(repo_root()) / "pm-runtime")
+    runtimes = collect_runtime_generations(
+        install_state_dir(repo_root()) / "pm-runtime"
+    )
     from pm.environments import installs_root
     from pm.install_states import collect_orphan_install_states
+
     orphans = collect_orphan_install_states(installs_root())
-    print(f"gc: removed {removed}, kept {kept}; removed {len(generations)} dependency generations, "
-          f"{len(runtimes)} PM runtime generations, {len(orphans)} install state dir(s) of deleted checkouts")
+    print(
+        f"gc: removed {removed}, kept {kept}; removed {len(generations)} dependency generations, "
+        f"{len(runtimes)} PM runtime generations, {len(orphans)} install state dir(s) of deleted checkouts"
+    )
     return 0
 
 
@@ -535,29 +591,48 @@ def _run_live(cmd: list[str], *, cwd, env, timeout: int = 3600) -> tuple[int, st
     from pm.environment import _run_streaming
 
     try:
-        result = _run_streaming(cmd, cwd=cwd, env=env, timeout=timeout, output=sys.stdout)
+        result = _run_streaming(
+            cmd, cwd=cwd, env=env, timeout=timeout, output=sys.stdout
+        )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{cmd[0]} timed out after {timeout}s") from exc
     return result.returncode, result.stderr
 
 
-def _resolve_updates(names: list[str], lockfile, only_target: str | None,
-                     skip_targets: frozenset[str] = frozenset()) -> tuple[list, list[str]]:
+def _resolve_updates(
+    names: list[str],
+    lockfile,
+    only_target: str | None,
+    skip_targets: frozenset[str] = frozenset(),
+) -> tuple[list, list[str]]:
     """Resolve each package's latest; an upstream outage records a failure instead of aborting."""
     resolved = []
     failures = []
     for name in names:
         package = get_package(name)
-        targets = [t for t in ALL_TARGETS if package.missing_reason(t) is None and t not in skip_targets]
+        targets = [
+            t
+            for t in ALL_TARGETS
+            if package.missing_reason(t) is None and t not in skip_targets
+        ]
         if only_target:  # cross-target check: only the requested target matters
             targets = [t for t in targets if t == only_target]
         if not targets:
             continue
         try:
-            decision = resolve_package(package, targets, lockfile.version(name),
-                                       artifacts=lockfile.pinned_artifacts(name))
+            decision = resolve_package(
+                package,
+                targets,
+                lockfile.version(name),
+                artifacts=lockfile.pinned_artifacts(name),
+            )
         except Exception as e:  # an upstream index outage must not kill the whole check
-            decision = Resolved(name, lockfile.version(name), package.version_style, reason=f"resolve failed: {e}")
+            decision = Resolved(
+                name,
+                lockfile.version(name),
+                package.version_style,
+                reason=f"resolve failed: {e}",
+            )
             failures.append(name)
         resolved.append(decision)
     return resolved, failures
@@ -570,11 +645,17 @@ def _report_update(decision, width: int) -> None:
     elif not d.changed:
         print(f"{d.name:<{width}}  {d.locked} up to date")
     elif d.version == d.locked and d.artifact_updates:
-        print(f"{d.name:<{width}}  {d.version}: newer artifacts for {', '.join(sorted(d.artifact_updates))}")
+        print(
+            f"{d.name:<{width}}  {d.version}: newer artifacts for {', '.join(sorted(d.artifact_updates))}"
+        )
     else:
         per = ""
         if d.per_target and len(set(d.per_target.values())) > 1:
-            per = " (" + ", ".join(f"{t}={v}" for t, v in sorted(d.per_target.items())) + ")"
+            per = (
+                " ("
+                + ", ".join(f"{t}={v}" for t, v in sorted(d.per_target.items()))
+                + ")"
+            )
         print(f"{d.name:<{width}}  {d.locked or '—'} → {d.version}{per}")
 
 
@@ -600,7 +681,9 @@ def _regenerate_bootstrap_pins(lockfile) -> int:
     script = lockfile.path.parent.parent / "scripts" / "gen-bootstrap-pins.py"
     if not script.is_file():
         return 0
-    return subprocess.run([sys.executable, str(script)], timeout=60, check=False).returncode
+    return subprocess.run(
+        [sys.executable, str(script)], timeout=60, check=False
+    ).returncode
 
 
 def _apply_pins(changed: list, lockfile) -> int:
@@ -690,18 +773,34 @@ def cmd_update(args) -> int:
     rolling termux-main pool has retired under our pins.
     """
     if args.termux:
-        ignored = [name for name, given in (("names", args.names), ("--target", args.target),
-                                            ("--uv", args.uv), ("--npm", args.npm)) if given]
+        ignored = [
+            name
+            for name, given in (
+                ("names", args.names),
+                ("--target", args.target),
+                ("--uv", args.uv),
+                ("--npm", args.npm),
+            )
+            if given
+        ]
         if ignored:
-            print(f"::warning::--termux repairs the termux pool pins only; ignoring {', '.join(ignored)}")
+            print(
+                f"::warning::--termux repairs the termux pool pins only; ignoring {', '.join(ignored)}"
+            )
         return _termux_pass(check=args.check)
     lockfile = _lockfile()
-    names = args.names or [n for n in lockfile.names() if not get_package(n).internal or n == "uv"]
+    names = args.names or [
+        n for n in lockfile.names() if not get_package(n).internal or n == "uv"
+    ]
     if args.target and not args.check:
-        print("::warning::--target is a CHECK-only cross-resolution flag; ignoring it for apply (the lockfile pins every target)")
+        print(
+            "::warning::--target is a CHECK-only cross-resolution flag; ignoring it for apply (the lockfile pins every target)"
+        )
         args.target = None
 
-    resolved, failures = _resolve_updates(names, lockfile, args.target, frozenset(args.skip_target))
+    resolved, failures = _resolve_updates(
+        names, lockfile, args.target, frozenset(args.skip_target)
+    )
     changed = [d for d in resolved if d.changed]
     if not resolved:
         print("pm update: nothing to check (no resolvable packages)")
@@ -710,7 +809,9 @@ def cmd_update(args) -> int:
     for d in resolved:
         _report_update(d, width)
     if failures:
-        print(f"pm update: resolution failed for {', '.join(failures)}; no changes applied")
+        print(
+            f"pm update: resolution failed for {', '.join(failures)}; no changes applied"
+        )
         return 1
     if args.check:
         if args.uv:
@@ -746,16 +847,22 @@ def _termux_pass(*, check: bool) -> int:
     width = max(len(entry.pin.name) for entry in stale)
     for entry in stale:
         if entry.replacement is None:
-            print(f"{entry.pin.name:<{width}}  {entry.pin.version}: the pool no longer carries it")
+            print(
+                f"{entry.pin.name:<{width}}  {entry.pin.version}: the pool no longer carries it"
+            )
         else:
-            print(f"{entry.pin.name:<{width}}  {entry.pin.version} → {entry.replacement.version}")
+            print(
+                f"{entry.pin.name:<{width}}  {entry.pin.version} → {entry.replacement.version}"
+            )
     if check:
         return 1
     applied = termux_libs.repair(table, lockfile, stale)
     if applied:
         termux_libs.save_table(table)
         lockfile.save()
-        print(f"✓ {applied} termux pins repinned; restage the bionic payload to pick them up")
+        print(
+            f"✓ {applied} termux pins repinned; restage the bionic payload to pick them up"
+        )
     return 1 if unresolved else 0
 
 
@@ -815,8 +922,8 @@ def cmd_repair(args) -> int:
 
 def cmd_bundle(args) -> int:
     from scripts.bundles.native import stage_native
-    return stage_native(args)
 
+    return stage_native(args)
 
 
 def main(argv=None) -> int:
@@ -833,30 +940,65 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     lock_parser = p = sub.add_parser(
-        "lock", help="relock uv.lock from pyproject.toml (or --bump a tool pin in pm/lock.json)",
+        "lock",
+        help="relock uv.lock from pyproject.toml (or --bump a tool pin in pm/lock.json)",
         description="With no arguments: re-resolve uv.lock from pyproject.toml; changes no "
-                    "environment and writes nothing when the lock is current. With --bump NAME "
-                    "VERSION: pin a pm tool's artifacts in pm/lock.json; uv.lock is untouched.")
-    p.add_argument("--bump", dest="name", metavar="NAME",
-                   help="pin tool NAME at VERSION in pm/lock.json instead of relocking uv.lock")
-    p.add_argument("version", nargs="?", metavar="VERSION", help="the tool version (only with --bump)")
+        "environment and writes nothing when the lock is current. With --bump NAME "
+        "VERSION: pin a pm tool's artifacts in pm/lock.json; uv.lock is untouched.",
+    )
+    p.add_argument(
+        "--bump",
+        dest="name",
+        metavar="NAME",
+        help="pin tool NAME at VERSION in pm/lock.json instead of relocking uv.lock",
+    )
+    p.add_argument(
+        "version",
+        nargs="?",
+        metavar="VERSION",
+        help="the tool version (only with --bump)",
+    )
     p.set_defaults(func=cmd_lock)
 
-    p = sub.add_parser("install", help="install packages (default: all required + optional defaults)")
+    p = sub.add_parser(
+        "install", help="install packages (default: all required + optional defaults)"
+    )
     p.add_argument("names", nargs="*")
-    p.add_argument("--extra", action="append", default=[], metavar="NAME",
-                   help="enable a declared dependency extra in the venv (repeatable)")
-    p.add_argument("--without", action="append", default=[], metavar="NAME",
-                   help="leave an optional default package (agent-browser, cua-driver) out of this and every later "
-                        "default install and update; `clawk pm install NAME` opts back in (repeatable)")
-    p.add_argument("--tools-only", action="store_true",
-                   help="install the tool closure, put it on PATH, and stop before the venv sync")
-    p.add_argument("--trust-recorded", action="store_true",
-                   help="trust the recorded tool digest instead of re-hashing every entry. "
-                        "shell activation only. a deliberate install re-checks the bytes")
-    p.add_argument("--test-environment", nargs="?", const="", default=None, metavar="EXTRAS",
-                   help="also make this checkout's isolated test environment current (activation). "
-                        "EXTRAS is comma-separated; omitted selects [all]")
+    p.add_argument(
+        "--extra",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="enable a declared dependency extra in the venv (repeatable)",
+    )
+    p.add_argument(
+        "--without",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="leave an optional default package (agent-browser, cua-driver) out of this and every later "
+        "default install and update; `clawk pm install NAME` opts back in (repeatable)",
+    )
+    p.add_argument(
+        "--tools-only",
+        action="store_true",
+        help="install the tool closure, put it on PATH, and stop before the venv sync",
+    )
+    p.add_argument(
+        "--trust-recorded",
+        action="store_true",
+        help="trust the recorded tool digest instead of re-hashing every entry. "
+        "shell activation only. a deliberate install re-checks the bytes",
+    )
+    p.add_argument(
+        "--test-environment",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="EXTRAS",
+        help="also make this checkout's isolated test environment current (activation). "
+        "EXTRAS is comma-separated; omitted selects [all]",
+    )
     p.add_argument(
         "--target",
         help="stage for a cross target (e.g. linux-arm64-bionic on a glibc "
@@ -871,38 +1013,76 @@ def main(argv=None) -> int:
     p = sub.add_parser("doctor", help="check installed state against the lockfile")
     p.set_defaults(func=cmd_doctor)
 
-    p = sub.add_parser("repair", help="rebuild the recorded dependency environment without changing its graph")
+    p = sub.add_parser(
+        "repair",
+        help="rebuild the recorded dependency environment without changing its graph",
+    )
     p.set_defaults(func=cmd_repair)
 
     p = sub.add_parser("gc", help="remove store entries nothing references")
     p.set_defaults(func=cmd_gc)
 
-    p = sub.add_parser("bundle", help="stage a payload (repo+store+facts+relocatable venv) into --out")
+    p = sub.add_parser(
+        "bundle", help="stage a payload (repo+store+facts+relocatable venv) into --out"
+    )
     p.add_argument("--out", required=True)
     p.add_argument("--ref", help="git ref for the repo snapshot (default HEAD)")
-    p.add_argument("--cache", type=Path, help="persistent build cache (default: UV_CACHE_DIR or PM's shared cache)")
+    p.add_argument(
+        "--cache",
+        type=Path,
+        help="persistent build cache (default: UV_CACHE_DIR or PM's shared cache)",
+    )
     p.set_defaults(func=cmd_bundle)
 
-    p = sub.add_parser("status", help="print the latest pm sync receipt (machine-readable)")
+    p = sub.add_parser(
+        "status", help="print the latest pm sync receipt (machine-readable)"
+    )
     p.set_defaults(func=cmd_status)
     p = sub.add_parser("update", help="resolve latest versions and re-pin the lockfile")
-    p.add_argument("names", nargs="*", help="packages to check/update (default: all with a latest source)")
-    p.add_argument("--check", action="store_true",
-                   help="dry-run: print what would change, write nothing (exit 1 if updates exist)")
-    p.add_argument("--target", help="resolve for a different target instead of this machine (e.g. win32-arm64)")
-    p.add_argument("--skip-target", action="append", default=[], choices=ALL_TARGETS, metavar="TARGET",
-                   help="leave TARGET's pins as they are, e.g. linux-arm64-bionic while the termux "
-                        "pool lags upstream (repeatable)")
-    p.add_argument("--uv", action="store_true", help="also refresh uv.lock + venv (uv update + sync)")
-    p.add_argument("--npm", action="store_true", help="also refresh package-lock.json (npm update)")
-    p.add_argument("--termux", action="store_true",
-                   help="repin the termux pool archives the pool has retired (the runtime-lib "
-                        "table + the bionic lock rows); --check reports without writing")
+    p.add_argument(
+        "names",
+        nargs="*",
+        help="packages to check/update (default: all with a latest source)",
+    )
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="dry-run: print what would change, write nothing (exit 1 if updates exist)",
+    )
+    p.add_argument(
+        "--target",
+        help="resolve for a different target instead of this machine (e.g. win32-arm64)",
+    )
+    p.add_argument(
+        "--skip-target",
+        action="append",
+        default=[],
+        choices=ALL_TARGETS,
+        metavar="TARGET",
+        help="leave TARGET's pins as they are, e.g. linux-arm64-bionic while the termux "
+        "pool lags upstream (repeatable)",
+    )
+    p.add_argument(
+        "--uv",
+        action="store_true",
+        help="also refresh uv.lock + venv (uv update + sync)",
+    )
+    p.add_argument(
+        "--npm", action="store_true", help="also refresh package-lock.json (npm update)"
+    )
+    p.add_argument(
+        "--termux",
+        action="store_true",
+        help="repin the termux pool archives the pool has retired (the runtime-lib "
+        "table + the bionic lock rows); --check reports without writing",
+    )
     p.set_defaults(func=cmd_update)
 
     args = parser.parse_args(argv)
     if args.cmd == "lock" and (args.name is None) != (args.version is None):
-        lock_parser.error("--bump NAME and VERSION go together; run with neither to relock uv.lock")
+        lock_parser.error(
+            "--bump NAME and VERSION go together; run with neither to relock uv.lock"
+        )
     from pm.runtime import is_runtime, run_cli
 
     try:

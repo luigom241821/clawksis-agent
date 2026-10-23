@@ -10,6 +10,7 @@ import sys
 
 def _cmd_memory_off():
     from clawk_cli.config import load_config, save_config
+
     config = load_config()
     if not isinstance(config.get("memory"), dict):
         config["memory"] = {}
@@ -21,6 +22,7 @@ def _cmd_memory_off():
 
 def _cmd_memory_reset(args):
     from clawk_constants import get_clawk_home, display_clawk_home
+
     mem_dir = get_clawk_home() / "memories"
     target = getattr(args, "target", "all")
     files_to_reset = []
@@ -31,7 +33,9 @@ def _cmd_memory_reset(args):
 
     existing = [(f, desc) for f, desc in files_to_reset if (mem_dir / f).exists()]
     if not existing:
-        print(f"\n  Nothing to reset — no memory files found in {display_clawk_home()}/memories/\n")
+        print(
+            f"\n  Nothing to reset — no memory files found in {display_clawk_home()}/memories/\n"
+        )
         return
 
     print("\n  This will permanently erase the following memory files:")
@@ -65,6 +69,7 @@ def cmd_memory(args):
         _cmd_memory_reset(args)
     else:
         from clawk_cli.memory_setup import memory_command
+
         memory_command(args)
 
 
@@ -74,29 +79,43 @@ _ACP_FLAGS = (
     ("check", "--check"),
     ("setup", "--setup"),
     ("setup_browser", "--setup-browser"),
-    ("assume_yes", "--yes"))
+    ("assume_yes", "--yes"),
+)
 
 
 def cmd_acp(args):
     """Launch Clawksis as an ACP server."""
     import os
+
     # The gateway-backed ACP server forwards launch flags from their documented env equivalents
     # (main() already exported --yolo / --safe-mode / --ignore-user-config).
-    for attr, name in (("accept_hooks", "CLAWK_ACCEPT_HOOKS"), ("ignore_rules", "CLAWK_IGNORE_RULES")):
+    for attr, name in (
+        ("accept_hooks", "CLAWK_ACCEPT_HOOKS"),
+        ("ignore_rules", "CLAWK_IGNORE_RULES"),
+    ):
         if getattr(args, attr, False):
             os.environ[name] = "1"
     # -m / --provider: the route a --safe-mode / --ignore-user-config session freezes (it reads no
     # profile default), carried like the TUI launcher's.
-    for attr, name in (("model", "CLAWK_MODEL"), ("provider", "CLAWK_INFERENCE_PROVIDER")):
+    for attr, name in (
+        ("model", "CLAWK_MODEL"),
+        ("provider", "CLAWK_INFERENCE_PROVIDER"),
+    ):
         if getattr(args, attr, None):
             os.environ[name] = getattr(args, attr)
     try:
         from acp_adapter.entry import main as acp_main
+
         acp_main([flag for attr, flag in _ACP_FLAGS if getattr(args, attr, False)])
     except ImportError as e:
-        print("The ACP server can't start: its protocol packages are missing from this install.", file=sys.stderr)
-        print("From the Clawksis environment, run: "
-              f"{install_hint('acp')}", file=sys.stderr)
+        print(
+            "The ACP server can't start: its protocol packages are missing from this install.",
+            file=sys.stderr,
+        )
+        print(
+            f"From the Clawksis environment, run: {install_hint('acp')}",
+            file=sys.stderr,
+        )
         print("Then restart Clawksis.", file=sys.stderr)
         print(f"Details: {e}", file=sys.stderr)
         sys.exit(1)
@@ -104,16 +123,20 @@ def cmd_acp(args):
 
 def cmd_tools(args):
     from clawk_cli.main import _require_tty
+
     action = getattr(args, "tools_action", None)
     if action in {"list", "disable", "enable"}:
         from clawk_cli.tools_config import tools_disable_enable_command
+
         tools_disable_enable_command(args)
     elif action == "post-setup":
         from clawk_cli.tools_config import run_post_setup_command
+
         sys.exit(run_post_setup_command(args))
     else:
         _require_tty("tools")
         from clawk_cli.tools_config import tools_command
+
         tools_command(args)
 
 
@@ -123,9 +146,11 @@ def cmd_insights(args):
         from clawk_state import SessionDB
         from agent.insights import InsightsEngine
         from clawk_cli.config import get_clawk_home
+
         path = get_clawk_home() / "state.db"
         if not path.exists():
             from agent.i18n import t
+
             print(f"  {t('cli.insights.no_session_data')}")
             return
         db = SessionDB(db_path=path, read_only=True)
@@ -135,6 +160,7 @@ def cmd_insights(args):
     except Exception as e:
         # Interactive /insights delegates here, so keep main's localized error line.
         from agent.i18n import t
+
         print(t("gateway.insights.error", error=str(e)))
     finally:
         if db is not None:
@@ -151,32 +177,46 @@ def _dict_or_empty(value) -> dict:
 def cmd_monitoring(args):
     """Gateway monitoring status: health & diagnostics export posture."""
     from clawk_cli.config import load_config
+
     action = getattr(args, "monitoring_action", None) or "status"
     mon = _dict_or_empty(load_config().get("monitoring"))
 
     if action == "status":
         from agent.monitoring import otlp_exporter
+
         gh = _dict_or_empty(mon.get("gateway_health_export"))
         otlp = _dict_or_empty(_dict_or_empty(mon.get("export")).get("otlp"))
 
         print("Gateway monitoring")
-        print(f"  Health export:  {'enabled' if gh.get('enabled') else 'disabled'} "
-              f"(monitoring.gateway_health_export.enabled)")
+        print(
+            f"  Health export:  {'enabled' if gh.get('enabled') else 'disabled'} "
+            f"(monitoring.gateway_health_export.enabled)"
+        )
         if gh.get("enabled"):
-            print(f"    Metrics:            {'on' if gh.get('metrics_enabled', True) else 'off'} "
-                  f"(interval {gh.get('export_interval_seconds', 60)}s)")
-            print(f"    Diagnostic events:  {'on' if gh.get('diagnostic_events_enabled', True) else 'off'}")
-            print(f"    Warning/error logs: {'on' if gh.get('warning_error_events_enabled', True) else 'off'} "
-                  f"(interval {gh.get('logs_export_interval_seconds', 5)}s)")
-            print("    Content safety:     always on "
-                  "(rendered messages are never exported; not configurable)")
+            print(
+                f"    Metrics:            {'on' if gh.get('metrics_enabled', True) else 'off'} "
+                f"(interval {gh.get('export_interval_seconds', 60)}s)"
+            )
+            print(
+                f"    Diagnostic events:  {'on' if gh.get('diagnostic_events_enabled', True) else 'off'}"
+            )
+            print(
+                f"    Warning/error logs: {'on' if gh.get('warning_error_events_enabled', True) else 'off'} "
+                f"(interval {gh.get('logs_export_interval_seconds', 5)}s)"
+            )
+            print(
+                "    Content safety:     always on "
+                "(rendered messages are never exported; not configurable)"
+            )
         endpoint = otlp.get("endpoint") or ""
         if otlp.get("enabled") and endpoint:
             print(f"  OTLP endpoint:  {endpoint}")
         else:
             print("  OTLP endpoint:  not configured (monitoring.export.otlp)")
-        print(f"  OTel SDK:       {'installed' if otlp_exporter.is_available() else 'not installed'} "
-              f"(optional extra: clawksis-agent[otlp])")
+        print(
+            f"  OTel SDK:       {'installed' if otlp_exporter.is_available() else 'not installed'} "
+            f"(optional extra: clawksis-agent[otlp])"
+        )
         print("\n  Scope: gateway service health + redacted diagnostics only.")
         print("  No prompts, messages, tool args/results, usage analytics, or traces.")
         return
@@ -187,15 +227,18 @@ def cmd_monitoring(args):
 
 def cmd_skills(args):
     from clawk_cli.main import _require_tty
+
     action = getattr(args, "skills_action", None)
     if action == "config":
         _require_tty("skills config")
         from clawk_cli.skills_config import skills_command as skills_config_command
+
         skills_config_command(args)
     elif action in ("trust", "untrust"):
         _cmd_skills_trust(args)
     else:
         from clawk_cli.skills_hub import skills_command
+
         return skills_command(args)
 
 
@@ -210,8 +253,10 @@ def _cmd_skills_trust(args):
         PROJECT_SKILLS_SUBDIRS,
         _candidate_project_skills_dirs,
         find_project_root,
-        iter_skill_index_files)
+        iter_skill_index_files,
+    )
     from clawk_cli.config import load_config, save_config
+
     action = args.skills_action
     raw_path = getattr(args, "path", None)
     if raw_path:
@@ -224,7 +269,8 @@ def _cmd_skills_trust(args):
         if root is None:
             print(
                 "Not inside a git checkout. Run from a project directory or "
-                "pass the project root path explicitly.")
+                "pass the project root path explicitly."
+            )
             return
 
     config = load_config()
@@ -260,11 +306,13 @@ def _cmd_skills_trust(args):
     # Show what this unlocks
     count = sum(
         sum(1 for _ in iter_skill_index_files(d, "SKILL.md"))
-        for d in _candidate_project_skills_dirs(root))
+        for d in _candidate_project_skills_dirs(root)
+    )
     if count:
         print(
             f"{count} project skill(s) will load in sessions started inside "
-            "this repo (they take precedence over same-named profile skills).")
+            "this repo (they take precedence over same-named profile skills)."
+        )
     else:
         subdirs = " or ".join(PROJECT_SKILLS_SUBDIRS)
         print(f"No project skills found yet — add them under {subdirs}.")

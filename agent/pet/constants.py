@@ -50,7 +50,11 @@ def cols_for_scale(scale: float) -> int:
 
 def resolve_cols(scale: float, unicode_cols: int = 0) -> int:
     """Resolve terminal width: explicit *unicode_cols* override, else from *scale*."""
-    return int(unicode_cols) if unicode_cols and int(unicode_cols) > 0 else cols_for_scale(scale)
+    return (
+        int(unicode_cols)
+        if unicode_cols and int(unicode_cols) > 0
+        else cols_for_scale(scale)
+    )
 
 
 class PetState(str, Enum):
@@ -66,17 +70,37 @@ class PetState(str, Enum):
 
 
 # Legacy Clawksis/petdex row order (top -> bottom) for the older 8-row, 9-column atlas.
-LEGACY_STATE_ROWS: list[str] = ["idle", "wave", "run", "failed", "review", "jump", "extra1", "extra2"]
+LEGACY_STATE_ROWS: list[str] = [
+    "idle",
+    "wave",
+    "run",
+    "failed",
+    "review",
+    "jump",
+    "extra1",
+    "extra2",
+]
 
 # Current Petdex row order (top -> bottom) for 1536x1872 atlases (8 cols x 9 rows).
-CODEX_STATE_ROWS: list[str] = ["idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review"]
+CODEX_STATE_ROWS: list[str] = [
+    "idle",
+    "running-right",
+    "running-left",
+    "waving",
+    "jumping",
+    "failed",
+    "waiting",
+    "running",
+    "review",
+]
 
 # Default for callers without a sheet: generated pets and the Codex contract use 9 rows.
 STATE_ROWS: list[str] = CODEX_STATE_ROWS
 # Canonical Clawksis names -> accepted row-name aliases in descending preference.
 _CODEX_NAMES = {"wave": "waving", "jump": "jumping", "run": "running"}
 STATE_ALIASES: dict[str, tuple[str, ...]] = {
-    s: (s, _CODEX_NAMES[s]) if s in _CODEX_NAMES else (s,) for s in ("idle", "wave", "jump", "run", "failed", "review", "waiting")
+    s: (s, _CODEX_NAMES[s]) if s in _CODEX_NAMES else (s,)
+    for s in ("idle", "wave", "jump", "run", "failed", "review", "waiting")
 }
 
 
@@ -98,4 +122,6 @@ def state_rows_for_grid(row_count: int | None) -> list[str]:
 def state_row_index(state: PetState | str, row_count: int | None = None) -> int:
     """Return the spritesheet row index for *state* (clamped, never raises)."""
     rows = state_rows_for_grid(row_count)
-    return next((rows.index(name) for name in state_aliases_for(state) if name in rows), 0)  # 0 = idle row
+    return next(
+        (rows.index(name) for name in state_aliases_for(state) if name in rows), 0
+    )  # 0 = idle row

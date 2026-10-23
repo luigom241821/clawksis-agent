@@ -1,6 +1,7 @@
 """Every writer that seeds or first-configures config.yaml must leave each messaging platform's display defaults
 alone (#121230). The gateway loader merges no DEFAULT_CONFIG, so any written global ``display.<key>`` beats every
 platform tier (e.g. Telegram/Slack tool_progress ``off`` -> ``all``, QQBot show_reasoning ``False`` -> ``True``)."""
+
 import os
 import shutil
 
@@ -22,7 +23,9 @@ def _setup_agent_enter(tmp_path, monkeypatch, cfg):
     """`clawk setup agent` on a fresh home, pressing Enter (the offered default) on every prompt."""
     from clawk_cli import setup
 
-    monkeypatch.setattr(setup, "prompt", lambda question, default=None, *a, **k: default or "")
+    monkeypatch.setattr(
+        setup, "prompt", lambda question, default=None, *a, **k: default or ""
+    )
     monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: False)
     setup.setup_agent_settings(cfg.load_config())
 
@@ -47,9 +50,14 @@ def _doctor_fix(tmp_path, monkeypatch, cfg):
     from clawk_cli import doctor
     from clawk_cli.doctor_config import _check_config_file
 
-    root = tmp_path / "checkout"  # only the template, so a stray cli-config.yaml cannot short-circuit the seed
+    root = (
+        tmp_path / "checkout"
+    )  # only the template, so a stray cli-config.yaml cannot short-circuit the seed
     root.mkdir()
-    shutil.copy2(cfg.get_project_root() / "cli-config.yaml.example", root / "cli-config.yaml.example")
+    shutil.copy2(
+        cfg.get_project_root() / "cli-config.yaml.example",
+        root / "cli-config.yaml.example",
+    )
     home = cfg.get_clawk_home()
     monkeypatch.setattr(doctor, "CLAWK_HOME", home)
     monkeypatch.setattr(doctor, "PROJECT_ROOT", root)
@@ -69,7 +77,9 @@ SEEDERS = {
 
 
 @pytest.mark.parametrize("seeder", list(SEEDERS))
-def test_every_seeder_keeps_every_platform_display_default(tmp_path, monkeypatch, seeder):
+def test_every_seeder_keeps_every_platform_display_default(
+    tmp_path, monkeypatch, seeder
+):
     import clawk_cli.config as cfg
     from gateway.run import _load_gateway_config
 
@@ -80,5 +90,7 @@ def test_every_seeder_keeps_every_platform_display_default(tmp_path, monkeypatch
     SEEDERS[seeder](tmp_path, monkeypatch, cfg)
 
     config_path = home / "config.yaml"
-    assert config_path.exists()  # the resolution checks below would pass on a missing file
+    assert (
+        config_path.exists()
+    )  # the resolution checks below would pass on a missing file
     assert_keeps_platform_display_defaults(_load_gateway_config(config_path))

@@ -6,6 +6,7 @@ user who owns it is the one typing in their own CLI/TUI/Desktop, and ``slash.exe
 proven that (``authorize_local_source`` plus the ``session:control`` capability). Messaging keeps
 admin-only.
 """
+
 import asyncio
 import json
 import signal
@@ -16,39 +17,73 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.gateway.fixtures.local_recovery_probe import Model, child_env, daemon, rpc, websocket
+from tests.gateway.fixtures.local_recovery_probe import (
+    Model,
+    child_env,
+    daemon,
+    rpc,
+    websocket,
+)
 
 
-@pytest.mark.platforms("linux")  # the daemon is stopped with SIGINT, which raises on Windows
+@pytest.mark.platforms(
+    "linux"
+)  # the daemon is stopped with SIGINT, which raises on Windows
 def test_local_session_owner_adds_a_goal_gate(tmp_path):
     root = Path(__file__).resolve().parents[2]
-    home, user, work = tmp_path / 'state', tmp_path / 'user', tmp_path / 'work'
+    home, user, work = tmp_path / "state", tmp_path / "user", tmp_path / "work"
     home.mkdir(mode=0o700)
     user.mkdir()
     work.mkdir()
-    peer = ThreadingHTTPServer(('127.0.0.1', 0), Model)
+    peer = ThreadingHTTPServer(("127.0.0.1", 0), Model)
     peer.requests = []
     peer.blocked, peer.release = threading.Event(), threading.Event()
     thread = threading.Thread(target=peer.serve_forever, daemon=True)
     thread.start()
-    url = f'http://127.0.0.1:{peer.server_port}/v1'
-    (home / 'config.yaml').write_text(json.dumps({
-        'gateway': {'multiplex_profiles': False},
-        'model': {'provider': 'custom', 'default': 'gate-model', 'base_url': url},
-        'auxiliary': {'title_generation': {'enabled': False}},
-    }))
+    url = f"http://127.0.0.1:{peer.server_port}/v1"
+    (home / "config.yaml").write_text(
+        json.dumps(
+            {
+                "gateway": {"multiplex_profiles": False},
+                "model": {
+                    "provider": "custom",
+                    "default": "gate-model",
+                    "base_url": url,
+                },
+                "auxiliary": {"title_generation": {"enabled": False}},
+            }
+        )
+    )
     env = child_env()
-    env.update(HOME=str(user), USERPROFILE=str(user), CLAWK_HOME=str(home), PYTHONPATH=str(root),
-               OPENAI_API_KEY='loopback-only', OPENAI_BASE_URL=url, PYTHONUNBUFFERED='1')
+    env.update(
+        HOME=str(user),
+        USERPROFILE=str(user),
+        CLAWK_HOME=str(home),
+        PYTHONPATH=str(root),
+        OPENAI_API_KEY="loopback-only",
+        OPENAI_BASE_URL=url,
+        PYTHONUNBUFFERED="1",
+    )
     out = {}
 
     async def probe(desc):
         async with websocket(home, desc) as ws:
-            created = await rpc(ws, 'session.create', request_id='gate', source='cli', toolsets=[], cwd=str(work))
-            sid = created['result']['session_id']
-            for command in ('goal ship the cache', 'goal gate add true', 'goal gate list'):
-                reply = await rpc(ws, 'slash.exec', session_id=sid, command=command)
-                out[command] = reply.get('result') or reply.get('error')
+            created = await rpc(
+                ws,
+                "session.create",
+                request_id="gate",
+                source="cli",
+                toolsets=[],
+                cwd=str(work),
+            )
+            sid = created["result"]["session_id"]
+            for command in (
+                "goal ship the cache",
+                "goal gate add true",
+                "goal gate list",
+            ):
+                reply = await rpc(ws, "slash.exec", session_id=sid, command=command)
+                out[command] = reply.get("result") or reply.get("error")
 
     try:
         with daemon(root, home, env, barrier=False) as (proc, desc):
@@ -60,10 +95,13 @@ def test_local_session_owner_adds_a_goal_gate(tmp_path):
         peer.server_close()
         thread.join(timeout=5)
 
-    added = out['goal gate add true']
-    assert 'admin' not in added.get('output', '').lower(), ('local owner refused as non-admin', out)
-    assert 'Gate added' in added['output'], out
-    assert '$ true' in out['goal gate list']['output'], out
+    added = out["goal gate add true"]
+    assert "admin" not in added.get("output", "").lower(), (
+        "local owner refused as non-admin",
+        out,
+    )
+    assert "Gate added" in added["output"], out
+    assert "$ true" in out["goal gate list"]["output"], out
 
 
 @pytest.mark.asyncio
@@ -76,12 +114,12 @@ async def test_messaging_goal_gate_add_stays_admin_only():
     runner = object.__new__(GatewayRunner)
 
     class _Mgr:
-        session_id = 's1'
+        session_id = "s1"
         added = []
 
         def add_gate(self, command):
             self.added.append(command)
-            raise AssertionError('gate added for a non-admin messaging sender')
+            raise AssertionError("gate added for a non-admin messaging sender")
 
     mgr = _Mgr()
 
@@ -93,8 +131,12 @@ async def test_messaging_goal_gate_add_stays_admin_only():
 
     runner._get_goal_manager_for_event = _mgr_for
     runner._run_in_executor_with_context = _inline
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id='c', user_id='u', chat_type='dm')
-    with patch('clawk_cli.goals.last_user_message_from_db', lambda _sid: None):
-        out = await runner._handle_goal_command(MessageEvent(text='/goal gate add true', source=source))
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="c", user_id="u", chat_type="dm"
+    )
+    with patch("clawk_cli.goals.last_user_message_from_db", lambda _sid: None):
+        out = await runner._handle_goal_command(
+            MessageEvent(text="/goal gate add true", source=source)
+        )
     assert mgr.added == []
-    assert 'admin' in out.lower()
+    assert "admin" in out.lower()

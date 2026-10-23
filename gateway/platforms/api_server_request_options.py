@@ -36,13 +36,23 @@ def _request_reasoning_config(model_options: Any) -> Optional[dict[str, Any]]:
 
 def _request_service_tier(model_options: Any) -> Any:
     """Return a per-request service_tier override or _REQUEST_OPTION_MISSING."""
-    from gateway.platforms.api_server import _REQUEST_OPTION_MISSING, _clean_request_string, _coerce_request_bool
+    from gateway.platforms.api_server import (
+        _REQUEST_OPTION_MISSING,
+        _clean_request_string,
+        _coerce_request_bool,
+    )
 
     if not isinstance(model_options, dict):
         return _REQUEST_OPTION_MISSING
     if "service_tier" in model_options:
         raw_tier = model_options.get("service_tier")
-        return _clean_request_string(raw_tier) if isinstance(raw_tier, str) else raw_tier
+        return (
+            _clean_request_string(raw_tier) if isinstance(raw_tier, str) else raw_tier
+        )
     if "fast" in model_options:
-        return "priority" if _coerce_request_bool(model_options.get("fast"), default=False) else None
+        return (
+            "priority"
+            if _coerce_request_bool(model_options.get("fast"), default=False)
+            else None
+        )
     return _REQUEST_OPTION_MISSING

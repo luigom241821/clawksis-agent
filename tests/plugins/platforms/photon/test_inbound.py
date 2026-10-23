@@ -3,6 +3,7 @@
 These exercise the sidecar-event stream and parsing without spawning the
 Node sidecar or binding ports.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,9 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
     return PhotonAdapter(cfg)
 
 
-def _capture(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> list[MessageEvent]:
+def _capture(
+    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
+) -> list[MessageEvent]:
     captured: list[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
@@ -205,7 +208,9 @@ def test_is_duplicate_window(monkeypatch: pytest.MonkeyPatch) -> None:
     assert adapter._dedup.is_duplicate("id-1") is True  # still dup
 
 
-def test_check_requirements_without_node(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_check_requirements_without_node(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     from plugins.platforms.photon import adapter as adapter_mod
 
     monkeypatch.setenv("PATH", "")

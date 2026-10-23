@@ -46,7 +46,6 @@ class TestManagedNousToolsEnabled:
         )
         assert managed_nous_tools_enabled() is False
 
-
     def test_returns_false_on_exception(self, monkeypatch):
         """Should never crash — returns False on any exception."""
         monkeypatch.setattr(
@@ -95,8 +94,6 @@ class TestNormalizeBrowserCloudProvider:
         assert normalize_browser_cloud_provider(None) == "local"
 
 
-
-
 # ---------------------------------------------------------------------------
 # coerce_modal_mode / normalize_modal_mode
 # ---------------------------------------------------------------------------
@@ -110,11 +107,8 @@ class TestCoerceModalMode:
     def test_none_returns_auto(self):
         assert coerce_modal_mode(None) == "auto"
 
-
     def test_strips_whitespace(self):
         assert coerce_modal_mode("  managed  ") == "managed"
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -129,13 +123,11 @@ class TestHasDirectModalCredentials:
         with patch.object(Path, "home", return_value=tmp_path):
             assert has_direct_modal_credentials() is False
 
-
     def test_only_token_secret_not_enough(self, monkeypatch, tmp_path):
         monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
         monkeypatch.setenv("MODAL_TOKEN_SECRET", "sec-456")
         with patch.object(Path, "home", return_value=tmp_path):
             assert has_direct_modal_credentials() is False
-
 
     def test_env_vars_take_priority_over_file(self, monkeypatch, tmp_path):
         monkeypatch.setenv("MODAL_TOKEN_ID", "id-123")
@@ -200,35 +192,54 @@ class TestResolveModalBackendState:
     # --- auto mode ---
 
     def test_auto_prefers_managed_when_available(self, monkeypatch):
-        result = self._resolve(monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch, "auto", has_direct=True, managed_ready=True, nous_enabled=True
+        )
         assert result["selected_backend"] == "managed"
-
 
     # --- direct mode ---
 
     def test_direct_selects_direct_when_available(self, monkeypatch):
-        result = self._resolve(monkeypatch, "direct", has_direct=True, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "direct",
+            has_direct=True,
+            managed_ready=True,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] == "direct"
 
     def test_direct_none_when_no_credentials(self, monkeypatch):
-        result = self._resolve(monkeypatch, "direct", has_direct=False, managed_ready=True, nous_enabled=True)
+        result = self._resolve(
+            monkeypatch,
+            "direct",
+            has_direct=False,
+            managed_ready=True,
+            nous_enabled=True,
+        )
         assert result["selected_backend"] is None
 
     # --- managed mode ---
 
-
     def test_managed_blocked_when_nous_disabled(self, monkeypatch):
-        result = self._resolve(monkeypatch, "managed", has_direct=True, managed_ready=True, nous_enabled=False)
+        result = self._resolve(
+            monkeypatch,
+            "managed",
+            has_direct=True,
+            managed_ready=True,
+            nous_enabled=False,
+        )
         assert result["selected_backend"] is None
         assert result["managed_mode_blocked"] is True
 
     # --- return structure ---
 
-
     # --- invalid mode falls back to auto ---
 
     def test_invalid_mode_treated_as_auto(self, monkeypatch):
-        result = self._resolve(monkeypatch, "bogus", has_direct=True, managed_ready=False)
+        result = self._resolve(
+            monkeypatch, "bogus", has_direct=True, managed_ready=False
+        )
         assert result["requested_mode"] == "auto"
         assert result["mode"] == "auto"
 
@@ -243,7 +254,6 @@ class TestResolveOpenaiAudioApiKey:
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "voice-key")
         monkeypatch.setenv("OPENAI_API_KEY", "general-key")
         assert resolve_openai_audio_api_key() == "voice-key"
-
 
     def test_strips_whitespace(self, monkeypatch):
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "  voice-key  ")
@@ -285,7 +295,6 @@ class TestResolveOpenaiAudioApiKeyIsProfileScoped:
             )
         finally:
             ss.reset_secret_scope(token)
-
 
     def test_single_profile_still_reads_environ(self, monkeypatch):
         """Control: no multiplexing, no scope — unchanged behaviour."""

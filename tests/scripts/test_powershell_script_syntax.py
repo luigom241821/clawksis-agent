@@ -99,8 +99,7 @@ def test_powershell_scripts_parse(tmp_path: Path) -> None:
     harness.write_text(_HARNESS, encoding="utf-8")
 
     result = subprocess.run(
-        [host, "-NoProfile", "-ExecutionPolicy", "Bypass",
-         "-File", str(harness)]
+        [host, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(harness)]
         + [str(p) for p in PS1_SCRIPTS],
         capture_output=True,
         text=True,

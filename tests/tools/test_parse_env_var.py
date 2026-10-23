@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import sys
 import tools.terminal_tool
+
 _tt_mod = sys.modules["tools.terminal_tool"]
 from tools.terminal_tool import _parse_env_var
 
@@ -19,22 +20,21 @@ class TestParseEnvVar:
         with patch.dict("os.environ", {"TERMINAL_TIMEOUT": "300"}):
             assert _parse_env_var("TERMINAL_TIMEOUT", "180") == 300
 
-
     def test_get_env_config_parses_docker_forward_env_json(self):
-        with patch.dict("os.environ", {
-            "TERMINAL_ENV": "docker",
-            "TERMINAL_DOCKER_FORWARD_ENV": '["GITHUB_TOKEN", "NPM_TOKEN"]',
-        }, clear=False):
+        with patch.dict(
+            "os.environ",
+            {
+                "TERMINAL_ENV": "docker",
+                "TERMINAL_DOCKER_FORWARD_ENV": '["GITHUB_TOKEN", "NPM_TOKEN"]',
+            },
+            clear=False,
+        ):
             config = _tt_mod._get_env_config()
             assert config["docker_forward_env"] == ["GITHUB_TOKEN", "NPM_TOKEN"]
 
-
     # -- invalid int raises ValueError with env var name --
 
-
     # -- invalid JSON raises ValueError with env var name --
-
-
 
 
 class TestImportTimeEnvParsing:
@@ -43,7 +43,9 @@ class TestImportTimeEnvParsing:
     def test_invalid_foreground_timeout_falls_back_to_default(self):
         default = importlib.reload(_tt_mod).FOREGROUND_MAX_TIMEOUT
         try:
-            with patch.dict("os.environ", {"TERMINAL_MAX_FOREGROUND_TIMEOUT": "5m"}, clear=False):
+            with patch.dict(
+                "os.environ", {"TERMINAL_MAX_FOREGROUND_TIMEOUT": "5m"}, clear=False
+            ):
                 mod = importlib.reload(_tt_mod)
                 assert mod.FOREGROUND_MAX_TIMEOUT == default
         finally:

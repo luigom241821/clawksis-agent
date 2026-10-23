@@ -21,8 +21,9 @@ class _AbortedStartupRunner:
         from gateway.session import SessionStore
         from clawk_state import SessionDB
         from clawk_constants import get_clawk_home
-        self.session_store = SessionStore(get_clawk_home() / 'sessions', config)
-        self._session_db = SessionDB(get_clawk_home() / 'state.db')
+
+        self.session_store = SessionStore(get_clawk_home() / "sessions", config)
+        self._session_db = SessionDB(get_clawk_home() / "state.db")
         self.session_store._db = self._session_db
         self._draining = False
         self.config = config
@@ -52,7 +53,9 @@ class _AbortedStartupRunner:
 
 
 @pytest.mark.asyncio
-async def test_sigusr1_handler_installed_by_start_gateway_logs_graceful_restart(tmp_path, monkeypatch, caplog):
+async def test_sigusr1_handler_installed_by_start_gateway_logs_graceful_restart(
+    tmp_path, monkeypatch, caplog
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     for target, value in (
         ("gateway.status.get_running_pid", lambda: None),
@@ -74,11 +77,18 @@ async def test_sigusr1_handler_installed_by_start_gateway_logs_graceful_restart(
     monkeypatch.setattr(gateway_run, "GatewayRunner", make_runner)
 
     import asyncio
+
     loop = asyncio.get_running_loop()
     installed = {}
-    monkeypatch.setattr(loop, "add_signal_handler", lambda sig, handler, *args: installed.update({sig: (handler, args)}))
+    monkeypatch.setattr(
+        loop,
+        "add_signal_handler",
+        lambda sig, handler, *args: installed.update({sig: (handler, args)}),
+    )
 
-    await gateway_run.start_gateway(config=GatewayConfig(), replace=False, verbosity=None)
+    await gateway_run.start_gateway(
+        config=GatewayConfig(), replace=False, verbosity=None
+    )
 
     handler, args = installed[signal.SIGUSR1]
     with caplog.at_level(logging.INFO, logger="gateway.run"):

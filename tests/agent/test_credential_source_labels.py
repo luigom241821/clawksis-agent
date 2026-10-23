@@ -32,7 +32,9 @@ def _config_api_line(capsys, api_key) -> str:
     cli.session_start = datetime(2031, 1, 1)
     cli.show_config()
     out = capsys.readouterr().out
-    return next(line for line in out.splitlines() if t("cli.config.label_api_key") in line)
+    return next(
+        line for line in out.splitlines() if t("cli.config.label_api_key") in line
+    )
 
 
 def _banner(capsys, key) -> str:
@@ -45,7 +47,9 @@ def _banner(capsys, key) -> str:
 def _entra_provider(monkeypatch):
     from agent import azure_identity_adapter as adapter
 
-    fake = SimpleNamespace(get_bearer_token_provider=lambda credential, scope: (lambda: _never_called()))
+    fake = SimpleNamespace(
+        get_bearer_token_provider=lambda credential, scope: lambda: _never_called()
+    )
     monkeypatch.setitem(sys.modules, "azure", SimpleNamespace(identity=fake))
     monkeypatch.setitem(sys.modules, "azure.identity", fake)
     monkeypatch.setattr(adapter, "_require_azure_identity", lambda: fake)
@@ -91,7 +95,9 @@ CASES = [
 
 
 @pytest.mark.parametrize(("build", "label_key"), CASES)
-def test_config_labels_a_callable_key_by_its_source(capsys, monkeypatch, build, label_key):
+def test_config_labels_a_callable_key_by_its_source(
+    capsys, monkeypatch, build, label_key
+):
     line = _config_api_line(capsys, build(monkeypatch))
     assert t(label_key) in line, line
     if label_key != "cli.config.microsoft_entra_id":
@@ -99,7 +105,9 @@ def test_config_labels_a_callable_key_by_its_source(capsys, monkeypatch, build, 
 
 
 @pytest.mark.parametrize(("build", "label_key"), CASES)
-def test_key_banner_labels_a_callable_key_by_its_source(capsys, monkeypatch, build, label_key):
+def test_key_banner_labels_a_callable_key_by_its_source(
+    capsys, monkeypatch, build, label_key
+):
     out = _banner(capsys, build(monkeypatch))
     assert t(label_key) in out, out
     if label_key != "cli.config.microsoft_entra_id":
@@ -109,10 +117,18 @@ def test_key_banner_labels_a_callable_key_by_its_source(capsys, monkeypatch, bui
 def test_both_surfaces_share_one_source_table():
     from agent import credential_source as cs
 
-    labels = {cs.credential_label(cs.tag_credential_source(lambda: "", s)) for s in cs.SOURCE_LABEL_KEYS}
+    labels = {
+        cs.credential_label(cs.tag_credential_source(lambda: "", s))
+        for s in cs.SOURCE_LABEL_KEYS
+    }
     assert labels == {t(k) for k in cs.SOURCE_LABEL_KEYS.values()}
-    assert t(cs.UNKNOWN_LABEL_KEY) not in labels, "the neutral label must not collide with a vendor label"
+    assert t(cs.UNKNOWN_LABEL_KEY) not in labels, (
+        "the neutral label must not collide with a vendor label"
+    )
 
 
 def test_string_keys_keep_the_masked_form(capsys):
-    assert _banner(capsys, "sk-live-abcdefghijklmnop3456").strip() == "🔑 Using API key: sk-live-...3456"
+    assert (
+        _banner(capsys, "sk-live-abcdefghijklmnop3456").strip()
+        == "🔑 Using API key: sk-live-...3456"
+    )

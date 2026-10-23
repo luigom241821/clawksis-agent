@@ -7,6 +7,7 @@ used to treat the leading ``27`` as ESC/cancel, which dumped the setup wizard's
 provider/model picker into its numbered "Select [1-N]" fallback the instant a
 user pressed up or down.
 """
+
 import sys
 from types import SimpleNamespace
 
@@ -75,8 +76,6 @@ class ExhaustingStdscr(FakeStdscr):
         return self.keys.pop(0)
 
 
-
-
 def test_raw_ss3_arrow_keys_decode():
     # Application cursor mode: ESC O B / ESC O A
     assert read_menu_key(FakeStdscr([27, ord("O"), ord("B")])) == NAV_DOWN
@@ -105,15 +104,47 @@ def test_left_arrow_decodes_to_back():
         ),
         ([27, ord("["), ord("1"), ord(";"), ord("1"), ord("D")], NAV_BACK),
         (
-            [27, ord("["), ord("2"), ord("7"), ord(";"), ord("1"), ord(";"), ord("1"), ord("3"), ord("~")],
+            [
+                27,
+                ord("["),
+                ord("2"),
+                ord("7"),
+                ord(";"),
+                ord("1"),
+                ord(";"),
+                ord("1"),
+                ord("3"),
+                ord("~"),
+            ],
             NAV_SELECT,
         ),
         (
-            [27, ord("["), ord("2"), ord("7"), ord(";"), ord("5"), ord(";"), ord("9"), ord("9"), ord("~")],
+            [
+                27,
+                ord("["),
+                ord("2"),
+                ord("7"),
+                ord(";"),
+                ord("5"),
+                ord(";"),
+                ord("9"),
+                ord("9"),
+                ord("~"),
+            ],
             NAV_INTERRUPT,
         ),
         (
-            [27, ord("["), ord("1"), ord("3"), ord(";"), ord("1"), ord(":"), ord("3"), ord("u")],
+            [
+                27,
+                ord("["),
+                ord("1"),
+                ord("3"),
+                ord(";"),
+                ord("1"),
+                ord(":"),
+                ord("3"),
+                ord("u"),
+            ],
             NAV_NONE,
         ),
     ],
@@ -126,11 +157,35 @@ def test_raw_ctrl_c_cancels():
     assert read_menu_key(FakeStdscr([3])) == NAV_INTERRUPT
 
 
-@pytest.mark.parametrize("keys", [
-    [4],  # raw/cbreak Ctrl+D
-    [27, ord("["), ord("1"), ord("0"), ord("0"), ord(";"), ord("5"), ord("u")],  # CSI-u Ctrl+d
-    [27, ord("["), ord("2"), ord("7"), ord(";"), ord("5"), ord(";"), ord("1"), ord("0"), ord("0"), ord("~")],
-])
+@pytest.mark.parametrize(
+    "keys",
+    [
+        [4],  # raw/cbreak Ctrl+D
+        [
+            27,
+            ord("["),
+            ord("1"),
+            ord("0"),
+            ord("0"),
+            ord(";"),
+            ord("5"),
+            ord("u"),
+        ],  # CSI-u Ctrl+d
+        [
+            27,
+            ord("["),
+            ord("2"),
+            ord("7"),
+            ord(";"),
+            ord("5"),
+            ord(";"),
+            ord("1"),
+            ord("0"),
+            ord("0"),
+            ord("~"),
+        ],
+    ],
+)
 def test_ctrl_d_leaves_a_menu_like_esc(keys):
     """Ctrl+D is EOF: before raw mode it already aborts a menu, so once raw mode is on it must too.
     It used to decode to nothing, and a menu (the shared-metrics offer) redrew on every press."""
@@ -299,9 +354,7 @@ def test_standalone_model_flow_renders_previous_and_reopens_provider(monkeypatch
 
     assert resolved == [0, 0, 0]
     assert screens == []
-    assert any(
-        "\u2190 previous" in str(args[2]) for args in model_back_screen.writes
-    )
+    assert any("\u2190 previous" in str(args[2]) for args in model_back_screen.writes)
 
 
 def test_radiolist_dispatches_contextual_back_navigation(monkeypatch):
@@ -357,10 +410,6 @@ def test_radiolist_dispatches_contextual_escape_cancellation(monkeypatch):
 
 def test_lone_escape_is_cancel():
     assert read_menu_key(FakeStdscr([27])) == NAV_CANCEL
-
-
-
-
 
 
 def test_enter_variants_select():

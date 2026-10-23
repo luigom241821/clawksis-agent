@@ -5,6 +5,7 @@ live adapter by bare platform posted (and reacted) with the default bot's identi
 honour ``_profile_adapters[profile]`` and fail closed (``None`` → scoped standalone sender / error)
 when the profile has no adapter for that platform — never the default bot.
 """
+
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ def mux_runner(tmp_path, monkeypatch):
     runner._profile_adapters = {"sec": {Platform.SLACK: sec_slack}, "nobot": {}}
     runner._primary_profile_name = "default"
     import gateway.run as gateway_run
+
     monkeypatch.setattr(gateway_run, "_gateway_runner_ref", lambda: runner)
     return home, default_slack, sec_slack
 
@@ -36,7 +38,9 @@ def test_secondary_profile_turn_resolves_its_own_adapter(mux_runner):
     with _profile_runtime_scope(home / "profiles" / "sec", {}):
         _, adapter = _live_adapter(Platform.SLACK)
     assert adapter is sec_slack
-    _, adapter = _live_adapter(Platform.SLACK)  # default scope still gets the default bot
+    _, adapter = _live_adapter(
+        Platform.SLACK
+    )  # default scope still gets the default bot
     assert adapter is default_slack
 
 

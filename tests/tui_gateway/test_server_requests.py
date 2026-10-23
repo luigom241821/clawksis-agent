@@ -18,22 +18,31 @@ from tui_gateway import server_requests
 @pytest.fixture()
 def wire(monkeypatch):
     frames: list[tuple[str, str]] = []
-    monkeypatch.setattr(server_requests, "_write", lambda frame: frames.append(("request", frame["id"])))
-    monkeypatch.setattr(server_requests, "_emit",
-                        lambda event, sid, payload: frames.append((event, payload["id"])))
+    monkeypatch.setattr(
+        server_requests, "_write", lambda frame: frames.append(("request", frame["id"]))
+    )
+    monkeypatch.setattr(
+        server_requests,
+        "_emit",
+        lambda event, sid, payload: frames.append((event, payload["id"])),
+    )
     monkeypatch.setattr(server_requests, "_answerable", lambda sid: True)
     server_requests.reset_for_tests()
     yield frames
     server_requests.reset_for_tests()
 
 
-def test_cancel_racing_the_request_write_reaches_the_wire_after_the_request(wire, monkeypatch):
+def test_cancel_racing_the_request_write_reaches_the_wire_after_the_request(
+    wire, monkeypatch
+):
     write_request = server_requests._write
     cancelled = []
 
     def write_after_an_interrupt(frame):
         # session.interrupt on another thread lands after registration, before the frame goes out.
-        interrupt = threading.Thread(target=lambda: cancelled.append(server_requests.cancel("s1")))
+        interrupt = threading.Thread(
+            target=lambda: cancelled.append(server_requests.cancel("s1"))
+        )
         interrupt.start()
         interrupt.join(timeout=10)
         write_request(frame)
@@ -48,8 +57,12 @@ def test_cancel_racing_the_request_write_reaches_the_wire_after_the_request(wire
 
 
 def test_cancel_after_the_write_is_emitted_once(wire):
-    pending = server_requests.send_async("approval", "s1", {"request_id": "r1", "command": "rm", "description": ""},
-                                         lambda result: None)
+    pending = server_requests.send_async(
+        "approval",
+        "s1",
+        {"request_id": "r1", "command": "rm", "description": ""},
+        lambda result: None,
+    )
 
     assert server_requests.cancel("s1") == 1
     pending("resolved")

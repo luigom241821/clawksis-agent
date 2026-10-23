@@ -20,7 +20,7 @@ import pytest
 
 def _skills_body(prompt: str) -> str:
     m = re.search(r"<available_skills>(.*?)</available_skills>", prompt, re.DOTALL)
-    return (m.group(1).strip() if m else "")
+    return m.group(1).strip() if m else ""
 
 
 def test_skills_prompt_scoped_to_override_not_ambient_home(tmp_path, monkeypatch):

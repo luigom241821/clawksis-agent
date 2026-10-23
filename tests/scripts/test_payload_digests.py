@@ -1,4 +1,5 @@
 """Packaged facts describe final tool bytes without changing their identity."""
+
 import copy
 import json
 from pathlib import Path
@@ -21,9 +22,16 @@ def _payload(tmp_path):
         directory = store / entry
         directory.mkdir(parents=True)
         (directory / "tool").write_bytes(b"staging bytes")
-        lock.set_pin(name, "1.0", {current_target(): {
-            "url": "https://example.invalid/tool.zip", "sha256": "a" * 64,
-        }})
+        lock.set_pin(
+            name,
+            "1.0",
+            {
+                current_target(): {
+                    "url": "https://example.invalid/tool.zip",
+                    "sha256": "a" * 64,
+                }
+            },
+        )
     lock.save()
     payload.record_tools(root, lock.path, current_target(), entries)
     Facts(store / "facts.json").record_state("venv", "selection", ["web"])
@@ -33,7 +41,11 @@ def _payload(tmp_path):
 def _rehash(root, cwd):
     return subprocess.run(
         [sys.executable, str(Path(payload.__file__)), "rehash", str(root)],
-        cwd=cwd, capture_output=True, text=True, encoding="utf-8", timeout=60,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
         check=False,
     )
 
@@ -96,7 +108,9 @@ def test_packaging_never_changes_external_metadata_or_build_locks(tmp_path):
     facts.unlink()
     facts.symlink_to(private)
     for operation in (
-        lambda: payload.record_tools(root, tmp_path / "lock.json", current_target(), {"uv": "uv"}),
+        lambda: payload.record_tools(
+            root, tmp_path / "lock.json", current_target(), {"uv": "uv"}
+        ),
         lambda: payload.rehash_tools(root),
     ):
         with pytest.raises(ValueError, match="symlinked"):
@@ -123,12 +137,24 @@ def test_sealing_strips_bom_and_absolute_build_paths(tmp_path):
     (runtime / "bin").mkdir()
     (runtime / "Scripts").mkdir()
     cfg = runtime / "pyvenv.cfg"
-    cfg.write_bytes("\ufeffhome = /private/builder\nexecutable = /private/python\nversion = 3.14\n".encode("utf-8"))
+    cfg.write_bytes(
+        "\ufeffhome = /private/builder\nexecutable = /private/python\nversion = 3.14\n".encode(
+            "utf-8"
+        )
+    )
     payload.seal_pm_runtime(root, python)
     assert not cfg.read_bytes().startswith(b"\xef\xbb\xbf")
     text = cfg.read_text(encoding="utf-8-sig")
-    assert text.splitlines() == [f"home = {Path('..') / 'tools' / 'pythön'}", "version = 3.14"]
-    assert json.loads((runtime / "pm-runtime.json").read_text(encoding="utf-8-sig"))["python"] == "../tools/pythön/python"
+    assert text.splitlines() == [
+        f"home = {Path('..') / 'tools' / 'pythön'}",
+        "version = 3.14",
+    ]
+    assert (
+        json.loads((runtime / "pm-runtime.json").read_text(encoding="utf-8-sig"))[
+            "python"
+        ]
+        == "../tools/pythön/python"
+    )
 
 
 def test_invalid_tool_evidence_never_partially_rewrites_facts(tmp_path):

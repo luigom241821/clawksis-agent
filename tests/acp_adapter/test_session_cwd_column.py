@@ -9,6 +9,7 @@ as unassigned -- "Workspace: --" -- even though its transcript was intact.
 ``_insert_session_row`` already accepted ``cwd``/``git_repo_root``; the ACP
 adapter simply never passed them.
 """
+
 import json
 from types import SimpleNamespace
 
@@ -91,12 +92,21 @@ def test_reopening_in_another_workspace_moves_the_cwd_column(tmp_path):
     db.close()
 
 
-def test_legacy_rows_get_their_cwd_column_backfilled_when_the_manager_opens_the_db(tmp_path):
+def test_legacy_rows_get_their_cwd_column_backfilled_when_the_manager_opens_the_db(
+    tmp_path,
+):
     """A row minted before the adapter wrote the column carries its workspace only in
     ``model_config``; the first DB use by the manager promotes it (#115705)."""
     db = SessionDB(tmp_path / "state.db")
-    db.create_session(session_id="legacy", source="acp", model="m", model_config={"cwd": "/work/hs-wwd"})
-    db.create_session(session_id="cli", source="cli", model="m", model_config={"cwd": "/somewhere"})
+    db.create_session(
+        session_id="legacy",
+        source="acp",
+        model="m",
+        model_config={"cwd": "/work/hs-wwd"},
+    )
+    db.create_session(
+        session_id="cli", source="cli", model="m", model_config={"cwd": "/somewhere"}
+    )
     assert db.get_session("legacy")["cwd"] in (None, "")
 
     manager = _manager(db)

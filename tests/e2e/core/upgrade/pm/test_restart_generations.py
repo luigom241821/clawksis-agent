@@ -21,7 +21,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -47,10 +49,19 @@ def test_restarts_never_build_or_accumulate_generations(home, provider):
     rebuilt = []
     for n in range(3):
         cp = P.turn(sb, provider, f"plain relaunch {n}")
-        rebuilt += [f"relaunch {n}: {line}" for line in cp.stderr.splitlines()
-                    if "source-update dependencies" in line or "interrupted source update" in line]
-    assert not rebuilt, "a plain relaunch of a current install re-ran the dependency sync / update tail:\n" + "\n".join(rebuilt)
-    assert P.generations(sb) == before, f"plain relaunches changed the generation set: {before} -> {P.generations(sb)}"
+        rebuilt += [
+            f"relaunch {n}: {line}"
+            for line in cp.stderr.splitlines()
+            if "source-update dependencies" in line
+            or "interrupted source update" in line
+        ]
+    assert not rebuilt, (
+        "a plain relaunch of a current install re-ran the dependency sync / update tail:\n"
+        + "\n".join(rebuilt)
+    )
+    assert P.generations(sb) == before, (
+        f"plain relaunches changed the generation set: {before} -> {P.generations(sb)}"
+    )
 
 
 def test_gateway_restarts_with_an_owed_tail_do_not_rebuild(home):
@@ -67,9 +78,21 @@ def test_gateway_restarts_with_an_owed_tail_do_not_rebuild(home):
             gw.wait_running()
         finally:
             gw.stop()
-        boots.append({"gens": P.generations(sb), "pending": P.pending_marker(sb).exists(),
-                      "tail": "finishing an interrupted source update" in gw.output()})
+        boots.append(
+            {
+                "gens": P.generations(sb),
+                "pending": P.pending_marker(sb).exists(),
+                "tail": "finishing an interrupted source update" in gw.output(),
+            }
+        )
     grown = [b["gens"] for b in boots if b["gens"] != before]
-    assert not grown, f"gateway restarts built dependency generations: {before} -> {grown}\n" + P.diagnostics(sb)
-    assert not boots[0]["pending"], f"the first gateway start left the owed tail pending: {boots}"
-    assert not any(b["tail"] for b in boots[1:]), f"every gateway start re-runs the source-update tail: {boots}"
+    assert not grown, (
+        f"gateway restarts built dependency generations: {before} -> {grown}\n"
+        + P.diagnostics(sb)
+    )
+    assert not boots[0]["pending"], (
+        f"the first gateway start left the owed tail pending: {boots}"
+    )
+    assert not any(b["tail"] for b in boots[1:]), (
+        f"every gateway start re-runs the source-update tail: {boots}"
+    )

@@ -39,7 +39,10 @@ def _payload(skills: int = 8, memories: int = 3, *, base_ts: int = 1_700_000_000
     return {
         "nodes": nodes,
         "edges": edges,
-        "clusters": [{"category": "devops", "count": skills}, {"category": "memory", "count": memories}],
+        "clusters": [
+            {"category": "devops", "count": skills},
+            {"category": "memory", "count": memories},
+        ],
         "stats": {
             "learned_skills": skills,
             "memory_nodes": memories,
@@ -74,8 +77,6 @@ def test_recency_ink_follows_age_gradient():
     assert samples == sorted(samples)
 
 
-
-
 def test_grid_runs_are_text_style_alpha():
     # Runs are [text, style, alpha] with an optional 4th hex override for
     # category-colored bars.
@@ -91,7 +92,9 @@ def test_grid_runs_are_text_style_alpha():
 
 
 def test_bars_render_skills_and_memories():
-    frame = render.render_graph(_payload(skills=10, memories=4), cols=72, rows=18, reveal=1.0)
+    frame = render.render_graph(
+        _payload(skills=10, memories=4), cols=72, rows=18, reveal=1.0
+    )
     flat = _flatten(frame["grid"])
     # Skills draw as comet trails (━), memories anchor on diamonds (◆).
     assert "━" in flat
@@ -99,18 +102,6 @@ def test_bars_render_skills_and_memories():
     styles = _styles(frame["grid"])
     assert render.STYLE_SKILL in styles
     assert render.STYLE_MEMORY in styles
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_frames_play_through_grows_visibility():
@@ -138,6 +129,10 @@ def test_memory_rows_carry_their_card_body_for_fingerprinted_ids():
     from agent.learning_graph_render import render_frames
 
     payload = build_learning_graph()
-    rows = [n for bucket in render_frames(payload, cols=80, rows=24, frames=1)["buckets"] for n in bucket["nodes"]]
+    rows = [
+        n
+        for bucket in render_frames(payload, cols=80, rows=24, frames=1)["buckets"]
+        for n in bucket["nodes"]
+    ]
 
     assert sorted(n["body"] for n in rows) == ["alpha note", "beta note"]

@@ -38,7 +38,3 @@ def test_apply_custom_provider_tls_to_client_kwargs():
     )
     assert client_kwargs["ssl_ca_cert"] == "/etc/ssl/mkcert-root.pem"
     assert client_kwargs["ssl_verify"] is True
-
-
-
-

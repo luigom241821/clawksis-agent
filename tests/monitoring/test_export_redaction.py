@@ -20,18 +20,10 @@ def test_secret_key_always_stripped():
     assert fake_key not in out
 
 
-
-
 def test_bearer_header_stripped():
     out = R.redact_for_export("Authorization: Bearer abc.def-ghi_jkl")
     assert out is not None
     assert "abc.def-ghi_jkl" not in out
-
-
-
-
-
-
 
 
 def test_structure_preserved():

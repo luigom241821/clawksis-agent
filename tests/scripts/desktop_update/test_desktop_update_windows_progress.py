@@ -116,7 +116,9 @@ def test_progress_advances_while_the_orchestrator_blocks(tmp_path: Path) -> None
         held_stage = "Testing quiet update"
         publish_deadline = time.monotonic() + 10
         first = _read_progress(shim_url, publish_deadline)
-        while first.get("message") != held_stage and time.monotonic() < publish_deadline:
+        while (
+            first.get("message") != held_stage and time.monotonic() < publish_deadline
+        ):
             time.sleep(0.1)
             first = _read_progress(shim_url, publish_deadline)
         assert first["message"] == held_stage, first
@@ -139,7 +141,9 @@ def test_progress_advances_while_the_orchestrator_blocks(tmp_path: Path) -> None
         if process.poll() is None:
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
                 check=False,
             )
             process.wait(timeout=15)

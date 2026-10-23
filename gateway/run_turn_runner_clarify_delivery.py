@@ -31,8 +31,10 @@ def text_fallback_coro(adapter, **send_kwargs):
     repeat the failure."""
     from gateway.platforms.base import BasePlatformAdapter
 
-    if not isinstance(adapter, BasePlatformAdapter) \
-            or type(adapter).send_clarify is BasePlatformAdapter.send_clarify:
+    if (
+        not isinstance(adapter, BasePlatformAdapter)
+        or type(adapter).send_clarify is BasePlatformAdapter.send_clarify
+    ):
         return None
     # A human-decision prompt: Telegram's "important" mode must push it, not deliver it silently (#132516).
     metadata = {**(send_kwargs.pop("metadata", None) or {}), "is_approval_prompt": True}
@@ -64,7 +66,8 @@ def _abort_for_outcome(outcome: str, *, session_key: str, clarify_mod) -> Option
     if outcome == "ambiguous":
         logger.warning(
             "Clarify prompt send timed out — treating as possibly-delivered "
-            "(no teardown; the registration stays armed for a late reply)")
+            "(no teardown; the registration stays armed for a late reply)"
+        )
     return None
 
 
@@ -73,11 +76,20 @@ def _clarify_send_disposition(fut, *, session_key: str, clarify_mod) -> Optional
     from gateway.run import _approval_send_outcome
 
     return _abort_for_outcome(
-        _approval_send_outcome(fut, timeout=SEND_ACK_WINDOW), session_key=session_key, clarify_mod=clarify_mod)
+        _approval_send_outcome(fut, timeout=SEND_ACK_WINDOW),
+        session_key=session_key,
+        clarify_mod=clarify_mod,
+    )
 
 
-def _clarify_send_then_wait(fut, *, clarify_id: str, session_key: str, clarify_mod,
-                            fallback: Optional[Callable[[], Any]] = None) -> tuple[str, bool]:
+def _clarify_send_then_wait(
+    fut,
+    *,
+    clarify_id: str,
+    session_key: str,
+    clarify_mod,
+    fallback: Optional[Callable[[], Any]] = None,
+) -> tuple[str, bool]:
     """Resolve a clarify prompt: send disposition, plain-text fallback, then the bounded wait.
 
     ``fallback()`` schedules the plain-text ``send_clarify`` and returns its future (or ``None``);
@@ -99,12 +111,22 @@ def _clarify_send_then_wait(fut, *, clarify_id: str, session_key: str, clarify_m
         if fut is not None:
             outcome = _approval_send_outcome(fut, timeout=SEND_ACK_WINDOW)
         if outcome == "sent":
-            logger.info("Clarify card undeliverable; plain-text prompt sent instead (id=%s)", clarify_id)
-    abort = _abort_for_outcome(outcome, session_key=session_key, clarify_mod=clarify_mod)
+            logger.info(
+                "Clarify card undeliverable; plain-text prompt sent instead (id=%s)",
+                clarify_id,
+            )
+    abort = _abort_for_outcome(
+        outcome, session_key=session_key, clarify_mod=clarify_mod
+    )
     if abort is not None:
         return abort, False
-    late = _LateFailureWatch(fut, clarify_id=clarify_id, session_key=session_key,
-                             clarify_mod=clarify_mod, fallback=fallback)
+    late = _LateFailureWatch(
+        fut,
+        clarify_id=clarify_id,
+        session_key=session_key,
+        clarify_mod=clarify_mod,
+        fallback=fallback,
+    )
     timeout = clarify_mod.get_clarify_timeout()
     response = clarify_mod.wait_for_response(clarify_id, timeout=float(timeout))
     late.disarm()
@@ -126,7 +148,9 @@ class _LateFailureWatch:
     sentinel, or ``None`` while nothing definitive happened) tells it why.
     Armed only while the future is still pending: a sent card needs no watch."""
 
-    def __init__(self, fut, *, clarify_id: str, session_key: str, clarify_mod, fallback) -> None:
+    def __init__(
+        self, fut, *, clarify_id: str, session_key: str, clarify_mod, fallback
+    ) -> None:
         self.undeliverable: Optional[str] = None
         self._armed = False
         self._clarify_id = clarify_id
@@ -146,6 +170,7 @@ class _LateFailureWatch:
     @staticmethod
     def _outcome(fut) -> str:
         from gateway.run import _approval_send_outcome
+
         return _approval_send_outcome(fut, timeout=0)
 
     def _on_card_done(self, fut) -> None:
@@ -154,7 +179,11 @@ class _LateFailureWatch:
         outcome = self._outcome(fut)
         if outcome == "sent":
             return
-        logger.warning("Clarify card send resolved %s after the ack window (id=%s)", outcome, self._clarify_id)
+        logger.warning(
+            "Clarify card send resolved %s after the ack window (id=%s)",
+            outcome,
+            self._clarify_id,
+        )
         if outcome == "ambiguous":
             # Lost ack (``raw_response.ambiguous``): the card may well have posted. Same invariant as
             # ``_abort_for_outcome`` — stay armed for the late button tap, never re-send, never
@@ -175,7 +204,10 @@ class _LateFailureWatch:
         if not self._armed:
             return
         if self._outcome(fut) == "sent":
-            logger.info("Clarify card undeliverable; plain-text prompt sent instead (id=%s)", self._clarify_id)
+            logger.info(
+                "Clarify card undeliverable; plain-text prompt sent instead (id=%s)",
+                self._clarify_id,
+            )
             return
         self._release()
 

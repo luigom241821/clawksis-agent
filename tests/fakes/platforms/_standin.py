@@ -56,8 +56,13 @@ class Visible:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
-def wait_until(pred: Callable[[], Any], what: str, timeout: float = 60.0, interval: float = 0.05,
-               on_timeout: Optional[Callable[[], str]] = None) -> Any:
+def wait_until(
+    pred: Callable[[], Any],
+    what: str,
+    timeout: float = 60.0,
+    interval: float = 0.05,
+    on_timeout: Optional[Callable[[], str]] = None,
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         got = pred()
@@ -65,7 +70,9 @@ def wait_until(pred: Callable[[], Any], what: str, timeout: float = 60.0, interv
             return got
         if time.monotonic() > deadline:
             ctx = on_timeout() if on_timeout else ""
-            raise AssertionError(f"timed out after {timeout}s waiting for {what}\n{ctx}")
+            raise AssertionError(
+                f"timed out after {timeout}s waiting for {what}\n{ctx}"
+            )
         time.sleep(interval)
 
 
@@ -98,7 +105,9 @@ class StandinServer:
         raise NotImplementedError
 
     def start(self) -> StandinServer:
-        self._thread = threading.Thread(target=self._serve, name=type(self).__name__, daemon=True)
+        self._thread = threading.Thread(
+            target=self._serve, name=type(self).__name__, daemon=True
+        )
         self._thread.start()
         if not self._ready.wait(30):
             raise RuntimeError(f"{type(self).__name__} did not start")
@@ -154,8 +163,16 @@ class StandinServer:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout)
 
     # recording + faults ------------------------------------------------------------------------
-    def record(self, method: str, params: dict[str, Any], response: Any, faulted: bool = False) -> Call:
-        call = Call(method=method, params=params, at=time.monotonic(), response=response, faulted=faulted)
+    def record(
+        self, method: str, params: dict[str, Any], response: Any, faulted: bool = False
+    ) -> Call:
+        call = Call(
+            method=method,
+            params=params,
+            at=time.monotonic(),
+            response=response,
+            faulted=faulted,
+        )
         with self._lock:
             self.calls.append(call)
         return call
@@ -164,8 +181,15 @@ class StandinServer:
         with self._lock:
             return [c for c in self.calls if c.method in methods]
 
-    def fail(self, method: str, body: Any, *, status: int = 200, times: int = 1,
-             match: Optional[Callable[[dict[str, Any]], bool]] = None) -> Fault:
+    def fail(
+        self,
+        method: str,
+        body: Any,
+        *,
+        status: int = 200,
+        times: int = 1,
+        match: Optional[Callable[[dict[str, Any]], bool]] = None,
+    ) -> Fault:
         fault = Fault(method=method, body=body, status=status, times=times, match=match)
         with self._lock:
             self._faults.append(fault)
@@ -192,8 +216,15 @@ class StandinServer:
             rows = self.calls[-last:]
         out = []
         for c in rows:
-            p = {k: (v[:80] + "…" if isinstance(v, str) and len(v) > 80 else v) for k, v in c.params.items()
-                 if k not in ("reply_markup", "blocks", "embeds", "components")}
-            out.append(f"  {'!' if c.faulted else ' '}{c.method} {json.dumps(p, default=str)[:240]}")
-        return f'''--- stand-in calls (last {len(rows):d})\n{"""
-""".join(out)}'''
+            p = {
+                k: (v[:80] + "…" if isinstance(v, str) and len(v) > 80 else v)
+                for k, v in c.params.items()
+                if k not in ("reply_markup", "blocks", "embeds", "components")
+            }
+            out.append(
+                f"  {'!' if c.faulted else ' '}{c.method} {json.dumps(p, default=str)[:240]}"
+            )
+        return f"""--- stand-in calls (last {len(rows):d})\n{
+            '''
+'''.join(out)
+        }"""

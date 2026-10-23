@@ -53,9 +53,13 @@ def plugin_platform():
 def _config_for(name: str):
     platform = Platform(name)
     pconfig = SimpleNamespace(enabled=True, token=None, extra={})
-    return platform, pconfig, SimpleNamespace(
-        platforms={platform: pconfig},
-        get_home_channel=lambda _platform: None,
+    return (
+        platform,
+        pconfig,
+        SimpleNamespace(
+            platforms={platform: pconfig},
+            get_home_channel=lambda _platform: None,
+        ),
     )
 
 
@@ -66,9 +70,7 @@ def test_platform_parser_normalizes_and_validator_rejects(plugin_platform):
         None,
         None,
     )
-    chat_id, thread_id, error = resolve_send_target(
-        name, "@alice@blocked.example"
-    )
+    chat_id, thread_id, error = resolve_send_target(name, "@alice@blocked.example")
     assert chat_id is None
     assert thread_id is None
     assert error
@@ -78,9 +80,7 @@ def test_registered_plugin_rejects_unrecognized_opaque_target(plugin_platform):
     name, _entry, seen = plugin_platform
 
     with patch("gateway.channel_directory.resolve_channel_name", return_value=None):
-        chat_id, thread_id, error = resolve_send_target(
-            name, "dm:opaque-recipient"
-        )
+        chat_id, thread_id, error = resolve_send_target(name, "dm:opaque-recipient")
 
     assert chat_id is None
     assert thread_id is None
@@ -88,7 +88,9 @@ def test_registered_plugin_rejects_unrecognized_opaque_target(plugin_platform):
     assert seen == []
 
 
-def test_plugin_parser_failures_are_diagnosable_without_leaking_exception(plugin_platform):
+def test_plugin_parser_failures_are_diagnosable_without_leaking_exception(
+    plugin_platform,
+):
     name, entry, _seen = plugin_platform
 
     def broken_parser(_ref):
@@ -126,24 +128,36 @@ def test_plugin_validator_custom_diagnostic_blocks_delivery(plugin_platform):
 
 
 @pytest.mark.parametrize("async_handler", [False, True])
-def test_host_send_honors_sync_and_async_plugin_handlers(plugin_platform, async_handler):
+def test_host_send_honors_sync_and_async_plugin_handlers(
+    plugin_platform, async_handler
+):
     name, entry, seen = plugin_platform
     _platform, _pconfig, config = _config_for(name)
 
     if not async_handler:
+
         def sync_handler(args, chat_id, platform_name, pconfig):
-            seen.append({"args": dict(args), "chat_id": chat_id, "platform": platform_name})
+            seen.append(
+                {"args": dict(args), "chat_id": chat_id, "platform": platform_name}
+            )
             return {"success": True, "platform": platform_name, "chat_id": chat_id}
+
         entry.send_message_handler = sync_handler
 
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("tools.interrupt.is_interrupted", return_value=False), \
-         patch("gateway.mirror.mirror_to_session", return_value=True):
-        result = json.loads(send_message_tool({
-            "target": f"{name}:@Alice@Example.COM",
-            "message": "hello",
-            "subject": "greeting",
-        }))
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch("gateway.mirror.mirror_to_session", return_value=True),
+    ):
+        result = json.loads(
+            send_message_tool(
+                {
+                    "target": f"{name}:@Alice@Example.COM",
+                    "message": "hello",
+                    "subject": "greeting",
+                }
+            )
+        )
 
     assert result["success"] is True
     assert result["platform"] == name
@@ -151,7 +165,9 @@ def test_host_send_honors_sync_and_async_plugin_handlers(plugin_platform, async_
     assert seen[-1]["args"]["subject"] == "greeting"
 
 
-def test_cli_and_cron_share_plugin_target_normalization(plugin_platform, monkeypatch, capsys):
+def test_cli_and_cron_share_plugin_target_normalization(
+    plugin_platform, monkeypatch, capsys
+):
     from cron.scheduler_delivery import _resolve_single_delivery_target
     from clawk_cli.send_cmd import cmd_send
 
@@ -168,10 +184,12 @@ def test_cli_and_cron_share_plugin_target_normalization(plugin_platform, monkeyp
     )
 
     monkeypatch.setattr("clawk_cli.send_cmd._load_clawk_env", lambda: None)
-    with patch("gateway.config.load_gateway_config", return_value=config), \
-         patch("tools.interrupt.is_interrupted", return_value=False), \
-         patch("gateway.mirror.mirror_to_session", return_value=True), \
-         pytest.raises(SystemExit) as exc:
+    with (
+        patch("gateway.config.load_gateway_config", return_value=config),
+        patch("tools.interrupt.is_interrupted", return_value=False),
+        patch("gateway.mirror.mirror_to_session", return_value=True),
+        pytest.raises(SystemExit) as exc,
+    ):
         cmd_send(args)
     assert exc.value.code == 0
     assert json.loads(capsys.readouterr().out)["chat_id"] == "@alice@example.com"
@@ -185,8 +203,6 @@ def test_cli_and_cron_share_plugin_target_normalization(plugin_platform, monkeyp
         "thread_id": None,
         "_resolved_from": "explicit",
     }
-
-
 
 
 def test_force_reload_unregisters_profile_owned_platform(plugin_platform, monkeypatch):
@@ -224,7 +240,7 @@ def test_fresh_process_real_plugin_fixture_covers_host_send_and_cron(tmp_path):
         "adapter_factory=lambda cfg: None, check_fn=lambda: True, "
         "parse_target_ref_fn=_parse, send_message_handler=_send)\n"
     )
-    script = r'''
+    script = r"""
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -246,13 +262,15 @@ from cron.scheduler_delivery import _resolve_single_delivery_target
 cron = _resolve_single_delivery_target({}, "fmsg:@Alice@Example.COM")
 print(json.dumps({"host_send": host_send, "cron": cron,
                   "model_registered": registry.get_entry("send_message") is not None}))
-'''
+"""
     env = dict(os.environ)
-    env.update({
-        "CLAWK_HOME": str(home),
-        "CLAWK_KANBAN_TASK": "fixture",
-        "PYTHONPATH": os.getcwd(),
-    })
+    env.update(
+        {
+            "CLAWK_HOME": str(home),
+            "CLAWK_KANBAN_TASK": "fixture",
+            "PYTHONPATH": os.getcwd(),
+        }
+    )
     completed = subprocess.run(
         [sys.executable, "-c", script],
         cwd=os.getcwd(),
@@ -287,10 +305,19 @@ def test_declared_target_syntax_and_standalone_policy_drive_send_routing():
         return NOT_EXPLICIT if ref == "7" else None
 
     name = "fmsg-syntax-test"
-    platform_registry.register(PlatformEntry(
-        name=name, label="Fixture Syntax", adapter_factory=lambda cfg: None, check_fn=lambda: True,
-        target_ref_syntax_fn=syntax, standalone_sender_fn=sender,
-        standalone_send=StandaloneSendPolicy(label="Fixture", media=True, captionable=True)))
+    platform_registry.register(
+        PlatformEntry(
+            name=name,
+            label="Fixture Syntax",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            target_ref_syntax_fn=syntax,
+            standalone_sender_fn=sender,
+            standalone_send=StandaloneSendPolicy(
+                label="Fixture", media=True, captionable=True
+            ),
+        )
+    )
     try:
         with patch("gateway.channel_directory.resolve_channel_name", return_value=None):
             assert resolve_send_target(name, "room-1:th") == ("room-1", "th", None)
@@ -298,9 +325,24 @@ def test_declared_target_syntax_and_standalone_policy_drive_send_routing():
             assert resolve_send_target(name, "42") == ("42", None, None)
             assert resolve_send_target(name, "7")[2]
         media = [(os.path.abspath(__file__).replace(".py", ".png"), False)]
-        result = asyncio.run(_send_to_platform(Platform(name), SimpleNamespace(extra={}), "room-1", "hi",
-                                               media_files=media))
+        result = asyncio.run(
+            _send_to_platform(
+                Platform(name),
+                SimpleNamespace(extra={}),
+                "room-1",
+                "hi",
+                media_files=media,
+            )
+        )
     finally:
         platform_registry.unregister(name)
     assert result == {"success": True}
-    assert calls == [{"chat_id": "room-1", "message": "", "thread_id": None, "media_files": media, "caption": "hi"}]
+    assert calls == [
+        {
+            "chat_id": "room-1",
+            "message": "",
+            "thread_id": None,
+            "media_files": media,
+            "caption": "hi",
+        }
+    ]

@@ -7,6 +7,7 @@ loaded because running scripts is disabled on this system". Past the load,
 the resolved runtime command must actually run (a `$command` local once
 collided with Invoke-Native's `$Command` parameter and recursed forever).
 """
+
 from pathlib import Path
 import json
 import os
@@ -27,19 +28,37 @@ def test_installed_clawk_runs_under_restricted_policy(tmp_path):
     assert powershell
     helper = tmp_path / "install" / "scripts" / "desktop-update" / "runtime.ps1"
     helper.parent.mkdir(parents=True)
-    helper.write_text("function Get-ClawksisRuntimeCommand([string]$InstallRoot) {\n"
-                      "    @('cmd.exe', '/c', 'echo', 'runtime-from', $InstallRoot)\n}\n",
-                      encoding="utf-8")
+    helper.write_text(
+        "function Get-ClawksisRuntimeCommand([string]$InstallRoot) {\n"
+        "    @('cmd.exe', '/c', 'echo', 'runtime-from', $InstallRoot)\n}\n",
+        encoding="utf-8",
+    )
     install_dir = str(helper.parents[2]).replace("'", "''")
     # Definitions load under Bypass (the iex'd text is never policy-checked);
     # the session then drops to Restricted, the policy a fresh machine has.
-    command = (f". '{str(INSTALLER).replace(chr(39), chr(39) * 2)}'; "
-               "Set-ExecutionPolicy -Scope Process Restricted -Force; "
-               f"$InstallDir = '{install_dir}'; "
-               "Invoke-InstalledClawksis @('setup')")
-    result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-                             "-Command", command],
-                            cwd=tmp_path, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60, check=False)
+    command = (
+        f". '{str(INSTALLER).replace(chr(39), chr(39) * 2)}'; "
+        "Set-ExecutionPolicy -Scope Process Restricted -Force; "
+        f"$InstallDir = '{install_dir}'; "
+        "Invoke-InstalledClawksis @('setup')"
+    )
+    result = subprocess.run(
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
+        cwd=tmp_path,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
     output = result.stdout + result.stderr
     assert "running scripts is disabled" not in output, output
     assert f"runtime-from {helper.parents[2]} setup" in result.stdout, output
@@ -61,20 +80,36 @@ def test_installer_runs_runtime_command_from_apostrophe_account_path(tmp_path):
         encoding="utf-8",
     )
     selected = runtime_command(
-        install_root, code="print('setup-runtime-ok')", python=sys.executable,
+        install_root,
+        code="print('setup-runtime-ok')",
+        python=sys.executable,
         home=install_root.parent / ".clawk",
     )
     env = os.environ.copy()
     env["CLAWK_TEST_RUNTIME_COMMAND"] = json.dumps(selected)
     quoted_installer = str(INSTALLER).replace("'", "''")
     quoted_root = str(install_root).replace("'", "''")
-    command = (f". '{quoted_installer}'; "
-               f"$InstallDir = '{quoted_root}'; "
-               "Invoke-InstalledClawksis @('setup')")
+    command = (
+        f". '{quoted_installer}'; "
+        f"$InstallDir = '{quoted_root}'; "
+        "Invoke-InstalledClawksis @('setup')"
+    )
     result = subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
-        cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=60,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ],
+        cwd=tmp_path,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     output = result.stdout + result.stderr

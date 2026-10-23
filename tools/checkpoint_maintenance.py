@@ -9,9 +9,20 @@ from typing import Dict, Optional
 from clawk_cli.gitlock import clear_stale_tmp_packs
 from utils import rmtree_readonly
 from tools.checkpoint_manager import (
-    _GIT_TIMEOUT, _LEGACY_PREFIX, _PRUNE_MARKER_NAME, _REFS_PREFIX, _STORE_DIRNAME,
-    _dir_size_bytes, _index_path, _list_projects, _pre_v2_shadow_repos,
-    _project_meta_path, _ref_name, _resolve_checkpoint_base, _run_git, _store_has_head,
+    _GIT_TIMEOUT,
+    _LEGACY_PREFIX,
+    _PRUNE_MARKER_NAME,
+    _REFS_PREFIX,
+    _STORE_DIRNAME,
+    _dir_size_bytes,
+    _index_path,
+    _list_projects,
+    _pre_v2_shadow_repos,
+    _project_meta_path,
+    _ref_name,
+    _resolve_checkpoint_base,
+    _run_git,
+    _store_has_head,
     _store_path,
 )
 
@@ -25,10 +36,13 @@ logger = logging.getLogger(__name__)
 # store rather than per-project shadow repos.  Legacy-archive dirs
 # (``legacy-<ts>/``) are swept with the same retention policy.
 
+
 def _delete_ref(store: Path, ref: str) -> bool:
     """Delete a ref from the store.  Returns True on success."""
     ok, _, _ = _run_git(
-        ["update-ref", "-d", ref], store, str(store.parent),
+        ["update-ref", "-d", ref],
+        store,
+        str(store.parent),
         allowed_returncodes={128},
     )
     return ok
@@ -187,7 +201,14 @@ def prune_checkpoints(
 
     try:
         with store_lock(base):
-            return _prune_checkpoints(base, result, retention_days, delete_orphans, max_total_size_mb, orphan_allowlist)
+            return _prune_checkpoints(
+                base,
+                result,
+                retention_days,
+                delete_orphans,
+                max_total_size_mb,
+                orphan_allowlist,
+            )
     except (PruneError, OSError) as exc:
         result["errors"] += 1
         logger.warning("Checkpoint maintenance stopped: %s", exc)
@@ -195,8 +216,12 @@ def prune_checkpoints(
 
 
 def _prune_checkpoints(
-    base: Path, result: dict[str, int], retention_days: int, delete_orphans: bool,
-    max_total_size_mb: int, orphan_allowlist: Optional[set],
+    base: Path,
+    result: dict[str, int],
+    retention_days: int,
+    delete_orphans: bool,
+    max_total_size_mb: int,
+    orphan_allowlist: Optional[set],
 ) -> dict[str, int]:
     size_before = _dir_size_bytes(base)
 
@@ -248,7 +273,8 @@ def _prune_checkpoints(
                 # recorded parent identity, so only the structural checks
                 # (parent present + populated / live mount point) apply here.
                 or _workdir_is_observably_gone(
-                    repo["workdir"], require_parent_identity=False,
+                    repo["workdir"],
+                    require_parent_identity=False,
                 )
             )
             and (orphan_allowlist is None or str(child) in orphan_allowlist)
@@ -344,13 +370,20 @@ def _prune_checkpoints(
 
         from tools.checkpoint_pruning import Pruner, PruneError
 
-        pruner = Pruner(_run_git, store, str(base), _GIT_TIMEOUT, _dir_size_bytes, _REFS_PREFIX)
+        pruner = Pruner(
+            _run_git, store, str(base), _GIT_TIMEOUT, _dir_size_bytes, _REFS_PREFIX
+        )
         try:
-            if result["deleted_orphan"] + result["deleted_stale"] or pruner.gc_pending():
+            if (
+                result["deleted_orphan"] + result["deleted_stale"]
+                or pruner.gc_pending()
+            ):
                 pruner.reclaim()
             if not pruner.enforce_size(max_total_size_mb * 1024 * 1024):
                 result["errors"] += 1
-                logger.warning("Checkpoint store remains over its size cap; minimum history retained")
+                logger.warning(
+                    "Checkpoint store remains over its size cap; minimum history retained"
+                )
         except (PruneError, OSError) as exc:
             result["errors"] += 1
             logger.warning("Checkpoint pruning stopped: %s", exc)
@@ -383,15 +416,22 @@ def maybe_auto_prune_checkpoints(
     try:
         if not base.exists():
             out["result"] = {
-                "scanned": 0, "deleted_orphan": 0, "deleted_stale": 0,
-                "errors": 0, "bytes_freed": 0,
+                "scanned": 0,
+                "deleted_orphan": 0,
+                "deleted_stale": 0,
+                "errors": 0,
+                "bytes_freed": 0,
             }
             return out
 
         marker = base / _PRUNE_MARKER_NAME
         now = time.time()
         try:
-            if marker.exists() and now - float(marker.read_text(encoding="utf-8-sig").strip()) < min_interval_hours * 3600:
+            if (
+                marker.exists()
+                and now - float(marker.read_text(encoding="utf-8-sig").strip())
+                < min_interval_hours * 3600
+            ):
                 out["skipped"] = True
                 return out
         except (OSError, ValueError):
@@ -402,8 +442,12 @@ def maybe_auto_prune_checkpoints(
             marker.write_text(str(now), encoding="utf-8")
         except OSError as exc:
             logger.debug("Could not write checkpoint prune marker: %s", exc)
-        result = out["result"] = prune_checkpoints(retention_days=retention_days, delete_orphans=delete_orphans,
-                                                   checkpoint_base=base, max_total_size_mb=max_total_size_mb)
+        result = out["result"] = prune_checkpoints(
+            retention_days=retention_days,
+            delete_orphans=delete_orphans,
+            checkpoint_base=base,
+            max_total_size_mb=max_total_size_mb,
+        )
 
         total = result["deleted_orphan"] + result["deleted_stale"]
         if total > 0:
@@ -429,6 +473,7 @@ def auto_prune_from_config() -> dict[str, object]:
     cleanup is only via explicit ``clawk checkpoints prune``. Never raises."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config().get("checkpoints") or {}
         if not cfg.get("auto_prune", False):
             return {"skipped": True}
@@ -436,7 +481,8 @@ def auto_prune_from_config() -> dict[str, object]:
             retention_days=int(cfg.get("retention_days", 7)),
             min_interval_hours=int(cfg.get("min_interval_hours", 24)),
             delete_orphans=False,
-            max_total_size_mb=int(cfg.get("max_total_size_mb", 500)))
+            max_total_size_mb=int(cfg.get("max_total_size_mb", 500)),
+        )
     except Exception as exc:
         logger.debug("checkpoint auto-maintenance skipped: %s", exc)
         return {"skipped": True, "error": str(exc)}
@@ -450,6 +496,7 @@ def checkpoint_footprint_notice() -> Optional[str]:
     project, so a big store is expected, not broken — the notice names the opt-out. Never raises."""
     try:
         from clawk_cli.config import load_config
+
         cfg = load_config().get("checkpoints") or {}
         if not cfg.get("enabled", False):
             return None
@@ -464,10 +511,13 @@ def checkpoint_footprint_notice() -> Optional[str]:
         store = _store_path(base)
         project_count = len(_list_projects(store)) if _store_has_head(store) else 0
         from clawk_cli.sizefmt import format_bytes
-        return (f"Filesystem checkpoints (/rollback) are on: {format_bytes(size)} across "
-                f"{project_count} project(s), above the {cap_mb} MB cap (one snapshot per project is "
-                f"always kept). Not using /rollback? `clawk config set checkpoints.enabled false` then "
-                f"`clawk checkpoints clear`; or lower `checkpoints.retention_days`.")
+
+        return (
+            f"Filesystem checkpoints (/rollback) are on: {format_bytes(size)} across "
+            f"{project_count} project(s), above the {cap_mb} MB cap (one snapshot per project is "
+            f"always kept). Not using /rollback? `clawk config set checkpoints.enabled false` then "
+            f"`clawk checkpoints clear`; or lower `checkpoints.retention_days`."
+        )
     except Exception as exc:
         logger.debug("checkpoint footprint notice skipped: %s", exc)
         return None
@@ -476,6 +526,7 @@ def checkpoint_footprint_notice() -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Public helpers for `clawk checkpoints` CLI
 # ---------------------------------------------------------------------------
+
 
 def store_status(checkpoint_base: Optional[Path] = None) -> dict:
     """Return a summary of the shadow store.
@@ -514,21 +565,25 @@ def store_status(checkpoint_base: Optional[Path] = None) -> dict:
                 workdir = meta.get("workdir") or ""
                 ref = _ref_name(dir_hash)
                 ok, count_out, _ = _run_git(
-                    ["rev-list", "--count", ref], store, str(base),
+                    ["rev-list", "--count", ref],
+                    store,
+                    str(base),
                     allowed_returncodes={128},
                 )
                 try:
                     commits = int(count_out) if ok else 0
                 except ValueError:
                     commits = 0
-                out["projects"].append({
-                    "hash": dir_hash,
-                    "workdir": workdir,
-                    "exists": bool(workdir) and Path(workdir).exists(),
-                    "created_at": meta.get("created_at"),
-                    "last_touch": meta.get("last_touch"),
-                    "commits": commits,
-                })
+                out["projects"].append(
+                    {
+                        "hash": dir_hash,
+                        "workdir": workdir,
+                        "exists": bool(workdir) and Path(workdir).exists(),
+                        "created_at": meta.get("created_at"),
+                        "last_touch": meta.get("last_touch"),
+                        "commits": commits,
+                    }
+                )
     out["project_count"] = len(out["projects"])
 
     out["pre_v2_projects"] = [
@@ -551,11 +606,13 @@ def store_status(checkpoint_base: Optional[Path] = None) -> dict:
                 mt = child.stat().st_mtime
             except OSError:
                 mt = 0
-            out["legacy_archives"].append({
-                "name": child.name,
-                "size_bytes": size,
-                "mtime": mt,
-            })
+            out["legacy_archives"].append(
+                {
+                    "name": child.name,
+                    "size_bytes": size,
+                    "mtime": mt,
+                }
+            )
 
     out["total_size_bytes"] = _dir_size_bytes(base)
     return out

@@ -42,6 +42,7 @@ def _isolate_env(monkeypatch):
 # authz union: a paired user is authorized regardless of the allowlist
 # --------------------------------------------------------------------------
 
+
 def _make_runner(*, paired: bool):
     from gateway.run import GatewayRunner
 
@@ -80,6 +81,7 @@ def test_unpaired_user_in_allowlist_still_authorized(monkeypatch):
 # B2 mirror: approval writes into the allowlist iff one is configured
 # --------------------------------------------------------------------------
 
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     """A real PairingStore backed by a temp pairing dir."""
@@ -88,6 +90,7 @@ def store(tmp_path, monkeypatch):
     import importlib
 
     import gateway.pairing as pairing_mod
+
     importlib.reload(pairing_mod)
     return pairing_mod.PairingStore()
 
@@ -105,9 +108,11 @@ def test_approval_adds_to_configured_allowlist(store, monkeypatch):
     captured = {}
     import clawk_cli.config as cfg
 
-    monkeypatch.setattr(cfg, "save_env_value",
-                        lambda k, v: (captured.__setitem__(k, v),
-                                      os.environ.__setitem__(k, v)))
+    monkeypatch.setattr(
+        cfg,
+        "save_env_value",
+        lambda k, v: (captured.__setitem__(k, v), os.environ.__setitem__(k, v)),
+    )
 
     _approve_new_user(store, "telegram", "newuser99")
 
@@ -120,9 +125,11 @@ def test_revoke_removes_from_allowlist(store, monkeypatch):
     removed = []
     import clawk_cli.config as cfg
 
-    monkeypatch.setattr(cfg, "save_env_value",
-                        lambda k, v: (saved.__setitem__(k, v),
-                                      os.environ.__setitem__(k, v)))
+    monkeypatch.setattr(
+        cfg,
+        "save_env_value",
+        lambda k, v: (saved.__setitem__(k, v), os.environ.__setitem__(k, v)),
+    )
     monkeypatch.setattr(cfg, "remove_env_value", lambda k: removed.append(k))
     # Seed the approved list directly so revoke has something to remove.
     store._approve_user("telegram", "newuser99", "")
@@ -177,7 +184,9 @@ def test_revoke_whatsapp_removes_all_alias_forms_from_allowlist(store, monkeypat
     assert saved.get("WHATSAPP_ALLOWED_USERS") == "keeper"
 
 
-def test_revoke_whatsapp_cloud_device_jid_removes_bare_allowlist_entry(store, monkeypatch):
+def test_revoke_whatsapp_cloud_device_jid_removes_bare_allowlist_entry(
+    store, monkeypatch
+):
     """Cloud pairing uses platform whatsapp_cloud — same JID/phone alias rules."""
     monkeypatch.setenv("WHATSAPP_CLOUD_ALLOWED_USERS", "already,15551234567")
     saved = {}
@@ -216,7 +225,8 @@ def test_revoke_whatsapp_preserves_wildcard_allowlist_entry(store, monkeypatch):
 
 
 def test_revoke_whatsapp_sole_entry_denies_live_adapter_without_restart(
-    store, monkeypatch,
+    store,
+    monkeypatch,
 ):
     """Sole allowlist entry revoke must deny immediately on a live gateway.
 
@@ -278,15 +288,18 @@ def test_revoke_whatsapp_sole_entry_denies_live_adapter_without_restart(
     store._approve_user("whatsapp", "15551234567@s.whatsapp.net", "")
     sender = "15551234567:47@s.whatsapp.net"
     assert adapter._is_dm_intake_allowed(sender) is True
-    assert runner._is_user_authorized(
-        SessionSource(
-            platform=Platform.WHATSAPP,
-            user_id=sender,
-            chat_id=sender,
-            user_name="revoked",
-            chat_type="dm",
+    assert (
+        runner._is_user_authorized(
+            SessionSource(
+                platform=Platform.WHATSAPP,
+                user_id=sender,
+                chat_id=sender,
+                user_name="revoked",
+                chat_type="dm",
+            )
         )
-    ) is True
+        is True
+    )
 
     assert store.revoke("whatsapp", sender) is True
     assert store.is_approved("whatsapp", "15551234567@s.whatsapp.net") is False
@@ -294,15 +307,18 @@ def test_revoke_whatsapp_sole_entry_denies_live_adapter_without_restart(
     assert "15551234567" not in (adapter._allow_from or set())
     assert adapter._is_dm_intake_allowed(sender) is False
     assert adapter._is_dm_allowed(sender) is False
-    assert runner._is_user_authorized(
-        SessionSource(
-            platform=Platform.WHATSAPP,
-            user_id=sender,
-            chat_id=sender,
-            user_name="revoked",
-            chat_type="dm",
+    assert (
+        runner._is_user_authorized(
+            SessionSource(
+                platform=Platform.WHATSAPP,
+                user_id=sender,
+                chat_id=sender,
+                user_name="revoked",
+                chat_type="dm",
+            )
         )
-    ) is False
+        is False
+    )
 
 
 def test_whatsapp_live_allowlist_keeps_explicit_config_over_env(monkeypatch):
@@ -397,7 +413,9 @@ def test_whatsapp_live_allowlist_denies_when_env_key_removed(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_matrix_pairing_revoke_denies_live_message_and_approval_without_restart(store):
+async def test_matrix_pairing_revoke_denies_live_message_and_approval_without_restart(
+    store,
+):
     """The runner's live pairing verdict must gate both Matrix messages and approvals."""
     from unittest.mock import AsyncMock, patch
 
@@ -409,7 +427,10 @@ async def test_matrix_pairing_revoke_denies_live_message_and_approval_without_re
     room_id = "!room:example.org"
     config = PlatformConfig(
         enabled=True,
-        extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
+        extra={
+            "homeserver": "https://matrix.example.org",
+            "user_id": "@bot:example.org",
+        },
     )
     adapter = MatrixAdapter(config)
     runner = object.__new__(GatewayRunner)
@@ -450,7 +471,9 @@ async def test_matrix_pairing_revoke_denies_live_message_and_approval_without_re
             room_id=room_id,
             content={"m.relates_to": {"event_id": prompt_id, "key": "✅"}},
         )
-        with patch("tools.approval.resolve_gateway_approval", return_value=1) as resolve:
+        with patch(
+            "tools.approval.resolve_gateway_approval", return_value=1
+        ) as resolve:
             await adapter._on_reaction(event)
         return prompt, resolve
 
@@ -496,7 +519,10 @@ def test_matrix_pairing_revoke_purges_live_allowlist_snapshot(store, monkeypatch
     adapter = MatrixAdapter(
         PlatformConfig(
             enabled=True,
-            extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
+            extra={
+                "homeserver": "https://matrix.example.org",
+                "user_id": "@bot:example.org",
+            },
         )
     )
     assert adapter._is_authorized_user(paired_id) is True

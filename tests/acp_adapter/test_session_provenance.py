@@ -42,9 +42,7 @@ def test_compression_split_continuation(db):
     time.sleep(0.001)
     _mk(db, "new", parent="old")
 
-    prov = build_session_provenance(
-        db, "acp-1", "new", previous_clawk_session_id="old"
-    )
+    prov = build_session_provenance(db, "acp-1", "new", previous_clawk_session_id="old")
     assert prov["sessionKind"] == "continuation"
     assert prov["parentClawksisSessionId"] == "old"
     assert prov["rootClawksisSessionId"] == "old"
@@ -53,8 +51,6 @@ def test_compression_split_continuation(db):
     # Head rotated this turn → reason/creatorKind flagged.
     assert prov["reason"] == "compression"
     assert prov["creatorKind"] == "compression"
-
-
 
 
 def test_non_compression_parent_is_root_not_continuation(db):
@@ -66,10 +62,6 @@ def test_non_compression_parent_is_root_not_continuation(db):
     assert prov["sessionKind"] == "root"
     assert prov["compressionDepth"] == 0
     assert prov["rootClawksisSessionId"] == "p"  # lineage root still walked
-
-
-
-
 
 
 def test_meta_wrapper_shape(db):

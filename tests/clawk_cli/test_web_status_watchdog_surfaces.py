@@ -5,6 +5,7 @@
 * A watchdog hard-exited the process (``degraded`` + watchdog ``exit_reason``, PID gone) -> the
   retained verdict stays ``degraded`` with its ``gateway_exit_reason`` instead of a bare ``stopped``.
 """
+
 from datetime import datetime, timedelta, timezone, UTC
 
 import pytest
@@ -33,8 +34,14 @@ def client(monkeypatch):
 
 
 def test_status_reports_stale_heartbeat_when_pid_alive(client, monkeypatch):
-    record = {"gateway_state": "running", "pid": 1234, "start_time": 111.0,
-              "updated_at": _iso_age(900), "platforms": {}, "active_agents": 0}
+    record = {
+        "gateway_state": "running",
+        "pid": 1234,
+        "start_time": 111.0,
+        "updated_at": _iso_age(900),
+        "platforms": {},
+        "active_agents": 0,
+    }
     monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda: 1234)
     monkeypatch.setattr(_gw_status, "read_runtime_status", lambda: record)
 
@@ -47,9 +54,17 @@ def test_status_reports_stale_heartbeat_when_pid_alive(client, monkeypatch):
     assert client.get("/api/status").json()["gateway_heartbeat_stale_s"] is None
 
 
-def test_status_keeps_watchdog_degraded_verdict_and_reason_for_dead_pid(client, monkeypatch):
-    record = {"gateway_state": "degraded", "exit_reason": "loop_liveness_watchdog",
-              "pid": 999_999_999, "start_time": 1.0, "updated_at": _iso_age(30), "platforms": {}}
+def test_status_keeps_watchdog_degraded_verdict_and_reason_for_dead_pid(
+    client, monkeypatch
+):
+    record = {
+        "gateway_state": "degraded",
+        "exit_reason": "loop_liveness_watchdog",
+        "pid": 999_999_999,
+        "start_time": 1.0,
+        "updated_at": _iso_age(30),
+        "platforms": {},
+    }
     monkeypatch.setattr(_gw_status, "get_running_pid_cached", lambda: None)
     monkeypatch.setattr(_gw_status, "read_runtime_status", lambda: record)
 

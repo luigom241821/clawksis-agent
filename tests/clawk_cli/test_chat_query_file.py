@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 
+
 def _parse(argv):
     sys.path.insert(0, str(REPO))
     try:
@@ -23,10 +24,12 @@ def _parse(argv):
     finally:
         sys.path.remove(str(REPO))
 
+
 def test_chat_parser_accepts_query_file():
     args = _parse(["chat", "--query-file", "/tmp/x.txt"])
     assert args.query_file == "/tmp/x.txt"
     assert args.query is None
+
 
 def test_query_and_query_file_mutually_exclusive(tmp_path):
     """argparse rejects -q + --query-file at parse time (exit 2), no env needed."""

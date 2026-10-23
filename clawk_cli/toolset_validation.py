@@ -6,7 +6,9 @@ from typing import Callable, List, Optional
 from clawk_cli.platforms import PLATFORMS
 from clawk_cli.toolset_scope import toolset_allowed_for_platform
 
-_NO_TOOLS = "the agent will have no tools on this platform. Run `clawk tools` to reconfigure."
+_NO_TOOLS = (
+    "the agent will have no tools on this platform. Run `clawk tools` to reconfigure."
+)
 
 
 def parse_platform_toolsets_value(value: object) -> Optional[list[str]]:
@@ -36,9 +38,14 @@ def _platform_default_toolset(platform: object) -> str:
 
 
 def _platform_default_is_valid(
-    platform: object, default_toolset: str, is_valid_toolset: Callable[[str], bool],
-    is_allowed_for_platform: Callable[[str, str], bool]) -> bool:
-    if is_valid_toolset(default_toolset) and is_allowed_for_platform(default_toolset, str(platform)):
+    platform: object,
+    default_toolset: str,
+    is_valid_toolset: Callable[[str], bool],
+    is_allowed_for_platform: Callable[[str, str], bool],
+) -> bool:
+    if is_valid_toolset(default_toolset) and is_allowed_for_platform(
+        default_toolset, str(platform)
+    ):
         return True
     # Dynamic plugin platforms are resolved by toolsets.resolve_toolset() even though their synthesized
     # clawk-<platform> name is not in TOOLSETS.
@@ -62,28 +69,44 @@ def saved_toolset_resolver(config: dict) -> Callable[[str], bool]:
     from toolsets import validate_toolset
 
     mcp_servers = config.get("mcp_servers")
-    servers = {str(name) for name in mcp_servers} if isinstance(mcp_servers, dict) else set()
+    servers = (
+        {str(name) for name in mcp_servers} if isinstance(mcp_servers, dict) else set()
+    )
     known = servers | {f"mcp-{name}" for name in servers} | {"no_mcp"}
 
     @cache
     def platform_bundles() -> frozenset:
         from clawk_cli.config import _platform_plugin_manifests
 
-        return frozenset(f"clawk-{name}" for name, _manifest in _platform_plugin_manifests())
+        return frozenset(
+            f"clawk-{name}" for name, _manifest in _platform_plugin_manifests()
+        )
 
     @cache
     def plugin_names() -> frozenset:
-        from clawk_cli.plugins import get_plugin_toolset_keys_nowait, get_portable_mcp_server_names_nowait
+        from clawk_cli.plugins import (
+            get_plugin_toolset_keys_nowait,
+            get_portable_mcp_server_names_nowait,
+        )
 
         portable = get_portable_mcp_server_names_nowait()
-        return frozenset(get_plugin_toolset_keys_nowait() | portable | {f"mcp-{name}" for name in portable})
+        return frozenset(
+            get_plugin_toolset_keys_nowait()
+            | portable
+            | {f"mcp-{name}" for name in portable}
+        )
 
-    return lambda name: (validate_toolset(name) or name in known
-                         or name in platform_bundles() or name in plugin_names())
+    return lambda name: (
+        validate_toolset(name)
+        or name in known
+        or name in platform_bundles()
+        or name in plugin_names()
+    )
 
 
 def validate_platform_toolsets(
-    platform_toolsets: object, is_valid_toolset: Callable[[str], bool],
+    platform_toolsets: object,
+    is_valid_toolset: Callable[[str], bool],
     is_allowed_for_platform: Callable[[str, str], bool] = toolset_allowed_for_platform,
 ) -> list[str]:
     """Return human-readable warnings for a ``platform_toolsets`` mapping.
@@ -99,14 +122,20 @@ def validate_platform_toolsets(
     valid_count = 0
     for platform, raw in platform_toolsets.items():
         default = _platform_default_toolset(platform)
-        default_valid = _platform_default_is_valid(platform, default, is_valid_toolset, is_allowed_for_platform)
+        default_valid = _platform_default_is_valid(
+            platform, default, is_valid_toolset, is_allowed_for_platform
+        )
         platform_valid_count = 0
         toolsets = parse_platform_toolsets_value(raw)
         if toolsets is None:
             if default_valid:
                 valid_count += 1
                 platform_valid_count += 1
-            fallback_detail = f"falling back to '{default}'" if default_valid else f"falling back to unknown default '{default}'"
+            fallback_detail = (
+                f"falling back to '{default}'"
+                if default_valid
+                else f"falling back to unknown default '{default}'"
+            )
             if raw is None:
                 value_detail = "a null toolset value"
             elif isinstance(raw, str):
@@ -115,9 +144,12 @@ def validate_platform_toolsets(
                 value_detail = f"invalid {type(raw).__name__} toolset value"
             warnings.append(
                 f"platform '{platform}' has {value_detail} — "
-                f"{fallback_detail}. Run `clawk tools` to configure explicitly.")
+                f"{fallback_detail}. Run `clawk tools` to configure explicitly."
+            )
             if platform_valid_count == 0:
-                warnings.append(f"platform '{platform}' has no valid toolsets configured — {_NO_TOOLS}")
+                warnings.append(
+                    f"platform '{platform}' has no valid toolsets configured — {_NO_TOOLS}"
+                )
             continue
 
         for name in toolsets:
@@ -125,7 +157,9 @@ def validate_platform_toolsets(
                 continue
             if not is_valid_toolset(name):
                 hint = f" — did you mean '{default}'?" if default_valid else ""
-                warnings.append(f"platform '{platform}' references unknown toolset '{name}'{hint}")
+                warnings.append(
+                    f"platform '{platform}' references unknown toolset '{name}'{hint}"
+                )
             elif is_allowed_for_platform(name, str(platform)):
                 valid_count += 1
                 platform_valid_count += 1
@@ -135,11 +169,16 @@ def validate_platform_toolsets(
                 )
 
         if platform_valid_count == 0:
-            reason = "is configured with an empty toolset list" if not toolsets else "has no valid toolsets configured"
+            reason = (
+                "is configured with an empty toolset list"
+                if not toolsets
+                else "has no valid toolsets configured"
+            )
             warnings.append(f"platform '{platform}' {reason} — {_NO_TOOLS}")
 
     if valid_count == 0:
         warnings.append(
             "platform_toolsets resolves to zero valid toolsets — the agent will "
-            "have no tools. Run `clawk tools` to reconfigure.")
+            "have no tools. Run `clawk tools` to reconfigure."
+        )
     return warnings

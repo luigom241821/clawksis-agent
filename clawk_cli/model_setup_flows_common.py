@@ -30,8 +30,14 @@ def _say(*lines: str) -> None:
     print("\n".join(lines))
 
 
-def _ask(prompt: str, *, secret: bool = False, raw: bool = False, cancel_msg: str | None = "\nCancelled.",
-         on_cancel=None):
+def _ask(
+    prompt: str,
+    *,
+    secret: bool = False,
+    raw: bool = False,
+    cancel_msg: str | None = "\nCancelled.",
+    on_cancel=None,
+):
     """One stripped prompt answer. ``raw`` uses builtin ``input`` (numbered fallbacks),
     ``secret`` the masked prompt, else ``line_input``. Ctrl-C/EOF prints *cancel_msg*
     (``None`` = silent) and returns *on_cancel*."""
@@ -50,27 +56,36 @@ def _ask(prompt: str, *, secret: bool = False, raw: bool = False, cancel_msg: st
 def _existing_api_key_for_model_flow(provider_id: str, pconfig) -> tuple[str, str]:
     """Resolve an existing wizard credential without changing its storage."""
     from clawk_cli.auth import _resolve_api_key_provider_secret
+
     return _resolve_api_key_provider_secret(provider_id, pconfig)
 
 
-def _ensure_flow_api_key(provider_id: str, pconfig, *, missing_hint=()) -> tuple[str, str, bool]:
+def _ensure_flow_api_key(
+    provider_id: str, pconfig, *, missing_hint=()
+) -> tuple[str, str, bool]:
     """Resolve the stored key, print *missing_hint* lines when none exists, then run
     ``_prompt_api_key`` (users can replace a stale key in-flow via K/R/C).
 
     Returns ``(existing_key, resolved_key, abort)``.
     """
     from clawk_cli.main_provider_setup import _prompt_api_key
-    existing_key, existing_source = _existing_api_key_for_model_flow(provider_id, pconfig)
+
+    existing_key, existing_source = _existing_api_key_for_model_flow(
+        provider_id, pconfig
+    )
     if not existing_key:
         for line in missing_hint:
             print(line)
-    resolved, abort = _prompt_api_key(pconfig, existing_key, provider_id=provider_id, existing_source=existing_source)
+    resolved, abort = _prompt_api_key(
+        pconfig, existing_key, provider_id=provider_id, existing_source=existing_source
+    )
     return existing_key, resolved, abort
 
 
 def _load_config_model_section() -> tuple[dict, dict]:
     """Return ``(cfg, cfg["model"])`` with the model section coerced to a dict."""
     from clawk_cli.config import load_config
+
     cfg = load_config()
     model = cfg.get("model")
     if not isinstance(model, dict):
@@ -83,6 +98,7 @@ def _begin_model_config(selected: str, provider: str) -> tuple[dict, dict]:
     """Record *selected* as the model choice and open the config model section
     with ``provider`` set; callers set endpoint fields then ``_commit_model_config``."""
     from clawk_cli.auth import _save_model_choice
+
     _save_model_choice(selected)
     cfg, model = _load_config_model_section()
     model["provider"] = provider
@@ -93,13 +109,22 @@ def _commit_model_config(cfg: dict) -> None:
     """Persist *cfg* and deactivate any OAuth provider."""
     from clawk_cli.auth import deactivate_provider
     from clawk_cli.config import save_config
+
     save_config(cfg)
     deactivate_provider()
 
 
-def _persist_model(selected: str, provider: str, *, base_url: str | None = None, api_mode: str | None = None,
-                   drop_base_url: bool = False, drop_api_mode: bool = False, clear_creds: bool = True,
-                   finish=None) -> dict:
+def _persist_model(
+    selected: str,
+    provider: str,
+    *,
+    base_url: str | None = None,
+    api_mode: str | None = None,
+    drop_base_url: bool = False,
+    drop_api_mode: bool = False,
+    clear_creds: bool = True,
+    finish=None,
+) -> dict:
     """The standard persist step: ``_save_model_choice`` → model section with ``provider``,
     ``base_url`` then ``api_mode`` (that order is the config.yaml key order) → scrub inline
     endpoint credentials (``clear_creds``; ``drop_api_mode`` also pops ``api_mode``) →
@@ -121,7 +146,9 @@ def _persist_model(selected: str, provider: str, *, base_url: str | None = None,
     return model
 
 
-def _finish_model(selected, provider: str, done: str, *, no_change: str = "No change.", **persist_kw):
+def _finish_model(
+    selected, provider: str, done: str, *, no_change: str = "No change.", **persist_kw
+):
     """``_persist_model`` + confirmation line when *selected*, else the no-change line.
     Returns the saved model section (None when nothing was selected)."""
     if not selected:
@@ -132,11 +159,17 @@ def _finish_model(selected, provider: str, done: str, *, no_change: str = "No ch
     return model
 
 
-def _activate_provider_model(selected, provider_id: str, base_url: str, done: str,
-                             no_change: str | None = "No change.") -> None:
+def _activate_provider_model(
+    selected,
+    provider_id: str,
+    base_url: str,
+    done: str,
+    no_change: str | None = "No change.",
+) -> None:
     """OAuth-provider persist: model choice + ``_update_config_for_provider`` (which owns
     the auth-state bookkeeping), then *done*; *no_change* (``None`` = silent) otherwise."""
     from clawk_cli.auth import _save_model_choice, _update_config_for_provider
+
     if not selected:
         if no_change is not None:
             print(no_change)
@@ -159,6 +192,7 @@ def _pick_model_or_prompt(model_list, prompt: str, **kwargs):
     """Radio picker when *model_list* is non-empty, else a free-text ``line_input``
     (None on Ctrl-C/EOF)."""
     from clawk_cli.auth import _prompt_model_selection
+
     if model_list:
         return _prompt_model_selection(model_list, **kwargs)
     return _ask(prompt, cancel_msg=None)
@@ -169,11 +203,16 @@ def _login_retry_context(args) -> tuple[str, str]:
     among its positional args. Nous keeps ``clawk portal``; every other OAuth provider is retried
     with ``clawk auth add <provider>`` and named by its own portal host (``clawk login`` no longer
     exists). Falls back to ``clawk model`` when no provider config is in play."""
-    pconfig = next((a for a in args if hasattr(a, "id") and hasattr(a, "portal_base_url")), None)
+    pconfig = next(
+        (a for a in args if hasattr(a, "id") and hasattr(a, "portal_base_url")), None
+    )
     if pconfig is None:
         return "clawk model", "the sign-in service"
     provider_id = str(getattr(pconfig, "id", "") or "")
-    host = urlparse(str(getattr(pconfig, "portal_base_url", "") or "")).hostname or "the sign-in service"
+    host = (
+        urlparse(str(getattr(pconfig, "portal_base_url", "") or "")).hostname
+        or "the sign-in service"
+    )
     if provider_id == "nous":
         return "clawk portal", host
     return (f"clawk auth add {provider_id}" if provider_id else "clawk model"), host
@@ -188,6 +227,7 @@ def _run_login(login_fn, *args, **kwargs) -> bool:
     helper that printed nothing) gets a one-line explanation so the user is never left with no
     output."""
     from clawk_cli.auth_error_copy import sign_in_failure_lines
+
     retry_command, service_host = _login_retry_context(args)
     try:
         login_fn(*args, **kwargs)
@@ -201,13 +241,22 @@ def _run_login(login_fn, *args, **kwargs) -> bool:
             print(f"Sign-in did not complete; run `{retry_command}` to try again.")
         return False
     except Exception as exc:
-        for line in sign_in_failure_lines(exc, service_host=service_host, retry_command=retry_command):
+        for line in sign_in_failure_lines(
+            exc, service_host=service_host, retry_command=retry_command
+        ):
             print(line)
         return False
     return True
 
 
-def _oauth_gate(logged_in: bool, name: str, login_fn, *login_args, fresh_name: str = "", recheck=None) -> bool:
+def _oauth_gate(
+    logged_in: bool,
+    name: str,
+    login_fn,
+    *login_args,
+    fresh_name: str = "",
+    recheck=None,
+) -> bool:
     """Login-or-reuse step for OAuth providers. Not logged in → start a login. Logged in →
     use / reauthenticate (``force_new_login``; *recheck()* must then report logged in) /
     cancel. Returns False when the flow must stop."""
@@ -235,13 +284,19 @@ def _models_dev_merged(provider_id: str, curated) -> list:
     models.dev order ahead of curated, matching ``_profile_live_catalog``. Empty list when
     models.dev has nothing / is unavailable."""
     from clawk_cli.models_catalog_static import _LIVE_FIRST_PICKER_PROVIDERS
+
     mdev_models: list = []
     with contextlib.suppress(Exception):
         from agent.models_dev import list_agentic_models
+
         mdev_models = list_agentic_models(provider_id)
     if not mdev_models:
         return []
-    primary, secondary = (mdev_models, curated) if provider_id in _LIVE_FIRST_PICKER_PROVIDERS else (curated, mdev_models)
+    primary, secondary = (
+        (mdev_models, curated)
+        if provider_id in _LIVE_FIRST_PICKER_PROVIDERS
+        else (curated, mdev_models)
+    )
     canonical = {m.lower(): m for m in mdev_models}
     merged: dict = {}
     for m in [*primary, *secondary]:
@@ -251,15 +306,22 @@ def _models_dev_merged(provider_id: str, curated) -> list:
 
 def _show_curated(model_list) -> None:
     if model_list:
-        print(f'  Showing {len(model_list)} curated models — use "Enter custom model name" for others.')
+        print(
+            f'  Showing {len(model_list)} curated models — use "Enter custom model name" for others.'
+        )
 
 
-def _prune_replaced_custom_model_config_credentials(base_url: str, *, provider_name: str = "") -> None:
+def _prune_replaced_custom_model_config_credentials(
+    base_url: str, *, provider_name: str = ""
+) -> None:
     """Drop stale ``model_config`` ("the credential under ``model.api_key``") entries from inactive
     custom pools: after an explicit custom-endpoint switch an old pool still carrying that source
     points at the previous endpoint and could be selected before the fresh config."""
     try:
-        from agent.credential_pool import CUSTOM_POOL_PREFIX, custom_provider_pool_key_candidates
+        from agent.credential_pool import (
+            CUSTOM_POOL_PREFIX,
+            custom_provider_pool_key_candidates,
+        )
         from clawk_cli.auth import read_credential_pool, write_credential_pool
 
         # A keyed ``providers.<key>`` endpoint stores under the durable slug while
@@ -268,7 +330,10 @@ def _prune_replaced_custom_model_config_credentials(base_url: str, *, provider_n
         # See #100413.
         active_pool_keys = {
             str(key).strip().lower()
-            for key in custom_provider_pool_key_candidates(base_url, provider_name=provider_name or None)}
+            for key in custom_provider_pool_key_candidates(
+                base_url, provider_name=provider_name or None
+            )
+        }
         if not active_pool_keys:
             return
         pools = read_credential_pool(None)
@@ -279,13 +344,22 @@ def _prune_replaced_custom_model_config_credentials(base_url: str, *, provider_n
                 not isinstance(pool_key, str)
                 or not pool_key.startswith(CUSTOM_POOL_PREFIX)
                 or pool_key in active_pool_keys
-                or not isinstance(entries, list)):
+                or not isinstance(entries, list)
+            ):
                 continue
-            retained = [e for e in entries if not (isinstance(e, dict) and e.get("source") == "model_config")]
+            retained = [
+                e
+                for e in entries
+                if not (isinstance(e, dict) and e.get("source") == "model_config")
+            ]
             if len(retained) != len(entries):
                 removed_ids = [
-                    str(e["id"]) for e in entries
-                    if isinstance(e, dict) and e.get("source") == "model_config" and e.get("id")]
+                    str(e["id"])
+                    for e in entries
+                    if isinstance(e, dict)
+                    and e.get("source") == "model_config"
+                    and e.get("id")
+                ]
                 write_credential_pool(pool_key, retained, removed_ids=removed_ids)
     except Exception:
         return
@@ -296,6 +370,7 @@ def _curses_choice(title: str, rows: list, default_idx: int):
     non-TTY) so the caller can fall back to a numbered prompt."""
     try:
         from clawk_cli.setup import _curses_prompt_choice
+
         return _curses_prompt_choice(title, rows, default_idx)
     except Exception:
         return None
@@ -306,7 +381,10 @@ def _radiolist(title: str, items: list, default_idx: int = 0, **kw):
     caller can fall back to a numbered prompt."""
     try:
         from clawk_cli.curses_ui import curses_radiolist
-        return curses_radiolist(title, items, selected=default_idx, cancel_returns=-1, **kw)
+
+        return curses_radiolist(
+            title, items, selected=default_idx, cancel_returns=-1, **kw
+        )
     except (ImportError, NotImplementedError, OSError, subprocess.SubprocessError):
         return None
 

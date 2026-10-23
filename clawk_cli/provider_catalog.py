@@ -20,7 +20,13 @@ from dataclasses import dataclass
 # ProviderProfile: external_process = copilot-acp (spawns `copilot --acp --stdio`), copilot = GitHub
 # Copilot token / gh auth.
 _ACCOUNTS_AUTH_TYPES: frozenset[str] = frozenset(
-    {"oauth_device_code", "oauth_external", "oauth_minimax", "external_process", "copilot"}
+    {
+        "oauth_device_code",
+        "oauth_external",
+        "oauth_minimax",
+        "external_process",
+        "copilot",
+    }
 )
 
 
@@ -28,15 +34,15 @@ _ACCOUNTS_AUTH_TYPES: frozenset[str] = frozenset(
 class ProviderDescriptor:
     """One provider, as seen by every surface (CLI picker + both GUI tabs)."""
 
-    slug: str                      # canonical id, e.g. "openai-codex"
-    label: str                     # human display name
-    description: str               # one-line description
-    auth_type: str                 # api_key | oauth_* | external_process | copilot | aws_sdk
-    tab: str                       # "keys" | "accounts"
+    slug: str  # canonical id, e.g. "openai-codex"
+    label: str  # human display name
+    description: str  # one-line description
+    auth_type: str  # api_key | oauth_* | external_process | copilot | aws_sdk
+    tab: str  # "keys" | "accounts"
     api_key_env_vars: tuple[str, ...]  # credential env vars (may be empty)
-    base_url_env_var: str          # base-URL override env var (may be "")
-    signup_url: str                # signup / console URL (may be "")
-    order: int                     # CANONICAL_PROVIDERS index — mirrors `clawk model`
+    base_url_env_var: str  # base-URL override env var (may be "")
+    signup_url: str  # signup / console URL (may be "")
+    order: int  # CANONICAL_PROVIDERS index — mirrors `clawk model`
 
 
 def tab_for_auth_type(auth_type: str) -> str:
@@ -50,7 +56,9 @@ def _is_url_var(name: str) -> bool:
 
 def _split_env_vars(env_vars: tuple[str, ...]) -> tuple[tuple[str, ...], str]:
     """Split a profile's ``env_vars`` into (api_key_vars, base_url_var)."""
-    return tuple(v for v in env_vars if not _is_url_var(v)), next((v for v in env_vars if _is_url_var(v)), "")
+    return tuple(v for v in env_vars if not _is_url_var(v)), next(
+        (v for v in env_vars if _is_url_var(v)), ""
+    )
 
 
 def _safe_import(module: str, attr: str, default):
@@ -68,6 +76,7 @@ def provider_catalog() -> list[ProviderDescriptor]:
     auto-extended by provider plugins). Auth/env from ``PROVIDER_REGISTRY``; display metadata from
     ``ProviderProfile`` with canonical/env fallbacks so profile-less providers still resolve."""
     from clawk_cli.models_catalog_static import listed_canonical_providers
+
     PROVIDER_REGISTRY = _safe_import("clawk_cli.auth", "PROVIDER_REGISTRY", {})
     OPTIONAL_ENV_VARS = _safe_import("clawk_cli.config", "OPTIONAL_ENV_VARS", {})
     # Overlays carry auth_type for providers with no registry/profile entry — notably the ``moa``
@@ -75,6 +84,7 @@ def provider_catalog() -> list[ProviderDescriptor]:
     CLAWK_OVERLAYS = _safe_import("clawk_cli.providers", "CLAWK_OVERLAYS", {})
     try:
         from providers import list_providers
+
         profiles = {p.name: p for p in list_providers()}
     except Exception:
         profiles = {}
@@ -85,11 +95,18 @@ def provider_catalog() -> list[ProviderDescriptor]:
         prof = profiles.get(slug)
         overlay = CLAWK_OVERLAYS.get(slug)
         # auth_type: registry is authoritative; then profile, then overlay (moa → "virtual"), then api_key.
-        auth_type = ((cfg.auth_type if cfg else "") or (prof.auth_type if prof else "")
-                     or (overlay.auth_type if overlay else "") or "api_key")
+        auth_type = (
+            (cfg.auth_type if cfg else "")
+            or (prof.auth_type if prof else "")
+            or (overlay.auth_type if overlay else "")
+            or "api_key"
+        )
         # Credential env vars: registry first (already normalized), else derived from the profile.
         if cfg and cfg.api_key_env_vars:
-            api_key_vars, base_url_var = tuple(cfg.api_key_env_vars), cfg.base_url_env_var or ""
+            api_key_vars, base_url_var = (
+                tuple(cfg.api_key_env_vars),
+                cfg.base_url_env_var or "",
+            )
         elif prof and prof.env_vars:
             api_key_vars, base_url_var = _split_env_vars(tuple(prof.env_vars))
         else:
@@ -100,9 +117,17 @@ def provider_catalog() -> list[ProviderDescriptor]:
             signup_url = (OPTIONAL_ENV_VARS.get(api_key_vars[0]) or {}).get("url") or ""
         out.append(
             ProviderDescriptor(
-                slug=slug, label=label, description=(prof.description if prof else "") or entry.tui_desc or label,
-                auth_type=auth_type, tab=tab_for_auth_type(auth_type), api_key_env_vars=api_key_vars,
-                base_url_env_var=base_url_var, signup_url=signup_url, order=order,
+                slug=slug,
+                label=label,
+                description=(prof.description if prof else "")
+                or entry.tui_desc
+                or label,
+                auth_type=auth_type,
+                tab=tab_for_auth_type(auth_type),
+                api_key_env_vars=api_key_vars,
+                base_url_env_var=base_url_var,
+                signup_url=signup_url,
+                order=order,
             )
         )
     return out

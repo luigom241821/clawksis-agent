@@ -18,10 +18,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
 class TestCompressionBoundaryHook:
     def _make_agent(self, session_db):
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",
@@ -62,25 +64,21 @@ class TestCompressionBoundaryHook:
             agent.context_compressor = compressor
 
             original_sid = agent.session_id
-            messages = [
-                {"role": "user", "content": f"m{i}"} for i in range(10)
-            ]
+            messages = [{"role": "user", "content": f"m{i}"} for i in range(10)]
 
             agent._compress_context(messages, "sys", approx_tokens=10_000)
 
             # Session_id rotated
-            assert agent.session_id != original_sid, \
+            assert agent.session_id != original_sid, (
                 "compression should rotate session_id when session_db is set"
+            )
 
             # Hook fired with boundary_reason="compression" and old_session_id
-            calls = [
-                c for c in compressor.on_session_start.call_args_list
-            ]
+            calls = [c for c in compressor.on_session_start.call_args_list]
             assert calls, "on_session_start was never called on the context engine"
             # Find the compression boundary call (there may be others from init)
             comp_calls = [
-                c for c in calls
-                if c.kwargs.get("boundary_reason") == "compression"
+                c for c in calls if c.kwargs.get("boundary_reason") == "compression"
             ]
             assert comp_calls, (
                 f"Expected an on_session_start call with "
@@ -88,10 +86,12 @@ class TestCompressionBoundaryHook:
             )
             call = comp_calls[-1]
             # Positional new session_id
-            assert call.args and call.args[0] == agent.session_id, \
+            assert call.args and call.args[0] == agent.session_id, (
                 f"Expected new session_id as first positional arg, got {call!r}"
-            assert call.kwargs.get("old_session_id") == original_sid, \
+            )
+            assert call.kwargs.get("old_session_id") == original_sid, (
                 f"Expected old_session_id={original_sid!r}, got {call.kwargs!r}"
+            )
             assert len(comp_calls) == 1
 
     def test_automatic_notification_follows_core_persistence(self):
@@ -102,18 +102,14 @@ class TestCompressionBoundaryHook:
             db = SessionDB(db_path=Path(tmpdir) / "test.db")
             agent = self._make_agent(db)
             compressor = MagicMock()
-            compressor.compress.return_value = [
-                {"role": "user", "content": "summary"}
-            ]
+            compressor.compress.return_value = [{"role": "user", "content": "summary"}]
             compressor.compression_count = 1
             compressor.last_prompt_tokens = 0
             compressor.last_completion_tokens = 0
             compressor._last_summary_error = None
             compressor._last_compress_aborted = False
-            compressor.on_session_start.side_effect = (
-                lambda *_args, **kwargs: events.append(
-                    kwargs.get("boundary_reason")
-                )
+            compressor.on_session_start.side_effect = lambda *_args, **kwargs: (
+                events.append(kwargs.get("boundary_reason"))
             )
             agent.context_compressor = compressor
             original_publish = db.publish_compression_child
@@ -141,7 +137,9 @@ class TestCompressionBoundaryHook:
             db = SessionDB(db_path=Path(tmpdir) / "test.db")
             agent = self._make_agent(db)
             compressor = MagicMock()
-            compressor.compress.side_effect = RuntimeError("synthetic compression failure")
+            compressor.compress.side_effect = RuntimeError(
+                "synthetic compression failure"
+            )
             agent.context_compressor = compressor
 
             with pytest.raises(RuntimeError, match="synthetic compression failure"):
@@ -177,6 +175,7 @@ class TestCompressionBoundaryHook:
     def test_no_hook_when_no_session_db(self):
         """Without session_db, session_id does not rotate and the hook is not fired."""
         from run_agent import AIAgent
+
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             agent = AIAgent(
                 api_key="test-key",
@@ -198,12 +197,15 @@ class TestCompressionBoundaryHook:
         agent.context_compressor = compressor
 
         original_sid = agent.session_id
-        agent._compress_context([{"role": "user", "content": "m"}], "sys", approx_tokens=100)
+        agent._compress_context(
+            [{"role": "user", "content": "m"}], "sys", approx_tokens=100
+        )
 
         # No DB => no rotation => no compression-boundary hook
         assert agent.session_id == original_sid
         comp_calls = [
-            c for c in compressor.on_session_start.call_args_list
+            c
+            for c in compressor.on_session_start.call_args_list
             if c.kwargs.get("boundary_reason") == "compression"
         ]
         assert not comp_calls, (
@@ -231,6 +233,7 @@ class TestCompressionBoundaryHook:
             def _raise_on_compression(*args, **kwargs):
                 if kwargs.get("boundary_reason") == "compression":
                     raise RuntimeError("plugin exploded")
+
             compressor.on_session_start.side_effect = _raise_on_compression
             agent.context_compressor = compressor
 
@@ -245,12 +248,14 @@ class TestCompressionBoundaryHook:
             assert compressed
             assert agent.session_id != original_sid
 
+
 class TestSessionCompressEvent:
     """The session:compress event_callback fires after a compression split."""
 
     def _make_agent(self, session_db, event_callback=None):
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from run_agent import AIAgent
+
             agent = AIAgent(
                 api_key="test-key",
                 base_url="https://openrouter.ai/api/v1",

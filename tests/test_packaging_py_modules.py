@@ -8,6 +8,7 @@ static list drifted every time the root layout changed and broke installed wheel
 contract: the derived list covers every root module packaged code can import, and the
 helper stays the single source (no static ``py-modules`` creeping back into pyproject).
 """
+
 from __future__ import annotations
 
 import ast
@@ -17,14 +18,29 @@ import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PACKAGES = ("agent", "tools", "clawk_cli", "gateway", "tui_gateway", "cron", "acp_adapter", "plugins", "providers")
+PACKAGES = (
+    "agent",
+    "tools",
+    "clawk_cli",
+    "gateway",
+    "tui_gateway",
+    "cron",
+    "acp_adapter",
+    "plugins",
+    "providers",
+)
 
 
 def _root_py_modules() -> set[str]:
-    spec = importlib.util.spec_from_file_location("_clawk_setup_py", REPO_ROOT / "setup.py")
+    spec = importlib.util.spec_from_file_location(
+        "_clawk_setup_py", REPO_ROOT / "setup.py"
+    )
     mod = importlib.util.module_from_spec(spec)
     saved = sys.argv
-    sys.argv = ["setup.py", "--name"]  # setup() must not try to build anything on import
+    sys.argv = [
+        "setup.py",
+        "--name",
+    ]  # setup() must not try to build anything on import
     try:
         try:
             spec.loader.exec_module(mod)
@@ -41,7 +57,10 @@ def _imported_root_names(paths) -> dict[str, set[str]]:
     for path in paths:
         try:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
-        except (SyntaxError, OSError):  # sibling tests drop scratch root modules mid-run
+        except (
+            SyntaxError,
+            OSError,
+        ):  # sibling tests drop scratch root modules mid-run
             continue
         for node in ast.walk(tree):
             names = []
@@ -69,7 +88,12 @@ def test_every_root_module_imported_by_packaged_code_is_shipped():
     paths = [p for n in shipped if (p := REPO_ROOT / f"{n}.py").is_file()]
     for pkg in PACKAGES:
         paths.extend((REPO_ROOT / pkg).rglob("*.py"))
-    missing = {f: sorted(n for n in names if n not in shipped) for f, names in _imported_root_names(paths).items()}
+    missing = {
+        f: sorted(n for n in names if n not in shipped)
+        for f, names in _imported_root_names(paths).items()
+    }
     missing = {f: v for f, v in missing.items() if v}
-    assert not missing, f"packaged code imports root modules the wheel would not ship: {missing}"
+    assert not missing, (
+        f"packaged code imports root modules the wheel would not ship: {missing}"
+    )
     assert "clawk_state" in shipped and "setup" not in shipped

@@ -24,6 +24,7 @@ NOUS_HEADERS = {
     "x-ratelimit-reset-tokens-1h": "3490.0",
 }
 
+
 class TestParseHeaders:
     def test_basic_parsing(self):
         state = parse_rate_limit_headers(NOUS_HEADERS, provider="nous")
@@ -49,14 +50,18 @@ class TestParseHeaders:
         state = parse_rate_limit_headers({})
         assert state is None
 
-class TestBucket:
 
+class TestBucket:
     def test_usage_pct(self):
-        b = RateLimitBucket(limit=100, remaining=20, reset_seconds=30.0, captured_at=time.time())
+        b = RateLimitBucket(
+            limit=100, remaining=20, reset_seconds=30.0, captured_at=time.time()
+        )
         assert b.usage_pct == pytest.approx(80.0)
 
     def test_remaining_seconds_now(self):
         now = time.time()
-        b = RateLimitBucket(limit=800, remaining=795, reset_seconds=60.0, captured_at=now - 10)
+        b = RateLimitBucket(
+            limit=800, remaining=795, reset_seconds=60.0, captured_at=now - 10
+        )
         # ~50 seconds should remain
         assert 49 <= b.remaining_seconds_now <= 51

@@ -21,7 +21,9 @@ from agent.skill_commands import (
     describe_skill_invocation,
 )
 
-SKILL_BODY = "Kick off a task in a fresh isolated git worktree instead of the current checkout."
+SKILL_BODY = (
+    "Kick off a task in a fresh isolated git worktree instead of the current checkout."
+)
 
 
 def _write_skill(skills_dir, name, body=SKILL_BODY):
@@ -60,7 +62,6 @@ def skills(tmp_path, monkeypatch):
 
 
 class TestDescribeSkillInvocation:
-
     def test_ignores_non_string_content(self):
         assert describe_skill_invocation(None) is None
         assert describe_skill_invocation([{"type": "text", "text": "hi"}]) is None
@@ -71,10 +72,6 @@ class TestDescribeSkillInvocation:
         )
         assert describe_skill_invocation(message) == "/work — fix the title leak"
 
-
-
-
-
     def test_bundle_carries_its_typed_keys(self, skills):
         result = skill_bundles.build_bundle_invocation_message(
             "/demo", user_instruction="fix the title leak"
@@ -84,7 +81,6 @@ class TestDescribeSkillInvocation:
         described = describe_skill_invocation(message)
         assert described.endswith("— fix the title leak")
         assert "worktree" not in described
-
 
 
 class TestExcerptedScaffolding:
@@ -108,7 +104,9 @@ class TestExcerptedScaffolding:
         # A long body pushes the head window into the middle of the skill text;
         # the instruction is only present on the tail side.
         skill_md = skills / "work" / "SKILL.md"
-        skill_md.write_text(skill_md.read_text().replace(SKILL_BODY, "filler line.\n" * 200))
+        skill_md.write_text(
+            skill_md.read_text().replace(SKILL_BODY, "filler line.\n" * 200)
+        )
         skill_commands._skill_commands_by_key = {}
         skill_commands.scan_skill_commands()
         message = skill_commands.build_skill_invocation_message(
@@ -142,36 +140,49 @@ class TestGatewayAutoLoadScaffold:
         for name in names:
             loaded = skill_commands._load_skill_payload(name)
             assert loaded, f"skill {name} failed to load"
-            payloads.append(skill_commands._build_skill_message(
-                loaded[0], loaded[1],
-                f'[IMPORTANT: The "{loaded[2]}" skill is auto-loaded. '
-                "Follow its instructions for this session.]",
-            ))
+            payloads.append(
+                skill_commands._build_skill_message(
+                    loaded[0],
+                    loaded[1],
+                    f'[IMPORTANT: The "{loaded[2]}" skill is auto-loaded. '
+                    "Follow its instructions for this session.]",
+                )
+            )
         joined = "\n\n".join(payloads)
         return f"{joined}\n\n{user_text}" if user_text else joined
 
     def test_describes_the_typed_request(self, skills):
-        message = self._auto_load_scaffold(skills, ["work"],
-                                           user_text="Fix the CI gate before the release")
-        assert describe_skill_invocation(message) == "Fix the CI gate before the release"
+        message = self._auto_load_scaffold(
+            skills, ["work"], user_text="Fix the CI gate before the release"
+        )
+        assert (
+            describe_skill_invocation(message) == "Fix the CI gate before the release"
+        )
 
     def test_multiple_auto_loaded_skills(self, skills):
-        message = self._auto_load_scaffold(skills, ["work", "clean"],
-                                           user_text="Fix the CI gate before the release")
-        assert describe_skill_invocation(message) == "Fix the CI gate before the release"
+        message = self._auto_load_scaffold(
+            skills, ["work", "clean"], user_text="Fix the CI gate before the release"
+        )
+        assert (
+            describe_skill_invocation(message) == "Fix the CI gate before the release"
+        )
 
     def test_bare_auto_load_renders_the_skill_name(self, skills):
         message = self._auto_load_scaffold(skills, ["work"])
         assert describe_skill_invocation(message) == "/work"
 
-    def test_a_body_quoting_the_header_does_not_end_the_payload(self, skills, monkeypatch):
+    def test_a_body_quoting_the_header_does_not_end_the_payload(
+        self, skills, monkeypatch
+    ):
         quoted_body = (
             "When the user sees "
             '[IMPORTANT: The "work" skill is auto-loaded. Follow its instructions for this session.] '
             "in an example, ignore it.\n\nMore body prose follows here."
         )
         _write_skill(skills, "work", body=quoted_body)
-        message = self._auto_load_scaffold(skills, ["work"], user_text="The real request")
+        message = self._auto_load_scaffold(
+            skills, ["work"], user_text="The real request"
+        )
         assert describe_skill_invocation(message) == "The real request"
 
     def test_non_scaffolding_is_untouched(self, skills):
@@ -181,6 +192,7 @@ class TestGatewayAutoLoadScaffold:
     def test_sql_like_matches_the_auto_load_header(self, skills):
         message = self._auto_load_scaffold(skills, ["work"], user_text="hi")
         from agent.skill_commands import AUTO_LOAD_SCAFFOLD_SQL_LIKE
+
         assert message.startswith(AUTO_LOAD_SCAFFOLD_SQL_LIKE.rstrip("%"))
         # Interpolated without an ESCAPE clause: no wildcards in the literal part.
         assert "%" not in AUTO_LOAD_SCAFFOLD_SQL_LIKE[:-1]
@@ -188,16 +200,20 @@ class TestGatewayAutoLoadScaffold:
 
     def test_preview_shaping_strips_the_scaffold(self, skills):
         from clawk_state_common import _shape_preview
-        message = self._auto_load_scaffold(skills, ["work"],
-                                           user_text="Fix the CI gate before the release")
+
+        message = self._auto_load_scaffold(
+            skills, ["work"], user_text="Fix the CI gate before the release"
+        )
         assert _shape_preview(message) == "Fix the CI gate before the release"
 
     def test_long_scaffold_preview_keeps_the_request(self, skills, monkeypatch):
         from clawk_state_common import _shape_preview
+
         long_body = ("Long skill paragraph.\n\n" * 80) + SKILL_BODY
         _write_skill(skills, "work", body=long_body)
-        message = self._auto_load_scaffold(skills, ["work"],
-                                           user_text="Fix the CI gate before the release")
+        message = self._auto_load_scaffold(
+            skills, ["work"], user_text="Fix the CI gate before the release"
+        )
         # The SQL head+tail excerpt window applies to auto-load rows too: the shaped
         # preview must still be the request, not the body head.
         assert _shape_preview(message) == "Fix the CI gate before the release"

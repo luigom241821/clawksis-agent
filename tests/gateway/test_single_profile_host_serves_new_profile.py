@@ -5,6 +5,7 @@ control socket was refused, so its sessions, chat and Delete all failed with "In
 response" (#141623). The creator's ``rescan-profiles`` signal (and the 30 s watcher) must start serving
 it from the SAME process: no restart, no drain, and unscoped secret reads fail closed from then on.
 """
+
 import asyncio
 import os
 import shutil
@@ -36,15 +37,23 @@ def standalone_host(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "launch-key")
     runner = GatewayRunner(GatewayConfig(multiplex_profiles=False))
     runner._running = True
-    runner.session_runtime_descriptor = {"state": "ready", "served_profiles": [], "capabilities": []}
+    runner.session_runtime_descriptor = {
+        "state": "ready",
+        "served_profiles": [],
+        "capabilities": [],
+    }
     runner.session_ticket_store = None
     restarts = []
     runner.request_restart = lambda **kw: restarts.append(kw) or True
-    write_runtime_status(gateway_state="running", multiplex_standalone_reason=SINGLE_PROFILE_REASON,
-                         served_profiles=[])
+    write_runtime_status(
+        gateway_state="running",
+        multiplex_standalone_reason=SINGLE_PROFILE_REASON,
+        served_profiles=[],
+    )
     flush_runtime_status()
     yield runner, home, restarts
     from gateway.runtime_ownership import process_ownership
+
     for profile in (home / "profiles").iterdir():
         process_ownership.release(profile.resolve())
 
@@ -58,7 +67,9 @@ def _mkprofile(home, name):
 
 @pytest.mark.platforms("linux")
 @pytest.mark.asyncio
-async def test_profile_created_after_a_single_profile_boot_is_served_without_a_restart(standalone_host):
+async def test_profile_created_after_a_single_profile_boot_is_served_without_a_restart(
+    standalone_host,
+):
     """End to end through the creator's real signal: the control socket's ``rescan-profiles`` verb."""
     from gateway import control_socket
     from gateway.run_bootstrap import _start_gateway_start_control_socket
@@ -81,6 +92,7 @@ async def test_profile_created_after_a_single_profile_boot_is_served_without_a_r
         assert is_multiplex_active()
         from agent.secret_scope import UnscopedSecretError, get_secret
         from gateway.run import _profile_runtime_scope
+
         with _profile_runtime_scope(bot.resolve()):
             assert get_secret("OPENAI_API_KEY") == "bot-own-key"
         # The default profile's next message goes through the production handler the switch re-wired.
@@ -99,21 +111,30 @@ async def test_profile_created_after_a_single_profile_boot_is_served_without_a_r
         # Deleting it again unserves it in place; the host keeps running.
         shutil.rmtree(bot)
         answer = await asyncio.to_thread(control_socket.rescan_gateway_profiles, home)
-        assert answer["removed"] == ["daily-news-bot"] and answer["served_profiles"] == ["default"]
+        assert answer["removed"] == ["daily-news-bot"] and answer[
+            "served_profiles"
+        ] == ["default"]
         assert restarts == []
     finally:
         await server.stop()
 
 
 @pytest.mark.asyncio
-async def test_a_blocked_new_profile_is_served_once_the_blocker_clears(standalone_host, monkeypatch):
+async def test_a_blocked_new_profile_is_served_once_the_blocker_clears(
+    standalone_host, monkeypatch
+):
     """A preflight blocker (the new profile still runs its own gateway) keeps the host standalone. It
     is not latched: the next rescan after the blocker clears serves the profile."""
     runner, home, restarts = standalone_host
     _mkprofile(home, "coder")
     own = {"coder": True}
-    monkeypatch.setattr(gm, "_live_gateway_pid", lambda h: os.getpid() if own.get(
-        clawk_constants.profile_name_for_home(h)) else None)
+    monkeypatch.setattr(
+        gm,
+        "_live_gateway_pid",
+        lambda h: (
+            os.getpid() if own.get(clawk_constants.profile_name_for_home(h)) else None
+        ),
+    )
     result = await runner.reconcile_served_profiles(reason="watcher")
     assert result["multiplex"] is False and not is_multiplex_active()
 
@@ -123,13 +144,17 @@ async def test_a_blocked_new_profile_is_served_once_the_blocker_clears(standalon
 
 
 @pytest.mark.asyncio
-async def test_auto_multiplex_migration_false_keeps_a_single_profile_boot_standalone(standalone_host):
+async def test_auto_multiplex_migration_false_keeps_a_single_profile_boot_standalone(
+    standalone_host,
+):
     """``gateway.auto_multiplex_migration: false`` on the default profile opts out of the in-place
     switch: a second profile stays unserved by this process on the creator's signal and the watcher, and
     setting the key back to true converges on the next rescan without a restart."""
     runner, home, restarts = standalone_host
     (home / "config.yaml").write_text(
-        "model: {default: m}\ngateway:\n  auto_multiplex_migration: false\n", encoding="utf-8")
+        "model: {default: m}\ngateway:\n  auto_multiplex_migration: false\n",
+        encoding="utf-8",
+    )
     _mkprofile(home, "coder")
     for reason in ("control-socket", "watcher"):
         result = await runner.reconcile_served_profiles(reason=reason)
@@ -141,7 +166,9 @@ async def test_auto_multiplex_migration_false_keeps_a_single_profile_boot_standa
     assert result["added"] == ["coder"] and is_multiplex_active() and restarts == []
 
 
-def test_launch_profile_work_on_a_standalone_host_binds_its_scope_once_a_second_home_is_hosted(standalone_host):
+def test_launch_profile_work_on_a_standalone_host_binds_its_scope_once_a_second_home_is_hosted(
+    standalone_host,
+):
     """Desktop's ``profiles.create`` hosts the new home before any rescan: from then on unscoped
     secret reads fail closed, so the launch profile's own ``session.create`` (owner dispatch on a
     still-standalone gateway) must bind the launch scope, not crash with UnscopedSecretError."""

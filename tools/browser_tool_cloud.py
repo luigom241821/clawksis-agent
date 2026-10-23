@@ -35,6 +35,7 @@ def _ensure_browser_plugins_loaded() -> None:
     """Idempotently trigger plugin discovery (standalone scripts/tests may never import ``model_tools``)."""
     try:
         from clawk_cli.plugins import _ensure_plugins_discovered
+
         _ensure_plugins_discovered()
     except Exception as exc:
         _origin().logger.debug("Browser plugin discovery failed (non-fatal): %s", exc)
@@ -61,17 +62,23 @@ def _get_cloud_provider() -> Optional[CloudBrowserProvider]:
             _bt._cloud_provider_resolved = False
             resolved = _resolve_cloud_provider_uncached()
             after_generation = _bt._browser_registry_generation(scope=scope)
-            if before_generation != after_generation:  # force reload mid-resolution: discard, resolve again
+            if (
+                before_generation != after_generation
+            ):  # force reload mid-resolution: discard, resolve again
                 continue
             if _bt._cloud_provider_resolved:
                 _bt._cached_cloud_provider_scope = scope
-                for stale_key in [key for key in _bt._cached_cloud_providers if key[0] == scope]:
+                for stale_key in [
+                    key for key in _bt._cached_cloud_providers if key[0] == scope
+                ]:
                     _bt._cached_cloud_providers.pop(stale_key, None)
                 _bt._cached_cloud_providers[cache_key] = resolved
             return resolved
 
 
-def _instantiate_explicit_cloud_provider(provider_key: str) -> Optional[CloudBrowserProvider]:
+def _instantiate_explicit_cloud_provider(
+    provider_key: str,
+) -> Optional[CloudBrowserProvider]:
     """Build the provider named by ``browser.cloud_provider``.
 
     Strict: an unregistered name raises ``ValueError`` (never a silent reroute to auto-detect); any
@@ -83,15 +90,23 @@ def _instantiate_explicit_cloud_provider(provider_key: str) -> Optional[CloudBro
         resolved = _registry_get_browser_provider(provider_key)
         if resolved is None:
             from tools.tool_backend_helpers import selection_error
-            raise ValueError(selection_error(
-                "browser", f"'{provider_key}'",
-                "no registered browser plugin has that name (install the corresponding plugin or fix the config key spelling)",
-            ))
+
+            raise ValueError(
+                selection_error(
+                    "browser",
+                    f"'{provider_key}'",
+                    "no registered browser plugin has that name (install the corresponding plugin or fix the config key spelling)",
+                )
+            )
         return resolved
     except ValueError:
         raise
     except Exception:
-        _bt.logger.warning("Failed to instantiate explicit cloud_provider %r; will retry on next call", provider_key, exc_info=True)
+        _bt.logger.warning(
+            "Failed to instantiate explicit cloud_provider %r; will retry on next call",
+            provider_key,
+            exc_info=True,
+        )
         return None
 
 
@@ -105,6 +120,7 @@ def _autodetect_cloud_provider() -> Optional[CloudBrowserProvider]:
     # execute bundled plugin code before a browser session is actually being resolved.
     from plugins.browser.browser_use.provider import BrowserUseBrowserProvider
     from plugins.browser.browserbase.provider import BrowserbaseBrowserProvider
+
     try:
         for cls in (BrowserUseBrowserProvider, BrowserbaseBrowserProvider):
             fallback_provider = cls()
@@ -127,9 +143,12 @@ def _resolve_cloud_provider_uncached() -> Optional[CloudBrowserProvider]:
     provider_key = None
     try:
         from clawk_cli.config import read_raw_config
+
         browser_cfg = read_raw_config().get("browser", {})
         if isinstance(browser_cfg, dict) and "cloud_provider" in browser_cfg:
-            provider_key = normalize_browser_cloud_provider(browser_cfg.get("cloud_provider"))
+            provider_key = normalize_browser_cloud_provider(
+                browser_cfg.get("cloud_provider")
+            )
             if provider_key in ("local", "camofox"):
                 # Camofox runs through the built-in browser tools, not a cloud provider.
                 _bt._cached_cloud_provider = None
@@ -182,6 +201,7 @@ def _is_local_backend() -> bool:
     # When terminal runs in a container, browser on host can access internal networks the terminal can't →
     # treat as non-local. See #68559.
     from tools.terminal_scope import terminal_env
+
     return terminal_env("TERMINAL_ENV", "local").strip().lower() in ("local", "")
 
 
@@ -206,25 +226,51 @@ def _get_browser_engine() -> str:
     navigation but has no graphical renderer (no screenshots).
     """
     _bt = _origin()
+
     def compute() -> str:
-        engine = _bt._browser_cfg("engine", "auto", lambda v: str(v).strip().lower() if v and str(v).strip() else "auto", "browser.engine from config")
+        engine = _bt._browser_cfg(
+            "engine",
+            "auto",
+            lambda v: str(v).strip().lower() if v and str(v).strip() else "auto",
+            "browser.engine from config",
+        )
         if engine == "auto":
-            engine = os.environ.get("AGENT_BROWSER_ENGINE", "").strip().lower() or engine
+            engine = (
+                os.environ.get("AGENT_BROWSER_ENGINE", "").strip().lower() or engine
+            )
         # agent-browser only accepts "chrome" and "lightpanda".
         _VALID_ENGINES = {"auto", "lightpanda", "chrome"}
         if engine not in _VALID_ENGINES:
-            _bt.logger.warning("Unknown browser engine %r (valid: %s), falling back to 'auto'", engine, ", ".join(sorted(_VALID_ENGINES)))
+            _bt.logger.warning(
+                "Unknown browser engine %r (valid: %s), falling back to 'auto'",
+                engine,
+                ", ".join(sorted(_VALID_ENGINES)),
+            )
             engine = "auto"
         return engine
+
     return _memo(_bt, "_browser_engine_resolved", "_cached_browser_engine", compute)
 
 
 def _is_headed_mode() -> bool:
     """True when the browser should launch headed: ``browser.headed``, else ``AGENT_BROWSER_HEADED``; cached."""
     _bt = _origin()
+
     def compute() -> bool:
-        headed = _bt._browser_cfg("headed", False, lambda v: False if v is None else str(v).strip().lower() in ("true", "1", "yes"), "browser.headed from config")
-        return headed or os.environ.get("AGENT_BROWSER_HEADED", "").strip().lower() in ("true", "1", "yes")
+        headed = _bt._browser_cfg(
+            "headed",
+            False,
+            lambda v: (
+                False if v is None else str(v).strip().lower() in ("true", "1", "yes")
+            ),
+            "browser.headed from config",
+        )
+        return headed or os.environ.get("AGENT_BROWSER_HEADED", "").strip().lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
     return _memo(_bt, "_headed_mode_resolved", "_cached_headed_mode", compute)
 
 
@@ -238,8 +284,15 @@ def _auto_local_for_private_urls() -> bool:
     """``browser.auto_local_for_private_urls`` (default True), cached: route private/LAN URLs to a local sidecar even with a cloud provider."""
     _bt = _origin()
     return _memo(
-        _bt, "_auto_local_for_private_urls_resolved", "_cached_auto_local_for_private_urls",
-        lambda: _bt._browser_cfg("auto_local_for_private_urls", _bt._cached_auto_local_for_private_urls, bool, "auto_local_for_private_urls from config"),
+        _bt,
+        "_auto_local_for_private_urls_resolved",
+        "_cached_auto_local_for_private_urls",
+        lambda: _bt._browser_cfg(
+            "auto_local_for_private_urls",
+            _bt._cached_auto_local_for_private_urls,
+            bool,
+            "auto_local_for_private_urls from config",
+        ),
     )
 
 
@@ -249,7 +302,9 @@ def _use_real_profile() -> bool:
     Read on EVERY call: it is a consent switch (flipping it off must not need a restart) and each multiplexed
     profile must decide for itself. One YAML load per local session creation, so no hot-path cost.
     """
-    return _origin()._browser_cfg("use_real_profile", False, bool, "use_real_profile from config")
+    return _origin()._browser_cfg(
+        "use_real_profile", False, bool, "use_real_profile from config"
+    )
 
 
 def _allow_private_urls() -> bool:
@@ -261,10 +316,20 @@ def _allow_private_urls() -> bool:
     _bt = _origin()
     if get_clawk_home_override() is not None:
         return _resolve_allow_private_urls()
-    return _memo(_bt, "_allow_private_urls_resolved", "_cached_allow_private_urls", _resolve_allow_private_urls)
+    return _memo(
+        _bt,
+        "_allow_private_urls_resolved",
+        "_cached_allow_private_urls",
+        _resolve_allow_private_urls,
+    )
 
 
 def _resolve_allow_private_urls() -> bool:
     """Read the browser private-URL toggle from the active config scope."""
     _bt = _origin()
-    return _bt._browser_cfg("allow_private_urls", False, lambda v: is_truthy_value(v, default=False), "allow_private_urls from config")
+    return _bt._browser_cfg(
+        "allow_private_urls",
+        False,
+        lambda v: is_truthy_value(v, default=False),
+        "allow_private_urls from config",
+    )

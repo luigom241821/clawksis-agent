@@ -22,11 +22,7 @@ from gateway.platforms.base import (
 from gateway.run import _collect_history_media_paths
 
 
-
-
 class TestSpacedPaths:
-
-
     def test_spaced_path_followed_by_prose_keeps_prose(self, tmp_path):
         p = tmp_path / "my server.log"
         p.write_text("log line\n")
@@ -36,19 +32,14 @@ class TestSpacedPaths:
         assert [os.path.realpath(x) for x, _ in media] == [os.path.realpath(str(p))]
         assert "is the log you asked for" in cleaned
 
-
     def test_forward_extension_stops_at_next_media_tag(self, tmp_path):
         a = tmp_path / "Caddyfile"
         b = tmp_path / "Dockerfile"
         a.write_text("localhost\n")
         b.write_text("FROM alpine\n")
-        media, cleaned = BasePlatformAdapter.extract_media(
-            f"MEDIA:{a} MEDIA:{b}"
-        )
+        media, cleaned = BasePlatformAdapter.extract_media(f"MEDIA:{a} MEDIA:{b}")
         got = sorted(os.path.realpath(x) for x, _ in media)
-        assert got == sorted(
-            [os.path.realpath(str(a)), os.path.realpath(str(b))]
-        )
+        assert got == sorted([os.path.realpath(str(a)), os.path.realpath(str(b))])
         assert "MEDIA:" not in cleaned
 
 

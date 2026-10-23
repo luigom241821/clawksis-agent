@@ -31,7 +31,9 @@ def tmp_cron_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_completed_oneshot_trigger_is_refused_and_disk_record_is_unchanged(tmp_cron_dir):
+def test_completed_oneshot_trigger_is_refused_and_disk_record_is_unchanged(
+    tmp_cron_dir,
+):
     job = create_job("done", "in 30m", name="done", repeat=1)
     mark_job_run(job["id"], success=True)
     before = copy.deepcopy(load_jobs())
@@ -55,12 +57,14 @@ def test_wedged_claimed_oneshot_remains_triggerable(tmp_cron_dir):
     now = datetime.now(UTC)
     job = create_job("wedged", "in 30m", repeat=2)
     record = get_job(job["id"])
-    record.update({
-        "run_claim": {"at": now.isoformat(), "by": "dead-worker"},
-        "state": "scheduled",
-        "enabled": True,
-        "next_run_at": (now - timedelta(minutes=1)).isoformat(),
-    })
+    record.update(
+        {
+            "run_claim": {"at": now.isoformat(), "by": "dead-worker"},
+            "state": "scheduled",
+            "enabled": True,
+            "next_run_at": (now - timedelta(minutes=1)).isoformat(),
+        }
+    )
     save_jobs([record])
 
     triggered = trigger_job(job["id"])
@@ -86,8 +90,6 @@ def test_terminal_jobs_are_not_due_or_advanced(tmp_cron_dir):
     assert get_due_jobs() == []
     assert advance_next_run(job["id"]) is False
     assert load_jobs() == before
-
-
 
 
 def test_update_cannot_reactivate_terminal_record(tmp_cron_dir):

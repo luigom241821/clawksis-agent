@@ -74,7 +74,6 @@ class TestInitSessionCwdRespect:
             "bootstrap cd must target the configured cwd (/my/project)"
         )
 
-
     def test_bootstrap_cd_uses_shlex_quote(self):
         """Paths with spaces must be properly quoted in the bootstrap cd."""
         env = _TestableEnv(cwd="/my project/with spaces")

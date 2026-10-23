@@ -9,6 +9,7 @@ sandbox or a public launch switch: only the managed worker bootstrap consumes
 the owner's validated assignment. No environment flag grants this policy and
 no reset exists; helper threads see the same immutable snapshot.
 """
+
 from dataclasses import dataclass
 import json
 import os
@@ -26,14 +27,22 @@ class _SafeWorkerPolicy:
 
 _policy: _SafeWorkerPolicy | None = None
 _bind_lock = Lock()
-_RUNTIME_IMPORTS = frozenset({
-    "run_agent", "model_tools", "clawk_cli.config", "clawk_cli.env_loader",
-    "clawk_cli.plugins", "providers", "agent.agent_init",
-})
+_RUNTIME_IMPORTS = frozenset(
+    {
+        "run_agent",
+        "model_tools",
+        "clawk_cli.config",
+        "clawk_cli.env_loader",
+        "clawk_cli.plugins",
+        "providers",
+        "agent.agent_init",
+    }
+)
 
 
-def _bind_safe_worker_policy(*, safe_mode: bool, ignore_user_config: bool,
-                             config: dict) -> _SafeWorkerPolicy:
+def _bind_safe_worker_policy(
+    *, safe_mode: bool, ignore_user_config: bool, config: dict
+) -> _SafeWorkerPolicy:
     """Called by the private worker bootstrap, never by the owner or public CLI."""
     if type(safe_mode) is not bool or type(ignore_user_config) is not bool:
         raise TypeError("worker bypass policy fields must be booleans")
@@ -59,7 +68,9 @@ def _bind(safe_mode: bool, ignore_user_config: bool, config: dict) -> _SafeWorke
             raise RuntimeError("worker policy is already bound")
         if _RUNTIME_IMPORTS.intersection(sys.modules):
             raise RuntimeError("worker policy must bind before runtime imports")
-        _policy = _SafeWorkerPolicy(os.getpid(), safe_mode, ignore_user_config, serialized)
+        _policy = _SafeWorkerPolicy(
+            os.getpid(), safe_mode, ignore_user_config, serialized
+        )
         return _policy
 
 

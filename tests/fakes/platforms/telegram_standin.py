@@ -67,7 +67,9 @@ def mdv2_error(text: str) -> str | None:
         if ch == ">" and (i == 0 or text[i - 1] == "\n"):
             i += 1
             continue
-        mark = next((mk for mk in ("||", "__", "*", "_", "~") if text.startswith(mk, i)), None)
+        mark = next(
+            (mk for mk in ("||", "__", "*", "_", "~") if text.startswith(mk, i)), None
+        )
         if mark is not None:
             if open_marks and open_marks[-1] == mark:
                 open_marks.pop()
@@ -97,7 +99,9 @@ def _check_text(p: dict[str, Any], field: str = "text") -> str:
         why = mdv2_error(text)
         if why:
             raise BotApiError(f"Bad Request: can't parse entities: {why}")
-        text = re.sub(r"\\(.)", r"\1", text)  # length and emptiness count the parsed text
+        text = re.sub(
+            r"\\(.)", r"\1", text
+        )  # length and emptiness count the parsed text
     if not text.strip():
         raise BotApiError("Bad Request: message text is empty")
     if len(text) > MAX_TEXT:
@@ -147,7 +151,10 @@ class TelegramStandin(StandinServer):
             reader = await request.multipart()
             async for part in reader:
                 if part.filename:
-                    params[part.name] = {"filename": part.filename, "size": len(await part.read())}
+                    params[part.name] = {
+                        "filename": part.filename,
+                        "size": len(await part.read()),
+                    }
                 else:
                     params[part.name] = decode_value(await part.text())
         elif request.can_read_body:
@@ -158,7 +165,10 @@ class TelegramStandin(StandinServer):
     async def _api(self, request: web.Request) -> web.Response:
         method = request.match_info["method"]
         if request.match_info["token"] != self.token:
-            return web.json_response({"ok": False, "error_code": 401, "description": "Unauthorized"}, status=401)
+            return web.json_response(
+                {"ok": False, "error_code": 401, "description": "Unauthorized"},
+                status=401,
+            )
         params = await self._params(request)
         if method == "getUpdates":
             result = await self._get_updates(params)
@@ -200,7 +210,9 @@ class TelegramStandin(StandinServer):
             with self._lock:
                 # An update id below the confirmed offset is gone (Bot API semantics); a replay
                 # (``redeliver``) re-queues the very same update object with a fresh position.
-                self._updates = [u for u in self._updates if u["_replay"] or u["update_id"] >= offset]
+                self._updates = [
+                    u for u in self._updates if u["_replay"] or u["update_id"] >= offset
+                ]
                 ready = self._updates[:]
                 for u in ready:
                     u["_replay"] = False
@@ -224,22 +236,41 @@ class TelegramStandin(StandinServer):
 
     # Bot API methods ---------------------------------------------------------------------------
     def _bot_user(self) -> dict[str, Any]:
-        return {"id": BOT_ID, "is_bot": True, "first_name": "Clawksis", "username": BOT_USERNAME,
-                "can_join_groups": True, "can_read_all_group_messages": True, "supports_inline_queries": False}
+        return {
+            "id": BOT_ID,
+            "is_bot": True,
+            "first_name": "Clawksis",
+            "username": BOT_USERNAME,
+            "can_join_groups": True,
+            "can_read_all_group_messages": True,
+            "supports_inline_queries": False,
+        }
 
     def _chat(self, chat_id: Any) -> dict[str, Any]:
-        return self.chats.get(str(chat_id)) or {"id": int(chat_id), "type": "private", "first_name": "User"}
+        return self.chats.get(str(chat_id)) or {
+            "id": int(chat_id),
+            "type": "private",
+            "first_name": "User",
+        }
 
     def _bot_message(self, params: dict[str, Any], **fields: Any) -> dict[str, Any]:
         chat_id = str(params["chat_id"])
         mid = next(self._message_ids)
-        msg = {"message_id": mid, "date": int(time.time()), "chat": self._chat(chat_id), "from": self._bot_user(),
-               **fields}
+        msg = {
+            "message_id": mid,
+            "date": int(time.time()),
+            "chat": self._chat(chat_id),
+            "from": self._bot_user(),
+            **fields,
+        }
         if params.get("message_thread_id"):
             msg["message_thread_id"] = int(params["message_thread_id"])
         with self._lock:
-            self._visible[(chat_id, str(mid))] = Visible(str(mid), fields.get("text") or fields.get("caption") or "",
-                                                         extra={"kind": fields.get("_kind", "text")})
+            self._visible[(chat_id, str(mid))] = Visible(
+                str(mid),
+                fields.get("text") or fields.get("caption") or "",
+                extra={"kind": fields.get("_kind", "text")},
+            )
         return msg
 
     def _m_getMe(self, _p: dict[str, Any]) -> dict[str, Any]:
@@ -249,7 +280,11 @@ class TelegramStandin(StandinServer):
         return []
 
     def _m_getChat(self, p: dict[str, Any]) -> dict[str, Any]:
-        return {**self._chat(p["chat_id"]), "accent_color_id": 0, "max_reaction_count": 11}
+        return {
+            **self._chat(p["chat_id"]),
+            "accent_color_id": 0,
+            "max_reaction_count": 11,
+        }
 
     def _m_sendMessage(self, p: dict[str, Any]) -> dict[str, Any]:
         return self._bot_message(p, text=_check_text(p))
@@ -267,23 +302,44 @@ class TelegramStandin(StandinServer):
         if not int(p.get("draft_id") or 0):
             raise BotApiError("Bad Request: draft_id must be non-zero")
         with self._lock:
-            self.drafts[(str(p["chat_id"]), int(p["draft_id"]))] = str(p.get("text") or p.get("content") or "")
+            self.drafts[(str(p["chat_id"]), int(p["draft_id"]))] = str(
+                p.get("text") or p.get("content") or ""
+            )
         return True
 
     def _ok_true(self, _p: dict[str, Any]) -> bool:
         return True
 
     # Side-effect-only methods the adapter calls (reactions, typing, command menu, webhook reset).
-    _m_setMessageReaction = _m_sendChatAction = _m_setMyCommands = _m_deleteMyCommands = _ok_true
-    _m_setMyShortDescription = _m_setMyDescription = _m_deleteWebhook = _m_answerCallbackQuery = _ok_true
+    _m_setMessageReaction = _m_sendChatAction = _m_setMyCommands = (
+        _m_deleteMyCommands
+    ) = _ok_true
+    _m_setMyShortDescription = _m_setMyDescription = _m_deleteWebhook = (
+        _m_answerCallbackQuery
+    ) = _ok_true
 
     def _m_sendPhoto(self, p: dict[str, Any]) -> dict[str, Any]:
-        return self._bot_message(p, caption=p.get("caption", ""), _kind="photo",
-                                 photo=[{"file_id": "out-photo", "file_unique_id": "op", "width": 1, "height": 1}])
+        return self._bot_message(
+            p,
+            caption=p.get("caption", ""),
+            _kind="photo",
+            photo=[
+                {
+                    "file_id": "out-photo",
+                    "file_unique_id": "op",
+                    "width": 1,
+                    "height": 1,
+                }
+            ],
+        )
 
     def _m_sendDocument(self, p: dict[str, Any]) -> dict[str, Any]:
-        return self._bot_message(p, caption=p.get("caption", ""), _kind="document",
-                                 document={"file_id": "out-doc", "file_unique_id": "od"})
+        return self._bot_message(
+            p,
+            caption=p.get("caption", ""),
+            _kind="document",
+            document={"file_id": "out-doc", "file_unique_id": "od"},
+        )
 
     def _m_editMessageText(self, p: dict[str, Any]) -> dict[str, Any]:
         _check_text(p)
@@ -293,12 +349,23 @@ class TelegramStandin(StandinServer):
             if vis is not None:
                 vis.text = p.get("text", "")
                 vis.edits += 1
-        return {"message_id": int(mid), "date": int(time.time()), "chat": self._chat(chat_id),
-                "from": self._bot_user(), "text": p.get("text", ""), "edit_date": int(time.time())}
+        return {
+            "message_id": int(mid),
+            "date": int(time.time()),
+            "chat": self._chat(chat_id),
+            "from": self._bot_user(),
+            "text": p.get("text", ""),
+            "edit_date": int(time.time()),
+        }
 
     def _m_editMessageReplyMarkup(self, p: dict[str, Any]) -> Any:
-        return {"message_id": int(p["message_id"]), "date": int(time.time()), "chat": self._chat(p["chat_id"]),
-                "from": self._bot_user(), "text": ""}
+        return {
+            "message_id": int(p["message_id"]),
+            "date": int(time.time()),
+            "chat": self._chat(p["chat_id"]),
+            "from": self._bot_user(),
+            "text": "",
+        }
 
     def _m_deleteMessage(self, p: dict[str, Any]) -> bool:
         with self._lock:
@@ -309,58 +376,106 @@ class TelegramStandin(StandinServer):
 
     def _m_getFile(self, p: dict[str, Any]) -> dict[str, Any]:
         fid = p["file_id"]
-        return {"file_id": fid, "file_unique_id": f"u-{fid}", "file_size": len(self.files.get(fid, b"")),
-                "file_path": self.file_paths.get(fid, f"documents/{fid}")}
+        return {
+            "file_id": fid,
+            "file_unique_id": f"u-{fid}",
+            "file_size": len(self.files.get(fid, b"")),
+            "file_path": self.file_paths.get(fid, f"documents/{fid}"),
+        }
 
     # test-facing driver ------------------------------------------------------------------------
     def _user(self, user_id: int, name: str = "Tester") -> dict[str, Any]:
-        return {"id": int(user_id), "is_bot": False, "first_name": name, "username": f"user{user_id}",
-                "language_code": "en"}
+        return {
+            "id": int(user_id),
+            "is_bot": False,
+            "first_name": name,
+            "username": f"user{user_id}",
+            "language_code": "en",
+        }
 
-    def _inbound(self, chat: dict[str, Any], user_id: int, **fields: Any) -> dict[str, Any]:
+    def _inbound(
+        self, chat: dict[str, Any], user_id: int, **fields: Any
+    ) -> dict[str, Any]:
         self.chats[str(chat["id"])] = chat
         mid = next(self._inbound_ids)
-        update = {"update_id": next(self._update_ids),
-                  "message": {"message_id": mid, "date": int(time.time()), "chat": chat,
-                              "from": self._user(user_id), **fields}}
+        update = {
+            "update_id": next(self._update_ids),
+            "message": {
+                "message_id": mid,
+                "date": int(time.time()),
+                "chat": chat,
+                "from": self._user(user_id),
+                **fields,
+            },
+        }
         self._push(update)
         return update
 
     def dm(self, user_id: int, text: str) -> dict[str, Any]:
-        chat = {"id": int(user_id), "type": "private", "first_name": "Tester", "username": f"user{user_id}"}
+        chat = {
+            "id": int(user_id),
+            "type": "private",
+            "first_name": "Tester",
+            "username": f"user{user_id}",
+        }
         return self._inbound(chat, user_id, text=text)
 
-    def group(self, chat_id: int, user_id: int, text: str, *, mention: bool) -> dict[str, Any]:
+    def group(
+        self, chat_id: int, user_id: int, text: str, *, mention: bool
+    ) -> dict[str, Any]:
         chat = {"id": int(chat_id), "type": "supergroup", "title": "Standin Group"}
         fields: dict[str, Any] = {"text": text}
         if mention:
             handle = f"@{BOT_USERNAME}"
             fields["text"] = f"{handle} {text}"
-            fields["entities"] = [{"type": "mention", "offset": 0, "length": len(handle)}]
+            fields["entities"] = [
+                {"type": "mention", "offset": 0, "length": len(handle)}
+            ]
         return self._inbound(chat, user_id, **fields)
 
-    def dm_document(self, user_id: int, filename: str, data: bytes, mime: str, caption: str = "") -> dict[str, Any]:
+    def dm_document(
+        self, user_id: int, filename: str, data: bytes, mime: str, caption: str = ""
+    ) -> dict[str, Any]:
         fid = f"doc-{len(self.files) + 1}"
         self.files[fid] = data
         self.file_paths[fid] = f"documents/{filename}"
         chat = {"id": int(user_id), "type": "private", "first_name": "Tester"}
-        fields: dict[str, Any] = {"document": {"file_id": fid, "file_unique_id": f"u-{fid}", "file_name": filename,
-                                               "mime_type": mime, "file_size": len(data)}}
+        fields: dict[str, Any] = {
+            "document": {
+                "file_id": fid,
+                "file_unique_id": f"u-{fid}",
+                "file_name": filename,
+                "mime_type": mime,
+                "file_size": len(data),
+            }
+        }
         if caption:
             fields["caption"] = caption
         return self._inbound(chat, user_id, **fields)
 
-    def callback(self, user_id: int, chat_id: int, message_id: int, data: str) -> dict[str, Any]:
+    def callback(
+        self, user_id: int, chat_id: int, message_id: int, data: str
+    ) -> dict[str, Any]:
         """A user clicks an inline button under bot message ``message_id``."""
         chat = self._chat(chat_id)
         with self._lock:
             vis = self._visible.get((str(chat_id), str(message_id)))
-        update = {"update_id": next(self._update_ids),
-                  "callback_query": {"id": f"cb-{next(self._inbound_ids)}", "from": self._user(user_id),
-                                     "chat_instance": f"ci-{chat_id}", "data": data,
-                                     "message": {"message_id": int(message_id), "date": int(time.time()),
-                                                 "chat": chat, "from": self._bot_user(),
-                                                 "text": vis.text if vis else ""}}}
+        update = {
+            "update_id": next(self._update_ids),
+            "callback_query": {
+                "id": f"cb-{next(self._inbound_ids)}",
+                "from": self._user(user_id),
+                "chat_instance": f"ci-{chat_id}",
+                "data": data,
+                "message": {
+                    "message_id": int(message_id),
+                    "date": int(time.time()),
+                    "chat": chat,
+                    "from": self._bot_user(),
+                    "text": vis.text if vis else "",
+                },
+            },
+        }
         self._push(update)
         return update
 
@@ -370,17 +485,29 @@ class TelegramStandin(StandinServer):
 
     def visible(self, chat_id: Any) -> list[Visible]:
         with self._lock:
-            return [v for (c, _), v in self._visible.items() if c == str(chat_id) and not v.deleted]
+            return [
+                v
+                for (c, _), v in self._visible.items()
+                if c == str(chat_id) and not v.deleted
+            ]
 
     def buttons(self, chat_id: Any) -> list[dict[str, Any]]:
         """Every inline button the bot attached to a message in ``chat_id`` (with its message id)."""
         out = []
-        for call in self.calls_of("sendMessage", "editMessageText", "editMessageReplyMarkup"):
+        for call in self.calls_of(
+            "sendMessage", "editMessageText", "editMessageReplyMarkup"
+        ):
             if str(call.params.get("chat_id")) != str(chat_id) or call.faulted:
                 continue
             markup = call.params.get("reply_markup") or {}
-            mid = call.params.get("message_id") or (call.response or {}).get("message_id")
-            for row in (markup.get("inline_keyboard") or []) if isinstance(markup, dict) else []:
+            mid = call.params.get("message_id") or (call.response or {}).get(
+                "message_id"
+            )
+            for row in (
+                (markup.get("inline_keyboard") or [])
+                if isinstance(markup, dict)
+                else []
+            ):
                 for btn in row:
                     out.append({**btn, "message_id": mid})
         return out

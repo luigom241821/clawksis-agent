@@ -27,8 +27,10 @@ CORRUPT_PNG = base64.b64decode(
 def _reload(monkeypatch, clawk_home: Path):
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import tools.image_source as isrc
+
     importlib.reload(isrc)
     return isrc
 
@@ -40,6 +42,7 @@ def _no_real_sandbox_bringup(monkeypatch):
     _reload does not touch) and resolved at call time, so it survives the
     per-test image_source reload. The bring-up tests override it."""
     import tools.terminal_tool as tt
+
     monkeypatch.setattr(tt, "ensure_task_env", lambda *a, **k: None)
 
 
@@ -49,7 +52,8 @@ class TestDataUrl:
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         b64 = base64.b64encode(PNG).decode()
         res = await isrc.resolve_image_source(
-            f"data:image/png;base64,{b64}", isrc.ResolveContext())
+            f"data:image/png;base64,{b64}", isrc.ResolveContext()
+        )
         assert res.data == PNG
         assert res.mime == "image/png"
         assert res.origin == "data"
@@ -60,10 +64,13 @@ class TestDataUrl:
         b64 = base64.b64encode(b"not an image").decode()
         with pytest.raises(isrc.NotAnImage):
             await isrc.resolve_image_source(
-                f"data:text/plain;base64,{b64}", isrc.ResolveContext())
+                f"data:text/plain;base64,{b64}", isrc.ResolveContext()
+            )
 
     @pytest.mark.asyncio
-    async def test_corrupt_png_rejected_at_resolver_boundary(self, tmp_path, monkeypatch):
+    async def test_corrupt_png_rejected_at_resolver_boundary(
+        self, tmp_path, monkeypatch
+    ):
         """A PNG-shaped but undecodable payload never becomes a resolved image."""
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         monkeypatch.setenv("TERMINAL_ENV", "local")
@@ -84,7 +91,6 @@ class TestLocalBackend:
         res = await isrc.resolve_image_source(str(img), isrc.ResolveContext())
         assert res.data == PNG
         assert res.origin == "file"
-
 
     @pytest.mark.asyncio
     async def test_bare_relative_path_resolves(self, tmp_path, monkeypatch):
@@ -140,7 +146,9 @@ class TestNonLocalBackendConfinement:
         assert res.origin == "file"
 
     @pytest.mark.asyncio
-    async def test_host_secret_outside_cache_routes_to_sandbox_not_host(self, tmp_path, monkeypatch):
+    async def test_host_secret_outside_cache_routes_to_sandbox_not_host(
+        self, tmp_path, monkeypatch
+    ):
         """A non-cache host path (e.g. /etc/passwd) must NOT be host-read — it
         routes to the in-sandbox exec-read, which reads the CONTAINER's file."""
         home = tmp_path / "clawk"
@@ -160,19 +168,27 @@ class TestNonLocalBackendConfinement:
             calls["cmd"] = cmd
             return {"returncode": 0, "output": container_png_b64}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
-            res = await isrc.resolve_image_source(str(secret), isrc.ResolveContext(task_id="t1"))
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
+            res = await isrc.resolve_image_source(
+                str(secret), isrc.ResolveContext(task_id="t1")
+            )
 
         # Read came from the sandbox exec-read, returning the container image —
         # the host secret bytes never appear.
         assert res.origin == "container"
         assert res.data == PNG
         assert b"HOST-PRIVATE-KEY" not in res.data
-        assert "head -c" in calls["cmd"] and "< " in calls["cmd"]  # bounded, redirect-safe form
+        assert (
+            "head -c" in calls["cmd"] and "< " in calls["cmd"]
+        )  # bounded, redirect-safe form
 
     @pytest.mark.asyncio
-    async def test_non_cache_path_fails_closed_without_sandbox(self, tmp_path, monkeypatch):
+    async def test_non_cache_path_fails_closed_without_sandbox(
+        self, tmp_path, monkeypatch
+    ):
         """No active sandbox env -> refuse rather than fall back to a host read."""
         home = tmp_path / "clawk"
         isrc = _reload(monkeypatch, home)
@@ -182,10 +198,14 @@ class TestNonLocalBackendConfinement:
 
         with patch("tools.image_source._get_active_env", return_value=None):
             with pytest.raises(isrc.SourceNotFound):
-                await isrc.resolve_image_source(str(secret), isrc.ResolveContext(task_id="t1"))
+                await isrc.resolve_image_source(
+                    str(secret), isrc.ResolveContext(task_id="t1")
+                )
 
     @pytest.mark.asyncio
-    async def test_symlink_in_cache_pointing_outside_is_not_host_read(self, tmp_path, monkeypatch):
+    async def test_symlink_in_cache_pointing_outside_is_not_host_read(
+        self, tmp_path, monkeypatch
+    ):
         """A symlink planted inside a cache dir that points at a host secret must
         not be host-read (resolve() escapes the cache) — it routes to sandbox."""
         home = tmp_path / "clawk"
@@ -205,7 +225,9 @@ class TestNonLocalBackendConfinement:
         # Fails closed (no sandbox) rather than host-reading the symlink target.
         with patch("tools.image_source._get_active_env", return_value=None):
             with pytest.raises(isrc.SourceNotFound):
-                await isrc.resolve_image_source(str(link), isrc.ResolveContext(task_id="t1"))
+                await isrc.resolve_image_source(
+                    str(link), isrc.ResolveContext(task_id="t1")
+                )
 
 
 class TestExecReadSafety:
@@ -222,16 +244,23 @@ class TestExecReadSafety:
             captured["cmd"] = cmd
             return {"returncode": 0, "output": base64.b64encode(PNG).decode()}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             await isrc.resolve_image_source(
-                "/workspace/-i-etc-shadow.png", isrc.ResolveContext(task_id="t1"))
+                "/workspace/-i-etc-shadow.png", isrc.ResolveContext(task_id="t1")
+            )
         assert f"head -c {isrc._MAX_INGEST_BYTES + 1} < " in captured["cmd"]
-        assert "'-i-etc-shadow.png'" in captured["cmd"] or "-i-etc-shadow.png" in captured["cmd"]
-
+        assert (
+            "'-i-etc-shadow.png'" in captured["cmd"]
+            or "-i-etc-shadow.png" in captured["cmd"]
+        )
 
     @pytest.mark.asyncio
-    async def test_exec_read_retries_cold_start_then_succeeds(self, tmp_path, monkeypatch):
+    async def test_exec_read_retries_cold_start_then_succeeds(
+        self, tmp_path, monkeypatch
+    ):
         """#76566: under Docker, vision's first exec-read can fail (cold
         container / pipe setup) and an identical retry succeeds. The
         resolver must transparently retry before raising, so users don't
@@ -251,10 +280,13 @@ class TestExecReadSafety:
                 return {"returncode": 1, "output": ""}
             return {"returncode": 0, "output": b64}
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             res = await isrc.resolve_image_source(
-                "/workspace/cold.png", isrc.ResolveContext(task_id="t1"))
+                "/workspace/cold.png", isrc.ResolveContext(task_id="t1")
+            )
         assert res.origin == "container"
         assert res.data == PNG
         assert calls["n"] == 2
@@ -271,13 +303,19 @@ class TestExecReadSafety:
         monkeypatch.setenv("TERMINAL_ENV", "docker")
 
         def fake_execute(cmd, **kw):
-            return {"returncode": 1, "output": "head: can't open '/x': No such file or directory"}
+            return {
+                "returncode": 1,
+                "output": "head: can't open '/x': No such file or directory",
+            }
 
-        with patch("tools.image_source._get_active_env",
-                   return_value=SimpleNamespace(execute=fake_execute)):
+        with patch(
+            "tools.image_source._get_active_env",
+            return_value=SimpleNamespace(execute=fake_execute),
+        ):
             with pytest.raises(isrc.SourceNotFound) as excinfo:
                 await isrc.resolve_image_source(
-                    "/workspace/missing.png", isrc.ResolveContext(task_id="t1"))
+                    "/workspace/missing.png", isrc.ResolveContext(task_id="t1")
+                )
         # Diagnostic surfaced — the user can act on it.
         assert "No such file or directory" in str(excinfo.value)
 
@@ -290,10 +328,13 @@ class TestSvgNormalization:
     @pytest.mark.asyncio
     async def test_svg_rasterized_when_converter_available(self, tmp_path, monkeypatch):
         from tools import vision_tools_image_prep as vt
+
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         monkeypatch.setenv("TERMINAL_ENV", "local")
         svg = tmp_path / "art.svg"
-        svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>')
+        svg.write_bytes(
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>'
+        )
 
         def fake_rasterize(svg_path, out_path):
             out_path.write_bytes(PNG)
@@ -310,6 +351,7 @@ class TestSvgNormalization:
 
     def test_svg_actionable_error_when_no_converter(self, tmp_path, monkeypatch):
         from tools import vision_tools_image_prep as vt
+
         _reload(monkeypatch, tmp_path / "clawk")
         svg = tmp_path / "art.svg"
         svg.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
@@ -331,7 +373,10 @@ class TestLazySandboxBringUp:
 
         brought_up = []
         fake_env = SimpleNamespace(
-            execute=lambda cmd, **kw: {"returncode": 0, "output": base64.b64encode(PNG).decode()}
+            execute=lambda cmd, **kw: {
+                "returncode": 0,
+                "output": base64.b64encode(PNG).decode(),
+            }
         )
 
         def fake_ensure(task_id):
@@ -343,17 +388,22 @@ class TestLazySandboxBringUp:
             return fake_env if brought_up else None
 
         import tools.terminal_tool as tt
+
         monkeypatch.setattr(tt, "ensure_task_env", fake_ensure)
         monkeypatch.setattr(isrc, "_get_active_env", fake_get_active)
 
-        res = await isrc.resolve_image_source("/tmp/test.png", isrc.ResolveContext(task_id="t1"))
+        res = await isrc.resolve_image_source(
+            "/tmp/test.png", isrc.ResolveContext(task_id="t1")
+        )
 
         assert brought_up == ["t1"]  # bring-up was triggered before the read
         assert res.origin == "container"
         assert res.data == PNG
 
     @pytest.mark.asyncio
-    async def test_bringup_that_yields_no_env_still_fails_closed(self, tmp_path, monkeypatch):
+    async def test_bringup_that_yields_no_env_still_fails_closed(
+        self, tmp_path, monkeypatch
+    ):
         """If the bring-up can't produce an env, the resolver still refuses
         rather than falling back to a host read."""
         isrc = _reload(monkeypatch, tmp_path / "clawk")
@@ -362,11 +412,14 @@ class TestLazySandboxBringUp:
         secret.write_bytes(b"HOST-PRIVATE-KEY")
 
         import tools.terminal_tool as tt
+
         monkeypatch.setattr(tt, "ensure_task_env", lambda *_a, **_k: None)
         monkeypatch.setattr(isrc, "_get_active_env", lambda *_a, **_k: None)
 
         with pytest.raises(isrc.SourceNotFound):
-            await isrc.resolve_image_source(str(secret), isrc.ResolveContext(task_id="t1"))
+            await isrc.resolve_image_source(
+                str(secret), isrc.ResolveContext(task_id="t1")
+            )
 
 
 # HEIF/HEIC/AVIF ISO-BMFF headers: 'ftyp' box at bytes 4-8, major brand at 8-12,
@@ -393,14 +446,17 @@ class TestHeicDetection:
 
     def test_heic_brand_detected(self):
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         assert _detect_image_mime_type_from_bytes(HEIC_HEADER) == "image/heic"
 
     def test_generic_mif1_brand_detected_as_heic(self):
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         assert _detect_image_mime_type_from_bytes(MIF1_HEADER) == "image/heic"
 
     def test_avif_brand_detected(self):
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         assert _detect_image_mime_type_from_bytes(AVIF_HEADER) == "image/avif"
 
     def test_mif1_major_with_avif_compatible_brand_is_avif(self):
@@ -409,20 +465,26 @@ class TestHeicDetection:
         only the major brand labeled every mif1 file HEIC, which routes an AVIF
         to the HEVC error text and mis-reports the format to the caller."""
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
-        assert _detect_image_mime_type_from_bytes(
-            MIF1_MAJOR_AVIF_COMPATIBLE) == "image/avif"
+
+        assert (
+            _detect_image_mime_type_from_bytes(MIF1_MAJOR_AVIF_COMPATIBLE)
+            == "image/avif"
+        )
 
     def test_mif1_major_with_av01_compatible_brand_is_avif(self):
         """Same as above for the 'av01' codec brand, deeper in the list."""
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
-        assert _detect_image_mime_type_from_bytes(
-            MIF1_MAJOR_AV01_COMPATIBLE) == "image/avif"
 
+        assert (
+            _detect_image_mime_type_from_bytes(MIF1_MAJOR_AV01_COMPATIBLE)
+            == "image/avif"
+        )
 
     def test_brand_scan_does_not_read_past_the_ftyp_box(self):
         """The scan is bounded by the declared ftyp box size, so an 'avif' token
         sitting in a FOLLOWING box must not upgrade a HEIC to AVIF."""
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         # ftyp box is exactly 0x18 bytes (major mif1 + one compatible 'heic');
         # the next box then contains the literal bytes 'avif'.
         hdr = (
@@ -444,10 +506,17 @@ class TestHeicDetection:
         """
         import struct
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         hdr = (
             struct.pack(">I", declared_size)
-            + b"ftyp" + b"mif1" + b"\x00" * 4 + b"heic"
-            + b"\x00\x00\x00\x10" + b"meta" + b"avif" + b"\x00" * 24
+            + b"ftyp"
+            + b"mif1"
+            + b"\x00" * 4
+            + b"heic"
+            + b"\x00\x00\x00\x10"
+            + b"meta"
+            + b"avif"
+            + b"\x00" * 24
         )
         assert _detect_image_mime_type_from_bytes(hdr) == "image/heic", (
             f"declared size {declared_size} widened the scan and leaked an "
@@ -460,10 +529,8 @@ class TestHeicDetection:
         genuine AVIF whose ftyp box is larger than 64 bytes is still detected."""
         import struct
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
-        hdr = (
-            struct.pack(">I", 9999)
-            + b"ftyp" + b"mif1" + b"\x00" * 4 + b"mif1avif"
-        )
+
+        hdr = struct.pack(">I", 9999) + b"ftyp" + b"mif1" + b"\x00" * 4 + b"mif1avif"
         assert _detect_image_mime_type_from_bytes(hdr) == "image/avif"
 
     def test_misaligned_box_size_does_not_crash_or_misdetect(self):
@@ -471,28 +538,40 @@ class TestHeicDetection:
         into reading a partial brand."""
         import struct
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         for size in (17, 18, 19, 21, 22, 23):
             hdr = (
                 struct.pack(">I", size)
-                + b"ftyp" + b"mif1" + b"\x00" * 4 + b"heic"
-                + b"\x00\x00\x00\x10" + b"meta" + b"avif" + b"\x00" * 24
+                + b"ftyp"
+                + b"mif1"
+                + b"\x00" * 4
+                + b"heic"
+                + b"\x00\x00\x00\x10"
+                + b"meta"
+                + b"avif"
+                + b"\x00" * 24
             )
             got = _detect_image_mime_type_from_bytes(hdr)
             assert got == "image/heic", f"size {size} -> {got}"
 
-
     def test_truncated_ftyp_header_does_not_crash(self):
         """A short/garbage read must return a value, not raise."""
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         assert _detect_image_mime_type_from_bytes(b"\x00\x00\x00\x18ftyp") is None
         # Bogus (huge) declared box size must fall back to the sniffed window.
-        assert _detect_image_mime_type_from_bytes(
-            b"\xff\xff\xff\xffftypmif1\x00\x00\x00\x00mif1avif") == "image/avif"
+        assert (
+            _detect_image_mime_type_from_bytes(
+                b"\xff\xff\xff\xffftypmif1\x00\x00\x00\x00mif1avif"
+            )
+            == "image/avif"
+        )
 
     def test_ftyp_with_unknown_brand_not_misdetected(self):
         """An ISO-BMFF ftyp box that isn't an image brand (e.g. mp4) stays
         unrecognized — we must not claim every ftyp container is an image."""
         from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
         mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom" + b"\x00" * 32
         assert _detect_image_mime_type_from_bytes(mp4) is None
 
@@ -504,6 +583,7 @@ class TestHeicDetection:
         pillow_heif.register_heif_opener()
         from PIL import Image
         from tools import vision_tools_image_prep as vt
+
         isrc = _reload(monkeypatch, tmp_path / "clawk")
         monkeypatch.setenv("TERMINAL_ENV", "local")
 
@@ -511,7 +591,8 @@ class TestHeicDetection:
         # x265's default CPU-sized pool can exhaust CI threads and hang the encoder.
         # This fixture needs one worker, not a pool per parallel test process.
         Image.new("RGB", (8, 8), (120, 60, 200)).save(
-            str(heic), format="HEIF",
+            str(heic),
+            format="HEIF",
             enc_params={"x265:pools": "none", "x265:frame-threads": "1"},
         )
 
@@ -529,11 +610,13 @@ class TestHeicDetection:
         (install pillow-heif) rather than a generic conversion failure — the
         same soft-dependency posture as SVG-without-rasterizer."""
         from tools import vision_tools_image_prep as vt
+
         _reload(monkeypatch, tmp_path / "clawk")
         heic = tmp_path / "photo.heic"
         heic.write_bytes(HEIC_HEADER)
 
         import builtins
+
         real_import = builtins.__import__
 
         def _no_heif(name, *args, **kwargs):
@@ -558,15 +641,18 @@ class TestHeicDetection:
         """
         pytest.importorskip("PIL")
         from PIL import Image, features
+
         if not features.check("avif"):
             pytest.skip("this Pillow build has no native AVIF codec")
         from tools import vision_tools_image_prep as vt
+
         _reload(monkeypatch, tmp_path / "clawk")
 
         avif = tmp_path / "photo.avif"
         Image.new("RGB", (8, 8), (10, 180, 90)).save(str(avif), format="AVIF")
 
         import builtins
+
         real_import = builtins.__import__
 
         def _no_heif(name, *args, **kwargs):
@@ -587,6 +673,7 @@ class TestHeicDetection:
         the AV1/Pillow path — not blame pillow-heif alone, which frequently
         ships without any AV1 codec."""
         from tools import vision_tools_image_prep as vt
+
         _reload(monkeypatch, tmp_path / "clawk")
         # Valid AVIF brand, but the payload is not decodable by anything.
         broken = tmp_path / "broken.avif"

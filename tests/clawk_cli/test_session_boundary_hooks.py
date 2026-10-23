@@ -4,8 +4,6 @@ from clawk_cli.plugins import PluginManager
 from cli import ClawksisCLI
 
 
-
-
 # These tests pin CLI ownership of the finalize request. The end-to-end
 # built-in/core/plugin dispatch order is exercised by
 # tests/clawk_cli/test_lifecycle.py::test_finalize_session_closes_core_before_plugin_export.

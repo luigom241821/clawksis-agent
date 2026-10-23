@@ -20,6 +20,7 @@ def _deny(monkeypatch, denied: Path) -> None:
             if self.parent == denied or self == denied:
                 raise PermissionError(13, "Permission denied", str(self))
             return method(self, *args, **kwargs)
+
         return probe
 
     monkeypatch.setattr(Path, "exists", refuse(real_exists))

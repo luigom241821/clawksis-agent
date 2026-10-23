@@ -43,7 +43,10 @@ def _run_job_with_real_db(job, db, tmp_path):
     # body that finalizes the cron session row runs here against ``db``.
     from types import SimpleNamespace
     from gateway import session_cron
-    token = session_cron._execution.set((SimpleNamespace(db=db), f"cron_{job['id']}_owned", job["id"], None))
+
+    token = session_cron._execution.set(
+        (SimpleNamespace(db=db), f"cron_{job['id']}_owned", job["id"], None)
+    )
     try:
         return _run_job_in_owner(job, db, tmp_path)
     finally:
@@ -51,25 +54,36 @@ def _run_job_with_real_db(job, db, tmp_path):
 
 
 def _run_job_in_owner(job, db, tmp_path):
-    with patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("clawk_state_registry.acquire", return_value=db), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider", return_value=_RUNTIME), \
-         patch("run_agent.AIAgent", _FakeCronAgent):
+    with (
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("clawk_state_registry.acquire", return_value=db),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider", return_value=_RUNTIME
+        ),
+        patch("run_agent.AIAgent", _FakeCronAgent),
+    ):
         return run_job(job)
 
 
 def _cron_rows(db):
-    return [dict(r) for r in db._read_all("SELECT * FROM sessions WHERE id LIKE 'cron_%'")]
+    return [
+        dict(r) for r in db._read_all("SELECT * FROM sessions WHERE id LIKE 'cron_%'")
+    ]
 
 
 def test_run_job_stamps_workdir_on_cron_session_row(tmp_path):
     db = SessionDB(db_path=tmp_path / "state.db")
     repo = tmp_path / "repo"
     repo.mkdir()
-    job = {"id": "workdir-job", "name": "workdir job", "prompt": "hello", "workdir": str(repo)}
+    job = {
+        "id": "workdir-job",
+        "name": "workdir job",
+        "prompt": "hello",
+        "workdir": str(repo),
+    }
 
     try:
         success, _output, _final, error = _run_job_with_real_db(job, db, tmp_path)

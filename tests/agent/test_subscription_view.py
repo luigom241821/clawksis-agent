@@ -39,34 +39,16 @@ def _tier(tid, order, dpm, mc, *, is_current=False, is_enabled=True):
 # ── subscription_manage_url ──────────────────────────────────────────
 
 
-
-
 def test_manage_url_omits_org_when_absent():
-    s = SubscriptionState(logged_in=True, org_id=None, portal_url="https://p.example.com/")
+    s = SubscriptionState(
+        logged_in=True, org_id=None, portal_url="https://p.example.com/"
+    )
     url = subscription_manage_url(s)
     assert url == "https://p.example.com/manage-subscription"
     assert "org_id" not in url
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ── shared plan-catalog helpers (format_tier_row / selectable_tiers / is_upgrade) ──
-
-
 
 
 def test_format_tier_row_hides_absent_or_zero_credits():
@@ -74,8 +56,6 @@ def test_format_tier_row_hides_absent_or_zero_credits():
     assert format_tier_row(_tier("plus", 1, "20", "0")) == "Plus · $20/mo"
     assert format_tier_row(_tier("plus", 1, "20", None)) == "Plus · $20/mo"
     assert "credits/mo" not in format_tier_row(_tier("plus", 1, "20", "0"))
-
-
 
 
 def test_is_upgrade_by_tier_order():
@@ -86,8 +66,6 @@ def test_is_upgrade_by_tier_order():
     )
     assert is_upgrade(state, "ultra") is True
     assert is_upgrade(state, "plus") is False
-
-
 
 
 # ── payload parser ───────────────────────────────────────────────────
@@ -118,10 +96,6 @@ def test_parser_maps_camelCase_payload_fields():
     assert s.current.monthly_credits == Decimal(1000)
 
 
-
-
-
-
 @pytest.mark.parametrize(
     "role,can_change_plan_raw,is_admin,can_change_plan",
     [
@@ -132,9 +106,7 @@ def test_parser_maps_camelCase_payload_fields():
         ("MEMBER", None, False, False),
     ],
 )
-def test_parser_five_roles(
-    role, can_change_plan_raw, is_admin, can_change_plan
-):
+def test_parser_five_roles(role, can_change_plan_raw, is_admin, can_change_plan):
     payload = {"org": {"role": role}}
     if can_change_plan_raw is not None:
         payload["canChangePlan"] = can_change_plan_raw
@@ -144,12 +116,6 @@ def test_parser_five_roles(
     assert state.is_admin is is_admin
     assert state.can_change_plan_raw is can_change_plan_raw
     assert state.can_change_plan is can_change_plan
-
-
-
-
-
-
 
 
 # ── tier catalog parsing (the picker) ────────────────────────────────
@@ -185,9 +151,9 @@ def test_parser_maps_tiers_catalog():
     assert free.tier_id == "free" and free.tier_order == 0
     assert free.dollars_per_month == Decimal(0)
     assert plus.is_current is True
-    assert plus.dollars_per_month == Decimal(20) and plus.monthly_credits == Decimal(1000)
-
-
+    assert plus.dollars_per_month == Decimal(20) and plus.monthly_credits == Decimal(
+        1000
+    )
 
 
 # ── preview parser (POST /preview) ───────────────────────────────────
@@ -213,20 +179,12 @@ def test_preview_parser_charge_now():
     assert p.monthly_credits_delta == Decimal(6000)
 
 
-
-
-
-
-
-
 # ── dev fixtures (env-driven, no live portal) ────────────────────────
 
 
 def test_no_fixture_when_env_unset(monkeypatch):
     monkeypatch.delenv("CLAWK_DEV_SUBSCRIPTION_FIXTURE", raising=False)
     assert dev_fixture_subscription_state() is None
-
-
 
 
 def test_dev_fixture_exposes_tier_catalog(monkeypatch):
@@ -236,8 +194,6 @@ def test_dev_fixture_exposes_tier_catalog(monkeypatch):
     assert s is not None and len(s.tiers) >= 2
     current = [t for t in s.tiers if t.is_current]
     assert len(current) == 1 and current[0].tier_id == "plus"
-
-
 
 
 def test_build_subscription_state_uses_fixture(monkeypatch):

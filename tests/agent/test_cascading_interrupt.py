@@ -21,6 +21,7 @@ right before the force-close. The worker's exception handler checks it and
 exits cleanly (no retry, no fallback, no "reconnecting" status) instead of
 treating the forced error as transient.
 """
+
 import threading
 import time
 import types
@@ -30,8 +31,6 @@ import httpx
 import pytest
 
 from agent import chat_completion_helpers as cch
-
-
 
 
 def _make_agent():
@@ -74,11 +73,9 @@ def test_non_streaming_cancel_does_not_surface_network_error():
 
     # The forced RemoteProtocolError must NOT surface as the raised error.
     assert create_calls["n"] == 1
-    assert elapsed < 10.0, f"interrupt took {elapsed:.1f}s — should be near-instant (guarding the 30s+ hang)"
-
-
-
-
+    assert elapsed < 10.0, (
+        f"interrupt took {elapsed:.1f}s — should be near-instant (guarding the 30s+ hang)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -138,5 +135,3 @@ def test_anthropic_non_streaming_stale_aborts_request_client_not_shared():
     )
     # Worker unblocks and closes its own request client from its own thread.
     _wait_for_mock_call(agent._close_request_anthropic_client)
-
-

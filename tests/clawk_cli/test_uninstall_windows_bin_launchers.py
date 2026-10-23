@@ -9,6 +9,7 @@ store entry), so the sweep takes everything in it.
 
 Platform verdicts are injected parameters (input→output, not host fakes).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

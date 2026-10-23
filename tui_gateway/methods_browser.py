@@ -16,10 +16,12 @@ def _resolve_browser_cdp_url() -> str:
     profile's live connect, env, then ``browser.cdp_url``) minus WS resolution; ``browser_navigate``
     normalizes on the next call."""
     from tools.browser_tool_cdp import env_cdp_url, live_cdp_override
+
     if env_url := live_cdp_override() or env_cdp_url():
         return env_url
     with contextlib.suppress(Exception):
         from clawk_cli.config import read_raw_config
+
         cfg = read_raw_config()
         browser_cfg = cfg.get("browser", {}) if isinstance(cfg, dict) else {}
         if isinstance(browser_cfg, dict):
@@ -32,18 +34,26 @@ def _is_default_local_cdp(parsed) -> bool:
     ``ws://127.0.0.1:9222/devtools/browser/<id>`` is connectable as-is and collapsing it to bare
     ``http://...:9222`` would break the connect."""
     with contextlib.suppress(ValueError):
-        return (parsed.scheme in {"http", "ws"} and parsed.hostname in {"127.0.0.1", "localhost"}
-                and (parsed.port or 80) == 9222 and parsed.path in {"", "/", "/json", "/json/version"})
+        return (
+            parsed.scheme in {"http", "ws"}
+            and parsed.hostname in {"127.0.0.1", "localhost"}
+            and (parsed.port or 80) == 9222
+            and parsed.path in {"", "/", "/json", "/json/version"}
+        )
     return False
 
 
 def _cdp_http_reachable(parsed, timeout: float = 2.0) -> bool:
     """True when ``/json/version`` or ``/json`` on the CDP host answers 2xx."""
     import urllib.request
+
     scheme = {"ws": "http", "wss": "https"}.get(parsed.scheme, parsed.scheme)
     root = f"{scheme}://{parsed.netloc}".rstrip("/")
     for url in (f"{root}/json/version", f"{root}/json"):
-        with contextlib.suppress(Exception), urllib.request.urlopen(url, timeout=timeout) as resp:
+        with (
+            contextlib.suppress(Exception),
+            urllib.request.urlopen(url, timeout=timeout) as resp,
+        ):
             if 200 <= getattr(resp, "status", 200) < 300:
                 return True
     return False
@@ -52,8 +62,12 @@ def _cdp_http_reachable(parsed, timeout: float = 2.0) -> bool:
 def _connect_local_default(port: int, system: str, announce) -> str | None:
     """Discover (or launch) the default local debug browser → CDP URL, or None after announcing."""
     from clawk_cli.browser_connect import (
-        discover_local_cdp_url, find_free_debug_port, launch_chrome_debug, local_port_in_use,
-        manual_chrome_debug_command)
+        discover_local_cdp_url,
+        find_free_debug_port,
+        launch_chrome_debug,
+        local_port_in_use,
+        manual_chrome_debug_command,
+    )
 
     # Dual-stack discovery: when another app squats the IPv4 loopback on the debug port, a
     # browser bound there comes up on [::1] only; an IPv4-only probe misses it AND hangs
@@ -65,11 +79,15 @@ def _connect_local_default(port: int, system: str, announce) -> str | None:
     launch_port = port
     if local_port_in_use(port):
         launch_port = find_free_debug_port(port)
-        announce(f"Port {port} is occupied by another application that isn't a CDP browser "
-                 "(an IDE debugger or dev server may be using it) — launching a debug browser "
-                 f"on port {launch_port} instead...")
+        announce(
+            f"Port {port} is occupied by another application that isn't a CDP browser "
+            "(an IDE debugger or dev server may be using it) — launching a debug browser "
+            f"on port {launch_port} instead..."
+        )
     else:
-        announce("Chromium-family browser isn't running with remote debugging — attempting to launch...")
+        announce(
+            "Chromium-family browser isn't running with remote debugging — attempting to launch..."
+        )
     launch = launch_chrome_debug(launch_port, system)
     if launch.launched:
         # Bounded wait: the whole connect must finish inside the client RPC timeout.
@@ -79,17 +97,27 @@ def _connect_local_default(port: int, system: str, announce) -> str | None:
                 break
             time.sleep(0.5)
     if discovered:
-        announce(f"Chromium-family browser launched and listening on port {launch_port}")
+        announce(
+            f"Chromium-family browser launched and listening on port {launch_port}"
+        )
         return discovered
     if launch.hint:
         announce(launch.hint, level="error")
     command = manual_chrome_debug_command(launch_port, system)
     hints = (
-        ["Start a Chromium-family browser with remote debugging, then retry /browser connect:", command]
-        if command else [
+        [
+            "Start a Chromium-family browser with remote debugging, then retry /browser connect:",
+            command,
+        ]
+        if command
+        else [
             "No supported Chromium-family browser executable was found in this environment.",
-            f"Install one or start a Chromium-family browser with --remote-debugging-port={launch_port}, then retry /browser connect."])
-    hints.append("Browser not connected — start a Chromium-family browser with remote debugging and retry /browser connect")
+            f"Install one or start a Chromium-family browser with --remote-debugging-port={launch_port}, then retry /browser connect.",
+        ]
+    )
+    hints.append(
+        "Browser not connected — start a Chromium-family browser with remote debugging and retry /browser connect"
+    )
     for line in hints:
         announce(line, level="error")
     return None
@@ -100,6 +128,7 @@ def _reap_profile_browsers() -> None:
     profiles' sessions on a multiplexed gateway keep theirs."""
     from clawk_constants import clawk_home_key
     from tools.browser_tool_lifecycle import cleanup_profile_browsers
+
     cleanup_profile_browsers(clawk_home_key())
 
 
@@ -108,9 +137,12 @@ def _browser_connect(rid, params: dict) -> dict:
     from clawk_cli.browser_connect import DEFAULT_BROWSER_CDP_URL
     from tools.browser_tool_cdp import set_live_cdp_override
     from urllib.parse import urlparse
+
     raw_url = params.get("url")
     if raw_url is not None and not isinstance(raw_url, str):
-        return _err(rid, 4015, f"browser url must be a string, got {type(raw_url).__name__}")
+        return _err(
+            rid, 4015, f"browser url must be a string, got {type(raw_url).__name__}"
+        )
     url = (raw_url or "").strip() or DEFAULT_BROWSER_CDP_URL
     sid, system, messages = params.get("session_id") or "", platform.system(), []
 
@@ -119,6 +151,7 @@ def _browser_connect(rid, params: dict) -> dict:
         # Without a session id the TUI prints `messages` from the response (an event would double-render).
         if sid:
             _emit("browser.progress", sid, {"message": message, "level": level})
+
     parsed = urlparse(url if "://" in url else f"http://{url}")
     if parsed.scheme not in _CDP_SCHEMES:
         return _err(rid, 4015, f"unsupported browser url: {url}")
@@ -136,8 +169,11 @@ def _browser_connect(rid, params: dict) -> dict:
     try:
         # Hosted ws[s]://.../devtools/browser/<id> endpoints don't serve the HTTP discovery path:
         # check TCP reachability only and let browser_navigate handshake.
-        if parsed.scheme in {"ws", "wss"} and parsed.path.startswith("/devtools/browser/"):
+        if parsed.scheme in {"ws", "wss"} and parsed.path.startswith(
+            "/devtools/browser/"
+        ):
             import socket
+
             try:
                 with socket.create_connection((parsed.hostname, port), timeout=2.0):
                     pass
@@ -154,8 +190,11 @@ def _browser_connect(rid, params: dict) -> dict:
             return _err(rid, 5031, f"could not reach browser CDP at {url}")
         # Concrete ``/devtools/browser/<id>`` endpoints stay as-is; discovery-style inputs collapse
         # to ``scheme://host:port`` so ``_resolve_cdp_override`` can append ``/json/version``.
-        normalized = (parsed.geturl() if parsed.path.startswith("/devtools/browser/")
-                      else parsed._replace(path="", params="", query="", fragment="").geturl())
+        normalized = (
+            parsed.geturl()
+            if parsed.path.startswith("/devtools/browser/")
+            else parsed._replace(path="", params="", query="", fragment="").geturl()
+        )
         # Reap BEFORE publishing this profile's endpoint (an in-flight tool call sees the old
         # supervisor closed) and AFTER (the default task's cached supervisor drains against the new URL).
         _reap_profile_browsers()
@@ -163,8 +202,14 @@ def _browser_connect(rid, params: dict) -> dict:
         _reap_profile_browsers()
     except Exception as e:
         return _err(rid, 5031, str(e))
-    return _ok(rid, {"connected": True, "url": normalized,
-                     **({"messages": messages} if messages else {})})
+    return _ok(
+        rid,
+        {
+            "connected": True,
+            "url": normalized,
+            **({"messages": messages} if messages else {}),
+        },
+    )
 
 
 def _browser_disconnect(rid) -> dict:

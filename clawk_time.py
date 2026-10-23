@@ -43,7 +43,9 @@ def _repair_surrogates(text: str, encoding: Optional[str] = None) -> str:
         return text
     if _ESCAPED_BYTES_RE.fullmatch(text):
         try:
-            return text.encode("ascii", "surrogateescape").decode(encoding or locale.getencoding())
+            return text.encode("ascii", "surrogateescape").decode(
+                encoding or locale.getencoding()
+            )
         except (LookupError, UnicodeError):
             pass
     return _SURROGATE_RE.sub("\ufffd", text)
@@ -60,15 +62,20 @@ def safe_strftime(value: datetime, fmt: str) -> str:
         return _repair_surrogates(value.strftime(fmt))
     except UnicodeEncodeError:
         zone = _repair_surrogates(value.tzname() or "").replace("%", "%%")
-        return _repair_surrogates(value.strftime(
-            re.sub(r"%([%Z])", lambda m: zone if m.group(1) == "Z" else "%%", fmt)))
+        return _repair_surrogates(
+            value.strftime(
+                re.sub(r"%([%Z])", lambda m: zone if m.group(1) == "Z" else "%%", fmt)
+            )
+        )
 
 
 def _env_timezone() -> str:
     """``CLAWK_TIMEZONE`` when it may speak for the active profile. Under the multiplexed
     gateway the env var holds only the DEFAULT profile's value (bridged from its config.yaml at
     startup), so every routed profile must read its own config.yaml instead."""
-    from agent.secret_scope import is_multiplex_active  # lazy: secret_scope pulls in more than a clock needs
+    from agent.secret_scope import (
+        is_multiplex_active,
+    )  # lazy: secret_scope pulls in more than a clock needs
 
     if is_multiplex_active():
         return ""
@@ -92,11 +99,17 @@ def _resolve_timezone_name() -> str:
         # parse is the stdlib-safe fallback for bootstrap consumers without clawk_cli importable.
         try:
             from clawk_cli.config_effective import load_user_config_effective
+
             cfg = load_user_config_effective(get_config_path())
         except Exception:
             import clawk_yaml as yaml
+
             config_path = get_config_path()
-            cfg = (yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}) if config_path.exists() else {}
+            cfg = (
+                (yaml.safe_load(config_path.read_text(encoding="utf-8")) or {})
+                if config_path.exists()
+                else {}
+            )
         if cfg:
             tz_cfg = cfg.get("timezone", "")
             if isinstance(tz_cfg, str) and tz_cfg.strip():
@@ -121,7 +134,11 @@ def _timezone_entry() -> tuple[str, Optional[ZoneInfo]]:
         try:
             tz = ZoneInfo(name)
         except Exception as exc:
-            logger.warning("Invalid timezone '%s': %s. Falling back to server local time.", name, exc)
+            logger.warning(
+                "Invalid timezone '%s': %s. Falling back to server local time.",
+                name,
+                exc,
+            )
     with _cache_lock:
         return _tz_cache.setdefault(cache_identity, (name, tz))
 

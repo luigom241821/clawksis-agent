@@ -13,6 +13,7 @@ need the same overrides back (override_requirements) to reach the locked graph.
 Stdlib only: the bootstrap runner loads pm.environment on a system python that
 may predate tomllib.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -37,14 +38,26 @@ def _parse_lock(text: str) -> tuple[list[dict[str, str]], list[tuple[str, str]]]
         import tomllib
     except ModuleNotFoundError:
         manifest = re.search(r"(?ms)^\[manifest\]\s*$(.*?)(?=^\[)", text + "\n[")
-        overrides = re.search(r"(?ms)^overrides\s*=\s*\[(.*?)^\]", manifest.group(1)) if manifest else None
+        overrides = (
+            re.search(r"(?ms)^overrides\s*=\s*\[(.*?)^\]", manifest.group(1))
+            if manifest
+            else None
+        )
         tables = re.findall(r"\{([^}]*)\}", overrides.group(1)) if overrides else []
-        entries = [dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', table)) for table in tables]
-        packages = re.findall(r'(?m)^\[\[package\]\]\s*\nname = "([^"]+)"\s*\nversion = "([^"]+)"', text)
+        entries = [
+            dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', table)) for table in tables
+        ]
+        packages = re.findall(
+            r'(?m)^\[\[package\]\]\s*\nname = "([^"]+)"\s*\nversion = "([^"]+)"', text
+        )
         return entries, packages
     data = tomllib.loads(text)
     entries = data.get("manifest", {}).get("overrides", [])
-    packages = [(package["name"], package["version"]) for package in data.get("package", []) if "version" in package]
+    packages = [
+        (package["name"], package["version"])
+        for package in data.get("package", [])
+        if "version" in package
+    ]
     return entries, packages
 
 
@@ -82,7 +95,9 @@ def unexpected_incompatibilities(report: str, lock: Path | None) -> list[str] | 
     its head, and any failure printed there). The caller then fails on the raw output
     instead of trusting a partial parse.
     """
-    lines = [line.strip() for line in report.splitlines() if _REPORT_LINE.match(line.strip())]
+    lines = [
+        line.strip() for line in report.splitlines() if _REPORT_LINE.match(line.strip())
+    ]
     found = _FOUND.search(report)
     if not lines or not found or int(found.group(1)) != len(lines):
         return None
@@ -92,6 +107,9 @@ def unexpected_incompatibilities(report: str, lock: Path | None) -> list[str] | 
     unexpected = []
     for line in lines:
         mismatch = _VERSION_MISMATCH.match(line)
-        if not (mismatch and mismatch.group(2) in expected.get(_normalize(mismatch.group(1)), ())):
+        if not (
+            mismatch
+            and mismatch.group(2) in expected.get(_normalize(mismatch.group(1)), ())
+        ):
             unexpected.append(line)
     return unexpected

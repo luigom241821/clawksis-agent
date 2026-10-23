@@ -40,7 +40,10 @@ def _clamp_or_default(value: Any) -> int:
 
 def _get_extract_char_limit() -> int:
     """``web.extract_char_limit`` clamped to a sane range, else the default."""
-    from tools.web_tools import _load_web_config  # lazy: tests patch tools.web_tools._load_web_config
+    from tools.web_tools import (
+        _load_web_config,
+    )  # lazy: tests patch tools.web_tools._load_web_config
+
     return _clamp_or_default(_load_web_config().get("extract_char_limit"))
 
 
@@ -48,10 +51,17 @@ def convert_base64_images_to_links(text: str) -> str:
     """Replace inline base64 image blobs (token bombs) with ``[IMAGE: alt]`` placeholders: markdown images
     (alt kept), parenthesised blobs, and bare ``data:image/...;base64,`` payloads. Real http(s) markdown
     image links are left untouched so the agent can ``web_extract`` / ``vision_analyze`` them."""
-    def _md_repl(m: re.Match[str]) -> str:
-        return f"[IMAGE: {alt}]" if (alt := (m.group("alt") or "").strip()) else "[IMAGE]"
 
-    out = re.sub(r"!\[(?P<alt>[^\]]*)\]\(\s*data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+\)", _md_repl, text)
+    def _md_repl(m: re.Match[str]) -> str:
+        return (
+            f"[IMAGE: {alt}]" if (alt := (m.group("alt") or "").strip()) else "[IMAGE]"
+        )
+
+    out = re.sub(
+        r"!\[(?P<alt>[^\]]*)\]\(\s*data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+\)",
+        _md_repl,
+        text,
+    )
     out = re.sub(r"\(\s*data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+\)", "[IMAGE]", out)
     return re.sub(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+", "[IMAGE]", out)
 
@@ -64,15 +74,20 @@ def _store_full_text(url: str, content: str) -> Optional[str]:
         import hashlib
         from clawk_constants import get_clawk_dir
         from tools.web_result_cache import _host_slug
+
         cache_dir = get_clawk_dir("cache/web", "web_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        path = cache_dir / f"{_host_slug(url)}-{hashlib.sha256(url.encode('utf-8')).hexdigest()[:10]}.md"
+        path = (
+            cache_dir
+            / f"{_host_slug(url)}-{hashlib.sha256(url.encode('utf-8')).hexdigest()[:10]}.md"
+        )
         if len(content) > MAX_STORED_TEXT_CHARS:
             content = content[:MAX_STORED_TEXT_CHARS] + (
                 f"\n\n[... stored copy truncated at {MAX_STORED_TEXT_CHARS:,} chars "
                 f"of {len(content):,}; re-extract a more specific URL for the rest ...]"
             )
         from tools.spill_safety import write_text_exclusive
+
         # Deterministic name in a well-known dir: refuse symlinks (lstat-unlink + exclusive create);
         # same-URL re-extraction legitimately overwrites. Not private: cache/web is bind-mounted
         # into remote backends' container UID.
@@ -96,16 +111,18 @@ def _truncate_with_footer(content: str, url: str, char_limit: int) -> tuple[str,
     if (nl := head.rfind("\n")) > head_budget * 0.5:
         head = head[:nl]
     if 0 <= (nl := tail.find("\n")) < tail_budget * 0.5:
-        tail = tail[nl + 1:]
+        tail = tail[nl + 1 :]
 
     stored_path = _store_full_text(url, content)
     if stored_path:
         # The footer is read by the AGENT, whose read_file runs inside the active backend: render the
         # path where docker/modal/ssh/... see the mounted cache, not the host path (#72389, #81984).
         from tools.credential_files import to_agent_visible_cache_path
+
         stored_path = to_agent_visible_cache_path(stored_path)
     footer_lines = [
-        "", "─" * 8 + " [TRUNCATED] " + "─" * 8,
+        "",
+        "─" * 8 + " [TRUNCATED] " + "─" * 8,
         f"Showing {len(head):,} chars (head) + {len(tail):,} chars (tail) "
         f"of {len(content):,} total clean characters.",
     ]
@@ -130,10 +147,29 @@ def _truncate_with_footer(content: str, url: str, char_limit: int) -> tuple[str,
 
 def _effective_char_limit(char_limit: Optional[int]) -> int:
     """Caller's ``char_limit`` (else config) clamped; non-numeric input falls back to the default."""
-    return _clamp_or_default(char_limit) if char_limit is not None else _get_extract_char_limit()
+    return (
+        _clamp_or_default(char_limit)
+        if char_limit is not None
+        else _get_extract_char_limit()
+    )
 
 
-_UNAMBIGUOUS_BINARY_KINDS = ("SQLite", "ZIP", "gzip", "bzip2", "xz", "7-Zip", "ELF", "Mach-O", "PNG", "JPEG", "GIF", "TIFF", "FLAC", "Ogg")
+_UNAMBIGUOUS_BINARY_KINDS = (
+    "SQLite",
+    "ZIP",
+    "gzip",
+    "bzip2",
+    "xz",
+    "7-Zip",
+    "ELF",
+    "Mach-O",
+    "PNG",
+    "JPEG",
+    "GIF",
+    "TIFF",
+    "FLAC",
+    "Ogg",
+)
 
 
 def _binary_payload_kind(text: str) -> str:
@@ -150,7 +186,9 @@ def _binary_payload_kind(text: str) -> str:
     return ""
 
 
-def _truncate_results(results: list[dict], char_limit: int, debug_call_data: dict) -> None:
+def _truncate_results(
+    results: list[dict], char_limit: int, debug_call_data: dict
+) -> None:
     """In place: replace each successful entry's content with its base64-cleaned, budgeted text;
     per-page truncation metrics go into ``debug_call_data``."""
     for result in results:
@@ -165,8 +203,14 @@ def _truncate_results(results: list[dict], char_limit: int, debug_call_data: dic
             result["content"] = ""
             result["error"] = (
                 f"URL returned binary content ({binary_kind}), not a page. Download it with the terminal "
-                "(curl -L -o) and use read_file (SQLite/Office/PDF auto-extract) or terminal utilities on the file.")
-            logger.info("%s (binary payload: %s, %d chars dropped)", url, binary_kind, len(raw_content))
+                "(curl -L -o) and use read_file (SQLite/Office/PDF auto-extract) or terminal utilities on the file."
+            )
+            logger.info(
+                "%s (binary payload: %s, %d chars dropped)",
+                url,
+                binary_kind,
+                len(raw_content),
+            )
             continue
         clean = convert_base64_images_to_links(raw_content)
         model_text, truncated = _truncate_with_footer(clean, url, char_limit)
@@ -176,7 +220,9 @@ def _truncate_results(results: list[dict], char_limit: int, debug_call_data: dic
             debug_call_data["truncation_metrics"].append(
                 {"url": url, "original_size": len(clean), "sent_size": len(model_text)}
             )
-            logger.info("%s (truncated %d -> %d chars)", url, len(clean), len(model_text))
+            logger.info(
+                "%s (truncated %d -> %d chars)", url, len(clean), len(model_text)
+            )
         else:
             logger.info("%s (%d chars, whole)", url, len(clean))
 
@@ -185,9 +231,15 @@ def _trim_results(results: list[dict]) -> list[dict]:
     """Keep only url/title/content/error per entry (+ blocked_by_policy when present)."""
     return [
         {
-            "url": r.get("url", ""), "title": r.get("title", ""), "content": r.get("content", ""),
+            "url": r.get("url", ""),
+            "title": r.get("title", ""),
+            "content": r.get("content", ""),
             "error": r.get("error"),
-            **({"blocked_by_policy": r["blocked_by_policy"]} if "blocked_by_policy" in r else {}),
+            **(
+                {"blocked_by_policy": r["blocked_by_policy"]}
+                if "blocked_by_policy" in r
+                else {}
+            ),
         }
         for r in results
     ]

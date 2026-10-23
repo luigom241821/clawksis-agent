@@ -8,12 +8,18 @@ import os
 from unittest.mock import patch
 
 import os as _os
-_SYS_ENV = {k: _os.environ[k] for k in ("SYSTEMROOT", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "HOME") if k in _os.environ}
+
+_SYS_ENV = {
+    k: _os.environ[k]
+    for k in ("SYSTEMROOT", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "HOME")
+    if k in _os.environ
+}
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run_setup_feishu(
     *,
@@ -53,20 +59,24 @@ def _run_setup_feishu(
             return True
         return False
 
-    with patch("clawk_cli.config.save_env_value", side_effect=mock_save), \
-         patch("clawk_cli.config.get_env_value", side_effect=mock_get), \
-         patch("clawk_cli.config.remove_env_value", side_effect=mock_remove), \
-         patch("clawk_cli.cli_output.prompt_yes_no", side_effect=prompt_yes_no_responses), \
-         patch("clawk_cli.setup.prompt_choice", side_effect=prompt_choice_responses), \
-         patch("clawk_cli.cli_output.prompt", side_effect=prompt_responses), \
-         patch("clawk_cli.cli_output.print_header"), \
-         patch("clawk_cli.cli_output.print_info"), \
-         patch("clawk_cli.cli_output.print_success"), \
-         patch("clawk_cli.cli_output.print_warning"), \
-         patch("clawk_cli.cli_output.print_error"), \
-         patch("plugins.platforms.feishu.adapter.qr_register", return_value=qr_result):
-
+    with (
+        patch("clawk_cli.config.save_env_value", side_effect=mock_save),
+        patch("clawk_cli.config.get_env_value", side_effect=mock_get),
+        patch("clawk_cli.config.remove_env_value", side_effect=mock_remove),
+        patch(
+            "clawk_cli.cli_output.prompt_yes_no", side_effect=prompt_yes_no_responses
+        ),
+        patch("clawk_cli.setup.prompt_choice", side_effect=prompt_choice_responses),
+        patch("clawk_cli.cli_output.prompt", side_effect=prompt_responses),
+        patch("clawk_cli.cli_output.print_header"),
+        patch("clawk_cli.cli_output.print_info"),
+        patch("clawk_cli.cli_output.print_success"),
+        patch("clawk_cli.cli_output.print_warning"),
+        patch("clawk_cli.cli_output.print_error"),
+        patch("plugins.platforms.feishu.adapter.qr_register", return_value=qr_result),
+    ):
         from plugins.platforms.feishu.adapter import interactive_setup
+
         interactive_setup()
 
     return saved_env, removed_keys
@@ -77,21 +87,30 @@ def _run_setup_feishu(
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Connection mode
 # ---------------------------------------------------------------------------
 
+
 class TestSetupFeishuConnectionMode:
     """Connection mode: QR always websocket, manual path lets user choose."""
-
 
     @patch("plugins.platforms.feishu.adapter.probe_bot", return_value=None)
     def test_manual_path_websocket(self, _mock_probe):
         env, _ = _run_setup_feishu(
             qr_result=None,
-            prompt_choice_responses=[1, 0, 0, 0, 0],  # method=manual, domain=feishu, connection=ws, dm=pairing, group=open
-            prompt_responses=["cli_manual", "secret_manual", ""],  # app_id, app_secret, home_channel
+            prompt_choice_responses=[
+                1,
+                0,
+                0,
+                0,
+                0,
+            ],  # method=manual, domain=feishu, connection=ws, dm=pairing, group=open
+            prompt_responses=[
+                "cli_manual",
+                "secret_manual",
+                "",
+            ],  # app_id, app_secret, home_channel
         )
         assert env["FEISHU_CONNECTION_MODE"] == "websocket"
 
@@ -100,21 +119,29 @@ class TestSetupFeishuConnectionMode:
 # DM security policy
 # ---------------------------------------------------------------------------
 
+
 class TestSetupFeishuDmPolicy:
     """DM policy must use platform-scoped FEISHU_ALLOW_ALL_USERS, not the global flag."""
 
     def _run_with_dm_choice(self, dm_choice_idx, prompt_responses=None):
         env, _ = _run_setup_feishu(
             qr_result={
-                "app_id": "cli_test", "app_secret": "s", "domain": "feishu",
-                "open_id": "ou_owner", "bot_name": None, "bot_open_id": None,
+                "app_id": "cli_test",
+                "app_secret": "s",
+                "domain": "feishu",
+                "open_id": "ou_owner",
+                "bot_name": None,
+                "bot_open_id": None,
             },
             prompt_yes_no_responses=[True],
-            prompt_choice_responses=[0, dm_choice_idx, 0],  # method=QR, dm=<choice>, group=open
+            prompt_choice_responses=[
+                0,
+                dm_choice_idx,
+                0,
+            ],  # method=QR, dm=<choice>, group=open
             prompt_responses=prompt_responses or [""],
         )
         return env
-
 
     def test_allowlist_sets_feishu_allow_all_false_with_list(self):
         env = self._run_with_dm_choice(2, prompt_responses=["ou_user1,ou_user2", ""])
@@ -127,13 +154,17 @@ class TestSetupFeishuDmPolicy:
 # Group policy
 # ---------------------------------------------------------------------------
 
-class TestSetupFeishuGroupPolicy:
 
+class TestSetupFeishuGroupPolicy:
     def test_open_with_mention(self):
         env, _ = _run_setup_feishu(
             qr_result={
-                "app_id": "cli_test", "app_secret": "s", "domain": "feishu",
-                "open_id": None, "bot_name": None, "bot_open_id": None,
+                "app_id": "cli_test",
+                "app_secret": "s",
+                "domain": "feishu",
+                "open_id": None,
+                "bot_name": None,
+                "bot_open_id": None,
             },
             prompt_yes_no_responses=[True],
             prompt_choice_responses=[0, 0, 0],  # method=QR, dm=pairing, group=open
@@ -146,14 +177,19 @@ class TestSetupFeishuGroupPolicy:
 # Home channel (optional clear — Issue #12423)
 # ---------------------------------------------------------------------------
 
+
 class TestSetupFeishuHomeChannel:
     """Blank home-channel answer must clear FEISHU_HOME_CHANNEL."""
 
     def test_blank_removes_existing_home_channel(self):
         env, removed = _run_setup_feishu(
             qr_result={
-                "app_id": "cli_test", "app_secret": "s", "domain": "feishu",
-                "open_id": None, "bot_name": None, "bot_open_id": None,
+                "app_id": "cli_test",
+                "app_secret": "s",
+                "domain": "feishu",
+                "open_id": None,
+                "bot_name": None,
+                "bot_open_id": None,
             },
             prompt_yes_no_responses=[True],
             prompt_choice_responses=[0, 0, 0],
@@ -167,6 +203,7 @@ class TestSetupFeishuHomeChannel:
 # ---------------------------------------------------------------------------
 # Adapter integration: env vars → FeishuAdapterSettings
 # ---------------------------------------------------------------------------
+
 
 class TestSetupFeishuAdapterIntegration:
     """Verify that env vars written by _setup_feishu() produce a valid adapter config.
@@ -200,10 +237,9 @@ class TestSetupFeishuAdapterIntegration:
         with patch.dict(os.environ, {**_SYS_ENV, **env}, clear=True):
             from gateway.config import PlatformConfig
             from plugins.platforms.feishu.adapter import FeishuAdapter
+
             adapter = FeishuAdapter(PlatformConfig())
             assert adapter._app_id == "cli_test_app"
             assert adapter._app_secret == "test_secret_value"
             assert adapter._domain_name == "feishu"
             assert adapter._connection_mode == "websocket"
-
-

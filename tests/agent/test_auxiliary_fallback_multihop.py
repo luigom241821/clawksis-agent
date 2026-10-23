@@ -7,6 +7,7 @@ is exhausted the primary (narrowed) error still surfaces as a controlled failure
 share the walk. A quarantined candidate is hidden for a TTL that matches its failure class: seconds
 for a transient 429 / dropped connection, the long payment hold only for depleted credit.
 """
+
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,13 +34,17 @@ def _quota_429(lane: str) -> Exception:
 
 
 def _plain_429(lane: str) -> Exception:
-    exc = Exception(f"Error code: 429 - {{'error': {{'message': 'Rate limit exceeded, retry in 20s', 'lane': '{lane}'}}}}")
+    exc = Exception(
+        f"Error code: 429 - {{'error': {{'message': 'Rate limit exceeded, retry in 20s', 'lane': '{lane}'}}}}"
+    )
     exc.status_code = 429
     return exc
 
 
 def _payment_402(lane: str) -> Exception:
-    exc = Exception(f"Error code: 402 - {{'error': {{'message': 'Insufficient credits', 'lane': '{lane}'}}}}")
+    exc = Exception(
+        f"Error code: 402 - {{'error': {{'message': 'Insufficient credits', 'lane': '{lane}'}}}}"
+    )
     exc.status_code = 402
     return exc
 
@@ -68,13 +73,26 @@ def _walk_patches(primary, main_chain_selections):
     """``provider: auto`` primary; per-task chain empty; main ``fallback_providers`` hands out the
     given (client, model, label) tuples in order and then reports exhaustion; discovery is empty."""
     return (
-        patch("agent.auxiliary_client._resolve_task_provider_model",
-              return_value=("auto", None, None, None, None)),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(primary, "modelA")),
-        patch("agent.auxiliary_client._try_configured_fallback_chain", return_value=(None, None, "")),
-        patch("agent.auxiliary_client._try_main_fallback_chain",
-              side_effect=list(main_chain_selections) + [(None, None, "")]),
-        patch("agent.auxiliary_client._try_payment_fallback", return_value=(None, None, "")),
+        patch(
+            "agent.auxiliary_client._resolve_task_provider_model",
+            return_value=("auto", None, None, None, None),
+        ),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(primary, "modelA"),
+        ),
+        patch(
+            "agent.auxiliary_client._try_configured_fallback_chain",
+            return_value=(None, None, ""),
+        ),
+        patch(
+            "agent.auxiliary_client._try_main_fallback_chain",
+            side_effect=list(main_chain_selections) + [(None, None, "")],
+        ),
+        patch(
+            "agent.auxiliary_client._try_payment_fallback",
+            return_value=(None, None, ""),
+        ),
     )
 
 
@@ -82,11 +100,17 @@ def test_sync_walk_advances_past_quota_limited_candidate_to_next_configured_entr
     """T3: primary 429 → fallback_providers[0] 429 → fallback_providers[1] serves."""
     primary = _client("http://127.0.0.1:1/v1", MagicMock(side_effect=_quota_429("A")))
     lane_b = _client("http://127.0.0.1:2/v1", MagicMock(side_effect=_quota_429("B")))
-    lane_c = _client("http://127.0.0.1:3/v1", MagicMock(return_value=_ok_response("OK")))
+    lane_c = _client(
+        "http://127.0.0.1:3/v1", MagicMock(return_value=_ok_response("OK"))
+    )
 
-    patches = _walk_patches(primary, [(lane_b, "modelB", "custom"), (lane_c, "modelC", "custom")])
+    patches = _walk_patches(
+        primary, [(lane_b, "modelB", "custom"), (lane_c, "modelC", "custom")]
+    )
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        result = call_llm(task="title_generation", messages=[{"role": "user", "content": "Reply OK"}])
+        result = call_llm(
+            task="title_generation", messages=[{"role": "user", "content": "Reply OK"}]
+        )
 
     assert result.choices[0].message.content == "OK"
     assert lane_b.chat.completions.create.call_count == 1
@@ -104,11 +128,24 @@ async def test_async_walk_exhausts_every_configured_lane_once_then_raises_primar
     lane_b = _client("http://127.0.0.1:2/v1", AsyncMock(side_effect=_quota_429("B")))
     lane_c = _client("http://127.0.0.1:3/v1", AsyncMock(side_effect=_quota_429("C")))
 
-    patches = _walk_patches(primary, [(lane_b, "modelB", "custom"), (lane_c, "modelC", "custom")])
-    with patches[0], patches[1], patches[2], patches[3] as main_chain, patches[4] as discovery, \
-            patch("agent.auxiliary_client._to_async_client", side_effect=lambda c, m, **kw: (c, m)):
+    patches = _walk_patches(
+        primary, [(lane_b, "modelB", "custom"), (lane_c, "modelC", "custom")]
+    )
+    with (
+        patches[0],
+        patches[1],
+        patches[2],
+        patches[3] as main_chain,
+        patches[4] as discovery,
+        patch(
+            "agent.auxiliary_client._to_async_client",
+            side_effect=lambda c, m, **kw: (c, m),
+        ),
+    ):
         with pytest.raises(Exception, match="'lane': 'A'"):
-            await async_call_llm(task="compression", messages=[{"role": "user", "content": "summarize"}])
+            await async_call_llm(
+                task="compression", messages=[{"role": "user", "content": "summarize"}]
+            )
 
     assert lane_b.chat.completions.create.call_count == 1
     assert lane_c.chat.completions.create.call_count == 1
@@ -118,22 +155,38 @@ async def test_async_walk_exhausts_every_configured_lane_once_then_raises_primar
     assert discovery.call_count >= 1
 
 
-def test_candidate_quarantine_ttl_is_short_for_transient_429_and_long_for_payment(caplog):
+def test_candidate_quarantine_ttl_is_short_for_transient_429_and_long_for_payment(
+    caplog,
+):
     """A per-minute 429 on a candidate hides the lane for seconds, not the 10-minute payment hold,
     and the warning names the real class; a 402 candidate still gets the long hold."""
     caplog.set_level("WARNING", logger="agent.auxiliary_client")
     primary = _client("http://127.0.0.1:1/v1", MagicMock(side_effect=_plain_429("A")))
     lane_b = _client("http://127.0.0.1:2/v1", MagicMock(side_effect=_plain_429("B")))
     lane_c = _client("http://127.0.0.1:3/v1", MagicMock(side_effect=_payment_402("C")))
-    lane_d = _client("http://127.0.0.1:4/v1", MagicMock(return_value=_ok_response("OK")))
+    lane_d = _client(
+        "http://127.0.0.1:4/v1", MagicMock(return_value=_ok_response("OK"))
+    )
 
     patches = _walk_patches(
-        primary, [(lane_b, "modelB", "custom"), (lane_c, "modelC", "custom"), (lane_d, "modelD", "custom")])
+        primary,
+        [
+            (lane_b, "modelB", "custom"),
+            (lane_c, "modelC", "custom"),
+            (lane_d, "modelD", "custom"),
+        ],
+    )
     with patches[0], patches[1], patches[2], patches[3], patches[4]:
-        result = call_llm(task="title_generation", messages=[{"role": "user", "content": "Reply OK"}])
+        result = call_llm(
+            task="title_generation", messages=[{"role": "user", "content": "Reply OK"}]
+        )
 
     assert result.choices[0].message.content == "OK"
     assert 0 < _quarantine_remaining("http://127.0.0.1:2/v1") <= 60
     assert _quarantine_remaining("http://127.0.0.1:3/v1") > 60
-    marks = [r.getMessage() for r in caplog.records if "marking local/custom unhealthy" in r.getMessage()]
+    marks = [
+        r.getMessage()
+        for r in caplog.records
+        if "marking local/custom unhealthy" in r.getMessage()
+    ]
     assert marks and "payment" not in marks[0] and "rate limit" in marks[0]

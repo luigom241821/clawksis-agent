@@ -25,6 +25,7 @@ from gateway.config import PlatformConfig
 # Ensure slack mocks are in place before importing the adapter
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -38,7 +39,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler", slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -54,6 +58,7 @@ from plugins.platforms.slack.adapter import SlackAdapter
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_adapter():
     config = PlatformConfig(enabled=True, token="xoxb-fake")
@@ -82,6 +87,7 @@ def _slack_api_error(status_code: int, retry_after: str | None = None):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestSlackSendRetryable:
     @pytest.mark.asyncio
     async def test_429_returns_retryable_with_retry_after(self):
@@ -97,14 +103,11 @@ class TestSlackSendRetryable:
         assert result.retryable is True
         assert result.retry_after == 30.0
 
-
     @pytest.mark.asyncio
     async def test_500_is_retryable_no_retry_after(self):
         adapter = _make_adapter()
         client = AsyncMock()
-        client.chat_postMessage = AsyncMock(
-            side_effect=_slack_api_error(500)
-        )
+        client.chat_postMessage = AsyncMock(side_effect=_slack_api_error(500))
         adapter._get_client = lambda cid, team_id="": client
 
         result = await adapter.send("C123", "hello")
@@ -128,4 +131,3 @@ class TestSlackSendRetryable:
 
         assert result.success is False
         assert "api_error=message_not_found" in caplog.text
-

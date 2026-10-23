@@ -12,7 +12,6 @@ pre-API preflight re-runs against the fallback's context window).
 """
 
 
-
 def _collect_cache_controls(obj):
     """Return every ``cache_control`` marker dict reachable in ``obj``."""
     markers = []
@@ -163,9 +162,7 @@ class TestMoACacheControlThreadsTtl:
             "base_url": "",
             "api_mode": "anthropic_messages",
         }
-        out = _maybe_apply_moa_cache_control(
-            messages, runtime, cache_disabled=False
-        )
+        out = _maybe_apply_moa_cache_control(messages, runtime, cache_disabled=False)
         markers = _collect_cache_controls(out)
         assert markers
         assert all("ttl" not in m for m in markers)
@@ -244,9 +241,17 @@ class TestAuxFallbackReplanThreadsTtl:
         ]
         for destination in (
             auxiliary_client._FallbackDestination(
-                "anthropic", "https://api.anthropic.com", "anthropic_messages", "claude-opus-4.8"),
+                "anthropic",
+                "https://api.anthropic.com",
+                "anthropic_messages",
+                "claude-opus-4.8",
+            ),
             auxiliary_client._FallbackDestination(
-                "openrouter", "https://openrouter.ai/api/v1", "chat_completions", "anthropic/claude-opus-4.8"),
+                "openrouter",
+                "https://openrouter.ai/api/v1",
+                "chat_completions",
+                "anthropic/claude-opus-4.8",
+            ),
         ):
             out_msgs, _ = auxiliary_client._replan_synchronous_cache_sections(
                 messages, None, destination=destination
@@ -255,8 +260,20 @@ class TestAuxFallbackReplanThreadsTtl:
         # A caller that decorated its own request (MoA advisor, iteration 1 of a
         # per-iteration fan-out) will replay that prefix: its markers survive the replan.
         from agent.prompt_caching import apply_anthropic_cache_control
-        advisor = apply_anthropic_cache_control(messages, cache_ttl="1h", native_anthropic=True)
+
+        advisor = apply_anthropic_cache_control(
+            messages, cache_ttl="1h", native_anthropic=True
+        )
         out_msgs, _ = auxiliary_client._replan_synchronous_cache_sections(
-            advisor, None, destination=auxiliary_client._FallbackDestination(
-                "anthropic", "https://api.anthropic.com", "anthropic_messages", "claude-opus-4.8"))
-        assert _collect_cache_controls(out_msgs), "a pre-decorated advisor request must keep caching"
+            advisor,
+            None,
+            destination=auxiliary_client._FallbackDestination(
+                "anthropic",
+                "https://api.anthropic.com",
+                "anthropic_messages",
+                "claude-opus-4.8",
+            ),
+        )
+        assert _collect_cache_controls(out_msgs), (
+            "a pre-decorated advisor request must keep caching"
+        )

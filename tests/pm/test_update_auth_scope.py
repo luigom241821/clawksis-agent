@@ -1,4 +1,5 @@
 """Index credentials stay on their exact HTTPS origin, including redirects."""
+
 from __future__ import annotations
 
 from email.message import Message
@@ -13,7 +14,7 @@ from pm import packages
 
 
 class IndexTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
-    def __init__(self, redirects=None, body=b'{}'):
+    def __init__(self, redirects=None, body=b"{}"):
         super().__init__()
         self.redirects = redirects or {}
         self.body = body
@@ -26,7 +27,10 @@ class IndexTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
         if destination:
             headers["Location"] = destination
         response = urllib.response.addinfourl(
-            io.BytesIO(self.body), headers, request.full_url, 302 if destination else 200,
+            io.BytesIO(self.body),
+            headers,
+            request.full_url,
+            302 if destination else 200,
         )
         response.msg = "Found" if destination else "OK"
         return response
@@ -34,20 +38,25 @@ class IndexTransport(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
     https_open = http_open
 
 
-@pytest.mark.parametrize("url,token", [
-    ("https://api.github.com/repos/example/tool/releases", "dummy-gh"),
-    ("https://api.github.com:443/repos/example/tool/releases", "dummy-gh"),
-    ("https://huggingface.co/api/buckets/example/tool/tree", "dummy-hf"),
-    ("https://nodejs.org/dist/index.json", None),
-    ("https://registry.npmjs.org/npm", None),
-    ("https://evilhuggingface.co/index", None),
-    ("https://api.github.com.evil.invalid/index", None),
-    ("https://api.github.com:444/index", None),
-    ("http://api.github.com/index", None),
-])
+@pytest.mark.parametrize(
+    "url,token",
+    [
+        ("https://api.github.com/repos/example/tool/releases", "dummy-gh"),
+        ("https://api.github.com:443/repos/example/tool/releases", "dummy-gh"),
+        ("https://huggingface.co/api/buckets/example/tool/tree", "dummy-hf"),
+        ("https://nodejs.org/dist/index.json", None),
+        ("https://registry.npmjs.org/npm", None),
+        ("https://evilhuggingface.co/index", None),
+        ("https://api.github.com.evil.invalid/index", None),
+        ("https://api.github.com:444/index", None),
+        ("http://api.github.com/index", None),
+    ],
+)
 def test_index_credentials_match_the_exact_origin(monkeypatch, url, token):
     transport = IndexTransport()
-    monkeypatch.setattr(urllib.request, "_opener", urllib.request.build_opener(transport))
+    monkeypatch.setattr(
+        urllib.request, "_opener", urllib.request.build_opener(transport)
+    )
     monkeypatch.setenv("GH_TOKEN", "dummy-gh")
     monkeypatch.setenv("HF_TOKEN", "dummy-hf")
 
@@ -59,31 +68,47 @@ def test_index_credentials_match_the_exact_origin(monkeypatch, url, token):
 
 
 @pytest.mark.parametrize("reader", ["json", "text", "release-digest"])
-@pytest.mark.parametrize("destination,credential_survives", [
-    ("https://api.github.com/second", True),
-    ("https://unrelated.invalid/second", False),
-    ("https://api.github.com:444/second", False),
-    ("http://api.github.com/second", False),
-])
-def test_index_redirects_use_the_credential_safe_opener(monkeypatch, reader, destination, credential_survives):
+@pytest.mark.parametrize(
+    "destination,credential_survives",
+    [
+        ("https://api.github.com/second", True),
+        ("https://unrelated.invalid/second", False),
+        ("https://api.github.com:444/second", False),
+        ("http://api.github.com/second", False),
+    ],
+)
+def test_index_redirects_use_the_credential_safe_opener(
+    monkeypatch, reader, destination, credential_survives
+):
     origin = "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b123"
     transport = IndexTransport(
         {origin: destination},
         body=b'{"assets": [{"name": "tool.zip", "digest": "sha256:abc123"}]}',
     )
-    monkeypatch.setattr(urllib.request, "_opener", urllib.request.build_opener(transport))
+    monkeypatch.setattr(
+        urllib.request, "_opener", urllib.request.build_opener(transport)
+    )
     monkeypatch.setenv("GH_TOKEN", "dummy-gh")
 
     if reader == "release-digest":
         monkeypatch.setattr(packages, "_release_digest_cache", {})
         package = packages.LlamaCpp()
-        assert package.known_sha256("123", "https://github.com/example/tool.zip") == "abc123"
+        assert (
+            package.known_sha256("123", "https://github.com/example/tool.zip")
+            == "abc123"
+        )
         # A cache hit must retain the parsed result without making another request.
-        assert package.known_sha256("123", "https://github.com/example/tool.zip") == "abc123"
+        assert (
+            package.known_sha256("123", "https://github.com/example/tool.zip")
+            == "abc123"
+        )
     else:
         {"json": update._get_json, "text": update._get_text}[reader](origin)
 
     assert [url for url, _ in transport.sent] == [origin, destination]
-    initial, redirected = [{key.lower(): value for key, value in headers.items()} for _, headers in transport.sent]
+    initial, redirected = [
+        {key.lower(): value for key, value in headers.items()}
+        for _, headers in transport.sent
+    ]
     assert initial["authorization"] == "Bearer dummy-gh"
     assert (redirected.get("authorization") == "Bearer dummy-gh") is credential_survives

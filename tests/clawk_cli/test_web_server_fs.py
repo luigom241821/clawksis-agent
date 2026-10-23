@@ -64,7 +64,11 @@ def test_fs_list_sorts_and_hides_noise(client, tmp_path):
     assert response.status_code == 200
     entries = response.json()["entries"]
     assert [entry["name"] for entry in entries] == ["a_dir", "a.txt", "b.txt"]
-    assert entries[0] == {"name": "a_dir", "path": str(root / "a_dir"), "isDirectory": True}
+    assert entries[0] == {
+        "name": "a_dir",
+        "path": str(root / "a_dir"),
+        "isDirectory": True,
+    }
     assert all(entry["name"] not in {".git", "node_modules"} for entry in entries)
 
 
@@ -157,7 +161,11 @@ def test_fs_routes_workspace_reads_to_ssh_backend(client, monkeypatch):
     assert default_cwd.json() == {"cwd": "/srv/repos", "branch": "main"}
     assert read_text.json()["text"] == "hello"
     assert read_data.json()["dataUrl"] == "data:image/png;base64,aGVsbG8="
-    assert write_text.json() == {"ok": True, "path": "/srv/repos/project/README.md", "byteSize": 7}
+    assert write_text.json() == {
+        "ok": True,
+        "path": "/srv/repos/project/README.md",
+        "byteSize": 7,
+    }
     assert git_root.json() == {"root": "/srv/repos/project"}
     assert download.content == b"hello"
     assert calls == [
@@ -169,8 +177,18 @@ def test_fs_routes_workspace_reads_to_ssh_backend(client, monkeypatch):
             file_routes._FS_TEXT_SOURCE_MAX_BYTES,
             file_routes._FS_TEXT_PREVIEW_MAX_BYTES,
         ),
-        ("read", "/srv/repos/project/logo.png", web_server._FS_DATA_URL_MAX_BYTES, None),
-        ("write", "/srv/repos/project/README.md", "updated", file_routes._FS_TEXT_WRITE_MAX_BYTES),
+        (
+            "read",
+            "/srv/repos/project/logo.png",
+            web_server._FS_DATA_URL_MAX_BYTES,
+            None,
+        ),
+        (
+            "write",
+            "/srv/repos/project/README.md",
+            "updated",
+            file_routes._FS_TEXT_WRITE_MAX_BYTES,
+        ),
         ("git-root", "/srv/repos/project/src"),
         ("inspect", "/srv/repos/project/report.txt"),
         ("stream", "/srv/repos/project/report.txt"),
@@ -215,7 +233,9 @@ def test_fs_backend_resolves_ssh_connection_from_profile_env(monkeypatch):
     }
 
 
-def test_fs_download_rejects_sensitive_resolved_ssh_path_before_streaming(client, monkeypatch):
+def test_fs_download_rejects_sensitive_resolved_ssh_path_before_streaming(
+    client, monkeypatch
+):
     class FakeSshFs:
         def inspect_file(self, _path):
             return "/srv/repos/.env", 8
@@ -289,7 +309,9 @@ def test_fs_download_rejects_sensitive_files(client, tmp_path):
 @pytest.mark.platforms("windows")
 @pytest.mark.parametrize("endpoint", ["/api/fs/download", "/api/fs/read-data-url"])
 @pytest.mark.parametrize("prefix", ["/", "/cygdrive/", "/mnt/"])
-def test_fs_media_shell_paths_deliver_files_and_preserve_access_checks(client, tmp_path, endpoint, prefix):
+def test_fs_media_shell_paths_deliver_files_and_preserve_access_checks(
+    client, tmp_path, endpoint, prefix
+):
     """MEDIA may reuse the path a successful Git Bash command used."""
     target = tmp_path / "checklist with spaces #1.txt"
     target.write_bytes(b"Weekend checklist\n[ ] Take a walk\n")
@@ -303,8 +325,11 @@ def test_fs_media_shell_paths_deliver_files_and_preserve_access_checks(client, t
     for path in (shell_path(target), str(target), target.as_uri()):
         response = client.get(endpoint, params={"path": path})
         assert response.status_code == 200, response.text
-        data = (base64.b64decode(response.json()["dataUrl"].split(",", 1)[1])
-                if endpoint.endswith("read-data-url") else response.content)
+        data = (
+            base64.b64decode(response.json()["dataUrl"].split(",", 1)[1])
+            if endpoint.endswith("read-data-url")
+            else response.content
+        )
         assert data == target.read_bytes()
 
     for path, expected in ((sensitive, 403), (tmp_path / "missing.txt", 404)):
@@ -314,10 +339,18 @@ def test_fs_media_shell_paths_deliver_files_and_preserve_access_checks(client, t
 
     from clawk_constants import get_clawk_home
     from clawk_state import SessionDB
-    SessionDB(db_path=get_clawk_home() / "state.db").close()  # read-only lookups need an initialized store
-    invalid_session = client.get(endpoint, params={
-        "path": shell_path(target), "profile": "default", "session_id": "missing-session",
-    })
+
+    SessionDB(
+        db_path=get_clawk_home() / "state.db"
+    ).close()  # read-only lookups need an initialized store
+    invalid_session = client.get(
+        endpoint,
+        params={
+            "path": shell_path(target),
+            "profile": "default",
+            "session_id": "missing-session",
+        },
+    )
     assert invalid_session.status_code == 404, invalid_session.text
     client.headers.pop(web_server._SESSION_HEADER_NAME)
     assert client.get(endpoint, params={"path": shell_path(target)}).status_code == 401
@@ -327,11 +360,17 @@ def test_fs_media_shell_paths_deliver_files_and_preserve_access_checks(client, t
 def test_fs_media_posix_paths_are_not_interpreted_as_windows_drives():
     from clawk_cli.web_server_files import _fs_path
 
-    for path in ("/c/Users/example/checklist.txt", "/cygdrive/c/checklist.txt", "/mnt/c/checklist.txt"):
+    for path in (
+        "/c/Users/example/checklist.txt",
+        "/cygdrive/c/checklist.txt",
+        "/mnt/c/checklist.txt",
+    ):
         assert _fs_path(path) == Path(path).resolve()
 
 
-@pytest.mark.parametrize("endpoint", ["/api/fs/read-text", "/api/fs/read-data-url", "/api/fs/download"])
+@pytest.mark.parametrize(
+    "endpoint", ["/api/fs/read-text", "/api/fs/read-data-url", "/api/fs/download"]
+)
 @pytest.mark.parametrize("relative", [".env", "auth.json", "mcp-tokens/github.json"])
 def test_fs_readers_reject_sensitive_paths(client, tmp_path, endpoint, relative):
     target = tmp_path / relative
@@ -410,9 +449,14 @@ def test_fs_write_text_never_decodes_percent_path(client, tmp_path):
     assert response.status_code == 200
     assert sibling.read_text() == "existing"
     assert (tmp_path / "report%20v2.md").read_text() == "new"
+
+
 @pytest.mark.parametrize("endpoint", ["read-text", "read-data-url", "download"])
 def test_fs_reads_translate_docker_workspace_path_to_host(
-    client, docker_volumes, monkeypatch, endpoint,
+    client,
+    docker_volumes,
+    monkeypatch,
+    endpoint,
 ):
     """#85238: an agent in a docker container emits /workspace/... paths; the
     authenticated fs API runs on the host gateway and must resolve them through
@@ -420,7 +464,9 @@ def test_fs_reads_translate_docker_workspace_path_to_host(
     target = docker_volumes / "generated report.txt"
     target.write_text("container output", encoding="utf-8")
 
-    response = client.get(f"/api/fs/{endpoint}", params={"path": "/workspace/generated report.txt"})
+    response = client.get(
+        f"/api/fs/{endpoint}", params={"path": "/workspace/generated report.txt"}
+    )
 
     assert response.status_code == 200
     if endpoint == "read-text":
@@ -432,7 +478,9 @@ def test_fs_reads_translate_docker_workspace_path_to_host(
         assert response.text == "container output"
 
 
-def test_fs_reads_translate_after_binding_profile_terminal_scope(client, tmp_path, monkeypatch):
+def test_fs_reads_translate_after_binding_profile_terminal_scope(
+    client, tmp_path, monkeypatch
+):
     """`serve --isolated` reaches these routes with no terminal scope bound, so
     the first translation attempt sees the launch env only; the retry under the
     profile's complete terminal policy must find the mount (from #104992)."""
@@ -442,17 +490,25 @@ def test_fs_reads_translate_after_binding_profile_terminal_scope(client, tmp_pat
     from tools.terminal_scope import get_terminal_scope
 
     def translate(path, session_key="", *, quiet=False):
-        if path == Path("/workspace/isolated report.txt") and get_terminal_scope() is not None:
+        if (
+            path == Path("/workspace/isolated report.txt")
+            and get_terminal_scope() is not None
+        ):
             return target
         return None
 
     monkeypatch.setattr(
-        "gateway.platforms.base._translate_docker_container_media_path", translate,
+        "gateway.platforms.base._translate_docker_container_media_path",
+        translate,
     )
-    monkeypatch.setattr("tools.terminal_scope.build_profile_terminal_scope", _no_scope_builder)
+    monkeypatch.setattr(
+        "tools.terminal_scope.build_profile_terminal_scope", _no_scope_builder
+    )
     monkeypatch.setenv("TERMINAL_ENV", "docker")
 
-    response = client.get("/api/fs/read-text", params={"path": "/workspace/isolated report.txt"})
+    response = client.get(
+        "/api/fs/read-text", params={"path": "/workspace/isolated report.txt"}
+    )
 
     assert response.status_code == 200
     assert response.json()["text"] == "isolated output"
@@ -460,11 +516,14 @@ def test_fs_reads_translate_after_binding_profile_terminal_scope(client, tmp_pat
 
 
 def test_fs_read_untranslated_container_path_names_the_agent_sandbox(
-    client, docker_volumes,
+    client,
+    docker_volumes,
 ):
     """A container-shaped path that fails translation under the docker backend
     must 404 with the honest sandbox reason, not a bare missing-file 404."""
-    response = client.get("/api/fs/read-text", params={"path": "/workspace/never-written.txt"})
+    response = client.get(
+        "/api/fs/read-text", params={"path": "/workspace/never-written.txt"}
+    )
 
     assert response.status_code == 404
     assert "agent sandbox" in response.json()["detail"]
@@ -479,14 +538,17 @@ def test_fs_list_translates_docker_workspace_path_to_host(client, docker_volumes
     assert response.status_code == 200
     entries = response.json()["entries"]
     assert [(entry["name"], entry["isDirectory"]) for entry in entries] == [
-        ("nested", True), ("report.txt", False),
+        ("nested", True),
+        ("report.txt", False),
     ]
     # Children carry the host path so the browser's next read/list works.
     assert entries[0]["path"] == str(docker_volumes / "nested")
     assert entries[1]["path"] == str(docker_volumes / "report.txt")
 
 
-def test_fs_download_maps_root_home_to_persistent_sandbox(client, monkeypatch, tmp_path):
+def test_fs_download_maps_root_home_to_persistent_sandbox(
+    client, monkeypatch, tmp_path
+):
     """#85238 Discord repro: a persistent docker agent writes /root/fileIwant.zip;
     the host copy lives at <sandbox>/docker/default/home. The download click must
     serve that file, not stat the gateway's own /root ("File is not readable")."""
@@ -520,7 +582,9 @@ def test_agent_fs_path_translates_before_host_normalization(monkeypatch, tmp_pat
         return mapped
 
     monkeypatch.setenv("TERMINAL_ENV", "docker")
-    monkeypatch.setattr("gateway.platforms.base._translate_docker_container_media_path", translate)
+    monkeypatch.setattr(
+        "gateway.platforms.base._translate_docker_container_media_path", translate
+    )
 
     def boom(*_a, **_k):
         raise AssertionError("_fs_path must not run when translation succeeds")
@@ -565,7 +629,9 @@ def test_readable_host_path_wins_over_root_sandbox(client, monkeypatch, tmp_path
     (sandbox_ws / "f.txt").write_text("SANDBOX", encoding="utf-8")
     monkeypatch.setenv("TERMINAL_ENV", "docker")
     monkeypatch.setenv("TERMINAL_SANDBOX_DIR", str(sandbox))
-    monkeypatch.setenv("TERMINAL_DOCKER_VOLUMES", json.dumps([f"{sandbox_ws}:{host_dir}"]))
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_VOLUMES", json.dumps([f"{sandbox_ws}:{host_dir}"])
+    )
 
     response = client.get("/api/fs/read-text", params={"path": str(host_dir / "f.txt")})
 
@@ -599,7 +665,9 @@ def test_fs_download_profile_uses_that_profiles_sandbox(client, monkeypatch, tmp
     for home in (default_home, work_home):
         home.mkdir(parents=True, exist_ok=True)
         (home / "config.yaml").write_text(
-            "terminal:\n  backend: docker\n  container_persistent: true\n", encoding="utf-8")
+            "terminal:\n  backend: docker\n  container_persistent: true\n",
+            encoding="utf-8",
+        )
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: default_home)
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     monkeypatch.delenv("TERMINAL_SANDBOX_DIR", raising=False)
@@ -609,11 +677,18 @@ def test_fs_download_profile_uses_that_profiles_sandbox(client, monkeypatch, tmp
 
     (default_home / "sandboxes/docker/default/home").mkdir(parents=True)
     (default_home / "sandboxes/docker/default/home/f.txt").write_bytes(b"DEFAULT")
-    work_dir = work_home / "sandboxes/docker" / sanitize_task_id_for_path("profile:work") / "home"
+    work_dir = (
+        work_home
+        / "sandboxes/docker"
+        / sanitize_task_id_for_path("profile:work")
+        / "home"
+    )
     work_dir.mkdir(parents=True)
     (work_dir / "f.txt").write_bytes(b"WORK")
 
-    work = client.get("/api/fs/download", params={"path": "/root/f.txt", "profile": "work"})
+    work = client.get(
+        "/api/fs/download", params={"path": "/root/f.txt", "profile": "work"}
+    )
     default = client.get("/api/fs/download", params={"path": "/root/f.txt"})
 
     assert work.status_code == 200, work.text
@@ -627,8 +702,12 @@ def test_fs_reads_accept_profile_current_for_host_files(client, tmp_path):
     target.write_text("host", encoding="utf-8")
 
     for selector in ("current", "", "CURRENT"):
-        read = client.get("/api/fs/read-text", params={"path": str(target), "profile": selector})
-        listing = client.get("/api/fs/list", params={"path": str(tmp_path), "profile": selector})
+        read = client.get(
+            "/api/fs/read-text", params={"path": str(target), "profile": selector}
+        )
+        listing = client.get(
+            "/api/fs/list", params={"path": str(tmp_path), "profile": selector}
+        )
         assert read.status_code == 200, (selector, read.text)
         assert read.json()["text"] == "host"
         assert listing.status_code == 200, (selector, listing.text)
@@ -643,7 +722,9 @@ def _two_profile_homes(monkeypatch, tmp_path, *, active_backend, work_backend):
     for home, backend in ((default_home, active_backend), (work_home, work_backend)):
         home.mkdir(parents=True, exist_ok=True)
         (home / "config.yaml").write_text(
-            f"terminal:\n  backend: {backend}\n  container_persistent: false\n", encoding="utf-8")
+            f"terminal:\n  backend: {backend}\n  container_persistent: false\n",
+            encoding="utf-8",
+        )
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: default_home)
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     monkeypatch.setenv("TERMINAL_ENV", active_backend)
@@ -651,42 +732,63 @@ def _two_profile_homes(monkeypatch, tmp_path, *, active_backend, work_backend):
     return default_home, work_home
 
 
-@pytest.mark.parametrize(("active", "work", "expected"), [
-    ("local", "docker", True),   # requested docker profile: a miss is a sandbox path
-    ("docker", "local", False),  # requested local profile: never the sandbox 404
-])
+@pytest.mark.parametrize(
+    ("active", "work", "expected"),
+    [
+        ("local", "docker", True),  # requested docker profile: a miss is a sandbox path
+        ("docker", "local", False),  # requested local profile: never the sandbox 404
+    ],
+)
 def test_unmapped_classification_uses_requested_profiles_backend(
-    monkeypatch, tmp_path, active, work, expected,
+    monkeypatch,
+    tmp_path,
+    active,
+    work,
+    expected,
 ):
     """The Windows 404-or-drive decision and the sandbox hint read the same profile
     translation used, in both mixed-backend directions."""
     from clawk_cli import web_server_files
 
     _default, work_home = _two_profile_homes(
-        monkeypatch, tmp_path, active_backend=active, work_backend=work)
+        monkeypatch, tmp_path, active_backend=active, work_backend=work
+    )
 
-    assert web_server_files._is_unmapped_container_path(
-        "/workspace/x.txt", profile_home=work_home) is expected
-    assert web_server_files._is_unmapped_container_path("/workspace/x.txt") is (active == "docker")
+    assert (
+        web_server_files._is_unmapped_container_path(
+            "/workspace/x.txt", profile_home=work_home
+        )
+        is expected
+    )
+    assert web_server_files._is_unmapped_container_path("/workspace/x.txt") is (
+        active == "docker"
+    )
 
 
-def test_native_home_override_translates_with_that_profiles_volumes(monkeypatch, tmp_path):
+def test_native_home_override_translates_with_that_profiles_volumes(
+    monkeypatch, tmp_path
+):
     """A native ticket binds the profile's home before the route runs; translation must
     install that profile's terminal policy, not read the launch env's volumes."""
     from clawk_cli import web_server_files
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     _default, work_home = _two_profile_homes(
-        monkeypatch, tmp_path, active_backend="docker", work_backend="docker")
+        monkeypatch, tmp_path, active_backend="docker", work_backend="docker"
+    )
     launch_mount = tmp_path / "launch-mount"
     work_mount = tmp_path / "work-mount"
     for mount, label in ((launch_mount, "LAUNCH"), (work_mount, "WORK")):
         mount.mkdir()
         (mount / "native.txt").write_text(label, encoding="utf-8")
-    monkeypatch.setenv("TERMINAL_DOCKER_VOLUMES", json.dumps([f"{launch_mount}:/workspace"]))
+    monkeypatch.setenv(
+        "TERMINAL_DOCKER_VOLUMES", json.dumps([f"{launch_mount}:/workspace"])
+    )
     (work_home / "config.yaml").write_text(
         "terminal:\n  backend: docker\n  container_persistent: false\n"
-        f"  docker_volumes:\n    - {work_mount}:/workspace\n", encoding="utf-8")
+        f"  docker_volumes:\n    - {work_mount}:/workspace\n",
+        encoding="utf-8",
+    )
 
     token = set_clawk_home_override(str(work_home))
     try:
@@ -695,11 +797,15 @@ def test_native_home_override_translates_with_that_profiles_volumes(monkeypatch,
         reset_clawk_home_override(token)
 
     assert translated == (work_mount / "native.txt").resolve()
-    assert web_server_files._agent_container_path("/workspace/native.txt") == (
-        launch_mount / "native.txt").resolve()
+    assert (
+        web_server_files._agent_container_path("/workspace/native.txt")
+        == (launch_mount / "native.txt").resolve()
+    )
 
 
-def test_fs_read_plain_host_path_logs_no_docker_media_warning(client, docker_volumes, tmp_path, caplog):
+def test_fs_read_plain_host_path_logs_no_docker_media_warning(
+    client, docker_volumes, tmp_path, caplog
+):
     """fs routes see ordinary host paths constantly; misses are not MEDIA warnings."""
     plain = tmp_path / "plain.txt"
     plain.write_text("x", encoding="utf-8")
@@ -716,10 +822,15 @@ def test_agent_fs_path_leaves_host_paths_to_fs_path(monkeypatch, tmp_path):
     def translate(*_a, **_k):
         raise AssertionError("relative/UNC/drive paths are not container paths")
 
-    monkeypatch.setattr("gateway.platforms.base._translate_docker_container_media_path", translate)
+    monkeypatch.setattr(
+        "gateway.platforms.base._translate_docker_container_media_path", translate
+    )
     target = tmp_path / "note.txt"
     target.write_text("x")
 
-    assert web_server_files._agent_fs_path("note.txt", cwd=str(tmp_path)) == target.resolve()
+    assert (
+        web_server_files._agent_fs_path("note.txt", cwd=str(tmp_path))
+        == target.resolve()
+    )
     assert web_server_files._agent_container_path("//server/share/x") is None
     assert web_server_files._agent_container_path("C:/data/x") is None

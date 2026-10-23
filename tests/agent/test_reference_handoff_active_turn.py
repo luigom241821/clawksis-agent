@@ -216,9 +216,12 @@ class TestSkipGuardRestoresRealUser:
             },
             _standalone_handoff(),
         ]
-        assert _should_skip_model_call_for_reference_handoff(
-            messages, "new ask after compaction"
-        ) is False
+        assert (
+            _should_skip_model_call_for_reference_handoff(
+                messages, "new ask after compaction"
+            )
+            is False
+        )
         assert messages[-1]["role"] == "user"
         assert messages[-1]["content"] == "new ask after compaction"
 
@@ -336,12 +339,15 @@ class TestReanchorSkipsHandoffFallback:
 
 class TestRetryableUserText:
     def test_losslessly_flattens_text_only_parts(self):
-        assert retryable_user_text(
-            [
-                {"type": "text", "text": "hello "},
-                {"type": "input_text", "text": "world"},
-            ]
-        ) == "hello world"
+        assert (
+            retryable_user_text(
+                [
+                    {"type": "text", "text": "hello "},
+                    {"type": "input_text", "text": "world"},
+                ]
+            )
+            == "hello world"
+        )
 
     def test_rejects_structured_media_parts(self):
         with pytest.raises(ValueError, match="media or unknown"):
@@ -380,8 +386,6 @@ class TestNoToolCallsWithoutLaterRealUser:
     def test_historical_snapshot_alone_is_not_actionable(self):
         """Suggested regression #3: executable-looking snapshot must not
         count as a user-originated turn."""
-        handoff = _standalone_handoff(
-            "run npm test and fix every failure in the suite"
-        )
+        handoff = _standalone_handoff("run npm test and fix every failure in the suite")
         assert is_user_originated_turn(handoff) is False
         assert reference_handoff_would_drive_next_model_call([handoff]) is True

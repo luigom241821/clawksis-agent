@@ -40,7 +40,9 @@ def canon(text: str) -> str:
     return _WS.sub("", text)
 
 
-def poll(fn: Callable[[], Any], timeout: float, what: str, interval: float = 0.05) -> Any:
+def poll(
+    fn: Callable[[], Any], timeout: float, what: str, interval: float = 0.05
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         value = fn()
@@ -59,13 +61,17 @@ class WsTerm:
         self.screen = Screen(rows, cols)
         self.raw = bytearray()
         self.control: list[dict[str, Any]] = []
-        self.first_frames: list[bytes] = []  # the first few binary frames, verbatim (replay proof)
+        self.first_frames: list[
+            bytes
+        ] = []  # the first few binary frames, verbatim (replay proof)
         self.close_code: int | None = None
         self._lock = threading.Lock()
         self._closed = threading.Event()
         self.ws = connect(url, open_timeout=30, max_size=None, close_timeout=5)
         self.ws.send(f"\x1b[RESIZE:{cols};{rows}]")
-        self._reader = threading.Thread(target=self._read_loop, name="ws-pty-reader", daemon=True)
+        self._reader = threading.Thread(
+            target=self._read_loop, name="ws-pty-reader", daemon=True
+        )
         self._reader.start()
 
     # -- io -----------------------------------------------------------------------------------------
@@ -114,9 +120,16 @@ class WsTerm:
 
     def lines(self) -> list[str]:
         with self._lock:
-            rows = self.screen.display() if self.screen.alt_active else self.screen.transcript()
+            rows = (
+                self.screen.display()
+                if self.screen.alt_active
+                else self.screen.transcript()
+            )
             cols = self.screen.cols
-        return [ln[: cols - 1] if len(ln) >= cols and ln[cols - 1] in _SCROLLBAR else ln for ln in rows]
+        return [
+            ln[: cols - 1] if len(ln) >= cols and ln[cols - 1] in _SCROLLBAR else ln
+            for ln in rows
+        ]
 
     def text(self) -> str:
         return canon("".join(self.lines()))
@@ -130,11 +143,16 @@ class WsTerm:
 
     def wait_for(self, needle: str, timeout: float = 60.0) -> None:
         try:
-            poll(lambda: canon(needle) in self.text() or self.closed, timeout, f"{needle[:60]!r} on the xterm")
+            poll(
+                lambda: canon(needle) in self.text() or self.closed,
+                timeout,
+                f"{needle[:60]!r} on the xterm",
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}") from None
         assert canon(needle) in self.text(), (
-            f"/api/pty closed (code={self.close_code}) before {needle[:60]!r} rendered\n--- screen ---\n{self.dump()}")
+            f"/api/pty closed (code={self.close_code}) before {needle[:60]!r} rendered\n--- screen ---\n{self.dump()}"
+        )
 
     def wait_quiet(self, idle: float = 1.0, timeout: float = 60.0) -> None:
         """A settled frame: nothing but digits (status-bar clocks) changed for ``idle`` seconds."""
@@ -146,20 +164,29 @@ class WsTerm:
             if cur != state["frame"]:
                 state["frame"], state["since"] = cur, now
             return bool(cur.strip()) and now - state["since"] >= idle
+
         try:
             poll(settled, timeout, "a settled TUI frame", interval=0.1)
         except AssertionError as exc:
-            raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}\n--- tail ---\n{bytes(self.raw[-600:])!r}") from None
+            raise AssertionError(
+                f"{exc}\n--- screen ---\n{self.dump()}\n--- tail ---\n{bytes(self.raw[-600:])!r}"
+            ) from None
 
     def submit(self, text: str, timeout: float = 30.0) -> None:
         """Type ``text``; once the composer echoes it, press Enter in a separate write."""
         before = self.text().count(canon(text))
         self.write(text)
         try:
-            poll(lambda: self.text().count(canon(text)) > before or self.closed, timeout, f"echo of {text!r}")
+            poll(
+                lambda: self.text().count(canon(text)) > before or self.closed,
+                timeout,
+                f"echo of {text!r}",
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}") from None
-        assert not self.closed, f"/api/pty closed (code={self.close_code}) while typing\n{self.dump()}"
+        assert not self.closed, (
+            f"/api/pty closed (code={self.close_code}) while typing\n{self.dump()}"
+        )
         self.write("\r")
 
 
@@ -198,6 +225,11 @@ class ProcessLedger:
     def identities(self) -> dict[Identity, str]:
         """Recorded processes plus current members of any recorded PTY session."""
         live = dict(self.seen)
-        live.update({(pid, int(fields[19])): cmdline(pid)
-                     for pid, fields in all_stats().items() if int(fields[3]) in self.sids})
+        live.update(
+            {
+                (pid, int(fields[19])): cmdline(pid)
+                for pid, fields in all_stats().items()
+                if int(fields[3]) in self.sids
+            }
+        )
         return live

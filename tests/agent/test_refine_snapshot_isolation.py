@@ -37,10 +37,12 @@ def _nested_history():
         {
             "role": "assistant",
             "content": "ok",
-            "tool_calls": [{
-                "id": "call-1",
-                "function": {"name": "read_file", "arguments": '{"path":"x"}'},
-            }],
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "function": {"name": "read_file", "arguments": '{"path":"x"}'},
+                }
+            ],
         },
     ]
 

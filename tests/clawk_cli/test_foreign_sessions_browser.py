@@ -15,10 +15,19 @@ def test_discovery_skips_inaccessible_log(tmp_path, monkeypatch, operation):
     folder = tmp_path / ".codex" / "sessions"
     folder.mkdir(parents=True)
     for name in ("readable", "inaccessible"):
-        (folder / f"rollout-{name}.jsonl").write_text(json.dumps({
-            "type": "response_item", "payload": {"type": "message", "role": "user",
-            "content": [{"type": "input_text", "text": name}]},
-        }), encoding="utf-8")
+        (folder / f"rollout-{name}.jsonl").write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": name}],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
 
     original = getattr(Path, operation)
 

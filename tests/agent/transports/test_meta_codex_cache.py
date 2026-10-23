@@ -1,6 +1,5 @@
 """Tests for Meta api.meta.ai prompt_cache_retention and transport plumbing."""
 
-
 import pytest
 
 from agent.transports import get_transport
@@ -10,11 +9,11 @@ from agent.transports.codex import _default_prompt_cache_retention_for_request
 @pytest.fixture
 def transport():
     import agent.transports.codex
+
     return get_transport("codex_responses")
 
 
 class TestMetaRetention:
-
     def test_meta_retention_also_for_generic_model_name(self, transport):
         for model in ["muse-spark", "meta/muse-spark-1.2-2026-04-01", "gpt-5.4", ""]:
             kw = transport.build_kwargs(
@@ -27,9 +26,24 @@ class TestMetaRetention:
             assert kw.get("prompt_cache_retention") == "24h", f"model={model!r}"
 
     def test_meta_retention_helper_direct(self):
-        assert _default_prompt_cache_retention_for_request("muse-spark-1.2", "https://api.meta.ai/v1") == "24h"
-        assert _default_prompt_cache_retention_for_request("muse-spark-1.2", "https://API.META.AI/v1") == "24h"
-        assert _default_prompt_cache_retention_for_request("muse-spark-1.2", "https://api.meta.ai:443/v1") == "24h"
+        assert (
+            _default_prompt_cache_retention_for_request(
+                "muse-spark-1.2", "https://api.meta.ai/v1"
+            )
+            == "24h"
+        )
+        assert (
+            _default_prompt_cache_retention_for_request(
+                "muse-spark-1.2", "https://API.META.AI/v1"
+            )
+            == "24h"
+        )
+        assert (
+            _default_prompt_cache_retention_for_request(
+                "muse-spark-1.2", "https://api.meta.ai:443/v1"
+            )
+            == "24h"
+        )
 
     def test_meta_retention_override_wins(self, transport):
         kw = transport.build_kwargs(
@@ -51,7 +65,6 @@ class TestMetaRetention:
             session_id="sid",
         )
         assert "prompt_cache_retention" not in kw
-
 
     def test_meta_prompt_cache_key_is_content_addressed(self, transport):
         messages = [{"role": "user", "content": "Hi"}]

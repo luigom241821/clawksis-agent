@@ -46,10 +46,7 @@ def _make_async_noop():
     return _noop
 
 
-
-
 class TestDrainWaitsForCronWork:
-
     @pytest.mark.asyncio
     async def test_drain_waits_for_in_flight_cron_job(self):
         """Before this fix, a cron-only workload made active_at_start=0
@@ -76,7 +73,9 @@ class TestDrainWaitsForCronWork:
 
 class TestKillToolSubprocessesMarksCronInterrupted:
     @pytest.mark.asyncio
-    async def test_in_flight_cron_job_marked_interrupted_on_forced_kill(self, monkeypatch):
+    async def test_in_flight_cron_job_marked_interrupted_on_forced_kill(
+        self, monkeypatch
+    ):
         import cron.scheduler as sched
         import tools.process_registry as _pr
         import tools.terminal_tool as _tt
@@ -94,7 +93,9 @@ class TestKillToolSubprocessesMarksCronInterrupted:
 
         monkeypatch.setattr(_pr.process_registry, "kill_all", lambda task_id=None: 1)
         monkeypatch.setattr(_tt, "cleanup_all_environments", lambda: None)
-        monkeypatch.setattr(terminal_tool_lifecycle, "cleanup_all_environments", lambda: None)
+        monkeypatch.setattr(
+            terminal_tool_lifecycle, "cleanup_all_environments", lambda: None
+        )
         monkeypatch.setattr(bt_lifecycle, "cleanup_all_browsers", lambda: None)
 
         marked_calls = []
@@ -107,9 +108,14 @@ class TestKillToolSubprocessesMarksCronInterrupted:
 
         monkeypatch.setattr(sched, "mark_running_jobs_interrupted", _spy)
 
-        with patch("gateway.status.remove_pid_file"), patch("gateway.status.publish_runtime_status"), \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("gateway.status.remove_pid_file"),
+            patch("gateway.status.publish_runtime_status"),
+            patch("cron.scheduler.mark_job_run"),
+        ):
             await runner.stop()
 
-        assert marked_calls, "mark_running_jobs_interrupted was never called during shutdown"
+        assert marked_calls, (
+            "mark_running_jobs_interrupted was never called during shutdown"
+        )
         assert any(result == ["job-1"] for _reason, result in marked_calls)

@@ -25,7 +25,11 @@ def sanitize_prompt_pin(pin: Any) -> Optional[dict[str, Any]]:
     redact_pii = pin.get("redact_pii")
     channel_prompt = pin.get("channel_prompt")
     parent_chat_id = pin.get("parent_chat_id")
-    if not isinstance(context_key, str) or not context_key or not isinstance(context_prompt, str):
+    if (
+        not isinstance(context_key, str)
+        or not context_key
+        or not isinstance(context_prompt, str)
+    ):
         return None
     if not isinstance(redact_pii, bool):
         return None
@@ -47,7 +51,11 @@ class SessionPromptPinMixin:
     """Fenced read/write of ``SessionEntry.prompt_pin`` on the routing index."""
 
     def set_prompt_pin(
-        self, session_key: str, pin: dict[str, Any], *, expected_session_id: Optional[str] = None,
+        self,
+        session_key: str,
+        pin: dict[str, Any],
+        *,
+        expected_session_id: Optional[str] = None,
     ) -> bool:
         """Persist effective prompt inputs without letting a stale turn cross a boundary.
 
@@ -60,22 +68,34 @@ class SessionPromptPinMixin:
             return False
         with self._lock:
             entry = self._entry_locked(session_key)
-            if entry is None or (expected_session_id is not None and entry.session_id != expected_session_id):
+            if entry is None or (
+                expected_session_id is not None
+                and entry.session_id != expected_session_id
+            ):
                 return False
             if entry.prompt_pin != cleaned:
                 self._save_entry(
-                    session_key, entry_data=replace(entry, prompt_pin=cleaned).to_dict(), lock_held=True)
+                    session_key,
+                    entry_data=replace(entry, prompt_pin=cleaned).to_dict(),
+                    lock_held=True,
+                )
                 entry.prompt_pin = cleaned
             return True
 
     def get_prompt_pin(
-        self, session_key: str, *, expected_session_id: Optional[str] = None,
+        self,
+        session_key: str,
+        *,
+        expected_session_id: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
         """Return the prompt pin only while the route still owns the caller's session."""
         with self._lock:
             entry = self._entry_locked(session_key)
             if entry is None:
                 return None
-            if expected_session_id is not None and entry.session_id != expected_session_id:
+            if (
+                expected_session_id is not None
+                and entry.session_id != expected_session_id
+            ):
                 return None
             return dict(entry.prompt_pin) if entry.prompt_pin else None

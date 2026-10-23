@@ -7,7 +7,13 @@ Split out of ``clawk_cli/main.py``. Names that still live in main are imported l
 import contextlib
 
 from typing import Optional
-from clawk_cli.model_setup_flows_common import _ask, _ensure_dict_section, _print_numbered, _radiolist, _say
+from clawk_cli.model_setup_flows_common import (
+    _ask,
+    _ensure_dict_section,
+    _print_numbered,
+    _radiolist,
+    _say,
+)
 
 
 def _is_profile_api_key_provider(provider_id: str) -> bool:
@@ -15,17 +21,38 @@ def _is_profile_api_key_provider(provider_id: str) -> bool:
     in select_provider_and_model() so plugin providers dispatch to the generic key flow."""
     try:
         from providers import get_provider_profile
+
         _p = get_provider_profile(provider_id)
         return _p is not None and _p.auth_type == "api_key"
     except Exception:
         return False
 
 
-_GENERIC_API_KEY_PROVIDERS = frozenset({
-    "openai-api", "gemini", "deepseek", "xai", "zai", "kimi-coding-cn",
-    "minimax", "minimax-cn", "kilocode", "opencode-zen", "opencode-go",
-    "alibaba", "huggingface", "xiaomi", "arcee", "gmi",
-    "nvidia", "ollama-cloud", "tencent-tokenhub", "tencent-tokenplan", "lmstudio"})
+_GENERIC_API_KEY_PROVIDERS = frozenset(
+    {
+        "openai-api",
+        "gemini",
+        "deepseek",
+        "xai",
+        "zai",
+        "kimi-coding-cn",
+        "minimax",
+        "minimax-cn",
+        "kilocode",
+        "opencode-zen",
+        "opencode-go",
+        "alibaba",
+        "huggingface",
+        "xiaomi",
+        "arcee",
+        "gmi",
+        "nvidia",
+        "ollama-cloud",
+        "tencent-tokenhub",
+        "tencent-tokenplan",
+        "lmstudio",
+    }
+)
 
 
 def _short_url(url: str) -> str:
@@ -37,8 +64,13 @@ def _clear_stale_openai_base_url():
     """Remove OPENAI_BASE_URL from ~/.clawksis/.env unless the active provider is 'custom' — a
     leftover value routes provider:auto auxiliary clients to the old custom endpoint."""
     from clawk_cli.config import get_env_value, save_env_value, load_config
+
     model_cfg = load_config().get("model", {})
-    provider = (model_cfg.get("provider") or "").strip().lower() if isinstance(model_cfg, dict) else ""
+    provider = (
+        (model_cfg.get("provider") or "").strip().lower()
+        if isinstance(model_cfg, dict)
+        else ""
+    )
     if provider == "custom" or not provider:
         return  # custom provider legitimately uses OPENAI_BASE_URL
 
@@ -64,7 +96,8 @@ _AUX_TASKS: list[tuple[str, str, str]] = [
     ("triage_specifier", "Triage specifier", "kanban spec fleshing"),
     ("kanban_decomposer", "Kanban decomposer", "task decomposition"),
     ("profile_describer", "Profile describer", "auto profile descriptions"),
-    ("curator", "Curator", "skill-usage review pass")]
+    ("curator", "Curator", "skill-usage review pass"),
+]
 
 # Special non-auxiliary task surfaced in the same picker: subagent delegation. Routing lives
 # under top-level `delegation.*` (NOT `auxiliary.delegation`) because delegate_task spawns full
@@ -83,6 +116,7 @@ def _all_aux_tasks() -> list[tuple[str, str, str]]:
     # Plugin discovery failure must not break the aux config UI.
     with contextlib.suppress(Exception):
         from clawk_cli.plugins import get_plugin_auxiliary_tasks
+
         for entry in get_plugin_auxiliary_tasks():
             tasks.append((entry["key"], entry["display_name"], entry["description"]))
     return tasks
@@ -120,7 +154,10 @@ def _delegation_cfg_as_task(cfg: dict) -> dict:
     d = cfg.get("delegation")
     if not isinstance(d, dict):
         d = {}
-    out = {k: str(d.get(k) or "").strip() for k in ("provider", "model", "base_url", "api_key")}
+    out = {
+        k: str(d.get(k) or "").strip()
+        for k in ("provider", "model", "base_url", "api_key")
+    }
     out["reasoning_effort"] = d.get("reasoning_effort", "")
     return out
 
@@ -139,8 +176,13 @@ def _aux_task_cfg_for_display(cfg: dict, task: str) -> dict:
     actually runs on the base's provider; every other task shows exactly what is stored."""
     with contextlib.suppress(Exception):
         from clawk_cli.plugins import get_plugin_auxiliary_tasks
-        if any(e.get("key") == task and e.get("inherit_from") for e in get_plugin_auxiliary_tasks()):
+
+        if any(
+            e.get("key") == task and e.get("inherit_from")
+            for e in get_plugin_auxiliary_tasks()
+        ):
             from agent.auxiliary_client import _get_auxiliary_task_config
+
             return _get_auxiliary_task_config(task)
     return _aux_task_cfg(cfg, task)
 
@@ -152,12 +194,20 @@ def _aux_task_display_name(task: str) -> str:
     return next((name for key, name, _ in _all_aux_tasks() if key == task), task)
 
 
-def _save_aux_choice(task: str, *, provider: str, model: str = "", base_url: str = "",
-                     api_key: str = "", reasoning_effort: Optional[str] = None) -> None:
+def _save_aux_choice(
+    task: str,
+    *,
+    provider: str,
+    model: str = "",
+    base_url: str = "",
+    api_key: str = "",
+    reasoning_effort: Optional[str] = None,
+) -> None:
     """Persist an aux task's four routing fields (timeout etc. untouched; main model config never
     modified). ``delegation`` writes the top-level section, with "auto" stored as an empty provider.
     ``reasoning_effort``: a level word or "" (provider default) to write; None leaves the key alone."""
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     if task == _DELEGATION_TASK_KEY:
         entry = _ensure_dict_section(cfg, "delegation")
@@ -180,6 +230,7 @@ def _aux_task_takes_reasoning(task: str) -> bool:
     if task == _DELEGATION_TASK_KEY:
         return True
     from clawk_cli.config_defaults import DEFAULT_CONFIG
+
     block = (DEFAULT_CONFIG.get("auxiliary") or {}).get(task)
     if isinstance(block, dict):
         return "reasoning_effort" in block
@@ -191,15 +242,18 @@ def _prompt_aux_reasoning_effort(task: str, current: str) -> Optional[str]:
     keep current. The empty-value row is "Inherit parent" for delegation (a child inherits the parent's
     effort; wording from #105431 by @fangliquanflq) and "Provider default" for aux tasks."""
     from clawk_constants import VALID_REASONING_EFFORTS
+
     label = "Inherit parent" if task == _DELEGATION_TASK_KEY else "Provider default"
     return _prompt_reasoning_effort_selection(
-        list(VALID_REASONING_EFFORTS), current_effort=current, default_label=label)
+        list(VALID_REASONING_EFFORTS), current_effort=current, default_label=label
+    )
 
 
 def _reset_aux_to_auto() -> int:
     """Reset every known aux task (built-in + plugin) back to auto/empty. Returns number reset."""
     from clawk_cli.config import load_config, save_config
     from clawk_cli.config_defaults import DEFAULT_CONFIG
+
     defaults = DEFAULT_CONFIG.get("auxiliary") or {}
 
     def _clear(entry: dict, auto: str, task: str = "") -> bool:
@@ -212,15 +266,24 @@ def _reset_aux_to_auto() -> int:
             changed = True
         for field in ("model", "base_url", "api_key", "reasoning_effort"):
             # Reset = the shipped default: "" everywhere except a slot that ships one (voice_chat: none).
-            default = str((defaults.get(task) or {}).get(field) or "") if isinstance(defaults.get(task), dict) else ""
-            if (entry.get(field) or entry.get(field) is False or default) and entry.get(field) != default:
+            default = (
+                str((defaults.get(task) or {}).get(field) or "")
+                if isinstance(defaults.get(task), dict)
+                else ""
+            )
+            if (entry.get(field) or entry.get(field) is False or default) and entry.get(
+                field
+            ) != default:
                 entry[field] = default
                 changed = True
         return changed
 
     cfg = load_config()
     aux = _ensure_dict_section(cfg, "auxiliary")
-    count = sum(_clear(_ensure_dict_section(aux, task), "auto", task) for task, _name, _desc in _all_aux_tasks())
+    count = sum(
+        _clear(_ensure_dict_section(aux, task), "auto", task)
+        for task, _name, _desc in _all_aux_tasks()
+    )
     dele = cfg.get("delegation")
     if isinstance(dele, dict):
         count += _clear(dele, "")
@@ -231,22 +294,34 @@ def _reset_aux_to_auto() -> int:
 def _aux_config_menu() -> None:
     """Top-level auxiliary-model picker; loops until the user picks "Back"."""
     from clawk_cli.config import load_config
+
     while True:
         cfg = load_config()
-        _say("", "  Auxiliary models — side-task routing", "",
-             "  Side tasks (vision, compression, web extraction, etc.) default",
-             '  to your main chat model.  "auto" means "use my main model" —',
-             "  Clawksis only falls back to a lightweight backend (OpenRouter,",
-             "  Nous Portal) if the main model is unavailable.  Override a",
-             "  task below if you want it pinned to a specific provider/model.", "")
+        _say(
+            "",
+            "  Auxiliary models — side-task routing",
+            "",
+            "  Side tasks (vision, compression, web extraction, etc.) default",
+            '  to your main chat model.  "auto" means "use my main model" —',
+            "  Clawksis only falls back to a lightweight backend (OpenRouter,",
+            "  Nous Portal) if the main model is unavailable.  Override a",
+            "  task below if you want it pinned to a specific provider/model.",
+            "",
+        )
 
-        menu_tasks = _all_aux_tasks() + [(_DELEGATION_TASK_KEY, _DELEGATION_TASK_NAME, _DELEGATION_TASK_DESC)]
+        menu_tasks = _all_aux_tasks() + [
+            (_DELEGATION_TASK_KEY, _DELEGATION_TASK_NAME, _DELEGATION_TASK_DESC)
+        ]
         name_col = max(len(name) for _, name, _ in menu_tasks) + 2
         desc_col = max(len(desc) for _, _, desc in menu_tasks) + 4
         entries = [
-            (task_key, f"{name.ljust(name_col)}{('(' + desc + ')').ljust(desc_col)}"
-                       f"{_format_aux_current(_aux_task_cfg_for_display(cfg, task_key))}")
-            for task_key, name, desc in menu_tasks]
+            (
+                task_key,
+                f"{name.ljust(name_col)}{('(' + desc + ')').ljust(desc_col)}"
+                f"{_format_aux_current(_aux_task_cfg_for_display(cfg, task_key))}",
+            )
+            for task_key, name, desc in menu_tasks
+        ]
         entries.append(("__reset__", "Reset all to auto"))
         entries.append(("__back__", "Back"))
 
@@ -258,8 +333,12 @@ def _aux_config_menu() -> None:
             return
         if key == "__reset__":
             n = _reset_aux_to_auto()
-            _say(f"Reset {n} auxiliary task(s) to auto." if n else "All auxiliary tasks were already set to auto.",
-                 "")
+            _say(
+                f"Reset {n} auxiliary task(s) to auto."
+                if n
+                else "All auxiliary tasks were already set to auto.",
+                "",
+            )
             continue
         _aux_select_for_task(key)
 
@@ -269,6 +348,7 @@ def _aux_select_for_task(task: str) -> None:
     ``build_aux_picker_rows()`` (shared substrate): only already-configured providers appear."""
     from clawk_cli.config import load_config
     from clawk_cli.inventory import build_aux_picker_rows, format_aux_picker_entries
+
     cfg = load_config()
     task_cfg = _aux_task_cfg(cfg, task)
     current_provider = str(task_cfg.get("provider") or "auto").strip() or "auto"
@@ -277,23 +357,43 @@ def _aux_select_for_task(task: str) -> None:
     display_name = _aux_task_display_name(task)
 
     try:
-        providers = build_aux_picker_rows(current_provider=current_provider, current_model=current_model,
-                                          current_base_url=current_base_url)
+        providers = build_aux_picker_rows(
+            current_provider=current_provider,
+            current_model=current_model,
+            current_base_url=current_base_url,
+        )
     except Exception as exc:
         print(f"Could not detect authenticated providers: {exc}")
         providers = []
 
     # (slug, label, models); "auto" always first
-    auto_marker = "  ← current" if current_provider == "auto" and not current_base_url else ""
-    auto_label = "auto (inherit main agent)" if task == _DELEGATION_TASK_KEY else "auto (recommended)"
-    entries: list[tuple[str, str, list[str]]] = [("__auto__", f"{auto_label}{auto_marker}", [])]
-    entries.extend(format_aux_picker_entries(providers, current_provider=current_provider,
-                                             current_base_url=current_base_url))
+    auto_marker = (
+        "  ← current" if current_provider == "auto" and not current_base_url else ""
+    )
+    auto_label = (
+        "auto (inherit main agent)"
+        if task == _DELEGATION_TASK_KEY
+        else "auto (recommended)"
+    )
+    entries: list[tuple[str, str, list[str]]] = [
+        ("__auto__", f"{auto_label}{auto_marker}", [])
+    ]
+    entries.extend(
+        format_aux_picker_entries(
+            providers,
+            current_provider=current_provider,
+            current_base_url=current_base_url,
+        )
+    )
     custom_marker = "  ← current" if current_base_url else ""
     entries.append(("__custom__", f"Custom endpoint (direct URL){custom_marker}", []))
     entries.append(("__back__", "Back", []))
 
-    _say("", f"  Configure {display_name} — current: {_format_aux_current(_aux_task_cfg_for_display(cfg, task))}", "")
+    _say(
+        "",
+        f"  Configure {display_name} — current: {_format_aux_current(_aux_task_cfg_for_display(cfg, task))}",
+        "",
+    )
     idx = _prompt_provider_choice([label for _, label, _ in entries], default=0)
     if idx is None:
         return
@@ -301,20 +401,35 @@ def _aux_select_for_task(task: str) -> None:
     if slug == "__back__":
         return
     if slug == "__auto__":
-        _save_aux_choice(task, provider="auto", model="", base_url="", api_key="", reasoning_effort="")
+        _save_aux_choice(
+            task,
+            provider="auto",
+            model="",
+            base_url="",
+            api_key="",
+            reasoning_effort="",
+        )
         print(f"{display_name}: reset to auto.")
     elif slug == "__custom__":
         _aux_flow_custom_endpoint(task, task_cfg)
     else:
-        _aux_flow_provider_model(task, slug, models, current_model, current_effort=_aux_effort_word(task_cfg))
+        _aux_flow_provider_model(
+            task, slug, models, current_model, current_effort=_aux_effort_word(task_cfg)
+        )
 
 
-def _aux_flow_provider_model(task: str, provider_slug: str, curated_models: list,
-                             current_model: str = "", current_effort: str = "") -> None:
+def _aux_flow_provider_model(
+    task: str,
+    provider_slug: str,
+    curated_models: list,
+    current_model: str = "",
+    current_effort: str = "",
+) -> None:
     """Prompt for a model under an already-authenticated provider (then its reasoning effort),
     save to aux."""
     from clawk_cli.auth import _prompt_model_selection
     from clawk_cli.models_pricing import get_pricing_for_provider
+
     display_name = _aux_task_display_name(task)
     try:
         pricing = get_pricing_for_provider(provider_slug) or {}
@@ -325,20 +440,37 @@ def _aux_flow_provider_model(task: str, provider_slug: str, curated_models: list
     # _prompt_model_selection supports "Enter custom model name" and cancel; with no curated
     # list (rare) fall back to a raw input prompt.
     if not model_list:
-        _say(f"No curated model list for {provider_slug}.", "Enter a model slug manually (blank = use provider default):")
+        _say(
+            f"No curated model list for {provider_slug}.",
+            "Enter a model slug manually (blank = use provider default):",
+        )
         selected = _ask("Model: ", cancel_msg="")
         if selected is None:
             return
     else:
-        selected = _prompt_model_selection(model_list, current_model=current_model, pricing=pricing,
-                                           confirm_provider=provider_slug)
+        selected = _prompt_model_selection(
+            model_list,
+            current_model=current_model,
+            pricing=pricing,
+            confirm_provider=provider_slug,
+        )
         if selected is None:
             print("No change.")
             return
 
-    effort = _prompt_aux_reasoning_effort(task, current_effort) if _aux_task_takes_reasoning(task) else None
-    _save_aux_choice(task, provider=provider_slug, model=selected or "", base_url="", api_key="",
-                     reasoning_effort=effort)
+    effort = (
+        _prompt_aux_reasoning_effort(task, current_effort)
+        if _aux_task_takes_reasoning(task)
+        else None
+    )
+    _save_aux_choice(
+        task,
+        provider=provider_slug,
+        model=selected or "",
+        base_url="",
+        api_key="",
+        reasoning_effort=effort,
+    )
     effort_note = f" · reasoning {effort}" if effort else ""
     if selected:
         print(f"{display_name}: {provider_slug} · {selected}{effort_note}")
@@ -352,29 +484,55 @@ def _aux_flow_custom_endpoint(task: str, task_cfg: dict) -> None:
     current_base_url = str(task_cfg.get("base_url") or "").strip()
     current_model = str(task_cfg.get("model") or "").strip()
 
-    _say("", f"  Custom endpoint for {display_name}",
-         "  Provide an OpenAI-compatible base URL (e.g. http://localhost:11434/v1)", "")
-    url = _ask(f"Base URL [{current_base_url}]: " if current_base_url else "Base URL: ", cancel_msg="")
+    _say(
+        "",
+        f"  Custom endpoint for {display_name}",
+        "  Provide an OpenAI-compatible base URL (e.g. http://localhost:11434/v1)",
+        "",
+    )
+    url = _ask(
+        f"Base URL [{current_base_url}]: " if current_base_url else "Base URL: ",
+        cancel_msg="",
+    )
     if url is None:
         return
     url = url or current_base_url
     if not url:
         print("No URL provided. No change.")
         return
-    model = _ask(f"Model slug (optional) [{current_model}]: " if current_model else "Model slug (optional): ",
-                 cancel_msg="")
+    model = _ask(
+        f"Model slug (optional) [{current_model}]: "
+        if current_model
+        else "Model slug (optional): ",
+        cancel_msg="",
+    )
     if model is None:
         return
     model = model or current_model
-    api_key = _ask("API key (optional, blank = use OPENAI_API_KEY): ", secret=True, cancel_msg="")
+    api_key = _ask(
+        "API key (optional, blank = use OPENAI_API_KEY): ", secret=True, cancel_msg=""
+    )
     if api_key is None:
         return
-    effort = (_prompt_aux_reasoning_effort(task, _aux_effort_word(task_cfg))
-              if _aux_task_takes_reasoning(task) else None)
+    effort = (
+        _prompt_aux_reasoning_effort(task, _aux_effort_word(task_cfg))
+        if _aux_task_takes_reasoning(task)
+        else None
+    )
 
-    _save_aux_choice(task, provider="custom", model=model, base_url=url, api_key=api_key, reasoning_effort=effort)
-    print(f"{display_name}: custom ({_short_url(url)})" + (f" · {model}" if model else "")
-          + (f" · reasoning {effort}" if effort else ""))
+    _save_aux_choice(
+        task,
+        provider="custom",
+        model=model,
+        base_url=url,
+        api_key=api_key,
+        reasoning_effort=effort,
+    )
+    print(
+        f"{display_name}: custom ({_short_url(url)})"
+        + (f" · {model}" if model else "")
+        + (f" · reasoning {effort}" if effort else "")
+    )
 
 
 _CANCELLED = object()
@@ -405,6 +563,7 @@ def _prompt_provider_choice(choices, *, default=0, title="Select provider:"):
     (piped stdin, non-TTY). Returns the selected index, or None if the user cancels."""
     with contextlib.suppress(Exception):
         from clawk_cli.setup import _curses_prompt_choice
+
         idx = _curses_prompt_choice(title, choices, default)
         if idx >= 0:
             print()
@@ -412,37 +571,67 @@ def _prompt_provider_choice(choices, *, default=0, title="Select provider:"):
 
     _print_numbered(title, choices, default)
     print()
-    idx = _ask_index(f"Choice [1-{len(choices)}] ({default + 1}): ", len(choices), echo_cancel=True)
+    idx = _ask_index(
+        f"Choice [1-{len(choices)}] ({default + 1}): ", len(choices), echo_cancel=True
+    )
     if idx is None:
         return default
     return None if idx is _CANCELLED else idx
 
 
-_DEFAULT_QWEN_PORTAL_MODELS = [
-    "qwen3-coder-plus", "qwen3-coder"]
+_DEFAULT_QWEN_PORTAL_MODELS = ["qwen3-coder-plus", "qwen3-coder"]
 
 # (mode value, label, description, accepted answers); "" = auto-detect
 _CUSTOM_API_MODES = (
-    ("", "Auto-detect", "Use Clawksis URL heuristics; best for standard OpenAI-compatible endpoints.",
-     ("1", "auto", "detect", "auto-detect")),
-    ("chat_completions", "Chat Completions", "Use /chat/completions for standard OpenAI-compatible servers.",
-     ("2", "chat", "chat_completions", "completions")),
-    ("codex_responses", "Responses / Codex", "Use /responses for Codex-compatible tool-calling backends.",
-     ("3", "responses", "codex", "codex_responses")),
-    ("anthropic_messages", "Anthropic Messages", "Use /v1/messages for Anthropic-compatible endpoints.",
-     ("4", "anthropic", "anthropic_messages", "messages")))
-_CUSTOM_API_MODE_ANSWERS = {answer: value for value, _, _, answers in _CUSTOM_API_MODES for answer in answers}
+    (
+        "",
+        "Auto-detect",
+        "Use Clawksis URL heuristics; best for standard OpenAI-compatible endpoints.",
+        ("1", "auto", "detect", "auto-detect"),
+    ),
+    (
+        "chat_completions",
+        "Chat Completions",
+        "Use /chat/completions for standard OpenAI-compatible servers.",
+        ("2", "chat", "chat_completions", "completions"),
+    ),
+    (
+        "codex_responses",
+        "Responses / Codex",
+        "Use /responses for Codex-compatible tool-calling backends.",
+        ("3", "responses", "codex", "codex_responses"),
+    ),
+    (
+        "anthropic_messages",
+        "Anthropic Messages",
+        "Use /v1/messages for Anthropic-compatible endpoints.",
+        ("4", "anthropic", "anthropic_messages", "messages"),
+    ),
+)
+_CUSTOM_API_MODE_ANSWERS = {
+    answer: value for value, _, _, answers in _CUSTOM_API_MODES for answer in answers
+}
 
 
-def _prompt_custom_api_mode_selection(base_url: str, current_api_mode: str = "") -> Optional[str]:
+def _prompt_custom_api_mode_selection(
+    base_url: str, current_api_mode: str = ""
+) -> Optional[str]:
     """Prompt for a custom provider API mode: an explicit mode string, or None for auto-detect."""
     from clawk_cli.runtime_provider import _detect_api_mode_for_url
+
     detected_mode = _detect_api_mode_for_url(base_url)
     default_mode = str(current_api_mode or "").strip().lower() or detected_mode or ""
 
     _say("", "Select API compatibility mode:")
     for idx, (value, label, description, _answers) in enumerate(_CUSTOM_API_MODES, 1):
-        markers = [m for m, hit in (("detected", value == detected_mode), ("current", value == default_mode)) if hit]
+        markers = [
+            m
+            for m, hit in (
+                ("detected", value == detected_mode),
+                ("current", value == default_mode),
+            )
+            if hit
+        ]
         suffix = f" [{' / '.join(markers)}]" if markers else ""
         _say(f"  {idx}. {label}{suffix}", f"     {description}")
 
@@ -464,6 +653,7 @@ def _auto_provider_name(base_url: str) -> str:
     """Display name from a custom endpoint URL, e.g. "Local (localhost:11434)" or
     "RunPod (xyz.runpod.io)" — the default offered during custom endpoint setup."""
     import re
+
     name = re.sub(r"/v1/?$", "", _short_url(base_url)).split("/")[0]
     if "localhost" in name or "127.0.0.1" in name:
         return f"Local ({name})"
@@ -485,11 +675,21 @@ def _custom_provider_api_key_config_value(provider_info, resolved_api_key=""):
 
 def _custom_provider_base_url_config_value(provider_info, resolved_base_url=""):
     """Return the value that should be persisted for a custom provider URL."""
-    return str(provider_info.get("base_url_ref", "") or "").strip() or str(resolved_base_url or "").strip()
+    return (
+        str(provider_info.get("base_url_ref", "") or "").strip()
+        or str(resolved_base_url or "").strip()
+    )
 
 
-def _save_custom_provider(base_url, api_key="", model="", context_length=None, name=None, api_mode=None,
-                          key_env=""):
+def _save_custom_provider(
+    base_url,
+    api_key="",
+    model="",
+    context_length=None,
+    name=None,
+    api_mode=None,
+    key_env="",
+):
     """Save a custom endpoint to ``custom_providers`` in config.yaml, deduplicated by base_url (an
     existing entry gets model / context_length / api_mode updated). *key_env* set means the caller
     already wrote the key to ``.env``; the entry references it instead of inlining the secret.
@@ -497,19 +697,25 @@ def _save_custom_provider(base_url, api_key="", model="", context_length=None, n
     See #69449.
     """
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     providers = cfg.get("custom_providers") or []
     if not isinstance(providers, list):
         providers = []
     for entry in providers:
-        if not (isinstance(entry, dict) and entry.get("base_url", "").rstrip("/") == base_url.rstrip("/")):
+        if not (
+            isinstance(entry, dict)
+            and entry.get("base_url", "").rstrip("/") == base_url.rstrip("/")
+        ):
             continue
         changed = False
         if model and entry.get("model") != model:
             entry["model"] = model
             changed = True
         if model and context_length:
-            _ensure_dict_section(entry, "models")[model] = {"context_length": context_length}
+            _ensure_dict_section(entry, "models")[model] = {
+                "context_length": context_length
+            }
             changed = True
         if api_mode:
             if entry.get("api_mode") != api_mode:
@@ -549,6 +755,7 @@ def _save_custom_provider(base_url, api_key="", model="", context_length=None, n
 def _remove_custom_provider(config):
     """Let the user remove a saved custom provider from config.yaml."""
     from clawk_cli.config import load_config, save_config
+
     cfg = load_config()
     providers = cfg.get("custom_providers") or []
     if not isinstance(providers, list) or not providers:
@@ -557,8 +764,11 @@ def _remove_custom_provider(config):
 
     print("Remove a custom provider:\n")
     choices = [
-        f"{entry.get('name', 'unnamed')} ({_short_url(entry.get('base_url', ''))})" if isinstance(entry, dict) else str(entry)
-        for entry in providers]
+        f"{entry.get('name', 'unnamed')} ({_short_url(entry.get('base_url', ''))})"
+        if isinstance(entry, dict)
+        else str(entry)
+        for entry in providers
+    ]
     choices.append("Cancel")
 
     idx = _radiolist("Select provider to remove:", list(choices))
@@ -583,14 +793,20 @@ def _remove_custom_provider(config):
     removed = providers.pop(idx)
     cfg["custom_providers"] = providers
     save_config(cfg)
-    removed_name = removed.get("name", "unnamed") if isinstance(removed, dict) else str(removed)
+    removed_name = (
+        removed.get("name", "unnamed") if isinstance(removed, dict) else str(removed)
+    )
     print(f'✅ Removed "{removed_name}" from custom providers.')
 
 
 def _prompt_reasoning_effort_selection(efforts, current_effort="", *, default_label=""):
     """Prompt for a reasoning effort. Returns a level, 'none', "" (only with *default_label*: the
     "use the provider default" row), or None to keep current."""
-    deduped = list(dict.fromkeys(str(effort).strip().lower() for effort in efforts if str(effort).strip()))
+    deduped = list(
+        dict.fromkeys(
+            str(effort).strip().lower() for effort in efforts if str(effort).strip()
+        )
+    )
     canonical_order = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
     ordered = [effort for effort in canonical_order if effort in deduped]
     ordered.extend(effort for effort in deduped if effort not in canonical_order)
@@ -605,7 +821,13 @@ def _prompt_reasoning_effort_selection(efforts, current_effort="", *, default_la
     # (return value, label) for the rows after the ladder; "" = provider default (aux tasks only).
     tail: list[tuple[Optional[str], str]] = [("none", disable_label)]
     if default_label:
-        tail.append(("", default_label + ("  ← currently in use" if current_effort == "" else "")))
+        tail.append(
+            (
+                "",
+                default_label
+                + ("  ← currently in use" if current_effort == "" else ""),
+            )
+        )
     tail.append((None, skip_label))
     tail_values = [v for v, _ in tail]
     if current_effort == "none":
@@ -631,7 +853,11 @@ def _prompt_reasoning_effort_selection(efforts, current_effort="", *, default_la
         for i, row in enumerate(rows, 1):
             print(f"  {i}. {row}")
         print()
-        idx = _ask_index(f"Choice [1-{len(rows)}] (default: keep current): ", len(rows), echo_cancel=False)
+        idx = _ask_index(
+            f"Choice [1-{len(rows)}] (default: keep current): ",
+            len(rows),
+            echo_cancel=False,
+        )
         if idx is None or idx is _CANCELLED:
             return None
     if idx < n:
@@ -642,6 +868,7 @@ def _prompt_reasoning_effort_selection(efforts, current_effort="", *, default_la
 def _model_choice_save_count() -> int:
     """Snapshot taken by ``select_provider_and_model`` before a flow runs (see below)."""
     from clawk_cli.auth_model_picker import model_choice_save_count
+
     return model_choice_save_count()
 
 
@@ -652,11 +879,14 @@ def _offer_reasoning_after_pick(model_before: str, saves_before: int) -> None:
     provider switch that keeps the same model ID or a re-pick of the current model. Cancel /
     "No change." never prompts."""
     from clawk_cli.config import load_config
+
     model_cfg = load_config().get("model")
     if not isinstance(model_cfg, dict):
         return
     model = str(model_cfg.get("default") or "").strip()
-    if not model or (model == model_before and _model_choice_save_count() == saves_before):
+    if not model or (
+        model == model_before and _model_choice_save_count() == saves_before
+    ):
         return
     _prompt_main_reasoning_effort(model, str(model_cfg.get("provider") or ""))
 
@@ -668,27 +898,37 @@ def _prompt_main_reasoning_effort(model: str, provider: str) -> None:
     no reasoning control; "Skip" leaves the current value alone."""
     from clawk_cli.config import load_config, save_config
     from clawk_cli.setup import _current_reasoning_effort, _set_reasoning_effort
+
     efforts = _main_model_reasoning_efforts(model, provider)
     if efforts is None:
         return
-    selected = _prompt_reasoning_effort_selection(efforts, current_effort=_current_reasoning_effort(load_config()))
+    selected = _prompt_reasoning_effort_selection(
+        efforts, current_effort=_current_reasoning_effort(load_config())
+    )
     if selected is None:
         return
     cfg = load_config()
     _set_reasoning_effort(cfg, selected)
     save_config(cfg)
-    print("Reasoning disabled for this model." if selected == "none" else f"Reasoning effort set to: {selected}")
+    print(
+        "Reasoning disabled for this model."
+        if selected == "none"
+        else f"Reasoning effort set to: {selected}"
+    )
 
 
 def _main_model_reasoning_efforts(model: str, provider: str) -> Optional[list[str]]:
     """Levels to offer for *model* on *provider*: None when the route has no reasoning control."""
     from clawk_constants import VALID_REASONING_EFFORTS
+
     slug = (provider or "").strip().lower()
     if slug == "copilot":
         from clawk_cli.models import github_model_reasoning_efforts
+
         return github_model_reasoning_efforts(model) or None
     try:
         from agent.models_dev import get_model_capabilities
+
         meta = get_model_capabilities(slug, model)
     except Exception:
         meta = None
@@ -718,17 +958,22 @@ def _persist_env_only_key(key_env: str, value: str) -> None:
         if (load_env().get(key_env) or "").strip() == value:
             return
         save_env_value(key_env, value)
-        print(f"  Saved {key_env} to {get_env_path()} so background services (e.g. the gateway) can use it too.")
+        print(
+            f"  Saved {key_env} to {get_env_path()} so background services (e.g. the gateway) can use it too."
+        )
     except Exception:
         pass
 
 
-def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_source: str = "") -> tuple:
+def _prompt_api_key(
+    pconfig, existing_key: str, provider_id: str = "", existing_source: str = ""
+) -> tuple:
     """API-key entry for ``clawk setup`` / ``clawk model``: first-time entry, or [K]eep / [R]eplace /
     [C]lear when a key exists (a malformed paste is recoverable without editing ``.env``).
     Returns ``(resolved_key, abort)``; ``abort=True`` means the caller must ``return`` at once."""
     from clawk_cli.auth import LMSTUDIO_NOAUTH_PLACEHOLDER
     from clawk_cli.config import save_env_value
+
     key_env = pconfig.api_key_env_vars[0] if pconfig.api_key_env_vars else ""
 
     def _prompt_new_key(*, allow_lmstudio_default: bool) -> str:
@@ -758,6 +1003,7 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
 
     # Already configured — offer K / R / C
     from clawk_cli.env_loader import format_secret_source_suffix
+
     source_suffix = format_secret_source_suffix(key_env) if key_env else ""
     print(f"  {pconfig.name} API key: {existing_key[:8]}... ✓{source_suffix}")
     if not key_env:
@@ -765,7 +1011,11 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
         print()
         return existing_key, False
     pool_backed = existing_source.startswith("credential_pool:")
-    menu = "  [K]eep / [R]eplace (default K): " if pool_backed else "  [K]eep / [R]eplace / [C]lear (default K): "
+    menu = (
+        "  [K]eep / [R]eplace (default K): "
+        if pool_backed
+        else "  [K]eep / [R]eplace / [C]lear (default K): "
+    )
     choice = _ask(menu, raw=True, cancel_msg="", on_cancel="k").lower()
 
     if choice.startswith("r"):
@@ -780,7 +1030,9 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
         return new_key, False
     if choice.startswith("c") and not pool_backed:
         save_env_value(key_env, "")
-        print(f"  API key cleared.  Re-run `clawk setup` to configure {pconfig.name} again.")
+        print(
+            f"  API key cleared.  Re-run `clawk setup` to configure {pconfig.name} again."
+        )
         return "", True
     # Keep (default, or any other input). An env-only key (shell export) is persisted so the
     # gateway resolves the same credential later; a pool-backed key already lives in auth.json.
@@ -792,29 +1044,53 @@ def _prompt_api_key(pconfig, existing_key: str, provider_id: str = "", existing_
 
 def _infer_stepfun_region(base_url: str) -> str:
     """Infer the current StepFun region from the configured endpoint."""
-    return "china" if "api.stepfun.com" in (base_url or "").strip().lower() else "international"
+    return (
+        "china"
+        if "api.stepfun.com" in (base_url or "").strip().lower()
+        else "international"
+    )
 
 
 def _stepfun_base_url_for_region(region: str) -> str:
-    from clawk_cli.auth import STEPFUN_STEP_PLAN_CN_BASE_URL, STEPFUN_STEP_PLAN_INTL_BASE_URL
-    return STEPFUN_STEP_PLAN_CN_BASE_URL if region == "china" else STEPFUN_STEP_PLAN_INTL_BASE_URL
+    from clawk_cli.auth import (
+        STEPFUN_STEP_PLAN_CN_BASE_URL,
+        STEPFUN_STEP_PLAN_INTL_BASE_URL,
+    )
+
+    return (
+        STEPFUN_STEP_PLAN_CN_BASE_URL
+        if region == "china"
+        else STEPFUN_STEP_PLAN_INTL_BASE_URL
+    )
 
 
 def _run_anthropic_oauth_flow(save_env_value):
     """Run the Claude OAuth setup-token flow. Returns True if credentials were saved."""
-    from agent.anthropic_credentials import run_oauth_setup_token, read_claude_code_credentials, is_claude_code_token_valid
-    from clawk_cli.config import save_anthropic_oauth_token, use_anthropic_claude_code_credentials
+    from agent.anthropic_credentials import (
+        run_oauth_setup_token,
+        read_claude_code_credentials,
+        is_claude_code_token_valid,
+    )
+    from clawk_cli.config import (
+        save_anthropic_oauth_token,
+        use_anthropic_claude_code_credentials,
+    )
 
     def _activate_claude_code_credentials_if_available() -> bool:
         try:
             creds = read_claude_code_credentials()
         except Exception:
             creds = None
-        if creds and (is_claude_code_token_valid(creds) or bool(creds.get("refreshToken"))):
+        if creds and (
+            is_claude_code_token_valid(creds) or bool(creds.get("refreshToken"))
+        ):
             use_anthropic_claude_code_credentials(save_fn=save_env_value)
             print("  ✓ Claude Code credentials linked.")
             from clawk_constants import display_clawk_home as _dhh_fn
-            print(f"    Clawksis will use Claude's credential store directly instead of copying a setup-token into {_dhh_fn()}/.env.")
+
+            print(
+                f"    Clawksis will use Claude's credential store directly instead of copying a setup-token into {_dhh_fn()}/.env."
+            )
             return True
         return False
 
@@ -828,8 +1104,12 @@ def _run_anthropic_oauth_flow(save_env_value):
         return True
 
     try:
-        _say("", "  Running 'claude setup-token' — follow the prompts below.",
-             "  A browser window will open for you to authorize access.", "")
+        _say(
+            "",
+            "  Running 'claude setup-token' — follow the prompts below.",
+            "  A browser window will open for you to authorize access.",
+            "",
+        )
         token = run_oauth_setup_token()
         if token:
             if _activate_claude_code_credentials_if_available():
@@ -850,12 +1130,20 @@ def _run_anthropic_oauth_flow(save_env_value):
 
     except FileNotFoundError:
         # Claude CLI not installed — guide user through manual setup
-        _say("", "  The 'claude' CLI is required for OAuth login.", "", "  To install and authenticate:", "",
-             "    1. Install Claude Code:  npm install -g @anthropic-ai/claude-code",
-             "    2. Run:                  claude setup-token",
-             "    3. Follow the browser prompts to authorize",
-             "    4. Re-run:               clawk model", "",
-             "  Or paste an existing setup-token now (sk-ant-oat-...):", "")
+        _say(
+            "",
+            "  The 'claude' CLI is required for OAuth login.",
+            "",
+            "  To install and authenticate:",
+            "",
+            "    1. Install Claude Code:  npm install -g @anthropic-ai/claude-code",
+            "    2. Run:                  claude setup-token",
+            "    3. Follow the browser prompts to authorize",
+            "    4. Re-run:               clawk model",
+            "",
+            "  Or paste an existing setup-token now (sk-ant-oat-...):",
+            "",
+        )
         saved = _paste_token("  Setup-token (or Enter to cancel): ")
         if saved is None:
             return False
@@ -880,30 +1168,55 @@ def _named_custom_provider_map(cfg) -> dict[str, dict[str, str]]:
     raw_entries: list[tuple[str, str, dict]] = []
     raw_list = raw_cfg.get("custom_providers")
     if isinstance(raw_list, list):
-        raw_entries.extend((e.get("name", ""), "", e) for e in raw_list if isinstance(e, dict))
+        raw_entries.extend(
+            (e.get("name", ""), "", e) for e in raw_list if isinstance(e, dict)
+        )
     raw_providers = raw_cfg.get("providers")
     if isinstance(raw_providers, dict):
-        raw_entries.extend((e.get("name", "") or k, k, e) for k, e in raw_providers.items() if isinstance(e, dict))
+        raw_entries.extend(
+            (e.get("name", "") or k, k, e)
+            for k, e in raw_providers.items()
+            if isinstance(e, dict)
+        )
     for name, provider_key, raw_entry in raw_entries:
         template = str(raw_entry.get("api_key", "") or "").strip()
-        base_template = str(raw_entry.get("base_url", "") or raw_entry.get("url", "") or raw_entry.get("api", "") or "").strip()
+        base_template = str(
+            raw_entry.get("base_url", "")
+            or raw_entry.get("url", "")
+            or raw_entry.get("api", "")
+            or ""
+        ).strip()
         name = str(name or "").strip()
         provider_key = str(provider_key or "").strip()
-        model = str(raw_entry.get("model", "") or raw_entry.get("default_model", "") or "").strip()
+        model = str(
+            raw_entry.get("model", "") or raw_entry.get("default_model", "") or ""
+        ).strip()
         # Index by every identity the loaded (expanded) config might present: (name),
         # (name, model), (provider_key), (provider_key, model); case-insensitive names.
         keys = [k.lower() for k in (name, provider_key) if k]
         identities = [(k,) for k in keys] + [(k, model) for k in keys]
-        for refs, tmpl in ((raw_api_key_refs, template), (raw_base_url_refs, base_template)):
+        for refs, tmpl in (
+            (raw_api_key_refs, template),
+            (raw_base_url_refs, base_template),
+        ):
             if "${" in tmpl:
                 for identity in identities:
                     refs.setdefault(identity, tmpl)
 
-    def _lookup_ref(refs: dict[tuple, str], name: str, provider_key: str, model: str) -> str:
+    def _lookup_ref(
+        refs: dict[tuple, str], name: str, provider_key: str, model: str
+    ) -> str:
         name_lc = str(name or "").strip().lower()
         pkey_lc = str(provider_key or "").strip().lower()
         model = str(model or "").strip()
-        return next((refs[i] for i in ((pkey_lc, model), (pkey_lc,), (name_lc, model), (name_lc,)) if i[0] and i in refs), "")
+        return next(
+            (
+                refs[i]
+                for i in ((pkey_lc, model), (pkey_lc,), (name_lc, model), (name_lc,))
+                if i[0] and i in refs
+            ),
+            "",
+        )
 
     custom_provider_map = {}
     for entry in get_compatible_custom_providers(cfg):
@@ -929,30 +1242,47 @@ def _named_custom_provider_map(cfg) -> dict[str, dict[str, str]]:
             "api_mode": entry.get("api_mode", ""),
             "provider_key": provider_key,
             "api_key_ref": _lookup_ref(raw_api_key_refs, name, provider_key, model),
-            "base_url_ref": _lookup_ref(raw_base_url_refs, name, provider_key, model)}
+            "base_url_ref": _lookup_ref(raw_base_url_refs, name, provider_key, model),
+        }
     return custom_provider_map
 
 
-def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict[str, str],
-                                custom_provider_map: dict[str, dict[str, str]]) -> tuple[list[tuple[str, str, list[str]]], int]:
+def _build_provider_picker_rows(
+    config: dict,
+    active: str,
+    provider_labels: dict[str, str],
+    custom_provider_map: dict[str, dict[str, str]],
+) -> tuple[list[tuple[str, str, list[str]]], int]:
     """Rows for the ``clawk model`` provider picker plus the pre-selected index. Canonical providers
     fold into display groups (PROVIDER_GROUPS): a group row's ``members`` drive a sub-picker, leaf
     rows have ``members == []``; saved custom providers and trailing actions stay flat. Honors
     ``model_catalog.excluded_providers`` (slug or alias, case-insensitive) like the gateway/TUI."""
     from clawk_cli.models import CANONICAL_PROVIDERS, _PROVIDER_ALIASES
-    from clawk_cli.models_catalog_static import group_providers, listed_canonical_providers, provider_group_for_slug
+    from clawk_cli.models_catalog_static import (
+        group_providers,
+        listed_canonical_providers,
+        provider_group_for_slug,
+    )
+
     canonical_descs = {p.slug: p.tui_desc for p in CANONICAL_PROVIDERS}
     listed = listed_canonical_providers()
     _cli_excluded = {
         str(p).strip().lower()
         for p in (config.get("model_catalog", {}) or {}).get("excluded_providers") or []
-        if p}
+        if p
+    }
     if _cli_excluded:
         # A canonical provider is hidden if its slug OR any alias is excluded.
-        _names_for: dict[str, set[str]] = {_p.slug: {_p.slug.lower()} for _p in CANONICAL_PROVIDERS}
+        _names_for: dict[str, set[str]] = {
+            _p.slug: {_p.slug.lower()} for _p in CANONICAL_PROVIDERS
+        }
         for _alias, _canon in _PROVIDER_ALIASES.items():
             _names_for.setdefault(_canon, {_canon.lower()}).add(_alias.lower())
-        _visible_slugs = [p.slug for p in listed if not _names_for.get(p.slug, {p.slug.lower()}) & _cli_excluded]
+        _visible_slugs = [
+            p.slug
+            for p in listed
+            if not _names_for.get(p.slug, {p.slug.lower()}) & _cli_excluded
+        ]
     else:
         _visible_slugs = [p.slug for p in listed]
 
@@ -975,8 +1305,17 @@ def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict
         if row["kind"] == "group":
             gid = row["group_id"]
             group_desc = row.get("description", "")
-            label = f"{row['label']} ▸ ({group_desc})" if group_desc else f"{row['label']} ▸"
-            _add(f"group:{gid}", label, row["members"], bool(active_group) and gid == active_group)
+            label = (
+                f"{row['label']} ▸ ({group_desc})"
+                if group_desc
+                else f"{row['label']} ▸"
+            )
+            _add(
+                f"group:{gid}",
+                label,
+                row["members"],
+                bool(active_group) and gid == active_group,
+            )
         else:
             slug = row["slug"]
             label = canonical_descs.get(slug, provider_labels.get(slug, slug))
@@ -984,6 +1323,7 @@ def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict
                 # Same free-tier rule as the gateway/TUI pickers: relabel for a guest, hide
                 # when nous.guest is off, untouched for a real account.
                 from clawk_cli.model_switch_providers import _free_tier_nous_row
+
                 tier_row = _free_tier_nous_row({"name": label, "models": []})
                 if tier_row is None:
                     continue
@@ -993,16 +1333,27 @@ def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict
     for key, provider_info in custom_provider_map.items():
         saved_model = provider_info.get("model", "")
         model_hint = f" — {saved_model}" if saved_model else ""
-        _add(key, f"{provider_info['name']} ({_short_url(provider_info['base_url'])}){model_hint}", [],
-             bool(active) and key == active)
+        _add(
+            key,
+            f"{provider_info['name']} ({_short_url(provider_info['base_url'])}){model_hint}",
+            [],
+            bool(active) and key == active,
+        )
 
     from clawk_cli.model_setup_flows_local import local_models_available
     from clawk_cli.providers import LLAMACPP_ALIASES
+
     if not _cli_excluded & set(LLAMACPP_ALIASES) and local_models_available():
-        _add("llamacpp", "Local models (run open models on this machine — no account or API key)", [],
-             active == "llamacpp")
+        _add(
+            "llamacpp",
+            "Local models (run open models on this machine — no account or API key)",
+            [],
+            active == "llamacpp",
+        )
     ordered.append(("custom", "Custom endpoint (enter URL manually)", []))
-    if isinstance(config.get("custom_providers"), list) and config.get("custom_providers"):
+    if isinstance(config.get("custom_providers"), list) and config.get(
+        "custom_providers"
+    ):
         ordered.append(("remove-custom", "Remove a saved custom provider", []))
     ordered.append(("reasoning", "Reasoning effort for the current model...", []))
     ordered.append(("aux-config", "Configure auxiliary models...", []))

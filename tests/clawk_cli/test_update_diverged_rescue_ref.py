@@ -23,14 +23,24 @@ GIT = ["git"]
 
 def _git(repo, *args, check=True):
     return subprocess.run(
-        GIT + list(args), cwd=repo, capture_output=True, text=True, check=check)
+        GIT + list(args), cwd=repo, capture_output=True, text=True, check=check
+    )
 
 
 def _commit(repo, name, text):
     (repo / name).write_text(text, encoding="utf-8")
     _git(repo, "add", name)
-    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid",
-         "commit", "-q", "-m", f"add {name}")
+    _git(
+        repo,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-q",
+        "-m",
+        f"add {name}",
+    )
     return _git(repo, "rev-parse", "HEAD").stdout.strip()
 
 
@@ -45,14 +55,20 @@ def diverged_checkout(tmp_path):
 
     checkout = tmp_path / "checkout"
     _git(tmp_path, "clone", "-q", str(upstream), str(checkout))
-    _git(checkout, "reset", "-q", "--hard", "HEAD~1")          # back to the shared commit
-    local_sha = _commit(checkout, "local-fix.txt", "local\n")  # diverges from origin/main
+    _git(checkout, "reset", "-q", "--hard", "HEAD~1")  # back to the shared commit
+    local_sha = _commit(
+        checkout, "local-fix.txt", "local\n"
+    )  # diverges from origin/main
     return checkout, local_sha
 
 
 def _rescue_refs(checkout):
-    out = _git(checkout, "for-each-ref", "--format=%(refname) %(objectname)",
-               "refs/clawk-update-backups/").stdout
+    out = _git(
+        checkout,
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        "refs/clawk-update-backups/",
+    ).stdout
     return dict(line.split() for line in out.splitlines() if line.strip())
 
 
@@ -61,22 +77,33 @@ def _assert_reset_kept_local_commit(checkout, local_sha, output):
     origin = _git(checkout, "rev-parse", "origin/main").stdout.strip()
     assert head == origin, "the reset itself must still happen"
     refs = [ref for ref, sha in _rescue_refs(checkout).items() if sha == local_sha]
-    assert len(refs) == 1, f"the dropped commit needs exactly one rescue ref: {_rescue_refs(checkout)}"
+    assert len(refs) == 1, (
+        f"the dropped commit needs exactly one rescue ref: {_rescue_refs(checkout)}"
+    )
     assert refs[0].startswith("refs/clawk-update-backups/diverged-main-")
     assert refs[0] in output, "the user must be told where the commits went"
-    dropped = _git(checkout, "log", "--format=%H", f"origin/main..{refs[0]}").stdout.split()
+    dropped = _git(
+        checkout, "log", "--format=%H", f"origin/main..{refs[0]}"
+    ).stdout.split()
     assert dropped == [local_sha]
 
 
 def test_clawk_update_keeps_local_commit_behind_a_rescue_ref(
-        diverged_checkout, monkeypatch, capsys):
+    diverged_checkout, monkeypatch, capsys
+):
     """The real apply path: ff-only fails, the reconcile resets, the local commit stays reachable."""
     checkout, local_sha = diverged_checkout
     monkeypatch.setattr(update_cmd._m(), "PROJECT_ROOT", checkout)
 
     update_cmd._pull_updates(
-        GIT, "main", None, prompt_for_restore=False, gw_input_fn=None,
-        discard_local_changes=False, keep_stash=False)
+        GIT,
+        "main",
+        None,
+        prompt_for_restore=False,
+        gw_input_fn=None,
+        discard_local_changes=False,
+        keep_stash=False,
+    )
 
     out = capsys.readouterr().out
     _assert_reset_kept_local_commit(checkout, local_sha, out)
@@ -99,15 +126,22 @@ def fast_forward_checkout(tmp_path):
 
 
 def test_live_index_lock_is_reported_without_false_divergence(
-        fast_forward_checkout, monkeypatch, capsys):
+    fast_forward_checkout, monkeypatch, capsys
+):
     checkout, before = fast_forward_checkout
     monkeypatch.setattr(update_cmd._m(), "PROJECT_ROOT", checkout)
     (checkout / ".git" / "index.lock").touch()
 
     with pytest.raises(SystemExit) as exc:
         update_cmd._pull_updates(
-            GIT, "main", None, prompt_for_restore=False, gw_input_fn=None,
-            discard_local_changes=False, keep_stash=False)
+            GIT,
+            "main",
+            None,
+            prompt_for_restore=False,
+            gw_input_fn=None,
+            discard_local_changes=False,
+            keep_stash=False,
+        )
 
     assert exc.value.code == 1
     assert _git(checkout, "rev-parse", "HEAD").stdout.strip() == before
@@ -121,7 +155,8 @@ def test_live_index_lock_is_reported_without_false_divergence(
 
 
 def test_operational_ff_failure_preserves_git_error_without_reset(
-        fast_forward_checkout, monkeypatch, capsys):
+    fast_forward_checkout, monkeypatch, capsys
+):
     checkout, before = fast_forward_checkout
     monkeypatch.setattr(update_cmd._m(), "PROJECT_ROOT", checkout)
     real_git_run = update_cmd._git_run
@@ -129,16 +164,25 @@ def test_operational_ff_failure_preserves_git_error_without_reset(
     def fail_merge(git_cmd, args, *rest, **kwargs):
         if args[:2] == ["merge", "--ff-only"]:
             return subprocess.CompletedProcess(
-                git_cmd + args, 128, stdout="",
-                stderr="fatal: unable to read tree: RPC failed; transfer closed")
+                git_cmd + args,
+                128,
+                stdout="",
+                stderr="fatal: unable to read tree: RPC failed; transfer closed",
+            )
         return real_git_run(git_cmd, args, *rest, **kwargs)
 
     monkeypatch.setattr(update_cmd, "_git_run", fail_merge)
 
     with pytest.raises(SystemExit) as exc:
         update_cmd._pull_updates(
-            GIT, "main", None, prompt_for_restore=False, gw_input_fn=None,
-            discard_local_changes=False, keep_stash=False)
+            GIT,
+            "main",
+            None,
+            prompt_for_restore=False,
+            gw_input_fn=None,
+            discard_local_changes=False,
+            keep_stash=False,
+        )
 
     assert exc.value.code == 1
     assert _git(checkout, "rev-parse", "HEAD").stdout.strip() == before

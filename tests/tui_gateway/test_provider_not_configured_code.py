@@ -15,7 +15,9 @@ from tui_gateway import server
 @pytest.fixture
 def emitted(monkeypatch):
     events = []
-    monkeypatch.setattr(server, "_emit", lambda kind, sid, payload: events.append((kind, payload)))
+    monkeypatch.setattr(
+        server, "_emit", lambda kind, sid, payload: events.append((kind, payload))
+    )
     return events
 
 
@@ -46,15 +48,21 @@ def _run_build(session):
 
 
 def test_provider_not_configured_is_named_in_the_error_event(monkeypatch, emitted):
-    session = _fail_build(monkeypatch, ProviderNotConfiguredError(
-        "No LLM provider configured. Run `clawk model` to select a provider, or run `clawk setup` "
-        "for first-time configuration."))
+    session = _fail_build(
+        monkeypatch,
+        ProviderNotConfiguredError(
+            "No LLM provider configured. Run `clawk model` to select a provider, or run `clawk setup` "
+            "for first-time configuration."
+        ),
+    )
 
     _run_build(session)
 
     _kind, payload = next((k, p) for k, p in emitted if k == "error")
     assert payload["code"] == "provider_not_configured"
-    assert "No LLM provider configured" in payload["message"]  # the sentence still reaches the reader
+    assert (
+        "No LLM provider configured" in payload["message"]
+    )  # the sentence still reaches the reader
 
 
 def test_an_unrelated_build_failure_carries_no_code(monkeypatch, emitted):
@@ -76,11 +84,22 @@ class TestAgentInitRaisesTheNamedError:
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         # Nothing resolves and no fallback chain: the end of the ladder.
-        monkeypatch.setattr("agent.auxiliary_client.resolve_provider_client", lambda *a, **kw: (None, None))
-        agent = SimpleNamespace(provider="auto", model="m", base_url=None, api_key=None,
-                                _fallback_activated=False, _explicit_provider="")
+        monkeypatch.setattr(
+            "agent.auxiliary_client.resolve_provider_client",
+            lambda *a, **kw: (None, None),
+        )
+        agent = SimpleNamespace(
+            provider="auto",
+            model="m",
+            base_url=None,
+            api_key=None,
+            _fallback_activated=False,
+            _explicit_provider="",
+        )
 
-        with pytest.raises(ProviderNotConfiguredError, match="No LLM provider configured"):
+        with pytest.raises(
+            ProviderNotConfiguredError, match="No LLM provider configured"
+        ):
             _routed_client_kwargs(agent, None, 60)
 
     def test_explicit_provider_without_credentials(self, monkeypatch, tmp_path):
@@ -89,10 +108,18 @@ class TestAgentInitRaisesTheNamedError:
         from agent.agent_init import _routed_client_kwargs
 
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-        agent = SimpleNamespace(provider="minimax-oauth", model="m", base_url=None, api_key=None,
-                                _fallback_activated=False, _explicit_provider="minimax-oauth")
+        agent = SimpleNamespace(
+            provider="minimax-oauth",
+            model="m",
+            base_url=None,
+            api_key=None,
+            _fallback_activated=False,
+            _explicit_provider="minimax-oauth",
+        )
 
-        with pytest.raises(ProviderNotConfiguredError, match=r"clawk auth add minimax-oauth"):
+        with pytest.raises(
+            ProviderNotConfiguredError, match=r"clawk auth add minimax-oauth"
+        ):
             _routed_client_kwargs(agent, None, 60)
 
     def test_the_type_is_a_runtime_error(self):

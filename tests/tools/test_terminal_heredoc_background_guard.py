@@ -40,16 +40,29 @@ class TestInertQuotedHeredocPayloadAllowed:
 
     def test_applescript_string_concat(self):
         cmd = (
-            "osascript <<'EOF'" + NL
-            + 'set out to "count " ' + AMP + " (count of items)" + NL
+            "osascript <<'EOF'"
+            + NL
+            + 'set out to "count " '
+            + AMP
+            + " (count of items)"
+            + NL
             + "EOF"
         )
         assert guidance(cmd) is None
 
     def test_python_bitwise_and(self):
-        cmd = "python3 <<'EOF'" + NL + "z = a " + AMP + " b" + NL + "print(z)" + NL + "EOF"
+        cmd = (
+            "python3 <<'EOF'"
+            + NL
+            + "z = a "
+            + AMP
+            + " b"
+            + NL
+            + "print(z)"
+            + NL
+            + "EOF"
+        )
         assert guidance(cmd) is None
-
 
     def test_double_quoted_delimiter(self):
         cmd = 'cat <<"EOF"' + NL + "foo " + AMP + " bar" + NL + "EOF"
@@ -61,26 +74,42 @@ class TestInertQuotedHeredocPayloadAllowed:
 
     def test_quoted_delimiter_with_punctuation(self):
         cmd = (
-            "python3 - <<'END.X'" + NL
-            + "mode = current " + AMP + " mask" + NL
+            "python3 - <<'END.X'"
+            + NL
+            + "mode = current "
+            + AMP
+            + " mask"
+            + NL
             + "END.X"
         )
         assert guidance(cmd) is None
 
     def test_multiple_quoted_heredocs_on_one_opener(self):
         cmd = (
-            "python3 - <<'A' 3<<'B'" + NL
-            + "one " + AMP + " two" + NL
-            + "A" + NL
-            + "three " + AMP + " four" + NL
+            "python3 - <<'A' 3<<'B'"
+            + NL
+            + "one "
+            + AMP
+            + " two"
+            + NL
+            + "A"
+            + NL
+            + "three "
+            + AMP
+            + " four"
+            + NL
             + "B"
         )
         assert guidance(cmd) is None
 
     def test_env_prefix_and_interpreter_path(self):
         cmd = (
-            "FOO=1 env /usr/bin/python3.12 - <<'PY'" + NL
-            + "x = a " + AMP + " b" + NL
+            "FOO=1 env /usr/bin/python3.12 - <<'PY'"
+            + NL
+            + "x = a "
+            + AMP
+            + " b"
+            + NL
             + "PY"
         )
         assert guidance(cmd) is None
@@ -95,8 +124,13 @@ class TestInertQuotedHeredocPayloadAllowed:
     )
     def test_owner_after_shell_prefix(self, prefix):
         cmd = (
-            prefix + "python3 - <<'PY'" + NL
-            + "value = left " + AMP + " right" + NL
+            prefix
+            + "python3 - <<'PY'"
+            + NL
+            + "value = left "
+            + AMP
+            + " right"
+            + NL
             + "PY"
         )
         assert guidance(cmd) is None
@@ -104,8 +138,13 @@ class TestInertQuotedHeredocPayloadAllowed:
     @pytest.mark.parametrize("redirect", ["2>&1", "&>/tmp/python.log"])
     def test_owner_with_fd_redirect(self, redirect):
         cmd = (
-            "python3 - <<'PY' " + redirect + NL
-            + "value = left " + AMP + " right" + NL
+            "python3 - <<'PY' "
+            + redirect
+            + NL
+            + "value = left "
+            + AMP
+            + " right"
+            + NL
             + "PY"
         )
         assert guidance(cmd) is None
@@ -125,58 +164,74 @@ class TestUnsafeHeredocPayloadRemainsVisible:
 
     def test_unquoted_command_substitution_is_still_scanned(self):
         cmd = (
-            "cat <<EOF" + NL
-            + "$(nohup sleep 10 >/dev/null 2>" + AMP + "1 " + AMP + ")" + NL
+            "cat <<EOF"
+            + NL
+            + "$(nohup sleep 10 >/dev/null 2>"
+            + AMP
+            + "1 "
+            + AMP
+            + ")"
+            + NL
             + "EOF"
         )
         assert guidance(cmd) is not None
 
     def test_shell_interpreter_payload_is_still_scanned(self):
         cmd = (
-            "bash <<'EOF'" + NL
-            + "nohup sleep 10 >/dev/null 2>" + AMP + "1 " + AMP + NL
+            "bash <<'EOF'"
+            + NL
+            + "nohup sleep 10 >/dev/null 2>"
+            + AMP
+            + "1 "
+            + AMP
+            + NL
             + "EOF"
         )
         assert guidance(cmd) is not None
 
     def test_python_elsewhere_does_not_authorize_bash_heredoc(self):
         cmd = (
-            "python3 -c 'pass'; bash <<'EOF'" + NL
-            + "nohup sleep 10 " + AMP + NL
+            "python3 -c 'pass'; bash <<'EOF'"
+            + NL
+            + "nohup sleep 10 "
+            + AMP
+            + NL
             + "EOF"
         )
         assert guidance(cmd) is not None
 
     def test_pipeline_python_does_not_authorize_bash_heredoc(self):
-        cmd = (
-            "bash <<'EOF' | python3" + NL
-            + "nohup sleep 10 " + AMP + NL
-            + "EOF"
-        )
+        cmd = "bash <<'EOF' | python3" + NL + "nohup sleep 10 " + AMP + NL + "EOF"
         assert guidance(cmd) is not None
 
     def test_downstream_shell_keeps_body_visible(self):
-        cmd = (
-            "cat <<'EOF' | sh" + NL
-            + "nohup sleep 10 " + AMP + NL
-            + "EOF"
-        )
+        cmd = "cat <<'EOF' | sh" + NL + "nohup sleep 10 " + AMP + NL + "EOF"
         assert guidance(cmd) is not None
 
     def test_nested_substitution_does_not_authorize_heredoc(self):
         cmd = (
-            "python3 -c $(bash <<'SH'" + NL
-            + "nohup sleep 100 >/dev/null 2>" + AMP + "1 " + AMP + NL
-            + "printf pass" + NL
-            + "SH" + NL
+            "python3 -c $(bash <<'SH'"
+            + NL
+            + "nohup sleep 100 >/dev/null 2>"
+            + AMP
+            + "1 "
+            + AMP
+            + NL
+            + "printf pass"
+            + NL
+            + "SH"
+            + NL
             + ")"
         )
         assert guidance(cmd) is not None
 
     def test_allowlisted_name_function_keeps_body_visible(self):
         cmd = (
-            "python3() { bash; }; python3 <<'PY'" + NL
-            + "nohup sleep 10 " + AMP + NL
+            "python3() { bash; }; python3 <<'PY'"
+            + NL
+            + "nohup sleep 10 "
+            + AMP
+            + NL
             + "PY"
         )
         assert guidance(cmd) is not None
@@ -203,9 +258,13 @@ class TestInactiveMarkersCannotHideShellTail:
 
     def test_line_continuation_keeps_opener_background_visible(self):
         cmd = (
-            "python3 - <<'PY' \\" + NL
-            + "  >/dev/null " + AMP + NL
-            + "print('ok')" + NL
+            "python3 - <<'PY' \\"
+            + NL
+            + "  >/dev/null "
+            + AMP
+            + NL
+            + "print('ok')"
+            + NL
             + "PY"
         )
         assert guidance(cmd) is not None
@@ -225,48 +284,62 @@ class TestRealBackgroundingStillBlocked:
         assert guidance(cmd) is not None
 
     def test_fd_redirect_does_not_hide_trailing_background(self):
-        cmd = (
-            "python3 - <<'PY' 2>"
-            + AMP
-            + "1 "
-            + AMP
-            + NL
-            + "print('ok')"
-            + NL
-            + "PY"
-        )
+        cmd = "python3 - <<'PY' 2>" + AMP + "1 " + AMP + NL + "print('ok')" + NL + "PY"
         assert guidance(cmd) is not None
 
     def test_background_after_heredoc(self):
         # A real backgrounding '&' AFTER the closing delimiter is still caught.
         cmd = (
-            "python3 - <<'PY'" + NL
-            + "print('ok')" + NL
-            + "PY" + NL
-            + "long_running " + AMP
+            "python3 - <<'PY'"
+            + NL
+            + "print('ok')"
+            + NL
+            + "PY"
+            + NL
+            + "long_running "
+            + AMP
         )
         assert guidance(cmd) is not None
-
 
 
 class TestStripHelpers:
     """Direct unit checks on the masking helpers."""
 
-
     def test_masking_preserves_line_structure(self):
         cmd = (
-            "python3 - <<'PY'" + NL
-            + "a " + AMP + " b" + NL
-            + "c " + AMP + " d" + NL
-            + "PY" + NL
+            "python3 - <<'PY'"
+            + NL
+            + "a "
+            + AMP
+            + " b"
+            + NL
+            + "c "
+            + AMP
+            + " d"
+            + NL
+            + "PY"
+            + NL
             + "echo done"
         )
         assert strip_inert_heredoc_bodies(cmd).count(NL) == cmd.count(NL)
 
     def test_multiple_sequential_heredocs(self):
         cmd = (
-            "cat <<'A'" + NL + "one " + AMP + " two" + NL + "A" + NL
-            + "cat <<'B'" + NL + "three " + AMP + " four" + NL + "B"
+            "cat <<'A'"
+            + NL
+            + "one "
+            + AMP
+            + " two"
+            + NL
+            + "A"
+            + NL
+            + "cat <<'B'"
+            + NL
+            + "three "
+            + AMP
+            + " four"
+            + NL
+            + "B"
         )
         stripped = strip_inert_heredoc_bodies(cmd)
         assert (" " + AMP + " ") not in stripped
@@ -279,11 +352,7 @@ class TestStripHelpers:
     def test_delimiter_requires_exact_terminator_line(self):
         # Indented terminator doesn't close a normal heredoc; the heredoc is
         # unterminated → everything stays visible.
-        cmd = (
-            "python3 - <<'PY'" + NL
-            + "payload " + AMP + " text" + NL
-            + "\tPY"
-        )
+        cmd = "python3 - <<'PY'" + NL + "payload " + AMP + " text" + NL + "\tPY"
         assert strip_inert_heredoc_bodies(cmd) == cmd
 
     def test_dash_heredoc_space_indented_line_is_body(self):
@@ -292,11 +361,17 @@ class TestStripHelpers:
         # against real bash), so the following "sleep 7 &" line is still BODY
         # text — inert data that cat prints — and masking it is correct.
         cmd = (
-            "cat <<-'PY'" + NL
-            + "payload" + NL
-            + " PY" + NL
-            + "sleep 7 " + AMP + NL
-            + "PY" + NL
+            "cat <<-'PY'"
+            + NL
+            + "payload"
+            + NL
+            + " PY"
+            + NL
+            + "sleep 7 "
+            + AMP
+            + NL
+            + "PY"
+            + NL
             + "echo after"
         )
         stripped = strip_inert_heredoc_bodies(cmd)

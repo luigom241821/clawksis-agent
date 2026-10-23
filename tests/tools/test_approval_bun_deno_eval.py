@@ -27,15 +27,24 @@ class TestBunDenoInlineScriptExecution:
             ('deno --quiet eval "console.log(1)"', "script execution via -e/-c flag"),
             ('deno -L debug eval "console.log(1)"', "script execution via -e/-c flag"),
             ('deno -Ldebug eval "console.log(1)"', "script execution via -e/-c flag"),
-            ('deno --log-level=debug eval "console.log(1)"', "script execution via -e/-c flag"),
+            (
+                'deno --log-level=debug eval "console.log(1)"',
+                "script execution via -e/-c flag",
+            ),
             # Windows resolves executable names case-insensitively; `_interpreter_family`
             # lowercases the basename, so BUN.EXE / Deno.exe must be classified too.
             ('BUN.EXE -e "console.log(1)"', "script execution via -e/-c flag"),
             ('Deno.exe eval "console.log(1)"', "script execution via -e/-c flag"),
             ('bun << "EOF"\nconsole.log("pwned")\nEOF', "script execution via heredoc"),
-            ("deno << 'EOF'\nconsole.log(\"pwned\")\nEOF", "script execution via heredoc"),
+            (
+                "deno << 'EOF'\nconsole.log(\"pwned\")\nEOF",
+                "script execution via heredoc",
+            ),
             # An unterminated quote fails closed like the other interpreter families.
-            ('bun -e "console.log(1)', "command parser limit or malformed executable payload"),
+            (
+                'bun -e "console.log(1)',
+                "command parser limit or malformed executable payload",
+            ),
         ],
     )
     def test_inline_eval_classified_like_node_and_python(self, cmd, expected_key):

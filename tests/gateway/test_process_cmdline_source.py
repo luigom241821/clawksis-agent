@@ -6,6 +6,7 @@ this used to fork ``ps`` every time (measured 4.2ms) when psutil answers the sam
 psutil cannot always answer (macOS raises ``AccessDenied`` across users), so ``ps`` must remain the
 fallback, not be replaced.
 """
+
 from __future__ import annotations
 
 import os
@@ -33,6 +34,7 @@ def no_proc(monkeypatch):
 
 def _no_fork(monkeypatch):
     """Fail loudly if anything forks a subprocess."""
+
     def _boom(*a, **kw):
         raise AssertionError(f"forked a subprocess: {a[0] if a else kw}")
 

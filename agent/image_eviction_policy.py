@@ -57,7 +57,9 @@ MANY_IMAGE_DIMENSION_LIMIT = 2000
 # SOF marker lives within the first few KB. ~32 KB of base64 is generous headroom, and only the
 # prefix is ever decoded (base64 expands 3 bytes per 4 chars).
 _DIMENSION_PROBE_CHARS = 32 * 1024
-_JPEG_SOF_MARKERS = frozenset({0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF})
+_JPEG_SOF_MARKERS = frozenset(
+    {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+)
 
 
 def image_dimensions_from_bytes(raw: bytes) -> Optional[tuple[int, int]]:
@@ -65,7 +67,9 @@ def image_dimensions_from_bytes(raw: bytes) -> Optional[tuple[int, int]]:
     segments (skipping 0xFF fill bytes) to the first SOF marker; stop at SOS. Lives here so both
     the send-path passes and the tool layer share one header-only reader."""
     if raw.startswith(b"\x89PNG\r\n\x1a\n") and len(raw) >= 24:
-        width, height = struct.unpack(">II", raw[16:24])  # cannot fail: 8 bytes are guaranteed present
+        width, height = struct.unpack(
+            ">II", raw[16:24]
+        )  # cannot fail: 8 bytes are guaranteed present
         return int(width), int(height)
     if raw.startswith(b"\xff\xd8") and len(raw) > 4:
         i = 2
@@ -80,11 +84,13 @@ def image_dimensions_from_bytes(raw: bytes) -> Optional[tuple[int, int]]:
                 continue
             if marker == 0xDA or i + 2 > len(raw):
                 break
-            segment_len = int.from_bytes(raw[i:i + 2], "big")
+            segment_len = int.from_bytes(raw[i : i + 2], "big")
             if segment_len < 2 or i + segment_len > len(raw):
                 break
             if marker in _JPEG_SOF_MARKERS and segment_len >= 7:
-                return int.from_bytes(raw[i + 5:i + 7], "big"), int.from_bytes(raw[i + 3:i + 5], "big")
+                return int.from_bytes(raw[i + 5 : i + 7], "big"), int.from_bytes(
+                    raw[i + 3 : i + 5], "big"
+                )
             i += segment_len
     return None
 
@@ -102,11 +108,13 @@ def image_max_side_from_data(data: Optional[str]) -> Optional[int]:
     payload = data
     if payload.startswith("data:"):
         _, separator, payload = payload.partition(",")
-        if not separator or ";base64" not in data[:data.index(",")]:
+        if not separator or ";base64" not in data[: data.index(",")]:
             return None
     payload = payload.strip()
     prefix = payload[:_DIMENSION_PROBE_CHARS]
-    prefix = prefix[: len(prefix) - (len(prefix) % 4)]  # decode needs a multiple-of-four length
+    prefix = prefix[
+        : len(prefix) - (len(prefix) % 4)
+    ]  # decode needs a multiple-of-four length
     if not prefix:
         return None
     try:
@@ -191,9 +199,9 @@ def outbound_image_retire_count(
     return max(
         (
             _retire_count_for_request(
-                carrier_blocks_newest_first[total - m:],
+                carrier_blocks_newest_first[total - m :],
                 reserved_blocks,
-                None if sizes is None else sizes[total - m:],
+                None if sizes is None else sizes[total - m :],
                 reserved_bytes,
                 limit,
                 budget,
@@ -204,7 +212,6 @@ def outbound_image_retire_count(
         ),
         default=0,
     )
-
 
 
 def outbound_retired_image_ids(agent: Any) -> set[str]:
@@ -222,7 +229,9 @@ def outbound_retired_image_ids(agent: Any) -> set[str]:
 
 
 def latched_retire_count(
-    retire: int, carrier_ids_newest_first: Sequence[Optional[str]], retired_ids: Optional[set[str]]
+    retire: int,
+    carrier_ids_newest_first: Sequence[Optional[str]],
+    retired_ids: Optional[set[str]],
 ) -> int:
     """Widen ``retire`` so every carrier up to the newest previously retired one stays retired,
     then record the carriers being retired into ``retired_ids``.
@@ -234,10 +243,15 @@ def latched_retire_count(
     if retired_ids is None:
         return retire
     total = len(carrier_ids_newest_first)
-    latched = [n for n, cid in enumerate(carrier_ids_newest_first) if cid and cid in retired_ids]
+    latched = [
+        n
+        for n, cid in enumerate(carrier_ids_newest_first)
+        if cid and cid in retired_ids
+    ]
     retire = max(retire, total - latched[0]) if latched else retire
-    retired_ids.update(cid for cid in carrier_ids_newest_first[total - retire:] if cid)
+    retired_ids.update(cid for cid in carrier_ids_newest_first[total - retire :] if cid)
     return retire
+
 
 def _retire_count_for_request(
     carrier_blocks_newest_first: Sequence[int],

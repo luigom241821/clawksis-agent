@@ -1,4 +1,5 @@
 """Restore dependency generations without importing the damaged environment."""
+
 from __future__ import annotations
 
 import contextlib
@@ -44,10 +45,21 @@ def validate_environment(python: Path | list[str], *, env: dict, cwd: Path) -> N
         "        assert bundle.is_file() and bundle.stat().st_size >= 1024, 'CA bundle is missing'\n"
     )
     command = [str(python), "-I"] if isinstance(python, (str, Path)) else [*python]
-    result = subprocess.run([*command, "-c", script], cwd=cwd, env=env,
-                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60, check=False)
+    result = subprocess.run(
+        [*command, "-c", script],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
     if result.returncode:
-        raise InstallError("venv", f"startup validation failed: {result.stderr.strip()[-1000:]}")
+        raise InstallError(
+            "venv", f"startup validation failed: {result.stderr.strip()[-1000:]}"
+        )
 
 
 def repair_dependencies(project_root: Path) -> None:
@@ -81,12 +93,22 @@ def _baseline_gaps(root: Path) -> list[str]:
     # The same checks venv_is_current applies; a gap must not skip them.
     recorded = fact.get("extras") if isinstance(fact, dict) else None
     stamp = fact.get("stamp") if isinstance(fact, dict) else None
-    if (not isinstance(recorded, list) or any(not isinstance(extra, str) for extra in recorded)
-            or not isinstance(stamp, str) or not stamp):
+    if (
+        not isinstance(recorded, list)
+        or any(not isinstance(extra, str) for extra in recorded)
+        or not isinstance(stamp, str)
+        or not stamp
+    ):
         raise ValueError("invalid recorded dependency state")
     shipped = (_facts().get("venv") or {}).get("extras") or []
     have = {_extra_key(extra) for extra in recorded}
-    return sorted({extra for extra in _still_declared(Venv(root), shipped) if _extra_key(extra) not in have})
+    return sorted(
+        {
+            extra
+            for extra in _still_declared(Venv(root), shipped)
+            if _extra_key(extra) not in have
+        }
+    )
 
 
 def refresh_dependencies(project_root: Path) -> str:
@@ -125,6 +147,9 @@ def refresh_dependencies(project_root: Path) -> str:
         # Keep the restored extras recorded too: a lazy install before the next boot
         # unions onto this selection and must not publish a generation without them.
         recorded = list(fact.get("extras") or [])
-        facts.record_state("venv", fact.get("stamp") or "stale",
-                           recorded + [extra for extra in missing if extra not in recorded])
+        facts.record_state(
+            "venv",
+            fact.get("stamp") or "stale",
+            recorded + [extra for extra in missing if extra not in recorded],
+        )
     return "fallback"

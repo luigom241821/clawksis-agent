@@ -18,6 +18,7 @@ class TestHandleSkillsSlashInstallFlags:
 
     def test_yes_flag_sets_skip_confirm(self):
         from clawk_cli.skills_hub import handle_skills_slash
+
         with patch("clawk_cli.skills_hub.do_install") as mock_install:
             handle_skills_slash("/skills install test/skill --yes")
             mock_install.assert_called_once()
@@ -29,10 +30,10 @@ class TestHandleSkillsSlashInstallFlags:
 class TestHandleSkillsSlashUninstallFlags:
     """Test flag parsing in handle_skills_slash for uninstall."""
 
-
     def test_no_flags_still_skips_confirm(self):
         """Slash commands always skip confirmation — input() hangs in TUI."""
         from clawk_cli.skills_hub import handle_skills_slash
+
         with patch("clawk_cli.skills_hub.do_uninstall") as mock_uninstall:
             handle_skills_slash("/skills uninstall test-skill")
             mock_uninstall.assert_called_once()
@@ -42,12 +43,12 @@ class TestHandleSkillsSlashUninstallFlags:
     def test_default_defers_cache_invalidation(self):
         """Without --now, cache invalidation is deferred to next session."""
         from clawk_cli.skills_hub import handle_skills_slash
+
         with patch("clawk_cli.skills_hub.do_uninstall") as mock_uninstall:
             handle_skills_slash("/skills uninstall test-skill")
             mock_uninstall.assert_called_once()
             _, kwargs = mock_uninstall.call_args
             assert kwargs.get("invalidate_cache") is False
-
 
             # We don't get to the input() call because resolve returns None,
             # but the parameter wiring is correct
@@ -59,11 +60,15 @@ class TestDoUninstallSkipConfirm:
     def test_skip_confirm_bypasses_input(self):
         """With skip_confirm=True, input() should not be called."""
         from clawk_cli.skills_hub import do_uninstall
-        with patch("clawk_cli.skills_hub._console"), \
-             patch("tools.skills_hub_install.uninstall_skill", return_value=(True, "Removed")) as mock_uninstall, \
-             patch("builtins.input") as mock_input:
+
+        with (
+            patch("clawk_cli.skills_hub._console"),
+            patch(
+                "tools.skills_hub_install.uninstall_skill",
+                return_value=(True, "Removed"),
+            ) as mock_uninstall,
+            patch("builtins.input") as mock_input,
+        ):
             do_uninstall("test-skill", skip_confirm=True)
             mock_input.assert_not_called()
             mock_uninstall.assert_called_once_with("test-skill")
-
-

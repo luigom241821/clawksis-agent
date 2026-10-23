@@ -30,11 +30,17 @@ DEFAULT_INTERVAL = 0.01
 
 
 def _timed_out(what: str | None, timeout: float) -> AssertionError:
-    return AssertionError(f"timed out after {timeout}s waiting for {what or 'the condition'}")
+    return AssertionError(
+        f"timed out after {timeout}s waiting for {what or 'the condition'}"
+    )
 
 
-def wait_until(predicate: Callable[[], T], timeout: float = DEFAULT_TIMEOUT,
-               interval: float = DEFAULT_INTERVAL, what: str | None = None) -> T:
+def wait_until(
+    predicate: Callable[[], T],
+    timeout: float = DEFAULT_TIMEOUT,
+    interval: float = DEFAULT_INTERVAL,
+    what: str | None = None,
+) -> T:
     """Return ``predicate()``'s first truthy value; raise AssertionError after ``timeout`` s."""
     deadline = time.monotonic() + timeout
     while True:
@@ -46,7 +52,9 @@ def wait_until(predicate: Callable[[], T], timeout: float = DEFAULT_TIMEOUT,
         time.sleep(interval)
 
 
-def wait_for_ctime_tick(directory: Path, after_ns: int, timeout: float = DEFAULT_TIMEOUT) -> None:
+def wait_for_ctime_tick(
+    directory: Path, after_ns: int, timeout: float = DEFAULT_TIMEOUT
+) -> None:
     """Block until the filesystem timestamp clock on ``directory``'s fs has passed ``after_ns``.
 
     Kernels without multigrain timestamps stamp inodes from a coarse, tick-granular clock (~4 ms),
@@ -63,8 +71,12 @@ def wait_for_ctime_tick(directory: Path, after_ns: int, timeout: float = DEFAULT
     wait_until(_ticked, timeout=timeout, what="filesystem ctime clock to advance")
 
 
-async def async_wait_until(predicate: Callable[[], T], timeout: float = DEFAULT_TIMEOUT,
-                           interval: float = DEFAULT_INTERVAL, what: str | None = None) -> T:
+async def async_wait_until(
+    predicate: Callable[[], T],
+    timeout: float = DEFAULT_TIMEOUT,
+    interval: float = DEFAULT_INTERVAL,
+    what: str | None = None,
+) -> T:
     """``wait_until`` for a coroutine: yields to the event loop between polls."""
     deadline = time.monotonic() + timeout
     while True:

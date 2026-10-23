@@ -4,6 +4,7 @@ A plugin backend pushes events to its own desktop half through
 ``clawk_cli.plugin_events`` instead of importing
 ``tui_gateway.server._broadcast_global_event``.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -37,14 +38,30 @@ def test_broadcast_reaches_a_registered_client_as_a_namespaced_global_event():
         server.unregister_live_transport(peer)
 
     assert peer.frames == [
-        {"jsonrpc": "2.0", "method": "event",
-         "params": {"type": "plugin.rss-reader.feed.updated", "session_id": "", "payload": {"count": 3}}},
-        {"jsonrpc": "2.0", "method": "event",
-         "params": {"type": "plugin.kanban.changed", "session_id": "", "payload": {}}},
+        {
+            "jsonrpc": "2.0",
+            "method": "event",
+            "params": {
+                "type": "plugin.rss-reader.feed.updated",
+                "session_id": "",
+                "payload": {"count": 3},
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "method": "event",
+            "params": {
+                "type": "plugin.kanban.changed",
+                "session_id": "",
+                "payload": {},
+            },
+        },
     ]
 
 
-def test_broadcast_from_a_turn_isolation_child_reaches_the_parent_gateways_clients(monkeypatch):
+def test_broadcast_from_a_turn_isolation_child_reaches_the_parent_gateways_clients(
+    monkeypatch,
+):
     """``dashboard.turn_isolation`` runs plugin agent-side code (tools, hooks, slash commands) in the
     compute-host child, where no client is connected: the frame must ride the host pipe to the parent
     ``clawk serve`` and fan out there instead of dying at ``logger.debug``."""
@@ -61,12 +78,18 @@ def test_broadcast_from_a_turn_isolation_child_reaches_the_parent_gateways_clien
     child_stdout = io.StringIO()
     stdin_r, stdin_w = os.pipe()
     child = threading.Thread(
-        target=compute_host.run_host, kwargs={"stdin": os.fdopen(stdin_r), "stdout": child_stdout}, daemon=True)
+        target=compute_host.run_host,
+        kwargs={"stdin": os.fdopen(stdin_r), "stdout": child_stdout},
+        daemon=True,
+    )
     child.start()
     try:
         deadline = threading.Event()
         for _ in range(100):  # the child registers its transport right after ``hello``
-            if any(isinstance(t, compute_host._HostTransport) for t in list(server._live_transports)):
+            if any(
+                isinstance(t, compute_host._HostTransport)
+                for t in list(server._live_transports)
+            ):
                 break
             deadline.wait(0.05)
         plugin_events.broadcast_plugin_event("rss-reader", "feed.updated", {"count": 3})
@@ -74,7 +97,10 @@ def test_broadcast_from_a_turn_isolation_child_reaches_the_parent_gateways_clien
         os.close(stdin_w)
         child.join(timeout=10)
     assert not child.is_alive()
-    assert not any(isinstance(t, compute_host._HostTransport) for t in list(server._live_transports))
+    assert not any(
+        isinstance(t, compute_host._HostTransport)
+        for t in list(server._live_transports)
+    )
 
     piped = [json.loads(line) for line in child_stdout.getvalue().splitlines()]
     relayed = [f for f in piped if f.get("type") == "rpc"]
@@ -87,7 +113,9 @@ def test_broadcast_from_a_turn_isolation_child_reaches_the_parent_gateways_clien
         server._relay_compute_host_rpc(relayed[0]["message"])
     finally:
         server.unregister_live_transport(peer)
-    assert [f["params"]["type"] for f in peer.frames] == ["plugin.rss-reader.feed.updated"]
+    assert [f["params"]["type"] for f in peer.frames] == [
+        "plugin.rss-reader.feed.updated"
+    ]
     assert peer.frames[0]["params"]["payload"] == {"count": 3}
 
 
@@ -116,7 +144,12 @@ def test_broadcast_without_a_gateway_module_is_a_logged_no_op(monkeypatch, caplo
         ("", "items", None, ValueError),
         ("Bad Id", "items", None, ValueError),
         ("has/slash", "items", None, ValueError),
-        ("other.x", "items", None, ValueError),  # a dotted id would spell plugin ``other``'s namespace
+        (
+            "other.x",
+            "items",
+            None,
+            ValueError,
+        ),  # a dotted id would spell plugin ``other``'s namespace
         ("ok", "", None, ValueError),
         ("ok", "bad name", None, ValueError),
         ("ok", "../x", None, ValueError),
@@ -125,9 +158,15 @@ def test_broadcast_without_a_gateway_module_is_a_logged_no_op(monkeypatch, caplo
         ("ok", "items", ["not", "a", "dict"], TypeError),
     ],
 )
-def test_names_that_cannot_form_a_namespaced_event_are_refused_before_emit(monkeypatch, plugin_id, event, payload, exc):
+def test_names_that_cannot_form_a_namespaced_event_are_refused_before_emit(
+    monkeypatch, plugin_id, event, payload, exc
+):
     from tui_gateway import server
 
-    monkeypatch.setattr(server, "_broadcast_global_event", lambda *_a, **_k: pytest.fail("must not emit"))
+    monkeypatch.setattr(
+        server,
+        "_broadcast_global_event",
+        lambda *_a, **_k: pytest.fail("must not emit"),
+    )
     with pytest.raises(exc):
         plugin_events.broadcast_plugin_event(plugin_id, event, payload)  # type: ignore[arg-type]

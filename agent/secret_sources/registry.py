@@ -21,8 +21,13 @@ from pathlib import Path
 from typing import Dict, List, MutableMapping, Optional
 
 from agent.secret_sources.base import (
-    SECRET_SOURCE_API_VERSION, ErrorKind, FetchResult, SecretSource, is_valid_env_name,
-    reset_source_environment, set_source_environment,
+    SECRET_SOURCE_API_VERSION,
+    ErrorKind,
+    FetchResult,
+    SecretSource,
+    is_valid_env_name,
+    reset_source_environment,
+    set_source_environment,
 )
 from clawk_constants import clawk_home_key, normalize_scope
 
@@ -49,9 +54,9 @@ class AppliedVar:
     """Provenance record for one env var the orchestrator set."""
 
     name: str
-    source: str          # SecretSource.name
-    shape: str           # "mapped" | "bulk"
-    overrode_env: bool   # replaced a pre-existing .env/shell value
+    source: str  # SecretSource.name
+    shape: str  # "mapped" | "bulk"
+    overrode_env: bool  # replaced a pre-existing .env/shell value
     # The source may beat .env/shell for this var (``override_existing`` and not ``preserve_existing``), so a
     # dotenv reload may re-assert it; a gap-fill or preserved name must keep following .env edits (#74265).
     authoritative: bool = False
@@ -65,10 +70,10 @@ class SourceReport:
     label: str
     result: FetchResult
     applied: list[str] = field(default_factory=list)
-    skipped_existing: list[str] = field(default_factory=list)   # .env/shell won
-    skipped_claimed: list[str] = field(default_factory=list)    # earlier source won
+    skipped_existing: list[str] = field(default_factory=list)  # .env/shell won
+    skipped_claimed: list[str] = field(default_factory=list)  # earlier source won
     skipped_protected: list[str] = field(default_factory=list)  # bootstrap-auth guard
-    skipped_invalid: list[str] = field(default_factory=list)    # bad env-var name
+    skipped_invalid: list[str] = field(default_factory=list)  # bad env-var name
 
 
 @dataclass
@@ -95,15 +100,22 @@ def _validate_source(source: SecretSource) -> Optional[str]:
     if not name or not name.replace("_", "").isalnum() or name != name.lower():
         return f"Ignoring secret source with invalid name {name!r}"
     if source.api_version != SECRET_SOURCE_API_VERSION:
-        return (f"Ignoring secret source '{name}': built against secret-source API "
-                f"v{source.api_version}, this Clawksis speaks v{SECRET_SOURCE_API_VERSION}")
+        return (
+            f"Ignoring secret source '{name}': built against secret-source API "
+            f"v{source.api_version}, this Clawksis speaks v{SECRET_SOURCE_API_VERSION}"
+        )
     if source.shape not in ("mapped", "bulk"):
         return f"Ignoring secret source '{name}': shape must be 'mapped' or 'bulk', got {source.shape!r}"
     return None
 
 
-def register_source(source: SecretSource, *, replace: bool = False, builtin: bool = False,
-                    scope: Optional[str] = None) -> bool:
+def register_source(
+    source: SecretSource,
+    *,
+    replace: bool = False,
+    builtin: bool = False,
+    scope: Optional[str] = None,
+) -> bool:
     """Register a secret source; True on success. Rejections are logged, never
     raised. ``replace`` allows same-name override (last-writer-wins); scheme
     collisions across *different* names are always rejected."""
@@ -118,13 +130,25 @@ def register_source(source: SecretSource, *, replace: bool = False, builtin: boo
         if scope is not None:
             effective.update(_SCOPED_SOURCES.get(scope, {}))
         if name in effective and not replace:
-            logger.warning("Secret source '%s' already registered; ignoring duplicate", name)
+            logger.warning(
+                "Secret source '%s' already registered; ignoring duplicate", name
+            )
             return False
-        owner = next((n for n, o in effective.items()
-                      if n != name and source.scheme and o.scheme == source.scheme), None)
+        owner = next(
+            (
+                n
+                for n, o in effective.items()
+                if n != name and source.scheme and o.scheme == source.scheme
+            ),
+            None,
+        )
         if owner:
-            logger.warning("Ignoring secret source '%s': scheme '%s://' is already owned by source '%s'",
-                           name, source.scheme, owner)
+            logger.warning(
+                "Ignoring secret source '%s': scheme '%s://' is already owned by source '%s'",
+                name,
+                source.scheme,
+                owner,
+            )
             return False
         target = _SOURCES if scope is None else _SCOPED_SOURCES.setdefault(scope, {})
         target[name] = source
@@ -146,7 +170,9 @@ def get_source(name: str, *, scope: Optional[str] = None) -> Optional[SecretSour
         return _merged(scope).get(name)
 
 
-def snapshot_registration(name: str, *, scope: Optional[str] = None) -> Optional[SecretSource]:
+def snapshot_registration(
+    name: str, *, scope: Optional[str] = None
+) -> Optional[SecretSource]:
     """Return the registration owned by exactly one registry layer."""
     _ensure_builtin_sources()
     scope = normalize_scope(scope)
@@ -154,8 +180,13 @@ def snapshot_registration(name: str, *, scope: Optional[str] = None) -> Optional
         return (_SOURCES if scope is None else _SCOPED_SOURCES.get(scope, {})).get(name)
 
 
-def restore_registration(name: str, current: SecretSource, previous: Optional[SecretSource], *,
-                         scope: Optional[str] = None) -> bool:
+def restore_registration(
+    name: str,
+    current: SecretSource,
+    previous: Optional[SecretSource],
+    *,
+    scope: Optional[str] = None,
+) -> bool:
     """Restore a host-owned source registration if it is still current."""
     _ensure_builtin_sources()
     scope = normalize_scope(scope)
@@ -188,7 +219,9 @@ def list_plugin_sources() -> list[SecretSource]:
     """
     _ensure_builtin_sources()
     with _REGISTRY_LOCK:
-        merged = {n: s for n, s in _SOURCES.items() if _SOURCE_ORIGINS.get(n) == "plugin"}
+        merged = {
+            n: s for n, s in _SOURCES.items() if _SOURCE_ORIGINS.get(n) == "plugin"
+        }
         merged.update(_SCOPED_SOURCES.get(clawk_home_key(), {}))
         return list(merged.values())
 
@@ -206,7 +239,9 @@ def _ensure_builtin_sources() -> None:
                 module = __import__(module_name, fromlist=[class_name])
                 register_source(getattr(module, class_name)(), builtin=True)
             except Exception:
-                logger.warning("Failed to register bundled %s secret source", label, exc_info=True)
+                logger.warning(
+                    "Failed to register bundled %s secret source", label, exc_info=True
+                )
 
 
 def _reset_registry_for_tests() -> None:
@@ -221,8 +256,9 @@ def _reset_registry_for_tests() -> None:
 # --- Orchestrated apply -----------------------------------------------------
 
 
-def _fetch_with_timeout(source: SecretSource, cfg: dict, home_path: Path,
-                        environ: MutableMapping[str, str]) -> FetchResult:
+def _fetch_with_timeout(
+    source: SecretSource, cfg: dict, home_path: Path, environ: MutableMapping[str, str]
+) -> FetchResult:
     """Run source.fetch() under a wall-clock budget; never raises.
 
     A worker thread enforces the budget: a source that blows it is reported as
@@ -230,8 +266,11 @@ def _fetch_with_timeout(source: SecretSource, cfg: dict, home_path: Path,
     process exit — acceptable for a startup-only path).
     """
     timeout = source.fetch_timeout_seconds(cfg)
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"secret-src-{source.name}")
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=1, thread_name_prefix=f"secret-src-{source.name}"
+    )
     try:
+
         def _fetch() -> FetchResult:
             token = set_source_environment(environ)
             try:
@@ -244,18 +283,24 @@ def _fetch_with_timeout(source: SecretSource, cfg: dict, home_path: Path,
             result = future.result(timeout=timeout)
         except concurrent.futures.TimeoutError:
             future.cancel()
-            return FetchResult().fail(f"fetch exceeded {timeout:.0f}s budget — startup continued "
-                                      "without this source (raise secrets."
-                                      f"{source.name}.timeout_seconds if the backend is just slow)",
-                                      ErrorKind.TIMEOUT)
+            return FetchResult().fail(
+                f"fetch exceeded {timeout:.0f}s budget — startup continued "
+                "without this source (raise secrets."
+                f"{source.name}.timeout_seconds if the backend is just slow)",
+                ErrorKind.TIMEOUT,
+            )
         except Exception as exc:
-            return FetchResult().fail(f"fetch raised {type(exc).__name__}: {exc}", ErrorKind.INTERNAL)
+            return FetchResult().fail(
+                f"fetch raised {type(exc).__name__}: {exc}", ErrorKind.INTERNAL
+            )
     finally:
         executor.shutdown(wait=False)
 
     if not isinstance(result, FetchResult):
-        return FetchResult().fail(f"fetch returned {type(result).__name__} instead of FetchResult",
-                                  ErrorKind.INTERNAL)
+        return FetchResult().fail(
+            f"fetch returned {type(result).__name__} instead of FetchResult",
+            ErrorKind.INTERNAL,
+        )
     return result
 
 
@@ -264,18 +309,29 @@ def _section(secrets_cfg: dict, name: str) -> dict:
     return cfg if isinstance(cfg, dict) else {}
 
 
-def _ordered_enabled_sources(secrets_cfg: dict, *, scope: Optional[str] = None) -> list[SecretSource]:
+def _ordered_enabled_sources(
+    secrets_cfg: dict, *, scope: Optional[str] = None
+) -> list[SecretSource]:
     """Enabled sources: ``secrets.sources`` order first, then registration order
     (mapped-vs-bulk precedence is applied on top by :func:`apply_all`)."""
     sources = {source.name: source for source in list_sources(scope=scope)}
 
     explicit = secrets_cfg.get("sources")
-    names = [e for e in explicit if isinstance(e, str)] if isinstance(explicit, list) else []
+    names = (
+        [e for e in explicit if isinstance(e, str)]
+        if isinstance(explicit, list)
+        else []
+    )
     unknown = [n for n in names if n not in sources]
     if unknown:
-        logger.warning("secrets.sources names unknown source(s): %s (known: %s)",
-                       ", ".join(unknown), ", ".join(sources) or "none")
-    order = dict.fromkeys([n for n in names if n in sources] + list(sources))  # insertion-ordered set
+        logger.warning(
+            "secrets.sources names unknown source(s): %s (known: %s)",
+            ", ".join(unknown),
+            ", ".join(sources) or "none",
+        )
+    order = dict.fromkeys(
+        [n for n in names if n in sources] + list(sources)
+    )  # insertion-ordered set
 
     enabled: list[SecretSource] = []
     for name in order:
@@ -283,7 +339,9 @@ def _ordered_enabled_sources(secrets_cfg: dict, *, scope: Optional[str] = None) 
             if sources[name].is_enabled(_section(secrets_cfg, name)):
                 enabled.append(sources[name])
         except Exception:
-            logger.warning("Secret source '%s' is_enabled() raised; skipping", name, exc_info=True)
+            logger.warning(
+                "Secret source '%s' is_enabled() raised; skipping", name, exc_info=True
+            )
     return enabled
 
 
@@ -292,7 +350,10 @@ def enabled_source_names(secrets_cfg: dict, home_path: Path) -> frozenset:
     and enabled). A source missing here was removed or disabled, so a value it injected earlier
     is no longer backed by anything and must be revoked, not kept as process residue."""
     secrets_cfg = secrets_cfg if isinstance(secrets_cfg, dict) else {}
-    return frozenset(s.name for s in _ordered_enabled_sources(secrets_cfg, scope=clawk_home_key(home_path)))
+    return frozenset(
+        s.name
+        for s in _ordered_enabled_sources(secrets_cfg, scope=clawk_home_key(home_path))
+    )
 
 
 def _active_profile_name(home_path: Optional[Path]) -> str:
@@ -319,20 +380,42 @@ def _profile_alias_target(var: str, profile: str) -> Optional[str]:
     if not profile or not var.endswith(suffix):
         return None
     alias = var[: -len(suffix)]
-    return alias if alias and is_valid_env_name(alias) and alias.endswith(_ALIAS_SUFFIXES) else None
+    return (
+        alias
+        if alias and is_valid_env_name(alias) and alias.endswith(_ALIAS_SUFFIXES)
+        else None
+    )
 
 
 class _Applier:
     """Apply phase state for one orchestrated pass: sequential, first-wins, attributed."""
 
-    def __init__(self, env: MutableMapping[str, str], report: ApplyReport,
-                 protected: dict[str, str], preserve: frozenset) -> None:
-        self.env, self.report, self.protected, self.preserve = env, report, protected, preserve
+    def __init__(
+        self,
+        env: MutableMapping[str, str],
+        report: ApplyReport,
+        protected: dict[str, str],
+        preserve: frozenset,
+    ) -> None:
+        self.env, self.report, self.protected, self.preserve = (
+            env,
+            report,
+            protected,
+            preserve,
+        )
         self.claimed: dict[str, str] = {}  # var → source name that won it
 
-    def apply_source(self, source: SecretSource, cfg: dict, result: FetchResult,
-                     profile: str, supplied_directly: set) -> None:
-        sr = SourceReport(name=source.name, label=source.label or source.name, result=result)
+    def apply_source(
+        self,
+        source: SecretSource,
+        cfg: dict,
+        result: FetchResult,
+        profile: str,
+        supplied_directly: set,
+    ) -> None:
+        sr = SourceReport(
+            name=source.name, label=source.label or source.name, result=result
+        )
         self.report.sources.append(sr)
         if not result.ok:
             return
@@ -347,12 +430,24 @@ class _Applier:
             if not self._try_apply(sr, source, override, var, value) or not profile:
                 continue
             alias = _profile_alias_target(var, profile)
-            if (alias and alias not in supplied_directly and alias not in self.claimed
-                    and self._try_apply(sr, source, override, alias, value)):
-                result.warnings.append(f"applied profile-scoped {var} as {alias} (active profile {profile!r})")
+            if (
+                alias
+                and alias not in supplied_directly
+                and alias not in self.claimed
+                and self._try_apply(sr, source, override, alias, value)
+            ):
+                result.warnings.append(
+                    f"applied profile-scoped {var} as {alias} (active profile {profile!r})"
+                )
 
-    def _try_apply(self, sr: SourceReport, source: SecretSource, override: bool,
-                   var: str, value: str) -> bool:
+    def _try_apply(
+        self,
+        sr: SourceReport,
+        source: SecretSource,
+        override: bool,
+        var: str,
+        value: str,
+    ) -> bool:
         """Apply one var through the shared guard chain. True = applied."""
         if not is_valid_env_name(var):
             sr.skipped_invalid.append(var)
@@ -362,9 +457,11 @@ class _Applier:
             return False
         if var in self.claimed:
             sr.skipped_claimed.append(var)
-            self.report.conflicts.append(f"{var}: kept value from {self.claimed[var]}; "
-                                         f"{source.name} also supplies it (first source wins — "
-                                         "remove one binding or reorder secrets.sources)")
+            self.report.conflicts.append(
+                f"{var}: kept value from {self.claimed[var]}; "
+                f"{source.name} also supplies it (first source wins — "
+                "remove one binding or reorder secrets.sources)"
+            )
             return False
         existed = bool(self.env.get(var))
         if existed and (var in self.preserve or not override):
@@ -373,13 +470,21 @@ class _Applier:
         self.env[var] = value
         self.claimed[var] = source.name
         sr.applied.append(var)
-        self.report.provenance[var] = AppliedVar(var, source.name, source.shape, overrode_env=existed,
-                                                 authoritative=override and var not in self.preserve)
+        self.report.provenance[var] = AppliedVar(
+            var,
+            source.name,
+            source.shape,
+            overrode_env=existed,
+            authoritative=override and var not in self.preserve,
+        )
         return True
 
 
-def apply_all(secrets_cfg: dict, home_path: Path,
-              environ: Optional[MutableMapping[str, str]] = None) -> ApplyReport:
+def apply_all(
+    secrets_cfg: dict,
+    home_path: Path,
+    environ: Optional[MutableMapping[str, str]] = None,
+) -> ApplyReport:
     """Fetch from every enabled source and apply the merged result to ``environ``
     (default ``os.environ``).
 
@@ -406,12 +511,21 @@ def apply_all(secrets_cfg: dict, home_path: Path,
         return report
 
     preserve_raw = secrets_cfg.get("preserve_existing")
-    preserve = frozenset(n.strip() for n in preserve_raw if isinstance(n, str) and n.strip()
-                         ) if isinstance(preserve_raw, list) else frozenset()
-    profile = _active_profile_name(home_path) if secrets_cfg.get("profile_alias", True) else ""
+    preserve = (
+        frozenset(n.strip() for n in preserve_raw if isinstance(n, str) and n.strip())
+        if isinstance(preserve_raw, list)
+        else frozenset()
+    )
+    profile = (
+        _active_profile_name(home_path)
+        if secrets_cfg.get("profile_alias", True)
+        else ""
+    )
 
     # Mapped outranks bulk regardless of list order.
-    ordered = [s for s in enabled if s.shape == "mapped"] + [s for s in enabled if s.shape == "bulk"]
+    ordered = [s for s in enabled if s.shape == "mapped"] + [
+        s for s in enabled if s.shape == "bulk"
+    ]
 
     fetches: list[tuple[SecretSource, dict, FetchResult]] = []
     protected: dict[str, str] = {}  # var → source that protects it
@@ -426,7 +540,9 @@ def apply_all(secrets_cfg: dict, home_path: Path,
             pass
 
     # An alias never shadows a var some source supplies by its real name.
-    supplied_directly = {v for _, _, r in fetches if r.ok for v in r.secrets if isinstance(v, str)}
+    supplied_directly = {
+        v for _, _, r in fetches if r.ok for v in r.secrets if isinstance(v, str)
+    }
 
     applier = _Applier(env, report, protected, preserve)
     for source, cfg, result in fetches:

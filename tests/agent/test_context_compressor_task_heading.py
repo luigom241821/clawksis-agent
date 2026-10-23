@@ -16,8 +16,6 @@ def _headings(text: str) -> list[str]:
     return [line for line in text.splitlines() if line.startswith("## ")]
 
 
-
-
 def test_grounding_collapses_alias_and_duplicate_task_sections():
     """A summarizer that emits the legacy alias, or both headings, ends up with exactly one grounded section."""
     body = (
@@ -40,7 +38,9 @@ def test_grounding_collapses_alias_and_duplicate_task_sections():
 
 def test_long_user_request_is_not_quoted_by_summary_model():
     """Long quotes stall Codex output; the postprocessor preserves source wording."""
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         compressor = ContextCompressor(model="test", quiet_mode=True)
     section = compressor._build_summary_prompt(
         "A long user request", 500, None, "", True

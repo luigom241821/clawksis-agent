@@ -71,16 +71,16 @@ def test_every_clawk_model_provider_is_configurable_in_desktop():
     gui = _keys_tab_providers() | _accounts_tab_providers()
     listed = {e.slug for e in listed_canonical_providers()}
     missing = [
-        slug
-        for slug in sorted(listed)
-        if slug not in _EXEMPT and slug not in gui
+        slug for slug in sorted(listed) if slug not in _EXEMPT and slug not in gui
     ]
     assert not missing, (
         "providers shown in `clawk model` but not configurable in the desktop "
         f"Providers tabs: {missing}"
     )
     leaked = sorted(gui & ({e.slug for e in CANONICAL_PROVIDERS} - listed))
-    assert not leaked, f"unlisted pre-release providers on the desktop Providers tabs: {leaked}"
+    assert not leaked, (
+        f"unlisted pre-release providers on the desktop Providers tabs: {leaked}"
+    )
 
 
 def test_each_provider_lands_on_the_tab_its_auth_type_dictates():
@@ -96,7 +96,9 @@ def test_each_provider_lands_on_the_tab_its_auth_type_dictates():
         if d.tab == "keys" and d.api_key_env_vars:
             assert d.slug in keys, f"{d.slug} (keys tab) missing from /api/env"
         elif d.tab == "accounts":
-            assert d.slug in accounts, f"{d.slug} (accounts tab) missing from /api/providers/oauth"
+            assert d.slug in accounts, (
+                f"{d.slug} (accounts tab) missing from /api/providers/oauth"
+            )
 
 
 def test_shared_api_key_preserves_each_provider_profile():

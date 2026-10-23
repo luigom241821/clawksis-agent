@@ -121,7 +121,9 @@ def test_cancellation_targets_only_the_matching_pending_command_and_cleans_up():
 
     assert not thread.is_alive()
     assert isinstance(outcome.get("error"), ControllerCancelled)
-    cancel_frames = [frame for frame in frames if frame["method"] == "browser.controller.cancel"]
+    cancel_frames = [
+        frame for frame in frames if frame["method"] == "browser.controller.cancel"
+    ]
     assert len(cancel_frames) == 1
     assert cancel_frames[0]["params"]["command_id"] == frames[0]["params"]["command_id"]
     assert broker.pending_count == 0

@@ -25,7 +25,9 @@ def test_postprocess_adds_agent_visible_image_for_active_ssh_env(monkeypatch, tm
     )
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr(image_generation_tool, "_active_terminal_env", lambda task_id: env)
+    monkeypatch.setattr(
+        image_generation_tool, "_active_terminal_env", lambda task_id: env
+    )
 
     raw = json.dumps({"success": True, "image": str(image_path)})
     result = json.loads(
@@ -40,7 +42,9 @@ def test_postprocess_adds_agent_visible_image_for_active_ssh_env(monkeypatch, tm
     assert sync_calls == [True]
 
 
-def test_concurrent_image_results_preserve_shared_remote_sync_state(monkeypatch, tmp_path):
+def test_concurrent_image_results_preserve_shared_remote_sync_state(
+    monkeypatch, tmp_path
+):
     from tools import image_generation_tool
     from tools.environments import file_sync
 
@@ -83,7 +87,9 @@ def test_concurrent_image_results_preserve_shared_remote_sync_state(monkeypatch,
 
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
     monkeypatch.setattr(file_sync, "_credential_host_paths", lambda: set())
-    monkeypatch.setattr(image_generation_tool, "_active_terminal_env", lambda _task_id: env)
+    monkeypatch.setattr(
+        image_generation_tool, "_active_terminal_env", lambda _task_id: env
+    )
 
     def postprocess(label, image_path):
         worker.label = label
@@ -135,7 +141,9 @@ def test_handle_image_generate_postprocesses_plugin_result(monkeypatch, tmp_path
     monkeypatch.setattr(
         image_generation_tool,
         "_dispatch_to_plugin_provider",
-        lambda prompt, aspect_ratio, **kw: json.dumps({"success": True, "image": str(image_path)}),
+        lambda prompt, aspect_ratio, **kw: json.dumps(
+            {"success": True, "image": str(image_path)}
+        ),
     )
 
     result = json.loads(
@@ -146,4 +154,7 @@ def test_handle_image_generate_postprocesses_plugin_result(monkeypatch, tmp_path
     )
 
     assert seen_task_ids == ["plugin-task"]
-    assert result["agent_visible_image"] == "/home/remote/.clawksis/cache/images/plugin.png"
+    assert (
+        result["agent_visible_image"]
+        == "/home/remote/.clawksis/cache/images/plugin.png"
+    )

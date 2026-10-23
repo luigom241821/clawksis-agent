@@ -6,6 +6,7 @@ clipping the bottom border and any items past the terminal's last row.
 The viewport helper now caps visible items and slides the offset to keep
 the cursor on screen.
 """
+
 from cli import ClawksisCLI
 
 
@@ -17,7 +18,6 @@ class TestPickerViewport:
         offset, visible = _compute(selected=0, scroll_offset=0, n=5, term_rows=30)
         assert offset == 0
         assert visible == 5
-
 
     def test_offset_recovers_after_stage_switch(self):
         # When the user backs out of the model stage and re-enters with

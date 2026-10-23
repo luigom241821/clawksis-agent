@@ -17,12 +17,22 @@ from agent.usage_pricing import (
 def test_astra_whole_request_price_tier_includes_cache_writes():
     below = estimate_usage_cost(
         "gpt-6-astra",
-        CanonicalUsage(input_tokens=100_000, output_tokens=10_000, cache_read_tokens=10_000, cache_write_tokens=10_000),
+        CanonicalUsage(
+            input_tokens=100_000,
+            output_tokens=10_000,
+            cache_read_tokens=10_000,
+            cache_write_tokens=10_000,
+        ),
         provider="openai",
     )
     above = estimate_usage_cost(
         "gpt-6-astra",
-        CanonicalUsage(input_tokens=100_000, output_tokens=10_000, cache_read_tokens=100_000, cache_write_tokens=100_001),
+        CanonicalUsage(
+            input_tokens=100_000,
+            output_tokens=10_000,
+            cache_read_tokens=100_000,
+            cache_write_tokens=100_001,
+        ),
         provider="openai",
     )
 
@@ -39,10 +49,20 @@ def test_astra_whole_request_price_tier_includes_cache_writes():
 
 
 _MODELS_DEV_REGISTRY = {
-    "openai": {"models": {"gpt-5-nano": {"cost": {"input": 0.05, "output": 0.4, "cache_read": 0.005}}}},
-    "xai": {"models": {"grok-4.3": {"cost": {"input": 1.25, "output": 2.5, "cache_read": 0.2}}}},
+    "openai": {
+        "models": {
+            "gpt-5-nano": {"cost": {"input": 0.05, "output": 0.4, "cache_read": 0.005}}
+        }
+    },
+    "xai": {
+        "models": {
+            "grok-4.3": {"cost": {"input": 1.25, "output": 2.5, "cache_read": 0.2}}
+        }
+    },
 }
-_USAGE = CanonicalUsage(input_tokens=1_000_000, output_tokens=1_000_000, cache_read_tokens=1_000_000)
+_USAGE = CanonicalUsage(
+    input_tokens=1_000_000, output_tokens=1_000_000, cache_read_tokens=1_000_000
+)
 
 
 @pytest.fixture
@@ -51,22 +71,34 @@ def models_dev_registry(monkeypatch):
     from agent import models_dev
 
     monkeypatch.setattr(models_dev, "_models_dev_cache", _MODELS_DEV_REGISTRY)
-    monkeypatch.setattr("agent.usage_pricing.fetch_endpoint_model_metadata", lambda *_a, **_k: {})
+    monkeypatch.setattr(
+        "agent.usage_pricing.fetch_endpoint_model_metadata", lambda *_a, **_k: {}
+    )
 
 
-@pytest.mark.parametrize(("provider", "base_url", "model", "expected"), [
-    ("openai-api", "https://api.openai.com/v1", "gpt-5-nano", ("estimated", Decimal("0.455"))),
-    ("openai", "", "gpt-5-nano", ("estimated", Decimal("0.455"))),
-    ("xai", "https://api.x.ai/v1", "grok-4.3", ("estimated", Decimal("3.95"))),
-    # The vendor's list price needs the vendor's own API: same provider name on
-    # someone else's host, a downgraded origin, a subscription route or a custom
-    # endpoint keep ``unknown`` rather than inheriting it.
-    ("xai", "https://grok-relay.example.com/v1", "grok-4.3", ("unknown", None)),
-    ("xai", "http://api.x.ai/v1", "grok-4.3", ("unknown", None)),
-    ("xai-oauth", "https://api.x.ai/v1", "grok-4.3", ("unknown", None)),
-    ("custom", "https://api.x.ai/v1", "grok-4.3", ("unknown", None)),
-])
-def test_direct_first_party_route_prices_models_missing_from_snapshot(models_dev_registry, provider, base_url, model, expected):
+@pytest.mark.parametrize(
+    ("provider", "base_url", "model", "expected"),
+    [
+        (
+            "openai-api",
+            "https://api.openai.com/v1",
+            "gpt-5-nano",
+            ("estimated", Decimal("0.455")),
+        ),
+        ("openai", "", "gpt-5-nano", ("estimated", Decimal("0.455"))),
+        ("xai", "https://api.x.ai/v1", "grok-4.3", ("estimated", Decimal("3.95"))),
+        # The vendor's list price needs the vendor's own API: same provider name on
+        # someone else's host, a downgraded origin, a subscription route or a custom
+        # endpoint keep ``unknown`` rather than inheriting it.
+        ("xai", "https://grok-relay.example.com/v1", "grok-4.3", ("unknown", None)),
+        ("xai", "http://api.x.ai/v1", "grok-4.3", ("unknown", None)),
+        ("xai-oauth", "https://api.x.ai/v1", "grok-4.3", ("unknown", None)),
+        ("custom", "https://api.x.ai/v1", "grok-4.3", ("unknown", None)),
+    ],
+)
+def test_direct_first_party_route_prices_models_missing_from_snapshot(
+    models_dev_registry, provider, base_url, model, expected
+):
     cost = estimate_usage_cost(model, _USAGE, provider=provider, base_url=base_url)
 
     assert (cost.status, cost.amount_usd) == expected
@@ -86,14 +118,14 @@ def test_normalize_usage_reads_deepseek_native_cache_hit_tokens():
         prompt_cache_miss_tokens=500,
     )
 
-    normalized = normalize_usage(usage, provider="deepseek", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="deepseek", api_mode="chat_completions"
+    )
 
     assert normalized.cache_read_tokens == 1500
     # prompt_tokens includes cached; input = 2000 - 1500 = the miss bucket
     assert normalized.input_tokens == 500
     assert normalized.output_tokens == 400
-
-
 
 
 def test_normalize_usage_openai_reads_top_level_anthropic_cache_fields():
@@ -114,7 +146,9 @@ def test_normalize_usage_openai_reads_top_level_anthropic_cache_fields():
         cache_creation_input_tokens=300,
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     # Expected: cache read from prompt_tokens_details.cached_tokens (preferred),
     # cache write from top-level cache_creation_input_tokens (fallback).
@@ -123,22 +157,6 @@ def test_normalize_usage_openai_reads_top_level_anthropic_cache_fields():
     # input_tokens = prompt_total - cache_read - cache_write = 1000 - 500 - 300 = 200
     assert normalized.input_tokens == 200
     assert normalized.output_tokens == 200
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_bundled_pricing_skips_endpoint_metadata(monkeypatch):
@@ -183,8 +201,6 @@ def test_unknown_model_falls_back_to_endpoint_metadata(monkeypatch):
     assert entry.output_cost_per_million == Decimal(2)
 
 
-
-
 def test_deepseek_deprecated_aliases_price_as_flash():
     """Invariant: deepseek-v4-flash / deepseek-chat / deepseek-reasoner are retired aliases
     served by the current Flash model — they must bill at identical rates to the
@@ -196,11 +212,9 @@ def test_deepseek_deprecated_aliases_price_as_flash():
         assert entry is not None, alias
         assert entry.input_cost_per_million == flash.input_cost_per_million, alias
         assert entry.output_cost_per_million == flash.output_cost_per_million, alias
-        assert (
-            entry.cache_read_cost_per_million == flash.cache_read_cost_per_million
-        ), alias
-
-
+        assert entry.cache_read_cost_per_million == flash.cache_read_cost_per_million, (
+            alias
+        )
 
 
 def test_bedrock_claude_rows_all_carry_cache_pricing():
@@ -229,10 +243,6 @@ def test_bedrock_claude_rows_all_carry_cache_pricing():
         assert entry.cache_write_cost_per_million > entry.input_cost_per_million, key
 
 
-
-
-
-
 def test_bedrock_versioned_inference_profile_resolves_to_bare_pricing():
     """Bedrock profile IDs may include the provider's dated version suffix.
 
@@ -254,10 +264,6 @@ def test_bedrock_versioned_inference_profile_resolves_to_bare_pricing():
         assert scoped.cache_write_cost_per_million == bare.cache_write_cost_per_million
 
 
-
-
-
-
 def test_bedrock_claude_cached_session_estimates_cost_not_unknown():
     """A Bedrock Claude session with cache hits must produce a dollar estimate,
     not ``unknown`` — the user-visible symptom in #50295.
@@ -269,7 +275,9 @@ def test_bedrock_claude_cached_session_estimates_cost_not_unknown():
         cache_read_input_tokens=1369379,
         cache_creation_input_tokens=42135,
     )
-    canonical = normalize_usage(usage, provider="bedrock", api_mode="anthropic_messages")
+    canonical = normalize_usage(
+        usage, provider="bedrock", api_mode="anthropic_messages"
+    )
     assert canonical.cache_read_tokens == 1369379
     assert canonical.cache_write_tokens == 42135
 
@@ -329,16 +337,6 @@ def test_fireworks_router_fast_tier_prices_distinctly():
     assert fast.output_cost_per_million > standard.output_cost_per_million
 
 
-
-
-
-
-
-
-
-
-
-
 def test_google_and_vertex_routes_share_official_pricing_snapshot():
     """Direct Gemini, Vertex, and Vertex's OpenAI-compatible hostname must
     all normalize to the Google official-pricing route.
@@ -393,9 +391,13 @@ def test_curated_google_flash_models_resolve_official_snapshot_pricing(monkeypat
         lambda *_args, **_kwargs: {},
     )
     curated = {m for m, _desc in OPENROUTER_MODELS} | set(_PROVIDER_MODELS["nous"])
-    flash = sorted(m for m in curated if m.startswith("google/gemini-") and m.endswith("-flash"))
+    flash = sorted(
+        m for m in curated if m.startswith("google/gemini-") and m.endswith("-flash")
+    )
     assert flash, "expected curated google/gemini-*-flash picker entries"
-    usage = CanonicalUsage(input_tokens=1_000_000, output_tokens=1_000_000, cache_read_tokens=1_000_000)
+    usage = CanonicalUsage(
+        input_tokens=1_000_000, output_tokens=1_000_000, cache_read_tokens=1_000_000
+    )
     for model in flash:
         bare = model.split("/", 1)[1]
         gemini = estimate_usage_cost(bare, usage, provider="gemini")
@@ -406,10 +408,6 @@ def test_curated_google_flash_models_resolve_official_snapshot_pricing(monkeypat
         # Direct-route models the picker offers must also be pickable directly.
         assert bare in _PROVIDER_MODELS["gemini"], model
         assert model in _PROVIDER_MODELS["vertex"], model
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -437,8 +435,6 @@ class TestFormatCostLabel:
     def test_normal_cost_renders_2dp(self):
         assert format_cost_label(Decimal("1.23")) == "~$1.23"
 
-
-
     def test_below_4dp_floor_never_reads_zero(self):
         """Amounts below $0.00005 must not render as '~$0.0000' (#79220).
 
@@ -450,7 +446,6 @@ class TestFormatCostLabel:
         # Exact boundary: $0.00005 rounds to 0.0000 under ROUND_HALF_EVEN
         # and must also take the fallback.
         assert format_cost_label(Decimal("0.00005")) == "~$<0.0001"
-
 
 
 # ---------------------------------------------------------------------------
@@ -527,7 +522,9 @@ def test_kimi_fallback_does_not_override_deepseek_hit_tokens():
         cached_tokens=999,  # must be ignored
     )
 
-    normalized = normalize_usage(usage, provider="deepseek", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="deepseek", api_mode="chat_completions"
+    )
 
     assert normalized.cache_read_tokens == 1500
 
@@ -559,16 +556,26 @@ def test_normalize_usage_handles_dict_shaped_usage():
     ns = SimpleNamespace(
         input_tokens=100,
         output_tokens=20,
-        input_tokens_details=SimpleNamespace(cached_tokens=60, cache_creation_tokens=10),
+        input_tokens_details=SimpleNamespace(
+            cached_tokens=60, cache_creation_tokens=10
+        ),
     )
 
     dict_result = normalize_usage(payload, api_mode="codex_responses")
     ns_result = normalize_usage(ns, api_mode="codex_responses")
 
-    assert dict_result.input_tokens == ns_result.input_tokens, f"input_tokens: dict={dict_result.input_tokens} vs ns={ns_result.input_tokens}"
-    assert dict_result.output_tokens == ns_result.output_tokens, f"output_tokens: dict={dict_result.output_tokens} vs ns={ns_result.output_tokens}"
-    assert dict_result.cache_read_tokens == ns_result.cache_read_tokens, f"cache_read: dict={dict_result.cache_read_tokens} vs ns={ns_result.cache_read_tokens}"
-    assert dict_result.cache_write_tokens == ns_result.cache_write_tokens, f"cache_write: dict={dict_result.cache_write_tokens} vs ns={ns_result.cache_write_tokens}"
+    assert dict_result.input_tokens == ns_result.input_tokens, (
+        f"input_tokens: dict={dict_result.input_tokens} vs ns={ns_result.input_tokens}"
+    )
+    assert dict_result.output_tokens == ns_result.output_tokens, (
+        f"output_tokens: dict={dict_result.output_tokens} vs ns={ns_result.output_tokens}"
+    )
+    assert dict_result.cache_read_tokens == ns_result.cache_read_tokens, (
+        f"cache_read: dict={dict_result.cache_read_tokens} vs ns={ns_result.cache_read_tokens}"
+    )
+    assert dict_result.cache_write_tokens == ns_result.cache_write_tokens, (
+        f"cache_write: dict={dict_result.cache_write_tokens} vs ns={ns_result.cache_write_tokens}"
+    )
     # Sanity: values must be non-zero (the whole point of the bug)
     assert dict_result.input_tokens > 0
     assert dict_result.cache_read_tokens > 0
@@ -603,7 +610,9 @@ def test_normalize_usage_openai_reads_nested_cache_creation_tokens():
         ),
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.cache_read_tokens == 100
     assert normalized.cache_write_tokens == 300
@@ -617,7 +626,9 @@ def test_normalize_usage_openai_reads_mapping_cache_creation_tokens():
         "prompt_tokens_details": {"cache_creation_input_tokens": 300},
     }
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.cache_write_tokens == 300
     assert normalized.input_tokens == 700
@@ -634,7 +645,9 @@ def test_normalize_usage_openai_prefers_nested_cache_write_tokens():
         cache_write_tokens=500,
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.cache_write_tokens == 200
 
@@ -647,7 +660,9 @@ def test_normalize_usage_mapping_preserves_reasoning_tokens():
         "completion_tokens_details": {"reasoning_tokens": 12},
     }
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.reasoning_tokens == 12
 
@@ -661,7 +676,9 @@ def test_normalize_usage_mapping_anthropic_fields():
         "output_tokens_details": {"reasoning_tokens": 7},
     }
 
-    normalized = normalize_usage(usage, provider="anthropic", api_mode="anthropic_messages")
+    normalized = normalize_usage(
+        usage, provider="anthropic", api_mode="anthropic_messages"
+    )
 
     assert normalized.cache_read_tokens == 50
     assert normalized.cache_write_tokens == 10
@@ -679,7 +696,9 @@ def test_normalize_usage_mapping_codex_fields():
         "output_tokens_details": {"reasoning_tokens": 5},
     }
 
-    normalized = normalize_usage(usage, provider="openai-codex", api_mode="codex_responses")
+    normalized = normalize_usage(
+        usage, provider="openai-codex", api_mode="codex_responses"
+    )
 
     assert normalized.input_tokens == 30
     assert normalized.cache_read_tokens == 60
@@ -698,7 +717,9 @@ def test_normalize_usage_clamps_negative_counters():
         completion_tokens_details=SimpleNamespace(reasoning_tokens=-3),
     )
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.input_tokens == 100
     assert normalized.output_tokens == 0
@@ -717,7 +738,9 @@ def test_normalize_usage_clamps_inconsistent_cache_total():
         },
     }
 
-    normalized = normalize_usage(usage, provider="openrouter", api_mode="chat_completions")
+    normalized = normalize_usage(
+        usage, provider="openrouter", api_mode="chat_completions"
+    )
 
     assert normalized.input_tokens == 0
     assert normalized.prompt_tokens == 130
@@ -748,7 +771,9 @@ def test_normalize_usage_codex_responses_falls_back_to_cache_creation_tokens():
     usage = SimpleNamespace(
         input_tokens=1000,
         output_tokens=100,
-        input_tokens_details=SimpleNamespace(cached_tokens=200, cache_creation_tokens=80),
+        input_tokens_details=SimpleNamespace(
+            cached_tokens=200, cache_creation_tokens=80
+        ),
     )
 
     normalized = normalize_usage(usage, provider="openai", api_mode="codex_responses")
@@ -892,7 +917,12 @@ def test_flat_entries_unaffected_by_tier_machinery():
 
 def _anthropic_usage(speed=None):
     """Canonical usage from an Anthropic-shaped usage payload; ``speed`` rides ``raw_usage``."""
-    payload = {"input_tokens": 100_000, "output_tokens": 10_000, "cache_read_input_tokens": 200_000, "cache_creation_input_tokens": 50_000}
+    payload = {
+        "input_tokens": 100_000,
+        "output_tokens": 10_000,
+        "cache_read_input_tokens": 200_000,
+        "cache_creation_input_tokens": 50_000,
+    }
     if speed:
         payload["speed"] = speed
     return normalize_usage(payload, provider="anthropic", api_mode="anthropic_messages")
@@ -907,20 +937,35 @@ def test_anthropic_fast_mode_responses_price_from_the_fast_rate_row():
     for model in _ANTHROPIC_FAST_MODE_MODELS:
         standard_entry = get_pricing_entry(model, provider="anthropic")
         assert standard_entry is not None
-        fast = estimate_usage_cost(model, _anthropic_usage("fast"), provider="anthropic")
+        fast = estimate_usage_cost(
+            model, _anthropic_usage("fast"), provider="anthropic"
+        )
         standard = estimate_usage_cost(model, _anthropic_usage(), provider="anthropic")
-        assert fast.pricing_version == _ANTHROPIC_FAST_MODE_PRICING[model].pricing_version
+        assert (
+            fast.pricing_version == _ANTHROPIC_FAST_MODE_PRICING[model].pricing_version
+        )
         assert standard.pricing_version == standard_entry.pricing_version
         assert fast.amount_usd > standard.amount_usd
         # A response the API reports as standard speed is billed like one without the field.
-        assert estimate_usage_cost(model, _anthropic_usage("standard"), provider="anthropic").amount_usd == standard.amount_usd
+        assert (
+            estimate_usage_cost(
+                model, _anthropic_usage("standard"), provider="anthropic"
+            ).amount_usd
+            == standard.amount_usd
+        )
     # Vendor-prefixed, dotted ids price from the same fast row.
-    assert estimate_usage_cost("anthropic/claude-opus-5.5", _anthropic_usage("fast"), provider="anthropic").amount_usd == (
-        estimate_usage_cost("claude-opus-5-5", _anthropic_usage("fast"), provider="anthropic").amount_usd
+    assert estimate_usage_cost(
+        "anthropic/claude-opus-5.5", _anthropic_usage("fast"), provider="anthropic"
+    ).amount_usd == (
+        estimate_usage_cost(
+            "claude-opus-5-5", _anthropic_usage("fast"), provider="anthropic"
+        ).amount_usd
     )
 
 
 def test_anthropic_fast_response_without_a_fast_rate_is_unknown():
-    result = estimate_usage_cost("claude-sonnet-4-6", _anthropic_usage("fast"), provider="anthropic")
+    result = estimate_usage_cost(
+        "claude-sonnet-4-6", _anthropic_usage("fast"), provider="anthropic"
+    )
     assert result.amount_usd is None
     assert result.status == "unknown"

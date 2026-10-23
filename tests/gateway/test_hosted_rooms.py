@@ -198,15 +198,14 @@ def test_first_database_open_does_not_retry_other_journal_errors(
         )
 
     monkeypatch.setattr(
-        clawk_state_wal, "apply_wal_with_fallback",
+        clawk_state_wal,
+        "apply_wal_with_fallback",
         configured_delete_refusal,
     )
 
     with pytest.raises(sqlite3.OperationalError, match="configured"):
         _create(tmp_path / "state.db")
     assert attempts == 1
-
-
 
 
 def test_authority_claim_fences_stale_gateway_events(tmp_path):
@@ -736,11 +735,14 @@ def test_room_log_pages_are_bounded_by_serialized_event_bytes(tmp_path, monkeypa
         )
 
     one_event = rooms.read_events(db, room_id="room-1", limit=1)
-    budget = len(
-        json.dumps(one_event, ensure_ascii=False, separators=(",", ":")).encode(
-            "utf-8"
+    budget = (
+        len(
+            json.dumps(one_event, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
         )
-    ) + 1
+        + 1
+    )
     monkeypatch.setattr(rooms, "MAX_LOG_PAGE_BYTES", budget)
 
     first = rooms.read_events(db, room_id="room-1", limit=4)
@@ -753,8 +755,6 @@ def test_room_log_pages_are_bounded_by_serialized_event_bytes(tmp_path, monkeypa
         limit=4,
     )
     assert second["events"][0]["seq"] == first["cursor"] + 1
-
-
 
 
 def test_room_log_page_bound_includes_json_structure_overhead(tmp_path, monkeypatch):
@@ -777,11 +777,14 @@ def test_room_log_page_bound_includes_json_structure_overhead(tmp_path, monkeypa
     while True:
         page = rooms.read_events(db, room_id="room-1", since_seq=cursor, limit=20)
         assert page["events"]
-        assert len(
-            json.dumps(page, ensure_ascii=False, separators=(",", ":")).encode(
-                "utf-8"
+        assert (
+            len(
+                json.dumps(page, ensure_ascii=False, separators=(",", ":")).encode(
+                    "utf-8"
+                )
             )
-        ) <= budget
+            <= budget
+        )
         replayed.extend(page["events"])
         assert page["cursor"] > cursor
         cursor = page["cursor"]
@@ -1342,7 +1345,8 @@ def test_upgrade_keeps_rooms_from_before_the_shared_state_db_split(tmp_path):
     assert [room["room_id"] for room in rooms.list_rooms(store)] == ["room-1"]
     assert rooms.room_state(store, room_id="room-1")["latest_seq"] == 1
     assert [
-        event["event_id"] for event in rooms.read_events(store, room_id="room-1")["events"]
+        event["event_id"]
+        for event in rooms.read_events(store, room_id="room-1")["events"]
     ] == ["event-1"]
 
 
@@ -1356,7 +1360,9 @@ def test_legacy_import_is_a_one_shot_and_skips_driver_liveness_state(tmp_path):
 
     driver.admit_task(
         legacy,
-        driver.TaskIdentity(room_id="room-1", task_id="task-1", thread_id="thread-1", turn_id="turn-1"),
+        driver.TaskIdentity(
+            room_id="room-1", task_id="task-1", thread_id="thread-1", turn_id="turn-1"
+        ),
         payload={"target_profile": "ops", "prompt": "ping", "source_event_seq": 1},
         clock=now,
     )
@@ -1374,13 +1380,21 @@ def test_legacy_import_is_a_one_shot_and_skips_driver_liveness_state(tmp_path):
     assert [room["room_id"] for room in rooms.list_rooms(store)] == ["room-1"]
     with sqlite3.connect(store) as conn:
         # Durable work follows the room across; the lease is liveness state and stays behind.
-        assert conn.execute("SELECT COUNT(*) FROM hosted_room_driver_tasks").fetchone()[0] == 1
-        assert conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='hosted_room_driver_leases'"
-        ).fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT COUNT(*) FROM hosted_room_driver_tasks").fetchone()[0]
+            == 1
+        )
+        assert (
+            conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='hosted_room_driver_leases'"
+            ).fetchone()[0]
+            == 0
+        )
 
     # Forcing a second import (marker cleared) must not replace what this store already owns.
-    rooms.rename_room(store, room_id="room-1", event_id="rename-1", name="Renamed", now=12)
+    rooms.rename_room(
+        store, room_id="room-1", event_id="rename-1", name="Renamed", now=12
+    )
     with sqlite3.connect(store) as conn:
         conn.execute("DELETE FROM hosted_room_legacy_imports")
     assert rooms.room_state(store, room_id="room-1")["name"] == "Renamed"
@@ -1400,21 +1414,49 @@ def test_legacy_import_skips_a_room_this_store_already_owns_as_a_unit(tmp_path):
     legacy = tmp_path / "state.db"
     _create(legacy, room_id="same")
     for index in range(5):
-        _append(legacy, room_id="same", event_id=f"legacy-{index}", kind="message.user", actor=USER,
-                payload={"text": str(index)}, now=11 + index)
+        _append(
+            legacy,
+            room_id="same",
+            event_id=f"legacy-{index}",
+            kind="message.user",
+            actor=USER,
+            payload={"text": str(index)},
+            now=11 + index,
+        )
     # The store already has its own "same" before the import runs (a room re-created after "not found").
     own = tmp_path / "scratch.db"
     _create(own, room_id="same")
-    _append(own, room_id="same", event_id="own-1", kind="message.user", actor=USER, payload={"text": "s"}, now=11)
+    _append(
+        own,
+        room_id="same",
+        event_id="own-1",
+        kind="message.user",
+        actor=USER,
+        payload={"text": "s"},
+        now=11,
+    )
     own.rename(tmp_path / "shared-state.db")
     store = tmp_path / "shared-state.db"
 
-    assert [event["event_id"] for event in rooms.read_events(store, room_id="same")["events"]] == ["own-1"]
-    _append(store, room_id="same", event_id="own-2", kind="message.user", actor=USER, payload={"text": "t"}, now=30)
+    assert [
+        event["event_id"]
+        for event in rooms.read_events(store, room_id="same")["events"]
+    ] == ["own-1"]
+    _append(
+        store,
+        room_id="same",
+        event_id="own-2",
+        kind="message.user",
+        actor=USER,
+        payload={"text": "t"},
+        now=30,
+    )
     assert rooms.room_state(store, room_id="same")["latest_seq"] == 2
 
 
-def test_legacy_import_reads_layouts_from_before_the_actor_and_authority_columns(tmp_path):
+def test_legacy_import_reads_layouts_from_before_the_actor_and_authority_columns(
+    tmp_path,
+):
     """A legacy store without authority_gateway_id/actor_json imports with the migration's defaults.
 
     ``INSERT OR IGNORE`` used to swallow the NOT NULL violations, drop every row and still record
@@ -1424,9 +1466,14 @@ def test_legacy_import_reads_layouts_from_before_the_actor_and_authority_columns
     store = tmp_path / "shared-state.db"
 
     assert _read_legacy_state(str(store)) == ("legacy", 1)
-    assert [event["event_id"] for event in rooms.read_events(store, room_id="room-1")["events"]] == ["legacy-event"]
+    assert [
+        event["event_id"]
+        for event in rooms.read_events(store, room_id="room-1")["events"]
+    ] == ["legacy-event"]
     with sqlite3.connect(store) as conn:
-        assert conn.execute("SELECT rooms FROM hosted_room_legacy_imports").fetchone() == (1,)
+        assert conn.execute(
+            "SELECT rooms FROM hosted_room_legacy_imports"
+        ).fetchone() == (1,)
         assert conn.execute("SELECT event_bytes FROM hosted_rooms").fetchone()[0] > 0
 
 
@@ -1438,7 +1485,17 @@ def test_unreadable_legacy_store_is_reported_once_per_process(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="gateway.hosted_rooms_legacy_import"):
         for _ in range(4):
             assert rooms.list_rooms(store) == []
-    assert len([record for record in caplog.records if "could not import" in record.message]) == 1
+    assert (
+        len(
+            [
+                record
+                for record in caplog.records
+                if "could not import" in record.message
+            ]
+        )
+        == 1
+    )
     with sqlite3.connect(store) as conn:
         assert not conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='hosted_room_legacy_imports'").fetchone()
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='hosted_room_legacy_imports'"
+        ).fetchone()

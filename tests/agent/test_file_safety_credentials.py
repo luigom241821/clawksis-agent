@@ -38,14 +38,6 @@ def _create(home: Path, rel: str | Path) -> Path:
     return p
 
 
-
-
-
-
-
-
-
-
 def test_arbitrary_clawk_home_file_not_blocked(fake_home):
     """Non-credential files inside CLAWK_HOME stay readable."""
     from agent.file_safety import get_read_block_error
@@ -61,16 +53,6 @@ def test_subdirectory_named_auth_json_not_blocked(fake_home):
 
     nested = _create(fake_home, Path("skills") / "my-skill" / "auth.json")
     assert get_read_block_error(str(nested)) is None
-
-
-
-
-
-
-
-
-
-
 
 
 def test_search_tool_blocks_direct_auth_json_path(fake_home, monkeypatch):
@@ -141,9 +123,7 @@ def test_search_tool_filters_credential_results(fake_home, tmp_path, monkeypatch
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(ft, "_get_file_ops", lambda task_id="default": FakeFileOps())
-    monkeypatch.setattr(
-        terminal_tool, "_session_cwd", {}
-    )
+    monkeypatch.setattr(terminal_tool, "_session_cwd", {})
 
     search_response = ft.search_tool(
         pattern="SEARCH",
@@ -152,9 +132,9 @@ def test_search_tool_filters_credential_results(fake_home, tmp_path, monkeypatch
     )
     out = json.loads(search_response)
     raw = json.dumps(out)
-    returned_paths = {
-        match["path"] for match in out.get("matches", [])
-    } | set(out.get("files", []))
+    returned_paths = {match["path"] for match in out.get("matches", [])} | set(
+        out.get("files", [])
+    )
 
     assert "SEARCH_AUTH_SECRET" not in raw
     assert "SEARCH_MCP_SECRET" not in raw
@@ -173,8 +153,6 @@ def test_search_tool_filters_credential_results(fake_home, tmp_path, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_webhook_subscriptions_blocked(fake_home):
     """webhook_subscriptions.json holds per-route HMAC secrets — blocked."""
     from agent.file_safety import get_read_block_error
@@ -185,15 +163,7 @@ def test_webhook_subscriptions_blocked(fake_home):
     assert "credential store" in err
 
 
-
-
-
-
-
-
-def test_identically_named_clawk_files_outside_home_not_blocked(
-    fake_home, tmp_path
-):
+def test_identically_named_clawk_files_outside_home_not_blocked(fake_home, tmp_path):
     """Clawksis-specific filenames (``auth.json``, ``mcp-tokens/``, ``google_oauth.json``)
     outside CLAWK_HOME must remain readable — the gate is per-location for
     those, not per-filename. ``.env`` is the exception: it's blocked anywhere
@@ -273,9 +243,7 @@ def test_profile_mode_blocks_root_credentials(tmp_path, monkeypatch):
     root_google_oauth = root / "auth" / "google_oauth.json"
     root_google_oauth.parent.mkdir(parents=True, exist_ok=True)
     root_google_oauth.write_text("x")
-    assert "credential store" in (
-        get_read_block_error(str(root_google_oauth)) or ""
-    )
+    assert "credential store" in (get_read_block_error(str(root_google_oauth)) or "")
 
     # Root-level mcp-tokens: blocked
     root_tok = root / "mcp-tokens" / "gh.json"

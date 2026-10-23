@@ -112,8 +112,13 @@ def test_cron_sync_fallback_returns_and_spawns_no_review_fork(monkeypatch):
     parent._session_db = None
 
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     monkeypatch.setattr(dt, "_build_child_agent", lambda **kw: child)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)

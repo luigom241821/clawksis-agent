@@ -19,7 +19,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from clawk_constants import get_default_clawk_root, get_clawk_home, named_profile_is_live
+from clawk_constants import (
+    get_default_clawk_root,
+    get_clawk_home,
+    named_profile_is_live,
+)
 from utils import atomic_json_write
 
 logger = logging.getLogger(__name__)
@@ -29,17 +33,23 @@ class ActiveSessionRegistryError(RuntimeError):
     """The liveness registry could not prove a safe ownership decision."""
 
 
-def coerce_max_concurrent_sessions(value: Any, key: str = "max_concurrent_sessions") -> Optional[int]:
+def coerce_max_concurrent_sessions(
+    value: Any, key: str = "max_concurrent_sessions"
+) -> Optional[int]:
     """Return a positive integer cap, or None when disabled/invalid."""
     if value is None:
         return None
     try:
-        if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+        if isinstance(value, bool) or (
+            isinstance(value, float) and not value.is_integer()
+        ):
             raise ValueError(value)
         parsed = int(value.strip(), 10) if isinstance(value, str) else int(value)
     except (TypeError, ValueError):
         logger.warning(
-            "Ignoring invalid %s=%r (expected a positive integer; 0/null disables)", key, value
+            "Ignoring invalid %s=%r (expected a positive integer; 0/null disables)",
+            key,
+            value,
         )
         return None
     return parsed if parsed > 0 else None
@@ -183,20 +193,29 @@ def _lock_path(registry_home: str | Path | None = None) -> Path:
 def _lease_paths(
     lease: Optional[ActiveSessionLease] = None, registry_home: str | Path | None = None
 ) -> tuple[Path, Path]:
-    if lease is not None and lease.state_path is not None and lease.lock_path is not None:
+    if (
+        lease is not None
+        and lease.state_path is not None
+        and lease.lock_path is not None
+    ):
         return lease.state_path, lease.lock_path
     home = _registry_home(registry_home)
-    return home / "runtime" / "active_sessions.json", home / "runtime" / "active_sessions.lock"
+    return (
+        home / "runtime" / "active_sessions.json",
+        home / "runtime" / "active_sessions.lock",
+    )
 
 
 def _flock(fh, *, lock: bool) -> None:
     """Exclusive whole-file lock/unlock on ``fh`` (fcntl on POSIX, msvcrt on Windows)."""
     if os.name == "nt":
         import msvcrt
+
         fh.seek(0)
         msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK if lock else msvcrt.LK_UNLCK, 1)
     else:
         import fcntl
+
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX if lock else fcntl.LOCK_UN)
 
 
@@ -256,12 +275,27 @@ def _read_entries(path: Path, *, strict: bool = False) -> list[dict[str, Any]]:
         for bad, what in (
             (lambda: not _nonblank_str(lease_id), "an invalid lease id"),
             (lambda: lease_id in seen_leases, "a duplicate lease id"),
-            (lambda: not _nonblank_str(entry.get("session_id")), "an invalid session id"),
+            (
+                lambda: not _nonblank_str(entry.get("session_id")),
+                "an invalid session id",
+            ),
             (lambda: _registry_pid(entry.get("pid")) <= 0, "an invalid pid"),
-            (lambda: not _optional_isinstance(entry.get("surface"), str), "an invalid surface"),
-            (lambda: not _optional_isinstance(entry.get("track_liveness"), bool), "an invalid liveness marker"),
-            (lambda: not _optional_isinstance(entry.get("metadata"), dict), "invalid metadata"),
-            (lambda: not _valid_process_start(entry.get("process_start_time")), "an invalid process start time"),
+            (
+                lambda: not _optional_isinstance(entry.get("surface"), str),
+                "an invalid surface",
+            ),
+            (
+                lambda: not _optional_isinstance(entry.get("track_liveness"), bool),
+                "an invalid liveness marker",
+            ),
+            (
+                lambda: not _optional_isinstance(entry.get("metadata"), dict),
+                "invalid metadata",
+            ),
+            (
+                lambda: not _valid_process_start(entry.get("process_start_time")),
+                "an invalid process start time",
+            ),
         ):
             if bad():
                 raise invalid(f"contains {what}")
@@ -303,12 +337,15 @@ def _process_start_time(pid: int) -> Optional[float]:
     # keep a stale lease alive indefinitely.
     try:
         import psutil  # type: ignore
+
         return float(psutil.Process(pid).create_time())
     except Exception:
         return None
 
 
-_OWN_START: tuple[int, float] | None = None  # (pid, create_time); published atomically, re-read after fork
+_OWN_START: tuple[int, float] | None = (
+    None  # (pid, create_time); published atomically, re-read after fork
+)
 
 
 def _own_start_time() -> Optional[float]:
@@ -332,7 +369,9 @@ def _optional_float(value: Any) -> Optional[float]:
         return None
 
 
-def _pid_liveness(pid: Any, process_start_time: Any = None, *, lenient: bool = False) -> Optional[bool]:
+def _pid_liveness(
+    pid: Any, process_start_time: Any = None, *, lenient: bool = False
+) -> Optional[bool]:
     """True/False for live/dead, or None when unknowable. ``lenient`` never returns None:
     an unparseable pid or failed existence probe counts as dead, an unreadable start as alive."""
     unknown_dead = False if lenient else None
@@ -342,10 +381,13 @@ def _pid_liveness(pid: Any, process_start_time: Any = None, *, lenient: bool = F
         pid_int = 0
     if pid_int <= 0:
         return unknown_dead
-    is_self = pid_int == os.getpid()  # trivially exists; the (pid, start) identity check still applies
+    is_self = (
+        pid_int == os.getpid()
+    )  # trivially exists; the (pid, start) identity check still applies
     if not is_self:
         try:
             from gateway.status import _pid_exists
+
             if not _pid_exists(pid_int):
                 return False
         except Exception:
@@ -360,8 +402,11 @@ def _pid_liveness(pid: Any, process_start_time: Any = None, *, lenient: bool = F
 
 
 def _prune_dead(
-    entries: list[dict[str, Any]], *, strict: bool = False,
-    target_session_id: str | None = None, target_pid: int | None = None,
+    entries: list[dict[str, Any]],
+    *,
+    strict: bool = False,
+    target_session_id: str | None = None,
+    target_pid: int | None = None,
 ) -> list[dict[str, Any]]:
     """Keep entries whose owner is alive; tracked/strict entries must be provably so.
 
@@ -383,11 +428,15 @@ def _prune_dead(
         if state is None:
             if (
                 not targeted
-                or (target_session_id is not None
-                    and str(entry.get("session_id") or "") == str(target_session_id))
+                or (
+                    target_session_id is not None
+                    and str(entry.get("session_id") or "") == str(target_session_id)
+                )
                 or (target_pid is not None and entry.get("pid") == target_pid)
             ):
-                raise ActiveSessionRegistryError("active session owner liveness is unknown")
+                raise ActiveSessionRegistryError(
+                    "active session owner liveness is unknown"
+                )
             state = True
         if state:
             live.append(entry)
@@ -431,12 +480,18 @@ def _drop_lease(
 
 def _holds_session(entries: list[dict[str, Any]], session_id: str) -> bool:
     target = str(session_id or "")
-    return bool(target) and any(str(e.get("session_id") or "") == target for e in entries)
+    return bool(target) and any(
+        str(e.get("session_id") or "") == target for e in entries
+    )
 
 
 def _read_live_entries(
-    state_path: Path, *, track_liveness: bool, warn: str,
-    target_session_id: str | None = None, target_pid: int | None = None,
+    state_path: Path,
+    *,
+    track_liveness: bool,
+    warn: str,
+    target_session_id: str | None = None,
+    target_pid: int | None = None,
 ) -> Optional[tuple[list[dict[str, Any]], list[dict[str, Any]]]]:
     """``(raw, pruned)`` from the registry, or None when it is unreadable.
 
@@ -448,8 +503,10 @@ def _read_live_entries(
     try:
         raw_entries = _read_entries(state_path, strict=True)
         return raw_entries, _prune_dead(
-            raw_entries, strict=track_liveness,
-            target_session_id=target_session_id, target_pid=target_pid,
+            raw_entries,
+            strict=track_liveness,
+            target_session_id=target_session_id,
+            target_pid=target_pid,
         )
     except ActiveSessionRegistryError:
         if track_liveness:
@@ -459,8 +516,12 @@ def _read_live_entries(
 
 
 def _lease_entry(
-    *, lease_id: str, session_id: str, surface: str,
-    metadata: Optional[dict[str, Any]] = None, track_liveness: bool = False,
+    *,
+    lease_id: str,
+    session_id: str,
+    surface: str,
+    metadata: Optional[dict[str, Any]] = None,
+    track_liveness: bool = False,
 ) -> dict[str, Any]:
     now = time.time()
     entry: dict[str, Any] = {
@@ -480,8 +541,13 @@ def _lease_entry(
 
 
 def try_acquire_active_session(
-    *, session_id: str, surface: str, config: Any, metadata: Optional[dict[str, Any]] = None,
-    registry_home: str | Path | None = None, track_liveness: bool = False,
+    *,
+    session_id: str,
+    surface: str,
+    config: Any,
+    metadata: Optional[dict[str, Any]] = None,
+    registry_home: str | Path | None = None,
+    track_liveness: bool = False,
 ) -> tuple[Optional[ActiveSessionLease], Optional[str]]:
     """Acquire an active-session slot: ``(lease, None)`` or ``(None, ActiveSessionRefusal)``.
 
@@ -505,21 +571,29 @@ def try_acquire_active_session(
         ), None
 
     entry = _lease_entry(
-        lease_id=lease_id, session_id=key, surface=str(surface), metadata=metadata,
+        lease_id=lease_id,
+        session_id=key,
+        surface=str(surface),
+        metadata=metadata,
         track_liveness=track_liveness,
     )
     state_path, lock_path = _lease_paths(registry_home=registry_home)
     lease = ActiveSessionLease(
-        lease_id=lease_id, session_id=key, surface=str(surface), state_path=state_path,
-        lock_path=lock_path, track_liveness=track_liveness,
+        lease_id=lease_id,
+        session_id=key,
+        surface=str(surface),
+        state_path=state_path,
+        lock_path=lock_path,
+        track_liveness=track_liveness,
     )
     with _FileLock(lock_path):
         # A capacity cap could degrade open; exclusivity cannot: "could not
         # prove ownership" must never become "no owner exists".
         loaded = _read_live_entries(
-            state_path, track_liveness=track_liveness,
+            state_path,
+            track_liveness=track_liveness,
             warn="Active-session registry is unavailable; refusing the session "
-                 "rather than risking a concurrent writer",
+            "rather than risking a concurrent writer",
             target_session_id=key,
         )
         if loaded is None:
@@ -534,7 +608,9 @@ def try_acquire_active_session(
         if pruned:
             logger.info("Pruned %d stale active session lease(s)", pruned)
 
-        def refuse(message: str, reason: str, log: str, *args) -> tuple[None, ActiveSessionRefusal]:
+        def refuse(
+            message: str, reason: str, log: str, *args
+        ) -> tuple[None, ActiveSessionRefusal]:
             _write_entries(state_path, entries)  # persist the prune even when refusing
             logger.info(log, *args)
             return None, ActiveSessionRefusal(message, reason)
@@ -555,9 +631,12 @@ def try_acquire_active_session(
                     _write_entries(state_path, entries)
                     return lease, None
                 return refuse(
-                    session_already_owned_message(key, existing), SESSION_NOT_OWNED,
+                    session_already_owned_message(key, existing),
+                    SESSION_NOT_OWNED,
                     "Refused active session %s: already held by pid=%s surface=%s",
-                    key, existing.get("pid"), existing.get("surface"),
+                    key,
+                    existing.get("pid"),
+                    existing.get("surface"),
                 )
 
         # Capacity second, and only when an operator asked for one.
@@ -566,7 +645,9 @@ def try_acquire_active_session(
                 active_session_limit_message(len(entries), max_sessions, entries),
                 MAX_CONCURRENT_SESSIONS,
                 "Active session limit reached: active=%d max=%d surface=%s",
-                len(entries), max_sessions, surface,
+                len(entries),
+                max_sessions,
+                surface,
             )
         entries.append(entry)
         _write_entries(state_path, entries)
@@ -583,9 +664,10 @@ def release_active_session(lease: ActiveSessionLease) -> None:
         if lease.released:
             return
         loaded = _read_live_entries(
-            state_path, track_liveness=lease.track_liveness,
+            state_path,
+            track_liveness=lease.track_liveness,
             warn="Active-session registry is unavailable; preserving it while "
-                 "releasing an untracked lease",
+            "releasing an untracked lease",
             target_session_id=lease.session_id,
         )
         if loaded is not None:
@@ -594,7 +676,10 @@ def release_active_session(lease: ActiveSessionLease) -> None:
 
 
 def transfer_active_session(
-    lease: ActiveSessionLease, *, session_id: str, metadata: Optional[dict[str, Any]] = None
+    lease: ActiveSessionLease,
+    *,
+    session_id: str,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> bool:
     """Move an existing lease to a new session id without dropping the slot."""
     new_session_id = str(session_id or "")
@@ -611,25 +696,33 @@ def transfer_active_session(
         if lease.released:
             return False
         loaded = _read_live_entries(
-            state_path, track_liveness=lease.track_liveness,
+            state_path,
+            track_liveness=lease.track_liveness,
             warn="Active-session registry is unavailable; refusing to overwrite "
-                 "it during lease transfer",
+            "it during lease transfer",
             target_session_id=lease.session_id,
         )
         if loaded is None:
             return False
         entries = loaded[1]
-        own = next((e for e in entries if str(e.get("lease_id") or "") == lease.lease_id), None)
+        own = next(
+            (e for e in entries if str(e.get("lease_id") or "") == lease.lease_id), None
+        )
         if own is not None:
             own["session_id"] = new_session_id
             own["updated_at"] = time.time()
             if metadata:
                 own["metadata"] = _clean_metadata(metadata)
         elif lease.track_liveness:
-            entries.append(_lease_entry(
-                lease_id=lease.lease_id, session_id=new_session_id, surface=lease.surface,
-                metadata=metadata, track_liveness=True,
-            ))
+            entries.append(
+                _lease_entry(
+                    lease_id=lease.lease_id,
+                    session_id=new_session_id,
+                    surface=lease.surface,
+                    metadata=metadata,
+                    track_liveness=True,
+                )
+            )
         else:
             return False
         _write_entries(state_path, entries)
@@ -655,14 +748,17 @@ def _drop_self_orphans(
     pid = os.getpid()
     cutoff = time.time() - _SELF_ORPHAN_GRACE_SECONDS
     return [
-        entry for entry in entries
+        entry
+        for entry in entries
         if entry.get("pid") != pid
         or str(entry.get("lease_id") or "") in own_live_lease_ids
         or (_optional_float(entry.get("started_at")) or 0.0) > cutoff
     ]
 
 
-def _release_orphaned_leases_in_home(registry_home: Path, live_lease_ids: set[str]) -> int:
+def _release_orphaned_leases_in_home(
+    registry_home: Path, live_lease_ids: set[str]
+) -> int:
     state_path = _state_path(registry_home)
     # No registry file yet means no leases have ever been written under this
     # home — don't take a lock (or create its file) on the idle-reaper tick.
@@ -670,7 +766,8 @@ def _release_orphaned_leases_in_home(registry_home: Path, live_lease_ids: set[st
         return 0
     with _FileLock(_lock_path(registry_home)):
         loaded = _read_live_entries(
-            state_path, track_liveness=False,
+            state_path,
+            track_liveness=False,
             warn="Active-session registry is unavailable; skipping orphaned-lease sweep",
             target_pid=os.getpid(),
         )
@@ -695,7 +792,9 @@ def release_orphaned_leases(live_lease_ids: set[str]) -> int:
     root = get_default_clawk_root()
     homes = [root]
     try:
-        homes.extend(p for p in (root / "profiles").iterdir() if named_profile_is_live(p))
+        homes.extend(
+            p for p in (root / "profiles").iterdir() if named_profile_is_live(p)
+        )
     except OSError:
         pass
 
@@ -709,7 +808,9 @@ def release_orphaned_leases(live_lease_ids: set[str]) -> int:
 
 
 def active_session_registry_snapshot(
-    registry_home: str | Path | None = None, *, strict: bool = False,
+    registry_home: str | Path | None = None,
+    *,
+    strict: bool = False,
 ) -> list[dict[str, Any]]:
     """Return live leases; attachment callers require provable liveness.
 
@@ -734,7 +835,8 @@ def active_session_registry_snapshot(
         with _FileLock(lock_path):
             current_entries = _read_entries(state_path, strict=True)
             kept_entries = [
-                entry for entry in current_entries
+                entry
+                for entry in current_entries
                 if str(entry.get("lease_id") or "") not in dead_lease_ids
             ]
             if len(kept_entries) != len(current_entries):
@@ -744,7 +846,9 @@ def active_session_registry_snapshot(
 
 @contextmanager
 def active_session_liveness_guard(
-    session_id: str, *, registry_home: str | Path | None = None,
+    session_id: str,
+    *,
+    registry_home: str | Path | None = None,
     own_live_lease_ids: set[str] | None = None,
 ) -> Iterator[bool]:
     """Hold the registry lock while reporting whether ``session_id`` is leased, so no
@@ -752,7 +856,9 @@ def active_session_liveness_guard(
     state_path, lock_path = _lease_paths(registry_home=registry_home)
     with _FileLock(lock_path):
         entries = _prune_dead(
-            _read_entries(state_path, strict=True), strict=True, target_session_id=session_id,
+            _read_entries(state_path, strict=True),
+            strict=True,
+            target_session_id=session_id,
         )
         entries = _drop_self_orphans(entries, own_live_lease_ids)
         _write_entries(state_path, entries)
@@ -761,14 +867,19 @@ def active_session_liveness_guard(
 
 @contextmanager
 def release_active_session_liveness_guard(
-    lease: ActiveSessionLease, session_id: str, *, own_live_lease_ids: set[str] | None = None,
+    lease: ActiveSessionLease,
+    session_id: str,
+    *,
+    own_live_lease_ids: set[str] | None = None,
 ) -> Iterator[bool]:
     """Remove ``lease`` and hold its registry lock through a lifecycle write, making
     cleanup one atomic decision (release, check siblings, end the durable row)."""
     if not lease.enabled or lease.released:
         home = lease.state_path.parent.parent if lease.state_path is not None else None
         with active_session_liveness_guard(
-            session_id, registry_home=home, own_live_lease_ids=own_live_lease_ids,
+            session_id,
+            registry_home=home,
+            own_live_lease_ids=own_live_lease_ids,
         ) as active:
             yield active
         return
@@ -776,7 +887,9 @@ def release_active_session_liveness_guard(
     state_path, lock_path = _lease_paths(lease)
     with _FileLock(lock_path):
         entries = _prune_dead(
-            _read_entries(state_path, strict=True), strict=True, target_session_id=session_id,
+            _read_entries(state_path, strict=True),
+            strict=True,
+            target_session_id=session_id,
         )
         kept = [e for e in entries if str(e.get("lease_id") or "") != lease.lease_id]
         kept = _drop_self_orphans(kept, own_live_lease_ids)

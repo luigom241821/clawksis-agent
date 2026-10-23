@@ -11,6 +11,7 @@ _CORE_ONLY = {"local", "api_server", "webhook", "msgraph_webhook", "relay"}
 
 def _entries():
     from clawk_cli.plugins import discover_plugins
+
     discover_plugins()
     return platform_registry.all_entries()
 
@@ -36,7 +37,10 @@ def test_env_override_secrets_stay_in_terminal_secret_blocklist():
     from clawk_cli.profile_channels import config_env_table_keys
     from tools.environments.local_env_policy import _ADAPTER_SECRET_ENV
 
-    secrets = {name.upper() for name in config_env_table_keys(_entries())
-               if name.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES)}
+    secrets = {
+        name.upper()
+        for name in config_env_table_keys(_entries())
+        if name.upper().endswith(PLATFORM_SECRET_ENV_SUFFIXES)
+    }
     assert "WEIXIN_TOKEN" in secrets  # the rows were actually read
     assert sorted(secrets - _ADAPTER_SECRET_ENV) == []

@@ -16,7 +16,8 @@ def _make_cli(questions, answers, choices, active):
     cli._clarify_freetext = False
     cli._clarify_state = {
         "questions": [
-            {"qid": f"q{i}", "question": question} for i, question in enumerate(questions)
+            {"qid": f"q{i}", "question": question}
+            for i, question in enumerate(questions)
         ],
         "answers": answers,
         "answer_meta": {},

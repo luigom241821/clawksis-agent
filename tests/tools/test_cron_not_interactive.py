@@ -35,7 +35,9 @@ def test_interactive_session_keeps_presence(monkeypatch, leaked_presence):
     assert (is_cli, is_gateway, is_ask) == (True, True, True)
 
 
-def test_api_server_platform_keeps_exec_ask_for_runs_approval_bridge(monkeypatch, leaked_presence):
+def test_api_server_platform_keeps_exec_ask_for_runs_approval_bridge(
+    monkeypatch, leaked_presence
+):
     """api_server resolves approvals via ``approval.request`` → ``POST /v1/runs/{id}/approval``;
     that bridge registers a notify callback for the session, and only then does ``is_ask``
     survive — clearing it with a live bridge would turn every bridged dangerous command into

@@ -11,7 +11,9 @@ from clawk_platform import declaration
 
 
 @pytest.mark.parametrize("connection", ["live", "recycled", "lazy", "absent"])
-def test_check_fn_composes_connection_and_registered_requirement(tmp_path, monkeypatch, connection):
+def test_check_fn_composes_connection_and_registered_requirement(
+    tmp_path, monkeypatch, connection
+):
     from tools import mcp_tool, mcp_tool_handlers
     from tools.mcp_tool_scope import _resolve_server_key
 
@@ -35,8 +37,10 @@ def test_check_fn_composes_connection_and_registered_requirement(tmp_path, monke
 
     location = tmp_path / "application.exe"
     decl = declaration.parse_declaration(
-        name, {sys.platform: {"presence": "executable", "location": str(location)}},
-        {"app": True}, where="test-plugin/plugin.yaml",
+        name,
+        {sys.platform: {"presence": "executable", "location": str(location)}},
+        {"app": True},
+        where="test-plugin/plugin.yaml",
     )
     declaration.register(name, decl)
     assert check() is False

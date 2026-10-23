@@ -41,7 +41,11 @@ class _ExplodingProfile(ProviderProfile):
 def registered():
     """Register profiles for one test and restore the registry afterwards."""
     _providers._discover_providers()
-    snapshot = (dict(_providers._REGISTRY), dict(_providers._ALIASES), _providers._PROVIDER_LIST_CACHE)
+    snapshot = (
+        dict(_providers._REGISTRY),
+        dict(_providers._ALIASES),
+        _providers._PROVIDER_LIST_CACHE,
+    )
     yield _providers.register_provider
     _providers._REGISTRY.clear()
     _providers._REGISTRY.update(snapshot[0])
@@ -61,13 +65,22 @@ def _agent(provider: str = ""):
 def _build(provider, base_url):
     from agent.agent_runtime_helpers import create_openai_client
 
-    return create_openai_client(_agent(provider), {"api_key": "k", "base_url": base_url}, reason="t", shared=False)
+    return create_openai_client(
+        _agent(provider),
+        {"api_key": "k", "base_url": base_url},
+        reason="t",
+        shared=False,
+    )
 
 
-def test_an_out_of_tree_profile_supplies_the_client_through_create_openai_client(registered):
+def test_an_out_of_tree_profile_supplies_the_client_through_create_openai_client(
+    registered,
+):
     from openai import OpenAI
 
-    registered(_SeamProfile(name="seam-test", aliases=("seam",), base_url="acp://seam-test"))
+    registered(
+        _SeamProfile(name="seam-test", aliases=("seam",), base_url="acp://seam-test")
+    )
     # By name, by alias, and by base_url prefix when no provider name is set.
     assert isinstance(_build("seam-test", "acp://seam-test"), _FakeClient)
     assert isinstance(_build("seam", "acp://seam-test"), _FakeClient)
@@ -95,7 +108,10 @@ def test_skip_flags_replace_the_isinstance_checks_for_in_and_out_of_tree_clients
     from agent.copilot_acp_client import CopilotACPClient
     from agent.gemini_native_adapter import GeminiNativeClient
 
-    assert CopilotACPClient.CLAWK_SKIP_TRANSPORT_WRAP and CopilotACPClient.CLAWK_SKIP_ASYNC_WRAP
+    assert (
+        CopilotACPClient.CLAWK_SKIP_TRANSPORT_WRAP
+        and CopilotACPClient.CLAWK_SKIP_ASYNC_WRAP
+    )
     assert GeminiNativeClient.CLAWK_SKIP_TRANSPORT_WRAP
     assert not getattr(GeminiNativeClient, "CLAWK_SKIP_ASYNC_WRAP", False)
 

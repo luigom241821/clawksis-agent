@@ -117,7 +117,9 @@ async def test_upstream_authorized_a2a_input_admits_durally_with_provenance(
         user_id="peer",
         user_name="peer",
     )
-    event = _fresh_native_event(source, text="a2a task from a bearer-authenticated peer")
+    event = _fresh_native_event(
+        source, text="a2a task from a bearer-authenticated peer"
+    )
     with native_callback(runner, event, get_clawk_home()):
         receipt = await authority.admit_native(event)
     payload = list_session_admissions(
@@ -163,7 +165,9 @@ async def test_same_principal_without_adapter_declaration_is_refused_by_native_a
     )
     if forge:
         vars(source)["authorization_is_upstream"] = True
-    event = _fresh_native_event(source, text="a2a task from a bearer-authenticated peer")
+    event = _fresh_native_event(
+        source, text="a2a task from a bearer-authenticated peer"
+    )
     with native_callback(runner, event, get_clawk_home()):
         with pytest.raises(RuntimeStoreError, match="permission_denied") as refused:
             await authority.admit_native(event)

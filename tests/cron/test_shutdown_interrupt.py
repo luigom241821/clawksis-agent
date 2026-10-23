@@ -33,7 +33,6 @@ def _reset_scheduler_state():
 
 
 class TestGetRunningJobIds:
-
     def test_reflects_in_flight_jobs(self):
         import cron.scheduler as sched
 
@@ -71,7 +70,8 @@ class TestMarkRunningJobsInterrupted:
         import cron.scheduler as sched
 
         sched._running_job_ids.update(
-            {sched._inflight_key("job-1"), sched._inflight_key("job-2")})
+            {sched._inflight_key("job-1"), sched._inflight_key("job-2")}
+        )
         profile_home = sched._get_clawk_home().resolve()
         sched._running_fire_owners.update(
             {
@@ -81,7 +81,9 @@ class TestMarkRunningJobsInterrupted:
         )
 
         with patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark:
-            marked = sched.mark_running_jobs_interrupted("gateway shutdown (final-cleanup)")
+            marked = sched.mark_running_jobs_interrupted(
+                "gateway shutdown (final-cleanup)"
+            )
 
         assert sorted(marked) == ["job-1", "job-2"]
         assert mock_mark.call_count == 2
@@ -110,7 +112,8 @@ class TestMarkRunningJobsInterrupted:
         import cron.scheduler as sched
 
         sched._running_job_ids.update(
-            {sched._inflight_key("job-1"), sched._inflight_key("job-2")})
+            {sched._inflight_key("job-1"), sched._inflight_key("job-2")}
+        )
         profile_home = sched._get_clawk_home().resolve()
         sched._running_fire_owners.update(
             {
@@ -137,7 +140,9 @@ class TestMarkRunningJobsInterrupted:
         profile_home.mkdir()
         with jobs.use_cron_store(profile_home):
             created = jobs.create_job(prompt="x", schedule="every 5m", name="owned")
-            claimed = jobs.claim_job_for_fire(created["id"], force=True, return_job=True)
+            claimed = jobs.claim_job_for_fire(
+                created["id"], force=True, return_job=True
+            )
             assert isinstance(claimed, dict)
             stale_owner = claimed["fire_claim"]["by"]
             original_status = claimed["last_status"]
@@ -171,12 +176,17 @@ class TestRunningFireOwnerRegistry:
         }
 
         def _observe_registry(current_job, run):
-            assert list(sched._running_fire_owners[sched._inflight_key(current_job["id"])].values()) == [
-                ("owner-1", sched._get_clawk_home().resolve())
-            ]
+            assert list(
+                sched._running_fire_owners[
+                    sched._inflight_key(current_job["id"])
+                ].values()
+            ) == [("owner-1", sched._get_clawk_home().resolve())]
             return True
 
-        with patch("cron.scheduler._run_with_fire_claim_heartbeat", side_effect=_observe_registry):
+        with patch(
+            "cron.scheduler._run_with_fire_claim_heartbeat",
+            side_effect=_observe_registry,
+        ):
             assert sched.run_one_job(job) is True
 
         assert sched._inflight_key(job["id"]) not in sched._running_fire_owners
@@ -205,13 +215,18 @@ class TestRunningFireOwnerRegistry:
             {"id": "same-job", "fire_claim": {"by": "old-owner"}},
             {"id": "same-job", "fire_claim": {"by": "replacement-owner"}},
         ]
-        threads = [threading.Thread(target=sched.run_one_job, args=(job,)) for job in jobs]
+        threads = [
+            threading.Thread(target=sched.run_one_job, args=(job,)) for job in jobs
+        ]
         for thread in threads:
             thread.start()
         entered.wait(timeout=2)
 
         assert sched.get_running_job_ids() == frozenset({"same-job"})
-        assert sched.mark_running_jobs_interrupted("shutdown") == ["same-job", "same-job"]
+        assert sched.mark_running_jobs_interrupted("shutdown") == [
+            "same-job",
+            "same-job",
+        ]
         assert set(marked_owners) == {"old-owner", "replacement-owner"}
 
         release.set()
@@ -220,7 +235,9 @@ class TestRunningFireOwnerRegistry:
             assert not thread.is_alive()
         assert "same-job" not in sched.get_running_job_ids()
 
-    def test_shutdown_marks_each_owner_in_its_profile_store(self, monkeypatch, tmp_path):
+    def test_shutdown_marks_each_owner_in_its_profile_store(
+        self, monkeypatch, tmp_path
+    ):
         import cron.jobs as cron_jobs
         import cron.scheduler as sched
 
@@ -245,7 +262,10 @@ class TestRunningFireOwnerRegistry:
 
         monkeypatch.setattr(sched, "mark_job_run", mark)
 
-        assert sched.mark_running_jobs_interrupted("shutdown") == ["same-job", "same-job"]
+        assert sched.mark_running_jobs_interrupted("shutdown") == [
+            "same-job",
+            "same-job",
+        ]
         assert set(observed) == {
             ("same-job", False, "owner-a", profile_a / "cron" / "jobs.json"),
             ("same-job", False, "owner-b", profile_b / "cron" / "jobs.json"),
@@ -255,8 +275,6 @@ class TestRunningFireOwnerRegistry:
 class TestIsInterrupted:
     """Peek-only check used at the delivery gate -- must NOT clear the
     flag, unlike _consume_interrupted_flag."""
-
-
 
     def test_does_not_clear_the_flag(self):
         import cron.scheduler as sched
@@ -272,7 +290,6 @@ class TestIsInterrupted:
 
 
 class TestConsumeInterruptedFlag:
-
     def test_true_and_clears_when_marked(self):
         import cron.scheduler as sched
 
@@ -318,8 +335,12 @@ class TestExecutionScopedInterruption:
 
         profile_home = sched._get_clawk_home().resolve()
         token_a, token_b = object(), object()
-        sched._running_fire_owners[sched._inflight_key("job-a")] = {token_a: ("owner-a", profile_home)}
-        sched._running_fire_owners[sched._inflight_key("job-b")] = {token_b: ("owner-b", profile_home)}
+        sched._running_fire_owners[sched._inflight_key("job-a")] = {
+            token_a: ("owner-a", profile_home)
+        }
+        sched._running_fire_owners[sched._inflight_key("job-b")] = {
+            token_b: ("owner-b", profile_home)
+        }
 
         with patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark:
             marked = sched.mark_running_jobs_interrupted(
@@ -353,20 +374,22 @@ class TestExecutionScopedInterruption:
             "prompt": "do work",
             "fire_claim": {"by": "replacement-owner"},
         }
-        with patch("cron.scheduler.claim_dispatch", return_value=True), \
-             patch("agent.secret_scope.set_secret_scope", return_value=None), \
-             patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-             patch("agent.secret_scope.reset_secret_scope"), \
-             patch(
-                 "cron.scheduler.run_job",
-                 return_value=(True, "full output", "final response", None),
-             ), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._is_cron_silence_response", return_value=False), \
-             patch("cron.scheduler._deliver_result", return_value=None), \
-             patch("cron.scheduler.fire_claim_fence"), \
-             patch("cron.scheduler.heartbeat_fire_claim", return_value=True), \
-             patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark:
+        with (
+            patch("cron.scheduler.claim_dispatch", return_value=True),
+            patch("agent.secret_scope.set_secret_scope", return_value=None),
+            patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+            patch("agent.secret_scope.reset_secret_scope"),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "full output", "final response", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._is_cron_silence_response", return_value=False),
+            patch("cron.scheduler._deliver_result", return_value=None),
+            patch("cron.scheduler.fire_claim_fence"),
+            patch("cron.scheduler.heartbeat_fire_claim", return_value=True),
+            patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark,
+        ):
             result = sched.run_one_job(job)
 
         assert result is True
@@ -397,17 +420,22 @@ class TestCombinedCancelEvent:
         external = threading.Event()
         job = {"id": "job-x", "name": "x", "prompt": "p"}
 
-        with patch.object(
-            sched,
-            "_run_with_fire_claim_heartbeat",
-            side_effect=lambda job_arg, run: run(threading.Event()),
-        ), patch.object(sched, "_run_one_job_body", return_value=True) as body:
+        with (
+            patch.object(
+                sched,
+                "_run_with_fire_claim_heartbeat",
+                side_effect=lambda job_arg, run: run(threading.Event()),
+            ),
+            patch.object(sched, "_run_one_job_body", return_value=True) as body,
+        ):
             assert sched.run_one_job(job, cancel_event=external) is True
 
         kwargs = body.call_args.kwargs
         assert kwargs["transport_cancel"] is external
         # What run_job receives: the ownership handle built from the two forwarded sources.
-        combined = sched._FireOwnership(job, kwargs["claim_lost"], kwargs["transport_cancel"]).cancel_event
+        combined = sched._FireOwnership(
+            job, kwargs["claim_lost"], kwargs["transport_cancel"]
+        ).cancel_event
         assert combined.is_set() is False
         external.set()
         assert combined.is_set() is True
@@ -442,9 +470,16 @@ class TestBaseExceptionThroughOwnerFencedFlow:
         import cron.scheduler as sched
 
         p1, p2, p3, p4, p5, p6 = self._patches(asyncio.CancelledError())
-        with p1, p2, p3, p4, p5, p6, \
-             patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark, \
-             patch("cron.scheduler.finish_execution") as mock_finish:
+        with (
+            p1,
+            p2,
+            p3,
+            p4,
+            p5,
+            p6,
+            patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark,
+            patch("cron.scheduler.finish_execution") as mock_finish,
+        ):
             try:
                 sched.run_one_job(self._job())
                 raised = False
@@ -461,9 +496,16 @@ class TestBaseExceptionThroughOwnerFencedFlow:
         import cron.scheduler as sched
 
         p1, p2, p3, p4, p5, p6 = self._patches(KeyboardInterrupt())
-        with p1, p2, p3, p4, p5, p6, \
-             patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark, \
-             patch("cron.scheduler.finish_execution"):
+        with (
+            p1,
+            p2,
+            p3,
+            p4,
+            p5,
+            p6,
+            patch("cron.scheduler.mark_job_run", return_value=True) as mock_mark,
+            patch("cron.scheduler.finish_execution"),
+        ):
             try:
                 sched.run_one_job(self._job())
                 raised = False
@@ -482,9 +524,16 @@ class TestBaseExceptionThroughOwnerFencedFlow:
         import cron.scheduler as sched
 
         p1, p2, p3, p4, p5, p6 = self._patches(asyncio.CancelledError())
-        with p1, p2, p3, p4, p5, p6, \
-             patch("cron.scheduler.mark_job_run", return_value=False) as mock_mark, \
-             patch("cron.scheduler.finish_execution"):
+        with (
+            p1,
+            p2,
+            p3,
+            p4,
+            p5,
+            p6,
+            patch("cron.scheduler.mark_job_run", return_value=False) as mock_mark,
+            patch("cron.scheduler.finish_execution"),
+        ):
             try:
                 sched.run_one_job(self._job())
             except asyncio.CancelledError:
@@ -520,9 +569,14 @@ class TestCallerLossAfterClaimAcquisition:
             # one terminal write, and only its own claim is cleared.
             owner = claimed["fire_claim"]["by"]
             assert jobs.heartbeat_fire_claim(job["id"], expected_owner=owner) is True
-            assert jobs.mark_job_run(
-                job["id"], True, expected_fire_owner=owner,
-            ) is True
+            assert (
+                jobs.mark_job_run(
+                    job["id"],
+                    True,
+                    expected_fire_owner=owner,
+                )
+                is True
+            )
             refreshed = jobs.get_job(job["id"])
             assert refreshed["fire_claim"] is None
             assert refreshed["last_status"] == "ok"
@@ -541,18 +595,20 @@ class TestRunOneJobHonoursInterruptedFlag:
         job = self._make_job()
         sched._interrupted_job_ids.add(sched._inflight_key(job["id"]))
 
-        with patch("cron.scheduler.claim_dispatch", return_value=True), \
-             patch("agent.secret_scope.set_secret_scope", return_value=None), \
-             patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-             patch("agent.secret_scope.reset_secret_scope"), \
-             patch(
-                 "cron.scheduler.run_job",
-                 return_value=(True, "full output", "final response", None),
-             ), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch("cron.scheduler._is_cron_silence_response", return_value=False), \
-             patch("cron.scheduler._deliver_result", return_value=None), \
-             patch("cron.scheduler.mark_job_run") as mock_mark:
+        with (
+            patch("cron.scheduler.claim_dispatch", return_value=True),
+            patch("agent.secret_scope.set_secret_scope", return_value=None),
+            patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+            patch("agent.secret_scope.reset_secret_scope"),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "full output", "final response", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch("cron.scheduler._is_cron_silence_response", return_value=False),
+            patch("cron.scheduler._deliver_result", return_value=None),
+            patch("cron.scheduler.mark_job_run") as mock_mark,
+        ):
             result = sched.run_one_job(job)
 
         assert result is True
@@ -576,22 +632,26 @@ class TestRunOneJobHonoursInterruptedFlag:
         job = dict(self._make_job(), deliver="telegram")
         sched._interrupted_job_ids.add(sched._inflight_key(job["id"]))
 
-        with patch("cron.scheduler.claim_dispatch", return_value=True), \
-             patch("agent.secret_scope.set_secret_scope", return_value=None), \
-             patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-             patch("agent.secret_scope.reset_secret_scope"), \
-             patch(
-                 "cron.scheduler.run_job",
-                 return_value=(True, "full output", "a plausible final response", None),
-             ), \
-             patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"), \
-             patch(
-                 "cron.scheduler._summarize_cron_failure_for_delivery",
-                 return_value="This run was interrupted.",
-             ) as mock_summarize, \
-             patch("cron.scheduler._is_cron_silence_response", return_value=False), \
-             patch("cron.delivery_queue.enqueue", return_value={"status": "pending"}) as mock_deliver, \
-             patch("cron.scheduler.mark_job_run"):
+        with (
+            patch("cron.scheduler.claim_dispatch", return_value=True),
+            patch("agent.secret_scope.set_secret_scope", return_value=None),
+            patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+            patch("agent.secret_scope.reset_secret_scope"),
+            patch(
+                "cron.scheduler.run_job",
+                return_value=(True, "full output", "a plausible final response", None),
+            ),
+            patch("cron.scheduler.save_job_output", return_value="/tmp/out.md"),
+            patch(
+                "cron.scheduler._summarize_cron_failure_for_delivery",
+                return_value="This run was interrupted.",
+            ) as mock_summarize,
+            patch("cron.scheduler._is_cron_silence_response", return_value=False),
+            patch(
+                "cron.delivery_queue.enqueue", return_value={"status": "pending"}
+            ) as mock_deliver,
+            patch("cron.scheduler.mark_job_run"),
+        ):
             result = sched.run_one_job(job)
 
         assert result is True
@@ -605,19 +665,20 @@ class TestRunOneJobHonoursInterruptedFlag:
         assert delivered_content == "This run was interrupted."
         assert "plausible final response" not in delivered_content
 
-
     def test_exception_path_also_honours_interrupted_flag(self):
         import cron.scheduler as sched
 
         job = self._make_job()
         sched._interrupted_job_ids.add(sched._inflight_key(job["id"]))
 
-        with patch("cron.scheduler.claim_dispatch", return_value=True), \
-             patch("agent.secret_scope.set_secret_scope", return_value=None), \
-             patch("agent.secret_scope.build_profile_secret_scope", return_value={}), \
-             patch("agent.secret_scope.reset_secret_scope"), \
-             patch("cron.scheduler.run_job", side_effect=RuntimeError("boom")), \
-             patch("cron.scheduler.mark_job_run") as mock_mark:
+        with (
+            patch("cron.scheduler.claim_dispatch", return_value=True),
+            patch("agent.secret_scope.set_secret_scope", return_value=None),
+            patch("agent.secret_scope.build_profile_secret_scope", return_value={}),
+            patch("agent.secret_scope.reset_secret_scope"),
+            patch("cron.scheduler.run_job", side_effect=RuntimeError("boom")),
+            patch("cron.scheduler.mark_job_run") as mock_mark,
+        ):
             result = sched.run_one_job(job)
 
         assert result is False

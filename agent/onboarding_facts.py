@@ -21,10 +21,15 @@ def read_facts(*, facts_source: str = "local", locale: str | None = None) -> Fac
     host = summary()
     machine = host["machine"]
     return Facts(
-        os=_OS.get(machine.get("os_family", ""), "linux"), arch=machine.get("native_arch", ""),
-        machine_kind=host["machine_kind"], nvidia_platform=host["nvidia_platform"],
-        facts_source="remote" if facts_source == "remote" else "local", locale=locale or host["locale"],
-        plugins=tuple(onboarding_names()), tours=check_tours_enabled())
+        os=_OS.get(machine.get("os_family", ""), "linux"),
+        arch=machine.get("native_arch", ""),
+        machine_kind=host["machine_kind"],
+        nvidia_platform=host["nvidia_platform"],
+        facts_source="remote" if facts_source == "remote" else "local",
+        locale=locale or host["locale"],
+        plugins=tuple(onboarding_names()),
+        tours=check_tours_enabled(),
+    )
 
 
 def suggested_name() -> str | None:

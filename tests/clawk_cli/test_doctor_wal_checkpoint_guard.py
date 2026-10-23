@@ -24,7 +24,9 @@ def _large_wal_db(tmp_path):
     return db
 
 
-def test_doctor_checkpoint_runs_only_on_the_exclusive_repair_guard(tmp_path, monkeypatch):
+def test_doctor_checkpoint_runs_only_on_the_exclusive_repair_guard(
+    tmp_path, monkeypatch
+):
     db = _large_wal_db(tmp_path)
 
     bare_connects: list[str] = []
@@ -70,24 +72,36 @@ def test_session_count_reads_a_home_with_uri_reserved_characters(tmp_path):
     assert _session_count(db) == 2
 
 
-def test_large_wal_warning_under_a_live_writer_never_suggests_a_bare_fix(tmp_path, monkeypatch, capsys):
+def test_large_wal_warning_under_a_live_writer_never_suggests_a_bare_fix(
+    tmp_path, monkeypatch, capsys
+):
     """`clawk doctor` (no --fix) on a large WAL while Desktop/gateway hold the DB must say it is normal and
     order "stop" before any `--fix` — the bare "run 'clawk doctor --fix'" nudge is how users became the
     second writer (#110054)."""
     import clawk_state_holders
 
-    monkeypatch.setattr(clawk_state_holders, "live_writer_holds_db", lambda *a, **k: True)
+    monkeypatch.setattr(
+        clawk_state_holders, "live_writer_holds_db", lambda *a, **k: True
+    )
     finding = Finding()
     _state_db_wal(finding, False, _large_wal_db(tmp_path))
     assert len(finding.issues) == 1 and not finding.fixed
-    assert finding.issues[0].index("stop the profile's gateway") < finding.issues[0].index("clawk doctor --fix")
+    assert finding.issues[0].index("stop the profile's gateway") < finding.issues[
+        0
+    ].index("clawk doctor --fix")
 
 
-def test_large_wal_warning_without_a_holder_still_orders_stop_before_fix(tmp_path, monkeypatch):
+def test_large_wal_warning_without_a_holder_still_orders_stop_before_fix(
+    tmp_path, monkeypatch
+):
     import clawk_state_holders
 
-    monkeypatch.setattr(clawk_state_holders, "live_writer_holds_db", lambda *a, **k: False)
+    monkeypatch.setattr(
+        clawk_state_holders, "live_writer_holds_db", lambda *a, **k: False
+    )
     finding = Finding()
     _state_db_wal(finding, False, _large_wal_db(tmp_path))
     assert len(finding.issues) == 1 and not finding.fixed
-    assert finding.issues[0].index("stop the profile's gateway") < finding.issues[0].index("clawk doctor --fix")
+    assert finding.issues[0].index("stop the profile's gateway") < finding.issues[
+        0
+    ].index("clawk doctor --fix")

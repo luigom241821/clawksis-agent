@@ -2,6 +2,7 @@
 
 The host tree vs a host checkpoint is not the sandbox session's diff, so the RPC must not run
 ``mgr.diff`` once the manager classifies the task's backend as a container."""
+
 import threading
 import types
 
@@ -25,11 +26,16 @@ def test_rollback_diff_refuses_container_backed_session():
             raise AssertionError("mgr.diff must not run for a container-backed session")
 
     server._sessions["sid"] = _session(
-        agent=types.SimpleNamespace(_checkpoint_mgr=_Mgr()), session_key="container-session"
+        agent=types.SimpleNamespace(_checkpoint_mgr=_Mgr()),
+        session_key="container-session",
     )
     try:
         resp = server.handle_request(
-            {"id": "1", "method": "rollback.diff", "params": {"session_id": "sid", "hash": "abc123"}}
+            {
+                "id": "1",
+                "method": "rollback.diff",
+                "params": {"session_id": "sid", "hash": "abc123"},
+            }
         )
     finally:
         server._sessions.pop("sid", None)

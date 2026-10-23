@@ -43,13 +43,11 @@ def test_split_strips_outer_pipes_and_trims():
     assert split_table_row("a | b | c") == ["a", "b", "c"]
 
 
-
-
 def test_looks_like_table_row():
     assert looks_like_table_row("| a | b |")
-    assert looks_like_table_row("a | b | c")          # no leading pipe, ≥2 pipes
+    assert looks_like_table_row("a | b | c")  # no leading pipe, ≥2 pipes
     assert not looks_like_table_row("not a table")
-    assert not looks_like_table_row("a | b")          # one pipe, no leading pipe
+    assert not looks_like_table_row("a | b")  # one pipe, no leading pipe
     assert not looks_like_table_row("")
 
 
@@ -58,23 +56,9 @@ def test_looks_like_table_row():
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Vertical fallback for tables wider than the terminal
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_horizontal_kept_when_table_fits():
@@ -119,10 +103,6 @@ def test_vertical_fallback_wraps_long_cell_text_with_indent():
     # Every line still fits the budget.
     for line in lines:
         assert wcswidth(line) <= 60
-
-
-
-
 
 
 def test_multiple_tables_in_one_text():

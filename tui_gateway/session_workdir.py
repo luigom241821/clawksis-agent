@@ -17,7 +17,12 @@ def _normalize_completion_path(path_part: str) -> str:
     expanded = os.path.expanduser(path_part)
     if os.name != "nt":
         normalized = expanded.replace("\\", "/")
-        if len(normalized) >= 3 and normalized[1] == ":" and normalized[2] == "/" and normalized[0].isalpha():
+        if (
+            len(normalized) >= 3
+            and normalized[1] == ":"
+            and normalized[2] == "/"
+            and normalized[0].isalpha()
+        ):
             return f"/mnt/{normalized[0].lower()}/{normalized[3:]}"
     return expanded
 
@@ -37,7 +42,9 @@ def _completion_cwd(params: dict | None = None) -> str:
         profile_home = _profile_home(profile) if profile else None
     except ProfileUnavailableError:
         # Main only resolved the profile when it consulted the profile's config; keep a deleted one fatal exactly there.
-        if (client_cwd and not params.get("cwd_explicit")) or not (client_cwd or session_cwd):
+        if (client_cwd and not params.get("cwd_explicit")) or not (
+            client_cwd or session_cwd
+        ):
             raise
         profile_home = None
     if not params.get("cwd_explicit") and client_cwd:
@@ -47,14 +54,25 @@ def _completion_cwd(params: dict | None = None) -> str:
     # env var; the dashboard's in-memory gateway does NOT inherit the PTY child's bridged TERMINAL_CWD, so a configured
     # terminal.cwd is read directly.
     named_ssh = profile_home is not None and _cwd_is_remote(profile_home)
-    raw = str(client_cwd or session_cwd or _profile_default_cwd(profile_home)
-              # A named ssh profile never inherits the LAUNCH profile's host cwd: its remote default is ~.
-              or ("~" if named_ssh else "") or _launch_configured_cwd()
-              or os.environ.get("TERMINAL_CWD") or _sandbox_workspace_cwd(None) or os.getcwd())
+    raw = str(
+        client_cwd
+        or session_cwd
+        or _profile_default_cwd(profile_home)
+        # A named ssh profile never inherits the LAUNCH profile's host cwd: its remote default is ~.
+        or ("~" if named_ssh else "")
+        or _launch_configured_cwd()
+        or os.environ.get("TERMINAL_CWD")
+        or _sandbox_workspace_cwd(None)
+        or os.getcwd()
+    )
     # An ssh cwd lives on the remote host: host expansion/isdir cannot vouch for it, and ``~`` names the REMOTE
     # user's home, never this host's. The launch profile keeps main's host fast path for everything else.
     if named_ssh:
-        return raw if _is_remote_cwd_shape(raw) else (_declared_remote_profile_cwd(profile_home) or "~")
+        return (
+            raw
+            if _is_remote_cwd_shape(raw)
+            else (_declared_remote_profile_cwd(profile_home) or "~")
+        )
     if profile_home is None and raw.startswith("~") and _cwd_is_remote(None):
         return raw
     with contextlib.suppress(Exception):
@@ -86,7 +104,11 @@ def _profile_terminal_policy(profile_home) -> dict:
     unreadable profile."""
     if not profile_home:
         return {}
-    from tools.terminal_scope import TerminalPolicyUnavailable, build_profile_terminal_scope
+    from tools.terminal_scope import (
+        TerminalPolicyUnavailable,
+        build_profile_terminal_scope,
+    )
+
     try:
         return build_profile_terminal_scope(Path(profile_home))
     except TerminalPolicyUnavailable:
@@ -101,7 +123,11 @@ def _bound_terminal_backend(profile_home) -> str:
     """Terminal backend of the profile a session/RPC is bound to. A named profile reads ITS policy: at
     ``session.create`` the multiplex gateway has not rebound CLAWK_HOME yet, so ``_effective_terminal_backend()``
     would report the LAUNCH profile's backend, which must never leak into a named one."""
-    return _policy_backend(_profile_terminal_policy(profile_home)) if profile_home else _effective_terminal_backend()
+    return (
+        _policy_backend(_profile_terminal_policy(profile_home))
+        if profile_home
+        else _effective_terminal_backend()
+    )
 
 
 def _cwd_is_remote(profile_home) -> bool:
@@ -118,7 +144,9 @@ def _declared_remote_profile_cwd(profile_home) -> str | None:
     """
     policy = _profile_terminal_policy(profile_home)
     raw = str(policy.get("TERMINAL_CWD") or "").strip()
-    return raw if _policy_backend(policy) == "ssh" and _is_remote_cwd_shape(raw) else None
+    return (
+        raw if _policy_backend(policy) == "ssh" and _is_remote_cwd_shape(raw) else None
+    )
 
 
 def _is_remote_cwd_shape(raw: str) -> bool:
@@ -142,7 +170,10 @@ def _sandbox_workspace_cwd(profile_home) -> str | None:
     ``docker_mount_cwd_to_workspace`` source). ssh has its own remote-cwd rules above."""
     if profile_home:
         policy = _profile_terminal_policy(profile_home)
-        backend, raw = _policy_backend(policy), str(policy.get("TERMINAL_CWD") or "").strip()
+        backend, raw = (
+            _policy_backend(policy),
+            str(policy.get("TERMINAL_CWD") or "").strip(),
+        )
     else:
         backend = _effective_terminal_backend()
         raw = os.environ.get("TERMINAL_CWD", "").strip() or _workdir_terminal_cfg("cwd")
@@ -153,8 +184,11 @@ def _sandbox_workspace_cwd(profile_home) -> str | None:
 
 def _profile_workspace_cwd(profile_home) -> str | None:
     """A named profile's configured workspace: an ssh profile's remote dir, a host dir, else a container dir."""
-    return (_declared_remote_profile_cwd(profile_home) or _profile_configured_cwd(profile_home)
-            or (_sandbox_workspace_cwd(profile_home) if profile_home else None))
+    return (
+        _declared_remote_profile_cwd(profile_home)
+        or _profile_configured_cwd(profile_home)
+        or (_sandbox_workspace_cwd(profile_home) if profile_home else None)
+    )
 
 
 def _profile_default_cwd(profile_home) -> str | None:
@@ -174,7 +208,9 @@ def _workspace_cwd(profile_home, raw: str) -> str:
     if _cwd_is_remote(profile_home):
         if _is_remote_cwd_shape(raw):
             return raw
-        raise ValueError(f"remote working directory must be absolute or ~-relative: {raw}")
+        raise ValueError(
+            f"remote working directory must be absolute or ~-relative: {raw}"
+        )
     resolved = os.path.abspath(os.path.expanduser(raw))
     if not os.path.isdir(resolved):
         raise ValueError(f"working directory does not exist: {raw}")
@@ -230,10 +266,16 @@ _LAUNCH_CWD_NOT_A_WORKSPACE = {"desktop"}
 
 def _context_cwd_is_launch_artifact(session: dict | None) -> bool:
     """Whether the session cwd came from app launch rather than user intent."""
-    return bool(session and not session.get("explicit_cwd") and _session_source(session) in _LAUNCH_CWD_NOT_A_WORKSPACE)
+    return bool(
+        session
+        and not session.get("explicit_cwd")
+        and _session_source(session) in _LAUNCH_CWD_NOT_A_WORKSPACE
+    )
 
 
-def _resolve_create_cwd(params: dict, source: str, profile_home) -> tuple[bool, str, bool]:
+def _resolve_create_cwd(
+    params: dict, source: str, profile_home
+) -> tuple[bool, str, bool]:
     """``(explicit_cwd, session_cwd, remote_cwd)`` for a freshly created session.
 
     Only a chosen workspace persists as cwd; the launch-dir fallback is "No workspace". A
@@ -247,17 +289,22 @@ def _resolve_create_cwd(params: dict, source: str, profile_home) -> tuple[bool, 
     persists nothing and a named profile's configured ``terminal.cwd`` keeps winning.
     """
     raw_cwd = str(params.get("cwd") or "").strip()
-    remote_cwd = bool(raw_cwd) and _is_remote_cwd_shape(raw_cwd) and _cwd_is_remote(profile_home)
+    remote_cwd = (
+        bool(raw_cwd) and _is_remote_cwd_shape(raw_cwd) and _cwd_is_remote(profile_home)
+    )
     explicit_cwd = False
     with contextlib.suppress(Exception):
         explicit_cwd = bool(raw_cwd) and (
-            remote_cwd or os.path.isdir(os.path.abspath(os.path.expanduser(raw_cwd))))
+            remote_cwd or os.path.isdir(os.path.abspath(os.path.expanduser(raw_cwd)))
+        )
     session_cwd = _completion_cwd(params)
     if raw_cwd and not explicit_cwd and source == "desktop":
         if params.get("cwd_explicit"):
             explicit_cwd = True
             session_cwd = raw_cwd
-        elif session_cwd and session_cwd == os.path.abspath(os.path.expanduser(raw_cwd)):
+        elif session_cwd and session_cwd == os.path.abspath(
+            os.path.expanduser(raw_cwd)
+        ):
             explicit_cwd = True
     return explicit_cwd, session_cwd, remote_cwd
 
@@ -266,9 +313,13 @@ def _persisted_session_cwd(session: dict) -> str | None:
     """The cwd to stamp on the session's DB row, or None to leave it unset (launch-dir rule: ``_ensure_session_db_row``)."""
     if session.get("explicit_cwd"):
         return _session_cwd(session)
-    if _session_source(session) in _LAUNCH_CWD_NOT_A_WORKSPACE or _is_remote_launch_cwd(session):
+    if _session_source(session) in _LAUNCH_CWD_NOT_A_WORKSPACE or _is_remote_launch_cwd(
+        session
+    ):
         return None
-    return str(session.get("cwd") or "") or None  # the session's OWN dir, never _session_cwd's gateway-wide fallback
+    return (
+        str(session.get("cwd") or "") or None
+    )  # the session's OWN dir, never _session_cwd's gateway-wide fallback
 
 
 def _is_remote_launch_cwd(session: dict | None) -> bool:
@@ -283,7 +334,9 @@ def _is_remote_launch_cwd(session: dict | None) -> bool:
     if _cwd_is_remote(profile_home):
         return True
     cwd = str(session.get("cwd") or "")
-    return bool(cwd) and not _host_cwd_is_terminal_cwd(profile_home) and os.path.isdir(cwd)
+    return (
+        bool(cwd) and not _host_cwd_is_terminal_cwd(profile_home) and os.path.isdir(cwd)
+    )
 
 
 def _host_cwd_is_terminal_cwd(profile_home) -> bool:
@@ -295,14 +348,18 @@ def _host_cwd_is_terminal_cwd(profile_home) -> bool:
     if backend in {"local", "docker"}:
         return True
     from tools.terminal_tool_config import _BUILTIN_BACKENDS
+
     if backend in _BUILTIN_BACKENDS:
         return False
     # An unknown or unloaded plugin is treated as remote: sending it a host path is the failure this guards. The
     # registry is read in the session's OWN profile scope: callers (session.create) run before that home is bound.
     from agent.terminal_env_registry import provider_flag
+
     scope = str(profile_home) if profile_home else None
-    return not (provider_flag(backend, "is_remote", True, scope=scope)
-                or provider_flag(backend, "is_container", True, scope=scope))
+    return not (
+        provider_flag(backend, "is_remote", True, scope=scope)
+        or provider_flag(backend, "is_container", True, scope=scope)
+    )
 
 
 def _is_clawk_owned_cwd(cwd: str, profile_home) -> bool:
@@ -320,7 +377,9 @@ def _is_clawk_owned_cwd(cwd: str, profile_home) -> bool:
         roots = {home.resolve(), get_default_clawk_root(home=home).resolve()}
     except (OSError, RuntimeError):
         return False
-    return any(path == root or root in path.parents for root in roots) or _is_install_tree(path)
+    return any(
+        path == root or root in path.parents for root in roots
+    ) or _is_install_tree(path)
 
 
 def _is_launch_dir(cwd: str, profile_home) -> bool:
@@ -337,8 +396,15 @@ def _is_launch_dir(cwd: str, profile_home) -> bool:
         path = Path(cwd).resolve()
         home = Path(profile_home or get_clawk_home()).expanduser().resolve()
         root = get_default_clawk_root(home=home).resolve()
-        launch = {home, home / "home", root, root / "home", Path(path.anchor),
-                  Path(get_real_home()).resolve(), Path.home().resolve()}
+        launch = {
+            home,
+            home / "home",
+            root,
+            root / "home",
+            Path(path.anchor),
+            Path(get_real_home()).resolve(),
+            Path.home().resolve(),
+        }
     except (OSError, RuntimeError):
         return False
     return path in launch or _is_install_tree(path)
@@ -361,7 +427,11 @@ def _is_other_profiles_cwd(cwd: str, profile_home) -> bool:
         return False
     if path == own or own in path.parents:
         return False
-    return path in (root, root / "home") or (root / "profiles") in path.parents or _is_install_tree(path)
+    return (
+        path in (root, root / "home")
+        or (root / "profiles") in path.parents
+        or _is_install_tree(path)
+    )
 
 
 def _resumable_stored_cwd(cwd, profile_home) -> str:
@@ -374,8 +444,12 @@ def _resumable_stored_cwd(cwd, profile_home) -> str:
     cwd = str(cwd or "")
     if cwd and _cwd_is_remote(profile_home) and _is_clawk_owned_cwd(cwd, profile_home):
         return ""
-    if cwd and not _cwd_is_remote(profile_home) and not _host_cwd_is_terminal_cwd(profile_home) \
-            and _is_launch_dir(cwd, profile_home):
+    if (
+        cwd
+        and not _cwd_is_remote(profile_home)
+        and not _host_cwd_is_terminal_cwd(profile_home)
+        and _is_launch_dir(cwd, profile_home)
+    ):
         return ""
     if cwd and _is_other_profiles_cwd(cwd, profile_home):
         return ""
@@ -409,7 +483,11 @@ def _session_is_local_backend(session: dict | None) -> bool:
     whatever the launch process runs (one multiplexed gateway serves many profiles), and a per-profile gateway
     (``clawk -p x``) may set ``terminal.backend: ssh`` in config without ``TERMINAL_ENV``: an env-only check would
     heal a live remote cwd to its nearest host ancestor (``/home``) and persist that."""
-    if session and session.get("profile_home") and _bound_terminal_backend(session["profile_home"]) != "local":
+    if (
+        session
+        and session.get("profile_home")
+        and _bound_terminal_backend(session["profile_home"]) != "local"
+    ):
         return False
     # Otherwise the launch backend, env or config: an in-process gateway (no TERMINAL_ENV bridge) under
     # ``terminal.backend: docker`` holds a container cwd (``/workspace``) that healing would walk up to ``/``.
@@ -450,12 +528,15 @@ def _reconcile_session_cwd_from_terminal(session: dict | None) -> bool:
     # ANY session whose cwd exists on disk, so keying the pin on it made every desktop session — all of which are
     # created with a workspace — unfollowable, which is exactly the agent-made-a-worktree case this reconcile exists
     # for.
-    if not session or (session.get("cwd_pinned") and not session.get("cwd_from_settle")):
+    if not session or (
+        session.get("cwd_pinned") and not session.get("cwd_from_settle")
+    ):
         return False
     if not _session_is_local_backend(session):
         return False
     try:
         from tools.terminal_tool import get_session_cwd
+
         if not (recorded := get_session_cwd(session.get("session_key") or "")):
             return False
     except Exception:
@@ -511,6 +592,7 @@ def _register_session_cwd(session: dict | None) -> None:
         hints.rebind_working_dir(str(session.get("cwd")))
     with contextlib.suppress(Exception):
         from tools.terminal_tool import register_task_env_overrides
+
         cwd, cwd_source = _terminal_task_cwd_with_source(session)
         # The cwd/override record is keyed by the ROUTED home (#123989). session.create is a plain
         # @method, so bind the session's own profile home here or the record lands under the raw key
@@ -520,9 +602,16 @@ def _register_session_cwd(session: dict | None) -> None:
 
         with contextlib.ExitStack() as stack:
             profile_home = session.get("profile_home")
-            if profile_home and hc.clawk_home_key(hc.get_clawk_home()) != hc.clawk_home_key(profile_home):
-                stack.callback(hc.reset_clawk_home_override, hc.set_clawk_home_override(str(profile_home)))
-            register_task_env_overrides(session["session_key"], {"cwd": cwd, "cwd_source": cwd_source})
+            if profile_home and hc.clawk_home_key(
+                hc.get_clawk_home()
+            ) != hc.clawk_home_key(profile_home):
+                stack.callback(
+                    hc.reset_clawk_home_override,
+                    hc.set_clawk_home_override(str(profile_home)),
+                )
+            register_task_env_overrides(
+                session["session_key"], {"cwd": cwd, "cwd_source": cwd_source}
+            )
 
 
 def _workdir_row_model_config(session: dict) -> tuple[str, dict]:
@@ -531,20 +620,31 @@ def _workdir_row_model_config(session: dict) -> tuple[str, dict]:
     global default here wins the INSERT-OR-IGNORE race (a reconnect silently reverts to the profile default).
     model_config carries provider/reasoning/service_tier so resume restores effort + fast too."""
     override = raw if isinstance(raw := session.get("model_override"), dict) else {}
-    row_model = str(override.get("model") or "").strip() or _session_default_route(session)[0]
-    model_config: dict = {k: str(v) for k in ("model", "provider", "base_url", "api_mode") if (v := override.get(k))}
+    row_model = (
+        str(override.get("model") or "").strip() or _session_default_route(session)[0]
+    )
+    model_config: dict = {
+        k: str(v)
+        for k in ("model", "provider", "base_url", "api_mode")
+        if (v := override.get(k))
+    }
     # A RESOLVED provider "custom" (named ``providers:``/``custom_providers:`` entry) persisted bare here is the origin
     # of "No LLM provider configured" rows (resume routes to OpenRouter with no key). Recover the durable
     # ``custom:<name>`` identity (matches _runtime_model_config).
     if str(model_config.get("provider") or "").strip().lower() == "custom":
         try:
             from clawk_cli.runtime_provider import canonical_custom_identity
+
             healed = canonical_custom_identity(
-                base_url=model_config.get("base_url") or None, model=model_config.get("model") or row_model or None)
+                base_url=model_config.get("base_url") or None,
+                model=model_config.get("model") or row_model or None,
+            )
             if healed:
                 model_config["provider"] = healed
         except Exception:
-            logger.debug("custom provider identity recovery failed (db row)", exc_info=True)
+            logger.debug(
+                "custom provider identity recovery failed (db row)", exc_info=True
+            )
     if (reasoning := session.get("create_reasoning_override")) is not None:
         model_config["reasoning_config"] = reasoning
     if (service_tier := session.get("create_service_tier_override")) is not None:
@@ -561,7 +661,10 @@ def _workdir_row_model_config(session: dict) -> tuple[str, dict]:
             model_config[flag] = True
     if isinstance(composer_profile := session.get("composer_override_profile"), dict):
         model_config["composer_override_profile"] = composer_profile
-    from tools.approval_yolo import with_session_yolo  # a /yolo toggled before the row existed
+    from tools.approval_yolo import (
+        with_session_yolo,
+    )  # a /yolo toggled before the row existed
+
     return row_model, with_session_yolo(model_config, session.get("session_key") or "")
 
 
@@ -594,8 +697,12 @@ def _ensure_session_db_row(session: dict) -> bool:
         row_model, model_config = _workdir_row_model_config(session)
         try:
             db.create_session(
-                key, source=_session_source(session), model=row_model, model_config=model_config or None,
-                parent_session_id=session.get("parent_session_id") or None, cwd=_persisted_session_cwd(session),
+                key,
+                source=_session_source(session),
+                model=row_model,
+                model_config=model_config or None,
+                parent_session_id=session.get("parent_session_id") or None,
+                cwd=_persisted_session_cwd(session),
                 # The login this session was opened under, in the same ``<provider>:<id>`` form the agent is
                 # built with — the row is the only place the identity reaches the store, and the upsert can't
                 # add it later (user_id is set at insert). None (no password provider, legacy token, stdio)
@@ -607,8 +714,12 @@ def _ensure_session_db_row(session: dict) -> bool:
                 # #94724 legacy-owner backfill exists to repair, and rows minted AFTER that one-shot
                 # backfill ran stayed NULL forever: profile-keyed matching then drops them from the sidebar
                 # and deep links can't resolve them (#99222).
-                profile_name=profile_name_for_home(profile_home) or _current_profile_name())
-            _persist_session_project_id(session, key)  # chat project (Clawksis), once the row exists
+                profile_name=profile_name_for_home(profile_home)
+                or _current_profile_name(),
+            )
+            _persist_session_project_id(
+                session, key
+            )  # chat project (Clawksis), once the row exists
             # Born hidden (session.create hidden=true, or set_hidden before the row existed): apply the deferred intent.
             if session.get("pending_hidden"):
                 try:
@@ -648,6 +759,7 @@ def _schedule_row_git_meta(session: dict, key: str, db) -> None:
 def _workdir_reraise_disk_full(exc: BaseException, log_msg: str) -> None:
     """Re-raise a disk-full write error (the caller must surface it); debug-log the rest."""
     from clawk_state_errors import is_disk_full_error
+
     if is_disk_full_error(exc):
         raise exc
     logger.debug(log_msg, exc_info=True)
@@ -656,8 +768,16 @@ def _workdir_reraise_disk_full(exc: BaseException, log_msg: str) -> None:
 # Seed row fields copied from the parent transcript. display_kind/metadata: timeline markers ride as role=user;
 # dropping the tag re-plants them as bare user turns after a restart and corrupts the truncate ordinal address space.
 _WORKDIR_SEED_FIELDS = (
-    "content", "reasoning", "reasoning_content", "reasoning_details", "codex_reasoning_items",
-    "codex_message_items", "display_kind", "display_metadata", "timestamp")
+    "content",
+    "reasoning",
+    "reasoning_content",
+    "reasoning_details",
+    "codex_reasoning_items",
+    "codex_message_items",
+    "display_kind",
+    "display_metadata",
+    "timestamp",
+)
 
 
 def _persist_branch_seed(session: dict) -> None:
@@ -667,14 +787,25 @@ def _persist_branch_seed(session: dict) -> None:
     once: at create for a seeded session, else at the first submit after ``_ensure_session_db_row`` wrote the
     row. ``seeded`` is stamped by session.create; a resumed session carries its stored transcript in
     ``history`` and must never re-append it."""
-    if not (key := session.get("session_key")) or not session.get("seeded") or session.get("_branch_seed_persisted"):
+    if (
+        not (key := session.get("session_key"))
+        or not session.get("seeded")
+        or session.get("_branch_seed_persisted")
+    ):
         return
     from agent.message_metadata import message_identity
     from agent.transcript_repair import sync_flushed_message_markers
+
     with session["history_lock"]:  # message_identity stamps the live dicts
         live = list(session.get("history") or [])
-        seed = [{"role": msg.get("role", "user"), **{f: msg.get(f) for f in _WORKDIR_SEED_FIELDS},
-                 **message_identity(msg)} for msg in live]
+        seed = [
+            {
+                "role": msg.get("role", "user"),
+                **{f: msg.get(f) for f in _WORKDIR_SEED_FIELDS},
+                **message_identity(msg),
+            }
+            for msg in live
+        ]
     if not seed:
         return
     with _session_db(session) as db:
@@ -715,7 +846,9 @@ def _submit_row_target_key(session: dict) -> str:
     queue merge, the drain deactivation — reads the same key instead of re-deriving one that a rotation
     can invalidate mid-turn.
     """
-    return str(getattr(session.get("agent"), "session_id", None) or "") or str(session.get("session_key") or "")
+    return str(getattr(session.get("agent"), "session_id", None) or "") or str(
+        session.get("session_key") or ""
+    )
 
 
 # Wire-sanitizer-safe key carrying the session the submit row was actually written under. Mirrors
@@ -731,8 +864,12 @@ def _submit_row_owner_key(staged: dict, session: dict) -> str:
     return recorded or _submit_row_target_key(session)
 
 
-def _write_submit_user_row(session: dict, text: Any, display_kind: str | None,
-                           accept_metadata: dict | None = None) -> dict | None:
+def _write_submit_user_row(
+    session: dict,
+    text: Any,
+    display_kind: str | None,
+    accept_metadata: dict | None = None,
+) -> dict | None:
     """Write the submitted user turn to the transcript and RETURN the durable dict (stamped
     ``_DB_PERSISTED_MARKER``/``_row_id``) WITHOUT slotting it on the session. The write half of
     :func:`_persist_submit_user_row`, shared by the busy-queue accept (which attaches the dict to
@@ -747,6 +884,7 @@ def _write_submit_user_row(session: dict, text: Any, display_kind: str | None,
         return None
     from agent.context_compressor import _DB_PERSISTED_MARKER
     from agent.message_metadata import stamp_message_timestamp, stamp_message_uid
+
     staged = stamp_message_timestamp({"role": "user", "content": text})
     if display_kind:
         staged["display_kind"] = display_kind
@@ -758,9 +896,16 @@ def _write_submit_user_row(session: dict, text: Any, display_kind: str | None,
         target = _submit_row_target_key(session)
         try:
             staged["_row_id"] = db.append_message(
-                target, "user", content=text, display_kind=display_kind, timestamp=staged["timestamp"],
-                message_uid=stamp_message_uid(staged),  # the live dict the turn adopts carries the row's uid
-                display_metadata=staged.get("display_metadata"))
+                target,
+                "user",
+                content=text,
+                display_kind=display_kind,
+                timestamp=staged["timestamp"],
+                message_uid=stamp_message_uid(
+                    staged
+                ),  # the live dict the turn adopts carries the row's uid
+                display_metadata=staged.get("display_metadata"),
+            )
         except Exception as exc:
             _workdir_reraise_disk_full(exc, "submit-time user row persist failed")
             return None
@@ -771,8 +916,12 @@ def _write_submit_user_row(session: dict, text: Any, display_kind: str | None,
     return staged
 
 
-def _persist_submit_user_row(session: dict, text: Any, display_kind: str | None,
-                             accept_metadata: dict | None = None) -> None:
+def _persist_submit_user_row(
+    session: dict,
+    text: Any,
+    display_kind: str | None,
+    accept_metadata: dict | None = None,
+) -> None:
     """Write the submitted user turn at send time, before the agent build and turn: the agent's own
     crash persist only runs once the build finished, so quitting a frozen app during a slow first build
     left a session row with no message (#111868). The dict is staged on the session already stamped
@@ -780,12 +929,18 @@ def _persist_submit_user_row(session: dict, text: Any, display_kind: str | None,
     ``_stage_turn_user_message`` and the flush writes no second row. A failed write stages nothing:
     the turn's crash persist then writes the row as before. ``accept_metadata`` marks a row that
     belongs to a still-QUEUED envelope (#125577); a dispatching turn's row is never marked."""
-    session.pop("_submit_user_row", None)  # a failed/unsupported write must not acknowledge an older send
-    if (staged := _write_submit_user_row(session, text, display_kind, accept_metadata)) is not None:
+    session.pop(
+        "_submit_user_row", None
+    )  # a failed/unsupported write must not acknowledge an older send
+    if (
+        staged := _write_submit_user_row(session, text, display_kind, accept_metadata)
+    ) is not None:
         session["_submit_user_row"] = staged
 
 
-def _adopt_submit_user_row(session: dict, agent, persist_user_message: Any, text: Any) -> None:
+def _adopt_submit_user_row(
+    session: dict, agent, persist_user_message: Any, text: Any
+) -> None:
     """Hand the row written at submit to the turn as its user dict (``agent._pending_cli_user_message``,
     adopted by ``_stage_turn_user_message`` when the content matches). A prompt the prologue rewrote
     (@-expansion, image parts) first updates that row so the durable transcript replays what the model
@@ -797,6 +952,7 @@ def _adopt_submit_user_row(session: dict, agent, persist_user_message: Any, text
         return
     if staged["content"] != persist_user_message:
         from agent.session_persistence import _durable_content
+
         with _session_db(session) as db:
             if db is None:
                 return
@@ -805,13 +961,19 @@ def _adopt_submit_user_row(session: dict, agent, persist_user_message: Any, text
                 # a rotated-away ``session_key`` would miss that row's session_id and silently skip the
                 # rewrite, leaving the transcript replaying the raw keystrokes.
                 db.set_user_message_content(
-                    _submit_row_owner_key(staged, session), staged["_row_id"],
-                    _durable_content(persist_user_message))
+                    _submit_row_owner_key(staged, session),
+                    staged["_row_id"],
+                    _durable_content(persist_user_message),
+                )
             except Exception:
-                logger.debug("submit-time user row update failed; the turn writes its own row", exc_info=True)
+                logger.debug(
+                    "submit-time user row update failed; the turn writes its own row",
+                    exc_info=True,
+                )
                 return
         staged["content"] = persist_user_message
     from agent.session_persistence import _persist_lock
+
     with _persist_lock(agent):
         agent._pending_cli_user_message = staged
 
@@ -827,6 +989,7 @@ def _workdir_owner_db(session: dict, fail_log: str):
     if profile_home := session.get("profile_home"):
         try:
             from clawk_state_registry import acquire
+
             db, close_db = acquire(Path(profile_home) / "state.db"), True
         except Exception:
             logger.debug(fail_log, exc_info=True)
@@ -839,6 +1002,7 @@ def _workdir_owner_db(session: dict, fail_log: str):
         if close_db and db is not None:
             with contextlib.suppress(Exception):
                 from clawk_state_registry import release_or_close
+
                 release_or_close(db)
 
 
@@ -851,14 +1015,21 @@ def _session_db(session: dict):
 
 
 def _rewind_active_session_history(
-    session: dict, user_ordinal: int, *, require_retryable: bool = False) -> tuple[list[dict], dict, int]:
+    session: dict, user_ordinal: int, *, require_retryable: bool = False
+) -> tuple[list[dict], dict, int]:
     """Rewind one canonical user turn while retaining carrier scaffolding. Caller holds ``history_lock``. Persistent
     sessions go through ``SessionDB.rewind_user_turn`` (the durable transcript is the authority; memory is installed
     only after the commit); a session without a key rewinds the warm history alone."""
-    from agent.context_compressor import history_before_user_originated_turn, retryable_user_text, user_originated_turn_view
+    from agent.context_compressor import (
+        history_before_user_originated_turn,
+        retryable_user_text,
+        user_originated_turn_view,
+    )
 
     history = _history_without_ephemeral_scaffolding(session.get("history", []))
-    user_indices = [i for i, m in enumerate(history) if user_originated_turn_view(m) is not None]
+    user_indices = [
+        i for i, m in enumerate(history) if user_originated_turn_view(m) is not None
+    ]
     if user_ordinal < 0 or user_ordinal >= len(user_indices):
         raise ValueError("target user message is no longer in session history")
     session_key = str(session.get("session_key") or "").strip()
@@ -867,12 +1038,22 @@ def _rewind_active_session_history(
             if db is None:
                 raise RuntimeError("session database is unavailable")
             outcome = db.rewind_user_turn(
-                session_key, user_ordinal, warm_history=history, require_retryable=require_retryable,
-                adopt_row_ids=True)
-        installed, live_view, rewound_count = outcome.prefix, outcome.live_view, outcome.rewound_count
+                session_key,
+                user_ordinal,
+                warm_history=history,
+                require_retryable=require_retryable,
+                adopt_row_ids=True,
+            )
+        installed, live_view, rewound_count = (
+            outcome.prefix,
+            outcome.live_view,
+            outcome.rewound_count,
+        )
     else:
         target_index = user_indices[user_ordinal]
-        installed, live_view = history_before_user_originated_turn(history, target_index)
+        installed, live_view = history_before_user_originated_turn(
+            history, target_index
+        )
         rewound_count = len(history) - target_index
         if require_retryable:
             retryable_user_text(live_view.get("content"))
@@ -893,12 +1074,19 @@ def _rewind_active_session_history(
 def _history_without_ephemeral_scaffolding(history: list[dict]) -> list[dict]:
     """Return the durable transcript shape without transient recovery rows."""
     from agent.session_persistence import _is_ephemeral_scaffolding
-    return [message.copy() for message in history if not _is_ephemeral_scaffolding(message)]
+
+    return [
+        message.copy() for message in history if not _is_ephemeral_scaffolding(message)
+    ]
 
 
 def _workdir_valid_generation(generation) -> bool:
     """A claimed DB probe generation: a positive int (bool excluded)."""
-    return not isinstance(generation, bool) and isinstance(generation, int) and generation >= 1
+    return (
+        not isinstance(generation, bool)
+        and isinstance(generation, int)
+        and generation >= 1
+    )
 
 
 def _persist_session_git_meta(session: dict, cwd: str, generation: int) -> None:
@@ -909,7 +1097,10 @@ def _persist_session_git_meta(session: dict, cwd: str, generation: int) -> None:
     if not session_key or not cwd or not _workdir_valid_generation(generation):
         return
     # Snapshot routing fields; the live session dict may be gone when the thread runs.
-    db_session = {"session_key": session_key, "profile_home": session.get("profile_home")}
+    db_session = {
+        "session_key": session_key,
+        "profile_home": session.get("profile_home"),
+    }
 
     def _run() -> None:
         try:
@@ -918,20 +1109,28 @@ def _persist_session_git_meta(session: dict, cwd: str, generation: int) -> None:
                 return
             with _session_db(db_session) as db:
                 if db is not None:
-                    db.publish_session_git_metadata(session_key, cwd, generation, branch, root)
+                    db.publish_session_git_metadata(
+                        session_key, cwd, generation, branch, root
+                    )
         except Exception:
             logger.debug("failed to persist session git metadata", exc_info=True)
 
     threading.Thread(target=_run, name="git-meta", daemon=True).start()
 
 
-def _persist_session_cwd_and_schedule_git_meta(session: dict, cwd: str, *, db=None) -> int | None:
+def _persist_session_cwd_and_schedule_git_meta(
+    session: dict, cwd: str, *, db=None
+) -> int | None:
     """Claim a DB-backed probe generation, then start Git enrichment."""
     try:
-        with (contextlib.nullcontext(db) if db is not None else _session_db(session)) as owner_db:
+        with (
+            contextlib.nullcontext(db) if db is not None else _session_db(session)
+        ) as owner_db:
             if owner_db is None:
                 return None
-            generation = owner_db.update_session_cwd(session.get("session_key", ""), cwd)
+            generation = owner_db.update_session_cwd(
+                session.get("session_key", ""), cwd
+            )
     except Exception:
         logger.debug("failed to persist session cwd", exc_info=True)
         return None
@@ -943,16 +1142,20 @@ def _persist_session_cwd_and_schedule_git_meta(session: dict, cwd: str, *, db=No
 
 def _set_session_cwd(session: dict, cwd: str) -> str:
     from clawk_constants import translate_cwd_for_wsl_backend
+
     cwd = translate_cwd_for_wsl_backend(str(cwd))
     resolved = _workspace_cwd(session.get("profile_home"), cwd)
     # An explicit user choice: persisted as the workspace (not the launch-dir fallback), superseding a settle-adopted
     # cwd — and PINNED, so the settle reconcile cannot drag it to another worktree the agent merely visited.
-    session.update(cwd=resolved, explicit_cwd=True, cwd_pinned=True, cwd_from_settle=False)
+    session.update(
+        cwd=resolved, explicit_cwd=True, cwd_pinned=True, cwd_from_settle=False
+    )
     _register_session_cwd(session)
     # The synchronous DB write claims ordering authority; git probes may publish only for that exact generation.
     _persist_session_cwd_and_schedule_git_meta(session, resolved)
     with contextlib.suppress(Exception):
         from tools.terminal_tool_lifecycle import cleanup_vm
+
         cleanup_vm(session["session_key"])
     return resolved
 

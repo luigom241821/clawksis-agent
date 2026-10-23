@@ -15,13 +15,13 @@ from typing import Any, Callable, Dict
 # Pattern lifted from PR #14965.
 _INVISIBLE_RE = re.compile(
     "["
-    "\u200b"          # Zero-Width Space
-    "\u200c"          # Zero-Width Non-Joiner
-    "\u200d"          # Zero-Width Joiner (ZWJ)
-    "\u200e\u200f"    # LTR / RTL marks
-    "\u2060"          # Word Joiner
-    "\ufeff"          # BOM / Zero-Width No-Break Space
-    "\ufe00-\ufe0f"   # Variation Selectors 1-16 (VS1–VS16)
+    "\u200b"  # Zero-Width Space
+    "\u200c"  # Zero-Width Non-Joiner
+    "\u200d"  # Zero-Width Joiner (ZWJ)
+    "\u200e\u200f"  # LTR / RTL marks
+    "\u2060"  # Word Joiner
+    "\ufeff"  # BOM / Zero-Width No-Break Space
+    "\ufe00-\ufe0f"  # Variation Selectors 1-16 (VS1–VS16)
     "\U000e0100-\U000e01ef"  # Variation Selectors 17-256
     "]"
 )
@@ -49,12 +49,19 @@ def format_message(content: str) -> str:
     text = re.sub(r"(```(?:[^\n]*\n)?[\s\S]*?```)", lambda m: _ph(m.group(0)), text)
     text = re.sub(r"(`[^`]+`)", lambda m: _ph(m.group(0)), text)
     # Headers (## Title) → *Title* (Chat has no header support).
-    text = re.sub(r"^#{1,6}\s+(.+)$", lambda m: _ph(f"*{m.group(1).strip()}*"), text, flags=re.MULTILINE)
+    text = re.sub(
+        r"^#{1,6}\s+(.+)$",
+        lambda m: _ph(f"*{m.group(1).strip()}*"),
+        text,
+        flags=re.MULTILINE,
+    )
     # ***text*** → *_text_*, then **text** → *text*.
     text = re.sub(r"\*\*\*(.+?)\*\*\*", lambda m: _ph(f"*_{m.group(1)}_*"), text)
     text = re.sub(r"\*\*(.+?)\*\*", lambda m: _ph(f"*{m.group(1)}*"), text)
     # [text](url) → <url|text> (Slack-style angle-bracket).
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", lambda m: _ph(f"<{m.group(2)}|{m.group(1)}>"), text)
+    text = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)", lambda m: _ph(f"<{m.group(2)}|{m.group(1)}>"), text
+    )
     text = _INVISIBLE_RE.sub("", text)
     # Collapse double spaces left over from stripped chars.
     text = re.sub(r"  +", " ", text)
@@ -71,7 +78,9 @@ def _required_str(mapping: dict[str, Any], key: str, context: str) -> str:
     return value
 
 
-def _copy_opt(dst: dict[str, Any], src: dict[str, Any], *keys: tuple[str, str]) -> dict[str, Any]:
+def _copy_opt(
+    dst: dict[str, Any], src: dict[str, Any], *keys: tuple[str, str]
+) -> dict[str, Any]:
     """Copy truthy ``src[src_key]`` into ``dst[dst_key]`` as str, in the given order."""
     for src_key, dst_key in keys:
         if src.get(src_key):
@@ -92,19 +101,37 @@ def _button_to_chat(button: dict[str, Any]) -> dict[str, Any]:
     raw_params = button.get("parameters") or {}
     if not isinstance(raw_params, dict):
         raise ValueError("button.parameters must be an object")
-    parameters = [{"key": str(key), "value": str(value)} for key, value in sorted(raw_params.items())]
-    return {"text": text, "onClick": {"action": {"function": action, "parameters": parameters}}}
+    parameters = [
+        {"key": str(key), "value": str(value)}
+        for key, value in sorted(raw_params.items())
+    ]
+    return {
+        "text": text,
+        "onClick": {"action": {"function": action, "parameters": parameters}},
+    }
 
 
 def _text_widget(widget: dict[str, Any]) -> dict[str, Any]:
-    return {"textParagraph": {"text": format_message(_required_str(widget, "text", "widget"))}}
+    return {
+        "textParagraph": {
+            "text": format_message(_required_str(widget, "text", "widget"))
+        }
+    }
 
 
 def _decorated_text_widget(widget: dict[str, Any]) -> dict[str, Any]:
     decorated: dict[str, Any] = {
         "text": format_message(_required_str(widget, "text", "widget")),
-        "wrapText": bool(widget.get("wrap_text", True))}
-    return {"decoratedText": _copy_opt(decorated, widget, ("top_label", "topLabel"), ("bottom_label", "bottomLabel"))}
+        "wrapText": bool(widget.get("wrap_text", True)),
+    }
+    return {
+        "decoratedText": _copy_opt(
+            decorated,
+            widget,
+            ("top_label", "topLabel"),
+            ("bottom_label", "bottomLabel"),
+        )
+    }
 
 
 def _image_widget(widget: dict[str, Any]) -> dict[str, Any]:
@@ -113,7 +140,9 @@ def _image_widget(widget: dict[str, Any]) -> dict[str, Any]:
 
 
 def _buttons_widget(widget: dict[str, Any]) -> dict[str, Any]:
-    raw_buttons = _required_list(widget, "buttons", "button widgets require at least one button")
+    raw_buttons = _required_list(
+        widget, "buttons", "button widgets require at least one button"
+    )
     return {"buttonList": {"buttons": [_button_to_chat(btn) for btn in raw_buttons]}}
 
 
@@ -123,18 +152,23 @@ def _selection_item(item: Any) -> dict[str, Any]:
     return {
         "text": _required_str(item, "text", "selection item"),
         "value": _required_str(item, "value", "selection item"),
-        "selected": bool(item.get("selected", False))}
+        "selected": bool(item.get("selected", False)),
+    }
 
 
 def _selection_widget(widget: dict[str, Any]) -> dict[str, Any]:
     name = _required_str(widget, "name", "widget")
-    raw_items = _required_list(widget, "items", "selection widgets require at least one item")
+    raw_items = _required_list(
+        widget, "items", "selection widgets require at least one item"
+    )
     return {
         "selectionInput": {
             "name": name,
             "label": str(widget.get("label") or name),
             "type": str(widget.get("selection_type") or "CHECK_BOX"),
-            "items": [_selection_item(item) for item in raw_items]}}
+            "items": [_selection_item(item) for item in raw_items],
+        }
+    }
 
 
 _WIDGET_RENDERERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
@@ -163,7 +197,9 @@ def _widget_to_chat(widget: dict[str, Any]) -> dict[str, Any]:
 def _section_to_chat(section: Any) -> dict[str, Any]:
     if not isinstance(section, dict):
         raise ValueError("card sections must be objects")
-    widgets = _required_list(section, "widgets", "card section widgets must contain at least one widget")
+    widgets = _required_list(
+        section, "widgets", "card section widgets must contain at least one widget"
+    )
     rendered: dict[str, Any] = {"widgets": [_widget_to_chat(w) for w in widgets]}
     return _copy_opt(rendered, section, ("header", "header"))
 
@@ -182,7 +218,9 @@ def _header_to_chat(header: Any) -> dict[str, Any]:
 def card_spec_to_cards_v2(card_spec: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(card_spec, dict):
         raise ValueError("card must be an object")
-    raw_sections = _required_list(card_spec, "sections", "card.sections must contain at least one section")
+    raw_sections = _required_list(
+        card_spec, "sections", "card.sections must contain at least one section"
+    )
     card: dict[str, Any] = {"sections": [_section_to_chat(s) for s in raw_sections]}
     header = card_spec.get("header")
     if header:

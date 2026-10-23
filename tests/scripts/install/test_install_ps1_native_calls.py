@@ -6,6 +6,7 @@ ErrorRecord that terminates a script running under
 ``powershell.exe`` (5.1) -- dot-sourced for its helpers, or as the real
 ``-Stage repository -Json`` entry against local git repositories.
 """
+
 import json
 import os
 from pathlib import Path
@@ -26,38 +27,77 @@ def _powershell() -> str:
 
 def _dot_sourced(body: str) -> subprocess.CompletedProcess:
     script = f'$ErrorActionPreference = "Stop"; . "{INSTALLER}"; {body}'
-    return subprocess.run([_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-                          capture_output=True, text=True, timeout=120, check=False)
+    return subprocess.run(
+        [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
 
 
 def test_native_stderr_under_stop_leaves_the_exit_code_to_the_caller():
-    result = _dot_sourced('Invoke-Native { cmd /c "echo soft-failure 1>&2 & exit 3" 2>$null }; '
-                          '"exit=$LASTEXITCODE preference=$ErrorActionPreference"')
+    result = _dot_sourced(
+        'Invoke-Native { cmd /c "echo soft-failure 1>&2 & exit 3" 2>$null }; '
+        '"exit=$LASTEXITCODE preference=$ErrorActionPreference"'
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "exit=3 preference=Stop" in result.stdout
 
 
 def test_path_uv_must_run_and_meet_the_pin(tmp_path):
-    for name, body in {"old": "@echo uv 0.6.17", "new": "@echo uv 99.0.0 (abc 2099-01-01)",
-                       "broken": "@echo boom 1>&2 & exit /b 1"}.items():
+    for name, body in {
+        "old": "@echo uv 0.6.17",
+        "new": "@echo uv 99.0.0 (abc 2099-01-01)",
+        "broken": "@echo boom 1>&2 & exit /b 1",
+    }.items():
         (tmp_path / f"{name}.cmd").write_text(body + "\r\n")
-    checks = "; ".join(f'"{n}=$(Test-UvAtLeastPin \'{tmp_path / (n + ".cmd")}\')"' for n in ("old", "new", "broken"))
+    checks = "; ".join(
+        f"\"{n}=$(Test-UvAtLeastPin '{tmp_path / (n + '.cmd')}')\""
+        for n in ("old", "new", "broken")
+    )
     result = _dot_sourced(checks)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.split() == ["old=False", "new=True", "broken=False"]
 
 
 def _git(repo: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
-                          check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
-def _stage(origin: Path, home: Path, *extra: str, **env_extra: str) -> tuple[subprocess.CompletedProcess, dict]:
-    env = dict(os.environ, CLAWK_REPO_URL=str(origin), CLAWK_HOME=str(home), **env_extra)
-    result = subprocess.run([_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(INSTALLER),
-                             "-Stage", "repository", "-Json", *extra],
-                            env=env, capture_output=True, text=True, timeout=180, check=False)
-    frames = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+def _stage(
+    origin: Path, home: Path, *extra: str, **env_extra: str
+) -> tuple[subprocess.CompletedProcess, dict]:
+    env = dict(
+        os.environ, CLAWK_REPO_URL=str(origin), CLAWK_HOME=str(home), **env_extra
+    )
+    result = subprocess.run(
+        [
+            _powershell(),
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(INSTALLER),
+            "-Stage",
+            "repository",
+            "-Json",
+            *extra,
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    frames = [
+        json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")
+    ]
     assert len(frames) == 1, result.stdout + result.stderr
     return result, frames[0]
 
@@ -112,14 +152,21 @@ def _pin_fixture(tmp_path: Path) -> tuple[Path, str, str]:
 
 
 def _clone_argv(trace: Path) -> list[str]:
-    [line] = [line for line in trace.read_text(encoding="utf-8-sig", errors="replace").splitlines() if "built-in: git clone " in line]
+    [line] = [
+        line
+        for line in trace.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        if "built-in: git clone " in line
+    ]
     return line.split("built-in: git clone ", 1)[1].split()
 
 
 def test_pinned_fresh_clone_never_materializes_the_branch_tip(tmp_path):
     """A pinned install (the desktop bootstrap passes -Commit) checks out only the pin, as install.sh does."""
     origin, pin, _ = _pin_fixture(tmp_path)
-    for name, extra, readme, no_checkout in (("pinned", ("-Commit", pin), "one", True), ("tip", (), "tip", False)):
+    for name, extra, readme, no_checkout in (
+        ("pinned", ("-Commit", pin), "one", True),
+        ("tip", (), "tip", False),
+    ):
         home, trace = tmp_path / name, tmp_path / f"{name}.trace"
         result, frame = _stage(origin, home, *extra, GIT_TRACE=str(trace))
         assert frame["ok"] is True, result.stdout + result.stderr

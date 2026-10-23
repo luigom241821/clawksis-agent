@@ -31,7 +31,10 @@ def normalize_slash_search_query(query: str) -> str:
 
 
 def _score_fields(fields: list[str], query: str, offset: int) -> float:
-    return next((offset + bump for bump, pred in _TIERS if any(pred(f, query) for f in fields)), math.inf)
+    return next(
+        (offset + bump for bump, pred in _TIERS if any(pred(f, query) for f in fields)),
+        math.inf,
+    )
 
 
 def score_slash_completion_item(item: dict, query: str) -> float:
@@ -52,9 +55,14 @@ def fuzzy_rank_slash_items(
     rankers to use as a leading sort key."""
     seen = {str(item.get("text", "")).strip() for item in items}
     merged = list(items) + [
-        item for item in catalog
-        if str(item.get("text", "")).strip() not in seen and not math.isinf(score_slash_completion_item(item, query))
+        item
+        for item in catalog
+        if str(item.get("text", "")).strip() not in seen
+        and not math.isinf(score_slash_completion_item(item, query))
     ]
     scores = {id(item): score_slash_completion_item(item, query) for item in merged}
-    ranked = sorted((item for item in merged if not math.isinf(scores[id(item)])), key=lambda item: scores[id(item)])
+    ranked = sorted(
+        (item for item in merged if not math.isinf(scores[id(item)])),
+        key=lambda item: scores[id(item)],
+    )
     return ranked, lambda item: scores.get(id(item), math.inf)

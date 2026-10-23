@@ -105,7 +105,7 @@ class TestGenericFailureRegression:
         agent_result = {
             "final_response": "",
             "failed": True,
-            "error": "ValueError: provider exploded {\"code\": 502}",
+            "error": 'ValueError: provider exploded {"code": 502}',
             "api_calls": 1,
         }
 
@@ -117,7 +117,12 @@ class TestGenericFailureRegression:
 
     def test_partial_turn_hides_provider_envelope_and_names_retry(self):
         raw = "API call failed after 3 retries: HTTP 500 internal server error"
-        agent_result = {"final_response": "", "partial": True, "error": raw, "api_calls": 2}
+        agent_result = {
+            "final_response": "",
+            "partial": True,
+            "error": raw,
+            "api_calls": 2,
+        }
 
         response = _normalize_empty_agent_response(agent_result, "", history_len=10)
 
@@ -126,7 +131,12 @@ class TestGenericFailureRegression:
 
     def test_partial_turn_keeps_curated_loop_text(self):
         curated = "Response truncated due to output length limit"
-        agent_result = {"final_response": "", "partial": True, "error": curated, "api_calls": 2}
+        agent_result = {
+            "final_response": "",
+            "partial": True,
+            "error": curated,
+            "api_calls": 2,
+        }
 
         response = _normalize_empty_agent_response(agent_result, "", history_len=10)
 
@@ -158,19 +168,27 @@ class TestNonempty400EnvelopeOverflowReply:
 
     def test_long_history_rewrites_envelope_to_session_too_large(self):
         response = _normalize_empty_agent_response(
-            self._failed(self._ENVELOPE), self._ENVELOPE, history_len=138,
+            self._failed(self._ENVELOPE),
+            self._ENVELOPE,
+            history_len=138,
         )
         assert "too long" in response.lower()
         assert "/compress" in response
         assert self._ENVELOPE not in response
 
-    @pytest.mark.parametrize("text", [
-        "Billing or credits exhausted: HTTP 429: You exceeded your current quota",
-        "API call failed after 3 retries: HTTP 429 rate limit exceeded",
-        "HTTP 401: invalid authentication token",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Billing or credits exhausted: HTTP 429: You exceeded your current quota",
+            "API call failed after 3 retries: HTTP 429 rate limit exceeded",
+            "HTTP 401: invalid authentication token",
+        ],
+    )
     def test_non_overflow_failure_keeps_its_own_text(self, text):
-        assert _normalize_empty_agent_response(self._failed(text), text, history_len=138) == text
+        assert (
+            _normalize_empty_agent_response(self._failed(text), text, history_len=138)
+            == text
+        )
 
     def test_curated_overflow_text_from_the_agent_survives(self):
         text = "Context compression timed out without reducing this conversation. No messages were dropped."

@@ -50,7 +50,9 @@ def selection_context_for_agent(agent: object) -> Optional[SelectionContext]:
         tokens = 0
     if tokens <= 0:
         return None
-    return SelectionContext(context_tokens=tokens, current_model=getattr(agent, "model", "") or None)
+    return SelectionContext(
+        context_tokens=tokens, current_model=getattr(agent, "model", "") or None
+    )
 
 
 def _wrap(kind: str, title: str, warning, model_name: str, provider: Optional[str]):
@@ -59,27 +61,48 @@ def _wrap(kind: str, title: str, warning, model_name: str, provider: Optional[st
     if warning is None:
         return None
     return SelectionWarning(
-        kind=kind, title=title, model=getattr(warning, "model", model_name),
-        provider=getattr(warning, "provider", provider or ""), message=warning.message)
+        kind=kind,
+        title=title,
+        model=getattr(warning, "model", model_name),
+        provider=getattr(warning, "provider", provider or ""),
+        message=warning.message,
+    )
 
 
 def _cost_guard(
-    model_name: str, provider: Optional[str], base_url: Optional[str], api_key: Optional[str],
-    model_info: Optional[ModelInfo], ctx: Optional[SelectionContext] = None) -> Optional[SelectionWarning]:
+    model_name: str,
+    provider: Optional[str],
+    base_url: Optional[str],
+    api_key: Optional[str],
+    model_info: Optional[ModelInfo],
+    ctx: Optional[SelectionContext] = None,
+) -> Optional[SelectionWarning]:
     from clawk_cli.model_cost_guard import expensive_model_warning
 
     warning = expensive_model_warning(
-        model_name, provider=provider, base_url=base_url, api_key=api_key, model_info=model_info)
+        model_name,
+        provider=provider,
+        base_url=base_url,
+        api_key=api_key,
+        model_info=model_info,
+    )
     return _wrap("cost", "Expensive Model Warning", warning, model_name, provider)
 
 
 def _data_policy_guard(
-    model_name: str, provider: Optional[str], base_url: Optional[str], api_key: Optional[str],
-    model_info: Optional[ModelInfo], ctx: Optional[SelectionContext] = None) -> Optional[SelectionWarning]:
+    model_name: str,
+    provider: Optional[str],
+    base_url: Optional[str],
+    api_key: Optional[str],
+    model_info: Optional[ModelInfo],
+    ctx: Optional[SelectionContext] = None,
+) -> Optional[SelectionWarning]:
     from clawk_cli.model_data_policy_guard import data_training_warning
 
     warning = data_training_warning(model_name, provider=provider, base_url=base_url)
-    return _wrap("data_policy", "Data-Training Tier Warning", warning, model_name, provider)
+    return _wrap(
+        "data_policy", "Data-Training Tier Warning", warning, model_name, provider
+    )
 
 
 # Context-token threshold above which a mid-session switch asks for confirmation: providers key
@@ -93,7 +116,11 @@ def _context_cache_threshold() -> int:
         from clawk_cli.config import load_config
 
         model_cfg = (load_config() or {}).get("model", {})
-        raw = model_cfg.get("switch_context_confirm_tokens") if isinstance(model_cfg, dict) else None
+        raw = (
+            model_cfg.get("switch_context_confirm_tokens")
+            if isinstance(model_cfg, dict)
+            else None
+        )
         if raw is not None:
             return max(0, int(raw))
     except Exception:
@@ -102,8 +129,13 @@ def _context_cache_threshold() -> int:
 
 
 def _context_cache_guard(
-    model_name: str, provider: Optional[str], base_url: Optional[str], api_key: Optional[str],
-    model_info: Optional[ModelInfo], ctx: Optional[SelectionContext] = None) -> Optional[SelectionWarning]:
+    model_name: str,
+    provider: Optional[str],
+    base_url: Optional[str],
+    api_key: Optional[str],
+    model_info: Optional[ModelInfo],
+    ctx: Optional[SelectionContext] = None,
+) -> Optional[SelectionWarning]:
     """Confirm a mid-session switch that abandons a large cached context. Fires only when the surface
     supplied live facts showing the active context at/above the threshold; smaller sessions, sessions
     with no measured size and same-model re-selects (cache stays warm) are silent."""
@@ -117,18 +149,25 @@ def _context_cache_guard(
     tokens = int(ctx.context_tokens)
     if threshold <= 0 or tokens < threshold:
         return None
-    message = "\n".join([
-        "!!! LARGE CONTEXT MODEL SWITCH !!!",
-        "",
-        f"This session holds ~{tokens:,} tokens of context.",
-        f"Switching to {target} makes the next reply re-read all of it uncached (providers key "
-        "prompt caches per model) — a one-time full-price input cost.",
-        "",
-        f"Threshold: model.switch_context_confirm_tokens (currently {threshold:,}; 0 disables this check).",
-        "Confirm only if you intend to switch now."])
+    message = "\n".join(
+        [
+            "!!! LARGE CONTEXT MODEL SWITCH !!!",
+            "",
+            f"This session holds ~{tokens:,} tokens of context.",
+            f"Switching to {target} makes the next reply re-read all of it uncached (providers key "
+            "prompt caches per model) — a one-time full-price input cost.",
+            "",
+            f"Threshold: model.switch_context_confirm_tokens (currently {threshold:,}; 0 disables this check).",
+            "Confirm only if you intend to switch now.",
+        ]
+    )
     return SelectionWarning(
-        kind="context_cache", title="Large Context Switch Warning", model=target,
-        provider=(provider or "").strip(), message=message)
+        kind="context_cache",
+        title="Large Context Switch Warning",
+        model=target,
+        provider=(provider or "").strip(),
+        message=message,
+    )
 
 
 # Registry, evaluated in order. Add new guard classes here — never at the
@@ -137,10 +176,15 @@ _GUARDS = (_cost_guard, _data_policy_guard, _context_cache_guard)
 
 
 def selection_warnings(
-    model_name: str, *, provider: Optional[str] = None, base_url: Optional[str] = None,
-    api_key: Optional[str] = None, model_info: Optional[ModelInfo] = None,
+    model_name: str,
+    *,
+    provider: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model_info: Optional[ModelInfo] = None,
     include_kinds: Optional[Iterable[str]] = None,
-    selection_context: Optional[SelectionContext] = None) -> list[SelectionWarning]:
+    selection_context: Optional[SelectionContext] = None,
+) -> list[SelectionWarning]:
     """Warnings from every registered guard (empty in the common case). ``include_kinds`` restricts
     which kinds are returned; ``selection_context`` carries live-session facts for switch-aware guards.
     Guard exceptions are swallowed — never break model selection."""
@@ -148,7 +192,9 @@ def selection_warnings(
     results: list[SelectionWarning] = []
     for guard in _GUARDS:
         try:
-            warning = guard(model_name, provider, base_url, api_key, model_info, selection_context)
+            warning = guard(
+                model_name, provider, base_url, api_key, model_info, selection_context
+            )
         except Exception:
             continue
         if warning is not None and (wanted is None or warning.kind in wanted):
@@ -162,19 +208,32 @@ def combined_message(warnings: list[SelectionWarning]) -> str:
 
 
 def combined_selection_warning(
-    model_name: str, *, provider: Optional[str] = None, base_url: Optional[str] = None,
-    api_key: Optional[str] = None, model_info: Optional[ModelInfo] = None,
+    model_name: str,
+    *,
+    provider: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model_info: Optional[ModelInfo] = None,
     selection_context: Optional[SelectionContext] = None,
 ) -> Optional[SelectionWarning]:
     """Drop-in for ``expensive_model_warning`` call sites: ``None``, the single warning, or a merged
     ``kind="multiple"`` warning stacking every message."""
     warnings = selection_warnings(
-        model_name, provider=provider, base_url=base_url, api_key=api_key, model_info=model_info,
-        selection_context=selection_context)
+        model_name,
+        provider=provider,
+        base_url=base_url,
+        api_key=api_key,
+        model_info=model_info,
+        selection_context=selection_context,
+    )
     if not warnings:
         return None
     if len(warnings) == 1:
         return warnings[0]
     return SelectionWarning(
-        kind="multiple", title="Model Selection Warning", model=warnings[0].model,
-        provider=warnings[0].provider, message=combined_message(warnings))
+        kind="multiple",
+        title="Model Selection Warning",
+        model=warnings[0].model,
+        provider=warnings[0].provider,
+        message=combined_message(warnings),
+    )

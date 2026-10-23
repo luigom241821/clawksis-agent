@@ -28,7 +28,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 
 pytestmark = [
     pytest.mark.platforms("linux"),
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -47,8 +49,13 @@ def _path_lines(sb: I.Sandbox) -> dict[str, int]:
     out = {}
     for name in RC_FILES:
         text = (sb.home / name).read_text(encoding="utf-8")
-        out[name] = sum(1 for line in text.splitlines()
-                        if ".local/bin" in line and "PATH" in line and not line.lstrip().startswith("#"))
+        out[name] = sum(
+            1
+            for line in text.splitlines()
+            if ".local/bin" in line
+            and "PATH" in line
+            and not line.lstrip().startswith("#")
+        )
     return out
 
 
@@ -58,8 +65,14 @@ def _login_shell_clawk(sb: I.Sandbox) -> str:
     env["PATH"] = "/usr/local/bin:/usr/bin:/bin"
     bash = shutil.which("bash")
     assert bash is not None, "bash required for install.sh and the login-shell probe"
-    cp = H.run([bash, "-lic", "command -v clawk"], env=env, cwd=sb.root, writable=[sb.root], timeout=60,
-               ro_binds=H.LOGIN_SHELL_RO_BINDS)
+    cp = H.run(
+        [bash, "-lic", "command -v clawk"],
+        env=env,
+        cwd=sb.root,
+        writable=[sb.root],
+        timeout=60,
+        ro_binds=H.LOGIN_SHELL_RO_BINDS,
+    )
     assert cp.returncode == 0, H.describe(cp)
     return cp.stdout.strip()
 
@@ -95,49 +108,96 @@ def installed(tmp_path_factory, provider):
 def _turn(sb: I.Sandbox, provider: FakeLLMServer, marker: str) -> None:
     n = len(provider.main_requests())
     cp = sb.cli("-z", marker)
-    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
+    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(
+        cp
+    )
     assert provider.default_text in cp.stdout, I.describe(cp)
     new = provider.main_requests()[n:]
-    assert len(new) == 1 and marker in json.dumps(new[0]["messages"]), "one-shot turn did not reach the provider once"
+    assert len(new) == 1 and marker in json.dumps(new[0]["messages"]), (
+        "one-shot turn did not reach the provider once"
+    )
 
 
 def _configure(sb: I.Sandbox, provider: FakeLLMServer) -> None:
     py = sb.python
-    ver = sb.run([py, "-c", "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])"])
+    ver = sb.run(
+        [
+            py,
+            "-c",
+            "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])",
+        ]
+    )
     assert ver.returncode == 0, I.describe(ver)
     version = int(ver.stdout.strip().splitlines()[-1])
-    (sb.clawk_home / "config.yaml").write_text(I.provider_config(provider.base_url, version), encoding="utf-8")
-    (sb.clawk_home / ".env").write_text(f"OPENAI_API_KEY={I.FAKE_KEY}\n# my note\n", encoding="utf-8")
-    (sb.clawk_home / "SOUL.md").write_text("You are my own customised agent.\n", encoding="utf-8")
+    (sb.clawk_home / "config.yaml").write_text(
+        I.provider_config(provider.base_url, version), encoding="utf-8"
+    )
+    (sb.clawk_home / ".env").write_text(
+        f"OPENAI_API_KEY={I.FAKE_KEY}\n# my note\n", encoding="utf-8"
+    )
+    (sb.clawk_home / "SOUL.md").write_text(
+        "You are my own customised agent.\n", encoding="utf-8"
+    )
     skill = sb.clawk_home / "skills" / "my-own-skill"
     skill.mkdir(parents=True, exist_ok=True)
-    (skill / "SKILL.md").write_text("---\nname: my-own-skill\ndescription: mine\n---\nDo my thing.\n", encoding="utf-8")
+    (skill / "SKILL.md").write_text(
+        "---\nname: my-own-skill\ndescription: mine\n---\nDo my thing.\n",
+        encoding="utf-8",
+    )
 
 
 def test_fresh_install_serves_head_and_runs_a_turn(installed, provider):
     sb, first = installed
-    assert first.returncode == 0, "install.sh failed on an empty HOME:\n" + I.describe(first)
-    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == I.head_sha(), "installed checkout is not the published commit"
-    assert I.git("status", "--porcelain", "--untracked-files=no", cwd=sb.checkout) == "", "installer dirtied the checkout"
+    assert first.returncode == 0, "install.sh failed on an empty HOME:\n" + I.describe(
+        first
+    )
+    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == I.head_sha(), (
+        "installed checkout is not the published commit"
+    )
+    assert (
+        I.git("status", "--porcelain", "--untracked-files=no", cwd=sb.checkout) == ""
+    ), "installer dirtied the checkout"
     ver = sb.cli("--version")
-    assert ver.returncode == 0 and I.TRACEBACK not in ver.stdout + ver.stderr, I.describe(ver)
-    probe = sb.run([sb.python, "-c", "import clawk_cli, run_agent; print(clawk_cli.__file__); print(run_agent.__file__)"])
+    assert ver.returncode == 0 and I.TRACEBACK not in ver.stdout + ver.stderr, (
+        I.describe(ver)
+    )
+    probe = sb.run(
+        [
+            sb.python,
+            "-c",
+            "import clawk_cli, run_agent; print(clawk_cli.__file__); print(run_agent.__file__)",
+        ]
+    )
     assert probe.returncode == 0, I.describe(probe)
     workspace = Path(sb.python).parent.parent.parent / "workspace"
     for line in probe.stdout.split():
         imported = Path(line)
-        assert imported.is_relative_to(workspace), f"installed PM environment imports code from outside the selected workspace: {line}"
-        assert imported.read_bytes() == (sb.checkout / imported.relative_to(workspace)).read_bytes(), (
-            f"installed PM workspace does not match the checkout: {line}")
+        assert imported.is_relative_to(workspace), (
+            f"installed PM environment imports code from outside the selected workspace: {line}"
+        )
+        assert (
+            imported.read_bytes()
+            == (sb.checkout / imported.relative_to(workspace)).read_bytes()
+        ), f"installed PM workspace does not match the checkout: {line}"
     for rel in ("config.yaml", ".env", "SOUL.md"):
-        assert (sb.clawk_home / rel).is_file(), f"installer did not seed ~/.clawksis/{rel}"
+        assert (sb.clawk_home / rel).is_file(), (
+            f"installer did not seed ~/.clawksis/{rel}"
+        )
     _configure(sb, provider)
     _turn(sb, provider, "first turn on a fresh install")
     db = I.db_state(sb.clawk_home / "state.db")
-    assert db["integrity"] == [("ok",)] and len(db["sessions"]) == 1 and db["n_messages"] >= 2, db
+    assert (
+        db["integrity"] == [("ok",)]
+        and len(db["sessions"]) == 1
+        and db["n_messages"] >= 2
+    ), db
     # A new login shell finds the command through the rc files the installer edited.
-    assert all(n >= 1 for n in _path_lines(sb).values()), f"PATH not wired into the shell rc: {_path_lines(sb)}"
-    assert _login_shell_clawk(sb) == sb.clawk, "a new shell does not resolve `clawk` to the installed launcher"
+    assert all(n >= 1 for n in _path_lines(sb).values()), (
+        f"PATH not wired into the shell rc: {_path_lines(sb)}"
+    )
+    assert _login_shell_clawk(sb) == sb.clawk, (
+        "a new shell does not resolve `clawk` to the installed launcher"
+    )
 
 
 def test_rerunning_the_installer_is_idempotent(installed, provider):
@@ -149,14 +209,26 @@ def test_rerunning_the_installer_is_idempotent(installed, provider):
     rc_before = _path_lines(sb)
     commit = I.git("rev-parse", "HEAD", cwd=sb.checkout)
     second = I.run_installer(sb)
-    assert second.returncode == 0, "re-running install.sh on a working install failed:\n" + I.describe(second)
-    assert re.search(r"(?i)traceback", second.stdout + second.stderr) is None, I.describe(second)
-    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == commit, "re-run moved the checkout"
+    assert second.returncode == 0, (
+        "re-running install.sh on a working install failed:\n" + I.describe(second)
+    )
+    assert re.search(r"(?i)traceback", second.stdout + second.stderr) is None, (
+        I.describe(second)
+    )
+    assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == commit, (
+        "re-run moved the checkout"
+    )
     after = _state(sb)
     for key in before:
-        assert after[key] == before[key], f"re-running the installer changed the user's {key}"
+        assert after[key] == before[key], (
+            f"re-running the installer changed the user's {key}"
+        )
     _turn(sb, provider, "turn after re-running the installer")
     db = I.db_state(sb.clawk_home / "state.db")
-    assert set(before["db"]["sessions"]) < set(db["sessions"]), "earlier session lost or new turn not persisted"
-    assert _path_lines(sb) == rc_before, f"PATH line appended again: {rc_before} -> {_path_lines(sb)}"
+    assert set(before["db"]["sessions"]) < set(db["sessions"]), (
+        "earlier session lost or new turn not persisted"
+    )
+    assert _path_lines(sb) == rc_before, (
+        f"PATH line appended again: {rc_before} -> {_path_lines(sb)}"
+    )
     assert _login_shell_clawk(sb) == sb.clawk

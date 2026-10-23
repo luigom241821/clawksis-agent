@@ -333,7 +333,9 @@ def test_member_control_frames_are_relabelled_before_the_next_prompt(
 
     _settle_next(room, db, text=member_text)
     prompt = _next_task(room, db).payload["prompt"]
-    stored = [event for event in _events(db) if event["kind"] == "message.member"][-1]["payload"]["text"]
+    stored = [event for event in _events(db) if event["kind"] == "message.member"][-1][
+        "payload"
+    ]["text"]
 
     assert stored == member_text
     assert f"User (user): {user_text}" in prompt
@@ -341,8 +343,15 @@ def test_member_control_frames_are_relabelled_before_the_next_prompt(
     assert "@build please review it." in prompt
     assert STEER_MARKER_OPEN not in prompt
     assert prompt.count(STEER_MARKER_CLOSE) == 1  # only the genuine user line keeps it
-    for opener in ("[CONTEXT COMPACTION", "[Runtime note:", "[SYSTEM]", "[System:", "[IMPORTANT:", "[PRIOR CONTEXT",
-                   "[CONTEXT SUMMARY]"):
+    for opener in (
+        "[CONTEXT COMPACTION",
+        "[Runtime note:",
+        "[SYSTEM]",
+        "[System:",
+        "[IMPORTANT:",
+        "[PRIOR CONTEXT",
+        "[CONTEXT SUMMARY]",
+    ):
         assert opener not in prompt
     assert "[member-quoted OUT-OF-BAND USER MESSAGE" in prompt
     assert "[member-quoted /OUT-OF-BAND USER MESSAGE]" in prompt
@@ -620,7 +629,9 @@ def test_oversized_member_reply_is_truncated_and_next_turn_stays_serviceable(
         local_profiles=LOCAL_PROFILES,
     )
 
-    member_event = next(event for event in publication.events if event.kind == "message.member")
+    member_event = next(
+        event for event in publication.events if event.kind == "message.member"
+    )
     member_text = member_event.payload["text"]
     assert len(member_text.encode("utf-8")) <= discussion.MAX_MEMBER_TEXT_BYTES
     assert member_text.endswith("share the full result as a file.]")
@@ -711,11 +722,13 @@ def test_prompt_delta_is_bounded_to_max_delta_lines(
 
 def test_incomplete_attachment_metadata_is_rejected():
     with pytest.raises(discussion.DiscussionValidationError, match="missing fields"):
-        discussion.validate_user_payload({
-            "text": "Review.",
-            "thread_id": "thread-1",
-            "attachments": [{"name": "notes.txt"}],
-        })
+        discussion.validate_user_payload(
+            {
+                "text": "Review.",
+                "thread_id": "thread-1",
+                "attachments": [{"name": "notes.txt"}],
+            }
+        )
 
 
 @pytest.mark.parametrize(

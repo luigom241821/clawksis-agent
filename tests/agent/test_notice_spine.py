@@ -7,6 +7,7 @@ Covers:
   C. TUI _agent_cbs notice binding — mirrors the status_callback tests already
      in tests/tui_gateway/test_tui_gateway_server.py.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -31,19 +32,7 @@ def _bare_agent() -> AIAgent:
     return agent
 
 
-
-
-
-
-
-
-
 # ── B. Constructor / init_agent signature threading ─────────────────────────
-
-
-
-
-
 
 
 # ── C. TUI _agent_cbs binding ────────────────────────────────────────────────
@@ -80,14 +69,13 @@ class TestAgentCbsNoticeBinding:
             },
         )
 
-
-
-
     def test_notice_clear_callback_event_type_is_notification_clear(self):
         from tui_gateway import server
 
         captured = []
-        with patch("tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)):
+        with patch(
+            "tui_gateway.server._emit", side_effect=lambda *a: captured.append(a)
+        ):
             cbs = server._agent_cbs("sid123")
             cbs["notice_clear_callback"]("some.key")
 

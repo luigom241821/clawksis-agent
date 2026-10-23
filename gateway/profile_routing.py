@@ -26,10 +26,14 @@ _WHATSAPP_NON_USER_SUFFIXES = ("@g.us", "@broadcast", "@newsletter")
 
 def _is_whatsapp_non_user_chat(chat_id: Optional[str]) -> bool:
     """True for group / broadcast / newsletter JIDs — not a sender identity."""
-    return bool(chat_id) and str(chat_id).strip().lower().endswith(_WHATSAPP_NON_USER_SUFFIXES)
+    return bool(chat_id) and str(chat_id).strip().lower().endswith(
+        _WHATSAPP_NON_USER_SUFFIXES
+    )
 
 
-def _whatsapp_user_chat_ids_match(platform: str, left: Optional[str], right: Optional[str]) -> bool:
+def _whatsapp_user_chat_ids_match(
+    platform: str, left: Optional[str], right: Optional[str]
+) -> bool:
     """True when two WhatsApp *user* chat_ids refer to the same person.
 
     Uses ``expand_whatsapp_aliases`` (same helper as session keys and adapter allowlists) so a bare
@@ -38,8 +42,10 @@ def _whatsapp_user_chat_ids_match(platform: str, left: Optional[str], right: Opt
     """
     if (
         (platform or "").strip().lower() not in _WHATSAPP_IDENTITY_PLATFORMS
-        or not left or not right
-        or _is_whatsapp_non_user_chat(left) or _is_whatsapp_non_user_chat(right)
+        or not left
+        or not right
+        or _is_whatsapp_non_user_chat(left)
+        or _is_whatsapp_non_user_chat(right)
     ):
         return False
     from gateway.whatsapp_identity import expand_whatsapp_aliases
@@ -56,7 +62,7 @@ class ProfileRouteRejected(RuntimeError):
         return self.args[1] if len(self.args) > 1 else None
 
     def __str__(self):
-        return str(self.args[0]) if self.args else ''
+        return str(self.args[0]) if self.args else ""
 
 
 @dataclass(frozen=True)
@@ -76,12 +82,22 @@ class ProfileRoute:
     @property
     def specificity(self) -> int:
         """Higher value = more specific match."""
-        return 2 * bool(self.guild_id) + 4 * bool(self.chat_id) + 8 * bool(self.thread_id) + 16 * bool(self.user_id)
+        return (
+            2 * bool(self.guild_id)
+            + 4 * bool(self.chat_id)
+            + 8 * bool(self.thread_id)
+            + 16 * bool(self.user_id)
+        )
 
     def matches(
-        self, platform: str, guild_id: Optional[str] = None, chat_id: Optional[str] = None,
-        thread_id: Optional[str] = None, parent_chat_id: Optional[str] = None,
-        adapter_profile: Optional[str] = None, user_id: Optional[str] = None,
+        self,
+        platform: str,
+        guild_id: Optional[str] = None,
+        chat_id: Optional[str] = None,
+        thread_id: Optional[str] = None,
+        parent_chat_id: Optional[str] = None,
+        adapter_profile: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> bool:
         """True if every discriminator the route declares holds (AND).
 
@@ -94,7 +110,9 @@ class ProfileRoute:
             return False
         if _bot_profile_key(self.bot_profile) != _bot_profile_key(adapter_profile):
             return False
-        if self.user_id is not None and (not self.user_id.strip() or self.user_id != user_id):
+        if self.user_id is not None and (
+            not self.user_id.strip() or self.user_id != user_id
+        ):
             return False
         if self.thread_id and self.thread_id != thread_id:
             return False
@@ -102,7 +120,9 @@ class ProfileRoute:
             self.chat_id
             and self.chat_id not in (chat_id, parent_chat_id)
             and not _whatsapp_user_chat_ids_match(platform, self.chat_id, chat_id)
-            and not _whatsapp_user_chat_ids_match(platform, self.chat_id, parent_chat_id)
+            and not _whatsapp_user_chat_ids_match(
+                platform, self.chat_id, parent_chat_id
+            )
         ):
             return False
         return not (self.guild_id and self.guild_id != guild_id)
@@ -131,8 +151,10 @@ def _coerce_route_id(value: Any) -> Optional[str]:
         return str(value)
     logger.warning(
         "Profile route discriminator %r (type %s) can never match an inbound "
-        "id — quote it in config.yaml (e.g. chat_id: \"%s\").",
-        value, type(value).__name__, value,
+        'id — quote it in config.yaml (e.g. chat_id: "%s").',
+        value,
+        type(value).__name__,
+        value,
     )
     return str(value)
 
@@ -149,7 +171,9 @@ def parse_profile_routes(raw: Optional[list[dict[str, Any]]]) -> list[ProfileRou
         platform = entry.get("platform", "")
         profile = entry.get("profile", "")
         if not platform or not profile:
-            logger.warning("Skipping profile route %s: missing platform or profile", name)
+            logger.warning(
+                "Skipping profile route %s: missing platform or profile", name
+            )
             continue
         # Validate profile name to prevent path traversal (lazy import: cycle).
         try:
@@ -158,35 +182,56 @@ def parse_profile_routes(raw: Optional[list[dict[str, Any]]]) -> list[ProfileRou
             profile = normalize_profile_name(profile)
             validate_profile_name(profile)
         except (ValueError, ImportError):
-            logger.warning("Skipping profile route %s: invalid profile name %r", name, profile)
+            logger.warning(
+                "Skipping profile route %s: invalid profile name %r", name, profile
+            )
             continue
         has_user_id, user_id = "user_id" in entry, entry.get("user_id")
-        if has_user_id and (user_id is None or isinstance(user_id, str) and not user_id.strip()):
-            logger.warning("Skipping profile route %s: user_id cannot be null or empty", name)
+        if has_user_id and (
+            user_id is None or isinstance(user_id, str) and not user_id.strip()
+        ):
+            logger.warning(
+                "Skipping profile route %s: user_id cannot be null or empty", name
+            )
             continue
-        routes.append(ProfileRoute(
-            name=name, platform=platform, profile=profile,
-            guild_id=_coerce_route_id(entry.get("guild_id")),
-            chat_id=_coerce_route_id(entry.get("chat_id")),
-            thread_id=_coerce_route_id(entry.get("thread_id")),
-            user_id=_coerce_route_id(user_id),
-            enabled=entry.get("enabled", True),
-            bot_profile=_bot_profile_key(entry.get("bot_profile")),
-        ))
+        routes.append(
+            ProfileRoute(
+                name=name,
+                platform=platform,
+                profile=profile,
+                guild_id=_coerce_route_id(entry.get("guild_id")),
+                chat_id=_coerce_route_id(entry.get("chat_id")),
+                thread_id=_coerce_route_id(entry.get("thread_id")),
+                user_id=_coerce_route_id(user_id),
+                enabled=entry.get("enabled", True),
+                bot_profile=_bot_profile_key(entry.get("bot_profile")),
+            )
+        )
     routes.sort(key=lambda r: r.specificity, reverse=True)
     logger.debug("Loaded %d profile routes (most-specific-first)", len(routes))
     return routes
 
 
 def match_profile_route(
-    routes: list[ProfileRoute], platform: str, guild_id: Optional[str] = None, chat_id: Optional[str] = None,
-    thread_id: Optional[str] = None, parent_chat_id: Optional[str] = None,
-    adapter_profile: Optional[str] = None, user_id: Optional[str] = None,
+    routes: list[ProfileRoute],
+    platform: str,
+    guild_id: Optional[str] = None,
+    chat_id: Optional[str] = None,
+    thread_id: Optional[str] = None,
+    parent_chat_id: Optional[str] = None,
+    adapter_profile: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> Optional[ProfileRoute]:
     """Return the first (most specific) matching route, or None."""
     for route in routes:
-        if route.matches(platform, guild_id=guild_id, chat_id=chat_id, thread_id=thread_id,
-                         parent_chat_id=parent_chat_id, adapter_profile=adapter_profile,
-                         user_id=user_id):
+        if route.matches(
+            platform,
+            guild_id=guild_id,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            parent_chat_id=parent_chat_id,
+            adapter_profile=adapter_profile,
+            user_id=user_id,
+        ):
             return route
     return None

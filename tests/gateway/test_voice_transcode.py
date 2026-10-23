@@ -8,6 +8,7 @@ transcode non-opus input; should_send_media_as_audio honors explicit
 is_voice for any audio ext on telegram; is_voice threaded through the three
 dispatch call sites.
 """
+
 import asyncio
 import os
 import sys
@@ -15,7 +16,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(
+    0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from gateway.platforms.base import should_send_media_as_audio, transcode_to_ogg_opus
 
@@ -50,13 +53,20 @@ class TestTranscodeEngine(unittest.TestCase):
         """A failing ffmpeg leaves no orphan temp file behind."""
         import subprocess
 
-        fake = subprocess.CompletedProcess(args=[], returncode=1, stdout=b"", stderr=b"boom")
-        with patch("shutil.which", return_value="ffmpeg"), \
-             patch("subprocess.run", return_value=fake):
+        fake = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout=b"", stderr=b"boom"
+        )
+        with (
+            patch("shutil.which", return_value="ffmpeg"),
+            patch("subprocess.run", return_value=fake),
+        ):
             before = set(os.listdir(tempfile.gettempdir()))
             self.assertIsNone(transcode_to_ogg_opus("/tmp/x.mp3"))
-            leaked = [f for f in os.listdir(tempfile.gettempdir())
-                      if f.startswith("voice_transcode_") and f not in before]
+            leaked = [
+                f
+                for f in os.listdir(tempfile.gettempdir())
+                if f.startswith("voice_transcode_") and f not in before
+            ]
             self.assertEqual(leaked, [])
 
 
@@ -108,15 +118,23 @@ class TestTelegramSendVoiceTranscode(unittest.TestCase):
             return fake_ogg
 
         try:
-            with patch("gateway.platforms.base.transcode_to_ogg_opus", side_effect=fake_transcode), \
-                 patch("plugins.platforms.telegram.adapter._probe_voice_duration_seconds", return_value=1):
-                result = asyncio.run(
-                    adapter.send_voice("123", mp3, is_voice=True)
-                )
+            with (
+                patch(
+                    "gateway.platforms.base.transcode_to_ogg_opus",
+                    side_effect=fake_transcode,
+                ),
+                patch(
+                    "plugins.platforms.telegram.adapter._probe_voice_duration_seconds",
+                    return_value=1,
+                ),
+            ):
+                result = asyncio.run(adapter.send_voice("123", mp3, is_voice=True))
             self.assertTrue(result.success, result.error)
             self.assertEqual(transcode_calls, [mp3])
             self.assertIn("voice", sent["kwargs"])  # routed to send_voice branch
-            self.assertFalse(os.path.exists(fake_ogg), "transcoded temp must be cleaned up")
+            self.assertFalse(
+                os.path.exists(fake_ogg), "transcoded temp must be cleaned up"
+            )
         finally:
             for p in (mp3, fake_ogg):
                 try:

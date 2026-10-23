@@ -25,8 +25,19 @@ from agent.vault_store import VaultItemMeta, normalize_origin
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 30.0
-_ENV_KEEP = ("PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "SystemRoot",
-             "TMPDIR", "TMP", "TEMP", "XDG_CONFIG_HOME", "BITWARDENCLI_APPDATA_DIR")
+_ENV_KEEP = (
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "SystemRoot",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "XDG_CONFIG_HOME",
+    "BITWARDENCLI_APPDATA_DIR",
+)
 
 
 class BitwardenLoginBackend(LoginBackend):
@@ -42,7 +53,9 @@ class BitwardenLoginBackend(LoginBackend):
         explicit = str(self.cfg.get("binary_path") or "")
         found = explicit or shutil.which("bw")
         if not found:
-            raise RuntimeError("Bitwarden CLI (bw) not found — install it or set vault.bitwarden.binary_path")
+            raise RuntimeError(
+                "Bitwarden CLI (bw) not found — install it or set vault.bitwarden.binary_path"
+            )
         return Path(found)
 
     def _env(self, session_token: Optional[str]) -> dict[str, str]:
@@ -59,9 +72,21 @@ class BitwardenLoginBackend(LoginBackend):
         # bw refuses a piped password ("Master password is required"); its non-interactive contract is
         # --passwordenv: the variable exists only in the child's environment, never in argv or ours.
         generation = _unlock.begin_unlock(self.name)
-        proc = run_with_secret_env([str(self._bw()), "unlock", "--raw", "--nointeraction", "--passwordenv", "CLAWK_BW_MASTER"],
-                                   env=self._env(None), secret_env="CLAWK_BW_MASTER", secret=master_password,
-                                   timeout=_TIMEOUT, label="bw")
+        proc = run_with_secret_env(
+            [
+                str(self._bw()),
+                "unlock",
+                "--raw",
+                "--nointeraction",
+                "--passwordenv",
+                "CLAWK_BW_MASTER",
+            ],
+            env=self._env(None),
+            secret_env="CLAWK_BW_MASTER",
+            secret=master_password,
+            timeout=_TIMEOUT,
+            label="bw",
+        )
         token = (proc.stdout or "").strip()
         if proc.returncode != 0 or not token:
             err = scrub_ansi(proc.stderr or "").strip()[:200]
@@ -75,8 +100,14 @@ class BitwardenLoginBackend(LoginBackend):
         token = _unlock.get_session_token(self.name)
         if not token:
             raise UnlockRequired(self)
-        proc = run_cli([str(self._bw()), *args, "--nointeraction"], env=self._env(token), timeout=_TIMEOUT,
-                       label="bw", timeout_message="bw timed out", stdin=subprocess.DEVNULL)
+        proc = run_cli(
+            [str(self._bw()), *args, "--nointeraction"],
+            env=self._env(token),
+            timeout=_TIMEOUT,
+            label="bw",
+            timeout_message="bw timed out",
+            stdin=subprocess.DEVNULL,
+        )
         if proc.returncode != 0:
             err = scrub_ansi(proc.stderr or "")
             if "locked" in err.lower() or "session" in err.lower():
@@ -96,7 +127,9 @@ class BitwardenLoginBackend(LoginBackend):
             login = item["login"]
             origins: list[str] = []
             for uri in login.get("uris") or []:
-                if uri.get("match") == 5:  # Bitwarden URI match "Never": not a fill target
+                if (
+                    uri.get("match") == 5
+                ):  # Bitwarden URI match "Never": not a fill target
                     continue
                 try:
                     origin = normalize_origin(str(uri.get("uri") or ""))
@@ -109,24 +142,33 @@ class BitwardenLoginBackend(LoginBackend):
             username = str(login.get("username") or "").strip() or None
             # Fill targets are browser pages, so app URIs (androidapp:// etc.) never widen
             # the fill set; an app-URI-only item keeps its single origin exactly as before.
-            web_origins = tuple(o for o in origins if o.startswith(("http://", "https://"))) or (origins[0],)
-            out.append(VaultItemMeta(
-                id=f"{self.prefix}{item.get('id')}", kind="login", label=str(item.get("name") or origins[0]),
-                origin=origins[0], created_at=str(item.get("creationDate") or ""),
-                identifier_type="username" if username else None, identifier=username,
-                allowed_origins=web_origins))
+            web_origins = tuple(
+                o for o in origins if o.startswith(("http://", "https://"))
+            ) or (origins[0],)
+            out.append(
+                VaultItemMeta(
+                    id=f"{self.prefix}{item.get('id')}",
+                    kind="login",
+                    label=str(item.get("name") or origins[0]),
+                    origin=origins[0],
+                    created_at=str(item.get("creationDate") or ""),
+                    identifier_type="username" if username else None,
+                    identifier=username,
+                    allowed_origins=web_origins,
+                )
+            )
         return out
 
     def get_meta(self, handle: str) -> Optional[VaultItemMeta]:
         return next((m for m in self.list_items() if m.id == handle), None)
 
     def resolve_password(self, handle: str) -> str:
-        return self._run("get", "password", handle[len(self.prefix):]).rstrip("\r\n")
+        return self._run("get", "password", handle[len(self.prefix) :]).rstrip("\r\n")
 
     def resolve_otp(self, handle: str) -> Optional[str]:
         # `bw get totp <id>` mints the current code from the item's TOTP seed; "No TOTP available" otherwise.
         try:
-            code = self._run("get", "totp", handle[len(self.prefix):]).strip()
+            code = self._run("get", "totp", handle[len(self.prefix) :]).strip()
         except Exception:
             return None
         return code if code.isdigit() else None

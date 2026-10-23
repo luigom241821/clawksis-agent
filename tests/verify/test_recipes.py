@@ -94,7 +94,10 @@ class TestNodeDetection:
     def test_cra(self, tmp_path):
         write_pkg(
             tmp_path,
-            {"dependencies": {"react-scripts": "5.0"}, "scripts": {"start": "react-scripts start"}},
+            {
+                "dependencies": {"react-scripts": "5.0"},
+                "scripts": {"start": "react-scripts start"},
+            },
         )
         recipe = detect_recipe(tmp_path)
         assert recipe.kind == "cra"
@@ -118,7 +121,9 @@ class TestPythonDetection:
         assert "runserver" in recipe.start
 
     def test_fastapi_uvicorn(self, tmp_path):
-        (tmp_path / "requirements.txt").write_text("fastapi\nuvicorn\n", encoding="utf-8")
+        (tmp_path / "requirements.txt").write_text(
+            "fastapi\nuvicorn\n", encoding="utf-8"
+        )
         (tmp_path / "main.py").touch()
         recipe = detect_recipe(tmp_path)
         assert recipe.kind == "fastapi"
@@ -133,14 +138,18 @@ class TestPythonDetection:
         assert recipe.port == 5000
 
     def test_generic_python_uv(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\nname='x'\n", encoding="utf-8"
+        )
         (tmp_path / "uv.lock").touch()
         recipe = detect_recipe(tmp_path)
         assert recipe.kind == "python"
         assert recipe.bootstrap == ["uv sync"]
 
     def test_generic_python_pyproject_editable_install(self, tmp_path):
-        (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\nname='x'\n", encoding="utf-8"
+        )
         recipe = detect_recipe(tmp_path)
         assert recipe.bootstrap == ["pip install -e ."]
         assert recipe.test == ["python -m unittest discover"]
@@ -211,7 +220,13 @@ class TestOtherEcosystems:
 
 class TestRecipeFromDict:
     def test_roundtrip(self):
-        recipe = Recipe(name="X", kind="node", bootstrap=["npm install"], port=3000, start="npm run dev")
+        recipe = Recipe(
+            name="X",
+            kind="node",
+            bootstrap=["npm install"],
+            port=3000,
+            start="npm run dev",
+        )
         restored = Recipe.from_dict(recipe.to_dict())
         assert restored == recipe
 

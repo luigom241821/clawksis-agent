@@ -17,7 +17,9 @@ from pathlib import Path
 
 from clawk_cli.update_cmd_common import _best_effort
 
-logger = logging.getLogger("clawk_cli.update_cmd")  # log-record parity with the origin module
+logger = logging.getLogger(
+    "clawk_cli.update_cmd"
+)  # log-record parity with the origin module
 
 _BACKEND_PURPOSES = ("serve", "dashboard")
 
@@ -44,11 +46,17 @@ def _planned_stop_marker_path(profile_path: Path) -> Path:
     return Path(profile_path) / ".gateway-planned-stop.json"
 
 
-def _planned_stop_markers(running_pids, profile_processes, service_gateway_pids) -> dict:
+def _planned_stop_markers(
+    running_pids, profile_processes, service_gateway_pids
+) -> dict:
     """``{pid: marker path}`` for each gateway the socket pause will ask (profile-mapped, not SCM)."""
     markers = {}
     for pid in running_pids:
-        home = None if pid in service_gateway_pids else getattr(profile_processes.get(pid), "path", None)
+        home = (
+            None
+            if pid in service_gateway_pids
+            else getattr(profile_processes.get(pid), "path", None)
+        )
         if home:
             markers[pid] = _planned_stop_marker_path(Path(home))
     return markers
@@ -59,18 +67,26 @@ def _write_update_planned_stop_marker(profile_path: Path, pid: int) -> bool:
     try:
         from gateway.status import _get_process_start_time
         from utils import atomic_json_write
+
         atomic_json_write(
             _planned_stop_marker_path(profile_path),
-            {"target_pid": pid, "target_start_time": _get_process_start_time(pid), "stopper_pid": os.getpid(),
-             "written_at": datetime.now(UTC).isoformat()},
-            indent=None, separators=(",", ":"),
+            {
+                "target_pid": pid,
+                "target_start_time": _get_process_start_time(pid),
+                "stopper_pid": os.getpid(),
+                "written_at": datetime.now(UTC).isoformat(),
+            },
+            indent=None,
+            separators=(",", ":"),
         )
         return True
     except (OSError, PermissionError):
         return False
 
 
-def _wait_for_windows_update_gateway_exit(pids: list[int], *, timeout: float) -> set[int]:
+def _wait_for_windows_update_gateway_exit(
+    pids: list[int], *, timeout: float
+) -> set[int]:
     """Wait for the given gateway PIDs to exit, returning survivors."""
     if not pids:
         return set()
@@ -144,10 +160,16 @@ def _psutil():
 def _parent_is_live(proc) -> bool:
     """True when *proc* has a running parent that is not a recycled PID (a "parent" created after its child)."""
     parent = proc.parent()
-    return parent is not None and parent.is_running() and parent.create_time() <= proc.create_time()
+    return (
+        parent is not None
+        and parent.is_running()
+        and parent.create_time() <= proc.create_time()
+    )
 
 
-def _detect_venv_python_processes(*, exclude_pids: set[int] | None = None) -> list[tuple[int, str, str]]:
+def _detect_venv_python_processes(
+    *, exclude_pids: set[int] | None = None
+) -> list[tuple[int, str, str]]:
     """Live processes running from the project venv's interpreter as ``(pid, name, cmdline)``; never raises.
 
     The clawk.exe shim guard misses the Desktop backend and anything off ``venv\\Scripts\\python(w).exe``;
@@ -157,10 +179,12 @@ def _detect_venv_python_processes(*, exclude_pids: set[int] | None = None) -> li
     The FULL cmdline is kept: callers parse it (the pausable-gateway exemption looks for ``gateway run``).
     """
     from clawk_cli.update_cmd import _m
+
     psutil = _psutil()
     if not _m()._is_windows() or psutil is None:
         return []
     from clawk_constants import project_venv_dir
+
     venv_dir = project_venv_dir(_m().PROJECT_ROOT) or _m().PROJECT_ROOT / "venv"
     venv_prefix = _lower_dir_prefix(venv_dir)
     root_prefix = _lower_dir_prefix(_m().PROJECT_ROOT)
@@ -186,14 +210,26 @@ def _detect_venv_python_processes(*, exclude_pids: set[int] | None = None) -> li
         in_venv = exe_norm.startswith(venv_prefix)
         name = str(info.get("name") or Path(exe).name)
         name_low = name.lower()
-        if not (in_venv or name_low.startswith(("python", "pypy")) or name_low in {"uv.exe", "uvx.exe", "clawk.exe"}):
+        if not (
+            in_venv
+            or name_low.startswith(("python", "pypy"))
+            or name_low in {"uv.exe", "uvx.exe", "clawk.exe"}
+        ):
             continue
         cmdline_raw = _cmdline_or_empty(proc)
         cmdline_low = cmdline_raw.lower()
         # Fallback: uv/base-interpreter trampolines have an exe OUTSIDE the venv yet hold
         # its .pyd files — match cmdline (venv path, or `-m clawk_cli.main` + root/cwd).
-        if in_venv or venv_prefix in cmdline_low or (
-            "clawk_cli.main" in cmdline_low and (root_prefix in cmdline_low or _cwd_prefix(proc).startswith(root_prefix))
+        if (
+            in_venv
+            or venv_prefix in cmdline_low
+            or (
+                "clawk_cli.main" in cmdline_low
+                and (
+                    root_prefix in cmdline_low
+                    or _cwd_prefix(proc).startswith(root_prefix)
+                )
+            )
         ):
             matches.append((int(pid), name, cmdline_raw))
     return matches
@@ -207,10 +243,29 @@ def _cwd_prefix(proc) -> str:
         return os.sep
 
 
-_HOLDER_VALUE_FLAGS_FALLBACK = frozenset({
-    "--profile", "-p", "--config", "--model", "-m", "--provider", "--reasoning", "--toolsets", "-t",
-    "--skills", "-s", "--continue", "-c", "--resume", "-r", "--oneshot", "-z", "--in", "--usage-file",
-})
+_HOLDER_VALUE_FLAGS_FALLBACK = frozenset(
+    {
+        "--profile",
+        "-p",
+        "--config",
+        "--model",
+        "-m",
+        "--provider",
+        "--reasoning",
+        "--toolsets",
+        "-t",
+        "--skills",
+        "-s",
+        "--continue",
+        "-c",
+        "--resume",
+        "-r",
+        "--oneshot",
+        "-z",
+        "--in",
+        "--usage-file",
+    }
+)
 _holder_value_flags_cache: frozenset | None = None
 
 
@@ -232,6 +287,7 @@ def _holder_value_flags() -> frozenset:
     flags: set[str] = {"--profile", "-p", "--config"}
     try:
         from clawk_cli._parser import build_top_level_parser
+
         for action in build_top_level_parser()[0]._actions:
             if action.option_strings and action.nargs != 0:
                 flags.update(action.option_strings)
@@ -257,7 +313,11 @@ def _clawk_holder_subcommand(cmdline: str) -> str | None:
     # ``python -c <src> … -m clawk_cli.main <subcommand>``: the entry token belongs to the argv the
     # inline source carries for a LATER spawn, not to this holder (#107002) -- unless the source is a
     # Clawksis bootstrap running the entry point in this process (#124318).
-    from gateway.status_inline_source import command_line_runs_inline_source, inline_bootstrap_argv
+    from gateway.status_inline_source import (
+        command_line_runs_inline_source,
+        inline_bootstrap_argv,
+    )
+
     normalized = [t.strip("\"'").replace("\\", "/") for t in tokens]
     if command_line_runs_inline_source(normalized):
         tokens = inline_bootstrap_argv(normalized)
@@ -266,8 +326,11 @@ def _clawk_holder_subcommand(cmdline: str) -> str | None:
 
     def _is_entry(i: int, token: str) -> bool:
         low = token.lower().strip("\"'").replace("\\", "/")
-        return (low.endswith("clawk_cli.main") and i > 0 and tokens[i - 1] == "-m") or (
-            low.rsplit("/", 1)[-1] in ("clawk", "clawk.exe")) or low.endswith("clawk_cli/main.py")
+        return (
+            (low.endswith("clawk_cli.main") and i > 0 and tokens[i - 1] == "-m")
+            or (low.rsplit("/", 1)[-1] in ("clawk", "clawk.exe"))
+            or low.endswith("clawk_cli/main.py")
+        )
 
     entry_idx = next((i for i, token in enumerate(tokens) if _is_entry(i, token)), None)
     if entry_idx is None:
@@ -277,7 +340,9 @@ def _clawk_holder_subcommand(cmdline: str) -> str | None:
     while i < len(tokens):
         token = tokens[i]
         if token in value_flags or token.split("=", 1)[0] in value_flags:
-            i += 1 if "=" in token else 2  # --flag value consumes two tokens; --flag=value one.
+            i += (
+                1 if "=" in token else 2
+            )  # --flag value consumes two tokens; --flag=value one.
         elif token.startswith("-"):
             i += 1
         else:
@@ -292,10 +357,12 @@ def _venv_launcher_ancestors(pids: list[int]) -> list[int]:
     CPython worker (writes the PID file). The pause set sees the worker, the venv scan sees the launcher, so a
     paused gateway still tripped the guard. One hop up only, venv-prefixed only (bounds blast radius)."""
     from clawk_cli.update_cmd import _m
+
     psutil = _psutil()
     if not _m()._is_windows() or not pids or psutil is None:
         return []
     from clawk_constants import project_venv_dir
+
     venv_dir = project_venv_dir(_m().PROJECT_ROOT) or _m().PROJECT_ROOT / "venv"
     venv_prefix = _lower_dir_prefix(venv_dir)
     skip = _self_and_non_gateway_ancestor_pids(psutil) | set(pids)
@@ -306,7 +373,11 @@ def _venv_launcher_ancestors(pids: list[int]) -> list[int]:
             if parent is None:
                 continue
             ppid = int(parent.pid)
-            if ppid not in skip and ppid not in found and (parent.exe() or "").lower().startswith(venv_prefix):
+            if (
+                ppid not in skip
+                and ppid not in found
+                and (parent.exe() or "").lower().startswith(venv_prefix)
+            ):
                 found.append(ppid)
     return found
 
@@ -319,6 +390,7 @@ def _venv_holder_kind(cmdline: str) -> str:
     Derived from the same classifiers the refusal path uses so automation stops exactly what the
     guard would refuse on."""
     from clawk_cli._scan_venv_blockers import _is_pausable_gateway
+
     if _is_pausable_gateway(cmdline):
         return "gateway"
     subcommand = _clawk_holder_subcommand(cmdline)
@@ -329,7 +401,9 @@ def _venv_holder_kind(cmdline: str) -> str:
     return "python"
 
 
-VENV_HOLDERS_EXIT = 3  # ``clawk update --list-venv-holders``: holders present (distinct from refusal 2)
+VENV_HOLDERS_EXIT = (
+    3  # ``clawk update --list-venv-holders``: holders present (distinct from refusal 2)
+)
 
 
 def list_venv_holders() -> list[dict]:
@@ -338,6 +412,7 @@ def list_venv_holders() -> list[dict]:
     Off Windows (or without psutil) the guard never fires, so the list is empty. ``exe``/``argv`` are the
     live psutil values when readable (the scan may carry only a cmdline prefix)."""
     from clawk_cli.update_cmd import _m
+
     psutil = _psutil()
     holders: list[dict] = []
     for pid, name, cmdline in _m()._detect_venv_python_processes():
@@ -347,17 +422,22 @@ def list_venv_holders() -> list[dict]:
                 proc = psutil.Process(int(pid))
                 exe = proc.exe() or name
                 argv = " ".join(proc.cmdline()) or cmdline
-        holders.append({"pid": int(pid), "exe": exe, "argv": argv, "kind": _venv_holder_kind(argv)})
+        holders.append(
+            {"pid": int(pid), "exe": exe, "argv": argv, "kind": _venv_holder_kind(argv)}
+        )
     return holders
 
 
-def _leftover_pausable_gateway_pids(matches: list[tuple[int, str, str]]) -> list[int] | None:
+def _leftover_pausable_gateway_pids(
+    matches: list[tuple[int, str, str]],
+) -> list[int] | None:
     """PIDs from *matches* when EVERY remaining venv holder is a pausable gateway, else ``None`` (keep refusing).
 
     A gateway respawned inside the pause->guard window (or via an unmapped spawn path) still holds ``.pyd`` files.
     Uses the Desktop preflight's ``_is_pausable_gateway`` so exemption and tolerance cannot drift; live argv is
     re-read via psutil when possible since the scan may hold only a cmdline prefix."""
     from clawk_cli._scan_venv_blockers import _is_pausable_gateway
+
     psutil = _psutil()
     pids: list[int] = []
     for pid, _name, cmdline in matches:
@@ -381,11 +461,17 @@ def _refuse_gateway_ancestor_tree_kill(pids: list[int], *, gateway_mode: bool) -
     """
     if gateway_mode or not pids:
         return False
+
     def _ancestors():
         from clawk_cli.gateway import _is_pid_ancestor_of_current_process
-        return [int(pid) for pid in pids if _is_pid_ancestor_of_current_process(int(pid))]
 
-    ancestors = _try_call(_ancestors, "Could not inspect gateway ancestry before tree-kill: %s")
+        return [
+            int(pid) for pid in pids if _is_pid_ancestor_of_current_process(int(pid))
+        ]
+
+    ancestors = _try_call(
+        _ancestors, "Could not inspect gateway ancestry before tree-kill: %s"
+    )
     if not ancestors:
         return False
     print(
@@ -409,9 +495,13 @@ def _ledger_manual_serve_holders(matches: list[tuple[int, str, str]]) -> list[di
         return []
     holder_pids = {int(pid) for pid, _name, _cmd in matches}
     return [
-        entry for entry in ledger_entries()
-        if entry.get("purpose") in _BACKEND_PURPOSES and isinstance(entry.get("pid"), int) and entry["pid"] in holder_pids
-        and spawner_is_dead(entry) is not False  # False = live Desktop supervisor owns it; keep refusing
+        entry
+        for entry in ledger_entries()
+        if entry.get("purpose") in _BACKEND_PURPOSES
+        and isinstance(entry.get("pid"), int)
+        and entry["pid"] in holder_pids
+        and spawner_is_dead(entry)
+        is not False  # False = live Desktop supervisor owns it; keep refusing
     ]
 
 
@@ -419,11 +509,19 @@ def _serve_relaunch_commands(entries: list[dict]) -> list[list[str]]:
     """Rebuild launch commands for stopped serves from ledger host/port/profile — never argv parsing
     (joined argv cannot round-trip Windows paths with spaces). Entries without a port are skipped."""
     from clawk_cli.update_cmd import _m
+
     clawk = "clawk"
     with suppress(Exception):
         scripts_dir = _m()._venv_scripts_dir()
         if scripts_dir is not None:
-            clawk = next((str(scripts_dir / n) for n in ("clawk.exe", "clawk") if (scripts_dir / n).is_file()), clawk)
+            clawk = next(
+                (
+                    str(scripts_dir / n)
+                    for n in ("clawk.exe", "clawk")
+                    if (scripts_dir / n).is_file()
+                ),
+                clawk,
+            )
     commands: list[list[str]] = []
     for entry in entries:
         port = entry.get("port")
@@ -431,8 +529,11 @@ def _serve_relaunch_commands(entries: list[dict]) -> list[list[str]]:
             continue
         profile, host = str(entry.get("profile") or ""), str(entry.get("host") or "")
         commands.append(
-            [clawk] + (["--profile", profile] if profile and profile != "default" else [])
-            + [str(entry.get("purpose"))] + (["--host", host] if host else []) + ["--port", str(port)]
+            [clawk]
+            + (["--profile", profile] if profile and profile != "default" else [])
+            + [str(entry.get("purpose"))]
+            + (["--host", host] if host else [])
+            + ["--port", str(port)]
         )
     return commands
 
@@ -442,6 +543,7 @@ def _relaunch_stopped_serves(token: dict) -> None:
 
     `pending` flips False on first invocation so explicit call + atexit registration cannot double-spawn."""
     from clawk_cli.update_cmd import _m, _record_update_step
+
     if not token.get("pending"):
         return
     token["pending"] = False
@@ -455,9 +557,12 @@ def _relaunch_stopped_serves(token: dict) -> None:
         print("  ⟲ Relaunching stopped serve/dashboard backend(s)")
         failed = _m()._respawn_dashboard_processes(commands)
     if skipped or failed:
-        print("  ⚠ Some stopped backends could not be relaunched automatically; restart them manually (clawk serve --host <ip> --port <port>).")
+        print(
+            "  ⚠ Some stopped backends could not be relaunched automatically; restart them manually (clawk serve --host <ip> --port <port>)."
+        )
     _record_update_step(
-        "serve_relaunch", not failed and not skipped,
+        "serve_relaunch",
+        not failed and not skipped,
         f"relaunched={len(commands) - len(failed)} failed={len(failed)} skipped={skipped}",
     )
 
@@ -485,7 +590,9 @@ def _live_argv_low(psutil, pid, cmdline: str) -> str | None:
     return argv.lower()
 
 
-def _orphaned_desktop_backend_pids(matches: list[tuple[int, str, str]]) -> list[tuple[int, int]] | None:
+def _orphaned_desktop_backend_pids(
+    matches: list[tuple[int, str, str]],
+) -> list[tuple[int, int]] | None:
     """``(pid, start_time)`` roots from *matches* when every remaining holder is an ORPHANED backend, else ``None``.
 
     Killing a Desktop-owned ``serve`` is futile (the app respawns it), but a straggler whose Desktop is gone
@@ -532,7 +639,11 @@ def _orphaned_desktop_backend_pids(matches: list[tuple[int, str, str]]) -> list[
             # PID-reuse check: a "parent" created after its child is a recycled PID. A live parent is
             # not a root but may be an orphan root's descendant (the venv trampoline re-execs uv
             # python with the SAME argv) — defer to pass 2.
-            if parent is not None and parent.is_running() and parent.create_time() <= proc.create_time():
+            if (
+                parent is not None
+                and parent.is_running()
+                and parent.create_time() <= proc.create_time()
+            ):
                 remaining.append(int(pid))
                 continue
         except psutil.NoSuchProcess:
@@ -545,7 +656,9 @@ def _orphaned_desktop_backend_pids(matches: list[tuple[int, str, str]]) -> list[
     root_set = {pid for pid, _start_time in roots}
     for pid in remaining:
         try:
-            if not root_set or not root_set & {int(a.pid) for a in psutil.Process(pid).parents()}:
+            if not root_set or not root_set & {
+                int(a.pid) for a in psutil.Process(pid).parents()
+            }:
                 return None
         except psutil.NoSuchProcess:
             continue  # exited already
@@ -561,18 +674,28 @@ def _ledger_reapable_backend_pids(matches: list[tuple[int, str, str]]) -> list[i
     (PID reuse can't forge it), purpose is a REAPABLE kind (never interactive), and the recorded SPAWNER is
     provably dead. Safe in ANY context. Unlisted holders fall to later rungs and never disqualify identified ones."""
     try:
-        from clawk_cli.process_identity import REAPABLE_PURPOSES, ledger_entries, spawner_is_dead
+        from clawk_cli.process_identity import (
+            REAPABLE_PURPOSES,
+            ledger_entries,
+            spawner_is_dead,
+        )
+
         entries = ledger_entries()
     except Exception:
         return []
     by_pid = {e.get("pid"): e for e in entries if isinstance(e.get("pid"), int)}
     return [
-        int(pid) for pid, _name, _cmdline in matches
-        if (entry := by_pid.get(int(pid))) and entry.get("purpose") in REAPABLE_PURPOSES and spawner_is_dead(entry) is True
+        int(pid)
+        for pid, _name, _cmdline in matches
+        if (entry := by_pid.get(int(pid)))
+        and entry.get("purpose") in REAPABLE_PURPOSES
+        and spawner_is_dead(entry) is True
     ]
 
 
-def _handoff_reapable_backend_pids(matches: list[tuple[int, str, str]]) -> list[int] | None:
+def _handoff_reapable_backend_pids(
+    matches: list[tuple[int, str, str]],
+) -> list[int] | None:
     """Backend PIDs safe to tree-reap during a GUI-updater hand-off, INCLUDING ones with a live parent; never raises.
 
     The orphan-only rung bails on ANY live parent (mid-teardown Electron, launcher->worker chain) and hung a
@@ -606,18 +729,28 @@ def _stop_process_trees(pids: list[int] | list[tuple[int, int]]) -> None:
     """
     from gateway.status import get_process_start_time
     from clawk_cli._subprocess_compat import pid_is_clawk, windows_hide_flags
+
     for entry in pids:
-        pid, expected_start_time = entry if isinstance(entry, tuple) else (int(entry), get_process_start_time(int(entry)))
+        pid, expected_start_time = (
+            entry
+            if isinstance(entry, tuple)
+            else (int(entry), get_process_start_time(int(entry)))
+        )
         try:
             if expected_start_time is None:
-                logger.debug("Skipping taskkill of PID %s: process identity unavailable", pid)
+                logger.debug(
+                    "Skipping taskkill of PID %s: process identity unavailable", pid
+                )
                 continue
             if not pid_is_clawk(pid, expected_start_time=expected_start_time):
                 logger.debug("Skipping taskkill of non-Clawksis or changed PID %s", pid)
                 continue
             subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"], check=False,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
                 creationflags=windows_hide_flags(),
             )
         except Exception as exc:
@@ -635,7 +768,10 @@ def _looks_like_desktop_control_plane(cmdline: str) -> bool:
     A cmdline whose subcommand cannot be determined is NOT a control plane — callers must not guess
     ownership. See #90778, #91869.
     """
-    return "clawk_cli.main" in (cmdline or "").lower() and _clawk_holder_subcommand(cmdline) in _BACKEND_PURPOSES
+    return (
+        "clawk_cli.main" in (cmdline or "").lower()
+        and _clawk_holder_subcommand(cmdline) in _BACKEND_PURPOSES
+    )
 
 
 def _desktop_owns_gateway_lifecycle() -> bool:
@@ -648,12 +784,22 @@ def _desktop_owns_gateway_lifecycle() -> bool:
     See #76129, #92091.
     """
     from clawk_cli.update_cmd import _m
-    with _best_effort('Desktop-lifecycle ledger probe failed: %s'):
+
+    with _best_effort("Desktop-lifecycle ledger probe failed: %s"):
         from clawk_cli.process_identity import ledger_entries, spawner_is_dead
-        if any(e.get("purpose") in _BACKEND_PURPOSES and spawner_is_dead(e) is False for e in ledger_entries()):
+
+        if any(
+            e.get("purpose") in _BACKEND_PURPOSES and spawner_is_dead(e) is False
+            for e in ledger_entries()
+        ):
             return True
     psutil = _psutil()
-    for pid, _name, cmdline in _try_call(_detect_venv_python_processes, "Desktop-lifecycle holder scan failed: %s") or []:
+    for pid, _name, cmdline in (
+        _try_call(
+            _detect_venv_python_processes, "Desktop-lifecycle holder scan failed: %s"
+        )
+        or []
+    ):
         if not _looks_like_desktop_control_plane(cmdline):
             continue
         if psutil is None:
@@ -667,14 +813,20 @@ def _desktop_owns_gateway_lifecycle() -> bool:
 def _win_service(name: str):
     """``(psutil, service)`` for the named SCM service (psutil imported here so tests can stub the module)."""
     import psutil
+
     return psutil, psutil.win_service_get(name)
 
 
 def _sc_exe(verb: str, name: str, service, settled_status: str) -> None:
     """``sc.exe <verb> <name>``; a non-zero exit is only an error when SCM doesn't already report *settled_status*."""
     result = subprocess.run(
-        ["sc.exe", verb, name], capture_output=True, text=True, encoding="utf-8", errors="replace",
-        timeout=10, check=False,
+        ["sc.exe", verb, name],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+        check=False,
     )
     if result.returncode != 0 and service.status() != settled_status:
         detail = (result.stderr or result.stdout).strip()
@@ -708,52 +860,95 @@ def _process_create_time(psutil, pid: int, label: str) -> float:
     try:
         return float(psutil.Process(int(pid)).create_time())
     except Exception as exc:
-        raise RuntimeError(f"Windows {label} process identity is unavailable before stop") from exc
+        raise RuntimeError(
+            f"Windows {label} process identity is unavailable before stop"
+        ) from exc
 
 
-def _verify_service_identities(psutil, name: str, service, expected_service_identity, expected_gateway_identity) -> None:
+def _verify_service_identities(
+    psutil, name: str, service, expected_service_identity, expected_gateway_identity
+) -> None:
     """Refuse to stop *name* unless SCM state, service/gateway process identities and ancestry all still match."""
     if expected_service_identity is not None:
         try:
-            current_status, current_service_pid = str(service.status()), int(service.pid() or 0)
+            current_status, current_service_pid = (
+                str(service.status()),
+                int(service.pid() or 0),
+            )
         except Exception as exc:
-            raise RuntimeError(f"Windows service {name} SCM identity is unavailable before stop") from exc
+            raise RuntimeError(
+                f"Windows service {name} SCM identity is unavailable before stop"
+            ) from exc
         if current_status != "running":
-            raise RuntimeError(f"Windows service {name} is not stably running before stop: {current_status}")
+            raise RuntimeError(
+                f"Windows service {name} is not stably running before stop: {current_status}"
+            )
         if current_service_pid != int(expected_service_identity[0]):
-            raise RuntimeError(f"Windows service {name} SCM process identity changed before stop")
-    for label, identity in (("service", expected_service_identity), ("gateway", expected_gateway_identity)):
-        if identity is not None and abs(_process_create_time(psutil, identity[0], label) - float(identity[1])) > 0.001:
+            raise RuntimeError(
+                f"Windows service {name} SCM process identity changed before stop"
+            )
+    for label, identity in (
+        ("service", expected_service_identity),
+        ("gateway", expected_gateway_identity),
+    ):
+        if (
+            identity is not None
+            and abs(
+                _process_create_time(psutil, identity[0], label) - float(identity[1])
+            )
+            > 0.001
+        ):
             raise RuntimeError(f"Windows {label} process identity changed before stop")
     if expected_service_identity is not None and expected_gateway_identity is not None:
         try:
-            ancestor_pids = {int(parent.pid) for parent in psutil.Process(int(expected_gateway_identity[0])).parents()}
+            ancestor_pids = {
+                int(parent.pid)
+                for parent in psutil.Process(
+                    int(expected_gateway_identity[0])
+                ).parents()
+            }
         except Exception as exc:
-            raise RuntimeError("Windows gateway ancestry is unavailable before service stop") from exc
+            raise RuntimeError(
+                "Windows gateway ancestry is unavailable before service stop"
+            ) from exc
         if int(expected_service_identity[0]) not in ancestor_pids:
             raise RuntimeError(f"Windows gateway is no longer owned by service {name}")
 
 
 def _stop_windows_gateway_service(
-    name: str, *, expected_processes: tuple[tuple[int, float], ...] = (), expected_service_identity: tuple[int, float] | None = None,
-    expected_gateway_identity: tuple[int, float] | None = None, timeout: float = 30.0,
+    name: str,
+    *,
+    expected_processes: tuple[tuple[int, float], ...] = (),
+    expected_service_identity: tuple[int, float] | None = None,
+    expected_gateway_identity: tuple[int, float] | None = None,
+    timeout: float = 30.0,
 ) -> None:
     """Stop one verified Windows service and wait until SCM reports it down.
 
     Lingering matching-identity processes after SCM says stopped make venv mutation unsafe — fail closed."""
     psutil, service = _win_service(name)
-    _verify_service_identities(psutil, name, service, expected_service_identity, expected_gateway_identity)
+    _verify_service_identities(
+        psutil, name, service, expected_service_identity, expected_gateway_identity
+    )
     _sc_exe("stop", name, service, "stopped")
 
     def _alive() -> list[int]:
-        return [pid for pid, create_time in expected_processes if _original_process_is_alive(psutil, pid, create_time)]
+        return [
+            pid
+            for pid, create_time in expected_processes
+            if _original_process_is_alive(psutil, pid, create_time)
+        ]
 
     if _poll_until(lambda: service.status() == "stopped" and not _alive(), timeout):
         return
     if service.status() != "stopped":
-        raise RuntimeError(f"Windows service {name} did not stop within {timeout:.0f}s; venv mutation unsafe.")
+        raise RuntimeError(
+            f"Windows service {name} did not stop within {timeout:.0f}s; venv mutation unsafe."
+        )
     if alive_after_stop := _alive():
-        raise RuntimeError(f"Windows service {name} stopped but its process tree is still alive: {alive_after_stop}")
+        raise RuntimeError(
+            f"Windows service {name} stopped but its process tree is still alive: {alive_after_stop}"
+        )
 
 
 def _start_windows_gateway_service(name: str, *, timeout: float = 30.0) -> None:
@@ -761,12 +956,15 @@ def _start_windows_gateway_service(name: str, *, timeout: float = 30.0) -> None:
     service = _win_service(name)[1]
     _sc_exe("start", name, service, "running")
     if not _poll_until(lambda: service.status() == "running", timeout):
-        raise RuntimeError(f"Windows service {name} did not start within {timeout:.0f}s")
+        raise RuntimeError(
+            f"Windows service {name} did not start within {timeout:.0f}s"
+        )
 
 
 def _restore_windows_gateway_service(name: str, *, timeout: float = 60.0) -> None:
     """Restore a service after an uncertain stop, including STOP_PENDING."""
     from clawk_cli.update_cmd import _start_windows_gateway_service
+
     service = _win_service(name)[1]
 
     def _settled() -> bool:
@@ -776,7 +974,9 @@ def _restore_windows_gateway_service(name: str, *, timeout: float = 60.0) -> Non
         return status in ("running", "stopped")
 
     if not _poll_until(_settled, timeout):
-        raise RuntimeError(f"Windows service {name} did not reach a restorable state within {timeout:.0f}s")
+        raise RuntimeError(
+            f"Windows service {name} did not reach a restorable state within {timeout:.0f}s"
+        )
 
 
 def _windows_cold_start_plan() -> dict | None:
@@ -796,15 +996,28 @@ def _windows_cold_start_plan() -> dict | None:
     consumes only that generation (#110020 review)."""
     from clawk_cli.update_cmd import _desktop_owns_gateway_lifecycle
     from clawk_cli import gateway_windows
-    with _best_effort('Could not check Windows gateway autostart state before update: %s'):
+
+    with _best_effort(
+        "Could not check Windows gateway autostart state before update: %s"
+    ):
         if not gateway_windows.is_installed():
             return None
-        token = {"resume_needed": True, "profiles": {}, "unmapped_pids": [], "unmapped": [], "cold_start_if_installed": True}
-        with _best_effort('Could not check Desktop gateway-lifecycle ownership before update: %s'):
+        token = {
+            "resume_needed": True,
+            "profiles": {},
+            "unmapped_pids": [],
+            "unmapped": [],
+            "cold_start_if_installed": True,
+        }
+        with _best_effort(
+            "Could not check Desktop gateway-lifecycle ownership before update: %s"
+        ):
             if _desktop_owns_gateway_lifecycle():
                 generation = gateway_windows.attested_death_generation(current_pids=[])
                 if generation is None:
-                    logger.debug("Skipping Windows gateway cold-start plan: Desktop owns gateway lifecycle")
+                    logger.debug(
+                        "Skipping Windows gateway cold-start plan: Desktop owns gateway lifecycle"
+                    )
                     return None
                 token["attested_generation"] = generation
         return token
@@ -821,34 +1034,67 @@ class ServicePauseFailed(RuntimeError):
         self.rollback_failures = rollback_failures
 
 
-def _pause_windows_gateway_services(service_gateways, token: dict, profiles: dict, unmapped: list) -> dict:
+def _pause_windows_gateway_services(
+    service_gateways, token: dict, profiles: dict, unmapped: list
+) -> dict:
     """Stop each SCM gateway service, recording them on *token*; roll everything back on failure.
 
     Runs after every fallible ordinary-gateway step so a failure here restores the attempted
     services AND the already-paused ordinary gateways before re-raising."""
-    from clawk_cli.update_cmd import _restore_windows_gateway_service, _stop_windows_gateway_service
+    from clawk_cli.update_cmd import (
+        _restore_windows_gateway_service,
+        _stop_windows_gateway_service,
+    )
+
     paused_services = []
     current_service_name = None
     try:
         for service in service_gateways:
             current_service_name = str(service.name)
             _stop_windows_gateway_service(
-                current_service_name, expected_processes=tuple(getattr(service, "descendant_identities", ())),
-                expected_service_identity=(int(service.service_pid), float(service.service_create_time)),
-                expected_gateway_identity=(int(service.gateway_pid), float(service.gateway_create_time)),
+                current_service_name,
+                expected_processes=tuple(getattr(service, "descendant_identities", ())),
+                expected_service_identity=(
+                    int(service.service_pid),
+                    float(service.service_create_time),
+                ),
+                expected_gateway_identity=(
+                    int(service.gateway_pid),
+                    float(service.gateway_create_time),
+                ),
             )
             paused_services.append(current_service_name)
             current_service_name = None
         if paused_services:
-            token.update(services=paused_services, expected_services=list(paused_services), restarted_services=[])
-            token["service_profiles"] = {str(s.name): str(s.profile) for s in service_gateways if str(s.name) in paused_services}
-            print("  ✓ Paused Windows gateway service(s): " + ", ".join(paused_services))
+            token.update(
+                services=paused_services,
+                expected_services=list(paused_services),
+                restarted_services=[],
+            )
+            token["service_profiles"] = {
+                str(s.name): str(s.profile)
+                for s in service_gateways
+                if str(s.name) in paused_services
+            }
+            print(
+                "  ✓ Paused Windows gateway service(s): " + ", ".join(paused_services)
+            )
         return token
     except Exception as exc:
-        restore_names = ([current_service_name] if current_service_name else []) + list(reversed(paused_services))
-        rollback: list[tuple[str, object]] = [(n, lambda n=n: _restore_windows_gateway_service(n)) for n in dict.fromkeys(restore_names)]
+        restore_names = ([current_service_name] if current_service_name else []) + list(
+            reversed(paused_services)
+        )
+        rollback: list[tuple[str, object]] = [
+            (n, lambda n=n: _restore_windows_gateway_service(n))
+            for n in dict.fromkeys(restore_names)
+        ]
         if profiles or unmapped:
-            rollback.append(("ordinary gateways", lambda: _resume_windows_gateways_after_update(token)))
+            rollback.append(
+                (
+                    "ordinary gateways",
+                    lambda: _resume_windows_gateways_after_update(token),
+                )
+            )
         rollback_failures = []
         for label, restore in rollback:
             try:
@@ -867,27 +1113,45 @@ def _owned_gateway_pids(pids, *, keep=(), quiet: bool = True) -> list[int]:
     another Clawksis install, or one whose home cannot be read, is named (unless *quiet*) and left
     running, never paused, force-killed or replayed (#124659)."""
     from clawk_cli.update_cmd_fleet import _scoped_manual_gateway_pids
+
     return _scoped_manual_gateway_pids(list(pids), keep=keep, quiet=quiet)
 
 
 def _discover_windows_gateways():
     """``(profile_processes, service_gateways, service_gateway_pids, running_pids)`` for the pause; any indeterminate probe aborts."""
-    from clawk_cli.gateway import find_gateway_pids, find_profile_gateway_processes, find_windows_gateway_services
+    from clawk_cli.gateway import (
+        find_gateway_pids,
+        find_profile_gateway_processes,
+        find_windows_gateway_services,
+    )
+
     with _abort_on_error("Could not map Windows gateway PIDs to profiles"):
         profile_process_list = find_profile_gateway_processes(strict=True)
         profile_processes = {proc.pid: proc for proc in profile_process_list}
     with _abort_on_error("Could not determine Windows gateway service ownership"):
-        service_gateways = find_windows_gateway_services(profile_processes=profile_process_list)
+        service_gateways = find_windows_gateway_services(
+            profile_processes=profile_process_list
+        )
     service_gateway_pids = {int(service.gateway_pid) for service in service_gateways}
     with _abort_on_error("Could not discover Windows gateway PIDs before update"):
         # find_gateway_pids(all_profiles=True) is a HOST-wide scan; only this install's fleet is paused.
-        running_pids = _owned_gateway_pids(dict.fromkeys(
-            [*find_gateway_pids(all_profiles=True), *sorted(profile_processes), *sorted(service_gateway_pids)]
-        ), keep=set(profile_processes) | service_gateway_pids, quiet=False)
+        running_pids = _owned_gateway_pids(
+            dict.fromkeys(
+                [
+                    *find_gateway_pids(all_profiles=True),
+                    *sorted(profile_processes),
+                    *sorted(service_gateway_pids),
+                ]
+            ),
+            keep=set(profile_processes) | service_gateway_pids,
+            quiet=False,
+        )
     return profile_processes, service_gateways, service_gateway_pids, running_pids
 
 
-def _request_socket_pauses(running_pids, profile_processes, service_gateway_pids, on_request=None):
+def _request_socket_pauses(
+    running_pids, profile_processes, service_gateway_pids, on_request=None
+):
     """Marker + socket-first pause for every profile-mapped gateway; ``(profiles, mapped_pids, socket_acks)``.
 
     Socket ACK = the gateway drains and exits by its own graceful path. No answer (older
@@ -913,6 +1177,7 @@ def _request_socket_pauses(running_pids, profile_processes, service_gateway_pids
             # venv handles on the way out. No answer (older gateway, no socket) → the marker watcher /
             # force-kill fallback below behaves exactly as before this verb existed.
             from gateway.control_socket import pause_gateway_for_update
+
             ack = pause_gateway_for_update(Path(proc.path))
             if ack and (ack.get("pausing") or ack.get("already_stopping")):
                 socket_acks.append(ack)
@@ -927,6 +1192,7 @@ def _gateway_drain_timeout(socket_acks: list[dict]) -> float:
     """Drain budget: configured restart drain (>= 1s), raised to a socket-paused gateway's declared
     ACTIVE-TURN budget + teardown grace so it isn't force-killed mid-turn."""
     from clawk_cli.gateway import _get_restart_drain_timeout
+
     try:
         drain_timeout = max(float(_get_restart_drain_timeout()), 1.0)
     except Exception:
@@ -935,7 +1201,9 @@ def _gateway_drain_timeout(socket_acks: list[dict]) -> float:
         with suppress(Exception):
             declared = max(float(a.get("drain_timeout") or 0.0) for a in socket_acks)
             drain_timeout = max(drain_timeout, declared + 10.0)
-        print(f"  → {len(socket_acks)} gateway(s) ACKed socket pause; waiting up to {int(drain_timeout)}s for graceful exit")
+        print(
+            f"  → {len(socket_acks)} gateway(s) ACKed socket pause; waiting up to {int(drain_timeout)}s for graceful exit"
+        )
     return drain_timeout
 
 
@@ -946,21 +1214,32 @@ def _pause_windows_gateways_for_update() -> dict | None:
     locked during ``git``/``uv``. Stop only PIDs the gateway discovery code identifies. The paused set is on
     disk (``update_pause_record``) before the first stop, with any set a killed earlier update orphaned."""
     from clawk_cli.update_cmd import _m
+
     if not _m()._is_windows():
         return None
     with _abort_on_error("Could not prepare Windows gateway pause for update"):
         import gateway.status
         from clawk_cli.gateway import _capture_gateway_argv
     from clawk_cli import update_pause_record as pause_record
+
     with _abort_on_error("Could not read the gateways an earlier update paused"):
         adopted, claims = pause_record.adopt_orphans()
-    profile_processes, service_gateways, service_gateway_pids, running_pids = _discover_windows_gateways()
+    profile_processes, service_gateways, service_gateway_pids, running_pids = (
+        _discover_windows_gateways()
+    )
     if not running_pids:
         return _cold_start_pause_token(adopted, claims)
-    unmapped_pids = [pid for pid in running_pids if pid not in profile_processes and pid not in service_gateway_pids]
+    unmapped_pids = [
+        pid
+        for pid in running_pids
+        if pid not in profile_processes and pid not in service_gateway_pids
+    ]
     from gateway.status import get_process_start_time
     from clawk_cli.update_fleet_scope import gateway_pid_home
-    born = {int(pid): get_process_start_time(int(pid)) for pid in running_pids}  # the processes discovered
+
+    born = {
+        int(pid): get_process_start_time(int(pid)) for pid in running_pids
+    }  # the processes discovered
     # Snapshot unmapped gateways' argv *before* anything stops so resume (or a later launch) can replay it.
     # Unmapped = no profile->PID-file mapping (e.g. Scheduled Task ``pythonw.exe -m ...``). Two homes can
     # run identical selectorless argv, so the home and birth identify the runtime the replay must restore:
@@ -969,40 +1248,84 @@ def _pause_windows_gateways_for_update() -> dict | None:
     # record, whose argv-only match lets another home's gateway retire this debt.
     homes = {int(pid): gateway_pid_home(int(pid)) for pid in unmapped_pids}
     if None in homes.values():
-        raise RuntimeError("Could not prove the Clawksis home of unmapped gateway PID(s) "
-                           + ", ".join(str(p) for p, h in homes.items() if h is None) + "; nothing was stopped")
+        raise RuntimeError(
+            "Could not prove the Clawksis home of unmapped gateway PID(s) "
+            + ", ".join(str(p) for p, h in homes.items() if h is None)
+            + "; nothing was stopped"
+        )
     unmapped = [
-        {"pid": int(pid), "argv": _try_call(lambda p=int(pid): _capture_gateway_argv(p),
-                                            "Could not capture argv for unmapped gateway %s: %s", int(pid)),
-         "home": homes[int(pid)], "ct": born[int(pid)]}
+        {
+            "pid": int(pid),
+            "argv": _try_call(
+                lambda p=int(pid): _capture_gateway_argv(p),
+                "Could not capture argv for unmapped gateway %s: %s",
+                int(pid),
+            ),
+            "home": homes[int(pid)],
+            "ct": born[int(pid)],
+        }
         for pid in unmapped_pids
     ]
     intended = {
-        "resume_needed": True, "unmapped_pids": unmapped_pids, "unmapped": unmapped,
-        "profiles": {str(profile_processes[pid].profile): int(pid) for pid in running_pids
-                     if pid in profile_processes and pid not in service_gateway_pids},
-        "identities": {str(pid): pause_record.identity(pid)["ct"] for pid in running_pids},
+        "resume_needed": True,
+        "unmapped_pids": unmapped_pids,
+        "unmapped": unmapped,
+        "profiles": {
+            str(profile_processes[pid].profile): int(pid)
+            for pid in running_pids
+            if pid in profile_processes and pid not in service_gateway_pids
+        },
+        "identities": {
+            str(pid): pause_record.identity(pid)["ct"] for pid in running_pids
+        },
     }
     if service_gateways:
         names = [str(s.name) for s in service_gateways]
-        intended.update(services=names, expected_services=list(names), restarted_services=[],
-                        service_profiles={str(s.name): str(s.profile) for s in service_gateways})
+        intended.update(
+            services=names,
+            expected_services=list(names),
+            restarted_services=[],
+            service_profiles={str(s.name): str(s.profile) for s in service_gateways},
+        )
     with _abort_on_error("Could not record the gateways this update pauses"):
         pause_record.record_pause(intended, adopted, claims)
         # The intent (and where each request goes), right before the first request. A live entry is owed
         # only once its request was issued (mark_stop_sent, or this update's marker still on disk): a
         # crash before that leaves it "never asked" (still serving, dropped), after it, draining (owed).
         pause_record.mark_stop_requested(
-            intended, running_pids, markers=_planned_stop_markers(running_pids, profile_processes, service_gateway_pids))
-    profiles = _stop_windows_gateways(running_pids, profile_processes, service_gateway_pids, unmapped_pids, unmapped,
-                                      on_request=lambda pid: pause_record.mark_stop_sent(intended, pid), born=born)
-    token = {"resume_needed": True, "profiles": profiles, "unmapped_pids": unmapped_pids, "unmapped": unmapped}
+            intended,
+            running_pids,
+            markers=_planned_stop_markers(
+                running_pids, profile_processes, service_gateway_pids
+            ),
+        )
+    profiles = _stop_windows_gateways(
+        running_pids,
+        profile_processes,
+        service_gateway_pids,
+        unmapped_pids,
+        unmapped,
+        on_request=lambda pid: pause_record.mark_stop_sent(intended, pid),
+        born=born,
+    )
+    token = {
+        "resume_needed": True,
+        "profiles": profiles,
+        "unmapped_pids": unmapped_pids,
+        "unmapped": unmapped,
+    }
     # Every profile with ANY live gateway at discovery counts as running: service-supervised ones skip the
     # socket pause (absent from ``profiles``) but the SCM restart brings them back, not a cold-start.
-    running_profiles = set(profiles) | {str(p.profile) for p in profile_processes.values()} | {str(s.profile) for s in service_gateways}
+    running_profiles = (
+        set(profiles)
+        | {str(p.profile) for p in profile_processes.values()}
+        | {str(s.profile) for s in service_gateways}
+    )
     _record_attested_cold_start_profiles(token, running_profiles)
     try:
-        token = _pause_windows_gateway_services(service_gateways, token, profiles, unmapped)
+        token = _pause_windows_gateway_services(
+            service_gateways, token, profiles, unmapped
+        )
     except ServicePauseFailed as exc:
         if not exc.rollback_failures:  # everything stopped was restarted in-line
             pause_record.abandon_pause(intended, adopted)
@@ -1013,21 +1336,47 @@ def _pause_windows_gateways_for_update() -> dict | None:
 def _cold_start_pause_token(adopted: dict | None, claims: list) -> dict | None:
     """No gateway runs: the cold-start plan, plus any orphaned set adopted from a killed update."""
     from clawk_cli import update_pause_record as pause_record
+
     token = _windows_cold_start_plan()
     # Other profiles may hold a dead attestation even when the active profile owes nothing
     # (clean exit, autostart not installed): give them a token to ride on.
-    probe = token if token is not None else {"resume_needed": True, "profiles": {}, "unmapped_pids": [], "unmapped": []}
+    probe = (
+        token
+        if token is not None
+        else {
+            "resume_needed": True,
+            "profiles": {},
+            "unmapped_pids": [],
+            "unmapped": [],
+        }
+    )
     _record_attested_cold_start_profiles(probe, set())
     token = probe if probe.get("cold_start_profiles") else token
     if adopted is None:
         return pause_record.stamp_tree(token) if token is not None else None
-    token = token if token is not None else {"resume_needed": True, "profiles": {}, "unmapped_pids": [], "unmapped": []}
+    token = (
+        token
+        if token is not None
+        else {
+            "resume_needed": True,
+            "profiles": {},
+            "unmapped_pids": [],
+            "unmapped": [],
+        }
+    )
     with _abort_on_error("Could not record the adopted paused-gateway set"):
         return pause_record.record_pause(token, adopted, claims)
 
 
-def _stop_windows_gateways(running_pids, profile_processes, service_gateway_pids, unmapped_pids, unmapped,
-                           on_request=None, born=None) -> dict:
+def _stop_windows_gateways(
+    running_pids,
+    profile_processes,
+    service_gateway_pids,
+    unmapped_pids,
+    unmapped,
+    on_request=None,
+    born=None,
+) -> dict:
     """Socket-pause the mapped gateways, drain, then tree-kill survivors; the paused ``profiles``.
     A force-killed process needs no stop record: dead, it is owed; alive, it was never stopped.
 
@@ -1036,19 +1385,38 @@ def _stop_windows_gateways(running_pids, profile_processes, service_gateway_pids
     reused meanwhile reads its replacement's own birth. No discovered birth refuses the kill."""
     from gateway.status import get_process_start_time, terminate_pid
     from clawk_cli.update_cmd import _m
-    mapped = [int(p) for p in running_pids if int(p) not in service_gateway_pids and int(p) in profile_processes]
-    born = {**{int(k): v for k, v in (born or {}).items()},
-            **{p: round(float(profile_processes[p].create_time) * 100) for p in mapped
-               if float(getattr(profile_processes[p], "create_time", 0) or 0) > 0}}
+
+    mapped = [
+        int(p)
+        for p in running_pids
+        if int(p) not in service_gateway_pids and int(p) in profile_processes
+    ]
+    born = {
+        **{int(k): v for k, v in (born or {}).items()},
+        **{
+            p: round(float(profile_processes[p].create_time) * 100)
+            for p in mapped
+            if float(getattr(profile_processes[p], "create_time", 0) or 0) > 0
+        },
+    }
     # Resolve venv-side launchers before any request: the launcher keeps ``.pyd`` mapped and would trip the
     # venv-holder guard, so it is killed with the survivors, under the identity it has now.
     launcher_pids = _m()._venv_launcher_ancestors(mapped)
-    born.update({int(p): get_process_start_time(int(p)) for p in launcher_pids if int(p) not in born})
+    born.update(
+        {
+            int(p): get_process_start_time(int(p))
+            for p in launcher_pids
+            if int(p) not in born
+        }
+    )
     profiles, mapped_pids, socket_acks = _request_socket_pauses(
-        running_pids, profile_processes, service_gateway_pids, on_request=on_request)
+        running_pids, profile_processes, service_gateway_pids, on_request=on_request
+    )
     print("→ Stopping Windows gateway process(es) before updating Clawksis...")
     drain_timeout = _gateway_drain_timeout(socket_acks)
-    survivors = _m()._wait_for_windows_update_gateway_exit(mapped_pids, timeout=drain_timeout)
+    survivors = _m()._wait_for_windows_update_gateway_exit(
+        mapped_pids, timeout=drain_timeout
+    )
     # Tree-kill survivors, unmapped gateways, and pre-request launchers; one already gone raises
     # ProcessLookupError, one whose birth differs (or was never read) is refused, and both are skipped.
     force_killed = []
@@ -1061,8 +1429,12 @@ def _stop_windows_gateways(running_pids, profile_processes, service_gateway_pids
     if force_killed:
         print(f"  → Force-stopped {len(force_killed)} gateway process(es)")
     if unmapped_pids:
-        print(f"  → Stopped {len(unmapped_pids)} gateway process(es) without profile mapping")
-        if any(not u.get("argv") for u in unmapped):  # no recoverable cmdline (psutil missing, denied, gone)
+        print(
+            f"  → Stopped {len(unmapped_pids)} gateway process(es) without profile mapping"
+        )
+        if any(
+            not u.get("argv") for u in unmapped
+        ):  # no recoverable cmdline (psutil missing, denied, gone)
             print("    Restart manually after update: clawk gateway run")
     return profiles
 
@@ -1077,15 +1449,21 @@ def _record_attested_cold_start_profiles(token: dict, running_profiles: set) -> 
     left to the existing plan so it is never spawned twice. Best-effort: never blocks the pause."""
     from clawk_cli.update_cmd import _desktop_owns_gateway_lifecycle
     from clawk_cli import gateway_windows
-    with _best_effort("Could not evaluate per-profile attested cold-starts before update: %s"):
+
+    with _best_effort(
+        "Could not evaluate per-profile attested cold-starts before update: %s"
+    ):
         if not _desktop_owns_gateway_lifecycle():
             return
         from clawk_cli.profiles import get_active_profile_name, profiles_to_serve
+
         active = get_active_profile_name() or "default"
         cold: dict[str, str] = {}
         # An activation list, not inventory: parked profiles stay offline.
         for name, home in profiles_to_serve(multiplex=True, include_standalone=True):
-            if name in running_profiles or (name == active and token.get("cold_start_if_installed")):
+            if name in running_profiles or (
+                name == active and token.get("cold_start_if_installed")
+            ):
                 continue
             generation = gateway_windows.attested_death_generation([], home=Path(home))
             if generation:
@@ -1099,13 +1477,18 @@ def _cold_start_attested_profiles(token: dict) -> None:
     generation that authorized it; one profile's failure never aborts the others (#110959)."""
     from clawk_cli import gateway_windows
     from clawk_cli.profiles import get_profile_dir
+
     pending = dict(token.get("cold_start_profiles") or {})
     if not pending:
         return
     for name, generation in sorted(pending.items()):
         home = Path(get_profile_dir(name))
-        with _best_effort(f"Could not cold-start Windows gateway profile {name} after update: %s"):
-            if not gateway_windows._live_gateway_pids(home=home):  # a concurrent autostart must not be doubled
+        with _best_effort(
+            f"Could not cold-start Windows gateway profile {name} after update: %s"
+        ):
+            if not gateway_windows._live_gateway_pids(
+                home=home
+            ):  # a concurrent autostart must not be doubled
                 pid = gateway_windows._spawn_detached(home=home)
                 if not pid:
                     raise RuntimeError("cold-start did not return a process ID")
@@ -1114,14 +1497,20 @@ def _cold_start_attested_profiles(token: dict) -> None:
                 raise RuntimeError(f"gateway profile {name} did not become ready")
             gateway_windows._consume_start_attestation(generation, home=home)
             # Keep the attestation chain: a death after this CLI exits must be visible to the next update.
-            gateway_windows._write_start_attestation(ready_pids, f"cold-start after update (profile {name})", home=home)
-            print(f"\n✓ Gateway profile {name} started via cold-start after update (PID: {ready_pids[0]})")
+            gateway_windows._write_start_attestation(
+                ready_pids, f"cold-start after update (profile {name})", home=home
+            )
+            print(
+                f"\n✓ Gateway profile {name} started via cold-start after update (PID: {ready_pids[0]})"
+            )
             token["cold_start_profiles"].pop(name, None)
     if token["cold_start_profiles"]:
         # Surface the miss like the active-profile cold-start does: the merged outcome marks the update
         # incomplete instead of reporting success with a profile still down.
-        raise RuntimeError("Windows gateway cold-start was not verified for profile(s): "
-                           + ", ".join(sorted(token["cold_start_profiles"])))
+        raise RuntimeError(
+            "Windows gateway cold-start was not verified for profile(s): "
+            + ", ".join(sorted(token["cold_start_profiles"]))
+        )
     token.pop("cold_start_profiles", None)
 
 
@@ -1146,6 +1535,7 @@ def _cold_start_windows_gateway_after_update(token: dict | None = None) -> bool:
     token (#110020 review). Only that generation is consumed afterwards — never a newer marker.
     """
     from clawk_cli.update_cmd import _desktop_owns_gateway_lifecycle, _m
+
     if not _m()._is_windows():
         return True
     with _abort_on_error("Could not load Windows gateway cold-start helpers"):
@@ -1159,11 +1549,17 @@ def _cold_start_windows_gateway_after_update(token: dict | None = None) -> bool:
     generation = token.get("attested_generation")
     if generation is None and "attested_generation" not in token:
         # Token written by pre-generation code and resumed across this very update: probe the marker.
-        with _abort_on_error("Could not re-read the start attestation before cold-start"):
+        with _abort_on_error(
+            "Could not re-read the start attestation before cold-start"
+        ):
             generation = gateway_windows.attested_death_generation(current_pids=[])
-    with _abort_on_error("Could not re-check Desktop gateway-lifecycle ownership before cold-start"):
+    with _abort_on_error(
+        "Could not re-check Desktop gateway-lifecycle ownership before cold-start"
+    ):
         if _desktop_owns_gateway_lifecycle() and not generation:
-            logger.debug("Skipping Windows gateway cold-start: Desktop owns gateway lifecycle")
+            logger.debug(
+                "Skipping Windows gateway cold-start: Desktop owns gateway lifecycle"
+            )
             return True
     with _abort_on_error("Could not cold-start Windows gateway after update"):
         pid = gateway_windows._spawn_detached()
@@ -1178,7 +1574,9 @@ def _cold_start_windows_gateway_after_update(token: dict | None = None) -> bool:
     # success without a gateway (#110020 review).
     if generation:
         gateway_windows._consume_start_attestation(generation)
-    print(f"\n✓ Gateway started via cold-start after update (PID: {', '.join(map(str, ready_pids))})")
+    print(
+        f"\n✓ Gateway started via cold-start after update (PID: {', '.join(map(str, ready_pids))})"
+    )
     with suppress(Exception):
         gateway_windows._write_start_attestation(ready_pids, "cold-start after update")
     return True
@@ -1197,10 +1595,12 @@ def _refresh_windows_gateway_launchers() -> None:
     gateway died at startup with ``RuntimeError: sys.stderr is None`` (#71671).
     """
     from clawk_cli.update_cmd import _m
+
     if not _m()._is_windows():
         return
-    with _best_effort('Could not refresh Windows gateway launchers after update: %s'):
+    with _best_effort("Could not refresh Windows gateway launchers after update: %s"):
         from clawk_cli import gateway_windows
+
         if gateway_windows.is_installed():
             gateway_windows._write_task_script()
             print("  ✓ Refreshed Windows gateway launcher scripts")
@@ -1212,7 +1612,9 @@ def _refresh_windows_gateway_launchers() -> None:
                 print(f"  ⚠ {message}")
             if gateway_windows.is_task_registered():
                 # A task registered by an older build never picks up template hardening otherwise (#113670).
-                gateway_windows.reconcile_scheduled_task(gateway_windows.get_task_name())
+                gateway_windows.reconcile_scheduled_task(
+                    gateway_windows.get_task_name()
+                )
 
 
 def _refresh_bootstrap_cache_scripts(branch: str = "main") -> None:
@@ -1234,12 +1636,17 @@ def _refresh_bootstrap_cache_scripts(branch: str = "main") -> None:
     The .ps1 copy gets a UTF-8 BOM to match the installer's cache format (#67193 encoding fix).
     """
     from clawk_cli.update_cmd import _m
-    with _best_effort('Could not refresh bootstrap-cache scripts after update: %s'):
+
+    with _best_effort("Could not refresh bootstrap-cache scripts after update: %s"):
         cache_dir = Path(_m().get_clawk_home()) / "bootstrap-cache"
         if not cache_dir.is_dir():
             return
-        safe_ref = re.sub(r"[^A-Za-z0-9._-]", "_", str(branch or "main"))  # install_script.rs::sanitize_ref()
-        if re.fullmatch(r"[0-9a-fA-F]{7,40}", safe_ref):  # install_script.rs::is_valid_commit(): immutable pin
+        safe_ref = re.sub(
+            r"[^A-Za-z0-9._-]", "_", str(branch or "main")
+        )  # install_script.rs::sanitize_ref()
+        if re.fullmatch(
+            r"[0-9a-fA-F]{7,40}", safe_ref
+        ):  # install_script.rs::is_valid_commit(): immutable pin
             return
         refreshed = []
         for kind, src_name in (("ps1", "install.ps1"), ("sh", "install.sh")):
@@ -1249,7 +1656,9 @@ def _refresh_bootstrap_cache_scripts(branch: str = "main") -> None:
                 continue  # this ref was never bootstrap-cached — nothing to heal
             data = src.read_bytes()
             if kind == "ps1" and not data.startswith(b"\xef\xbb\xbf"):
-                data = b"\xef\xbb\xbf" + data  # PowerShell needs the BOM or localized/em-dash text mis-decodes.
+                data = (
+                    b"\xef\xbb\xbf" + data
+                )  # PowerShell needs the BOM or localized/em-dash text mis-decodes.
             # See #67193.
             if cached.read_bytes() == data:
                 continue
@@ -1258,7 +1667,10 @@ def _refresh_bootstrap_cache_scripts(branch: str = "main") -> None:
             os.replace(tmp, cached)
             refreshed.append(cached.name)
         if refreshed:
-            print("  ✓ Refreshed installer bootstrap-cache script(s): " + ", ".join(sorted(refreshed)))
+            print(
+                "  ✓ Refreshed installer bootstrap-cache script(s): "
+                + ", ".join(sorted(refreshed))
+            )
 
 
 _SERVICE_READY_TIMEOUT_S = 60.0
@@ -1270,31 +1682,44 @@ _SERVICE_RETRY_BASE_S = 60.0
 _SERVICE_RETRY_MAX_S = 3600.0
 
 
-def _service_gateway_ready(name: str, profile: str | None, timeout_s: float | None = None) -> list[int]:
+def _service_gateway_ready(
+    name: str, profile: str | None, timeout_s: float | None = None
+) -> list[int]:
     """The stable gateway *name*'s service process supervises (in *profile*'s home when known): SCM
     ``running`` proves only the wrapper started, not that the gateway it hosts came up."""
     from clawk_cli import gateway_windows
     from clawk_cli.profiles import get_profile_dir
+
     psutil, service = _win_service(name)
 
     def under_service(pids):
         try:
             service_pid = int(service.pid() or 0)
-        except (psutil.Error, OSError, ValueError, TypeError):  # SCM/psutil failure or a non-int pid
+        except (
+            psutil.Error,
+            OSError,
+            ValueError,
+            TypeError,
+        ):  # SCM/psutil failure or a non-int pid
             return []
         owned = []
         for pid in pids:
             # A gateway that exited or a process tree psutil cannot read is not the service's; any
             # other error is a bug the resume boundary reports, not a silent "not under service".
             with suppress(psutil.Error, OSError):
-                if service_pid and service_pid in {int(p.pid) for p in psutil.Process(int(pid)).parents()}:
+                if service_pid and service_pid in {
+                    int(p.pid) for p in psutil.Process(int(pid)).parents()
+                }:
                     owned.append(int(pid))
         return owned
 
     home = Path(get_profile_dir(profile)) if profile else None
     return gateway_windows._wait_for_gateway_ready(
-        timeout_s=_SERVICE_READY_TIMEOUT_S if timeout_s is None else timeout_s, home=home,
-        all_profiles=home is None, pid_filter=under_service)
+        timeout_s=_SERVICE_READY_TIMEOUT_S if timeout_s is None else timeout_s,
+        home=home,
+        all_profiles=home is None,
+        pid_filter=under_service,
+    )
 
 
 def _service_running(name: str) -> bool:
@@ -1304,7 +1729,11 @@ def _service_running(name: str) -> bool:
         return False
     try:
         return _win_service(name)[1].status() == "running"
-    except (psutil.Error, OSError, AttributeError):  # missing service, SCM access, non-Windows psutil
+    except (
+        psutil.Error,
+        OSError,
+        AttributeError,
+    ):  # missing service, SCM access, non-Windows psutil
         return False
 
 
@@ -1316,34 +1745,60 @@ def _resume_windows_services(token: dict) -> None:
     whose gateway was not ready is not re-probed before its backoff (``service_retry``) elapses:
     the debt stays owed without stalling every command."""
     from clawk_cli.update_cmd import _start_windows_gateway_service
+
     services = list(token.get("services") or [])
     token.setdefault("expected_services", list(services))
     verified_restarts = list(token.get("restarted_services") or [])
-    retry = {name: state for name, state in (token.get("service_retry") or {}).items() if name in services}
+    retry = {
+        name: state
+        for name, state in (token.get("service_retry") or {}).items()
+        if name in services
+    }
     recovering = bool(token.get("recovery"))
     restarted_services = []
     failed_services = []
     for service_name in map(str, services):
         backoff = retry.get(service_name) or {}
         try:
-            if recovering and _time.time() < float(backoff.get("next_at") or 0) and _service_running(service_name):
+            if (
+                recovering
+                and _time.time() < float(backoff.get("next_at") or 0)
+                and _service_running(service_name)
+            ):
                 failed_services.append(service_name)
-                print(f"  ⚠ Windows gateway service {service_name}: its gateway was not ready; "
-                      f"next check after {int(float(backoff['next_at']) - _time.time())}s")
+                print(
+                    f"  ⚠ Windows gateway service {service_name}: its gateway was not ready; "
+                    f"next check after {int(float(backoff['next_at']) - _time.time())}s"
+                )
                 continue
             _start_windows_gateway_service(service_name)
-            if not _service_gateway_ready(service_name, (token.get("service_profiles") or {}).get(service_name),
-                                          _SERVICE_READY_PROBE_S if recovering else None):
+            if not _service_gateway_ready(
+                service_name,
+                (token.get("service_profiles") or {}).get(service_name),
+                _SERVICE_READY_PROBE_S if recovering else None,
+            ):
                 attempts = int(backoff.get("attempts") or 0) + 1
-                retry[service_name] = {"attempts": attempts, "next_at": _time.time() + min(
-                    _SERVICE_RETRY_BASE_S * 2 ** min(attempts - 1, 6), _SERVICE_RETRY_MAX_S)}
-                raise RuntimeError(f"Windows service {service_name} is running but its gateway did not become ready")
+                retry[service_name] = {
+                    "attempts": attempts,
+                    "next_at": _time.time()
+                    + min(
+                        _SERVICE_RETRY_BASE_S * 2 ** min(attempts - 1, 6),
+                        _SERVICE_RETRY_MAX_S,
+                    ),
+                }
+                raise RuntimeError(
+                    f"Windows service {service_name} is running but its gateway did not become ready"
+                )
             retry.pop(service_name, None)
             restarted_services.append(service_name)
             if service_name not in verified_restarts:
                 verified_restarts.append(service_name)
         except Exception as exc:
-            logger.warning("Could not restart Windows gateway service %s after update: %s", service_name, exc)
+            logger.warning(
+                "Could not restart Windows gateway service %s after update: %s",
+                service_name,
+                exc,
+            )
             print(f"  ⚠ Could not restart Windows gateway service: {service_name}")
             failed_services.append(service_name)
     token["restarted_services"] = verified_restarts
@@ -1353,9 +1808,15 @@ def _resume_windows_services(token: dict) -> None:
     else:
         token.pop("service_retry", None)
     if failed_services:
-        raise RuntimeError("Could not restart Windows gateway service(s): " + ", ".join(failed_services))
+        raise RuntimeError(
+            "Could not restart Windows gateway service(s): "
+            + ", ".join(failed_services)
+        )
     if restarted_services:
-        print("\n  ✓ Restarted Windows gateway service(s): " + ", ".join(restarted_services))
+        print(
+            "\n  ✓ Restarted Windows gateway service(s): "
+            + ", ".join(restarted_services)
+        )
 
 
 def _relaunch_paused_gateways(profiles: dict, unmapped: list) -> tuple[dict, list]:
@@ -1363,21 +1824,37 @@ def _relaunch_paused_gateways(profiles: dict, unmapped: list) -> tuple[dict, lis
     profiles, launched unmapped entries)``. Nothing leaves the token here: a watcher only proves a
     relaunch was scheduled, so every entry stays owed until ITS gateway is verified ready."""
     with _abort_on_error("Could not load Windows gateway restart helper"):
-        from clawk_cli.gateway import launch_detached_gateway_restart_by_cmdline, launch_detached_profile_gateway_restart
+        from clawk_cli.gateway import (
+            launch_detached_gateway_restart_by_cmdline,
+            launch_detached_profile_gateway_restart,
+        )
 
     # An exception from a launch (incl. bad pid/argv coercion) logs at debug and reads as a failed relaunch.
     launched = {}
     for profile, old_pid in sorted(profiles.items()):
-        if _try_call(lambda p=profile, o=old_pid: launch_detached_profile_gateway_restart(str(p), int(o)),
-                     "Could not restart Windows gateway profile %s after update: %s", profile):
+        if _try_call(
+            lambda p=profile, o=old_pid: launch_detached_profile_gateway_restart(
+                str(p), int(o)
+            ),
+            "Could not restart Windows gateway profile %s after update: %s",
+            profile,
+        ):
             launched[str(profile)] = int(old_pid)
     launched_unmapped = []
     for entry in unmapped:
         argv, old_pid = entry.get("argv"), entry.get("pid")
         # On the paused runtime's home (None on a pre-home record: the updater's own home, as before).
-        if argv and old_pid and _try_call(lambda o=old_pid, a=argv, h=entry.get("home"): launch_detached_gateway_restart_by_cmdline(
-                int(o), list(a), home=h),
-                                          "Could not restart unmapped Windows gateway (pid %s) after update: %s", old_pid):
+        if (
+            argv
+            and old_pid
+            and _try_call(
+                lambda o=old_pid, a=argv, h=entry.get("home"): (
+                    launch_detached_gateway_restart_by_cmdline(int(o), list(a), home=h)
+                ),
+                "Could not restart unmapped Windows gateway (pid %s) after update: %s",
+                old_pid,
+            )
+        ):
             launched_unmapped.append(entry)
     return launched, launched_unmapped
 
@@ -1393,7 +1870,11 @@ def _pending_relaunch_pids(profiles: dict, unmapped: list, pid_exists) -> list[i
     (``pid_exists`` is injected) so the decision is testable off Windows.
     """
     candidates = [int(pid) for pid in profiles.values()]
-    candidates += [int(entry["pid"]) for entry in unmapped if entry.get("argv") and entry.get("pid")]
+    candidates += [
+        int(entry["pid"])
+        for entry in unmapped
+        if entry.get("argv") and entry.get("pid")
+    ]
     return sorted({pid for pid in candidates if pid > 0 and pid_exists(pid)})
 
 
@@ -1406,6 +1887,7 @@ def _relaunch_verify_timeout_s(profiles: dict, unmapped: list, pid_exists) -> fl
     never scheduled to appear inside the window (#107002).
     """
     from clawk_cli.gateway import GATEWAY_RESTART_WATCHER_TIMEOUT_S
+
     if not _pending_relaunch_pids(profiles, unmapped, pid_exists):
         return _RELAUNCH_VERIFY_TIMEOUT_S
     return float(GATEWAY_RESTART_WATCHER_TIMEOUT_S) + _RELAUNCH_VERIFY_TIMEOUT_S
@@ -1420,8 +1902,13 @@ def _unmapped_ready_filter(entry: dict, taken: set):
     captured (no key: a pre-durable-pause updater's token) keeps the argv-only match; a recorded
     ``home`` that is empty proves no runtime and is never matched."""
     import psutil
-    from gateway.status import _looks_like_gateway_process, _same_clawk_home, get_process_start_time
+    from gateway.status import (
+        _looks_like_gateway_process,
+        _same_clawk_home,
+        get_process_start_time,
+    )
     from clawk_cli.update_fleet_scope import gateway_pid_home
+
     tail, old = list(entry.get("argv") or [])[1:], int(entry.get("pid") or 0)
     home, old_ct = entry.get("home"), entry.get("ct")
 
@@ -1431,24 +1918,40 @@ def _unmapped_ready_filter(entry: dict, taken: set):
         if not home:
             return False
         live_home, ct = gateway_pid_home(pid), get_process_start_time(pid)
-        return live_home is not None and _same_clawk_home(live_home, home) and (old_ct is None or ct is None or ct > old_ct)
+        return (
+            live_home is not None
+            and _same_clawk_home(live_home, home)
+            and (old_ct is None or ct is None or ct > old_ct)
+        )
 
     def matches(pid: int) -> bool:
         if pid == old or pid in taken:
             return False
         try:
-            return (list(psutil.Process(pid).cmdline() or [])[1:] == tail and _looks_like_gateway_process(pid)
-                    and same_runtime(pid))
-        except (psutil.Error, OSError, ValueError):  # exited, access denied, zombie, invalid pid
+            return (
+                list(psutil.Process(pid).cmdline() or [])[1:] == tail
+                and _looks_like_gateway_process(pid)
+                and same_runtime(pid)
+            )
+        except (
+            psutil.Error,
+            OSError,
+            ValueError,
+        ):  # exited, access denied, zombie, invalid pid
             return False
+
     return lambda pids: [pid for pid in _owned_gateway_pids(pids) if matches(int(pid))]
 
 
 _READY_INTERVAL_S = 0.4  # gateway_windows._wait_for_gateway_ready's poll interval and
-_READY_CONFIRM_S = 2.0   # confirmation window: one hit proves a spawn, not a survived startup
+_READY_CONFIRM_S = (
+    2.0  # confirmation window: one hit proves a spawn, not a survived startup
+)
 
 
-def _poll_until_ready(targets: list, deadline: float, taken: set, respawn_window: float | None = None) -> dict:
+def _poll_until_ready(
+    targets: list, deadline: float, taken: set, respawn_window: float | None = None
+) -> dict:
     """``{key: pids}`` for each ``(key, probe, claim_all)`` target whose gateway stayed visible for
     a whole confirmation window. All targets share one loop, so N targets cost one window, not N:
     one fleet process scan per tick (``probe(scan)`` calls ``scan()`` only if it needs the fleet),
@@ -1471,20 +1974,35 @@ def _poll_until_ready(targets: list, deadline: float, taken: set, respawn_window
     replacement that flaps in and out must not renew its budget forever.
     """
     from clawk_cli.gateway import find_gateway_pids
+
     ready: dict = {}
     since: dict = {}
     failed: set = set()
     graced: set = set()
     first_seen: set = set()
-    hard_stop = deadline + 2 * (respawn_window or 0.0) + _READY_CONFIRM_S + _READY_INTERVAL_S
+    hard_stop = (
+        deadline + 2 * (respawn_window or 0.0) + _READY_CONFIRM_S + _READY_INTERVAL_S
+    )
     while True:
         now = _time.monotonic()
         if now >= hard_stop:
             return ready
-        pending = [t for t in targets if t[0] not in ready and t[0] not in failed and (now < deadline or t[0] in since)]
+        pending = [
+            t
+            for t in targets
+            if t[0] not in ready
+            and t[0] not in failed
+            and (now < deadline or t[0] in since)
+        ]
         if not pending:
-            starved = [key for key, _probe, _all in targets
-                       if key not in ready and key not in failed and key not in first_seen and key not in graced]
+            starved = [
+                key
+                for key, _probe, _all in targets
+                if key not in ready
+                and key not in failed
+                and key not in first_seen
+                and key not in graced
+            ]
             if respawn_window is not None and starved:
                 graced.update(starved)
                 deadline = now + respawn_window
@@ -1496,13 +2014,16 @@ def _poll_until_ready(targets: list, deadline: float, taken: set, respawn_window
             if not fleet:
                 fleet.append(list(find_gateway_pids(all_profiles=True)))
             return fleet[0]
+
         taken.clear()
         taken.update(pid for pids in ready.values() for pid in pids)
         for key, probe, claim_all in pending:
             try:
                 pids = list(probe(scan))
             except Exception as exc:  # health: allow BLE001 -- one target's probe failure must not stall the others
-                logger.warning("Could not verify Windows gateway %s after update: %s", key, exc)
+                logger.warning(
+                    "Could not verify Windows gateway %s after update: %s", key, exc
+                )
                 failed.add(key)
                 continue
             if not pids:
@@ -1522,7 +2043,9 @@ def _poll_until_ready(targets: list, deadline: float, taken: set, respawn_window
             _time.sleep(_READY_INTERVAL_S)
 
 
-def _verify_relaunched_gateways_alive(token: dict, profiles: dict, unmapped: list) -> None:
+def _verify_relaunched_gateways_alive(
+    token: dict, profiles: dict, unmapped: list
+) -> None:
     """Retire each relaunched runtime on ITS OWN readiness: a profile on a stable gateway in its
     profile home, an unmapped entry on a stable gateway running its argv. A watcher only proves a
     relaunch was scheduled, and another target's readiness proves nothing about this one.
@@ -1533,42 +2056,84 @@ def _verify_relaunched_gateways_alive(token: dict, profiles: dict, unmapped: lis
         from gateway.status import _pid_exists
         from clawk_cli import gateway_windows
         from clawk_cli.profiles import get_profile_dir
-    deadline = _time.monotonic() + _relaunch_verify_timeout_s(profiles, unmapped, _pid_exists)
+    deadline = _time.monotonic() + _relaunch_verify_timeout_s(
+        profiles, unmapped, _pid_exists
+    )
     taken: set = set()
     # Profiles first: a gateway on a profile's home is that profile's, never an unmapped entry's.
-    targets = [(("profile", name), lambda _scan, h=Path(get_profile_dir(name)), o=int(old_pid): gateway_windows._live_gateway_pids(
-        home=h, pid_filter=lambda ps: [p for p in ps if int(p) != o]), True) for name, old_pid in sorted(profiles.items())]
-    targets += [(("unmapped", i), lambda scan, f=_unmapped_ready_filter(entry, taken): f(scan()), False)
-                for i, entry in enumerate(unmapped)]
-    ready = _poll_until_ready(targets, deadline, taken, respawn_window=_RELAUNCH_VERIFY_TIMEOUT_S)
+    targets = [
+        (
+            ("profile", name),
+            lambda _scan, h=Path(get_profile_dir(name)), o=int(old_pid): (
+                gateway_windows._live_gateway_pids(
+                    home=h, pid_filter=lambda ps: [p for p in ps if int(p) != o]
+                )
+            ),
+            True,
+        )
+        for name, old_pid in sorted(profiles.items())
+    ]
+    targets += [
+        (
+            ("unmapped", i),
+            lambda scan, f=_unmapped_ready_filter(entry, taken): f(scan()),
+            False,
+        )
+        for i, entry in enumerate(unmapped)
+    ]
+    ready = _poll_until_ready(
+        targets, deadline, taken, respawn_window=_RELAUNCH_VERIFY_TIMEOUT_S
+    )
     ready_profiles = [name for name in sorted(profiles) if ("profile", name) in ready]
-    ready_unmapped = [entry for i, entry in enumerate(unmapped) if ("unmapped", i) in ready]
+    ready_unmapped = [
+        entry for i, entry in enumerate(unmapped) if ("unmapped", i) in ready
+    ]
     ready_pids = [pid for pids in ready.values() for pid in pids]
     # Fleet reconciliation (#91277) cross-checks every planned runtime against relaunched_profiles:
     # only a verified one is listed, so an unready one still surfaces as unaccounted.
     token["relaunched_profiles"] = ready_profiles
-    token["profiles"] = {n: pid for n, pid in (token.get("profiles") or {}).items() if n not in ready_profiles}
-    token["unmapped"] = [u for u in (token.get("unmapped") or []) if u not in ready_unmapped]
+    token["profiles"] = {
+        n: pid
+        for n, pid in (token.get("profiles") or {}).items()
+        if n not in ready_profiles
+    }
+    token["unmapped"] = [
+        u for u in (token.get("unmapped") or []) if u not in ready_unmapped
+    ]
     if ready_pids:
         with suppress(Exception):
-            gateway_windows._write_start_attestation(sorted(set(ready_pids)), "post-update relaunch")
+            gateway_windows._write_start_attestation(
+                sorted(set(ready_pids)), "post-update relaunch"
+            )
     if ready_profiles:
-        print(f"\n  ✓ Restarting Windows gateway profile(s): {', '.join(ready_profiles)}")
+        print(
+            f"\n  ✓ Restarting Windows gateway profile(s): {', '.join(ready_profiles)}"
+        )
     if ready_unmapped:
-        print(f"  ✓ Restarting {len(ready_unmapped)} unmapped Windows gateway process(es)")
-    unready = sorted(set(profiles) - set(ready_profiles)) + [f"pid {u.get('pid')}" for u in unmapped if u not in ready_unmapped]
+        print(
+            f"  ✓ Restarting {len(ready_unmapped)} unmapped Windows gateway process(es)"
+        )
+    unready = sorted(set(profiles) - set(ready_profiles)) + [
+        f"pid {u.get('pid')}" for u in unmapped if u not in ready_unmapped
+    ]
     if unready:
         print(
-            "\n  ⚠ Windows gateway restart could not be verified for: " + ", ".join(unready) + "\n"
+            "\n  ⚠ Windows gateway restart could not be verified for: "
+            + ", ".join(unready)
+            + "\n"
             "    (The respawned gateway may have been killed by a parent Job Object during updater teardown, #48820.)\n"
             "    Recover with: clawk gateway restart"
         )
-        raise RuntimeError("Windows gateway relaunch after update was not verified alive: " + ", ".join(unready))
+        raise RuntimeError(
+            "Windows gateway relaunch after update was not verified alive: "
+            + ", ".join(unready)
+        )
 
 
 def _resume_windows_gateways_after_update(token: dict | None) -> None:
     """Restart Windows profile gateways previously paused for update."""
     from clawk_cli.update_cmd import _m
+
     if not token or not token.get("resume_needed"):
         return
     # The foreground call sites register this same function via atexit as a safety net for
@@ -1578,6 +2143,7 @@ def _resume_windows_gateways_after_update(token: dict | None) -> None:
     # returns) cannot replay the same RuntimeError a second time at interpreter teardown.
     # ``unregister`` is a no-op when this function was never registered.
     import atexit
+
     atexit.unregister(_resume_windows_gateways_after_update)
     if not _m()._is_windows() and token.get("platform") != "posix":
         token["resume_needed"] = False
@@ -1591,14 +2157,17 @@ def _resume_windows_gateways_after_update(token: dict | None) -> None:
 def _resume_unless_torn(token: dict) -> None:
     """Resume the paused set, or leave it owed when the checkout is not whole."""
     from clawk_cli import update_pause_record as pause_record
+
     if token.get("pause_id"):
         whole, why = pause_record.tree_is_whole(token)
         if not whole:
             # Starting gateways now would boot them on a half-written tree or the pre-sync
             # dependencies. The durable record keeps the obligation for the next launch, which
             # runs after the interrupted-pull restore and the dependency sync.
-            print(f"  ⚠ Paused gateway(s) left stopped: {why}.\n"
-                  "    The next `clawk` command (or `clawk update`) restarts them.")
+            print(
+                f"  ⚠ Paused gateway(s) left stopped: {why}.\n"
+                "    The next `clawk` command (or `clawk update`) restarts them."
+            )
             token["resume_needed"] = False
             token["resume_deferred"] = why
             pause_record.sync(token)
@@ -1613,8 +2182,12 @@ def _resume_paused_set(token: dict) -> None:
     """Bring every paused runtime back; each one is retired from *token* only on its own verified
     start, and one failure (an SCM service, a profile) never keeps the others stopped."""
     from clawk_cli.update_cmd import _m
-    if token.get("platform") == "posix":  # Linux/macOS pre-swap pause (update_cmd_posix_pause)
+
+    if (
+        token.get("platform") == "posix"
+    ):  # Linux/macOS pre-swap pause (update_cmd_posix_pause)
         from clawk_cli.update_cmd_posix_pause import resume_paused_set
+
         return resume_paused_set(token)
     # Regenerate launcher scripts before respawning so a legacy pythonw-era
     # autostart entry comes back on the current design at next login too.
@@ -1633,19 +2206,28 @@ def _resume_paused_set(token: dict) -> None:
     if profiles or any(u.get("argv") for u in unmapped):
         launched, launched_unmapped = _relaunch_paused_gateways(profiles, unmapped)
         if launched or launched_unmapped:
-            attempt(lambda: _verify_relaunched_gateways_alive(token, launched, launched_unmapped))
+            attempt(
+                lambda: _verify_relaunched_gateways_alive(
+                    token, launched, launched_unmapped
+                )
+            )
         else:
             token["relaunched_profiles"] = []
         not_launched = sorted(set(profiles) - set(launched)) + [
-            f"pid {u.get('pid')}" for u in unmapped if u not in launched_unmapped]
+            f"pid {u.get('pid')}" for u in unmapped if u not in launched_unmapped
+        ]
         if not_launched:
-            failures.append("Could not restart every paused Windows gateway: " + ", ".join(not_launched))
+            failures.append(
+                "Could not restart every paused Windows gateway: "
+                + ", ".join(not_launched)
+            )
     elif token.get("cold_start_if_installed"):
         # Before the per-profile spawns: this guard is fleet-wide (any live gateway ⇒ done).
         def cold_start() -> None:
             if not _m()._cold_start_windows_gateway_after_update(token):
                 raise RuntimeError("Windows gateway cold-start was not verified")
             token["cold_start_if_installed"] = False
+
         attempt(cold_start)
     # After the paused profiles are back: a dead-attested sibling that fails to cold-start must not
     # keep the profiles that WERE running from being relaunched.
@@ -1655,10 +2237,13 @@ def _resume_paused_set(token: dict) -> None:
     token["resume_needed"] = False
 
 
-def _resume_windows_gateways_and_merge_outcome(outcome, _windows_gateway_resume, gateway_mode: bool):
+def _resume_windows_gateways_and_merge_outcome(
+    outcome, _windows_gateway_resume, gateway_mode: bool
+):
     """Resume gateways paused for a Windows update and fold the token into ``outcome``'s systemd/launchd-style
     bookkeeping so reconciliation never reports a healthy gateway as unaccounted. Must never abort the update."""
     from clawk_cli.update_cmd import _m
+
     try:
         _m()._resume_windows_gateways_after_update(_windows_gateway_resume)
     except Exception as _windows_resume_exc:
@@ -1675,18 +2260,32 @@ def _resume_windows_gateways_and_merge_outcome(outcome, _windows_gateway_resume,
 
     token = _windows_gateway_resume
     # Failed relaunches are absent from the token so they still surface. Best-effort.
-    with _best_effort('Could not merge Windows relaunch outcome into fleet reconciliation bookkeeping: %s'):
-        _extend_unique(outcome.relaunched_profiles, token.get("relaunched_profiles") or [])
+    with _best_effort(
+        "Could not merge Windows relaunch outcome into fleet reconciliation bookkeeping: %s"
+    ):
+        _extend_unique(
+            outcome.relaunched_profiles, token.get("relaunched_profiles") or []
+        )
     windows_restarted = list(token.get("restarted_services") or [])
     service_profiles = token.get("service_profiles") or {}
     _extend_unique(outcome.restarted_services, windows_restarted)
-    _extend_unique(outcome.relaunched_profiles, (p for p in (service_profiles.get(n) for n in windows_restarted) if p))
-    _extend_unique(outcome.failed_or_stale_units, (str(service_profiles.get(n) or n) for n in (token.get("services") or [])))
+    _extend_unique(
+        outcome.relaunched_profiles,
+        (p for p in (service_profiles.get(n) for n in windows_restarted) if p),
+    )
+    _extend_unique(
+        outcome.failed_or_stale_units,
+        (str(service_profiles.get(n) or n) for n in (token.get("services") or [])),
+    )
     with suppress(Exception):
         from clawk_cli.update_receipt import record_gateway_restart
+
         record_gateway_restart(
-            restarted_services=outcome.restarted_services, relaunched_profiles=outcome.relaunched_profiles,
-            externally_supervised_profiles=outcome.externally_supervised_profiles, killed_pids=sorted(outcome.killed_pids),
-            failed_units=outcome.failed_or_stale_units, incomplete=outcome.incomplete or bool(outcome.failed_or_stale_units),
+            restarted_services=outcome.restarted_services,
+            relaunched_profiles=outcome.relaunched_profiles,
+            externally_supervised_profiles=outcome.externally_supervised_profiles,
+            killed_pids=sorted(outcome.killed_pids),
+            failed_units=outcome.failed_or_stale_units,
+            incomplete=outcome.incomplete or bool(outcome.failed_or_stale_units),
             phase_error="; ".join(outcome.phase_errors) or None,
         )

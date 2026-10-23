@@ -19,7 +19,11 @@ DEFAULT_PROBE_TIMEOUT = 10.0
 
 # Metadata-only endpoints (none spend generation credits): name -> (url, env var, auth scheme).
 _KEYED_PROBES = {
-    "Firecrawl": ("https://api.firecrawl.dev/v2/team/credit-usage", "FIRECRAWL_API_KEY", "Bearer"),
+    "Firecrawl": (
+        "https://api.firecrawl.dev/v2/team/credit-usage",
+        "FIRECRAWL_API_KEY",
+        "Bearer",
+    ),
     "FAL": ("https://fal.ai/api/models?page=1", "FAL_KEY", "Key"),
 }
 # TTS/STT providers that never touch the network (nothing to probe).
@@ -42,9 +46,13 @@ class ProbeResult:
 
 # ── Small seams (monkeypatchable in tests, and single points of control) ──
 
-def _http_get(url: str, headers: Optional[dict] = None, timeout: Optional[float] = None):
+
+def _http_get(
+    url: str, headers: Optional[dict] = None, timeout: Optional[float] = None
+):
     """Single HTTP GET seam for all metadata probes."""
     import httpx
+
     # Sanitize at the seam (idempotent, no-op on a clean env): a bracketed-IPv6 NO_PROXY entry
     # ([::1], Clash Verge/mihomo) makes this bare trust_env client raise InvalidURL at
     # construction (#118159), which _run_one's catch-all would dress up as backend downtime.
@@ -56,6 +64,7 @@ def _browser_available() -> bool:
     """Is the local browser automation backend (agent-browser) installed?"""
     try:
         from tools.browser_tool_install import _find_agent_browser
+
         return bool(_find_agent_browser(validate=False))
     except Exception:
         return False
@@ -70,8 +79,10 @@ def _launch_browser_probe(timeout: float) -> tuple:
         return (False, "playwright not installed")
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            channel="chromium", executable_path=chromium_executable(),
-            headless=True, timeout=timeout * 1000,
+            channel="chromium",
+            executable_path=chromium_executable(),
+            headless=True,
+            timeout=timeout * 1000,
         )
         try:
             browser.new_page().goto("about:blank", timeout=timeout * 1000)
@@ -83,19 +94,27 @@ def _launch_browser_probe(timeout: float) -> tuple:
 def _probe_mcp_server(name: str, config: dict, timeout: float):
     """initialize + tools/list against one configured MCP server."""
     from clawk_cli.mcp_config import _probe_single_server
+
     return _probe_single_server(name, config, connect_timeout=timeout)
 
 
 # ── Per-backend probes. Each returns a ProbeResult; _run_one's catch-all handles crashes. ──
 
+
 def _classify_http(name: str, resp, key_hint: str) -> ProbeResult:
     code = getattr(resp, "status_code", None)
     if code is not None and 200 <= code < 300:
         return ProbeResult(name, "pass", f"(HTTP {code})")
-    return ProbeResult(name, "fail", f"(HTTP {code} — check {key_hint})" if code in (401, 403) else f"(HTTP {code})")
+    return ProbeResult(
+        name,
+        "fail",
+        f"(HTTP {code} — check {key_hint})" if code in (401, 403) else f"(HTTP {code})",
+    )
 
 
-def _keyed_probe(name: str, url: str, env_var: str, scheme: str, timeout: float) -> ProbeResult:
+def _keyed_probe(
+    name: str, url: str, env_var: str, scheme: str, timeout: float
+) -> ProbeResult:
     """Metadata GET authenticated by one env var (never a generation call)."""
     key = os.getenv(env_var, "").strip()
     if not key:
@@ -116,15 +135,27 @@ def _probe_audio(kind: str, config: dict, timeout: float) -> ProbeResult:
     name = kind.upper()
     provider = (((config.get(kind) or {}).get("provider")) or "").strip().lower()
     if provider in _LOCAL_AUDIO_PROVIDERS:
-        return ProbeResult(name, "skip", f"(provider '{provider or 'local'}' — no remote backend to probe)")
+        return ProbeResult(
+            name,
+            "skip",
+            f"(provider '{provider or 'local'}' — no remote backend to probe)",
+        )
     if provider not in _AUDIO_PROBES:
-        return ProbeResult(name, "skip", f"(provider '{provider}' — no live probe implemented)")
+        return ProbeResult(
+            name, "skip", f"(provider '{provider}' — no live probe implemented)"
+        )
     url, env_var, scheme = _AUDIO_PROBES[provider]
     key = os.getenv(env_var, "").strip()
     if not key:
-        return ProbeResult(name, "warn", f"(provider '{provider}' configured but {env_var} is not set)")
-    headers = {"xi-api-key": key} if scheme == "xi" else {"Authorization": f"Bearer {key}"}
-    result = _classify_http(name, _http_get(url, headers=headers, timeout=timeout), env_var)
+        return ProbeResult(
+            name, "warn", f"(provider '{provider}' configured but {env_var} is not set)"
+        )
+    headers = (
+        {"xi-api-key": key} if scheme == "xi" else {"Authorization": f"Bearer {key}"}
+    )
+    result = _classify_http(
+        name, _http_get(url, headers=headers, timeout=timeout), env_var
+    )
     result.detail = f"({provider}) {result.detail}"
     return result
 
@@ -144,7 +175,9 @@ def _report(result: ProbeResult, issues: list[str]) -> None:
         issues.append(f"Live probe failed: {result.name} {result.detail}")
 
 
-def _run_one(name: str, fn: Callable[[], ProbeResult], issues: list[str]) -> ProbeResult:
+def _run_one(
+    name: str, fn: Callable[[], ProbeResult], issues: list[str]
+) -> ProbeResult:
     """Run one probe with a catch-all so a crash never kills doctor."""
     try:
         result = fn()
@@ -152,7 +185,9 @@ def _run_one(name: str, fn: Callable[[], ProbeResult], issues: list[str]) -> Pro
         result = ProbeResult(name, "fail", f"(timed out: {exc})")
     except Exception as exc:
         msg = str(exc) or exc.__class__.__name__
-        result = ProbeResult(name, "fail", f"(timed out: {msg})" if "time" in msg.lower() else f"({msg})")
+        result = ProbeResult(
+            name, "fail", f"(timed out: {msg})" if "time" in msg.lower() else f"({msg})"
+        )
     _report(result, issues)
     return result
 
@@ -161,31 +196,48 @@ def run_live_checks(issues: list[str]) -> list[ProbeResult]:
     """Run one bounded, read-only probe per configured tool backend — sequential by design (predictable output
     ordering). Appends a remediation line to ``issues`` per failed probe; skipped backends never append."""
     from clawk_cli.config import load_config_readonly
+
     config = load_config_readonly()
     try:
-        timeout = float((config.get("doctor") or {}).get("live_probe_timeout", DEFAULT_PROBE_TIMEOUT))
+        timeout = float(
+            (config.get("doctor") or {}).get(
+                "live_probe_timeout", DEFAULT_PROBE_TIMEOUT
+            )
+        )
     except (TypeError, ValueError):
         timeout = DEFAULT_PROBE_TIMEOUT
     timeout = max(1.0, timeout)
     _section("Live Backend Probes (opt-in, real calls)")
     results: list[ProbeResult] = [
-        _run_one(name, lambda n=name, spec=spec: _keyed_probe(n, *spec, timeout), issues)
+        _run_one(
+            name, lambda n=name, spec=spec: _keyed_probe(n, *spec, timeout), issues
+        )
         for name, spec in _KEYED_PROBES.items()
     ]
     results.append(_run_one("Browser", lambda: _probe_browser(timeout), issues))
     servers = config.get("mcp_servers") or {}
     if isinstance(servers, dict) and servers:
         for name in sorted(servers):
+
             def _probe(n=name, e=servers[name]) -> ProbeResult:
                 if not isinstance(e, dict):
                     return ProbeResult(f"MCP: {n}", "skip", "(malformed config entry)")
-                return ProbeResult(f"MCP: {n}", "pass", f"({len(_probe_mcp_server(n, e, timeout))} tool(s))")
+                return ProbeResult(
+                    f"MCP: {n}",
+                    "pass",
+                    f"({len(_probe_mcp_server(n, e, timeout))} tool(s))",
+                )
+
             results.append(_run_one(f"MCP: {name}", _probe, issues))
     else:
         results.append(ProbeResult("MCP", "skip", "(no servers configured)"))
         _report(results[-1], issues)
     for kind in ("tts", "stt"):
-        results.append(_run_one(kind.upper(), lambda k=kind: _probe_audio(k, config, timeout), issues))
+        results.append(
+            _run_one(
+                kind.upper(), lambda k=kind: _probe_audio(k, config, timeout), issues
+            )
+        )
     return results
 
 

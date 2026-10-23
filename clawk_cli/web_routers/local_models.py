@@ -32,8 +32,17 @@ from starlette.concurrency import run_in_threadpool
 from clawk_cli import config as config_mod, web_deps
 from clawk_cli.web_routers._common import _CONFIG_MUTATION_LOCK, _config_profile_scope
 from clawk_cli.local_runtime import (
-    binaries, bootstrap, catalog, context_policy, estimator, growth, hardware, hf_browse,
-    load_progress, presets, supervisor,
+    binaries,
+    bootstrap,
+    catalog,
+    context_policy,
+    estimator,
+    growth,
+    hardware,
+    hf_browse,
+    load_progress,
+    presets,
+    supervisor,
 )
 from agent.memory_provider import spawn_context_thread
 from pm.downloader import Download, DownloadPaused, Source
@@ -53,17 +62,21 @@ _RUNNING: dict[str, dict[str, Any]] = {}
 _QUICKSTART_LOCK = threading.Lock()
 _LLAMACPP_PROVIDERS = ("llamacpp", "llama.cpp", "llama-cpp")
 _SPLIT_PART_RE = r"-\d{5}-of-\d{5}"
-_DOWNLOAD_PHASES = frozenset({"starting", "installing-runtime", "downloading-runtime", "downloading"})
+_DOWNLOAD_PHASES = frozenset(
+    {"starting", "installing-runtime", "downloading-runtime", "downloading"}
+)
 # Trailing window the transfer rate averages over. Long enough that a bursty
 # tick (a chunk flush, a mirror switch) doesn't spike the estimate, short
 # enough that the number tracks what the link is doing NOW.
 _RATE_WINDOW = 8.0
 _RATE_MIN_ELAPSED = 0.5  # below this a two-sample slope is noise, not a rate
-_SERVER_START_FAILED = "The local server could not start — check the runtime is installed"
+_SERVER_START_FAILED = (
+    "The local server could not start — check the runtime is installed"
+)
 
 
 class RuntimeInstallBody(BaseModel):
-    backend: Optional[str] = None   # None/auto -> detect
+    backend: Optional[str] = None  # None/auto -> detect
 
 
 class ModelDownloadBody(BaseModel):
@@ -75,11 +88,11 @@ class JobIdBody(BaseModel):
 
 
 class QuickstartBody(BaseModel):
-    model_id: str | None = None   # default: the catalog's recommended entry
+    model_id: str | None = None  # default: the catalog's recommended entry
 
 
 class ServerActionBody(BaseModel):
-    action: str                 # "stop" | "start"
+    action: str  # "stop" | "start"
 
 
 class ModelEjectBody(BaseModel):
@@ -87,16 +100,16 @@ class ModelEjectBody(BaseModel):
 
 
 class ModelActivateBody(BaseModel):
-    model_id: str               # exact variant id (a staged .gguf stem)
+    model_id: str  # exact variant id (a staged .gguf stem)
 
 
 class BrowsedDownloadBody(BaseModel):
     repo: str
-    paths: list[str]            # one GGUF, or every part of a split, in order
+    paths: list[str]  # one GGUF, or every part of a split, in order
 
 
 class SideloadBody(BaseModel):
-    path: str                   # absolute path to a .gguf on this machine
+    path: str  # absolute path to a .gguf on this machine
 
 
 def _human_gb(n: float) -> str:
@@ -116,7 +129,13 @@ def _http_error(status: int, prefix: str = ""):
         raise HTTPException(status_code=status, detail=f"{prefix}{exc}") from exc
 
 
-def _quiet(fn: Callable[[], Any], default: Any, *, warn: str | None = None, debug: str | None = None) -> Any:
+def _quiet(
+    fn: Callable[[], Any],
+    default: Any,
+    *,
+    warn: str | None = None,
+    debug: str | None = None,
+) -> Any:
     """``fn()`` or ``default`` on any exception — for garnish that must never 500. ``warn`` logs a
     warning with the exception (%s), ``debug`` a debug line with traceback; silent otherwise."""
     try:
@@ -132,19 +151,26 @@ def _quiet(fn: Callable[[], Any], default: Any, *, warn: str | None = None, debu
 # ── jobs ─────────────────────────────────────────────────────
 def _job(kind: str, target: str, model_id: str | None = None) -> dict[str, Any]:
     job = {
-        "job_id": uuid.uuid4().hex[:12], "kind": kind, "target": target,
-        "model_id": model_id,       # catalog id for downloads; None otherwise
-        "status": "running",        # running | paused | done | error
-        "phase": "starting",        # human-readable step name
-        "detail": "", "total_bytes": None, "done_bytes": 0, "started_at": time.time(), "error": None,
+        "job_id": uuid.uuid4().hex[:12],
+        "kind": kind,
+        "target": target,
+        "model_id": model_id,  # catalog id for downloads; None otherwise
+        "status": "running",  # running | paused | done | error
+        "phase": "starting",  # human-readable step name
+        "detail": "",
+        "total_bytes": None,
+        "done_bytes": 0,
+        "started_at": time.time(),
+        "error": None,
     }
     with _JOBS_LOCK:
         _JOBS[job["job_id"]] = job
     return job
 
 
-def _rate_and_eta(samples: collections.deque[tuple[float, int]], done: int,
-                  total: int | None) -> tuple[float | None, int | None]:
+def _rate_and_eta(
+    samples: collections.deque[tuple[float, int]], done: int, total: int | None
+) -> tuple[float | None, int | None]:
     """Transfer rate and remaining seconds from a trailing sample window.
 
     The rate is the slope across the window, not the last two ticks, so a
@@ -189,9 +215,15 @@ def _job_view(job: dict[str, Any]) -> dict[str, Any]:
     out = dict(job)
     running = _RUNNING.get(job["job_id"], {})
     pause = running.get("pause")
-    out["pause_requested"] = bool(pause is not None and pause.is_set() and out["status"] == "running")
-    out["can_pause"] = bool(pause is not None and out["status"] == "running"
-                            and out["phase"] in _DOWNLOAD_PHASES and not out["pause_requested"])
+    out["pause_requested"] = bool(
+        pause is not None and pause.is_set() and out["status"] == "running"
+    )
+    out["can_pause"] = bool(
+        pause is not None
+        and out["status"] == "running"
+        and out["phase"] in _DOWNLOAD_PHASES
+        and not out["pause_requested"]
+    )
     out["can_resume"] = out["status"] == "paused" and "resume" in running
     if out["total_bytes"]:
         out["percent"] = min(100, round(out["done_bytes"] / out["total_bytes"] * 100))
@@ -222,9 +254,16 @@ def _finish(job: dict[str, Any], detail: str) -> None:
     _step(job, "done", detail)
 
 
-def _spawn_job(job: dict[str, Any], name: str, body: Callable[[], None], *, fail_msg: str | None = None,
-               on_exit: Callable[[], None] | None = None, download_label: str | None = None,
-               resumable: bool = False) -> None:
+def _spawn_job(
+    job: dict[str, Any],
+    name: str,
+    body: Callable[[], None],
+    *,
+    fail_msg: str | None = None,
+    on_exit: Callable[[], None] | None = None,
+    download_label: str | None = None,
+    resumable: bool = False,
+) -> None:
     """One worker per job. Pauses retain ownership; terminal outcomes release it."""
     guard = threading.Lock()
     pause = threading.Event()
@@ -292,15 +331,21 @@ def _refresh_runtime(skip_msg: str) -> None:
     _quiet(bootstrap.refresh_local_runtime, None, debug=skip_msg)
 
 
-def _router_request(endpoint: dict[str, Any], path: str, *, timeout: float, payload: dict | None = None) -> Any:
+def _router_request(
+    endpoint: dict[str, Any], path: str, *, timeout: float, payload: dict | None = None
+) -> Any:
     """Call the local router (base_url minus ``/v1``) with its bearer key; GET (no payload) -> parsed JSON, POST -> None."""
     headers = {"Authorization": f"Bearer {endpoint.get('api_key', '')}"}
     data = None
     if payload is not None:
         headers["Content-Type"] = "application/json"
         data = json.dumps(payload).encode()
-    req = urllib.request.Request(endpoint["base_url"].rsplit("/v1", 1)[0] + path, data=data, headers=headers,
-                                 method="POST" if payload is not None else None)
+    req = urllib.request.Request(
+        endpoint["base_url"].rsplit("/v1", 1)[0] + path,
+        data=data,
+        headers=headers,
+        method="POST" if payload is not None else None,
+    )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return None if payload is not None else json.loads(r.read())
 
@@ -363,7 +408,9 @@ def _start_local_server(config: dict, fail_detail: str):
     return sup
 
 
-def _ensure_server(job: dict[str, Any], config: dict, model_id: str, *, fail_detail: str, skip_msg: str) -> None:
+def _ensure_server(
+    job: dict[str, Any], config: dict, model_id: str, *, fail_detail: str, skip_msg: str
+) -> None:
     """Start the local server if needed and self-heal a stale router: the model list is spawn-only, so a
     server started before ``model_id`` finished downloading can't serve it — bounce it when it doesn't know it."""
     _step(job, "starting-server", "Starting the local server")
@@ -384,7 +431,9 @@ def _ensure_server(job: dict[str, Any], config: dict, model_id: str, *, fail_det
     if endpoint is not None:
 
         def _known_models() -> dict[str, Any]:
-            data = (_router_request(endpoint, "/models", timeout=10) or {}).get("data", [])
+            data = (_router_request(endpoint, "/models", timeout=10) or {}).get(
+                "data", []
+            )
             return {m.get("id"): m for m in data}
 
         _quiet(lambda: rescan_if_unknown(_known_models()), None, debug=skip_msg)
@@ -393,7 +442,9 @@ def _ensure_server(job: dict[str, Any], config: dict, model_id: str, *, fail_det
 def _assign_default(job: dict[str, Any], model_id: str) -> None:
     """Make ``model_id`` the main model via the same machinery as /api/model/set."""
     _step(job, "setting-default", "Making it your default")
-    web_deps.late("_apply_model_assignment_sync", "clawk_cli.web_server_config")("main", "llamacpp", model_id, "", "", "")
+    web_deps.late("_apply_model_assignment_sync", "clawk_cli.web_server_config")(
+        "main", "llamacpp", model_id, "", "", ""
+    )
 
 
 # ── downloads: ranged parallel streams ───────────────────────
@@ -408,20 +459,38 @@ def _model_id_for(gguf: Path) -> str:
 
 def _variant_files_on_disk(model_id: str) -> list[Path]:
     """Every local file of a staged model: all split parts plus catalog-declared assets (mmproj/draft/MTP head) when present."""
-    files = [p for p in bootstrap.models_dir().glob("*.gguf") if _model_id_for(p) == model_id]
+    files = [
+        p for p in bootstrap.models_dir().glob("*.gguf") if _model_id_for(p) == model_id
+    ]
     hit = catalog.find_entry_for_model(model_id)
     assets = (hit[0].mmproj, hit[0].draft, hit[0].mtp_head) if hit is not None else ()
-    files += [bootstrap.assets_dir() / a.local_name for a in assets
-              if a is not None and (bootstrap.assets_dir() / a.local_name).exists()]
+    files += [
+        bootstrap.assets_dir() / a.local_name
+        for a in assets
+        if a is not None and (bootstrap.assets_dir() / a.local_name).exists()
+    ]
     return files
 
 
 def _download_plan(entry, variant) -> list:
     """Everything a variant needs: split parts + mmproj/draft/MTP head assets, as (url, dest, bytes) tuples."""
-    plan = [(_hf_url(entry.repo, a.path, a.revision), bootstrap.models_dir() / a.local_name, a.size_bytes)
-            for a in variant.files]
-    plan += [(_hf_url(a.repo or entry.repo, a.path, a.revision), bootstrap.assets_dir() / a.local_name, a.size_bytes)
-             for a in (entry.mmproj, entry.draft, entry.mtp_head) if a is not None]
+    plan = [
+        (
+            _hf_url(entry.repo, a.path, a.revision),
+            bootstrap.models_dir() / a.local_name,
+            a.size_bytes,
+        )
+        for a in variant.files
+    ]
+    plan += [
+        (
+            _hf_url(a.repo or entry.repo, a.path, a.revision),
+            bootstrap.assets_dir() / a.local_name,
+            a.size_bytes,
+        )
+        for a in (entry.mmproj, entry.draft, entry.mtp_head)
+        if a is not None
+    ]
     return plan
 
 
@@ -437,18 +506,30 @@ def _missing_drafts(engine_tag: str) -> list:
             continue
         if not any(v.model_id in staged for v in entry.variants):
             continue
-        if entry.draft_min_engine and build < int(entry.draft_min_engine.removeprefix("b")):
+        if entry.draft_min_engine and build < int(
+            entry.draft_min_engine.removeprefix("b")
+        ):
             continue
         dest = bootstrap.assets_dir() / asset.local_name
         if not dest.is_file():
-            plan.append((_hf_url(asset.repo or entry.repo, asset.path, asset.revision), dest, asset.size_bytes))
+            plan.append(
+                (
+                    _hf_url(asset.repo or entry.repo, asset.path, asset.revision),
+                    dest,
+                    asset.size_bytes,
+                )
+            )
     return plan
 
 
 def _run_download_plan(job: dict[str, Any], plan: list, label: str, entry=None) -> None:
     """The downloader counts completed files and every part of this plan. A catalog entry's draft
     downloads last and only speeds generation up, so a draft that fails costs the model nothing."""
-    draft = bootstrap.assets_dir() / entry.draft.local_name if entry is not None and entry.draft else None
+    draft = (
+        bootstrap.assets_dir() / entry.draft.local_name
+        if entry is not None and entry.draft
+        else None
+    )
     required = [row for row in plan if row[1] != draft]
     _step(job, "downloading", f"Downloading {label}")
     _download_job(job, required)
@@ -456,7 +537,9 @@ def _run_download_plan(job: dict[str, Any], plan: list, label: str, entry=None) 
     if optional:
         with _JOBS_LOCK:
             job.update(done_bytes=0, total_bytes=None, ranges={})
-        _step(job, "downloading", "Downloading the draft model that speeds up generation")
+        _step(
+            job, "downloading", "Downloading the draft model that speeds up generation"
+        )
         _download_optional(job, optional)
 
 
@@ -465,13 +548,16 @@ def _download_progress_hook(job: dict[str, Any]):
         with _JOBS_LOCK:
             job.update(done_bytes=done, total_bytes=total or None, ranges=ranges)
             _record_rate(job, done)
+
     return tick
 
 
 def _download_job(job: dict[str, Any], plan) -> None:
     """Model bytes use the same resumable transfer as pinned PM archives."""
     running = _RUNNING.get(job["job_id"], {})
-    dl = Download([Source(url, dest) for url, dest, _ in plan], pause_event=running.get("pause"))
+    dl = Download(
+        [Source(url, dest) for url, dest, _ in plan], pause_event=running.get("pause")
+    )
     dl.run(progress=_download_progress_hook(job))
 
 
@@ -482,7 +568,10 @@ def _download_optional(job: dict[str, Any], plan) -> bool:
         _download_job(job, plan)
     except DownloadPaused:
         raise
-    except (RuntimeError, OSError) as exc:  # the downloader's transfer, hash and rename failures, and disk errors
+    except (
+        RuntimeError,
+        OSError,
+    ) as exc:  # the downloader's transfer, hash and rename failures, and disk errors
         logger.warning("optional download failed; continuing without it: %s", exc)
         return False
     return True
@@ -493,20 +582,34 @@ def _loaded_models(running: dict[str, Any]) -> tuple[dict[str, str], dict[str, A
     the preset decision) — the difference between 'fast' and 'why is my CPU busy', so it must be inspectable.
     'loading' is its own state (a 20-GB load in flight is the most important thing the pane can show)."""
     data = _router_request(running, "/models", timeout=3)
-    loaded = {m["id"]: m.get("status", {}).get("value", "unknown") for m in data.get("data", [])
-              if m.get("status", {}).get("value") in ("loaded", "ready", "loading")}
+    loaded = {
+        m["id"]: m.get("status", {}).get("value", "unknown")
+        for m in data.get("data", [])
+        if m.get("status", {}).get("value") in ("loaded", "ready", "loading")
+    }
     placement: dict[str, Any] = {}
     decisions = presets.read_preset_decisions()
     for model_id, state in loaded.items():
         facts: dict[str, Any] = {}
         plan = decisions.get(model_id)
         if plan is not None:
-            facts.update(window=plan.window, window_label=_k_label(plan.window), spilled=plan.spilled)
+            facts.update(
+                window=plan.window,
+                window_label=_k_label(plan.window),
+                spilled=plan.spilled,
+            )
         n_ctx = state in ("loaded", "ready") and _quiet(
-            lambda: _router_request(running, f"/props?{child_query(model_id)}", timeout=3)
-            .get("default_generation_settings", {}).get("n_ctx"), None)
+            lambda: (
+                _router_request(running, f"/props?{child_query(model_id)}", timeout=3)
+                .get("default_generation_settings", {})
+                .get("n_ctx")
+            ),
+            None,
+        )
         if n_ctx:
-            facts.update(granted_window=int(n_ctx), granted_window_label=_k_label(int(n_ctx)))
+            facts.update(
+                granted_window=int(n_ctx), granted_window_label=_k_label(int(n_ctx))
+            )
         if facts:
             placement[model_id] = facts
     return loaded, placement
@@ -522,10 +625,19 @@ def _staged_row(gguf: Path) -> dict[str, Any]:
 def _active_llamacpp_model_id() -> str | None:
     """The active main model when it is one of ours (config authority: the model.provider + model.default
     that /api/model/set writes)."""
+
     def read() -> str | None:
         model_section = (_load_config() or {}).get("model") or {}
-        if str(model_section.get("provider", "")).strip().lower() in _LLAMACPP_PROVIDERS:
-            return str(model_section.get("default") or model_section.get("name") or "").strip() or None
+        if (
+            str(model_section.get("provider", "")).strip().lower()
+            in _LLAMACPP_PROVIDERS
+        ):
+            return (
+                str(
+                    model_section.get("default") or model_section.get("name") or ""
+                ).strip()
+                or None
+            )
         return None
 
     return _quiet(read, None)
@@ -538,30 +650,54 @@ def local_models_status():
     section = _runtime_section()
     engine = binaries.installed_engine(section.get("backend", "auto"))
     runtime_backend = engine.backend if engine is not None else None
-    configured_tag = binaries.pinned_tag(runtime_backend) if runtime_backend else _runtime_target()[0]
+    configured_tag = (
+        binaries.pinned_tag(runtime_backend)
+        if runtime_backend
+        else _runtime_target()[0]
+    )
     tag = engine.tag if engine is not None else configured_tag
     import pm
 
-    current = pm.installed_package(binaries.BACKEND_PACKAGES[runtime_backend]) if runtime_backend else None
+    current = (
+        pm.installed_package(binaries.BACKEND_PACKAGES[runtime_backend])
+        if runtime_backend
+        else None
+    )
     # The pane must list models from the old per-profile layout even while the runtime is off.
     _quiet(bootstrap.adopt_legacy_models, [], warn="legacy model adoption failed: %r")
     mdir = bootstrap.models_dir()
     running = _state_endpoint()
     # Resident models from the live router ({} when down): Loaded pills + eject. A failed read is never
     # silent: an empty dict here renders as 'Not in memory' on a machine whose VRAM is visibly full.
-    loaded, placement = ({}, {}) if running is None else _quiet(
-        lambda: _loaded_models(running), ({}, {}), warn="loaded-models read failed: %r")
+    loaded, placement = (
+        ({}, {})
+        if running is None
+        else _quiet(
+            lambda: _loaded_models(running),
+            ({}, {}),
+            warn="loaded-models read failed: %r",
+        )
+    )
     return {
-        "enabled": bool(section.get("enabled")), "tag": tag, "configured_tag": configured_tag,
-        "update_available": bool(section.get("enabled") and engine is not None and current is None),
-        "runtime_installed": runtime_backend is not None, "runtime_backend": runtime_backend,
-        "server_running": running is not None, "server_base_url": (running or {}).get("base_url"),
-        "active_model_id": _active_llamacpp_model_id(), "loaded_models": loaded,
+        "enabled": bool(section.get("enabled")),
+        "tag": tag,
+        "configured_tag": configured_tag,
+        "update_available": bool(
+            section.get("enabled") and engine is not None and current is None
+        ),
+        "runtime_installed": runtime_backend is not None,
+        "runtime_backend": runtime_backend,
+        "server_running": running is not None,
+        "server_base_url": (running or {}).get("base_url"),
+        "active_model_id": _active_llamacpp_model_id(),
+        "loaded_models": loaded,
         # Live load progress per model (SSE-fed): {model_id: {stage, value, percent}}.
         # The chat's loading bar and the picker rows poll this; garnish, never a 500.
         "loading": _quiet(load_progress.get_loading_progress, {}),
         "placement": placement,
-        "models": [_staged_row(gguf) for gguf in bootstrap.staged_models()] if mdir.exists() else [],
+        "models": [_staged_row(gguf) for gguf in bootstrap.staged_models()]
+        if mdir.exists()
+        else [],
         "models_dir": str(mdir),
     }
 
@@ -588,9 +724,15 @@ def local_models_hardware():
     budget = hardware.probe_budget()
     ram_total, ram_avail = hardware._ram_bytes()
     out = {
-        "uma": budget.uma, "vram_total_bytes": budget.total_device_bytes, "vram_usable_bytes": budget.usable_vram_bytes,
-        "ram_total_bytes": ram_total, "ram_available_bytes": ram_avail, "vram_label": _human_gb(budget.total_device_bytes),
-        "gpu_name": None, "gpu_util_percent": None, "vram_used_bytes": None,
+        "uma": budget.uma,
+        "vram_total_bytes": budget.total_device_bytes,
+        "vram_usable_bytes": budget.usable_vram_bytes,
+        "ram_total_bytes": ram_total,
+        "ram_available_bytes": ram_avail,
+        "vram_label": _human_gb(budget.total_device_bytes),
+        "gpu_name": None,
+        "gpu_util_percent": None,
+        "vram_used_bytes": None,
     }
     out.update(_quiet(_nvidia_smi_facts, {}))
     return out
@@ -598,10 +740,14 @@ def local_models_hardware():
 
 # ── catalog: priced for THIS machine before download ─────────
 _QUANT_REASONS = {
-    "best-large-window": ("Recommended build ({quant}) — the quant class this engine is optimized for; "
-                          "runs fully on your GPU with a large context window"),
-    "best-fits": ("Recommended build ({quant}) — the quant class this engine is optimized for; "
-                  "runs fully on your GPU"),
+    "best-large-window": (
+        "Recommended build ({quant}) — the quant class this engine is optimized for; "
+        "runs fully on your GPU with a large context window"
+    ),
+    "best-fits": (
+        "Recommended build ({quant}) — the quant class this engine is optimized for; "
+        "runs fully on your GPU"
+    ),
 }
 _QUANT_REASON_COMPACT = "Compact build sized for this machine ({quant}) — larger than GPU memory, runs slower"
 
@@ -609,21 +755,41 @@ _QUANT_REASON_COMPACT = "Compact build sized for this machine ({quant}) — larg
 def _installed(entry, variant) -> bool:
     """Every file the variant needs is on disk. The draft is optional: a model downloaded before
     its draft joined the catalog stays downloaded."""
-    return all(((bootstrap.models_dir() if f in variant.files else bootstrap.assets_dir())
-                / f.local_name).is_file() for f in entry.install_files(variant))
+    return all(
+        (
+            (bootstrap.models_dir() if f in variant.files else bootstrap.assets_dir())
+            / f.local_name
+        ).is_file()
+        for f in entry.install_files(variant)
+    )
 
 
-def _catalog_row(entry, budget, recommended, recommended_reason, staged_ids) -> dict[str, Any]:
+def _catalog_row(
+    entry, budget, recommended, recommended_reason, staged_ids
+) -> dict[str, Any]:
     choice = catalog.select_variant(entry, budget)
     # Any variant of this family on disk counts as downloaded.
-    dl = next((v for v in entry.variants if v.model_id in staged_ids and _installed(entry, v)), None)
+    dl = next(
+        (
+            v
+            for v in entry.variants
+            if v.model_id in staged_ids and _installed(entry, v)
+        ),
+        None,
+    )
     row: dict[str, Any] = {
-        "id": entry.id, "display_name": entry.display_name, "description": entry.description,
-        "native_context": entry.n_ctx_train, "native_context_label": _k_label(entry.n_ctx_train),
+        "id": entry.id,
+        "display_name": entry.display_name,
+        "description": entry.description,
+        "native_context": entry.n_ctx_train,
+        "native_context_label": _k_label(entry.n_ctx_train),
         "recommended": entry.id == recommended,
         "recommended_reason": recommended_reason if entry.id == recommended else None,
-        "downloaded": dl is not None, "downloaded_model_id": dl.model_id if dl else None,
-        "downloaded_quant": dl.quant if dl else None, "mtp": entry.mtp_capable, "vision": entry.mmproj is not None,
+        "downloaded": dl is not None,
+        "downloaded_model_id": dl.model_id if dl else None,
+        "downloaded_quant": dl.quant if dl else None,
+        "mtp": entry.mtp_capable,
+        "vision": entry.mmproj is not None,
         # Day-0 architectures need the llama.cpp release where their support landed: True gates
         # download/activate until the engine updates, but the row still renders (visible + explained beats hidden).
         "needs_engine": _engine_too_old(entry.min_engine),
@@ -632,32 +798,52 @@ def _catalog_row(entry, budget, recommended, recommended_reason, staged_ids) -> 
     if choice is None:
         smallest = min(entry.variants, key=lambda v: v.size_bytes)
         smallest_total = entry.download_bytes(smallest)
-        row.update({
-            "fits": False, "size_bytes": smallest_total, "size_label": _human_gb(smallest_total),
-            "fit_summary": "Needs more memory than this machine has",
-            "fit_detail": (f"even the most compact build ({smallest.quant}, {_human_gb(smallest_total)}) "
-                           "exceeds GPU + system memory"),
-        })
+        row.update(
+            {
+                "fits": False,
+                "size_bytes": smallest_total,
+                "size_label": _human_gb(smallest_total),
+                "fit_summary": "Needs more memory than this machine has",
+                "fit_detail": (
+                    f"even the most compact build ({smallest.quant}, {_human_gb(smallest_total)}) "
+                    "exceeds GPU + system memory"
+                ),
+            }
+        )
         return row
 
     variant = choice.variant
     decision = entry.launch_plan(variant, budget).decision
     download_total = entry.download_bytes(variant)
-    row.update({
-        "fits": True, "model_id": variant.model_id, "quant": variant.quant,
-        "quant_validated": variant.validated, "size_bytes": download_total,
-        "size_label": _human_gb(download_total), "variant_count": len(entry.variants),
-        "quant_reason": _QUANT_REASONS.get(choice.reason_key, _QUANT_REASON_COMPACT).format(quant=variant.quant),
-    })
+    row.update(
+        {
+            "fits": True,
+            "model_id": variant.model_id,
+            "quant": variant.quant,
+            "quant_validated": variant.validated,
+            "size_bytes": download_total,
+            "size_label": _human_gb(download_total),
+            "variant_count": len(entry.variants),
+            "quant_reason": _QUANT_REASONS.get(
+                choice.reason_key, _QUANT_REASON_COMPACT
+            ).format(quant=variant.quant),
+        }
+    )
     if isinstance(decision, estimator.PhysicsRefusal):
         row["fit_summary"] = row["quant_reason"]
         return row
-    row.update(start_window=decision.window, start_window_label=_k_label(decision.window), spilled=decision.spilled)
+    row.update(
+        start_window=decision.window,
+        start_window_label=_k_label(decision.window),
+        spilled=decision.spilled,
+    )
     if decision.window >= entry.n_ctx_train:
         shape = f"runs at its full {row['native_context_label']} context"
     else:
         shape = f"starts at {row['start_window_label']} and grows toward {row['native_context_label']} as you use it"
-    row["fit_summary"] = shape + (" (larger than your GPU memory — runs slower)" if decision.spilled else "")
+    row["fit_summary"] = shape + (
+        " (larger than your GPU memory — runs slower)" if decision.spilled else ""
+    )
     return row
 
 
@@ -675,12 +861,18 @@ def local_models_catalog():
     # The reason key ships with the row so the Recommended badge's tooltip is the branch that actually
     # fired, not a re-derivation that can drift.
     recommended, recommended_reason = catalog.recommended_entry(
-        budget, _eligible_entries(), backend=_runtime_section().get("backend", "auto")) or (None, None)
+        budget, _eligible_entries(), backend=_runtime_section().get("backend", "auto")
+    ) or (None, None)
     recommended_id = recommended.id if recommended is not None else None
     # Completeness-checked staging (split parts all present) — same answer the picker and router see, so a
     # mid-download model never reads as downloaded.
     staged_ids = set(bootstrap.staged_model_ids())
-    return {"models": [_catalog_row(e, budget, recommended_id, recommended_reason, staged_ids) for e in catalog.CATALOG]}
+    return {
+        "models": [
+            _catalog_row(e, budget, recommended_id, recommended_reason, staged_ids)
+            for e in catalog.CATALOG
+        ]
+    }
 
 
 # ── runtime install (job) ────────────────────────────────────
@@ -695,20 +887,24 @@ def _runtime_progress_hook(job: dict[str, Any]):
     def hook(stage: str, done: int, total: int, label: str) -> None:
         phase, detail = phases[stage]
         _step(job, phase, detail + (f" ({label})" if label else ""))
+
     return hook
 
 
 def _install_engine_job(job: dict[str, Any], backend: str):
     _step(job, "installing-runtime", "Preparing the pinned local engine")
     return binaries.ensure_engine(
-        backend, progress=_runtime_progress_hook(job),
+        backend,
+        progress=_runtime_progress_hook(job),
         download_progress=_download_progress_hook(job),
         pause_event=_RUNNING[job["job_id"]]["pause"],
     )
 
 
 @router.post("/api/local-models/runtime/install")
-def local_models_runtime_install(body: RuntimeInstallBody, profile: Optional[str] = None):
+def local_models_runtime_install(
+    body: RuntimeInstallBody, profile: Optional[str] = None
+):
     tag, backend = _runtime_target(body.backend)
     job = _job("runtime-install", f"llama.cpp {tag} ({backend})")
     owed = {"restart": False}  # survives a pause: resume runs this job's ``run`` again
@@ -719,21 +915,43 @@ def local_models_runtime_install(body: RuntimeInstallBody, profile: Optional[str
             engine = _install_engine_job(job, backend)
             drafts = _missing_drafts(engine.tag)
             if drafts:
-                before, owed["restart"] = owed["restart"], True  # the restart is what loads them
-                _step(job, "downloading", "Downloading draft models that speed up generation")
-                if not _download_optional(job, drafts) and len(_missing_drafts(engine.tag)) == len(drafts):
+                before, owed["restart"] = (
+                    owed["restart"],
+                    True,
+                )  # the restart is what loads them
+                _step(
+                    job,
+                    "downloading",
+                    "Downloading draft models that speed up generation",
+                )
+                if not _download_optional(job, drafts) and len(
+                    _missing_drafts(engine.tag)
+                ) == len(drafts):
                     owed["restart"] = before  # nothing new landed for a restart to load
             running = bootstrap.get_supervisor()
             serving = bootstrap.serving_engine()
-            stale = previous != engine or (serving is not None and serving.tag != engine.tag)
+            stale = previous != engine or (
+                serving is not None and serving.tag != engine.tag
+            )
             if running is not None and (stale or owed["restart"]):
-                _step(job, "restarting", "Switching the running server to the pinned build"
-                      if stale else "Restarting the local server")
+                _step(
+                    job,
+                    "restarting",
+                    "Switching the running server to the pinned build"
+                    if stale
+                    else "Restarting the local server",
+                )
                 bootstrap.refresh_local_runtime()
                 owed["restart"] = False
         _finish(job, f"llama.cpp {tag} ready ({backend})")
 
-    _spawn_job(job, "lr-runtime-install", run, fail_msg="runtime install failed: %s", resumable=True)
+    _spawn_job(
+        job,
+        "lr-runtime-install",
+        run,
+        fail_msg="runtime install failed: %s",
+        resumable=True,
+    )
     return {"job_id": job["job_id"], "backend": backend, "tag": tag}
 
 
@@ -745,11 +963,17 @@ def _download_target(model_id: str):
     if entry is None:  # exact variant id, or nothing we know (404)
         return catalog.find_entry_for_model(model_id) or _entry_or_404(model_id)
     if _engine_too_old(entry.min_engine):
-        raise HTTPException(status_code=409, detail=(
-            f"{entry.display_name} needs llama.cpp {entry.min_engine} or newer — update the engine first"))
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{entry.display_name} needs llama.cpp {entry.min_engine} or newer — update the engine first"
+            ),
+        )
     choice = catalog.select_variant(entry, hardware.probe_budget(planning=True))
     if choice is None:
-        raise HTTPException(status_code=409, detail=f"no variant of {entry.id} fits this machine")
+        raise HTTPException(
+            status_code=409, detail=f"no variant of {entry.id} fits this machine"
+        )
     return entry, choice.variant
 
 
@@ -759,14 +983,27 @@ def local_models_download(body: ModelDownloadBody):
     entry, variant = _download_target(body.model_id)
     plan = _download_plan(entry, variant)
     if plan and all(dest.is_file() for _, dest, _ in plan):
-        return {"job_id": None, "already_downloaded": True, "model_id": variant.model_id}
-    job = _job("model-download", f"{entry.display_name} ({variant.quant})", model_id=entry.id)
+        return {
+            "job_id": None,
+            "already_downloaded": True,
+            "model_id": variant.model_id,
+        }
+    job = _job(
+        "model-download", f"{entry.display_name} ({variant.quant})", model_id=entry.id
+    )
+
     def _run():
         _run_download_plan(job, plan, entry.display_name, entry)
         _finish(job, f"{entry.display_name} ready")
         _refresh_runtime("post-download runtime refresh skipped")
 
-    _spawn_job(job, "lr-model-download", _run, fail_msg="model download failed: %s", resumable=True)
+    _spawn_job(
+        job,
+        "lr-model-download",
+        _run,
+        fail_msg="model download failed: %s",
+        resumable=True,
+    )
     return {"job_id": job["job_id"], "model_id": variant.model_id}
 
 
@@ -802,9 +1039,16 @@ async def local_models_delete(model_id: str):
     for path in files:
         path.unlink(missing_ok=True)
     # Growth state dies with the model: a re-download starts back at its zero-spill window, not a stale grown one.
-    _quiet(lambda: growth.clear_window_override(model_id), None, debug="window-override clear skipped")
-    spawn_context_thread(_refresh_runtime, args=("post-delete runtime refresh skipped",),
-                         name="lr-post-delete").start()
+    _quiet(
+        lambda: growth.clear_window_override(model_id),
+        None,
+        debug="window-override clear skipped",
+    )
+    spawn_context_thread(
+        _refresh_runtime,
+        args=("post-delete runtime refresh skipped",),
+        name="lr-post-delete",
+    ).start()
     return {"ok": True}
 
 
@@ -820,19 +1064,28 @@ def _quickstart_target(body: QuickstartBody, budget):
         candidates = [_entry_or_404(body.model_id)]
     else:
         picked = catalog.recommended_entry(
-            budget, _eligible_entries(), backend=_runtime_section().get("backend", "auto"))
+            budget,
+            _eligible_entries(),
+            backend=_runtime_section().get("backend", "auto"),
+        )
         if picked is None:
             raise HTTPException(
                 status_code=409,
                 detail="No automatic recommendation for this machine — open Local Models to browse or choose a model explicitly",
             )
-        candidates = [picked[0]] + [e for e in catalog.CATALOG if e.id != picked[0].id and e.recommend]
+        candidates = [picked[0]] + [
+            e for e in catalog.CATALOG if e.id != picked[0].id and e.recommend
+        ]
     for candidate in candidates:
         choice = catalog.select_variant(candidate, budget)
         if choice is not None and not _engine_too_old(candidate.min_engine):
             return candidate, choice.variant
-    raise HTTPException(status_code=409, detail=(
-        "no catalog model fits this machine — open Local Models to browse for a smaller build"))
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "no catalog model fits this machine — open Local Models to browse for a smaller build"
+        ),
+    )
 
 
 def _repriced_quickstart(job: dict[str, Any], body: QuickstartBody, variant):
@@ -863,6 +1116,7 @@ def local_models_quickstart(body: QuickstartBody, profile: Optional[str] = None)
     if not _QUICKSTART_LOCK.acquire(blocking=False):
         raise HTTPException(status_code=409, detail="Setup is already running")
     job = _job("quickstart", entry.display_name, model_id=entry.id)
+
     def _run():
         nonlocal entry, variant, download_plan
         if need_runtime and binaries.installed_engine(backend) is None:
@@ -877,16 +1131,32 @@ def local_models_quickstart(body: QuickstartBody, profile: Optional[str] = None)
             _run_download_plan(job, download_plan, entry.display_name, entry)
         _step(job, "starting-server", "Starting the local server")
         with _config_profile_scope(profile):
-            _ensure_server(job, _set_runtime_enabled(True), variant.model_id,
-                           fail_detail="The local server could not start — open Local Models for details",
-                           skip_msg="quickstart rescan check skipped")
+            _ensure_server(
+                job,
+                _set_runtime_enabled(True),
+                variant.model_id,
+                fail_detail="The local server could not start — open Local Models for details",
+                skip_msg="quickstart rescan check skipped",
+            )
             _assign_default(job, variant.model_id)
         _finish(job, f"{entry.display_name} is ready — new chats use it")
 
-    _spawn_job(job, "lr-quickstart", _run, fail_msg="quickstart failed: %s",
-               on_exit=_QUICKSTART_LOCK.release, resumable=True)
-    return {"job_id": job["job_id"], "model_id": entry.id, "display_name": entry.display_name,
-            "needs_runtime": need_runtime, "needs_download": need_download, "download_bytes": download_bytes}
+    _spawn_job(
+        job,
+        "lr-quickstart",
+        _run,
+        fail_msg="quickstart failed: %s",
+        on_exit=_QUICKSTART_LOCK.release,
+        resumable=True,
+    )
+    return {
+        "job_id": job["job_id"],
+        "model_id": entry.id,
+        "display_name": entry.display_name,
+        "needs_runtime": need_runtime,
+        "needs_download": need_download,
+        "download_bytes": download_bytes,
+    }
 
 
 # ── server lifecycle: turn the engine on/off ─────────────────
@@ -895,8 +1165,12 @@ def _terminate_state_pid() -> None:
     from clawk_cli.local_runtime.recovery import stop_recorded_orphan
 
     if not stop_recorded_orphan():
-        raise HTTPException(status_code=409, detail=(
-            "Another Clawksis process owns this server, or its ownership could not be verified"))
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Another Clawksis process owns this server, or its ownership could not be verified"
+            ),
+        )
 
 
 def _stop_server() -> None:
@@ -945,7 +1219,9 @@ def local_models_eject(body: ModelEjectBody):
     if endpoint is None:
         raise HTTPException(status_code=409, detail="local server is not running")
     with _http_error(502):
-        _router_request(endpoint, "/models/unload", timeout=120, payload={"model": body.model_id})
+        _router_request(
+            endpoint, "/models/unload", timeout=120, payload={"model": body.model_id}
+        )
     return {"ok": True}
 
 
@@ -956,7 +1232,9 @@ async def local_models_activate(body: ModelActivateBody, profile: Optional[str] 
     inference; an empty router costs nothing). Kept as a job for UI continuity."""
     # Split variants stage under their first part — resolve like the other routes.
     if body.model_id not in bootstrap.staged_model_ids():
-        raise HTTPException(status_code=404, detail=f"{body.model_id} is not downloaded")
+        raise HTTPException(
+            status_code=404, detail=f"{body.model_id} is not downloaded"
+        )
     job = _job("model-activate", body.model_id, model_id=body.model_id)
 
     def _run():
@@ -964,8 +1242,13 @@ async def local_models_activate(body: ModelActivateBody, profile: Optional[str] 
         # config.yaml write — scope it to the profile the request names, inside the job
         # thread (the contextvar override must be set where the write happens).
         with _config_profile_scope(profile):
-            _ensure_server(job, config_mod.load_config(), body.model_id,
-                           fail_detail=_SERVER_START_FAILED, skip_msg="activate rescan check skipped")
+            _ensure_server(
+                job,
+                config_mod.load_config(),
+                body.model_id,
+                fail_detail=_SERVER_START_FAILED,
+                skip_msg="activate rescan check skipped",
+            )
             _step(job, "setting-default", "Making it your default")
             _set_runtime_enabled(True)
             _assign_default(job, body.model_id)
@@ -1002,7 +1285,12 @@ async def local_models_search(q: str, limit: int = 20):
     if not q.strip():
         return {"hits": []}
     with _http_error(502, "Hugging Face search unavailable: "):
-        return {"hits": [h.__dict__ for h in await run_in_threadpool(hf_browse.search_models, q, limit)]}
+        return {
+            "hits": [
+                h.__dict__
+                for h in await run_in_threadpool(hf_browse.search_models, q, limit)
+            ]
+        }
 
 
 @router.get("/api/local-models/search/files")
@@ -1010,7 +1298,9 @@ async def local_models_search_files(repo: str):
     """Servable GGUFs in one HF repo with a rough pre-download fit verdict per quant (file size + conservative
     fill-ins; the GGUF header refines it)."""
     with _http_error(502, f"Could not list {repo}: "):
-        groups = await run_in_threadpool(hf_browse.priced_repo_files, repo, hardware.probe_budget(planning=True))
+        groups = await run_in_threadpool(
+            hf_browse.priced_repo_files, repo, hardware.probe_budget(planning=True)
+        )
     return {"files": [dict(g.__dict__, paths=list(g.paths)) for g in groups]}
 
 
@@ -1022,18 +1312,31 @@ async def local_models_download_browsed(body: BrowsedDownloadBody):
     paths = [p for p in (body.paths or []) if p.lower().endswith(".gguf")]
     if not paths:
         raise HTTPException(status_code=422, detail="no .gguf files given")
-    model_id = re.sub(rf"(?:{_SPLIT_PART_RE})?\.gguf$", "", paths[0].rsplit("/", 1)[-1], flags=re.IGNORECASE)
+    model_id = re.sub(
+        rf"(?:{_SPLIT_PART_RE})?\.gguf$",
+        "",
+        paths[0].rsplit("/", 1)[-1],
+        flags=re.IGNORECASE,
+    )
     if model_id in bootstrap.staged_model_ids():
         return {"job_id": None, "already_downloaded": True, "model_id": model_id}
     job = _job("model-download", f"{model_id} (from {body.repo})", model_id=model_id)
 
-    plan = [(_hf_url(body.repo, urllib.parse.quote(path)),
-             bootstrap.models_dir() / path.rsplit("/", 1)[-1], 0) for path in paths]
+    plan = [
+        (
+            _hf_url(body.repo, urllib.parse.quote(path)),
+            bootstrap.models_dir() / path.rsplit("/", 1)[-1],
+            0,
+        )
+        for path in paths
+    ]
 
     def _fetch():
         _run_download_plan(job, plan, model_id)
 
-    _spawn_job(job, "lm-download-browsed", _fetch, download_label=model_id, resumable=True)
+    _spawn_job(
+        job, "lm-download-browsed", _fetch, download_label=model_id, resumable=True
+    )
     return {"job_id": job["job_id"], "model_id": model_id}
 
 
@@ -1049,10 +1352,10 @@ async def local_models_sideload(body: SideloadBody):
         return {"ok": True, "model_id": dest.stem, "already_present": True}
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.link(src, dest)          # hardlink: instant, no extra disk
+        os.link(src, dest)  # hardlink: instant, no extra disk
     except OSError:
         try:
-            os.symlink(src, dest)   # cross-volume fallback
+            os.symlink(src, dest)  # cross-volume fallback
         except OSError:
             await run_in_threadpool(shutil.copyfile, src, dest)
     _refresh_runtime("post-sideload runtime refresh skipped")

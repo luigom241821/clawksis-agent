@@ -7,6 +7,7 @@ The authority test is "does this worker act for a ROUTED home", exactly as ``ser
 decides it. The secret scope bound around the env build is what supplies B's OWN values for the
 dispatcher's declared ``terminal.env_passthrough`` names.
 """
+
 import os
 from pathlib import Path
 
@@ -27,7 +28,8 @@ def profile_b(tmp_path, monkeypatch):
     served = launch / "profiles" / "b"
     served.mkdir(parents=True)
     (served / "config.yaml").write_text(
-        "terminal:\n  backend: docker\n  docker_image: b-image\n", encoding="utf-8")
+        "terminal:\n  backend: docker\n  docker_image: b-image\n", encoding="utf-8"
+    )
     monkeypatch.setenv("HOME", str(tmp_path / "fakehome"))
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setenv("TERMINAL_ENV", "local")  # ambient launch-profile policy
@@ -41,7 +43,8 @@ def test_worker_profile_scope_installs_the_assigned_profiles_terminal_policy(pro
         scope = get_terminal_scope() or {}
     assert scope.get("TERMINAL_ENV") == "docker"
     assert scope.get("TERMINAL_DOCKER_IMAGE") == "b-image", (
-        f"worker inherited the launch profile's terminal policy: {scope}")
+        f"worker inherited the launch profile's terminal policy: {scope}"
+    )
 
 
 def _spawn_env_for_profile_b(monkeypatch, tmp_path):
@@ -58,10 +61,22 @@ def _spawn_env_for_profile_b(monkeypatch, tmp_path):
     monkeypatch.setattr(process_registry, "systemd_user_bus_env", _capture)
 
     task = Task(
-        id="t1", title="t", body=None, assignee="b", status="claimed", priority=0,
-        created_by=None, created_at=0, started_at=None, completed_at=None,
-        workspace_kind="dir", workspace_path=None, claim_lock=None, claim_expires=None,
-        tenant=None)
+        id="t1",
+        title="t",
+        body=None,
+        assignee="b",
+        status="claimed",
+        priority=0,
+        created_by=None,
+        created_at=0,
+        started_at=None,
+        completed_at=None,
+        workspace_kind="dir",
+        workspace_path=None,
+        claim_lock=None,
+        claim_expires=None,
+        tenant=None,
+    )
     with pytest.raises(_StopSpawn):
         kanban_db_dispatch._default_spawn(task, str(tmp_path / "ws"))
     assert captured, "_default_spawn never built a worker env"
@@ -69,12 +84,14 @@ def _spawn_env_for_profile_b(monkeypatch, tmp_path):
 
 
 def test_worker_for_another_profile_never_inherits_the_dispatchers_credentials(
-        profile_b, tmp_path, monkeypatch):
+    profile_b, tmp_path, monkeypatch
+):
     """Single-profile host (multiplex OFF) — the case the gateway-wide flag left unprotected."""
     monkeypatch.setenv("OPENAI_API_KEY", "dispatcher-launch-key")
     env = _spawn_env_for_profile_b(monkeypatch, tmp_path)
     assert "OPENAI_API_KEY" not in env, (
-        "B's worker inherited the dispatcher's provider credential")
+        "B's worker inherited the dispatcher's provider credential"
+    )
 
 
 def test_launch_profiles_own_worker_keeps_its_credentials(tmp_path, monkeypatch):
@@ -96,17 +113,31 @@ def test_launch_profiles_own_worker_keeps_its_credentials(tmp_path, monkeypatch)
 
     monkeypatch.setattr(process_registry, "systemd_user_bus_env", _capture)
     task = Task(
-        id="t1", title="t", body=None, assignee="default", status="claimed", priority=0,
-        created_by=None, created_at=0, started_at=None, completed_at=None,
-        workspace_kind="dir", workspace_path=None, claim_lock=None, claim_expires=None,
-        tenant=None)
+        id="t1",
+        title="t",
+        body=None,
+        assignee="default",
+        status="claimed",
+        priority=0,
+        created_by=None,
+        created_at=0,
+        started_at=None,
+        completed_at=None,
+        workspace_kind="dir",
+        workspace_path=None,
+        claim_lock=None,
+        claim_expires=None,
+        tenant=None,
+    )
     with pytest.raises(_StopSpawn):
         kanban_db_dispatch._default_spawn(task, str(tmp_path / "ws"))
 
     assert captured and captured[0].get("OPENAI_API_KEY") == "dispatcher-launch-key"
 
 
-def test_worker_for_another_profile_can_still_import_clawk(profile_b, tmp_path, monkeypatch):
+def test_worker_for_another_profile_can_still_import_clawk(
+    profile_b, tmp_path, monkeypatch
+):
     """The routed-profile scrub strips Clawksis-owned PYTHONPATH entries, but the worker IS Clawksis
     (`-m clawk_cli.kanban_worker_client`): a PYTHONPATH-launched dispatcher must hand it a tree
     it can import, or it dies on `No module named 'clawk_cli'` before reaching the owner."""

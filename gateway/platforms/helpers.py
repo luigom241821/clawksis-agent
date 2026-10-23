@@ -40,7 +40,11 @@ class MessageDeduplicator:
             self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
             if len(self._seen) > self._max_size:
                 # All entries still fresh: keep the newest so max_size holds under load.
-                self._seen = dict(sorted(self._seen.items(), key=lambda item: item[1])[-self._max_size:])
+                self._seen = dict(
+                    sorted(self._seen.items(), key=lambda item: item[1])[
+                        -self._max_size :
+                    ]
+                )
         return False
 
     def contains(self, msg_id: str) -> bool:
@@ -63,7 +67,9 @@ class MessageDeduplicator:
     def absorb(self, other: "MessageDeduplicator") -> None:
         """Adopt *other*'s still-live IDs (at their original seen times) into this cache."""
         cutoff = time.time() - self._ttl
-        self._seen.update({k: v for k, v in other._seen.items() if v > cutoff and k not in self._seen})
+        self._seen.update(
+            {k: v for k, v in other._seen.items() if v > cutoff and k not in self._seen}
+        )
 
 
 def carry_inbound_dedup(predecessor: Any, adapter: Any) -> None:
@@ -76,7 +82,11 @@ def carry_inbound_dedup(predecessor: Any, adapter: Any) -> None:
         return
     for name, previous in vars(predecessor).items():
         current = getattr(adapter, name, None)
-        if isinstance(previous, MessageDeduplicator) and isinstance(current, MessageDeduplicator) and current is not previous:
+        if (
+            isinstance(previous, MessageDeduplicator)
+            and isinstance(current, MessageDeduplicator)
+            and current is not previous
+        ):
             current.absorb(previous)
 
 
@@ -109,7 +119,9 @@ async def cancel_task(task: Optional[asyncio.Task]) -> None:
             await task
 
 
-def bounded_put(store: MutableMapping[str, Any], key: str, value: Any, cap: int) -> None:
+def bounded_put(
+    store: MutableMapping[str, Any], key: str, value: Any, cap: int
+) -> None:
     """Insert into an insertion-ordered mapping with a hard size bound, evicting the oldest keys. A
     re-put moves the key to the newest position so live entries outlast stale ones."""
     store.pop(key, None)
@@ -187,6 +199,7 @@ class ThreadParticipationTracker:
 
     def _state_path(self) -> Path:
         from clawk_constants import get_clawk_home
+
         return get_clawk_home() / f"{self._platform}_threads.json"
 
     def _load(self) -> list[str]:
@@ -201,7 +214,7 @@ class ThreadParticipationTracker:
             with self._lock:
                 thread_list = list(self._threads)
                 if len(thread_list) > self._max_tracked:
-                    thread_list = thread_list[-self._max_tracked:]
+                    thread_list = thread_list[-self._max_tracked :]
                     self._threads = dict.fromkeys(thread_list)
             atomic_json_write(self._state_path(), thread_list, indent=None)
 
@@ -257,13 +270,22 @@ async def send_chunks(chunks: list, send_one) -> Any:
     fallback, cron standalone fallback) re-sends the head the recipient already has.
     """
     from gateway.platforms.base import SendResult
+
     result = SendResult(success=False, error="nothing to send")
     for delivered, chunk in enumerate(chunks):
         result = await send_one(chunk)
         if not result.success:
             if delivered:
-                raw = dict(result.raw_response) if isinstance(result.raw_response, dict) else {}
-                raw.update(partial_overflow=True, delivered_chunks=delivered, total_chunks=len(chunks))
+                raw = (
+                    dict(result.raw_response)
+                    if isinstance(result.raw_response, dict)
+                    else {}
+                )
+                raw.update(
+                    partial_overflow=True,
+                    delivered_chunks=delivered,
+                    total_chunks=len(chunks),
+                )
                 result.raw_response = raw
             break
     return result
@@ -282,17 +304,18 @@ def redact_phone(phone: str) -> str:
 # primitives but keeps its own MarkdownV2-aware renderer.
 # Delimiter row: optional outer pipes, dash cells (optional alignment colons). Requires at
 # least one internal '|' so a lone '---' rule is NOT matched.
-TABLE_SEPARATOR_RE = re.compile(r'^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*){1,}\|?\s*$')
+TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*){1,}\|?\s*$")
 
 
 def is_table_row(line: str) -> bool:
     """Return True if *line* could plausibly be a table data row."""
-    return '|' in line.strip()
+    return "|" in line.strip()
 
 
 def split_markdown_table_row(line: str) -> list[str]:
     """Split a GFM table row into stripped cells (delegates to agent.markdown_tables)."""
     from agent.markdown_tables import split_table_row
+
     return split_table_row(line)
 
 
@@ -302,7 +325,9 @@ def _render_table_block(table_block: list[str]) -> str:
     headers = split_markdown_table_row(table_block[0]) if len(table_block) >= 3 else []
     if len(headers) < 2:
         return "\n".join(table_block)
-    has_row_label_col = len(split_markdown_table_row(table_block[2])) == len(headers) + 1
+    has_row_label_col = (
+        len(split_markdown_table_row(table_block[2])) == len(headers) + 1
+    )
     rendered_groups: list[str] = []
     for index, row in enumerate(table_block[2:], start=1):
         cells = split_markdown_table_row(row)
@@ -313,26 +338,33 @@ def _render_table_block(table_block: list[str]) -> str:
             heading = next((cell for cell in cells if cell), f"Row {index}")
             data_cells = cells
         data_cells = (data_cells + [""] * len(headers))[: len(headers)]
-        bullets = [f"• {header}: {value}" for header, value in zip(headers, data_cells)
-                   if has_row_label_col or value != heading]
+        bullets = [
+            f"• {header}: {value}"
+            for header, value in zip(headers, data_cells)
+            if has_row_label_col or value != heading
+        ]
         rendered_groups.append("\n".join([f"**{heading}**", *bullets]))
     return "\n\n".join(rendered_groups)
 
 
 def convert_table_to_bullets(text: str) -> str:
     """Rewrite GFM pipe tables into bold-heading + bullet groups; fenced code is left alone."""
-    if '|' not in text or '-' not in text:
+    if "|" not in text or "-" not in text:
         return text
-    lines = text.split('\n')
+    lines = text.split("\n")
     out: list[str] = []
     in_fence = False
     i = 0
     while i < len(lines):
         line = lines[i]
-        is_fence_line = line.lstrip().startswith('```')
+        is_fence_line = line.lstrip().startswith("```")
         in_fence ^= is_fence_line
-        if not (in_fence or is_fence_line) and '|' in line and i + 1 < len(lines) \
-                and TABLE_SEPARATOR_RE.match(lines[i + 1]):
+        if (
+            not (in_fence or is_fence_line)
+            and "|" in line
+            and i + 1 < len(lines)
+            and TABLE_SEPARATOR_RE.match(lines[i + 1])
+        ):
             j = i + 2
             while j < len(lines) and is_table_row(lines[j]):
                 j += 1
@@ -341,12 +373,18 @@ def convert_table_to_bullets(text: str) -> str:
         else:
             out.append(line)
             i += 1
-    return '\n'.join(out)
+    return "\n".join(out)
 
 
-def compile_mention_patterns(raw, *, log_prefix: str, platform_label: str | None = None,
-                             display_label: str | None = None, defaults: list[str] | None = None,
-                             logger_: logging.Logger | None = None) -> list[re.Pattern]:
+def compile_mention_patterns(
+    raw,
+    *,
+    log_prefix: str,
+    platform_label: str | None = None,
+    display_label: str | None = None,
+    defaults: list[str] | None = None,
+    logger_: logging.Logger | None = None,
+) -> list[re.Pattern]:
     """Compile regex wake-word/mention patterns from config or env values.
 
     * **Config-style** (dingtalk, telegram): pass ``platform_label``. ``raw`` must be a
@@ -373,13 +411,25 @@ def compile_mention_patterns(raw, *, log_prefix: str, platform_label: str | None
             return []
         patterns = [raw] if isinstance(raw, str) else raw
         if not isinstance(patterns, list):
-            log.warning("[%s] %s mention_patterns must be a list or string; got %s",
-                        log_prefix, platform_label, type(patterns).__name__)
+            log.warning(
+                "[%s] %s mention_patterns must be a list or string; got %s",
+                log_prefix,
+                platform_label,
+                type(patterns).__name__,
+            )
             return []
-        compiled = _compile([p for p in patterns if isinstance(p, str) and p.strip()],
-                            "[%s] Invalid %s mention pattern %r: %s", display)
+        compiled = _compile(
+            [p for p in patterns if isinstance(p, str) and p.strip()],
+            "[%s] Invalid %s mention pattern %r: %s",
+            display,
+        )
         if compiled:
-            log.info("[%s] Loaded %d %s mention pattern(s)", log_prefix, len(compiled), display)
+            log.info(
+                "[%s] Loaded %d %s mention pattern(s)",
+                log_prefix,
+                len(compiled),
+                display,
+            )
         return compiled
     if raw is None:
         patterns = list(defaults or [])
@@ -389,8 +439,13 @@ def compile_mention_patterns(raw, *, log_prefix: str, platform_label: str | None
             loaded = json.loads(text) if text else []
         except Exception:
             loaded = None
-        patterns = loaded if isinstance(loaded, list) else [
-            part.strip() for line in text.splitlines() for part in line.split(",")]
+        patterns = (
+            loaded
+            if isinstance(loaded, list)
+            else [
+                part.strip() for line in text.splitlines() for part in line.split(",")
+            ]
+        )
     else:
         patterns = raw if isinstance(raw, list) else [raw]
     texts = [t for t in (str(p).strip() for p in patterns) if t]
@@ -404,30 +459,30 @@ def compile_mention_patterns(raw, *, log_prefix: str, platform_label: str | None
 
 def text_has_unclosed_fence(text: str) -> bool:
     """Return True when *text* ends inside an unclosed ``` code fence."""
-    return sum(line.startswith('```') for line in text.split('\n')) % 2 == 1
+    return sum(line.startswith("```") for line in text.split("\n")) % 2 == 1
 
 
 def text_ends_with_table_row(text: str) -> bool:
     """True when the last non-empty line starts and ends with ``|``."""
-    return _is_pipe_row(text.rstrip().split('\n')[-1])
+    return _is_pipe_row(text.rstrip().split("\n")[-1])
 
 
 def is_fence_atom(text: str) -> bool:
     """True when an atomic block is a code block (starts with ```)."""
-    return text.lstrip().startswith('```')
+    return text.lstrip().startswith("```")
 
 
 def _is_pipe_row(line: str) -> bool:
     stripped = line.strip()
-    return stripped.startswith('|') and stripped.endswith('|')
+    return stripped.startswith("|") and stripped.endswith("|")
 
 
 def is_table_atom(text: str) -> bool:
     """True when an atomic block is a table (first line is ``|...|``)."""
-    return _is_pipe_row(text.split('\n')[0])
+    return _is_pipe_row(text.split("\n")[0])
 
 
-_SENTENCE_END_NEWLINE_RE = re.compile(r'[。！？.!?]\n')
+_SENTENCE_END_NEWLINE_RE = re.compile(r"[。！？.!?]\n")
 
 
 def _cp_budget(text, budget, len_fn):
@@ -436,6 +491,7 @@ def _cp_budget(text, budget, len_fn):
     if len_fn is len:
         return budget
     from gateway.platforms.base import _custom_unit_to_cp  # heavyweight; lazy
+
     return _custom_unit_to_cp(text, budget, len_fn)
 
 
@@ -448,13 +504,13 @@ def split_at_paragraph_boundary(text, max_chars, len_fn=None):
     """
     _len = len_fn or len
     if _len(text) <= max_chars:
-        return text, ''
-    window = text[:_cp_budget(text, max_chars, _len)]
-    pos = window.rfind('\n\n')
+        return text, ""
+    window = text[: _cp_budget(text, max_chars, _len)]
+    pos = window.rfind("\n\n")
     sentence_ends = [m.end() for m in _SENTENCE_END_NEWLINE_RE.finditer(window)]
     cut = pos + 2 if pos > 0 else (sentence_ends[-1] if sentence_ends else 0)
     if not cut:
-        pos = window.rfind('\n')
+        pos = window.rfind("\n")
         cut = pos + 1 if pos > 0 else len(window)
     return text[:cut], text[cut:]
 
@@ -468,22 +524,22 @@ def split_markdown_atoms(text: str) -> list[str]:
 
     def _flush_current() -> None:
         if current_lines:
-            atom = '\n'.join(current_lines)
+            atom = "\n".join(current_lines)
             if atom.strip():
                 atoms.append(atom)
             current_lines.clear()
 
-    for line in text.split('\n'):
+    for line in text.split("\n"):
         if in_fence:
             current_lines.append(line)
-            if line.startswith('```'):
+            if line.startswith("```"):
                 in_fence = False
                 _flush_current()
-        elif line.startswith('```'):
+        elif line.startswith("```"):
             _flush_current()
             in_fence = True
             current_lines.append(line)
-        elif line.strip() == '':
+        elif line.strip() == "":
             _flush_current()
         else:
             # A table line and a non-table line never share an atom.
@@ -498,11 +554,15 @@ def infer_block_separator(prev_chunk: str, next_chunk: str) -> str:
     """``'\\n'`` when the boundary sits at a code fence or a continued table, else ``'\\n\\n'``."""
     prev_trimmed = prev_chunk.rstrip()
     next_trimmed = next_chunk.lstrip()
-    if prev_trimmed.endswith('```') or next_trimmed.startswith('```'):
-        return '\n'
-    if text_ends_with_table_row(prev_chunk) and next_trimmed and _is_pipe_row(next_trimmed.split('\n')[0]):
-        return '\n'
-    return '\n\n'
+    if prev_trimmed.endswith("```") or next_trimmed.startswith("```"):
+        return "\n"
+    if (
+        text_ends_with_table_row(prev_chunk)
+        and next_trimmed
+        and _is_pipe_row(next_trimmed.split("\n")[0])
+    ):
+        return "\n"
+    return "\n\n"
 
 
 def merge_streaming_fences(chunks: list[str]) -> list[str]:
@@ -513,7 +573,9 @@ def merge_streaming_fences(chunks: list[str]) -> list[str]:
     while i < len(chunks):
         current = chunks[i]
         while text_has_unclosed_fence(current) and i + 1 < len(chunks):
-            current = current + infer_block_separator(current, chunks[i + 1]) + chunks[i + 1]
+            current = (
+                current + infer_block_separator(current, chunks[i + 1]) + chunks[i + 1]
+            )
             i += 1
         result.append(current)
         i += 1
@@ -529,13 +591,17 @@ def balance_fences_across_chunks(chunks: list[str]) -> list[str]:
     carry_lang = None
     for chunk in chunks:
         body = f"```{carry_lang}\n{chunk}" if carry_lang is not None else chunk
-        in_code, lang = fence_state_after(chunk, carry_lang is not None, carry_lang or "")
+        in_code, lang = fence_state_after(
+            chunk, carry_lang is not None, carry_lang or ""
+        )
         carry_lang = lang if in_code else None
         out.append(body + "\n```" if in_code else body)
     return out
 
 
-def fence_state_after(text: str, in_code: bool = False, lang: str = "") -> tuple[bool, str]:
+def fence_state_after(
+    text: str, in_code: bool = False, lang: str = ""
+) -> tuple[bool, str]:
     """Walk ``text`` line by line toggling on ``` lines; return the final (in_code, lang)."""
     for line in text.split("\n"):
         stripped = line.strip()
@@ -570,8 +636,9 @@ def greedy_pack_blocks(blocks, max_length, len_fn=None, sep="\n\n", overflow=Non
     return packed
 
 
-def split_text_fence_aware(text, limit, len_fn=None, *, prefer_paragraphs=True,
-                           balance_fences=False):
+def split_text_fence_aware(
+    text, limit, len_fn=None, *, prefer_paragraphs=True, balance_fences=False
+):
     """Split markdown into chunks of at most *limit*, respecting fences.
 
     ``prefer_paragraphs=True`` (yuanbao-derived): atoms (fences, tables, paragraphs) are
@@ -604,26 +671,35 @@ def _chunk_markdown_paragraphs(text, max_chars, len_fn=None):
         atom_len = _len(atom)
         sep_len = 2 if current_parts else 0
         if current_len + sep_len + atom_len > max_chars and current_parts:
-            chunks.append('\n\n'.join(current_parts))
+            chunks.append("\n\n".join(current_parts))
             current_parts, current_len, sep_len = [], 0, 0
-        if (not current_parts and atom_len > max_chars
-                and (is_fence_atom(atom) or is_table_atom(atom))):
+        if (
+            not current_parts
+            and atom_len > max_chars
+            and (is_fence_atom(atom) or is_table_atom(atom))
+        ):
             indivisible_set.add(len(chunks))
             chunks.append(atom)
             continue
         current_parts.append(atom)
         current_len += sep_len + atom_len
     if current_parts:
-        chunks.append('\n\n'.join(current_parts))
+        chunks.append("\n\n".join(current_parts))
     # Phase 3: split still-oversized divisible chunks at paragraph boundaries.
     result: list[str] = []
     for idx, chunk in enumerate(chunks):
-        if _len(chunk) <= max_chars or idx in indivisible_set or text_has_unclosed_fence(chunk):
+        if (
+            _len(chunk) <= max_chars
+            or idx in indivisible_set
+            or text_has_unclosed_fence(chunk)
+        ):
             result.append(chunk)
             continue
         remaining = chunk
         while _len(remaining) > max_chars:
-            head, remaining = split_at_paragraph_boundary(remaining, max_chars, len_fn=len_fn)
+            head, remaining = split_at_paragraph_boundary(
+                remaining, max_chars, len_fn=len_fn
+            )
             if not head:
                 head, remaining = remaining[:max_chars], remaining[max_chars:]
             if head:
@@ -633,7 +709,7 @@ def _chunk_markdown_paragraphs(text, max_chars, len_fn=None):
     # Phase 4: merge small chunks with neighbours.
     merged: list[str] = result[:1]
     for chunk in result[1:]:
-        combined = merged[-1] + '\n\n' + chunk
+        combined = merged[-1] + "\n\n" + chunk
         if _len(combined) <= max_chars:
             merged[-1] = combined
         else:
@@ -696,6 +772,7 @@ def platform_http_client(**kwargs: Any) -> Any:
     from gateway.platforms._http_client_limits import platform_httpx_limits
     from gateway.platforms.base import ssrf_redirect_guard
     from tools.url_safety import create_ssrf_safe_async_client
+
     hooks = dict(kwargs.pop("event_hooks", None) or {})
     hooks["response"] = [ssrf_redirect_guard, *hooks.get("response", ())]
     kwargs.setdefault("timeout", 30.0)

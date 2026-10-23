@@ -23,6 +23,7 @@ from cron.scheduler_preflight import _preflight_check_delivery
 
 # ── token parsing ────────────────────────────────────────────────────────────
 
+
 def test_bare_token_targets_own_profile():
     assert parse_bot_chat_deliver_token("bot-chat") == ""
     assert parse_bot_chat_deliver_token("  Bot-Chat  ") == ""
@@ -45,9 +46,6 @@ def test_non_bot_chat_tokens_pass_through():
 # ── target resolution ────────────────────────────────────────────────────────
 
 
-
-
-
 def test_unknown_profile_resolves_to_none():
     with mock.patch("clawk_cli.profiles.profile_exists", return_value=False):
         assert _resolve_bot_chat_target({"id": "j1"}, "ghost") is None
@@ -56,10 +54,18 @@ def test_unknown_profile_resolves_to_none():
 def test_resolve_delivery_targets_combines_with_platform_targets():
     """bot-chat rides the same comma-separated deliver string as platforms."""
     job = {"id": "j1", "deliver": "bot-chat,telegram"}
-    with mock.patch.object(sched_delivery, "_get_home_target_chat_id", return_value="-100123"), \
-         mock.patch.object(sched_delivery, "_get_home_target_thread_id", return_value=None), \
-         mock.patch.object(sched_delivery, "_is_known_delivery_platform", return_value=True), \
-         mock.patch.object(sched_delivery, "_resolve_origin", return_value=None):
+    with (
+        mock.patch.object(
+            sched_delivery, "_get_home_target_chat_id", return_value="-100123"
+        ),
+        mock.patch.object(
+            sched_delivery, "_get_home_target_thread_id", return_value=None
+        ),
+        mock.patch.object(
+            sched_delivery, "_is_known_delivery_platform", return_value=True
+        ),
+        mock.patch.object(sched_delivery, "_resolve_origin", return_value=None),
+    ):
         targets = _resolve_delivery_targets(job)
     platforms = {t["platform"] for t in targets}
     assert BOT_CHAT_PLATFORM in platforms
@@ -68,19 +74,25 @@ def test_resolve_delivery_targets_combines_with_platform_targets():
 
 # ── preflight ────────────────────────────────────────────────────────────────
 
+
 def test_preflight_ignores_bot_chat_targets():
     """bot-chat needs no gateway credentials — preflight must not block it."""
     assert _preflight_check_delivery({"id": "j1", "deliver": "bot-chat"}) is None
-    assert _preflight_check_delivery({"id": "j1", "deliver": "bot-chat:research"}) is None
+    assert (
+        _preflight_check_delivery({"id": "j1", "deliver": "bot-chat:research"}) is None
+    )
 
 
 def test_preflight_still_blocks_unknown_platforms():
-    with mock.patch.object(sched_delivery, "_is_known_delivery_platform", return_value=False):
+    with mock.patch.object(
+        sched_delivery, "_is_known_delivery_platform", return_value=False
+    ):
         err = _preflight_check_delivery({"id": "j1", "deliver": "nonexistent-platform"})
     assert err is not None and "not a known" in err
 
 
 # ── create-time validation ───────────────────────────────────────────────────
+
 
 def test_create_validation_rejects_unknown_profile():
     from tools.cronjob_tools import _validate_bot_chat_deliver
@@ -102,6 +114,7 @@ def test_create_validation_accepts_bare_and_existing():
 
 # ── delivery lane ────────────────────────────────────────────────────────────
 
+
 def test_deliver_message_carries_cron_attribution(tmp_path, monkeypatch):
     """The admitted turn self-identifies as scheduled output, not the user."""
     from tools import bot_live_delivery as mailbox
@@ -109,13 +122,24 @@ def test_deliver_message_carries_cron_attribution(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     captured = {}
 
-    def fake_deliver(home, owner, message, *, delivery_id, notification_category="result"):
+    def fake_deliver(
+        home, owner, message, *, delivery_id, notification_category="result"
+    ):
         captured["message"] = message
         return {"status": "settled", "message": message, "delivery_id": delivery_id}
 
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner", lambda home: {"session_id": "local-bot"})
+    monkeypatch.setattr(
+        mailbox, "find_canonical_live_owner", lambda home: {"session_id": "local-bot"}
+    )
     monkeypatch.setattr(mailbox, "deliver_to_live_owner", fake_deliver)
-    assert _deliver_to_bot_chat({"id": "j1", "name": "Daily digest", "execution_id": "r1"}, "the payload", "") is None
+    assert (
+        _deliver_to_bot_chat(
+            {"id": "j1", "name": "Daily digest", "execution_id": "r1"},
+            "the payload",
+            "",
+        )
+        is None
+    )
     assert 'Cronjob "Daily digest" output' in captured["message"]
     assert "not the user" in captured["message"]
     assert "the payload" in captured["message"]
@@ -129,14 +153,25 @@ def test_failure_notice_reaches_the_owner_as_a_diagnostic(tmp_path, monkeypatch)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     seen = []
 
-    def fake_deliver(home, owner, message, *, delivery_id, notification_category="result"):
+    def fake_deliver(
+        home, owner, message, *, delivery_id, notification_category="result"
+    ):
         seen.append(notification_category)
-        return {"status": "settled", "message": message, "delivery_id": delivery_id,
-                "notification_category": notification_category}
+        return {
+            "status": "settled",
+            "message": message,
+            "delivery_id": delivery_id,
+            "notification_category": notification_category,
+        }
 
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner", lambda home: {"session_id": "local-bot"})
+    monkeypatch.setattr(
+        mailbox, "find_canonical_live_owner", lambda home: {"session_id": "local-bot"}
+    )
     monkeypatch.setattr(mailbox, "deliver_to_live_owner", fake_deliver)
-    monkeypatch.setattr("gateway.warning_notifications.warning_notifications_enabled", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "gateway.warning_notifications.warning_notifications_enabled",
+        lambda *a, **k: True,
+    )
     job = {"id": "j1", "name": "n", "execution_id": "r1"}
     assert _deliver_to_bot_chat(job, "boom", "", for_failure=True) is None
     assert _deliver_to_bot_chat(dict(job, execution_id="r2"), "ok", "") is None
@@ -149,34 +184,54 @@ def test_deliver_without_authority_is_parked_not_a_second_writer(tmp_path, monke
     from tools import bot_live_delivery as mailbox
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(subprocess, "run", mock.Mock(side_effect=AssertionError("no local inference fallback")))
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner",
-                        mock.Mock(side_effect=ValueError("profile authority is not ready")))
-    err = _deliver_to_bot_chat({"id": "j1", "name": "n", "execution_id": "r1"}, "out", "")
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        mock.Mock(side_effect=AssertionError("no local inference fallback")),
+    )
+    monkeypatch.setattr(
+        mailbox,
+        "find_canonical_live_owner",
+        mock.Mock(side_effect=ValueError("profile authority is not ready")),
+    )
+    err = _deliver_to_bot_chat(
+        {"id": "j1", "name": "n", "execution_id": "r1"}, "out", ""
+    )
     assert err is not None and "queued" in err and "not running" in err
 
 
-def test_failure_notice_to_a_profile_hiding_warnings_is_suppressed_not_sent(tmp_path, monkeypatch):
+def test_failure_notice_to_a_profile_hiding_warnings_is_suppressed_not_sent(
+    tmp_path, monkeypatch
+):
     """A ``for_failure`` notice whose TARGET profile hides warning notifications is booked as a
     durable ``suppressed`` disposition (flagged on the job), never admitted to the owner; a
     requested (non-failure) result is never gated."""
     from tools import bot_live_delivery as mailbox
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("display: {suppress_warning_notifications: true}\n")
+    (tmp_path / "config.yaml").write_text(
+        "display: {suppress_warning_notifications: true}\n"
+    )
     admitted = []
 
-    def fake_deliver(home, owner, message, *, delivery_id, notification_category="result"):
+    def fake_deliver(
+        home, owner, message, *, delivery_id, notification_category="result"
+    ):
         admitted.append(message)
         return {"status": "queued", "message": message, "delivery_id": delivery_id}
 
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner", lambda home: {"session_id": "bot"})
+    monkeypatch.setattr(
+        mailbox, "find_canonical_live_owner", lambda home: {"session_id": "bot"}
+    )
     monkeypatch.setattr(mailbox, "deliver_to_live_owner", fake_deliver)
 
     failure = {"id": "j1", "name": "n", "execution_id": "r1"}
     assert _deliver_to_bot_chat(failure, "diagnostic", "", for_failure=True) is None
     assert failure["_notification_all_targets_suppressed"] is True
-    assert failure["_bot_chat_delivery_receipts"]["bot-chat:(own)"]["status"] == "suppressed"
+    assert (
+        failure["_bot_chat_delivery_receipts"]["bot-chat:(own)"]["status"]
+        == "suppressed"
+    )
     assert admitted == []
 
     result = {"id": "j1", "name": "n", "execution_id": "r2"}
@@ -188,9 +243,11 @@ def test_failure_notice_to_a_profile_hiding_warnings_is_suppressed_not_sent(tmp_
 
 # ── delivery-targets listing (UI pickers) ────────────────────────────────────
 
+
 def test_delivery_targets_include_local_profiles():
-    with mock.patch("clawk_cli.profiles.list_profile_names",
-                    return_value=["default", "research"]):
+    with mock.patch(
+        "clawk_cli.profiles.list_profile_names", return_value=["default", "research"]
+    ):
         targets = sched_delivery.cron_delivery_targets()
     ids = [t["id"] for t in targets]
     assert f"{BOT_CHAT_PLATFORM}:default" in ids
@@ -202,7 +259,10 @@ def test_delivery_targets_include_local_profiles():
 
 # ── legacy cron/bot_chat_pending upgrade path ────────────────────────────────
 
-def test_tick_hands_legacy_pending_records_to_the_live_owner_once(tmp_path, monkeypatch):
+
+def test_tick_hands_legacy_pending_records_to_the_live_owner_once(
+    tmp_path, monkeypatch
+):
     """Records the retired CLI lane left in cron/bot_chat_pending are never orphaned: a queued
     (never-started) record is admitted to the live owner under its own id; a claimed one (an
     uncertain CLI turn) is never resent; the files stay as evidence."""
@@ -220,28 +280,49 @@ def test_tick_hands_legacy_pending_records_to_the_live_owner_once(tmp_path, monk
     monkeypatch.setattr(J, "OUTPUT_DIR", tmp_path / "cron" / "output")
     monkeypatch.setattr(S, "_clawk_home", tmp_path)
     monkeypatch.setattr(S, "_sweep_mcp_orphans", lambda: None)
-    monkeypatch.setattr(scheduler_authority, "reconcile_pending", lambda *, allow_connect=True: None)
+    monkeypatch.setattr(
+        scheduler_authority, "reconcile_pending", lambda *, allow_connect=True: None
+    )
     (tmp_path / "state.db").write_text("")
     root = tmp_path / "cron" / "bot_chat_pending"
     root.mkdir(parents=True)
     queued, claimed = "a" * 64, "b" * 64
     for key, status in ((queued, "queued"), (claimed, "claimed")):
-        (root / f"{key}.json").write_text(json.dumps(dict(
-            id=key, status=status, job={"id": "j1", "name": "Digest"}, content="the report",
-            profile="", home=str(tmp_path), sequence=1, for_failure=True)))
+        (root / f"{key}.json").write_text(
+            json.dumps(
+                dict(
+                    id=key,
+                    status=status,
+                    job={"id": "j1", "name": "Digest"},
+                    content="the report",
+                    profile="",
+                    home=str(tmp_path),
+                    sequence=1,
+                    for_failure=True,
+                )
+            )
+        )
     admitted = []
 
-    def fake_deliver(home, owner, message, *, delivery_id, notification_category="result"):
+    def fake_deliver(
+        home, owner, message, *, delivery_id, notification_category="result"
+    ):
         admitted.append((delivery_id, message, notification_category))
         return {"status": "queued", "message": message, "delivery_id": delivery_id}
 
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner", lambda home: {"session_id": "bot"})
+    monkeypatch.setattr(
+        mailbox, "find_canonical_live_owner", lambda home: {"session_id": "bot"}
+    )
     monkeypatch.setattr(mailbox, "deliver_to_live_owner", fake_deliver)
 
     S.tick(verbose=False)
     S.tick(verbose=False)
 
-    assert [(key, category) for key, _, category in admitted] == [(queued, "diagnostic")]
-    assert 'Cronjob "Digest" output' in admitted[0][1] and "the report" in admitted[0][1]
+    assert [(key, category) for key, _, category in admitted] == [
+        (queued, "diagnostic")
+    ]
+    assert (
+        'Cronjob "Digest" output' in admitted[0][1] and "the report" in admitted[0][1]
+    )
     assert json.loads((root / f"{queued}.json").read_text())["status"] == "transferred"
     assert json.loads((root / f"{claimed}.json").read_text())["status"] == "claimed"

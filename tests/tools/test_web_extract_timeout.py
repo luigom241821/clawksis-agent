@@ -4,6 +4,7 @@ A backend that keeps the response open without finishing (hanging HTTP server,
 stuck SDK) must produce per-URL timeout errors instead of stalling the tool
 call — and the event loop — indefinitely.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,8 +32,11 @@ class _HangingSyncProvider:
         time.sleep(2)
 
 
-@pytest.mark.parametrize("provider", [_HangingAsyncProvider(), _HangingSyncProvider()],
-                         ids=["async", "sync-to-thread"])
+@pytest.mark.parametrize(
+    "provider",
+    [_HangingAsyncProvider(), _HangingSyncProvider()],
+    ids=["async", "sync-to-thread"],
+)
 def test_hanging_provider_returns_per_url_timeout_errors(monkeypatch, provider):
     monkeypatch.setattr(wte, "_extract_timeout_seconds", lambda: 0.2)
     monkeypatch.setattr(wte, "_rescue_eligible", lambda p: False)
@@ -52,5 +56,7 @@ def test_timeout_zero_disables_the_cap(monkeypatch):
             return [{"url": u, "content": "ok"} for u in urls]
 
     monkeypatch.setattr(wte, "_extract_timeout_seconds", lambda: 0.0)
-    results = asyncio.run(wte._dispatch_extract(_FastProvider(), ["https://example.com/x"], None))
+    results = asyncio.run(
+        wte._dispatch_extract(_FastProvider(), ["https://example.com/x"], None)
+    )
     assert results[0]["content"] == "ok"

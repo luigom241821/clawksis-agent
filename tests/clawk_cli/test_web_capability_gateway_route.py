@@ -21,7 +21,9 @@ def client(monkeypatch, _isolate_clawk_home):
     return test_client
 
 
-def test_web_capability_picks_use_own_keys_and_never_the_nous_gateway(client, monkeypatch):
+def test_web_capability_picks_use_own_keys_and_never_the_nous_gateway(
+    client, monkeypatch
+):
     from clawk_cli.config import load_config
 
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fc-own-key")
@@ -40,4 +42,8 @@ def test_web_capability_picks_use_own_keys_and_never_the_nous_gateway(client, mo
     put(expect=400, provider="Nous Subscription")
     web = load_config()["web"]
     assert web.get("search_backend") == "firecrawl"
-    assert "nous" not in {web.get("backend"), web.get("search_backend"), web.get("extract_backend")}
+    assert "nous" not in {
+        web.get("backend"),
+        web.get("search_backend"),
+        web.get("extract_backend"),
+    }

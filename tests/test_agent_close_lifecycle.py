@@ -44,7 +44,12 @@ class RecordingAgent:
     def run_conversation(self, *args, **kwargs):
         if self.fail:
             raise RuntimeError("agent run failed")
-        return {"final_response": "ok", "messages": [], "completed": True, "api_calls": 0}
+        return {
+            "final_response": "ok",
+            "messages": [],
+            "completed": True,
+            "api_calls": 0,
+        }
 
     def _convert_to_trajectory_format(self, *args, **kwargs):
         return []
@@ -72,10 +77,15 @@ class TestBatchRunnerClosesAgent:
 
     def test_agent_closed_after_successful_prompt(self, monkeypatch):
         import batch_runner
-        RecordingAgent.use(monkeypatch, where="batch_runner.AIAgent")
-        monkeypatch.setattr(batch_runner, "sample_toolsets_from_distribution", lambda name: [])
 
-        result = batch_runner._process_single_prompt(0, {"prompt": "hi"}, 0, self.CONFIG)
+        RecordingAgent.use(monkeypatch, where="batch_runner.AIAgent")
+        monkeypatch.setattr(
+            batch_runner, "sample_toolsets_from_distribution", lambda name: []
+        )
+
+        result = batch_runner._process_single_prompt(
+            0, {"prompt": "hi"}, 0, self.CONFIG
+        )
 
         assert result["success"] is True
         assert len(RecordingAgent.instances) == 1
@@ -92,9 +102,13 @@ class TestBatchRunnerClosesAgent:
         FailingAgent.reset()
         FailingAgent.instances = []
         monkeypatch.setattr("batch_runner.AIAgent", FailingAgent)
-        monkeypatch.setattr(batch_runner, "sample_toolsets_from_distribution", lambda name: [])
+        monkeypatch.setattr(
+            batch_runner, "sample_toolsets_from_distribution", lambda name: []
+        )
 
-        result = batch_runner._process_single_prompt(0, {"prompt": "hi"}, 0, self.CONFIG)
+        result = batch_runner._process_single_prompt(
+            0, {"prompt": "hi"}, 0, self.CONFIG
+        )
 
         assert result["success"] is False
         assert FailingAgent.instances[0].closed
@@ -109,7 +123,9 @@ class TestFeishuCommentClosesAgent:
 
         RecordingAgent.reset()
         monkeypatch.setattr("run_agent.AIAgent", RecordingAgent)
-        monkeypatch.setattr(feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {}))
+        monkeypatch.setattr(
+            feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {})
+        )
         # session_key="" keeps the cross-card history cache out of the test.
         response = feishu_comment._run_comment_agent("hi", client=None, session_key="")
         return response
@@ -130,7 +146,9 @@ class TestFeishuCommentClosesAgent:
 
         FailingAgent.instances = []
         monkeypatch.setattr("run_agent.AIAgent", FailingAgent)
-        monkeypatch.setattr(feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {}))
+        monkeypatch.setattr(
+            feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {})
+        )
         response = feishu_comment._run_comment_agent("hi", client=None, session_key="")
         assert response == ""
         assert FailingAgent.instances[0].closed
@@ -167,10 +185,13 @@ class TestPromptBackgroundClosesAgent:
 
         monkeypatch.setattr(server, "_start_agent_build", lambda sid_, session_: None)
         monkeypatch.setattr(
-            server, "_background_agent_kwargs", lambda agent, task_id: {"model": "m"})
+            server, "_background_agent_kwargs", lambda agent, task_id: {"model": "m"}
+        )
         monkeypatch.setattr(
-            server, "_side_agent_session_db",
-            lambda parent_db: contextlib.nullcontext(parent_db))
+            server,
+            "_side_agent_session_db",
+            lambda parent_db: contextlib.nullcontext(parent_db),
+        )
         bodies = []
 
         def fake_spawn(rid, session, task_id, parent, event, body, **kwargs):
@@ -182,7 +203,8 @@ class TestPromptBackgroundClosesAgent:
         monkeypatch.setattr("run_agent.AIAgent", agent_cls)
 
         response = server._methods["prompt.background"](
-            1, {"session_id": sid, "text": "do work"})
+            1, {"session_id": sid, "text": "do work"}
+        )
 
         assert "error" not in response, response
         # The side-agent body runs synchronously through the fake spawner.
@@ -192,6 +214,7 @@ class TestPromptBackgroundClosesAgent:
 
     def test_agent_closed_after_background_turn(self, monkeypatch):
         from tui_gateway import server
+
         sid = "close-lifecycle-bg"
         _bg_session(server, sid)
         try:
@@ -236,15 +259,28 @@ def _make_cli():
     cli._session_db = None
     cli.reasoning_config = None
     cli.service_tier = None
-    for attr in ("_providers_only", "_providers_ignore", "_providers_order", "_provider_sort",
-                 "_provider_require_params", "_provider_data_collection",
-                 "_openrouter_min_coding_score", "_fallback_model",
-                 "_sudo_password_callback", "_approval_callback", "_vault_unlock_callback",
-                 "_vault_save_login_callback", "_secret_capture_callback"):
+    for attr in (
+        "_providers_only",
+        "_providers_ignore",
+        "_providers_order",
+        "_provider_sort",
+        "_provider_require_params",
+        "_provider_data_collection",
+        "_openrouter_min_coding_score",
+        "_fallback_model",
+        "_sudo_password_callback",
+        "_approval_callback",
+        "_vault_unlock_callback",
+        "_vault_save_login_callback",
+        "_secret_capture_callback",
+    ):
         setattr(cli, attr, None)
     cli._ensure_runtime_credentials = lambda: True
     cli._resolve_turn_agent_config = lambda prompt: {
-        "model": "m", "runtime": {}, "request_overrides": None}
+        "model": "m",
+        "runtime": {},
+        "request_overrides": None,
+    }
     return cli
 
 
@@ -253,11 +289,14 @@ class TestCliBackgroundCommandClosesAgent:
         cli = _make_cli()
         agent_cls.reset()
         monkeypatch.setattr("run_agent.AIAgent", agent_cls)
-        for target in ("cli.set_sudo_password_callback", "cli.set_approval_callback",
-                       "cli.set_secret_capture_callback",
-                       "agent.vault_backends.unlock.set_code_prompt_callback",
-                       "agent.vault_backends.unlock.set_save_login_prompt_callback",
-                       "agent.vault_backends.unlock.set_unlock_prompt_callback"):
+        for target in (
+            "cli.set_sudo_password_callback",
+            "cli.set_approval_callback",
+            "cli.set_secret_capture_callback",
+            "agent.vault_backends.unlock.set_code_prompt_callback",
+            "agent.vault_backends.unlock.set_save_login_prompt_callback",
+            "agent.vault_backends.unlock.set_unlock_prompt_callback",
+        ):
             monkeypatch.setattr(target, lambda *a, **k: None)
         produced = {}
 

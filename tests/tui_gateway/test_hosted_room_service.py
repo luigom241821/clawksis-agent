@@ -35,9 +35,7 @@ from tui_gateway.hosted_room_peer_http import PeerRunsHTTPError
 def _append_room_event(db, **kwargs):
     if kwargs.get("kind") == "message.user":
         room = hosted_rooms.room_state(db, room_id=kwargs["room_id"])
-        kwargs.setdefault(
-            "authority_gateway_id", str(room["authority_gateway_id"])
-        )
+        kwargs.setdefault("authority_gateway_id", str(room["authority_gateway_id"]))
         kwargs.setdefault("authority_epoch", int(room["authority_epoch"]))
     return hosted_rooms.append_event(db, **kwargs)
 
@@ -68,7 +66,8 @@ class _FakeRPC:
         task,
         execution_generation,
         on_terminal,
-        member_id="", attachments=None,
+        member_id="",
+        attachments=None,
     ):
         on_terminal({"status": "settled", "text": f"reply from {profile}"})
         return {"accepted": True}
@@ -232,11 +231,11 @@ class _ApprovalPeerClient(_FakePeerClient):
             "status": "waiting_for_approval",
             "active": True,
             "task_id": task_id,
-                "execution_generation": 2,
-                "run_id": "run-peer-1",
-                "session_id": "peer-group-session",
-                "request_id": "req-peer-1",
-                "approval": {
+            "execution_generation": 2,
+            "run_id": "run-peer-1",
+            "session_id": "peer-group-session",
+            "request_id": "req-peer-1",
+            "approval": {
                 "description": "Run the focused tests",
                 "command": "pytest -q tests/focused",
                 "choices": ["once", "deny"],
@@ -280,7 +279,8 @@ class _PromptRecordingRPC(_FakeRPC):
         task,
         execution_generation,
         on_terminal,
-        member_id="", attachments=None,
+        member_id="",
+        attachments=None,
     ):
         self.prompts.append((profile, prompt))
         on_terminal({"status": "settled", "text": f"reply from {profile}"})
@@ -476,33 +476,37 @@ def test_policy_checkpoint_bounds_replay_after_completed_room_history(
         activity_seq = user_seq + 1
         thread_id = f"thread-{index}"
         event_id = f"user-{index}"
-        rows.extend((
+        rows.extend(
             (
-                "room-1",
-                user_seq,
-                event_id,
-                "message.user",
-                json.dumps({"kind": "user", "id": "load-test"}),
-                None,
-                json.dumps({"text": "done", "thread_id": thread_id}),
-                float(user_seq),
-            ),
-            (
-                "room-1",
-                activity_seq,
-                f"activity-{index}",
-                "room.activity",
-                json.dumps({"kind": "gateway", "id": authority}),
-                1,
-                json.dumps({
-                    "status": "settled",
-                    "reason_code": "silent_round",
-                    "thread_id": thread_id,
-                    "discussion_event_id": event_id,
-                }),
-                float(activity_seq),
-            ),
-        ))
+                (
+                    "room-1",
+                    user_seq,
+                    event_id,
+                    "message.user",
+                    json.dumps({"kind": "user", "id": "load-test"}),
+                    None,
+                    json.dumps({"text": "done", "thread_id": thread_id}),
+                    float(user_seq),
+                ),
+                (
+                    "room-1",
+                    activity_seq,
+                    f"activity-{index}",
+                    "room.activity",
+                    json.dumps({"kind": "gateway", "id": authority}),
+                    1,
+                    json.dumps(
+                        {
+                            "status": "settled",
+                            "reason_code": "silent_round",
+                            "thread_id": thread_id,
+                            "discussion_event_id": event_id,
+                        }
+                    ),
+                    float(activity_seq),
+                ),
+            )
+        )
     with sqlite3.connect(db) as conn:
         conn.executemany(
             """INSERT INTO hosted_room_events(
@@ -591,10 +595,13 @@ def test_same_thread_followup_migrates_and_delivers_committed_peer_reply(
         )
     )
     with sqlite3.connect(db) as conn:
-        assert conn.execute(
-            """SELECT COUNT(*) FROM hosted_room_policy_transcript
+        assert (
+            conn.execute(
+                """SELECT COUNT(*) FROM hosted_room_policy_transcript
                WHERE room_id='room-1' AND thread_id='thread-1'"""
-        ).fetchone()[0] == 2
+            ).fetchone()[0]
+            == 2
+        )
         conn.execute("DELETE FROM hosted_room_policy_transcript")
         conn.execute(
             """DELETE FROM hosted_room_policy_transcript_state
@@ -679,8 +686,7 @@ def test_thread_transcript_prunes_committed_message_and_settlement_together(
     )
     _wait_for(
         lambda: any(
-            event["kind"] == "room.activity"
-            for event in service._events("room-1")
+            event["kind"] == "room.activity" for event in service._events("room-1")
         )
     )
     assert service.stop(timeout=5.0)
@@ -1157,10 +1163,17 @@ def test_registered_peer_route_rehydrates_after_service_restart(tmp_path: Path):
 def test_one_corrupt_stored_route_does_not_hide_healthy_peers(tmp_path: Path):
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     service = HostedRoomService(_server(), db_path=db)
-    for room_id, member_id in (("room-good", "member-good"), ("room-bad", "member-bad")):
+    for room_id, member_id in (
+        ("room-good", "member-good"),
+        ("room-bad", "member-bad"),
+    ):
         route = PeerMemberRoute(
             home_install_id=hosted_rooms.local_authority_gateway_id(),
             member_id=member_id,
@@ -1275,7 +1288,11 @@ def test_registration_disk_failure_does_not_publish_live_route(
     db = tmp_path / "state.db"
     service = HostedRoomService(_server(), db_path=db)
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1311,7 +1328,11 @@ def test_room_route_revocation_is_remote_first_and_removes_local_state(
 
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1345,7 +1366,11 @@ def test_failed_remote_revocation_preserves_route_for_retry(tmp_path: Path):
 
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1378,7 +1403,11 @@ def test_expired_remote_grant_no_longer_blocks_room_cleanup(tmp_path: Path):
 
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1411,7 +1440,11 @@ def test_expired_grant_surfaces_needs_reauthorization_without_secret(
 ):
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1509,7 +1542,11 @@ def test_not_admitted_dispatch_persists_unavailable_route_until_success(
 ):
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1552,9 +1589,7 @@ def test_not_admitted_dispatch_persists_unavailable_route_until_success(
     )
     binding = service.bindings()[0]
     task = {
-        "identity": driver.TaskIdentity(
-            "room-1", "task-peer", "thread-1", "turn-1"
-        ),
+        "identity": driver.TaskIdentity("room-1", "task-peer", "thread-1", "turn-1"),
         "execution_generation": 1,
         "payload": {
             "target_member_id": "member-peer",
@@ -1602,7 +1637,11 @@ def test_dispatch_refresh_persists_before_remote_admission(tmp_path: Path):
     now = time.time()
     secret = b"s" * 32
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     old_grant = issue_room_grant(
         secret,
@@ -1713,9 +1752,12 @@ def test_dispatch_refresh_persists_before_remote_admission(tmp_path: Path):
         peer.dispatches[0]["execution_policy_digest"]
         == catalog.execution_policy.policy_digest
     )
-    assert HostedRoomService(_server(), db_path=db).peer_routes[
-        ("room-1", "member-peer")
-    ].grant == new_grant
+    assert (
+        HostedRoomService(_server(), db_path=db)
+        .peer_routes[("room-1", "member-peer")]
+        .grant
+        == new_grant
+    )
 
 
 @pytest.mark.parametrize(
@@ -1745,7 +1787,7 @@ def test_dispatch_refresh_marks_route_for_reauthorization_on_drift(
         )
     )
     refreshed_catalog = catalog_mapping(
-            target_profile="reviewer",
+        target_profile="reviewer",
         installation_id="install-peer",
         persistent_process=True,
         attachments=capability_changed,
@@ -1813,7 +1855,11 @@ def test_dispatch_refresh_marks_route_for_reauthorization_on_drift(
 def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),
@@ -1855,7 +1901,7 @@ def test_peer_approval_is_scoped_visible_and_resolvable(tmp_path: Path):
                     "profile": "reviewer",
                     "capability_digest": catalog.catalog_digest,
                 },
-            }
+            },
         ],
     )
     identity = driver.TaskIdentity("room-1", "task-1", "thread-1", "turn-1")
@@ -2007,7 +2053,11 @@ def test_stale_local_approval_cannot_resolve_replacement_request(tmp_path: Path)
 def test_peer_recovery_replays_the_same_execution_generation(tmp_path: Path):
     db = tmp_path / "state.db"
     catalog = GatewayRoomCatalog.from_mapping(
-        catalog_mapping(target_profile="default", installation_id="install-peer", persistent_process=True)
+        catalog_mapping(
+            target_profile="default",
+            installation_id="install-peer",
+            persistent_process=True,
+        )
     )
     route = PeerMemberRoute(
         home_install_id=hosted_rooms.local_authority_gateway_id(),

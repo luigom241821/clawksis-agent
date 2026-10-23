@@ -19,6 +19,7 @@ import pytest
 
 from tools.environments.base import EnvironmentConnectionError
 
+
 @pytest.fixture
 def isolated_env(tmp_path, monkeypatch):
     """Isolated CLAWK_HOME + a clean environment cache for terminal_tool."""
@@ -38,13 +39,20 @@ def isolated_env(tmp_path, monkeypatch):
     yield tt
     _clear()
 
-def _mock_ssh_unreachable(monkeypatch, stderr="ssh: connect to host unreachable.invalid port 22: Connection refused"):
+
+def _mock_ssh_unreachable(
+    monkeypatch,
+    stderr="ssh: connect to host unreachable.invalid port 22: Connection refused",
+):
     """Make every ssh subprocess in the ssh backend fail like a dead host."""
-    monkeypatch.setattr("tools.environments.ssh.shutil.which", lambda _x: "/usr/bin/ssh")
+    monkeypatch.setattr(
+        "tools.environments.ssh.shutil.which", lambda _x: "/usr/bin/ssh"
+    )
     monkeypatch.setattr(
         "tools.environments.ssh.subprocess.run",
         lambda *a, **k: subprocess.CompletedProcess([], 255, stdout="", stderr=stderr),
     )
+
 
 def _ssh_backend_env(monkeypatch):
     monkeypatch.setenv("TERMINAL_ENV", "ssh")
@@ -52,6 +60,7 @@ def _ssh_backend_env(monkeypatch):
     monkeypatch.setenv("TERMINAL_SSH_USER", "nobody")
     monkeypatch.delenv("TERMINAL_SSH_PORT", raising=False)
     monkeypatch.delenv("TERMINAL_SSH_KEY", raising=False)
+
 
 class TestExceptionClassification:
     """Backends raise EnvironmentConnectionError for connection-class failures."""
@@ -66,7 +75,9 @@ class TestExceptionClassification:
     def test_ssh_connect_timeout_raises_connection_error(self, monkeypatch):
         from tools.environments.ssh import SSHEnvironment
 
-        monkeypatch.setattr("tools.environments.ssh.shutil.which", lambda _x: "/usr/bin/ssh")
+        monkeypatch.setattr(
+            "tools.environments.ssh.shutil.which", lambda _x: "/usr/bin/ssh"
+        )
 
         def _timeout(*a, **k):
             raise subprocess.TimeoutExpired(cmd="ssh", timeout=15)
@@ -87,6 +98,7 @@ class TestExceptionClassification:
         with pytest.raises(EnvironmentConnectionError):
             docker_env._ensure_docker_available()
 
+
 class TestDegradedToolResult:
     """terminal_tool returns structured degraded results in warn mode."""
 
@@ -102,13 +114,19 @@ class TestDegradedToolResult:
         assert r.get("retry_hint")
         assert "traceback" not in r
 
-    def test_docker_daemon_down_returns_degraded_result(self, isolated_env, monkeypatch):
+    def test_docker_daemon_down_returns_degraded_result(
+        self, isolated_env, monkeypatch
+    ):
         monkeypatch.setenv("TERMINAL_ENV", "docker")
         monkeypatch.delenv("TERMINAL_DEGRADED_MODE", raising=False)
-        monkeypatch.setattr(isolated_env, "_maybe_reap_docker_orphans", lambda _cc: None)
+        monkeypatch.setattr(
+            isolated_env, "_maybe_reap_docker_orphans", lambda _cc: None
+        )
         monkeypatch.setattr("tools.environments.docker.find_docker", lambda: None)
 
-        r = json.loads(isolated_env.terminal_tool("echo hi", task_id="t-degraded-docker"))
+        r = json.loads(
+            isolated_env.terminal_tool("echo hi", task_id="t-degraded-docker")
+        )
         assert r["status"] == "degraded"
         assert r.get("reason")
         assert r.get("retry_hint")
@@ -119,7 +137,9 @@ class TestDegradedToolResult:
         _ssh_backend_env(monkeypatch)
         _mock_ssh_unreachable(monkeypatch)
 
-        r = json.loads(isolated_env.terminal_tool("echo hi", task_id="t-degraded-cache"))
+        r = json.loads(
+            isolated_env.terminal_tool("echo hi", task_id="t-degraded-cache")
+        )
         assert r["status"] == "degraded"
         with isolated_env._env_lock:
             assert not isolated_env._active_environments
@@ -132,7 +152,9 @@ class TestDegradedToolResult:
         real_which = real_shutil.which
         _ssh_backend_env(monkeypatch)
         _mock_ssh_unreachable(monkeypatch)
-        r1 = json.loads(isolated_env.terminal_tool("echo hi", task_id="t-degraded-recover"))
+        r1 = json.loads(
+            isolated_env.terminal_tool("echo hi", task_id="t-degraded-recover")
+        )
         assert r1["status"] == "degraded"
 
         # Backend "recovers" — restore the real subprocess machinery (the
@@ -141,9 +163,12 @@ class TestDegradedToolResult:
         monkeypatch.setattr(subprocess, "run", real_run)
         monkeypatch.setattr(real_shutil, "which", real_which)
         monkeypatch.setenv("TERMINAL_ENV", "local")
-        r2 = json.loads(isolated_env.terminal_tool("echo back", task_id="t-degraded-recover"))
+        r2 = json.loads(
+            isolated_env.terminal_tool("echo back", task_id="t-degraded-recover")
+        )
         assert r2["exit_code"] == 0
         assert "back" in r2["output"]
+
 
 class TestNonInfrastructureFailuresUntouched:
     def test_nonzero_exit_is_not_degraded(self, isolated_env, monkeypatch):
@@ -154,10 +179,14 @@ class TestNonInfrastructureFailuresUntouched:
 
     def test_command_not_found_is_not_degraded(self, isolated_env, monkeypatch):
         monkeypatch.setenv("TERMINAL_ENV", "local")
-        r = json.loads(isolated_env.terminal_tool(
-            "definitely_not_a_real_command_zzz_42", task_id="t-degraded-notfound"))
+        r = json.loads(
+            isolated_env.terminal_tool(
+                "definitely_not_a_real_command_zzz_42", task_id="t-degraded-notfound"
+            )
+        )
         assert r["exit_code"] != 0
         assert r.get("status") != "degraded"
+
 
 class TestFailModePreservesRaiseBehavior:
     def test_fail_mode_returns_error_with_traceback(self, isolated_env, monkeypatch):
@@ -175,5 +204,7 @@ class TestFailModePreservesRaiseBehavior:
         _mock_ssh_unreachable(monkeypatch)
         monkeypatch.setenv("TERMINAL_DEGRADED_MODE", "bogus-value")
 
-        r = json.loads(isolated_env.terminal_tool("echo hi", task_id="t-degraded-bogus"))
+        r = json.loads(
+            isolated_env.terminal_tool("echo hi", task_id="t-degraded-bogus")
+        )
         assert r["status"] == "degraded"

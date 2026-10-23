@@ -17,14 +17,19 @@ today's teardown + sentinel behavior.
 import concurrent.futures
 from unittest.mock import MagicMock
 
-from gateway.run_turn_runner_clarify_delivery import _clarify_send_disposition, _clarify_send_then_wait
+from gateway.run_turn_runner_clarify_delivery import (
+    _clarify_send_disposition,
+    _clarify_send_then_wait,
+)
 
 SENTINEL = "[clarify prompt could not be delivered]"
+
 
 class _Result:
     def __init__(self, success, error=None):
         self.success = success
         self.error = error
+
 
 def test_timeout_keeps_registration_armed_and_proceeds_to_wait():
     fut = MagicMock()
@@ -40,6 +45,7 @@ def test_timeout_keeps_registration_armed_and_proceeds_to_wait():
     )
     clarify_mod.clear_session.assert_not_called()
 
+
 def test_successful_send_proceeds_to_wait():
     fut = MagicMock()
     fut.result.return_value = _Result(True)
@@ -49,6 +55,7 @@ def test_successful_send_proceeds_to_wait():
         is None
     )
     clarify_mod.clear_session.assert_not_called()
+
 
 def test_definitive_error_result_tears_down_and_aborts():
     fut = MagicMock()
@@ -60,6 +67,7 @@ def test_definitive_error_result_tears_down_and_aborts():
     )
     clarify_mod.clear_session.assert_called_once_with("sk")
 
+
 def test_non_timeout_exception_tears_down_and_aborts():
     fut = MagicMock()
     fut.result.side_effect = RuntimeError("loop unavailable")
@@ -70,6 +78,7 @@ def test_non_timeout_exception_tears_down_and_aborts():
     )
     clarify_mod.clear_session.assert_called_once_with("sk")
 
+
 def test_missing_future_tears_down_and_aborts():
     clarify_mod = MagicMock()
     assert (
@@ -78,7 +87,9 @@ def test_missing_future_tears_down_and_aborts():
     )
     clarify_mod.clear_session.assert_called_once_with("sk")
 
+
 # --- Caller-path contract: the disposition feeds the bounded wait ---------
+
 
 def test_ambiguous_send_reaches_wait_for_response():
     """The full caller contract, not just the classifier: on a send timeout
@@ -99,6 +110,7 @@ def test_ambiguous_send_reaches_wait_for_response():
     clarify_mod.clear_session.assert_not_called()
     clarify_mod.wait_for_response.assert_called_once_with("cid123", timeout=600.0)
 
+
 def test_sent_reaches_wait_for_response():
     fut = MagicMock()
     fut.result.return_value = _Result(True)
@@ -106,27 +118,23 @@ def test_sent_reaches_wait_for_response():
     clarify_mod.get_clarify_timeout.return_value = 600
     clarify_mod.wait_for_response.return_value = "answer"
 
-    assert (
-        _clarify_send_then_wait(
-            fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
-        )
-        == ("answer", True)
-    )
+    assert _clarify_send_then_wait(
+        fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
+    ) == ("answer", True)
     clarify_mod.wait_for_response.assert_called_once_with("cid123", timeout=600.0)
+
 
 def test_definitive_failure_never_waits():
     fut = MagicMock()
     fut.result.return_value = _Result(False, "relay prompt op unavailable")
     clarify_mod = MagicMock()
 
-    assert (
-        _clarify_send_then_wait(
-            fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
-        )
-        == (SENTINEL, False)
-    )
+    assert _clarify_send_then_wait(
+        fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
+    ) == (SENTINEL, False)
     clarify_mod.wait_for_response.assert_not_called()
     clarify_mod.clear_session.assert_called_once_with("sk")
+
 
 def test_no_response_returns_timeout_sentinel():
     fut = MagicMock()
@@ -135,11 +143,9 @@ def test_no_response_returns_timeout_sentinel():
     clarify_mod.get_clarify_timeout.return_value = 600
     clarify_mod.wait_for_response.return_value = None
 
-    assert (
-        _clarify_send_then_wait(
-            fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
-        )
-        == ("[user did not respond within 10m]", False)
-    )
+    assert _clarify_send_then_wait(
+        fut, clarify_id="cid123", session_key="sk", clarify_mod=clarify_mod
+    ) == ("[user did not respond within 10m]", False)
+
 
 # --- Definitive failures keep their diagnostic detail in the log ----------

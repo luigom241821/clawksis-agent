@@ -7,6 +7,7 @@ targetText}``; the adapter must unwrap it instead of emitting
 context. spectrum usually can't hydrate the text of our own outbound bubbles, so the
 adapter records what it sends in ``gateway.rich_sent_store`` and falls back to that.
 """
+
 from __future__ import annotations
 
 import os
@@ -35,7 +36,9 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch, **extra: Any) -> PhotonAdapte
     return PhotonAdapter(PlatformConfig(enabled=True, token="", extra=dict(extra)))
 
 
-def _capture_handled(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) -> list[MessageEvent]:
+def _capture_handled(
+    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch
+) -> list[MessageEvent]:
     captured: list[MessageEvent] = []
 
     async def fake_handle(event: MessageEvent) -> None:
@@ -45,7 +48,9 @@ def _capture_handled(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch) ->
     return captured
 
 
-def _capture_sidecar(adapter: PhotonAdapter, message_id: str = "out-1") -> list[tuple[str, dict[str, Any]]]:
+def _capture_sidecar(
+    adapter: PhotonAdapter, message_id: str = "out-1"
+) -> list[tuple[str, dict[str, Any]]]:
     calls: list[tuple[str, dict[str, Any]]] = []
 
     async def fake_call(path: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -56,15 +61,26 @@ def _capture_sidecar(adapter: PhotonAdapter, message_id: str = "out-1") -> list[
     return calls
 
 
-def _reply_event(inner: dict[str, Any], *, message_id: str = "in-2", target_id: str = "out-0",
-                 direction: str | None = "outbound", target_text: str | None = "earlier answer") -> dict[str, Any]:
+def _reply_event(
+    inner: dict[str, Any],
+    *,
+    message_id: str = "in-2",
+    target_id: str = "out-0",
+    direction: str | None = "outbound",
+    target_text: str | None = "earlier answer",
+) -> dict[str, Any]:
     return {
         "messageId": message_id,
         "space": {"id": DM, "type": "dm", "phone": PHONE},
         "sender": {"id": PHONE},
         "timestamp": "2026-09-25T18:00:00Z",
-        "content": {"type": "reply", "content": inner, "targetMessageId": target_id,
-                    "targetDirection": direction, "targetText": target_text},
+        "content": {
+            "type": "reply",
+            "content": inner,
+            "targetMessageId": target_id,
+            "targetDirection": direction,
+            "targetText": target_text,
+        },
     }
 
 
@@ -93,8 +109,14 @@ async def test_threaded_photo_reply_keeps_the_photo(monkeypatch):
     adapter = _make_adapter(monkeypatch)
     handled = _capture_handled(adapter, monkeypatch)
 
-    inner = {"type": "attachment", "name": "pic.png", "mimeType": "image/png", "size": 68,
-             "data": _PNG_1X1_B64, "encoding": "base64"}
+    inner = {
+        "type": "attachment",
+        "name": "pic.png",
+        "mimeType": "image/png",
+        "size": 68,
+        "data": _PNG_1X1_B64,
+        "encoding": "base64",
+    }
     await adapter._dispatch_inbound(_reply_event(inner))
 
     event = handled[0]
@@ -109,7 +131,9 @@ async def test_reply_to_users_own_message_is_not_marked_own(monkeypatch):
     adapter = _make_adapter(monkeypatch)
     handled = _capture_handled(adapter, monkeypatch)
 
-    await adapter._dispatch_inbound(_reply_event({"type": "text", "text": "ctx"}, direction="inbound"))
+    await adapter._dispatch_inbound(
+        _reply_event({"type": "text", "text": "ctx"}, direction="inbound")
+    )
 
     assert handled[0].text == "ctx"
     assert handled[0].reply_to_is_own_message is False
@@ -135,7 +159,10 @@ async def test_reply_to_our_message_hydrates_quoted_text_from_sent_index(monkeyp
     await adapter.send(DM, "the plan is A then B")
     assert calls[-1][0] == "/send"
     await adapter._dispatch_inbound(
-        _reply_event({"type": "text", "text": "do B first"}, target_id="out-1", target_text=None))
+        _reply_event(
+            {"type": "text", "text": "do B first"}, target_id="out-1", target_text=None
+        )
+    )
 
     assert handled[-1].text == "do B first"
     assert handled[-1].reply_to_message_id == "out-1"
@@ -152,7 +179,12 @@ async def test_reply_after_restart_is_still_marked_own(monkeypatch):
 
     restarted = _make_adapter(monkeypatch)  # fresh in-memory _sent_message_ids
     handled = _capture_handled(restarted, monkeypatch)
-    event = _reply_event({"type": "text", "text": "ok"}, target_id="out-9", direction=None, target_text=None)
+    event = _reply_event(
+        {"type": "text", "text": "ok"},
+        target_id="out-9",
+        direction=None,
+        target_text=None,
+    )
     await restarted._dispatch_inbound(event)
 
     assert handled[-1].reply_to_text == "the plan is A then B"
@@ -168,15 +200,23 @@ async def test_send_to_bare_phone_is_found_from_dm_guid(monkeypatch):
 
     await adapter.send(PHONE, "morning briefing")
     await adapter._dispatch_inbound(
-        _reply_event({"type": "text", "text": "more on item 2"}, target_id="out-7", target_text=None))
+        _reply_event(
+            {"type": "text", "text": "more on item 2"},
+            target_id="out-7",
+            target_text=None,
+        )
+    )
 
     assert handled[-1].reply_to_text == "morning briefing"
 
 
 @pytest.mark.asyncio
 async def test_attachment_send_is_recorded_as_label(monkeypatch, tmp_path):
-    monkeypatch.setattr(PhotonAdapter, "validate_media_delivery_path",
-                        staticmethod(lambda p: p if os.path.exists(p) else None))
+    monkeypatch.setattr(
+        PhotonAdapter,
+        "validate_media_delivery_path",
+        staticmethod(lambda p: p if os.path.exists(p) else None),
+    )
     img = tmp_path / "chart.png"
     img.write_bytes(b"\x89PNG fake")
     adapter = _make_adapter(monkeypatch)
@@ -185,7 +225,12 @@ async def test_attachment_send_is_recorded_as_label(monkeypatch, tmp_path):
 
     await adapter.send_image_file(DM, str(img))
     await adapter._dispatch_inbound(
-        _reply_event({"type": "text", "text": "what is this"}, target_id="out-3", target_text=None))
+        _reply_event(
+            {"type": "text", "text": "what is this"},
+            target_id="out-3",
+            target_text=None,
+        )
+    )
 
     assert handled[-1].reply_to_text == "[attachment: chart.png]"
 
@@ -221,29 +266,44 @@ def _fake_standalone_sidecar(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(photon_adapter.httpx, "AsyncClient", _FakeClient)
 
 
-async def _reply_text_for(adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch, target_id: str) -> str | None:
+async def _reply_text_for(
+    adapter: PhotonAdapter, monkeypatch: pytest.MonkeyPatch, target_id: str
+) -> str | None:
     handled = _capture_handled(adapter, monkeypatch)
     await adapter._dispatch_inbound(
-        _reply_event({"type": "text", "text": "about this"}, target_id=target_id, target_text=None))
+        _reply_event(
+            {"type": "text", "text": "about this"},
+            target_id=target_id,
+            target_text=None,
+        )
+    )
     assert handled[-1].text == "about this"
     return handled[-1].reply_to_text
 
 
 @pytest.mark.asyncio
 async def test_standalone_send_records_text_and_attachments(monkeypatch, tmp_path):
-    monkeypatch.setattr(photon_adapter.BasePlatformAdapter, "validate_media_delivery_path",
-                        staticmethod(lambda p: p if os.path.exists(p) else None))
+    monkeypatch.setattr(
+        photon_adapter.BasePlatformAdapter,
+        "validate_media_delivery_path",
+        staticmethod(lambda p: p if os.path.exists(p) else None),
+    )
     chart = tmp_path / "chart.png"
     chart.write_bytes(b"\x89PNG fake")
     _fake_standalone_sidecar(monkeypatch)
     cfg = PlatformConfig(enabled=True, token="", extra={})
 
-    result = await photon_adapter._standalone_send(cfg, PHONE, "daily digest", media_files=[(str(chart), False)])
+    result = await photon_adapter._standalone_send(
+        cfg, PHONE, "daily digest", media_files=[(str(chart), False)]
+    )
     assert result.get("success") is True
 
     adapter = _make_adapter(monkeypatch)
     assert await _reply_text_for(adapter, monkeypatch, "cron-1") == "daily digest"
-    assert await _reply_text_for(adapter, monkeypatch, "cron-2") == "[attachment: chart.png]"
+    assert (
+        await _reply_text_for(adapter, monkeypatch, "cron-2")
+        == "[attachment: chart.png]"
+    )
 
 
 @pytest.mark.asyncio
@@ -262,7 +322,9 @@ async def test_plain_fallback_resend_is_recorded(monkeypatch):
     adapter = _make_adapter(monkeypatch)
     _capture_sidecar(adapter, message_id="fallback-1")
 
-    result = await adapter._send_plain_fallback(DM, "plain retry", reply_to=None, metadata=None)
+    result = await adapter._send_plain_fallback(
+        DM, "plain retry", reply_to=None, metadata=None
+    )
 
     assert result.success
     assert await _reply_text_for(adapter, monkeypatch, "fallback-1") == "plain retry"
@@ -273,7 +335,9 @@ async def test_unknown_reply_target_leaves_text_empty(monkeypatch):
     adapter = _make_adapter(monkeypatch)
     handled = _capture_handled(adapter, monkeypatch)
 
-    await adapter._dispatch_inbound(_reply_event({"type": "text", "text": "?"}, target_text=None))
+    await adapter._dispatch_inbound(
+        _reply_event({"type": "text", "text": "?"}, target_text=None)
+    )
 
     assert handled[-1].text == "?"
     assert handled[-1].reply_to_text is None

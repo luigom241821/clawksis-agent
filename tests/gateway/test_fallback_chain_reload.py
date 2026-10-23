@@ -21,9 +21,7 @@ def test_refresh_fallback_model_rereads_config(tmp_path, monkeypatch):
     monkeypatch.setattr("gateway.run._clawk_home", tmp_path)
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
-        "fallback_providers:\n"
-        "  - provider: deepseek\n"
-        "    model: deepseek-v4-flash\n"
+        "fallback_providers:\n  - provider: deepseek\n    model: deepseek-v4-flash\n"
     )
 
     runner = SimpleNamespace(
@@ -68,8 +66,6 @@ def test_apply_fallback_chain_skips_while_cooldown_holds_fallback():
     assert agent._fallback_chain == live
     assert agent._fallback_index == 1
     assert agent._fallback_activated is True
-
-
 
 
 def test_load_fallback_model_static_unchanged_contract(tmp_path, monkeypatch):

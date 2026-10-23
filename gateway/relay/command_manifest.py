@@ -18,7 +18,9 @@ from typing import Any, Dict, List
 _STR = 3
 
 
-def _opt(name: str, description: str, *, choices: list[str] | None = None) -> dict[str, Any]:
+def _opt(
+    name: str, description: str, *, choices: list[str] | None = None
+) -> dict[str, Any]:
     row: dict[str, Any] = {
         "type": _STR,
         "name": name,
@@ -38,8 +40,17 @@ def _cmd(name: str, description: str, *options: dict[str, Any]) -> dict[str, Any
 
 
 _REASONING_CHOICES = [
-    "none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
-    "reset", "show", "hide",
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra",
+    "reset",
+    "show",
+    "hide",
 ]
 
 
@@ -48,25 +59,46 @@ def build_relay_command_manifest() -> list[dict[str, Any]]:
     return [
         _cmd("new", "Start a new conversation"),
         _cmd("reset", "Reset your Clawksis session"),
-        _cmd("model", "Show or change the model",
-             _opt("name", "Model name. Leave empty to see current.")),
-        _cmd("reasoning", "Show/change reasoning effort, or toggle showing it",
-             _opt("effort", "Level, reset, or show/hide. Leave empty to see current.",
-                  choices=_REASONING_CHOICES)),
-        _cmd("personality", "Set a personality",
-             _opt("name", "Personality name. Leave empty to list.")),
+        _cmd(
+            "model",
+            "Show or change the model",
+            _opt("name", "Model name. Leave empty to see current."),
+        ),
+        _cmd(
+            "reasoning",
+            "Show/change reasoning effort, or toggle showing it",
+            _opt(
+                "effort",
+                "Level, reset, or show/hide. Leave empty to see current.",
+                choices=_REASONING_CHOICES,
+            ),
+        ),
+        _cmd(
+            "personality",
+            "Set a personality",
+            _opt("name", "Personality name. Leave empty to list."),
+        ),
         _cmd("retry", "Retry your last message"),
         _cmd("undo", "Remove the last exchange"),
         _cmd("status", "Show Clawksis session status"),
         _cmd("sethome", "Set this chat as the home channel"),
         _cmd("stop", "Stop the running Clawksis agent"),
-        _cmd("steer", "Inject a message after the next tool call (no interrupt)",
-             _opt("text", "What to tell the agent")),
+        _cmd(
+            "steer",
+            "Inject a message after the next tool call (no interrupt)",
+            _opt("text", "What to tell the agent"),
+        ),
         _cmd("compress", "Compress conversation context"),
-        _cmd("title", "Set or show the session title",
-             _opt("text", "New title. Leave empty to show.")),
-        _cmd("resume", "Resume a previously-named session",
-             _opt("name", "Session title or id")),
+        _cmd(
+            "title",
+            "Set or show the session title",
+            _opt("text", "New title. Leave empty to show."),
+        ),
+        _cmd(
+            "resume",
+            "Resume a previously-named session",
+            _opt("name", "Session title or id"),
+        ),
         _cmd("usage", "Show token usage for this session"),
         _cmd("help", "Show available commands"),
         _cmd("insights", "Show usage insights and analytics"),
@@ -75,16 +107,36 @@ def build_relay_command_manifest() -> list[dict[str, Any]]:
         _cmd("voice", "Toggle voice reply mode"),
         _cmd("update", "Update Clawksis to the latest version"),
         _cmd("restart", "Gracefully restart the Clawksis gateway"),
-        _cmd("approve", "Approve a pending dangerous command",
-             _opt("scope", "Approval scope", choices=["once", "session", "always", "all"])),
-        _cmd("deny", "Deny a pending dangerous command",
-             _opt("reason", "Why (relayed to the agent)")),
-        _cmd("thread", "Create a new thread and start a Clawksis session in it",
-             _opt("name", "Thread name")),
-        _cmd("queue", "Queue a prompt for the next turn (doesn't interrupt)",
-             _opt("text", "The prompt to queue")),
-        _cmd("bg", "Run a prompt in a separate background session",
-             _opt("text", "The prompt to run")),
-        _cmd("btw", "Ask a side question about the current conversation",
-             _opt("text", "The question to answer")),
+        _cmd(
+            "approve",
+            "Approve a pending dangerous command",
+            _opt(
+                "scope", "Approval scope", choices=["once", "session", "always", "all"]
+            ),
+        ),
+        _cmd(
+            "deny",
+            "Deny a pending dangerous command",
+            _opt("reason", "Why (relayed to the agent)"),
+        ),
+        _cmd(
+            "thread",
+            "Create a new thread and start a Clawksis session in it",
+            _opt("name", "Thread name"),
+        ),
+        _cmd(
+            "queue",
+            "Queue a prompt for the next turn (doesn't interrupt)",
+            _opt("text", "The prompt to queue"),
+        ),
+        _cmd(
+            "bg",
+            "Run a prompt in a separate background session",
+            _opt("text", "The prompt to run"),
+        ),
+        _cmd(
+            "btw",
+            "Ask a side question about the current conversation",
+            _opt("text", "The question to answer"),
+        ),
     ]

@@ -10,13 +10,13 @@ import clawk_state_holders
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("identity", ["alias", "different-inode", "different-device"])
-def test_foreign_holder_uses_device_and_inode_not_path(
-    tmp_path, monkeypatch, identity
-):
+def test_foreign_holder_uses_device_and_inode_not_path(tmp_path, monkeypatch, identity):
     """Descriptor identity is authoritative even when /proc spells another path."""
     db_path = tmp_path / "state.db"
     db_path.touch()
-    alias_path = tmp_path / "namespace-alias" / "state.db" if identity == "alias" else db_path
+    alias_path = (
+        tmp_path / "namespace-alias" / "state.db" if identity == "alias" else db_path
+    )
 
     proc_root = tmp_path / "proc"
     for pid in (111, 222):
@@ -105,7 +105,11 @@ def test_windows_restart_manager_scan_sizes_then_excludes_self(monkeypatch, tmp_
     holders = clawk_state_holders._windows_restart_manager_holders(db_path)
 
     assert [pid for pid, _ in holders] == [4242]
-    assert calls[0] == ("register", 2, sorted(str(p) for p in (db_path, tmp_path / "state.db-wal")))
+    assert calls[0] == (
+        "register",
+        2,
+        sorted(str(p) for p in (db_path, tmp_path / "state.db-wal")),
+    )
     assert calls[-1] == "end"
 
     _Api.RmStartSession = _Fn(lambda *_args: 5)

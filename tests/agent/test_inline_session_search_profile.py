@@ -23,21 +23,33 @@ def test_session_search_honours_requested_profile_db(tmp_path, monkeypatch):
 
     current_db = SessionDB(clawk_home / "state.db")
     current_db.create_session("default-session", source="gateway")
-    current_db.append_message("default-session", role="user", content="weekly report default")
+    current_db.append_message(
+        "default-session", role="user", content="weekly report default"
+    )
     current_db._conn.commit()
     profile_db = SessionDB(profile_home / "state.db")
     profile_db.create_session("profile-session", source="cli")
-    profile_db.append_message("profile-session", role="user", content="weekly report llm wiki")
+    profile_db.append_message(
+        "profile-session", role="user", content="weekly report llm wiki"
+    )
     profile_db._conn.commit()
     profile_db.close()
 
-    agent = SimpleNamespace(_get_session_db_for_recall=lambda: current_db, session_id="gw-1")
+    agent = SimpleNamespace(
+        _get_session_db_for_recall=lambda: current_db, session_id="gw-1"
+    )
     ctx = InlineToolContext(effective_task_id="task-1", tool_call_id="call-1")
     try:
-        routed = json.loads(INLINE_TOOL_EXECUTORS["session_search"](
-            agent, {"query": "weekly report", "profile": "llm-wiki"}, ctx))
-        missing = json.loads(INLINE_TOOL_EXECUTORS["session_search"](
-            agent, {"query": "weekly report", "profile": "missing-profile"}, ctx))
+        routed = json.loads(
+            INLINE_TOOL_EXECUTORS["session_search"](
+                agent, {"query": "weekly report", "profile": "llm-wiki"}, ctx
+            )
+        )
+        missing = json.loads(
+            INLINE_TOOL_EXECUTORS["session_search"](
+                agent, {"query": "weekly report", "profile": "missing-profile"}, ctx
+            )
+        )
     finally:
         current_db.close()
 

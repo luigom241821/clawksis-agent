@@ -29,7 +29,9 @@ logger = logging.getLogger("agent.conversation_compression")
 _GENERIC_ABORT_VERDICTS = frozenset({"no_progress", "summary_generation_aborted"})
 
 
-def _snapshot_compression_effect_input(messages: list, verbatim_tail: list | None) -> list | None:
+def _snapshot_compression_effect_input(
+    messages: list, verbatim_tail: list | None
+) -> list | None:
     """Content-only snapshot for final effect accounting; telemetry must never break compression."""
     try:
         if not verbatim_tail:
@@ -43,7 +45,11 @@ def _snapshot_compression_effect_input(messages: list, verbatim_tail: list | Non
 
 
 def _record_committed_attempt_effect(
-    agent: Any, messages_before: list | None, messages_after: list, verbatim_tail: list | None, split_status: str,
+    agent: Any,
+    messages_before: list | None,
+    messages_after: list,
+    verbatim_tail: list | None,
+    split_status: str,
 ) -> None:
     """Finalize effect fields from the transcript shape that crossed the commit boundary."""
     if messages_before is None:
@@ -53,8 +59,12 @@ def _record_committed_attempt_effect(
             from clawk_cli.partial_compress import rejoin_compressed_head_and_tail
 
             # Without a SessionDB, the manual-compression caller performs this rejoin after compress_context returns.
-            messages_after = rejoin_compressed_head_and_tail(messages_after, verbatim_tail)
-        recorder = getattr(agent.context_compressor, "_record_committed_compression_effect", None)
+            messages_after = rejoin_compressed_head_and_tail(
+                messages_after, verbatim_tail
+            )
+        recorder = getattr(
+            agent.context_compressor, "_record_committed_compression_effect", None
+        )
         if callable(recorder):
             recorder(messages_before, messages_after)
     except Exception:
@@ -62,7 +72,10 @@ def _record_committed_attempt_effect(
 
 
 def _attempt_seed(
-    agent: Any, *, attempt_began: bool = True, attempt_seed: dict[str, Any] | None = None,
+    agent: Any,
+    *,
+    attempt_began: bool = True,
+    attempt_seed: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """This attempt's id, the session it started in, and its trigger.
 
@@ -71,26 +84,44 @@ def _attempt_seed(
     An emit with no attempt begun (pool saturation) gets a fresh id and an unknown trigger."""
     if attempt_seed:
         return dict(attempt_seed)
-    attempt_id = getattr(agent, "_compression_attempt_id", None) if attempt_began else None
+    attempt_id = (
+        getattr(agent, "_compression_attempt_id", None) if attempt_began else None
+    )
     return {
-        "attempt_id": attempt_id or uuid.uuid4().hex, "session_id": getattr(agent, "session_id", "") or "",
+        "attempt_id": attempt_id or uuid.uuid4().hex,
+        "session_id": getattr(agent, "session_id", "") or "",
         "trigger_source": "unknown",
     }
 
 
 def _log_attempt_record(payload: dict[str, Any]) -> None:
     """The one attempt log line; ``scripts/micro_compaction_report.py`` parses this prefix."""
-    logger.info("context compression attempt telemetry: %s", json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    logger.info(
+        "context compression attempt telemetry: %s",
+        json.dumps(payload, sort_keys=True, separators=(",", ":")),
+    )
 
 
 # Fields describing the rewritten transcript; the input-side counts (messages_before, tokens_before) stay.
-_CANDIDATE_EFFECT_FIELDS = ("messages_after", "tokens_after", "tokens_reclaimed", "items_dropped")
+_CANDIDATE_EFFECT_FIELDS = (
+    "messages_after",
+    "tokens_after",
+    "tokens_reclaimed",
+    "items_dropped",
+)
 
 
 def _emit_compression_attempt_telemetry(
-    agent: Any, *, started_at: float, commit_status: str, split_status: str, failure_class: str | None = None,
-    commit_started_at: float | None = None, include_last_telemetry: bool = True,
-    attempt_seed: dict[str, Any] | None = None, history_rewritten: bool | None = None,
+    agent: Any,
+    *,
+    started_at: float,
+    commit_status: str,
+    split_status: str,
+    failure_class: str | None = None,
+    commit_started_at: float | None = None,
+    include_last_telemetry: bool = True,
+    attempt_seed: dict[str, Any] | None = None,
+    history_rewritten: bool | None = None,
 ) -> None:
     """Emit one content-free JSON log line for a compression attempt.
 
@@ -101,9 +132,18 @@ def _emit_compression_attempt_telemetry(
     a split that failed after publishing the compacted history still did."""
     try:
         compressor = agent.context_compressor
-        telemetry = getattr(compressor, "_last_compression_telemetry", None) if include_last_telemetry else None
-        seed = _attempt_seed(agent, attempt_began=include_last_telemetry, attempt_seed=attempt_seed)
-        own = isinstance(telemetry, dict) and telemetry.get("attempt_id") == seed["attempt_id"]
+        telemetry = (
+            getattr(compressor, "_last_compression_telemetry", None)
+            if include_last_telemetry
+            else None
+        )
+        seed = _attempt_seed(
+            agent, attempt_began=include_last_telemetry, attempt_seed=attempt_seed
+        )
+        own = (
+            isinstance(telemetry, dict)
+            and telemetry.get("attempt_id") == seed["attempt_id"]
+        )
         if not own:
             # Before dispatch the compressor still holds the previous attempt's dict, a pre-commit restore puts
             # it back, and a newer attempt may have seeded its own: describe THIS attempt from its seed, never
@@ -115,7 +155,8 @@ def _emit_compression_attempt_telemetry(
         payload.setdefault("attempt_id", seed["attempt_id"])
         payload.setdefault("session_id", seed["session_id"])
         payload.update(
-            total_duration_ms=int((time.monotonic() - started_at) * 1000), commit_status=commit_status,
+            total_duration_ms=int((time.monotonic() - started_at) * 1000),
+            commit_status=commit_status,
             split_status=split_status,
         )
         if history_rewritten is not None:
@@ -125,43 +166,71 @@ def _emit_compression_attempt_telemetry(
             for key in _CANDIDATE_EFFECT_FIELDS:
                 payload.pop(key, None)
         if commit_started_at is not None:
-            telemetry["commit_ms"] = payload["commit_ms"] = max(0, int((time.monotonic() - commit_started_at) * 1000))
+            telemetry["commit_ms"] = payload["commit_ms"] = max(
+                0, int((time.monotonic() - commit_started_at) * 1000)
+            )
         # Defer only to THIS attempt's class: an abort restore can put the previous attempt's telemetry back.
-        if failure_class and not (failure_class in _GENERIC_ABORT_VERDICTS and own and payload.get("failure_class")):
+        if failure_class and not (
+            failure_class in _GENERIC_ABORT_VERDICTS
+            and own
+            and payload.get("failure_class")
+        ):
             payload["failure_class"] = failure_class
         payload.setdefault("chunking", False)
         payload.setdefault("chunk_count", 0)
         # The compressor's fallback flags are this attempt's only when its telemetry is.
         payload["fallback_used"] = bool(
             payload.get("fallback_used")
-            or own and (
+            or own
+            and (
                 getattr(compressor, "_last_summary_fallback_used", False)
                 or getattr(compressor, "_last_aux_model_failure_model", None)
             )
         )
         _log_attempt_record(payload)
         publish_attempt(agent, payload)
-        from clawk_cli.observability.shared_metrics_events import finish_compression_attempt
+        from clawk_cli.observability.shared_metrics_events import (
+            finish_compression_attempt,
+        )
 
         finish_compression_attempt(
-            commit_status, payload.get("failure_class"), getattr(agent.context_compressor, "context_length", None), agent=agent,
+            commit_status,
+            payload.get("failure_class"),
+            getattr(agent.context_compressor, "context_length", None),
+            agent=agent,
         )
     except Exception as exc:
-        logger.debug("failed to emit compression attempt telemetry: %s", exc, exc_info=True)
+        logger.debug(
+            "failed to emit compression attempt telemetry: %s", exc, exc_info=True
+        )
 
 
 def _emit_aborted_attempt_telemetry(
-    agent: Any, started_at: float, failure_class: str | None, attempt_seed: dict[str, Any] | None = None,
+    agent: Any,
+    started_at: float,
+    failure_class: str | None,
+    attempt_seed: dict[str, Any] | None = None,
 ) -> None:
     _emit_compression_attempt_telemetry(
-        agent, started_at=started_at, commit_status="aborted", split_status="aborted", failure_class=failure_class,
+        agent,
+        started_at=started_at,
+        commit_status="aborted",
+        split_status="aborted",
+        failure_class=failure_class,
         attempt_seed=attempt_seed,
     )
 
 
 def _emit_bypassed_attempt_telemetry(
-    agent: Any, started_at: float, *, commit_status: str, failure_class: str | None, approx_tokens: Any,
-    route: str = "clawk", method: str = "none", attempt_seed: dict[str, Any] | None = None,
+    agent: Any,
+    started_at: float,
+    *,
+    commit_status: str,
+    failure_class: str | None,
+    approx_tokens: Any,
+    route: str = "clawk",
+    method: str = "none",
+    attempt_seed: dict[str, Any] | None = None,
 ) -> None:
     """Log one attempt that never reached the local compressor: an automatic gate blocked it, Codex owns the
     thread, or the session lease showed another path already owns the work. The compressor's telemetry still
@@ -170,26 +239,38 @@ def _emit_bypassed_attempt_telemetry(
     try:
         compressor = getattr(agent, "context_compressor", None)
         payload = {
-            "event": "compression_attempt", "route": route, "method": method, "failure_class": failure_class,
+            "event": "compression_attempt",
+            "route": route,
+            "method": method,
+            "failure_class": failure_class,
             **_attempt_seed(agent, attempt_seed=attempt_seed),
-            "main_provider": getattr(agent, "provider", "") or "", "main_model": getattr(agent, "model", "") or "",
+            "main_provider": getattr(agent, "provider", "") or "",
+            "main_model": getattr(agent, "model", "") or "",
             # Private caches only: the public properties can trigger a synchronous context-length probe.
             "main_context_limit": getattr(compressor, "_resolved_context_length", None),
             "effective_threshold": getattr(compressor, "_threshold_tokens", None),
-            "current_estimated_tokens": approx_tokens if isinstance(approx_tokens, int) else None,
-            "total_duration_ms": int((time.monotonic() - started_at) * 1000), "commit_status": commit_status,
-            "split_status": "not_applicable", "fallback_used": False,
+            "current_estimated_tokens": approx_tokens
+            if isinstance(approx_tokens, int)
+            else None,
+            "total_duration_ms": int((time.monotonic() - started_at) * 1000),
+            "commit_status": commit_status,
+            "split_status": "not_applicable",
+            "fallback_used": False,
         }
         _log_attempt_record(payload)
         publish_attempt(agent, payload)
     except Exception as exc:
-        logger.debug("failed to emit compression attempt telemetry: %s", exc, exc_info=True)
+        logger.debug(
+            "failed to emit compression attempt telemetry: %s", exc, exc_info=True
+        )
     finally:
         # compress_context opened the thread-local shared-metric lifecycle before reaching this exit.
         # Bypassed attempts are log-only, so retire that lifecycle explicitly; otherwise an unrelated
         # pool-saturation emit on the same thread can consume its trigger and token count.
         try:
-            from clawk_cli.observability.shared_metrics_events import discard_compression_attempt
+            from clawk_cli.observability.shared_metrics_events import (
+                discard_compression_attempt,
+            )
 
             discard_compression_attempt()
         except Exception:
@@ -197,12 +278,20 @@ def _emit_bypassed_attempt_telemetry(
 
 
 def _emit_blocked_attempt_telemetry(
-    agent: Any, started_at: float, approx_tokens: Any, attempt_seed: dict[str, Any] | None, reason: str,
+    agent: Any,
+    started_at: float,
+    approx_tokens: Any,
+    attempt_seed: dict[str, Any] | None,
+    reason: str,
 ) -> None:
     """Record an automatic attempt the breaker gate refused for ``reason`` (the gate's block reason). The class keeps
     only the guard's name (``blocked:cooldown``, ``blocked:structural_backoff``, ``blocked:ineffective``), never its
     seconds."""
     _emit_bypassed_attempt_telemetry(
-        agent, started_at, commit_status="blocked", failure_class=f"blocked:{reason.split(':', 1)[0]}",
-        approx_tokens=approx_tokens, attempt_seed=attempt_seed,
+        agent,
+        started_at,
+        commit_status="blocked",
+        failure_class=f"blocked:{reason.split(':', 1)[0]}",
+        approx_tokens=approx_tokens,
+        attempt_seed=attempt_seed,
     )

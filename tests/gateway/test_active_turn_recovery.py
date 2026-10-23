@@ -154,7 +154,9 @@ def test_failed_mark_persistence_does_not_leak_marker_into_later_save(tmp_path):
     assert _entry_for(reloaded, source).active_turn_token is None
 
 
-def test_failed_clear_persistence_keeps_token_retryable_and_durable_clear_wins(tmp_path):
+def test_failed_clear_persistence_keeps_token_retryable_and_durable_clear_wins(
+    tmp_path,
+):
     store = _make_store(tmp_path)
     source = _make_source()
     entry = store.get_or_create_session(source)
@@ -250,9 +252,10 @@ def test_exact_old_active_turn_recovers_even_when_updated_at_is_stale(tmp_path):
     # Prove the marker survives a fresh SessionStore and is not relying on the
     # in-memory object that wrote it.
     reloaded = _make_store(tmp_path)
-    assert reloaded.recover_interrupted_turns(
-        max_age_seconds=ACTIVE_TURN_MAX_AGE_SECONDS
-    ) == 1
+    assert (
+        reloaded.recover_interrupted_turns(max_age_seconds=ACTIVE_TURN_MAX_AGE_SECONDS)
+        == 1
+    )
 
     recovered = _entry_for(reloaded, source)
     assert recovered.resume_pending is True
@@ -313,9 +316,10 @@ def test_ancient_active_marker_is_cleared_without_auto_resume(tmp_path):
         current = store._entries[entry.session_key]
         current.active_turn_started_at = datetime.now() - timedelta(hours=2)
 
-    assert store.recover_interrupted_turns(
-        max_age_seconds=ACTIVE_TURN_MAX_AGE_SECONDS
-    ) == 0
+    assert (
+        store.recover_interrupted_turns(max_age_seconds=ACTIVE_TURN_MAX_AGE_SECONDS)
+        == 0
+    )
     recovered = _entry_for(store, source)
     assert recovered.resume_pending is False
     assert recovered.active_turn_token is None
@@ -384,12 +388,14 @@ async def test_runner_active_turn_carrier_clears_the_exact_resolved_key():
     runner.session_store = MagicMock()
     mark_active = AsyncMock(return_value="token-1")
     clear_active = AsyncMock(return_value=True)
-    runner._async_session_store = SimpleNamespace(_store=runner.session_store, mark_turn_active=mark_active, clear_turn_active=clear_active)
+    runner._async_session_store = SimpleNamespace(
+        _store=runner.session_store,
+        mark_turn_active=mark_active,
+        clear_turn_active=clear_active,
+    )
     event = SimpleNamespace()
 
-    await runner._mark_durable_active_turn(
-        cast(Any, event), "resolved-session-key"
-    )
+    await runner._mark_durable_active_turn(cast(Any, event), "resolved-session-key")
 
     assert event._gateway_active_turn_session_key == "resolved-session-key"
     assert event._gateway_active_turn_token == "token-1"
@@ -405,10 +411,10 @@ async def test_runner_active_turn_carrier_clears_the_exact_resolved_key():
 async def test_runner_active_turn_clear_is_best_effort():
     runner = object.__new__(GatewayRunner)
     runner.session_store = MagicMock()
-    clear_active = AsyncMock(
-        side_effect=[OSError("disk unavailable"), True]
+    clear_active = AsyncMock(side_effect=[OSError("disk unavailable"), True])
+    runner._async_session_store = SimpleNamespace(
+        _store=runner.session_store, clear_turn_active=clear_active
     )
-    runner._async_session_store = SimpleNamespace(_store=runner.session_store, clear_turn_active=clear_active)
     event = SimpleNamespace(
         _gateway_active_turn_session_key="resolved-session-key",
         _gateway_active_turn_token="token-1",
@@ -426,7 +432,9 @@ async def test_runner_active_turn_clear_stops_after_bounded_retries():
     runner = object.__new__(GatewayRunner)
     runner.session_store = MagicMock()
     clear_active = AsyncMock(side_effect=OSError("disk unavailable"))
-    runner._async_session_store = SimpleNamespace(_store=runner.session_store, clear_turn_active=clear_active)
+    runner._async_session_store = SimpleNamespace(
+        _store=runner.session_store, clear_turn_active=clear_active
+    )
     event = SimpleNamespace(
         _gateway_active_turn_session_key="resolved-session-key",
         _gateway_active_turn_token="token-1",
@@ -445,14 +453,20 @@ def _db_runner(tmp_path) -> tuple[GatewayRunner, SessionStore]:
     return runner, runner.session_store
 
 
-def _turn(store: SessionStore, chat_id: str, *, marked: bool, reply: str | None, **prompt: Any) -> SessionSource:
+def _turn(
+    store: SessionStore, chat_id: str, *, marked: bool, reply: str | None, **prompt: Any
+) -> SessionSource:
     source = _make_source(chat_id)
     entry = store.get_or_create_session(source)
     if marked:
         store.mark_turn_active(entry.session_key)
-    store.append_to_transcript(entry.session_id, {"role": "user", "content": f"question {chat_id}", **prompt})
+    store.append_to_transcript(
+        entry.session_id, {"role": "user", "content": f"question {chat_id}", **prompt}
+    )
     if reply is not None:
-        store.append_to_transcript(entry.session_id, {"role": "assistant", "content": reply})
+        store.append_to_transcript(
+            entry.session_id, {"role": "assistant", "content": reply}
+        )
     return source
 
 
@@ -468,12 +482,17 @@ async def test_unclean_restart_resumes_only_the_turn_left_in_flight(tmp_path):
 
     assert not _entry_for(store, finished).resume_pending
     resumed = _entry_for(store, in_flight)
-    assert (resumed.resume_pending, resumed.resume_reason) == (True, "restart_interrupted")
+    assert (resumed.resume_pending, resumed.resume_reason) == (
+        True,
+        "restart_interrupted",
+    )
     _close_store_db(store)
 
 
 @pytest.mark.asyncio
-async def test_unclean_restart_delivers_a_persisted_unledgered_reply_instead_of_regenerating(tmp_path):
+async def test_unclean_restart_delivers_a_persisted_unledgered_reply_instead_of_regenerating(
+    tmp_path,
+):
     """Killed after the reply was persisted but before it reached the delivery ledger: the stored
     reply is ledgered for this boot's sweep (marked, it may already be on screen), not resumed."""
     from gateway.delivery_ledger import sweep_recoverable
@@ -486,8 +505,9 @@ async def test_unclean_restart_delivers_a_persisted_unledgered_reply_instead_of_
     entry = _entry_for(store, source)
     assert (entry.resume_pending, entry.active_turn_token) == (False, None)
     rows = sweep_recoverable(deliverable_platforms={"discord"})
-    assert [(r["content"], r["needs_marker"], r["chat_id"], r["thread_id"]) for r in rows] == [
-        ("the stored answer", True, "replied", "thread-1")]
+    assert [
+        (r["content"], r["needs_marker"], r["chat_id"], r["thread_id"]) for r in rows
+    ] == [("the stored answer", True, "replied", "thread-1")]
     _close_store_db(store)
 
 
@@ -495,22 +515,39 @@ _WAKE = {"display_kind": "internal_notification"}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("reply", "prompt", "owed"), [
-    ("[SILENT]", _WAKE, []),
-    ("NO_REPLY", _WAKE, []),
-    ("disk is 91% full", {**_WAKE, "display_metadata": {"notification_category": "diagnostic"}}, []),
-    ("NO_REPLY", {}, ["⚠️ The model returned only a silence marker for a message that needed a reply. "
-                      "Try again or rephrase."]),
-    ("NO_REPLY", {"display_metadata": {"reply_expected": False}}, []),
-])
-async def test_unclean_restart_never_redelivers_a_reply_live_delivery_suppressed(tmp_path, reply, prompt, owed):
+@pytest.mark.parametrize(
+    ("reply", "prompt", "owed"),
+    [
+        ("[SILENT]", _WAKE, []),
+        ("NO_REPLY", _WAKE, []),
+        (
+            "disk is 91% full",
+            {**_WAKE, "display_metadata": {"notification_category": "diagnostic"}},
+            [],
+        ),
+        (
+            "NO_REPLY",
+            {},
+            [
+                "⚠️ The model returned only a silence marker for a message that needed a reply. "
+                "Try again or rephrase."
+            ],
+        ),
+        ("NO_REPLY", {"display_metadata": {"reply_expected": False}}, []),
+    ],
+)
+async def test_unclean_restart_never_redelivers_a_reply_live_delivery_suppressed(
+    tmp_path, reply, prompt, owed
+):
     """A crash-left reply is owed exactly what live delivery would have sent: nothing for a silence
     marker on a machinery turn, a muted diagnostic wake or a message the adapter reported as not
     addressed to the bot (and the finished turn is not resumed), the unexpected-silence notice for
     any other human turn, never the raw marker."""
     from gateway.delivery_ledger import sweep_recoverable
 
-    (Path(os.environ["CLAWK_HOME"]) / "config.yaml").write_text("display: {suppress_warning_notifications: true}\n", encoding="utf-8")
+    (Path(os.environ["CLAWK_HOME"]) / "config.yaml").write_text(
+        "display: {suppress_warning_notifications: true}\n", encoding="utf-8"
+    )
     runner, store = _db_runner(tmp_path)
     source = _turn(store, "quiet", marked=True, reply=reply, **prompt)
 
@@ -518,12 +555,16 @@ async def test_unclean_restart_never_redelivers_a_reply_live_delivery_suppressed
 
     entry = _entry_for(store, source)
     assert (entry.resume_pending, entry.active_turn_token) == (False, None)
-    assert [r["content"] for r in sweep_recoverable(deliverable_platforms={"discord"})] == owed
+    assert [
+        r["content"] for r in sweep_recoverable(deliverable_platforms={"discord"})
+    ] == owed
     _close_store_db(store)
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch")
+@pytest.mark.skipif(
+    not hasattr(time, "tzset"), reason="needs a POSIX process timezone switch"
+)
 async def test_turn_marker_start_survives_a_timezone_change_across_the_crash(tmp_path):
     """The dead process's local zone is not the new one's (DST, container vs unit TZ): the marked
     turn still resumes, and the previous turn's answer persisted a minute before it is not re-sent
@@ -533,9 +574,17 @@ async def test_turn_marker_start_survives_a_timezone_change_across_the_crash(tmp
     runner, store = _db_runner(tmp_path)
     source = _make_source("tz")
     entry = store.get_or_create_session(source)
-    store.append_to_transcript(entry.session_id, {"role": "user", "content": "earlier question"})
-    store.append_to_transcript(entry.session_id, {"role": "assistant", "content": "earlier answer",
-                                                  "timestamp": time.time() - 60})
+    store.append_to_transcript(
+        entry.session_id, {"role": "user", "content": "earlier question"}
+    )
+    store.append_to_transcript(
+        entry.session_id,
+        {
+            "role": "assistant",
+            "content": "earlier answer",
+            "timestamp": time.time() - 60,
+        },
+    )
     original_tz = os.environ.get("TZ")
     try:
         os.environ["TZ"] = "Etc/GMT+7"  # UTC-7 when the turn starts ...

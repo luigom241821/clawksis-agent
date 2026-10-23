@@ -1,4 +1,5 @@
 """Prepared inputs become runnable products without acquiring dependencies."""
+
 from __future__ import annotations
 
 import json
@@ -19,13 +20,17 @@ def inputs_fixture(tmp_path):
     source.mkdir()
     (source / "pyproject.toml").write_text(
         '[project]\nname="assembly-fixture"\nversion="1.2.3"\n'
-        '[project.scripts]\nprobe="entry:main"\n', encoding="utf-8")
+        '[project.scripts]\nprobe="entry:main"\n',
+        encoding="utf-8",
+    )
     (source / "entry.py").write_text(
         "import json, os, sys\nfrom pathlib import Path\nimport dependency\n"
         "from importlib.metadata import version\n"
         "def main():\n print(json.dumps([sys.argv[1:], dependency.VALUE, "
         "version('assembly-fixture'), (Path(__file__).parent/'skills/data').read_text()]))\n"
-        " return 7\n", encoding="utf-8")
+        " return 7\n",
+        encoding="utf-8",
+    )
     (source / "skills").mkdir()
     (source / "skills/data").write_text("resource", encoding="utf-8")
     out = tmp_path / "payload"
@@ -33,11 +38,20 @@ def inputs_fixture(tmp_path):
     site = out / "venv/lib/python3.14/site-packages"
     site.mkdir(parents=True)
     (site / "dependency.py").write_text("VALUE = 'prepared'\n", encoding="utf-8")
-    (site / "entry.py").write_text("raise RuntimeError('dependency shadowed source')\n", encoding="utf-8")
+    (site / "entry.py").write_text(
+        "raise RuntimeError('dependency shadowed source')\n", encoding="utf-8"
+    )
     pm = out / "pm-runtime"
     (pm / "lib/site-packages").mkdir(parents=True)
-    (pm / "pm-runtime.json").write_text(json.dumps({
-        "python": "../tools/python/bin/python3", "sitePackages": "lib/site-packages"}), encoding="utf-8")
+    (pm / "pm-runtime.json").write_text(
+        json.dumps(
+            {
+                "python": "../tools/python/bin/python3",
+                "sitePackages": "lib/site-packages",
+            }
+        ),
+        encoding="utf-8",
+    )
     tui, web = tmp_path / "tui", tmp_path / "web"
     (tui / "dist").mkdir(parents=True)
     web.mkdir()
@@ -45,12 +59,19 @@ def inputs_fixture(tmp_path):
     (tui / "package.json").write_text('{"type":"module"}', encoding="utf-8")
     (web / "index.html").write_text("built web", encoding="utf-8")
     return out, {
-        "project": str(source / "pyproject.toml"), "code": str(source),
-        "repo": "app", "target": "linux-x64", "placement": "contained",
-        "python": str(python), "site_packages": str(site),
-        "environment": str(out / "venv"), "tools": str(out / "tools"),
-        "pm_runtime": str(pm), "resources": {"skills": str(source / "skills")},
-        "frontends": {"tui": str(tui), "web": str(web)}, "ref": "fixture-revision",
+        "project": str(source / "pyproject.toml"),
+        "code": str(source),
+        "repo": "app",
+        "target": "linux-x64",
+        "placement": "contained",
+        "python": str(python),
+        "site_packages": str(site),
+        "environment": str(out / "venv"),
+        "tools": str(out / "tools"),
+        "pm_runtime": str(pm),
+        "resources": {"skills": str(source / "skills")},
+        "frontends": {"tui": str(tui), "web": str(web)},
+        "ref": "fixture-revision",
     }
 
 
@@ -60,10 +81,26 @@ def build_cli(data, out, tmp_path):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     return subprocess.run(
-        [sys.executable, "-B", "-m", "scripts.build.agent", "--inputs", str(document), "--out", str(out)],
-        cwd=tmp_path, env={"PATH": os.environ["PATH"], "HOME": str(home),
-                          "CLAWK_HOME": str(home / ".clawksis"), "PYTHONPATH": str(ROOT)},
-        capture_output=True, text=True, timeout=30,
+        [
+            sys.executable,
+            "-B",
+            "-m",
+            "scripts.build.agent",
+            "--inputs",
+            str(document),
+            "--out",
+            str(out),
+        ],
+        cwd=tmp_path,
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(home),
+            "CLAWK_HOME": str(home / ".clawksis"),
+            "PYTHONPATH": str(ROOT),
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
 
@@ -72,29 +109,66 @@ def build_cli(data, out, tmp_path):
 def test_contained_cli_assembly_runs_after_move_and_preserves_prepared_state(tmp_path):
     out, data = inputs_fixture(tmp_path)
     (out / "provider-state").write_text("retain", encoding="utf-8")
-    before = {p.relative_to(data["code"]): p.read_bytes() for p in Path(data["code"]).rglob("*") if p.is_file()}
+    before = {
+        p.relative_to(data["code"]): p.read_bytes()
+        for p in Path(data["code"]).rglob("*")
+        if p.is_file()
+    }
     result = build_cli(data, out, tmp_path)
     assert result.returncode == 0, result.stderr
     assert (out / "provider-state").read_text() == "retain"
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["ref"] == data["ref"]
     assert manifest["runtime"] == {
-        "repoDir": "app", "toolsDir": "tools", "storePython": "tools/python/bin/python3",
-        "sitePackages": "venv/lib/python3.14/site-packages", "commands": {"probe": "bin/probe"}}
+        "repoDir": "app",
+        "toolsDir": "tools",
+        "storePython": "tools/python/bin/python3",
+        "sitePackages": "venv/lib/python3.14/site-packages",
+        "commands": {"probe": "bin/probe"},
+    }
     assert (out / "app/clawk_cli/tui_dist/entry.js").is_file()
-    assert json.loads((out / "app/clawk_cli/tui_dist/package.json").read_text())["type"] == "module"
+    assert (
+        json.loads((out / "app/clawk_cli/tui_dist/package.json").read_text())["type"]
+        == "module"
+    )
     assert (out / "app/clawk_cli/web_dist/index.html").is_file()
     assert not (tmp_path / "home/.clawk").exists()
     moved = tmp_path / "relocated payload"
     out.rename(moved)
-    (tmp_path / "entry.py").write_text("raise RuntimeError('cwd shadowed source')", encoding="utf-8")
-    run = subprocess.run([str(moved / manifest["runtime"]["commands"]["probe"]), "two words", "$(no)", ""],
-                         cwd=tmp_path, env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home"),
-                                            "PYTHONPATH": "/foreign", "PYTHONHOME": "/foreign"},
-                         text=True, capture_output=True, timeout=30, check=False)
+    (tmp_path / "entry.py").write_text(
+        "raise RuntimeError('cwd shadowed source')", encoding="utf-8"
+    )
+    run = subprocess.run(
+        [
+            str(moved / manifest["runtime"]["commands"]["probe"]),
+            "two words",
+            "$(no)",
+            "",
+        ],
+        cwd=tmp_path,
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "home"),
+            "PYTHONPATH": "/foreign",
+            "PYTHONHOME": "/foreign",
+        },
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
     assert run.returncode == 7, run.stderr
-    assert json.loads(run.stdout) == [["two words", "$(no)", ""], "prepared", "1.2.3", "resource"]
-    assert before == {p.relative_to(data["code"]): p.read_bytes() for p in Path(data["code"]).rglob("*") if p.is_file()}
+    assert json.loads(run.stdout) == [
+        ["two words", "$(no)", ""],
+        "prepared",
+        "1.2.3",
+        "resource",
+    ]
+    assert before == {
+        p.relative_to(data["code"]): p.read_bytes()
+        for p in Path(data["code"]).rglob("*")
+        if p.is_file()
+    }
     assert not list(moved.rglob("__pycache__"))
     assert (moved / "pm-runtime/pm-runtime.json").is_file()
 
@@ -107,32 +181,59 @@ def test_referenced_installed_code_uses_derived_command_map_without_copying(tmp_
     (source / "entry.py").write_text(
         "import json, os\nfrom pathlib import Path\n"
         "def main():\n print(json.dumps([Path(os.environ['CLAWK_BUNDLED_SKILLS'],'data').read_text(),"
-        "os.environ['CLAWK_NODE']]))\n", encoding="utf-8")
+        "os.environ['CLAWK_NODE']]))\n",
+        encoding="utf-8",
+    )
     bindir = tmp_path / "installed env/bin"
     bindir.mkdir(parents=True)
     command = bindir / "probe"
-    command.write_text(f"#!{sys.executable}\nimport sys\nsys.path.insert(0, {str(source)!r})\nfrom entry import main\nmain()\n", encoding="utf-8")
+    command.write_text(
+        f"#!{sys.executable}\nimport sys\nsys.path.insert(0, {str(source)!r})\nfrom entry import main\nmain()\n",
+        encoding="utf-8",
+    )
     command.chmod(0o755)
-    data.update(placement="references", repo="share/clawksis-agent", command_dir=str(bindir),
-                env={"CLAWK_NODE": "/prepared/node"})
+    data.update(
+        placement="references",
+        repo="share/clawksis-agent",
+        command_dir=str(bindir),
+        env={"CLAWK_NODE": "/prepared/node"},
+    )
     before = {p: p.read_bytes() for p in source.rglob("*") if p.is_file()}
     result = build_cli(data, out, tmp_path)
     assert result.returncode == 0, result.stderr
     mapping = json.loads((out / "command-map.json").read_text())
-    assert mapping["commands"] == {"probe": {
-        "source": str(command), "destination": "bin/probe", "entry": "entry:main"}}
-    assert Path(mapping["env"]["CLAWK_TUI_DIR"]).resolve() == Path(data["frontends"]["tui"])
-    assert Path(mapping["env"]["CLAWK_WEB_DIST"]).resolve() == Path(data["frontends"]["web"])
+    assert mapping["commands"] == {
+        "probe": {
+            "source": str(command),
+            "destination": "bin/probe",
+            "entry": "entry:main",
+        }
+    }
+    assert Path(mapping["env"]["CLAWK_TUI_DIR"]).resolve() == Path(
+        data["frontends"]["tui"]
+    )
+    assert Path(mapping["env"]["CLAWK_WEB_DIST"]).resolve() == Path(
+        data["frontends"]["web"]
+    )
     assert mapping["env"]["CLAWK_INSTALL_ROOT"] == str(out / "share/clawksis-agent")
     assert not list(out.rglob("entry.py"))
     assert (out / "share/clawksis-agent/skills").is_symlink()
     assert (out / "ui-tui").is_symlink()
     assert (out / "share/clawksis-agent/web_dist").is_symlink()
     assert not (out / "bin/probe").exists(), "Nix owns native makeWrapper"
-    run = subprocess.run([mapping["commands"]["probe"]["source"]], cwd=tmp_path,
-                         env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home"),
-                              "PYTHONDONTWRITEBYTECODE": "1", **mapping["env"]},
-                         text=True, capture_output=True, check=True)
+    run = subprocess.run(
+        [mapping["commands"]["probe"]["source"]],
+        cwd=tmp_path,
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "home"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            **mapping["env"],
+        },
+        text=True,
+        capture_output=True,
+        check=True,
+    )
     assert json.loads(run.stdout) == ["resource", "/prepared/node"]
     assert before == {p: p.read_bytes() for p in source.rglob("*") if p.is_file()}
 
@@ -142,7 +243,14 @@ def test_fixed_root_keeps_privilege_shim_and_resolves_venv_command_symlink(tmp_p
     out, data = inputs_fixture(tmp_path)
     # Docker source already occupies /opt/clawksis; its bin/clawk belongs to s6.
     shutil.copytree(data["code"], out, dirs_exist_ok=True)
-    data.update(placement="fixed", repo=".", code=str(out), project=str(out / "pyproject.toml"), bin_dir="libexec", python=sys.executable)
+    data.update(
+        placement="fixed",
+        repo=".",
+        code=str(out),
+        project=str(out / "pyproject.toml"),
+        bin_dir="libexec",
+        python=sys.executable,
+    )
     bindir = out / "bin"
     bindir.mkdir()
     (bindir / "probe").write_text("privilege shim", encoding="utf-8")
@@ -156,9 +264,14 @@ def test_fixed_root_keeps_privilege_shim_and_resolves_venv_command_symlink(tmp_p
     link = out / "venv/bin/probe"
     link.parent.mkdir()
     link.symlink_to("../../libexec/probe")
-    run = subprocess.run([str(link), "ok"], cwd=tmp_path,
-                         env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")},
-                         text=True, capture_output=True, check=False)
+    run = subprocess.run(
+        [str(link), "ok"],
+        cwd=tmp_path,
+        env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home")},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
     assert run.returncode == 7, run.stderr
     assert json.loads(run.stdout)[0] == ["ok"]
 
@@ -172,9 +285,11 @@ def test_source_metadata_keeps_declared_requirements_extras_and_entrypoints(tmp_
     project = Path(data["project"])
     project.write_text(
         '[project]\nname="assembly-fixture"\nversion="1.2.3"\nrequires-python=">=3.11"\n'
-        'dependencies=["dependency>=1,<2; python_version >= \'3.11\'"]\n'
-        '[project.optional-dependencies]\nextra=["optional>=2; sys_platform == \'linux\'"]\n'
-        '[project.scripts]\nprobe="entry:main"\n', encoding="utf-8")
+        "dependencies=[\"dependency>=1,<2; python_version >= '3.11'\"]\n"
+        "[project.optional-dependencies]\nextra=[\"optional>=2; sys_platform == 'linux'\"]\n"
+        '[project.scripts]\nprobe="entry:main"\n',
+        encoding="utf-8",
+    )
     result = build_cli(data, out, tmp_path)
     assert result.returncode == 0, result.stderr
     metadata = next(distributions(path=[str(out / "app")]))
@@ -185,14 +300,29 @@ def test_source_metadata_keeps_declared_requirements_extras_and_entrypoints(tmp_
     assert optional.marker.evaluate({"extra": "extra", "sys_platform": "linux"})
     assert not optional.marker.evaluate({"extra": "", "sys_platform": "linux"})
     assert not optional.marker.evaluate({"extra": "extra", "sys_platform": "win32"})
-    assert [(e.name, e.value) for e in metadata.entry_points] == [("probe", "entry:main")]
+    assert [(e.name, e.value) for e in metadata.entry_points] == [
+        ("probe", "entry:main")
+    ]
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.parametrize("fault", ["missing-pm", "missing-resource", "missing-tui", "missing-web", "unknown-field", "bad-repo", "bad-target"])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing-pm",
+        "missing-resource",
+        "missing-tui",
+        "missing-web",
+        "unknown-field",
+        "bad-repo",
+        "bad-target",
+    ],
+)
 def test_failed_inputs_cannot_leave_a_completion_claim(tmp_path, fault):
     out, data = inputs_fixture(tmp_path)
-    (out / "manifest.json").write_text('{"runtime": {"commands": {}}}', encoding="utf-8")
+    (out / "manifest.json").write_text(
+        '{"runtime": {"commands": {}}}', encoding="utf-8"
+    )
     if fault == "missing-pm":
         (Path(data["pm_runtime"]) / "pm-runtime.json").unlink()
     elif fault == "missing-resource":
@@ -214,7 +344,9 @@ def test_failed_inputs_cannot_leave_a_completion_claim(tmp_path, fault):
 
 
 @pytest.mark.platforms("posix")
-def test_incremental_copy_drops_removed_source_without_deleting_provider_files(tmp_path):
+def test_incremental_copy_drops_removed_source_without_deleting_provider_files(
+    tmp_path,
+):
     out, data = inputs_fixture(tmp_path)
     source = Path(data["code"])
     (source / "obsolete.py").write_text("old", encoding="utf-8")
@@ -226,7 +358,9 @@ def test_incremental_copy_drops_removed_source_without_deleting_provider_files(t
     assert build_cli(data, out, tmp_path).returncode == 0
     assert not (out / "app/obsolete.py").exists()
     assert not (out / "app/clawk_cli/web_dist/stale").exists()
-    assert (out / "app/clawk_cli/tui_dist/entry.js").read_bytes() == (Path(data["frontends"]["tui"]) / "dist/entry.js").read_bytes()
+    assert (out / "app/clawk_cli/tui_dist/entry.js").read_bytes() == (
+        Path(data["frontends"]["tui"]) / "dist/entry.js"
+    ).read_bytes()
     assert sentinel.read_text() == "retain"
 
 
@@ -236,7 +370,9 @@ def test_payload_smoke_uses_relocated_manifest_commands(tmp_path):
     source = Path(data["code"])
     (source / "pyproject.toml").write_text(
         '[project]\nname="smoke-fixture"\nversion="1"\n'
-        '[project.scripts]\nclawk="entry:main"\n', encoding="utf-8")
+        '[project.scripts]\nclawk="entry:main"\n',
+        encoding="utf-8",
+    )
     (source / "entry.py").write_text(
         "import json, os, sys\nfrom pathlib import Path\n"
         "def main():\n"
@@ -246,7 +382,9 @@ def test_payload_smoke_uses_relocated_manifest_commands(tmp_path):
         " if sys.argv[1:] == ['tools', 'list']:\n"
         "  import dependency\n"
         "  print(json.dumps([sys.argv[1:], dependency.VALUE]))\n"
-        " else: print('fast path')\n", encoding="utf-8")
+        " else: print('fast path')\n",
+        encoding="utf-8",
+    )
     data["bin_dir"] = "libexec"
     harness = Path(data["site_packages"]) / "browser_harness"
     harness.mkdir()
@@ -254,39 +392,84 @@ def test_payload_smoke_uses_relocated_manifest_commands(tmp_path):
     (harness / "run.py").write_text("print('harness ok')\n", encoding="utf-8")
     assert build_cli(data, out, tmp_path).returncode == 0
     shutil.rmtree(source)
-    env = dict(os.environ, PYTHONPATH="/foreign", PYTHONHOME="/foreign", CLAWK_PYTHON="/foreign")
+    env = dict(
+        os.environ,
+        PYTHONPATH="/foreign",
+        PYTHONHOME="/foreign",
+        CLAWK_PYTHON="/foreign",
+    )
     command = ["bash", str(ROOT / "scripts/smoke-payload.sh"), str(out)]
-    result = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert '"prepared"' in result.stdout
     assert out.is_dir(), "smoke must restore the artifact for packaging"
     assert "harness ok" in result.stdout
     shutil.rmtree(harness)
-    no_harness = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    no_harness = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert no_harness.returncode != 0
     assert "browser-harness failed" in no_harness.stdout + no_harness.stderr
-    dependency = Path(data['site_packages']) / 'dependency.py'
+    dependency = Path(data["site_packages"]) / "dependency.py"
     dependency.unlink()
-    missing_dep = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    missing_dep = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert missing_dep.returncode != 0
-    assert 'SMOKE OK' not in missing_dep.stdout
+    assert "SMOKE OK" not in missing_dep.stdout
     # A broken published command cannot be rescued by importing raw Python.
     (out / "libexec/clawk").unlink()
-    failed = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    failed = subprocess.run(
+        command,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert failed.returncode != 0
     assert "SMOKE OK" not in failed.stdout
     assert out.is_dir(), "failed smoke must also restore the artifact"
     # Even an executable reporting success is not a payload command if it escapes.
-    manifest = json.loads((out / 'manifest.json').read_text())
-    external = shutil.which('true')
+    manifest = json.loads((out / "manifest.json").read_text())
+    external = shutil.which("true")
     assert external
-    (out / 'libexec/clawk').symlink_to(external)
-    for path in (external, 'libexec/clawk'):
-        manifest['runtime']['commands']['clawk'] = path
-        (out / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
-        escaped = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    (out / "libexec/clawk").symlink_to(external)
+    for path in (external, "libexec/clawk"):
+        manifest["runtime"]["commands"]["clawk"] = path
+        (out / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        escaped = subprocess.run(
+            command,
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
         assert escaped.returncode != 0, escaped.stdout
-        assert 'SMOKE OK' not in escaped.stdout
+        assert "SMOKE OK" not in escaped.stdout
 
 
 @pytest.mark.platforms("posix")
@@ -297,60 +480,133 @@ def test_stage_passes_explicit_products_to_the_single_assembler(tmp_path, monkey
 
     out, data = inputs_fixture(tmp_path)
     calls = []
+
     def native(args):
         calls.append(args.frontends)
         assemble(AgentInputs.from_dict({**data, "frontends": args.frontends}), out)
         return 0
+
     monkeypatch.setattr(stage, "stage_native", native)
-    assert stage.main(["--out", str(out), "--ref", "fixture", "--tui", data["frontends"]["tui"],
-                       "--web", data["frontends"]["web"]]) == 0
+    assert (
+        stage.main(
+            [
+                "--out",
+                str(out),
+                "--ref",
+                "fixture",
+                "--tui",
+                data["frontends"]["tui"],
+                "--web",
+                data["frontends"]["web"],
+            ]
+        )
+        == 0
+    )
     assert calls == [{k: Path(v) for k, v in data["frontends"].items()}]
-    assert json.loads((out / "manifest.json").read_text())["runtime"]["commands"] == {"probe": "bin/probe"}
+    assert json.loads((out / "manifest.json").read_text())["runtime"]["commands"] == {
+        "probe": "bin/probe"
+    }
 
 
 @pytest.mark.platforms("posix")
 def test_prepared_environment_python_imports_app_from_unrelated_script(tmp_path):
     out, data = inputs_fixture(tmp_path)
     environment = out / ".venv"
-    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(environment)], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(environment)], check=True
+    )
     python = environment / "bin/python"
-    site = subprocess.check_output([str(python), "-I", "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])"], text=True).strip()
+    site = subprocess.check_output(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "import sysconfig; print(sysconfig.get_paths()['purelib'])",
+        ],
+        text=True,
+    ).strip()
     Path(site, "dependency.py").write_text("VALUE='prepared'", encoding="utf-8")
-    data.update(placement="fixed", environment=str(environment), python=str(python), site_packages=site)
+    data.update(
+        placement="fixed",
+        environment=str(environment),
+        python=str(python),
+        site_packages=site,
+    )
     result = build_cli(data, out, tmp_path)
     assert result.returncode == 0, result.stderr
     script = tmp_path / "external-probe.py"
-    script.write_text("import entry\nfrom importlib.metadata import version\nprint(version('assembly-fixture'))\n", encoding="utf-8")
-    run = subprocess.run([str(python), "-I", str(script)], cwd=tmp_path,
-                         env={"PATH": os.environ["PATH"], "HOME": str(tmp_path / "home"), "PYTHONDONTWRITEBYTECODE": "1"},
-                         capture_output=True, text=True, check=False)
+    script.write_text(
+        "import entry\nfrom importlib.metadata import version\nprint(version('assembly-fixture'))\n",
+        encoding="utf-8",
+    )
+    run = subprocess.run(
+        [str(python), "-I", str(script)],
+        cwd=tmp_path,
+        env={
+            "PATH": os.environ["PATH"],
+            "HOME": str(tmp_path / "home"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert run.returncode == 0, run.stderr
     assert run.stdout.strip() == "1.2.3"
 
 
 def test_site_layout_uses_explicit_target_version_not_builder_python(tmp_path):
     from scripts.build.inputs import dependency_site
-    assert dependency_site(tmp_path, "3.99.1+vendor", "linux-x64") == tmp_path / "lib/python3.99/site-packages"
-    assert dependency_site(tmp_path, "3.99.1", "win32-arm64") == tmp_path / "Lib/site-packages"
+
+    assert (
+        dependency_site(tmp_path, "3.99.1+vendor", "linux-x64")
+        == tmp_path / "lib/python3.99/site-packages"
+    )
+    assert (
+        dependency_site(tmp_path, "3.99.1", "win32-arm64")
+        == tmp_path / "Lib/site-packages"
+    )
 
 
-def test_automatic_frontends_use_requested_snapshot_not_current_checkout(tmp_path, monkeypatch):
+def test_automatic_frontends_use_requested_snapshot_not_current_checkout(
+    tmp_path, monkeypatch
+):
     from scripts.bundles import stage
+
     repo = tmp_path / "checkout"
     repo.mkdir()
     subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
     project = repo / "pyproject.toml"
     project.write_text('[project]\nversion="1"\n', encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "-c", "user.name=Fixture", "-c", "user.email=f@example.test", "commit", "-m", "selected"], cwd=repo, check=True, capture_output=True)
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=f@example.test",
+            "commit",
+            "-m",
+            "selected",
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+    ).strip()
     project.write_text('[project]\nversion="dirty-current"\n', encoding="utf-8")
     monkeypatch.setattr(stage, "ROOT", repo)
-    monkeypatch.setattr("scripts.build.icon_environment.prepare_icon_environment",
-                        lambda source, out, cache: sys.executable)
+    monkeypatch.setattr(
+        "scripts.build.icon_environment.prepare_icon_environment",
+        lambda source, out, cache: sys.executable,
+    )
     monkeypatch.setattr(stage.shutil, "which", lambda name: "/prepared/node")
     real_run = subprocess.run
     built_sources = []
+
     def run(command, **kwargs):
         if command[0] != "/prepared/node":
             return real_run(command, **kwargs)
@@ -358,6 +614,7 @@ def test_automatic_frontends_use_requested_snapshot_not_current_checkout(tmp_pat
         built_sources.append(source)
         assert source != repo
         assert 'version="1"' in (source / "pyproject.toml").read_text()
+
     monkeypatch.setattr(stage.subprocess, "run", run)
     monkeypatch.setattr(stage, "stage_native", lambda args: 0)
     assert stage.main(["--out", str(tmp_path / "out"), "--ref", revision]) == 0

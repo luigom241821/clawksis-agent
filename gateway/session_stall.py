@@ -14,18 +14,27 @@ from typing import Any, Mapping, Optional
 
 
 def should_emit_session_stall_notification(
-    *, timeout_seconds: float, idle_seconds: Optional[float], has_pending_inbound: bool,
+    *,
+    timeout_seconds: float,
+    idle_seconds: Optional[float],
+    has_pending_inbound: bool,
     already_notified: bool,
 ) -> bool:
     """Return True when a stall warning should be sent for this session."""
     return (
-        timeout_seconds > 0 and has_pending_inbound and not already_notified
-        and idle_seconds is not None and idle_seconds >= timeout_seconds
+        timeout_seconds > 0
+        and has_pending_inbound
+        and not already_notified
+        and idle_seconds is not None
+        and idle_seconds >= timeout_seconds
     )
 
 
 def should_clear_session_stall_notification(
-    *, timeout_seconds: float, idle_seconds: Optional[float], has_pending_inbound: bool,
+    *,
+    timeout_seconds: float,
+    idle_seconds: Optional[float],
+    has_pending_inbound: bool,
 ) -> bool:
     """Return True when a prior stall notice may be cleared (episode ended)."""
     if not has_pending_inbound or timeout_seconds <= 0:
@@ -40,8 +49,10 @@ def format_session_stall_notification(idle_seconds: float) -> str:
     See #72016.
     """
     mins = max(1, int(idle_seconds // 60))
-    return (f"⚠️ I seem to be stuck (no activity for {mins} min). Send /stop to cancel the current "
-            "task, or /new to start a fresh conversation.")
+    return (
+        f"⚠️ I seem to be stuck (no activity for {mins} min). Send /stop to cancel the current "
+        "task, or /new to start a fresh conversation."
+    )
 
 
 def _finite_float(value: Any) -> Optional[float]:
@@ -56,7 +67,9 @@ def _finite_float(value: Any) -> Optional[float]:
 
 
 def resolve_session_idle_seconds_from_activity(
-    activity: Optional[Mapping[str, Any]], *, now: Optional[float] = None,
+    activity: Optional[Mapping[str, Any]],
+    *,
+    now: Optional[float] = None,
 ) -> Optional[float]:
     """Idle seconds from a shared activity snapshot: a finite ``seconds_since_activity``, else
     derived from ``last_activity_at`` / ``last_activity_ts``.  None when there is no usable

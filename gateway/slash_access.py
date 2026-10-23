@@ -45,7 +45,8 @@ class SlashAccessPolicy:
         if self.is_admin(user_id):
             return True
         return bool(canonical_cmd) and (
-            canonical_cmd in _ALWAYS_ALLOWED_FOR_USERS or canonical_cmd in self.user_allowed_commands
+            canonical_cmd in _ALWAYS_ALLOWED_FOR_USERS
+            or canonical_cmd in self.user_allowed_commands
         )
 
 
@@ -94,7 +95,9 @@ def policy_from_extra(extra: dict, scope: str) -> SlashAccessPolicy:
     cmds = _coerce_command_list(extra.get(cmd_key))
     if scope == "dm" and not cmds:
         cmds = _coerce_command_list(extra.get("group_user_allowed_commands"))
-    return SlashAccessPolicy(enabled=bool(admin_ids), admin_user_ids=admin_ids, user_allowed_commands=cmds)
+    return SlashAccessPolicy(
+        enabled=bool(admin_ids), admin_user_ids=admin_ids, user_allowed_commands=cmds
+    )
 
 
 def policy_for_source(gateway_config: Any, source: Any) -> SlashAccessPolicy:
@@ -133,7 +136,6 @@ def policy_for_source(gateway_config: Any, source: Any) -> SlashAccessPolicy:
 __all__ = ["SlashAccessPolicy", "policy_for_source", "policy_from_extra"]
 
 
-
 def policy_for_runner_source(runner: Any, source: Any) -> SlashAccessPolicy:
     """Slash-gating policy from the profile whose bot received ``source``.
 
@@ -149,7 +151,11 @@ def policy_for_runner_source(runner: Any, source: Any) -> SlashAccessPolicy:
     from gateway.session_identity import identity_of
 
     identity = identity_of(source)
-    owner = identity.transport_profile if identity is not None else getattr(source, "profile", None)
+    owner = (
+        identity.transport_profile
+        if identity is not None
+        else getattr(source, "profile", None)
+    )
     primary = getattr(runner, "_primary_profile_name", None) or "default"
     if owner and owner != primary:
         config = (getattr(runner, "_profile_configs", None) or {}).get(owner)

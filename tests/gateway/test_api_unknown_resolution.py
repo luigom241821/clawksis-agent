@@ -1,4 +1,5 @@
 """HTTP run owners can acknowledge an exact unknown API admission after restart."""
+
 import asyncio
 import json
 from contextlib import suppress
@@ -20,9 +21,13 @@ from clawk_state_runtime import claim_session_input, list_session_admissions
 
 _OWNER = ContextVar("test_api_unknown_owner", default="owner")
 _API_KEYS = {"owner": "checkpoint-two-api-key", "other": "other-valid-api-key"}
-_AUTH_HEADERS = {"Authorization": f"Bearer {_API_KEYS['owner']}", "X-Test-Owner": "owner"}
+_AUTH_HEADERS = {
+    "Authorization": f"Bearer {_API_KEYS['owner']}",
+    "X-Test-Owner": "owner",
+}
 _OTHER_AUTH_HEADERS = {
-    "Authorization": f"Bearer {_API_KEYS['other']}", "X-Test-Owner": "other"
+    "Authorization": f"Bearer {_API_KEYS['other']}",
+    "X-Test-Owner": "other",
 }
 
 
@@ -84,8 +89,11 @@ async def _restarted_api_runs(tmp_path, monkeypatch, *, idempotent=True):
     tasks = []
     try:
         admitted = []
-        inputs = (("run-a", "HEAD"), ("run-b", "FOLLOWER")) if idempotent else (
-            ("run-a", "SAME BODY"), ("run-b", "SAME BODY"))
+        inputs = (
+            (("run-a", "HEAD"), ("run-b", "FOLLOWER"))
+            if idempotent
+            else (("run-a", "SAME BODY"), ("run-b", "SAME BODY"))
+        )
         for run_id, text in inputs:
             headers = dict(_AUTH_HEADERS)
             if idempotent:
@@ -119,7 +127,16 @@ async def _restarted_api_runs(tmp_path, monkeypatch, *, idempotent=True):
         runner._adapter_for_source = lambda source: fresh
         client = _runs_client(fresh)
         await client.start_server()
-        return client, (adapter, fresh), store, restarted, rows[0], rows[1], executed, tasks
+        return (
+            client,
+            (adapter, fresh),
+            store,
+            restarted,
+            rows[0],
+            rows[1],
+            executed,
+            tasks,
+        )
     except Exception:
         await client.close()
         adapter._response_store.close()
@@ -146,9 +163,16 @@ async def _close_fixture(client, adapters, store, tasks):
 async def test_http_resolve_unknown_releases_follower_once_without_replaying_head(
     tmp_path, monkeypatch
 ):
-    client, adapters, store, owner, unknown, follower, executed, tasks = (
-        await _restarted_api_runs(tmp_path, monkeypatch)
-    )
+    (
+        client,
+        adapters,
+        store,
+        owner,
+        unknown,
+        follower,
+        executed,
+        tasks,
+    ) = await _restarted_api_runs(tmp_path, monkeypatch)
     try:
         body = {
             "admission_id": unknown["admission_id"],
@@ -159,10 +183,18 @@ async def test_http_resolve_unknown_releases_follower_once_without_replaying_hea
         assert unauthenticated.status == 401
         assert (await unauthenticated.json())["error"]["code"] == "gateway_auth_failed"
 
-        capabilities = json.loads((await adapters[-1]._handle_capabilities(
-            SimpleNamespace(headers=_AUTH_HEADERS, remote="127.0.0.1"))).text)
+        capabilities = json.loads(
+            (
+                await adapters[-1]._handle_capabilities(
+                    SimpleNamespace(headers=_AUTH_HEADERS, remote="127.0.0.1")
+                )
+            ).text
+        )
         assert capabilities["features"]["run_unknown_resolution"] is True
-        assert capabilities["endpoints"]["run_unknown_resolution"]["path"] == "/v1/runs/{run_id}/resolve-unknown"
+        assert (
+            capabilities["endpoints"]["run_unknown_resolution"]["path"]
+            == "/v1/runs/{run_id}/resolve-unknown"
+        )
 
         response = await client.post(path, json=body, headers=_AUTH_HEADERS)
         assert response.status == 200, await response.text()
@@ -175,7 +207,9 @@ async def test_http_resolve_unknown_releases_follower_once_without_replaying_hea
         assert executed == ["FOLLOWER"]
         statuses = {
             row["admission_id"]: (row["status"], row["outcome"])
-            for row in list_session_admissions(owner.db, session_id="api-session", pending_only=False)
+            for row in list_session_admissions(
+                owner.db, session_id="api-session", pending_only=False
+            )
         }
         assert statuses[unknown["admission_id"]] == ("terminal", "interrupted")
         assert statuses[follower["admission_id"]] == ("terminal", "completed")
@@ -186,9 +220,15 @@ async def test_http_resolve_unknown_releases_follower_once_without_replaying_hea
         assert await again.json() == result
         await owner.sessions["api-session"].task
         assert executed == ["FOLLOWER"]
-        stale = await client.post(path, json=body | {"execution_generation": unknown["generation"] + 1},
-                                  headers=_AUTH_HEADERS)
-        assert stale.status == 409 and (await stale.json())["error"]["code"] == "stale_generation"
+        stale = await client.post(
+            path,
+            json=body | {"execution_generation": unknown["generation"] + 1},
+            headers=_AUTH_HEADERS,
+        )
+        assert (
+            stale.status == 409
+            and (await stale.json())["error"]["code"] == "stale_generation"
+        )
     finally:
         await _close_fixture(client, adapters, store, tasks)
 
@@ -197,9 +237,16 @@ async def test_http_resolve_unknown_releases_follower_once_without_replaying_hea
 async def test_http_resolve_unknown_refuses_stale_or_foreign_admission(
     tmp_path, monkeypatch
 ):
-    client, adapters, store, owner, unknown, follower, executed, tasks = (
-        await _restarted_api_runs(tmp_path, monkeypatch)
-    )
+    (
+        client,
+        adapters,
+        store,
+        owner,
+        unknown,
+        follower,
+        executed,
+        tasks,
+    ) = await _restarted_api_runs(tmp_path, monkeypatch)
     try:
         run_path = "/v1/runs/" + unknown["request_id"] + "/resolve-unknown"
         stop = await client.post(
@@ -209,23 +256,35 @@ async def test_http_resolve_unknown_refuses_stale_or_foreign_admission(
         assert stop.status == 409
         assert (await stop.json())["error"]["code"] == "unknown_execution"
         attempts = (
-            ({
-                "admission_id": unknown["admission_id"],
-                "execution_generation": unknown["generation"] + 1,
-            }, "stale_generation"),
-            ({
-                "admission_id": follower["admission_id"],
-                "execution_generation": unknown["generation"],
-            }, "not_found"),
-            ({
-                "admission_id": unknown["admission_id"],
-                "execution_generation": False,
-            }, "stale_generation"),
-            ({
-                "admission_id": unknown["admission_id"],
-                "execution_generation": unknown["generation"],
-                "extra": True,
-            }, "invalid_params"),
+            (
+                {
+                    "admission_id": unknown["admission_id"],
+                    "execution_generation": unknown["generation"] + 1,
+                },
+                "stale_generation",
+            ),
+            (
+                {
+                    "admission_id": follower["admission_id"],
+                    "execution_generation": unknown["generation"],
+                },
+                "not_found",
+            ),
+            (
+                {
+                    "admission_id": unknown["admission_id"],
+                    "execution_generation": False,
+                },
+                "stale_generation",
+            ),
+            (
+                {
+                    "admission_id": unknown["admission_id"],
+                    "execution_generation": unknown["generation"],
+                    "extra": True,
+                },
+                "invalid_params",
+            ),
             ([unknown["admission_id"], unknown["generation"]], "invalid_params"),
         )
         for body, code in attempts:
@@ -255,9 +314,16 @@ async def test_http_resolve_unknown_refuses_stale_or_foreign_admission(
 async def test_fresh_adapter_recovers_non_idempotent_owner_but_refuses_other_credential(
     tmp_path, monkeypatch
 ):
-    client, adapters, store, _owner, unknown, _follower, _executed, tasks = (
-        await _restarted_api_runs(tmp_path, monkeypatch, idempotent=False)
-    )
+    (
+        client,
+        adapters,
+        store,
+        _owner,
+        unknown,
+        _follower,
+        _executed,
+        tasks,
+    ) = await _restarted_api_runs(tmp_path, monkeypatch, idempotent=False)
     try:
         path = "/v1/runs/" + unknown["request_id"] + "/resolve-unknown"
         body = {
@@ -286,25 +352,44 @@ async def test_http_poll_reports_unknown_head_as_non_terminal_until_resolved(
     poller cannot tell a paused head from a finished run if the projection reuses it."""
     from gateway.platforms.api_server_run_idempotency import TERMINAL_STATUSES
 
-    client, adapters, store, owner, unknown, _follower, executed, tasks = (
-        await _restarted_api_runs(tmp_path, monkeypatch)
-    )
+    (
+        client,
+        adapters,
+        store,
+        owner,
+        unknown,
+        _follower,
+        executed,
+        tasks,
+    ) = await _restarted_api_runs(tmp_path, monkeypatch)
     try:
         path = "/v1/runs/" + unknown["request_id"]
         polled = await client.get(path, headers=_AUTH_HEADERS)
         assert polled.status == 200, await polled.text()
         body = await polled.json()
-        print("POLL_BEFORE_RESOLVE", json.dumps({k: body.get(k) for k in (
-            "status", "admission_id", "execution_generation")}, sort_keys=True))
+        print(
+            "POLL_BEFORE_RESOLVE",
+            json.dumps(
+                {
+                    k: body.get(k)
+                    for k in ("status", "admission_id", "execution_generation")
+                },
+                sort_keys=True,
+            ),
+        )
         assert body["status"] not in TERMINAL_STATUSES, body
         assert body["status"] == "unknown", body
         assert body["admission_id"] == unknown["admission_id"]
         assert body["execution_generation"] == unknown["generation"]
 
-        resolved = await client.post(path + "/resolve-unknown", headers=_AUTH_HEADERS, json={
-            "admission_id": body["admission_id"],
-            "execution_generation": body["execution_generation"],
-        })
+        resolved = await client.post(
+            path + "/resolve-unknown",
+            headers=_AUTH_HEADERS,
+            json={
+                "admission_id": body["admission_id"],
+                "execution_generation": body["execution_generation"],
+            },
+        )
         assert resolved.status == 200, await resolved.text()
         await owner.sessions["api-session"].task
         assert executed == ["FOLLOWER"]

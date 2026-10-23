@@ -242,8 +242,12 @@ def test_total_ceiling_exhaustion_does_not_start_fallback():
         msgs, prompt = _run(
             # idle == ceiling: the primary's idle expiry spends the whole shared budget. >= 2 s so a
             # loaded runner still starts the primary worker inside it (tests/AGENTS.md).
-            worker, chain=[dict(CHAIN_ENTRY, timeout=2.0)], timeouts=timeouts, messages=original,
-            idle=2.0, ceiling=2.0,
+            worker,
+            chain=[dict(CHAIN_ENTRY, timeout=2.0)],
+            timeouts=timeouts,
+            messages=original,
+            idle=2.0,
+            ceiling=2.0,
         )
     finally:
         worker.release.set()
@@ -274,8 +278,12 @@ def test_stall_after_prompt_reading_still_funds_the_fallback():
     try:
         msgs, prompt = _run(
             # Same budget as the exhaustion test above: without the extension the idle expiry spends it.
-            worker, chain=[dict(CHAIN_ENTRY, timeout=2.0)], timeouts=timeouts, messages=original,
-            idle=2.0, ceiling=2.0,
+            worker,
+            chain=[dict(CHAIN_ENTRY, timeout=2.0)],
+            timeouts=timeouts,
+            messages=original,
+            idle=2.0,
+            ceiling=2.0,
         )
     finally:
         worker.release.set()
@@ -286,7 +294,9 @@ def test_stall_after_prompt_reading_still_funds_the_fallback():
     assert not timeouts
 
 
-def test_same_turn_fallback_retry_is_not_gated_by_the_primary_stall_backoff(tmp_path, monkeypatch):
+def test_same_turn_fallback_retry_is_not_gated_by_the_primary_stall_backoff(
+    tmp_path, monkeypatch
+):
     """The cancelled primary worker persists ``stall_interrupted`` while the fallback retry is already
     running; that cooldown must not no-op the retry (#112387). Real AIAgent, real ``compress_context``
     and facade timeout wrap; only the summary route (``compress``) is stubbed: the primary route stalls
@@ -306,8 +316,14 @@ def test_same_turn_fallback_retry_is_not_gated_by_the_primary_stall_backoff(tmp_
         from run_agent import AIAgent
 
         agent = AIAgent(
-            api_key="test-key", base_url="https://openrouter.ai/api/v1", model="test/model", quiet_mode=True,
-            session_db=db, session_id=session_id, skip_context_files=True, skip_memory=True,
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            quiet_mode=True,
+            session_db=db,
+            session_id=session_id,
+            skip_context_files=True,
+            skip_memory=True,
         )
     agent._compression_feasibility_checked = True
     agent.compression_in_place = True
@@ -320,11 +336,15 @@ def test_same_turn_fallback_retry_is_not_gated_by_the_primary_stall_backoff(tmp_
 
     def fake_compress(messages, **kwargs):
         route = take_pinned_summary_route()
-        routes.append((route["label"] if route else None, kwargs.get("bypass_cooldown", False)))
+        routes.append(
+            (route["label"] if route else None, kwargs.get("bypass_cooldown", False))
+        )
         if route is None:
             cancelled = getattr(compressor, "_compression_cancelled_check", None)
             deadline = time.monotonic() + 5
-            while time.monotonic() < deadline and not (callable(cancelled) and cancelled()):
+            while time.monotonic() < deadline and not (
+                callable(cancelled) and cancelled()
+            ):
                 time.sleep(0.0005)
             raise AuxiliaryExplicitCancellation()
         return [{"role": "user", "content": "summary of earlier turns"}, original[-1]]
@@ -335,17 +355,28 @@ def test_same_turn_fallback_retry_is_not_gated_by_the_primary_stall_backoff(tmp_
     def route_after_primary_unwound():
         # Pin the race outcome from the report: the primary persisted its backoff before the retry ran.
         deadline = time.monotonic() + 3
-        while time.monotonic() < deadline and compressor._summary_failure_cooldown_until <= time.monotonic():
+        while (
+            time.monotonic() < deadline
+            and compressor._summary_failure_cooldown_until <= time.monotonic()
+        ):
             time.sleep(0.001)
         return real_route()
 
-    monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda compression_cfg=None: (0.4, 4.0))
-    monkeypatch.setattr(cc, "resolve_compression_fallback_route", route_after_primary_unwound)
+    monkeypatch.setattr(
+        cc,
+        "resolve_context_compression_timeouts",
+        lambda compression_cfg=None: (0.4, 4.0),
+    )
+    monkeypatch.setattr(
+        cc, "resolve_compression_fallback_route", route_after_primary_unwound
+    )
     with _patch_chain([CHAIN_ENTRY]):
         out_msgs, _prompt = agent._compress_context(live, "sys", approx_tokens=50_000)
 
     assert [r[0] for r in routes] == [None, "fallback_chain[0](custom)"]
-    assert routes[1][1] is True, "the same-turn retry must bypass the cooldown the primary just armed"
+    assert routes[1][1] is True, (
+        "the same-turn retry must bypass the cooldown the primary just armed"
+    )
     assert len(out_msgs) == 2 and out_msgs is not live
     assert getattr(agent, "_last_compression_timed_out", None) is not True
 
@@ -372,8 +403,8 @@ def test_resolved_route_carries_entry_credentials_and_timeout():
 def test_incomplete_chain_entries_are_skipped():
     chain = [
         "not-a-mapping",
-        {"model": "orphan-model"},          # no provider
-        {"provider": "custom"},             # no model
+        {"model": "orphan-model"},  # no provider
+        {"provider": "custom"},  # no model
         CHAIN_ENTRY,
     ]
     with _patch_chain(chain):

@@ -53,15 +53,28 @@ def _append_env(ph: ParityHome, values: dict[str, str]) -> None:
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
     if existing and not existing.endswith("\n"):
         existing += "\n"
-    path.write_text(existing + "".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
+    path.write_text(
+        existing + "".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8"
+    )
 
 
-def _spawn(ph: ParityHome, argv: list[str], log_name: str, extra_env: dict[str, str] | None = None):
+def _spawn(
+    ph: ParityHome,
+    argv: list[str],
+    log_name: str,
+    extra_env: dict[str, str] | None = None,
+):
     log_path = ph.root / log_name
     log = open(log_path, "wb")
     proc = subprocess.Popen(
-        argv, cwd=ph.project, env=ph.env(extra_env), stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1,
+        argv,
+        cwd=ph.project,
+        env=ph.env(extra_env),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=log,
+        text=True,
+        bufsize=1,
     )
     proc._parity_log = log  # type: ignore[attr-defined]
     proc._parity_log_path = log_path  # type: ignore[attr-defined]
@@ -101,19 +114,32 @@ def _stop(ph: ParityHome, proc: subprocess.Popen) -> bool:
     try:
         if proc.poll() is None:
             marker = subprocess.run(
-                [sys.executable, "-c",
-                 "import sys; from gateway.status import write_planned_stop_marker as w, "
-                 "_get_planned_stop_marker_path as p; ok = w(int(sys.argv[1])); print(p()); "
-                 "sys.exit(0 if ok else 1)",
-                 str(proc.pid)],
-                cwd=ph.project, env=ph.env(), capture_output=True, text=True, timeout=60,
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; from gateway.status import write_planned_stop_marker as w, "
+                    "_get_planned_stop_marker_path as p; ok = w(int(sys.argv[1])); print(p()); "
+                    "sys.exit(0 if ok else 1)",
+                    str(proc.pid),
+                ],
+                cwd=ph.project,
+                env=ph.env(),
+                capture_output=True,
+                text=True,
+                timeout=60,
                 stdin=subprocess.DEVNULL,
                 check=False,
             )
-            assert marker.returncode == 0, f"planned-stop marker write failed: {marker.stderr[-1000:]}"
+            assert marker.returncode == 0, (
+                f"planned-stop marker write failed: {marker.stderr[-1000:]}"
+            )
             marker_path = Path(marker.stdout.strip().splitlines()[-1])
             deadline = time.monotonic() + STOP_TIMEOUT
-            while marker_path.exists() and proc.poll() is None and time.monotonic() < deadline:
+            while (
+                marker_path.exists()
+                and proc.poll() is None
+                and time.monotonic() < deadline
+            ):
                 time.sleep(0.05)
             if proc.poll() is None:
                 with contextlib.suppress(ProcessLookupError):
@@ -144,10 +170,19 @@ def _collect_delivered(events: list[dict[str, Any]]) -> str:
 def drive_gateway(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
     ph.pin_terminal_cwd()
     # A real Telegram setup: bot token + allowlisted user in the profile .env.
-    _append_env(ph, {"TELEGRAM_BOT_TOKEN": "123456:parity-fake-token",
-                     "TELEGRAM_ALLOWED_USERS": PARITY_USER_ID})
-    proc = _spawn(ph, [sys.executable, str(GATEWAY_CHILD)], "gateway.stderr.log",
-                  {"PARITY_GATEWAY_PROMPT": prompt, "PARITY_GATEWAY_USER": PARITY_USER_ID})
+    _append_env(
+        ph,
+        {
+            "TELEGRAM_BOT_TOKEN": "123456:parity-fake-token",
+            "TELEGRAM_ALLOWED_USERS": PARITY_USER_ID,
+        },
+    )
+    proc = _spawn(
+        ph,
+        [sys.executable, str(GATEWAY_CHILD)],
+        "gateway.stderr.log",
+        {"PARITY_GATEWAY_PROMPT": prompt, "PARITY_GATEWAY_USER": PARITY_USER_ID},
+    )
     lines = _stdout_pump(proc)
     events: list[dict[str, Any]] = []
     outcome: str | None = None
@@ -157,27 +192,36 @@ def drive_gateway(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResul
         while outcome is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise AssertionError(f"gateway turn timed out; events={events}\n{_log_tail(proc)}")
+                raise AssertionError(
+                    f"gateway turn timed out; events={events}\n{_log_tail(proc)}"
+                )
             try:
                 line = lines.get(timeout=remaining)
             except queue.Empty:
                 continue
             if line is None:
                 raise AssertionError(
-                    f"gateway exited {proc.wait()} before the turn completed; events={events}\n{_log_tail(proc)}")
+                    f"gateway exited {proc.wait()} before the turn completed; events={events}\n{_log_tail(proc)}"
+                )
             if not line.startswith(_LINE_PREFIX):
                 continue
-            ev = json.loads(line[len(_LINE_PREFIX):])
+            ev = json.loads(line[len(_LINE_PREFIX) :])
             events.append(ev)
             if ev["kind"] == "complete":
                 outcome = ev["outcome"]
     finally:
         graceful = _stop(ph, proc)
     return DriveResult(
-        final_text=_collect_delivered(events), toolset="clawk-telegram", cwd_channel="terminal.cwd",
+        final_text=_collect_delivered(events),
+        toolset="clawk-telegram",
+        cwd_channel="terminal.cwd",
         graceful_exit=graceful,
-        extra={"outcome": outcome, "exit_code": proc.returncode, "events": events,
-               "stderr_log": str(proc._parity_log_path)},  # type: ignore[attr-defined]
+        extra={
+            "outcome": outcome,
+            "exit_code": proc.returncode,
+            "events": events,
+            "stderr_log": str(proc._parity_log_path),
+        },  # type: ignore[attr-defined]
     )
 
 
@@ -190,8 +234,14 @@ def _free_loopback_port() -> int:
         return s.getsockname()[1]
 
 
-def _http(method: str, url: str, *, key: str | None = None, body: dict | None = None,
-          timeout: float = 5.0) -> tuple[int, str]:
+def _http(
+    method: str,
+    url: str,
+    *,
+    key: str | None = None,
+    body: dict | None = None,
+    timeout: float = 5.0,
+) -> tuple[int, str]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     if data is not None:
@@ -218,9 +268,13 @@ def _await_own_api_server(proc: subprocess.Popen, base: str, key: str) -> bool:
         if "already in use" in _log_tail(proc, 20000):
             return False
         if proc.poll() is not None:
-            raise AssertionError(f"api server exited {proc.returncode} before ready\n{_log_tail(proc)}")
+            raise AssertionError(
+                f"api server exited {proc.returncode} before ready\n{_log_tail(proc)}"
+            )
         if time.monotonic() >= deadline:
-            raise AssertionError(f"api server never became ready on {base}\n{_log_tail(proc)}")
+            raise AssertionError(
+                f"api server never became ready on {base}\n{_log_tail(proc)}"
+            )
         with contextlib.suppress(OSError, urllib.error.URLError, ValueError):
             status, raw = _http("GET", f"{base}/health/detailed", key=key, timeout=2.0)
             if status == 200 and json.loads(raw).get("pid") == proc.pid:
@@ -231,13 +285,26 @@ def _await_own_api_server(proc: subprocess.Popen, base: str, key: str) -> bool:
 def drive_api_server(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveResult:
     ph.pin_terminal_cwd()
     key = secrets.token_hex(32)
-    env_before = (ph.clawk_home / ".env").read_text(encoding="utf-8") if (ph.clawk_home / ".env").exists() else ""
+    env_before = (
+        (ph.clawk_home / ".env").read_text(encoding="utf-8")
+        if (ph.clawk_home / ".env").exists()
+        else ""
+    )
     for _attempt in range(PORT_ATTEMPTS):
         port = _free_loopback_port()
         (ph.clawk_home / ".env").write_text(env_before, encoding="utf-8")
-        _append_env(ph, {"API_SERVER_ENABLED": "true", "API_SERVER_KEY": key,
-                         "API_SERVER_HOST": "127.0.0.1", "API_SERVER_PORT": str(port)})
-        proc = _spawn(ph, [sys.executable, "-m", "gateway.run"], "api_server.stderr.log")
+        _append_env(
+            ph,
+            {
+                "API_SERVER_ENABLED": "true",
+                "API_SERVER_KEY": key,
+                "API_SERVER_HOST": "127.0.0.1",
+                "API_SERVER_PORT": str(port),
+            },
+        )
+        proc = _spawn(
+            ph, [sys.executable, "-m", "gateway.run"], "api_server.stderr.log"
+        )
         base = f"http://127.0.0.1:{port}"
         try:
             ready = _await_own_api_server(proc, base, key)
@@ -248,24 +315,40 @@ def drive_api_server(ph: ParityHome, srv: FakeLLMServer, prompt: str) -> DriveRe
             break
         _stop(ph, proc)
     else:
-        raise AssertionError(f"api server lost the port race {PORT_ATTEMPTS} times\n{_log_tail(proc)}")
+        raise AssertionError(
+            f"api server lost the port race {PORT_ATTEMPTS} times\n{_log_tail(proc)}"
+        )
     status: int | None = None
     payload: dict[str, Any] = {}
     graceful = False
     try:
         status, raw = _http(
-            "POST", f"{base}/v1/chat/completions", key=key, timeout=TURN_TIMEOUT,
-            body={"model": "clawksis-agent", "messages": [{"role": "user", "content": prompt}],
-                  "stream": False},
+            "POST",
+            f"{base}/v1/chat/completions",
+            key=key,
+            timeout=TURN_TIMEOUT,
+            body={
+                "model": "clawksis-agent",
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
         )
         payload = json.loads(raw) if raw.strip().startswith("{") else {"raw": raw}
-        assert status == 200, f"/v1/chat/completions -> {status}: {raw[-2000:]}\n{_log_tail(proc)}"
+        assert status == 200, (
+            f"/v1/chat/completions -> {status}: {raw[-2000:]}\n{_log_tail(proc)}"
+        )
     finally:
         graceful = _stop(ph, proc)
     choices = payload.get("choices") or [{}]
     text = (choices[0].get("message") or {}).get("content")
     return DriveResult(
-        final_text=text, toolset="clawk-api-server", cwd_channel="terminal.cwd", graceful_exit=graceful,
-        extra={"http_status": status, "exit_code": proc.returncode,
-               "stderr_log": str(proc._parity_log_path)},  # type: ignore[attr-defined]
+        final_text=text,
+        toolset="clawk-api-server",
+        cwd_channel="terminal.cwd",
+        graceful_exit=graceful,
+        extra={
+            "http_status": status,
+            "exit_code": proc.returncode,
+            "stderr_log": str(proc._parity_log_path),
+        },  # type: ignore[attr-defined]
     )

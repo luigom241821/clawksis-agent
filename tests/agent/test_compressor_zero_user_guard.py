@@ -106,7 +106,6 @@ class TestCompressAlwaysKeepsAUserTurn:
             f"non-retryable 400. Role histogram: {hist}"
         )
 
-
     def test_no_consecutive_user_roles_introduced(self, compressor):
         """Forcing the summary to role=user must not create two
         consecutive user-role messages (strict alternation invariant).
@@ -124,9 +123,9 @@ class TestCompressAlwaysKeepsAUserTurn:
             out = c.compress(messages, current_tokens=90_000)
 
         for prev, cur in itertools.pairwise(out):
-            assert not (
-                prev.get("role") == "user" and cur.get("role") == "user"
-            ), "compression introduced consecutive user-role messages"
+            assert not (prev.get("role") == "user" and cur.get("role") == "user"), (
+                "compression introduced consecutive user-role messages"
+            )
 
     def test_preserved_tail_user_is_not_overridden(self, compressor):
         """When a genuine user message survives in the tail, the guard
@@ -167,8 +166,7 @@ def _has_nonempty_user_text(messages: list[dict]) -> bool:
     from agent.context_compressor import _content_text_for_contains
 
     return any(
-        m.get("role") == "user"
-        and _content_text_for_contains(m.get("content")).strip()
+        m.get("role") == "user" and _content_text_for_contains(m.get("content")).strip()
         for m in messages
     )
 
@@ -192,12 +190,17 @@ class TestCompressKeepsANonEmptyUserTurn:
         # only surviving user turn is an image with no caption text.
         messages = [{"role": "user", "content": "work kanban task 42"}]
         messages += _tool_turns(0, 12)
-        messages += [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-            ],
-        }]
+        messages += [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAAA"},
+                    },
+                ],
+            }
+        ]
 
         mocked = f"{SUMMARY_PREFIX}\nrolled-up summary of the tool work"
         with patch.object(c, "_generate_summary", return_value=mocked):
@@ -228,12 +231,17 @@ class TestCompressKeepsANonEmptyUserTurn:
         c.tail_token_budget = 10
         c.compression_count = 0
 
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-            ],
-        }]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAAA"},
+                    },
+                ],
+            }
+        ]
         messages += _tool_turns(0, 12)
 
         mocked = f"{SUMMARY_PREFIX}\nrolled-up summary of the tool work"
@@ -259,12 +267,17 @@ class TestCompressKeepsANonEmptyUserTurn:
         c.compression_count = 1  # decays protect_first_n to 0 -> compress_start == 0
         messages = [{"role": "user", "content": "work kanban task 42"}]
         messages += _tool_turns(0, 12)
-        messages += [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-            ],
-        }]
+        messages += [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,AAAA"},
+                    },
+                ],
+            }
+        ]
 
         mocked = f"{SUMMARY_PREFIX}\nrolled-up summary of the tool work"
         with patch.object(c, "_generate_summary", return_value=mocked):

@@ -47,8 +47,6 @@ def _wait_dead(proc: subprocess.Popen, timeout: float = 5.0) -> bool:
     return False
 
 
-
-
 class TestIdentityGuard:
     def test_kills_when_start_time_matches(self, tmp_path):
         """A genuine bridge (recorded start time matches) IS reaped."""
@@ -63,7 +61,6 @@ class TestIdentityGuard:
                 proc.kill()
                 proc.wait()
 
-
     def test_legacy_pidfile_refuses_cmdline_only_kill(self, tmp_path):
         """Legacy pidfile (pid only): a node+session-looking cmdline is NOT trusted — fail closed (#116883).
 
@@ -76,8 +73,12 @@ class TestIdentityGuard:
         try:
             (tmp_path / "bridge.pid").write_text(str(proc.pid))  # legacy: pid only
             _kill_stale_bridge_by_pidfile(tmp_path)
-            time.sleep(0.5)  # give a wrongly-delivered SIGTERM time to land and be observed
-            assert proc.poll() is None, "a cmdline-only match must not be killed (fail closed)"
+            time.sleep(
+                0.5
+            )  # give a wrongly-delivered SIGTERM time to land and be observed
+            assert proc.poll() is None, (
+                "a cmdline-only match must not be killed (fail closed)"
+            )
             assert not (tmp_path / "bridge.pid").exists()
         finally:
             proc.kill()
@@ -101,10 +102,13 @@ class TestKillPortProcess:
         port = srv.getsockname()[1]
         srv.listen(5)
         # A separate process holding a *client* connection to that port.
-        client = subprocess.Popen([
-            sys.executable, "-c",
-            f"import socket,time; c=socket.create_connection(('127.0.0.1',{port:d})); time.sleep(0.2)",
-        ])
+        client = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                f"import socket,time; c=socket.create_connection(('127.0.0.1',{port:d})); time.sleep(0.2)",
+            ]
+        )
         try:
             conn, _ = srv.accept()  # establish the client connection
             pids = _listener_pids_on_port(port)
@@ -118,4 +122,3 @@ class TestKillPortProcess:
             client.kill()
             client.wait()
             srv.close()
-

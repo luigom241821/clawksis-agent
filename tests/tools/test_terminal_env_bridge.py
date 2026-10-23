@@ -35,11 +35,7 @@ def _write_config(text: str) -> None:
 
 
 def test_unset_terminal_env_backfills_backend_from_config():
-    _write_config(
-        "terminal:\n"
-        "  backend: docker\n"
-        "  docker_image: custom/image:1\n"
-    )
+    _write_config("terminal:\n  backend: docker\n  docker_image: custom/image:1\n")
 
     config = terminal_tool._get_env_config()
 
@@ -71,11 +67,7 @@ def test_partial_terminal_config_preserves_unrelated_env_values(monkeypatch):
 
 
 def test_explicit_config_key_overrides_matching_env_value(monkeypatch):
-    _write_config(
-        "terminal:\n"
-        "  backend: docker\n"
-        "  docker_image: config/image:1\n"
-    )
+    _write_config("terminal:\n  backend: docker\n  docker_image: config/image:1\n")
     monkeypatch.setenv("TERMINAL_ENV", "ssh")
     monkeypatch.setenv("TERMINAL_DOCKER_IMAGE", "env/image:2")
 
@@ -117,8 +109,6 @@ def test_defaults_backfill_when_neither_config_nor_env_selects_backend():
     assert os.environ["TERMINAL_ENV"] == "local"
 
 
-
-
 def test_bridge_config_failure_does_not_crash(monkeypatch):
     import clawk_cli.config as config_mod
 
@@ -157,8 +147,8 @@ def test_secondary_home_override_does_not_latch_ambient_env(tmp_path, monkeypatc
         "terminal:\n"
         "  backend: docker\n"
         "  docker_image: bee/local:1\n"
-        '  docker_volumes:\n'
-        '    - /bee/vol:/data\n',
+        "  docker_volumes:\n"
+        "    - /bee/vol:/data\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("CLAWK_HOME", str(launch_home))

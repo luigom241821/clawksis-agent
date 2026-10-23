@@ -33,6 +33,7 @@ def config_home(tmp_path, monkeypatch):
 
 def _write_config(home, **top_level):
     import clawk_yaml as yaml
+
     cfg = {"model": "old-model", "custom_providers": []}
     cfg.update(top_level)
     (home / "config.yaml").write_text(yaml.safe_dump(cfg))
@@ -51,9 +52,12 @@ def _capture_provider_labels(config_home):
         if "labels" not in captured:
             captured["labels"] = list(labels)
 
-    with patch("clawk_cli.main._prompt_provider_choice",
-               side_effect=_capture_and_cancel), \
-         patch("builtins.print"):
+    with (
+        patch(
+            "clawk_cli.main._prompt_provider_choice", side_effect=_capture_and_cancel
+        ),
+        patch("builtins.print"),
+    ):
         select_provider_and_model()
 
     return captured.get("labels", [])
@@ -94,6 +98,7 @@ def test_cli_picker_hides_excluded_provider_by_alias(config_home):
         pytest.skip("no aliased canonical provider available to test")
 
     from clawk_cli.models import _PROVIDER_LABELS
+
     target_label_fragment = _PROVIDER_LABELS.get(target_slug, target_slug)
 
     # Baseline: the provider appears without exclusion.
@@ -151,14 +156,20 @@ def test_unconfigured_rows_hide_excluded_provider():
     from clawk_cli.inventory import _append_unconfigured_rows
 
     baseline = {r["slug"].lower() for r in _append_unconfigured_rows([], _picker_ctx())}
-    assert "openrouter" in baseline, "sanity: openrouter should be a canonical skeleton row"
+    assert "openrouter" in baseline, (
+        "sanity: openrouter should be a canonical skeleton row"
+    )
 
     slugs = {
         r["slug"].lower()
         for r in _append_unconfigured_rows([], _picker_ctx(excluded=["openrouter"]))
     }
-    assert "openrouter" not in slugs, "excluded provider must not be re-added as a skeleton row"
-    assert slugs == baseline - {"openrouter"}, "only the excluded provider should be removed"
+    assert "openrouter" not in slugs, (
+        "excluded provider must not be re-added as a skeleton row"
+    )
+    assert slugs == baseline - {"openrouter"}, (
+        "only the excluded provider should be removed"
+    )
 
 
 def test_unconfigured_rows_exclusion_is_case_insensitive():
@@ -184,7 +195,11 @@ def test_unconfigured_rows_hide_excluded_provider_by_alias():
     target_slug = None
     target_alias = None
     for alias, canon in _PROVIDER_ALIASES.items():
-        if canon and canon.lower() in baseline and any(p.slug == canon for p in CANONICAL_PROVIDERS):
+        if (
+            canon
+            and canon.lower() in baseline
+            and any(p.slug == canon for p in CANONICAL_PROVIDERS)
+        ):
             target_slug = canon
             target_alias = alias
             break
@@ -207,7 +222,12 @@ def test_unconfigured_rows_exclude_current_provider_matches_cli():
     from clawk_cli.inventory import _append_unconfigured_rows
 
     rows = _append_unconfigured_rows(
-        [], _picker_ctx(excluded=["openrouter"], current_provider="openrouter", current_model="some-model")
+        [],
+        _picker_ctx(
+            excluded=["openrouter"],
+            current_provider="openrouter",
+            current_model="some-model",
+        ),
     )
     assert "openrouter" not in {r["slug"].lower() for r in rows}
 
@@ -216,6 +236,12 @@ def test_unconfigured_rows_empty_excluded_is_noop():
     from clawk_cli.inventory import _append_unconfigured_rows
 
     base = {r["slug"].lower() for r in _append_unconfigured_rows([], _picker_ctx())}
-    empty = {r["slug"].lower() for r in _append_unconfigured_rows([], _picker_ctx(excluded=[]))}
-    none = {r["slug"].lower() for r in _append_unconfigured_rows([], _picker_ctx(excluded=None))}
+    empty = {
+        r["slug"].lower()
+        for r in _append_unconfigured_rows([], _picker_ctx(excluded=[]))
+    }
+    none = {
+        r["slug"].lower()
+        for r in _append_unconfigured_rows([], _picker_ctx(excluded=None))
+    }
     assert base == empty == none

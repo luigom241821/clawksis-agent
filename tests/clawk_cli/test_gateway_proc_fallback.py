@@ -25,6 +25,7 @@ _OTHER_CMD = "python -m some_other_thing"
 def _fake_proc_dir(entries: dict):
     """Return side_effects that simulate /proc: isdir → True, listdir → pids,
     open(cmdline) → null-delimited command bytes."""
+
     def _isdir(path):
         return str(path) == "/proc"
 
@@ -66,7 +67,7 @@ class TestProcFallback:
     def test_detects_gateway_pid_via_proc(self):
         my_pid = os.getpid()
         entries = {
-            my_pid: "python -m clawk_cli.main",   # own process — excluded
+            my_pid: "python -m clawk_cli.main",  # own process — excluded
             12345: _GATEWAY_CMD,
             99999: _OTHER_CMD,
         }
@@ -78,7 +79,10 @@ class TestProcFallback:
             patch("builtins.open", side_effect=_open),
             # The fake /proc entries are ours: the other-users filter stats the REAL /proc/<pid>,
             # so a root-owned runner process that happens to hold PID 12345 dropped the fake gateway.
-            patch("clawk_cli.gateway_migrate_guards.pid_is_other_users", return_value=False),
+            patch(
+                "clawk_cli.gateway_migrate_guards.pid_is_other_users",
+                return_value=False,
+            ),
             patch("clawk_cli.gateway._get_ancestor_pids", return_value=set()),
             patch("subprocess.run") as mock_ps,
         ):
@@ -87,9 +91,6 @@ class TestProcFallback:
         assert 12345 in pids
         assert 99999 not in pids
         mock_ps.assert_not_called()  # ps must NOT be called when /proc worked
-
-
-
 
     def test_proc_permission_error_skips_pid(self):
         def _isdir(path):
@@ -125,10 +126,15 @@ def test_other_users_gateways_are_not_ours_unless_root(euid, expected):
     ps_out = f"111 {_GATEWAY_CMD}\n222 {_GATEWAY_CMD}\n"
     with (
         patch("os.path.isdir", side_effect=lambda p: p != "/proc"),
-        patch("os.geteuid", return_value=euid),  # windows-footgun: ok — POSIX-only test (platforms marker)
+        patch(
+            "os.geteuid", return_value=euid
+        ),  # windows-footgun: ok — POSIX-only test (platforms marker)
         patch("clawk_cli.gateway_migrate_guards._pid_uid", side_effect=owners.get),
         patch("clawk_cli.gateway._get_ancestor_pids", return_value=set()),
-        patch("subprocess.run", return_value=MagicMock(returncode=0, stdout=ps_out, stderr="")),
+        patch(
+            "subprocess.run",
+            return_value=MagicMock(returncode=0, stdout=ps_out, stderr=""),
+        ),
     ):
         assert gateway_mod._scan_gateway_pids(set(), all_profiles=True) == expected
 
@@ -153,7 +159,9 @@ class TestPsFallbackBsdCompat:
             assert not gateway_mod._scan_gateway_pids(set())
 
         ps_calls = [
-            c[0][0] for c in mock_run.call_args_list if c[0] and c[0][0] and c[0][0][0] == "ps"
+            c[0][0]
+            for c in mock_run.call_args_list
+            if c[0] and c[0][0] and c[0][0][0] == "ps"
         ]
         assert ps_calls, "ps was not invoked at all"
         ps_call = ps_calls[0]
@@ -264,6 +272,7 @@ class TestGetServicePidsAllProfiles:
             patch("clawk_cli.gateway.supports_systemd_services", return_value=True),
             patch("subprocess.run") as mock_run,
         ):
+
             def _run_side_effect(args, **kwargs):
                 args_list = list(args) if args else []
                 cmd_str = " ".join(str(a) for a in args_list[:4])

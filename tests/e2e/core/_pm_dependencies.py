@@ -38,8 +38,13 @@ def _prepare_test_tools() -> tuple[Path, dict] | None:
         )
     records = {name: facts.get(name) for name in names}
     python = records["python"]
-    if not python or (source / python["entry"]).resolve() != Path(sys.base_prefix).resolve():
-        raise AssertionError(f"test interpreter is not from the selected PM store: {source}")
+    if (
+        not python
+        or (source / python["entry"]).resolve() != Path(sys.base_prefix).resolve()
+    ):
+        raise AssertionError(
+            f"test interpreter is not from the selected PM store: {source}"
+        )
     target = current_target()
     lock = Lockfile(lockfile_path())
     verified_tools(names, source_store=source, target=target, lock=lock)
@@ -51,7 +56,9 @@ def _prepare_test_tools() -> tuple[Path, dict] | None:
     try:
         for record in records.values():
             assert record is not None
-            shutil.copytree(source / record["entry"], prepared / record["entry"], symlinks=True)
+            shutil.copytree(
+                source / record["entry"], prepared / record["entry"], symlinks=True
+            )
         (prepared / "facts.json").write_text(
             json.dumps({"schema": 1, "packages": records}), encoding="utf-8"
         )
@@ -80,9 +87,19 @@ def select_test_dependencies(clawk_home: Path, checkout: Path) -> None:
     target = environment / selected.relative_to(test_venv)
     target.parent.mkdir(parents=True)
     target.symlink_to(selected, target_is_directory=True)
-    (state / "facts.json").write_text(json.dumps({"schema": 1, "packages": {"venv": {
-        "environment": str(environment),
-    }}}), encoding="utf-8")
+    (state / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {
+                    "venv": {
+                        "environment": str(environment),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     if _PREPARED_TOOLS is None:
         return
@@ -93,4 +110,6 @@ def select_test_dependencies(clawk_home: Path, checkout: Path) -> None:
         assert record is not None
         entry = record["entry"]
         (tools / entry).symlink_to(source / entry, target_is_directory=True)
-    (tools / "facts.json").write_text(json.dumps({"schema": 1, "packages": records}), encoding="utf-8")
+    (tools / "facts.json").write_text(
+        json.dumps({"schema": 1, "packages": records}), encoding="utf-8"
+    )

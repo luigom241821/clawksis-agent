@@ -12,7 +12,12 @@ FOCUS_TOOL_PROGRESS_MODE = "off"  # the SAME value ``/verbose off`` uses so both
 # Modes in which the CLI commits a per-tool scrollback line. Mirrors the gate in
 # ``ClawksisCLI._on_tool_progress`` so the hidden-line counter and the renderer never drift apart.
 TOOL_PROGRESS_VISIBLE_MODES = frozenset({"new", "all", "verbose"})
-TOOL_PROGRESS_MODES = ("off", "new", "all", "verbose")  # ``log`` is a gateway-only extra step
+TOOL_PROGRESS_MODES = (
+    "off",
+    "new",
+    "all",
+    "verbose",
+)  # ``log`` is a gateway-only extra step
 FOCUS_STATUSBAR_LABEL = "◉ focus"  # short on purpose — the bar is width-constrained
 
 # /focus argument words -> (action, target); bare /focus toggles like /footer, /battery, /timestamps.
@@ -43,14 +48,18 @@ def resolve_focus_arg(arg: str, current: bool) -> tuple[str, Optional[bool]]:
     return _FOCUS_WORDS.get(text, ("usage", None))
 
 
-def would_display_tool_line(mode: object, function_name: str, last_tool_name: Optional[str] = None) -> bool:
+def would_display_tool_line(
+    mode: object, function_name: str, last_tool_name: Optional[str] = None
+) -> bool:
     """Would the CLI have committed a scrollback line for this tool call? Counts honestly: with ``/verbose off``
     focus view hides nothing extra and must not claim otherwise. ``new`` mode skips consecutive repeats of the
     same tool, so the counter does too."""
     if not function_name:
         return False
     normalized = normalize_tool_progress_mode(mode)
-    return normalized in TOOL_PROGRESS_VISIBLE_MODES and not (normalized == "new" and function_name == last_tool_name)
+    return normalized in TOOL_PROGRESS_VISIBLE_MODES and not (
+        normalized == "new" and function_name == last_tool_name
+    )
 
 
 def format_hidden_line(count: int) -> Optional[str]:
@@ -59,7 +68,11 @@ def format_hidden_line(count: int) -> Optional[str]:
         n = int(count)
     except (TypeError, ValueError):
         return None
-    return f"⋯ {n} {'tool line' if n == 1 else 'tool lines'} hidden · /focus off to show" if n > 0 else None
+    return (
+        f"⋯ {n} {'tool line' if n == 1 else 'tool lines'} hidden · /focus off to show"
+        if n > 0
+        else None
+    )
 
 
 def focus_statusbar_segment(enabled: bool) -> str:

@@ -256,9 +256,11 @@ class TestJobObjectMechanismLive:
                 k.CloseHandle(gw)
 
     def test_breakaway_child_survives_job_teardown(self, tmp_path):
-        with self._grandchild_after_teardown(
-            tmp_path, "windows_detach_flags"
-        ) as (k, gw, in_job):
+        with self._grandchild_after_teardown(tmp_path, "windows_detach_flags") as (
+            k,
+            gw,
+            in_job,
+        ):
             assert not in_job, "a CREATE_BREAKAWAY_FROM_JOB child must leave the job"
             assert k.WaitForSingleObject(gw, 2000) == WAIT_TIMEOUT, (
                 "CREATE_BREAKAWAY_FROM_JOB child must survive the parent "
@@ -331,9 +333,11 @@ class TestWatcherRespawnLive:
         # (b) Stdio trace: on unfixed main stderr went to DEVNULL — a dying
         # gateway left zero trace (#48820 4th repro).
         assert _wait_for(
-            lambda: stdio_log.exists()
-            and "stub-gateway-stderr-trace"
-            in stdio_log.read_text(encoding="utf-8-sig", errors="replace"),
+            lambda: (
+                stdio_log.exists()
+                and "stub-gateway-stderr-trace"
+                in stdio_log.read_text(encoding="utf-8-sig", errors="replace")
+            ),
             timeout_s=30,
         ), "respawned gateway stderr must land in logs/gateway-stdio.log"
 

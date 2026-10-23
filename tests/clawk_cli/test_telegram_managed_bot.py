@@ -20,8 +20,6 @@ SECOND_VALID_TOKEN = "987654321:abcdefghijklmnopqrstuvwxyzABCDEF"
 
 
 class TestQRCode:
-
-
     def test_print_qr_code_with_url(self, capsys):
         print_qr_code("https://t.me/newbot/Bot/test_bot")
         captured = capsys.readouterr()
@@ -75,11 +73,8 @@ class TestCreatePairing:
     def test_failure_status(self):
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch(
-            "clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp
-        ):
+        with patch("clawk_cli.telegram_managed_bot.httpx.post", return_value=mock_resp):
             assert create_pairing("https://api.example.com") is None
-
 
     def test_uses_env_override(self, monkeypatch):
         monkeypatch.setenv(TELEGRAM_ONBOARDING_URL_ENV, "https://worker.example")
@@ -129,9 +124,6 @@ class TestPollForToken:
             "Authorization": "Bearer secret-token"
         }
 
-
-
-
     def test_eventual_success(self):
         not_ready = MagicMock()
         not_ready.status_code = 200
@@ -159,7 +151,9 @@ class TestPollForToken:
 
 
 class TestSetupTelegramAuto:
-    def test_setup_result_passes_profile_name_for_profile_home(self, monkeypatch, tmp_path):
+    def test_setup_result_passes_profile_name_for_profile_home(
+        self, monkeypatch, tmp_path
+    ):
         from clawk_cli import setup
 
         seen = {}

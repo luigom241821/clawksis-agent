@@ -44,7 +44,9 @@ class FakeTransport:
         self.calls = []
 
     def __call__(self, endpoint, payload, *, timeout):
-        self.calls.append({"endpoint": endpoint, "payload": payload, "timeout": timeout})
+        self.calls.append(
+            {"endpoint": endpoint, "payload": payload, "timeout": timeout}
+        )
         if not self._responses:
             return FakeResponse(202)
         item = self._responses.pop(0)
@@ -100,7 +102,9 @@ def _clear_consent(store):
             connection.execute("DELETE FROM consent_marks")
 
 
-def _add_package(store, package_id, period_day, *, exported=True, install_id=INSTALL_ID):
+def _add_package(
+    store, package_id, period_day, *, exported=True, install_id=INSTALL_ID
+):
     payload = {
         "schema_version": "clawk.shared_metrics.v2",
         "package_id": package_id,
@@ -178,7 +182,9 @@ class TestContractResponses:
 
     def test_400_is_permanent_and_never_retried(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
-        transport = FakeTransport(FakeResponse(400, body='{"error":"invalid_envelope"}'))
+        transport = FakeTransport(
+            FakeResponse(400, body='{"error":"invalid_envelope"}')
+        )
         outcome = _sender(store, transport).send_pending()
         assert outcome.rejected == 1
         assert len(transport.calls) == 1, "a 400 must not be retried"
@@ -331,9 +337,7 @@ class TestConsentGate:
         with store._connection() as connection:
             with write_txn(connection):
                 reconcile_send_consent(connection, True, now=later)
-                reconcile_send_consent(
-                    connection, True, now=later + timedelta(days=30)
-                )
+                reconcile_send_consent(connection, True, now=later + timedelta(days=30))
 
         transport = FakeTransport(*[FakeResponse(202)] * 10)
         SharedMetricsSender(
@@ -360,29 +364,35 @@ class TestConsentGate:
         with store._connection() as connection:
             with write_txn(connection):
                 reconcile_send_consent(connection, True, now=later)
-                reconcile_send_consent(
-                    connection, True, now=later + timedelta(days=10)
-                )
-        _add_package(store, "after-re-optin", (later + timedelta(days=1)).date().isoformat())
+                reconcile_send_consent(connection, True, now=later + timedelta(days=10))
+        _add_package(
+            store, "after-re-optin", (later + timedelta(days=1)).date().isoformat()
+        )
         transport = FakeTransport(FakeResponse(202))
         SharedMetricsSender(
-            store, ENDPOINT, post=transport, sleep=lambda _s: None,
+            store,
+            ENDPOINT,
+            post=transport,
+            sleep=lambda _s: None,
             now=lambda: later + timedelta(days=2),
         ).send_pending()
         assert len(transport.calls) == 1
 
 
 class TestIdentity:
-
     def test_transmitted_id_is_frozen_on_the_row(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
         transport = FakeTransport(FakeResponse(503), FakeResponse(202))
         _sender(store, transport).send_pending()
-        assert _row(store, "pkg-1")["sent_install_id"] == transport.bodies[0]["install_id"]
+        assert (
+            _row(store, "pkg-1")["sent_install_id"] == transport.bodies[0]["install_id"]
+        )
 
     def test_retries_send_identical_bytes(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
-        transport = FakeTransport(FakeResponse(503), FakeResponse(503), FakeResponse(202))
+        transport = FakeTransport(
+            FakeResponse(503), FakeResponse(503), FakeResponse(202)
+        )
         _sender(store, transport).send_pending()
         payloads = {c["payload"] for c in transport.calls}
         assert len(payloads) == 1, "a resend must be byte-identical per the contract"
@@ -419,9 +429,12 @@ class TestOutboxIsNotAQueue:
         _add_package(store, "pkg-1", "2026-08-26")
         _sender(store, FakeTransport(FakeResponse(202))).send_pending()
         with store._connection() as connection:
-            assert connection.execute(
-                "SELECT COUNT(*) FROM package_outbox WHERE package_id = 'pkg-1'"
-            ).fetchone()[0] == 1
+            assert (
+                connection.execute(
+                    "SELECT COUNT(*) FROM package_outbox WHERE package_id = 'pkg-1'"
+                ).fetchone()[0]
+                == 1
+            )
 
 
 class TestClaimingAndBounds:
@@ -434,14 +447,18 @@ class TestClaimingAndBounds:
 
     def test_a_deferred_package_is_skipped_until_due(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
-        _sender(store, FakeTransport(FakeResponse(429, retry_after="600"))).send_pending()
+        _sender(
+            store, FakeTransport(FakeResponse(429, retry_after="600"))
+        ).send_pending()
         second = FakeTransport(FakeResponse(202))
         _sender(store, second).send_pending()
         assert second.calls == [], "backoff must survive within the same process"
 
     def test_a_deferred_package_is_retried_once_due(self, store):
         _add_package(store, "pkg-1", "2026-08-26")
-        _sender(store, FakeTransport(FakeResponse(429, retry_after="60"))).send_pending()
+        _sender(
+            store, FakeTransport(FakeResponse(429, retry_after="60"))
+        ).send_pending()
 
         later = SharedMetricsSender(
             store,
@@ -500,9 +517,7 @@ class TestClaimingAndBounds:
             "a concurrent pass claimed a package already in flight"
         )
 
-    def test_a_claim_leases_the_row_long_enough_to_cover_a_worst_case_send(
-        self, store
-    ):
+    def test_a_claim_leases_the_row_long_enough_to_cover_a_worst_case_send(self, store):
         """The lease must outlast one package's worst legal duration.
 
         Asserting merely "in the future" passed for a 1-second lease, which is
@@ -531,7 +546,6 @@ class TestClaimingAndBounds:
 
         clock = {"t": NOW}
         first_posts, second_posts = [], []
-
 
         def transport(endpoint, payload, *, timeout):
             pid = json.loads(payload)["package_id"]
@@ -656,7 +670,8 @@ class TestClaimingAndBounds:
 
         posts = []
         sender_a = SharedMetricsSender(
-            store, ENDPOINT,
+            store,
+            ENDPOINT,
             post=lambda e, p, *, timeout: (posts.append("A"), FakeResponse(202))[1],
             sleep=lambda _s: None,
             now=lambda: clock["t"],
@@ -708,14 +723,10 @@ class TestClaimingAndBounds:
             "renewal granted authority without extending the lease"
         )
         # And not just 'later': the full fresh lease from the renewal clock.
-        expected = (NOW + timedelta(seconds=100 + 300)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        expected = (NOW + timedelta(seconds=100 + 300)).strftime("%Y-%m-%dT%H:%M:%SZ")
         assert lease_after == expected
 
-    def test_a_lapsed_claimant_resuming_after_reclaim_cannot_double_post(
-        self, store
-    ):
+    def test_a_lapsed_claimant_resuming_after_reclaim_cannot_double_post(self, store):
         """PR-review P1: expiry -> reclaim -> old claimant resumes.
 
         A claims, then is suspended (laptop lid) BEFORE its POST. The lease
@@ -757,9 +768,7 @@ class TestClaimingAndBounds:
         result_a = sender_a._send_one(claimed_a)
 
         row = _row(store, "pkg-1")
-        assert posts == ["B"], (
-            f"a lapsed claimant transmitted after reclaim: {posts}"
-        )
+        assert posts == ["B"], f"a lapsed claimant transmitted after reclaim: {posts}"
         assert result_a == "deferred"
         assert row["send_state"] == "sent", "B's settlement must stand"
 
@@ -771,17 +780,22 @@ class TestClaimingAndBounds:
         """
         _add_package(store, "pkg-1", "2026-08-26")
         sender_a = SharedMetricsSender(
-            store, ENDPOINT,
+            store,
+            ENDPOINT,
             post=FakeTransport(OSError("net"), OSError("net"), OSError("net")),
-            sleep=lambda _s: None, now=lambda: NOW,
+            sleep=lambda _s: None,
+            now=lambda: NOW,
         )
         claimed_a = sender_a._claim_next(NOW, set())
         assert claimed_a is not None and not claimed_a["skip"]
 
         later = NOW + timedelta(seconds=400)
         sender_b = SharedMetricsSender(
-            store, ENDPOINT, post=FakeTransport(),
-            sleep=lambda _s: None, now=lambda: later,
+            store,
+            ENDPOINT,
+            post=FakeTransport(),
+            sleep=lambda _s: None,
+            now=lambda: later,
         )
         claimed_b = sender_b._claim_next(later, set())
         assert claimed_b is not None and not claimed_b["skip"]
@@ -797,7 +811,9 @@ class TestClaimingAndBounds:
     def test_an_expired_lease_is_reclaimed(self, store):
         """A process killed mid-pass must not strand its packages."""
         _add_package(store, "pkg-1", "2026-08-26")
-        _sender(store, FakeTransport(OSError("killed"), OSError(""), OSError(""))).send_pending()
+        _sender(
+            store, FakeTransport(OSError("killed"), OSError(""), OSError(""))
+        ).send_pending()
 
         later = SharedMetricsSender(
             store,
@@ -987,7 +1003,6 @@ class TestCompression:
         captured = self._captured_request(payload)
         assert captured["data"][:2] == b"\x1f\x8b", "gzip magic bytes"
         assert captured["headers"].get("Content-encoding".lower()) == "gzip"
-
 
     def test_gzip_is_deterministic_across_time(self):
         """Kills the mtime footgun: gzip embeds a timestamp by default.

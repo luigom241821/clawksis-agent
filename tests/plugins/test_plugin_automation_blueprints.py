@@ -47,7 +47,9 @@ def _write_plugin(home: Path, name: str, body: str, *, enable: bool = True) -> N
     (plugin_dir / "__init__.py").write_text(body)
     # JSON is valid YAML; avoids a yaml import in the test module.
     plugins = {"enabled": [name]} if enable else {"enabled": [], "disabled": [name]}
-    (home / "config.yaml").write_text(json.dumps({"model": "test-model", "plugins": plugins}))
+    (home / "config.yaml").write_text(
+        json.dumps({"model": "test-model", "plugins": plugins})
+    )
 
 
 @pytest.fixture()
@@ -117,15 +119,23 @@ async def test_plugin_blueprints_are_profile_scoped(homes):
     _write_plugin(homes["default"], "teamtools", _STANDUP)
 
     # Interleave A -> B -> A: no cached plugin catalog may leak across profiles.
-    a1 = _plugin_keys((await _rt_cron.list_cron_blueprints(profile="default"))["blueprints"])
-    b = _plugin_keys((await _rt_cron.list_cron_blueprints(profile="other"))["blueprints"])
-    a2 = _plugin_keys((await _rt_cron.list_cron_blueprints(profile="default"))["blueprints"])
+    a1 = _plugin_keys(
+        (await _rt_cron.list_cron_blueprints(profile="default"))["blueprints"]
+    )
+    b = _plugin_keys(
+        (await _rt_cron.list_cron_blueprints(profile="other"))["blueprints"]
+    )
+    a2 = _plugin_keys(
+        (await _rt_cron.list_cron_blueprints(profile="default"))["blueprints"]
+    )
     assert set(a1) == set(a2) == {"teamtools:standup"}
     assert b == {}
 
     with pytest.raises(_rt_cron.HTTPException) as exc:
         await _rt_cron.instantiate_blueprint(
-            _web_models.AutomationBlueprintInstantiate(blueprint="teamtools:standup", values={}),
+            _web_models.AutomationBlueprintInstantiate(
+                blueprint="teamtools:standup", values={}
+            ),
             profile="other",
         )
     assert exc.value.status_code == 404
@@ -149,8 +159,11 @@ def test_plugin_cannot_shadow_builtin_and_bad_keys_are_rejected(homes, caplog):
     with caplog.at_level(logging.WARNING, logger="clawk_cli.plugins"):
         keys = [bp.key for bp in list_blueprints()]
     assert keys.count("morning-brief") == 1
-    builtin, mine = get_blueprint("morning-brief"), get_blueprint("teamtools:morning-brief")
-    assert builtin is not None and builtin.plugin == ""          # still the built-in
+    builtin, mine = (
+        get_blueprint("morning-brief"),
+        get_blueprint("teamtools:morning-brief"),
+    )
+    assert builtin is not None and builtin.plugin == ""  # still the built-in
     assert mine is not None and mine.title == "Mine"
     assert keys.count("teamtools:morning-brief") == 1
     assert not any(k.endswith("spoof") for k in keys)
@@ -168,12 +181,20 @@ def test_plugin_cannot_shadow_builtin_and_bad_keys_are_rejected(homes, caplog):
         ({"title": ""}, "title"),
     ],
 )
-def test_malformed_plugin_blueprint_is_warned_and_ignored(homes, caplog, fields, reason):
+def test_malformed_plugin_blueprint_is_warned_and_ignored(
+    homes, caplog, fields, reason
+):
     from cron.blueprint_catalog import list_blueprints
 
-    base = dict(title="T", description="d", schedule_template="0 9 * * *", prompt_template="hi")
+    base = dict(
+        title="T", description="d", schedule_template="0 9 * * *", prompt_template="hi"
+    )
     base.update(fields)
-    _write_plugin(homes["default"], "teamtools", f"def register(ctx):\n    ctx.register_automation_blueprint('bad', **{base!r})\n")
+    _write_plugin(
+        homes["default"],
+        "teamtools",
+        f"def register(ctx):\n    ctx.register_automation_blueprint('bad', **{base!r})\n",
+    )
 
     with caplog.at_level(logging.WARNING, logger="clawk_cli.plugins"):
         keys = [bp.key for bp in list_blueprints()]
@@ -188,7 +209,9 @@ async def test_job_from_plugin_blueprint_survives_plugin_disable(homes):
 
     _write_plugin(homes["default"], "teamtools", _STANDUP)
     created = await _rt_cron.instantiate_blueprint(
-        _web_models.AutomationBlueprintInstantiate(blueprint="teamtools:standup", values={}),
+        _web_models.AutomationBlueprintInstantiate(
+            blueprint="teamtools:standup", values={}
+        ),
         profile="default",
     )
 

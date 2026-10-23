@@ -6,6 +6,7 @@ the agent while attempt 1 was stalled, attempt 2 sent the OLD model slug to the 
 base_url (404, then a rate-limit hold). The streamer now hands the transient error back to the
 turn loop, which rebuilds the request for the current route on its own next attempt.
 """
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -17,9 +18,15 @@ def _make_agent():
     from run_agent import AIAgent
 
     agent = AIAgent(
-        api_key="test-key", base_url="https://openrouter.ai/api/v1", model="deepseek/deepseek-v4-flash",
-        provider="openrouter", quiet_mode=True, skip_context_files=True, skip_memory=True,
-        enabled_toolsets=[], max_iterations=1,
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+        model="deepseek/deepseek-v4-flash",
+        provider="openrouter",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        enabled_toolsets=[],
+        max_iterations=1,
     )
     agent.api_mode = "chat_completions"
     return agent
@@ -27,12 +34,38 @@ def _make_agent():
 
 def _ok_stream(model):
     chunks = [
-        SimpleNamespace(choices=[SimpleNamespace(index=0, delta=SimpleNamespace(
-            content="ok", tool_calls=None, reasoning_content=None, reasoning=None), finish_reason=None)],
-            model=model, usage=None),
-        SimpleNamespace(choices=[SimpleNamespace(index=0, delta=SimpleNamespace(
-            content=None, tool_calls=None, reasoning_content=None, reasoning=None), finish_reason="stop")],
-            model=model, usage=None),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    delta=SimpleNamespace(
+                        content="ok",
+                        tool_calls=None,
+                        reasoning_content=None,
+                        reasoning=None,
+                    ),
+                    finish_reason=None,
+                )
+            ],
+            model=model,
+            usage=None,
+        ),
+        SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    delta=SimpleNamespace(
+                        content=None,
+                        tool_calls=None,
+                        reasoning_content=None,
+                        reasoning=None,
+                    ),
+                    finish_reason="stop",
+                )
+            ],
+            model=model,
+            usage=None,
+        ),
     ]
     stream = MagicMock()
     stream.__iter__ = MagicMock(return_value=iter(chunks))
@@ -44,10 +77,16 @@ def _run(agent, on_create):
     """Drive the streaming call with a request-local client whose ``create`` is ``on_create``."""
     client = MagicMock()
     client.chat.completions.create.side_effect = on_create
-    with patch("run_agent.AIAgent._create_request_openai_client", return_value=client), \
-            patch("run_agent.AIAgent._close_request_openai_client"):
+    with (
+        patch("run_agent.AIAgent._create_request_openai_client", return_value=client),
+        patch("run_agent.AIAgent._close_request_openai_client"),
+    ):
         return agent._interruptible_streaming_api_call(
-            {"model": "deepseek/deepseek-v4-flash", "messages": [{"role": "user", "content": "hi"}]})
+            {
+                "model": "deepseek/deepseek-v4-flash",
+                "messages": [{"role": "user", "content": "hi"}],
+            }
+        )
 
 
 def test_stream_retry_does_not_replay_stale_route_after_switch_model():
@@ -59,9 +98,16 @@ def test_stream_retry_does_not_replay_stale_route_after_switch_model():
 
     def switch_then_drop(**kwargs):
         sent.append((kwargs["model"], agent.base_url))
-        with patch("agent.model_metadata.get_model_context_length", return_value=128000):
-            agent.switch_model("kimi-k2.6", "kimi-coding", api_key="k",
-                               base_url="https://api.moonshot.ai/v1", api_mode="chat_completions")
+        with patch(
+            "agent.model_metadata.get_model_context_length", return_value=128000
+        ):
+            agent.switch_model(
+                "kimi-k2.6",
+                "kimi-coding",
+                api_key="k",
+                base_url="https://api.moonshot.ai/v1",
+                api_mode="chat_completions",
+            )
         raise httpx.ReadError("stale stream killed")
 
     with pytest.raises(httpx.ReadError):

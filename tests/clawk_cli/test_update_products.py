@@ -9,18 +9,27 @@ import pm
 from clawk_cli import main, update_cmd
 
 
-
-
-
-
-@pytest.mark.parametrize("failure,exception,code", [
-    (None, None, 0), (SystemExit(3), SystemExit, 3),
-    (SystemExit(None), SystemExit, 1), (RuntimeError("tail exploded"), RuntimeError, 1),
-    (pm.InstallError("venv", "conflict"), SystemExit, 1),
-    (subprocess.CalledProcessError(23, ["python", "-m", "clawk_cli.source_build"]), SystemExit, 1),
-])
+@pytest.mark.parametrize(
+    "failure,exception,code",
+    [
+        (None, None, 0),
+        (SystemExit(3), SystemExit, 3),
+        (SystemExit(None), SystemExit, 1),
+        (RuntimeError("tail exploded"), RuntimeError, 1),
+        (pm.InstallError("venv", "conflict"), SystemExit, 1),
+        (
+            subprocess.CalledProcessError(
+                23, ["python", "-m", "clawk_cli.source_build"]
+            ),
+            SystemExit,
+            1,
+        ),
+    ],
+)
 @pytest.mark.parametrize("reexec", [False, True])
-def test_command_reports_outcome_and_releases_real_lock(tmp_path, monkeypatch, failure, exception, code, reexec):
+def test_command_reports_outcome_and_releases_real_lock(
+    tmp_path, monkeypatch, failure, exception, code, reexec
+):
     from clawk_cli import update_lock, update_receipt
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -44,7 +53,9 @@ def test_command_reports_outcome_and_releases_real_lock(tmp_path, monkeypatch, f
         with pytest.raises(exception) as error:
             main.cmd_update(SimpleNamespace(gateway=True))
         if exception is SystemExit:
-            assert error.value.code == (failure.code if isinstance(failure, SystemExit) else code)
+            assert error.value.code == (
+                failure.code if isinstance(failure, SystemExit) else code
+            )
     receipt = update_receipt.read_latest_receipt()
     assert receipt is not None
     assert receipt["exit_code"] == code

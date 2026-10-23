@@ -54,9 +54,14 @@ class TestResumeQuietStderr:
         captured = capsys.readouterr()
         assert result is False
         # stdout must stay clean
-        assert t("cli.resume.session_not_found", session_id=cli.session_id) not in captured.out
+        assert (
+            t("cli.resume.session_not_found", session_id=cli.session_id)
+            not in captured.out
+        )
         # the resume status goes to stderr
-        assert t("cli.resume.session_not_found", session_id=cli.session_id) in captured.err
+        assert (
+            t("cli.resume.session_not_found", session_id=cli.session_id) in captured.err
+        )
         assert "clawk sessions list" in captured.err
 
     def test_session_not_found_goes_to_stdout_in_full_mode(self, capsys):
@@ -69,7 +74,9 @@ class TestResumeQuietStderr:
         captured = capsys.readouterr()
         assert result is False
         # Interactive mode keeps the existing _cprint path → stdout.
-        assert t("cli.resume.session_not_found", session_id=cli.session_id) in captured.out
+        assert (
+            t("cli.resume.session_not_found", session_id=cli.session_id) in captured.out
+        )
 
     def test_resumed_banner_goes_to_stderr_in_quiet_mode(self, capsys):
         db = MagicMock()
@@ -117,17 +124,23 @@ class TestResumeQuietStderr:
         assert "has no messages" in captured.err
         assert "Starting fresh" in captured.err
 
-    def test_resume_policy_refusal_is_a_usage_error_not_an_agent_init_failure(self, capsys):
+    def test_resume_policy_refusal_is_a_usage_error_not_an_agent_init_failure(
+        self, capsys
+    ):
         """`--resume X --max-turns 1 -q ...` printed the agent-init failure copy ("couldn't start the model
         connection ... clawk doctor") and exited 1; it is interactive startup's `Error:` line on stderr
         with exit 2. Any other failed open keeps the agent-init copy."""
         from clawk_cli.gateway_chat import _RESUME_POLICY_MISMATCH
         from clawk_cli.gateway_client import GatewayClientError
+
         cli = _make_cli(quiet=True, db=MagicMock())
-        refusal = f"{_RESUME_POLICY_MISMATCH} --max-turns differs from this session's launch."
+        refusal = (
+            f"{_RESUME_POLICY_MISMATCH} --max-turns differs from this session's launch."
+        )
 
         def refuse():
             raise GatewayClientError(refusal)
+
         cli._ensure_gateway_session = refuse
         with pytest.raises(SystemExit) as exited:
             cli._init_agent()
@@ -138,5 +151,6 @@ class TestResumeQuietStderr:
 
         def unreachable():
             raise GatewayClientError("gateway unavailable")
+
         cli._ensure_gateway_session = unreachable
         assert cli._init_agent() is False

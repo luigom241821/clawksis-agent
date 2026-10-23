@@ -49,7 +49,9 @@ class TestImageTooLargeClassification:
                 "maximum: 12966600 bytes > 5242880 bytes"
             ),
         )
-        result = classify_api_error(err, provider="anthropic", model="claude-sonnet-4-6")
+        result = classify_api_error(
+            err, provider="anthropic", model="claude-sonnet-4-6"
+        )
         assert result.reason == FailoverReason.image_too_large
         assert result.retryable is True
 
@@ -101,7 +103,7 @@ class TestImageTooLargeClassification:
         """The new "media" patterns must not widen into ordinary 400s."""
         err = _FakeApiError(
             status_code=400,
-            message="messages: unexpected role \"tool\" at index 3",
+            message='messages: unexpected role "tool" at index 3',
         )
         result = classify_api_error(err, provider="minimax", model="MiniMax-M3")
         assert result.reason != FailoverReason.image_too_large
@@ -117,9 +119,19 @@ class TestImageTooLargeClassification:
         """Real ``openai.BadRequestError`` shape: ``str(err)`` is ``Error code: 400 - <body JSON>``."""
         import json
 
-        body = {"detail": [{"type": "string_type", "loc": loc, "msg": "Input should be a valid string",
-                            "input": [{"type": "text", "text": "what is this"},
-                                      {"type": "image_url", "image_url": {"url": url}}]}]}
+        body = {
+            "detail": [
+                {
+                    "type": "string_type",
+                    "loc": loc,
+                    "msg": "Input should be a valid string",
+                    "input": [
+                        {"type": "text", "text": "what is this"},
+                        {"type": "image_url", "image_url": {"url": url}},
+                    ],
+                }
+            ]
+        }
         return _FakeApiError(400, "Error code: 400 - " + json.dumps(body), body)
 
     def test_oversize_rejections_reported_as_400_shrink(self):
@@ -132,7 +144,11 @@ class TestImageTooLargeClassification:
         big = "data:image/png;base64," + "A" * (11 * 1024 * 1024)
         small = "data:image/png;base64," + "A" * (64 * 1024)
         oversize = [
-            _FakeApiError(400, self._NIM_400, {"error": {"message": self._NIM_400, "code": "invalid_image_format"}}),
+            _FakeApiError(
+                400,
+                self._NIM_400,
+                {"error": {"message": self._NIM_400, "code": "invalid_image_format"}},
+            ),
             _FakeApiError(400, self._DASHSCOPE_400),
             self._pydantic_400(["body", "messages", 0, "content", "str"], big),
         ]
@@ -143,14 +159,24 @@ class TestImageTooLargeClassification:
 
         controls = {
             FailoverReason.multimodal_tool_content_unsupported: [
-                self._pydantic_400(["body", "messages", 3, "tool", "content", "str"], big),
+                self._pydantic_400(
+                    ["body", "messages", 3, "tool", "content", "str"], big
+                ),
                 self._pydantic_400(["body", "messages", 0, "content", "str"], small),
             ],
-            FailoverReason.format_error: [_FakeApiError(400, "Unsupported parameter: 'max_tokens' is not supported with this model.")],
+            FailoverReason.format_error: [
+                _FakeApiError(
+                    400,
+                    "Unsupported parameter: 'max_tokens' is not supported with this model.",
+                )
+            ],
         }
         for expected, errs in controls.items():
             for err in errs:
-                assert classify_api_error(err, provider="custom", model="x").reason == expected, str(err)[:120]
+                assert (
+                    classify_api_error(err, provider="custom", model="x").reason
+                    == expected
+                ), str(err)[:120]
 
 
 class TestSpentShrinkFallsBack:
@@ -189,24 +215,51 @@ class TestSpentShrinkFallsBack:
         from agent.turn_api_error import settle_unrecovered_error
 
         agent = self._Agent()
-        err = _FakeApiError(400, "Please make sure your payload is below 26214400 bytes in size.")
+        err = _FakeApiError(
+            400, "Please make sure your payload is below 26214400 bytes in size."
+        )
         retry = SimpleNamespace(
-            image_shrink_retry_attempted=shrink_attempted, copilot_stale_cred_retry_attempted=False,
-            primary_recovery_attempted=False, restart_with_redirected_messages=False,
+            image_shrink_retry_attempted=shrink_attempted,
+            copilot_stale_cred_retry_attempted=False,
+            primary_recovery_attempted=False,
+            restart_with_redirected_messages=False,
         )
         classified = classify_api_error(err, provider="custom")
         assert classified.reason == FailoverReason.image_too_large
-        with patch("agent.conversation_loop._is_copilot_provider", lambda a: False), patch(
-            "agent.conversation_loop._arm_fallback_restart", lambda agent, msgs, prompt, retry: prompt
-        ), patch("agent.turn_api_error.compute_error_backoff", lambda *a, **k: 0), patch(
-            "agent.turn_api_error.interruptible_backoff_sleep", lambda *a, **k: None
+        with (
+            patch("agent.conversation_loop._is_copilot_provider", lambda a: False),
+            patch(
+                "agent.conversation_loop._arm_fallback_restart",
+                lambda agent, msgs, prompt, retry: prompt,
+            ),
+            patch("agent.turn_api_error.compute_error_backoff", lambda *a, **k: 0),
+            patch(
+                "agent.turn_api_error.interruptible_backoff_sleep", lambda *a, **k: None
+            ),
         ):
             verdict = settle_unrecovered_error(
-                agent, api_error=err, classified=classified, _retry=retry, status_code=400, error_msg=str(err),
-                is_context_length_error=False, is_rate_limited=False, _is_zai_coding_overload=False,
-                _provider="custom", _base="https://integrate.api.nvidia.com/v1", _model="x", messages=[],
-                api_messages=[], api_kwargs={}, active_system_prompt="", conversation_history=None,
-                approx_tokens=10, retry_count=0, max_retries=3, compression_attempts=0, api_call_count=1,
+                agent,
+                api_error=err,
+                classified=classified,
+                _retry=retry,
+                status_code=400,
+                error_msg=str(err),
+                is_context_length_error=False,
+                is_rate_limited=False,
+                _is_zai_coding_overload=False,
+                _provider="custom",
+                _base="https://integrate.api.nvidia.com/v1",
+                _model="x",
+                messages=[],
+                api_messages=[],
+                api_kwargs={},
+                active_system_prompt="",
+                conversation_history=None,
+                approx_tokens=10,
+                retry_count=0,
+                max_retries=3,
+                compression_attempts=0,
+                api_call_count=1,
             )
         return agent, verdict
 
@@ -246,7 +299,9 @@ class TestImagePatchBudgetShrink:
         buf = io.BytesIO()
         Image.new("RGB", (5444, 6200), (200, 30, 30)).save(buf, format="PNG")
         url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-        msgs = [{"role": "user", "content": [{"type": "input_image", "image_url": url}]}]
+        msgs = [
+            {"role": "user", "content": [{"type": "input_image", "image_url": url}]}
+        ]
 
         assert try_shrink_image_parts_in_messages(msgs, max_dimension=cap) is True
         shrunk = msgs[0]["content"][0]["image_url"]
@@ -254,9 +309,15 @@ class TestImagePatchBudgetShrink:
         assert -(-w // 32) * -(-h // 32) <= 30000
 
         # "limit of N" without the patch vocabulary is not a dimension ceiling.
-        assert _image_error_max_dimension(_FakeApiError(
-            status_code=400, message="request exceeds the limit of 100 images per minute",
-        )) is None
+        assert (
+            _image_error_max_dimension(
+                _FakeApiError(
+                    status_code=400,
+                    message="request exceeds the limit of 100 images per minute",
+                )
+            )
+            is None
+        )
 
 
 # ─── Shrink helper ───────────────────────────────────────────────────────────
@@ -318,6 +379,7 @@ def _install_fake_pillow(
 def _make_agent():
     """Build a bare AIAgent for method-level testing, no provider setup."""
     from run_agent import AIAgent
+
     agent = object.__new__(AIAgent)
     agent.provider = "anthropic"
     agent.model = "claude-sonnet-4-6"
@@ -330,7 +392,6 @@ class TestShrinkImagePartsHelper:
         assert agent._try_shrink_image_parts_in_messages([]) is False
         assert agent._try_shrink_image_parts_in_messages(None) is False
 
-
     def test_small_image_part_not_shrunk(self, monkeypatch):
         """An image under 4 MB is left alone — shrink helper only touches oversized ones."""
         agent = _make_agent()
@@ -339,17 +400,21 @@ class TestShrinkImagePartsHelper:
         resize_hits = {"count": 0}
         monkeypatch.setattr(
             "tools.vision_tools._resize_image_for_vision",
-            lambda *a, **kw: resize_hits.__setitem__("count", resize_hits["count"] + 1) or small_url,
+            lambda *a, **kw: (
+                resize_hits.__setitem__("count", resize_hits["count"] + 1) or small_url
+            ),
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "hi"},
-                {"type": "image_url", "image_url": {"url": small_url}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "hi"},
+                    {"type": "image_url", "image_url": {"url": small_url}},
+                ],
+            }
+        ]
         assert agent._try_shrink_image_parts_in_messages(msgs) is False
         assert resize_hits["count"] == 0
         # URL unchanged.
@@ -361,7 +426,9 @@ class TestShrinkImagePartsHelper:
         oversized_url = _big_png_data_url(5000)  # ~5 MB raw → ~6.7 MB b64
         shrunk = "data:image/jpeg;base64," + "A" * 1000  # small
 
-        def _fake_resize(path, mime_type=None, max_base64_bytes=None, max_dimension=None):
+        def _fake_resize(
+            path, mime_type=None, max_base64_bytes=None, max_dimension=None
+        ):
             return shrunk
 
         monkeypatch.setattr(
@@ -370,17 +437,18 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "look"},
-                {"type": "image_url", "image_url": {"url": oversized_url}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look"},
+                    {"type": "image_url", "image_url": {"url": oversized_url}},
+                ],
+            }
+        ]
         changed = agent._try_shrink_image_parts_in_messages(msgs)
         assert changed is True
         assert msgs[0]["content"][1]["image_url"]["url"] == shrunk
-
 
     def test_anthropic_base64_image_source_rewritten(self, monkeypatch):
         """Anthropic-native image blocks are shrinkable after adapter conversion."""
@@ -391,7 +459,9 @@ class TestShrinkImagePartsHelper:
         shrunk = "data:image/jpeg;base64," + "N" * 1000
         seen = {}
 
-        def _fake_resize(path, mime_type=None, max_base64_bytes=None, max_dimension=None):
+        def _fake_resize(
+            path, mime_type=None, max_base64_bytes=None, max_dimension=None
+        ):
             seen["mime_type"] = mime_type
             seen["max_dimension"] = max_dimension
             return shrunk
@@ -402,19 +472,21 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": original_data,
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": original_data,
+                        },
                     },
-                },
-            ],
-        }]
+                ],
+            }
+        ]
         changed = agent._try_shrink_image_parts_in_messages(
             msgs,
             max_dimension=2000,
@@ -428,7 +500,6 @@ class TestShrinkImagePartsHelper:
         assert source["media_type"] == "image/jpeg"
         assert source["data"] == "N" * 1000
 
-
     def test_multiple_images_all_shrunk(self, monkeypatch):
         agent = _make_agent()
         big1 = _big_png_data_url(5000)
@@ -441,19 +512,20 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "compare"},
-                {"type": "image_url", "image_url": {"url": big1}},
-                {"type": "image_url", "image_url": {"url": big2}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "compare"},
+                    {"type": "image_url", "image_url": {"url": big1}},
+                    {"type": "image_url", "image_url": {"url": big2}},
+                ],
+            }
+        ]
         changed = agent._try_shrink_image_parts_in_messages(msgs)
         assert changed is True
         assert msgs[0]["content"][1]["image_url"]["url"] == shrunk
         assert msgs[0]["content"][2]["image_url"]["url"] == shrunk
-
 
     def test_shrink_failure_returns_false_and_leaves_url_intact(self, monkeypatch):
         """If re-encode fails, leave the URL alone so the caller surfaces the original error."""
@@ -466,15 +538,16 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": oversized_url}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": oversized_url}},
+                ],
+            }
+        ]
         assert agent._try_shrink_image_parts_in_messages(msgs) is False
         assert msgs[0]["content"][0]["image_url"]["url"] == oversized_url
-
 
     def test_mixed_one_shrinkable_one_not_returns_false(self, monkeypatch):
         """Regression for the wedged-session incident (May 2026).
@@ -510,13 +583,15 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "tool",
-            "content": [
-                {"type": "image_url", "image_url": {"url": shrinkable}},
-                {"type": "image_url", "image_url": {"url": unshrinkable}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "tool",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": shrinkable}},
+                    {"type": "image_url", "image_url": {"url": unshrinkable}},
+                ],
+            }
+        ]
         # One part shrank, one survived oversized → must NOT retry.
         assert agent._try_shrink_image_parts_in_messages(msgs) is False
         # The shrinkable one was still re-encoded (mutated in place).
@@ -548,7 +623,9 @@ class TestShrinkImagePartsHelper:
         dimensionally_shrunk = "data:image/png;base64," + "G" * 200 * 1024
         seen = {}
 
-        def _fake_resize(path, mime_type=None, max_base64_bytes=None, max_dimension=None):
+        def _fake_resize(
+            path, mime_type=None, max_base64_bytes=None, max_dimension=None
+        ):
             seen["max_dimension"] = max_dimension
             return dimensionally_shrunk
 
@@ -558,18 +635,24 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": original_url}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": original_url}},
+                ],
+            }
+        ]
         # The re-encode is byte-LARGER than the original — proves the byte gate
         # is no longer the rejection driver on the dimension path.
         assert len(dimensionally_shrunk) > len(original_url)
-        assert agent._try_shrink_image_parts_in_messages(
-            msgs, max_dimension=2000,
-        ) is True
+        assert (
+            agent._try_shrink_image_parts_in_messages(
+                msgs,
+                max_dimension=2000,
+            )
+            is True
+        )
         assert seen["max_dimension"] == 2000
         assert msgs[0]["content"][0]["image_url"]["url"] == dimensionally_shrunk
 
@@ -592,15 +675,21 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": original_url}},
-            ],
-        }]
-        assert agent._try_shrink_image_parts_in_messages(
-            msgs, max_dimension=2000,
-        ) is False
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": original_url}},
+                ],
+            }
+        ]
+        assert (
+            agent._try_shrink_image_parts_in_messages(
+                msgs,
+                max_dimension=2000,
+            )
+            is False
+        )
         # Original left untouched — caller surfaces the provider's 400.
         assert msgs[0]["content"][0]["image_url"]["url"] == original_url
 
@@ -626,11 +715,13 @@ class TestShrinkImagePartsHelper:
         second = _big_png_data_url(90)
         calls = {"n": 0}
 
-        def _fake_resize(path, mime_type=None, max_base64_bytes=None, max_dimension=None):
+        def _fake_resize(
+            path, mime_type=None, max_base64_bytes=None, max_dimension=None
+        ):
             calls["n"] += 1
             if calls["n"] == 1:
                 return "data:image/png;base64," + "G" * 200 * 1024  # in-cap
-            return "data:image/png;base64," + "H" * 120 * 1024      # still over
+            return "data:image/png;base64," + "H" * 120 * 1024  # still over
 
         monkeypatch.setattr(
             "tools.vision_tools._resize_image_for_vision",
@@ -638,18 +729,26 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": first}},
-                {"type": "image_url", "image_url": {"url": second}},
-            ],
-        }]
-        assert agent._try_shrink_image_parts_in_messages(
-            msgs, max_dimension=2000,
-        ) is False
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": first}},
+                    {"type": "image_url", "image_url": {"url": second}},
+                ],
+            }
+        ]
+        assert (
+            agent._try_shrink_image_parts_in_messages(
+                msgs,
+                max_dimension=2000,
+            )
+            is False
+        )
 
-    def test_byte_oversized_but_pixel_oversized_after_shrink_blocks_retry(self, monkeypatch):
+    def test_byte_oversized_but_pixel_oversized_after_shrink_blocks_retry(
+        self, monkeypatch
+    ):
         """Bytes-triggered shrink must ALSO honour the active per-side cap.
 
         Adversarial-review regression (#48013, round 2): an image over BOTH the
@@ -676,21 +775,26 @@ class TestShrinkImagePartsHelper:
             raising=False,
         )
 
-        msgs = [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": oversized_url}},
-            ],
-        }]
+        msgs = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": oversized_url}},
+                ],
+            }
+        ]
         # Bytes shrank, but the per-side cap is still violated → no real
         # progress; the helper must NOT report success (would burn the retry).
         assert len(byte_smaller_still_over) < len(oversized_url)
-        assert agent._try_shrink_image_parts_in_messages(
-            msgs, max_dimension=2000,
-        ) is False
+        assert (
+            agent._try_shrink_image_parts_in_messages(
+                msgs,
+                max_dimension=2000,
+            )
+            is False
+        )
         # Original left in place — caller surfaces the provider's 400.
         assert msgs[0]["content"][0]["image_url"]["url"] == oversized_url
-
 
 
 class TestShrinkCopyOnWriteHistoryIsolation:
@@ -728,4 +832,3 @@ class TestShrinkCopyOnWriteHistoryIsolation:
         # ...but the stored history still has the original bytes.
         assert history_msg["content"][0] is history_part
         assert history_part["image_url"]["url"] == oversized_url
-

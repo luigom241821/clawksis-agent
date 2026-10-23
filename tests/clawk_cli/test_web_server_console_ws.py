@@ -98,7 +98,11 @@ def blocking_provider():
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
-    state = {"started": threading.Event(), "peer_closed": threading.Event(), "release": threading.Event()}
+    state = {
+        "started": threading.Event(),
+        "peer_closed": threading.Event(),
+        "release": threading.Event(),
+    }
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -118,9 +122,25 @@ def blocking_provider():
                 if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
                     state["peer_closed"].set()
                     return
-            body = json.dumps({"id": "x", "object": "chat.completion", "model": "test-model", "choices": [
-                {"index": 0, "message": {"role": "assistant", "content": "done"}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}}).encode()
+            body = json.dumps(
+                {
+                    "id": "x",
+                    "object": "chat.completion",
+                    "model": "test-model",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "done"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 1,
+                        "completion_tokens": 1,
+                        "total_tokens": 2,
+                    },
+                }
+            ).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -137,7 +157,9 @@ def blocking_provider():
         srv.shutdown()
 
 
-def test_console_cancel_stops_forked_agent_request_before_reporting(console_client, monkeypatch, blocking_provider):
+def test_console_cancel_stops_forked_agent_request_before_reporting(
+    console_client, monkeypatch, blocking_provider
+):
     """#106179: cancelling a console command whose worker forked an AIAgent must interrupt
     that agent — closing its in-flight provider request — and wait for the worker to exit BEFORE the
     prompt reports cancelled/timeout. asyncio can only drop the waiter; the thread keeps decoding otherwise."""
@@ -152,12 +174,20 @@ def test_console_cancel_stops_forked_agent_request_before_reporting(console_clie
     # built-ins are excluded from the review list, so the temp home needs one.
     skill_dir = get_clawk_home() / "skills" / "console-cancel-probe"
     skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("---\nname: console-cancel-probe\ndescription: x\n---\n", encoding="utf-8")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: console-cancel-probe\ndescription: x\n---\n", encoding="utf-8"
+    )
     skill_usage.record_created("console-cancel-probe", agent_created=True)
 
     monkeypatch.setattr(
-        curator, "_resolve_review_provider",
-        lambda: ({"api_key": "test-key", "base_url": blocking_provider["base_url"]}, "test-model", "openai-compat", {}),
+        curator,
+        "_resolve_review_provider",
+        lambda: (
+            {"api_key": "test-key", "base_url": blocking_provider["base_url"]},
+            "test-model",
+            "openai-compat",
+            {},
+        ),
     )
     worker_exited = threading.Event()
     real_execute = chat_ws._execute_console_line
@@ -175,29 +205,47 @@ def test_console_cancel_stops_forked_agent_request_before_reporting(console_clie
         assert conn.receive_json()["type"] == "ready"
         conn.send_json({"type": "input", "line": line})
         _recv_until(conn, "complete", status="confirm_required")
-        assert worker_exited.wait(10)  # the confirm probe's worker, not the one under test
+        assert worker_exited.wait(
+            10
+        )  # the confirm probe's worker, not the one under test
         worker_exited.clear()
         conn.send_json({"type": "confirm", "command": line})
-        assert blocking_provider["started"].wait(60), "forked agent never reached the provider"
+        assert blocking_provider["started"].wait(60), (
+            "forked agent never reached the provider"
+        )
         conn.send_json({"type": "cancel"})
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             frame = conn.receive_json()
-            if frame.get("type") == "complete" and frame.get("status") in {"cancelled", "timeout"}:
+            if frame.get("type") == "complete" and frame.get("status") in {
+                "cancelled",
+                "timeout",
+            }:
                 break
         else:
             raise AssertionError("no cancelled/timeout frame")
-        observed = (frame["status"], blocking_provider["peer_closed"].is_set(), worker_exited.is_set())
-        blocking_provider["release"].set()  # a leaked worker (the bug) must not wedge socket teardown
+        observed = (
+            frame["status"],
+            blocking_provider["peer_closed"].is_set(),
+            worker_exited.is_set(),
+        )
+        blocking_provider[
+            "release"
+        ].set()  # a leaked worker (the bug) must not wedge socket teardown
         worker_exited.wait(30)
     assert observed == ("cancelled", True, True), (
-        "(status, provider request closed, worker exited) at the terminal frame")
+        "(status, provider request closed, worker exited) at the terminal frame"
+    )
 
 
 def test_interrupt_scope_cancels_agents_that_start_after_the_cancel():
     """A turn that begins after the host cancelled must be interrupted on entry, else a cancel racing
     agent construction leaves a live request behind."""
-    from agent.interrupt_scope import InterruptScope, bind_interrupt_scope, track_in_interrupt_scope
+    from agent.interrupt_scope import (
+        InterruptScope,
+        bind_interrupt_scope,
+        track_in_interrupt_scope,
+    )
 
     class Agent:
         def __init__(self):

@@ -41,13 +41,12 @@ class TestParseJudgeResponse:
     def test_clean_json_done(self):
         from clawk_cli.goals import _parse_judge_response
 
-        verdict, reason, _pf, wait = _parse_judge_response('{"done": true, "reason": "all good"}')
+        verdict, reason, _pf, wait = _parse_judge_response(
+            '{"done": true, "reason": "all good"}'
+        )
         assert verdict == "done"
         assert reason == "all good"
         assert wait is None
-
-
-
 
     def test_wait_verdict_with_pid(self):
         from clawk_cli.goals import _parse_judge_response
@@ -61,16 +60,12 @@ class TestParseJudgeResponse:
         assert reason == "CI running"
 
 
-
-
 # ──────────────────────────────────────────────────────────────────────
 # judge_goal — fail-open semantics
 # ──────────────────────────────────────────────────────────────────────
 
 
 class TestJudgeGoal:
-
-
     def test_api_error_continues(self):
         """Judge exception → fail-open continue (don't wedge progress on judge bugs)."""
         from clawk_cli import goals
@@ -89,13 +84,18 @@ class TestJudgeGoal:
         with patch(
             "agent.auxiliary_client.call_llm",
             return_value=MagicMock(
-                choices=[MagicMock(message=MagicMock(content='{"done": true, "reason": "achieved"}'))]
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content='{"done": true, "reason": "achieved"}'
+                        )
+                    )
+                ]
             ),
         ):
             verdict, reason, _, _wd, _tf = goals.judge_goal("goal", "agent response")
         assert verdict == "done"
         assert reason == "achieved"
-
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -104,7 +104,6 @@ class TestJudgeGoal:
 
 
 class TestGoalManager:
-
     def test_set_then_status(self, clawk_home):
         from clawk_cli.goals import GoalManager
 
@@ -117,13 +116,6 @@ class TestGoalManager:
         assert mgr.is_active()
         assert "active" in mgr.status_line().lower()
         assert "port the thing" in mgr.status_line()
-
-
-
-
-
-
-
 
     def test_continuation_prompt_shape(self, clawk_home):
         """The continuation prompt must include the goal text verbatim —
@@ -144,10 +136,6 @@ class TestGoalManager:
 # ──────────────────────────────────────────────────────────────────────
 
 
-
-
-
-
 # ──────────────────────────────────────────────────────────────────────
 # Auto-pause on consecutive judge parse failures
 # ──────────────────────────────────────────────────────────────────────
@@ -157,9 +145,6 @@ class TestJudgeParseFailureAutoPause:
     """Regression: weak judge models (e.g. deepseek-v4-flash) that return
     empty strings or non-JSON prose must auto-pause the loop after N turns
     instead of burning the whole turn budget."""
-
-
-
 
     def test_api_error_does_not_count_as_parse_failure(self):
         """Transient network/API errors must not trip the auto-pause guard."""
@@ -176,7 +161,6 @@ class TestJudgeParseFailureAutoPause:
         assert parse_failed is False
         assert transport_failed is True
 
-
     def test_auto_pause_after_three_consecutive_parse_failures(self, clawk_home):
         """N=3 consecutive parse failures → auto-pause with config pointer."""
         from clawk_cli import goals
@@ -186,7 +170,15 @@ class TestJudgeParseFailureAutoPause:
         mgr.set("do a thing")
 
         with patch.object(
-            goals, "judge_goal", return_value=("continue", "judge returned empty response", True, None, False)
+            goals,
+            "judge_goal",
+            return_value=(
+                "continue",
+                "judge returned empty response",
+                True,
+                None,
+                False,
+            ),
         ):
             d1 = mgr.evaluate_after_turn("step 1")
             assert d1["should_continue"] is True
@@ -202,9 +194,6 @@ class TestJudgeParseFailureAutoPause:
             assert mgr.state.consecutive_parse_failures == 3
 
 
-
-
-
 # ──────────────────────────────────────────────────────────────────────
 # /subgoal — user-added criteria
 # ──────────────────────────────────────────────────────────────────────
@@ -216,15 +205,17 @@ class TestGoalStateSubgoalsBackcompat:
         round-trip with an empty list, not crash."""
         from clawk_cli.goals import GoalState
 
-        legacy = json.dumps({
-            "goal": "do a thing",
-            "status": "active",
-            "turns_used": 2,
-            "max_turns": 20,
-            "created_at": 1.0,
-            "last_turn_at": 2.0,
-            "consecutive_parse_failures": 0,
-        })
+        legacy = json.dumps(
+            {
+                "goal": "do a thing",
+                "status": "active",
+                "turns_used": 2,
+                "max_turns": 20,
+                "created_at": 1.0,
+                "last_turn_at": 2.0,
+                "consecutive_parse_failures": 0,
+            }
+        )
         state = GoalState.from_json(legacy)
         assert state.goal == "do a thing"
         assert state.subgoals == []
@@ -237,18 +228,32 @@ class TestMigrateGoalToSession:
     goal silently dies when compression rotates session_id."""
 
     def test_migrates_active_goal_to_child(self, clawk_home):
-        from clawk_cli.goals import save_goal, load_goal, migrate_goal_to_session, GoalState
+        from clawk_cli.goals import (
+            save_goal,
+            load_goal,
+            migrate_goal_to_session,
+            GoalState,
+        )
+
         save_goal("parent-sid", GoalState(goal="ship the feature"))
-        assert migrate_goal_to_session("parent-sid", "child-sid", reason="compression") is True
+        assert (
+            migrate_goal_to_session("parent-sid", "child-sid", reason="compression")
+            is True
+        )
         child = load_goal("child-sid")
         assert child is not None and child.goal == "ship the feature"
         # Parent row archived (cleared) so only the child is active.
         parent = load_goal("parent-sid")
         assert parent is not None and parent.status == "cleared"
 
-
     def test_does_not_clobber_existing_child_goal(self, clawk_home):
-        from clawk_cli.goals import save_goal, load_goal, migrate_goal_to_session, GoalState
+        from clawk_cli.goals import (
+            save_goal,
+            load_goal,
+            migrate_goal_to_session,
+            GoalState,
+        )
+
         save_goal("p3", GoalState(goal="parent goal"))
         save_goal("c3", GoalState(goal="child already has one"))
         assert migrate_goal_to_session("p3", "c3") is False
@@ -270,7 +275,9 @@ class TestSessionDbCacheAfterProfileDelete:
 
         # conftest re-points DEFAULT_DB_PATH at one fixed file; the registry must resolve the
         # scoped profile home here, as production does.
-        with patch.object(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH):
+        with patch.object(
+            clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+        ):
             profile = clawk_home / "profiles" / "p1"
             profile.mkdir(parents=True)
             token = set_clawk_home_override(profile)
@@ -294,16 +301,17 @@ class TestSessionDbCacheAfterProfileDelete:
 class TestGoalManagerSubgoals:
     def test_add_subgoal(self, clawk_home):
         from clawk_cli.goals import GoalManager
+
         mgr = GoalManager(session_id="sub-add")
         mgr.set("main goal")
         text = mgr.add_subgoal("  use bullet points  ")
         assert text == "use bullet points"
         assert mgr.state.subgoals == ["use bullet points"]
 
-
     def test_remove_subgoal_out_of_range(self, clawk_home):
         import pytest
         from clawk_cli.goals import GoalManager
+
         mgr = GoalManager(session_id="sub-oob")
         mgr.set("g")
         mgr.add_subgoal("only")
@@ -327,10 +335,13 @@ class TestJudgeGoalWithSubgoals:
 
         class _FakeMsg:
             content = '{"done": true, "reason": "all done"}'
+
         class _FakeChoice:
             message = _FakeMsg()
+
         class _FakeResp:
             choices = [_FakeChoice()]
+
         def _fake_call_llm(**kwargs):
             captured.update(kwargs)
             return _FakeResp()
@@ -344,7 +355,9 @@ class TestJudgeGoalWithSubgoals:
 
         # The aux client was called with a prompt that includes the subgoals.
         sent_messages = captured.get("messages") or []
-        user_msg = next((m["content"] for m in sent_messages if m["role"] == "user"), "")
+        user_msg = next(
+            (m["content"] for m in sent_messages if m["role"] == "user"), ""
+        )
         assert "Additional criteria" in user_msg
         assert "1. write tests" in user_msg
         assert "2. update docs" in user_msg
@@ -358,10 +371,13 @@ class TestJudgeGoalWithSubgoals:
 
         class _FakeMsg:
             content = '{"done": true, "reason": "ok"}'
+
         class _FakeChoice:
             message = _FakeMsg()
+
         class _FakeResp:
             choices = [_FakeChoice()]
+
         def _fake_call_llm(**kwargs):
             captured.update(kwargs)
             return _FakeResp()
@@ -370,11 +386,11 @@ class TestJudgeGoalWithSubgoals:
             goals.judge_goal("ship it", "done", subgoals=None)
 
         sent_messages = captured.get("messages") or []
-        user_msg = next((m["content"] for m in sent_messages if m["role"] == "user"), "")
+        user_msg = next(
+            (m["content"] for m in sent_messages if m["role"] == "user"), ""
+        )
         assert "Additional criteria" not in user_msg
         assert "ship it" in user_msg
-
-
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -391,13 +407,13 @@ class TestWaitBarrier:
         """Start a short-lived child process; return its Popen handle."""
         import subprocess
         import sys
+
         return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
 
     @staticmethod
     def _dead_pid():
         """A PID that is essentially guaranteed not to be running."""
         return 2_000_000_000
-
 
     def test_parked_on_live_pid_does_not_continue_or_judge(self, clawk_home):
         from clawk_cli import goals
@@ -426,7 +442,9 @@ class TestWaitBarrier:
             proc.terminate()
             proc.wait(timeout=10)
 
-    def test_wait_on_rejects_a_pid_not_alive_on_this_host(self, clawk_home, monkeypatch):
+    def test_wait_on_rejects_a_pid_not_alive_on_this_host(
+        self, clawk_home, monkeypatch
+    ):
         """Regression for #110826: do not persist a barrier for remote/dead PIDs."""
         from clawk_cli import goals
         from clawk_cli.goals import GoalManager
@@ -439,7 +457,6 @@ class TestWaitBarrier:
             mgr.wait_on(4242, reason="remote CI")
 
         assert mgr.state.waiting_on_pid is None
-
 
     def test_stop_waiting_clears_barrier(self, clawk_home):
         from clawk_cli.goals import GoalManager
@@ -487,16 +504,37 @@ class TestGatherBackgroundProcessesOwnership:
         class _Reg:
             def list_sessions(self, task_id=None, session_key=None):
                 return [
-                    {"session_id": "proc_mine", "status": "running", "owner_task_id": "root-sid", "task_id": "default"},
-                    {"session_id": "proc_child", "status": "running", "owner_task_id": "sa-1-abc", "task_id": "default"},
-                    {"session_id": "proc_done", "status": "exited", "owner_task_id": "root-sid", "task_id": "default"},
+                    {
+                        "session_id": "proc_mine",
+                        "status": "running",
+                        "owner_task_id": "root-sid",
+                        "task_id": "default",
+                    },
+                    {
+                        "session_id": "proc_child",
+                        "status": "running",
+                        "owner_task_id": "sa-1-abc",
+                        "task_id": "default",
+                    },
+                    {
+                        "session_id": "proc_done",
+                        "status": "exited",
+                        "owner_task_id": "root-sid",
+                        "task_id": "default",
+                    },
                 ]
 
         import tools.process_registry as pr
-        monkeypatch.setattr(pr, "process_registry", _Reg())
-        assert [p["session_id"] for p in goals.gather_background_processes()] == ["proc_mine", "proc_child"]
-        assert [p["session_id"] for p in goals.gather_background_processes(owner_task_id="root-sid")] == ["proc_mine"]
 
+        monkeypatch.setattr(pr, "process_registry", _Reg())
+        assert [p["session_id"] for p in goals.gather_background_processes()] == [
+            "proc_mine",
+            "proc_child",
+        ]
+        assert [
+            p["session_id"]
+            for p in goals.gather_background_processes(owner_task_id="root-sid")
+        ] == ["proc_mine"]
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -511,6 +549,7 @@ class TestJudgeDrivenWait:
     @staticmethod
     def _spawn_sleeper():
         import subprocess, sys
+
         return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
 
     def test_judge_wait_on_dead_pid_continues_instead_of_parking(self, clawk_home):
@@ -521,9 +560,19 @@ class TestJudgeDrivenWait:
 
         mgr = GoalManager(session_id="jw-dead-pid", default_max_turns=10)
         mgr.set("ship the PR")
-        with patch.object(goals, "_pid_alive", return_value=False), patch.object(
-            goals, "judge_goal",
-            return_value=("wait", "remote job still running", False, {"pid": 4242}, False),
+        with (
+            patch.object(goals, "_pid_alive", return_value=False),
+            patch.object(
+                goals,
+                "judge_goal",
+                return_value=(
+                    "wait",
+                    "remote job still running",
+                    False,
+                    {"pid": 4242},
+                    False,
+                ),
+            ),
         ):
             decision = mgr.evaluate_after_turn("Started the job over ssh (pid 4242).")
         assert decision["verdict"] == "continue"
@@ -540,11 +589,18 @@ class TestJudgeDrivenWait:
 
         mgr = GoalManager(session_id="jw-toctou-pid", default_max_turns=10)
         mgr.set("ship the PR")
-        with patch.object(goals, "_pid_alive", return_value=True), patch.object(
-            GoalManager, "wait_on", side_effect=ValueError("pid is not alive on this host"),
-        ), patch.object(
-            goals, "judge_goal",
-            return_value=("wait", "job still running", False, {"pid": 4242}, False),
+        with (
+            patch.object(goals, "_pid_alive", return_value=True),
+            patch.object(
+                GoalManager,
+                "wait_on",
+                side_effect=ValueError("pid is not alive on this host"),
+            ),
+            patch.object(
+                goals,
+                "judge_goal",
+                return_value=("wait", "job still running", False, {"pid": 4242}, False),
+            ),
         ):
             decision = mgr.evaluate_after_turn("Started the job (pid 4242).")
         assert decision["verdict"] == "continue"
@@ -562,15 +618,26 @@ class TestJudgeDrivenWait:
             mgr.set("ship the PR")
             # Judge sees the running process and says wait-on-pid.
             with patch.object(
-                goals, "judge_goal",
-                return_value=("wait", "CI watcher still running", False, {"pid": proc.pid}, False),
+                goals,
+                "judge_goal",
+                return_value=(
+                    "wait",
+                    "CI watcher still running",
+                    False,
+                    {"pid": proc.pid},
+                    False,
+                ),
             ):
                 decision = mgr.evaluate_after_turn(
                     "Pushed the PR, watching CI.",
-                    background_processes=[{
-                        "pid": proc.pid, "command": "wait_for_pr_green.sh",
-                        "status": "running", "uptime_seconds": 12,
-                    }],
+                    background_processes=[
+                        {
+                            "pid": proc.pid,
+                            "command": "wait_for_pr_green.sh",
+                            "status": "running",
+                            "uptime_seconds": 12,
+                        }
+                    ],
                 )
             assert decision["verdict"] == "wait"
             assert decision["should_continue"] is False
@@ -588,7 +655,6 @@ class TestJudgeDrivenWait:
         finally:
             proc.terminate()
             proc.wait(timeout=10)
-
 
     def test_time_barrier_clears_after_deadline(self, clawk_home):
         from clawk_cli.goals import GoalManager
@@ -610,12 +676,15 @@ class TestJudgeDrivenWait:
         mgr = GoalManager(session_id="jw-cont", default_max_turns=10)
         mgr.set("do work")
         with patch.object(
-            goals, "judge_goal",
+            goals,
+            "judge_goal",
             return_value=("continue", "more to do", False, None, False),
         ):
             decision = mgr.evaluate_after_turn(
                 "made progress",
-                background_processes=[{"pid": 999999, "command": "x", "status": "running"}],
+                background_processes=[
+                    {"pid": 999999, "command": "x", "status": "running"}
+                ],
             )
         assert decision["verdict"] == "continue"
         assert decision["should_continue"] is True
@@ -637,8 +706,15 @@ class TestSessionTriggerBarrier:
     def _inject(sid, *, watch_patterns=None, exited=False):
         import time as _t
         from tools.process_registry import process_registry, ProcessSession
-        s = ProcessSession(id=sid, command="watcher.sh", task_id="t",
-                           session_key="", cwd="/tmp", started_at=_t.time())
+
+        s = ProcessSession(
+            id=sid,
+            command="watcher.sh",
+            task_id="t",
+            session_key="",
+            cwd="/tmp",
+            started_at=_t.time(),
+        )
         if watch_patterns:
             s.watch_patterns = list(watch_patterns)
         s.exited = exited
@@ -648,7 +724,6 @@ class TestSessionTriggerBarrier:
             process_registry._running[sid] = s
         return s, process_registry
 
-
     def test_registry_releases_on_watch_match_while_alive(self, clawk_home):
         s, reg = self._inject("proc_t2", watch_patterns=["READY"])
         assert reg.is_session_waiting("proc_t2") is True
@@ -657,9 +732,9 @@ class TestSessionTriggerBarrier:
         assert s.exited is False
         assert reg.is_session_waiting("proc_t2") is False
 
-
     def test_wait_on_session_validation(self, clawk_home):
         from clawk_cli.goals import GoalManager
+
         mgr = GoalManager(session_id="st-val")
         # No active goal → RuntimeError
         try:
@@ -675,16 +750,12 @@ class TestSessionTriggerBarrier:
             pass
 
 
-
-
 # ──────────────────────────────────────────────────────────────────────
 # Completion contract (Codex-inspired structured goals)
 # ──────────────────────────────────────────────────────────────────────
 
 
 class TestParseContract:
-
-
     def test_inline_fields_parsed(self):
         from clawk_cli.goals import parse_contract
 
@@ -749,9 +820,6 @@ class TestGoalContractSerialization:
 
 
 class TestGoalManagerContract:
-
-
-
     def test_set_contract_after_the_fact(self, clawk_home):
         from clawk_cli.goals import GoalManager, GoalContract
 
@@ -762,6 +830,7 @@ class TestGoalManagerContract:
         assert mgr.has_contract()
         # Survives reload.
         from clawk_cli.goals import GoalManager as GM2
+
         assert GM2(session_id="c-after").has_contract()
 
     def test_persistence_roundtrip(self, clawk_home):
@@ -778,17 +847,22 @@ class TestGoalManagerContract:
 class TestJudgeWithContract:
     def _fake_call_llm(self, captured, content='{"done": false, "reason": "more"}'):
         """judge_goal routes through call_llm (#35566) — capture its kwargs."""
+
         class _FakeMsg:
             pass
+
         _FakeMsg.content = content
+
         class _FakeChoice:
             message = _FakeMsg()
+
         class _FakeResp:
             choices = [_FakeChoice()]
 
         def _fake(**kwargs):
             captured.update(kwargs)
             return _FakeResp()
+
         return _fake
 
     def test_judge_uses_contract_template(self, clawk_home):
@@ -797,14 +871,21 @@ class TestJudgeWithContract:
         from clawk_cli.goals import GoalContract
 
         captured = {}
-        with patch("agent.auxiliary_client.call_llm",
-                   side_effect=self._fake_call_llm(captured)):
+        with patch(
+            "agent.auxiliary_client.call_llm", side_effect=self._fake_call_llm(captured)
+        ):
             goals.judge_goal(
-                "ship it", "I think it's done",
+                "ship it",
+                "I think it's done",
                 contract=GoalContract(verification="pytest -q passes"),
             )
         user_msg = next(
-            (m["content"] for m in (captured.get("messages") or []) if m["role"] == "user"), ""
+            (
+                m["content"]
+                for m in (captured.get("messages") or [])
+                if m["role"] == "user"
+            ),
+            "",
         )
         assert "completion contract" in user_msg.lower()
         assert "pytest -q passes" in user_msg
@@ -821,25 +902,28 @@ class TestDraftContract:
                 '"constraints": "no API change", "boundaries": "services/auth", '
                 '"stop_when": "schema change needed"}'
             )
+
         class _FakeChoice:
             message = _FakeMsg()
+
         class _FakeResp:
             choices = [_FakeChoice()]
-        with patch("agent.auxiliary_client.call_llm",
-                   return_value=_FakeResp()):
+
+        with patch("agent.auxiliary_client.call_llm", return_value=_FakeResp()):
             contract = goals.draft_contract("Migrate auth to JWT")
         assert contract is not None
         assert contract.outcome == "auth on JWT"
         assert contract.verification == "auth suite green"
         assert not contract.is_empty()
 
-
     def test_draft_returns_none_when_no_client(self, clawk_home):
         from unittest.mock import patch
         from clawk_cli import goals
 
-        with patch("agent.auxiliary_client.call_llm",
-                   side_effect=RuntimeError("No LLM provider configured")):
+        with patch(
+            "agent.auxiliary_client.call_llm",
+            side_effect=RuntimeError("No LLM provider configured"),
+        ):
             assert goals.draft_contract("anything") is None
 
 
@@ -853,19 +937,28 @@ class TestContractAndBackgroundCompose:
     the contract block and the background-process list to the judge, so it
     can return either done (evidence met) or wait (parked on the poller)."""
 
-    def _capture_call_llm(self, captured, content='{"verdict": "wait", "wait_on_pid": 4242, "reason": "CI still running"}'):
+    def _capture_call_llm(
+        self,
+        captured,
+        content='{"verdict": "wait", "wait_on_pid": 4242, "reason": "CI still running"}',
+    ):
         """judge_goal routes through call_llm (#35566) — capture its kwargs."""
+
         class _FakeMsg:
             pass
+
         _FakeMsg.content = content
+
         class _FakeChoice:
             message = _FakeMsg()
+
         class _FakeResp:
             choices = [_FakeChoice()]
 
         def _fake(**kwargs):
             captured.update(kwargs)
             return _FakeResp()
+
         return _fake
 
     def test_judge_prompt_carries_contract_and_background(self, clawk_home):
@@ -874,12 +967,19 @@ class TestContractAndBackgroundCompose:
         from clawk_cli.goals import GoalContract
 
         captured = {}
-        bg = [{
-            "session_id": "ci-watch", "pid": 4242, "status": "running",
-            "command": "wait_for_pr_green.sh 50501", "trigger": "exit",
-        }]
-        with patch("agent.auxiliary_client.call_llm",
-                   side_effect=self._capture_call_llm(captured)):
+        bg = [
+            {
+                "session_id": "ci-watch",
+                "pid": 4242,
+                "status": "running",
+                "command": "wait_for_pr_green.sh 50501",
+                "trigger": "exit",
+            }
+        ]
+        with patch(
+            "agent.auxiliary_client.call_llm",
+            side_effect=self._capture_call_llm(captured),
+        ):
             verdict, _reason, _parse_failed, wait_directive, _tf = goals.judge_goal(
                 "ship the PR",
                 "I pushed and started the CI watcher; waiting on it now.",
@@ -887,7 +987,12 @@ class TestContractAndBackgroundCompose:
                 background_processes=bg,
             )
         user_msg = next(
-            (m["content"] for m in (captured.get("messages") or []) if m["role"] == "user"), ""
+            (
+                m["content"]
+                for m in (captured.get("messages") or [])
+                if m["role"] == "user"
+            ),
+            "",
         )
         # Both surfaces present in one prompt.
         assert "completion contract" in user_msg.lower()

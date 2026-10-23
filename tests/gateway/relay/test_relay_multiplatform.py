@@ -51,7 +51,10 @@ def test_identities_multi_platform_keyed_map(monkeypatch):
         ),
     )
     # Order preserved; whitespace in the list trimmed.
-    assert relay.relay_platform_identities() == [("discord", "app-1"), ("telegram", "bot-9")]
+    assert relay.relay_platform_identities() == [
+        ("discord", "app-1"),
+        ("telegram", "bot-9"),
+    ]
     # The PRIMARY is the first listed platform.
     assert relay.relay_platform_identity() == ("discord", "app-1")
 
@@ -64,6 +67,7 @@ def test_bot_ids_malformed_json_degrades_to_empty(monkeypatch):
 
 
 # ─────────────────────────── provision loop ───────────────────────────
+
 
 def _arm(monkeypatch, *, url="wss://connector.example/relay", token="nas-token"):
     monkeypatch.setattr(relay, "relay_url", lambda: url)
@@ -81,12 +85,20 @@ def test_self_provision_loops_per_platform(monkeypatch):
 
     def _fake(**kwargs):
         calls.append((kwargs["platform"], kwargs["bot_id"], kwargs["gateway_id"]))
-        return {"secret": "s" * 64, "deliveryKey": "d" * 64, "tenant": "t", "gatewayId": kwargs["gateway_id"]}
+        return {
+            "secret": "s" * 64,
+            "deliveryKey": "d" * 64,
+            "tenant": "t",
+            "gatewayId": kwargs["gateway_id"],
+        }
 
     monkeypatch.setattr(relay, "_post_provision", _fake)
     assert relay.self_provision_relay() is True
     # One POST per fronted platform, all under the SAME gatewayId.
-    assert [(p, b) for p, b, _ in calls] == [("discord", "app-1"), ("telegram", "bot-9")]
+    assert [(p, b) for p, b, _ in calls] == [
+        ("discord", "app-1"),
+        ("telegram", "bot-9"),
+    ]
     assert len({gw for _, _, gw in calls}) == 1
     # The in-process secret is set once (from the first success).
     import os
@@ -95,6 +107,7 @@ def test_self_provision_loops_per_platform(monkeypatch):
 
 
 # ─────────────────────────── per-frame egress (adapter) ───────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
@@ -129,7 +142,12 @@ async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
         MessageEvent(
             text="hi",
             message_type=MessageType.TEXT,
-            source=SessionSource(platform=Platform.TELEGRAM, chat_id="tg-1", chat_type="dm", user_id="u-1"),
+            source=SessionSource(
+                platform=Platform.TELEGRAM,
+                chat_id="tg-1",
+                chat_type="dm",
+                user_id="u-1",
+            ),
         )
     )
     await adapter.send("tg-1", "a telegram reply")
@@ -141,10 +159,13 @@ async def test_adapter_stamps_per_frame_platform_from_inbound(monkeypatch):
         MessageEvent(
             text="yo",
             message_type=MessageType.TEXT,
-            source=SessionSource(platform=Platform.DISCORD, chat_id="dc-1", chat_type="channel", scope_id="g-1"),
+            source=SessionSource(
+                platform=Platform.DISCORD,
+                chat_id="dc-1",
+                chat_type="channel",
+                scope_id="g-1",
+            ),
         )
     )
     await adapter.send("dc-1", "a discord reply")
     assert stub.sent_platforms[-1] == "discord"
-
-

@@ -10,6 +10,11 @@ _SEND_TARGET_RE = re.compile(r"^\s*(-?\d+)(?::(\d+))?\s*$")
 SEND_ENTRY_KWARGS = {
     "target_ref_syntax_fn": regex_groups_parser(_SEND_TARGET_RE),
     # Every send (text too) bypasses the live adapter: forums/threads/multipart via REST.
-    "standalone_send": StandaloneSendPolicy(label="Discord", media=True, all_sends=True, captionable=True,
-                                            empty_list_between_chunks=True),
+    "standalone_send": StandaloneSendPolicy(
+        label="Discord",
+        media=True,
+        all_sends=True,
+        captionable=True,
+        empty_list_between_chunks=True,
+    ),
 }

@@ -10,14 +10,18 @@ def _missing_package(monkeypatch):
     import pm
     import clawk_constants
 
-    monkeypatch.setattr(clawk_constants, "find_node_executable", lambda executable: None)
+    monkeypatch.setattr(
+        clawk_constants, "find_node_executable", lambda executable: None
+    )
     monkeypatch.setattr(clawk_constants, "with_clawk_node_path", dict)
     monkeypatch.setattr(pm, "ensure", lambda package, explicit: SimpleNamespace(env={}))
     monkeypatch.setattr(pm, "installed_package", lambda package: None)
 
 
 @pytest.mark.parametrize("executable", ["npm", "node"])
-def test_dashboard_reports_prepared_bridge_binary_missing(tmp_path, monkeypatch, executable):
+def test_dashboard_reports_prepared_bridge_binary_missing(
+    tmp_path, monkeypatch, executable
+):
     from clawk_cli.web_routers import messaging
     from gateway.platforms import whatsapp_common
 
@@ -25,20 +29,32 @@ def test_dashboard_reports_prepared_bridge_binary_missing(tmp_path, monkeypatch,
     bridge_dir = tmp_path / "bridge"
     bridge_dir.mkdir()
     (bridge_dir / "bridge.js").write_text("", encoding="utf-8")
-    monkeypatch.setattr(whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir)
+    monkeypatch.setattr(
+        whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir
+    )
     if executable == "npm":
         operation = lambda: messaging._ensure_whatsapp_bridge_dependencies(bridge_dir)
     else:
-        monkeypatch.setattr(messaging, "_ensure_whatsapp_bridge_dependencies", lambda path: None)
-        operation = lambda: messaging._spawn_whatsapp_pairing_process(tmp_path / "session", "bot")
+        monkeypatch.setattr(
+            messaging, "_ensure_whatsapp_bridge_dependencies", lambda path: None
+        )
+        operation = lambda: messaging._spawn_whatsapp_pairing_process(
+            tmp_path / "session", "bot"
+        )
     with pytest.raises(HTTPException) as caught:
         operation()
-    if caught.value.status_code != 500 or executable not in caught.value.detail or "binary" not in caught.value.detail:
+    if (
+        caught.value.status_code != 500
+        or executable not in caught.value.detail
+        or "binary" not in caught.value.detail
+    ):
         pytest.fail(f"Unexpected dashboard error: {caught.value!r}")
 
 
 @pytest.mark.parametrize("executable", ["npm", "node"])
-def test_cli_reports_prepared_bridge_binary_missing(tmp_path, monkeypatch, capsys, executable):
+def test_cli_reports_prepared_bridge_binary_missing(
+    tmp_path, monkeypatch, capsys, executable
+):
     from clawk_cli import main, main_platform_setup as setup
     from gateway.platforms import whatsapp_common
 
@@ -54,7 +70,9 @@ def test_cli_reports_prepared_bridge_binary_missing(tmp_path, monkeypatch, capsy
         monkeypatch.setattr(setup, "_whatsapp_choose_mode", lambda *args: "bot")
         monkeypatch.setattr(setup, "_whatsapp_allowed_users", lambda *args: None)
         monkeypatch.setattr(setup, "_whatsapp_install_bridge", lambda path: True)
-        monkeypatch.setattr(whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir)
+        monkeypatch.setattr(
+            whatsapp_common, "resolve_whatsapp_bridge_dir", lambda: bridge_dir
+        )
         monkeypatch.setattr(main, "get_clawk_home", lambda: tmp_path)
         setup.cmd_whatsapp(SimpleNamespace())
     output = capsys.readouterr().out

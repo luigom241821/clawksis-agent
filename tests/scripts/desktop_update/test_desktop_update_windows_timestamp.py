@@ -12,10 +12,15 @@ import pytest
 
 
 @pytest.mark.platforms("windows")
-def test_windows_update_writes_locale_independent_marker_and_result(tmp_path, monkeypatch):
+def test_windows_update_writes_locale_independent_marker_and_result(
+    tmp_path, monkeypatch
+):
     shell = shutil.which("powershell.exe")
     assert shell, "native Windows acceptance requires PowerShell"
-    script = Path(__file__).resolve().parent.parent.parent.parent / "scripts/desktop-update/windows.ps1"
+    script = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "scripts/desktop-update/windows.ps1"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_UPDATE_STARTED_AT", raising=False)
     # -SelfTestMarker runs the actual claim and finally/result publication,
@@ -25,13 +30,24 @@ def test_windows_update_writes_locale_independent_marker_and_result(tmp_path, mo
         "& $env:CLAWK_TIMESTAMP_TEST_SCRIPT -InstallRoot $env:CLAWK_HOME -NoUi -NoMarkerCleanup -SelfTestMarker"
     )
     started = int(time.time())
-    result = subprocess.run([shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-                            env={**os.environ, "CLAWK_TIMESTAMP_TEST_SCRIPT": str(script)},
-                            capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        env={**os.environ, "CLAWK_TIMESTAMP_TEST_SCRIPT": str(script)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
     finished = int(time.time())
     assert result.returncode == 0, result.stdout + result.stderr
-    marker = (tmp_path / ".clawk-update-in-progress").read_text(encoding="utf-8-sig").splitlines()
-    receipt = json.loads((tmp_path / ".clawk-update-result.json").read_text(encoding="utf-8-sig"))
+    marker = (
+        (tmp_path / ".clawk-update-in-progress")
+        .read_text(encoding="utf-8-sig")
+        .splitlines()
+    )
+    receipt = json.loads(
+        (tmp_path / ".clawk-update-result.json").read_text(encoding="utf-8-sig")
+    )
     # v2 body (contract C1): the creation-time line is culture-invariant too,
     # and the claim names its stable run identity (receipt correlation).
     assert len(marker) == 4 and int(marker[0]) > 0

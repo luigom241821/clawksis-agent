@@ -61,17 +61,29 @@ class MultiplexGateway:
         for _ in range(3):
             offset = self.log_path.stat().st_size if self.log_path.exists() else 0
             self._spawn()
-            H.poll(lambda: self.healthy() or self._died(), 120, "multiplexed gateway /health")
-            if self.proc.poll() is None or "already in use" not in self.tail(offset=offset):
+            H.poll(
+                lambda: self.healthy() or self._died(),
+                120,
+                "multiplexed gateway /health",
+            )
+            if self.proc.poll() is None or "already in use" not in self.tail(
+                offset=offset
+            ):
                 break
             self._rebind(H.free_port())
-        assert self.proc.poll() is None, f"gateway exited rc={self.proc.returncode}: {self.tail()}"
+        assert self.proc.poll() is None, (
+            f"gateway exited rc={self.proc.returncode}: {self.tail()}"
+        )
 
     def _spawn(self) -> None:
         log = open(self.log_path, "a", encoding="utf-8")
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "clawk_cli.main", "gateway", "run"], cwd=str(self.home),
-            env=H.hermetic_env(self.home), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            [sys.executable, "-m", "clawk_cli.main", "gateway", "run"],
+            cwd=str(self.home),
+            env=H.hermetic_env(self.home),
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
         log.close()
@@ -87,7 +99,9 @@ class MultiplexGateway:
 
     def healthy(self) -> bool:
         try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/health", timeout=3) as r:
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{self.port}/health", timeout=3
+            ) as r:
                 return r.status == 200
         except (OSError, urllib.error.URLError):
             return False
@@ -95,8 +109,13 @@ class MultiplexGateway:
     def chat(self, prefix: str, api_key: str, text: str) -> tuple[int, Any]:
         req = urllib.request.Request(
             f"http://127.0.0.1:{self.port}{prefix}/v1/chat/completions",
-            data=json.dumps({"model": "clawk", "messages": [{"role": "user", "content": text}]}).encode(),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            data=json.dumps(
+                {"model": "clawk", "messages": [{"role": "user", "content": text}]}
+            ).encode(),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
         )
         try:
             with urllib.request.urlopen(req, timeout=90) as r:
@@ -140,10 +159,19 @@ def fleet(tmp_path_factory: pytest.TempPathFactory):
     home.mkdir(parents=True)
     H.assert_profiles_root_under(root, home)
     for t in tenants.values():
-        extra = {} if t.name != "default" else {
-            "gateway": {"multiplex_profiles": True},
-            "platforms": {"api_server": {"enabled": True, "extra": {"host": "127.0.0.1", "port": port}}},
-        }
+        extra = (
+            {}
+            if t.name != "default"
+            else {
+                "gateway": {"multiplex_profiles": True},
+                "platforms": {
+                    "api_server": {
+                        "enabled": True,
+                        "extra": {"host": "127.0.0.1", "port": port},
+                    }
+                },
+            }
+        )
         H.write_tenant_home(t, extra)
     gw = MultiplexGateway(root, port, tenants["default"].home / "config.yaml")
     try:
@@ -157,24 +185,37 @@ def fleet(tmp_path_factory: pytest.TempPathFactory):
             t.srv.stop()
 
 
-def _turns(gw: MultiplexGateway, tenants: dict[str, H.Tenant], order: list[str]) -> None:
+def _turns(
+    gw: MultiplexGateway, tenants: dict[str, H.Tenant], order: list[str]
+) -> None:
     for name in order:
         t = tenants[name]
         before = len(t.srv.requests)  # type: ignore[union-attr]
         status, body = gw.chat(prefix(name), t.api_server_key, f"turn for {name}")
-        assert status == 200, f"{name} turn via api_server failed: {status} {body!r}\n{gw.tail()}"
+        assert status == 200, (
+            f"{name} turn via api_server failed: {status} {body!r}\n{gw.tail()}"
+        )
         answer = body["choices"][0]["message"]["content"]
-        assert f"probe done for {name}" in answer, f"{name} was answered by someone else: {answer!r}"
-        assert len(t.srv.requests) >= before + 2, f"{name}'s turn never reached its own provider"  # type: ignore[union-attr]
+        assert f"probe done for {name}" in answer, (
+            f"{name} was answered by someone else: {answer!r}"
+        )
+        assert len(t.srv.requests) >= before + 2, (
+            f"{name}'s turn never reached its own provider"
+        )  # type: ignore[union-attr]
 
 
 def _await_cron(tenants: dict[str, H.Tenant], at_least: int) -> None:
     # tool call + follow-up per fire; the ticker's first tick runs right after boot.
-    H.poll(lambda: all(H.cron_requests(t) >= 2 * at_least for t in tenants.values()), 150,
-           f"cron fire #{at_least} in every profile")
+    H.poll(
+        lambda: all(H.cron_requests(t) >= 2 * at_least for t in tenants.values()),
+        150,
+        f"cron fire #{at_least} in every profile",
+    )
 
 
-def test_multiplexed_gateway_never_crosses_tenants(fleet, request: pytest.FixtureRequest) -> None:
+def test_multiplexed_gateway_never_crosses_tenants(
+    fleet, request: pytest.FixtureRequest
+) -> None:
     root, tenants, gw = fleet
     home = root / "home"
 
@@ -193,19 +234,31 @@ def test_multiplexed_gateway_never_crosses_tenants(fleet, request: pytest.Fixtur
             if route is owner:
                 continue
             seen = len(route.srv.requests)  # type: ignore[union-attr]
-            status, _ = gw.chat(prefix(route.name), owner.api_server_key, "cross-tenant key")
-            assert status in (401, 403), f"{owner.name}'s API key opened {route.name}'s route (HTTP {status})"
-            assert len(route.srv.requests) == seen, f"{owner.name}'s key drove {route.name}'s provider"  # type: ignore[union-attr]
+            status, _ = gw.chat(
+                prefix(route.name), owner.api_server_key, "cross-tenant key"
+            )
+            assert status in (401, 403), (
+                f"{owner.name}'s API key opened {route.name}'s route (HTTP {status})"
+            )
+            assert len(route.srv.requests) == seen, (
+                f"{owner.name}'s key drove {route.name}'s provider"
+            )  # type: ignore[union-attr]
 
     # Phase 3: profile churn next to the live host never restarts or kills it.
     created = H.run_clawk(["profile", "create", "gamma"], home)
     assert created.returncode == 0, created.stderr[-2000:]
     attach = H.run_clawk(["-p", "gamma", "gateway", "run"], home, timeout=150)
-    assert "[harness] killed" not in attach.stderr, "`-p gamma gateway run` started a second gateway"
-    assert gw.proc.pid == host_pid and gw.proc.poll() is None, "profile create/attach replaced the host"  # type: ignore[union-attr]
+    assert "[harness] killed" not in attach.stderr, (
+        "`-p gamma gateway run` started a second gateway"
+    )
+    assert gw.proc.pid == host_pid and gw.proc.poll() is None, (
+        "profile create/attach replaced the host"
+    )  # type: ignore[union-attr]
     deleted = H.run_clawk(["profile", "delete", "gamma", "--yes"], home)
     assert deleted.returncode == 0, deleted.stderr[-2000:]
-    assert gw.proc.pid == host_pid and gw.proc.poll() is None, f"profile delete killed the host\n{gw.tail()}"  # type: ignore[union-attr]
+    assert gw.proc.pid == host_pid and gw.proc.poll() is None, (
+        f"profile delete killed the host\n{gw.tail()}"
+    )  # type: ignore[union-attr]
     _turns(gw, tenants, ["alpha", "beta"])
     H.check_isolation(tenants, min_snapshots=3)
 

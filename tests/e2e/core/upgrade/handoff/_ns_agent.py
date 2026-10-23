@@ -63,11 +63,20 @@ def _procs() -> list[dict]:
             key, sep, value = item.partition(b"=")
             if sep and key in (b"CLAWK_HOME", b"INVOCATION_ID", b"CLAWK_E2E_UNIT"):
                 env[key.decode()] = value.decode(errors="replace")
-        rows.append({
-            "pid": pid, "state": fields[0], "ppid": int(fields[1]), "start": int(fields[19]),
-            "cmdline": [a.decode(errors="replace") for a in _read(f"/proc/{pid}/cmdline").split(b"\0") if a],
-            "env": env,
-        })
+        rows.append(
+            {
+                "pid": pid,
+                "state": fields[0],
+                "ppid": int(fields[1]),
+                "start": int(fields[19]),
+                "cmdline": [
+                    a.decode(errors="replace")
+                    for a in _read(f"/proc/{pid}/cmdline").split(b"\0")
+                    if a
+                ],
+                "env": env,
+            }
+        )
     return rows
 
 
@@ -88,28 +97,55 @@ def _reaper_loop() -> None:
 
 def _run(req: dict) -> dict:
     stdin = subprocess.PIPE if req.get("input") is not None else subprocess.DEVNULL
-    proc = subprocess.Popen(req["argv"], env=req["env"], cwd=req["cwd"], text=True, stdin=stdin,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    proc = subprocess.Popen(
+        req["argv"],
+        env=req["env"],
+        cwd=req["cwd"],
+        text=True,
+        stdin=stdin,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
     started = time.monotonic()
     try:
-        out, err = proc.communicate(input=req.get("input"), timeout=req.get("timeout") or 600)
-        return {"rc": proc.returncode, "stdout": out, "stderr": err, "timed_out": False,
-                "elapsed": time.monotonic() - started}
+        out, err = proc.communicate(
+            input=req.get("input"), timeout=req.get("timeout") or 600
+        )
+        return {
+            "rc": proc.returncode,
+            "stdout": out,
+            "stderr": err,
+            "timed_out": False,
+            "elapsed": time.monotonic() - started,
+        }
     except subprocess.TimeoutExpired:
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except OSError:
             pass
         out, err = proc.communicate()
-        return {"rc": proc.returncode, "stdout": out, "stderr": err, "timed_out": True,
-                "elapsed": time.monotonic() - started}
+        return {
+            "rc": proc.returncode,
+            "stdout": out,
+            "stderr": err,
+            "timed_out": True,
+            "elapsed": time.monotonic() - started,
+        }
 
 
 def _spawn(req: dict) -> dict:
     log = open(req["log"], "ab")
     try:
-        proc = subprocess.Popen(req["argv"], env=req["env"], cwd=req["cwd"], stdin=subprocess.DEVNULL,
-                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        proc = subprocess.Popen(
+            req["argv"],
+            env=req["env"],
+            cwd=req["cwd"],
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
     finally:
         log.close()
     _CHILDREN[proc.pid] = proc
@@ -150,7 +186,9 @@ def main() -> None:
     for raw in sys.stdin:
         raw = raw.strip()
         if raw:
-            threading.Thread(target=_handle, args=(json.loads(raw),), daemon=True).start()
+            threading.Thread(
+                target=_handle, args=(json.loads(raw),), daemon=True
+            ).start()
 
 
 if __name__ == "__main__":

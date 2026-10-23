@@ -162,8 +162,12 @@ class GroupsCapabilitiesResult(Result):
     seatable_profiles: list[str] | None = None
 
 
-method("groups.capabilities", params=GroupsCapabilitiesParams, result=GroupsCapabilitiesResult,
-       doc="Describe the hosted-room protocol implemented by this gateway.")
+method(
+    "groups.capabilities",
+    params=GroupsCapabilitiesParams,
+    result=GroupsCapabilitiesResult,
+    doc="Describe the hosted-room protocol implemented by this gateway.",
+)
 
 
 # ── groups.list / create / state ──────────────────────────────────────────────────────────────
@@ -180,8 +184,12 @@ class GroupsListResult(Result):
     next_offset: int | None = None
 
 
-method("groups.list", params=GroupsListParams, result=GroupsListResult,
-       doc="List rooms hosted by this gateway, most recently changed first.")
+method(
+    "groups.list",
+    params=GroupsListParams,
+    result=GroupsListResult,
+    doc="List rooms hosted by this gateway, most recently changed first.",
+)
 
 
 class GroupsCreateParams(ProfileParams):
@@ -196,8 +204,12 @@ class GroupsCreateResult(Result):
     room: Room
 
 
-method("groups.create", params=GroupsCreateParams, result=GroupsCreateResult,
-       doc="Create a hosted room idempotently; authority is this gateway's stable install identity.")
+method(
+    "groups.create",
+    params=GroupsCreateParams,
+    result=GroupsCreateResult,
+    doc="Create a hosted room idempotently; authority is this gateway's stable install identity.",
+)
 
 
 class GroupsStateParams(RoomParams):
@@ -236,8 +248,12 @@ class GroupsStateResult(Result):
     driver_status: RoomDriverStatus | None = None
 
 
-method("groups.state", params=GroupsStateParams, result=GroupsStateResult,
-       doc="One hosted room's replay cursor and fenced authority state, plus live driver status.")
+method(
+    "groups.state",
+    params=GroupsStateParams,
+    result=GroupsStateResult,
+    doc="One hosted room's replay cursor and fenced authority state, plus live driver status.",
+)
 
 
 # ── groups.send / rename / log ────────────────────────────────────────────────────────────────
@@ -255,8 +271,12 @@ class GroupsSendResult(Result):
     driver_started: bool = True
 
 
-method("groups.send", params=GroupsSendParams, result=GroupsSendResult,
-       doc="Append one inert message.user event idempotently; the actor is server-owned.")
+method(
+    "groups.send",
+    params=GroupsSendParams,
+    result=GroupsSendResult,
+    doc="Append one inert message.user event idempotently; the actor is server-owned.",
+)
 
 
 class GroupsRenameParams(RoomParams):
@@ -268,8 +288,12 @@ class GroupsRenameResult(Result):
     room: Room
 
 
-method("groups.rename", params=GroupsRenameParams, result=GroupsRenameResult,
-       doc="Rename one hosted room atomically with its replay event.")
+method(
+    "groups.rename",
+    params=GroupsRenameParams,
+    result=GroupsRenameResult,
+    doc="Rename one hosted room atomically with its replay event.",
+)
 
 
 class GroupsLogParams(RoomParams):
@@ -288,8 +312,12 @@ class GroupsLogResult(Result):
     authority: RoomAuthority
 
 
-method("groups.log", params=GroupsLogParams, result=GroupsLogResult,
-       doc="A monotonic room-log delta after since_seq, bounded by count and page bytes.")
+method(
+    "groups.log",
+    params=GroupsLogParams,
+    result=GroupsLogResult,
+    doc="A monotonic room-log delta after since_seq, bounded by count and page bytes.",
+)
 
 
 # ── groups.disband / stop / approve / retry ───────────────────────────────────────────────────
@@ -311,8 +339,12 @@ class GroupsDisbandResult(Result):
     tombstone: RoomTombstone
 
 
-method("groups.disband", params=GroupsDisbandParams, result=GroupsDisbandResult,
-       doc="Permanently tombstone a hosted room id after stopping its work and revoking peer routes.")
+method(
+    "groups.disband",
+    params=GroupsDisbandParams,
+    result=GroupsDisbandResult,
+    doc="Permanently tombstone a hosted room id after stopping its work and revoking peer routes.",
+)
 
 
 class GroupsStopParams(RoomParams):
@@ -323,8 +355,12 @@ class GroupsStopResult(Result):
     cancelled: int
 
 
-method("groups.stop", params=GroupsStopParams, result=GroupsStopResult,
-       doc="Durably cancel queued or running work for one hosted room.")
+method(
+    "groups.stop",
+    params=GroupsStopParams,
+    result=GroupsStopResult,
+    doc="Durably cancel queued or running work for one hosted room.",
+)
 
 
 class GroupsApproveParams(RoomParams):
@@ -342,8 +378,12 @@ class GroupsApproveResult(Result):
     result: dict[str, JsonValue]
 
 
-method("groups.approve", params=GroupsApproveParams, result=GroupsApproveResult,
-       doc="Resolve one exact pending approval raised by a local or peer room member.")
+method(
+    "groups.approve",
+    params=GroupsApproveParams,
+    result=GroupsApproveResult,
+    doc="Resolve one exact pending approval raised by a local or peer room member.",
+)
 
 
 class GroupsRetryParams(RoomParams):
@@ -365,8 +405,12 @@ class GroupsRetryResult(Result):
     task: RoomTaskReceipt
 
 
-method("groups.retry", params=GroupsRetryParams, result=GroupsRetryResult,
-       doc="Retry one indeterminate room task after explicit user confirmation.")
+method(
+    "groups.retry",
+    params=GroupsRetryParams,
+    result=GroupsRetryResult,
+    doc="Retry one indeterminate room task after explicit user confirmation.",
+)
 
 
 # ── replication / authority takeover ──────────────────────────────────────────────────────────
@@ -386,8 +430,12 @@ class GroupsReplicateResult(Result):
     caught_up: bool
 
 
-method("groups.replicate", params=GroupsReplicateParams, result=GroupsReplicateResult,
-       doc="Persist one authority-stamped replay page into the local replica store; idempotent.")
+method(
+    "groups.replicate",
+    params=GroupsReplicateParams,
+    result=GroupsReplicateResult,
+    doc="Persist one authority-stamped replay page into the local replica store; idempotent.",
+)
 
 
 class GroupsReplicaStateParams(RoomParams):
@@ -406,8 +454,12 @@ class GroupsReplicaStateResult(Result):
     updated_at: float
 
 
-method("groups.replica_state", params=GroupsReplicaStateParams, result=GroupsReplicaStateResult,
-       doc="The local replica's coverage and authority lineage for one room.")
+method(
+    "groups.replica_state",
+    params=GroupsReplicaStateParams,
+    result=GroupsReplicaStateResult,
+    doc="The local replica's coverage and authority lineage for one room.",
+)
 
 
 class GroupsPromoteParams(RoomParams):
@@ -425,8 +477,12 @@ class GroupsPromoteResult(Result):
     latest_seq: int
 
 
-method("groups.promote", params=GroupsPromoteParams, result=GroupsPromoteResult,
-       doc="Continue a replicated room on this gateway at epoch + 1; requires confirm=true.")
+method(
+    "groups.promote",
+    params=GroupsPromoteParams,
+    result=GroupsPromoteResult,
+    doc="Continue a replicated room on this gateway at epoch + 1; requires confirm=true.",
+)
 
 
 class GroupsDemoteParams(RoomParams):
@@ -441,8 +497,12 @@ class GroupsDemoteResult(Result):
     idempotent: bool
 
 
-method("groups.demote", params=GroupsDemoteParams, result=GroupsDemoteResult,
-       doc="Fence this gateway's stale room authority against a proven newer epoch.")
+method(
+    "groups.demote",
+    params=GroupsDemoteParams,
+    result=GroupsDemoteResult,
+    doc="Fence this gateway's stale room authority against a proven newer epoch.",
+)
 
 
 # ── peer routes (RoomLink) ────────────────────────────────────────────────────────────────────
@@ -465,8 +525,12 @@ class GroupsPeerInviteResult(Result):
     endpoint: RoomLinkEndpoint
 
 
-method("groups.peer.invite", params=GroupsPeerInviteParams, result=GroupsPeerInviteResult,
-       doc="Mint one target-issued room/profile grant for a prospective room home.")
+method(
+    "groups.peer.invite",
+    params=GroupsPeerInviteParams,
+    result=GroupsPeerInviteResult,
+    doc="Mint one target-issued room/profile grant for a prospective room home.",
+)
 
 
 class GroupsPeerRevokeParams(ProfileParams):
@@ -477,8 +541,12 @@ class GroupsPeerRevokeResult(Result):
     revoked: bool = True
 
 
-method("groups.peer.revoke", params=GroupsPeerRevokeParams, result=GroupsPeerRevokeResult,
-       doc="Revoke one target-issued grant using its exact profile scope.")
+method(
+    "groups.peer.revoke",
+    params=GroupsPeerRevokeParams,
+    result=GroupsPeerRevokeResult,
+    doc="Revoke one target-issued grant using its exact profile scope.",
+)
 
 
 class GroupsPeerRegisterParams(RoomParams):
@@ -486,7 +554,9 @@ class GroupsPeerRegisterParams(RoomParams):
     target_url: str
     target_profile: str
     grant: str
-    catalog: dict[str, JsonValue]  # a RoomLinkCatalog mapping; ``GatewayRoomCatalog.from_mapping`` is exact
+    catalog: dict[
+        str, JsonValue
+    ]  # a RoomLinkCatalog mapping; ``GatewayRoomCatalog.from_mapping`` is exact
     cancellation_scope_id: str | None = None
     trace_id: str | None = None
 
@@ -499,8 +569,12 @@ class GroupsPeerRegisterResult(Result):
     target_profile: str
 
 
-method("groups.peer.register", params=GroupsPeerRegisterParams, result=GroupsPeerRegisterResult,
-       doc="Register and probe one scoped peer route on the room home.")
+method(
+    "groups.peer.register",
+    params=GroupsPeerRegisterParams,
+    result=GroupsPeerRegisterResult,
+    doc="Register and probe one scoped peer route on the room home.",
+)
 
 
 # ── bot relay ─────────────────────────────────────────────────────────────────────────────────
@@ -528,8 +602,12 @@ class BotRelayRosterSyncResult(Result):
     count: int
 
 
-method("bot_relay.roster.sync", params=BotRelayRosterSyncParams, result=BotRelayRosterSyncResult,
-       doc="Replace this gateway's view of agents on other connections; answers the accepted row count.")
+method(
+    "bot_relay.roster.sync",
+    params=BotRelayRosterSyncParams,
+    result=BotRelayRosterSyncResult,
+    doc="Replace this gateway's view of agents on other connections; answers the accepted row count.",
+)
 
 
 class BotRelayOutboxDrainParams(ProfileParams):
@@ -553,8 +631,12 @@ class BotRelayOutboxDrainResult(Result):
     envelopes: list[RelayEnvelope]
 
 
-method("bot_relay.outbox.drain", params=BotRelayOutboxDrainParams, result=BotRelayOutboxDrainResult,
-       doc="Atomically claim every pending cross-connection envelope queued on this gateway.")
+method(
+    "bot_relay.outbox.drain",
+    params=BotRelayOutboxDrainParams,
+    result=BotRelayOutboxDrainResult,
+    doc="Atomically claim every pending cross-connection envelope queued on this gateway.",
+)
 
 
 class BotRelayDeliverParams(Params):
@@ -571,8 +653,12 @@ class BotRelayDeliverResult(Result):
     reply: str
 
 
-method("bot_relay.deliver", params=BotRelayDeliverParams, result=BotRelayDeliverResult,
-       doc="Deliver a relayed DM into a Bot Chat on this gateway and return the one-turn reply (blocking).")
+method(
+    "bot_relay.deliver",
+    params=BotRelayDeliverParams,
+    result=BotRelayDeliverResult,
+    doc="Deliver a relayed DM into a Bot Chat on this gateway and return the one-turn reply (blocking).",
+)
 
 
 class BotRelayReplyParams(ProfileParams):
@@ -582,8 +668,12 @@ class BotRelayReplyParams(ProfileParams):
     reason: str | None = None
 
 
-method("bot_relay.reply", params=BotRelayReplyParams, result=OkResult,
-       doc="Write a relayed reply and/or typed error for an envelope so the sender-side waiter resolves.")
+method(
+    "bot_relay.reply",
+    params=BotRelayReplyParams,
+    result=OkResult,
+    doc="Write a relayed reply and/or typed error for an envelope so the sender-side waiter resolves.",
+)
 
 
 # ── browser controller ────────────────────────────────────────────────────────────────────────
@@ -599,7 +689,9 @@ class BrowserControllerRegisterParams(BrowserControllerParams):
     controller_id: str
     browser_profile_id: str
     capabilities: list[str] | None = None
-    protocol_version: JsonValue | None = None  # checked exactly by the handler (an int today)
+    protocol_version: JsonValue | None = (
+        None  # checked exactly by the handler (an int today)
+    )
     # Ignored: the principal is derived from the server-minted identity, never client-supplied.
     principal_id: str | None = None
 
@@ -618,9 +710,12 @@ class BrowserControllerRegisterResult(Result):
     scope: ControllerScope
 
 
-method("browser.controller.register", params=BrowserControllerRegisterParams,
-       result=BrowserControllerRegisterResult,
-       doc="Attach this connection as the browser controller for one session; fails closed (4403).")
+method(
+    "browser.controller.register",
+    params=BrowserControllerRegisterParams,
+    result=BrowserControllerRegisterResult,
+    doc="Attach this connection as the browser controller for one session; fails closed (4403).",
+)
 
 
 class BrowserControllerResultParams(BrowserControllerParams):
@@ -634,24 +729,41 @@ class BrowserControllerResultResult(Result):
     accepted: bool
 
 
-method("browser.controller.result", params=BrowserControllerResultParams,
-       result=BrowserControllerResultResult,
-       doc="Deliver one command result to the broker; accepted is false for unknown or settled command ids.")
+method(
+    "browser.controller.result",
+    params=BrowserControllerResultParams,
+    result=BrowserControllerResultResult,
+    doc="Deliver one command result to the broker; accepted is false for unknown or settled command ids.",
+)
 
 
-method("browser.controller.heartbeat", params=BrowserControllerParams, result=OkResult,
-       doc="Acknowledge a heartbeat only for this transport's own attached controller.")
+method(
+    "browser.controller.heartbeat",
+    params=BrowserControllerParams,
+    result=OkResult,
+    doc="Acknowledge a heartbeat only for this transport's own attached controller.",
+)
 
 
 class BrowserControllerDetachResult(Result):
     detached: bool = True
 
 
-method("browser.controller.detach", params=BrowserControllerParams, result=BrowserControllerDetachResult,
-       doc="Hard-detach only the controller owned by this authenticated transport.")
+method(
+    "browser.controller.detach",
+    params=BrowserControllerParams,
+    result=BrowserControllerDetachResult,
+    doc="Hard-detach only the controller owned by this authenticated transport.",
+)
 
 
 __all__ = [
-    "GroupsLogResult", "RelayEnvelope", "Room", "RoomAuthority", "RoomEvent", "RoomLinkCatalog",
-    "RoomMember", "RoomMemberInput",
+    "GroupsLogResult",
+    "RelayEnvelope",
+    "Room",
+    "RoomAuthority",
+    "RoomEvent",
+    "RoomLinkCatalog",
+    "RoomMember",
+    "RoomMemberInput",
 ]

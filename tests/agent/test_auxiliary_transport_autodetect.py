@@ -21,9 +21,13 @@ import pytest
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     for key in (
-        "OPENAI_API_KEY", "OPENAI_BASE_URL",
-        "ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN",
-        "KIMI_API_KEY", "KIMI_CODING_API_KEY", "KIMI_BASE_URL",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "KIMI_API_KEY",
+        "KIMI_CODING_API_KEY",
+        "KIMI_BASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -32,24 +36,33 @@ def _clean_env(monkeypatch):
 # URL detection helper
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url,expected,label", [
-    ("https://api.kimi.com/coding/v1", True, "Kimi Coding Plan /v1"),
-    ("https://api.kimi.com/coding", True, "Kimi Coding Plan no /v1"),
-    ("https://api.moonshot.ai/v1", False, "Moonshot legacy"),
-    ("https://api.minimax.io/anthropic", True, "MiniMax /anthropic"),
-    ("https://litellm.example.com/v1/anthropic", True, "/anthropic suffix"),
-    ("https://litellm.example.com/anthropic/v1", True, "/anthropic/v1 base"),
-    ("https://litellm.example.com/anthropic/v1/models", False, "/anthropic/v1 subpath"),
-    ("https://api.anthropic.com", True, "native Anthropic"),
-    ("https://api.anthropic.com/v1", True, "native Anthropic /v1"),
-    ("https://openrouter.ai/api/v1", False, "OpenRouter"),
-    ("https://api.openai.com/v1", False, "OpenAI"),
-    ("https://inference-api.nousresearch.com/v1", False, "Nous"),
-    ("", False, "empty"),
-    (None, False, "None"),
-])
+
+@pytest.mark.parametrize(
+    "url,expected,label",
+    [
+        ("https://api.kimi.com/coding/v1", True, "Kimi Coding Plan /v1"),
+        ("https://api.kimi.com/coding", True, "Kimi Coding Plan no /v1"),
+        ("https://api.moonshot.ai/v1", False, "Moonshot legacy"),
+        ("https://api.minimax.io/anthropic", True, "MiniMax /anthropic"),
+        ("https://litellm.example.com/v1/anthropic", True, "/anthropic suffix"),
+        ("https://litellm.example.com/anthropic/v1", True, "/anthropic/v1 base"),
+        (
+            "https://litellm.example.com/anthropic/v1/models",
+            False,
+            "/anthropic/v1 subpath",
+        ),
+        ("https://api.anthropic.com", True, "native Anthropic"),
+        ("https://api.anthropic.com/v1", True, "native Anthropic /v1"),
+        ("https://openrouter.ai/api/v1", False, "OpenRouter"),
+        ("https://api.openai.com/v1", False, "OpenAI"),
+        ("https://inference-api.nousresearch.com/v1", False, "Nous"),
+        ("", False, "empty"),
+        (None, False, "None"),
+    ],
+)
 def test_endpoint_speaks_anthropic_messages(url, expected, label):
     from agent.auxiliary_client import _endpoint_speaks_anthropic_messages
+
     assert _endpoint_speaks_anthropic_messages(url) is expected, (
         f"{label}: {url!r} should be {expected}"
     )
@@ -60,24 +73,10 @@ def test_endpoint_speaks_anthropic_messages(url, expected, label):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Integration: resolve_provider_client for named kimi-coding provider
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_provider_client_kimi_coding_wraps_anthropic(monkeypatch, tmp_path):
     """End-to-end: resolve_provider_client('kimi-coding', 'kimi-for-coding')

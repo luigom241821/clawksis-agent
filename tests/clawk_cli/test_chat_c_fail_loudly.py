@@ -29,6 +29,7 @@ def isolated_home(tmp_path, monkeypatch):
 
     def create_titled(title):
         from clawk_state import SessionDB
+
         db = SessionDB()
         try:
             sid = "local-" + "ab" * 32
@@ -37,6 +38,7 @@ def isolated_home(tmp_path, monkeypatch):
             return sid
         finally:
             db.close()
+
     monkeypatch.setattr(gateway_session_store, "create_titled_session", create_titled)
     return home
 
@@ -155,8 +157,12 @@ class TestChatCFailLoudlyOnStderr:
         import clawk_cli.gateway_session_store as store_mod
 
         created = []
-        monkeypatch.setattr(store_mod, "create_titled_session",
-                            lambda title: created.append(title) or "local-" + "a" * 64, raising=False)
+        monkeypatch.setattr(
+            store_mod,
+            "create_titled_session",
+            lambda title: created.append(title) or "local-" + "a" * 64,
+            raising=False,
+        )
         args = type(
             "Args",
             (),
@@ -169,15 +175,23 @@ class TestChatCFailLoudlyOnStderr:
 
         main_mod._resolve_continue_arg(args, use_tui=False)
 
-        assert args.resume == "local-" + "a" * 64, "resume should be set to the new session id"
+        assert args.resume == "local-" + "a" * 64, (
+            "resume should be set to the new session id"
+        )
         assert created == ["Bot Chat"]
-        assert not (isolated_home / "state.db").exists(), "the CLI must not write the titled row itself"
+        assert not (isolated_home / "state.db").exists(), (
+            "the CLI must not write the titled row itself"
+        )
 
     def test_tui_create_if_missing_keeps_the_local_titled_row(self, isolated_home):
         """The TUI launch is unchanged: main's titled row, then the TUI resumes it."""
         import clawk_cli.main as main_mod
 
-        args = type("Args", (), {"continue_last": "Bot Chat", "resume": None, "create_if_missing": True})()
+        args = type(
+            "Args",
+            (),
+            {"continue_last": "Bot Chat", "resume": None, "create_if_missing": True},
+        )()
         main_mod._resolve_continue_arg(args, use_tui=True)
 
         assert args.resume, "resume should be set to the new session id"

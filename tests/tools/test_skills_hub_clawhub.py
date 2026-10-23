@@ -23,7 +23,9 @@ class TestClawHubSource(unittest.TestCase):
     def setUp(self):
         self.src = ClawHubSource()
         self._safe_patcher = patch("tools.skills_hub.is_safe_url", return_value=True)
-        self._policy_patcher = patch("tools.skills_hub.check_website_access", return_value=None)
+        self._policy_patcher = patch(
+            "tools.skills_hub.check_website_access", return_value=None
+        )
         self._safe_patcher.start()
         self._policy_patcher.start()
 
@@ -65,7 +67,6 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(results[0].identifier, "caldav-calendar")
         self.assertEqual(results[0].name, "CalDAV Calendar")
         self.assertEqual(results[0].description, "Calendar integration")
-
 
     @patch("tools.skills_hub.httpx.get")
     def test_inspect_maps_display_name_and_summary(self, mock_get):
@@ -132,7 +133,6 @@ class TestClawHubSource(unittest.TestCase):
         self.assertIsNotNone(meta)
         self.assertEqual(meta.extra.get("owner"), "thesethrose")
 
-
     @patch("tools.skills_hub_clawhub._guarded_http_stream")
     @patch("tools.skills_hub._ssrf_safe_http_get")
     @patch("tools.skills_hub.httpx.get")
@@ -153,7 +153,10 @@ class TestClawHubSource(unittest.TestCase):
                     status_code=200,
                     json_data={
                         "files": [
-                            {"path": "SKILL.md", "rawUrl": "https://files.example/skill-md"},
+                            {
+                                "path": "SKILL.md",
+                                "rawUrl": "https://files.example/skill-md",
+                            },
                             {"path": "README.md", "content": "hello"},
                         ]
                     },
@@ -176,11 +179,15 @@ class TestClawHubSource(unittest.TestCase):
     def test_fetch_falls_back_to_versions_list(self, mock_get):
         def side_effect(url, *args, **kwargs):
             if url.endswith("/skills/caldav-calendar"):
-                return _MockResponse(status_code=200, json_data={"slug": "caldav-calendar"})
+                return _MockResponse(
+                    status_code=200, json_data={"slug": "caldav-calendar"}
+                )
             if url.endswith("/skills/caldav-calendar/versions"):
                 return _MockResponse(status_code=200, json_data=[{"version": "2.0.0"}])
             if url.endswith("/skills/caldav-calendar/versions/2.0.0"):
-                return _MockResponse(status_code=200, json_data={"files": {"SKILL.md": "# Skill"}})
+                return _MockResponse(
+                    status_code=200, json_data={"files": {"SKILL.md": "# Skill"}}
+                )
             return _MockResponse(status_code=404, json_data={})
 
         mock_get.side_effect = side_effect
@@ -213,7 +220,10 @@ class TestClawHubSource(unittest.TestCase):
                     status_code=200,
                     json_data={
                         "files": [
-                            {"path": "SKILL.md", "rawUrl": "http://127.0.0.1/private-skill"},
+                            {
+                                "path": "SKILL.md",
+                                "rawUrl": "http://127.0.0.1/private-skill",
+                            },
                         ]
                     },
                 )
@@ -246,15 +256,23 @@ class TestClawHubSource(unittest.TestCase):
         page_calls = {"n": 0}
         pages = [
             {
-                "items": [{"slug": f"a-skill-{i}", "displayName": f"A {i}"} for i in range(200)],
+                "items": [
+                    {"slug": f"a-skill-{i}", "displayName": f"A {i}"}
+                    for i in range(200)
+                ],
                 "nextCursor": "cursor-page-2",
             },
             {
-                "items": [{"slug": f"b-skill-{i}", "displayName": f"B {i}"} for i in range(200)],
+                "items": [
+                    {"slug": f"b-skill-{i}", "displayName": f"B {i}"}
+                    for i in range(200)
+                ],
                 "nextCursor": "cursor-page-3",
             },
             {
-                "items": [{"slug": f"c-skill-{i}", "displayName": f"C {i}"} for i in range(50)],
+                "items": [
+                    {"slug": f"c-skill-{i}", "displayName": f"C {i}"} for i in range(50)
+                ],
                 "nextCursor": None,
             },
         ]
@@ -274,7 +292,9 @@ class TestClawHubSource(unittest.TestCase):
 
         # 200 + 200 + 50 = 450 unique skills, all retrieved via cursor pagination.
         self.assertEqual(len(results), 450)
-        self.assertEqual(page_calls["n"], 3, "expected exactly 3 cursor-paginated pages")
+        self.assertEqual(
+            page_calls["n"], 3, "expected exactly 3 cursor-paginated pages"
+        )
         identifiers = {meta.identifier for meta in results}
         self.assertIn("a-skill-0", identifiers)
         self.assertIn("b-skill-199", identifiers)
@@ -337,9 +357,7 @@ class TestClawHubSource(unittest.TestCase):
                 return _MockResponse(
                     status_code=200,
                     json_data={
-                        "items": [
-                            {"slug": "only-skill", "displayName": "Only Skill"}
-                        ],
+                        "items": [{"slug": "only-skill", "displayName": "Only Skill"}],
                         # No nextCursor -> natural termination.
                     },
                 )
@@ -354,8 +372,12 @@ class TestClawHubSource(unittest.TestCase):
         mock_write_cache.assert_called_once()
 
     def test_parse_identifier_accepts_clawhub_shapes(self):
-        self.assertEqual(ClawHubSource._parse_identifier("skillopt"), ("skillopt", None))
-        self.assertEqual(ClawHubSource._parse_identifier("clawhub/skillopt"), ("skillopt", None))
+        self.assertEqual(
+            ClawHubSource._parse_identifier("skillopt"), ("skillopt", None)
+        )
+        self.assertEqual(
+            ClawHubSource._parse_identifier("clawhub/skillopt"), ("skillopt", None)
+        )
         self.assertEqual(
             ClawHubSource._parse_identifier("@harrylabsj/skillopt"),
             ("skillopt", "harrylabsj"),
@@ -414,7 +436,6 @@ class TestClawHubSource(unittest.TestCase):
         mock_get.assert_called_once()
 
 
-
 class TestClawHubCatalogWalkBounded(unittest.TestCase):
     """max_items bounds the walk so browse's cold-start fallback renders one
     page without walking the entire 50k+ catalog. The offline index builder
@@ -423,7 +444,9 @@ class TestClawHubCatalogWalkBounded(unittest.TestCase):
     def setUp(self):
         self.src = ClawHubSource()
         self._safe_patcher = patch("tools.skills_hub.is_safe_url", return_value=True)
-        self._policy_patcher = patch("tools.skills_hub.check_website_access", return_value=None)
+        self._policy_patcher = patch(
+            "tools.skills_hub.check_website_access", return_value=None
+        )
         self._safe_patcher.start()
         self._policy_patcher.start()
 
@@ -467,8 +490,12 @@ class TestClawHubCatalogWalkBounded(unittest.TestCase):
 
         # Each mocked page yields exactly 1 item, so ~5 pages cover the bound.
         self.assertGreaterEqual(len(results), 5)
-        self.assertLess(page_calls["n"], 750, "bounded walk should stop well before the cap")
-        self.assertLess(page_calls["n"], 20, "should stop within a few pages of the bound")
+        self.assertLess(
+            page_calls["n"], 750, "bounded walk should stop well before the cap"
+        )
+        self.assertLess(
+            page_calls["n"], 20, "should stop within a few pages of the bound"
+        )
         # Partial (bounded) walk must not be cached.
         mock_write_cache.assert_not_called()
 
@@ -528,7 +555,10 @@ class TestClawHubCatalogWalkBounded(unittest.TestCase):
             idx = calls["n"]
             calls["n"] += 1
             if idx == 0:
-                return {"items": [{"slug": "skill-a", "displayName": "A"}], "nextCursor": "c1"}
+                return {
+                    "items": [{"slug": "skill-a", "displayName": "A"}],
+                    "nextCursor": "c1",
+                }
             return None
 
         with patch.object(ClawHubSource, "_get_json", side_effect=fake_get_json):
@@ -551,7 +581,9 @@ class TestClawHubCatalogWalkBounded(unittest.TestCase):
 
         results = self.src.search("", limit=10)
 
-        self.assertEqual(len(results), 10, "browse page should be exactly `limit` items")
+        self.assertEqual(
+            len(results), 10, "browse page should be exactly `limit` items"
+        )
         # Walk stopped near the bound, not at the 750-page cap.
         self.assertLess(page_calls["n"], 30)
 
@@ -580,7 +612,6 @@ class TestFetchOwnerHandleRetry(unittest.TestCase):
         self.assertEqual(mock_get.call_count, 2)
         mock_sleep.assert_called_once_with(3.0)
 
-
     @patch("tools.skills_hub.time.sleep")
     @patch("tools.skills_hub.httpx.get")
     def test_gives_up_after_max_attempts_on_429(self, mock_get, mock_sleep):
@@ -591,7 +622,9 @@ class TestFetchOwnerHandleRetry(unittest.TestCase):
 
         self.assertIsNone(handle)
         self.assertEqual(mock_get.call_count, 3)
-        self.assertEqual(mock_sleep.call_count, 2)  # sleeps between attempts, not after last
+        self.assertEqual(
+            mock_sleep.call_count, 2
+        )  # sleeps between attempts, not after last
 
     @patch("tools.skills_hub.time.sleep")
     @patch("tools.skills_hub.httpx.get")
@@ -628,6 +661,7 @@ class TestFetchOwnerHandleRetry(unittest.TestCase):
     def test_retries_on_transport_error(self, mock_get, mock_sleep):
         """Network/transport errors (httpx.HTTPError) trigger retry with backoff."""
         import httpx
+
         mock_get.side_effect = [
             httpx.ConnectError("connection refused"),
             _MockResponse(
@@ -669,16 +703,25 @@ class TestFetchOwnerHandleRetry(unittest.TestCase):
 
         skills = [
             SkillMeta(
-                name="s1", description="", source="clawhub",
-                identifier="s1", trust_level="community",
+                name="s1",
+                description="",
+                source="clawhub",
+                identifier="s1",
+                trust_level="community",
             ),
             SkillMeta(
-                name="s2", description="", source="clawhub",
-                identifier="s2", trust_level="community",
+                name="s2",
+                description="",
+                source="clawhub",
+                identifier="s2",
+                trust_level="community",
             ),
             SkillMeta(
-                name="s3", description="", source="clawhub",
-                identifier="s3", trust_level="community",
+                name="s3",
+                description="",
+                source="clawhub",
+                identifier="s3",
+                trust_level="community",
             ),
         ]
 
@@ -696,19 +739,33 @@ class TestFetchOwnerHandleRetry(unittest.TestCase):
         """An exhausted budget ends enrichment early (the un-enriched rest ships without an
         owner) instead of walking every remaining skill — the unbounded walk over 78k skills
         at ~2s each is what timed out the CI index build for two months."""
+
         def slow_owner(url, *args, **kwargs):
             time.sleep(0.05)
-            return _MockResponse(status_code=200,
-                                 json_data={"skill": {"slug": "s"}, "owner": {"handle": "eve"}})
+            return _MockResponse(
+                status_code=200,
+                json_data={"skill": {"slug": "s"}, "owner": {"handle": "eve"}},
+            )
+
         mock_get.side_effect = slow_owner
-        skills = [SkillMeta(name=f"s{i}", description="", source="clawhub",
-                            identifier=f"s{i}", trust_level="community") for i in range(200)]
+        skills = [
+            SkillMeta(
+                name=f"s{i}",
+                description="",
+                source="clawhub",
+                identifier=f"s{i}",
+                trust_level="community",
+            )
+            for i in range(200)
+        ]
 
         enriched = self.src.enrich_owners(skills, max_workers=1, budget_seconds=0.3)
 
         self.assertGreaterEqual(enriched, 1)
         self.assertLess(enriched, 200)
-        self.assertEqual(enriched, sum(1 for s in skills if s.extra.get("owner") == "eve"))
+        self.assertEqual(
+            enriched, sum(1 for s in skills if s.extra.get("owner") == "eve")
+        )
         self.assertLess(mock_get.call_count, 200)
 
 

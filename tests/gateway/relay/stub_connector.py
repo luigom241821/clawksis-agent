@@ -49,7 +49,10 @@ class StubConnector:
         # Canned result for the next send_follow_up (override per-test). Default
         # mimics a resolved capability egress; set success=False to simulate an
         # absent/expired capability or a tenant mismatch on the connector side.
-        self.next_follow_up_result: dict[str, Any] = {"success": True, "message_id": "f1"}
+        self.next_follow_up_result: dict[str, Any] = {
+            "success": True,
+            "message_id": "f1",
+        }
         # Canned result for the next draft frame (NS-658 live cards). The
         # sealing frame (final=true) echoes message_id = the stream ts.
         self.next_draft_result: dict[str, Any] = {"success": True}
@@ -100,7 +103,9 @@ class StubConnector:
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         return self.chat_info.get(chat_id, {"name": chat_id, "type": "dm"})
 
-    async def send_interrupt(self, session_key: str, reason: Optional[str] = None) -> None:
+    async def send_interrupt(
+        self, session_key: str, reason: Optional[str] = None
+    ) -> None:
         self.interrupts.append({"session_key": session_key, "reason": reason})
 
     async def send_follow_up(
@@ -114,17 +119,25 @@ class StubConnector:
     async def push_inbound(self, event: MessageEvent) -> None:
         """Simulate the connector delivering a normalized inbound event."""
         if self._inbound is None:
-            raise RuntimeError("no inbound handler registered (call adapter.connect first)")
+            raise RuntimeError(
+                "no inbound handler registered (call adapter.connect first)"
+            )
         await self._inbound(event)
 
     async def push_interrupt(self, session_key: str, chat_id: str) -> None:
         """Simulate the connector delivering an interrupt_inbound over the WS."""
         if self._interrupt_inbound is None:
-            raise RuntimeError("no interrupt_inbound handler registered (call adapter.connect first)")
+            raise RuntimeError(
+                "no interrupt_inbound handler registered (call adapter.connect first)"
+            )
         await self._interrupt_inbound(session_key, chat_id)
 
-    async def push_passthrough(self, forward: Any, buffer_id: Optional[str] = None) -> None:
+    async def push_passthrough(
+        self, forward: Any, buffer_id: Optional[str] = None
+    ) -> None:
         """Simulate the connector forwarding a passthrough request over the WS (§5.1)."""
         if self._passthrough is None:
-            raise RuntimeError("no passthrough handler registered (call adapter.connect first)")
+            raise RuntimeError(
+                "no passthrough handler registered (call adapter.connect first)"
+            )
         await self._passthrough(forward, buffer_id)

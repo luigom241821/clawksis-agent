@@ -46,5 +46,7 @@ def test_delivery_targets_route_binds_profile_scope(tmp_path, monkeypatch):
     result = asyncio.run(cron_router.get_cron_delivery_targets())
 
     assert "chat" in seen, "route must call cron_delivery_targets()"
-    assert seen["chat"] == "12345", "route must bind the profile secret scope before the read"
+    assert seen["chat"] == "12345", (
+        "route must bind the profile secret scope before the read"
+    )
     assert result["targets"][0]["id"] == "local"

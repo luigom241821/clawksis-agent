@@ -29,18 +29,26 @@ def main() -> None:
     if sys.argv[1:2] == ["--terminate-safe"]:
         # Old Desktop treats exit 0 as a successful stop without reading stdout.
         # A stale preview request must never claim to have stopped a process.
-        print(json.dumps({
-            "ok": False,
-            "error": "Legacy preview termination is retired; no processes were stopped.",
-        }))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "Legacy preview termination is retired; no processes were stopped.",
+                }
+            )
+        )
         raise SystemExit(1)
-    print(json.dumps({
-        "ok": True,
-        "blocked": False,
-        "processes": [],
-        "retired": True,
-        "message": "Legacy venv preflight is retired; PM stages fresh runtime generations.",
-    }))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "blocked": False,
+                "processes": [],
+                "retired": True,
+                "message": "Legacy venv preflight is retired; PM stages fresh runtime generations.",
+            }
+        )
+    )
     raise SystemExit(0)
 
 

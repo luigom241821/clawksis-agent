@@ -26,8 +26,10 @@ class TestMiniMaxModelValidation:
             "suggested_base_url": None,
             "used_fallback": False,
         }
-        with patch("clawk_cli.models.fetch_api_models", return_value=None), \
-             patch("clawk_cli.models.probe_api_models", return_value=probe_payload):
+        with (
+            patch("clawk_cli.models.fetch_api_models", return_value=None),
+            patch("clawk_cli.models.probe_api_models", return_value=probe_payload),
+        ):
             yield
 
     # -------------------------------------------------------------------------
@@ -72,5 +74,3 @@ class TestMiniMaxModelValidation:
     # -------------------------------------------------------------------------
     # Test 4: Verify catalog path is used (probe_api_models returns None)
     # -------------------------------------------------------------------------
-
-

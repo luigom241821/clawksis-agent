@@ -38,7 +38,9 @@ IDLE_CAP_MS = 5 * 60_000
 STATE_KEY = "engagement_day_state"
 _MINUTE_MS = 60_000
 _ACTIVE_THRESHOLDS = (
-    (5 * _MINUTE_MS, "lt_5m"), (30 * _MINUTE_MS, "5m_to_30m"), (120 * _MINUTE_MS, "30m_to_2h"),
+    (5 * _MINUTE_MS, "lt_5m"),
+    (30 * _MINUTE_MS, "5m_to_30m"),
+    (120 * _MINUTE_MS, "30m_to_2h"),
     (360 * _MINUTE_MS, "2h_to_6h"),
 )
 _SWITCH_THRESHOLDS = ((2, "1"), (4, "2_to_3"), (11, "4_to_10"), (31, "11_to_30"))
@@ -47,7 +49,9 @@ _SWITCH_THRESHOLDS = ((2, "1"), (4, "2_to_3"), (11, "4_to_10"), (31, "11_to_30")
 # ``one_shot`` keeps the treatment it had while it read ``interactive``: a person typing ``clawk -z`` and a
 # script looping it look the same from inside the process; the label lets the rollup split them instead.
 _ENGAGED_ENTRYPOINTS = frozenset({"gateway_message", "interactive", "one_shot"})
-_INTERACTION_METRICS = frozenset({contract.TASK_STARTED_METRIC, contract.TASK_FINISHED_METRIC})
+_INTERACTION_METRICS = frozenset(
+    {contract.TASK_STARTED_METRIC, contract.TASK_FINISHED_METRIC}
+)
 _ALL = "*"
 
 # Test / live-probe seam: wall clock in epoch seconds.
@@ -55,7 +59,11 @@ _now: Callable[[], float] = time.time
 
 
 def active_minutes_bucket(active_ms: int) -> str:
-    return "0" if active_ms <= 0 else contract._bucket(active_ms, _ACTIVE_THRESHOLDS, "gte_6h")
+    return (
+        "0"
+        if active_ms <= 0
+        else contract._bucket(active_ms, _ACTIVE_THRESHOLDS, "gte_6h")
+    )
 
 
 def surfaces_used_bucket(count: int) -> str:
@@ -68,10 +76,14 @@ def turns_before_switch_bucket(turns: int) -> str:
 
 # ---- producer side (relay subscriber) ------------------------------------------------------------
 
+
 def interaction_surface(classified: list[tuple[str, dict, int]]) -> str | None:
     """The engagement surface of a task start/end counter, else None."""
     for metric_name, dimensions, _ in classified:
-        if metric_name in _INTERACTION_METRICS and dimensions.get("entrypoint") in _ENGAGED_ENTRYPOINTS:
+        if (
+            metric_name in _INTERACTION_METRICS
+            and dimensions.get("entrypoint") in _ENGAGED_ENTRYPOINTS
+        ):
             surface = dimensions.get("execution_surface", "")
             return surface if surface in contract.ENGAGEMENT_SURFACES else None
     return None
@@ -93,27 +105,50 @@ def turn_route(event: Any) -> tuple[str, str] | None:
         return None
     limits = contract._MODEL_ROUTE_MAX_LENGTHS
     route = tuple(data[k] for k in ("provider", "model"))
-    if not all(isinstance(v, str) and v == contract._metric_identifier(v, max_length=limits[k])
-               for k, v in zip(("provider", "model"), route)):
+    if not all(
+        isinstance(v, str) and v == contract._metric_identifier(v, max_length=limits[k])
+        for k, v in zip(("provider", "model"), route)
+    ):
         return None
     return route  # type: ignore[return-value]
 
 
-def record(store: Any, resource: dict[str, str], *, surface: str | None, route: tuple[str, str] | None) -> None:
+def record(
+    store: Any,
+    resource: dict[str, str],
+    *,
+    surface: str | None,
+    route: tuple[str, str] | None,
+) -> None:
     """The clock is read inside each write transaction: writers then apply in clock order, so no
     process closes a day another already closed. A busy store defers the interaction, never drops it."""
     profile_home = Path(store.database_path).parent.parent.parent
     root_home = _root_home(profile_home)
     owner = root_home == profile_home
     profile = _profile_hash(profile_home) if surface is not None else None
-    store.update_rollup_state(STATE_KEY, lambda state: apply(
-        state, now_ms=_now_ms(), resource=resource, surface=surface, route=route,
-        profile=profile if owner else None, owner=owner,
-    ))
+    store.update_rollup_state(
+        STATE_KEY,
+        lambda state: apply(
+            state,
+            now_ms=_now_ms(),
+            resource=resource,
+            surface=surface,
+            route=route,
+            profile=profile if owner else None,
+            owner=owner,
+        ),
+    )
     if profile is not None and not owner and _collects(root_home):
-        _root_store(root_home).update_rollup_state(STATE_KEY, lambda state: apply(
-            state, now_ms=_now_ms(), resource=resource, profile=profile, owner=True,
-        ))
+        _root_store(root_home).update_rollup_state(
+            STATE_KEY,
+            lambda state: apply(
+                state,
+                now_ms=_now_ms(),
+                resource=resource,
+                profile=profile,
+                owner=True,
+            ),
+        )
 
 
 def _now_ms() -> int:
@@ -161,30 +196,47 @@ def _root_store(home: Path) -> Any:
     with _root_stores_lock:
         if home not in _root_stores:
             root = home / "telemetry" / "shared_metrics"
-            _root_stores[home] = SharedMetricsStore(root / "metrics.sqlite3", root / "outbox")
+            _root_stores[home] = SharedMetricsStore(
+                root / "metrics.sqlite3", root / "outbox"
+            )
         return _root_stores[home]
 
 
 # ---- the rollup (pure) ---------------------------------------------------------------------------
+
 
 def _utc_day(now_ms: int) -> str:
     return datetime.fromtimestamp(now_ms / 1000, tz=UTC).date().isoformat()
 
 
 def _fresh(day: str, resource: dict[str, str], owner: bool) -> dict[str, Any]:
-    return {"day": day, "resource": resource, "surfaces": {}, "models": {}, "profiles": [], "owner": owner}
+    return {
+        "day": day,
+        "resource": resource,
+        "surfaces": {},
+        "models": {},
+        "profiles": [],
+        "owner": owner,
+    }
 
 
 def _valid_state(state: Any) -> bool:
     return (
-        isinstance(state, dict) and isinstance(state.get("day"), str)
-        and isinstance(state.get("surfaces"), dict) and isinstance(state.get("models"), dict)
+        isinstance(state, dict)
+        and isinstance(state.get("day"), str)
+        and isinstance(state.get("surfaces"), dict)
+        and isinstance(state.get("models"), dict)
     )
 
 
 def apply(
-    state: dict[str, Any] | None, *, now_ms: int, resource: dict[str, str],
-    surface: str | None = None, route: tuple[str, str] | None = None, profile: str | None = None,
+    state: dict[str, Any] | None,
+    *,
+    now_ms: int,
+    resource: dict[str, str],
+    surface: str | None = None,
+    route: tuple[str, str] | None = None,
+    profile: str | None = None,
     owner: bool = False,
 ) -> tuple[dict[str, Any], list[tuple[str, dict, dict, str]]]:
     """Fold one interaction (``surface``), attended turn (``route``) and/or a profile's user turn
@@ -215,7 +267,11 @@ def apply(
 
 
 def _primary(models: dict[str, Any]) -> tuple[str, str]:
-    counted = [(int(n), key) for key, n in models.items() if isinstance(n, int) and key.count(" ") == 1]
+    counted = [
+        (int(n), key)
+        for key, n in models.items()
+        if isinstance(n, int) and key.count(" ") == 1
+    ]
     if not counted:
         return "none", "none"
     provider, model = max(counted)[1].split(" ")
@@ -226,28 +282,50 @@ def close_day(state: dict[str, Any]) -> list[tuple[str, dict, dict, str]]:
     """The rows one closed day reports: none for a day with no engaged surface, except the root
     profile's host row (0 minutes, 0 surfaces) carrying the day's active-profile count."""
     day, resource = state["day"], state.get("resource") or {}
-    streams = {k: v for k, v in state["surfaces"].items() if isinstance(v, list) and len(v) == 2}
+    streams = {
+        k: v
+        for k, v in state["surfaces"].items()
+        if isinstance(v, list) and len(v) == 2
+    }
     surfaces = {k: v for k, v in streams.items() if k in contract.ENGAGEMENT_SURFACES}
     profiles = state.get("profiles") if state.get("owner") is True else None
     active_profiles = len(profiles) if isinstance(profiles, list) else 0
     if not surfaces and not active_profiles:
         return []
     rows = [
-        (contract.ENGAGEMENT_SURFACE_METRIC,
-         {"active_minutes_bucket": active_minutes_bucket(int(v[0])), "surface": name}, resource, day)
+        (
+            contract.ENGAGEMENT_SURFACE_METRIC,
+            {
+                "active_minutes_bucket": active_minutes_bucket(int(v[0])),
+                "surface": name,
+            },
+            resource,
+            day,
+        )
         for name, v in sorted(surfaces.items())
     ]
     provider, model = _primary(state["models"])
-    rows.append((contract.ENGAGEMENT_DAY_METRIC, {
-        "active_minutes_bucket": active_minutes_bucket(int((streams.get(_ALL) or [0])[0])),
-        "active_profile_count_bucket": contract.size_bucket(active_profiles),
-        "primary_model": model, "primary_provider": provider,
-        "surfaces_used_count": surfaces_used_bucket(len(surfaces)),
-    }, resource, day))
+    rows.append(
+        (
+            contract.ENGAGEMENT_DAY_METRIC,
+            {
+                "active_minutes_bucket": active_minutes_bucket(
+                    int((streams.get(_ALL) or [0])[0])
+                ),
+                "active_profile_count_bucket": contract.size_bucket(active_profiles),
+                "primary_model": model,
+                "primary_provider": provider,
+                "surfaces_used_count": surfaces_used_bucket(len(surfaces)),
+            },
+            resource,
+            day,
+        )
+    )
     return rows
 
 
 # ---- per-conversation state kept by the relay runtime -------------------------------------------
+
 
 @dataclass
 class RouteRun:
@@ -264,7 +342,9 @@ class RouteRun:
 
     def take(self) -> tuple[dict[str, str], int] | None:
         """The model being left and its turn count; resets (the next model starts from zero)."""
-        taken = (self.route, self.turns) if self.route is not None and self.turns else None
+        taken = (
+            (self.route, self.turns) if self.route is not None and self.turns else None
+        )
         self.route, self.turns = None, 0
         return taken
 
@@ -291,9 +371,15 @@ class SessionTally:
         if not other.turns:
             return
         if not self.turns or other.first_turn_ns < self.first_turn_ns:
-            self.start_fields, self.first_turn_ns = other.start_fields, other.first_turn_ns
+            self.start_fields, self.first_turn_ns = (
+                other.start_fields,
+                other.first_turn_ns,
+            )
         if other.last_turn_ns >= self.last_turn_ns:
-            self.last_outcome, self.last_turn_ns = other.last_outcome, other.last_turn_ns
+            self.last_outcome, self.last_turn_ns = (
+                other.last_outcome,
+                other.last_turn_ns,
+            )
         self.turns += other.turns
         self.failed_turns += other.failed_turns
         self.model_calls += other.model_calls
@@ -307,11 +393,16 @@ class SessionTally:
 
         return {
             **session_fields(
-                self.start_fields, turns=self.turns, failed_turns=self.failed_turns, last_outcome=self.last_outcome,
+                self.start_fields,
+                turns=self.turns,
+                failed_turns=self.failed_turns,
+                last_outcome=self.last_outcome,
                 active_ms=max(0, self.last_turn_ns - self.first_turn_ns) // 1_000_000,
             ),
             # Messages the conversation added: each user turn, each primary-model reply, each tool result.
-            "message_count_bucket": contract.long_size_bucket(self.turns + self.replies + self.tool_calls),
+            "message_count_bucket": contract.long_size_bucket(
+                self.turns + self.replies + self.tool_calls
+            ),
             "model_call_count_bucket": contract.long_size_bucket(self.model_calls),
             "tool_call_count_bucket": contract.long_size_bucket(self.tool_calls),
         }

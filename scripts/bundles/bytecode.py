@@ -40,15 +40,21 @@ def _import_roots(root: Path) -> list[Path]:
     for source_root in roots + [root / "venv", root / "pm-runtime"]:
         if not source_root.is_dir():
             raise FileNotFoundError(f"missing import root: {source_root}")
-    sites = sorted((root / "venv").glob("lib/python*/site-packages")) + \
-        sorted((root / "venv").glob("Lib/site-packages"))
+    sites = sorted((root / "venv").glob("lib/python*/site-packages")) + sorted(
+        (root / "venv").glob("Lib/site-packages")
+    )
     if len(sites) != 1:
-        raise ValueError(f"expected exactly one staged venv site-packages, found {len(sites)}")
+        raise ValueError(
+            f"expected exactly one staged venv site-packages, found {len(sites)}"
+        )
     roots.append(sites[0])
-    pm_sites = sorted((root / "pm-runtime").glob("lib/python*/site-packages")) + \
-        sorted((root / "pm-runtime").glob("Lib/site-packages"))
+    pm_sites = sorted((root / "pm-runtime").glob("lib/python*/site-packages")) + sorted(
+        (root / "pm-runtime").glob("Lib/site-packages")
+    )
     if len(pm_sites) != 1:
-        raise ValueError(f"expected exactly one PM runtime site-packages, found {len(pm_sites)}")
+        raise ValueError(
+            f"expected exactly one PM runtime site-packages, found {len(pm_sites)}"
+        )
     roots.append(pm_sites[0])
     return roots
 
@@ -56,6 +62,7 @@ def _import_roots(root: Path) -> list[Path]:
 def _uncovered(root: Path) -> tuple[list[Path], int]:
     """Parseable .py files without a pyc, and unparseable fixtures skipped."""
     from importlib.util import cache_from_source
+
     missing: list[Path] = []
     unparseable = 0
     for path in root.rglob("*.py"):
@@ -85,15 +92,28 @@ def bake_bytecode(root: Path, python: Path) -> dict:
     total = 0
     for source_root in _import_roots(root):
         subprocess.run(
-            [str(python), "-I", "-m", "compileall", "-q",
-             "--invalidation-mode", "unchecked-hash", str(source_root)],
-            check=True, timeout=30 * 60, stdin=subprocess.DEVNULL)
+            [
+                str(python),
+                "-I",
+                "-m",
+                "compileall",
+                "-q",
+                "--invalidation-mode",
+                "unchecked-hash",
+                str(source_root),
+            ],
+            check=True,
+            timeout=30 * 60,
+            stdin=subprocess.DEVNULL,
+        )
         missing, _unparseable = _uncovered(source_root)
         if missing:
             sample = ", ".join(str(m.relative_to(root)) for m in missing[:5])
-            raise ValueError(f"{len(missing)} payload modules have no bytecode pyc "
-                             f"({sample}…): a fresh install would cold-compile them "
-                             "every launch")
+            raise ValueError(
+                f"{len(missing)} payload modules have no bytecode pyc "
+                f"({sample}…): a fresh install would cold-compile them "
+                "every launch"
+            )
         total += sum(1 for _ in source_root.rglob("__pycache__/*.pyc"))
     # Pycs are read-only BEFORE packaging so a stale-source rewrite (which
     # unchecked-hash never triggers anyway) or any incidental write can never

@@ -134,7 +134,9 @@ class TestInodeReplacement:
         assert registry.release(first) is True
         assert first._conn is None
 
-    def test_open_failure_after_replacement_leaves_no_stale_entry(self, tmp_path, monkeypatch):
+    def test_open_failure_after_replacement_leaves_no_stale_entry(
+        self, tmp_path, monkeypatch
+    ):
         """Replacement-open failure must not leave a closed stale object
         as the registry's authority for the path."""
         db_path = tmp_path / "state.db"
@@ -304,7 +306,9 @@ class TestTeardownOutsideLock:
         assert registry.release(first) is True
         assert registry.release(second) is True
 
-    def test_final_release_does_not_hold_registry_lock_during_close(self, tmp_path, monkeypatch):
+    def test_final_release_does_not_hold_registry_lock_during_close(
+        self, tmp_path, monkeypatch
+    ):
         """A final release's teardown (token-writer stop, WAL checkpoint,
         read-pool drain) must run OUTSIDE the registry lock — otherwise
         one state.db's close stalls acquisition for every other."""
@@ -383,7 +387,10 @@ class TestTeardownOutsideLock:
         verifier = registry.acquire(db_path)
         try:
             with verifier._lock:
-                assert verifier._conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+                assert (
+                    verifier._conn.execute("PRAGMA integrity_check").fetchone()[0]
+                    == "ok"
+                )
         finally:
             registry.release(verifier)
         stats = registry.stats()
@@ -442,7 +449,9 @@ class TestLegacyCloseSemantics:
 
 
 class TestAcquireSingleFlight:
-    def test_concurrent_first_acquires_share_one_generation(self, tmp_path, monkeypatch):
+    def test_concurrent_first_acquires_share_one_generation(
+        self, tmp_path, monkeypatch
+    ):
         """Two threads acquiring a cold path concurrently must end up
         sharing ONE generation, with the loser's instance torn down."""
         db_path = tmp_path / "state.db"
@@ -543,7 +552,9 @@ class TestMultiGenerationTeardownBarrier:
         assert current is not old
         return db_path, old, current
 
-    def test_retired_drain_does_not_lift_a_pending_current_teardown(self, tmp_path, monkeypatch):
+    def test_retired_drain_does_not_lift_a_pending_current_teardown(
+        self, tmp_path, monkeypatch
+    ):
         """close_all() must not report a finished sweep over a pending close."""
         db_path, old, current = self._two_generations(tmp_path, monkeypatch)
         resolved = Path(db_path).resolve()
@@ -571,7 +582,9 @@ class TestMultiGenerationTeardownBarrier:
 
             sweeper = threading.Thread(target=_close_all, daemon=True)
             sweeper.start()
-            assert not sweep_done.wait(0.5), "close_all returned with a close still pending"
+            assert not sweep_done.wait(0.5), (
+                "close_all returned with a close still pending"
+            )
             assert current._conn is not None
 
             resume.set()
@@ -585,7 +598,9 @@ class TestMultiGenerationTeardownBarrier:
         assert current._conn is None
         assert registry._tearing_down.get(resolved) is None
 
-    def test_replacement_is_not_published_before_the_last_close_settles(self, tmp_path, monkeypatch):
+    def test_replacement_is_not_published_before_the_last_close_settles(
+        self, tmp_path, monkeypatch
+    ):
         """acquire() must not open a writer on top of an unfinished close."""
         db_path, old, current = self._two_generations(tmp_path, monkeypatch)
         entered, resume = self._pause_teardown_of(monkeypatch, current)
@@ -609,7 +624,9 @@ class TestMultiGenerationTeardownBarrier:
 
             opener = threading.Thread(target=_acquire, daemon=True)
             opener.start()
-            assert not acquire_done.wait(0.5), "replacement published before the previous close"
+            assert not acquire_done.wait(0.5), (
+                "replacement published before the previous close"
+            )
 
             resume.set()
             assert acquire_done.wait(10.0)
@@ -673,7 +690,9 @@ class TestCloseAllUnder:
         profile_dir.mkdir(parents=True)
         assert registry.close_all_under(profile_dir) == 0
 
-    def test_waits_for_admitted_teardown_after_generation_is_gone(self, tmp_path, monkeypatch):
+    def test_waits_for_admitted_teardown_after_generation_is_gone(
+        self, tmp_path, monkeypatch
+    ):
         """Final release admits teardown before close; rmtree still needs that wait."""
         profile_dir = tmp_path / "profiles" / "work"
         profile_dir.mkdir(parents=True)

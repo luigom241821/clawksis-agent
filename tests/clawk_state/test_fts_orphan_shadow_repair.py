@@ -16,7 +16,8 @@ def _orphan_family(db_path, family: str) -> None:
     raw.isolation_level = None
     raw.execute("PRAGMA writable_schema=ON")
     raw.execute(
-        "DELETE FROM sqlite_master WHERE name = ? AND sql LIKE 'CREATE VIRTUAL TABLE%'", (family,),
+        "DELETE FROM sqlite_master WHERE name = ? AND sql LIKE 'CREATE VIRTUAL TABLE%'",
+        (family,),
     )
     version = raw.execute("PRAGMA schema_version").fetchone()[0]
     raw.execute(f"PRAGMA schema_version={version + 1}")
@@ -60,7 +61,9 @@ def test_orphaned_base_family_is_repaired_and_healthy_trigram_untouched(tmp_path
             hits = reopened._conn.execute(
                 "SELECT count(*) FROM messages_fts WHERE messages_fts MATCH 'orphan'"
             ).fetchone()[0]
-        assert hits == 3, "recreated index must be rebuilt from the canonical messages table"
+        assert hits == 3, (
+            "recreated index must be rebuilt from the canonical messages table"
+        )
     finally:
         reopened.close()
     # Same rowids: the healthy family was neither dropped nor recreated.

@@ -46,7 +46,6 @@ class TestThreadLocalApprovalCallback:
     """GHSA-qg5c-hvr5-hjgr: set_approval_callback must be per-thread so
     concurrent ACP sessions don't stomp on each other's handlers."""
 
-
     def test_callback_not_visible_in_different_thread(self):
         """Thread A's callback is NOT visible to Thread B."""
         from tools.terminal_tool import (
@@ -64,12 +63,14 @@ class TestThreadLocalApprovalCallback:
             set_approval_callback(cb_a)
             # Pause so thread B has time to set its own callback
             import time
+
             time.sleep(0.05)
             seen_in_a.append(_get_approval_callback())
 
         def thread_b():
             set_approval_callback(cb_b)
             import time
+
             time.sleep(0.05)
             seen_in_b.append(_get_approval_callback())
 
@@ -109,7 +110,6 @@ class TestThreadLocalApprovalCallback:
         # Main thread still has its callback
         assert _get_approval_callback() is cb_main
 
-
     def test_sudo_password_cache_does_not_leak_across_threads(self):
         """Interactive sudo cache must not bleed into another executor thread."""
         from tools.terminal_tool_sudo import (
@@ -132,7 +132,6 @@ class TestThreadLocalApprovalCallback:
 
         assert worker_saw == [""]
         assert _get_cached_sudo_password() == "main-thread-password"
-
 
 
 class TestAcpExecAskGate:
@@ -164,7 +163,9 @@ class TestAcpExecAskGate:
 
         # Without CLAWK_INTERACTIVE: takes auto-approve path, callback NOT called
         result = check_all_command_guards(
-            "rm -rf /tmp/test-exec-ask", "local", approval_callback=fake_cb,
+            "rm -rf /tmp/test-exec-ask",
+            "local",
+            approval_callback=fake_cb,
         )
         assert result["approved"] is True
         assert called_with == [], (
@@ -176,7 +177,9 @@ class TestAcpExecAskGate:
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         called_with.clear()
         result = check_all_command_guards(
-            "rm -rf /tmp/test-exec-ask", "local", approval_callback=fake_cb,
+            "rm -rf /tmp/test-exec-ask",
+            "local",
+            approval_callback=fake_cb,
         )
         assert called_with, (
             "with CLAWK_INTERACTIVE the approval path should consult the "
@@ -184,4 +187,3 @@ class TestAcpExecAskGate:
             "GHSA-96vc-wcxf-jjff"
         )
         assert result["approved"] is True
-

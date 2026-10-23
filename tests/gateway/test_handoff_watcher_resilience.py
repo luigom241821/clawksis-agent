@@ -250,8 +250,6 @@ async def test_reclaim_runs_per_profile_store(monkeypatch):
     )
 
 
-
-
 def test_reclaim_stale_running_handoffs_flips_only_running_rows(tmp_path):
     """DB-level: only 'running' rows are touched, and their ids are returned."""
     from clawk_state import SessionDB

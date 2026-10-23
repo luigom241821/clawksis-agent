@@ -26,7 +26,10 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from gateway.platforms.base import (
-    _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS, _MEDIA_DELIVERY_DENIED_PREFIXES, _ROOT_CREDENTIAL_PATHS)
+    _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS,
+    _MEDIA_DELIVERY_DENIED_PREFIXES,
+    _ROOT_CREDENTIAL_PATHS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +39,12 @@ _FETCH_MAX_BYTES = 50 * 1024 * 1024
 
 _DENIED_PREFIXES = tuple(PurePosixPath(p) for p in _MEDIA_DELIVERY_DENIED_PREFIXES)
 # Credential dirs under the sandbox home plus the Clawksis stores, which live at ``~/.clawksis`` there.
-_DENIED_HOME_RELATIVE = tuple(PurePosixPath(s) for s in _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS) + tuple(
-    PurePosixPath(".clawk", *PurePosixPath(rel.replace(os.sep, "/")).parts) for rel in _ROOT_CREDENTIAL_PATHS)
+_DENIED_HOME_RELATIVE = tuple(
+    PurePosixPath(s) for s in _MEDIA_DELIVERY_DENIED_HOME_SUBPATHS
+) + tuple(
+    PurePosixPath(".clawk", *PurePosixPath(rel.replace(os.sep, "/")).parts)
+    for rel in _ROOT_CREDENTIAL_PATHS
+)
 
 
 def remote_path_is_denied(path: str, remote_home: Optional[str]) -> bool:
@@ -58,34 +65,52 @@ def remote_path_is_denied(path: str, remote_home: Optional[str]) -> bool:
     if home is not None:
         return any(_under(home / rel) for rel in _DENIED_HOME_RELATIVE)
     parts = target.parts
-    return any(parts[i:i + len(rel.parts)] == rel.parts
-               for rel in _DENIED_HOME_RELATIVE for i in range(len(parts) - len(rel.parts) + 1))
+    return any(
+        parts[i : i + len(rel.parts)] == rel.parts
+        for rel in _DENIED_HOME_RELATIVE
+        for i in range(len(parts) - len(rel.parts) + 1)
+    )
 
 
 def _active_remote_env():
     """The live remote BaseEnvironment for the current session, or None (local backend / no env yet).
     Keyed by the session id the turn registered its sandbox under (falls back to the session key)."""
-    from agent.prompt_builder import _REMOTE_TERMINAL_BACKENDS, _plugin_backend_is_remote
+    from agent.prompt_builder import (
+        _REMOTE_TERMINAL_BACKENDS,
+        _plugin_backend_is_remote,
+    )
     from gateway.platforms.base import _tenv
     from gateway.session_context import get_session_env
     from tools.terminal_tool_lifecycle import get_active_env
+
     backend = _tenv("TERMINAL_ENV", "local").strip().lower()
-    if backend not in _REMOTE_TERMINAL_BACKENDS and not _plugin_backend_is_remote(backend):
+    if backend not in _REMOTE_TERMINAL_BACKENDS and not _plugin_backend_is_remote(
+        backend
+    ):
         return None
-    return get_active_env(get_session_env("CLAWK_SESSION_ID") or get_session_env("CLAWK_SESSION_KEY") or "default")
+    return get_active_env(
+        get_session_env("CLAWK_SESSION_ID")
+        or get_session_env("CLAWK_SESSION_KEY")
+        or "default"
+    )
 
 
 def fetch_remote_media(path: str) -> Optional[str]:
     """Host path of a validated copy of sandbox file ``path``, or None (never raises). Only fires
     when a remote backend is active; the caller has already failed local validation."""
     from gateway.media_policy import media_delivery_strict
+
     if media_delivery_strict():
         return None
     env = _active_remote_env()
     if env is None:
         return None
     from gateway.platforms.base import (
-        DOCUMENT_CACHE_DIR, _log_safe_path, _normalize_media_tag_path, validate_media_delivery_path)
+        DOCUMENT_CACHE_DIR,
+        _log_safe_path,
+        _normalize_media_tag_path,
+        validate_media_delivery_path,
+    )
     from tools.environments.base import FileFetchError
 
     remote_home = getattr(env, "_remote_home", None)
@@ -107,14 +132,22 @@ def fetch_remote_media(path: str) -> Optional[str]:
         dest.parent.mkdir(parents=True, exist_ok=True)
         env.fetch_file(resolved, dest, max_bytes=_FETCH_MAX_BYTES)
     except FileFetchError as exc:
-        logger.warning("Remote media fetch of %s skipped: %s", _log_safe_path(candidate), exc)
+        logger.warning(
+            "Remote media fetch of %s skipped: %s", _log_safe_path(candidate), exc
+        )
         return None
     except Exception:
-        logger.warning("Remote media fetch of %s failed", _log_safe_path(candidate), exc_info=True)
+        logger.warning(
+            "Remote media fetch of %s failed", _log_safe_path(candidate), exc_info=True
+        )
         return None
     validated = validate_media_delivery_path(str(dest))
     if not validated:
         dest.unlink(missing_ok=True)
         return None
-    logger.info("Fetched remote media %s from the %s sandbox", _log_safe_path(candidate), type(env).__name__)
+    logger.info(
+        "Fetched remote media %s from the %s sandbox",
+        _log_safe_path(candidate),
+        type(env).__name__,
+    )
     return validated

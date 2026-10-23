@@ -20,26 +20,9 @@ from run_agent import AIAgent
 
 
 class TestIsThinkingOnlyAssistant:
-
     def test_plain_assistant_reply_is_not_thinking_only(self):
         msg = {"role": "assistant", "content": "Hello there"}
         assert not AIAgent._is_thinking_only_assistant(msg)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def test_non_dict_returns_false(self):
         assert not AIAgent._is_thinking_only_assistant(None)
@@ -80,7 +63,6 @@ class TestIsThinkingOnlyAssistant:
 
 
 class TestDropThinkingOnlyAndMergeUsers:
-
     def test_empty_list_passthrough(self):
         assert AIAgent._drop_thinking_only_and_merge_users([]) == []
 
@@ -104,7 +86,6 @@ class TestDropThinkingOnlyAndMergeUsers:
         assert scaffold["content"] == "SUMMARY SCAFFOLD"
         assert live_ask["content"] == "REAL ASK"
 
-
     def test_preserves_alternation_after_drop(self):
         msgs = [
             {"role": "user", "content": "u1"},
@@ -117,8 +98,6 @@ class TestDropThinkingOnlyAndMergeUsers:
         assert roles == ["user", "assistant"]
         assert out[0]["content"] == "u1\n\nu2"
         assert out[1]["content"] == "real reply"
-
-
 
     def test_does_not_touch_stored_messages_original_list_unmutated(self):
         original_first_user = {"role": "user", "content": "u1"}
@@ -139,7 +118,12 @@ class TestDropThinkingOnlyAndMergeUsers:
         # it did somehow, the surrounding tool result stays put.
         msgs = [
             {"role": "user", "content": "u1"},
-            {"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "t", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "tool_calls": [
+                    {"id": "c1", "function": {"name": "t", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "c1", "content": "ok"},
             {"role": "assistant", "content": "", "reasoning": "..."},
             {"role": "user", "content": "u2"},
@@ -159,7 +143,6 @@ class TestDropThinkingOnlyAndMergeUsers:
             {"type": "text", "text": "first"},
             {"type": "text", "text": "second"},
         ]
-
 
     def test_trailing_prefill_stubs_dropped_so_request_ends_on_user(self):
         # Regression for the Gemini 400 "Requests ending with a model turn are
@@ -208,7 +191,11 @@ class TestCompactionCheckpointCarrier:
     REASONING = {"type": "reasoning", "encrypted_content": "per-turn"}
 
     def _carrier(self, items):
-        return {"role": "assistant", "content": "", "codex_reasoning_items": list(items)}
+        return {
+            "role": "assistant",
+            "content": "",
+            "codex_reasoning_items": list(items),
+        }
 
     def test_reasoning_only_carrier_is_still_thinking_only(self):
         """The existing contract is unchanged for ordinary reasoning turns."""

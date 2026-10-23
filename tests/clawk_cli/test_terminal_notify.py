@@ -35,7 +35,13 @@ def test_osc9_body_emitted_and_sanitized_only_when_flag_on(monkeypatch):
 
 
 def test_warp_osc777_only_under_supported_warp_build(monkeypatch):
-    out = _ring(monkeypatch, flag_on=True, env=_WARP_OK, context="approval", detail="rm -rf build")
+    out = _ring(
+        monkeypatch,
+        flag_on=True,
+        env=_WARP_OK,
+        context="approval",
+        detail="rm -rf build",
+    )
     prefix = "\x1b]777;notify;warp://cli-agent;"
     assert out.count(prefix) == 1
     payload = json.loads(out.split(prefix, 1)[1].rstrip("\x07"))
@@ -46,18 +52,28 @@ def test_warp_osc777_only_under_supported_warp_build(monkeypatch):
     assert payload["v"] == 1
     # Broken build (advertises the protocol var but can't render) → OSC 9 only.
     broken = dict(_WARP_OK, WARP_CLIENT_VERSION="v0.2026.03.25.08.24.stable_05")
-    assert prefix not in _ring(monkeypatch, flag_on=True, env=broken, context="approval")
+    assert prefix not in _ring(
+        monkeypatch, flag_on=True, env=broken, context="approval"
+    )
     # Not Warp at all → OSC 9 only.
     not_warp = dict(_WARP_OK, TERM_PROGRAM="ghostty")
-    assert prefix not in _ring(monkeypatch, flag_on=True, env=not_warp, context="approval")
+    assert prefix not in _ring(
+        monkeypatch, flag_on=True, env=not_warp, context="approval"
+    )
 
 
-def test_running_app_gets_bell_and_osc9_on_its_loop_never_a_second_tty_writer(monkeypatch):
+def test_running_app_gets_bell_and_osc9_on_its_loop_never_a_second_tty_writer(
+    monkeypatch,
+):
     """With the prompt_toolkit app live, the bell + notification must reach the tty through the
     app's output ON THE APP LOOP, never via a second writer from the calling thread."""
     for key in _WARP_OK:
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr(terminal_notify, "write_tty", lambda seq: pytest.fail(f"stray tty write: {seq!r}"))
+    monkeypatch.setattr(
+        terminal_notify,
+        "write_tty",
+        lambda seq: pytest.fail(f"stray tty write: {seq!r}"),
+    )
 
     class _Output:
         raw = []

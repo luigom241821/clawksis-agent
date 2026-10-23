@@ -1,4 +1,5 @@
 """Inline-shell snippets never turn a silent failure into an empty (looks-fine) result."""
+
 from agent.skill_preprocessing import run_inline_shell
 
 

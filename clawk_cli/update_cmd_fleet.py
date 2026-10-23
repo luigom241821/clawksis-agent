@@ -33,8 +33,13 @@ _FRESH_RESTART_SUPERVISORS = frozenset({"systemd", "launchd", "service", "s6"})
 
 _SYSTEMD_SCOPES = (("user", ["systemctl", "--user"]), ("system", ["systemctl"]))
 _LIST_GATEWAY_UNITS = [
-    "list-units", "clawk-gateway*", "clawk-serve*", "clawksis-dashboard*",
-    "--plain", "--no-legend", "--no-pager",
+    "list-units",
+    "clawk-gateway*",
+    "clawk-serve*",
+    "clawksis-dashboard*",
+    "--plain",
+    "--no-legend",
+    "--no-pager",
 ]
 
 
@@ -60,10 +65,13 @@ def _fleet_restart_pending_marker_path() -> Path:
     is still read and cleared here so an in-flight update is discharged after the upgrade.
     """
     from clawk_cli.update_cmd import get_clawk_home
+
     return get_clawk_home() / _FLEET_RESTART_PENDING_NAME
 
 
-def _write_fleet_restart_pending_marker(*, expected_sha: str = "", runtimes: list[dict] | None = None, owner: str = "") -> bool:
+def _write_fleet_restart_pending_marker(
+    *, expected_sha: str = "", runtimes: list[dict] | None = None, owner: str = ""
+) -> bool:
     """Arm the HOST pull→restart obligation. Never raises; False when no store every profile reads took it.
 
     An unwritable host state dir falls back to this profile's per-home marker, which settles the
@@ -77,17 +85,26 @@ def _write_fleet_restart_pending_marker(*, expected_sha: str = "", runtimes: lis
         return True
     from clawk_cli.update_cmd import _m
     from clawk_cli.update_host_obligation import arm_host_obligation
+
     if _m()._pytest_owns_live_checkout(_fleet_restart_pending_marker_path().parent):
-        logger.debug("Skipping fleet-restart-pending obligation under pytest (live checkout)")
+        logger.debug(
+            "Skipping fleet-restart-pending obligation under pytest (live checkout)"
+        )
         return True
-    return arm_host_obligation(_fleet_restart_pending_marker_path(), expected_sha=expected_sha, runtimes=runtimes,
-                               profile=_current_profile_name(), owner=owner)
+    return arm_host_obligation(
+        _fleet_restart_pending_marker_path(),
+        expected_sha=expected_sha,
+        runtimes=runtimes,
+        profile=_current_profile_name(),
+        owner=owner,
+    )
 
 
 def _current_profile_name() -> str:
     """Profile whose CLI armed the obligation (diagnostics only — the record is host-scoped)."""
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         return get_active_profile_name() or "default"
     except Exception:
         return ""
@@ -97,13 +114,17 @@ def _clear_fleet_restart_pending_marker() -> None:
     """Discharge the obligation for the whole host (legacy per-home marker included). Never raises."""
     from clawk_cli.update_cmd import _m
     from clawk_cli.update_host_obligation import clear_host_obligation
+
     clear_host_obligation()
-    _m()._clear_marker_file(_fleet_restart_pending_marker_path(), label="fleet-restart-pending")
+    _m()._clear_marker_file(
+        _fleet_restart_pending_marker_path(), label="fleet-restart-pending"
+    )
 
 
 def _fleet_restart_obligation_armed() -> bool:
     """True when this HOST owes a fleet restart — from any profile's CLI."""
     from clawk_cli.update_host_obligation import host_obligation_present
+
     if host_obligation_present():
         return True
     with suppress(OSError):
@@ -116,7 +137,11 @@ def _obligation_fields() -> dict[str, str] | None:
 
     ``None`` means nothing armed OR a malformed record; both must leave the obligation standing.
     """
-    from clawk_cli.update_host_obligation import host_obligation_present, obligation_fields
+    from clawk_cli.update_host_obligation import (
+        host_obligation_present,
+        obligation_fields,
+    )
+
     fields = obligation_fields()
     if fields is not None:
         return fields
@@ -140,8 +165,10 @@ def _obligation_fields() -> dict[str, str] | None:
 def _current_checkout_sha() -> str | None:
     """Current on-disk checkout HEAD, or None if it cannot be resolved."""
     from clawk_cli.update_cmd import _capture_head_sha, _m
+
     try:
         from clawk_cli.version_info import get_code_identity
+
         sha = (get_code_identity(refresh=True) or {}).get("sha")
         return str(sha) if sha else None
     except Exception:
@@ -169,7 +196,9 @@ def _receipt_looks_unfinished(receipt: dict) -> bool:
     return bool(receipt.get("stop_reason")) and not succeeded
 
 
-def _receipt_reports_stale_runtime(receipt: dict, expected_sha: str | None = None) -> bool:
+def _receipt_reports_stale_runtime(
+    receipt: dict, expected_sha: str | None = None
+) -> bool:
     """True when ``update_receipts/latest.json`` records a runtime SHA skew.
 
     Prefer the post-restart ``fleet`` matrix. ``plan.runtimes[].code_sha`` is captured
@@ -179,6 +208,7 @@ def _receipt_reports_stale_runtime(receipt: dict, expected_sha: str | None = Non
     See #95294.
     """
     from clawk_cli.update_cmd import _current_checkout_sha
+
     if not isinstance(receipt, dict):
         return False
     expected_sha = expected_sha or _current_checkout_sha()
@@ -211,7 +241,15 @@ def _receipt_reports_stale_runtime(receipt: dict, expected_sha: str | None = Non
 
 
 _SUPERVISED_SERVE_BACKENDS = frozenset(
-    {"manual-serve", "desktop", "desktop-ssh", "systemd", "launchd", "windows-service", "service"}
+    {
+        "manual-serve",
+        "desktop",
+        "desktop-ssh",
+        "systemd",
+        "launchd",
+        "windows-service",
+        "service",
+    }
 )
 # Backends whose supervisor restarts the process without any updater bookkeeping. ``manual-serve``
 # is excluded: it owes a durable handoff (``defer_manual_serve``) before it stops counting.
@@ -221,15 +259,23 @@ _SUPERVISED_SERVE_BACKENDS = frozenset(
 _SUPERVISOR_OWNED_SERVE_BACKENDS = _SUPERVISED_SERVE_BACKENDS - {"manual-serve"}
 
 
-def _receipt_owed_gateways(receipt: dict, pending_manual: list[dict]) -> set[tuple[str, str]] | None:
+def _receipt_owed_gateways(
+    receipt: dict, pending_manual: list[dict]
+) -> set[tuple[str, str]] | None:
     """Pure coverage classification after manual retention of this receipt snapshot.
 
     Empty means this receipt owes no gateways, not that an independent marker owes none. Unknown identities, unclassified serve backends and failed manual transfers make coverage unverified.
     """
     plan = receipt.get("plan") or {}
-    entries: list[tuple[object, str | None]] = [(entry, None) for entry in plan.get("runtimes") or []]
-    entries.extend((entry, None) for entry in receipt.get("pending_manual_serves") or [])
-    entries.extend((entry, None) for entry in receipt.get("carried_manual_serves") or [])
+    entries: list[tuple[object, str | None]] = [
+        (entry, None) for entry in plan.get("runtimes") or []
+    ]
+    entries.extend(
+        (entry, None) for entry in receipt.get("pending_manual_serves") or []
+    )
+    entries.extend(
+        (entry, None) for entry in receipt.get("carried_manual_serves") or []
+    )
     entries.extend((entry, "gateway") for entry in receipt.get("fleet") or [])
     owed: set[tuple[str, str]] = set()
     unverified = False
@@ -245,7 +291,11 @@ def _receipt_owed_gateways(receipt: dict, pending_manual: list[dict]) -> set[tup
         # obligation mechanism's — a host running a dashboard carries such a row in every receipt,
         # and a blanket veto made the gateway warning permanently undischargeable there (#115090).
         # Only an unclassified backend or a failed manual transfer still makes coverage unverified.
-        if kind in ("serve", "dashboard") and entry.get("supervisor") in _SUPERVISED_SERVE_BACKENDS and entry not in pending_manual:
+        if (
+            kind in ("serve", "dashboard")
+            and entry.get("supervisor") in _SUPERVISED_SERVE_BACKENDS
+            and entry not in pending_manual
+        ):
             continue
         if kind != "gateway" or not profile or profile == "unknown":
             unverified = True
@@ -266,11 +316,19 @@ def _fleet_covered_gateways(fleet: list) -> set[tuple[str, str]] | None:
         if not profile or profile == "unknown":
             return None  # unidentified runtime: the matrix cannot vouch for it
         covered.add(("gateway", profile))
-        covered.update(("gateway", served) for served in row.get("served_profiles") or [])
+        covered.update(
+            ("gateway", served) for served in row.get("served_profiles") or []
+        )
     return covered
 
 
-def _live_fleet_covers_receipt(expected_sha: str | None, receipt: dict, owed: set[tuple[str, str]] | None, *, accept_states: tuple = ("current",)) -> bool:
+def _live_fleet_covers_receipt(
+    expected_sha: str | None,
+    receipt: dict,
+    owed: set[tuple[str, str]] | None,
+    *,
+    accept_states: tuple = ("current",),
+) -> bool:
     """Require a successor at the expected SHA for every owed gateway identity."""
     if not expected_sha:
         return False
@@ -285,7 +343,8 @@ def _live_fleet_covers_receipt(expected_sha: str | None, receipt: dict, owed: se
         # State labels are checkout-relative; completed restarts may accept stale rows at the pulled SHA.
         if not fleet or any(
             row.get("state") not in accept_states or row.get("code_sha") != expected_sha
-            for row in fleet if not row_is_external(row)
+            for row in fleet
+            if not row_is_external(row)
         ):
             return False
         covered = _fleet_covered_gateways(fleet)
@@ -324,7 +383,12 @@ def _marker_owed_gateways(inventory: object) -> set[tuple[str, str]] | None:
             owed.add(_UNMAPPED_GATEWAY)
             continue
         profile = runtime.get("profile")
-        if runtime.get("kind") != "gateway" or not isinstance(profile, str) or not profile.strip() or profile == "unknown":
+        if (
+            runtime.get("kind") != "gateway"
+            or not isinstance(profile, str)
+            or not profile.strip()
+            or profile == "unknown"
+        ):
             raise ValueError("fleet-restart inventory row is not an identified gateway")
         owed.add(("gateway", profile))
     return owed
@@ -340,14 +404,22 @@ def _discharge_gatewayless_marker(checkout_sha: str, expected_sha: str) -> bool:
     from clawk_cli.update_cmd_fleet_gatewayless import host_owes_no_gateway_restart
 
     try:
-        gatewayless = (checkout_sha == expected_sha or checkout_contains(expected_sha)) and host_owes_no_gateway_restart()
+        gatewayless = (
+            checkout_sha == expected_sha or checkout_contains(expected_sha)
+        ) and host_owes_no_gateway_restart()
     except Exception as exc:
-        logger.debug("Gateway-less host probe failed; keeping fleet-restart-pending marker: %s", exc)
+        logger.debug(
+            "Gateway-less host probe failed; keeping fleet-restart-pending marker: %s",
+            exc,
+        )
         return False
     if not gatewayless:
         return False
     _clear_fleet_restart_pending_marker()
-    logger.debug("Fleet-restart-pending marker discharged: host runs no gateway at %s", checkout_sha[:10])
+    logger.debug(
+        "Fleet-restart-pending marker discharged: host runs no gateway at %s",
+        checkout_sha[:10],
+    )
     return True
 
 
@@ -392,12 +464,18 @@ def _marker_only_restart_obsolete() -> bool:
         # A pull that recorded no gateway runtime owes no restart; clearing avoids the
         # stuck "Fleet restart incomplete" loop on Desktop-hosted (no-service) installs.
         _clear_fleet_restart_pending_marker()
-        logger.debug("Fleet-restart-pending marker discharged: no gateway obligation recorded")
+        logger.debug(
+            "Fleet-restart-pending marker discharged: no gateway obligation recorded"
+        )
         return True
     if owed is not None and not expected_sha:
         return False  # an inventoried obligation without its SHA can never be proven
     checkout_sha = _current_checkout_sha()
-    if owed is not None and checkout_sha != expected_sha and not checkout_contains(expected_sha):
+    if (
+        owed is not None
+        and checkout_sha != expected_sha
+        and not checkout_contains(expected_sha)
+    ):
         return False  # a newer pull moved HEAD; it owns a fresh obligation
     # HEAD may sit past ``expected_sha`` by a carried local commit (a cherry-picked hotfix) that no
     # pull made and no fresh obligation covers; the fleet is held to the code it actually runs, which
@@ -407,9 +485,12 @@ def _marker_only_restart_obsolete() -> bool:
         return False
     try:
         from clawk_cli.update_receipt import collect_fleet_versions, row_is_external
+
         fleet = collect_fleet_versions()
     except Exception as exc:
-        logger.debug("Fleet probe failed; keeping fleet-restart-pending marker: %s", exc)
+        logger.debug(
+            "Fleet probe failed; keeping fleet-restart-pending marker: %s", exc
+        )
         return False
     if not fleet or (not expected_sha and all(row_is_external(row) for row in fleet)):
         if owed is not None or not expected_sha:
@@ -427,15 +508,23 @@ def _marker_only_restart_obsolete() -> bool:
             return False  # stale / down / unknown-identity row still owes the restart
     if owed is not None and not owed - {_UNMAPPED_GATEWAY} <= covered:
         return False  # A gateway this marker owns is absent (down) or unidentifiable.
-    if owed and _UNMAPPED_GATEWAY in owed and not (_fleet_covered_gateways(
-            [row for row in fleet if not row_is_external(row)]) or set()) - owed:
+    if (
+        owed
+        and _UNMAPPED_GATEWAY in owed
+        and not (
+            _fleet_covered_gateways([row for row in fleet if not row_is_external(row)])
+            or set()
+        )
+        - owed
+    ):
         # An unmapped stopped gateway has no identity to match, so only a local gateway that no
         # mapped owed one explains can be its successor; another checkout's gateway never is.
         return False
     _clear_fleet_restart_pending_marker()
     logger.debug(
         "Fleet-restart-pending marker discharged: %d gateway(s) already serve %s",
-        len(fleet), target_sha[:10],
+        len(fleet),
+        target_sha[:10],
     )
     return True
 
@@ -451,7 +540,9 @@ def _receipt_restart_phase_completed(receipt: dict) -> str | None:
     return str(post_sha) if post_sha else None
 
 
-def _pending_fleet_restart_needed(*, receipt: dict | None = None, pending_manual: list[dict] | None = None) -> bool:
+def _pending_fleet_restart_needed(
+    *, receipt: dict | None = None, pending_manual: list[dict] | None = None
+) -> bool:
     """Require identity-matched gateways at checkout HEAD for update catch-up."""
     from clawk_cli.update_cmd import _current_checkout_sha
     from clawk_cli.update_receipt import read_latest_receipt
@@ -470,7 +561,9 @@ def _pending_fleet_restart_needed(*, receipt: dict | None = None, pending_manual
     return not _live_fleet_covers_receipt(_current_checkout_sha(), receipt, owed)
 
 
-def _update_owes_fleet_restart(*, receipt: dict | None = None, pending_manual: list[dict] | None = None) -> bool:
+def _update_owes_fleet_restart(
+    *, receipt: dict | None = None, pending_manual: list[dict] | None = None
+) -> bool:
     """Hold a completed restart to the code it pulled, not a later checkout HEAD."""
     from clawk_cli.update_cmd import _current_checkout_sha
     from clawk_cli.update_receipt import read_latest_receipt
@@ -489,7 +582,9 @@ def _update_owes_fleet_restart(*, receipt: dict | None = None, pending_manual: l
     restarted_to = _receipt_restart_phase_completed(receipt)
     # A fleet an operator has since restarted onto a moved checkout (``clawk gateway restart`` —
     # the remedy this warning names) has nothing of the update left to owe either.
-    if restarted_to and _live_fleet_covers_receipt(restarted_to, receipt, owed, accept_states=("current", "stale")):
+    if restarted_to and _live_fleet_covers_receipt(
+        restarted_to, receipt, owed, accept_states=("current", "stale")
+    ):
         return False
     return not _live_fleet_covers_receipt(_current_checkout_sha(), receipt, owed)
 
@@ -497,8 +592,14 @@ def _update_owes_fleet_restart(*, receipt: dict | None = None, pending_manual: l
 def _warn_pending_fleet_restart(*, startup: bool = False) -> None:
     """Print the specific interrupted-update fleet-restart warning."""
     stream = sys.stderr if startup else sys.stdout
-    print("⚠ A previous `clawk update` pulled new code but did not restart running gateways.", file=stream)
-    print("  Gateways may still be serving pre-update modules (mixed sys.modules).", file=stream)
+    print(
+        "⚠ A previous `clawk update` pulled new code but did not restart running gateways.",
+        file=stream,
+    )
+    print(
+        "  Gateways may still be serving pre-update modules (mixed sys.modules).",
+        file=stream,
+    )
     if startup:
         print("  Run `clawk update` or `clawk gateway restart`.", file=stream)
 
@@ -506,7 +607,10 @@ def _warn_pending_fleet_restart(*, startup: bool = False) -> None:
 def _warn_pending_fleet_restart_on_startup() -> None:
     """Cheap CLI-startup hint. Never restarts; never raises."""
     from clawk_cli.update_receipt import read_latest_receipt
-    from clawk_cli.update_serve_obligations import retain_receipt_manual_serves, warn_pending_manual_serves
+    from clawk_cli.update_serve_obligations import (
+        retain_receipt_manual_serves,
+        warn_pending_manual_serves,
+    )
 
     receipt = read_latest_receipt() or {}
     pending_manual = None
@@ -552,7 +656,10 @@ def _unit_main_pid(scope_cmd: list, svc_name: str) -> int:
     identity that cannot be proved keeps its own restart.
     """
     try:
-        result = _systemctl(list(scope_cmd) + ["show", svc_name, "--property=MainPID", "--value"], timeout=10)
+        result = _systemctl(
+            list(scope_cmd) + ["show", svc_name, "--property=MainPID", "--value"],
+            timeout=10,
+        )
     except (OSError, subprocess.TimeoutExpired):
         return 0
     if getattr(result, "returncode", 1) != 0:
@@ -575,7 +682,9 @@ def _restart_systemd_gateway_units_best_effort(failed: list, listings) -> None:
     from clawk_cli.update_host_obligation import collapse_units_to_host_processes
 
     answered = set()
-    targets: dict[str, tuple[str, list, str]] = {}  # "<scope>/<unit>" -> (scope, scope_cmd, unit)
+    targets: dict[
+        str, tuple[str, list, str]
+    ] = {}  # "<scope>/<unit>" -> (scope, scope_cmd, unit)
     for scope, scope_cmd, result in listings:
         answered.add(scope)
         if result.returncode != 0:
@@ -583,8 +692,9 @@ def _restart_systemd_gateway_units_best_effort(failed: list, listings) -> None:
             continue
         _for_each_systemd_gateway_unit(
             result.stdout,
-            process_unit=lambda svc_name, _scope=scope, _cmd=scope_cmd: targets.setdefault(
-                f"{_scope}/{svc_name}", (_scope, _cmd, svc_name)),
+            process_unit=lambda svc_name, _scope=scope, _cmd=scope_cmd: (
+                targets.setdefault(f"{_scope}/{svc_name}", (_scope, _cmd, svc_name))
+            ),
             on_unit_timeout=lambda svc_name, exc: failed.append(svc_name),
         )
 
@@ -593,7 +703,8 @@ def _restart_systemd_gateway_units_best_effort(failed: list, listings) -> None:
     if len(keys) > 1:
         # Only worth a `systemctl show` round when several units could be one process.
         keys, covered = collapse_units_to_host_processes(
-            keys, lambda key: _unit_main_pid(targets[key][1], targets[key][2]))
+            keys, lambda key: _unit_main_pid(targets[key][1], targets[key][2])
+        )
     for unit_key, owner_key in covered.items():
         print(
             f"  • {unit_key} is a legacy per-profile unit sharing one host gateway process with "
@@ -609,13 +720,21 @@ def _restart_systemd_gateway_units_best_effort(failed: list, listings) -> None:
         if _needs_sudo(scope):
             manage_cmd = ["sudo", "-n"] + manage_cmd
         try:
-            result = _systemctl_reset_and_restart(manage_cmd, svc_name, scope_cmd=scope_cmd)
-            if result.returncode != 0 or not _wait_for_service_active(scope_cmd, svc_name):
+            result = _systemctl_reset_and_restart(
+                manage_cmd, svc_name, scope_cmd=scope_cmd
+            )
+            if result.returncode != 0 or not _wait_for_service_active(
+                scope_cmd, svc_name
+            ):
                 failed.append(svc_name)
         except subprocess.TimeoutExpired:
             failed.append(svc_name)
     # A timeout or missing executable is not an empty scope.
-    failed.extend(f"systemd-{scope} (listing unavailable)" for scope, _ in _SYSTEMD_SCOPES if scope not in answered)
+    failed.extend(
+        f"systemd-{scope} (listing unavailable)"
+        for scope, _ in _SYSTEMD_SCOPES
+        if scope not in answered
+    )
 
 
 def _live_fleet_current_rows() -> list[dict] | None:
@@ -627,13 +746,17 @@ def _live_fleet_current_rows() -> list[dict] | None:
         return None
     try:
         from clawk_cli.update_receipt import collect_fleet_versions
+
         fleet = collect_fleet_versions()
     except Exception as exc:
         logger.debug("Pending fleet restart: fleet probe failed: %s", exc)
         return None
     if not fleet or _fleet_covered_gateways(fleet) is None:
         return None
-    if all(row.get("state") == "current" and str(row.get("code_sha")) == checkout_sha for row in fleet):
+    if all(
+        row.get("state") == "current" and str(row.get("code_sha")) == checkout_sha
+        for row in fleet
+    ):
         return fleet
     return None
 
@@ -655,6 +778,7 @@ def _restart_identity_sha() -> str:
         return sha
     with suppress(Exception):
         from clawk_cli.update_receipt import read_latest_receipt
+
         post_update = (read_latest_receipt() or {}).get("post_update")
         if isinstance(post_update, dict):
             return str(post_update.get("sha") or "")
@@ -675,12 +799,17 @@ def _fleet_restart_skip_reason(plan) -> str | None:
     stamped identity) keeps the restart — the reconciliation there is what surfaces it.
     """
     from clawk_cli.update_host_obligation import host_restart_already_completed
+
     checkout_sha = _restart_identity_sha()
     if host_restart_already_completed(checkout_sha):
         return "this host's gateway was already restarted for this update"
-    if (checkout_sha and plan is not None and plan.runtimes
-            and all(str(runtime.code_sha) == checkout_sha for runtime in plan.runtimes)
-            and _live_fleet_current_rows() is not None):
+    if (
+        checkout_sha
+        and plan is not None
+        and plan.runtimes
+        and all(str(runtime.code_sha) == checkout_sha for runtime in plan.runtimes)
+        and _live_fleet_current_rows() is not None
+    ):
         return "every running gateway already serves the checkout code"
     return None
 
@@ -688,21 +817,35 @@ def _fleet_restart_skip_reason(plan) -> str | None:
 def _run_pending_fleet_restart() -> bool:
     """Historical retry hook; new retries use the ordinary completion owner."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
 def _systemctl(cmd: list, *, timeout: float):
     """Run a systemctl (or sudo systemctl) invocation, capturing utf-8 text with a timeout."""
-    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout, check=False)
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+        check=False,
+    )
 
 
-def _systemctl_reset_and_restart(manage_cmd: list, svc_name: str, *, scope_cmd: list | None = None):
+def _systemctl_reset_and_restart(
+    manage_cmd: list, svc_name: str, *, scope_cmd: list | None = None
+):
     """``reset-failed`` then ``restart``: a unit parked in failed state by systemd's own
     auto-restart can wedge a plain ``restart`` against RestartSec backoff and stay dead."""
     # Property reads need no manage-units privileges: narrow sudoers may permit
     # restart/reset-failed but deny show. Keep the same user/system manager scope.
     from clawk_cli.update_cmd_fleet_unit_budget import systemd_restart_timeout
-    timeout = systemd_restart_timeout(scope_cmd if scope_cmd is not None else manage_cmd, svc_name)
+
+    timeout = systemd_restart_timeout(
+        scope_cmd if scope_cmd is not None else manage_cmd, svc_name
+    )
     _systemctl(manage_cmd + ["reset-failed", svc_name], timeout=10)
     return _systemctl(manage_cmd + ["restart", svc_name], timeout=timeout)
 
@@ -715,7 +858,12 @@ def _systemd_unit_owned_by_update(scope_cmd: list, svc_name: str) -> bool:
     listed, not because it ran the updated code. Foreign or unreadable ownership prints a notice
     and leaves the unit alone; it is not a failed restart.
     """
-    from clawk_cli.update_fleet_scope import describe_skipped_runtime, systemd_unit_clawk_home, home_in_update_scope
+    from clawk_cli.update_fleet_scope import (
+        describe_skipped_runtime,
+        systemd_unit_clawk_home,
+        home_in_update_scope,
+    )
+
     home = systemd_unit_clawk_home(scope_cmd, svc_name)
     if home is not None and home_in_update_scope(home):
         return True
@@ -726,9 +874,15 @@ def _systemd_unit_owned_by_update(scope_cmd: list, svc_name: str) -> bool:
 def _scoped_manual_gateway_pids(pids, *, keep=(), quiet: bool = False) -> list[int]:
     """*pids* whose live home this update owns (plus *keep*, PIDs already mapped to this
     install's profile PID files); every other gateway process is named and left running."""
-    from clawk_cli.update_fleet_scope import describe_skipped_runtime, partition_gateway_pids_by_scope
+    from clawk_cli.update_fleet_scope import (
+        describe_skipped_runtime,
+        partition_gateway_pids_by_scope,
+    )
+
     keep = set(keep)
-    owned, foreign = partition_gateway_pids_by_scope([pid for pid in pids if pid not in keep])
+    owned, foreign = partition_gateway_pids_by_scope(
+        [pid for pid in pids if pid not in keep]
+    )
     if not quiet:
         for pid, home in foreign:
             print(describe_skipped_runtime("gateway process", f"PID {pid}", home))
@@ -760,7 +914,9 @@ def _is_clawk_gateway_unit(unit: str) -> bool:
     )
 
 
-def _for_each_systemd_gateway_unit(list_units_stdout: str, *, process_unit, on_unit_timeout) -> None:
+def _for_each_systemd_gateway_unit(
+    list_units_stdout: str, *, process_unit, on_unit_timeout
+) -> None:
     """Process each clawk-gateway*/clawk-serve* unit from ``systemctl list-units``.
 
     ``TimeoutExpired`` from ``process_unit`` is isolated per unit via ``on_unit_timeout``
@@ -798,6 +954,7 @@ def _service_unit_supports_graceful_sigusr1_restart(svc_name: str) -> bool:
 def _warn_incomplete_gateway_fleet_restart(failed_units: list) -> None:
     """Print an explicit incomplete-update warning for unrestarted units."""
     from clawk_cli.gateway import is_macos
+
     if not failed_units:
         return
     ordered = list(dict.fromkeys(failed_units))  # de-dup, discovery order
@@ -813,7 +970,9 @@ def _warn_incomplete_gateway_fleet_restart(failed_units: list) -> None:
         print("  running pre-update code (mixed sys.modules). Recover with:")
         print("    clawk gateway status")
         print("    launchctl list | grep <label>")
-        print("    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<label>.plist")
+        print(
+            "    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/<label>.plist"
+        )
         return
     print("  Skipped units may still be running pre-update code (mixed")
     print("  sys.modules). Restart them manually, then verify:")
@@ -826,7 +985,9 @@ def _warn_incomplete_gateway_fleet_restart(failed_units: list) -> None:
 
 
 def _restart_launchd_gateway_after_update(
-    *, supervision_verify: bool = True, self_restart_pending: set | None = None,
+    *,
+    supervision_verify: bool = True,
+    self_restart_pending: set | None = None,
 ) -> tuple[list, list]:
     """Restart the invoking profile's launchd gateway after an update.
 
@@ -845,9 +1006,14 @@ def _restart_launchd_gateway_after_update(
     See #88848.
     """
     from clawk_cli.gateway import (
-        get_launchd_label, get_launchd_plist_path, launchd_restart, wait_for_launchd_gateway_supervision,
-        _is_pid_ancestor_of_current_process, _launchctl_supervised_pid,
+        get_launchd_label,
+        get_launchd_plist_path,
+        launchd_restart,
+        wait_for_launchd_gateway_supervision,
+        _is_pid_ancestor_of_current_process,
+        _launchctl_supervised_pid,
     )
+
     current_label = get_launchd_label()
     old_pid = None
     try:
@@ -856,7 +1022,9 @@ def _restart_launchd_gateway_after_update(
         # Snapshot BEFORE the restart: "supervising some pid" was true before too, so only a pid that
         # actually changed distinguishes a restart from a no-op (the sibling loop's contract). Read-only
         # and verification-only — the restart itself is never gated on `launchctl list` (#74973).
-        old_pid = _launchctl_supervised_pid(current_label) if supervision_verify else None
+        old_pid = (
+            _launchctl_supervised_pid(current_label) if supervision_verify else None
+        )
         try:
             launchd_restart()
         except subprocess.CalledProcessError as e:
@@ -904,7 +1072,11 @@ def _restart_launchd_gateway_after_update(
 
 
 def _restart_macos_launchd_gateways(
-    restarted_services: list, failed_or_stale_units: list, drain_budget: float, *, require_supervision: bool = False,
+    restarted_services: list,
+    failed_or_stale_units: list,
+    drain_budget: float,
+    *,
+    require_supervision: bool = False,
     self_restart_pending: set | None = None,
 ) -> None:
     """Restart every launchd-managed gateway after an update (macOS).
@@ -921,20 +1093,42 @@ def _restart_macos_launchd_gateways(
     cannot leave the rest of the fleet on old code (#68523).
     """
     from clawk_cli.gateway import (
-        get_launchd_label, get_launchd_plist_path, launchd_gateway_labels_for_install, legacy_launchd_labels_for_install,
-        _graceful_restart_via_sigusr1, _launchd_kickstart,
-        _locate_launchd_gateway_service, _wait_for_launchd_service_pid,
+        get_launchd_label,
+        get_launchd_plist_path,
+        launchd_gateway_labels_for_install,
+        legacy_launchd_labels_for_install,
+        _graceful_restart_via_sigusr1,
+        _launchd_kickstart,
+        _locate_launchd_gateway_service,
+        _wait_for_launchd_service_pid,
     )
+
     if require_supervision:
-        listing = subprocess.run(["launchctl", "list"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10, check=False)
+        listing = subprocess.run(
+            ["launchctl", "list"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
         if listing.returncode != 0:
             failed_or_stale_units.append("launchd (listing failed)")
             return
     from clawk_cli.update_cmd_posix_pause import already_restarted
+
     current_label = get_launchd_label()
-    resumed = already_restarted()["labels"]  # paused for the update, restarted on the new code
-    _restarted, _failed = ([], []) if current_label in resumed else _restart_launchd_gateway_after_update(
-        supervision_verify=True, self_restart_pending=self_restart_pending)
+    resumed = already_restarted()[
+        "labels"
+    ]  # paused for the update, restarted on the new code
+    _restarted, _failed = (
+        ([], [])
+        if current_label in resumed
+        else _restart_launchd_gateway_after_update(
+            supervision_verify=True, self_restart_pending=self_restart_pending
+        )
+    )
     restarted_services.extend(_restarted)
     failed_or_stale_units.extend(_failed)
 
@@ -943,10 +1137,18 @@ def _restart_macos_launchd_gateways(
     # to the derivation; legacy_launchd_labels_for_install() credits one only when its plist is
     # provably this install's, so the #41403 boundary (never touch another install's fleet) holds.
     # See #115254.
-    legacy_labels = legacy_launchd_labels_for_install(exclude=set(derived_labels) | {current_label})
+    legacy_labels = legacy_launchd_labels_for_install(
+        exclude=set(derived_labels) | {current_label}
+    )
     if legacy_labels:
-        print(f"  ↻ legacy-labelled units of this install join the restart: {', '.join(legacy_labels)}")
-    from clawk_cli.update_fleet_scope import describe_skipped_runtime, launchd_label_foreign_home
+        print(
+            f"  ↻ legacy-labelled units of this install join the restart: {', '.join(legacy_labels)}"
+        )
+    from clawk_cli.update_fleet_scope import (
+        describe_skipped_runtime,
+        launchd_label_foreign_home,
+    )
+
     for label in derived_labels + legacy_labels:
         if label == current_label or label in resumed:
             continue
@@ -960,17 +1162,27 @@ def _restart_macos_launchd_gateways(
             # reuse that domain so a sibling is never probed in one and restarted in another.
             domain, old_pid = _locate_launchd_gateway_service(label)
             if domain is None:
-                if require_supervision and get_launchd_plist_path().with_name(f"{label}.plist").exists():
+                if (
+                    require_supervision
+                    and get_launchd_plist_path().with_name(f"{label}.plist").exists()
+                ):
                     failed_or_stale_units.append(label)
                 continue  # A profile without an installed job has no restart target.
             graceful_ok = False
             if old_pid is not None and old_pid > 0:
                 print(f"  → {label}: draining (up to {drain_budget:.0f}s)...")
                 from clawk_cli.update_cmd_drain_report import drain_progress_reporter
+
                 graceful_ok = _graceful_restart_via_sigusr1(
-                    old_pid, drain_timeout=drain_budget,
-                    on_progress=drain_progress_reporter(_gateway_home_for_pid(old_pid), budget_s=drain_budget))
-            if graceful_ok and _wait_for_launchd_service_pid(label, old_pid=old_pid, timeout=10.0, domain=domain):
+                    old_pid,
+                    drain_timeout=drain_budget,
+                    on_progress=drain_progress_reporter(
+                        _gateway_home_for_pid(old_pid), budget_s=drain_budget
+                    ),
+                )
+            if graceful_ok and _wait_for_launchd_service_pid(
+                label, old_pid=old_pid, timeout=10.0, domain=domain
+            ):
                 # KeepAlive already respawned it on new code — a kickstart would kill it.
                 restarted_services.append(label)
                 continue
@@ -984,7 +1196,9 @@ def _restart_macos_launchd_gateways(
                     f"    Recover manually: launchctl kickstart -k {domain}/{label}"
                 )
                 continue
-            if _wait_for_launchd_service_pid(label, old_pid=old_pid, timeout=15.0, domain=domain):
+            if _wait_for_launchd_service_pid(
+                label, old_pid=old_pid, timeout=15.0, domain=domain
+            ):
                 restarted_services.append(label)
             else:
                 failed_or_stale_units.append(label)
@@ -994,7 +1208,9 @@ def _restart_macos_launchd_gateways(
                 )
         except subprocess.TimeoutExpired:
             failed_or_stale_units.append(label)
-            print(f"  ⚠ launchctl timed out restarting {label}; continuing with remaining gateways")
+            print(
+                f"  ⚠ launchctl timed out restarting {label}; continuing with remaining gateways"
+            )
 
 
 def _surviving_gateway_pids_after_failed_restart():
@@ -1006,15 +1222,16 @@ def _surviving_gateway_pids_after_failed_restart():
     """
     try:
         from clawk_cli.gateway import find_gateway_pids
-        return _scoped_manual_gateway_pids(find_gateway_pids(all_profiles=True), quiet=True)
+
+        return _scoped_manual_gateway_pids(
+            find_gateway_pids(all_profiles=True), quiet=True
+        )
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Could not probe for surviving gateways after update: %s", exc)
         return None
 
 
-_MANUAL_GATEWAY_SKIP_REASON = (
-    "manual gateway has no supervisor relaunch authority; left running for explicit operator restart"
-)
+_MANUAL_GATEWAY_SKIP_REASON = "manual gateway has no supervisor relaunch authority; left running for explicit operator restart"
 _DESKTOP_SERVE_SKIP_REASON = (
     "desktop app owns and respawns this serve backend;"
     " the recovery pass must not restart it out from under its supervisor"
@@ -1037,7 +1254,9 @@ _LAUNCHD_SERVE_SKIP_REASON = (
 )
 
 
-def _gateway_recovery_partition(plan, *, skip_profiles: set[str] | None = None) -> tuple[dict[str, str], list[dict]]:
+def _gateway_recovery_partition(
+    plan, *, skip_profiles: set[str] | None = None
+) -> tuple[dict[str, str], list[dict]]:
     """Partition pre-update runtimes into fresh-restart candidates and skips.
 
     Uses only the pre-checkout inventory: re-importing ``clawk_cli.gateway`` in the
@@ -1051,7 +1270,7 @@ def _gateway_recovery_partition(plan, *, skip_profiles: set[str] | None = None) 
     skip_profiles = skip_profiles or set()
     candidates: dict[str, str] = {}
     skipped: list[dict] = []
-    with _best_effort('Could not prepare fresh gateway restart profiles: %s'):
+    with _best_effort("Could not prepare fresh gateway restart profiles: %s"):
         for runtime in getattr(plan, "runtimes", ()) or ():
             kind = getattr(runtime, "kind", None)
             profile = getattr(runtime, "profile", None)
@@ -1076,7 +1295,14 @@ def _gateway_recovery_partition(plan, *, skip_profiles: set[str] | None = None) 
                     reason = _SERVE_SKIP_REASON
             else:
                 continue
-            skipped.append({"profile": profile, "kind": str(kind), "supervisor": str(supervisor), "reason": reason})
+            skipped.append(
+                {
+                    "profile": profile,
+                    "kind": str(kind),
+                    "supervisor": str(supervisor),
+                    "reason": reason,
+                }
+            )
     return candidates, skipped
 
 
@@ -1105,7 +1331,11 @@ def _warn_gateway_restart_phase_aborted(exc: BaseException, pids) -> None:
 
 
 def _drain_or_signal_gateway_for_update(
-    pid: int, drain_budget: float, label: str, *, self_restart_pending: set | None = None,
+    pid: int,
+    drain_budget: float,
+    label: str,
+    *,
+    self_restart_pending: set | None = None,
 ) -> bool:
     """Three-way triage (shared by systemd and bare-process paths) for handing a
     running gateway over to new code. Returns True when signalled/stopped.
@@ -1125,9 +1355,14 @@ def _drain_or_signal_gateway_for_update(
     force-drain cap (1800s) before killing its own updater's session. See #86684.
     """
     from clawk_cli.gateway import (
-        GATEWAY_LOOP_WEDGED, _escalate_wedged_gateway, _graceful_restart_via_sigusr1,
-        _is_pid_ancestor_of_current_process, _request_gateway_self_restart, probe_gateway_loop_liveness,
+        GATEWAY_LOOP_WEDGED,
+        _escalate_wedged_gateway,
+        _graceful_restart_via_sigusr1,
+        _is_pid_ancestor_of_current_process,
+        _request_gateway_self_restart,
+        probe_gateway_loop_liveness,
     )
+
     if _is_pid_ancestor_of_current_process(pid):
         print(
             f"  → {label}: update is running inside this gateway's "
@@ -1139,14 +1374,21 @@ def _drain_or_signal_gateway_for_update(
             self_restart_pending.add(pid)
         return accepted
     if probe_gateway_loop_liveness(pid) == GATEWAY_LOOP_WEDGED:
-        print(f"  ⚠ {label}: gateway event loop is unresponsive — skipping drain, forcing a bounded stop...")
+        print(
+            f"  ⚠ {label}: gateway event loop is unresponsive — skipping drain, forcing a bounded stop..."
+        )
         _escalate_wedged_gateway(pid)
         return True
     print(f"  → {label}: draining (up to {drain_budget:.0f}s)...")
     from clawk_cli.update_cmd_drain_report import drain_progress_reporter
+
     return _graceful_restart_via_sigusr1(
-        pid, drain_timeout=drain_budget,
-        on_progress=drain_progress_reporter(_gateway_home_for_pid(pid), budget_s=drain_budget))
+        pid,
+        drain_timeout=drain_budget,
+        on_progress=drain_progress_reporter(
+            _gateway_home_for_pid(pid), budget_s=drain_budget
+        ),
+    )
 
 
 def _gateway_home_for_pid(pid: int):
@@ -1154,6 +1396,7 @@ def _gateway_home_for_pid(pid: int):
     with suppress(Exception):
         from clawk_cli.update_receipt import _profile_homes
         from gateway.status import read_runtime_status
+
         for _profile, home in _profile_homes():
             record = read_runtime_status(home / "gateway_state.json") or {}
             if record.get("pid") == pid:
@@ -1170,10 +1413,23 @@ def _sudo_noninteractive_ok(targeted_probe: list) -> bool:
     are about to elevate.
     """
     try:
-        if subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5, check=False).returncode == 0:
+        if (
+            subprocess.run(
+                ["sudo", "-n", "true"], capture_output=True, timeout=5, check=False
+            ).returncode
+            == 0
+        ):
             return True
         # Blanket sudo refused — a targeted NOPASSWD sudoers entry may still work.
-        return subprocess.run(["sudo", "-n", *targeted_probe], capture_output=True, timeout=5, check=False).returncode == 0
+        return (
+            subprocess.run(
+                ["sudo", "-n", *targeted_probe],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1193,7 +1449,11 @@ def _resolve_manage_cmd(cache: dict, scope_: str, scope_cmd_: list, svc_name_: s
     cmd = scope_cmd_ + ["--no-ask-password"]
     if _needs_sudo(scope_):
         sudo_cmd = ["sudo", "-n"] + cmd
-        cmd = sudo_cmd if _sudo_noninteractive_ok(cmd + ["reset-failed", svc_name_]) else None
+        cmd = (
+            sudo_cmd
+            if _sudo_noninteractive_ok(cmd + ["reset-failed", svc_name_])
+            else None
+        )
     cache[scope_] = cmd
     return cmd
 
@@ -1204,13 +1464,23 @@ def _repair_unit_without_fatal_exit_park(svc_name: str, scope: str) -> None:
     regenerated user units parked (#118282). The gateway rewrites its USER unit at boot; a SYSTEM unit
     lives in /etc, so rewrite it here when we are root, else name the repair."""
     from clawk_cli.gateway import (
-        _SYSTEM_UNIT_DIR, GATEWAY_FATAL_CONFIG_EXIT_CODE, get_service_name,
-        refresh_systemd_unit_if_needed, user_systemd_unit_dir,
+        _SYSTEM_UNIT_DIR,
+        GATEWAY_FATAL_CONFIG_EXIT_CODE,
+        get_service_name,
+        refresh_systemd_unit_if_needed,
+        user_systemd_unit_dir,
     )
+
     system = scope == "system"
-    unit_path = (_SYSTEM_UNIT_DIR if system else user_systemd_unit_dir()) / f"{svc_name}.service"
+    unit_path = (
+        _SYSTEM_UNIT_DIR if system else user_systemd_unit_dir()
+    ) / f"{svc_name}.service"
     try:
-        parked = re.search(rf"^RestartPreventExitStatus=.*\b{GATEWAY_FATAL_CONFIG_EXIT_CODE}\b", unit_path.read_text(encoding="utf-8-sig"), re.MULTILINE)
+        parked = re.search(
+            rf"^RestartPreventExitStatus=.*\b{GATEWAY_FATAL_CONFIG_EXIT_CODE}\b",
+            unit_path.read_text(encoding="utf-8-sig"),
+            re.MULTILINE,
+        )
     except OSError:
         return
     if parked:
@@ -1235,8 +1505,15 @@ def _repair_unit_without_fatal_exit_park(svc_name: str, scope: str) -> None:
 
 
 def _restart_one_systemd_gateway_unit(
-    svc_name: str, *, scope: str, scope_cmd: list, drain_budget: float, _manage_cmd_cache: dict,
-    restarted_services: list, failed_or_stale_units: list, self_restart_pending: set | None = None,
+    svc_name: str,
+    *,
+    scope: str,
+    scope_cmd: list,
+    drain_budget: float,
+    _manage_cmd_cache: dict,
+    restarted_services: list,
+    failed_or_stale_units: list,
+    self_restart_pending: set | None = None,
 ) -> None:
     """Restart one active systemd gateway/serve unit: graceful SIGUSR1 drain, then forced restart.
 
@@ -1258,17 +1535,25 @@ def _restart_one_systemd_gateway_unit(
     _main_pid = 0
     if _service_unit_supports_graceful_sigusr1_restart(svc_name):
         try:
-            _show = _systemctl(scope_cmd + ["show", svc_name, "--property=MainPID", "--value"], timeout=5)
+            _show = _systemctl(
+                scope_cmd + ["show", svc_name, "--property=MainPID", "--value"],
+                timeout=5,
+            )
             _main_pid = int((_show.stdout or "").strip() or 0)
         except (ValueError, subprocess.TimeoutExpired, FileNotFoundError):
             _main_pid = 0
 
     # Three-way triage (ancestor / wedged / graceful drain).
     _graceful_ok = _main_pid > 0 and _drain_or_signal_gateway_for_update(
-        _main_pid, drain_budget, svc_name, self_restart_pending=self_restart_pending)
+        _main_pid, drain_budget, svc_name, self_restart_pending=self_restart_pending
+    )
 
     if _graceful_ok:
-        from clawk_cli.update_cmd_fleet_unit_budget import service_restart_sec, systemd_restart_timeout
+        from clawk_cli.update_cmd_fleet_unit_budget import (
+            service_restart_sec,
+            systemd_restart_timeout,
+        )
+
         # ``Restart=always`` respawns only after RestartSec (60s in our unit; dead time for a
         # voluntary restart). ``reset-failed`` + ``start`` skips it (~1-3s); if RestartSec already
         # elapsed, ``start`` is a no-op and we fall through to the poll. Needs manage-units
@@ -1291,7 +1576,9 @@ def _restart_one_systemd_gateway_unit(
                 f"auto-restart (~{int(_restart_sec)}s; "
                 "no root for an immediate restart)..."
             )
-        if _wait_for_service_active(scope_cmd, svc_name, timeout=max(10.0, _restart_sec + 10.0)):
+        if _wait_for_service_active(
+            scope_cmd, svc_name, timeout=max(10.0, _restart_sec + 10.0)
+        ):
             restarted_services.append(svc_name)
             return
         # Exited but not respawned (older unit without Restart=on-failure /
@@ -1343,7 +1630,11 @@ def _restart_one_systemd_gateway_unit(
 
 
 def _restart_systemd_gateway_units(
-    restarted_services, failed_or_stale_units, restarted_scoped_units, drain_budget, self_restart_pending=None,
+    restarted_services,
+    failed_or_stale_units,
+    restarted_scoped_units,
+    drain_budget,
+    self_restart_pending=None,
 ):
     """Restart every active clawk-gateway*/clawk-serve* systemd unit (user + system).
 
@@ -1351,6 +1642,7 @@ def _restart_systemd_gateway_units(
     (``scope/name``); failures → ``failed_or_stale_units``. Per-unit timeouts isolated.
     """
     from clawk_cli.gateway import supports_systemd_services, _ensure_user_systemd_env
+
     if not supports_systemd_services():
         return
     _manage_cmd_cache: dict = {}
@@ -1381,12 +1673,16 @@ def _restart_systemd_gateway_units(
     # is an N-fold outage from one update. Units sharing a live PID collapse to one restart;
     # the others are named as legacy units to migrate, never silently dropped.
     from clawk_cli.update_host_obligation import collapse_units_to_host_processes
-    targets: dict[str, tuple[str, list, str]] = {}  # "<scope>/<unit>" -> (scope, scope_cmd, unit)
+
+    targets: dict[
+        str, tuple[str, list, str]
+    ] = {}  # "<scope>/<unit>" -> (scope, scope_cmd, unit)
     for scope, scope_cmd, result in _systemd_gateway_unit_listings(_on_list_timeout):
         _for_each_systemd_gateway_unit(
             result.stdout,
-            process_unit=lambda svc_name, _scope=scope, _cmd=scope_cmd: targets.setdefault(
-                f"{_scope}/{svc_name}", (_scope, _cmd, svc_name)),
+            process_unit=lambda svc_name, _scope=scope, _cmd=scope_cmd: (
+                targets.setdefault(f"{_scope}/{svc_name}", (_scope, _cmd, svc_name))
+            ),
             on_unit_timeout=_on_unit_timeout,
         )
     keys = list(targets)
@@ -1394,7 +1690,8 @@ def _restart_systemd_gateway_units(
     if len(keys) > 1:
         # Only worth a `systemctl show` round when several units could be one process.
         keys, covered = collapse_units_to_host_processes(
-            keys, lambda key: _unit_main_pid(targets[key][1], targets[key][2]))
+            keys, lambda key: _unit_main_pid(targets[key][1], targets[key][2])
+        )
     for unit_key, owner_key in covered.items():
         print(
             f"  • {unit_key} is a legacy per-profile unit sharing one host gateway process with "
@@ -1403,9 +1700,12 @@ def _restart_systemd_gateway_units(
         )
 
     from clawk_cli.update_cmd_posix_pause import already_restarted
+
     for key in keys:
         scope, scope_cmd, svc_name = targets[key]
-        if key in already_restarted()["units"]:  # paused for the update, restarted on the new code
+        if (
+            key in already_restarted()["units"]
+        ):  # paused for the update, restarted on the new code
             restarted_scoped_units.add(key)
             continue
         # Scope-qualify before the next unit; ``finally`` so a mid-pass abort keeps settled units.
@@ -1424,7 +1724,9 @@ def _restart_systemd_gateway_units(
         except subprocess.TimeoutExpired as exc:
             _on_unit_timeout(svc_name, exc)
         finally:
-            restarted_scoped_units.update(f"{scope}/{name}" for name in restarted_services[_scope_mark:])
+            restarted_scoped_units.update(
+                f"{scope}/{name}" for name in restarted_services[_scope_mark:]
+            )
 
 
 def _unit_main_pid(scope_cmd: list, svc_name: str) -> int:
@@ -1434,7 +1736,10 @@ def _unit_main_pid(scope_cmd: list, svc_name: str) -> int:
     identity that cannot be proved keeps its own restart.
     """
     try:
-        result = _systemctl(list(scope_cmd) + ["show", svc_name, "--property=MainPID", "--value"], timeout=10)
+        result = _systemctl(
+            list(scope_cmd) + ["show", svc_name, "--property=MainPID", "--value"],
+            timeout=10,
+        )
     except (OSError, subprocess.TimeoutExpired):
         return 0
     if getattr(result, "returncode", 1) != 0:
@@ -1482,11 +1787,15 @@ class _GatewayRestartOutcome:
         """Best-effort ``record_gateway_restart`` from the current bookkeeping."""
         with suppress(Exception):
             from clawk_cli.update_receipt import record_gateway_restart
+
             record_gateway_restart(
-                restarted_services=self.restarted_services, relaunched_profiles=self.relaunched_profiles,
+                restarted_services=self.restarted_services,
+                relaunched_profiles=self.relaunched_profiles,
                 externally_supervised_profiles=self.externally_supervised_profiles,
-                killed_pids=sorted(self.killed_pids), failed_units=self.failed_or_stale_units,
-                incomplete=self.incomplete, **extra,
+                killed_pids=sorted(self.killed_pids),
+                failed_units=self.failed_or_stale_units,
+                incomplete=self.incomplete,
+                **extra,
             )
 
 
@@ -1497,11 +1806,16 @@ def _restart_manual_gateways(out: _GatewayRestartOutcome, _drain_budget) -> None
     """
     import signal as _signal
     from clawk_cli.gateway import (
-        find_gateway_pids, find_profile_gateway_processes, _prepare_profile_gateway_update_restart, _get_service_pids,
+        find_gateway_pids,
+        find_profile_gateway_processes,
+        _prepare_profile_gateway_update_restart,
+        _get_service_pids,
         _wait_for_gateway_exit,
     )
+
     # Exclude just-restarted service PIDs so we don't kill what systemd/launchd spawned.
     from clawk_cli.update_cmd_posix_pause import already_restarted
+
     # Plus the gateways this update paused and already restarted on the new code.
     service_pids = _get_service_pids(all_profiles=True) | already_restarted()["pids"]
     manual_pids = find_gateway_pids(exclude_pids=service_pids, all_profiles=True)
@@ -1535,7 +1849,11 @@ def _restart_manual_gateways(out: _GatewayRestartOutcome, _drain_budget) -> None
         # relaunches either way. The helper announces its choice first because a silent
         # full-budget wait reads as a hung update.
         if not _drain_or_signal_gateway_for_update(
-                pid, _drain_budget, proc.profile, self_restart_pending=out.self_restart_pending_pids):
+            pid,
+            _drain_budget,
+            proc.profile,
+            self_restart_pending=out.self_restart_pending_pids,
+        ):
             with suppress(ProcessLookupError, PermissionError):
                 os.kill(pid, _signal.SIGTERM)
         # Wait ≤5s for exit: Telegram keeps the old getUpdates session ~30s; a new gateway
@@ -1561,11 +1879,19 @@ def _restart_manual_gateways(out: _GatewayRestartOutcome, _drain_budget) -> None
         for svc in out.restarted_services:
             print(f"  ✓ Restarted {svc}")
         if out.relaunched_profiles:
-            print(f"  ✓ Restarting manual gateway profile(s): {', '.join(out.relaunched_profiles)}")
+            print(
+                f"  ✓ Restarting manual gateway profile(s): {', '.join(out.relaunched_profiles)}"
+            )
         if out.externally_supervised_profiles:
             names = ", ".join(out.externally_supervised_profiles)
-            print(f"  ✓ Handed gateway profile(s) back to their external supervisor: {names}")
-        unmapped_count = (len(out.killed_pids) - len(out.relaunched_profiles) - len(out.externally_supervised_profiles))
+            print(
+                f"  ✓ Handed gateway profile(s) back to their external supervisor: {names}"
+            )
+        unmapped_count = (
+            len(out.killed_pids)
+            - len(out.relaunched_profiles)
+            - len(out.externally_supervised_profiles)
+        )
         if unmapped_count:
             print(f"  → Stopped {unmapped_count} manual gateway process(es)")
             print("    Restart manually: clawk gateway run")
@@ -1577,37 +1903,53 @@ def _force_kill_stuck_gateways(killed_pids) -> None:
     """Survivor sweep: gateways ignoring SIGTERM (stuck drain, blocked I/O, zombie) never
     exit, so the watcher never respawns and ImportErrors persist. Give graceful paths a
     moment, then SIGKILL remaining pre-update PIDs."""
-    with _best_effort('Post-restart survivor sweep failed: %s'):
+    with _best_effort("Post-restart survivor sweep failed: %s"):
         from clawk_cli.gateway import find_gateway_pids, _get_service_pids
+
         # --- Post-restart survivor sweep ----------------------------- Issue #17648: some gateways ignore
         # SIGTERM (stuck drain, blocked I/O, PID dead but zombie). The detached profile watchers wait 120s
         # for the old PID to exit — if it never does, no respawn happens and the user keeps hitting
         # ImportError against a stale sys.modules.
         _time.sleep(3.0)
-        _surviving = find_gateway_pids(exclude_pids=_get_service_pids(all_profiles=True), all_profiles=True)
+        _surviving = find_gateway_pids(
+            exclude_pids=_get_service_pids(all_profiles=True), all_profiles=True
+        )
         # Only PIDs we already tried to kill; newer ones are left alone.
         _stuck = [pid for pid in _surviving if pid in killed_pids]
         if _stuck:
             print()
-            print(f"  ⚠ {len(_stuck)} gateway process(es) ignored SIGTERM — force-killing")
+            print(
+                f"  ⚠ {len(_stuck)} gateway process(es) ignored SIGTERM — force-killing"
+            )
             from gateway.status import get_process_start_time, terminate_pid
+
             for pid in _stuck:
                 with suppress(ProcessLookupError, PermissionError, OSError):
                     # taskkill /T /F on Windows (no SIGKILL there), SIGKILL on POSIX.
-                    terminate_pid(pid, force=True, expected_start_time=get_process_start_time(pid))
+                    terminate_pid(
+                        pid, force=True, expected_start_time=get_process_start_time(pid)
+                    )
             # Let the OS reap so watchers see the exit and respawn.
             _time.sleep(1.5)
 
 
 def _recover_after_restart_phase_abort(
-    e, _pre_update_plan, out: _GatewayRestartOutcome, *, gateway_mode, restarted_scoped_units
+    e,
+    _pre_update_plan,
+    out: _GatewayRestartOutcome,
+    *,
+    gateway_mode,
+    restarted_scoped_units,
 ) -> None:
     """Phase-abort recovery: fresh-child restart + fail-closed verdict; updates ``out`` in place."""
     from clawk_cli.update_abort_recovery import _owed_stale_serve_rows
     from clawk_cli.update_cmd import (
-        _abort_recovery_is_complete, _recover_gateway_restart_after_abort, _surviving_pre_update_serve_runtimes,
+        _abort_recovery_is_complete,
+        _recover_gateway_restart_after_abort,
+        _surviving_pre_update_serve_runtimes,
         _warn_stale_serve_runtimes,
     )
+
     logger.debug("Gateway restart during update failed: %s", e)
     out.phase_errors.append(str(e))
     # Restart output never printed: assume stale unless provably no gateway runs.
@@ -1626,17 +1968,26 @@ def _recover_after_restart_phase_abort(
         if getattr(runtime, "kind", None) == "gateway"
         and isinstance(getattr(runtime, "profile", None), str)
     }
-    _already_restarted_profiles = set(out.relaunched_profiles) | set(out.externally_supervised_profiles)
+    _already_restarted_profiles = set(out.relaunched_profiles) | set(
+        out.externally_supervised_profiles
+    )
     _already_restarted_profiles.update(
         profile
         for profile in _planned_gateway_profiles
-        if any(_gateway_service_matches_profile(profile, service) for service in out.restarted_services)
+        if any(
+            _gateway_service_matches_profile(profile, service)
+            for service in out.restarted_services
+        )
     )
     _recovery_result = _recover_gateway_restart_after_abort(
-        _pre_update_plan, gateway_mode=gateway_mode, skip_profiles=_already_restarted_profiles,
+        _pre_update_plan,
+        gateway_mode=gateway_mode,
+        skip_profiles=_already_restarted_profiles,
         skip_units=set(restarted_scoped_units),
     )
-    _serve_units_failed = list((_recovery_result.get("serve_units") or {}).get("failed") or [])
+    _serve_units_failed = list(
+        (_recovery_result.get("serve_units") or {}).get("failed") or []
+    )
     # Deliberately NOT merged into ``restarted_services`` (gateway vocabulary feeding the
     # fleet probe); serve coverage lives in the recovery result/receipt. A serve/dashboard
     # still the SAME pre-update process is live on old code (unreachable by `gateway
@@ -1648,7 +1999,9 @@ def _recover_after_restart_phase_abort(
     # ("relaunch_attempted") was never observed and must not clear incomplete.
     _recovery_verified = set(_recovery_result.get("verified") or [])
     out.relaunched_profiles.extend(
-        profile for profile in sorted(_recovery_verified) if profile not in out.relaunched_profiles
+        profile
+        for profile in sorted(_recovery_verified)
+        if profile not in out.relaunched_profiles
     )
     if _abort_recovery_is_complete(
         planned_gateway_profiles=_planned_gateway_profiles,
@@ -1677,6 +2030,7 @@ def _gateway_drain_budget() -> float:
     """Seconds a drain-first (SIGUSR1) restart may wait for a gateway to exit; 45s floor."""
     try:
         from clawk_cli.gateway import _get_restart_exit_wait_budget
+
         return max(float(_get_restart_exit_wait_budget()), 45.0)
     except Exception:
         return 45.0
@@ -1689,13 +2043,20 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
     every planned gateway is verifiably covered.
     """
     from clawk_cli.update_cmd import _m
+
     # All bookkeeping is declared before the try so abort recovery and fleet reconciliation
     # can read it even if the phase raises early. ``pre_restart_gateway_pids`` stays empty
     # until we are about to stop/drain, so an early exception has nothing to fail closed on,
     # while a failure after stopping a discovered gateway fails closed on an empty survivor probe.
     out = _GatewayRestartOutcome(
-        incomplete=False, phase_errors=[], pre_restart_gateway_pids=[], restarted_services=[], failed_or_stale_units=[],
-        relaunched_profiles=[], externally_supervised_profiles=[], killed_pids=set(),
+        incomplete=False,
+        phase_errors=[],
+        pre_restart_gateway_pids=[],
+        restarted_services=[],
+        failed_or_stale_units=[],
+        relaunched_profiles=[],
+        externally_supervised_profiles=[],
+        killed_pids=set(),
     )
     # Scope-qualified twin (``user/clawk-serve`` vs ``system/clawk-serve`` are different
     # processes; abort recovery needs WHICH settled). Bare names stay in
@@ -1720,6 +2081,7 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
             _get_service_pids,
             _wait_for_gateway_exit,
         )
+
         # Drain budget covers ``restart_after_turn_timeout`` and stop()'s
         # ``restart_drain_timeout`` so a gateway waiting on a turn isn't hard-killed;
         # units without SIGUSR1 wiring just time out into ``systemctl restart``.
@@ -1728,12 +2090,17 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
         # Snapshot before any stop/drain so an empty survivor probe reads as "stopped
         # and never came back", not "nothing was running"; None fails closed.
         try:
-            out.pre_restart_gateway_pids = _scoped_manual_gateway_pids(find_gateway_pids(all_profiles=True), quiet=True)
+            out.pre_restart_gateway_pids = _scoped_manual_gateway_pids(
+                find_gateway_pids(all_profiles=True), quiet=True
+            )
         except Exception:
             out.pre_restart_gateway_pids = None
 
         _restart_systemd_gateway_units(
-            out.restarted_services, out.failed_or_stale_units, restarted_scoped_units, _drain_budget,
+            out.restarted_services,
+            out.failed_or_stale_units,
+            restarted_scoped_units,
+            _drain_budget,
             out.self_restart_pending_pids,
         )
 
@@ -1741,7 +2108,9 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
         if is_macos():
             with suppress(FileNotFoundError, ImportError):
                 _restart_macos_launchd_gateways(
-                    out.restarted_services, out.failed_or_stale_units, _drain_budget,
+                    out.restarted_services,
+                    out.failed_or_stale_units,
+                    _drain_budget,
                     self_restart_pending=out.self_restart_pending_pids,
                 )
 
@@ -1756,7 +2125,11 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
 
     except Exception as e:
         _recover_after_restart_phase_abort(
-            e, _pre_update_plan, out, gateway_mode=gateway_mode, restarted_scoped_units=restarted_scoped_units
+            e,
+            _pre_update_plan,
+            out,
+            gateway_mode=gateway_mode,
+            restarted_scoped_units=restarted_scoped_units,
         )
 
     out.restarted_scoped_units = set(restarted_scoped_units)
@@ -1764,6 +2137,7 @@ def _restart_gateway_fleet_after_update(_pre_update_plan, gateway_mode: bool):
         # Stamp the HOST obligation so every other profile's CLI knows this update's restart
         # already happened; without it each profile re-kills the one shared multiplexer.
         from clawk_cli.update_host_obligation import mark_host_restart_completed
+
         mark_host_restart_completed(_restart_identity_sha())
     return out
 
@@ -1787,7 +2161,11 @@ def _restart_phase_failure_is_incomplete(surviving, pre_restart_pids) -> bool:
 
 
 def _fleet_probe_expected_runtimes(
-    pre_update_plan, pre_restart_pids, windows_resume_token, restarted_services, killed_pids,
+    pre_update_plan,
+    pre_restart_pids,
+    windows_resume_token,
+    restarted_services,
+    killed_pids,
 ) -> bool:
     """Whether the post-update fleet probe should have produced rows.
 
@@ -1816,13 +2194,16 @@ def _fleet_probe_expected_runtimes(
         # Gateway-kind only: serve/dashboard plan records never publish a gateway_state.json
         # row, so a dashboard-only plan cannot ground a rows-expected verdict (#97332).
         if pre_update_plan is not None and any(
-            getattr(runtime, "kind", None) == "gateway" for runtime in pre_update_plan.runtimes
+            getattr(runtime, "kind", None) == "gateway"
+            for runtime in pre_update_plan.runtimes
         ):
             return True
     return False
 
 
-def _wait_for_service_active(scope_cmd_: list, svc_name_: str, timeout: float = 10.0) -> bool:
+def _wait_for_service_active(
+    scope_cmd_: list, svc_name_: str, timeout: float = 10.0
+) -> bool:
     """Poll ``systemctl is-active`` (0.5s) up to ``timeout``: the Stopped -> Started
     transition isn't instantaneous, so a one-shot check falsely reports down."""
     deadline = _time.monotonic() + max(timeout, 0.5)

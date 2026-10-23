@@ -51,6 +51,7 @@ def _write_home(tmp_path, monkeypatch, reasoning_echo: bool):
     # Drop any path-keyed config cache from a prior test.
     try:
         from clawk_cli import config as _cfg
+
         for name in ("_CONFIG_CACHE", "_config_cache"):
             if hasattr(_cfg, name):
                 getattr(_cfg, name).clear()
@@ -61,11 +62,12 @@ def _write_home(tmp_path, monkeypatch, reasoning_echo: bool):
 def _agent_with_init_flag() -> AIAgent:
     """Build an agent and materialize the echo flag the way init_agent does."""
     from clawk_cli.config import load_config_readonly
+
     agent = object.__new__(AIAgent)
     agent._reasoning_echo_flag = bool(
         (load_config_readonly().get("model") or {}).get("reasoning_echo")
     )
-    agent.provider = "custom"          # what the resolver returns for a named custom provider
+    agent.provider = "custom"  # what the resolver returns for a named custom provider
     agent.base_url = "http://127.0.0.1:8098/v1"
     agent.model = "kimi-k3"
     agent.verbose_logging = False
@@ -88,8 +90,11 @@ class TestReasoningEchoResolverE2E:
         assert agent._reasoning_echo_opt_in() is True
         assert agent._needs_thinking_reasoning_pad() is True
 
-        source = {"role": "assistant", "content": "calling a tool",
-                  "reasoning_content": "the model's chain of thought"}
+        source = {
+            "role": "assistant",
+            "content": "calling a tool",
+            "reasoning_content": "the model's chain of thought",
+        }
         api_msg = dict(source)
         copy_reasoning_content_for_api(agent, source, api_msg)
         assert api_msg["reasoning_content"] == "the model's chain of thought"
@@ -102,8 +107,11 @@ class TestReasoningEchoResolverE2E:
         assert agent._reasoning_echo_flag is False
         assert agent._reasoning_echo_opt_in() is False
 
-        source = {"role": "assistant", "content": "calling a tool",
-                  "reasoning_content": "the model's chain of thought"}
+        source = {
+            "role": "assistant",
+            "content": "calling a tool",
+            "reasoning_content": "the model's chain of thought",
+        }
         api_msg = dict(source)
         copy_reasoning_content_for_api(agent, source, api_msg)
         assert api_msg["reasoning_content"] == "the model's chain of thought"

@@ -8,6 +8,7 @@ kill) was verified live on Windows against a bash-backed env; these tests
 pin the host-side protocol logic: spawn parsing, liveness handling,
 state_lost/state_reset reporting, fail-open, and owner isolation.
 """
+
 import json
 import os
 import sys
@@ -69,20 +70,37 @@ def _spawn_ok_handlers(cell_results):
 
 def _cell(status="ok", stdout="", execution_count=1, **kw):
     payload = {
-        "id": "000001", "status": status, "stdout": stdout, "stderr": "",
-        "stdout_clipped": False, "stderr_clipped": False, "traceback": "",
+        "id": "000001",
+        "status": status,
+        "stdout": stdout,
+        "stderr": "",
+        "stdout_clipped": False,
+        "stderr_clipped": False,
+        "traceback": "",
         "execution_count": execution_count,
     }
     payload.update(kw)
     return payload
 
 
-def _run(env, code="print(1)", *, task="t1", reset=False, timeout=10,
-         tools=frozenset({"read_file"})):
+def _run(
+    env,
+    code="print(1)",
+    *,
+    task="t1",
+    reset=False,
+    timeout=10,
+    tools=frozenset({"read_file"}),
+):
     return execute_in_remote_kernel(
-        code, env=env, env_type="ssh", task_env_id=task,
-        sandbox_tools=tools, timeout=timeout,
-        max_tool_calls=5, reset=reset,
+        code,
+        env=env,
+        env_type="ssh",
+        task_env_id=task,
+        sandbox_tools=tools,
+        timeout=timeout,
+        max_tool_calls=5,
+        reset=reset,
     )
 
 
@@ -131,13 +149,16 @@ class TestSpawnAndReuse(RemoteKernelBase):
         self.assertEqual(second["kernel"]["execution_count"], 2)
         # Exactly one spawn happened.
         self.assertEqual(
-            sum(1 for c in env.commands if "nohup" in c), 1,
+            sum(1 for c in env.commands if "nohup" in c),
+            1,
         )
 
     def test_spawn_failure_fails_open(self):
-        env = ScriptedEnv([
-            ("nohup", lambda c: {"output": "sh: cannot fork\n", "returncode": 1}),
-        ])
+        env = ScriptedEnv(
+            [
+                ("nohup", lambda c: {"output": "sh: cannot fork\n", "returncode": 1}),
+            ]
+        )
         self.assertIsNone(_run(env))
         self.assertEqual(len(_REMOTE_KERNELS), 0)
 
@@ -156,8 +177,9 @@ class TestDeathDetection(RemoteKernelBase):
         _run(env)
         # Flip liveness to dead for the next probe only.
         original = env.handlers
-        env.handlers = [("kill -0", lambda c: {"output": "", "returncode": 1})] \
-            + [h for h in original if h[0] != "kill -0"]
+        env.handlers = [("kill -0", lambda c: {"output": "", "returncode": 1})] + [
+            h for h in original if h[0] != "kill -0"
+        ]
         # Restore ALIVE after the respawn's own probe would run: the spawn
         # path probes liveness once — make the dead answer one-shot.
         state = {"dead_probes": 0}
@@ -168,21 +190,25 @@ class TestDeathDetection(RemoteKernelBase):
                 return {"output": "", "returncode": 1}
             return {"output": "ALIVE\n", "returncode": 0}
 
-        env.handlers = [("kill -0", flaky_liveness)] + \
-            [h for h in original if h[0] != "kill -0"]
+        env.handlers = [("kill -0", flaky_liveness)] + [
+            h for h in original if h[0] != "kill -0"
+        ]
         result = _run(env)
         self.assertEqual(result["status"], "success", result)
         self.assertTrue(result["kernel"].get("state_lost"))
-        self.assertIn("state from earlier calls was lost",
-                      result["kernel"].get("note", ""))
+        self.assertIn(
+            "state from earlier calls was lost", result["kernel"].get("note", "")
+        )
 
     def test_cell_timeout_kills_kernel_and_reports(self):
         # cat never returns a result file → cell deadline expires.
-        env = ScriptedEnv([
-            ("nohup", lambda c: {"output": "PID:77\n", "returncode": 0}),
-            ("kill -0", lambda c: {"output": "ALIVE\n", "returncode": 0}),
-            ("cat ", lambda c: {"output": "", "returncode": 0}),
-        ])
+        env = ScriptedEnv(
+            [
+                ("nohup", lambda c: {"output": "PID:77\n", "returncode": 0}),
+                ("kill -0", lambda c: {"output": "ALIVE\n", "returncode": 0}),
+                ("cat ", lambda c: {"output": "", "returncode": 0}),
+            ]
+        )
         result = _run(env, timeout=2)
         self.assertEqual(result["status"], "timeout")
         self.assertTrue(result["kernel"]["state_lost"])
@@ -238,9 +264,15 @@ class TestIdleReapAndCapEviction(RemoteKernelBase):
     def test_idle_expired_kernel_is_reaped_on_next_call(self):
         env = ScriptedEnv(_spawn_ok_handlers([_cell(), _cell()]))
         execute_in_remote_kernel(
-            "print(1)", env=env, env_type="ssh", task_env_id="stale",
-            sandbox_tools=frozenset(), timeout=10, max_tool_calls=5,
-            reset=False, idle_exit=1800,
+            "print(1)",
+            env=env,
+            env_type="ssh",
+            task_env_id="stale",
+            sandbox_tools=frozenset(),
+            timeout=10,
+            max_tool_calls=5,
+            reset=False,
+            idle_exit=1800,
         )
         self.assertEqual(len(_REMOTE_KERNELS), 1)
         # Backdate the kernel's last_used past the idle window — simulates
@@ -250,9 +282,15 @@ class TestIdleReapAndCapEviction(RemoteKernelBase):
         # A call for a DIFFERENT key must reap the stale entry on entry,
         # without ever touching or reviving it.
         execute_in_remote_kernel(
-            "print(1)", env=env, env_type="ssh", task_env_id="fresh",
-            sandbox_tools=frozenset(), timeout=10, max_tool_calls=5,
-            reset=False, idle_exit=1800,
+            "print(1)",
+            env=env,
+            env_type="ssh",
+            task_env_id="fresh",
+            sandbox_tools=frozenset(),
+            timeout=10,
+            max_tool_calls=5,
+            reset=False,
+            idle_exit=1800,
         )
         owners = {key[0] for key in _REMOTE_KERNELS}
         self.assertNotIn("stale", owners)
@@ -263,9 +301,15 @@ class TestIdleReapAndCapEviction(RemoteKernelBase):
             env = ScriptedEnv(_spawn_ok_handlers([_cell() for _ in range(10)]))
             for i in range(3):
                 execute_in_remote_kernel(
-                    "print(1)", env=env, env_type="ssh", task_env_id=f"owner-{i}",
-                    sandbox_tools=frozenset(), timeout=10, max_tool_calls=5,
-                    reset=False, idle_exit=1800,
+                    "print(1)",
+                    env=env,
+                    env_type="ssh",
+                    task_env_id=f"owner-{i}",
+                    sandbox_tools=frozenset(),
+                    timeout=10,
+                    max_tool_calls=5,
+                    reset=False,
+                    idle_exit=1800,
                 )
             self.assertEqual(len(_REMOTE_KERNELS), 2)
             owners = {key[0] for key in _REMOTE_KERNELS}
@@ -285,13 +329,17 @@ class TestIdleReapAndCapEviction(RemoteKernelBase):
             gate.wait(10)
             return {"output": json.dumps(_cell()), "returncode": 0}
 
-        busy_env = ScriptedEnv([
-            ("nohup", lambda c: {"output": "PID:4242\n", "returncode": 0}),
-            ("kill -0", lambda c: {"output": "ALIVE\n", "returncode": 0}),
-            ("cat ", slow_cat),
-        ])
+        busy_env = ScriptedEnv(
+            [
+                ("nohup", lambda c: {"output": "PID:4242\n", "returncode": 0}),
+                ("kill -0", lambda c: {"output": "ALIVE\n", "returncode": 0}),
+                ("cat ", slow_cat),
+            ]
+        )
         with patch("tools.code_kernel._lifecycle_limits", return_value=(1, 1800)):
-            worker = threading.Thread(target=_run, args=(busy_env,), kwargs={"task": "busy"})
+            worker = threading.Thread(
+                target=_run, args=(busy_env,), kwargs={"task": "busy"}
+            )
             worker.start()
             # Snapshot: the worker thread inserts into the registry concurrently and a live
             # dict iteration raises "dictionary changed size during iteration".
@@ -313,19 +361,31 @@ class TestDispatchIntegration(unittest.TestCase):
         from tools.code_execution_tool import _execute_remote
 
         fake = {
-            "status": "success", "stdout": "kernel says hi\n", "stderr": "",
-            "traceback": "", "tool_calls_made": 0,
+            "status": "success",
+            "stdout": "kernel says hi\n",
+            "stderr": "",
+            "traceback": "",
+            "tool_calls_made": 0,
             "kernel": {"reused": True, "remote": True, "execution_count": 3},
         }
-        env = ScriptedEnv([
-            ("command -v python3", lambda c: {"output": "OK\n", "returncode": 0}),
-        ])
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env",
-                   return_value=(env, "ssh")), \
-             patch("tools.code_kernel_remote.execute_in_remote_kernel",
-                   return_value=fake):
+        env = ScriptedEnv(
+            [
+                ("command -v python3", lambda c: {"output": "OK\n", "returncode": 0}),
+            ]
+        )
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(env, "ssh"),
+            ),
+            patch(
+                "tools.code_kernel_remote.execute_in_remote_kernel", return_value=fake
+            ),
+        ):
             result = json.loads(_execute_remote("print()", "t", ["read_file"]))
         self.assertEqual(result["status"], "success")
         self.assertIn("kernel says hi", result["output"])
@@ -335,20 +395,32 @@ class TestDispatchIntegration(unittest.TestCase):
         from tools.code_execution_tool import _execute_remote
         from unittest.mock import MagicMock
 
-        env = ScriptedEnv([
-            ("command -v python3", lambda c: {"output": "OK\n", "returncode": 0}),
-            ("python3 script.py", lambda c: {"output": "per-call ran\n",
-                                             "returncode": 0}),
-        ])
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env",
-                   return_value=(env, "ssh")), \
-             patch("tools.code_kernel_remote.execute_in_remote_kernel",
-                   return_value=None), \
-             patch("tools.code_execution_tool._ship_file_to_remote"), \
-             patch("tools.code_execution_tool.threading.Thread",
-                   return_value=MagicMock()):
+        env = ScriptedEnv(
+            [
+                ("command -v python3", lambda c: {"output": "OK\n", "returncode": 0}),
+                (
+                    "python3 script.py",
+                    lambda c: {"output": "per-call ran\n", "returncode": 0},
+                ),
+            ]
+        )
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(env, "ssh"),
+            ),
+            patch(
+                "tools.code_kernel_remote.execute_in_remote_kernel", return_value=None
+            ),
+            patch("tools.code_execution_tool._ship_file_to_remote"),
+            patch(
+                "tools.code_execution_tool.threading.Thread", return_value=MagicMock()
+            ),
+        ):
             result = json.loads(_execute_remote("print()", "t", ["read_file"]))
         self.assertEqual(result["status"], "success")
         self.assertIn("per-call ran", result["output"])
@@ -369,7 +441,8 @@ class TestSharedHostLockdown(RemoteKernelBase):
         # world-readable via ps for the command's whole lifetime.
         self.assertFalse(
             any(kernel.rpc_token in c for c in env.commands),
-            "rpc token appeared in a remote command line")
+            "rpc token appeared in a remote command line",
+        )
         spawn_cmd = next(c for c in env.commands if "nohup" in c)
         self.assertNotIn("CLAWK_RPC_TOKEN=", spawn_cmd)
         mkdir_cmd = next(c for c in env.commands if "mkdir -p" in c)
@@ -380,11 +453,16 @@ class TestSharedHostLockdown(RemoteKernelBase):
             import shutil
             import subprocess
             import tempfile
+
             root = tempfile.mkdtemp()
             self.addCleanup(shutil.rmtree, root, True)
             local = root + kernel.kernel_dir
-            r = subprocess.run(["bash", "-c", mkdir_cmd.replace(kernel.kernel_dir, local)],
-                               capture_output=True, text=True, check=False)
+            r = subprocess.run(
+                ["bash", "-c", mkdir_cmd.replace(kernel.kernel_dir, local)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
             self.assertEqual(r.returncode, 0, r.stderr)
             for d in (local, f"{local}/cells", f"{local}/rpc"):
                 self.assertEqual(os.stat(d).st_mode & 0o777, 0o700, d)
@@ -393,21 +471,29 @@ class TestSharedHostLockdown(RemoteKernelBase):
         ship_cmds = [c for c in env.commands if "base64 -d" in c]
         self.assertTrue(any("kernel.env" in c for c in ship_cmds))
         import base64
-        env_ship = next(p for p, c in zip(env.stdin_payloads, env.commands)
-                        if p and "kernel.env" in c)
+
+        env_ship = next(
+            p
+            for p, c in zip(env.stdin_payloads, env.commands)
+            if p and "kernel.env" in c
+        )
         env_content = base64.b64decode(env_ship).decode()
         self.assertIn(f"CLAWK_RPC_TOKEN={kernel.rpc_token}", env_content)
         # Fail closed on a failed cell ship: the checked write raises and the
         # kernel is evicted, so the next call cannot reuse a kernel whose
         # state silently missed this cell.
-        env.handlers.insert(0, ("cell_req_", lambda c: {"output": "ENOSPC", "returncode": 1}))
+        env.handlers.insert(
+            0, ("cell_req_", lambda c: {"output": "ENOSPC", "returncode": 1})
+        )
         with self.assertRaises(RuntimeError):
             _run(env, timeout=1)
         self.assertEqual(len(_REMOTE_KERNELS), 0)
         # Fail closed on a failed dir setup: nothing (env file, runner) is
         # shipped into a dir that may still be missing or permissive.
-        env = ScriptedEnv([("mkdir -p", lambda c: {"output": "EACCES", "returncode": 1})]
-                          + _spawn_ok_handlers([_cell()]))
+        env = ScriptedEnv(
+            [("mkdir -p", lambda c: {"output": "EACCES", "returncode": 1})]
+            + _spawn_ok_handlers([_cell()])
+        )
         self.assertIsNone(_run(env))
         self.assertFalse(any("base64 -d" in c for c in env.commands), env.commands)
 

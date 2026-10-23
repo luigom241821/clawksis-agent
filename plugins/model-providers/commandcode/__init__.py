@@ -20,7 +20,11 @@ class CommandCodeProfile(ProviderProfile):
     """CommandCode — OpenAI-compatible chat completions endpoint."""
 
     def fetch_models(
-        self, *, api_key: str | None = None, base_url: str | None = None, timeout: float = 8.0
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 8.0,
     ) -> list[str] | None:
         """Public (unauthenticated) /models endpoint. The picker passes base_url
         unconditionally, so only a value differing from the default is a custom endpoint."""
@@ -33,14 +37,21 @@ class CommandCodeProfile(ProviderProfile):
             req.add_header("User-Agent", _profile_user_agent())
             with open_credentialed_url(req, timeout=timeout) as resp:
                 data = json.loads(resp.read().decode())
-            return [m["id"] for m in data.get("data", []) if isinstance(m, dict) and "id" in m]
+            return [
+                m["id"]
+                for m in data.get("data", [])
+                if isinstance(m, dict) and "id" in m
+            ]
         except Exception as exc:
             logger.debug("fetch_models(commandcode): %s", exc)
             return None
 
-
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, model: str | None = None, **context
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        model: str | None = None,
+        **context,
     ) -> tuple[dict, dict]:
         """DeepSeek ids (``deepseek/deepseek-v4-flash``) get the native DeepSeek wire
         controls: DeepSeek V4+ defaults to thinking when ``thinking`` is omitted, so
@@ -55,7 +66,9 @@ class CommandCodeProfile(ProviderProfile):
         if native is None:
             return {}, {}
         return native.build_api_kwargs_extras(
-            reasoning_config=reasoning_config, model=m.split("/", 1)[1], **context,
+            reasoning_config=reasoning_config,
+            model=m.split("/", 1)[1],
+            **context,
         )
 
 
@@ -63,35 +76,66 @@ class CommandCodeAnthropicProfile(CommandCodeProfile):
     """CommandCode — Anthropic Messages API-compatible endpoint."""
 
     def fetch_models(
-        self, *, api_key: str | None = None, base_url: str | None = None, timeout: float = 8.0
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 8.0,
     ) -> list[str] | None:
         """Public /models endpoint, filtered to Anthropic-family models."""
-        all_models = super().fetch_models(api_key=api_key, base_url=base_url, timeout=timeout)
-        return None if all_models is None else [m for m in all_models if m.startswith("claude-")]
+        all_models = super().fetch_models(
+            api_key=api_key, base_url=base_url, timeout=timeout
+        )
+        return (
+            None
+            if all_models is None
+            else [m for m in all_models if m.startswith("claude-")]
+        )
 
 
 commandcode = CommandCodeProfile(
-    name="commandcode", aliases=("commandcode-chat",), api_mode="chat_completions",
+    name="commandcode",
+    aliases=("commandcode-chat",),
+    api_mode="chat_completions",
     # Same key as the anthropic profile; distinct base-URL override vars so each
     # profile renders its own card on the desktop Keys tab (rows keyed by env var).
     env_vars=("COMMANDCODE_API_KEY", "COMMANDCODE_BASE_URL"),
-    display_name="CommandCode", description="CommandCode — 20+ models via OpenAI-compatible API",
-    signup_url="https://commandcode.ai/", base_url=_COMMANDCODE_BASE, models_url=_COMMANDCODE_MODELS_URL,
+    display_name="CommandCode",
+    description="CommandCode — 20+ models via OpenAI-compatible API",
+    signup_url="https://commandcode.ai/",
+    base_url=_COMMANDCODE_BASE,
+    models_url=_COMMANDCODE_MODELS_URL,
     fallback_models=(
-        "deepseek/deepseek-v4-pro", "deepseek/deepseek-v4-flash", "Qwen/Qwen3.7-Max", "Qwen/Qwen3.6-Plus",
-        "moonshotai/Kimi-K2.6", "zai-org/GLM-5.1", "MiniMaxAI/MiniMax-M2.7", "stepfun/Step-3.5-Flash",
-        "xiaomi/mimo-v2.5-pro", "google/gemini-3.5-flash", "gpt-5.5",
+        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash",
+        "Qwen/Qwen3.7-Max",
+        "Qwen/Qwen3.6-Plus",
+        "moonshotai/Kimi-K2.6",
+        "zai-org/GLM-5.1",
+        "MiniMaxAI/MiniMax-M2.7",
+        "stepfun/Step-3.5-Flash",
+        "xiaomi/mimo-v2.5-pro",
+        "google/gemini-3.5-flash",
+        "gpt-5.5",
     ),
     default_aux_model="deepseek/deepseek-v4-flash",
 )
 
 commandcode_anthropic = CommandCodeAnthropicProfile(
-    name="commandcode-anthropic", aliases=("commandcode-claude",), api_mode="anthropic_messages",
+    name="commandcode-anthropic",
+    aliases=("commandcode-claude",),
+    api_mode="anthropic_messages",
     env_vars=("COMMANDCODE_API_KEY", "COMMANDCODE_ANTHROPIC_BASE_URL"),
     display_name="CommandCode (Anthropic)",
     description="CommandCode — Claude models via Anthropic Messages API",
-    signup_url="https://commandcode.ai/", base_url=_COMMANDCODE_BASE, models_url=_COMMANDCODE_MODELS_URL,
-    fallback_models=("claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5-20251001"),
+    signup_url="https://commandcode.ai/",
+    base_url=_COMMANDCODE_BASE,
+    models_url=_COMMANDCODE_MODELS_URL,
+    fallback_models=(
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+        "claude-haiku-4-5-20251001",
+    ),
     default_aux_model="claude-haiku-4-5-20251001",
 )
 

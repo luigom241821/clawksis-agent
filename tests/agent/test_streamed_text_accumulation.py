@@ -31,14 +31,11 @@ def _make_agent():
 class TestStreamedTextValue:
     """The value callers read must not change."""
 
-
     def test_deltas_join_in_order(self):
         agent = _make_agent()
         for piece in ["Hello", ", ", "world", "!"]:
             agent._record_streamed_assistant_text(piece)
         assert agent._current_streamed_assistant_text == "Hello, world!"
-
-
 
     def test_direct_assignment_still_works(self):
         # Several call sites set this attribute straight, both to seed a value
@@ -50,7 +47,6 @@ class TestStreamedTextValue:
         agent._record_streamed_assistant_text(" plus more")
         assert agent._current_streamed_assistant_text == "set by hand plus more"
 
-
     def test_empty_and_non_string_deltas_are_ignored(self):
         agent = _make_agent()
         agent._record_streamed_assistant_text("keep")
@@ -58,9 +54,6 @@ class TestStreamedTextValue:
         agent._record_streamed_assistant_text(None)  # type: ignore[arg-type]
         agent._record_streamed_assistant_text(12345)  # type: ignore[arg-type]
         assert agent._current_streamed_assistant_text == "keep"
-
-
-
 
 
 def _agent_with_sink():
@@ -97,7 +90,6 @@ class TestFireStreamDeltaEmptiness:
         agent._fire_stream_delta("\n\nagain")
         assert delivered[-1] == "again"
         assert agent._current_streamed_assistant_text == "again"
-
 
 
 if __name__ == "__main__":

@@ -181,7 +181,6 @@ class TestZaiGLM53ReasoningEffort:
         )
         assert top_level == {"reasoning_effort": "high"}
 
-
     @pytest.mark.parametrize(
         "model",
         [
@@ -201,7 +200,6 @@ class TestZaiGLM53ReasoningEffort:
         )
         assert extra_body == {"thinking": {"type": "enabled", "clear_thinking": False}}
         assert top_level == {"reasoning_effort": "low"}
-
 
 
 class TestZaiModelGating:
@@ -229,7 +227,6 @@ class TestZaiModelGating:
 class TestZaiFullKwargsIntegration:
     """End-to-end: the transport's full kwargs carry the reasoning wiring."""
 
-
     def test_glm_5_2_effort_reaches_top_level(self, zai_profile):
         from agent.transports.chat_completions import ChatCompletionsTransport
 
@@ -243,14 +240,22 @@ class TestZaiFullKwargsIntegration:
             provider_name="zai",
         )
         assert kwargs["reasoning_effort"] == "max"
-        assert kwargs["extra_body"]["thinking"] == {"type": "enabled", "clear_thinking": False}
+        assert kwargs["extra_body"]["thinking"] == {
+            "type": "enabled",
+            "clear_thinking": False,
+        }
 
-    @pytest.mark.parametrize("model,reasoning,thinking,effort", [
-        ("glm-5.3-flash", {"enabled": False}, "enabled", "low"),
-        ("glm-5.2", {"enabled": False}, "disabled", None),
-        ("glm-5.3", None, None, None),
-    ])
-    def test_glm_thinking_preference_reaches_transport(self, zai_profile, model, reasoning, thinking, effort):
+    @pytest.mark.parametrize(
+        "model,reasoning,thinking,effort",
+        [
+            ("glm-5.3-flash", {"enabled": False}, "enabled", "low"),
+            ("glm-5.2", {"enabled": False}, "disabled", None),
+            ("glm-5.3", None, None, None),
+        ],
+    )
+    def test_glm_thinking_preference_reaches_transport(
+        self, zai_profile, model, reasoning, thinking, effort
+    ):
         from agent.transports.chat_completions import ChatCompletionsTransport
 
         kwargs = ChatCompletionsTransport().build_kwargs(
@@ -263,6 +268,13 @@ class TestZaiFullKwargsIntegration:
             provider_name="zai",
         )
         assert kwargs.get("reasoning_effort") == effort
-        expected = None if thinking is None else (
-            {"type": thinking, "clear_thinking": False} if thinking == "enabled" else {"type": thinking})
+        expected = (
+            None
+            if thinking is None
+            else (
+                {"type": thinking, "clear_thinking": False}
+                if thinking == "enabled"
+                else {"type": thinking}
+            )
+        )
         assert kwargs.get("extra_body", {}).get("thinking") == expected

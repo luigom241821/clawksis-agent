@@ -4,6 +4,7 @@ Extracted from ``clawk_cli/gateway.py``. Bodies read facade helpers through ``_g
 binding on ``clawk_cli.gateway``) so the seams tests and callers patch on the facade keep
 intercepting the moved code.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -13,6 +14,7 @@ import sys
 
 def _gw():
     from clawk_cli import gateway  # late: the facade imports this module
+
     return gateway
 
 
@@ -20,7 +22,10 @@ def _gw():
 # SMS, etc. live in plugins/platforms/<name>/ and are discovered via the platform registry.
 _PLATFORMS = [
     {
-        "key": "mattermost", "label": "Mattermost", "emoji": "💬", "token_var": "MATTERMOST_TOKEN",
+        "key": "mattermost",
+        "label": "Mattermost",
+        "emoji": "💬",
+        "token_var": "MATTERMOST_TOKEN",
         "setup_instructions": [
             "1. In Mattermost: Integrations → Bot Accounts → Add Bot Account",
             "   (System Console → Integrations → Bot Accounts must be enabled)",
@@ -32,19 +37,37 @@ _PLATFORMS = [
             "5. To get a channel ID: click the channel name → View Info → copy the ID",
         ],
         "vars": [
-            {"name": "MATTERMOST_URL", "prompt": "Server URL (e.g. https://mm.example.com)",
-             "password": False, "help": "Your Mattermost server URL. Works with any self-hosted instance."},
-            {"name": "MATTERMOST_TOKEN", "prompt": "Bot token", "password": True,
-             "help": "Paste the bot token from step 2 above."},
-            {"name": "MATTERMOST_ALLOWED_USERS", "prompt": "Allowed user IDs (comma-separated)",
-             "password": False, "is_allowlist": True, "help": "Your Mattermost user ID from step 4 above."},
-            {"name": "MATTERMOST_HOME_CHANNEL",
-             "prompt": "Home channel ID (for cron/notification delivery, or empty to set later with /set-home)",
-             "password": False, "help": "Channel ID where Clawksis delivers cron results and notifications."},
-            {"name": "MATTERMOST_REPLY_MODE",
-             "prompt": "Reply mode — 'off' for flat messages, 'thread' for threaded replies (default: off)",
-             "password": False,
-             "help": "off = flat channel messages, thread = replies nest under your message."},
+            {
+                "name": "MATTERMOST_URL",
+                "prompt": "Server URL (e.g. https://mm.example.com)",
+                "password": False,
+                "help": "Your Mattermost server URL. Works with any self-hosted instance.",
+            },
+            {
+                "name": "MATTERMOST_TOKEN",
+                "prompt": "Bot token",
+                "password": True,
+                "help": "Paste the bot token from step 2 above.",
+            },
+            {
+                "name": "MATTERMOST_ALLOWED_USERS",
+                "prompt": "Allowed user IDs (comma-separated)",
+                "password": False,
+                "is_allowlist": True,
+                "help": "Your Mattermost user ID from step 4 above.",
+            },
+            {
+                "name": "MATTERMOST_HOME_CHANNEL",
+                "prompt": "Home channel ID (for cron/notification delivery, or empty to set later with /set-home)",
+                "password": False,
+                "help": "Channel ID where Clawksis delivers cron results and notifications.",
+            },
+            {
+                "name": "MATTERMOST_REPLY_MODE",
+                "prompt": "Reply mode — 'off' for flat messages, 'thread' for threaded replies (default: off)",
+                "password": False,
+                "help": "off = flat channel messages, thread = replies nest under your message.",
+            },
         ],
     },
 ]
@@ -57,12 +80,17 @@ def _all_platforms() -> list[dict]:
     hidden on Windows: python-olm has no wheel or native build (use WSL)."""
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()
     except Exception as e:
         _gw().logger.debug("plugin discovery failed during platform enumeration: %s", e)
 
     hide_matrix = sys.platform == "win32"
-    platforms = [dict(p) for p in _gw()._PLATFORMS if not (hide_matrix and p.get("key") == "matrix")]
+    platforms = [
+        dict(p)
+        for p in _gw()._PLATFORMS
+        if not (hide_matrix and p.get("key") == "matrix")
+    ]
     by_key = {p["key"]: p for p in platforms}
 
     try:
@@ -73,11 +101,16 @@ def _all_platforms() -> list[dict]:
     for entry in platform_registry.all_entries():
         if entry.name in by_key or (hide_matrix and entry.name == "matrix"):
             continue
-        platforms.append({
-            "key": entry.name, "label": entry.label, "emoji": entry.emoji,
-            "token_var": entry.required_env[0] if entry.required_env else "",
-            "install_hint": entry.install_hint, "_registry_entry": entry,
-        })
+        platforms.append(
+            {
+                "key": entry.name,
+                "label": entry.label,
+                "emoji": entry.emoji,
+                "token_var": entry.required_env[0] if entry.required_env else "",
+                "install_hint": entry.install_hint,
+                "_registry_entry": entry,
+            }
+        )
     return platforms
 
 
@@ -90,6 +123,7 @@ def _platform_status(platform: dict) -> str:
         try:
             if entry.is_connected is not None:
                 from gateway.config import PlatformConfig
+
                 configured = bool(entry.is_connected(PlatformConfig(enabled=True)))
             else:
                 configured = bool(entry.check_fn())
@@ -105,7 +139,9 @@ def _platform_status(platform: dict) -> str:
 
 def _set_platform_unauthorized_dm_behavior(platform_key: str, behavior: str) -> None:
     """Persist a platform-specific unauthorized-DM policy in config.yaml."""
-    _gw().write_platform_config_field(platform_key, "unauthorized_dm_behavior", behavior, raw=True)
+    _gw().write_platform_config_field(
+        platform_key, "unauthorized_dm_behavior", behavior, raw=True
+    )
 
 
 def print_setup_header(title: str) -> None:
@@ -141,16 +177,20 @@ def prompt_csv(prompt_text: str, default: str) -> str:
 
 # (default index, *choices) for the no-allowlist access prompt, keyed by is_email.
 _UNAUTHORIZED_ACCESS_CHOICES = {
-    True: (3,
+    True: (
+        3,
         "Enable open access (any email sender can message the bot)",
         "Use DM pairing (unknown email senders receive a pairing code)",
         "Politely decline unknown senders (one-time message, then silence)",
-        "Keep unknown senders silent"),
-    False: (1,
+        "Keep unknown senders silent",
+    ),
+    False: (
+        1,
         "Enable open access (anyone can message the bot)",
         "Use DM pairing (unknown users request access, you approve with 'clawk pairing approve')",
         "Politely decline unknown senders (one-time message, then silence)",
-        "Skip for now (bot will deny all users until configured)"),
+        "Skip for now (bot will deny all users until configured)",
+    ),
 }
 
 
@@ -159,18 +199,26 @@ def _prompt_unauthorized_access(platform_key: str) -> None:
     is_email = platform_key == "email"
     print()
     default_idx, *access_choices = _UNAUTHORIZED_ACCESS_CHOICES[is_email]
-    access_idx = _gw().prompt_choice("  How should unauthorized users be handled?", access_choices, default_idx)
+    access_idx = _gw().prompt_choice(
+        "  How should unauthorized users be handled?", access_choices, default_idx
+    )
     if access_idx == 0:
-        _gw().save_env_value("EMAIL_ALLOW_ALL_USERS" if is_email else "GATEWAY_ALLOW_ALL_USERS", "true")
+        _gw().save_env_value(
+            "EMAIL_ALLOW_ALL_USERS" if is_email else "GATEWAY_ALLOW_ALL_USERS", "true"
+        )
         _gw().print_warning("  Open access enabled — anyone can use your bot!")
     elif access_idx == 1:
         if is_email:
             _set_platform_unauthorized_dm_behavior("email", "pair")
-        _gw().print_success("  DM pairing mode — users will receive a code to request access.")
+        _gw().print_success(
+            "  DM pairing mode — users will receive a code to request access."
+        )
         _gw().print_info("  Approve with: clawk pairing approve <platform> <code>")
     elif access_idx == 2:
         _set_platform_unauthorized_dm_behavior(platform_key, "decline")
-        _gw().print_success("  Unknown senders get one polite decline, then silence (unauthorized_dm_behavior: decline).")
+        _gw().print_success(
+            "  Unknown senders get one polite decline, then silence (unauthorized_dm_behavior: decline)."
+        )
     elif is_email:
         _gw().print_success("  Unknown email senders will be ignored.")
     else:
@@ -182,13 +230,15 @@ def _telegram_auto_setup(token_var: str) -> tuple[bool, object]:
     print()
     _gw()._print_info_lines(
         "  Telegram can be configured automatically with a managed bot:",
-        "  [1] Automatic (scan QR → confirm in Telegram → done)", "  [2] Manual BotFather token",
+        "  [1] Automatic (scan QR → confirm in Telegram → done)",
+        "  [2] Manual BotFather token",
     )
     if _gw().prompt("  Choice [1/2]", default="1").strip() != "1":
         return False, None
     try:
         from clawk_cli.telegram_managed_bot import (
-            auto_setup_telegram_bot_result, is_valid_telegram_bot_token,
+            auto_setup_telegram_bot_result,
+            is_valid_telegram_bot_token,
         )
     except ImportError:
         _gw().print_warning("  Automatic setup is unavailable in this install.")
@@ -219,13 +269,18 @@ def _clean_discord_ids(cleaned: str) -> str:
     return ",".join(parts)
 
 
-def _prompt_allowlist_var(var: dict, platform_key: str, auto_owner_user_id) -> str | None:
+def _prompt_allowlist_var(
+    var: dict, platform_key: str, auto_owner_user_id
+) -> str | None:
     """Allowlist prompt for one var; returns the saved value or None (open-access prompt shown)."""
     if "TELEGRAM" in var["name"] and auto_owner_user_id:
         detected_id = str(auto_owner_user_id)
         _gw().print_success(f"  Detected your Telegram user ID: {detected_id}")
         if _gw().prompt_yes_no("  Allow this Telegram account to use the bot?", True):
-            extra = _gw().prompt("  Additional allowed user IDs (comma-separated, optional)", password=False)
+            extra = _gw().prompt(
+                "  Additional allowed user IDs (comma-separated, optional)",
+                password=False,
+            )
             ids = [detected_id]
             for uid in extra.replace(" ", "").split(","):
                 if uid and uid not in ids:
@@ -255,7 +310,12 @@ def _prompt_allowlist_var(var: dict, platform_key: str, auto_owner_user_id) -> s
 def _setup_standard_platform(platform: dict):
     """Interactive setup for Telegram, Discord, or Slack."""
     from clawk_cli.setup_hidden_env import is_setup_hidden_env as _is_setup_hidden_env
-    emoji, label, token_var = platform["emoji"], platform["label"], platform["token_var"]
+
+    emoji, label, token_var = (
+        platform["emoji"],
+        platform["label"],
+        platform["token_var"],
+    )
     print_setup_header(f"{emoji} {label}")
 
     instructions = platform.get("setup_instructions")
@@ -274,8 +334,11 @@ def _setup_standard_platform(platform: dict):
 
     # Skip knobs the setup forms hide (home channel, reply mode, proxy...): they're self-configuring.
     setup_vars = [
-        v for v in platform["vars"]
-        if v["name"] == token_var or v.get("is_allowlist") or not _is_setup_hidden_env(v["name"])
+        v
+        for v in platform["vars"]
+        if v["name"] == token_var
+        or v.get("is_allowlist")
+        or not _is_setup_hidden_env(v["name"])
     ]
 
     for var in setup_vars:
@@ -320,6 +383,7 @@ def _setup_standard_platform(platform: dict):
 def _builtin_setup_fn(key: str):
     """Resolve a built-in platform's setup function; late-bound to dodge the clawk_cli.setup cycle."""
     from clawk_cli import setup as _s
+
     return {
         # telegram/discord/slack/whatsapp/dingtalk/feishu/wecom setup_fns come from their plugins.
         "webhooks": _gw().setup_platforms._setup_webhooks,
@@ -344,16 +408,25 @@ def _configure_platform(platform: dict) -> None:
     print_setup_header(f"{platform.get('emoji', '🔌')} {label}")
     required = entry.required_env if entry else []
     if required:
-        _gw().print_info(f"  Set these env vars in ~/.clawksis/.env: {', '.join(required)}")
+        _gw().print_info(
+            f"  Set these env vars in ~/.clawksis/.env: {', '.join(required)}"
+        )
     else:
-        _gw().print_info(f"  Configure {label} in config.yaml under gateway.platforms.{platform['key']}")
+        _gw().print_info(
+            f"  Configure {label} in config.yaml under gateway.platforms.{platform['key']}"
+        )
     if platform.get("install_hint"):
         _gw().print_info(f"  {platform['install_hint']}")
 
 
-def _wizard_offer_service_action(action: str, question: str, failed_label: str, **kwargs) -> None:
+def _wizard_offer_service_action(
+    action: str, question: str, failed_label: str, **kwargs
+) -> None:
     """Wizard start/restart prompt; prints remediation instead when system scope would need root."""
-    if _gw().supports_systemd_services() and _gw()._system_scope_wizard_would_need_root():
+    if (
+        _gw().supports_systemd_services()
+        and _gw()._system_scope_wizard_would_need_root()
+    ):
         _gw()._print_system_scope_remediation(action)
     elif _gw().prompt_yes_no(question, True):
         _gw()._setup_service_action(action, failed_label=failed_label, **kwargs)
@@ -367,7 +440,9 @@ def _setup_service_action(
     try:
         backend = _gw()._service_backend(windows=windows)
         if backend is not None:
-            _gw()._service_call(backend, action, None if action == "restart" else system)
+            _gw()._service_call(
+                backend, action, None if action == "restart" else system
+            )
         elif action == "restart" and windows:
             _gw().stop_profile_gateway()
             _gw().print_info("Start manually: clawk gateway")
@@ -392,22 +467,29 @@ _WIZARD_BANNER = (
 )
 
 
-_WIZARD_BACKEND_LABELS = {"systemd": "systemd", "launchd": "launchd", "windows": "Scheduled Task"}
+_WIZARD_BACKEND_LABELS = {
+    "systemd": "systemd",
+    "launchd": "launchd",
+    "windows": "Scheduled Task",
+}
 
 
 # Post-setup guidance when no service backend applies, keyed by the fallthrough reason.
 _WIZARD_NO_SERVICE_LINES = {
     "wsl": (
-        "  WSL detected but systemd is not running.", "  Run in foreground: clawk gateway run",
+        "  WSL detected but systemd is not running.",
+        "  Run in foreground: clawk gateway run",
         "  For persistence:   tmux new -s clawk 'clawk gateway run'",
         "  To enable systemd: add systemd=true to /etc/wsl.conf, then 'wsl --shutdown'",
     ),
     "termux": (
-        "  Termux does not use systemd/launchd services.", "  Run in foreground: clawk gateway run",
+        "  Termux does not use systemd/launchd services.",
+        "  Run in foreground: clawk gateway run",
         "  Or start it manually in the background (best effort): nohup clawk gateway run >{home}/logs/gateway.log 2>&1 &",
     ),
     "unsupported": (
-        "  Service install not supported on this platform.", "  Run in foreground: clawk gateway run",
+        "  Service install not supported on this platform.",
+        "  Run in foreground: clawk gateway run",
     ),
 }
 
@@ -430,7 +512,9 @@ def _wizard_service_status_block() -> None:
         _gw().print_success("Gateway service is installed and running.")
     elif service_installed:
         _gw().print_warning("Gateway service is installed but not running.")
-        _wizard_offer_service_action("start", "  Start it now?", "Failed to start", windows=False)
+        _wizard_offer_service_action(
+            "start", "  Start it now?", "Failed to start", windows=False
+        )
     else:
         _gw().print_info("Gateway service is not installed yet.")
         _gw().print_info("You'll be offered to install it after configuring platforms.")
@@ -442,8 +526,12 @@ def _wizard_platform_loop() -> None:
         _gw().print_header("Messaging Platforms")
 
         platforms = _gw()._all_platforms()
-        menu_items = [f"{p['emoji']} {p['label']}  ({_platform_status(p)})" for p in platforms] + ["Done"]
-        choice = _gw().prompt_choice("Select a platform to configure:", menu_items, len(menu_items) - 1)
+        menu_items = [
+            f"{p['emoji']} {p['label']}  ({_platform_status(p)})" for p in platforms
+        ] + ["Done"]
+        choice = _gw().prompt_choice(
+            "Select a platform to configure:", menu_items, len(menu_items) - 1
+        )
         if choice == len(platforms):
             break
         _gw()._configure_platform(platforms[choice])
@@ -457,7 +545,9 @@ def _wizard_install_service(backend: str) -> None:
     installs and starts in the elevated child), so the wizard forwards the answers
     and returns without a second start. Each install-intent question is asked exactly
     once per setup run."""
-    wsl_note = " (note: services may not survive WSL restarts)" if _gw().is_wsl() else ""
+    wsl_note = (
+        " (note: services may not survive WSL restarts)" if _gw().is_wsl() else ""
+    )
     start_now = _gw().prompt_yes_no("  Start the gateway now?", True)
     start_on_login = _gw().prompt_yes_no(
         f"  Start the gateway automatically on login/boot as a {_WIZARD_BACKEND_LABELS[backend]} service?"
@@ -468,7 +558,9 @@ def _wizard_install_service(backend: str) -> None:
         _gw().print_info("  Skipped start and auto-start setup.")
         _gw().print_info("  You can install later: clawk gateway install")
         if _gw().supports_systemd_services():
-            _gw().print_info("  Or as a boot-time service: sudo clawk gateway install --system")
+            _gw().print_info(
+                "  Or as a boot-time service: sudo clawk gateway install --system"
+            )
         _gw().print_info("  Or run in foreground:  clawk gateway run")
         return
     try:
@@ -480,11 +572,15 @@ def _wizard_install_service(backend: str) -> None:
         elif backend == "launchd":
             _gw().launchd_install(force=False, start_now=start_now)
         else:
-            _gw()._gw_windows().install(force=False, start_now=start_now, start_on_login=start_on_login)
+            _gw()._gw_windows().install(
+                force=False, start_now=start_now, start_on_login=start_on_login
+            )
             return
         print()
         if did_install and start_now:
-            _gw()._setup_service_action("start", failed_label="Start failed", system=installed_scope == "system")
+            _gw()._setup_service_action(
+                "start", failed_label="Start failed", system=installed_scope == "system"
+            )
     except subprocess.CalledProcessError as e:
         _gw().print_error(f"  Install failed: {e}")
         _gw().print_info("  You can try manually: clawk gateway install")
@@ -505,9 +601,13 @@ def _wizard_post_setup() -> None:
     service_running = _gw()._is_service_running()
 
     if service_running:
-        _wizard_offer_service_action("restart", "  Restart the gateway to pick up changes?", "Restart failed")
+        _wizard_offer_service_action(
+            "restart", "  Restart the gateway to pick up changes?", "Restart failed"
+        )
     elif service_installed:
-        _wizard_offer_service_action("start", "  Start the gateway service?", "Start failed")
+        _wizard_offer_service_action(
+            "start", "  Start the gateway service?", "Start failed"
+        )
     else:
         print()
         backend = _gw()._service_backend()
@@ -518,10 +618,13 @@ def _wizard_post_setup() -> None:
             reason, home = "wsl", ""
         elif _gw().is_termux():
             from clawk_constants import display_clawk_home as _dhh
+
             reason, home = "termux", _dhh()
         else:
             reason, home = "unsupported", ""
-        _gw()._print_info_lines(*(line.format(home=home) for line in _WIZARD_NO_SERVICE_LINES[reason]))
+        _gw()._print_info_lines(
+            *(line.format(home=home) for line in _WIZARD_NO_SERVICE_LINES[reason])
+        )
 
 
 def gateway_setup():
@@ -543,12 +646,18 @@ def gateway_setup():
     # Meaningful progress on any platform; ``_platform_status`` already handles plugin dual states.
     def _is_progress(status: str) -> bool:
         s = status.lower()
-        return not (s == "not configured" or s.startswith("partially") or s.startswith("plugin disabled"))
+        return not (
+            s == "not configured"
+            or s.startswith("partially")
+            or s.startswith("plugin disabled")
+        )
 
     if any(_is_progress(_gw()._platform_status(p)) for p in _gw()._all_platforms()):
         _gw()._wizard_post_setup()
     else:
         print()
-        _gw().print_info("No platforms configured. Run 'clawk gateway setup' when ready.")
+        _gw().print_info(
+            "No platforms configured. Run 'clawk gateway setup' when ready."
+        )
 
     print()

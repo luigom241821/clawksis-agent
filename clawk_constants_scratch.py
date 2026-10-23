@@ -9,6 +9,7 @@ A process Clawksis itself started is never an orphan, though: an idle entry a re
 process still works inside is kept, not reaped (#132401). Ownership comes from the two
 registries Clawksis writes, not from a marker file a lane must remember to drop.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -69,8 +70,12 @@ def _open_prune_log(log_file: Path | None) -> logging.Logger:
     # backslashreplace: a legal POSIX name that is not UTF-8 is written escaped instead of
     # dropping the whole record.
     handler = _PruneLogHandler(
-        log_file, maxBytes=_PRUNE_LOG_MAX_BYTES, backupCount=_PRUNE_LOG_BACKUPS, encoding="utf-8",
-        errors="backslashreplace", delay=True,
+        log_file,
+        maxBytes=_PRUNE_LOG_MAX_BYTES,
+        backupCount=_PRUNE_LOG_BACKUPS,
+        encoding="utf-8",
+        errors="backslashreplace",
+        delay=True,
     )
     handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
     audit.addHandler(handler)
@@ -133,8 +138,12 @@ def _scan_subtree(path: Path, cutoff: float) -> tuple[str, str | None]:
                     try:
                         st = child.stat(follow_symlinks=False)
                     except OSError as exc:
-                        return _SCAN_FAILED, current if stuck.is_permission_error(exc) else None
-                    if st.st_mtime >= cutoff and not (st.st_nlink > 1 and child.is_file(follow_symlinks=False)):
+                        return _SCAN_FAILED, current if stuck.is_permission_error(
+                            exc
+                        ) else None
+                    if st.st_mtime >= cutoff and not (
+                        st.st_nlink > 1 and child.is_file(follow_symlinks=False)
+                    ):
                         return _TOUCHED, None
                     if child.is_dir(follow_symlinks=False):
                         stack.append(child.path)
@@ -195,8 +204,16 @@ def _registered_live_pids(home: Path) -> set[int]:
         except (OSError, ValueError):
             continue
         for entry in entries if isinstance(entries, list) else []:
-            pid, stamp = (entry.get("pid"), entry.get(stamp_key)) if isinstance(entry, dict) else (None, None)
-            if not isinstance(pid, int) or pid <= 0 or entry.get("pid_scope", "host") != "host":
+            pid, stamp = (
+                (entry.get("pid"), entry.get(stamp_key))
+                if isinstance(entry, dict)
+                else (None, None)
+            )
+            if (
+                not isinstance(pid, int)
+                or pid <= 0
+                or entry.get("pid_scope", "host") != "host"
+            ):
                 continue
             # An MCP helper whose recorded spawner is provably gone is an orphan, not owned: the
             # rule reap_orphaned_mcp_helpers applies. Long-lived entry points (gateway, serve) that
@@ -227,12 +244,16 @@ def _owned_by_clawk(proc, registered: set[int]) -> bool:
 
     try:
         # pid 1 is excluded as an ancestor: a Clawksis running as a container init adopts every orphan.
-        return proc.pid in registered or any(p.pid in registered and p.pid != 1 for p in proc.parents())
+        return proc.pid in registered or any(
+            p.pid in registered and p.pid != 1 for p in proc.parents()
+        )
     except (psutil.Error, OSError):
         return False
 
 
-def reap_processes_rooted_in(scratch_root: Path, doomed: list[Path], audit: logging.Logger = logger) -> int:
+def reap_processes_rooted_in(
+    scratch_root: Path, doomed: list[Path], audit: logging.Logger = logger
+) -> int:
     """TERM (then KILL) same-user processes whose cwd is inside an entry about to be
     pruned, or is a path under *scratch_root* that no longer exists. Returns the count.
 
@@ -266,12 +287,24 @@ def reap_processes_rooted_in(scratch_root: Path, doomed: list[Path], audit: logg
         cwd_path = cwd[: -len(" (deleted)")] if deleted else cwd
         if not _under(cwd_path, root):
             continue
-        if deleted or not os.path.exists(cwd_path) or any(_under(cwd_path, t) for t in targets):
+        if (
+            deleted
+            or not os.path.exists(cwd_path)
+            or any(_under(cwd_path, t) for t in targets)
+        ):
             (lineage if proc.pid in skip else victims).append((proc, cwd_path))
     # The owning home comes from the scratch path as configured, not its resolved target:
     # a cache/scratch symlinked onto another disk still belongs to <home>.
-    registered = _registered_live_pids(Path(scratch_root).absolute().parent.parent) if victims else set()
-    owned = lineage + [(proc, cwd_path) for proc, cwd_path in victims if _owned_by_clawk(proc, registered)]
+    registered = (
+        _registered_live_pids(Path(scratch_root).absolute().parent.parent)
+        if victims
+        else set()
+    )
+    owned = lineage + [
+        (proc, cwd_path)
+        for proc, cwd_path in victims
+        if _owned_by_clawk(proc, registered)
+    ]
     for proc, cwd_path in owned:
         for entry in [e for e in doomed if _under(cwd_path, os.path.realpath(str(e)))]:
             doomed.remove(entry)
@@ -279,12 +312,23 @@ def reap_processes_rooted_in(scratch_root: Path, doomed: list[Path], audit: logg
                 name = proc.name()
             except (psutil.Error, OSError):
                 name = "?"
-            audit.info("scratch prune: kept %r — live Clawksis process pid=%d (%r) works inside",
-                       os.fspath(entry), proc.pid, name)
+            audit.info(
+                "scratch prune: kept %r — live Clawksis process pid=%d (%r) works inside",
+                os.fspath(entry),
+                proc.pid,
+                name,
+            )
     # Re-filter against the shrunk *doomed*: an orphan in a kept entry is spared with it (the
     # reap only exists to clear the way for rmtree); one whose cwd is already gone still goes.
-    victims = [(proc, cwd_path) for proc, cwd_path in victims if (proc, cwd_path) not in owned
-               and (not os.path.exists(cwd_path) or any(_under(cwd_path, os.path.realpath(str(e))) for e in doomed))]
+    victims = [
+        (proc, cwd_path)
+        for proc, cwd_path in victims
+        if (proc, cwd_path) not in owned
+        and (
+            not os.path.exists(cwd_path)
+            or any(_under(cwd_path, os.path.realpath(str(e))) for e in doomed)
+        )
+    ]
     if not victims:
         return 0
     for proc, cwd_path in victims:
@@ -293,8 +337,12 @@ def reap_processes_rooted_in(scratch_root: Path, doomed: list[Path], audit: logg
             proc.terminate()
         except (psutil.Error, OSError):
             continue
-        audit.info("scratch prune: sent TERM pid=%d name=%r cwd=%r", proc.pid, name, cwd_path)
-    _, alive = psutil.wait_procs([proc for proc, _ in victims], timeout=_REAP_GRACE_SECONDS)
+        audit.info(
+            "scratch prune: sent TERM pid=%d name=%r cwd=%r", proc.pid, name, cwd_path
+        )
+    _, alive = psutil.wait_procs(
+        [proc for proc, _ in victims], timeout=_REAP_GRACE_SECONDS
+    )
     for proc in alive:
         try:
             # A zombie already exited; only its parent has not collected it yet.
@@ -303,8 +351,12 @@ def reap_processes_rooted_in(scratch_root: Path, doomed: list[Path], audit: logg
             proc.kill()
         except (psutil.Error, OSError):
             continue
-        audit.info("scratch prune: sent KILL pid=%d (still running after TERM)", proc.pid)
-    logger.info("scratch prune: reaped %d process(es) rooted in pruned entries", len(victims))
+        audit.info(
+            "scratch prune: sent KILL pid=%d (still running after TERM)", proc.pid
+        )
+    logger.info(
+        "scratch prune: reaped %d process(es) rooted in pruned entries", len(victims)
+    )
     return len(victims)
 
 
@@ -319,16 +371,26 @@ def _linked_worktree_repos(entry: Path) -> set[str]:
                 for child in it:
                     if child.name == ".git" and child.is_file(follow_symlinks=False):
                         try:
-                            line = Path(child.path).read_text(encoding="utf-8-sig", errors="replace").strip()
+                            line = (
+                                Path(child.path)
+                                .read_text(encoding="utf-8-sig", errors="replace")
+                                .strip()
+                            )
                         except OSError:
                             continue
                         if line.startswith("gitdir:"):
-                            gitdir = Path(line[len("gitdir:"):].strip())
+                            gitdir = Path(line[len("gitdir:") :].strip())
                             # <repo>/.git/worktrees/<name> -> <repo>
-                            if gitdir.parent.name == "worktrees" and gitdir.parent.parent.name == ".git":
+                            if (
+                                gitdir.parent.name == "worktrees"
+                                and gitdir.parent.parent.name == ".git"
+                            ):
                                 repos.add(str(gitdir.parent.parent.parent))
-                    elif child.is_dir(follow_symlinks=False) and depth < _GIT_FILE_MAX_DEPTH \
-                            and child.name not in ("node_modules", ".venv", "venv"):
+                    elif (
+                        child.is_dir(follow_symlinks=False)
+                        and depth < _GIT_FILE_MAX_DEPTH
+                        and child.name not in ("node_modules", ".venv", "venv")
+                    ):
                         stack.append((child.path, depth + 1))
         except OSError:
             continue
@@ -343,15 +405,23 @@ def release_git_worktrees(repos: set[str]) -> None:
         try:
             subprocess.run(
                 ["git", "-C", repo, "worktree", "prune"],
-                stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=15, check=False,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=15,
+                check=False,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             logger.debug("git worktree prune in %s failed: %s", repo, exc)
 
 
 def prune_idle_entries(
-    root: Path, max_idle_hours: float, skip_names: frozenset[str], log_file: Path | None = None,
+    root: Path,
+    max_idle_hours: float,
+    skip_names: frozenset[str],
+    log_file: Path | None = None,
 ) -> int:
     """Delete top-level entries of *root* with no write anywhere in their subtree for
     *max_idle_hours*, reaping processes and worktree registrations rooted in them first.
@@ -368,12 +438,19 @@ def prune_idle_entries(
 
 
 def _prune_idle_entries(
-    root: Path, max_idle_hours: float, skip_names: frozenset[str], audit: logging.Logger,
+    root: Path,
+    max_idle_hours: float,
+    skip_names: frozenset[str],
+    audit: logging.Logger,
 ) -> int:
     cutoff = time.time() - max_idle_hours * 3600
     # Entries already known to hold files this user cannot read or delete are skipped before
     # any walk, until that is fixed (clawk_constants_scratch_stuck).
-    skip_names = skip_names | stuck.load_skips(root) | {stuck.STUCK_STATE_NAME, stuck.STUCK_LOCK_NAME}
+    skip_names = (
+        skip_names
+        | stuck.load_skips(root)
+        | {stuck.STUCK_STATE_NAME, stuck.STUCK_LOCK_NAME}
+    )
     try:
         entries = [e for e in root.iterdir() if e.name not in skip_names]
     except OSError:
@@ -391,7 +468,9 @@ def _prune_idle_entries(
     # (or by hand) are found by the deleted-cwd rule, not by membership in ``doomed``.
     try:
         reap_processes_rooted_in(root, doomed, audit)
-    except Exception as exc:  # psutil missing or restricted host: the deletion still proceeds
+    except (
+        Exception
+    ) as exc:  # psutil missing or restricted host: the deletion still proceeds
         logger.debug("scratch prune: process reap skipped: %s", exc, exc_info=True)
     if not doomed:
         return 0
@@ -429,7 +508,9 @@ def _prune_idle_entries(
             except OSError:
                 entry_gone = False
             if entry_gone:
-                audit.info("scratch prune: entry %r vanished since selection", os.fspath(entry))
+                audit.info(
+                    "scratch prune: entry %r vanished since selection", os.fspath(entry)
+                )
             elif state == _TOUCHED:
                 audit.info(
                     "scratch prune: rescued %r — touched since selection, kept",
@@ -465,7 +546,9 @@ def _prune_idle_entries(
         except FileNotFoundError:
             pass
         except OSError:
-            audit.info("scratch prune: could not confirm removal of %r", os.fspath(entry))
+            audit.info(
+                "scratch prune: could not confirm removal of %r", os.fspath(entry)
+            )
             continue
         audit.info("scratch prune: removed %r (%d bytes)", os.fspath(entry), size)
         removed += 1

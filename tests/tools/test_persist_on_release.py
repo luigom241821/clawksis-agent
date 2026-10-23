@@ -59,7 +59,12 @@ def test_gateway_turn_timeout_reap_skips_persisted_sessions(registry):
     registry._running[volatile.id] = volatile
     calls = _fake_kill_collector(registry)
 
-    assert registry.kill_started_since("session-a", frozenset(), source="gateway_turn_timeout") == 1
+    assert (
+        registry.kill_started_since(
+            "session-a", frozenset(), source="gateway_turn_timeout"
+        )
+        == 1
+    )
     assert [c[0] for c in calls] == ["proc_new"]
     assert persisted.exited is False
 
@@ -84,9 +89,11 @@ def test_agent_close_owned_loop_skips_persisted_sessions(registry, monkeypatch):
     # _close_task_resources also runs cleanup_vm/cleanup_browser/release_computer_use;
     # stub them so the loop under test is the only thing that runs.
     import run_agent as ra
+
     monkeypatch.setattr(ra, "cleanup_vm", lambda *a, **k: None)
     monkeypatch.setattr(ra, "cleanup_browser", lambda *a, **k: None)
     import tools.computer_use.tool as cu
+
     monkeypatch.setattr(cu, "release_computer_use_session", lambda *a, **k: None)
 
     ClientLifecycleMixin._close_task_resources(agent, "turn-1")
@@ -132,6 +139,7 @@ def test_spawn_local_stamps_persist_on_release(registry, monkeypatch, tmp_path):
     # suite's HomeIOGuard forbids. None == "no managed install found".
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     from tools.environments import local as local_env
+
     monkeypatch.setattr(local_env, "_resolve_clawk_bin_dir", lambda: None)
     monkeypatch.setattr(registry, "_track_started", lambda *a, **k: None)
     monkeypatch.setattr(terminal_tool_sudo, "_rewrite_compound_background", lambda c: c)
@@ -141,7 +149,8 @@ def test_spawn_local_stamps_persist_on_release(registry, monkeypatch, tmp_path):
     monkeypatch.setattr("subprocess.Popen", MagicMock(return_value=fake_popen))
 
     session = registry.spawn_local(
-        "python -c 'import time; time.sleep(60)'", task_id="t1", persist_on_release=True)
+        "python -c 'import time; time.sleep(60)'", task_id="t1", persist_on_release=True
+    )
     assert session.persist_on_release is True
 
     session = registry.spawn_local("echo hi", task_id="t1")

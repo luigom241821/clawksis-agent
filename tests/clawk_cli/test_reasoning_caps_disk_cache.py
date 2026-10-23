@@ -21,20 +21,22 @@ from clawk_cli import models_pricing
 from clawk_cli import models_reasoning_caps
 
 
-_CATALOG = json.dumps({
-    "data": [
-        {
-            "id": "deepseek/deepseek-v4-pro",
-            "supported_parameters": ["reasoning", "tools"],
-            "reasoning": {"mandatory": False},
-        },
-        {
-            "id": "arcee-ai/trinity-large-thinking",
-            "supported_parameters": ["reasoning"],
-            "reasoning": {"mandatory": True},
-        },
-    ]
-}).encode()
+_CATALOG = json.dumps(
+    {
+        "data": [
+            {
+                "id": "deepseek/deepseek-v4-pro",
+                "supported_parameters": ["reasoning", "tools"],
+                "reasoning": {"mandatory": False},
+            },
+            {
+                "id": "arcee-ai/trinity-large-thinking",
+                "supported_parameters": ["reasoning"],
+                "reasoning": {"mandatory": True},
+            },
+        ]
+    }
+).encode()
 
 
 def _response(body: bytes):
@@ -94,17 +96,23 @@ def test_fetched_catalog_answers_a_later_process_offline(
     verdict, and a silently-ignored "thinking off" for the whole turn.
     """
     monkeypatch.setattr(
-        models_mod, "_urlopen_model_catalog_request",
+        models_mod,
+        "_urlopen_model_catalog_request",
         lambda req, *, timeout: _response(_CATALOG),
     )
-    assert models_reasoning_caps.nous_model_reasoning_capabilities(
-        "deepseek/deepseek-v4-pro", allow_fetch=True
-    ) is not None
+    assert (
+        models_reasoning_caps.nous_model_reasoning_capabilities(
+            "deepseek/deepseek-v4-pro", allow_fetch=True
+        )
+        is not None
+    )
 
     cold_process()
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
 
-    caps = models_reasoning_caps.nous_model_reasoning_capabilities("deepseek/deepseek-v4-pro")
+    caps = models_reasoning_caps.nous_model_reasoning_capabilities(
+        "deepseek/deepseek-v4-pro"
+    )
     assert caps["mandatory"] is False
     mandatory = models_reasoning_caps.nous_model_reasoning_capabilities(
         "arcee-ai/trinity-large-thinking"
@@ -120,7 +128,8 @@ def test_mirror_is_keyed_by_catalog_url(cold_process, offline, monkeypatch):
     the wrong deployment.
     """
     monkeypatch.setattr(
-        models_mod, "_urlopen_model_catalog_request",
+        models_mod,
+        "_urlopen_model_catalog_request",
         lambda req, *, timeout: _response(_CATALOG),
     )
     models_reasoning_caps.nous_model_reasoning_capabilities(
@@ -130,16 +139,20 @@ def test_mirror_is_keyed_by_catalog_url(cold_process, offline, monkeypatch):
     cold_process()
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
 
-    assert models_reasoning_caps.openrouter_model_reasoning_capabilities(
-        "deepseek/deepseek-v4-pro"
-    ) is None
+    assert (
+        models_reasoning_caps.openrouter_model_reasoning_capabilities(
+            "deepseek/deepseek-v4-pro"
+        )
+        is None
+    )
 
 
 def test_staging_portal_does_not_read_productions_mirror(
     cold_process, offline, monkeypatch
 ):
     monkeypatch.setattr(
-        models_mod, "_urlopen_model_catalog_request",
+        models_mod,
+        "_urlopen_model_catalog_request",
         lambda req, *, timeout: _response(_CATALOG),
     )
     models_reasoning_caps.nous_model_reasoning_capabilities(
@@ -150,9 +163,12 @@ def test_staging_portal_does_not_read_productions_mirror(
     monkeypatch.setenv("NOUS_INFERENCE_BASE_URL", "https://staging.nousresearch.com")
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
 
-    assert models_reasoning_caps.nous_model_reasoning_capabilities(
-        "deepseek/deepseek-v4-pro"
-    ) is None
+    assert (
+        models_reasoning_caps.nous_model_reasoning_capabilities(
+            "deepseek/deepseek-v4-pro"
+        )
+        is None
+    )
 
 
 def test_stale_copy_is_still_served(cold_process, offline, monkeypatch):
@@ -163,7 +179,8 @@ def test_stale_copy_is_still_served(cold_process, offline, monkeypatch):
     """
     url = models_reasoning_caps.nous_catalog_url()
     models_reasoning_caps._save_reasoning_caps_disk(
-        url, {"deepseek/deepseek-v4-pro": {"supports_reasoning": True, "mandatory": False}}
+        url,
+        {"deepseek/deepseek-v4-pro": {"supports_reasoning": True, "mandatory": False}},
     )
     raw = json.loads(models_reasoning_caps._reasoning_caps_disk_path().read_text())
     raw[url]["ts"] = 0  # epoch — far past any TTL
@@ -172,7 +189,9 @@ def test_stale_copy_is_still_served(cold_process, offline, monkeypatch):
     cold_process()
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
 
-    caps = models_reasoning_caps.nous_model_reasoning_capabilities("deepseek/deepseek-v4-pro")
+    caps = models_reasoning_caps.nous_model_reasoning_capabilities(
+        "deepseek/deepseek-v4-pro"
+    )
     assert caps["mandatory"] is False
 
 
@@ -183,7 +202,12 @@ def test_unreadable_mirror_degrades_to_unknown(cold_process, offline, monkeypatc
     path.write_text("{ this is not json")
 
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
-    assert models_reasoning_caps.nous_model_reasoning_capabilities("deepseek/deepseek-v4-pro") is None
+    assert (
+        models_reasoning_caps.nous_model_reasoning_capabilities(
+            "deepseek/deepseek-v4-pro"
+        )
+        is None
+    )
 
 
 def test_pricing_fetch_seeds_the_mirror(cold_process, offline, monkeypatch):
@@ -195,7 +219,8 @@ def test_pricing_fetch_seeds_the_mirror(cold_process, offline, monkeypatch):
     monkeypatch.setattr(models_pricing, "_pricing_cache", {})
     monkeypatch.setattr(models_pricing, "_pricing_cache_retry_after", {})
     monkeypatch.setattr(
-        models_mod, "_urlopen_model_catalog_request",
+        models_mod,
+        "_urlopen_model_catalog_request",
         lambda req, *, timeout: _response(_CATALOG),
     )
     models_pricing.fetch_models_with_pricing(
@@ -205,7 +230,9 @@ def test_pricing_fetch_seeds_the_mirror(cold_process, offline, monkeypatch):
     cold_process()
     monkeypatch.setattr(models_mod, "_urlopen_model_catalog_request", offline)
 
-    caps = models_reasoning_caps.nous_model_reasoning_capabilities("deepseek/deepseek-v4-pro")
+    caps = models_reasoning_caps.nous_model_reasoning_capabilities(
+        "deepseek/deepseek-v4-pro"
+    )
     assert caps is not None
 
 
@@ -229,8 +256,12 @@ def test_a_missing_mirror_is_looked_for_once_per_process(cold_process, monkeypat
         return real_read()
 
     monkeypatch.setattr(models_reasoning_caps, "nous_catalog_url", _counting_url)
-    monkeypatch.setattr(models_reasoning_caps, "_read_reasoning_caps_disk", _counting_read)
+    monkeypatch.setattr(
+        models_reasoning_caps, "_read_reasoning_caps_disk", _counting_read
+    )
     for _ in range(5):
-        models_reasoning_caps.nous_model_reasoning_capabilities("deepseek/deepseek-v4-pro")
+        models_reasoning_caps.nous_model_reasoning_capabilities(
+            "deepseek/deepseek-v4-pro"
+        )
 
     assert counts == {"url": 1, "read": 1}

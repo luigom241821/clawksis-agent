@@ -164,7 +164,6 @@ class TestBoundaryFractions:
         assert "credits.usage" not in to_clear
 
 
-
 # ── Scenario 4: grant_spent ───────────────────────────────────────────────────
 
 
@@ -176,7 +175,6 @@ class TestGrantSpent:
             purchased_micros=purchased_micros,
             purchased_usd="12.34",
         )
-
 
     def test_grant_spent_fires_on_live_crossing(self):
         """Observing the grant NOT yet spent (uf < 1.0) opens the gate; the later
@@ -193,8 +191,6 @@ class TestGrantSpent:
         to_show, to_clear = evaluate_credits_notices(self._grant_state(), latch)
         assert all(n.key != "credits.grant_spent" for n in to_show)
         assert "credits.grant_spent" not in to_clear
-
-
 
     def test_sub_cent_residual_does_not_open_gate(self):
         """A float-derived portal seed can report a sub-cent grant residual where
@@ -217,7 +213,6 @@ class TestGrantSpent:
         assert all(n.key != "credits.grant_spent" for n in to_show)
 
 
-
 # ── Scenario 5: depleted + recovery ──────────────────────────────────────────
 
 
@@ -237,7 +232,9 @@ class TestDepleted:
         # Fire depleted
         evaluate_credits_notices(CreditsState(paid_access=False), latch)
         # Now recovered
-        to_show, to_clear = evaluate_credits_notices(CreditsState(paid_access=True), latch)
+        to_show, to_clear = evaluate_credits_notices(
+            CreditsState(paid_access=True), latch
+        )
         assert "credits.depleted" in to_clear
         restored = [n for n in to_show if n.key == "credits.restored"]
         assert len(restored) == 1
@@ -251,7 +248,9 @@ class TestDepleted:
         evaluate_credits_notices(CreditsState(paid_access=False), latch)
         evaluate_credits_notices(CreditsState(paid_access=True), latch)
         # Goes depleted again
-        to_show, _to_clear = evaluate_credits_notices(CreditsState(paid_access=False), latch)
+        to_show, _to_clear = evaluate_credits_notices(
+            CreditsState(paid_access=False), latch
+        )
         keys = [n.key for n in to_show]
         assert "credits.depleted" in keys
 
@@ -268,9 +267,6 @@ class TestDepletedFreeModelSuppression:
         assert "credits.depleted" not in latch["active"]
         assert to_clear == []
 
-
-
-
     def test_genuine_recovery_still_emits_restored_when_notice_active(self):
         """paid_access flip back to True with the notice showing → clear + restored
         (unchanged behaviour, regardless of the model-free flag)."""
@@ -284,25 +280,28 @@ class TestDepletedFreeModelSuppression:
         assert len(restored) == 1
 
 
-
 # ── Scenario 5c: is_free_tier_model (local-data-only check) ──────────────────
 
 
 class TestIsFreeTierModel:
-
-
     def test_pricing_cache_peek_zero_priced_model(self, monkeypatch):
         from agent.credits_tracker import is_free_tier_model
         from clawk_cli import models_pricing
 
         # The picker keys the cache on the pre-/v1 root (get_pricing_for_provider
         # strips a trailing /v1 before fetch_models_with_pricing).
-        monkeypatch.setattr(models_pricing, "_pricing_cache",
+        monkeypatch.setattr(
+            models_pricing,
+            "_pricing_cache",
             {
                 "https://inference-api.nousresearch.com": {
                     "some/zero-priced": {"prompt": "0", "completion": "0"},
                     "some/paid": {"prompt": "0.000001", "completion": "0.000002"},
-                    "some/subscription": {"prompt": "0.000001", "completion": "0.000002", "billing_mode": "subscription"},
+                    "some/subscription": {
+                        "prompt": "0.000001",
+                        "completion": "0.000002",
+                        "billing_mode": "subscription",
+                    },
                 }
             },
         )
@@ -311,10 +310,22 @@ class TestIsFreeTierModel:
         base = "https://inference-api.nousresearch.com/v1"
         assert is_free_tier_model("some/zero-priced", base) is True
         assert is_free_tier_model("some/paid", base) is False
-        assert is_free_tier_model("some/subscription", base) is True  # billed elsewhere: depleted credits don't block it
+        assert (
+            is_free_tier_model("some/subscription", base) is True
+        )  # billed elsewhere: depleted credits don't block it
         # Pre-stripped and trailing-slash variants resolve to the same key.
-        assert is_free_tier_model("some/zero-priced", "https://inference-api.nousresearch.com/") is True
-        assert is_free_tier_model("some/zero-priced", "https://inference-api.nousresearch.com/v1/") is True
+        assert (
+            is_free_tier_model(
+                "some/zero-priced", "https://inference-api.nousresearch.com/"
+            )
+            is True
+        )
+        assert (
+            is_free_tier_model(
+                "some/zero-priced", "https://inference-api.nousresearch.com/v1/"
+            )
+            is True
+        )
 
     def test_nous_welcome_host_is_free_without_pricing(self, monkeypatch):
         """Anything the welcome host serves is the free tier, with no pricing lookup: the portal seeds
@@ -324,8 +335,16 @@ class TestIsFreeTierModel:
         from clawk_cli import models_pricing
 
         monkeypatch.setattr(models_pricing, "_pricing_cache", {})
-        assert is_free_tier_model("nous/welcome", "https://welcome-api.nousresearch.com/v1") is True
-        assert is_free_tier_model("some/other", "https://welcome-api.nousresearch.com") is True
+        assert (
+            is_free_tier_model(
+                "nous/welcome", "https://welcome-api.nousresearch.com/v1"
+            )
+            is True
+        )
+        assert (
+            is_free_tier_model("some/other", "https://welcome-api.nousresearch.com")
+            is True
+        )
 
     def test_paid_nous_host_still_needs_pricing_evidence(self, monkeypatch):
         """The free-tier rule is the host, not the model name: the paid inference host can serve
@@ -334,8 +353,16 @@ class TestIsFreeTierModel:
         from clawk_cli import models_pricing
 
         monkeypatch.setattr(models_pricing, "_pricing_cache", {})
-        assert is_free_tier_model("nous/welcome", "https://inference-api.nousresearch.com/v1") is False
-        assert is_free_tier_model("some/paid", "https://inference-api.nousresearch.com/v1") is False
+        assert (
+            is_free_tier_model(
+                "nous/welcome", "https://inference-api.nousresearch.com/v1"
+            )
+            is False
+        )
+        assert (
+            is_free_tier_model("some/paid", "https://inference-api.nousresearch.com/v1")
+            is False
+        )
         assert is_free_tier_model("nous/welcome", "") is False
 
     def test_exception_fails_open_to_false(self, monkeypatch):
@@ -347,7 +374,10 @@ class TestIsFreeTierModel:
                 raise RuntimeError("boom")
 
         monkeypatch.setattr(models_pricing, "_pricing_cache", _Exploding())
-        assert is_free_tier_model("some/model", "https://inference-api.nousresearch.com") is False
+        assert (
+            is_free_tier_model("some/model", "https://inference-api.nousresearch.com")
+            is False
+        )
 
     def test_stealth_prefix_detected_as_free(self):
         """Stealth-preview SKUs (stealth/...) are free-tier but carry no
@@ -357,18 +387,20 @@ class TestIsFreeTierModel:
 
         # No base_url needed — stealth/ is a zero-network signal, same as :free.
         assert is_free_tier_model("stealth/ox-alpha", "") is True
-        assert is_free_tier_model("stealth/ox-alpha", "https://inference-api.nousresearch.com/v1") is True
+        assert (
+            is_free_tier_model(
+                "stealth/ox-alpha", "https://inference-api.nousresearch.com/v1"
+            )
+            is True
+        )
         # Non-stealth model without :free suffix → not free (without pricing cache).
         assert is_free_tier_model("some/paid-model", "") is False
-
 
 
 # ── Scenario 6: denominator none (uf is None) ────────────────────────────────
 
 
 class TestDenominatorNone:
-
-
     def test_warn90_clears_when_uf_becomes_none(self):
         """If warn90 was active and uf becomes None, it should clear."""
         latch = fresh_latch()
@@ -397,7 +429,9 @@ class TestNoticeCopy:
 
     def test_grant_spent_contains_verbatim_purchased_usd(self):
         latch = fresh_latch()
-        evaluate_credits_notices(state_with_fraction(0.10), latch)  # open the crossing gate
+        evaluate_credits_notices(
+            state_with_fraction(0.10), latch
+        )  # open the crossing gate
         s = state_with_fraction(
             1.0,
             denominator_kind="subscription_cap",
@@ -407,7 +441,6 @@ class TestNoticeCopy:
         to_show, _ = evaluate_credits_notices(s, latch)
         grant_notice = next(n for n in to_show if n.key == "credits.grant_spent")
         assert "$12.34" in grant_notice.text
-
 
 
 # ── Scenario 8: severity order in a single call ──────────────────────────────
@@ -420,8 +453,12 @@ class TestSeverityOrder:
         (usage is suppressed here: purchased>0 — see TestTopUpSuppression.
         usage + grant_spent are now mutually exclusive by design.)
         """
-        latch = {"active": set(), "seen_below_90": True, "usage_band": None,
-                 "seen_grant_unspent": True}
+        latch = {
+            "active": set(),
+            "seen_below_90": True,
+            "usage_band": None,
+            "seen_grant_unspent": True,
+        }
 
         # Build state: subscription_cap, uf >= 1.0, purchased_micros > 0, NOT paid_access
         # grant_cond: subscription_cap + uf >= 1.0 + purchased > 0 ✓
@@ -470,7 +507,6 @@ class TestTopUpSuppression:
     """purchased_micros > 0 suppresses the sub-cap usage gauge: the cap is the
     wrong denominator for an account that can keep spending top-up funds."""
 
-
     def test_topup_landing_mid_session_clears_active_band(self):
         """A showing 90% warn must clear when a top-up lands (purchased 0 → >0)."""
         latch = fresh_latch()
@@ -478,7 +514,9 @@ class TestTopUpSuppression:
         evaluate_credits_notices(state_with_fraction(0.95), latch)
         assert latch["usage_band"] == 90
         to_show, to_clear = evaluate_credits_notices(
-            state_with_fraction(0.95, purchased_micros=10_000_000, purchased_usd="10.00"),
+            state_with_fraction(
+                0.95, purchased_micros=10_000_000, purchased_usd="10.00"
+            ),
             latch,
         )
         assert "credits.usage" in to_clear
@@ -490,7 +528,9 @@ class TestTopUpSuppression:
         latch = fresh_latch()
         evaluate_credits_notices(state_with_fraction(0.10), latch)
         evaluate_credits_notices(
-            state_with_fraction(0.95, purchased_micros=10_000_000, purchased_usd="10.00"),
+            state_with_fraction(
+                0.95, purchased_micros=10_000_000, purchased_usd="10.00"
+            ),
             latch,
         )
         assert latch["usage_band"] is None
@@ -499,8 +539,6 @@ class TestTopUpSuppression:
         # uf 0.95 of a $20 cap → used = $19.00 (cap − remaining, clamped).
         assert "$19.00" in n.text
         assert latch["usage_band"] == 90
-
-
 
 
 # ── Invariant: never fire + clear same key in one call ────────────────────────
@@ -558,8 +596,6 @@ class TestUsageBands:
         assert "$11.00" in n.text and n.level == "info"
         assert latch["usage_band"] == 50
 
-
-
     def test_step_down_on_recovery(self):
         """Recovering steps the band back down, then clears below the lowest band."""
         latch = fresh_latch()
@@ -577,6 +613,3 @@ class TestUsageBands:
         to_show, to_clear = evaluate_credits_notices(state_with_fraction(0.10), latch)
         assert "credits.usage" in to_clear
         assert latch["usage_band"] is None
-
-
-

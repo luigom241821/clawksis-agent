@@ -3,6 +3,7 @@
 Run from the checkout with the project Python. No provider requests are sent.
 The FIFO releases the real cached update result only after the prompt renders.
 """
+
 import argparse
 import errno
 import json
@@ -28,7 +29,9 @@ def run_case(root, output, name, behind, early=False, cancel=False):
             "model:\n  default: test-model\n  provider: custom\n"
             "  base_url: http://127.0.0.1:9/v1\n"
             "display:\n  interface: cli\n  skip_banner: false\n"
-            "memory:\n  provider: ''\n", encoding="utf-8")
+            "memory:\n  provider: ''\n",
+            encoding="utf-8",
+        )
         cache = hh / "notice-result.json"
         # This harness tests display timing, not source-check cache policy.
         payload = json.dumps({"behind": behind}).encode()
@@ -36,19 +39,34 @@ def run_case(root, output, name, behind, early=False, cancel=False):
             cache.write_bytes(payload)
         else:
             os.mkfifo(cache)
-        env = {"PATH": os.environ["PATH"], "HOME": home, "CLAWK_HOME": str(hh),
-               "PYTHONPATH": str(root), "PYTHONUNBUFFERED": "1",
-               "TERM": "xterm-256color", "LANG": "C.UTF-8",
-               "OPENAI_API_KEY": "local-not-used", "PROMPT_TOOLKIT_NO_CPR": "1"}
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": home,
+            "CLAWK_HOME": str(hh),
+            "PYTHONPATH": str(root),
+            "PYTHONUNBUFFERED": "1",
+            "TERM": "xterm-256color",
+            "LANG": "C.UTF-8",
+            "OPENAI_API_KEY": "local-not-used",
+            "PROMPT_TOOLKIT_NO_CPR": "1",
+        }
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
-        bootstrap = ("import json; from pathlib import Path; import clawk_cli.main as m; "
-                     "import clawk_cli.banner as b; from clawk_cli import source_check; "
-                     f"source_check.check_for_updates = lambda **kw: json.loads(Path({str(cache)!r}).read_text()); "
-                     "print('LOADED', m.__file__, b.__file__, flush=True); m.main()")
-        proc = subprocess.Popen([sys.executable, "-c", bootstrap, "chat"], cwd=root,
-                                env=env, stdin=slave, stdout=slave, stderr=slave,
-                                start_new_session=True)
+        bootstrap = (
+            "import json; from pathlib import Path; import clawk_cli.main as m; "
+            "import clawk_cli.banner as b; from clawk_cli import source_check; "
+            f"source_check.check_for_updates = lambda **kw: json.loads(Path({str(cache)!r}).read_text()); "
+            "print('LOADED', m.__file__, b.__file__, flush=True); m.main()"
+        )
+        proc = subprocess.Popen(
+            [sys.executable, "-c", bootstrap, "chat"],
+            cwd=root,
+            env=env,
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            start_new_session=True,
+        )
         os.close(slave)
         data = bytearray()
 
@@ -77,7 +95,12 @@ def run_case(root, output, name, behind, early=False, cancel=False):
                 fd = os.open(cache, os.O_WRONLY | os.O_NONBLOCK)
                 os.write(fd, payload)
                 os.close(fd)
-                pump_until(lambda b: b"to update" in b[offset:] or b"update available" in b[offset:], 3)
+                pump_until(
+                    lambda b: (
+                        b"to update" in b[offset:] or b"update available" in b[offset:]
+                    ),
+                    3,
+                )
                 # prompt_toolkit prints above the prompt via run_in_terminal (input detached,
                 # cooked mode); type only after the prompt is redrawn, like a user would.
                 redraw = len(data)
@@ -89,11 +112,16 @@ def run_case(root, output, name, behind, early=False, cancel=False):
             proc.wait(timeout=30)
             text = bytes(data).decode(errors="replace")
             (output / f"{name}.pty").write_bytes(data)
-            result = {"case": name, "ready": ready, "exited": exited,
-                      "returncode": proc.returncode, "garbled": "?[1;33m" in text,
-                      "notice": "commits behind" in text or "update available" in text,
-                      "loaded_worktree": str(root / "clawk_cli/banner.py") in text,
-                      "raw_path": str(output / f"{name}.pty")}
+            result = {
+                "case": name,
+                "ready": ready,
+                "exited": exited,
+                "returncode": proc.returncode,
+                "garbled": "?[1;33m" in text,
+                "notice": "commits behind" in text or "update available" in text,
+                "loaded_worktree": str(root / "clawk_cli/banner.py") in text,
+                "raw_path": str(output / f"{name}.pty"),
+            }
             assert result["loaded_worktree"] and proc.returncode == 0, result
             return result
         finally:
@@ -112,16 +140,24 @@ def main():
     args = parser.parse_args()
     root = Path(args.root).resolve()
     args.output.mkdir(parents=True, exist_ok=True)
-    cases = [("late-count", 3, False, False), ("late-current", 0, False, False),
-             ("late-unknown-count", -1, False, False), ("early-count", 3, True, False),
-             ("cancel-pending", 3, False, True)]
+    cases = [
+        ("late-count", 3, False, False),
+        ("late-current", 0, False, False),
+        ("late-unknown-count", -1, False, False),
+        ("early-count", 3, True, False),
+        ("cancel-pending", 3, False, True),
+    ]
     results = [run_case(root, args.output, *case) for case in cases]
     (args.output / "results.json").write_text(json.dumps(results, indent=2) + "\n")
     print(json.dumps(results, indent=2))
     for row in results:
         expected_notice = row["case"] not in ("late-current", "cancel-pending")
         assert row["notice"] == expected_notice, row
-        expected_garble = args.expect == "garbled" and row["case"].startswith("late-") and expected_notice
+        expected_garble = (
+            args.expect == "garbled"
+            and row["case"].startswith("late-")
+            and expected_notice
+        )
         assert row["garbled"] == expected_garble, row
 
 

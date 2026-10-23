@@ -39,9 +39,7 @@ def _disable_live_custom_provider_model_probe(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.models.cached_provider_model_ids", lambda *_a, **_kw: []
     )
-    monkeypatch.setattr(
-        "clawk_cli.models.provider_model_ids", lambda *_a, **_kw: []
-    )
+    monkeypatch.setattr("clawk_cli.models.provider_model_ids", lambda *_a, **_kw: [])
     monkeypatch.setattr(
         "clawk_cli.models_local.fetch_ollama_local_models", lambda *_a, **_kw: None
     )
@@ -81,7 +79,9 @@ def test_picker_native_catalog_is_admitted_to_the_shared_model_cache(monkeypatch
     monkeypatch.setattr(
         "clawk_cli.models_local.should_use_ollama_native_catalog", lambda *a, **k: True
     )
-    monkeypatch.setattr("clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {})
+    monkeypatch.setattr(
+        "clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {}
+    )
     monkeypatch.setattr(
         "clawk_cli.models_local.fetch_ollama_local_models", lambda *a, **k: ["qwen3:8b"]
     )
@@ -105,7 +105,9 @@ def test_picker_native_catalog_skips_cache_admission_when_cache_is_off(monkeypat
     monkeypatch.setattr(
         "clawk_cli.models_local.should_use_ollama_native_catalog", lambda *a, **k: True
     )
-    monkeypatch.setattr("clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {})
+    monkeypatch.setattr(
+        "clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {}
+    )
     monkeypatch.setattr(
         "clawk_cli.models_local.fetch_ollama_local_models", lambda *a, **k: ["qwen3:8b"]
     )
@@ -113,7 +115,9 @@ def test_picker_native_catalog_skips_cache_admission_when_cache_is_off(monkeypat
     from clawk_cli.models import cached_fetch_api_models
 
     url = "http://127.0.0.1:11434/v1"
-    assert _fetch_picker_live_models(None, url, "custom", False, cache=False) == ["qwen3:8b"]
+    assert _fetch_picker_live_models(None, url, "custom", False, cache=False) == [
+        "qwen3:8b"
+    ]
 
     assert cached_fetch_api_models(None, url, cache_only=True, timeout=1.5) is None
 
@@ -123,10 +127,13 @@ def _native_picker_probe(monkeypatch, models_by_call):
     monkeypatch.setattr(
         "clawk_cli.models_local.should_use_ollama_native_catalog", lambda *a, **k: True
     )
-    monkeypatch.setattr("clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {})
+    monkeypatch.setattr(
+        "clawk_cli.models._get_ollama_native_headers", lambda *a, **k: {}
+    )
     answers = iter(models_by_call)
     monkeypatch.setattr(
-        "clawk_cli.models_local.fetch_ollama_local_models", lambda *a, **k: next(answers)
+        "clawk_cli.models_local.fetch_ollama_local_models",
+        lambda *a, **k: next(answers),
     )
 
 
@@ -155,11 +162,14 @@ def test_picker_native_catalog_uses_the_short_native_ttl(monkeypatch):
 
     refreshes = []
     monkeypatch.setattr(
-        "clawk_cli.models._spawn_swr_refresh", lambda key, fn=None: refreshes.append(key)
+        "clawk_cli.models._spawn_swr_refresh",
+        lambda key, fn=None: refreshes.append(key),
     )
     _age_cached_rows(_OLLAMA_LOCAL_MODELS_CACHE_TTL + 1)
     assert _fetch_picker_live_models("sk-ollama", url, "custom", False) == ["qwen3:8b"]
-    assert len(refreshes) == 1, "row older than the native TTL must be revalidated, not fresh"
+    assert len(refreshes) == 1, (
+        "row older than the native TTL must be revalidated, not fresh"
+    )
 
 
 def test_picker_empty_native_catalog_is_not_stale_served(monkeypatch):
@@ -175,9 +185,9 @@ def test_picker_empty_native_catalog_is_not_stale_served(monkeypatch):
     assert _fetch_picker_live_models("sk-ollama", url, "custom", False) == []
 
     _age_cached_rows(_PROVIDER_MODELS_CACHE_TTL + 100)
-    assert _fetch_picker_live_models("sk-ollama", url, "custom", False) == ["back:latest"]
-
-
+    assert _fetch_picker_live_models("sk-ollama", url, "custom", False) == [
+        "back:latest"
+    ]
 
 
 def test_list_authenticated_providers_includes_custom_providers(monkeypatch):
@@ -205,7 +215,6 @@ def test_list_authenticated_providers_includes_custom_providers(monkeypatch):
         and p["api_url"] == "http://127.0.0.1:4141/v1"
         for p in providers
     )
-
 
 
 def test_list_authenticated_providers_numeric_yaml_provider_dict_key(monkeypatch):
@@ -258,12 +267,13 @@ def test_list_authenticated_providers_numeric_custom_provider_name(monkeypatch):
     )
 
     assert any(
-        str(p.get("name")) == "2070" or "2070" in str(p.get("slug"))
-        for p in rows
+        str(p.get("name")) == "2070" or "2070" in str(p.get("slug")) for p in rows
     )
 
 
-def test_providers_singular_model_does_not_suppress_ollama_native_discovery(monkeypatch):
+def test_providers_singular_model_does_not_suppress_ollama_native_discovery(
+    monkeypatch,
+):
     """A saved selection in ``providers:`` is not an explicit catalog."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
     monkeypatch.setattr(providers_mod, "CLAWK_OVERLAYS", {})
@@ -344,9 +354,6 @@ def test_list_authenticated_providers_can_skip_custom_provider_live_probe(monkey
     row = next(p for p in providers if p["slug"] == "custom:slow-local")
     assert row["models"] == ["local-model"]
     assert row["total_models"] == 1
-
-
-
 
 
 def test_resolve_provider_full_finds_named_custom_provider():
@@ -466,7 +473,9 @@ def test_list_authenticated_providers_includes_active_bare_custom_endpoint(monke
     assert bare_custom["api_url"] == "https://www.ccsub.net/v1"
 
 
-def test_list_authenticated_providers_can_probe_active_bare_custom_endpoint(monkeypatch):
+def test_list_authenticated_providers_can_probe_active_bare_custom_endpoint(
+    monkeypatch,
+):
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
     monkeypatch.setattr(providers_mod, "CLAWK_OVERLAYS", {})
     monkeypatch.setattr(
@@ -491,9 +500,14 @@ def test_list_authenticated_providers_can_probe_active_bare_custom_endpoint(monk
 
 def test_switch_model_accepts_explicit_bare_custom_current_endpoint(monkeypatch):
     """Picker selections for bare custom endpoints should route to current base_url."""
-    monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", lambda *a, **k: _MOCK_VALIDATION)
+    monkeypatch.setattr(
+        "clawk_cli.models_validate.validate_requested_model",
+        lambda *a, **k: _MOCK_VALIDATION,
+    )
     monkeypatch.setattr("clawk_cli.model_switch.get_model_info", lambda *a, **k: None)
-    monkeypatch.setattr("clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None
+    )
 
     result = switch_model(
         raw_input="gpt-4o-mini",
@@ -513,7 +527,9 @@ def test_switch_model_accepts_explicit_bare_custom_current_endpoint(monkeypatch)
     assert result.api_key == "sk-test"
 
 
-def test_switch_to_bare_custom_from_another_provider_resolves_the_configured_endpoint(monkeypatch, tmp_path):
+def test_switch_to_bare_custom_from_another_provider_resolves_the_configured_endpoint(
+    monkeypatch, tmp_path
+):
     """#73680: the per-turn config sync adopting ``provider: custom`` from an OpenRouter session
     must land on the configured custom endpoint, not pair the new model with OpenRouter's URL
     and key."""
@@ -524,9 +540,14 @@ def test_switch_to_bare_custom_from_another_provider_resolves_the_configured_end
         encoding="utf-8",
     )
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", lambda *a, **k: _MOCK_VALIDATION)
+    monkeypatch.setattr(
+        "clawk_cli.models_validate.validate_requested_model",
+        lambda *a, **k: _MOCK_VALIDATION,
+    )
     monkeypatch.setattr("clawk_cli.model_switch.get_model_info", lambda *a, **k: None)
-    monkeypatch.setattr("clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None
+    )
 
     result = switch_model(
         raw_input="qwen3:8b",
@@ -545,18 +566,27 @@ def test_switch_to_bare_custom_from_another_provider_resolves_the_configured_end
     assert result.api_key == "no-key-required"
 
 
-def test_switch_to_bare_custom_with_no_configured_endpoint_keeps_the_current_one(monkeypatch, tmp_path):
+def test_switch_to_bare_custom_with_no_configured_endpoint_keeps_the_current_one(
+    monkeypatch, tmp_path
+):
     """#74143 shape on the switched-provider path: with no ``model.base_url`` the bare-custom
     resolver lands on OpenRouter's default whenever an OpenRouter key exists — a host the user
     never picked. An Anthropic session must stay on its own endpoint instead."""
     home = tmp_path / "clawk-home"
     home.mkdir()
-    (home / "config.yaml").write_text("model:\n  default: m\n  provider: anthropic\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: m\n  provider: anthropic\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-env")
-    monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", lambda *a, **k: _MOCK_VALIDATION)
+    monkeypatch.setattr(
+        "clawk_cli.models_validate.validate_requested_model",
+        lambda *a, **k: _MOCK_VALIDATION,
+    )
     monkeypatch.setattr("clawk_cli.model_switch.get_model_info", lambda *a, **k: None)
-    monkeypatch.setattr("clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None
+    )
 
     result = switch_model(
         raw_input="m2",
@@ -597,12 +627,19 @@ def test_switch_to_bare_custom_ignores_an_openrouter_mirror(monkeypatch, tmp_pat
     endpoint and key (the switched arm used to adopt it, dropping a working credential)."""
     home = tmp_path / "clawk-home"
     home.mkdir()
-    (home / "config.yaml").write_text("model:\n  default: m\n  provider: custom\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "model:\n  default: m\n  provider: custom\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://mirror.example.com/v1")
-    monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", lambda *a, **k: _MOCK_VALIDATION)
+    monkeypatch.setattr(
+        "clawk_cli.models_validate.validate_requested_model",
+        lambda *a, **k: _MOCK_VALIDATION,
+    )
     monkeypatch.setattr("clawk_cli.model_switch.get_model_info", lambda *a, **k: None)
-    monkeypatch.setattr("clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None
+    )
 
     result = switch_model(
         raw_input="m2",
@@ -640,9 +677,9 @@ def test_is_aggregator_recognizes_named_custom_provider():
     assert providers_mod.is_aggregator("custom:litellm") is True
 
 
-
-
-def test_switch_model_does_not_send_ollama_headers_to_unrelated_custom_endpoint(monkeypatch):
+def test_switch_model_does_not_send_ollama_headers_to_unrelated_custom_endpoint(
+    monkeypatch,
+):
     """A custom endpoint must not inherit headers from configured Ollama."""
     seen_headers = []
     validation_headers = []
@@ -679,9 +716,13 @@ def test_switch_model_does_not_send_ollama_headers_to_unrelated_custom_endpoint(
             "api_mode": "chat_completions",
         },
     )
-    monkeypatch.setattr("clawk_cli.models_validate.validate_requested_model", fake_validation)
+    monkeypatch.setattr(
+        "clawk_cli.models_validate.validate_requested_model", fake_validation
+    )
     monkeypatch.setattr("clawk_cli.model_switch.get_model_info", lambda *a, **k: None)
-    monkeypatch.setattr("clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.get_model_capabilities", lambda *a, **k: None
+    )
 
     result = switch_model(
         raw_input="new-model",
@@ -697,9 +738,6 @@ def test_switch_model_does_not_send_ollama_headers_to_unrelated_custom_endpoint(
     assert result.success is True
     assert seen_headers == [{}]
     assert validation_headers == [None]
-
-
-
 
 
 def test_picker_selection_resolves_named_custom_provider_model_id(monkeypatch):
@@ -732,9 +770,7 @@ def test_picker_selection_resolves_named_custom_provider_model_id(monkeypatch):
             {
                 "name": "sensenova",
                 "base_url": "https://token.sensenova.cn/v1",
-                "models": [
-                    {"id": "deepseek-v4-flash", "name": "deepseek-v4-flash"}
-                ],
+                "models": [{"id": "deepseek-v4-flash", "name": "deepseek-v4-flash"}],
             }
         ],
     )
@@ -742,10 +778,6 @@ def test_picker_selection_resolves_named_custom_provider_model_id(monkeypatch):
     assert result.success is True
     assert result.target_provider == "custom:sensenova"
     assert result.new_model == "deepseek-v4-flash"
-
-
-
-
 
 
 def test_list_groups_same_name_custom_providers_into_one_row(monkeypatch):
@@ -759,11 +791,31 @@ def test_list_groups_same_name_custom_providers_into_one_row(monkeypatch):
         current_provider="openrouter",
         user_providers={},
         custom_providers=[
-            {"name": "Ollama Cloud", "base_url": "https://ollama.com/v1", "model": "qwen3-coder:480b-cloud"},
-            {"name": "Ollama Cloud", "base_url": "https://ollama.com/v1", "model": "glm-5.1:cloud"},
-            {"name": "Ollama Cloud", "base_url": "https://ollama.com/v1", "model": "kimi-k2.5"},
-            {"name": "Ollama Cloud", "base_url": "https://ollama.com/v1", "model": "minimax-m2.7:cloud"},
-            {"name": "Moonshot", "base_url": "https://api.moonshot.ai/v1", "model": "kimi-k2-thinking"},
+            {
+                "name": "Ollama Cloud",
+                "base_url": "https://ollama.com/v1",
+                "model": "qwen3-coder:480b-cloud",
+            },
+            {
+                "name": "Ollama Cloud",
+                "base_url": "https://ollama.com/v1",
+                "model": "glm-5.1:cloud",
+            },
+            {
+                "name": "Ollama Cloud",
+                "base_url": "https://ollama.com/v1",
+                "model": "kimi-k2.5",
+            },
+            {
+                "name": "Ollama Cloud",
+                "base_url": "https://ollama.com/v1",
+                "model": "minimax-m2.7:cloud",
+            },
+            {
+                "name": "Moonshot",
+                "base_url": "https://api.moonshot.ai/v1",
+                "model": "kimi-k2-thinking",
+            },
         ],
         max_models=50,
     )
@@ -771,7 +823,10 @@ def test_list_groups_same_name_custom_providers_into_one_row(monkeypatch):
     ollama_rows = [p for p in providers if p["name"] == "Ollama Cloud"]
     assert len(ollama_rows) == 1, f"Expected 1 Ollama Cloud row, got {len(ollama_rows)}"
     assert ollama_rows[0]["models"] == [
-        "qwen3-coder:480b-cloud", "glm-5.1:cloud", "kimi-k2.5", "minimax-m2.7:cloud"
+        "qwen3-coder:480b-cloud",
+        "glm-5.1:cloud",
+        "kimi-k2.5",
+        "minimax-m2.7:cloud",
     ]
     assert ollama_rows[0]["total_models"] == 4
 
@@ -791,9 +846,24 @@ def test_list_deduplicates_same_model_in_group(monkeypatch):
         current_provider="openrouter",
         user_providers={},
         custom_providers=[
-            {"name": "MyProvider", "base_url": "http://localhost:11434/v1", "model": "llama3", "discover_models": False},
-            {"name": "MyProvider", "base_url": "http://localhost:11434/v1", "model": "llama3", "discover_models": False},
-            {"name": "MyProvider", "base_url": "http://localhost:11434/v1", "model": "mistral", "discover_models": False},
+            {
+                "name": "MyProvider",
+                "base_url": "http://localhost:11434/v1",
+                "model": "llama3",
+                "discover_models": False,
+            },
+            {
+                "name": "MyProvider",
+                "base_url": "http://localhost:11434/v1",
+                "model": "llama3",
+                "discover_models": False,
+            },
+            {
+                "name": "MyProvider",
+                "base_url": "http://localhost:11434/v1",
+                "model": "mistral",
+                "discover_models": False,
+            },
         ],
         max_models=50,
     )
@@ -841,8 +911,6 @@ def test_custom_provider_no_key_singular_model_still_probes_live_models(monkeypa
     row = next(p for p in providers if p["name"] == "Local llama.cpp")
     assert row["models"] == ["llama3", "mistral", "qwen3-coder"]
     assert row["total_models"] == 3
-
-
 
 
 def test_custom_provider_group_explicit_duplicate_skips_probe(monkeypatch):
@@ -1057,11 +1125,6 @@ def test_list_enumerates_dict_format_models_without_singular_model(monkeypatch):
     assert thor_rows[0]["total_models"] == 3
 
 
-
-
-
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # #9210: group custom_providers by (base_url, api_key) in /model picker
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1078,12 +1141,27 @@ def test_list_authenticated_providers_groups_same_endpoint(monkeypatch):
         current_base_url="http://localhost:11434/v1",
         user_providers={},
         custom_providers=[
-            {"name": "Ollama — MiniMax M2.7", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "minimax-m2.7", "discover_models": False},
-            {"name": "Ollama — GLM 5.1",      "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "glm-5.1", "discover_models": False},
-            {"name": "Ollama — Qwen3-coder", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "qwen3-coder", "discover_models": False},
+            {
+                "name": "Ollama — MiniMax M2.7",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "minimax-m2.7",
+                "discover_models": False,
+            },
+            {
+                "name": "Ollama — GLM 5.1",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "glm-5.1",
+                "discover_models": False,
+            },
+            {
+                "name": "Ollama — Qwen3-coder",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "qwen3-coder",
+                "discover_models": False,
+            },
         ],
         max_models=50,
         probe_custom_providers=False,
@@ -1114,8 +1192,12 @@ def test_list_authenticated_providers_current_endpoint_uses_current_slug(monkeyp
         current_base_url="http://localhost:11434/v1",
         user_providers={},
         custom_providers=[
-            {"name": "Ollama — GLM 5.1", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "glm-5.1"},
+            {
+                "name": "Ollama — GLM 5.1",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "glm-5.1",
+            },
         ],
         max_models=50,
     )
@@ -1136,7 +1218,9 @@ def test_picker_endpoint_authorization_overrides_inferred_bearer(monkeypatch):
         captured.update(headers or {})
         return ["model-a"]
 
-    monkeypatch.setattr("clawk_cli.models_local.should_use_ollama_native_catalog", lambda *a, **k: True)
+    monkeypatch.setattr(
+        "clawk_cli.models_local.should_use_ollama_native_catalog", lambda *a, **k: True
+    )
     monkeypatch.setattr("clawk_cli.models_local.fetch_ollama_local_models", fake_native)
     result = _fetch_picker_live_models(
         "endpoint-key",
@@ -1148,9 +1232,7 @@ def test_picker_endpoint_authorization_overrides_inferred_bearer(monkeypatch):
 
     assert result == ["model-a"]
     auth_headers = {
-        key: value
-        for key, value in captured.items()
-        if key.lower() == "authorization"
+        key: value for key, value in captured.items() if key.lower() == "authorization"
     }
     assert auth_headers == {"authorization": "Api-Key explicit"}
 
@@ -1168,8 +1250,12 @@ def test_list_authenticated_providers_bare_custom_slug_recovers(monkeypatch):
         current_base_url="http://localhost:11434/v1",
         user_providers={},
         custom_providers=[
-            {"name": "Ollama — GLM 5.1", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "glm-5.1"},
+            {
+                "name": "Ollama — GLM 5.1",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "glm-5.1",
+            },
         ],
         max_models=50,
     )
@@ -1242,12 +1328,24 @@ def test_list_authenticated_providers_distinct_endpoints_stay_separate(monkeypat
     providers = list_authenticated_providers(
         user_providers={},
         custom_providers=[
-            {"name": "Ollama — GLM 5.1", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "glm-5.1"},
-            {"name": "Moonshot", "base_url": "https://api.moonshot.cn/v1",
-             "api_key": "sk-m", "model": "moonshot-v1"},
-            {"name": "Ollama — Qwen3-coder", "base_url": "http://localhost:11434/v1",
-             "api_key": "ollama", "model": "qwen3-coder"},
+            {
+                "name": "Ollama — GLM 5.1",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "glm-5.1",
+            },
+            {
+                "name": "Moonshot",
+                "base_url": "https://api.moonshot.cn/v1",
+                "api_key": "sk-m",
+                "model": "moonshot-v1",
+            },
+            {
+                "name": "Ollama — Qwen3-coder",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "qwen3-coder",
+            },
         ],
         max_models=50,
         probe_custom_providers=False,
@@ -1262,7 +1360,9 @@ def test_list_authenticated_providers_distinct_endpoints_stay_separate(monkeypat
     assert moonshot["models"] == ["moonshot-v1"]
 
 
-def test_list_authenticated_providers_same_url_different_keys_disambiguated(monkeypatch):
+def test_list_authenticated_providers_same_url_different_keys_disambiguated(
+    monkeypatch,
+):
     """Two custom_providers entries with the same base_url but different
     api_keys (and identical cleaned names) must both stay visible in the
     picker — slug is suffixed to disambiguate."""
@@ -1272,10 +1372,18 @@ def test_list_authenticated_providers_same_url_different_keys_disambiguated(monk
     providers = list_authenticated_providers(
         user_providers={},
         custom_providers=[
-            {"name": "OpenAI — key A", "base_url": "https://api.openai.com/v1",
-             "api_key": "sk-AAA", "model": "gpt-5.4"},
-            {"name": "OpenAI — key B", "base_url": "https://api.openai.com/v1",
-             "api_key": "sk-BBB", "model": "gpt-4.6"},
+            {
+                "name": "OpenAI — key A",
+                "base_url": "https://api.openai.com/v1",
+                "api_key": "sk-AAA",
+                "model": "gpt-5.4",
+            },
+            {
+                "name": "OpenAI — key B",
+                "base_url": "https://api.openai.com/v1",
+                "api_key": "sk-BBB",
+                "model": "gpt-4.6",
+            },
         ],
         max_models=50,
     )
@@ -1291,7 +1399,9 @@ def test_list_authenticated_providers_same_url_different_keys_disambiguated(monk
     assert models["custom:openai-2"] == ["gpt-4.6"]
 
 
-def test_list_authenticated_providers_same_url_different_key_env_and_api_mode_stay_separate(monkeypatch):
+def test_list_authenticated_providers_same_url_different_key_env_and_api_mode_stay_separate(
+    monkeypatch,
+):
     """Same gateway host but different key_env/api_mode entries are distinct providers."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
     monkeypatch.setattr(providers_mod, "CLAWK_OVERLAYS", {})
@@ -1327,8 +1437,6 @@ def test_list_authenticated_providers_same_url_different_key_env_and_api_mode_st
     assert by_slug["custom:claude"]["models"] == ["claude-opus-4-8"]
     assert by_slug["custom:gpt"]["is_current"] is True
     assert by_slug["custom:claude"]["is_current"] is False
-
-
 
 
 def test_lmstudio_picker_probes_active_config_base_url(monkeypatch):
@@ -1438,7 +1546,12 @@ def test_lmstudio_bare_providers_block_does_not_hide_live_catalog(monkeypatch):
         current_provider="lmstudio",
         current_base_url="http://127.0.0.1:1234/v1",
         current_model="model-a",
-        user_providers={"lmstudio": {"request_timeout_seconds": 86400, "stale_timeout_seconds": 86400}},
+        user_providers={
+            "lmstudio": {
+                "request_timeout_seconds": 86400,
+                "stale_timeout_seconds": 86400,
+            }
+        },
     )
 
     rows = [p for p in providers if p["slug"] == "lmstudio"]
@@ -1449,7 +1562,9 @@ def test_lmstudio_bare_providers_block_does_not_hide_live_catalog(monkeypatch):
     assert row["source"] == "clawk"
 
 
-def test_lmstudio_providers_block_with_explicit_endpoint_still_uses_section3(monkeypatch):
+def test_lmstudio_providers_block_with_explicit_endpoint_still_uses_section3(
+    monkeypatch,
+):
     """When `providers.lmstudio` sets its own base_url, the user has
     deliberately pointed the slug at a specific endpoint — the generic
     custom-endpoint handling (section 3) remains the correct, unsurprising
@@ -1475,26 +1590,18 @@ def test_lmstudio_providers_block_with_explicit_endpoint_still_uses_section3(mon
         current_provider="lmstudio",
         current_base_url="http://remote-box:1234/v1",
         current_model="remote-model",
-        user_providers={"lmstudio": {"base_url": "http://remote-box:1234/v1", "discover_models": True}},
+        user_providers={
+            "lmstudio": {
+                "base_url": "http://remote-box:1234/v1",
+                "discover_models": True,
+            }
+        },
     )
 
     rows = [p for p in providers if p["slug"] == "lmstudio"]
     assert len(rows) == 1
     assert rows[0]["is_user_defined"] is True
     assert rows[0]["models"] == ["remote-model"]
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_custom_providers_uses_live_models_for_multi_model_endpoint(monkeypatch):
@@ -1538,11 +1645,7 @@ def test_custom_providers_uses_live_models_for_multi_model_endpoint(monkeypatch)
     )
 
     gateway_prov = next(
-        (
-            p
-            for p in providers
-            if p.get("api_url") == "https://gateway.example.com/v1"
-        ),
+        (p for p in providers if p.get("api_url") == "https://gateway.example.com/v1"),
         None,
     )
 
@@ -1597,9 +1700,7 @@ def test_same_endpoint_different_extra_headers_not_collapsed(monkeypatch):
         max_models=50,
     )
 
-    rows = [
-        p for p in providers if p.get("api_url") == "http://localhost:8081/v1"
-    ]
+    rows = [p for p in providers if p.get("api_url") == "http://localhost:8081/v1"]
     # Two distinct rows, not one collapsed row.
     assert len(rows) == 2, f"expected 2 rows, got {len(rows)}: {rows}"
 
@@ -1610,10 +1711,6 @@ def test_same_endpoint_different_extra_headers_not_collapsed(monkeypatch):
     # Each row surfaces the model list its own headers unlocked.
     models_by_row = {tuple(r["models"]) for r in rows}
     assert models_by_row == {("model-a",), ("model-b",)}
-
-
-
-
 
 
 def test_resolve_custom_provider_passes_key_env():
@@ -1695,8 +1792,6 @@ def test_discovered_models_auto_saved_to_cache(monkeypatch):
     assert gateway_prov["models"] == ["discovered-a", "discovered-b", "discovered-c"]
 
 
-
-
 def test_save_discovered_models_preserves_dict_form(monkeypatch):
     """``_save_discovered_models_to_config`` must not replace a dict-form
     ``models`` mapping (per-model metadata like ``context_length``) with
@@ -1729,9 +1824,7 @@ def test_save_discovered_models_preserves_dict_form(monkeypatch):
         "https://gateway.example.com/v1",
         ["configured-model", "discovered-model"],
     )
-    assert save_calls == [], (
-        "Dict-form models must not be replaced with a flat list"
-    )
+    assert save_calls == [], "Dict-form models must not be replaced with a flat list"
 
 
 def test_model_flow_named_custom_persists_discovered_models(monkeypatch):
@@ -1755,11 +1848,11 @@ def test_model_flow_named_custom_persists_discovered_models(monkeypatch):
         ],
     )
     # Non-interactive model selection.
-    monkeypatch.setattr(
-        "clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: 0
-    )
+    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: 0)
     # No-op downstream writes so the test never touches a real config.
-    monkeypatch.setattr("clawk_cli.main_provider_setup._save_custom_provider", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "clawk_cli.main_provider_setup._save_custom_provider", lambda *a, **k: None
+    )
     monkeypatch.setattr("clawk_cli.auth._save_model_choice", lambda *a, **k: None)
     monkeypatch.setattr("clawk_cli.auth.deactivate_provider", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -1828,12 +1921,24 @@ def test_shared_url_different_display_names_are_separate_rows(monkeypatch):
         current_base_url="https://openrouter.ai/api/v1",
         user_providers={},
         custom_providers=[
-            {"name": "Cerebras", "base_url": "https://proxy.example.com/v1",
-             "api_key": "proxy-key", "model": "llama-4-scout"},
-            {"name": "Groq", "base_url": "https://proxy.example.com/v1",
-             "api_key": "proxy-key", "model": "llama-4-scout"},
-            {"name": "Perplexity", "base_url": "https://proxy.example.com/v1",
-             "api_key": "proxy-key", "model": "sonar-pro"},
+            {
+                "name": "Cerebras",
+                "base_url": "https://proxy.example.com/v1",
+                "api_key": "proxy-key",
+                "model": "llama-4-scout",
+            },
+            {
+                "name": "Groq",
+                "base_url": "https://proxy.example.com/v1",
+                "api_key": "proxy-key",
+                "model": "llama-4-scout",
+            },
+            {
+                "name": "Perplexity",
+                "base_url": "https://proxy.example.com/v1",
+                "api_key": "proxy-key",
+                "model": "sonar-pro",
+            },
         ],
         max_models=50,
     )
@@ -1984,8 +2089,14 @@ def _seed_custom_model_cache(monkeypatch, models, *, age_seconds=10):
     monkeypatch.setattr(models_mod, "_load_provider_models_cache", lambda: cache)
 
 
-def _no_probe_local_row(monkeypatch, *, custom_providers=None, user_providers=None,
-                        current_provider="nous", **kwargs):
+def _no_probe_local_row(
+    monkeypatch,
+    *,
+    custom_providers=None,
+    user_providers=None,
+    current_provider="nous",
+    **kwargs,
+):
     """Run the GUI picker path (no live probing) and return the local row
     plus every base_url a live fetch was attempted against."""
     monkeypatch.setattr("agent.models_dev.fetch_models_dev", dict)
@@ -2342,14 +2453,11 @@ def test_auto_saved_catalog_round_trips_without_pinning(tmp_path, monkeypatch):
     # The persisted shape is what the picker will read on the next open. It
     # must not, on a keyless entry, suppress discovery of a wider catalog.
     _seed_custom_model_cache(monkeypatch, [*_LOCAL_CATALOG, "omlx-model-9"])
-    row, fetched = _no_probe_local_row(
-        monkeypatch, custom_providers=[saved]
-    )
+    row, fetched = _no_probe_local_row(monkeypatch, custom_providers=[saved])
 
     assert row is not None
     assert row["models"] == [*_LOCAL_CATALOG, "omlx-model-9"], (
-        "an auto-saved catalog must not pin the endpoint against a newer "
-        "cached lineup"
+        "an auto-saved catalog must not pin the endpoint against a newer cached lineup"
     )
     assert fetched == []
 
@@ -2397,9 +2505,7 @@ def test_legacy_sentinel_catalog_still_resolves_and_migrates(tmp_path, monkeypat
 
     # ...and the picker row built from the legacy entry lists no phantoms.
     _seed_custom_model_cache(monkeypatch, [])
-    row, fetched = _no_probe_local_row(
-        monkeypatch, custom_providers=[legacy_entry]
-    )
+    row, fetched = _no_probe_local_row(monkeypatch, custom_providers=[legacy_entry])
     assert row is not None
     assert not any(str(m).startswith("__") for m in row["models"])
     assert fetched == []
@@ -2407,9 +2513,7 @@ def test_legacy_sentinel_catalog_still_resolves_and_migrates(tmp_path, monkeypat
     # (c) the next discovery save rewrites to the clean shape.
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(
-        yaml.safe_dump({"custom_providers": [legacy_entry]})
-    )
+    cfg_path.write_text(yaml.safe_dump({"custom_providers": [legacy_entry]}))
     monkeypatch.setattr(config_mod, "CONFIG_PATH", str(cfg_path), raising=False)
 
     _save_discovered_models_to_config(_LOCAL_ENDPOINT, list(_LOCAL_CATALOG))
@@ -2421,20 +2525,40 @@ def test_legacy_sentinel_catalog_still_resolves_and_migrates(tmp_path, monkeypat
     assert "__explicit_model_allowlist__" not in saved["models"]
 
 
-def test_same_provider_switch_on_session_only_custom_endpoint_keeps_endpoint(monkeypatch):
+def test_same_provider_switch_on_session_only_custom_endpoint_keeps_endpoint(
+    monkeypatch,
+):
     """#74143: a same-provider ``/model`` on a bare ``custom`` session whose base_url is NOT the
     trusted config ``model.base_url`` must stay on that endpoint with its key — re-resolving from
     config fell through to the OpenRouter default and moved the next turn to a host the user never
     picked."""
-    for var in ("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "CUSTOM_BASE_URL", "CUSTOM_API_KEY", "OPENAI_API_KEY"):
+    for var in (
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_BASE_URL",
+        "CUSTOM_BASE_URL",
+        "CUSTOM_API_KEY",
+        "OPENAI_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
-    monkeypatch.setattr("clawk_cli.model_switch.load_config", lambda: {"model": {"provider": "openrouter", "default": "x"}}, raising=False)
+    monkeypatch.setattr(
+        "clawk_cli.model_switch.load_config",
+        lambda: {"model": {"provider": "openrouter", "default": "x"}},
+        raising=False,
+    )
     monkeypatch.setattr(
         "clawk_cli.models.probe_api_models",
-        lambda api_key, base_url, **kw: {"models": ["m-a", "m-b"], "url": base_url + "/models", "base_url": base_url,
-                                          "suggested_base_url": None, "used_fallback": False})
+        lambda api_key, base_url, **kw: {
+            "models": ["m-a", "m-b"],
+            "url": base_url + "/models",
+            "base_url": base_url,
+            "suggested_base_url": None,
+            "used_fallback": False,
+        },
+    )
 
-    result = switch_model("m-b", "custom", "m-a", "http://10.0.0.5:8000/v1", "session-secret")
+    result = switch_model(
+        "m-b", "custom", "m-a", "http://10.0.0.5:8000/v1", "session-secret"
+    )
 
     assert result.success
     assert result.base_url == "http://10.0.0.5:8000/v1"

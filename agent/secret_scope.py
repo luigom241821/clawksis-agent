@@ -9,6 +9,7 @@ agent's worker thread via ``copy_context()``); ``get_secret(name)`` reads from
 it and, when multiplexing is active with no scope set, RAISES rather than
 falling back to ``os.environ``. Design: ``website/docs/developer-guide/multiplexing-gateway.md``.
 """
+
 from __future__ import annotations
 
 import codecs
@@ -52,6 +53,7 @@ def set_multiplex_active(active: bool) -> None:
         pin_process_clawk_home,
         process_clawk_home_is_pinned,
     )
+
     _MULTIPLEX_ACTIVE = bool(active)
     if _MULTIPLEX_ACTIVE:
         if not process_clawk_home_is_pinned():
@@ -98,21 +100,33 @@ def serves_routed_profile() -> bool:
     mirror cannot flip this predicate."""
     if is_multiplex_active():
         return True
-    from clawk_constants import get_clawk_home_override, get_routing_process_clawk_home, clawk_home_key
+    from clawk_constants import (
+        get_clawk_home_override,
+        get_routing_process_clawk_home,
+        clawk_home_key,
+    )
+
     own = clawk_home_key(get_routing_process_clawk_home())
     bound = _SECRET_SCOPE.get()
-    if bound is not None and bound.profile_home and clawk_home_key(bound.profile_home) != own:
+    if (
+        bound is not None
+        and bound.profile_home
+        and clawk_home_key(bound.profile_home) != own
+    ):
         return True
     override = get_clawk_home_override()
     return override is not None and clawk_home_key(override) != own
 
 
-_SECRET_SCOPE: ContextVar[Optional[_BoundScope]] = ContextVar("_SECRET_SCOPE", default=None)
+_SECRET_SCOPE: ContextVar[Optional[_BoundScope]] = ContextVar(
+    "_SECRET_SCOPE", default=None
+)
 # A launch-profile body that entered before this process started multiplexing (no scope bound,
 # single-profile semantics): the launch profile's own mapping to read once fail-closed is armed
 # mid-body. Set only by ``tui_gateway.launch_profile_policy.launch_body``; never ``os.environ``.
 _LAUNCH_BODY_SCOPE: ContextVar[Optional[Callable[[], Mapping[str, str]]]] = ContextVar(
-    "_LAUNCH_BODY_SCOPE", default=None)
+    "_LAUNCH_BODY_SCOPE", default=None
+)
 
 
 def set_launch_body_scope(resolver: Callable[[], Mapping[str, str]]) -> Token:
@@ -137,9 +151,15 @@ class UnscopedSecretError(RuntimeError):
         # Older callers passed the whole developer sentence positionally
         # (``UnscopedSecretError("get_secret('X') called with no scope ...")``); a secret
         # name never contains whitespace, so treat such a string as the detail.
-        if secret_name and not developer_detail and any(ch.isspace() for ch in secret_name):
+        if (
+            secret_name
+            and not developer_detail
+            and any(ch.isspace() for ch in secret_name)
+        ):
             secret_name, developer_detail = "", secret_name
-        what = f"this profile's {secret_name}" if secret_name else "this profile's API key"
+        what = (
+            f"this profile's {secret_name}" if secret_name else "this profile's API key"
+        )
         super().__init__(
             f"Clawksis could not read {what} (an internal profile-scoping bug on the multiplexed "
             "gateway, not your configuration). Run `clawk gateway restart`; if it keeps happening, "
@@ -151,7 +171,9 @@ class UnscopedSecretError(RuntimeError):
             self.add_note(developer_detail)
 
 
-def set_secret_scope(secrets: Optional[Mapping[str, str]], *, profile_home: Optional[str] = None) -> Token:
+def set_secret_scope(
+    secrets: Optional[Mapping[str, str]], *, profile_home: Optional[str] = None
+) -> Token:
     """Install the active profile's secret mapping; ``None`` clears. Returns a reset token.
 
     ``profile_home`` stamps the home the mapping was built for so
@@ -159,7 +181,9 @@ def set_secret_scope(secrets: Optional[Mapping[str, str]], *, profile_home: Opti
     deliberately skips the CLAWK_HOME override."""
     if secrets is None:
         return _SECRET_SCOPE.set(None)
-    return _SECRET_SCOPE.set(_BoundScope(secrets, str(profile_home) if profile_home else None))
+    return _SECRET_SCOPE.set(
+        _BoundScope(secrets, str(profile_home) if profile_home else None)
+    )
 
 
 def reset_secret_scope(token: Token) -> None:
@@ -182,38 +206,62 @@ def current_secret_scope_home() -> Optional[str]:
 # They keep reading os.environ even in multiplex mode (routing them through the
 # fail-closed path would wrongly crash). Keep this tight — when in doubt a
 # value is a profile secret. Membership is exact name OR prefix.
-_GLOBAL_ENV_EXACT = frozenset({
-    # Clawksis runtime / deployment
-    "CLAWK_HOME", "CLAWK_PROFILE", "CLAWK_GATEWAY_LOCK_DIR",
-    "CLAWK_MAX_ITERATIONS", "CLAWK_API_TIMEOUT",
-    "CLAWK_REDACT_SECRETS", "CLAWK_NOUS_TIMEOUT_SECONDS",
-    "_CLAWK_GATEWAY",
-    # OS / interpreter
-    "PATH", "HOME", "USER", "LANG", "LC_ALL", "TZ", "PWD", "SHELL", "TMPDIR",
-    "VIRTUAL_ENV", "PYTHONPATH", "SSL_CERT_FILE",
-    # Kanban paths (per-board, not per-profile-secret)
-    "CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT", "CLAWK_KANBAN_BOARD",
-    # API-server LISTENER settings — deployment config (compose/systemd env),
-    # which the scoped runner reload must keep seeing or containers silently
-    # lose the api_server platform. API_SERVER_KEY is a credential: NOT here.
-    # See #64674, #69379.
-    "API_SERVER_ENABLED", "API_SERVER_HOST", "API_SERVER_PORT",
-    "API_SERVER_CORS_ORIGINS",
-    # Relay-connector ROUTING stamps injected by managed deploys. Every reader
-    # (gateway.config, relay_url()/registration/self-provision) must resolve
-    # the SAME value or the adapter registers while the platform is absent
-    # from config. GATEWAY_RELAY_SECRET/_ID/_DELIVERY_KEY and IDP_* are auth
-    # material and deliberately stay profile-scoped.
-    "GATEWAY_RELAY_URL", "GATEWAY_RELAY_ENDPOINT",
-    "GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS",
-    "GATEWAY_RELAY_PLATFORMS", "GATEWAY_RELAY_BOT_IDS",
-    "GATEWAY_RELAY_ROUTE_KEYS", "GATEWAY_RELAY_INSTANCE_ID",
-    "GATEWAY_RELAY_WAKE_URL", "GATEWAY_RELAY_DISPLAY_NAME",
-})
+_GLOBAL_ENV_EXACT = frozenset(
+    {
+        # Clawksis runtime / deployment
+        "CLAWK_HOME",
+        "CLAWK_PROFILE",
+        "CLAWK_GATEWAY_LOCK_DIR",
+        "CLAWK_MAX_ITERATIONS",
+        "CLAWK_API_TIMEOUT",
+        "CLAWK_REDACT_SECRETS",
+        "CLAWK_NOUS_TIMEOUT_SECONDS",
+        "_CLAWK_GATEWAY",
+        # OS / interpreter
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        "PWD",
+        "SHELL",
+        "TMPDIR",
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+        "SSL_CERT_FILE",
+        # Kanban paths (per-board, not per-profile-secret)
+        "CLAWK_KANBAN_DB",
+        "CLAWK_KANBAN_WORKSPACES_ROOT",
+        "CLAWK_KANBAN_BOARD",
+        # API-server LISTENER settings — deployment config (compose/systemd env),
+        # which the scoped runner reload must keep seeing or containers silently
+        # lose the api_server platform. API_SERVER_KEY is a credential: NOT here.
+        # See #64674, #69379.
+        "API_SERVER_ENABLED",
+        "API_SERVER_HOST",
+        "API_SERVER_PORT",
+        "API_SERVER_CORS_ORIGINS",
+        # Relay-connector ROUTING stamps injected by managed deploys. Every reader
+        # (gateway.config, relay_url()/registration/self-provision) must resolve
+        # the SAME value or the adapter registers while the platform is absent
+        # from config. GATEWAY_RELAY_SECRET/_ID/_DELIVERY_KEY and IDP_* are auth
+        # material and deliberately stay profile-scoped.
+        "GATEWAY_RELAY_URL",
+        "GATEWAY_RELAY_ENDPOINT",
+        "GATEWAY_RELAY_ALLOW_DIRECT_PLATFORMS",
+        "GATEWAY_RELAY_PLATFORMS",
+        "GATEWAY_RELAY_BOT_IDS",
+        "GATEWAY_RELAY_ROUTE_KEYS",
+        "GATEWAY_RELAY_INSTANCE_ID",
+        "GATEWAY_RELAY_WAKE_URL",
+        "GATEWAY_RELAY_DISPLAY_NAME",
+    }
+)
 _GLOBAL_ENV_PREFIXES = (
     "CLAWK_KANBAN_",
-    "CLAWK_TELEGRAM_",   # tuning knobs (batch delays, fallback toggles) — NOT the token
-    "TERMINAL_",          # terminal/sandbox backend settings
+    "CLAWK_TELEGRAM_",  # tuning knobs (batch delays, fallback toggles) — NOT the token
+    "TERMINAL_",  # terminal/sandbox backend settings
 )
 
 
@@ -285,7 +333,9 @@ def _strip_inline_comment(value: str) -> str:
                 i += 2  # skip the escaped character
                 continue
             if ch == quote:
-                return value[: i + 1] if value[i + 1:].lstrip().startswith("#") else value
+                return (
+                    value[: i + 1] if value[i + 1 :].lstrip().startswith("#") else value
+                )
             i += 1
         return value  # unterminated quote: leave as-is
     return re.split(r"\s+#", value, maxsplit=1)[0].strip()
@@ -300,7 +350,7 @@ def _parse_env_value(raw_value: str) -> str:
         parsed: list[str] = []
         i = 0
         while i < len(quoted):
-            escaped = quoted[i] == "\\" and quoted[i + 1:i + 2] in ('"', "\\")
+            escaped = quoted[i] == "\\" and quoted[i + 1 : i + 2] in ('"', "\\")
             parsed.append(quoted[i + 1] if escaped else quoted[i])
             i += 2 if escaped else 1
         return "".join(parsed)
@@ -353,7 +403,7 @@ def _parse_env_text(text: str) -> dict[str, str]:
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
-            line = line[len("export "):].lstrip()
+            line = line[len("export ") :].lstrip()
         key, sep, value = line.partition("=")
         key = key.strip()
         if sep and key:
@@ -403,6 +453,7 @@ def build_profile_secret_scope(clawk_home: Path) -> dict[str, str]:
     secrets = load_env_file(Path(clawk_home) / ".env")
     try:
         from clawk_cli.env_loader import get_secret_source_values
+
         external_secrets = get_secret_source_values(Path(clawk_home))
     except Exception:
         external_secrets = {}
@@ -411,6 +462,7 @@ def build_profile_secret_scope(clawk_home: Path) -> dict[str, str]:
     # gateway.config_loader); scoped gate readers under multiplex never fall to os.environ, so seed it
     # into that profile's own mapping. A secondary never inherits it (#80099 class).
     from gateway.config_loader import bridged_allow_all_users
+
     bridged = bridged_allow_all_users()
     if bridged is not None and _is_process_home(clawk_home):
         secrets.setdefault("GATEWAY_ALLOW_ALL_USERS", bridged)
@@ -421,9 +473,13 @@ def build_profile_secret_scope(clawk_home: Path) -> dict[str, str]:
     # managed-vs-user collision (#111187 review). Every multiplex-authoritative scope — gateway
     # turn, routed cron fire, external worker — is built here, so managed authority is composed
     # once, not restored by each consumer.
-    from clawk_cli.managed_scope import load_managed_env  # fail-open: {} when no managed scope
+    from clawk_cli.managed_scope import (
+        load_managed_env,
+    )  # fail-open: {} when no managed scope
 
-    secrets.update((k, v) for k, v in load_managed_env().items() if not _is_global_env(k))
+    secrets.update(
+        (k, v) for k, v in load_managed_env().items() if not _is_global_env(k)
+    )
     return secrets
 
 
@@ -432,6 +488,7 @@ def _is_process_home(clawk_home: Path) -> bool:
     ``serves_routed_profile()``: a host that mirrors a served profile into ``CLAWK_HOME`` would
     otherwise seed the launch profile's bridged allow-all grant into that profile's scope."""
     from clawk_constants import get_routing_process_clawk_home
+
     try:
         return Path(clawk_home).resolve() == get_routing_process_clawk_home().resolve()
     except OSError:

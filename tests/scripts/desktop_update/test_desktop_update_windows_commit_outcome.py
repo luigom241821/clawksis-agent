@@ -6,6 +6,7 @@ is on the new version, so nothing afterwards may report "still on the previous
 version", and the hand-off's own supervision (watchdog, probes, marker
 release) must not turn healthy work into a failure.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,7 @@ import pytest
 from tests.installation_launcher_fixture import publish_fixture_launcher
 
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
-SCRIPT = ROOT / 'scripts/desktop-update/windows.ps1'
+SCRIPT = ROOT / "scripts/desktop-update/windows.ps1"
 CLI = """
 import ctypes, json, os, subprocess, sys, time
 from pathlib import Path
@@ -74,82 +75,156 @@ if __name__ == '__main__':
 """
 
 
-def _handoff(tmp_path: Path, *args: str, verify: str = 'pass\n', timeout: int = 150, prepare=None, **env: str):
-    install = tmp_path / 'checkout'
+def _handoff(
+    tmp_path: Path,
+    *args: str,
+    verify: str = "pass\n",
+    timeout: int = 150,
+    prepare=None,
+    **env: str,
+):
+    install = tmp_path / "checkout"
     publish_fixture_launcher(install, CLI)
-    (install / 'clawk_cli/desktop_update_verify.py').write_text(verify, encoding='utf-8')
-    home = tmp_path / 'home'; home.mkdir()
+    (install / "clawk_cli/desktop_update_verify.py").write_text(
+        verify, encoding="utf-8"
+    )
+    home = tmp_path / "home"
+    home.mkdir()
     if prepare is not None:
         prepare(home, install)
-    calls = tmp_path / 'calls.jsonl'
+    calls = tmp_path / "calls.jsonl"
     proc = subprocess.Popen(
-        ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(SCRIPT),
-         '-InstallRoot', str(install), '-NoUi', *args],
-        cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-        env={**os.environ, 'CLAWK_HOME': str(home), 'CLAWK_RUNTIME_DIR': str(tmp_path / 'empty-store'),
-             'HANDOFF_CALLS': str(calls), 'PYTHONIOENCODING': 'utf-8', **env},
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(SCRIPT),
+            "-InstallRoot",
+            str(install),
+            "-NoUi",
+            *args,
+        ],
+        cwd=tmp_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env={
+            **os.environ,
+            "CLAWK_HOME": str(home),
+            "CLAWK_RUNTIME_DIR": str(tmp_path / "empty-store"),
+            "HANDOFF_CALLS": str(calls),
+            "PYTHONIOENCODING": "utf-8",
+            **env,
+        },
     )
     try:
         out, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        subprocess.run(['taskkill', '/T', '/F', '/PID', str(proc.pid)], capture_output=True, check=False)
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+            capture_output=True,
+            check=False,
+        )
         out, _ = proc.communicate()
-        pytest.fail(f'hand-off did not finish within {timeout}s: {out}')
-    argv = [json.loads(line) for line in calls.read_text(encoding='utf-8-sig').splitlines()] if calls.exists() else []
-    result_path = home / '.clawk-update-result.json'
-    result = json.loads(result_path.read_text(encoding='utf-8-sig')) if result_path.is_file() else None
+        pytest.fail(f"hand-off did not finish within {timeout}s: {out}")
+    argv = (
+        [
+            json.loads(line)
+            for line in calls.read_text(encoding="utf-8-sig").splitlines()
+        ]
+        if calls.exists()
+        else []
+    )
+    result_path = home / ".clawk-update-result.json"
+    result = (
+        json.loads(result_path.read_text(encoding="utf-8-sig"))
+        if result_path.is_file()
+        else None
+    )
     return proc.returncode, out, argv, result, home
 
 
-@pytest.mark.platforms('windows')
-def test_verify_failure_after_a_committed_update_is_ok_with_warnings(tmp_path: Path) -> None:
-    code, out, argv, result, _ = _handoff(tmp_path, verify='raise SystemExit(3)\n')
+@pytest.mark.platforms("windows")
+def test_verify_failure_after_a_committed_update_is_ok_with_warnings(
+    tmp_path: Path,
+) -> None:
+    code, out, argv, result, _ = _handoff(tmp_path, verify="raise SystemExit(3)\n")
     assert code == 0, out
-    assert (result['ok'], result['exit_code'], result['manual']) == (True, 0, True), result
-    assert [w.split(':')[0] for w in result['warnings']] == ['verify'], result
-    assert result['message'].startswith('Clawksis was updated, but'), result
-    assert 'previous version' not in result['message']
+    assert (result["ok"], result["exit_code"], result["manual"]) == (True, 0, True), (
+        result
+    )
+    assert [w.split(":")[0] for w in result["warnings"]] == ["verify"], result
+    assert result["message"].startswith("Clawksis was updated, but"), result
+    assert "previous version" not in result["message"]
     # The fleet the Desktop stopped is still brought back.
-    assert argv[-1] == ['gateway', 'start', '--all'], argv
+    assert argv[-1] == ["gateway", "start", "--all"], argv
 
 
-@pytest.mark.platforms('windows')
+@pytest.mark.platforms("windows")
 def test_result_is_atomic_json_carrying_started_at_and_warnings(tmp_path: Path) -> None:
     started = int(time.time()) - 5
-    code, out, _, result, home = _handoff(tmp_path, CLAWK_UPDATE_STARTED_AT=str(started))
+    code, out, _, result, home = _handoff(
+        tmp_path, CLAWK_UPDATE_STARTED_AT=str(started)
+    )
     assert code == 0, out
-    assert (result['ok'], result['started_at'], result['warnings']) == (True, started, []), result
-    assert not list(home.glob('.clawk-update-result.json.*.tmp'))
+    assert (result["ok"], result["started_at"], result["warnings"]) == (
+        True,
+        started,
+        [],
+    ), result
+    assert not list(home.glob(".clawk-update-result.json.*.tmp"))
 
 
-@pytest.mark.platforms('windows')
+@pytest.mark.platforms("windows")
 def test_a_result_that_cannot_be_published_leaves_no_tmp_file(tmp_path: Path) -> None:
     # Write-Result's Move/Replace fail (the result path is a directory): its <result>.<pid>.tmp
     # must not be left beside it, one per hand-off, forever.
     code, out, _, result, home = _handoff(
-        tmp_path, '-NoGateway', prepare=lambda home, _install: (home / '.clawk-update-result.json').mkdir())
+        tmp_path,
+        "-NoGateway",
+        prepare=lambda home, _install: (home / ".clawk-update-result.json").mkdir(),
+    )
     assert code == 0, out
     assert result is None
-    assert not list(home.glob('.clawk-update-result.json.*.tmp')), list(home.iterdir())
+    assert not list(home.glob(".clawk-update-result.json.*.tmp")), list(home.iterdir())
 
 
-@pytest.mark.platforms('windows')
-@pytest.mark.parametrize(('receipt', 'ok'), [('interrupted', True), ('partial', True), ('interrupted,another-run', False),
-                                             ('failed', False)])
-def test_nonzero_exit_after_the_commit_point_is_installed_with_a_followup(tmp_path: Path, receipt: str, ok: bool) -> None:
+@pytest.mark.platforms("windows")
+@pytest.mark.parametrize(
+    ("receipt", "ok"),
+    [
+        ("interrupted", True),
+        ("partial", True),
+        ("interrupted,another-run", False),
+        ("failed", False),
+    ],
+)
+def test_nonzero_exit_after_the_commit_point_is_installed_with_a_followup(
+    tmp_path: Path, receipt: str, ok: bool
+) -> None:
     # Contract C3: `clawk update` exits 130 / 1 AFTER its commit point (Ctrl-C after the code
     # moved, a parked autostash). Its own receipt (matched by the correlation id) says so: the
     # result must report the update installed with an owed follow-up, never "update failed".
-    code, out, argv, result, _ = _handoff(tmp_path, HANDOFF_RECEIPT=receipt, HANDOFF_EXIT='130')
+    code, out, argv, result, _ = _handoff(
+        tmp_path, HANDOFF_RECEIPT=receipt, HANDOFF_EXIT="130"
+    )
     if ok:
         assert code == 0, out
-        assert (result['ok'], result['exit_code'], result['manual']) == (True, 0, True), result
-        assert result['message'].startswith('Clawksis was updated, but'), result
-        assert [w.split(':')[0] for w in result['warnings']] == ['update'], result
-        assert argv[-1] == ['gateway', 'start', '--all'], argv   # the post-commit steps still run
+        assert (result["ok"], result["exit_code"], result["manual"]) == (
+            True,
+            0,
+            True,
+        ), result
+        assert result["message"].startswith("Clawksis was updated, but"), result
+        assert [w.split(":")[0] for w in result["warnings"]] == ["update"], result
+        assert argv[-1] == ["gateway", "start", "--all"], (
+            argv
+        )  # the post-commit steps still run
     else:
         assert code == 130, out
-        assert (result['ok'], result['exit_code']) == (False, 130), result
+        assert (result["ok"], result["exit_code"]) == (False, 130), result
 
 
 _TIMED_CHECKOUT_HOLDER = """
@@ -161,66 +236,104 @@ time.sleep(float(sys.argv[2]))
 """
 
 
-@pytest.mark.platforms('windows')
-def test_result_finished_at_is_stamped_after_the_r6_release_wait(tmp_path: Path) -> None:
+@pytest.mark.platforms("windows")
+def test_result_finished_at_is_stamped_after_the_r6_release_wait(
+    tmp_path: Path,
+) -> None:
     # The relaunched Desktop drops a non-manual result whose finished_at is 30 minutes old; the
     # R6 wait lasts up to 2 h. The result must carry the time the hand-off actually finished.
     holders = []
 
     def hold_checkout(_home: Path, install: Path) -> None:
-        holders.append((subprocess.Popen([sys.executable, '-c', _TIMED_CHECKOUT_HOLDER,
-                                          str(install / '.clawk-update.lock'), '25']), time.time() + 25))
+        holders.append(
+            (
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        _TIMED_CHECKOUT_HOLDER,
+                        str(install / ".clawk-update.lock"),
+                        "25",
+                    ]
+                ),
+                time.time() + 25,
+            )
+        )
+
     try:
-        code, out, _, result, home = _handoff(tmp_path, '-NoGateway', prepare=hold_checkout)
+        code, out, _, result, home = _handoff(
+            tmp_path, "-NoGateway", prepare=hold_checkout
+        )
     finally:
         for proc, _ in holders:
-            proc.kill(); proc.wait()
+            proc.kill()
+            proc.wait()
     assert code == 0, out
-    log = (home / 'logs/desktop-update-handoff.log').read_text(encoding='utf-8-sig')
-    assert 'keeping the update marker' in log, log
-    assert result['ok'] is True and result['finished_at'] >= int(holders[0][1]) - 1, result
+    log = (home / "logs/desktop-update-handoff.log").read_text(encoding="utf-8-sig")
+    assert "keeping the update marker" in log, log
+    assert result["ok"] is True and result["finished_at"] >= int(holders[0][1]) - 1, (
+        result
+    )
 
 
-@pytest.mark.platforms('windows')
+@pytest.mark.platforms("windows")
 def test_marker_with_a_live_delegate_is_handed_to_it_at_finish(tmp_path: Path) -> None:
     # A7 release rule: the owner deletes its claim unless a delegate still runs; then that
     # delegate becomes the owner (canonical body, started_at kept, no delegate line).
-    pid_file = tmp_path / 'delegate.pid'
+    pid_file = tmp_path / "delegate.pid"
     try:
         code, out, _, _result, home = _handoff(tmp_path, HANDOFF_DELEGATE=str(pid_file))
         assert code == 0, out
-        marker = (home / '.clawk-update-in-progress').read_bytes().decode().split('\n')
-        assert marker[0] == pid_file.read_text(encoding='utf-8-sig'), marker
-        assert marker[2].startswith('ct:') and marker[3:] == [''], marker
+        marker = (home / ".clawk-update-in-progress").read_bytes().decode().split("\n")
+        assert marker[0] == pid_file.read_text(encoding="utf-8-sig"), marker
+        assert marker[2].startswith("ct:") and marker[3:] == [""], marker
     finally:
         if pid_file.exists():
-            subprocess.run(['taskkill', '/F', '/PID', pid_file.read_text(encoding='utf-8-sig')], capture_output=True, check=False)
+            subprocess.run(
+                ["taskkill", "/F", "/PID", pid_file.read_text(encoding="utf-8-sig")],
+                capture_output=True,
+                check=False,
+            )
 
 
-@pytest.mark.platforms('windows')
-def test_watchdog_remap_after_banner_reports_interrupted_followups(tmp_path: Path) -> None:
+@pytest.mark.platforms("windows")
+def test_watchdog_remap_after_banner_reports_interrupted_followups(
+    tmp_path: Path,
+) -> None:
     code, out, _argv, result, _ = _handoff(
-        tmp_path, '-NoGateway', HANDOFF_HANG='Update complete! (v1.0.0)',
-        CLAWK_UPDATE_STEP_IDLE_SECONDS='3',
+        tmp_path,
+        "-NoGateway",
+        HANDOFF_HANG="Update complete! (v1.0.0)",
+        CLAWK_UPDATE_STEP_IDLE_SECONDS="3",
     )
     assert code == 0, out
-    assert (result['ok'], result['manual']) == (True, True), result
-    assert any('interrupted' in w for w in result['warnings']), result
+    assert (result["ok"], result["manual"]) == (True, True), result
+    assert any("interrupted" in w for w in result["warnings"]), result
 
 
-@pytest.mark.platforms('windows')
-def test_cpu_busy_pipe_silent_update_is_not_killed_by_the_idle_watchdog(tmp_path: Path) -> None:
+@pytest.mark.platforms("windows")
+def test_cpu_busy_pipe_silent_update_is_not_killed_by_the_idle_watchdog(
+    tmp_path: Path,
+) -> None:
     code, out, _argv, result, _ = _handoff(
-        tmp_path, '-NoGateway', HANDOFF_BUSY_SECONDS='15', CLAWK_UPDATE_STEP_IDLE_SECONDS='4',
+        tmp_path,
+        "-NoGateway",
+        HANDOFF_BUSY_SECONDS="15",
+        CLAWK_UPDATE_STEP_IDLE_SECONDS="4",
     )
     assert code == 0, out
-    assert (result['ok'], result['warnings']) == (True, []), result
+    assert (result["ok"], result["warnings"]) == (True, []), result
 
 
-@pytest.mark.platforms('windows')
+@pytest.mark.platforms("windows")
 def test_hanging_update_help_probe_is_bounded(tmp_path: Path) -> None:
     code, out, argv, _result, _ = _handoff(
-        tmp_path, '-NoGateway', '-ProbeTimeoutSeconds', '10', timeout=120, HANDOFF_HELP_HANG='1',
+        tmp_path,
+        "-NoGateway",
+        "-ProbeTimeoutSeconds",
+        "10",
+        timeout=120,
+        HANDOFF_HELP_HANG="1",
     )
     assert code == 0, out
-    assert argv[0][:2] == ['update', '--yes'] and '--keep-stash' not in argv[0], argv
+    assert argv[0][:2] == ["update", "--yes"] and "--keep-stash" not in argv[0], argv

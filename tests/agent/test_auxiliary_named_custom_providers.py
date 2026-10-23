@@ -19,6 +19,7 @@ def _isolate(tmp_path, monkeypatch):
 def _write_config(tmp_path, config_dict):
     """Write a config.yaml to the test CLAWK_HOME."""
     import clawk_yaml as yaml
+
     config_path = tmp_path / ".clawk" / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
 
@@ -26,58 +27,80 @@ def _write_config(tmp_path, config_dict):
 class TestNormalizeVisionProvider:
     """_normalize_vision_provider should resolve 'main' to actual main provider."""
 
-
     def test_main_resolves_to_openrouter(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "anthropic/claude-sonnet-4", "provider": "openrouter"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "default": "anthropic/claude-sonnet-4",
+                    "provider": "openrouter",
+                },
+            },
+        )
         from agent.auxiliary_client import _normalize_vision_provider
+
         assert _normalize_vision_provider("main") == "openrouter"
-
-
-
-
-
-
 
 
 class TestResolveProviderClientMainAlias:
     """resolve_provider_client('main', ...) should resolve to actual main provider."""
 
     def test_main_resolves_to_named_custom_provider(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "my-model", "provider": "beans"},
-            "custom_providers": [
-                {"name": "beans", "base_url": "http://beans.local/v1", "api_key": "k"},
-            ],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "my-model", "provider": "beans"},
+                "custom_providers": [
+                    {
+                        "name": "beans",
+                        "base_url": "http://beans.local/v1",
+                        "api_key": "k",
+                    },
+                ],
+            },
+        )
         from agent.auxiliary_client import resolve_provider_client
+
         client, model = resolve_provider_client("main", "override-model")
         assert client is not None
         assert model == "override-model"
         assert "beans.local" in str(client.base_url)
 
     def test_main_with_custom_colon_prefix(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "my-model", "provider": "custom:beans"},
-            "custom_providers": [
-                {"name": "beans", "base_url": "http://beans.local/v1", "api_key": "k"},
-            ],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "my-model", "provider": "custom:beans"},
+                "custom_providers": [
+                    {
+                        "name": "beans",
+                        "base_url": "http://beans.local/v1",
+                        "api_key": "k",
+                    },
+                ],
+            },
+        )
         from agent.auxiliary_client import resolve_provider_client
+
         client, _model = resolve_provider_client("main", "test")
         assert client is not None
         assert "beans.local" in str(client.base_url)
 
     def test_main_resolves_github_copilot_alias(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "gpt-5.4", "provider": "github-copilot"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "gpt-5.4", "provider": "github-copilot"},
+            },
+        )
         with (
-            patch("clawk_cli.auth.resolve_api_key_provider_credentials", return_value={
-                "api_key": "ghu_test_token",
-                "base_url": "https://api.githubcopilot.com",
-            }),
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "api_key": "ghu_test_token",
+                    "base_url": "https://api.githubcopilot.com",
+                },
+            ),
             patch("agent.auxiliary_client.OpenAI") as mock_openai,
         ):
             mock_openai.return_value = MagicMock()
@@ -94,49 +117,64 @@ class TestResolveProviderClientNamedCustom:
     """resolve_provider_client should resolve named custom providers directly."""
 
     def test_named_custom_provider(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "test-model"},
-            "custom_providers": [
-                {"name": "beans", "base_url": "http://beans.local/v1", "api_key": "k"},
-            ],
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "test-model"},
+                "custom_providers": [
+                    {
+                        "name": "beans",
+                        "base_url": "http://beans.local/v1",
+                        "api_key": "k",
+                    },
+                ],
+            },
+        )
         from agent.auxiliary_client import resolve_provider_client
+
         client, model = resolve_provider_client("beans", "my-model")
         assert client is not None
         assert model == "my-model"
         assert "beans.local" in str(client.base_url)
 
-
         # no-key-required should be used
 
     def test_providers_dict_uses_durable_pool_when_no_inline_key(self, tmp_path):
         """Titles/compression/vision must read credential_pool.<key>, not a placeholder."""
-        _write_config(tmp_path, {
-            "providers": {
-                "b-ai": {
-                    "name": "B.AI",
-                    "base_url": "https://api.b.ai/v1",
+        _write_config(
+            tmp_path,
+            {
+                "providers": {
+                    "b-ai": {
+                        "name": "B.AI",
+                        "base_url": "https://api.b.ai/v1",
+                    },
                 },
             },
-        })
+        )
         auth_path = tmp_path / ".clawk" / "auth.json"
-        auth_path.write_text(json.dumps({
-            "version": 1,
-            "providers": {},
-            "credential_pool": {
-                "b-ai": [
-                    {
-                        "id": "k1",
-                        "label": "primary",
-                        "auth_type": "api_key",
-                        "priority": 0,
-                        "source": "manual",
-                        "access_token": "sk-real-b-ai-pool-key-12345",
-                    }
-                ]
-            },
-        }))
+        auth_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "providers": {},
+                    "credential_pool": {
+                        "b-ai": [
+                            {
+                                "id": "k1",
+                                "label": "primary",
+                                "auth_type": "api_key",
+                                "priority": 0,
+                                "source": "manual",
+                                "access_token": "sk-real-b-ai-pool-key-12345",
+                            }
+                        ]
+                    },
+                }
+            )
+        )
         from agent.auxiliary_client import resolve_provider_client
+
         client, _model = resolve_provider_client("b-ai", "b-ai-model")
         assert client is not None
         assert "api.b.ai" in str(client.base_url)
@@ -147,14 +185,20 @@ class TestResolveProviderClientModelNormalization:
     """Direct-provider auxiliary routing should normalize models like main runtime."""
 
     def test_matching_native_prefix_is_stripped_for_main_provider(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "zai/glm-5.1", "provider": "zai"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "zai/glm-5.1", "provider": "zai"},
+            },
+        )
         with (
-            patch("clawk_cli.auth.resolve_api_key_provider_credentials", return_value={
-                "api_key": "glm-key",
-                "base_url": "https://api.z.ai/api/paas/v4",
-            }),
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "api_key": "glm-key",
+                    "base_url": "https://api.z.ai/api/paas/v4",
+                },
+            ),
             patch("agent.auxiliary_client.OpenAI") as mock_openai,
         ):
             mock_openai.return_value = MagicMock()
@@ -164,7 +208,6 @@ class TestResolveProviderClientModelNormalization:
 
         assert client is not None
         assert model == "glm-5.1"
-
 
     def test_aggregator_vendor_slug_is_preserved(self, monkeypatch):
         monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
@@ -184,15 +227,21 @@ class TestResolveVisionProviderClientModelNormalization:
     """Vision auto-routing should reuse the same provider-specific normalization."""
 
     def test_vision_auto_strips_matching_main_provider_prefix(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"default": "zai/glm-5.1", "provider": "zai"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {"default": "zai/glm-5.1", "provider": "zai"},
+            },
+        )
         with (
             patch("agent.auxiliary_client._read_nous_auth", return_value=None),
-            patch("clawk_cli.auth.resolve_api_key_provider_credentials", return_value={
-                "api_key": "glm-key",
-                "base_url": "https://api.z.ai/api/paas/v4",
-            }),
+            patch(
+                "clawk_cli.auth.resolve_api_key_provider_credentials",
+                return_value={
+                    "api_key": "glm-key",
+                    "base_url": "https://api.z.ai/api/paas/v4",
+                },
+            ),
             patch("agent.auxiliary_client.OpenAI") as mock_openai,
         ):
             mock_openai.return_value = MagicMock()
@@ -202,13 +251,17 @@ class TestResolveVisionProviderClientModelNormalization:
 
         assert provider == "zai"
         assert client is not None
-        assert model == "glm-5.3-flash"  # zai coding endpoints support this vision-capable fallback
+        assert (
+            model == "glm-5.3-flash"
+        )  # zai coding endpoints support this vision-capable fallback
 
 
 class TestAutoClientCacheModelCompatibility:
     """Auto client cache should not keep OpenRouter-format model overrides on non-OR clients."""
 
-    def test_first_auto_cache_miss_drops_openrouter_model_for_named_custom_runtime(self, tmp_path):
+    def test_first_auto_cache_miss_drops_openrouter_model_for_named_custom_runtime(
+        self, tmp_path
+    ):
         from agent import auxiliary_client as ac
 
         ac._client_cache.clear()
@@ -242,8 +295,6 @@ class TestAutoClientCacheModelCompatibility:
             ac._client_cache.clear()
 
 
-
-
 class TestProvidersDictApiModeAnthropicMessages:
     """Regression guard for #15033.
 
@@ -257,31 +308,34 @@ class TestProvidersDictApiModeAnthropicMessages:
     ``resolve_provider_client``'s named-custom branch never read it.
     """
 
-
-
-
-    def test_resolve_provider_client_returns_anthropic_client(self, tmp_path, monkeypatch):
+    def test_resolve_provider_client_returns_anthropic_client(
+        self, tmp_path, monkeypatch
+    ):
         """Named custom provider with api_mode=anthropic_messages must
         route through AnthropicAuxiliaryClient, carrying the entry's extra_headers
         like the OpenAI-wire arms do (#109595)."""
         monkeypatch.setenv("MYRELAY_API_KEY", "sk-test")
-        _write_config(tmp_path, {
-            "providers": {
-                "myrelay": {
-                    "name": "myrelay",
-                    "base_url": "https://example-relay.test/anthropic",
-                    "key_env": "MYRELAY_API_KEY",
-                    "api_mode": "anthropic_messages",
-                    "default_model": "claude-opus-4-7",
-                    "extra_headers": {"X-Gateway-Token": "gw-1"},
+        _write_config(
+            tmp_path,
+            {
+                "providers": {
+                    "myrelay": {
+                        "name": "myrelay",
+                        "base_url": "https://example-relay.test/anthropic",
+                        "key_env": "MYRELAY_API_KEY",
+                        "api_mode": "anthropic_messages",
+                        "default_model": "claude-opus-4-7",
+                        "extra_headers": {"X-Gateway-Token": "gw-1"},
+                    },
                 },
             },
-        })
+        )
         from agent.auxiliary_client import (
             resolve_provider_client,
             AnthropicAuxiliaryClient,
             AsyncAnthropicAuxiliaryClient,
         )
+
         sync_client, sync_model = resolve_provider_client("myrelay", async_mode=False)
         assert isinstance(sync_client, AnthropicAuxiliaryClient), (
             f"expected AnthropicAuxiliaryClient, got {type(sync_client).__name__}"
@@ -289,15 +343,15 @@ class TestProvidersDictApiModeAnthropicMessages:
         assert sync_model == "claude-opus-4-7"
         sdk_headers = sync_client._real_client._custom_headers
         assert sdk_headers.get("X-Gateway-Token") == "gw-1"
-        assert "anthropic-beta" in sdk_headers, "entry headers must merge onto, not replace, the builder's headers"
+        assert "anthropic-beta" in sdk_headers, (
+            "entry headers must merge onto, not replace, the builder's headers"
+        )
 
         async_client, async_model = resolve_provider_client("myrelay", async_mode=True)
         assert isinstance(async_client, AsyncAnthropicAuxiliaryClient), (
             f"expected AsyncAnthropicAuxiliaryClient, got {type(async_client).__name__}"
         )
         assert async_model == "claude-opus-4-7"
-
-
 
 
 class TestCustomProviderAliasCollision:
@@ -311,56 +365,86 @@ class TestCustomProviderAliasCollision:
     """
 
     def test_custom_named_kimi_wins_over_builtin_alias(self, tmp_path):
-        _write_config(tmp_path, {
-            "model": {"provider": "openrouter", "default": "anthropic/claude-sonnet-4.6"},
-            "custom_providers": [
-                {
-                    "name": "kimi",
-                    "base_url": "https://my-custom-kimi.example.com/v1",
-                    "api_key": "my-kimi-key",
-                    "models": {"my-kimi-model": {"context_length": 200000}},
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "provider": "openrouter",
+                    "default": "anthropic/claude-sonnet-4.6",
                 },
-            ],
-        })
+                "custom_providers": [
+                    {
+                        "name": "kimi",
+                        "base_url": "https://my-custom-kimi.example.com/v1",
+                        "api_key": "my-kimi-key",
+                        "models": {"my-kimi-model": {"context_length": 200000}},
+                    },
+                ],
+            },
+        )
         from agent.auxiliary_client import resolve_provider_client
         from openai import OpenAI
-        client, model = resolve_provider_client("kimi", model="my-kimi-model", raw_codex=True)
+
+        client, model = resolve_provider_client(
+            "kimi", model="my-kimi-model", raw_codex=True
+        )
         assert isinstance(client, OpenAI)
         assert "my-custom-kimi.example.com" in str(client.base_url)
         assert client.api_key == "my-kimi-key"
         assert model == "my-kimi-model"
 
-    def test_bare_kimi_without_custom_still_routes_to_builtin(self, tmp_path, monkeypatch):
+    def test_bare_kimi_without_custom_still_routes_to_builtin(
+        self, tmp_path, monkeypatch
+    ):
         """Regression guard: bare 'kimi' with no custom entry must still
         reach the built-in kimi-coding provider."""
-        _write_config(tmp_path, {
-            "model": {"provider": "openrouter", "default": "anthropic/claude-sonnet-4.6"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "provider": "openrouter",
+                    "default": "anthropic/claude-sonnet-4.6",
+                },
+            },
+        )
         monkeypatch.setenv("KIMI_API_KEY", "builtin-kimi-key")
         from agent.auxiliary_client import resolve_provider_client
-        client, _ = resolve_provider_client("kimi", model="kimi-k2-0905-preview", raw_codex=True)
+
+        client, _ = resolve_provider_client(
+            "kimi", model="kimi-k2-0905-preview", raw_codex=True
+        )
         assert client is not None
         base_url = str(client.base_url)
         # Built-in kimi-coding points at api.moonshot.ai
-        assert "moonshot" in base_url or "kimi" in base_url, f"unexpected base_url {base_url!r}"
+        assert "moonshot" in base_url or "kimi" in base_url, (
+            f"unexpected base_url {base_url!r}"
+        )
 
     @pytest.mark.parametrize("provider", ["llamacpp", "custom:llamacpp"])
     def test_named_llamacpp_wins_over_local_server_alias(self, tmp_path, provider):
         """A ``providers:`` entry whose name is also a local-server alias (``llamacpp``) resolves to
         its configured base_url, not to the alias's generic ``custom`` branch (#115990)."""
-        _write_config(tmp_path, {
-            "model": {"provider": "openrouter", "default": "anthropic/claude-sonnet-4.6"},
-            "providers": {
-                "llamacpp": {
-                    "base_url": "http://127.0.0.1:8081/v1",
-                    "model": "local-model",
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "provider": "openrouter",
+                    "default": "anthropic/claude-sonnet-4.6",
+                },
+                "providers": {
+                    "llamacpp": {
+                        "base_url": "http://127.0.0.1:8081/v1",
+                        "model": "local-model",
+                    },
                 },
             },
-        })
+        )
         from agent.auxiliary_client import resolve_provider_client
         from openai import OpenAI
 
-        client, model = resolve_provider_client(provider, model="local-model", raw_codex=True)
+        client, model = resolve_provider_client(
+            provider, model="local-model", raw_codex=True
+        )
 
         assert isinstance(client, OpenAI)
         assert str(client.base_url).rstrip("/") == "http://127.0.0.1:8081/v1"
@@ -371,14 +455,23 @@ class TestCustomProviderAliasCollision:
         registered provider's defaults on the API-key branch.  Used by
         _try_activate_fallback to route a fallback through a built-in
         provider name but targeting a user-supplied endpoint."""
-        _write_config(tmp_path, {
-            "model": {"provider": "openrouter", "default": "anthropic/claude-sonnet-4.6"},
-        })
+        _write_config(
+            tmp_path,
+            {
+                "model": {
+                    "provider": "openrouter",
+                    "default": "anthropic/claude-sonnet-4.6",
+                },
+            },
+        )
         monkeypatch.setenv("KIMI_API_KEY", "builtin-kimi-key")
         from agent.auxiliary_client import resolve_provider_client
         from openai import OpenAI
+
         client, _ = resolve_provider_client(
-            "kimi-coding", model="kimi-k2", raw_codex=True,
+            "kimi-coding",
+            model="kimi-k2",
+            raw_codex=True,
             explicit_base_url="https://override.example.com",
             explicit_api_key="override-key",
         )
@@ -399,6 +492,7 @@ class TestResolveProviderClientMainRuntimeCustom:
         is used directly, bypassing the _try_custom_endpoint / API-key
         fallback chain."""
         from agent.auxiliary_client import resolve_provider_client
+
         main_runtime = {
             "provider": "custom",
             "base_url": "https://my-gateway.example.com/v1",
@@ -415,7 +509,9 @@ class TestResolveProviderClientMainRuntimeCustom:
         assert "my-gateway.example.com" in str(client.base_url)
         assert client.api_key == "***"
 
-    def test_custom_provider_main_runtime_no_credentials_falls_through(self, tmp_path, monkeypatch):
+    def test_custom_provider_main_runtime_no_credentials_falls_through(
+        self, tmp_path, monkeypatch
+    ):
         """When main_runtime has no base_url or no api_key, the existing
         _try_custom_endpoint / _resolve_api_key_provider fallback chain is
         still tried."""
@@ -426,6 +522,7 @@ class TestResolveProviderClientMainRuntimeCustom:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         from agent.auxiliary_client import resolve_provider_client
+
         # main_runtime with key but no base_url → must fall through
         client, _model = resolve_provider_client(
             "custom",
@@ -439,6 +536,7 @@ class TestResolveProviderClientMainRuntimeCustom:
         """explicit_base_url still wins over main_runtime — the caller's
         explicit argument is the strongest signal."""
         from agent.auxiliary_client import resolve_provider_client
+
         main_runtime = {
             "base_url": "https://main-runtime.example.com/v1",
             "api_key": "sk-main",
@@ -465,6 +563,7 @@ class TestBareNamedAuxCredentialSurvivesAsyncRebuild:
 
     def _cfg(self):
         import sys
+
         return {
             "model": {"provider": "clawk-gw", "default": "main-model"},
             "providers": {
@@ -475,20 +574,29 @@ class TestBareNamedAuxCredentialSurvivesAsyncRebuild:
                     "extra_headers": {"x-gw-session": "aux-session-tag"},
                 },
             },
-            "auxiliary": {"compression": {"provider": "clawk-gw", "model": "aux-model"}},
+            "auxiliary": {
+                "compression": {"provider": "clawk-gw", "model": "aux-model"}
+            },
         }
 
     @staticmethod
     def _wire_headers(client):
         """Headers the SDK would put on a request (after its own auth refresh), not the config view."""
         from openai._models import FinalRequestOptions
-        return client._build_headers(FinalRequestOptions(method="post", url="/chat/completions"))
+
+        return client._build_headers(
+            FinalRequestOptions(method="post", url="/chat/completions")
+        )
 
     def test_async_task_client_carries_key_cmd_bearer_and_extra_headers(self, tmp_path):
         import asyncio
+
         _write_config(tmp_path, self._cfg())
         from agent.auxiliary_client import resolve_provider_client
-        client, _model = resolve_provider_client("clawk-gw", "aux-model", async_mode=True, task="compression")
+
+        client, _model = resolve_provider_client(
+            "clawk-gw", "aux-model", async_mode=True, task="compression"
+        )
         assert client is not None
         asyncio.run(client._refresh_api_key())
         headers = self._wire_headers(client)
@@ -498,9 +606,13 @@ class TestBareNamedAuxCredentialSurvivesAsyncRebuild:
     def test_sync_to_async_rebuild_keeps_credential_and_headers(self, tmp_path):
         """The fallback-candidate ladder rebuilds a resolved sync client through ``_to_async_client``."""
         import asyncio
+
         _write_config(tmp_path, self._cfg())
         from agent.auxiliary_client import _to_async_client, resolve_provider_client
-        sync_client, model = resolve_provider_client("clawk-gw", "aux-model", task="compression")
+
+        sync_client, model = resolve_provider_client(
+            "clawk-gw", "aux-model", task="compression"
+        )
         sync_client._refresh_api_key()  # what the SDK does in _prepare_options before each request
         assert self._wire_headers(sync_client)["authorization"] == "Bearer vk-test-1234"
         async_client, _ = _to_async_client(sync_client, model)
@@ -520,7 +632,13 @@ class TestKeyedCustomProviderReasoningWire:
 
     _KEYED = {
         "model": {"default": "vendor/model", "provider": "groq"},
-        "providers": {"groq": {"name": "groq", "api": "https://api.groq.com/openai/v1", "api_key": "k"}},
+        "providers": {
+            "groq": {
+                "name": "groq",
+                "api": "https://api.groq.com/openai/v1",
+                "api_key": "k",
+            }
+        },
     }
 
     @pytest.mark.parametrize("provider", ["groq", "main", "custom:groq"])
@@ -529,31 +647,56 @@ class TestKeyedCustomProviderReasoningWire:
         configured 'medium' is clamped to 'default' — the bare-key case goes through ``call_llm``."""
         _write_config(tmp_path, self._KEYED)
         from agent.auxiliary_client import _build_call_kwargs, call_llm
-        common = dict(reasoning_config={"enabled": True, "effort": "medium"}, base_url="https://api.groq.com/openai/v1")
+
+        common = dict(
+            reasoning_config={"enabled": True, "effort": "medium"},
+            base_url="https://api.groq.com/openai/v1",
+        )
         if provider == "groq":
             client = MagicMock(base_url=common["base_url"])
-            with patch("agent.auxiliary_client._get_cached_client", return_value=(client, "vendor/model")), \
-                    patch("agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _t, **_kw: resp):
-                call_llm(provider=provider, model="vendor/model", messages=[{"role": "user", "content": "hi"}], **common)
+            with (
+                patch(
+                    "agent.auxiliary_client._get_cached_client",
+                    return_value=(client, "vendor/model"),
+                ),
+                patch(
+                    "agent.auxiliary_client._validate_llm_response",
+                    side_effect=lambda resp, _t, **_kw: resp,
+                ),
+            ):
+                call_llm(
+                    provider=provider,
+                    model="vendor/model",
+                    messages=[{"role": "user", "content": "hi"}],
+                    **common,
+                )
             kwargs = client.chat.completions.create.call_args.kwargs
         else:
-            kwargs = _build_call_kwargs(provider, "vendor/model", [{"role": "user", "content": "hi"}], **common)
+            kwargs = _build_call_kwargs(
+                provider, "vendor/model", [{"role": "user", "content": "hi"}], **common
+            )
         assert kwargs.get("reasoning_effort") == "default"
         assert "reasoning" not in (kwargs.get("extra_body") or {})
 
     def test_profile_backed_and_unknown_providers_keep_their_wire(self, tmp_path):
         _write_config(tmp_path, self._KEYED)
         from agent.auxiliary_client import _build_call_kwargs
+
         nested = {"reasoning": {"enabled": True, "effort": "medium"}}
         # Aggregator profile: nested extra_body.reasoning is its wire; unchanged.
         kwargs = _build_call_kwargs(
-            "openrouter", "vendor/model", [{"role": "user", "content": "hi"}],
-            reasoning_config={"enabled": True, "effort": "medium"}, base_url="https://openrouter.ai/api/v1",
+            "openrouter",
+            "vendor/model",
+            [{"role": "user", "content": "hi"}],
+            reasoning_config={"enabled": True, "effort": "medium"},
+            base_url="https://openrouter.ai/api/v1",
         )
         assert kwargs["extra_body"] == nested and "reasoning_effort" not in kwargs
         # No keyed entry, no base_url, no profile: generic fallback, never the custom projection.
         kwargs = _build_call_kwargs(
-            "someunknown", "vendor/model", [{"role": "user", "content": "hi"}],
+            "someunknown",
+            "vendor/model",
+            [{"role": "user", "content": "hi"}],
             reasoning_config={"enabled": True, "effort": "medium"},
         )
         assert kwargs["extra_body"] == nested and "reasoning_effort" not in kwargs
@@ -571,39 +714,76 @@ class TestAuxInheritsCustomProviderExtraBody:
         return {
             "model": {"default": "some-model", "provider": "custom:my-proxy"},
             "custom_providers": [
-                {"name": "my-proxy", "base_url": self._PROXY, "model": "some-model", "api_key": "sk-x",
-                 "extra_body": {"user": "proxy-user", "metadata": {"tier": "entry"}}},
-                {"name": "other-proxy", "base_url": "https://other.example/v1", "api_key": "sk-y",
-                 "extra_body": {"user": "other-user"}},
+                {
+                    "name": "my-proxy",
+                    "base_url": self._PROXY,
+                    "model": "some-model",
+                    "api_key": "sk-x",
+                    "extra_body": {"user": "proxy-user", "metadata": {"tier": "entry"}},
+                },
+                {
+                    "name": "other-proxy",
+                    "base_url": "https://other.example/v1",
+                    "api_key": "sk-y",
+                    "extra_body": {"user": "other-user"},
+                },
             ],
             "auxiliary": auxiliary,
         }
 
     def _sent_extra_body(self, main_runtime=None, **call):
         from agent.auxiliary_client import call_llm
+
         sent = {}
 
         def fake_create(**kwargs):
             sent.update(kwargs)
             return MagicMock()
 
-        with patch("openai.resources.chat.completions.Completions.create", side_effect=fake_create), \
-                patch("agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _t, **_kw: resp):
-            call_llm(task="approval", messages=[{"role": "user", "content": "hi"}], main_runtime=main_runtime, **call)
+        with (
+            patch(
+                "openai.resources.chat.completions.Completions.create",
+                side_effect=fake_create,
+            ),
+            patch(
+                "agent.auxiliary_client._validate_llm_response",
+                side_effect=lambda resp, _t, **_kw: resp,
+            ),
+        ):
+            call_llm(
+                task="approval",
+                messages=[{"role": "user", "content": "hi"}],
+                main_runtime=main_runtime,
+                **call,
+            )
         assert sent, "request never reached the transport"
         return sent.get("extra_body") or {}
 
-    @pytest.mark.parametrize("main_runtime", [
-        None,
-        {"provider": "custom", "model": "some-model", "base_url": _PROXY, "api_key": "sk-x"},
-    ], ids=["config-main", "live-runtime"])
-    def test_approval_with_empty_task_extra_body_inherits_entry_body(self, tmp_path, main_runtime):
+    @pytest.mark.parametrize(
+        "main_runtime",
+        [
+            None,
+            {
+                "provider": "custom",
+                "model": "some-model",
+                "base_url": _PROXY,
+                "api_key": "sk-x",
+            },
+        ],
+        ids=["config-main", "live-runtime"],
+    )
+    def test_approval_with_empty_task_extra_body_inherits_entry_body(
+        self, tmp_path, main_runtime
+    ):
         _write_config(tmp_path, self._config(approval={"extra_body": {}}))
         body = self._sent_extra_body(main_runtime=main_runtime)
         assert body["user"] == "proxy-user"
 
     def test_task_and_caller_keys_win_over_entry(self, tmp_path):
-        _write_config(tmp_path, self._config(approval={"extra_body": {"metadata": {"tier": "task"}}}))
+        _write_config(
+            tmp_path,
+            self._config(approval={"extra_body": {"metadata": {"tier": "task"}}}),
+        )
         body = self._sent_extra_body(extra_body={"user": "caller-user"})
         assert body["user"] == "caller-user"
         assert body["metadata"] == {"tier": "task"}
@@ -611,13 +791,20 @@ class TestAuxInheritsCustomProviderExtraBody:
     def test_other_destinations_do_not_inherit(self, tmp_path):
         _write_config(tmp_path, self._config())
         from agent.auxiliary_client import _build_call_kwargs
+
         msgs = [{"role": "user", "content": "hi"}]
         # A fallback to a built-in never carries the custom entry's body.
-        openrouter = _build_call_kwargs("openrouter", "vendor/model", msgs, base_url="https://openrouter.ai/api/v1")
+        openrouter = _build_call_kwargs(
+            "openrouter", "vendor/model", msgs, base_url="https://openrouter.ai/api/v1"
+        )
         assert "user" not in (openrouter.get("extra_body") or {})
         # A fallback to another named entry carries ITS body, not the primary's.
-        other = _build_call_kwargs("custom:other-proxy", "m", msgs, base_url="https://other.example/v1/")
+        other = _build_call_kwargs(
+            "custom:other-proxy", "m", msgs, base_url="https://other.example/v1/"
+        )
         assert other["extra_body"]["user"] == "other-user"
         # A custom endpoint no entry describes gets nothing.
-        stray = _build_call_kwargs("custom", "some-model", msgs, base_url="https://stray.example/v1")
+        stray = _build_call_kwargs(
+            "custom", "some-model", msgs, base_url="https://stray.example/v1"
+        )
         assert "user" not in (stray.get("extra_body") or {})

@@ -51,14 +51,22 @@ def _packaged_resources_dir(desktop_dir: Path) -> Optional[Path]:
     if executable is None:
         return None
     # macOS: …/Clawksis.app/Contents/MacOS/Clawksis → …/Contents/Resources
-    return executable.parent.parent / "Resources" if sys.platform == "darwin" else executable.parent / "resources"
+    return (
+        executable.parent.parent / "Resources"
+        if sys.platform == "darwin"
+        else executable.parent / "resources"
+    )
 
 
 # The module files the renderer fetches before any app code runs: Vite emits
 # them as `<script type="module" src>` plus `<link rel="modulepreload" href>`.
-_HTML_TAG_WITH_URL = re.compile(r"""<(?:script|link)\b[^>]*\b(?:src|href)=["']([^"']+)["'][^>]*>""", re.IGNORECASE)
+_HTML_TAG_WITH_URL = re.compile(
+    r"""<(?:script|link)\b[^>]*\b(?:src|href)=["']([^"']+)["'][^>]*>""", re.IGNORECASE
+)
 
-_MODULE_TAG = re.compile(r"""\btype=["']module["']|\brel=["']modulepreload["']""", re.IGNORECASE)
+_MODULE_TAG = re.compile(
+    r"""\btype=["']module["']|\brel=["']modulepreload["']""", re.IGNORECASE
+)
 
 
 def _renderer_bundle_torn(dist_dir: Path) -> bool:
@@ -70,14 +78,18 @@ def _renderer_bundle_torn(dist_dir: Path) -> bool:
     unreadable index or one naming nothing checkable is NOT torn.
     """
     try:
-        html = (dist_dir / "index.html").read_text(encoding="utf-8-sig", errors="replace")
+        html = (dist_dir / "index.html").read_text(
+            encoding="utf-8-sig", errors="replace"
+        )
     except OSError:
         return False
 
     for match in _HTML_TAG_WITH_URL.finditer(html):
         href = match.group(1)
         # Absolute/CDN URLs aren't part of this bundle's generation.
-        if not _MODULE_TAG.search(match.group(0)) or re.match(r"^[a-z]+:|^//", href, re.IGNORECASE):
+        if not _MODULE_TAG.search(match.group(0)) or re.match(
+            r"^[a-z]+:|^//", href, re.IGNORECASE
+        ):
             continue
         rel = href.split("?", 1)[0].split("#", 1)[0].lstrip("./")
         if rel and not (dist_dir / rel).exists():
@@ -98,11 +110,16 @@ def _packaged_node_pty_missing(dist_dir: Path) -> bool:
     if not (root / "package.json").is_file():
         return False
 
-    native_dirs = [root / "build" / "Release", *(root / "prebuilds").glob(f"{sys.platform}-*")]
+    native_dirs = [
+        root / "build" / "Release",
+        *(root / "prebuilds").glob(f"{sys.platform}-*"),
+    ]
     return not any(next(d.rglob("*.node"), None) for d in native_dirs if d.is_dir())
 
 
-def _desktop_build_needed(desktop_dir: Path, project_root: Path, *, source_mode: bool) -> bool:
+def _desktop_build_needed(
+    desktop_dir: Path, project_root: Path, *, source_mode: bool
+) -> bool:
     """True when the desktop build output is stale, missing, torn, or built in the other mode."""
     if source_mode:
         if not _desktop_dist_exists(desktop_dir):
@@ -114,16 +131,26 @@ def _desktop_build_needed(desktop_dir: Path, project_root: Path, *, source_mode:
     # the intact SOURCE tree, not the half-replaced output.
     dist_dir = _renderer_bundle_dir(desktop_dir, source_mode=source_mode)
     if dist_dir is not None and _renderer_bundle_torn(dist_dir):
-        print(f"  ⚠ A previous update left the desktop bundle incomplete ({dist_dir}); rebuilding it")
+        print(
+            f"  ⚠ A previous update left the desktop bundle incomplete ({dist_dir}); rebuilding it"
+        )
         return True
 
-    if not source_mode and dist_dir is not None and _packaged_node_pty_missing(dist_dir):
-        print("  ⚠ The packaged desktop app has no node-pty native binary; rebuilding it")
+    if (
+        not source_mode
+        and dist_dir is not None
+        and _packaged_node_pty_missing(dist_dir)
+    ):
+        print(
+            "  ⚠ The packaged desktop app has no node-pty native binary; rebuilding it"
+        )
         return True
 
     from clawk_cli.source_build import source_product_current
 
-    return dist_dir is None or not source_product_current(project_root, "desktop", dist_dir)
+    return dist_dir is None or not source_product_current(
+        project_root, "desktop", dist_dir
+    )
 
 
 def _packaged_desktop_current_for_head(desktop_dir: Path, project_root: Path) -> bool:
@@ -142,7 +169,9 @@ def _packaged_desktop_current_for_head(desktop_dir: Path, project_root: Path) ->
     from clawk_cli.version_info import _run_git
 
     commit = read_install_stamp(resources).get("commit")
-    if not isinstance(commit, str) or commit != _run_git(project_root, "rev-parse", "HEAD"):
+    if not isinstance(commit, str) or commit != _run_git(
+        project_root, "rev-parse", "HEAD"
+    ):
         return False
     return not _desktop_build_needed(desktop_dir, project_root, source_mode=False)
 
@@ -162,11 +191,14 @@ def _desktop_packaged_executable_in(release_dir: Path) -> Optional[Path]:
         candidates = list(release_dir.glob("mac*/Clawksis.app/Contents/MacOS/Clawksis"))
     elif sys.platform == "win32":
         candidates = [
-            release_dir / d / "Clawksis.exe" for d in ("win-unpacked", "win-ia32-unpacked", "win-arm64-unpacked")
+            release_dir / d / "Clawksis.exe"
+            for d in ("win-unpacked", "win-ia32-unpacked", "win-arm64-unpacked")
         ]
     else:
         candidates = [
-            release_dir / d / n for d in ("linux-unpacked", "linux-arm64-unpacked") for n in ("clawk", "Clawksis")
+            release_dir / d / n
+            for d in ("linux-unpacked", "linux-arm64-unpacked")
+            for n in ("clawk", "Clawksis")
         ]
 
     existing = [p for p in candidates if p.exists()]
@@ -214,7 +246,12 @@ def _rename_riding_out_file_lock(src: Path, dst: Path) -> None:
         except PermissionError as exc:
             logger.warning(
                 "desktop promotion rename %s -> %s hit a file lock (attempt %d/%d), retrying in %.1fs: %s",
-                src.name, dst.name, attempt, len(_DESKTOP_SWAP_RENAME_RETRY_DELAYS_S) + 1, delay, exc,
+                src.name,
+                dst.name,
+                attempt,
+                len(_DESKTOP_SWAP_RENAME_RETRY_DELAYS_S) + 1,
+                delay,
+                exc,
             )
             _time_mod.sleep(delay)
     os.rename(src, dst)
@@ -225,7 +262,9 @@ def _desktop_staging_dir(desktop_dir: Path) -> Path:
     swap is a rename) but not inside it, so ``release/*-unpacked`` globs never see it. Sweeps leftovers."""
     for stale in desktop_dir.glob(f"{_DESKTOP_STAGING_PREFIX}*"):
         shutil.rmtree(stale, ignore_errors=True)
-    return desktop_dir / f"{_DESKTOP_STAGING_PREFIX}{os.getpid()}-{int(_time_mod.time())}"
+    return (
+        desktop_dir / f"{_DESKTOP_STAGING_PREFIX}{os.getpid()}-{int(_time_mod.time())}"
+    )
 
 
 def _desktop_unpacked_root(exe: Path, release_dir: Path) -> Path:
@@ -275,15 +314,21 @@ def _swap_staged_desktop_app(desktop_dir: Path, staging_dir: Path) -> Optional[P
             # wait for it — only the update hand-offs do). Either way a renderer alive
             # past the rename below keeps fetching its old hashed chunks from disk and
             # dies on the next lazy import, so stop it on every platform (#109643).
-            stopped = _stop_desktop_processes_locking_build(desktop_dir, also_posix=True)
+            stopped = _stop_desktop_processes_locking_build(
+                desktop_dir, also_posix=True
+            )
             if stopped:
-                logger.info("stopped desktop processes before staged app promotion: %s", stopped)
+                logger.info(
+                    "stopped desktop processes before staged app promotion: %s", stopped
+                )
             _rename_riding_out_file_lock(live_root, previous)
         try:
             _rename_riding_out_file_lock(staged_root, live_root)
         except OSError:
             if moved_aside:
-                _rename_riding_out_file_lock(previous, live_root)  # restore; live app back as it was
+                _rename_riding_out_file_lock(
+                    previous, live_root
+                )  # restore; live app back as it was
             raise
         if moved_aside:
             shutil.rmtree(previous, ignore_errors=True)
@@ -313,10 +358,16 @@ _PE_MACHINE_AMD64 = 0x8664
 _PE_MACHINE_ARM64 = 0xAA64
 
 _PE_MACHINE_NAMES = {
-    _PE_MACHINE_I386: "x86 (32-bit)", _PE_MACHINE_AMD64: "x64 (AMD64)", _PE_MACHINE_ARM64: "ARM64",
+    _PE_MACHINE_I386: "x86 (32-bit)",
+    _PE_MACHINE_AMD64: "x64 (AMD64)",
+    _PE_MACHINE_ARM64: "ARM64",
 }
 
-_PE_MACHINE_TO_NAME = {_PE_MACHINE_ARM64: "ARM64", _PE_MACHINE_AMD64: "AMD64", _PE_MACHINE_I386: "X86"}
+_PE_MACHINE_TO_NAME = {
+    _PE_MACHINE_ARM64: "ARM64",
+    _PE_MACHINE_AMD64: "AMD64",
+    _PE_MACHINE_I386: "X86",
+}
 
 # MACHINE_ATTRIBUTES bits (processthreadsapi.h). UserEnabled means the host
 # can run user-mode code of that machine type — natively or under emulation.
@@ -325,6 +376,7 @@ _MACHINE_ATTRIBUTE_USER_ENABLED = 0x00000001
 
 def _kernel32():
     import ctypes
+
     return ctypes.WinDLL("kernel32", use_last_error=True)
 
 
@@ -333,8 +385,12 @@ def _windows_user_runnable_pe_machines() -> Optional[set]:
     AMD64-on-ARM64 emulation); None when unavailable (pre-Win11 22000) so callers fall back."""
     import ctypes
     from ctypes import wintypes
+
     kernel32 = _kernel32()
-    kernel32.GetMachineTypeAttributes.argtypes = [wintypes.USHORT, ctypes.POINTER(ctypes.c_int)]
+    kernel32.GetMachineTypeAttributes.argtypes = [
+        wintypes.USHORT,
+        ctypes.POINTER(ctypes.c_int),
+    ]
     kernel32.GetMachineTypeAttributes.restype = ctypes.c_long
 
     runnable = set()
@@ -381,12 +437,15 @@ def _parse_pe_machine(path: Path) -> int:
     """COFF machine field of the PE at ``path``; ``ValueError`` with a readable reason when it is not a
     structurally complete PE (bad magic, truncated header, section data past EOF). Header walk only."""
     import struct
+
     try:
         file_size = path.stat().st_size
     except OSError as exc:
         raise ValueError(f"unreadable: {exc}")
     if file_size < 512:
-        raise ValueError(f"file is only {file_size} bytes — far too small to be a Windows executable")
+        raise ValueError(
+            f"file is only {file_size} bytes — far too small to be a Windows executable"
+        )
     with path.open("rb") as fh:
         head = fh.read(64)
         if len(head) < 64 or head[:2] != b"MZ":
@@ -395,7 +454,9 @@ def _parse_pe_machine(path: Path) -> int:
             )
         e_lfanew = struct.unpack_from("<I", head, 0x3C)[0]
         if e_lfanew <= 0 or e_lfanew + 24 > file_size:
-            raise ValueError("corrupt DOS header: PE header offset points past end of file")
+            raise ValueError(
+                "corrupt DOS header: PE header offset points past end of file"
+            )
         fh.seek(e_lfanew)
         pe_head = fh.read(24)
         if len(pe_head) < 24 or pe_head[:4] != b"PE\x00\x00":
@@ -464,6 +525,7 @@ def _desktop_ancestor_in(desktop_dir: Path) -> Optional[int]:
     needs, and it cannot be stopped without killing this process first. Never raises."""
     try:
         import psutil
+
         release_dir = (desktop_dir / "release").resolve()
         ancestors = list(psutil.Process(os.getpid()).parents())
     except Exception:
@@ -474,7 +536,9 @@ def _desktop_ancestor_in(desktop_dir: Path) -> Optional[int]:
     return None
 
 
-def _stop_desktop_processes_locking_build(desktop_dir: Path, *, also_posix: bool = False) -> list[int]:
+def _stop_desktop_processes_locking_build(
+    desktop_dir: Path, *, also_posix: bool = False
+) -> list[int]:
     """Terminate a running desktop app whose exe lives INSIDE this build's ``release`` tree.
 
     Windows needs it everywhere: the exe lock makes the pack die with ``Access is denied``.
@@ -486,6 +550,7 @@ def _stop_desktop_processes_locking_build(desktop_dir: Path, *, also_posix: bool
         return []
     try:
         import psutil
+
         release_dir = (desktop_dir / "release").resolve()
     except Exception:
         return []
@@ -568,10 +633,12 @@ def _stop_desktop_processes_locking_build(desktop_dir: Path, *, also_posix: bool
 def _desktop_macos_bundle_id(bundle: Path) -> Optional[str]:
     """Return a bundle/framework CFBundleIdentifier for local macOS signing."""
     import plistlib
+
     info = bundle / "Contents" / "Info.plist"
     if not info.exists() and bundle.suffix == ".framework":
         candidates = list(bundle.glob("Versions/*/Resources/Info.plist")) + list(
-            bundle.glob("Resources/Info.plist"))
+            bundle.glob("Resources/Info.plist")
+        )
         if candidates:
             info = candidates[0]
     if not info.exists():
@@ -591,6 +658,7 @@ def _desktop_macos_local_signing_identity() -> Optional[str]:
         return None
     try:
         from clawk_cli.config import load_config
+
         desktop = load_config().get("desktop", {})
         if not isinstance(desktop, dict):
             return None
@@ -608,7 +676,10 @@ def _desktop_macos_local_signing_identity() -> Optional[str]:
 
 def _codesign_verify(codesign: str, app: Path, **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(  # noqa: PLW1510 -- forwarding wrapper: callers pass subprocess kwargs via **kwargs (check may arrive through it); an explicit check=False would raise TypeError
-        [codesign, "--verify", "--deep", "--strict", str(app)], capture_output=True, **kwargs)
+        [codesign, "--verify", "--deep", "--strict", str(app)],
+        capture_output=True,
+        **kwargs,
+    )
 
 
 def _macos_signature_summary(codesign: str, app: Path) -> Optional[dict]:
@@ -621,8 +692,13 @@ def _macos_signature_summary(codesign: str, app: Path) -> Optional[dict]:
     """
     try:
         info = subprocess.run(
-            [codesign, "-dv", str(app)], check=False, capture_output=True,
-            text=True, encoding="utf-8", errors="replace")
+            [codesign, "-dv", str(app)],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     except Exception:
         return None
     output = f"{info.stdout}\n{info.stderr}"
@@ -632,7 +708,7 @@ def _macos_signature_summary(codesign: str, app: Path) -> Optional[dict]:
     def field(key: str) -> Optional[str]:
         for line in output.splitlines():
             if line.startswith(f"{key}="):
-                return line[len(key) + 1:].strip() or None
+                return line[len(key) + 1 :].strip() or None
         return None
 
     team = field("TeamIdentifier")
@@ -643,7 +719,9 @@ def _macos_signature_summary(codesign: str, app: Path) -> Optional[dict]:
     }
 
 
-def _macos_signing_downgrade_error(installed: dict, rebuilt: Optional[dict]) -> Optional[str]:
+def _macos_signing_downgrade_error(
+    installed: dict, rebuilt: Optional[dict]
+) -> Optional[str]:
     """Reason to refuse swapping a publisher-signed installed app for ``rebuilt``, or None.
 
     #123748: replacing a Developer ID (Team ID) installation with a locally signed or
@@ -656,22 +734,33 @@ def _macos_signing_downgrade_error(installed: dict, rebuilt: Optional[dict]) -> 
     if not installed["team"]:
         return None
     if rebuilt is None or not rebuilt["team"]:
-        return (f"publisher-signed app (Team ID {installed['team']}) would be replaced by a "
-                "locally signed or unreadable build; kept the existing app. To update it, "
-                "sign the rebuild with the publisher identity (CSC_LINK / "
-                "APPLE_SIGNING_IDENTITY) and update again.")
+        return (
+            f"publisher-signed app (Team ID {installed['team']}) would be replaced by a "
+            "locally signed or unreadable build; kept the existing app. To update it, "
+            "sign the rebuild with the publisher identity (CSC_LINK / "
+            "APPLE_SIGNING_IDENTITY) and update again."
+        )
     if rebuilt["team"] != installed["team"]:
-        return (f"publisher Team ID {installed['team']} does not match rebuilt "
-                f"{rebuilt['team']}; kept the existing app. Check the signing identity "
-                f"in desktop.macos_signing_identity and update again.")
-    if (installed["identifier"] and rebuilt["identifier"]
-            and installed["identifier"] != rebuilt["identifier"]):
-        return (f"bundle identifier {installed['identifier']!r} does not match rebuilt "
-                f"{rebuilt['identifier']!r}; kept the existing app. Align the build's "
-                f"bundle identifier and update again.")
+        return (
+            f"publisher Team ID {installed['team']} does not match rebuilt "
+            f"{rebuilt['team']}; kept the existing app. Check the signing identity "
+            f"in desktop.macos_signing_identity and update again."
+        )
+    if (
+        installed["identifier"]
+        and rebuilt["identifier"]
+        and installed["identifier"] != rebuilt["identifier"]
+    ):
+        return (
+            f"bundle identifier {installed['identifier']!r} does not match rebuilt "
+            f"{rebuilt['identifier']!r}; kept the existing app. Align the build's "
+            f"bundle identifier and update again."
+        )
     if not rebuilt["verified"]:
-        return ("rebuilt bundle failed strict signature verification; kept the existing "
-                "app. Re-run the build; if it persists, inspect with `codesign -vvv`.")
+        return (
+            "rebuilt bundle failed strict signature verification; kept the existing "
+            "app. Re-run the build; if it persists, inspect with `codesign -vvv`."
+        )
     return None
 
 
@@ -683,16 +772,28 @@ def _desktop_macos_has_valid_real_signature(app: Path) -> bool:
         return False
     try:
         info = subprocess.run(
-            [codesign, "-dv", str(app)], check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            [codesign, "-dv", str(app)],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         output = f"{info.stdout}\n{info.stderr}"
-        if info.returncode != 0 or "TeamIdentifier=" not in output or "TeamIdentifier=not set" in output:
+        if (
+            info.returncode != 0
+            or "TeamIdentifier=" not in output
+            or "TeamIdentifier=not set" in output
+        ):
             return False
         return _codesign_verify(codesign, app, check=False).returncode == 0
     except Exception:
         return False
 
 
-def _desktop_macos_local_codesign(app: Path, *, desktop_dir: Path, identity: str = "-") -> bool:
+def _desktop_macos_local_codesign(
+    app: Path, *, desktop_dir: Path, identity: str = "-"
+) -> bool:
     """Sign a local build inside-out (Mach-O files, nested frameworks/helpers, main bundle) with the
     repo's entitlements and an identifier-pinned DR when ad-hoc — a plain ``--deep --sign -`` gives
     a cdhash-only DR (TCC re-prompts every rebuild) and strips the JIT/mic entitlements.
@@ -707,11 +808,17 @@ def _desktop_macos_local_codesign(app: Path, *, desktop_dir: Path, identity: str
         # Hardened-runtime restrictions apply to ad-hoc signatures too; signing
         # with --options runtime but WITHOUT allow-jit would leave Electron/V8
         # crashing on launch. Bail so the caller falls back to the legacy sign.
-        raise FileNotFoundError(f"desktop entitlement plists missing under {desktop_dir / 'electron'}")
+        raise FileNotFoundError(
+            f"desktop entitlement plists missing under {desktop_dir / 'electron'}"
+        )
 
     def sign_path(
-        path: Path, *, entitlements: Optional[Path] = None, identifier: Optional[str] = None,
-        runtime: bool = True) -> None:
+        path: Path,
+        *,
+        entitlements: Optional[Path] = None,
+        identifier: Optional[str] = None,
+        runtime: bool = True,
+    ) -> None:
         args = [codesign, "--force", "--sign", identity, "--timestamp=none"]
         if runtime:
             args += ["--options", "runtime"]
@@ -735,7 +842,10 @@ def _desktop_macos_local_codesign(app: Path, *, desktop_dir: Path, identity: str
             continue  # nested helper apps are signed as bundles below
         for name in files:
             fp = root_path / name
-            if name in {"chrome_crashpad_handler", "spawn-helper"} or fp.suffix in {".node", ".dylib"}:
+            if name in {"chrome_crashpad_handler", "spawn-helper"} or fp.suffix in {
+                ".node",
+                ".dylib",
+            }:
                 standalone.append(fp)
     for fp in sorted(standalone, key=lambda p: len(p.parts), reverse=True):
         sign_path(fp, runtime=False)
@@ -752,7 +862,11 @@ def _desktop_macos_local_codesign(app: Path, *, desktop_dir: Path, identity: str
         # Every nested bundle takes the inherit plist, frameworks included: under the hardened
         # runtime Electron Framework needs allow-jit in its own signature, and signing it with
         # no entitlements strips what electron-builder's afterSign step applies in a real build.
-        sign_path(bundle, entitlements=ent_inherit, identifier=_desktop_macos_bundle_id(bundle))
+        sign_path(
+            bundle,
+            entitlements=ent_inherit,
+            identifier=_desktop_macos_bundle_id(bundle),
+        )
 
     # 3) The main bundle, with the app's own entitlements.
     sign_path(app, entitlements=ent_main, identifier=_desktop_macos_bundle_id(app))
@@ -766,7 +880,12 @@ def _macos_legacy_adhoc_resign(codesign: str, app: Path) -> bool:
     prompt is recoverable, deletion is not)."""
     try:
         result = subprocess.run(
-            [codesign, "--force", "--deep", "--sign", "-", str(app)], check=False, capture_output=True, text=True, encoding="utf-8", errors="replace"
+            [codesign, "--force", "--deep", "--sign", "-", str(app)],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if result.returncode != 0:
             print(
@@ -774,13 +893,25 @@ def _macos_legacy_adhoc_resign(codesign: str, app: Path) -> bool:
                 "leaving safeStorage keychain item untouched)"
             )
             return False
-        if _codesign_verify(codesign, app, check=False, text=True, encoding="utf-8", errors="replace").returncode != 0:
+        if (
+            _codesign_verify(
+                codesign,
+                app,
+                check=False,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            ).returncode
+            != 0
+        ):
             print(
                 "  (warning: legacy ad-hoc re-sign did not pass strict verification; "
                 "leaving safeStorage keychain item untouched)"
             )
             return False
-        print("  → macOS desktop re-signed (legacy ad-hoc); safeStorage keychain item left untouched")
+        print(
+            "  → macOS desktop re-signed (legacy ad-hoc); safeStorage keychain item left untouched"
+        )
         return True
     except Exception as exc:
         print(f"  (warning: macOS relaunch fixup skipped: {exc})")
@@ -788,8 +919,11 @@ def _macos_legacy_adhoc_resign(codesign: str, app: Path) -> bool:
 
 
 def _desktop_macos_relaunchable_fixup(
-    desktop_dir: Path, *, publisher_signing_configured: Optional[bool] = None,
-    release_dir: Optional[Path] = None) -> bool:
+    desktop_dir: Path,
+    *,
+    publisher_signing_configured: Optional[bool] = None,
+    release_dir: Optional[Path] = None,
+) -> bool:
     """Re-sign a locally-built macOS app so in-place self-update doesn't reset TCC grants.
 
     A rebuilt ad-hoc bundle (new cdhash, no stable Designated Requirement) reports
@@ -808,7 +942,8 @@ def _desktop_macos_relaunchable_fixup(
         return True
     if publisher_signing_configured is None:
         publisher_signing_configured = bool(
-            os.environ.get("CSC_LINK") or os.environ.get("APPLE_SIGNING_IDENTITY"))
+            os.environ.get("CSC_LINK") or os.environ.get("APPLE_SIGNING_IDENTITY")
+        )
     if publisher_signing_configured:
         return True
     # ``release_dir`` (stage-and-swap, #86443): sign the STAGED bundle before it is promoted, so the live
@@ -842,13 +977,19 @@ def _desktop_macos_relaunchable_fixup(
         if not str(replaces).endswith(".app") or not replaces.is_dir():
             replaces = None
     try:
-        if _desktop_macos_local_codesign(app, desktop_dir=desktop_dir, identity=identity):
+        if _desktop_macos_local_codesign(
+            app, desktop_dir=desktop_dir, identity=identity
+        ):
             label = "keychain identity" if configured else "stable ad-hoc identity"
-            print(f"  → macOS desktop signed with {label}; TCC grants persist across rebuilds")
+            print(
+                f"  → macOS desktop signed with {label}; TCC grants persist across rebuilds"
+            )
             return True
     except Exception as exc:
         if configured:
-            target_sig = _macos_signature_summary(codesign, replaces) if replaces else None
+            target_sig = (
+                _macos_signature_summary(codesign, replaces) if replaces else None
+            )
             if target_sig and target_sig["team"]:
                 # #123748: a publisher-signed (Team ID) install must never be degraded to a
                 # locally signed or ad-hoc build — the weaker signature changes the anchor
@@ -874,7 +1015,9 @@ def _desktop_macos_relaunchable_fixup(
                 "certificate anchor)"
             )
             try:
-                if _desktop_macos_local_codesign(app, desktop_dir=desktop_dir, identity="-"):
+                if _desktop_macos_local_codesign(
+                    app, desktop_dir=desktop_dir, identity="-"
+                ):
                     print(
                         "  → macOS desktop signed with stable ad-hoc identity; "
                         "TCC grants persist across rebuilds"
@@ -882,7 +1025,9 @@ def _desktop_macos_relaunchable_fixup(
                     return True
             except Exception as adhoc_exc:
                 exc = adhoc_exc
-        print(f"  (warning: stable macOS signing failed ({exc}); using legacy ad-hoc sign)")
+        print(
+            f"  (warning: stable macOS signing failed ({exc}); using legacy ad-hoc sign)"
+        )
     return _macos_legacy_adhoc_resign(codesign, app)
 
 
@@ -937,6 +1082,7 @@ def _running_macos_app_bundles() -> set[Path]:
     under: Electron loads ``app.asar`` chunks and helper apps lazily, so renaming its bundle away
     and deleting the old tree crashes the live app (the detached updater waits for it to exit)."""
     import psutil
+
     bundles: set[Path] = set()
     for proc in psutil.process_iter(["exe"]):
         exe = proc.info.get("exe") or ""
@@ -948,10 +1094,14 @@ def _running_macos_app_bundles() -> set[Path]:
 def _stage_macos_bundle_copy(src: Path, dst: Path) -> None:
     """``ditto`` copies a bundle with its signature, xattrs and symlinks intact (``shutil`` drops
     the resource-fork metadata codesign verifies)."""
-    subprocess.run(["/usr/bin/ditto", str(src), str(dst)], check=True, capture_output=True)
+    subprocess.run(
+        ["/usr/bin/ditto", str(src), str(dst)], check=True, capture_output=True
+    )
 
 
-def _install_rebuilt_desktop_app(desktop_dir: Path, candidates: list[Path]) -> tuple[list[Path], list[str]]:
+def _install_rebuilt_desktop_app(
+    desktop_dir: Path, candidates: list[Path]
+) -> tuple[list[Path], list[str]]:
     """Copy the rebuilt macOS bundle into every stale or missing installed ``Clawksis.app`` in
     *candidates* (``_installed_desktop_apps()``) (#52339).
 
@@ -973,7 +1123,8 @@ def _install_rebuilt_desktop_app(desktop_dir: Path, candidates: list[Path]) -> t
         return [], []
     # .../Clawksis.app/Contents/MacOS/Clawksis -> .../Clawksis.app
     return _install_rebuilt_macos_bundles(
-        rebuilt_exe.parents[2], candidates, running=_running_macos_app_bundles())
+        rebuilt_exe.parents[2], candidates, running=_running_macos_app_bundles()
+    )
 
 
 def _refresh_installed_desktop_apps(desktop_dir: Path) -> None:
@@ -986,14 +1137,17 @@ def _refresh_installed_desktop_apps(desktop_dir: Path) -> None:
     installed, problems = _install_rebuilt_desktop_app(desktop_dir, owned)
     for app in installed:
         if app in missing:
-            print(f"  ✓ Reinstalled the Desktop app at {app}: it had been removed, so Finder, "
-                  "the Dock and Spotlight could not find Clawksis")
+            print(
+                f"  ✓ Reinstalled the Desktop app at {app}: it had been removed, so Finder, "
+                "the Dock and Spotlight could not find Clawksis"
+            )
         else:
             print(f"  ✓ Installed the rebuilt Desktop app at {app}")
     for problem in problems:
         print(f"  ⚠ {problem}")
     from clawk_cli.gui_uninstall import desktop_install_record
     from utils import atomic_json_write, read_json_or_empty
+
     # A copy that failed to reinstall stays recorded, so the next update retries it. Every
     # `clawk desktop` launch lands here: write only when the set changed.
     apps = [str(app) for app in owned]
@@ -1016,7 +1170,11 @@ def _update_owned_macos_bundles(candidates: list[Path]) -> list[Path]:
     owned = []
     for app in candidates:
         try:
-            stamp = json.loads((app / "Contents" / "Resources" / "install-stamp.json").read_text(encoding="utf-8-sig"))
+            stamp = json.loads(
+                (app / "Contents" / "Resources" / "install-stamp.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
         except (OSError, ValueError):
             continue
         if isinstance(stamp, dict) and stamp.get("updateMechanism", "self") == "self":
@@ -1032,7 +1190,11 @@ def _owns_installed_desktop_apps() -> bool:
         return False
     from clawk_cli.main import PROJECT_ROOT
     from clawk_constants import get_default_clawk_root
-    return Path(PROJECT_ROOT).resolve() == (get_default_clawk_root() / "clawksis-agent").resolve()
+
+    return (
+        Path(PROJECT_ROOT).resolve()
+        == (get_default_clawk_root() / "clawksis-agent").resolve()
+    )
 
 
 def _installed_desktop_apps() -> list[Path]:
@@ -1047,6 +1209,7 @@ def _installed_desktop_apps() -> list[Path]:
         return []
     from clawk_cli.gui_uninstall import desktop_install_record, packaged_gui_app_paths
     from utils import read_json_or_empty
+
     candidates = packaged_gui_app_paths()
     if owned := _update_owned_macos_bundles(candidates):
         return owned
@@ -1056,7 +1219,9 @@ def _installed_desktop_apps() -> list[Path]:
     return [app for app in candidates if str(app) in recorded and not app.exists()]
 
 
-def _installed_desktop_launch_target(desktop_dir: Path, packaged_executable: Path) -> Path:
+def _installed_desktop_launch_target(
+    desktop_dir: Path, packaged_executable: Path
+) -> Path:
     """The executable ``clawk desktop`` launches: the installed app once it IS the checkout build.
 
     Finder, the Dock and Spotlight open the installed ``Clawksis.app``; launching the ``release/``
@@ -1076,7 +1241,8 @@ def _installed_desktop_launch_target(desktop_dir: Path, packaged_executable: Pat
 
 
 def _install_rebuilt_macos_bundles(
-        rebuilt_app: Path, candidates: list[Path], *, running: set[Path]) -> tuple[list[Path], list[str]]:
+    rebuilt_app: Path, candidates: list[Path], *, running: set[Path]
+) -> tuple[list[Path], list[str]]:
     """Stage-and-swap ``rebuilt_app`` into each bundle path in ``candidates`` that is missing or
     whose ``app.asar`` differs. The rebuilt bundle already carries the stable local signing identity and no
     quarantine xattr (``_desktop_macos_relaunchable_fixup``); ``ditto`` preserves both, so nothing
@@ -1100,7 +1266,8 @@ def _install_rebuilt_macos_bundles(
         if app.resolve() in running:
             problems.append(
                 f"{app} is running and was not refreshed; quit Clawksis Desktop and run "
-                "`clawk update` again (or update from inside the app)")
+                "`clawk update` again (or update from inside the app)"
+            )
             continue
         if codesign:
             installed_sig = _macos_signature_summary(codesign, app)
@@ -1130,7 +1297,11 @@ def _force_adhoc_macos_signing(env: dict, *, source_mode: bool) -> bool:
     notarized signature. No-op for source runs, off-macOS, with a real identity, or when pinned."""
     if sys.platform != "darwin" or source_mode:
         return False
-    if env.get("CSC_LINK") or env.get("APPLE_SIGNING_IDENTITY") or "CSC_IDENTITY_AUTO_DISCOVERY" in env:
+    if (
+        env.get("CSC_LINK")
+        or env.get("APPLE_SIGNING_IDENTITY")
+        or "CSC_IDENTITY_AUTO_DISCOVERY" in env
+    ):
         return False
     env["CSC_IDENTITY_AUTO_DISCOVERY"] = "false"
     return True
@@ -1148,7 +1319,9 @@ def _desktop_linux_needs_no_sandbox() -> bool:
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         return False
     try:
-        with open("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", encoding="utf-8") as f:
+        with open(
+            "/proc/sys/kernel/apparmor_restrict_unprivileged_userns", encoding="utf-8"
+        ) as f:
             return f.read().strip() == "1"
     except OSError:
         return False
@@ -1166,14 +1339,20 @@ def _desktop_linux_userns_sandbox_available() -> bool:
         return (
             subprocess.run(
                 [unshare, "--user", "--map-root-user", "true"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
             ).returncode
-            == 0)
+            == 0
+        )
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
-def _sandbox_helper_lstat(packaged_executable: Path) -> tuple[Path, Optional[os.stat_result]]:
+def _sandbox_helper_lstat(
+    packaged_executable: Path,
+) -> tuple[Path, Optional[os.stat_result]]:
     """``(chrome-sandbox path, lstat or None)`` — lstat so a symlink is inspected, not followed."""
     sandbox = packaged_executable.parent / "chrome-sandbox"
     try:
@@ -1201,7 +1380,9 @@ def _desktop_linux_sandbox_fixup(packaged_executable: Path) -> bool:
 
     sandbox, st = _sandbox_helper_lstat(packaged_executable)
     if not sandbox.exists():
-        print(f"✗ Clawksis Desktop is missing Electron's Linux sandbox helper: {sandbox}")
+        print(
+            f"✗ Clawksis Desktop is missing Electron's Linux sandbox helper: {sandbox}"
+        )
         return False
     # Reject symlinks — chown/chmod must not follow an attacker-controlled link.
     if st is None:
@@ -1220,7 +1401,9 @@ def _desktop_linux_sandbox_fixup(packaged_executable: Path) -> bool:
 
     sudo = shutil.which("sudo")
     if not sudo:
-        print("✗ Clawksis Desktop requires sudo to configure Electron's Linux sandbox helper.")
+        print(
+            "✗ Clawksis Desktop requires sudo to configure Electron's Linux sandbox helper."
+        )
         return False
 
     print("→ Configuring Electron Linux sandbox helper (sudo required)...")
@@ -1235,7 +1418,10 @@ def _desktop_linux_sandbox_fixup(packaged_executable: Path) -> bool:
         non_interactive = sys.stdin is None or not sys.stdin.isatty()
     except ValueError:  # stdin closed under us
         non_interactive = True
-    for command in ([sudo, "chown", "root:root", str(sandbox)], [sudo, "chmod", "4755", str(sandbox)]):
+    for command in (
+        [sudo, "chown", "root:root", str(sandbox)],
+        [sudo, "chmod", "4755", str(sandbox)],
+    ):
         if non_interactive:
             command.insert(1, "-n")
         try:
@@ -1260,12 +1446,21 @@ def _desktop_linux_needs_disable_setuid_sandbox(packaged_executable: Path) -> bo
     if sys.platform != "linux":
         return False
     _sandbox, st = _sandbox_helper_lstat(packaged_executable)
-    return st is not None and stat.S_ISREG(st.st_mode) and not _sandbox_helper_is_setuid_root(st)
+    return (
+        st is not None
+        and stat.S_ISREG(st.st_mode)
+        and not _sandbox_helper_is_setuid_root(st)
+    )
 
 
-_LINUX_PASSWORD_STORES = frozenset({"gnome-libsecret", "kwallet", "kwallet5", "kwallet6", "basic"})
+_LINUX_PASSWORD_STORES = frozenset(
+    {"gnome-libsecret", "kwallet", "kwallet5", "kwallet6", "basic"}
+)
 
-_GPU_FLAG_WORDS = {**dict.fromkeys(("1", "true", "yes", "on"), "1"), **dict.fromkeys(("0", "false", "no", "off"), "0")}
+_GPU_FLAG_WORDS = {
+    **dict.fromkeys(("1", "true", "yes", "on"), "1"),
+    **dict.fromkeys(("0", "false", "no", "off"), "0"),
+}
 
 
 def _detect_linux_password_store() -> str | None:
@@ -1282,13 +1477,18 @@ def _detect_linux_password_store() -> str | None:
     with contextlib.suppress(Exception):
         result = subprocess.run(
             [
-                "dbus-send", "--session", "--print-reply", "--reply-timeout=2000",
+                "dbus-send",
+                "--session",
+                "--print-reply",
+                "--reply-timeout=2000",
                 "--dest=org.freedesktop.secrets",
                 "/org/freedesktop/secrets",
                 "org.freedesktop.DBus.Peer.Ping",
             ],
             capture_output=True,
-            timeout=5, check=False)
+            timeout=5,
+            check=False,
+        )
         if result.returncode == 0:
             return "gnome-libsecret"
     return None
@@ -1306,6 +1506,7 @@ def _desktop_launch_options() -> tuple[list[str], str, str, str, bool]:
     renderer_accessibility = True
     try:
         from clawk_cli.config import load_config
+
         desktop_cfg = (load_config() or {}).get("desktop") or {}
     except Exception:
         return flags, disable_gpu, password_store, ozone_hint, renderer_accessibility
@@ -1352,8 +1553,14 @@ def _register_linux_desktop_entry(defer: bool = False):
     pending. Terminal, detached and ``--build-only`` launches install synchronously.
     """
     from clawk_cli.main import PROJECT_ROOT
+
     try:
-        from clawk_cli.linux_desktop_entry import DeferredDesktopEntryInstall, install_desktop_entry, is_supported
+        from clawk_cli.linux_desktop_entry import (
+            DeferredDesktopEntryInstall,
+            install_desktop_entry,
+            is_supported,
+        )
+
         if not is_supported():
             return None
         if defer:
@@ -1369,7 +1576,9 @@ def _register_linux_desktop_entry(defer: bool = False):
 
 
 def _promote_staged_desktop_app(
-    desktop_dir: Path, staging_dir: Path, *,
+    desktop_dir: Path,
+    staging_dir: Path,
+    *,
     integrity_check: Optional[Callable[[Path], Optional[str]]] = None,
 ) -> Path:
     """Sign and verify before swapping; the default integrity check is Windows PE validation."""
@@ -1383,9 +1592,13 @@ def _promote_staged_desktop_app(
         # signature was never established — fold the refusal into the same
         # previous-app-kept error path the integrity check uses.
         _discard_desktop_staging(staging_dir)
-        print("✗ The rebuilt desktop app could not be signed with a stable identity; "
-              "not promoting it.")
-        raise RuntimeError(f"Desktop signing refused the staged build. {_PREVIOUS_APP_KEPT}")
+        print(
+            "✗ The rebuilt desktop app could not be signed with a stable identity; "
+            "not promoting it."
+        )
+        raise RuntimeError(
+            f"Desktop signing refused the staged build. {_PREVIOUS_APP_KEPT}"
+        )
 
     # Validate only staging. The swap owns live-app rollback; raw in-place
     # pack backups are not part of this transaction.
@@ -1393,19 +1606,26 @@ def _promote_staged_desktop_app(
         integrity_check = _desktop_exe_integrity_error
     error = (
         integrity_check(staged_executable)
-        if staged_executable is not None and integrity_check is not None else None
+        if staged_executable is not None and integrity_check is not None
+        else None
     )
     if staged_executable is None or error is not None:
         _discard_desktop_staging(staging_dir)
         if staged_executable is None:
             print(f"✗ Desktop build produced no launchable app in {staging_dir}")
         else:
-            print(f"✗ The built {staged_executable.name} failed its integrity check: {error}\n"
-                  f"    at: {staged_executable}")
-        raise RuntimeError(f"Desktop build produced no launchable app. {_PREVIOUS_APP_KEPT}")
+            print(
+                f"✗ The built {staged_executable.name} failed its integrity check: {error}\n"
+                f"    at: {staged_executable}"
+            )
+        raise RuntimeError(
+            f"Desktop build produced no launchable app. {_PREVIOUS_APP_KEPT}"
+        )
     packaged_executable = _swap_staged_desktop_app(desktop_dir, staging_dir)
     if packaged_executable is None:
-        print(f"✗ Could not install the rebuilt desktop app into {desktop_dir / 'release'}")
+        print(
+            f"✗ Could not install the rebuilt desktop app into {desktop_dir / 'release'}"
+        )
         raise RuntimeError(f"Could not publish the desktop build. {_PREVIOUS_APP_KEPT}")
     return packaged_executable
 
@@ -1416,30 +1636,59 @@ def _diagnose_esbuild_ignore_scripts(output: Optional[str]) -> None:
     ``@esbuild/<platform>`` optional dependency is absent) — #53082. Best-effort: only
     adds context, never masks the original error."""
     text = output or ""
-    if not ("@esbuild/" in text and "could not be found" in text) and "ignore-scripts" not in text:
+    if (
+        not ("@esbuild/" in text and "could not be found" in text)
+        and "ignore-scripts" not in text
+    ):
         return
     print("  ⚠ This looks like esbuild's native binary is missing — commonly caused by")
-    print("    `ignore-scripts=true` in your npm config, which skips esbuild's postinstall")
+    print(
+        "    `ignore-scripts=true` in your npm config, which skips esbuild's postinstall"
+    )
     print("    that stages the @esbuild/<platform> package.")
-    print("    Fix: run `npm config get ignore-scripts` — if true, either set it to false")
-    print("    (`npm config set ignore-scripts false`), then reinstall: `npm ci` in the repo root,")
-    print("    or stage the binary directly: `node node_modules/esbuild/install.js` in apps/desktop.")
+    print(
+        "    Fix: run `npm config get ignore-scripts` — if true, either set it to false"
+    )
+    print(
+        "    (`npm config set ignore-scripts false`), then reinstall: `npm ci` in the repo root,"
+    )
+    print(
+        "    or stage the binary directly: `node node_modules/esbuild/install.js` in apps/desktop."
+    )
 
 
-def build_prepared_desktop(desktop_dir: Path, *, source_mode: bool, npm: str, env: dict,
-                           icons: Path | None = None) -> Optional[Path]:
+def build_prepared_desktop(
+    desktop_dir: Path,
+    *,
+    source_mode: bool,
+    npm: str,
+    env: dict,
+    icons: Path | None = None,
+) -> Optional[Path]:
     """Build prepared desktop sources, then publish the verified staged app."""
-    from clawk_cli.source_build import run_in_custody  # npm writes the checkout: update custody
+    from clawk_cli.source_build import (
+        run_in_custody,
+    )  # npm writes the checkout: update custody
 
-    if not source_mode and sys.platform == "win32" and (ancestor := _desktop_ancestor_in(desktop_dir)):
+    if (
+        not source_mode
+        and sys.platform == "win32"
+        and (ancestor := _desktop_ancestor_in(desktop_dir))
+    ):
         # The Desktop running this build holds the exe lock the promotion rename needs,
         # and stopping it would kill this process first (#123499). Packing would only
         # produce a build that cannot be installed; leave the app as it is. Its content
         # stamp stays stale, so `clawk desktop` run outside the app rebuilds it
         # (_desktop_build_needed), and the in-app update completes with desktop=True.
-        print(f"  ⚠ Skipped rebuilding the desktop app: this update is running inside it (pid {ancestor}),")
-        print("    and Windows locks a running app's files. Quit Clawksis Desktop and run `clawk desktop`")
-        print("    from a terminal, or use Update now in Settings → About, to rebuild and reopen it.")
+        print(
+            f"  ⚠ Skipped rebuilding the desktop app: this update is running inside it (pid {ancestor}),"
+        )
+        print(
+            "    and Windows locks a running app's files. Quit Clawksis Desktop and run `clawk desktop`"
+        )
+        print(
+            "    from a terminal, or use Update now in Settings → About, to rebuild and reopen it."
+        )
         return None
     build_label = "source build" if source_mode else "packaged app"
     build_env = dict(env)
@@ -1448,10 +1697,13 @@ def build_prepared_desktop(desktop_dir: Path, *, source_mode: bool, npm: str, en
         # builds run later, often with every system git removed from PATH; the
         # desktop stamp must still resolve this checkout's real HEAD.
         import pm
+
         build_env = pm.ensure("git", base_env=build_env).env
     if _force_adhoc_macos_signing(build_env, source_mode=source_mode):
-        print("  → No Developer ID configured; ad-hoc signing this local rebuild "
-              "(CSC_IDENTITY_AUTO_DISCOVERY=false)")
+        print(
+            "  → No Developer ID configured; ad-hoc signing this local rebuild "
+            "(CSC_IDENTITY_AUTO_DISCOVERY=false)"
+        )
     build_args = ["--icons", str(icons)] if icons else []
     build_cmd = [npm, "run", "build", "--", *build_args]
     staging_dir = None if source_mode else _desktop_staging_dir(desktop_dir)
@@ -1461,15 +1713,38 @@ def build_prepared_desktop(desktop_dir: Path, *, source_mode: bool, npm: str, en
 
         stopped = _stop_desktop_processes_locking_build(desktop_dir)
         if stopped:
-            print(f"  ⚠ Stopped running desktop app to free the build output (pid {', '.join(map(str, stopped))})")
+            print(
+                f"  ⚠ Stopped running desktop app to free the build output (pid {', '.join(map(str, stopped))})"
+            )
     try:
-        run_in_custody(desktop_dir.parents[1], build_cmd, f"Building desktop {build_label}", cwd=desktop_dir, env=build_env)
+        run_in_custody(
+            desktop_dir.parents[1],
+            build_cmd,
+            f"Building desktop {build_label}",
+            cwd=desktop_dir,
+            env=build_env,
+        )
         if staging_dir is not None:
-            run_in_custody(desktop_dir.parents[1], [npm, "run", "builder", "--", "--dir", "--publish", "never",
-                           f"-c.directories.output={staging_dir}"], "Packaging the desktop app",
-                           cwd=desktop_dir, env=build_env)
+            run_in_custody(
+                desktop_dir.parents[1],
+                [
+                    npm,
+                    "run",
+                    "builder",
+                    "--",
+                    "--dir",
+                    "--publish",
+                    "never",
+                    f"-c.directories.output={staging_dir}",
+                ],
+                "Packaging the desktop app",
+                cwd=desktop_dir,
+                env=build_env,
+            )
         packaged_executable = (
-            _promote_staged_desktop_app(desktop_dir, staging_dir) if staging_dir is not None else None
+            _promote_staged_desktop_app(desktop_dir, staging_dir)
+            if staging_dir is not None
+            else None
         )
         return packaged_executable
     except subprocess.CalledProcessError as exc:
@@ -1487,7 +1762,12 @@ _WSL_D3D12_DRIVERS = (
     Path("/usr/lib64/dri/d3d12_dri.so"),
     Path("/usr/lib/dri/d3d12_dri.so"),
 )
-_MESA_DRIVER_OVERRIDES = ("GALLIUM_DRIVER", "MESA_LOADER_DRIVER_OVERRIDE", "LIBGL_ALWAYS_SOFTWARE", "LIBGL_DRIVERS_PATH")
+_MESA_DRIVER_OVERRIDES = (
+    "GALLIUM_DRIVER",
+    "MESA_LOADER_DRIVER_OVERRIDE",
+    "LIBGL_ALWAYS_SOFTWARE",
+    "LIBGL_DRIVERS_PATH",
+)
 
 
 def _prefer_wsl_d3d12(env: dict) -> None:
@@ -1496,9 +1776,14 @@ def _prefer_wsl_d3d12(env: dict) -> None:
     its GPU process (setting it from JS is too late). Explicit Mesa choices win; hosts without
     the driver are left alone."""
     from clawk_constants import is_wsl
+
     if any(key in env for key in _MESA_DRIVER_OVERRIDES):
         return
-    if is_wsl() and _WSL_DXG_DEVICE.exists() and any(driver.is_file() for driver in _WSL_D3D12_DRIVERS):
+    if (
+        is_wsl()
+        and _WSL_DXG_DEVICE.exists()
+        and any(driver.is_file() for driver in _WSL_D3D12_DRIVERS)
+    ):
         env["GALLIUM_DRIVER"] = "d3d12"
 
 
@@ -1512,26 +1797,41 @@ def _desktop_launch_env(args: argparse.Namespace) -> tuple[dict, list[str]]:
     """Electron child env + config-supplied extra flags. ``desktop.*`` config is bridged to env vars
     Electron already reads; an explicit env var wins over config (and over keychain detection)."""
     from clawk_constants import socket_safe_tmpdir, with_clawk_node_path
+
     # with_clawk_node_path() copies os.environ when called with no arg.
     env = with_clawk_node_path()
     tmpdir = env.get("TMPDIR", "")
-    if sys.platform == "linux" and len(os.fsencode(tmpdir)) > _ELECTRON_TMPDIR_MAX_BYTES:
+    if (
+        sys.platform == "linux"
+        and len(os.fsencode(tmpdir)) > _ELECTRON_TMPDIR_MAX_BYTES
+    ):
         # A longer TMPDIR hangs requestSingleInstanceLock(). Only Chromium's socket dir moves:
         # Electron main hands the real TMPDIR back to the backend and its other children.
         env[_DESKTOP_TMPDIR_ENV] = tmpdir
         env["TMPDIR"] = socket_safe_tmpdir()
     _prefer_wsl_d3d12(env)
     for attr, key in (
-        ("fake_boot", "CLAWK_DESKTOP_BOOT_FAKE"), ("ignore_existing", "CLAWK_DESKTOP_IGNORE_EXISTING")):
+        ("fake_boot", "CLAWK_DESKTOP_BOOT_FAKE"),
+        ("ignore_existing", "CLAWK_DESKTOP_IGNORE_EXISTING"),
+    ):
         if getattr(args, attr, False):
             env[key] = "1"
     if getattr(args, "clawk_root", None):
-        env["CLAWK_DESKTOP_CLAWK_ROOT"] = str(Path(args.clawk_root).expanduser().resolve())
+        env["CLAWK_DESKTOP_CLAWK_ROOT"] = str(
+            Path(args.clawk_root).expanduser().resolve()
+        )
     cwd = getattr(args, "cwd", None)
-    env["CLAWK_DESKTOP_CWD"] = str(Path(cwd).expanduser().resolve()) if cwd else os.getcwd()
+    env["CLAWK_DESKTOP_CWD"] = (
+        str(Path(cwd).expanduser().resolve()) if cwd else os.getcwd()
+    )
 
-    config_electron_flags, config_disable_gpu, config_password_store, config_ozone_hint, config_renderer_a11y = (
-        _desktop_launch_options())
+    (
+        config_electron_flags,
+        config_disable_gpu,
+        config_password_store,
+        config_ozone_hint,
+        config_renderer_a11y,
+    ) = _desktop_launch_options()
     if config_disable_gpu != "auto" and "CLAWK_DESKTOP_DISABLE_GPU" not in os.environ:
         env["CLAWK_DESKTOP_DISABLE_GPU"] = config_disable_gpu
     if config_ozone_hint != "auto" and "ELECTRON_OZONE_PLATFORM_HINT" not in os.environ:
@@ -1540,14 +1840,19 @@ def _desktop_launch_env(args: argparse.Namespace) -> tuple[dict, list[str]]:
     # Renderer accessibility tree (composer exposure to OS dictation/IME
     # tools, #118271/#92607) defaults to ON inside the app; bridge only the
     # explicit opt-out so the default never depends on the launcher path.
-    if not config_renderer_a11y and "CLAWK_DESKTOP_RENDERER_ACCESSIBILITY" not in os.environ:
+    if (
+        not config_renderer_a11y
+        and "CLAWK_DESKTOP_RENDERER_ACCESSIBILITY" not in os.environ
+    ):
         env["CLAWK_DESKTOP_RENDERER_ACCESSIBILITY"] = "0"
 
     # Without --password-store safeStorage.isEncryptionAvailable() is often
     # false and the desktop app refuses to persist remote gateway tokens.
     if sys.platform == "linux" and "CLAWK_DESKTOP_PASSWORD_STORE" not in os.environ:
         password_store = (
-            config_password_store if config_password_store != "auto" else _detect_linux_password_store()
+            config_password_store
+            if config_password_store != "auto"
+            else _detect_linux_password_store()
         )
         if password_store:
             env["CLAWK_DESKTOP_PASSWORD_STORE"] = password_store
@@ -1555,36 +1860,59 @@ def _desktop_launch_env(args: argparse.Namespace) -> tuple[dict, list[str]]:
 
 
 def _check_desktop_skip_build(
-    desktop_dir: Path, project_root: Path, *, source_mode: bool, packaged_executable: Optional[Path]
+    desktop_dir: Path,
+    project_root: Path,
+    *,
+    source_mode: bool,
+    packaged_executable: Optional[Path],
 ) -> None:
     """Validate the pre-built artifact ``--skip-build`` promised; exit with a hint when it's missing."""
     if source_mode:
         if not _desktop_dist_exists(desktop_dir):
-            print(f"✗ --skip-build --source was passed but no desktop dist found at: {desktop_dir / 'dist'}")
+            print(
+                f"✗ --skip-build --source was passed but no desktop dist found at: {desktop_dir / 'dist'}"
+            )
             print("  Pre-build first:  cd apps/desktop && npm run build")
-            print("  Or drop --skip-build to install dependencies and build automatically.")
+            print(
+                "  Or drop --skip-build to install dependencies and build automatically."
+            )
             sys.exit(1)
         if not (_electron_dir(project_root) / "package.json").exists():
-            print("✗ --skip-build --source requires existing desktop workspace dependencies.")
+            print(
+                "✗ --skip-build --source requires existing desktop workspace dependencies."
+            )
             print(f"  Install first:  cd {project_root} && npm ci")
-            print("  Or drop --skip-build to install dependencies and build automatically.")
+            print(
+                "  Or drop --skip-build to install dependencies and build automatically."
+            )
             sys.exit(1)
-        print(f"→ Skipping desktop source build (--skip-build --source); using dist at {desktop_dir / 'dist'}")
+        print(
+            f"→ Skipping desktop source build (--skip-build --source); using dist at {desktop_dir / 'dist'}"
+        )
     elif packaged_executable is None:
-        print(f"✗ --skip-build was passed but no packaged desktop app was found at: {desktop_dir / 'release'}")
+        print(
+            f"✗ --skip-build was passed but no packaged desktop app was found at: {desktop_dir / 'release'}"
+        )
         print("  Pre-build first:  cd apps/desktop && npm run pack")
         print("  Or drop --skip-build to package automatically.")
         sys.exit(1)
     else:
-        desktop_launch_notice(f"→ Skipping desktop package build (--skip-build); using {packaged_executable}")
+        desktop_launch_notice(
+            f"→ Skipping desktop package build (--skip-build); using {packaged_executable}"
+        )
 
 
 def _packaged_desktop_launch_command(packaged_executable: Path) -> list[str]:
     """``[exe, *sandbox flags]`` after the Linux sandbox fixup; exits when the sandbox can't be configured."""
     launch_command = [str(packaged_executable)]
     if not _desktop_linux_sandbox_fixup(packaged_executable):
-        if _desktop_linux_needs_no_sandbox() and _desktop_linux_sandbox_helper_is_regular_file(packaged_executable):
-            print("⚠ Falling back to --no-sandbox because this Linux host restricts unprivileged user namespaces and the Electron sandbox helper could not be configured.")
+        if (
+            _desktop_linux_needs_no_sandbox()
+            and _desktop_linux_sandbox_helper_is_regular_file(packaged_executable)
+        ):
+            print(
+                "⚠ Falling back to --no-sandbox because this Linux host restricts unprivileged user namespaces and the Electron sandbox helper could not be configured."
+            )
             launch_command.append("--no-sandbox")
         else:
             sys.exit(1)
@@ -1631,6 +1959,7 @@ def cmd_gui(args: argparse.Namespace):
     """Build and launch the native Electron desktop GUI."""
     from clawk_cli.main import PROJECT_ROOT
     from clawk_cli.source_build import prepare_source_dependencies, source_build_env
+
     desktop_dir = PROJECT_ROOT / "apps" / "desktop"
     # A bundled install IS the app: no source tree, no build, and the
     # launcher is a sibling of this payload rather than something we
@@ -1659,6 +1988,7 @@ def cmd_gui(args: argparse.Namespace):
 
     with contextlib.suppress(Exception):
         from clawk_logging import setup_logging as _setup_logging_gui
+
         _setup_logging_gui(mode="gui")
 
     env, config_electron_flags = _desktop_launch_env(args)
@@ -1671,6 +2001,7 @@ def cmd_gui(args: argparse.Namespace):
     # grants survive rebuilds, then exit without building/launching.
     if getattr(args, "setup_tcc_identity", False):
         from clawk_cli.main_desktop_tcc import _desktop_macos_setup_tcc_identity
+
         identity = getattr(args, "identity", None) or "Clawksis Local Signing"
         sys.exit(0 if _desktop_macos_setup_tcc_identity(identity) else 1)
 
@@ -1693,36 +2024,55 @@ def cmd_gui(args: argparse.Namespace):
             acquired = build_lock.acquire()
         except OSError as exc:
             print(f"✗ Could not create the desktop build lock: {exc}")
-            print("  Refusing to run npm without serialization; check the checkout permissions and retry.")
+            print(
+                "  Refusing to run npm without serialization; check the checkout permissions and retry."
+            )
             sys.exit(1)
         if not acquired:
-            print("✗ A Clawksis update or another desktop dependency install or build is already running.")
+            print(
+                "✗ A Clawksis update or another desktop dependency install or build is already running."
+            )
             print("  Wait for it to finish, then retry.")
             sys.exit(2)
 
     needs_build = not skip_build and (
-        force_build or _desktop_build_needed(desktop_dir, PROJECT_ROOT, source_mode=source_mode)
+        force_build
+        or _desktop_build_needed(desktop_dir, PROJECT_ROOT, source_mode=source_mode)
     )
     npm = None
     try:
         if needs_build:
-            build_env = source_build_env(env, explicit=force_build or getattr(args, "build_only", False))
+            build_env = source_build_env(
+                env, explicit=force_build or getattr(args, "build_only", False)
+            )
             npm = shutil.which("npm", path=build_env["PATH"])
             env["PATH"] = build_env["PATH"]
         if skip_build:
             _check_desktop_skip_build(
-                desktop_dir, PROJECT_ROOT, source_mode=source_mode, packaged_executable=packaged_executable
+                desktop_dir,
+                PROJECT_ROOT,
+                source_mode=source_mode,
+                packaged_executable=packaged_executable,
             )
         elif needs_build:
-            prepare_source_dependencies(PROJECT_ROOT, ("ui-tui", "web", "apps/desktop"), env=build_env,
-                                        explicit=force_build or getattr(args, "build_only", False))
-            built = build_prepared_desktop(desktop_dir, source_mode=source_mode, npm=npm, env=build_env)
+            prepare_source_dependencies(
+                PROJECT_ROOT,
+                ("ui-tui", "web", "apps/desktop"),
+                env=build_env,
+                explicit=force_build or getattr(args, "build_only", False),
+            )
+            built = build_prepared_desktop(
+                desktop_dir, source_mode=source_mode, npm=npm, env=build_env
+            )
             if not source_mode:
                 # None only when the build was skipped under its own Desktop: reopen the app it kept.
                 packaged_executable = built or packaged_executable
         else:
             build_label = "source build" if source_mode else "packaged app"
-            desktop_launch_notice(f"✓ Desktop {build_label} is up to date (content stamp matches)", source_mode=source_mode)
+            desktop_launch_notice(
+                f"✓ Desktop {build_label} is up to date (content stamp matches)",
+                source_mode=source_mode,
+            )
     except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
         print(f"✗ Desktop GUI build failed: {exc}")
         if build_lock is not None:
@@ -1734,8 +2084,11 @@ def cmd_gui(args: argparse.Namespace):
     # shell still has the app in STARTING, so it defers the write until Electron
     # reports the window on screen (#111906). --build-only spawns no app: write now.
     from clawk_cli.linux_desktop_entry import launched_from_shell
+
     build_only = bool(getattr(args, "build_only", False))
-    deferred_entry = _register_linux_desktop_entry(defer=launched_from_shell() and not build_only)
+    deferred_entry = _register_linux_desktop_entry(
+        defer=launched_from_shell() and not build_only
+    )
 
     # --build-only: produce the artifact but do NOT launch. The installer's
     # --update flow drives the rebuild headlessly and launches the desktop
@@ -1745,15 +2098,23 @@ def cmd_gui(args: argparse.Namespace):
     if build_only:
         if source_mode:
             if not _desktop_dist_exists(desktop_dir):
-                print(f"✗ --build-only --source produced no dist at: {desktop_dir / 'dist'}")
+                print(
+                    f"✗ --build-only --source produced no dist at: {desktop_dir / 'dist'}"
+                )
                 sys.exit(1)
-            print(f"✓ Desktop source build ready at {desktop_dir / 'dist'} (not launching; --build-only)")
+            print(
+                f"✓ Desktop source build ready at {desktop_dir / 'dist'} (not launching; --build-only)"
+            )
         elif packaged_executable is None:
-            print(f"✗ --build-only produced no launchable app at: {desktop_dir / 'release'}")
+            print(
+                f"✗ --build-only produced no launchable app at: {desktop_dir / 'release'}"
+            )
             print("  Expected an unpacked Electron app for the current OS.")
             sys.exit(1)
         else:
-            print(f"✓ Desktop packaged app ready: {packaged_executable} (not launching; --build-only)")
+            print(
+                f"✓ Desktop packaged app ready: {packaged_executable} (not launching; --build-only)"
+            )
         if build_lock is not None:
             build_lock.release()
         return
@@ -1764,21 +2125,30 @@ def cmd_gui(args: argparse.Namespace):
         # Electron package, including when --skip-build was requested.
         electron = _electron_dir(PROJECT_ROOT)
         try:
-            executable = electron / "dist" / (electron / "path.txt").read_text(encoding="utf-8-sig").strip()
+            executable = (
+                electron
+                / "dist"
+                / (electron / "path.txt").read_text(encoding="utf-8-sig").strip()
+            )
             if not executable.is_file():
                 raise FileNotFoundError(executable)
         except OSError as exc:
             print(f"✗ Prepared Electron runtime is missing: {exc}")
-            print("  From the project root, run: node scripts/build/electron-runtime.mjs --source .")
+            print(
+                "  From the project root, run: node scripts/build/electron-runtime.mjs --source ."
+            )
             raise SystemExit(1) from exc
         launch_command = [str(executable), "."]
     else:
         if packaged_executable is None:
-            print(f"✗ Desktop package build completed but no launchable app was found at: {desktop_dir / 'release'}")
+            print(
+                f"✗ Desktop package build completed but no launchable app was found at: {desktop_dir / 'release'}"
+            )
             print("  Expected an unpacked Electron app for the current OS.")
             sys.exit(1)
         launch_command = _packaged_desktop_launch_command(
-            _installed_desktop_launch_target(desktop_dir, packaged_executable))
+            _installed_desktop_launch_target(desktop_dir, packaged_executable)
+        )
         launch_command.extend(config_electron_flags)
     if getattr(args, "local", False):
         launch_command.append("--local")
@@ -1790,7 +2160,9 @@ def cmd_gui(args: argparse.Namespace):
         launch_command.append("--close-preview")
     launch_command.extend(_explicit_profile_args())
     if not source_mode:
-        desktop_launch_notice(f"→ Launching packaged Clawksis Desktop: {' '.join(launch_command)}")
+        desktop_launch_notice(
+            f"→ Launching packaged Clawksis Desktop: {' '.join(launch_command)}"
+        )
     # The launch target is ready; the fixups above finished mutating the
     # packaged tree. Electron is the long-lived handoff, so release the build
     # lock now — an open Desktop window must never block a future rebuild.
@@ -1824,7 +2196,9 @@ def cmd_gui(args: argparse.Namespace):
             close_fds=True,
         )
         try:
-            subprocess.Popen(launch_command, creationflags=windows_detach_flags(), **popen_kwargs)
+            subprocess.Popen(
+                launch_command, creationflags=windows_detach_flags(), **popen_kwargs
+            )
         except OSError as exc:
             # Only recover from a denied job breakaway (the parent's job object
             # lacks JOB_OBJECT_LIMIT_BREAKAWAY_OK), which surfaces as
@@ -1840,12 +2214,19 @@ def cmd_gui(args: argparse.Namespace):
             )
         if deferred_entry is not None:
             deferred_entry.finish()
-        desktop_launch_notice("✓ Clawksis Desktop launched in a detached window; you can close this shell.")
+        desktop_launch_notice(
+            "✓ Clawksis Desktop launched in a detached window; you can close this shell."
+        )
         sys.exit(0)
     with desktop_console_output(source_mode=source_mode) as streams:
         try:
             launch_result = subprocess.run(
-                launch_command, cwd=desktop_dir, env=env, check=False, pass_fds=pass_fds, **streams
+                launch_command,
+                cwd=desktop_dir,
+                env=env,
+                check=False,
+                pass_fds=pass_fds,
+                **streams,
             )
         except KeyboardInterrupt:
             # Ctrl-C in the terminal the launcher is attached to is the user
@@ -1885,7 +2266,11 @@ def _launch_bundled_desktop(
 
     Never returns.
     """
-    from clawk_cli.bundled_app import NotBundledApp, launch_detached, resolve_bundle_layout
+    from clawk_cli.bundled_app import (
+        NotBundledApp,
+        launch_detached,
+        resolve_bundle_layout,
+    )
     from clawk_cli.main import PROJECT_ROOT
 
     refused = [
@@ -1919,8 +2304,13 @@ def _launch_bundled_desktop(
 
     launch_command = [str(layout.launcher)]
     if not _desktop_linux_sandbox_fixup(layout.launcher):
-        if _desktop_linux_needs_no_sandbox() and _desktop_linux_sandbox_helper_is_regular_file(layout.launcher):
-            print("⚠ Falling back to --no-sandbox because this Linux host restricts unprivileged user namespaces and the Electron sandbox helper could not be configured.")
+        if (
+            _desktop_linux_needs_no_sandbox()
+            and _desktop_linux_sandbox_helper_is_regular_file(layout.launcher)
+        ):
+            print(
+                "⚠ Falling back to --no-sandbox because this Linux host restricts unprivileged user namespaces and the Electron sandbox helper could not be configured."
+            )
             launch_command.append("--no-sandbox")
         else:
             sys.exit(1)
@@ -1930,5 +2320,3 @@ def _launch_bundled_desktop(
     pid = launch_detached(launch_command, env=env, cwd=layout.app_root)
     print(f"→ Launched Clawksis Desktop: {' '.join(launch_command)} (pid {pid})")
     sys.exit(0)
-
-

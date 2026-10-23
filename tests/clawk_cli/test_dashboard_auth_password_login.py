@@ -70,9 +70,7 @@ def _unsign(secret: bytes, token: str):
     try:
         blob = base64.urlsafe_b64decode(token.encode())
         raw, sig = blob[:-32], blob[-32:]
-        if not hmac.compare_digest(
-            sig, hmac.new(secret, raw, hashlib.sha256).digest()
-        ):
+        if not hmac.compare_digest(sig, hmac.new(secret, raw, hashlib.sha256).digest()):
             return None
         return json.loads(raw)
     except Exception:
@@ -119,9 +117,14 @@ class PasswordProvider(DashboardAuthProvider):
         if not p or p.get("kind") != "access" or p["exp"] <= int(time.time()):
             return None
         return Session(
-            user_id=p["sub"], email="", display_name=p["sub"], org_id="",
-            provider=self.name, expires_at=p["exp"],
-            access_token=access_token, refresh_token="",
+            user_id=p["sub"],
+            email="",
+            display_name=p["sub"],
+            org_id="",
+            provider=self.name,
+            expires_at=p["exp"],
+            access_token=access_token,
+            refresh_token="",
         )
 
     def refresh_session(self, *, refresh_token: str) -> Session:
@@ -132,8 +135,12 @@ class PasswordProvider(DashboardAuthProvider):
             raise RefreshExpiredError("dead rt")
         exp = int(time.time()) + self._ttl
         return Session(
-            user_id=p["sub"], email="", display_name=p["sub"], org_id="",
-            provider=self.name, expires_at=exp,
+            user_id=p["sub"],
+            email="",
+            display_name=p["sub"],
+            org_id="",
+            provider=self.name,
+            expires_at=exp,
             access_token=_sign(self._secret, p["sub"], "access", self._ttl),
             refresh_token=_sign(self._secret, p["sub"], "refresh", 30 * 86400),
         )
@@ -178,15 +185,11 @@ def gated_app(pw_provider):
 
 
 class TestProtocolExtension:
-
-
     def test_default_complete_password_login_raises_not_implemented(self):
         # A provider that doesn't override the method (the Stub) raises,
         # rather than silently accepting any credentials.
         with pytest.raises(NotImplementedError):
-            StubAuthProvider().complete_password_login(
-                username="x", password="y"
-            )
+            StubAuthProvider().complete_password_login(username="x", password="y")
 
 
 # ---------------------------------------------------------------------------
@@ -211,16 +214,13 @@ class TestProviderListFlag:
         assert '<form class="provider-form" data-provider="testpw"' in login.text
         assert "/auth/password-login" in login.text
 
-
     def test_oauth_provider_reports_false(self):
         clear_providers()
         register_provider(StubAuthProvider())
         prev = getattr(web_server.app.state, "auth_required", None)
         web_server.app.state.auth_required = True
         try:
-            client = TestClient(
-                web_server.app, base_url="https://fly-app.fly.dev"
-            )
+            client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
             resp = client.get("/api/auth/providers")
             prov = {p["name"]: p for p in resp.json()["providers"]}
             assert prov["stub"]["supports_password"] is False
@@ -237,8 +237,11 @@ class TestProviderListFlag:
 class TestPasswordLoginRoute:
     @pytest.mark.parametrize("rate_limited", [False, True])
     def test_oversized_provider_rejected_without_audit(
-        self: TestPasswordLoginRoute, gated_app: TestClient,
-        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rate_limited: bool,
+        self: TestPasswordLoginRoute,
+        gated_app: TestClient,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        rate_limited: bool,
     ) -> None:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         if rate_limited:
@@ -246,7 +249,11 @@ class TestPasswordLoginRoute:
             for _ in range(15):
                 response = gated_app.post(
                     "/auth/password-login",
-                    json={"provider": "testpw", "username": "admin", "password": "WRONG"},
+                    json={
+                        "provider": "testpw",
+                        "username": "admin",
+                        "password": "WRONG",
+                    },
                 )
             assert response is not None and response.status_code == 429
         path = tmp_path / "logs" / "dashboard-auth.log"
@@ -261,9 +268,7 @@ class TestPasswordLoginRoute:
         assert provider not in after
         assert after == before
 
-    def test_valid_credentials_set_session_cookies_and_return_next(
-        self, gated_app
-    ):
+    def test_valid_credentials_set_session_cookies_and_return_next(self, gated_app):
         resp = gated_app.post(
             "/auth/password-login",
             json={
@@ -305,8 +310,6 @@ class TestPasswordLoginRoute:
         assert "set-cookie" not in {k.lower() for k in resp.headers}
 
 
-
-
 # ---------------------------------------------------------------------------
 # Transparent refresh — expired access token, live refresh token
 # ---------------------------------------------------------------------------
@@ -324,9 +327,7 @@ class TestPasswordSessionRefresh:
         prev = getattr(web_server.app.state, "auth_required", None)
         web_server.app.state.auth_required = True
         try:
-            client = TestClient(
-                web_server.app, base_url="https://fly-app.fly.dev"
-            )
+            client = TestClient(web_server.app, base_url="https://fly-app.fly.dev")
             login = client.post(
                 "/auth/password-login",
                 json={"provider": "testpw", "username": "admin", "password": "hunter2"},
@@ -368,19 +369,28 @@ class TestRateLimit:
 
     @pytest.mark.parametrize(
         "peer, forwarded_suffix",
-        [("203.0.113.9", ""), ("127.0.0.1", ", 203.0.113.9"),
-         ("172.18.0.9", ", 203.0.113.9")],
+        [
+            ("203.0.113.9", ""),
+            ("127.0.0.1", ", 203.0.113.9"),
+            ("172.18.0.9", ", 203.0.113.9"),
+        ],
         ids=["direct", "loopback-proxy", "configured-proxy"],
     )
     def test_spoofed_x_forwarded_for_does_not_reset_rate_limit(
-        self: TestRateLimit, gated_app: TestClient, peer: str, forwarded_suffix: str,
+        self: TestRateLimit,
+        gated_app: TestClient,
+        peer: str,
+        forwarded_suffix: str,
     ) -> None:
         # X-Forwarded-For is attacker-controlled unless it came from a trusted
         # reverse proxy. Even behind an appending proxy, the client-supplied
         # first hop must not override Uvicorn's resolved client address.
         trusted = _dashboard_forwarded_allow_ips({"trusted_proxies": ["172.18.0.0/16"]})
         # Uvicorn and Starlette expose incompatible static ASGI type aliases.
-        app = cast(Any, ProxyHeadersMiddleware(cast(Any, web_server.app), trusted_hosts=trusted))
+        app = cast(
+            Any,
+            ProxyHeadersMiddleware(cast(Any, web_server.app), trusted_hosts=trusted),
+        )
         client = TestClient(app, base_url=str(gated_app.base_url), client=(peer, 50000))
         for i in range(_PW_RATE_MAX_ATTEMPTS):
             resp = client.post(
@@ -400,7 +410,9 @@ class TestRateLimit:
         # Another real client must retain its own budget, including when both
         # clients reach the dashboard through the same trusted proxy.
         other_peer = peer if forwarded_suffix else "203.0.113.10"
-        other_client = TestClient(app, base_url=str(gated_app.base_url), client=(other_peer, 50001))
+        other_client = TestClient(
+            app, base_url=str(gated_app.base_url), client=(other_peer, 50001)
+        )
         allowed = other_client.post(
             "/auth/password-login",
             headers={"X-Forwarded-For": "203.0.113.10"},
@@ -425,9 +437,11 @@ class TestRateLimit:
         _reset_password_rate_limit()
         monkeypatch.setattr(auth_routes, "_PW_RATE_MAX_BUCKETS", 2)
         now = time.monotonic()
-        auth_routes._pw_attempts["expired"] = auth_routes.deque([
-            now - auth_routes._PW_RATE_WINDOW_SEC - 1,
-        ])
+        auth_routes._pw_attempts["expired"] = auth_routes.deque(
+            [
+                now - auth_routes._PW_RATE_WINDOW_SEC - 1,
+            ]
+        )
         auth_routes._pw_attempts["live"] = auth_routes.deque([now])
 
         assert auth_routes._password_rate_limited("192.0.2.99") is False
@@ -438,18 +452,24 @@ class TestRateLimit:
 
 
 @pytest.mark.parametrize("peer", [("203.0.113.7", 12345), None])
-def test_client_ip_uses_asgi_peer_not_forwarded_header(peer: tuple[str, int] | None) -> None:
+def test_client_ip_uses_asgi_peer_not_forwarded_header(
+    peer: tuple[str, int] | None,
+) -> None:
     from fastapi import Request
 
     from clawk_cli.dashboard_auth.request_utils import client_ip
 
     # Preserve the ASGI address, including one normalized by trusted upstream
     # middleware; a missing peer must not fall back to an untrusted header.
-    request = Request({
-        "type": "http", "client": peer,
-        "headers": [(b"x-forwarded-for", b"198.51.100.1, 192.0.2.1")],
-    })
+    request = Request(
+        {
+            "type": "http",
+            "client": peer,
+            "headers": [(b"x-forwarded-for", b"198.51.100.1, 192.0.2.1")],
+        }
+    )
     assert client_ip(request) == (peer[0] if peer else "")
+
 
 # ---------------------------------------------------------------------------
 # Login page rendering
@@ -457,7 +477,6 @@ def test_client_ip_uses_asgi_peer_not_forwarded_header(peer: tuple[str, int] | N
 
 
 class TestLoginPageRender:
-
     def test_oauth_only_page_stays_script_free(self):
         clear_providers()
         register_provider(StubAuthProvider())
@@ -472,4 +491,3 @@ class TestLoginPageRender:
             assert "/auth/password-login" not in html
         finally:
             clear_providers()
-

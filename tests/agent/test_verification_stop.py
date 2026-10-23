@@ -14,6 +14,7 @@ from agent.verification_stop import (
     verify_on_stop_enabled,
 )
 
+
 def _node_project(root: Path) -> None:
     (root / "package.json").write_text(
         json.dumps({"scripts": {"test": "vitest", "lint": "eslint ."}}),
@@ -21,15 +22,18 @@ def _node_project(root: Path) -> None:
     )
     (root / "pnpm-lock.yaml").write_text("", encoding="utf-8")
 
+
 def _make_project(root: Path) -> None:
     root.mkdir()
     _node_project(root)
+
 
 @pytest.fixture(autouse=True)
 def _ledger_on(monkeypatch):
     """The ledger is inert unless verify-on-stop is enabled; ``clear_verify_env`` (requested
     explicitly, so it runs after this) strips it again for the enabled()-logic tests."""
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "1")
+
 
 @pytest.fixture
 def clear_verify_env(monkeypatch):
@@ -47,17 +51,20 @@ def clear_verify_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     return monkeypatch
 
+
 def test_verify_on_stop_env_can_enable(clear_verify_env):
     # Env "1" forces ON regardless of surface (here a messaging platform).
     clear_verify_env.setenv("CLAWK_VERIFY_ON_STOP", "1")
     clear_verify_env.setenv("CLAWK_SESSION_PLATFORM", "telegram")
     assert verify_on_stop_enabled({"agent": {}}) is True
 
+
 @pytest.mark.parametrize("source", ["cli", "tui", "desktop", "codex", "local"])
 def test_verify_on_stop_auto_on_for_interactive_surfaces(clear_verify_env, source):
     # Under "auto", CLI/TUI/desktop coding surfaces resolve ON.
     clear_verify_env.setenv("CLAWK_SESSION_SOURCE", source)
     assert verify_on_stop_enabled({"agent": {"verify_on_stop": "auto"}}) is True
+
 
 def test_verify_on_stop_missing_value_defaults_off(clear_verify_env):
     # A missing/unrecognized config value falls back OFF on every surface,
@@ -67,6 +74,7 @@ def test_verify_on_stop_missing_value_defaults_off(clear_verify_env):
     assert verify_on_stop_enabled({"agent": {}}) is False
     assert verify_on_stop_enabled({"agent": {"verify_on_stop": "bogus"}}) is False
     assert verify_on_stop_enabled({}) is False
+
 
 def test_nudge_checks_all_edited_workspaces(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
@@ -94,6 +102,7 @@ def test_nudge_checks_all_edited_workspaces(tmp_path, monkeypatch):
     assert nudge is not None
     assert changed_b in nudge
 
+
 @pytest.mark.platforms("posix")  # Symlinks require elevated privileges on Windows
 def test_no_suite_nudge_uses_canonical_temp_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
@@ -115,6 +124,7 @@ def test_no_suite_nudge_uses_canonical_temp_dir(tmp_path, monkeypatch):
     assert str(real_temp) in nudge
     assert str(linked_temp) not in nudge
 
+
 def test_ad_hoc_pass_satisfies_no_suite_stop_loop(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
@@ -134,23 +144,29 @@ def test_ad_hoc_pass_satisfies_no_suite_stop_loop(tmp_path, monkeypatch):
 
     assert build_verify_on_stop_nudge(session_id="s1", changed_paths=[changed]) is None
 
+
 def test_nudge_attempts_are_bounded(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _node_project(tmp_path)
     changed = str(tmp_path / "src" / "app.ts")
     mark_workspace_edited(session_id="s1", cwd=tmp_path, paths=[changed])
 
-    assert build_verify_on_stop_nudge(
-        session_id="s1",
-        changed_paths=[changed],
-        attempts=2,
-        max_attempts=2,
-    ) is None
+    assert (
+        build_verify_on_stop_nudge(
+            session_id="s1",
+            changed_paths=[changed],
+            attempts=2,
+            max_attempts=2,
+        )
+        is None
+    )
+
 
 # ---------------------------------------------------------------------------
 # Fix C: documentation/prose edits carry no verifiable behavior and must never
 # trip the nudge, even on an unverified workspace.
 # ---------------------------------------------------------------------------
+
 
 def test_mixed_doc_and_code_edit_still_nudges(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
@@ -159,9 +175,7 @@ def test_mixed_doc_and_code_edit_still_nudges(tmp_path, monkeypatch):
     code = str(tmp_path / "src" / "app.ts")
     mark_workspace_edited(session_id="s1", cwd=tmp_path, paths=[code])
 
-    nudge = build_verify_on_stop_nudge(
-        session_id="s1", changed_paths=[doc, code]
-    )
+    nudge = build_verify_on_stop_nudge(session_id="s1", changed_paths=[doc, code])
     assert nudge is not None
     # The doc path is filtered out of the reported set; the code path remains.
     assert code in nudge

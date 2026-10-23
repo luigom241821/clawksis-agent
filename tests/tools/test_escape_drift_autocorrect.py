@@ -9,7 +9,10 @@ import json
 
 import pytest
 
-from tools.escape_drift_autocorrect import AmbiguousEscapeDriftError, maybe_correct_escape_drift
+from tools.escape_drift_autocorrect import (
+    AmbiguousEscapeDriftError,
+    maybe_correct_escape_drift,
+)
 
 
 @pytest.fixture
@@ -20,6 +23,7 @@ def workdir(tmp_path, monkeypatch):
 
 def _patch_tool(**kwargs):
     from tools.file_tools import patch_tool
+
     return json.loads(patch_tool(**kwargs))
 
 
@@ -51,44 +55,68 @@ def test_quote_kind_escaped_only_in_replacement_is_rejected():
     with pytest.raises(AmbiguousEscapeDriftError):
         maybe_correct_escape_drift(old, new, content)
     from tools.fuzzy_match import fuzzy_find_and_replace
+
     out, count, _strategy, err = fuzzy_find_and_replace(content, old, new)
     assert count == 0 and out == content
     assert "intended escaping" in err
 
 
 _SHARED_CASES = [
-    ('pat = r"\\d+"\n', r'pat = r"\\d+"', 'pat = None', 'pat = None\n'),
+    ('pat = r"\\d+"\n', r'pat = r"\\d+"', "pat = None", "pat = None\n"),
     ("x = 'it'\n", r"x = \'it\'", r"x = \'its\'", "x = 'its'\n"),
     ('pat = r"\\d+"\n', r'pat = r"\\d+"', r'pat = r"\\w+"', None),
 ]
 
 
 @pytest.mark.parametrize("engine", ["replace", "v4a", "skill"])
-@pytest.mark.parametrize("content,old,new,expected", _SHARED_CASES,
-                         ids=["backslash_free", "quote", "ambiguous"])
-def test_shared_correction_policy_across_tools(workdir, monkeypatch, engine, content, old, new, expected):
+@pytest.mark.parametrize(
+    "content,old,new,expected",
+    _SHARED_CASES,
+    ids=["backslash_free", "quote", "ambiguous"],
+)
+def test_shared_correction_policy_across_tools(
+    workdir, monkeypatch, engine, content, old, new, expected
+):
     target = workdir / "example.txt"
     target.write_text(content)
     if engine == "skill":
         from tools import skill_manager_tool
+
         skill_dir = workdir / "skills" / "example"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "SKILL.md").write_text("---\nname: example\ndescription: Test skill.\n---\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: example\ndescription: Test skill.\n---\n"
+        )
         target = skill_dir / "references" / "example.txt"
         target.parent.mkdir()
         target.write_text(content)
         monkeypatch.setattr(skill_manager_tool, "SKILLS_DIR", skill_dir.parent)
-        monkeypatch.setattr("agent.skill_utils.get_all_skills_dirs", lambda: [skill_dir.parent])
-        result = json.loads(skill_manager_tool.skill_manage(
-            action="patch", name="example", file_path=str(target.relative_to(skill_dir)),
-            old_string=old, new_string=new, task_id="t-shared"))
+        monkeypatch.setattr(
+            "agent.skill_utils.get_all_skills_dirs", lambda: [skill_dir.parent]
+        )
+        result = json.loads(
+            skill_manager_tool.skill_manage(
+                action="patch",
+                name="example",
+                file_path=str(target.relative_to(skill_dir)),
+                old_string=old,
+                new_string=new,
+                task_id="t-shared",
+            )
+        )
     elif engine == "v4a":
-        patch = (f"*** Begin Patch\n*** Update File: {target}\n@@\n"
-                 + "\n".join("-" + line for line in old.splitlines()) + "\n"
-                 + "\n".join("+" + line for line in new.splitlines()) + "\n*** End Patch")
+        patch = (
+            f"*** Begin Patch\n*** Update File: {target}\n@@\n"
+            + "\n".join("-" + line for line in old.splitlines())
+            + "\n"
+            + "\n".join("+" + line for line in new.splitlines())
+            + "\n*** End Patch"
+        )
         result = _patch_tool(mode="patch", patch=patch, task_id="t-shared")
     else:
-        result = _patch_tool(path=str(target), old_string=old, new_string=new, task_id="t-shared")
+        result = _patch_tool(
+            path=str(target), old_string=old, new_string=new, task_id="t-shared"
+        )
     if expected is None:
         assert result.get("success") is not True
         assert "intentional backslashes" in result["error"]
@@ -99,10 +127,14 @@ def test_shared_correction_policy_across_tools(workdir, monkeypatch, engine, con
         assert "escape-drift auto-corrected" in result["note"]
 
 
-@pytest.mark.parametrize("content,old,new,expected", _SHARED_CASES,
-                         ids=["backslash_free", "quote", "ambiguous"])
+@pytest.mark.parametrize(
+    "content,old,new,expected",
+    _SHARED_CASES,
+    ids=["backslash_free", "quote", "ambiguous"],
+)
 def test_approval_preview_agrees_with_patch(workdir, content, old, new, expected):
     from acp_adapter.edit_approval import build_edit_proposal
+
     target = workdir / "preview.txt"
     target.write_text(content)
     arguments = dict(path=str(target), old_string=old, new_string=new)
@@ -121,18 +153,28 @@ def test_approval_preview_agrees_with_patch(workdir, content, old, new, expected
 
 
 class TestPatchEndToEnd:
-    @pytest.mark.parametrize("replacement", [
-        r'sep = r"a\c"',
-        r'sep = r"a\\c"' + "\n" + r'other = "C:\\backup"',
-        r'sep = r"a\\c"' + "\n" + r'print("done\n")',
-        r'sep = r"a\\c"',
-    ], ids=["clean_replacement", "windows_path", "odd_escape", "all_runs_even"])
-    def test_doubled_anchor_with_replacement_backslashes_is_rejected(self, workdir, replacement):
+    @pytest.mark.parametrize(
+        "replacement",
+        [
+            r'sep = r"a\c"',
+            r'sep = r"a\\c"' + "\n" + r'other = "C:\\backup"',
+            r'sep = r"a\\c"' + "\n" + r'print("done\n")',
+            r'sep = r"a\\c"',
+        ],
+        ids=["clean_replacement", "windows_path", "odd_escape", "all_runs_even"],
+    )
+    def test_doubled_anchor_with_replacement_backslashes_is_rejected(
+        self, workdir, replacement
+    ):
         f = workdir / "anchor.py"
         original = 'sep = r"a\\b"\n'
         f.write_text(original)
-        result = _patch_tool(path=str(f), old_string=r'sep = r"a\\b"',
-                             new_string=replacement, task_id="t-drift")
+        result = _patch_tool(
+            path=str(f),
+            old_string=r'sep = r"a\\b"',
+            new_string=replacement,
+            task_id="t-drift",
+        )
         assert result.get("success") is not True
         assert "intentional backslashes" in result["error"]
         assert f.read_text() == original
@@ -142,10 +184,19 @@ class TestPatchEndToEnd:
         f = workdir / "a.py"
         original = 'pat = re.compile(r"\\d+")\nsep = r"a\\b"\n'
         f.write_text(original)
-        replacement = r'pat = re.compile(r"\\w+")' + "\n" + r'sep = r"a\\b"' + "\n" + r'print("done\n")'
-        r = _patch_tool(path=str(f), old_string=r'pat = re.compile(r"\\d+")' + "\n" + r'sep = r"a\\b"',
-                        new_string=replacement,
-                        task_id="t-drift")
+        replacement = (
+            r'pat = re.compile(r"\\w+")'
+            + "\n"
+            + r'sep = r"a\\b"'
+            + "\n"
+            + r'print("done\n")'
+        )
+        r = _patch_tool(
+            path=str(f),
+            old_string=r'pat = re.compile(r"\\d+")' + "\n" + r'sep = r"a\\b"',
+            new_string=replacement,
+            task_id="t-drift",
+        )
         assert r.get("success") is not True
         assert f.read_text() == original
 
@@ -165,12 +216,24 @@ class TestPatchEndToEnd:
         assert r.get("success") is not True
         assert f.read_text() == content
 
-    @pytest.mark.parametrize("content,old,new,expected", [
-        ('pat = re.compile(r"\\d+")\n', r'pat = re.compile(r"\\d+")', 'pat = None',
-         'pat = None\n'),
-        ("x = 'it'\n", r"x = \'it\'", r"x = \'its\'" + "\n" + r"y = \'ok\'",
-         "x = 'its'\ny = 'ok'\n"),
-    ], ids=["backslash_free_replacement", "quote_escaped"])
+    @pytest.mark.parametrize(
+        "content,old,new,expected",
+        [
+            (
+                'pat = re.compile(r"\\d+")\n',
+                r'pat = re.compile(r"\\d+")',
+                "pat = None",
+                "pat = None\n",
+            ),
+            (
+                "x = 'it'\n",
+                r"x = \'it\'",
+                r"x = \'its\'" + "\n" + r"y = \'ok\'",
+                "x = 'its'\ny = 'ok'\n",
+            ),
+        ],
+        ids=["backslash_free_replacement", "quote_escaped"],
+    )
     def test_verified_correction_with_note(self, workdir, content, old, new, expected):
         f = workdir / "c.py"
         f.write_text(content)
@@ -179,13 +242,22 @@ class TestPatchEndToEnd:
         assert "escape-drift auto-corrected" in r["note"]
         assert f.read_text() == expected
 
-    @pytest.mark.parametrize("content,old,new", [
-        ('s = "a\\\\b"\n', r's = "a\\b"', r's = "a\\c"'),
-        ("s = 'it\\'s'\n", r"s = 'it\'s'", r"s = 'it\'s ok'"),
-        ('sep = r"a\\b"\n', r'sep = r"a\b"',
-         r'sep = r"a\c"' + "\n" + r'other = "C:\\backup"'),
-    ], ids=["real_double_backslash", "real_escaped_quote", "clean_resend"])
-    def test_file_really_containing_escapes_is_left_alone(self, workdir, content, old, new):
+    @pytest.mark.parametrize(
+        "content,old,new",
+        [
+            ('s = "a\\\\b"\n', r's = "a\\b"', r's = "a\\c"'),
+            ("s = 'it\\'s'\n", r"s = 'it\'s'", r"s = 'it\'s ok'"),
+            (
+                'sep = r"a\\b"\n',
+                r'sep = r"a\b"',
+                r'sep = r"a\c"' + "\n" + r'other = "C:\\backup"',
+            ),
+        ],
+        ids=["real_double_backslash", "real_escaped_quote", "clean_resend"],
+    )
+    def test_file_really_containing_escapes_is_left_alone(
+        self, workdir, content, old, new
+    ):
         f = workdir / "d.py"
         f.write_text(content)
         r = _patch_tool(path=str(f), old_string=old, new_string=new, task_id="t-drift")

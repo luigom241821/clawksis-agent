@@ -1,17 +1,23 @@
 """Regression for #117276: ``clawk doctor``'s exit status must agree with its unresolved findings."""
+
 from types import SimpleNamespace
 
 import pytest
 
 
-@pytest.mark.parametrize("issues,manual,fixed,fix,expected", [
-    (["needs repair"], [], 0, False, 1),
-    ([], ["manual repair"], 0, False, 1),
-    ([], [], 0, False, 0),
-    ([], [], 1, True, 0),
-    ([], ["remaining repair"], 1, True, 1),
-])
-def test_doctor_command_reports_remaining_findings(monkeypatch, capsys, issues, manual, fixed, fix, expected):
+@pytest.mark.parametrize(
+    "issues,manual,fixed,fix,expected",
+    [
+        (["needs repair"], [], 0, False, 1),
+        ([], ["manual repair"], 0, False, 1),
+        ([], [], 0, False, 0),
+        ([], [], 1, True, 0),
+        ([], ["remaining repair"], 1, True, 1),
+    ],
+)
+def test_doctor_command_reports_remaining_findings(
+    monkeypatch, capsys, issues, manual, fixed, fix, expected
+):
     from clawk_cli import doctor
     from clawk_cli.main import cmd_doctor
     from clawk_cli.doctor_report import Finding
@@ -47,8 +53,13 @@ main()
     result = subprocess.run(
         [sys.executable, "-c", program],
         cwd=Path(__file__).resolve().parents[2],
-        capture_output=True, text=True, encoding="utf-8", timeout=30,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
         check=False,
     )
     assert result.returncode == int(unresolved), result.stdout + result.stderr
-    assert ("fixture unresolved problem" if unresolved else "All checks passed") in result.stdout
+    assert (
+        "fixture unresolved problem" if unresolved else "All checks passed"
+    ) in result.stdout

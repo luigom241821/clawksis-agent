@@ -67,16 +67,19 @@ def test_status_reports_auth_required_in_gated_mode(gated_client):
     assert body["auth_providers"] == ["stub"]
 
 
-
-
 # Host-local detail (absolute paths, PID, internal gateway URL) is deployment
 # recon a liveness probe never needs. ``/api/status`` bypasses dashboard auth
 # (it is in ``PUBLIC_API_PATHS``), so on a network-exposed bind it must not
 # leak that detail to anonymous callers.
-_HOST_DETAIL_FIELDS = frozenset({
-    "clawk_home", "config_path", "env_path", "gateway_pid",
-    "gateway_health_url",
-})
+_HOST_DETAIL_FIELDS = frozenset(
+    {
+        "clawk_home",
+        "config_path",
+        "env_path",
+        "gateway_pid",
+        "gateway_health_url",
+    }
+)
 
 
 def test_status_withholds_host_detail_in_gated_mode(gated_client):
@@ -93,5 +96,3 @@ def test_status_withholds_host_detail_in_gated_mode(gated_client):
     # Deployment recon must be withheld from the anonymous public probe.
     leaked = _HOST_DETAIL_FIELDS & set(body.keys())
     assert not leaked, f"/api/status leaked host detail under the gate: {leaked}"
-
-

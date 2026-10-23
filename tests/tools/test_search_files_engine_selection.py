@@ -37,8 +37,6 @@ class RecordingEnvironment:
         return [command for command in self.commands if "--files" in command]
 
 
-
-
 def test_default_file_search_runs_one_bounded_unsorted_rg_command():
     env = RecordingEnvironment()
     ops = ShellFileOperations(env)
@@ -256,8 +254,6 @@ def test_invalid_direct_file_order_returns_structured_error():
     assert env.rg_commands == []
 
 
-
-
 @pytest.mark.parametrize("blank_path", ["", " \t ", None])
 def test_handler_normalizes_blank_path_to_current_directory(monkeypatch, blank_path):
     """#112424: a present-but-blank (or null) path must fall back to the documented '.' default."""
@@ -269,11 +265,11 @@ def test_handler_normalizes_blank_path_to_current_directory(monkeypatch, blank_p
 
     monkeypatch.setattr("tools.file_tools.search_tool", fake_search_tool)
 
-    registry.dispatch("search_files", {"pattern": "needle", "target": "files", "path": blank_path})
+    registry.dispatch(
+        "search_files", {"pattern": "needle", "target": "files", "path": blank_path}
+    )
 
     assert captured["path"] == "."
-
-
 
 
 def test_repeated_search_key_distinguishes_order(monkeypatch):
@@ -281,7 +277,9 @@ def test_repeated_search_key_distinguishes_order(monkeypatch):
         def search(self, **kwargs):
             return SearchResult()
 
-    monkeypatch.setattr("tools.file_tools._get_file_ops", lambda task_id: StubOperations())
+    monkeypatch.setattr(
+        "tools.file_tools._get_file_ops", lambda task_id: StubOperations()
+    )
     task_id = "engine-order-key"
     for _ in range(3):
         assert "BLOCKED" not in json.loads(
@@ -322,15 +320,16 @@ def test_resolved_executable_with_spaces_is_used_by_every_rg_invocation():
     assert ops._zero_match_probe("absent", "/repo", None) is None
 
     invocations = [
-        command for command in env.commands
-        if any(flag in command for flag in ("--files", "--line-number", "--count-matches"))
+        command
+        for command in env.commands
+        if any(
+            flag in command for flag in ("--files", "--line-number", "--count-matches")
+        )
     ]
     assert invocations
     assert all("'/opt/Rip Grep/rg'" in command for command in invocations)
     assert all(not re.search(r"(?:^|[; ])rg\s", command) for command in invocations)
     assert len([c for c in env.commands if c.startswith("command -v rg")]) == 1
-
-
 
 
 @pytest.mark.platforms("windows")
@@ -348,6 +347,7 @@ def test_off_path_windows_rg_miss_is_reprobed_then_success_is_cached(
     def command_v_miss(command, **kwargs):
         probes.append(command)
         from tools.file_operations import ExecuteResult
+
         return ExecuteResult(stdout="", exit_code=1)
 
     monkeypatch.setattr(ops, "_exec", command_v_miss)
@@ -463,9 +463,7 @@ def test_comma_delimited_file_roots_preserve_internal_spaces_in_one_search():
         return {"output": "", "returncode": 1}
 
     env.execute = execute
-    result = ShellFileOperations(env).search(
-        "*.py", path=combined, target="files"
-    )
+    result = ShellFileOperations(env).search("*.py", path=combined, target="files")
 
     assert result.error is None
     assert result.files == ["C:/root one/a.py", "C:/root two/b.py"]

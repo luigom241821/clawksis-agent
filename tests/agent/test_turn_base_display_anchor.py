@@ -23,10 +23,12 @@ from types import SimpleNamespace
 from agent.model_metadata import estimate_messages_tokens_rough
 from agent.usage_anchor import anchored_context_tokens, capture_usage_anchor
 
+
 def _msg(role, content, **extra):
     m = {"role": role, "content": content}
     m.update(extra)
     return m
+
 
 class TestChargeStaleThinkingKwarg:
     def test_delta_excludes_stale_reasoning(self):
@@ -37,13 +39,9 @@ class TestChargeStaleThinkingKwarg:
         # Simulate a tool loop appending reasoning-heavy assistant turns.
         big_thinking = "deliberation " * 5_000  # ~65K chars ≈ 16K tokens
         messages.append(_msg("assistant", "the anchored reply itself"))
-        messages.append(
-            _msg("assistant", "step one", reasoning_content=big_thinking)
-        )
+        messages.append(_msg("assistant", "step one", reasoning_content=big_thinking))
         messages.append(_msg("tool", "tool output", tool_call_id="c1"))
-        messages.append(
-            _msg("assistant", "step two", reasoning_content=big_thinking)
-        )
+        messages.append(_msg("assistant", "step two", reasoning_content=big_thinking))
 
         charged = anchored_context_tokens(messages, anchor)
         uncharged = anchored_context_tokens(
@@ -65,6 +63,7 @@ class TestChargeStaleThinkingKwarg:
         assert anchored_context_tokens(messages, anchor) == anchored_context_tokens(
             messages, anchor, charge_stale_thinking=True
         )
+
 
 class TestContextBreakdownPrefersTurnBaseAnchor:
     def test_breakdown_uses_turn_base_over_last_response(self, monkeypatch):
@@ -115,6 +114,7 @@ class TestContextBreakdownPrefersTurnBaseAnchor:
         payload = cb.compute_session_context_breakdown(agent, messages)
         assert payload["context_used"] >= 300_000
 
+
 class TestInvalidationSitesClearTurnBaseAnchor:
     def test_clearing_the_anchor_clears_the_turn_base_too(self):
         """Compaction and the codex-native rewrite clear via set_usage_anchor(None): both the
@@ -123,7 +123,12 @@ class TestInvalidationSitesClearTurnBaseAnchor:
         from agent.usage_anchor import set_usage_anchor
 
         messages = [_msg("user", "a"), _msg("assistant", "b")]
-        agent = SimpleNamespace(_usage_anchor=None, _turn_base_usage_anchor=None, _session_db=None, session_id=None)
+        agent = SimpleNamespace(
+            _usage_anchor=None,
+            _turn_base_usage_anchor=None,
+            _session_db=None,
+            session_id=None,
+        )
         first = capture_usage_anchor(1_000, 10, messages)
         set_usage_anchor(agent, first, turn_base=True)
         set_usage_anchor(agent, capture_usage_anchor(2_000, 10, messages))

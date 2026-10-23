@@ -32,8 +32,12 @@ def checked_store(tmp_path, monkeypatch, served):
         package.probe_version = False
         package.binary_rel = {"posix": f"bin/{name}", "win32": f"bin/{name}"}
         registry._packages[name] = package
-        archive, digest = make_tar(docroot, f"{name}.tar.gz", {f"bin/{name}": "fixture tool"})
-        lock.set_pin(name, "1.0", {"any": {"url": f"{url}/{archive}", "sha256": digest}})
+        archive, digest = make_tar(
+            docroot, f"{name}.tar.gz", {f"bin/{name}": "fixture tool"}
+        )
+        lock.set_pin(
+            name, "1.0", {"any": {"url": f"{url}/{archive}", "sha256": digest}}
+        )
         lock.save()
         engine.ensure(name, explicit=True)
         installed = pm.installed_package(name)
@@ -65,7 +69,9 @@ def test_activate_moves_store_dirs_ahead_of_user_dirs(checked_store, monkeypatch
     assert os.environ["PATH"].split(os.pathsep) == [*store, user_dir]
 
 
-def test_drift_activates_intact_chains_and_reports_the_live_verdict(checked_store, monkeypatch):
+def test_drift_activates_intact_chains_and_reports_the_live_verdict(
+    checked_store, monkeypatch
+):
     binaries, checks = checked_store
     user_dir = os.path.join(os.sep, "user", "bin")
     monkeypatch.setattr(registry._packages["third"], "deps", ("second",))
@@ -84,7 +90,9 @@ def test_drift_activates_intact_chains_and_reports_the_live_verdict(checked_stor
 
 @pytest.mark.parametrize("surface", ["gateway", "cli"])
 @pytest.mark.parametrize("damaged", [False, True])
-def test_startup_uses_one_verdict(checked_store, monkeypatch, capsys, caplog, surface, damaged):
+def test_startup_uses_one_verdict(
+    checked_store, monkeypatch, capsys, caplog, surface, damaged
+):
     binaries, checks = checked_store
     if surface == "gateway":
         from gateway import run
@@ -94,18 +102,27 @@ def test_startup_uses_one_verdict(checked_store, monkeypatch, capsys, caplog, su
 
         monkeypatch.setattr(run, "start_gateway", started)
         monkeypatch.setattr(run, "_exit_after_graceful_shutdown", lambda code: None)
-        monkeypatch.setattr("clawk_cli.boot_bootstrap.maybe_run_boot_bootstrap", lambda _root: None)
+        monkeypatch.setattr(
+            "clawk_cli.boot_bootstrap.maybe_run_boot_bootstrap", lambda _root: None
+        )
         monkeypatch.setattr(sys, "argv", ["gateway"])
         start = run.main
     else:
         from clawk_cli import main
 
         # Stop at --help: exercise the actual startup block, not an agent session.
-        monkeypatch.setattr("clawk_cli.boot_bootstrap.maybe_run_boot_bootstrap", lambda _root: None)
-        for name in ("_set_process_title", "_advertise_agent_env",
-                     "_sweep_stale_bytecode_if_checkout_changed",
-                     "_try_termux_fast_tui_launch", "_try_termux_fast_cli_launch",
-                     "_try_fast_serve_launch", "_try_fast_chat_launch"):
+        monkeypatch.setattr(
+            "clawk_cli.boot_bootstrap.maybe_run_boot_bootstrap", lambda _root: None
+        )
+        for name in (
+            "_set_process_title",
+            "_advertise_agent_env",
+            "_sweep_stale_bytecode_if_checkout_changed",
+            "_try_termux_fast_tui_launch",
+            "_try_termux_fast_cli_launch",
+            "_try_fast_serve_launch",
+            "_try_fast_chat_launch",
+        ):
             monkeypatch.setattr(main, name, lambda: None)
         monkeypatch.setattr(sys, "argv", ["clawk", "--help"])
 
@@ -128,5 +145,8 @@ def test_startup_uses_one_verdict(checked_store, monkeypatch, capsys, caplog, su
         assert str(binaries[1].parent) not in os.environ["PATH"].split(os.pathsep)
         assert "install out of sync (second: not installed or outdated)" in diagnostics
     else:
-        assert all(str(binary.parent) in os.environ["PATH"].split(os.pathsep) for binary in binaries)
+        assert all(
+            str(binary.parent) in os.environ["PATH"].split(os.pathsep)
+            for binary in binaries
+        )
         assert "install out of sync" not in diagnostics

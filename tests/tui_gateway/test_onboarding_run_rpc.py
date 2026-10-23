@@ -26,7 +26,9 @@ def launched_under_work(tmp_path, monkeypatch) -> tuple[Path, Path]:
 
 
 def _call(method: str, params: dict | None = None) -> dict:
-    return server.handle_request({"jsonrpc": "2.0", "id": 5, "method": method, "params": params or {}})
+    return server.handle_request(
+        {"jsonrpc": "2.0", "id": 5, "method": method, "params": params or {}}
+    )
 
 
 def _onboarding(home: Path) -> dict:
@@ -38,9 +40,19 @@ def test_state_answers_run_and_eligible(launched_under_work, monkeypatch):
     # The user's own "work" profile is install history, so an unset flag is not due, and on the
     # desktop's local backend nothing carries a first chat: the trial is never claimed on a used machine.
     as_local_desktop_backend(monkeypatch)
-    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "NOUS_API_KEY"):
+    for var in (
+        "OPENROUTER_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "NOUS_API_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
-    assert _call("onboarding.state")["result"] == {"run": False, "eligible": False, "session_id": None, "run_id": None}
+    assert _call("onboarding.state")["result"] == {
+        "run": False,
+        "eligible": False,
+        "session_id": None,
+        "run_id": None,
+    }
 
     # Onboarding runs in the default profile, so its key is what makes the run eligible.
     (root / ".env").write_text("OPENROUTER_API_KEY=sk-or-test\n", encoding="utf-8")
@@ -50,7 +62,12 @@ def test_state_answers_run_and_eligible(launched_under_work, monkeypatch):
 def test_set_run_writes_the_root_config(launched_under_work):
     root, work = launched_under_work
 
-    assert _call("onboarding.set_run", {"run": True})["result"] == {"run": True, "eligible": False, "session_id": None, "run_id": None}
+    assert _call("onboarding.set_run", {"run": True})["result"] == {
+        "run": True,
+        "eligible": False,
+        "session_id": None,
+        "run_id": None,
+    }
     assert _onboarding(root)["run"] is True
     assert "run" not in _onboarding(work)
     assert _call("onboarding.state")["result"]["run"] is True
@@ -75,7 +92,9 @@ def test_skip_leaves_the_first_chat_offer_alone(launched_under_work):
     assert PROFILE_BUILD_FLAG not in (_onboarding(root).get("seen") or {})
 
 
-def test_a_failed_write_fails_the_call_and_writes_nothing(launched_under_work, monkeypatch):
+def test_a_failed_write_fails_the_call_and_writes_nothing(
+    launched_under_work, monkeypatch
+):
     # The offer flag and run land in one write: if it fails the caller sees an error and neither is applied.
     from clawk_cli import config as config_mod
 
@@ -89,7 +108,9 @@ def test_a_failed_write_fails_the_call_and_writes_nothing(launched_under_work, m
 
     monkeypatch.setattr(config_mod, "atomic_config_write", refuse_the_offer_flag)
 
-    assert "error" in _call("onboarding.set_run", {"run": False, "mark_profile_offered": True})
+    assert "error" in _call(
+        "onboarding.set_run", {"run": False, "mark_profile_offered": True}
+    )
     assert "run" not in _onboarding(root)
     assert PROFILE_BUILD_FLAG not in (_onboarding(root).get("seen") or {})
 

@@ -25,6 +25,7 @@ from tools.file_tools_read_tracking import _read_tracker, reset_file_dedup
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeReadResult:
     def __init__(self, content="line1\nline2\n", total_lines=2, file_size=100):
         self.content = content
@@ -58,7 +59,9 @@ class _FakePatchResult:
 def _make_fake_ops(read_content="hello\n", file_size=6):
     fake = MagicMock(env=None)
     fake.read_file = lambda path, offset=1, limit=500: _FakeReadResult(
-        content=read_content, total_lines=1, file_size=file_size,
+        content=read_content,
+        total_lines=1,
+        file_size=file_size,
     )
     fake.write_file = lambda path, content: _FakeWriteResult()
     fake.patch_replace = lambda path, old, new, replace_all=False: _FakePatchResult()
@@ -78,8 +81,8 @@ def _modify_externally(path: str, content: str) -> None:
 # write_file: refuse stale / unread overwrites before touching the disk
 # ---------------------------------------------------------------------------
 
-class TestStalenessCheck(unittest.TestCase):
 
+class TestStalenessCheck(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         file_state.get_registry().clear()
@@ -110,15 +113,21 @@ class TestStalenessCheck(unittest.TestCase):
     def test_write_file_refuses_before_mutation_when_modified_externally(self):
         """read → external edit → write_file: refused, external edit preserved;
         a full re-read heals the baseline and the next write lands."""
-        self.assertNotIn("error", json.loads(read_file_tool(self._tmpfile, task_id="t1")))
+        self.assertNotIn(
+            "error", json.loads(read_file_tool(self._tmpfile, task_id="t1"))
+        )
         _modify_externally(self._tmpfile, "someone else changed this\n")
 
-        refused = json.loads(write_file_tool(self._tmpfile, "new content\n", task_id="t1"))
+        refused = json.loads(
+            write_file_tool(self._tmpfile, "new content\n", task_id="t1")
+        )
         self.assertTrue(refused.get("stale_write_blocked"), refused)
         with open(self._tmpfile) as f:
             self.assertEqual(f.read(), "someone else changed this\n")
 
-        self.assertNotIn("error", json.loads(read_file_tool(self._tmpfile, task_id="t1")))
+        self.assertNotIn(
+            "error", json.loads(read_file_tool(self._tmpfile, task_id="t1"))
+        )
         written = json.loads(write_file_tool(self._tmpfile, "merged\n", task_id="t1"))
         self.assertNotIn("error", written)
         with open(self._tmpfile) as f:
@@ -132,15 +141,33 @@ class TestStalenessCheck(unittest.TestCase):
         refused = json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t2"))
         self.assertTrue(refused.get("stale_write_blocked"), refused)
 
-        patched = json.loads(patch_tool(mode="replace", path=self._tmpfile,
-                                        old_string="original", new_string="patched", task_id="t2"))
+        patched = json.loads(
+            patch_tool(
+                mode="replace",
+                path=self._tmpfile,
+                old_string="original",
+                new_string="patched",
+                task_id="t2",
+            )
+        )
         self.assertNotIn("error", patched)
-        self.assertTrue(json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t2")).get("stale_write_blocked"))
+        self.assertTrue(
+            json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t2")).get(
+                "stale_write_blocked"
+            )
+        )
 
         with open(self._tmpfile, "w") as f:
             f.write("one\ntwo\nthree\n")
-        self.assertNotIn("error", json.loads(read_file_tool(self._tmpfile, offset=1, limit=1, task_id="t2")))
-        self.assertTrue(json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t2")).get("stale_write_blocked"))
+        self.assertNotIn(
+            "error",
+            json.loads(read_file_tool(self._tmpfile, offset=1, limit=1, task_id="t2")),
+        )
+        self.assertTrue(
+            json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t2")).get(
+                "stale_write_blocked"
+            )
+        )
 
         secret = "ghp_" + "A" * 40
         with open(self._tmpfile, "w") as f:
@@ -148,14 +175,20 @@ class TestStalenessCheck(unittest.TestCase):
         with patch("agent.redact._REDACT_ENABLED", True):
             read = json.loads(read_file_tool(self._tmpfile, task_id="t2"))
             self.assertNotIn(secret, read["content"])
-            refused = json.loads(write_file_tool(self._tmpfile, "token=«redacted:ghp_…»\n", task_id="t2"))
+            refused = json.loads(
+                write_file_tool(self._tmpfile, "token=«redacted:ghp_…»\n", task_id="t2")
+            )
         self.assertTrue(refused.get("stale_write_blocked"), refused)
         with open(self._tmpfile) as f:
             self.assertEqual(f.read(), f"token={secret}\n")
 
         new_path = os.path.join(self._tmpdir, "brand_new.txt")
-        self.assertNotIn("error", json.loads(write_file_tool(new_path, "one\n", task_id="t2")))
-        self.assertNotIn("error", json.loads(write_file_tool(new_path, "two\n", task_id="t2")))
+        self.assertNotIn(
+            "error", json.loads(write_file_tool(new_path, "one\n", task_id="t2"))
+        )
+        self.assertNotIn(
+            "error", json.loads(write_file_tool(new_path, "two\n", task_id="t2"))
+        )
         with open(new_path) as f:
             self.assertEqual(f.read(), "two\n")
         os.unlink(new_path)
@@ -169,9 +202,16 @@ class TestStalenessCheck(unittest.TestCase):
             f.write("".join(f"line {i}\n" for i in range(1, 2501)))
         first = json.loads(read_file_tool(self._tmpfile, task_id="t3"))
         self.assertTrue(first.get("truncated"), first)
-        self.assertTrue(json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t3")).get("stale_write_blocked"))
+        self.assertTrue(
+            json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t3")).get(
+                "stale_write_blocked"
+            )
+        )
 
-        self.assertNotIn("error", json.loads(read_file_tool(self._tmpfile, offset=2001, task_id="t3")))
+        self.assertNotIn(
+            "error",
+            json.loads(read_file_tool(self._tmpfile, offset=2001, task_id="t3")),
+        )
         reset_file_dedup("t3")
         written = json.loads(write_file_tool(self._tmpfile, "merged\n", task_id="t3"))
         self.assertNotIn("error", written, written)
@@ -181,15 +221,18 @@ class TestStalenessCheck(unittest.TestCase):
         with open(self._tmpfile, "w") as f:
             f.write("".join(f"line {i}\n" for i in range(1, 2501)))
         json.loads(read_file_tool(self._tmpfile, task_id="t3"))
-        _modify_externally(self._tmpfile, "".join(f"other {i}\n" for i in range(1, 2501)))
+        _modify_externally(
+            self._tmpfile, "".join(f"other {i}\n" for i in range(1, 2501))
+        )
         json.loads(read_file_tool(self._tmpfile, offset=2001, task_id="t3"))
         refused = json.loads(write_file_tool(self._tmpfile, "x\n", task_id="t3"))
         self.assertTrue(refused.get("stale_write_blocked"), refused)
         self.assertNotIn("Warning:", refused["error"])
 
-
     @patch("tools.file_tools._get_file_ops")
-    def test_relative_path_uses_recorded_session_cwd_for_staleness_tracking(self, mock_ops):
+    def test_relative_path_uses_recorded_session_cwd_for_staleness_tracking(
+        self, mock_ops
+    ):
         """Relative-path stale tracking must follow the session's recorded cwd."""
         start_dir = os.path.join(self._tmpdir, "start")
         live_dir = os.path.join(self._tmpdir, "worktree")
@@ -204,7 +247,9 @@ class TestStalenessCheck(unittest.TestCase):
             f.write("live copy\n")
 
         fake_ops = _make_fake_ops("live copy\n", 10)
-        fake_ops.write_file = MagicMock(side_effect=AssertionError("must not write stale content"))
+        fake_ops.write_file = MagicMock(
+            side_effect=AssertionError("must not write stale content")
+        )
         mock_ops.return_value = fake_ops
 
         from tools import terminal_tool
@@ -234,8 +279,8 @@ class TestStalenessCheck(unittest.TestCase):
 # Staleness in patch
 # ---------------------------------------------------------------------------
 
-class TestPatchStaleness(unittest.TestCase):
 
+class TestPatchStaleness(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         file_state.get_registry().clear()
@@ -263,11 +308,15 @@ class TestPatchStaleness(unittest.TestCase):
         with open(self._tmpfile, "w") as f:
             f.write("externally modified\n")
 
-        result = json.loads(patch_tool(
-            mode="replace", path=self._tmpfile,
-            old_string="original", new_string="patched",
-            task_id="p1",
-        ))
+        result = json.loads(
+            patch_tool(
+                mode="replace",
+                path=self._tmpfile,
+                old_string="original",
+                new_string="patched",
+                task_id="p1",
+            )
+        )
         self.assertIn("_warning", result)
         self.assertIn("modified since you last read", result["_warning"])
 
@@ -277,18 +326,21 @@ class TestPatchStaleness(unittest.TestCase):
         mock_ops.return_value = _make_fake_ops("original line\n", 15)
         read_file_tool(self._tmpfile, task_id="p2")
 
-        result = json.loads(patch_tool(
-            mode="replace", path=self._tmpfile,
-            old_string="original", new_string="patched",
-            task_id="p2",
-        ))
+        result = json.loads(
+            patch_tool(
+                mode="replace",
+                path=self._tmpfile,
+                old_string="original",
+                new_string="patched",
+                task_id="p2",
+            )
+        )
         self.assertNotIn("_warning", result)
 
 
 # ---------------------------------------------------------------------------
 # Unit test for the helper
 # ---------------------------------------------------------------------------
-
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ import pytest
 
 from gateway.session_context import _VAR_MAP, clear_session_vars, set_session_vars
 
+
 @pytest.fixture
 def temp_cron_home(tmp_path, monkeypatch):
     from cron import jobs as cron_jobs
@@ -24,6 +25,7 @@ def temp_cron_home(tmp_path, monkeypatch):
     with cron_jobs.use_cron_store(tmp_path):
         cron_jobs.ensure_dirs()
         yield tmp_path
+
 
 def _enter_cron_context(platform=None, chat_id=None, thread_id=None):
     """Simulate the contextvar state run_job() establishes for a cron run."""
@@ -36,24 +38,32 @@ def _enter_cron_context(platform=None, chat_id=None, thread_id=None):
     extra = []
     if platform is not None:
         extra.append(
-            (_VAR_MAP["CLAWK_CRON_AUTO_DELIVER_PLATFORM"],
-             _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_PLATFORM"].set(platform))
+            (
+                _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_PLATFORM"],
+                _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_PLATFORM"].set(platform),
+            )
         )
         extra.append(
-            (_VAR_MAP["CLAWK_CRON_AUTO_DELIVER_CHAT_ID"],
-             _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_CHAT_ID"].set(str(chat_id)))
+            (
+                _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_CHAT_ID"],
+                _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_CHAT_ID"].set(str(chat_id)),
+            )
         )
         if thread_id is not None:
             extra.append(
-                (_VAR_MAP["CLAWK_CRON_AUTO_DELIVER_THREAD_ID"],
-                 _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_THREAD_ID"].set(str(thread_id)))
+                (
+                    _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_THREAD_ID"],
+                    _VAR_MAP["CLAWK_CRON_AUTO_DELIVER_THREAD_ID"].set(str(thread_id)),
+                )
             )
     return tokens, extra
+
 
 def _exit_cron_context(tokens, extra):
     for var, token in reversed(extra):
         var.reset(token)
     clear_session_vars(tokens)
+
 
 def _create(deliver=None):
     from tools.cronjob_tools import cronjob
@@ -66,6 +76,7 @@ def _create(deliver=None):
             deliver=deliver,
         )
     )
+
 
 class TestCronContextDeliveryResolution:
     def test_omitted_deliver_resolves_to_creator_target(self, temp_cron_home):
@@ -119,6 +130,7 @@ class TestCronContextDeliveryResolution:
             _exit_cron_context(tokens, extra)
         assert result["deliver"] == "discord:#engineering"
 
+
 class TestCronContextUpdatePath:
     def test_update_deliver_origin_resolves_in_cron_context(self, temp_cron_home):
         """The update action must apply the same resolution as create — a
@@ -151,6 +163,7 @@ class TestCronContextUpdatePath:
         )
         assert result["success"] is True
         assert get_job(created["job_id"]).get("deliver") == "origin"
+
 
 class TestNonCronContextUnchanged:
     def test_chat_session_create_keeps_literal_origin(self, temp_cron_home):

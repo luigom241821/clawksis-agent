@@ -144,19 +144,17 @@ Vind de bestanden.
     assert compressor._previous_summary is None
 
 
-
-
 def test_zero_user_provenance_survives_iterative_compaction(compressor):
     messages = _assistant_tool_turns(0, 12)
-    first_summary = f"{SUMMARY_PREFIX}\n{_valid_zero_user_summary('First pass').strip()}"
+    first_summary = (
+        f"{SUMMARY_PREFIX}\n{_valid_zero_user_summary('First pass').strip()}"
+    )
 
     with patch.object(compressor, "_generate_summary", return_value=first_summary):
         first = compressor.compress(messages, current_tokens=90_000)
 
     first_handoffs = [
-        message
-        for message in first
-        if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
+        message for message in first if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
     ]
     assert len(first_handoffs) == 1
     assert first_handoffs[0][COMPRESSED_SUMMARY_HAS_USER_TURN_KEY] is False
@@ -193,9 +191,7 @@ def test_zero_user_provenance_survives_iterative_compaction(compressor):
         second = resumed.compress(second_input, current_tokens=90_000)
 
     second_handoffs = [
-        message
-        for message in second
-        if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
+        message for message in second if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
     ]
     assert len(second_handoffs) == 1
     assert second_handoffs[0][COMPRESSED_SUMMARY_HAS_USER_TURN_KEY] is False
@@ -223,9 +219,13 @@ def test_real_task_wins_over_trailing_max_iterations_nudge(compressor):
     human = {"role": "user", "content": "Refactor the auth module and add tests."}
     messages = [
         human,
-        {"role": "assistant", "content": "Working on it.", "tool_calls": [
-            {"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}
-        ]},
+        {
+            "role": "assistant",
+            "content": "Working on it.",
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "terminal", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": "ok"},
         {"role": "user", "content": MAX_ITERATIONS_SUMMARY_REQUEST},
     ]
@@ -355,9 +355,13 @@ def test_real_task_wins_over_trailing_dropped_tools_continuation_nudge(compresso
     human = {"role": "user", "content": "Refactor the auth module and add tests."}
     messages = [
         human,
-        {"role": "assistant", "content": "Working on it.", "tool_calls": [
-            {"id": "c1", "function": {"name": "write_file", "arguments": "{}"}}
-        ]},
+        {
+            "role": "assistant",
+            "content": "Working on it.",
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "write_file", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "c1", "content": "ok"},
         {
             "role": "user",
@@ -401,9 +405,7 @@ def test_compress_context_todo_snapshot_stays_synthetic_across_two_boundaries(
         )
 
     first_handoff = next(
-        message
-        for message in first
-        if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
+        message for message in first if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
     )
     assert first_handoff[COMPRESSED_SUMMARY_HAS_USER_TURN_KEY] is False
     assert "First boundary" in first_handoff["content"]
@@ -434,23 +436,9 @@ def test_compress_context_todo_snapshot_stays_synthetic_across_two_boundaries(
         )
 
     handoff = next(
-        message
-        for message in second
-        if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
+        message for message in second if message.get(COMPRESSED_SUMMARY_METADATA_KEY)
     )
     assert handoff[COMPRESSED_SUMMARY_HAS_USER_TURN_KEY] is False
     assert "Second boundary" in handoff["content"]
     assert "User asked:" not in handoff["content"]
     db.close()
-
-
-
-
-
-
-
-
-
-
-
-

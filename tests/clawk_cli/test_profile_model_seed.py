@@ -56,7 +56,10 @@ def test_fresh_profile_retains_resolvable_custom_endpoint(
         if schema == "providers"
         else [endpoint, unrelated]
     )
-    source = {"model": {"provider": provider, "default": "synthetic-model"}, schema: catalog}
+    source = {
+        "model": {"provider": provider, "default": "synthetic-model"},
+        schema: catalog,
+    }
 
     created = create_from_launch(source)
 
@@ -105,7 +108,9 @@ def test_fresh_profile_keeps_exact_key_provider_tuning(create_from_launch, model
     selected = {model["provider"]: {"request_timeout_seconds": 150}}
     neighbor = {"neighbor": {"request_timeout_seconds": 5}}
 
-    created = create_from_launch({"model": model, "providers": {**selected, **neighbor}})
+    created = create_from_launch(
+        {"model": model, "providers": {**selected, **neighbor}}
+    )
 
     assert created["providers"] == selected
 
@@ -162,15 +167,23 @@ def test_model_seed_selects_env_referenced_provider(monkeypatch):
     "schema,endpoint",
     [
         ("providers", {"name": "${LAB_NAME}", "base_url": "http://127.0.0.1:11434/v1"}),
-        ("custom_providers", {"name": "${LAB_NAME}", "base_url": "http://127.0.0.1:11434/v1"}),
+        (
+            "custom_providers",
+            {"name": "${LAB_NAME}", "base_url": "http://127.0.0.1:11434/v1"},
+        ),
         ("custom_providers", {"name": "Lab", "base_url": "${LAB_URL}"}),
     ],
 )
-def test_model_seed_matches_env_referenced_endpoint_names(monkeypatch, schema, endpoint):
+def test_model_seed_matches_env_referenced_endpoint_names(
+    monkeypatch, schema, endpoint
+):
     monkeypatch.setenv("LAB_NAME", "Lab")
     monkeypatch.setenv("LAB_URL", "http://127.0.0.1:11434/v1")
     catalog = {"gateway": endpoint} if schema == "providers" else [endpoint]
-    source = {"model": {"provider": "custom:lab", "default": "synthetic-model"}, schema: catalog}
+    source = {
+        "model": {"provider": "custom:lab", "default": "synthetic-model"},
+        schema: catalog,
+    }
 
     seed = launch_model_seed(source)
 
@@ -236,7 +249,9 @@ LAB = {"provider": "custom:lab", "default": "synthetic-model"}
             {"providers": {"lab": {"base_url": URL + "x"}}},
             {
                 "providers": {},
-                "custom_providers": [{"name": "Lab", "base_url": URL, "enabled": False}],
+                "custom_providers": [
+                    {"name": "Lab", "base_url": URL, "enabled": False}
+                ],
             },
         ),
         # Same-identity destination entries go even when they could not win on their own:

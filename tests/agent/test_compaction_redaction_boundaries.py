@@ -85,8 +85,7 @@ def test_serializer_input_redacts_content_and_tool_args():
                     "function": {
                         "name": "terminal",
                         "arguments": (
-                            f'{{"command": "curl {OAUTH_URL}",'
-                            f' "note": "{SECRET}"}}'
+                            f'{{"command": "curl {OAUTH_URL}", "note": "{SECRET}"}}'
                         ),
                     },
                 }
@@ -116,9 +115,7 @@ def test_summary_output_redacts_llm_echoed_secrets():
     c = _compressor()
     leaked = f"Summary leaked OPENAI_API_KEY {SECRET} and {OAUTH_URL}"
 
-    with patch(
-        "agent.context_compressor.call_llm", return_value=_response(leaked)
-    ):
+    with patch("agent.context_compressor.call_llm", return_value=_response(leaked)):
         summary = c._generate_summary([{"role": "user", "content": "hi"}])
 
     assert summary is not None

@@ -54,8 +54,6 @@ def _trip(cc: ContextCompressor) -> None:
 
 
 class TestRecoveryWindow:
-
-
     def test_effective_probe_clears_the_guard_completely(self):
         cc = _compressor()
         _trip(cc)
@@ -86,8 +84,6 @@ class TestRecoveryWindow:
             cc.update_from_response({"prompt_tokens": cc.threshold_tokens + 1})
         assert cc.should_compress(cc.threshold_tokens + 1) is False
         assert cc._ineffective_compression_count == 2
-
-
 
 
 class TestRestartSemantics:

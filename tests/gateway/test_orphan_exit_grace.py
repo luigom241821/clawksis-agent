@@ -13,6 +13,7 @@ The port-rebinding reason the 5s deadline was introduced still holds, so the
 force-kill stays — it just must not fire on a process that is still shutting
 down normally, and when it does fire it must say so.
 """
+
 from __future__ import annotations
 
 import pytest

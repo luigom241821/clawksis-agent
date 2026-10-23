@@ -1,4 +1,5 @@
 """Profile directory removal: wait out the live owner, then rmtree with a short retry."""
+
 from __future__ import annotations
 
 import contextlib
@@ -17,7 +18,10 @@ def wait_profile_unowned(profile_dir: Path, *, timeout: float | None = None) -> 
     """True once no gateway runtime holds ``profile_dir``'s ``gateway.lock`` (taken and released
     through ``exclusive_maintenance``); False when it is still held after ``timeout`` seconds."""
     from gateway.runtime_ownership import OwnershipConflict, exclusive_maintenance
-    deadline = time.monotonic() + (OWNER_RELEASE_WAIT_SECONDS if timeout is None else timeout)
+
+    deadline = time.monotonic() + (
+        OWNER_RELEASE_WAIT_SECONDS if timeout is None else timeout
+    )
     while True:
         try:
             with exclusive_maintenance([profile_dir]):
@@ -26,7 +30,7 @@ def wait_profile_unowned(profile_dir: Path, *, timeout: float | None = None) -> 
             pass
         except OSError:
             # A read-only copy (0555 home, 0444 lock) cannot host a reservation: probe it instead.
-            if _lock_unheld_read_only(profile_dir / 'gateway.lock'):
+            if _lock_unheld_read_only(profile_dir / "gateway.lock"):
                 return True
         if time.monotonic() >= deadline:
             return False
@@ -35,11 +39,12 @@ def wait_profile_unowned(profile_dir: Path, *, timeout: float | None = None) -> 
 
 def _lock_unheld_read_only(path: Path) -> bool:
     """A missing lock, or one our own flock through a read-only descriptor wins, has no holder."""
-    if os.name == 'nt':
+    if os.name == "nt":
         return False  # a sharing violation there is a live holder
     import fcntl
+
     try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | os.O_NONBLOCK)
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK)
     except FileNotFoundError:
         return True
     try:

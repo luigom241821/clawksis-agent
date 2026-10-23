@@ -8,6 +8,7 @@ informational. Nothing is deleted — every finding stays in the report with fil
 nothing here applies to a bundled skill's own ``SKILL.md`` / ``skills/`` tree, which the agent
 does read as instructions. Every function is a pure predicate on (finding, line, path).
 """
+
 from __future__ import annotations
 
 import base64
@@ -35,11 +36,24 @@ STEP_DOWN = {"critical": "high", "high": "medium"}
 DOC_PROSE_EXTENSIONS = {".md", ".txt", ".rst", ".html"}
 _PROSE_KEEPS_FULL_SEVERITY_CATEGORIES = {"injection", "credential_exposure"}
 _PROSE_KEEPS_FULL_SEVERITY_IDS = {
-    "context_exfil", "send_to_url", "md_image_exfil", "md_link_exfil", "ssh_backdoor",
-    "curl_pipe_shell", "wget_pipe_shell", "curl_pipe_python",
-    "agent_config_mod", "agent_config_mod_shell", "agent_config_contract", "agent_config_ref",
-    "clawk_config_mod", "clawk_config_mod_shell", "clawk_config_ref",
-    "other_agent_config_mod", "other_agent_config_mod_shell", "other_agent_config_ref",
+    "context_exfil",
+    "send_to_url",
+    "md_image_exfil",
+    "md_link_exfil",
+    "ssh_backdoor",
+    "curl_pipe_shell",
+    "wget_pipe_shell",
+    "curl_pipe_python",
+    "agent_config_mod",
+    "agent_config_mod_shell",
+    "agent_config_contract",
+    "agent_config_ref",
+    "clawk_config_mod",
+    "clawk_config_mod_shell",
+    "clawk_config_ref",
+    "other_agent_config_mod",
+    "other_agent_config_mod_shell",
+    "other_agent_config_ref",
 }
 # Agent instruction surfaces inside a plugin — a bundled skill tree and the post-install note
 # the agent is shown — are executed as instructions, so they get no prose cap.
@@ -50,7 +64,10 @@ _AGENT_INSTRUCTION_FILES = {"skill.md", "after-install.md"}
 def is_doc_prose(rel_path: str) -> bool:
     """A documentation file that the loader never executes and the agent never runs as a skill."""
     p = Path(rel_path)
-    if p.suffix.lower() not in DOC_PROSE_EXTENSIONS or p.name.lower() in _AGENT_INSTRUCTION_FILES:
+    if (
+        p.suffix.lower() not in DOC_PROSE_EXTENSIONS
+        or p.name.lower() in _AGENT_INSTRUCTION_FILES
+    ):
         return False
     return not any(part.lower() in _AGENT_INSTRUCTION_DIRS for part in p.parts[:-1])
 
@@ -71,14 +88,20 @@ def is_ci_workflow(rel_path: str) -> bool:
     p = Path(rel_path)
     if p.name.lower() == ".gitlab-ci.yml":
         return True
-    return (len(p.parts) == 3 and p.parts[0].lower() == ".github" and p.parts[1].lower() == "workflows"
-            and p.suffix.lower() in _CI_WORKFLOW_SUFFIXES)
+    return (
+        len(p.parts) == 3
+        and p.parts[0].lower() == ".github"
+        and p.parts[1].lower() == "workflows"
+        and p.suffix.lower() in _CI_WORKFLOW_SUFFIXES
+    )
 
 
 def is_agent_facing(finding: Finding) -> bool:
     """A shape whose prose IS the payload (injection, agent-config edit, install one-liner, leaked key)."""
-    return (finding.category in _PROSE_KEEPS_FULL_SEVERITY_CATEGORIES
-            or finding.pattern_id in _PROSE_KEEPS_FULL_SEVERITY_IDS)
+    return (
+        finding.category in _PROSE_KEEPS_FULL_SEVERITY_CATEGORIES
+        or finding.pattern_id in _PROSE_KEEPS_FULL_SEVERITY_IDS
+    )
 
 
 def prose_cap(finding: Finding) -> Optional[str]:
@@ -97,8 +120,14 @@ def prose_cap(finding: Finding) -> Optional[str]:
 _PIPE_TO_SHELL_IDS = {"curl_pipe_shell", "wget_pipe_shell", "curl_pipe_python"}
 _URL_IN_LINE = re.compile(r'https?://([^\s/"\'`)]+)([^\s"\'`)]*)')
 _TRUSTED_INSTALLER_HOSTS = {
-    "clawksis-agent.nousresearch.com", "ollama.com", "bun.sh",
-    "get.docker.com", "sh.rustup.rs", "deno.land", "astral.sh", "app.factory.ai",
+    "clawksis-agent.nousresearch.com",
+    "ollama.com",
+    "bun.sh",
+    "get.docker.com",
+    "sh.rustup.rs",
+    "deno.land",
+    "astral.sh",
+    "app.factory.ai",
 }
 
 
@@ -127,9 +156,16 @@ def is_trusted_installer_pipe(finding: Finding, line: str) -> bool:
 # ``en.yaml`` itself matches ``updating: "... AGENTS.md"``). Injection shapes and leaked keys
 # keep full severity: a pack can still carry model-directed text.
 _CATALOG_STEPS_DOWN_IDS = {
-    "agent_config_mod", "agent_config_mod_shell", "agent_config_contract", "agent_config_ref",
-    "clawk_config_mod", "clawk_config_mod_shell", "clawk_config_ref",
-    "other_agent_config_mod", "other_agent_config_mod_shell", "other_agent_config_ref",
+    "agent_config_mod",
+    "agent_config_mod_shell",
+    "agent_config_contract",
+    "agent_config_ref",
+    "clawk_config_mod",
+    "clawk_config_mod_shell",
+    "clawk_config_ref",
+    "other_agent_config_mod",
+    "other_agent_config_mod_shell",
+    "other_agent_config_ref",
 }
 _LOCALE_CATALOG_SUFFIXES = {".yaml", ".yml"}
 
@@ -137,7 +173,11 @@ _LOCALE_CATALOG_SUFFIXES = {".yaml", ".yml"}
 def is_locale_catalog(rel_path: str) -> bool:
     """A ``locales/<name>.yaml`` catalog at the plugin root."""
     p = Path(rel_path)
-    return len(p.parts) == 2 and p.parts[0].lower() == "locales" and p.suffix.lower() in _LOCALE_CATALOG_SUFFIXES
+    return (
+        len(p.parts) == 2
+        and p.parts[0].lower() == "locales"
+        and p.suffix.lower() in _LOCALE_CATALOG_SUFFIXES
+    )
 
 
 def catalog_cap(finding: Finding) -> Optional[str]:
@@ -146,7 +186,11 @@ def catalog_cap(finding: Finding) -> Optional[str]:
     file — so it caps to a note (medium), not merely one step; other shapes take the one-step prose cap."""
     if finding.pattern_id in _CATALOG_STEPS_DOWN_IDS:
         rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-        return finding.severity if rank.get(finding.severity, 0) <= rank["medium"] else "medium"
+        return (
+            finding.severity
+            if rank.get(finding.severity, 0) <= rank["medium"]
+            else "medium"
+        )
     return prose_cap(finding)
 
 
@@ -159,22 +203,27 @@ def catalog_cap(finding: Finding) -> Optional[str]:
 # ~/.clawksis/profiles/N/roles/crew``). It lands at medium (a note). A wider target (``$HOME``, ``$HOME/.clawksis``,
 # ``$HOME/.clawksis/plugins/*``) only gets the generic prose step (high, caution) and the same line in a ``.sh``
 # stays critical (#115353).
-_UNINSTALL_HOME = r'(?:\$HOME|\$\{HOME\}|~)/\.clawk(?:sis)?'
+_UNINSTALL_HOME = r"(?:\$HOME|\$\{HOME\}|~)/\.clawk(?:sis)?"
 
 
 def _uninstall_operand(group: str) -> str:
     """One ``~/.clawksis/<segments>/<leaf>`` operand, optionally quoted (quote tracked by *group*)."""
-    return (rf'(?P<{group}>["\']?)' + _UNINSTALL_HOME
-            + rf'(?:/[A-Za-z0-9][A-Za-z0-9._-]*)+/?(?P={group})')
+    return (
+        rf'(?P<{group}>["\']?)'
+        + _UNINSTALL_HOME
+        + rf"(?:/[A-Za-z0-9][A-Za-z0-9._-]*)+/?(?P={group})"
+    )
 
 
 # ``rm`` plus one or more such operands on the line (``crew`` deletes a plugins dir and a roles dir):
 # distinct capture-group names so the optional-quote backreferences do not collide.
 _SELF_UNINSTALL_RM = re.compile(
-    r'^(?:\$\s*)?rm\s+(?:-[a-zA-Z]+\s+)*'
+    r"^(?:\$\s*)?rm\s+(?:-[a-zA-Z]+\s+)*"
     + _uninstall_operand("q0")
-    + r'(?:\s+' + _uninstall_operand("q1") + r')*'
-    + r'\s*(?:#.*)?$'
+    + r"(?:\s+"
+    + _uninstall_operand("q1")
+    + r")*"
+    + r"\s*(?:#.*)?$"
 )
 
 # The same shape embedded in a backtick code span mid-prose (``… When you're done, `rm -rf
@@ -182,9 +231,11 @@ _SELF_UNINSTALL_RM = re.compile(
 # ``~/.clawksis`` operands and then close (no chaining, no ``&&``, no trailing command), so a chained or
 # force-push example (``rm -rf ~/x && git push --force``) does not qualify.
 _SELF_UNINSTALL_RM_IN_SPAN = re.compile(
-    r'`(?:\$\s*)?rm\s+(?:-[a-zA-Z]+\s+)*'
+    r"`(?:\$\s*)?rm\s+(?:-[a-zA-Z]+\s+)*"
     + _uninstall_operand("q2")
-    + r'(?:\s+' + _uninstall_operand("q3") + r')*\s*`'
+    + r"(?:\s+"
+    + _uninstall_operand("q3")
+    + r")*\s*`"
 )
 
 
@@ -192,8 +243,10 @@ def is_self_uninstall_doc(finding: Finding, line: str) -> bool:
     if finding.pattern_id != "destructive_home_rm":
         return False
     stripped = line.strip()
-    return (_SELF_UNINSTALL_RM.match(stripped) is not None
-            or _SELF_UNINSTALL_RM_IN_SPAN.search(line) is not None)
+    return (
+        _SELF_UNINSTALL_RM.match(stripped) is not None
+        or _SELF_UNINSTALL_RM_IN_SPAN.search(line) is not None
+    )
 
 
 # ── (2) test trees and fixtures ──────────────────────────────────────────────────────────────
@@ -207,7 +260,10 @@ def is_self_uninstall_doc(finding: Finding, line: str) -> bool:
 # ``tests/`` dir); a nested ``src/spec/handler.py`` is runtime code and gets no cap.
 TEST_TREE_DIRS = {"tests", "test", "testing", "spec", "specs", "fixtures"}
 _TEST_DIRS_ANY_DEPTH = {"__tests__", "__fixtures__", "__mocks__"}
-_TEST_FILE_NAME = re.compile(r"^(?:tests?_[^/]*|[^/]*_tests?\.[^./]+|[^/]*\.(?:test|spec)\.[^./]+)$", re.IGNORECASE)
+_TEST_FILE_NAME = re.compile(
+    r"^(?:tests?_[^/]*|[^/]*_tests?\.[^./]+|[^/]*\.(?:test|spec)\.[^./]+)$",
+    re.IGNORECASE,
+)
 
 
 # In a test file, a hostile string that is only DATA — quoted, with no exec verb on the line
@@ -216,14 +272,27 @@ _TEST_FILE_NAME = re.compile(r"^(?:tests?_[^/]*|[^/]*_tests?\.[^./]+|[^/]*\.(?:t
 # in a test still steps down only once: the line executes when imported.
 _EXEC_ON_LINE = re.compile(
     r"\b(?:system|popen|run|call|check_output|check_call|Popen|exec|execv\w*|spawn\w*|eval|execSync|execFile\w*"
-    r"|spawnSync|child_process|source|os\.startfile|open)\s*\(|\$\(|(?<![\w\\])`", re.IGNORECASE)
+    r"|spawnSync|child_process|source|os\.startfile|open)\s*\(|\$\(|(?<![\w\\])`",
+    re.IGNORECASE,
+)
 
 
 # In Python/JS/TS a quote never runs a command, so ``$(whoami)`` or a backtick INSIDE a string
 # literal (``'; rm -rf / ; $(whoami) `id`'`` in a hostile-input table) is data, not an exec marker;
 # the call that would run it (``os.system(``, ``exec(``) sits outside the literal and still counts.
 # Shell-like files keep the raw line: there ``"$(id)"`` executes inside double quotes.
-_QUOTES_NEVER_EXECUTE_SUFFIXES = {".py", ".pyi", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".mts", ".cts", ".tsx"}
+_QUOTES_NEVER_EXECUTE_SUFFIXES = {
+    ".py",
+    ".pyi",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".jsx",
+    ".ts",
+    ".mts",
+    ".cts",
+    ".tsx",
+}
 
 # An exec call whose FIRST argument is a string literal runs that literal: ``os.system('rm -rf /')``,
 # ``open('/etc/passwd')``, ``exec("code")``. A test dispatcher that passes the hostile string as a
@@ -233,10 +302,14 @@ _QUOTES_NEVER_EXECUTE_SUFFIXES = {".py", ".pyi", ".js", ".mjs", ".cjs", ".jsx", 
 # it; keying on first-argument position distinguishes the two without dropping a real exec.
 _EXEC_CALL_OPEN = re.compile(
     r"\b(?:system|popen|run|call|check_output|check_call|Popen|exec|execv\w*|spawn\w*|eval|execSync"
-    r"|execFile\w*|spawnSync|source|os\.startfile|open)\s*\(\s*", re.IGNORECASE)
+    r"|execFile\w*|spawnSync|source|os\.startfile|open)\s*\(\s*",
+    re.IGNORECASE,
+)
 
 
-def _exec_first_arg_literal_spans(line: str, spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+def _exec_first_arg_literal_spans(
+    line: str, spans: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
     """Literal spans that sit as the direct first argument of an exec call (``open('<lit>')``)."""
     out = []
     for m in _EXEC_CALL_OPEN.finditer(line):
@@ -248,11 +321,15 @@ def _exec_first_arg_literal_spans(line: str, spans: list[tuple[int, int]]) -> li
 
 def _executes(line: str, rel_path: str) -> bool:
     if Path(rel_path).suffix.lower() in _QUOTES_NEVER_EXECUTE_SUFFIXES:
-        line = _LITERAL_SPANS.sub(lambda m: m.group(0)[0] + " " * (len(m.group(0)) - 2) + m.group(0)[-1], line)
+        line = _LITERAL_SPANS.sub(
+            lambda m: m.group(0)[0] + " " * (len(m.group(0)) - 2) + m.group(0)[-1], line
+        )
     return _EXEC_ON_LINE.search(line) is not None
 
 
-def is_inert_fixture_line(finding: Finding, line: str, is_code: bool, rel_path: str = "") -> bool:
+def is_inert_fixture_line(
+    finding: Finding, line: str, is_code: bool, rel_path: str = ""
+) -> bool:
     """The finding's text is quoted test data that nothing on the line runs: every hit is inside a
     string literal, and no such literal is the direct first argument of an exec call. A literal passed
     as a later argument / nested in a dict to a test dispatcher (``call(x, "/etc/passwd")``) is data;
@@ -292,8 +369,24 @@ def is_test_tree(rel_path: str) -> bool:
 # call, and the finding drops to informational (kept in the report).
 _BASE64_RUN = re.compile(r"(?:base64,)?([A-Za-z0-9+/]{24,}={0,2})")
 _MEDIA_MAGIC = (
-    b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF", b"wOFF", b"wOF2", b"OTTO", b"\x00\x01\x00\x00",
-    b"ttcf", b"BM", b"%PDF", b"\x00\x00\x01\x00", b"<svg", b"<?xml", b"ID3", b"OggS", b"fLaC", b"\x1a\x45\xdf\xa3",
+    b"\x89PNG",
+    b"\xff\xd8\xff",
+    b"GIF8",
+    b"RIFF",
+    b"wOFF",
+    b"wOF2",
+    b"OTTO",
+    b"\x00\x01\x00\x00",
+    b"ttcf",
+    b"BM",
+    b"%PDF",
+    b"\x00\x00\x01\x00",
+    b"<svg",
+    b"<?xml",
+    b"ID3",
+    b"OggS",
+    b"fLaC",
+    b"\x1a\x45\xdf\xa3",
 )
 
 
@@ -322,9 +415,13 @@ def is_base64_media(line: str) -> bool:
 # matching DECODE (round-trip), not an opaque embedded blob. Such a line is a note. The embedded-blob
 # attack (decode only, no ``tar c``/no prior ``base64`` encode) keeps full severity.
 _B64_ROUNDTRIP = re.compile(
-    r'\bbase64\b(?![^\n|;&]*(?:-[a-z]*d[a-z]*|--decode))[^\n]*\|[^\n]*'
-    r'\bbase64\s+(?:-[^\s|]+\s+)*?(?:-[a-z]*d[a-z]*|--decode)\b', re.IGNORECASE)
-_TAR_CREATE = re.compile(r'\btar\s+(?:-?-?create\b|-?-?c[a-z]*f?\b|c[a-z]*f?\b)', re.IGNORECASE)
+    r"\bbase64\b(?![^\n|;&]*(?:-[a-z]*d[a-z]*|--decode))[^\n]*\|[^\n]*"
+    r"\bbase64\s+(?:-[^\s|]+\s+)*?(?:-[a-z]*d[a-z]*|--decode)\b",
+    re.IGNORECASE,
+)
+_TAR_CREATE = re.compile(
+    r"\btar\s+(?:-?-?create\b|-?-?c[a-z]*f?\b|c[a-z]*f?\b)", re.IGNORECASE
+)
 
 
 def is_base64_archive_roundtrip(finding: Finding, line: str) -> bool:
@@ -356,7 +453,8 @@ _LITERAL_SPANS = re.compile(
 # literal (``/etc/`` + flags ``passwd``) and an unquoted ``cat /etc/passwd | curl …`` in a test
 # script scored as inert data.
 _PATTERN_TOKEN = {
-    "sudo_usage": re.compile(r"\bsudo\b"), "dump_all_env": re.compile(r"printenv|env\s*\|"),
+    "sudo_usage": re.compile(r"\bsudo\b"),
+    "dump_all_env": re.compile(r"printenv|env\s*\|"),
     "format_filesystem": re.compile(r"\bmkfs\b"),
 }
 
@@ -370,7 +468,12 @@ def _is_alternation_member(line: str, start: int, end: int) -> bool:
 def _is_whole_literal(line: str, start: int, end: int, span: tuple[int, int]) -> bool:
     """The token is the entire quoted content of the literal it sits in (``"printenv"``)."""
     a, b = span
-    return start == a + 1 and end == b - 1 and line[a] in "\"'`" and not _EXEC_ON_LINE.search(line)
+    return (
+        start == a + 1
+        and end == b - 1
+        and line[a] in "\"'`"
+        and not _EXEC_ON_LINE.search(line)
+    )
 
 
 def is_regex_alternation_token(finding: Finding, line: str) -> bool:
@@ -388,7 +491,9 @@ def is_regex_alternation_token(finding: Finding, line: str) -> bool:
         span = next(((a, b) for a, b in spans if a <= h.start() and h.end() <= b), None)
         if span is None:
             return False
-        return _is_alternation_member(line, h.start(), h.end()) or _is_whole_literal(line, h.start(), h.end(), span)
+        return _is_alternation_member(line, h.start(), h.end()) or _is_whole_literal(
+            line, h.start(), h.end(), span
+        )
 
     return bool(hits) and all(inert(h) for h in hits)
 
@@ -406,13 +511,16 @@ def is_regex_alternation_token(finding: Finding, line: str) -> bool:
 _SUDO_TOKEN = re.compile(r"\bsudo\b(?!\.\w)")
 _SUDO_ADMIN_HINT = re.compile(
     r"\bsudo\s+(?:-[A-Za-z]+\b\s+)*(?:apt|apt-get|snap|dnf|yum|pacman|zypper|apk|brew|port|emerge"
-    r"|systemctl|service|launchctl|pip[0-9]*|npm|gem|-u\b|-E\b|-H\b|-n\b)", re.IGNORECASE)
+    r"|systemctl|service|launchctl|pip[0-9]*|npm|gem|-u\b|-E\b|-H\b|-n\b)",
+    re.IGNORECASE,
+)
 # ``(?:sudo\s+)?(?:git|…)`` — ``sudo`` inside a REGEX pattern string (the literal ``\s`` whitespace
 # metacharacter marks it as the plugin's OWN command-parser regex, never a real invocation).
 _SUDO_IN_REGEX = re.compile(r"\(\?:?\s*sudo\\s", re.IGNORECASE)
 _SUDO_NEGATION = re.compile(
     r"\b(?:never|not|no|without|don'?t|cannot|can'?t|avoid|refus\w*|forbid\w*|disallow\w*)\b",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def _sudo_in_safety_clause(line: str, start: int) -> bool:
@@ -473,7 +581,9 @@ def is_env_dump_in_safety_clause(finding: Finding, line: str) -> bool:
 # note rather than the one-step comment cap. An UNQUOTED injection in a README/SKILL.md prose line, or
 # a quoted phrase outside a comment/CHANGELOG, keeps full severity.
 _INJECTION_PHRASE_IDS = {"prompt_injection_ignore", "disregard_rules"}
-_QUOTED_SPAN = re.compile(r'"[^"\n]*"|\'[^\'\n]*\'|`[^`\n]*`|«[^»\n]*»|“[^”\n]*”|‘[^’\n]*’')
+_QUOTED_SPAN = re.compile(
+    r'"[^"\n]*"|\'[^\'\n]*\'|`[^`\n]*`|«[^»\n]*»|“[^”\n]*”|‘[^’\n]*’'
+)
 
 
 def is_quoted_injection_phrase(finding: Finding, line: str) -> bool:
@@ -485,7 +595,9 @@ def is_quoted_injection_phrase(finding: Finding, line: str) -> bool:
         return False
     spans = [m.span() for m in _QUOTED_SPAN.finditer(line)]
     hits = list(rx.finditer(line))
-    return bool(hits) and all(any(a <= h.start() and h.end() <= b for a, b in spans) for h in hits)
+    return bool(hits) and all(
+        any(a <= h.start() and h.end() <= b for a, b in spans) for h in hits
+    )
 
 
 # ── (6) repo-root traversal in a build/setup script ─────────────────────────────────────────────
@@ -501,7 +613,8 @@ _TRAVERSAL_RUN = re.compile(r"(?:\.\./)+\.\.")
 _SENSITIVE_AFTER_TRAVERSAL = re.compile(
     r"(?:/|\\)*(?:etc\b|passwd\b|shadow\b|\.ssh\b|\.aws\b|\.env\b|\.clawk(?:sis)?\b|\.gnupg\b|\.kube\b"
     r"|\.docker\b|\.netrc\b|\.npmrc\b|\.pypirc\b|\.config\b|proc\b|root\b|home\b|var\b|usr\b|sys\b)",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def is_repo_root_traversal(finding: Finding, line: str) -> bool:
@@ -513,7 +626,7 @@ def is_repo_root_traversal(finding: Finding, line: str) -> bool:
         return False
     for m in runs:
         # skip trailing ``../`` / ``..`` segments, then look at what the path continues into
-        rest = line[m.end():]
+        rest = line[m.end() :]
         rest = re.sub(r"^(?:/?\.\.)*/?", "", rest)
         if _SENSITIVE_AFTER_TRAVERSAL.match(rest):
             return False
@@ -528,13 +641,38 @@ def is_repo_root_traversal(finding: Finding, line: str) -> bool:
 # no dangerous os call (``system``/``popen``/``exec*``/``spawn*``/``remove``/``unlink``) and no exec marker.
 _IMPORT_OS = re.compile(r'__import__\s*\(\s*["\']os["\']\s*\)\s*\.\s*(\w+)')
 _BENIGN_OS_MEMBERS = {
-    "environ", "getenv", "fsync", "fspath", "path", "sep", "linesep", "name", "getcwd", "getpid",
-    "getppid", "urandom", "cpu_count", "uname", "stat", "listdir", "scandir", "walk", "access",
-    "isatty", "get_terminal_size", "devnull", "curdir", "pardir", "extsep", "altsep", "pathsep",
+    "environ",
+    "getenv",
+    "fsync",
+    "fspath",
+    "path",
+    "sep",
+    "linesep",
+    "name",
+    "getcwd",
+    "getpid",
+    "getppid",
+    "urandom",
+    "cpu_count",
+    "uname",
+    "stat",
+    "listdir",
+    "scandir",
+    "walk",
+    "access",
+    "isatty",
+    "get_terminal_size",
+    "devnull",
+    "curdir",
+    "pardir",
+    "extsep",
+    "altsep",
+    "pathsep",
 }
 _DANGEROUS_OS_ON_LINE = re.compile(
-    r'\bos\s*\.\s*(?:system|popen|exec\w*|spawn\w*|remove|unlink|rmdir|removedirs)\b'
-    r'|__import__\s*\(\s*["\']os["\']\s*\)\s*\.\s*(?:system|popen|exec\w*|spawn\w*|remove|unlink|rmdir)\b')
+    r"\bos\s*\.\s*(?:system|popen|exec\w*|spawn\w*|remove|unlink|rmdir|removedirs)\b"
+    r'|__import__\s*\(\s*["\']os["\']\s*\)\s*\.\s*(?:system|popen|exec\w*|spawn\w*|remove|unlink|rmdir)\b'
+)
 
 
 def is_benign_lazy_os_import(finding: Finding, line: str) -> bool:
@@ -579,7 +717,8 @@ def is_disclosed_config_note(finding: Finding, rel_path: str) -> bool:
 # (``echo "$KEY" >> ~/.ssh/authorized_keys``) keep full severity.
 _AUTHORIZED_KEYS_WRITE = re.compile(
     r">>?|\btee\b|\bcp\b|\bmv\b|\bsed\s+-\w*i|\bcat\b|writeFileSync|appendFileSync|\.(?:write|append)\w*\s*\(",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def is_authorized_keys_prose(finding: Finding, line: str, is_doc: bool) -> bool:
@@ -591,8 +730,11 @@ def is_authorized_keys_prose(finding: Finding, line: str, is_doc: bool) -> bool:
     pos = line.lower().find("authorized_keys")
     if pos < 0:
         return False
-    return any(a <= pos and pos + len("authorized_keys") <= b for a, b in
-               (m.span() for m in _LITERAL_SPANS.finditer(line)))
+    return any(
+        a <= pos and pos + len("authorized_keys") <= b
+        for a, b in (m.span() for m in _LITERAL_SPANS.finditer(line))
+    )
+
 
 # ── (7) loopback address with port ───────────────────────────────────────────────────────────
 # ``hardcoded_ip_port`` is the "network" family's egress tripwire, yet ``127.0.0.1:12306`` in a
@@ -619,7 +761,9 @@ def is_loopback_only(finding: Finding, line: str) -> bool:
 # ``uv`` / ``pipx`` / ``sudo`` / a shell separator, is a command string and never qualifies, nor
 # does any line that executes something (``subprocess.run("pip install x", shell=True)``).
 _PIP_INSTALL_TOKEN = re.compile(r"pip\s+install\b", re.IGNORECASE)
-_PIP_COMMAND_POSITION = re.compile(r"(?:^|[;&|`(]|\b(?:uv|pipx|sudo|python[\d.]*\s+-m))\s*$", re.IGNORECASE)
+_PIP_COMMAND_POSITION = re.compile(
+    r"(?:^|[;&|`(]|\b(?:uv|pipx|sudo|python[\d.]*\s+-m))\s*$", re.IGNORECASE
+)
 
 
 def is_pip_install_in_prose_literal(finding: Finding, line: str) -> bool:
@@ -634,8 +778,11 @@ def is_pip_install_in_prose_literal(finding: Finding, line: str) -> bool:
         span = next(((a, b) for a, b in spans if a <= h.start() and h.end() <= b), None)
         if span is None:
             return False
-        content_start = next((i for i in range(span[0], span[1]) if line[i] in "\"'`/"), span[0]) + 1
-        return _PIP_COMMAND_POSITION.search(line[content_start:h.start()]) is None
+        content_start = (
+            next((i for i in range(span[0], span[1]) if line[i] in "\"'`/"), span[0])
+            + 1
+        )
+        return _PIP_COMMAND_POSITION.search(line[content_start : h.start()]) is None
 
     return bool(hits) and all(prose(h) for h in hits)
 
@@ -658,7 +805,9 @@ def is_hex_in_char_class(finding: Finding, line: str) -> bool:
         return False
     classes = [m.span() for m in _CHAR_CLASS.finditer(line)]
     hits = list(_HEX_ESCAPE.finditer(line))
-    return bool(hits) and all(any(a <= h.start() and h.end() <= b for a, b in classes) for h in hits)
+    return bool(hits) and all(
+        any(a <= h.start() and h.end() <= b for a, b in classes) for h in hits
+    )
 
 
 # ── (10) loopback ``curl``/``wget`` target on a shell continuation line ──────────────────────
@@ -671,7 +820,11 @@ def is_hex_in_char_class(finding: Finding, line: str) -> bool:
 # informational. A routable host anywhere on the logical line keeps the severity.
 _CONTINUATION_PATTERN_IDS = {"env_exfil_curl", "env_exfil_wget"}
 _URL_HOST = re.compile(r"https?://(\[[0-9a-fA-F:]+\]|[^\s/:\"'`)\]]+)")
-_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "[::1]"}    # the pattern's own same-line exemption
+_LOOPBACK_HOSTS = {
+    "localhost",
+    "127.0.0.1",
+    "[::1]",
+}  # the pattern's own same-line exemption
 
 
 def logical_line(lines: list[str], index: int) -> str:
@@ -687,11 +840,19 @@ def logical_line(lines: list[str], index: int) -> str:
 def is_loopback_continuation(finding: Finding, line: str, joined: str) -> bool:
     """The line continues with ``\\``, the finding's own pattern stops matching on the logical
     line, and every ``http(s)://`` host on it is loopback."""
-    if finding.pattern_id not in _CONTINUATION_PATTERN_IDS or not line.rstrip().endswith("\\"):
+    if (
+        finding.pattern_id not in _CONTINUATION_PATTERN_IDS
+        or not line.rstrip().endswith("\\")
+    ):
         return False
     rx = _PATTERN_BY_ID.get(finding.pattern_id)
     hosts = [m.group(1).lower() for m in _URL_HOST.finditer(joined)]
-    return rx is not None and rx.search(joined) is None and bool(hosts) and all(h in _LOOPBACK_HOSTS for h in hosts)
+    return (
+        rx is not None
+        and rx.search(joined) is None
+        and bool(hosts)
+        and all(h in _LOOPBACK_HOSTS for h in hosts)
+    )
 
 
 # ── (11) prose string values in a JSON data file ────────────────────────────────────────────
@@ -706,17 +867,29 @@ def is_loopback_continuation(finding: Finding, line: str, joined: str) -> bool:
 # ``sudo``/``exec`` (``"sudo",`` in an ``args`` array), keys that name something executed
 # (``"command"``, ``"postinstall"``, ``"run"``, ``"args"`` …) and ``package.json`` (npm runs its
 # ``scripts``) keep the severity.
-_JSON_STRING_LINE = re.compile(r'^\s*(?:"(?P<k>(?:[^"\\]|\\.)*)"\s*:\s*)?"(?P<v>(?:[^"\\]|\\.)*)"\s*,?\s*$')
-_JSON_COMMAND_KEY = re.compile(r"cmd|command|script|exec|run|shell|install|hook|arg|entry|bin|start|setup", re.IGNORECASE)
+_JSON_STRING_LINE = re.compile(
+    r'^\s*(?:"(?P<k>(?:[^"\\]|\\.)*)"\s*:\s*)?"(?P<v>(?:[^"\\]|\\.)*)"\s*,?\s*$'
+)
+_JSON_COMMAND_KEY = re.compile(
+    r"cmd|command|script|exec|run|shell|install|hook|arg|entry|bin|start|setup",
+    re.IGNORECASE,
+)
 _JSON_EXECUTED_FILES = {"package.json"}
-_COMMAND_POSITION = re.compile(r"(?:^|[;&|`(]|\$\(|\b(?:sudo|exec|eval|do|then|xargs|bash|sh|-c))\s*$", re.IGNORECASE)
+_COMMAND_POSITION = re.compile(
+    r"(?:^|[;&|`(]|\$\(|\b(?:sudo|exec|eval|do|then|xargs|bash|sh|-c))\s*$",
+    re.IGNORECASE,
+)
 
 
 def is_json_prose_value(finding: Finding, rel_path: str, line: str) -> bool:
     """Every hit sits mid-sentence inside the key or value of a ``"key": "string"`` pair (or a bare
     string list element) in a ``.json`` data file, under a key that does not name something executed."""
     p = Path(rel_path)
-    if finding.severity != "high" or p.suffix.lower() != ".json" or p.name.lower() in _JSON_EXECUTED_FILES:
+    if (
+        finding.severity != "high"
+        or p.suffix.lower() != ".json"
+        or p.name.lower() in _JSON_EXECUTED_FILES
+    ):
         return False
     m = _JSON_STRING_LINE.match(line)
     rx = _PATTERN_BY_ID.get(finding.pattern_id)
@@ -727,8 +900,14 @@ def is_json_prose_value(finding: Finding, rel_path: str, line: str) -> bool:
         return False
 
     def prose(h: re.Match[str]) -> bool:
-        part = next((g for g in ("k", "v") if m.start(g) <= h.start() and h.end() <= m.end(g)), None)
-        return part is not None and _COMMAND_POSITION.search(line[m.start(part):h.start()]) is None
+        part = next(
+            (g for g in ("k", "v") if m.start(g) <= h.start() and h.end() <= m.end(g)),
+            None,
+        )
+        return (
+            part is not None
+            and _COMMAND_POSITION.search(line[m.start(part) : h.start()]) is None
+        )
 
     hits = list(rx.finditer(line))
     return bool(hits) and all(prose(h) for h in hits)
@@ -742,12 +921,17 @@ def is_json_prose_value(finding: Finding, rel_path: str, line: str) -> bool:
 # (reported, verdict-neutral). Any of those beside it keeps the pattern's severity.
 _MINING_MACHINERY = re.compile(
     r"xmrig|stratum|coinhive|cryptonight|randomx|cpuminer|minerd|nicehash|hashrate|donate-level"
-    r"|\bmin(?:e[sd]?|ers?|ing)\b|--(?:coin|algo)\b", re.IGNORECASE)
+    r"|\bmin(?:e[sd]?|ers?|ing)\b|--(?:coin|algo)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_standalone_coin_name(line: str, start: int, end: int) -> bool:
-    return (line[start:end].lower() == "monero" and (start == 0 or not line[start - 1].isalnum())
-            and (end == len(line) or not line[end].isalnum()))
+    return (
+        line[start:end].lower() == "monero"
+        and (start == 0 or not line[start - 1].isalnum())
+        and (end == len(line) or not line[end].isalnum())
+    )
 
 
 def is_coin_name_only(finding: Finding, line: str) -> bool:
@@ -757,7 +941,9 @@ def is_coin_name_only(finding: Finding, line: str) -> bool:
         return False
     rx = _PATTERN_BY_ID.get(finding.pattern_id)
     hits = list(rx.finditer(line)) if rx else []
-    return bool(hits) and all(_is_standalone_coin_name(line, h.start(), h.end()) for h in hits)
+    return bool(hits) and all(
+        _is_standalone_coin_name(line, h.start(), h.end()) for h in hits
+    )
 
 
 # Google mints installed-app (desktop/CLI) OAuth clients with a ``GOCSPX-`` secret that its OAuth
@@ -769,7 +955,9 @@ _GOOGLE_PUBLIC_CLIENT_SECRET = re.compile(r'["\']GOCSPX-[A-Za-z0-9_-]{20,}["\']'
 
 def is_google_installed_app_secret(finding: Finding, line: str) -> bool:
     """A ``hardcoded_secret`` hit whose literal is a Google installed-app OAuth client secret."""
-    return finding.pattern_id == "hardcoded_secret" and bool(_GOOGLE_PUBLIC_CLIENT_SECRET.search(line))
+    return finding.pattern_id == "hardcoded_secret" and bool(
+        _GOOGLE_PUBLIC_CLIENT_SECRET.search(line)
+    )
 
 
 __all__ = [

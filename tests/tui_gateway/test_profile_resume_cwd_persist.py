@@ -60,8 +60,13 @@ def resume_path(monkeypatch):
         db = SessionDB(db_path=home / "state.db")
         try:
             db.create_session(KEY, source="desktop", model="test-model", cwd=str(root))
-            resp = server.handle_request({"id": "1", "method": "session.resume",
-                                          "params": {"session_id": KEY, "profile": "austin", **flags}})
+            resp = server.handle_request(
+                {
+                    "id": "1",
+                    "method": "session.resume",
+                    "params": {"session_id": KEY, "profile": "austin", **flags},
+                }
+            )
             assert "error" not in resp, resp
             live = server._sessions[resp["result"]["session_id"]]
             assert live["cwd"] == str(home)
@@ -81,11 +86,14 @@ def resume_path(monkeypatch):
             server._sessions.pop(sid, None)
 
 
-@pytest.mark.parametrize("flags", [
-    pytest.param({"eager_build": True}, id="eager"),
-    pytest.param({}, id="cold"),
-    pytest.param({"defer_history": True}, id="deferred"),
-])
+@pytest.mark.parametrize(
+    "flags",
+    [
+        pytest.param({"eager_build": True}, id="eager"),
+        pytest.param({}, id="cold"),
+        pytest.param({"defer_history": True}, id="deferred"),
+    ],
+)
 def test_every_resume_path_repairs_the_saved_workspace(resume_path, flags):
     run, home = resume_path
     assert run(flags) == str(home)

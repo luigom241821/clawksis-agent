@@ -37,12 +37,14 @@ logger = logging.getLogger(__name__)
 # Availability check
 # ---------------------------------------------------------------------------
 
+
 def _check_vault_available() -> bool:
     """Schema-gate: the vault rides with the browser. An empty vault still needs save_login so the
     agent can offer to remember a login the first time it meets a form; hiding the tool until an item
     exists meant nobody ever discovered the feature. Deferral keeps that presence nearly free."""
     from tools.browser_tool_install import check_browser_requirements
     from tools.browser_use_cli import is_browser_use_cli_mode
+
     # check_browser_requirements() is False by design in Browser Use mode (browser_exec replaces the
     # built-in surface); the vault serves both stacks.
     return bool(is_browser_use_cli_mode() or check_browser_requirements())
@@ -51,6 +53,7 @@ def _check_vault_available() -> bool:
 # ---------------------------------------------------------------------------
 # JS evaluation plumbing (server-side; results never carry secret values)
 # ---------------------------------------------------------------------------
+
 
 def _eval_js(task_id: str, expression: str) -> dict[str, Any]:
     """Evaluate NON-SECRET JS on the current page (inspection, origin reads).
@@ -103,13 +106,21 @@ def _ensure_supervisor(task_id: str):
     from tools.browser_tool_session import _run_browser_command
 
     res = _run_browser_command(_last_session_key(task_id), "get", ["cdp-url"])
-    cdp_url = str(((res or {}).get("data") or {}).get("cdpUrl") or "") if (res or {}).get("success") else ""
+    cdp_url = (
+        str(((res or {}).get("data") or {}).get("cdpUrl") or "")
+        if (res or {}).get("success")
+        else ""
+    )
     if not cdp_url:
         return None
     policy, timeout_s = _get_dialog_policy_config()
     try:
-        return SUPERVISOR_REGISTRY.get_or_start(task_id=task_id, cdp_url=_resolve_cdp_override(cdp_url),
-                                                dialog_policy=policy, dialog_timeout_s=timeout_s)
+        return SUPERVISOR_REGISTRY.get_or_start(
+            task_id=task_id,
+            cdp_url=_resolve_cdp_override(cdp_url),
+            dialog_policy=policy,
+            dialog_timeout_s=timeout_s,
+        )
     except Exception as exc:
         logger.debug("vault fill: supervisor attach to local session failed (%s)", exc)
         return None
@@ -149,10 +160,15 @@ def _eval_js_secret(task_id: str, expression: str) -> dict[str, Any]:
     # epoch check only discards the result, and a fill is a side effect, not a result.
     if _bot_desktop_browser_session(task_id):
         from tools.bot_desktop import lease as _bd_lease
+
         try:
             _bd_lease.assert_agent_may_act()
         except _bd_lease.HumanHasControl as exc:
-            return {"success": False, "error_type": "human_has_control", "error": str(exc)}
+            return {
+                "success": False,
+                "error_type": "human_has_control",
+                "error": str(exc),
+            }
 
     sup = supervisor.evaluate_runtime(expression)
     if sup.get("ok"):
@@ -216,6 +232,7 @@ def _focus_bound_origin(task_id: str, origin: str, kind: str) -> Optional[str]:
 # Handlers
 # ---------------------------------------------------------------------------
 
+
 def browser_vault_list() -> str:
     """List login handles + metadata across every enabled backend. Passwords are never included.
 
@@ -228,8 +245,15 @@ def browser_vault_list() -> str:
     items, locked, errors = [], [], []
     for backend in enabled_backends():
         if backend.needs_unlock and not backend.is_unlocked():
-            locked.append({"backend": backend.name, "display_name": backend.display_name,
-                           "unlock": "browser_vault action=unlock" if can_prompt_here() else "unavailable_in_this_session"})
+            locked.append(
+                {
+                    "backend": backend.name,
+                    "display_name": backend.display_name,
+                    "unlock": "browser_vault action=unlock"
+                    if can_prompt_here()
+                    else "unavailable_in_this_session",
+                }
+            )
             continue
         try:
             metas = backend.list_items()
@@ -237,20 +261,32 @@ def browser_vault_list() -> str:
             errors.append({"backend": backend.name, "error": str(exc)[:200]})
             continue
         for meta in metas:
-            entry = {"handle": meta.id, "backend": backend.name, "label": meta.label, "kind": meta.kind,
-                     "origin": meta.origin, "available": meta.kind == "login" or bool(meta.origin)}
+            entry = {
+                "handle": meta.id,
+                "backend": backend.name,
+                "label": meta.label,
+                "kind": meta.kind,
+                "origin": meta.origin,
+                "available": meta.kind == "login" or bool(meta.origin),
+            }
             if len(meta.allowed_origins) > 1:
                 entry["allowed_origins"] = list(meta.allowed_origins)
             if meta.has_otp or backend.needs_unlock:
-                entry["two_factor"] = "automatic" if meta.has_otp else "automatic if the manager stores a TOTP seed, else the user is asked"
+                entry["two_factor"] = (
+                    "automatic"
+                    if meta.has_otp
+                    else "automatic if the manager stores a TOTP seed, else the user is asked"
+                )
             if meta.identifier:
                 entry["identifier"] = meta.identifier
                 entry["identifier_type"] = meta.identifier_type
             items.append(entry)
     out: dict[str, Any] = {"success": True, "items": items}
     if not items:
-        out["hint"] = ("No saved logins. On a login page, call browser_vault action=save_login to ask the user to save one. "
-                       "Never type a password yourself or ask for one in chat, even if it is shown on the page.")
+        out["hint"] = (
+            "No saved logins. On a login page, call browser_vault action=save_login to ask the user to save one. "
+            "Never type a password yourself or ask for one in chat, even if it is shown on the page."
+        )
     if locked:
         out["locked"] = locked
     if errors:
@@ -263,25 +299,49 @@ def browser_vault_unlock(backend_name: str) -> str:
     from agent.vault_backends import enabled_backends
     from agent.vault_backends.unlock import can_prompt_here, get_unlock_prompt_callback
 
-    backend = next((b for b in enabled_backends() if b.name == backend_name and b.needs_unlock), None)
+    backend = next(
+        (b for b in enabled_backends() if b.name == backend_name and b.needs_unlock),
+        None,
+    )
     if backend is None:
-        return json.dumps({"success": False, "error": f"No unlockable vault backend named {backend_name!r}."})
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"No unlockable vault backend named {backend_name!r}.",
+            }
+        )
     if backend.is_unlocked():
-        return json.dumps({"success": True, "backend": backend.name, "already_unlocked": True})
+        return json.dumps(
+            {"success": True, "backend": backend.name, "already_unlocked": True}
+        )
     if not can_prompt_here():
-        return json.dumps({"success": False, "error_type": "unlock_unavailable",
-                           "error": (f"{backend.display_name} is locked and this session cannot prompt for the "
-                                     "master password (headless/cron/API). Unlock it from an interactive Clawksis "
-                                     "session or the Desktop app first.")})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "unlock_unavailable",
+                "error": (
+                    f"{backend.display_name} is locked and this session cannot prompt for the "
+                    "master password (headless/cron/API). Unlock it from an interactive Clawksis "
+                    "session or the Desktop app first."
+                ),
+            }
+        )
     prompt = get_unlock_prompt_callback()
     master = prompt(backend.name, backend.display_name) if prompt else ""
     if not master:
-        return json.dumps({"success": False, "error_type": "unlock_cancelled",
-                           "error": f"The user declined to unlock {backend.display_name}."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "unlock_cancelled",
+                "error": f"The user declined to unlock {backend.display_name}.",
+            }
+        )
     try:
         backend.unlock(master)  # type: ignore[attr-defined]
     except Exception as exc:
-        return json.dumps({"success": False, "error_type": "unlock_failed", "error": str(exc)[:300]})
+        return json.dumps(
+            {"success": False, "error_type": "unlock_failed", "error": str(exc)[:300]}
+        )
     finally:
         del master
     return json.dumps({"success": True, "backend": backend.name})
@@ -290,7 +350,10 @@ def browser_vault_unlock(backend_name: str) -> str:
 def browser_vault_save_login(label: str = "", task_id: Optional[str] = None) -> str:
     """Ask the user (masked prompt on their surface) for the login of the CURRENT page, store it in the local
     vault bound to that origin, and fill the password at once. The values never enter the conversation."""
-    from agent.vault_backends.unlock import can_prompt_here, get_save_login_prompt_callback
+    from agent.vault_backends.unlock import (
+        can_prompt_here,
+        get_save_login_prompt_callback,
+    )
     from agent.vault_store import get_vault_store
 
     effective_task_id = task_id or "default"
@@ -299,36 +362,79 @@ def browser_vault_save_login(label: str = "", task_id: Optional[str] = None) -> 
     _focus_bound_origin(effective_task_id, "", "login")
     origin = _current_page_origin(effective_task_id)
     if not origin:
-        return json.dumps({"success": False, "error": "Open the site's login page first; the login is saved for that page's origin."})
+        return json.dumps(
+            {
+                "success": False,
+                "error": "Open the site's login page first; the login is saved for that page's origin.",
+            }
+        )
     prompt = get_save_login_prompt_callback()
     if prompt is None or not can_prompt_here():
-        return json.dumps({"success": False, "error_type": "prompt_unavailable",
-                           "error": (f"This session cannot ask the user for a login (headless/cron/API). Tell them to run "
-                                     f"`clawk vault add` or use Desktop → Settings → Passwords & Logins for {origin}.")})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "prompt_unavailable",
+                "error": (
+                    f"This session cannot ask the user for a login (headless/cron/API). Tell them to run "
+                    f"`clawk vault add` or use Desktop → Settings → Passwords & Logins for {origin}."
+                ),
+            }
+        )
     host = origin.split("://", 1)[-1]
     site = label.strip() or host
-    answer = prompt(origin, host)  # the prompt names the site by host: the user recognises URLs, not agent labels
+    answer = prompt(
+        origin, host
+    )  # the prompt names the site by host: the user recognises URLs, not agent labels
     if not answer or not answer.get("password") or not answer.get("identifier"):
-        return json.dumps({"success": False, "error_type": "save_declined",
-                           "error": "The user chose not to save a login for this site. Do not ask again this turn."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "save_declined",
+                "error": "The user chose not to save a login for this site. Do not ask again this turn.",
+            }
+        )
     identifier = str(answer["identifier"]).strip()
-    id_type = "email" if "@" in identifier else ("phone" if identifier.lstrip("+").isdigit() else "username")
+    id_type = (
+        "email"
+        if "@" in identifier
+        else ("phone" if identifier.lstrip("+").isdigit() else "username")
+    )
     try:
-        meta = get_vault_store().add_item("login", site, {"identifier_type": id_type, "identifier": identifier,
-                                                        "password": str(answer["password"])}, origin=origin)
+        meta = get_vault_store().add_item(
+            "login",
+            site,
+            {
+                "identifier_type": id_type,
+                "identifier": identifier,
+                "password": str(answer["password"]),
+            },
+            origin=origin,
+        )
     except Exception as exc:
-        return json.dumps({"success": False, "error_type": "save_failed", "error": str(exc)[:200]})
+        return json.dumps(
+            {"success": False, "error_type": "save_failed", "error": str(exc)[:200]}
+        )
     finally:
         answer.clear()
     filled = json.loads(browser_vault_fill(meta.id, task_id=effective_task_id))
-    return json.dumps({"success": True, "handle": meta.id, "origin": origin, "identifier": identifier,
-                       "identifier_type": id_type, "fill": filled,
-                       "next": "Type the identifier into the username field if the form has one, then submit."},
-                      ensure_ascii=False)
+    return json.dumps(
+        {
+            "success": True,
+            "handle": meta.id,
+            "origin": origin,
+            "identifier": identifier,
+            "identifier_type": id_type,
+            "fill": filled,
+            "next": "Type the identifier into the username field if the form has one, then submit.",
+        },
+        ensure_ascii=False,
+    )
 
 
-_TAB_PROBES["otp"] = ("!!document.querySelector('input[autocomplete=one-time-code], input[name*=otp i], input[name*=code i], "
-                      "input[id*=otp i], input[id*=code i], input[name*=totp i], input[aria-label*=code i]')")
+_TAB_PROBES["otp"] = (
+    "!!document.querySelector('input[autocomplete=one-time-code], input[name*=otp i], input[name*=code i], "
+    "input[id*=otp i], input[id*=code i], input[name*=totp i], input[aria-label*=code i]')"
+)
 
 
 def browser_vault_enter_code(handle: str = "", task_id: Optional[str] = None) -> str:
@@ -339,25 +445,44 @@ def browser_vault_enter_code(handle: str = "", task_id: Optional[str] = None) ->
     from agent.redact import register_vault_redaction_value
     from agent.vault_backends import backend_for_handle
     from agent.vault_backends.unlock import can_prompt_here, get_code_prompt_callback
-    from agent.vault_login_classifier import LoginControl, build_fill_js, build_inspection_js, build_otp_fills, classify_otp_controls
+    from agent.vault_login_classifier import (
+        LoginControl,
+        build_fill_js,
+        build_inspection_js,
+        build_otp_fills,
+        classify_otp_controls,
+    )
 
     effective_task_id = task_id or "default"
     _focus_bound_origin(effective_task_id, "", "otp")
     origin = _current_page_origin(effective_task_id)
     if not origin:
-        return json.dumps({"success": False, "error": "No page with a code field is open."})
+        return json.dumps(
+            {"success": False, "error": "No page with a code field is open."}
+        )
     site = origin.split("://", 1)[-1]
 
     nonce = secrets.token_hex(8)
     inspect = _eval_js(effective_task_id, build_inspection_js(nonce))
-    raw_controls = _parse_json_result(inspect.get("result")) if inspect.get("success") else None
+    raw_controls = (
+        _parse_json_result(inspect.get("result")) if inspect.get("success") else None
+    )
     if isinstance(raw_controls, str):
         raw_controls = _parse_json_result(raw_controls)
-    otp_controls = classify_otp_controls([LoginControl.from_dict(r) for r in (raw_controls or []) if isinstance(r, dict)])
+    otp_controls = classify_otp_controls(
+        [LoginControl.from_dict(r) for r in (raw_controls or []) if isinstance(r, dict)]
+    )
     if not otp_controls:
-        return json.dumps({"success": False, "error_type": "no_code_field",
-                           "error": ("No one-time-code field on the current page. If the site wants a passkey, hardware key or "
-                                     "an approval tap in an app, tell the user to complete it on their device and wait for the page to move on.")})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "no_code_field",
+                "error": (
+                    "No one-time-code field on the current page. If the site wants a passkey, hardware key or "
+                    "an approval tap in an app, tell the user to complete it on their device and wait for the page to move on."
+                ),
+            }
+        )
 
     code: Optional[str] = None
     source = "user"
@@ -372,28 +497,57 @@ def browser_vault_enter_code(handle: str = "", task_id: Optional[str] = None) ->
     if not code:
         prompt = get_code_prompt_callback()
         if prompt is None or not can_prompt_here():
-            return json.dumps({"success": False, "error_type": "prompt_unavailable",
-                               "error": (f"{site} asks for a one-time code and this session cannot ask the user (headless/cron/API). "
-                                         "Save an authenticator key for this login so codes can be generated automatically.")})
+            return json.dumps(
+                {
+                    "success": False,
+                    "error_type": "prompt_unavailable",
+                    "error": (
+                        f"{site} asks for a one-time code and this session cannot ask the user (headless/cron/API). "
+                        "Save an authenticator key for this login so codes can be generated automatically."
+                    ),
+                }
+            )
         code = (prompt(site, "") or "").strip().replace(" ", "").replace("-", "")
         if not code:
-            return json.dumps({"success": False, "error_type": "code_declined",
-                               "error": "The user did not enter a code. Do not ask again this turn."})
+            return json.dumps(
+                {
+                    "success": False,
+                    "error_type": "code_declined",
+                    "error": "The user did not enter a code. Do not ask again this turn.",
+                }
+            )
 
     register_vault_redaction_value(code)
     fills = build_otp_fills(otp_controls, code)
-    result = _eval_js_secret(effective_task_id, build_fill_js(fills, expected_origin=origin, nonce=nonce))
+    result = _eval_js_secret(
+        effective_task_id, build_fill_js(fills, expected_origin=origin, nonce=nonce)
+    )
     del code
     if not result.get("success"):
-        return json.dumps({"success": False, "error": str(result.get("error") or "fill failed")[:200]})
+        return json.dumps(
+            {"success": False, "error": str(result.get("error") or "fill failed")[:200]}
+        )
     parsed = _parse_json_result(result.get("result"))
     if isinstance(parsed, str):
         parsed = _parse_json_result(parsed)
     if isinstance(parsed, dict) and parsed.get("refused") == "origin_changed":
-        return json.dumps({"success": False, "error_type": "origin_changed", "error": "The page navigated before the code could be entered. Nothing was written."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "origin_changed",
+                "error": "The page navigated before the code could be entered. Nothing was written.",
+            }
+        )
     filled = int(parsed.get("filled", 0)) if isinstance(parsed, dict) else 0
-    return json.dumps({"success": bool(filled), "filled_fields": filled, "origin": origin, "source": source,
-                       "next": "Submit the form (many sites auto-submit when the last digit lands)."})
+    return json.dumps(
+        {
+            "success": bool(filled),
+            "filled_fields": filled,
+            "origin": origin,
+            "source": source,
+            "next": "Submit the form (many sites auto-submit when the last digit lands).",
+        }
+    )
 
 
 def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
@@ -428,8 +582,13 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
     try:
         meta = backend.get_meta(handle) if backend is not None else None
     except UnlockRequired:
-        return json.dumps({"success": False, "error_type": "unlock_required",
-                           "error": f"{backend.display_name} locked again; call browser_vault action=unlock."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "unlock_required",
+                "error": f"{backend.display_name} locked again; call browser_vault action=unlock.",
+            }
+        )
     if meta is None:
         return json.dumps(
             {
@@ -442,11 +601,23 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
             }
         )
     if meta.kind != "login" and not meta.origin:
-        return json.dumps({"success": False, "error_type": "no_origin",
-                           "error": f"Vault item {handle!r} has no bound origin; {meta.kind} items are filled only on the site they were saved for."})
-    if meta.kind == "payment" and not _confirm_payment_fill(meta.label, str(meta.origin)):
-        return json.dumps({"success": False, "error_type": "payment_declined",
-                           "error": "The user did not confirm filling this payment card. Do not retry; ask them instead."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "no_origin",
+                "error": f"Vault item {handle!r} has no bound origin; {meta.kind} items are filled only on the site they were saved for.",
+            }
+        )
+    if meta.kind == "payment" and not _confirm_payment_fill(
+        meta.label, str(meta.origin)
+    ):
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "payment_declined",
+                "error": "The user did not confirm filling this payment card. Do not retry; ask them instead.",
+            }
+        )
 
     # ── Origin binding pre-check (cheap early exit; the authoritative check
     # runs synchronously inside the fill script itself) ──────────────────────
@@ -462,7 +633,10 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
     page_origin = page_origin or _current_page_origin(effective_task_id)
     if not page_origin:
         return json.dumps(
-            {"success": False, "error": "Could not determine the current page origin. Navigate to the login page first."}
+            {
+                "success": False,
+                "error": "Could not determine the current page origin. Navigate to the login page first.",
+            }
         )
     if page_origin not in allowed:
         return json.dumps(
@@ -482,15 +656,25 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
     inspect = _eval_js(effective_task_id, build_inspection_js(nonce))
     if not inspect.get("success"):
         return json.dumps(
-            {"success": False, "error": f"Could not inspect page inputs: {inspect.get('error', 'eval failed')}"}
+            {
+                "success": False,
+                "error": f"Could not inspect page inputs: {inspect.get('error', 'eval failed')}",
+            }
         )
     raw_controls = _parse_json_result(inspect.get("result"))
     if isinstance(raw_controls, str):
         raw_controls = _parse_json_result(raw_controls)
     if not isinstance(raw_controls, list):
-        return json.dumps({"success": False, "error": "Page input inspection returned no usable controls."})
+        return json.dumps(
+            {
+                "success": False,
+                "error": "Page input inspection returned no usable controls.",
+            }
+        )
 
-    classify = classify_login_control if meta.kind == "login" else classify_checkout_control
+    classify = (
+        classify_login_control if meta.kind == "login" else classify_checkout_control
+    )
     classified: list[ClassifiedLoginControl] = []
     for raw in raw_controls:
         if not isinstance(raw, dict):
@@ -499,7 +683,12 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
         if result is not None:
             classified.append(result)
     if not classified:
-        return json.dumps({"success": False, "error": f"No {meta.kind} form fields were found on the current page."})
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"No {meta.kind} form fields were found on the current page.",
+            }
+        )
 
     # ── Resolve secret and fill (secret never enters any logged string) ─────
     try:
@@ -508,25 +697,40 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
             fills = select_password_fill(classified, secret["password"])
         else:
             secret = backend.resolve_secret(handle)
-            fills = select_checkout_fills(classified, secret, PAYMENT_FIELDS if meta.kind == "payment" else ADDRESS_FIELDS)
+            fills = select_checkout_fills(
+                classified,
+                secret,
+                PAYMENT_FIELDS if meta.kind == "payment" else ADDRESS_FIELDS,
+            )
     except UnlockRequired:
-        return json.dumps({"success": False, "error_type": "unlock_required",
-                           "error": f"{backend.display_name} locked again; call browser_vault action=unlock."})
+        return json.dumps(
+            {
+                "success": False,
+                "error_type": "unlock_required",
+                "error": f"{backend.display_name} locked again; call browser_vault action=unlock.",
+            }
+        )
     if not fills:
         return json.dumps(
-            {"success": False, "error": f"No fillable {meta.kind} field matched the saved item on this page."}
+            {
+                "success": False,
+                "error": f"No fillable {meta.kind} field matched the saved item on this page.",
+            }
         )
 
     # Register the secret bytes with the model-egress redaction boundary
     # BEFORE they touch the page: any later browser_* result (including
     # browser_cdp Runtime.evaluate reads) that echoes them is scrubbed.
     # Address values are not secrets but the card fields are: register every payment value.
-    for value in (secret.values() if meta.kind == "payment" else [secret.get("password", "")]):
+    for value in (
+        secret.values() if meta.kind == "payment" else [secret.get("password", "")]
+    ):
         register_vault_redaction_value(value)
 
     try:
         fill_result = _eval_js_secret(
-            effective_task_id, build_fill_js(fills, expected_origin=page_origin, nonce=nonce)
+            effective_task_id,
+            build_fill_js(fills, expected_origin=page_origin, nonce=nonce),
         )
     except Exception as exc:
         # Strip any secret material from exception text before surfacing.
@@ -534,7 +738,9 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
             {"success": False, "error": scrub_secret_from_text(str(exc), secret)}
         )
     if not fill_result.get("success"):
-        err = scrub_secret_from_text(str(fill_result.get("error") or "fill failed"), secret)
+        err = scrub_secret_from_text(
+            str(fill_result.get("error") or "fill failed"), secret
+        )
         out = {"success": False, "error": err}
         if fill_result.get("error_type"):
             out["error_type"] = fill_result["error_type"]
@@ -558,13 +764,22 @@ def browser_vault_fill(handle: str, task_id: Optional[str] = None) -> str:
         )
     filled = parsed.get("filled", 0) if isinstance(parsed, dict) else 0
 
-    out = {"success": bool(filled), "filled_fields": int(filled), "backend": backend.name,
-           "kind": meta.kind, "origin": page_origin}
+    out = {
+        "success": bool(filled),
+        "filled_fields": int(filled),
+        "backend": backend.name,
+        "kind": meta.kind,
+        "origin": page_origin,
+    }
     if meta.kind == "login":
-        out["next"] = ("Submit. If the site then asks for a verification code, call browser_vault action=enter_code with this handle"
-                       + (" (a code will be generated automatically)." if meta.has_otp else "."))
+        out["next"] = (
+            "Submit. If the site then asks for a verification code, call browser_vault action=enter_code with this handle"
+            + (" (a code will be generated automatically)." if meta.has_otp else ".")
+        )
     if meta.kind != "login":
-        out["fields"] = sorted(f["token"] for f in fills)  # which controls were targeted, never the values
+        out["fields"] = sorted(
+            f["token"] for f in fills
+        )  # which controls were targeted, never the values
     return json.dumps(out)
 
 
@@ -574,11 +789,16 @@ def _confirm_payment_fill(label: str, origin: str) -> bool:
     round-trip or CLI panel); headless sessions cannot confirm and the fill is refused."""
     from tools.approval_prompt import request_elicitation_consent
 
-    return request_elicitation_consent(
-        f"Fill payment card '{label}' on {origin}",
-        "The agent wants to enter your saved card details into this checkout page. The card number and "
-        "CVC never enter the conversation. Approve only if you intend to pay here.",
-        surface="vault-payment", title="Confirm payment card fill?") == "accept"
+    return (
+        request_elicitation_consent(
+            f"Fill payment card '{label}' on {origin}",
+            "The agent wants to enter your saved card details into this checkout page. The card number and "
+            "CVC never enter the conversation. Approve only if you intend to pay here.",
+            surface="vault-payment",
+            title="Confirm payment card fill?",
+        )
+        == "accept"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -603,10 +823,23 @@ BROWSER_VAULT_SCHEMA = {
     "parameters": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["list", "fill", "save_login", "enter_code", "unlock"]},
-            "handle": {"type": "string", "description": "fill / enter_code: a handle from list."},
-            "backend": {"type": "string", "enum": ["onepassword", "bitwarden"], "description": "unlock only."},
-            "label": {"type": "string", "description": "save_login only: short site name (default: the host)."},
+            "action": {
+                "type": "string",
+                "enum": ["list", "fill", "save_login", "enter_code", "unlock"],
+            },
+            "handle": {
+                "type": "string",
+                "description": "fill / enter_code: a handle from list.",
+            },
+            "backend": {
+                "type": "string",
+                "enum": ["onepassword", "bitwarden"],
+                "description": "unlock only.",
+            },
+            "label": {
+                "type": "string",
+                "description": "save_login only: short site name (default: the host).",
+            },
         },
         "required": ["action"],
     },
@@ -616,7 +849,10 @@ BROWSER_VAULT_SCHEMA = {
 def _bot_desktop_browser_session(task_id: Optional[str]) -> bool:
     from tools.browser_tool import _active_sessions, _last_session_key
     from tools.browser_tool_session import _shares_bot_desktop_browser
-    return _shares_bot_desktop_browser(_active_sessions.get(_last_session_key(task_id or "default")) or {})
+
+    return _shares_bot_desktop_browser(
+        _active_sessions.get(_last_session_key(task_id or "default")) or {}
+    )
 
 
 def _fenced_page_op(task_id: Optional[str], fn) -> str:
@@ -645,8 +881,13 @@ def _handle_vault(args: dict[str, Any], **kwargs) -> str:
         "enter_code": lambda: browser_vault_enter_code(handle=handle, task_id=tid),
     }
     if action not in page_ops:
-        return json.dumps({"success": False, "error": f"Unknown action {action!r}; use list, fill, save_login, "
-                                                       "enter_code or unlock."})
+        return json.dumps(
+            {
+                "success": False,
+                "error": f"Unknown action {action!r}; use list, fill, save_login, "
+                "enter_code or unlock.",
+            }
+        )
     return _fenced_page_op(tid, page_ops[action])
 
 

@@ -8,6 +8,7 @@ path — ahead of the credential pool and the one-shot OAuth refresh, so a sessi
 never burns a refresh token or benches healthy pool entries; a 401 without cached reasoning is
 a real expiry and stays on the credential path.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,7 +17,9 @@ from agent.error_classifier import FailoverReason, classify_api_error
 from agent.turn_recovery import recover_after_classification
 from agent.turn_retry_state import TurnRetryState
 
-_TOKEN_EXPIRED = "Provided authentication token is expired. Please try signing in again."
+_TOKEN_EXPIRED = (
+    "Provided authentication token is expired. Please try signing in again."
+)
 
 
 class _Codex401(Exception):
@@ -54,10 +57,12 @@ class _Agent:
 
     def _extract_api_error_context(self, error):
         from agent.agent_runtime_helpers import extract_api_error_context
+
         return extract_api_error_context(error)
 
     def _disable_codex_reasoning_replay(self, messages=None, **kwargs):
         from run_agent import AIAgent
+
         return AIAgent._disable_codex_reasoning_replay(self, messages, **kwargs)
 
     def __getattr__(self, name):
@@ -66,8 +71,13 @@ class _Agent:
 
 def _cached_history(n: int = 2):
     return [
-        {"role": "assistant", "content": f"answer {i}",
-         "codex_reasoning_items": [{"type": "reasoning", "id": f"rs_{i}", "encrypted_content": "gAAA" * 8}]}
+        {
+            "role": "assistant",
+            "content": f"answer {i}",
+            "codex_reasoning_items": [
+                {"type": "reasoning", "id": f"rs_{i}", "encrypted_content": "gAAA" * 8}
+            ],
+        }
         for i in range(n)
     ]
 
@@ -76,8 +86,14 @@ def _recover(agent, err, retry, messages):
     classified = classify_api_error(err, provider=agent.provider, model=agent.model)
     assert classified.reason == FailoverReason.auth  # never reclassified
     return recover_after_classification(
-        agent, err, classified, retry, status_code=401,
-        error_context=agent._extract_api_error_context(err), messages=messages, api_messages=list(messages),
+        agent,
+        err,
+        classified,
+        retry,
+        status_code=401,
+        error_context=agent._extract_api_error_context(err),
+        messages=messages,
+        api_messages=list(messages),
     )
 
 
@@ -87,7 +103,9 @@ def test_token_expired_strips_cached_reasoning_once_before_the_credential_path()
     retried, _ = _recover(agent, _Codex401(), retry, messages)
 
     assert retried is True
-    assert agent.refresh_calls == 0  # no refresh token burned on a session-state problem
+    assert (
+        agent.refresh_calls == 0
+    )  # no refresh token burned on a session-state problem
     # First rejection: only the stale blobs go; blobs minted from now on keep replaying.
     assert agent._codex_reasoning_replay_enabled is True
     assert not any("codex_reasoning_items" in m for m in messages)
@@ -95,14 +113,23 @@ def test_token_expired_strips_cached_reasoning_once_before_the_credential_path()
     assert _recover(agent, _Codex401(), retry, messages) == (False, False)
     assert agent.refresh_calls == 1
     # A later turn rejecting its own fresh blobs means the route cannot round-trip them: replay off.
-    assert _recover(agent, _Codex401(), TurnRetryState(), _cached_history()) == (True, False)
+    assert _recover(agent, _Codex401(), TurnRetryState(), _cached_history()) == (
+        True,
+        False,
+    )
     assert agent._codex_reasoning_replay_enabled is False
 
 
-@pytest.mark.parametrize("err, history", [
-    (_Codex401(), []),                       # real expiry: nothing cached to strip
-    (_Codex401(code=None), _cached_history()),  # generic 401: not the token_expired signature
-])
+@pytest.mark.parametrize(
+    "err, history",
+    [
+        (_Codex401(), []),  # real expiry: nothing cached to strip
+        (
+            _Codex401(code=None),
+            _cached_history(),
+        ),  # generic 401: not the token_expired signature
+    ],
+)
 def test_token_expired_without_cached_reasoning_stays_on_auth_path(err, history):
     agent, retry = _Agent(), TurnRetryState()
 
@@ -120,13 +147,22 @@ def test_pooled_token_expired_strips_cached_reasoning_before_benching_entries():
 
     agent, retry, messages = _Agent(), TurnRetryState(), _cached_history()
     entries = [
-        PooledCredential(provider="openai-codex", id=f"acct-{i}", label=f"acct-{i}", auth_type="oauth",
-                         priority=i, source=f"acct-{i}", access_token=token)
+        PooledCredential(
+            provider="openai-codex",
+            id=f"acct-{i}",
+            label=f"acct-{i}",
+            auth_type="oauth",
+            priority=i,
+            source=f"acct-{i}",
+            access_token=token,
+        )
         for i, token in enumerate(["same-bearer", "other-bearer"])
     ]
     pool = CredentialPool("openai-codex", entries)
     agent._credential_pool = pool
-    agent._recover_with_credential_pool = lambda **kw: recover_with_credential_pool(agent, **kw)
+    agent._recover_with_credential_pool = lambda **kw: recover_with_credential_pool(
+        agent, **kw
+    )
 
     retried, recovered_with_pool = _recover(agent, _Codex401(), retry, messages)
 

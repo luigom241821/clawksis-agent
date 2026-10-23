@@ -1,4 +1,5 @@
 """Coalesce concurrent synchronous HTTP reads before threadpool admission."""
+
 import asyncio
 import inspect
 from functools import partial, wraps
@@ -11,7 +12,10 @@ from clawk_constants import get_clawk_home
 
 def _freeze(value):
     if isinstance(value, dict):
-        return (type(value), frozenset((_freeze(k), _freeze(v)) for k, v in value.items()))
+        return (
+            type(value),
+            frozenset((_freeze(k), _freeze(v)) for k, v in value.items()),
+        )
     if isinstance(value, (list, tuple)):
         return (type(value), tuple(map(_freeze, value)))
     if isinstance(value, (set, frozenset)):
@@ -31,8 +35,10 @@ def coalesced_read(func, *, thread_runner=run_sync):
     signature = inspect.signature(func)
     hints = get_type_hints(func, include_extras=True)
     signature = signature.replace(
-        parameters=[p.replace(annotation=hints.get(p.name, p.annotation))
-                    for p in signature.parameters.values()],
+        parameters=[
+            p.replace(annotation=hints.get(p.name, p.annotation))
+            for p in signature.parameters.values()
+        ],
         return_annotation=hints.get("return", signature.return_annotation),
     )
     states = WeakKeyDictionary()
@@ -46,6 +52,7 @@ def coalesced_read(func, *, thread_runner=run_sync):
         pending, admission = states.setdefault(loop, ({}, asyncio.Semaphore(1)))
         task = pending.get(key)
         if task is None:
+
             async def execute():
                 try:
                     async with admission:
@@ -54,10 +61,13 @@ def coalesced_read(func, *, thread_runner=run_sync):
                     pending.pop(key, None)
                     if not pending:
                         states.pop(loop, None)
+
             task = loop.create_task(execute())
             pending[key] = task
             # Observe failures even if every HTTP caller has disconnected.
-            task.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+            task.add_done_callback(
+                lambda done: None if done.cancelled() else done.exception()
+            )
         # A disconnected caller must not release admission for a live worker.
         return await asyncio.shield(task)
 

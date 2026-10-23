@@ -19,6 +19,7 @@ from tools.vision_tools import (
 # _detect_video_mime_type
 # ---------------------------------------------------------------------------
 
+
 class TestDetectVideoMimeType:
     """Extension-based MIME detection for video files."""
 
@@ -37,9 +38,11 @@ class TestDetectVideoMimeType:
         p.write_bytes(b"\x00" * 10)
         assert _detect_video_mime_type(p) == "video/mp4"
 
+
 # ---------------------------------------------------------------------------
 # _video_to_base64_data_url
 # ---------------------------------------------------------------------------
+
 
 class TestVideoToBase64DataUrl:
     """Base64 encoding of video files."""
@@ -57,6 +60,7 @@ class TestVideoToBase64DataUrl:
         # Falls back to video/mp4
         assert result.startswith("data:video/mp4;base64,")
 
+
 # ---------------------------------------------------------------------------
 # Schema validation
 # ---------------------------------------------------------------------------
@@ -65,6 +69,7 @@ class TestVideoToBase64DataUrl:
 # _handle_video_analyze handler
 # ---------------------------------------------------------------------------
 
+
 class TestHandleVideoAnalyze:
     """Tests for the registry handler wrapper."""
 
@@ -72,17 +77,23 @@ class TestHandleVideoAnalyze:
         monkeypatch.setenv("AUXILIARY_VIDEO_MODEL", "")
         monkeypatch.setenv("AUXILIARY_VISION_MODEL", "google/gemini-flash")
 
-        with patch("tools.vision_tools.video_analyze_tool", new_callable=AsyncMock) as mock_tool:
+        with patch(
+            "tools.vision_tools.video_analyze_tool", new_callable=AsyncMock
+        ) as mock_tool:
             mock_tool.return_value = json.dumps({"success": True, "analysis": "ok"})
             asyncio.get_event_loop().run_until_complete(
-                _handle_video_analyze({"video_url": "/tmp/test.mp4", "question": "test"})
+                _handle_video_analyze(
+                    {"video_url": "/tmp/test.mp4", "question": "test"}
+                )
             )
             args = mock_tool.call_args[0]
             assert args[2] == "google/gemini-flash"
 
+
 # ---------------------------------------------------------------------------
 # video_analyze_tool — integration-style tests with mocked LLM
 # ---------------------------------------------------------------------------
+
 
 class TestVideoAnalyzeTool:
     """Core video analysis function tests."""
@@ -99,8 +110,15 @@ class TestVideoAnalyzeTool:
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "A short video showing a demo."
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock, return_value=mock_response):
-            with patch("tools.vision_tools.extract_content_or_reasoning", return_value="A short video showing a demo."):
+        with patch(
+            "tools.vision_tools.async_call_llm",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            with patch(
+                "tools.vision_tools.extract_content_or_reasoning",
+                return_value="A short video showing a demo.",
+            ):
                 result = self._run(video_analyze_tool(str(video), "What is this?"))
 
         data = json.loads(result)
@@ -123,7 +141,9 @@ class TestVideoAnalyzeTool:
         disguised = tmp_path / "video.mp4"
         disguised.symlink_to(secret)
 
-        with patch("tools.vision_tools.async_call_llm", new_callable=AsyncMock) as mock_llm:
+        with patch(
+            "tools.vision_tools.async_call_llm", new_callable=AsyncMock
+        ) as mock_llm:
             result = self._run(video_analyze_tool(str(disguised), "What is this?"))
 
         data = json.loads(result)
@@ -156,7 +176,9 @@ class TestVideoAnalyzeTool:
             return mock_response
 
         with patch("tools.vision_tools.async_call_llm", side_effect=capture_llm):
-            with patch("tools.vision_tools.extract_content_or_reasoning", return_value="OK"):
+            with patch(
+                "tools.vision_tools.extract_content_or_reasoning", return_value="OK"
+            ):
                 self._run(video_analyze_tool(str(video), "Describe this"))
 
         messages = captured_kwargs["messages"]
@@ -171,7 +193,9 @@ class TestVideoAnalyzeTool:
         # provider uses its full output budget (max-tokens-knob policy).
         assert "max_tokens" not in captured_kwargs
 
-    def test_non_local_backend_reads_video_from_terminal_backend(self, tmp_path, monkeypatch):
+    def test_non_local_backend_reads_video_from_terminal_backend(
+        self, tmp_path, monkeypatch
+    ):
         """Non-local terminal backends must not read local host video paths.
 
         The read routes through the shared media resolver
@@ -211,7 +235,10 @@ class TestVideoAnalyzeTool:
 
         with (
             patch("tools.vision_tools.async_call_llm", side_effect=capture_llm),
-            patch("tools.vision_tools.extract_content_or_reasoning", return_value="sandbox video"),
+            patch(
+                "tools.vision_tools.extract_content_or_reasoning",
+                return_value="sandbox video",
+            ),
         ):
             result = self._run(
                 video_analyze_tool(str(host_video), "Describe this", task_id="task-123")
@@ -225,15 +252,18 @@ class TestVideoAnalyzeTool:
         assert uploaded_bytes == remote_bytes
         assert uploaded_bytes != host_video.read_bytes()
 
+
 # ---------------------------------------------------------------------------
 # Toolset registration
 # ---------------------------------------------------------------------------
+
 
 class TestVideoToolsetRegistration:
     """Verify the tool is registered correctly."""
 
     def test_registered_in_video_toolset(self):
         from tools.registry import registry
+
         entry = registry.get_entry("video_analyze")
         assert entry is not None
         assert entry.toolset == "video"

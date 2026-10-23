@@ -22,14 +22,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -56,7 +66,12 @@ class FakeDMChannel:
 
 
 class FakeTextChannel:
-    def __init__(self, channel_id: int = 1, name: str = "general", guild_name: str = "Clawksis Server"):
+    def __init__(
+        self,
+        channel_id: int = 1,
+        name: str = "general",
+        guild_name: str = "Clawksis Server",
+    ):
         self.id = channel_id
         self.name = name
         self.guild = SimpleNamespace(name=guild_name)
@@ -64,7 +79,13 @@ class FakeTextChannel:
 
 
 class FakeThread:
-    def __init__(self, channel_id: int = 1, name: str = "thread", parent=None, guild_name: str = "Clawksis Server"):
+    def __init__(
+        self,
+        channel_id: int = 1,
+        name: str = "thread",
+        parent=None,
+        guild_name: str = "Clawksis Server",
+    ):
         self.id = channel_id
         self.name = name
         self.parent = parent
@@ -75,7 +96,9 @@ class FakeThread:
 
 @pytest.fixture
 def adapter(monkeypatch):
-    monkeypatch.setattr(discord_platform.discord, "DMChannel", FakeDMChannel, raising=False)
+    monkeypatch.setattr(
+        discord_platform.discord, "DMChannel", FakeDMChannel, raising=False
+    )
     monkeypatch.setattr(discord_platform.discord, "Thread", FakeThread, raising=False)
 
     config = PlatformConfig(enabled=True, token="fake-token")
@@ -219,21 +242,26 @@ async def test_auto_thread_failure_skips_agent_and_notifies_user(adapter, monkey
 def test_config_bridges_ignored_channels(monkeypatch, tmp_path):
     """gateway/config.py bridges discord.ignored_channels to env var."""
     import clawk_yaml as yaml
+
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(yaml.safe_dump({
-        "discord": {
-            "ignored_channels": ["111", "222"],
-        },
-    }))
+    config_file.write_text(
+        yaml.safe_dump(
+            {
+                "discord": {
+                    "ignored_channels": ["111", "222"],
+                },
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     # Use setenv (not delenv) so monkeypatch registers cleanup even when
     # the var doesn't exist yet — load_gateway_config will overwrite it.
     monkeypatch.setenv("DISCORD_IGNORED_CHANNELS", "")
 
     from gateway.config import load_gateway_config
+
     load_gateway_config()
 
     import os
+
     assert os.getenv("DISCORD_IGNORED_CHANNELS") == "111,222"
-
-

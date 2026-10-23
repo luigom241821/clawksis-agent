@@ -35,7 +35,9 @@ from agent.plugin_llm import (
 # ---------------------------------------------------------------------------
 
 
-def _fake_response(text: str = "ok", *, prompt: int = 3, completion: int = 5) -> SimpleNamespace:
+def _fake_response(
+    text: str = "ok", *, prompt: int = 3, completion: int = 5
+) -> SimpleNamespace:
     return SimpleNamespace(
         choices=[
             SimpleNamespace(
@@ -91,7 +93,9 @@ def _set_builtins(monkeypatch, keys: list[str]) -> None:
     )
 
 
-def _policy(plugin_id: str = "my-plugin", *, allow_task_override: bool = False) -> _TrustPolicy:
+def _policy(
+    plugin_id: str = "my-plugin", *, allow_task_override: bool = False
+) -> _TrustPolicy:
     return _TrustPolicy(plugin_id=plugin_id, allow_task_override=allow_task_override)
 
 
@@ -104,7 +108,9 @@ class TestCheckTask:
     def test_none_returns_none(self, monkeypatch):
         _set_registry(monkeypatch, [])
         _set_builtins(monkeypatch, [])
-        assert _check_task(_policy(), plugin_id="my-plugin", requested_task=None) is None
+        assert (
+            _check_task(_policy(), plugin_id="my-plugin", requested_task=None) is None
+        )
 
     @pytest.mark.parametrize("raw", ["auto", "AUTO", "  auto  ", "", "   "])
     def test_auto_and_blank_return_none(self, monkeypatch, raw):
@@ -124,7 +130,9 @@ class TestCheckTask:
         _set_registry(monkeypatch, [{"key": "classifier", "plugin": "my-plugin"}])
         _set_builtins(monkeypatch, [])
         assert (
-            _check_task(_policy(), plugin_id="my-plugin", requested_task="  classifier ")
+            _check_task(
+                _policy(), plugin_id="my-plugin", requested_task="  classifier "
+            )
             == "classifier"
         )
 
@@ -133,7 +141,9 @@ class TestCheckTask:
         _set_builtins(monkeypatch, ["vision"])
         with caplog.at_level(logging.WARNING):
             with pytest.raises(PluginLlmTrustError) as exc:
-                _check_task(_policy(), plugin_id="my-plugin", requested_task="classifier")
+                _check_task(
+                    _policy(), plugin_id="my-plugin", requested_task="classifier"
+                )
         # Error names both offending plugin and key; no silent fallback.
         assert "my-plugin" in str(exc.value)
         assert "classifier" in str(exc.value)
@@ -360,7 +370,9 @@ class TestForwardsToCallLlm:
             kwargs["route_info"].update(provider="aux-provider", model="aux-model")
             return _fake_response()
 
-        monkeypatch.setattr("agent.auxiliary_client.async_call_llm", fake_async_call_llm)
+        monkeypatch.setattr(
+            "agent.auxiliary_client.async_call_llm", fake_async_call_llm
+        )
         llm = make_plugin_llm_for_test(plugin_id="my-plugin", policy=_policy())
         result = asyncio.run(
             llm.acomplete([{"role": "user", "content": "hi"}], task="classifier")
@@ -396,7 +408,9 @@ class TestOwnershipIntegration:
         # A manifest with a distinct key stores the canonical id (key), which
         # is exactly what ctx.llm is bound to — so the trust gate matches.
         manager = self._make_manager()
-        self._register(manager, name="Display Name", key="my_key", task_key="classifier")
+        self._register(
+            manager, name="Display Name", key="my_key", task_key="classifier"
+        )
         monkeypatch.setattr(
             "clawk_cli.plugins._ensure_plugins_discovered", lambda: manager
         )
@@ -418,15 +432,21 @@ class TestOwnershipIntegration:
         _set_builtins(monkeypatch, ["vision"])
 
         assert (
-            _check_task(_policy(plugin_id="p"), plugin_id="p", requested_task="classifier")
+            _check_task(
+                _policy(plugin_id="p"), plugin_id="p", requested_task="classifier"
+            )
             == "classifier"
         )
         with pytest.raises(PluginLlmTrustError):
             _check_task(
-                _policy(plugin_id="other"), plugin_id="other", requested_task="classifier"
+                _policy(plugin_id="other"),
+                plugin_id="other",
+                requested_task="classifier",
             )
 
-    def test_auto_task_reports_configured_fallback_provider_and_model(self, tmp_path, monkeypatch):
+    def test_auto_task_reports_configured_fallback_provider_and_model(
+        self, tmp_path, monkeypatch
+    ):
         from agent import auxiliary_client as auxiliary_mod
         from clawk_cli import config as config_mod
 
@@ -448,8 +468,12 @@ auxiliary:
         monkeypatch.setattr(config_mod, "_RAW_CONFIG_CACHE", {})
 
         manager = self._make_manager()
-        ctx = self._register(manager, name="my-plugin", key="my-plugin", task_key="classifier")
-        monkeypatch.setattr("clawk_cli.plugins._ensure_plugins_discovered", lambda: manager)
+        ctx = self._register(
+            manager, name="my-plugin", key="my-plugin", task_key="classifier"
+        )
+        monkeypatch.setattr(
+            "clawk_cli.plugins._ensure_plugins_discovered", lambda: manager
+        )
         _set_builtins(monkeypatch, [])
         monkeypatch.setattr("agent.auxiliary_client._read_main_provider", lambda: "")
         monkeypatch.setattr("agent.auxiliary_client._read_main_model", lambda: "")
@@ -478,10 +502,12 @@ auxiliary:
         )
 
         assert (captured["provider"], captured["model"]) == (
-            "fallback-provider", "fallback-model"
+            "fallback-provider",
+            "fallback-model",
         )
         assert (result.provider, result.model) == (
-            "fallback-provider", "fallback-model"
+            "fallback-provider",
+            "fallback-model",
         )
 
     def test_async_auto_resolution_preserves_route_provider(self, monkeypatch):
@@ -505,9 +531,10 @@ auxiliary:
         )
 
         assert resolved_client is async_client
-        assert auxiliary_client._effective_provider_for_client(
-            resolved_client, "auto"
-        ) == "fallback-provider"
+        assert (
+            auxiliary_client._effective_provider_for_client(resolved_client, "auto")
+            == "fallback-provider"
+        )
         assert model == "fallback-model"
 
     def test_sync_fallback_reports_the_successful_route(self, tmp_path, monkeypatch):
@@ -540,7 +567,9 @@ auxiliary:
             chat=SimpleNamespace(completions=SimpleNamespace(create=fail))
         )
         fallback_client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **_kwargs: _fake_response()))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=lambda **_kwargs: _fake_response())
+            )
         )
         monkeypatch.setattr(
             "agent.auxiliary_client._get_cached_client",
@@ -556,7 +585,10 @@ auxiliary:
             plugin_id="my-plugin", policy=_policy()
         ).complete([{"role": "user", "content": "hi"}], task="classifier")
 
-        assert (result.provider, result.model) == ("fallback-provider", "fallback-model")
+        assert (result.provider, result.model) == (
+            "fallback-provider",
+            "fallback-model",
+        )
 
     def test_async_fallback_reports_the_successful_route(self, tmp_path, monkeypatch):
         from clawk_cli import config as config_mod
@@ -612,4 +644,7 @@ auxiliary:
             )
         )
 
-        assert (result.provider, result.model) == ("fallback-provider", "fallback-model")
+        assert (result.provider, result.model) == (
+            "fallback-provider",
+            "fallback-model",
+        )

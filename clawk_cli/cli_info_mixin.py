@@ -48,8 +48,17 @@ def _reload_mcp_choices() -> list[tuple[str, str, str]]:
     """(id, label, hint) rows for the /reload-mcp confirm modal, in the active language."""
     return [
         ("once", t("cli.reload_mcp.choice_once"), t("cli.reload_mcp.choice_once_hint")),
-        ("always", t("cli.reload_mcp.choice_always"), t("cli.reload_mcp.choice_always_hint")),
-        ("cancel", t("cli.reload_mcp.choice_cancel"), t("cli.reload_mcp.choice_cancel_hint"))]
+        (
+            "always",
+            t("cli.reload_mcp.choice_always"),
+            t("cli.reload_mcp.choice_always_hint"),
+        ),
+        (
+            "cancel",
+            t("cli.reload_mcp.choice_cancel"),
+            t("cli.reload_mcp.choice_cancel_hint"),
+        ),
+    ]
 
 
 # /help section headers: the category ids are load-bearing for gateway help and the registry, so
@@ -80,7 +89,10 @@ def _ascii_box(title: str, width: int) -> None:
 
 def _toolset_map(tools, availability, get_toolset_for_tool) -> dict:
     """tool name → toolset id, including tools of unavailable toolsets (banner snapshot)."""
-    tmap = {tool["function"]["name"]: get_toolset_for_tool(tool["function"]["name"]) for tool in tools}
+    tmap = {
+        tool["function"]["name"]: get_toolset_for_tool(tool["function"]["name"])
+        for tool in tools
+    }
     for item in availability.get("unavailable_toolsets", []):
         for name in item.get("tools", []):
             tmap.setdefault(name, item.get("id", item.get("name", "")))
@@ -96,10 +108,15 @@ def _skill_line(item: dict) -> str:
 class BannerPlan(NamedTuple):
     """What the welcome banner draws, shared by startup (``show_banner``) and ``/clear`` so the two
     cannot drift apart."""
+
     store: Any  # the gateway session store, or None off the gateway
-    inventory: dict | None  # a gateway session's tools: its snapshot, never this process's registry
+    inventory: (
+        dict | None
+    )  # a gateway session's tools: its snapshot, never this process's registry
     ctx_len: int | None
-    banner_kw: dict | None  # build_welcome_banner's common kwargs; None → the compact banner
+    banner_kw: (
+        dict | None
+    )  # build_welcome_banner's common kwargs; None → the compact banner
 
 
 def banner_plan(cli, console) -> BannerPlan:
@@ -107,18 +124,35 @@ def banner_plan(cli, console) -> BannerPlan:
     ``display.compact``, or a gateway session with no snapshot yet."""
     from agent.context_pin import is_context_pinned
     from clawk_cli.gateway_tools_notify import gateway_store
+
     store = gateway_store(cli)
     inventory = store.banner_inventory() if store is not None else None
     agent = getattr(cli, "agent", None)
     compressor = getattr(agent, "context_compressor", None)
     ctx_len = compressor.context_length if compressor is not None else None
-    if cli.compact or shutil.get_terminal_size().columns < 80 or (store is not None and inventory is None):
+    if (
+        cli.compact
+        or shutil.get_terminal_size().columns < 80
+        or (store is not None and inventory is None)
+    ):
         return BannerPlan(store, inventory, ctx_len, None)
-    return BannerPlan(store, inventory, ctx_len, dict(
-        console=console, model=cli.model, cwd=os.getenv("TERMINAL_CWD", os.getcwd()),
-        enabled_toolsets=cli.enabled_toolsets, session_id=cli.session_id, context_length=ctx_len,
-        provider=cli.provider,
-        context_pinned=is_context_pinned(ctx_len, getattr(agent, "_config_context_length", None))))
+    return BannerPlan(
+        store,
+        inventory,
+        ctx_len,
+        dict(
+            console=console,
+            model=cli.model,
+            cwd=os.getenv("TERMINAL_CWD", os.getcwd()),
+            enabled_toolsets=cli.enabled_toolsets,
+            session_id=cli.session_id,
+            context_length=ctx_len,
+            provider=cli.provider,
+            context_pinned=is_context_pinned(
+                ctx_len, getattr(agent, "_config_context_length", None)
+            ),
+        ),
+    )
 
 
 class CLIInfoMixin:
@@ -129,12 +163,20 @@ class CLIInfoMixin:
         """Main's banner from the gateway session's snapshot (the TUI banner's data): the CLI
         enumerates nothing. The canonical id shows as main's 8-character label (display only)."""
         from clawk_cli.gateway_session_store import session_label
+
         build_welcome_banner(
-            tools=inventory["tools"], get_toolset_for_tool=inventory["get_toolset_for_tool"],
-            availability=inventory["availability"], skills_by_category=inventory["skills_by_category"],
-            **{**banner_kw, "cwd": inventory["cwd"] or banner_kw["cwd"],
-               "context_length": inventory["context_length"] or banner_kw["context_length"],
-               "session_id": session_label(self.session_id)})
+            tools=inventory["tools"],
+            get_toolset_for_tool=inventory["get_toolset_for_tool"],
+            availability=inventory["availability"],
+            skills_by_category=inventory["skills_by_category"],
+            **{
+                **banner_kw,
+                "cwd": inventory["cwd"] or banner_kw["cwd"],
+                "context_length": inventory["context_length"]
+                or banner_kw["context_length"],
+                "session_id": session_label(self.session_id),
+            },
+        )
 
     def _print_gateway_tool_warnings(self, lines):
         """Main's ``_show_tool_availability_warnings`` lines, computed by the gateway that resolved
@@ -148,9 +190,12 @@ class CLIInfoMixin:
         """Display the welcome banner in Claude Code style."""
         from cli import _build_compact_banner, get_tool_definitions, logger
         from clawk_cli.banner import build_welcome_banner, print_recent_changes
+
         self.console.clear()
         store, gateway_inventory, ctx_len, banner_kw = banner_plan(self, self.console)
-        on_gateway = store is not None  # its tools come from the gateway: never enumerated here
+        on_gateway = (
+            store is not None
+        )  # its tools come from the gateway: never enumerated here
 
         # Auto-compact for narrow terminals — the full banner needs ~80 columns to avoid wrapping.
         if banner_kw is None:
@@ -162,14 +207,20 @@ class CLIInfoMixin:
             # cold get_tool_definitions walk. The agent's REAL tool list is still computed fresh at
             # first message; a background refresh re-verifies the snapshot so drift self-heals.
             from clawk_cli.banner import (
-                compute_toolset_availability, load_banner_snapshot, save_banner_snapshot)
+                compute_toolset_availability,
+                load_banner_snapshot,
+                save_banner_snapshot,
+            )
+
             try:
                 snapshot = load_banner_snapshot(self.enabled_toolsets)
             except Exception:
                 snapshot = None
 
             if gateway_inventory is not None:
-                self._show_gateway_banner(build_welcome_banner, gateway_inventory, banner_kw)
+                self._show_gateway_banner(
+                    build_welcome_banner, gateway_inventory, banner_kw
+                )
             elif snapshot is not None:
                 self._defer_tool_warnings = True
                 toolset_map = snapshot["toolset_map"]
@@ -178,33 +229,51 @@ class CLIInfoMixin:
                     get_toolset_for_tool=lambda name: toolset_map.get(name),
                     availability=snapshot["availability"],
                     skills_by_category=snapshot.get("skills_by_category"),
-                    **banner_kw)
+                    **banner_kw,
+                )
 
                 def _refresh_banner_snapshot() -> None:
                     try:
                         from model_tools import get_toolset_for_tool
+
                         tools = get_tool_definitions(
                             enabled_toolsets=self.enabled_toolsets,
-                            disabled_toolsets=self.disabled_toolsets, quiet_mode=True)
-                        availability = compute_toolset_availability(self.enabled_toolsets)
+                            disabled_toolsets=self.disabled_toolsets,
+                            quiet_mode=True,
+                        )
+                        availability = compute_toolset_availability(
+                            self.enabled_toolsets
+                        )
                         tmap = _toolset_map(tools, availability, get_toolset_for_tool)
-                        save_banner_snapshot(tools, self.enabled_toolsets, availability, tmap)
+                        save_banner_snapshot(
+                            tools, self.enabled_toolsets, availability, tmap
+                        )
                     except Exception:
                         logger.debug("banner snapshot refresh failed", exc_info=True)
 
                 threading.Thread(
-                    target=_refresh_banner_snapshot, name="banner-snapshot-refresh", daemon=True,
+                    target=_refresh_banner_snapshot,
+                    name="banner-snapshot-refresh",
+                    daemon=True,
                 ).start()
             else:
                 # Cold path: compute live, then persist the snapshot for the next launch.
                 from model_tools import get_toolset_for_tool
-                tools = get_tool_definitions(enabled_toolsets=self.enabled_toolsets,
-                                             disabled_toolsets=self.disabled_toolsets, quiet_mode=True)
+
+                tools = get_tool_definitions(
+                    enabled_toolsets=self.enabled_toolsets,
+                    disabled_toolsets=self.disabled_toolsets,
+                    quiet_mode=True,
+                )
                 availability = compute_toolset_availability(self.enabled_toolsets)
-                build_welcome_banner(tools=tools, availability=availability, **banner_kw)
+                build_welcome_banner(
+                    tools=tools, availability=availability, **banner_kw
+                )
                 try:
                     tmap = _toolset_map(tools, availability, get_toolset_for_tool)
-                    save_banner_snapshot(tools, self.enabled_toolsets, availability, tmap)
+                    save_banner_snapshot(
+                        tools, self.enabled_toolsets, availability, tmap
+                    )
                 except Exception:
                     logger.debug("banner snapshot save failed", exc_info=True)
 
@@ -215,63 +284,96 @@ class CLIInfoMixin:
         # Tool discovery is deferred on the Termux bare prompt path (warnings show once tools
         # init). On the snapshot fast path the check walks every check_fn (~180ms) — run it in
         # the background and let its output land above the prompt (patch_stdout-safe).
-        if isinstance((gateway_inventory or {}).get("tool_availability_warnings"), list):
-            self._print_gateway_tool_warnings(gateway_inventory["tool_availability_warnings"])
+        if isinstance(
+            (gateway_inventory or {}).get("tool_availability_warnings"), list
+        ):
+            self._print_gateway_tool_warnings(
+                gateway_inventory["tool_availability_warnings"]
+            )
         elif not on_gateway and os.environ.get("CLAWK_DEFER_AGENT_STARTUP") != "1":
             if getattr(self, "_defer_tool_warnings", False):
                 threading.Thread(
                     target=self._show_tool_availability_warnings,
                     name="tool-availability-warnings",
-                    daemon=True).start()
+                    daemon=True,
+                ).start()
             else:
                 self._show_tool_availability_warnings()
 
         # Low context warning — tied to the runtime guard so guidance cannot drift.
         from agent.model_metadata import MINIMUM_CONTEXT_LENGTH, is_local_endpoint
+
         if ctx_len and ctx_len < MINIMUM_CONTEXT_LENGTH:
             self._console_print()
-            self._console_print(f"[yellow]{t('cli.banner.context_too_low', tokens=f'{ctx_len:,}')}[/]")
-            self._console_print(f"[dim]   {t('cli.banner.context_minimum', tokens=f'{MINIMUM_CONTEXT_LENGTH:,}')}[/]")
+            self._console_print(
+                f"[yellow]{t('cli.banner.context_too_low', tokens=f'{ctx_len:,}')}[/]"
+            )
+            self._console_print(
+                f"[dim]   {t('cli.banner.context_minimum', tokens=f'{MINIMUM_CONTEXT_LENGTH:,}')}[/]"
+            )
             base_url = getattr(self, "base_url", "") or ""
             from urllib.parse import urlparse as _urlparse
+
             try:
-                _port = _urlparse(base_url if "://" in base_url else f"//{base_url}").port
+                _port = _urlparse(
+                    base_url if "://" in base_url else f"//{base_url}"
+                ).port
             except ValueError:
                 _port = None
             if _port == 11434 or "ollama" in base_url_hostname(base_url):
                 fix = t("cli.banner.fix_ollama", tokens=str(MINIMUM_CONTEXT_LENGTH))
             elif _port == 1234:
                 fix = t("cli.banner.fix_lm_studio")
-            elif is_local_endpoint(base_url):  # llama.cpp / vLLM / any local server — not Ollama
-                fix = t("cli.banner.fix_local_server",
-                        tokens_k=str(MINIMUM_CONTEXT_LENGTH // 1000), tokens=str(MINIMUM_CONTEXT_LENGTH))
+            elif is_local_endpoint(
+                base_url
+            ):  # llama.cpp / vLLM / any local server — not Ollama
+                fix = t(
+                    "cli.banner.fix_local_server",
+                    tokens_k=str(MINIMUM_CONTEXT_LENGTH // 1000),
+                    tokens=str(MINIMUM_CONTEXT_LENGTH),
+                )
             else:
                 fix = t("cli.banner.fix_config")
             self._console_print(f"[dim]   {fix}[/]")
 
         from clawk_cli.model_switch import is_nous_clawk_non_agentic
+
         if is_nous_clawk_non_agentic(getattr(self, "model", "") or ""):
             self._console_print()
-            self._console_print(f"[bold yellow]{t('cli.banner.clawk_models_not_agentic')}[/]")
+            self._console_print(
+                f"[bold yellow]{t('cli.banner.clawk_models_not_agentic')}[/]"
+            )
             self._console_print(f"[dim]   {t('cli.banner.clawk_models_lack_tools')}[/]")
-            self._console_print(f"[dim]   {t('cli.banner.clawk_models_switch_hint')}[/]")
+            self._console_print(
+                f"[dim]   {t('cli.banner.clawk_models_switch_hint')}[/]"
+            )
 
         # Project-local skills one-liner: trusted → count; untrusted-with-skills → point at
         # `clawk skills trust`. Never raises.
         try:
             from agent.skill_utils import (
-                get_project_skills_dirs, get_untrusted_project_skills_root, iter_skill_index_files)
+                get_project_skills_dirs,
+                get_untrusted_project_skills_root,
+                iter_skill_index_files,
+            )
+
             _proj_dirs = get_project_skills_dirs()
             if _proj_dirs:
-                _n = sum(sum(1 for _ in iter_skill_index_files(d, "SKILL.md")) for d in _proj_dirs)
+                _n = sum(
+                    sum(1 for _ in iter_skill_index_files(d, "SKILL.md"))
+                    for d in _proj_dirs
+                )
                 if _n:
-                    self._console_print(f"[dim]{t('cli.banner.project_skills_loaded', count=str(_n))}[/]")
+                    self._console_print(
+                        f"[dim]{t('cli.banner.project_skills_loaded', count=str(_n))}[/]"
+                    )
             else:
                 _untrusted = get_untrusted_project_skills_root()
                 if _untrusted is not None:
                     _root, _n = _untrusted
                     self._console_print(
-                        f"[yellow]{t('cli.banner.project_skills_untrusted', count=str(_n), root=str(_root))}[/]")
+                        f"[yellow]{t('cli.banner.project_skills_untrusted', count=str(_n), root=str(_root))}[/]"
+                    )
         except Exception:
             logger.debug("project skills banner notice failed", exc_info=True)
 
@@ -283,7 +385,9 @@ class CLIInfoMixin:
         except Exception:
             return False
         agent = getattr(self, "agent", None)
-        return model_supports_fast_mode(getattr(agent, "model", None) or getattr(self, "model", None))
+        return model_supports_fast_mode(
+            getattr(agent, "model", None) or getattr(self, "model", None)
+        )
 
     def _command_available(self, slash_command: str) -> bool:
         if slash_command == "/fast":
@@ -294,8 +398,16 @@ class CLIInfoMixin:
         """Display help. Bare /help shows categorized core commands with the skill list collapsed
         to one line; /help skills lists all skill commands; /help <query> filters by substring."""
         from cli import (
-            ChatConsole, _BOLD, _DIM, _RST, _accent_hex, _cprint, _session_skill_commands,
-            _termux_example_image_path, get_skill_bundles)
+            ChatConsole,
+            _BOLD,
+            _DIM,
+            _RST,
+            _accent_hex,
+            _cprint,
+            _session_skill_commands,
+            _termux_example_image_path,
+            get_skill_bundles,
+        )
         from clawk_cli.commands import COMMAND_REGISTRY, HELP_SESSION_SUBGROUPS
 
         arg = (arg or "").strip()
@@ -303,17 +415,21 @@ class CLIInfoMixin:
 
         def _row(cmd: str, desc: str, width: int = 15) -> None:
             ChatConsole().print(
-                f"    [bold {_accent_hex()}]{cmd:<{width}}[/] [dim]-[/] {_escape(desc)}")
+                f"    [bold {_accent_hex()}]{cmd:<{width}}[/] [dim]-[/] {_escape(desc)}"
+            )
 
         # /help skills — the full list, kept out of the default view so core commands don't
         # scroll off screen.
         if arg.lower() in ("skills", "skill"):
             from clawk_cli import gateway_plugin_commands
+
             if skill_commands:
-                _cprint(f"\n  ⚡ {_BOLD}{t('cli.help.skill_commands')}{_RST} "
-                        f"({t('cli.help.n_installed', count=str(len(skill_commands)))}):")
+                _cprint(
+                    f"\n  ⚡ {_BOLD}{t('cli.help.skill_commands')}{_RST} "
+                    f"({t('cli.help.n_installed', count=str(len(skill_commands)))}):"
+                )
                 for cmd, info in sorted(skill_commands.items()):
-                    _row(cmd, info['description'], 22)
+                    _row(cmd, info["description"], 22)
             else:
                 _cprint(f"\n  {t('cli.help.no_skill_commands')}")
             # Skills whose name is a built-in command never get a /<name> (agent.skill_commands guard).
@@ -327,6 +443,7 @@ class CLIInfoMixin:
         default_header = t("cli.help.header")
         try:
             from clawk_cli.skin_engine import get_active_help_header
+
             header = get_active_help_header(default_header)
         except Exception:
             header = default_header
@@ -356,10 +473,30 @@ class CLIInfoMixin:
                 continue
             desc = cmd_def.describe()
             rows = by_category.setdefault(cmd_def.category, [])
-            rows.append((f"/{cmd_def.name}", t("cli.help.usage_suffix", description=desc, command=cmd_def.name,
-                                              args=cmd_def.args_hint) if cmd_def.args_hint else desc))
+            rows.append(
+                (
+                    f"/{cmd_def.name}",
+                    t(
+                        "cli.help.usage_suffix",
+                        description=desc,
+                        command=cmd_def.name,
+                        args=cmd_def.args_hint,
+                    )
+                    if cmd_def.args_hint
+                    else desc,
+                )
+            )
             for alias in cmd_def.aliases:
-                rows.append((f"/{alias}", t("cli.help.alias_suffix", description=desc, command=cmd_def.name)))
+                rows.append(
+                    (
+                        f"/{alias}",
+                        t(
+                            "cli.help.alias_suffix",
+                            description=desc,
+                            command=cmd_def.name,
+                        ),
+                    )
+                )
 
         for category, commands in by_category.items():
             if category != "Session":
@@ -367,7 +504,11 @@ class CLIInfoMixin:
                 continue
             # The oversized Session category renders as sub-groups
             # (Session / Context / Background & Automation).
-            sub_of = {f"/{n}": sub for sub, names in HELP_SESSION_SUBGROUPS.items() for n in names}
+            sub_of = {
+                f"/{n}": sub
+                for sub, names in HELP_SESSION_SUBGROUPS.items()
+                for n in names
+            }
             buckets: dict[str, list[tuple[str, str]]] = {"Session": []}
             for _sub in HELP_SESSION_SUBGROUPS:
                 buckets[_sub] = []
@@ -380,36 +521,49 @@ class CLIInfoMixin:
         # core reference; filter mode includes matching skill commands inline.
         if query:
             matched_skills = [
-                (cmd, info) for cmd, info in sorted(skill_commands.items())
-                if query in cmd.lower() or query in (info.get("description", "").lower())]
+                (cmd, info)
+                for cmd, info in sorted(skill_commands.items())
+                if query in cmd.lower()
+                or query in (info.get("description", "").lower())
+            ]
             if matched_skills:
-                _cprint(f"\n  ⚡ {_BOLD}{t('cli.help.skill_commands')}{_RST} "
-                        f"({t('cli.help.matching_query', query=arg)}):")
+                _cprint(
+                    f"\n  ⚡ {_BOLD}{t('cli.help.skill_commands')}{_RST} "
+                    f"({t('cli.help.matching_query', query=arg)}):"
+                )
                 for cmd, info in matched_skills:
-                    _row(cmd, info['description'], 22)
+                    _row(cmd, info["description"], 22)
         elif skill_commands:
             _cprint(
                 f"\n  ⚡ {_BOLD}{t('cli.help.skill_commands')}{_RST}: "
                 f"{t('cli.help.n_installed', count=str(len(skill_commands)))} "
-                f"— {_DIM}/help skills{_RST} {t('cli.help.to_list_them')}")
+                f"— {_DIM}/help skills{_RST} {t('cli.help.to_list_them')}"
+            )
 
         _bundles_now = get_skill_bundles()
         if _bundles_now and not query:
-            _cprint(f"\n  ▣ {_BOLD}{t('cli.help.skill_bundles')}{_RST} "
-                    f"({t('cli.help.n_installed', count=str(len(_bundles_now)))}):")
+            _cprint(
+                f"\n  ▣ {_BOLD}{t('cli.help.skill_bundles')}{_RST} "
+                f"({t('cli.help.n_installed', count=str(len(_bundles_now)))}):"
+            )
             for cmd, info in sorted(_bundles_now.items()):
                 skill_count = len(info.get("skills", []))
-                desc = info.get("description") or t("cli.help.load_n_skills", count=str(skill_count))
+                desc = info.get("description") or t(
+                    "cli.help.load_n_skills", count=str(skill_count)
+                )
                 ChatConsole().print(
                     f"    [bold {_accent_hex()}]{cmd:<22}[/] [dim]-[/] "
-                    f"{_escape(desc)} [dim]({t('cli.help.n_skills', count=str(skill_count))})[/]")
+                    f"{_escape(desc)} [dim]({t('cli.help.n_skills', count=str(skill_count))})[/]"
+                )
 
         quick_commands = self.config.get("quick_commands", {})
         if quick_commands and not query:
-            _cprint(f"\n  ⚡ {_BOLD}{t('cli.help.quick_commands')}{_RST} "
-                    f"({t('cli.help.n_configured', count=str(len(quick_commands)))}):")
+            _cprint(
+                f"\n  ⚡ {_BOLD}{t('cli.help.quick_commands')}{_RST} "
+                f"({t('cli.help.n_configured', count=str(len(quick_commands)))}):"
+            )
             for name, qcmd in sorted(quick_commands.items()):
-                _row('/' + name, qcmd.get("description", qcmd.get("type", "")), 22)
+                _row("/" + name, qcmd.get("description", qcmd.get("type", "")), 22)
 
         if query:
             _cprint(f"\n  {_DIM}{t('cli.help.filtered_by', query=arg)}{_RST}\n")
@@ -419,24 +573,33 @@ class CLIInfoMixin:
         _cprint(f"  {_DIM}{t('cli.help.multiline_hint')}{_RST}")
         _cprint(f"  {_DIM}{t('cli.help.draft_editor_hint')}{_RST}")
         if _is_termux_environment():
-            _cprint(f"  {_DIM}{t('cli.help.attach_image_hint', path=_termux_example_image_path())}{_RST}\n")
+            _cprint(
+                f"  {_DIM}{t('cli.help.attach_image_hint', path=_termux_example_image_path())}{_RST}\n"
+            )
         else:
             _cprint(f"  {_DIM}{t('cli.help.paste_image_hint')}{_RST}\n")
 
     def show_tools(self):
         """Display available tools with kawaii ASCII art."""
         from clawk_cli.gateway_tools import session_tools
-        remote = session_tools()  # the gateway session's catalog (its MCP + plugin tools included)
+
+        remote = (
+            session_tools()
+        )  # the gateway session's catalog (its MCP + plugin tools included)
         if remote is not None:
             tools, get_toolset_for_tool = remote
         else:
             from cli import get_tool_definitions
             from model_tools import get_toolset_for_tool
+
             # Pre-assembly list: /tools is a discovery surface, so it must show the full catalog
             # including tools deferred behind the tool_search bridge (users verify MCP installs here).
-            tools = get_tool_definitions(enabled_toolsets=self.enabled_toolsets,
-                                         disabled_toolsets=self.disabled_toolsets, quiet_mode=True,
-                                         skip_tool_search_assembly=True)
+            tools = get_tool_definitions(
+                enabled_toolsets=self.enabled_toolsets,
+                disabled_toolsets=self.disabled_toolsets,
+                quiet_mode=True,
+                skip_tool_search_assembly=True,
+            )
         if not tools:
             print(t("cli.tools.none_available"))
             return
@@ -452,7 +615,7 @@ class CLIInfoMixin:
             desc = tool["function"].get("description", "").split("\n")[0]
             # First sentence: split on ". " (period+space) so "e.g." / "v2.0" stay intact.
             if ". " in desc:
-                desc = desc[:desc.index(". ") + 1]
+                desc = desc[: desc.index(". ") + 1]
             toolsets.setdefault(toolset, []).append((name, desc))
 
         for toolset in sorted(toolsets.keys()):
@@ -467,11 +630,13 @@ class CLIInfoMixin:
     def show_toolsets(self):
         """Display available toolsets with kawaii ASCII art."""
         from clawk_cli.cli_info_lines import toolsets_lines
+
         print("\n".join(toolsets_lines(self.enabled_toolsets)))
 
     def _handle_whoami_command(self):
         """Display slash-command access for the local CLI surface."""
         import getpass
+
         try:
             user_name = getpass.getuser() or "?"
         except Exception:
@@ -480,7 +645,9 @@ class CLIInfoMixin:
         print(f"  {t('cli.whoami.you_label'):<15} {t('cli.whoami.you_value')}")
         print(f"  {t('cli.whoami.user_label'):<15} {user_name}")
         print(f"  {t('cli.whoami.tier_label'):<15} {t('cli.whoami.tier_value')}")
-        print(f"  {t('cli.whoami.slash_commands_label'):<15} {t('cli.whoami.slash_commands_value')}")
+        print(
+            f"  {t('cli.whoami.slash_commands_label'):<15} {t('cli.whoami.slash_commands_value')}"
+        )
         print()
 
     def _busy_inline_command(self, text: str, has_images: bool, names: tuple) -> bool:
@@ -493,30 +660,37 @@ class CLIInfoMixin:
         thread-safe; ``/bg`` / ``/btw`` start their side session without touching the foreground turn).
         """
         from cli import _looks_like_slash_command
+
         if not text or has_images or not _looks_like_slash_command(text):
             return False
         if not getattr(self, "_agent_running", False):
             return False
         try:
             from clawk_cli.commands import resolve_command
-            cmd = resolve_command(text.split(None, 1)[0].lower().lstrip('/'))
+
+            cmd = resolve_command(text.split(None, 1)[0].lower().lstrip("/"))
             return bool(cmd and cmd.name in names)
         except Exception:
             return False
 
-    def _should_handle_steer_command_inline(self, text: str, has_images: bool = False) -> bool:
+    def _should_handle_steer_command_inline(
+        self, text: str, has_images: bool = False
+    ) -> bool:
         """Return True when /steer or /queue should be dispatched immediately while the agent is
         running. Queued raw, ``/queue <prompt>`` only re-enqueued itself after the turn and
         ``/queue list|rm|edit`` could not inspect the queue until it had already drained."""
         return self._busy_inline_command(text, has_images, ("steer", "queue"))
 
     def _should_handle_background_command_inline(
-        self, text: str, has_images: bool = False) -> bool:
+        self, text: str, has_images: bool = False
+    ) -> bool:
         """Return True when /bg or /btw should be dispatched while the agent runs (their
         ``CommandDef`` entries declare ``busy_policy="dispatch"``; the classic CLI honours it here)."""
         return self._busy_inline_command(text, has_images, ("bg", "btw"))
 
-    def _should_handle_stop_command_inline(self, text: str, has_images: bool = False) -> bool:
+    def _should_handle_stop_command_inline(
+        self, text: str, has_images: bool = False
+    ) -> bool:
         """Return True when /stop should be dispatched while the agent runs: its ``CommandDef`` declares
         ``busy_policy="interrupt_then_dispatch"``, and queued it would only run after the turn it stops."""
         return self._busy_inline_command(text, has_images, ("stop",))
@@ -532,8 +706,14 @@ class CLIInfoMixin:
         """
         from cli import _rich_text_from_ansi
         from clawk_cli.bang_shell import (
-            USAGE_HINT, bang_shell_enabled, check_bang_approval, is_bang_command,
-            parse_bang_command, resolve_bang_cwd, run_bang_command)
+            USAGE_HINT,
+            bang_shell_enabled,
+            check_bang_approval,
+            is_bang_command,
+            parse_bang_command,
+            resolve_bang_cwd,
+            run_bang_command,
+        )
 
         if not is_bang_command(text):
             return False
@@ -551,14 +731,17 @@ class CLIInfoMixin:
         if not approval.get("approved"):
             message = approval.get("message") or t(
                 "cli.shell.command_denied",
-                reason=approval.get("description") or t("cli.shell.flagged_as_dangerous"))
+                reason=approval.get("description")
+                or t("cli.shell.flagged_as_dangerous"),
+            )
             self._console_print(f"[bold red]{_escape(str(message))}[/]")
             return True
 
         exit_code = run_bang_command(
             command,
             cwd=resolve_bang_cwd(getattr(self, "session_id", None)),
-            writer=lambda line: self._console_print(_rich_text_from_ansi(line)))
+            writer=lambda line: self._console_print(_rich_text_from_ansi(line)),
+        )
         if exit_code:
             self._console_print(f"[dim]{t('cli.shell.exited', code=str(exit_code))}[/]")
         return True
@@ -566,15 +749,18 @@ class CLIInfoMixin:
     def _show_gateway_status(self):
         """Show status of the gateway and connected messaging platforms."""
         from clawk_cli.cli_info_lines import platforms_lines
+
         print("\n".join(platforms_lines()))
 
     def _print_random_tip(self) -> None:
         """Best-effort discovery tip (startup + /clear); never raises."""
         try:
             from clawk_cli.tips import get_random_tip
+
             _tip = get_random_tip()
             try:
                 from clawk_cli.skin_engine import get_active_skin
+
                 _tip_color = get_active_skin().get_color("banner_dim", "#4A3496")
             except Exception:
                 _tip_color = "#4A3496"
@@ -590,11 +776,14 @@ class CLIInfoMixin:
         ``-v`` and ``/verbose-logging``).
         """
         from cli import _cprint, save_config_value
+
         try:
             idx = _TOOL_PROGRESS_CYCLE.index(self.tool_progress_mode)
         except ValueError:
             idx = 2  # default to "all"
-        self.tool_progress_mode = _TOOL_PROGRESS_CYCLE[(idx + 1) % len(_TOOL_PROGRESS_CYCLE)]
+        self.tool_progress_mode = _TOOL_PROGRESS_CYCLE[
+            (idx + 1) % len(_TOOL_PROGRESS_CYCLE)
+        ]
 
         # /verbose is the explicit tool-progress control, so cycling it takes ownership of the
         # mode back from focus view (else a "focus" badge + hidden-line counts would show while
@@ -606,6 +795,7 @@ class CLIInfoMixin:
             self._focus_last_counted_tool = None
             try:
                 from clawk_cli.focus_view import FOCUS_CONFIG_KEY
+
                 save_config_value(FOCUS_CONFIG_KEY, False)
             except Exception:
                 pass
@@ -632,7 +822,9 @@ class CLIInfoMixin:
 
     def _agent_or_self(self, name: str):
         """Provider-ish attribute from the live agent, falling back to the CLI's own value."""
-        return (getattr(self.agent, name, None) if self.agent else None) or getattr(self, name, None)
+        return (getattr(self.agent, name, None) if self.agent else None) or getattr(
+            self, name, None
+        )
 
     def _usage_reset(self, force: bool = False):
         """`/usage reset [--force]` — redeem one banked Codex reset credit."""
@@ -646,8 +838,10 @@ class CLIInfoMixin:
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
             try:
                 result = _pool.submit(
-                    redeem_codex_reset_credit, base_url=self._agent_or_self("base_url"),
-                    api_key=self._agent_or_self("api_key"), force=force,
+                    redeem_codex_reset_credit,
+                    base_url=self._agent_or_self("base_url"),
+                    api_key=self._agent_or_self("api_key"),
+                    force=force,
                 ).result(timeout=45.0)
             except concurrent.futures.TimeoutError:
                 print(f"  {t('cli.usage.codex_timeout')}")
@@ -659,20 +853,30 @@ class CLIInfoMixin:
         per-category table; `all` appends per-skill / per-toolset costs. Read-only: same chars/4
         engine as the desktop popover (agent.context_breakdown) — no provider calls, no cache impact."""
         from clawk_cli.gateway_side import connection_for
+
         if (connection := connection_for(self)) is not None:
             return self._show_gateway_context_breakdown(connection)
         if not self.agent:
             print(f"  {t('cli.shared.no_active_agent')}")
             return
 
-        args = cmd_original.split(maxsplit=1)[1].strip().lower() if " " in cmd_original else ""
+        args = (
+            cmd_original.split(maxsplit=1)[1].strip().lower()
+            if " " in cmd_original
+            else ""
+        )
         expanded = args in {"all", "full", "details"}
 
         from agent.context_breakdown import (
-            compute_context_details, compute_session_context_breakdown,
-            render_context_breakdown_lines)
+            compute_context_details,
+            compute_session_context_breakdown,
+            render_context_breakdown_lines,
+        )
+
         try:
-            payload = compute_session_context_breakdown(self.agent, self.conversation_history)
+            payload = compute_session_context_breakdown(
+                self.agent, self.conversation_history
+            )
         except Exception as e:
             print(f"  {t('cli.context.compute_failed', error=str(e))}")
             return
@@ -684,16 +888,24 @@ class CLIInfoMixin:
             except Exception:
                 details = {"skills": [], "toolsets": []}
 
-        from agent.context_file_sources import context_file_sources_for_agent, render_context_file_lines
+        from agent.context_file_sources import (
+            context_file_sources_for_agent,
+            render_context_file_lines,
+        )
+
         try:
-            file_lines = render_context_file_lines(context_file_sources_for_agent(self.agent))
+            file_lines = render_context_file_lines(
+                context_file_sources_for_agent(self.agent)
+            )
         except Exception:
             file_lines = []
 
         print()
         print(f"  {t('cli.context.header', model=payload.get('model') or self.model)}")
         print()
-        for line in render_context_breakdown_lines(payload, details=details, grid=True) + ([""] + file_lines if file_lines else []):
+        for line in render_context_breakdown_lines(
+            payload, details=details, grid=True
+        ) + ([""] + file_lines if file_lines else []):
             print(f"  {line}")
         print()
 
@@ -703,8 +915,11 @@ class CLIInfoMixin:
         from agent.context_breakdown import render_context_breakdown_lines
         from agent.context_file_sources import render_context_file_lines
         from clawk_cli.gateway_client import GatewayClientError
+
         try:
-            payload = connection.call("session.context_breakdown", session_id=self.session_id)
+            payload = connection.call(
+                "session.context_breakdown", session_id=self.session_id
+            )
         except GatewayClientError as e:
             print(f"  {t('cli.context.compute_failed', error=str(e))}")
             return
@@ -715,7 +930,9 @@ class CLIInfoMixin:
         print()
         print(f"  {t('cli.context.header', model=payload.get('model') or self.model)}")
         print()
-        for line in render_context_breakdown_lines(payload, grid=True) + (["", *file_lines] if file_lines else []):
+        for line in render_context_breakdown_lines(payload, grid=True) + (
+            ["", *file_lines] if file_lines else []
+        ):
             print(f"  {line}")
         print()
 
@@ -748,6 +965,7 @@ class CLIInfoMixin:
         rl_state = agent.get_rate_limit_state()
         if rl_state and rl_state.has_data:
             from agent.rate_limit_tracker import format_rate_limit_display
+
             print()
             print(format_rate_limit_display(rl_state))
             print()
@@ -759,7 +977,9 @@ class CLIInfoMixin:
         last_prompt = max(0, compressor.last_prompt_tokens)
         ctx_len = compressor.context_length
         pct = min(100, (last_prompt / ctx_len * 100)) if ctx_len else 0
-        elapsed = format_duration_compact((datetime.now() - self.session_start).total_seconds())
+        elapsed = format_duration_compact(
+            (datetime.now() - self.session_start).total_seconds()
+        )
 
         def _label_row(key: str, value: str) -> None:
             # Labels are re-padded here (not in the catalog) so translated widths still align.
@@ -772,19 +992,32 @@ class CLIInfoMixin:
         _label_row("cli.usage.label_output_tokens", f"{output_tokens:>10,}")
         if reasoning_tokens:
             _label_row("cli.usage.label_reasoning_subset", f"{reasoning_tokens:>10,}")
-        _label_row("cli.usage.label_prompt_tokens_total", f"{agent.session_prompt_tokens:>10,}")
-        _label_row("cli.usage.label_completion_tokens", f"{agent.session_completion_tokens:>10,}")
+        _label_row(
+            "cli.usage.label_prompt_tokens_total", f"{agent.session_prompt_tokens:>10,}"
+        )
+        _label_row(
+            "cli.usage.label_completion_tokens",
+            f"{agent.session_completion_tokens:>10,}",
+        )
         _label_row("cli.usage.label_total_tokens", f"{agent.session_total_tokens:>10,}")
         _label_row("cli.usage.label_api_calls", f"{calls:>10,}")
         _label_row("cli.usage.label_session_duration", f"{elapsed:>10}")
         print(f"  {'─' * 40}")
         from agent.context_breakdown import context_display_source
+
         mark = "~" if context_display_source(compressor) != "provider_usage" else ""
         from agent.context_pin import context_pin_suffix
-        pin_suffix = context_pin_suffix(ctx_len, getattr(agent, '_config_context_length', None))
-        print(f"  {t('cli.usage.label_current_context'):<17} {mark}{last_prompt:,} / {ctx_len:,} ({mark}{pct:.0f}%){pin_suffix}")
+
+        pin_suffix = context_pin_suffix(
+            ctx_len, getattr(agent, "_config_context_length", None)
+        )
+        print(
+            f"  {t('cli.usage.label_current_context'):<17} {mark}{last_prompt:,} / {ctx_len:,} ({mark}{pct:.0f}%){pin_suffix}"
+        )
         print(f"  {t('cli.usage.label_messages'):<17} {len(self.conversation_history)}")
-        print(f"  {t('cli.usage.label_compressions'):<17} {compressor.compression_count}")
+        print(
+            f"  {t('cli.usage.label_compressions'):<17} {compressor.compression_count}"
+        )
 
         self._print_account_limits()
 
@@ -793,7 +1026,16 @@ class CLIInfoMixin:
 
         if self.verbose:
             logging.getLogger().setLevel(logging.DEBUG)
-            for noisy in ('openai', 'openai._base_client', 'httpx', 'httpcore', 'asyncio', 'hpack', 'grpc', 'modal'):
+            for noisy in (
+                "openai",
+                "openai._base_client",
+                "httpx",
+                "httpcore",
+                "asyncio",
+                "hpack",
+                "grpc",
+                "modal",
+            ):
                 logging.getLogger(noisy).setLevel(logging.WARNING)
         else:
             logging.getLogger().setLevel(logging.INFO)
@@ -810,16 +1052,21 @@ class CLIInfoMixin:
         if not provider:
             return False
         from agent.account_usage import fetch_account_usage, render_account_usage_lines
+
         account_snapshot = None
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as _pool:
             try:
                 account_snapshot = _pool.submit(
-                    fetch_account_usage, provider, base_url=self._agent_or_self("base_url"),
+                    fetch_account_usage,
+                    provider,
+                    base_url=self._agent_or_self("base_url"),
                     api_key=self._agent_or_self("api_key"),
                 ).result(timeout=10.0)
             except (concurrent.futures.TimeoutError, Exception):
                 account_snapshot = None
-        account_lines = [f"  {line}" for line in render_account_usage_lines(account_snapshot)]
+        account_lines = [
+            f"  {line}" for line in render_account_usage_lines(account_snapshot)
+        ]
         if not account_lines:
             return False
         print()
@@ -876,6 +1123,7 @@ class CLIInfoMixin:
         self._last_config_check = now
 
         from clawk_cli.config import get_config_path as _get_config_path
+
         cfg_path = _get_config_path()
         if not cfg_path.exists():
             return
@@ -897,6 +1145,7 @@ class CLIInfoMixin:
         # deep-merged + expanded config); otherwise any save_config_value() rewrite of an
         # unrelated key would false-positive on "${POWERMEM_API_KEY}" vs its expanded value.
         from clawk_cli.config import _expand_env_vars
+
         new_mcp = _expand_env_vars(new_cfg.get("mcp_servers") or {})
         if new_mcp == self._config_mcp_servers:
             return  # some other section was edited
@@ -904,7 +1153,11 @@ class CLIInfoMixin:
         # Read the toggle from the config just parsed so the user can flip it in the same edit;
         # missing key means default-on.
         _mcp_cfg = new_cfg.get("mcp")
-        _auto = _mcp_cfg.get("auto_reload_on_config_change", True) if isinstance(_mcp_cfg, dict) else True
+        _auto = (
+            _mcp_cfg.get("auto_reload_on_config_change", True)
+            if isinstance(_mcp_cfg, dict)
+            else True
+        )
         self._config_mcp_servers = new_mcp
 
         if not _auto:
@@ -926,13 +1179,16 @@ class CLIInfoMixin:
         auto-reload calls ``_reload_mcp`` directly. Reloading invalidates the provider prompt cache
         (tool schemas are baked into the system prompt), hence the warning."""
         choice = _gated_confirm(
-            self, "reload-mcp", "mcp_reload_confirm",
+            self,
+            "reload-mcp",
+            "mcp_reload_confirm",
             title=t("cli.reload_mcp.title"),
             detail=t("cli.reload_mcp.detail"),
             choices=_reload_mcp_choices(),
             unchanged=t("cli.reload_mcp.unchanged"),
             always_msg=t("cli.reload_mcp.always_msg"),
-            once_verb=t("cli.reload_mcp.once_verb"))
+            once_verb=t("cli.reload_mcp.once_verb"),
+        )
         if choice is None:
             return
         with self._busy_command(self._slow_command_status(cmd_original)):
@@ -943,11 +1199,16 @@ class CLIInfoMixin:
         agent, so it reconciles them with config and refreshes its agents (``reload.mcp``); main's
         "Agent updated" line then counts the tools the gateway session now loads."""
         from clawk_cli.gateway_client import GatewayClientError
+
         if not self._command_running:
             print(t("cli.reload_mcp.reloading"))
         try:
-            result = connection.call("reload.mcp", session_id=self.session_id, confirm=True)
-            snapshot = connection.call("session.resume", session_id=self.session_id) or {}
+            result = connection.call(
+                "reload.mcp", session_id=self.session_id, confirm=True
+            )
+            snapshot = (
+                connection.call("session.resume", session_id=self.session_id) or {}
+            )
         except GatewayClientError as e:
             print(f"  {t('gateway.reload_mcp.failed', error=str(e))}")
             return
@@ -956,13 +1217,16 @@ class CLIInfoMixin:
         info = snapshot.get("info") or {}
         count = info.get("tool_count")
         if not isinstance(count, int):
-            count = sum(len(names or []) for names in (info.get("tools") or {}).values())
+            count = sum(
+                len(names or []) for names in (info.get("tools") or {}).values()
+            )
         print(f"  {t('cli.reload_mcp.agent_updated', count=str(count))}")
 
     def _reload_mcp(self):
         """Reload MCP servers: disconnect all, re-read config.yaml, reconnect, then refresh the
         agent's tool list so the model sees the updated tools on the next turn."""
         from clawk_cli.gateway_side import connection_for
+
         if (connection := connection_for(self)) is not None:
             return self._reload_gateway_mcp(connection)
         try:
@@ -970,6 +1234,7 @@ class CLIInfoMixin:
             from tools.mcp_tool_discovery import discover_mcp_tools
             from tools.mcp_tool_agent import reprobe_tool_availability
             from tools.mcp_tool import _servers, _lock
+
             with _lock:
                 old_servers = set(_servers.keys())
             if not self._command_running:
@@ -986,21 +1251,28 @@ class CLIInfoMixin:
             diff = {
                 "Added": connected_servers - old_servers,
                 "Removed": old_servers - connected_servers,
-                "Reconnected": connected_servers & old_servers}
-            for label, key in (("Reconnected", "cli.reload_mcp.reconnected"), ("Added", "cli.reload_mcp.added"),
-                               ("Removed", "cli.reload_mcp.removed")):
+                "Reconnected": connected_servers & old_servers,
+            }
+            for label, key in (
+                ("Reconnected", "cli.reload_mcp.reconnected"),
+                ("Added", "cli.reload_mcp.added"),
+                ("Removed", "cli.reload_mcp.removed"),
+            ):
                 if diff[label]:
                     print(f"  {t(key, names=', '.join(sorted(diff[label])))}")
             if not connected_servers:
                 print(f"  {t('gateway.reload_mcp.none_connected')}")
             else:
-                print(f"  {t('cli.reload_mcp.tools_available', tools=str(len(new_tools)), servers=str(len(connected_servers)))}")
+                print(
+                    f"  {t('cli.reload_mcp.tools_available', tools=str(len(new_tools)), servers=str(len(connected_servers)))}"
+                )
 
             # Route through the shared helper so this path stays in lockstep with the TUI RPC /
             # gateway reload / late-binding paths (name-diff, thread-safe, additive-preserving so
             # memory-provider and context-engine tools survive the rebuild).
             if self.agent is not None:
                 from tools.mcp_tool_agent import refresh_agent_mcp_tools
+
                 # Pick up servers ENABLED in config this session: enabled_toolsets was resolved at
                 # startup, so merge now-connected names in (unless `all`/`*` is pinned) so a
                 # freshly-added server isn't filtered out. Mirrors startup (see __init__).
@@ -1012,29 +1284,43 @@ class CLIInfoMixin:
                         if _name not in merged:
                             merged.append(_name)
                     enabled_override = merged
-                refresh_agent_mcp_tools(self.agent, enabled_override=enabled_override, quiet_mode=True)
+                refresh_agent_mcp_tools(
+                    self.agent, enabled_override=enabled_override, quiet_mode=True
+                )
                 if enabled_override is not None:
                     self.enabled_toolsets = enabled_override
 
             # Tell the model tools changed — appended at the END so the prefix cache survives.
             change_parts = [
-                f"{label} servers: {', '.join(sorted(names))}" for label, names in diff.items() if names
+                f"{label} servers: {', '.join(sorted(names))}"
+                for label, names in diff.items()
+                if names
             ]
-            tool_summary = f"{len(new_tools)} MCP tool(s) now available" if new_tools else "No MCP tools available"
+            tool_summary = (
+                f"{len(new_tools)} MCP tool(s) now available"
+                if new_tools
+                else "No MCP tools available"
+            )
             change_detail = ". ".join(change_parts) + ". " if change_parts else ""
-            self.conversation_history.append({
-                "role": "user",
-                "content": f"[IMPORTANT: MCP servers have been reloaded. {change_detail}{tool_summary}. The tool list for this conversation has been updated accordingly.]",
-            })
+            self.conversation_history.append(
+                {
+                    "role": "user",
+                    "content": f"[IMPORTANT: MCP servers have been reloaded. {change_detail}{tool_summary}. The tool list for this conversation has been updated accordingly.]",
+                }
+            )
 
             # Persist now so the session log reflects the refreshed tools list (best-effort).
             if self.agent is not None:
                 try:
-                    self.agent._persist_session(self.conversation_history, self.conversation_history)
+                    self.agent._persist_session(
+                        self.conversation_history, self.conversation_history
+                    )
                 except Exception:
                     pass
 
-            print(f"  {t('cli.reload_mcp.agent_updated', count=str(len(self.agent.tools if self.agent else [])))}")
+            print(
+                f"  {t('cli.reload_mcp.agent_updated', count=str(len(self.agent.tools if self.agent else [])))}"
+            )
         except Exception as e:
             print(f"  {t('gateway.reload_mcp.failed', error=str(e))}")
 
@@ -1049,17 +1335,27 @@ class CLIInfoMixin:
         """
         try:
             from clawk_cli.gateway_tools import process_view
+
             if not self._command_running:
                 print(t("cli.reload_skills.reloading"))
             view = process_view()
-            if view is not None:  # the gateway session's rescan (its plugin skills too): nothing is scanned here
-                result = (view.connection.call("skills.reload", session_id=view.session_id) or {}).get("result") or {}
+            if (
+                view is not None
+            ):  # the gateway session's rescan (its plugin skills too): nothing is scanned here
+                result = (
+                    view.connection.call("skills.reload", session_id=view.session_id)
+                    or {}
+                ).get("result") or {}
                 from clawk_cli.gateway_plugin_commands import invalidate
-                invalidate(self)  # /help, completion and dispatch read the rescanned list
+
+                invalidate(
+                    self
+                )  # /help, completion and dispatch read the rescanned list
             else:
                 from agent.skill_commands import reload_skills
+
                 result = reload_skills()
-            added = result.get("added", [])      # [{"name", "description"}, ...]
+            added = result.get("added", [])  # [{"name", "description"}, ...]
             removed = result.get("removed", [])
             total = result.get("total", 0)
 
@@ -1081,9 +1377,17 @@ class CLIInfoMixin:
             # Same shape as the system prompt's skill catalog (``    - name: description``).
             sections = ["[USER INITIATED SKILLS RELOAD:"]
             if added:
-                sections += ["", "Added Skills:", *(_skill_line(item) for item in added)]
+                sections += [
+                    "",
+                    "Added Skills:",
+                    *(_skill_line(item) for item in added),
+                ]
             if removed:
-                sections += ["", "Removed Skills:", *(_skill_line(item) for item in removed)]
+                sections += [
+                    "",
+                    "Removed Skills:",
+                    *(_skill_line(item) for item in removed),
+                ]
             sections += ["", "Use skills_list to see the updated catalog.]"]
             self._pending_skills_reload_note = "\n".join(sections)
         except Exception as e:

@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     """A cron.suggestions module bound to an isolated CLAWK_HOME."""
@@ -17,19 +18,28 @@ def store(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.suggestions as s
+
     importlib.reload(s)
     return s
+
 
 def _add(store, key="k1", title="Test", source="catalog", schedule="0 9 * * *"):
     return store.add_suggestion(
         title=title,
         description="desc",
         source=source,
-        job_spec={"prompt": "do it", "schedule": schedule, "name": title, "deliver": "origin"},
+        job_spec={
+            "prompt": "do it",
+            "schedule": schedule,
+            "name": title,
+            "deliver": "origin",
+        },
         dedup_key=key,
     )
+
 
 class TestStore:
     def test_explicit_file_override_wins_over_profile_home(self, tmp_path, monkeypatch):
@@ -99,7 +109,9 @@ class TestStore:
 
     def test_unknown_source_rejected(self, store):
         with pytest.raises(ValueError):
-            store.add_suggestion(title="x", description="d", source="bogus", job_spec={}, dedup_key="k")
+            store.add_suggestion(
+                title="x", description="d", source="bogus", job_spec={}, dedup_key="k"
+            )
 
     def test_usage_source_is_consent_first_self_improvement(self, store):
         """Background review suggestions must stay pending until user acceptance."""
@@ -133,7 +145,9 @@ class TestStore:
             return {"id": "job123", "name": kwargs.get("name"), **kwargs}
 
         with patch("cron.jobs.create_job", fake_create_job):
-            job = store.accept_suggestion("1", origin={"platform": "telegram", "chat_id": "5"})
+            job = store.accept_suggestion(
+                "1", origin={"platform": "telegram", "chat_id": "5"}
+            )
 
         assert job is not None
         assert created["schedule"] == "0 9 * * *"
@@ -179,6 +193,7 @@ class TestStore:
         # Dismissed record retained so its dedup_key still latches.
         assert _add(store, key="b") is None
 
+
 class TestCatalog:
     def test_seed_registers_all_entries(self, store):
         from cron.suggestion_catalog import CATALOG, seed_catalog_suggestions
@@ -194,13 +209,18 @@ class TestCatalog:
         # remote terminal backends (Docker/Modal); prompts must reference
         # scripts by module path instead.
         for entry in CATALOG:
-            assert classify_items_script_path() not in entry.job_spec.get("prompt", ""), entry.key
+            assert classify_items_script_path() not in entry.job_spec.get(
+                "prompt", ""
+            ), entry.key
+
 
 class TestBlueprintBridge:
     def test_blueprint_registers_suggestion(self, store):
         from tools.blueprints import BlueprintSpec, register_blueprint_suggestion
 
-        spec = BlueprintSpec(skill_name="morning-brief", schedule="0 8 * * *", deliver="telegram")
+        spec = BlueprintSpec(
+            skill_name="morning-brief", schedule="0 8 * * *", deliver="telegram"
+        )
         with patch("cron.suggestions.add_suggestion", store.add_suggestion):
             rec = register_blueprint_suggestion(spec)
         assert rec is not None
@@ -208,11 +228,13 @@ class TestBlueprintBridge:
         assert rec["job_spec"]["skills"] == ["morning-brief"]
         assert rec["job_spec"]["schedule"] == "0 8 * * *"
 
+
 class TestCommandHandler:
     def test_bare_lists_pending(self, store):
         _add(store, key="c1", title="Daily thing")
         with patch("cron.suggestions.list_pending", store.list_pending):
             from clawk_cli.suggestions_cmd import handle_suggestions_command
+
             # Patch the module the handler imports.
             with patch.dict("sys.modules"):
                 out = handle_suggestions_command("")

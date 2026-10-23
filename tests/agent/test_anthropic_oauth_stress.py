@@ -106,19 +106,23 @@ def _process_claude_code_refresh_worker(
 
     result_queue.put({"kind": "ready", "pid": os.getpid()})
     if not start_event.wait(timeout=10):
-        result_queue.put({"kind": "result", "ok": False, "error": "start barrier timeout"})
+        result_queue.put(
+            {"kind": "result", "ok": False, "error": "start barrier timeout"}
+        )
         return
 
     entry = _entry(id="pool-entry", refresh_token="stale-rt", source="claude_code")
     pool = credential_pool_mod.CredentialPool("anthropic", [entry])
     try:
         refreshed = pool._refresh_entry(pool.entries()[0], force=True)
-        result_queue.put({
-            "kind": "result",
-            "ok": refreshed is not None,
-            "refresh_token": refreshed.refresh_token if refreshed else None,
-            "pool_refresh_token": pool.entries()[0].refresh_token,
-        })
+        result_queue.put(
+            {
+                "kind": "result",
+                "ok": refreshed is not None,
+                "refresh_token": refreshed.refresh_token if refreshed else None,
+                "pool_refresh_token": pool.entries()[0].refresh_token,
+            }
+        )
     except BaseException as exc:  # pragma: no cover - failure diagnostics
         result_queue.put({"kind": "result", "ok": False, "error": repr(exc)})
 
@@ -189,7 +193,9 @@ def test_high_concurrency_anthropic_refresh_no_lost_updates_no_deadlock(
     server = _SingleUseTokenServer(delay_seconds=0.02)
     monkeypatch.setattr(
         "agent.anthropic_credentials.refresh_anthropic_oauth_pure",
-        lambda refresh_token, use_json=False: server.refresh(refresh_token, use_json=use_json),
+        lambda refresh_token, use_json=False: server.refresh(
+            refresh_token, use_json=use_json
+        ),
     )
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
@@ -262,13 +268,15 @@ def test_distinct_profiles_share_one_claude_refresh_without_duplicate_post(
     """
     shared_credentials_path = clawk_home / "shared-claude-credentials.json"
     shared_credentials_path.write_text(
-        json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "stale-at",
-                "refreshToken": "stale-rt",
-                "expiresAt": 0,
+        json.dumps(
+            {
+                "claudeAiOauth": {
+                    "accessToken": "stale-at",
+                    "refreshToken": "stale-rt",
+                    "expiresAt": 0,
+                }
             }
-        }),
+        ),
         encoding="utf-8",
     )
     server_state_path = clawk_home / "fake-token-server.json"
@@ -281,14 +289,16 @@ def test_distinct_profiles_share_one_claude_refresh_without_duplicate_post(
     for profile_home in profile_homes:
         profile_home.mkdir(parents=True)
         (profile_home / "auth.json").write_text(
-            json.dumps({
-                "version": 1,
-                "providers": {},
-                # claude_code is a borrowed source; its raw tokens must not
-                # be persisted in a profile pool. Each worker constructs the
-                # runtime entry from the shared credential source below.
-                "credential_pool": {},
-            }),
+            json.dumps(
+                {
+                    "version": 1,
+                    "providers": {},
+                    # claude_code is a borrowed source; its raw tokens must not
+                    # be persisted in a profile pool. Each worker constructs the
+                    # runtime entry from the shared credential source below.
+                    "credential_pool": {},
+                }
+            ),
             encoding="utf-8",
         )
 
@@ -323,9 +333,9 @@ def test_distinct_profiles_share_one_claude_refresh_without_duplicate_post(
                 messages.append(result_queue.get(timeout=remaining))
             except queue.Empty:
                 break
-        assert len([m for m in messages if m.get("kind") == "ready"]) == len(processes), (
-            f"not all refresh workers reached the start barrier: {messages!r}"
-        )
+        assert len([m for m in messages if m.get("kind") == "ready"]) == len(
+            processes
+        ), f"not all refresh workers reached the start barrier: {messages!r}"
         start_event.set()
 
         for process in processes:

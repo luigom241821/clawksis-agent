@@ -124,9 +124,9 @@ def test_namespace_falls_back_to_name_when_key_empty():
 @pytest.mark.parametrize(
     "bad_event",
     [
-        "clawk:x",   # reserved core prefix
-        "a:x",        # foreign namespace
-        "b:x",        # even the plugin's own colon'd name — must pass bare only
+        "clawk:x",  # reserved core prefix
+        "a:x",  # foreign namespace
+        "b:x",  # even the plugin's own colon'd name — must pass bare only
         "other:evt",
         ":x",
         "x:",
@@ -181,8 +181,10 @@ def test_per_callback_isolation(caplog):
     # Both listeners were invoked despite the first raising.
     assert count == 2
     assert received == [{"ok": True}]
-    assert any("subscriber exploded" in r.message or "raised" in r.message
-               for r in caplog.records)
+    assert any(
+        "subscriber exploded" in r.message or "raised" in r.message
+        for r in caplog.records
+    )
 
 
 def test_emit_returns_before_blocking_subscriber_finishes():

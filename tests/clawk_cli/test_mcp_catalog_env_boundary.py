@@ -158,14 +158,14 @@ def test_catalog_accepts_declared_credential(
 
     monkeypatch.setattr(mcp_config, "_probe_single_server", probe)
 
-    assert _CatalogBackend().install(
-        "demo", {"DEMO_API_KEY": "valid-demo-value"}
-    ) == ["demo_tool"]
+    assert _CatalogBackend().install("demo", {"DEMO_API_KEY": "valid-demo-value"}) == [
+        "demo_tool"
+    ]
     assert probes == ["demo"]
     assert "demo" in mcp_config._get_mcp_servers()
-    assert "DEMO_API_KEY=valid-demo-value" in (
-        catalog_env / ".env"
-    ).read_text(encoding="utf-8")
+    assert "DEMO_API_KEY=valid-demo-value" in (catalog_env / ".env").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_catalog_non_secret_env_never_lands_in_env_file(
@@ -227,9 +227,9 @@ def test_catalog_non_secret_env_never_lands_in_env_file(
 
     server = load_config()["mcp_servers"]["demo"]
     assert server["url"] == "https://demo.example.test"
-    assert "${DEMO_BASE_URL}" not in (
-        catalog_env / "config.yaml"
-    ).read_text(encoding="utf-8")
+    assert "${DEMO_BASE_URL}" not in (catalog_env / "config.yaml").read_text(
+        encoding="utf-8"
+    )
 
 
 @pytest.mark.parametrize(
@@ -341,13 +341,24 @@ def test_connection_card_install_keeps_env_file_secrets_only(
         {"name": "DEMO_BASE_URL", "prompt": "Demo base URL", "secret": False},
     ]
     manifest_path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
-    monkeypatch.setattr(mcp_config, "_probe_single_server", lambda name, cfg, **_k: [("demo_tool", "")])
+    monkeypatch.setattr(
+        mcp_config, "_probe_single_server", lambda name, cfg, **_k: [("demo_tool", "")]
+    )
 
     _CatalogBackend().install(
-        "demo", {"DEMO_API_KEY": "valid-demo-value", "DEMO_BASE_URL": "https://demo.example.test"}
+        "demo",
+        {
+            "DEMO_API_KEY": "valid-demo-value",
+            "DEMO_BASE_URL": "https://demo.example.test",
+        },
     )
 
     env_text = (catalog_env / ".env").read_text(encoding="utf-8")
     assert "DEMO_API_KEY=valid-demo-value" in env_text
-    assert "DEMO_BASE_URL" not in env_text and "https://demo.example.test" not in env_text
-    assert mcp_config._get_mcp_servers()["demo"]["env"]["DEMO_BASE_URL"] == "https://demo.example.test"
+    assert (
+        "DEMO_BASE_URL" not in env_text and "https://demo.example.test" not in env_text
+    )
+    assert (
+        mcp_config._get_mcp_servers()["demo"]["env"]["DEMO_BASE_URL"]
+        == "https://demo.example.test"
+    )

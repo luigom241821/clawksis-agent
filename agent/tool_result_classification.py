@@ -13,11 +13,22 @@ FILE_MUTATING_TOOL_NAMES = frozenset({"write_file", "patch"})
 # Tools whose interrupted/dangling execution is safe to discard because they
 # cannot mutate either external state or Clawksis session state. Unknown/plugin/
 # MCP tools stay effect-capable by default.
-NO_EFFECT_TOOL_NAMES = frozenset({
-    "read_file", "search_files", "session_search", "skill_view", "skills_list",
-    "web_extract", "web_search", "vision_analyze", "browser_snapshot",
-    "browser_get_images", "browser_console", "read_terminal",
-})
+NO_EFFECT_TOOL_NAMES = frozenset(
+    {
+        "read_file",
+        "search_files",
+        "session_search",
+        "skill_view",
+        "skills_list",
+        "web_extract",
+        "web_search",
+        "vision_analyze",
+        "browser_snapshot",
+        "browser_get_images",
+        "browser_console",
+        "read_terminal",
+    }
+)
 
 
 def tool_may_have_side_effect(tool_name: str) -> bool:
@@ -46,7 +57,9 @@ def is_guardrail_refusal(result: Any) -> bool:
 # empty: success payloads routinely carry ``"error": null`` per item (web_extract) or a
 # ``"failed": 0`` count, and a bare substring test flagged every one of them.
 _FAILURE_MARKER_RE = re.compile(
-    r'"(?:error|failed)"(?!\s*:\s*(?:null|false|0|""|\[\]|\{\})\s*(?:[,}\]]|$))', re.IGNORECASE)
+    r'"(?:error|failed)"(?!\s*:\s*(?:null|false|0|""|\[\]|\{\})\s*(?:[,}\]]|$))',
+    re.IGNORECASE,
+)
 
 
 def has_failure_marker(result: str) -> bool:
@@ -54,14 +67,23 @@ def has_failure_marker(result: str) -> bool:
     STARTING in the first 500 chars, or a body starting with ``Error``. The value is read past
     the cut, so an ``"error": null`` straddling char 500 is not mistaken for a truncated one."""
     head = result[:600]
-    return any(m.start() < 500 for m in _FAILURE_MARKER_RE.finditer(head)) or result.startswith("Error")
+    return any(
+        m.start() < 500 for m in _FAILURE_MARKER_RE.finditer(head)
+    ) or result.startswith("Error")
 
 
 # ``timeout`` is deliberately absent: process(wait) returns it for a still-running job.
 _FAILED_STATUSES = frozenset({"failed", "error"})
 
-_RATE_LIMIT_RE = re.compile(r"rate[\s_-]?limit|too many requests|\b429\b", re.IGNORECASE)
-_RETRY_AFTER_KEYS = ("retry_after", "retryAfter", "retry_after_seconds", "retry_after_ms")
+_RATE_LIMIT_RE = re.compile(
+    r"rate[\s_-]?limit|too many requests|\b429\b", re.IGNORECASE
+)
+_RETRY_AFTER_KEYS = (
+    "retry_after",
+    "retryAfter",
+    "retry_after_seconds",
+    "retry_after_ms",
+)
 
 
 def is_rate_limited(result: Any) -> bool:
@@ -76,10 +98,16 @@ def is_rate_limited(result: Any) -> bool:
             return bool(_RATE_LIMIT_RE.search(result[:500]))
     if not isinstance(data, dict):
         return False
-    if any(data.get(k) for k in _RETRY_AFTER_KEYS) or 429 in (data.get("status"), data.get("status_code"), data.get("code")):
+    if any(data.get(k) for k in _RETRY_AFTER_KEYS) or 429 in (
+        data.get("status"),
+        data.get("status_code"),
+        data.get("code"),
+    ):
         return True
     error = data.get("error")
-    text = error.get("message") or error.get("code") if isinstance(error, dict) else error
+    text = (
+        error.get("message") or error.get("code") if isinstance(error, dict) else error
+    )
     return isinstance(text, str) and bool(_RATE_LIMIT_RE.search(text))
 
 
@@ -92,7 +120,11 @@ def shape_failure_error(data: dict) -> str | None:
     if str(data.get("status", "")).lower() in _FAILED_STATUSES:
         return str(data.get("status"))
     items = data.get("results")
-    if not isinstance(items, list) or not items or not all(isinstance(i, dict) for i in items):
+    if (
+        not isinstance(items, list)
+        or not items
+        or not all(isinstance(i, dict) for i in items)
+    ):
         return None
     errors = [i.get("error") for i in items]
     if not all(errors):

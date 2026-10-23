@@ -43,7 +43,9 @@ class TestFailClosedAfterNotADb:
             reopen = MagicMock()
             monkeypatch.setattr("clawk_state._connect_tracked_db", reopen)
             db._conn = _NotADbOnce(real_conn)
-            with pytest.raises(sqlite3.DatabaseError, match="not a database") as excinfo:
+            with pytest.raises(
+                sqlite3.DatabaseError, match="not a database"
+            ) as excinfo:
                 db.create_session(session_id="s2", source="cli", model="test")
             reopen.assert_not_called()
             # NOTADB on a live write is structural: the handle is quarantined.
@@ -75,7 +77,10 @@ class TestWriteIoerrRetryBoundary:
                     self.begins = 0
 
                 def execute(self, sql, *args, **kwargs):
-                    if str(sql).strip().upper().startswith("BEGIN") and self.begins == 0:
+                    if (
+                        str(sql).strip().upper().startswith("BEGIN")
+                        and self.begins == 0
+                    ):
                         self.begins += 1
                         raise sqlite3.OperationalError("disk I/O error")
                     return self._real.execute(sql, *args, **kwargs)

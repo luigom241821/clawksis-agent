@@ -93,8 +93,16 @@ class _AuxCallHooks:
     """Fires the pre/post pair for one provider attempt; the base payload is built once."""
 
     def __init__(
-        self, *, aux_task: str, metadata: dict[str, Any], client: Any, kwargs: dict[str, Any],
-        provider: str, model: str, api_mode: str, streaming: bool,
+        self,
+        *,
+        aux_task: str,
+        metadata: dict[str, Any],
+        client: Any,
+        kwargs: dict[str, Any],
+        provider: str,
+        model: str,
+        api_mode: str,
+        streaming: bool,
     ) -> None:
         self.streaming = streaming
         self.kwargs = kwargs
@@ -128,7 +136,8 @@ class _AuxCallHooks:
         body = {k: v for k, v in kwargs.items() if k not in {"timeout", "http_client"}}
         total_chars = sum(len(str(_field(m, "content") or "")) for m in messages)
         _fire(
-            PRE_AUXILIARY_CALL, **self.base,
+            PRE_AUXILIARY_CALL,
+            **self.base,
             request_messages=list(messages),
             system_prompt=_system_prompt(messages, kwargs),
             tool_count=len(kwargs.get("tools") or []),
@@ -145,33 +154,48 @@ class _AuxCallHooks:
 
         ended_at = time.time()
         payload: dict[str, Any] = dict(
-            self.base, ended_at=ended_at, api_duration=max(0.0, ended_at - self.started_at),
+            self.base,
+            ended_at=ended_at,
+            api_duration=max(0.0, ended_at - self.started_at),
             error=None if error is None else f"{type(error).__name__}: {error}"[:2000],
             error_type=None if error is None else type(error).__name__,
         )
         # A streamed response is handed back unconsumed (the MoA facade owns reassembly), so
         # there is no usage/finish_reason to report yet; ``streaming`` tells the observer why.
         if error is not None or self.streaming:
-            payload.update(finish_reason=None, response_model=None, usage=None, response=None,
-                           assistant_content_chars=0, assistant_tool_call_count=0)
+            payload.update(
+                finish_reason=None,
+                response_model=None,
+                usage=None,
+                response=None,
+                assistant_content_chars=0,
+                assistant_tool_call_count=0,
+            )
         else:
             message, finish_reason = _first_choice_message(response)
             content = _field(message, "content") if message is not None else None
-            tool_calls = (_field(message, "tool_calls") if message is not None else None) or []
+            tool_calls = (
+                _field(message, "tool_calls") if message is not None else None
+            ) or []
             payload.update(
                 finish_reason=finish_reason,
                 response_model=_field(response, "model"),
                 usage=_usage_summary(response),
-                response=_Sanitize._sanitize_hook_payload({
-                    "model": _field(response, "model"),
-                    "finish_reason": finish_reason,
-                    "assistant_message": {
-                        "role": (_field(message, "role") if message is not None else None) or "assistant",
-                        "content": content,
-                        "tool_calls": tool_calls,
-                    },
-                    "usage": payload.get("usage"),
-                }),
+                response=_Sanitize._sanitize_hook_payload(
+                    {
+                        "model": _field(response, "model"),
+                        "finish_reason": finish_reason,
+                        "assistant_message": {
+                            "role": (
+                                _field(message, "role") if message is not None else None
+                            )
+                            or "assistant",
+                            "content": content,
+                            "tool_calls": tool_calls,
+                        },
+                        "usage": payload.get("usage"),
+                    }
+                ),
                 assistant_content_chars=len(content) if isinstance(content, str) else 0,
                 assistant_tool_call_count=len(tool_calls),
             )
@@ -195,8 +219,12 @@ def _fire(name: str, **payload: Any) -> None:
 
         invoke_hook(name, **payload)
     except Exception:
-        logger.warning("%s plugin hook failed for aux_task=%s; continuing",
-                       name, payload.get("aux_task"), exc_info=True)
+        logger.warning(
+            "%s plugin hook failed for aux_task=%s; continuing",
+            name,
+            payload.get("aux_task"),
+            exc_info=True,
+        )
 
 
 def _hooks_or_none(**kw: Any) -> Optional[_AuxCallHooks]:
@@ -206,28 +234,50 @@ def _hooks_or_none(**kw: Any) -> Optional[_AuxCallHooks]:
         hooks = _AuxCallHooks(**kw)
         hooks.pre()
     except Exception:
-        logger.warning("pre_auxiliary_call payload build failed; continuing", exc_info=True)
+        logger.warning(
+            "pre_auxiliary_call payload build failed; continuing", exc_info=True
+        )
         return None
     return hooks
 
 
-def _post_safely(hooks: Optional[_AuxCallHooks], response: Any = None, error: Any = None) -> None:
+def _post_safely(
+    hooks: Optional[_AuxCallHooks], response: Any = None, error: Any = None
+) -> None:
     if hooks is None:
         return
     try:
         hooks.post(response, error)
     except Exception:
-        logger.warning("post_auxiliary_call payload build failed; continuing", exc_info=True)
+        logger.warning(
+            "post_auxiliary_call payload build failed; continuing", exc_info=True
+        )
 
 
 def run_with_aux_hooks(
-    call: Callable[[], Any], *, aux_task: str, metadata: dict[str, Any], client: Any,
-    kwargs: dict[str, Any], provider: str, model: str, api_mode: str, streaming: bool = False,
+    call: Callable[[], Any],
+    *,
+    aux_task: str,
+    metadata: dict[str, Any],
+    client: Any,
+    kwargs: dict[str, Any],
+    provider: str,
+    model: str,
+    api_mode: str,
+    streaming: bool = False,
 ) -> Any:
     """Run one synchronous provider attempt between ``pre_auxiliary_call`` and
     ``post_auxiliary_call``; the exception (if any) is reported in ``post`` and re-raised."""
-    hooks = _hooks_or_none(aux_task=aux_task, metadata=metadata, client=client, kwargs=kwargs,
-                           provider=provider, model=model, api_mode=api_mode, streaming=streaming)
+    hooks = _hooks_or_none(
+        aux_task=aux_task,
+        metadata=metadata,
+        client=client,
+        kwargs=kwargs,
+        provider=provider,
+        model=model,
+        api_mode=api_mode,
+        streaming=streaming,
+    )
     try:
         response = call()
     except BaseException as exc:
@@ -238,12 +288,27 @@ def run_with_aux_hooks(
 
 
 async def arun_with_aux_hooks(
-    call: Callable[[], Awaitable[Any]], *, aux_task: str, metadata: dict[str, Any], client: Any,
-    kwargs: dict[str, Any], provider: str, model: str, api_mode: str,
+    call: Callable[[], Awaitable[Any]],
+    *,
+    aux_task: str,
+    metadata: dict[str, Any],
+    client: Any,
+    kwargs: dict[str, Any],
+    provider: str,
+    model: str,
+    api_mode: str,
 ) -> Any:
     """Async twin of :func:`run_with_aux_hooks`."""
-    hooks = _hooks_or_none(aux_task=aux_task, metadata=metadata, client=client, kwargs=kwargs,
-                           provider=provider, model=model, api_mode=api_mode, streaming=False)
+    hooks = _hooks_or_none(
+        aux_task=aux_task,
+        metadata=metadata,
+        client=client,
+        kwargs=kwargs,
+        provider=provider,
+        model=model,
+        api_mode=api_mode,
+        streaming=False,
+    )
     try:
         response = await call()
     except BaseException as exc:

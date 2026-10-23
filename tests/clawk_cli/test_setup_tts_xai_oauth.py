@@ -93,10 +93,20 @@ def test_tts_xai_step_prefers_existing_api_key_over_oauth(monkeypatch):
 
     messages = []
     monkeypatch.setattr(setup_tts, "_xai_oauth_logged_in_for_setup", lambda: True)
-    monkeypatch.setattr(setup_tts._setup, "get_env_value", lambda key: "xai-key" if key == "XAI_API_KEY" else "")
-    monkeypatch.setattr(setup_tts._setup, "print_success", lambda msg: messages.append(msg))
+    monkeypatch.setattr(
+        setup_tts._setup,
+        "get_env_value",
+        lambda key: "xai-key" if key == "XAI_API_KEY" else "",
+    )
+    monkeypatch.setattr(
+        setup_tts._setup, "print_success", lambda msg: messages.append(msg)
+    )
     monkeypatch.setattr(setup_tts._setup, "prompt", lambda *a, **k: "")
-    monkeypatch.setattr(setup_tts._setup, "prompt_choice", lambda *a, **k: pytest.fail("no prompt expected"))
+    monkeypatch.setattr(
+        setup_tts._setup,
+        "prompt_choice",
+        lambda *a, **k: pytest.fail("no prompt expected"),
+    )
 
     config = {}
     assert setup_tts._tts_xai_step(config) == "xai"

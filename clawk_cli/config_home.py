@@ -62,9 +62,13 @@ def initialize_home(home: Path, subdirs: tuple[str, ...], ensured: set[str]) -> 
         _ensure_directory(home, create=not managed, secure=not managed, home=home)
         required = ("cron", "sessions", "logs", "memories") if managed else subdirs
         for subdir in required:
-            _ensure_directory(home / subdir, create=not managed, secure=not managed, home=home)
+            _ensure_directory(
+                home / subdir, create=not managed, secure=not managed, home=home
+            )
         if managed:
-            _ensure_directory(home / "logs" / "curator", create=True, secure=False, home=home)
+            _ensure_directory(
+                home / "logs" / "curator", create=True, secure=False, home=home
+            )
         try:
             _ensure_default_soul_md(home)
         except OSError as exc:
@@ -85,7 +89,12 @@ def config_load_issue(exc: Exception):
 
     if isinstance(exc, (HomeInitializationError, OSError)):
         return ConfigIssue(
-            "error", f"Clawksis storage is unavailable: {exc}",
+            "error",
+            f"Clawksis storage is unavailable: {exc}",
             "Check the reported path, link target, mount and permissions; keep config.yaml unchanged.",
         )
-    return ConfigIssue("error", "Could not load config.yaml", "Run 'clawk setup' to create a valid config")
+    return ConfigIssue(
+        "error",
+        "Could not load config.yaml",
+        "Run 'clawk setup' to create a valid config",
+    )

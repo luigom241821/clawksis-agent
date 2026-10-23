@@ -56,16 +56,20 @@ def _big_region(n_rounds=60, tool_chars=6_000):
         {"role": "user", "content": "Please fix PR #12345 in agent/foo.py"},
     ]
     for i in range(n_rounds):
-        turns.append({
-            "role": "assistant",
-            "content": f"Working on step {i}: editing agent/foo.py line {i}",
-        })
-        turns.append({
-            "role": "tool",
-            "tool_call_id": f"tc{i}",
-            "tool_name": "terminal",
-            "content": f"round {i} output: " + ("x" * tool_chars),
-        })
+        turns.append(
+            {
+                "role": "assistant",
+                "content": f"Working on step {i}: editing agent/foo.py line {i}",
+            }
+        )
+        turns.append(
+            {
+                "role": "tool",
+                "tool_call_id": f"tc{i}",
+                "tool_name": "terminal",
+                "content": f"round {i} output: " + ("x" * tool_chars),
+            }
+        )
     return turns
 
 
@@ -81,13 +85,16 @@ class TestLeanSingleAuxiliaryCall:
     def test_exactly_one_call_llm_per_lean_attempt(self):
         c = _mk_compressor()
         turns = _big_region()
-        with patch(
-            "agent.context_compressor.call_llm",
-            return_value=_llm_response(SUMMARY_BODY),
-        ) as main_call, patch(
-            "agent.auxiliary_client.call_llm",
-            return_value=_llm_response(SUMMARY_BODY),
-        ) as aux_call:
+        with (
+            patch(
+                "agent.context_compressor.call_llm",
+                return_value=_llm_response(SUMMARY_BODY),
+            ) as main_call,
+            patch(
+                "agent.auxiliary_client.call_llm",
+                return_value=_llm_response(SUMMARY_BODY),
+            ) as aux_call,
+        ):
             summary = c._generate_summary(turns)
         assert summary is not None
         # THE contract: one auxiliary request per compaction attempt, total.
@@ -102,7 +109,6 @@ class TestLeanSingleAuxiliaryCall:
         ):
             summary = c._generate_summary(turns)
         assert _LEAN_SESSION_LOG_HEADING in summary
-
 
     def test_anchor_index_and_recovery_footer_present(self):
         c = _mk_compressor()
@@ -134,7 +140,9 @@ class TestLeanSingleAuxiliaryCall:
 class TestSampledSummaryInput:
     def test_small_input_passes_through(self):
         records = ["[USER]: abc" * 100] * 3
-        assert ContextCompressor._sample_summary_records(records)[0] == "\n\n".join(records)
+        assert ContextCompressor._sample_summary_records(records)[0] == "\n\n".join(
+            records
+        )
 
     def test_sampling_is_bounded_ordered_and_marked(self):
         # Distinct decade markers let us verify oldest-to-newest order and

@@ -13,6 +13,7 @@ These tests pin:
      killing draft streaming for the whole response.
   3. A non-BadRequest failure propagates so the caller falls back to edit.
 """
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -38,6 +39,7 @@ async def test_send_draft_falls_back_to_plain_text_on_markdownv2_error():
 
     # Resolve the BadRequest type the adapter checks via _is_bad_request_error.
     from telegram.error import BadRequest  # type: ignore
+
     calls = []
 
     async def _draft(**kwargs):
@@ -56,5 +58,3 @@ async def test_send_draft_falls_back_to_plain_text_on_markdownv2_error():
     assert "parse_mode" in calls[0]
     assert "parse_mode" not in calls[1]
     assert calls[1]["text"] == "weird _text"  # raw, unformatted
-
-

@@ -19,7 +19,9 @@ from agent.context_compressor import ContextCompressor, HISTORICAL_TASK_HEADING
 
 
 def _compressor() -> ContextCompressor:
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(
             model="test/model",
             threshold_percent=0.85,
@@ -49,19 +51,18 @@ def _fixed_now():
     return datetime(2026, 6, 7, 12, 0, tzinfo=UTC)
 
 
-
-
-
-
 def test_clock_failure_omits_rule_but_compaction_still_runs():
     compressor = _compressor()
 
     def _boom():
         raise RuntimeError("clock unavailable")
 
-    with patch.object(clawk_time, "now", _boom), patch(
-        "agent.context_compressor.call_llm", return_value=_response("summary")
-    ) as mock_call:
+    with (
+        patch.object(clawk_time, "now", _boom),
+        patch(
+            "agent.context_compressor.call_llm", return_value=_response("summary")
+        ) as mock_call,
+    ):
         result = compressor._generate_summary(_turns())
 
     # call_llm was still invoked -> compaction was not blocked by the clock error.
@@ -77,9 +78,12 @@ def test_anchoring_rule_uses_date_from_clawk_time_now():
     """The date is taken from clawk_time.now(), which respects the user's TZ."""
     compressor = _compressor()
     fixed = datetime(2025, 12, 31, 23, 30, tzinfo=UTC)
-    with patch.object(clawk_time, "now", lambda: fixed), patch(
-        "agent.context_compressor.call_llm", return_value=_response("summary")
-    ) as mock_call:
+    with (
+        patch.object(clawk_time, "now", lambda: fixed),
+        patch(
+            "agent.context_compressor.call_llm", return_value=_response("summary")
+        ) as mock_call,
+    ):
         compressor._generate_summary(_turns())
 
     prompt = mock_call.call_args.kwargs["messages"][0]["content"]

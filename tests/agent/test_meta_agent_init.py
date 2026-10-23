@@ -1,7 +1,6 @@
 """Tests for AIAgent provider=meta host-mandated api_mode."""
 
 
-
 def test_agent_init_meta_base_url_implies_codex_responses():
     from run_agent import AIAgent
 
@@ -79,8 +78,11 @@ def test_agent_init_anthropic_url_preserves_credential_pool():
 
     pool = SimpleNamespace(provider="anthropic")
 
-    with patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()), patch(
-        "agent.anthropic_credentials._is_oauth_token", return_value=False
+    with (
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()
+        ),
+        patch("agent.anthropic_credentials._is_oauth_token", return_value=False),
     ):
         agent = AIAgent(
             provider=None,
@@ -114,7 +116,9 @@ def test_agent_init_meta_url_without_provider_implies_codex_responses():
     assert agent.api_mode == "codex_responses"
 
 
-def test_agent_init_meta_provider_without_meta_url_falls_through_to_chat_completions(monkeypatch):
+def test_agent_init_meta_provider_without_meta_url_falls_through_to_chat_completions(
+    monkeypatch,
+):
     """`provider="meta"` without an api.meta.ai base_url falls through to chat_completions.
 
     The Meta wire protocol is URL-driven by design so custom OpenAI-compatible
@@ -149,5 +153,3 @@ def test_agent_init_meta_provider_without_meta_url_falls_through_to_chat_complet
     )
     assert agent_custom.api_mode == "chat_completions"
     assert agent_custom.provider == "meta"
-
-

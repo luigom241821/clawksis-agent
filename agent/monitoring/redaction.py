@@ -19,7 +19,9 @@ _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _PHONE_RE = re.compile(
     r"(?<!\w)(?:\+?\d{1,3}[\s.\-]?)?(?:\(\d{2,4}\)[\s.\-]?)?\d{3}[\s.\-]?\d{3,4}(?:[\s.\-]?\d{2,4})?(?!\w)"
 )
-_UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
+_UUID_RE = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
 
 
 def redact_for_export(text: Optional[str]) -> Optional[str]:
@@ -33,7 +35,13 @@ def redact_for_export(text: Optional[str]) -> Optional[str]:
     return out
 
 
-def redact_bounded(raw: Any, *, limit: int = 500, empty: str = "[redacted]", unavailable: str = UNAVAILABLE) -> str:
+def redact_bounded(
+    raw: Any,
+    *,
+    limit: int = 500,
+    empty: str = "[redacted]",
+    unavailable: str = UNAVAILABLE,
+) -> str:
     """Redact ``str(raw or "")`` and length-bound it; ``empty`` replaces an empty
     result, ``unavailable`` is returned if redaction itself raises."""
     try:

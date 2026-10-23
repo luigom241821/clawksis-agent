@@ -27,7 +27,9 @@ _OURS, _SIBLING = "111", "222"
 
 @pytest.fixture(autouse=True)
 def _pinned_namespace(monkeypatch):
-    monkeypatch.setattr(clawk_state_pidns, "_LOCAL_PID_NS", LocalPidNamespace(_OURS, True))
+    monkeypatch.setattr(
+        clawk_state_pidns, "_LOCAL_PID_NS", LocalPidNamespace(_OURS, True)
+    )
 
 
 def _dead_pid() -> int:
@@ -47,16 +49,22 @@ def test_turn_lease_of_sibling_namespace_is_not_stolen(tmp_path) -> None:
     assert db.try_acquire_session_turn_lease("shared", sibling, ttl_seconds=0.3) is True
 
     contender = f"pid={os.getpid()}:pidns={_OURS}:turn=gw-turn:platform=cli"
-    assert db.try_acquire_session_turn_lease("shared", contender, ttl_seconds=300) is False
+    assert (
+        db.try_acquire_session_turn_lease("shared", contender, ttl_seconds=300) is False
+    )
 
     time.sleep(0.4)
-    assert db.try_acquire_session_turn_lease("shared", contender, ttl_seconds=300) is True
+    assert (
+        db.try_acquire_session_turn_lease("shared", contender, ttl_seconds=300) is True
+    )
 
     # Unstamped (pre-upgrade) TTL holder: STRICT — never probed, defers to TTL.
     db.create_session("legacy", source="test")
     legacy = f"pid={_dead_pid()}:turn=old:platform=x"
     assert db.try_acquire_session_turn_lease("legacy", legacy, ttl_seconds=300) is True
-    assert db.try_acquire_session_turn_lease("legacy", contender, ttl_seconds=300) is False
+    assert (
+        db.try_acquire_session_turn_lease("legacy", contender, ttl_seconds=300) is False
+    )
 
 
 def test_flock_holder_record_qualifies_pid_namespaces(monkeypatch, tmp_path) -> None:
@@ -70,9 +78,19 @@ def test_flock_holder_record_qualifies_pid_namespaces(monkeypatch, tmp_path) -> 
     assert f":pidns={_OURS}:" in _compression_lock_holder(object())
 
     # Same namespace + provably gone: break the orphaned lock (unchanged).
-    assert provably_dead({"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}) is True
+    assert (
+        provably_dead(
+            {"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}
+        )
+        is True
+    )
     # Foreign namespace: a local absence is not proof — defer.
-    assert provably_dead({"pid": dead, "pidns": _SIBLING, "start_ticks": 1, "acquired_at": 0.0}) is False
+    assert (
+        provably_dead(
+            {"pid": dead, "pidns": _SIBLING, "start_ticks": 1, "acquired_at": 0.0}
+        )
+        is False
+    )
     # Unstamped (pre-upgrade) record: these never expire, so keep probing them.
     assert provably_dead({"pid": dead, "start_ticks": 1, "acquired_at": 0.0}) is True
     assert provably_dead(None) is False
@@ -80,10 +98,28 @@ def test_flock_holder_record_qualifies_pid_namespaces(monkeypatch, tmp_path) -> 
     # Our own namespace lookup failed: a stamped record is unverifiable, but an
     # unstamped one still breaks (#100108 orphan-lock cleanup must not regress).
     monkeypatch.setattr(clawk_state_pidns, "_LOCAL_PID_NS", None)
-    monkeypatch.setattr(clawk_state_pidns, "_resolve_local_pid_namespace", lambda: LocalPidNamespace(None, True))
-    assert provably_dead({"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}) is False
+    monkeypatch.setattr(
+        clawk_state_pidns,
+        "_resolve_local_pid_namespace",
+        lambda: LocalPidNamespace(None, True),
+    )
+    assert (
+        provably_dead(
+            {"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}
+        )
+        is False
+    )
     assert provably_dead({"pid": dead, "start_ticks": 1, "acquired_at": 0.0}) is True
 
     # The failed lookup was not cached: once it resolves, a stamped record breaks.
-    monkeypatch.setattr(clawk_state_pidns, "_resolve_local_pid_namespace", lambda: LocalPidNamespace(_OURS, True))
-    assert provably_dead({"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}) is True
+    monkeypatch.setattr(
+        clawk_state_pidns,
+        "_resolve_local_pid_namespace",
+        lambda: LocalPidNamespace(_OURS, True),
+    )
+    assert (
+        provably_dead(
+            {"pid": dead, "pidns": _OURS, "start_ticks": 1, "acquired_at": 0.0}
+        )
+        is True
+    )

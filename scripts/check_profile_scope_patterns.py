@@ -17,6 +17,7 @@ Usage:
     python scripts/check_profile_scope_patterns.py --files tools/bot_relay.py ...   # whole files
     python scripts/check_profile_scope_patterns.py --base origin/main --json out.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,7 +31,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PATTERNS = ROOT / "scripts" / "ci" / "profile_scope_patterns.json"
 SUFFIXES = (".py", ".ts", ".tsx")
-SKIP_PREFIXES = ("tests/", "website/", "skills/", "optional-skills/", "evals/", "scripts/", ".worktrees/")
+SKIP_PREFIXES = (
+    "tests/",
+    "website/",
+    "skills/",
+    "optional-skills/",
+    "evals/",
+    "scripts/",
+    ".worktrees/",
+)
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
@@ -51,15 +60,28 @@ def load_patterns(path: Path = PATTERNS) -> list[dict]:
     for p in data["patterns"]:
         # ``path_regex`` (optional) restricts a pattern to files whose repo-relative path matches.
         path_rx = re.compile(p["path_regex"]) if p.get("path_regex") else None
-        out.append({**p, "_rx": re.compile(p["pattern_regex"], re.MULTILINE), "_path_rx": path_rx})
+        out.append(
+            {
+                **p,
+                "_rx": re.compile(p["pattern_regex"], re.MULTILINE),
+                "_path_rx": path_rx,
+            }
+        )
     return out
 
 
 def _lint_path(rel: str) -> bool:
-    return rel.endswith(SUFFIXES) and not rel.startswith(SKIP_PREFIXES) and "/tests/" not in rel and "node_modules" not in rel
+    return (
+        rel.endswith(SUFFIXES)
+        and not rel.startswith(SKIP_PREFIXES)
+        and "/tests/" not in rel
+        and "node_modules" not in rel
+    )
 
 
-def scan_text(rel: str, text: str, patterns: list[dict], lines: set[int] | None = None) -> list[Finding]:
+def scan_text(
+    rel: str, text: str, patterns: list[dict], lines: set[int] | None = None
+) -> list[Finding]:
     """Findings for *text*; ``lines`` restricts to those 1-based line numbers (None = whole file).
     Multi-line patterns are anchored on the line where the match starts."""
     findings: list[Finding] = []
@@ -72,13 +94,30 @@ def scan_text(rel: str, text: str, patterns: list[dict], lines: set[int] | None 
             line_no = text.count("\n", 0, m.start()) + 1
             if lines is not None and line_no not in lines:
                 continue
-            findings.append(Finding(rel, line_no, p["id"], p["class"], p["why"], p["scope_hint"],
-                                    src_lines[line_no - 1].strip()[:160]))
+            findings.append(
+                Finding(
+                    rel,
+                    line_no,
+                    p["id"],
+                    p["class"],
+                    p["why"],
+                    p["scope_hint"],
+                    src_lines[line_no - 1].strip()[:160],
+                )
+            )
     return findings
 
 
 def _git(*args: str) -> str:
-    proc = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     return proc.stdout
 
 
@@ -108,22 +147,44 @@ def added_lines_vs_base(base: str, head: str | None) -> dict[str, set[int]]:
 def _read(rel: str, head: str | None) -> str | None:
     if head:
         cmd = ["git", "show", f"{head}:{rel}"]
-        r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
+        r = subprocess.run(
+            cmd,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         return r.stdout if r.returncode == 0 else None
     path = ROOT / rel
-    return path.read_text(encoding="utf-8-sig", errors="replace") if path.is_file() else None
+    return (
+        path.read_text(encoding="utf-8-sig", errors="replace")
+        if path.is_file()
+        else None
+    )
 
 
-def run(base: str | None, head: str | None, files: list[str], patterns: list[dict]) -> list[Finding]:
+def run(
+    base: str | None, head: str | None, files: list[str], patterns: list[dict]
+) -> list[Finding]:
     findings: list[Finding] = []
     if files:
         for f in files:
             path = Path(f)
-            text = path.read_text(encoding="utf-8-sig", errors="replace") if path.is_file() else None
+            text = (
+                path.read_text(encoding="utf-8-sig", errors="replace")
+                if path.is_file()
+                else None
+            )
             if text is None:
                 continue
             resolved = path.resolve()
-            rel = str(resolved.relative_to(ROOT)) if resolved.is_relative_to(ROOT) else str(path)
+            rel = (
+                str(resolved.relative_to(ROOT))
+                if resolved.is_relative_to(ROOT)
+                else str(path)
+            )
             findings.extend(scan_text(rel, text, patterns))
         return findings
     for rel, lines in sorted(added_lines_vs_base(base or "origin/main", head).items()):
@@ -134,22 +195,37 @@ def run(base: str | None, head: str | None, files: list[str], patterns: list[dic
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--base", default="origin/main", help="base ref for the added-lines diff")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--base", default="origin/main", help="base ref for the added-lines diff"
+    )
     ap.add_argument("--head", default=None, help="head ref (default: working tree)")
-    ap.add_argument("--files", nargs="*", default=[], help="scan these whole files instead of a diff")
-    ap.add_argument("--json", default=None, help="also write findings as JSON to this path")
+    ap.add_argument(
+        "--files",
+        nargs="*",
+        default=[],
+        help="scan these whole files instead of a diff",
+    )
+    ap.add_argument(
+        "--json", default=None, help="also write findings as JSON to this path"
+    )
     args = ap.parse_args(argv)
 
     patterns = load_patterns()
     findings = run(args.base, args.head, args.files, patterns)
     if args.json:
-        Path(args.json).write_text(json.dumps([asdict(f) for f in findings], indent=2) + "\n", encoding="utf-8")
+        Path(args.json).write_text(
+            json.dumps([asdict(f) for f in findings], indent=2) + "\n", encoding="utf-8"
+        )
     if not findings:
         print("profile-scope patterns: 0 findings")
         return 0
-    print(f"profile-scope patterns: {len(findings)} finding(s) — ADVISORY, read each against its scope hint "
-          f"(root AGENTS.md § Rules that apply everywhere; scripts/ci/profile_scope_patterns.json)")
+    print(
+        f"profile-scope patterns: {len(findings)} finding(s) — ADVISORY, read each against its scope hint "
+        f"(root AGENTS.md § Rules that apply everywhere; scripts/ci/profile_scope_patterns.json)"
+    )
     for f in findings:
         print(f"{f.path}:{f.line}  {f.pattern_id}/{f.pattern_class}  {f.why}")
         print(f"    | {f.text}")

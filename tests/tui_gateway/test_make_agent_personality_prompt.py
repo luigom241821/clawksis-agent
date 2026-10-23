@@ -19,14 +19,18 @@ def _runtime():
 def _call_make_agent(cfg):
     with ExitStack() as stack:
         stack.enter_context(patch("tui_gateway.server._load_cfg", return_value=cfg))
-        stack.enter_context(patch("tui_gateway.server._get_db", return_value=MagicMock()))
+        stack.enter_context(
+            patch("tui_gateway.server._get_db", return_value=MagicMock())
+        )
         stack.enter_context(
             patch("tui_gateway.server._load_tool_progress_mode", return_value="compact")
         )
         stack.enter_context(
             patch("tui_gateway.server._load_reasoning_config", return_value=None)
         )
-        stack.enter_context(patch("tui_gateway.server._load_service_tier", return_value=None))
+        stack.enter_context(
+            patch("tui_gateway.server._load_service_tier", return_value=None)
+        )
         stack.enter_context(
             patch("tui_gateway.server._load_enabled_toolsets", return_value=None)
         )

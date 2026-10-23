@@ -17,7 +17,7 @@ from clawk_cli.plugins import PluginManager
 
 REPO_PLUGINS = Path(__file__).resolve().parents[2] / "plugins"
 
-PROBE_PLUGIN = '''
+PROBE_PLUGIN = """
 from agent.delegation_provider import DelegationProvider, DelegationRouteError
 
 class Options(DelegationProvider):
@@ -45,29 +45,56 @@ class Options(DelegationProvider):
 
 def register(ctx):
     ctx.register_delegation_provider(Options())
-'''
+"""
 
 OPTIONS = [
-    {"name": "fast", "description": "cheap and quick", "base_url": "http://127.0.0.1:9/v1", "model": "fast-model"},
-    {"name": "deep", "description": "slow and careful", "base_url": "http://127.0.0.1:9/v1", "model": "deep-model",
-     "reasoning_effort": "high"},
-    {"name": "refused", "description": "never allowed", "base_url": "http://127.0.0.1:9/v1", "model": "x"},
+    {
+        "name": "fast",
+        "description": "cheap and quick",
+        "base_url": "http://127.0.0.1:9/v1",
+        "model": "fast-model",
+    },
+    {
+        "name": "deep",
+        "description": "slow and careful",
+        "base_url": "http://127.0.0.1:9/v1",
+        "model": "deep-model",
+        "reasoning_effort": "high",
+    },
+    {
+        "name": "refused",
+        "description": "never allowed",
+        "base_url": "http://127.0.0.1:9/v1",
+        "model": "x",
+    },
 ]
 
 
-def _home(tmp_path, monkeypatch, delegation: dict, plugins=("probe-options",), disabled=()):
+def _home(
+    tmp_path, monkeypatch, delegation: dict, plugins=("probe-options",), disabled=()
+):
     home = tmp_path / ".clawk"
     plugin_dir = home / "plugins" / "probe-options"
     plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.yaml").write_text(yaml.safe_dump({"name": "probe-options", "version": "1.0"}), encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        yaml.safe_dump({"name": "probe-options", "version": "1.0"}), encoding="utf-8"
+    )
     (plugin_dir / "__init__.py").write_text(PROBE_PLUGIN, encoding="utf-8")
-    (home / "config.yaml").write_text(yaml.safe_dump(
-        {"plugins": {"enabled": list(plugins), "disabled": list(disabled)}, "delegation": delegation}),
-        encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "plugins": {"enabled": list(plugins), "disabled": list(disabled)},
+                "delegation": delegation,
+            }
+        ),
+        encoding="utf-8",
+    )
     # Bundled plugins: only the delegation category (the default strategy is a bundled plugin).
     bundled = tmp_path / "bundled"
     bundled.mkdir()
-    (bundled / "delegation").symlink_to(REPO_PLUGINS / "delegation", target_is_directory=True)
+    (bundled / "delegation").symlink_to(
+        REPO_PLUGINS / "delegation", target_is_directory=True
+    )
     monkeypatch.setenv("HOME", str(tmp_path / "os-home"))
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(plugins_mod, "get_bundled_plugins_dir", lambda: bundled)
@@ -78,6 +105,7 @@ def _home(tmp_path, monkeypatch, delegation: dict, plugins=("probe-options",), d
 
 def _definition():
     from tools.registry import registry
+
     return registry.get_definitions({"delegate_task"})[0]["function"]
 
 
@@ -89,26 +117,53 @@ def _task_props(definition):
 def recorded(monkeypatch):
     """Record what each child is built with; children 'complete' immediately."""
     from tools import delegate_tool as dt
+
     built = []
 
     def build(**kwargs):
         built.append(kwargs)
-        return types.SimpleNamespace(tool_progress_callback=None, model=kwargs.get("model"))
+        return types.SimpleNamespace(
+            tool_progress_callback=None, model=kwargs.get("model")
+        )
 
     monkeypatch.setattr(dt, "_build_child_preserving_parent_tools", build)
-    monkeypatch.setattr(dt, "_run_single_child", lambda task_index, goal, child=None, parent_agent=None, **kw: {
-        "task_index": task_index, "status": "completed", "summary": "ok", "api_calls": 1, "duration_seconds": 0})
+    monkeypatch.setattr(
+        dt,
+        "_run_single_child",
+        lambda task_index, goal, child=None, parent_agent=None, **kw: {
+            "task_index": task_index,
+            "status": "completed",
+            "summary": "ok",
+            "api_calls": 1,
+            "duration_seconds": 0,
+        },
+    )
     return built
 
 
 def _parent(session_id="root"):
-    return types.SimpleNamespace(session_id=session_id, model="parent-model", provider="openrouter",
-                                 tool_progress_callback=None, _delegate_spinner=None, request_overrides={},
-                                 _safe_print=lambda line: None)
+    return types.SimpleNamespace(
+        session_id=session_id,
+        model="parent-model",
+        provider="openrouter",
+        tool_progress_callback=None,
+        _delegate_spinner=None,
+        request_overrides={},
+        _safe_print=lambda line: None,
+    )
 
 
-def test_selected_plugin_backend_extends_schema_and_routes_each_task(tmp_path, monkeypatch, recorded):
-    _, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options", "backends": {"probe-options": {"options": OPTIONS}}})
+def test_selected_plugin_backend_extends_schema_and_routes_each_task(
+    tmp_path, monkeypatch, recorded
+):
+    _, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "backends": {"probe-options": {"options": OPTIONS}},
+        },
+    )
     try:
         from agent.delegation_registry import get_active_provider
         from tools.delegate_tool import delegate_task
@@ -123,128 +178,249 @@ def test_selected_plugin_backend_extends_schema_and_routes_each_task(tmp_path, m
         # Byte-stable for a session: the same config yields the same definition.
         assert json.dumps(_definition()) == json.dumps(definition)
 
-        out = json.loads(delegate_task(tasks=[
-            {"goal": "summarize the quick thing", "option": "fast"},
-            {"goal": "think hard about the slow thing", "option": "deep"},
-            {"goal": "no option: plain delegation config"},
-        ], parent_agent=_parent()))
+        out = json.loads(
+            delegate_task(
+                tasks=[
+                    {"goal": "summarize the quick thing", "option": "fast"},
+                    {"goal": "think hard about the slow thing", "option": "deep"},
+                    {"goal": "no option: plain delegation config"},
+                ],
+                parent_agent=_parent(),
+            )
+        )
         assert [r["status"] for r in out["results"]] == ["completed"] * 3
         fast, deep, plain = recorded
         assert (fast["model"], fast["override_base_url"], fast["override_api_key"]) == (
-            "fast-model", "http://127.0.0.1:9/v1", "k-fast")
-        assert (deep["model"], deep["override_reasoning_effort"]) == ("deep-model", "high")
+            "fast-model",
+            "http://127.0.0.1:9/v1",
+            "k-fast",
+        )
+        assert (deep["model"], deep["override_reasoning_effort"]) == (
+            "deep-model",
+            "high",
+        )
         # The no-option task falls back to the delegation section, i.e. inherit the parent.
-        assert plain["model"] is None and plain["override_provider"] is None and plain["profile_home"] is None
+        assert (
+            plain["model"] is None
+            and plain["override_provider"] is None
+            and plain["profile_home"] is None
+        )
     finally:
         manager.unload()
 
 
-def test_an_unroutable_task_is_refused_alone_and_its_siblings_run(tmp_path, monkeypatch, recorded):
+def test_an_unroutable_task_is_refused_alone_and_its_siblings_run(
+    tmp_path, monkeypatch, recorded
+):
     """Fail closed per task: a bad parameter or a backend refusal refuses that task only, its result entry says why
     and which backend refused it; the call is a tool error only when no task can run."""
-    _, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options", "backends": {"probe-options": {"options": OPTIONS}}})
+    _, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "backends": {"probe-options": {"options": OPTIONS}},
+        },
+    )
     try:
         from tools.delegate_tool import delegate_task
 
-        out = json.loads(delegate_task(tasks=[
-            {"goal": "a task with a typo in it", "option": "fsat"},
-            {"goal": "summarize the quick thing", "option": "fast"},
-            {"goal": "a task the backend refuses", "option": "refused"},
-        ], parent_agent=_parent()))
+        out = json.loads(
+            delegate_task(
+                tasks=[
+                    {"goal": "a task with a typo in it", "option": "fsat"},
+                    {"goal": "summarize the quick thing", "option": "fast"},
+                    {"goal": "a task the backend refuses", "option": "refused"},
+                ],
+                parent_agent=_parent(),
+            )
+        )
         typo, fast, refused = out["results"]
         assert [r["task_index"] for r in out["results"]] == [0, 1, 2]
-        assert typo["status"] == "error" and "must be one of fast, deep, refused" in typo["error"]
-        assert refused["status"] == "error" and "reserved for humans" in refused["error"]
+        assert (
+            typo["status"] == "error"
+            and "must be one of fast, deep, refused" in typo["error"]
+        )
+        assert (
+            refused["status"] == "error" and "reserved for humans" in refused["error"]
+        )
         assert typo["route"] == {"backend": "probe-options", "refused": True}
-        assert fast["status"] == "completed" and [b["model"] for b in recorded] == ["fast-model"]
+        assert fast["status"] == "completed" and [b["model"] for b in recorded] == [
+            "fast-model"
+        ]
 
-        bad = json.loads(delegate_task(tasks=[{"goal": "only a refused task", "option": "refused"}],
-                                       parent_agent=_parent()))
+        bad = json.loads(
+            delegate_task(
+                tasks=[{"goal": "only a refused task", "option": "refused"}],
+                parent_agent=_parent(),
+            )
+        )
         assert "reserved for humans" in bad["error"] and len(recorded) == 1
     finally:
         manager.unload()
 
 
-def test_a_missing_backend_fails_closed_and_default_keeps_todays_route(tmp_path, monkeypatch, recorded):
+def test_a_missing_backend_fails_closed_and_default_keeps_todays_route(
+    tmp_path, monkeypatch, recorded
+):
     """Unset and ``default`` are today's behaviour; a backend nobody provides is a tool error naming it and the fix,
     never a quiet run on the default route."""
     from tools.delegate_tool import delegate_task
 
-    pinned = {"model": "pinned-model", "base_url": "http://127.0.0.1:9/v1", "api_key": "k"}
+    pinned = {
+        "model": "pinned-model",
+        "base_url": "http://127.0.0.1:9/v1",
+        "api_key": "k",
+    }
     definitions, outcomes = [], []
     for delegation in ({}, {"backend": "default"}, {"backend": "not-installed"}):
-        _, manager = _home(tmp_path / str(len(definitions)), monkeypatch, {**delegation, **pinned}, plugins=())
+        _, manager = _home(
+            tmp_path / str(len(definitions)),
+            monkeypatch,
+            {**delegation, **pinned},
+            plugins=(),
+        )
         try:
             definitions.append(json.dumps(_definition()))
-            outcomes.append(json.loads(delegate_task(tasks=[{"goal": "one plain delegated task"}],
-                                                     parent_agent=_parent())))
+            outcomes.append(
+                json.loads(
+                    delegate_task(
+                        tasks=[{"goal": "one plain delegated task"}],
+                        parent_agent=_parent(),
+                    )
+                )
+            )
         finally:
             manager.unload()
     assert len(set(definitions)) == 1 and '"option"' not in definitions[0]
-    assert [(b["model"], b["override_base_url"]) for b in recorded] == [("pinned-model", "http://127.0.0.1:9/v1")] * 2
+    assert [(b["model"], b["override_base_url"]) for b in recorded] == [
+        ("pinned-model", "http://127.0.0.1:9/v1")
+    ] * 2
     error = outcomes[2]["error"]
-    assert "'not-installed' is not installed" in error and "clawk config set delegation.backend default" in error
+    assert (
+        "'not-installed' is not installed" in error
+        and "clawk config set delegation.backend default" in error
+    )
 
 
-def test_a_backend_route_without_its_own_chain_inherits_delegation_fallback_providers(tmp_path, monkeypatch):
+def test_a_backend_route_without_its_own_chain_inherits_delegation_fallback_providers(
+    tmp_path, monkeypatch
+):
     from tools.delegate_tool_config import _resolve_child_fallback_chain
     from tools.delegate_tool_routes import resolve_task_routes
 
     chain = [{"provider": "openrouter", "model": "backup-model"}]
     options = [{**OPTIONS[0]}, {**OPTIONS[1], "fallback_providers": []}]
-    _, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options", "fallback_providers": chain,
-                                               "backends": {"probe-options": {"options": options}}})
+    _, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "fallback_providers": chain,
+            "backends": {"probe-options": {"options": options}},
+        },
+    )
     try:
         from tools.delegate_tool_config import _load_config
 
-        routes, err = resolve_task_routes([{"goal": "inherits", "option": "fast"}, {"goal": "own empty chain",
-                                                                                     "option": "deep"}],
-                                          _load_config(), _parent())
+        routes, err = resolve_task_routes(
+            [
+                {"goal": "inherits", "option": "fast"},
+                {"goal": "own empty chain", "option": "deep"},
+            ],
+            _load_config(),
+            _parent(),
+        )
         assert err is None
-        inherited, disabled = (_resolve_child_fallback_chain(_parent(), r.routing_cfg, pinned=True) for r in routes)
-        assert [(e["provider"], e["model"]) for e in inherited] == [("openrouter", "backup-model")]
+        inherited, disabled = (
+            _resolve_child_fallback_chain(_parent(), r.routing_cfg, pinned=True)
+            for r in routes
+        )
+        assert [(e["provider"], e["model"]) for e in inherited] == [
+            ("openrouter", "backup-model")
+        ]
         assert disabled is None
     finally:
         manager.unload()
 
 
-def test_a_session_backend_switch_routes_that_session_only_and_global_persists(tmp_path, monkeypatch, recorded):
+def test_a_session_backend_switch_routes_that_session_only_and_global_persists(
+    tmp_path, monkeypatch, recorded
+):
     """``/delegation`` seam: a session override decides that session's routing; ``--global`` writes config.yaml
     and drops the override; a backend that cannot run is refused up front."""
-    home, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options",
-                                                  "backends": {"probe-options": {"options": OPTIONS}}})
+    home, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "backends": {"probe-options": {"options": OPTIONS}},
+        },
+    )
     try:
         from agent.delegation_backends import (
-            get_session_backend, list_backends, set_global_backend, set_session_backend,
+            get_session_backend,
+            list_backends,
+            set_global_backend,
+            set_session_backend,
         )
         from tools.delegate_tool import delegate_task
 
-        assert [(b.name, b.available) for b in list_backends()] == [("default", True), ("probe-options", True)]
+        assert [(b.name, b.available) for b in list_backends()] == [
+            ("default", True),
+            ("probe-options", True),
+        ]
         set_session_backend("chat-a", "default")
         for sid in ("chat-a", "chat-b"):
-            delegate_task(tasks=[{"goal": "route me plainly"}, {"goal": "route me on fast", "option": "fast"}],
-                          parent_agent=_parent(sid))
+            delegate_task(
+                tasks=[
+                    {"goal": "route me plainly"},
+                    {"goal": "route me on fast", "option": "fast"},
+                ],
+                parent_agent=_parent(sid),
+            )
         # chat-a's schema still offers `option` (it follows config.yaml); its default backend refuses that task
         # instead of running it on the default route, and a name no backend declares is refused too.
         assert [b["model"] for b in recorded] == [None, None, "fast-model"]
-        error = json.loads(delegate_task(tasks=[{"goal": "route me on fast", "option": "fast"},
-                                                {"goal": "route me on a tier", "tier": "a"}],
-                                         parent_agent=_parent("chat-a")))["error"]
+        error = json.loads(
+            delegate_task(
+                tasks=[
+                    {"goal": "route me on fast", "option": "fast"},
+                    {"goal": "route me on a tier", "tier": "a"},
+                ],
+                parent_agent=_parent("chat-a"),
+            )
+        )["error"]
         owned, unknown = error.split(" Task 1: ")
-        assert "backend is 'default'" in owned and "`/delegation default --global` then `/new`" in owned
-        assert "`/delegation probe-options` to switch this session back to the saved backend" in owned
-        assert "'tier'" in unknown and "no installed delegation backend" in unknown and len(recorded) == 3
+        assert (
+            "backend is 'default'" in owned
+            and "`/delegation default --global` then `/new`" in owned
+        )
+        assert (
+            "`/delegation probe-options` to switch this session back to the saved backend"
+            in owned
+        )
+        assert (
+            "'tier'" in unknown
+            and "no installed delegation backend" in unknown
+            and len(recorded) == 3
+        )
         with pytest.raises(ValueError, match="'nope' is not installed"):
             set_session_backend("chat-a", "nope")
 
         set_global_backend("default", session_key="chat-a")
-        assert yaml.safe_load((home / "config.yaml").read_text())["delegation"]["backend"] == "default"
+        assert (
+            yaml.safe_load((home / "config.yaml").read_text())["delegation"]["backend"]
+            == "default"
+        )
         assert get_session_backend("chat-a") is None
     finally:
         manager.unload()
 
 
-def test_a_session_switch_refuses_a_task_using_the_previous_backends_parameter(tmp_path, monkeypatch, recorded):
+def test_a_session_switch_refuses_a_task_using_the_previous_backends_parameter(
+    tmp_path, monkeypatch, recorded
+):
     """The schema keeps the saved backend's parameters for the whole session (cached prompt), so after
     ``/delegation`` switches to another backend a task sending the old ``option`` is refused alone, naming the
     session's backend, the parameter and the fix; it never runs on the new backend's default route."""
@@ -262,8 +438,14 @@ def test_a_session_switch_refuses_a_task_using_the_previous_backends_parameter(t
         def route_task(self, task, config):
             return {"model": f"{task.get('target') or 'profile-default'}-model"}
 
-    _, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options",
-                                               "backends": {"probe-options": {"options": OPTIONS}}})
+    _, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "backends": {"probe-options": {"options": OPTIONS}},
+        },
+    )
     profiles = Profiles()
     _registry.register(profiles)
     try:
@@ -272,19 +454,28 @@ def test_a_session_switch_refuses_a_task_using_the_previous_backends_parameter(t
 
         assert "option" in _task_props(_definition())
         set_session_backend("chat-a", "probe-profiles")
-        out = json.loads(delegate_task(tasks=[
-            {"goal": "the quick thing", "option": "fast"},
-            {"goal": "a plain task"},
-            {"goal": "a work task", "target": "work"},
-        ], parent_agent=_parent("chat-a")))
+        out = json.loads(
+            delegate_task(
+                tasks=[
+                    {"goal": "the quick thing", "option": "fast"},
+                    {"goal": "a plain task"},
+                    {"goal": "a work task", "target": "work"},
+                ],
+                parent_agent=_parent("chat-a"),
+            )
+        )
         refused, plain, work = out["results"]
-        assert refused["status"] == "error" and refused["route"] == {"backend": "probe-profiles", "refused": True}
+        assert refused["status"] == "error" and refused["route"] == {
+            "backend": "probe-profiles",
+            "refused": True,
+        }
         # /new starts on the saved backend, so the advice persists the session's pick first or names the saved one.
         assert refused["error"] == (
             "Task 0: this session's delegation backend is 'probe-profiles', which does not take 'option' (declared by "
             "'probe-options'), so this task was not started. Run `/delegation probe-profiles --global` then `/new` for "
             "a session whose delegate_task choices match 'probe-profiles', or `/delegation probe-options` to switch "
-            "this session back to the saved backend.")
+            "this session back to the saved backend."
+        )
         assert plain["status"] == work["status"] == "completed"
         assert [b["model"] for b in recorded] == ["profile-default-model", "work-model"]
     finally:
@@ -317,8 +508,12 @@ def test_plugin_parameters_never_redefine_core_or_route_fields(tmp_path, monkeyp
             return "greedy"
 
         def task_parameters(self, config):
-            return {"goal": {"type": "string"}, "model": {"type": "string"}, "api_key": {"type": "string"},
-                    "tier": {"type": "string", "enum": ["a", "b"]}}
+            return {
+                "goal": {"type": "string"},
+                "model": {"type": "string"},
+                "api_key": {"type": "string"},
+                "tier": {"type": "string", "enum": ["a", "b"]},
+            }
 
         def route_task(self, task, config):
             return {}
@@ -358,8 +553,11 @@ def test_route_task_always_sees_the_core_task_position(tmp_path, monkeypatch):
     _registry.register(positional)
     try:
         assert schema_extension({"backend": "positional"})[0] == {}
-        _, err = resolve_task_routes([{"goal": "first", "index": 7}, {"goal": "second", "index": 0}],
-                                     {"backend": "positional"}, _parent())
+        _, err = resolve_task_routes(
+            [{"goal": "first", "index": 7}, {"goal": "second", "index": 0}],
+            {"backend": "positional"},
+            _parent(),
+        )
         assert err is None and seen == [0, 1]
     finally:
         _registry.restore_registration("positional", positional, None)
@@ -387,39 +585,60 @@ def test_backend_key_reads_through_the_real_loader(tmp_path, monkeypatch):
 def test_backend_settings_come_from_its_own_backends_block(tmp_path, monkeypatch):
     """A backend's settings are ``delegation.backends.<its name>``: the same keys beside the core delegation keys
     or under another backend's name are not its settings."""
-    _, manager = _home(tmp_path, monkeypatch, {"backend": "probe-options", "options": OPTIONS,
-                                               "backends": {"model_map": {"options": OPTIONS}}})
+    _, manager = _home(
+        tmp_path,
+        monkeypatch,
+        {
+            "backend": "probe-options",
+            "options": OPTIONS,
+            "backends": {"model_map": {"options": OPTIONS}},
+        },
+    )
     try:
         assert _task_props(_definition())["option"]["enum"] == []
     finally:
         manager.unload()
 
 
-def test_default_strategy_is_the_bundled_plugin_through_the_same_seam(tmp_path, monkeypatch, recorded):
+def test_default_strategy_is_the_bundled_plugin_through_the_same_seam(
+    tmp_path, monkeypatch, recorded
+):
     from agent.delegation_registry import get_active_provider
     from tools.delegate_tool import delegate_task
 
-    _, manager = _home(tmp_path / "on", monkeypatch, {"model": "pinned-model"}, plugins=())
+    _, manager = _home(
+        tmp_path / "on", monkeypatch, {"model": "pinned-model"}, plugins=()
+    )
     try:
         assert manager._plugins["delegation/default"].enabled
         provider = get_active_provider({})
         assert provider.name == "default"
         assert type(provider).__module__.startswith("clawk_plugins.delegation__default")
-        delegate_task(tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent())
+        delegate_task(
+            tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()
+        )
         assert recorded[-1]["model"] == "pinned-model"
     finally:
         manager.unload()
     # Disabling the bundled default is the one way to have no strategy: a clear refusal, base schema.
-    _, manager = _home(tmp_path / "off", monkeypatch, {}, plugins=(), disabled=("delegation/default",))
+    _, manager = _home(
+        tmp_path / "off", monkeypatch, {}, plugins=(), disabled=("delegation/default",)
+    )
     try:
-        out = json.loads(delegate_task(tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()))
+        out = json.loads(
+            delegate_task(
+                tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()
+            )
+        )
         assert "delegation/default is disabled" in out["error"]
         assert "option" not in _task_props(_definition())
     finally:
         manager.unload()
 
 
-def test_runtime_with_zero_plugins_loaded_still_delegates_on_the_bundled_default(tmp_path, monkeypatch, recorded):
+def test_runtime_with_zero_plugins_loaded_still_delegates_on_the_bundled_default(
+    tmp_path, monkeypatch, recorded
+):
     """Delegation is a core tool: a runtime whose plugin sweep never ran (or was pinned empty) loads the
     bundled default strategy on first use instead of losing delegate_task."""
     from agent import delegation_registry
@@ -430,7 +649,9 @@ def test_runtime_with_zero_plugins_loaded_still_delegates_on_the_bundled_default
 
     home = tmp_path / ".clawk"
     home.mkdir(parents=True)
-    (home / "config.yaml").write_text(yaml.safe_dump({"delegation": {"model": "pinned-model"}}), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"delegation": {"model": "pinned-model"}}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     pinned = PluginManager()
     pinned._discovered = True  # zero plugins, discovery never runs
@@ -439,7 +660,9 @@ def test_runtime_with_zero_plugins_loaded_still_delegates_on_the_bundled_default
     if previous is not None:
         _registry.restore_registration("default", previous, None)
     try:
-        delegate_task(tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent())
+        delegate_task(
+            tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()
+        )
         assert recorded[-1]["model"] == "pinned-model"
         assert get_active_provider({}).name == "default"
         assert _load_bundled("../../tools") is None  # config text never becomes a path
@@ -449,7 +672,9 @@ def test_runtime_with_zero_plugins_loaded_still_delegates_on_the_bundled_default
             _registry.restore_registration("default", current, previous)
 
 
-def test_first_use_default_never_outlives_a_later_disable(tmp_path, monkeypatch, recorded):
+def test_first_use_default_never_outlives_a_later_disable(
+    tmp_path, monkeypatch, recorded
+):
     """The first-use load of the bundled default is not a second, permanent registration: once
     ``delegation/default`` is disabled, the next delegation refuses even in the runtime that loaded it."""
     from agent import delegation_registry
@@ -460,7 +685,9 @@ def test_first_use_default_never_outlives_a_later_disable(tmp_path, monkeypatch,
     home = tmp_path / ".clawk"
     home.mkdir(parents=True)
     config = home / "config.yaml"
-    config.write_text(yaml.safe_dump({"delegation": {"model": "pinned-model"}}), encoding="utf-8")
+    config.write_text(
+        yaml.safe_dump({"delegation": {"model": "pinned-model"}}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     pinned = PluginManager()
     pinned._discovered = True  # zero plugins, discovery never runs
@@ -469,11 +696,24 @@ def test_first_use_default_never_outlives_a_later_disable(tmp_path, monkeypatch,
     if previous is not None:
         _registry.restore_registration("default", previous, None)
     try:
-        delegate_task(tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent())
+        delegate_task(
+            tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()
+        )
         assert recorded[-1]["model"] == "pinned-model"
-        config.write_text(yaml.safe_dump({"plugins": {"disabled": ["delegation/default"]},
-                                          "delegation": {"model": "pinned-model"}}), encoding="utf-8")
-        out = json.loads(delegate_task(tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()))
+        config.write_text(
+            yaml.safe_dump(
+                {
+                    "plugins": {"disabled": ["delegation/default"]},
+                    "delegation": {"model": "pinned-model"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        out = json.loads(
+            delegate_task(
+                tasks=[{"goal": "one plain delegated task"}], parent_agent=_parent()
+            )
+        )
         assert "delegation/default is disabled" in out.get("error", "")
         assert len(recorded) == 1
     finally:
@@ -494,16 +734,30 @@ def test_a_replacement_default_strategy_gets_the_full_route_contract(monkeypatch
             return "default"
 
         def route_task(self, task, config):
-            return {"base_url": "https://chatgpt.com/backend-api/codex", "api_key": "k", "model": "gpt-6-astra",
-                    "service_tier": "fast", "label": "codex-fast"}
+            return {
+                "base_url": "https://chatgpt.com/backend-api/codex",
+                "api_key": "k",
+                "model": "gpt-6-astra",
+                "service_tier": "fast",
+                "label": "codex-fast",
+            }
 
-    monkeypatch.setattr("tools.delegate_tool_routes._active_provider", lambda config: Replacement())
-    (route,), error = resolve_task_routes([{"goal": "one plain delegated task"}], {}, _parent())
+    monkeypatch.setattr(
+        "tools.delegate_tool_routes._active_provider", lambda config: Replacement()
+    )
+    (route,), error = resolve_task_routes(
+        [{"goal": "one plain delegated task"}], {}, _parent()
+    )
     assert error is None and route.label == "codex-fast"
-    assert route.creds["service_tier"] == "priority" and route.creds["request_overrides"]["service_tier"] == "priority"
+    assert (
+        route.creds["service_tier"] == "priority"
+        and route.creds["request_overrides"]["service_tier"] == "priority"
+    )
 
 
-def test_an_unavailable_replacement_default_falls_back_to_the_bundled_strategy(monkeypatch):
+def test_an_unavailable_replacement_default_falls_back_to_the_bundled_strategy(
+    monkeypatch,
+):
     """A provider registered as ``default`` that reports unavailable never takes delegation down: the enabled
     bundled default strategy serves the task instead."""
     from agent import delegation_registry
@@ -529,9 +783,10 @@ def test_an_unavailable_replacement_default_falls_back_to_the_bundled_strategy(m
     try:
         provider = get_active_provider({})
         assert provider is not None and provider.is_available()
-        assert provider.route_task({"goal": "g", "index": 0}, {"model": "m"}) == {"model": "m"}
+        assert provider.route_task({"goal": "g", "index": 0}, {"model": "m"}) == {
+            "model": "m"
+        }
     finally:
         current = _registry.snapshot_registration("default")
         if current is not None:
             _registry.restore_registration("default", current, previous)
-

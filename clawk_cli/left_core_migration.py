@@ -34,8 +34,13 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from clawk_cli.memory_provider_migration import (
-    _failed_recently, _home_consent, _home_label, _install_command, _interactive,
-    _note_failure, _unattended_consent,
+    _failed_recently,
+    _home_consent,
+    _home_label,
+    _install_command,
+    _interactive,
+    _note_failure,
+    _unattended_consent,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,8 +54,11 @@ LEFT_CORE_TERMINAL_KEYS = {"terminal.singularity_image": "TERMINAL_SINGULARITY_I
 
 def _read_config(home: Path) -> dict:
     import utils
+
     try:
-        data = utils.fast_safe_load((home / "config.yaml").read_text(encoding="utf-8-sig"))
+        data = utils.fast_safe_load(
+            (home / "config.yaml").read_text(encoding="utf-8-sig")
+        )
     except Exception:  # missing/unreadable/invalid YAML: nothing we can see is in use
         return {}
     return data if isinstance(data, dict) else {}
@@ -64,22 +72,30 @@ def platform_configured_on(home: Path, name: str) -> bool:
     Env credentials are the caller's to check. Read-only; works before the platform's plugin loads."""
     from gateway import config_loader
     from gateway.config import PlatformConfig
+
     gw_data = config_loader.load_legacy_gateway_json(home)
     gw_data = gw_data if isinstance(gw_data, dict) else {}
     try:
         yaml_cfg = config_loader.read_yaml_layers(home)
-    except Exception:  # malformed config.yaml: the gateway falls back to gateway.json alone too
+    except (
+        Exception
+    ):  # malformed config.yaml: the gateway falls back to gateway.json alone too
         yaml_cfg = {}
     yaml_cfg = yaml_cfg if isinstance(yaml_cfg, dict) else {}
     block = config_loader.merge_platform_sections(
-        yaml_cfg, yaml_cfg.get("gateway"), gw_data, also=frozenset({name})).get(name)
+        yaml_cfg, yaml_cfg.get("gateway"), gw_data, also=frozenset({name})
+    ).get(name)
     if not isinstance(block, dict):
         return False
     platform = PlatformConfig.from_dict(block)
-    return platform.enabled or ("enabled" not in block and bool(str(platform.token or "").strip()))
+    return platform.enabled or (
+        "enabled" not in block and bool(str(platform.token or "").strip())
+    )
 
 
-def _toolset_listed(config: dict, names: frozenset[str], *, own_platform: str = "") -> bool:
+def _toolset_listed(
+    config: dict, names: frozenset[str], *, own_platform: str = ""
+) -> bool:
     """A toolset in *names* is selected in ``platform_toolsets`` or the top-level ``toolsets`` list.
 
     *own_platform*'s row is skipped: it scopes that platform's own sessions, which only exist once the
@@ -87,9 +103,16 @@ def _toolset_listed(config: dict, names: frozenset[str], *, own_platform: str = 
     config.yaml, and it carried ``homeassistant: [clawk-homeassistant]`` until Home Assistant left core,
     so that row alone is not use."""
     rows = config.get("platform_toolsets")
-    selections = [sel for platform, sel in rows.items() if platform != own_platform] if isinstance(rows, dict) else []
+    selections = (
+        [sel for platform, sel in rows.items() if platform != own_platform]
+        if isinstance(rows, dict)
+        else []
+    )
     selections.append(config.get("toolsets"))
-    return any(isinstance(sel, list) and any(str(item) in names for item in sel) for sel in selections)
+    return any(
+        isinstance(sel, list) and any(str(item) in names for item in sel)
+        for sel in selections
+    )
 
 
 def homeassistant_in_use(home: Path, *, process_env: bool = False) -> bool:
@@ -99,11 +122,13 @@ def homeassistant_in_use(home: Path, *, process_env: bool = False) -> bool:
     another platform or in the top-level ``toolsets`` list. *process_env* (the active home at startup only)
     also counts a ``HASS_TOKEN`` the process received from its environment (systemd unit, Docker, shell export)."""
     from agent.secret_scope import load_env_file
+
     if (load_env_file(home / ".env").get("HASS_TOKEN") or "").strip():
         return True
     if process_env:
         try:
             from agent.secret_scope import get_secret
+
             if (get_secret("HASS_TOKEN", "") or "").strip():
                 return True
         except Exception:
@@ -111,7 +136,10 @@ def homeassistant_in_use(home: Path, *, process_env: bool = False) -> bool:
     if platform_configured_on(home, "homeassistant"):
         return True
     return _toolset_listed(
-        _read_config(home), frozenset({"homeassistant", "clawk-homeassistant"}), own_platform="homeassistant")
+        _read_config(home),
+        frozenset({"homeassistant", "clawk-homeassistant"}),
+        own_platform="homeassistant",
+    )
 
 
 def spotify_in_use(home: Path, *, process_env: bool = False) -> bool:
@@ -119,13 +147,19 @@ def spotify_in_use(home: Path, *, process_env: bool = False) -> bool:
     (``providers.spotify``, written by ``clawk auth spotify``) or the ``spotify`` toolset selected
     for a platform. The tools were opt-in and login-gated, so a client id alone is not use."""
     import json
+
     try:
         store = json.loads((home / "auth.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):  # missing/unreadable/invalid JSON: no login we can see
+    except (
+        OSError,
+        ValueError,
+    ):  # missing/unreadable/invalid JSON: no login we can see
         store = {}
     providers = store.get("providers") if isinstance(store, dict) else None
     state = providers.get("spotify") if isinstance(providers, dict) else None
-    if isinstance(state, dict) and (state.get("access_token") or state.get("refresh_token")):
+    if isinstance(state, dict) and (
+        state.get("access_token") or state.get("refresh_token")
+    ):
         return True
     return _toolset_listed(_read_config(home), frozenset({"spotify"}))
 
@@ -135,17 +169,23 @@ def _bundled_plugin_selected(home: Path, plugin: str) -> bool:
     ``plugins.disabled`` (which wins, as in the loader), read with the managed overlay applied like the
     loader's config, so an administrator's pinned list counts."""
     from gateway import config_loader
+
     feature = next(f for f in LEFT_CORE if f.plugin == plugin)
     try:
         plugins = config_loader.read_yaml_layers(home).get("plugins")
-    except Exception:  # malformed config.yaml: the loader enables nothing from it either
+    except (
+        Exception
+    ):  # malformed config.yaml: the loader enables nothing from it either
         logger.debug("left-core: unreadable config for %s", home, exc_info=True)
         return False
     plugins = plugins if isinstance(plugins, dict) else {}
 
     def listed(key: str) -> bool:
         names = plugins.get(key)
-        return isinstance(names, list) and any(str(n) in (feature.plugin_key, feature.plugin) for n in names)
+        return isinstance(names, list) and any(
+            str(n) in (feature.plugin_key, feature.plugin) for n in names
+        )
+
     return listed("enabled") and not listed("disabled")
 
 
@@ -166,6 +206,7 @@ def singularity_in_use(home: Path, *, process_env: bool = False) -> bool:
     is process-global (``get_secret`` never scopes it), so for any other served home it is the launch
     profile's backend, not this one's."""
     from gateway import config_loader
+
     try:
         terminal = config_loader.read_yaml_layers(home).get("terminal")
     except Exception:  # malformed config.yaml: the bridge reads nothing from it either
@@ -175,9 +216,11 @@ def singularity_in_use(home: Path, *, process_env: bool = False) -> bool:
     configured = str(terminal.get("backend") or terminal.get("env_type") or "").strip()
     if not configured:
         from clawk_cli.env_loader import resolve_home_dotenv
+
         configured = resolve_home_dotenv(home).get("TERMINAL_ENV", "").strip()
     if not configured and process_env:
         from clawk_constants import get_routing_process_clawk_home, clawk_home_key
+
         if clawk_home_key(home) == clawk_home_key(get_routing_process_clawk_home()):
             configured = os.environ.get("TERMINAL_ENV", "").strip()
     return configured.lower() == "singularity"
@@ -192,10 +235,10 @@ def agent_imports_in_use(home: Path, *, process_env: bool = False) -> bool:
 
 @dataclass(frozen=True)
 class LeftCoreFeature:
-    plugin: str                               # catalog entry name == installed plugin name
-    label: str                                # user-facing feature name
-    in_use: Callable[..., bool]               # (home, *, process_env=False) -> bool, read-only
-    unchanged: str                            # what migrated users keep, shown on success
+    plugin: str  # catalog entry name == installed plugin name
+    label: str  # user-facing feature name
+    in_use: Callable[..., bool]  # (home, *, process_env=False) -> bool, read-only
+    unchanged: str  # what migrated users keep, shown on success
     # Credentials core stripped from every child process while it shipped the feature. Core keeps
     # stripping them (tools/environments/local_env_policy.py): with the plugin absent (migration
     # pending, declined or failed) no manifest declares them, and they would reach every child.
@@ -238,22 +281,32 @@ class LeftCoreFeature:
 
 LEFT_CORE: tuple[LeftCoreFeature, ...] = (
     LeftCoreFeature(
-        plugin="homeassistant", label="Home Assistant", in_use=homeassistant_in_use,
+        plugin="homeassistant",
+        label="Home Assistant",
+        in_use=homeassistant_in_use,
         unchanged="HASS_TOKEN/HASS_URL, platforms.homeassistant and the ha_* tool names are unchanged",
-        secret_env=("HASS_TOKEN",), private_env=("HASS_URL",),
-        toolsets=("homeassistant",), off_platforms=("acp", "webhook"), platform="homeassistant",
-        enable_env=("HASS_TOKEN",), channel_env_prefixes=("HASS_",),
+        secret_env=("HASS_TOKEN",),
+        private_env=("HASS_URL",),
+        toolsets=("homeassistant",),
+        off_platforms=("acp", "webhook"),
+        platform="homeassistant",
+        enable_env=("HASS_TOKEN",),
+        channel_env_prefixes=("HASS_",),
     ),
     LeftCoreFeature(
-        plugin="spotify", label="Spotify", in_use=spotify_in_use,
+        plugin="spotify",
+        label="Spotify",
+        in_use=spotify_in_use,
         unchanged="your Spotify login, the spotify toolset and the spotify_* tools are unchanged; "
-                  "`clawk auth spotify` is now `clawk spotify login`",
+        "`clawk auth spotify` is now `clawk spotify login`",
         cli="spotify",
     ),
     LeftCoreFeature(
-        plugin="langfuse", label="Langfuse", in_use=langfuse_in_use,
+        plugin="langfuse",
+        label="Langfuse",
+        in_use=langfuse_in_use,
         unchanged="your Langfuse keys and CLAWK_LANGFUSE_* settings are unchanged; the plugin is now "
-                  "`langfuse` (was observability/langfuse)",
+        "`langfuse` (was observability/langfuse)",
         secret_env=("CLAWK_LANGFUSE_SECRET_KEY",),
         private_env=("CLAWK_LANGFUSE_PUBLIC_KEY", "CLAWK_LANGFUSE_BASE_URL"),
         plugin_key="observability/langfuse",
@@ -261,47 +314,66 @@ LEFT_CORE: tuple[LeftCoreFeature, ...] = (
     LeftCoreFeature(
         # MCP clients that launch `clawk mcp serve` are configured outside Clawksis, so no home shows the
         # feature in use: nothing installs automatically, and the old spelling prints where it went.
-        plugin="mcp-serve", label="Clawksis as an MCP server", in_use=lambda home, **_: False,
-        unchanged="the conversation tools keep their names; MCP clients change their args to [\"mcp-serve\"]",
-        command="mcp-serve", old_command="clawk mcp serve",
+        plugin="mcp-serve",
+        label="Clawksis as an MCP server",
+        in_use=lambda home, **_: False,
+        unchanged='the conversation tools keep their names; MCP clients change their args to ["mcp-serve"]',
+        command="mcp-serve",
+        old_command="clawk mcp serve",
     ),
     LeftCoreFeature(
-        plugin="singularity", label="Singularity/Apptainer terminal backend", in_use=singularity_in_use,
+        plugin="singularity",
+        label="Singularity/Apptainer terminal backend",
+        in_use=singularity_in_use,
         unchanged="terminal.backend: singularity, terminal.singularity_image (TERMINAL_SINGULARITY_IMAGE) "
-                  "and the container_* limits are unchanged",
+        "and the container_* limits are unchanged",
         terminal_backend="singularity",
     ),
     LeftCoreFeature(
-        plugin="agent-importers", label="`clawk import-agent`", in_use=agent_imports_in_use,
+        plugin="agent-importers",
+        label="`clawk import-agent`",
+        in_use=agent_imports_in_use,
         unchanged="`clawk import-agent`, its flags and your import-sync.json sync sources are unchanged",
-        command="import-agent", old_cli=("claw",),
+        command="import-agent",
+        old_cli=("claw",),
     ),
 )
 
+
 def _install_sentence(feature: LeftCoreFeature) -> str:
     from clawk_constants import get_clawk_home
-    return (f"{feature.label} moved out of core into the '{feature.plugin}' plugin: install it with "
-            f"`{_install_command(feature.plugin, Path(get_clawk_home()))}`")
+
+    return (
+        f"{feature.label} moved out of core into the '{feature.plugin}' plugin: install it with "
+        f"`{_install_command(feature.plugin, Path(get_clawk_home()))}`"
+    )
 
 
 def platform_install_hint(platform: str) -> str:
     """For an unknown platform name that left core: the sentence that names its install command for
     the active home, else ``""``. Appended to "unknown platform" errors (``send_message``)."""
-    feature = next((f for f in LEFT_CORE if f.platform and f.platform == platform), None)
+    feature = next(
+        (f for f in LEFT_CORE if f.platform and f.platform == platform), None
+    )
     return f". {_install_sentence(feature)}" if feature else ""
 
 
 def terminal_backend_install_hint(backend: str) -> str:
     """For a ``terminal.backend`` value that left core: the sentence that names its install command for
     the active home, else ``""``. Appended to "unknown terminal backend" errors."""
-    feature = next((f for f in LEFT_CORE if f.terminal_backend and f.terminal_backend == backend), None)
+    feature = next(
+        (f for f in LEFT_CORE if f.terminal_backend and f.terminal_backend == backend),
+        None,
+    )
     return f". {_install_sentence(feature)}" if feature else ""
 
 
 def legacy_plugin_alias(name: str) -> str:
     """The catalog plugin a bundled key that left core now names (``observability/langfuse`` ->
     ``langfuse``), else ``""``."""
-    return next((f.plugin for f in LEFT_CORE if f.plugin_key and f.plugin_key == name), "")
+    return next(
+        (f.plugin for f in LEFT_CORE if f.plugin_key and f.plugin_key == name), ""
+    )
 
 
 def legacy_plugin_keys(plugin: str) -> set[str]:
@@ -315,17 +387,30 @@ def moved_command_hint(prog: str, value: str, action: str = "") -> str:
     ``clawk <command>`` / ``clawk <old_cli>`` while the plugin is not loaded, the line saying where it
     went and how to get it for the active home, else ``""``."""
     from clawk_constants import get_clawk_home
+
     home = Path(get_clawk_home())
-    moved = next((f for f in LEFT_CORE if f.old_command and f.old_command == f"{prog} {value}"), None)
+    moved = next(
+        (f for f in LEFT_CORE if f.old_command and f.old_command == f"{prog} {value}"),
+        None,
+    )
     if moved is not None:
         present = plugin_present(moved.plugin, home)
-        get = "" if present else f" Install it with: `{_install_command(moved.plugin, home)}`."
-        return (f"{moved.label} moved out of core into the '{moved.plugin}' plugin: `{moved.old_command}` is now "
-                f"`clawk {moved.command}`.{get}")
+        get = (
+            ""
+            if present
+            else f" Install it with: `{_install_command(moved.plugin, home)}`."
+        )
+        return (
+            f"{moved.label} moved out of core into the '{moved.plugin}' plugin: `{moved.old_command}` is now "
+            f"`clawk {moved.command}`.{get}"
+        )
     if prog == "clawk auth":
         feature = next((f for f in LEFT_CORE if f.cli and f.cli == value), None)
     elif prog == "clawk":
-        feature = next((f for f in LEFT_CORE if value and value in (f.cli, f.command, *f.old_cli)), None)
+        feature = next(
+            (f for f in LEFT_CORE if value and value in (f.cli, f.command, *f.old_cli)),
+            None,
+        )
     else:
         feature = None
     if feature is None:
@@ -334,11 +419,17 @@ def moved_command_hint(prog: str, value: str, action: str = "") -> str:
     if not plugin_present(feature.plugin, home):
         get = f" Install it with: `{install}`."
     else:
-        get = f" Enable it with: `{install.replace(' install ', ' enable ')}`." if prog == "clawk" else ""
+        get = (
+            f" Enable it with: `{install.replace(' install ', ' enable ')}`."
+            if prog == "clawk"
+            else ""
+        )
     if prog == "clawk auth":
         old = " ".join(p for p in ("clawk auth", action, value) if p)
-        return (f"{feature.label} moved out of core into the '{feature.plugin}' plugin: `{old}` is now "
-                f"`clawk {value} {action or 'login'}`.{get}")
+        return (
+            f"{feature.label} moved out of core into the '{feature.plugin}' plugin: `{old}` is now "
+            f"`clawk {value} {action or 'login'}`.{get}"
+        )
     label = f"`clawk {value}`" if value in feature.old_cli else feature.label
     return f"{label} moved out of core into the '{feature.plugin}' plugin, which is not loaded.{get}"
 
@@ -347,7 +438,10 @@ def moved_plugin_hint(name: str) -> str:
     """For a plugin name nothing resolves to (so the plugin is not installed): the bundled key of a
     plugin that left core (``observability/langfuse``) or its catalog name, the line naming the install
     command for the active home, else ``""``. Appended to "No plugin named ..." errors."""
-    feature = next((f for f in LEFT_CORE if f.plugin_key and name in (f.plugin_key, f.plugin)), None)
+    feature = next(
+        (f for f in LEFT_CORE if f.plugin_key and name in (f.plugin_key, f.plugin)),
+        None,
+    )
     return f"{_install_sentence(feature)}." if feature else ""
 
 
@@ -363,10 +457,15 @@ def plugin_present(plugin: str, home: Path) -> bool:
 def _core_carried(feature: LeftCoreFeature, selection: list) -> bool:
     """Whether core resolved *feature*'s toolsets on for a platform selecting *selection*: named
     directly, or through a ``clawk`` / ``clawk-<platform>`` composite that included them."""
+
     def carries(name: str) -> bool:
         if name in feature.toolsets or name == "clawk":
             return True
-        return name.startswith("clawk-") and name[len("clawk-"):].replace("-", "_") not in feature.off_platforms
+        return (
+            name.startswith("clawk-")
+            and name[len("clawk-") :].replace("-", "_") not in feature.off_platforms
+        )
+
     return any(carries(str(name)) for name in selection)
 
 
@@ -387,7 +486,9 @@ def _scope_kept(config: dict, feature: LeftCoreFeature) -> bool:
 
 def _mark(config: dict, key: str, feature: LeftCoreFeature) -> None:
     done = config.get(key)
-    config[key] = sorted({*(map(str, done) if isinstance(done, list) else ()), feature.plugin})
+    config[key] = sorted(
+        {*(map(str, done) if isinstance(done, list) else ()), feature.plugin}
+    )
 
 
 def _record_migration(home: Path, feature: LeftCoreFeature) -> None:
@@ -403,9 +504,12 @@ def _record_migration(home: Path, feature: LeftCoreFeature) -> None:
     (``clawk tools``). Raises when config.yaml cannot be read or written."""
     from clawk_cli.config import atomic_config_write, read_user_config_raw
     from clawk_cli.toolset_validation import parse_platform_toolsets_value
+
     path = home / "config.yaml"
     config = read_user_config_raw(path)
-    installed = plugin_present(feature.plugin, home) and not _marked(config, _INSTALLED_KEY, feature)
+    installed = plugin_present(feature.plugin, home) and not _marked(
+        config, _INSTALLED_KEY, feature
+    )
     if _scope_kept(config, feature) and not installed:
         return
     if installed:
@@ -413,7 +517,9 @@ def _record_migration(home: Path, feature: LeftCoreFeature) -> None:
     if not _scope_kept(config, feature):
         saved = config.get("platform_toolsets")
         saved = saved if isinstance(saved, dict) else {}
-        selections = {str(p): parse_platform_toolsets_value(v) for p, v in saved.items()}
+        selections = {
+            str(p): parse_platform_toolsets_value(v) for p, v in saved.items()
+        }
         for platform in feature.off_platforms:
             selections.setdefault(platform, None)
         known = config.get("known_plugin_toolsets")
@@ -423,7 +529,9 @@ def _record_migration(home: Path, feature: LeftCoreFeature) -> None:
                 continue  # no (valid) saved list: core's default composite carried the toolsets
             if selection is not None and _core_carried(feature, selection):
                 continue
-            current = known.get(platform) if isinstance(known.get(platform), list) else []
+            current = (
+                known.get(platform) if isinstance(known.get(platform), list) else []
+            )
             if missing := [ts for ts in feature.toolsets if ts not in current]:
                 known[platform] = sorted({*map(str, current), *missing})
         if known:
@@ -432,14 +540,20 @@ def _record_migration(home: Path, feature: LeftCoreFeature) -> None:
     atomic_config_write(path, config)
 
 
-def _pending(home: Path, *, say: Callable[[str], None], process_env: bool = False,
-             backoff: bool = False) -> list[LeftCoreFeature]:
+def _pending(
+    home: Path,
+    *,
+    say: Callable[[str], None],
+    process_env: bool = False,
+    backoff: bool = False,
+) -> list[LeftCoreFeature]:
     """Rows *home* uses whose plugin it never had and that the catalog ships (a catalog miss is
     reported through *say*). Converts the toolset scope of every row *home* uses once
     (:func:`_record_migration`), installed or not; a row whose scope cannot be recorded is
     reported and skipped, never installed unscoped. A row marked installed is done for good.
     *backoff* (startup) skips a row whose last attempt failed recently, before any network."""
     from clawk_cli.memory_provider_migration import catalog_source
+
     out = []
     for feature in LEFT_CORE:
         if _marked(_read_config(home), _INSTALLED_KEY, feature):
@@ -450,37 +564,58 @@ def _pending(home: Path, *, say: Callable[[str], None], process_env: bool = Fals
         try:
             _record_migration(home, feature)
         except Exception as exc:
-            say(f"  ⚠ {feature.label} moved out of core into the '{feature.plugin}' plugin: its per-platform "
+            say(
+                f"  ⚠ {feature.label} moved out of core into the '{feature.plugin}' plugin: its per-platform "
                 f"toolset selection could not be kept ({exc}). Check `clawk tools`"
-                + ("." if present else f" and run `{_install_command(feature.plugin, home)}`."))
+                + (
+                    "."
+                    if present
+                    else f" and run `{_install_command(feature.plugin, home)}`."
+                )
+            )
             continue
         if present:
             continue
         if backoff and _failed_recently(home, feature.plugin):
-            logger.info("%s plugin install failed recently for %s; retrying later or on `clawk update`",
-                        feature.label, home)
+            logger.info(
+                "%s plugin install failed recently for %s; retrying later or on `clawk update`",
+                feature.label,
+                home,
+            )
             continue
         if catalog_source(feature.plugin) is None:
             _note_failure(home, feature.plugin)
-            say(f"  ⚠ {feature.label} moved out of core into the '{feature.plugin}' plugin, which this "
+            say(
+                f"  ⚠ {feature.label} moved out of core into the '{feature.plugin}' plugin, which this "
                 f"Clawksis cannot find in the plugin catalog yet. Run `{_install_command(feature.plugin, home)}` "
-                f"once it is listed.")
+                f"once it is listed."
+            )
             continue
         out.append(feature)
     return out
 
 
-def _install_into(home: Path, *, consent: Optional[bool] = None) -> Callable[[str], dict]:
+def _install_into(
+    home: Path, *, consent: Optional[bool] = None
+) -> Callable[[str], dict]:
     def _install(name: str) -> dict:
         from clawk_cli.plugins_cmd import dashboard_install_plugin
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
         token = set_clawk_home_override(home)
         try:
-            return dashboard_install_plugin("", force=False, enable=True, catalog_name=name,
-                                            assume_deps_consent=_unattended_consent() if consent is None
-                                            else consent)
+            return dashboard_install_plugin(
+                "",
+                force=False,
+                enable=True,
+                catalog_name=name,
+                assume_deps_consent=_unattended_consent()
+                if consent is None
+                else consent,
+            )
         finally:
             reset_clawk_home_override(token)
+
     return _install
 
 
@@ -488,12 +623,24 @@ def _first_cause(error: str) -> str:
     """One line for a notice: git's own ``fatal:`` / ``error:`` line when *error* ends with raw git
     stderr (a failed clone), else its first non-empty line."""
     lines = [line.strip() for line in error.splitlines() if line.strip()]
-    cause = next((line.split(":", 1)[1].strip() for line in lines if line.startswith(("fatal:", "error:"))), None)
+    cause = next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in lines
+            if line.startswith(("fatal:", "error:"))
+        ),
+        None,
+    )
     return (cause or (lines[0] if lines else "unknown error")).rstrip(". ")
 
 
-def _install_one(home: Path, feature: LeftCoreFeature, *, install: Callable[[str], dict],
-                 say: Callable[[str], None]) -> bool:
+def _install_one(
+    home: Path,
+    feature: LeftCoreFeature,
+    *,
+    install: Callable[[str], dict],
+    say: Callable[[str], None],
+) -> bool:
     try:
         result = install(feature.plugin)
     except Exception as exc:  # network, uv, kill list — report, do not raise
@@ -503,18 +650,27 @@ def _install_one(home: Path, feature: LeftCoreFeature, *, install: Callable[[str
             _record_migration(home, feature)
         except Exception as exc:  # the next run sees the plugin dir and records it then
             logger.debug("left-core install marker not written for %s: %s", home, exc)
-        say(f"  ✓ {feature.label} moved out of core — installed the '{feature.plugin}' plugin from the "
-            f"catalog ({feature.unchanged}).")
+        say(
+            f"  ✓ {feature.label} moved out of core — installed the '{feature.plugin}' plugin from the "
+            f"catalog ({feature.unchanged})."
+        )
         return True
     _note_failure(home, feature.plugin)
     error = _first_cause(str(result.get("error") or ""))
-    say(f"  ⚠ {feature.label} moved out of core and its '{feature.plugin}' plugin could not be installed "
-        f"automatically: {error}. Run `{_install_command(feature.plugin, home)}`.")
+    say(
+        f"  ⚠ {feature.label} moved out of core and its '{feature.plugin}' plugin could not be installed "
+        f"automatically: {error}. Run `{_install_command(feature.plugin, home)}`."
+    )
     return False
 
 
-def migrate_home(home: Path, *, install: Callable[[str], dict], say: Callable[[str], None] = print,
-                 process_env: bool = False) -> list[str]:
+def migrate_home(
+    home: Path,
+    *,
+    install: Callable[[str], dict],
+    say: Callable[[str], None] = print,
+    process_env: bool = False,
+) -> list[str]:
     """Install every left-core plugin *home* uses and lacks. Returns installed plugin names; never raises."""
     installed = []
     for feature in _pending(home, say=say, process_env=process_env):
@@ -548,23 +704,34 @@ def migrate_all_homes(*, say: Callable[[str], None] = print) -> list[str]:
     try:
         for feature, homes in pending.values():
             if len(homes) > 1 and _interactive():
-                say(f"  {feature.label} is used in {len(homes)} profiles "
+                say(
+                    f"  {feature.label} is used in {len(homes)} profiles "
                     f"({', '.join(_home_label(h) for h in homes)}); your answers to its dependency "
-                    f"questions apply to all of them.")
+                    f"questions apply to all of them."
+                )
             with shared_dependency_answers():
                 for index, home in enumerate(homes):
-                    if _install_one(home, feature, install=_install_into(home), say=labelled(home)):
+                    if _install_one(
+                        home, feature, install=_install_into(home), say=labelled(home)
+                    ):
                         installed.append(feature.plugin)
                         continue
-                    rest = homes[index + 1:]
+                    rest = homes[index + 1 :]
                     if rest:
-                        say(f"  ⚠ The '{feature.plugin}' plugin was not installed for "
+                        say(
+                            f"  ⚠ The '{feature.plugin}' plugin was not installed for "
                             f"{', '.join(_home_label(h) for h in rest)} either. Run "
-                            + ", ".join(f"`{_install_command(feature.plugin, h)}`" for h in rest) + ".")
+                            + ", ".join(
+                                f"`{_install_command(feature.plugin, h)}`" for h in rest
+                            )
+                            + "."
+                        )
                     break
     except KeyboardInterrupt:
-        say("  ⚠ Plugin migration cancelled. Profiles already migrated keep their plugin; run "
-            "`clawk plugins install <name>` (with `-p <profile>`) for the rest.")
+        say(
+            "  ⚠ Plugin migration cancelled. Profiles already migrated keep their plugin; run "
+            "`clawk plugins install <name>` (with `-p <profile>`) for the rest."
+        )
     return installed
 
 
@@ -572,6 +739,7 @@ def _gateway_serves(home: Path) -> bool:
     """A live gateway serves *home*: it loaded its platforms before this agent-start install."""
     try:
         from gateway.status import resolve_gateway_liveness
+
         return resolve_gateway_liveness(profile_dir=home, use_cache=False).running
     except Exception:
         return False
@@ -583,6 +751,7 @@ def recover_at_startup(*, say: Optional[Callable[[str], None]] = None) -> list[s
     attempt queued for this home; without it they are logged and queued for the home's first agent.
     Returns installed plugin names."""
     from agent.safe_worker_policy import worker_config_snapshot
+
     if worker_config_snapshot() is not None:
         # A frozen safe/ignore-user-config worker never reads the profile's config.yaml and never
         # installs customizations; the owner process runs this migration for the home.
@@ -618,21 +787,28 @@ def recover_at_startup(*, say: Optional[Callable[[str], None]] = None) -> list[s
         if not features:
             return []
         from pm.install import lazy_installs_allowed
+
         if not lazy_installs_allowed():
             for feature in features:
-                report(f"⚠ {feature.label} moved out of core and its '{feature.plugin}' plugin is not "
-                       f"installed, so it is off. security.allow_lazy_installs is off, so Clawksis did not "
-                       f"fetch it: run `{_install_command(feature.plugin, home)}`.")
+                report(
+                    f"⚠ {feature.label} moved out of core and its '{feature.plugin}' plugin is not "
+                    f"installed, so it is off. security.allow_lazy_installs is off, so Clawksis did not "
+                    f"fetch it: run `{_install_command(feature.plugin, home)}`."
+                )
             return []
         installed = []
         # Agent init cannot answer a dependency prompt: under the CLI the chat input owns the terminal,
         # so the question hangs at "Initializing agent...". Every row shipped in core, so its users
         # already accepted its dependencies (as memory_provider_migration.recover_at_startup does).
         for feature in features:
-            if _install_one(home, feature, install=_install_into(home, consent=True), say=report):
+            if _install_one(
+                home, feature, install=_install_into(home, consent=True), say=report
+            ):
                 installed.append(feature.plugin)
                 if say is not None and feature.platform and _gateway_serves(home):
-                    report(f"Restart the gateway (`clawk gateway restart`) so it serves {feature.label}.")
+                    report(
+                        f"Restart the gateway (`clawk gateway restart`) so it serves {feature.label}."
+                    )
         return installed
     except Exception as exc:  # never take agent/gateway start down
         logger.warning("left-core plugin migration failed: %s", exc, exc_info=True)
@@ -646,7 +822,13 @@ def recover_for_command(name: Optional[str]) -> None:
     (a Docker image swap runs no ``clawk update``) whose only Clawksis process is a scheduled
     ``clawk import-agent --sync`` never starts an agent or a gateway to do it."""
     from clawk_constants import get_clawk_home
+
     home = Path(get_clawk_home())
-    if any(name and name in (f.cli, f.command, *f.old_cli) and not plugin_present(f.plugin, home)
-           and f.in_use(home) for f in LEFT_CORE):
+    if any(
+        name
+        and name in (f.cli, f.command, *f.old_cli)
+        and not plugin_present(f.plugin, home)
+        and f.in_use(home)
+        for f in LEFT_CORE
+    ):
         recover_at_startup(say=lambda message: print(message, file=sys.stderr))

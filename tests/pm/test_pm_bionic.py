@@ -53,11 +53,17 @@ def _assert_pinned_bionic_row(lock, pkg, url_suffix_re):
 
 def test_python_bionic_row_matches_supplier(lock):
     """The Python package definition and lock must agree on the termux-main artifact."""
-    _assert_pinned_bionic_row(lock, "python", r"/p/python/python_(?P<ver>[0-9.]+(?:-[0-9]+)?)_aarch64\.deb$")
+    _assert_pinned_bionic_row(
+        lock, "python", r"/p/python/python_(?P<ver>[0-9.]+(?:-[0-9]+)?)_aarch64\.deb$"
+    )
+
+
 def test_node_bionic_row_matches_supplier(lock):
     """The node bionic row is an explicit pin of the termux-main nodejs .deb;
     the row and Nodejs.fetch_url(bionic arm) must agree."""
     _assert_pinned_bionic_row(lock, "node", r"nodejs_(?P<ver>[0-9.]+)-1_aarch64\.deb$")
+
+
 def test_termux_docker_row_pins_digest(lock):
     row = lock["packages"]["termux-docker"]["artifacts"]["linux-arm64-bionic"]
     version = lock["packages"]["termux-docker"]["version"]
@@ -71,7 +77,10 @@ def test_python_bionic_pin_is_independent_of_desktop_build_version(lock):
 
     py = get_package("python")
     package = lock["packages"]["python"]
-    assert py.fetch_url(package["version"], "linux-arm64-bionic") == package["artifacts"]["linux-arm64-bionic"]["url"]
+    assert (
+        py.fetch_url(package["version"], "linux-arm64-bionic")
+        == package["artifacts"]["linux-arm64-bionic"]["url"]
+    )
     assert py.deb_package == "python"
 
 
@@ -79,10 +88,19 @@ def test_uv_bionic_row_matches_supplier(lock):
     """The uv bionic row is an explicit pin of the termux-main pool .deb;
     the row and Uv.fetch_url(bionic arm) must agree."""
     _assert_pinned_bionic_row(lock, "uv", r"/u/uv/uv_(?P<ver>[0-9.]+)_aarch64\.deb$")
-@pytest.mark.parametrize("name,main,on_path", [
-    ("python", None, True), ("uv", "bin/uv", False), ("node", "bin/node", True),
-])
-def test_registered_bionic_stage_preserves_host_facts(tmp_path, monkeypatch, lock, name, main, on_path):
+
+
+@pytest.mark.parametrize(
+    "name,main,on_path",
+    [
+        ("python", None, True),
+        ("uv", "bin/uv", False),
+        ("node", "bin/node", True),
+    ],
+)
+def test_registered_bionic_stage_preserves_host_facts(
+    tmp_path, monkeypatch, lock, name, main, on_path
+):
     import hashlib
     from pm import paths
     from pm.install import stage_only
@@ -101,7 +119,11 @@ def test_registered_bionic_stage_preserves_host_facts(tmp_path, monkeypatch, loc
     before = facts.read_bytes()
     if main is None:
         # Archive filename is the independent supplier authority, not main_rel().
-        version = lock["packages"]["python"]["artifacts"][target]["url"].rsplit("/", 1)[1].split("_")[1]
+        version = (
+            lock["packages"]["python"]["artifacts"][target]["url"]
+            .rsplit("/", 1)[1]
+            .split("_")[1]
+        )
         main = "bin/python" + ".".join(version.split(".")[:2])
     relative = "data/data/com.termux/files/usr/" + main
     package = get_package(name)
@@ -112,7 +134,11 @@ def test_registered_bionic_stage_preserves_host_facts(tmp_path, monkeypatch, loc
         build_deb(deb, {"Package": name, "Version": "1.0"}, files)
         digest = hashlib.sha256(deb.read_bytes()).hexdigest()
         lock = Lockfile(paths.lockfile_path())
-        lock.set_pin(name, "1.0", {target: {"url": "https://example.test/fixture.deb", "sha256": digest}})
+        lock.set_pin(
+            name,
+            "1.0",
+            {target: {"url": "https://example.test/fixture.deb", "sha256": digest}},
+        )
         lock.save()
         cached = store.entry(f"fetch-{digest}")
         cached.mkdir(parents=True)
@@ -126,7 +152,9 @@ def test_registered_bionic_stage_preserves_host_facts(tmp_path, monkeypatch, loc
     entry = stage_only(name, target)
     assert (entry / relative).read_bytes() == b"bionic-payload"
     assert package.binary(entry, target) == entry / relative
-    assert package.env(entry, target).get("PATH") == ([str((entry / relative).parent)] if on_path else None)
+    assert package.env(entry, target).get("PATH") == (
+        [str((entry / relative).parent)] if on_path else None
+    )
     assert stage_only(name, target) == entry
     archive({"unrelated": b"not the main executable"})
     with pytest.raises(InstallError, match="missing"):

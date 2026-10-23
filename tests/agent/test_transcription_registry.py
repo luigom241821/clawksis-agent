@@ -50,7 +50,11 @@ class _FakeProvider(TranscriptionProvider):
     def transcribe(self, file_path: str, **kw):
         if self._transcribe_impl is not None:
             return self._transcribe_impl(file_path, **kw)
-        return {"success": True, "transcript": f"fake({file_path})", "provider": self._name}
+        return {
+            "success": True,
+            "transcript": f"fake({file_path})",
+            "provider": self._name,
+        }
 
 
 @pytest.fixture(autouse=True)
@@ -70,10 +74,9 @@ class TestRegistration:
         p = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(p)
         assert transcription_registry.get_provider("openrouter") is p
-        assert [r.name for r in transcription_registry.list_providers()] == ["openrouter"]
-
-
-
+        assert [r.name for r in transcription_registry.list_providers()] == [
+            "openrouter"
+        ]
 
     @pytest.mark.parametrize("builtin", sorted(transcription_registry._BUILTIN_NAMES))
     def test_rejects_builtin_shadow_with_warning(self, builtin, caplog):
@@ -85,20 +88,15 @@ class TestRegistration:
         assert transcription_registry.list_providers() == []
 
 
-
-
 # ---------------------------------------------------------------------------
 # Lookup
 # ---------------------------------------------------------------------------
 
 
 class TestLookup:
-
     def test_get_provider_non_string_returns_none(self):
         assert transcription_registry.get_provider(None) is None  # type: ignore[arg-type]
         assert transcription_registry.get_provider(123) is None  # type: ignore[arg-type]
-
-
 
     def test_list_providers_sorted(self):
         transcription_registry.register_provider(_FakeProvider(name="zylo"))
@@ -114,13 +112,6 @@ class TestLookup:
 
 
 class TestABCContract:
-
-
-
-
-
-
-
     def test_default_model_first_listed(self):
         class WithModels(_FakeProvider):
             def list_models(self):

@@ -118,7 +118,6 @@ class TestIdentityFlush:
             finally:
                 db.close()
 
-
     def test_repeated_flush_same_turn_writes_once(self):
         """Identity tracking preserves #860 same-turn dedup behavior."""
         from clawk_state import SessionDB
@@ -231,8 +230,10 @@ class TestIdentityFlush:
                 agent._flushed_db_message_ids = {id(new_assistant)}
 
                 agent._flush_messages_to_session_db(
-                    [{"role": "user", "content": "u1", "_db_persisted": True},
-                     new_assistant],
+                    [
+                        {"role": "user", "content": "u1", "_db_persisted": True},
+                        new_assistant,
+                    ],
                     [],
                 )
 
@@ -264,8 +265,11 @@ class TestFlushCursorMarkerPop:
                     "role": "assistant",
                     "content": "",
                     "tool_calls": [
-                        {"id": "t1", "type": "function",
-                         "function": {"name": "f", "arguments": "{}"}}
+                        {
+                            "id": "t1",
+                            "type": "function",
+                            "function": {"name": "f", "arguments": "{}"},
+                        }
                     ],
                 }
                 messages = [tool_row]

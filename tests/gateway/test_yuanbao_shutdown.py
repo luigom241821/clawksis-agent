@@ -17,7 +17,9 @@ import sys
 import os
 import asyncio
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
@@ -87,8 +89,6 @@ async def test_cleanup_ws_does_not_stall_on_hung_server():
     # Bounded by WS_CLOSE_TIMEOUT_S (+ small scheduling slack), not the 5s
     # close_timeout the server would otherwise hold us to.
     assert elapsed < WS_CLOSE_TIMEOUT_S + 1.0
-
-
 
 
 @pytest.mark.asyncio

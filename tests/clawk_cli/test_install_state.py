@@ -18,8 +18,10 @@ def machine(tmp_path, monkeypatch):
     active.mkdir()
     other.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(active))
-    places = Places(markers=(tmp_path / "state" / ".machine",),
-                    sources=(install_state._active_root, lambda: (other,)))
+    places = Places(
+        markers=(tmp_path / "state" / ".machine",),
+        sources=(install_state._active_root, lambda: (other,)),
+    )
     monkeypatch.setattr(install_state, "machine_places", lambda: places)
     install_state.probe.cache_clear()
     yield other, places
@@ -29,19 +31,37 @@ def machine(tmp_path, monkeypatch):
 def _messages_db(path: Path) -> None:
     with sqlite3.connect(path) as conn:
         conn.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY)")
-        conn.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, content TEXT)")
+        conn.execute(
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, content TEXT)"
+        )
         conn.execute("INSERT INTO messages (session_id, content) VALUES ('s', 'hi')")
     conn.close()
 
 
 USE = {
-    Evidence.ONBOARDING_DONE: lambda r: (r / "config.yaml").write_text("onboarding:\n  run: false\n", encoding="utf-8"),
-    Evidence.NAMED_PROFILE: lambda r: ((r / "profiles" / "work").mkdir(parents=True),
-                                       (r / "profiles" / "work" / "config.yaml").write_text("{}\n", encoding="utf-8")),
-    Evidence.PROVIDER_CONFIG: lambda r: (r / "config.yaml").write_text("model:\n  provider: openrouter\n", encoding="utf-8"),
-    Evidence.PROVIDER_KEY: lambda r: (r / ".env").write_text("OPENROUTER_API_KEY=sk-test\n", encoding="utf-8"),
-    Evidence.PROVIDER_LOGIN: lambda r: (r / "auth.json").write_text(json.dumps(
-        {"providers": {"nous": {"auth_method": "anonymous", "anon_token": "anon_x"}}}), encoding="utf-8"),
+    Evidence.ONBOARDING_DONE: lambda r: (r / "config.yaml").write_text(
+        "onboarding:\n  run: false\n", encoding="utf-8"
+    ),
+    Evidence.NAMED_PROFILE: lambda r: (
+        (r / "profiles" / "work").mkdir(parents=True),
+        (r / "profiles" / "work" / "config.yaml").write_text("{}\n", encoding="utf-8"),
+    ),
+    Evidence.PROVIDER_CONFIG: lambda r: (r / "config.yaml").write_text(
+        "model:\n  provider: openrouter\n", encoding="utf-8"
+    ),
+    Evidence.PROVIDER_KEY: lambda r: (r / ".env").write_text(
+        "OPENROUTER_API_KEY=sk-test\n", encoding="utf-8"
+    ),
+    Evidence.PROVIDER_LOGIN: lambda r: (r / "auth.json").write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "nous": {"auth_method": "anonymous", "anon_token": "anon_x"}
+                }
+            }
+        ),
+        encoding="utf-8",
+    ),
     Evidence.MESSAGES: lambda r: _messages_db(r / "state.db"),
 }
 
@@ -50,26 +70,44 @@ def test_a_machine_with_only_install_time_files_is_fresh(machine):
     other, places = machine
     # What installers and a first boot write: template config, example .env keys, an empty state.db,
     # pool rows Clawksis seeded from the shell, the PM boot record.
-    (other / "config.yaml").write_text("_config_version: 50\nmodel:\n  default: x\n  provider: auto\n", encoding="utf-8")
-    (other / ".env").write_text('TERMINAL_ENV=local\n# OPENROUTER_API_KEY=\nOPENROUTER_API_KEY="" # optional\n',
-                                encoding="utf-8")
-    (other / "auth.json").write_text(json.dumps({"credential_pool": {"openrouter": [{"source": "env:OPENROUTER_API_KEY"}]}}), encoding="utf-8")
-    sqlite3.connect(other / "state.db").execute("CREATE TABLE messages (id INTEGER)").connection.close()
+    (other / "config.yaml").write_text(
+        "_config_version: 50\nmodel:\n  default: x\n  provider: auto\n",
+        encoding="utf-8",
+    )
+    (other / ".env").write_text(
+        'TERMINAL_ENV=local\n# OPENROUTER_API_KEY=\nOPENROUTER_API_KEY="" # optional\n',
+        encoding="utf-8",
+    )
+    (other / "auth.json").write_text(
+        json.dumps(
+            {"credential_pool": {"openrouter": [{"source": "env:OPENROUTER_API_KEY"}]}}
+        ),
+        encoding="utf-8",
+    )
+    sqlite3.connect(other / "state.db").execute(
+        "CREATE TABLE messages (id INTEGER)"
+    ).connection.close()
     (other / "installs" / "k" / "bootstrap").mkdir(parents=True)
-    (other / "installs" / "k" / "bootstrap" / "default.json").write_text("{}", encoding="utf-8")
+    (other / "installs" / "k" / "bootstrap" / "default.json").write_text(
+        "{}", encoding="utf-8"
+    )
 
     assert install_state.probe().fresh
     assert not places.markers[0].exists()
 
 
 @pytest.mark.parametrize("evidence", list(USE))
-def test_use_in_another_root_beats_an_empty_clawk_home_and_marks_the_machine(machine, evidence):
+def test_use_in_another_root_beats_an_empty_clawk_home_and_marks_the_machine(
+    machine, evidence
+):
     other, places = machine
     USE[evidence](other)
 
     state = install_state.probe()
 
-    assert [(f.evidence, f.where) for f in state.findings] == [(evidence, other.resolve())]
+    assert [(f.evidence, f.where) for f in state.findings] == [
+        (evidence, other.resolve())
+    ]
     assert places.markers[0].is_file()
     # The marker answers for the machine from now on, even once that root is gone.
     for child in sorted(other.rglob("*"), reverse=True):
@@ -88,18 +126,27 @@ def test_an_unreadable_root_counts_as_existing_but_never_marks(machine):
     assert not places.markers[0].exists()
 
 
-def test_a_root_in_a_protected_folder_is_existing_without_being_opened(machine, tmp_path, monkeypatch):
+def test_a_root_in_a_protected_folder_is_existing_without_being_opened(
+    machine, tmp_path, monkeypatch
+):
     _other, places = machine
     protected = tmp_path / "Documents"
-    places = Places(markers=places.markers, sources=(lambda: (protected / "clawk-home",),),
-                    protected=(protected,))
+    places = Places(
+        markers=places.markers,
+        sources=(lambda: (protected / "clawk-home",),),
+        protected=(protected,),
+    )
     monkeypatch.setattr(install_state, "machine_places", lambda: places)
 
     assert install_state.probe().findings[0].evidence is Evidence.UNREADABLE
 
 
-@pytest.mark.parametrize("name", ["config.yaml", ".env", "auth.json", "state.db", "profiles"])
-def test_a_file_linked_into_a_protected_folder_is_existing_without_being_opened(machine, tmp_path, monkeypatch, name):
+@pytest.mark.parametrize(
+    "name", ["config.yaml", ".env", "auth.json", "state.db", "profiles"]
+)
+def test_a_file_linked_into_a_protected_folder_is_existing_without_being_opened(
+    machine, tmp_path, monkeypatch, name
+):
     """A root outside the protected folders whose file links into one: following the link would raise
     the macOS permission prompt, so the target counts as unreadable."""
     other, places = machine
@@ -109,17 +156,28 @@ def test_a_file_linked_into_a_protected_folder_is_existing_without_being_opened(
     if name == "profiles":
         target.mkdir()
     elif name == "state.db":
-        sqlite3.connect(target).execute("CREATE TABLE messages (id INTEGER)").connection.close()
+        sqlite3.connect(target).execute(
+            "CREATE TABLE messages (id INTEGER)"
+        ).connection.close()
     else:
         target.write_text("{}\n", encoding="utf-8")
     (other / name).symlink_to(target)
-    monkeypatch.setattr(install_state, "machine_places",
-                        lambda: Places(markers=places.markers, sources=places.sources, protected=(protected,)))
+    monkeypatch.setattr(
+        install_state,
+        "machine_places",
+        lambda: Places(
+            markers=places.markers, sources=places.sources, protected=(protected,)
+        ),
+    )
 
-    assert [(f.evidence, f.where) for f in install_state.probe().findings] == [(Evidence.UNREADABLE, other.resolve())]
+    assert [(f.evidence, f.where) for f in install_state.probe().findings] == [
+        (Evidence.UNREADABLE, other.resolve())
+    ]
 
 
-def test_a_launcher_in_a_protected_folder_names_its_folder_without_being_opened(tmp_path, monkeypatch):
+def test_a_launcher_in_a_protected_folder_names_its_folder_without_being_opened(
+    tmp_path, monkeypatch
+):
     from types import SimpleNamespace
 
     import clawk_platform.resolver
@@ -128,9 +186,14 @@ def test_a_launcher_in_a_protected_folder_names_its_folder_without_being_opened(
 
     protected = tmp_path / "Documents"
     launcher = protected / "clawk-src" / "clawk"
-    monkeypatch.setattr(known_dirs, "mac_privacy_protected_dirs", lambda: (str(protected),))
-    monkeypatch.setattr(clawk_platform.resolver, "locate_command",
-                        lambda _name: SimpleNamespace(command=(str(launcher),)))
+    monkeypatch.setattr(
+        known_dirs, "mac_privacy_protected_dirs", lambda: (str(protected),)
+    )
+    monkeypatch.setattr(
+        clawk_platform.resolver,
+        "locate_command",
+        lambda _name: SimpleNamespace(command=(str(launcher),)),
+    )
 
     def opened(_target):
         pytest.fail("the launcher inside a protected folder was opened")
@@ -155,13 +218,19 @@ def test_gateway_service_definitions_name_their_homes(tmp_path, monkeypatch):
     vbs = tmp_path / "Clawksis_Gateway.vbs"
     vbs.write_text(f'env.Item("CLAWK_HOME") = "{home}-win"\r\n', encoding="utf-8")
     from clawk_platform.resolver import known_dirs
-    monkeypatch.setattr(known_dirs, "gateway_service_definition_globs", lambda: (str(tmp_path / "*Gateway*"),
-                                                                                str(tmp_path / "*gateway*")))
+
+    monkeypatch.setattr(
+        known_dirs,
+        "gateway_service_definition_globs",
+        lambda: (str(tmp_path / "*Gateway*"), str(tmp_path / "*gateway*")),
+    )
 
     assert set(install_state._service_homes()) == {home, Path(f"{home}-win")}
 
 
-def test_a_gateway_started_by_a_scheduled_task_or_the_startup_fallback_names_its_home(tmp_path, monkeypatch):
+def test_a_gateway_started_by_a_scheduled_task_or_the_startup_fallback_names_its_home(
+    tmp_path, monkeypatch
+):
     """A Scheduled Task install removes the Startup-folder entries, and the Startup fallback only starts
     the home's own launcher: both name their home through the ``gateway.vbs`` they start."""
     from clawk_cli import gateway_windows
@@ -176,15 +245,31 @@ def test_a_gateway_started_by_a_scheduled_task_or_the_startup_fallback_names_its
     by_task, by_startup = tmp_path / "task home", tmp_path / "startup home"
     startup = tmp_path / "Startup" / "Clawksis_Gateway.vbs"
     startup.parent.mkdir()
-    startup.write_text(gateway_windows._build_startup_launcher(launcher(by_startup).with_suffix(".cmd")), encoding="utf-8")
-    monkeypatch.setattr(known_dirs, "gateway_service_definition_globs", lambda: (str(startup.parent / "Clawksis_Gateway*"),))
-    monkeypatch.setattr(gateway_windows, "registered_task_launchers", lambda: [str(launcher(by_task))], raising=False)
+    startup.write_text(
+        gateway_windows._build_startup_launcher(
+            launcher(by_startup).with_suffix(".cmd")
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        known_dirs,
+        "gateway_service_definition_globs",
+        lambda: (str(startup.parent / "Clawksis_Gateway*"),),
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "registered_task_launchers",
+        lambda: [str(launcher(by_task))],
+        raising=False,
+    )
 
     assert {by_task, by_startup} <= set(install_state._service_homes())
 
 
 @pytest.mark.platforms("posix")
-def test_a_gateway_service_counts_only_for_the_account_it_runs_as(tmp_path, monkeypatch):
+def test_a_gateway_service_counts_only_for_the_account_it_runs_as(
+    tmp_path, monkeypatch
+):
     """A machine-wide unit is another account's install unless it runs as this one (``User=``, root
     when it names none): that account's gateway must not cost a new desktop user the trial."""
     import getpass
@@ -192,14 +277,27 @@ def test_a_gateway_service_counts_only_for_the_account_it_runs_as(tmp_path, monk
     from clawk_platform.resolver import known_dirs
 
     me = getpass.getuser()
-    units = {"mine": f"User={me}\n", "theirs": "User=nobody\n" if me != "nobody" else "User=root\n", "root": ""}
+    units = {
+        "mine": f"User={me}\n",
+        "theirs": "User=nobody\n" if me != "nobody" else "User=root\n",
+        "root": "",
+    }
     for name, identity in units.items():
         (tmp_path / f"clawk-gateway-{name}.service").write_text(
-            f'[Service]\n{identity}Environment="CLAWK_HOME={tmp_path / name}"\n', encoding="utf-8")
-    monkeypatch.setattr(known_dirs, "gateway_service_definition_globs",
-                        lambda: (str(tmp_path / "clawk-gateway-[mt]*.service"),))
-    monkeypatch.setattr(known_dirs, "system_gateway_service_definition_globs",
-                        lambda: (str(tmp_path / "clawk-gateway-root.service"),), raising=False)
+            f'[Service]\n{identity}Environment="CLAWK_HOME={tmp_path / name}"\n',
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(
+        known_dirs,
+        "gateway_service_definition_globs",
+        lambda: (str(tmp_path / "clawk-gateway-[mt]*.service"),),
+    )
+    monkeypatch.setattr(
+        known_dirs,
+        "system_gateway_service_definition_globs",
+        lambda: (str(tmp_path / "clawk-gateway-root.service"),),
+        raising=False,
+    )
 
     homes = set(install_state._service_homes())
 

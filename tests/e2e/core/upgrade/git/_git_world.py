@@ -40,7 +40,9 @@ PYTESTMARK = [
     pytest.mark.platforms("linux"),
     # Every `clawk update` runs inside the bwrap sandbox against a throwaway install in tmp_path.
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -56,7 +58,15 @@ def reported_success(cp: subprocess.CompletedProcess) -> bool:
 
 def n1_tag() -> str:
     """N-1: the newest release tag strictly before HEAD."""
-    return I.git("describe", "--tags", "--abbrev=0", "--match", "v20[0-9][0-9].*", "HEAD~1", cwd=H.WORKTREE)
+    return I.git(
+        "describe",
+        "--tags",
+        "--abbrev=0",
+        "--match",
+        "v20[0-9][0-9].*",
+        "HEAD~1",
+        cwd=H.WORKTREE,
+    )
 
 
 def n1_base() -> str:
@@ -101,10 +111,17 @@ class World:
 
     def git_env(self) -> dict[str, str]:
         """Host-side git with the sandbox's HOME: its URL rewrite, never the real GitHub."""
-        return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(self.sb.home),
-                "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C",
-                "GIT_AUTHOR_NAME": "user", "GIT_AUTHOR_EMAIL": "user@example.invalid",
-                "GIT_COMMITTER_NAME": "user", "GIT_COMMITTER_EMAIL": "user@example.invalid"}
+        return {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": str(self.sb.home),
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+            "LC_ALL": "C",
+            "GIT_AUTHOR_NAME": "user",
+            "GIT_AUTHOR_EMAIL": "user@example.invalid",
+            "GIT_COMMITTER_NAME": "user",
+            "GIT_COMMITTER_EMAIL": "user@example.invalid",
+        }
 
     def git(self, *args: str, check: bool = True) -> str:
         return I.git(*args, cwd=self.checkout, check=check, env=self.git_env())
@@ -120,9 +137,11 @@ class World:
 
     def shape(self) -> dict[str, str]:
         """The clone's shape: partial-clone filter and shallowness."""
-        return {"promisor": self.config("remote.origin.promisor") or "-",
-                "filter": self.config("remote.origin.partialclonefilter") or "-",
-                "shallow": self.git("rev-parse", "--is-shallow-repository")}
+        return {
+            "promisor": self.config("remote.origin.promisor") or "-",
+            "filter": self.config("remote.origin.partialclonefilter") or "-",
+            "shallow": self.git("rev-parse", "--is-shallow-repository"),
+        }
 
     def status(self) -> str:
         return self.git("status", "--porcelain=v1", "--untracked-files=all")
@@ -132,7 +151,9 @@ class World:
 
     def refs_containing(self, sha: str) -> list[str]:
         """Refs (branches, stash, backups, tags) that keep ``sha`` reachable; the reflog does not count."""
-        return self.git("for-each-ref", "--contains", sha, "--format=%(refname)").split()
+        return self.git(
+            "for-each-ref", "--contains", sha, "--format=%(refname)"
+        ).split()
 
     def reset_clean(self) -> None:
         """Per-cell isolation on a shared install: on ``main`` at its current commit, a clean tree,
@@ -156,8 +177,10 @@ class World:
 
     def update(self, *extra: str, timeout: float = 1200) -> subprocess.CompletedProcess:
         cp = self.sb.cli("update", "--yes", "--branch", "main", *extra, timeout=timeout)
-        self.transcripts.append(f"$ clawk update --yes --branch main {' '.join(extra)} -> rc={cp.returncode}\n"
-                                f"{(cp.stdout or '')[-8000:]}\n{(cp.stderr or '')[-4000:]}")
+        self.transcripts.append(
+            f"$ clawk update --yes --branch main {' '.join(extra)} -> rc={cp.returncode}\n"
+            f"{(cp.stdout or '')[-8000:]}\n{(cp.stderr or '')[-4000:]}"
+        )
         return cp
 
     def version(self) -> subprocess.CompletedProcess:
@@ -177,34 +200,76 @@ class World:
         if cp is not None:
             out.append(H.describe(cp, limit=8000))
         with contextlib.suppress(Exception):
-            out.append(f"HEAD={self.head()} branch={self.branch()} shape={self.shape()}")
+            out.append(
+                f"HEAD={self.head()} branch={self.branch()} shape={self.shape()}"
+            )
             out.append("status:\n" + (self.status() or "  (clean)"))
-            out.append("refs:\n" + self.git("for-each-ref", "--format=%(refname) %(objectname:short)",
-                                            "refs/heads", "refs/stash", "refs/clawk-update-backups",
-                                            "refs/remotes"))
+            out.append(
+                "refs:\n"
+                + self.git(
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname:short)",
+                    "refs/heads",
+                    "refs/stash",
+                    "refs/clawk-update-backups",
+                    "refs/remotes",
+                )
+            )
         rec = self.receipt()
         if rec:
-            out.append("receipt: " + json.dumps({k: rec.get(k) for k in ("outcome", "status", "exit_code", "steps")
-                                                 if k in rec}, default=str)[:3000])
+            out.append(
+                "receipt: "
+                + json.dumps(
+                    {
+                        k: rec.get(k)
+                        for k in ("outcome", "status", "exit_code", "steps")
+                        if k in rec
+                    },
+                    default=str,
+                )[:3000]
+            )
         logs = self.sb.clawk_home / "logs"
         for name in ("update.log", "errors.log"):
             p = logs / name
             if p.is_file():
-                out.append(f"--- {p} (tail)\n" + p.read_text(encoding="utf-8", errors="replace")[-3000:])
+                out.append(
+                    f"--- {p} (tail)\n"
+                    + p.read_text(encoding="utf-8", errors="replace")[-3000:]
+                )
         out.append("http requests:\n" + self.srv.describe(mark))
         return "\n".join(out)
 
 
 def _preclone(sb: I.Sandbox, args: list[str], env: dict[str, str]) -> None:
     sb.clawk_home.mkdir(parents=True, exist_ok=True)
-    cp = subprocess.run(["git", "clone", "-q", *args, "--branch", "main", I.OFFICIAL_HTTPS, str(sb.checkout)],
-                        capture_output=True, text=True, env=env, timeout=900, check=False)
+    cp = subprocess.run(
+        [
+            "git",
+            "clone",
+            "-q",
+            *args,
+            "--branch",
+            "main",
+            I.OFFICIAL_HTTPS,
+            str(sb.checkout),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=900,
+        check=False,
+    )
     assert cp.returncode == 0, f"pre-clone {args} failed: {cp.stderr[-2000:]}"
 
 
 @contextlib.contextmanager
-def world(root: Path, *, base: str, installer_ref: str | None = None,
-          preclone: list[str] | None = None) -> Iterator[World]:
+def world(
+    root: Path,
+    *,
+    base: str,
+    installer_ref: str | None = None,
+    preclone: list[str] | None = None,
+) -> Iterator[World]:
     """Serve origin ``main`` at ``base`` over smart HTTP and install from it with the installer
     of ``installer_ref`` (None: HEAD's). Yields the live ``World``; the server stops on exit."""
     root.mkdir(parents=True, exist_ok=True)
@@ -216,7 +281,9 @@ def world(root: Path, *, base: str, installer_ref: str | None = None,
         url = srv.url(REPO)
         (sb.home / ".gitconfig").write_text(
             f'[url "{url}"]\n  insteadOf = {I.OFFICIAL_HTTPS}\n  insteadOf = {I.OFFICIAL_SSH}\n'
-            '[user]\n  name = user\n  email = user@example.invalid\n', encoding="utf-8")
+            "[user]\n  name = user\n  email = user@example.invalid\n",
+            encoding="utf-8",
+        )
         w = World(root=root, srv=srv, bare=bare, sb=sb)
         if preclone is not None:
             _preclone(sb, preclone, w.git_env())
@@ -224,11 +291,19 @@ def world(root: Path, *, base: str, installer_ref: str | None = None,
         script.write_text(installer_script(installer_ref), encoding="utf-8")
         # The served repo publishes commits on main and no release tags: install main (N-1's
         # installer ignores the variable and installs main anyway).
-        cp = sb.run(["bash", str(script), "--non-interactive"], timeout=1800, input="",
-                    env={**sb.env, "CLAWK_INSTALL_CHANNEL": "main"})
-        assert cp.returncode == 0, f"install ({installer_ref or 'HEAD'} installer, base {base[:12]}) failed:\n{w.diag(cp)}"
+        cp = sb.run(
+            ["bash", str(script), "--non-interactive"],
+            timeout=1800,
+            input="",
+            env={**sb.env, "CLAWK_INSTALL_CHANNEL": "main"},
+        )
+        assert cp.returncode == 0, (
+            f"install ({installer_ref or 'HEAD'} installer, base {base[:12]}) failed:\n{w.diag(cp)}"
+        )
         head = w.head()
-        assert head == base, f"installer left HEAD at {head}, expected {base}\n{w.diag(cp)}"
+        assert head == base, (
+            f"installer left HEAD at {head}, expected {base}\n{w.diag(cp)}"
+        )
         w.install_bytes = w.bytes_since(0)
         w.install_shape = w.shape()
         yield w

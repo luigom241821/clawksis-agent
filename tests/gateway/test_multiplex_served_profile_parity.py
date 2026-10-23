@@ -21,7 +21,10 @@ from clawk_constants import get_clawk_home
 
 class RecordingAdapter:
     def __init__(self, notice_delivery=None):
-        self.config = PlatformConfig(enabled=True, extra={"notice_delivery": notice_delivery} if notice_delivery else {})
+        self.config = PlatformConfig(
+            enabled=True,
+            extra={"notice_delivery": notice_delivery} if notice_delivery else {},
+        )
         self.platform = Platform.TELEGRAM
         self.calls = []
         self._active_sessions, self._pending_messages, self._session_tasks = {}, {}, {}
@@ -46,8 +49,11 @@ def served(tmp_path, monkeypatch):
     alpha = root / "profiles" / "alpha"
     alpha.mkdir(parents=True)
     (root / "config.yaml").write_text(
-        "gateway:\n  multiplex_profiles: true\ndisplay:\n  background_process_notifications: concise\n")
-    (alpha / "config.yaml").write_text("display:\n  background_process_notifications: 'off'\n")
+        "gateway:\n  multiplex_profiles: true\ndisplay:\n  background_process_notifications: concise\n"
+    )
+    (alpha / "config.yaml").write_text(
+        "display:\n  background_process_notifications: 'off'\n"
+    )
     (root / ".env").write_text("")
     (alpha / ".env").write_text("")
     monkeypatch.setenv("CLAWK_HOME", str(root))
@@ -56,9 +62,16 @@ def served(tmp_path, monkeypatch):
     set_multiplex_active(True)
 
     runner = GatewayRunner.__new__(GatewayRunner)
-    runner.config = SimpleNamespace(multiplex_profiles=True, profile_routes=[], get_notice_delivery=lambda p: "public")
+    runner.config = SimpleNamespace(
+        multiplex_profiles=True,
+        profile_routes=[],
+        get_notice_delivery=lambda p: "public",
+    )
     runner._running = True
-    default_adapter, alpha_adapter = RecordingAdapter(), RecordingAdapter(notice_delivery="private")
+    default_adapter, alpha_adapter = (
+        RecordingAdapter(),
+        RecordingAdapter(notice_delivery="private"),
+    )
     runner.adapters = {Platform.TELEGRAM: default_adapter}
     runner._profile_adapters = {"alpha": {Platform.TELEGRAM: alpha_adapter}}
     runner._primary_profile_name = "default"
@@ -71,14 +84,25 @@ def served(tmp_path, monkeypatch):
     runner._background_tasks = set()
     runner._profile_failed_platforms = {}
     try:
-        yield SimpleNamespace(root=root, alpha=alpha, runner=runner, alpha_adapter=alpha_adapter,
-                              default_adapter=default_adapter)
+        yield SimpleNamespace(
+            root=root,
+            alpha=alpha,
+            runner=runner,
+            alpha_adapter=alpha_adapter,
+            default_adapter=default_adapter,
+        )
     finally:
         set_multiplex_active(False)
 
 
 def _alpha_source():
-    return SessionSource(platform=Platform.TELEGRAM, chat_id="1001", chat_type="dm", user_id="u1", profile="alpha")
+    return SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="1001",
+        chat_type="dm",
+        user_id="u1",
+        profile="alpha",
+    )
 
 
 def test_platform_notice_honours_the_served_profiles_notice_delivery(served):
@@ -99,23 +123,36 @@ def test_loop_completion_persists_into_the_served_profiles_store(served):
     from clawk_cli.loops import LoopManager
 
     runner = served.runner
-    entry = SimpleNamespace(session_id="sess-alpha-1", session_key="agent:alpha:telegram:dm:1001")
+    entry = SimpleNamespace(
+        session_id="sess-alpha-1", session_key="agent:alpha:telegram:dm:1001"
+    )
     with _profile_runtime_scope(served.alpha):
         _get_session_db()
         mgr = LoopManager(session_id=entry.session_id)
-        mgr.set("check", interval_seconds=300, route={"platform": "telegram", "chat_id": "1001", "profile": "alpha"})
+        mgr.set(
+            "check",
+            interval_seconds=300,
+            route={"platform": "telegram", "chat_id": "1001", "profile": "alpha"},
+        )
         assert mgr.fire_tick()
-        asyncio.run(runner._post_turn_loop_completion(
-            session_entry=entry, source=_alpha_source(), final_response="done"))
+        asyncio.run(
+            runner._post_turn_loop_completion(
+                session_entry=entry, source=_alpha_source(), final_response="done"
+            )
+        )
 
     def loop_row(home):
         import sqlite3
+
         db = home / "state.db"
         if not db.exists():
             return None
         con = sqlite3.connect(db)
         try:
-            row = con.execute("SELECT value FROM state_meta WHERE key=?", (f"loop:{entry.session_id}",)).fetchone()
+            row = con.execute(
+                "SELECT value FROM state_meta WHERE key=?",
+                (f"loop:{entry.session_id}",),
+            ).fetchone()
         finally:
             con.close()
         return json.loads(row[0]) if row else None
@@ -131,9 +168,17 @@ def test_watch_event_gate_uses_the_owning_profiles_mode(served):
 
     runner = served.runner
     registry = ProcessRegistry()
-    evt = {"type": "watch_match", "session_id": "p1", "session_key": "agent:alpha:telegram:dm:1001",
-           "platform": "telegram", "chat_type": "dm", "chat_id": "1001", "pattern": "DONE",
-           "output": "DONE", "command": "x"}
+    evt = {
+        "type": "watch_match",
+        "session_id": "p1",
+        "session_key": "agent:alpha:telegram:dm:1001",
+        "platform": "telegram",
+        "chat_type": "dm",
+        "chat_id": "1001",
+        "pattern": "DONE",
+        "output": "DONE",
+        "command": "x",
+    }
     registry.completion_queue.put(evt)
     asyncio.run(runner._drain_watch_notifications(registry.completion_queue))
     assert registry.completion_queue.qsize() == 0
@@ -148,9 +193,17 @@ def test_served_profile_process_checkpoint_is_recovered_at_startup(served, monke
 
     runner = served.runner
     import os
-    entry = {"session_id": "proc_alpha01", "pid": os.getpid(), "pid_scope": "host", "command": "sleep 1",
-             "started_at": 1.0, "watcher_interval": 5, "notify_on_complete": True,
-             "session_key": "agent:alpha:telegram:dm:1001"}
+
+    entry = {
+        "session_id": "proc_alpha01",
+        "pid": os.getpid(),
+        "pid_scope": "host",
+        "command": "sleep 1",
+        "started_at": 1.0,
+        "watcher_interval": 5,
+        "notify_on_complete": True,
+        "session_key": "agent:alpha:telegram:dm:1001",
+    }
     (served.alpha / "processes.json").write_text(json.dumps([entry]))
     registry = ProcessRegistry()
     monkeypatch.setattr(registry, "_host_pid_is_ours", lambda pid, start: True)

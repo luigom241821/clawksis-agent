@@ -36,11 +36,15 @@ def test_pending_deliveries_are_claimed_in_instant_order_across_dst_fall_back(
     monkeypatch.setattr(queue, "DELIVERY_DB", tmp_path / "deliveries.db")
     new_york = ZoneInfo("America/New_York")
     monkeypatch.setattr(
-        queue, "_clawk_now", lambda: datetime(2026, 11, 1, 1, 50, tzinfo=new_york, fold=0)
+        queue,
+        "_clawk_now",
+        lambda: datetime(2026, 11, 1, 1, 50, tzinfo=new_york, fold=0),
     )
     queue.enqueue("exec-z-earlier", {"id": "job-1"}, "first")
     monkeypatch.setattr(
-        queue, "_clawk_now", lambda: datetime(2026, 11, 1, 1, 10, tzinfo=new_york, fold=1)
+        queue,
+        "_clawk_now",
+        lambda: datetime(2026, 11, 1, 1, 10, tzinfo=new_york, fold=1),
     )
     queue.enqueue("exec-a-later", {"id": "job-2"}, "second")
 
@@ -150,9 +154,7 @@ def test_wait_timeout_marks_inflight_delivery_unknown_without_retry(
     send.assert_not_called()
 
 
-def test_dead_delivery_owner_becomes_unknown_and_is_not_retried(
-    tmp_path, monkeypatch
-):
+def test_dead_delivery_owner_becomes_unknown_and_is_not_retried(tmp_path, monkeypatch):
     import cron.delivery_queue as queue
 
     monkeypatch.setattr(queue, "DELIVERY_DB", tmp_path / "deliveries.db")
@@ -168,9 +170,7 @@ def test_dead_delivery_owner_becomes_unknown_and_is_not_retried(
     assert queue.get_status("exec-1")["status"] == "unknown"
 
 
-def test_delivery_failure_is_terminal_not_retried_and_redacted(
-    tmp_path, monkeypatch
-):
+def test_delivery_failure_is_terminal_not_retried_and_redacted(tmp_path, monkeypatch):
     import cron.delivery_queue as queue
 
     monkeypatch.setattr(queue, "DELIVERY_DB", tmp_path / "deliveries.db")

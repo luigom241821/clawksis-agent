@@ -25,7 +25,6 @@ from unittest.mock import patch
 import pytest
 
 
-
 class FakeKeyBindings:
     def __init__(self):
         self.bound = []
@@ -59,6 +58,7 @@ def test_native_windows_preserves_newline():
 
 def test_ssh_tty_alone_preserves_newline():
     import cli as cli_mod
+
     # Strip out anything that might leak truth
     with patch.dict(os.environ, {"SSH_TTY": "/dev/pts/0"}, clear=True):
         assert cli_mod._preserve_ctrl_enter_newline() is True
@@ -66,6 +66,7 @@ def test_ssh_tty_alone_preserves_newline():
 
 def test_windows_terminal_session_preserves_newline():
     import cli as cli_mod
+
     with patch.dict(os.environ, {"WT_SESSION": "abc-def"}, clear=True):
         assert cli_mod._preserve_ctrl_enter_newline() is True
 
@@ -73,22 +74,28 @@ def test_windows_terminal_session_preserves_newline():
 def test_ghostty_tmux_session_preserves_ctrl_j_newline():
     """Ghostty-inherited env survives tmux even when TERM_PROGRAM becomes tmux."""
     import cli as cli_mod
+
     with patch.dict(
         os.environ,
-        {"TERM": "tmux-256color", "TERM_PROGRAM": "tmux", "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty"},
+        {
+            "TERM": "tmux-256color",
+            "TERM_PROGRAM": "tmux",
+            "GHOSTTY_RESOURCES_DIR": "/usr/share/ghostty",
+        },
         clear=True,
     ):
         assert cli_mod._preserve_ctrl_enter_newline() is True
 
 
-
-
 def test_cli_multiline_shortcuts_can_be_disabled():
     import cli as cli_mod
 
-    assert cli_mod._cli_multiline_shortcuts_enabled(
-        {"display": {"cli_multiline_shortcuts": False}}
-    ) is False
+    assert (
+        cli_mod._cli_multiline_shortcuts_enabled(
+            {"display": {"cli_multiline_shortcuts": False}}
+        )
+        is False
+    )
 
 
 def test_ctrl_j_is_not_submit_when_multiline_shortcuts_enabled():
@@ -125,15 +132,18 @@ def test_backslash_enter_continuation_replaces_marker_with_newline():
     import cli as cli_mod
 
     assert cli_mod._apply_backslash_line_continuation("first line\\") == "first line\n"
-    assert cli_mod._apply_backslash_line_continuation("first line\\   ") == "first line\n"
-
-
+    assert (
+        cli_mod._apply_backslash_line_continuation("first line\\   ") == "first line\n"
+    )
 
 
 def test_unknown_terminal_does_not_enable_extended_enter_keys():
     import cli as cli_mod
 
-    assert cli_mod._terminal_supports_extended_enter_keys({"TERM_PROGRAM": "unknown"}) is False
+    assert (
+        cli_mod._terminal_supports_extended_enter_keys({"TERM_PROGRAM": "unknown"})
+        is False
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -142,10 +152,13 @@ def test_unknown_terminal_does_not_enable_extended_enter_keys():
 # ---------------------------------------------------------------------------
 class _FakeOutput:
     """Minimal output object with write_raw + flush for _enable_extended_enter_keys."""
+
     def __init__(self):
         self.written = b""
+
     def write_raw(self, data):
         self.written += data.encode() if isinstance(data, str) else data
+
     def flush(self):
         pass
 
@@ -203,11 +216,14 @@ def test_proc_version_microsoft_marker_preserves_newline():
     """
     import cli as cli_mod
     from io import StringIO
+
     with patch.dict(os.environ, {}, clear=True):
         real_open = open
 
         def _fake_open(path, *args, **kwargs):
-            if "/proc/version" in str(path) or "/proc/sys/kernel/osrelease" in str(path):
+            if "/proc/version" in str(path) or "/proc/sys/kernel/osrelease" in str(
+                path
+            ):
                 return StringIO("Linux version 5.15.167.4-microsoft-standard-WSL2")
             return real_open(path, *args, **kwargs)
 

@@ -68,9 +68,7 @@ class TestTryWalCheckpointPassive:
         assert len(passive_calls) == 1, (
             f"Expected 1 PASSIVE checkpoint call, got {len(passive_calls)}"
         )
-        assert len(truncate_calls) == 0, (
-            "Periodic checkpoint should NOT use TRUNCATE"
-        )
+        assert len(truncate_calls) == 0, "Periodic checkpoint should NOT use TRUNCATE"
 
     def test_failed_checkpoint_never_raises_and_is_not_silent(self, db, caplog):
         """The periodic checkpoint runs from the write path: a failing PASSIVE
@@ -85,8 +83,6 @@ class TestTryWalCheckpointPassive:
         finally:
             db._conn = real_conn
         assert any(r.levelno >= logging.WARNING for r in caplog.records)
-
-
 
 
 class TestCloseUsesPassive:
@@ -132,7 +128,6 @@ class TestCloseUsesPassive:
 
         assert db._conn is None
         mock_conn.close.assert_called()
-
 
 
 class TestVacuumUsesPassive:
@@ -214,11 +209,14 @@ class TestCheckpointFrequency:
         # Write exactly _CHECKPOINT_EVERY_N_WRITES sessions to trigger one checkpoint
         n = db._CHECKPOINT_EVERY_N_WRITES
         import time as _time
+
         for i in range(n):
-            db._execute_write(lambda conn, _i=i: conn.execute(
-                "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
-                (f"sess_{_i}", "test", _time.time()),
-            ))
+            db._execute_write(
+                lambda conn, _i=i: conn.execute(
+                    "INSERT INTO sessions (id, source, started_at) VALUES (?, ?, ?)",
+                    (f"sess_{_i}", "test", _time.time()),
+                )
+            )
 
         assert call_count[0] == 1, (
             f"Expected 1 checkpoint after {n} writes, got {call_count[0]}"

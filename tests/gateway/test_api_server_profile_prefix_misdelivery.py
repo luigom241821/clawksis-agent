@@ -49,7 +49,9 @@ class TestResolverWithMultiplexOff:
         )
         assert adapter._resolve_request_profile(_request("researcher")) is None
 
-    def test_prefix_naming_default_on_default_home_is_honored(self, adapter, monkeypatch):
+    def test_prefix_naming_default_on_default_home_is_honored(
+        self, adapter, monkeypatch
+    ):
         monkeypatch.setattr(
             "clawk_cli.profiles.profile_matches_home",
             lambda name, home=None: name == "default",
@@ -62,7 +64,10 @@ class TestResolverWithMultiplexOff:
             "clawk_cli.profiles.profile_matches_home",
             lambda name, home=None: name == "default",
         )
-        assert adapter._resolve_request_profile(_request("researcher")) is _PROFILE_REJECTED
+        assert (
+            adapter._resolve_request_profile(_request("researcher"))
+            is _PROFILE_REJECTED
+        )
 
     def test_unresolvable_own_identity_fails_closed(self, adapter, monkeypatch):
         """If the process cannot prove who it is, it must not answer as anyone."""
@@ -71,7 +76,10 @@ class TestResolverWithMultiplexOff:
             raise RuntimeError("no home")
 
         monkeypatch.setattr("clawk_cli.profiles.profile_matches_home", boom)
-        assert adapter._resolve_request_profile(_request("researcher")) is _PROFILE_REJECTED
+        assert (
+            adapter._resolve_request_profile(_request("researcher"))
+            is _PROFILE_REJECTED
+        )
 
 
 class TestMultiplexOnUnchanged:
@@ -93,9 +101,7 @@ async def test_http_request_addressed_to_another_agent_is_404_not_answered(
 ):
     """End to end through the real middleware: the wrong-agent request must
     404 instead of being served — a body would mean the misdelivery is back."""
-    monkeypatch.setattr(
-        "clawk_cli.profiles.get_active_profile_name", lambda: "default"
-    )
+    monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "default")
 
     async def handler(request):
         return web.json_response({"served_by": "default"})

@@ -1,4 +1,5 @@
 """One stdlib JSON-line PM request per isolated process."""
+
 from __future__ import annotations
 
 import json
@@ -51,7 +52,9 @@ def main():
         os.dup2(null.fileno(), 0)
     messages = queue.Queue()
     pause = threading.Event()
-    threading.Thread(target=_read_controls, args=(messages, pause, controls), daemon=True).start()
+    threading.Thread(
+        target=_read_controls, args=(messages, pause, controls), daemon=True
+    ).start()
 
     def receive():
         message = messages.get()
@@ -67,6 +70,7 @@ def main():
     from pm.registry import load_package_definitions
     from pm.runtime import lease_current_runtime
     from pm.worker_operations import OPERATIONS
+
     lease_current_runtime()
     context = request["context"]
     paths.repo_root = lambda: Path(context["repo"])

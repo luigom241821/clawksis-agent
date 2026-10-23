@@ -47,7 +47,9 @@ def broadcast_calls(monkeypatch):
 
 
 class TestApprovalsSaveBroadcast:
-    def test_get_shaped_record_roundtrip_does_not_broadcast(self, client, broadcast_calls):
+    def test_get_shaped_record_roundtrip_does_not_broadcast(
+        self, client, broadcast_calls
+    ):
         """The settings page PUTs the defaulted GET record back verbatim on
         every autosave. That must not broadcast: disk holds sparse YAML while
         GET returns defaults, so a block-level compare is always-unequal (the
@@ -73,7 +75,9 @@ class TestApprovalsSaveBroadcast:
         )
 
     def test_approvals_mode_change_broadcasts(self, client, broadcast_calls):
-        resp = client.put("/api/config", json={"config": {"approvals": {"mode": "off"}}})
+        resp = client.put(
+            "/api/config", json={"config": {"approvals": {"mode": "off"}}}
+        )
         assert resp.status_code == 200
         assert broadcast_calls, (
             "PUT /api/config changed approvals.mode but no session.info "
@@ -89,11 +93,15 @@ class TestApprovalsSaveBroadcast:
         )
 
     def test_approvals_noop_save_does_not_broadcast(self, client, broadcast_calls):
-        first = client.put("/api/config", json={"config": {"approvals": {"mode": "off"}}})
+        first = client.put(
+            "/api/config", json={"config": {"approvals": {"mode": "off"}}}
+        )
         assert first.status_code == 200
         broadcast_calls.clear()
 
-        again = client.put("/api/config", json={"config": {"approvals": {"mode": "off"}}})
+        again = client.put(
+            "/api/config", json={"config": {"approvals": {"mode": "off"}}}
+        )
         assert again.status_code == 200
         assert not broadcast_calls, (
             "saving an identical approvals block is a no-op and must not "
@@ -113,12 +121,16 @@ class TestApprovalsSaveBroadcast:
             "the broadcast leaves live sessions painting stale YOLO state"
         )
 
-    def test_other_profile_save_does_not_broadcast(self, client, broadcast_calls, monkeypatch, tmp_path):
+    def test_other_profile_save_does_not_broadcast(
+        self, client, broadcast_calls, monkeypatch, tmp_path
+    ):
         from clawk_cli import web_server
 
         profile_dir = tmp_path / "profiles" / "other"
         profile_dir.mkdir(parents=True)
-        monkeypatch.setattr(_web_server_profiles, "_resolve_profile_dir", lambda name: profile_dir)
+        monkeypatch.setattr(
+            _web_server_profiles, "_resolve_profile_dir", lambda name: profile_dir
+        )
 
         resp = client.put(
             "/api/config",
@@ -135,14 +147,18 @@ class TestApprovalsSaveBroadcast:
         import sys
 
         monkeypatch.delitem(sys.modules, "tui_gateway.server", raising=False)
-        resp = client.put("/api/config", json={"config": {"approvals": {"mode": "smart"}}})
+        resp = client.put(
+            "/api/config", json={"config": {"approvals": {"mode": "smart"}}}
+        )
         assert resp.status_code == 200
         assert "tui_gateway.server" not in sys.modules, (
             "the broadcast seam must not IMPORT the gateway; a process "
             "without one has no sessions to notify"
         )
 
-    def test_raw_save_deleting_approvals_block_broadcasts(self, client, broadcast_calls):
+    def test_raw_save_deleting_approvals_block_broadcasts(
+        self, client, broadcast_calls
+    ):
         seed = client.put(
             "/api/config/raw",
             json={"yaml_text": "approvals:\n  mode: 'off'\n"},
@@ -159,8 +175,7 @@ class TestApprovalsSaveBroadcast:
         )
         assert resp.status_code == 200
         assert broadcast_calls, (
-            "deleting the approvals block changes the effective mode and "
-            "must broadcast"
+            "deleting the approvals block changes the effective mode and must broadcast"
         )
 
     def test_raw_save_approvals_change_broadcasts(self, client, broadcast_calls):
@@ -174,10 +189,14 @@ class TestApprovalsSaveBroadcast:
             "broadcast reached the gateway"
         )
 
-    def test_raw_save_without_approvals_change_does_not_broadcast(self, client, broadcast_calls):
+    def test_raw_save_without_approvals_change_does_not_broadcast(
+        self, client, broadcast_calls
+    ):
         seed = client.put(
             "/api/config/raw",
-            json={"yaml_text": "approvals:\n  mode: manual\ndisplay:\n  skin: default\n"},
+            json={
+                "yaml_text": "approvals:\n  mode: manual\ndisplay:\n  skin: default\n"
+            },
         )
         assert seed.status_code == 200
         broadcast_calls.clear()
@@ -191,17 +210,21 @@ class TestApprovalsSaveBroadcast:
 
 
 class TestGatewayBroadcastHelper:
-    def test_broadcast_session_info_emits_for_live_sessions(self, _isolate_clawk_home, monkeypatch):
+    def test_broadcast_session_info_emits_for_live_sessions(
+        self, _isolate_clawk_home, monkeypatch
+    ):
         """tui_gateway.server.broadcast_session_info walks _sessions and emits."""
         from tui_gateway import server
 
         emitted = []
         monkeypatch.setattr(
-            server, "_emit_session_info_for_session",
+            server,
+            "_emit_session_info_for_session",
             lambda sid, sess: emitted.append(sid),
         )
         monkeypatch.setattr(
-            server, "_sessions",
+            server,
+            "_sessions",
             {"s1": {"agent": object()}, "s2": {"agent": object()}},
         )
 
@@ -216,7 +239,9 @@ class TestGatewayBroadcastHelper:
         from tui_gateway import server
 
         calls = []
-        monkeypatch.setattr(server, "broadcast_session_info", lambda: calls.append(True))
+        monkeypatch.setattr(
+            server, "broadcast_session_info", lambda: calls.append(True)
+        )
 
         session = {"agent": None}
         server._mirror_slash_side_effects("sid1", session, "/approvals off")

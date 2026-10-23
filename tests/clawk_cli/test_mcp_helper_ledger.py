@@ -62,6 +62,7 @@ def _dead_process_identity() -> tuple[int, float]:
 # register_child — entry shape
 # ---------------------------------------------------------------------------
 
+
 def test_register_child_entry_shape(ledger, child):
     assert pi.register_child(child.pid, "mcp-helper") is True
     entries = json.loads(ledger.read_text(encoding="utf-8"))
@@ -92,11 +93,10 @@ def test_register_child_rejects_dead_or_invalid_pids(ledger):
     assert not ledger.exists() or json.loads(ledger.read_text()) == []
 
 
-
-
 # ---------------------------------------------------------------------------
 # Spawner liveness gate
 # ---------------------------------------------------------------------------
+
 
 def test_live_spawner_protection(ledger, child):
     """A helper whose spawner (this process) lives is never reap-eligible."""
@@ -173,6 +173,7 @@ def test_reap_ignores_non_mcp_purposes(ledger, child):
 # ---------------------------------------------------------------------------
 # Prune-on-write of exited children
 # ---------------------------------------------------------------------------
+
 
 def test_ledger_prunes_exited_children_on_next_write(ledger):
     doomed = subprocess.Popen(["sleep", "300"])

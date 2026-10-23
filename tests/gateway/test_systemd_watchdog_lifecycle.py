@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-
 from gateway.config import GatewayConfig
 from gateway.run import GatewayRunner
 
@@ -47,5 +46,3 @@ def test_runner_starts_watchdog_only_after_running(monkeypatch):
     assert watchdog.config_enabled is True
     assert watchdog.calls[0] == "start"
     assert len(watchdog.calls) == 2 and watchdog.calls[1].startswith("ready:")
-
-

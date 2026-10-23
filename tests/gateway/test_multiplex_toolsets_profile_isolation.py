@@ -15,6 +15,7 @@ E2E-style: real profile homes under a temp CLAWKSIS root, real config.yaml
 files read through the canonical loaders, and real aiohttp request routing
 (TestClient) through the profile-prefix middleware. No mocked config reads.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -108,9 +109,7 @@ class TestMultiplexOnToolsetIsolation:
         """Cross-profile auth stays closed: owner key must not read lokaj."""
         adapter = _make_adapter(multiplex=True)
         async with TestClient(TestServer(_make_app(adapter))) as cli:
-            status, _ = await _enabled_toolsets(
-                cli, "/p/lokaj/v1/toolsets", OWNER_KEY
-            )
+            status, _ = await _enabled_toolsets(cli, "/p/lokaj/v1/toolsets", OWNER_KEY)
             assert status == 401
 
     @pytest.mark.asyncio
@@ -127,7 +126,6 @@ class TestMultiplexOnToolsetIsolation:
 class TestMultiplexOffPrefixFailsClosed:
     """Single-profile gateways must not serve another profile's URL."""
 
-
     def test_self_referential_prefix_falls_through(self, clawk_root):
         """/p/default/ on the default-profile gateway keeps working."""
         adapter = _make_adapter(multiplex=False)
@@ -139,9 +137,7 @@ class TestMultiplexOffPrefixFailsClosed:
 
     def test_own_named_profile_prefix_falls_through(self, clawk_root, monkeypatch):
         """A gateway launched FOR profile lokaj accepts /p/lokaj/…"""
-        monkeypatch.setenv(
-            "CLAWK_HOME", str(clawk_root / "profiles" / "lokaj")
-        )
+        monkeypatch.setenv("CLAWK_HOME", str(clawk_root / "profiles" / "lokaj"))
         adapter = _make_adapter(multiplex=False)
 
         class _Req:
@@ -159,9 +155,7 @@ class TestMultiplexOffPrefixFailsClosed:
             )
             assert resp.status == 404
             # Bare route unaffected.
-            status, enabled = await _enabled_toolsets(
-                cli, "/v1/toolsets", OWNER_KEY
-            )
+            status, enabled = await _enabled_toolsets(cli, "/v1/toolsets", OWNER_KEY)
             assert status == 200
             assert "computer_use" not in enabled
 

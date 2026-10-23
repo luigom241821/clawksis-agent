@@ -14,7 +14,7 @@ class _ToolCallAccumulator:
     def __init__(self):
         self.acc: dict = {}
         self._notified: set = set()
-        self._last_id_at_idx: dict = {}      # raw_index -> last seen non-empty id
+        self._last_id_at_idx: dict = {}  # raw_index -> last seen non-empty id
         self._active_slot_by_idx: dict = {}  # raw_index -> current slot in acc
         # Argument deltas are collected per slot and joined once in ``materialize`` —
         # ``+=`` per chunk rebuilds the whole string every delta (quadratic on big args).
@@ -46,7 +46,9 @@ class _ToolCallAccumulator:
         repairable call with a trailing comma still ends its slot. Scans only fragments added since
         the last check: linear over the call, and free for providers that never reach here."""
         parts = self._argument_parts.get(slot, [])
-        done, depth, in_string, escaped, started = self._arg_scan.get(slot, (0, 0, False, False, False))
+        done, depth, in_string, escaped, started = self._arg_scan.get(
+            slot, (0, 0, False, False, False)
+        )
         for ch in "".join(parts[done:]):
             if in_string:
                 if escaped:
@@ -76,7 +78,9 @@ class _ToolCallAccumulator:
 
         self._active_slot_by_idx.setdefault(raw_idx, raw_idx)
         if (
-            delta_id and raw_idx in self._last_id_at_idx and delta_id != self._last_id_at_idx[raw_idx]
+            delta_id
+            and raw_idx in self._last_id_at_idx
+            and delta_id != self._last_id_at_idx[raw_idx]
             and self._starts_new_call(tc_delta, self._active_slot_by_idx[raw_idx])
         ):
             self._active_slot_by_idx[raw_idx] = max(self.acc, default=-1) + 1
@@ -85,7 +89,13 @@ class _ToolCallAccumulator:
         idx = self._active_slot_by_idx[raw_idx]
 
         entry = self.acc.setdefault(
-            idx, {"id": tc_id or "", "type": "function", "function": {"name": "", "arguments": ""}, "extra_content": None},
+            idx,
+            {
+                "id": tc_id or "",
+                "type": "function",
+                "function": {"name": "", "arguments": ""},
+                "extra_content": None,
+            },
         )
         parts = self._argument_parts.setdefault(idx, [])
         if tc_id:
@@ -99,13 +109,19 @@ class _ToolCallAccumulator:
             if getattr(tc_function, "arguments", None):
                 parts.append(tc_function.arguments)
             # Copilot's Gemini 3 variant signs the call inside ``function``.
-            if isinstance(fn_sig := field(tc_function, "thought_signature"), str) and fn_sig:
+            if (
+                isinstance(fn_sig := field(tc_function, "thought_signature"), str)
+                and fn_sig
+            ):
                 entry["thought_signature"] = fn_sig
         extra = getattr(tc_delta, "extra_content", None)
         if extra is None and hasattr(tc_delta, "model_extra"):
-            extra = (tc_delta.model_extra if isinstance(tc_delta.model_extra, dict) else {}).get("extra_content")
+            extra = (
+                tc_delta.model_extra if isinstance(tc_delta.model_extra, dict) else {}
+            ).get("extra_content")
         if extra is not None:
             from agent.chat_completion_helpers import _dump_if_model
+
             entry["extra_content"] = _dump_if_model(extra)
         name = entry["function"]["name"]
         if name and idx not in self._notified:

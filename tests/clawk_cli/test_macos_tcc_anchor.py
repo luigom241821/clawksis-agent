@@ -29,7 +29,9 @@ from pm.environments import venv_python
 from clawk_cli import doctor_platform
 
 
-def _build_store(tmp_path, version: str = "3.11.15", *, with_libpython: bool = False) -> Path:
+def _build_store(
+    tmp_path, version: str = "3.11.15", *, with_libpython: bool = False
+) -> Path:
     store = (
         tmp_path
         / "uv-store"
@@ -143,7 +145,8 @@ class TestEnsureTccAnchor:
         signed = []
 
         monkeypatch.setattr(
-            "clawk_cli.macos_signing.sign_managed_python", lambda p: signed.append(Path(p)) or True
+            "clawk_cli.macos_signing.sign_managed_python",
+            lambda p: signed.append(Path(p)) or True,
         )
         store_bin = _build_store(tmp_path)
         root = _build_checkout(tmp_path, store_bin=store_bin)
@@ -313,7 +316,9 @@ class TestEnsureTccAnchor:
         assert tcc.ensure_tcc_anchor(root) is not None
         assert tcc.tcc_anchor_state(root)[0] == "active"
 
-    def test_copy_alias_failure_warns_and_cleans_staging(self, tmp_path, monkeypatch, caplog):
+    def test_copy_alias_failure_warns_and_cleans_staging(
+        self, tmp_path, monkeypatch, caplog
+    ):
         # _copy_alias must log the failure (silent skips hid the #95541
         # shape) and never leave a staging file behind.
         anchor = tmp_path / "anchor"
@@ -349,7 +354,6 @@ class TestEnsureTccAnchor:
         assert not list(venv_bin.glob(".tcc-anchor-source.*"))
 
 
-
 class TestBootGate:
     """Direct branch coverage for _passes_boot_gate.
 
@@ -364,7 +368,8 @@ class TestBootGate:
     def test_refuses_nonzero_exit(self, tmp_path, monkeypatch):
         # dyld / encodings crash in the staged copy → refuse install.
         monkeypatch.setattr(
-            tcc.subprocess, "run",
+            tcc.subprocess,
+            "run",
             lambda *a, **k: self._proc(a[0], 1, "", "ModuleNotFoundError: encodings"),
         )
         assert not tcc._passes_boot_gate(tmp_path / "staged", tmp_path / "venv")
@@ -372,7 +377,8 @@ class TestBootGate:
     def test_refuses_wrong_prefix(self, tmp_path, monkeypatch):
         # Boots but resolves the build-time prefix (the /install signature).
         monkeypatch.setattr(
-            tcc.subprocess, "run",
+            tcc.subprocess,
+            "run",
             lambda *a, **k: self._proc(a[0], 0, "/install\n", ""),
         )
         assert not tcc._passes_boot_gate(tmp_path / "staged", tmp_path / "venv")
@@ -430,7 +436,8 @@ class TestBootGate:
         venv = tmp_path / "venv"
         venv.mkdir()
         monkeypatch.setattr(
-            tcc.subprocess, "run",
+            tcc.subprocess,
+            "run",
             lambda *a, **k: self._proc(a[0], 0, f"{venv}\n", ""),
         )
         assert tcc._passes_boot_gate(tmp_path / "staged", venv)
@@ -506,9 +513,6 @@ class TestTccAnchorState:
 
 
 class TestDoctorCheck:
-
-
-
     def test_skip_is_silent_on_non_macos(self, monkeypatch, capsys):
         monkeypatch.setattr(
             tcc, "tcc_anchor_state", lambda *a, **k: ("skip", "not macOS")
@@ -560,10 +564,21 @@ class TestAnchoredAliasesBootE2E:
         # The runner itself may already have PM's stable signature. Give only
         # this disposable source a different identity so a skipped sign fails.
         subprocess.run(
-            ["codesign", "--force", "--sign", "-", "--timestamp=none",
-             "--identifier", "test.clawk.unanchored", "--requirements",
-             '=designated => identifier "test.clawk.unanchored"', str(store_bin / minor)],
-            check=True, capture_output=True, timeout=30,
+            [
+                "codesign",
+                "--force",
+                "--sign",
+                "-",
+                "--timestamp=none",
+                "--identifier",
+                "test.clawk.unanchored",
+                "--requirements",
+                '=designated => identifier "test.clawk.unanchored"',
+                str(store_bin / minor),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
         )
         os.symlink(base / "lib", store / "lib")
 
@@ -588,16 +603,27 @@ class TestAnchoredAliasesBootE2E:
             assert not executable.is_symlink()
             subprocess.run(
                 ["codesign", "--verify", "--deep", "--strict", str(executable)],
-                check=True, capture_output=True, timeout=30,
+                check=True,
+                capture_output=True,
+                timeout=30,
             )
             identity = subprocess.run(
                 ["codesign", "-d", "-r-", str(executable)],
-                check=True, capture_output=True, text=True, timeout=30,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
-            assert 'designated => identifier "com.nousresearch.clawk.managed-python"' in identity.stdout
+            assert (
+                'designated => identifier "com.nousresearch.clawk.managed-python"'
+                in identity.stdout
+            )
             probe = subprocess.run(
-                [str(venv_bin / name), "-c",
-                 "import encodings, sys; print(sys.prefix)"],
+                [
+                    str(venv_bin / name),
+                    "-c",
+                    "import encodings, sys; print(sys.prefix)",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=120,

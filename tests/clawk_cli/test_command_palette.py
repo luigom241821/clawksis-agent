@@ -10,13 +10,14 @@ def _bare_cli():
     return cli
 
 
-
-
 class TestCommandPaletteFilter:
     def _state(self, entries, query):
         cli = _bare_cli()
         cli._command_palette_state = {
-            "entries": entries, "filter": query, "selected": 0, "_scroll_offset": 0,
+            "entries": entries,
+            "filter": query,
+            "selected": 0,
+            "_scroll_offset": 0,
         }
         return cli
 
@@ -56,7 +57,7 @@ class TestCommandPaletteFilter:
         # in its description must rank strictly after any name match.
         entries = [
             ("/goal", "Background", "check the status of things"),  # desc-only match
-            ("/status", "Context", "Show session status"),          # name match
+            ("/status", "Context", "Show session status"),  # name match
         ]
         cli = self._state(entries, "status")
         rows = cli._command_palette_visible_entries()
@@ -79,7 +80,9 @@ class TestCommandPaletteSelectionInserts:
         cli = _bare_cli()
         cli._command_palette_state = {
             "entries": [("/model", "Model", "Switch model")],
-            "filter": "", "selected": 0, "_scroll_offset": 0,
+            "filter": "",
+            "selected": 0,
+            "_scroll_offset": 0,
         }
         # Fake prompt_toolkit app + buffer.
         buf = SimpleNamespace(text="", cursor_position=0)

@@ -22,19 +22,27 @@ logger = logging.getLogger(__name__)
 __all__ = ["splice_provider_projection"]
 
 
-def splice_provider_projection(agent: Any, response: Any, messages: list[dict[str, Any]]) -> int:
+def splice_provider_projection(
+    agent: Any, response: Any, messages: list[dict[str, Any]]
+) -> int:
     """Append the provider's projected history rows and tick the nudge counter.
 
     Returns the number of rows spliced. Tolerates absent/garbage attributes so a
     third-party OpenAI-compatible client can't break the turn.
     """
     projected = getattr(response, "clawk_projected_messages", None)
-    rows = [m for m in projected if isinstance(m, dict)] if isinstance(projected, list) else []
+    rows = (
+        [m for m in projected if isinstance(m, dict)]
+        if isinstance(projected, list)
+        else []
+    )
     for row in rows:
         append_message(messages, row)
     if rows:
         logger.debug(
-            "spliced %d provider-projected transcript row(s) from %s", len(rows), getattr(agent, "provider", "?"),
+            "spliced %d provider-projected transcript row(s) from %s",
+            len(rows),
+            getattr(agent, "provider", "?"),
         )
 
     try:

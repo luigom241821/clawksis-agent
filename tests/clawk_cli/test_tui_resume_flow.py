@@ -38,9 +38,7 @@ def main_mod(monkeypatch):
     return mod
 
 
-def test_exit_after_oneshot_flushes_stdio_and_calls_os_exit(
-    monkeypatch, main_mod
-):
+def test_exit_after_oneshot_flushes_stdio_and_calls_os_exit(monkeypatch, main_mod):
     flushed = []
     exits = []
 
@@ -131,7 +129,11 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "run_agent", mod("run_agent", AIAgent=FakeAgent))
     # Oneshot borrows the process-shared registry handle (one writer per state.db path).
-    monkeypatch.setitem(sys.modules, "clawk_state_registry", mod("clawk_state_registry", acquire=fake_acquire))
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_state_registry",
+        mod("clawk_state_registry", acquire=fake_acquire),
+    )
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.config",
@@ -140,7 +142,9 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.models",
-        mod("clawk_cli.models", detect_provider_for_model=lambda *_args, **_kwargs: None),
+        mod(
+            "clawk_cli.models", detect_provider_for_model=lambda *_args, **_kwargs: None
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -162,7 +166,10 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.tools_config",
-        mod("clawk_cli.tools_config", _get_platform_tools=lambda *_args, **_kwargs: {"session_search"}),
+        mod(
+            "clawk_cli.tools_config",
+            _get_platform_tools=lambda *_args, **_kwargs: {"session_search"},
+        ),
     )
 
     text, result = _run_agent("recall this")
@@ -208,26 +215,60 @@ def test_oneshot_closes_its_relay_root_before_agent_teardown(monkeypatch, run_fa
         return module
 
     monkeypatch.setitem(sys.modules, "run_agent", mod("run_agent", AIAgent=FakeAgent))
-    monkeypatch.setitem(sys.modules, "clawk_state_registry", mod("clawk_state_registry", acquire=lambda db_path=None: None))
-    monkeypatch.setitem(sys.modules, "clawk_cli.config", mod("clawk_cli.config", load_config=lambda: {"model": {"default": "m"}}))
-    monkeypatch.setitem(sys.modules, "clawk_cli.models",
-                        mod("clawk_cli.models", detect_provider_for_model=lambda *_a, **_k: None))
-    monkeypatch.setitem(sys.modules, "clawk_cli.runtime_provider", mod(
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_state_registry",
+        mod("clawk_state_registry", acquire=lambda db_path=None: None),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.config",
+        mod("clawk_cli.config", load_config=lambda: {"model": {"default": "m"}}),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.models",
+        mod("clawk_cli.models", detect_provider_for_model=lambda *_a, **_k: None),
+    )
+    monkeypatch.setitem(
+        sys.modules,
         "clawk_cli.runtime_provider",
-        resolve_runtime_with_fallback=lambda _cfg, **_k: ({"api_key": "k", "base_url": "u", "provider": "p",
-                                                           "api_mode": "chat_completions", "credential_pool": None}, None),
-    ))
-    monkeypatch.setitem(sys.modules, "clawk_cli.tools_config",
-                        mod("clawk_cli.tools_config", _get_platform_tools=lambda *_a, **_k: set()))
-    monkeypatch.setattr(lifecycle, "finalize_session", lambda **kw: events.append(("finalize", kw)))
+        mod(
+            "clawk_cli.runtime_provider",
+            resolve_runtime_with_fallback=lambda _cfg, **_k: (
+                {
+                    "api_key": "k",
+                    "base_url": "u",
+                    "provider": "p",
+                    "api_mode": "chat_completions",
+                    "credential_pool": None,
+                },
+                None,
+            ),
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.tools_config",
+        mod("clawk_cli.tools_config", _get_platform_tools=lambda *_a, **_k: set()),
+    )
+    monkeypatch.setattr(
+        lifecycle, "finalize_session", lambda **kw: events.append(("finalize", kw))
+    )
 
     if run_fails:
         with pytest.raises(RuntimeError, match="agent failed"):
             _run_agent("finish this")
     else:
         assert _run_agent("finish this")[0] == "ok"
-    assert events == [("finalize", {"session_id": "entry-id", "platform": "cli", "reason": "shutdown"}),
-                      "memory", "agent_close"]
+    assert events == [
+        (
+            "finalize",
+            {"session_id": "entry-id", "platform": "cli", "reason": "shutdown"},
+        ),
+        "memory",
+        "agent_close",
+    ]
 
 
 def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
@@ -235,7 +276,9 @@ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
     captured = {}
     active_path_during_call = None
 
-    monkeypatch.setattr(main_tui_launch, "_make_tui_argv",
+    monkeypatch.setattr(
+        main_tui_launch,
+        "_make_tui_argv",
         lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")),
     )
 
@@ -267,7 +310,9 @@ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
     assert env["NODE_ENV"] == "production"
 
 
-def test_launch_tui_prefers_launch_cwd_over_inherited_clawk_cwd(monkeypatch, main_mod, tmp_path):
+def test_launch_tui_prefers_launch_cwd_over_inherited_clawk_cwd(
+    monkeypatch, main_mod, tmp_path
+):
     """The directory `clawk --tui` was run from outranks an inherited CLAWK_CWD.
 
     A shell export - or an outer `clawk --tui` - leaves CLAWK_CWD naming a real but stale
@@ -283,10 +328,14 @@ def test_launch_tui_prefers_launch_cwd_over_inherited_clawk_cwd(monkeypatch, mai
     monkeypatch.chdir(launch)
 
     captured = {}
-    monkeypatch.setattr(main_tui_launch, "_make_tui_argv",
+    monkeypatch.setattr(
+        main_tui_launch,
+        "_make_tui_argv",
         lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")),
     )
-    monkeypatch.setattr(main_mod.subprocess, "call",
+    monkeypatch.setattr(
+        main_mod.subprocess,
+        "call",
         lambda argv, cwd=None, env=None: captured.update({"env": env}) or 1,
     )
 
@@ -294,11 +343,15 @@ def test_launch_tui_prefers_launch_cwd_over_inherited_clawk_cwd(monkeypatch, mai
         main_mod._launch_tui()
 
     handed_to_tui = Path(captured["env"]["CLAWK_CWD"]).resolve()
-    assert handed_to_tui == launch.resolve(), "the TUI gateway must start where the user launched"
+    assert handed_to_tui == launch.resolve(), (
+        "the TUI gateway must start where the user launched"
+    )
     assert handed_to_tui != stale.resolve()
 
 
-def test_launch_tui_worktree_still_outranks_the_launch_cwd(monkeypatch, main_mod, tmp_path):
+def test_launch_tui_worktree_still_outranks_the_launch_cwd(
+    monkeypatch, main_mod, tmp_path
+):
     """`--worktree` names an explicit destination, so it keeps precedence over the launch cwd."""
     worktree = tmp_path / "worktree"
     launch = tmp_path / "launch-project"
@@ -309,11 +362,17 @@ def test_launch_tui_worktree_still_outranks_the_launch_cwd(monkeypatch, main_mod
     monkeypatch.chdir(launch)
 
     captured = {}
-    monkeypatch.setattr(main_tui_launch, "_setup_tui_worktree", lambda: {"path": str(worktree)})
-    monkeypatch.setattr(main_tui_launch, "_make_tui_argv",
+    monkeypatch.setattr(
+        main_tui_launch, "_setup_tui_worktree", lambda: {"path": str(worktree)}
+    )
+    monkeypatch.setattr(
+        main_tui_launch,
+        "_make_tui_argv",
         lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")),
     )
-    monkeypatch.setattr(main_mod.subprocess, "call",
+    monkeypatch.setattr(
+        main_mod.subprocess,
+        "call",
         lambda argv, cwd=None, env=None: captured.update({"env": env}) or 1,
     )
 
@@ -326,7 +385,9 @@ def test_launch_tui_worktree_still_outranks_the_launch_cwd(monkeypatch, main_mod
 
 
 @pytest.mark.parametrize("backend", ["local", "docker"])
-def test_launch_tui_local_session_starts_in_launch_dir_not_terminal_cwd(monkeypatch, main_mod, tmp_path, backend):
+def test_launch_tui_local_session_starts_in_launch_dir_not_terminal_cwd(
+    monkeypatch, main_mod, tmp_path, backend
+):
     """A local TUI follows the classic CLI rule: the launch dir beats an absolute terminal.cwd (#84015).
 
     Remote backends keep terminal.cwd: the launch dir names nothing on the sandbox.
@@ -336,7 +397,8 @@ def test_launch_tui_local_session_starts_in_launch_dir_not_terminal_cwd(monkeypa
     configured.mkdir()
     launch.mkdir()
     (Path(os.environ["CLAWK_HOME"]) / "config.yaml").write_text(
-        f"terminal:\n  backend: {backend}\n  cwd: {configured}\n", encoding="utf-8")
+        f"terminal:\n  backend: {backend}\n  cwd: {configured}\n", encoding="utf-8"
+    )
     monkeypatch.delenv("TERMINAL_ENV", raising=False)
     monkeypatch.delenv("TERMINAL_CWD", raising=False)
     monkeypatch.setenv("CLAWK_PYTHON", sys.executable)
@@ -344,10 +406,14 @@ def test_launch_tui_local_session_starts_in_launch_dir_not_terminal_cwd(monkeypa
     monkeypatch.chdir(launch)
 
     captured = {}
-    monkeypatch.setattr(main_tui_launch, "_make_tui_argv",
+    monkeypatch.setattr(
+        main_tui_launch,
+        "_make_tui_argv",
         lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")),
     )
-    monkeypatch.setattr(main_mod.subprocess, "call",
+    monkeypatch.setattr(
+        main_mod.subprocess,
+        "call",
         lambda argv, cwd=None, env=None: captured.update({"env": env}) or 1,
     )
 
@@ -364,21 +430,36 @@ def test_launch_tui_local_session_starts_in_launch_dir_not_terminal_cwd(monkeypa
 
 
 @pytest.mark.parametrize("flag", ["CLAWK_SAFE_MODE", "CLAWK_IGNORE_USER_CONFIG"])
-def test_launch_tui_bypass_without_model_refuses_before_the_tui_starts(monkeypatch, main_mod, capsys, flag):
+def test_launch_tui_bypass_without_model_refuses_before_the_tui_starts(
+    monkeypatch, main_mod, capsys, flag
+):
     """`clawk --tui --safe-mode` (or an exported CLAWK_IGNORE_USER_CONFIG=1) reads no profile
     default model: the owner refuses session.create with bare invalid_params, so the launcher must
     say "pass --model" before spawning the TUI, as classic chat does."""
     monkeypatch.setenv(flag, "1")
     monkeypatch.delenv("CLAWK_MODEL", raising=False)
-    monkeypatch.setenv("CLAWK_PYTHON", sys.executable)  # never resolve a python over the real PATH
-    monkeypatch.setattr(main_tui_launch, "_make_tui_argv",
-                        lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")))
+    monkeypatch.setenv(
+        "CLAWK_PYTHON", sys.executable
+    )  # never resolve a python over the real PATH
+    monkeypatch.setattr(
+        main_tui_launch,
+        "_make_tui_argv",
+        lambda tui_dir, tui_dev: (["node", "dist/entry.js"], Path(".")),
+    )
     spawned = []
-    monkeypatch.setattr(main_mod.subprocess, "call", lambda argv, cwd=None, env=None: spawned.append(env) or 0)
+    monkeypatch.setattr(
+        main_mod.subprocess,
+        "call",
+        lambda argv, cwd=None, env=None: spawned.append(env) or 0,
+    )
     with pytest.raises(SystemExit) as exc:
         main_mod._launch_tui()
     assert exc.value.code == 1 and spawned == []
     assert "pass --model explicitly" in capsys.readouterr().err
     with pytest.raises(SystemExit):
         main_mod._launch_tui(model="stub-model")
-    assert spawned and spawned[-1][flag] == "1" and spawned[-1]["CLAWK_MODEL"] == "stub-model"
+    assert (
+        spawned
+        and spawned[-1][flag] == "1"
+        and spawned[-1]["CLAWK_MODEL"] == "stub-model"
+    )

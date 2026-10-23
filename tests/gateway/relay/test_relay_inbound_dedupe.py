@@ -63,6 +63,7 @@ def loop():
 def _record(bucket, event):
     async def _coro():
         bucket.append(event)
+
     return _coro()
 
 
@@ -169,7 +170,6 @@ class TestWireLevelReplayDedupe:
         if "source" in overrides:
             raw["source"] = {**self.WIRE["source"], **overrides["source"]}
         return _event_from_wire(raw)
-
 
     def test_replayed_wire_frame_dropped(self, loop):
         adapter, _ = _connected_adapter()

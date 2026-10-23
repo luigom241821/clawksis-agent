@@ -22,7 +22,11 @@ class CopilotACPProfile(ProviderProfile):
         return CopilotACPClient(**client_kwargs)
 
     def fetch_models(
-        self, *, api_key: str | None = None, base_url: str | None = None, timeout: float = 15.0
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout: float = 15.0,
     ) -> list[str] | None:
         """Enabled models advertised by a short-lived signed-in ACP session (``session/new``).
 
@@ -38,8 +42,11 @@ class CopilotACPProfile(ProviderProfile):
             if not str(creds.get("base_url") or "").startswith("acp://"):
                 return None
             client = self.create_client(
-                api_key=creds.get("api_key"), base_url=creds.get("base_url"),
-                command=creds.get("command"), args=creds.get("args"))
+                api_key=creds.get("api_key"),
+                base_url=creds.get("base_url"),
+                command=creds.get("command"),
+                args=creds.get("args"),
+            )
             return client.list_models(timeout_seconds=timeout) or None
         except Exception:
             # Missing CLI (AuthError), refused --acp / failed spawn (RuntimeError), probe
@@ -48,7 +55,8 @@ class CopilotACPProfile(ProviderProfile):
 
 
 copilot_acp = CopilotACPProfile(
-    name="copilot-acp", aliases=("github-copilot-acp", "copilot-acp-agent"),
+    name="copilot-acp",
+    aliases=("github-copilot-acp", "copilot-acp-agent"),
     api_mode="chat_completions",  # ACP subprocess uses chat_completions routing
     env_vars=(),  # Managed by ACP subprocess
     base_url="acp://copilot",  # ACP internal scheme

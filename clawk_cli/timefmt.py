@@ -19,7 +19,9 @@ EPOCH_MIN = 0.0
 EPOCH_MAX = 4_200_000_000.0
 
 
-def coerce_epoch(value: Any, *, session_id: Optional[str] = None, field: str = "timestamp") -> Optional[float]:
+def coerce_epoch(
+    value: Any, *, session_id: Optional[str] = None, field: str = "timestamp"
+) -> Optional[float]:
     """A stored timestamp cell as float epoch seconds, or ``None`` when it cannot be trusted.
 
     Numbers, numeric strings and ``datetime`` are accepted; anything else, non-finite values and
@@ -35,14 +37,22 @@ def coerce_epoch(value: Any, *, session_id: Optional[str] = None, field: str = "
     except (TypeError, ValueError):
         ts = math.nan
     if not (EPOCH_MIN <= ts <= EPOCH_MAX):  # also False for nan
-        logger.warning("Ignoring corrupt %s %r%s", field, value, f" on session {session_id}" if session_id else "")
+        logger.warning(
+            "Ignoring corrupt %s %r%s",
+            field,
+            value,
+            f" on session {session_id}" if session_id else "",
+        )
         return None
     return ts
 
 
 def relative_time(ts, *, session_id: Optional[str] = None) -> str:
     """Format a timestamp as relative time (e.g., '2h ago', 'yesterday'); ``?`` when unset or corrupt."""
-    if not ts or (ts := coerce_epoch(ts, session_id=session_id, field="last_active")) is None:
+    if (
+        not ts
+        or (ts := coerce_epoch(ts, session_id=session_id, field="last_active")) is None
+    ):
         return "?"
     delta = _time.time() - ts
     if delta < 60:

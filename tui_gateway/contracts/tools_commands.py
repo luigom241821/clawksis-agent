@@ -44,8 +44,12 @@ class SystemBatteryResult(Result):
     category: BatteryCategory = BatteryCategory.dim
 
 
-method("system.battery", params=SystemBatteryParams, result=SystemBatteryResult,
-       doc="Host battery for the status bar; always resolves, ``available: false`` when unreadable.")
+method(
+    "system.battery",
+    params=SystemBatteryParams,
+    result=SystemBatteryResult,
+    doc="Host battery for the status bar; always resolves, ``available: false`` when unreadable.",
+)
 
 
 # ── process.* / agents.list ───────────────────────────────────────────────────────────────────
@@ -61,9 +65,13 @@ class ProcessStopResult(Result):
     delegations: int = 0
 
 
-method("process.stop", params=ProcessStopParams, result=ProcessStopResult,
-       doc="``/stop``: on the shared owner, kill the background processes ``session_id`` owns (required); a "
-           "standalone sidecar kills every process it holds. Answers the count killed.")
+method(
+    "process.stop",
+    params=ProcessStopParams,
+    result=ProcessStopResult,
+    doc="``/stop``: on the shared owner, kill the background processes ``session_id`` owns (required); a "
+    "standalone sidecar kills every process it holds. Answers the count killed.",
+)
 
 
 class AgentsListParams(Params):
@@ -81,8 +89,12 @@ class AgentsListResult(Result):
     processes: list[AgentProcessRow] = Field(default_factory=list)
 
 
-method("agents.list", params=AgentsListParams, result=AgentsListResult,
-       doc="Registry-wide background process summary for ``/agents``.")
+method(
+    "agents.list",
+    params=AgentsListParams,
+    result=AgentsListResult,
+    doc="Registry-wide background process summary for ``/agents``.",
+)
 
 
 class ProcessListParams(Params):
@@ -118,8 +130,12 @@ class ProcessListResult(Result):
     processes: list[ProcessEntry] = Field(default_factory=list)
 
 
-method("process.list", params=ProcessListParams, result=ProcessListResult,
-       doc="Background processes owned by the caller's session (desktop status stack poll).")
+method(
+    "process.list",
+    params=ProcessListParams,
+    result=ProcessListResult,
+    doc="Background processes owned by the caller's session (desktop status stack poll).",
+)
 
 
 class ProcessKillParams(Params):
@@ -148,8 +164,12 @@ class ProcessKillResult(_Open):
     error: str | None = None
 
 
-method("process.kill", params=ProcessKillParams, result=ProcessKillResult,
-       doc="Kill one background process the caller's session owns and return its output snapshot.")
+method(
+    "process.kill",
+    params=ProcessKillParams,
+    result=ProcessKillResult,
+    doc="Kill one background process the caller's session owns and return its output snapshot.",
+)
 
 
 # ── shell.exec / cli.exec ─────────────────────────────────────────────────────────────────────
@@ -166,8 +186,12 @@ class ShellExecResult(Result):
     code: int
 
 
-method("shell.exec", params=ShellExecParams, result=ShellExecResult,
-       doc="Run a safe (non-dangerous) shell command captured for ``!cmd`` / inline substitution.")
+method(
+    "shell.exec",
+    params=ShellExecParams,
+    result=ShellExecResult,
+    doc="Run a safe (non-dangerous) shell command captured for ``!cmd`` / inline substitution.",
+)
 
 
 class CanonicalShellExecParams(Params):
@@ -176,9 +200,13 @@ class CanonicalShellExecParams(Params):
     profile: str | None = None
 
 
-canonical_method("shell.exec", params=CanonicalShellExecParams, result=ShellExecResult,
-                 doc="Ink ``!cmd`` / ``{!cmd}`` on the shared owner: one safe command for a local session, in "
-                     "its frozen launch cwd (``gateway/session_shell.py``).")
+canonical_method(
+    "shell.exec",
+    params=CanonicalShellExecParams,
+    result=ShellExecResult,
+    doc="Ink ``!cmd`` / ``{!cmd}`` on the shared owner: one safe command for a local session, in "
+    "its frozen launch cwd (``gateway/session_shell.py``).",
+)
 
 
 class CliExecParams(Params):
@@ -194,8 +222,12 @@ class CliExecResult(Result):
     hint: str | None = None
 
 
-method("cli.exec", params=CliExecParams, result=CliExecResult,
-       doc="Run ``clawk <argv>`` non-interactively and capture its output; ``blocked`` explains a refusal.")
+method(
+    "cli.exec",
+    params=CliExecParams,
+    result=CliExecResult,
+    doc="Run ``clawk <argv>`` non-interactively and capture its output; ``blocked`` explains a refusal.",
+)
 
 
 # ── command catalog / resolve / dispatch / slash.exec ─────────────────────────────────────────
@@ -244,8 +276,12 @@ class CommandsCatalogResult(Result):
     plugin_commands: dict[str, str] = Field(default_factory=dict)
 
 
-method("commands.catalog", params=CommandsCatalogParams, result=CommandsCatalogResult,
-       doc="Categorized slash metadata (registry, quick, plugin, skill) for completion menus.")
+method(
+    "commands.catalog",
+    params=CommandsCatalogParams,
+    result=CommandsCatalogResult,
+    doc="Categorized slash metadata (registry, quick, plugin, skill) for completion menus.",
+)
 
 
 class CommandResolveParams(Params):
@@ -259,8 +295,12 @@ class CommandResolveResult(Result):
     category: str
 
 
-method("command.resolve", params=CommandResolveParams, result=CommandResolveResult,
-       doc="Canonical registry command for a name or alias.")
+method(
+    "command.resolve",
+    params=CommandResolveParams,
+    result=CommandResolveResult,
+    doc="Canonical registry command for a name or alias.",
+)
 
 
 class DispatchType(WireEnum):
@@ -295,8 +335,12 @@ class CommandDispatchResult(Result):
     status: str | None = None
 
 
-method("command.dispatch", params=CommandDispatchParams, result=CommandDispatchResult,
-       doc="Run a quick/plugin/bundle/skill/built-in slash command and answer a structured directive.")
+method(
+    "command.dispatch",
+    params=CommandDispatchParams,
+    result=CommandDispatchResult,
+    doc="Run a quick/plugin/bundle/skill/built-in slash command and answer a structured directive.",
+)
 
 
 class SlashExecParams(Params):
@@ -320,8 +364,12 @@ class SlashExecResult(Result):
     status: str | None = None
 
 
-method("slash.exec", params=SlashExecParams, result=SlashExecResult,
-       doc="Execute a slash command against the session's slash worker (or a live/plugin shortcut).")
+method(
+    "slash.exec",
+    params=SlashExecParams,
+    result=SlashExecResult,
+    doc="Execute a slash command against the session's slash worker (or a live/plugin shortcut).",
+)
 
 
 # ── insights.get / config.show ────────────────────────────────────────────────────────────────
@@ -338,8 +386,12 @@ class InsightsGetResult(Result):
     messages: int
 
 
-method("insights.get", params=InsightsGetParams, result=InsightsGetResult,
-       doc="Session/message counts over the last ``days`` for the (optionally scoped) profile store.")
+method(
+    "insights.get",
+    params=InsightsGetParams,
+    result=InsightsGetResult,
+    doc="Session/message counts over the last ``days`` for the (optionally scoped) profile store.",
+)
 
 
 class ConfigShowParams(Params):
@@ -357,8 +409,12 @@ class ConfigShowResult(Result):
     sections: list[ConfigSection] = Field(default_factory=list)
 
 
-method("config.show", params=ConfigShowParams, result=ConfigShowResult,
-       doc="Masked, display-ready config summary (model / agent / environment rows).")
+method(
+    "config.show",
+    params=ConfigShowParams,
+    result=ConfigShowResult,
+    doc="Masked, display-ready config summary (model / agent / environment rows).",
+)
 
 
 # ── rollback.* ────────────────────────────────────────────────────────────────────────────────
@@ -380,8 +436,12 @@ class RollbackListResult(Result):
     checkpoints: list[RollbackCheckpoint] = Field(default_factory=list)
 
 
-method("rollback.list", params=RollbackListParams, result=RollbackListResult,
-       doc="Checkpoints for the session's cwd; ``enabled: false`` when checkpointing is off.")
+method(
+    "rollback.list",
+    params=RollbackListParams,
+    result=RollbackListResult,
+    doc="Checkpoints for the session's cwd; ``enabled: false`` when checkpointing is off.",
+)
 
 
 class RollbackRestoreParams(Params):
@@ -412,8 +472,12 @@ class RollbackRestoreResult(_Open):
     debug: JsonValue | None = None
 
 
-method("rollback.restore", params=RollbackRestoreParams, result=RollbackRestoreResult,
-       doc="Restore the working tree (or one file) to a checkpoint by hash or 1-based index.")
+method(
+    "rollback.restore",
+    params=RollbackRestoreParams,
+    result=RollbackRestoreResult,
+    doc="Restore the working tree (or one file) to a checkpoint by hash or 1-based index.",
+)
 
 
 class RollbackDiffParams(Params):
@@ -428,8 +492,12 @@ class RollbackDiffResult(Result):
     rendered: str | None = None
 
 
-method("rollback.diff", params=RollbackDiffParams, result=RollbackDiffResult,
-       doc="Diff between a checkpoint and the working tree, with an ANSI rendering sized to the TUI.")
+method(
+    "rollback.diff",
+    params=RollbackDiffParams,
+    result=RollbackDiffResult,
+    doc="Diff between a checkpoint and the working tree, with an ANSI rendering sized to the TUI.",
+)
 
 
 # ── cron.manage ───────────────────────────────────────────────────────────────────────────────
@@ -473,7 +541,9 @@ class CronJobRow(_Open):
     last_run_at: str | None = None
     last_status: str | None = None
     last_delivery_error: str | None = None
-    last_delivery_unverified: list[str] | None = None  # unconfirmed ``platform:chat_id[:thread_id]`` targets
+    last_delivery_unverified: list[str] | None = (
+        None  # unconfirmed ``platform:chat_id[:thread_id]`` targets
+    )
     last_fire_error: str | None = None
     last_error: str | None = None
     enabled: bool = True
@@ -525,8 +595,12 @@ class CronManageResult(_Open):
     removed_job: CronRemovedJob | None = None
 
 
-method("cron.manage", params=CronManageParams, result=CronManageResult,
-       doc="List/add/remove/pause/resume cron jobs in the (optionally profile-scoped) cron store.")
+method(
+    "cron.manage",
+    params=CronManageParams,
+    result=CronManageResult,
+    doc="List/add/remove/pause/resume cron jobs in the (optionally profile-scoped) cron store.",
+)
 
 
 # ── browser.manage ────────────────────────────────────────────────────────────────────────────
@@ -556,6 +630,10 @@ class BrowserManageResult(Result):
     browser_use: bool | None = None
 
 
-method("browser.manage", params=BrowserManageParams, result=BrowserManageResult,
-       doc="Inspect, attach to, or drop the CDP browser the tools use, or switch Browser Use mode "
-           "(``use``, applies to new sessions); ``messages`` narrate a connect.")
+method(
+    "browser.manage",
+    params=BrowserManageParams,
+    result=BrowserManageResult,
+    doc="Inspect, attach to, or drop the CDP browser the tools use, or switch Browser Use mode "
+    "(``use``, applies to new sessions); ``messages`` narrate a connect.",
+)

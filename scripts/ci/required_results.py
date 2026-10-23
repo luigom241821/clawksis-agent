@@ -55,8 +55,11 @@ def evaluate_gate(
     allowed_skips: list[str] = []
     entries = needs or {}
     lanes = (entries.get("detect") or {}).get("outputs") or {}
-    required = {job for job, keys in _UPDATE_CONSUMER_LANES.items()
-                if any(lanes.get(key) in ("true", True) for key in keys)}
+    required = {
+        job
+        for job, keys in _UPDATE_CONSUMER_LANES.items()
+        if any(lanes.get(key) in ("true", True) for key in keys)
+    }
     if not entries:
         failed.append("<no-needs>")
     failed.extend(required - entries.keys())
@@ -64,7 +67,11 @@ def evaluate_gate(
         result = (info or {}).get("result")
         if result == "success":
             continue
-        if result == "skipped" and name not in required and (not release or name in EXCLUDED_JOBS):
+        if (
+            result == "skipped"
+            and name not in required
+            and (not release or name in EXCLUDED_JOBS)
+        ):
             allowed_skips.append(name)
             continue
         failed.append(name)
@@ -77,10 +84,14 @@ def evaluate_gate(
 
 def compact_results(needs: dict[str, dict[str, Any]] | None) -> dict[str, str]:
     """{job_name: result} for every entry, for the PR comment assembler."""
-    return {name: (info or {}).get("result", "") for name, info in (needs or {}).items()}
+    return {
+        name: (info or {}).get("result", "") for name, info in (needs or {}).items()
+    }
 
 
-def render_report(needs: dict[str, dict[str, Any]] | None, verdict: dict[str, Any]) -> list[str]:
+def render_report(
+    needs: dict[str, dict[str, Any]] | None, verdict: dict[str, Any]
+) -> list[str]:
     """Per-job lines plus ::error:: annotations for the failed set."""
     lines: list[str] = []
     for name in sorted(needs or {}):
@@ -115,7 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     for line in render_report(needs, verdict):
         print(line)
     if verdict["ok"]:
-        print("All checks passed" if args.release else "All checks passed (or were skipped)")
+        print(
+            "All checks passed"
+            if args.release
+            else "All checks passed (or were skipped)"
+        )
     return 0 if verdict["ok"] else 1
 
 

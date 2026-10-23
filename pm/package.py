@@ -106,7 +106,6 @@ class Package:
         keeps its minor line and takes patch/build identity from the asset)."""
         return []
 
-
     def fetch_url(self, version: str, target: str) -> str:
         if not self.url:
             raise InstallError(self.name, "package has no download url")
@@ -155,7 +154,9 @@ class Package:
             return ""
         return self._binary_reason(binary, entry, target)
 
-    def repair_staged_verification(self, entry: Path, target: str, reason: str) -> tuple[str, str]:
+    def repair_staged_verification(
+        self, entry: Path, target: str, reason: str
+    ) -> tuple[str, str]:
         """Install-time remediation for a failed staged verification.
 
         verify() is also used by read-only inspection paths such as
@@ -170,7 +171,10 @@ class Package:
         """'' when the binary is present and arch-plausible on target."""
         if not binary.is_file():
             return _missing_reason(binary, entry)
-        if machine_matches_binary(binary, target) is False and target not in self.emulated_arch_targets:
+        if (
+            machine_matches_binary(binary, target) is False
+            and target not in self.emulated_arch_targets
+        ):
             return f"{binary.name} is not a {target} binary"
         return ""
 
@@ -230,22 +234,26 @@ def deb_data_tar(name: str, archive: Path) -> bytes:
         raise InstallError(name, f"not an ar archive: {archive.name}")
     offset = 8
     while offset + 60 <= len(raw):
-        hdr = raw[offset:offset + 60]
+        hdr = raw[offset : offset + 60]
         member = hdr[0:16].decode("ascii", "replace").rstrip()
         try:
             size = int(hdr[48:58].decode("ascii", "replace").strip())
         except ValueError:
             raise InstallError(name, f"bad ar member size in {archive.name}")
         start = offset + 60
-        data = raw[start:start + size]
+        data = raw[start : start + size]
         if member.startswith("data.tar"):
             if member.endswith(".lzma"):
-                raise InstallError(name, f"unsupported data compression {member} in {archive.name}")
+                raise InstallError(
+                    name, f"unsupported data compression {member} in {archive.name}"
+                )
             if member.endswith(".zst"):
                 try:
                     from compression import zstd
                 except ImportError:
-                    raise InstallError(name, f"{member} in {archive.name} needs Python 3.14+ (zstd)")
+                    raise InstallError(
+                        name, f"{member} in {archive.name} needs Python 3.14+ (zstd)"
+                    )
                 return zstd.decompress(data)
             return data
         offset = start + size + (size % 2)
@@ -367,7 +375,9 @@ def _probe_reason(binary: Path, proc: subprocess.CompletedProcess) -> str:
     """Why a --version probe failed: the exit code plus output tail."""
     out = (proc.stdout or b"") + (proc.stderr or b"")
     tail = out.decode(errors="replace").strip()[-300:]
-    return f"{native(binary)} --version exited {proc.returncode}" + (f": {tail}" if tail else "")
+    return f"{native(binary)} --version exited {proc.returncode}" + (
+        f": {tail}" if tail else ""
+    )
 
 
 class Runner:

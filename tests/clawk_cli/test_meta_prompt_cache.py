@@ -5,6 +5,7 @@ import pytest
 from clawk_cli.providers import determine_api_mode, host_mandated_api_mode
 from clawk_cli import runtime_provider as rp
 
+
 class TestHostMandatedMetaResponses:
     @pytest.mark.parametrize(
         "url",
@@ -51,38 +52,77 @@ class TestHostMandatedMetaResponses:
 
     def test_determine_api_mode_meta_via_named_custom(self):
         assert determine_api_mode("meta", "https://api.meta.ai/v1") == "codex_responses"
-        assert determine_api_mode("custom", "https://api.meta.ai/v1") == "codex_responses"
-        assert determine_api_mode("generic", "https://generic.example.com/v1") == "chat_completions"
+        assert (
+            determine_api_mode("custom", "https://api.meta.ai/v1") == "codex_responses"
+        )
+        assert (
+            determine_api_mode("generic", "https://generic.example.com/v1")
+            == "chat_completions"
+        )
 
     def test_determine_api_mode_meta_with_trailing_slash(self):
-        assert determine_api_mode("meta", "https://api.meta.ai/v1/") == "codex_responses"
+        assert (
+            determine_api_mode("meta", "https://api.meta.ai/v1/") == "codex_responses"
+        )
 
     def test_runtime_detect_meta(self):
-        assert rp._detect_api_mode_for_url("https://api.meta.ai/v1") == "codex_responses"
-        assert rp._detect_api_mode_for_url("https://api.meta.ai/v1/chat/completions") == "codex_responses"
-        assert rp._detect_api_mode_for_url("https://API.META.AI/v1") == "codex_responses"
+        assert (
+            rp._detect_api_mode_for_url("https://api.meta.ai/v1") == "codex_responses"
+        )
+        assert (
+            rp._detect_api_mode_for_url("https://api.meta.ai/v1/chat/completions")
+            == "codex_responses"
+        )
+        assert (
+            rp._detect_api_mode_for_url("https://API.META.AI/v1") == "codex_responses"
+        )
 
     def test_runtime_detect_meta_rejects_spoofs(self):
-        assert rp._detect_api_mode_for_url("https://api.meta.ai.attacker.test/v1") is None
+        assert (
+            rp._detect_api_mode_for_url("https://api.meta.ai.attacker.test/v1") is None
+        )
         assert rp._detect_api_mode_for_url("https://proxy.test/api.meta.ai/v1") is None
         assert rp._detect_api_mode_for_url("https://meta.ai/v1") is None
         assert rp._detect_api_mode_for_url("https://generic.example.com/v1") is None
 
     def test_fallback_api_mode_meta(self):
-        assert rp._fallback_api_mode("meta", "https://api.meta.ai/v1", "muse-spark-1.2") == "codex_responses"
-        assert rp._fallback_api_mode("custom", "https://api.meta.ai/v1", "muse-spark-1.2") == "codex_responses"
+        assert (
+            rp._fallback_api_mode("meta", "https://api.meta.ai/v1", "muse-spark-1.2")
+            == "codex_responses"
+        )
+        assert (
+            rp._fallback_api_mode("custom", "https://api.meta.ai/v1", "muse-spark-1.2")
+            == "codex_responses"
+        )
         # generic still chat
-        assert rp._fallback_api_mode("custom", "https://generic.example.com/v1", "muse-spark-1.2") == "chat_completions"
+        assert (
+            rp._fallback_api_mode(
+                "custom", "https://generic.example.com/v1", "muse-spark-1.2"
+            )
+            == "chat_completions"
+        )
+
 
 class TestMetaConfigRoundtrip:
     def test_providers_meta_api_mode_roundtrip(self):
         from clawk_cli.config import _normalize_custom_provider_entry
 
-        entry = {"name": "Meta", "base_url": "https://api.meta.ai/v1", "api_mode": "codex_responses"}
+        entry = {
+            "name": "Meta",
+            "base_url": "https://api.meta.ai/v1",
+            "api_mode": "codex_responses",
+        }
         normalized = _normalize_custom_provider_entry(entry)
         assert normalized.get("api_mode") == "codex_responses"
 
-        entry2 = {"name": "Meta", "base_url": "https://api.meta.ai/v1", "transport": "codex_responses"}
+        entry2 = {
+            "name": "Meta",
+            "base_url": "https://api.meta.ai/v1",
+            "transport": "codex_responses",
+        }
         normalized2 = _normalize_custom_provider_entry(entry2)
         # transport is lifted to api_mode via _normalize path or at least preserved
-        assert normalized2.get("api_mode") == "codex_responses" or normalized2.get("transport") == "codex_responses"
+        assert (
+            normalized2.get("api_mode") == "codex_responses"
+            or normalized2.get("transport") == "codex_responses"
+        )

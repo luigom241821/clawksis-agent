@@ -56,12 +56,16 @@ def _serve(handler_cls):
         t.join(timeout=5)
 
 
-def _handler(status: int = 200,
-             content_type: str | None = "text/html; charset=utf-8",
-             body: bytes = b"<html>x</html>", head_status=None, record=None,
-             post_content_type: str | None = None,
-             post_body: bytes = b"",
-             post_status: int | None = None):
+def _handler(
+    status: int = 200,
+    content_type: str | None = "text/html; charset=utf-8",
+    body: bytes = b"<html>x</html>",
+    head_status=None,
+    record=None,
+    post_content_type: str | None = None,
+    post_body: bytes = b"",
+    post_status: int | None = None,
+):
     """Build a BaseHTTPRequestHandler that replies with the given shape.
 
     ``head_status`` lets HEAD return a different status than GET (to exercise
@@ -116,13 +120,17 @@ def _handler(status: int = 200,
 # Reject: non-MCP content types on a 2xx response
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("content_type", [
-    "text/html; charset=utf-8",
-    "text/html",
-    "text/plain",
-    "application/xml",
-    "text/HTML",  # case-insensitivity
-])
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "text/html; charset=utf-8",
+        "text/html",
+        "text/plain",
+        "application/xml",
+        "text/HTML",  # case-insensitivity
+    ],
+)
 def test_non_mcp_content_type_raises(content_type):
     task = _make_task("bad_srv")
     with _serve(_handler(status=200, content_type=content_type)) as base:
@@ -136,12 +144,16 @@ def test_non_mcp_content_type_raises(content_type):
 # Pass-through: valid MCP content types, ambiguous, and error responses
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("content_type", [
-    "application/json",
-    "application/json; charset=utf-8",
-    "text/event-stream",
-    "TEXT/EVENT-STREAM",
-])
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "application/json",
+        "application/json; charset=utf-8",
+        "text/event-stream",
+        "TEXT/EVENT-STREAM",
+    ],
+)
 def test_valid_mcp_content_types_pass(content_type):
     task = _make_task()
     with _serve(_handler(status=200, content_type=content_type, body=b"{}")) as base:
@@ -167,6 +179,7 @@ def test_missing_content_type_passes():
 # ---------------------------------------------------------------------------
 # OAuth server: why the run() guard is needed
 # ---------------------------------------------------------------------------
+
 
 def test_oauth_server_html_response_raises_without_skip():
     """_preflight_content_type raises NonMcpEndpointError for 200 text/html.
@@ -218,7 +231,9 @@ def test_run_skips_preflight_for_oauth(monkeypatch):
 
         # Bypass URL validation so the test doesn't need a live network.
         monkeypatch.setattr(_mcp_errors, "_validate_remote_mcp_url", lambda n, u: None)
-        monkeypatch.setattr(_mcp.MCPServerTask, "_preflight_content_type", _fake_preflight)
+        monkeypatch.setattr(
+            _mcp.MCPServerTask, "_preflight_content_type", _fake_preflight
+        )
         monkeypatch.setattr(_mcp.MCPServerTask, "_run_http", _fake_run_http)
 
         task = _mcp.MCPServerTask("hospitable-test")
@@ -253,15 +268,19 @@ def test_run_skips_preflight_when_skip_preflight_set(monkeypatch):
             raise asyncio.CancelledError()
 
         monkeypatch.setattr(_mcp_errors, "_validate_remote_mcp_url", lambda n, u: None)
-        monkeypatch.setattr(_mcp.MCPServerTask, "_preflight_content_type", _fake_preflight)
+        monkeypatch.setattr(
+            _mcp.MCPServerTask, "_preflight_content_type", _fake_preflight
+        )
         monkeypatch.setattr(_mcp.MCPServerTask, "_run_http", _fake_run_http)
 
         task = _mcp.MCPServerTask("skip-preflight-test")
         with pytest.raises(asyncio.CancelledError):
-            await task.run({
-                "url": "https://mcp.example.com/mcp",
-                "skip_preflight": True,
-            })
+            await task.run(
+                {
+                    "url": "https://mcp.example.com/mcp",
+                    "skip_preflight": True,
+                }
+            )
 
     asyncio.run(_inner())
     assert preflight_calls == [], (
@@ -272,8 +291,6 @@ def test_run_skips_preflight_when_skip_preflight_set(monkeypatch):
 # ---------------------------------------------------------------------------
 # POST probe fallback for POST-only MCP servers
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -334,18 +351,29 @@ def test_run_strict_redirect_headers_reaches_preflight_boundary(monkeypatch):
     async def _fake_run_http(self, config):
         raise asyncio.CancelledError()
 
-    monkeypatch.setattr(_mcp_errors, "_validate_remote_mcp_url", lambda n, u: None)  # loopback URL
+    monkeypatch.setattr(
+        _mcp_errors, "_validate_remote_mcp_url", lambda n, u: None
+    )  # loopback URL
     monkeypatch.setattr(_mcp.MCPServerTask, "_run_http", _fake_run_http)
 
-    with _serve(_recording_mcp_handler(seen)) as target, \
-            _serve(_redirect_handler(target)) as origin:
+    with (
+        _serve(_recording_mcp_handler(seen)) as target,
+        _serve(_redirect_handler(target)) as origin,
+    ):
         task = _mcp.MCPServerTask("strict-preflight-test")
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(task.run({
-                "url": f"{origin}/mcp",
-                "headers": {"Authorization": "Bearer s3cr3t", "X-API-Key": "k3y"},
-                "strict_redirect_headers": True,
-            }))
+            asyncio.run(
+                task.run(
+                    {
+                        "url": f"{origin}/mcp",
+                        "headers": {
+                            "Authorization": "Bearer s3cr3t",
+                            "X-API-Key": "k3y",
+                        },
+                        "strict_redirect_headers": True,
+                    }
+                )
+            )
     assert seen, "the redirect target was never probed"
     assert "authorization" not in seen and "x-api-key" not in seen
     assert "s3cr3t" not in seen.values() and "k3y" not in seen.values()
@@ -369,15 +397,22 @@ def test_streamable_http_client_strips_credentials_on_redirect(monkeypatch):
 
     monkeypatch.setattr(_mcp, "streamable_http_client", _fake_streams)
 
-    with _serve(_recording_mcp_handler(seen)) as target, \
-            _serve(_redirect_handler(target)) as origin:
+    with (
+        _serve(_recording_mcp_handler(seen)) as target,
+        _serve(_redirect_handler(target)) as origin,
+    ):
+
         async def _drive():
             cm = task._streamable_http_transport(
                 f"{origin}/mcp",
                 {"Authorization": "Bearer s3cr3t", "X-API-Key": "k3y"},
-                connect_timeout=5.0, ssl_verify=True, client_cert=None,
-                oauth_auth=None, strict_cfg_headers=True,
-                configured_header_names={"x-api-key"})
+                connect_timeout=5.0,
+                ssl_verify=True,
+                client_cert=None,
+                oauth_auth=None,
+                strict_cfg_headers=True,
+                configured_header_names={"x-api-key"},
+            )
             async with cm:
                 await captured["client"].get(f"{origin}/mcp")
 

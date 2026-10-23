@@ -1,14 +1,17 @@
 """Writable runner initialization, separate from process ownership."""
+
 from __future__ import annotations
 
 import logging
 
 logger = logging.getLogger("gateway.run")  # log-record parity with gateway/run.py
 
+
 class GatewayRuntimeInitMixin:
     def _init_runtime_settings(self) -> None:
         """Load ephemeral per-call config (prefill, reasoning, busy modes, timeouts, routing)."""
-        from gateway.run import (Dict, Optional, _load_gateway_config)
+        from gateway.run import Dict, Optional, _load_gateway_config
+
         self._prefill_messages = self._load_prefill_messages()
         self._reasoning_config = self._load_reasoning_config()
         self._service_tier = self._load_service_tier()
@@ -18,7 +21,9 @@ class GatewayRuntimeInitMixin:
         # Secondary-profile busy modes snapshotted at multiplex startup; handlers never reread config.
         self._busy_input_modes_by_profile: Dict[str, str] = {}
         self._busy_text_modes_by_profile: Dict[str, str] = {}
-        self._busy_text_timing = self._busy_text_timing_from_config(_load_gateway_config())
+        self._busy_text_timing = self._busy_text_timing_from_config(
+            _load_gateway_config()
+        )
         self._busy_text_timing_by_profile: Dict[str, tuple[float, float]] = {}
         self._human_delay = self._human_delay_from_config(_load_gateway_config())
         self._human_delay_by_profile: Dict[str, Optional[tuple[int, int]]] = {}
@@ -27,29 +32,54 @@ class GatewayRuntimeInitMixin:
         # boot — launchd fixes it at load — and applied only to signal-driven stops, which are the
         # only stops launchd times. See _load_launchd_exit_timeout().
         self._stop_requested_by_signal = False
-        self._launchd_exit_timeout_s = self._load_launchd_exit_timeout(self._restart_drain_timeout)
+        self._launchd_exit_timeout_s = self._load_launchd_exit_timeout(
+            self._restart_drain_timeout
+        )
         self._restart_after_turn_timeout = self._load_restart_after_turn_timeout()
         self._cron_drain_timeout = self._load_cron_drain_timeout()
-        self._signal_interrupt_grace_timeout = self._load_signal_interrupt_grace_timeout()
+        self._signal_interrupt_grace_timeout = (
+            self._load_signal_interrupt_grace_timeout()
+        )
         self._provider_routing = self._load_provider_routing()
         self._fallback_model = self._load_fallback_model()
 
     def _init_session_store(self) -> None:
         """Build the SessionStore (with process-registry reset guard), its async facade and the router."""
-        from gateway.run import (AsyncSessionStore, DeliveryRouter, SessionStore)
+        from gateway.run import AsyncSessionStore, DeliveryRouter, SessionStore
         from tools.process_registry import process_registry
+
         self.session_store = SessionStore(
-            self.config.sessions_dir, self.config,
+            self.config.sessions_dir,
+            self.config,
             has_active_processes_fn=lambda key: process_registry.has_active_for_session(
-                key))
+                key
+            ),
+        )
         # Loop-side boundary: sync helpers use ``session_store`` directly; async handlers await this facade.
         self._async_session_store = AsyncSessionStore(self.session_store)
         self.delivery_router = DeliveryRouter(self.config)
 
     def _init_lifecycle_state(self) -> None:
         """Initialise run/exit/restart flags, per-session state, and completion-delivery bookkeeping."""
-        from gateway.run import (Dict, List, MessageEvent, Optional, OrderedDict, Platform, SessionSource, SessionState, SessionTurnLeaseRegistry, asyncio, concurrent, threading, time)
-        self._running = self._exit_cleanly = self._exit_with_failure = self._draining = False
+        from gateway.run import (
+            Dict,
+            List,
+            MessageEvent,
+            Optional,
+            OrderedDict,
+            Platform,
+            SessionSource,
+            SessionState,
+            SessionTurnLeaseRegistry,
+            asyncio,
+            concurrent,
+            threading,
+            time,
+        )
+
+        self._running = self._exit_cleanly = self._exit_with_failure = (
+            self._draining
+        ) = False
         self._gateway_loop: Optional[asyncio.AbstractEventLoop] = None
         self._shutdown_event = asyncio.Event()
         self._exit_reason: Optional[str] = None
@@ -61,8 +91,12 @@ class GatewayRuntimeInitMixin:
         self._external_drain_active = False
         # ``_signal_initiated_shutdown``: SIGTERM/SIGINT with no planned-stop/takeover marker (container,
         # OOM, bare kill); _stop_impl must NOT persist gateway_state=stopped or container_boot won't restart.
-        self._restart_requested = self._signal_initiated_shutdown = self._restart_task_started = False
-        self._restart_detached = self._restart_via_service = self._detached_restart_helper_started = False
+        self._restart_requested = self._signal_initiated_shutdown = (
+            self._restart_task_started
+        ) = False
+        self._restart_detached = self._restart_via_service = (
+            self._detached_restart_helper_started
+        ) = False
         self._restart_command_source: Optional[SessionSource] = None
         # Construction clock: bounds the /restart redelivery guard's window (missing dedup marker = stale).
         self._startup_time: float = time.time()
@@ -74,7 +108,9 @@ class GatewayRuntimeInitMixin:
         self._executor_lock = threading.Lock()
         self._executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
         # Best-effort session housekeeping runs on its OWN pool; see _run_housekeeping_in_executor.
-        self._housekeeping_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+        self._housekeeping_executor: Optional[concurrent.futures.ThreadPoolExecutor] = (
+            None
+        )
         # Set on gateway stop so the recreate-on-shutdown path can't resurrect the pool.
         self._executor_closing = False
         # ALL per-session state lives here (gateway/session_state.py); use _session_state / _peek_session_state.
@@ -121,20 +157,27 @@ class GatewayRuntimeInitMixin:
         # exactly-once across a crash; durable replay state stays owned by tools.async_delegation.
         self._completion_delivery_lock = threading.Lock()
         self._completion_deliveries_inflight: set[tuple[str, str, object]] = set()
-        self._completion_deliveries_delivered: OrderedDict[tuple[str, str, object], None] = OrderedDict()
+        self._completion_deliveries_delivered: OrderedDict[
+            tuple[str, str, object], None
+        ] = OrderedDict()
         self._completion_delivery_retention = 2048
         # Agent-triggered terminal completions from one conversation often land in the same scheduler
         # tick; hold them briefly so the agent gets one synthetic turn instead of one per process.
         # See #70300.
-        self._completion_notification_batches: dict[tuple[str, ...], list[tuple[str, dict, asyncio.Future]]] = {}
-        self._completion_notification_batch_tasks: dict[tuple[str, ...], asyncio.Task] = {}
+        self._completion_notification_batches: dict[
+            tuple[str, ...], list[tuple[str, dict, asyncio.Future]]
+        ] = {}
+        self._completion_notification_batch_tasks: dict[
+            tuple[str, ...], asyncio.Task
+        ] = {}
         self._completion_notification_batch_flush_tasks: set[asyncio.Task] = set()
         self._completion_notification_batch_window = 0.1
         self._completion_notification_batches_stopping = False
 
     def _init_runtime_caches(self) -> None:
         """Agent cache, profile identity, Teams runtime, failed-platform tracking, slash-confirm counter."""
-        from gateway.run import (Any, Dict, Optional, OrderedDict, Platform, threading)
+        from gateway.run import Any, Dict, Optional, OrderedDict, Platform, threading
+
         # AIAgent per session preserves prompt caching (fresh agent per message ~10x cost on Anthropic).
         # Value: (AIAgent, config_signature); LRU cap in _enforce_agent_cache_cap, TTL in expiry watcher.
         self._agent_cache: OrderedDict[str, tuple] = OrderedDict()
@@ -158,11 +201,22 @@ class GatewayRuntimeInitMixin:
         # Slash-confirm state lives in tools.slash_confirm (module-level) so adapters resolve callbacks
         # without a runner backref; local counter keeps confirm_ids compact (64-byte callback_data caps).
         import itertools
+
         self._slash_confirm_counter = itertools.count(1)
 
     def _init_session_db(self) -> None:
         """Open the session DB for the active scope and run opportunistic state.db / checkpoint maintenance."""
-        from gateway.run import (Any, Dict, Path, _SESSION_DB_UNPINNED, _housekeeping_chore, _housekeeping_state_db_maintenance, _launch_sessions_dir, threading)
+        from gateway.run import (
+            Any,
+            Dict,
+            Path,
+            _SESSION_DB_UNPINNED,
+            _housekeeping_chore,
+            _housekeeping_state_db_maintenance,
+            _launch_sessions_dir,
+            threading,
+        )
+
         # Session DB is a property caching one AsyncSessionDB per path (a handle bound here would pin the
         # root home under multiplex); priming here keeps startup diagnostics at init.
         # Initialize session database for session_search tool support. Same frozen-handle class of bug as
@@ -173,14 +227,18 @@ class GatewayRuntimeInitMixin:
         self._session_db_handles: Dict[Path, Any] = {}
         self._session_db_handles_lock = threading.Lock()
         from gateway.session_db_recovery import RecoverableHandleCache
+
         self._session_db_handle_cache = RecoverableHandleCache(
-            handles=self._session_db_handles, lock=self._session_db_handles_lock)
+            handles=self._session_db_handles, lock=self._session_db_handles_lock
+        )
         try:
             self._open_session_db_for_active_scope(raise_on_error=True)
         except Exception as e:
             # WARNING (not DEBUG) so it lands in errors.log; else an NFS CLAWK_HOME silently loses /resume etc.
             logger.warning("SQLite session store not available: %s", e, exc_info=True)
-            self._session_db_init_error = str(e)  # surfaced on the home channel(s) once connected
+            self._session_db_init_error = str(
+                e
+            )  # surfaced on the home channel(s) once connected
 
         # Opportunistic state.db maintenance (prune + optional VACUUM), at most once per min_interval_hours.
         # A few blocking seconds per day is fine for a long-lived gateway; failures log, never raise.
@@ -194,11 +252,17 @@ class GatewayRuntimeInitMixin:
         # state.db was never pruned or vacuumed by anybody, and the launch profile's
         # retention_days/auto_prune decided whether it happened at all.
         from gateway.run_profile_reconcile import _for_each_served_profile
-        _launch_sessions = _launch_sessions_dir(self.config)  # resolved OUTSIDE any profile scope
+
+        _launch_sessions = _launch_sessions_dir(
+            self.config
+        )  # resolved OUTSIDE any profile scope
         _housekeeping_chore(
             "state.db startup maintenance",
             lambda: _for_each_served_profile(
-                self, lambda _label: _housekeeping_state_db_maintenance(_launch_sessions)))
+                self,
+                lambda _label: _housekeeping_state_db_maintenance(_launch_sessions),
+            ),
+        )
         # Checkpoint store pruning is a housekeeping chore (``_housekeeping_checkpoint_prune``), not a
         # constructor step: its ``git gc`` repacks the whole store (tens of seconds on a GB store) and
         # here it ran before the control socket, adapters and the code_sha stamp — so the first
@@ -206,11 +270,13 @@ class GatewayRuntimeInitMixin:
 
     def _init_registries_and_clocks(self) -> None:
         """Pairing stores, hook registry, voice modes, background-task set, liveness and idle clocks."""
-        from gateway.run import (Dict, List, Optional, asyncio, time)
+        from gateway.run import Dict, List, Optional, asyncio, time
+
         # ``pairing_store``: global/default store (CLI, callers without profile context); ``pairing_stores``:
         # per-profile map ``authz_mixin._is_user_authorized`` routes through (one whitelist per profile).
         from gateway.pairing import PairingStore
         from gateway.hooks import ProfileHookRegistries
+
         self.pairing_store = PairingStore()
         self.pairing_stores: Dict[str, PairingStore] = {}
         # One HookRegistry per served profile home, resolved from the active scope at emit time.

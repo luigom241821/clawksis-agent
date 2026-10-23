@@ -6,6 +6,7 @@ declare an ``extra_headers`` dict that must land on the OpenAI client's
 credential swaps / rebuilds. Values may carry credentials — the plumbing must
 never log them.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent
@@ -43,9 +44,3 @@ def test_custom_provider_extra_headers_applied_at_construction(mock_openai):
     headers = agent._client_kwargs["default_headers"]
     assert headers["CF-Access-Client-Id"] == "xxxx.access"
     assert headers["X-Client-Name"] == "clawksis-agent"
-
-
-
-
-
-

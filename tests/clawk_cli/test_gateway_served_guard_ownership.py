@@ -37,8 +37,11 @@ def _use_home(monkeypatch, fake_home: Path, clawk_home: Path) -> None:
 
 def _publish_host(monkeypatch, home: Path, served: tuple[str, ...]) -> HostGateway:
     gateway = HostGateway(4242, home, served)
-    monkeypatch.setattr(host_attach, "host_gateway_serving",
-                        lambda profile, **kw: gateway if gateway.serves(profile) else None)
+    monkeypatch.setattr(
+        host_attach,
+        "host_gateway_serving",
+        lambda profile, **kw: gateway if gateway.serves(profile) else None,
+    )
     return gateway
 
 
@@ -52,6 +55,7 @@ def _refusal(gw) -> tuple[bool, str]:
 @pytest.fixture
 def gw(monkeypatch):
     from clawk_cli import gateway as gw
+
     monkeypatch.setattr(gw, "_is_service_installed", lambda: True)
     return gw
 
@@ -72,7 +76,9 @@ def test_foreign_tenants_host_gateway_never_serves_this_home(tmp_path, monkeypat
     assert (refused, out) == (False, "")
 
 
-def test_own_standalone_gateway_is_not_a_multiplexer_refusing_its_restart(tmp_path, monkeypatch, gw):
+def test_own_standalone_gateway_is_not_a_multiplexer_refusing_its_restart(
+    tmp_path, monkeypatch, gw
+):
     """#120871 (T1/T6 standalone fleet): argus's own host record is ours to restart."""
     fake_home = tmp_path / "fakehome"
     own_home = fake_home / ".clawksis" / "profiles" / "argus"
@@ -86,7 +92,9 @@ def test_own_standalone_gateway_is_not_a_multiplexer_refusing_its_restart(tmp_pa
     gw._guard_named_profile_under_multiplexer()  # must not sys.exit(78)
 
 
-def test_satellite_served_by_same_tenants_multiplexer_is_still_refused(tmp_path, monkeypatch, gw):
+def test_satellite_served_by_same_tenants_multiplexer_is_still_refused(
+    tmp_path, monkeypatch, gw
+):
     """Control: the default multiplexer of OUR tenant lists coder -> refused, hint names the owner."""
     fake_home = tmp_path / "fakehome"
     root = fake_home / ".clawksis"
@@ -103,7 +111,9 @@ def test_satellite_served_by_same_tenants_multiplexer_is_still_refused(tmp_path,
     assert exc.value.code == gw.GATEWAY_FATAL_CONFIG_EXIT_CODE
 
 
-def test_cron_status_restart_hint_names_the_profile_hosting_the_scheduler(tmp_path, monkeypatch, gw):
+def test_cron_status_restart_hint_names_the_profile_hosting_the_scheduler(
+    tmp_path, monkeypatch, gw
+):
     """#120871: `clawk -p argus cron status` on a standalone fleet points at argus, not default."""
     from gateway.host_topology import HostGatewayTopology
     from clawk_cli import cron as cron_mod
@@ -114,8 +124,10 @@ def test_cron_status_restart_hint_names_the_profile_hosting_the_scheduler(tmp_pa
     _publish_host(monkeypatch, own_home, ("argus",))
     monkeypatch.setattr(cron_mod, "_active_cron_provider_name", lambda: "builtin")
     monkeypatch.setattr("clawk_cli.profiles.get_active_profile_name", lambda: "argus")
-    monkeypatch.setattr("gateway.host_topology.host_gateway_serving",
-                        lambda name=None: HostGatewayTopology(4242, ("argus",), "host_record"))
+    monkeypatch.setattr(
+        "gateway.host_topology.host_gateway_serving",
+        lambda name=None: HostGatewayTopology(4242, ("argus",), "host_record"),
+    )
     seen = []
 
     class _Stop(Exception):

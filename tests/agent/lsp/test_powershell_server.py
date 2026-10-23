@@ -5,6 +5,7 @@ bundle (GitHub release zip) driven by a ``pwsh`` bootstrap script, not a
 single binary on PATH. These tests cover the registry wiring plus the
 two-prerequisite spawn logic (pwsh host + module bundle).
 """
+
 from __future__ import annotations
 
 import os
@@ -23,14 +24,6 @@ def test_powershell_extensions_route_to_pses():
         s = find_server_for_file(ext)
         assert s is not None, ext
         assert s.server_id == "powershell"
-
-
-
-
-
-
-
-
 
 
 def _make_fake_bundle(root) -> str:
@@ -57,8 +50,6 @@ def test_spawn_builds_command_with_bundle_via_env(monkeypatch, tmp_path):
     # -NonInteractive / -NoProfile keep the host from hanging on a prompt.
     assert "-NonInteractive" in spec.command
     assert "-NoProfile" in spec.command
-
-
 
 
 def test_bundle_path_init_override_not_leaked_into_init_options(monkeypatch, tmp_path):

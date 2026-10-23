@@ -16,13 +16,24 @@ from agent.error_classifier import FailoverReason
 from clawk_constants import display_clawk_home
 
 # Failure codes minted by loop sites that are not provider verdicts (see module docstring).
-SITE_FAILURE_CODES = frozenset({
-    "context_overflow", "truncated", "invalid_response", "empty_response", "loop_error",
-    "interpreter_shutdown", "session_busy", "gateway_connection", "host_error",
-})
+SITE_FAILURE_CODES = frozenset(
+    {
+        "context_overflow",
+        "truncated",
+        "invalid_response",
+        "empty_response",
+        "loop_error",
+        "interpreter_shutdown",
+        "session_busy",
+        "gateway_connection",
+        "host_error",
+    }
+)
 
 
-def stamp_failure(result: dict[str, Any], reason: str, retryable: bool) -> dict[str, Any]:
+def stamp_failure(
+    result: dict[str, Any], reason: str, retryable: bool
+) -> dict[str, Any]:
     """Stamp the UI verdict fields on a terminal result (in place; returns it)."""
     result["failure_reason"] = reason
     result["failure_retryable"] = bool(retryable)
@@ -36,9 +47,7 @@ def stamp_failure(result: dict[str, Any], reason: str, retryable: bool) -> dict[
 # (``agent/conversation_loop.py::run_conversation``) and the gateway's own writer
 # (``gateway/run_turn.py::_hmwa_close_failed_turn``) say the same thing.
 
-FAILED_TURN_NOTICE = (
-    "Your request was not processed. Send it again if you still want me to carry it out."
-)
+FAILED_TURN_NOTICE = "Your request was not processed. Send it again if you still want me to carry it out."
 PARTIAL_FAILED_TURN_NOTICE = (
     "This turn did not complete. Some actions may already have run; verify their effects "
     "before resending."
@@ -61,8 +70,15 @@ FAILED_TURN_DISPLAY_KIND = "failed_turn"
 def untyped_failed_turn_display_kind(role: Any, content: Any) -> Optional[str]:
     """``FAILED_TURN_DISPLAY_KIND`` for a boundary row persisted before the closers typed it
     (exact notice text, so a real reply quoting it stays a reply); read-side only."""
-    if role == "assistant" and isinstance(content, str) and content.strip() in (
-        FAILED_TURN_NOTICE, PARTIAL_FAILED_TURN_NOTICE, AUTOMATION_INTERRUPTED_NOTICE,
+    if (
+        role == "assistant"
+        and isinstance(content, str)
+        and content.strip()
+        in (
+            FAILED_TURN_NOTICE,
+            PARTIAL_FAILED_TURN_NOTICE,
+            AUTOMATION_INTERRUPTED_NOTICE,
+        )
     ):
         return FAILED_TURN_DISPLAY_KIND
     return None
@@ -72,7 +88,8 @@ def failed_turn_notice(turn_messages: Any) -> str:
     """Boundary copy for a failed turn: never claim "not processed" when a tool may have run."""
     for row in turn_messages or ():
         if isinstance(row, dict) and (
-            row.get("role") == "tool" or (row.get("role") == "assistant" and row.get("tool_calls"))
+            row.get("role") == "tool"
+            or (row.get("role") == "assistant" and row.get("tool_calls"))
         ):
             return PARTIAL_FAILED_TURN_NOTICE
     return FAILED_TURN_NOTICE
@@ -86,6 +103,7 @@ def provider_label_for(provider: Any) -> str:
 
 
 # ---- turn_exit_reason → failure verdict (finalize_turn stamps these) --------------------------
+
 
 class ExitFailure(NamedTuple):
     """Verdict for a loop exit. ``fails_turn`` False = advisory: the descriptor fields are
@@ -103,7 +121,12 @@ class ExitFailure(NamedTuple):
 _EXIT_REASON_FAILURES: tuple[tuple[str, str, bool, bool], ...] = (
     # Advisory: the reasoning-only text may literally be the answer, and cron stays silent.
     ("empty_response_exhausted", "empty_response", True, False),
-    ("all_retries_exhausted_no_response", FailoverReason.server_error.value, True, True),
+    (
+        "all_retries_exhausted_no_response",
+        FailoverReason.server_error.value,
+        True,
+        True,
+    ),
     # #55316/#54756: the loop stopped on a tool tail with no follow-up text; the
     # finalizer synthesizes the visible close and fails the turn.
     ("pending_tool_result", "loop_error", True, True),
@@ -124,9 +147,12 @@ _EXIT_REASON_FAILURES: tuple[tuple[str, str, bool, bool], ...] = (
 # Provider error code carried inside an HTTP-200 body → classifier reason.
 _INVALID_RESPONSE_CODES: dict[int, str] = {
     429: FailoverReason.rate_limit.value,
-    500: FailoverReason.server_error.value, 502: FailoverReason.server_error.value,
-    503: FailoverReason.overloaded.value, 529: FailoverReason.overloaded.value,
-    504: FailoverReason.timeout.value, 524: FailoverReason.timeout.value,
+    500: FailoverReason.server_error.value,
+    502: FailoverReason.server_error.value,
+    503: FailoverReason.overloaded.value,
+    529: FailoverReason.overloaded.value,
+    504: FailoverReason.timeout.value,
+    524: FailoverReason.timeout.value,
 }
 
 
@@ -139,7 +165,11 @@ def invalid_response_failure_reason(response: Any) -> str:
     if code is None and isinstance(err, dict):
         code = err.get("code")
     try:
-        return _INVALID_RESPONSE_CODES.get(int(code), "invalid_response") if code is not None else "invalid_response"
+        return (
+            _INVALID_RESPONSE_CODES.get(int(code), "invalid_response")
+            if code is not None
+            else "invalid_response"
+        )
     except (TypeError, ValueError):
         return "invalid_response"
 
@@ -278,7 +308,9 @@ FAILURE_CAUSE_GLOSS: dict[str, str] = {
 }
 
 
-def failure_cause_gloss(reason: Any, *, subject: str = "it", possessive: str = "its") -> Optional[str]:
+def failure_cause_gloss(
+    reason: Any, *, subject: str = "it", possessive: str = "its"
+) -> Optional[str]:
     """Plain clause for a classified ``failure_reason``; None when the reason has no gloss."""
     template = FAILURE_CAUSE_GLOSS.get(str(reason or ""))
     return template.format(subject=subject, possessive=possessive) if template else None
@@ -305,7 +337,8 @@ _FAILURE_CODE_COPY: dict[str, str] = {
     ),
     "loop_error": (
         "Clawksis hit repeated errors and stopped this turn so it wouldn't keep retrying. "
-        + _NEXT_STEPS_LOOP + "\n\nDetails: {detail}"
+        + _NEXT_STEPS_LOOP
+        + "\n\nDetails: {detail}"
     ),
     "interpreter_shutdown": (
         "Clawksis was shutting down and stopped this turn. Your conversation is saved — reopen "
@@ -359,7 +392,8 @@ _ONE_OFF_COPY: dict[str, str] = {
     # Rides failure_reason="loop_error" (advisory; the turn is incomplete, not failed).
     "local_processing_error": (
         "Clawksis hit an internal error while handling the model's reply and stopped this turn. "
-        + _NEXT_STEPS_LOOP + "\n\nDetails: {detail}"
+        + _NEXT_STEPS_LOOP
+        + "\n\nDetails: {detail}"
     ),
     "max_iterations_no_summary": (
         "I ran out of steps for this turn ({limit} tool calls) before finishing, and couldn't "
@@ -379,17 +413,32 @@ def site_copy(code: str, **fields: Any) -> str:
     return _SITE_COPY[code].format_map(_Defaults(fields))
 
 
-def exhausted_copy(reason: str, *, label: str, attempts: int, summary: str, reset_seconds: Optional[float] = None) -> str:
+def exhausted_copy(
+    reason: str,
+    *,
+    label: str,
+    attempts: int,
+    summary: str,
+    reset_seconds: Optional[float] = None,
+) -> str:
     """Chat copy once retries + fallback are exhausted (``max_retries_exhausted_result``). A rate
     limit whose reset window is known names it: an 8.6h plan quota is not "wait a minute" (#89401)."""
     first_attempt = attempts == 1 and reason in _EXHAUSTED_FIRST_ATTEMPT_LEADS
-    lead = (_EXHAUSTED_FIRST_ATTEMPT_LEADS if first_attempt else _EXHAUSTED_LEADS).get(
-        reason, _EXHAUSTED_DEFAULT_LEAD).format(label=label, attempts=attempts)
+    lead = (
+        (_EXHAUSTED_FIRST_ATTEMPT_LEADS if first_attempt else _EXHAUSTED_LEADS)
+        .get(reason, _EXHAUSTED_DEFAULT_LEAD)
+        .format(label=label, attempts=attempts)
+    )
     # The free-tier cutoff (one attempt) fires on any cooldown over a minute, so it always names the reset.
-    if reset_seconds is not None and (reset_seconds >= 120 or first_attempt and reset_seconds > 0):
+    if reset_seconds is not None and (
+        reset_seconds >= 120 or first_attempt and reset_seconds > 0
+    ):
         from agent.retry_utils import format_reset_window
-        situation = (f"its usage limit resets in {format_reset_window(reset_seconds)}. "
-                     "Send /retry after that, or switch models with /model.")
+
+        situation = (
+            f"its usage limit resets in {format_reset_window(reset_seconds)}. "
+            "Send /retry after that, or switch models with /model."
+        )
     else:
         situation = f"it looks temporarily unavailable. {_NEXT_STEPS_RETRY}"
     return (
@@ -442,7 +491,12 @@ def relogin_command_hint(provider: Any) -> str:
 
 
 def nonretryable_copy(
-    classified: Any, *, provider: Any, model: Any, summary: str, prefix_suggestion: Optional[str] = None,
+    classified: Any,
+    *,
+    provider: Any,
+    model: Any,
+    summary: str,
+    prefix_suggestion: Optional[str] = None,
 ) -> str:
     """Chat copy for a terminal non-retryable rejection (auth, model missing, TLS, generic 4xx)."""
     label = provider_label_for(provider)
@@ -451,14 +505,22 @@ def nonretryable_copy(
 
         template = _AUTH_COPY[auth_kind(str(provider or ""))]
     else:
-        template = _NONRETRYABLE_COPY.get(classified.reason.value, _NONRETRYABLE_DEFAULT_COPY)
+        template = _NONRETRYABLE_COPY.get(
+            classified.reason.value, _NONRETRYABLE_DEFAULT_COPY
+        )
     prefix_hint = (
         f" If you typed the name yourself it may be missing its vendor prefix — did you mean "
         f"'{prefix_suggestion}'?"
-        if prefix_suggestion else ""
+        if prefix_suggestion
+        else ""
     )
-    body = template.format(label=label, model=model, home=display_clawk_home(), prefix_hint=prefix_hint,
-                           relogin=oauth_relogin_command(provider))
+    body = template.format(
+        label=label,
+        model=model,
+        home=display_clawk_home(),
+        prefix_hint=prefix_hint,
+        relogin=oauth_relogin_command(provider),
+    )
     return f"{body}\n\nProvider said: {summary}"
 
 

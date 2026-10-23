@@ -36,11 +36,17 @@ logger = logging.getLogger(__name__)
 ARCHIVE_PREFIX = "refs/clawk/archive/"
 _SUBJECT = "clawk worktree archive: "
 _IDENTITY = {
-    "GIT_AUTHOR_NAME": "Clawksis worktree archive", "GIT_AUTHOR_EMAIL": "clawk-archive@localhost",
-    "GIT_COMMITTER_NAME": "Clawksis worktree archive", "GIT_COMMITTER_EMAIL": "clawk-archive@localhost",
+    "GIT_AUTHOR_NAME": "Clawksis worktree archive",
+    "GIT_AUTHOR_EMAIL": "clawk-archive@localhost",
+    "GIT_COMMITTER_NAME": "Clawksis worktree archive",
+    "GIT_COMMITTER_EMAIL": "clawk-archive@localhost",
 }
 # Raw bytes in, raw bytes out: no line-ending conversion on either side of the round trip.
-_RAW_CONFIG = (("core.autocrlf", "false"), ("core.safecrlf", "false"), ("core.eol", "lf"))
+_RAW_CONFIG = (
+    ("core.autocrlf", "false"),
+    ("core.safecrlf", "false"),
+    ("core.eol", "lf"),
+)
 
 
 class ArchiveError(RuntimeError):
@@ -59,6 +65,7 @@ class Archive:
 
 def _env(cwd, index: Optional[str] = None) -> dict:
     from clawk_cli._subprocess_compat import noninteractive_repo_git_env
+
     env = noninteractive_repo_git_env(cwd)
     if env is None:
         raise ArchiveError("git filter discovery failed")
@@ -74,10 +81,19 @@ def _env(cwd, index: Optional[str] = None) -> dict:
 
 
 def _run(args, cwd, env, timeout: float = 300, stdin_text: Optional[str] = None):
-    return subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True,  # windows-footgun: ok -- encoding passed on the next line
-                          encoding="utf-8", errors="surrogateescape", timeout=timeout,
-                          input=stdin_text, stdin=None if stdin_text is not None else subprocess.DEVNULL,
-                          check=False)
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        env=env,
+        capture_output=True,
+        text=True,  # windows-footgun: ok -- encoding passed on the next line
+        encoding="utf-8",
+        errors="surrogateescape",
+        timeout=timeout,
+        input=stdin_text,
+        stdin=None if stdin_text is not None else subprocess.DEVNULL,
+        check=False,
+    )
 
 
 def _ok(args, cwd, env, **kw) -> str:
@@ -99,10 +115,19 @@ def _raw_attrs(args, cwd, env, empty_tree: str, **kw) -> str:
 
 
 def _run_bytes(args, cwd, env, data: bytes, timeout: float = 300) -> bytes:
-    result = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, input=data,
-                            timeout=timeout, check=False)
+    result = subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        env=env,
+        capture_output=True,
+        input=data,
+        timeout=timeout,
+        check=False,
+    )
     if result.returncode != 0:
-        raise ArchiveError(f"git {args[0]} failed: {result.stderr.decode('utf-8', 'replace').strip()[-300:]}")
+        raise ArchiveError(
+            f"git {args[0]} failed: {result.stderr.decode('utf-8', 'replace').strip()[-300:]}"
+        )
     return result.stdout
 
 
@@ -125,7 +150,11 @@ def _rehash_raw(wt: Path, tenv) -> None:
     replaces ``.gitattributes``: ``info/attributes`` and ``core.attributesFile`` still apply.
     ``hash-object --no-filters`` skips all of it.
     """
-    entries = [e for e in _regular_entries(wt, tenv) if os.path.isfile(wt / e[2]) and not os.path.islink(wt / e[2])]
+    entries = [
+        e
+        for e in _regular_entries(wt, tenv)
+        if os.path.isfile(wt / e[2]) and not os.path.islink(wt / e[2])
+    ]
     if not entries:
         return
     shas: list[str] = []
@@ -133,14 +162,31 @@ def _rehash_raw(wt: Path, tenv) -> None:
     batch = [p for _m, _s, p in entries if "\n" not in p and not p.startswith('"')]
     if batch:
         data = "".join(p + "\n" for p in batch).encode("utf-8", "surrogateescape")
-        shas = _run_bytes(["hash-object", "-w", "--no-filters", "--stdin-paths"], wt, tenv, data).decode().split()
+        shas = (
+            _run_bytes(
+                ["hash-object", "-w", "--no-filters", "--stdin-paths"], wt, tenv, data
+            )
+            .decode()
+            .split()
+        )
     by_path = dict(zip(batch, shas))
     for _m, _s, path in entries:
         if path not in by_path:
             raw = (wt / path).read_bytes()
-            by_path[path] = _run_bytes(["hash-object", "-w", "--no-filters", "--stdin"], wt, tenv, raw).decode().strip()
+            by_path[path] = (
+                _run_bytes(
+                    ["hash-object", "-w", "--no-filters", "--stdin"], wt, tenv, raw
+                )
+                .decode()
+                .strip()
+            )
     info = "".join(f"{mode} {by_path[path]}\t{path}\0" for mode, _s, path in entries)
-    _run_bytes(["update-index", "-z", "--index-info"], wt, tenv, info.encode("utf-8", "surrogateescape"))
+    _run_bytes(
+        ["update-index", "-z", "--index-info"],
+        wt,
+        tenv,
+        info.encode("utf-8", "surrogateescape"),
+    )
 
 
 def _write_raw(dest: Path, env) -> None:
@@ -148,12 +194,17 @@ def _write_raw(dest: Path, env) -> None:
     entries = _regular_entries(dest, env)
     if not entries:
         return
-    out = _run_bytes(["cat-file", "--batch"], dest, env, "".join(f"{s}\n" for _m, s, _p in entries).encode())
+    out = _run_bytes(
+        ["cat-file", "--batch"],
+        dest,
+        env,
+        "".join(f"{s}\n" for _m, s, _p in entries).encode(),
+    )
     pos = 0
     for _mode, _sha, path in entries:
         header_end = out.index(b"\n", pos)
         size = int(out[pos:header_end].split()[2])
-        body = out[header_end + 1:header_end + 1 + size]
+        body = out[header_end + 1 : header_end + 1 + size]
         pos = header_end + 1 + size + 1
         target = dest / path
         if target.is_symlink():
@@ -190,13 +241,25 @@ def submodule_work(wt_path, *, gitlinks: bool = True) -> Optional[str]:
     """
     wt = Path(wt_path)
     env = {**_env(wt), "GIT_OPTIONAL_LOCKS": "0"}
-    modules = Path(_ok(["rev-parse", "--absolute-git-dir"], wt, env).strip()) / "modules"
+    modules = (
+        Path(_ok(["rev-parse", "--absolute-git-dir"], wt, env).strip()) / "modules"
+    )
     if modules.is_dir() and any(modules.iterdir()):
-        return f"{SUBMODULE_REASON}repository in {modules} would be deleted with the tree"
+        return (
+            f"{SUBMODULE_REASON}repository in {modules} would be deleted with the tree"
+        )
     staged = _ok(["ls-files", "--stage", "-z"], wt, env)
-    links = [e.split("\t", 1)[1] for e in staged.split("\0") if e.startswith("160000 ") and "\t" in e]
+    links = [
+        e.split("\t", 1)[1]
+        for e in staged.split("\0")
+        if e.startswith("160000 ") and "\t" in e
+    ]
     kept = [p for p in links if gitlinks or (wt / p / ".git").exists()]
-    return f"{SUBMODULE_REASON}{kept[0]} cannot be archived (gitlink only)" if kept else None
+    return (
+        f"{SUBMODULE_REASON}{kept[0]} cannot be archived (gitlink only)"
+        if kept
+        else None
+    )
 
 
 def staged_state(wt_path) -> str:
@@ -211,15 +274,21 @@ def staged_state(wt_path) -> str:
 
 def _digest_index(wt: Path, env) -> str:
     import hashlib
+
     env = {**env, "GIT_OPTIONAL_LOCKS": "0"}
-    return hashlib.sha256(_ok(["ls-files", "--stage", "-z"], wt, env).encode("utf-8", "surrogateescape")).hexdigest()
+    return hashlib.sha256(
+        _ok(["ls-files", "--stage", "-z"], wt, env).encode("utf-8", "surrogateescape")
+    ).hexdigest()
 
 
-def archive_preflight(wt_path, max_untracked_mb: float = 50) -> Optional[tuple[str, str]]:
+def archive_preflight(
+    wt_path, max_untracked_mb: float = 50
+) -> Optional[tuple[str, str]]:
     """``(keep-action, reason)`` when archiving and removing *wt_path* would lose something
     (``worktree_retention.removal_blocker``: submodule, embedded repository, per-worktree ref,
     an untracked file over the size cap), else None. Read-only."""
     from clawk_cli.worktree_retention import KEEP_UNARCHIVABLE, removal_blocker
+
     try:
         wt = Path(wt_path)
         skipped = _split_oversized(wt, _untracked(wt, _env(wt)), max_untracked_mb)
@@ -246,14 +315,27 @@ def _split_oversized(wt: Path, untracked: list[str], max_mb: float) -> list[dict
 def _create_ref(repo_root: str, name: str, sha: str, env) -> str:
     base = ARCHIVE_PREFIX + ref_safe(name)
     stamp = time.strftime("%Y%m%dT%H%M%S")
-    for ref in (base, f"{base}--{stamp}", *(f"{base}--{stamp}-{i}" for i in range(2, 50))):
+    for ref in (
+        base,
+        f"{base}--{stamp}",
+        *(f"{base}--{stamp}-{i}" for i in range(2, 50)),
+    ):
         # Empty old value = create only: two racing sweeps never overwrite each other's archive.
-        if _run(["update-ref", "-m", "clawk worktree archive", ref, sha, ""], repo_root, env).returncode == 0:
+        if (
+            _run(
+                ["update-ref", "-m", "clawk worktree archive", ref, sha, ""],
+                repo_root,
+                env,
+            ).returncode
+            == 0
+        ):
             return ref
     raise ArchiveError(f"could not create an archive ref for {name}")
 
 
-def snapshot_worktree(repo_root: str, wt_path, *, reason: str, max_untracked_mb: float = 50) -> Archive:
+def snapshot_worktree(
+    repo_root: str, wt_path, *, reason: str, max_untracked_mb: float = 50
+) -> Archive:
     """Archive the full working state of *wt_path*; raises :class:`ArchiveError` on any failure.
 
     Never writes the tree's real index or working files (temporary ``GIT_INDEX_FILE`` only).
@@ -265,12 +347,16 @@ def snapshot_worktree(repo_root: str, wt_path, *, reason: str, max_untracked_mb:
     if unsafe:
         raise ArchiveError(unsafe)
     head = _ok(["rev-parse", "--verify", "HEAD^{commit}"], wt, env).strip()
-    branch = _run(["symbolic-ref", "--short", "-q", "HEAD"], wt, env).stdout.strip() or None
+    branch = (
+        _run(["symbolic-ref", "--short", "-q", "HEAD"], wt, env).stdout.strip() or None
+    )
     git_dir = Path(_ok(["rev-parse", "--absolute-git-dir"], wt, env).strip())
     untracked = _untracked(wt, env)
     embedded = [p for p in untracked if p.endswith("/")]
     if embedded:
-        raise ArchiveError(f"untracked embedded repository {embedded[0].rstrip('/')} cannot be archived")
+        raise ArchiveError(
+            f"untracked embedded repository {embedded[0].rstrip('/')} cannot be archived"
+        )
     skipped = _split_oversized(wt, untracked, max_untracked_mb)
 
     token = f"clawk-archive-{os.getpid()}-{uuid.uuid4().hex[:8]}"
@@ -286,26 +372,61 @@ def snapshot_worktree(repo_root: str, wt_path, *, reason: str, max_untracked_mb:
         index_tree = _ok(["write-tree"], wt, tenv).strip()
         empty_tree = _ok(["mktree"], wt, env, stdin_text="").strip()
         specs = [":(top)"] + [f":(top,exclude,literal){s['path']}" for s in skipped]
-        pathspec.write_bytes(("\0".join(specs) + "\0").encode("utf-8", "surrogateescape"))
-        _raw_attrs(["add", "-A", "--pathspec-from-file", str(pathspec), "--pathspec-file-nul"],
-                   wt, tenv, empty_tree)
+        pathspec.write_bytes(
+            ("\0".join(specs) + "\0").encode("utf-8", "surrogateescape")
+        )
+        _raw_attrs(
+            ["add", "-A", "--pathspec-from-file", str(pathspec), "--pathspec-file-nul"],
+            wt,
+            tenv,
+            empty_tree,
+        )
         # Every blob from the exact bytes on disk (add converted them per attributes).
         _rehash_raw(wt, tenv)
         work_tree = _ok(["write-tree"], wt, tenv).strip()
-        index_commit = _ok(["commit-tree", index_tree, "-p", head, "-m", f"index of {wt.name}"], wt, env).strip()
-        meta = {"version": 1, "name": wt.name, "path": str(wt), "repo_root": str(repo_root),
-                "branch": branch, "head": head, "index_commit": index_commit,
-                "created": int(time.time()), "reason": reason, "skipped_untracked": skipped}
-        message = f"{_SUBJECT}{wt.name}\n\n{json.dumps(meta, indent=1, ensure_ascii=False)}\n"
-        sha = _ok(["commit-tree", work_tree, "-p", head, "-p", index_commit], wt, env,
-                  stdin_text=message).strip()
+        index_commit = _ok(
+            ["commit-tree", index_tree, "-p", head, "-m", f"index of {wt.name}"],
+            wt,
+            env,
+        ).strip()
+        meta = {
+            "version": 1,
+            "name": wt.name,
+            "path": str(wt),
+            "repo_root": str(repo_root),
+            "branch": branch,
+            "head": head,
+            "index_commit": index_commit,
+            "created": int(time.time()),
+            "reason": reason,
+            "skipped_untracked": skipped,
+        }
+        message = (
+            f"{_SUBJECT}{wt.name}\n\n{json.dumps(meta, indent=1, ensure_ascii=False)}\n"
+        )
+        sha = _ok(
+            ["commit-tree", work_tree, "-p", head, "-p", index_commit],
+            wt,
+            env,
+            stdin_text=message,
+        ).strip()
     finally:
-        for leftover in (tmp_index, tmp_index.with_name(tmp_index.name + ".lock"), pathspec):
+        for leftover in (
+            tmp_index,
+            tmp_index.with_name(tmp_index.name + ".lock"),
+            pathspec,
+        ):
             leftover.unlink(missing_ok=True)
     ref = _create_ref(repo_root, wt.name, sha, env)
     logger.info("Archived worktree %s -> %s (%s)", wt, ref, reason)
-    return Archive(ref=ref, name=ref[len(ARCHIVE_PREFIX):], sha=sha, created=meta["created"], meta=meta,
-                   staged=staged)
+    return Archive(
+        ref=ref,
+        name=ref[len(ARCHIVE_PREFIX) :],
+        sha=sha,
+        created=meta["created"],
+        meta=meta,
+        staged=staged,
+    )
 
 
 def _parse_meta(body: str) -> dict:
@@ -321,9 +442,17 @@ def list_archives(repo_root: str) -> list[Archive]:
     """Every archive in *repo_root*, newest first. Read-only; [] when git fails."""
     try:
         env = _env(repo_root)
-        out = _ok(["for-each-ref", "--sort=-creatordate",
-                   "--format=%(refname)%00%(objectname)%00%(creatordate:unix)%00%(contents:body)%00",
-                   ARCHIVE_PREFIX], repo_root, env, timeout=60)
+        out = _ok(
+            [
+                "for-each-ref",
+                "--sort=-creatordate",
+                "--format=%(refname)%00%(objectname)%00%(creatordate:unix)%00%(contents:body)%00",
+                ARCHIVE_PREFIX,
+            ],
+            repo_root,
+            env,
+            timeout=60,
+        )
     except (ArchiveError, OSError, subprocess.SubprocessError):
         return []
     archives = []
@@ -333,8 +462,15 @@ def list_archives(repo_root: str) -> list[Archive]:
             continue
         meta = _parse_meta(parts[3])
         created = float(meta.get("created") or parts[2] or 0)
-        archives.append(Archive(ref=parts[0], name=parts[0][len(ARCHIVE_PREFIX):], sha=parts[1],
-                                created=created, meta=meta))
+        archives.append(
+            Archive(
+                ref=parts[0],
+                name=parts[0][len(ARCHIVE_PREFIX) :],
+                sha=parts[1],
+                created=created,
+                meta=meta,
+            )
+        )
     return archives
 
 
@@ -345,11 +481,19 @@ def find_archive(repo_root: str, name: str) -> Optional[Archive]:
     for arc in archives:
         if arc.name == wanted:
             return arc
-    return next((a for a in archives if a.meta.get("name") == name or a.name == ref_safe(name)), None)
+    return next(
+        (a for a in archives if a.meta.get("name") == name or a.name == ref_safe(name)),
+        None,
+    )
 
 
-def prune_expired_archives(repo_root: str, retention_days: float, *, now: Optional[float] = None,
-                           dry_run: bool = False) -> list[str]:
+def prune_expired_archives(
+    repo_root: str,
+    retention_days: float,
+    *,
+    now: Optional[float] = None,
+    dry_run: bool = False,
+) -> list[str]:
     """Delete archive refs older than *retention_days* (0 keeps them forever)."""
     if not retention_days or retention_days <= 0:
         return []
@@ -366,16 +510,26 @@ def prune_expired_archives(repo_root: str, retention_days: float, *, now: Option
 
 
 def _branch_tip(repo_root: str, branch: str, env) -> Optional[str]:
-    result = _run(["rev-parse", "--verify", "-q", f"refs/heads/{branch}^{{commit}}"], repo_root, env)
+    result = _run(
+        ["rev-parse", "--verify", "-q", f"refs/heads/{branch}^{{commit}}"],
+        repo_root,
+        env,
+    )
     return result.stdout.strip() if result.returncode == 0 else None
 
 
 def _checked_out_branches(repo_root: str, env) -> set:
     out = _run(["worktree", "list", "--porcelain"], repo_root, env).stdout
-    return {line[len("branch refs/heads/"):] for line in out.splitlines() if line.startswith("branch refs/heads/")}
+    return {
+        line[len("branch refs/heads/") :]
+        for line in out.splitlines()
+        if line.startswith("branch refs/heads/")
+    }
 
 
-def _add_args(repo_root: str, dest: Path, branch: Optional[str], head: str, env) -> tuple[list, bool]:
+def _add_args(
+    repo_root: str, dest: Path, branch: Optional[str], head: str, env
+) -> tuple[list, bool]:
     """``worktree add`` argv restoring *branch* when that is safe -> (argv, detached)."""
     base = ["worktree", "add", "--no-checkout"]
     if branch:
@@ -395,7 +549,9 @@ def restore_archive(repo_root: str, name: str, target=None) -> dict:
     meta = arc.meta
     head = meta.get("head") or f"{arc.sha}^1"
     index_commit = meta.get("index_commit") or f"{arc.sha}^2"
-    dest = Path(target or meta.get("path") or Path(repo_root) / ".worktrees" / arc.name).absolute()
+    dest = Path(
+        target or meta.get("path") or Path(repo_root) / ".worktrees" / arc.name
+    ).absolute()
     if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
         raise ArchiveError(f"{dest} already exists; pass a different path")
     env = _env(repo_root)
@@ -410,6 +566,13 @@ def restore_archive(repo_root: str, name: str, target=None) -> dict:
     _ok(["read-tree", f"{index_commit}^{{tree}}"], dest, wenv)
     _run(["update-index", "-q", "--refresh"], dest, wenv)
     from clawk_cli.worktree_registry import record_worktree_repo
+
     record_worktree_repo(repo_root)
-    return {"path": str(dest), "branch": meta.get("branch"), "detached": detached, "head": head,
-            "ref": arc.ref, "skipped_untracked": meta.get("skipped_untracked") or []}
+    return {
+        "path": str(dest),
+        "branch": meta.get("branch"),
+        "detached": detached,
+        "head": head,
+        "ref": arc.ref,
+        "skipped_untracked": meta.get("skipped_untracked") or [],
+    }

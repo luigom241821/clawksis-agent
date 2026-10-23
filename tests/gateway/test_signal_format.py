@@ -11,21 +11,26 @@ from plugins.platforms.signal.signal_format import markdown_to_signal
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _m2s(text: str):
     """Shorthand: return (plain_text, styles)."""
     return markdown_to_signal(text)
+
 
 def _style_types(styles: list[str]) -> list[str]:
     """Extract just the STYLE part from '0:4:BOLD' strings."""
     return [s.rsplit(":", 1)[1] for s in styles]
 
+
 def _find_style(styles: list[str], style_type: str) -> list[str]:
     """Return only styles matching a given type."""
     return [s for s in styles if s.endswith(f":{style_type}")]
 
+
 # ===========================================================================
 # Basic formatting
 # ===========================================================================
+
 
 class TestMarkdownToSignalBasic:
     """Core formatting: bold, italic, strikethrough, monospace."""
@@ -54,9 +59,11 @@ class TestMarkdownToSignalBasic:
         assert len(styles) == 1
         assert styles[0].endswith(":MONOSPACE")
 
+
 # ===========================================================================
 # Italic false-positive regressions
 # ===========================================================================
+
 
 class TestItalicFalsePositives:
     """Regressions from signal-italic-false-positive-fix.md and
@@ -120,9 +127,11 @@ class TestItalicFalsePositives:
         assert text == "word"
         assert len(_find_style(styles, "ITALIC")) == 1
 
+
 # ===========================================================================
 # Style position accuracy
 # ===========================================================================
+
 
 class TestStylePositions:
     """Verify that start:length positions map to the correct text."""
@@ -142,9 +151,11 @@ class TestStylePositions:
         assert len(styles) == 1
         assert self._extract(text, styles[0]) == "world"
 
+
 # ===========================================================================
 # Edge cases
 # ===========================================================================
+
 
 class TestEdgeCases:
     """Tricky inputs that have caused issues or could regress."""
@@ -162,9 +173,11 @@ class TestEdgeCases:
         # Should not crash; any italic match would be a false positive
         assert "5" in text and "15" in text
 
+
 # ===========================================================================
 # signal-markdown-strip-patch: core conversion pipeline
 # ===========================================================================
+
 
 class TestMarkdownStripPatch:
     """Tests for the original signal-markdown-strip-patch.
@@ -210,9 +223,11 @@ class TestMarkdownStripPatch:
         # ## at end might remain if not at line start — that's ok
         # The important thing is styled markers are stripped
 
+
 # ===========================================================================
 # signal-streaming-patch: SUPPORTS_MESSAGE_EDITING and send() behavior
 # ===========================================================================
+
 
 class TestTableRealignment:
     """GFM pipe tables are re-aligned to a fixed monospace width and wrapped in a
@@ -230,20 +245,29 @@ class TestTableRealignment:
         for styles after it."""
         from wcwidth import wcswidth
 
-        text, styles = _m2s("| 名前 | Score |\n|---|---|\n| 東京 | 🚀 |\n| Bob | 1 |\n\n**tail**")
+        text, styles = _m2s(
+            "| 名前 | Score |\n|---|---|\n| 東京 | 🚀 |\n| Bob | 1 |\n\n**tail**"
+        )
         (mono,) = _find_style(styles, "MONOSPACE")
         block = self._u16_slice(text, mono)
         assert text == block + "\n\ntail"
         rows = block.split("\n")
-        assert len(rows) == 4 and all(wcswidth(row) == wcswidth(rows[0]) for row in rows)
+        assert len(rows) == 4 and all(
+            wcswidth(row) == wcswidth(rows[0]) for row in rows
+        )
         assert self._u16_slice(text, _find_style(styles, "BOLD")[0]) == "tail"
 
     def test_fenced_pipe_table_is_code_and_later_code_range_survives_realignment(self):
         """A pipe table inside ``` is code and must not be realigned or double-styled; a table's
         padding changes its length, and a code block after it still maps to its own text."""
-        text, styles = _m2s("| Name | Age |\n|---|---|\n| Alice | 30 |\n\n```\n| a | b |\n|---|---|\n| 1 | 22 |\n```")
+        text, styles = _m2s(
+            "| Name | Age |\n|---|---|\n| Alice | 30 |\n\n```\n| a | b |\n|---|---|\n| 1 | 22 |\n```"
+        )
         mono = _find_style(styles, "MONOSPACE")
         assert len(mono) == 2
-        assert self._u16_slice(text, mono[0]) == "| Name  | Age |\n|-------|-----|\n| Alice | 30  |"
+        assert (
+            self._u16_slice(text, mono[0])
+            == "| Name  | Age |\n|-------|-----|\n| Alice | 30  |"
+        )
         assert self._u16_slice(text, mono[1]) == "| a | b |\n|---|---|\n| 1 | 22 |"
         assert "cost | value" == _m2s("cost | value\nnot a table")[0].split("\n")[0]

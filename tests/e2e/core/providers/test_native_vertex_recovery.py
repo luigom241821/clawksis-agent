@@ -20,7 +20,9 @@ from typing import Any, Callable
 
 import pytest
 
-pytest.importorskip("google.auth", reason="Vertex minting needs google-auth (CI installs it)")
+pytest.importorskip(
+    "google.auth", reason="Vertex minting needs google-auth (CI installs it)"
+)
 
 from tests.e2e.core.providers._native_helpers import (
     ChatResult,
@@ -58,39 +60,86 @@ def _prompt_tokens(body: dict[str, Any]) -> int:
 
 
 def _summary(_rec: dict[str, Any]) -> Say:
-    return Say(f"## Goal\nKeep reading the seeded files ({SUMMARY_MARK}).\n## Progress\n- Read several files.\n", chunk_chars=64)
+    return Say(
+        f"## Goal\nKeep reading the seeded files ({SUMMARY_MARK}).\n## Progress\n- Read several files.\n",
+        chunk_chars=64,
+    )
 
 
 def _fake(tmp: Path, name: str, script: list[Any], **kw: Any) -> FakeVertex:
-    fake = FakeVertex(tmp / name / "fake", project=PROJECT, region=REGION, sa_project=SA_EMBEDDED_PROJECT,
-                      script=script, **kw)
+    fake = FakeVertex(
+        tmp / name / "fake",
+        project=PROJECT,
+        region=REGION,
+        sa_project=SA_EMBEDDED_PROJECT,
+        script=script,
+        **kw,
+    )
     fake.start()
     return fake
 
 
 def run_compaction(tmp: Path) -> dict[str, Any]:
-    script: list[Any] = [Call([("read_file", {"path": f"f{i}.txt"})]) for i in range(4)] + [Say(TURN1_FINAL)]
-    script += [Call([("read_file", {"path": f"f{i}.txt"})]) for i in range(4, 7)] + [Say(TURN2_FINAL)]
-    fake = _fake(tmp, "compaction", script, aux=_summary, prompt_tokens_fn=_prompt_tokens)
-    setup = clawk_setup(fake, context_length=CONTEXT_LENGTH, extra_config={
-        "compression": {"threshold_tokens": THRESHOLD_TOKENS, "protect_last_n": 4}})
+    script: list[Any] = [
+        Call([("read_file", {"path": f"f{i}.txt"})]) for i in range(4)
+    ] + [Say(TURN1_FINAL)]
+    script += [Call([("read_file", {"path": f"f{i}.txt"})]) for i in range(4, 7)] + [
+        Say(TURN2_FINAL)
+    ]
+    fake = _fake(
+        tmp, "compaction", script, aux=_summary, prompt_tokens_fn=_prompt_tokens
+    )
+    setup = clawk_setup(
+        fake,
+        context_length=CONTEXT_LENGTH,
+        extra_config={
+            "compression": {"threshold_tokens": THRESHOLD_TOKENS, "protect_last_n": 4}
+        },
+    )
     nh = make_home(tmp / "compaction" / "h", **setup)
     for i in range(7):
-        (nh.project / f"f{i}.txt").write_text(f"file {i} " + "lorem ipsum dolor " * 300 + "\n", encoding="utf-8")
+        (nh.project / f"f{i}.txt").write_text(
+            f"file {i} " + "lorem ipsum dolor " * 300 + "\n", encoding="utf-8"
+        )
     turn1 = run_chat(nh, "Read f0.txt through f3.txt.", env=fake.child_env(), args=ARGS)
     sid = latest_session(nh) if turn1.returncode == 0 else None
-    turn2 = run_chat(nh, "Now read f4.txt through f6.txt.", env=fake.child_env(), args=ARGS, resume=sid) if sid else None
+    turn2 = (
+        run_chat(
+            nh,
+            "Now read f4.txt through f6.txt.",
+            env=fake.child_env(),
+            args=ARGS,
+            resume=sid,
+        )
+        if sid
+        else None
+    )
     return {"fake": fake, "nh": nh, "turn1": turn1, "turn2": turn2}
 
 
 def run_drop(tmp: Path) -> dict[str, Any]:
-    fake = _fake(tmp, "drop", [Call([("read_file", {"path": "note.txt"})]), Drop(DROP_PARTIAL, after_chars=22), Say(DROP_FINAL)])
+    fake = _fake(
+        tmp,
+        "drop",
+        [
+            Call([("read_file", {"path": "note.txt"})]),
+            Drop(DROP_PARTIAL, after_chars=22),
+            Say(DROP_FINAL),
+        ],
+    )
     nh = make_home(tmp / "drop" / "h", **clawk_setup(fake))
     (nh.project / "note.txt").write_text("note: KIWI-13\n", encoding="utf-8")
-    return {"fake": fake, "nh": nh, "turn": run_chat(nh, "Read note.txt.", env=fake.child_env(), args=ARGS)}
+    return {
+        "fake": fake,
+        "nh": nh,
+        "turn": run_chat(nh, "Read note.txt.", env=fake.child_env(), args=ARGS),
+    }
 
 
-SCENARIOS: dict[str, Callable[[Path], dict[str, Any]]] = {"compaction": run_compaction, "drop": run_drop}
+SCENARIOS: dict[str, Callable[[Path], dict[str, Any]]] = {
+    "compaction": run_compaction,
+    "drop": run_drop,
+}
 
 
 @pytest.fixture(scope="module")
@@ -105,38 +154,55 @@ def results(tmp_path_factory: pytest.TempPathFactory) -> Any:
 
 
 def _ok(turn: ChatResult | None, what: str, answer: str) -> None:
-    assert turn is not None and turn.returncode == 0, f"{what} failed:\n{turn.describe() if turn else 'not run'}"
+    assert turn is not None and turn.returncode == 0, (
+        f"{what} failed:\n{turn.describe() if turn else 'not run'}"
+    )
     assert answer in turn.stdout, turn.describe()
 
 
 def _assert_pairs(rows: list[dict[str, Any]]) -> None:
-    calls = [tc["id"] for r in rows if r["role"] == "assistant" for tc in tool_calls_of(r)]
+    calls = [
+        tc["id"] for r in rows if r["role"] == "assistant" for tc in tool_calls_of(r)
+    ]
     results = [r["tool_call_id"] for r in rows if r["role"] == "tool"]
-    assert sorted(calls) == sorted(results), f"persisted tool pairs broken: calls={calls} results={results}"
+    assert sorted(calls) == sorted(results), (
+        f"persisted tool pairs broken: calls={calls} results={results}"
+    )
 
 
-def test_compacted_signed_session_stays_valid_for_vertex(results: dict[str, Any]) -> None:
+def test_compacted_signed_session_stays_valid_for_vertex(
+    results: dict[str, Any],
+) -> None:
     """The summary call goes to Vertex with the minted bearer, and every request after compaction is
     accepted: tool pairs intact, current-turn calls still signed, each signature on its own call."""
     res = results["compaction"]
     fake = res["fake"]
     _ok(res["turn1"], "turn 1", TURN1_FINAL)
     _ok(res["turn2"], "turn 2 (--resume)", TURN2_FINAL)
-    assert not fake.rejected(), json.dumps([(r["status"], r["rejected"]) for r in fake.rejected()], indent=1)
+    assert not fake.rejected(), json.dumps(
+        [(r["status"], r["rejected"]) for r in fake.rejected()], indent=1
+    )
     aux = fake.aux_requests()
     assert aux, "compaction never called the summarizer (threshold not crossed?)"
     minted = {f"Bearer {t}" for t in fake.minted_tokens()}
     assert {r["auth"] for r in aux} <= minted
     first_aux = fake.requests.index(aux[0])
     after = [r for r in fake.requests[first_aux:] if r["kind"] == "main"]
-    assert after and any(SUMMARY_MARK in json.dumps(r["body"]["messages"]) for r in after), (
-        "no post-compaction request carries the summary")
+    assert after and any(
+        SUMMARY_MARK in json.dumps(r["body"]["messages"]) for r in after
+    ), "no post-compaction request carries the summary"
     for rec in after:
         for msg in rec["body"]["messages"]:
             for tc in msg.get("tool_calls") or []:
-                sig = (tc.get("extra_content") or {}).get("google", {}).get("thought_signature")
+                sig = (
+                    (tc.get("extra_content") or {})
+                    .get("google", {})
+                    .get("thought_signature")
+                )
                 if sig is not None:
-                    assert fake.signature_by_call.get(tc["id"]) == sig, f"signature moved to another call: {tc['id']}"
+                    assert fake.signature_by_call.get(tc["id"]) == sig, (
+                        f"signature moved to another call: {tc['id']}"
+                    )
 
 
 def test_compacted_session_rows_keep_tool_pairs(results: dict[str, Any]) -> None:
@@ -146,7 +212,9 @@ def test_compacted_session_rows_keep_tool_pairs(results: dict[str, Any]) -> None
     rows = messages(nh, latest_session(nh))
     _assert_pairs(rows)
     assert_no_duplicate_assistant_text(rows, TURN2_FINAL)
-    assert any(r["role"] == "assistant" and r.get("content") == TURN2_FINAL for r in rows)
+    assert any(
+        r["role"] == "assistant" and r.get("content") == TURN2_FINAL for r in rows
+    )
 
 
 def test_stream_drop_retried_without_duplicate_content(results: dict[str, Any]) -> None:
@@ -157,11 +225,17 @@ def test_stream_drop_retried_without_duplicate_content(results: dict[str, Any]) 
     _ok(res["turn"], "drop turn", DROP_FINAL)
     assert not fake.rejected(), [r["rejected"] for r in fake.rejected()]
     mains = fake.main_requests()
-    assert [r["response"] for r in mains] == ["Call", "Drop", "Say"], [r.get("response") for r in mains]
-    assert mains[2]["body"]["messages"] == mains[1]["body"]["messages"], "the retry changed the conversation"
+    assert [r["response"] for r in mains] == ["Call", "Drop", "Say"], [
+        r.get("response") for r in mains
+    ]
+    assert mains[2]["body"]["messages"] == mains[1]["body"]["messages"], (
+        "the retry changed the conversation"
+    )
     rows = messages(nh, latest_session(nh))
     assert [r["role"] for r in rows] == ["user", "assistant", "tool", "assistant"], rows
     partial = DROP_PARTIAL[:22]
-    assert not [r["id"] for r in rows if partial in (r.get("content") or "")], "the dropped partial was persisted"
+    assert not [r["id"] for r in rows if partial in (r.get("content") or "")], (
+        "the dropped partial was persisted"
+    )
     assert_no_duplicate_assistant_text(rows, DROP_FINAL)
     assert partial not in res["turn"].stdout

@@ -92,17 +92,21 @@ def test_toolsets_route_survives_default_executor_starvation(monkeypatch):
         "_get_effective_configurable_toolsets",
         lambda: [("test", "Test", "Test toolset")],
     )
-    monkeypatch.setattr(tools_config, "_toolset_configuration_platform", lambda _name: "cli")
-    monkeypatch.setattr(tools_config, "_get_platform_tools", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        tools_config, "_toolset_configuration_platform", lambda _name: "cli"
+    )
+    monkeypatch.setattr(
+        tools_config, "_get_platform_tools", lambda *_args, **_kwargs: []
+    )
     monkeypatch.setattr(tools_config, "get_nous_subscription_features", lambda _cfg: {})
-    monkeypatch.setattr(tools_config, "_toolset_has_keys", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        tools_config, "_toolset_has_keys", lambda *_args, **_kwargs: False
+    )
     monkeypatch.setattr(tools_config, "gui_toolset_label", lambda label: label)
     monkeypatch.setattr(platforms, "platform_label", lambda _key, fallback: fallback)
     monkeypatch.setattr(toolsets, "resolve_toolset", lambda _name: [])
 
-    response = asyncio.run(
-        _request_with_wedged_default_executor("/api/tools/toolsets")
-    )
+    response = asyncio.run(_request_with_wedged_default_executor("/api/tools/toolsets"))
 
     assert response.status_code == 200
     assert isinstance(response.json(), list)
@@ -121,7 +125,9 @@ def test_status_route_survives_default_executor_starvation(monkeypatch):
             "profile_platforms": {},
         },
     )
-    monkeypatch.setattr(_web_server_lifecycle, "_resolve_restart_drain_timeout", lambda: 30.0)
+    monkeypatch.setattr(
+        _web_server_lifecycle, "_resolve_restart_drain_timeout", lambda: 30.0
+    )
     monkeypatch.setattr(web_server, "get_install_id", lambda: None)
 
     response = asyncio.run(

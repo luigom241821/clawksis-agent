@@ -15,14 +15,18 @@ import uuid
 from typing import Any, Dict, Tuple
 
 
-VALID_REQUEST_TYPES = frozenset({"start_bot", "stop", "status", "transcript", "say", "ping"})
+VALID_REQUEST_TYPES = frozenset(
+    {"start_bot", "stop", "status", "transcript", "say", "ping"}
+)
 
 
 def _nonempty_str(value: Any) -> bool:
     return isinstance(value, str) and bool(value)
 
 
-def make_request(type: str, token: str, payload: dict[str, Any], req_id: str | None = None) -> dict[str, Any]:
+def make_request(
+    type: str, token: str, payload: dict[str, Any], req_id: str | None = None
+) -> dict[str, Any]:
     """Construct a request envelope; ``req_id`` defaults to a uuid4 hex."""
     if not _nonempty_str(type):
         raise ValueError("type must be a non-empty string")
@@ -32,7 +36,12 @@ def make_request(type: str, token: str, payload: dict[str, Any], req_id: str | N
         raise ValueError("token must be a string")
     if not isinstance(payload, dict):
         raise ValueError("payload must be a dict")
-    return {"type": type, "id": req_id or uuid.uuid4().hex, "token": token, "payload": payload}
+    return {
+        "type": type,
+        "id": req_id or uuid.uuid4().hex,
+        "token": token,
+        "payload": payload,
+    }
 
 
 def make_response(req_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -79,5 +88,6 @@ def validate_request(msg: dict[str, Any], expected_token: str) -> tuple[bool, st
         (lambda: _nonempty_str(msg.get("id")), "missing or non-string 'id'"),
         (lambda: _nonempty_str(token), "missing token"),
         (lambda: token == expected_token, "token mismatch"),
-        (lambda: isinstance(msg.get("payload"), dict), "payload must be a dict"))
+        (lambda: isinstance(msg.get("payload"), dict), "payload must be a dict"),
+    )
     return next(((False, reason) for ok, reason in checks if not ok()), (True, ""))

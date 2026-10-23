@@ -10,6 +10,7 @@ CLAWK_HOME), so resolving there -- and caching on the instance -- gives each
 profile its own store. Exercised via ``_resolve_store_dir`` directly so the
 test needs no mautrix install.
 """
+
 from gateway.config import PlatformConfig
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 from plugins.platforms.matrix import adapter as matrix_adapter
@@ -20,7 +21,10 @@ def _make_adapter() -> matrix_adapter.MatrixAdapter:
         PlatformConfig(
             enabled=True,
             token="syt_test_token",
-            extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
+            extra={
+                "homeserver": "https://matrix.example.org",
+                "user_id": "@bot:example.org",
+            },
         )
     )
 

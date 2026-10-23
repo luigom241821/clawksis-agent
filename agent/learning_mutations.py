@@ -17,7 +17,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 _MEMORY_FILES = {"memory": "MEMORY.md", "profile": "USER.md"}
-_STORE_TARGETS = {"memory": "memory", "profile": "user"}  # journey source -> MemoryStore target
+_STORE_TARGETS = {
+    "memory": "memory",
+    "profile": "user",
+}  # journey source -> MemoryStore target
 
 
 def parse_node_kind(node_id: str) -> str:
@@ -30,7 +33,11 @@ def _parse_memory_id(node_id: str) -> tuple[str, int, str]:
     The fingerprint is empty for an id minted before the graph carried one."""
     parts = node_id.split(":")
     try:
-        if len(parts) not in (3, 4) or parts[0] != "memory" or parts[1] not in _MEMORY_FILES:
+        if (
+            len(parts) not in (3, 4)
+            or parts[0] != "memory"
+            or parts[1] not in _MEMORY_FILES
+        ):
             raise ValueError
         return parts[1], int(parts[2]), parts[3] if len(parts) == 4 else ""
     except ValueError as exc:
@@ -47,7 +54,14 @@ def _resolve_fingerprint(chunks: list[str], fingerprint: str) -> int | None:
     """
     from agent.learning_graph import memory_fingerprint
 
-    return next((i for i, chunk in enumerate(chunks) if memory_fingerprint(chunk) == fingerprint), None)
+    return next(
+        (
+            i
+            for i, chunk in enumerate(chunks)
+            if memory_fingerprint(chunk) == fingerprint
+        ),
+        None,
+    )
 
 
 def _locate_memory(node_id: str) -> tuple[Path, list[str], int]:
@@ -76,7 +90,11 @@ def _locate_memory(node_id: str) -> tuple[Path, list[str], int]:
         raise IndexError(f"memory index {gidx} out of range")
     if cards[gidx].get("source") != source:
         raise ValueError("memory node id is stale — refresh the graph")
-    local = gidx if source == "memory" else gidx - sum(1 for c in cards if c.get("source") == "memory")
+    local = (
+        gidx
+        if source == "memory"
+        else gidx - sum(1 for c in cards if c.get("source") == "memory")
+    )
     if not 0 <= local < len(chunks):
         raise ValueError("memory node id is stale — refresh the graph")
     return path, chunks, local
@@ -94,7 +112,11 @@ def _mutate_memory(node_id: str, replacement: str | None) -> dict[str, Any]:
 
     source, _, _ = _parse_memory_id(node_id)
     name = _MEMORY_FILES[source]
-    message = f"deleted memory from {name}" if replacement is None else f"updated memory in {name}"
+    message = (
+        f"deleted memory from {name}"
+        if replacement is None
+        else f"updated memory in {name}"
+    )
 
     def _apply(entries, limit):
         from tools.memory_tool import ENTRY_DELIMITER
@@ -102,15 +124,27 @@ def _mutate_memory(node_id: str, replacement: str | None) -> dict[str, Any]:
         _, chunks, local = _locate_memory(node_id)
         text = chunks[local].strip()
         if text not in entries:
-            return {"success": False, "error": "memory node id is stale — refresh the graph"}
+            return {
+                "success": False,
+                "error": "memory node id is stale — refresh the graph",
+            }
         idx = entries.index(text)
-        new_entries = entries[:idx] + ([] if replacement is None else [replacement]) + entries[idx + 1:]
+        new_entries = (
+            entries[:idx]
+            + ([] if replacement is None else [replacement])
+            + entries[idx + 1 :]
+        )
         # Same cap the memory tool enforces on replace (never on remove: deleting is how a file
         # already over its total gets back under it). An over-limit entry reads as external drift
         # to every later mutation, so the tool's own remove/replace refuse until hand-fixed.
-        if replacement is not None and (total := len(ENTRY_DELIMITER.join(new_entries))) > limit:
-            return {"success": False,
-                    "error": f"Replacement would put memory at {total:,}/{limit:,} chars. Shorten the new content."}
+        if (
+            replacement is not None
+            and (total := len(ENTRY_DELIMITER.join(new_entries))) > limit
+        ):
+            return {
+                "success": False,
+                "error": f"Replacement would put memory at {total:,}/{limit:,} chars. Shorten the new content.",
+            }
         return new_entries, message
 
     result = load_on_disk_store()._mutate(_STORE_TARGETS[source], _apply)
@@ -122,19 +156,25 @@ def _mutate_memory(node_id: str, replacement: str | None) -> dict[str, Any]:
 def _clear_skill_cache() -> None:
     try:
         from agent.prompt_builder import clear_skills_system_prompt_cache
+
         clear_skills_system_prompt_cache(clear_snapshot=True)
     except Exception:
         pass
 
 
-def _dispatch(node_id: str, memory_fn: Callable, skill_fn: Callable, *args) -> dict[str, Any]:
+def _dispatch(
+    node_id: str, memory_fn: Callable, skill_fn: Callable, *args
+) -> dict[str, Any]:
     try:
-        return (memory_fn if parse_node_kind(node_id) == "memory" else skill_fn)(node_id, *args)
+        return (memory_fn if parse_node_kind(node_id) == "memory" else skill_fn)(
+            node_id, *args
+        )
     except (ValueError, IndexError) as exc:
         return {"ok": False, "message": str(exc)}
 
 
 # ── Inspect (edit prefill) ──────────────────────────────────────────────────
+
 
 def node_detail(node_id: str) -> dict[str, Any]:
     """Current content for an edit prefill. ``content`` is the full SKILL.md
@@ -145,21 +185,35 @@ def node_detail(node_id: str) -> dict[str, Any]:
 def _memory_detail(node_id: str) -> dict[str, Any]:
     _, chunks, local = _locate_memory(node_id)
     body = chunks[local].strip()
-    return {"ok": True, "kind": "memory", "id": node_id, "label": body.splitlines()[0][:80], "content": body}
+    return {
+        "ok": True,
+        "kind": "memory",
+        "id": node_id,
+        "label": body.splitlines()[0][:80],
+        "content": body,
+    }
 
 
 def _skill_detail(node_id: str) -> dict[str, Any]:
     from tools.skill_manager_tool import _find_skill
+
     found = _find_skill(node_id)
     if not found:
         return {"ok": False, "message": f"skill '{node_id}' not found"}
     skill_md = Path(found["path"]) / "SKILL.md"
     if not skill_md.exists():
         return {"ok": False, "message": f"SKILL.md missing for '{node_id}'"}
-    return {"ok": True, "kind": "skill", "id": node_id, "label": node_id, "content": skill_md.read_text(encoding="utf-8-sig")}
+    return {
+        "ok": True,
+        "kind": "skill",
+        "id": node_id,
+        "label": node_id,
+        "content": skill_md.read_text(encoding="utf-8-sig"),
+    }
 
 
 # ── Delete ──────────────────────────────────────────────────────────────────
+
 
 def delete_node(node_id: str) -> dict[str, Any]:
     return _dispatch(node_id, _delete_memory, _delete_skill)
@@ -167,17 +221,26 @@ def delete_node(node_id: str) -> dict[str, Any]:
 
 def _delete_skill(name: str) -> dict[str, Any]:
     from tools import skill_usage
+
     # Pin must be respected by autonomous maintenance. The curator already skips pinned skills from every
     # auto-transition; the background review fork is the same kind of autonomous, no-user-present actor, so
     # it must not write to a pinned skill either (issue #25839). This is stricter than the foreground
     # ``_pinned_guard`` (which only blocks deletion) precisely because there is no user in the loop to
     # consent to an edit here.
     if skill_usage.get_record(name).get("pinned"):
-        return {"ok": False, "message": f"'{name}' is pinned — unpin it first (clawk curator unpin {name})"}
+        return {
+            "ok": False,
+            "message": f"'{name}' is pinned — unpin it first (clawk curator unpin {name})",
+        }
     ok, message = skill_usage.archive_skill(name)
     if ok:
         _clear_skill_cache()
-    return {"ok": ok, "message": f"archived '{name}' — restore with: clawk curator restore {name}" if ok else message}
+    return {
+        "ok": ok,
+        "message": f"archived '{name}' — restore with: clawk curator restore {name}"
+        if ok
+        else message,
+    }
 
 
 def _delete_memory(node_id: str) -> dict[str, Any]:
@@ -186,12 +249,14 @@ def _delete_memory(node_id: str) -> dict[str, Any]:
 
 # ── Edit ────────────────────────────────────────────────────────────────────
 
+
 def edit_node(node_id: str, content: str) -> dict[str, Any]:
     return _dispatch(node_id, _edit_memory, _edit_skill, content)
 
 
 def _edit_skill(name: str, content: str) -> dict[str, Any]:
     from tools.skill_manager_tool import _edit_skill as _do_edit
+
     result = _do_edit(name, content)
     if result.get("success"):
         _clear_skill_cache()

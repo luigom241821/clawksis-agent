@@ -117,7 +117,7 @@ def _assert_user_call_has_skip_db(calls, expected_skip_db: bool):
                 user_calls.append(call)
     assert len(user_calls) >= 1, (
         f"Expected at least one user-role append_to_transcript call, "
-        f"got calls: {[c.args for c in calls if len(c.args)>=2]}"
+        f"got calls: {[c.args for c in calls if len(c.args) >= 2]}"
     )
     for call in user_calls:
         actual = call.kwargs.get("skip_db", False)
@@ -174,12 +174,14 @@ async def test_agent_failed_early_skip_db_when_agent_has_session_db(
     assert replay[-1]["content"] == "unrelated question"
 
 
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "tail_role, expected_roles",
     [("user", ["assistant"]), ("assistant", [])],
-    ids=["agent-flushed-user-row-still-closed", "redelivery-of-closed-turn-adds-nothing"],
+    ids=[
+        "agent-flushed-user-row-still-closed",
+        "redelivery-of-closed-turn-adds-nothing",
+    ],
 )
 async def test_boundary_keyed_on_durable_tail_when_user_row_is_deduped(
     monkeypatch, tmp_path, tail_role, expected_roles
@@ -201,10 +203,13 @@ async def test_boundary_keyed_on_durable_tail_when_user_row_is_deduped(
         }
     )
 
-    await runner._handle_message_with_agent(_event(), _source(), "agent:main:telegram:group:-1001:12345", 1)
+    await runner._handle_message_with_agent(
+        _event(), _source(), "agent:main:telegram:group:-1001:12345", 1
+    )
 
     rows = [
-        call.args[1] for call in runner.session_store.append_to_transcript.call_args_list
+        call.args[1]
+        for call in runner.session_store.append_to_transcript.call_args_list
         if len(call.args) >= 2 and call.args[1].get("role") in {"user", "assistant"}
     ]
     assert [row["role"] for row in rows] == expected_roles
@@ -310,5 +315,3 @@ async def test_transcript_read_failure_stops_turn_before_agent_or_append(
 
 
 # ── Test 4: normal path (new_messages found) uses skip_db=True ────────
-
-

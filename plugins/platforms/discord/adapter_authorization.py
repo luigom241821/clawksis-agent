@@ -1,4 +1,5 @@
 """Fresh membership checks for owner-held durable native inputs."""
+
 import asyncio
 
 
@@ -13,11 +14,23 @@ class DiscordAuthorizationMixin:
         # wins, and outside multiplex the loader copies YAML allowed_roles into it once (first
         # writer), so there a role removed from YAML is revoked at restart, as for ingress.
         def policy():
-            current = load_gateway_config().platforms.get(Platform.DISCORD) or PlatformConfig()
-            raw = self._gate_raw('allowed_roles', 'DISCORD_ALLOWED_ROLES', config=current)
-            roles = {int(str(item).strip()) for item in self._gate_csv_set(raw)
-                     if str(item).strip().isdigit()}
-            guild_id = _read_dm_role_auth_guild() if source.chat_type == 'dm' else source.scope_id
+            current = (
+                load_gateway_config().platforms.get(Platform.DISCORD)
+                or PlatformConfig()
+            )
+            raw = self._gate_raw(
+                "allowed_roles", "DISCORD_ALLOWED_ROLES", config=current
+            )
+            roles = {
+                int(str(item).strip())
+                for item in self._gate_csv_set(raw)
+                if str(item).strip().isdigit()
+            }
+            guild_id = (
+                _read_dm_role_auth_guild()
+                if source.chat_type == "dm"
+                else source.scope_id
+            )
             return roles, guild_id
 
         roles, guild_id = policy()
@@ -39,9 +52,13 @@ class DiscordAuthorizationMixin:
         # transport home after SDK I/O so an intervening .env edit is visible too.
         from gateway.run import _profile_runtime_scope
         from clawk_constants import get_clawk_home
+
         with _profile_runtime_scope(get_clawk_home()):
             current_policy = policy()
         if self._client is not client or current_policy != (roles, guild_id):
             return False
-        return (member.id == uid and member.guild.id == int(guild_id)
-                and any(role.id in roles for role in member.roles))
+        return (
+            member.id == uid
+            and member.guild.id == int(guild_id)
+            and any(role.id in roles for role in member.roles)
+        )

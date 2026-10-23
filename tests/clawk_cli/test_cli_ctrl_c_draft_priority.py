@@ -42,8 +42,11 @@ def test_draft_is_cleared_before_a_running_turn_is_interrupted(monkeypatch, hand
     cli = _Cli()
     buffer = Buffer()
     buffer.text = "half typed follow-up"
-    app = SimpleNamespace(current_buffer=buffer, invalidate=lambda: None,
-                          exit=lambda: setattr(cli, "_should_exit", True))
+    app = SimpleNamespace(
+        current_buffer=buffer,
+        invalidate=lambda: None,
+        exit=lambda: setattr(cli, "_should_exit", True),
+    )
     event = SimpleNamespace(app=app)
 
     getattr(cli, handler)(event)

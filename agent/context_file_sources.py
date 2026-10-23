@@ -36,8 +36,12 @@ _STATUS_DISPLAY = {
 
 def _entry(label: str, path: Path, content: str, status: str) -> dict[str, Any]:
     return {
-        "label": label, "path": str(path), "chars": len(content), "est_tokens": estimate_tokens_rough(content),
-        "loaded": status in ("loaded", "truncated", "flagged"), "status": status,
+        "label": label,
+        "path": str(path),
+        "chars": len(content),
+        "est_tokens": estimate_tokens_rough(content),
+        "loaded": status in ("loaded", "truncated", "flagged"),
+        "status": status,
     }
 
 
@@ -49,7 +53,9 @@ def _empty_status(path: Path) -> str:
         return "unreadable"
 
 
-def _loaded_status(content: str, rendered_len: int, max_chars: int, user_authored: bool = False) -> str:
+def _loaded_status(
+    content: str, rendered_len: int, max_chars: int, user_authored: bool = False
+) -> str:
     """Same scan the builder runs (``_scan_context_content``): a hit replaces a project file with a BLOCKED
     marker; the user's own SOUL.md (*user_authored*) still loads and is reported as ``flagged``."""
     if _pb._scan_for_threats(content.lstrip("\ufeff"), scope="context"):
@@ -58,8 +64,11 @@ def _loaded_status(content: str, rendered_len: int, max_chars: int, user_authore
 
 
 def list_context_file_sources(
-    cwd: Optional[str] = None, context_length: Optional[int] = None, allow_install_tree_fallback: bool = False,
-    home_override: Path | None = None, skip_soul: bool = False,
+    cwd: Optional[str] = None,
+    context_length: Optional[int] = None,
+    allow_install_tree_fallback: bool = False,
+    home_override: Path | None = None,
+    skip_soul: bool = False,
 ) -> list[dict[str, Any]]:
     """One dict per context file Clawksis considered, in the builder's priority order.
 
@@ -69,7 +78,9 @@ def list_context_file_sources(
     """
     cwd_path = Path(cwd if cwd is not None else os.getcwd()).resolve()
     max_chars = _pb._get_context_file_max_chars(context_length)
-    suppressed = _pb._project_context_suppressed(cwd, cwd_path, allow_install_tree_fallback)
+    suppressed = _pb._project_context_suppressed(
+        cwd, cwd_path, allow_install_tree_fallback
+    )
     sources: list[dict[str, Any]] = []
     winner: Optional[str] = None
     for kind, label, path, content in _pb.discover_context_files(cwd_path):
@@ -86,12 +97,17 @@ def list_context_file_sources(
         sources.append(_entry(label, path, content, status))
 
     if not skip_soul:
-        home = Path(home_override) if home_override is not None else _pb.get_clawk_home()
+        home = (
+            Path(home_override) if home_override is not None else _pb.get_clawk_home()
+        )
         soul_path = home / "SOUL.md"
         if _pb._exists_or_denied(soul_path):
             content = _pb._read_context_file(soul_path)
-            status = (_loaded_status(content, len(content), max_chars, user_authored=True) if content
-                      else _empty_status(soul_path))
+            status = (
+                _loaded_status(content, len(content), max_chars, user_authored=True)
+                if content
+                else _empty_status(soul_path)
+            )
             sources.append(_entry("SOUL.md", soul_path, content, status))
     return sources
 
@@ -103,12 +119,17 @@ def context_file_sources_for_agent(agent: Any) -> list[dict[str, Any]]:
         return []
     from agent.runtime_cwd import resolve_context_cwd
     from agent.system_prompt import _agent_home
+
     launch_artifact = getattr(agent, "_context_cwd_is_launch_artifact", False)
     cwd = resolve_context_cwd(include_session_override=not launch_artifact)
-    ctx_len = getattr(getattr(agent, "context_compressor", None), "context_length", None)
+    ctx_len = getattr(
+        getattr(agent, "context_compressor", None), "context_length", None
+    )
     return list_context_file_sources(
-        cwd=str(cwd) if cwd is not None else None, context_length=ctx_len if isinstance(ctx_len, int) else None,
-        allow_install_tree_fallback=getattr(agent, "platform", None) in ("cli", "tui"), home_override=_agent_home(agent),
+        cwd=str(cwd) if cwd is not None else None,
+        context_length=ctx_len if isinstance(ctx_len, int) else None,
+        allow_install_tree_fallback=getattr(agent, "platform", None) in ("cli", "tui"),
+        home_override=_agent_home(agent),
     )
 
 
@@ -121,5 +142,7 @@ def render_context_file_lines(sources: list[dict[str, Any]]) -> list[str]:
     for src in sources:
         glyph, note = _STATUS_DISPLAY.get(str(src.get("status") or ""), ("•", ""))
         suffix = f"  ({note})" if note else ""
-        lines.append(f"{glyph} {src.get('label') or ''!s:<{width}} ~{int(src.get('est_tokens') or 0):>9,} tokens{suffix}")
+        lines.append(
+            f"{glyph} {src.get('label') or ''!s:<{width}} ~{int(src.get('est_tokens') or 0):>9,} tokens{suffix}"
+        )
     return lines

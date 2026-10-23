@@ -11,6 +11,7 @@ particular, ChatGPT Codex OAuth enforces 272K on the same slug. The sibling
 
 Fix: both display paths now go through ``resolve_display_context_length()``.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -31,9 +32,11 @@ class _FakeModelInfo:
 
 class _StubCLI:
     """Minimum attrs ``_apply_model_switch_result`` reads on ``self``."""
+
     def _stage_and_swap_model(self, result, old_model):
         # Staging + in-place swap lives in a helper; run the real one on this stub.
         import cli as _cli_mod
+
         return _cli_mod.ClawksisCLI._stage_and_swap_model(self, result, old_model)
 
     agent = None

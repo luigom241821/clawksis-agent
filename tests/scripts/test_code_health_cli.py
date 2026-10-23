@@ -23,18 +23,33 @@ from scripts.code_health.config import ENFORCEMENT
 
 REPO = Path(__file__).resolve().parents[2]
 _GUARD_SCRIPTS = (
-    "scripts/check-windows-footguns.py", "scripts/check_bash_shebangs.py",
-    "scripts/check_no_tmp_literals.py", "scripts/check_config_yaml_writers.py",
-    "scripts/ci/check_os_marker_fakes.py", "scripts/check-case-collisions.py",
-    "scripts/ci/check_lazy_deps_imports.py", "scripts/ci/check_profile_archive_boundary.py",
-    "scripts/ci/check_agents_md_size.py", "scripts/ci/check_blob_size.py",
+    "scripts/check-windows-footguns.py",
+    "scripts/check_bash_shebangs.py",
+    "scripts/check_no_tmp_literals.py",
+    "scripts/check_config_yaml_writers.py",
+    "scripts/ci/check_os_marker_fakes.py",
+    "scripts/check-case-collisions.py",
+    "scripts/ci/check_lazy_deps_imports.py",
+    "scripts/ci/check_profile_archive_boundary.py",
+    "scripts/ci/check_agents_md_size.py",
+    "scripts/ci/check_blob_size.py",
 )
-_SUPPORT = ("scripts/ci/profile_scope_patterns.json", "agent/subdirectory_hints.py", *_GUARD_SCRIPTS)
-_LEGACY = "def legacy(x):\n" + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(21))
+_SUPPORT = (
+    "scripts/ci/profile_scope_patterns.json",
+    "agent/subdirectory_hints.py",
+    *_GUARD_SCRIPTS,
+)
+_LEGACY = "def legacy(x):\n" + "".join(
+    f"    if x == {i}:\n        return {i}\n" for i in range(21)
+)
 _GROWN = _LEGACY + "    if x == 99:\n        return 99\n"
-_ENV_COPY = "import os\n\n\ndef child_env():\n    env = os.environ.copy()\n    return env\n"
+_ENV_COPY = (
+    "import os\n\n\ndef child_env():\n    env = os.environ.copy()\n    return env\n"
+)
 # A violation of a rule that always blocks (PS-P05 is warning-only until replayed).
-_SWALLOW = "def swallow():\n    try:\n        pass\n    except Exception:\n        pass\n"
+_SWALLOW = (
+    "def swallow():\n    try:\n        pass\n    except Exception:\n        pass\n"
+)
 _SWITCH = "scripts/code_health/config.py"
 
 
@@ -45,10 +60,21 @@ def _env() -> dict[str, str]:
     return env
 
 
-def _sh(cwd: Path, *argv: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(list(argv), cwd=cwd, env=env or _env(), capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
-                          timeout=600, check=False)
+def _sh(
+    cwd: Path, *argv: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        list(argv),
+        cwd=cwd,
+        env=env or _env(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdin=subprocess.DEVNULL,
+        timeout=600,
+        check=False,
+    )
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -93,8 +119,12 @@ def _add_engine(repo: Path, checker: bool = True) -> list[str]:
     _write(repo, {"tests/README.md": "os-marker-fakes scans tests/\n"})
     if checker:
         shutil.copy2(REPO / "scripts/check", repo / "scripts/check")
-        shutil.copytree(REPO / "scripts/code_health", repo / "scripts/code_health",
-                        ignore=shutil.ignore_patterns("__pycache__"), dirs_exist_ok=True)
+        shutil.copytree(
+            REPO / "scripts/code_health",
+            repo / "scripts/code_health",
+            ignore=shutil.ignore_patterns("__pycache__"),
+            dirs_exist_ok=True,
+        )
     return ["agent", "scripts", "tests"]
 
 
@@ -121,7 +151,10 @@ def _ratchet_repo(tmp_path: Path, switch: str | None = None) -> tuple[Path, str]
     repo = _init(tmp_path / "repo")
     (repo / "scripts/ci").mkdir(parents=True)
     shutil.copy2(REPO / "scripts/ci/profile_scope_patterns.json", repo / "scripts/ci/")
-    files: dict[str, str | None] = {"pkg/a.py": _LEGACY, **({_SWITCH: switch} if switch else {})}
+    files: dict[str, str | None] = {
+        "pkg/a.py": _LEGACY,
+        **({_SWITCH: switch} if switch else {}),
+    }
     _write(repo, files)
     _git(repo, "add", "--all", "--", ".gitignore", "pyproject.toml", "scripts", "pkg")
     _git(repo, "commit", "-q", "-m", "base")
@@ -131,22 +164,35 @@ def _ratchet_repo(tmp_path: Path, switch: str | None = None) -> tuple[Path, str]
 # --- F20: the staged/commit health verdict comes from the judged artifact only -----------------
 
 
-@pytest.mark.parametrize("unstaged", [
-    # the policy file read by the PS-P05 rule, narrowed so it no longer covers pkg/
-    ("scripts/ci/profile_scope_patterns.json", lambda t: t.replace(
-        '"id": "P05",', '"id": "P05",\n      "path_regex": "^nowhere/",')),
-    # the engine itself, edited to exempt pkg/ from PS-P05
-    ("scripts/code_health/config.py", lambda t: t.replace(
-        'exclude=SINGLE_PROFILE, blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"',
-        'exclude=SINGLE_PROFILE + ("pkg/*",), blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"')),
-])
+@pytest.mark.parametrize(
+    "unstaged",
+    [
+        # the policy file read by the PS-P05 rule, narrowed so it no longer covers pkg/
+        (
+            "scripts/ci/profile_scope_patterns.json",
+            lambda t: t.replace(
+                '"id": "P05",', '"id": "P05",\n      "path_regex": "^nowhere/",'
+            ),
+        ),
+        # the engine itself, edited to exempt pkg/ from PS-P05
+        (
+            "scripts/code_health/config.py",
+            lambda t: t.replace(
+                'exclude=SINGLE_PROFILE, blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"',
+                'exclude=SINGLE_PROFILE + ("pkg/*",), blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"',
+            ),
+        ),
+    ],
+)
 def test_staged_health_ignores_unstaged_policy_and_engine(tmp_path, unstaged):
     repo = _engine_repo(tmp_path)
     _write(repo, {"pkg/c.py": _ENV_COPY})
     _git(repo, "add", "--", "pkg/c.py")
     tree = _git(repo, "write-tree")
     first = _check(repo, "--staged", "--only", "health", "--base", "HEAD")
-    assert first.returncode == 0 and "PS-P05" in first.stdout, first.stdout + first.stderr
+    assert first.returncode == 0 and "PS-P05" in first.stdout, (
+        first.stdout + first.stderr
+    )
 
     rel, edit = unstaged
     original = (repo / rel).read_text(encoding="utf-8")
@@ -154,7 +200,9 @@ def test_staged_health_ignores_unstaged_policy_and_engine(tmp_path, unstaged):
     assert edited != original
     (repo / rel).write_text(edited, encoding="utf-8")
     again = _check(repo, "--staged", "--only", "health", "--base", "HEAD")
-    assert _timeless(again.stdout) == _timeless(first.stdout), again.stdout + again.stderr
+    assert _timeless(again.stdout) == _timeless(first.stdout), (
+        again.stdout + again.stderr
+    )
     # the judged artifact and the user's unstaged work are both untouched
     assert _git(repo, "write-tree") == tree
     assert (repo / rel).read_text(encoding="utf-8") == edited
@@ -168,7 +216,9 @@ def test_staged_health_ignores_unstaged_policy_and_engine(tmp_path, unstaged):
 def test_unknown_or_empty_selector_is_a_usage_error(selector):
     proc = _sh(REPO, sys.executable, str(REPO / "scripts/check"), "--only", selector)
     assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "health" in proc.stderr and "shebangs" in proc.stderr  # lists the valid names
+    assert (
+        "health" in proc.stderr and "shebangs" in proc.stderr
+    )  # lists the valid names
     assert "checks, ok" not in proc.stdout
 
 
@@ -177,19 +227,26 @@ def test_valid_selector_runs_its_check_and_keeps_its_status(tmp_path):
     _write(repo, {"pkg/c.py": _SWALLOW})
     _git(repo, "add", "--", "pkg/c.py")
     proc = _check(repo, "--staged", "--only", "health,shebangs", "--base", "HEAD")
-    assert proc.returncode == 1 and "2 checks, FAILED: health" in proc.stdout, proc.stdout
+    assert proc.returncode == 1 and "2 checks, FAILED: health" in proc.stdout, (
+        proc.stdout
+    )
 
 
 # --- JSON output on every return path ----------------------------------------------------------
 
 
-@pytest.mark.parametrize("case, switch, files, code, findings", [
-    ("no measured change", None, {"README.md": "docs\n"}, 0, 0),
-    ("enforcement off", 'ENFORCEMENT = "off"\n', {"pkg/a.py": _GROWN}, 0, 0),
-    ("findings", None, {"pkg/a.py": _GROWN}, 1, 1),
-    ("clean measured diff", None, {"pkg/b.py": "def b():\n    return 2\n"}, 0, 0),
-])
-def test_json_stdout_is_json_on_every_path(tmp_path, capsys, case, switch, files, code, findings):
+@pytest.mark.parametrize(
+    "case, switch, files, code, findings",
+    [
+        ("no measured change", None, {"README.md": "docs\n"}, 0, 0),
+        ("enforcement off", 'ENFORCEMENT = "off"\n', {"pkg/a.py": _GROWN}, 0, 0),
+        ("findings", None, {"pkg/a.py": _GROWN}, 1, 1),
+        ("clean measured diff", None, {"pkg/b.py": "def b():\n    return 2\n"}, 0, 0),
+    ],
+)
+def test_json_stdout_is_json_on_every_path(
+    tmp_path, capsys, case, switch, files, code, findings
+):
     repo, base = _ratchet_repo(tmp_path, switch)
     head = _commit(repo, files)
     assert cli.run(repo, base, head, as_json=True) == code, case
@@ -228,7 +285,9 @@ def _branch_with_checker(repo: Path, name: str, extra: dict[str, str]) -> str:
 
 
 def _remote_ref(remote: Path, branch: str) -> str:
-    return _git(remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}")
+    return _git(
+        remote, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}"
+    )
 
 
 def test_pre_push_judges_a_checker_branch_pushed_from_an_older_checkout(tmp_path):
@@ -265,8 +324,9 @@ def test_hooks_prefer_the_repo_virtualenv_over_path_python(tmp_path):
     fake = tmp_path / "fakebin"
     fake.mkdir()
     for name in ("python3", "python"):
-        (fake / name).write_text("#!/bin/sh\necho 'wrong interpreter' >&2\nexit 97\n",
-                                 encoding="utf-8")
+        (fake / name).write_text(
+            "#!/bin/sh\necho 'wrong interpreter' >&2\nexit 97\n", encoding="utf-8"
+        )
         (fake / name).chmod(0o755)
     env = _env()
     env["PATH"] = f"{fake}{os.pathsep}{env['PATH']}"
@@ -286,9 +346,11 @@ def test_hooks_prefer_the_repo_virtualenv_over_path_python(tmp_path):
 def test_check_refuses_old_python_before_importing_anything():
     # The guard reads sys.version_info; a 3.10 interpreter is emulated by overriding it before
     # scripts/check runs (tomllib, imported via ruff_runner, would otherwise crash it).
-    code = ("import runpy, sys; sys.version_info = (3, 10, 12, 'final', 0); "
-            f"sys.argv = ['scripts/check', '--only', 'shebangs']; "
-            f"runpy.run_path({str(REPO / 'scripts/check')!r}, run_name='__main__')")
+    code = (
+        "import runpy, sys; sys.version_info = (3, 10, 12, 'final', 0); "
+        f"sys.argv = ['scripts/check', '--only', 'shebangs']; "
+        f"runpy.run_path({str(REPO / 'scripts/check')!r}, run_name='__main__')"
+    )
     proc = _sh(REPO, sys.executable, "-c", code)
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert "3.11" in proc.stderr and "Traceback" not in proc.stderr
@@ -297,13 +359,21 @@ def test_check_refuses_old_python_before_importing_anything():
 # --- m3: the ENFORCEMENT switch ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize("switch, code", [
-    ('ENFORCEMENT: str = "off"\n', 0),
-    ('ENFORCEMENT: str = "advisory"\n', 0),
-    ('ENFORCEMENT = "warn"\n', 1),  # an unknown value is not a way to relax the check
-    ('ENFORCEMENT = "off"  # until the burn-down lands\n', 0),
-])
-def test_enforcement_switch_parses_annotated_and_unknown_values(tmp_path, capsys, switch, code):
+@pytest.mark.parametrize(
+    "switch, code",
+    [
+        ('ENFORCEMENT: str = "off"\n', 0),
+        ('ENFORCEMENT: str = "advisory"\n', 0),
+        (
+            'ENFORCEMENT = "warn"\n',
+            1,
+        ),  # an unknown value is not a way to relax the check
+        ('ENFORCEMENT = "off"  # until the burn-down lands\n', 0),
+    ],
+)
+def test_enforcement_switch_parses_annotated_and_unknown_values(
+    tmp_path, capsys, switch, code
+):
     repo, base = _ratchet_repo(tmp_path, switch)
     head = _commit(repo, {"pkg/a.py": _GROWN})
     assert cli.run(repo, base, head) == code, capsys.readouterr().out
@@ -315,22 +385,30 @@ def test_enforcement_reads_this_trees_own_switch():
     assert cli.parse_switch(text) == ENFORCEMENT
 
 
-def _branch_behind_main(tmp_path: Path, main_switch: str, branch_files: dict[str, str]) -> Path:
+def _branch_behind_main(
+    tmp_path: Path, main_switch: str, branch_files: dict[str, str]
+) -> Path:
     repo, base = _ratchet_repo(tmp_path, 'ENFORCEMENT = "blocking"\n')
     _git(repo, "checkout", "-q", "-b", "feature")
     _commit(repo, branch_files)
     _git(repo, "checkout", "-q", "main")
     tip = _commit(repo, {_SWITCH: main_switch, "NEWS.md": "main moved on\n"})
     _git(repo, "update-ref", "refs/remotes/origin/main", tip)
-    _git(repo, "reset", "-q", "--hard", base)  # local main is stale; only origin/main moved
+    _git(
+        repo, "reset", "-q", "--hard", base
+    )  # local main is stale; only origin/main moved
     _git(repo, "checkout", "-q", "feature")
     return repo
 
 
 def test_local_runs_take_the_switch_from_the_main_tip(tmp_path, monkeypatch, capsys):
-    repo = _branch_behind_main(tmp_path, 'ENFORCEMENT = "advisory"\n', {"pkg/a.py": _GROWN})
+    repo = _branch_behind_main(
+        tmp_path, 'ENFORCEMENT = "advisory"\n', {"pkg/a.py": _GROWN}
+    )
     monkeypatch.chdir(repo)
-    assert cli.main([]) == 0, capsys.readouterr().out  # the flip on main reaches the branch
+    assert cli.main([]) == 0, (
+        capsys.readouterr().out
+    )  # the flip on main reaches the branch
     head = _git(repo, "rev-parse", "HEAD")
     assert cli.main(["--head", head]) == 0
     out = capsys.readouterr().out
@@ -359,7 +437,9 @@ def test_hooks_run_with_msys_path_conversion_disabled(tmp_path):
     _write(repo, {"pkg/e.py": _SWALLOW})
     _git(repo, "add", "--", "pkg/e.py")
     commit = _sh(repo, "git", "commit", "-q", "-m", "swallow", env=env)
-    assert commit.returncode != 0 and "BLE001" in commit.stdout + commit.stderr, commit.stdout + commit.stderr
+    assert commit.returncode != 0 and "BLE001" in commit.stdout + commit.stderr, (
+        commit.stdout + commit.stderr
+    )
     _write(repo, {"pkg/e.py": "def e():\n    return 5\n"})
     _git(repo, "add", "--", "pkg/e.py")
     commit = _sh(repo, "git", "commit", "-q", "-m", "clean", env=env)
@@ -372,30 +452,52 @@ def test_hooks_run_with_msys_path_conversion_disabled(tmp_path):
     _git(repo, "add", "--", "pkg/f.py")
     _git(repo, "commit", "-q", "--no-verify", "-m", "swallow")
     push = _sh(repo, "git", "push", "-q", "origin", "feature", env=env)
-    assert push.returncode != 0 and "BLE001" in push.stdout + push.stderr, push.stdout + push.stderr
+    assert push.returncode != 0 and "BLE001" in push.stdout + push.stderr, (
+        push.stdout + push.stderr
+    )
 
 
 # --- m4: the CI guards that ran outside the lint workflow --------------------------------------
 
 
-@pytest.mark.parametrize("job, files", [
-    ("case-collisions", {"pkg/Notes.md": "a\n", "pkg/NOTES.md": "b\n"}),
-    ("lazy-deps", {"pkg/uses.py": "import tools.lazy_deps\n"}),
-    ("profile-archives", {"pkg/export.tar.gz": "not really\n"}),
-    ("blob-size", {"pkg/shot.png": "\0" * (600 * 1024)}),
-])
+@pytest.mark.parametrize(
+    "job, files",
+    [
+        ("case-collisions", {"pkg/Notes.md": "a\n", "pkg/NOTES.md": "b\n"}),
+        ("lazy-deps", {"pkg/uses.py": "import tools.lazy_deps\n"}),
+        ("profile-archives", {"pkg/export.tar.gz": "not really\n"}),
+        ("blob-size", {"pkg/shot.png": "\0" * (600 * 1024)}),
+    ],
+)
 def test_ci_only_guards_run_in_scripts_check(tmp_path, job, files):
     repo = _engine_repo(tmp_path)
     clean = _check(repo, "--staged", "--only", job, "--base", "HEAD")
-    assert clean.returncode == 0 and "1 checks, ok" in clean.stdout, clean.stdout + clean.stderr
+    assert clean.returncode == 0 and "1 checks, ok" in clean.stdout, (
+        clean.stdout + clean.stderr
+    )
     # Staged as blobs, never written to disk: a case-insensitive filesystem holds one of
     # Notes.md / NOTES.md, but the index (what --staged judges) holds both.
     for rel, text in files.items():
-        blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=repo, env=_env(),
-                              input=text.encode("utf-8"), capture_output=True, timeout=60, check=True)
-        _git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob.stdout.decode().strip()},{rel}")
+        blob = subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            cwd=repo,
+            env=_env(),
+            input=text.encode("utf-8"),
+            capture_output=True,
+            timeout=60,
+            check=True,
+        )
+        _git(
+            repo,
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            f"100644,{blob.stdout.decode().strip()},{rel}",
+        )
     proc = _check(repo, "--staged", "--only", job, "--base", "HEAD")
-    assert proc.returncode == 1 and f"FAILED: {job}" in proc.stdout, proc.stdout + proc.stderr
+    assert proc.returncode == 1 and f"FAILED: {job}" in proc.stdout, (
+        proc.stdout + proc.stderr
+    )
 
 
 # --- F21: profile regex rules see executable code, not prose -----------------------------------
@@ -404,19 +506,27 @@ def test_ci_only_guards_run_in_scripts_check(tmp_path, job, files):
 _FUNC = "import os\n\n\ndef build(cmd):\n{}    return cmd\n"
 
 
-@pytest.mark.parametrize("body, flagged", [
-    ("    # Avoid env = os.environ.copy(); use the scoped builder.\n", False),
-    ('    """Avoid env = os.environ.copy(); use the scoped builder."""\n', False),
-    ('    """Builder.\n\n    Never env = os.environ.copy() here.\n    """\n', False),
-    ("    # don't read os.getenv(\"DISCORD_TOKEN\") directly\n", False),
-    ("    cmd = [cmd]  # not os.environ.get('SLACK_TOKEN')\n", False),
-    ("    'inert example: env = os.environ.copy()'\n", False),
-    # positive controls: the real operations, including a literal env-key argument
-    ("    env = os.environ.copy()\n    cmd = (cmd, env)\n", True),
-    ("    token = os.getenv(\"DISCORD_TOKEN\")\n    cmd = (cmd, token)\n", True),
-    ("    env = dict(os.environ)  # copy it\n    cmd = (cmd, env)\n", True),
-])
-def test_profile_regex_rules_ignore_comments_and_docstrings(tmp_path, capsys, body, flagged):
+@pytest.mark.parametrize(
+    "body, flagged",
+    [
+        ("    # Avoid env = os.environ.copy(); use the scoped builder.\n", False),
+        ('    """Avoid env = os.environ.copy(); use the scoped builder."""\n', False),
+        (
+            '    """Builder.\n\n    Never env = os.environ.copy() here.\n    """\n',
+            False,
+        ),
+        ('    # don\'t read os.getenv("DISCORD_TOKEN") directly\n', False),
+        ("    cmd = [cmd]  # not os.environ.get('SLACK_TOKEN')\n", False),
+        ("    'inert example: env = os.environ.copy()'\n", False),
+        # positive controls: the real operations, including a literal env-key argument
+        ("    env = os.environ.copy()\n    cmd = (cmd, env)\n", True),
+        ('    token = os.getenv("DISCORD_TOKEN")\n    cmd = (cmd, token)\n', True),
+        ("    env = dict(os.environ)  # copy it\n    cmd = (cmd, env)\n", True),
+    ],
+)
+def test_profile_regex_rules_ignore_comments_and_docstrings(
+    tmp_path, capsys, body, flagged
+):
     repo, base = _ratchet_repo(tmp_path)
     head = _commit(repo, {"pkg/c.py": _FUNC.format(body)})
     code = cli.run(repo, base, head)
@@ -431,8 +541,10 @@ def test_profile_regex_rules_ignore_comments_and_docstrings(tmp_path, capsys, bo
 @pytest.mark.parametrize("rules", ["BLE001 S110", "BLE001, S110", "BLE001,S110"])
 def test_allow_comment_lists_rules_by_comma_or_space(tmp_path, capsys, rules):
     repo, base = _ratchet_repo(tmp_path)
-    swallow = ("def other():\n    try:\n        pass\n"
-               f"    except Exception:  # health: allow {rules} -- boundary\n        pass\n")
+    swallow = (
+        "def other():\n    try:\n        pass\n"
+        f"    except Exception:  # health: allow {rules} -- boundary\n        pass\n"
+    )
     head = _commit(repo, {"pkg/b.py": swallow})
     assert cli.run(repo, base, head) == 0, capsys.readouterr().out
 
@@ -443,11 +555,16 @@ def test_allow_comment_lists_rules_by_comma_or_space(tmp_path, capsys, rules):
 def test_tooling_failure_exits_2_without_a_traceback(tmp_path, monkeypatch, capsys):
     repo, base = _ratchet_repo(tmp_path)
     lock = {"packages": {"node_modules/typescript": {"version": "0.0.0-not-published"}}}
-    _commit(repo, {"package-lock.json": json.dumps(lock), "web/a.ts": "export const a = 1;\n"})
+    _commit(
+        repo,
+        {"package-lock.json": json.dumps(lock), "web/a.ts": "export const a = 1;\n"},
+    )
     if not shutil.which("npm") or not shutil.which("node"):
         pytest.skip("needs node + npm to reach the npm install path")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    monkeypatch.setenv("npm_config_offline", "true")  # a real npm failure, without the network
+    monkeypatch.setenv(
+        "npm_config_offline", "true"
+    )  # a real npm failure, without the network
     monkeypatch.chdir(repo)
     assert cli.main(["--base", base, "--head", "HEAD"]) == 2
     err = capsys.readouterr().err

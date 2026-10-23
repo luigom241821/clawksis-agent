@@ -1,5 +1,6 @@
 """Truncation retries must send a larger output budget than the failed request (#72770),
 without exceeding the model's known output limit (#79715)."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -35,11 +36,23 @@ def _length_continuation_budgets(agent, attempts=4):
         _retry = TurnRetryState()
         _retry.restart_with_length_continuation = True
         verdict = apply_retry_restarts(
-            agent, _retry=_retry, response=None, interrupted=False, messages=[],
-            conversation_history=[], user_message="hi", api_kwargs={}, current_turn_user_idx=0,
-            final_response=None, retry_count=0, max_retries=3, api_call_count=1,
-            restart_count=0, length_continue_retries=n,
-            _preflight_compression_blocked=False, _turn_exit_reason="unknown",
+            agent,
+            _retry=_retry,
+            response=None,
+            interrupted=False,
+            messages=[],
+            conversation_history=[],
+            user_message="hi",
+            api_kwargs={},
+            current_turn_user_idx=0,
+            final_response=None,
+            retry_count=0,
+            max_retries=3,
+            api_call_count=1,
+            restart_count=0,
+            length_continue_retries=n,
+            _preflight_compression_blocked=False,
+            _turn_exit_reason="unknown",
         )
         assert verdict.action == "continue"
         budgets.append(agent._ephemeral_max_output_tokens)
@@ -61,8 +74,12 @@ def test_retry_raises_budget_above_large_requested_cap(site, requested_cap):
 def test_boost_clamped_to_known_model_output_limit(site):
     # claude-sonnet-4-5 outputs at most 64000: never ask for more, and don't double a
     # request that already sits at the ceiling (the provider would 400).
-    below = site(_agent(None, 40000, api_mode="anthropic_messages", model="claude-sonnet-4-5"))
-    at_limit = site(_agent(None, 64000, api_mode="anthropic_messages", model="claude-sonnet-4-5"))
+    below = site(
+        _agent(None, 40000, api_mode="anthropic_messages", model="claude-sonnet-4-5")
+    )
+    at_limit = site(
+        _agent(None, 64000, api_mode="anthropic_messages", model="claude-sonnet-4-5")
+    )
     assert below == [64000] * 4
     assert at_limit == [64000] * 4
 

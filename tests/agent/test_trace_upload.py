@@ -24,20 +24,29 @@ from agent.trace_upload import (
 # Converter
 # ---------------------------------------------------------------------------
 
+
 def _sample_messages():
     return [
         {"role": "system", "content": "you are clawk"},
         {"role": "user", "content": "list files"},
-        {"role": "assistant", "content": "Listing.", "tool_calls": [
-            {"id": "call_1", "function": {"name": "terminal", "arguments": '{"command": "ls"}'}},
-        ]},
-        {"role": "tool", "tool_call_id": "call_1", "tool_name": "terminal", "content": "a.txt\nb.txt"},
+        {
+            "role": "assistant",
+            "content": "Listing.",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "function": {"name": "terminal", "arguments": '{"command": "ls"}'},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "call_1",
+            "tool_name": "terminal",
+            "content": "a.txt\nb.txt",
+        },
         {"role": "assistant", "content": "Two files."},
     ]
-
-
-
-
 
 
 def test_converter_emits_tool_use_and_tool_result():
@@ -60,7 +69,12 @@ def test_converter_emits_tool_use_and_tool_result():
 
 
 def test_converter_redacts_secrets_by_default():
-    msgs = [{"role": "user", "content": "key OPENAI_API_KEY=sk-abc123def456ghi789jklmno end"}]
+    msgs = [
+        {
+            "role": "user",
+            "content": "key OPENAI_API_KEY=sk-abc123def456ghi789jklmno end",
+        }
+    ]
     jsonl = build_trace_jsonl(msgs, session_id="s1", redact=True)
     assert "sk-abc123def456ghi789jklmno" not in jsonl
 
@@ -83,8 +97,12 @@ def test_upload_blocks_when_redactor_fails(monkeypatch):
         raise RuntimeError("redactor unavailable")
 
     monkeypatch.setattr("agent.redact.redact_sensitive_text", boom)
-    with patch.object(trace_upload, "load_session_messages", return_value=(_sample_messages(), {})), \
-         patch.object(trace_upload, "_do_upload") as upload_mock:
+    with (
+        patch.object(
+            trace_upload, "load_session_messages", return_value=(_sample_messages(), {})
+        ),
+        patch.object(trace_upload, "_do_upload") as upload_mock,
+    ):
         msg = upload_session_trace("s1")
 
     assert "Trace upload blocked" in msg
@@ -109,30 +127,14 @@ def test_load_session_messages_closes_database_on_failure(monkeypatch):
     db.close.assert_called_once()
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Token resolution
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Top-level upload entry point
 # ---------------------------------------------------------------------------
-
-
-
-
-
 
 
 def test_upload_happy_path_mocked(monkeypatch):
@@ -144,9 +146,14 @@ def test_upload_happy_path_mocked(monkeypatch):
     fake_api = MagicMock()
     fake_api.whoami.return_value = {"name": "alice"}
 
-    with patch.object(trace_upload, "load_session_messages",
-                      return_value=(messages, {"model": "claude-x"})), \
-         patch("huggingface_hub.HfApi", return_value=fake_api):
+    with (
+        patch.object(
+            trace_upload,
+            "load_session_messages",
+            return_value=(messages, {"model": "claude-x"}),
+        ),
+        patch("huggingface_hub.HfApi", return_value=fake_api),
+    ):
         msg = upload_session_trace("20260531_abc", cwd="/tmp")
 
     # Returned a viewer URL
@@ -171,9 +178,3 @@ def test_upload_happy_path_mocked(monkeypatch):
     first = json.loads(body.strip().split("\n")[0])
     assert first["type"] in ("user", "assistant")
     assert first["sessionId"] == "20260531_abc"
-
-
-
-
-
-

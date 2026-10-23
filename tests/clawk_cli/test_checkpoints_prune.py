@@ -15,13 +15,24 @@ import pytest
 
 
 def _ns(**kwargs) -> argparse.Namespace:
-    defaults = {"retention_days": 7, "max_size_mb": 500, "keep_orphans": False, "force": False}
+    defaults = {
+        "retention_days": 7,
+        "max_size_mb": 500,
+        "keep_orphans": False,
+        "force": False,
+    }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
 
 
 def _prune_result(**kwargs) -> dict:
-    result = {"scanned": 0, "deleted_orphan": 0, "deleted_stale": 0, "errors": 0, "bytes_freed": 0}
+    result = {
+        "scanned": 0,
+        "deleted_orphan": 0,
+        "deleted_stale": 0,
+        "errors": 0,
+        "bytes_freed": 0,
+    }
     result.update(kwargs)
     return result
 
@@ -34,16 +45,29 @@ _V2_ORPHAN_ONLY_STATUS = {
 _PRE_V2_ONLY_STATUS = {
     "projects": [],
     "pre_v2_projects": [
-        {"path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe", "workdir": None, "exists": False},
+        {
+            "path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe",
+            "workdir": None,
+            "exists": False,
+        },
     ],
 }
 
 _MIXED_STATUS = {
     "projects": [
-        {"hash": "abc123", "workdir": "/gone/v2-project", "exists": False, "commits": 4},
+        {
+            "hash": "abc123",
+            "workdir": "/gone/v2-project",
+            "exists": False,
+            "commits": 4,
+        },
     ],
     "pre_v2_projects": [
-        {"path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe", "workdir": "/gone/pre-v2-project", "exists": False},
+        {
+            "path": "/home/user/.clawksis/checkpoints/deadbeefcafebabe",
+            "workdir": "/gone/pre-v2-project",
+            "exists": False,
+        },
     ],
 }
 
@@ -65,17 +89,15 @@ def _patch_checkpoint_manager(monkeypatch, status: dict, prune_calls: list):
 # ─── pre-v2-only store ──────────────────────────────────────────────────────
 
 
-
-
 # ─── mixed store (v2 + pre-v2) ──────────────────────────────────────────────
-
-
 
 
 # ─── --keep-orphans skips the prompt entirely, on either layout ───────────
 
 
-@pytest.mark.parametrize("status", [_PRE_V2_ONLY_STATUS, _MIXED_STATUS], ids=["pre_v2_only", "mixed"])
+@pytest.mark.parametrize(
+    "status", [_PRE_V2_ONLY_STATUS, _MIXED_STATUS], ids=["pre_v2_only", "mixed"]
+)
 def test_keep_orphans_skips_prompt(monkeypatch, capsys, status):
     import clawk_cli.checkpoints as checkpoints_cli
 
@@ -119,7 +141,3 @@ def test_empty_preview_binds_empty_allowlist(monkeypatch, capsys):
     assert rc == 0
     assert len(prune_calls) == 1
     assert prune_calls[0]["orphan_allowlist"] == set()
-
-
-
-

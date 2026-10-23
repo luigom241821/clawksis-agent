@@ -30,7 +30,9 @@ class _Registry:
 
 
 @pytest.mark.asyncio
-async def test_failed_hot_serve_retires_session_and_bot_recovery_tasks(monkeypatch, tmp_path):
+async def test_failed_hot_serve_retires_session_and_bot_recovery_tasks(
+    monkeypatch, tmp_path
+):
     home = tmp_path.resolve()
     registry = _Registry()
     runner = SimpleNamespace(
@@ -50,7 +52,7 @@ async def test_failed_hot_serve_retires_session_and_bot_recovery_tasks(monkeypat
         payload={"text": "queued bot delivery"},
     )
 
-    live = LiveSession(SimpleNamespace(platform=None, user_id='owner'), 'route')
+    live = LiveSession(SimpleNamespace(platform=None, user_id="owner"), "route")
     authority = SimpleNamespace(
         runner=runner,
         db=db,
@@ -111,15 +113,18 @@ async def test_failed_hot_serve_retires_session_and_bot_recovery_tasks(monkeypat
     unbound = []
     monkeypatch.setattr(run_runtime, "_build_profile_authority", build)
     monkeypatch.setattr(
-        "gateway.session_local_recovery.recover_local_sessions", recover_local)
+        "gateway.session_local_recovery.recover_local_sessions", recover_local
+    )
     monkeypatch.setattr(
         "gateway.platforms.webhook_ingress.recover_webhook_finalizations",
         recover_webhook,
     )
     monkeypatch.setattr(
-        "gateway.session_hosted_service._ensure_hosted_service", fail_hosted)
+        "gateway.session_hosted_service._ensure_hosted_service", fail_hosted
+    )
     monkeypatch.setattr(
-        "gateway.session_cron.unbind_owner", lambda value: unbound.append(value))
+        "gateway.session_cron.unbind_owner", lambda value: unbound.append(value)
+    )
 
     try:
         with pytest.raises(RuntimeError, match="late hot-serve failure"):
@@ -134,6 +139,7 @@ async def test_failed_hot_serve_retires_session_and_bot_recovery_tasks(monkeypat
         assert unbound == [authority]
     finally:
         db.close()
+
 
 @pytest.mark.asyncio
 async def test_settle_gateway_runtime_waits_for_bot_receipt_tasks():
@@ -163,7 +169,9 @@ async def test_settle_gateway_runtime_waits_for_bot_receipt_tasks():
 
 
 @pytest.mark.asyncio
-async def test_failed_hot_serve_with_a_live_writer_parks_without_aborting_or_re_adopting(monkeypatch, tmp_path):
+async def test_failed_hot_serve_with_a_live_writer_parks_without_aborting_or_re_adopting(
+    monkeypatch, tmp_path
+):
     """A serve-time failure whose retirement misses its deadline keeps the reservation and the
     retiring authority, parks the profile without adapters, lets the rest of the batch serve, and
     is never handed back as served by the next reconcile."""
@@ -176,17 +184,26 @@ async def test_failed_hot_serve_with_a_live_writer_parks_without_aborting_or_re_
     for home in (launch, *homes.values()):
         home.mkdir(parents=True)
     registry = SessionAuthorities(launch, multiplexed=True)
-    writer = asyncio.create_task(asyncio.Event().wait())  # a turn that outlives its Stop
+    writer = asyncio.create_task(
+        asyncio.Event().wait()
+    )  # a turn that outlives its Stop
     started, parked = [], {}
     runner = SimpleNamespace(
-        session_authorities=registry, session_control_server=None, _running_agents={},
+        session_authorities=registry,
+        session_control_server=None,
+        _running_agents={},
         config=SimpleNamespace(multiplex_profiles=False, _runtime_profile_homes=()),
         session_runtime_descriptor={"served_profiles": []},
         session_ticket_store=SimpleNamespace(profile_ids=frozenset()),
-        _served_profile_homes={}, _served_profile_signatures={},
-        _live_resource_claims=lambda active: {}, _record_served_profiles=lambda active, homes: None)
+        _served_profile_homes={},
+        _served_profile_signatures={},
+        _live_resource_claims=lambda active: {},
+        _record_served_profiles=lambda active, homes: None,
+    )
     runner.served_profile_names = lambda: sorted(runner._served_profile_homes)
-    runner._serve_profile_runtime = GatewayProfileReconcileMixin._serve_profile_runtime.__get__(runner)
+    runner._serve_profile_runtime = (
+        GatewayProfileReconcileMixin._serve_profile_runtime.__get__(runner)
+    )
 
     async def start_adapters(name, home, claimed):
         started.append(name)
@@ -195,13 +212,26 @@ async def test_failed_hot_serve_with_a_live_writer_parks_without_aborting_or_re_
     async def after_added(profile_homes):
         return None
 
-    runner._start_one_profile_adapters, runner._after_profiles_added = start_adapters, after_added
+    runner._start_one_profile_adapters, runner._after_profiles_added = (
+        start_adapters,
+        after_added,
+    )
 
     async def build(runner_, name, home, *, register):
-        live = SimpleNamespace(task=writer if name == "beta" else None, route=name,
-                               event_stream=SimpleNamespace(execution={"execution_generation": 1}))
-        authority = SimpleNamespace(runner=runner_, profile_id=str(home), sessions={"s": live},
-                                    pending_stops={}, adopted={}, retiring=False, hosted_room_service=None)
+        live = SimpleNamespace(
+            task=writer if name == "beta" else None,
+            route=name,
+            event_stream=SimpleNamespace(execution={"execution_generation": 1}),
+        )
+        authority = SimpleNamespace(
+            runner=runner_,
+            profile_id=str(home),
+            sessions={"s": live},
+            pending_stops={},
+            adopted={},
+            retiring=False,
+            hosted_room_service=None,
+        )
         registry.add(home, authority, name=name)
         return authority
 
@@ -214,23 +244,42 @@ async def test_failed_hot_serve_with_a_live_writer_parks_without_aborting_or_re_
 
     monkeypatch.setattr(run_runtime, "_build_profile_authority", build)
     monkeypatch.setattr(run_runtime, "TURN_SETTLE_SECONDS", 0.05)
-    monkeypatch.setattr(run_runtime, "_record_parked_profiles", lambda value: parked.update(value))
+    monkeypatch.setattr(
+        run_runtime, "_record_parked_profiles", lambda value: parked.update(value)
+    )
     monkeypatch.setattr("gateway.session_bot.recover_bot_deliveries", recover_bot)
-    monkeypatch.setattr("gateway.session_local_recovery.recover_local_sessions", lambda a, schedule: None)
-    monkeypatch.setattr("gateway.platforms.webhook_ingress.recover_webhook_finalizations", no_webhooks)
+    monkeypatch.setattr(
+        "gateway.session_local_recovery.recover_local_sessions",
+        lambda a, schedule: None,
+    )
+    monkeypatch.setattr(
+        "gateway.platforms.webhook_ingress.recover_webhook_finalizations", no_webhooks
+    )
     monkeypatch.setattr("gateway.session_cron.unbind_owner", lambda authority: None)
-    monkeypatch.setattr("clawk_cli.profiles.profiles_to_serve", lambda **kw: list(homes.items()))
+    monkeypatch.setattr(
+        "clawk_cli.profiles.profiles_to_serve", lambda **kw: list(homes.items())
+    )
     try:
         for attempt in range(2):
             result = await GatewayProfileReconcileMixin._apply_profile_changes(
-                runner, {}, list(homes) if attempt == 0 else ["beta"], [], [], reason="control-socket",
-                live=dict(homes))
+                runner,
+                {},
+                list(homes) if attempt == 0 else ["beta"],
+                [],
+                [],
+                reason="control-socket",
+                live=dict(homes),
+            )
             assert result["parked"] == ["beta"], result
             assert "beta" in parked and "beta" not in started, (attempt, started)
-            assert process_ownership.owns(homes["beta"]), "the live writer's home was released"
+            assert process_ownership.owns(homes["beta"]), (
+                "the live writer's home was released"
+            )
             assert registry.for_home(homes["beta"]).retiring is True
         assert started == ["gamma"], "one profile's failed serve aborted the batch"
-        assert result["served_profiles"] == []  # served_profile_names reads the stubbed record
+        assert (
+            result["served_profiles"] == []
+        )  # served_profile_names reads the stubbed record
     finally:
         writer.cancel()
         await asyncio.gather(writer, return_exceptions=True)

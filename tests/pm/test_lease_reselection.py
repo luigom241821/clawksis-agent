@@ -1,4 +1,5 @@
 """A reader that lost the install lock still ends up leasing the generation it imports from."""
+
 import contextlib
 import json
 import os
@@ -24,13 +25,18 @@ def generations(tmp_path, monkeypatch):
 
     def select(name):
         environment = state / "environments" / name / "venv"
-        runtime_facts_path(repo).write_text(json.dumps({"packages": {"venv": {"environment": str(environment)}}}), encoding="utf-8")
+        runtime_facts_path(repo).write_text(
+            json.dumps({"packages": {"venv": {"environment": str(environment)}}}),
+            encoding="utf-8",
+        )
         return environment.resolve()
 
     return repo, state, select
 
 
-def test_unlocked_reader_releases_a_lease_the_installer_moved_away_from(generations, monkeypatch):
+def test_unlocked_reader_releases_a_lease_the_installer_moved_away_from(
+    generations, monkeypatch
+):
     from clawk_cli import runtime_state
     from pm.environments import activate_dependencies
 
@@ -59,8 +65,12 @@ def test_unlocked_reader_releases_a_lease_the_installer_moved_away_from(generati
 
     activate_dependencies(repo)
 
-    assert leased[0] == first and leased[-1] == state / "environments" / "second" / "venv"
-    assert not any((first.parent / ".leases").iterdir()), "the stale lease must be released"
+    assert (
+        leased[0] == first and leased[-1] == state / "environments" / "second" / "venv"
+    )
+    assert not any((first.parent / ".leases").iterdir()), (
+        "the stale lease must be released"
+    )
     assert len(list((state / "environments" / "second" / ".leases").iterdir())) == 1
 
 

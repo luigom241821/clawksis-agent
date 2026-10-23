@@ -23,7 +23,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from clawk_cli.update_channel import (
-    _CANARY_TAG_RE, STABLE_TAG_RE, canary_tag_for_date, canary_timestamp,
+    _CANARY_TAG_RE,
+    STABLE_TAG_RE,
+    canary_tag_for_date,
+    canary_timestamp,
     is_canary_tag,
 )
 from scripts.releases.authors import resolve_author
@@ -35,7 +38,10 @@ def git(*args, cwd=None):
     """Run a git command and return stdout."""
     result = subprocess.run(
         ["git"] + list(args),
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=cwd or str(REPO_ROOT),
         check=False,
     )
@@ -50,7 +56,9 @@ def git_result(*args, cwd=None):
     return subprocess.run(
         ["git"] + list(args),
         capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=cwd or str(REPO_ROOT),
         check=False,
     )
@@ -91,8 +99,12 @@ def dispatch_desktop_build(tag: str, gh_repo: str | None) -> bool:
     cmd[cmd.index("--ref") + 1] = dispatch_ref
 
     result = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", cwd=str(REPO_ROOT),
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(REPO_ROOT),
         check=False,
     )
     if result.returncode != 0:
@@ -106,12 +118,24 @@ def dispatch_desktop_build(tag: str, gh_repo: str | None) -> bool:
 
 def _default_branch(gh_repo: str | None) -> str | None:
     """The repo's default branch, resolved via gh. None on any failure."""
-    cmd = ["gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]
+    cmd = [
+        "gh",
+        "repo",
+        "view",
+        "--json",
+        "defaultBranchRef",
+        "--jq",
+        ".defaultBranchRef.name",
+    ]
     if gh_repo:
         cmd += [gh_repo]
     result = subprocess.run(
-        cmd, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", cwd=str(REPO_ROOT),
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(REPO_ROOT),
         check=False,
     )
     if result.returncode != 0:
@@ -154,7 +178,8 @@ def remote_github_repo(remote: str) -> str | None:
         r"(?:https?://(?:[^/@\s]+@)?github\.com/|"
         r"ssh://(?:[^/@\s]+@)?github\.com(?::\d+)?/|"
         r"git://github\.com/|[^/@:\s]+@github\.com:)"
-        r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?", url,
+        r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?",
+        url,
     )
     return match.group(1) if match else None
 
@@ -184,13 +209,25 @@ def categorize_commit(subject: str) -> str:
         "breaking": [r"^breaking[\s:(]", r"^!:", r"BREAKING CHANGE"],
         "features": [r"^feat[\s:(]", r"^feature[\s:(]", r"^add[\s:(]"],
         "fixes": [r"^fix[\s:(]", r"^bugfix[\s:(]", r"^bug[\s:(]", r"^hotfix[\s:(]"],
-        "improvements": [r"^improve[\s:(]", r"^perf[\s:(]", r"^enhance[\s:(]",
-                         r"^refactor[\s:(]", r"^cleanup[\s:(]", r"^clean[\s:(]",
-                         r"^update[\s:(]", r"^optimize[\s:(]"],
+        "improvements": [
+            r"^improve[\s:(]",
+            r"^perf[\s:(]",
+            r"^enhance[\s:(]",
+            r"^refactor[\s:(]",
+            r"^cleanup[\s:(]",
+            r"^clean[\s:(]",
+            r"^update[\s:(]",
+            r"^optimize[\s:(]",
+        ],
         "docs": [r"^doc[\s:(]", r"^docs[\s:(]"],
         "tests": [r"^test[\s:(]", r"^tests[\s:(]"],
-        "chore": [r"^chore[\s:(]", r"^ci[\s:(]", r"^build[\s:(]",
-                  r"^deps[\s:(]", r"^bump[\s:(]"],
+        "chore": [
+            r"^chore[\s:(]",
+            r"^ci[\s:(]",
+            r"^build[\s:(]",
+            r"^deps[\s:(]",
+            r"^bump[\s:(]",
+        ],
     }
 
     for category, regexes in patterns.items():
@@ -212,7 +249,12 @@ def categorize_commit(subject: str) -> str:
 def clean_subject(subject: str) -> str:
     """Clean up a commit subject for display."""
     # Remove conventional commit prefix
-    cleaned = re.sub(r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*", "", subject, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"^(feat|fix|docs|chore|refactor|test|perf|ci|build|improve|add|update|cleanup|hotfix|breaking|enhance|optimize|bugfix|bug|feature|tests|deps|bump)[\s:(!]+\s*",
+        "",
+        subject,
+        flags=re.IGNORECASE,
+    )
     # Remove trailing issue refs that are redundant with PR links
     cleaned = cleaned.strip()
     # Capitalize first letter
@@ -230,9 +272,16 @@ def parse_coauthors(body: str) -> list:
     if not body:
         return []
     # AI/bot emails to ignore in co-author trailers
-    _ignored_emails = {"noreply@anthropic.com", "noreply@github.com",
-                       "cursoragent@cursor.com", "clawk@nousresearch.com"}
-    _ignored_names = re.compile(r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)", re.IGNORECASE)
+    _ignored_emails = {
+        "noreply@anthropic.com",
+        "noreply@github.com",
+        "cursoragent@cursor.com",
+        "clawk@nousresearch.com",
+    }
+    _ignored_names = re.compile(
+        r"^(Claude|Copilot|Cursor Agent|GitHub Actions?|dependabot|renovate)",
+        re.IGNORECASE,
+    )
     pattern = re.compile(r"Co-authored-by:\s*(.+?)\s*<([^>]+)>", re.IGNORECASE)
     results = []
     for m in pattern.finditer(body):
@@ -253,7 +302,8 @@ def get_commits(since_tag=None, until="HEAD", cwd=None):
     # Format: hash<US>author_name<US>author_email<US>subject\0body
     # Using %x1f (unit separator) to avoid conflict with | in author names
     log = git(
-        "log", range_spec,
+        "log",
+        range_spec,
         "--format=%H%x1f%an%x1f%ae%x1f%s%x00%b%x00",
         "--no-merges",
         cwd=cwd,
@@ -282,16 +332,18 @@ def get_commits(since_tag=None, until="HEAD", cwd=None):
         sha, name, email, subject = parts
         coauthor_info = parse_coauthors(body)
         coauthors = [resolve_author(ca["name"], ca["email"]) for ca in coauthor_info]
-        commits.append({
-            "sha": sha,
-            "short_sha": sha[:8],
-            "author_name": name,
-            "author_email": email,
-            "subject": subject,
-            "category": categorize_commit(subject),
-            "github_author": resolve_author(name, email),
-            "coauthors": coauthors,
-        })
+        commits.append(
+            {
+                "sha": sha,
+                "short_sha": sha[:8],
+                "author_name": name,
+                "author_email": email,
+                "subject": subject,
+                "category": categorize_commit(subject),
+                "github_author": resolve_author(name, email),
+                "coauthors": coauthors,
+            }
+        )
 
     return commits
 
@@ -304,8 +356,15 @@ def get_pr_number(subject: str) -> str | None:
     return None
 
 
-def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
-                       prev_tag=None, first_release=False, no_changelog=False):
+def generate_changelog(
+    commits,
+    tag_name,
+    semver,
+    repo_url="https://github.com/samuelgradientai-sys/clawksis-agent",
+    prev_tag=None,
+    first_release=False,
+    no_changelog=False,
+):
     """Generate markdown changelog from categorized commits."""
     lines = []
 
@@ -328,8 +387,12 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
     lines.append("")
 
     if first_release:
-        lines.append("> 🎉 **First official release!** This marks the beginning of regular weekly releases")
-        lines.append("> for Clawksis. See below for everything included in this initial release.")
+        lines.append(
+            "> 🎉 **First official release!** This marks the beginning of regular weekly releases"
+        )
+        lines.append(
+            "> for Clawksis. See below for everything included in this initial release."
+        )
         lines.append("")
 
     all_authors = set()
@@ -377,7 +440,9 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
                 if pr_num:
                     parts.append(f"([#{pr_num}]({repo_url}/pull/{pr_num}))")
                 else:
-                    parts.append(f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))")
+                    parts.append(
+                        f"([`{commit['short_sha']}`]({repo_url}/commit/{commit['sha']}))"
+                    )
 
                 if author not in teknium_aliases:
                     parts.append(f"— {author}")
@@ -411,7 +476,9 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
 
     # Full changelog link
     if prev_tag:
-        lines.append(f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})")
+        lines.append(
+            f"**Full Changelog**: [{prev_tag}...{tag_name}]({repo_url}/compare/{prev_tag}...{tag_name})"
+        )
     else:
         lines.append(f"**Full Changelog**: [{tag_name}]({repo_url}/commits/{tag_name})")
     lines.append("")
@@ -419,48 +486,88 @@ def generate_changelog(commits, tag_name, semver, repo_url="https://github.com/s
     return "\n".join(lines)
 
 
-def _resume_canary(tag: str, remote: str, repository: str, *, notes_file: Path | None = None) -> None:
+def _resume_canary(
+    tag: str, remote: str, repository: str, *, notes_file: Path | None = None
+) -> None:
     """Converge a tag-pushed canary through draft, dispatch, and protected head."""
     ref = f"refs/tags/{tag}"
     local_object = git("rev-parse", ref)
     commit = git("rev-parse", f"{ref}^{{commit}}")
     if git("cat-file", "-t", local_object) != "tag":
         raise ValueError("Canary receipt must be an annotated tag")
-    remote_refs = dict(line.split()[::-1] for line in git(
-        "ls-remote", remote, ref, f"{ref}^{{}}",
-    ).splitlines())
+    remote_refs = dict(
+        line.split()[::-1]
+        for line in git(
+            "ls-remote",
+            remote,
+            ref,
+            f"{ref}^{{}}",
+        ).splitlines()
+    )
     if remote_refs.get(ref) != local_object or remote_refs.get(f"{ref}^{{}}") != commit:
         raise ValueError("Canary receipt differs from its exact remote tag object")
 
     view = subprocess.run(
-        ["gh", "release", "view", tag, "--repo", repository, "--json", "tagName,isDraft,isPrerelease,url"],
-        cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8",
+        [
+            "gh",
+            "release",
+            "view",
+            tag,
+            "--repo",
+            repository,
+            "--json",
+            "tagName,isDraft,isPrerelease,url",
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
         check=False,
     )
     # A draft is served at an untagged-* URL, never releases/tag/<tag>; gh's
     # answer is the only working link to it.
     if view.returncode != 0:
         create = [
-            "gh", "release", "create", tag, "--repo", repository,
-            "--verify-tag", "--draft", "--prerelease",
-            "--title", f"Clawksis canary {tag}",
+            "gh",
+            "release",
+            "create",
+            tag,
+            "--repo",
+            repository,
+            "--verify-tag",
+            "--draft",
+            "--prerelease",
+            "--title",
+            f"Clawksis canary {tag}",
         ]
-        create.extend(["--notes-file", str(notes_file)] if notes_file else ["--generate-notes"])
+        create.extend(
+            ["--notes-file", str(notes_file)] if notes_file else ["--generate-notes"]
+        )
         created = subprocess.run(
-            create, cwd=REPO_ROOT, capture_output=True, text=True, encoding="utf-8",
+            create,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
             check=False,
         )
         if created.returncode != 0:
-            raise ValueError(created.stderr.strip() or "Canary draft could not be recovered")
+            raise ValueError(
+                created.stderr.strip() or "Canary draft could not be recovered"
+            )
         draft_url = created.stdout.strip()
     else:
         release = json.loads(view.stdout)
-        if (release.get("tagName") != tag or not isinstance(release.get("isDraft"), bool)
-                or release.get("isPrerelease") is not True):
+        if (
+            release.get("tagName") != tag
+            or not isinstance(release.get("isDraft"), bool)
+            or release.get("isPrerelease") is not True
+        ):
             raise ValueError("Canary release state differs from its receipt")
         draft_url = release.get("url") or ""
 
     from scripts.releases.versioning import published_channel_identity
+
     published = published_channel_identity(repository, "canary")
     if published is not None and published == (tag[1:], commit):
         print(f"✓ {tag} is already published.")
@@ -468,8 +575,12 @@ def _resume_canary(tag: str, remote: str, repository: str, *, notes_file: Path |
     if not dispatch_desktop_build(tag, repository):
         raise SystemExit(1)
     print(f"Resumed canary publication for {tag}.")
-    print(f"Workflow: https://github.com/{repository}/actions/workflows/desktop-bundled-release.yml")
-    print("Wait for that workflow to finish. It builds this canary and publishes the draft when the build is green.")
+    print(
+        f"Workflow: https://github.com/{repository}/actions/workflows/desktop-bundled-release.yml"
+    )
+    print(
+        "Wait for that workflow to finish. It builds this canary and publishes the draft when the build is green."
+    )
     print(f"The draft is at {draft_url}.")
 
 
@@ -508,12 +619,18 @@ def cmd_canary(args) -> None:
                 print(f"✓ No new commits since {prev_canary} — nothing to do.")
             return
     from scripts.releases.versioning import published_stable_identity
+
     stable_version, stable_commit = published_stable_identity(gh_repo)
     tag_name = canary_tag_for_date(stable_version, date_utc)
 
     since = prev_canary or stable_commit
 
-    if git_result("rev-parse", "--verify", "--quiet", f"refs/tags/{tag_name}").returncode == 0:
+    if (
+        git_result(
+            "rev-parse", "--verify", "--quiet", f"refs/tags/{tag_name}"
+        ).returncode
+        == 0
+    ):
         if git("rev-parse", f"{tag_name}^{{commit}}") != git("rev-parse", "HEAD"):
             raise ValueError(f"{tag_name} already receipts a different commit")
         if args.publish:
@@ -521,7 +638,6 @@ def cmd_canary(args) -> None:
         else:
             print(f"✓ {tag_name} already exists — nothing to do.")
         return
-
 
     commits = get_commits(since_tag=since)
     if not commits:
@@ -531,7 +647,12 @@ def cmd_canary(args) -> None:
     version = tag_name.lstrip("v")
     print(f"Canary: {tag_name} ({len(commits)} commits since {since})")
     changelog = generate_changelog(
-        commits, tag_name, version, prev_tag=since, first_release=False, no_changelog=args.no_changelog
+        commits,
+        tag_name,
+        version,
+        prev_tag=since,
+        first_release=False,
+        no_changelog=args.no_changelog,
     )
 
     if not args.publish:
@@ -539,9 +660,7 @@ def cmd_canary(args) -> None:
         print("\nDry run complete. To publish, add --publish")
         return
 
-    tag_result = git_result(
-        "tag", "-a", tag_name, "-m", f"Clawksis canary {date_utc}"
-    )
+    tag_result = git_result("tag", "-a", tag_name, "-m", f"Clawksis canary {date_utc}")
     if tag_result.returncode != 0:
         print(f"✗ Failed to create tag {tag_name}: {tag_result.stderr.strip()}")
         sys.exit(1)
@@ -585,7 +704,7 @@ def prune_old_canaries(args) -> None:
 
     tags = git("tag", "--list", "v*+canary.*", "--sort=-creatordate")
     doomed = []
-    for tag in (tags.split("\n") if tags else []):
+    for tag in tags.split("\n") if tags else []:
         date = _canary_date(tag)
         if date is not None and date < cutoff:
             doomed.append(tag)
@@ -600,8 +719,12 @@ def prune_old_canaries(args) -> None:
         if gh_repo:
             gh_cmd += ["--repo", gh_repo]
         result = subprocess.run(
-            gh_cmd, capture_output=True, text=True, encoding="utf-8",
-            errors="replace", cwd=str(REPO_ROOT),
+            gh_cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            cwd=str(REPO_ROOT),
             check=False,
         )
         if result.returncode == 0:
@@ -615,83 +738,162 @@ def prune_old_canaries(args) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Clawksis Release Tool")
-    parser.add_argument("--canary", action="store_true",
-                        help="Tag + publish a stable-core canary "
-                             "(v<stable>+canary.<YYYYMMDDTHHMMSSZ>); no-op when "
-                             "HEAD has no new commits since the last canary")
-    parser.add_argument("--build-commit", type=str, metavar="REV",
-                        help="Preview an exact-commit build into releases/commit/<sha>/ on R2. "
-                             "Add --publish to dispatch without a tag or release. The same "
-                             "direct dispatch runs from any GitHub remote; add --channel NAME "
-                             "to publish into an updatable R2 channel instead of a one-off.")
-    parser.add_argument("--bundle-env", action="append", default=[], metavar="NAME=VALUE",
-                        help="Bake a non-secret environment default into a commit desktop bundle. "
-                             "Repeat for multiple variables. Runtime environment values win.")
-    parser.add_argument("--bundle-unset", action="append", default=[], metavar="NAME",
-                        help="Clear an inherited variable at desktop launch, even when set. "
-                             "Uses an explicit empty value; repeat for multiple variables.")
-    parser.add_argument("--prune-canaries", action="store_true",
-                        help="Delete canary releases+tags older than 14 days")
-    parser.add_argument("--publish", action="store_true",
-                        help="Actually create the tag and GitHub release (otherwise dry run)")
-    parser.add_argument("--remote", type=str,
-                        help="Git remote that receives the release push and the GitHub "
-                             "release. Required with --publish when more than one remote "
-                             "is configured; the single remote is used when only one exists.")
-    parser.add_argument("--date", type=str,
-                        help="Override release date metadata (format: YYYY.M.D)")
+    parser.add_argument(
+        "--canary",
+        action="store_true",
+        help="Tag + publish a stable-core canary "
+        "(v<stable>+canary.<YYYYMMDDTHHMMSSZ>); no-op when "
+        "HEAD has no new commits since the last canary",
+    )
+    parser.add_argument(
+        "--build-commit",
+        type=str,
+        metavar="REV",
+        help="Preview an exact-commit build into releases/commit/<sha>/ on R2. "
+        "Add --publish to dispatch without a tag or release. The same "
+        "direct dispatch runs from any GitHub remote; add --channel NAME "
+        "to publish into an updatable R2 channel instead of a one-off.",
+    )
+    parser.add_argument(
+        "--bundle-env",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Bake a non-secret environment default into a commit desktop bundle. "
+        "Repeat for multiple variables. Runtime environment values win.",
+    )
+    parser.add_argument(
+        "--bundle-unset",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="Clear an inherited variable at desktop launch, even when set. "
+        "Uses an explicit empty value; repeat for multiple variables.",
+    )
+    parser.add_argument(
+        "--prune-canaries",
+        action="store_true",
+        help="Delete canary releases+tags older than 14 days",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Actually create the tag and GitHub release (otherwise dry run)",
+    )
+    parser.add_argument(
+        "--remote",
+        type=str,
+        help="Git remote that receives the release push and the GitHub "
+        "release. Required with --publish when more than one remote "
+        "is configured; the single remote is used when only one exists.",
+    )
+    parser.add_argument(
+        "--date", type=str, help="Override release date metadata (format: YYYY.M.D)"
+    )
 
-    parser.add_argument("--no-changelog", action="store_true",
-                        help="Skip changelog")
+    parser.add_argument("--no-changelog", action="store_true", help="Skip changelog")
     subcommands = parser.add_subparsers(dest="command")
     release_cmd = subcommands.add_parser(
-        "release", help="Claim a version, cut a draft, and dispatch the gate")
-    release_cmd.add_argument("--commit", required=True, metavar="SHA",
-                             help="The commit to release; it must be on main or a release/* branch")
-    release_cmd.add_argument("--bump", choices=["major", "minor", "patch"], default="patch")
-    release_cmd.add_argument("--autopublish", action="store_true",
-                             help="Publish on green instead of leaving a draft")
+        "release", help="Claim a version, cut a draft, and dispatch the gate"
+    )
+    release_cmd.add_argument(
+        "--commit",
+        required=True,
+        metavar="SHA",
+        help="The commit to release; it must be on main or a release/* branch",
+    )
+    release_cmd.add_argument(
+        "--bump", choices=["major", "minor", "patch"], default="patch"
+    )
+    release_cmd.add_argument(
+        "--autopublish",
+        action="store_true",
+        help="Publish on green instead of leaving a draft",
+    )
     from scripts.releases import lanes as lane_set
 
-    release_cmd.add_argument("--only", action="append", metavar="LANES",
-                             help="Start from exactly these lanes instead of the default set "
-                                  "(comma-separated, repeatable).")
-    release_cmd.add_argument("--with", dest="with_lanes", action="append", metavar="LANES",
-                             help="Also build or test these lanes (comma-separated, repeatable).")
-    release_cmd.add_argument("--without", dest="without_lanes", action="append", metavar="LANES",
-                             help="Do not build or test these lanes (comma-separated, repeatable).")
-    release_cmd.epilog = ("Lanes (default on unless noted): "
-                          + "; ".join(f"{lane.name}{'' if lane.default else ' (off)'} = {lane.doc}"
-                                      for lane in lane_set.LANES))
+    release_cmd.add_argument(
+        "--only",
+        action="append",
+        metavar="LANES",
+        help="Start from exactly these lanes instead of the default set "
+        "(comma-separated, repeatable).",
+    )
+    release_cmd.add_argument(
+        "--with",
+        dest="with_lanes",
+        action="append",
+        metavar="LANES",
+        help="Also build or test these lanes (comma-separated, repeatable).",
+    )
+    release_cmd.add_argument(
+        "--without",
+        dest="without_lanes",
+        action="append",
+        metavar="LANES",
+        help="Do not build or test these lanes (comma-separated, repeatable).",
+    )
+    release_cmd.epilog = "Lanes (default on unless noted): " + "; ".join(
+        f"{lane.name}{'' if lane.default else ' (off)'} = {lane.doc}"
+        for lane in lane_set.LANES
+    )
     release_cmd.formatter_class = argparse.RawDescriptionHelpFormatter
     # SUPPRESS keeps a --no-changelog given before the subcommand from being
     # reset by this parser's default.
-    release_cmd.add_argument("--no-changelog", action="store_true", default=argparse.SUPPRESS,
-                             help="Leave the commit list out of the draft body")
+    release_cmd.add_argument(
+        "--no-changelog",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="Leave the commit list out of the draft body",
+    )
     release_cmd.add_argument("--remote", type=str)
     changelog_cmd = subcommands.add_parser(
-        "changelog", help="Print the changelog the next stable release draft would carry")
-    changelog_cmd.add_argument("--commit", required=True, metavar="SHA",
-                               help="Commit the release would be cut at")
-    changelog_cmd.add_argument("--bump", choices=["major", "minor", "patch"], default="patch")
+        "changelog",
+        help="Print the changelog the next stable release draft would carry",
+    )
+    changelog_cmd.add_argument(
+        "--commit",
+        required=True,
+        metavar="SHA",
+        help="Commit the release would be cut at",
+    )
+    changelog_cmd.add_argument(
+        "--bump", choices=["major", "minor", "patch"], default="patch"
+    )
     changelog_cmd.add_argument("--remote", type=str)
     publish_cmd = subcommands.add_parser(
-        "publish", help="Publish a green stable release through the ordered sequencer")
+        "publish", help="Publish a green stable release through the ordered sequencer"
+    )
     publish_cmd.add_argument("--version", required=True)
     publish_cmd.add_argument("--remote", type=str)
     abandon_cmd = subcommands.add_parser(
-        "abandon", help="Clear the outstanding attempt, keeping its attempt ref and writing an abandon marker")
+        "abandon",
+        help="Clear the outstanding attempt, keeping its attempt ref and writing an abandon marker",
+    )
     abandon_cmd.add_argument("--version", required=True)
     abandon_cmd.add_argument("--remote", type=str)
-    from scripts.releases.channel_build import add_arguments, validate_arguments, cmd_channel
+    from scripts.releases.channel_build import (
+        add_arguments,
+        validate_arguments,
+        cmd_channel,
+    )
 
     add_arguments(parser)
     args = parser.parse_args()
 
-    from scripts.releases.entrypoint import cmd_abandon, cmd_changelog, cmd_publish, cmd_release
+    from scripts.releases.entrypoint import (
+        cmd_abandon,
+        cmd_changelog,
+        cmd_publish,
+        cmd_release,
+    )
 
-    stable_commands = {"release": cmd_release, "publish": cmd_publish, "abandon": cmd_abandon,
-                       "changelog": cmd_changelog}
+    stable_commands = {
+        "release": cmd_release,
+        "publish": cmd_publish,
+        "abandon": cmd_abandon,
+        "changelog": cmd_changelog,
+    }
     if args.command:
         stable_commands[args.command](args)
         return
@@ -701,12 +903,20 @@ def main():
     if (args.bundle_env or args.bundle_unset) and args.build_commit is None:
         parser.error("--bundle-env and --bundle-unset require --build-commit")
     if args.build_commit is not None:
-        conflicting = [name for name, supplied in (
-            ("--canary", args.canary), ("--prune-canaries", args.prune_canaries),
-            ("--date", args.date), ("--no-changelog", args.no_changelog),
-        ) if supplied]
+        conflicting = [
+            name
+            for name, supplied in (
+                ("--canary", args.canary),
+                ("--prune-canaries", args.prune_canaries),
+                ("--date", args.date),
+                ("--no-changelog", args.no_changelog),
+            )
+            if supplied
+        ]
         if conflicting:
-            parser.error("--build-commit cannot be combined with " + ", ".join(conflicting))
+            parser.error(
+                "--build-commit cannot be combined with " + ", ".join(conflicting)
+            )
     from scripts.releases.commit_build import cmd_build_commit
 
     modes = (
@@ -718,7 +928,9 @@ def main():
         if selected:
             handler(args)
             return
-    parser.error("select release, publish, abandon, changelog, --canary, --build-commit, or a channel operation")
+    parser.error(
+        "select release, publish, abandon, changelog, --canary, --build-commit, or a channel operation"
+    )
 
 
 if __name__ == "__main__":

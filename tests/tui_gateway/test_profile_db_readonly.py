@@ -28,7 +28,11 @@ def _seed_store(home: Path) -> Path:
 
 def _bind_foreign(monkeypatch, tmp_path: Path) -> None:
     foreign = _seed_store(tmp_path / "profiles" / "code")
-    monkeypatch.setattr(server, "_profile_home", lambda name: foreign if (name or "").strip() == "code" else None)
+    monkeypatch.setattr(
+        server,
+        "_profile_home",
+        lambda name: foreign if (name or "").strip() == "code" else None,
+    )
 
 
 def test_foreign_profile_db_is_read_only(monkeypatch, tmp_path):
@@ -45,7 +49,11 @@ def test_fresh_served_profile_store_is_seeded_for_its_first_read(monkeypatch, tm
     of answering storage_unavailable until a turn happens to run (#120730 remote-secondary E2E)."""
     fresh = tmp_path / "profiles" / "newbot"
     fresh.mkdir(parents=True)
-    monkeypatch.setattr(server, "_profile_home", lambda name: fresh if (name or "").strip() == "newbot" else None)
+    monkeypatch.setattr(
+        server,
+        "_profile_home",
+        lambda name: fresh if (name or "").strip() == "newbot" else None,
+    )
     with server._profile_db({"profile": "newbot"}) as db:
         assert db is not None and db.read_only is True
         assert db.get_session_by_title("Bot Chat") is None
@@ -65,13 +73,23 @@ def test_discover_repos_payload_skips_backfill_on_read_only(monkeypatch, tmp_pat
     _bind_foreign(monkeypatch, tmp_path)
     with server._profile_db({"profile": "code"}) as db:
         calls = []
-        monkeypatch.setattr(type(db), "backfill_repo_roots", lambda self, m: calls.append(m), raising=False)
+        monkeypatch.setattr(
+            type(db),
+            "backfill_repo_roots",
+            lambda self, m: calls.append(m),
+            raising=False,
+        )
         server._discover_repos_payload(db, backfill=True, include_cached=False)
         assert calls == []
     # Same call on a writable handle still backfills.
     with server._profile_db({"profile": "code"}, writer=True) as db:
         calls = []
-        monkeypatch.setattr(type(db), "backfill_repo_roots", lambda self, m: calls.append(m), raising=False)
+        monkeypatch.setattr(
+            type(db),
+            "backfill_repo_roots",
+            lambda self, m: calls.append(m),
+            raising=False,
+        )
         server._discover_repos_payload(db, backfill=True, include_cached=False)
         assert len(calls) == 1
 
@@ -89,12 +107,18 @@ def test_bot_chat_unarchive_escalates_to_writer(monkeypatch, tmp_path):
     db.end_session("bot", "ws_orphan_reap")
     db.set_session_archived("bot", True)
     db.close()
-    monkeypatch.setattr(server, "_profile_home", lambda name: foreign if (name or "").strip() == "code" else None)
+    monkeypatch.setattr(
+        server,
+        "_profile_home",
+        lambda name: foreign if (name or "").strip() == "code" else None,
+    )
 
     with server._profile_db({"profile": "code"}) as ro_db:
         assert ro_db.read_only is True
         resp = server._session_list_by_title("rid", ro_db, BOT_CHAT_TITLE)
-    assert resp["result"]["sessions"], "archived Bot Chat was not resurrected through the writer escalation"
+    assert resp["result"]["sessions"], (
+        "archived Bot Chat was not resurrected through the writer escalation"
+    )
 
     check = SessionDB(db_path=foreign / "state.db", read_only=True)
     try:

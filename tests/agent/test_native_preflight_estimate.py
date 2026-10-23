@@ -33,7 +33,9 @@ def _history_with_checkpoint():
     pre = []
     for i in range(30):
         pre.append({"role": "user", "content": f"ask {i}"})
-        pre.append({"role": "assistant", "content": "working " + ("tool output " * 400)})
+        pre.append(
+            {"role": "assistant", "content": "working " + ("tool output " * 400)}
+        )
         pre.append(
             {
                 "role": "tool",
@@ -58,14 +60,18 @@ def _history_with_checkpoint():
 
 def test_returns_none_when_api_mode_is_not_codex_responses():
     agent = _codex_agent(api_mode="chat_completions")
-    assert estimate_native_responses_preflight_tokens(agent, _history_with_checkpoint()) is None
+    assert (
+        estimate_native_responses_preflight_tokens(agent, _history_with_checkpoint())
+        is None
+    )
 
 
 def test_returns_none_when_native_compaction_is_disabled():
     agent = _codex_agent(codex_responses_native_compaction=False)
-    assert estimate_native_responses_preflight_tokens(agent, _history_with_checkpoint()) is None
-
-
+    assert (
+        estimate_native_responses_preflight_tokens(agent, _history_with_checkpoint())
+        is None
+    )
 
 
 def test_pruned_estimate_is_far_below_durable_transcript():
@@ -119,9 +125,9 @@ def test_midturn_pressure_uses_pruned_estimate_when_eligible():
     assert generic > native * 2
     # The assembled api_messages carry the system row; the helper must not
     # double-count it (converter skips system rows, system_prompt adds it once).
-    assert _midturn_request_pressure_tokens(
-        agent, messages, "be brief", generic
-    ) == native
+    assert (
+        _midturn_request_pressure_tokens(agent, messages, "be brief", generic) == native
+    )
 
 
 def test_midturn_pressure_falls_back_to_generic_plus_tools_when_ineligible():

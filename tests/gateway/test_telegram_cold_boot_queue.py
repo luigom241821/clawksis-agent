@@ -16,7 +16,9 @@ from plugins.platforms.telegram.adapter import TelegramAdapter
 
 
 def _make_adapter(extra=None) -> TelegramAdapter:
-    return TelegramAdapter(PlatformConfig(enabled=True, token="test-token", extra=extra or {}))
+    return TelegramAdapter(
+        PlatformConfig(enabled=True, token="test-token", extra=extra or {})
+    )
 
 
 async def _capture_drop_pending(adapter: TelegramAdapter, *, is_reconnect: bool):
@@ -24,7 +26,9 @@ async def _capture_drop_pending(adapter: TelegramAdapter, *, is_reconnect: bool)
     captured = {}
     adapter._delete_webhook_best_effort = AsyncMock()
 
-    async def _fake_resilient(*, drop_pending_updates, error_callback, require_progress=False):
+    async def _fake_resilient(
+        *, drop_pending_updates, error_callback, require_progress=False
+    ):
         captured["drop_pending_updates"] = drop_pending_updates
         captured["require_progress"] = require_progress
         return True
@@ -70,7 +74,9 @@ async def _capture_webhook_drop_pending(
         captured.update(kwargs)
 
     adapter._app = SimpleNamespace(
-        updater=SimpleNamespace(start_webhook=AsyncMock(side_effect=_fake_start_webhook))
+        updater=SimpleNamespace(
+            start_webhook=AsyncMock(side_effect=_fake_start_webhook)
+        )
     )
     monkeypatch.setenv("TELEGRAM_WEBHOOK_URL", "https://example.test/telegram")
     monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "test-secret")
@@ -81,7 +87,9 @@ async def _capture_webhook_drop_pending(
 
 
 @pytest.mark.asyncio
-async def test_webhook_cold_boot_honors_the_knob_and_logs_the_decision(monkeypatch, caplog):
+async def test_webhook_cold_boot_honors_the_knob_and_logs_the_decision(
+    monkeypatch, caplog
+):
     """The webhook start path forwards the same policy as polling, and says which one
     it applied. The flag is not a no-op there: PTB feeds it to delete_webhook /
     set_webhook, which drop Telegram's stored updates."""
@@ -101,6 +109,8 @@ async def test_webhook_reconnect_preserves_queue_regardless_of_the_knob(monkeypa
     boots to drop."""
     adapter = _make_adapter()
 
-    captured = await _capture_webhook_drop_pending(adapter, monkeypatch, is_reconnect=True)
+    captured = await _capture_webhook_drop_pending(
+        adapter, monkeypatch, is_reconnect=True
+    )
 
     assert captured["drop_pending_updates"] is False

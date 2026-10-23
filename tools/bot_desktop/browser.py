@@ -21,7 +21,12 @@ from tools.bot_desktop import runtime
 
 DISK_CACHE_BYTES = 256 * 1024 * 1024
 
-_SYSTEM_BROWSERS = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser")
+_SYSTEM_BROWSERS = (
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+)
 
 
 def profile_dir() -> Path:
@@ -30,7 +35,11 @@ def profile_dir() -> Path:
     state lives), so ``pin`` means ``<CLAWK_HOME>/pin`` and two profiles never share one jar by accident."""
     override = os.path.expanduser(os.environ.get("AGENT_BROWSER_PROFILE", "").strip())
     if override:
-        return Path(override) if os.path.isabs(override) else runtime.get_clawk_home() / override
+        return (
+            Path(override)
+            if os.path.isabs(override)
+            else runtime.get_clawk_home() / override
+        )
     return runtime.state_dir() / "browser-profile"
 
 
@@ -56,7 +65,9 @@ def _managed_executable() -> Optional[str]:
     from clawk_cli.browser_runtime import chromium_executable
 
     exe = chromium_executable(allow_override=False)
-    return exe if exe and os.access(exe, os.X_OK) and not _is_headless_shell(exe) else None
+    return (
+        exe if exe and os.access(exe, os.X_OK) and not _is_headless_shell(exe) else None
+    )
 
 
 def _is_headless_shell(exe: str) -> bool:
@@ -68,7 +79,9 @@ def _is_headless_shell(exe: str) -> bool:
 
 
 def _system_executable() -> Optional[str]:
-    return next((shutil.which(name) for name in _SYSTEM_BROWSERS if shutil.which(name)), None)
+    return next(
+        (shutil.which(name) for name in _SYSTEM_BROWSERS if shutil.which(name)), None
+    )
 
 
 def _is_root() -> bool:
@@ -77,6 +90,7 @@ def _is_root() -> bool:
 
 def _userns_restricted() -> bool:
     from tools.browser_tool_session import apparmor_restricts_unprivileged_userns
+
     return apparmor_restricts_unprivileged_userns()
 
 
@@ -86,7 +100,9 @@ def dock_launch() -> Optional[tuple[str, str]]:
     return (exe, str(profile_dir())) if exe else None
 
 
-def dock_argv(exe: str, user_data_dir: str, *, sandbox_bypass: Optional[bool] = None) -> list[str]:
+def dock_argv(
+    exe: str, user_data_dir: str, *, sandbox_bypass: Optional[bool] = None
+) -> list[str]:
     """Command the dock's Browser icon runs. ``--remote-debugging-port=0`` makes a human-started
     instance attachable (Chromium writes the chosen port to ``<user-data-dir>/DevToolsActivePort``);
     first-run / default-browser dialogs would sit between the human and the bot's tabs."""
@@ -95,27 +111,54 @@ def dock_argv(exe: str, user_data_dir: str, *, sandbox_bypass: Optional[bool] = 
     # The same sandbox policy agent-browser starts this binary with (root, Docker, AppArmor userns): the
     # human's Browser is the bot's browser, in the same container; a stricter rule here just made the dock
     # icon die with 'No usable sandbox!' in the official image while the agent's own Chromium ran fine.
-    from tools.browser_tool_session import CHROMIUM_SANDBOX_BYPASS_ARGS, _needs_chromium_sandbox_bypass
+    from tools.browser_tool_session import (
+        CHROMIUM_SANDBOX_BYPASS_ARGS,
+        _needs_chromium_sandbox_bypass,
+    )
+
     # The profile is persistent by design (logins survive handoffs); its HTTP cache is not worth a
     # gateway's disk: uncapped it grows for months toward a hosted instance's 6 GB.
-    return [exe, f"--user-data-dir={user_data_dir}", "--remote-debugging-port=0", "--no-first-run",
-            "--no-default-browser-check", "--test-type", f"--disk-cache-size={DISK_CACHE_BYTES}",
-            *(CHROMIUM_SANDBOX_BYPASS_ARGS if (_needs_chromium_sandbox_bypass() if sandbox_bypass is None
-                                              else sandbox_bypass) else ())]
+    return [
+        exe,
+        f"--user-data-dir={user_data_dir}",
+        "--remote-debugging-port=0",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--test-type",
+        f"--disk-cache-size={DISK_CACHE_BYTES}",
+        *(
+            CHROMIUM_SANDBOX_BYPASS_ARGS
+            if (
+                _needs_chromium_sandbox_bypass()
+                if sandbox_bypass is None
+                else sandbox_bypass
+            )
+            else ()
+        ),
+    ]
 
 
-def dock_exec_line(exe: str, user_data_dir: str, *, sandbox_bypass: Optional[bool] = None) -> str:
+def dock_exec_line(
+    exe: str, user_data_dir: str, *, sandbox_bypass: Optional[bool] = None
+) -> str:
     """The ``Exec=`` line of the dock's ``.desktop`` entry. Every argument is double-quoted per the
     Desktop Entry spec (a browser under ``/opt/Google Chrome/`` or a profile under a spaced CLAWK_HOME
     otherwise splits into garbage): inside the quotes ``" ` $ \\`` are backslash-escaped, and because the
     value is itself a string field, each of those backslashes is escaped once more."""
+
     def quote(arg: str) -> str:
         quoted = "".join("\\" + ch if ch in '"`$\\' else ch for ch in arg)
         return '"' + quoted.replace("\\", "\\\\") + '"'
-    return "Exec=" + " ".join(quote(arg) for arg in dock_argv(exe, user_data_dir, sandbox_bypass=sandbox_bypass))
+
+    return "Exec=" + " ".join(
+        quote(arg)
+        for arg in dock_argv(exe, user_data_dir, sandbox_bypass=sandbox_bypass)
+    )
 
 
-def running_instance_cdp_port(user_data_dir: str, *, exclude_session: Optional[str] = None) -> Optional[int]:
+def running_instance_cdp_port(
+    user_data_dir: str, *, exclude_session: Optional[str] = None
+) -> Optional[int]:
     """DevTools port of a Chromium currently running on ``user_data_dir``, or ``None``.
 
     Both files outlive a crashed or closed Chromium: ``SingletonLock`` is a symlink to ``host-pid`` and
@@ -125,13 +168,17 @@ def running_instance_cdp_port(user_data_dir: str, *, exclude_session: Optional[s
     close the browser as a config change and then attach to the port that just died with it.
     """
     try:
-        with open(os.path.join(user_data_dir, "DevToolsActivePort"), encoding="utf-8-sig") as fh:
+        with open(
+            os.path.join(user_data_dir, "DevToolsActivePort"), encoding="utf-8-sig"
+        ) as fh:
             port_line = fh.readline().strip()
         target = os.readlink(os.path.join(user_data_dir, "SingletonLock"))
     except OSError:
         return None
     _host, _, pid_text = target.rpartition("-")
-    if not (port_line.isdigit() and pid_text.isdigit()) or not _pid_alive(int(pid_text)):
+    if not (port_line.isdigit() and pid_text.isdigit()) or not _pid_alive(
+        int(pid_text)
+    ):
         return None
     if exclude_session and _launched_by_session(int(pid_text)) == exclude_session:
         return None
@@ -150,7 +197,9 @@ def _launched_by_session(chromium_pid: int) -> Optional[str]:
     ``/proc/<ppid>/environ`` is the marker (Linux-only, same user)."""
     try:
         with open(f"/proc/{chromium_pid}/status", encoding="utf-8") as fh:
-            ppid = next((int(line.split()[1]) for line in fh if line.startswith("PPid:")), 0)
+            ppid = next(
+                (int(line.split()[1]) for line in fh if line.startswith("PPid:")), 0
+            )
         with open(f"/proc/{ppid}/environ", "rb") as fh:
             raw = fh.read()
     except (OSError, ValueError):
@@ -164,6 +213,7 @@ def _launched_by_session(chromium_pid: int) -> Optional[str]:
 
 def _pid_alive(pid: int) -> bool:
     import psutil
+
     return psutil.pid_exists(pid)
 
 

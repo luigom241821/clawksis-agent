@@ -3,6 +3,7 @@
 Each probe runs in a FRESH subprocess with an isolated CLAWK_HOME so nothing is cached across reps.
 Reports medians + min over reps. Writes <label>.runtime.json.
 """
+
 import json, os, statistics, subprocess, sys, tempfile, time, shutil
 
 TREE, LABEL = sys.argv[1], sys.argv[2]
@@ -10,36 +11,96 @@ REPS = int(sys.argv[3]) if len(sys.argv) > 3 else 7
 PY = os.environ.get("NAV_PY", sys.executable)
 HOME = tempfile.mkdtemp(prefix=f"hh_{LABEL}_")
 os.makedirs(f"{HOME}/skills", exist_ok=True)
-open(f"{HOME}/config.yaml", "w", encoding="utf-8").write("model:\n  default: openai/gpt-4o-mini\n  provider: openrouter\nterminal:\n  backend: local\n")
-ENV = {**os.environ, "CLAWK_HOME": HOME, "PYTHONPATH": TREE, "PYTHONDONTWRITEBYTECODE": "0", "OPENROUTER_API_KEY": "sk-bench-placeholder",
-       "CLAWK_SKIP_UPDATE_CHECK": "1", "NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "120"}
+open(f"{HOME}/config.yaml", "w", encoding="utf-8").write(
+    "model:\n  default: openai/gpt-4o-mini\n  provider: openrouter\nterminal:\n  backend: local\n"
+)
+ENV = {
+    **os.environ,
+    "CLAWK_HOME": HOME,
+    "PYTHONPATH": TREE,
+    "PYTHONDONTWRITEBYTECODE": "0",
+    "OPENROUTER_API_KEY": "sk-bench-placeholder",
+    "CLAWK_SKIP_UPDATE_CHECK": "1",
+    "NO_COLOR": "1",
+    "TERM": "dumb",
+    "COLUMNS": "120",
+}
 for k in list(ENV):
-    if k.startswith(("CLAWK_SESSION", "CLAWK_PROFILE")): ENV.pop(k)
+    if k.startswith(("CLAWK_SESSION", "CLAWK_PROFILE")):
+        ENV.pop(k)
+
 
 def run(argv, code=None, timeout=300):
     t0 = time.perf_counter()
-    r = subprocess.run([PY, *argv] if code is None else [PY, "-c", code], cwd=TREE, env=ENV, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
+    r = subprocess.run(
+        [PY, *argv] if code is None else [PY, "-c", code],
+        cwd=TREE,
+        env=ENV,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
     return time.perf_counter() - t0, r
 
-def warm_pyc():
-    subprocess.run([PY, "-m", "compileall", "-q", "-j", "16", TREE], cwd=TREE, env=ENV, capture_output=True, check=False)
 
-def med(xs): return round(statistics.median(xs), 4)
+def warm_pyc():
+    subprocess.run(
+        [PY, "-m", "compileall", "-q", "-j", "16", TREE],
+        cwd=TREE,
+        env=ENV,
+        capture_output=True,
+        check=False,
+    )
+
+
+def med(xs):
+    return round(statistics.median(xs), 4)
+
 
 results = {"label": LABEL, "tree": TREE, "reps": REPS}
 
 # 0. bytecode on disk (after compileall) — proxy for "how much code gets loaded"
 warm_pyc()
-pyc_bytes = 0; pyc_n = 0
+pyc_bytes = 0
+pyc_n = 0
 for dp, dns, fns in os.walk(TREE):
-    if any(s in dp for s in ("/node_modules", "/apps/", "/.git", "/tests", "/website", "/build", "/venv")): dns[:] = []; continue
+    if any(
+        s in dp
+        for s in (
+            "/node_modules",
+            "/apps/",
+            "/.git",
+            "/tests",
+            "/website",
+            "/build",
+            "/venv",
+        )
+    ):
+        dns[:] = []
+        continue
     for f in fns:
-        if f.endswith(".pyc"): pyc_bytes += os.path.getsize(os.path.join(dp, f)); pyc_n += 1
-results["pyc_files"] = pyc_n; results["pyc_bytes"] = pyc_bytes
+        if f.endswith(".pyc"):
+            pyc_bytes += os.path.getsize(os.path.join(dp, f))
+            pyc_n += 1
+results["pyc_files"] = pyc_n
+results["pyc_bytes"] = pyc_bytes
 
 # 1. import-time probes: fresh interpreter, measure wall + module count + RSS
-IMPORT_TARGETS = ["run_agent", "cli", "clawk_cli.main", "gateway.run", "tools.registry", "clawk_state", "tui_gateway.server", "clawk_cli.web_server", "model_tools", "agent.prompt_builder"]
-probe = r'''
+IMPORT_TARGETS = [
+    "run_agent",
+    "cli",
+    "clawk_cli.main",
+    "gateway.run",
+    "tools.registry",
+    "clawk_state",
+    "tui_gateway.server",
+    "clawk_cli.web_server",
+    "model_tools",
+    "agent.prompt_builder",
+]
+probe = r"""
 import sys, time, os, resource, json
 t0=time.perf_counter()
 n0=len(sys.modules)
@@ -53,33 +114,78 @@ rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 tree=os.getcwd(); foreign=[m for m,mod in list(sys.modules.items()) if getattr(mod,"__file__",None) and "clawksis-agent" in mod.__file__ and not mod.__file__.startswith(tree) and "site-packages" not in mod.__file__]
 if foreign: err=(err or "")+f" FOREIGN_MODULES:{foreign[:3]}"
 print(json.dumps({"dt":dt,"mods":len(sys.modules)-n0,"rss_kb":rss,"err":err}))
-'''
+"""
 imp = {}
 for tgt in IMPORT_TARGETS:
     rows = []
     for _ in range(REPS):
         _, r = run([], code=None) if False else (None, None)
-        r = subprocess.run([PY, "-c", probe, tgt], cwd=TREE, env=ENV, capture_output=True, text=True, timeout=300, check=False)
-        try: rows.append(json.loads([l for l in (r.stdout + "\n" + r.stderr).splitlines() if l.lstrip().startswith("{") and "\"dt\"" in l][-1].strip()))
-        except Exception: rows.append({"dt": None, "mods": None, "rss_kb": None, "err": (r.stderr or r.stdout)[-300:]})
+        r = subprocess.run(
+            [PY, "-c", probe, tgt],
+            cwd=TREE,
+            env=ENV,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        try:
+            rows.append(
+                json.loads(
+                    [
+                        l
+                        for l in (r.stdout + "\n" + r.stderr).splitlines()
+                        if l.lstrip().startswith("{") and '"dt"' in l
+                    ][-1].strip()
+                )
+            )
+        except Exception:
+            rows.append(
+                {
+                    "dt": None,
+                    "mods": None,
+                    "rss_kb": None,
+                    "err": (r.stderr or r.stdout)[-300:],
+                }
+            )
     ok = [x for x in rows if x["dt"] is not None and not x["err"]]
-    imp[tgt] = {"dt_med": med([x["dt"] for x in ok]) if ok else None, "dt_min": round(min(x["dt"] for x in ok), 4) if ok else None,
-                "mods": ok[0]["mods"] if ok else None, "rss_mb": round(med([x["rss_kb"] for x in ok]) / 1024, 1) if ok else None,
-                "err": next((x["err"] for x in rows if x["err"]), None)}
+    imp[tgt] = {
+        "dt_med": med([x["dt"] for x in ok]) if ok else None,
+        "dt_min": round(min(x["dt"] for x in ok), 4) if ok else None,
+        "mods": ok[0]["mods"] if ok else None,
+        "rss_mb": round(med([x["rss_kb"] for x in ok]) / 1024, 1) if ok else None,
+        "err": next((x["err"] for x in rows if x["err"]), None),
+    }
 results["import"] = imp
 
 # 2. CLI end-to-end startup: `clawk --version`, `clawk --help`, `clawk doctor --help`, `clawk config get model` (no network)
-CLI = {"version": ["clawk_cli/main.py", "--version"], "help": ["clawk_cli/main.py", "--help"], "config_get": ["clawk_cli/main.py", "config", "get", "model"], "tools_list": ["clawk_cli/main.py", "tools", "--help"], "skills_help": ["clawk_cli/main.py", "skills", "--help"]}
+CLI = {
+    "version": ["clawk_cli/main.py", "--version"],
+    "help": ["clawk_cli/main.py", "--help"],
+    "config_get": ["clawk_cli/main.py", "config", "get", "model"],
+    "tools_list": ["clawk_cli/main.py", "tools", "--help"],
+    "skills_help": ["clawk_cli/main.py", "skills", "--help"],
+}
 cli = {}
 for name, argv in CLI.items():
-    ts = []; rc = None; last = ""
+    ts = []
+    rc = None
+    last = ""
     for _ in range(REPS):
-        dt, r = run(argv); ts.append(dt); rc = r.returncode; last = (r.stderr or r.stdout)[-200:]
-    cli[name] = {"med": med(ts), "min": round(min(ts), 4), "rc": rc, "tail": last if rc else ""}
+        dt, r = run(argv)
+        ts.append(dt)
+        rc = r.returncode
+        last = (r.stderr or r.stdout)[-200:]
+    cli[name] = {
+        "med": med(ts),
+        "min": round(min(ts), 4),
+        "rc": rc,
+        "tail": last if rc else "",
+    }
 results["cli"] = cli
 
 # 3. in-process hot paths (single fresh interpreter, timeit inside): tool schema assembly, system prompt build, state db ops
-hot = r'''
+hot = r"""
 import time, json, os, sys, timeit, importlib
 out={}
 def T(name, fn, n):
@@ -134,19 +240,51 @@ try:
     T("registry_get_definitions_all_ms", lambda: registry.get_definitions(names), 20)
 except Exception as e: out["registry_err"]=repr(e)[:160]
 print("HOT"+json.dumps(out))
-'''
+"""
 _, r = run([], code=hot, timeout=600)
-try: results["hot"] = json.loads([l for l in r.stdout.splitlines() if l.startswith("HOT")][-1][3:])
-except Exception: results["hot"] = {"err": (r.stderr or r.stdout)[-800:]}
+try:
+    results["hot"] = json.loads(
+        [l for l in r.stdout.splitlines() if l.startswith("HOT")][-1][3:]
+    )
+except Exception:
+    results["hot"] = {"err": (r.stderr or r.stdout)[-800:]}
 
 # 4. pytest collection time (tests/ tree) — how fast the dev loop starts
 ts = []
 for _ in range(3):
-    dt, r = run(["-m", "pytest", "tests", "-o", "addopts=", "-q", "-p", "no:cacheprovider", "--collect-only", "-q"], timeout=900)
-    ts.append(dt); collected = [l for l in r.stdout.splitlines() if "collected" in l][-1:] or r.stdout.splitlines()[-1:]
-results["pytest_collect"] = {"med_s": med(ts), "min_s": round(min(ts), 2), "summary": collected}
+    dt, r = run(
+        [
+            "-m",
+            "pytest",
+            "tests",
+            "-o",
+            "addopts=",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--collect-only",
+            "-q",
+        ],
+        timeout=900,
+    )
+    ts.append(dt)
+    collected = [l for l in r.stdout.splitlines() if "collected" in l][
+        -1:
+    ] or r.stdout.splitlines()[-1:]
+results["pytest_collect"] = {
+    "med_s": med(ts),
+    "min_s": round(min(ts), 2),
+    "summary": collected,
+}
 
-OUT = os.environ.get("NAV_OUT", "."); os.makedirs(OUT, exist_ok=True)
-json.dump(results, open(os.path.join(OUT, f"{LABEL}.runtime.json"), "w", encoding="utf-8"), indent=1)
+OUT = os.environ.get("NAV_OUT", ".")
+os.makedirs(OUT, exist_ok=True)
+json.dump(
+    results,
+    open(os.path.join(OUT, f"{LABEL}.runtime.json"), "w", encoding="utf-8"),
+    indent=1,
+)
 shutil.rmtree(HOME, ignore_errors=True)
-print(f"{LABEL}: import run_agent={imp['run_agent']['dt_med']}s mods={imp['run_agent']['mods']} rss={imp['run_agent']['rss_mb']}MB | cli --version={cli['version']['med']}s help={cli['help']['med']}s | collect={results['pytest_collect']['med_s']}s | pyc={pyc_bytes/1e6:.1f}MB")
+print(
+    f"{LABEL}: import run_agent={imp['run_agent']['dt_med']}s mods={imp['run_agent']['mods']} rss={imp['run_agent']['rss_mb']}MB | cli --version={cli['version']['med']}s help={cli['help']['med']}s | collect={results['pytest_collect']['med_s']}s | pyc={pyc_bytes / 1e6:.1f}MB"
+)

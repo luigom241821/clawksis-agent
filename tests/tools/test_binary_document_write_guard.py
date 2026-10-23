@@ -61,9 +61,25 @@ def _make_wal_db(path: Path):
 
 class TestExtensionHelpers:
     def test_opaque_document_extensions(self):
-        for p in ("a.docx", "b.XLSX", "c.pptx", "d.doc", "e.odt", "f.ods", "g.odp",
-                  "h.docm", "i.xlsm", "j.xlsb", "k.pptm", "l.ppsx", "m.ppsm",
-                  "n.pps", "o.pot", "p.rtf", "q.epub"):
+        for p in (
+            "a.docx",
+            "b.XLSX",
+            "c.pptx",
+            "d.doc",
+            "e.odt",
+            "f.ods",
+            "g.odp",
+            "h.docm",
+            "i.xlsm",
+            "j.xlsb",
+            "k.pptm",
+            "l.ppsx",
+            "m.ppsm",
+            "n.pps",
+            "o.pot",
+            "p.rtf",
+            "q.epub",
+        ):
             assert has_opaque_document_extension(p) is True, f"{p} should be opaque"
 
     def test_non_opaque_paths(self):
@@ -74,8 +90,6 @@ class TestExtensionHelpers:
         assert is_pdf_path("report.pdf") is True
         assert is_pdf_path("report.PDF") is True
         assert is_pdf_path("report.txt") is False
-
-
 
 
 class TestWriteFileToolGuard:
@@ -170,8 +184,9 @@ class TestPatchToolGuard:
         original = docx.read_bytes()
 
         result = json.loads(
-            patch_tool(mode="replace", path=str(docx),
-                       old_string="good", new_string="great")
+            patch_tool(
+                mode="replace", path=str(docx), old_string="good", new_string="great"
+            )
         )
 
         assert result.get("error")
@@ -201,11 +216,7 @@ class TestPatchToolGuard:
         docx = tmp_path / "old.docx"
         _make_minimal_docx(docx)
 
-        v4a = (
-            "*** Begin Patch\n"
-            f"*** Delete File: {docx}\n"
-            "*** End Patch"
-        )
+        v4a = f"*** Begin Patch\n*** Delete File: {docx}\n*** End Patch"
         result = json.loads(patch_tool(mode="patch", patch=v4a))
         err = result.get("error") or ""
         assert "binary document" not in err.lower()
@@ -214,8 +225,10 @@ class TestPatchToolGuard:
         with _make_wal_db(tmp_path / "state.db") as wal:
             original = wal.read_bytes()
             result = json.loads(
-                patch_tool(mode="replace", path=str(wal),
-                           old_string="alpha", new_string="beta"))
+                patch_tool(
+                    mode="replace", path=str(wal), old_string="alpha", new_string="beta"
+                )
+            )
             # Pin the binary refusal: the no-baseline guard would otherwise
             # mask a regression in sidecar detection.
             assert "binary" in result.get("error", ""), result
@@ -225,8 +238,9 @@ class TestPatchToolGuard:
         target = tmp_path / "notes.txt"
         target.write_text("hello world")
         result = json.loads(
-            patch_tool(mode="replace", path=str(target),
-                       old_string="world", new_string="there")
+            patch_tool(
+                mode="replace", path=str(target), old_string="world", new_string="there"
+            )
         )
         assert not result.get("error")
         assert target.read_text() == "hello there"

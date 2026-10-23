@@ -25,7 +25,9 @@ def _parse_wake_gate(script_output: str) -> bool:
     Any other output (non-JSON, missing flag, gate absent, or ``wakeAgent: true``) means wake the agent
     normally. See #1232.
     """
-    stripped_lines = [line for line in (script_output or "").splitlines() if line.strip()]
+    stripped_lines = [
+        line for line in (script_output or "").splitlines() if line.strip()
+    ]
     if not stripped_lines:
         return True
     try:
@@ -74,9 +76,11 @@ _RESPONSE_HEADING = "## Response\n\n"
 _PROMPT_SEPARATOR = "\n\n"  # writer's blank line after the prompt body
 _RESPONSE_TERMINATOR = "\n"  # writer's trailing newline after the response body
 _PROMPT_FRAME_RE = re.compile(
-    rf"(?m)^{re.escape(_PROMPT_FRAME)}(\d+)\n{re.escape(_PROMPT_HEADING)}")
+    rf"(?m)^{re.escape(_PROMPT_FRAME)}(\d+)\n{re.escape(_PROMPT_HEADING)}"
+)
 _RESPONSE_FRAME_RE = re.compile(
-    rf"(?m)^{re.escape(_RESPONSE_FRAME)}(\d+)\n{re.escape(_RESPONSE_HEADING)}")
+    rf"(?m)^{re.escape(_RESPONSE_FRAME)}(\d+)\n{re.escape(_RESPONSE_HEADING)}"
+)
 
 
 def _archive_answer(archive: str) -> str | None:
@@ -98,16 +102,22 @@ def _archive_answer(archive: str) -> str | None:
     # New writers stamp the prompt length outside user-owned text. Jump past
     # that prompt instead of searching its quoted markers for a response frame.
     prompt_frame = _PROMPT_FRAME_RE.search(archive)
-    if (prompt_frame is not None
-            and archive.find(_PROMPT_HEADING) == prompt_frame.end() - len(_PROMPT_HEADING)):
-        response_start = prompt_frame.end() + int(prompt_frame.group(1)) + len(_PROMPT_SEPARATOR)
+    if prompt_frame is not None and archive.find(
+        _PROMPT_HEADING
+    ) == prompt_frame.end() - len(_PROMPT_HEADING):
+        response_start = (
+            prompt_frame.end() + int(prompt_frame.group(1)) + len(_PROMPT_SEPARATOR)
+        )
         frame = _RESPONSE_FRAME_RE.match(archive, response_start)
-        tail = archive[frame.end():] if frame is not None else ""
+        tail = archive[frame.end() :] if frame is not None else ""
         # A missing or truncated writer-owned boundary is unusable.
-        if (frame is None or len(tail) != int(frame.group(1)) + len(_RESPONSE_TERMINATOR)
-                or not tail.endswith(_RESPONSE_TERMINATOR)):
+        if (
+            frame is None
+            or len(tail) != int(frame.group(1)) + len(_RESPONSE_TERMINATOR)
+            or not tail.endswith(_RESPONSE_TERMINATOR)
+        ):
             return None
-        answer = tail[:-len(_RESPONSE_TERMINATOR)].strip()
+        answer = tail[: -len(_RESPONSE_TERMINATOR)].strip()
     elif "## Response" not in archive:
         return archive.strip()
     else:
@@ -132,6 +142,7 @@ def _inject_context_from(job: dict, prompt: str) -> tuple[str, bool]:
     if not context_from:
         return prompt, False
     from cron.jobs import get_cron_output_dir
+
     output_dir = get_cron_output_dir()
     if isinstance(context_from, str):
         context_from = [context_from]
@@ -145,13 +156,16 @@ def _inject_context_from(job: dict, prompt: str) -> tuple[str, bool]:
         if not source_job_id or not all(c in "0123456789abcdef" for c in source_job_id):
             logger.warning(
                 "context_from: skipping invalid job_id %r for job_id=%r name=%r%s",
-                source_job_id, job.get("id"), job.get("name"),
+                source_job_id,
+                job.get("id"),
+                job.get("name"),
                 _delivery._cron_job_origin_log_suffix(job),
             )
             continue
         try:
             output_files = sorted(
-                (output_dir / source_job_id).glob("*.md"), key=lambda f: f.stat().st_mtime,
+                (output_dir / source_job_id).glob("*.md"),
+                key=lambda f: f.stat().st_mtime,
                 reverse=True,
             )
             latest_output = ""
@@ -161,8 +175,13 @@ def _inject_context_from(job: dict, prompt: str) -> tuple[str, bool]:
                 # quote these markers. Keep error documents useful for recovery context.
                 header = candidate.split("\n---\n", 1)[0].split("\n## Prompt", 1)[0]
                 silent_audit = candidate.startswith("# Cron Job:") and any(
-                    line.startswith(("**Status:** no_change", "**Status:** silent",
-                                     "Script gate returned `wakeAgent=false`"))
+                    line.startswith(
+                        (
+                            "**Status:** no_change",
+                            "**Status:** silent",
+                            "Script gate returned `wakeAgent=false`",
+                        )
+                    )
                     for line in header.splitlines()
                 )
                 if not candidate.strip() or silent_audit:
@@ -177,16 +196,24 @@ def _inject_context_from(job: dict, prompt: str) -> tuple[str, bool]:
             latest_output = _clip_to_context_budget(latest_output)
             if is_self:
                 prompt = _prepend_context_block(
-                    prompt, "Your previous run's output", _SELF_CONTEXT_INTRO, latest_output)
+                    prompt,
+                    "Your previous run's output",
+                    _SELF_CONTEXT_INTRO,
+                    latest_output,
+                )
             else:
                 prompt = _prepend_context_block(
-                    prompt, f"Output from job '{source_job_id}'", _UPSTREAM_CONTEXT_INTRO,
+                    prompt,
+                    f"Output from job '{source_job_id}'",
+                    _UPSTREAM_CONTEXT_INTRO,
                     latest_output,
                 )
             injected = True
         except (OSError, PermissionError) as e:
             # silent skip — never put error text into the prompt
-            logger.warning("context_from: failed to read output for job %r: %s", source_job_id, e)
+            logger.warning(
+                "context_from: failed to read output for job %r: %s", source_job_id, e
+            )
     return prompt, injected
 
 
@@ -194,9 +221,13 @@ def _load_cron_skill_parts(job: dict, skill_names: list[str]) -> list[str]:
     """Load each named skill/bundle into prompt parts; unknown ones are skipped with a notice."""
     from tools.skills_tool import skill_view
     from tools.skill_usage import bump_use
-    from agent.skill_bundles import build_bundle_invocation_message, resolve_bundle_command_key
+    from agent.skill_bundles import (
+        build_bundle_invocation_message,
+        resolve_bundle_command_key,
+    )
     from agent.skill_commands import _inject_skill_config, ambiguous_skill_label
     from agent.skill_utils import normalize_skill_lookup_name
+
     job_label = job.get("name", job.get("id"))
     task_id = str(job.get("id") or "") or None
     parts: list[str] = []
@@ -211,7 +242,8 @@ def _load_cron_skill_parts(job: dict, skill_names: list[str]) -> list[str]:
         bundle_key = resolve_bundle_command_key(skill_name.lstrip("/"))
         if bundle_key:
             bundle_payload = build_bundle_invocation_message(
-                bundle_key, user_instruction="", task_id=task_id)
+                bundle_key, user_instruction="", task_id=task_id
+            )
             if bundle_payload:
                 if parts:
                     parts.append("")
@@ -231,29 +263,40 @@ def _load_cron_skill_parts(job: dict, skill_names: list[str]) -> list[str]:
         if not loaded.get("success"):
             _skip(
                 "skill not found, skipping — %s",
-                loaded.get("error") or f"Failed to load skill '{skill_name}'")
+                loaded.get("error") or f"Failed to load skill '{skill_name}'",
+            )
             continue
 
         try:
             bump_use(skill_name, task_id=task_id)
         except Exception:
-            logger.debug("Cron job: failed to bump skill usage for '%s'", skill_name, exc_info=True)
+            logger.debug(
+                "Cron job: failed to bump skill usage for '%s'",
+                skill_name,
+                exc_info=True,
+            )
 
         if parts:
             parts.append("")
-        parts.extend([
-            f'[IMPORTANT: The user has invoked the "{skill_name}" skill, indicating they want you to follow its instructions. The full skill content is loaded below.]',
-            "",
-            str(loaded.get("content") or "").strip()])
+        parts.extend(
+            [
+                f'[IMPORTANT: The user has invoked the "{skill_name}" skill, indicating they want you to follow its instructions. The full skill content is loaded below.]',
+                "",
+                str(loaded.get("content") or "").strip(),
+            ]
+        )
         _inject_skill_config(loaded, parts)
 
     if skipped:
-        parts.insert(0, (
-            f"[IMPORTANT: The following skill(s) were listed for this job but could not be found "
-            f"and were skipped: {', '.join(skipped)}. "
-            f"Start your response with a brief notice so the user is aware, e.g.: "
-            f"'⚠️ Skill(s) not found and skipped: {', '.join(skipped)}']"
-        ))
+        parts.insert(
+            0,
+            (
+                f"[IMPORTANT: The following skill(s) were listed for this job but could not be found "
+                f"and were skipped: {', '.join(skipped)}. "
+                f"Start your response with a brief notice so the user is aware, e.g.: "
+                f"'⚠️ Skill(s) not found and skipped: {', '.join(skipped)}']"
+            ),
+        )
     return parts
 
 
@@ -281,7 +324,7 @@ _CRON_HINT_RULES = (
 )
 _CRON_HINT_TAIL = (
     "SILENT: If there is genuinely nothing new to report, respond "
-    "with exactly \"[SILENT]\" (nothing else) to suppress delivery. "
+    'with exactly "[SILENT]" (nothing else) to suppress delivery. '
     "[SILENT] is a literal ASCII control token — never translate or "
     "rephrase it, whatever language the rest of your answer uses. "
     "Never combine [SILENT] with content — either report your "
@@ -292,7 +335,7 @@ _CRON_HINT_TAIL = (
     "RECURSION: This is a run of an EXISTING scheduled job — execute "
     "the task now. NEVER create or update a cron job because of "
     "recurring or future-schedule language in the task prompt below; "
-    "treat phrasing like \"each Monday\" or \"every day at 9\" as "
+    'treat phrasing like "each Monday" or "every day at 9" as '
     "context for this run, not as a request to schedule another job.]\n\n"
 )
 
@@ -303,15 +346,20 @@ def _cron_hint() -> str:
     configured_lang = _sched._cron_configured_language()
     lang_clause = (
         "LANGUAGE: Reply in the user's language — see the USER PROFILE below (user.md) when present"
-        + (f", otherwise use the configured language '{configured_lang}'. " if configured_lang
-           else ", otherwise match the language the user normally writes in. ")
+        + (
+            f", otherwise use the configured language '{configured_lang}'. "
+            if configured_lang
+            else ", otherwise match the language the user normally writes in. "
+        )
         + "Never default to English unless that is the user's language. "
     )
     return _CRON_HINT_HEAD + lang_clause + _CRON_HINT_RULES + _CRON_HINT_TAIL
 
 
 def _build_job_prompt(
-    job: dict, prerun_script: Optional[tuple] = None, extra_prompt: Optional[str] = None,
+    job: dict,
+    prerun_script: Optional[tuple] = None,
+    extra_prompt: Optional[str] = None,
     runtime_data_prompt: Optional[str] = None,
 ) -> str:
     """Build the effective prompt for a cron job, optionally loading skills first.
@@ -338,17 +386,27 @@ def _build_job_prompt(
     script_path = job.get("script")
     if script_path:
         success, script_output = (
-            prerun_script if prerun_script is not None
+            prerun_script
+            if prerun_script is not None
             else _script._run_job_script(
-                script_path, workdir=_sched._resolve_job_workdir(job, str(job.get("id") or "")),
-                interpreter=job.get("interpreter")))
+                script_path,
+                workdir=_sched._resolve_job_workdir(job, str(job.get("id") or "")),
+                interpreter=job.get("interpreter"),
+            )
+        )
         if success and not script_output:
             return None  # no output → nothing to report, skip the AI call
         heading, intro = (
-            ("Script Output", "The following data was collected by a pre-run script. "
-                              "Use it as context for your analysis.")
+            (
+                "Script Output",
+                "The following data was collected by a pre-run script. "
+                "Use it as context for your analysis.",
+            )
             if success
-            else ("Script Error", "The data-collection script failed. Report this to the user.")
+            else (
+                "Script Error",
+                "The data-collection script failed. Report this to the user.",
+            )
         )
         prompt = _prepend_context_block(prompt, heading, intro, script_output)
         has_injected_data = True
@@ -358,6 +416,7 @@ def _build_job_prompt(
 
     # Durable per-job notepad; empty renders as "" so unused → byte-identical prompt.
     from cron import notepad as cron_notepad
+
     notepad_section = cron_notepad.render_notepad_section(str(job.get("id") or ""))
     if notepad_section:
         prompt = f"{notepad_section}{prompt}"
@@ -375,7 +434,10 @@ def _build_job_prompt(
     skill_names = _job_skill_names(job)
     if not skill_names:
         return _scan_assembled_cron_prompt(
-            prompt, job, has_skills=False, has_injected_data=has_injected_data,
+            prompt,
+            job,
+            has_skills=False,
+            has_injected_data=has_injected_data,
             user_prompt=user_prompt,
         )
 
@@ -383,6 +445,7 @@ def _build_job_prompt(
     stable_prefix = None
     if prompt:
         from agent.skill_commands import append_user_instruction
+
         parts.append("")
         # Skill blocks are stable per job config; the appended instruction is volatile per-run.
         # Declare that boundary for the Anthropic cache planner.
@@ -398,12 +461,17 @@ def _build_job_prompt(
     ):
         # Guarded: the scanner may mutate the bytes; mismatch → whole-message caching.
         from agent.prompt_cache_boundary import register_stable_prefix
+
         register_stable_prefix(stable_prefix)
     return assembled
 
 
 def _scan_assembled_cron_prompt(
-    assembled: str, job: dict, *, has_skills: bool = False, has_injected_data: bool = False,
+    assembled: str,
+    job: dict,
+    *,
+    has_skills: bool = False,
+    has_injected_data: bool = False,
     user_prompt: Optional[str] = None,
 ) -> str:
     """Scan the assembled cron prompt for injection; raise ``CronPromptInjectionBlocked`` on a hit.
@@ -418,6 +486,7 @@ def _scan_assembled_cron_prompt(
     """
     from tools.cronjob_tools import _scan_cron_prompt
     from tools.cronjob_prompt_scan import _scan_cron_skill_assembled
+
     if has_skills or has_injected_data:
         # The cleaned (sanitized) prompt is what actually runs.
         assembled, scan_error = _scan_cron_skill_assembled(assembled)
@@ -428,7 +497,9 @@ def _scan_assembled_cron_prompt(
     if scan_error:
         logger.warning(
             "Cron job '%s': assembled prompt blocked by injection scanner — %s",
-            job.get("name") or job.get("id") or "<unknown>", scan_error)
+            job.get("name") or job.get("id") or "<unknown>",
+            scan_error,
+        )
         raise _sched.CronPromptInjectionBlocked(scan_error)
     return assembled
 
@@ -440,29 +511,38 @@ def _guard_job_credential_exfil(job: dict) -> None:
     are validated by the caller, not here."""
     try:
         from tools.cronjob_tools import _validate_cron_base_url
+
         err = _validate_cron_base_url(job.get("provider"), job.get("base_url"))
     except Exception as exc:
         # Fail CLOSED on validator/import errors — but only for jobs WITH a base_url override;
         # a job without one cannot exfiltrate via this path, so it still runs.
         err = (
-            f"could not validate provider/base_url pair "
-            f"({exc.__class__.__name__}: {exc}); refusing to run a job with "
-            "an unverified base_url override"
-        ) if job.get("base_url") else None
+            (
+                f"could not validate provider/base_url pair "
+                f"({exc.__class__.__name__}: {exc}); refusing to run a job with "
+                "an unverified base_url override"
+            )
+            if job.get("base_url")
+            else None
+        )
     if err:
         job_id = job.get("id")
         logger.error(
             "Job '%s': refusing to run — unsafe provider/base_url pair could "
             "exfiltrate a stored credential: %s",
-            job_id, err)
+            job_id,
+            err,
+        )
         raise RuntimeError(f"Cron job '{job_id}' blocked for safety: {err}")
 
 
 def _block_and_pause_job(
-    job_id: str, job_name: str, reason: str) -> tuple[bool, str, str, Optional[str]]:
+    job_id: str, job_name: str, reason: str
+) -> tuple[bool, str, str, Optional[str]]:
     """Fail a run closed and pause the job: an unrunnable job left enabled re-fires every tick
     forever; ``paused_at``/``paused_reason`` give an auditable record."""
     from cron.jobs import pause_job
+
     logger.error("Job '%s': %s", job_id, reason)
     try:
         pause_job(job_id, f"Auto-paused by scheduler: {reason}")

@@ -9,9 +9,13 @@ from clawk_state import SessionDB
 from tui_gateway import server
 
 
-@pytest.mark.parametrize("source,omit_messages", [("desktop", True), ("desktop", False), ("tui", True)])
+@pytest.mark.parametrize(
+    "source,omit_messages", [("desktop", True), ("desktop", False), ("tui", True)]
+)
 @pytest.mark.parametrize("profile", [None, "work"])
-def test_deferred_resume_preserves_model_history_and_db_ownership(tmp_path, monkeypatch, source, omit_messages, profile):
+def test_deferred_resume_preserves_model_history_and_db_ownership(
+    tmp_path, monkeypatch, source, omit_messages, profile
+):
     home = tmp_path / "work"
     home.mkdir()
     db = SessionDB(home / "state.db")
@@ -20,14 +24,29 @@ def test_deferred_resume_preserves_model_history_and_db_ownership(tmp_path, monk
     db.end_session("parent", "compression")
     db.create_session("tip", source=source, parent_session_id="parent")
     db.append_message("tip", "user", "archived display", timestamp=101.0)
-    db.archive_and_compact("tip", [
-        {"role": "assistant", "content": "summary", "_compressed_summary": True},
-        {"role": "user", "content": "current ask"},
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "dangling", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
-    ])
-    expected = canonicalize_replay_history(db.get_messages_as_conversation(
-        "tip", repair_alternation=True, include_row_ids=True))
+    db.archive_and_compact(
+        "tip",
+        [
+            {"role": "assistant", "content": "summary", "_compressed_summary": True},
+            {"role": "user", "content": "current ask"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "dangling",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": "{}"},
+                    }
+                ],
+            },
+        ],
+    )
+    expected = canonicalize_replay_history(
+        db.get_messages_as_conversation(
+            "tip", repair_alternation=True, include_row_ids=True
+        )
+    )
     stored = db.get_session("tip")
     assert stored is not None
     stored_count = stored["message_count"]
@@ -69,13 +88,24 @@ def test_deferred_resume_preserves_model_history_and_db_ownership(tmp_path, monk
     monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda: None)
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *args: None)
     monkeypatch.setattr(server, "_start_agent_build", lambda *args: built.set())
-    monkeypatch.setattr(server, "_emit", lambda kind, sid, payload: events.append((kind, payload)))
+    monkeypatch.setattr(
+        server, "_emit", lambda kind, sid, payload: events.append((kind, payload))
+    )
     sid = None
     try:
-        response = server.handle_request({"id": "resume", "method": "session.resume", "params": {
-            "session_id": "tip", "source": source, "defer_history": True,
-            "omit_messages": omit_messages, **({"profile": profile} if profile else {}),
-        }})
+        response = server.handle_request(
+            {
+                "id": "resume",
+                "method": "session.resume",
+                "params": {
+                    "session_id": "tip",
+                    "source": source,
+                    "defer_history": True,
+                    "omit_messages": omit_messages,
+                    **({"profile": profile} if profile else {}),
+                },
+            }
+        )
         assert response is not None and "error" not in response, response
         sid = response["result"]["session_id"]
         session = server._sessions[sid]
@@ -87,7 +117,10 @@ def test_deferred_resume_preserves_model_history_and_db_ownership(tmp_path, monk
         assert session["display_history_prefix"] == ([] if model_only else prefix)
         count = stored_count if model_only else len(display)
         assert session["resume_message_count"] == count
-        assert ("session.resume_progress", {"message_count": count, "phase": "history", "status": "complete"}) in events
+        assert (
+            "session.resume_progress",
+            {"message_count": count, "phase": "history", "status": "complete"},
+        ) in events
         if profile:
             assert closed.wait(5)
             assert db._conn is None
@@ -101,16 +134,23 @@ def test_deferred_resume_preserves_model_history_and_db_ownership(tmp_path, monk
 
 
 @pytest.mark.parametrize("outcome", ["replaced", "failed"])
-def test_model_hydration_discards_stale_results_and_closes_owned_db(tmp_path, monkeypatch, outcome):
+def test_model_hydration_discards_stale_results_and_closes_owned_db(
+    tmp_path, monkeypatch, outcome
+):
     db = SessionDB(tmp_path / "state.db")
     db.create_session("stored", source="desktop")
     db.append_message("stored", "user", "model context")
     started, release, closed = threading.Event(), threading.Event(), threading.Event()
     original_read, original_close = db.get_messages_as_conversation, db.close
     events, builds = [], []
-    old = {"history": [], "history_lock": threading.RLock(), "resume_hydrating": True,
-           "resume_history_ready": threading.Event(), "agent_ready": threading.Event(),
-           "resume_message_count": 1}
+    old = {
+        "history": [],
+        "history_lock": threading.RLock(),
+        "resume_hydrating": True,
+        "resume_history_ready": threading.Event(),
+        "agent_ready": threading.Event(),
+        "resume_message_count": 1,
+    }
     replacement = {"history": [{"role": "user", "content": "replacement"}]}
     monkeypatch.setitem(server._sessions, "hydrating", old)
 
@@ -130,7 +170,9 @@ def test_model_hydration_discards_stale_results_and_closes_owned_db(tmp_path, mo
     monkeypatch.setattr(server, "_emit", lambda *args: events.append(args))
     monkeypatch.setattr(server, "_start_agent_build", lambda *args: builds.append(args))
     try:
-        server._schedule_resume_hydration("hydrating", "stored", db, close_db=True, model_history_only=True)
+        server._schedule_resume_hydration(
+            "hydrating", "stored", db, close_db=True, model_history_only=True
+        )
         assert started.wait(5)
         assert not closed.is_set()
         if outcome == "replaced":
@@ -141,9 +183,13 @@ def test_model_hydration_discards_stale_results_and_closes_owned_db(tmp_path, mo
         assert builds == []
         if outcome == "replaced":
             assert server._sessions["hydrating"] is replacement
-            assert replacement == {"history": [{"role": "user", "content": "replacement"}]}
+            assert replacement == {
+                "history": [{"role": "user", "content": "replacement"}]
+            }
             assert old["history"] == []
-            assert not any(payload.get("status") == "complete" for _, _, payload in events)
+            assert not any(
+                payload.get("status") == "complete" for _, _, payload in events
+            )
         else:
             assert "hydrating" not in server._sessions
             assert old["resume_history_ready"].is_set()

@@ -114,6 +114,7 @@ def test_nested_aux_llm_call_inside_managed_tool_does_not_cross_loops(relay_turn
 
     host.relay.llm.execute = counting_execute
     try:
+
         def the_tool(args):
             result = _nested_aux_llm_call_from_worker_thread()
             return {"analysis": result["choices"][0]["message"]["content"]}
@@ -224,9 +225,7 @@ def test_guard_resets_after_managed_callback_returns(relay_turn):
 
 def test_resolve_execution_context_bypasses_inside_guard(relay_turn):
     with relay_runtime.managed_callback_guard():
-        runtime, session, parent = relay_runtime.resolve_execution_context(
-            "session-1"
-        )
+        runtime, session, parent = relay_runtime.resolve_execution_context("session-1")
     assert runtime is None and session is None and parent is None
     # Outside the guard the context resolves normally again.
     runtime, session, _parent = relay_runtime.resolve_execution_context("session-1")

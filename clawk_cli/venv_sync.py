@@ -4,6 +4,7 @@ Stdlib-only at import: installers call this before dependencies exist.
 All checkout roots use PM's selected generation and facts; sealed payloads
 remain build-owned. ``--check`` is passive and never provisions tools.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,6 +35,7 @@ def _is_sealed(project_root: Path) -> bool:
         return False
     from clawk_cli.steward import read_install_stamp
     from pm.paths import install_stamp_path
+
     stamp_path = install_stamp_path(project_root)
     data = read_install_stamp(project_root)
     if not data:
@@ -53,15 +55,20 @@ def check_runtime(project_root: Path) -> str | None:
     import pm
     from clawk_cli.steward import read_install_stamp, sealed_steward
 
-    if (Path(project_root) / ".git").exists() and read_install_stamp(project_root).get("updateMechanism") != "self":
+    if (Path(project_root) / ".git").exists() and read_install_stamp(project_root).get(
+        "updateMechanism"
+    ) != "self":
         return None  # A developer's checkout does not owe managed products.
 
     problems = pm.activate()
     if not problems:
         return None
     steward = sealed_steward(Path(project_root))
-    remedy = (f"this {steward}-managed install must rebuild the artifact to fix"
-              if steward else "run `clawk pm install`")
+    remedy = (
+        f"this {steward}-managed install must rebuild the artifact to fix"
+        if steward
+        else "run `clawk pm install`"
+    )
     return f"install out of sync ({'; '.join(problems)}) — {remedy}"
 
 
@@ -69,7 +76,12 @@ def publish_launchers(project_root: Path, *, create: bool = True) -> None:
     """Refresh durable commands; bootstrap repairs only existing PATH exposure."""
     import logging
 
-    from clawk_cli._launchers import ENTRY_POINTS, ensure_install_launchers, expose_cli, resolve_store_python
+    from clawk_cli._launchers import (
+        ENTRY_POINTS,
+        ensure_install_launchers,
+        expose_cli,
+        resolve_store_python,
+    )
     from clawk_cli.steward import read_install_stamp
 
     root = Path(project_root)
@@ -84,14 +96,19 @@ def publish_launchers(project_root: Path, *, create: bool = True) -> None:
         # A PM tree promises its launchers (tests/install/e2e-assets/
         # source-driver.sh refuses to let --version paper over the gap), so
         # this skip is a half-finished update, never a quiet no-op.
-        log.warning("launchers: no managed interpreter under %s; %s not published",
-                    root, root / ".clawk" / "bin")
+        log.warning(
+            "launchers: no managed interpreter under %s; %s not published",
+            root,
+            root / ".clawk" / "bin",
+        )
         return
     written = ensure_install_launchers(root, root / ".clawk" / "bin")
     if len(written) != len(ENTRY_POINTS):
         from pm.package import InstallError
 
-        raise InstallError("launchers", "source launcher publication failed", "retry the source update")
+        raise InstallError(
+            "launchers", "source launcher publication failed", "retry the source update"
+        )
     result = expose_cli(root, create=create)
     if not result["ok"]:
         import logging
@@ -107,7 +124,11 @@ def sync(project_root: Path | None = None, *, check: bool = False) -> dict:
     if _is_sealed(root):
         return {"state": "sealed", "ok": True}
     if not (root / "pyproject.toml").is_file():
-        return {"state": "failed", "ok": False, "detail": f"no pyproject.toml under {root}"}
+        return {
+            "state": "failed",
+            "ok": False,
+            "detail": f"no pyproject.toml under {root}",
+        }
     try:
         import pm
 
@@ -142,13 +163,18 @@ def collect_superseded_generations(project_root: Path) -> None:
 
     try:
         removed = collect_generations(project_root) + collect_runtime_generations(
-            install_state_dir(project_root) / "pm-runtime")
+            install_state_dir(project_root) / "pm-runtime"
+        )
     except (OSError, ValueError) as exc:
         # Reclaiming space must never turn a committed update into a failure.
-        logging.getLogger(__name__).warning("dependency generation cleanup skipped: %s", exc)
+        logging.getLogger(__name__).warning(
+            "dependency generation cleanup skipped: %s", exc
+        )
         return
     if removed:
-        logging.getLogger(__name__).info("collected %d unused dependency generations", len(removed))
+        logging.getLogger(__name__).info(
+            "collected %d unused dependency generations", len(removed)
+        )
 
 
 #: Answered from the tree alone; a metadata query must never wait on (or fail with)
@@ -267,10 +293,19 @@ def refuse_foreign_owned_venv(project_root: Path) -> None:
     # A root-run update on a user's checkout is not safe even if a fresh
     # generation would be allocated: it publishes root-owned state for them.
     from pm.environments import selected_venv
-    candidates = [root, root / "venv", root / ".venv", root / ".clawk", selected_venv(root)]
+
+    candidates = [
+        root,
+        root / "venv",
+        root / ".venv",
+        root / ".clawk",
+        selected_venv(root),
+    ]
     for venv in (root / "venv", root / ".venv", candidates[-1]):
-        for directory in (venv / ("Scripts" if os.name == "nt" else "bin"),
-                          *venv.glob("lib/python*/site-packages")):
+        for directory in (
+            venv / ("Scripts" if os.name == "nt" else "bin"),
+            *venv.glob("lib/python*/site-packages"),
+        ):
             if directory.is_dir():
                 candidates.append(directory)
                 for entry in list(directory.iterdir())[:2000]:
@@ -298,7 +333,9 @@ _TAIL_SCRIPTS = frozenset({"source_completion.py", "update_completion.py"})
 def _is_tail_script(root: Path, argv0: str) -> bool:
     """Exact own-script identity; argv is not inherited by the processes a tail spawns."""
     script = Path(argv0)
-    return script.name in _TAIL_SCRIPTS and script.resolve().parent == root / "clawk_cli"
+    return (
+        script.name in _TAIL_SCRIPTS and script.resolve().parent == root / "clawk_cli"
+    )
 
 
 def _supervised_child() -> bool:
@@ -331,10 +368,18 @@ def _tree_matches_completed_stamp(root: Path) -> bool:
 
     stamp = read_install_stamp(root)
     commit = stamp.get("commit")
-    if not isinstance(commit, str) or not commit or "adoptedAt" in stamp or stamp.get("dirty") is not False:
+    if (
+        not isinstance(commit, str)
+        or not commit
+        or "adoptedAt" in stamp
+        or stamp.get("dirty") is not False
+    ):
         return False
     pending = completion_pending_path(root)
-    if pending.is_file() and pending.stat().st_mtime >= (root / "install-stamp.json").stat().st_mtime:
+    if (
+        pending.is_file()
+        and pending.stat().st_mtime >= (root / "install-stamp.json").stat().st_mtime
+    ):
         return False
     info = _git_version_info(root, include_untracked=True)
     return info.commit == commit and not info.dirty
@@ -365,15 +410,18 @@ def prepare_launch(project_root: Path, argv: list[str]) -> Path | None:
     from clawk_cli.steward import read_install_stamp
 
     command = command_argv(argv)
-    if (command[:1] == ["pm"]
-            or _METADATA_FLAGS & set(argv)
-            # This is the recovery path shown by the Desktop when a pending update has
-            # fenced the gateway. Completing that same tail first can take minutes and
-            # leaves the user without the fence diagnosis or a usable restart remedy.
-            or _is_read_only_gateway_status(command)
-            or os.environ.get("CLAWK_DISABLE_LAZY_INSTALLS", "").lower() in ("1", "true", "yes")
-            or not (root / ".git").exists()
-            or not (root / "pyproject.toml").is_file()):
+    if (
+        command[:1] == ["pm"]
+        or _METADATA_FLAGS & set(argv)
+        # This is the recovery path shown by the Desktop when a pending update has
+        # fenced the gateway. Completing that same tail first can take minutes and
+        # leaves the user without the fence diagnosis or a usable restart remedy.
+        or _is_read_only_gateway_status(command)
+        or os.environ.get("CLAWK_DISABLE_LAZY_INSTALLS", "").lower()
+        in ("1", "true", "yes")
+        or not (root / ".git").exists()
+        or not (root / "pyproject.toml").is_file()
+    ):
         return None
     stamp = read_install_stamp(root)
     if not stamp:
@@ -404,7 +452,8 @@ def prepare_launch(project_root: Path, argv: list[str]) -> Path | None:
         print(
             f"clawk: a source update could not be finished automatically "
             f"({_attempts} attempts); run `clawk update` from a shell to finish it",
-            file=sys.stderr, flush=True,
+            file=sys.stderr,
+            flush=True,
         )
     elif not _may_retry:
         # Backoff window not yet elapsed: skip this launch's retry without
@@ -416,7 +465,9 @@ def prepare_launch(project_root: Path, argv: list[str]) -> Path | None:
         # keeps a dead update's marker (R6: refused as held, never reclaimed).
         lock = UpdateLock(install_root=root, checkout_first=False)
         if not lock.acquire():
-            raise RuntimeError("an update is still running; wait for it to exit, then relaunch Clawksis")
+            raise RuntimeError(
+                "an update is still running; wait for it to exit, then relaunch Clawksis"
+            )
         try:
             # Under the launching update's own claim (its pid is our ancestor) a process it
             # spawned owes no tail: that obligation is the updater's.
@@ -435,27 +486,36 @@ def prepare_launch(project_root: Path, argv: list[str]) -> Path | None:
                 # marker over a held checkout lock is a killed update whose tree (its completion
                 # child) still runs.
                 if not lock.acquire_checkout(root):
-                    raise RuntimeError("an update is still running; wait for it to exit, then relaunch Clawksis")
+                    raise RuntimeError(
+                        "an update is still running; wait for it to exit, then relaunch Clawksis"
+                    )
                 _finish_source_update(root, current=current, pending=pending)
         finally:
             lock.release()
     python = resolve_store_python(root)
     if python is None:
-        raise RuntimeError("source update has no managed Python; run `clawk pm install`")
+        raise RuntimeError(
+            "source update has no managed Python; run `clawk pm install`"
+        )
     # Lexical identity, never resolve(): PM spells the store path through
     # CLAWK_HOME (which may carry '..') while sys.executable arrives
     # normalized, so a raw compare re-execs every child forever (#122513). A
     # venv interpreter symlinked to the same binary is still a different
     # interpreter (its own sys.prefix) and must re-exec once.
-    same = os.path.normcase(os.path.abspath(python)) == os.path.normcase(os.path.abspath(sys.executable))
+    same = os.path.normcase(os.path.abspath(python)) == os.path.normcase(
+        os.path.abspath(sys.executable)
+    )
     if not current or not same:
         publish_launchers(root)
         return python
     if owed_to_cli:
         # Left owed, not dropped: say so (once, in the process that boots) where an
         # operator of the unit will read it.
-        print("clawk: a source update is unfinished; run `clawk update` from a shell to finish it",
-              file=sys.stderr, flush=True)
+        print(
+            "clawk: a source update is unfinished; run `clawk update` from a shell to finish it",
+            file=sys.stderr,
+            flush=True,
+        )
     return None
 
 
@@ -477,9 +537,13 @@ def _prepare_borrowed_launch(root: Path, owner: Path, *, current: bool) -> Path 
     from clawk_cli.update_lock import UpdateLock
 
     if not current:
-        lock = UpdateLock(install_root=root, checkout_first=False)  # R6, as in prepare_launch
+        lock = UpdateLock(
+            install_root=root, checkout_first=False
+        )  # R6, as in prepare_launch
         if not lock.acquire():
-            raise RuntimeError("an update is still running; wait for it to exit, then relaunch Clawksis")
+            raise RuntimeError(
+                "an update is still running; wait for it to exit, then relaunch Clawksis"
+            )
         try:
             _sync_source_dependencies(root, arm=False, borrowed_from=owner)
         finally:
@@ -489,8 +553,12 @@ def _prepare_borrowed_launch(root: Path, owner: Path, *, current: bool) -> Path 
             raise RuntimeError("dependency sync left this install out of date")
     python = resolve_store_python(root)
     if python is None:
-        raise RuntimeError("source update has no managed Python; run `clawk pm install`")
-    same = os.path.normcase(os.path.abspath(python)) == os.path.normcase(os.path.abspath(sys.executable))
+        raise RuntimeError(
+            "source update has no managed Python; run `clawk pm install`"
+        )
+    same = os.path.normcase(os.path.abspath(python)) == os.path.normcase(
+        os.path.abspath(sys.executable)
+    )
     return python if not current or not same else None
 
 
@@ -503,10 +571,19 @@ def _finish_source_update(root: Path, *, current: bool, pending: Path) -> None:
     if not current:
         # Existing markers guard liveness, never create the completion obligation.
         # Current post-sync verification children can boot under a live updater.
-        legacy_markers = (root / ".update-incomplete", root / ".lazy-refresh-incomplete")
+        legacy_markers = (
+            root / ".update-incomplete",
+            root / ".lazy-refresh-incomplete",
+        )
         if any(_marker_owner_is_live(marker) for marker in legacy_markers):
-            raise RuntimeError("an update is still running; wait for it to exit, then relaunch Clawksis")
-        print("clawk: completing source-update dependencies...", file=sys.stderr, flush=True)
+            raise RuntimeError(
+                "an update is still running; wait for it to exit, then relaunch Clawksis"
+            )
+        print(
+            "clawk: completing source-update dependencies...",
+            file=sys.stderr,
+            flush=True,
+        )
         completed = _tree_matches_completed_stamp(root)
         # ponytail: commit-only match; a product dir deleted by hand is rebuilt on demand
         # by its own entry point (the TUI/web freshness gates), not here.
@@ -521,7 +598,11 @@ def _finish_source_update(root: Path, *, current: bool, pending: Path) -> None:
         clear_completion(root)
         return
     else:
-        print("clawk: finishing an interrupted source update...", file=sys.stderr, flush=True)
+        print(
+            "clawk: finishing an interrupted source update...",
+            file=sys.stderr,
+            flush=True,
+        )
     # Sync commits the dependency generation, but a source update also owes
     # the product builds and the post-build maintenance -- the tail every
     # install and finished update shares (clawk_cli/source_completion.py).
@@ -529,8 +610,9 @@ def _finish_source_update(root: Path, *, current: bool, pending: Path) -> None:
     # activated, so hand that file THIS interpreter and let it re-exec
     # itself, exactly as the installers do.
     desktop_app = root / "apps/desktop"
-    desktop = ((desktop_app / "dist/index.html").is_file()
-               or any((desktop_app / "release").glob("*")))
+    desktop = (desktop_app / "dist/index.html").is_file() or any(
+        (desktop_app / "release").glob("*")
+    )
     # The tail's progress lines go to stderr: this is an automatic repair in
     # front of whatever command the user ran, and that command may be
     # emitting machine-readable stdout (a JSON probe, a piped query).
@@ -542,11 +624,21 @@ def _finish_source_update(root: Path, *, current: bool, pending: Path) -> None:
     # the tail stays owed.
     try:
         code = run(
-            [sys.executable, "-I", "-B", "-u",
-             str(root / "clawk_cli/source_completion.py"),
-             "--source", str(root), "--finish-update",
-             *(("--desktop",) if desktop else ())],
-            inherit_lock=True, cwd=root, env=activation_environment(root), stdout=sys.__stderr__,
+            [
+                sys.executable,
+                "-I",
+                "-B",
+                "-u",
+                str(root / "clawk_cli/source_completion.py"),
+                "--source",
+                str(root),
+                "--finish-update",
+                *(("--desktop",) if desktop else ()),
+            ],
+            inherit_lock=True,
+            cwd=root,
+            env=activation_environment(root),
+            stdout=sys.__stderr__,
         ).returncode
     except CustodyRefused as exc:
         print(f"clawk: {exc.reason}", file=sys.stderr, flush=True)
@@ -559,7 +651,9 @@ def _finish_source_update(root: Path, *, current: bool, pending: Path) -> None:
     clear_completion(root)
 
 
-def _sync_source_dependencies(root: Path, *, arm: bool, borrowed_from: Path | None = None) -> None:
+def _sync_source_dependencies(
+    root: Path, *, arm: bool, borrowed_from: Path | None = None
+) -> None:
     """Commit the tree's dependency generation; *arm* also owes the tail afterwards.
 
     *borrowed_from* names the data root that owns the checkout when this one only borrows
@@ -572,10 +666,18 @@ def _sync_source_dependencies(root: Path, *, arm: bool, borrowed_from: Path | No
     from pm.extras import legacy_selection
 
     if borrowed_from is not None:
-        print(f"clawk: preparing dependencies for this data root (the checkout's updates belong to "
-              f"{borrowed_from})...", file=sys.stderr, flush=True)
+        print(
+            f"clawk: preparing dependencies for this data root (the checkout's updates belong to "
+            f"{borrowed_from})...",
+            file=sys.stderr,
+            flush=True,
+        )
     elif not arm:
-        print("clawk: preparing dependencies for this update...", file=sys.stderr, flush=True)
+        print(
+            "clawk: preparing dependencies for this update...",
+            file=sys.stderr,
+            flush=True,
+        )
     refuse_foreign_owned_venv(root)
     if arm:
         # Owed from before the sync commits: a crash between the commit and the
@@ -587,7 +689,9 @@ def _sync_source_dependencies(root: Path, *, arm: bool, borrowed_from: Path | No
     # Same order as `clawk update`: an interrupted update or a hand-run
     # `git pull` leaves this tree's lockfile ahead of the installed tools.
     ensure_tools_for_sync()
-    pm.sync_venv(extras, explicit=True, project_root=root, evict_incompatible_plugins=True)
+    pm.sync_venv(
+        extras, explicit=True, project_root=root, evict_incompatible_plugins=True
+    )
     collect_superseded_generations(root)
     if borrowed_from is not None:
         return  # The checkout's markers describe the owner's environment, not this one.
@@ -598,7 +702,11 @@ def _sync_source_dependencies(root: Path, *, arm: bool, borrowed_from: Path | No
 
 
 def relaunch_command(
-    python: Path, root: Path, argv: list[str], original: list[str], module: str | None,
+    python: Path,
+    root: Path,
+    argv: list[str],
+    original: list[str],
+    module: str | None,
 ) -> list[str]:
     """Re-enter the same script/module/launcher with the managed interpreter.
 
@@ -617,7 +725,9 @@ def relaunch_command(
         if option in ("-W", "-X") and index < len(original):
             options.append(original[index])
             index += 1
-    prefix = f"import sys, runpy; sys.path.insert(0, {str(root)!r}); sys.argv = {argv!r}; "
+    prefix = (
+        f"import sys, runpy; sys.path.insert(0, {str(root)!r}); sys.argv = {argv!r}; "
+    )
     if argv[0] == "-c":
         body = f"exec({original[index + 1]!r})"
     elif module and module != "__main__":
@@ -632,9 +742,7 @@ def relaunch_command(
 def main(argv: list | None = None) -> int:
     parser = argparse.ArgumentParser(prog="clawk_cli.venv_sync")
     parser.add_argument("--project-root", default=None)
-    parser.add_argument(
-        "--check", action="store_true", help="report; change nothing"
-    )
+    parser.add_argument("--check", action="store_true", help="report; change nothing")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 

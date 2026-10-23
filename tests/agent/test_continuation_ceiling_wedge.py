@@ -19,6 +19,7 @@ from clawk_constants import PARTIAL_STREAM_STUB_ID, FINISH_REASON_LENGTH
 @pytest.fixture()
 def loop_agent():
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -41,14 +42,17 @@ def loop_agent():
 
 def _stub(content):
     from tests.agent.test_run_agent import _mock_assistant_msg
+
     return SimpleNamespace(
         id=PARTIAL_STREAM_STUB_ID,
         model="test/model",
-        choices=[SimpleNamespace(
-            index=0,
-            message=_mock_assistant_msg(content=content),
-            finish_reason=FINISH_REASON_LENGTH,
-        )],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=content),
+                finish_reason=FINISH_REASON_LENGTH,
+            )
+        ],
         usage=None,
     )
 
@@ -65,8 +69,10 @@ def _run(agent, message, history=None):
 class TestContinuationCeilingWedge:
     def _exhaust_ceiling(self, agent):
         agent.client.chat.completions.create.side_effect = [
-            _stub("part one "), _stub("part two "),
-            _stub("part three "), _stub("part four."),
+            _stub("part one "),
+            _stub("part two "),
+            _stub("part three "),
+            _stub("part four."),
         ]
         return _run(agent, "write me a long report")
 
@@ -92,7 +98,10 @@ class TestContinuationCeilingWedge:
         ]
         result2 = _run(loop_agent, "hi", history=result1["messages"])
 
-        assert loop_agent.client.chat.completions.create.call_count == calls_after_turn1 + 1, (
+        assert (
+            loop_agent.client.chat.completions.create.call_count
+            == calls_after_turn1 + 1
+        ), (
             "A new user message after the continuation ceiling must issue "
             "exactly one fresh upstream request."
         )
@@ -108,7 +117,8 @@ class TestContinuationCeilingWedge:
         msgs = result["messages"]
 
         nudges = [
-            m for m in msgs
+            m
+            for m in msgs
             if m.get("role") == "user"
             and "Continue exactly where you left off" in (m.get("content") or "")
         ]
@@ -126,7 +136,6 @@ class TestContinuationCeilingWedge:
         for part in ("part one", "part two", "part three", "part four"):
             assert part in content, "Stitched partial must keep every fragment."
 
-
     def test_continuation_requests_carry_no_marks(self, loop_agent):
         """The scaffolding marks are Clawksis bookkeeping. The centrally
         sanitized api_messages must never carry them — only the
@@ -138,11 +147,14 @@ class TestContinuationCeilingWedge:
         original = loop_agent._build_api_kwargs
 
         def _spy(api_messages, tools_for_api=None):
-            seen_api_messages.append([dict(m) for m in api_messages if isinstance(m, dict)])
+            seen_api_messages.append(
+                [dict(m) for m in api_messages if isinstance(m, dict)]
+            )
             return original(api_messages, tools_for_api=tools_for_api)
 
         loop_agent.client.chat.completions.create.side_effect = [
-            _stub("part one "), _stub("part two "),
+            _stub("part one "),
+            _stub("part two "),
             _mock_response(content="the rest.", finish_reason="stop"),
         ]
         with patch.object(loop_agent, "_build_api_kwargs", side_effect=_spy):
@@ -174,14 +186,17 @@ class TestContinuationCeilingWedge:
             },
         ]
         loop_agent.client.chat.completions.create.side_effect = [
-            _stub("wedge one "), _stub("wedge two "),
-            _stub("wedge three "), _stub("wedge four."),
+            _stub("wedge one "),
+            _stub("wedge two "),
+            _stub("wedge three "),
+            _stub("wedge four."),
         ]
         result = _run(loop_agent, "another long report", history=reloaded_history)
 
         assert result["completed"] is False
         prior = [
-            m for m in result["messages"]
+            m
+            for m in result["messages"]
             if m.get("role") == "assistant"
             and "earlier answer fragment" in (m.get("content") or "")
         ]
@@ -215,17 +230,28 @@ class TestTruncatedPartJoining:
 
     def test_glued_parts_get_a_newline(self):
         from agent.conversation_loop import _join_truncated_parts
-        assert _join_truncated_parts(
-            [("Edited index.html", False), ("Review the 5 changes", False)]
-        ) == "Edited index.html\nReview the 5 changes"
+
+        assert (
+            _join_truncated_parts(
+                [("Edited index.html", False), ("Review the 5 changes", False)]
+            )
+            == "Edited index.html\nReview the 5 changes"
+        )
 
     def test_existing_whitespace_is_not_doubled(self):
         from agent.conversation_loop import _join_truncated_parts
-        assert _join_truncated_parts([("line one\n", False), ("line two", False)]) == "line one\nline two"
+
+        assert (
+            _join_truncated_parts([("line one\n", False), ("line two", False)])
+            == "line one\nline two"
+        )
         assert _join_truncated_parts([("word", False), (" next", False)]) == "word next"
 
     def test_degenerate_inputs(self):
         from agent.conversation_loop import _join_truncated_parts
+
         assert _join_truncated_parts([]) == ""
         assert _join_truncated_parts([("only", False)]) == "only"
-        assert _join_truncated_parts([("a", False), ("", False), ("b", False)]) == "a\nb"
+        assert (
+            _join_truncated_parts([("a", False), ("", False), ("b", False)]) == "a\nb"
+        )

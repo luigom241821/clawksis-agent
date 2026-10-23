@@ -18,8 +18,10 @@ import pytest
 from agent.secret_scope import set_multiplex_active
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
-_PROBE = ("import json,os;print(json.dumps({k:os.environ.get(k) for k in "
-          "('CLAWK_HOME','A_MARKER','B_MARKER','TERMINAL_ENV','CLAWK_MODEL','FIRECRAWL_API_KEY')}))")
+_PROBE = (
+    "import json,os;print(json.dumps({k:os.environ.get(k) for k in "
+    "('CLAWK_HOME','A_MARKER','B_MARKER','TERMINAL_ENV','CLAWK_MODEL','FIRECRAWL_API_KEY')}))"
+)
 
 
 @pytest.fixture
@@ -28,11 +30,18 @@ def mux_homes(tmp_path, monkeypatch):
     a = tmp_path / ".clawk"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
-    (a / ".env").write_text("A_MARKER=a\nCLAWK_MODEL=a-model\nTERMINAL_ENV=docker\nFIRECRAWL_API_KEY=a-fc\n", encoding="utf-8")
+    (a / ".env").write_text(
+        "A_MARKER=a\nCLAWK_MODEL=a-model\nTERMINAL_ENV=docker\nFIRECRAWL_API_KEY=a-fc\n",
+        encoding="utf-8",
+    )
     (b / ".env").write_text("B_MARKER=b\nFIRECRAWL_API_KEY=b-fc\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(a))
-    for key, val in (("A_MARKER", "a"), ("CLAWK_MODEL", "a-model"), ("TERMINAL_ENV", "docker"),
-                     ("FIRECRAWL_API_KEY", "a-fc")):
+    for key, val in (
+        ("A_MARKER", "a"),
+        ("CLAWK_MODEL", "a-model"),
+        ("TERMINAL_ENV", "docker"),
+        ("FIRECRAWL_API_KEY", "a-fc"),
+    ):
         monkeypatch.setenv(key, val)
     monkeypatch.delenv("B_MARKER", raising=False)
     set_multiplex_active(True)
@@ -43,13 +52,25 @@ def mux_homes(tmp_path, monkeypatch):
 
 
 def _child_view(env: dict) -> dict:
-    out = subprocess.run([sys.executable, "-c", _PROBE], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    out = subprocess.run(
+        [sys.executable, "-c", _PROBE],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
 def _assert_is_b_env(seen: dict, b: Path, *, with_secrets: bool):
     assert seen["CLAWK_HOME"] == str(b)
-    assert seen["A_MARKER"] is None and seen["TERMINAL_ENV"] is None and seen["CLAWK_MODEL"] is None
+    assert (
+        seen["A_MARKER"] is None
+        and seen["TERMINAL_ENV"] is None
+        and seen["CLAWK_MODEL"] is None
+    )
     assert seen["B_MARKER"] == ("b" if with_secrets else None)
 
 
@@ -69,7 +90,9 @@ def test_slash_worker_child_runs_in_the_served_profiles_env(mux_homes, monkeypat
         def poll(self):
             return 0
 
-    with monkeypatch.context() as m:  # restored before the probe child spawns through the real Popen
+    with (
+        monkeypatch.context() as m
+    ):  # restored before the probe child spawns through the real Popen
         m.setattr(server.subprocess, "Popen", _Popen)
         token = set_clawk_home_override(str(b))
         try:
@@ -80,11 +103,15 @@ def test_slash_worker_child_runs_in_the_served_profiles_env(mux_homes, monkeypat
         # Outside multiplex the launch profile's own worker keeps its env untouched.
         set_multiplex_active(False)
         server._SlashWorker("sess", "", profile_home=None)
-        assert captured["env"]["A_MARKER"] == "a" and captured["env"]["CLAWK_HOME"] == str(a)
+        assert captured["env"]["A_MARKER"] == "a" and captured["env"][
+            "CLAWK_HOME"
+        ] == str(a)
     _assert_is_b_env(_child_view(served_env), b, with_secrets=True)
 
 
-def test_launch_profile_worker_spawns_with_own_home_after_multiplex_flip(mux_homes, monkeypatch):
+def test_launch_profile_worker_spawns_with_own_home_after_multiplex_flip(
+    mux_homes, monkeypatch
+):
     """After ``set_multiplex_active`` (first foreign-profile request), the launch profile's own worker
     must still spawn under ITS home — ``served_profile_child_env(target_home=None, inherit_credentials=True)``
     raises ``UnscopedSecretError`` by design once multiplexing is on, so the spawn site must pass the
@@ -92,7 +119,9 @@ def test_launch_profile_worker_spawns_with_own_home_after_multiplex_flip(mux_hom
     from tui_gateway import server
 
     a, _b = mux_homes
-    monkeypatch.setattr(server, "_clawk_home", str(a))  # launch profile home, captured at import
+    monkeypatch.setattr(
+        server, "_clawk_home", str(a)
+    )  # launch profile home, captured at import
     captured = {}
 
     class _Popen:
@@ -111,7 +140,9 @@ def test_launch_profile_worker_spawns_with_own_home_after_multiplex_flip(mux_hom
     # No UnscopedSecretError: the worker is launched under the launch profile's own home, not routed.
     env = captured["env"]
     assert env["CLAWK_HOME"] == str(a)
-    assert env["A_MARKER"] == "a"  # launch residual retained (target is not a routed/foreign home)
+    assert (
+        env["A_MARKER"] == "a"
+    )  # launch residual retained (target is not a routed/foreign home)
 
 
 def test_helper_children_resolve_secrets_through_the_served_profile(mux_homes):
@@ -121,12 +152,18 @@ def test_helper_children_resolve_secrets_through_the_served_profile(mux_homes):
     from tools.browser_tool import _build_browser_env
 
     _a, b = mux_homes
-    helper = (f"{sys.executable} -c \"import os;print(os.environ.get('B_MARKER','-')+'|'"
-              f"+os.environ.get('A_MARKER','-')+'|'+os.environ.get('CLAWK_HOME',''))\"")
+    helper = (
+        f"{sys.executable} -c \"import os;print(os.environ.get('B_MARKER','-')+'|'"
+        f"+os.environ.get('A_MARKER','-')+'|'+os.environ.get('CLAWK_HOME',''))\""
+    )
     with _profile_runtime_scope(b, hydrate_secrets=False):
         token, _ttl = _mint(helper, "b-provider")
         browser_env = _build_browser_env()
     assert token == f"b|-|{b}"
     seen = _child_view(browser_env)
-    _assert_is_b_env(seen, b, with_secrets=False)  # provider tier stays scrubbed for the browser
-    assert seen["FIRECRAWL_API_KEY"] == "b-fc"  # the passthrough key is B's, not the launch profile's
+    _assert_is_b_env(
+        seen, b, with_secrets=False
+    )  # provider tier stays scrubbed for the browser
+    assert (
+        seen["FIRECRAWL_API_KEY"] == "b-fc"
+    )  # the passthrough key is B's, not the launch profile's

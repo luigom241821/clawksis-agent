@@ -32,6 +32,8 @@ async def _fire_post_delivery_cb(cb):
     result = cb()
     if _inspect.isawaitable(result):
         await result
+
+
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 from gateway.session import SessionSource
 
@@ -66,12 +68,19 @@ class CleanupCaptureAdapter(BasePlatformAdapter):
     async def send(self, chat_id, content, reply_to=None, metadata=None) -> SendResult:
         mid = self._mint_id()
         self.sent.append(
-            {"chat_id": chat_id, "content": content, "message_id": mid, "metadata": metadata}
+            {
+                "chat_id": chat_id,
+                "content": content,
+                "message_id": mid,
+                "metadata": metadata,
+            }
         )
         return SendResult(success=True, message_id=mid)
 
     async def edit_message(self, chat_id, message_id, content) -> SendResult:
-        self.edits.append({"chat_id": chat_id, "message_id": message_id, "content": content})
+        self.edits.append(
+            {"chat_id": chat_id, "message_id": message_id, "content": content}
+        )
         return SendResult(success=True, message_id=message_id)
 
     async def delete_message(self, chat_id, message_id) -> bool:
@@ -186,17 +195,23 @@ def _install_fakes(
     import tools.terminal_tool
 
     gateway_run = importlib.import_module("gateway.run")
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"}
+    )
 
     # Wire the per-platform cleanup_progress flag via the config loader the
     # gateway actually reads (``_load_gateway_config`` returns user config).
-    cfg = {
-        "display": {
-            "platforms": {
-                cleanup_platform.value: {"cleanup_progress": True},
+    cfg = (
+        {
+            "display": {
+                "platforms": {
+                    cleanup_platform.value: {"cleanup_progress": True},
+                }
             }
         }
-    } if cleanup_on else {}
+        if cleanup_on
+        else {}
+    )
     monkeypatch.setattr(gateway_run, "_load_gateway_config", lambda: cfg)
     return gateway_run
 
@@ -219,7 +234,9 @@ async def test_messaging_agent_forwards_checkpoint_config(monkeypatch, tmp_path)
     adapter = CleanupCaptureAdapter()
     runner = _make_runner(adapter)
     gateway_run = _install_fakes(
-        monkeypatch, CheckpointCaptureAgent, cleanup_on=False,
+        monkeypatch,
+        CheckpointCaptureAgent,
+        cleanup_on=False,
     )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     monkeypatch.setattr(

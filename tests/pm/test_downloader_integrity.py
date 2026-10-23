@@ -1,4 +1,5 @@
 """Every ranged worker must prove which representation and bytes it received."""
+
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,7 +13,10 @@ from tests.pm._fixtures import threaded_server
 from tests.pm._range_server import dl_server
 
 
-@pytest.mark.parametrize("reply", ["whole-body", "wrong-bounds", "changed-size", "changed-etag", "short-body"])
+@pytest.mark.parametrize(
+    "reply",
+    ["whole-body", "wrong-bounds", "changed-size", "changed-etag", "short-body"],
+)
 def test_invalid_worker_response_cannot_publish(reply, tmp_path):
     payload = bytes(range(256)) * (12 * 1024)
 
@@ -20,11 +24,17 @@ def test_invalid_worker_response_cannot_publish(reply, tmp_path):
         def do_GET(self):
             bounds = self.headers.get("Range")
             if bounds == "bytes=0-0":
-                status, content_range, body = 206, f"bytes 0-0/{len(payload)}", payload[:1]
+                status, content_range, body = (
+                    206,
+                    f"bytes 0-0/{len(payload)}",
+                    payload[:1],
+                )
             else:
-                start, end = map(int, re.fullmatch(r"bytes=(\d+)-(\d+)", bounds).groups())
+                start, end = map(
+                    int, re.fullmatch(r"bytes=(\d+)-(\d+)", bounds).groups()
+                )
                 status, total, reported_start = 206, len(payload), start
-                body = payload[start:end + 1]
+                body = payload[start : end + 1]
                 if reply == "whole-body":
                     status, body = 200, payload
                 elif reply == "wrong-bounds":
@@ -37,7 +47,11 @@ def test_invalid_worker_response_cannot_publish(reply, tmp_path):
             self.send_response(status)
             self.send_header("Content-Range", content_range)
             self.send_header("Content-Length", str(len(body)))
-            etag = '"new"' if reply == "changed-etag" and bounds != "bytes=0-0" else '"original"'
+            etag = (
+                '"new"'
+                if reply == "changed-etag" and bounds != "bytes=0-0"
+                else '"original"'
+            )
             self.send_header("ETag", etag)
             self.end_headers()
             try:
@@ -57,7 +71,9 @@ def test_invalid_worker_response_cannot_publish(reply, tmp_path):
 
 
 @pytest.mark.parametrize("previous", [None, b"previous complete model"])
-def test_failed_copy_publication_keeps_destination_atomic(tmp_path, monkeypatch, previous):
+def test_failed_copy_publication_keeps_destination_atomic(
+    tmp_path, monkeypatch, previous
+):
     import errno
     import shutil
 
@@ -74,11 +90,9 @@ def test_failed_copy_publication_keeps_destination_atomic(tmp_path, monkeypatch,
     source = Source("https://example.invalid/model", destination)
     download = Download([source], partials_dir=part.parent)
 
-
     def interrupted_stream(src, dst, *args, **kwargs):
         dst.write(src.read(4))
         raise OSError(errno.ENOSPC, "destination full")
-
 
     monkeypatch.setattr(shutil, "copyfileobj", interrupted_stream)
     with pytest.raises(OSError, match="destination full"):
@@ -87,7 +101,9 @@ def test_failed_copy_publication_keeps_destination_atomic(tmp_path, monkeypatch,
     assert (destination.read_bytes() if destination.exists() else None) == previous
     assert part.read_bytes() == payload
     assert side.exists()
-    assert set(destination.parent.iterdir()) == ({destination} if previous is not None else set())
+    assert set(destination.parent.iterdir()) == (
+        {destination} if previous is not None else set()
+    )
 
 
 def test_fragmented_resume_obeys_connection_limit(tmp_path):
@@ -106,7 +122,9 @@ def test_fragmented_resume_obeys_connection_limit(tmp_path):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             nonlocal active, maximum
-            start, end = map(int, re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers["Range"]).groups())
+            start, end = map(
+                int, re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers["Range"]).groups()
+            )
             is_probe = (start, end) == (0, 0)
             self.send_response(206)
             self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
@@ -125,7 +143,7 @@ def test_fragmented_resume_obeys_connection_limit(tmp_path):
                 # already entered while this one sat on the release, so the overlap is still caught.
                 with lock:
                     active -= 1
-            self.wfile.write(payload[start:end + 1])
+            self.wfile.write(payload[start : end + 1])
 
         def log_message(self, *args):
             pass
@@ -139,11 +157,17 @@ def test_fragmented_resume_obeys_connection_limit(tmp_path):
     partials.mkdir()
     key = hashlib.sha256(url.encode()).hexdigest()
     (partials / f"{key}.part").write_bytes(payload)
-    (partials / f"{key}.ranges").write_text(json.dumps({
-        "total": len(payload), "etag": '"same-object"',
-        "sha256": hashlib.sha256(payload).hexdigest(),
-        "ranges": [[0, 512], [1024, 1536], [2048, 2560]],
-    }), encoding="utf-8")
+    (partials / f"{key}.ranges").write_text(
+        json.dumps(
+            {
+                "total": len(payload),
+                "etag": '"same-object"',
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "ranges": [[0, 512], [1024, 1536], [2048, 2560]],
+            }
+        ),
+        encoding="utf-8",
+    )
     source = Source(url, tmp_path / "result", hashlib.sha256(payload).hexdigest())
     errors = []
 
@@ -189,7 +213,9 @@ def test_processes_share_partial_ownership_without_losing_destinations(tmp_path)
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             nonlocal active, maximum
-            start, end = map(int, re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers["Range"]).groups())
+            start, end = map(
+                int, re.fullmatch(r"bytes=(\d+)-(\d+)", self.headers["Range"]).groups()
+            )
             probe = (start, end) == (0, 0)
             self.send_response(206)
             self.send_header("Content-Range", f"bytes {start}-{end}/{len(payload)}")
@@ -204,10 +230,12 @@ def test_processes_share_partial_ownership_without_losing_destinations(tmp_path)
                     if active > 1:
                         both.set()
                 release.wait(timeout=15)
-                with lock:  # before the body, same reason as the single-process test above
+                with (
+                    lock
+                ):  # before the body, same reason as the single-process test above
                     active -= 1
             try:
-                self.wfile.write(payload[start:end + 1])
+                self.wfile.write(payload[start : end + 1])
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
@@ -228,12 +256,24 @@ def test_processes_share_partial_ownership_without_losing_destinations(tmp_path)
     destinations = [tmp_path / "first" / "model", tmp_path / "second" / "model"]
     try:
         for destination in destinations:
-            children.append(subprocess.Popen(
-                [sys.executable, "-c", script, f"http://127.0.0.1:{server.server_port}/model",
-                 str(destination), str(tmp_path / "partials")],
-                cwd=tmp_path, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, encoding="utf-8",
-            ))
+            children.append(
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        script,
+                        f"http://127.0.0.1:{server.server_port}/model",
+                        str(destination),
+                        str(tmp_path / "partials"),
+                    ],
+                    cwd=tmp_path,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                )
+            )
             assert entered.wait(timeout=10)
         both.wait(timeout=2)
     finally:
@@ -250,11 +290,16 @@ def test_processes_share_partial_ownership_without_losing_destinations(tmp_path)
         server.server_close()
         serving.join(timeout=5)
     assert all(code == 0 for code, _, _ in results), results
-    assert [destination.read_bytes() for destination in destinations] == [payload, payload]
+    assert [destination.read_bytes() for destination in destinations] == [
+        payload,
+        payload,
+    ]
     assert maximum == 1, "two processes wrote one partial concurrently"
 
 
-@pytest.mark.parametrize("damage", ["changed-etag", "missing-part", "invalid-bounds", "no-validator"])
+@pytest.mark.parametrize(
+    "damage", ["changed-etag", "missing-part", "invalid-bounds", "no-validator"]
+)
 def test_resume_never_trusts_unbound_coverage(tmp_path, dl_server, damage):
     import hashlib
     import json
@@ -276,9 +321,17 @@ def test_resume_never_trusts_unbound_coverage(tmp_path, dl_server, damage):
         etag = ""
         RangeHandler.etags = False
     ranges = [[0, len(payload)]] if damage != "invalid-bounds" else [[-1, len(payload)]]
-    (partials / f"{key}.ranges").write_text(json.dumps({
-        "total": len(payload), "etag": etag, "sha256": "", "ranges": ranges,
-    }), encoding="utf-8")
+    (partials / f"{key}.ranges").write_text(
+        json.dumps(
+            {
+                "total": len(payload),
+                "etag": etag,
+                "sha256": "",
+                "ranges": ranges,
+            }
+        ),
+        encoding="utf-8",
+    )
 
     destination = tmp_path / "model"
     Download([Source(source_url, destination)], partials_dir=partials).run()

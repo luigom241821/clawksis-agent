@@ -65,9 +65,9 @@ def _helper(module_name):
     return helper
 
 
-
-
-@pytest.mark.parametrize(("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS)
+@pytest.mark.parametrize(
+    ("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS
+)
 def test_scoped_read_wins_over_environ(module_name, var, monkeypatch):
     """Scope installed under multiplex: the profile's value wins, not environ's."""
     helper = _helper(module_name)
@@ -80,7 +80,9 @@ def test_scoped_read_wins_over_environ(module_name, var, monkeypatch):
         ss.reset_secret_scope(tok)
 
 
-@pytest.mark.parametrize(("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS)
+@pytest.mark.parametrize(
+    ("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS
+)
 def test_scoped_miss_returns_default_no_environ_borrow(module_name, var, monkeypatch):
     """Scope installed but key absent: return the default — never borrow the
     default profile's os.environ value into a secondary profile."""
@@ -96,7 +98,9 @@ def test_scoped_miss_returns_default_no_environ_borrow(module_name, var, monkeyp
         ss.reset_secret_scope(tok)
 
 
-@pytest.mark.parametrize(("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS)
+@pytest.mark.parametrize(
+    ("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS
+)
 def test_unscoped_under_multiplex_falls_back_to_environ(module_name, var, monkeypatch):
     """The DEFAULT profile constructs its adapters unscoped under multiplexing.
     A bare get_secret would raise UnscopedSecretError and crash startup; the
@@ -111,7 +115,9 @@ def test_unscoped_under_multiplex_falls_back_to_environ(module_name, var, monkey
     assert helper(var, "fallback-default") == "fallback-default"
 
 
-@pytest.mark.parametrize(("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS)
+@pytest.mark.parametrize(
+    ("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS
+)
 def test_single_profile_legacy_environ_read(module_name, var, monkeypatch):
     """Multiplex off, no scope: legacy os.environ read keeps working."""
     helper = _helper(module_name)

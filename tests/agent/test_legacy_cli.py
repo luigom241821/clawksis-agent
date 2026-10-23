@@ -18,7 +18,9 @@ import run_agent
 
 def _run_console_script(monkeypatch, *argv: str):
     pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    module, func = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["scripts"]["clawksis-agent"].split(":")
+    module, func = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"][
+        "scripts"
+    ]["clawksis-agent"].split(":")
     monkeypatch.setattr(sys, "argv", ["clawksis-agent", *argv])
     try:
         return getattr(importlib.import_module(module), func)()
@@ -47,12 +49,24 @@ def test_query_and_runner_options_reach_the_agent(monkeypatch, capsys):
 
         def run_conversation(self, query):
             seen["query"] = query
-            return {"completed": True, "api_calls": 1, "messages": [], "final_response": "ok"}
+            return {
+                "completed": True,
+                "api_calls": 1,
+                "messages": [],
+                "final_response": "ok",
+            }
 
     monkeypatch.setattr(run_agent, "AIAgent", _Agent)
 
-    assert _run_console_script(monkeypatch, "--query", "hello there", "--max-turns", "3",
-                               "--disabled-toolsets", "web") in (0, None)
+    assert _run_console_script(
+        monkeypatch,
+        "--query",
+        "hello there",
+        "--max-turns",
+        "3",
+        "--disabled-toolsets",
+        "web",
+    ) in (0, None)
     assert seen["query"] == "hello there"
     assert seen["init"]["max_iterations"] == 3
     assert seen["init"]["disabled_toolsets"] == ["web"]

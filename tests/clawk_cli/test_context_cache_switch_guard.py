@@ -28,29 +28,60 @@ def _guard(model, ctx, cfg=_no_config):
 class TestContextCacheGuard:
     def test_silent_without_context_or_below_threshold(self):
         assert _guard("new/model", None) is None
-        assert _guard("new/model", SelectionContext(context_tokens=5_000, current_model="old/model")) is None
+        assert (
+            _guard(
+                "new/model",
+                SelectionContext(context_tokens=5_000, current_model="old/model"),
+            )
+            is None
+        )
 
     def test_fires_above_default_threshold(self):
         tokens = DEFAULT_CONTEXT_CACHE_SWITCH_THRESHOLD + 1
-        warning = _guard("new/model", SelectionContext(context_tokens=tokens, current_model="old/model"))
+        warning = _guard(
+            "new/model",
+            SelectionContext(context_tokens=tokens, current_model="old/model"),
+        )
         assert warning is not None
         assert warning.kind == "context_cache"
         assert f"{tokens:,}" in warning.message
 
     def test_same_model_reselect_stays_silent(self):
-        ctx = SelectionContext(context_tokens=DEFAULT_CONTEXT_CACHE_SWITCH_THRESHOLD * 2, current_model="same/model")
+        ctx = SelectionContext(
+            context_tokens=DEFAULT_CONTEXT_CACHE_SWITCH_THRESHOLD * 2,
+            current_model="same/model",
+        )
         assert _guard("same/model", ctx) is None
 
     def test_config_threshold_override_and_zero_disables(self):
         ctx = SelectionContext(context_tokens=20_000, current_model="old/model")
-        assert _guard("new/model", ctx, lambda: {"model": {"switch_context_confirm_tokens": 10_000}}) is not None
+        assert (
+            _guard(
+                "new/model",
+                ctx,
+                lambda: {"model": {"switch_context_confirm_tokens": 10_000}},
+            )
+            is not None
+        )
         huge = SelectionContext(context_tokens=10**9, current_model="old/model")
-        assert _guard("new/model", huge, lambda: {"model": {"switch_context_confirm_tokens": 0}}) is None
+        assert (
+            _guard(
+                "new/model",
+                huge,
+                lambda: {"model": {"switch_context_confirm_tokens": 0}},
+            )
+            is None
+        )
 
     def test_registry_threads_selection_context(self):
-        ctx = SelectionContext(context_tokens=DEFAULT_CONTEXT_CACHE_SWITCH_THRESHOLD + 1, current_model="old/model")
+        ctx = SelectionContext(
+            context_tokens=DEFAULT_CONTEXT_CACHE_SWITCH_THRESHOLD + 1,
+            current_model="old/model",
+        )
         with patch("clawk_cli.config.load_config", _no_config):
-            with_ctx = selection_warnings("new/model", provider="openrouter", selection_context=ctx)
+            with_ctx = selection_warnings(
+                "new/model", provider="openrouter", selection_context=ctx
+            )
             without = selection_warnings("new/model", provider="openrouter")
         assert any(w.kind == "context_cache" for w in with_ctx)
         assert not any(w.kind == "context_cache" for w in without)

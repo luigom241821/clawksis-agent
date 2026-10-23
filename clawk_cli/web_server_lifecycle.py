@@ -1,5 +1,4 @@
-"""Serve-process lifecycle: parent death watchdog, port-conflict preflight, READY announcement, browser open, trusted proxies.
-"""
+"""Serve-process lifecycle: parent death watchdog, port-conflict preflight, READY announcement, browser open, trusted proxies."""
 
 import asyncio
 import logging
@@ -48,7 +47,9 @@ def _process_start_marker(pid: int) -> str:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         kernel32.OpenProcess.restype = wintypes.HANDLE
-        kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+        kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [
+            ctypes.POINTER(wintypes.FILETIME)
+        ] * 4
         kernel32.GetProcessTimes.restype = wintypes.BOOL
         kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
         kernel32.CloseHandle.restype = wintypes.BOOL
@@ -62,23 +63,37 @@ def _process_start_marker(pid: int) -> str:
         creation, exit_time, kernel, user = (wintypes.FILETIME() for _ in range(4))
         try:
             if not kernel32.GetProcessTimes(
-                handle, ctypes.byref(creation), ctypes.byref(exit_time), ctypes.byref(kernel), ctypes.byref(user)
+                handle,
+                ctypes.byref(creation),
+                ctypes.byref(exit_time),
+                ctypes.byref(kernel),
+                ctypes.byref(user),
             ):
-                raise OSError(ctypes.get_last_error(), f"GetProcessTimes failed for PID {pid}")
+                raise OSError(
+                    ctypes.get_last_error(), f"GetProcessTimes failed for PID {pid}"
+                )
         finally:
             kernel32.CloseHandle(handle)
 
         filetime = (creation.dwHighDateTime << 32) | creation.dwLowDateTime
         return f"win:{filetime + 504911232000000000}"
 
-    result = subprocess.run(["ps", "-p", str(pid), "-o", "lstart="], capture_output=True, text=True, encoding="utf-8",
-                            errors="replace", check=False)
+    result = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "lstart="],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
     marker = result.stdout.strip()
     if result.returncode == 0 and marker:
         return f"ps:{marker}"
     # Only known "missing pid" signals become ProcessLookupError; anything else stays OSError so the
     # watchdog degrades to pid liveness instead of exiting on a healthy backend.
-    if (result.returncode == 1 and not marker) or "no such process" in result.stderr.lower():
+    if (
+        result.returncode == 1 and not marker
+    ) or "no such process" in result.stderr.lower():
         raise ProcessLookupError(pid)
     raise OSError(f"ps could not inspect PID {pid}: {result.stderr.strip()}")
 
@@ -164,9 +179,11 @@ def _warm_gateway_module() -> None:
 def _resolve_restart_drain_timeout() -> float:
     try:
         from clawk_cli.gateway import _get_restart_drain_timeout
+
         return _get_restart_drain_timeout()
     except ImportError:
         from gateway.restart import DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+
         return DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
 
 
@@ -190,7 +207,8 @@ def _eager_reconcile_own_session_db() -> None:
     except Exception as exc:
         _log.warning(
             "startup schema reconcile of state.db failed (%s); session "
-            "reads will report the store unavailable until owner recovery", exc,
+            "reads will report the store unavailable until owner recovery",
+            exc,
         )
 
 
@@ -212,12 +230,16 @@ def _write_dashboard_ready_file(actual_port: int) -> None:
         return
 
     try:
-        atomic_json_write(Path(target), {"port": int(actual_port)}, indent=None, separators=(",", ":"))
+        atomic_json_write(
+            Path(target), {"port": int(actual_port)}, indent=None, separators=(",", ":")
+        )
     except Exception as exc:
         _log.warning("Failed to write dashboard ready file %r: %s", target, exc)
 
 
-def _maybe_open_browser(host: str, actual_port: int, open_browser: bool, initial_profile: str) -> None:
+def _maybe_open_browser(
+    host: str, actual_port: int, open_browser: bool, initial_profile: str
+) -> None:
     """Open the dashboard URL in the user's browser if appropriate.
 
     Skips headless Linux (no DISPLAY/WAYLAND_DISPLAY) so a TUI browser can't
@@ -228,7 +250,9 @@ def _maybe_open_browser(host: str, actual_port: int, open_browser: bool, initial
 
     import webbrowser
 
-    _has_display = sys.platform != "linux" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    _has_display = sys.platform != "linux" or bool(
+        os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
+    )
     if not _has_display:
         _log.debug(
             "Skipping browser-open: no DISPLAY or WAYLAND_DISPLAY detected "
@@ -242,6 +266,7 @@ def _maybe_open_browser(host: str, actual_port: int, open_browser: bool, initial
     _open_url = f"http://{format_url_host(_display_host)}:{actual_port}"
     if initial_profile:
         from urllib.parse import quote
+
         _open_url += f"/?profile={quote(initial_profile)}"
 
     def _open():
@@ -281,7 +306,9 @@ def _is_serve_orphaned(
             if actual_marker is not None:
                 if _parent_start_markers_match(actual_marker, expected_start_marker):
                     return False
-                if _parent_start_marker_mismatch_is_conclusive(actual_marker, expected_start_marker):
+                if _parent_start_marker_mismatch_is_conclusive(
+                    actual_marker, expected_start_marker
+                ):
                     return True
                 # Inconclusive marker: degrade to PID liveness instead of exiting.
 
@@ -345,7 +372,11 @@ def _start_parent_death_watchdog() -> None:
     has_marker = start_marker is not None
     if has_marker != (nonce is not None):
         return
-    if has_marker and (not _valid_parent_start_marker(start_marker or "") or not nonce or nonce != nonce.strip()):
+    if has_marker and (
+        not _valid_parent_start_marker(start_marker or "")
+        or not nonce
+        or nonce != nonce.strip()
+    ):
         # Disarming is fail-safe (the backend keeps serving) but must not be
         # traceless: this backend will never reap itself if the Desktop dies.
         _log.warning(
@@ -391,7 +422,10 @@ def _is_addr_in_use_error(exc: OSError) -> bool:
     import errno
 
     # POSIX, Linux, macOS, WinSock; WSAEADDRINUSE also surfaces as winerror.
-    return exc.errno in {errno.EADDRINUSE, 98, 48, 10048} or getattr(exc, "winerror", None) == 10048
+    return (
+        exc.errno in {errno.EADDRINUSE, 98, 48, 10048}
+        or getattr(exc, "winerror", None) == 10048
+    )
 
 
 def _port_bind_conflict(host: str, port: int) -> bool:
@@ -538,7 +572,9 @@ def _uvicorn_console_logging() -> None:
     ):
         logger = logging.getLogger(name)
         logger.propagate = False
-        if not logger.handlers:  # a second listener in this process keeps the first one's
+        if (
+            not logger.handlers
+        ):  # a second listener in this process keeps the first one's
             handler = logging.StreamHandler(stream)
             handler.setFormatter(formatter)
             logger.addHandler(handler)
@@ -546,9 +582,16 @@ def _uvicorn_console_logging() -> None:
     logging.getLogger("uvicorn").setLevel(logging.INFO)
 
 
-def build_listener_server(served_app, host: str, port: int, *, auth_required: bool,
-                          ws_ping: Optional[tuple[float, float]] = None,
-                          timeout_graceful_shutdown: Optional[float] = 3, lifespan: str = "auto"):
+def build_listener_server(
+    served_app,
+    host: str,
+    port: int,
+    *,
+    auth_required: bool,
+    ws_ping: Optional[tuple[float, float]] = None,
+    timeout_graceful_shutdown: Optional[float] = 3,
+    lifespan: str = "auto",
+):
     """uvicorn ``Config`` + ``Server`` for a dashboard or gateway-session listener (FastAPI-free, so
     the gateway can build its session listener without importing the dashboard app).
 
@@ -562,7 +605,10 @@ def build_listener_server(served_app, host: str, port: int, *, auth_required: bo
     """
     import uvicorn
     from clawk_cli.config import load_config
-    from clawk_cli.web_server_boundary import _DESKTOP_ATTACHMENT_WS_MAX_BYTES, _LOOPBACK_HOST_VALUES
+    from clawk_cli.web_server_boundary import (
+        _DESKTOP_ATTACHMENT_WS_MAX_BYTES,
+        _LOOPBACK_HOST_VALUES,
+    )
 
     try:
         dash_cfg = load_config().get("dashboard") or {}
@@ -576,11 +622,21 @@ def build_listener_server(served_app, host: str, port: int, *, auth_required: bo
             return default
 
     if ws_ping is None:
-        ws_ping = (None, None) if host in _LOOPBACK_HOST_VALUES else (
-            _ws_ping_setting("ws_ping_interval"), _ws_ping_setting("ws_ping_timeout"))
+        ws_ping = (
+            (None, None)
+            if host in _LOOPBACK_HOST_VALUES
+            else (
+                _ws_ping_setting("ws_ping_interval"),
+                _ws_ping_setting("ws_ping_timeout"),
+            )
+        )
     _uvicorn_console_logging()
     config = uvicorn.Config(
-        served_app, host=host, port=port, log_level="warning", log_config=None,
+        served_app,
+        host=host,
+        port=port,
+        log_level="warning",
+        log_config=None,
         # Off by default so _ws_client_is_allowed sees the real peer, not
         # X-Forwarded-For. Gated mode runs behind a TLS terminator and needs
         # X-Forwarded-Proto for cookie Secure flags.

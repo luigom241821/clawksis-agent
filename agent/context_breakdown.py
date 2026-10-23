@@ -49,8 +49,12 @@ _CATEGORIES = {
 
 def _category_label(category_id: str) -> str:
     return t(f"gateway.context.category.{category_id}")
+
+
 _FREE_GLYPH = "·"
-_CONTEXT_SOURCES = frozenset({"local_estimate", "provider_usage", "provider_usage_plus_estimate"})
+_CONTEXT_SOURCES = frozenset(
+    {"local_estimate", "provider_usage", "provider_usage_plus_estimate"}
+)
 _GRID_COLUMNS = 20
 _GRID_ROWS = 5  # 100 cells → 1 cell per percent of the context window
 _DETAILS_TABLE_LIMIT = 15  # display cap only; the underlying data keeps everything
@@ -58,6 +62,7 @@ _DETAILS_TABLE_LIMIT = 15  # display cap only; the underlying data keeps everyth
 
 def _chars_to_tokens(text: str) -> int:
     from agent.model_metadata import estimate_tokens_rough
+
     return estimate_tokens_rough(text)
 
 
@@ -67,6 +72,7 @@ def _json_tokens(value: Any) -> int:
 
 def _bytes_to_tokens(size: Optional[int]) -> Optional[int]:
     from agent.model_metadata import CHARS_PER_TOKEN
+
     return None if size is None else (int(size) + 3) // CHARS_PER_TOKEN
 
 
@@ -83,7 +89,13 @@ def _split_tools(tools: Sequence[dict]) -> tuple[list[dict], list[dict], list[di
     for tool in tools:
         fn = tool.get("function") if isinstance(tool, dict) else None
         name = str((fn if isinstance(fn, dict) else tool).get("name") or "")
-        bucket = mcp if name.startswith("mcp_") else subagent if name in _SUBAGENT_TOOL_NAMES else builtin
+        bucket = (
+            mcp
+            if name.startswith("mcp_")
+            else subagent
+            if name in _SUBAGENT_TOOL_NAMES
+            else builtin
+        )
         bucket.append(tool)
     return builtin, mcp, subagent
 
@@ -124,7 +136,11 @@ def context_display_source(compressor: Any) -> str:
     """
     real = getattr(compressor, "last_real_prompt_tokens", None)
     shown = getattr(compressor, "last_prompt_tokens", 0) or 0
-    return "local_estimate" if isinstance(real, (int, float)) and shown > 0 and shown != real else "provider_usage"
+    return (
+        "local_estimate"
+        if isinstance(real, (int, float)) and shown > 0 and shown != real
+        else "provider_usage"
+    )
 
 
 def context_usage_fields(compressor: Any) -> dict[str, Any]:
@@ -135,12 +151,18 @@ def context_usage_fields(compressor: Any) -> dict[str, Any]:
         return {}
     used = min(used, maximum)
     source = context_display_source(compressor)
-    return {"context_used": used, "context_max": maximum,
-            "context_percent": max(0, min(100, round(used / maximum * 100))),
-            "context_source": source, "context_estimated": source != "provider_usage"}
+    return {
+        "context_used": used,
+        "context_max": maximum,
+        "context_percent": max(0, min(100, round(used / maximum * 100))),
+        "context_source": source,
+        "context_estimated": source != "provider_usage",
+    }
 
 
-def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]] = None) -> dict[str, Any]:
+def compute_session_context_breakdown(
+    agent: Any, messages: Optional[list[dict]] = None
+) -> dict[str, Any]:
     """Return a Cursor-style context usage breakdown for one live agent."""
     from agent.model_metadata import estimate_messages_tokens_rough
     from agent.usage_anchor import anchored_context_tokens
@@ -152,9 +174,12 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
     skills_index = _skills_block(stable)
     memory_block, user_block = _memory_blocks(agent)
     system_prompt_text = _join(
-        _strip_blocks(stable, skills_index), _strip_blocks(parts.get("volatile", "") or "", memory_block, user_block)
+        _strip_blocks(stable, skills_index),
+        _strip_blocks(parts.get("volatile", "") or "", memory_block, user_block),
     )
-    builtin_tools, mcp_tools, subagent_tools = _split_tools(list(getattr(agent, "tools", None) or []))
+    builtin_tools, mcp_tools, subagent_tools = _split_tools(
+        list(getattr(agent, "tools", None) or [])
+    )
     tokens_by_id = {
         "system_prompt": _chars_to_tokens(system_prompt_text),
         "tool_definitions": _json_tokens(builtin_tools),
@@ -176,7 +201,9 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
     # anchoring on the LAST response makes the meter sawtooth. Fall back to the
     # last-response anchor, then measured, then estimated.
     anchor = getattr(agent, "_turn_base_usage_anchor", None)
-    context_used = anchored_context_tokens(messages, anchor, charge_stale_thinking=False)
+    context_used = anchored_context_tokens(
+        messages, anchor, charge_stale_thinking=False
+    )
     if context_used is None:
         anchor = getattr(agent, "_usage_anchor", None)
         context_used = anchored_context_tokens(messages, anchor)
@@ -185,7 +212,7 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
         context_used = measured_used if measured_used > 0 else estimated_total
         source = context_display_source(comp) if measured_used > 0 else "local_estimate"
     else:
-        delta = messages[int(anchor["base_count"]):]
+        delta = messages[int(anchor["base_count"]) :]
         if delta and delta[0].get("role") == "assistant":
             delta = delta[1:]
         source = "provider_usage_plus_estimate" if delta else "provider_usage"
@@ -195,12 +222,19 @@ def compute_session_context_breakdown(agent: Any, messages: Optional[list[dict]]
 
     return {
         "categories": [
-            {"color": color, "id": category_id, "label": _category_label(category_id), "tokens": tokens_by_id[category_id]}
+            {
+                "color": color,
+                "id": category_id,
+                "label": _category_label(category_id),
+                "tokens": tokens_by_id[category_id],
+            }
             for category_id, (color, _glyph_) in _CATEGORIES.items()
             if tokens_by_id[category_id] > 0 or category_id in _ALWAYS_REPORTED
         ],
         "context_max": context_max,
-        "context_percent": max(0, min(100, round(context_used / context_max * 100))) if context_max else 0,
+        "context_percent": max(0, min(100, round(context_used / context_max * 100)))
+        if context_max
+        else 0,
         "context_used": context_used,
         "context_source": source,
         "context_estimated": source != "provider_usage",
@@ -215,10 +249,15 @@ def compute_context_details(agent: Any) -> dict[str, Any]:
     Reuses the ``clawk prompt-size`` attribution (index-line bytes from the
     live skills block; schema bytes via the registry's tool→toolset map).
     """
-    from clawk_cli.prompt_size import _compute_skills_breakdown, _compute_toolsets_breakdown
+    from clawk_cli.prompt_size import (
+        _compute_skills_breakdown,
+        _compute_toolsets_breakdown,
+    )
     from agent.system_prompt import build_system_prompt_parts
 
-    skills_block = _skills_block(build_system_prompt_parts(agent).get("stable", "") or "")
+    skills_block = _skills_block(
+        build_system_prompt_parts(agent).get("stable", "") or ""
+    )
     tools = list(getattr(agent, "tools", None) or [])
     return {
         "skills": [
@@ -227,7 +266,9 @@ def compute_context_details(agent: Any) -> dict[str, Any]:
                 "index_tokens": _bytes_to_tokens(entry.get("index_line_bytes")) or 0,
                 "skill_md_tokens": _bytes_to_tokens(entry.get("skill_md_bytes")),
             }
-            for entry in (_compute_skills_breakdown(skills_block) if skills_block else [])
+            for entry in (
+                _compute_skills_breakdown(skills_block) if skills_block else []
+            )
         ],
         "toolsets": [
             {
@@ -259,7 +300,10 @@ def render_context_grid(payload: dict[str, Any]) -> list[str]:
             cells.extend([_glyph(cat)] * n)
         cells = cells[:total_cells]
     cells.extend([_FREE_GLYPH] * (total_cells - len(cells)))
-    return [" ".join(cells[row * _GRID_COLUMNS:(row + 1) * _GRID_COLUMNS]) for row in range(_GRID_ROWS)]
+    return [
+        " ".join(cells[row * _GRID_COLUMNS : (row + 1) * _GRID_COLUMNS])
+        for row in range(_GRID_ROWS)
+    ]
 
 
 def render_context_category_lines(payload: dict[str, Any]) -> list[str]:
@@ -273,21 +317,44 @@ def render_context_category_lines(payload: dict[str, Any]) -> list[str]:
     if not categories:
         return [*lines, t("gateway.context.no_data_yet")]
     free_label = t("gateway.context.free_space")
-    width = max(len(free_label), *(len(str(cat.get("label") or "")) for cat in categories))
+    width = max(
+        len(free_label), *(len(str(cat.get("label") or "")) for cat in categories)
+    )
     for cat in categories:
-        tokens, label = int(cat.get("tokens") or 0), str(cat.get("label") or cat.get("id") or "")
-        lines.append(t("gateway.context.category_row", glyph=_glyph(cat), label=f"{label:<{width}}",
-                       tokens=f"{tokens:>9,}", pct=f"{tokens / denom * 100 if denom else 0.0:>5.1f}"))
+        tokens, label = (
+            int(cat.get("tokens") or 0),
+            str(cat.get("label") or cat.get("id") or ""),
+        )
+        lines.append(
+            t(
+                "gateway.context.category_row",
+                glyph=_glyph(cat),
+                label=f"{label:<{width}}",
+                tokens=f"{tokens:>9,}",
+                pct=f"{tokens / denom * 100 if denom else 0.0:>5.1f}",
+            )
+        )
     if context_max > 0:
         free = max(0, context_max - estimated_total)
-        lines.append(t("gateway.context.category_row", glyph=_FREE_GLYPH, label=f"{free_label:<{width}}",
-                       tokens=f"{free:>9,}", pct=f"{free / context_max * 100:>5.1f}"))
+        lines.append(
+            t(
+                "gateway.context.category_row",
+                glyph=_FREE_GLYPH,
+                label=f"{free_label:<{width}}",
+                tokens=f"{free:>9,}",
+                pct=f"{free / context_max * 100:>5.1f}",
+            )
+        )
     return lines
 
 
 def _toolset_row(group: dict[str, Any]) -> str:
-    return t("gateway.context.toolset_row", toolset=f"{group['toolset']:<24}", count=f"{group['tool_count']:>3}",
-             tokens=f"{group['schema_tokens']:>8,}")
+    return t(
+        "gateway.context.toolset_row",
+        toolset=f"{group['toolset']:<24}",
+        count=f"{group['tool_count']:>3}",
+        tokens=f"{group['schema_tokens']:>8,}",
+    )
 
 
 def _skill_row(entry: dict[str, Any]) -> str:
@@ -295,8 +362,15 @@ def _skill_row(entry: dict[str, Any]) -> str:
     if len(name) > 28:
         name = name[:27] + "…"
     md = entry.get("skill_md_tokens")
-    md_str = f"~{md:>8,}" if md is not None else f"{t('gateway.context.not_available'):>8}"
-    return t("gateway.context.skill_row", name=f"{name:<28}", index_tokens=f"{entry['index_tokens']:>6,}", md_tokens=md_str)
+    md_str = (
+        f"~{md:>8,}" if md is not None else f"{t('gateway.context.not_available'):>8}"
+    )
+    return t(
+        "gateway.context.skill_row",
+        name=f"{name:<28}",
+        index_tokens=f"{entry['index_tokens']:>6,}",
+        md_tokens=md_str,
+    )
 
 
 def _table(lines: list[str], title: str, rows: list[dict[str, Any]], fmt) -> None:
@@ -308,14 +382,26 @@ def _table(lines: list[str], title: str, rows: list[dict[str, Any]], fmt) -> Non
     lines.append(title)
     lines.extend(fmt(row) for row in rows[:_DETAILS_TABLE_LIMIT])
     if len(rows) > _DETAILS_TABLE_LIMIT:
-        lines.append(t("gateway.context.and_more", count=len(rows) - _DETAILS_TABLE_LIMIT))
+        lines.append(
+            t("gateway.context.and_more", count=len(rows) - _DETAILS_TABLE_LIMIT)
+        )
 
 
 def render_context_details_lines(details: dict[str, Any]) -> list[str]:
     """Render the expanded ``/context all`` per-skill / per-toolset tables."""
     lines: list[str] = []
-    _table(lines, t("gateway.context.toolsets_title"), details.get("toolsets") or [], _toolset_row)
-    _table(lines, t("gateway.context.skills_title"), details.get("skills") or [], _skill_row)
+    _table(
+        lines,
+        t("gateway.context.toolsets_title"),
+        details.get("toolsets") or [],
+        _toolset_row,
+    )
+    _table(
+        lines,
+        t("gateway.context.skills_title"),
+        details.get("skills") or [],
+        _skill_row,
+    )
     return lines
 
 
@@ -332,12 +418,30 @@ def render_context_breakdown_lines(
 
     context_max = int(payload.get("context_max") or 0)
     if context_max > 0:
-        used, pct = int(payload.get("context_used") or 0), int(payload.get("context_percent") or 0)
+        used, pct = (
+            int(payload.get("context_used") or 0),
+            int(payload.get("context_percent") or 0),
+        )
         mark = "~" if payload.get("context_estimated") else ""
-        lines.extend(["", t("gateway.context.window_line", mark=mark, used=f"{used:,}", max=f"{context_max:,}", pct=pct)])
+        lines.extend(
+            [
+                "",
+                t(
+                    "gateway.context.window_line",
+                    mark=mark,
+                    used=f"{used:,}",
+                    max=f"{context_max:,}",
+                    pct=pct,
+                ),
+            ]
+        )
         source = payload.get("context_source")
         if source:
-            source_label = t(f"gateway.context.source.{source}") if source in _CONTEXT_SOURCES else source
+            source_label = (
+                t(f"gateway.context.source.{source}")
+                if source in _CONTEXT_SOURCES
+                else source
+            )
             lines.append(t("gateway.context.source_line", source=source_label))
 
     if details is None:

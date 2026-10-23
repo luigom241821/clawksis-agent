@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -21,6 +20,7 @@ def _make_plugin_dir(parent: Path, name: str, manifest: dict) -> Path:
     d = parent / name
     d.mkdir(parents=True, exist_ok=True)
     import clawk_yaml as yaml
+
     (d / "plugin.yaml").write_text(yaml.safe_dump(manifest), encoding="utf-8")
     (d / "__init__.py").write_text("def register(ctx): pass\n", encoding="utf-8")
     return d
@@ -42,9 +42,11 @@ class TestReadManifestInfo:
     def test_flat_plugin(self, tmp_path):
         from clawk_cli.plugins_cmd import _read_manifest_info
 
-        d = _make_plugin_dir(tmp_path, "my-plugin", {
-            "name": "my-plugin", "version": "1.0.0", "description": "test"
-        })
+        d = _make_plugin_dir(
+            tmp_path,
+            "my-plugin",
+            {"name": "my-plugin", "version": "1.0.0", "description": "test"},
+        )
         result = _read_manifest_info(d, "")
         assert result is not None
         name, version, description, key = result
@@ -52,7 +54,6 @@ class TestReadManifestInfo:
         assert version == "1.0.0"
         assert description == "test"
         assert key == "my-plugin"  # flat: key == name
-
 
     def test_no_manifest(self, tmp_path):
         from clawk_cli.plugins_cmd import _read_manifest_info
@@ -67,7 +68,10 @@ class TestReadManifestInfo:
         d = tmp_path / "my-plugin"
         d.mkdir()
         import clawk_yaml as yaml
-        (d / "plugin.yml").write_text(yaml.safe_dump({"name": "my-plugin"}), encoding="utf-8")
+
+        (d / "plugin.yml").write_text(
+            yaml.safe_dump({"name": "my-plugin"}), encoding="utf-8"
+        )
         result = _read_manifest_info(d, "")
         assert result is not None
         assert result[0] == "my-plugin"
@@ -79,22 +83,20 @@ class TestReadManifestInfo:
 
 
 class TestDiscoverAllPlugins:
-
-
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
     def test_mixed_flat_and_category(self, mock_user_dir, mock_bundled_dir, tmp_path):
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
-        _make_plugin_dir(tmp_path, "disk-cleanup", {
-            "name": "disk-cleanup", "version": "1.0.0"
-        })
-        _make_category_plugin(tmp_path, "web", "keenable", {
-            "name": "web-keenable", "version": "1.0.0"
-        })
-        _make_category_plugin(tmp_path, "web", "exa", {
-            "name": "web-exa", "version": "1.0.0"
-        })
+        _make_plugin_dir(
+            tmp_path, "disk-cleanup", {"name": "disk-cleanup", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            tmp_path, "web", "keenable", {"name": "web-keenable", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            tmp_path, "web", "exa", {"name": "web-exa", "version": "1.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -112,13 +114,14 @@ class TestDiscoverAllPlugins:
         from clawk_cli.plugins_cmd import _discover_all_plugins
 
         # 2 levels: should be found
-        _make_category_plugin(tmp_path, "web", "keenable", {
-            "name": "web-keenable", "version": "1.0.0"
-        })
+        _make_category_plugin(
+            tmp_path, "web", "keenable", {"name": "web-keenable", "version": "1.0.0"}
+        )
         # 3 levels: should NOT be found
         deep = tmp_path / "a" / "b" / "c"
         deep.mkdir(parents=True)
         import clawk_yaml as yaml
+
         (deep / "plugin.yaml").write_text(
             yaml.safe_dump({"name": "too-deep"}), encoding="utf-8"
         )
@@ -132,7 +135,9 @@ class TestDiscoverAllPlugins:
 
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_bundled_model_providers_skipped(self, mock_user_dir, mock_bundled_dir, tmp_path):
+    def test_bundled_model_providers_skipped(
+        self, mock_user_dir, mock_bundled_dir, tmp_path
+    ):
         """``plugins/model-providers/`` has its own provider registry loader.
 
         Bundled providers should not appear in ``clawk plugins list`` as
@@ -145,19 +150,31 @@ class TestDiscoverAllPlugins:
         bundled = tmp_path / "bundled"
         user = tmp_path / "user"
         user.mkdir()
-        _make_category_plugin(bundled, "model-providers", "openrouter", {
-            "name": "openrouter-provider", "version": "1.0.0",
-            "kind": "model-provider",
-        })
-        _make_category_plugin(bundled, "memory", "letta", {
-            "name": "letta-memory", "version": "1.0.0"
-        })
-        _make_category_plugin(bundled, "context_engine", "compressor", {
-            "name": "compressor", "version": "1.0.0"
-        })
-        _make_category_plugin(bundled, "observability", "langfuse", {
-            "name": "langfuse", "version": "1.0.0"
-        })
+        _make_category_plugin(
+            bundled,
+            "model-providers",
+            "openrouter",
+            {
+                "name": "openrouter-provider",
+                "version": "1.0.0",
+                "kind": "model-provider",
+            },
+        )
+        _make_category_plugin(
+            bundled, "memory", "letta", {"name": "letta-memory", "version": "1.0.0"}
+        )
+        _make_category_plugin(
+            bundled,
+            "context_engine",
+            "compressor",
+            {"name": "compressor", "version": "1.0.0"},
+        )
+        _make_category_plugin(
+            bundled,
+            "observability",
+            "langfuse",
+            {"name": "langfuse", "version": "1.0.0"},
+        )
         mock_user_dir.return_value = user
         mock_bundled_dir.return_value = bundled
 
@@ -181,10 +198,16 @@ class TestDiscoverAllPlugins:
         bundled = tmp_path / "bundled"
         bundled.mkdir()
         user = tmp_path / "user"
-        _make_category_plugin(user, "model-providers", "acme", {
-            "name": "acme-provider", "version": "0.1.0",
-            "kind": "model-provider",
-        })
+        _make_category_plugin(
+            user,
+            "model-providers",
+            "acme",
+            {
+                "name": "acme-provider",
+                "version": "0.1.0",
+                "kind": "model-provider",
+            },
+        )
         mock_user_dir.return_value = user
         mock_bundled_dir.return_value = bundled
 
@@ -199,15 +222,21 @@ class TestDiscoverAllPlugins:
 
 
 class TestPluginStatus:
-
-
     def test_key_in_disabled(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("web-keenable", set(), {"web/keenable"}, key="web/keenable") == "disabled"
+
+        assert (
+            _plugin_status("web-keenable", set(), {"web/keenable"}, key="web/keenable")
+            == "disabled"
+        )
 
     def test_neither_name_nor_key(self):
         from clawk_cli.plugins_cmd import _plugin_status
-        assert _plugin_status("unknown", {"other"}, set(), key="cat/unknown") == "not enabled"
+
+        assert (
+            _plugin_status("unknown", {"other"}, set(), key="cat/unknown")
+            == "not enabled"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +250,14 @@ class TestFilterPluginEntries:
 
         entries = [
             ("web-keenable", "1.0.0", "search", "user", Path("/tmp"), "web/keenable"),
-            ("disk-cleanup", "1.0.0", "cleanup", "bundled", Path("/tmp"), "disk-cleanup"),
+            (
+                "disk-cleanup",
+                "1.0.0",
+                "cleanup",
+                "bundled",
+                Path("/tmp"),
+                "disk-cleanup",
+            ),
         ]
         args = MagicMock()
         args.no_bundled = False
@@ -241,15 +277,22 @@ class TestFilterPluginEntries:
 class TestCmdListJson:
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_json_output_includes_category_plugins(self, mock_user_dir, mock_bundled_dir, tmp_path, capsys):
+    def test_json_output_includes_category_plugins(
+        self, mock_user_dir, mock_bundled_dir, tmp_path, capsys
+    ):
         from clawk_cli.plugins_cmd import cmd_list
 
-        _make_category_plugin(tmp_path, "web", "keenable", {
-            "name": "web-keenable", "version": "1.0.0", "description": "search"
-        })
-        _make_plugin_dir(tmp_path, "disk-cleanup", {
-            "name": "disk-cleanup", "version": "2.0.0", "description": "cleanup"
-        })
+        _make_category_plugin(
+            tmp_path,
+            "web",
+            "keenable",
+            {"name": "web-keenable", "version": "1.0.0", "description": "search"},
+        )
+        _make_plugin_dir(
+            tmp_path,
+            "disk-cleanup",
+            {"name": "disk-cleanup", "version": "2.0.0", "description": "cleanup"},
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
@@ -269,17 +312,21 @@ class TestCmdListJson:
 
     @patch("clawk_cli.plugins.get_bundled_plugins_dir")
     @patch("clawk_cli.plugins_cmd._plugins_dir")
-    def test_json_status_uses_key(self, mock_user_dir, mock_bundled_dir, tmp_path, capsys):
+    def test_json_status_uses_key(
+        self, mock_user_dir, mock_bundled_dir, tmp_path, capsys
+    ):
         from clawk_cli.plugins_cmd import cmd_list
 
-        _make_category_plugin(tmp_path, "web", "keenable", {
-            "name": "web-keenable", "version": "1.0.0"
-        })
+        _make_category_plugin(
+            tmp_path, "web", "keenable", {"name": "web-keenable", "version": "1.0.0"}
+        )
         mock_user_dir.return_value = tmp_path
         mock_bundled_dir.return_value = tmp_path / "nonexistent"
 
         # Patch config to return web/keenable as enabled
-        with patch("clawk_cli.plugins_cmd._get_enabled_set", return_value={"web/keenable"}):
+        with patch(
+            "clawk_cli.plugins_cmd._get_enabled_set", return_value={"web/keenable"}
+        ):
             args = MagicMock()
             args.json = True
             args.plain = False

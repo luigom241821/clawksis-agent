@@ -34,7 +34,6 @@ class TestRegisterAndGetPending:
         assert pending["handler"] is handler
         assert "created_at" in pending
 
-
     def test_get_pending_returns_copy_not_reference(self):
         async def h(choice):
             return "x"
@@ -71,7 +70,6 @@ class TestResolve:
         result = await slash_confirm.resolve("sess1", "cid1", "once")
         assert result is None
 
-
     @pytest.mark.asyncio
     async def test_resolve_double_click_only_runs_handler_once(self):
         calls = []
@@ -104,7 +102,6 @@ class TestClear:
         assert slash_confirm.get_pending("sess1") is None
 
 
-
 class TestClearIfStale:
     def test_clears_stale_entry(self):
         async def h(c):
@@ -116,7 +113,6 @@ class TestClearIfStale:
         cleared = slash_confirm.clear_if_stale("sess1", timeout=300)
         assert cleared is True
         assert slash_confirm.get_pending("sess1") is None
-
 
     def test_returns_false_for_missing_entry(self):
         cleared = slash_confirm.clear_if_stale("nobody")

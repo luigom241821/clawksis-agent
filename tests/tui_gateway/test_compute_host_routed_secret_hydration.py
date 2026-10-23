@@ -15,7 +15,9 @@ from tui_gateway.compute_host import ComputeHost
 
 
 @pytest.mark.platforms("linux")
-def test_routed_session_build_sees_the_profiles_external_secret_source(monkeypatch, tmp_path):
+def test_routed_session_build_sees_the_profiles_external_secret_source(
+    monkeypatch, tmp_path
+):
     """Two routed homes A→B→A, each with a ``secrets.command`` helper that is the ONLY holder of its
     provider key. Inside each build the scope resolves that profile's key and not the other's."""
     from agent.secret_scope import get_secret, set_multiplex_active
@@ -37,7 +39,8 @@ def test_routed_session_build_sees_the_profiles_external_secret_source(monkeypat
         (home / "config.yaml").write_text(
             "secrets:\n  command:\n    enabled: true\n"
             f"    command: \"printf 'VAULT_ONLY_KEY=vault-{name}\\\\n'\"\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         homes[name] = home
 
     host = ComputeHost(stdout=io.StringIO(), heartbeat_secs=0)
@@ -56,8 +59,15 @@ def test_routed_session_build_sees_the_profiles_external_secret_source(monkeypat
     try:
         for name in ("a", "b", "a"):
             host._build_server_session(
-                server, {"sid": f"s-{name}", "session_key": f"k-{name}", "history": [],
-                         "profile_home": str(homes[name])}, f"s-{name}")
+                server,
+                {
+                    "sid": f"s-{name}",
+                    "session_key": f"k-{name}",
+                    "history": [],
+                    "profile_home": str(homes[name]),
+                },
+                f"s-{name}",
+            )
     finally:
         host.close()
         env_loader.reset_secret_source_cache()

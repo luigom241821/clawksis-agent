@@ -10,8 +10,6 @@ import pytest
 from tools.computer_use import cua_backend_driver
 
 
-
-
 def _invoke(monkeypatch, *args: str) -> int:
     cli_main = import_module("clawk_cli.main")
     monkeypatch.setattr(sys, "argv", ["clawk", "computer-use", *args])
@@ -23,30 +21,40 @@ def _invoke(monkeypatch, *args: str) -> int:
     return 0
 
 
-
-
-
-
-def test_computer_use_status_reports_pm_without_polling_vendor(monkeypatch, capsys, tmp_path):
+def test_computer_use_status_reports_pm_without_polling_vendor(
+    monkeypatch, capsys, tmp_path
+):
     from clawk_cli import tools_config_cua as cua
 
     monkeypatch.delenv("CLAWK_CUA_DRIVER_CMD", raising=False)
-    monkeypatch.setattr(cua_backend_driver, "resolve_cua_driver_cmd", lambda: str(tmp_path / "cua-driver"))
-    monkeypatch.setattr(cua, "_cua_driver_contract_status", lambda _binary=None: {"ready": True, "version": "0.20.0"})
+    monkeypatch.setattr(
+        cua_backend_driver,
+        "resolve_cua_driver_cmd",
+        lambda: str(tmp_path / "cua-driver"),
+    )
+    monkeypatch.setattr(
+        cua,
+        "_cua_driver_contract_status",
+        lambda _binary=None: {"ready": True, "version": "0.20.0"},
+    )
     assert _invoke(monkeypatch, "status") == 0
     output = capsys.readouterr().out
     assert "Clawksis PM" in output
     assert "latest" not in output
 
 
-def test_computer_use_status_returns_nonzero_when_driver_is_missing(monkeypatch, capsys):
+def test_computer_use_status_returns_nonzero_when_driver_is_missing(
+    monkeypatch, capsys
+):
     monkeypatch.setattr(cua_backend_driver, "resolve_cua_driver_cmd", lambda: None)
     assert _invoke(monkeypatch, "status") == 1
     assert "cua-driver: not installed" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("override", [False, True])
-def test_computer_use_status_reports_unusable_driver(monkeypatch, capsys, tmp_path, override):
+def test_computer_use_status_reports_unusable_driver(
+    monkeypatch, capsys, tmp_path, override
+):
     from clawk_cli import tools_config_cua as cua
 
     driver = str(tmp_path / "cua-driver")
@@ -55,9 +63,14 @@ def test_computer_use_status_reports_unusable_driver(monkeypatch, capsys, tmp_pa
     else:
         monkeypatch.delenv("CLAWK_CUA_DRIVER_CMD", raising=False)
     monkeypatch.setattr(cua_backend_driver, "resolve_cua_driver_cmd", lambda: driver)
-    monkeypatch.setattr(cua, "_cua_driver_contract_status", lambda _binary=None: {
-        "ready": False, "reason": "manifest is invalid",
-    })
+    monkeypatch.setattr(
+        cua,
+        "_cua_driver_contract_status",
+        lambda _binary=None: {
+            "ready": False,
+            "reason": "manifest is invalid",
+        },
+    )
     assert _invoke(monkeypatch, "status") == 1
     output = capsys.readouterr().out
     assert "Repair required" in output
@@ -88,10 +101,23 @@ def test_permissions_status_names_the_stale_tcc_row_for_the_missing_grant(
     the status output must name the reset for exactly the missing service, never for one that is granted."""
     from tools.computer_use import permissions
 
-    status = {"platform": "darwin", "platform_supported": True, "installed": True, "version": "cua-driver 0.28.2",
-              "ready": False, "can_grant": True, "checks": [], "source": None, "error": None,
-              "accessibility": False, "screen_recording": True, "screen_recording_capturable": True}
-    monkeypatch.setattr(permissions, "computer_use_status", lambda driver_cmd=None: status)
+    status = {
+        "platform": "darwin",
+        "platform_supported": True,
+        "installed": True,
+        "version": "cua-driver 0.28.2",
+        "ready": False,
+        "can_grant": True,
+        "checks": [],
+        "source": None,
+        "error": None,
+        "accessibility": False,
+        "screen_recording": True,
+        "screen_recording_capturable": True,
+    }
+    monkeypatch.setattr(
+        permissions, "computer_use_status", lambda driver_cmd=None: status
+    )
 
     assert _invoke(monkeypatch, "permissions", "status") == 1
     out = capsys.readouterr().out

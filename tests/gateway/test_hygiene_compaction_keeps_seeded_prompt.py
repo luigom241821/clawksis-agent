@@ -5,6 +5,7 @@ stored prompt (``_seed_hygiene_system_prompt``). Compaction rebuilds the prompt 
 (#98426) and the commit persists the result, so without the seed being honoured the session row lost the
 skills index / provider blocks and every later fresh agent restored those degraded bytes verbatim.
 """
+
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -25,16 +26,22 @@ def _agent(**over):
     def _invalidate():
         agent._cached_system_prompt = None
 
-    fields = dict(_cached_system_prompt=None, session_id="sess-1",
-                  _build_system_prompt=_build, _invalidate_system_prompt=_invalidate)
+    fields = dict(
+        _cached_system_prompt=None,
+        session_id="sess-1",
+        _build_system_prompt=_build,
+        _invalidate_system_prompt=_invalidate,
+    )
     fields.update(over)
     agent = SimpleNamespace(**fields)
     return agent, built
 
 
 def _rebuild(agent):
-    with patch.object(cc, "_refresh_agent_tool_definitions", return_value=False), \
-         patch("agent.system_prompt.reconstruct_static_prefix"):
+    with (
+        patch.object(cc, "_refresh_agent_tool_definitions", return_value=False),
+        patch("agent.system_prompt.reconstruct_static_prefix"),
+    ):
         return cc._rebuild_system_prompt_at_boundary(agent, "")
 
 

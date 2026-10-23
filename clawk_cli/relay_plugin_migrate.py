@@ -15,7 +15,10 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from clawk_cli.relay_plugin_cutover import (
-    LEGACY_RELAY_EXPORT_ENV_VARS, RELAY_PLUGINS_CONFIG_ENV, configured_legacy_relay_env_vars)
+    LEGACY_RELAY_EXPORT_ENV_VARS,
+    RELAY_PLUGINS_CONFIG_ENV,
+    configured_legacy_relay_env_vars,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +62,16 @@ def relay_plugin_payload_from_legacy_env(env: Mapping[str, Any]) -> dict[str, An
             "enabled": True,
             "agent_name": _s(env, "CLAWK_NEMO_RELAY_ATIF_AGENT_NAME", "Clawksis"),
             "model_name": _s(env, "CLAWK_NEMO_RELAY_ATIF_MODEL_NAME", "unknown"),
-            "filename_template": _s(env, "CLAWK_NEMO_RELAY_ATIF_FILENAME_TEMPLATE", "clawk-atif-{session_id}.json"),
+            "filename_template": _s(
+                env,
+                "CLAWK_NEMO_RELAY_ATIF_FILENAME_TEMPLATE",
+                "clawk-atif-{session_id}.json",
+            ),
         }
         if _s(env, "CLAWK_NEMO_RELAY_ATIF_OUTPUT_DIRECTORY"):
-            kwargs["output_directory"] = _s(env, "CLAWK_NEMO_RELAY_ATIF_OUTPUT_DIRECTORY")
+            kwargs["output_directory"] = _s(
+                env, "CLAWK_NEMO_RELAY_ATIF_OUTPUT_DIRECTORY"
+            )
         if _s(env, "CLAWK_NEMO_RELAY_ATIF_AGENT_VERSION"):
             kwargs["agent_version"] = _s(env, "CLAWK_NEMO_RELAY_ATIF_AGENT_VERSION")
         atif = obs.AtifConfig(**kwargs)
@@ -77,7 +86,9 @@ def relay_plugin_payload_from_legacy_env(env: Mapping[str, Any]) -> dict[str, An
     # Relay 0.10 auto-exports gen_ai traces (prompt/response content) to any OTEL_EXPORTER_OTLP_*
     # endpoint in the process env; the legacy vars never exported OTLP, so keep that off.
     otel_off = obs.OpenTelemetrySectionConfig(enabled=False)
-    spec = obs.ComponentSpec(config=obs.ObservabilityConfig(atif=atif, atof=atof, opentelemetry=otel_off))
+    spec = obs.ComponentSpec(
+        config=obs.ObservabilityConfig(atif=atif, atof=atof, opentelemetry=otel_off)
+    )
     return {"version": 1, "components": [spec.to_dict()]}
 
 
@@ -90,7 +101,9 @@ def _toml_scalar(value: Any) -> str:
     return f'"{text}"'
 
 
-def _emit_table(lines: list[str], path: str, table: Mapping[str, Any], *, array_item: bool = False) -> None:
+def _emit_table(
+    lines: list[str], path: str, table: Mapping[str, Any], *, array_item: bool = False
+) -> None:
     """Minimal TOML emitter for the nested-dict/list-of-dict shape ``to_dict()`` produces."""
     scalars = {k: v for k, v in table.items() if not isinstance(v, (dict, list))}
     nested = {k: v for k, v in table.items() if isinstance(v, (dict, list))}
@@ -110,7 +123,9 @@ def _emit_table(lines: list[str], path: str, table: Mapping[str, Any], *, array_
                     lines.append("")
                     _emit_table(lines, child, item, array_item=True)
                 else:
-                    raise ValueError(f"unsupported TOML array item at {child}: {item!r}")
+                    raise ValueError(
+                        f"unsupported TOML array item at {child}: {item!r}"
+                    )
 
 
 def dumps_toml(document: Mapping[str, Any]) -> str:
@@ -118,6 +133,7 @@ def dumps_toml(document: Mapping[str, Any]) -> str:
     of tables only — exactly the ``ComponentSpec.to_dict()`` shape)."""
     try:
         import tomli_w  # type: ignore
+
         return tomli_w.dumps(dict(document))
     except ImportError:
         lines: list[str] = []
@@ -134,12 +150,15 @@ def validate_relay_plugin_payload(payload: Mapping[str, Any]) -> list:
     diagnostics = list(plugin.validate_exact(dict(payload))["config"]["diagnostics"])
     # Relay 0.8's initialize() raised on these; 0.9's validator only reports them.
     if errors := [d for d in diagnostics if d.get("level") == "error"]:
-        raise ValueError("; ".join(str(d.get("message") or d.get("code") or d) for d in errors))
+        raise ValueError(
+            "; ".join(str(d.get("message") or d.get("code") or d) for d in errors)
+        )
     return diagnostics
 
 
 def _comment_out_legacy_lines(lines: list[str], names: set[str]) -> list[str]:
     from clawk_cli.config import _env_line_defines_key
+
     out = []
     for line in lines:
         if any(_env_line_defines_key(line, name) for name in names):
@@ -149,10 +168,18 @@ def _comment_out_legacy_lines(lines: list[str], names: set[str]) -> list[str]:
     return out
 
 
-def migrate_profile_relay_env(home: Path, *, validate: bool = True) -> RelayMigrationResult:
+def migrate_profile_relay_env(
+    home: Path, *, validate: bool = True
+) -> RelayMigrationResult:
     """Migrate ONE profile home's ``.env``. Never raises for a no-op; a Relay import/validation failure
     leaves ``.env`` untouched and is reported in ``validation_error``."""
-    from clawk_cli.config import _env_line_defines_key, _quote_env_value, _read_env_lines, _write_env_lines
+    from clawk_cli.config import (
+        _env_line_defines_key,
+        _quote_env_value,
+        _read_env_lines,
+        _write_env_lines,
+    )
+
     result = RelayMigrationResult(home=home)
     env_path = home / ".env"
     if not env_path.is_file():
@@ -173,14 +200,19 @@ def migrate_profile_relay_env(home: Path, *, validate: bool = True) -> RelayMigr
     if env.get(RELAY_PLUGINS_CONFIG_ENV, "").strip():
         result.skipped_reason = f"{RELAY_PLUGINS_CONFIG_ENV} already set"
         return result
-    if not (_truthy(env.get("CLAWK_NEMO_RELAY_ATIF_ENABLED")) or _truthy(env.get("CLAWK_NEMO_RELAY_ATOF_ENABLED"))):
+    if not (
+        _truthy(env.get("CLAWK_NEMO_RELAY_ATIF_ENABLED"))
+        or _truthy(env.get("CLAWK_NEMO_RELAY_ATOF_ENABLED"))
+    ):
         result.skipped_reason = "no exporter enabled by the legacy variables"
         return result
     try:
         payload = relay_plugin_payload_from_legacy_env(env)
         if validate:
             result.diagnostics = validate_relay_plugin_payload(payload)
-    except Exception as exc:  # nemo_relay missing or rejecting the payload: leave .env alone
+    except (
+        Exception
+    ) as exc:  # nemo_relay missing or rejecting the payload: leave .env alone
         result.validation_error = f"{type(exc).__name__}: {exc}"
         return result
     toml_path = home / RELAY_PLUGINS_TOML_NAME
@@ -192,19 +224,26 @@ def migrate_profile_relay_env(home: Path, *, validate: bool = True) -> RelayMigr
     )
     toml_path.write_text(header + dumps_toml(payload), encoding="utf-8")
     new_lines = _comment_out_legacy_lines(lines, set(LEGACY_RELAY_EXPORT_ENV_VARS))
-    if not any(_env_line_defines_key(line, RELAY_PLUGINS_CONFIG_ENV) for line in new_lines):
+    if not any(
+        _env_line_defines_key(line, RELAY_PLUGINS_CONFIG_ENV) for line in new_lines
+    ):
         if new_lines and not new_lines[-1].endswith("\n"):
             new_lines[-1] += "\n"
-        new_lines.append(f"{RELAY_PLUGINS_CONFIG_ENV}={_quote_env_value(str(toml_path))}\n")
+        new_lines.append(
+            f"{RELAY_PLUGINS_CONFIG_ENV}={_quote_env_value(str(toml_path))}\n"
+        )
     _write_env_lines(env_path, new_lines, preserve_mode=True)
     result.toml_path = toml_path
     result.migrated_vars = legacy
     return result
 
 
-def migrate_all_profile_relay_envs(*, validate: bool = True) -> list[RelayMigrationResult]:
+def migrate_all_profile_relay_envs(
+    *, validate: bool = True
+) -> list[RelayMigrationResult]:
     """Default home + every live named profile (multiplex: each profile keeps its own TOML)."""
     from clawk_cli.profiles import _get_default_clawk_home, _iter_named_profile_dirs
+
     homes = [_get_default_clawk_home(), *_iter_named_profile_dirs()]
     return [migrate_profile_relay_env(home, validate=validate) for home in homes]
 
@@ -218,17 +257,31 @@ def print_relay_migration_report(results: list[RelayMigrationResult]) -> None:
     print()
     if migrated:
         print("\033[1;33m⚠  NeMo Relay exporter configuration migrated\033[0m")
-        print("   Relay no longer reads the legacy CLAWK_NEMO_RELAY_ATIF_*/ATOF_* variables.")
-        print("   Each profile below now has a generated relay-plugins.toml selected by")
-        print(f"   {RELAY_PLUGINS_CONFIG_ENV} in its .env (legacy lines commented out, not deleted):")
+        print(
+            "   Relay no longer reads the legacy CLAWK_NEMO_RELAY_ATIF_*/ATOF_* variables."
+        )
+        print(
+            "   Each profile below now has a generated relay-plugins.toml selected by"
+        )
+        print(
+            f"   {RELAY_PLUGINS_CONFIG_ENV} in its .env (legacy lines commented out, not deleted):"
+        )
         for r in migrated:
-            extra = f" ({len(r.diagnostics)} Relay diagnostic(s))" if r.diagnostics else ""
+            extra = (
+                f" ({len(r.diagnostics)} Relay diagnostic(s))" if r.diagnostics else ""
+            )
             label = r.home.name if r.home.parent.name == "profiles" else "default"
             print(f"     • {label}: {r.toml_path}{extra}")
-        print("   Restart the gateway to apply the migrated exporter settings. Review the file and adjust paths if needed.")
+        print(
+            "   Restart the gateway to apply the migrated exporter settings. Review the file and adjust paths if needed."
+        )
     for r in failed:
-        print(f"   ✗ {r.home}: could not migrate Relay exporter vars — {r.validation_error}")
-        print(f"     Write {r.home / RELAY_PLUGINS_TOML_NAME} by hand and set {RELAY_PLUGINS_CONFIG_ENV}.")
+        print(
+            f"   ✗ {r.home}: could not migrate Relay exporter vars — {r.validation_error}"
+        )
+        print(
+            f"     Write {r.home / RELAY_PLUGINS_TOML_NAME} by hand and set {RELAY_PLUGINS_CONFIG_ENV}."
+        )
 
 
 def run_relay_migration_after_update() -> None:
@@ -239,6 +292,7 @@ def run_relay_migration_after_update() -> None:
 def cmd_migrate_relay(args) -> None:
     """``clawk migrate relay [--all-profiles] [--no-validate]``."""
     from clawk_constants import get_clawk_home
+
     validate = not getattr(args, "no_validate", False)
     if getattr(args, "all_profiles", False):
         results = migrate_all_profile_relay_envs(validate=validate)

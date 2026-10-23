@@ -65,7 +65,9 @@ class TestEarlyRecovery:
             pm_recovery, "repair_dependencies", lambda root: repairs.append(root)
         )
         assert er.recover_if_needed(project_root=tmp_path, argv=[]) is True
-        assert repairs == [tmp_path], "sandboxed recovery was wrongly disabled by the guard"
+        assert repairs == [tmp_path], (
+            "sandboxed recovery was wrongly disabled by the guard"
+        )
         assert not (tmp_path / ".lazy-refresh-incomplete").exists()
 
 

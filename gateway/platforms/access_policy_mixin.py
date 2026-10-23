@@ -29,18 +29,25 @@ class OwnAccessPolicyMixin:
         # A host that forgets its prefix would silently read ``_ALLOW_ALL_USERS`` and deny every
         # open-DM deployment whose setup wrote ``<PLATFORM>_ALLOW_ALL_USERS`` — refuse at class creation.
         if not str(cls.ALLOW_ALL_ENV_PREFIX or "").strip():
-            raise TypeError(f"{cls.__qualname__} mixes in OwnAccessPolicyMixin but sets no ALLOW_ALL_ENV_PREFIX")
+            raise TypeError(
+                f"{cls.__qualname__} mixes in OwnAccessPolicyMixin but sets no ALLOW_ALL_ENV_PREFIX"
+            )
 
     @property
     def enforces_own_access_policy(self) -> bool:
         return True
 
     def _allow_all_env_names(self) -> tuple[str, ...]:
-        return ("GATEWAY_ALLOW_ALL_USERS", f"{self.ALLOW_ALL_ENV_PREFIX}_ALLOW_ALL_USERS")
+        return (
+            "GATEWAY_ALLOW_ALL_USERS",
+            f"{self.ALLOW_ALL_ENV_PREFIX}_ALLOW_ALL_USERS",
+        )
 
     def _open_dm_opted_in(self) -> bool:
-        return any(str(get_scoped_secret(name, "") or "").strip().lower() in OPTIN_TRUTHY
-                   for name in self._allow_all_env_names())
+        return any(
+            str(get_scoped_secret(name, "") or "").strip().lower() in OPTIN_TRUTHY
+            for name in self._allow_all_env_names()
+        )
 
     def _entry_matches(self, entries: Iterable[str], target: str) -> bool:
         return target in entries

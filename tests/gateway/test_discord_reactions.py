@@ -24,8 +24,8 @@ def _ensure_discord_mock():
     discord_mod.ForumChannel = type("ForumChannel", (), {})
     discord_mod.Interaction = object
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -107,7 +107,10 @@ async def test_process_message_background_adds_and_swaps_reactions(adapter):
     await adapter._process_message_background(event, build_session_key(event.source))
 
     assert raw_message.add_reaction.await_args_list[0].args == ("👀",)
-    assert raw_message.remove_reaction.await_args_list[0].args == ("👀", adapter._client.user)
+    assert raw_message.remove_reaction.await_args_list[0].args == (
+        "👀",
+        adapter._client.user,
+    )
     assert raw_message.add_reaction.await_args_list[1].args == ("✅",)
 
 
@@ -139,5 +142,3 @@ async def test_reactions_disabled_via_env(adapter, monkeypatch):
     raw_message.remove_reaction.assert_not_awaited()
     # Response should still be sent
     adapter.send.assert_awaited_once()
-
-

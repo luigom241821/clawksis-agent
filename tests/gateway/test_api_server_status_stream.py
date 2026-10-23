@@ -10,14 +10,19 @@ import pytest
 
 from gateway.platforms.api_server import ThreadSafeAsyncQueue
 from tests.gateway.test_api_server_reasoning_stream import (
-    _fake_writer_env, _frames, _stub_create_agent_runtime, adapter,
+    _fake_writer_env,
+    _frames,
+    _stub_create_agent_runtime,
+    adapter,
 )
 
 _LADDER = "⏳ Provider temporarily unavailable — retrying automatically in 15s (cycle 1/5); cancel the request to stop"
 
 
 @pytest.mark.asyncio
-async def test_chat_completions_stream_forwards_agent_status_callback(adapter, monkeypatch):
+async def test_chat_completions_stream_forwards_agent_status_callback(
+    adapter, monkeypatch
+):
     """``_spawn_stream_agent`` wires ``status_callback`` into ``AIAgent(...)``; a status line arrives
     as an ``event: clawk.status`` frame and never as answer ``content``."""
     import gateway.platforms.api_server as api_mod
@@ -38,19 +43,32 @@ async def test_chat_completions_stream_forwards_agent_status_callback(adapter, m
     request, written, fake_response = _fake_writer_env()
     stream_q = ThreadSafeAsyncQueue()
     agent_task, agent_ref = adapter._spawn_stream_agent(
-        stream_q, user_message="q", conversation_history=[], session_id="api-session")
+        stream_q, user_message="q", conversation_history=[], session_id="api-session"
+    )
     with patch.object(api_mod.web, "StreamResponse", return_value=fake_response):
         await adapter._write_sse_chat_completion(
-            request, "chatcmpl-x", "clawksis-agent", int(time.time()), stream_q, agent_task, agent_ref)
+            request,
+            "chatcmpl-x",
+            "clawksis-agent",
+            int(time.time()),
+            stream_q,
+            agent_task,
+            agent_ref,
+        )
     frames = _frames(written)
-    assert [d for e, d in frames if e == "clawk.status"] == [{"kind": "lifecycle", "text": _LADDER}]
-    content = "".join(d["choices"][0]["delta"].get("content") or "" for e, d in frames if e is None)
+    assert [d for e, d in frames if e == "clawk.status"] == [
+        {"kind": "lifecycle", "text": _LADDER}
+    ]
+    content = "".join(
+        d["choices"][0]["delta"].get("content") or "" for e, d in frames if e is None
+    )
     assert content == "answer"
 
 
 @pytest.mark.asyncio
 async def test_responses_stream_emits_status_event_outside_output_items(adapter):
     import gateway.platforms.api_server as api_mod
+
     request, written, fake_response = _fake_writer_env()
     stream_q = ThreadSafeAsyncQueue()
 
@@ -63,11 +81,23 @@ async def test_responses_stream_emits_status_event_outside_output_items(adapter)
     agent_task.add_done_callback(lambda _f: stream_q.put_nowait(None))
     with patch.object(api_mod.web, "StreamResponse", return_value=fake_response):
         await adapter._write_sse_responses(
-            request=request, response_id=f"resp_{uuid.uuid4().hex[:28]}", model="clawksis-agent",
-            created_at=int(time.time()), stream_q=stream_q, agent_task=agent_task, agent_ref=[None],
-            conversation_history=[], user_message="q", instructions=None, conversation=None,
-            store=False, session_id=None)
+            request=request,
+            response_id=f"resp_{uuid.uuid4().hex[:28]}",
+            model="clawksis-agent",
+            created_at=int(time.time()),
+            stream_q=stream_q,
+            agent_task=agent_task,
+            agent_ref=[None],
+            conversation_history=[],
+            user_message="q",
+            instructions=None,
+            conversation=None,
+            store=False,
+            session_id=None,
+        )
     frames = _frames(written)
-    assert [d for e, d in frames if e == "clawk.status"] == [{"kind": "lifecycle", "text": _LADDER}]
+    assert [d for e, d in frames if e == "clawk.status"] == [
+        {"kind": "lifecycle", "text": _LADDER}
+    ]
     completed = next(d for e, d in frames if e == "response.completed")
     assert [o["type"] for o in completed["response"]["output"]] == ["message"]

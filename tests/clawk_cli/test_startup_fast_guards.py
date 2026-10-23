@@ -51,8 +51,14 @@ def test_cli_starts_from_a_deleted_cwd(tmp_path):
     gone = tmp_path / "scratch"
     gone.mkdir()
     # The child needs the checkout on sys.path by absolute name; the cwd is exactly what is gone.
-    env = {**os.environ, "CLAWK_HOME": str(home), "TERMUX_VERSION": "",
-           "PYTHONPATH": os.pathsep.join(p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH")) if p)}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "TERMUX_VERSION": "",
+        "PYTHONPATH": os.pathsep.join(
+            p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH")) if p
+        ),
+    }
     env.pop("CLAWK_DEV", None)
     fd = os.open(gone, os.O_RDONLY)
     try:
@@ -61,8 +67,14 @@ def test_cli_starts_from_a_deleted_cwd(tmp_path):
         # preexec fchdir onto its still-open handle — the shape a reaped workspace leaves behind.
         result = subprocess.run(
             [sys.executable, "-m", "clawk_cli.main", "--version"],
-            capture_output=True, text=True, timeout=60, env=env,
-            cwd=REPO_ROOT, preexec_fn=lambda: os.fchdir(fd), check=False)
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=env,
+            cwd=REPO_ROOT,
+            preexec_fn=lambda: os.fchdir(fd),
+            check=False,
+        )
     finally:
         os.close(fd)
     assert result.returncode == 0, result.stderr
@@ -95,9 +107,14 @@ def test_startup_fast_import_weight():
 
 
 # A dead local proxy: every HTTP(S) call (GitHub's API, a git https fetch) fails at once.
-_OFFLINE = {"HTTPS_PROXY": "http://127.0.0.1:9", "HTTP_PROXY": "http://127.0.0.1:9",
-            "https_proxy": "http://127.0.0.1:9", "http_proxy": "http://127.0.0.1:9",
-            "NO_PROXY": "", "no_proxy": ""}
+_OFFLINE = {
+    "HTTPS_PROXY": "http://127.0.0.1:9",
+    "HTTP_PROXY": "http://127.0.0.1:9",
+    "https_proxy": "http://127.0.0.1:9",
+    "http_proxy": "http://127.0.0.1:9",
+    "NO_PROXY": "",
+    "no_proxy": "",
+}
 
 
 def _run_version(env_overrides: dict) -> subprocess.CompletedProcess:
@@ -116,15 +133,11 @@ def _run_version(env_overrides: dict) -> subprocess.CompletedProcess:
     )
 
 
-
-
 def test_fast_version_parity_on_termux(tmp_path):
     """The historical Termux path — the one eb4040242 broke."""
     home = tmp_path / ".clawk"
     home.mkdir()
-    result = _run_version(
-        {"CLAWK_HOME": str(home), "TERMUX_VERSION": "0.118"}
-    )
+    result = _run_version({"CLAWK_HOME": str(home), "TERMUX_VERSION": "0.118"})
     assert result.returncode == 0, result.stderr
     assert "Clawksis v" in result.stdout
     assert "Traceback" not in result.stderr
@@ -150,12 +163,21 @@ def test_literal_tilde_clawk_home_expands_before_any_reader(tmp_path):
     cwd = tmp_path / "project"
     fake_home.mkdir()
     cwd.mkdir()
-    env = {**os.environ, "HOME": str(fake_home), "USERPROFILE": str(fake_home), "CLAWK_HOME": "~/.x"}
+    env = {
+        **os.environ,
+        "HOME": str(fake_home),
+        "USERPROFILE": str(fake_home),
+        "CLAWK_HOME": "~/.x",
+    }
     env.pop("CLAWK_DEV", None)
     env["PYTHONPATH"] = str(REPO_ROOT)
     result = subprocess.run(
         [sys.executable, "-m", "clawk_cli.main", "config", "path"],
-        capture_output=True, text=True, timeout=120, cwd=cwd, env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=cwd,
+        env=env,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -166,15 +188,25 @@ def test_literal_tilde_clawk_home_expands_before_any_reader(tmp_path):
     # call the resolver, so the entry-point hunk in main.py (not clawk_constants) must have
     # rewritten the env var by the time the module import finishes.
     probe = subprocess.run(
-        [sys.executable, "-c", "import clawk_cli.main, os; print(os.environ['CLAWK_HOME'])"],
-        capture_output=True, text=True, timeout=120, cwd=cwd, env=env,
+        [
+            sys.executable,
+            "-c",
+            "import clawk_cli.main, os; print(os.environ['CLAWK_HOME'])",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=cwd,
+        env=env,
         check=False,
     )
     assert probe.returncode == 0, probe.stderr
     assert probe.stdout.strip() == str(fake_home / ".x")
 
 
-def test_normalize_clawk_home_env_rewrites_tilde_and_leaves_absolute_alone(tmp_path, monkeypatch):
+def test_normalize_clawk_home_env_rewrites_tilde_and_leaves_absolute_alone(
+    tmp_path, monkeypatch
+):
     from clawk_cli import _startup_fast
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -205,13 +237,20 @@ def test_bootstrap_preserves_live_cwd_and_recovers_deleted_cwd(tmp_path, remove_
         "import clawk_bootstrap\n"
         "print(os.getcwd())\n"
     )
-    env = {**os.environ, "CLAWK_HOME": str(tmp_path / ".clawk"),
-           "PYTHONPATH": str(REPO_ROOT)}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(tmp_path / ".clawk"),
+        "PYTHONPATH": str(REPO_ROOT),
+    }
     env.pop("CLAWK_DEV", None)
     result = subprocess.run(
         [sys.executable, "-c", probe, str(cwd), "deleted" if remove_cwd else "live"],
-        stdin=subprocess.DEVNULL, capture_output=True, text=True,
-        timeout=60, cwd=REPO_ROOT, env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=REPO_ROOT,
+        env=env,
         check=False,
     )
     assert result.returncode == 0, result.stderr

@@ -18,7 +18,10 @@ _TEMPLATE_MARKER_RE = re.compile(
 )
 _MIN_BATCH_GOAL_LEN = 10
 
-def _recover_tasks_from_json_string(tasks: Any) -> tuple[Optional[list[dict[str, Any]]], Optional[str]]:
+
+def _recover_tasks_from_json_string(
+    tasks: Any,
+) -> tuple[Optional[list[dict[str, Any]]], Optional[str]]:
     """``(parsed_list, None)`` for a JSON-array string, ``(None, error)`` for a bad string, ``(None, None)`` otherwise."""
     if not isinstance(tasks, str):
         return None, None
@@ -28,10 +31,17 @@ def _recover_tasks_from_json_string(tasks: Any) -> tuple[Optional[list[dict[str,
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
-        return None, f"tasks must be a JSON array of task objects; received a string that could not be parsed as JSON ({exc.msg})."
+        return (
+            None,
+            f"tasks must be a JSON array of task objects; received a string that could not be parsed as JSON ({exc.msg}).",
+        )
     if not isinstance(parsed, list):
-        return None, f"tasks must be a JSON array of task objects; parsed {type(parsed).__name__} instead."
+        return (
+            None,
+            f"tasks must be a JSON array of task objects; parsed {type(parsed).__name__} instead.",
+        )
     return parsed, None
+
 
 def _validate_batch_tasks(task_list: list[dict[str, Any]]) -> Optional[str]:
     """Batch-only quality gate beyond per-task goal presence; actionable error or None. No minimum count: a one-entry
@@ -63,6 +73,7 @@ def _validate_batch_tasks(task_list: list[dict[str, Any]]) -> Optional[str]:
                 "exactly what to do."
             )
     return None
+
 
 def _normalize_task_list(
     goal, context, tasks, output_schema, top_role: str, max_children: int
@@ -104,12 +115,14 @@ def _normalize_task_list(
     batch_error = _validate_batch_tasks(task_list) if isinstance(tasks, list) else None
     return (None, batch_error) if batch_error else (task_list, None)
 
+
 def _coerce_task_schemas(
     task_list: list[dict[str, Any]], output_schema: Optional[dict[str, Any]]
 ) -> tuple[list[Optional[dict[str, Any]]], Optional[str]]:
     """Per-task coerced output schemas. A malformed output_schema fails the whole call before any child spawns;
     schema-less tasks resolve to None and take no new code paths downstream."""
     from tools.delegation_output_schema import coerce_output_schema
+
     task_schemas: list[Optional[dict[str, Any]]] = []
     for i, task in enumerate(task_list):
         raw_schema = task.get("output_schema")
@@ -121,10 +134,14 @@ def _coerce_task_schemas(
         task_schemas.append(coerced_schema)
     return task_schemas, None
 
+
 # Per-task image ceiling: enough for screenshots/mocks while keeping the child's first request small.
 _MAX_TASK_IMAGES = 8
 
-def _normalize_task_images(task: dict, i: int) -> tuple[Optional[list[str]], Optional[str]]:
+
+def _normalize_task_images(
+    task: dict, i: int
+) -> tuple[Optional[list[str]], Optional[str]]:
     """``(cleaned_list_or_None, None)`` for a task's optional ``images`` (local paths, http(s) or data: URLs), else
     ``(None, error)``. A bare string is wrapped into a one-entry list (small models emit scalars for arrays)."""
     raw = task.get("images")
@@ -133,11 +150,17 @@ def _normalize_task_images(task: dict, i: int) -> tuple[Optional[list[str]], Opt
     if isinstance(raw, str):
         raw = [raw]
     if not isinstance(raw, list):
-        return None, f"Task {i} 'images' must be an array of local file paths or http(s) URLs."
+        return (
+            None,
+            f"Task {i} 'images' must be an array of local file paths or http(s) URLs.",
+        )
     cleaned: list[str] = []
     for item in raw:
         if not isinstance(item, str) or not item.strip():
-            return None, f"Task {i} 'images' entries must be non-empty strings (local file paths or http(s) URLs)."
+            return (
+                None,
+                f"Task {i} 'images' entries must be non-empty strings (local file paths or http(s) URLs).",
+            )
         cleaned.append(item.strip())
     if len(cleaned) > _MAX_TASK_IMAGES:
         return None, (
@@ -145,6 +168,7 @@ def _normalize_task_images(task: dict, i: int) -> tuple[Optional[list[str]], Opt
             "Trim to the images the child actually needs to see."
         )
     return (cleaned or None), None
+
 
 def _coerce_task_images(
     task_list: list[dict[str, Any]], images: Optional[list[str]]

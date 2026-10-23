@@ -3,6 +3,7 @@
 Automatic compression does not create the child again, so the worker's ``usage.main``
 is the write that fills the column, and it carries the surface to the NULL root.
 """
+
 import pytest
 
 from clawk_state import SessionDB
@@ -12,12 +13,18 @@ def _compress(db, parent_created, child):
     parent = "parent-" + child
     db.create_session(parent, source="local")
     with db._lock:
-        db._conn.execute("UPDATE sessions SET created_source=? WHERE id=?", (parent_created, parent))
+        db._conn.execute(
+            "UPDATE sessions SET created_source=? WHERE id=?", (parent_created, parent)
+        )
         db._conn.commit()
     db.append_message(parent, role="user", content="hi")
     db.publish_compression_child(
-        parent_session_id=parent, child_session_id=child, source="local",
-        messages=[{"role": "user", "content": "hi"}], require_compression_lease=False)
+        parent_session_id=parent,
+        child_session_id=child,
+        source="local",
+        messages=[{"role": "user", "content": "hi"}],
+        require_compression_lease=False,
+    )
     return child
 
 
@@ -36,14 +43,30 @@ def test_desktop_worker_heals_gui_to_desktop(tmp_path, child_created):
     try:
         child = _compress(db, None, "desktop-child")
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source=? WHERE id=?", (child_created, child))
+            db._conn.execute(
+                "UPDATE sessions SET created_source=? WHERE id=?",
+                (child_created, child),
+            )
             db._conn.commit()
         epoch = rt.begin_runtime_epoch(db, instance_id="owner")
         scope = dict(epoch=epoch, execution_id="w", session_id=child, generation=0)
-        rt.register_worker_execution(db, **scope, kind="compute", adoption_secret="private")
-        rt.mutate_worker_execution(db, **scope, sequence=1, operation="usage.main", payload={
-            "input_tokens": 4, "output_tokens": 1, "api_call_count": 1, "model": "m",
-            "billing_provider": "p", "source": "gui"})
+        rt.register_worker_execution(
+            db, **scope, kind="compute", adoption_secret="private"
+        )
+        rt.mutate_worker_execution(
+            db,
+            **scope,
+            sequence=1,
+            operation="usage.main",
+            payload={
+                "input_tokens": 4,
+                "output_tokens": 1,
+                "api_call_count": 1,
+                "model": "m",
+                "billing_provider": "p",
+                "source": "gui",
+            },
+        )
         assert _created(db, child) == "desktop"
         assert _created(db, "parent-" + child) == "desktop"
     finally:
@@ -51,22 +74,35 @@ def test_desktop_worker_heals_gui_to_desktop(tmp_path, child_created):
 
 
 @pytest.mark.parametrize("mid_created, expected_root", [("cli", "cli"), ("tui", None)])
-def test_stamp_walks_through_a_same_surface_mid_segment(tmp_path, mid_created, expected_root):
+def test_stamp_walks_through_a_same_surface_mid_segment(
+    tmp_path, mid_created, expected_root
+):
     """root(NULL) -> mid -> tip(NULL): a usage write on the tip stamps the root through a mid
     segment already on the tip's surface; a mid on another surface stops the walk."""
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         mid = _compress(db, None, "mid")
         db.publish_compression_child(
-            parent_session_id=mid, child_session_id="tip", source="local",
-            messages=[{"role": "user", "content": "hi"}], require_compression_lease=False)
+            parent_session_id=mid,
+            child_session_id="tip",
+            source="local",
+            messages=[{"role": "user", "content": "hi"}],
+            require_compression_lease=False,
+        )
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source=? WHERE id=?", (mid_created, mid))
+            db._conn.execute(
+                "UPDATE sessions SET created_source=? WHERE id=?", (mid_created, mid)
+            )
             db._conn.execute("UPDATE sessions SET created_source=NULL WHERE id='tip'")
             db._conn.commit()
-        db.update_token_counts("tip", input_tokens=1, model="m", api_call_count=1, source="cli")
+        db.update_token_counts(
+            "tip", input_tokens=1, model="m", api_call_count=1, source="cli"
+        )
         assert [_created(db, sid) for sid in ("parent-mid", mid, "tip")] == [
-            expected_root, mid_created, "cli"]
+            expected_root,
+            mid_created,
+            "cli",
+        ]
     finally:
         db.close()
 
@@ -79,12 +115,20 @@ def test_compressing_a_stamped_tip_stamps_its_legacy_root(tmp_path, root_created
     try:
         tip = _compress(db, root_created, "legacy-tip")
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source='cli' WHERE id=?", (tip,))
+            db._conn.execute(
+                "UPDATE sessions SET created_source='cli' WHERE id=?", (tip,)
+            )
             db._conn.commit()
         db.publish_compression_child(
-            parent_session_id=tip, child_session_id="new-tip", source="local",
-            messages=[{"role": "user", "content": "hi"}], require_compression_lease=False)
-        assert [_created(db, sid) for sid in ("parent-" + tip, tip, "new-tip")] == ["cli"] * 3
+            parent_session_id=tip,
+            child_session_id="new-tip",
+            source="local",
+            messages=[{"role": "user", "content": "hi"}],
+            require_compression_lease=False,
+        )
+        assert [_created(db, sid) for sid in ("parent-" + tip, tip, "new-tip")] == [
+            "cli"
+        ] * 3
     finally:
         db.close()
 
@@ -97,16 +141,26 @@ def test_unset_parent_behind_a_reset_edge_takes_the_fast_path(tmp_path):
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         db.create_session("legacy", source="local")
-        db.create_session("reset-root", source="cli", parent_session_id="legacy",
-                          model_config={"_reset_from": "legacy"})
+        db.create_session(
+            "reset-root",
+            source="cli",
+            parent_session_id="legacy",
+            model_config={"_reset_from": "legacy"},
+        )
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source=NULL, ended_at=1, "
-                             "end_reason='session_reset' WHERE id='legacy'")
+            db._conn.execute(
+                "UPDATE sessions SET created_source=NULL, ended_at=1, "
+                "end_reason='session_reset' WHERE id='legacy'"
+            )
             db._conn.commit()
         db.append_message("reset-root", role="user", content="hi")
         db.publish_compression_child(
-            parent_session_id="reset-root", child_session_id="tip", source="cli",
-            messages=[{"role": "user", "content": "hi"}], require_compression_lease=False)
+            parent_session_id="reset-root",
+            child_session_id="tip",
+            source="cli",
+            messages=[{"role": "user", "content": "hi"}],
+            require_compression_lease=False,
+        )
         statements = []
         with db._lock:
             db._conn.set_trace_callback(statements.append)
@@ -132,15 +186,23 @@ def test_owner_start_lists_a_legacy_compressed_chain_once(tmp_path, root_created
     try:
         mid = _compress(db, root_created, "mid")
         db.publish_compression_child(
-            parent_session_id=mid, child_session_id="tip", source="local",
-            messages=[{"role": "user", "content": "hi"}], require_compression_lease=False)
+            parent_session_id=mid,
+            child_session_id="tip",
+            source="local",
+            messages=[{"role": "user", "content": "hi"}],
+            require_compression_lease=False,
+        )
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source=? WHERE id=?", (root_created, mid))
+            db._conn.execute(
+                "UPDATE sessions SET created_source=? WHERE id=?", (root_created, mid)
+            )
             db._conn.execute("UPDATE sessions SET created_source='cli' WHERE id='tip'")
             db._conn.commit()
 
         def listed():
-            return [s["id"] for s in SurfaceLabelReader(db).list_sessions_rich(source="cli")]
+            return [
+                s["id"] for s in SurfaceLabelReader(db).list_sessions_rich(source="cli")
+            ]
 
         assert listed() == []
         assert backfill_compression_created_sources(db) == 2
@@ -161,16 +223,27 @@ def test_owner_start_keeps_known_provenance(tmp_path):
         _compress(db, "tui", "known")
         _compress(db, None, "unset")
         branched = _compress(db, None, "branched")
-        db.create_session("branch", source="cli", parent_session_id="parent-" + branched,
-                          model_config={"_branched_from": "parent-" + branched})
+        db.create_session(
+            "branch",
+            source="cli",
+            parent_session_id="parent-" + branched,
+            model_config={"_branched_from": "parent-" + branched},
+        )
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source='cli' WHERE id IN ('known', 'branch')")
-            db._conn.execute("UPDATE sessions SET created_source=NULL WHERE id IN ('unset', ?)", (branched,))
+            db._conn.execute(
+                "UPDATE sessions SET created_source='cli' WHERE id IN ('known', 'branch')"
+            )
+            db._conn.execute(
+                "UPDATE sessions SET created_source=NULL WHERE id IN ('unset', ?)",
+                (branched,),
+            )
             db._conn.commit()
 
         assert backfill_compression_created_sources(db) == 0
-        assert [_created(db, sid) for sid in ("parent-known", "parent-unset", "parent-branched", "branch")] == [
-            "tui", None, None, "cli"]
+        assert [
+            _created(db, sid)
+            for sid in ("parent-known", "parent-unset", "parent-branched", "branch")
+        ] == ["tui", None, None, "cli"]
     finally:
         db.close()
 
@@ -184,11 +257,19 @@ def test_owner_start_skips_a_branch_child_of_an_unset_compression_parent(tmp_pat
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
         branched = _compress(db, None, "branched")
-        db.create_session("branch", source="cli", parent_session_id="parent-" + branched,
-                          model_config={"_branched_from": "parent-" + branched})
+        db.create_session(
+            "branch",
+            source="cli",
+            parent_session_id="parent-" + branched,
+            model_config={"_branched_from": "parent-" + branched},
+        )
         with db._lock:
-            db._conn.execute("UPDATE sessions SET created_source='cli' WHERE id='branch'")
-            db._conn.execute("UPDATE sessions SET created_source=NULL WHERE id=?", (branched,))
+            db._conn.execute(
+                "UPDATE sessions SET created_source='cli' WHERE id='branch'"
+            )
+            db._conn.execute(
+                "UPDATE sessions SET created_source=NULL WHERE id=?", (branched,)
+            )
             db._conn.commit()
 
         assert backfill_compression_created_sources(db) == 0
@@ -204,8 +285,16 @@ def test_unset_ancestor_probe_reads_only_the_walked_rows(tmp_path):
 
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
-        plan = [row[3] for row in db._conn.execute(
-            "EXPLAIN QUERY PLAN " + _UNSET_ANCESTOR_SQL, ("tip", "cli", _CHAIN_CAP))]
-        assert not [step for step in plan if step.startswith("SCAN") and "up" not in step.split()], plan
+        plan = [
+            row[3]
+            for row in db._conn.execute(
+                "EXPLAIN QUERY PLAN " + _UNSET_ANCESTOR_SQL, ("tip", "cli", _CHAIN_CAP)
+            )
+        ]
+        assert not [
+            step
+            for step in plan
+            if step.startswith("SCAN") and "up" not in step.split()
+        ], plan
     finally:
         db.close()

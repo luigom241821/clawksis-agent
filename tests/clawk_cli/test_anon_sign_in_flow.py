@@ -17,7 +17,14 @@ import pytest
 from clawk_cli import anon_auth, auth_device_flow
 from clawk_cli.auth import _auth_file_path, _load_auth_store
 from tests.clawk_cli.test_anon_upgrade import (
-    EMAIL, FREE_PICK, PORTAL, WELCOME, _write_model_config, free_account, portal)
+    EMAIL,
+    FREE_PICK,
+    PORTAL,
+    WELCOME,
+    _write_model_config,
+    free_account,
+    portal,
+)
 
 __all__ = ["free_account", "portal"]
 
@@ -38,7 +45,9 @@ def _auth_bytes() -> bytes:
 
 def test_a_completed_sign_in_yields_code_waiting_then_completed(portal, free_account):
     _seed_free_tier()
-    _write_model_config({"provider": "nous", "default": anon_auth.GUEST_MODEL, "base_url": WELCOME})
+    _write_model_config(
+        {"provider": "nous", "default": anon_auth.GUEST_MODEL, "base_url": WELCOME}
+    )
 
     states = _drain()
 
@@ -59,27 +68,51 @@ def test_no_surface_calls_the_promotion_endpoints(portal, free_account):
     assert not [p for _, p in portal.calls if "promotion" in p]
 
 
-def test_the_email_comes_from_the_access_token_not_the_claim_answer(portal, free_account):
+def test_the_email_comes_from_the_access_token_not_the_claim_answer(
+    portal, free_account
+):
     _seed_free_tier()
-    portal.claim_reply = {**portal.claim_reply, "account_email": "someone-else@example.test"}
+    portal.claim_reply = {
+        **portal.claim_reply,
+        "account_email": "someone-else@example.test",
+    }
 
     assert _drain()[-1].email == EMAIL
 
 
 def test_the_handoff_result_rides_the_completed_state(portal, free_account):
     _seed_free_tier()
-    portal.claim_reply = {**portal.claim_reply, "connectors": {
-        "kind": "moved", "moved_toolkits": ["gmail"], "dropped_toolkits": ["slack"]}}
+    portal.claim_reply = {
+        **portal.claim_reply,
+        "connectors": {
+            "kind": "moved",
+            "moved_toolkits": ["gmail"],
+            "dropped_toolkits": ["slack"],
+        },
+    }
 
     completed = _drain()[-1]
 
-    assert completed.handoff == (f"Your apps moved to {EMAIL}: gmail.", f"Reconnect in {EMAIL}: slack.")
-    assert completed.copy.splitlines()[:3] == [f"Signed in as {EMAIL}.", *completed.handoff]
+    assert completed.handoff == (
+        f"Your apps moved to {EMAIL}: gmail.",
+        f"Reconnect in {EMAIL}: slack.",
+    )
+    assert completed.copy.splitlines()[:3] == [
+        f"Signed in as {EMAIL}.",
+        *completed.handoff,
+    ]
 
 
-def test_no_identity_on_disk_signs_in_without_minting_or_claiming(portal, free_account, monkeypatch):
-    monkeypatch.setattr(anon_auth, "mint_guest",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("run_sign_in must not mint")))
+def test_no_identity_on_disk_signs_in_without_minting_or_claiming(
+    portal, free_account, monkeypatch
+):
+    monkeypatch.setattr(
+        anon_auth,
+        "mint_guest",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("run_sign_in must not mint")
+        ),
+    )
 
     states = _drain()
 
@@ -112,7 +145,9 @@ def test_an_expired_token_answer_yields_timed_out(portal):
     assert portal.token_grants == 0
 
 
-def test_the_portal_override_is_read_inside_the_profile_scope(portal, free_account, monkeypatch):
+def test_the_portal_override_is_read_inside_the_profile_scope(
+    portal, free_account, monkeypatch
+):
     in_scope = []
 
     @contextlib.contextmanager
@@ -124,10 +159,14 @@ def test_the_portal_override_is_read_inside_the_profile_scope(portal, free_accou
             in_scope.pop()
 
     from clawk_cli import auth_nous
+
     reads = []
     real_override = auth_nous._nous_portal_env_override
-    monkeypatch.setattr(auth_nous, "_nous_portal_env_override",
-                        lambda: (reads.append(bool(in_scope)), real_override())[1])
+    monkeypatch.setattr(
+        auth_nous,
+        "_nous_portal_env_override",
+        lambda: (reads.append(bool(in_scope)), real_override())[1],
+    )
 
     assert _drain(scope=_scope)[-1].kind == "completed"
     assert reads and all(reads[:1])
@@ -136,14 +175,18 @@ def test_the_portal_override_is_read_inside_the_profile_scope(portal, free_accou
 def test_the_portal_override_wins_over_a_saved_portal(portal, monkeypatch):
     guest = _seed_free_tier()
     from clawk_cli.auth import _save_auth_store, _save_provider_state
+
     store = _load_auth_store()
-    _save_provider_state(store, "nous", {**guest, "portal_base_url": "https://portal.nousresearch.com"})
+    _save_provider_state(
+        store, "nous", {**guest, "portal_base_url": "https://portal.nousresearch.com"}
+    )
     _save_auth_store(store)
     asked = []
 
     def _record(client, portal_base_url, client_id, scope):
         asked.append(portal_base_url)
         raise RuntimeError("stop after the code request")
+
     monkeypatch.setattr(auth_device_flow, "_request_device_code", _record)
 
     _drain()
@@ -151,13 +194,16 @@ def test_the_portal_override_wins_over_a_saved_portal(portal, monkeypatch):
     assert asked == [PORTAL]
 
 
-def test_a_transport_error_yields_failed_without_leaking_the_detail_into_chat_copy(portal, monkeypatch):
+def test_a_transport_error_yields_failed_without_leaking_the_detail_into_chat_copy(
+    portal, monkeypatch
+):
     _seed_free_tier()
     before = _auth_bytes()
     detail = "boom at https://portal.example.test/api/oauth/device/code"
 
     def _boom(*a, **kw):
         raise RuntimeError(detail)
+
     monkeypatch.setattr(auth_device_flow, "_request_device_code", _boom)
 
     state = _drain()[-1]
@@ -169,13 +215,21 @@ def test_a_transport_error_yields_failed_without_leaking_the_detail_into_chat_co
     assert _auth_bytes() == before
 
 
-def test_a_persist_failure_yields_failed_rather_than_raising(portal, free_account, monkeypatch):
+def test_a_persist_failure_yields_failed_rather_than_raising(
+    portal, free_account, monkeypatch
+):
     _seed_free_tier()
     settles = []
     from clawk_cli import auth_nous
+
     monkeypatch.setattr(
-        auth_nous, "persist_nous_credentials", lambda *a, **kw: (_ for _ in ()).throw(OSError("read-only home")))
-    monkeypatch.setattr(anon_auth, "settle_after_upgrade", lambda state: settles.append(state) or {})
+        auth_nous,
+        "persist_nous_credentials",
+        lambda *a, **kw: (_ for _ in ()).throw(OSError("read-only home")),
+    )
+    monkeypatch.setattr(
+        anon_auth, "settle_after_upgrade", lambda state: settles.append(state) or {}
+    )
 
     states = _drain()
 
@@ -185,17 +239,23 @@ def test_a_persist_failure_yields_failed_rather_than_raising(portal, free_accoun
     assert settles == []
 
 
-def test_a_settle_failure_yields_failed_rather_than_raising(portal, free_account, monkeypatch):
+def test_a_settle_failure_yields_failed_rather_than_raising(
+    portal, free_account, monkeypatch
+):
     _seed_free_tier()
     persists = []
     from clawk_cli import auth_nous
+
     real_persist = auth_nous.persist_nous_credentials
     monkeypatch.setattr(
-        auth_nous, "persist_nous_credentials",
-        lambda state, **kw: (persists.append(state), real_persist(state, **kw))[1])
+        auth_nous,
+        "persist_nous_credentials",
+        lambda state, **kw: (persists.append(state), real_persist(state, **kw))[1],
+    )
 
     def _boom(state):
         raise RuntimeError("config is read-only")
+
     monkeypatch.setattr(anon_auth, "settle_after_upgrade", _boom)
 
     states = _drain()
@@ -207,8 +267,11 @@ def test_a_settle_failure_yields_failed_rather_than_raising(portal, free_account
 
 def test_already_signed_in_short_circuits_before_any_network_unless_replacing(portal):
     from clawk_cli.auth import _save_auth_store, _save_provider_state
+
     store = _load_auth_store()
-    _save_provider_state(store, "nous", {"auth_method": "oauth_device_code", "access_token": "x"})
+    _save_provider_state(
+        store, "nous", {"auth_method": "oauth_device_code", "access_token": "x"}
+    )
     _save_auth_store(store)
     portal.calls.clear()
 
@@ -257,11 +320,15 @@ def test_cancelling_during_the_token_poll_stops_it_within_a_second(portal):
 
     assert rest == ["waiting", "cancelled"]
     assert elapsed < 3.0
-    assert polls >= 1 and portal.token_polls == polls     # the generator is done: nothing polls on
+    assert (
+        polls >= 1 and portal.token_polls == polls
+    )  # the generator is done: nothing polls on
     assert _auth_bytes() == before
 
 
-def test_a_cancel_that_lands_with_the_token_grant_still_saves_nothing(portal, free_account):
+def test_a_cancel_that_lands_with_the_token_grant_still_saves_nothing(
+    portal, free_account
+):
     _seed_free_tier()
     before = _auth_bytes()
     stop = threading.Event()
@@ -275,11 +342,15 @@ def test_a_cancel_that_lands_with_the_token_grant_still_saves_nothing(portal, fr
     assert portal.claims == []
 
 
-def test_a_persist_guard_that_refuses_persists_nothing_and_never_settles(portal, free_account, monkeypatch):
+def test_a_persist_guard_that_refuses_persists_nothing_and_never_settles(
+    portal, free_account, monkeypatch
+):
     _seed_free_tier()
     before = _auth_bytes()
     settles = []
-    monkeypatch.setattr(anon_auth, "settle_after_upgrade", lambda state: settles.append(state) or {})
+    monkeypatch.setattr(
+        anon_auth, "settle_after_upgrade", lambda state: settles.append(state) or {}
+    )
 
     @contextlib.contextmanager
     def _refuse():
@@ -302,26 +373,39 @@ def test_persistence_happens_only_after_the_token_grant(portal, free_account):
     assert seen["completed"] != before
 
 
-def test_a_token_without_a_scope_keeps_the_requested_scope(portal, free_account, monkeypatch):
+def test_a_token_without_a_scope_keeps_the_requested_scope(
+    portal, free_account, monkeypatch
+):
     from clawk_cli import auth_nous
     from clawk_cli.auth import PROVIDER_REGISTRY
+
     real_poll = auth_device_flow._poll_for_token
-    monkeypatch.setattr(auth_device_flow, "_poll_for_token",
-                        lambda **kw: {k: v for k, v in real_poll(**kw).items() if k != "scope"})
+    monkeypatch.setattr(
+        auth_device_flow,
+        "_poll_for_token",
+        lambda **kw: {k: v for k, v in real_poll(**kw).items() if k != "scope"},
+    )
     saved = []
     real_persist = auth_nous.persist_nous_credentials
-    monkeypatch.setattr(auth_nous, "persist_nous_credentials",
-                        lambda state, **kw: (saved.append(state), real_persist(state, **kw))[1])
+    monkeypatch.setattr(
+        auth_nous,
+        "persist_nous_credentials",
+        lambda state, **kw: (saved.append(state), real_persist(state, **kw))[1],
+    )
 
     assert _drain()[-1].kind == "completed"
     assert saved[0]["scope"] == PROVIDER_REGISTRY["nous"].scope
 
 
-def test_the_ca_bundle_is_honoured_for_the_whole_sign_in(portal, free_account, monkeypatch):
+def test_the_ca_bundle_is_honoured_for_the_whole_sign_in(
+    portal, free_account, monkeypatch
+):
     import certifi
+
     monkeypatch.setenv("CLAWK_CA_BUNDLE", certifi.where())
     seen = []
     from clawk_cli import auth_nous
+
     real_client = auth_nous._nous_http_client
 
     def _recording(timeout_seconds, verify):
@@ -333,7 +417,8 @@ def test_the_ca_bundle_is_honoured_for_the_whole_sign_in(portal, free_account, m
 
 
 def test_the_scope_is_entered_for_the_precondition_and_the_persist_but_never_around_a_wait(
-        portal, free_account, monkeypatch):
+    portal, free_account, monkeypatch
+):
     _seed_free_tier()
     events = []
 
@@ -350,6 +435,7 @@ def test_the_scope_is_entered_for_the_precondition_and_the_persist_but_never_aro
     def _poll(**kwargs):
         events.append(("poll", threading.get_ident()))
         return real_poll(**kwargs)
+
     monkeypatch.setattr(auth_device_flow, "_poll_for_token", _poll)
 
     states = []
@@ -359,4 +445,13 @@ def test_the_scope_is_entered_for_the_precondition_and_the_persist_but_never_aro
 
     assert states[-1].kind == "completed"
     kinds = [kind for kind, _ in events]
-    assert kinds == ["enter", "exit", "yield", "yield", "poll", "enter", "exit", "yield"]
+    assert kinds == [
+        "enter",
+        "exit",
+        "yield",
+        "yield",
+        "poll",
+        "enter",
+        "exit",
+        "yield",
+    ]

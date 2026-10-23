@@ -9,17 +9,26 @@ from tools.terminal_tool_guards import gateway_lifecycle_block
 def test_bootstrap_rejection_does_not_invent_keepalive(tmp_path, monkeypatch):
     from tools import process_registry
 
-    monkeypatch.setattr(process_registry, "_is_supervised_gateway_process", lambda: True)
+    monkeypatch.setattr(
+        process_registry, "_is_supervised_gateway_process", lambda: True
+    )
     plist = tmp_path / "com.example.schedule.plist"
-    plist.write_bytes(plistlib.dumps({
-        "Label": "com.example.schedule",
-        "ProgramArguments": ["/bin/true"],
-        "RunAtLoad": False,
-        "StartCalendarInterval": {"Hour": 9, "Minute": 0},
-    }))
+    plist.write_bytes(
+        plistlib.dumps(
+            {
+                "Label": "com.example.schedule",
+                "ProgramArguments": ["/bin/true"],
+                "RunAtLoad": False,
+                "StartCalendarInterval": {"Hour": 9, "Minute": 0},
+            }
+        )
+    )
     blocked = gateway_lifecycle_block(
         command=f"launchctl bootstrap gui/501 {plist}",
-        env=None, env_type="local", cwd=str(tmp_path), workdir=None,
+        env=None,
+        env_type="local",
+        cwd=str(tmp_path),
+        workdir=None,
         session_key="diagnostic-test",
     )
     assert blocked is not None
@@ -28,7 +37,9 @@ def test_bootstrap_rejection_does_not_invent_keepalive(tmp_path, monkeypatch):
     assert result["error"]
 
 
-def test_interpreter_kill_rejection_names_the_owned_process_route(tmp_path, monkeypatch):
+def test_interpreter_kill_rejection_names_the_owned_process_route(
+    tmp_path, monkeypatch
+):
     """Scheduled-Task topology (#113667): only ``CLAWK_SUPERVISED_CHILD`` marks the launch, and an
     image-name kill of the interpreter is refused with the ``proc_*`` / explicit-PID route named.
     Other images and explicit PIDs pass."""
@@ -36,13 +47,22 @@ def test_interpreter_kill_rejection_names_the_owned_process_route(tmp_path, monk
 
     monkeypatch.setenv("_CLAWK_GATEWAY", "1")
     monkeypatch.setenv("CLAWK_SUPERVISED_CHILD", "1")
-    for marker in ("INVOCATION_ID", "XPC_SERVICE_NAME", "CLAWK_S6_SUPERVISED_CHILD", "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR"):
+    for marker in (
+        "INVOCATION_ID",
+        "XPC_SERVICE_NAME",
+        "CLAWK_S6_SUPERVISED_CHILD",
+        "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR",
+    ):
         monkeypatch.delenv(marker, raising=False)
     monkeypatch.setattr("gateway.status.get_running_pid", lambda *a, **k: os.getpid())
 
     def run(command):
         return gateway_lifecycle_block(
-            command=command, env=None, env_type="local", cwd=str(tmp_path), workdir=None,
+            command=command,
+            env=None,
+            env_type="local",
+            cwd=str(tmp_path),
+            workdir=None,
             session_key="diagnostic-test",
         )
 

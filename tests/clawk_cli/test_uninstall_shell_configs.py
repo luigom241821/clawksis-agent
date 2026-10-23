@@ -6,6 +6,7 @@ takes no backup of them, so the rewrite has to be atomic: a bare
 caller wraps everything in ``except Exception: log_warn(...)``, so a partial
 write is downgraded to a warning and the user's next login starts a bare shell.
 """
+
 from __future__ import annotations
 
 import os

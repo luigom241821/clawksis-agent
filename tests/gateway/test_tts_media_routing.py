@@ -68,15 +68,21 @@ def _allowed_media_path(tmp_path, monkeypatch, name):
 
 
 @pytest.mark.asyncio
-async def test_base_adapter_routes_voice_tagged_telegram_ogg_media_tag_to_voice_sender(tmp_path, monkeypatch):
+async def test_base_adapter_routes_voice_tagged_telegram_ogg_media_tag_to_voice_sender(
+    tmp_path, monkeypatch
+):
     adapter = _MediaRoutingAdapter()
     event = _event()
     media_file = _allowed_media_path(tmp_path, monkeypatch, "speech.ogg")
     adapter._message_handler = AsyncMock(
         return_value=f"[[audio_as_voice]]\nMEDIA:{media_file}"
     )
-    adapter.send_voice = AsyncMock(return_value=SendResult(success=True, message_id="voice"))
-    adapter.send_document = AsyncMock(return_value=SendResult(success=True, message_id="doc"))
+    adapter.send_voice = AsyncMock(
+        return_value=SendResult(success=True, message_id="voice")
+    )
+    adapter.send_document = AsyncMock(
+        return_value=SendResult(success=True, message_id="doc")
+    )
 
     await adapter._process_message_background(event, build_session_key(event.source))
 
@@ -100,7 +106,9 @@ def _fake_runner(thread_meta):
 
 
 @pytest.mark.asyncio
-async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(tmp_path, monkeypatch):
+async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(
+    tmp_path, monkeypatch
+):
     event = _event(thread_id="topic-1")
     allowed_root = tmp_path / "media-cache"
     allowed_root.mkdir()
@@ -123,8 +131,12 @@ async def test_streaming_delivery_blocks_media_path_outside_allowed_roots(tmp_pa
         extract_images=BasePlatformAdapter.extract_images,
         extract_local_files=BasePlatformAdapter.extract_local_files,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="image")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="image")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -173,8 +185,12 @@ async def test_non_streaming_media_failure_notifies_user(tmp_path, monkeypatch):
             error="Discord accepted the message but attached no files (clip.mp4)",
         )
     )
-    adapter.send_document = AsyncMock(return_value=SendResult(success=True, message_id="doc"))
-    adapter.send_voice = AsyncMock(return_value=SendResult(success=True, message_id="voice"))
+    adapter.send_document = AsyncMock(
+        return_value=SendResult(success=True, message_id="doc")
+    )
+    adapter.send_voice = AsyncMock(
+        return_value=SendResult(success=True, message_id="voice")
+    )
     adapter.send_multiple_images = AsyncMock()
 
     await adapter._process_message_background(event, build_session_key(event.source))
@@ -206,12 +222,15 @@ class _DiscordMediaFailureAdapter(BasePlatformAdapter):
 
 @pytest.mark.asyncio
 async def test_queued_followup_delivery_strips_media_tag_from_text_and_sends_image(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     event = _event(thread_id="topic-1")
     media_file = _allowed_media_path(tmp_path, monkeypatch, "pricelist.png")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = lambda source, anchor=None: {"thread_id": "topic-1"}
+    runner._thread_metadata_for_source = lambda source, anchor=None: {
+        "thread_id": "topic-1"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
 
     adapter = SimpleNamespace(
@@ -222,7 +241,9 @@ async def test_queued_followup_delivery_strips_media_tag_from_text_and_sends_ima
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -249,15 +270,16 @@ async def test_queued_followup_delivery_strips_media_tag_from_text_and_sends_ima
 
 @pytest.mark.asyncio
 async def test_queued_followup_delivery_reuses_routing_metadata_for_media(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Queued text and media must stay on the same precomputed reply route."""
     event = _event(thread_id="source-topic")
     media_file = _allowed_media_path(tmp_path, monkeypatch, "threaded.png")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = (
-        lambda source, reply_to_message_id=None: {"thread_id": "recomputed-topic"}
-    )
+    runner._thread_metadata_for_source = lambda source, reply_to_message_id=None: {
+        "thread_id": "recomputed-topic"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
     routing_metadata = {
         "thread_id": "queued-topic",
@@ -272,7 +294,9 @@ async def test_queued_followup_delivery_reuses_routing_metadata_for_media(
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -301,7 +325,9 @@ async def test_queued_followup_delivery_reuses_routing_metadata_for_media(
 async def test_queued_followup_delivery_keeps_remote_image_url_in_text():
     event = _event(thread_id="topic-1")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = lambda source, anchor=None: {"thread_id": "topic-1"}
+    runner._thread_metadata_for_source = lambda source, anchor=None: {
+        "thread_id": "topic-1"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
 
     adapter = SimpleNamespace(
@@ -312,7 +338,9 @@ async def test_queued_followup_delivery_keeps_remote_image_url_in_text():
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -336,15 +364,16 @@ async def test_queued_followup_delivery_keeps_remote_image_url_in_text():
 
 @pytest.mark.asyncio
 async def test_queued_followup_delivery_keeps_bare_local_path_in_text(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Queued delivery must not strip paths its explicit-only uploader ignores."""
     event = _event(thread_id="topic-1")
     media_file = _allowed_media_path(tmp_path, monkeypatch, "inspected.png")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = (
-        lambda source, reply_to_message_id=None: {"thread_id": "topic-1"}
-    )
+    runner._thread_metadata_for_source = lambda source, reply_to_message_id=None: {
+        "thread_id": "topic-1"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
 
     adapter = SimpleNamespace(
@@ -355,7 +384,9 @@ async def test_queued_followup_delivery_keeps_bare_local_path_in_text(
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -383,7 +414,9 @@ async def test_queued_followup_delivery_preserves_protected_media_example():
     """Inline-code MEDIA examples must remain visible after queued text cleanup."""
     event = _event(thread_id="topic-1")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = lambda source, anchor=None: {"thread_id": "topic-1"}
+    runner._thread_metadata_for_source = lambda source, anchor=None: {
+        "thread_id": "topic-1"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
 
     adapter = SimpleNamespace(
@@ -394,7 +427,9 @@ async def test_queued_followup_delivery_preserves_protected_media_example():
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -424,7 +459,9 @@ async def test_queued_followup_delivery_skips_media_when_turn_failed():
     completed-turn path's ``not agent_result.get("failed")`` guard."""
     event = _event(thread_id="topic-1")
     runner = object.__new__(GatewayRunner)
-    runner._thread_metadata_for_source = lambda source, anchor=None: {"thread_id": "topic-1"}
+    runner._thread_metadata_for_source = lambda source, anchor=None: {
+        "thread_id": "topic-1"
+    }
     runner._reply_anchor_for_event = lambda event: event.message_id
 
     adapter = SimpleNamespace(
@@ -435,7 +472,9 @@ async def test_queued_followup_delivery_skips_media_when_turn_failed():
         send=AsyncMock(return_value=SendResult(success=True, message_id="text")),
         send_multiple_images=AsyncMock(return_value=None),
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="voice")),
-        send_document=AsyncMock(return_value=SendResult(success=True, message_id="doc")),
+        send_document=AsyncMock(
+            return_value=SendResult(success=True, message_id="doc")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="video")),
     )
 
@@ -473,15 +512,23 @@ class _QueuedMediaCaptureAdapter(BasePlatformAdapter):
         self.sent.append({"chat_id": chat_id, "content": content, "metadata": metadata})
         return SendResult(success=True, message_id=f"text-{len(self.sent)}")
 
-    async def send_image_file(self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kwargs):
-        self.images.append({"chat_id": chat_id, "image_path": image_path, "metadata": metadata})
+    async def send_image_file(
+        self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kwargs
+    ):
+        self.images.append(
+            {"chat_id": chat_id, "image_path": image_path, "metadata": metadata}
+        )
         return SendResult(success=True, message_id=f"img-{len(self.images)}")
 
-    async def send_multiple_images(self, chat_id, images, metadata=None, human_delay=0.0):
+    async def send_multiple_images(
+        self, chat_id, images, metadata=None, human_delay=0.0
+    ):
         for image_url, _alt in images:
             path = image_url
             path = path.removeprefix("file://")
-            self.images.append({"chat_id": chat_id, "image_path": path, "metadata": metadata})
+            self.images.append(
+                {"chat_id": chat_id, "image_path": path, "metadata": metadata}
+            )
 
     async def get_chat_info(self, chat_id):
         return {"id": chat_id, "type": "dm"}
@@ -494,7 +541,9 @@ class _QueuedMediaAgent:
     def __init__(self, **kwargs):
         self.tools = []
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **kwargs
+    ):
         type(self).calls += 1
         if type(self).calls == 1:
             return {
@@ -511,7 +560,8 @@ class _QueuedMediaAgent:
 
 @pytest.mark.asyncio
 async def test_queued_resend_branch_delivers_media_and_preserves_protected_example(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Exercise the real queued first-response resend path in ``_run_agent``."""
     media_file = _allowed_media_path(tmp_path, monkeypatch, "quote.png")
@@ -548,7 +598,9 @@ async def test_queued_resend_branch_delivers_media_and_preserves_protected_examp
         stt_enabled=False,
     )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
-    monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
+    monkeypatch.setattr(
+        gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"}
+    )
 
     source = SessionSource(
         platform=Platform.TELEGRAM,
@@ -575,10 +627,14 @@ async def test_queued_resend_branch_delivers_media_and_preserves_protected_examp
 
     assert _QueuedMediaAgent.calls == 2
     assert result["final_response"] == "follow-up processed"
-    first_texts = [call["content"] for call in adapter.sent if "Quote here" in call["content"]]
-    assert first_texts, f"expected queued resend of first response, got: {adapter.sent!r}"
+    first_texts = [
+        call["content"] for call in adapter.sent if "Quote here" in call["content"]
+    ]
+    assert first_texts, (
+        f"expected queued resend of first response, got: {adapter.sent!r}"
+    )
     assert f"MEDIA:{media_file}" not in first_texts[0]
     assert "`MEDIA:/tmp/example.png`" in first_texts[0]
-    assert any(str(media_file) in unquote(img["image_path"]) for img in adapter.images), (
-        f"expected native image delivery via queued resend, got: {adapter.images!r}"
-    )
+    assert any(
+        str(media_file) in unquote(img["image_path"]) for img in adapter.images
+    ), f"expected native image delivery via queued resend, got: {adapter.images!r}"

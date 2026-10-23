@@ -12,7 +12,9 @@ from run_agent import AIAgent
 
 
 def _pinned_ids() -> set[int]:
-    return {id(pin) for pins, _text, _images in _MSG_TOKENS_CACHE.values() for pin in pins}
+    return {
+        id(pin) for pins, _text, _images in _MSG_TOKENS_CACHE.values() for pin in pins
+    }
 
 
 def _closing_agent(messages: list) -> AIAgent:
@@ -29,8 +31,13 @@ def _closing_agent(messages: list) -> AIAgent:
 def test_close_evicts_the_conversations_memo_entries_and_keeps_others():
     reply = "closed-session reply " * 5000
     other = "another live session's reply " * 5000
-    closed = [{"role": "user", "content": "hi there, a long enough opening question for the memo key?"},
-              {"role": "assistant", "content": reply}]
+    closed = [
+        {
+            "role": "user",
+            "content": "hi there, a long enough opening question for the memo key?",
+        },
+        {"role": "assistant", "content": reply},
+    ]
     live = [{"role": "assistant", "content": other}]
     before = estimate_messages_tokens_rough(closed)
     estimate_messages_tokens_rough(live)
@@ -56,18 +63,32 @@ def test_compression_evicts_the_bodies_the_summary_replaced(tmp_path, monkeypatc
     db = SessionDB(db_path=tmp_path / "state.db")
     db.create_session("S", source="cli")
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
-        agent = AIAgent(api_key="test-key", base_url="https://openrouter.ai/api/v1", model="test/model",
-                        platform="cli", quiet_mode=True, session_db=db, session_id="S",
-                        skip_context_files=True, skip_memory=True)
+        agent = AIAgent(
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            platform="cli",
+            quiet_mode=True,
+            session_db=db,
+            session_id="S",
+            skip_context_files=True,
+            skip_memory=True,
+        )
     agent.context_compressor = MagicMock()
     dropped = "pre-compression tool output " * 5000
     kept = "kept tail reply " * 5000
-    history = [{"role": "user", "content": "q" * 80}, {"role": "tool", "content": dropped},
-               {"role": "assistant", "content": kept}]
+    history = [
+        {"role": "user", "content": "q" * 80},
+        {"role": "tool", "content": dropped},
+        {"role": "assistant", "content": kept},
+    ]
     estimate_messages_tokens_rough(history)
     compressed = [{"role": "user", "content": "[summary] " + "s" * 80}, history[2]]
-    monkeypatch.setattr(conversation_compression, "compress_context",
-                        lambda *_a, **_kw: (compressed, "prompt"))
+    monkeypatch.setattr(
+        conversation_compression,
+        "compress_context",
+        lambda *_a, **_kw: (compressed, "prompt"),
+    )
     assert id(dropped) in _pinned_ids()
 
     agent._compress_context(history, "sys", commit_fence=CompressionCommitFence())
@@ -95,8 +116,11 @@ def test_compression_telemetry_does_not_pin_the_one_shot_summary_prompt():
     recorder._active_compression_telemetry = {"effective_aux_context": None}
     prompt = "summarize this serialized transcript " * 20000
 
-    recorder._record_aux_compression_call(prompt_messages=[{"role": "user", "content": prompt}],
-                                          max_tokens=None, duration_ms=1)
+    recorder._record_aux_compression_call(
+        prompt_messages=[{"role": "user", "content": prompt}],
+        max_tokens=None,
+        duration_ms=1,
+    )
 
     assert recorder._active_compression_telemetry["aux_prompt_tokens"] > 0
     assert id(prompt) not in _pinned_ids()
@@ -107,8 +131,10 @@ def test_close_evicts_a_prompt_caching_split_system_prompt():
 
     static = "the static, cacheable system prefix " * 2000
     full = static + "\nper-session suffix: today's date and the active model"
-    request = apply_anthropic_cache_control([{"role": "system", "content": full}, {"role": "user", "content": "hi"}],
-                                            static_system_prefix=static)
+    request = apply_anthropic_cache_control(
+        [{"role": "system", "content": full}, {"role": "user", "content": "hi"}],
+        static_system_prefix=static,
+    )
     assert isinstance(request[0]["content"], list)  # the real split shape the memo sees
     estimate_messages_tokens_rough(request)
     agent = _closing_agent([{"role": "user", "content": "hi"}])

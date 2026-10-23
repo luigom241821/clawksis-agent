@@ -25,7 +25,6 @@ def _isolate(tmp_path, monkeypatch):
 
 
 class TestDynamicRouteLoading:
-
     def test_loads_dynamic_routes(self, tmp_path):
         subs = {"my-hook": {"secret": "dynamic-secret", "prompt": "test", "events": []}}
         (tmp_path / _DYNAMIC_ROUTES_FILENAME).write_text(json.dumps(subs))
@@ -77,5 +76,3 @@ class TestDynamicRouteSecretValidation:
         adapter = _make_adapter()  # global secret set
         adapter._reload_dynamic_routes()
         assert "valid" in adapter._routes
-
-

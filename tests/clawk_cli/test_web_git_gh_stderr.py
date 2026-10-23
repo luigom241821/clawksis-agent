@@ -18,7 +18,9 @@ from clawk_cli import web_git
 
 
 def _proc(returncode: int = 0, stdout: str = "", stderr: str = "") -> CompletedProcess:
-    return CompletedProcess(args=["gh"], returncode=returncode, stdout=stdout, stderr=stderr)
+    return CompletedProcess(
+        args=["gh"], returncode=returncode, stdout=stdout, stderr=stderr
+    )
 
 
 def _make_gh(returncode: int, stdout: str = "", stderr: str = ""):
@@ -28,7 +30,10 @@ def _make_gh(returncode: int, stdout: str = "", stderr: str = ""):
 
 class TestGhRetainsStderr:
     def test_success_returns_ok_with_stdout_and_stderr(self, tmp_path):
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(0, "ok\n", ""):
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(0, "ok\n", ""),
+        ):
             ok, out, err = web_git._gh(str(tmp_path), ["auth", "status"])
 
         assert ok is True
@@ -36,8 +41,9 @@ class TestGhRetainsStderr:
         assert err == ""
 
     def test_nonzero_exit_keeps_exit_status_and_stderr(self, tmp_path):
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(
-            1, "", "no commits between main and feature"
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(1, "", "no commits between main and feature"),
         ):
             ok, out, err = web_git._gh(str(tmp_path), ["pr", "create", "--fill"])
 
@@ -56,20 +62,27 @@ class TestReviewCreatePrSurfacesGhStderr:
     def test_failure_message_carries_gh_stderr_marker(self, tmp_path):
         # A unique marker: the assertion fails if the wrapper regresses to the
         # generic message or drops stderr anywhere between exec and the raise.
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(
-            1, "", "gh: no commits between main and bb/fix-wave2g"
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(1, "", "gh: no commits between main and bb/fix-wave2g"),
         ):
-            with pytest.raises(RuntimeError, match="no commits between main and bb/fix-wave2g"):
+            with pytest.raises(
+                RuntimeError, match="no commits between main and bb/fix-wave2g"
+            ):
                 web_git.review_create_pr(str(tmp_path))
 
     def test_failure_message_still_names_gh_when_stderr_is_empty(self, tmp_path):
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(1, "", "   "):
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(1, "", "   "),
+        ):
             with pytest.raises(RuntimeError, match="is gh installed and authenticated"):
                 web_git.review_create_pr(str(tmp_path))
 
     def test_success_path_returns_the_pr_url(self, tmp_path):
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(
-            0, "https://github.com/org/repo/pull/1234\n", ""
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(0, "https://github.com/org/repo/pull/1234\n", ""),
         ):
             result = web_git.review_create_pr(str(tmp_path))
 
@@ -78,7 +91,10 @@ class TestReviewCreatePrSurfacesGhStderr:
     def test_oversized_stderr_is_bounded_to_its_tail(self, tmp_path):
         marker = "TRAILING-MARKER-reason"
         stderr = "x" * 5_000 + "\n" + marker
-        with patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"), _make_gh(1, "", stderr):
+        with (
+            patch.object(web_git.shutil, "which", return_value="/usr/bin/gh"),
+            _make_gh(1, "", stderr),
+        ):
             with pytest.raises(RuntimeError) as excinfo:
                 web_git.review_create_pr(str(tmp_path))
 

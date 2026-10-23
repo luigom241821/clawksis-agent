@@ -1,4 +1,5 @@
 """Worker provenance is not a dependency edge or a transient runtime session."""
+
 import json
 
 import pytest
@@ -6,9 +7,15 @@ import pytest
 from clawk_state import SessionDB
 
 
-@pytest.mark.parametrize("linked,explicit", [(False, None), (True, None), (False, "override")])
+@pytest.mark.parametrize(
+    "linked,explicit", [(False, None), (True, None), (False, "override")]
+)
 def test_worker_create_keeps_durable_origin(tmp_path, monkeypatch, linked, explicit):
-    from clawk_cli import kanban_db as kb, kanban_db_connect as kbc, kanban_db_notify as kn
+    from clawk_cli import (
+        kanban_db as kb,
+        kanban_db_connect as kbc,
+        kanban_db_notify as kn,
+    )
     from tools import kanban_tools as kt, async_delegation
     from gateway.session_context import set_session_vars, clear_session_vars
 
@@ -17,9 +24,16 @@ def test_worker_create_keeps_durable_origin(tmp_path, monkeypatch, linked, expli
     kb.init_db()
     with kbc.connect_closing() as conn:
         owner = kb.create_task(conn, title="owner", session_id="durable")
-        kn.add_notify_sub(conn, task_id=owner, platform="discord", chat_id="chat",
-                          user_id="user", notifier_profile="default", delivery_mode="notify",
-                          delivery_metadata={"scope_id": "guild", "parent_chat_id": "forum"})
+        kn.add_notify_sub(
+            conn,
+            task_id=owner,
+            platform="discord",
+            chat_id="chat",
+            user_id="user",
+            notifier_profile="default",
+            delivery_mode="notify",
+            delivery_metadata={"scope_id": "guild", "parent_chat_id": "forum"},
+        )
         expected = kn.list_notify_subs(conn, owner)[0]
     if explicit:
         state = SessionDB(db_path=tmp_path / "state.db")
@@ -27,12 +41,22 @@ def test_worker_create_keeps_durable_origin(tmp_path, monkeypatch, linked, expli
         state.close()
     monkeypatch.setenv("CLAWK_KANBAN_TASK", owner)
     monkeypatch.setenv("CLAWK_SESSION_ID", "ephemeral")
-    monkeypatch.setattr(async_delegation, "_current_origin_session_id", lambda: "api-origin")
+    monkeypatch.setattr(
+        async_delegation, "_current_origin_session_id", lambda: "api-origin"
+    )
     # Even a matching current channel must not upgrade an inherited passive policy.
     tokens = set_session_vars(platform="discord", chat_id="chat", profile="default")
     try:
-        result = json.loads(kt._handle_create(dict(title="child", assignee="default",
-                            parents=[owner] if linked else [], session_id=explicit)))
+        result = json.loads(
+            kt._handle_create(
+                dict(
+                    title="child",
+                    assignee="default",
+                    parents=[owner] if linked else [],
+                    session_id=explicit,
+                )
+            )
+        )
     finally:
         clear_session_vars(tokens)
     assert result["ok"], result
@@ -41,21 +65,45 @@ def test_worker_create_keeps_durable_origin(tmp_path, monkeypatch, linked, expli
         assert child.session_id == (explicit or "durable")
         subs = kn.list_notify_subs(conn, child.id)
         assert len(subs) == 1
-        for key in ("platform", "chat_id", "user_id", "delivery_mode", "delivery_metadata", "notifier_profile"):
+        for key in (
+            "platform",
+            "chat_id",
+            "user_id",
+            "delivery_mode",
+            "delivery_metadata",
+            "notifier_profile",
+        ):
             assert subs[0][key] == expected[key]
-        assert bool(conn.execute("SELECT 1 FROM task_links WHERE child_id = ?", (child.id,)).fetchone()) == linked
+        assert (
+            bool(
+                conn.execute(
+                    "SELECT 1 FROM task_links WHERE child_id = ?", (child.id,)
+                ).fetchone()
+            )
+            == linked
+        )
 
 
 def test_tool_subscription_captures_conversation_anchors(tmp_path, monkeypatch):
-    from clawk_cli import kanban_db as kb, kanban_db_connect as kbc, kanban_db_notify as kn
+    from clawk_cli import (
+        kanban_db as kb,
+        kanban_db_connect as kbc,
+        kanban_db_notify as kn,
+    )
     from tools import kanban_tools as kt
     from gateway.session_context import set_session_vars, clear_session_vars
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     kb.init_db()
-    tokens = set_session_vars(platform="discord", chat_id="thread", chat_type="thread",
-                             scope_id="guild", parent_chat_id="forum", profile="default")
+    tokens = set_session_vars(
+        platform="discord",
+        chat_id="thread",
+        chat_type="thread",
+        scope_id="guild",
+        parent_chat_id="forum",
+        profile="default",
+    )
     try:
         result = json.loads(kt._handle_create(dict(title="direct", assignee="default")))
     finally:
@@ -67,11 +115,16 @@ def test_tool_subscription_captures_conversation_anchors(tmp_path, monkeypatch):
         assert metadata["parent_chat_id"] == "forum"
 
 
-@pytest.mark.parametrize(("session_id", "persisted"), [
-    ("phantom-session", False),
-    ("persisted-session", True),
-])
-def test_tool_create_only_stamps_persisted_ambient_session(tmp_path, monkeypatch, session_id, persisted):
+@pytest.mark.parametrize(
+    ("session_id", "persisted"),
+    [
+        ("phantom-session", False),
+        ("persisted-session", True),
+    ],
+)
+def test_tool_create_only_stamps_persisted_ambient_session(
+    tmp_path, monkeypatch, session_id, persisted
+):
     """Ambient worker ids are provenance only after their state.db row exists."""
     from clawk_cli import kanban_db as kb, kanban_db_connect as kbc
     from tools import kanban_tools as kt
@@ -90,13 +143,17 @@ def test_tool_create_only_stamps_persisted_ambient_session(tmp_path, monkeypatch
     # var is set too so the reporter's unverified-env path (the pre-fix stamping seam) is exercised.
     monkeypatch.setenv("CLAWK_SESSION_ID", session_id)
     with scoped_current_session_id(session_id):
-        result = json.loads(kt._handle_create({"title": "child", "assignee": "default"}))
+        result = json.loads(
+            kt._handle_create({"title": "child", "assignee": "default"})
+        )
     with kbc.connect_closing() as conn:
         task = kb.get_task(conn, result["task_id"])
     assert task.session_id == (session_id if persisted else None)
 
 
-def test_tool_create_stamps_request_scoped_session_over_process_env(tmp_path, monkeypatch):
+def test_tool_create_stamps_request_scoped_session_over_process_env(
+    tmp_path, monkeypatch
+):
     """In a multi-session process os.environ holds the LAST agent built; the request-scoped
     binding names the conversation that actually ordered the card."""
     from clawk_cli import kanban_db as kb, kanban_db_connect as kbc
@@ -113,6 +170,8 @@ def test_tool_create_stamps_request_scoped_session_over_process_env(tmp_path, mo
     state.close()
 
     with scoped_current_session_id("ordering-session"):
-        result = json.loads(kt._handle_create({"title": "child", "assignee": "default"}))
+        result = json.loads(
+            kt._handle_create({"title": "child", "assignee": "default"})
+        )
     with kbc.connect_closing() as conn:
         assert kb.get_task(conn, result["task_id"]).session_id == "ordering-session"

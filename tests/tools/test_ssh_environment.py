@@ -30,6 +30,7 @@ requires_ssh = pytest.mark.skipif(
 
 def _run(command, task_id="ssh_test", **kwargs):
     from tools.terminal_tool import terminal_tool
+
     return json.loads(terminal_tool(command, task_id=task_id, **kwargs))
 
 
@@ -39,19 +40,23 @@ def _cleanup(task_id="ssh_test"):
     # into the next.
     from tools.terminal_tool import _resolve_container_task_id
     from tools.terminal_tool_lifecycle import cleanup_vm
+
     cleanup_vm(_resolve_container_task_id(task_id))
 
 
 class TestBuildSSHCommand:
-
     @pytest.fixture(autouse=True)
     def _mock_connection(self, monkeypatch):
-        monkeypatch.setattr("tools.environments.ssh.subprocess.run",
-                            lambda *a, **k: subprocess.CompletedProcess([], 0))
-        monkeypatch.setattr("tools.environments.ssh.subprocess.Popen",
-                            lambda *a, **k: MagicMock(stdout=iter([]),
-                                                      stderr=iter([]),
-                                                      stdin=MagicMock()))
+        monkeypatch.setattr(
+            "tools.environments.ssh.subprocess.run",
+            lambda *a, **k: subprocess.CompletedProcess([], 0),
+        )
+        monkeypatch.setattr(
+            "tools.environments.ssh.subprocess.Popen",
+            lambda *a, **k: MagicMock(
+                stdout=iter([]), stderr=iter([]), stdin=MagicMock()
+            ),
+        )
         monkeypatch.setattr("tools.environments.base.time.sleep", lambda _: None)
 
     def test_base_flags(self, monkeypatch):
@@ -60,8 +65,12 @@ class TestBuildSSHCommand:
         monkeypatch.setattr(ssh_env, "_SSH_MULTIPLEX", True)
         env = SSHEnvironment(host="h", user="u")
         cmd = " ".join(env._build_ssh_command())
-        for flag in ("ControlMaster=auto", "ControlPersist=300",
-                      "BatchMode=yes", "StrictHostKeyChecking=accept-new"):
+        for flag in (
+            "ControlMaster=auto",
+            "ControlPersist=300",
+            "BatchMode=yes",
+            "StrictHostKeyChecking=accept-new",
+        ):
             assert flag in cmd
 
     def test_controlmaster_gated_off_on_windows(self, monkeypatch):
@@ -80,7 +89,6 @@ class TestBuildSSHCommand:
         assert "StrictHostKeyChecking=accept-new" in cmd
         assert env._build_ssh_command()[-1] == "u@h"
 
-
     def test_user_host_suffix(self):
         env = SSHEnvironment(host="h", user="u")
         assert env._build_ssh_command()[-1] == "u@h"
@@ -96,7 +104,9 @@ class TestBuildSSHCommand:
         env._run_bash(cmd)
         return captured
 
-    def test_run_bash_forwards_passthrough_by_sendenv_never_in_remote_argv(self, monkeypatch):
+    def test_run_bash_forwards_passthrough_by_sendenv_never_in_remote_argv(
+        self, monkeypatch
+    ):
         """#14091: allowlisted names travel as ``-o SendEnv=NAME`` with values only in the ssh client env;
         provider credentials on the allowlist stay behind; a .env value fills an unset shell var."""
         from tools import env_passthrough
@@ -105,9 +115,14 @@ class TestBuildSSHCommand:
         monkeypatch.setenv("NEXTCLOUD_URL", "https://next.example")
         monkeypatch.delenv("NEXTCLOUD_PASS", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-must-not-forward")
-        monkeypatch.setattr(env_passthrough, "get_all_passthrough",
-                            lambda: frozenset({"NEXTCLOUD_URL", "NEXTCLOUD_PASS", "OPENAI_API_KEY"}))
-        monkeypatch.setattr(ssh_env, "_load_clawk_env_vars", lambda: {"NEXTCLOUD_PASS": "from-dotenv"})
+        monkeypatch.setattr(
+            env_passthrough,
+            "get_all_passthrough",
+            lambda: frozenset({"NEXTCLOUD_URL", "NEXTCLOUD_PASS", "OPENAI_API_KEY"}),
+        )
+        monkeypatch.setattr(
+            ssh_env, "_load_clawk_env_vars", lambda: {"NEXTCLOUD_PASS": "from-dotenv"}
+        )
 
         captured = self._capture_run_bash(monkeypatch, env)
 
@@ -116,14 +131,19 @@ class TestBuildSSHCommand:
         assert captured["env"]["NEXTCLOUD_URL"] == "https://next.example"
         assert captured["env"]["NEXTCLOUD_PASS"] == "from-dotenv"
         remote_text = " ".join(captured["cmd"])
-        assert "https://next.example" not in remote_text and "from-dotenv" not in remote_text
+        assert (
+            "https://next.example" not in remote_text
+            and "from-dotenv" not in remote_text
+        )
         assert "sk-must-not-forward" not in remote_text
 
     def test_run_bash_without_passthrough_inherits_env_unchanged(self, monkeypatch):
         from tools import env_passthrough
 
         monkeypatch.setattr(env_passthrough, "get_all_passthrough", lambda: frozenset())
-        captured = self._capture_run_bash(monkeypatch, SSHEnvironment(host="h", user="u"))
+        captured = self._capture_run_bash(
+            monkeypatch, SSHEnvironment(host="h", user="u")
+        )
         assert not any(a.startswith("SendEnv=") for a in captured["cmd"])
         assert captured["env"] is None
 
@@ -140,12 +160,16 @@ class TestControlSocketPath:
 
     @pytest.fixture(autouse=True)
     def _mock_connection(self, monkeypatch):
-        monkeypatch.setattr("tools.environments.ssh.subprocess.run",
-                            lambda *a, **k: subprocess.CompletedProcess([], 0))
-        monkeypatch.setattr("tools.environments.ssh.subprocess.Popen",
-                            lambda *a, **k: MagicMock(stdout=iter([]),
-                                                      stderr=iter([]),
-                                                      stdin=MagicMock()))
+        monkeypatch.setattr(
+            "tools.environments.ssh.subprocess.run",
+            lambda *a, **k: subprocess.CompletedProcess([], 0),
+        )
+        monkeypatch.setattr(
+            "tools.environments.ssh.subprocess.Popen",
+            lambda *a, **k: MagicMock(
+                stdout=iter([]), stderr=iter([]), stdin=MagicMock()
+            ),
+        )
         monkeypatch.setattr("tools.environments.base.time.sleep", lambda _: None)
 
     # SSH appends ``.XXXXXXXXXXXXXXXX`` (17 bytes) to the ControlPath in
@@ -161,11 +185,13 @@ class TestControlSocketPath:
         # Simulate the macOS $TMPDIR shape from the issue traceback —
         # 48 bytes, the typical length of ``/var/folders/XX/YYYYYYYYY/T``.
         fake_tmp = "/var/folders/2t/wbkw5yb158jc3zhswgl7tz9c0000gn/T"
-        monkeypatch.setattr("tools.environments.ssh.tempfile.gettempdir",
-                            lambda: fake_tmp)
+        monkeypatch.setattr(
+            "tools.environments.ssh.tempfile.gettempdir", lambda: fake_tmp
+        )
         # The simulated path doesn't exist on the test host — skip the
         # real mkdir so __init__ can proceed.
         from pathlib import Path as _Path
+
         monkeypatch.setattr(_Path, "mkdir", lambda *a, **k: None)
 
         env = SSHEnvironment(
@@ -197,21 +223,23 @@ class TestControlSocketPath:
 
 
 class TestTerminalToolConfig:
-
-
     def test_ssh_persistent_respects_config(self, monkeypatch):
         """TERMINAL_PERSISTENT_SHELL=false disables SSH persistent by default."""
         monkeypatch.delenv("TERMINAL_SSH_PERSISTENT", raising=False)
         monkeypatch.setenv("TERMINAL_PERSISTENT_SHELL", "false")
         from tools.terminal_tool import _get_env_config
+
         assert _get_env_config()["ssh_persistent"] is False
 
     @requires_ssh
     @pytest.mark.parametrize("setting, expected", [(None, True), ("false", False)])
-    def test_ssh_persistent_reaches_the_environment(self, monkeypatch, setting, expected):
+    def test_ssh_persistent_reaches_the_environment(
+        self, monkeypatch, setting, expected
+    ):
         """terminal.persistent_shell (bridged to TERMINAL_PERSISTENT_SHELL) reaches SSHEnvironment."""
         from tools.terminal_tool import _get_env_config
         from tools.terminal_tool_lifecycle import _create_configured_env
+
         _setup_ssh_env(monkeypatch, persistent=True)
         monkeypatch.delenv("TERMINAL_SSH_PERSISTENT")
         if setting is None:
@@ -219,8 +247,15 @@ class TestTerminalToolConfig:
         else:
             monkeypatch.setenv("TERMINAL_PERSISTENT_SHELL", setting)
         config = _get_env_config()
-        env = _create_configured_env(config, "ssh", image="", cwd="~", timeout=30,
-                                     task_id="ssh-persist-config", host_cwd=None)
+        env = _create_configured_env(
+            config,
+            "ssh",
+            image="",
+            cwd="~",
+            timeout=30,
+            task_id="ssh-persist-config",
+            host_cwd=None,
+        )
         try:
             assert env._persist_env is expected
         finally:
@@ -234,7 +269,6 @@ class TestSSHPreflight:
         with pytest.raises(RuntimeError, match="SSH is not installed or not in PATH"):
             ssh_env._ensure_ssh_available()
 
-
     def test_ssh_environment_connects_when_ssh_exists(self, monkeypatch):
         called = {"count": 0}
 
@@ -243,11 +277,21 @@ class TestSSHPreflight:
         def _fake_establish(self):
             called["count"] += 1
 
-        monkeypatch.setattr(ssh_env.SSHEnvironment, "_establish_connection", _fake_establish)
-        monkeypatch.setattr(ssh_env.SSHEnvironment, "_detect_remote_home", lambda self: "/home/alice")
-        monkeypatch.setattr(ssh_env.SSHEnvironment, "_ensure_remote_dirs", lambda self: None)
+        monkeypatch.setattr(
+            ssh_env.SSHEnvironment, "_establish_connection", _fake_establish
+        )
+        monkeypatch.setattr(
+            ssh_env.SSHEnvironment, "_detect_remote_home", lambda self: "/home/alice"
+        )
+        monkeypatch.setattr(
+            ssh_env.SSHEnvironment, "_ensure_remote_dirs", lambda self: None
+        )
         monkeypatch.setattr(ssh_env.SSHEnvironment, "init_session", lambda self: None)
-        monkeypatch.setattr(ssh_env, "FileSyncManager", lambda **kw: type("M", (), {"sync": lambda self, **k: None})())
+        monkeypatch.setattr(
+            ssh_env,
+            "FileSyncManager",
+            lambda **kw: type("M", (), {"sync": lambda self, **k: None})(),
+        )
 
         env = ssh_env.SSHEnvironment(host="example.com", user="alice")
 
@@ -257,18 +301,26 @@ class TestSSHPreflight:
 
     def test_ssh_environment_can_skip_agent_file_sync(self, monkeypatch):
         monkeypatch.setattr(ssh_env.shutil, "which", lambda _name: "/usr/bin/ssh")
-        monkeypatch.setattr(ssh_env.SSHEnvironment, "_establish_connection", lambda self: None)
-        monkeypatch.setattr(ssh_env.SSHEnvironment, "_detect_remote_home", lambda self: "/home/alice")
+        monkeypatch.setattr(
+            ssh_env.SSHEnvironment, "_establish_connection", lambda self: None
+        )
+        monkeypatch.setattr(
+            ssh_env.SSHEnvironment, "_detect_remote_home", lambda self: "/home/alice"
+        )
         monkeypatch.setattr(ssh_env.SSHEnvironment, "init_session", lambda self: None)
         monkeypatch.setattr(
             ssh_env.SSHEnvironment,
             "_ensure_remote_dirs",
-            lambda self: pytest.fail("workspace browsing must not mutate the SSH target"),
+            lambda self: pytest.fail(
+                "workspace browsing must not mutate the SSH target"
+            ),
         )
         monkeypatch.setattr(
             ssh_env,
             "FileSyncManager",
-            lambda **_kw: pytest.fail("workspace browsing must not start agent file sync"),
+            lambda **_kw: pytest.fail(
+                "workspace browsing must not start agent file sync"
+            ),
         )
 
         env = ssh_env.SSHEnvironment(
@@ -310,7 +362,9 @@ class TestSSHProbeOnly:
         _mock_ssh_runtime["sync_factory"].assert_not_called()
         _mock_ssh_runtime["init_session"].assert_not_called()
 
-    def test_probe_only_control_socket_is_isolated(self, monkeypatch, _mock_ssh_runtime):
+    def test_probe_only_control_socket_is_isolated(
+        self, monkeypatch, _mock_ssh_runtime
+    ):
         control_exit_calls = []
 
         def _fake_run(*args, **kwargs):
@@ -320,8 +374,12 @@ class TestSSHProbeOnly:
         monkeypatch.setattr(ssh_env.subprocess, "run", _fake_run)
 
         normal = ssh_env.SSHEnvironment(host="example.com", user="alice")
-        first_probe = ssh_env.SSHEnvironment(host="example.com", user="alice", probe_only=True)
-        second_probe = ssh_env.SSHEnvironment(host="example.com", user="alice", probe_only=True)
+        first_probe = ssh_env.SSHEnvironment(
+            host="example.com", user="alice", probe_only=True
+        )
+        second_probe = ssh_env.SSHEnvironment(
+            host="example.com", user="alice", probe_only=True
+        )
 
         assert first_probe.control_socket != normal.control_socket
         assert second_probe.control_socket != first_probe.control_socket
@@ -349,7 +407,6 @@ def _setup_ssh_env(monkeypatch, persistent: bool):
 
 @requires_ssh
 class TestOneShotSSH:
-
     @pytest.fixture(autouse=True)
     def _setup(self, monkeypatch):
         _setup_ssh_env(monkeypatch, persistent=False)
@@ -361,7 +418,6 @@ class TestOneShotSSH:
         assert r["exit_code"] == 0
         assert "hello" in r["output"]
 
-
     def test_state_does_not_persist(self):
         """Exports stay in their own command; cwd still carries (file tools rely on it)."""
         home = _run("pwd")["output"].strip()
@@ -372,7 +428,6 @@ class TestOneShotSSH:
 
 @requires_ssh
 class TestPersistentSSH:
-
     @pytest.fixture(autouse=True)
     def _setup(self, monkeypatch):
         _setup_ssh_env(monkeypatch, persistent=True)
@@ -388,7 +443,6 @@ class TestPersistentSSH:
         _run("export CLAWK_PERSIST_TEST=works")
         r = _run("echo $CLAWK_PERSIST_TEST")
         assert r["output"].strip() == "works"
-
 
     def test_large_output(self):
         r = _run("seq 1 1000")
@@ -424,7 +478,7 @@ class TestRealSSHBackend:
 
     def test_quoting_survives_the_ssh_hop(self):
         # One quoting layer for bash -c, one for the remote login shell sshd runs it under.
-        payload = "it's \"quoted\" $HOME `tick` \\back; echo injected"
+        payload = 'it\'s "quoted" $HOME `tick` \\back; echo injected'
         r = _run(f"printf '%s\\n' {shlex.quote(payload)}")
         assert r["output"].rstrip("\n") == payload
 
@@ -450,6 +504,8 @@ class TestRealSSHBackend:
         content = "alpha\nbeta: ünïcödé ✓\n"
         wrote = json.loads(write_file_tool(path, content, task_id="ssh_test"))
         assert "error" not in wrote, wrote
-        assert _run(f"wc -c < {shlex.quote(path)}")["output"].strip() == str(len(content.encode()))
+        assert _run(f"wc -c < {shlex.quote(path)}")["output"].strip() == str(
+            len(content.encode())
+        )
         read = json.loads(read_file_tool(path, task_id="ssh_test"))
         assert "beta: ünïcödé ✓" in read["content"], read

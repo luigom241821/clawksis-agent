@@ -27,10 +27,17 @@ class _BasicLimits(ctypes.Structure):
 
 
 class _IoCounters(ctypes.Structure):
-    _fields_ = [(name, ctypes.c_ulonglong) for name in (
-        "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
-        "ReadTransferCount", "WriteTransferCount", "OtherTransferCount",
-    )]
+    _fields_ = [
+        (name, ctypes.c_ulonglong)
+        for name in (
+            "ReadOperationCount",
+            "WriteOperationCount",
+            "OtherOperationCount",
+            "ReadTransferCount",
+            "WriteTransferCount",
+            "OtherTransferCount",
+        )
+    ]
 
 
 class _ExtendedLimits(ctypes.Structure):
@@ -50,9 +57,16 @@ class _WindowsJob:
         self._api = ctypes.WinDLL("kernel32", use_last_error=True)
         for name, args, result in (
             ("CreateJobObjectW", [ctypes.c_void_p, wintypes.LPCWSTR], wintypes.HANDLE),
-            ("SetInformationJobObject", [wintypes.HANDLE, ctypes.c_int,
-                                         ctypes.c_void_p, wintypes.DWORD], wintypes.BOOL),
-            ("AssignProcessToJobObject", [wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+            (
+                "SetInformationJobObject",
+                [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD],
+                wintypes.BOOL,
+            ),
+            (
+                "AssignProcessToJobObject",
+                [wintypes.HANDLE, wintypes.HANDLE],
+                wintypes.BOOL,
+            ),
             ("CloseHandle", [wintypes.HANDLE], wintypes.BOOL),
         ):
             fn = getattr(self._api, name)
@@ -67,7 +81,8 @@ class _WindowsJob:
             # Neither BREAKAWAY_OK nor SILENT_BREAKAWAY_OK: descendants stay contained.
             limits.BasicLimitInformation.LimitFlags = 0x2000  # KILL_ON_JOB_CLOSE
             if not self._api.SetInformationJobObject(
-                    self._handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+                self._handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)
+            ):
                 raise ctypes.WinError(ctypes.get_last_error())
         except BaseException:
             self.close()
@@ -102,7 +117,8 @@ def server_child_env(base_env: Mapping[str, str]) -> dict[str, str]:
     (git / PowerShell / update probes), whose children legitimately need GH_TOKEN, HF_TOKEN, …
     """
     return {
-        key: value for key, value in base_env.items()
+        key: value
+        for key, value in base_env.items()
         if not any(marker in key.upper() for marker in _CREDENTIAL_ENV_MARKERS)
     }
 
@@ -119,7 +135,9 @@ def spawn_server(cmd, **kwargs) -> tuple[subprocess.Popen, _WindowsJob | None]:
     job = _WindowsJob()
     proc = None
     try:
-        kwargs["creationflags"] = kwargs.get("creationflags", 0) | 0x00000004  # CREATE_SUSPENDED
+        kwargs["creationflags"] = (
+            kwargs.get("creationflags", 0) | 0x00000004
+        )  # CREATE_SUSPENDED
         proc = subprocess.Popen(cmd, **kwargs)
         job.assign(proc)
         psutil.Process(proc.pid).resume()

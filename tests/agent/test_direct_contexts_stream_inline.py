@@ -61,9 +61,17 @@ class _Wire:
                 self.send_header("content-type", "text/event-stream")
                 self.end_headers()
                 first = {
-                    "id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "m",
-                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": "hello"},
-                                 "finish_reason": None}],
+                    "id": "c1",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "m",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": "hello"},
+                            "finish_reason": None,
+                        }
+                    ],
                 }
                 self.wfile.write(f"data: {json.dumps(first)}\n\n".encode())
                 self.wfile.flush()
@@ -77,13 +85,29 @@ class _Wire:
                         pass
                     return
                 second = {
-                    "id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "m",
-                    "choices": [{"index": 0, "delta": {"content": " world"}, "finish_reason": None}],
+                    "id": "c1",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "m",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": " world"},
+                            "finish_reason": None,
+                        }
+                    ],
                 }
                 fin = {
-                    "id": "c1", "object": "chat.completion.chunk", "created": 1, "model": "m",
+                    "id": "c1",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": "m",
                     "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-                    "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+                    "usage": {
+                        "prompt_tokens": 3,
+                        "completion_tokens": 2,
+                        "total_tokens": 5,
+                    },
                 }
                 for c in (second, fin):
                     self.wfile.write(f"data: {json.dumps(c)}\n\n".encode())
@@ -198,10 +222,14 @@ def test_inline_stream_stale_detector_still_fires_from_monitor_thread(
         interruptible_streaming_api_call(agent, dict(_KW))
     elapsed = time.time() - started
 
-    assert elapsed < 6.0, f"inline stream was not bounded by the stale detector ({elapsed:.1f}s)"
+    assert elapsed < 6.0, (
+        f"inline stream was not bounded by the stale detector ({elapsed:.1f}s)"
+    )
 
 
-def test_inline_stream_cross_thread_interrupt_aborts_promptly(stalling_wire, monkeypatch):
+def test_inline_stream_cross_thread_interrupt_aborts_promptly(
+    stalling_wire, monkeypatch
+):
     """``AIAgent.interrupt()`` from another thread (cron watchdog, delegation
     stall monitor) must abort the inline stream and surface InterruptedError
     — the property the direct_api_call path guaranteed via
@@ -234,11 +262,14 @@ def test_inline_stream_cross_thread_interrupt_aborts_promptly(stalling_wire, mon
 
 def test_should_use_direct_api_call_gate_is_unchanged():
     """The routing predicate itself is untouched — only what it routes to."""
+
     def mk(platform, api_mode="chat_completions", provider="openrouter"):
         return SimpleNamespace(platform=platform, api_mode=api_mode, provider=provider)
 
     assert should_use_direct_api_call(mk("cron")) is True
     assert should_use_direct_api_call(mk("subagent")) is True
     assert should_use_direct_api_call(mk("cli")) is False
-    assert should_use_direct_api_call(mk("cron", api_mode="anthropic_messages")) is False
+    assert (
+        should_use_direct_api_call(mk("cron", api_mode="anthropic_messages")) is False
+    )
     assert should_use_direct_api_call(mk("cron", provider="moa")) is False

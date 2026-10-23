@@ -15,7 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-__all__ = ["CATALOG", "CatalogEntry", "classify_items_script_path", "seed_catalog_suggestions"]
+__all__ = [
+    "CATALOG",
+    "CatalogEntry",
+    "classify_items_script_path",
+    "seed_catalog_suggestions",
+]
 
 
 def classify_items_script_path() -> str:
@@ -27,7 +32,7 @@ def classify_items_script_path() -> str:
 class CatalogEntry:
     """A curated starter automation offered as a suggestion."""
 
-    key: str                 # stable dedup key (never re-offered once dismissed)
+    key: str  # stable dedup key (never re-offered once dismissed)
     title: str
     description: str
     job_spec: dict[str, Any]  # kwargs for cron.jobs.create_job
@@ -116,7 +121,8 @@ CATALOG: list[CatalogEntry] = [
 
 
 def seed_catalog_suggestions(
-    *, add_fn: Optional[Callable[..., Optional[dict[str, Any]]]] = None,
+    *,
+    add_fn: Optional[Callable[..., Optional[dict[str, Any]]]] = None,
     keys: Optional[list[str]] = None,
 ) -> list[dict[str, Any]]:
     """Register catalog entries as pending suggestions.
@@ -135,8 +141,11 @@ def seed_catalog_suggestions(
         if wanted is not None and entry.key not in wanted:
             continue
         rec = add_fn(
-            title=entry.title, description=entry.description, source="catalog",
-            job_spec=dict(entry.job_spec), dedup_key=entry.key,
+            title=entry.title,
+            description=entry.description,
+            source="catalog",
+            job_spec=dict(entry.job_spec),
+            dedup_key=entry.key,
         )
         if rec is not None:
             created.append(rec)

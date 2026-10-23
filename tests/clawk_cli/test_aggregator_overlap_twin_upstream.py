@@ -37,11 +37,15 @@ def test_built_in_row_keeps_models_when_user_row_is_same_upstream(twin_slug):
     # its custom:<aggregator> slug or, under any other name, by its upstream URL.
     rows = [
         _builtin_openrouter_row(["anthropic/claude-fable-5", "openai/gpt-6"]),
-        _user_row(twin_slug, "https://openrouter.ai/api/v1", [
-            "anthropic/claude-fable-5",
-            "openai/gpt-6",
-            "qwen/qwen-4-max",
-        ]),
+        _user_row(
+            twin_slug,
+            "https://openrouter.ai/api/v1",
+            [
+                "anthropic/claude-fable-5",
+                "openai/gpt-6",
+                "qwen/qwen-4-max",
+            ],
+        ),
     ]
     inventory._strip_aggregator_overlaps(rows)
     assert rows[0]["models"] == ["anthropic/claude-fable-5", "openai/gpt-6"]

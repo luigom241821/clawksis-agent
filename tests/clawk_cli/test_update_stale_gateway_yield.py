@@ -34,14 +34,23 @@ def _status_block(pids):
 
 
 @pytest.mark.parametrize("had_success_before_update", [False, True])
-def test_cron_status_reports_stale_code_yield_as_unhealthy(cron_home, had_success_before_update):
+def test_cron_status_reports_stale_code_yield_as_unhealthy(
+    cron_home, had_success_before_update
+):
     """Fresh heartbeat + persisted CronTickYielded == outage, whatever the success marker says."""
-    from cron.jobs import _current_cron_store, ensure_dirs, record_ticker_error, record_ticker_heartbeat
+    from cron.jobs import (
+        _current_cron_store,
+        ensure_dirs,
+        record_ticker_error,
+        record_ticker_heartbeat,
+    )
     from cron.scheduler import CronTickYielded
 
     ensure_dirs()
     if had_success_before_update:
-        (_current_cron_store().cron_dir / "ticker_last_success").write_text(str(time.time() - 600))
+        (_current_cron_store().cron_dir / "ticker_last_success").write_text(
+            str(time.time() - 600)
+        )
     exc = CronTickYielded("5eb99eb284", "2ed6387d87")
     record_ticker_error(f"{type(exc).__name__}: {exc}")
     record_ticker_heartbeat(success=False)
@@ -63,7 +72,9 @@ def test_cron_status_still_green_after_a_clean_tick(cron_home):
     assert "cron jobs will fire automatically" in _status_block([4242])
 
 
-@pytest.mark.skipif(not hasattr(signal, "SIGUSR1"), reason="POSIX drain-first restart signal")
+@pytest.mark.skipif(
+    not hasattr(signal, "SIGUSR1"), reason="POSIX drain-first restart signal"
+)
 def test_update_signals_proven_stale_gateway_survivor(cron_home, tmp_path):
     """A `stale` fleet-matrix row gets SIGUSR1 (request_restart); a `current` row is untouched."""
     from clawk_cli.update_cmd_fleet import _GatewayRestartOutcome
@@ -71,22 +82,43 @@ def test_update_signals_proven_stale_gateway_survivor(cron_home, tmp_path):
 
     marker = tmp_path / "got_sigusr1"
     child = subprocess.Popen(
-        [sys.executable, "-c",
-         "import signal, sys, time\n"
-         f"signal.signal(signal.SIGUSR1, lambda *_: (open({str(marker)!r}, 'w').write('x'), sys.exit(75)))\n"
-         "print('ready', flush=True)\n"
-         "time.sleep(120)"],
-        stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        [
+            sys.executable,
+            "-c",
+            "import signal, sys, time\n"
+            f"signal.signal(signal.SIGUSR1, lambda *_: (open({str(marker)!r}, 'w').write('x'), sys.exit(75)))\n"
+            "print('ready', flush=True)\n"
+            "time.sleep(120)",
+        ],
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
     )
     try:
         assert child.stdout.readline().strip() == "ready"
         restart = _GatewayRestartOutcome(
-            incomplete=True, phase_errors=[], pre_restart_gateway_pids=[child.pid], restarted_services=[],
-            failed_or_stale_units=[], relaunched_profiles=[], externally_supervised_profiles=[], killed_pids=set(),
+            incomplete=True,
+            phase_errors=[],
+            pre_restart_gateway_pids=[child.pid],
+            restarted_services=[],
+            failed_or_stale_units=[],
+            relaunched_profiles=[],
+            externally_supervised_profiles=[],
+            killed_pids=set(),
         )
         fleet = [
-            {"profile": "default", "pid": child.pid, "state": "stale", "code_sha": "a" * 40},
-            {"profile": "fresh", "pid": os.getpid(), "state": "current", "code_sha": "b" * 40},
+            {
+                "profile": "default",
+                "pid": child.pid,
+                "state": "stale",
+                "code_sha": "a" * 40,
+            },
+            {
+                "profile": "fresh",
+                "pid": os.getpid(),
+                "state": "current",
+                "code_sha": "b" * 40,
+            },
         ]
         with contextlib.redirect_stdout(io.StringIO()):
             signalled = signal_stale_fleet_survivors(fleet, restart, 10.0)
@@ -110,23 +142,45 @@ def test_verify_fleet_hands_stale_rows_to_survivor_signalling(monkeypatch):
     from clawk_cli import update_cmd
     from clawk_cli.update_cmd_fleet import _GatewayRestartOutcome
 
-    stale_fleet = [{"profile": "default", "pid": 4242, "state": "stale", "code_sha": "a" * 40}]
+    stale_fleet = [
+        {"profile": "default", "pid": 4242, "state": "stale", "code_sha": "a" * 40}
+    ]
     seen = {}
     monkeypatch.setattr(fleet_verify, "_print_legacy_units_warning", lambda: None)
-    monkeypatch.setattr(update_cmd, "_finish_dashboard_update_cleanup", lambda *a, **k: None)
+    monkeypatch.setattr(
+        update_cmd, "_finish_dashboard_update_cleanup", lambda *a, **k: None
+    )
     # The live post-update dashboard pass restarts a managed clawksis-dashboard unit.
-    monkeypatch.setattr("clawk_cli.update_cmd_maint._refresh_dashboard_after_update", lambda **k: set())
-    monkeypatch.setattr(update_cmd, "_surviving_pre_update_serve_runtimes", lambda plan: [])
-    monkeypatch.setattr(fleet_verify, "_collect_fleet_snapshot", lambda restart, expected: stale_fleet)
-    monkeypatch.setattr(surv, "signal_stale_fleet_survivors",
-                        lambda fleet, restart, budget: seen.setdefault("fleet", fleet) and [])
+    monkeypatch.setattr(
+        "clawk_cli.update_cmd_maint._refresh_dashboard_after_update", lambda **k: set()
+    )
+    monkeypatch.setattr(
+        update_cmd, "_surviving_pre_update_serve_runtimes", lambda plan: []
+    )
+    monkeypatch.setattr(
+        fleet_verify, "_collect_fleet_snapshot", lambda restart, expected: stale_fleet
+    )
+    monkeypatch.setattr(
+        surv,
+        "signal_stale_fleet_survivors",
+        lambda fleet, restart, budget: seen.setdefault("fleet", fleet) and [],
+    )
     restart = _GatewayRestartOutcome(
-        incomplete=False, phase_errors=[], pre_restart_gateway_pids=[4242], restarted_services=[],
-        failed_or_stale_units=[], relaunched_profiles=[], externally_supervised_profiles=[], killed_pids=set(),
+        incomplete=False,
+        phase_errors=[],
+        pre_restart_gateway_pids=[4242],
+        restarted_services=[],
+        failed_or_stale_units=[],
+        relaunched_profiles=[],
+        externally_supervised_profiles=[],
+        killed_pids=set(),
     )
     with contextlib.redirect_stdout(io.StringIO()):
         fleet_verify._verify_fleet_after_update(
-            restart, _pre_update_plan=None, _windows_gateway_resume=None, update_complete=True,
+            restart,
+            _pre_update_plan=None,
+            _windows_gateway_resume=None,
+            update_complete=True,
         )
     # Contract C3: was SystemExit(1); now flagged incomplete (owed restart, marker kept).
     assert restart.incomplete

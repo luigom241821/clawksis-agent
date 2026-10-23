@@ -1,4 +1,5 @@
 """Additive transport membership for shared live sessions."""
+
 from __future__ import annotations
 
 import threading
@@ -10,11 +11,13 @@ _session_transport_lock = threading.RLock()
 
 def _transport_is_live_peer(transport) -> bool:
     """Exclude the process fallback sink, parked sentinel, and closed peers."""
-    return (transport is not None
-            and transport is not _detached_ws_transport
-            and transport is not _stdio_transport
-            and not isinstance(transport, (_DropTransport, StdioTransport))
-            and not _transport_is_dead(transport))
+    return (
+        transport is not None
+        and transport is not _detached_ws_transport
+        and transport is not _stdio_transport
+        and not isinstance(transport, (_DropTransport, StdioTransport))
+        and not _transport_is_dead(transport)
+    )
 
 
 def _session_transport_contains(session: dict | None, transport) -> bool:
@@ -22,12 +25,15 @@ def _session_transport_contains(session: dict | None, transport) -> bool:
         return False
     existing = session.get("transport")
     return existing is transport or (
-        isinstance(existing, FanoutTransport) and existing.contains(transport))
+        isinstance(existing, FanoutTransport) and existing.contains(transport)
+    )
 
 
 def _session_live_transports(session: dict | None) -> list:
     existing = (session or {}).get("transport")
-    peers = existing.transports() if isinstance(existing, FanoutTransport) else [existing]
+    peers = (
+        existing.transports() if isinstance(existing, FanoutTransport) else [existing]
+    )
     return [peer for peer in peers if _transport_is_live_peer(peer)]
 
 
@@ -63,8 +69,15 @@ def _session_client_answers_requests(sid: str) -> bool:
     transports never count."""
     from tui_gateway import server_requests
     from tui_gateway.ws import WSTransport
-    clients = [peer for peer in _session_live_transports(_sessions.get(sid)) if isinstance(peer, WSTransport)]
-    return not clients or any(server_requests.answers_requests(peer) for peer in clients)
+
+    clients = [
+        peer
+        for peer in _session_live_transports(_sessions.get(sid))
+        if isinstance(peer, WSTransport)
+    ]
+    return not clients or any(
+        server_requests.answers_requests(peer) for peer in clients
+    )
 
 
 def _session_answering_clients(sid: str) -> list:
@@ -72,8 +85,12 @@ def _session_answering_clients(sid: str) -> list:
     the windows whose unanimous "not shown here" settles a window-owned request (server_requests.py)."""
     from tui_gateway import server_requests
     from tui_gateway.ws import WSTransport
-    return [peer for peer in _session_live_transports(_sessions.get(sid))
-            if isinstance(peer, WSTransport) and server_requests.answers_requests(peer)]
+
+    return [
+        peer
+        for peer in _session_live_transports(_sessions.get(sid))
+        if isinstance(peer, WSTransport) and server_requests.answers_requests(peer)
+    ]
 
 
 def _warn_foreign_login(session: dict, transport) -> None:
@@ -84,8 +101,12 @@ def _warn_foreign_login(session: dict, transport) -> None:
         return
     creator = _session_auth_user_id(session)
     if creator != attaching:
-        logger.warning("Session %s keeps the user id %s it was created with; a client logged in as %s attached",
-                       session.get("session_key"), creator or "(none)", attaching)
+        logger.warning(
+            "Session %s keeps the user id %s it was created with; a client logged in as %s attached",
+            session.get("session_key"),
+            creator or "(none)",
+            attaching,
+        )
 
 
 def _attach_session_transport(session: dict | None, transport) -> bool:
@@ -96,7 +117,10 @@ def _attach_session_transport(session: dict | None, transport) -> bool:
         if isinstance(transport, FanoutTransport):
             # Snapshot and attach share detach's lock: a queued fanout cannot
             # resurrect a still-open peer removed during flattening.
-            attached = [_attach_session_transport(session, peer) for peer in transport.transports()]
+            attached = [
+                _attach_session_transport(session, peer)
+                for peer in transport.transports()
+            ]
             return any(attached)
         existing = session.get("transport")
         if _transport_is_dead(transport):
@@ -147,12 +171,18 @@ def _detach_transport_from_sessions(transport) -> list[tuple[str, dict]]:
         attached = []
         for sid, session in _sessions.items():
             existing = session.get("transport")
-            if (existing is transport
-                    or isinstance(existing, FanoutTransport) and existing.contains(transport)
-                    or transport in (session.get("viewers") or {})):
+            if (
+                existing is transport
+                or isinstance(existing, FanoutTransport)
+                and existing.contains(transport)
+                or transport in (session.get("viewers") or {})
+            ):
                 attached.append((sid, session))
-    return [(sid, session) for sid, session in attached
-            if not _detach_session_transport(session, transport)]
+    return [
+        (sid, session)
+        for sid, session in attached
+        if not _detach_session_transport(session, transport)
+    ]
 
 
 def register(server) -> None:

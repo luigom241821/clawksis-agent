@@ -7,7 +7,11 @@ import pytest
 
 import tools.approval as approval_module
 from tools import approval_context
-from tools.approval import approve_session, check_all_command_guards, detect_dangerous_command
+from tools.approval import (
+    approve_session,
+    check_all_command_guards,
+    detect_dangerous_command,
+)
 from tools.approval_context import set_current_session_key, reset_current_session_key
 
 
@@ -31,7 +35,12 @@ def _clean_state():
     approval_module._pending.clear()
     approval_module._permanent_approved.clear()
     saved = {}
-    for k in ("CLAWK_INTERACTIVE", "CLAWK_GATEWAY_SESSION", "CLAWK_EXEC_ASK", "CLAWK_YOLO_MODE"):
+    for k in (
+        "CLAWK_INTERACTIVE",
+        "CLAWK_GATEWAY_SESSION",
+        "CLAWK_EXEC_ASK",
+        "CLAWK_YOLO_MODE",
+    ):
         if k in os.environ:
             saved[k] = os.environ.pop(k)
     yield
@@ -40,7 +49,12 @@ def _clean_state():
     approval_module._permanent_approved.clear()
     for k, v in saved.items():
         os.environ[k] = v
-    for k in ("CLAWK_INTERACTIVE", "CLAWK_GATEWAY_SESSION", "CLAWK_EXEC_ASK", "CLAWK_YOLO_MODE"):
+    for k in (
+        "CLAWK_INTERACTIVE",
+        "CLAWK_GATEWAY_SESSION",
+        "CLAWK_EXEC_ASK",
+        "CLAWK_YOLO_MODE",
+    ):
         os.environ.pop(k, None)
 
 
@@ -48,11 +62,11 @@ def _clean_state():
 # Container skip
 # ---------------------------------------------------------------------------
 
+
 class TestContainerSkip:
     def test_docker_skips_both(self):
         result = check_all_command_guards("rm -rf /", "docker")
         assert result["approved"] is True
-
 
     def test_daytona_skips_both(self):
         result = check_all_command_guards("rm -rf /", "daytona")
@@ -66,6 +80,7 @@ class TestContainerSkip:
 # ---------------------------------------------------------------------------
 # Interactive CLI prompt
 # ---------------------------------------------------------------------------
+
 
 class TestCliPrompt:
     def test_safe_command_runs_without_prompt(self):
@@ -89,8 +104,12 @@ class TestCliPrompt:
         session_key = "guard-session"
         token = set_current_session_key(session_key)
         try:
-            assert check_all_command_guards("rm -rf /tmp/a", "local", approval_callback=cb)["approved"]
-            assert check_all_command_guards("rm -rf /tmp/b", "local", approval_callback=cb)["approved"]
+            assert check_all_command_guards(
+                "rm -rf /tmp/a", "local", approval_callback=cb
+            )["approved"]
+            assert check_all_command_guards(
+                "rm -rf /tmp/b", "local", approval_callback=cb
+            )["approved"]
         finally:
             reset_current_session_key(token)
         cb.assert_called_once()
@@ -102,7 +121,9 @@ class TestCliPrompt:
         try:
             approve_session(session_key, detect_dangerous_command("rm -rf /tmp/x")[1])
             cb = MagicMock()
-            assert check_all_command_guards("rm -rf /tmp/x", "local", approval_callback=cb)["approved"]
+            assert check_all_command_guards(
+                "rm -rf /tmp/x", "local", approval_callback=cb
+            )["approved"]
         finally:
             reset_current_session_key(token)
         cb.assert_not_called()
@@ -116,6 +137,7 @@ class TestCliPrompt:
 # Manual command_allowlist glob entries
 # ---------------------------------------------------------------------------
 
+
 class TestCommandAllowlistGlobs:
     def test_glob_allowlist_bypasses_combined_guard(self):
         os.environ["CLAWK_INTERACTIVE"] = "1"
@@ -127,7 +149,6 @@ class TestCommandAllowlistGlobs:
         )
 
         assert result["approved"] is True
-
 
     @pytest.mark.parametrize(
         "command",
@@ -150,6 +171,7 @@ class TestCommandAllowlistGlobs:
 # ---------------------------------------------------------------------------
 # Gateway (TUI / desktop) approval notify payload carries allow_permanent
 # ---------------------------------------------------------------------------
+
 
 class TestGatewayApprovalAllowPermanent:
     """The gateway emits the approval prompt to the renderer via the notify

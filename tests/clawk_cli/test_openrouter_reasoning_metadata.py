@@ -19,7 +19,10 @@ class TestParseReasoningCapabilities:
         item = {
             "id": "nvidia/nemotron-3-ultra",
             "supported_parameters": ["temperature", "tools", "reasoning"],
-            "reasoning": {"mandatory": False, "supported_efforts": ["low", "medium", "high"]},
+            "reasoning": {
+                "mandatory": False,
+                "supported_efforts": ["low", "medium", "high"],
+            },
         }
         caps = parse_openrouter_reasoning_capabilities(item)
         assert caps == {
@@ -67,7 +70,10 @@ class TestParseReasoningCapabilities:
 
     def test_unknown_when_supported_parameters_missing(self):
         assert parse_openrouter_reasoning_capabilities({"id": "x"}) is None
-        assert parse_openrouter_reasoning_capabilities({"supported_parameters": "bad"}) is None
+        assert (
+            parse_openrouter_reasoning_capabilities({"supported_parameters": "bad"})
+            is None
+        )
         assert parse_openrouter_reasoning_capabilities("not-a-dict") is None
 
     def test_effort_list_normalized_and_deduped(self):
@@ -115,24 +121,32 @@ class TestClampReasoningEffort:
 class TestOpenRouterModelReasoningCapabilities:
     def _prime_cache(self, monkeypatch, caps_by_id):
         import clawk_cli.models as models_mod
+
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", caps_by_id)
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
 
-
     def test_unlisted_model_returns_none(self, monkeypatch):
-        from clawk_cli.models_reasoning_caps import openrouter_model_reasoning_capabilities
+        from clawk_cli.models_reasoning_caps import (
+            openrouter_model_reasoning_capabilities,
+        )
+
         self._prime_cache(monkeypatch, {"a/b": {"supports_reasoning": True}})
         assert openrouter_model_reasoning_capabilities("private/custom") is None
 
     def test_empty_model_returns_none(self, monkeypatch):
-        from clawk_cli.models_reasoning_caps import openrouter_model_reasoning_capabilities
+        from clawk_cli.models_reasoning_caps import (
+            openrouter_model_reasoning_capabilities,
+        )
+
         self._prime_cache(monkeypatch, {"a/b": {"supports_reasoning": True}})
         assert openrouter_model_reasoning_capabilities("") is None
         assert openrouter_model_reasoning_capabilities(None) is None
 
     def test_catalog_unreachable_returns_none_and_rate_limits(self, monkeypatch):
         import clawk_cli.models as models_mod
-        from clawk_cli.models_reasoning_caps import openrouter_model_reasoning_capabilities
+        from clawk_cli.models_reasoning_caps import (
+            openrouter_model_reasoning_capabilities,
+        )
 
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", None)
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
@@ -150,7 +164,9 @@ class TestOpenRouterModelReasoningCapabilities:
 
     def test_cache_only_by_default_never_fetches(self, monkeypatch):
         import clawk_cli.models as models_mod
-        from clawk_cli.models_reasoning_caps import openrouter_model_reasoning_capabilities
+        from clawk_cli.models_reasoning_caps import (
+            openrouter_model_reasoning_capabilities,
+        )
 
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", None)
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
@@ -168,6 +184,7 @@ class TestSupportsReasoningExtraBodyMetadataGate:
 
     def _make_agent(self, model):
         from run_agent import AIAgent
+
         agent = AIAgent(
             api_key="test-key",
             base_url="https://openrouter.ai/api/v1",
@@ -180,33 +197,46 @@ class TestSupportsReasoningExtraBodyMetadataGate:
 
     def test_metadata_positive_overrides_static_list(self, monkeypatch):
         import clawk_cli.models as models_mod
+
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {
-            # nvidia/ is NOT in the static prefix allowlist (#75386) —
-            # metadata must make it work without a code change.
-            "nvidia/nemotron-3-ultra": {
-                "supports_reasoning": True,
-                "supported_efforts": ["low", "medium", "high"],
-                "mandatory": False,
+        monkeypatch.setattr(
+            models_mod,
+            "_openrouter_reasoning_caps_cache",
+            {
+                # nvidia/ is NOT in the static prefix allowlist (#75386) —
+                # metadata must make it work without a code change.
+                "nvidia/nemotron-3-ultra": {
+                    "supports_reasoning": True,
+                    "supported_efforts": ["low", "medium", "high"],
+                    "mandatory": False,
+                },
             },
-        })
+        )
         agent = self._make_agent("nvidia/nemotron-3-ultra")
         assert agent._supports_reasoning_extra_body() is True
 
     def test_metadata_negative_overrides_static_list(self, monkeypatch):
         import clawk_cli.models as models_mod
+
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {
-            # openai/ IS in the static prefix list, but the catalog says this
-            # route rejects reasoning controls — the definitive negative wins.
-            "openai/gpt-4o-mini": {"supports_reasoning": False},
-        })
+        monkeypatch.setattr(
+            models_mod,
+            "_openrouter_reasoning_caps_cache",
+            {
+                # openai/ IS in the static prefix list, but the catalog says this
+                # route rejects reasoning controls — the definitive negative wins.
+                "openai/gpt-4o-mini": {"supports_reasoning": False},
+            },
+        )
         agent = self._make_agent("openai/gpt-4o-mini")
         assert agent._supports_reasoning_extra_body() is False
 
     def test_unknown_falls_back_to_static_prefixes(self, monkeypatch):
         import clawk_cli.models as models_mod
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {"a/b": None})
+
+        monkeypatch.setattr(
+            models_mod, "_openrouter_reasoning_caps_cache", {"a/b": None}
+        )
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
         # deepseek/ is in the static list; unlisted in catalog → fallback True.
         agent = self._make_agent("deepseek/deepseek-chat")
@@ -222,13 +252,17 @@ class TestOpenRouterProfileClamp:
         from providers import get_provider_profile
 
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {
-            "qwen/qwen3-plus": {
-                "supports_reasoning": True,
-                "supported_efforts": ["low", "medium", "high"],
-                "mandatory": False,
+        monkeypatch.setattr(
+            models_mod,
+            "_openrouter_reasoning_caps_cache",
+            {
+                "qwen/qwen3-plus": {
+                    "supports_reasoning": True,
+                    "supported_efforts": ["low", "medium", "high"],
+                    "mandatory": False,
+                },
             },
-        })
+        )
         profile = get_provider_profile("openrouter")
         assert profile is not None
         extra_body, _top = profile.build_api_kwargs_extras(
@@ -242,7 +276,9 @@ class TestOpenRouterProfileClamp:
         import clawk_cli.models as models_mod
         from providers import get_provider_profile
 
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {"a/b": None})
+        monkeypatch.setattr(
+            models_mod, "_openrouter_reasoning_caps_cache", {"a/b": None}
+        )
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
         profile = get_provider_profile("openrouter")
         assert profile is not None
@@ -261,21 +297,33 @@ class TestOpenRouterProfileClamp:
         from providers import get_provider_profile
 
         monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_failed_at", None)
-        monkeypatch.setattr(models_mod, "_openrouter_reasoning_caps_cache", {
-            "z-ai/glm-5.3-flash": {
-                "supports_reasoning": True,
-                "supported_efforts": ["max", "high", "low"],
-                "mandatory": True,
+        monkeypatch.setattr(
+            models_mod,
+            "_openrouter_reasoning_caps_cache",
+            {
+                "z-ai/glm-5.3-flash": {
+                    "supports_reasoning": True,
+                    "supported_efforts": ["max", "high", "low"],
+                    "mandatory": True,
+                },
+                "z-ai/glm-5.1": {
+                    "supports_reasoning": True,
+                    "supported_efforts": None,
+                    "mandatory": False,
+                },
             },
-            "z-ai/glm-5.1": {"supports_reasoning": True, "supported_efforts": None, "mandatory": False},
-        })
+        )
         profile = get_provider_profile("openrouter")
         for disable in ({"enabled": False}, {"enabled": True, "effort": "none"}):
             extra_body, _top = profile.build_api_kwargs_extras(
-                reasoning_config=disable, supports_reasoning=True, model="z-ai/glm-5.3-flash",
+                reasoning_config=disable,
+                supports_reasoning=True,
+                model="z-ai/glm-5.3-flash",
             )
             assert "reasoning" not in extra_body, disable
         extra_body, _top = profile.build_api_kwargs_extras(
-            reasoning_config={"enabled": False}, supports_reasoning=True, model="z-ai/glm-5.1",
+            reasoning_config={"enabled": False},
+            supports_reasoning=True,
+            model="z-ai/glm-5.1",
         )
         assert extra_body["reasoning"] == {"enabled": False}

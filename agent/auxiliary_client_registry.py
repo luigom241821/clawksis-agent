@@ -6,6 +6,7 @@ registry twin of the facade's ``_EXPLICIT_PROVIDER_BRANCHES``. Arms late-import 
 facade (siblings never form a module-level cycle) so the seam every test patches —
 ``agent.auxiliary_client.*`` — is the module production reads.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,14 +25,22 @@ _LOGGED_MINIMAX_UNEXPECTED_KEYS: set = set()
 
 def _resolve_vertex_arm(req: _ResolveRequest) -> _ResolveResult:
     from agent.auxiliary_client import _build_vertex_client, _route_client
+
     client, final_model = _build_vertex_client(req.provider, req.model)
-    return _route_client(req, client, final_model) if client is not None else (None, None)
+    return (
+        _route_client(req, client, final_model) if client is not None else (None, None)
+    )
 
 
 def _resolve_bedrock_arm(req: _ResolveRequest) -> _ResolveResult:
     from agent.auxiliary_client import _build_bedrock_client, _route_client
-    client, final_model = _build_bedrock_client(req.provider, req.model, raw_codex=req.raw_codex)
-    return _route_client(req, client, final_model) if client is not None else (None, None)
+
+    client, final_model = _build_bedrock_client(
+        req.provider, req.model, raw_codex=req.raw_codex
+    )
+    return (
+        _route_client(req, client, final_model) if client is not None else (None, None)
+    )
 
 
 def _log_once_debug(seen: set, key: str, msg: str, *args: object) -> None:
@@ -54,11 +63,18 @@ def _resolve_minimax_oauth_arm(req: _ResolveRequest) -> _ResolveResult:
     from clawk_cli.auth_constants import AuthError
 
     from agent.auxiliary_client import (
-        AnthropicAuxiliaryClient, _AuxProbeClientStub, _aux_probe_active,
-        _get_aux_model_for_provider, _normalize_resolved_model, _route_client,
+        AnthropicAuxiliaryClient,
+        _AuxProbeClientStub,
+        _aux_probe_active,
+        _get_aux_model_for_provider,
+        _normalize_resolved_model,
+        _route_client,
     )
     from agent.anthropic_credentials import anthropic_route_is_oauth
-    from clawk_cli.auth import get_provider_auth_state, resolve_minimax_oauth_runtime_credentials
+    from clawk_cli.auth import (
+        get_provider_auth_state,
+        resolve_minimax_oauth_runtime_credentials,
+    )
 
     # Probe mode answers "resolvable?" for availability gates and must not touch the
     # network: read the raw persisted state (access_token + inference_base_url present →
@@ -66,15 +82,23 @@ def _resolve_minimax_oauth_arm(req: _ResolveRequest) -> _ResolveResult:
     # credential_pool.py::_seed_minimax_singleton).
     if _aux_probe_active():
         state = get_provider_auth_state("minimax-oauth")
-        base_url = str((state or {}).get("inference_base_url") or "").strip().rstrip("/")
+        base_url = (
+            str((state or {}).get("inference_base_url") or "").strip().rstrip("/")
+        )
         if not ((state or {}).get("access_token") and base_url):
-            _log_once_debug(_LOGGED_MINIMAX_ABSENT_KEYS, "minimax-oauth",
-                            "resolve_provider_client: minimax-oauth not logged in")
+            _log_once_debug(
+                _LOGGED_MINIMAX_ABSENT_KEYS,
+                "minimax-oauth",
+                "resolve_provider_client: minimax-oauth not logged in",
+            )
             return None, None
         final_model = _normalize_resolved_model(
-            req.model or _get_aux_model_for_provider(req.provider) or "MiniMax-M3", req.provider,
+            req.model or _get_aux_model_for_provider(req.provider) or "MiniMax-M3",
+            req.provider,
         )
-        return _route_client(req, _AuxProbeClientStub(api_key="", base_url=base_url), final_model)
+        return _route_client(
+            req, _AuxProbeClientStub(api_key="", base_url=base_url), final_model
+        )
 
     try:
         credentials = resolve_minimax_oauth_runtime_credentials(as_token_provider=True)
@@ -83,8 +107,12 @@ def _resolve_minimax_oauth_arm(req: _ResolveRequest) -> _ResolveResult:
         # "absent → (None, None), never an exception" (the aux ladder then falls through
         # to its Step-2 chain). Debug-once, like every other fall-through — a per-call
         # WARNING would recreate the #21521 log spam once a quarantine wipes the tokens.
-        _log_once_debug(_LOGGED_MINIMAX_ABSENT_KEYS, "minimax-oauth",
-                        "resolve_provider_client: minimax-oauth unavailable: %s", exc)
+        _log_once_debug(
+            _LOGGED_MINIMAX_ABSENT_KEYS,
+            "minimax-oauth",
+            "resolve_provider_client: minimax-oauth unavailable: %s",
+            exc,
+        )
         return None, None
     except Exception as exc:
         # Deliberate boundary (BLE001): a genuinely unexpected failure still ends the arm
@@ -93,31 +121,45 @@ def _resolve_minimax_oauth_arm(req: _ResolveRequest) -> _ResolveResult:
         if "minimax-oauth" not in _LOGGED_MINIMAX_UNEXPECTED_KEYS:
             _LOGGED_MINIMAX_UNEXPECTED_KEYS.add("minimax-oauth")
             logger.warning(
-                "resolve_provider_client: unexpected minimax-oauth resolution failure: %s", exc,
-                exc_info=True)
+                "resolve_provider_client: unexpected minimax-oauth resolution failure: %s",
+                exc,
+                exc_info=True,
+            )
         return None, None
     token_provider = credentials.get("api_key")
     base_url = str(credentials.get("base_url") or "").strip().rstrip("/")
     if not callable(token_provider) or not base_url:
-        _log_once_debug(_LOGGED_MINIMAX_ABSENT_KEYS, "minimax-oauth",
-                        "resolve_provider_client: minimax-oauth credentials incomplete")
+        _log_once_debug(
+            _LOGGED_MINIMAX_ABSENT_KEYS,
+            "minimax-oauth",
+            "resolve_provider_client: minimax-oauth credentials incomplete",
+        )
         return None, None
     final_model = _normalize_resolved_model(
-        req.model or _get_aux_model_for_provider(req.provider) or "MiniMax-M3", req.provider,
+        req.model or _get_aux_model_for_provider(req.provider) or "MiniMax-M3",
+        req.provider,
     )
-    from agent.anthropic_adapter import build_anthropic_client  # SDK-absent boundary, like _try_anthropic
+    from agent.anthropic_adapter import (
+        build_anthropic_client,
+    )  # SDK-absent boundary, like _try_anthropic
+
     try:
         real_client = build_anthropic_client(token_provider, base_url)
     except ImportError:
         return None, None
     client = AnthropicAuxiliaryClient(
-        real_client, final_model, token_provider, base_url,
-        is_oauth=anthropic_route_is_oauth(base_url, token_provider))
+        real_client,
+        final_model,
+        token_provider,
+        base_url,
+        is_oauth=anthropic_route_is_oauth(base_url, token_provider),
+    )
     return _route_client(req, client, final_model)
 
 
 def _resolve_plugin_oauth_arm(req: _ResolveRequest) -> _ResolveResult:
     from agent.auxiliary_plugin_oauth import resolve_plugin_oauth_client
+
     return resolve_plugin_oauth_client(req)
 
 

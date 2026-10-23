@@ -93,7 +93,9 @@ _FAKE_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2ln"
 
 def test_ambient_get_when_no_client_credentials(monkeypatch):
     """token_url without client_id/secret selects a plain GET, not a raise."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     captured = {}
 
@@ -114,7 +116,9 @@ def test_ambient_get_when_no_client_credentials(monkeypatch):
 
 def test_ambient_accepts_json_envelope(monkeypatch):
     """Ambient endpoints that return {"access_token": ...} JSON also work."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     def fake_urlopen(req, timeout=None):
         return io.BytesIO(json.dumps({"access_token": _FAKE_JWT}).encode())
@@ -138,7 +142,9 @@ def test_ambient_rejects_non_string_envelope_values(monkeypatch, envelope):
     """access_token in a JSON envelope must be a non-empty STRING — the same
     contract as the client_credentials path. No str() coercion of numbers,
     booleans, or objects into 'tokens'."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     def fake_urlopen(req, timeout=None):
         return io.BytesIO(json.dumps(envelope).encode())
@@ -150,7 +156,9 @@ def test_ambient_rejects_non_string_envelope_values(monkeypatch, envelope):
 
 def test_ambient_rejects_non_token_body(monkeypatch):
     """A body that is neither a JWT-ish string nor a token envelope fails loudly."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     def fake_urlopen(req, timeout=None):
         return io.BytesIO(b"<html>404 not found</html>")
@@ -161,7 +169,9 @@ def test_ambient_rejects_non_token_body(monkeypatch):
 
 
 def test_ambient_rejects_empty_body(monkeypatch):
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     def fake_urlopen(req, timeout=None):
         return io.BytesIO(b"   \n")
@@ -175,9 +185,12 @@ def test_ambient_rejects_short_plaintext_error_words(monkeypatch):
     """A terse plain-text error body (e.g. 'unauthorized') must not be
     returned as a credential — it matches the base64url alphabet but is
     neither a JWT nor plausibly an opaque token."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
 
     for body in ("unauthorized", "error", "access_denied", "null", "forbidden"):
+
         def fake_urlopen(req, timeout=None, _b=body):
             return io.BytesIO(_b.encode())
 
@@ -188,7 +201,9 @@ def test_ambient_rejects_short_plaintext_error_words(monkeypatch):
 
 def test_ambient_accepts_long_opaque_token(monkeypatch):
     """Non-JWT opaque bearer tokens (long random strings) still work."""
-    monkeypatch.setenv("GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token")
+    monkeypatch.setenv(
+        "GATEWAY_RELAY_IDP_TOKEN_URL", "https://proxy.local/access-token"
+    )
     opaque = "v2_9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b"
 
     def fake_urlopen(req, timeout=None):

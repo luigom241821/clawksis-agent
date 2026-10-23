@@ -61,12 +61,21 @@ def homes(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_profile_configured_cwd", lambda _home: str(tmp_path))
     monkeypatch.setattr(server, "_enable_gateway_prompts", lambda: None)
     monkeypatch.setattr(server, "_schedule_agent_build", lambda *a, **k: None)
-    monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_schedule_session_cap_enforcement", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_maybe_schedule_auto_continue", lambda *a, **k: None)
     monkeypatch.setattr(server, "_default_session_cwd", lambda *a, **k: str(tmp_path))
     monkeypatch.setattr(server, "_child_run_active", lambda *a, **k: False)
     monkeypatch.setattr(
-        server, "_live_session_payload", lambda sid, session, **_k: {"session_id": sid, "message_count": 0, "messages": [], "info": {}}
+        server,
+        "_live_session_payload",
+        lambda sid, session, **_k: {
+            "session_id": sid,
+            "message_count": 0,
+            "messages": [],
+            "info": {},
+        },
     )
     known = set(server._sessions)
     yield homes
@@ -76,7 +85,9 @@ def homes(monkeypatch, tmp_path):
 
 
 def _resume(**params):
-    return server.handle_request({"id": "1", "method": "session.resume", "params": params})
+    return server.handle_request(
+        {"id": "1", "method": "session.resume", "params": params}
+    )
 
 
 def _register_live(sid: str, profile_home) -> dict:
@@ -104,5 +115,11 @@ def test_launch_profile_still_matches_records_without_profile_home(homes):
     _register_live("live-launch", None)
     _register_live("live-a", homes["a"])
 
-    assert _resume(session_id="s1", source="desktop")["result"]["session_id"] == "live-launch"
-    assert _resume(session_id="s1", profile="a", source="desktop")["result"]["session_id"] == "live-a"
+    assert (
+        _resume(session_id="s1", source="desktop")["result"]["session_id"]
+        == "live-launch"
+    )
+    assert (
+        _resume(session_id="s1", profile="a", source="desktop")["result"]["session_id"]
+        == "live-a"
+    )

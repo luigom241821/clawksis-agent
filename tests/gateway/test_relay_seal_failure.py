@@ -113,11 +113,17 @@ class TestSealTransportError:
         t = FlakyTransport(raise_on=("seal", "send"))
         adapter = _armed_adapter(t)
         cfg = StreamConsumerConfig(
-            transport="auto", chat_type="dm",
-            edit_interval=0.01, buffer_threshold=1, cursor="",
+            transport="auto",
+            chat_type="dm",
+            edit_interval=0.01,
+            buffer_threshold=1,
+            cursor="",
         )
         sc = GatewayStreamConsumer(
-            adapter, "C1", cfg, metadata={"thread_ts": "1700.3"},
+            adapter,
+            "C1",
+            cfg,
+            metadata={"thread_ts": "1700.3"},
         )
         task = asyncio.create_task(sc.run())
         sc.on_delta("complete answer")

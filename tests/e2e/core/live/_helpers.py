@@ -29,20 +29,24 @@ import pytest
 
 # Snapshot BEFORE tests/conftest.py::_hermetic_environment strips credentials.
 LIVE_KEY_VARS = (
-    "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "NOUS_API_KEY",
-    "OPENAI_API_KEY", "GEMINI_API_KEY", "XAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "NOUS_API_KEY",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "XAI_API_KEY",
 )
 _LIVE_KEYS: dict[str, str] = {
-    name: os.environ[name].strip() for name in LIVE_KEY_VARS if os.environ.get(name, "").strip()
+    name: os.environ[name].strip()
+    for name in LIVE_KEY_VARS
+    if os.environ.get(name, "").strip()
 }
 
 LOOKUP_VALUES = {"alpha": "ZEBRA-7731", "beta": "OTTER-2204", "gamma": "HERON-5918"}
 TOOL_NAME = "live_lookup"
 TOOLSET = "live_probe"
 
-TURN1 = (
-    f'Call the {TOOL_NAME} tool with key "alpha", then reply with only the value it returned.'
-)
+TURN1 = f'Call the {TOOL_NAME} tool with key "alpha", then reply with only the value it returned.'
 TURN2 = (
     f'Call {TOOL_NAME} for key "beta" AND for key "gamma". Issue BOTH calls in parallel in a '
     "single response (two tool calls in one message), then reply with only the two values."
@@ -55,9 +59,22 @@ TURN3 = (
 # Text that must never reach the user: reasoning tags, DeepSeek DSML, chat-template
 # control tokens, raw tool-call JSON / XML.
 LEAK_MARKERS = (
-    "<think>", "</think>", "<thinking>", "</thinking>", "DSML", "<|", "|>",
-    "<tool_call", "</tool_call>", "<function", "</function", '"tool_calls"',
-    '"arguments"', '{"key"', "<invoke", "antml",
+    "<think>",
+    "</think>",
+    "<thinking>",
+    "</thinking>",
+    "DSML",
+    "<|",
+    "|>",
+    "<tool_call",
+    "</tool_call>",
+    "<function",
+    "</function",
+    '"tool_calls"',
+    '"arguments"',
+    '{"key"',
+    "<invoke",
+    "antml",
 )
 
 # Per-test spend guard (tokens, all buckets). A regression that loops or re-sends
@@ -85,35 +102,119 @@ class LiveCase:
 # retired slug fails the listing test loudly instead of 404ing mid-conversation.
 # Override with CLAWK_LIVE_MODEL_<ID> (upper-cased, '-' -> '_').
 LIVE_CASES: tuple[LiveCase, ...] = (
-    LiveCase("openrouter-openai", "openrouter", "OPENROUTER_API_KEY",
-             ("openai/gpt-4.1-nano", "openai/gpt-5-nano"), ("openrouter.ai",), 0.10, 0.40),
-    LiveCase("openrouter-anthropic", "openrouter", "OPENROUTER_API_KEY",
-             ("anthropic/claude-haiku-4.5", "anthropic/claude-3-haiku"), ("openrouter.ai",), 1.0, 5.0,
-             cache_expected=True, pad_tokens=4600),
-    LiveCase("openrouter-google", "openrouter", "OPENROUTER_API_KEY",
-             ("google/gemini-2.5-flash-lite", "google/gemini-3.1-flash-lite"), ("openrouter.ai",), 0.10, 0.40),
-    LiveCase("openrouter-xai", "openrouter", "OPENROUTER_API_KEY",
-             ("x-ai/grok-4.3", "x-ai/grok-build-0.1", "x-ai/grok-4.20"), ("openrouter.ai",), 1.25, 2.50),
-    LiveCase("openrouter-deepseek", "openrouter", "OPENROUTER_API_KEY",
-             ("deepseek/deepseek-v4-flash", "deepseek/deepseek-v4.1-flash", "deepseek/deepseek-chat-v3.1"),
-             ("openrouter.ai",), 0.10, 0.50),
-    LiveCase("openrouter-qwen", "openrouter", "OPENROUTER_API_KEY",
-             ("qwen/qwen3.7-flash", "qwen/qwen3.5-flash-02-23", "qwen/qwen3-235b-a22b-2507"),
-             ("openrouter.ai",), 0.10, 0.40),
-    LiveCase("nous-portal", "nous", "NOUS_API_KEY",
-             ("deepseek/deepseek-v4-flash", "qwen/qwen3.7-flash", "google/gemini-2.5-flash-lite",
-              "openai/gpt-4.1-nano"),
-             ("inference-api.nousresearch.com", "portal.nousresearch.com"), 0.30, 1.20),
-    LiveCase("anthropic-direct", "anthropic", "ANTHROPIC_API_KEY",
-             ("claude-haiku-4-5", "claude-haiku-4-5-20251001"), ("api.anthropic.com",), 1.0, 5.0,
-             cache_expected=True, pad_tokens=4600, native_anthropic=True),
-    LiveCase("openai-direct", "openai", "OPENAI_API_KEY",
-             ("gpt-5-nano", "gpt-5.4-nano", "gpt-4.1-nano"), ("api.openai.com",), 0.05, 0.40),
-    LiveCase("gemini-direct", "gemini", "GEMINI_API_KEY",
-             ("gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"),
-             ("generativelanguage.googleapis.com",), 0.25, 1.50),
-    LiveCase("xai-direct", "xai", "XAI_API_KEY",
-             ("grok-4.3", "grok-4.20-0309-reasoning", "grok-build-0.1"), ("api.x.ai",), 1.25, 2.50),
+    LiveCase(
+        "openrouter-openai",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        ("openai/gpt-4.1-nano", "openai/gpt-5-nano"),
+        ("openrouter.ai",),
+        0.10,
+        0.40,
+    ),
+    LiveCase(
+        "openrouter-anthropic",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        ("anthropic/claude-haiku-4.5", "anthropic/claude-3-haiku"),
+        ("openrouter.ai",),
+        1.0,
+        5.0,
+        cache_expected=True,
+        pad_tokens=4600,
+    ),
+    LiveCase(
+        "openrouter-google",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        ("google/gemini-2.5-flash-lite", "google/gemini-3.1-flash-lite"),
+        ("openrouter.ai",),
+        0.10,
+        0.40,
+    ),
+    LiveCase(
+        "openrouter-xai",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        ("x-ai/grok-4.3", "x-ai/grok-build-0.1", "x-ai/grok-4.20"),
+        ("openrouter.ai",),
+        1.25,
+        2.50,
+    ),
+    LiveCase(
+        "openrouter-deepseek",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        (
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4.1-flash",
+            "deepseek/deepseek-chat-v3.1",
+        ),
+        ("openrouter.ai",),
+        0.10,
+        0.50,
+    ),
+    LiveCase(
+        "openrouter-qwen",
+        "openrouter",
+        "OPENROUTER_API_KEY",
+        ("qwen/qwen3.7-flash", "qwen/qwen3.5-flash-02-23", "qwen/qwen3-235b-a22b-2507"),
+        ("openrouter.ai",),
+        0.10,
+        0.40,
+    ),
+    LiveCase(
+        "nous-portal",
+        "nous",
+        "NOUS_API_KEY",
+        (
+            "deepseek/deepseek-v4-flash",
+            "qwen/qwen3.7-flash",
+            "google/gemini-2.5-flash-lite",
+            "openai/gpt-4.1-nano",
+        ),
+        ("inference-api.nousresearch.com", "portal.nousresearch.com"),
+        0.30,
+        1.20,
+    ),
+    LiveCase(
+        "anthropic-direct",
+        "anthropic",
+        "ANTHROPIC_API_KEY",
+        ("claude-haiku-4-5", "claude-haiku-4-5-20251001"),
+        ("api.anthropic.com",),
+        1.0,
+        5.0,
+        cache_expected=True,
+        pad_tokens=4600,
+        native_anthropic=True,
+    ),
+    LiveCase(
+        "openai-direct",
+        "openai",
+        "OPENAI_API_KEY",
+        ("gpt-5-nano", "gpt-5.4-nano", "gpt-4.1-nano"),
+        ("api.openai.com",),
+        0.05,
+        0.40,
+    ),
+    LiveCase(
+        "gemini-direct",
+        "gemini",
+        "GEMINI_API_KEY",
+        ("gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-flash-lite-latest"),
+        ("generativelanguage.googleapis.com",),
+        0.25,
+        1.50,
+    ),
+    LiveCase(
+        "xai-direct",
+        "xai",
+        "XAI_API_KEY",
+        ("grok-4.3", "grok-4.20-0309-reasoning", "grok-build-0.1"),
+        ("api.x.ai",),
+        1.25,
+        2.50,
+    ),
 )
 
 LISTING_PROVIDERS: dict[str, str] = {c.provider: c.key_env for c in LIVE_CASES}
@@ -128,13 +229,20 @@ def live_key(env_name: str) -> str:
 
 
 def model_override(case: LiveCase) -> str | None:
-    return os.environ.get("CLAWK_LIVE_MODEL_" + case.id.upper().replace("-", "_")) or None
+    return (
+        os.environ.get("CLAWK_LIVE_MODEL_" + case.id.upper().replace("-", "_")) or None
+    )
 
 
 # HTTP wire recorder -----------------------------------------------------------
 
-_INFERENCE_SUFFIXES = ("/chat/completions", "/responses", "/messages", ":streamGenerateContent",
-                       ":generateContent")
+_INFERENCE_SUFFIXES = (
+    "/chat/completions",
+    "/responses",
+    "/messages",
+    ":streamGenerateContent",
+    ":generateContent",
+)
 
 
 @dataclass
@@ -165,12 +273,19 @@ class WireLog:
     def main_turn(self, start: int = 0) -> list[WireRecord]:
         """Inference requests of the agent loop itself (they carry the test tool),
         excluding auxiliary calls such as title generation."""
-        return [r for r in self.inference(start)
-                if isinstance(r.body, dict) and TOOL_NAME in json.dumps(r.body.get("tools") or "")]
+        return [
+            r
+            for r in self.inference(start)
+            if isinstance(r.body, dict)
+            and TOOL_NAME in json.dumps(r.body.get("tools") or "")
+        ]
 
     def describe(self, recs: list[WireRecord]) -> str:
-        return ", ".join(f"{r.method} {r.host}{r.path} -> {r.status}" + (f" {r.error}" if r.error else "")
-                         for r in recs)
+        return ", ".join(
+            f"{r.method} {r.host}{r.path} -> {r.status}"
+            + (f" {r.error}" if r.error else "")
+            for r in recs
+        )
 
     def status_counts(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -198,9 +313,20 @@ def install_wire_recorder(monkeypatch: pytest.MonkeyPatch, secret: str) -> WireL
         except Exception:
             return None
 
-    def _record(request: httpx.Request, status: int, body: Any, error: str = "") -> None:
-        log.records.append(WireRecord(request.method, request.url.host, request.url.path, status,
-                                      _carries(request), body, error.replace(secret, "<redacted>")[:400]))
+    def _record(
+        request: httpx.Request, status: int, body: Any, error: str = ""
+    ) -> None:
+        log.records.append(
+            WireRecord(
+                request.method,
+                request.url.host,
+                request.url.path,
+                status,
+                _carries(request),
+                body,
+                error.replace(secret, "<redacted>")[:400],
+            )
+        )
 
     def _error_text(resp: httpx.Response) -> str:
         # Error bodies are small and read eagerly by every SDK anyway; cache them on
@@ -242,11 +368,14 @@ def install_wire_recorder(monkeypatch: pytest.MonkeyPatch, secret: str) -> WireL
         return resp
 
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle_request)
-    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", handle_async_request)
+    monkeypatch.setattr(
+        httpx.AsyncHTTPTransport, "handle_async_request", handle_async_request
+    )
     return log
 
 
 # Deterministic test tool --------------------------------------------------------
+
 
 def register_lookup_tool() -> Callable[[], None]:
     from tools.registry import registry
@@ -256,13 +385,16 @@ def register_lookup_tool() -> Callable[[], None]:
         return json.dumps({"key": key, "value": LOOKUP_VALUES.get(key, "UNKNOWN")})
 
     registry.register(
-        name=TOOL_NAME, toolset=TOOLSET,
+        name=TOOL_NAME,
+        toolset=TOOLSET,
         schema={
             "name": TOOL_NAME,
             "description": "Look up the secret value stored under a key.",
             "parameters": {
                 "type": "object",
-                "properties": {"key": {"type": "string", "description": "alpha, beta or gamma"}},
+                "properties": {
+                    "key": {"type": "string", "description": "alpha, beta or gamma"}
+                },
                 "required": ["key"],
             },
         },
@@ -272,6 +404,7 @@ def register_lookup_tool() -> Callable[[], None]:
 
 
 # CLAWK_HOME wiring -------------------------------------------------------------
+
 
 def write_live_home(clawk_home: Path, provider: str, model: str) -> None:
     """Minimal real config: the provider under test, eager tools (no tool_search
@@ -285,7 +418,7 @@ def write_live_home(clawk_home: Path, provider: str, model: str) -> None:
         "  api_max_retries: 2\n"
         "tools:\n"
         "  tool_search:\n"
-        "    enabled: \"off\"\n",
+        '    enabled: "off"\n',
         encoding="utf-8",
     )
 
@@ -294,16 +427,22 @@ def pad_text(tokens: int) -> str:
     """~``tokens`` tokens of inert reference material (≈8 tokens per row)."""
     if tokens <= 0:
         return ""
-    rows = [f"R{i:04d} amber quartz lantern {i * 7 % 1000:03d}" for i in range(tokens // 8)]
+    rows = [
+        f"R{i:04d} amber quartz lantern {i * 7 % 1000:03d}" for i in range(tokens // 8)
+    ]
     return "\n\nReference table (ignore unless asked):\n" + "\n".join(rows)
 
 
 # Assertions helpers ----------------------------------------------------------------
 
+
 def assistant_tool_calls(messages: list[dict]) -> list[list[dict]]:
     """Tool-call groups (one list per assistant message) in order."""
-    return [list(m["tool_calls"]) for m in messages
-            if m.get("role") == "assistant" and m.get("tool_calls")]
+    return [
+        list(m["tool_calls"])
+        for m in messages
+        if m.get("role") == "assistant" and m.get("tool_calls")
+    ]
 
 
 def parse_tool_args(call: dict) -> dict:
@@ -339,8 +478,16 @@ def conversation_part(body: Any) -> Any:
     return None
 
 
-REASONING_KEYS = {"reasoning_content", "reasoning", "reasoning_details", "thinking",
-                  "thought_signature", "thoughtSignature", "encrypted_content", "signature"}
+REASONING_KEYS = {
+    "reasoning_content",
+    "reasoning",
+    "reasoning_details",
+    "thinking",
+    "thought_signature",
+    "thoughtSignature",
+    "encrypted_content",
+    "signature",
+}
 
 
 def reasoning_replay_keys(body: Any) -> set[str]:
@@ -357,13 +504,22 @@ def usage_line(case: LiveCase, model: str, agent: Any, wire: WireLog) -> dict:
     cr = int(agent.session_cache_read_tokens or 0)
     cw = int(agent.session_cache_write_tokens or 0)
     # Upper bound: cache reads at full input price, cache writes at 1.25x (Anthropic's rate).
-    ceiling = ((inp + cr + 1.25 * cw) * case.price_in + out * case.price_out) / 1_000_000
+    ceiling = (
+        (inp + cr + 1.25 * cw) * case.price_in + out * case.price_out
+    ) / 1_000_000
     return {
-        "case": case.id, "model": model, "api_calls": int(agent.session_api_calls or 0),
+        "case": case.id,
+        "model": model,
+        "api_calls": int(agent.session_api_calls or 0),
         "http_inference_calls": len(wire.inference()),
         "http_statuses": wire.status_counts(),
-        "http_errors": sorted({f"{r.status} {r.error[:160]}" for r in wire.inference() if r.status >= 400})[:5],
-        "input": inp, "output": out, "cache_read": cr, "cache_write": cw,
+        "http_errors": sorted(
+            {f"{r.status} {r.error[:160]}" for r in wire.inference() if r.status >= 400}
+        )[:5],
+        "input": inp,
+        "output": out,
+        "cache_read": cr,
+        "cache_write": cw,
         "reasoning": int(getattr(agent, "session_reasoning_tokens", 0) or 0),
         "clawk_est_usd": round(float(agent.session_estimated_cost_usd or 0.0), 6),
         "clawk_cost_status": str(getattr(agent, "session_cost_status", "")),

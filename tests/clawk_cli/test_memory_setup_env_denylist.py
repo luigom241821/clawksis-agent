@@ -90,11 +90,13 @@ def test_denylisted_key_does_not_block_other_writes(capsys):
     """If a single batch contains one denylisted key plus legitimate
     integration credentials, the denylisted one is skipped but the
     legitimate ones still land. The wizard must not abort mid-batch."""
-    _write_env_vars({
-        "LD_PRELOAD": "/tmp/evil.so",
-        "CLAWK_LANGFUSE_PUBLIC_KEY": "pk-test-123",
-        "OPENROUTER_API_KEY": "sk-or-test-456",
-    })
+    _write_env_vars(
+        {
+            "LD_PRELOAD": "/tmp/evil.so",
+            "CLAWK_LANGFUSE_PUBLIC_KEY": "pk-test-123",
+            "OPENROUTER_API_KEY": "sk-or-test-456",
+        }
+    )
 
     assert "LD_PRELOAD" not in _env_file_keys()
     env = load_env()
@@ -109,10 +111,12 @@ def test_legitimate_clawk_integration_key_still_writable():
     CLAWK_SPOTIFY_*, CLAWK_QWEN_BASE_URL, ...) must keep working or
     the memory-setup wizard regresses for every plugin that follows
     the convention."""
-    _write_env_vars({
-        "CLAWK_LANGFUSE_PUBLIC_KEY": "pk-lf-789",
-        "CLAWK_QWEN_BASE_URL": "https://example.com/v1",
-    })
+    _write_env_vars(
+        {
+            "CLAWK_LANGFUSE_PUBLIC_KEY": "pk-lf-789",
+            "CLAWK_QWEN_BASE_URL": "https://example.com/v1",
+        }
+    )
 
     env = load_env()
     assert env["CLAWK_LANGFUSE_PUBLIC_KEY"] == "pk-lf-789"

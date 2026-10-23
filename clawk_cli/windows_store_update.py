@@ -6,6 +6,7 @@ Exit 0 means success, 2 means a check found updates, and 1 means failure.
 
 Run with the bundled payload python: ``python -P -m clawk_cli.windows_store_update``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,7 +30,9 @@ def perform(context, mode, wait, completed_state) -> dict:
     }[mode]
     outcome = wait(request(updates))
     if outcome.overall_state != completed_state:
-        result.update(ok=False, error=f"Microsoft Store {mode}: {outcome.overall_state.name}")
+        result.update(
+            ok=False, error=f"Microsoft Store {mode}: {outcome.overall_state.name}"
+        )
     return result
 
 
@@ -68,7 +71,9 @@ def _execute(mode: str, window_handle: int | None) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("check", "download", "install"), default="check")
+    parser.add_argument(
+        "--mode", choices=("check", "download", "install"), default="check"
+    )
     parser.add_argument("--hwnd", type=int)
     args = parser.parse_args(argv)
     # The packaged interpreter receives its dependencies through PYTHONPATH.
@@ -81,14 +86,20 @@ def main(argv=None) -> int:
 
         init_apartment(ApartmentType.SINGLE_THREADED)
     except Exception as exc:
-        print(json.dumps({"available": None, "ok": False, "error": str(exc)}), flush=True)
+        print(
+            json.dumps({"available": None, "ok": False, "error": str(exc)}), flush=True
+        )
         return 1
     try:
         try:
             result = _execute(args.mode, args.hwnd)
         except Exception as exc:
             # Missing Store acquisition is not evidence that the app is current.
-            result = {"available": None, "ok": False, "error": f"Microsoft Store request failed: {exc}"}
+            result = {
+                "available": None,
+                "ok": False,
+                "error": f"Microsoft Store request failed: {exc}",
+            }
     finally:
         # _execute's COM objects must be released before apartment shutdown.
         uninit_apartment()

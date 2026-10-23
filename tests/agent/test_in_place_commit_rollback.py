@@ -135,12 +135,12 @@ class TestInPlaceCommitFailureRollback:
 
             # ── The fix: the returned transcript is the pre-compression
             # snapshot, not the uncommitted compacted set.
-            assert [m["content"] for m in compressed] == [
-                f"m{i}" for i in range(8)
-            ], "failed in-place commit must not hand back the compacted set"
-            assert all(
-                m.get(_DB_PERSISTED_MARKER) for m in compressed
-            ), "restored rows must keep their persistence marker"
+            assert [m["content"] for m in compressed] == [f"m{i}" for i in range(8)], (
+                "failed in-place commit must not hand back the compacted set"
+            )
+            assert all(m.get(_DB_PERSISTED_MARKER) for m in compressed), (
+                "restored rows must keep their persistence marker"
+            )
 
             # ── The symptom: the post-compression persist walk must not
             # re-INSERT anything. Run it twice — multiple exit paths persist.

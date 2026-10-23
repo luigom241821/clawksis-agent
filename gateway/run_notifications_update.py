@@ -23,10 +23,12 @@ from gateway.run_shutdown import _log_suppressed
 # Log-record parity with the origin module.
 logger = logging.getLogger("gateway.run")
 
+
 # A failed /update leaves the previous version running; the full pip/git log stays on the host
 # (`clawk update` re-runs it in the terminal) and only a short tail is quoted in chat.
 def _update_failed_notice() -> str:
     return t("gateway.update.failed_notice")
+
 
 # An update's completion notice waits for its target platform adapter to (re)connect before it
 # can be delivered. Nothing bounds that wait, so a marker naming a platform that is not
@@ -58,7 +60,14 @@ class GatewayUpdateNotificationsMixin:
             return self.pending.exists() or self.claimed.exists()
 
         def unlink_all(self) -> None:
-            for p in (self.pending, self.claimed, self.output, self.exit_code, self.prompt, self.response):
+            for p in (
+                self.pending,
+                self.claimed,
+                self.output,
+                self.exit_code,
+                self.prompt,
+                self.response,
+            ):
                 p.unlink(missing_ok=True)
 
     @dataclasses.dataclass
@@ -73,10 +82,13 @@ class GatewayUpdateNotificationsMixin:
 
         def send_metadata(self):
             from gateway.run import _non_conversational_metadata
+
             return _non_conversational_metadata(self.metadata, platform=self.platform)
 
         async def send(self, text: str):
-            return await self.adapter.send(self.chat_id, text, metadata=self.send_metadata())
+            return await self.adapter.send(
+                self.chat_id, text, metadata=self.send_metadata()
+            )
 
     def _schedule_update_notification_watch(self) -> None:
         """Ensure a background task is watching for update completion."""
@@ -84,18 +96,23 @@ class GatewayUpdateNotificationsMixin:
         if existing_task and not existing_task.done():
             return
         try:
-            self._update_notification_task = asyncio.create_task(self._watch_update_progress())
+            self._update_notification_task = asyncio.create_task(
+                self._watch_update_progress()
+            )
         except RuntimeError:
             logger.debug("Skipping update notification watcher: no running event loop")
 
     @classmethod
     def _update_paths(cls) -> GatewayUpdateNotificationsMixin._UpdatePaths:
         from gateway.run import _clawk_home
+
         return cls._UpdatePaths(
             pending=_clawk_home / ".update_pending.json",
-            claimed=_clawk_home / ".update_pending.claimed.json", output=_clawk_home / ".update_output.txt",
+            claimed=_clawk_home / ".update_pending.claimed.json",
+            output=_clawk_home / ".update_output.txt",
             exit_code=_clawk_home / ".update_exit_code",
-            prompt=_clawk_home / ".update_prompt.json", response=_clawk_home / ".update_response",
+            prompt=_clawk_home / ".update_prompt.json",
+            response=_clawk_home / ".update_response",
         )
 
     @staticmethod
@@ -107,6 +124,7 @@ class GatewayUpdateNotificationsMixin:
         if profile:
             return profile
         from gateway.session import profile_from_session_key_namespace
+
         parts = str(data.get("session_key") or "").split(":")
         if len(parts) >= 5 and parts[0] == "agent" and parts[1] not in ("main", ""):
             return profile_from_session_key_namespace(parts[1])
@@ -145,26 +163,42 @@ class GatewayUpdateNotificationsMixin:
                 platform = Platform(platform_str)
                 # The requester's OWN profile bot (marker ``profile``, else the ``agent:<profile>:`` key
                 # lane); a bare self.adapters lookup is the default bot under multiplex.
-                adapter = self._authorization_adapter(platform, self._marker_profile(pending))
+                adapter = self._authorization_adapter(
+                    platform, self._marker_profile(pending)
+                )
                 if not adapter:
                     return None
-                metadata = self._pending_marker_metadata(platform, chat_id, pending, adapter)
+                metadata = self._pending_marker_metadata(
+                    platform, chat_id, pending, adapter
+                )
                 # Fallback session key if not stored (old pending files)
                 return self._UpdateTarget(
-                    adapter, chat_id, session_key or f"{platform_str}:{chat_id}", metadata, platform,
+                    adapter,
+                    chat_id,
+                    session_key or f"{platform_str}:{chat_id}",
+                    metadata,
+                    platform,
                 )
         return None
 
     def _pending_marker_metadata(self, platform, chat_id, data: dict, adapter):
         """Thread metadata for a persisted update/restart marker (thread_id/chat_type/message_id keys)."""
         return self._thread_metadata_for_target(
-            platform, chat_id, data.get("thread_id"), chat_type=data.get("chat_type"),
-            reply_to_message_id=data.get("message_id"), adapter=adapter,
+            platform,
+            chat_id,
+            data.get("thread_id"),
+            chat_type=data.get("chat_type"),
+            reply_to_message_id=data.get("message_id"),
+            adapter=adapter,
         )
 
-    async def _watch_update_completion_only(self, paths: _UpdatePaths, deadline: float, poll_interval: float) -> None:
+    async def _watch_update_completion_only(
+        self, paths: _UpdatePaths, deadline: float, poll_interval: float
+    ) -> None:
         """Fallback when no adapter/chat can be resolved: wait for the exit code, then notify."""
-        logger.warning("Update watcher: cannot resolve adapter/chat_id, falling back to completion-only")
+        logger.warning(
+            "Update watcher: cannot resolve adapter/chat_id, falling back to completion-only"
+        )
         # Poll until _send_update_notification delivers (it returns False while the platform reconnects).
         loop = asyncio.get_running_loop()
         while paths.any_pending() and loop.time() < deadline:
@@ -193,41 +227,65 @@ class GatewayUpdateNotificationsMixin:
     async def _send_update_output(self, target: _UpdateTarget, text: str) -> None:
         """Send buffered update output as fenced chunks that fit message limits (Telegram: 4096)."""
         from tools.ansi_strip import strip_ansi
+
         clean = strip_ansi(text).strip()
         if not clean:
             return
         max_chunk = 3500
         for i in range(0, len(clean), max_chunk):
             with _log_suppressed(logging.DEBUG, "Update stream send failed: %s"):
-                await target.send(f"```\n{clean[i:i + max_chunk]}\n```")
+                await target.send(f"```\n{clean[i : i + max_chunk]}\n```")
 
-    async def _forward_update_prompt(self, target: _UpdateTarget, prompt_text: str, default: str) -> None:
+    async def _forward_update_prompt(
+        self, target: _UpdateTarget, prompt_text: str, default: str
+    ) -> None:
         """Forward an update prompt: platform-native buttons first (Discord, Telegram), else text."""
         sent_buttons = False
         adapter = target.adapter
         if getattr(type(adapter), "send_update_prompt", None) is not None:
-            with _log_suppressed(logging.DEBUG, "Button-based update prompt failed: %s"):
+            with _log_suppressed(
+                logging.DEBUG, "Button-based update prompt failed: %s"
+            ):
                 await adapter.send_update_prompt(
-                    chat_id=target.chat_id, prompt=prompt_text, default=default,
-                    session_key=target.session_key, metadata=target.send_metadata(),
+                    chat_id=target.chat_id,
+                    prompt=prompt_text,
+                    default=default,
+                    session_key=target.session_key,
+                    metadata=target.send_metadata(),
                 )
                 sent_buttons = True
         if not sent_buttons:
-            default_hint = t("gateway.update.prompt_default", default=default) if default else ""
+            default_hint = (
+                t("gateway.update.prompt_default", default=default) if default else ""
+            )
             _p = getattr(adapter, "typed_command_prefix", "/")
-            await target.send(t("gateway.update.prompt", prompt=prompt_text, default_hint=default_hint, prefix=_p))
+            await target.send(
+                t(
+                    "gateway.update.prompt",
+                    prompt=prompt_text,
+                    default_hint=default_hint,
+                    prefix=_p,
+                )
+            )
         # Keep the prompt marker on disk until answered so a restarted watcher can re-forward it.
         self._session_state(target.session_key).persistent.update_prompt_pending = True
-        logger.info("Forwarded update prompt to %s: %s", target.session_key, prompt_text[:80])
+        logger.info(
+            "Forwarded update prompt to %s: %s", target.session_key, prompt_text[:80]
+        )
 
-    def _clear_update_markers(self, paths: _UpdatePaths, session_key: Optional[str]) -> None:
+    def _clear_update_markers(
+        self, paths: _UpdatePaths, session_key: Optional[str]
+    ) -> None:
         paths.unlink_all()
         state = self._peek_session_state(session_key)
         if state is not None:
             state.persistent.update_prompt_pending = False
 
     async def _watch_update_progress(
-        self, poll_interval: float = 2.0, stream_interval: float = 4.0, timeout: float = 1800.0
+        self,
+        poll_interval: float = 2.0,
+        stream_interval: float = 4.0,
+        timeout: float = 1800.0,
     ) -> None:
         """Watch ``clawk update --gateway``, streaming output + forwarding prompts.
 
@@ -257,35 +315,55 @@ class GatewayUpdateNotificationsMixin:
             nonlocal buffer, bytes_sent
             if paths.output.exists():
                 with suppress(OSError):
-                    chunk, bytes_sent = self._read_update_output_since(paths.output, bytes_sent)
+                    chunk, bytes_sent = self._read_update_output_since(
+                        paths.output, bytes_sent
+                    )
                     buffer += chunk
 
         while loop.time() < deadline:
             if paths.exit_code.exists():
                 _read_new_output()
                 await _flush_buffer()
-                with _log_suppressed(logging.WARNING, "Update final notification failed: %s"):
+                with _log_suppressed(
+                    logging.WARNING, "Update final notification failed: %s"
+                ):
                     exit_code = self._update_exit_code(paths)
                     await target.send(
-                        t("gateway.update.finished") if exit_code == 0 else _update_failed_notice()
+                        t("gateway.update.finished")
+                        if exit_code == 0
+                        else _update_failed_notice()
                     )
-                    logger.info("Update finished (exit=%s), notified %s", exit_code, session_key)
+                    logger.info(
+                        "Update finished (exit=%s), notified %s", exit_code, session_key
+                    )
                 self._clear_update_markers(paths, session_key)
                 return
             _read_new_output()
             if buffer.strip() and (loop.time() - last_stream_time) >= stream_interval:
                 await _flush_buffer()
             # Forward a prompt only when none is pending, else every poll re-forwards the same prompt.
-            _pending_state = self._peek_session_state(session_key) if session_key else None
-            if paths.prompt.exists() and session_key and not getattr(
-                getattr(_pending_state, "persistent", None), "update_prompt_pending", False
+            _pending_state = (
+                self._peek_session_state(session_key) if session_key else None
+            )
+            if (
+                paths.prompt.exists()
+                and session_key
+                and not getattr(
+                    getattr(_pending_state, "persistent", None),
+                    "update_prompt_pending",
+                    False,
+                )
             ):
                 try:
-                    prompt_data = json.loads(paths.prompt.read_text(encoding="utf-8-sig"))
+                    prompt_data = json.loads(
+                        paths.prompt.read_text(encoding="utf-8-sig")
+                    )
                     prompt_text = prompt_data.get("prompt", "")
                     if prompt_text:
                         await _flush_buffer()  # user sees context before the prompt
-                        await self._forward_update_prompt(target, prompt_text, prompt_data.get("default", ""))
+                        await self._forward_update_prompt(
+                            target, prompt_text, prompt_data.get("default", "")
+                        )
                 except (json.JSONDecodeError, OSError) as e:
                     logger.debug("Failed to read update prompt: %s", e)
             await asyncio.sleep(poll_interval)
@@ -303,6 +381,7 @@ class GatewayUpdateNotificationsMixin:
         False while the update is still running (caller may retry); True after a definitive send/skip.
         """
         from gateway.run import _non_conversational_metadata
+
         paths = self._update_paths()
         if not paths.any_pending():
             return False
@@ -332,9 +411,15 @@ class GatewayUpdateNotificationsMixin:
             if not paths.exit_code.exists():
                 return _defer("Update notification deferred: update still running")
             exit_code = self._update_exit_code(paths)
-            output = paths.output.read_bytes().decode("utf-8", errors="replace") if paths.output.exists() else ""
+            output = (
+                paths.output.read_bytes().decode("utf-8", errors="replace")
+                if paths.output.exists()
+                else ""
+            )
             platform = Platform(platform_str)
-            adapter = self._authorization_adapter(platform, self._marker_profile(pending))
+            adapter = self._authorization_adapter(
+                platform, self._marker_profile(pending)
+            )
             if chat_id and not adapter:
                 age = self._marker_age_seconds(pending)
                 if age is not None and age > _UPDATE_NOTIFY_MAX_ADAPTER_WAIT_SECONDS:
@@ -345,15 +430,26 @@ class GatewayUpdateNotificationsMixin:
                     # definitive decision (True) so the caller stops rescheduling.
                     logger.warning(
                         "Post-update notification for %s:%s dropped after %.1fh: %s adapter never "
-                        "connected", platform_str, chat_id, age / 3600.0, platform_str)
+                        "connected",
+                        platform_str,
+                        chat_id,
+                        age / 3600.0,
+                        platform_str,
+                    )
                     self._clear_update_markers(paths, pending.get("session_key"))
                     return True
                 # Target platform not reconnected yet (common right after the update's restart): keep the
                 # markers for a later retry instead of silently losing the notification.
-                return _defer("Update notification deferred: %s adapter not connected yet", platform_str)
+                return _defer(
+                    "Update notification deferred: %s adapter not connected yet",
+                    platform_str,
+                )
             if chat_id:
-                metadata = self._pending_marker_metadata(platform, chat_id, pending, adapter)
+                metadata = self._pending_marker_metadata(
+                    platform, chat_id, pending, adapter
+                )
                 from tools.ansi_strip import strip_ansi
+
                 output = strip_ansi(output).strip()
                 if exit_code == 0:
                     msg = t("gateway.update.finished_success")
@@ -362,13 +458,31 @@ class GatewayUpdateNotificationsMixin:
                 else:
                     msg = _update_failed_notice()
                     if output:
-                        msg = t("gateway.update.last_lines", msg=msg, tail=_update_output_tail(output, 800))
-                await adapter.send(chat_id, msg, metadata=_non_conversational_metadata(metadata, platform=platform))
-                logger.info("Sent post-update notification to %s:%s (exit=%s)", platform_str, chat_id, exit_code)
+                        msg = t(
+                            "gateway.update.last_lines",
+                            msg=msg,
+                            tail=_update_output_tail(output, 800),
+                        )
+                await adapter.send(
+                    chat_id,
+                    msg,
+                    metadata=_non_conversational_metadata(metadata, platform=platform),
+                )
+                logger.info(
+                    "Sent post-update notification to %s:%s (exit=%s)",
+                    platform_str,
+                    chat_id,
+                    exit_code,
+                )
         except Exception as e:
             logger.warning("Post-update notification failed: %s", e)
         finally:
             if cleanup:
-                for p in (active_pending_path, paths.claimed, paths.output, paths.exit_code):
+                for p in (
+                    active_pending_path,
+                    paths.claimed,
+                    paths.output,
+                    paths.exit_code,
+                ):
                     p.unlink(missing_ok=True)
         return True

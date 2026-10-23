@@ -24,11 +24,17 @@ def rehome_inbound_media(event: MessageEvent) -> None:
     """
     if not event.media_urls:
         return
-    from clawk_constants import get_clawk_home, get_routing_process_clawk_home, clawk_home_key
+    from clawk_constants import (
+        get_clawk_home,
+        get_routing_process_clawk_home,
+        clawk_home_key,
+    )
+
     active, launch = Path(get_clawk_home()), Path(get_routing_process_clawk_home())
     if clawk_home_key(active) == clawk_home_key(launch):
         return
     from tools.credential_files import to_agent_visible_cache_path
+
     rewritten = list(event.media_urls)
     for i, raw in enumerate(event.media_urls):
         src = Path(raw)
@@ -43,9 +49,15 @@ def rehome_inbound_media(event: MessageEvent) -> None:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dest))
         except OSError:
-            logger.warning("Could not move inbound attachment %s into the routed profile's cache", raw, exc_info=True)
+            logger.warning(
+                "Could not move inbound attachment %s into the routed profile's cache",
+                raw,
+                exc_info=True,
+            )
             continue
         rewritten[i] = str(dest)
-        if event.text and raw in event.text:  # note an adapter already baked in (observed/replied media)
+        if (
+            event.text and raw in event.text
+        ):  # note an adapter already baked in (observed/replied media)
             event.text = event.text.replace(raw, to_agent_visible_cache_path(str(dest)))
     event.media_urls = rewritten

@@ -41,7 +41,9 @@ def test_hosted_auth_start_returns_public_authorization_url(monkeypatch):
     def fake_worker(flow, cfg):
         import asyncio
 
-        asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=s1"))
+        asyncio.run(
+            flow.publish_authorization_url("https://idp.example/authorize?state=s1")
+        )
 
     monkeypatch.setattr(_web_server_mcp, "_run_dashboard_mcp_oauth", fake_worker)
     with patch(
@@ -74,9 +76,7 @@ def test_hosted_callback_bypasses_gated_cookie_auth(monkeypatch):
         redirect_uri="https://agent.example/api/mcp/oauth/callback/reports",
     )
     asyncio.run(
-        flow.publish_authorization_url(
-            "https://idp.example/authorize?state=expected"
-        )
+        flow.publish_authorization_url("https://idp.example/authorize?state=expected")
     )
     _web_server_mcp._mcp_oauth_flows[flow.flow_id] = flow
     monkeypatch.setattr(web_server.app.state, "auth_required", True, raising=False)
@@ -89,13 +89,17 @@ def test_hosted_callback_bypasses_gated_cookie_auth(monkeypatch):
     assert flow._callback == ("abc", "expected", None)
 
 
-def test_hosted_auth_allows_same_server_name_in_different_profiles(tmp_path, monkeypatch):
+def test_hosted_auth_allows_same_server_name_in_different_profiles(
+    tmp_path, monkeypatch
+):
     from clawk_cli import web_server
     from tools.mcp_dashboard_oauth import DashboardOAuthFlow
 
     profile_home = tmp_path / "profiles" / "work"
     profile_home.mkdir(parents=True)
-    monkeypatch.setattr(_web_server_profiles, "_resolve_profile_dir", lambda _name: profile_home)
+    monkeypatch.setattr(
+        _web_server_profiles, "_resolve_profile_dir", lambda _name: profile_home
+    )
 
     existing = DashboardOAuthFlow(
         flow_id="existing-default",
@@ -109,15 +113,20 @@ def test_hosted_auth_allows_same_server_name_in_different_profiles(tmp_path, mon
     def fake_worker(flow, cfg):
         import asyncio
 
-        asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=work"))
+        asyncio.run(
+            flow.publish_authorization_url("https://idp.example/authorize?state=work")
+        )
 
-    with patch("clawk_cli.mcp_config._get_mcp_servers", return_value={"reports": {"url": "https://mcp.example"}}), \
-         patch.object(_web_server_mcp, "_run_dashboard_mcp_oauth", fake_worker):
+    with (
+        patch(
+            "clawk_cli.mcp_config._get_mcp_servers",
+            return_value={"reports": {"url": "https://mcp.example"}},
+        ),
+        patch.object(_web_server_mcp, "_run_dashboard_mcp_oauth", fake_worker),
+    ):
         response = _client().post("/api/mcp/servers/reports/auth?profile=work")
 
     assert response.status_code != 409
-
-
 
 
 def test_flow_status_does_not_expose_authorization_code():
@@ -156,10 +165,16 @@ def test_cancel_marks_the_flow_terminal_for_a_retrying_worker():
         clawk_home="/tmp/clawk-test",
         redirect_uri="https://agent.example/api/mcp/oauth/callback/reports",
     )
-    asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=first"))
+    asyncio.run(
+        flow.publish_authorization_url("https://idp.example/authorize?state=first")
+    )
     _web_server_mcp._mcp_oauth_flows[flow.flow_id] = flow
 
-    assert _client().delete("/api/mcp/oauth/flows/flow-cancel-retry").json()["ok"] is True
+    assert (
+        _client().delete("/api/mcp/oauth/flows/flow-cancel-retry").json()["ok"] is True
+    )
     with pytest.raises(RuntimeError, match="cancelled"):
-        asyncio.run(flow.publish_authorization_url("https://idp.example/authorize?state=second"))
+        asyncio.run(
+            flow.publish_authorization_url("https://idp.example/authorize?state=second")
+        )
     assert flow.snapshot()["status"] == "error"

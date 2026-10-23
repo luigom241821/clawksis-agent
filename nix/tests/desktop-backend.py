@@ -1,4 +1,5 @@
 """Launch the packaged desktop with a competing mutable install."""
+
 import contextlib
 import os
 from pathlib import Path
@@ -66,8 +67,18 @@ with tempfile.TemporaryDirectory(prefix="clawk-desktop-backend-") as temporary:
     log_path = home / "desktop-output.log"
     with log_path.open("w") as log:
         child = subprocess.Popen(
-            ["cage", "--", desktop, "--no-sandbox", "--disable-gpu", "--ozone-platform=wayland"],
-            cwd=home, env=env, stdout=log, stderr=subprocess.STDOUT,
+            [
+                "cage",
+                "--",
+                desktop,
+                "--no-sandbox",
+                "--disable-gpu",
+                "--ozone-platform=wayland",
+            ],
+            cwd=home,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
         )
         try:
@@ -82,12 +93,18 @@ with tempfile.TemporaryDirectory(prefix="clawk-desktop-backend-") as temporary:
                 # Desktop attaches to `clawk gateway ensure` (the daemon serves the dashboard), so
                 # readiness is Desktop's own attach line, not a spawned `clawk serve` sentinel.
                 if "[backend] Clawksis gateway is ready" in output:
-                    assert f"[backend] using existing Clawksis CLI at {expected}" in output, output
-                    print("PASS: packaged desktop selected its pinned backend over the mutable install")
+                    assert (
+                        f"[backend] using existing Clawksis CLI at {expected}" in output
+                    ), output
+                    print(
+                        "PASS: packaged desktop selected its pinned backend over the mutable install"
+                    )
                     break
                 time.sleep(0.1)
             else:
-                raise AssertionError(f"Desktop did not start its backend:\n{log_path.read_text()}")
+                raise AssertionError(
+                    f"Desktop did not start its backend:\n{log_path.read_text()}"
+                )
         finally:
             os.killpg(child.pid, signal.SIGTERM)
             try:

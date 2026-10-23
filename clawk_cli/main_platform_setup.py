@@ -29,16 +29,26 @@ def _whatsapp_choose_mode(get_env_value, save_env_value):
     """Step 1 of ``clawk whatsapp``: ``"bot"`` / ``"self-chat"``, or None when cancelled."""
     current_mode = get_env_value("WHATSAPP_MODE") or ""
     if current_mode:
-        mode_label = "separate bot number" if current_mode == "bot" else "personal number (self-chat)"
+        mode_label = (
+            "separate bot number"
+            if current_mode == "bot"
+            else "personal number (self-chat)"
+        )
         print(f"\n✓ Mode: {mode_label}")
         return current_mode
-    _say("", "How will you use WhatsApp with Clawksis?", "",
-         "  1. Separate bot number (recommended)",
-         "     People message the bot's number directly — cleanest experience.",
-         "     Requires a second phone number with WhatsApp installed on a device.", "",
-         "  2. Personal number (self-chat)",
-         "     You message yourself to talk to the agent.",
-         "     Quick to set up, but the UX is less intuitive.", "")
+    _say(
+        "",
+        "How will you use WhatsApp with Clawksis?",
+        "",
+        "  1. Separate bot number (recommended)",
+        "     People message the bot's number directly — cleanest experience.",
+        "     Requires a second phone number with WhatsApp installed on a device.",
+        "",
+        "  2. Personal number (self-chat)",
+        "     You message yourself to talk to the agent.",
+        "     Quick to set up, but the UX is less intuitive.",
+        "",
+    )
     try:
         choice = input("  Choose [1/2]: ").strip()
     except (EOFError, KeyboardInterrupt):
@@ -46,19 +56,22 @@ def _whatsapp_choose_mode(get_env_value, save_env_value):
         return None
     if choice == "1":
         save_env_value("WHATSAPP_MODE", "bot")
-        _say("  ✓ Mode: separate bot number", "",
-             "  ┌─────────────────────────────────────────────────┐",
-             "  │  Getting a second number for the bot:           │",
-             "  │                                                 │",
-             "  │  Easiest: Install WhatsApp Business (free app)  │",
-             "  │  on your phone with a second number:            │",
-             "  │    • Dual-SIM: use your 2nd SIM slot            │",
-             "  │    • Google Voice: free US number (voice.google) │",
-             "  │    • Prepaid SIM: $3-10, verify once            │",
-             "  │                                                 │",
-             "  │  WhatsApp Business runs alongside your personal │",
-             "  │  WhatsApp — no second phone needed.             │",
-             "  └─────────────────────────────────────────────────┘")
+        _say(
+            "  ✓ Mode: separate bot number",
+            "",
+            "  ┌─────────────────────────────────────────────────┐",
+            "  │  Getting a second number for the bot:           │",
+            "  │                                                 │",
+            "  │  Easiest: Install WhatsApp Business (free app)  │",
+            "  │  on your phone with a second number:            │",
+            "  │    • Dual-SIM: use your 2nd SIM slot            │",
+            "  │    • Google Voice: free US number (voice.google) │",
+            "  │    • Prepaid SIM: $3-10, verify once            │",
+            "  │                                                 │",
+            "  │  WhatsApp Business runs alongside your personal │",
+            "  │  WhatsApp — no second phone needed.             │",
+            "  └─────────────────────────────────────────────────┘",
+        )
         return "bot"
     save_env_value("WHATSAPP_MODE", "self-chat")
     print("  ✓ Mode: personal number (self-chat)")
@@ -73,7 +86,9 @@ def _whatsapp_allowed_users(wa_mode: str, get_env_value, save_env_value) -> None
         if not _yes_no("\n  Update allowed users? [y/N] "):
             return
         if wa_mode == "bot":
-            phone = line_input("  Phone numbers that can message the bot (comma-separated): ").strip()
+            phone = line_input(
+                "  Phone numbers that can message the bot (comma-separated): "
+            ).strip()
         else:
             phone = line_input("  Your phone number (e.g. 15551234567): ").strip()
         if phone:
@@ -83,7 +98,9 @@ def _whatsapp_allowed_users(wa_mode: str, get_env_value, save_env_value) -> None
     print()
     if wa_mode == "bot":
         print("  Who should be allowed to message the bot?")
-        phone = line_input("  Phone numbers (comma-separated, or * for anyone): ").strip()
+        phone = line_input(
+            "  Phone numbers (comma-separated, or * for anyone): "
+        ).strip()
     else:
         phone = line_input("  Your phone number (e.g. 15551234567): ").strip()
     if phone:
@@ -96,10 +113,13 @@ def _whatsapp_allowed_users(wa_mode: str, get_env_value, save_env_value) -> None
 def _whatsapp_install_bridge(bridge_dir) -> bool:
     """Step 4 of ``clawk whatsapp``: ``npm install`` the bridge when needed. False = stop."""
     from clawk_constants import find_node_executable, with_clawk_node_path
+
     if (bridge_dir / "node_modules").exists():
         print("✓ Bridge dependencies already installed")
         return True
-    print("\n→ Installing WhatsApp bridge dependencies (this can take a few minutes)...")
+    print(
+        "\n→ Installing WhatsApp bridge dependencies (this can take a few minutes)..."
+    )
     import pm
 
     npm = find_node_executable("npm")
@@ -113,8 +133,15 @@ def _whatsapp_install_bridge(bridge_dir) -> bool:
             npm = str(installed.binary)
         result = subprocess.run(
             [npm, "install", "--no-fund", "--no-audit", "--progress=false"],
-            cwd=str(bridge_dir), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-            encoding="utf-8", errors="replace", env=env, check=False)
+            cwd=str(bridge_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            check=False,
+        )
     except (pm.InstallError, OSError) as exc:
         print(f"  ✗ Bridge dependency preparation failed: {exc}")
         return False
@@ -133,9 +160,11 @@ def _whatsapp_install_bridge(bridge_dir) -> bool:
 def cmd_whatsapp(args):
     """Set up WhatsApp: choose mode, configure, install bridge, pair via QR."""
     from clawk_cli.main import _require_tty, get_clawk_home
+
     _require_tty("whatsapp")
     from clawk_cli.config import get_env_value, save_env_value
     from clawk_constants import find_node_executable, with_clawk_node_path
+
     _say("", "∇ WhatsApp Setup", "=" * 50)
 
     wa_mode = _whatsapp_choose_mode(get_env_value, save_env_value)
@@ -153,6 +182,7 @@ def cmd_whatsapp(args):
     _whatsapp_allowed_users(wa_mode, get_env_value, save_env_value)
 
     from gateway.platforms.whatsapp_common import resolve_whatsapp_bridge_dir
+
     bridge_dir = resolve_whatsapp_bridge_dir()
     bridge_script = bridge_dir / "bridge.js"
     if not bridge_script.exists():
@@ -174,13 +204,19 @@ def cmd_whatsapp(args):
             # Older installs may have lost WHATSAPP_ENABLED; a kept pairing re-asserts it.
             if (get_env_value("WHATSAPP_ENABLED") or "").lower() != "true":
                 save_env_value("WHATSAPP_ENABLED", "true")
-            _say("\n✓ WhatsApp is configured and paired!", "  Start the gateway with: clawk gateway")
+            _say(
+                "\n✓ WhatsApp is configured and paired!",
+                "  Start the gateway with: clawk gateway",
+            )
             return
 
     # QR code pairing
     _say("", "─" * 50)
     if wa_mode == "bot":
-        _say("📱 Open WhatsApp (or WhatsApp Business) on the", "   phone with the BOT's number, then scan:")
+        _say(
+            "📱 Open WhatsApp (or WhatsApp Business) on the",
+            "   phone with the BOT's number, then scan:",
+        )
     else:
         print("📱 Open WhatsApp on your phone, then scan:")
     _say("", "   Settings → Linked Devices → Link a Device", "─" * 50, "")
@@ -192,7 +228,9 @@ def cmd_whatsapp(args):
             pm.ensure("node", explicit=True)
             installed = pm.installed_package("node")
             if installed is None or installed.binary is None:
-                raise pm.InstallError("node", "Node.js binary is missing after preparation")
+                raise pm.InstallError(
+                    "node", "Node.js binary is missing after preparation"
+                )
             node = str(installed.binary)
         except pm.InstallError as exc:
             print(f"  ✗ Node.js preparation failed: {exc}")
@@ -200,7 +238,10 @@ def cmd_whatsapp(args):
     with contextlib.suppress(KeyboardInterrupt):
         subprocess.run(
             [node, str(bridge_script), "--pair-only", "--session", str(session_dir)],
-            cwd=str(bridge_dir), env=with_clawk_node_path(), check=False)
+            cwd=str(bridge_dir),
+            env=with_clawk_node_path(),
+            check=False,
+        )
 
     print()
     if not (session_dir / "creds.json").exists():
@@ -210,16 +251,24 @@ def cmd_whatsapp(args):
     save_env_value("WHATSAPP_ENABLED", "true")
     _say("✓ WhatsApp paired successfully!", "")
     if wa_mode == "bot":
-        _say("  Next steps:", "    1. Start the gateway:  clawk gateway",
-             "    2. Send a message to the bot's WhatsApp number",
-             "    3. The agent will reply automatically", "",
-             "  Tip: Agent responses are prefixed with '∇ Clawksis'")
+        _say(
+            "  Next steps:",
+            "    1. Start the gateway:  clawk gateway",
+            "    2. Send a message to the bot's WhatsApp number",
+            "    3. The agent will reply automatically",
+            "",
+            "  Tip: Agent responses are prefixed with '∇ Clawksis'",
+        )
     else:
-        _say("  Next steps:", "    1. Start the gateway:  clawk gateway",
-             "    2. Open WhatsApp → Message Yourself",
-             "    3. Type a message — the agent will reply", "",
-             "  Tip: Agent responses are prefixed with '∇ Clawksis'",
-             "  so you can tell them apart from your own messages.")
+        _say(
+            "  Next steps:",
+            "    1. Start the gateway:  clawk gateway",
+            "    2. Open WhatsApp → Message Yourself",
+            "    3. Type a message — the agent will reply",
+            "",
+            "  Tip: Agent responses are prefixed with '∇ Clawksis'",
+            "  so you can tell them apart from your own messages.",
+        )
     _say("", "  Or install as a service: clawk gateway install")
 
 
@@ -227,8 +276,10 @@ def cmd_whatsapp_cloud(args):
     """Set up WhatsApp Business Cloud API (official Meta integration) — complementary to the
     ``clawk whatsapp`` Baileys bridge wizard. See ``plugins/platforms/whatsapp_cloud/setup_wizard.py``."""
     from clawk_cli.main import _require_tty
+
     _require_tty("whatsapp-cloud")
     from plugins.platforms.whatsapp_cloud.setup_wizard import run_whatsapp_cloud_setup
+
     return run_whatsapp_cloud_setup()
 
 
@@ -237,17 +288,20 @@ def cmd_slack(args):
     every gateway command registered as a first-class slash."""
     sub = getattr(args, "slack_command", None)
     if sub in {None, ""}:
-        _err("usage: clawk slack <subcommand>\n"
-             "\n"
-             "subcommands:\n"
-             "  manifest   Generate a Slack app manifest with every gateway\n"
-             "             command registered as a native slash\n"
-             "\n"
-             "Run `clawk slack manifest -h` for details.")
+        _err(
+            "usage: clawk slack <subcommand>\n"
+            "\n"
+            "subcommands:\n"
+            "  manifest   Generate a Slack app manifest with every gateway\n"
+            "             command registered as a native slash\n"
+            "\n"
+            "Run `clawk slack manifest -h` for details."
+        )
         return 1
 
     if sub == "manifest":
         from clawk_cli.slack_cli import slack_manifest_command
+
         status = slack_manifest_command(args)
         if status:
             raise SystemExit(status)

@@ -18,7 +18,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from gateway.restart import DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT, resolve_systemd_timeout_stop_sec
+from gateway.restart import (
+    DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT,
+    resolve_systemd_timeout_stop_sec,
+)
 import contextlib
 
 _SIGNAL_NAME_BY_NUM: dict[int, str] = {
@@ -41,7 +44,10 @@ def _signal_name(sig: Any) -> str:
 
 def _read_proc_field(pid: int, key: str) -> Optional[str]:
     """Read a single field from /proc/<pid>/status.  Linux only; None elsewhere."""
-    with contextlib.suppress(OSError), open(f"/proc/{pid}/status", encoding="utf-8") as fh:
+    with (
+        contextlib.suppress(OSError),
+        open(f"/proc/{pid}/status", encoding="utf-8") as fh,
+    ):
         for line in fh:
             if line.startswith(key + ":"):
                 return line.split(":", 1)[1].strip()
@@ -79,14 +85,20 @@ def snapshot_shutdown_context(received_signal: Any = None) -> dict[str, Any]:
     timestamps. Pure stdlib, never raises, never blocks."""
     pid, ppid = os.getpid(), os.getppid()
     ctx: dict[str, Any] = {
-        "ts": time.time(), "ts_monotonic": time.monotonic(),
+        "ts": time.time(),
+        "ts_monotonic": time.monotonic(),
         "signal": _signal_name(received_signal),
         "signal_num": int(received_signal) if received_signal is not None else None,
-        "pid": pid, "ppid": ppid, "parent": _proc_summary(ppid), "self": _proc_summary(pid),
+        "pid": pid,
+        "ppid": ppid,
+        "parent": _proc_summary(ppid),
+        "self": _proc_summary(pid),
     }
     # INVOCATION_ID is set by systemd units; ppid==1 also suggests systemd forwarded the SIGTERM.
-    for ctx_key, env_key in (("systemd_invocation_id", "INVOCATION_ID"),
-                             ("systemd_journal_stream", "JOURNAL_STREAM")):
+    for ctx_key, env_key in (
+        ("systemd_invocation_id", "INVOCATION_ID"),
+        ("systemd_journal_stream", "JOURNAL_STREAM"),
+    ):
         if os.environ.get(env_key):
             ctx[ctx_key] = os.environ[env_key]
     ctx["under_systemd"] = bool(os.environ.get("INVOCATION_ID")) or ppid == 1
@@ -107,8 +119,9 @@ def snapshot_shutdown_context(received_signal: Any = None) -> dict[str, Any]:
             raw = _read_marker(Path(clawk_home_str) / ".gateway-takeover.json")
             if raw is not None:
                 ctx["takeover_marker"] = raw[:300]
-                ctx["takeover_marker_for_self"] = (f'"target_pid": {pid}' in raw
-                                                   or f"'target_pid': {pid}" in raw)
+                ctx["takeover_marker_for_self"] = (
+                    f'"target_pid": {pid}' in raw or f"'target_pid': {pid}" in raw
+                )
             raw = _read_marker(Path(clawk_home_str) / ".gateway-planned-stop.json")
             if raw is not None:
                 ctx["planned_stop_marker"] = raw[:300]
@@ -123,7 +136,7 @@ def _async_diagnostic_script(signal_name: str, self_pid: int) -> str:
         "echo '--- ps (top 60 by cpu, comm only) ---'; "
         # ``sort`` instead of GNU ``--sort=-pcpu`` so BSD ps (macOS) produces a listing too; the header
         # line is echoed first so ``sort`` does not bury it among the 0.0-cpu rows.
-        "ps -eo pid,ppid,user,pcpu,pmem,stat,comm 2>/dev/null | { IFS= read -r h; echo \"$h\"; sort -nrk4; } | head -60; "
+        'ps -eo pid,ppid,user,pcpu,pmem,stat,comm 2>/dev/null | { IFS= read -r h; echo "$h"; sort -nrk4; } | head -60; '
         f"echo '--- pstree of self ---'; pstree -pl {self_pid} 2>/dev/null | head -40 || true; "
         "echo '--- loadavg ---'; cat /proc/loadavg 2>/dev/null || sysctl -n vm.loadavg 2>/dev/null || true; "
         "echo '--- recent dmesg (oom/killed) ---'; "
@@ -132,8 +145,9 @@ def _async_diagnostic_script(signal_name: str, self_pid: int) -> str:
     )
 
 
-def spawn_async_diagnostic(log_path: Path, signal_name: str, *,
-                           timeout_seconds: float = 5.0) -> Optional[int]:
+def spawn_async_diagnostic(
+    log_path: Path, signal_name: str, *, timeout_seconds: float = 5.0
+) -> Optional[int]:
     """Fire-and-forget ``ps``-style snapshot appended to ``log_path``: a detached subprocess (own
     ``timeout`` so a wedged ``ps`` self-cleans) rather than a blocking process listing in the signal
     handler, which can freeze the loop >2s on a busy host. Returns the subprocess PID, or ``None``
@@ -159,23 +173,33 @@ def spawn_async_diagnostic(log_path: Path, signal_name: str, *,
     bound = [timeout_bin, f"{timeout_seconds:.0f}"] if timeout_bin else []
     try:  # start_new_session: outlive systemd killing our cgroup (KillMode=control-group) to flush
         return subprocess.Popen(
-            [*bound, "bash", "-c", script], stdout=fd,
-            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True,
-            close_fds=True).pid
+            [*bound, "bash", "-c", script],
+            stdout=fd,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        ).pid
     except OSError:
         return None
     finally:
-        with contextlib.suppress(OSError):  # subprocess inherited the fd; drop our handle
+        with contextlib.suppress(
+            OSError
+        ):  # subprocess inherited the fd; drop our handle
             os.close(fd)
 
 
 def format_context_for_log(ctx: dict[str, Any]) -> str:
     """Render a shutdown context dict as one scannable log line (parent identity, never argv)."""
     parent = ctx.get("parent") or {}
-    load_str = f"{load:.2f}" if isinstance(load := ctx.get("loadavg_1m"), (int, float)) else "?"
+    load_str = (
+        f"{load:.2f}"
+        if isinstance(load := ctx.get("loadavg_1m"), (int, float))
+        else "?"
+    )
     extras: list[str] = []
     if ctx.get("takeover_marker") is not None:
-        who = 'self' if ctx.get('takeover_marker_for_self') else 'other'
+        who = "self" if ctx.get("takeover_marker_for_self") else "other"
         extras.append(f"takeover_marker_present={who}")
     if ctx.get("planned_stop_marker") is not None:
         extras.append("planned_stop_marker_present=yes")
@@ -210,19 +234,31 @@ def check_systemd_timing_alignment(
         return None  # Not running under systemd (or at least not directly)
     # /proc/self/cgroup: "0::/user.slice/.../clawk-gateway.service"
     unit_name: Optional[str] = None
-    with contextlib.suppress(OSError), open("/proc/self/cgroup", encoding="utf-8") as fh:
+    with (
+        contextlib.suppress(OSError),
+        open("/proc/self/cgroup", encoding="utf-8") as fh,
+    ):
         for line in fh:
             parts = reversed(line.strip().split("/"))
             unit_name = next((p for p in parts if p.endswith(".service")), None)
             if unit_name:
                 break
-    if (timeout_us := _systemd_timeout_stop_us(unit_name) if unit_name else None) is None:
+    if (
+        timeout_us := _systemd_timeout_stop_us(unit_name) if unit_name else None
+    ) is None:
         return None
     timeout_stop_sec = timeout_us / 1_000_000.0
-    expected = float(resolve_systemd_timeout_stop_sec(drain_timeout, cron_drain_timeout))
-    return {"unit": unit_name, "timeout_stop_sec": timeout_stop_sec, "drain_timeout": drain_timeout,
-            "cron_drain_timeout": cron_drain_timeout, "expected_min": expected,
-            "mismatch": timeout_stop_sec < expected}
+    expected = float(
+        resolve_systemd_timeout_stop_sec(drain_timeout, cron_drain_timeout)
+    )
+    return {
+        "unit": unit_name,
+        "timeout_stop_sec": timeout_stop_sec,
+        "drain_timeout": drain_timeout,
+        "cron_drain_timeout": cron_drain_timeout,
+        "expected_min": expected,
+        "mismatch": timeout_stop_sec < expected,
+    }
 
 
 def _systemd_timeout_stop_us(unit_name: str) -> Optional[int]:
@@ -231,7 +267,11 @@ def _systemd_timeout_stop_us(unit_name: str) -> Optional[int]:
         try:
             result = subprocess.run(
                 ["systemctl", *flag, "show", unit_name, "--property=TimeoutStopUSec"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2.0,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=2.0,
                 check=False,
             )
         except (subprocess.TimeoutExpired, OSError):
@@ -240,7 +280,11 @@ def _systemd_timeout_stop_us(unit_name: str) -> Optional[int]:
         for line in result.stdout.splitlines() if result.returncode == 0 else ():
             if line.startswith("TimeoutStopUSec="):
                 value = line.split("=", 1)[1].strip()
-                timeout_us = int(value) if value.isdigit() else parse_systemd_duration_to_us(value)
+                timeout_us = (
+                    int(value)
+                    if value.isdigit()
+                    else parse_systemd_duration_to_us(value)
+                )
                 if timeout_us is not None:
                     return timeout_us
     return None
@@ -253,11 +297,20 @@ def parse_systemd_duration_to_us(raw: str) -> Optional[int]:
     """
     if not raw:
         return None
-    units = {"us": 1, "ms": 1_000, "s": 1_000_000, "sec": 1_000_000,
-             "min": 60_000_000, "h": 3_600_000_000, "hr": 3_600_000_000,
-             # Fixed systemd time-util.h constants, not variable calendar months/years.
-             "d": 86_400_000_000, "w": 604_800_000_000,
-             "month": 2_629_800_000_000, "y": 31_557_600_000_000}
+    units = {
+        "us": 1,
+        "ms": 1_000,
+        "s": 1_000_000,
+        "sec": 1_000_000,
+        "min": 60_000_000,
+        "h": 3_600_000_000,
+        "hr": 3_600_000_000,
+        # Fixed systemd time-util.h constants, not variable calendar months/years.
+        "d": 86_400_000_000,
+        "w": 604_800_000_000,
+        "month": 2_629_800_000_000,
+        "y": 31_557_600_000_000,
+    }
     total_us, token, digits = 0, "", ""
 
     def _flush() -> bool:  # fold the pending digits/token pair into total_us
@@ -271,6 +324,7 @@ def parse_systemd_duration_to_us(raw: str) -> Optional[int]:
             return False
         digits = token = ""
         return True
+
     for ch in raw + " ":
         if ch.isdigit() or ch == ".":
             if token and not _flush():  # a digit after a unit ends the previous number
@@ -281,4 +335,3 @@ def parse_systemd_duration_to_us(raw: str) -> Optional[int]:
         elif digits and not _flush():
             return None
     return total_us if total_us > 0 else None
-

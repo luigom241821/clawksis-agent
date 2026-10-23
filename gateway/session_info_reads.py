@@ -5,6 +5,7 @@ that held the agent. On the shared gateway that process is the owner, so ``slash
 classic CLI's own line builders (clawk_cli/cli_info_lines.py) here, inside the owning profile, for
 this session's toolsets: the same text on the classic CLI, Ink and every other local client.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,15 +13,21 @@ import asyncio
 
 def _toolsets(authority, policy):
     from clawk_cli.cli_info_lines import toolsets_lines
-    return toolsets_lines(list(policy.current_toolsets(policy.config(authority, secrets=False))) if policy else [])
+
+    return toolsets_lines(
+        list(policy.current_toolsets(policy.config(authority, secrets=False)))
+        if policy
+        else []
+    )
 
 
 def _platforms(authority, policy):
     from clawk_cli.cli_info_lines import platforms_lines
+
     return platforms_lines()
 
 
-READS = {'toolsets': _toolsets, 'platforms': _platforms}
+READS = {"toolsets": _toolsets, "platforms": _platforms}
 
 
 async def owner_lines(authority, lines, offload=None) -> dict:
@@ -30,12 +37,14 @@ async def owner_lines(authority, lines, offload=None) -> dict:
 
     def build():
         with owner_scope(authority):
-            return '\n'.join(lines()).strip('\n')
-    return {'type': 'exec', 'output': await (offload or asyncio.to_thread)(build)}
+            return "\n".join(lines()).strip("\n")
+
+    return {"type": "exec", "output": await (offload or asyncio.to_thread)(build)}
 
 
 async def run_info_read(authority, live, name) -> dict:
     """Render *name* off the owner loop, in the owning profile; None policy = no frozen route."""
     from gateway.session_policy import policy_for_source
+
     policy = policy_for_source(authority.runner, live.source)
     return await owner_lines(authority, lambda: READS[name](authority, policy))

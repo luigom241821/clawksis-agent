@@ -1,4 +1,5 @@
 from clawk_state import AsyncSessionDB
+
 """Regression tests for approval-state cleanup on session boundaries."""
 
 from datetime import datetime
@@ -11,7 +12,12 @@ from gateway.platforms.event import MessageEvent
 from gateway.session import SessionEntry, SessionSource, build_session_key
 from tools import approval as approval_mod
 from tools import slash_confirm as slash_confirm_mod
-from tools.approval import approve_session, enable_session_yolo, is_approved, is_session_yolo_enabled
+from tools.approval import (
+    approve_session,
+    enable_session_yolo,
+    is_approved,
+    is_session_yolo_enabled,
+)
 from tools.approval_gateway_wait import _ApprovalEntry
 
 
@@ -160,7 +166,9 @@ def test_clear_session_boundary_security_state_is_scoped():
     async def _other_handler(choice):
         return f"other:{choice}"
 
-    slash_confirm_mod.register(session_key, "confirm-target", "reload-mcp", _target_handler)
+    slash_confirm_mod.register(
+        session_key, "confirm-target", "reload-mcp", _target_handler
+    )
     slash_confirm_mod.register(other_key, "confirm-other", "reload-mcp", _other_handler)
 
     runner._clear_session_boundary_security_state(session_key)

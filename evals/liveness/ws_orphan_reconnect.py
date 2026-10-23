@@ -3,6 +3,7 @@ Usage: python evals/liveness/ws_orphan_reconnect.py REPO [redetach]
 Seeds a post-interrupt queued envelope to reproduce the bypass-writer schedule,
 not the exact naturally arriving queue race. No lifecycle predicate is patched.
 """
+
 import json
 import os
 from pathlib import Path
@@ -76,7 +77,11 @@ sequence = 0
 def rpc(ws, method, params):
     global sequence
     sequence += 1
-    ws.send(json.dumps({"jsonrpc": "2.0", "id": sequence, "method": method, "params": params}))
+    ws.send(
+        json.dumps(
+            {"jsonrpc": "2.0", "id": sequence, "method": method, "params": params}
+        )
+    )
     while True:
         for line in ws.recv(timeout=15).splitlines():
             obj = json.loads(line)
@@ -102,7 +107,11 @@ def detached_running():
     return sid, session, transport, stop, worker
 
 
-trace = {"source": s.__file__, "home": home, "fidelity": "actual WebSocket, offline model boundary"}
+trace = {
+    "source": s.__file__,
+    "home": home,
+    "fidelity": "actual WebSocket, offline model boundary",
+}
 try:
     # Negative: an orphan which never reconnects must still be reaped.
     sid, session, dead, stop, worker = detached_running()
@@ -127,7 +136,9 @@ try:
         trace["fresh_detachment_polls"] = session["_client_gone_interrupt_polls"]
         stop.set()
         worker.join(2)
-        assert trace["fresh_detachment_polls"] == 1, "new detachment inherited old poll budget"
+        assert trace["fresh_detachment_polls"] == 1, (
+            "new detachment inherited old poll budget"
+        )
         trace["result"] = "PASS fresh detachment"
         raise SystemExit(0)
     with connect(url) as ws:
@@ -143,14 +154,19 @@ try:
         stop.set()
         worker.join(2)
         session["running"] = False
-        wait_for(lambda: sid not in s._pending_ws_reaps, "owning settlement not retired")
+        wait_for(
+            lambda: sid not in s._pending_ws_reaps, "owning settlement not retired"
+        )
         trace["flag_after_poll"] = session.get("_client_gone_interrupt_requested")
         trace["polls_after_poll"] = session.get("_client_gone_interrupt_polls")
         trace["responses"] = {}
         for method in ("session.resume", "session.activate", "prompt.submit"):
             target = session["session_key"] if method == "session.resume" else sid
             reply = rpc(ws, method, {"session_id": target, "text": "probe"})
-            trace["responses"][method] = {"success": "result" in reply, "error": reply.get("error")}
+            trace["responses"][method] = {
+                "success": "result" in reply,
+                "error": reply.get("error"),
+            }
         assert trace["flag_after_poll"] is None, "abandoned interrupt claim remains"
         assert trace["polls_after_poll"] is None
         assert all(r["success"] for r in trace["responses"].values()), trace

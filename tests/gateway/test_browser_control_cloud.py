@@ -50,7 +50,9 @@ def gated_dashboard():
         _reset_for_tests()
 
 
-def test_dashboard_ticket_identity_is_carried_forward_without_trusting_rpc_params(gated_dashboard):
+def test_dashboard_ticket_identity_is_carried_forward_without_trusting_rpc_params(
+    gated_dashboard,
+):
     _reset_for_tests()
     ticket = mint_ticket(user_id="user-fixture", provider="provider-fixture")
     ws = _fake_ticket_ws(ticket)
@@ -123,7 +125,10 @@ def test_cloud_event_writer_surfaces_closed_or_failed_transport_immediately():
         def write(self, _frame):
             return False
 
-    frame = {"method": "browser.controller.command", "params": {"command_id": "fixture"}}
+    frame = {
+        "method": "browser.controller.command",
+        "params": {"command_id": "fixture"},
+    }
     with pytest.raises(ConnectionError, match="fixture transport closed"):
         _broker_event_writer(RaisingTransport(), "session-fixture")(frame)
     with pytest.raises(ConnectionError, match="failed"):
@@ -140,7 +145,9 @@ def test_cloud_principal_digest_is_unambiguous_across_identity_components():
     "identity",
     [None, {}, {"user_id": "server-internal", "provider": "server-internal"}],
 )
-def test_cloud_controller_registration_rejects_missing_or_internal_identity(monkeypatch, identity):
+def test_cloud_controller_registration_rejects_missing_or_internal_identity(
+    monkeypatch, identity
+):
     monkeypatch.setattr(
         "gateway.browser_control_broker.browser_control_enabled", lambda: True
     )
@@ -231,7 +238,9 @@ def test_cloud_registration_rejects_unsupported_protocol_or_empty_capabilities(
         server._sessions.pop("registration-session-fixture", None)
 
 
-def test_cloud_gateway_real_action_round_trip_is_bound_to_identity_and_transport(monkeypatch):
+def test_cloud_gateway_real_action_round_trip_is_bound_to_identity_and_transport(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "gateway.browser_control_broker.browser_control_enabled", lambda: True
     )
@@ -388,7 +397,10 @@ def test_cloud_gateway_real_action_round_trip_is_bound_to_identity_and_transport
                     "session_id": "session-fixture",
                     "command_id": rejected_event["params"]["payload"]["command_id"],
                     "ok": "false",
-                    "error": {"code": "controller_rejected", "message": "fixture rejection"},
+                    "error": {
+                        "code": "controller_rejected",
+                        "message": "fixture rejection",
+                    },
                 },
             },
             transport=transport,
@@ -403,7 +415,9 @@ def test_cloud_gateway_real_action_round_trip_is_bound_to_identity_and_transport
         server._sessions.pop("session-fixture", None)
 
 
-def test_cloud_same_identity_reconnect_refreshes_transport_and_completes_pending(monkeypatch):
+def test_cloud_same_identity_reconnect_refreshes_transport_and_completes_pending(
+    monkeypatch,
+):
     monkeypatch.setattr(
         "gateway.browser_control_broker.browser_control_enabled", lambda: True
     )
@@ -579,11 +593,14 @@ def test_cloud_explicit_detach_requires_current_authenticated_owner(monkeypatch)
             owner,
         )
         assert detached["result"] == {"detached": True}
-        assert broker.scope_for_session(
-            session_id="detach-session",
-            principal_id=registration["result"]["scope"]["principal_id"],
-            transport_family="cloud-ticket-ws",
-        ) is None
+        assert (
+            broker.scope_for_session(
+                session_id="detach-session",
+                principal_id=registration["result"]["scope"]["principal_id"],
+                transport_family="cloud-ticket-ws",
+            )
+            is None
+        )
     finally:
         broker.reset()
         server._sessions.pop("detach-session", None)

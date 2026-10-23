@@ -17,7 +17,11 @@ import pytest
 # Mirrors the post-pull purge of a pre-hand-off updater (v2026.9.14
 # clawk_cli/update_cmd_maint.py): package prefixes only, root-level modules survive.
 _PRE_HANDOFF_PURGE_PREFIXES = ("clawk_cli", "gateway", "tools", "tui_gateway", "agent")
-_PRE_HANDOFF_PURGE_PROTECTED = {"clawk_cli", "clawk_cli.main", "clawk_cli.clawk_logging"}
+_PRE_HANDOFF_PURGE_PROTECTED = {
+    "clawk_cli",
+    "clawk_cli.main",
+    "clawk_cli.clawk_logging",
+}
 
 
 @pytest.fixture
@@ -27,7 +31,9 @@ def pre_handoff_purge():
 
     def _purge() -> None:
         for name in list(sys.modules):
-            if name in _PRE_HANDOFF_PURGE_PROTECTED or name.startswith("clawk_cli.update_"):
+            if name in _PRE_HANDOFF_PURGE_PROTECTED or name.startswith(
+                "clawk_cli.update_"
+            ):
                 continue
             if name.split(".", 1)[0] in _PRE_HANDOFF_PURGE_PREFIXES:
                 module = sys.modules.pop(name, None)

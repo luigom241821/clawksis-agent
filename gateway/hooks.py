@@ -33,7 +33,9 @@ def _resolve_hooks_dir() -> Path:
     loaded from the launch home would run the default profile's handlers (arbitrary Python) on
     every other profile's messages, responses and user ids."""
     configured = Path(HOOKS_DIR)
-    return configured if configured != _HOOKS_DIR_AT_IMPORT else get_clawk_home() / "hooks"
+    return (
+        configured if configured != _HOOKS_DIR_AT_IMPORT else get_clawk_home() / "hooks"
+    )
 
 
 def _skip(name: str, reason: str) -> None:
@@ -106,7 +108,12 @@ class HookRegistry:
             for event in events:
                 self._handlers.setdefault(event, []).append(handle_fn)
             self._loaded_hooks.append(
-                {"name": hook_name, "description": description, "events": events, "path": str(hook_dir)}
+                {
+                    "name": hook_name,
+                    "description": description,
+                    "events": events,
+                    "path": str(hook_dir),
+                }
             )
             print(f"[hooks] Loaded hook '{hook_name}' for events: {events}", flush=True)
 
@@ -118,11 +125,15 @@ class HookRegistry:
             handlers.extend(self._handlers.get(f"{event_type.split(':')[0]}:*", []))
         return handlers
 
-    async def emit(self, event_type: str, context: Optional[dict[str, Any]] = None) -> None:
+    async def emit(
+        self, event_type: str, context: Optional[dict[str, Any]] = None
+    ) -> None:
         """Fire all handlers for an event, discarding return values."""
         await self.emit_collect(event_type, context)
 
-    async def emit_collect(self, event_type: str, context: Optional[dict[str, Any]] = None) -> list[Any]:
+    async def emit_collect(
+        self, event_type: str, context: Optional[dict[str, Any]] = None
+    ) -> list[Any]:
         """Fire handlers and return their non-None return values in order (decision-style
         hooks, e.g. ``command:<name>`` policies).  A failing handler is logged, not fatal."""
         if context is None:
@@ -131,7 +142,9 @@ class HookRegistry:
         for fn in self._resolve_handlers(event_type):
             try:
                 result = fn(event_type, context)
-                result = await result if asyncio.iscoroutine(result) else result  # sync or async handlers
+                result = (
+                    await result if asyncio.iscoroutine(result) else result
+                )  # sync or async handlers
                 if result is not None:
                     results.append(result)
             except Exception as e:
@@ -174,8 +187,12 @@ class ProfileHookRegistries:
         """Load the active home's hooks now (startup, or a secondary profile's scoped startup)."""
         self._active()
 
-    async def emit(self, event_type: str, context: Optional[dict[str, Any]] = None) -> None:
+    async def emit(
+        self, event_type: str, context: Optional[dict[str, Any]] = None
+    ) -> None:
         await self._active().emit(event_type, context)
 
-    async def emit_collect(self, event_type: str, context: Optional[dict[str, Any]] = None) -> list[Any]:
+    async def emit_collect(
+        self, event_type: str, context: Optional[dict[str, Any]] = None
+    ) -> list[Any]:
         return await self._active().emit_collect(event_type, context)

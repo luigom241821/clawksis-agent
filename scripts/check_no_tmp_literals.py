@@ -42,6 +42,7 @@ Run: python scripts/check_no_tmp_literals.py [--all] [--print-baseline] [paths..
   --strict-baseline  fail on stale/overstated ``_BASELINE`` entries too
 Exit 1 on any violation, 0 when clean.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,22 +59,62 @@ SELF = Path(__file__).resolve()
 MARKER = "no-tmp: ok"
 
 SCAN_SUFFIXES = {
-    ".py", ".sh", ".bash", ".ts", ".tsx", ".js", ".mjs", ".cjs",
-    ".md", ".mdx", ".txt", ".yaml", ".yml", ".json", ".toml",
+    ".py",
+    ".sh",
+    ".bash",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".md",
+    ".mdx",
+    ".txt",
+    ".yaml",
+    ".yml",
+    ".json",
+    ".toml",
 }
 
 # Pruned at every depth.
 SKIP_DIRS = {
-    ".git", ".venv", "venv", "node_modules", "__pycache__", "build", "dist", ".worktrees",
-    "tests", "tests-js", "__tests__", "e2e", "evals", "docker", "MagicMock",
-    ".pytest_cache", ".ruff_cache", ".mypy_cache", "coverage", "target",
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    "build",
+    "dist",
+    ".worktrees",
+    "tests",
+    "tests-js",
+    "__tests__",
+    "e2e",
+    "evals",
+    "docker",
+    "MagicMock",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    "coverage",
+    "target",
 }
 # Pruned only directly under the repo root.
 ROOT_SKIP_DIRS = {".github"}
 # Pruned as repo-relative paths.
-SKIP_REL_DIRS = {Path("website/i18n"), Path("website/build"), Path("website/node_modules")}
+SKIP_REL_DIRS = {
+    Path("website/i18n"),
+    Path("website/build"),
+    Path("website/node_modules"),
+}
 
-SKIP_FILE_NAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "uv.lock", "poetry.lock"}
+SKIP_FILE_NAMES = {
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "uv.lock",
+    "poetry.lock",
+}
 SKIP_FILE_PATTERNS = (
     re.compile(r"^test_.*\.py$"),
     re.compile(r"_test\.py$"),
@@ -88,12 +129,30 @@ _TMP_TOKEN = re.compile(r"(?<![\w./~\\-])(?<!:-)/tmp(?![\w-])")
 
 
 _LINE_COMMENT_PREFIX = {
-    ".sh": ("#",), ".bash": ("#",), ".yaml": ("#",), ".yml": ("#",), ".toml": ("#",),
-    ".ts": ("//", "/*", "*"), ".tsx": ("//", "/*", "*"), ".js": ("//", "/*", "*"),
-    ".mjs": ("//", "/*", "*"), ".cjs": ("//", "/*", "*"),
+    ".sh": ("#",),
+    ".bash": ("#",),
+    ".yaml": ("#",),
+    ".yml": ("#",),
+    ".toml": ("#",),
+    ".ts": ("//", "/*", "*"),
+    ".tsx": ("//", "/*", "*"),
+    ".js": ("//", "/*", "*"),
+    ".mjs": ("//", "/*", "*"),
+    ".cjs": ("//", "/*", "*"),
 }
-_TRAILING_COMMENT = {".py": "#", ".sh": "#", ".bash": "#", ".yaml": "#", ".yml": "#", ".toml": "#",
-                     ".ts": "//", ".tsx": "//", ".js": "//", ".mjs": "//", ".cjs": "//"}
+_TRAILING_COMMENT = {
+    ".py": "#",
+    ".sh": "#",
+    ".bash": "#",
+    ".yaml": "#",
+    ".yml": "#",
+    ".toml": "#",
+    ".ts": "//",
+    ".tsx": "//",
+    ".js": "//",
+    ".mjs": "//",
+    ".cjs": "//",
+}
 
 
 def _python_comment_and_docstring_spans(text: str) -> tuple[dict[int, int], set[int]]:
@@ -116,16 +175,26 @@ def _python_comment_and_docstring_spans(text: str) -> tuple[dict[int, int], set[
     doc_lines: set[int] = set()
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # scanned files' own SyntaxWarnings are not our business
+            warnings.simplefilter(
+                "ignore"
+            )  # scanned files' own SyntaxWarnings are not our business
             tree = ast.parse(text)
     except (SyntaxError, ValueError):
         return comments, doc_lines
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
             body = getattr(node, "body", [])
-            if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant) \
-                    and isinstance(body[0].value.value, str):
-                doc_lines.update(range(body[0].lineno, (body[0].end_lineno or body[0].lineno) + 1))
+            if (
+                body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(getattr(body[0], "value", None), ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                doc_lines.update(
+                    range(body[0].lineno, (body[0].end_lineno or body[0].lineno) + 1)
+                )
     return comments, doc_lines
 
 
@@ -170,8 +239,20 @@ def _git_ignored(root: Path) -> set[Path]:
     run wrote. Empty when *root* is not a git checkout."""
     try:
         out = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--others", "--ignored", "--exclude-standard", "-z"],
-            capture_output=True, text=True, check=True, stdin=subprocess.DEVNULL,
+            [
+                "git",
+                "-C",
+                str(root),
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            stdin=subprocess.DEVNULL,
         ).stdout
     except (OSError, subprocess.CalledProcessError):
         return set()
@@ -186,7 +267,9 @@ def iter_files(root: Path | None = None):
         rel_here = here.relative_to(root) if here != root else Path()
         excluded = SKIP_DIRS | (ROOT_SKIP_DIRS if here == root else set())
         dirnames[:] = sorted(
-            d for d in dirnames if d not in excluded and (rel_here / d) not in SKIP_REL_DIRS
+            d
+            for d in dirnames
+            if d not in excluded and (rel_here / d) not in SKIP_REL_DIRS
         )
         for filename in sorted(filenames):
             path = here / filename
@@ -226,16 +309,28 @@ _BASELINE: dict[str, int] = {
 
 
 def _format_baseline(hits: dict[str, list]) -> str:
-    body = "".join(f'    "{rel}": {len(found)},\n' for rel, found in sorted(hits.items()))
+    body = "".join(
+        f'    "{rel}": {len(found)},\n' for rel, found in sorted(hits.items())
+    )
     return "_BASELINE: dict[str, int] = {\n" + body + "}"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("paths", nargs="*", help="files to check (default: whole repo)")
-    ap.add_argument("--all", action="store_true", help="ignore _BASELINE; report every hit")
-    ap.add_argument("--print-baseline", action="store_true", help="print a _BASELINE for the current tree")
-    ap.add_argument("--strict-baseline", action="store_true", help="also fail when _BASELINE overstates a file")
+    ap.add_argument(
+        "--all", action="store_true", help="ignore _BASELINE; report every hit"
+    )
+    ap.add_argument(
+        "--print-baseline",
+        action="store_true",
+        help="print a _BASELINE for the current tree",
+    )
+    ap.add_argument(
+        "--strict-baseline",
+        action="store_true",
+        help="also fail when _BASELINE overstates a file",
+    )
     args = ap.parse_args(argv)
 
     hits = scan(args.paths or None)
@@ -252,7 +347,9 @@ def main(argv: list[str] | None = None) -> int:
         allowed = baseline.get(rel)
         if allowed is not None and len(found) <= allowed:
             if len(found) < allowed:
-                advisories.append(f"{rel}: {len(found)} literal /tmp path(s) left, _BASELINE says {allowed}")
+                advisories.append(
+                    f"{rel}: {len(found)} literal /tmp path(s) left, _BASELINE says {allowed}"
+                )
             continue
         for lineno, line in found:
             total += 1
@@ -261,8 +358,10 @@ def main(argv: list[str] | None = None) -> int:
         if rel not in hits:
             advisories.append(f"{rel}: listed in _BASELINE but clean (or gone)")
     if advisories:
-        print("advisory — _BASELINE in scripts/check_no_tmp_literals.py is stale; regenerate it with "
-              "--print-baseline (fewer hits than listed is progress, not a failure):")
+        print(
+            "advisory — _BASELINE in scripts/check_no_tmp_literals.py is stale; regenerate it with "
+            "--print-baseline (fewer hits than listed is progress, not a failure):"
+        )
         print("\n".join("  " + a for a in advisories))
     if args.strict_baseline and advisories:
         problems.extend(advisories)

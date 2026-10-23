@@ -79,9 +79,7 @@ class TestResetBackupOrdering:
         assert SENTINEL_MODEL not in config_path.read_text(encoding="utf-8")
         assert load_config()["model"] == DEFAULT_CONFIG["model"]
 
-    def test_reset_reports_where_the_backup_landed(
-        self, tmp_path, monkeypatch, capsys
-    ):
+    def test_reset_reports_where_the_backup_landed(self, tmp_path, monkeypatch, capsys):
         """--reset can exit early, so it must surface the backup path itself."""
         from clawk_cli.setup import run_setup_wizard
 

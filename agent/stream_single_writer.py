@@ -17,14 +17,23 @@ logger = logging.getLogger(__name__)
 
 def claim_stream_writer(agent: Any) -> int:
     """Claim the delta sink for this stream attempt; ``0`` (never fenced) when the agent lacks the fence or the claim raised."""
-    return _fence_call(agent, "_claim_stream_writer", int, 0, "claim failed; proceeding unfenced")
+    return _fence_call(
+        agent, "_claim_stream_writer", int, 0, "claim failed; proceeding unfenced"
+    )
 
 
 def stream_writer_is_current(agent: Any, token: int) -> bool:
     """True when ``token`` is still the active writer; a falsy token or a fence-less agent cannot prove supersession, so True."""
     if not token:
         return True
-    return _fence_call(agent, "_stream_writer_is_current", bool, True, "is_current check failed; treating as current", token)
+    return _fence_call(
+        agent,
+        "_stream_writer_is_current",
+        bool,
+        True,
+        "is_current check failed; treating as current",
+        token,
+    )
 
 
 def _fence_call(agent: Any, name: str, cast, fallback, failure_note: str, *args):

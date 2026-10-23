@@ -1,4 +1,5 @@
 """Realized digests bind link text without reading the linked directory."""
+
 import os
 from pathlib import Path
 
@@ -36,7 +37,9 @@ def test_directory_links_bind_only_their_target_text(tmp_path):
         link.symlink_to(Path("..") / "left", target_is_directory=True)
     except OSError as exc:
         if getattr(exc, "winerror", None) == 1314:
-            pytest.skip("directory symlinks require Windows Developer Mode or privilege")
+            pytest.skip(
+                "directory symlinks require Windows Developer Mode or privilege"
+            )
         raise
     first = tree_digest(root)
     assert first != plain
@@ -69,7 +72,11 @@ def test_junctions_bind_target_text_without_walking_outside(tmp_path, monkeypatc
     def point_at(target):
         result = subprocess.run(
             [command, "/d", "/c", "mklink", "/J", str(junction), str(target)],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr

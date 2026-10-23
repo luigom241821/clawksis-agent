@@ -5,6 +5,7 @@ interpolation) rather than mocking it, proving the property that matters: two
 profiles with different keys never see each other's, and an unscoped read in
 multiplex mode fails closed instead of leaking.
 """
+
 import pytest
 
 from pathlib import Path
@@ -24,6 +25,7 @@ class TestRuntimeProviderUsesScope:
 
     def test_getenv_two_profiles_isolated(self, monkeypatch):
         from agent.secret_scope import get_secret_str as _getenv
+
         ss.set_multiplex_active(True)
 
         tok_a = ss.set_secret_scope({"OPENAI_API_KEY": "sk-A"})
@@ -44,6 +46,7 @@ class TestMcpInterpolationUsesScope:
 
     def test_interpolation_reads_scope(self, monkeypatch):
         from tools.mcp_tool_config import _interpolate_env_vars
+
         monkeypatch.setenv("MY_MCP_TOKEN", "global-token")
         ss.set_multiplex_active(True)
         tok = ss.set_secret_scope({"MY_MCP_TOKEN": "profile-token"})
@@ -107,13 +110,11 @@ def test_turn_scoped_dotenv_reload_does_not_pollute_process_env(tmp_path, monkey
     profile_a.mkdir(parents=True)
     profile_b.mkdir(parents=True)
     (profile_a / ".env").write_text(
-        "PROFILE_SCOPED_API_KEY=secret-a\n"
-        "DISCORD_ALLOWED_CHANNELS=profile-a-only\n",
+        "PROFILE_SCOPED_API_KEY=secret-a\nDISCORD_ALLOWED_CHANNELS=profile-a-only\n",
         encoding="utf-8",
     )
     (profile_b / ".env").write_text(
-        "PROFILE_SCOPED_API_KEY=secret-b\n"
-        "DISCORD_ALLOWED_CHANNELS=profile-b-only\n",
+        "PROFILE_SCOPED_API_KEY=secret-b\nDISCORD_ALLOWED_CHANNELS=profile-b-only\n",
         encoding="utf-8",
     )
     monkeypatch.delenv("PROFILE_SCOPED_API_KEY", raising=False)
@@ -152,8 +153,12 @@ def test_launch_home_dotenv_still_loads_under_multiplex(tmp_path, monkeypatch):
     routed = tmp_path / "profiles" / "routed"
     launch.mkdir()
     routed.mkdir(parents=True)
-    (launch / ".env").write_text("LAUNCH_ONLY_FALLBACK_KEY=launch-key\n", encoding="utf-8")
-    (routed / ".env").write_text("LAUNCH_ONLY_FALLBACK_KEY=routed-secret\n", encoding="utf-8")
+    (launch / ".env").write_text(
+        "LAUNCH_ONLY_FALLBACK_KEY=launch-key\n", encoding="utf-8"
+    )
+    (routed / ".env").write_text(
+        "LAUNCH_ONLY_FALLBACK_KEY=routed-secret\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.delenv("LAUNCH_ONLY_FALLBACK_KEY", raising=False)
     ss.set_multiplex_active(True)
@@ -173,7 +178,9 @@ def test_launch_home_dotenv_still_loads_under_multiplex(tmp_path, monkeypatch):
     assert os.environ["LAUNCH_ONLY_FALLBACK_KEY"] == "launch-key"
 
 
-def test_launch_home_load_inside_foreign_turn_keeps_routed_cwd_out_of_process_env(tmp_path, monkeypatch):
+def test_launch_home_load_inside_foreign_turn_keeps_routed_cwd_out_of_process_env(
+    tmp_path, monkeypatch
+):
     """A launch-targeted load while a FOREIGN profile is routed is still skipped: its terminal
     bridge reads config through the override, so it would copy the routed profile's ``terminal.cwd``
     into the shared ``TERMINAL_CWD`` that the launch profile's own turns and cron jobs read."""
@@ -188,9 +195,15 @@ def test_launch_home_load_inside_foreign_turn_keeps_routed_cwd_out_of_process_en
     routed_work = tmp_path / "work-routed"
     for d in (launch, routed, launch_work, routed_work):
         d.mkdir(parents=True)
-    (launch / ".env").write_text("LAUNCH_ONLY_FALLBACK_KEY=launch-key\n", encoding="utf-8")
-    (launch / "config.yaml").write_text(f"terminal:\n  backend: local\n  cwd: {launch_work}\n", encoding="utf-8")
-    (routed / "config.yaml").write_text(f"terminal:\n  backend: local\n  cwd: {routed_work}\n", encoding="utf-8")
+    (launch / ".env").write_text(
+        "LAUNCH_ONLY_FALLBACK_KEY=launch-key\n", encoding="utf-8"
+    )
+    (launch / "config.yaml").write_text(
+        f"terminal:\n  backend: local\n  cwd: {launch_work}\n", encoding="utf-8"
+    )
+    (routed / "config.yaml").write_text(
+        f"terminal:\n  backend: local\n  cwd: {routed_work}\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setenv("TERMINAL_CWD", str(launch_work))
     ss.set_multiplex_active(True)
@@ -220,9 +233,7 @@ def test_cold_profile_hydrates_external_source_without_global_env(
     sibling = tmp_path / "profiles" / "sibling"
     profile.mkdir(parents=True)
     sibling.mkdir(parents=True)
-    (profile / ".env").write_text(
-        "EXPLICIT_API_KEY=dotenv-wins\n", encoding="utf-8"
-    )
+    (profile / ".env").write_text("EXPLICIT_API_KEY=dotenv-wins\n", encoding="utf-8")
     monkeypatch.delenv("TEST_PROVIDER_API_KEY", raising=False)
     monkeypatch.delenv("EXPLICIT_API_KEY", raising=False)
     monkeypatch.setattr(

@@ -20,15 +20,40 @@ logger = logging.getLogger(__name__)
 # Gemini's ``FunctionDeclaration.parameters`` accepts only a subset of OpenAPI 3.0 /
 # JSON Schema (the ``Schema`` object); everything else is stripped.
 _GEMINI_SCHEMA_ALLOWED_KEYS = {
-    "type", "format", "title", "description", "nullable", "enum", "maxItems", "minItems", "properties", "required",
-    "minProperties", "maxProperties", "minLength", "maxLength", "pattern", "example", "anyOf", "propertyOrdering",
-    "default", "items", "minimum", "maximum",
+    "type",
+    "format",
+    "title",
+    "description",
+    "nullable",
+    "enum",
+    "maxItems",
+    "minItems",
+    "properties",
+    "required",
+    "minProperties",
+    "maxProperties",
+    "minLength",
+    "maxLength",
+    "pattern",
+    "example",
+    "anyOf",
+    "propertyOrdering",
+    "default",
+    "items",
+    "minimum",
+    "maximum",
 }
 
 
 _GEMINI_STRUCTURAL_KEYS = {
     "array": {"items", "minItems", "maxItems"},
-    "object": {"properties", "required", "minProperties", "maxProperties", "propertyOrdering"},
+    "object": {
+        "properties",
+        "required",
+        "minProperties",
+        "maxProperties",
+        "propertyOrdering",
+    },
 }
 
 
@@ -49,13 +74,25 @@ def _normalize_gemini_type_array(type_array: list, cleaned: dict[str, Any]) -> N
         constraints = {"anyOf": cleaned["anyOf"]} if "anyOf" in cleaned else {}
         # Gemini requires items/properties on the typed branch itself, not
         # its typeless parent. Keep required paired with those properties.
-        structural = {key: cleaned.pop(key) for keys in _GEMINI_STRUCTURAL_KEYS.values()
-                      for key in keys if key in cleaned}
+        structural = {
+            key: cleaned.pop(key)
+            for keys in _GEMINI_STRUCTURAL_KEYS.values()
+            for key in keys
+            if key in cleaned
+        }
         cleaned["anyOf"] = [
-            sanitize_gemini_schema({**branch, **constraints, **{
-                key: value for key, value in structural.items()
-                if key in _GEMINI_STRUCTURAL_KEYS.get(branch["type"], ())
-            }}) for branch in derived["anyOf"]
+            sanitize_gemini_schema(
+                {
+                    **branch,
+                    **constraints,
+                    **{
+                        key: value
+                        for key, value in structural.items()
+                        if key in _GEMINI_STRUCTURAL_KEYS.get(branch["type"], ())
+                    },
+                }
+            )
+            for branch in derived["anyOf"]
         ]
     else:
         cleaned["type"] = derived["type"]
@@ -77,12 +114,20 @@ def sanitize_gemini_schema(schema: Any) -> dict[str, Any]:
             continue
         if key == "properties":
             if isinstance(value, dict):
-                cleaned[key] = {name: sanitize_gemini_schema(sub) for name, sub in value.items() if isinstance(name, str)}
+                cleaned[key] = {
+                    name: sanitize_gemini_schema(sub)
+                    for name, sub in value.items()
+                    if isinstance(name, str)
+                }
         elif key == "items":
             cleaned[key] = sanitize_gemini_schema(value)
         elif key == "anyOf":
             if isinstance(value, list):
-                cleaned[key] = [sanitize_gemini_schema(item) for item in value if isinstance(item, dict)]
+                cleaned[key] = [
+                    sanitize_gemini_schema(item)
+                    for item in value
+                    if isinstance(item, dict)
+                ]
         else:
             cleaned[key] = value
 
@@ -96,9 +141,14 @@ def sanitize_gemini_schema(schema: Any) -> dict[str, Any]:
     # still emits typed tool arguments at runtime. dict.fromkeys = ordered dedupe.
     enum_val = cleaned.get("enum")
     if isinstance(enum_val, list) and (
-        isinstance(type_array, list) or cleaned.get("type") in {"integer", "number", "boolean"}
+        isinstance(type_array, list)
+        or cleaned.get("type") in {"integer", "number", "boolean"}
     ):
-        if stringified := list(dict.fromkeys(v for v in map(_stringify_enum_value, enum_val) if v is not None)):
+        if stringified := list(
+            dict.fromkeys(
+                v for v in map(_stringify_enum_value, enum_val) if v is not None
+            )
+        ):
             cleaned["enum"] = stringified
         else:
             cleaned.pop("enum", None)
@@ -111,7 +161,11 @@ def sanitize_gemini_schema(schema: Any) -> dict[str, Any]:
     if isinstance(required_val, list):
         props_val = cleaned.get("properties")
         prop_names = set(props_val) if isinstance(props_val, dict) else set()
-        valid_required = [name for name in required_val if isinstance(name, str) and name in prop_names]
+        valid_required = [
+            name
+            for name in required_val
+            if isinstance(name, str) and name in prop_names
+        ]
         if not valid_required:
             cleaned.pop("required", None)
         elif len(valid_required) != len(required_val):
@@ -151,7 +205,9 @@ def _resolve_local_ref(root: dict[str, Any], ref: str) -> Optional[dict[str, Any
     return node if isinstance(node, dict) else None
 
 
-def _inline_refs(node: Any, root: dict[str, Any], budget: list[int], stack: tuple = ()) -> Any:
+def _inline_refs(
+    node: Any, root: dict[str, Any], budget: list[int], stack: tuple = ()
+) -> Any:
     """Recursively inline same-document ``$ref`` nodes; ``ValueError`` on an unresolvable
     or circular reference or an exhausted budget (the caller then keeps the original)."""
     if isinstance(node, list):
@@ -160,7 +216,9 @@ def _inline_refs(node: Any, root: dict[str, Any], budget: list[int], stack: tupl
         return node
     ref = node.get("$ref")
     if not isinstance(ref, str):
-        return {key: _inline_refs(value, root, budget, stack) for key, value in node.items()}
+        return {
+            key: _inline_refs(value, root, budget, stack) for key, value in node.items()
+        }
     if ref in stack:
         raise ValueError(f"circular $ref {ref!r}")
     budget[0] -= 1
@@ -173,7 +231,11 @@ def _inline_refs(node: Any, root: dict[str, Any], budget: list[int], stack: tupl
     # JSON Schema: siblings of $ref (description, default, ...) apply alongside the
     # referenced schema and win over it.
     siblings = {k: v for k, v in node.items() if k != "$ref"}
-    return {**inlined, **_inline_refs(siblings, root, budget, stack)} if siblings else inlined
+    return (
+        {**inlined, **_inline_refs(siblings, root, budget, stack)}
+        if siblings
+        else inlined
+    )
 
 
 def prepare_gemini_tool_parameters(parameters: Any) -> dict[str, Any]:

@@ -25,14 +25,23 @@ def digest(path: Path) -> str | None:
 def tool_text(content: Any) -> str:
     """Flatten a chat-completions tool message ``content`` (str or content parts) to text."""
     if isinstance(content, list):
-        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in content)
+        return "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+        )
     return str(content or "")
 
 
-def run_tool_calls(home: Path, calls: list[tuple[str, dict[str, Any]]], *, cwd: Path,
-                   config: str = "", env_lines: dict[str, str] | None = None,
-                   extra_env: dict[str, str] | None = None, timeout: float = 150.0,
-                   prepare: Callable[[], None] | None = None) -> list[str]:
+def run_tool_calls(
+    home: Path,
+    calls: list[tuple[str, dict[str, Any]]],
+    *,
+    cwd: Path,
+    config: str = "",
+    env_lines: dict[str, str] | None = None,
+    extra_env: dict[str, str] | None = None,
+    timeout: float = 150.0,
+    prepare: Callable[[], None] | None = None,
+) -> list[str]:
     """Run one ``clawk chat -q`` turn whose model issues ``calls`` sequentially; return each tool
     result text, in call order. ``prepare`` runs after the home (config.yaml + .env) is written and
     before Clawksis starts (snapshot pre-run state there). Harness failures (non-zero exit, a lost tool
@@ -40,16 +49,30 @@ def run_tool_calls(home: Path, calls: list[tuple[str, dict[str, Any]]], *, cwd: 
     key = H.canary("sk-traversal")
     script: list[Any] = [ToolCall(name, args) for name, args in calls] + [Text("done")]
     with FakeLLMServer(script, api_key=key) as srv:
-        H.write_home(home / ".clawksis", srv.base_url, api_key=key, config=config, env=env_lines)
+        H.write_home(
+            home / ".clawksis", srv.base_url, api_key=key, config=config, env=env_lines
+        )
         if prepare is not None:
             prepare()
-        proc = H.run_clawk(["chat", "-q", "run the scripted tools", "-Q"], home, cwd=cwd,
-                            extra_env=extra_env, timeout=timeout)
+        proc = H.run_clawk(
+            ["chat", "-q", "run the scripted tools", "-Q"],
+            home,
+            cwd=cwd,
+            extra_env=extra_env,
+            timeout=timeout,
+        )
         reqs = srv.main_requests()
-    assert proc.returncode == 0, f"clawk chat -q rc={proc.returncode}\n{proc.stdout[-2000:]}\n{proc.stderr[-4000:]}"
-    assert len(reqs) == len(calls) + 1, f"expected {len(calls) + 1} model turns, saw {len(reqs)}\n{proc.stderr[-3000:]}"
-    results = {m.get("tool_call_id"): tool_text(m.get("content"))
-               for m in reqs[-1]["messages"] if m.get("role") == "tool"}
+    assert proc.returncode == 0, (
+        f"clawk chat -q rc={proc.returncode}\n{proc.stdout[-2000:]}\n{proc.stderr[-4000:]}"
+    )
+    assert len(reqs) == len(calls) + 1, (
+        f"expected {len(calls) + 1} model turns, saw {len(reqs)}\n{proc.stderr[-3000:]}"
+    )
+    results = {
+        m.get("tool_call_id"): tool_text(m.get("content"))
+        for m in reqs[-1]["messages"]
+        if m.get("role") == "tool"
+    }
     ids = [f"call_fake_{i + 1}" for i in range(len(calls))]
     missing = [i for i in ids if i not in results]
     assert not missing, f"tool results missing for {missing}: got {sorted(results)}"

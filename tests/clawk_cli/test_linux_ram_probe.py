@@ -49,9 +49,10 @@ def test_missing_memavailable_falls_back_to_memfree():
 
 def test_unusable_meminfo_is_not_a_reading():
     assert hw._linux_ram_from_meminfo("MemAvailable: 1048576 kB\n") is None
-    assert hw._linux_ram_from_meminfo(
-        "MemTotal: 1048576 kB\nMemAvailable: 2097152 kB\n"
-    ) is None
+    assert (
+        hw._linux_ram_from_meminfo("MemTotal: 1048576 kB\nMemAvailable: 2097152 kB\n")
+        is None
+    )
 
 
 def test_ram_bytes_uses_injected_meminfo_including_zero(monkeypatch):

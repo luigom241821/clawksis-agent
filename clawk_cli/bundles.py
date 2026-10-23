@@ -11,7 +11,13 @@ from rich.table import Table
 from clawk_cli.cli_output import line_input
 
 from agent.skill_bundles import (
-    _bundles_dir, delete_bundle, get_bundle, list_bundles, reload_bundles, save_bundle, scan_bundles
+    _bundles_dir,
+    delete_bundle,
+    get_bundle,
+    list_bundles,
+    reload_bundles,
+    save_bundle,
+    scan_bundles,
 )
 
 
@@ -31,7 +37,8 @@ def _cmd_list(args) -> None:
         c.print(
             f"[dim]No bundles installed yet. Create one with:\n"
             f"  clawk bundles create <name> --skill skill1 --skill skill2[/]\n"
-            f"Bundles directory: [bold]{_bundles_dir()}[/]")
+            f"Bundles directory: [bold]{_bundles_dir()}[/]"
+        )
         return
 
     table = Table(title=f"Skill Bundles ({len(bundles)})", show_lines=False)
@@ -45,7 +52,8 @@ def _cmd_list(args) -> None:
             f"/{info['slug']}",
             info["name"],
             str(len(info.get("skills", []))),
-            info.get("description") or "")
+            info.get("description") or "",
+        )
     c.print(table)
     c.print(f"\n[dim]Bundles directory: {_bundles_dir()}[/]")
 
@@ -74,7 +82,8 @@ def _cmd_create(args) -> None:
         # Interactive prompt for skills if none were passed on the CLI.
         c.print(
             "[dim]No skills passed via --skill. Enter one skill name per line.\n"
-            "Submit an empty line to finish.[/]")
+            "Submit an empty line to finish.[/]"
+        )
         try:
             while True:
                 line = line_input("skill> ").strip()
@@ -88,8 +97,12 @@ def _cmd_create(args) -> None:
 
     try:
         path = save_bundle(
-            name, skills, description=args.description or "", instruction=args.instruction or "",
-            overwrite=bool(args.force))
+            name,
+            skills,
+            description=args.description or "",
+            instruction=args.instruction or "",
+            overwrite=bool(args.force),
+        )
     except FileExistsError as exc:
         _fail(c, f"[bold red]{exc}[/]\n[dim]Pass --force to overwrite.[/]")
     except ValueError as exc:
@@ -100,7 +113,8 @@ def _cmd_create(args) -> None:
     if info:
         c.print(
             f"  Invoke with: [bold cyan]/{info['slug']}[/]  "
-            f"(loads {len(info['skills'])} skills)")
+            f"(loads {len(info['skills'])} skills)"
+        )
 
 
 def _cmd_delete(args) -> None:
@@ -146,19 +160,34 @@ def register_cli(subparser) -> None:
         help="Create a new skill bundle",
         description=(
             "Create a new bundle. Skills can be passed via --skill (repeat for "
-            "multiple) or entered interactively when omitted."))
+            "multiple) or entered interactively when omitted."
+        ),
+    )
     p_create.add_argument("name", help="Bundle name (becomes the /slash command)")
     p_create.add_argument(
-        "--skill", "-s", action="append", default=[],
-        help="Skill name to include (repeat for multiple)")
+        "--skill",
+        "-s",
+        action="append",
+        default=[],
+        help="Skill name to include (repeat for multiple)",
+    )
     p_create.add_argument(
-        "--description", "-d", default="",
-        help="Human-readable description shown in /help and `clawk bundles list`")
+        "--description",
+        "-d",
+        default="",
+        help="Human-readable description shown in /help and `clawk bundles list`",
+    )
     p_create.add_argument(
-        "--instruction", "-i", default="",
-        help="Extra guidance prepended to the loaded skill content")
+        "--instruction",
+        "-i",
+        default="",
+        help="Extra guidance prepended to the loaded skill content",
+    )
     p_create.add_argument(
-        "--force", "-f", action="store_true", help="Overwrite an existing bundle with the same name"
+        "--force",
+        "-f",
+        action="store_true",
+        help="Overwrite an existing bundle with the same name",
     )
     p_create.set_defaults(_bundles_handler=_cmd_create)
 
@@ -166,7 +195,9 @@ def register_cli(subparser) -> None:
     p_delete.add_argument("name", help="Bundle name")
     p_delete.set_defaults(_bundles_handler=_cmd_delete)
 
-    p_reload = subs.add_parser("reload", help="Re-scan the bundles directory and report changes")
+    p_reload = subs.add_parser(
+        "reload", help="Re-scan the bundles directory and report changes"
+    )
     p_reload.set_defaults(_bundles_handler=_cmd_reload)
 
     # Ensure a fresh scan when any bundles subcommand runs.
@@ -175,5 +206,7 @@ def register_cli(subparser) -> None:
 
 def bundles_command(args) -> None:
     """Dispatch ``clawk bundles <subcommand>`` to the right handler."""
-    handler = getattr(args, "_bundles_handler", None) or _cmd_list  # no subcommand → list
+    handler = (
+        getattr(args, "_bundles_handler", None) or _cmd_list
+    )  # no subcommand → list
     handler(args)

@@ -2,6 +2,7 @@
 
 Handlers live here (not in ``clawk_cli/main.py``) so the LSP module ships self-contained.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -11,19 +12,54 @@ _STATUS_MARKERS = {"installed": "✓", "missing": "·", "manual-only": "?"}
 
 # (name, help, optional (flag, add_argument kwargs), handler(args)) — order defines the help listing.
 _SUBCOMMANDS = [
-    ("status", "Show LSP service status",
-     ("--json", {"action": "store_true", "help": "Emit machine-readable JSON"}),
-     lambda a: _cmd_status(getattr(a, "json", False))),
-    ("list", "List supported language servers",
-     ("--installed-only", {"action": "store_true", "help": "Only show servers whose binary is currently available"}),
-     lambda a: _cmd_list(getattr(a, "installed_only", False))),
-    ("install", "Install a server binary", ("server", {"help": "Server id (e.g. pyright, gopls)"}),
-     lambda a: _cmd_install(a.server)),
-    ("install-all", "Install every server with a known auto-install recipe",
-     ("--include-manual", {"action": "store_true", "help": "Even attempt servers marked manual-install (best effort)"}),
-     lambda a: _cmd_install_all(getattr(a, "include_manual", False))),
-    ("restart", "Tear down running LSP clients (next edit re-spawns)", None, lambda a: _cmd_restart()),
-    ("which", "Print binary path for a server", ("server", {"help": "Server id"}), lambda a: _cmd_which(a.server)),
+    (
+        "status",
+        "Show LSP service status",
+        ("--json", {"action": "store_true", "help": "Emit machine-readable JSON"}),
+        lambda a: _cmd_status(getattr(a, "json", False)),
+    ),
+    (
+        "list",
+        "List supported language servers",
+        (
+            "--installed-only",
+            {
+                "action": "store_true",
+                "help": "Only show servers whose binary is currently available",
+            },
+        ),
+        lambda a: _cmd_list(getattr(a, "installed_only", False)),
+    ),
+    (
+        "install",
+        "Install a server binary",
+        ("server", {"help": "Server id (e.g. pyright, gopls)"}),
+        lambda a: _cmd_install(a.server),
+    ),
+    (
+        "install-all",
+        "Install every server with a known auto-install recipe",
+        (
+            "--include-manual",
+            {
+                "action": "store_true",
+                "help": "Even attempt servers marked manual-install (best effort)",
+            },
+        ),
+        lambda a: _cmd_install_all(getattr(a, "include_manual", False)),
+    ),
+    (
+        "restart",
+        "Tear down running LSP clients (next edit re-spawns)",
+        None,
+        lambda a: _cmd_restart(),
+    ),
+    (
+        "which",
+        "Print binary path for a server",
+        ("server", {"help": "Server id"}),
+        lambda a: _cmd_which(a.server),
+    ),
 ]
 _COMMANDS = {name: handler for name, _, _, handler in _SUBCOMMANDS}
 
@@ -60,45 +96,83 @@ def _all_servers() -> list:
     """Config-declared servers (``lsp.servers.<id>.extensions``) ahead of the built-in registry."""
     from agent.lsp.servers import SERVERS, custom_servers
     from clawk_cli.config import load_config_readonly
+
     try:
         lsp_cfg = load_config_readonly().get("lsp") or {}
     except Exception:
         lsp_cfg = {}
-    return [*custom_servers(lsp_cfg.get("servers") if isinstance(lsp_cfg, dict) else None), *SERVERS]
+    return [
+        *custom_servers(lsp_cfg.get("servers") if isinstance(lsp_cfg, dict) else None),
+        *SERVERS,
+    ]
 
 
 def _status_for(server_id: str) -> str:
     import os
     from agent.lsp.install import detect_status
     from agent.lsp.servers import SERVERS, ServerContext
-    custom = next((s for s in _all_servers() if s.server_id == server_id and s not in SERVERS), None)
-    if custom is not None:  # no install recipe: installed iff the configured command resolves
+
+    custom = next(
+        (s for s in _all_servers() if s.server_id == server_id and s not in SERVERS),
+        None,
+    )
+    if (
+        custom is not None
+    ):  # no install recipe: installed iff the configured command resolves
         cwd = os.getcwd()
-        return "installed" if custom.build_spawn(cwd, ServerContext(cwd, install_strategy="manual")) else "manual-only"
+        return (
+            "installed"
+            if custom.build_spawn(cwd, ServerContext(cwd, install_strategy="manual"))
+            else "manual-only"
+        )
     return detect_status(_recipe_pkg_for(server_id))
 
 
 def _cmd_status(emit_json: bool) -> int:
     from agent.lsp import get_service
     from agent.lsp.servers import UNTRUSTED_SAFE_SERVERS
+
     servers = _all_servers()
     svc = get_service()
     info = svc.get_status() if svc is not None else {"enabled": False}
     if emit_json:
         import json
-        registry = [{"server_id": s.server_id, "extensions": list(s.extensions), "description": s.description,
-                     "binary_status": _status_for(s.server_id)} for s in servers]
-        sys.stdout.write(json.dumps({"service": info, "registry": registry}, indent=2) + "\n")
+
+        registry = [
+            {
+                "server_id": s.server_id,
+                "extensions": list(s.extensions),
+                "description": s.description,
+                "binary_status": _status_for(s.server_id),
+            }
+            for s in servers
+        ]
+        sys.stdout.write(
+            json.dumps({"service": info, "registry": registry}, indent=2) + "\n"
+        )
         return 0
 
-    out = ["LSP Service", "===========", f"  enabled:         {info.get('enabled', False)}"]
+    out = [
+        "LSP Service",
+        "===========",
+        f"  enabled:         {info.get('enabled', False)}",
+    ]
     if svc is not None:
-        out += [f"  wait_mode:       {info.get('wait_mode')}",
-                f"  wait_timeout:    {info.get('wait_timeout')}s",
-                f"  install_strategy:{info.get('install_strategy')}"]
+        out += [
+            f"  wait_mode:       {info.get('wait_mode')}",
+            f"  wait_timeout:    {info.get('wait_timeout')}s",
+            f"  install_strategy:{info.get('install_strategy')}",
+        ]
         clients = info.get("clients") or []
-        out.append(f"  active clients:  {len(clients)}" if clients else "  active clients:  none")
-        out += [f"    - {c['server_id']:20s} state={c['state']:10s} root={c['workspace_root']}" for c in clients]
+        out.append(
+            f"  active clients:  {len(clients)}"
+            if clients
+            else "  active clients:  none"
+        )
+        out += [
+            f"    - {c['server_id']:20s} state={c['state']:10s} root={c['workspace_root']}"
+            for c in clients
+        ]
         broken = info.get("broken") or []
         if broken:
             out.append(f"  broken pairs:    {len(broken)}")
@@ -106,20 +180,30 @@ def _cmd_status(emit_json: bool) -> int:
         if disabled := info.get("disabled_servers"):
             out.append(f"  disabled in cfg: {', '.join(disabled)}")
         if untrusted := info.get("untrusted_skipped"):
-            out.append(f"  untrusted skips: {len(untrusted)} (add the workspace to lsp.trusted_workspaces)")
+            out.append(
+                f"  untrusted skips: {len(untrusted)} (add the workspace to lsp.trusted_workspaces)"
+            )
             out += [f"    - {sid:20s} root={root}" for sid, root in untrusted]
     # Sidecar gaps the registry table can't show (bash-language-server -> shellcheck).
     if backend_warnings := _backend_warnings():
-        out += ["", "Backend warnings", "================"] + [f"  ! {line}" for line in backend_warnings]
+        out += ["", "Backend warnings", "================"] + [
+            f"  ! {line}" for line in backend_warnings
+        ]
     out += ["", "Registered Servers", "=================="]
     for s in servers:
         status = _status_for(s.server_id)
         ext_summary = ", ".join(list(s.extensions)[:5])
         if len(s.extensions) > 5:
             ext_summary += f", … (+{len(s.extensions) - 5})"
-        out.append(f"  {_STATUS_MARKERS.get(status, ' ')} {s.server_id:24s} [{status:11s}] {ext_summary}")
+        out.append(
+            f"  {_STATUS_MARKERS.get(status, ' ')} {s.server_id:24s} [{status:11s}] {ext_summary}"
+        )
         if s.description:
-            gate = "" if s.server_id in UNTRUSTED_SAFE_SERVERS else "  [trusted workspaces only]"
+            gate = (
+                ""
+                if s.server_id in UNTRUSTED_SAFE_SERVERS
+                else "  [trusted workspaces only]"
+            )
             out.append(f"      {s.description}{gate}")
     sys.stdout.write("\n".join(out) + "\n")
     return 0
@@ -129,12 +213,15 @@ def _cmd_list(installed_only: bool) -> int:
     for s in _all_servers():
         status = _status_for(s.server_id)
         if not (installed_only and status != "installed"):
-            sys.stdout.write(f"{s.server_id:24s} [{status:11s}] {','.join(s.extensions)}\n")
+            sys.stdout.write(
+                f"{s.server_id:24s} [{status:11s}] {','.join(s.extensions)}\n"
+            )
     return 0
 
 
 def _cmd_install(server_id: str) -> int:
     from agent.lsp.install import try_install, INSTALL_RECIPES
+
     pkg = _recipe_pkg_for(server_id)
     if _status_for(server_id) == "installed":
         sys.stdout.write(f"{server_id} already installed\n")
@@ -146,19 +233,25 @@ def _cmd_install(server_id: str) -> int:
         sys.stdout.write(f"installed: {bin_path}\n")
         return 0
     manual = (INSTALL_RECIPES.get(pkg) or {}).get("strategy") == "manual"
-    sys.stderr.write(f"{server_id}: this server requires a manual install. See documentation.\n" if manual
-                     else f"{server_id}: install failed (see logs).\n")
+    sys.stderr.write(
+        f"{server_id}: this server requires a manual install. See documentation.\n"
+        if manual
+        else f"{server_id}: install failed (see logs).\n"
+    )
     return 1
 
 
 def _cmd_install_all(include_manual: bool) -> int:
     from agent.lsp.servers import SERVERS
     from agent.lsp.install import try_install, INSTALL_RECIPES
+
     rc = 0
     for s in SERVERS:
         pkg = _recipe_pkg_for(s.server_id)
         recipe = INSTALL_RECIPES.get(pkg)
-        if recipe is None or (recipe.get("strategy") == "manual" and not include_manual):
+        if recipe is None or (
+            recipe.get("strategy") == "manual" and not include_manual
+        ):
             continue
         if _status_for(s.server_id) == "installed":
             sys.stdout.write(f"  {s.server_id:24s} already installed\n")
@@ -173,6 +266,7 @@ def _cmd_install_all(include_manual: bool) -> int:
 
 def _cmd_restart() -> int:
     from agent.lsp import shutdown_service
+
     shutdown_service()
     sys.stdout.write("LSP service shut down. Next edit will respawn clients.\n")
     return 0
@@ -180,7 +274,10 @@ def _cmd_restart() -> int:
 
 def _cmd_which(server_id: str) -> int:
     from agent.lsp.install import INSTALL_RECIPES, _existing_binary
-    resolved = _existing_binary((INSTALL_RECIPES.get(server_id) or {}).get("bin", server_id))
+
+    resolved = _existing_binary(
+        (INSTALL_RECIPES.get(server_id) or {}).get("bin", server_id)
+    )
     if resolved:
         sys.stdout.write(resolved + "\n")
         return 0
@@ -206,7 +303,13 @@ def _backend_warnings() -> list:
     """Notes about missing sidecar tools that make a server spawn fine but emit nothing (e.g. shellcheck)."""
     import shutil
     from agent.lsp.install import _existing_binary
-    if _existing_binary("bash-language-server") is not None and shutil.which("shellcheck") is None:
-        return ["bash-language-server is installed but shellcheck is missing — "
-                "diagnostics will be empty (apt: shellcheck, brew: shellcheck, scoop: shellcheck)."]
+
+    if (
+        _existing_binary("bash-language-server") is not None
+        and shutil.which("shellcheck") is None
+    ):
+        return [
+            "bash-language-server is installed but shellcheck is missing — "
+            "diagnostics will be empty (apt: shellcheck, brew: shellcheck, scoop: shellcheck)."
+        ]
     return []

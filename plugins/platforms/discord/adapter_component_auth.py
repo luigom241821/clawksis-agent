@@ -1,4 +1,5 @@
 """Shared user-or-role authorization for Discord component (button) clicks."""
+
 from __future__ import annotations
 
 from typing import Any, Callable, Optional
@@ -7,7 +8,9 @@ from gateway.platforms._shared import platform_gate_env as _scoped_gate_env
 
 
 def _component_check_auth(
-    interaction, allowed_user_ids: Optional[set], allowed_role_ids: Optional[set],
+    interaction,
+    allowed_user_ids: Optional[set],
+    allowed_role_ids: Optional[set],
     live_auth: Optional[Callable[[Any], Optional[bool]]] = None,
 ) -> bool:
     """Shared user-or-role OR authorization for component button clicks.
@@ -25,11 +28,21 @@ def _component_check_auth(
     # Scope-aware reads (issue #72348): component interactions are dispatched from discord.py tasks
     # descended from the task created inside the owning profile's runtime scope, so the profile's
     # secret-scope contextvar is inherited here.
-    if _scoped_gate_env("DISCORD_ALLOW_ALL_USERS").strip().lower() in {"true", "1", "yes"}:
+    if _scoped_gate_env("DISCORD_ALLOW_ALL_USERS").strip().lower() in {
+        "true",
+        "1",
+        "yes",
+    }:
         return True
-    if _scoped_gate_env("GATEWAY_ALLOW_ALL_USERS").strip().lower() in {"true", "1", "yes"}:
+    if _scoped_gate_env("GATEWAY_ALLOW_ALL_USERS").strip().lower() in {
+        "true",
+        "1",
+        "yes",
+    }:
         return True
-    user_set = {str(uid).strip() for uid in (allowed_user_ids or set()) if str(uid).strip()}
+    user_set = {
+        str(uid).strip() for uid in (allowed_user_ids or set()) if str(uid).strip()
+    }
     global_allowed = {
         uid.strip()
         for uid in _scoped_gate_env("GATEWAY_ALLOWED_USERS").split(",")
@@ -45,7 +58,8 @@ def _component_check_auth(
         uid = ""
     if has_users:
         if ("*" in user_set or (uid and uid in user_set)) and (
-                live_auth is None or live_auth(interaction) is not False):
+            live_auth is None or live_auth(interaction) is not False
+        ):
             return True
     if has_roles:
         roles_attr = getattr(user, "roles", None)
@@ -62,6 +76,7 @@ def _component_check_auth(
     if uid:
         try:
             from gateway.pairing import PairingStore
+
             store = PairingStore()
             if store.is_approved("discord", uid):
                 return True

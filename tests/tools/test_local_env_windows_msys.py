@@ -54,6 +54,7 @@ from tools.environments.local import (
 # _msys_to_windows_path — pure-function unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestMsysToWindowsPath:
     @pytest.mark.platforms("linux")
     def test_noop_on_non_windows(self):
@@ -76,6 +77,7 @@ class TestMsysToWindowsPath:
 # _windows_to_msys_path — reverse translation for bash builtin cd
 # ---------------------------------------------------------------------------
 
+
 class TestWindowsToMsysPath:
     @pytest.mark.platforms("linux")
     def test_noop_on_non_windows(self):
@@ -91,10 +93,13 @@ class TestWindowsToMsysPath:
 # _bash_safe_path / _quote_bash_path — shell-script interpolation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.platforms("windows")
 class TestBashSafePath:
     def test_native_windows_path_becomes_msys(self):
-        assert _bash_safe_path(r"C:\Users\alice\notes.txt") == "/c/Users/alice/notes.txt"
+        assert (
+            _bash_safe_path(r"C:\Users\alice\notes.txt") == "/c/Users/alice/notes.txt"
+        )
 
     def test_quote_bash_path_quotes_mixed_windows_path(self):
         quoted = _quote_bash_path(
@@ -107,6 +112,7 @@ class TestBashSafePath:
 # ---------------------------------------------------------------------------
 # _resolve_safe_cwd — Windows fast path
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.platforms("windows")
 class TestResolveSafeCwdWindows:
@@ -128,6 +134,7 @@ class TestResolveSafeCwdWindows:
 # ---------------------------------------------------------------------------
 # End-to-end: _update_cwd via stdout marker
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.platforms("windows")
 class TestUpdateCwdWindowsMsys:
@@ -164,6 +171,7 @@ class TestUpdateCwdWindowsMsys:
 # ---------------------------------------------------------------------------
 # End-to-end: _extract_cwd_from_output rollback when marker is invalid
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.platforms("windows")
 class TestExtractCwdFromOutputWindowsMsys:
@@ -217,6 +225,7 @@ class TestExtractCwdFromOutputWindowsMsys:
 # MSYS_NO_PATHCONV — native Windows command flags (#56700)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.platforms("windows")
 class TestWindowsMsysPathconvDefaults:
     def test_make_run_env_sets_msys_no_pathconv_on_windows(self):
@@ -240,6 +249,7 @@ class TestWindowsMsysPathconvDefaults:
 # Git Bash coreutils on PATH — non-login ``bash -c`` fallback (empty
 # write_file error / terminal exit 127 when login bash is broken)
 # ---------------------------------------------------------------------------
+
 
 class TestGitBashCoreutilsOnPath:
     def _fake_isdir(self, existing):
@@ -293,6 +303,7 @@ class TestGitBashCoreutilsOnPath:
 # Command wrapping — native Windows cwd must be Git Bash-friendly for cd
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.platforms("windows")
 class TestWrapCommandWindowsNativeCwd:
     def test_wrap_command_converts_native_cwd_for_builtin_cd(self):
@@ -307,11 +318,17 @@ class TestWrapCommandWindowsNativeCwd:
         assert "builtin cd -- /c/Users/liush || exit 126" in wrapped
         assert r"builtin cd -- C:\Users\liush || exit 126" not in wrapped
 
-    def test_init_session_bootstrap_rewrites_backslash_snapshot_paths(self, monkeypatch):
+    def test_init_session_bootstrap_rewrites_backslash_snapshot_paths(
+        self, monkeypatch
+    ):
         captured = {}
 
-        def fake_run_bash(self, cmd_string, *, login=False, timeout=120, stdin_data=None):
-            captured.setdefault("script", cmd_string)  # bootstrap only; ignore the failure-path probe
+        def fake_run_bash(
+            self, cmd_string, *, login=False, timeout=120, stdin_data=None
+        ):
+            captured.setdefault(
+                "script", cmd_string
+            )  # bootstrap only; ignore the failure-path probe
             raise RuntimeError("stop after capturing bootstrap")
 
         monkeypatch.setattr(LocalEnvironment, "_run_bash", fake_run_bash)
@@ -338,8 +355,16 @@ def test_git_bash_dirs_stay_first_when_clawk_tools_move_behind_the_users(monkeyp
     import pm.install
     from tools.environments import local as local_mod
 
-    bash_dir, node_dir, system32 = "/store/git/usr/bin", "/store/node", "/windows/system32"
+    bash_dir, node_dir, system32 = (
+        "/store/git/usr/bin",
+        "/store/node",
+        "/windows/system32",
+    )
     monkeypatch.setattr(pm.install, "_store_path_dirs", lambda: [bash_dir, node_dir])
     monkeypatch.setattr(local_mod, "_git_bash_bin_dirs", lambda: [bash_dir])
     path = os.pathsep.join([bash_dir, node_dir, system32])
-    assert local_mod._user_tools_first(path).split(os.pathsep) == [bash_dir, system32, node_dir]
+    assert local_mod._user_tools_first(path).split(os.pathsep) == [
+        bash_dir,
+        system32,
+        node_dir,
+    ]

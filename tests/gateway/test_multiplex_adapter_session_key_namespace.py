@@ -92,7 +92,9 @@ class TestOwnerProfileKeying:
         secondary_a.set_owner_profile("medicina")
         src = _source()
         k_default = build_session_key(src, profile=default_a._session_key_profile(src))
-        k_secondary = build_session_key(src, profile=secondary_a._session_key_profile(src))
+        k_secondary = build_session_key(
+            src, profile=secondary_a._session_key_profile(src)
+        )
         assert k_default != k_secondary, f"both bots share one lane: {k_default}"
         assert k_default.startswith("agent:main:")
         assert k_secondary.startswith("agent:medicina:")
@@ -127,8 +129,9 @@ class TestOwnerProfileKeying:
         a._session_store = None
         a.set_owner_profile("default")
         assert a._owner_profile is None
-        assert build_session_key(_source(), profile=a._session_key_profile(_source())) \
-            == build_session_key(_source())
+        assert build_session_key(
+            _source(), profile=a._session_key_profile(_source())
+        ) == build_session_key(_source())
 
     @pytest.mark.parametrize("blank", [None, "", "   "])
     def test_blank_owner_is_none(self, blank):
@@ -154,8 +157,9 @@ class TestOwnerProfileKeying:
         bare = object.__new__(_Adapter)
         assert not hasattr(bare, "_owner_profile")
         assert bare._session_key_profile(_source()) is None
-        assert build_session_key(_source(), profile=bare._session_key_profile(_source())) \
-            == build_session_key(_source())
+        assert build_session_key(
+            _source(), profile=bare._session_key_profile(_source())
+        ) == build_session_key(_source())
 
     def test_resolver_exception_falls_back_to_none(self):
         class _Boom:
@@ -175,16 +179,17 @@ class TestOwnerProfileKeying:
         from unittest.mock import MagicMock
 
         a = _Adapter()
-        a._session_store = MagicMock()          # resolver returns a MagicMock
+        a._session_store = MagicMock()  # resolver returns a MagicMock
         assert a._session_key_profile(_source()) is None
-        assert build_session_key(_source(), profile=a._session_key_profile(_source())) \
-            == build_session_key(_source())
+        assert build_session_key(
+            _source(), profile=a._session_key_profile(_source())
+        ) == build_session_key(_source())
 
     @pytest.mark.parametrize("junk", [123, object(), ["medicina"], b"medicina", "   "])
     def test_non_string_or_blank_owner_is_ignored(self, junk):
         a = _Adapter()
         a._session_store = None
-        a._owner_profile = junk                 # bypass the setter's normalisation
+        a._owner_profile = junk  # bypass the setter's normalisation
         assert a._session_key_profile(_source()) is None
 
     def test_no_source_still_resolves_owner(self):

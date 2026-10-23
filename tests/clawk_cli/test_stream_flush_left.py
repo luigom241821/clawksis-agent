@@ -5,6 +5,7 @@ whitespace, so pasting a response out of the terminal produced broken
 text. The pad is now empty and the final-response Rich Panel uses zero
 horizontal padding for the same reason (July 2026).
 """
+
 import os
 import re
 import sys
@@ -35,17 +36,11 @@ def cli_stub(monkeypatch):
     return cli, emitted
 
 
-
-
 def test_streamed_content_lines_have_no_leading_whitespace(cli_stub):
     cli, emitted = cli_stub
     cli._stream_delta("First streamed line of text.\nSecond streamed line.\n")
     cli._flush_stream()
-    content = [
-        _strip_ansi(e)
-        for e in emitted
-        if "streamed line" in _strip_ansi(e)
-    ]
+    content = [_strip_ansi(e) for e in emitted if "streamed line" in _strip_ansi(e)]
     assert content, "no content lines captured"
     for line in content:
         assert not line.startswith(" "), f"leading whitespace leaked: {line!r}"

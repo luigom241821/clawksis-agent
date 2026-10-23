@@ -4,6 +4,7 @@ bootstrap_python's pre-Python awk reader must follow object names and braces
 (the same contract setup-clawk.sh's pin() established), so any indentation the
 lock writer produces resolves the same pinned version.
 """
+
 import json
 import os
 from pathlib import Path
@@ -19,9 +20,14 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.platforms("posix")
 
 
-@pytest.mark.parametrize("indent,blank_lines", [(2, False), (4, False), (0, False), ("\t", False), (4, True)],
-                         ids=["two-spaces", "four-spaces", "no-indent", "tabs", "blank-lines"])
-def test_bootstrap_python_reads_pin_independent_of_indentation(tmp_path, indent, blank_lines):
+@pytest.mark.parametrize(
+    "indent,blank_lines",
+    [(2, False), (4, False), (0, False), ("\t", False), (4, True)],
+    ids=["two-spaces", "four-spaces", "no-indent", "tabs", "blank-lines"],
+)
+def test_bootstrap_python_reads_pin_independent_of_indentation(
+    tmp_path, indent, blank_lines
+):
     bash = shutil.which("bash")
     assert bash, "the shell bootstrap contract requires Bash"
     core = tmp_path / "checkout"
@@ -36,18 +42,23 @@ def test_bootstrap_python_reads_pin_independent_of_indentation(tmp_path, indent,
         f"printf '%s\\n' \"$*\" >> {shlex.quote(str(calls))}\n"
         'case "$*" in\n'
         f'  "python install --no-bin --no-registry {py_version}") ;;\n'
-        f'  "python find --managed-python {py_version}") printf \'%s\\n\' {shlex.quote(interpreter)} ;;\n'
-        '  *) exit 91 ;;\n'
-        'esac\n',
+        f"  \"python find --managed-python {py_version}\") printf '%s\\n' {shlex.quote(interpreter)} ;;\n"
+        "  *) exit 91 ;;\n"
+        "esac\n",
         encoding="utf-8",
     )
     uv.chmod(0o755)
     decoy = {"sha256": "0" * 64, "url": "http://127.0.0.1:1/wrong.tar.gz"}
-    data = {"packages": {
-        "before": {"artifacts": {"any": decoy}, "version": "wrong-before"},
-        "python": {"artifacts": {"any": decoy}, "version": f"{py_version}.7+fixture"},
-        "after": {"artifacts": {"any": decoy}, "version": "wrong-after"},
-    }}
+    data = {
+        "packages": {
+            "before": {"artifacts": {"any": decoy}, "version": "wrong-before"},
+            "python": {
+                "artifacts": {"any": decoy},
+                "version": f"{py_version}.7+fixture",
+            },
+            "after": {"artifacts": {"any": decoy}, "version": "wrong-after"},
+        }
+    }
     content = json.dumps(data, indent=indent)
     if blank_lines:
         content = content.replace("\n", "\n \t\n")
@@ -59,9 +70,19 @@ def test_bootstrap_python_reads_pin_independent_of_indentation(tmp_path, indent,
         "bootstrap_python\n"
     )
     env = dict(os.environ, HOME=str(tmp_path), CLAWK_HOME=str(tmp_path / ".clawk"))
-    result = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        ["bash", "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     # A layout-sensitive reader resolves no version, falls back to "3.14", and
     # the argv witness exits 91 on an unexpected pin. Cold/warm acquisition is
     # exercised with real tools in test_fresh_source_install, not duplicated here.
-    assert calls.read_text().splitlines()[-1] == f"python find --managed-python {py_version}"
+    assert (
+        calls.read_text().splitlines()[-1]
+        == f"python find --managed-python {py_version}"
+    )

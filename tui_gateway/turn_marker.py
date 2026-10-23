@@ -37,8 +37,13 @@ def _cross_process_lock(path: Path):
     """Sibling backends on one CLAWK_HOME (#94778) don't share ``_lock``; without this flock one's stale
     load → store resurrects a marker the other just cleared (a finished turn auto-continues again)."""
     from clawk_cli.auth import _file_lock
-    return _file_lock(path.with_name(f"{path.name}.lock"), _file_lock_holder, 5.0,
-                      f"Timed out waiting for the turn-marker lock ({path})")
+
+    return _file_lock(
+        path.with_name(f"{path.name}.lock"),
+        _file_lock_holder,
+        5.0,
+        f"Timed out waiting for the turn-marker lock ({path})",
+    )
 
 
 def _started_at(entry: dict) -> float:
@@ -53,6 +58,7 @@ def _writer_identity() -> dict:
     identity = {"writer_pid": os.getpid()}
     try:
         from clawk_cli.active_sessions import _own_start_time
+
         start = _own_start_time()
         if start is not None:
             identity["writer_start_time"] = float(start)
@@ -77,6 +83,7 @@ def marker_writer_state(entry: dict) -> str:
         return "unknown"
     try:
         from clawk_cli.active_sessions import _pid_liveness
+
         live = _pid_liveness(pid, entry.get("writer_start_time"))
     except Exception:
         return "unknown"
@@ -90,16 +97,26 @@ def _load(path: Path) -> dict[str, dict]:
     except FileNotFoundError:
         return {}
     except Exception:
-        logger.debug("unreadable turn-marker file %s; starting fresh", path, exc_info=True)
+        logger.debug(
+            "unreadable turn-marker file %s; starting fresh", path, exc_info=True
+        )
         return {}
-    return {k: v for k, v in data.items() if isinstance(v, dict)} if isinstance(data, dict) else {}
+    return (
+        {k: v for k, v in data.items() if isinstance(v, dict)}
+        if isinstance(data, dict)
+        else {}
+    )
 
 
 def _prune(entries: dict[str, dict], now: float) -> dict[str, dict]:
     fresh = {k: e for k, e in entries.items() if now - _started_at(e) <= _MAX_AGE_SECS}
     if len(fresh) <= _MAX_ENTRIES:
         return fresh
-    return dict(sorted(fresh.items(), key=lambda item: _started_at(item[1]), reverse=True)[:_MAX_ENTRIES])
+    return dict(
+        sorted(fresh.items(), key=lambda item: _started_at(item[1]), reverse=True)[
+            :_MAX_ENTRIES
+        ]
+    )
 
 
 def _store(path: Path, entries: dict[str, dict]) -> None:
@@ -118,29 +135,61 @@ def _update(home: Path | str, session_key: str, mutate, what: str) -> None:
             if entries is not None:
                 _store(path, entries)
     except Exception:
-        logger.debug("failed to %s turn marker for %s", what, session_key, exc_info=True)
+        logger.debug(
+            "failed to %s turn marker for %s", what, session_key, exc_info=True
+        )
 
 
-def record_turn_start(home: Path | str, session_key: str, prompt: str, *, attempts: int = 0,
-                      auto_continue: bool = True, notification_category: str | None = None) -> None:
+def record_turn_start(
+    home: Path | str,
+    session_key: str,
+    prompt: str,
+    *,
+    attempts: int = 0,
+    auto_continue: bool = True,
+    notification_category: str | None = None,
+) -> None:
     """Persist the marker for a turn that is about to run. ``attempts`` = how many auto-continues led to
     this run (0 for a user-initiated turn); the crash-loop breaker reads it back on the next resume."""
     if not session_key or not prompt:
         return
     now = time.time()
-    entry = {"attempts": max(0, int(attempts)), "prompt": prompt[:_MAX_PROMPT_CHARS], "started_at": now,
-             "auto_continue": bool(auto_continue), **_writer_identity()}
+    entry = {
+        "attempts": max(0, int(attempts)),
+        "prompt": prompt[:_MAX_PROMPT_CHARS],
+        "started_at": now,
+        "auto_continue": bool(auto_continue),
+        **_writer_identity(),
+    }
     if notification_category == "diagnostic":
         entry["notification_category"] = notification_category
     # Identity only — never the prompt: this log is read on crash triage and must not carry turn content.
-    logger.debug("turn marker recorded for session %s by writer pid %s", session_key, entry["writer_pid"])
-    _update(home, session_key, lambda entries: {**_prune(entries, now), session_key: entry}, "record")
+    logger.debug(
+        "turn marker recorded for session %s by writer pid %s",
+        session_key,
+        entry["writer_pid"],
+    )
+    _update(
+        home,
+        session_key,
+        lambda entries: {**_prune(entries, now), session_key: entry},
+        "record",
+    )
 
 
 def clear_turn_marker(home: Path | str, session_key: str) -> None:
     """Remove the marker once its turn concluded (any outcome the client saw)."""
     if session_key:
-        _update(home, session_key, lambda e: {k: v for k, v in e.items() if k != session_key} if session_key in e else None, "clear")
+        _update(
+            home,
+            session_key,
+            lambda e: (
+                {k: v for k, v in e.items() if k != session_key}
+                if session_key in e
+                else None
+            ),
+            "clear",
+        )
 
 
 def read_turn_marker(home: Path | str, session_key: str) -> dict[str, Any] | None:
@@ -153,11 +202,22 @@ def read_turn_marker(home: Path | str, session_key: str) -> dict[str, Any] | Non
         prompt = str(entry.get("prompt") or "") if isinstance(entry, dict) else ""
         if not prompt.strip():
             return None
-        return {"attempts": max(0, int(entry.get("attempts") or 0)), "prompt": prompt, "started_at": _started_at(entry),
-                "auto_continue": bool(entry.get("auto_continue", True)),
-                # Writer identity when present: extra keys only, so a marker written by an older build still reads.
-                **{k: entry[k] for k in ("writer_pid", "writer_start_time") if entry.get(k) is not None},
-                **({"notification_category": "diagnostic"}
-                   if entry.get("notification_category") == "diagnostic" else {})}
+        return {
+            "attempts": max(0, int(entry.get("attempts") or 0)),
+            "prompt": prompt,
+            "started_at": _started_at(entry),
+            "auto_continue": bool(entry.get("auto_continue", True)),
+            # Writer identity when present: extra keys only, so a marker written by an older build still reads.
+            **{
+                k: entry[k]
+                for k in ("writer_pid", "writer_start_time")
+                if entry.get(k) is not None
+            },
+            **(
+                {"notification_category": "diagnostic"}
+                if entry.get("notification_category") == "diagnostic"
+                else {}
+            ),
+        }
     except Exception:
         return None

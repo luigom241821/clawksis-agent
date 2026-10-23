@@ -24,6 +24,7 @@ from gateway.config import Platform, PlatformConfig
 # Mock slack-bolt if not installed (same pattern as test_slack_mention.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -40,7 +41,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler", slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -75,6 +79,7 @@ def _make_adapter(**extra):
 # _slack_ignore_other_user_mentions()
 # ---------------------------------------------------------------------------
 
+
 def test_ignore_other_user_mentions_defaults_off(monkeypatch):
     monkeypatch.delenv("SLACK_IGNORE_OTHER_USER_MENTIONS", raising=False)
     adapter = _make_adapter()
@@ -107,6 +112,7 @@ def test_addressed_channel_and_broadcast_tokens_are_not_users():
 # _slack_message_mentions_self()
 # ---------------------------------------------------------------------------
 
+
 def _mentions_self(text):
     return _make_adapter()._slack_message_mentions_self(text, SELF_UIDS)
 
@@ -123,6 +129,7 @@ def test_mentions_self_id_prefix_is_not_a_match():
 # ---------------------------------------------------------------------------
 # Integration: real _handle_slack_message
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def adapter():
@@ -161,14 +168,17 @@ def _event(text, ts, thread_ts=None):
 
 
 async def _run(adapter, event):
-    with patch.object(
-        adapter, "_resolve_user_name", new=AsyncMock(return_value="human")
-    ), patch.object(
-        adapter, "_fetch_thread_context", new=AsyncMock(return_value=None)
-    ), patch.object(
-        adapter, "_fetch_thread_parent_text", new=AsyncMock(return_value="")
-    ), patch.object(
-        adapter, "_has_active_session_for_thread", return_value=False
+    with (
+        patch.object(
+            adapter, "_resolve_user_name", new=AsyncMock(return_value="human")
+        ),
+        patch.object(
+            adapter, "_fetch_thread_context", new=AsyncMock(return_value=None)
+        ),
+        patch.object(
+            adapter, "_fetch_thread_parent_text", new=AsyncMock(return_value="")
+        ),
+        patch.object(adapter, "_has_active_session_for_thread", return_value=False),
     ):
         await adapter._handle_slack_message(event)
 
@@ -180,7 +190,10 @@ async def test_free_response_replies_when_bot_also_mentioned(adapter):
 
     await _run(
         adapter,
-        _event(f"<@{OTHER_USER_ID}> and <@{BOT_USER_ID}> please compare", ts="1700000000.000003"),
+        _event(
+            f"<@{OTHER_USER_ID}> and <@{BOT_USER_ID}> please compare",
+            ts="1700000000.000003",
+        ),
     )
 
     adapter.handle_message.assert_awaited_once()
@@ -214,7 +227,11 @@ async def test_mentioned_thread_ignores_followup_addressed_to_other_user(adapter
 
     await _run(
         adapter,
-        _event(f"<@{OTHER_USER_ID}> check this out", ts="1700000000.000011", thread_ts=thread_ts),
+        _event(
+            f"<@{OTHER_USER_ID}> check this out",
+            ts="1700000000.000011",
+            thread_ts=thread_ts,
+        ),
     )
 
     adapter.handle_message.assert_not_awaited()
@@ -223,6 +240,7 @@ async def test_mentioned_thread_ignores_followup_addressed_to_other_user(adapter
 # ---------------------------------------------------------------------------
 # Config bridge: config.yaml slack.ignore_other_user_mentions → extra + env
 # ---------------------------------------------------------------------------
+
 
 def test_config_bridges_slack_ignore_other_user_mentions(monkeypatch, tmp_path):
     """config.yaml ``slack.ignore_other_user_mentions`` reaches the runtime env
@@ -242,6 +260,7 @@ def test_config_bridges_slack_ignore_other_user_mentions(monkeypatch, tmp_path):
     load_gateway_config()
 
     import os as _os
+
     assert _os.environ["SLACK_IGNORE_OTHER_USER_MENTIONS"] == "true"
 
 
@@ -260,4 +279,5 @@ def test_ignore_other_user_mentions_env_wins_over_yaml(monkeypatch, tmp_path):
     load_gateway_config()
 
     import os as _os
+
     assert _os.environ["SLACK_IGNORE_OTHER_USER_MENTIONS"] == "false"

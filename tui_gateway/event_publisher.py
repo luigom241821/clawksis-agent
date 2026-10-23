@@ -46,7 +46,9 @@ class WsPublisherTransport:
             _log.debug("event publisher connect failed: %s", exc)
             self._dead = True
             return
-        self._worker = threading.Thread(target=self._drain, name="clawk-ws-pub", daemon=True)
+        self._worker = threading.Thread(
+            target=self._drain, name="clawk-ws-pub", daemon=True
+        )
         self._worker.start()
 
     def _drain(self) -> None:

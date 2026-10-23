@@ -65,11 +65,13 @@ def _error_shapes(param):
     }
     return [
         pytest.param(
-            f"Error code: 400 - {openai_body!r}", openai_body,
+            f"Error code: 400 - {openai_body!r}",
+            openai_body,
             id=f"{param}-openai-structured",
         ),
         pytest.param(
-            f"{param} is not supported on this model", {},
+            f"{param} is not supported on this model",
+            {},
             id=f"{param}-message-only",
         ),
         pytest.param(
@@ -91,8 +93,11 @@ def _drive_conversation_retry(transport, *, provider, model, max_attempts=3):
             return transport()
         except Exception as exc:
             verdict = classify_api_error(
-                exc, provider=provider, model=model,
-                approx_tokens=50, num_messages=3,
+                exc,
+                provider=provider,
+                model=model,
+                approx_tokens=50,
+                num_messages=3,
             )
             if not verdict.retryable:
                 raise
@@ -124,13 +129,16 @@ class TestClassifierPathRegistryWalk:
             message, body = msg_param.values
             err = MockAPIError(message, status_code=400, body=copy.deepcopy(body))
             verdict = classify_api_error(
-                err, provider="openai-codex", model="gpt-5.6-sol",
-                approx_tokens=546912, context_length=272000, num_messages=576,
+                err,
+                provider="openai-codex",
+                model="gpt-5.6-sol",
+                approx_tokens=546912,
+                context_length=272000,
+                num_messages=576,
             )
             assert verdict.reason == FailoverReason.server_error, message
             assert verdict.retryable is True, message
             assert verdict.should_compress is False, message
-
 
     @pytest.mark.parametrize("param", REGISTRY_PARAMS)
     def test_sender_route_still_fails_fast(self, param):
@@ -138,9 +146,15 @@ class TestClassifierPathRegistryWalk:
         400 is a real request bug — it must stay a non-retryable format_error."""
         sender = _SERVER_INJECTED_PARAM_SENDERS[param][0]
         err = MockAPIError(
-            f"Unsupported parameter: '{param}'", status_code=400,
-            body={"error": {"message": f"Unsupported parameter: '{param}'",
-                            "code": "unsupported_parameter", "param": param}},
+            f"Unsupported parameter: '{param}'",
+            status_code=400,
+            body={
+                "error": {
+                    "message": f"Unsupported parameter: '{param}'",
+                    "code": "unsupported_parameter",
+                    "param": param,
+                }
+            },
         )
         verdict = classify_api_error(err, provider=sender, model="any-model")
         assert verdict.reason == FailoverReason.format_error
@@ -151,20 +165,29 @@ class TestClassifierPathRegistryWalk:
         Blindly stripping arbitrary params would mask real request bugs
         (never convert our own request bug into a friendly lie)."""
         err = MockAPIError(
-            "Unsupported parameter: 'frobnication_level'", status_code=400,
-            body={"error": {"message": "Unsupported parameter: 'frobnication_level'",
-                            "code": "unsupported_parameter",
-                            "param": "frobnication_level"}},
+            "Unsupported parameter: 'frobnication_level'",
+            status_code=400,
+            body={
+                "error": {
+                    "message": "Unsupported parameter: 'frobnication_level'",
+                    "code": "unsupported_parameter",
+                    "param": "frobnication_level",
+                }
+            },
         )
         verdict = classify_api_error(
-            err, provider="openai-codex", model="gpt-5.6-sol",
+            err,
+            provider="openai-codex",
+            model="gpt-5.6-sol",
         )
         assert verdict.reason == FailoverReason.format_error
         assert verdict.retryable is False
         transport = _FlakyTransport(err)
         with pytest.raises(MockAPIError):
             _drive_conversation_retry(
-                transport, provider="openai-codex", model="gpt-5.6-sol",
+                transport,
+                provider="openai-codex",
+                model="gpt-5.6-sol",
             )
         assert transport.calls == 1  # aborted on first attempt, no blind retry
 
@@ -173,6 +196,7 @@ class TestClassifierPathRegistryWalk:
 # Path 2 — auxiliary call path (call_llm reactive strip-and-retry rungs)
 # ---------------------------------------------------------------------------
 
+
 class _FlakyClient:
     """Fake OpenAI-SDK client: chat.completions.create 400s once, then OK."""
 
@@ -180,9 +204,7 @@ class _FlakyClient:
         self.base_url = "https://api.openai.com/v1"
         self.calls = []
         self._error = error
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
         self.calls.append(copy.deepcopy(kwargs))
@@ -195,12 +217,18 @@ def _aux_patches(client):
     # gpt-4.1: a model the aux path still SENDS temperature to. gpt-5.x omits it up front
     # (#51083), which would leave the reactive strip rung nothing to strip.
     return (
-        patch("agent.auxiliary_client._resolve_task_provider_model",
-              return_value=("openai-codex", "gpt-4.1", None, None, None)),
-        patch("agent.auxiliary_client._get_cached_client",
-              return_value=(client, "gpt-4.1")),
-        patch("agent.auxiliary_client._validate_llm_response",
-              side_effect=lambda resp, _task, **_kw: resp),
+        patch(
+            "agent.auxiliary_client._resolve_task_provider_model",
+            return_value=("openai-codex", "gpt-4.1", None, None, None),
+        ),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "gpt-4.1"),
+        ),
+        patch(
+            "agent.auxiliary_client._validate_llm_response",
+            side_effect=lambda resp, _task, **_kw: resp,
+        ),
     )
 
 
@@ -225,8 +253,10 @@ AUX_STRIPPABLE = [
     pytest.param(
         {"extra_body": {"response_format": {"type": "json_object"}}},
         "HTTP 400: Unsupported parameter: response_format",
-        lambda kw: "response_format"
-        not in (kw.get("extra_body") or {}) and "response_format" not in kw,
+        lambda kw: (
+            "response_format" not in (kw.get("extra_body") or {})
+            and "response_format" not in kw
+        ),
         id="response_format",
     ),
 ]

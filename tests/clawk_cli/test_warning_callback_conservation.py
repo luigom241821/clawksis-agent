@@ -1,4 +1,5 @@
 """Concrete CLI sinks own filtering; generic agent callbacks remain observable."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -24,11 +25,19 @@ class CLI(CLIStreamMixin):
 
 
 @pytest.mark.parametrize("setting", [None, False, True])
-def test_cli_notice_and_wait_callbacks_keep_default_output(tmp_path, monkeypatch, setting):
+def test_cli_notice_and_wait_callbacks_keep_default_output(
+    tmp_path, monkeypatch, setting
+):
     import cli
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text(yaml.safe_dump(
-        {} if setting is None else {"display": {"suppress_warning_notifications": setting}}))
+    (tmp_path / "config.yaml").write_text(
+        yaml.safe_dump(
+            {}
+            if setting is None
+            else {"display": {"suppress_warning_notifications": setting}}
+        )
+    )
     printed = []
     monkeypatch.setattr(cli, "_cprint", printed.append)
     surface = CLI()
@@ -40,7 +49,9 @@ def test_cli_notice_and_wait_callbacks_keep_default_output(tmp_path, monkeypatch
     agent._emit_diagnostic_wait("arbitrary retry wording")
     surface._flush_credit_notices()
     assert bool(printed) is not (setting is True)
-    assert surface._spinner_text == ("" if setting is True else "arbitrary retry wording")
+    assert surface._spinner_text == (
+        "" if setting is True else "arbitrary retry wording"
+    )
     agent._emit_notice(SimpleNamespace(level="info", text="ordinary progress"))
     agent._emit_wait_notice("⚠ requested progress")
     surface._flush_credit_notices()

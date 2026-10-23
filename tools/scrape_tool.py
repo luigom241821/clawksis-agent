@@ -293,7 +293,10 @@ def _run_one(
             cmd += ["--solve-cloudflare"]
         try:
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout_s,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
                 check=False,
             )
         except subprocess.TimeoutExpired:

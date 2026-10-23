@@ -30,7 +30,11 @@ class TestRedactApprovalCommand:
     """Contract for the approval-prompt redaction seam used by the gateway."""
 
     def test_redacts_github_pat(self):
-        raw = "curl -H 'Authorization: token " + _FAKE_GHP + "' https://api.github.com/user"
+        raw = (
+            "curl -H 'Authorization: token "
+            + _FAKE_GHP
+            + "' https://api.github.com/user"
+        )
         out = _redact_approval_command(raw)
         assert _FAKE_GHP not in out
         # command structure preserved so the operator can still judge the action
@@ -44,10 +48,11 @@ class TestRedactApprovalCommand:
         assert "python s.py" in out
 
     def test_redacts_bearer_token(self):
-        raw = "curl -H 'Authorization: Bearer " + _FAKE_JWT + "' https://api.example.com"
+        raw = (
+            "curl -H 'Authorization: Bearer " + _FAKE_JWT + "' https://api.example.com"
+        )
         out = _redact_approval_command(raw)
         assert _FAKE_JWT not in out
-
 
     def test_forces_redaction_even_when_disabled(self, monkeypatch):
         """force=True must redact even if security.redact_secrets is off -- the
@@ -77,23 +82,32 @@ class TestApprovalCommandWiring:
                         pass
 
                     async def send_exec_approval(self, **kwargs):
-                        sent.append(kwargs['command'])
+                        sent.append(kwargs["command"])
                         return SimpleNamespace(success=card_success, error=None)
 
                     async def send(self, chat_id, text, **kwargs):
                         sent.append(text)
                         return SimpleNamespace(success=True)
 
-                ctx = SimpleNamespace(_status_adapter=Adapter(), _status_chat_id='fixture',
-                    _status_thread_metadata=None, session_key='redaction-fixture',
-                    _loop_for_step=asyncio.get_running_loop(), stream_consumer_holder=[None])
+                ctx = SimpleNamespace(
+                    _status_adapter=Adapter(),
+                    _status_chat_id="fixture",
+                    _status_thread_metadata=None,
+                    session_key="redaction-fixture",
+                    _loop_for_step=asyncio.get_running_loop(),
+                    stream_consumer_holder=[None],
+                )
                 turn = TurnRunner(SimpleNamespace(), ctx)
-                raw = 'curl -H "Authorization: token ' + _FAKE_GHP + '" https://example.test'
-                approval = {'command': raw, 'description': 'fixture'}
+                raw = (
+                    'curl -H "Authorization: token '
+                    + _FAKE_GHP
+                    + '" https://example.test'
+                )
+                approval = {"command": raw, "description": "fixture"}
                 await asyncio.to_thread(turn._approval_notify_sync, approval)
                 assert len(sent) == (1 if card_success else 2)
-                assert all(_FAKE_GHP not in text and 'curl' in text for text in sent)
-                assert approval['command'] == raw
+                assert all(_FAKE_GHP not in text and "curl" in text for text in sent)
+                assert approval["command"] == raw
 
         asyncio.run(exercise())
 
@@ -103,8 +117,11 @@ class TestApprovalTextFallbackContract:
         from gateway.run import _format_exec_approval_fallback
 
         text = _format_exec_approval_fallback(
-            "rm -rf /", "dangerous deletion", "/",
-            allow_permanent=False, smart_denied=True,
+            "rm -rf /",
+            "dangerous deletion",
+            "/",
+            allow_permanent=False,
+            smart_denied=True,
         )
         assert "`/approve`" in text
         assert "approve session" not in text
@@ -114,10 +131,16 @@ class TestApprovalTextFallbackContract:
         """Surfaces without buttons get the same deadline line as the button card."""
         from gateway.run import _format_exec_approval_fallback
 
-        monkeypatch.setattr("gateway.platforms.base_exec_approval.approval_timeout_seconds", lambda: 300)
+        monkeypatch.setattr(
+            "gateway.platforms.base_exec_approval.approval_timeout_seconds", lambda: 300
+        )
         text = _format_exec_approval_fallback("rm -rf /", "recursive delete", "/")
         assert "recursive delete" in text
         assert "5 minutes" in text
-        for step in ("`/approve`", "`/approve session`", "`/approve always`", "`/deny`"):
+        for step in (
+            "`/approve`",
+            "`/approve session`",
+            "`/approve always`",
+            "`/deny`",
+        ):
             assert step in text
-

@@ -59,7 +59,9 @@ class _BenignProbeMethodFilter(logging.Filter):
         if not isinstance(exc, RequestError) or getattr(exc, "code", None) != -32601:
             return True
         data = getattr(exc, "data", None)
-        return not (isinstance(data, dict) and data.get("method") in _BENIGN_PROBE_METHODS)
+        return not (
+            isinstance(data, dict) and data.get("method") in _BENIGN_PROBE_METHODS
+        )
 
 
 def _setup_logging() -> None:
@@ -67,8 +69,12 @@ def _setup_logging() -> None:
     from agent.redact import RedactingFormatter
 
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(RedactingFormatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-                                            datefmt="%Y-%m-%d %H:%M:%S"))
+    handler.setFormatter(
+        RedactingFormatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     handler.addFilter(_BenignProbeMethodFilter())
     root = logging.getLogger()
     root.handlers.clear()
@@ -92,15 +98,34 @@ def _load_env() -> None:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="clawk-acp", description="Run Clawksis as an ACP stdio server.")
-    parser.add_argument("--version", action="store_true", help="Print Clawksis version and exit")
-    parser.add_argument("--check", action="store_true", help="Verify ACP dependencies and adapter imports, then exit")
-    parser.add_argument("--setup", action="store_true",
-                        help="Run interactive Clawksis provider/model setup for ACP terminal auth")
-    parser.add_argument("--setup-browser", action="store_true",
-                        help="Prepare PM's pinned browser tools and Chromium.")
-    parser.add_argument("--yes", "-y", action="store_true", dest="assume_yes",
-                        help="Accept setup prompts.")
+    parser = argparse.ArgumentParser(
+        prog="clawk-acp", description="Run Clawksis as an ACP stdio server."
+    )
+    parser.add_argument(
+        "--version", action="store_true", help="Print Clawksis version and exit"
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Verify ACP dependencies and adapter imports, then exit",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run interactive Clawksis provider/model setup for ACP terminal auth",
+    )
+    parser.add_argument(
+        "--setup-browser",
+        action="store_true",
+        help="Prepare PM's pinned browser tools and Chromium.",
+    )
+    parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        dest="assume_yes",
+        help="Accept setup prompts.",
+    )
     return parser.parse_args(argv)
 
 
@@ -132,8 +157,14 @@ def _run_setup() -> None:
     if not sys.stdin.isatty():
         return
     try:
-        reply = input("\nInstall browser tools? Downloads the pinned browser and "
-                      "Chromium through PM. [y/N] ").strip().lower()
+        reply = (
+            input(
+                "\nInstall browser tools? Downloads the pinned browser and "
+                "Chromium through PM. [y/N] "
+            )
+            .strip()
+            .lower()
+        )
     except (EOFError, KeyboardInterrupt):
         return
     if reply in {"y", "yes"}:
@@ -157,13 +188,19 @@ def _warm_memory_provider_import(logger: logging.Logger) -> None:
     from plugins.memory import import_memory_provider_module
 
     if not import_memory_provider_module():
-        logger.debug("memory provider not warmed (none configured or import failed; agent init reports that)")
+        logger.debug(
+            "memory provider not warmed (none configured or import failed; agent init reports that)"
+        )
 
 
 def main(argv: list[str] | None = None) -> None:
     """Entry point: load env, configure logging, run the ACP agent."""
     args = _parse_args(argv)
-    for flag, action in (("version", _print_version), ("check", _run_check), ("setup", _run_setup)):
+    for flag, action in (
+        ("version", _print_version),
+        ("check", _run_check),
+        ("setup", _run_setup),
+    ):
         if getattr(args, flag):
             return action()
     if args.setup_browser:

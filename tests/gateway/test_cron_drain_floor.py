@@ -73,7 +73,11 @@ class TestDrainWaitsForCronOnDefaultConfig:
         """#132989: a /v1 run's caller is blocked on its result, so it rides the cron floor too."""
         runner, _adapter = make_restart_runner()
         live = [1]
-        runner.adapters = {Platform.API_SERVER: SimpleNamespace(active_agent_work_count=lambda: live[0])}
+        runner.adapters = {
+            Platform.API_SERVER: SimpleNamespace(
+                active_agent_work_count=lambda: live[0]
+            )
+        }
 
         async def finish_run():
             await asyncio.sleep(0.12)
@@ -83,7 +87,9 @@ class TestDrainWaitsForCronOnDefaultConfig:
         _snapshot, timed_out = await runner._drain_active_agents(0.0, 2.0)
         await task
 
-        assert timed_out is False, "api_server run was interrupted on the 0s chat budget (#132989)"
+        assert timed_out is False, (
+            "api_server run was interrupted on the 0s chat budget (#132989)"
+        )
 
     @pytest.mark.asyncio
     async def test_cron_floor_is_bounded_not_indefinite(self):
@@ -145,42 +151,43 @@ class TestParseCronDrainTimeout:
 
 class TestResolveCronDrainBudget:
     def test_extends_a_zero_drain_up_to_the_configured_floor(self):
-        assert resolve_cron_drain_budget(
-            0.0, 30.0, watchdog_delay=60.0, elapsed=1.0
-        ) == 30.0
+        assert (
+            resolve_cron_drain_budget(0.0, 30.0, watchdog_delay=60.0, elapsed=1.0)
+            == 30.0
+        )
 
     def test_clamped_to_the_watchdog_leash_minus_cleanup_reserve(self):
         # Watchdog hard-exits at 60s; waiting 300s would guarantee a SIGKILL
         # mid-cleanup, leaving the job wedged at last_status=running.
-        budget = resolve_cron_drain_budget(
-            0.0, 300.0, watchdog_delay=60.0, elapsed=5.0
-        )
+        budget = resolve_cron_drain_budget(0.0, 300.0, watchdog_delay=60.0, elapsed=5.0)
         assert budget == pytest.approx(60.0 - 5.0 - CRON_DRAIN_CLEANUP_RESERVE_S)
 
     def test_never_shortens_an_explicitly_configured_drain_timeout(self):
-        assert resolve_cron_drain_budget(
-            120.0, 30.0, watchdog_delay=180.0, elapsed=0.0
-        ) == 120.0
+        assert (
+            resolve_cron_drain_budget(120.0, 30.0, watchdog_delay=180.0, elapsed=0.0)
+            == 120.0
+        )
 
     def test_no_headroom_left_falls_back_to_the_drain_timeout(self):
-        assert resolve_cron_drain_budget(
-            0.0, 30.0, watchdog_delay=60.0, elapsed=59.0
-        ) == 0.0
+        assert (
+            resolve_cron_drain_budget(0.0, 30.0, watchdog_delay=60.0, elapsed=59.0)
+            == 0.0
+        )
 
     def test_zero_floor_opts_out_entirely(self):
-        assert resolve_cron_drain_budget(
-            0.0, 0.0, watchdog_delay=60.0, elapsed=0.0
-        ) == 0.0
+        assert (
+            resolve_cron_drain_budget(0.0, 0.0, watchdog_delay=60.0, elapsed=0.0) == 0.0
+        )
 
     def test_non_numeric_inputs_degrade_instead_of_raising(self):
-        assert resolve_cron_drain_budget(
-            None, "30", watchdog_delay=60.0, elapsed=None
-        ) == 30.0
+        assert (
+            resolve_cron_drain_budget(None, "30", watchdog_delay=60.0, elapsed=None)
+            == 30.0
+        )
 
 
 class TestResolveSystemdTimeoutStopSec:
     """#94759: TimeoutStopSec must cover cron drain, not just chat drain."""
-
 
     def test_configured_drain_still_extends_the_deadline_directly(self):
         assert resolve_systemd_timeout_stop_sec(60.0, 30.0) == 90
@@ -194,9 +201,9 @@ class TestResolveSystemdTimeoutStopSec:
         assert resolve_systemd_timeout_stop_sec(0.0, 0.0) == 60
 
     def test_cron_floor_never_shortens_a_long_drain(self):
-        assert resolve_systemd_timeout_stop_sec(180.0, 30.0) == resolve_systemd_timeout_stop_sec(
-            180.0, 0.0
-        )
+        assert resolve_systemd_timeout_stop_sec(
+            180.0, 30.0
+        ) == resolve_systemd_timeout_stop_sec(180.0, 0.0)
 
     def test_garbage_inputs_degrade_to_the_floor(self):
         assert resolve_systemd_timeout_stop_sec("soon", None) == 60

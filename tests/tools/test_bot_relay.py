@@ -78,15 +78,25 @@ def test_roster_read_missing_and_corrupt(root):
 def test_resolve_remote_target_forms(root):
     bot_relay.write_remote_roster(root, _rows())
     roster = bot_relay.read_remote_roster(root)
-    assert bot_relay.resolve_remote_target("researcher", roster)["connection_id"] == "ssh-vps"
+    assert (
+        bot_relay.resolve_remote_target("researcher", roster)["connection_id"]
+        == "ssh-vps"
+    )
     assert bot_relay.resolve_remote_target("@clawk", roster)["profile"] == "default"
     # profile name resolves too
-    assert bot_relay.resolve_remote_target("default", roster)["connection_id"] == "cloud-1"
+    assert (
+        bot_relay.resolve_remote_target("default", roster)["connection_id"] == "cloud-1"
+    )
     # exact connection-qualified form
-    assert bot_relay.resolve_remote_target("clawk@cloud-1", roster)["profile"] == "default"
+    assert (
+        bot_relay.resolve_remote_target("clawk@cloud-1", roster)["profile"] == "default"
+    )
     # profile@connection — the form Desktop's mention middleware annotates
     # for remote bots (#97678); the UI alias form must not be required
-    assert bot_relay.resolve_remote_target("default@cloud-1", roster)["profile"] == "default"
+    assert (
+        bot_relay.resolve_remote_target("default@cloud-1", roster)["profile"]
+        == "default"
+    )
     assert bot_relay.resolve_remote_target("clawk@nope", roster) is None
     assert bot_relay.resolve_remote_target("ghost", roster) is None
 
@@ -122,7 +132,7 @@ def test_enqueue_claim_replays_exact_identity_until_reply(root):
     assert claimed[0]["message"] == "hi"
     # Reconnect replays the same admission identity, never a fresh turn.
     assert bot_relay.claim_pending_envelopes(root) == claimed
-    bot_relay.write_reply(root, env['id'], reply='done')
+    bot_relay.write_reply(root, env["id"], reply="done")
     assert bot_relay.claim_pending_envelopes(root) == []
 
 
@@ -156,15 +166,23 @@ def test_write_reply_keeps_the_first_settled_reply_for_an_envelope(root):
     not displace the reply the waiter already read, so the answer never turns into an error."""
     env_id = "a" * 32
     first = bot_relay.write_reply(root, env_id, reply="the answer")
-    second = bot_relay.write_reply(root, env_id, error="target busy", reason="target_busy")
+    second = bot_relay.write_reply(
+        root, env_id, error="target busy", reason="target_busy"
+    )
     assert second == first
     record = json.loads(first.read_text(encoding="utf-8"))
-    assert (record["reply"], record["error"], record["reason"]) == ("the answer", "", "")
+    assert (record["reply"], record["error"], record["reason"]) == (
+        "the answer",
+        "",
+        "",
+    )
 
 
 def test_write_reply_reason_passthrough_and_classification(root):
     # explicit reason is persisted verbatim
-    path = bot_relay.write_reply(root, "c" * 32, error="boom", reason="delivery_timeout")
+    path = bot_relay.write_reply(
+        root, "c" * 32, error="boom", reason="delivery_timeout"
+    )
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     assert data["reason"] == "delivery_timeout" and data["error"] == "boom"
     # no reason given → classified from error text
@@ -186,13 +204,19 @@ def test_waiter_is_a_runner_entrypoint_the_approval_gate_lets_through(root):
 
     from tools.approval import detect_dangerous_command
 
-    env = {"id": "b" * 32, "target_handle": "researcher", "target_connection": "ssh-vps"}
+    env = {
+        "id": "b" * 32,
+        "target_handle": "researcher",
+        "target_connection": "ssh-vps",
+    }
     cmd = bot_relay.waiter_command(root, env)
     parts = shlex.split(cmd)
 
     assert detect_dangerous_command(cmd)[0] is False, cmd
     assert parts[1].endswith("bot_mode_dm.py") and parts[2] == "--wait-reply"
-    assert parts[3] == str(bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{'b' * 32}.json")
+    assert parts[3] == str(
+        bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{'b' * 32}.json"
+    )
     assert parts[4:] == ["@researcher on ssh-vps", str(bot_relay.REPLY_WAIT_SECONDS)]
 
 
@@ -205,11 +229,17 @@ def test_waiter_outlives_the_desktop_deliver_deadline():
     gateway's own worst-case deliver hold, which ends before it — is a claimed envelope's silence
     provably a dead Desktop rather than a slow turn, and the waiter must still be listening when the
     ONE re-offered delivery hits its own Desktop deadline."""
-    live_hold_s = bot_relay.TURN_WAIT_SECONDS_FALLBACK + bot_relay.TURN_ATTEMPT_TIMEOUT_SECONDS * bot_relay.TURN_MAX_ATTEMPTS
+    live_hold_s = (
+        bot_relay.TURN_WAIT_SECONDS_FALLBACK
+        + bot_relay.TURN_ATTEMPT_TIMEOUT_SECONDS * bot_relay.TURN_MAX_ATTEMPTS
+    )
     desktop_budget_s = live_hold_s + bot_relay.DESKTOP_DELIVER_SETTLEMENT_MARGIN_SECONDS
     assert bot_relay.DESKTOP_DELIVER_TIMEOUT_SECONDS == desktop_budget_s
     assert bot_relay.REOFFER_AFTER_SECONDS > desktop_budget_s > live_hold_s
-    assert bot_relay.REPLY_WAIT_SECONDS > bot_relay.REOFFER_AFTER_SECONDS + desktop_budget_s
+    assert (
+        bot_relay.REPLY_WAIT_SECONDS
+        > bot_relay.REOFFER_AFTER_SECONDS + desktop_budget_s
+    )
 
 
 @pytest.mark.parametrize(
@@ -217,25 +247,38 @@ def test_waiter_outlives_the_desktop_deliver_deadline():
     [
         ({"reply": "pong"}, 0, ["@researcher on ssh-vps", "pong"]),
         ({"reply": ""}, 0, ["@researcher on ssh-vps"]),
-        ({"error": "turn failed", "reason": "provider_rate_limit"}, 1,
-         ["@researcher on ssh-vps", "provider_rate_limit", "turn failed"]),
+        (
+            {"error": "turn failed", "reason": "provider_rate_limit"},
+            1,
+            ["@researcher on ssh-vps", "provider_rate_limit", "turn failed"],
+        ),
         ({"error": "turn failed"}, 1, ["@researcher on ssh-vps", "turn failed"]),
         (None, 1, ["@researcher on ssh-vps", "0.3s"]),
     ],
     ids=["reply", "empty-reply", "typed-error", "untyped-error", "gave-up"],
 )
-def test_waiter_prints_the_completion_notification_the_sender_wakes_on(root, capsys, reply_file, expected_code, expected_tokens):
+def test_waiter_prints_the_completion_notification_the_sender_wakes_on(
+    root, capsys, reply_file, expected_code, expected_tokens
+):
     """The waiter's stdout IS the sender's completion notification: the reply, a typed failure the
     sender can branch on without parsing prose (#93091), or an honest give-up that names the budget."""
     from tools import bot_mode_dm
 
-    env = {"id": "d" * 32, "target_handle": "researcher", "target_connection": "ssh-vps"}
-    reply_path = bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{env['id']}.json"
+    env = {
+        "id": "d" * 32,
+        "target_handle": "researcher",
+        "target_connection": "ssh-vps",
+    }
+    reply_path = (
+        bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{env['id']}.json"
+    )
     reply_path.parent.mkdir(parents=True, exist_ok=True)
     if reply_file is not None:
         reply_path.write_text(json.dumps(reply_file), encoding="utf-8")
 
-    code = bot_mode_dm._delivery_main(["--wait-reply", str(reply_path), "@researcher on ssh-vps", "0.3"])
+    code = bot_mode_dm._delivery_main(
+        ["--wait-reply", str(reply_path), "@researcher on ssh-vps", "0.3"]
+    )
 
     out = capsys.readouterr().out
     assert code == expected_code
@@ -243,11 +286,13 @@ def test_waiter_prints_the_completion_notification_the_sender_wakes_on(root, cap
     assert bot_mode_dm._delivery_main(["--wait-reply", str(reply_path)]) == 2
 
 
-
-
 def test_roster_rejects_connection_id_outside_handle_charset(root):
     bad = [
-        {"profile": "researcher", "handle": "researcher", "connection_id": "vps'); print(1)"},
+        {
+            "profile": "researcher",
+            "handle": "researcher",
+            "connection_id": "vps'); print(1)",
+        },
         {"profile": "researcher", "handle": "researcher", "connection_id": "foo'bar"},
         {"profile": "researcher", "handle": "researcher", "connection_id": "ssh vps"},
         {"profile": "researcher", "handle": "researcher", "connection_id": "a" * 65},
@@ -274,12 +319,19 @@ def test_hostile_roster_fields_ride_as_argv_data(root):
 
     assert "-c" not in parts
     assert parts[4] == f"@researcher on {inj}"
-    reply_path = bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{env['id']}.json"
+    reply_path = (
+        bot_relay.relay_root(root) / bot_relay.REPLIES_DIR / f"{env['id']}.json"
+    )
     reply_path.parent.mkdir(parents=True, exist_ok=True)
     reply_path.write_text(json.dumps({"reply": "pong"}), encoding="utf-8")
-    proc = subprocess.run(parts, capture_output=True, text=True, timeout=30, check=False)
+    proc = subprocess.run(
+        parts, capture_output=True, text=True, timeout=30, check=False
+    )
 
-    assert proc.returncode == 0 and proc.stdout.splitlines() == [f"Reply from @researcher on {inj}:", "pong"]
+    assert proc.returncode == 0 and proc.stdout.splitlines() == [
+        f"Reply from @researcher on {inj}:",
+        "pong",
+    ]
 
 
 # ── message_agent integration: relay route + legacy-SOUL gate fix ───────────
@@ -353,10 +405,18 @@ def test_tool_injects_despite_legacy_soul_protocol(tmp_path):
 
 def test_relay_route_queues_envelope_and_spawns_waiter(tmp_path, monkeypatch):
     home = _managed_home(tmp_path)
-    bot_relay.write_remote_roster(home, [
-        {"profile": "default", "handle": "clawk", "connection_id": "cloud-1",
-         "connection_label": "Clawksis Cloud", "title": "Moxie"},
-    ])
+    bot_relay.write_remote_roster(
+        home,
+        [
+            {
+                "profile": "default",
+                "handle": "clawk",
+                "connection_id": "cloud-1",
+                "connection_label": "Clawksis Cloud",
+                "title": "Moxie",
+            },
+        ],
+    )
 
     spawned = {}
 
@@ -382,10 +442,13 @@ def test_relay_route_queues_envelope_and_spawns_waiter(tmp_path, monkeypatch):
 
 def test_relay_route_ambiguous_target_errors_with_forms(tmp_path, monkeypatch):
     home = _managed_home(tmp_path)
-    bot_relay.write_remote_roster(home, [
-        {"profile": "scout", "handle": "scout", "connection_id": "cloud-1"},
-        {"profile": "scout", "handle": "scout", "connection_id": "ssh-vps"},
-    ])
+    bot_relay.write_remote_roster(
+        home,
+        [
+            {"profile": "scout", "handle": "scout", "connection_id": "cloud-1"},
+            {"profile": "scout", "handle": "scout", "connection_id": "ssh-vps"},
+        ],
+    )
     monkeypatch.setattr(
         "tools.bot_mode_dm._spawn_delivery",
         lambda *a, **k: json.dumps({"status": "queued"}),
@@ -394,7 +457,9 @@ def test_relay_route_ambiguous_target_errors_with_forms(tmp_path, monkeypatch):
     out = json.loads(message_agent_tool(target="scout", message="hi", agent=agent))
     assert "scout@cloud-1" in out.get("error", "") and "scout@ssh-vps" in out["error"]
     # connection-qualified form goes through
-    out2 = json.loads(message_agent_tool(target="scout@ssh-vps", message="hi", agent=agent))
+    out2 = json.loads(
+        message_agent_tool(target="scout@ssh-vps", message="hi", agent=agent)
+    )
     assert out2.get("status") == "queued"
 
 
@@ -406,41 +471,83 @@ def test_remote_default_is_addressable_by_its_title_slug(tmp_path, monkeypatch):
 
     home = _managed_home(tmp_path)
     rows = [
-        {"profile": "default", "handle": "clawk", "connection_id": "vps-1", "title": "CoS Bot"},
-        {"profile": "default", "handle": "clawk", "connection_id": "cloud-1", "title": "Ops Bot"},
-        {"profile": "cos-bot", "handle": "cos-bot", "connection_id": "cloud-1", "title": "Other"},
+        {
+            "profile": "default",
+            "handle": "clawk",
+            "connection_id": "vps-1",
+            "title": "CoS Bot",
+        },
+        {
+            "profile": "default",
+            "handle": "clawk",
+            "connection_id": "cloud-1",
+            "title": "Ops Bot",
+        },
+        {
+            "profile": "cos-bot",
+            "handle": "cos-bot",
+            "connection_id": "cloud-1",
+            "title": "Other",
+        },
     ]
-    monkeypatch.setattr("tools.bot_mode_dm._spawn_delivery", lambda *a, **k: json.dumps({"status": "queued"}))
+    monkeypatch.setattr(
+        "tools.bot_mode_dm._spawn_delivery",
+        lambda *a, **k: json.dumps({"status": "queued"}),
+    )
     agent = _FakeAgent(home)
     for order in (rows, rows[::-1]):
         bot_relay.write_remote_roster(home, order)
         roster = bot_relay.read_remote_roster(home)
-        forms = dict(zip((r["connection_id"] + "/" + r["profile"] for r in roster),
-                         bot_relay.remote_target_forms(roster, bot_mode_probe.local_taken_forms(home))))
+        forms = dict(
+            zip(
+                (r["connection_id"] + "/" + r["profile"] for r in roster),
+                bot_relay.remote_target_forms(
+                    roster, bot_mode_probe.local_taken_forms(home)
+                ),
+            )
+        )
         # an exact handle beats a colliding title slug; the collided title falls back to the qualified form
-        assert forms == {"cloud-1/cos-bot": "cos-bot", "vps-1/default": "clawk@vps-1", "cloud-1/default": "ops-bot"}
-        assert bot_relay.resolve_remote_target("cos-bot", roster)["profile"] == "cos-bot"
+        assert forms == {
+            "cloud-1/cos-bot": "cos-bot",
+            "vps-1/default": "clawk@vps-1",
+            "cloud-1/default": "ops-bot",
+        }
+        assert (
+            bot_relay.resolve_remote_target("cos-bot", roster)["profile"] == "cos-bot"
+        )
     out = json.loads(message_agent_tool(target="@ops-bot", message="ping", agent=agent))
     assert out.get("status") == "queued"
     [env] = bot_relay.claim_pending_envelopes(home)
     assert (env["target_connection"], env["target_profile"]) == ("cloud-1", "default")
     # a bare @clawk from the local default is the two remote defaults — offered under their reply-safe forms
-    err = json.loads(message_agent_tool(target="clawk", message="ping", agent=agent))["error"]
+    err = json.loads(message_agent_tool(target="clawk", message="ping", agent=agent))[
+        "error"
+    ]
     assert "clawk@vps-1" in err and "ops-bot" in err
     section = bot_mode_probe.get_bot_mode_protocol_section(home)
-    assert "`@ops-bot`" in section and "`@clawk@vps-1`" in section and "- `@clawk` —" not in section
-
-
+    assert (
+        "`@ops-bot`" in section
+        and "`@clawk@vps-1`" in section
+        and "- `@clawk` —" not in section
+    )
 
 
 def test_protocol_section_lists_remote_teammates(tmp_path):
     from tools import bot_mode_probe
 
     home = _managed_home(tmp_path)
-    bot_relay.write_remote_roster(home, [
-        {"profile": "default", "handle": "clawk", "connection_id": "cloud-1",
-         "connection_label": "Clawksis Cloud", "title": "Moxie"},
-    ])
+    bot_relay.write_remote_roster(
+        home,
+        [
+            {
+                "profile": "default",
+                "handle": "clawk",
+                "connection_id": "cloud-1",
+                "connection_label": "Clawksis Cloud",
+                "title": "Moxie",
+            },
+        ],
+    )
     section = bot_mode_probe.get_bot_mode_protocol_section(home, force_refresh=True)
     # Offered under its title slug: bare `@clawk` is THIS gateway's own default (#103731).
     assert "`@moxie`" in section and "Clawksis Cloud" in section
@@ -451,9 +558,12 @@ def test_capability_fingerprint_changes_with_relay_roster(tmp_path):
 
     home = _managed_home(tmp_path)
     before = bot_mode_probe.capability_fingerprint(home)
-    bot_relay.write_remote_roster(home, [
-        {"profile": "default", "handle": "clawk", "connection_id": "cloud-1"},
-    ])
+    bot_relay.write_remote_roster(
+        home,
+        [
+            {"profile": "default", "handle": "clawk", "connection_id": "cloud-1"},
+        ],
+    )
     after = bot_mode_probe.capability_fingerprint(home)
     assert before != after  # eternal Bot Chats refresh once on roster change
 
@@ -466,15 +576,27 @@ def test_cleanup_bot_relay_artifacts_sweeps_stale_plaintext(tmp_path, monkeypatc
     import time as _time
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    target = {"profile": "scout", "handle": "scout", "connection_id": "cloud-1",
-              "connection_label": "", "title": "", "description": ""}
+    target = {
+        "profile": "scout",
+        "handle": "scout",
+        "connection_id": "cloud-1",
+        "connection_label": "",
+        "title": "",
+        "description": "",
+    }
     stale_env = bot_relay.enqueue_envelope(
-        tmp_path, target=target, message="old secret",
-        sender_profile="default", sender_handle="clawk",
+        tmp_path,
+        target=target,
+        message="old secret",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     fresh_env = bot_relay.enqueue_envelope(
-        tmp_path, target=target, message="new secret",
-        sender_profile="default", sender_handle="clawk",
+        tmp_path,
+        target=target,
+        message="new secret",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     base = bot_relay.relay_root(tmp_path)
     stale_reply = bot_relay.write_reply(tmp_path, stale_env["id"], reply="done")
@@ -502,21 +624,37 @@ import time as _time2
 
 
 def _target(conn="cloud-1", profile="scout", handle="scout"):
-    return {"profile": profile, "handle": handle, "connection_id": conn,
-            "connection_label": "", "title": "", "description": ""}
+    return {
+        "profile": profile,
+        "handle": handle,
+        "connection_id": conn,
+        "connection_label": "",
+        "title": "",
+        "description": "",
+    }
 
 
 def test_enqueue_fails_fast_when_row_explicitly_offline(root):
-    bot_relay.write_remote_roster(root, [
-        {"profile": "scout", "handle": "scout", "connection_id": "cloud-1",
-         "online": False},
-    ])
+    bot_relay.write_remote_roster(
+        root,
+        [
+            {
+                "profile": "scout",
+                "handle": "scout",
+                "connection_id": "cloud-1",
+                "online": False,
+            },
+        ],
+    )
     roster = bot_relay.read_remote_roster(root)
     assert roster[0]["online"] is False  # additive field survives normalize
     with pytest.raises(bot_relay.EnvelopeRefusedError) as ei:
         bot_relay.enqueue_envelope(
-            root, target=roster[0], message="hi",
-            sender_profile="default", sender_handle="clawk",
+            root,
+            target=roster[0],
+            message="hi",
+            sender_profile="default",
+            sender_handle="clawk",
         )
     assert ei.value.reason == "runtime_offline"
     assert "offline" in str(ei.value)
@@ -529,8 +667,11 @@ def test_enqueue_fails_fast_when_target_absent_from_fresh_roster(root):
     bot_relay.write_remote_roster(root, _rows())  # fresh, no 'scout' row
     with pytest.raises(bot_relay.EnvelopeRefusedError) as ei:
         bot_relay.enqueue_envelope(
-            root, target=_target(), message="hi",
-            sender_profile="default", sender_handle="clawk",
+            root,
+            target=_target(),
+            message="hi",
+            sender_profile="default",
+            sender_handle="clawk",
         )
     assert ei.value.reason == "runtime_offline"
 
@@ -538,34 +679,52 @@ def test_enqueue_fails_fast_when_target_absent_from_fresh_roster(root):
 def test_enqueue_fails_open_when_liveness_unknown(root):
     # 1. no roster ever synced → unknown → enqueue
     env = bot_relay.enqueue_envelope(
-        root, target=_target(), message="hi",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="hi",
+        sender_profile="default",
+        sender_handle="clawk",
     )
-    assert (bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env['id']}.json").exists()
+    assert (
+        bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env['id']}.json"
+    ).exists()
     # 2. stale roster missing the target → unknown → enqueue
     bot_relay.write_remote_roster(root, _rows())
     roster_path = bot_relay.relay_root(root) / bot_relay.ROSTER_FILE
     old = _time2.time() - bot_relay.ROSTER_FRESH_SECONDS - 5
     _os2.utime(roster_path, (old, old))
     env2 = bot_relay.enqueue_envelope(
-        root, target=_target(), message="hi again",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="hi again",
+        sender_profile="default",
+        sender_handle="clawk",
     )
-    assert (bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env2['id']}.json").exists()
+    assert (
+        bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env2['id']}.json"
+    ).exists()
     # 3. fresh roster listing the target without an online flag → enqueue
     bot_relay.write_remote_roster(root, _rows())
     target = bot_relay.read_remote_roster(root)[1]  # researcher@ssh-vps
     env3 = bot_relay.enqueue_envelope(
-        root, target=target, message="hello",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=target,
+        message="hello",
+        sender_profile="default",
+        sender_handle="clawk",
     )
-    assert (bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env3['id']}.json").exists()
+    assert (
+        bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR / f"{env3['id']}.json"
+    ).exists()
 
 
 def test_drain_expires_old_envelope_with_queued_expired_reply(root):
     env = bot_relay.enqueue_envelope(
-        root, target=_target(), message="too late",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="too late",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     base = bot_relay.relay_root(root)
     out_path = base / bot_relay.OUTBOX_DIR / f"{env['id']}.json"
@@ -592,12 +751,18 @@ def test_the_outbox_is_claimed_oldest_first(root):
     ``uuid4().hex``. The names here are forced into the reverse of the send order to pin that
     deterministically, which random ids reproduce half the time."""
     first = bot_relay.enqueue_envelope(
-        root, target=_target(), message="do this first",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="do this first",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     second = bot_relay.enqueue_envelope(
-        root, target=_target(), message="then this",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="then this",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     outbox = bot_relay.relay_root(root) / bot_relay.OUTBOX_DIR
     now = _time2.time()
@@ -617,23 +782,32 @@ def test_replayed_unanswered_dm_precedes_mail_queued_after_it(root):
     second DM queued since. Both reach the target's delivery lane in this list's order, so the
     claimed-but-unanswered one (sent first) must come first — not after the fresh outbox row."""
     first = bot_relay.enqueue_envelope(
-        root, target=_target(), message="do this first",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="do this first",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     base = bot_relay.relay_root(root)
     now = _time2.time()
     _os2.utime(base / bot_relay.OUTBOX_DIR / f"{first['id']}.json", (now - 2, now - 2))
     assert [e["id"] for e in bot_relay.claim_pending_envelopes(root)] == [first["id"]]
     second = bot_relay.enqueue_envelope(
-        root, target=_target(), message="then this",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="then this",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     _os2.utime(base / bot_relay.OUTBOX_DIR / f"{second['id']}.json", (now - 1, now - 1))
 
     drained = bot_relay.claim_pending_envelopes(root)
 
     assert [e["message"] for e in drained] == ["do this first", "then this"]
-    assert [e["id"] for e in drained] == [first["id"], second["id"]]  # stable ids, no re-mint
+    assert [e["id"] for e in drained] == [
+        first["id"],
+        second["id"],
+    ]  # stable ids, no re-mint
 
 
 def test_pre_upgrade_claim_settles_unknown_instead_of_stranding_its_waiter(root):
@@ -643,16 +817,25 @@ def test_pre_upgrade_claim_settles_unknown_instead_of_stranding_its_waiter(root)
     from tools.bot_failure_reasons import UNKNOWN, is_auto_retryable
 
     base = bot_relay._ensure_dirs(root)
-    legacy = {"id": "a" * 32, "created_at": int(_time2.time()) - 60, "from_profile": "default",
-              "from_handle": "clawk", "target_connection": "cloud-1", "target_profile": "default",
-              "target_handle": "clawk", "message": "legacy"}
+    legacy = {
+        "id": "a" * 32,
+        "created_at": int(_time2.time()) - 60,
+        "from_profile": "default",
+        "from_handle": "clawk",
+        "target_connection": "cloud-1",
+        "target_profile": "default",
+        "target_handle": "clawk",
+        "message": "legacy",
+    }
     path = base / bot_relay.CLAIMED_DIR / f"{legacy['id']}.json"
     path.write_text(json.dumps(legacy), encoding="utf-8")
     reply_path = base / bot_relay.REPLIES_DIR / f"{legacy['id']}.json"
     claimed_at = _time2.time() - 60
     _os2.utime(path, (claimed_at, claimed_at))
     assert bot_relay.claim_pending_envelopes(root) == []
-    assert not reply_path.exists()  # inside the old lane's in-flight window: no verdict yet
+    assert (
+        not reply_path.exists()
+    )  # inside the old lane's in-flight window: no verdict yet
 
     claimed_at = _time2.time() - bot_relay.REOFFER_AFTER_SECONDS - 10
     _os2.utime(path, (claimed_at, claimed_at))
@@ -664,8 +847,11 @@ def test_pre_upgrade_claim_settles_unknown_instead_of_stranding_its_waiter(root)
 
 def test_drain_delivers_fresh_envelope_under_ttl(root):
     env = bot_relay.enqueue_envelope(
-        root, target=_target(), message="on time",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="on time",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     claimed = bot_relay.claim_pending_envelopes(root)
     assert [e["id"] for e in claimed] == [env["id"]]
@@ -677,8 +863,11 @@ def test_drain_delivers_fresh_envelope_under_ttl(root):
 def test_drain_ttl_zero_disables_expiry(root, monkeypatch):
     monkeypatch.setattr(bot_relay, "_envelope_ttl_seconds", lambda: 0)
     env = bot_relay.enqueue_envelope(
-        root, target=_target(), message="never expires",
-        sender_profile="default", sender_handle="clawk",
+        root,
+        target=_target(),
+        message="never expires",
+        sender_profile="default",
+        sender_handle="clawk",
     )
     base = bot_relay.relay_root(root)
     out_path = base / bot_relay.OUTBOX_DIR / f"{env['id']}.json"
@@ -689,19 +878,27 @@ def test_drain_ttl_zero_disables_expiry(root, monkeypatch):
 
 
 def test_invalid_ttl_config_falls_back_instead_of_breaking_drain(monkeypatch):
-    monkeypatch.setattr(bot_relay, "_bot_mode_cfg", lambda *args, **kwargs: "not-a-number")
+    monkeypatch.setattr(
+        bot_relay, "_bot_mode_cfg", lambda *args, **kwargs: "not-a-number"
+    )
 
     assert bot_relay._envelope_ttl_seconds() == bot_relay.DEFAULT_ENVELOPE_TTL_SECONDS
 
 
-
-
 def test_message_agent_surfaces_runtime_offline_refusal(tmp_path, monkeypatch):
     home = _managed_home(tmp_path)
-    bot_relay.write_remote_roster(home, [
-        {"profile": "default", "handle": "clawk", "connection_id": "cloud-1",
-         "connection_label": "Clawksis Cloud", "online": False},
-    ])
+    bot_relay.write_remote_roster(
+        home,
+        [
+            {
+                "profile": "default",
+                "handle": "clawk",
+                "connection_id": "cloud-1",
+                "connection_label": "Clawksis Cloud",
+                "online": False,
+            },
+        ],
+    )
     monkeypatch.setattr(
         "tools.bot_mode_dm._spawn_delivery",
         lambda *a, **k: json.dumps({"status": "queued"}),
@@ -721,7 +918,11 @@ def test_delivery_turn_author_from_envelope_sender_fields():
     author = bot_relay.delivery_turn_author("ops", "ops-bot")
     assert author == {"id": "bot:ops", "name": "ops-bot", "is_bot": True}
     # The display name falls back to the profile; the id never comes from the handle.
-    assert bot_relay.delivery_turn_author("ops", "") == {"id": "bot:ops", "name": "ops", "is_bot": True}
+    assert bot_relay.delivery_turn_author("ops", "") == {
+        "id": "bot:ops",
+        "name": "ops",
+        "is_bot": True,
+    }
     assert bot_relay.delivery_turn_author("", "ops-bot") is None
     assert bot_relay.delivery_turn_author(None, None) is None
 
@@ -731,9 +932,17 @@ def test_delivery_turn_author_qualifies_a_remote_sender_by_its_connection():
     included; the recipient's own ``ops`` is the only bare ``bot:ops``."""
     remote = bot_relay.delivery_turn_author("ops", "ops-bot", "cloud-1")
     assert remote == {"id": "bot:cloud-1/ops", "name": "ops-bot", "is_bot": True}
-    assert bot_relay.delivery_turn_author("ops", "ops-bot", "local") == {"id": "bot:local/ops", "name": "ops-bot", "is_bot": True}
+    assert bot_relay.delivery_turn_author("ops", "ops-bot", "local") == {
+        "id": "bot:local/ops",
+        "name": "ops-bot",
+        "is_bot": True,
+    }
     # An older Desktop that sends no connection id still yields an author.
-    assert bot_relay.delivery_turn_author("ops", "ops-bot", "") == {"id": "bot:ops", "name": "ops-bot", "is_bot": True}
+    assert bot_relay.delivery_turn_author("ops", "ops-bot", "") == {
+        "id": "bot:ops",
+        "name": "ops-bot",
+        "is_bot": True,
+    }
 
 
 def test_delivery_env_carries_only_the_given_author(monkeypatch):
@@ -741,7 +950,10 @@ def test_delivery_env_carries_only_the_given_author(monkeypatch):
     from agent.turn_author import TURN_AUTHOR_ENV
 
     monkeypatch.setenv("CLAWK_RELAY_TEST_MARKER", "kept")
-    monkeypatch.setenv(TURN_AUTHOR_ENV, json.dumps({"id": "bot:previous", "name": "previous", "is_bot": True}))
+    monkeypatch.setenv(
+        TURN_AUTHOR_ENV,
+        json.dumps({"id": "bot:previous", "name": "previous", "is_bot": True}),
+    )
     monkeypatch.setenv("CLAWK_SESSION_KEY", "session-A")
     monkeypatch.setenv("CLAWK_UI_SESSION_ID", "ui-A")
     monkeypatch.setenv("CLAWK_SESSION_ID", "session-A")
@@ -751,7 +963,11 @@ def test_delivery_env_carries_only_the_given_author(monkeypatch):
 
     assert TURN_AUTHOR_ENV not in bot_relay.delivery_env(None)
     env = bot_relay.delivery_env(bot_relay.delivery_turn_author("ops", "ops"))
-    assert json.loads(env[TURN_AUTHOR_ENV]) == {"id": "bot:ops", "name": "ops", "is_bot": True}
+    assert json.loads(env[TURN_AUTHOR_ENV]) == {
+        "id": "bot:ops",
+        "name": "ops",
+        "is_bot": True,
+    }
     assert env["CLAWK_RELAY_TEST_MARKER"] == "kept"
     assert "CLAWK_SESSION_KEY" not in env
     assert "CLAWK_UI_SESSION_ID" not in env
@@ -760,10 +976,16 @@ def test_delivery_env_carries_only_the_given_author(monkeypatch):
     assert env["CLAWK_SESSION_STALL_TIMEOUT"] == "97"
 
 
-def test_delivery_env_under_multiplex_names_the_pinned_launch_home(tmp_path, monkeypatch):
+def test_delivery_env_under_multiplex_names_the_pinned_launch_home(
+    tmp_path, monkeypatch
+):
     """A relayed DM into the launch profile spawns with the launch home and its secrets, even after a
     host mirrors another home into CLAWK_HOME; a bound scope or home override still wins."""
-    from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+    from agent.secret_scope import (
+        reset_secret_scope,
+        set_multiplex_active,
+        set_secret_scope,
+    )
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     launch, mirrored = tmp_path / "launch", tmp_path / "mirrored"
@@ -789,12 +1011,17 @@ def test_delivery_env_under_multiplex_names_the_pinned_launch_home(tmp_path, mon
     home_token = set_clawk_home_override(str(mirrored))
     try:
         env = bot_relay.delivery_env(None, None)
-        assert (env["CLAWK_HOME"], env["OPENROUTER_API_KEY"]) == (str(mirrored), "sk-override")
+        assert (env["CLAWK_HOME"], env["OPENROUTER_API_KEY"]) == (
+            str(mirrored),
+            "sk-override",
+        )
     finally:
         reset_clawk_home_override(home_token)
 
 
-def test_delivery_env_single_profile_host_passes_the_process_env_through(tmp_path, monkeypatch):
+def test_delivery_env_single_profile_host_passes_the_process_env_through(
+    tmp_path, monkeypatch
+):
     """Without multiplex nothing is pinned or overlaid: the child sees the process env as before."""
     (tmp_path / ".env").write_text("OPENROUTER_API_KEY=from-dotenv\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))

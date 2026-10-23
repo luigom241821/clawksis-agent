@@ -43,19 +43,35 @@ def mux(tmp_path, monkeypatch):
     for name in ("ops", "team_b"):
         (home / "profiles" / name).mkdir(parents=True)
     (home / ".env").write_text("TELEGRAM_ALLOWED_USERS=777\n")
-    (home / "profiles" / "team_b" / ".env").write_text("TELEGRAM_ALLOWED_USERS=72719239\n")
+    (home / "profiles" / "team_b" / ".env").write_text(
+        "TELEGRAM_ALLOWED_USERS=72719239\n"
+    )
     (home / "profiles" / "ops" / ".env").write_text("")
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    for key in ("TELEGRAM_ALLOWED_USERS", "GATEWAY_ALLOW_ALL_USERS", "GATEWAY_ALLOWED_USERS"):
+    for key in (
+        "TELEGRAM_ALLOWED_USERS",
+        "GATEWAY_ALLOW_ALL_USERS",
+        "GATEWAY_ALLOWED_USERS",
+    ):
         monkeypatch.delenv(key, raising=False)
     prev = secret_scope.is_multiplex_active()
     secret_scope.set_multiplex_active(True)
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(multiplex_profiles=True)
-    runner.config.platforms = {Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})}
+    runner.config.platforms = {
+        Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})
+    }
     runner.config.profile_routes = parse_profile_routes(
-        [{"name": "admin-dm", "platform": "telegram", "profile": "ops", "chat_id": "72719239"}])
+        [
+            {
+                "name": "admin-dm",
+                "platform": "telegram",
+                "profile": "ops",
+                "chat_id": "72719239",
+            }
+        ]
+    )
     runner.pairing_store = PairingStore(profile="default")
     runner.pairing_stores = {}
     runner._primary_profile_name = "default"
@@ -64,10 +80,19 @@ def mux(tmp_path, monkeypatch):
     team_b.set_owner_profile("team_b")
     runner.adapters = {Platform.TELEGRAM: primary}
     runner._profile_adapters = {"team_b": {Platform.TELEGRAM: team_b}, "ops": {}}
-    served = [("default", home), ("ops", home / "profiles" / "ops"), ("team_b", home / "profiles" / "team_b")]
-    with patch("clawk_cli.profiles.profiles_to_serve", return_value=served), \
-            patch("clawk_cli.profiles.get_profile_dir", side_effect=lambda n: home / "profiles" / n), \
-            patch("clawk_cli.profiles.profile_exists", return_value=True):
+    served = [
+        ("default", home),
+        ("ops", home / "profiles" / "ops"),
+        ("team_b", home / "profiles" / "team_b"),
+    ]
+    with (
+        patch("clawk_cli.profiles.profiles_to_serve", return_value=served),
+        patch(
+            "clawk_cli.profiles.get_profile_dir",
+            side_effect=lambda n: home / "profiles" / n,
+        ),
+        patch("clawk_cli.profiles.profile_exists", return_value=True),
+    ):
         yield SimpleNamespace(runner=runner, home=home, primary=primary, team_b=team_b)
     secret_scope.set_multiplex_active(prev)
 
@@ -75,10 +100,17 @@ def mux(tmp_path, monkeypatch):
 def test_shared_bot_route_does_not_hijack_dedicated_secondary_bot(mux):
     """A chat_id route for the shared bot must not re-home the same user's DM with team_b's own bot;
     the same DM to the shared bot still routes to ``ops`` (#104933)."""
-    via_team_b = mux.team_b.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+    via_team_b = mux.team_b.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     assert via_team_b.profile == "team_b"
-    assert mux.runner._session_key_for_source(via_team_b) == "agent:team_b:telegram:dm:72719239"
-    via_primary = mux.primary.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+    assert (
+        mux.runner._session_key_for_source(via_team_b)
+        == "agent:team_b:telegram:dm:72719239"
+    )
+    via_primary = mux.primary.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     assert via_primary.profile == "ops"
 
 
@@ -94,7 +126,12 @@ def test_secondary_busy_followup_authorized_against_its_own_allowlist(mux):
         return mux.runner._is_user_authorized(event.source)
 
     mux.runner._handle_active_session_busy_message = _busy
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="72719239", chat_type="dm", user_id="72719239")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="72719239",
+        chat_type="dm",
+        user_id="72719239",
+    )
     source._transport_adapter_ref = weakref.ref(mux.team_b)
     handler = mux.runner._make_profile_busy_session_handler("team_b")
     assert asyncio.run(handler(SimpleNamespace(source=source), "k")) is True
@@ -107,12 +144,26 @@ def test_mid_turn_authorization_reads_admitting_transport_allowlist(mux):
     injection, voice and auto-resume now use."""
     from gateway.run import _profile_runtime_scope
 
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="777", chat_type="dm", user_id="777", profile="ops")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="777",
+        chat_type="dm",
+        user_id="777",
+        profile="ops",
+    )
     source._transport_adapter_ref = weakref.ref(mux.primary)
     with _profile_runtime_scope(mux.home / "profiles" / "ops"):
-        assert mux.runner._is_user_authorized(source) is False  # the bug the call sites had
+        assert (
+            mux.runner._is_user_authorized(source) is False
+        )  # the bug the call sites had
         assert mux.runner._is_user_authorized_for_source(source) is True
-    stranger = SessionSource(platform=Platform.TELEGRAM, chat_id="1", chat_type="dm", user_id="1", profile="ops")
+    stranger = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="1",
+        chat_type="dm",
+        user_id="1",
+        profile="ops",
+    )
     stranger._transport_adapter_ref = weakref.ref(mux.primary)
     with _profile_runtime_scope(mux.home / "profiles" / "ops"):
         assert mux.runner._is_user_authorized_for_source(stranger) is False
@@ -121,11 +172,19 @@ def test_mid_turn_authorization_reads_admitting_transport_allowlist(mux):
 def test_shared_bot_satellite_resolves_primary_transport_for_restored_sources(mux):
     """A routed satellite with no bot of its own drains through the primary for restored/cached
     sources (no transport ref); a disconnected secondary that owns a credential stays fail-closed."""
-    restored = SessionSource(platform=Platform.TELEGRAM, chat_id="72719239", chat_type="dm", user_id="7", profile="ops")
+    restored = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="72719239",
+        chat_type="dm",
+        user_id="7",
+        profile="ops",
+    )
     assert mux.runner._authorization_adapter(Platform.TELEGRAM, "ops") is mux.primary
     assert mux.runner._delivery_adapter_for(restored) is mux.primary
     assert mux.runner._resolve_injection_adapter("telegram", restored) is mux.primary
-    mux.runner._profile_adapters["team_b"] = {}  # team_b's bot is down: never borrow the primary
+    mux.runner._profile_adapters[
+        "team_b"
+    ] = {}  # team_b's bot is down: never borrow the primary
     assert mux.runner._authorization_adapter(Platform.TELEGRAM, "team_b") is None
 
 
@@ -137,12 +196,20 @@ def test_completion_preflight_runs_in_target_profile_scope(mux):
 
     db_home = mux.home / "profiles" / "team_b"
     SessionDB(db_path=db_home / "state.db").create_session(
-        session_id="sess-b", source="telegram", session_key="agent:team_b:telegram:dm:1", profile_name="team_b")
+        session_id="sess-b",
+        source="telegram",
+        session_key="agent:team_b:telegram:dm:1",
+        profile_name="team_b",
+    )
     runner = mux.runner
     runner._session_db_pinned = run_module._SESSION_DB_UNPINNED
     runner._session_db_handles, runner._session_db_handles_lock = {}, threading.Lock()
     runner.session_store, runner._session_sources = None, {}
-    evt = {"type": "async_delegation", "session_key": "agent:team_b:telegram:dm:1", "parent_session_id": "sess-b"}
+    evt = {
+        "type": "async_delegation",
+        "session_key": "agent:team_b:telegram:dm:1",
+        "parent_session_id": "sess-b",
+    }
 
     async def _run():
         unscoped = await runner._classify_completion_target("sess-b")
@@ -153,9 +220,15 @@ def test_completion_preflight_runs_in_target_profile_scope(mux):
     assert asyncio.run(_run()) == ("terminal", "deliver")
 
 
-@pytest.mark.parametrize(("launch_policy", "served_policy"), [(False, True), (True, False)])
+@pytest.mark.parametrize(
+    ("launch_policy", "served_policy"), [(False, True), (True, False)]
+)
 def test_raw_api_server_child_notice_follows_the_served_profile_policy(
-    tmp_path, monkeypatch, private_db_probe_cleanup, launch_policy, served_policy,
+    tmp_path,
+    monkeypatch,
+    private_db_probe_cleanup,
+    launch_policy,
+    served_policy,
 ):
     """A served profile's raw api_server session names no profile: the child-process notice policy
     of the profile whose own store holds the session decides, not the launch profile's."""
@@ -173,23 +246,44 @@ def test_raw_api_server_child_notice_follows_the_served_profile_policy(
     (home / "config.yaml").write_text(policy.format(str(launch_policy).lower()))
     (served / "config.yaml").write_text(policy.format(str(served_policy).lower()))
     db = SessionDB(db_path=served / "state.db")
-    db.create_session(session_id="raw-session", source="api_server", profile_name="builder")
+    db.create_session(
+        session_id="raw-session", source="api_server", profile_name="builder"
+    )
     turns = []
 
     async def api_turn(**kw):
         turns.append((kw["session_id"], kw["profile"]))
 
-    evt = {"type": "watch_match", "session_id": "proc_abcd1234", "session_key": "raw-session",
-           "platform": "api_server", "chat_id": "raw-session", "owner_task_id": "sa-child",
-           "pattern": "READY", "command": "build", "output": "READY"}
+    evt = {
+        "type": "watch_match",
+        "session_id": "proc_abcd1234",
+        "session_key": "raw-session",
+        "platform": "api_server",
+        "chat_id": "raw-session",
+        "owner_task_id": "sa-child",
+        "pattern": "READY",
+        "command": "build",
+        "output": "READY",
+    }
 
     async def _run():
-        with run_module._profile_runtime_scope(home), patch.object(
-            run_module, "_multiplex_profile_homes", return_value=[("builder", served)],
+        with (
+            run_module._profile_runtime_scope(home),
+            patch.object(
+                run_module,
+                "_multiplex_profile_homes",
+                return_value=[("builder", served)],
+            ),
         ):
-            runner = run_module.GatewayRunner(GatewayConfig(multiplex_profiles=True, sessions_dir=home / "sessions"))
-            runner.adapters[Platform.API_SERVER] = cast(BasePlatformAdapter, SimpleNamespace(
-                supports_async_delivery=False, run_internal_session_turn=api_turn))
+            runner = run_module.GatewayRunner(
+                GatewayConfig(multiplex_profiles=True, sessions_dir=home / "sessions")
+            )
+            runner.adapters[Platform.API_SERVER] = cast(
+                BasePlatformAdapter,
+                SimpleNamespace(
+                    supports_async_delivery=False, run_internal_session_turn=api_turn
+                ),
+            )
             runner._primary_profile_name = "default"
             runner._profile_adapters = {"builder": {}}
             completions = queue.Queue()

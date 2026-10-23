@@ -26,6 +26,7 @@ import pytest
 
 def _make_pconfig(provider_id, env_vars=None):
     from clawk_cli.auth import ProviderConfig
+
     return ProviderConfig(
         id=provider_id,
         name=provider_id.title(),
@@ -71,10 +72,13 @@ class TestMalformedEnvKeySkipped:
     def test_malformed_openrouter_env_key_falls_back_to_pool(
         self, isolated_clawk_home, caplog
     ):
-        _write_env_file(isolated_clawk_home, OPENROUTER_API_KEY="not-a-real-openrouter-key")
+        _write_env_file(
+            isolated_clawk_home, OPENROUTER_API_KEY="not-a-real-openrouter-key"
+        )
         pool = _mock_pool(_entry("sk-or-v1-valid-pool-key-abc123"))
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=pool):
             with caplog.at_level(logging.WARNING):
                 key, source = _resolve_api_key_provider_secret(
@@ -90,10 +94,13 @@ class TestMalformedEnvKeySkipped:
         self, isolated_clawk_home, caplog
     ):
         """Malformed env key + no pool → empty result, never the bad key."""
-        _write_env_file(isolated_clawk_home, OPENROUTER_API_KEY="sk-proj-wrong-provider-key")
+        _write_env_file(
+            isolated_clawk_home, OPENROUTER_API_KEY="sk-proj-wrong-provider-key"
+        )
         pool = _mock_pool()
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=pool):
             with caplog.at_level(logging.WARNING):
                 key, source = _resolve_api_key_provider_secret(
@@ -111,6 +118,7 @@ class TestMalformedEnvKeySkipped:
         )
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=pool):
             key, source = _resolve_api_key_provider_secret(
                 provider_id="openrouter",
@@ -124,9 +132,12 @@ class TestNoDeclaredPrefixUnaffected:
     """Providers without a declared prefix keep today's fail-open behavior."""
 
     def test_undeclared_provider_env_key_returned_verbatim(self, isolated_clawk_home):
-        _write_env_file(isolated_clawk_home, DEEPSEEK_API_KEY="totally-unknown-format-key")
+        _write_env_file(
+            isolated_clawk_home, DEEPSEEK_API_KEY="totally-unknown-format-key"
+        )
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         pool = _mock_pool(_entry("pool-key-should-not-win"))
         with patch("agent.credential_pool.load_pool", return_value=pool) as mp:
             key, source = _resolve_api_key_provider_secret(
@@ -146,6 +157,7 @@ class TestValidEnvKeyStillWins:
         pool = _mock_pool(_entry("sk-or-v1-pool-key-loses"))
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=pool) as mp:
             key, source = _resolve_api_key_provider_secret(
                 provider_id="openrouter",
@@ -164,6 +176,7 @@ class TestValidEnvKeyStillWins:
         )
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         key, source = _resolve_api_key_provider_secret(
             provider_id="openrouter",
             pconfig=_make_pconfig(

@@ -14,6 +14,7 @@ the guaranteed 400 first. Dropping the field would also succeed once, but it say
 next call and hands the effort choice back to the provider default (often ``medium`` or higher, the
 opposite of what a thinking-off caller asked for).
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,11 +34,15 @@ _DISABLED_EFFORTS = {"none", "off", "disabled", "false", "0"}
 def _route_key(provider: Optional[str], base_url: Optional[str]) -> str:
     """Endpoint host:port when known (a base_url override turns a named provider into ``custom``), else
     the provider name — the same key shape ``auxiliary_structured_output`` uses."""
-    return (urlparse(base_url or "").netloc or "").lower() or str(provider or "").strip().lower()
+    return (urlparse(base_url or "").netloc or "").lower() or str(
+        provider or ""
+    ).strip().lower()
 
 
 def _is_disabled(reasoning_config: Any) -> bool:
-    return isinstance(reasoning_config, dict) and reasoning_config.get("enabled") is False
+    return (
+        isinstance(reasoning_config, dict) and reasoning_config.get("enabled") is False
+    )
 
 
 def floor_reasoning_config(reasoning_config: Any) -> dict[str, Any]:
@@ -64,25 +69,36 @@ def with_reasoning_floor(kwargs: dict[str, Any]) -> Optional[dict[str, Any]]:
     if isinstance(extra_body, dict):
         reasoning = extra_body.get("reasoning")
         if _is_disabled(reasoning) or (
-            isinstance(reasoning, dict) and str(reasoning.get("effort", "")).strip().lower() in _DISABLED_EFFORTS
+            isinstance(reasoning, dict)
+            and str(reasoning.get("effort", "")).strip().lower() in _DISABLED_EFFORTS
         ):
-            retry["extra_body"] = {**extra_body, "reasoning": {"enabled": True, "effort": REASONING_FLOOR_EFFORT}}
+            retry["extra_body"] = {
+                **extra_body,
+                "reasoning": {"enabled": True, "effort": REASONING_FLOOR_EFFORT},
+            }
             changed = True
     return retry if changed else None
 
 
 def remember_reasoning_floor(
-    provider: Optional[str], base_url: Optional[str], rejected_kwargs: dict[str, Any], error: BaseException,
+    provider: Optional[str],
+    base_url: Optional[str],
+    rejected_kwargs: dict[str, Any],
+    error: BaseException,
 ) -> None:
     """Record that this route's ``rejected_kwargs["model"]`` refuses to disable reasoning (the ladder
     calls this after the stepped-up retry succeeded)."""
-    _FLOORED_ROUTES.add((_route_key(provider, base_url), str(rejected_kwargs.get("model") or "")))
+    _FLOORED_ROUTES.add(
+        (_route_key(provider, base_url), str(rejected_kwargs.get("model") or ""))
+    )
 
 
 _NOUS_PROVIDERS = {"nous", "nous-portal", "nousresearch"}
 
 
-def _catalog_marks_mandatory(provider: Optional[str], base_url: Optional[str], model: Optional[str]) -> bool:
+def _catalog_marks_mandatory(
+    provider: Optional[str], base_url: Optional[str], model: Optional[str]
+) -> bool:
     """True when the route's ``/v1/models`` catalog (OpenRouter, Nous Portal) flags *model*
     ``reasoning.mandatory``. Cache-only — memory, then the disk mirror — so it never blocks; a cold
     catalog is warmed in the background, and the mirror it writes answers every later call and process.
@@ -91,10 +107,21 @@ def _catalog_marks_mandatory(provider: Optional[str], base_url: Optional[str], m
     provider_norm = str(provider or "").strip().lower()
     host = (urlparse(base_url or "").hostname or "").lower()
     from clawk_cli import models_reasoning_caps as caps_mod
-    if provider_norm == "openrouter" or host == "openrouter.ai" or host.endswith(".openrouter.ai"):
-        lookup, warm = caps_mod.openrouter_model_reasoning_capabilities, caps_mod.warm_openrouter_reasoning_caps_async
+
+    if (
+        provider_norm == "openrouter"
+        or host == "openrouter.ai"
+        or host.endswith(".openrouter.ai")
+    ):
+        lookup, warm = (
+            caps_mod.openrouter_model_reasoning_capabilities,
+            caps_mod.warm_openrouter_reasoning_caps_async,
+        )
     elif provider_norm in _NOUS_PROVIDERS:
-        lookup, warm = caps_mod.nous_model_reasoning_capabilities, caps_mod.warm_nous_reasoning_caps_async
+        lookup, warm = (
+            caps_mod.nous_model_reasoning_capabilities,
+            caps_mod.warm_nous_reasoning_caps_async,
+        )
     else:
         return False
     try:
@@ -107,7 +134,10 @@ def _catalog_marks_mandatory(provider: Optional[str], base_url: Optional[str], m
 
 
 def known_reasoning_floor(
-    reasoning_config: Any, provider: Optional[str], base_url: Optional[str], model: Optional[str],
+    reasoning_config: Any,
+    provider: Optional[str],
+    base_url: Optional[str],
+    model: Optional[str],
     task: Optional[str] = None,
 ) -> Any:
     """*reasoning_config* lifted to the floor when this route+model is known to refuse a disable — learned
@@ -115,12 +145,20 @@ def known_reasoning_floor(
     otherwise. Runs before the profile projection so every wire shape starts at the floor."""
     if not _is_disabled(reasoning_config):
         return reasoning_config
-    if (_route_key(provider, base_url), str(model or "")) not in _FLOORED_ROUTES and not _catalog_marks_mandatory(
-        provider, base_url, model,
+    if (
+        _route_key(provider, base_url),
+        str(model or ""),
+    ) not in _FLOORED_ROUTES and not _catalog_marks_mandatory(
+        provider,
+        base_url,
+        model,
     ):
         return reasoning_config
     logger.info(
         "Auxiliary %s: %s (%s) cannot disable reasoning; sending effort=%s up front",
-        task or "call", _route_key(provider, base_url) or "provider", model or "model", REASONING_FLOOR_EFFORT,
+        task or "call",
+        _route_key(provider, base_url) or "provider",
+        model or "model",
+        REASONING_FLOOR_EFFORT,
     )
     return floor_reasoning_config(reasoning_config)

@@ -23,13 +23,20 @@ def _coerce_config_version(value) -> int:
     return max(version, 0)
 
 
-def read_config_version_stamp(*, raise_on_parse_error: bool = False) -> tuple[Optional[int], int]:
+def read_config_version_stamp(
+    *, raise_on_parse_error: bool = False
+) -> tuple[Optional[int], int]:
     """Single raw read behind ``check_config_version()``: ``(stamp, latest_version)`` where
     *stamp* is ``None`` when config.yaml parsed but carries no ``_config_version`` key (a
     never-stamped current-schema file, not an ancient install — ``migrate_config()`` gives it only
     the legacy-key steps). A missing file, or malformed YAML under a tolerant caller, reads as
     ``latest`` exactly as ``check_config_version()`` always reported it."""
-    from clawk_cli.config import InvalidUserConfigError, _warn_config_parse_failure, fast_safe_load, get_config_path
+    from clawk_cli.config import (
+        InvalidUserConfigError,
+        _warn_config_parse_failure,
+        fast_safe_load,
+        get_config_path,
+    )
 
     latest = _coerce_config_version(DEFAULT_CONFIG.get("_config_version", 1)) or 1
     config_path = get_config_path()

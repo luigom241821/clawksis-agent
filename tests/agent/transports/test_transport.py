@@ -12,36 +12,37 @@ from agent.transports import get_transport
 
 # ── Registry tests ───────────────────────────────────────────────────────
 
-class TestTransportRegistry:
 
+class TestTransportRegistry:
     def test_get_unregistered_returns_none(self):
         assert get_transport("nonexistent_mode") is None
 
 
 # ── AnthropicTransport tests ────────────────────────────────────────────
 
-class TestAnthropicTransport:
 
+class TestAnthropicTransport:
     @pytest.fixture
     def transport(self):
         import agent.transports.anthropic
+
         return get_transport("anthropic_messages")
 
-
     def test_convert_tools_simple(self, transport):
-        tools = [{
-            "type": "function",
-            "function": {
-                "name": "test_tool",
-                "description": "A test",
-                "parameters": {"type": "object", "properties": {}},
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "test_tool",
+                    "description": "A test",
+                    "parameters": {"type": "object", "properties": {}},
+                },
             }
-        }]
+        ]
         result = transport.convert_tools(tools)
         assert len(result) == 1
         assert result[0]["name"] == "test_tool"
         assert "input_schema" in result[0]
-
 
     def test_map_finish_reason(self, transport):
         assert transport.map_finish_reason("end_turn") == "stop"
@@ -51,7 +52,6 @@ class TestAnthropicTransport:
         assert transport.map_finish_reason("refusal") == "content_filter"
         assert transport.map_finish_reason("model_context_window_exceeded") == "length"
         assert transport.map_finish_reason("unknown") == "stop"
-
 
     def test_normalize_response_text(self, transport):
         """Test normalization of a simple text response."""
@@ -71,17 +71,32 @@ class TestAnthropicTransport:
         """stop_reason=refusal maps to content_filter and carries the message's stop_details (the
         SDK exposes it only as an extra field); a plain end_turn adds no stop_details key."""
         refusal = SimpleNamespace(
-            content=[], stop_reason="refusal", usage=None, model="claude",
-            stop_details={"type": "refusal", "category": "general_harms", "explanation": "classifier halt"},
+            content=[],
+            stop_reason="refusal",
+            usage=None,
+            model="claude",
+            stop_details={
+                "type": "refusal",
+                "category": "general_harms",
+                "explanation": "classifier halt",
+            },
         )
         nr = transport.normalize_response(refusal)
         assert nr.finish_reason == "content_filter"
         assert nr.provider_data["stop_details"]["explanation"] == "classifier halt"
         plain = transport.normalize_response(
-            SimpleNamespace(content=[SimpleNamespace(type="text", text="ok")], stop_reason="end_turn", usage=None, model="claude"))
+            SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="ok")],
+                stop_reason="end_turn",
+                usage=None,
+                model="claude",
+            )
+        )
         assert "stop_details" not in (plain.provider_data or {})
 
-    def test_streamed_refusal_stop_details_reach_provider_data(self, transport, monkeypatch):
+    def test_streamed_refusal_stop_details_reach_provider_data(
+        self, transport, monkeypatch
+    ):
         """Only the message_delta event carries stop_details (the SDK snapshot keeps just
         stop_reason/stop_sequence), so both streaming wires must carry it into the final Message:
         the aux ``_stream_final_message`` reader and the main wire's accumulator restore."""
@@ -90,23 +105,41 @@ class TestAnthropicTransport:
         from agent import relay_llm
         from agent.anthropic_adapter import _stream_final_message
 
-        details = {"type": "refusal", "category": "general_harms", "explanation": "classifier halt"}
-        delta_event = SimpleNamespace(type="message_delta", delta=SimpleNamespace(stop_reason="refusal", stop_details=details))
+        details = {
+            "type": "refusal",
+            "category": "general_harms",
+            "explanation": "classifier halt",
+        }
+        delta_event = SimpleNamespace(
+            type="message_delta",
+            delta=SimpleNamespace(stop_reason="refusal", stop_details=details),
+        )
         message_stop_event = SimpleNamespace(type="message_stop")
 
         def _stream_cm(final):
             stream = MagicMock()
-            stream.__iter__ = MagicMock(return_value=iter([delta_event, message_stop_event]))
+            stream.__iter__ = MagicMock(
+                return_value=iter([delta_event, message_stop_event])
+            )
             stream.get_final_message = MagicMock(return_value=final)
             cm = MagicMock()
-            cm.__enter__, cm.__exit__ = MagicMock(return_value=stream), MagicMock(return_value=False)
+            cm.__enter__, cm.__exit__ = (
+                MagicMock(return_value=stream),
+                MagicMock(return_value=False),
+            )
             return cm
 
         def _snapshot():  # what get_final_message returns: no stop_details attribute at all
-            return SimpleNamespace(content=[], stop_reason="refusal", usage=None, model="claude")
+            return SimpleNamespace(
+                content=[], stop_reason="refusal", usage=None, model="claude"
+            )
 
-        aux = _stream_final_message(lambda **_: _stream_cm(_snapshot()), {"model": "claude"}, "", None, None)
-        assert transport.normalize_response(aux).provider_data["stop_details"] == details
+        aux = _stream_final_message(
+            lambda **_: _stream_cm(_snapshot()), {"model": "claude"}, "", None, None
+        )
+        assert (
+            transport.normalize_response(aux).provider_data["stop_details"] == details
+        )
 
         from run_agent import AIAgent
 
@@ -117,18 +150,34 @@ class TestAnthropicTransport:
         def _start_feeding(self, request):
             unmanaged(self, request)
             raw = self._stream
-            self._stream = (chunk for chunk in raw if self._on_chunk(relay_llm._jsonable(chunk)) or True)
+            self._stream = (
+                chunk
+                for chunk in raw
+                if self._on_chunk(relay_llm._jsonable(chunk)) or True
+            )
 
-        monkeypatch.setattr(relay_llm.ManagedLlmStream, "_start_unmanaged", _start_feeding)
-        agent = AIAgent(api_key="k", base_url="https://example.com/v1", model="claude", quiet_mode=True,
-                        skip_context_files=True, skip_memory=True)
+        monkeypatch.setattr(
+            relay_llm.ManagedLlmStream, "_start_unmanaged", _start_feeding
+        )
+        agent = AIAgent(
+            api_key="k",
+            base_url="https://example.com/v1",
+            model="claude",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+        )
         agent.api_mode = "anthropic_messages"
         agent._anthropic_client = MagicMock()
         agent._anthropic_api_key = "k"
         agent._create_request_anthropic_client = lambda *a, **k: agent._anthropic_client
-        agent._anthropic_client.messages.stream = MagicMock(return_value=_stream_cm(_snapshot()))
+        agent._anthropic_client.messages.stream = MagicMock(
+            return_value=_stream_cm(_snapshot())
+        )
         main = agent._interruptible_streaming_api_call({"model": "claude"})
-        assert transport.normalize_response(main).provider_data["stop_details"] == details
+        assert (
+            transport.normalize_response(main).provider_data["stop_details"] == details
+        )
 
     def test_normalize_response_tool_calls(self, transport):
         """Test normalization of a tool-use response."""

@@ -78,14 +78,13 @@ def _make_head_moved_side_effect(pre_sha=PRE_SHA, post_sha=POST_SHA):
             return SimpleNamespace(returncode=0, stdout=f"{post_sha}\n", stderr="")
 
         if joined.endswith("rev-parse HEAD"):
-            return SimpleNamespace(returncode=0, stdout=f"{post_sha if advanced else pre_sha}\n", stderr="")
+            return SimpleNamespace(
+                returncode=0, stdout=f"{post_sha if advanced else pre_sha}\n", stderr=""
+            )
 
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     return side_effect
-
-
-
 
 
 def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
@@ -96,8 +95,11 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
     # would miss. Fake the runner itself so the seam holds on every OS.
     from clawk_cli import update_custody
 
-    monkeypatch.setattr(update_custody, "run",
-                        lambda argv, *, inherit_lock=False, **kw: run_side_effect(list(argv), **kw))
+    monkeypatch.setattr(
+        update_custody,
+        "run",
+        lambda argv, *, inherit_lock=False, **kw: run_side_effect(list(argv), **kw),
+    )
     monkeypatch.setattr(clawk_main, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(update_cmd, "_prepare_updated_checkout", lambda *a, **k: None)
     (tmp_path / ".git").mkdir()
@@ -127,9 +129,7 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
         main_web_build, "_record_bytecode_fingerprint", lambda *a, **k: None
     )
     monkeypatch.setattr(clawk_main, "_run_pre_update_backup", lambda *a, **k: None)
-    monkeypatch.setattr(
-        clawk_main, "_pause_windows_gateways_for_update", lambda: None
-    )
+    monkeypatch.setattr(clawk_main, "_pause_windows_gateways_for_update", lambda: None)
     monkeypatch.setattr(
         clawk_main, "_resume_windows_gateways_after_update", lambda *a, **k: None
     )
@@ -139,8 +139,10 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
         clawk_main,
         "_install_hangup_protection",
         lambda gateway_mode=False: {
-            "prev_stdout": None, "prev_stderr": None,
-            "log_file": None, "installed": False,
+            "prev_stdout": None,
+            "prev_stderr": None,
+            "log_file": None,
+            "installed": False,
         },
     )
     monkeypatch.setattr(clawk_main, "_finalize_update_output", lambda *a, **k: None)
@@ -154,7 +156,8 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
         lambda *a, **k: None,
     )
     monkeypatch.setattr(
-        "clawk_cli.update_cmd_maint._refresh_dashboard_after_update", lambda **k: None,
+        "clawk_cli.update_cmd_maint._refresh_dashboard_after_update",
+        lambda **k: None,
     )
     # The startup version-info probe runs git rev-parse HEAD (and the
     # result is cached per-process, so whether it runs depends on test
@@ -169,9 +172,7 @@ def _patch_update_deps(monkeypatch, tmp_path, run_side_effect):
 
     import clawk_cli.gateway as clawk_gateway
 
-    monkeypatch.setattr(
-        clawk_gateway, "find_gateway_pids", lambda **_kwargs: []
-    )
+    monkeypatch.setattr(clawk_gateway, "find_gateway_pids", lambda **_kwargs: [])
     monkeypatch.setattr(clawk_gateway, "supports_systemd_services", lambda: False)
     monkeypatch.setattr(
         clawk_gateway, "find_profile_gateway_processes", lambda *a, **k: []
@@ -350,16 +351,38 @@ def test_successful_command_boundary_receipt_without_fleet_does_not_retrigger(
 @pytest.mark.parametrize(
     ("receipt", "unfinished"),
     [
-        pytest.param({"outcome": "success", "exit_code": 0, "stop_reason": "sys.exit(0)"}, False, id="success-sys-exit-0"),
-        pytest.param({"outcome": "success", "stop_reason": "KeyboardInterrupt: "}, False, id="success-no-exit-code"),
-        pytest.param({"exit_code": 0, "stop_reason": "sys.exit(0)"}, False, id="exit-0-no-outcome"),
+        pytest.param(
+            {"outcome": "success", "exit_code": 0, "stop_reason": "sys.exit(0)"},
+            False,
+            id="success-sys-exit-0",
+        ),
+        pytest.param(
+            {"outcome": "success", "stop_reason": "KeyboardInterrupt: "},
+            False,
+            id="success-no-exit-code",
+        ),
+        pytest.param(
+            {"exit_code": 0, "stop_reason": "sys.exit(0)"},
+            False,
+            id="exit-0-no-outcome",
+        ),
         # update_contract writes {"outcome": "refused", "stop_reason": <code>} with no exit_code;
         # the stop_reason clause is what keeps that receipt unfinished.
-        pytest.param({"outcome": "refused", "stop_reason": "not_updatable_in_place"}, True, id="refused-stop-reason-only"),
-        pytest.param({"outcome": "failed", "exit_code": 1, "stop_reason": "KeyboardInterrupt: "}, True, id="failed-interrupt"),
+        pytest.param(
+            {"outcome": "refused", "stop_reason": "not_updatable_in_place"},
+            True,
+            id="refused-stop-reason-only",
+        ),
+        pytest.param(
+            {"outcome": "failed", "exit_code": 1, "stop_reason": "KeyboardInterrupt: "},
+            True,
+            id="failed-interrupt",
+        ),
     ],
 )
-def test_stop_reason_only_marks_unfinished_when_nothing_vouches_for_success(receipt, unfinished):
+def test_stop_reason_only_marks_unfinished_when_nothing_vouches_for_success(
+    receipt, unfinished
+):
     assert update_cmd._receipt_looks_unfinished(receipt) is unfinished
 
 
@@ -430,7 +453,9 @@ def test_clean_update_escalates_surviving_serve_as_unaccounted(
     committed) end ``success`` with an owed ``gateway_restart`` follow-up and
     the restart obligation still armed — never a silent clean success."""
     from clawk_cli.update_inventory import (
-        RuntimeRecord, UpdatePlan, _restart_mechanism,
+        RuntimeRecord,
+        UpdatePlan,
+        _restart_mechanism,
     )
     import clawk_cli.update_inventory as ui
 
@@ -439,13 +464,21 @@ def test_clean_update_escalates_surviving_serve_as_unaccounted(
 
     plan = UpdatePlan()
     plan.runtimes = [
-        RuntimeRecord(kind="gateway", profile="default", pid=4444,
-                      supervisor="systemd",
-                      restart_via=_restart_mechanism("systemd", "default")),
-        RuntimeRecord(kind="serve", profile="default", pid=5555,
-                      supervisor="manual-serve",
-                      restart_via=_restart_mechanism("manual-serve", "default"),
-                      detail={"create_time": 1000.0}),
+        RuntimeRecord(
+            kind="gateway",
+            profile="default",
+            pid=4444,
+            supervisor="systemd",
+            restart_via=_restart_mechanism("systemd", "default"),
+        ),
+        RuntimeRecord(
+            kind="serve",
+            profile="default",
+            pid=5555,
+            supervisor="manual-serve",
+            restart_via=_restart_mechanism("manual-serve", "default"),
+            detail={"create_time": 1000.0},
+        ),
     ]
     monkeypatch.setattr(ui, "collect_runtime_inventory", lambda: plan)
     # The restart phase's own bookkeeping says the gateway unit restarted
@@ -463,15 +496,23 @@ def test_clean_update_escalates_surviving_serve_as_unaccounted(
     # verifier polls its full no-rows window, ~2 min of wall clock).
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
-        lambda **_k: [{"profile": "default", "pid": 4444, "code_sha": POST_SHA,
-                       "code_version": "0.21.0", "state": "current"}],
+        lambda **_k: [
+            {
+                "profile": "default",
+                "pid": 4444,
+                "code_sha": POST_SHA,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
+        ],
     )
     # Real survivor probe semantics against a fake ledger: pid 5555 is still
     # the same incarnation the plan recorded.
     import clawk_cli.process_identity as pi
 
     monkeypatch.setattr(
-        pi, "ledger_entries",
+        pi,
+        "ledger_entries",
         lambda **_k: [{"pid": 5555, "purpose": "serve", "create_time": 1000.0}],
     )
 
@@ -491,6 +532,7 @@ def test_clean_update_escalates_surviving_serve_as_unaccounted(
     assert receipt["outcome"] == "success"
     assert [f["step"] for f in receipt["followups"]] == ["gateway_restart"]
     from clawk_cli import update_cmd_fleet
+
     assert update_cmd_fleet._fleet_restart_obligation_armed()
     # (2) the reconciliation verdict is unchanged.
     by_pid = {o["pid"]: o["outcome"] for o in receipt["runtime_outcomes"]}
@@ -507,7 +549,9 @@ def test_clean_update_defers_desktop_owned_serve_and_clears_marker(
     with nothing that could ever discharge it. It is surfaced (``deferred``,
     relaunch hint) rather than dropped."""
     from clawk_cli.update_inventory import (
-        RuntimeRecord, UpdatePlan, _restart_mechanism,
+        RuntimeRecord,
+        UpdatePlan,
+        _restart_mechanism,
     )
     import clawk_cli.update_inventory as ui
     import clawk_cli.process_identity as pi
@@ -517,13 +561,21 @@ def test_clean_update_defers_desktop_owned_serve_and_clears_marker(
 
     plan = UpdatePlan()
     plan.runtimes = [
-        RuntimeRecord(kind="gateway", profile="default", pid=4444,
-                      supervisor="systemd",
-                      restart_via=_restart_mechanism("systemd", "default")),
-        RuntimeRecord(kind="serve", profile="default", pid=6161,
-                      supervisor="desktop",
-                      restart_via=_restart_mechanism("desktop", "default"),
-                      detail={"create_time": 1000.0}),
+        RuntimeRecord(
+            kind="gateway",
+            profile="default",
+            pid=4444,
+            supervisor="systemd",
+            restart_via=_restart_mechanism("systemd", "default"),
+        ),
+        RuntimeRecord(
+            kind="serve",
+            profile="default",
+            pid=6161,
+            supervisor="desktop",
+            restart_via=_restart_mechanism("desktop", "default"),
+            detail={"create_time": 1000.0},
+        ),
     ]
     monkeypatch.setattr(ui, "collect_runtime_inventory", lambda: plan)
     real_match = ui.match_runtime_outcomes
@@ -538,12 +590,20 @@ def test_clean_update_defers_desktop_owned_serve_and_clears_marker(
     # The gateway leg is healthy on the new code; only the Desktop serve is left.
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
-        lambda **_k: [{"profile": "default", "pid": 4444, "code_sha": POST_SHA,
-                       "code_version": "0.21.0", "state": "current"}],
+        lambda **_k: [
+            {
+                "profile": "default",
+                "pid": 4444,
+                "code_sha": POST_SHA,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
+        ],
     )
     # Same incarnation still alive: the Desktop serve genuinely survived on pre-update code.
     monkeypatch.setattr(
-        pi, "ledger_entries",
+        pi,
+        "ledger_entries",
         lambda **_k: [{"pid": 6161, "purpose": "serve", "create_time": 1000.0}],
     )
 
@@ -562,9 +622,7 @@ def test_clean_update_defers_desktop_owned_serve_and_clears_marker(
     assert by_pid == {4444: "restarted", 6161: "deferred"}
 
 
-def test_interrupt_between_pull_and_restart_leaves_marker(
-    monkeypatch, tmp_path
-):
+def test_interrupt_between_pull_and_restart_leaves_marker(monkeypatch, tmp_path):
     args = _update_args()
     _patch_update_deps(monkeypatch, tmp_path, _make_head_moved_side_effect())
 
@@ -579,7 +637,9 @@ def test_interrupt_between_pull_and_restart_leaves_marker(
 
     assert exc.value.code == 130
     assert update_cmd_fleet._fleet_restart_obligation_armed()
-    record = json.loads(host_obligation.host_obligation_path().read_text(encoding="utf-8"))
+    record = json.loads(
+        host_obligation.host_obligation_path().read_text(encoding="utf-8")
+    )
     assert record["expected_sha"] == POST_SHA
 
 
@@ -613,12 +673,20 @@ def _patch_marker_sha(monkeypatch, disk_sha):
 
 def test_startup_warn_discharged_when_fleet_current(monkeypatch, capsys):
     disk_sha = "e" * 40
-    update_cmd._write_fleet_restart_pending_marker(expected_sha=disk_sha, runtimes=[{"kind": "gateway", "profile": "default"}])
+    update_cmd._write_fleet_restart_pending_marker(
+        expected_sha=disk_sha, runtimes=[{"kind": "gateway", "profile": "default"}]
+    )
     _patch_marker_sha(monkeypatch, disk_sha)
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": disk_sha, "code_version": "0.21.0", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": disk_sha,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
         ],
     )
 
@@ -628,7 +696,9 @@ def test_startup_warn_discharged_when_fleet_current(monkeypatch, capsys):
     assert not update_cmd_fleet._fleet_restart_obligation_armed()
 
 
-def test_startup_warn_discharged_when_multiplexer_covers_owed_profiles(monkeypatch, capsys):
+def test_startup_warn_discharged_when_multiplexer_covers_owed_profiles(
+    monkeypatch, capsys
+):
     """A current multiplexer discharges every profile named in its live record (#113350)."""
     disk_sha = "e" * 40
     # The marker owns its inventory (two gateways owed); an inventory-less marker
@@ -679,7 +749,9 @@ def test_startup_warn_discharged_when_multiplexer_covers_owed_profiles(monkeypat
 
 
 @pytest.mark.parametrize("supervisor", ["desktop", "launchd"])
-def test_startup_warn_discharged_when_inventory_holds_supervised_serve(monkeypatch, capsys, supervisor):
+def test_startup_warn_discharged_when_inventory_holds_supervised_serve(
+    monkeypatch, capsys, supervisor
+):
     """A supervised serve/dashboard row in the marker's inventory is its supervisor's to
     restart (#115090 for receipts, #111494 for the Desktop backend) — it must not make the
     gateway warning permanently undischargeable once every gateway serves the pulled SHA.
@@ -693,16 +765,32 @@ def test_startup_warn_discharged_when_inventory_holds_supervised_serve(monkeypat
     update_cmd._write_fleet_restart_pending_marker(
         expected_sha=disk_sha,
         runtimes=[
-            {"kind": "gateway", "profile": "default", "pid": 42, "supervisor": "systemd"},
-            {"kind": "serve", "profile": "default", "pid": 6161, "supervisor": supervisor,
-             "detail": {"create_time": 1000.0}},
+            {
+                "kind": "gateway",
+                "profile": "default",
+                "pid": 42,
+                "supervisor": "systemd",
+            },
+            {
+                "kind": "serve",
+                "profile": "default",
+                "pid": 6161,
+                "supervisor": supervisor,
+                "detail": {"create_time": 1000.0},
+            },
         ],
     )
     _patch_marker_sha(monkeypatch, disk_sha)
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": disk_sha, "code_version": "0.21.0", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": disk_sha,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
         ],
     )
 
@@ -718,15 +806,31 @@ def test_startup_warn_kept_when_inventory_holds_unclassified_serve(monkeypatch, 
     update_cmd._write_fleet_restart_pending_marker(
         expected_sha=disk_sha,
         runtimes=[
-            {"kind": "gateway", "profile": "default", "pid": 42, "supervisor": "systemd"},
-            {"kind": "serve", "profile": "default", "pid": 6161, "supervisor": "manual"},
+            {
+                "kind": "gateway",
+                "profile": "default",
+                "pid": 42,
+                "supervisor": "systemd",
+            },
+            {
+                "kind": "serve",
+                "profile": "default",
+                "pid": 6161,
+                "supervisor": "manual",
+            },
         ],
     )
     _patch_marker_sha(monkeypatch, disk_sha)
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": disk_sha, "code_version": "0.21.0", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": disk_sha,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
         ],
     )
 
@@ -739,19 +843,64 @@ def test_startup_warn_kept_when_inventory_holds_unclassified_serve(monkeypatch, 
 @pytest.mark.parametrize(
     "disk_sha, fleet",
     [
-        ("e" * 40, [{"profile": "default", "pid": 42, "code_sha": "7" * 40, "code_version": "0.20.0", "state": "stale"}]),
+        (
+            "e" * 40,
+            [
+                {
+                    "profile": "default",
+                    "pid": 42,
+                    "code_sha": "7" * 40,
+                    "code_version": "0.20.0",
+                    "state": "stale",
+                }
+            ],
+        ),
         ("e" * 40, []),  # probe answered empty: no proof either way
-        ("e" * 40, [{"profile": "default", "pid": 42, "code_sha": None, "code_version": None, "state": "unknown"}]),
+        (
+            "e" * 40,
+            [
+                {
+                    "profile": "default",
+                    "pid": 42,
+                    "code_sha": None,
+                    "code_version": None,
+                    "state": "unknown",
+                }
+            ],
+        ),
         (None, [{"profile": "default", "code_sha": "e" * 40, "state": "current"}]),
         # checkout moved to a commit unrelated to the marker's SHA: a newer pull owns a fresh obligation
-        ("f" * 40, [{"profile": "default", "pid": 42, "code_sha": "e" * 40, "code_version": None, "state": "current"}]),
+        (
+            "f" * 40,
+            [
+                {
+                    "profile": "default",
+                    "pid": 42,
+                    "code_sha": "e" * 40,
+                    "code_version": None,
+                    "state": "current",
+                }
+            ],
+        ),
     ],
-    ids=["stale-row", "empty-probe", "unknown-identity", "unknown-checkout", "checkout-moved"],
+    ids=[
+        "stale-row",
+        "empty-probe",
+        "unknown-identity",
+        "unknown-checkout",
+        "checkout-moved",
+    ],
 )
-def test_startup_warn_kept_without_positive_evidence(monkeypatch, capsys, disk_sha, fleet):
-    update_cmd._write_fleet_restart_pending_marker(expected_sha="e" * 40, runtimes=[{"kind": "gateway", "profile": "default"}])
+def test_startup_warn_kept_without_positive_evidence(
+    monkeypatch, capsys, disk_sha, fleet
+):
+    update_cmd._write_fleet_restart_pending_marker(
+        expected_sha="e" * 40, runtimes=[{"kind": "gateway", "profile": "default"}]
+    )
     _patch_marker_sha(monkeypatch, disk_sha)
-    monkeypatch.setattr("clawk_cli.update_receipt.collect_fleet_versions", lambda **kwargs: fleet)
+    monkeypatch.setattr(
+        "clawk_cli.update_receipt.collect_fleet_versions", lambda **kwargs: fleet
+    )
 
     update_cmd._warn_pending_fleet_restart_on_startup()
 
@@ -774,7 +923,9 @@ def _checkout_with_carried_commit(monkeypatch, tmp_path):
     repo.mkdir()
 
     def git(*args):
-        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+        return subprocess.run(
+            ["git", *args], cwd=repo, capture_output=True, text=True, check=True
+        ).stdout.strip()
 
     git("init", "-q", "-b", "main")
     git("config", "user.email", "t@t")
@@ -792,12 +943,24 @@ def _checkout_with_carried_commit(monkeypatch, tmp_path):
     return expected, head
 
 
-def test_obligation_discharges_when_gateway_serves_descendant_of_expected_sha(monkeypatch, tmp_path, capsys):
+def test_obligation_discharges_when_gateway_serves_descendant_of_expected_sha(
+    monkeypatch, tmp_path, capsys
+):
     expected, head = _checkout_with_carried_commit(monkeypatch, tmp_path)
-    update_cmd._write_fleet_restart_pending_marker(expected_sha=expected, runtimes=[{"kind": "gateway", "profile": "default"}])
+    update_cmd._write_fleet_restart_pending_marker(
+        expected_sha=expected, runtimes=[{"kind": "gateway", "profile": "default"}]
+    )
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
-        lambda **kwargs: [{"profile": "default", "pid": 42, "code_sha": head, "code_version": "0.21.4", "state": "current"}],
+        lambda **kwargs: [
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": head,
+                "code_version": "0.21.4",
+                "state": "current",
+            }
+        ],
     )
     assert update_cmd._pending_fleet_restart_needed() is False
     update_cmd._warn_pending_fleet_restart_on_startup()
@@ -806,12 +969,24 @@ def test_obligation_discharges_when_gateway_serves_descendant_of_expected_sha(mo
     assert not update_cmd_fleet._fleet_restart_obligation_armed()
 
 
-def test_obligation_kept_when_gateway_serves_stale_code_on_carried_checkout(monkeypatch, tmp_path, capsys):
+def test_obligation_kept_when_gateway_serves_stale_code_on_carried_checkout(
+    monkeypatch, tmp_path, capsys
+):
     expected, _head = _checkout_with_carried_commit(monkeypatch, tmp_path)
-    update_cmd._write_fleet_restart_pending_marker(expected_sha=expected, runtimes=[{"kind": "gateway", "profile": "default"}])
+    update_cmd._write_fleet_restart_pending_marker(
+        expected_sha=expected, runtimes=[{"kind": "gateway", "profile": "default"}]
+    )
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
-        lambda **kwargs: [{"profile": "default", "pid": 42, "code_sha": "0" * 40, "code_version": "0.21.3", "state": "stale"}],
+        lambda **kwargs: [
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": "0" * 40,
+                "code_version": "0.21.3",
+                "state": "stale",
+            }
+        ],
     )
 
     update_cmd._warn_pending_fleet_restart_on_startup()
@@ -823,7 +998,10 @@ def test_obligation_kept_when_gateway_serves_stale_code_on_carried_checkout(monk
 def test_startup_warn_kept_when_receipt_owed_gateway_is_down(monkeypatch, capsys):
     """A sibling the restart phase killed yields no startup row; the marker still owns it."""
     disk_sha = "e" * 40
-    update_cmd._write_fleet_restart_pending_marker(expected_sha=disk_sha, runtimes=[{"kind": "gateway", "profile": p} for p in ("alpha", "beta")])
+    update_cmd._write_fleet_restart_pending_marker(
+        expected_sha=disk_sha,
+        runtimes=[{"kind": "gateway", "profile": p} for p in ("alpha", "beta")],
+    )
     _patch_marker_sha(monkeypatch, disk_sha)
     receipt_dir = get_clawk_home() / "logs" / "update_receipts"
     receipt_dir.mkdir(parents=True)
@@ -832,9 +1010,24 @@ def test_startup_warn_kept_when_receipt_owed_gateway_is_down(monkeypatch, capsys
             {
                 "outcome": "partial",
                 "exit_code": 1,
-                "plan": {"runtimes": [{"kind": "gateway", "profile": p, "code_sha": "o" * 40, "pid": 1} for p in ("alpha", "beta")]},
+                "plan": {
+                    "runtimes": [
+                        {
+                            "kind": "gateway",
+                            "profile": p,
+                            "code_sha": "o" * 40,
+                            "pid": 1,
+                        }
+                        for p in ("alpha", "beta")
+                    ]
+                },
                 "fleet": [
-                    {"profile": "alpha", "pid": 42, "code_sha": disk_sha, "state": "current"},
+                    {
+                        "profile": "alpha",
+                        "pid": 42,
+                        "code_sha": disk_sha,
+                        "state": "current",
+                    },
                     {"profile": "beta", "pid": 43, "code_sha": None, "state": "down"},
                 ],
             }
@@ -844,7 +1037,13 @@ def test_startup_warn_kept_when_receipt_owed_gateway_is_down(monkeypatch, capsys
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "alpha", "pid": 42, "code_sha": disk_sha, "code_version": "0.21.0", "state": "current"}
+            {
+                "profile": "alpha",
+                "pid": 42,
+                "code_sha": disk_sha,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
         ],
     )
 
@@ -854,7 +1053,9 @@ def test_startup_warn_kept_when_receipt_owed_gateway_is_down(monkeypatch, capsys
     assert update_cmd_fleet._fleet_restart_obligation_armed()
 
 
-def test_startup_warn_silent_when_failed_receipt_already_restarted_fleet(monkeypatch, capsys):
+def test_startup_warn_silent_when_failed_receipt_already_restarted_fleet(
+    monkeypatch, capsys
+):
     """#112604 aftermath: the update pulled ``pulled``, restarted every gateway onto it, then a
     post-restart step crashed (receipt ``failed``, empty ``fleet`` matrix). Later a manual
     ``git pull`` moved the checkout again. The startup hint must not blame that update for a
@@ -866,16 +1067,31 @@ def test_startup_warn_silent_when_failed_receipt_already_restarted_fleet(monkeyp
     (receipt_dir / "latest.json").write_text(
         json.dumps(
             {
-                "outcome": "failed", "exit_code": 1,
+                "outcome": "failed",
+                "exit_code": 1,
                 "stop_reason": "AttributeError: module 'clawk_cli.main_dashboard' has no attribute 'x'",
-                "pre_update": {"sha": pre}, "post_update": {"sha": pulled},
+                "pre_update": {"sha": pre},
+                "post_update": {"sha": pulled},
                 "gateway_restart": {
-                    "restarted_services": ["clawk-gateway"], "relaunched_profiles": [],
-                    "externally_supervised_profiles": [], "killed_pids": [], "failed_units": [],
-                    "incomplete": False, "phase_error": "",
+                    "restarted_services": ["clawk-gateway"],
+                    "relaunched_profiles": [],
+                    "externally_supervised_profiles": [],
+                    "killed_pids": [],
+                    "failed_units": [],
+                    "incomplete": False,
+                    "phase_error": "",
                 },
                 "fleet": [],
-                "plan": {"runtimes": [{"kind": "gateway", "profile": "default", "code_sha": pre, "pid": 1}]},
+                "plan": {
+                    "runtimes": [
+                        {
+                            "kind": "gateway",
+                            "profile": "default",
+                            "code_sha": pre,
+                            "pid": 1,
+                        }
+                    ]
+                },
             }
         ),
         encoding="utf-8",
@@ -883,7 +1099,13 @@ def test_startup_warn_silent_when_failed_receipt_already_restarted_fleet(monkeyp
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": pulled, "code_version": "0.21.3", "state": "stale"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": pulled,
+                "code_version": "0.21.3",
+                "state": "stale",
+            }
         ],
     )
 
@@ -893,7 +1115,9 @@ def test_startup_warn_silent_when_failed_receipt_already_restarted_fleet(monkeyp
     assert update_cmd_fleet._pending_fleet_restart_needed() is True
 
 
-def test_startup_warn_silent_when_completed_update_fleet_restarted_onto_moved_checkout(monkeypatch, capsys):
+def test_startup_warn_silent_when_completed_update_fleet_restarted_onto_moved_checkout(
+    monkeypatch, capsys
+):
     """The remedy the warning names must clear it: after a completed update, a manual ``git pull``
     plus ``clawk gateway restart`` leaves every owed gateway on today's checkout — newer than the
     update's ``post_update.sha`` — which is nothing that update still owes (#113350 steps 3–4)."""
@@ -904,15 +1128,37 @@ def test_startup_warn_silent_when_completed_update_fleet_restarted_onto_moved_ch
     (receipt_dir / "latest.json").write_text(
         json.dumps(
             {
-                "outcome": "success", "exit_code": 0,
-                "pre_update": {"sha": pre}, "post_update": {"sha": pulled},
+                "outcome": "success",
+                "exit_code": 0,
+                "pre_update": {"sha": pre},
+                "post_update": {"sha": pulled},
                 "gateway_restart": {
-                    "restarted_services": ["clawk-gateway"], "relaunched_profiles": [],
-                    "externally_supervised_profiles": [], "killed_pids": [], "failed_units": [],
-                    "incomplete": False, "phase_error": "",
+                    "restarted_services": ["clawk-gateway"],
+                    "relaunched_profiles": [],
+                    "externally_supervised_profiles": [],
+                    "killed_pids": [],
+                    "failed_units": [],
+                    "incomplete": False,
+                    "phase_error": "",
                 },
-                "fleet": [{"profile": "default", "pid": 7, "code_sha": pulled, "state": "current"}],
-                "plan": {"runtimes": [{"kind": "gateway", "profile": "default", "code_sha": pre, "pid": 1}]},
+                "fleet": [
+                    {
+                        "profile": "default",
+                        "pid": 7,
+                        "code_sha": pulled,
+                        "state": "current",
+                    }
+                ],
+                "plan": {
+                    "runtimes": [
+                        {
+                            "kind": "gateway",
+                            "profile": "default",
+                            "code_sha": pre,
+                            "pid": 1,
+                        }
+                    ]
+                },
             }
         ),
         encoding="utf-8",
@@ -920,7 +1166,13 @@ def test_startup_warn_silent_when_completed_update_fleet_restarted_onto_moved_ch
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": checkout, "code_version": "0.21.3", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": checkout,
+                "code_version": "0.21.3",
+                "state": "current",
+            }
         ],
     )
 
@@ -938,7 +1190,9 @@ def test_startup_warn_silent_when_completed_update_fleet_restarted_onto_moved_ch
 # evidence bar as an inventoried marker, minus the owed-coverage check.
 
 
-def test_startup_warn_discharged_when_inventory_less_marker_fleet_current(monkeypatch, capsys):
+def test_startup_warn_discharged_when_inventory_less_marker_fleet_current(
+    monkeypatch, capsys
+):
     disk_sha = "e" * 40
     update_cmd._write_fleet_restart_pending_marker(expected_sha=disk_sha)
     assert "inventory" not in host_obligation.read_host_obligation()
@@ -946,7 +1200,13 @@ def test_startup_warn_discharged_when_inventory_less_marker_fleet_current(monkey
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": disk_sha, "code_version": "0.21.0", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": disk_sha,
+                "code_version": "0.21.0",
+                "state": "current",
+            }
         ],
     )
 
@@ -963,7 +1223,13 @@ def test_startup_warn_kept_when_inventory_less_marker_fleet_stale(monkeypatch, c
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": "7" * 40, "code_version": "0.20.0", "state": "stale"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": "7" * 40,
+                "code_version": "0.20.0",
+                "state": "stale",
+            }
         ],
     )
 
@@ -972,7 +1238,9 @@ def test_startup_warn_kept_when_inventory_less_marker_fleet_stale(monkeypatch, c
     assert "did not restart running gateways" in capsys.readouterr().err
     assert update_cmd_fleet._fleet_restart_obligation_armed()
 
+
 # ── Empty-inventory marker: a pull that recorded no gateway owes nothing (#115311) ──
+
 
 def _write_marker_with_inventory(expected_sha, runtimes):
     marker = update_cmd_fleet._fleet_restart_pending_marker_path()
@@ -1010,7 +1278,15 @@ def test_pending_fleet_restart_cleared_instead_of_exit_1(monkeypatch, tmp_path):
 
 
 def _current_row(sha):
-    return [{"profile": "default", "pid": 42, "code_sha": sha, "code_version": "0.21.0", "state": "current"}]
+    return [
+        {
+            "profile": "default",
+            "pid": 42,
+            "code_sha": sha,
+            "code_version": "0.21.0",
+            "state": "current",
+        }
+    ]
 
 
 def _plan_with_current_gateway(monkeypatch, sha):
@@ -1018,8 +1294,16 @@ def _plan_with_current_gateway(monkeypatch, sha):
     import clawk_cli.update_inventory as ui
 
     plan = ui.UpdatePlan()
-    plan.runtimes = [ui.RuntimeRecord(kind="gateway", profile="default", pid=42, supervisor="systemd",
-                                      code_sha=sha, restart_via=ui._restart_mechanism("systemd", "default"))]
+    plan.runtimes = [
+        ui.RuntimeRecord(
+            kind="gateway",
+            profile="default",
+            pid=42,
+            supervisor="systemd",
+            code_sha=sha,
+            restart_via=ui._restart_mechanism("systemd", "default"),
+        )
+    ]
     monkeypatch.setattr(ui, "collect_runtime_inventory", lambda: plan)
 
 
@@ -1043,7 +1327,10 @@ def test_up_to_date_update_leaves_current_fleet_alone(monkeypatch, tmp_path, cap
     _patch_update_deps(monkeypatch, tmp_path, _make_up_to_date_side_effect("abc123"))
     _patch_marker_sha(monkeypatch, "abc123")
     _plan_with_current_gateway(monkeypatch, "abc123")
-    monkeypatch.setattr("clawk_cli.update_receipt.collect_fleet_versions", lambda **k: _current_row("abc123"))
+    monkeypatch.setattr(
+        "clawk_cli.update_receipt.collect_fleet_versions",
+        lambda **k: _current_row("abc123"),
+    )
     restarts = _spy_fleet_restart(monkeypatch)
 
     clawk_main.cmd_update(args)
@@ -1052,9 +1339,12 @@ def test_up_to_date_update_leaves_current_fleet_alone(monkeypatch, tmp_path, cap
     assert not update_cmd_fleet._fleet_restart_obligation_armed()
     assert "Gateway restart skipped" in capsys.readouterr().out
     from clawk_cli.update_receipt import read_latest_receipt
+
     receipt = read_latest_receipt()
     assert receipt["outcome"] == "success"
-    assert any(skip.get("name") == "gateway_restart" for skip in receipt.get("skips", []))
+    assert any(
+        skip.get("name") == "gateway_restart" for skip in receipt.get("skips", [])
+    )
 
 
 def test_up_to_date_update_still_restarts_a_stale_gateway(monkeypatch, tmp_path):
@@ -1065,8 +1355,18 @@ def test_up_to_date_update_still_restarts_a_stale_gateway(monkeypatch, tmp_path)
     _plan_with_current_gateway(monkeypatch, "abc123")
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
-        lambda **k: _current_row("abc123") + [
-            {"profile": "work", "pid": 43, "code_sha": "0" * 40, "code_version": "0.20.0", "state": "stale"}],
+        lambda **k: (
+            _current_row("abc123")
+            + [
+                {
+                    "profile": "work",
+                    "pid": 43,
+                    "code_sha": "0" * 40,
+                    "code_version": "0.20.0",
+                    "state": "stale",
+                }
+            ]
+        ),
     )
     restarts = _spy_fleet_restart(monkeypatch)
 
@@ -1081,7 +1381,9 @@ def test_second_profile_attaches_to_completed_host_restart(monkeypatch):
     """One host process serves every profile: once its restart is stamped for this checkout,
     another profile's completion skips the restart instead of killing the multiplexer again."""
     _patch_marker_sha(monkeypatch, "abc123")
-    monkeypatch.setattr("clawk_cli.update_receipt.collect_fleet_versions", lambda **k: [])
+    monkeypatch.setattr(
+        "clawk_cli.update_receipt.collect_fleet_versions", lambda **k: []
+    )
     update_cmd._write_fleet_restart_pending_marker(expected_sha="abc123")
     assert update_cmd_fleet._fleet_restart_skip_reason(None) is None
 
@@ -1100,18 +1402,35 @@ def test_second_profile_attaches_to_completed_host_restart(monkeypatch):
 # the warning could never clear even with every live gateway current on the checkout.
 
 
-def test_startup_warn_discharged_when_sha_less_marker_fleet_current(monkeypatch, capsys):
+def test_startup_warn_discharged_when_sha_less_marker_fleet_current(
+    monkeypatch, capsys
+):
     checkout = "e" * 40
     path = host_obligation.host_obligation_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
-        "version": 1, "started": 0.0, "pid": 424242, "armed_by_profile": "default", "expected_sha": "",
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "started": 0.0,
+                "pid": 424242,
+                "armed_by_profile": "default",
+                "expected_sha": "",
+            }
+        ),
+        encoding="utf-8",
+    )
     _patch_marker_sha(monkeypatch, checkout)
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "default", "pid": 42, "code_sha": checkout, "code_version": "0.21.5", "state": "current"}
+            {
+                "profile": "default",
+                "pid": 42,
+                "code_sha": checkout,
+                "code_version": "0.21.5",
+                "state": "current",
+            }
         ],
     )
 
@@ -1121,21 +1440,38 @@ def test_startup_warn_discharged_when_sha_less_marker_fleet_current(monkeypatch,
     assert not update_cmd_fleet._fleet_restart_obligation_armed()
 
 
-def test_startup_warn_kept_when_sha_less_marker_fleet_is_all_external(monkeypatch, capsys):
+def test_startup_warn_kept_when_sha_less_marker_fleet_is_all_external(
+    monkeypatch, capsys
+):
     """Every live gateway serving ANOTHER checkout root says nothing about this checkout's code:
     the SHA-less marker stays armed exactly as it does with no fleet at all."""
     checkout = "e" * 40
     path = host_obligation.host_obligation_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({
-        "version": 1, "started": 0.0, "pid": 424242, "armed_by_profile": "default", "expected_sha": "",
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "started": 0.0,
+                "pid": 424242,
+                "armed_by_profile": "default",
+                "expected_sha": "",
+            }
+        ),
+        encoding="utf-8",
+    )
     _patch_marker_sha(monkeypatch, checkout)
     monkeypatch.setattr(
         "clawk_cli.update_receipt.collect_fleet_versions",
         lambda **kwargs: [
-            {"profile": "other", "pid": 43, "code_sha": "f" * 40, "code_version": "0.21.5", "state": "external",
-             "code_root": "/elsewhere/clawksis-agent"}
+            {
+                "profile": "other",
+                "pid": 43,
+                "code_sha": "f" * 40,
+                "code_version": "0.21.5",
+                "state": "external",
+                "code_root": "/elsewhere/clawksis-agent",
+            }
         ],
     )
 
@@ -1145,18 +1481,25 @@ def test_startup_warn_kept_when_sha_less_marker_fleet_is_all_external(monkeypatc
     assert update_cmd_fleet._fleet_restart_obligation_armed()
 
 
-def test_completion_arms_obligation_with_checkout_sha_when_head_capture_empty(monkeypatch):
+def test_completion_arms_obligation_with_checkout_sha_when_head_capture_empty(
+    monkeypatch,
+):
     """The armer must never record the poisoned shape: an empty head capture falls back to the
     checkout identity the reader compares the fleet against."""
     checkout = "e" * 40
     _patch_marker_sha(monkeypatch, checkout)
     armed = []
-    monkeypatch.setattr(update_cmd, "_write_fleet_restart_pending_marker", lambda **kw: armed.append(kw["expected_sha"]))
+    monkeypatch.setattr(
+        update_cmd,
+        "_write_fleet_restart_pending_marker",
+        lambda **kw: armed.append(kw["expected_sha"]),
+    )
     monkeypatch.setattr(update_cmd, "run_completion", lambda request: {"exit_code": 0})
     monkeypatch.setattr(update_cmd, "_accept_completion_pm_receipt", lambda *a: None)
     monkeypatch.setattr(update_cmd, "adopt_retired_channel", lambda request: False)
 
     update_cmd._complete_source_update(
-        {"expected_sha": "", "receipt": {"update_id": "u1"}, "windows_resume": None})
+        {"expected_sha": "", "receipt": {"update_id": "u1"}, "windows_resume": None}
+    )
 
     assert armed == [checkout]

@@ -35,6 +35,7 @@ def _session(agent=None, **extra):
 
 # ── _session_compression_in_flight ────────────────────────────────────────
 
+
 def _patch_db(monkeypatch, holder):
     class _Db:
         def get_compression_lock_holder(self, sid):
@@ -79,6 +80,7 @@ def test_compression_in_flight_false_when_db_errors(monkeypatch):
 
 
 # ── _handle_busy_submit demotion ──────────────────────────────────────────
+
 
 def test_busy_interrupt_mode_queues_while_compressing(monkeypatch):
     monkeypatch.setattr(server, "_load_busy_input_mode", lambda: "interrupt")
@@ -142,6 +144,7 @@ def test_busy_queued_drain_forces_queue_regardless(monkeypatch):
 
 # ── session.steer / session.redirect demotion ─────────────────────────────
 
+
 def test_session_steer_queues_while_compressing(monkeypatch):
     monkeypatch.setattr(server, "_session_compression_in_flight", lambda session: True)
     seen = []
@@ -150,7 +153,12 @@ def test_session_steer_queues_while_compressing(monkeypatch):
     monkeypatch.setitem(server._sessions, "sid", session)
     try:
         resp = server.handle_request(
-            {"id": "r1", "method": "session.steer", "params": {"session_id": "sid", "text": "follow-up"}})
+            {
+                "id": "r1",
+                "method": "session.steer",
+                "params": {"session_id": "sid", "text": "follow-up"},
+            }
+        )
     finally:
         server._sessions.pop("sid", None)
 
@@ -162,12 +170,19 @@ def test_session_steer_queues_while_compressing(monkeypatch):
 def test_session_redirect_queues_while_compressing(monkeypatch):
     monkeypatch.setattr(server, "_session_compression_in_flight", lambda session: True)
     seen = []
-    agent = types.SimpleNamespace(_supports_active_turn_redirect=True, redirect=lambda t: seen.append(t) or True)
+    agent = types.SimpleNamespace(
+        _supports_active_turn_redirect=True, redirect=lambda t: seen.append(t) or True
+    )
     session = _session(agent=agent)
     monkeypatch.setitem(server._sessions, "sid", session)
     try:
         resp = server.handle_request(
-            {"id": "r1", "method": "session.redirect", "params": {"session_id": "sid", "text": "follow-up"}})
+            {
+                "id": "r1",
+                "method": "session.redirect",
+                "params": {"session_id": "sid", "text": "follow-up"},
+            }
+        )
     finally:
         server._sessions.pop("sid", None)
 
@@ -176,6 +191,7 @@ def test_session_redirect_queues_while_compressing(monkeypatch):
 
 
 # ── manual compaction holds the session busy (#133504) ────────────────────
+
 
 def test_submit_during_manual_compress_is_queued_and_reply_persists(monkeypatch):
     """A prompt sent while session.compress runs its LLM summary used to be admitted on the idle
@@ -187,13 +203,24 @@ def test_submit_during_manual_compress_is_queued_and_reply_persists(monkeypatch)
     def fake_compress_now(agent, msgs, request, **kw):
         entered.set()
         gate.wait(5)
-        return types.SimpleNamespace(status="compressed", removed=4,
-                                     after_messages=[{"role": "user", "content": "[summary]"}, *msgs[-2:]])
+        return types.SimpleNamespace(
+            status="compressed",
+            removed=4,
+            after_messages=[{"role": "user", "content": "[summary]"}, *msgs[-2:]],
+        )
 
-    def fake_turn(rid, sid, session, text, **kw):  # the drained turn: snapshot, reply, commit
+    def fake_turn(
+        rid, sid, session, text, **kw
+    ):  # the drained turn: snapshot, reply, commit
         with session["history_lock"]:
             hist, ver = list(session["history"]), int(session["history_version"])
-        result = {"messages": [*hist, {"role": "user", "content": text}, {"role": "assistant", "content": "REPLY"}]}
+        result = {
+            "messages": [
+                *hist,
+                {"role": "user", "content": text},
+                {"role": "assistant", "content": "REPLY"},
+            ]
+        }
         server._commit_turn_history(session, result, hist, ver)
         session["running"] = False
 
@@ -201,37 +228,80 @@ def test_submit_during_manual_compress_is_queued_and_reply_persists(monkeypatch)
     monkeypatch.setattr(server, "_run_prompt_submit", fake_turn)
     monkeypatch.setattr(server, "_load_busy_input_mode", lambda: "interrupt")
     infos = []
-    monkeypatch.setattr(server, "_emit", lambda event, sid, payload=None: event == "session.info" and infos.append(payload))
-    for name in ("_status_update", "_sync_session_key_after_compress", "_persist_queued_user_row",
-                 "_replace_queued_user_row_for_turn", "_clear_pending", "_announce_cancelled_gateway_approvals"):
+    monkeypatch.setattr(
+        server,
+        "_emit",
+        lambda event, sid, payload=None: (
+            event == "session.info" and infos.append(payload)
+        ),
+    )
+    for name in (
+        "_status_update",
+        "_sync_session_key_after_compress",
+        "_persist_queued_user_row",
+        "_replace_queued_user_row_for_turn",
+        "_clear_pending",
+        "_announce_cancelled_gateway_approvals",
+    ):
         monkeypatch.setattr(server, name, lambda *a, **k: None)
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda _s: False)
-    monkeypatch.setattr(server, "_session_info", lambda agent, session: {"running": bool(session["running"])})
+    monkeypatch.setattr(
+        server,
+        "_session_info",
+        lambda agent, session: {"running": bool(session["running"])},
+    )
     agent = types.SimpleNamespace(
-        session_id="session-key", _cached_system_prompt="", tools=None, context_compressor=None,
-        interrupt=lambda *a, **k: (_ for _ in ()).throw(AssertionError("compaction must not be interrupted")))
-    history = [{"role": r, "content": f"m{i}"} for i, r in enumerate(["user", "assistant"] * 3)]
+        session_id="session-key",
+        _cached_system_prompt="",
+        tools=None,
+        context_compressor=None,
+        interrupt=lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("compaction must not be interrupted")
+        ),
+    )
+    history = [
+        {"role": r, "content": f"m{i}"} for i, r in enumerate(["user", "assistant"] * 3)
+    ]
     session = _session(agent=agent, running=False, history=history)
     monkeypatch.setattr(server, "_sess", lambda params, rid: (session, None))
     monkeypatch.setattr(server, "_sess_nowait", lambda params, rid: (session, None))
 
-    rpc = threading.Thread(target=server._methods["session.compress"], args=("r1", {"session_id": "sid"}))
+    rpc = threading.Thread(
+        target=server._methods["session.compress"], args=("r1", {"session_id": "sid"})
+    )
     rpc.start()
     assert entered.wait(5)
-    server._interrupt_session_turn("sid", session)  # Stop mid-compaction must not release the busy claim
+    server._interrupt_session_turn(
+        "sid", session
+    )  # Stop mid-compaction must not release the busy claim
     assert session["running"] is True
-    second = server._methods["session.compress"]("r3", {"session_id": "sid"})  # the locked claim maps to busy
+    second = server._methods["session.compress"](
+        "r3", {"session_id": "sid"}
+    )  # the locked claim maps to busy
     assert second["error"]["code"] == 4009
-    assert "/compress" in second["error"]["message"] and "Stop" not in second["error"]["message"]  # double-click
+    assert (
+        "/compress" in second["error"]["message"]
+        and "Stop" not in second["error"]["message"]
+    )  # double-click
     # tools.configure rebuilds the agent (history_version bump): refused before it reads the action
     refused = server._methods["tools.configure"]("r4", {"session_id": "sid"})["error"]
     assert refused["code"] == 4009
-    assert "/compress" in refused["message"] and "Stop" not in refused["message"]  # nothing is replying
-    with pytest.raises(server.CompressionBusy):  # the /compress + slash-mirror core: a typed busy, not a failure
-        server._compress_live_with_feedback("sid", session, agent, "", snapshot_kwargs=True)
+    assert (
+        "/compress" in refused["message"] and "Stop" not in refused["message"]
+    )  # nothing is replying
+    with pytest.raises(
+        server.CompressionBusy
+    ):  # the /compress + slash-mirror core: a typed busy, not a failure
+        server._compress_live_with_feedback(
+            "sid", session, agent, "", snapshot_kwargs=True
+        )
     # "/compress --aggressive" never touches history: answered without claiming (or draining) the busy session
-    assert server._compress_live_with_feedback("sid", session, agent, "--aggressive", snapshot_kwargs=True) == \
-        ccm.AGGRESSIVE_UNSUPPORTED
+    assert (
+        server._compress_live_with_feedback(
+            "sid", session, agent, "--aggressive", snapshot_kwargs=True
+        )
+        == ccm.AGGRESSIVE_UNSUPPORTED
+    )
     resp = server._handle_busy_submit("r2", "sid", session, "question", "ws-1")
     gate.set()
     rpc.join(5)
@@ -240,4 +310,6 @@ def test_submit_during_manual_compress_is_queued_and_reply_persists(monkeypatch)
     assert session["history"][-1]["content"] == "REPLY"
     assert session["history"][0]["content"] == "[summary]"
     assert session["running"] is False
-    assert infos[0] == {"running": True} and infos[-1] == {"running": False}  # Desktop sees the busy edge close
+    assert infos[0] == {"running": True} and infos[-1] == {
+        "running": False
+    }  # Desktop sees the busy edge close

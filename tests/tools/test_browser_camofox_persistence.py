@@ -39,6 +39,7 @@ def _enable_persistence():
 @pytest.fixture(autouse=True)
 def _clear_session_state():
     import tools.browser_camofox as mod
+
     yield
     with mod._sessions_lock:
         mod._sessions.clear()
@@ -47,8 +48,6 @@ def _clear_session_state():
 
 
 class TestManagedPersistenceToggle:
-
-
     def test_disabled_on_config_load_error(self):
         with patch("tools.browser_camofox.load_config", side_effect=Exception("fail")):
             assert _managed_persistence_enabled() is False
@@ -64,7 +63,6 @@ class TestEphemeralMode:
         session = _get_session("task-1")
         assert session["user_id"].startswith("clawk_")
         assert session["managed"] is False
-
 
     def test_session_reuse_within_same_task(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -89,7 +87,6 @@ class TestManagedPersistenceMode:
             assert session["session_key"] == expected["session_key"]
             assert session["managed"] is True
 
-
     def test_navigate_reuses_identity_after_close(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
@@ -99,17 +96,26 @@ class TestManagedPersistenceMode:
         def _capture_post(url, json=None, timeout=None, headers=None):
             requests_seen.append(json)
             return _mock_response(
-                json_data={"tabId": f"tab-{len(requests_seen)}", "url": "https://example.com"}
+                json_data={
+                    "tabId": f"tab-{len(requests_seen)}",
+                    "url": "https://example.com",
+                }
             )
 
         with (
             _enable_persistence(),
             patch("tools.browser_camofox.requests.post", side_effect=_capture_post),
-            patch("tools.browser_camofox.requests.delete", return_value=_mock_response()),
+            patch(
+                "tools.browser_camofox.requests.delete", return_value=_mock_response()
+            ),
         ):
-            first = json.loads(camofox_navigate("https://example.com", task_id="task-1"))
+            first = json.loads(
+                camofox_navigate("https://example.com", task_id="task-1")
+            )
             camofox_close("task-1")
-            second = json.loads(camofox_navigate("https://example.com", task_id="task-1"))
+            second = json.loads(
+                camofox_navigate("https://example.com", task_id="task-1")
+            )
 
         assert first["success"] is True
         assert second["success"] is True
@@ -238,8 +244,9 @@ class TestConfiguredCamofoxIdentity:
             timeout=5,
         )
 
-
-    def test_soft_cleanup_preserves_externally_managed_session(self, tmp_path, monkeypatch):
+    def test_soft_cleanup_preserves_externally_managed_session(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
         monkeypatch.setenv("CAMOFOX_USER_ID", "shared-camofox")
@@ -250,6 +257,7 @@ class TestConfiguredCamofoxIdentity:
 
         assert result is True
         import tools.browser_camofox as mod
+
         with mod._sessions_lock:
             assert "task-1" not in mod._sessions
 
@@ -264,18 +272,23 @@ class TestVncUrlDiscovery:
             assert check_camofox_available() is True
         assert get_vnc_url() == "http://myhost:6080"
 
-
     def test_navigate_includes_vnc_hint(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
         import tools.browser_camofox as mod
+
         mod._vnc_url = "http://localhost:6080"
         mod._vnc_url_checked = True
 
-        with patch("tools.browser_camofox.requests.post", return_value=_mock_response(
-            json_data={"tabId": "t1", "url": "https://example.com"}
-        )):
-            result = json.loads(camofox_navigate("https://example.com", task_id="vnc-test"))
+        with patch(
+            "tools.browser_camofox.requests.post",
+            return_value=_mock_response(
+                json_data={"tabId": "t1", "url": "https://example.com"}
+            ),
+        ):
+            result = json.loads(
+                camofox_navigate("https://example.com", task_id="vnc-test")
+            )
 
         assert result["vnc_url"] == "http://localhost:6080"
         assert "vnc_hint" in result
@@ -295,9 +308,9 @@ class TestCamofoxSoftCleanup:
         assert result is True
         # Session should have been dropped from in-memory store
         import tools.browser_camofox as mod
+
         with mod._sessions_lock:
             assert "task-1" not in mod._sessions
-
 
     def test_does_not_call_server_delete(self, tmp_path, monkeypatch):
         """Soft cleanup must never hit the Camofox /sessions DELETE endpoint."""

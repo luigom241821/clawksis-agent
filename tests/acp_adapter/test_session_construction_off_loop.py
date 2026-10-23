@@ -24,14 +24,21 @@ def _slow_factory():
     time.sleep(BUILD_SECONDS)  # stands in for the memory-provider import / AIAgent init
     from types import SimpleNamespace
 
-    return SimpleNamespace(model="m", session_id="s", enabled_toolsets=[], disabled_toolsets=[],
-                           _pending_toolsets=None)
+    return SimpleNamespace(
+        model="m",
+        session_id="s",
+        enabled_toolsets=[],
+        disabled_toolsets=[],
+        _pending_toolsets=None,
+    )
 
 
 @pytest.mark.asyncio
 async def test_new_session_keeps_the_event_loop_free():
     """A concurrent coroutine keeps ticking while the agent is built."""
-    server = ClawksisACPAgent(session_manager=SessionManager(agent_factory=_slow_factory))
+    server = ClawksisACPAgent(
+        session_manager=SessionManager(agent_factory=_slow_factory)
+    )
     ticks = 0
     done = asyncio.Event()
 
@@ -46,17 +53,22 @@ async def test_new_session_keeps_the_event_loop_free():
     done.set()
     await task
     assert resp.session_id
-    assert ticks >= 5, f"event loop was blocked during session construction (ticks={ticks})"
+    assert ticks >= 5, (
+        f"event loop was blocked during session construction (ticks={ticks})"
+    )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("call", [
-    lambda s: s.prompt([TextContentBlock(type="text", text="hi")], "gone"),
-    lambda s: s.cancel("gone"),
-    lambda s: s.set_session_model("m", "gone"),
-    lambda s: s.set_session_mode("ask", "gone"),
-    lambda s: s.set_config_option("edit_approval_policy", "gone", "ask"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda s: s.prompt([TextContentBlock(type="text", text="hi")], "gone"),
+        lambda s: s.cancel("gone"),
+        lambda s: s.set_session_model("m", "gone"),
+        lambda s: s.set_session_mode("ask", "gone"),
+        lambda s: s.set_config_option("edit_approval_policy", "gone", "ask"),
+    ],
+)
 async def test_handlers_restore_unknown_sessions_off_the_loop(call):
     """``get_session`` on a not-in-memory id restores from the DB (full agent build) and
     waits on the restore lock; the per-session handlers must not do that on the loop."""
@@ -80,7 +92,9 @@ async def test_handlers_restore_unknown_sessions_off_the_loop(call):
     await call(server)
     done.set()
     await task
-    assert ticks >= 5, f"event loop was blocked during the session restore (ticks={ticks})"
+    assert ticks >= 5, (
+        f"event loop was blocked during the session restore (ticks={ticks})"
+    )
 
 
 def test_concurrent_restores_of_one_session_build_a_single_agent():
@@ -94,27 +108,35 @@ def test_concurrent_restores_of_one_session_build_a_single_agent():
     def slow_restore(session_id):
         restores.append(session_id)
         time.sleep(0.2)
-        return manager._install_state(session_id, manager._agent_factory(), "/tmp", "m", [], persist=False)
+        return manager._install_state(
+            session_id, manager._agent_factory(), "/tmp", "m", [], persist=False
+        )
 
     manager._restore = slow_restore
     results = []
-    threads = [threading.Thread(target=lambda: results.append(manager.get_session("sid-1"))) for _ in range(2)]
+    threads = [
+        threading.Thread(target=lambda: results.append(manager.get_session("sid-1")))
+        for _ in range(2)
+    ]
     for t in threads:
         t.start()
     for t in threads:
         t.join(timeout=10)
     assert len(results) == 2 and results[0] is results[1] is not None
-    assert len(restores) == 1, f"restore ran {len(restores)} agent builds for one session id"
+    assert len(restores) == 1, (
+        f"restore ran {len(restores)} agent builds for one session id"
+    )
 
 
-def test_import_memory_provider_module_imports_without_constructing(tmp_path, monkeypatch):
+def test_import_memory_provider_module_imports_without_constructing(
+    tmp_path, monkeypatch
+):
     """The ACP startup warm-up (Windows main-thread pre-import, #58083) imports the
     configured provider's module plus the native stack it defers (hindsight imports numpy
     only in ``is_available()``), and nothing more: no provider instance, no register()."""
     import sys
 
     from plugins import memory as memory_plugins
-
 
     provider = tmp_path / "plugins" / "warmprov"
     provider.mkdir(parents=True)
@@ -125,12 +147,18 @@ def test_import_memory_provider_module_imports_without_constructing(tmp_path, mo
         encoding="utf-8",
     )
     native = tmp_path / "plugins" / "_warm_native.py"
-    native.write_text("import sys\nsys.modules['_warm_native_marker'] = True\n", encoding="utf-8")
+    native.write_text(
+        "import sys\nsys.modules['_warm_native_marker'] = True\n", encoding="utf-8"
+    )
     monkeypatch.syspath_prepend(str(tmp_path / "plugins"))
-    monkeypatch.setattr(memory_plugins, "_NATIVE_WARM_IMPORTS", ("_warm_native",), raising=False)
+    monkeypatch.setattr(
+        memory_plugins, "_NATIVE_WARM_IMPORTS", ("_warm_native",), raising=False
+    )
     sys.modules.pop("_warm_native_marker", None)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(memory_plugins, "_external_source_dirs", lambda: [tmp_path / "plugins"])
+    monkeypatch.setattr(
+        memory_plugins, "_external_source_dirs", lambda: [tmp_path / "plugins"]
+    )
     sys.modules.pop("_warmprov_marker", None)
     sys.modules.pop("_warmprov_registered", None)
 

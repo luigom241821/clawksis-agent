@@ -19,11 +19,19 @@ _ATTEMPTS = 4
 _MAX_DELAY = 30.0
 _HTTP_RETRY = frozenset({408, 429, 500, 502, 503, 504})
 _R2_HOSTS = frozenset({"hermes-assets.nousresearch.com"})
-_NETWORK_ERRNOS = frozenset({
-    errno.ECONNABORTED, errno.ECONNREFUSED, errno.ECONNRESET,
-    errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH,
-    errno.EHOSTUNREACH, errno.EPIPE, errno.ETIMEDOUT,
-})
+_NETWORK_ERRNOS = frozenset(
+    {
+        errno.ECONNABORTED,
+        errno.ECONNREFUSED,
+        errno.ECONNRESET,
+        errno.ENETDOWN,
+        errno.ENETRESET,
+        errno.ENETUNREACH,
+        errno.EHOSTUNREACH,
+        errno.EPIPE,
+        errno.ETIMEDOUT,
+    }
+)
 
 
 def is_transient(exc: Exception) -> bool:
@@ -59,17 +67,21 @@ def edge_block(exc: BaseException) -> str | None:
     if headers.get("x-vercel-mitigated"):
         cdn = "Vercel"
     elif headers.get("cf-mitigated") or (
-            host in _R2_HOSTS and (headers.get("server") or "").lower() == "cloudflare"
-            and not headers.get("cf-cache-status")):
+        host in _R2_HOSTS
+        and (headers.get("server") or "").lower() == "cloudflare"
+        and not headers.get("cf-cache-status")
+    ):
         cdn = "Cloudflare"
     else:
         return None
-    return (f"{host or 'the server'}'s CDN firewall ({cdn}) refused this network. Your install is fine; "
-            "retry from another network")
+    return (
+        f"{host or 'the server'}'s CDN firewall ({cdn}) refused this network. Your install is fine; "
+        "retry from another network"
+    )
 
 
 def _delay(exc: Exception, attempt: int) -> float:
-    delay = float(2 ** attempt)
+    delay = float(2**attempt)
     if isinstance(exc, urllib.error.HTTPError):
         value = exc.headers.get("Retry-After", "") if exc.headers else ""
         if value:
@@ -88,7 +100,9 @@ def _delay(exc: Exception, attempt: int) -> float:
 
 
 def retry_network(
-    operation: Callable[[], _T], *, wait: Callable[[float], None] | None = None,
+    operation: Callable[[], _T],
+    *,
+    wait: Callable[[float], None] | None = None,
 ) -> _T:
     """Retry the complete request and body read, never an install or publish.
 
@@ -108,6 +122,9 @@ def retry_network(
             attempt += 1
             logging.getLogger(__name__).warning(
                 "network request failed (%s); retrying in %gs (attempt %d/%d)",
-                exc, delay, attempt, _ATTEMPTS,
+                exc,
+                delay,
+                attempt,
+                _ATTEMPTS,
             )
             (wait or time.sleep)(delay)

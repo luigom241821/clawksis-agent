@@ -3,17 +3,8 @@ from __future__ import annotations
 import textwrap
 
 
-
 def _write_config(tmp_path, body: str) -> None:
     (tmp_path / "config.yaml").write_text(textwrap.dedent(body), encoding="utf-8")
-
-
-
-
-
-
-
-
 
 
 def test_anthropic_adapter_honors_timeout_kwarg():
@@ -40,17 +31,21 @@ def test_resolved_api_call_timeout_priority(monkeypatch, tmp_path):
     (tmp_path / ".env").write_text("", encoding="utf-8")
 
     # Case A: config wins over env var
-    _write_config(tmp_path, """\
+    _write_config(
+        tmp_path,
+        """\
         providers:
           openrouter:
             request_timeout_seconds: 77
             models:
               openai/gpt-4o-mini:
                 timeout_seconds: 42
-        """)
+        """,
+    )
     monkeypatch.setenv("CLAWK_API_TIMEOUT", "999")
 
     from run_agent import AIAgent
+
     agent = AIAgent(
         model="openai/gpt-4o-mini",
         provider="openrouter",
@@ -73,10 +68,13 @@ def test_resolved_api_call_timeout_priority(monkeypatch, tmp_path):
     # Clear the cached config load
     import importlib
     from clawk_cli import config as cfg_mod
+
     importlib.reload(cfg_mod)
     from clawk_cli import timeouts as to_mod
+
     importlib.reload(to_mod)
     import run_agent as ra_mod
+
     importlib.reload(ra_mod)
 
     agent2 = ra_mod.AIAgent(
@@ -90,7 +88,3 @@ def test_resolved_api_call_timeout_priority(monkeypatch, tmp_path):
         platform="cli",
     )
     assert agent2._resolved_api_call_timeout() == 999.0
-
-
-
-

@@ -7,9 +7,8 @@ import pytest
 
 from gateway.platforms import api_server
 
-def test_room_grant_secret_stays_gateway_owned_on_named_profile(
-    tmp_path, monkeypatch
-):
+
+def test_room_grant_secret_stays_gateway_owned_on_named_profile(tmp_path, monkeypatch):
     from gateway.hosted_room_peer import gateway_room_grant_secret
 
     adapter = api_server.APIServerAdapter.__new__(api_server.APIServerAdapter)
@@ -20,6 +19,7 @@ def test_room_grant_secret_stays_gateway_owned_on_named_profile(
         assert adapter._room_grant_secret() == gateway_room_grant_secret()
     finally:
         api_server._api_request_profile.reset(profile_token)
+
 
 def test_superseded_room_authority_cannot_reuse_its_grant(tmp_path, monkeypatch):
     from gateway import hosted_rooms
@@ -68,9 +68,10 @@ def test_superseded_room_authority_cannot_reuse_its_grant(tmp_path, monkeypatch)
 
     adapter = api_server.APIServerAdapter.__new__(api_server.APIServerAdapter)
     request = MagicMock(headers={"Authorization": f"ClawksisRoom {old_grant}"})
-    assert adapter._room_grant_claims(request, permission="status")[
-        "authority_gateway_id"
-    ] == "gateway-old"
+    assert (
+        adapter._room_grant_claims(request, permission="status")["authority_gateway_id"]
+        == "gateway-old"
+    )
 
     hosted_rooms.reserve_peer_room(
         hosted_rooms.default_db_path(),

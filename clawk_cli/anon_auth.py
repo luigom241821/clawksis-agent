@@ -38,8 +38,14 @@ from typing import Any, Callable, Dict, Optional
 
 from agent.retry_utils import parse_retry_after_seconds
 from clawk_cli.auth_constants import (
-    AuthError, DEFAULT_NOUS_PORTAL_URL, DEFAULT_NOUS_WELCOME_URL, NOUS_INFERENCE_INVOKE_SCOPE, WELCOME_CLAIM_FLAG,
-    _decode_jwt_claims, httpx)
+    AuthError,
+    DEFAULT_NOUS_PORTAL_URL,
+    DEFAULT_NOUS_WELCOME_URL,
+    NOUS_INFERENCE_INVOKE_SCOPE,
+    WELCOME_CLAIM_FLAG,
+    _decode_jwt_claims,
+    httpx,
+)
 
 logger = logging.getLogger("clawk_cli.auth")
 
@@ -59,10 +65,13 @@ PREVIEW_FULL_CONNECTORS_ENV = "CLAWK_PREVIEW_FULL_CONNECTORS"
 GUEST_MINT_TIMEOUT_SECONDS = 5.0
 # Copy shared by every surface that names the free tier (R-USR-1): never guest / anonymous / account.
 FREE_TIER_LABEL = "Nous · free tier"
-UPGRADE_HINT = "Run `clawk auth upgrade` to sign in with a Nous account, or /login inside a chat."
+UPGRADE_HINT = (
+    "Run `clawk auth upgrade` to sign in with a Nous account, or /login inside a chat."
+)
 FREE_TIER_NOT_SIGNED_IN = (
     "You're not signed in. Free inference and connectors are always on. "
-    "Run `clawk auth` to sign in with a Nous account.")
+    "Run `clawk auth` to sign in with a Nous account."
+)
 
 
 class AnonCredentialDead(AuthError):
@@ -72,9 +81,16 @@ class AnonCredentialDead(AuthError):
     """
 
 
-def _anon_err(message: str, code: str, *, retry_after: Optional[float] = None) -> AuthError:
+def _anon_err(
+    message: str, code: str, *, retry_after: Optional[float] = None
+) -> AuthError:
     """An ``AuthError`` for a free-tier failure *code*; terminal-ness is the code's (``ANON_TERMINAL_CODES``)."""
-    return AuthError(message, code=code, retry_after=retry_after, retryable=code not in ANON_TERMINAL_CODES)
+    return AuthError(
+        message,
+        code=code,
+        retry_after=retry_after,
+        retryable=code not in ANON_TERMINAL_CODES,
+    )
 
 
 # --- Free-tier failure codes ------------------------------------------------------------------------
@@ -94,19 +110,30 @@ def _anon_err(message: str, code: str, *, retry_after: Optional[float] = None) -
 #   404 ``unknown_token``         the credential was reaped or claimed (re-mint)
 #   403 ``account_locked``        the account is locked (dead; never re-mint from it)
 #   401                           an outstanding JWT whose account is gone (re-mint)
-ANON_GATE_CLOSED = "anon_gate_closed"          # not enabled here: sign in, or another provider
-ANON_GATE_PAUSED = "anon_gate_paused"          # ops breaker: keep checking in the background
-ANON_RATE_LIMITED = "anon_rate_limited"        # too many sign-ups / exchanges: wait Retry-After
-ANON_POW_REQUIRED = "anon_pow_required"        # proof of work requested: deferred, sign in instead
-ANON_ACCOUNT_LOCKED = "anon_account_locked"    # dead, and no replacement is minted from it
-ANON_CREDENTIAL_DEAD = "anon_credential_dead"  # reaped or claimed: replaced silently, once
-ANON_UNREACHABLE = "anon_unreachable"          # timeout, DNS, refused connection
-ANON_SERVER_ERROR = "anon_server_error"        # 5xx, non-JSON, malformed success body
-ANON_CHALLENGE_REQUIRED = "anon_challenge_required"  # a browser check is still pending (``anon_challenge``)
+ANON_GATE_CLOSED = "anon_gate_closed"  # not enabled here: sign in, or another provider
+ANON_GATE_PAUSED = "anon_gate_paused"  # ops breaker: keep checking in the background
+ANON_RATE_LIMITED = (
+    "anon_rate_limited"  # too many sign-ups / exchanges: wait Retry-After
+)
+ANON_POW_REQUIRED = (
+    "anon_pow_required"  # proof of work requested: deferred, sign in instead
+)
+ANON_ACCOUNT_LOCKED = (
+    "anon_account_locked"  # dead, and no replacement is minted from it
+)
+ANON_CREDENTIAL_DEAD = (
+    "anon_credential_dead"  # reaped or claimed: replaced silently, once
+)
+ANON_UNREACHABLE = "anon_unreachable"  # timeout, DNS, refused connection
+ANON_SERVER_ERROR = "anon_server_error"  # 5xx, non-JSON, malformed success body
+ANON_CHALLENGE_REQUIRED = (
+    "anon_challenge_required"  # a browser check is still pending (``anon_challenge``)
+)
 ANON_SIGNIN_REQUIRED = "anon_signin_required"  # refused without an account, or a 428 this version can't run
 # Codes a later attempt cannot fix (for this process / this version).
-ANON_TERMINAL_CODES = frozenset({
-    ANON_GATE_CLOSED, ANON_POW_REQUIRED, ANON_ACCOUNT_LOCKED, ANON_SIGNIN_REQUIRED})
+ANON_TERMINAL_CODES = frozenset(
+    {ANON_GATE_CLOSED, ANON_POW_REQUIRED, ANON_ACCOUNT_LOCKED, ANON_SIGNIN_REQUIRED}
+)
 # Codes that mean the account service itself is not answering: a sign-in (which goes through the
 # same service) cannot help either, so surfaces offer "try again" / "another provider" only.
 ANON_UNREACHABLE_CODES = frozenset({ANON_UNREACHABLE, ANON_SERVER_ERROR})
@@ -118,9 +145,9 @@ ANON_FAILURE_COPY = {
     ANON_GATE_CLOSED: f"This version can't be used without a Nous account. {_SIGNIN_IS_FREE}",
     ANON_GATE_PAUSED: f"Using Clawksis without signing in is paused for a moment. {_SIGNIN_IS_FREE}",
     ANON_RATE_LIMITED: "Lots of people are getting started right now. Try again in {wait}. "
-                       "Signing in is free and skips the wait.",
+    "Signing in is free and skips the wait.",
     ANON_POW_REQUIRED: "The Nous server asked for a proof of work, but that isn't implemented in your "
-                       "Agent yet. Sign in with a Nous account to continue.",
+    "Agent yet. Sign in with a Nous account to continue.",
     ANON_CHALLENGE_REQUIRED: "Finish the quick check in your browser, then try again.",
     ANON_SIGNIN_REQUIRED: "Free guest access isn't available here. Sign in with a Nous account to continue.",
     ANON_ACCOUNT_LOCKED: f"This session can't continue without signing in. {_SIGNIN_IS_FREE}",
@@ -158,9 +185,14 @@ def guest_allowed() -> bool:
     (``nous.guest: true``), so every fallback below answers False."""
     try:
         from clawk_cli.config import load_config_readonly
+
         nous_cfg = load_config_readonly().get("nous")
-    except Exception:  # config unreadable: keep today's behaviour (no guest) rather than mint
-        logger.debug("guest: config unreadable, treating nous.guest as false", exc_info=True)
+    except (
+        Exception
+    ):  # config unreadable: keep today's behaviour (no guest) rather than mint
+        logger.debug(
+            "guest: config unreadable, treating nous.guest as false", exc_info=True
+        )
         return False
     if not isinstance(nous_cfg, dict):
         return False
@@ -178,17 +210,24 @@ def is_anonymous_request(provider: Any, api_key: Any) -> bool:
     Named free accounts and opaque API keys must retain normal provider errors.
     """
     from clawk_cli.auth_constants import _decode_jwt_claims
-    return provider == "nous" and _decode_jwt_claims(api_key).get("account_tier") == ANON_ACCOUNT_TIER
+
+    return (
+        provider == "nous"
+        and _decode_jwt_claims(api_key).get("account_tier") == ANON_ACCOUNT_TIER
+    )
 
 
 def is_anonymous_agent(agent: Any) -> bool:
     """:func:`is_anonymous_request` for a live agent: read at call time, since the credential rotates."""
-    return is_anonymous_request(getattr(agent, "provider", ""), getattr(agent, "api_key", None))
+    return is_anonymous_request(
+        getattr(agent, "provider", ""), getattr(agent, "api_key", None)
+    )
 
 
 def current_nous_state() -> Optional[dict[str, Any]]:
     """The profile's ``providers.nous`` state without locking or network (status/picker reads)."""
     from clawk_cli.auth import _load_auth_store, _load_provider_state
+
     try:
         return _load_provider_state(_load_auth_store(), "nous")
     except Exception as exc:
@@ -205,6 +244,7 @@ def on_local_desktop_backend() -> bool:
     created by, a connection ``process_identity.local_desktop_client`` accepted. Never an SSH, URL or
     cloud backend, a shell the desktop launched, or the gateway's other clients."""
     from clawk_cli.process_identity import serves_local_desktop_now
+
     return serves_local_desktop_now()
 
 
@@ -213,7 +253,11 @@ def free_inference_active(state: Any = None) -> bool:
     still allowed. Only the claim is the local Desktop's (``welcome_trial``); once claimed, every
     surface of the install runs on it. *state* defaults to the profile's."""
     state = current_nous_state() if state is None else state
-    return is_guest_state(state) and state.get(WELCOME_CLAIM_FLAG) is True and guest_allowed()
+    return (
+        is_guest_state(state)
+        and state.get(WELCOME_CLAIM_FLAG) is True
+        and guest_allowed()
+    )
 
 
 def trial_model() -> str:
@@ -241,6 +285,7 @@ def guest_without_free_tier(state: Any) -> bool:
 
 def free_tier_route() -> bool:
     from clawk_cli.auth import resolve_provider
+
     return has_free_tier_account() and resolve_provider("auto") == "nous"
 
 
@@ -267,7 +312,11 @@ def pin_model_for_route(provider: Any, base_url: Any, model: Any) -> Any:
     """
     if provider == "nous" and route_is_welcome_host(base_url):
         if model and model != GUEST_MODEL:
-            logger.info("Nous free tier: using %s instead of configured model %s", GUEST_MODEL, model)
+            logger.info(
+                "Nous free tier: using %s instead of configured model %s",
+                GUEST_MODEL,
+                model,
+            )
         return GUEST_MODEL
     return model
 
@@ -288,6 +337,7 @@ def route_is_welcome_host(base_url: Any) -> bool:
     portal host keeps its model even when a guest singleton exists beside it.
     """
     from urllib.parse import urlparse
+
     try:
         host = (urlparse(str(base_url or "")).hostname or "").lower()
     except ValueError:
@@ -306,6 +356,7 @@ def anon_secret() -> str:
 
 def _anon_headers() -> dict[str, str]:
     from clawk_cli.anon_challenge import user_agent
+
     headers = {"content-type": "application/json", "user-agent": user_agent()}
     if secret := anon_secret():
         headers[ANON_SECRET_HEADER] = secret
@@ -316,11 +367,20 @@ def _anon_headers() -> dict[str, str]:
 # status; an exact pair wins over the wildcard. Anything unlisted is a server error.
 _NAS_REFUSALS: dict[tuple, tuple] = {
     (404, "unknown_token"): (AnonCredentialDead, ANON_CREDENTIAL_DEAD),
-    (404, None): (AuthError, ANON_GATE_CLOSED),        # uniform with a nonexistent route, on purpose
-    (401, "invalid_shared_secret"): (AuthError, ANON_GATE_CLOSED),   # pre-launch NAS builds only
+    (404, None): (
+        AuthError,
+        ANON_GATE_CLOSED,
+    ),  # uniform with a nonexistent route, on purpose
+    (401, "invalid_shared_secret"): (
+        AuthError,
+        ANON_GATE_CLOSED,
+    ),  # pre-launch NAS builds only
     (401, None): (AnonCredentialDead, ANON_CREDENTIAL_DEAD),
     (403, "account_locked"): (AnonCredentialDead, ANON_ACCOUNT_LOCKED),
-    (403, "anonymous_accounts_disabled"): (AuthError, ANON_GATE_PAUSED),   # pre-launch names
+    (403, "anonymous_accounts_disabled"): (
+        AuthError,
+        ANON_GATE_PAUSED,
+    ),  # pre-launch names
     (403, "circuit_open"): (AuthError, ANON_GATE_PAUSED),
     (428, None): (AuthError, ANON_POW_REQUIRED),
     (429, None): (AuthError, ANON_RATE_LIMITED),
@@ -331,7 +391,10 @@ _Verdict = Callable[[dict[str, Any]], AuthError]
 
 
 def _raise_for_anon_status(
-    response: httpx.Response, *, action: str, overrides: Optional[dict[tuple, _Verdict]] = None,
+    response: httpx.Response,
+    *,
+    action: str,
+    overrides: Optional[dict[tuple, _Verdict]] = None,
 ) -> dict[str, Any]:
     try:
         payload = response.json()
@@ -350,26 +413,49 @@ def _raise_for_anon_status(
         build = overrides.get((status, error)) or overrides.get((status, None))
         if build:
             raise build(payload)
-    cls, code = (_NAS_REFUSALS.get((status, error)) or _NAS_REFUSALS.get((status, None))
-                 or ((AuthError, ANON_POW_REQUIRED) if error == "pow_" else (AuthError, ANON_SERVER_ERROR)))
+    cls, code = (
+        _NAS_REFUSALS.get((status, error))
+        or _NAS_REFUSALS.get((status, None))
+        or (
+            (AuthError, ANON_POW_REQUIRED)
+            if error == "pow_"
+            else (AuthError, ANON_SERVER_ERROR)
+        )
+    )
     if code == ANON_SERVER_ERROR:
-        logger.info("Nous free tier %s failed (%s%s)", action, status, f": {error}" if error else "")
+        logger.info(
+            "Nous free tier %s failed (%s%s)",
+            action,
+            status,
+            f": {error}" if error else "",
+        )
     retry_after = parse_retry_after_seconds(response.headers)
-    raise cls(anon_failure_copy(code, retry_after=retry_after), code=code, retry_after=retry_after,
-              retryable=code not in ANON_TERMINAL_CODES)
+    raise cls(
+        anon_failure_copy(code, retry_after=retry_after),
+        code=code,
+        retry_after=retry_after,
+        retryable=code not in ANON_TERMINAL_CODES,
+    )
 
 
 def mint_request_body() -> dict[str, Any]:
     """The ``/api/anonymous/create`` body: ``{"preview_full_connectors": bool}`` when the env var is
     ``1`` / ``true`` or ``0`` / ``false``, else ``{}``."""
     raw = (os.environ.get(PREVIEW_FULL_CONNECTORS_ENV) or "").strip()
-    return {"preview_full_connectors": raw in ("1", "true")} if raw in ("1", "true", "0", "false") else {}
+    return (
+        {"preview_full_connectors": raw in ("1", "true")}
+        if raw in ("1", "true", "0", "false")
+        else {}
+    )
 
 
 def mint_guest(client: httpx.Client, portal_base_url: str) -> dict[str, Any]:
     """``POST /api/anonymous/create`` -> ``{user_id, org_id, token, idle_ttl_days}``. Token shown once."""
     response = client.post(
-        f"{portal_base_url.rstrip('/')}/api/anonymous/create", headers=_anon_headers(), json=mint_request_body())
+        f"{portal_base_url.rstrip('/')}/api/anonymous/create",
+        headers=_anon_headers(),
+        json=mint_request_body(),
+    )
     payload = _raise_for_anon_status(response, action="sign-up")
     token = payload.get("token")
     if not isinstance(token, str) or not token.startswith("anon_"):
@@ -386,27 +472,42 @@ def mint_guest(client: httpx.Client, portal_base_url: str) -> dict[str, Any]:
 def is_connectors_only(token: Any) -> bool:
     """*token* carries a scope claim and it lacks ``inference:invoke`` (a scopeless JWT reads as today's)."""
     from clawk_cli.auth_nous import _scope_values
+
     claims = _decode_jwt_claims(token)
     scopes = _scope_values(claims.get("scope")) | _scope_values(claims.get("scp"))
     return bool(scopes) and NOUS_INFERENCE_INVOKE_SCOPE not in scopes
 
 
-def held_connectors_token(state: Any, *, skew_seconds: Optional[int] = None) -> Optional[str]:
+def held_connectors_token(
+    state: Any, *, skew_seconds: Optional[int] = None
+) -> Optional[str]:
     """The bearer a connectors / managed-tools call sends: the profile's token (for a guest the
     inference one, a superset), else a guest's connectors-only token, preferring one that outlives
     *skew_seconds*. ``None`` also accepts an expiring token (availability probes)."""
     from clawk_cli.auth import _is_expiring
+
     if not isinstance(state, dict):
         return None
     slots = (state, state.get("connectors_token") if is_guest_state(state) else None)
-    held = [(s["access_token"], s.get("expires_at")) for s in slots
-            if isinstance(s, dict) and isinstance(s.get("access_token"), str) and s["access_token"]]
-    live = next((token for token, exp in held if not _is_expiring(exp, skew_seconds or 0)), None)
+    held = [
+        (s["access_token"], s.get("expires_at"))
+        for s in slots
+        if isinstance(s, dict)
+        and isinstance(s.get("access_token"), str)
+        and s["access_token"]
+    ]
+    live = next(
+        (token for token, exp in held if not _is_expiring(exp, skew_seconds or 0)), None
+    )
     return live or (held[0][0] if held and skew_seconds is None else None)
 
 
 def exchange_anon_jwt(
-    client: httpx.Client, portal_base_url: str, anon_token: str, *, auth_state: dict[str, Any],
+    client: httpx.Client,
+    portal_base_url: str,
+    anon_token: str,
+    *,
+    auth_state: dict[str, Any],
     purpose: str,
 ) -> dict[str, Any]:
     """``POST /api/anonymous/token {token}`` -> ``{access_token, expires_in, inference_base_url, ...}``.
@@ -416,13 +517,24 @@ def exchange_anon_jwt(
     portal, credential, and the *auth_state* whose ``tls`` block the mint used) on a browser challenge.
     """
     from clawk_cli import anon_challenge
+
     response = client.post(
-        f"{portal_base_url.rstrip('/')}/api/anonymous/token", headers=_anon_headers(),
-        json={"token": anon_token, "client": anon_challenge.client_info(), "purpose": purpose})
+        f"{portal_base_url.rstrip('/')}/api/anonymous/token",
+        headers=_anon_headers(),
+        json={
+            "token": anon_token,
+            "client": anon_challenge.client_info(),
+            "purpose": purpose,
+        },
+    )
 
     def challenge(body: dict[str, Any]) -> AuthError:
         return anon_challenge.challenge_error(
-            body, portal_base_url=portal_base_url, anon_token=anon_token, auth_state=auth_state)
+            body,
+            portal_base_url=portal_base_url,
+            anon_token=anon_token,
+            auth_state=auth_state,
+        )
 
     def signin(body: dict[str, Any]) -> AuthError:
         # Refused without an account, or a 428 this version has no primitive for: either way the
@@ -434,9 +546,17 @@ def exchange_anon_jwt(
         return _anon_err(ANON_FAILURE_COPY[ANON_POW_REQUIRED], ANON_POW_REQUIRED)
 
     # The challenge gate sits on the token exchange only; every other endpoint keeps the table.
-    payload = _raise_for_anon_status(response, action="token exchange", overrides={
-        (428, "challenge_required"): challenge, (428, "pow_"): proof_of_work, (428, None): signin,
-        (403, "signin_required"): signin, (403, "access_denied"): signin})
+    payload = _raise_for_anon_status(
+        response,
+        action="token exchange",
+        overrides={
+            (428, "challenge_required"): challenge,
+            (428, "pow_"): proof_of_work,
+            (428, None): signin,
+            (403, "signin_required"): signin,
+            (403, "access_denied"): signin,
+        },
+    )
     if not isinstance(payload.get("access_token"), str) or not payload["access_token"]:
         logger.info("Nous free tier token exchange returned no token")
         raise _anon_err(ANON_FAILURE_COPY[ANON_SERVER_ERROR], ANON_SERVER_ERROR)
@@ -450,6 +570,7 @@ def apply_exchange_to_state(state: dict[str, Any], exchanged: dict[str, Any]) ->
     """Write a fresh exchange result into a guest state in place: an inference token (token, expiry,
     routing) into the state itself, a connectors-only one into ``connectors_token`` beside it."""
     from clawk_cli.auth_nous import _validate_nous_inference_url_from_network
+
     access_token = exchanged["access_token"]
     claims = _decode_jwt_claims(access_token)
     now = datetime.now(UTC)
@@ -459,21 +580,30 @@ def apply_exchange_to_state(state: dict[str, Any], exchanged: dict[str, Any]) ->
     else:
         expires_at = now + timedelta(seconds=int(exchanged.get("expires_in") or 900))
     if is_connectors_only(access_token):
-        state["connectors_token"] = {"access_token": access_token, "expires_at": expires_at.isoformat()}
+        state["connectors_token"] = {
+            "access_token": access_token,
+            "expires_at": expires_at.isoformat(),
+        }
         return
     # NAS names the welcome host on every exchange; absent (older NAS) or outside the allowlist
     # (a staging host without NOUS_INFERENCE_BASE_URL set), the literal stands in. Never the paid
     # host: the gateway cross-refuses an anonymous JWT there.
-    inference_url = (_validate_nous_inference_url_from_network(exchanged.get("inference_base_url"))
-                     or DEFAULT_NOUS_WELCOME_URL)
+    inference_url = (
+        _validate_nous_inference_url_from_network(exchanged.get("inference_base_url"))
+        or DEFAULT_NOUS_WELCOME_URL
+    )
     scope = claims.get("scope") or claims.get("scp") or state.get("scope")
     if isinstance(scope, (list, tuple)):
         scope = " ".join(str(s) for s in scope)
     state.update(
-        access_token=access_token, token_type="Bearer", scope=scope,
-        obtained_at=now.isoformat(), expires_at=expires_at.isoformat(),
+        access_token=access_token,
+        token_type="Bearer",
+        scope=scope,
+        obtained_at=now.isoformat(),
+        expires_at=expires_at.isoformat(),
         expires_in=max(0, int((expires_at - now).total_seconds())),
-        account_tier=str(claims.get("account_tier") or ANON_ACCOUNT_TIER))
+        account_tier=str(claims.get("account_tier") or ANON_ACCOUNT_TIER),
+    )
     state["inference_base_url"] = inference_url
     for key in ("user_id", "org_id"):
         if exchanged.get(key):
@@ -483,6 +613,7 @@ def apply_exchange_to_state(state: dict[str, Any], exchanged: dict[str, Any]) ->
 
 def _portal_base_url() -> str:
     from clawk_cli.auth_nous import _nous_portal_env_override
+
     return (_nous_portal_env_override() or DEFAULT_NOUS_PORTAL_URL).rstrip("/")
 
 
@@ -491,23 +622,34 @@ def _shared_identity_key(state: Any) -> Optional[str]:
     account. Used to decide whether two stores hold the SAME identity."""
     if not isinstance(state, dict):
         return None
-    return state.get("anon_token") if is_guest_state(state) else state.get("refresh_token")
+    return (
+        state.get("anon_token") if is_guest_state(state) else state.get("refresh_token")
+    )
 
 
-def _mint_locked(client: httpx.Client, portal: str, auth_store: dict[str, Any], *,
-                 welcome_claim: bool) -> dict[str, Any]:
+def _mint_locked(
+    client: httpx.Client,
+    portal: str,
+    auth_store: dict[str, Any],
+    *,
+    welcome_claim: bool,
+) -> dict[str, Any]:
     """Mint under the caller's locks. The identity is persisted as soon as ``create`` succeeds, BEFORE
     the exchange: a 429 or timeout on the exchange must not lose a credential NAS still honours (the
     next attempt exchanges the stored one instead of minting again). *welcome_claim* is written in
     that same save, so a claimed guest is never left unstamped."""
     from clawk_cli.auth import _store_provider_state, _save_auth_store
     from clawk_cli.auth_nous import _write_shared_nous_state
+
     minted = mint_guest(client, portal)
     state: dict[str, Any] = {
-        "auth_method": ANON_AUTH_METHOD, "account_tier": ANON_ACCOUNT_TIER,
-        "anon_token": minted["token"], "client_id": ANON_CLIENT_ID,
+        "auth_method": ANON_AUTH_METHOD,
+        "account_tier": ANON_ACCOUNT_TIER,
+        "anon_token": minted["token"],
+        "client_id": ANON_CLIENT_ID,
         "portal_base_url": portal.rstrip("/"),
-        "user_id": minted.get("user_id"), "org_id": minted.get("org_id"),
+        "user_id": minted.get("user_id"),
+        "org_id": minted.get("org_id"),
         "idle_ttl_days": minted.get("idle_ttl_days"),
         WELCOME_CLAIM_FLAG: welcome_claim,
     }
@@ -525,8 +667,8 @@ def _mint_locked(client: httpx.Client, portal: str, auth_store: dict[str, Any], 
 # credential is a reason to mint again; an explicit user retry (``force=True``) bypasses it.
 # Keyed per profile home ("" for the unscoped launch profile): profile A's 429 must not stop
 # profile B from ever getting an identity.
-_MINT_RETRY_LADDER = (15.0, 60.0, 300.0)      # unreachable / server error, attempt 1, 2, 3+
-_MINT_PAUSED_MIN_WAIT = 60.0                  # ops breaker: never poll it faster than this
+_MINT_RETRY_LADDER = (15.0, 60.0, 300.0)  # unreachable / server error, attempt 1, 2, 3+
+_MINT_PAUSED_MIN_WAIT = 60.0  # ops breaker: never poll it faster than this
 
 
 @dataclass
@@ -536,20 +678,30 @@ class MintFailure:
     code: str
     message: str
     retryable: bool
-    retry_after: float     # the wait this failure asked for, in seconds (0 for a terminal code)
-    not_before: float      # ``time.monotonic()`` before which ``ensure_portal_identity`` stays quiet
+    retry_after: (
+        float  # the wait this failure asked for, in seconds (0 for a terminal code)
+    )
+    not_before: float  # ``time.monotonic()`` before which ``ensure_portal_identity`` stays quiet
     attempts: int = 1
 
     def remaining(self) -> float:
         # Rounded to the millisecond: ``(now + wait) - now`` is not exactly ``wait`` in floating point,
         # and the ceil below turned that dust into an extra whole second ("retry in 61s").
-        return 0.0 if not self.retryable else max(0.0, round(self.not_before - time.monotonic(), 3))
+        return (
+            0.0
+            if not self.retryable
+            else max(0.0, round(self.not_before - time.monotonic(), 3))
+        )
 
     def as_payload(self) -> dict[str, Any]:
         """The wire shape every status RPC carries: ``{error_code, error, retryable, retry_after}``
         with ``retry_after`` the seconds still to wait (whole, rounded up)."""
-        return {"error_code": self.code, "error": self.message, "retryable": self.retryable,
-                "retry_after": math.ceil(self.remaining()) if self.retryable else 0}
+        return {
+            "error_code": self.code,
+            "error": self.message,
+            "retryable": self.retryable,
+            "retry_after": math.ceil(self.remaining()) if self.retryable else 0,
+        }
 
 
 _mint_failures: dict[str, MintFailure] = {}
@@ -557,6 +709,7 @@ _mint_failures: dict[str, MintFailure] = {}
 
 def _mint_memo_key() -> str:
     from clawk_constants import get_clawk_home_override, clawk_home_key
+
     return "" if get_clawk_home_override() is None else clawk_home_key()
 
 
@@ -591,7 +744,9 @@ def classify_mint_exception(exc: BaseException) -> AuthError:
     except Exception:  # httpx unavailable (lazy proxy): the stdlib set stands
         pass
     code = ANON_UNREACHABLE if isinstance(exc, transport) else ANON_SERVER_ERROR
-    wrapped = _anon_err(ANON_FAILURE_COPY[code], code, retry_after=getattr(exc, "retry_after", None))
+    wrapped = _anon_err(
+        ANON_FAILURE_COPY[code], code, retry_after=getattr(exc, "retry_after", None)
+    )
     wrapped.__cause__ = exc
     return wrapped
 
@@ -605,19 +760,30 @@ def _note_mint_failure(err: AuthError) -> MintFailure:
         wait, not_before = 0.0, float("inf")
     else:
         hinted = err.retry_after
-        wait = float(hinted) if hinted else _MINT_RETRY_LADDER[min(attempts, len(_MINT_RETRY_LADDER)) - 1]
+        wait = (
+            float(hinted)
+            if hinted
+            else _MINT_RETRY_LADDER[min(attempts, len(_MINT_RETRY_LADDER)) - 1]
+        )
         if code == ANON_GATE_PAUSED:
             wait = max(wait, _MINT_PAUSED_MIN_WAIT)
         wait = max(1.0, wait)
         not_before = time.monotonic() + wait
-    failure = MintFailure(code=code, message=str(err), retryable=retryable, retry_after=wait,
-                          not_before=not_before, attempts=attempts)
+    failure = MintFailure(
+        code=code,
+        message=str(err),
+        retryable=retryable,
+        retry_after=wait,
+        not_before=not_before,
+        attempts=attempts,
+    )
     _mint_failures[_mint_memo_key()] = failure
     return failure
 
 
-def _reconcile_and_provision(*, timeout_seconds: float, force: bool = False,
-                             welcome_claim: bool = False) -> Optional[dict[str, Any]]:
+def _reconcile_and_provision(
+    *, timeout_seconds: float, force: bool = False, welcome_claim: bool = False
+) -> Optional[dict[str, Any]]:
     """The lifecycle body, run under profile lock THEN shared lock (the documented order).
 
     1. The shared store is the identity of record for this Clawksis root. If it holds an identity
@@ -627,19 +793,33 @@ def _reconcile_and_provision(*, timeout_seconds: float, force: bool = False,
     3. Nothing anywhere: mint, persisting the credential before exchanging it.
     """
     from clawk_cli.auth import (
-        _auth_store_lock, _load_auth_store, _load_provider_state, _save_auth_store,
-        _store_provider_state, _resolve_verify)
+        _auth_store_lock,
+        _load_auth_store,
+        _load_provider_state,
+        _save_auth_store,
+        _store_provider_state,
+        _resolve_verify,
+    )
     from clawk_cli.auth_nous import (
-        _nous_http_client, _nous_shared_store_lock, _read_shared_nous_state, _write_shared_nous_state)
+        _nous_http_client,
+        _nous_shared_store_lock,
+        _read_shared_nous_state,
+        _write_shared_nous_state,
+    )
+
     portal = _portal_base_url()
     with _auth_store_lock():
         auth_store = _load_auth_store()
         profile_state = _load_provider_state(auth_store, "nous")
         with _nous_shared_store_lock(timeout_seconds=max(timeout_seconds, 5.0)):
             shared = _read_shared_nous_state()
-            if shared and _shared_identity_key(shared) != _shared_identity_key(profile_state):
+            if shared and _shared_identity_key(shared) != _shared_identity_key(
+                profile_state
+            ):
                 state = dict(shared)
-                _store_provider_state(auth_store, "nous", state, set_active=not is_guest_state(state))
+                _store_provider_state(
+                    auth_store, "nous", state, set_active=not is_guest_state(state)
+                )
                 _save_auth_store(auth_store)
                 logger.debug("Nous identity adopted from the shared store")
                 return state
@@ -654,7 +834,9 @@ def _reconcile_and_provision(*, timeout_seconds: float, force: bool = False,
             verify = _resolve_verify(insecure=None, ca_bundle=None, auth_state=None)
             try:
                 with _nous_http_client(timeout_seconds, verify) as client:
-                    return _mint_locked(client, portal, auth_store, welcome_claim=welcome_claim)
+                    return _mint_locked(
+                        client, portal, auth_store, welcome_claim=welcome_claim
+                    )
             except Exception as exc:
                 # Noted before the locks are released, so a caller queued on them sees the cooldown.
                 err = classify_mint_exception(exc)
@@ -665,7 +847,10 @@ def _reconcile_and_provision(*, timeout_seconds: float, force: bool = False,
 
 
 def ensure_portal_identity(
-    *, explicit: bool, timeout_seconds: float = GUEST_MINT_TIMEOUT_SECONDS, force: bool = False,
+    *,
+    explicit: bool,
+    timeout_seconds: float = GUEST_MINT_TIMEOUT_SECONDS,
+    force: bool = False,
     welcome_claim: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Make sure this profile has a Nous identity (guest or account); mint a guest only if the shared
@@ -690,20 +875,36 @@ def ensure_portal_identity(
     ``ANON_*`` codes and whose ``retry_after`` / ``retryable`` say what a caller may do next.
     """
     if not explicit:
-        raise ValueError("ensure_portal_identity: only explicit creators may call this (explicit=True)")
+        raise ValueError(
+            "ensure_portal_identity: only explicit creators may call this (explicit=True)"
+        )
     if not guest_allowed():
         return None
     failure = _mint_failure_for_profile()
-    if failure and not force and not current_nous_state() and time.monotonic() < failure.not_before:
-        return None  # in cooldown (or terminal) for this profile; do not hammer the portal
+    if (
+        failure
+        and not force
+        and not current_nous_state()
+        and time.monotonic() < failure.not_before
+    ):
+        return (
+            None  # in cooldown (or terminal) for this profile; do not hammer the portal
+        )
     try:
-        state = _reconcile_and_provision(timeout_seconds=timeout_seconds, force=force,
-                                         welcome_claim=welcome_claim)
+        state = _reconcile_and_provision(
+            timeout_seconds=timeout_seconds, force=force, welcome_claim=welcome_claim
+        )
     except Exception as exc:
         err = classify_mint_exception(exc)
         noted = getattr(err, "mint_failure", None) or _note_mint_failure(err)
-        logger.info("Nous free tier not set up (%s, attempt %d%s)", noted.code, noted.attempts,
-                    f", next try in {noted.retry_after:.0f}s" if noted.retryable else ", not retried")
+        logger.info(
+            "Nous free tier not set up (%s, attempt %d%s)",
+            noted.code,
+            noted.attempts,
+            f", next try in {noted.retry_after:.0f}s"
+            if noted.retryable
+            else ", not retried",
+        )
         if err is exc:
             raise
         raise err from exc
@@ -711,11 +912,14 @@ def ensure_portal_identity(
         _clear_mint_failure()
         # Adopting a sibling profile's sign-in replaced this profile's guest under the locks above.
         from clawk_cli.guest_handoff import drain
+
         drain()
     return state
 
 
-def refresh_guest_state(state: dict[str, Any], client: httpx.Client, *, purpose: str) -> str:
+def refresh_guest_state(
+    state: dict[str, Any], client: httpx.Client, *, purpose: str
+) -> str:
     """Token-acquisition seam for a guest: re-exchange the ``anon_`` credential in place and return
     the minted token. Every caller names its *purpose*: ``"connectors"`` for connector and managed-tool
     bearers, ``"inference"`` only for a guest that carries the welcome trial.
@@ -728,13 +932,25 @@ def refresh_guest_state(state: dict[str, Any], client: httpx.Client, *, purpose:
     if purpose == "inference" and not free_inference_active(state):
         # The one place a guest's inference token is minted: only the welcome trial on the desktop's
         # local backend carries one. Not terminal: the guest stays for connectors.
-        raise AuthError("Clawksis is not logged into Nous Portal.", provider="nous", code="nous_auth_missing")
+        raise AuthError(
+            "Clawksis is not logged into Nous Portal.",
+            provider="nous",
+            code="nous_auth_missing",
+        )
     anon_token = state.get("anon_token")
     if not isinstance(anon_token, str) or not anon_token:
-        raise AnonCredentialDead(ANON_FAILURE_COPY[ANON_CREDENTIAL_DEAD], code=ANON_CREDENTIAL_DEAD)
+        raise AnonCredentialDead(
+            ANON_FAILURE_COPY[ANON_CREDENTIAL_DEAD], code=ANON_CREDENTIAL_DEAD
+        )
     from clawk_cli.auth import _nous_portal_base_url
+
     exchanged = exchange_anon_jwt(
-        client, _nous_portal_base_url(state), anon_token, auth_state=state, purpose=purpose)
+        client,
+        _nous_portal_base_url(state),
+        anon_token,
+        auth_state=state,
+        purpose=purpose,
+    )
     apply_exchange_to_state(state, exchanged)
     return exchanged["access_token"]
 
@@ -747,8 +963,18 @@ def clear_dead_guest(reason: str, *, dead_token: Optional[str] = None) -> None:
     *dead_token* is None the profile's current guest is treated as the failed one.
     """
     from clawk_cli.auth import (
-        _auth_store_lock, _load_auth_store, _load_provider_state, _save_auth_store, _store_section)
-    from clawk_cli.auth_nous import _clear_shared_nous_state, _nous_shared_store_lock, _read_shared_nous_state
+        _auth_store_lock,
+        _load_auth_store,
+        _load_provider_state,
+        _save_auth_store,
+        _store_section,
+    )
+    from clawk_cli.auth_nous import (
+        _clear_shared_nous_state,
+        _nous_shared_store_lock,
+        _read_shared_nous_state,
+    )
+
     with _auth_store_lock():
         auth_store = _load_auth_store()
         state = _load_provider_state(auth_store, "nous")
@@ -767,7 +993,9 @@ def clear_dead_guest(reason: str, *, dead_token: Optional[str] = None) -> None:
             if token and is_guest_state(shared) and shared.get("anon_token") == token:
                 _clear_shared_nous_state(reason)
     _clear_mint_failure()
-    logger.info("Nous free-tier identity retired (%s); a new one is set up on next use", reason)
+    logger.info(
+        "Nous free-tier identity retired (%s); a new one is set up on next use", reason
+    )
 
 
 # --- Gateway welcome-tier contract: structured refusals and the model-switch header ------------------
@@ -782,7 +1010,14 @@ def clear_dead_guest(reason: str, *, dead_token: Optional[str] = None) -> None:
 MODEL_SWITCH_HEADER = "x-nous-model-switch"
 # Fairshare refusal reasons the welcome tier can answer with (api ``FairshareRefusalReason``).
 WELCOME_REFUSAL_REASONS = frozenset(
-    {"model_not_free", "feature_not_free", "at_capacity", "admission_closed", "rate_limited"})
+    {
+        "model_not_free",
+        "feature_not_free",
+        "at_capacity",
+        "admission_closed",
+        "rate_limited",
+    }
+)
 # Reasons that mean "not on this tier, ever": no retry helps, only a sign-in or another provider.
 WELCOME_TIER_GATE_REASONS = frozenset({"model_not_free", "feature_not_free"})
 # Gateway messages (lowercased substrings) for a request on the wrong host or a dark tier.
@@ -798,13 +1033,13 @@ _WELCOME_ROUTE_COPY = {
     # Only reachable when the route heal (``turn_recovery._recover_welcome_tier``) could not move
     # the session: the one cause left is a user-set NOUS_INFERENCE_BASE_URL naming the paid host.
     "anon_on_paid_host": "This install is set to use a different Nous server (NOUS_INFERENCE_BASE_URL). "
-                         "Unset it to use the free model, or sign in. {signin}",
+    "Unset it to use the free model, or sign in. {signin}",
     "named_on_welcome_host": "This Nous account needs to reconnect. {model_hint}",
     "tier_disabled": "Using Clawksis without signing in is switched off right now. "
-                     "Sign in to keep chatting, it's free. {signin}",
+    "Sign in to keep chatting, it's free. {signin}",
     # Only reachable when re-exchanging the free credential failed (``turn_recovery._recover_welcome_tier``).
     "session_expired": "Clawksis couldn't renew its connection to the free model. "
-                       "Send your message again, or sign in to keep chatting, it's free. {signin}",
+    "Send your message again, or sign in to keep chatting, it's free. {signin}",
 }
 # The sign-in door, phrased for a chat surface (slash command) and for a terminal.
 _SIGNIN_CHAT = "To sign in: /login."
@@ -812,8 +1047,10 @@ _SIGNIN_TERMINAL = "To sign in: `clawk auth upgrade`."
 _MODEL_HINT_CHAT = "Run /model and pick the Nous row again."
 _MODEL_HINT_TERMINAL = "Run `clawk model` and pick the Nous row again."
 # Terminal copy for a free-model outage once the retries are spent (5xx, transport failure).
-FREE_TIER_OUTAGE_COPY = ("The free model is having trouble responding right now. "
-                         "Try sending your message again in a minute.")
+FREE_TIER_OUTAGE_COPY = (
+    "The free model is having trouble responding right now. "
+    "Try sending your message again in a minute."
+)
 
 
 def parse_welcome_refusal(body: Any) -> Optional[dict[str, Any]]:
@@ -829,17 +1066,29 @@ def parse_welcome_refusal(body: Any) -> Optional[dict[str, Any]]:
         return None
     raw_retry = body.get("retry_after")
     try:
-        retry_after = max(0, int(float(raw_retry))) if raw_retry not in (None, "") else 0
+        retry_after = (
+            max(0, int(float(raw_retry))) if raw_retry not in (None, "") else 0
+        )
     except (TypeError, ValueError):
         retry_after = 0
     raw_alternates = body.get("alternates")
-    alternates = [str(a) for a in raw_alternates if isinstance(a, str) and a] if isinstance(raw_alternates, list) else []
+    alternates = (
+        [str(a) for a in raw_alternates if isinstance(a, str) and a]
+        if isinstance(raw_alternates, list)
+        else []
+    )
     upgrade_url = body.get("upgrade_url")
-    return {"reason": reason, "retry_after": retry_after, "alternates": alternates,
-            "upgrade_url": upgrade_url if isinstance(upgrade_url, str) else ""}
+    return {
+        "reason": reason,
+        "retry_after": retry_after,
+        "alternates": alternates,
+        "upgrade_url": upgrade_url if isinstance(upgrade_url, str) else "",
+    }
 
 
-def welcome_refusal_copy(refusal: dict[str, Any], *, model: str = "", in_chat: bool = True, door: bool = True) -> str:
+def welcome_refusal_copy(
+    refusal: dict[str, Any], *, model: str = "", in_chat: bool = True, door: bool = True
+) -> str:
     """User copy for a structured welcome-tier refusal: what happened and the one way forward.
 
     Never guest / anonymous / claim; ``in_chat`` picks ``/login`` over the terminal verb.
@@ -853,23 +1102,33 @@ def welcome_refusal_copy(refusal: dict[str, Any], *, model: str = "", in_chat: b
     wait = friendly_wait(retry) if retry > 0 else "a little while"
     if reason == "model_not_free":
         what = f"{model} isn't" if model else "That model isn't"
-        return (f"{what} available without signing in, so Clawksis uses {serves} for now. "
-                f"Sign in for more models. {signin}").rstrip()
+        return (
+            f"{what} available without signing in, so Clawksis uses {serves} for now. "
+            f"Sign in for more models. {signin}"
+        ).rstrip()
     if reason == "feature_not_free":
         return f"That isn't available without signing in. Sign in to use it, it's free. {signin}".rstrip()
     if reason == "at_capacity":
-        return ("Chatting without signing in is really busy right now. Sign in to skip the queue, "
-                f"it's free, or try again in {wait}. {signin}").rstrip()
+        return (
+            "Chatting without signing in is really busy right now. Sign in to skip the queue, "
+            f"it's free, or try again in {wait}. {signin}"
+        ).rstrip()
     if reason == "admission_closed":
-        return ("Chatting without signing in is full right now. Sign in to keep going, "
-                f"it's free, or try again in {wait}. {signin}").rstrip()
+        return (
+            "Chatting without signing in is full right now. Sign in to keep going, "
+            f"it's free, or try again in {wait}. {signin}"
+        ).rstrip()
     if reason == "rate_limited":
-        return (f"You've used up the allowance for chatting without signing in. It refreshes in {wait}. "
-                f"Sign in for a bigger allowance, it's free. {signin}").rstrip()
+        return (
+            f"You've used up the allowance for chatting without signing in. It refreshes in {wait}. "
+            f"Sign in for a bigger allowance, it's free. {signin}"
+        ).rstrip()
     return f"Clawksis couldn't send that without signing in. Signing in is free. {signin}".rstrip()
 
 
-def welcome_route_refusal(status: Any, message: Any, base_url: Any = None) -> Optional[str]:
+def welcome_route_refusal(
+    status: Any, message: Any, base_url: Any = None
+) -> Optional[str]:
     """Which host cross-refusal a gateway 400/403 is; None for any other error.
 
     ``"anon_on_paid_host"``: a free-tier JWT reached the paid host. ``"named_on_welcome_host"``: an
@@ -884,17 +1143,26 @@ def welcome_route_refusal(status: Any, message: Any, base_url: Any = None) -> Op
     if status not in (400, 403):
         return None
     text = str(message or "").lower()
-    kind = next((kind for needle, kind in _WELCOME_ROUTE_REFUSALS if needle in text), None)
+    kind = next(
+        (kind for needle, kind in _WELCOME_ROUTE_REFUSALS if needle in text), None
+    )
     if kind is None and status == 403 and route_is_welcome_host(base_url):
         return "tier_disabled"
     return kind
 
 
-def welcome_route_refusal_copy(kind: str, *, in_chat: bool = True, door: bool = True) -> str:
-    template = _WELCOME_ROUTE_COPY.get(kind) or "Clawksis couldn't reach the free model on this route."
+def welcome_route_refusal_copy(
+    kind: str, *, in_chat: bool = True, door: bool = True
+) -> str:
+    template = (
+        _WELCOME_ROUTE_COPY.get(kind)
+        or "Clawksis couldn't reach the free model on this route."
+    )
     return template.format(
-        host=DEFAULT_NOUS_WELCOME_URL, signin=(_SIGNIN_CHAT if in_chat else _SIGNIN_TERMINAL) if door else "",
-        model_hint=_MODEL_HINT_CHAT if in_chat else _MODEL_HINT_TERMINAL).rstrip()
+        host=DEFAULT_NOUS_WELCOME_URL,
+        signin=(_SIGNIN_CHAT if in_chat else _SIGNIN_TERMINAL) if door else "",
+        model_hint=_MODEL_HINT_CHAT if in_chat else _MODEL_HINT_TERMINAL,
+    ).rstrip()
 
 
 def note_model_switch(agent: Any, headers: Any) -> Optional[str]:
@@ -911,7 +1179,14 @@ def note_model_switch(agent: Any, headers: Any) -> Optional[str]:
     try:
         value = headers.get(MODEL_SWITCH_HEADER)
         if value is None and hasattr(headers, "items"):
-            value = next((v for k, v in headers.items() if str(k).lower() == MODEL_SWITCH_HEADER), None)
+            value = next(
+                (
+                    v
+                    for k, v in headers.items()
+                    if str(k).lower() == MODEL_SWITCH_HEADER
+                ),
+                None,
+            )
     except Exception:
         return None
     backing = str(value or "").strip()
@@ -948,22 +1223,35 @@ def apply_model_switch(agent: Any) -> Optional[str]:
     # mismatch it did not cause; this pair names the move so the check can recognise exactly this
     # server-driven switch even when the config write below did not land.
     agent._nous_model_switch = (requested, backing)
-    logger.info("Nous gateway asked to switch %s -> %s; applied for this session", requested, backing)
+    logger.info(
+        "Nous gateway asked to switch %s -> %s; applied for this session",
+        requested,
+        backing,
+    )
     try:
         from clawk_cli.config import load_config_readonly
+
         raw = load_config_readonly().get("model")
-        model_cfg = raw if isinstance(raw, dict) else ({"default": raw} if isinstance(raw, str) else {})
+        model_cfg = (
+            raw
+            if isinstance(raw, dict)
+            else ({"default": raw} if isinstance(raw, str) else {})
+        )
         if str(model_cfg.get("default") or "").strip() == requested:
             from clawk_cli.auth import _update_config_for_provider
+
             _update_config_for_provider(
-                "nous", str(getattr(agent, "base_url", "") or ""), default_model=backing)
+                "nous", str(getattr(agent, "base_url", "") or ""), default_model=backing
+            )
             logger.info("Config default model moved %s -> %s", requested, backing)
     except Exception as exc:
         logger.debug("model switch: config default left as is: %s", exc)
     status = getattr(agent, "_buffer_status", None)
     if callable(status):
         try:
-            status(f"Model is now {backing} (your account's model; {requested} is the free tier's).")
+            status(
+                f"Model is now {backing} (your account's model; {requested} is the free tier's)."
+            )
         except Exception:
             pass
     return backing
@@ -992,6 +1280,7 @@ def set_guest_flag(flag: str) -> Optional[dict[str, Any]]:
     """Set *flag* on the guest's ``providers.nous`` state in whichever store holds it, and return the
     updated state; None when there is no guest."""
     from clawk_cli.auth import _provider_state_transaction
+
     with _provider_state_transaction("nous") as (auth_store, state, source_path):
         if not is_guest_state(state) or source_path is None:
             return None
@@ -1002,9 +1291,18 @@ def set_guest_flag(flag: str) -> Optional[dict[str, Any]]:
     return state
 
 
-def _save_guest_state(auth_store: dict[str, Any], state: dict[str, Any], source_path: Path) -> None:
+def _save_guest_state(
+    auth_store: dict[str, Any], state: dict[str, Any], source_path: Path
+) -> None:
     """Write the guest's ``providers.nous`` back to the store it was read from (the caller holds its lock)."""
-    from clawk_cli.auth import _auth_file_path, _load_auth_store, _same_path, _save_auth_store, _store_section
+    from clawk_cli.auth import (
+        _auth_file_path,
+        _load_auth_store,
+        _same_path,
+        _save_auth_store,
+        _store_section,
+    )
+
     if _same_path(source_path, _auth_file_path()):
         _store_section(auth_store, "providers")["nous"] = state
         _save_auth_store(auth_store)
@@ -1024,25 +1322,49 @@ UPGRADED_AUTH_METHOD = "oauth_device_code"
 
 
 def _account_state_from_token(
-    token_data: dict[str, Any], *, portal_base_url: str, client_id: str, scope: Optional[str], verify: Any,
+    token_data: dict[str, Any],
+    *,
+    portal_base_url: str,
+    client_id: str,
+    scope: Optional[str],
+    verify: Any,
     timeout_seconds: float,
 ) -> dict[str, Any]:
     """The ``providers.nous`` shape for the signed-in account (same fields the device-code login writes)."""
-    from clawk_cli.auth import PROVIDER_REGISTRY, _coerce_ttl_seconds, _optional_base_url, _tls_state_from_verify
-    from clawk_cli.auth_nous import _NOUS_EMPTY_AGENT_KEY_FIELDS, _iso_after, refresh_nous_oauth_from_state
+    from clawk_cli.auth import (
+        PROVIDER_REGISTRY,
+        _coerce_ttl_seconds,
+        _optional_base_url,
+        _tls_state_from_verify,
+    )
+    from clawk_cli.auth_nous import (
+        _NOUS_EMPTY_AGENT_KEY_FIELDS,
+        _iso_after,
+        refresh_nous_oauth_from_state,
+    )
+
     now = datetime.now(UTC)
     ttl = _coerce_ttl_seconds(token_data.get("expires_in", 0))
-    inference_url = (
-        _optional_base_url(token_data.get("inference_base_url"))
-        or PROVIDER_REGISTRY["nous"].inference_base_url.rstrip("/"))
+    inference_url = _optional_base_url(
+        token_data.get("inference_base_url")
+    ) or PROVIDER_REGISTRY["nous"].inference_base_url.rstrip("/")
     state = {
-        "portal_base_url": portal_base_url, "inference_base_url": inference_url,
-        "client_id": client_id, "scope": token_data.get("scope") or scope,
+        "portal_base_url": portal_base_url,
+        "inference_base_url": inference_url,
+        "client_id": client_id,
+        "scope": token_data.get("scope") or scope,
         "token_type": token_data.get("token_type", "Bearer"),
-        "access_token": token_data["access_token"], "refresh_token": token_data.get("refresh_token"),
-        "obtained_at": now.isoformat(), "expires_at": _iso_after(now, ttl), "expires_in": ttl,
-        "tls": _tls_state_from_verify(verify), **_NOUS_EMPTY_AGENT_KEY_FIELDS}
-    state = refresh_nous_oauth_from_state(state, timeout_seconds=timeout_seconds, force_refresh=False)
+        "access_token": token_data["access_token"],
+        "refresh_token": token_data.get("refresh_token"),
+        "obtained_at": now.isoformat(),
+        "expires_at": _iso_after(now, ttl),
+        "expires_in": ttl,
+        "tls": _tls_state_from_verify(verify),
+        **_NOUS_EMPTY_AGENT_KEY_FIELDS,
+    }
+    state = refresh_nous_oauth_from_state(
+        state, timeout_seconds=timeout_seconds, force_refresh=False
+    )
     state["auth_method"] = UPGRADED_AUTH_METHOD
     return state
 
@@ -1065,12 +1387,19 @@ def settle_after_upgrade(account_state: dict[str, Any]) -> dict[str, Any]:
     itself still counts.
     """
     from clawk_cli.config import load_config_readonly
+
     try:
         raw = load_config_readonly().get("model")
     except Exception as exc:
-        logger.warning("sign-in completion: config unreadable, default model left as is: %s", exc)
+        logger.warning(
+            "sign-in completion: config unreadable, default model left as is: %s", exc
+        )
         return {"model": "", "changed": False}
-    model_cfg = raw if isinstance(raw, dict) else ({"default": raw} if isinstance(raw, str) else {})
+    model_cfg = (
+        raw
+        if isinstance(raw, dict)
+        else ({"default": raw} if isinstance(raw, str) else {})
+    )
     current = str(model_cfg.get("default") or "").strip()
     on_welcome_model = current == GUEST_MODEL
     on_welcome_host = route_is_welcome_host(model_cfg.get("base_url"))
@@ -1079,6 +1408,7 @@ def settle_after_upgrade(account_state: dict[str, Any]) -> dict[str, Any]:
     model = current
     if on_welcome_model:
         from clawk_cli.models import recommended_nous_default_model
+
         try:
             model = str(recommended_nous_default_model().get("model") or "")
         except Exception as exc:
@@ -1086,16 +1416,21 @@ def settle_after_upgrade(account_state: dict[str, Any]) -> dict[str, Any]:
             model = ""
     try:
         from clawk_cli.auth import _update_config_for_provider
+
         # One write: host and default move together, so a failure leaves the config as it was
         # rather than the account host paired with the welcome model. No eligible recommendation
         # (Portal unreachable, or the plan and org policy admit nothing) clears the default in that
         # same write; the runtime's silent default applies until the user picks one with `clawk model`.
         _update_config_for_provider(
-            "nous", str(account_state.get("inference_base_url") or ""),
+            "nous",
+            str(account_state.get("inference_base_url") or ""),
             default_model=model if on_welcome_model else None,
-            clear_default=on_welcome_model and not model)
+            clear_default=on_welcome_model and not model,
+        )
     except Exception as exc:
-        logger.warning("sign-in completion: could not update the default model: %s", exc)
+        logger.warning(
+            "sign-in completion: could not update the default model: %s", exc
+        )
         return {"model": current, "changed": False}
     return {"model": model, "changed": True}
 
@@ -1103,12 +1438,14 @@ def settle_after_upgrade(account_state: dict[str, Any]) -> dict[str, Any]:
 def _poll_for_token(*args, **kwargs) -> dict[str, Any]:
     """Keep both the sign-in module seam and the device-flow seam live at call time."""
     from clawk_cli.auth_device_flow import _poll_for_token as poll
+
     return poll(*args, **kwargs)
 
 
 def persist_nous_credentials(*args, **kwargs):
     """Keep the existing auth_nous persistence seam behind the sign-in entry point."""
     from clawk_cli.auth_nous import persist_nous_credentials as persist
+
     return persist(*args, **kwargs)
 
 

@@ -120,9 +120,7 @@ class TestOpenLockPatience:
         SessionDB(db_path=db_path).close()
 
         started = threading.Event()
-        holder = threading.Thread(
-            target=_hold_write_lock, args=(db_path, 3.0, started)
-        )
+        holder = threading.Thread(target=_hold_write_lock, args=(db_path, 3.0, started))
         holder.start()
         try:
             assert started.wait(5.0)
@@ -153,7 +151,9 @@ class TestOpenLockPatience:
 def _use_delete_journal_mode(monkeypatch, tmp_path):
     home = tmp_path / "clawk-home"
     home.mkdir()
-    (home / "config.yaml").write_text("database:\n  journal_mode: delete\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "database:\n  journal_mode: delete\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
 
 
@@ -170,7 +170,9 @@ def _hold_exclusive(db_path, hold_s, started_evt):
 
 
 @pytest.mark.parametrize("read_only", [False, True], ids=["writer", "read_only"])
-def test_open_waits_out_lock_lost_inside_fts_constructor(tmp_path, monkeypatch, read_only):
+def test_open_waits_out_lock_lost_inside_fts_constructor(
+    tmp_path, monkeypatch, read_only
+):
     """A DELETE-mode sibling taking the lock between schema load and the messages_fts probe
     makes SQLite report SQLITE_BUSY as "vtable constructor failed: messages_fts" (FTS5's
     xConnect reads %_config). The open must wait that out like any other lock, not fail."""
@@ -187,8 +189,14 @@ def test_open_waits_out_lock_lost_inside_fts_constructor(tmp_path, monkeypatch, 
     real_probe = SessionDB._fts_table_probe
 
     def probe_after_sibling_takes_lock(self, cursor, table_name):
-        if table_name == "messages_fts" and not holder.is_alive() and not started.is_set():
-            cursor.execute("SELECT count(*) FROM sqlite_master").fetchall()  # schema cached
+        if (
+            table_name == "messages_fts"
+            and not holder.is_alive()
+            and not started.is_set()
+        ):
+            cursor.execute(
+                "SELECT count(*) FROM sqlite_master"
+            ).fetchall()  # schema cached
             holder.start()
             assert started.wait(5.0)
         return real_probe(self, cursor, table_name)

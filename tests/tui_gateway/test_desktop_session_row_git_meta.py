@@ -31,9 +31,13 @@ def _desktop_session(monkeypatch, tmp_path, cwd):
     monkeypatch.setattr(server, "_get_db", lambda: db)
     monkeypatch.setattr(server, "_resolve_model", lambda: "test-model")
     monkeypatch.setattr(server, "_start_agent_build", lambda *a, **k: None)
-    resp = server.handle_request({
-        "id": "1", "method": "session.create", "params": {"cols": 80, "source": "desktop", "cwd": str(cwd)},
-    })
+    resp = server.handle_request(
+        {
+            "id": "1",
+            "method": "session.create",
+            "params": {"cols": 80, "source": "desktop", "cwd": str(cwd)},
+        }
+    )
     sid = resp["result"]["session_id"]
     # Patched only after create: session.create starts real Timers (Thread subclasses).
     monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
@@ -60,7 +64,9 @@ def test_row_git_probe_runs_once_per_session(monkeypatch, tmp_path):
     db, sid, session, key = _desktop_session(monkeypatch, tmp_path, repo)
     probes = []
     real_branch = server.git_probe.branch
-    monkeypatch.setattr(server.git_probe, "branch", lambda cwd: probes.append(cwd) or real_branch(cwd))
+    monkeypatch.setattr(
+        server.git_probe, "branch", lambda cwd: probes.append(cwd) or real_branch(cwd)
+    )
     try:
         for _ in range(3):  # prompt.submit re-calls the upsert every turn
             assert server._ensure_session_db_row(session) is True

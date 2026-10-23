@@ -27,6 +27,7 @@ import pytest
 
 from tui_gateway import server
 
+
 class _InlineThread:
     """Run the turn synchronously so tests observe its final state."""
 
@@ -44,6 +45,7 @@ class _InlineThread:
 
     def join(self, timeout=None):
         return None
+
 
 def _session(agent=None, **extra):
     return {
@@ -63,27 +65,36 @@ def _session(agent=None, **extra):
         **extra,
     }
 
+
 @pytest.fixture()
 def turn_stubs(monkeypatch, tmp_path):
     """Neutralize the turn pipeline's environment-heavy side paths."""
     monkeypatch.setattr(server, "_emit", lambda *a, **k: None)
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    monkeypatch.setattr(server, "_sync_agent_model_with_config", lambda sid, session: None)
+    monkeypatch.setattr(
+        server, "_sync_agent_model_with_config", lambda sid, session: None
+    )
     monkeypatch.setattr(server, "_session_cwd", lambda session: str(tmp_path))
     monkeypatch.setattr(server, "_register_session_cwd", lambda session: None)
     monkeypatch.setattr(server, "_tts_stream_begin", lambda: None)
-    monkeypatch.setattr(server, "_sync_session_key_after_compress", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_sync_session_key_after_compress", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_get_usage", lambda agent: {})
+
 
 @pytest.fixture()
 def turn_env(turn_stubs, monkeypatch):
     """``turn_stubs`` with the turn run inline on the caller's thread."""
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
 
+
 def _records(caplog, needle):
     return [r for r in caplog.records if needle in r.getMessage()]
 
+
 SECRETISH_PROMPT = "please rotate QDRANT_API_KEY=hunter2-super-secret now"
+
 
 def test_accepted_and_finished_records_on_success(turn_env, caplog):
     agent = types.SimpleNamespace(
@@ -111,7 +122,9 @@ def test_accepted_and_finished_records_on_success(turn_env, caplog):
 
 
 @pytest.mark.parametrize("settle_info_raises", [False, True])
-def test_turn_settles_before_post_turn_trim(turn_stubs, monkeypatch, caplog, settle_info_raises):
+def test_turn_settles_before_post_turn_trim(
+    turn_stubs, monkeypatch, caplog, settle_info_raises
+):
     """A blocked post-turn trim must not hold the session running or its bookend (#131740);
     turn audio still ends BEFORE settlement, so a next turn admitted during the trim keeps its own."""
     from clawk_cli import mem_trim
@@ -127,12 +140,20 @@ def test_turn_settles_before_post_turn_trim(turn_stubs, monkeypatch, caplog, set
     if settle_info_raises:  # a raising settle step must not skip the post-turn trim
         monkeypatch.setattr(server, "_emit_settled_session_info", lambda *a: 1 / 0)
     audio_end = []  # (event, session running at that moment)
-    tts = types.SimpleNamespace(put=lambda x: x is None and audio_end.append(("tts", session["running"])))
+    tts = types.SimpleNamespace(
+        put=lambda x: x is None and audio_end.append(("tts", session["running"]))
+    )
     monkeypatch.setattr(server, "_start_turn_voice", lambda: (tts, True))
-    monkeypatch.setattr(voice_mode, "stop_thinking_sound", lambda: audio_end.append(("thinking", session["running"])))
+    monkeypatch.setattr(
+        voice_mode,
+        "stop_thinking_sound",
+        lambda: audio_end.append(("thinking", session["running"])),
+    )
     agent = types.SimpleNamespace(
-        session_id="agent-sid-1", run_conversation=lambda *a, **k: {"final_response": "done"},
-        clear_interrupt=lambda: None)
+        session_id="agent-sid-1",
+        run_conversation=lambda *a, **k: {"final_response": "done"},
+        clear_interrupt=lambda: None,
+    )
     session = _session(agent=agent, running=True)
     monkeypatch.setattr(server, "_sessions", {"ui-sid": session})
     try:

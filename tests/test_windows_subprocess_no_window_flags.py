@@ -35,7 +35,10 @@ def _spawns(captured, *needles):
         for cmd, kwargs in captured
         if cmd
         and all(
-            any(needle in str(part) for part in (cmd if isinstance(cmd, (list, tuple)) else [cmd]))
+            any(
+                needle in str(part)
+                for part in (cmd if isinstance(cmd, (list, tuple)) else [cmd])
+            )
             for needle in needles
         )
     ]
@@ -93,8 +96,12 @@ def test_bounded_git_probe_fast_path_spawn_contract_windows(monkeypatch):
 
     spawns = []
     fake_popen = _make_fake_popen(spawns, stdout="main\n")
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
-    monkeypatch.setattr(processes, "spawn_server", lambda cmd, **kw: (fake_popen(cmd, **kw), None))
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
+    monkeypatch.setattr(
+        processes, "spawn_server", lambda cmd, **kw: (fake_popen(cmd, **kw), None)
+    )
 
     out = _subprocess_compat.bounded_git_probe(
         ["git", "-C", "C:/repo", "branch", "--show-current"], timeout=1.5
@@ -112,8 +119,6 @@ def test_bounded_git_probe_fast_path_spawn_contract_windows(monkeypatch):
     assert kwargs["creationflags"] == _CREATE_NO_WINDOW
 
 
-
-
 def test_bounded_git_probe_nonzero_returncode_returns_empty(monkeypatch):
     from clawk_cli import _subprocess_compat
 
@@ -124,17 +129,12 @@ def test_bounded_git_probe_nonzero_returncode_returns_empty(monkeypatch):
         _make_fake_popen(spawns, stdout="garbage-should-not-leak\n", returncode=1),
     )
 
-    assert _subprocess_compat.bounded_git_probe(["git", "-C", "/repo", "status"], timeout=1.5) == ""
-
-
-
-
-
-
-
-
-
-
+    assert (
+        _subprocess_compat.bounded_git_probe(
+            ["git", "-C", "/repo", "status"], timeout=1.5
+        )
+        == ""
+    )
 
 
 def test_bounded_git_probe_spawn_failure_returns_empty(monkeypatch):
@@ -146,25 +146,12 @@ def test_bounded_git_probe_spawn_failure_returns_empty(monkeypatch):
 
     monkeypatch.setattr(_subprocess_compat.subprocess, "Popen", boom)
 
-    assert _subprocess_compat.bounded_git_probe(["git", "-C", "/repo", "status"], timeout=1.5) == ""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    assert (
+        _subprocess_compat.bounded_git_probe(
+            ["git", "-C", "/repo", "status"], timeout=1.5
+        )
+        == ""
+    )
 
 
 @pytest.mark.platforms("windows")
@@ -200,9 +187,6 @@ def test_shell_hooks_hide_hook_command_windows(monkeypatch):
     assert "process_group" not in captured[0][1]
 
 
-
-
-
 # ── #56747 GUI-reachable exec paths + provider transports (PR #56877) ──────
 #
 # These six sites are the desktop-GUI-reachable spawns that still flashed a
@@ -223,9 +207,9 @@ def _patch_hide_flags(monkeypatch):
     """
     import clawk_cli._subprocess_compat as subprocess_compat
 
-    monkeypatch.setattr(subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
-
-
+    monkeypatch.setattr(
+        subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
 
 
 def test_tui_shell_exec_rpc_hides_console_window(monkeypatch):
@@ -241,21 +225,17 @@ def test_tui_shell_exec_rpc_hides_console_window(monkeypatch):
     monkeypatch.setattr(server.subprocess, "run", fake_run)
 
     resp = server.handle_request(
-        {"id": "2", "method": "shell.exec", "params": {"command": "echo shellexec-56747"}}
+        {
+            "id": "2",
+            "method": "shell.exec",
+            "params": {"command": "echo shellexec-56747"},
+        }
     )
     assert resp["result"]["code"] == 0
 
     spawns = _spawns(captured, "shellexec-56747")
     assert len(spawns) == 1, captured
     assert spawns[0][1]["creationflags"] == _CREATE_NO_WINDOW
-
-
-
-
-
-
-
-
 
 
 # ── #47971 LSP spawn + installer paths (salvage) ────────────────────────────
@@ -286,9 +266,7 @@ def test_lsp_client_spawn_hides_console_window(monkeypatch):
         return _FakeProc()
 
     monkeypatch.setattr(lsp_client, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
-    monkeypatch.setattr(
-        lsp_client.asyncio, "create_subprocess_exec", fake_exec
-    )
+    monkeypatch.setattr(lsp_client.asyncio, "create_subprocess_exec", fake_exec)
 
     client = lsp_client.LSPClient(
         server_id="test-server",
@@ -306,10 +284,6 @@ def test_lsp_client_spawn_hides_console_window(monkeypatch):
     assert kwargs["stdin"] == asyncio.subprocess.PIPE
     assert kwargs["stdout"] == asyncio.subprocess.PIPE
     assert kwargs["start_new_session"] is True
-
-
-
-
 
 
 # ── #67690 env probes, lazy installs, platform.win32_ver() (@m4r13y) ───────
@@ -409,7 +383,9 @@ def test_gitlock_git_spawns_hide_console_window(monkeypatch, tmp_path):
     monkeypatch.setattr(gitlock, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
     monkeypatch.setattr(gitlock.subprocess, "run", fake_run)
 
-    assert gitlock._git_stdout_lines(tmp_path, ["rev-parse", "--git-path", "shallow"]) == ["deadbeef"]
+    assert gitlock._git_stdout_lines(
+        tmp_path, ["rev-parse", "--git-path", "shallow"]
+    ) == ["deadbeef"]
     assert gitlock._batch_missing_parents(tmp_path, ["abc123"]) == set()
     gitlock.repair_broken_shallow_boundaries(tmp_path)
 
@@ -427,7 +403,9 @@ def test_gitlock_tasklist_probe_hides_console_window(monkeypatch):
 
     def fake_run(cmd, **kwargs):
         captured.append((list(cmd), kwargs))
-        return _Completed(stdout="\"git.exe\",\"1234\",\"Console\",\"1\",\"10,000 K\"\n", returncode=0)
+        return _Completed(
+            stdout='"git.exe","1234","Console","1","10,000 K"\n', returncode=0
+        )
 
     monkeypatch.setattr(gitlock, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
     monkeypatch.setattr(gitlock.subprocess, "run", fake_run)
@@ -475,7 +453,11 @@ def test_gateway_scheduled_task_state_hides_powershell_window(monkeypatch):
     _patch_hide_flags(monkeypatch)
     monkeypatch.setattr(gateway, "is_windows", lambda: True)
     monkeypatch.setattr(gateway.subprocess, "run", fake_run)
-    monkeypatch.setattr(gateway.shutil, "which", lambda name: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE")
+    monkeypatch.setattr(
+        gateway.shutil,
+        "which",
+        lambda name: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE",
+    )
 
     assert gateway._windows_scheduled_task_state("clawk-gateway") == "Ready"
     assert len(captured) == 1, captured
@@ -495,7 +477,9 @@ def test_update_git_run_hides_console_window(monkeypatch, tmp_path):
         return _Completed(stdout="ok\n", returncode=0)
 
     _patch_hide_flags(monkeypatch)
-    monkeypatch.setattr(update_cmd, "_m", lambda: SimpleNamespace(PROJECT_ROOT=tmp_path))
+    monkeypatch.setattr(
+        update_cmd, "_m", lambda: SimpleNamespace(PROJECT_ROOT=tmp_path)
+    )
     monkeypatch.setattr(update_cmd.subprocess, "run", fake_run)
 
     update_cmd._git_run(["git"], ["rev-parse", "HEAD"], tmp_path)
@@ -527,9 +511,17 @@ def test_update_git_plumbing_spawns_hide_console_window(monkeypatch, tmp_path):
         return _Completed(stdout="main\nabc123\n", returncode=0)
 
     monkeypatch.setattr(update_cmd_git, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
-    monkeypatch.setattr(update_cmd_git, "_GIT_TEXT_KW",
-                        dict(capture_output=True, text=True, encoding="utf-8", errors="replace",
-                             creationflags=_CREATE_NO_WINDOW))
+    monkeypatch.setattr(
+        update_cmd_git,
+        "_GIT_TEXT_KW",
+        dict(
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=_CREATE_NO_WINDOW,
+        ),
+    )
     monkeypatch.setattr(update_cmd_git.subprocess, "run", fake_run)
 
     assert update_cmd_git._probe_fork_bomb(["git"]) is False
@@ -554,7 +546,9 @@ def test_safe_directory_git_config_probes_hide_console_window(monkeypatch):
         return _Completed(stdout="", returncode=1)
 
     _subprocess_compat._safe_directory_cache.clear()
-    monkeypatch.setattr(_subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW)
+    monkeypatch.setattr(
+        _subprocess_compat, "windows_hide_flags", lambda: _CREATE_NO_WINDOW
+    )
     monkeypatch.setattr(_subprocess_compat.subprocess, "run", fake_run)
 
     assert _subprocess_compat._user_safe_directories({}) == []
@@ -583,17 +577,26 @@ def test_cached_nvidia_gpu_query_hides_console_window_and_caches(monkeypatch):
 
     def fake_run(cmd, **kwargs):
         captured.append((list(cmd), kwargs))
-        return _Completed(stdout="8192, 4096, NVIDIA GeForce RTX 4060 Ti, 0x250410DE, 4096, 12\n", returncode=0)
+        return _Completed(
+            stdout="8192, 4096, NVIDIA GeForce RTX 4060 Ti, 0x250410DE, 4096, 12\n",
+            returncode=0,
+        )
 
     monkeypatch.setattr(hardware, "_gpu_query_cache", None)
-    monkeypatch.setattr(hardware, "_nvidia_smi_path", lambda: r"C:\Windows\System32\nvidia-smi.exe")
+    monkeypatch.setattr(
+        hardware, "_nvidia_smi_path", lambda: r"C:\Windows\System32\nvidia-smi.exe"
+    )
     _patch_hide_flags(monkeypatch)
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
     vram = hardware._nvidia_vram()
     assert vram == (8192 << 20, 4096 << 20, "NVIDIA GeForce RTX 4060 Ti", 0x250410DE)
     facts = local_models._nvidia_smi_facts()
-    assert facts == dict(gpu_name="NVIDIA GeForce RTX 4060 Ti", gpu_util_percent=12, vram_used_bytes=4096 << 20)
+    assert facts == dict(
+        gpu_name="NVIDIA GeForce RTX 4060 Ti",
+        gpu_util_percent=12,
+        vram_used_bytes=4096 << 20,
+    )
     vendor = bootstrap._detect_gpu_vendor()
     assert vendor == "nvidia NVIDIA GeForce RTX 4060 Ti"
 
@@ -614,7 +617,9 @@ def test_cached_nvidia_gpu_query_failure_is_cached(monkeypatch):
         return _Completed(stdout="", returncode=1)
 
     monkeypatch.setattr(hardware, "_gpu_query_cache", None)
-    monkeypatch.setattr(hardware, "_nvidia_smi_path", lambda: r"C:\Windows\System32\nvidia-smi.exe")
+    monkeypatch.setattr(
+        hardware, "_nvidia_smi_path", lambda: r"C:\Windows\System32\nvidia-smi.exe"
+    )
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
     assert hardware._nvidia_vram() is None

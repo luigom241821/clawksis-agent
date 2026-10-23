@@ -23,10 +23,15 @@ def two_homes(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(a))
     monkeypatch.delenv("CLAWK_MAX_ITERATIONS", raising=False)
     for home, turns, model in ((a, 7, "A/fallback"), (b, 99, "B/fallback")):
-        (home / "config.yaml").write_text(yaml.safe_dump({
-            "agent": {"max_turns": turns},
-            "fallback_providers": [{"provider": "openrouter", "model": model}],
-        }), encoding="utf-8")
+        (home / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "agent": {"max_turns": turns},
+                    "fallback_providers": [{"provider": "openrouter", "model": model}],
+                }
+            ),
+            encoding="utf-8",
+        )
     return a, b
 
 
@@ -63,10 +68,16 @@ def test_aux_nous_auth_reads_routed_profile_auth_json(two_homes, monkeypatch):
     import agent.auxiliary_client as aux
 
     for home, token in ((a, "TOKEN_A"), (b, "TOKEN_B")):
-        (home / "auth.json").write_text(json.dumps({
-            "version": 1, "active_provider": "nous",
-            "providers": {"nous": {"agent_key": token, "access_token": token}},
-        }), encoding="utf-8")
+        (home / "auth.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "active_provider": "nous",
+                    "providers": {"nous": {"agent_key": token, "access_token": token}},
+                }
+            ),
+            encoding="utf-8",
+        )
     monkeypatch.setattr(aux, "_select_pool_entry", lambda _provider: (False, None))
 
     assert (aux._read_nous_auth() or {}).get("access_token") == "TOKEN_A"
@@ -76,10 +87,13 @@ def test_aux_nous_auth_reads_routed_profile_auth_json(two_homes, monkeypatch):
 def _write_hook(home: Path, name: str) -> None:
     hook_dir = home / "hooks" / name
     hook_dir.mkdir(parents=True)
-    (hook_dir / "HOOK.yaml").write_text(f"name: {name}\nevents: ['agent:start']\n", encoding="utf-8")
+    (hook_dir / "HOOK.yaml").write_text(
+        f"name: {name}\nevents: ['agent:start']\n", encoding="utf-8"
+    )
     (hook_dir / "handler.py").write_text(
         "def handle(event_type, context):\n    context.setdefault('seen', []).append(__name__)\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.asyncio
@@ -108,14 +122,23 @@ def test_media_policy_reads_routed_profile_config_not_env(two_homes, monkeypatch
     a, b = two_homes
     from gateway import media_policy
 
-    (a / "config.yaml").write_text(yaml.safe_dump(
-        {"gateway": {"strict": True, "media_delivery_allow_dirs": ["/srv/a"]}}), encoding="utf-8")
-    (b / "config.yaml").write_text(yaml.safe_dump(
-        {"gateway": {"strict": False, "media_delivery_allow_dirs": ["/srv/b"]}}), encoding="utf-8")
+    (a / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"gateway": {"strict": True, "media_delivery_allow_dirs": ["/srv/a"]}}
+        ),
+        encoding="utf-8",
+    )
+    (b / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"gateway": {"strict": False, "media_delivery_allow_dirs": ["/srv/b"]}}
+        ),
+        encoding="utf-8",
+    )
     # Gateway startup bridges the LAUNCH profile's policy into the process env.
     for var in ("CLAWK_MEDIA_DELIVERY_STRICT", "CLAWK_MEDIA_ALLOW_DIRS"):
         monkeypatch.delenv(var, raising=False)
     from clawk_cli.config import load_config
+
     media_policy.apply_media_policy_env(load_config())
     assert media_policy.media_delivery_strict() is True
     assert media_policy.media_delivery_allow_dirs() == "/srv/a"
@@ -131,9 +154,15 @@ def test_routed_media_policy_bridge_never_writes_the_shared_env(two_homes, monke
     from gateway import media_policy
     from clawk_cli.config import load_config
 
-    (b / "config.yaml").write_text(yaml.safe_dump(
-        {"gateway": {"strict": False, "media_delivery_allow_dirs": ["/srv/b"]}}), encoding="utf-8")
-    policy_envs = [env for _, env in media_policy._FLAG_ENVS] + [media_policy._ALLOW_DIRS_ENV]
+    (b / "config.yaml").write_text(
+        yaml.safe_dump(
+            {"gateway": {"strict": False, "media_delivery_allow_dirs": ["/srv/b"]}}
+        ),
+        encoding="utf-8",
+    )
+    policy_envs = [env for _, env in media_policy._FLAG_ENVS] + [
+        media_policy._ALLOW_DIRS_ENV
+    ]
     for var in policy_envs:
         monkeypatch.delenv(var, raising=False)
 
@@ -144,8 +173,10 @@ def test_routed_media_policy_bridge_never_writes_the_shared_env(two_homes, monke
 
     # The launch profile's own bridge (no override) still runs once the host multiplexes: a
     # process-wide "serves a routed profile" gate would skip it for every caller.
-    (a / "config.yaml").write_text(yaml.safe_dump(
-        {"gateway": {"media_delivery_allow_dirs": ["/srv/a"]}}), encoding="utf-8")
+    (a / "config.yaml").write_text(
+        yaml.safe_dump({"gateway": {"media_delivery_allow_dirs": ["/srv/a"]}}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr("agent.secret_scope._MULTIPLEX_ACTIVE", True)
     media_policy.apply_media_policy_env(load_config())
     assert media_policy.media_delivery_allow_dirs() == "/srv/a"

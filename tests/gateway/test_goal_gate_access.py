@@ -48,9 +48,7 @@ def _runner(*, admins=(), group_admins=()):
 def _event(user_id: str = "user-1", *, chat_type: str = "dm"):
     event = MagicMock()
     event.source = _source(user_id, chat_type=chat_type)
-    event.get_command_args.return_value = (
-        "gate add touch /tmp/host-in-the-shell"
-    )
+    event.get_command_args.return_value = "gate add touch /tmp/host-in-the-shell"
     return event
 
 
@@ -84,9 +82,7 @@ async def test_gateway_explicit_admin_can_add_goal_gate():
     result = await GatewayRunner._handle_goal_command(runner, _event("admin-1"))
 
     assert "Gate added" in result
-    manager.add_gate.assert_called_once_with(
-        "touch /tmp/host-in-the-shell"
-    )
+    manager.add_gate.assert_called_once_with("touch /tmp/host-in-the-shell")
 
 
 @pytest.mark.asyncio
@@ -110,9 +106,7 @@ async def test_gateway_group_gate_add_uses_group_admin_scope():
 
     assert "explicitly configured gateway admin" in denied
     assert "Gate added" in allowed
-    manager.add_gate.assert_called_once_with(
-        "touch /tmp/host-in-the-shell"
-    )
+    manager.add_gate.assert_called_once_with("touch /tmp/host-in-the-shell")
 
 
 @pytest.mark.asyncio

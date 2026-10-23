@@ -15,8 +15,6 @@ def _reset_emitter():
     desktop_ui.set_emitter(None)
 
 
-
-
 def test_emits_preview_close_for_the_whole_pane():
     calls = []
     desktop_ui.set_emitter(lambda sid, event, payload: calls.append((event, payload)))
@@ -48,4 +46,6 @@ def test_emitter_failure_is_reported():
         raise RuntimeError("no window")
 
     desktop_ui.set_emitter(_boom)
-    assert "no window" in json.loads(cp.close_preview_tool("https://x.example"))["error"]
+    assert (
+        "no window" in json.loads(cp.close_preview_tool("https://x.example"))["error"]
+    )

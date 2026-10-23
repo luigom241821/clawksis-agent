@@ -31,6 +31,7 @@ def map_fatal_config_exit_for_launchd(returncode: int) -> int:
         return 0
     return returncode
 
+
 # Set by ``clawk gateway run --external-supervisor``. Unlike systemd's INVOCATION_ID
 # and launchd's XPC_SERVICE_NAME, this survives wrappers that replace the child
 # environment (e.g. ``sudo env -i``).
@@ -40,19 +41,27 @@ EXTERNAL_GATEWAY_SUPERVISOR_ENV = "CLAWK_GATEWAY_EXTERNAL_SUPERVISOR"
 # grandchild, which sees ``XPC_SERVICE_NAME=0``. Read only via :func:`launchd_job_label`.
 LAUNCHD_LABEL_ENV = "CLAWK_LAUNCHD_LABEL"
 
-DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT = float(DEFAULT_CONFIG["agent"]["restart_drain_timeout"])
-DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT = float(DEFAULT_CONFIG["gateway"]["signal_interrupt_grace_timeout"])
+DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT = float(
+    DEFAULT_CONFIG["agent"]["restart_drain_timeout"]
+)
+DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT = float(
+    DEFAULT_CONFIG["gateway"]["signal_interrupt_grace_timeout"]
+)
 DEFAULT_GATEWAY_POST_INTERRUPT_GRACE_TIMEOUT = 5.0
 
 # In-band restart waits for active turns to finish *before* ``stop()`` begins; distinct from
 # ``restart_drain_timeout``, the force-interrupt budget once ``stop()`` runs (short under TimeoutStopSec).
-DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT = float(DEFAULT_CONFIG["agent"]["restart_after_turn_timeout"])
+DEFAULT_GATEWAY_RESTART_AFTER_TURN_TIMEOUT = float(
+    DEFAULT_CONFIG["agent"]["restart_after_turn_timeout"]
+)
 
 # Floor under the ``stop()`` drain for cron jobs and api_server (/v1) runs. ``restart_drain_timeout``
 # defaults to 0 because interrupting a *chat* turn is cheap and recoverable (user told, session
 # resume_pending); an interrupted *cron* run is a permanent failure in jobs.json and an interrupted
 # /v1 run fails its waiting caller — a 0s drain silently destroys work.
-DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT = float(DEFAULT_CONFIG["agent"]["cron_drain_timeout"])
+DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT = float(
+    DEFAULT_CONFIG["agent"]["cron_drain_timeout"]
+)
 # Watchdog leash held back for post-drain work (interrupt agents, kill subprocesses, mark jobs,
 # disconnect adapters). Waiting for cron past that trades a job killed *and recorded* for one
 # SIGKILLed mid-write and wedged at ``last_status=running`` forever.
@@ -107,7 +116,9 @@ def launchd_job_label(environ: Mapping[str, str] | None = None) -> str | None:
     return None
 
 
-def launchd_service_label(environ: Mapping[str, str] | None = None, *, platform: str = sys.platform) -> str | None:
+def launchd_service_label(
+    environ: Mapping[str, str] | None = None, *, platform: str = sys.platform
+) -> str | None:
     """Return this process's ``ai.clawk.*`` launchd job label, or ``None`` off darwin.
 
     ``launchctl print`` reports ``exit timeout = 1`` for app-coalition labels — treating those as
@@ -139,7 +150,9 @@ def read_launchd_exit_timeout_s(
     if not label:
         return None
     if uid is None:
-        getuid = getattr(os, "getuid", None)  # absent on Windows; label is None there anyway
+        getuid = getattr(
+            os, "getuid", None
+        )  # absent on Windows; label is None there anyway
         if getuid is None:
             return None
         uid = getuid()
@@ -179,7 +192,9 @@ def resolve_launchd_capped_drain(
     """
 
     drain = _seconds(drain_timeout)
-    budget = _seconds(launchd_exit_timeout_s)  # None / non-numeric → 0.0 → no budget applies
+    budget = _seconds(
+        launchd_exit_timeout_s
+    )  # None / non-numeric → 0.0 → no budget applies
     if budget <= 0.0:
         return drain
     return min(drain, max(budget - _seconds(cleanup_reserve_s), 0.0))
@@ -195,10 +210,14 @@ def effective_stop_drain_timeout(runner: object) -> float:
     getattr-guarded on purpose: shutdown-path tests drive ``_stop_impl``
     from bare doubles that are not ``GatewayRunner`` instances.
     """
-    drain = getattr(runner, "_restart_drain_timeout", DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT)
+    drain = getattr(
+        runner, "_restart_drain_timeout", DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+    )
     if not getattr(runner, "_stop_requested_by_signal", False):
         return drain
-    return resolve_launchd_capped_drain(drain, getattr(runner, "_launchd_exit_timeout_s", None))
+    return resolve_launchd_capped_drain(
+        drain, getattr(runner, "_launchd_exit_timeout_s", None)
+    )
 
 
 def effective_stop_watchdog_delay(runner: object, watchdog_delay: float) -> float:
@@ -216,7 +235,9 @@ def effective_stop_watchdog_delay(runner: object, watchdog_delay: float) -> floa
     if not getattr(runner, "_stop_requested_by_signal", False):
         return leash
     return resolve_launchd_capped_drain(
-        leash, getattr(runner, "_launchd_exit_timeout_s", None), cleanup_reserve_s=LAUNCHD_WATCHDOG_DUMP_MARGIN_S,
+        leash,
+        getattr(runner, "_launchd_exit_timeout_s", None),
+        cleanup_reserve_s=LAUNCHD_WATCHDOG_DUMP_MARGIN_S,
     )
 
 
@@ -251,9 +272,13 @@ def is_gateway_supervisor_process(environ: Mapping[str, str] | None = None) -> b
     """
     env = os.environ if environ is None else environ
     xpc_service = env.get("XPC_SERVICE_NAME", "")
-    return bool(env.get("INVOCATION_ID") or env.get("CLAWK_S6_SUPERVISED_CHILD") or (xpc_service and xpc_service != "0")
-                or launchd_job_label(env)
-                or str(env.get(EXTERNAL_GATEWAY_SUPERVISOR_ENV, "")).strip().lower() in _TRUTHY)
+    return bool(
+        env.get("INVOCATION_ID")
+        or env.get("CLAWK_S6_SUPERVISED_CHILD")
+        or (xpc_service and xpc_service != "0")
+        or launchd_job_label(env)
+        or str(env.get(EXTERNAL_GATEWAY_SUPERVISOR_ENV, "")).strip().lower() in _TRUTHY
+    )
 
 
 def is_supervised_gateway_launch(environ: Mapping[str, str] | None = None) -> bool:
@@ -285,7 +310,9 @@ def _seconds(value: object, fallback: float = 0.0) -> float:
         return fallback
 
 
-def _parse_timeout_keeping_zero(raw: object, default: float, *, finite: bool = False) -> float:
+def _parse_timeout_keeping_zero(
+    raw: object, default: float, *, finite: bool = False
+) -> float:
     """Parse a timeout where ``0`` is a deliberate disable (must NOT fall through
     to ``default``), unlike None / blank / non-numeric (/ non-finite) input."""
     if raw is None or (isinstance(raw, str) and not raw.strip()):
@@ -299,7 +326,9 @@ def _parse_timeout_keeping_zero(raw: object, default: float, *, finite: bool = F
 
 def parse_restart_drain_timeout(raw: object) -> float:
     """Parse a configured drain timeout; falsy (incl. ``0``) falls back to the shared default."""
-    return _parse_timeout_keeping_zero(raw or None, DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT)
+    return _parse_timeout_keeping_zero(
+        raw or None, DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+    )
 
 
 def parse_restart_after_turn_timeout(raw: object) -> float:
@@ -318,11 +347,17 @@ def parse_cron_drain_timeout(raw: object) -> float:
 
 def parse_signal_interrupt_grace_timeout(raw: object) -> float:
     """Parse the unexpected-signal post-interrupt grace timeout."""
-    return _parse_timeout_keeping_zero(raw, DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT, finite=True)
+    return _parse_timeout_keeping_zero(
+        raw, DEFAULT_GATEWAY_SIGNAL_INTERRUPT_GRACE_TIMEOUT, finite=True
+    )
 
 
 def resolve_cron_drain_budget(
-    drain_timeout: float, cron_drain_timeout: float, *, watchdog_delay: float, elapsed: float = 0.0,
+    drain_timeout: float,
+    cron_drain_timeout: float,
+    *,
+    watchdog_delay: float,
+    elapsed: float = 0.0,
     cleanup_reserve_s: float = CRON_DRAIN_CLEANUP_RESERVE_S,
 ) -> float:
     """Seconds the stop drain may wait on in-flight cron and api_server (/v1) work.
@@ -335,13 +370,20 @@ def resolve_cron_drain_budget(
     floor = _seconds(cron_drain_timeout)
     if floor <= 0.0:
         return drain
-    ceiling = _seconds(watchdog_delay) - _seconds(elapsed) - _seconds(cleanup_reserve_s, CRON_DRAIN_CLEANUP_RESERVE_S)
+    ceiling = (
+        _seconds(watchdog_delay)
+        - _seconds(elapsed)
+        - _seconds(cleanup_reserve_s, CRON_DRAIN_CLEANUP_RESERVE_S)
+    )
     return max(drain, min(floor, ceiling))
 
 
 def resolve_systemd_timeout_stop_sec(
-    drain_timeout: float, cron_drain_timeout: float = DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT, *,
-    cleanup_reserve_s: float = CRON_DRAIN_CLEANUP_RESERVE_S, headroom_s: float = SYSTEMD_STOP_HEADROOM_S,
+    drain_timeout: float,
+    cron_drain_timeout: float = DEFAULT_GATEWAY_CRON_DRAIN_TIMEOUT,
+    *,
+    cleanup_reserve_s: float = CRON_DRAIN_CLEANUP_RESERVE_S,
+    headroom_s: float = SYSTEMD_STOP_HEADROOM_S,
     floor_s: float = SYSTEMD_TIMEOUT_STOP_SEC_FLOOR,
 ) -> int:
     """Seconds systemd ``TimeoutStopSec`` must cover: the stop path may first wait
@@ -357,7 +399,11 @@ def resolve_systemd_timeout_stop_sec(
 
 
 def resolve_restart_exit_wait_budget(
-    drain_timeout: float, after_turn_timeout: float, cron_drain_timeout: float, *, headroom: float = 15.0,
+    drain_timeout: float,
+    after_turn_timeout: float,
+    cron_drain_timeout: float,
+    *,
+    headroom: float = 15.0,
 ) -> float:
     """Seconds a CLI waits for the gateway PID to exit after SIGUSR1: the in-band after-turn
     deferral, then the longest supervisor stop envelope — the one systemd's ``TimeoutStopSec`` is
@@ -366,6 +412,12 @@ def resolve_restart_exit_wait_budget(
 
     A non-finite drain means "wait indefinitely", not a crash in the integer envelope.
     """
-    if not all(math.isfinite(_seconds(value)) for value in (drain_timeout, cron_drain_timeout)):
+    if not all(
+        math.isfinite(_seconds(value)) for value in (drain_timeout, cron_drain_timeout)
+    ):
         return math.inf
-    return _seconds(after_turn_timeout) + resolve_systemd_timeout_stop_sec(drain_timeout, cron_drain_timeout) + _seconds(headroom)
+    return (
+        _seconds(after_turn_timeout)
+        + resolve_systemd_timeout_stop_sec(drain_timeout, cron_drain_timeout)
+        + _seconds(headroom)
+    )

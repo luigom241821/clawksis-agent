@@ -29,6 +29,7 @@ def loop_agent():
     so we can stage a dropped-tool-call response + continuation pair on
     ``.chat.completions.create``."""
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -54,14 +55,17 @@ def _dropped_tool_call_response(content: str):
     """A response whose finish_reason claims a tool call, but tool_calls is
     empty — the provider contract violation this fix recovers from."""
     from tests.agent.test_run_agent import _mock_assistant_msg
+
     return SimpleNamespace(
         id="chatcmpl-dropped",
         model="test/model",
-        choices=[SimpleNamespace(
-            index=0,
-            message=_mock_assistant_msg(content=content, tool_calls=None),
-            finish_reason="tool_calls",
-        )],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=content, tool_calls=None),
+                finish_reason="tool_calls",
+            )
+        ],
         usage=None,
     )
 
@@ -95,14 +99,14 @@ class TestDroppedToolCallRecovery:
         second_call = loop_agent.client.chat.completions.create.call_args_list[1]
         msgs = second_call.kwargs.get("messages") or second_call.args[0].get("messages")
         last_user = next(
-            (m for m in reversed(msgs) if m.get("role") == "user"), None,
+            (m for m in reversed(msgs) if m.get("role") == "user"),
+            None,
         )
         assert last_user is not None
         assert "tool call" in (last_user.get("content") or "").lower(), (
             "The nudge must explicitly ask the model to issue the tool call."
         )
         assert "All checks pass" in result["final_response"]
-
 
     def test_clean_stop_text_turn_is_unaffected(self, loop_agent):
         """A genuine finish_reason=stop text response must exit normally — the
@@ -176,7 +180,8 @@ class TestDroppedToolCallRecovery:
         # The finalization pop strips the answered pair from the live list —
         # no flagged scaffolding may survive into the returned transcript.
         leftover = [
-            m for m in result["messages"]
+            m
+            for m in result["messages"]
             if isinstance(m, dict) and m.get("_dropped_toolcall_nudge")
         ]
         assert not leftover, (
@@ -191,4 +196,3 @@ class TestDroppedToolCallRecovery:
             "_dropped_toolcall_nudge messages must be classified as "
             "ephemeral scaffolding so they are never persisted."
         )
-

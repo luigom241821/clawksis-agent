@@ -12,8 +12,11 @@ from types import SimpleNamespace
 
 def _response(content="done", *, tool_calls=None):
     message = SimpleNamespace(content=content, tool_calls=tool_calls or [])
-    return SimpleNamespace(choices=[SimpleNamespace(message=message, finish_reason="stop")],
-                           usage=None, model="fake-model")
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=message, finish_reason="stop")],
+        usage=None,
+        model="fake-model",
+    )
 
 
 def _config(home, fanout="user_turn"):
@@ -48,9 +51,18 @@ def _install_fake_llm(monkeypatch, ref_runs):
 
 def _after_tool_call(base):
     return base + [
-        {"role": "assistant", "content": "", "tool_calls": [
-            {"id": "c1", "function": {"name": "clarify", "arguments": "{}"}}]},
-        {"role": "tool", "tool_call_id": "c1", "content": '{"responses": [{"user_response": "Development"}]}'},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "c1", "function": {"name": "clarify", "arguments": "{}"}}
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "content": '{"responses": [{"user_response": "Development"}]}',
+        },
     ]
 
 
@@ -66,7 +78,9 @@ def _prepared(monkeypatch, tmp_path, fanout="user_turn"):
     facade = MoAChatCompletions("review")
     base = [{"role": "user", "content": "use the clarify tool now"}]
     first = facade.create(messages=base, tools=[], _moa_prepare_only=True)
-    second = facade.create(messages=_after_tool_call(base), tools=[], _moa_prepare_only=True)
+    second = facade.create(
+        messages=_after_tool_call(base), tools=[], _moa_prepare_only=True
+    )
     return first, second, ref_runs
 
 

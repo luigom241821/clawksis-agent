@@ -40,8 +40,6 @@ def conn(kanban_home):
         yield c
 
 
-
-
 def test_held_lock_skips_the_tick_without_writes(conn):
     """While another holder owns the board lock, dispatch_once must skip and
     must NOT invoke spawn_fn (no DB writes happen on a skipped tick)."""
@@ -64,8 +62,6 @@ def test_held_lock_skips_the_tick_without_writes(conn):
     assert spawn_calls == [], "spawn_fn must not run while the tick is locked out"
 
 
-
-
 def test_lock_is_board_scoped(conn):
     """Holding board A's dispatch lock must not block a tick on board B —
     distinct boards have distinct DB files and tick independently."""
@@ -77,5 +73,3 @@ def test_lock_is_board_scoped(conn):
         assert held_a is True
         with kbc._dispatch_tick_lock(db_other) as held_b:
             assert held_b is True, "a lock on a different board must be independent"
-
-

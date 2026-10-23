@@ -1,4 +1,5 @@
 """Importing gateway helpers must not apply messaging-only cwd defaults."""
+
 import os
 from pathlib import Path
 import subprocess
@@ -16,14 +17,34 @@ def test_gateway_import_preserves_cwdless_tui_workspace(tmp_path, configured):
     launch.mkdir()
     cwd = launch.as_posix() if configured == "explicit" else configured
     (home / "config.yaml").write_text(f"terminal:\n  cwd: '{cwd}'\n", encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k.upper() in {
-        "PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT",
-    }}
-    for key in ("HOME", "USERPROFILE", "CLAWK_HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"):
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k.upper()
+        in {
+            "PATH",
+            "SYSTEMROOT",
+            "WINDIR",
+            "COMSPEC",
+            "PATHEXT",
+        }
+    }
+    for key in (
+        "HOME",
+        "USERPROFILE",
+        "CLAWK_HOME",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "TEMP",
+        "TMP",
+    ):
         env[key] = str(home)
     env["PYTHONPATH"] = str(repo)
     result = subprocess.run(
-        [sys.executable, "-c", """
+        [
+            sys.executable,
+            "-c",
+            """
 from pathlib import Path
 import tui_gateway.server as server
 launch = Path.cwd()
@@ -32,8 +53,13 @@ import gateway.run
 assert Path(server._completion_cwd({})) == launch, (
     'gateway import changed cwd-less TUI workspace', server._completion_cwd({}), str(launch)
 )
-"""],
-        cwd=launch, env=env, capture_output=True, text=True, timeout=60,
+""",
+        ],
+        cwd=launch,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -53,7 +79,13 @@ assert Path(server._completion_cwd({})) == launch, (
     ],
 )
 def test_gateway_start_keeps_messaging_cwd_defaults(
-    monkeypatch, tmp_path, backend, mount, configured, legacy, expected,
+    monkeypatch,
+    tmp_path,
+    backend,
+    mount,
+    configured,
+    legacy,
+    expected,
 ):
     import asyncio
     from gateway.run import start_gateway
@@ -76,4 +108,6 @@ def test_gateway_start_keeps_messaging_cwd_defaults(
     monkeypatch.setattr(resource_limits, "apply_nofile_soft_limit", stop)
     with pytest.raises(StopBeforeStartup):
         asyncio.run(start_gateway())
-    assert os.environ.get("TERMINAL_CWD") == (str(tmp_path) if expected == "home" else expected)
+    assert os.environ.get("TERMINAL_CWD") == (
+        str(tmp_path) if expected == "home" else expected
+    )

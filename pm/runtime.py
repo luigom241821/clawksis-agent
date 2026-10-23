@@ -3,6 +3,7 @@
 Only the bootstrap below runs in the caller's interpreter. It never imports
 application dependencies or adds the manager's dependencies to that process.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -49,7 +50,9 @@ def _inputs(project: Path, python: Path, *, as_spelled: bool = False) -> str:
     # bin/python3 is itself a symlink, so resolving it would re-key every install.
     # A store spells its root extended-length on Windows; the identity must not.
     python = Path(native(python)).absolute()
-    digest.update(str(python if as_spelled else python.parent.resolve() / python.name).encode())
+    digest.update(
+        str(python if as_spelled else python.parent.resolve() / python.name).encode()
+    )
     return digest.hexdigest()
 
 
@@ -76,38 +79,72 @@ def _resident_runtime() -> tuple[Path, Path] | None:
         except FileNotFoundError:
             return None
         except (OSError, ValueError) as exc:
-            raise InstallError("pm-runtime", "invalid package install stamp", "reinstall this application") from exc
+            raise InstallError(
+                "pm-runtime",
+                "invalid package install stamp",
+                "reinstall this application",
+            ) from exc
         if stamp.get("distribution") not in ("nix", "docker"):
             return None
         value = stamp.get("pmRuntime")
         if not isinstance(value, str) or not Path(value).is_absolute():
-            raise InstallError("pm-runtime", "packaged PM runtime is missing", "reinstall this application")
+            raise InstallError(
+                "pm-runtime",
+                "packaged PM runtime is missing",
+                "reinstall this application",
+            )
         runtime = Path(value)
     try:
         marker = json.loads((runtime / "pm-runtime.json").read_text(encoding="utf-8"))
         python = (runtime / marker["python"]).resolve()
         site = (runtime / marker["sitePackages"]).resolve()
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise InstallError("pm-runtime", "packaged PM runtime is missing or invalid", "reinstall this application") from exc
+        raise InstallError(
+            "pm-runtime",
+            "packaged PM runtime is missing or invalid",
+            "reinstall this application",
+        ) from exc
     # Native payloads must remain self-contained. Nix's independent derivation
     # instead refers to its immutable interpreter/dependencies in /nix/store.
-    if (not python.is_file() or not site.is_dir()
-            or (payload is not None and (not python.is_relative_to(payload) or not site.is_relative_to(runtime)))):
-        raise InstallError("pm-runtime", "packaged PM paths are missing or escape the payload", "reinstall this application")
+    if (
+        not python.is_file()
+        or not site.is_dir()
+        or (
+            payload is not None
+            and (not python.is_relative_to(payload) or not site.is_relative_to(runtime))
+        )
+    ):
+        raise InstallError(
+            "pm-runtime",
+            "packaged PM paths are missing or escape the payload",
+            "reinstall this application",
+        )
     return python, site
 
 
 def _validate(python: Path, env: dict[str, str]) -> str:
     try:
         checked = subprocess.run(
-            [str(python), "-I", "-B", "-c",
-             "import packaging, tomli_w, truststore; from ruamel.yaml import YAML"],
-            env=env, capture_output=True, text=True, timeout=30,
+            [
+                str(python),
+                "-I",
+                "-B",
+                "-c",
+                "import packaging, tomli_w, truststore; from ruamel.yaml import YAML",
+            ],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return str(exc)
-    return checked.stderr.strip() or f"exit {checked.returncode}" if checked.returncode else ""
+    return (
+        checked.stderr.strip() or f"exit {checked.returncode}"
+        if checked.returncode
+        else ""
+    )
 
 
 # Generations this process resolved for a child. The lease is taken under
@@ -126,9 +163,16 @@ def _hold_for_children(environment: Path) -> None:
         _HELD[environment] = lease_directory(environment)
 
 
-def prepare_runtime(uv: Path, python: Path, root: Path, *, offline: bool = False,
-                    project: Path | None = None, bootstrap: bool = True,
-                    cache: Path | None = None) -> Path:
+def prepare_runtime(
+    uv: Path,
+    python: Path,
+    root: Path,
+    *,
+    offline: bool = False,
+    project: Path | None = None,
+    bootstrap: bool = True,
+    cache: Path | None = None,
+) -> Path:
     """Publish a locked PM environment without resolving the application.
 
     Generations are immutable after publication. Failed preparation leaves the
@@ -153,17 +197,26 @@ def prepare_runtime(uv: Path, python: Path, root: Path, *, offline: bool = False
         # home under a symlink (/home -> /var/home) that is still this interpreter.
         if fact.get("inputs") in (identity, _inputs(project, python, as_spelled=True)):
             environment = root / fact["generation"]
-            if (environment / "pm-runtime.json").is_file() and not _validate(_python(environment), env):
+            if (environment / "pm-runtime.json").is_file() and not _validate(
+                _python(environment), env
+            ):
                 _hold_for_children(environment)
                 return _python(environment)
         if not bootstrap:
-            raise InstallError("pm-runtime", "not installed or outdated and lazy installs are disabled",
-                               "run `clawk pm install` to prepare the independent PM runtime")
+            raise InstallError(
+                "pm-runtime",
+                "not installed or outdated and lazy installs are disabled",
+                "run `clawk pm install` to prepare the independent PM runtime",
+            )
         generation = Path("generations") / uuid.uuid4().hex
         environment = root / generation
         try:
-            print("Preparing the isolated Clawksis runtime…", file=sys.stderr, flush=True)
-            executable = stage_runtime(uv, python, environment, project=project, offline=offline, cache=cache)
+            print(
+                "Preparing the isolated Clawksis runtime…", file=sys.stderr, flush=True
+            )
+            executable = stage_runtime(
+                uv, python, environment, project=project, offline=offline, cache=cache
+            )
             (environment / ".lease-managed").touch()
             _write(environment / "pm-runtime.json", {"inputs": identity})
             _write(selected, {"inputs": identity, "generation": generation.as_posix()})
@@ -201,19 +254,26 @@ def collect_runtime_generations(root: Path) -> list[Path]:
         if not lock_fd(lock.fileno(), wait=False):
             return removed  # a stage is in flight; maintenance skips rather than queues
         try:
-            selected = json.loads((root / "selected.json").read_text(encoding="utf-8-sig")).get("generation", "")
+            selected = json.loads(
+                (root / "selected.json").read_text(encoding="utf-8-sig")
+            ).get("generation", "")
         except FileNotFoundError:
             selected = ""
         for generation in sorted(generations.iterdir()):
-            if not generation.is_dir() or generation.is_symlink() or generation == root / selected:
+            if (
+                not generation.is_dir()
+                or generation.is_symlink()
+                or generation == root / selected
+            ):
                 continue
             published = (generation / "pm-runtime.json").is_file()
-            if published and (not (generation / ".lease-managed").is_file() or leases_held(generation)):
+            if published and (
+                not (generation / ".lease-managed").is_file() or leases_held(generation)
+            ):
                 continue
             shutil.rmtree(generation)
             removed.append(generation)
     return removed
-
 
 
 def runtime_python(*, bootstrap: bool = True, cache: Path | None = None) -> Path:
@@ -231,8 +291,11 @@ def runtime_python(*, bootstrap: bool = True, cache: Path | None = None) -> Path
     tools = _toolchain(realize=False)
     if tools is None:
         if not bootstrap:
-            raise InstallError("pm-runtime", "not installed and lazy installs are disabled",
-                               "run `clawk pm install` to prepare the independent PM runtime")
+            raise InstallError(
+                "pm-runtime",
+                "not installed and lazy installs are disabled",
+                "run `clawk pm install` to prepare the independent PM runtime",
+            )
         from pm.lock import Lockfile
         from pm.paths import lockfile_path, store_root
         from pm.registry import get_package
@@ -243,7 +306,11 @@ def runtime_python(*, bootstrap: bool = True, cache: Path | None = None) -> Path
         package = get_package("uv")
         version = Lockfile(lockfile_path()).version("uv")
         target = current_target()
-        staged = package.binary(store_root() / package.store_entry(version, target), target) if version else None
+        staged = (
+            package.binary(store_root() / package.store_entry(version, target), target)
+            if version
+            else None
+        )
         if staged is not None and staged.is_file():
             tools = staged, Path(sys.executable)
         else:
@@ -252,12 +319,22 @@ def runtime_python(*, bootstrap: bool = True, cache: Path | None = None) -> Path
     if tools is None:
         raise InstallError("pm-runtime", "pinned uv and Python are unavailable")
     uv, python = tools
-    return prepare_runtime(uv, python, install_state_dir(project) / "pm-runtime",
-                           bootstrap=bootstrap, cache=cache)
+    return prepare_runtime(
+        uv,
+        python,
+        install_state_dir(project) / "pm-runtime",
+        bootstrap=bootstrap,
+        cache=cache,
+    )
 
 
-def runtime_command(script: Path, args: tuple[str, ...] | list[str] = (), *,
-                    bootstrap: bool = True, cache: Path | None = None) -> list[str]:
+def runtime_command(
+    script: Path,
+    args: tuple[str, ...] | list[str] = (),
+    *,
+    bootstrap: bool = True,
+    cache: Path | None = None,
+) -> list[str]:
     """One launch contract for mutable venvs and resident signed payloads."""
     resident = _resident_runtime()
     if resident is None:
@@ -268,10 +345,23 @@ def runtime_command(script: Path, args: tuple[str, ...] | list[str] = (), *,
         "import runpy,sys; sys.path.insert(0,sys.argv.pop(1)); "
         "script=sys.argv.pop(1); sys.argv[0]=script; runpy.run_path(script,run_name='__main__')"
     )
-    return [str(python), "-I", "-S", "-B", "-c", launcher, str(site), str(script), *args]
+    return [
+        str(python),
+        "-I",
+        "-S",
+        "-B",
+        "-c",
+        launcher,
+        str(site),
+        str(script),
+        *args,
+    ]
 
 
 def run_cli(argv: list[str]) -> int:
-    result = subprocess.run(runtime_command(Path(__file__).with_name("launch.py"), argv),
-                            env=runtime_environment(), check=False)
+    result = subprocess.run(
+        runtime_command(Path(__file__).with_name("launch.py"), argv),
+        env=runtime_environment(),
+        check=False,
+    )
     return result.returncode

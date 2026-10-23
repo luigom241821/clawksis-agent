@@ -19,6 +19,7 @@ rotation returns None so the caller surfaces the error / activates fallback.
 Healthy keys carry no cooldown and are immediately available next turn — this
 does not reintroduce hammering, it stops it.
 """
+
 import json
 
 import pytest
@@ -48,14 +49,14 @@ def _entry(idx, key):
 
 
 class TestUnmatchedHintRotationIsBounded:
-
     def test_multi_entry_pool_unmatched_hint_loop_terminates(
         self, tmp_path, monkeypatch
     ):
         """Multi-entry pool: consecutive unmatched-hint rotations must reach
         None within one lap of the pool instead of ping-ponging forever."""
         pool = _seed_pool(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             [_entry(0, "key-a"), _entry(1, "key-b"), _entry(2, "key-c")],
         )
         assert pool.select() is not None

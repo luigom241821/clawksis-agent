@@ -30,7 +30,10 @@ _log = logging.getLogger("clawk_cli.web_server")
 # Windows uses win_pty_bridge (pywinpty/ConPTY); same surface, no handler guards.
 try:
     if sys.platform.startswith("win"):
-        from clawk_cli.win_pty_bridge import WinPtyBridge as PtyBridge, PtyUnavailableError
+        from clawk_cli.win_pty_bridge import (
+            WinPtyBridge as PtyBridge,
+            PtyUnavailableError,
+        )
     else:
         from clawk_cli.pty_bridge import PtyBridge, PtyUnavailableError
     _PTY_BRIDGE_AVAILABLE = True
@@ -40,6 +43,8 @@ except ImportError:  # pragma: no cover - pywinpty / ptyprocess missing
 
     class PtyUnavailableError(RuntimeError):  # type: ignore[no-redef]
         """Stub when the platform PTY bridge cannot be imported."""
+
+
 _RESIZE_RE = re.compile(rb"\x1b\[RESIZE:(\d+);(\d+)\]")
 _PTY_READ_CHUNK_TIMEOUT = 0.2
 
@@ -48,7 +53,11 @@ _PTY_READ_CHUNK_TIMEOUT = 0.2
 # A positive sleep lets other coroutines run and keeps dashboard idle CPU low (#42627).
 _PTY_IDLE_BACKOFF = 0.05
 PTY_REGISTRY = PtySessionRegistry(
-    ttl=30 * 60, max_sessions=16, buffer_cap=1 * 1024 * 1024, read_timeout=_PTY_READ_CHUNK_TIMEOUT)
+    ttl=30 * 60,
+    max_sessions=16,
+    buffer_cap=1 * 1024 * 1024,
+    read_timeout=_PTY_READ_CHUNK_TIMEOUT,
+)
 
 
 async def _close_stalled_pty_input(ws: WebSocket, *, path: str) -> None:
@@ -73,7 +82,9 @@ async def _legacy_pump(ws: WebSocket, bridge) -> None:
     async def pump_pty_to_ws() -> None:
         try:
             while True:
-                chunk = await loop.run_in_executor(None, bridge.read, _PTY_READ_CHUNK_TIMEOUT)
+                chunk = await loop.run_in_executor(
+                    None, bridge.read, _PTY_READ_CHUNK_TIMEOUT
+                )
                 if chunk is None:  # EOF
                     return
                 if not chunk:  # no data this tick; yield control and retry
@@ -139,6 +150,7 @@ def _ws_client_reason(ws: WebSocket) -> Optional[str]:
     (:func:`clawk_cli.web_server_boundary.ws_client_reason` on the dashboard app state)."""
     from clawk_cli.web_server import app
     from clawk_cli.web_server_boundary import ws_client_reason
+
     return ws_client_reason(ws, app.state)
 
 
@@ -152,6 +164,7 @@ def _ws_host_origin_reason(ws: WebSocket) -> Optional[str]:
     (:func:`clawk_cli.web_server_boundary.ws_host_origin_reason` on the dashboard app state)."""
     from clawk_cli.web_server import app
     from clawk_cli.web_server_boundary import ws_host_origin_reason
+
     return ws_host_origin_reason(ws, app.state)
 
 
@@ -183,18 +196,22 @@ def _ws_request_view(ws: WebSocket) -> Request:
     """
     from fastapi import Request
 
-    return Request({
-        "type": "http",
-        "headers": [(k.lower().encode("latin-1"), v.encode("latin-1"))
-                    for k, v in getattr(ws.headers, "items", dict)()],
-        "client": (ws.client.host, 0) if ws.client else None,
-        "server": None,
-        "scheme": "ws",
-        "method": "GET",
-        "path": ws.url.path,
-        "query_string": b"",
-        "root_path": "",
-    })
+    return Request(
+        {
+            "type": "http",
+            "headers": [
+                (k.lower().encode("latin-1"), v.encode("latin-1"))
+                for k, v in getattr(ws.headers, "items", dict)()
+            ],
+            "client": (ws.client.host, 0) if ws.client else None,
+            "server": None,
+            "scheme": "ws",
+            "method": "GET",
+            "path": ws.url.path,
+            "query_string": b"",
+            "root_path": "",
+        }
+    )
 
 
 def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
@@ -223,6 +240,7 @@ def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
     """
     from clawk_cli.dashboard_auth.native_http import HEADER, authenticate_native_ws
     from clawk_cli.web_server import _SESSION_TOKEN, app
+
     if HEADER in ws.headers:
         grant = authenticate_native_ws(ws)
         if grant is None:
@@ -235,12 +253,18 @@ def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
         # that don't bring in the dashboard_auth layer.
         from clawk_cli.dashboard_auth.audit import AuditEvent, audit_log
         from clawk_cli.dashboard_auth.ws_tickets import (
-            TicketInvalid, consume_internal_credential, consume_ticket)
+            TicketInvalid,
+            consume_internal_credential,
+            consume_ticket,
+        )
 
         def _reject(reason: str) -> None:
             audit_log(
-                AuditEvent.WS_TICKET_REJECTED, reason=reason,
-                ip=(ws.client.host if ws.client else ""), path=ws.url.path)
+                AuditEvent.WS_TICKET_REJECTED,
+                reason=reason,
+                ip=(ws.client.host if ws.client else ""),
+                path=ws.url.path,
+            )
 
         def _stamp_identity(info) -> None:
             # Server-minted {user_id, provider} stamped onto the WS object is the
@@ -249,7 +273,9 @@ def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
             # Only identity fields are carried — bookkeeping such as
             # ``minted_at`` is not part of the identity contract.
             ws._clawk_auth_identity = {
-                "user_id": info.get("user_id"), "provider": info.get("provider")}
+                "user_id": info.get("user_id"),
+                "provider": info.get("provider"),
+            }
             if info.get("issuer"):
                 ws._clawk_auth_identity["issuer"] = info["issuer"]
 
@@ -302,7 +328,8 @@ def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
 
             try:
                 session = _verify_access_token(
-                    _ws_request_view(ws), access_token=token, audit=False)
+                    _ws_request_view(ws), access_token=token, audit=False
+                )
             except ProviderError as exc:
                 # All providers unreachable (IDP outage) — reject without
                 # crashing the upgrade; the REST bearer leg answers 503, and
@@ -310,10 +337,12 @@ def _ws_auth_reason(ws: WebSocket) -> tuple[Optional[str], str]:
                 _reject(f"session token verify unavailable: {exc}")
                 return "token_unavailable", "token"
             if session is not None:
-                _stamp_identity({
-                    "user_id": getattr(session, "user_id", None),
-                    "provider": getattr(session, "provider", None),
-                })
+                _stamp_identity(
+                    {
+                        "user_id": getattr(session, "user_id", None),
+                        "provider": getattr(session, "provider", None),
+                    }
+                )
                 audit_log(
                     AuditEvent.TOKEN_AUTH_SUCCESS,
                     provider=getattr(session, "provider", None),
@@ -346,9 +375,12 @@ def _ws_auth_ok(ws: WebSocket) -> bool:
 
 
 def _resolve_chat_argv(
-    resume: Optional[str] = None, sidecar_url: Optional[str] = None, profile: Optional[str] = None,
+    resume: Optional[str] = None,
+    sidecar_url: Optional[str] = None,
+    profile: Optional[str] = None,
     active_session_file: Optional[str] = None,
-    workspace_cwd: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
+    workspace_cwd: Optional[str] = None,
+) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve the argv + cwd + env for the chat PTY (what ``clawk --tui`` runs).
 
     Tests monkeypatch this with a tiny fake command.  Env contract: resume goes
@@ -364,8 +396,14 @@ def _resolve_chat_argv(
     passes as the explicit ``cwd`` of ``session.create`` when attached to the
     in-memory gateway, whose own cwd is the dashboard's launch dir).
     """
-    from clawk_cli.web_server_profiles import _config_profile_scope, _resolve_profile_dir
-    from clawk_cli.web_server_sessions import _open_session_db_for_profile, _session_latest_descendant
+    from clawk_cli.web_server_profiles import (
+        _config_profile_scope,
+        _resolve_profile_dir,
+    )
+    from clawk_cli.web_server_sessions import (
+        _open_session_db_for_profile,
+        _session_latest_descendant,
+    )
     from clawk_cli.main import PROJECT_ROOT
     from clawk_cli.main_tui_launch import _apply_tui_python_env, _make_tui_argv
 
@@ -378,12 +416,16 @@ def _resolve_chat_argv(
     # Secrets kept — the spawned agent needs provider creds.  An explicit profile
     # scope overrides CLAWK_HOME before config is bridged into the env.
     from tools.environments.local import build_subprocess_env
+
     env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=True)
     if profile_dir is not None:
         env["CLAWK_HOME"] = str(profile_dir)
     try:
         from clawk_cli.config import (
-            apply_terminal_config_to_env, read_raw_config, terminal_config_owned_env_vars)
+            apply_terminal_config_to_env,
+            read_raw_config,
+            terminal_config_owned_env_vars,
+        )
 
         if profile_dir is not None:
             # Drop only the terminal keys the launch profile owns before applying
@@ -396,7 +438,9 @@ def _resolve_chat_argv(
         else:
             apply_terminal_config_to_env(env=env)
     except Exception:
-        _log.warning("Failed to apply terminal config bridge for dashboard chat", exc_info=True)
+        _log.warning(
+            "Failed to apply terminal config bridge for dashboard chat", exc_info=True
+        )
     if workspace_cwd:
         env["CLAWK_CWD"] = workspace_cwd
         env["CLAWK_TUI_CWD"] = workspace_cwd
@@ -413,7 +457,8 @@ def _resolve_chat_argv(
 
     if resume:
         _resume_db = _open_session_db_for_profile(
-            requested if profile_dir is not None else None, read_only=True)
+            requested if profile_dir is not None else None, read_only=True
+        )
         try:
             latest_resume, _latest_path = _session_latest_descendant(resume, _resume_db)
         finally:
@@ -446,6 +491,7 @@ def _resolve_client_ws_host() -> Optional[str]:
     """Host the in-container WS client should dial: ``CLAWK_DASHBOARD_WS_HOST``
     wins always; a wildcard bind becomes ``127.0.0.1``; others verbatim."""
     from clawk_cli.web_server import app
+
     explicit = os.environ.get("CLAWK_DASHBOARD_WS_HOST", "").strip()
     if explicit:
         return explicit
@@ -464,11 +510,16 @@ def _server_internal_ws_url(path: str, **extra_qs) -> Optional[str]:
     reconnect, and a 30s-TTL ticket can expire before a slow cold boot dials.
     """
     from clawk_cli.web_server import _SESSION_TOKEN, app
+
     host = _resolve_client_ws_host()
     port = getattr(app.state, "bound_port", None)
     if not host or not port:
         return None
-    netloc = f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
+    netloc = (
+        f"[{host}]:{port}"
+        if ":" in host and not host.startswith("[")
+        else f"{host}:{port}"
+    )
     if getattr(app.state, "auth_required", False):
         from clawk_cli.dashboard_auth.ws_tickets import internal_ws_credential
 
@@ -489,12 +540,16 @@ def _build_sidecar_url(channel: str) -> Optional[str]:
 
 
 async def _resolve_chat_argv_async(
-    resume: Optional[str] = None, sidecar_url: Optional[str] = None, profile: Optional[str] = None,
+    resume: Optional[str] = None,
+    sidecar_url: Optional[str] = None,
+    profile: Optional[str] = None,
     active_session_file: Optional[str] = None,
-    workspace_cwd: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
+    workspace_cwd: Optional[str] = None,
+) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve chat argv off the event loop (it may run ``npm run build``); the
     async lock keeps one-build-at-a-time without parking worker threads."""
     from clawk_cli.web_server import _get_chat_argv_lock, app
+
     kwargs = {"resume": resume, "sidecar_url": sidecar_url, "profile": profile}
     if active_session_file is not None:
         kwargs["active_session_file"] = active_session_file
@@ -508,6 +563,7 @@ async def _resolve_chat_argv_async(
 def _active_session_file_for_channel(app: FastAPI, channel: str) -> Path:
     """Return the per-channel file where a dashboard TUI writes its active sid."""
     from clawk_cli.web_server import _get_pty_active_session_files
+
     files = _get_pty_active_session_files(app)
     if files.get(channel) is None:
         fd, raw_path = tempfile.mkstemp(prefix="clawk-pty-active-", suffix=".json")
@@ -530,10 +586,15 @@ def _get_console_executor() -> concurrent.futures.ThreadPoolExecutor:
         with _console_executor_lock:
             if _console_executor is None:
                 _console_executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=_CONSOLE_EXECUTOR_MAX_WORKERS, thread_name_prefix="clawk-console")
+                    max_workers=_CONSOLE_EXECUTOR_MAX_WORKERS,
+                    thread_name_prefix="clawk-console",
+                )
                 # Tear down on interpreter exit without waiting on in-flight
                 # workers: a stuck 60s console command must not block shutdown.
                 atexit.register(
-                    lambda: _console_executor
-                    and _console_executor.shutdown(wait=False, cancel_futures=True))
+                    lambda: (
+                        _console_executor
+                        and _console_executor.shutdown(wait=False, cancel_futures=True)
+                    )
+                )
     return _console_executor

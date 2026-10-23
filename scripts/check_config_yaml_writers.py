@@ -21,6 +21,7 @@ Suppress a true false positive with ``# config-writer: ok — <why>`` on the cal
 
 Usage: python3 scripts/check_config_yaml_writers.py [paths...]
 """
+
 from __future__ import annotations
 
 import ast
@@ -29,12 +30,23 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_TREES = ("clawk_cli", "agent", "gateway", "tui_gateway", "cron", "plugins", "tools", "cli.py", "utils.py")
+DEFAULT_TREES = (
+    "clawk_cli",
+    "agent",
+    "gateway",
+    "tui_gateway",
+    "cron",
+    "plugins",
+    "tools",
+    "cli.py",
+    "utils.py",
+)
 # The config writer module and the on-disk primitive it wraps.
 ALLOWED_FILES = {ROOT / "utils.py"}
 DUMPERS = {"atomic_yaml_write", "safe_dump", "dump"}
 CONFIG_PATH_RE = re.compile(
-    r"config_path|cfg_path|config\.yaml|get_config_path\(\)|_active_config_path\(\)|\blive_path\b")
+    r"config_path|cfg_path|config\.yaml|get_config_path\(\)|_active_config_path\(\)|\blive_path\b"
+)
 CONFIG_MODULE_RE = re.compile(r"^clawk_cli/config(_[a-z_]+)?\.py$")
 SUPPRESS = "# config-writer: ok"
 
@@ -53,7 +65,11 @@ def _is_yaml_dump(call: ast.Call, src: str) -> bool:
         return True
     if name in ("safe_dump", "dump"):
         # ``yaml.dump`` / ``yaml.safe_dump`` / ``yaml_rt.dump``; plain ``json.dump`` is not YAML.
-        receiver = ast.get_source_segment(src, call.func.value) if isinstance(call.func, ast.Attribute) else ""
+        receiver = (
+            ast.get_source_segment(src, call.func.value)
+            if isinstance(call.func, ast.Attribute)
+            else ""
+        )
         return "yaml" in (receiver or "").lower() or name == "safe_dump"
     return False
 
@@ -74,7 +90,8 @@ def scan_file(path: Path) -> list[str]:
         if SUPPRESS in line:
             return
         problems.append(
-            f"{rel}:{node.lineno}: {why} — route it through the clawk_cli.config writer seam")
+            f"{rel}:{node.lineno}: {why} — route it through the clawk_cli.config writer seam"
+        )
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -86,7 +103,9 @@ def scan_file(path: Path) -> list[str]:
             first = ast.get_source_segment(src, node.args[0]) if node.args else ""
             if first and CONFIG_PATH_RE.search(first):
                 flag(node, f"PyYAML dump of a config path ({first})")
-        elif _func_name(node.func) == "write_text" and isinstance(node.func, ast.Attribute):
+        elif _func_name(node.func) == "write_text" and isinstance(
+            node.func, ast.Attribute
+        ):
             receiver = ast.get_source_segment(src, node.func.value) or ""
             body = ast.get_source_segment(src, node) or ""
             if CONFIG_PATH_RE.search(receiver) and "dump(" in body:
@@ -108,7 +127,10 @@ def main(argv: list[str]) -> int:
             continue
         problems.extend(scan_file(f))
     if problems:
-        print("config.yaml must only be written through the comment-preserving writer:", file=sys.stderr)
+        print(
+            "config.yaml must only be written through the comment-preserving writer:",
+            file=sys.stderr,
+        )
         for p in problems:
             print(f"  {p}", file=sys.stderr)
         return 1

@@ -27,11 +27,17 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOGS = {
     "skills": REPO_ROOT / "website" / "docs" / "reference" / "skills-catalog.md",
-    "optional-skills": REPO_ROOT / "website" / "docs" / "reference" / "optional-skills-catalog.md",
+    "optional-skills": REPO_ROOT
+    / "website"
+    / "docs"
+    / "reference"
+    / "optional-skills-catalog.md",
 }
 SKILL_PAGES = REPO_ROOT / "website" / "docs" / "user-guide" / "skills"
 
-_ROW_RE = re.compile(r"^\|\s*\[(?:\*\*)?`?([^`*\]]+)`?(?:\*\*)?\]\(([^)]+)\)", re.MULTILINE)
+_ROW_RE = re.compile(
+    r"^\|\s*\[(?:\*\*)?`?([^`*\]]+)`?(?:\*\*)?\]\(([^)]+)\)", re.MULTILINE
+)
 _PATH_ROW_RE = re.compile(r"^\|\s*Path\s*\|\s*`([^`]+)`", re.MULTILINE)
 _MD_LINK_RE = re.compile(r"\]\((\.[^)]+\.md)(?:#[^)]*)?\)")
 
@@ -41,7 +47,10 @@ def _shipped_skills(root: str) -> set[str]:
 
 
 def _catalog_rows(path: Path) -> dict[str, str]:
-    return {m.group(1).strip(): m.group(2).strip() for m in _ROW_RE.finditer(path.read_text(encoding="utf-8"))}
+    return {
+        m.group(1).strip(): m.group(2).strip()
+        for m in _ROW_RE.finditer(path.read_text(encoding="utf-8"))
+    }
 
 
 @pytest.mark.parametrize("root", sorted(CATALOGS))
@@ -56,8 +65,12 @@ def test_catalog_lists_every_shipped_skill(root):
 def test_catalog_rows_resolve_to_a_shipped_skill(root):
     """No catalog row outlives the skill it documents."""
     shipped = _shipped_skills(root)
-    dangling = sorted(name for name in _catalog_rows(CATALOGS[root]) if name not in shipped)
-    assert not dangling, f"{CATALOGS[root].name} lists skills that no longer ship: {dangling}"
+    dangling = sorted(
+        name for name in _catalog_rows(CATALOGS[root]) if name not in shipped
+    )
+    assert not dangling, (
+        f"{CATALOGS[root].name} lists skills that no longer ship: {dangling}"
+    )
 
 
 @pytest.mark.parametrize("root", sorted(CATALOGS))
@@ -65,7 +78,8 @@ def test_catalog_links_resolve(root):
     """Every relative link in a catalog points at a file that exists."""
     catalog = CATALOGS[root]
     broken = sorted(
-        target for target in set(_MD_LINK_RE.findall(catalog.read_text(encoding="utf-8")))
+        target
+        for target in set(_MD_LINK_RE.findall(catalog.read_text(encoding="utf-8")))
         if not (catalog.parent / target).resolve().exists()
     )
     assert not broken, f"{catalog.name} has dangling links: {broken}"
@@ -90,4 +104,6 @@ def test_generated_pages_use_posix_separators():
         for bad in _PATH_ROW_RE.findall(catalog.read_text(encoding="utf-8")):
             if "\\" in bad:
                 offenders.append(f"{catalog.name}: Path `{bad}`")
-    assert not offenders, "Windows separators in generated docs:\n" + "\n".join(offenders[:20])
+    assert not offenders, "Windows separators in generated docs:\n" + "\n".join(
+        offenders[:20]
+    )

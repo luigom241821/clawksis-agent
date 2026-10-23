@@ -337,12 +337,18 @@ def test_session_teardown_releases_the_replay_ring(monkeypatch):
     from tui_gateway import session_lifecycle
 
     # The isolated-turn settle and full finalize need an agent/DB behind the dict; the subject is the ring.
-    monkeypatch.setattr(session_lifecycle, "_teardown_session", lambda session, end_reason="tui_close": None)
+    monkeypatch.setattr(
+        session_lifecycle,
+        "_teardown_session",
+        lambda session, end_reason="tui_close": None,
+    )
     for _ in range(3):
         event_replay._stamp_event(_frame("closed-sid"))
     event_replay._stamp_event(_frame("live-sid"))
 
-    assert session_lifecycle._teardown_popped_session({"_sid": "closed-sid"}, end_reason="tui_shutdown")
+    assert session_lifecycle._teardown_popped_session(
+        {"_sid": "closed-sid"}, end_reason="tui_shutdown"
+    )
 
     assert events_since("closed-sid", 0) == []
     assert event_replay.is_truncated("closed-sid", 0)
@@ -359,6 +365,8 @@ def test_a_raising_teardown_still_releases_the_replay_ring(monkeypatch):
     event_replay._stamp_event(_frame("failed-sid"))
 
     with pytest.raises(RuntimeError):
-        session_lifecycle._teardown_popped_session({"_sid": "failed-sid"}, end_reason="tui_shutdown")
+        session_lifecycle._teardown_popped_session(
+            {"_sid": "failed-sid"}, end_reason="tui_shutdown"
+        )
 
     assert events_since("failed-sid", 0) == []

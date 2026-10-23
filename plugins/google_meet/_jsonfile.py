@@ -28,5 +28,10 @@ def say_queue_lock(queue_path: Path) -> Iterator[None]:
     from clawk_cli.auth import _file_lock
 
     lock_path = queue_path.with_name(queue_path.name + ".lock")
-    with _file_lock(lock_path, _say_queue_lock_holder, 10.0, f"Timed out waiting for say queue lock ({lock_path})"):
+    with _file_lock(
+        lock_path,
+        _say_queue_lock_holder,
+        10.0,
+        f"Timed out waiting for say queue lock ({lock_path})",
+    ):
         yield

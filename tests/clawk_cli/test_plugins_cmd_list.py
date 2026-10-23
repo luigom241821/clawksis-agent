@@ -141,22 +141,35 @@ def test_entrypoint_spec_does_not_abort_plugin_status(monkeypatch):
 
     def stat(self, *args, **kwargs):
         if str(self).startswith("mnemosyne_clawk:register"):
-            err = OSError(22, "The filename, directory name, or volume label syntax is incorrect")
+            err = OSError(
+                22, "The filename, directory name, or volume label syntax is incorrect"
+            )
             err.winerror = 123
             raise err
         return real_stat(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "stat", stat)
 
-    assert plugins_cmd._plugin_status(
-        "mnemosyne_clawk", set(), set(), key="mnemosyne_clawk",
-        source="entrypoint", dir_path="mnemosyne_clawk:register",
-    ) == "not enabled"
+    assert (
+        plugins_cmd._plugin_status(
+            "mnemosyne_clawk",
+            set(),
+            set(),
+            key="mnemosyne_clawk",
+            source="entrypoint",
+            dir_path="mnemosyne_clawk:register",
+        )
+        == "not enabled"
+    )
 
 
 @pytest.mark.platforms("posix")  # chmod is a no-op on Windows
-@pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores file permissions")
-def test_unreadable_plugin_dir_is_skipped_by_every_manifest_scan(monkeypatch, tmp_path, caplog):
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores file permissions"
+)
+def test_unreadable_plugin_dir_is_skipped_by_every_manifest_scan(
+    monkeypatch, tmp_path, caplog
+):
     """One plugin directory the process cannot stat() into (Windows WinError 5, POSIX mode 000)
     must be warned about and skipped — not abort discovery for every other plugin (#111804).
     Covers the loader scan (``scan_directory``) and the list/hub scan (``_scan_level``)."""
@@ -167,10 +180,14 @@ def test_unreadable_plugin_dir_is_skipped_by_every_manifest_scan(monkeypatch, tm
     bundled_dir.mkdir()
     for name in ("denied", "good"):
         (user_dir / name).mkdir(parents=True)
-        (user_dir / name / "plugin.yaml").write_text(f"name: {name}\nversion: 1.0.0\n", encoding="utf-8")
+        (user_dir / name / "plugin.yaml").write_text(
+            f"name: {name}\nversion: 1.0.0\n", encoding="utf-8"
+        )
     (user_dir / "denied").chmod(0)
     monkeypatch.setattr(plugins_cmd, "_plugins_dir", lambda: user_dir)
-    monkeypatch.setattr("clawk_cli.plugins.get_bundled_plugins_dir", lambda: bundled_dir)
+    monkeypatch.setattr(
+        "clawk_cli.plugins.get_bundled_plugins_dir", lambda: bundled_dir
+    )
     monkeypatch.setattr(importlib.metadata, "entry_points", list)
 
     try:

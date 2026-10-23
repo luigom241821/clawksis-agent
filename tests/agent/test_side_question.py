@@ -11,7 +11,6 @@ from agent.side_question import (
 
 
 class TestRenderHistory:
-
     def test_basic_roles(self):
         history = [
             {"role": "system", "content": "SYSTEM PROMPT — must not appear"},
@@ -54,7 +53,9 @@ class TestRenderHistory:
         assert len(out) < 4000
 
     def test_non_dict_entries_ignored(self):
-        out = render_history_for_side_question(["garbage", None, 42, {"role": "user", "content": "hi"}])
+        out = render_history_for_side_question(
+            ["garbage", None, 42, {"role": "user", "content": "hi"}]
+        )
         assert "USER: hi" in out
 
 
@@ -75,7 +76,13 @@ class TestAnswerSideQuestion:
             return "the error was in foo.py"
 
         history = [{"role": "user", "content": "run the tests"}]
-        runtime = {"model": "m", "provider": "p", "base_url": "u", "api_key": "k", "api_mode": "chat_completions"}
+        runtime = {
+            "model": "m",
+            "provider": "p",
+            "base_url": "u",
+            "api_key": "k",
+            "api_mode": "chat_completions",
+        }
         with patch("agent.oneshot.run_oneshot", side_effect=fake_run_oneshot):
             answer = answer_side_question(
                 "which file had the error?", history, main_runtime=runtime
@@ -125,27 +132,33 @@ class TestForkPath:
             return "fork answer"
 
         parent = object()
-        with patch("agent.side_question._answer_via_fork", side_effect=fake_fork), \
-             patch("agent.side_question._answer_via_oneshot") as oneshot:
+        with (
+            patch("agent.side_question._answer_via_fork", side_effect=fake_fork),
+            patch("agent.side_question._answer_via_oneshot") as oneshot,
+        ):
             out = answer_side_question("q?", [], parent_agent=parent)
         assert out == "fork answer"
         assert seen["parent"] is parent
         oneshot.assert_not_called()
 
     def test_falls_back_to_oneshot_when_fork_fails(self):
-        with patch(
-            "agent.side_question._answer_via_fork",
-            side_effect=RuntimeError("boom"),
-        ), patch(
-            "agent.side_question._answer_via_oneshot", return_value="digest answer"
-        ) as oneshot:
+        with (
+            patch(
+                "agent.side_question._answer_via_fork",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch(
+                "agent.side_question._answer_via_oneshot", return_value="digest answer"
+            ) as oneshot,
+        ):
             out = answer_side_question("q?", [], parent_agent=object())
         assert out == "digest answer"
         oneshot.assert_called_once()
 
     def test_no_parent_agent_uses_oneshot(self):
-        with patch("agent.side_question._answer_via_fork") as fork, patch(
-            "agent.side_question._answer_via_oneshot", return_value="digest"
+        with (
+            patch("agent.side_question._answer_via_fork") as fork,
+            patch("agent.side_question._answer_via_oneshot", return_value="digest"),
         ):
             out = answer_side_question("q?", [])
         assert out == "digest"
@@ -180,12 +193,16 @@ class TestForkPath:
             {"role": "user", "content": "fix foo.py"},
             {"role": "assistant", "content": "fixed"},
         ]
-        with patch("agent.background_review.build_cache_parity_fork", fake_build), \
-             patch("clawk_cli.plugins.set_thread_tool_whitelist",
-                   side_effect=lambda allowed, **kw: whitelists.append(allowed)), \
-             patch("clawk_cli.plugins.clear_thread_tool_whitelist"), \
-             patch("agent.background_review._snapshot_review_usage", return_value={}), \
-             patch("agent.background_review._record_review_usage_to_parent"):
+        with (
+            patch("agent.background_review.build_cache_parity_fork", fake_build),
+            patch(
+                "clawk_cli.plugins.set_thread_tool_whitelist",
+                side_effect=lambda allowed, **kw: whitelists.append(allowed),
+            ),
+            patch("clawk_cli.plugins.clear_thread_tool_whitelist"),
+            patch("agent.background_review._snapshot_review_usage", return_value={}),
+            patch("agent.background_review._record_review_usage_to_parent"),
+        ):
             answer = _answer_via_fork(object(), "which file?", history)
 
         assert answer == "it was foo.py"

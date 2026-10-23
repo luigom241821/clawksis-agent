@@ -13,7 +13,6 @@ from both the installed and expected text before comparison.
 from __future__ import annotations
 
 
-
 # ---------------------------------------------------------------------------
 # _strip_optional_systemd_directives
 # ---------------------------------------------------------------------------
@@ -22,6 +21,7 @@ from __future__ import annotations
 class TestStripOptionalSystemdDirectives:
     def test_removes_restart_max_delay_sec(self):
         from clawk_cli.gateway import _strip_optional_systemd_directives
+
         text = """[Service]
 Restart=always
 RestartSec=5
@@ -35,11 +35,6 @@ RestartSteps=5
         assert "RestartSec=5" in result
 
 
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # systemd_unit_is_current integration
 # ---------------------------------------------------------------------------
@@ -47,7 +42,9 @@ RestartSteps=5
 
 class TestSystemdUnitIsCurrent:
     def test_unit_without_fatal_config_restart_policy_is_not_current(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         from clawk_cli import gateway as gw
 
@@ -93,14 +90,16 @@ WantedBy=default.target
         monkeypatch.setattr(
             gw,
             "generate_systemd_unit",
-            lambda system=False, run_as_user=None: installed + "\nRestartMaxDelaySec=300\nRestartSteps=5\n",
+            lambda system=False, run_as_user=None: (
+                installed + "\nRestartMaxDelaySec=300\nRestartSteps=5\n"
+            ),
         )
 
         assert gw.systemd_unit_is_current(system=False) is True
 
-
     def test_nonexistent_unit_is_not_current(self, tmp_path, monkeypatch):
         from clawk_cli import gateway as gw
+
         unit_file = tmp_path / "nonexistent.service"
         monkeypatch.setattr(gw, "get_systemd_unit_path", lambda system=False: unit_file)
         assert gw.systemd_unit_is_current(system=False) is False

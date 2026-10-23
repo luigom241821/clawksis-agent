@@ -16,8 +16,10 @@ DISPLAY_LANGUAGE_KEY = "display.language"
 def resolve_display_language(value: str) -> Optional[str]:
     """Canonical id for *value* (alias/region-tolerant) or ``None`` when no layer supplies it."""
     from agent.i18n import reset_language_cache, resolve_language_id
+
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()
     except Exception:
         pass  # a broken plugin tree must not block setting a bundled language
@@ -33,9 +35,12 @@ def display_language_error(value: str) -> Optional[str]:
     if resolve_display_language(value) is not None:
         return None
     from agent.i18n import supported_languages
-    return (f"✗ Unknown language {value!r} for {DISPLAY_LANGUAGE_KEY}. Available: "
-            f"{', '.join(supported_languages())}.\n  Install a language pack plugin "
-            "(clawk plugins install <pack>) or drop <CLAWK_HOME>/locales/<id>.yaml to add one.")
+
+    return (
+        f"✗ Unknown language {value!r} for {DISPLAY_LANGUAGE_KEY}. Available: "
+        f"{', '.join(supported_languages())}.\n  Install a language pack plugin "
+        "(clawk plugins install <pack>) or drop <CLAWK_HOME>/locales/<id>.yaml to add one."
+    )
 
 
 __all__ = ["DISPLAY_LANGUAGE_KEY", "display_language_error", "resolve_display_language"]

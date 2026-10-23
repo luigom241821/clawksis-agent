@@ -44,13 +44,18 @@ def kanban_root(tmp_path, monkeypatch):
     fresh root, which is as close to "the other machine" as a unit test
     gets.
     """
+
     def _use(name: str) -> Path:
         root = tmp_path / name
         root.mkdir(exist_ok=True)
         monkeypatch.setenv("CLAWK_HOME", str(root))
         monkeypatch.setenv("CLAWK_KANBAN_HOME", str(root))
-        for var in ("CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT",
-                    "CLAWK_KANBAN_ATTACHMENTS_ROOT", "CLAWK_KANBAN_BOARD"):
+        for var in (
+            "CLAWK_KANBAN_DB",
+            "CLAWK_KANBAN_WORKSPACES_ROOT",
+            "CLAWK_KANBAN_ATTACHMENTS_ROOT",
+            "CLAWK_KANBAN_BOARD",
+        ):
             monkeypatch.delenv(var, raising=False)
         kb._INITIALIZED_PATHS.clear()
         return root
@@ -68,8 +73,11 @@ def _seed_board(slug: str = "alpha") -> dict[str, str]:
             conn, title="scratch task", body="body", assignee="coder"
         )
         ids["worktree"] = kb.create_task(
-            conn, title="worktree task", assignee="coder",
-            workspace_kind="worktree", workspace_path="/exporter/repo",
+            conn,
+            title="worktree task",
+            assignee="coder",
+            workspace_kind="worktree",
+            workspace_path="/exporter/repo",
         )
         kb.add_comment(conn, ids["scratch"], "brooklyn", "a comment")
         kb.link_tasks(conn, ids["scratch"], ids["worktree"])
@@ -113,6 +121,7 @@ def _tasks_by_title(slug: str) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 # Round trip
 # ---------------------------------------------------------------------------
+
 
 def test_round_trip_preserves_content(kanban_root, tmp_path):
     _seed_board()
@@ -182,6 +191,7 @@ def test_workspaces_are_never_exported(kanban_root, tmp_path):
 # Machine-local state does not travel
 # ---------------------------------------------------------------------------
 
+
 def test_claimed_task_arrives_unclaimed_and_queued(kanban_root, tmp_path):
     ids = _seed_board()
     _claim(ids["scratch"])
@@ -213,9 +223,9 @@ def test_gateway_subscriptions_never_travel(kanban_root, tmp_path):
     kanban_root("target")
     result = kt.import_board(archive)
     with kbc.connect_closing(board=result["board"]) as conn:
-        assert conn.execute(
-            "SELECT COUNT(*) FROM kanban_notify_subs"
-        ).fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT COUNT(*) FROM kanban_notify_subs").fetchone()[0] == 0
+        )
 
     assert b"12345" not in Path(archive).read_bytes()
 
@@ -241,8 +251,12 @@ def test_unresolvable_workspaces_are_parked_not_dispatched(kanban_root, tmp_path
 
 
 def test_board_metadata_loses_exporter_local_paths(kanban_root, tmp_path):
-    kb.create_board("alpha", name="Alpha Board",
-                    default_workdir="/exporter/repo", project_id="proj-1")
+    kb.create_board(
+        "alpha",
+        name="Alpha Board",
+        default_workdir="/exporter/repo",
+        project_id="proj-1",
+    )
     archive = kt.export_board("alpha", str(tmp_path / "alpha"))["archive"]
 
     kanban_root("target")
@@ -257,6 +271,7 @@ def test_board_metadata_loses_exporter_local_paths(kanban_root, tmp_path):
 # ---------------------------------------------------------------------------
 # Import never overwrites
 # ---------------------------------------------------------------------------
+
 
 def test_slug_collision_creates_a_new_board(kanban_root, tmp_path):
     _seed_board()
@@ -306,13 +321,17 @@ def test_explicit_slug_is_honoured(kanban_root, tmp_path):
 # Hostile / malformed input
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("member", [
-    "../escape.txt",
-    "board/../../escape.txt",
-    "/etc/passwd",
-    "C:\\Windows\\system32",
-    "board\\..\\..\\escape.txt",
-])
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        "../escape.txt",
+        "board/../../escape.txt",
+        "/etc/passwd",
+        "C:\\Windows\\system32",
+        "board\\..\\..\\escape.txt",
+    ],
+)
 def test_traversal_members_are_rejected(member):
     with pytest.raises(ValueError):
         normalize_archive_parts(member)

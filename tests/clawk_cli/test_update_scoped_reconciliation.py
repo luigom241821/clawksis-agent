@@ -4,12 +4,25 @@ import json
 
 import pytest
 
-from clawk_cli import process_identity, update_cmd_fleet as fleet, update_inventory, update_receipt
+from clawk_cli import (
+    process_identity,
+    update_cmd_fleet as fleet,
+    update_inventory,
+    update_receipt,
+)
 from clawk_cli.update_inventory import RuntimeRecord, UpdatePlan
 from clawk_constants import get_clawk_home
 import clawk_cli.update_host_obligation as host_obligation
 
-MANUAL = {"kind": "serve", "profile": "work", "pid": 900, "supervisor": "manual-serve", "restart_via": "respawn-argv", "code_sha": "old", "detail": {"create_time": 1000.0}}
+MANUAL = {
+    "kind": "serve",
+    "profile": "work",
+    "pid": 900,
+    "supervisor": "manual-serve",
+    "restart_via": "respawn-argv",
+    "code_sha": "old",
+    "detail": {"create_time": 1000.0},
+}
 CURRENT = {"profile": "alpha", "state": "current", "code_sha": "new"}
 GATEWAY = {"kind": "gateway", "profile": "alpha", "code_sha": "old"}
 DEAD_PID = 2**22 - 7
@@ -23,23 +36,95 @@ def write_gateway_state(home, state):
     home.mkdir(parents=True, exist_ok=True)
     (home / "gateway_state.json").write_text(json.dumps(record))
 
+
 CASES = [
-    ("receipt-successor", {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}}, None, [CURRENT], False),
+    (
+        "receipt-successor",
+        {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}},
+        None,
+        [CURRENT],
+        False,
+    ),
     ("marker-external-restart", {}, "new", [CURRENT], False),
-    ("missing-sibling", {"outcome": "failed", "plan": {"runtimes": [GATEWAY, dict(GATEWAY, profile="beta")]}}, "new", [CURRENT], True),
-    ("stale-successor", {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}}, None, [dict(CURRENT, state="stale", code_sha="old")], True),
-    ("unknown-successor", {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}}, None, [dict(CURRENT, state="unknown")], True),
+    (
+        "missing-sibling",
+        {
+            "outcome": "failed",
+            "plan": {"runtimes": [GATEWAY, dict(GATEWAY, profile="beta")]},
+        },
+        "new",
+        [CURRENT],
+        True,
+    ),
+    (
+        "stale-successor",
+        {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}},
+        None,
+        [dict(CURRENT, state="stale", code_sha="old")],
+        True,
+    ),
+    (
+        "unknown-successor",
+        {"outcome": "failed", "plan": {"runtimes": [GATEWAY]}},
+        None,
+        [dict(CURRENT, state="unknown")],
+        True,
+    ),
     # An inventory-less record armed with no SHA is held to the checkout like any other
     # inventory-less marker (#125952): it clears once every live gateway is current on it and
     # stays pending while a row is stale.
     ("marker-no-sha", {}, "", [CURRENT], False),
-    ("marker-no-sha-stale", {}, "", [dict(CURRENT, state="stale", code_sha="old")], True),
+    (
+        "marker-no-sha-stale",
+        {},
+        "",
+        [dict(CURRENT, state="stale", code_sha="old")],
+        True,
+    ),
     ("checkout-moved", {}, "old", [CURRENT], True),
     ("marker-empty-no-receipt", {}, "new", [], True),
-    ("markerless-stamped-manual", {"outcome": "partial", "plan": {"runtimes": [MANUAL]}}, None, [], False),
-    ("old-manual-new-marker", {"outcome": "success", "post_update": {"sha": "old"}, "plan": {"runtimes": [MANUAL]}, "fleet": []}, "new", [], True),
-    ("same-sha-not-ownership", {"outcome": "success", "post_update": {"sha": "new"}, "plan": {"runtimes": [MANUAL]}, "fleet": []}, "new", [], True),
-    ("mixed-receipt-successors", {"outcome": "partial", "plan": {"runtimes": [GATEWAY, MANUAL]}, "fleet": [dict(CURRENT, state="stale", code_sha="old")]}, None, [CURRENT], False),
+    (
+        "markerless-stamped-manual",
+        {"outcome": "partial", "plan": {"runtimes": [MANUAL]}},
+        None,
+        [],
+        False,
+    ),
+    (
+        "old-manual-new-marker",
+        {
+            "outcome": "success",
+            "post_update": {"sha": "old"},
+            "plan": {"runtimes": [MANUAL]},
+            "fleet": [],
+        },
+        "new",
+        [],
+        True,
+    ),
+    (
+        "same-sha-not-ownership",
+        {
+            "outcome": "success",
+            "post_update": {"sha": "new"},
+            "plan": {"runtimes": [MANUAL]},
+            "fleet": [],
+        },
+        "new",
+        [],
+        True,
+    ),
+    (
+        "mixed-receipt-successors",
+        {
+            "outcome": "partial",
+            "plan": {"runtimes": [GATEWAY, MANUAL]},
+            "fleet": [dict(CURRENT, state="stale", code_sha="old")],
+        },
+        None,
+        [CURRENT],
+        False,
+    ),
 ]
 
 
@@ -62,13 +147,23 @@ def seed(monkeypatch, old, marker, live, alive=True):
     return target
 
 
-@pytest.mark.parametrize("name,old,marker,live,pending", CASES, ids=[case[0] for case in CASES])
-def test_scoped_reconciliation_matrix(monkeypatch, capsys, name, old, marker, live, pending):
+@pytest.mark.parametrize(
+    "name,old,marker,live,pending", CASES, ids=[case[0] for case in CASES]
+)
+def test_scoped_reconciliation_matrix(
+    monkeypatch, capsys, name, old, marker, live, pending
+):
     live = list(live)
     target = seed(monkeypatch, old, marker, live)
     if name in ("marker-external-restart", "missing-sibling", "checkout-moved"):
-        runtimes = [GATEWAY, dict(GATEWAY, profile="beta")] if name == "missing-sibling" else [GATEWAY]
-        fleet._write_fleet_restart_pending_marker(expected_sha=marker, runtimes=runtimes)
+        runtimes = (
+            [GATEWAY, dict(GATEWAY, profile="beta")]
+            if name == "missing-sibling"
+            else [GATEWAY]
+        )
+        fleet._write_fleet_restart_pending_marker(
+            expected_sha=marker, runtimes=runtimes
+        )
     before = target.read_bytes()
     assert fleet._pending_fleet_restart_needed() is pending
     fleet._warn_pending_fleet_restart_on_startup()
@@ -76,7 +171,9 @@ def test_scoped_reconciliation_matrix(monkeypatch, capsys, name, old, marker, li
     # Deferred catch-up rides the ordinary completion owner under PM; the marker
     # lifecycle is what the startup warning reflects here.
     assert target.read_bytes() == before
-    assert host_obligation.host_obligation_path().exists() is (marker is not None and pending)
+    assert host_obligation.host_obligation_path().exists() is (
+        marker is not None and pending
+    )
     if name == "missing-sibling":
         live.append(dict(CURRENT, profile="beta"))
         assert not fleet._pending_fleet_restart_needed()
@@ -84,8 +181,19 @@ def test_scoped_reconciliation_matrix(monkeypatch, capsys, name, old, marker, li
         assert target.read_bytes() == before
 
 
-DESKTOP = RuntimeRecord(kind="serve", profile="default", pid=901, supervisor="desktop", restart_via="desktop-respawn")
-DESKTOP_RECEIPT = {"outcome": "failed", "plan": {"runtimes": [{"kind": "serve", "profile": "default", "supervisor": "desktop"}]}}
+DESKTOP = RuntimeRecord(
+    kind="serve",
+    profile="default",
+    pid=901,
+    supervisor="desktop",
+    restart_via="desktop-respawn",
+)
+DESKTOP_RECEIPT = {
+    "outcome": "failed",
+    "plan": {
+        "runtimes": [{"kind": "serve", "profile": "default", "supervisor": "desktop"}]
+    },
+}
 
 # (name, receipt, live runtimes, gateway_state per profile, checkout, pending)
 GATEWAYLESS_CASES = [
@@ -97,30 +205,95 @@ GATEWAYLESS_CASES = [
     # HEAD carries a local commit on top of the pulled SHA (#119367).
     ("carried-local-commit", {}, [DESKTOP], {}, "hotfix", False),
     # Receipts neither discharge nor block: the old manual row is history, not the live host.
-    ("manual-receipt-gatewayless-host", {"outcome": "success", "plan": {"runtimes": [MANUAL]}}, [], {}, "new", False),
-    ("desktop-receipt-stopped-gateway", DESKTOP_RECEIPT, [DESKTOP], {"default": "running"}, "new", True),
+    (
+        "manual-receipt-gatewayless-host",
+        {"outcome": "success", "plan": {"runtimes": [MANUAL]}},
+        [],
+        {},
+        "new",
+        False,
+    ),
+    (
+        "desktop-receipt-stopped-gateway",
+        DESKTOP_RECEIPT,
+        [DESKTOP],
+        {"default": "running"},
+        "new",
+        True,
+    ),
     ("named-profile-gateway-gone", {}, [DESKTOP], {"work": "running"}, "new", True),
     ("state-record-without-state", {}, [], {"default": None}, "new", True),
-    ("unclassified-serve", {}, [RuntimeRecord(kind="serve", profile="default", pid=902, supervisor="manual")], {}, "new", True),
-    ("manual-serve-without-identity", {}, [RuntimeRecord(kind="serve", profile="work", pid=903, supervisor="manual-serve", restart_via="respawn-argv")], {}, "new", True),
-    ("gateway-runtime-without-fleet-row", {}, [RuntimeRecord(kind="gateway", profile="default", pid=904, supervisor="manual")], {}, "new", True),
+    (
+        "unclassified-serve",
+        {},
+        [RuntimeRecord(kind="serve", profile="default", pid=902, supervisor="manual")],
+        {},
+        "new",
+        True,
+    ),
+    (
+        "manual-serve-without-identity",
+        {},
+        [
+            RuntimeRecord(
+                kind="serve",
+                profile="work",
+                pid=903,
+                supervisor="manual-serve",
+                restart_via="respawn-argv",
+            )
+        ],
+        {},
+        "new",
+        True,
+    ),
+    (
+        "gateway-runtime-without-fleet-row",
+        {},
+        [
+            RuntimeRecord(
+                kind="gateway", profile="default", pid=904, supervisor="manual"
+            )
+        ],
+        {},
+        "new",
+        True,
+    ),
     ("checkout-diverged", {}, [DESKTOP], {}, "elsewhere", True),
 ]
 
 
-@pytest.mark.parametrize("name,receipt,runtimes,states,checkout,pending", GATEWAYLESS_CASES, ids=[case[0] for case in GATEWAYLESS_CASES])
-def test_gatewayless_host_settles_on_host_evidence(monkeypatch, capsys, name, receipt, runtimes, states, checkout, pending):
+@pytest.mark.parametrize(
+    "name,receipt,runtimes,states,checkout,pending",
+    GATEWAYLESS_CASES,
+    ids=[case[0] for case in GATEWAYLESS_CASES],
+)
+def test_gatewayless_host_settles_on_host_evidence(
+    monkeypatch, capsys, name, receipt, runtimes, states, checkout, pending
+):
     """An inventory-less marker with no live gateway settles on what the host runs now (#118742)."""
     from clawk_cli.profiles import _get_default_clawk_home, _get_profiles_root
 
     seed(monkeypatch, receipt, "new", [])
     (get_clawk_home() / "gateway_state.json").unlink()
     for profile, state in states.items():
-        write_gateway_state(_get_default_clawk_home() if profile == "default" else _get_profiles_root() / profile, state)
-    monkeypatch.setattr(update_inventory, "collect_runtime_inventory", lambda: UpdatePlan(runtimes=list(runtimes)))
+        write_gateway_state(
+            _get_default_clawk_home()
+            if profile == "default"
+            else _get_profiles_root() / profile,
+            state,
+        )
+    monkeypatch.setattr(
+        update_inventory,
+        "collect_runtime_inventory",
+        lambda: UpdatePlan(runtimes=list(runtimes)),
+    )
     monkeypatch.setattr(fleet, "_current_checkout_sha", lambda: checkout)
     monkeypatch.setattr("clawk_cli.update_cmd._current_checkout_sha", lambda: checkout)
-    monkeypatch.setattr("clawk_cli.update_cmd_fleet_checkout.checkout_contains", lambda sha: checkout == "hotfix")
+    monkeypatch.setattr(
+        "clawk_cli.update_cmd_fleet_checkout.checkout_contains",
+        lambda sha: checkout == "hotfix",
+    )
 
     assert fleet._pending_fleet_restart_needed() is pending
     assert host_obligation.host_obligation_path().exists() is pending
@@ -141,7 +314,9 @@ def test_gatewayless_probe_failure_keeps_marker(monkeypatch):
 
 
 @pytest.mark.parametrize("completed_restart", [False, True])
-def test_legacy_marker_discharges_on_live_fleet_evidence_without_receipt(monkeypatch, capsys, completed_restart):
+def test_legacy_marker_discharges_on_live_fleet_evidence_without_receipt(
+    monkeypatch, capsys, completed_restart
+):
     """An inventory-less N+1 marker settles on live-fleet evidence alone (#115638).
 
     It never borrows the old receipt's ownership: the receipt is left intact and the
@@ -161,8 +336,18 @@ def test_legacy_marker_discharges_on_live_fleet_evidence_without_receipt(monkeyp
     assert target.read_bytes() == receipt_before
 
 
-@pytest.mark.parametrize("live,pending", [([CURRENT], False), ([dict(CURRENT, state="stale", code_sha="old")], True), ([], True)], ids=["fleet-current", "fleet-stale", "fleet-empty"])
-def test_inventory_less_marker_settles_after_out_of_band_pull(monkeypatch, capsys, live, pending):
+@pytest.mark.parametrize(
+    "live,pending",
+    [
+        ([CURRENT], False),
+        ([dict(CURRENT, state="stale", code_sha="old")], True),
+        ([], True),
+    ],
+    ids=["fleet-current", "fleet-stale", "fleet-empty"],
+)
+def test_inventory_less_marker_settles_after_out_of_band_pull(
+    monkeypatch, capsys, live, pending
+):
     """An inventory-less marker left behind by an old update survives every later out-of-band
     ``git pull`` (#115638): nothing rewrites it, and its ``expected_sha`` is never HEAD again.
     It records no owed set, so a fleet that is current on the checkout is the whole of the

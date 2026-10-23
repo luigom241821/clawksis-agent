@@ -1,4 +1,5 @@
 """Cross-process ownership of resumable partials and their GC boundary."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -45,7 +46,12 @@ def collect_partials(root: Path, *, grace_seconds: float = GC_GRACE_SECONDS) -> 
                 continue
             pair = [root / f"{key}{suffix}" for suffix in (".part", ".ranges")]
             try:
-                if any(path.exists() and grace_seconds > 0 and now - path.stat().st_mtime < grace_seconds for path in pair):
+                if any(
+                    path.exists()
+                    and grace_seconds > 0
+                    and now - path.stat().st_mtime < grace_seconds
+                    for path in pair
+                ):
                     continue
                 for path in pair:
                     path.unlink(missing_ok=True)

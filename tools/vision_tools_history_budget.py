@@ -6,6 +6,7 @@ re-sent on every later API call. Two knobs bound that cost: ``vision.embed_targe
 may be embedded per session). See #112095: a delegated subagent re-loaded five screenshots
 158 times in 15 minutes because nothing refused the repeat.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -39,6 +40,7 @@ def _cfg_vision(key: str, default=None):
     """``vision.<key>`` from config.yaml; ``default`` when config is unavailable."""
     try:
         from clawk_cli.config import cfg_get, load_config
+
         return cfg_get(load_config(), "vision", key, default=default)
     except Exception:
         return default
@@ -69,6 +71,7 @@ def resolve_repeat_cap() -> int:
     except (TypeError, ValueError):
         pass
     from agent.delegation_context import is_delegated_child_process_context
+
     return _SUBAGENT_REPEAT_CAP if is_delegated_child_process_context() else 0
 
 
@@ -77,7 +80,10 @@ def _image_key(image_url: str) -> str:
     URLs drop their fragment, data URLs hash. Region crops are NOT part of the key — the incident
     loop alternated full loads and crops of the same files, and both re-embed the image."""
     if image_url.startswith("data:"):
-        return "data:" + hashlib.sha256(image_url.encode("utf-8", "ignore")).hexdigest()[:32]
+        return (
+            "data:"
+            + hashlib.sha256(image_url.encode("utf-8", "ignore")).hexdigest()[:32]
+        )
     stripped = image_url.split("#", 1)[0].removeprefix("file://")
     if "://" in stripped:
         return "url:" + stripped
@@ -86,6 +92,7 @@ def _image_key(image_url: str) -> str:
 
 def _count_key(image_url: str) -> tuple[str, str]:
     from gateway.session_context import get_session_env
+
     return get_session_env("CLAWK_SESSION_ID", ""), _image_key(image_url)
 
 
@@ -143,7 +150,9 @@ def release_embed(image_url: str) -> None:
 # ``[Image attached: <url>]`` handle per image into the text part; ``conversation_loop.run_conversation``
 # scopes those handles here for the turn and the tool inherits them through contextvars.
 _NATIVE_HANDLE_RE = re.compile(r"^\[Image attached(?: at)?: (.+?)\]\s*$", re.MULTILINE)
-_native_turn_images: ContextVar[frozenset[str]] = ContextVar("vision_native_turn_images", default=frozenset())
+_native_turn_images: ContextVar[frozenset[str]] = ContextVar(
+    "vision_native_turn_images", default=frozenset()
+)
 
 
 def _native_turn_keys(user_message: Any) -> frozenset[str]:
@@ -151,8 +160,14 @@ def _native_turn_keys(user_message: Any) -> frozenset[str]:
         isinstance(p, dict) and p.get("type") == "image_url" for p in user_message
     ):
         return frozenset()
-    text = "\n".join(p.get("text", "") for p in user_message if isinstance(p, dict) and p.get("type") == "text")
-    return frozenset(_image_key(m.strip()) for m in _NATIVE_HANDLE_RE.findall(text) if m.strip())
+    text = "\n".join(
+        p.get("text", "")
+        for p in user_message
+        if isinstance(p, dict) and p.get("type") == "text"
+    )
+    return frozenset(
+        _image_key(m.strip()) for m in _NATIVE_HANDLE_RE.findall(text) if m.strip()
+    )
 
 
 @contextlib.contextmanager
@@ -171,10 +186,13 @@ def native_turn_duplicate(image_url: str, region: Optional[list]) -> Optional[st
     (the Telegram case in #76411); a ``region`` crop still embeds because it returns new detail."""
     if region is not None or _image_key(image_url) not in _native_turn_images.get():
         return None
-    return json.dumps({
-        "success": True,
-        "already_in_context": True,
-        "message": (
-            "This image is already attached natively to the current user message — you can see it "
-            "now. Answer with your built-in vision; pass a `region` to zoom into part of it."),
-    })
+    return json.dumps(
+        {
+            "success": True,
+            "already_in_context": True,
+            "message": (
+                "This image is already attached natively to the current user message — you can see it "
+                "now. Answer with your built-in vision; pass a `region` to zoom into part of it."
+            ),
+        }
+    )

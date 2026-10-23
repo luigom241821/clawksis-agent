@@ -12,7 +12,9 @@ _WORKER_STDERR_TAIL_CHARS = 1500
 def format_run_error(exc: BaseException) -> str:
     """Retain chained causes without capturing locals or exposing URL credentials."""
     traceback_text = redact_sensitive_text(
-        "".join(format_exception(exc)), force=True, redact_url_credentials=True,
+        "".join(format_exception(exc)),
+        force=True,
+        redact_url_credentials=True,
     )
     return f"## Error\n\n```\n{traceback_text}\n```\n"
 

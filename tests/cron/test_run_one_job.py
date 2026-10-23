@@ -10,13 +10,21 @@ The first test characterizes the sequence as driven through `tick()` (proving
 the extraction didn't change `tick`'s behavior); the rest unit-test the
 extracted helper directly.
 """
+
 import pytest
 
 import cron.scheduler as s
 
 
-def _patch_pipeline(monkeypatch, *, success=True, output="out", final="final response",
-                    error=None, silent_marker_in=None):
+def _patch_pipeline(
+    monkeypatch,
+    *,
+    success=True,
+    output="out",
+    final="final response",
+    error=None,
+    silent_marker_in=None,
+):
     """Patch the job pipeline primitives and record the call order."""
     calls = []
 
@@ -43,12 +51,12 @@ def _patch_pipeline(monkeypatch, *, success=True, output="out", final="final res
     return calls
 
 
-
-
 def test_tick_skips_job_when_durable_fire_claim_is_lost(monkeypatch):
     """A manual/external fire that wins the shared CAS must exclude ticker."""
     calls = _patch_pipeline(monkeypatch)
-    monkeypatch.setattr(s, "get_due_jobs", lambda: [{"id": "j1", "name": "t", "deliver": "telegram"}])
+    monkeypatch.setattr(
+        s, "get_due_jobs", lambda: [{"id": "j1", "name": "t", "deliver": "telegram"}]
+    )
     monkeypatch.setattr(s, "claim_job_for_fire", lambda _job_id: False)
 
     assert s.tick(verbose=False, sync=True) == 0
@@ -74,7 +82,9 @@ def test_run_one_job_agent_declared_failure_uses_failure_bookkeeping(monkeypatch
         final="[CRON_FAILURE]\nThe delegated child could not finish the report.",
     )
 
-    ok = s.run_one_job({"id": "declared-failure", "name": "delegate", "deliver": "telegram"})
+    ok = s.run_one_job(
+        {"id": "declared-failure", "name": "delegate", "deliver": "telegram"}
+    )
 
     assert ok is True
     assert [call[0] for call in calls] == ["run_job", "save", "enqueue", "mark"]
@@ -90,7 +100,10 @@ def test_run_one_job_agent_declared_failure_is_delivered_verbatim(monkeypatch):
     # Delivery rides the durable queue on the canonical path; the composed content is what lands.
     monkeypatch.setattr(
         "cron.delivery_queue.enqueue",
-        lambda execution_id, job, content, **kw: delivered.append(content) or {"status": "pending"})
+        lambda execution_id, job, content, **kw: (
+            delivered.append(content) or {"status": "pending"}
+        ),
+    )
 
     s.run_one_job({"id": "verbatim", "name": "nightly export", "deliver": "telegram"})
 
@@ -117,9 +130,7 @@ def test_run_one_job_exception_delivers_failure_alert(monkeypatch):
     marked = []
     finished = []
 
-    monkeypatch.setattr(
-        s, "create_execution", lambda *_a, **_kw: {"id": "exec-j3"}
-    )
+    monkeypatch.setattr(s, "create_execution", lambda *_a, **_kw: {"id": "exec-j3"})
     monkeypatch.setattr(s, "claim_dispatch", lambda _job_id: True)
     monkeypatch.setattr(s, "mark_execution_running", lambda _execution_id: {})
     monkeypatch.setattr(
@@ -151,8 +162,14 @@ def test_run_one_job_exception_delivers_failure_alert(monkeypatch):
     assert len(delivered) == 1 and delivered[0][0] == "j3"
     # The notice carries the classifier verdict's gloss from the copy table (whatever its wording),
     # never the raw HTTP code as the lead, plus a retry command.
-    from cron.scheduler_failure_copy import _provider_failure_cause, classify_cron_failure_reason
-    gloss = _provider_failure_cause(classify_cron_failure_reason("Gemini HTTP 503 (UNAVAILABLE)"))
+    from cron.scheduler_failure_copy import (
+        _provider_failure_cause,
+        classify_cron_failure_reason,
+    )
+
+    gloss = _provider_failure_cause(
+        classify_cron_failure_reason("Gemini HTTP 503 (UNAVAILABLE)")
+    )
     assert gloss and gloss in delivered[0][1]
     assert not delivered[0][1].lstrip("⚠️ ").startswith("Gemini HTTP 503")
     assert "clawk cron run j3" in delivered[0][1]
@@ -175,9 +192,7 @@ def test_run_one_job_exception_records_failure_alert_delivery_error(monkeypatch)
     """A failed fallback alert must populate last_delivery_error."""
     marked = []
 
-    monkeypatch.setattr(
-        s, "create_execution", lambda *_a, **_kw: {"id": "exec-j4"}
-    )
+    monkeypatch.setattr(s, "create_execution", lambda *_a, **_kw: {"id": "exec-j4"})
     monkeypatch.setattr(s, "claim_dispatch", lambda _job_id: True)
     monkeypatch.setattr(s, "mark_execution_running", lambda _execution_id: {})
     monkeypatch.setattr(
@@ -281,9 +296,7 @@ def test_run_one_job_exception_after_delivery_does_not_redeliver(monkeypatch):
     delivered = []
     mark_calls = []
 
-    monkeypatch.setattr(
-        s, "create_execution", lambda *_a, **_kw: {"id": "exec-j5"}
-    )
+    monkeypatch.setattr(s, "create_execution", lambda *_a, **_kw: {"id": "exec-j5"})
     monkeypatch.setattr(s, "claim_dispatch", lambda _job_id: True)
     monkeypatch.setattr(s, "mark_execution_running", lambda _execution_id: {})
     monkeypatch.setattr(
@@ -313,8 +326,14 @@ def test_run_one_job_exception_after_delivery_does_not_redeliver(monkeypatch):
     assert s.drain_delivery_queue(adapters={}, loop=None) == 1
     assert delivered == [("j5", "final response")]
     assert s.drain_delivery_queue(adapters={}, loop=None) == 0
-    assert mark_calls[0] == (("j5", True, None), {
-        "delivery_error": None, "execution_id": "exec-j5", "status": "delivery_queued"})
+    assert mark_calls[0] == (
+        ("j5", True, None),
+        {
+            "delivery_error": None,
+            "execution_id": "exec-j5",
+            "status": "delivery_queued",
+        },
+    )
     assert mark_calls[1] == (
         ("j5", False, "bookkeeping boom"),
         {"delivery_error": None},
@@ -327,9 +346,7 @@ def test_run_one_job_keyboard_interrupt_skips_delivery_and_reraises(monkeypatch)
     marked = []
     finished = []
 
-    monkeypatch.setattr(
-        s, "create_execution", lambda *_a, **_kw: {"id": "exec-j6"}
-    )
+    monkeypatch.setattr(s, "create_execution", lambda *_a, **_kw: {"id": "exec-j6"})
     monkeypatch.setattr(s, "claim_dispatch", lambda _job_id: True)
     monkeypatch.setattr(s, "mark_execution_running", lambda _execution_id: {})
     monkeypatch.setattr(
@@ -419,4 +436,3 @@ def test_run_one_job_installs_secret_scope_under_multiplex(monkeypatch, tmp_path
     assert scope_during_delivery["base_url"] == "https://openrouter.ai/api/v1"
     # And it was torn down after the full lifecycle returned (no leak).
     assert ss.current_secret_scope() is None
-

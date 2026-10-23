@@ -31,7 +31,10 @@ def _is_plain_json_data(value: Any) -> bool:
     if value is None or isinstance(value, (str, int, float, bool)):
         return True
     if isinstance(value, dict):
-        return all(isinstance(key, str) and _is_plain_json_data(item) for key, item in value.items())
+        return all(
+            isinstance(key, str) and _is_plain_json_data(item)
+            for key, item in value.items()
+        )
     if isinstance(value, list):
         return all(_is_plain_json_data(item) for item in value)
     return False
@@ -51,18 +54,33 @@ def bypass_sdk_request_transform(
     (``messages`` on chat.completions) and keeps the field's position in the JSON
     body, so the bytes — and therefore any byte-keyed prompt cache — are unchanged.
     """
-    if os.environ.get(ESCAPE_HATCH_ENV, "").strip().lower() in {"1", "true", "yes", "on"}:
+    if os.environ.get(ESCAPE_HATCH_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         return request_kwargs
-    moved = {f: request_kwargs[f] for f in fields
-             if isinstance(request_kwargs.get(f), (dict, list)) and _is_plain_json_data(request_kwargs[f])}
+    moved = {
+        f: request_kwargs[f]
+        for f in fields
+        if isinstance(request_kwargs.get(f), (dict, list))
+        and _is_plain_json_data(request_kwargs[f])
+    }
     if not moved:
         return request_kwargs
-    bypassed = {key: ([] if keep_slots else value) if key in moved else value
-                for key, value in request_kwargs.items() if keep_slots or key not in moved}
+    bypassed = {
+        key: ([] if keep_slots else value) if key in moved else value
+        for key, value in request_kwargs.items()
+        if keep_slots or key not in moved
+    }
     extra_body = bypassed.get("extra_body")
     merged = dict(extra_body) if isinstance(extra_body, dict) else {}
     # An explicit caller-provided extra_body entry keeps precedence (SDK post-transform merge).
-    bypassed["extra_body"] = {**merged, **{f: v for f, v in moved.items() if f not in merged}}
+    bypassed["extra_body"] = {
+        **merged,
+        **{f: v for f, v in moved.items() if f not in merged},
+    }
     return bypassed
 
 
@@ -77,4 +95,6 @@ def bypass_chat_sdk_request_transform(request_kwargs: dict, client: Any) -> dict
     completions = getattr(getattr(client, "chat", None), "completions", None)
     if completions is None or not type(completions).__module__.startswith("openai."):
         return request_kwargs
-    return bypass_sdk_request_transform(request_kwargs, CHAT_COMPLETIONS_BYPASS_FIELDS, keep_slots=True)
+    return bypass_sdk_request_transform(
+        request_kwargs, CHAT_COMPLETIONS_BYPASS_FIELDS, keep_slots=True
+    )

@@ -80,8 +80,11 @@ class TestRefreshTokenCookieDeprecation:
         def _set():
             r = Response("ok")
             set_session_cookies(
-                r, access_token="AT", refresh_token=refresh_token,
-                access_token_expires_in=3600, use_https=True,
+                r,
+                access_token="AT",
+                refresh_token=refresh_token,
+                access_token_expires_in=3600,
+                use_https=True,
             )
             return r
 
@@ -96,7 +99,6 @@ class TestRefreshTokenCookieDeprecation:
         # AT cookie still set (whichever variant the request resolves to).
         at_cookies = [c for c in cookies if SESSION_AT_COOKIE in c]
         assert len(at_cookies) == 1
-
 
     def test_clear_session_cookies_still_emits_rt_deletion(self):
         """Even when we never wrote the RT cookie, logout/clear should
@@ -113,10 +115,7 @@ class TestRefreshTokenCookieDeprecation:
         client = TestClient(app)
         r = client.get("/clear")
         cookies = r.headers.get_list("set-cookie")
-        assert any(
-            SESSION_RT_COOKIE in c and "Max-Age=0" in c
-            for c in cookies
-        )
+        assert any(SESSION_RT_COOKIE in c and "Max-Age=0" in c for c in cookies)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +136,6 @@ class TestApi401Envelope:
         assert body["error"] == "unauthenticated"
         assert "login_url" in body
         assert body["login_url"].startswith("/login")
-
 
     def test_invalid_cookie_clears_dead_cookie(self, gated_app):
         """Dead-cookie cleanup — Phase 6 requirement so the browser
@@ -203,15 +201,19 @@ class TestTransparentRefreshOnAccessTokenEviction:
         provider = StubAuthProvider(default_ttl=900)
         register_provider(provider)
         valid_rt = _sign(
-            {"sub": "stub-user-1", "kind": "refresh", "exp": int(_t.time()) + 30 * 86400}
+            {
+                "sub": "stub-user-1",
+                "kind": "refresh",
+                "exp": int(_t.time()) + 30 * 86400,
+            }
         )
         return provider, valid_rt
-
 
     def test_provider_hint_routes_refresh_to_token_owner(self, gated_app):
         """A Nous-style RT must not be rejected by Basic just because Basic
         was registered first. The non-secret provider hint routes directly to
         the provider that minted the session."""
+
         class WrongProvider(StubAuthProvider):
             name = "basic"
 
@@ -242,15 +244,14 @@ class TestTransparentRefreshOnAccessTokenEviction:
         response = gated_app.get("/api/sessions", follow_redirects=False)
 
         assert response.status_code == 200
-        assert [row["id"] for row in response.json()["sessions"]] == ["refresh-owner-session"]
+        assert [row["id"] for row in response.json()["sessions"]] == [
+            "refresh-owner-session"
+        ]
         assert wrong.refresh_calls == 0
         assert any(
             SESSION_PROVIDER_COOKIE in cookie and "stub" in cookie
             for cookie in response.headers.get_list("set-cookie")
         )
-
-
-
 
     def test_dead_rt_only_bounces_to_login(self, gated_app):
         """An RT-only request whose RT is dead/expired must bounce (the
@@ -264,6 +265,7 @@ class TestTransparentRefreshOnAccessTokenEviction:
         # A syntactically-real but expired RT (signed with exp<=now).
         import time as _t
         from tests.clawk_cli.conftest_dashboard_auth import _sign
+
         dead_rt = _sign({"sub": "u", "kind": "refresh", "exp": int(_t.time()) - 1})
         gated_app.cookies.set(SESSION_RT_COOKIE, dead_rt)
         r = gated_app.get("/api/sessions")
@@ -272,7 +274,6 @@ class TestTransparentRefreshOnAccessTokenEviction:
 
 
 class TestHtmlRedirectNext:
-
     def test_root_path_auto_sso(self, gated_app):
         r = gated_app.get("/", follow_redirects=False)
         # Root has no useful next= (login lands at "/" anyway).
@@ -288,7 +289,6 @@ class TestHtmlRedirectNext:
         # 401 path. But sanity: the page renders.
         r = gated_app.get("/login")
         assert r.status_code == 200
-
 
 
 # ---------------------------------------------------------------------------
@@ -332,8 +332,7 @@ class TestAutoSsoRedirect:
         # silent attempt rather than being stuck on /login forever.
         set_cookie = r.headers.get_list("set-cookie")
         assert any(
-            self.SSO_ATTEMPT_COOKIE in c and "Max-Age=0" in c
-            for c in set_cookie
+            self.SSO_ATTEMPT_COOKIE in c and "Max-Age=0" in c for c in set_cookie
         )
 
     def test_no_infinite_loop_following_redirects(self, gated_app):
@@ -353,7 +352,6 @@ class TestAutoSsoRedirect:
         second = gated_app.get("/dashboard", follow_redirects=False)
         assert second.headers["location"].startswith("/login")
         assert "/auth/login" not in second.headers["location"]
-
 
     def test_login_page_prefixed_urls_behind_proxy(self, gated_app):
         """When X-Forwarded-Prefix is set, the login page must render
@@ -449,10 +447,7 @@ class TestNextSameOriginValidation:
                 self.headers = {}
 
         assert _safe_next_target(FakeRequest("/api/analytics/models")) == ""
-        assert (
-            _safe_next_target(FakeRequest("/api/analytics/models", "days=30"))
-            == ""
-        )
+        assert _safe_next_target(FakeRequest("/api/analytics/models", "days=30")) == ""
         assert _safe_next_target(FakeRequest("/api/sessions")) == ""
         assert _safe_next_target(FakeRequest("/api/config")) == ""
         assert _safe_next_target(FakeRequest("/api/status")) == ""
@@ -460,7 +455,6 @@ class TestNextSameOriginValidation:
         # has no such SPA route, but pinning the boundary keeps the rule
         # crisp.
         assert _safe_next_target(FakeRequest("/api")) == ""
-
 
     def test_safe_next_validator_does_not_reject_api_prefix_lookalikes(self):
         """Negative guard: ``/api-docs`` or ``/apis`` aren't ``/api/*``
@@ -476,8 +470,6 @@ class TestNextSameOriginValidation:
         # only match the ``/api/`` prefix or exact ``/api``.
         assert _safe_next_target(FakeRequest("/apidocs")) == "%2Fapidocs"
         assert _safe_next_target(FakeRequest("/api-keys")) == "%2Fapi-keys"
-
-
 
     def test_safe_next_validator_respects_prefix(self):
         """When ``X-Forwarded-Prefix`` is set, the ``next`` target must
@@ -514,24 +506,16 @@ class TestNextSameOriginValidation:
         )
 
         # Auth rejection paths still work with prefix
-        assert (
-            _safe_next_target(FakeRequest("/login", prefix="/clawk"))
-            == ""
-        )
-        assert (
-            _safe_next_target(FakeRequest("/auth/login", prefix="/clawk"))
-            == ""
-        )
-        assert (
-            _safe_next_target(FakeRequest("/api/auth/me", prefix="/clawk"))
-            == ""
-        )
+        assert _safe_next_target(FakeRequest("/login", prefix="/clawk")) == ""
+        assert _safe_next_target(FakeRequest("/auth/login", prefix="/clawk")) == ""
+        assert _safe_next_target(FakeRequest("/api/auth/me", prefix="/clawk")) == ""
 
         # API paths rejected even with prefix
         assert (
             _safe_next_target(FakeRequest("/api/analytics/models", prefix="/clawk"))
             == ""
         )
+
 
 # ---------------------------------------------------------------------------
 # /auth/callback honours next= and validates it
@@ -561,7 +545,10 @@ class TestAuthCallbackNext:
     """
 
     def _drive_oauth_via_login(
-        self, gated_app, *, next_path: str = "",
+        self,
+        gated_app,
+        *,
+        next_path: str = "",
         expect_next_in_button: bool = True,
     ):
         """Walk /login → /auth/login → IDP-bounce → /auth/callback like
@@ -594,9 +581,7 @@ class TestAuthCallbackNext:
         # next= values, the validator drops them at the /login boundary
         # and the button href must NOT carry the rogue value.
         if next_path and expect_next_in_button:
-            assert "next=" in href, (
-                f"login button dropped next= (href={href!r})"
-            )
+            assert "next=" in href, f"login button dropped next= (href={href!r})"
         if next_path and not expect_next_in_button:
             assert "next=" not in href, (
                 f"login button leaked rejected next= "
@@ -613,12 +598,10 @@ class TestAuthCallbackNext:
             follow_redirects=False,
         )
 
-
     def test_callback_with_safe_next_lands_there(self, gated_app):
         r = self._drive_oauth_via_login(gated_app, next_path="/sessions")
         assert r.status_code == 302
         assert r.headers["location"] == "/sessions"
-
 
     def test_attacker_callback_next_param_is_ignored(self, gated_app):
         """Hardening: even if an attacker crafts a callback URL with a
@@ -628,9 +611,7 @@ class TestAuthCallbackNext:
         # Drive a clean login with no next=.
         r_login = gated_app.get("/login", follow_redirects=False)
         assert r_login.status_code == 200
-        r_to_idp = gated_app.get(
-            "/auth/login?provider=stub", follow_redirects=False
-        )
+        r_to_idp = gated_app.get("/auth/login?provider=stub", follow_redirects=False)
         state = r_to_idp.headers["location"].split("state=")[1]
         # Attacker appends next=/internal-admin to the callback URL.
         r = gated_app.get(
@@ -686,20 +667,20 @@ class TestValidatePostLoginTarget:
 
     def test_accepts_same_origin_paths(self):
         from clawk_cli.dashboard_auth.routes import _validate_post_login_target
+
         assert _validate_post_login_target("/sessions") == "/sessions"
         # URL-encoded form (as the cookie carries it) round-trips through
         # the validator's unquote step.
         assert (
-            _validate_post_login_target("%2Fsessions%3Fpage%3D2")
-            == "/sessions?page=2"
+            _validate_post_login_target("%2Fsessions%3Fpage%3D2") == "/sessions?page=2"
         )
-
 
     def test_rejects_api_paths(self):
         """Bug fix: any ``/api/*`` target is dropped at the callback
         boundary. Pin both the exact match and the trailing-slash forms
         plus a few realistic SPA-API endpoints."""
         from clawk_cli.dashboard_auth.routes import _validate_post_login_target
+
         assert _validate_post_login_target("/api") == ""
         assert _validate_post_login_target("/api/analytics/models") == ""
         assert _validate_post_login_target("/api/analytics/models?days=30") == ""
@@ -707,11 +688,8 @@ class TestValidatePostLoginTarget:
         assert _validate_post_login_target("/api/config") == ""
         # URL-encoded form — what the cookie actually carries.
         assert (
-            _validate_post_login_target(
-                "%2Fapi%2Fanalytics%2Fmodels%3Fdays%3D30"
-            ) == ""
+            _validate_post_login_target("%2Fapi%2Fanalytics%2Fmodels%3Fdays%3D30") == ""
         )
-
 
 
 # ---------------------------------------------------------------------------
@@ -733,16 +711,17 @@ class TestRenderLoginHtmlNext:
 
     def test_no_next_emits_plain_button(self):
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html()
         assert 'href="/auth/login?provider=stub"' in html_out
         assert "next=" not in html_out
-
 
     def test_next_with_html_metacharacters_is_escaped(self):
         """Defence in depth: even though the caller validates next_path,
         we still HTML-escape the rendered value so a regression in the
         caller can't trivially produce an HTML-injection sink."""
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         # `"` in a path is already URL-encoded by quote() to %22, so it
         # never reaches the HTML escaper as a raw quote. This test pins
         # both layers: quote() does its job AND escape() does its.
@@ -752,11 +731,13 @@ class TestRenderLoginHtmlNext:
 
     def test_prefix_prepended_to_provider_button_href(self):
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html(prefix="/clawk")
         assert 'href="/clawk/auth/login?provider=stub"' in html_out
 
     def test_prefix_with_next_threaded(self):
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html(next_path="/sessions", prefix="/clawk")
         assert 'href="/clawk/auth/login?provider=stub' in html_out
         assert "next=" in html_out
@@ -765,6 +746,7 @@ class TestRenderLoginHtmlNext:
         """Explicitly passing prefix='' (the default) must NOT inject a
         ``data-prefix`` attribute or alter the hrefs."""
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html(prefix="")
         assert 'href="/auth/login?provider=stub"' in html_out
         assert "data-prefix" not in html_out
@@ -773,11 +755,13 @@ class TestRenderLoginHtmlNext:
         """The <main> element must carry data-prefix so the password-login
         JS can read it."""
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html(prefix="/clawk")
         assert 'data-prefix="/clawk"' in html_out
 
     def test_prefix_does_not_appear_without_explicit_prefix(self):
         from clawk_cli.dashboard_auth.login_page import render_login_html
+
         html_out = render_login_html()
         assert "<main>" in html_out
         assert "data-prefix" not in html_out
@@ -797,14 +781,11 @@ class TestAuthLoginPkceCookieNext:
     """
 
     def test_no_next_query_omits_next_segment(self, gated_app):
-        r = gated_app.get(
-            "/auth/login?provider=stub", follow_redirects=False
-        )
+        r = gated_app.get("/auth/login?provider=stub", follow_redirects=False)
         assert r.status_code == 302
         cookies = r.headers.get_list("set-cookie")
         pkce = next(c for c in cookies if "clawk_session_pkce" in c)
         assert "next=" not in pkce
-
 
     def test_unsafe_next_query_dropped_from_cookie(self, gated_app):
         """The validator at /auth/login refuses //evil.com BEFORE

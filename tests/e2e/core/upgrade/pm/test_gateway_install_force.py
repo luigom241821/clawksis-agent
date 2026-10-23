@@ -30,7 +30,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -42,13 +44,17 @@ def _pm_failures(sb: I.Sandbox, clawk: str) -> list[str]:
         cp = sb.run([clawk, *args], timeout=300)
         if cp.returncode != 0 or I.TRACEBACK in cp.stdout + cp.stderr:
             tail = (cp.stdout + cp.stderr).strip().splitlines()[-1:] or [""]
-            bad.append(f"`clawk {' '.join(args)}` rc={cp.returncode}: {tail[0][:300]}\n{I.describe(cp)}")
+            bad.append(
+                f"`clawk {' '.join(args)}` rc={cp.returncode}: {tail[0][:300]}\n{I.describe(cp)}"
+            )
     return bad
 
 
 @pytest.fixture(scope="module")
 def provider():
-    with FakeLLMServer(default_text="fake reply for the pm gateway-install suite") as srv:
+    with FakeLLMServer(
+        default_text="fake reply for the pm gateway-install suite"
+    ) as srv:
         yield srv
 
 
@@ -60,16 +66,22 @@ def updated(tmp_path_factory, provider):
     installed = P.selected_generation(sb)
     P.publish_dependency_release(origin, root, 1)
     P.ok(P.update(sb, env=P.lazy_env(sb)), "clawk update failed")
-    assert P.selected_generation(sb) != installed, "harness: the update did not select a new generation"
+    assert P.selected_generation(sb) != installed, (
+        "harness: the update did not select a new generation"
+    )
     return sb
 
 
 def test_gateway_install_force_leaves_the_install_bootable(updated):
     sb = updated
-    cp = P.run_env(sb, [sb.clawk, "gateway", "install", "--force"], P.lazy_env(sb), timeout=600)
+    cp = P.run_env(
+        sb, [sb.clawk, "gateway", "install", "--force"], P.lazy_env(sb), timeout=600
+    )
     assert I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
     bad = _pm_failures(sb, sb.clawk)
-    assert not bad, "clawk pm commands fail after `gateway install --force`:\n" + "\n".join(bad)
+    assert not bad, (
+        "clawk pm commands fail after `gateway install --force`:\n" + "\n".join(bad)
+    )
     gw = P.Gateway(sb, P.lazy_env(sb), sb.root / "after-install-force.log")
     try:
         gw.wait_running()
@@ -81,4 +93,6 @@ def test_pm_commands_run_from_the_managed_environment(updated):
     sb = updated
     exe = str(P.selected_generation(sb) / "venv" / "bin" / "clawk")
     bad = _pm_failures(sb, exe)
-    assert not bad, "clawk pm commands die from the managed environment's clawk:\n" + "\n".join(bad)
+    assert not bad, (
+        "clawk pm commands die from the managed environment's clawk:\n" + "\n".join(bad)
+    )

@@ -88,9 +88,7 @@ def test_disabling_collection_closes_the_send_consent_window(monkeypatch, tmp_pa
         open_windows = connection.execute(
             "SELECT COUNT(*) FROM send_consent_windows WHERE closed_at IS NULL"
         ).fetchone()[0]
-    assert open_windows == 0, (
-        "disabling collection left the send consent window open"
-    )
+    assert open_windows == 0, "disabling collection left the send consent window open"
 
 
 def test_setup_parser_accepts_telemetry_section():
@@ -110,12 +108,18 @@ def test_no_answer_survives_the_callers_later_config_save(monkeypatch):
     the profile read undecided and every surface (Desktop strip, CLI offer) asked again."""
     from clawk_cli.config import load_config, read_raw_config, save_config
 
-    monkeypatch.setattr("clawk_cli.setup.prompt_yes_no", lambda _question, default: False)
+    monkeypatch.setattr(
+        "clawk_cli.setup.prompt_yes_no", lambda _question, default: False
+    )
     config = load_config()
     setup_telemetry(config)
     save_config(config)  # what the wizard and `clawk tools` do afterwards
 
-    assert read_raw_config()["telemetry"]["shared_metrics"] == {"enabled": False, "send": False, "offer_version": 2}
+    assert read_raw_config()["telemetry"]["shared_metrics"] == {
+        "enabled": False,
+        "send": False,
+        "offer_version": 2,
+    }
 
 
 def test_unsolicited_offers_are_off_by_default(monkeypatch):
@@ -124,7 +128,9 @@ def test_unsolicited_offers_are_off_by_default(monkeypatch):
     from clawk_cli.observability import shared_metrics_consent as consent
 
     asked = []
-    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0)
+    monkeypatch.setattr(
+        "clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0
+    )
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
@@ -141,22 +147,33 @@ def test_chat_offer_asks_an_undecided_profile_once(monkeypatch):
     from clawk_cli.config import read_raw_config
     from clawk_cli.observability import shared_metrics_consent as consent
 
-    monkeypatch.setattr(consent, "UNSOLICITED_OFFER", True)  # the offer machinery itself
+    monkeypatch.setattr(
+        consent, "UNSOLICITED_OFFER", True
+    )  # the offer machinery itself
     asked = []
-    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0)
+    monkeypatch.setattr(
+        "clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: asked.append(a) or 0
+    )
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
     monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
 
-    consent.offer_consent_before_chat(argparse.Namespace(query="hi"))  # no person to ask
+    consent.offer_consent_before_chat(
+        argparse.Namespace(query="hi")
+    )  # no person to ask
     assert asked == []
     consent.offer_consent_before_chat(argparse.Namespace())
     consent.offer_consent_before_chat(argparse.Namespace())
 
     assert len(asked) == 1
     assert asked[0][1] == ["Share with Nous", "No thanks"]
-    assert consent.consent_state(read_raw_config()) == {"enabled": True, "send": True, "decided": True, "reask": False}
+    assert consent.consent_state(read_raw_config()) == {
+        "enabled": True,
+        "send": True,
+        "decided": True,
+        "reask": False,
+    }
 
 
 def test_offer_drops_keys_typed_before_it_appeared(monkeypatch):
@@ -164,8 +181,13 @@ def test_offer_drops_keys_typed_before_it_appeared(monkeypatch):
     from clawk_cli.observability import shared_metrics_consent as consent
 
     events = []
-    monkeypatch.setattr("clawk_cli.curses_ui.flush_stdin", lambda: events.append("flush"))
-    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: events.append("ask") or -1)
+    monkeypatch.setattr(
+        "clawk_cli.curses_ui.flush_stdin", lambda: events.append("flush")
+    )
+    monkeypatch.setattr(
+        "clawk_cli.curses_ui.curses_radiolist",
+        lambda *a, **k: events.append("ask") or -1,
+    )
 
     consent.offer_consent()
 
@@ -179,25 +201,41 @@ def test_unseen_no_thanks_is_asked_once_more_and_then_settled(monkeypatch):
     from clawk_cli.config import read_raw_config, save_config
     from clawk_cli.observability import shared_metrics_consent as consent
 
-    monkeypatch.setattr(consent, "UNSOLICITED_OFFER", True)  # the offer machinery itself
+    monkeypatch.setattr(
+        consent, "UNSOLICITED_OFFER", True
+    )  # the offer machinery itself
     shown = []
-    monkeypatch.setattr("clawk_cli.curses_ui.curses_radiolist", lambda *a, **k: shown.append(k["description"]) or -1)
+    monkeypatch.setattr(
+        "clawk_cli.curses_ui.curses_radiolist",
+        lambda *a, **k: shown.append(k["description"]) or -1,
+    )
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("sys.stdout.isatty", lambda: True)
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
     monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
 
     for send in (True, False):
-        save_config({"telemetry": {"shared_metrics": {"enabled": True, "send": send}}}, strip_defaults=False)
+        save_config(
+            {"telemetry": {"shared_metrics": {"enabled": True, "send": send}}},
+            strip_defaults=False,
+        )
         consent.offer_consent_before_chat(argparse.Namespace())
     assert shown == []
 
-    save_config({"telemetry": {"shared_metrics": {"enabled": False, "send": False}}}, strip_defaults=False)
+    save_config(
+        {"telemetry": {"shared_metrics": {"enabled": False, "send": False}}},
+        strip_defaults=False,
+    )
     consent.offer_consent_before_chat(argparse.Namespace())
     consent.offer_consent_before_chat(argparse.Namespace())
 
     assert len(shown) == 1 and shown[0].startswith(consent._REASK_NOTE)
-    assert consent.consent_state(read_raw_config()) == {"enabled": False, "send": False, "decided": True, "reask": False}
+    assert consent.consent_state(read_raw_config()) == {
+        "enabled": False,
+        "send": False,
+        "decided": True,
+        "reask": False,
+    }
 
 
 def test_every_cli_promise_that_pre_opt_in_data_stays_local_names_the_install_note():
@@ -209,5 +247,8 @@ def test_every_cli_promise_that_pre_opt_in_data_stays_local_names_the_install_no
 
     explainer = " ".join(_SEND_CONSENT_EXPLAINER)
     for text in (explainer, " ".join(_OFFER_DESCRIPTION.split())):
-        assert "before you opt in" in text and "install note" in text.split("before you opt in")[0], text
+        assert (
+            "before you opt in" in text
+            and "install note" in text.split("before you opt in")[0]
+        ), text
     assert max(len(line) for line in _SEND_CONSENT_EXPLAINER) + 2 <= 80

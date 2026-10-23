@@ -16,6 +16,7 @@ def all_assignees_spawnable(monkeypatch):
     would break tests that assert spawn behavior.
     """
     from clawk_cli import profiles
+
     monkeypatch.setattr(profiles, "profile_exists", lambda name: True)
 
 
@@ -91,15 +92,28 @@ def _source_channels_resolve_locally(request, monkeypatch):
     from clawk_cli.release_channels import ChannelResolution
 
     def resolve(name, repository):
-        record = {"schema": 1, "name": name, "repository": repository, "policy": "source-branch",
-                  "state": "active", "identity": None, "nextSequence": 1, "head": None,
-                  "delivery": {"kind": "source-branch", "branch": name}}
+        record = {
+            "schema": 1,
+            "name": name,
+            "repository": repository,
+            "policy": "source-branch",
+            "state": "active",
+            "identity": None,
+            "nextSequence": 1,
+            "head": None,
+            "delivery": {"kind": "source-branch", "branch": name},
+        }
         return ChannelResolution(record, record, None)
 
     monkeypatch.setattr(source_releases, "_resolve_channel", resolve)
     # stable reads GitHub releases directly; keep it off the network the same way.
-    monkeypatch.setattr(source_releases, "_resolve_stable", lambda repository, *_: source_releases.SourceTarget(
-        "stable", "stable", repository, branch="stable"))
+    monkeypatch.setattr(
+        source_releases,
+        "_resolve_stable",
+        lambda repository, *_: source_releases.SourceTarget(
+            "stable", "stable", repository, branch="stable"
+        ),
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -133,13 +147,18 @@ def isolated_source_completion(monkeypatch):
     """Unit-test the completion tail in-process; real transport is tested separately."""
     from clawk_cli import update_cmd, update_completion
 
-    monkeypatch.setattr("clawk_cli.source_build.build_update_products", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "clawk_cli.source_build.build_update_products", lambda *a, **kw: None
+    )
     monkeypatch.setattr("clawk_cli.venv_sync.publish_launchers", lambda *a: None)
 
     def complete(request):
         update_completion._complete_selected(request)
-        return {"exit_code": 0, "receipt": update_completion._read_terminal_receipt(request),
-                "windows_resume": request["windows_resume"]}
+        return {
+            "exit_code": 0,
+            "receipt": update_completion._read_terminal_receipt(request),
+            "windows_resume": request["windows_resume"],
+        }
 
     monkeypatch.setattr(update_cmd, "run_completion", complete)
 
@@ -165,6 +184,7 @@ def _reset_prompt_toolkit_output_cache():
     _clear()
     yield
     _clear()
+
 
 @pytest.fixture
 def probe_root(tmp_path):

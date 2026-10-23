@@ -30,7 +30,9 @@ def payload_cache(tmp_path, monkeypatch):
     return get_default_clawk_root() / "cache" / "uv"
 
 
-def test_update_merges_the_new_payload_into_an_existing_seed(payload_cache, tmp_path, monkeypatch):
+def test_update_merges_the_new_payload_into_an_existing_seed(
+    payload_cache, tmp_path, monkeypatch
+):
     """An update ships a payload cache for a new lock; its wheels must reach the machine cache.
 
     Regression: ``.seeded`` meant "done forever", so an updated install never received the new
@@ -46,7 +48,9 @@ def test_update_merges_the_new_payload_into_an_existing_seed(payload_cache, tmp_
     added.write_text("new pin\n", encoding="utf-8")
     (code / "uv.lock").write_text("version = 1  # updated\n", encoding="utf-8")
     packages.uv_cache_dir()
-    assert (payload_cache / "archive-v0" / "bucket" / "new.py").read_text(encoding="utf-8-sig") == "new pin\n"
+    assert (payload_cache / "archive-v0" / "bucket" / "new.py").read_text(
+        encoding="utf-8-sig"
+    ) == "new pin\n"
 
 
 def test_partial_seed_is_retried_on_the_next_install(payload_cache, monkeypatch):
@@ -62,18 +66,28 @@ def test_partial_seed_is_retried_on_the_next_install(payload_cache, monkeypatch)
 
     monkeypatch.setattr(shutil, "copytree", flaky)
     packages.uv_cache_dir()
-    assert not (payload_cache / ".seeded").is_file(), "a failed seed recorded completion"
+    assert not (payload_cache / ".seeded").is_file(), (
+        "a failed seed recorded completion"
+    )
 
     packages.uv_cache_dir()
     assert (payload_cache / ".seeded").is_file()
-    assert (payload_cache / "archive-v0" / "bucket" / "module.py").read_text(encoding="utf-8") == "seeded = True\n"
+    assert (payload_cache / "archive-v0" / "bucket" / "module.py").read_text(
+        encoding="utf-8"
+    ) == "seeded = True\n"
 
 
 def test_retry_finishes_a_seed_that_died_inside_a_directory(payload_cache, monkeypatch):
     """A copy that already created ``archive-v0/`` left the retry nothing to do: it skipped the
     existing top-level directory and recorded completion over the hole, so uv later failed with
     "Missing .dist-info directory" for the bucket the copy never finished."""
-    dist_info = paths.store_root().parent / "uv-cache" / "archive-v0" / "bucket" / "pkg-1.0.dist-info"
+    dist_info = (
+        paths.store_root().parent
+        / "uv-cache"
+        / "archive-v0"
+        / "bucket"
+        / "pkg-1.0.dist-info"
+    )
     dist_info.mkdir()
     (dist_info / "METADATA").write_text("Name: pkg\n", encoding="utf-8")
     real_copytree = shutil.copytree
@@ -88,11 +102,15 @@ def test_retry_finishes_a_seed_that_died_inside_a_directory(payload_cache, monke
     monkeypatch.setattr(shutil, "copytree", dies_at_dist_info)
     packages.uv_cache_dir()
     bucket = payload_cache / "archive-v0" / "bucket"
-    assert (bucket / "module.py").is_file() and not (bucket / "pkg-1.0.dist-info").exists()
+    assert (bucket / "module.py").is_file() and not (
+        bucket / "pkg-1.0.dist-info"
+    ).exists()
     assert not (payload_cache / ".seeded").is_file()
 
     packages.uv_cache_dir()
-    assert (bucket / "pkg-1.0.dist-info" / "METADATA").read_text(encoding="utf-8") == "Name: pkg\n"
+    assert (bucket / "pkg-1.0.dist-info" / "METADATA").read_text(
+        encoding="utf-8"
+    ) == "Name: pkg\n"
     assert (payload_cache / ".seeded").is_file()
 
 
@@ -106,7 +124,9 @@ def test_retry_recopies_a_file_the_interrupted_seed_left_short(payload_cache):
     assert (payload_cache / ".seeded").is_file()
 
 
-def test_marker_from_a_seedless_image_does_not_block_a_later_seed(payload_cache, tmp_path, monkeypatch):
+def test_marker_from_a_seedless_image_does_not_block_a_later_seed(
+    payload_cache, tmp_path, monkeypatch
+):
     """An image without ``uv-cache/`` still writes ``.seeded`` for the current lock. The next image
     ships the seed with the same lock, and its wheels must still reach the volume."""
     code = tmp_path / "code"

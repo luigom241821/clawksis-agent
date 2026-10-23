@@ -24,8 +24,11 @@ def _isolated_logging():
     """Undo the queued file handlers, root level and uvicorn logger state a test sets up."""
     root = logging.getLogger()
     saved_root_level = root.level
-    saved = {name: (lg.level, lg.propagate, list(lg.handlers))
-             for name in _UVICORN_LOGGERS for lg in (logging.getLogger(name),)}
+    saved = {
+        name: (lg.level, lg.propagate, list(lg.handlers))
+        for name in _UVICORN_LOGGERS
+        for lg in (logging.getLogger(name),)
+    }
     clawk_logging._reset_queued_handlers()
     yield
     clawk_logging._reset_queued_handlers()
@@ -42,7 +45,9 @@ def _isolated_logging():
 
 
 def _gateway_listener(_monkeypatch):
-    return build_listener_server(lambda scope, receive, send: None, "127.0.0.1", 0, auth_required=False)
+    return build_listener_server(
+        lambda scope, receive, send: None, "127.0.0.1", 0, auth_required=False
+    )
 
 
 def _dashboard_listener(monkeypatch):
@@ -50,8 +55,12 @@ def _dashboard_listener(monkeypatch):
     return ws_mod._build_uvicorn_server("127.0.0.1", 0)
 
 
-@pytest.mark.parametrize("build", [_gateway_listener, _dashboard_listener], ids=["gateway", "dashboard"])
-def test_listener_config_keeps_every_profile_log_file_writing(tmp_path, monkeypatch, build):
+@pytest.mark.parametrize(
+    "build", [_gateway_listener, _dashboard_listener], ids=["gateway", "dashboard"]
+)
+def test_listener_config_keeps_every_profile_log_file_writing(
+    tmp_path, monkeypatch, build
+):
     root = tmp_path / "root"
     beta = root / "profiles" / "beta"
     beta.mkdir(parents=True)
@@ -76,27 +85,38 @@ def test_listener_config_keeps_every_profile_log_file_writing(tmp_path, monkeypa
         for name in ("agent.log", "errors.log", "gateway.log"):
             text = (home / "logs" / name).read_text(encoding="utf-8-sig")
             assert "before-listener" in text
-            assert "after-listener" in text, f"building the listener silenced {home / 'logs' / name}"
+            assert "after-listener" in text, (
+                f"building the listener silenced {home / 'logs' / name}"
+            )
 
 
-def test_listener_config_keeps_uvicorn_on_the_console_and_out_of_the_clawk_logs(tmp_path, monkeypatch, capsys):
+def test_listener_config_keeps_uvicorn_on_the_console_and_out_of_the_clawk_logs(
+    tmp_path, monkeypatch, capsys
+):
     """Without uvicorn's ``dictConfig`` its loggers still print where they did: ``uvicorn.error``
     to stderr, access lines nowhere at ``log_level="warning"``, neither into agent.log."""
     root = tmp_path / "root"
     clawk_logging.setup_logging(clawk_home=root, mode="gateway", force=True)
     _gateway_listener(monkeypatch)
-    _dashboard_listener(monkeypatch)  # a second listener in the process adds no second console handler
+    _dashboard_listener(
+        monkeypatch
+    )  # a second listener in the process adds no second console handler
 
     logging.getLogger("uvicorn.error").warning("uvicorn-console-warning")
     logging.getLogger("uvicorn.access").info(
-        '%s - "%s %s HTTP/%s" %d', "127.0.0.1:50000", "GET", "/access-line", "1.1", 200)
+        '%s - "%s %s HTTP/%s" %d', "127.0.0.1:50000", "GET", "/access-line", "1.1", 200
+    )
     logging.getLogger("gateway.listener_logging").warning("clawk-file-warning")
     clawk_logging.flush_log_queue()
 
     out, err = capsys.readouterr()
-    assert logging.getLogger("uvicorn").level == logging.INFO  # LOGGING_CONFIG's, not the root's
+    assert (
+        logging.getLogger("uvicorn").level == logging.INFO
+    )  # LOGGING_CONFIG's, not the root's
     assert err.count("uvicorn-console-warning") == 1
     assert "/access-line" not in out + err
     agent_log = (root / "logs" / "agent.log").read_text(encoding="utf-8-sig")
     assert "clawk-file-warning" in agent_log
-    assert "uvicorn-console-warning" not in agent_log and "/access-line" not in agent_log
+    assert (
+        "uvicorn-console-warning" not in agent_log and "/access-line" not in agent_log
+    )

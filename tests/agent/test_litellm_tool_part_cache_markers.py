@@ -43,9 +43,7 @@ def _tool_messages(msgs):
 def _has_part_marker(msg):
     content = msg.get("content")
     if isinstance(content, list):
-        return any(
-            isinstance(p, dict) and "cache_control" in p for p in content
-        )
+        return any(isinstance(p, dict) and "cache_control" in p for p in content)
     return False
 
 
@@ -92,8 +90,7 @@ class TestEnvelopeToolPartMarkerSuppression:
         non_tool_marked = [
             m
             for m in decorated
-            if m.get("role") != "tool"
-            and ("cache_control" in m or _has_part_marker(m))
+            if m.get("role") != "tool" and ("cache_control" in m or _has_part_marker(m))
         ]
         assert non_tool_marked, "budget must reallocate, not vanish"
 
@@ -122,6 +119,4 @@ class TestEnvelopeToolPartMarkerSuppression:
             native_anthropic=True,
             tool_part_markers=False,
         )
-        assert any(
-            "cache_control" in m for m in _tool_messages(decorated)
-        )
+        assert any("cache_control" in m for m in _tool_messages(decorated))

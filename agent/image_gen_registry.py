@@ -13,13 +13,19 @@ import logging
 from typing import Optional
 
 from agent.image_gen_provider import ImageGenProvider
-from agent.provider_registry import ProviderRegistry, configured_provider_name, is_available_safe
+from agent.provider_registry import (
+    ProviderRegistry,
+    configured_provider_name,
+    is_available_safe,
+)
 
 logger = logging.getLogger(__name__)
 
 
 _registry: ProviderRegistry[ImageGenProvider] = ProviderRegistry(
-    label="Image gen", provider_cls=ImageGenProvider, logger=logger,
+    label="Image gen",
+    provider_cls=ImageGenProvider,
+    logger=logger,
 )
 _registry.export(globals())
 
@@ -35,10 +41,15 @@ def get_active_provider() -> Optional[ImageGenProvider]:
     if configured:
         if snapshot.get(configured) is not None:
             return snapshot[configured]
-        logger.debug("image_gen.provider='%s' configured but not registered; falling back", configured)
+        logger.debug(
+            "image_gen.provider='%s' configured but not registered; falling back",
+            configured,
+        )
 
     def _available(p: ImageGenProvider) -> bool:
-        return is_available_safe(p, logger, "image_gen provider %s.is_available() raised %s")
+        return is_available_safe(
+            p, logger, "image_gen provider %s.is_available() raised %s"
+        )
 
     available = [p for p in snapshot.values() if _available(p)]
     if len(available) == 1:

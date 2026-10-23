@@ -64,7 +64,9 @@ class TestModelSetSecretHandling:
         assert SECRET not in text
         assert "api_key: ${MY_SECRET_KEY}" in _model_block(isolated_home)
 
-    def test_key_env_pointer_is_preferred_over_api_key(self, isolated_home, monkeypatch):
+    def test_key_env_pointer_is_preferred_over_api_key(
+        self, isolated_home, monkeypatch
+    ):
         monkeypatch.setenv("MYPROV_KEY", SECRET)
         _write_config(
             isolated_home,

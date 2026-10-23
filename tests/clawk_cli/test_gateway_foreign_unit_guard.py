@@ -7,6 +7,7 @@ Real incident: an e2e helper ran `clawk gateway stop` with a throwaway ``HOME`` 
 ``clawk-gateway``; system units are global, so that unit "existed"; ``_sync_clawk_home_from_systemd_unit``
 then adopted the production home and ``systemctl stop clawk-gateway`` took every bot offline.
 """
+
 import os
 from pathlib import Path
 
@@ -27,21 +28,37 @@ def host(tmp_path, monkeypatch):
     unit_dir = tmp_path / "systemd"
     unit_dir.mkdir()
     (unit_dir / f"{gateway_cli._SERVICE_BASE}.service").write_text(
-        f'[Service]\nEnvironment="CLAWK_HOME={prod}"\nExecStart=/bin/true\n', encoding="utf-8")
+        f'[Service]\nEnvironment="CLAWK_HOME={prod}"\nExecStart=/bin/true\n',
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gateway_cli, "_SYSTEM_UNIT_DIR", unit_dir)
-    monkeypatch.setattr(gateway_cli, "user_systemd_unit_dir", lambda: tmp_path / "no-user-units")
+    monkeypatch.setattr(
+        gateway_cli, "user_systemd_unit_dir", lambda: tmp_path / "no-user-units"
+    )
     monkeypatch.setattr(gateway_cli, "supports_systemd_services", lambda: True)
     import clawk_constants
+
     monkeypatch.setattr(clawk_constants, "_account_home", lambda: account.parent)
     monkeypatch.setattr(os, "geteuid", lambda: 0)
     # Never reach a real systemd: preamble/privilege checks are not under test, systemctl is recorded.
-    monkeypatch.setattr(gateway_cli, "_systemd_scope_preamble", lambda action, system, **_k: system)
-    monkeypatch.setattr(gateway_cli, "refresh_systemd_unit_if_needed", lambda system=False: None)
+    monkeypatch.setattr(
+        gateway_cli, "_systemd_scope_preamble", lambda action, system, **_k: system
+    )
+    monkeypatch.setattr(
+        gateway_cli, "refresh_systemd_unit_if_needed", lambda system=False: None
+    )
     monkeypatch.setattr(gateway_cli, "_systemctl_show", lambda props, system=False: {})
     monkeypatch.setattr(gateway_cli, "_mark_planned_stop", lambda *a, **k: None)
     calls = []
-    monkeypatch.setattr(gateway_cli, "_run_systemctl", lambda args, **kw: calls.append(list(args)))
-    return {"prod": prod, "account": account, "sandbox_home": sandbox_home, "calls": calls}
+    monkeypatch.setattr(
+        gateway_cli, "_run_systemctl", lambda args, **kw: calls.append(list(args))
+    )
+    return {
+        "prod": prod,
+        "account": account,
+        "sandbox_home": sandbox_home,
+        "calls": calls,
+    }
 
 
 def _sandbox(monkeypatch, host):
@@ -50,28 +67,41 @@ def _sandbox(monkeypatch, host):
     ``profiles/<name>``, a pre-pinning unit), so the guard is what keeps the verb off that unit."""
     monkeypatch.setenv("HOME", str(host["sandbox_home"]))
     monkeypatch.setenv("CLAWK_HOME", str(host["sandbox_home"] / ".clawk"))
-    collided = gateway_cli._SYSTEM_UNIT_DIR / f"{gateway_cli.get_service_name()}.service"
-    collided.write_text(f'[Service]\nEnvironment="CLAWK_HOME={host["prod"]}"\nExecStart=/bin/true\n', encoding="utf-8")
+    collided = (
+        gateway_cli._SYSTEM_UNIT_DIR / f"{gateway_cli.get_service_name()}.service"
+    )
+    collided.write_text(
+        f'[Service]\nEnvironment="CLAWK_HOME={host["prod"]}"\nExecStart=/bin/true\n',
+        encoding="utf-8",
+    )
 
 
 @pytest.mark.platforms("linux")
-def test_sandbox_home_does_not_name_the_bare_unit_and_a_colliding_unit_is_not_installed_for_it(host, monkeypatch):
+def test_sandbox_home_does_not_name_the_bare_unit_and_a_colliding_unit_is_not_installed_for_it(
+    host, monkeypatch
+):
     _sandbox(monkeypatch, host)
-    assert gateway_cli.get_service_name() != gateway_cli._SERVICE_BASE      # naming root: account, not $HOME
+    assert (
+        gateway_cli.get_service_name() != gateway_cli._SERVICE_BASE
+    )  # naming root: account, not $HOME
     assert gateway_service_owner.foreign_systemd_unit_home(True) == str(host["prod"])
-    assert gateway_cli._systemd_unit_installed() is False                   # `gateway stop` -> PID path
+    assert gateway_cli._systemd_unit_installed() is False  # `gateway stop` -> PID path
     assert gateway_cli._installed_service_kind_for(lambda: False) is None
 
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("verb", ["stop", "restart", "start"])
-def test_direct_service_verbs_refuse_a_foreign_unit_without_touching_systemd(host, monkeypatch, verb):
+def test_direct_service_verbs_refuse_a_foreign_unit_without_touching_systemd(
+    host, monkeypatch, verb
+):
     _sandbox(monkeypatch, host)
     with pytest.raises(SystemExit) as exc:
         getattr(gateway_cli, f"systemd_{verb}")(system=True)
     assert exc.value.code == 1
     assert host["calls"] == []
-    assert os.environ["CLAWK_HOME"] == str(host["sandbox_home"] / ".clawk")   # never adopted prod's home
+    assert os.environ["CLAWK_HOME"] == str(
+        host["sandbox_home"] / ".clawk"
+    )  # never adopted prod's home
 
 
 @pytest.mark.platforms("linux")
@@ -89,7 +119,7 @@ def test_sudo_from_the_account_default_home_still_operates_the_unit(host, monkey
     assert gateway_service_owner.foreign_systemd_unit_home(True) is None
     gateway_cli.systemd_stop(system=True)
     assert host["calls"] == [["stop", gateway_cli.get_service_name()]]
-    assert Path(os.environ["CLAWK_HOME"]) == host["prod"]                       # adopted, as before
+    assert Path(os.environ["CLAWK_HOME"]) == host["prod"]  # adopted, as before
 
 
 @pytest.mark.platforms("linux")

@@ -6,7 +6,9 @@ import queue
 import threading
 
 
-def test_side_workers_hold_admission_through_cleanup_and_preserve_profile_scope(tmp_path, monkeypatch):
+def test_side_workers_hold_admission_through_cleanup_and_preserve_profile_scope(
+    tmp_path, monkeypatch
+):
     from clawk_cli import backend_retirement
     from clawk_constants import get_clawk_home
     from agent.secret_scope import get_secret, set_multiplex_active
@@ -27,11 +29,15 @@ def test_side_workers_hold_admission_through_cleanup_and_preserve_profile_scope(
     set_multiplex_active(True)
     try:
         for home in [homes[0], homes[1], homes[0]]:
-            entered, release, cleaning, release_cleanup = (threading.Event() for _ in range(4))
+            entered, release, cleaning, release_cleanup = (
+                threading.Event() for _ in range(4)
+            )
             observed = []
 
             def body():
-                observed.append((get_clawk_home(), get_secret("RETIREMENT_SCOPE"), marker.get()))
+                observed.append(
+                    (get_clawk_home(), get_secret("RETIREMENT_SCOPE"), marker.get())
+                )
                 entered.set()
                 assert release.wait(10)
                 return "finished"
@@ -42,7 +48,15 @@ def test_side_workers_hold_admission_through_cleanup_and_preserve_profile_scope(
 
             session = {"profile_home": str(home), "cwd": str(tmp_path)}
             try:
-                result = server._spawn_side_agent("r", session, "side", "parent", "background.complete", body, cleanup=cleanup)
+                result = server._spawn_side_agent(
+                    "r",
+                    session,
+                    "side",
+                    "parent",
+                    "background.complete",
+                    body,
+                    cleanup=cleanup,
+                )
                 assert result["result"]["task_id"] == "side"
                 assert entered.wait(10)
                 assert fence.prepare() == {"ok": False, "idle": False}
@@ -59,7 +73,9 @@ def test_side_workers_hold_admission_through_cleanup_and_preserve_profile_scope(
                         thread.join(10)
             emitted.get(timeout=10)
             token = fence.prepare()["token"]
-            assert "error" in server._spawn_side_agent("r", session, "late", "parent", "background.complete", body)
+            assert "error" in server._spawn_side_agent(
+                "r", session, "late", "parent", "background.complete", body
+            )
             assert fence.cancel(token) == {"ok": True}
     finally:
         set_multiplex_active(False)

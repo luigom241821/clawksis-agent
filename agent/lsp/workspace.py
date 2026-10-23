@@ -7,6 +7,7 @@
    files (``pyproject.toml``, ``Cargo.toml``, ...), optionally bailing if an exclude marker
    shows up first.
 """
+
 from __future__ import annotations
 
 import logging
@@ -134,7 +135,9 @@ def nearest_root(
     return None
 
 
-def resolve_workspace_for_file(file_path: str, *, cwd: Optional[str] = None) -> tuple[Optional[str], bool]:
+def resolve_workspace_for_file(
+    file_path: str, *, cwd: Optional[str] = None
+) -> tuple[Optional[str], bool]:
     """Return ``(workspace_root, gated_in)`` for a file.  The cwd's worktree wins when the file is
     inside it; otherwise the file's own worktree is the fallback anchor (monorepos / unrelated
     checkouts).  ``(None, False)`` when neither is in a git worktree."""
@@ -163,6 +166,7 @@ def operator_workspace_roots() -> set[str]:
     from gateway.session_context import get_session_env
     from tools.terminal_scope import TerminalPolicyUnavailable
     from utils import is_truthy_value
+
     # Work the model can schedule has no operator anchor: a kanban worker is launched in (with
     # TERMINAL_CWD =) the task's workspace and a cron run's session cwd is the job's workdir, and the
     # kanban_create / cronjob tools let the model pick both.
@@ -176,14 +180,19 @@ def operator_workspace_roots() -> set[str]:
     for anchor in anchors:
         try:
             root = find_git_worktree(str(anchor()))
-        except (OSError, TerminalPolicyUnavailable):  # a deleted cwd; a profile whose terminal policy failed
+        except (
+            OSError,
+            TerminalPolicyUnavailable,
+        ):  # a deleted cwd; a profile whose terminal policy failed
             continue
         if root is not None and not is_inside_workspace(home, root):
             roots.add(root)
     return roots
 
 
-def is_trusted_workspace(root: str, trusted_roots: Iterable[str], operator_roots: AbstractSet[str]) -> bool:
+def is_trusted_workspace(
+    root: str, trusted_roots: Iterable[str], operator_roots: AbstractSet[str]
+) -> bool:
     """True iff a language server may load code the project at ``root`` ships (its own interpreter,
     TypeScript SDK, config files, build scripts): ``root`` is inside an ``lsp.trusted_workspaces``
     entry, or belongs to one of the ``operator_workspace_roots`` worktrees.  A nested clone inside

@@ -62,9 +62,7 @@ def live_held_db(tmp_path):
     src = tmp_path / "snap.db"
     _make_db(src, "snapshot-good")
     _make_db(dst, "live-old")
-    held = connect_tracked(
-        dst, connect_fn=sqlite3.connect, check_same_thread=False
-    )
+    held = connect_tracked(dst, connect_fn=sqlite3.connect, check_same_thread=False)
     held.execute("PRAGMA journal_mode=WAL")
     held.execute("INSERT INTO t VALUES ('held-write')")
     held.commit()
@@ -92,9 +90,7 @@ def test_safe_restore_fallback_refuses_under_own_live_connection(live_held_db):
     assert _own_deleted_fds(str(dst.name)) == []
 
 
-def test_update_autorestore_refuses_under_own_live_connection(
-    live_held_db, capsys
-):
+def test_update_autorestore_refuses_under_own_live_connection(live_held_db, capsys):
     src, dst = live_held_db
     wal = dst.with_name(dst.name + "-wal")
     wal_ino = wal.stat().st_ino

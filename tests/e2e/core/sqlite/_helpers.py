@@ -60,7 +60,9 @@ def skip_unless_deployable(journal: str) -> None:
     if journal == "wal" and not linked_sqlite_is_wal_capable():
         import pytest
 
-        pytest.skip(f"linked SQLite {sqlite3.sqlite_version} runs Clawksis in DELETE mode; the delete arm covers it")
+        pytest.skip(
+            f"linked SQLite {sqlite3.sqlite_version} runs Clawksis in DELETE mode; the delete arm covers it"
+        )
 
 
 def base_seed() -> int:
@@ -74,15 +76,19 @@ def episode_seed(label: str) -> int:
 def child_env(home: Path, clawk_home: Path) -> dict:
     """Probe hygiene: private HOME/CLAWK_HOME, no provider credentials, repo importable."""
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update({
-        "HOME": str(home),
-        "CLAWK_HOME": str(clawk_home),
-        "PYTHONUNBUFFERED": "1",
-        # The child's CLAWK_HOME *is* this chamber's private home, which the live-DB guard reads as
-        # "the real Clawksis root"; HOME/CLAWK_HOME above already keep it off the production install.
-        "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-        "PYTHONPATH": os.pathsep.join(p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH", "")) if p),
-    })
+    env.update(
+        {
+            "HOME": str(home),
+            "CLAWK_HOME": str(clawk_home),
+            "PYTHONUNBUFFERED": "1",
+            # The child's CLAWK_HOME *is* this chamber's private home, which the live-DB guard reads as
+            # "the real Clawksis root"; HOME/CLAWK_HOME above already keep it off the production install.
+            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+            "PYTHONPATH": os.pathsep.join(
+                p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH", "")) if p
+            ),
+        }
+    )
     return env
 
 
@@ -97,7 +103,9 @@ class Chamber:
         self.clawk_home = self.home / ".clawksis"
         self.clawk_home.mkdir(parents=True, exist_ok=True)
         # The config default in BOTH arms: the delete arm is a default-config user on a vulnerable SQLite.
-        (self.clawk_home / "config.yaml").write_text("database:\n  journal_mode: wal\n", encoding="utf-8")
+        (self.clawk_home / "config.yaml").write_text(
+            "database:\n  journal_mode: wal\n", encoding="utf-8"
+        )
         self.db = self.clawk_home / "state.db"
         self.work = root / "work"
         self.work.mkdir(exist_ok=True)
@@ -113,21 +121,34 @@ class Chamber:
         self.fd_samples: dict[str, list[int]] = {}
         self._lock = threading.Lock()
         self._monitor_stop = threading.Event()
-        self._monitor = threading.Thread(target=self._scan_loop, name="deleted-fd-monitor", daemon=True)
+        self._monitor = threading.Thread(
+            target=self._scan_loop, name="deleted-fd-monitor", daemon=True
+        )
         self._monitor.start()
 
     # -- lifecycle ---------------------------------------------------------------------------------
-    def spawn(self, role: str, name: str, *, env: dict | None = None, **args) -> subprocess.Popen:
+    def spawn(
+        self, role: str, name: str, *, env: dict | None = None, **args
+    ) -> subprocess.Popen:
         assert name not in self.procs, f"duplicate role name {name}"
         if role == "writer":
             args.setdefault("pace", self.writer_pace)
-        payload = {"workdir": str(self.work), "name": name, "db": str(self.db),
-                   "stop": str(self.work / f"{name}.stop"), "busy_ok": self.mode == "delete", **args}
+        payload = {
+            "workdir": str(self.work),
+            "name": name,
+            "db": str(self.db),
+            "stop": str(self.work / f"{name}.stop"),
+            "busy_ok": self.mode == "delete",
+            **args,
+        }
         stderr = open(self.work / f"{name}.stderr", "wb")
         proc = subprocess.Popen(
             [sys.executable, str(ROLES), role, json.dumps(payload)],
-            cwd=str(REPO_ROOT), env={**self.env, **(env or {})}, stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL, stderr=stderr,
+            cwd=str(REPO_ROOT),
+            env={**self.env, **(env or {})},
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr,
         )
         proc._stderr_file = stderr  # type: ignore[attr-defined]
         with self._lock:
@@ -142,8 +163,12 @@ class Chamber:
         stderr = open(self.work / f"{name}.stderr", "wb")
         payload = {"workdir": str(self.work), "name": name, "argv": list(argv)}
         proc = subprocess.Popen(
-            [sys.executable, str(ROLES), "cli", json.dumps(payload)], cwd=str(REPO_ROOT), env=self.env,
-            stdin=subprocess.DEVNULL, stdout=open(self.work / f"{name}.stdout", "wb"), stderr=stderr,
+            [sys.executable, str(ROLES), "cli", json.dumps(payload)],
+            cwd=str(REPO_ROOT),
+            env=self.env,
+            stdin=subprocess.DEVNULL,
+            stdout=open(self.work / f"{name}.stdout", "wb"),
+            stderr=stderr,
         )
         proc._stderr_file = stderr  # type: ignore[attr-defined]
         with self._lock:
@@ -152,28 +177,45 @@ class Chamber:
 
     def stderr(self, name: str) -> str:
         path = self.work / f"{name}.stderr"
-        return path.read_text(encoding="utf-8", errors="replace")[-3000:] if path.exists() else ""
+        return (
+            path.read_text(encoding="utf-8", errors="replace")[-3000:]
+            if path.exists()
+            else ""
+        )
 
     def wait_event(self, name: str, event: str, *, deadline: float = 60.0) -> dict:
         found: list[dict] = []
 
         def _has() -> bool:
-            found[:] = [e for e in self.events(name) if e.get("event") in (event, "error")]
+            found[:] = [
+                e for e in self.events(name) if e.get("event") in (event, "error")
+            ]
             return bool(found)
 
         self._wait(name, _has, f"{name}:{event}", deadline)
-        assert found[0].get("event") == event, f"{name} reported {found[0]}\n{self.stderr(name)}"
+        assert found[0].get("event") == event, (
+            f"{name} reported {found[0]}\n{self.stderr(name)}"
+        )
         return found[0]
 
     def wait_acks(self, name: str, n: int, *, deadline: float = 60.0) -> None:
-        self._wait(name, lambda: len(self.journal(name)[1]) >= n, f"{n} acks from {name}", deadline)
+        self._wait(
+            name,
+            lambda: len(self.journal(name)[1]) >= n,
+            f"{n} acks from {name}",
+            deadline,
+        )
 
     def _wait(self, name: str, predicate, what: str, deadline: float) -> None:
         try:
-            wait_for(predicate, deadline=deadline, what=what, child=self.procs.get(name))
+            wait_for(
+                predicate, deadline=deadline, what=what, child=self.procs.get(name)
+            )
         except AssertionError as exc:
             tail = [e for e in self.events(name) if e.get("event") == "error"][-1:]
-            raise AssertionError(f"{exc}\n{name} stderr:\n{self.stderr(name)}\n{tail}") from None
+            raise AssertionError(
+                f"{exc}\n{name} stderr:\n{self.stderr(name)}\n{tail}"
+            ) from None
 
     def request_stop(self, name: str) -> None:
         (self.work / f"{name}.stop").touch()
@@ -184,7 +226,9 @@ class Chamber:
             rc = proc.wait(timeout=deadline)
         except subprocess.TimeoutExpired:
             kill9_and_reap(proc)
-            raise AssertionError(f"{name} did not exit within {deadline}s\n{self.stderr(name)}") from None
+            raise AssertionError(
+                f"{name} did not exit within {deadline}s\n{self.stderr(name)}"
+            ) from None
         finally:
             proc._stderr_file.close()  # type: ignore[attr-defined]
         return rc
@@ -237,7 +281,10 @@ class Chamber:
                         link = os.readlink(f"{fd_dir}/{fd}")
                     except OSError:
                         continue
-                    if link.endswith(" (deleted)") and link[: -len(" (deleted)")] in targets:
+                    if (
+                        link.endswith(" (deleted)")
+                        and link[: -len(" (deleted)")] in targets
+                    ):
                         if not self._still_held(fd_dir, fd, link):
                             continue
                         with self._lock:
@@ -282,7 +329,12 @@ class Chamber:
         return out
 
     def errors(self) -> list[tuple[str, dict]]:
-        return [(name, e) for name in list(self.procs) for e in self.events(name) if e.get("event") == "error"]
+        return [
+            (name, e)
+            for name in list(self.procs)
+            for e in self.events(name)
+            if e.get("event") == "error"
+        ]
 
     def journal(self, name: str) -> tuple[dict[str, str], set[str]]:
         """``(intents: tok -> sid, acked tokens)`` for one writer run."""
@@ -330,7 +382,9 @@ def counts(db: Path) -> dict[str, int]:
     """Per-session canonical row counts (plus ``__total__``)."""
     conn = _connect(db)
     try:
-        rows = conn.execute("SELECT session_id, count(*) FROM messages GROUP BY session_id").fetchall()
+        rows = conn.execute(
+            "SELECT session_id, count(*) FROM messages GROUP BY session_id"
+        ).fetchall()
     finally:
         conn.close()
     out = {sid: n for sid, n in rows}
@@ -342,7 +396,9 @@ def token_counts(db: Path) -> dict[str, int]:
     """How many canonical rows carry each writer token (first word of the content)."""
     conn = _connect(db)
     try:
-        rows = conn.execute("SELECT content FROM messages WHERE content LIKE 'TK%'").fetchall()
+        rows = conn.execute(
+            "SELECT content FROM messages WHERE content LIKE 'TK%'"
+        ).fetchall()
     finally:
         conn.close()
     out: dict[str, int] = {}
@@ -358,13 +414,26 @@ def fts_problems(db: Path, sample_tokens: list[str]) -> list[str]:
     problems: list[str] = []
     conn = _connect(db, ro=False)
     try:
-        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master").fetchall()}
-        meta = dict(conn.execute("SELECT key, value FROM state_meta").fetchall()) if "state_meta" in tables else {}
-        pending = {k: v for k, v in meta.items() if k.startswith("fts_rebuild") or k in ("fts_stale",)}
+        tables = {
+            r[0] for r in conn.execute("SELECT name FROM sqlite_master").fetchall()
+        }
+        meta = (
+            dict(conn.execute("SELECT key, value FROM state_meta").fetchall())
+            if "state_meta" in tables
+            else {}
+        )
+        pending = {
+            k: v
+            for k, v in meta.items()
+            if k.startswith("fts_rebuild") or k in ("fts_stale",)
+        }
         if pending:
             problems.append(f"FTS recovery still pending in state_meta: {pending}")
         canon = conn.execute("SELECT count(*) FROM messages").fetchone()[0]
-        pairs = [("messages_fts", "messages_fts_src"), ("messages_fts_trigram", "messages_fts_trigram_src")]
+        pairs = [
+            ("messages_fts", "messages_fts_src"),
+            ("messages_fts_trigram", "messages_fts_trigram_src"),
+        ]
         for fts, src in pairs:
             if fts not in tables:
                 problems.append(f"{fts} missing")
@@ -372,16 +441,24 @@ def fts_problems(db: Path, sample_tokens: list[str]) -> list[str]:
             indexed = conn.execute(f"SELECT count(*) FROM {fts}_docsize").fetchone()[0]
             expected = conn.execute(f"SELECT count(*) FROM {src}").fetchone()[0]
             if indexed != expected:
-                problems.append(f"{fts}: {indexed} indexed rows vs {expected} source rows (canonical {canon})")
+                problems.append(
+                    f"{fts}: {indexed} indexed rows vs {expected} source rows (canonical {canon})"
+                )
             try:
-                conn.execute(f"INSERT INTO {fts}({fts}, rank) VALUES('integrity-check', 1)")
+                conn.execute(
+                    f"INSERT INTO {fts}({fts}, rank) VALUES('integrity-check', 1)"
+                )
             except sqlite3.DatabaseError as exc:
                 problems.append(f"{fts} integrity-check: {exc}")
         for tok in sample_tokens:
-            hits = conn.execute("SELECT count(*) FROM messages_fts WHERE messages_fts MATCH ?",
-                                (f'"{tok}"',)).fetchone()[0]
+            hits = conn.execute(
+                "SELECT count(*) FROM messages_fts WHERE messages_fts MATCH ?",
+                (f'"{tok}"',),
+            ).fetchone()[0]
             if hits != 1:
-                problems.append(f"session search finds acked {tok} {hits}x (expected 1)")
+                problems.append(
+                    f"session search finds acked {tok} {hits}x (expected 1)"
+                )
         conn.rollback()
     finally:
         conn.close()
@@ -394,14 +471,20 @@ def journal_mode_problems(chamber: Chamber, prefix: str = "") -> list[str]:
     problems = []
     mode = journal_mode(chamber.db)
     if mode != chamber.mode:
-        problems.append(f"journal_mode is {mode!r} after the episode (arm is {chamber.mode})")
+        problems.append(
+            f"journal_mode is {mode!r} after the episode (arm is {chamber.mode})"
+        )
     want = chamber.mode == "wal"
     for name in list(chamber.procs):
         if not name.startswith(prefix):
             continue
-        ready = [e for e in chamber.events(name) if e.get("event") == "ready" and "wal" in e]
+        ready = [
+            e for e in chamber.events(name) if e.get("event") == "ready" and "wal" in e
+        ]
         if ready and ready[0]["wal"] != want:
-            problems.append(f"{name} opened SessionDB with _wal_active={ready[0]['wal']} in the {chamber.mode} arm")
+            problems.append(
+                f"{name} opened SessionDB with _wal_active={ready[0]['wal']} in the {chamber.mode} arm"
+            )
     return problems
 
 
@@ -433,7 +516,9 @@ def exactly_once_problems(chamber: Chamber) -> list[str]:
                 problems.append(f"{run}: in-flight {tok} stored {stored[tok]}x")
     phantom = sorted(set(stored) - intended)
     if phantom:
-        problems.append(f"{len(phantom)} stored rows no writer intended, e.g. {phantom[:3]}")
+        problems.append(
+            f"{len(phantom)} stored rows no writer intended, e.g. {phantom[:3]}"
+        )
     return problems
 
 
@@ -442,15 +527,21 @@ def compress_journal(chamber: Chamber, run: str) -> list[list[str]]:
     path = chamber.work / f"{run}.journal"
     if not path.exists():
         return []
-    return [line.split()[1:] for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("C ")]
+    return [
+        line.split()[1:]
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("C ")
+    ]
 
 
 def token_flags(db: Path, token: str) -> list[tuple[int, int]]:
     """``(active, compacted)`` of every canonical row whose content carries ``token``."""
     conn = _connect(db)
     try:
-        rows = conn.execute("SELECT active, compacted FROM messages WHERE content LIKE ?",
-                            (f"%{token}%",)).fetchall()
+        rows = conn.execute(
+            "SELECT active, compacted FROM messages WHERE content LIKE ?",
+            (f"%{token}%",),
+        ).fetchall()
     finally:
         conn.close()
     return sorted((int(a), int(c)) for a, c in rows)

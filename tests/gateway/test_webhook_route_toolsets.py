@@ -30,7 +30,9 @@ class _Src:
     def __init__(self, chat_id):
         self.chat_id = chat_id
         # What _dispatch_agent_run stamps: exactly the authenticated route, no delivery id.
-        self.user_id = chat_id.rsplit(":", 1)[0] if chat_id.startswith("webhook:") else None
+        self.user_id = (
+            chat_id.rsplit(":", 1)[0] if chat_id.startswith("webhook:") else None
+        )
 
 
 def _make_adapter(routes):
@@ -53,7 +55,6 @@ class TestWebhookAdapterToolsetsForSource:
         wa = _make_adapter({"mon": {"secret": "x", "toolsets": ["terminal", "file"]}})
         assert wa.toolsets_for_source(_Src("webhook:mon:d1")) == ["terminal", "file"]
 
-
     def test_unknown_route_returns_none(self):
         wa = _make_adapter({})
         assert wa.toolsets_for_source(_Src("webhook:ghost:d1")) is None
@@ -73,7 +74,6 @@ class TestWebhookAdapterToolsetsForSource:
         assert wa.toolsets_for_source(_Src("webhook:empty:d")) is None
         assert wa.toolsets_for_source(_Src("webhook:str:d")) is None
         assert wa.toolsets_for_source(_Src("webhook:blank:d")) is None
-
 
 
 class TestGatewayResolveEnabledToolsetsForSource:
@@ -148,12 +148,20 @@ class TestToolsetsBindToAuthenticatedRoute:
 
     ROUTES = {
         "build": {"secret": "strong-secret", "toolsets": ["terminal", "file"]},
-        "build:external": {"secret": "weak-secret", "toolsets": ["web"], "prompt": "{text}"},
+        "build:external": {
+            "secret": "weak-secret",
+            "toolsets": ["web"],
+            "prompt": "{text}",
+        },
     }
 
     async def _dispatch(self, path, secret, delivery_id):
-        adapter = WebhookAdapter(PlatformConfig(
-            enabled=True, extra={"host": "127.0.0.1", "port": 0, "routes": self.ROUTES}))
+        adapter = WebhookAdapter(
+            PlatformConfig(
+                enabled=True,
+                extra={"host": "127.0.0.1", "port": 0, "routes": self.ROUTES},
+            )
+        )
         captured = []
 
         async def _capture(event):
@@ -163,19 +171,28 @@ class TestToolsetsBindToAuthenticatedRoute:
         app = web.Application()
         # Admission is durable: the route handler acks only through a session authority.
         from tests.gateway.fixtures.webhook_route_authority import mount_authority
+
         mount_authority(app, adapter)
         app.router.add_post("/webhooks/{route_name}", adapter._handle_webhook)
         body = json.dumps({"text": "hi"}).encode()
         sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
         async with TestClient(TestServer(app)) as cli:
-            resp = await cli.post(path, data=body, headers={
-                "X-Hub-Signature-256": sig, "Content-Type": "application/json",
-                "X-GitHub-Delivery": delivery_id})
+            resp = await cli.post(
+                path,
+                data=body,
+                headers={
+                    "X-Hub-Signature-256": sig,
+                    "Content-Type": "application/json",
+                    "X-GitHub-Delivery": delivery_id,
+                },
+            )
             assert resp.status == 202
             await asyncio.sleep(0.05)
         assert len(captured) == 1
         gr = _make_runner(adapter)
-        return GatewayRunner._resolve_enabled_toolsets_for_source(gr, BASE_CONFIG, captured[0], "webhook")
+        return GatewayRunner._resolve_enabled_toolsets_for_source(
+            gr, BASE_CONFIG, captured[0], "webhook"
+        )
 
     @pytest.mark.asyncio
     async def test_colon_route_gets_its_own_toolsets_not_its_prefix_routes(self):

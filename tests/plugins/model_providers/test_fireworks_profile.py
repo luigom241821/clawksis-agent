@@ -22,8 +22,6 @@ def fireworks_profile():
     return profile
 
 
-
-
 class TestFireworksHeaders:
     def test_attribution_matches_canonical_clawk_values(self, fireworks_profile):
         """Fireworks requests carry the same attribution identity Clawksis sends
@@ -40,11 +38,10 @@ class TestFireworksHeaders:
 
     def test_user_agent_identifies_clawk(self, fireworks_profile):
         from clawk_cli.version_info import get_version_info
+
         assert fireworks_profile.default_headers["User-Agent"] == (
             f"ClawksisAgent/{get_version_info().base_version}"
         )
-
-
 
 
 class TestFireworksModelDefaults:
@@ -76,22 +73,36 @@ class TestFireworksReasoning:
             # Fireworks: thinking-off goes out as the documented top-level control, never as the
             # nested ``extra_body.reasoning`` the API 400s on (#109774, salvaged from #109807).
             ("fireworks", {"enabled": False}, {"reasoning_effort": "none"}, False),
-            ("fireworks", {"enabled": True, "effort": "low"}, {"reasoning_effort": "low"}, False),
+            (
+                "fireworks",
+                {"enabled": True, "effort": "low"},
+                {"reasoning_effort": "low"},
+                False,
+            ),
             # Control: a route without a reasoning-aware profile keeps the generic fallback.
             ("unregistered-gateway", {"enabled": False}, {}, True),
         ],
     )
     def test_auxiliary_reasoning_wire_shape(
-        self, fireworks_profile, provider, reasoning_config, expect_top_level, expect_generic
+        self,
+        fireworks_profile,
+        provider,
+        reasoning_config,
+        expect_top_level,
+        expect_generic,
     ):
         from agent.auxiliary_client import _build_call_kwargs
 
         kwargs = _build_call_kwargs(
-            provider, "accounts/fireworks/models/glm-5p2",
+            provider,
+            "accounts/fireworks/models/glm-5p2",
             [{"role": "user", "content": "Generate a title"}],
-            reasoning_config=reasoning_config, base_url="https://api.fireworks.ai/inference/v1",
+            reasoning_config=reasoning_config,
+            base_url="https://api.fireworks.ai/inference/v1",
             task="title_generation",
         )
 
-        assert {k: v for k, v in kwargs.items() if k == "reasoning_effort"} == expect_top_level
+        assert {
+            k: v for k, v in kwargs.items() if k == "reasoning_effort"
+        } == expect_top_level
         assert ("reasoning" in kwargs.get("extra_body", {})) is expect_generic

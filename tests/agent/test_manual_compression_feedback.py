@@ -59,5 +59,3 @@ def test_fallback_compression_reports_dropped_message_count():
     assert "12" in feedback["headline"] and "4" in feedback["headline"]
     assert "8" in feedback["note"]
     assert "invalid response" in feedback["note"]
-
-

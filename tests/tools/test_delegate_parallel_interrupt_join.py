@@ -19,11 +19,21 @@ from tools.delegate_tool_dispatch import _Batch, _run_children_parallel
 def _batch(children, parent):
     tasks = [{"goal": f"task {i}"} for i in range(len(children))]
     return _Batch(
-        task_list=tasks, children=[(i, tasks[i], c) for i, c in enumerate(children)],
-        parent_agent=parent, creds={}, context=None, top_role="leaf",
-        max_children=len(children), live_deleg_id=None, live_writers=[], live_paths=[],
-        origin_wake_sid="", origin_ui_session_id="", origin_owner_transport=None,
-        origin_owner_session_record=None, origin_session_history_delivery=False,
+        task_list=tasks,
+        children=[(i, tasks[i], c) for i, c in enumerate(children)],
+        parent_agent=parent,
+        creds={},
+        context=None,
+        top_role="leaf",
+        max_children=len(children),
+        live_deleg_id=None,
+        live_writers=[],
+        live_paths=[],
+        origin_wake_sid="",
+        origin_ui_session_id="",
+        origin_owner_transport=None,
+        origin_owner_session_record=None,
+        origin_session_history_delivery=False,
         overall_start=time.monotonic(),
     )
 
@@ -32,7 +42,9 @@ def test_interrupt_does_not_join_wedged_child():
     wedged_release = threading.Event()
     wedged_started = threading.Event()
     parent = SimpleNamespace(
-        _interrupt_requested=False, _delegate_spinner=None, quiet_mode=True,
+        _interrupt_requested=False,
+        _delegate_spinner=None,
+        quiet_mode=True,
     )
 
     def run_child(i, task, child):
@@ -40,8 +52,14 @@ def test_interrupt_does_not_join_wedged_child():
             wedged_started.set()
             wedged_release.wait()  # parked until test teardown
             return {"task_index": i, "status": "completed"}
-        return {"task_index": i, "status": "completed", "summary": "done",
-                "error": None, "api_calls": 1, "duration_seconds": 0}
+        return {
+            "task_index": i,
+            "status": "completed",
+            "summary": "done",
+            "error": None,
+            "api_calls": 1,
+            "duration_seconds": 0,
+        }
 
     children = [SimpleNamespace(_delegate_role="leaf") for _ in range(2)]
     batch = _batch(children, parent)
@@ -73,12 +91,20 @@ def test_interrupt_does_not_join_wedged_child():
 def test_normal_completion_still_joins_cleanly():
     """No interrupt: all children finish and results sort by task_index."""
     parent = SimpleNamespace(
-        _interrupt_requested=False, _delegate_spinner=None, quiet_mode=True,
+        _interrupt_requested=False,
+        _delegate_spinner=None,
+        quiet_mode=True,
     )
 
     def run_child(i, task, child):
-        return {"task_index": i, "status": "completed", "summary": f"s{i}",
-                "error": None, "api_calls": 1, "duration_seconds": 0}
+        return {
+            "task_index": i,
+            "status": "completed",
+            "summary": f"s{i}",
+            "error": None,
+            "api_calls": 1,
+            "duration_seconds": 0,
+        }
 
     children = [SimpleNamespace(_delegate_role="leaf") for _ in range(3)]
     batch = _batch(children, parent)

@@ -110,9 +110,6 @@ class TestKimiFamilyGetsAdaptiveThinking:
         assert "temperature" not in kwargs
         assert kwargs["max_tokens"] == 4096
 
-
-
-
     def test_kimi_family_replay_preserves_unsigned_thinking(self) -> None:
         """On a custom Kimi endpoint, unsigned reasoning_content thinking
         blocks must survive the third-party signature-stripping pass so
@@ -146,7 +143,8 @@ class TestKimiFamilyGetsAdaptiveThinking:
         assistant_msg = next(m for m in converted if m["role"] == "assistant")
         assistant_blocks = assistant_msg["content"]
         thinking_blocks = [
-            b for b in assistant_blocks
+            b
+            for b in assistant_blocks
             if isinstance(b, dict) and b.get("type") == "thinking"
         ]
         assert len(thinking_blocks) == 1

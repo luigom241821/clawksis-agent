@@ -1,4 +1,5 @@
 """The manual and automatic archive paths use the same WAL-safe serialization."""
+
 import sqlite3
 import zipfile
 from argparse import Namespace
@@ -11,7 +12,9 @@ from clawk_cli import backup
 
 
 @pytest.mark.parametrize("automatic", [False, True])
-def test_zip_captures_live_wal_and_cleans_failed_staging(tmp_path, monkeypatch, automatic):
+def test_zip_captures_live_wal_and_cleans_failed_staging(
+    tmp_path, monkeypatch, automatic
+):
     home = tmp_path / ".clawk"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -35,12 +38,18 @@ def test_zip_captures_live_wal_and_cleans_failed_staging(tmp_path, monkeypatch, 
         writer.commit()
         run()
         with zipfile.ZipFile(archive) as zipped:
-            assert not any(name.endswith(('-wal', '-shm')) for name in zipped.namelist())
-            member = next(name for name in zipped.namelist() if name.endswith('state.db'))
+            assert not any(
+                name.endswith(("-wal", "-shm")) for name in zipped.namelist()
+            )
+            member = next(
+                name for name in zipped.namelist() if name.endswith("state.db")
+            )
             restored = tmp_path / "restored.db"
             restored.write_bytes(zipped.read(member))
         with closing(sqlite3.connect(restored)) as snapshot:
-            assert snapshot.execute("SELECT body FROM messages").fetchall() == [("WAL-only row",)]
+            assert snapshot.execute("SELECT body FROM messages").fetchall() == [
+                ("WAL-only row",)
+            ]
 
         def refuse_write(self, filename, arcname=None, **kwargs):
             raise OSError("archive device full")
@@ -49,8 +58,13 @@ def test_zip_captures_live_wal_and_cleans_failed_staging(tmp_path, monkeypatch, 
             previous = {info.filename: info.CRC for info in zipped.infolist()}
         monkeypatch.setattr(zipfile.ZipFile, "write", refuse_write)
         run()
-        assert sorted(output.iterdir()) == [archive], "a failed write must not leak a private database snapshot"
+        assert sorted(output.iterdir()) == [archive], (
+            "a failed write must not leak a private database snapshot"
+        )
         if automatic:
             with zipfile.ZipFile(archive) as zipped:
-                assert {info.filename: info.CRC for info in zipped.infolist()} == previous, \
+                assert {
+                    info.filename: info.CRC for info in zipped.infolist()
+                } == previous, (
                     "an all-failed run must not overwrite the previous good archive"
+                )

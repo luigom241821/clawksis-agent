@@ -23,15 +23,24 @@ logger = logging.getLogger(__name__)
 
 #: Names owned by in-tree backends in tools/environments/ — never
 #: registrable by plugins. Includes internal-mode aliases (managed_modal).
-BUILTIN_BACKEND_NAMES = frozenset({
-    "local", "docker", "modal", "managed_modal",
-    "daytona", "vercel_sandbox", "ssh",
-})
+BUILTIN_BACKEND_NAMES = frozenset(
+    {
+        "local",
+        "docker",
+        "modal",
+        "managed_modal",
+        "daytona",
+        "vercel_sandbox",
+        "ssh",
+    }
+)
 
 
 def _reject_builtin_collision(name: str) -> None:
-    raise ValueError(f"Terminal backend name '{name}' is reserved for the built-in {name} backend "
-                     "and cannot be registered by a plugin")
+    raise ValueError(
+        f"Terminal backend name '{name}' is reserved for the built-in {name} backend "
+        "and cannot be registered by a plugin"
+    )
 
 
 _registry: ProviderRegistry[TerminalEnvironmentProvider] = ProviderRegistry(
@@ -64,7 +73,12 @@ def provider_flag(name: str, attr: str, default=False, *, scope: Optional[str] =
     try:
         return getattr(provider, attr, default)
     except Exception:
-        logger.debug("Terminal environment provider '%s' attribute '%s' raised", name, attr, exc_info=True)
+        logger.debug(
+            "Terminal environment provider '%s' attribute '%s' raised",
+            name,
+            attr,
+            exc_info=True,
+        )
         return default
 
 
@@ -81,5 +95,7 @@ def plugin_strip_env_keys() -> frozenset:
         try:
             keys.update(provider.strip_env_keys)
         except Exception:
-            logger.debug("Terminal environment provider strip_env_keys raised", exc_info=True)
+            logger.debug(
+                "Terminal environment provider strip_env_keys raised", exc_info=True
+            )
     return frozenset(keys)

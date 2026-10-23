@@ -14,11 +14,11 @@ def test_stt_echo_transcripts_defaults_on_for_backwards_compatibility():
 
 
 def test_top_level_stt_echo_transcripts_takes_precedence():
-    cfg = GatewayConfig.from_dict({
-        "stt_echo_transcripts": False,
-        "stt": {"echo_transcripts": True},
-    })
+    cfg = GatewayConfig.from_dict(
+        {
+            "stt_echo_transcripts": False,
+            "stt": {"echo_transcripts": True},
+        }
+    )
 
     assert cfg.stt_echo_transcripts is False
-
-

@@ -20,12 +20,26 @@ from agent.skill_utils import SKILL_PROMPT_DESC_LIMIT, parse_frontmatter
 # Shell utilities already wrapped as native tools; naming them in prose steers
 # the model to a raw shell call. banned token -> native tool to name instead.
 _SHELL_UTIL_TO_TOOL: dict[str, str] = {
-    "grep": "search_files", "rg": "search_files", "cat": "read_file", "head": "read_file",
-    "tail": "read_file", "sed": "patch", "awk": "patch",
-    "find": "search_files (target='files')", "ls": "search_files (target='files')"}
+    "grep": "search_files",
+    "rg": "search_files",
+    "cat": "read_file",
+    "head": "read_file",
+    "tail": "read_file",
+    "sed": "patch",
+    "awk": "patch",
+    "find": "search_files (target='files')",
+    "ls": "search_files (target='files')",
+}
 _MARKETING_WORDS = (
-    "powerful", "comprehensive", "seamless", "advanced", "cutting-edge", "state-of-the-art",
-    "revolutionary", "robust")
+    "powerful",
+    "comprehensive",
+    "seamless",
+    "advanced",
+    "cutting-edge",
+    "state-of-the-art",
+    "revolutionary",
+    "robust",
+)
 # POSIX-only primitives that require ``platforms:`` when a bundled script uses
 # them. Detected in scripts/, not in prose.
 _POSIX_PRIMITIVES = (
@@ -36,9 +50,17 @@ _POSIX_PRIMITIVES = (
     "osascript",
     "/proc/",
     "apt-get",
-    "systemctl")
+    "systemctl",
+)
 # Scaffolding files a skill should not ship (noise, not skill content).
-_FORBIDDEN_FILES = ("README.md", "CHANGELOG.md", "install.sh", ".env", ".env.example", ".gitignore")
+_FORBIDDEN_FILES = (
+    "README.md",
+    "CHANGELOG.md",
+    "install.sh",
+    ".env",
+    ".env.example",
+    ".gitignore",
+)
 # Presence of the load-bearing section is checked, not exact ordering, so the
 # linter is not a change-detector.
 _EXPECTED_SECTIONS = ("When to Use", "When to use")
@@ -75,77 +97,123 @@ def _err(rule: str, message: str) -> LintFinding:
 def _warn(rule: str, message: str) -> LintFinding:
     return LintFinding(WARNING, rule, message)
 
+
 def _strip_code_blocks(body: str) -> str:
     """Remove fenced code blocks so prose-only checks don't fire on examples."""
     return re.sub(r"```.*?```", "", body, flags=re.DOTALL)
 
 
-def _check_frontmatter(frontmatter: dict[str, Any], skill_dir: Optional[Path]) -> Iterator[LintFinding]:
+def _check_frontmatter(
+    frontmatter: dict[str, Any], skill_dir: Optional[Path]
+) -> Iterator[LintFinding]:
     name = str(frontmatter.get("name", "")).strip()
     if name and not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name):
-        yield _err("name-format", f"name '{name}' must be lowercase letters, digits, hyphens, "
-                   f"and underscores only.")
+        yield _err(
+            "name-format",
+            f"name '{name}' must be lowercase letters, digits, hyphens, "
+            f"and underscores only.",
+        )
     if skill_dir is not None and name and name != skill_dir.name:
-        yield _err("name-dir-mismatch", f"frontmatter name '{name}' does not match directory "
-                   f"'{skill_dir.name}'; they must be identical.")
+        yield _err(
+            "name-dir-mismatch",
+            f"frontmatter name '{name}' does not match directory "
+            f"'{skill_dir.name}'; they must be identical.",
+        )
     # Measure the raw authored value: extract_skill_description() already
     # truncates to the prompt budget, so it can never exceed the limit.
     desc = str(frontmatter.get("description", "")).strip().strip("'\"")
     if len(desc) > SKILL_PROMPT_DESC_LIMIT:
-        yield _warn("description-length",
-                    f"description is {len(desc)} chars; the skill index truncates past "
-                    f"{SKILL_PROMPT_DESC_LIMIT} chars + '...', losing routing "
-                    f"signal. Keep it to one sentence.")
-    hits = [w for w in _MARKETING_WORDS if re.search(rf"\b{re.escape(w)}\b", desc.lower())]
+        yield _warn(
+            "description-length",
+            f"description is {len(desc)} chars; the skill index truncates past "
+            f"{SKILL_PROMPT_DESC_LIMIT} chars + '...', losing routing "
+            f"signal. Keep it to one sentence.",
+        )
+    hits = [
+        w for w in _MARKETING_WORDS if re.search(rf"\b{re.escape(w)}\b", desc.lower())
+    ]
     if hits:
-        yield _warn("description-marketing",
-                    f"description contains marketing words {hits}; state the capability, not adjectives.")
+        yield _warn(
+            "description-marketing",
+            f"description contains marketing words {hits}; state the capability, not adjectives.",
+        )
     for key in ("version", "author", "license"):
         if key not in frontmatter:
-            yield _warn("missing-metadata", f"frontmatter is missing '{key}'; every peer skill has it.")
+            yield _warn(
+                "missing-metadata",
+                f"frontmatter is missing '{key}'; every peer skill has it.",
+            )
     meta = frontmatter.get("metadata")
     clawk_meta = meta.get("clawk") if isinstance(meta, dict) else None
     if not isinstance(clawk_meta, dict):
-        yield _warn("missing-metadata", "frontmatter is missing metadata.clawk.{tags, related_skills}.")
+        yield _warn(
+            "missing-metadata",
+            "frontmatter is missing metadata.clawk.{tags, related_skills}.",
+        )
     elif "tags" not in clawk_meta:
         yield _warn("missing-metadata", "metadata.clawk.tags is missing.")
     author = str(frontmatter.get("author", ""))
-    if author and author.strip().lower() in ("clawk", "agent", "clawk agent") and (
-        author != "Clawksis"):
-        yield _warn("author-caps", f"author '{author}' should be 'Clawksis' (proper caps) "
-                    f"or a real contributor name.")
+    if (
+        author
+        and author.strip().lower() in ("clawk", "agent", "clawk agent")
+        and (author != "Clawksis")
+    ):
+        yield _warn(
+            "author-caps",
+            f"author '{author}' should be 'Clawksis' (proper caps) "
+            f"or a real contributor name.",
+        )
     platforms = frontmatter.get("platforms")
     if platforms:
         valid = {"linux", "macos", "windows", "darwin"}
         items = platforms if isinstance(platforms, list) else [platforms]
         bad = [p for p in items if str(p).lower() not in valid]
         if bad:
-            yield _warn("platforms-value", f"platforms contains unrecognized value(s) {bad}; "
-                        f"expected a subset of {sorted(valid)}.")
+            yield _warn(
+                "platforms-value",
+                f"platforms contains unrecognized value(s) {bad}; "
+                f"expected a subset of {sorted(valid)}.",
+            )
 
 
 def _check_body(body: str, skill_dir: Optional[Path]) -> Iterator[LintFinding]:
     if len(body) > _BODY_SOFT_BUDGET_CHARS:
-        yield _warn("oversized-body",
-                    f"SKILL.md body is {len(body):,} chars (~{len(body) // 4:,} tokens); skill_view loads "
-                    f"all of it and it stays in context for every later call of the session. Keep the "
-                    f"always-on rules here (~200 lines) and move topic depth into references/<topic>.md, "
-                    f"linked from the body.")
+        yield _warn(
+            "oversized-body",
+            f"SKILL.md body is {len(body):,} chars (~{len(body) // 4:,} tokens); skill_view loads "
+            f"all of it and it stays in context for every later call of the session. Keep the "
+            f"always-on rules here (~200 lines) and move topic depth into references/<topic>.md, "
+            f"linked from the body.",
+        )
     # Only backtick-wrapped mentions in PROSE (not fenced code): bare words are too noisy.
     prose = _strip_code_blocks(body)
     for util, tool in _SHELL_UTIL_TO_TOOL.items():
         if re.search(rf"`{re.escape(util)}`", prose):
-            yield _warn("shell-utility-reference",
-                        f"prose references `{util}`; name the native tool `{tool}` instead.")
-    if not any(re.search(rf"^#+\s+{re.escape(s)}", body, re.MULTILINE) for s in _EXPECTED_SECTIONS):
-        yield _warn("missing-section", "no '## When to Use' section found; skills need explicit "
-                    "trigger conditions near the top.")
+            yield _warn(
+                "shell-utility-reference",
+                f"prose references `{util}`; name the native tool `{tool}` instead.",
+            )
+    if not any(
+        re.search(rf"^#+\s+{re.escape(s)}", body, re.MULTILINE)
+        for s in _EXPECTED_SECTIONS
+    ):
+        yield _warn(
+            "missing-section",
+            "no '## When to Use' section found; skills need explicit "
+            "trigger conditions near the top.",
+        )
     # Incident-log shape: a skill body dense in PR/issue numbers is narrating history instead of
     # stating rules. Threshold is per 1k chars so a long body with one citation is fine.
     refs = len(re.findall(r"(?<![\w/])#\d{3,6}\b|\b(?:PR|issue)\s*#?\d{3,6}\b", prose))
-    if refs >= _INCIDENT_REF_MIN and refs / max(len(prose), 1) * 1000 >= _INCIDENT_REF_PER_KCHAR:
-        yield _warn("incident-log-shape", f"{refs} PR/issue references in prose; write the generalizable "
-                    "rule + why and drop the incident numbers — the rule must stand without the story.")
+    if (
+        refs >= _INCIDENT_REF_MIN
+        and refs / max(len(prose), 1) * 1000 >= _INCIDENT_REF_PER_KCHAR
+    ):
+        yield _warn(
+            "incident-log-shape",
+            f"{refs} PR/issue references in prose; write the generalizable "
+            "rule + why and drop the incident numbers — the rule must stand without the story.",
+        )
     if skill_dir is None:
         return
     # Dangling links. Only references/, templates/, assets/ are reliably skill-owned;
@@ -157,8 +225,11 @@ def _check_body(body: str, skill_dir: Optional[Path]) -> Iterator[LintFinding]:
             continue
         seen.add(rel)
         if not (skill_dir / rel).exists():
-            yield _warn("dangling-reference", f"body references '{rel}' but that file "
-                        f"does not exist in the skill directory.")
+            yield _warn(
+                "dangling-reference",
+                f"body references '{rel}' but that file "
+                f"does not exist in the skill directory.",
+            )
 
 
 def _check_files(frontmatter: dict[str, Any], skill_dir: Path) -> Iterator[LintFinding]:
@@ -178,23 +249,35 @@ def _check_files(frontmatter: dict[str, Any], skill_dir: Path) -> Iterator[LintF
                 offenders[script.name] = hit
     if offenders:
         detail = "; ".join(f"{k}: {v}" for k, v in offenders.items())
-        yield _warn("platforms-gating",
-                    f"scripts use POSIX-only primitives ({detail}) but no 'platforms:' frontmatter is "
-                    f"declared. Fix cross-platform or gate with platforms: [linux, macos].")
+        yield _warn(
+            "platforms-gating",
+            f"scripts use POSIX-only primitives ({detail}) but no 'platforms:' frontmatter is "
+            f"declared. Fix cross-platform or gate with platforms: [linux, macos].",
+        )
     for fname in _FORBIDDEN_FILES:
         if (skill_dir / fname).exists():
-            yield _warn("forbidden-file",
-                        f"skill ships '{fname}'; skills should not include scaffolding/config files.")
+            yield _warn(
+                "forbidden-file",
+                f"skill ships '{fname}'; skills should not include scaffolding/config files.",
+            )
     refs_dir = skill_dir / "references"
     if refs_dir.is_dir():
-        n_refs = sum(1 for p in refs_dir.rglob("*.md") if not any(part.startswith("_") for part in p.parts))
+        n_refs = sum(
+            1
+            for p in refs_dir.rglob("*.md")
+            if not any(part.startswith("_") for part in p.parts)
+        )
         if n_refs > _MAX_REFERENCE_FILES:
-            yield _warn("references-sprawl",
-                        f"{n_refs} files under references/; that is a per-session log, not topical depth. "
-                        "Merge same-topic files into one rule set and drop incident narration.")
+            yield _warn(
+                "references-sprawl",
+                f"{n_refs} files under references/; that is a per-session log, not topical depth. "
+                "Merge same-topic files into one rule set and drop incident narration.",
+            )
 
 
-def lint_content(content: str, *, skill_dir: Optional[Path] = None) -> list[LintFinding]:
+def lint_content(
+    content: str, *, skill_dir: Optional[Path] = None
+) -> list[LintFinding]:
     """Lint raw SKILL.md *content*.
 
     ``skill_dir`` enables on-disk checks (name/dir match, dangling links, POSIX
@@ -202,7 +285,9 @@ def lint_content(content: str, *, skill_dir: Optional[Path] = None) -> list[Lint
     the create path needs before the file exists.
     """
     frontmatter, body = parse_frontmatter(content)
-    findings = list(_check_frontmatter(frontmatter, skill_dir)) + list(_check_body(body, skill_dir))
+    findings = list(_check_frontmatter(frontmatter, skill_dir)) + list(
+        _check_body(body, skill_dir)
+    )
     if skill_dir is not None:
         findings += _check_files(frontmatter, skill_dir)
     return findings

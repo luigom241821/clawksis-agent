@@ -37,7 +37,8 @@ def _site_packages_in(env_overlay: dict) -> Path | None:
 
 
 def test_managed_install_uses_the_committed_generation_not_the_in_tree_venv(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """The committed generation wins; the leftover pre-PM venv never reaches the child."""
     from cron import scheduler_script as sched_script
@@ -49,7 +50,9 @@ def test_managed_install_uses_the_committed_generation_not_the_in_tree_venv(
     store.write_text("", encoding="utf-8")
     child = _write_venv(tmp_path / "child")
 
-    monkeypatch.setattr("clawk_cli._launchers.resolve_store_python", lambda _root: store)
+    monkeypatch.setattr(
+        "clawk_cli._launchers.resolve_store_python", lambda _root: store
+    )
     monkeypatch.setattr("pm.environments.committed_venv", lambda _root: committed)
     # Base read selected_venv; pointing it at the stale venv is what makes this red there.
     monkeypatch.setattr("pm.environments.selected_venv", lambda _root: stale)
@@ -60,6 +63,8 @@ def test_managed_install_uses_the_committed_generation_not_the_in_tree_venv(
 
     assert interpreter == str(store)
     overlay = _site_packages_in(env_overlay)
-    assert overlay is not None, "the committed generation must supply a site-packages entry"
+    assert overlay is not None, (
+        "the committed generation must supply a site-packages entry"
+    )
     assert overlay == committed / "Lib" / "site-packages"
     assert not overlay.is_relative_to(stale)

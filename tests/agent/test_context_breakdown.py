@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from agent.context_breakdown import compute_session_context_breakdown
 
+
 def _make_agent(
     *,
     stable: str = "identity and guidance",
@@ -17,8 +18,14 @@ def _make_agent(
     agent.model = "openai/gpt-5.4"
     agent.tools = tools or [
         {"type": "function", "function": {"name": "terminal", "description": "run"}},
-        {"type": "function", "function": {"name": "mcp_demo_tool", "description": "mcp"}},
-        {"type": "function", "function": {"name": "delegate_task", "description": "spawn"}},
+        {
+            "type": "function",
+            "function": {"name": "mcp_demo_tool", "description": "mcp"},
+        },
+        {
+            "type": "function",
+            "function": {"name": "delegate_task", "description": "spawn"},
+        },
     ]
     agent._memory_store = None
     agent._memory_enabled = True
@@ -28,6 +35,7 @@ def _make_agent(
         last_prompt_tokens=last_prompt_tokens,
     )
     return agent, {"stable": stable, "context": context, "volatile": volatile}
+
 
 def test_breakdown_includes_major_categories():
     stable = (
@@ -43,9 +51,18 @@ def test_breakdown_includes_major_categories():
         data = compute_session_context_breakdown(agent, history)
 
     ids = {item["id"] for item in data["categories"]}
-    assert {"system_prompt", "tool_definitions", "rules", "skills", "mcp", "subagent_definitions", "conversation"} <= ids
+    assert {
+        "system_prompt",
+        "tool_definitions",
+        "rules",
+        "skills",
+        "mcp",
+        "subagent_definitions",
+        "conversation",
+    } <= ids
     assert data["context_max"] == 200_000
     assert data["estimated_total"] > 0
+
 
 def test_context_used_never_exceeds_model_window():
     """Regression for #109760: anchor + appended-delta estimate can overshoot the window
@@ -53,7 +70,10 @@ def test_context_used_never_exceeds_model_window():
     from agent.context_breakdown import context_usage_fields
     from agent.usage_anchor import capture_usage_anchor
 
-    history = [{"role": "user", "content": "start"}, {"role": "assistant", "content": "ok"}]
+    history = [
+        {"role": "user", "content": "start"},
+        {"role": "assistant", "content": "ok"},
+    ]
     agent, parts = _make_agent(context_length=262_144)
     agent._turn_base_usage_anchor = capture_usage_anchor(250_000, 1_000, history)
     history = history + [{"role": "user", "content": "x" * 800_000}]
@@ -65,9 +85,15 @@ def test_context_used_never_exceeds_model_window():
     assert data["context_used"] <= data["context_max"]
     assert data["context_percent"] == 100
 
-    seeded = context_usage_fields(MagicMock(context_length=262_144, last_prompt_tokens=400_000,
-                                            last_real_prompt_tokens=150_000))
+    seeded = context_usage_fields(
+        MagicMock(
+            context_length=262_144,
+            last_prompt_tokens=400_000,
+            last_real_prompt_tokens=150_000,
+        )
+    )
     assert seeded["context_used"] <= seeded["context_max"]
+
 
 def test_empty_transcript_still_reports_the_conversation_category():
     """Zero conversation tokens is a measurement, not an absence (#87903).
@@ -79,7 +105,9 @@ def test_empty_transcript_still_reports_the_conversation_category():
     absent categories (mcp/memory/skills with nothing configured) stay dropped.
     """
     agent, parts = _make_agent(
-        tools=[{"type": "function", "function": {"name": "terminal", "description": "run"}}]
+        tools=[
+            {"type": "function", "function": {"name": "terminal", "description": "run"}}
+        ]
     )
     history = []  # nothing said yet
 
@@ -93,12 +121,14 @@ def test_empty_transcript_still_reports_the_conversation_category():
     assert "mcp" not in categories
     assert "skills" not in categories
 
+
 # ── /context renderers (pure functions over the payload) ────────────────────
 
 from agent.context_breakdown import (
     render_context_breakdown_lines,
     render_context_grid,
 )
+
 
 def _payload(**overrides):
     base = {
@@ -117,6 +147,7 @@ def _payload(**overrides):
     base.update(overrides)
     return base
 
+
 def test_grid_is_5x20_and_mostly_free():
     rows = render_context_grid(_payload())
     assert len(rows) == 5
@@ -127,6 +158,7 @@ def test_grid_is_5x20_and_mostly_free():
     # Category glyphs proportional: 10k→5, 20k→10, 5k→2-3, 15k→7-8 cells
     assert cells.count("■") == 5
     assert cells.count("▣") == 10
+
 
 def test_breakdown_lines_grid_toggle():
     with_grid = render_context_breakdown_lines(_payload(), grid=True)

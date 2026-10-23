@@ -79,7 +79,9 @@ def _timeout_after_entry(monkeypatch, started):
         fence.touch_progress()
         return wait(future, fence, idle=0.1, ceiling=1.0, wait_started=time.monotonic())
 
-    monkeypatch.setattr(cc, "resolve_context_compression_timeouts", lambda cfg=None: (30, 60))
+    monkeypatch.setattr(
+        cc, "resolve_context_compression_timeouts", lambda cfg=None: (30, 60)
+    )
     monkeypatch.setattr(cc, "_await_worker_within_budget", after_entry)
     return futures
 
@@ -117,9 +119,7 @@ def test_f3_mutating_engine_cannot_touch_live_transcript_after_timeout(
     baseline = copy.deepcopy(live)
 
     try:
-        returned, _sp = agent._compress_context(
-            live, "sys", approx_tokens=120_000
-        )
+        returned, _sp = agent._compress_context(live, "sys", approx_tokens=120_000)
         # Host timed out and returned while the engine is STILL blocked.
         assert engine_started.wait(timeout=5)
         assert not release_engine.is_set()
@@ -190,9 +190,7 @@ def test_host_timeout_releases_pool_slot_while_protected_provider_is_still_block
     live = [{"role": "user", "content": f"m{i}"} for i in range(20)]
 
     try:
-        returned, _sp = agent._compress_context(
-            live, "sys", approx_tokens=120_000
-        )
+        returned, _sp = agent._compress_context(live, "sys", approx_tokens=120_000)
         assert returned is live
         assert provider_started.wait(timeout=10)
         assert not release_provider.is_set()
@@ -259,8 +257,8 @@ def test_f4_five_step_stale_holder_regression(tmp_path: Path) -> None:
     agent.context_compressor.compress.side_effect = _blocked_summary
     # Track cooldown-clear attempts on the OLD worker's compressor.
     cooldown_cleared = []
-    agent.context_compressor._clear_compression_failure_cooldown = (
-        lambda: cooldown_cleared.append(True)
+    agent.context_compressor._clear_compression_failure_cooldown = lambda: (
+        cooldown_cleared.append(True)
     )
 
     messages = [{"role": "user", "content": f"m{i}"} for i in range(20)]

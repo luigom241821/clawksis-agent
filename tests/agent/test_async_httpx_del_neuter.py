@@ -21,6 +21,7 @@ import pytest
 # Layer 1: neuter_async_httpx_del
 # ---------------------------------------------------------------------------
 
+
 class TestNeuterAsyncHttpxDel:
     """Verify neuter_async_httpx_del replaces __del__ on the SDK class."""
 
@@ -46,9 +47,11 @@ class TestNeuterAsyncHttpxDel:
             # Restore original to avoid leaking into other tests
             AsyncHttpxClientWrapper.__del__ = original_del
 
+
 # ---------------------------------------------------------------------------
 # Layer 3: cleanup_stale_async_clients
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupStaleAsyncClients:
     """Verify stale cache entries are evicted and force-closed."""
@@ -230,9 +233,11 @@ class TestCleanupStaleAsyncClients:
             with _client_cache_lock:
                 _client_cache.pop(key, None)
 
+
 # ---------------------------------------------------------------------------
 # Cache bounded growth (#10200)
 # ---------------------------------------------------------------------------
+
 
 class TestClientCacheBoundedGrowth:
     """Verify the cache stays bounded when loops change (fix for #10200).
@@ -269,10 +274,13 @@ class TestClientCacheBoundedGrowth:
 
         try:
             # Now call _get_cached_client — should detect stale loop and evict
-            with patch("agent.auxiliary_client.resolve_provider_client") as mock_resolve:
+            with patch(
+                "agent.auxiliary_client.resolve_provider_client"
+            ) as mock_resolve:
                 mock_resolve.return_value = (MagicMock(), "new-model")
                 _client, _model = _get_cached_client(
-                    "test_replace", async_mode=True,
+                    "test_replace",
+                    async_mode=True,
                 )
             # The old entry should have been replaced
             with _client_cache_lock:

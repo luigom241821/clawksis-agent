@@ -56,12 +56,10 @@ class TestModelExtraTypeGuard:
         transport = ChatCompletionsTransport()
         return transport.normalize_response(_make_response(model_extra=model_extra))
 
-
     def test_none_model_extra(self):
         result = self._normalize(None)
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].provider_data is None
-
 
     def test_dict_model_extra_still_extracts_extra_content(self):
         """The valid dict path must keep working — extra_content preserved."""
@@ -70,4 +68,3 @@ class TestModelExtraTypeGuard:
         assert result.tool_calls[0].provider_data == {
             "extra_content": {"thought_signature": "sig"}
         }
-

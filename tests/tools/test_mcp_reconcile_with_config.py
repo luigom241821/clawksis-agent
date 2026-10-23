@@ -18,7 +18,9 @@ def test_reconcile_tears_down_server_dropped_from_config(monkeypatch, tmp_path):
     configured = {"linear": {"url": "https://mcp.example.test/mcp", "auth": "oauth"}}
     monkeypatch.setattr(_config, "_load_mcp_config", lambda: dict(configured))
     discovered: list = []
-    monkeypatch.setattr(disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or [])
+    monkeypatch.setattr(
+        disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or []
+    )
 
     _loop._ensure_mcp_loop()
     srv = MCPServerTask("linear")
@@ -31,7 +33,11 @@ def test_reconcile_tears_down_server_dropped_from_config(monkeypatch, tmp_path):
         mcp_tool._servers["linear"] = srv
         mcp_tool._server_scope_keys["linear"] = None
     try:
-        assert disc.reconcile_mcp_servers_with_config() == {"removed": [], "added": [], "pending": []}
+        assert disc.reconcile_mcp_servers_with_config() == {
+            "removed": [],
+            "added": [],
+            "pending": [],
+        }
         assert "linear" in mcp_tool._servers and not discovered
 
         configured.clear()  # user deletes the entry
@@ -59,11 +65,21 @@ def test_disabled_lazy_and_connecting_entries(monkeypatch, tmp_path):
     from tools import mcp_tool_lifecycle as _lifecycle
     from tools import mcp_tool_registration as _registration
 
-    monkeypatch.setattr(_config, "_load_mcp_config", lambda: {"linear": {"url": "https://x/mcp", "enabled": False}})
+    monkeypatch.setattr(
+        _config,
+        "_load_mcp_config",
+        lambda: {"linear": {"url": "https://x/mcp", "enabled": False}},
+    )
     torn_down: list = []
     deregistered: list = []
-    monkeypatch.setattr(_lifecycle, "shutdown_mcp_servers", lambda **kw: torn_down.append(kw))
-    monkeypatch.setattr(_registration, "_deregister_mcp_tool_all_scopes", lambda key, name: deregistered.append(name))
+    monkeypatch.setattr(
+        _lifecycle, "shutdown_mcp_servers", lambda **kw: torn_down.append(kw)
+    )
+    monkeypatch.setattr(
+        _registration,
+        "_deregister_mcp_tool_all_scopes",
+        lambda key, name: deregistered.append(name),
+    )
     monkeypatch.setattr(disc, "discover_mcp_tools", lambda *a, **k: [])
     with mcp_tool._lock:
         mcp_tool._servers["linear"] = object()
@@ -74,9 +90,16 @@ def test_disabled_lazy_and_connecting_entries(monkeypatch, tmp_path):
         mcp_tool._lazy_server_tool_names["asana"] = ["mcp__asana__list"]
     try:
         result = disc.reconcile_mcp_servers_with_config()
-        assert result == {"removed": ["linear", "asana"], "added": [], "pending": ["notion"]}
+        assert result == {
+            "removed": ["linear", "asana"],
+            "added": [],
+            "pending": ["notion"],
+        }
         assert torn_down == [{"scope": None, "names": {"linear"}}]
-        assert deregistered == ["mcp__asana__list"] and "asana" not in mcp_tool._lazy_server_configs
+        assert (
+            deregistered == ["mcp__asana__list"]
+            and "asana" not in mcp_tool._lazy_server_configs
+        )
     finally:
         with mcp_tool._lock:
             for name in ("linear", "notion"):
@@ -87,7 +110,9 @@ def test_disabled_lazy_and_connecting_entries(monkeypatch, tmp_path):
             mcp_tool._lazy_server_tool_names.pop("asana", None)
 
 
-def test_reconcile_retries_failed_first_connect_only_after_cooldown(monkeypatch, tmp_path):
+def test_reconcile_retries_failed_first_connect_only_after_cooldown(
+    monkeypatch, tmp_path
+):
     """A configured server whose first connect failed is absent from ``_servers`` for good — no
     task exists to park and self-probe — so the reconcile is its only reviver (#112445). It must
     not enter discovery while the per-server connect cooldown is active (that takes the cross-process
@@ -100,17 +125,24 @@ def test_reconcile_retries_failed_first_connect_only_after_cooldown(monkeypatch,
     from tools import mcp_tool_loop as _loop
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(_config, "_load_mcp_config", lambda: {"ghost": {"url": "https://x/mcp"}})
+    monkeypatch.setattr(
+        _config, "_load_mcp_config", lambda: {"ghost": {"url": "https://x/mcp"}}
+    )
     discovered: list = []
-    monkeypatch.setattr(disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or [])
+    monkeypatch.setattr(
+        disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or []
+    )
     try:
         disc._note_connect_failure("ghost", RuntimeError("connection refused"))
-        assert disc.reconcile_mcp_servers_with_config()["added"] == [] and not discovered, \
-            "inside the cooldown nothing is attempted"
+        assert (
+            disc.reconcile_mcp_servers_with_config()["added"] == [] and not discovered
+        ), "inside the cooldown nothing is attempted"
         with mcp_tool._lock:
             mcp_tool._server_connect_retry_after.clear()
         assert disc.reconcile_mcp_servers_with_config()["added"] == ["ghost"]
-        assert discovered == [1], "cooldown lapsed: the never-connected server goes through discovery"
+        assert discovered == [1], (
+            "cooldown lapsed: the never-connected server goes through discovery"
+        )
 
         def _timeout(*a, **k):
             raise TimeoutError("discovery bound")
@@ -120,12 +152,18 @@ def test_reconcile_retries_failed_first_connect_only_after_cooldown(monkeypatch,
             mcp_tool._server_connecting.add("ghost")
         with pytest.raises(TimeoutError):
             disc._run_discovery_pass({"ghost": {"url": "https://x/mcp"}})
-        assert disc._connect_cooldown_active("ghost"), "a timed-out pass stamps the cooldown"
+        assert disc._connect_cooldown_active("ghost"), (
+            "a timed-out pass stamps the cooldown"
+        )
         assert "ghost" not in mcp_tool._server_connecting
     finally:
         with mcp_tool._lock:
-            for store in (mcp_tool._server_connect_errors, mcp_tool._server_connect_failures,
-                          mcp_tool._server_connect_retry_after, mcp_tool._server_scope_keys):
+            for store in (
+                mcp_tool._server_connect_errors,
+                mcp_tool._server_connect_failures,
+                mcp_tool._server_connect_retry_after,
+                mcp_tool._server_scope_keys,
+            ):
                 store.pop("ghost", None)
             mcp_tool._server_connecting.discard("ghost")
 
@@ -140,18 +178,28 @@ def test_reconcile_counts_adopted_shared_connection_as_live(monkeypatch, tmp_pat
     from tools import mcp_tool_discovery as disc
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(_config, "_load_mcp_config", lambda: {"x": {"url": "https://x/mcp"}})
+    monkeypatch.setattr(
+        _config, "_load_mcp_config", lambda: {"x": {"url": "https://x/mcp"}}
+    )
     monkeypatch.setattr(mcp_tool, "_mcp_registry_scope", lambda: "B")
     discovered: list = []
-    monkeypatch.setattr(disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or [])
+    monkeypatch.setattr(
+        disc, "discover_mcp_tools", lambda *a, **k: discovered.append(1) or []
+    )
     with mcp_tool._lock:
         mcp_tool._servers[("A", "x")] = object()
         mcp_tool._server_scope_keys[("A", "x")] = "A"
         mcp_tool._server_tool_scopes[("A", "x")] = {"A", "B"}
     try:
         for _ in range(3):
-            assert disc.reconcile_mcp_servers_with_config() == {"removed": [], "added": [], "pending": []}
-        assert not discovered, "an adopted shared connection is live for this scope; nothing to add"
+            assert disc.reconcile_mcp_servers_with_config() == {
+                "removed": [],
+                "added": [],
+                "pending": [],
+            }
+        assert not discovered, (
+            "an adopted shared connection is live for this scope; nothing to add"
+        )
     finally:
         with mcp_tool._lock:
             mcp_tool._servers.pop(("A", "x"), None)

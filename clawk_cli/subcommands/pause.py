@@ -26,7 +26,8 @@ def cmd_pause(args: argparse.Namespace) -> int:
     print(
         "    Cron dispatch, kanban dispatch, and new gateway turns (messaging and interactive\n"
         "    CLI, TUI and Desktop turns alike) are on hold. In-flight work keeps running.\n"
-        "    Run `clawk resume` to lift the pause.")
+        "    Run `clawk resume` to lift the pause."
+    )
     return 0
 
 
@@ -44,17 +45,24 @@ def cmd_resume(args: argparse.Namespace) -> int:
 def build_pause_parser(subparsers) -> None:
     """Attach the ``pause`` and ``resume`` subcommands to ``subparsers``."""
     pause_parser = subparsers.add_parser(
-        "pause", help="Emergency stop: pause cron/kanban dispatch and new gateway turns",
+        "pause",
+        help="Emergency stop: pause cron/kanban dispatch and new gateway turns",
         description="Engage the global emergency stop. Halts NEW work only — cron "
-            "dispatch, kanban dispatch, and new gateway turns — until "
-            "`clawk resume`. Interactive CLI, TUI and Desktop turns are gateway turns, so they "
-            "are held too: each gets \"Clawksis is paused\" with the reason. Turns already "
-            "running finish; in-flight work is never killed.")
+        "dispatch, kanban dispatch, and new gateway turns — until "
+        "`clawk resume`. Interactive CLI, TUI and Desktop turns are gateway turns, so they "
+        'are held too: each gets "Clawksis is paused" with the reason. Turns already '
+        "running finish; in-flight work is never killed.",
+    )
     pause_parser.add_argument(
-        "--reason", default=None, help="Optional reason stored in the sentinel and shown to users")
+        "--reason",
+        default=None,
+        help="Optional reason stored in the sentinel and shown to users",
+    )
     pause_parser.set_defaults(func=cmd_pause)
 
     resume_parser = subparsers.add_parser(
-        "resume", help="Lift the emergency stop set by `clawk pause`",
-        description="Remove the ESTOP sentinel; dispatch resumes on the next tick.")
+        "resume",
+        help="Lift the emergency stop set by `clawk pause`",
+        description="Remove the ESTOP sentinel; dispatch resumes on the next tick.",
+    )
     resume_parser.set_defaults(func=cmd_resume)

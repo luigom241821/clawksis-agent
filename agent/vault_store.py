@@ -41,15 +41,25 @@ LOGIN_IDENTIFIER_TYPES = ("email", "phone", "username")
 # browser fill targets (agent/vault_login_classifier.py); the Desktop Add dialog and `clawk vault add`
 # both write these names, so the fill never has to guess a user's ad-hoc field naming.
 PAYMENT_FIELDS = {
-    "card_number": "cc-number", "cardholder_name": "cc-name", "exp_month": "cc-exp-month",
-    "exp_year": "cc-exp-year", "cvc": "cc-csc", "billing_postal_code": "postal-code",
+    "card_number": "cc-number",
+    "cardholder_name": "cc-name",
+    "exp_month": "cc-exp-month",
+    "exp_year": "cc-exp-year",
+    "cvc": "cc-csc",
+    "billing_postal_code": "postal-code",
 }
 ADDRESS_FIELDS = {
-    "address_line1": "address-line1", "address_line2": "address-line2", "city": "address-level2",
-    "state": "address-level1", "postal_code": "postal-code", "country": "country-name",
+    "address_line1": "address-line1",
+    "address_line2": "address-line2",
+    "city": "address-level2",
+    "state": "address-level1",
+    "postal_code": "postal-code",
+    "country": "country-name",
 }
-REQUIRED_FIELDS = {"payment": ("card_number", "exp_month", "exp_year", "cvc"),
-                   "address": ("address_line1", "city", "postal_code", "country")}
+REQUIRED_FIELDS = {
+    "payment": ("card_number", "exp_month", "exp_year", "cvc"),
+    "address": ("address_line1", "city", "postal_code", "country"),
+}
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
@@ -83,9 +93,12 @@ def normalize_otp_secret(value: str) -> str:
     digits, period, algo = 6, 30, "SHA1"
     if value.lower().startswith("otpauth://"):
         from urllib.parse import parse_qs, urlparse
+
         parsed = urlparse(value)
         if parsed.netloc.lower() != "totp":
-            raise VaultError("only otpauth://totp links are supported (counter-based HOTP is not)")
+            raise VaultError(
+                "only otpauth://totp links are supported (counter-based HOTP is not)"
+            )
         qs = {k.lower(): v[0] for k, v in parse_qs(parsed.query).items()}
         value = qs.get("secret", "")
         try:
@@ -95,16 +108,22 @@ def normalize_otp_secret(value: str) -> str:
             raise VaultError("otpauth:// digits/period must be integers")
         algo = qs.get("algorithm", algo).upper().replace("-", "")
         if digits not in (6, 7, 8) or period <= 0 or algo not in _OTP_ALGOS:
-            raise VaultError("unsupported otpauth:// parameters (digits 6-8, period > 0, SHA1/SHA256/SHA512)")
+            raise VaultError(
+                "unsupported otpauth:// parameters (digits 6-8, period > 0, SHA1/SHA256/SHA512)"
+            )
     seed = re.sub(r"[\s-]", "", value).upper().rstrip("=")
     if not seed or re.search(r"[^A-Z2-7]", seed):
-        raise VaultError("authenticator key must be a base32 secret or an otpauth:// URI")
+        raise VaultError(
+            "authenticator key must be a base32 secret or an otpauth:// URI"
+        )
     if (digits, period, algo) == (6, 30, "SHA1"):
         return seed
     return f"{seed}|{digits}|{period}|{algo}"
 
 
-def totp_now(seed: str, *, digits: int = 6, period: int = 30, at: Optional[float] = None) -> str:
+def totp_now(
+    seed: str, *, digits: int = 6, period: int = 30, at: Optional[float] = None
+) -> str:
     """RFC 6238 TOTP for a stored seed (see normalize_otp_secret for the ``seed|digits|period|algo``
     form). Stdlib only."""
     import base64
@@ -121,7 +140,9 @@ def totp_now(seed: str, *, digits: int = 6, period: int = 30, at: Optional[float
     counter = int((at if at is not None else _time.time()) // period)
     digest = hmac.new(key, struct.pack(">Q", counter), getattr(hashlib, algo)).digest()
     offset = digest[-1] & 0x0F
-    code = (struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    code = (struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF) % (
+        10**digits
+    )
     return str(code).zfill(digits)
 
 
@@ -167,7 +188,9 @@ class VaultItemMeta:
     created_at: str
     identifier_type: Optional[str] = None
     identifier: Optional[str] = None
-    has_otp: bool = False  # a TOTP seed is stored: 2FA codes can be minted without asking the user
+    has_otp: bool = (
+        False  # a TOTP seed is stored: 2FA codes can be minted without asking the user
+    )
     # Every origin the password manager bound to this item (manager backends only;
     # ``origin`` is the first/primary one). Fill matching stays exact-origin against
     # this list — no wildcard or subdomain inference is ever derived from it.
@@ -195,8 +218,10 @@ class VaultStore:
     """Encrypted, profile-scoped vault under ``<CLAWK_HOME>/vault/``."""
 
     def __init__(self, base_dir: Optional[Path] = None):
-        self._base = Path(base_dir) if base_dir is not None else (
-            Path(get_clawk_home()) / "vault"
+        self._base = (
+            Path(base_dir)
+            if base_dir is not None
+            else (Path(get_clawk_home()) / "vault")
         )
         self._vault_path = self._base / "vault.json.enc"
         self._key_path = self._base / "vault.key"
@@ -228,7 +253,9 @@ class VaultStore:
             self._ensure_dir()
             lock_path = self._base / ".vault.lock"
             if msvcrt and (not lock_path.exists() or lock_path.stat().st_size == 0):
-                lock_path.write_text(" ", encoding="utf-8")  # msvcrt needs a non-empty byte range to lock
+                lock_path.write_text(
+                    " ", encoding="utf-8"
+                )  # msvcrt needs a non-empty byte range to lock
             with open(lock_path, "r+" if msvcrt else "a+", encoding="utf-8") as fd:
                 if fcntl:
                     fcntl.flock(fd, fcntl.LOCK_EX)
@@ -251,9 +278,7 @@ class VaultStore:
         self._ensure_dir()
         if not self._key_path.exists():
             key = Fernet.generate_key()
-            fd = os.open(
-                self._key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
-            )
+            fd = os.open(self._key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             try:
                 os.write(fd, key)
             finally:
@@ -285,9 +310,7 @@ class VaultStore:
         try:
             data = json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise VaultError(
-                "vault file is corrupted (invalid JSON)"
-            ) from exc
+            raise VaultError("vault file is corrupted (invalid JSON)") from exc
         if not isinstance(data, dict):
             raise VaultError("vault file is corrupted (unexpected shape)")
         items = data.get("items", [])
@@ -319,7 +342,9 @@ class VaultStore:
         ``address`` payloads remain fully secret.
         """
         if kind not in VAULT_KINDS:
-            raise VaultError(f"unknown vault kind {kind!r} (expected one of {VAULT_KINDS})")
+            raise VaultError(
+                f"unknown vault kind {kind!r} (expected one of {VAULT_KINDS})"
+            )
         label = (label or "").strip()
         if not label:
             raise VaultError("label is required")
@@ -343,10 +368,17 @@ class VaultStore:
             # Login secret payload is password (+ optional TOTP seed); identifier lives in
             # metadata and any stray origin echo is dropped.
             otp_secret = normalize_otp_secret(str(secret.get("otp_secret") or ""))
-            secret = {"password": secret["password"], **({"otp_secret": otp_secret} if otp_secret else {})}
+            secret = {
+                "password": secret["password"],
+                **({"otp_secret": otp_secret} if otp_secret else {}),
+            }
         else:
             allowed = PAYMENT_FIELDS if kind == "payment" else ADDRESS_FIELDS
-            secret = {k: str(v) for k, v in secret.items() if k in allowed and str(v or "").strip()}
+            secret = {
+                k: str(v)
+                for k, v in secret.items()
+                if k in allowed and str(v or "").strip()
+            }
             missing = [f for f in REQUIRED_FIELDS[kind] if f not in secret]
             if missing:
                 raise VaultError(f"{kind} items require {', '.join(missing)}")

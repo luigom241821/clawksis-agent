@@ -41,8 +41,7 @@ def is_managed_nous_gateway_url(
     build_origin = gateway_builder or build_vendor_gateway_url
     try:
         expected = {
-            urlsplit(build_origin(label))[:2]
-            for label in ("tool", "connector")
+            urlsplit(build_origin(label))[:2] for label in ("tool", "connector")
         }
         actual = urlsplit(url.strip())
     except ValueError:

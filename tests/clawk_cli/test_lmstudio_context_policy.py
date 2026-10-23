@@ -27,15 +27,19 @@ class _JsonResponse:
 def _catalog(*, loaded_context=None, maximum=262_144):
     loaded_instances = []
     if loaded_context is not None:
-        loaded_instances.append({
-            "id": f"{MODEL}:active",
-            "config": {"context_length": loaded_context},
-        })
-    return [{
-        "key": MODEL,
-        "max_context_length": maximum,
-        "loaded_instances": loaded_instances,
-    }]
+        loaded_instances.append(
+            {
+                "id": f"{MODEL}:active",
+                "config": {"context_length": loaded_context},
+            }
+        )
+    return [
+        {
+            "key": MODEL,
+            "max_context_length": maximum,
+            "loaded_instances": loaded_instances,
+        }
+    ]
 
 
 def _capture_load(monkeypatch, response_payload):
@@ -49,13 +53,10 @@ def _capture_load(monkeypatch, response_payload):
     return requests
 
 
-
-
-
-
 def test_missing_echo_refreshes_loaded_state(monkeypatch):
     catalogs = iter([_catalog(), _catalog(loaded_context=88_000)])
-    monkeypatch.setattr(models_local, "_lmstudio_fetch_raw_models", lambda **_kwargs: next(catalogs)
+    monkeypatch.setattr(
+        models_local, "_lmstudio_fetch_raw_models", lambda **_kwargs: next(catalogs)
     )
     _capture_load(monkeypatch, {"status": "loaded"})
 
@@ -67,7 +68,9 @@ def test_missing_echo_refreshes_loaded_state(monkeypatch):
 
 
 def test_explicit_override_above_known_maximum_rejects_even_when_loaded(monkeypatch):
-    monkeypatch.setattr(models_local, "_lmstudio_fetch_raw_models",
+    monkeypatch.setattr(
+        models_local,
+        "_lmstudio_fetch_raw_models",
         lambda **_kwargs: _catalog(loaded_context=64_000, maximum=128_000),
     )
     monkeypatch.setattr(

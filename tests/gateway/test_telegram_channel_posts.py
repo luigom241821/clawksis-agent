@@ -133,7 +133,9 @@ def _make_channel_update(msg):
     )
 
 
-def test_build_message_event_uses_channel_identity_for_channel_posts(telegram_adapter_cls):
+def test_build_message_event_uses_channel_identity_for_channel_posts(
+    telegram_adapter_cls,
+):
     adapter = _make_adapter(telegram_adapter_cls)
     msg = _make_channel_message()
 
@@ -146,5 +148,3 @@ def test_build_message_event_uses_channel_identity_for_channel_posts(telegram_ad
     assert event.source.user_id == "-1003950368353"
     assert event.source.user_name == "wzrd"
     assert event.platform_update_id == 12345
-
-

@@ -29,11 +29,17 @@ def homes(tmp_path, monkeypatch):
     a = tmp_path / ".clawk"
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
-    (a / ".env").write_text("A_MARKER=a\nCLAWK_MODEL=a-model\nFIRECRAWL_API_KEY=a-fc\n", encoding="utf-8")
+    (a / ".env").write_text(
+        "A_MARKER=a\nCLAWK_MODEL=a-model\nFIRECRAWL_API_KEY=a-fc\n", encoding="utf-8"
+    )
     (b / ".env").write_text("B_MARKER=b\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(a))
-    for key, val in (("A_MARKER", "a"), ("CLAWK_MODEL", "a-model"), ("FIRECRAWL_API_KEY", "a-fc"),
-                     ("OPENAI_API_KEY", "sk-ambient-launch-only")):
+    for key, val in (
+        ("A_MARKER", "a"),
+        ("CLAWK_MODEL", "a-model"),
+        ("FIRECRAWL_API_KEY", "a-fc"),
+        ("OPENAI_API_KEY", "sk-ambient-launch-only"),
+    ):
         monkeypatch.setenv(key, val)
     monkeypatch.delenv("B_MARKER", raising=False)
     set_multiplex_active(False)
@@ -50,12 +56,23 @@ def test_ambient_only_launch_credential_never_reaches_a_routed_child(homes):
     set_multiplex_active(True)
     env = served_profile_child_env(target_home=b, inherit_credentials=True)
     assert env["CLAWK_HOME"] == str(b) and env["B_MARKER"] == "b"
-    assert "OPENAI_API_KEY" not in env and "A_MARKER" not in env and "FIRECRAWL_API_KEY" not in env
+    assert (
+        "OPENAI_API_KEY" not in env
+        and "A_MARKER" not in env
+        and "FIRECRAWL_API_KEY" not in env
+    )
     # The raw-environ base used by the relay delivery child is scrubbed the same way.
-    env = served_profile_child_env(base=os.environ, target_home=b, inherit_credentials=True)
+    env = served_profile_child_env(
+        base=os.environ, target_home=b, inherit_credentials=True
+    )
     assert "OPENAI_API_KEY" not in env and env["B_MARKER"] == "b"
     # The launch profile's own child keeps its env (ambient injection is A's legitimate credential).
-    assert served_profile_child_env(target_home=a, inherit_credentials=True)["OPENAI_API_KEY"] == "sk-ambient-launch-only"
+    assert (
+        served_profile_child_env(target_home=a, inherit_credentials=True)[
+            "OPENAI_API_KEY"
+        ]
+        == "sk-ambient-launch-only"
+    )
     with pytest.raises(UnscopedSecretError):
         served_profile_child_env(inherit_credentials=True)
 
@@ -70,14 +87,22 @@ def test_routed_home_with_multiplex_flag_off_gets_no_launch_residue(homes, monke
     try:
         env = served_profile_child_env(inherit_credentials=True)
         assert env["CLAWK_HOME"] == str(b) and env["B_MARKER"] == "b"
-        assert "A_MARKER" not in env and "CLAWK_MODEL" not in env and "OPENAI_API_KEY" not in env
+        assert (
+            "A_MARKER" not in env
+            and "CLAWK_MODEL" not in env
+            and "OPENAI_API_KEY" not in env
+        )
         browser_env = _build_browser_env()
-        assert "FIRECRAWL_API_KEY" not in browser_env and browser_env["CLAWK_HOME"] == str(b)
+        assert "FIRECRAWL_API_KEY" not in browser_env and browser_env[
+            "CLAWK_HOME"
+        ] == str(b)
     finally:
         reset_clawk_home_override(token)
     # Control: the launch profile's own browser keeps its key and its settings.
     assert _build_browser_env()["FIRECRAWL_API_KEY"] == "a-fc"
-    assert served_profile_child_env(inherit_credentials=True)["CLAWK_MODEL"] == "a-model"
+    assert (
+        served_profile_child_env(inherit_credentials=True)["CLAWK_MODEL"] == "a-model"
+    )
 
 
 def test_real_child_observes_only_the_routed_profile(homes):
@@ -92,7 +117,20 @@ def test_real_child_observes_only_the_routed_profile(homes):
     finally:
         reset_clawk_home_override(token)
     probe = "import json,os;print(json.dumps({k:os.environ.get(k) for k in ('CLAWK_HOME','A_MARKER','B_MARKER','OPENAI_API_KEY')}))"
-    out = subprocess.run([sys.executable, "-c", probe], env=env, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
+    out = subprocess.run(
+        [sys.executable, "-c", probe],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
     seen = json.loads(out.stdout.strip().splitlines()[-1])
-    assert seen == {"CLAWK_HOME": str(b), "A_MARKER": None, "B_MARKER": "b", "OPENAI_API_KEY": None}
+    assert seen == {
+        "CLAWK_HOME": str(b),
+        "A_MARKER": None,
+        "B_MARKER": "b",
+        "OPENAI_API_KEY": None,
+    }
     assert Path(seen["CLAWK_HOME"]) == b

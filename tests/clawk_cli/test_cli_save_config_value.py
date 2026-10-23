@@ -16,10 +16,14 @@ class TestSaveConfigValueAtomic:
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         config_path = clawk_home / "config.yaml"
-        config_path.write_text(yaml.safe_dump({
-            "model": {"default": "test-model", "provider": "openrouter"},
-            "display": {"skin": "default"},
-        }))
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "model": {"default": "test-model", "provider": "openrouter"},
+                    "display": {"skin": "default"},
+                }
+            )
+        )
         # save_config_value resolves the target live via get_clawk_home(), so
         # point CLAWK_HOME at the temp dir (the _clawk_home import-time
         # constant is no longer consulted).
@@ -27,15 +31,19 @@ class TestSaveConfigValueAtomic:
         monkeypatch.setattr("cli._clawk_home", clawk_home)
         return config_path
 
-
-
     def test_creates_nested_keys(self, config_env):
         """Dot-separated paths create intermediate dicts as needed."""
         from cli import save_config_value
-        save_config_value("auxiliary.compression.model", "google/gemini-3-flash-preview")
+
+        save_config_value(
+            "auxiliary.compression.model", "google/gemini-3-flash-preview"
+        )
 
         result = yaml.safe_load(config_env.read_text())
-        assert result["auxiliary"]["compression"]["model"] == "google/gemini-3-flash-preview"
+        assert (
+            result["auxiliary"]["compression"]["model"]
+            == "google/gemini-3-flash-preview"
+        )
 
     def test_file_not_truncated_on_error(self, config_env, monkeypatch):
         """If atomic_yaml_write raises, the original file is untouched."""
@@ -47,6 +55,7 @@ class TestSaveConfigValueAtomic:
         monkeypatch.setattr("utils.atomic_roundtrip_yaml_update", exploding_write)
 
         from cli import save_config_value
+
         result = save_config_value("display.skin", "broken")
 
         assert result is False

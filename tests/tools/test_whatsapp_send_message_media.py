@@ -163,7 +163,10 @@ def test_missing_captioned_file_falls_back_to_text():
     assert "error" in res
     assert "not found" in res["error"]
     # ...but the caption text was delivered on its own first.
-    assert [url for url, _ in calls] == ["http://localhost:3000/health", "http://localhost:3000/send"]
+    assert [url for url, _ in calls] == [
+        "http://localhost:3000/health",
+        "http://localhost:3000/send",
+    ]
     assert calls[1][1]["message"] == "floor plan"
 
 
@@ -176,9 +179,14 @@ def test_standalone_send_uses_persisted_secondary_bridge_port(tmp_path, monkeypa
     monkeypatch.setenv("CLAWK_HOME", str(home))
     session_ctx, calls = _session_with([_resp(200, {"messageId": "t1"})])
     with patch("aiohttp.ClientSession", return_value=session_ctx):
-        result = asyncio.run(_standalone_send(SimpleNamespace(token="", extra={}), "12345", "hello"))
+        result = asyncio.run(
+            _standalone_send(SimpleNamespace(token="", extra={}), "12345", "hello")
+        )
     assert result["success"] is True
-    assert [url for url, _ in calls] == ["http://localhost:3042/health", "http://localhost:3042/send"]
+    assert [url for url, _ in calls] == [
+        "http://localhost:3042/health",
+        "http://localhost:3042/send",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -187,7 +195,11 @@ def test_standalone_send_uses_persisted_secondary_bridge_port(tmp_path, monkeypa
     ids=["persisted", "explicit-wins", "unallocated-default"],
 )
 def test_secondary_standalone_sends_use_active_profile_port_for_text_media_and_mentions(
-    tmp_path, monkeypatch, persisted_port, extra, expected_port,
+    tmp_path,
+    monkeypatch,
+    persisted_port,
+    extra,
+    expected_port,
 ):
     """The active multiplex profile, not launch HOME, owns all standalone routes."""
     launch_home = tmp_path / "launch"
@@ -212,10 +224,15 @@ def test_secondary_standalone_sends_use_active_profile_port_for_text_media_and_m
         override = set_clawk_home_override(home)
         try:
             with patch("aiohttp.ClientSession", return_value=session_ctx):
-                result = asyncio.run(_standalone_send(
-                    SimpleNamespace(token="", extra=config_extra), "12345", "hello",
-                    media_files=[(str(media), False)], mentions=["12345"],
-                ))
+                result = asyncio.run(
+                    _standalone_send(
+                        SimpleNamespace(token="", extra=config_extra),
+                        "12345",
+                        "hello",
+                        media_files=[(str(media), False)],
+                        mentions=["12345"],
+                    )
+                )
         finally:
             reset_clawk_home_override(override)
         assert result.get("success") is True, result
@@ -233,26 +250,44 @@ def test_secondary_standalone_sends_use_active_profile_port_for_text_media_and_m
         assert record.read_text(encoding="utf-8") == str(persisted_port)
 
 
-@pytest.mark.parametrize("reported", ["own", "other", None, "unhealthy"],
-                         ids=["own-session", "other-profile-session", "pre-session-bridge", "health-503"])
+@pytest.mark.parametrize(
+    "reported",
+    ["own", "other", None, "unhealthy"],
+    ids=["own-session", "other-profile-session", "pre-session-bridge", "health-503"],
+)
 def test_standalone_send_posts_only_through_this_profiles_bridge(tmp_path, reported):
     """Profiles sharing a bridge_port must not send from each other's WhatsApp account, text or media."""
     own = tmp_path / "b" / "session"
     media = tmp_path / "image.png"
     media.write_bytes(b"image")
     sessions = {"own": own, "other": tmp_path / "a" / "session"}
-    health = _resp(503) if reported == "unhealthy" else _resp(200, {"session": str(sessions[reported])} if reported else {})
+    health = (
+        _resp(503)
+        if reported == "unhealthy"
+        else _resp(200, {"session": str(sessions[reported])} if reported else {})
+    )
     session_ctx, calls = _session_with(
-        [_resp(200, {"messageId": "text"}), _resp(200, {"messageId": "media"})], health=health)
+        [_resp(200, {"messageId": "text"}), _resp(200, {"messageId": "media"})],
+        health=health,
+    )
     with patch("aiohttp.ClientSession", return_value=session_ctx):
-        result = asyncio.run(_standalone_send(
-            SimpleNamespace(token="", extra={"bridge_port": 3000, "session_path": str(own)}), "12345", "hello",
-            media_files=[(str(media), False)],
-        ))
+        result = asyncio.run(
+            _standalone_send(
+                SimpleNamespace(
+                    token="", extra={"bridge_port": 3000, "session_path": str(own)}
+                ),
+                "12345",
+                "hello",
+                media_files=[(str(media), False)],
+            )
+        )
     posted = [url for url, _ in calls if not url.endswith("/health")]
     if reported in ("other", "unhealthy"):
         assert "nothing was sent" in result["error"]
         assert posted == []
     else:
         assert result.get("success") is True, result
-        assert posted == ["http://localhost:3000/send", "http://localhost:3000/send-media"]
+        assert posted == [
+            "http://localhost:3000/send",
+            "http://localhost:3000/send-media",
+        ]

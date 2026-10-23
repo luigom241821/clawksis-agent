@@ -31,10 +31,6 @@ def test_redacts_email_addresses():
     assert "[redacted email]" in out
 
 
-
-
-
-
 def test_does_not_mangle_code_review_shaped_text():
     """Advisory text is often code-review shaped. Line numbers, timestamps,
     bare digit runs, git SHAs, IPs, versions, and source-code assignments must
@@ -51,8 +47,6 @@ def test_does_not_mangle_code_review_shaped_text():
         "timeout = 1234567890\n"
     )
     assert _redact_reference_text(text) == text
-
-
 
 
 def test_non_string_input_passes_through():
@@ -147,12 +141,8 @@ def test_full_mode_redacts_aggregator_input_too(monkeypatch, tmp_path):
     assert "(555) 867-5309" not in prepared["guidance"]
     assert "ceo@example.com" not in ref_events[0]["text"]
     # The redacted guidance is what reaches the aggregator request messages.
-    joined_content = "".join(
-        str(m.get("content")) for m in prepared["messages"]
-    )
+    joined_content = "".join(str(m.get("content")) for m in prepared["messages"])
     assert "ceo@example.com" not in joined_content
-
-
 
 
 def test_cache_keeps_raw_text_redaction_applied_per_surface(monkeypatch, tmp_path):

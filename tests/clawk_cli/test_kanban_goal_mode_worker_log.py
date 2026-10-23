@@ -11,17 +11,32 @@ from __future__ import annotations
 from clawk_cli import kanban_db_dispatch as dispatch
 from clawk_cli.kanban_db import Task
 
+
 def _task(**overrides) -> Task:
     base = dict(
-        id="t_goal1", title="ship it", body="acceptance: tests pass", assignee="worker",
-        status="running", priority=0, created_by=None, created_at=1, started_at=None,
-        completed_at=None, workspace_kind="scratch", workspace_path=None,
-        claim_lock=None, claim_expires=None, tenant=None,
+        id="t_goal1",
+        title="ship it",
+        body="acceptance: tests pass",
+        assignee="worker",
+        status="running",
+        priority=0,
+        created_by=None,
+        created_at=1,
+        started_at=None,
+        completed_at=None,
+        workspace_kind="scratch",
+        workspace_path=None,
+        claim_lock=None,
+        claim_expires=None,
+        tenant=None,
     )
     base.update(overrides)
     return Task(**base)
 
-def test_goal_mode_worker_takes_the_same_stdout_rich_path_as_a_one_shot_worker(monkeypatch):
+
+def test_goal_mode_worker_takes_the_same_stdout_rich_path_as_a_one_shot_worker(
+    monkeypatch,
+):
     monkeypatch.setattr(dispatch, "_resolve_clawk_argv", lambda: ["clawk"])
     monkeypatch.setattr(dispatch, "_resolve_worker_cli_toolsets", lambda home: None)
     plain = dispatch._worker_argv(_task(goal_mode=False), "worker", None)

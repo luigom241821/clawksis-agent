@@ -38,8 +38,11 @@ POST_TURNS = 2
 
 def _tui_session(sc: Scenario) -> dict:
     return {
-        "agent": sc.agent, "history": list(sc.history), "history_lock": threading.Lock(),
-        "history_version": 1, "session_key": sc.session_id,
+        "agent": sc.agent,
+        "history": list(sc.history),
+        "history_lock": threading.Lock(),
+        "history_version": 1,
+        "session_key": sc.session_id,
     }
 
 
@@ -54,7 +57,9 @@ def _compress_via_tui(sc: Scenario, args: str) -> int:
 
 
 def _live(sc: Scenario) -> list[tuple]:
-    return norm_list(_row_msg(r) for r in active_rows(db_rows(sc.db_path, sc.session_id)))
+    return norm_list(
+        _row_msg(r) for r in active_rows(db_rows(sc.db_path, sc.session_id))
+    )
 
 
 def _run_after(sc: Scenario, specs, where: str) -> None:
@@ -69,13 +74,26 @@ def _run_after(sc: Scenario, specs, where: str) -> None:
 
 
 # Each boundary form once; seeds alternate so both seeded session shapes meet full and partial compress.
-@pytest.mark.parametrize(("seed", "args"), [
-    (5, ""), (17, ""), (5, "here"), (17, "here 1"), (5, "here 2"), (17, "here 3"), (5, "keep the file names"),
-])
+@pytest.mark.parametrize(
+    ("seed", "args"),
+    [
+        (5, ""),
+        (17, ""),
+        (5, "here"),
+        (17, "here 1"),
+        (5, "here 2"),
+        (17, "here 3"),
+        (5, "keep the file names"),
+    ],
+)
 def test_manual_compress_keeps_every_invariant(make_scenario, tmp_path, seed, args):
     sc = make_scenario("good", threshold_tokens=HIGH_THRESHOLD)
-    specs = generate_transcript(seed, PRE_TURNS + POST_TURNS + 1, tmp_path / "work",
-                                kinds=("tools", "parallel", "chat", "image"))
+    specs = generate_transcript(
+        seed,
+        PRE_TURNS + POST_TURNS + 1,
+        tmp_path / "work",
+        kinds=("tools", "parallel", "chat", "image"),
+    )
     for spec in specs[:PRE_TURNS]:
         sc.run_turn(spec)
     before_live = _live(sc)
@@ -83,26 +101,47 @@ def test_manual_compress_keeps_every_invariant(make_scenario, tmp_path, seed, ar
 
     removed = _compress_via_tui(sc, args)
 
-    assert len(sc.summary_calls) - calls_before <= 2, "manual compress made a runaway number of summarizer calls"
-    assert removed > 0 and sc.committed_compactions() > 0, f"/compress {args!r} did not compact"
+    assert len(sc.summary_calls) - calls_before <= 2, (
+        "manual compress made a runaway number of summarizer calls"
+    )
+    assert removed > 0 and sc.committed_compactions() > 0, (
+        f"/compress {args!r} did not compact"
+    )
     assert _live(sc) != before_live
-    assert any(GOOD_SUMMARY_TOKEN in str(m.get("content")) for m in sc.history), "summary missing from history"
+    assert any(GOOD_SUMMARY_TOKEN in str(m.get("content")) for m in sc.history), (
+        "summary missing from history"
+    )
     if args.startswith("here"):
         # The kept exchanges (the newest N user turns) stay verbatim and live.
         n = int(args.split()[1]) if len(args.split()) > 1 else 1
         kept = [s.marker for s in specs[:PRE_TURNS]][-n:]
-        live_user_rows = [r for r in active_rows(db_rows(sc.db_path, sc.session_id)) if r["role"] == "user"]
+        live_user_rows = [
+            r
+            for r in active_rows(db_rows(sc.db_path, sc.session_id))
+            if r["role"] == "user"
+        ]
         for marker in kept:
-            assert any(MARKER_RE.findall(r["content"] or "") == [marker] for r in live_user_rows), (
-                f"/compress {args}: kept exchange {marker} is not a live verbatim row in state.db")
+            assert any(
+                MARKER_RE.findall(r["content"] or "") == [marker]
+                for r in live_user_rows
+            ), (
+                f"/compress {args}: kept exchange {marker} is not a live verbatim row in state.db"
+            )
     _run_after(sc, specs[PRE_TURNS:], f"after /compress {args!r}")
 
 
 @pytest.mark.parametrize("mode", ("empty", "refusal", "truncated"))
 @pytest.mark.parametrize("args", ["", "here 2"])
-def test_manual_compress_with_failed_summary_changes_nothing(make_scenario, tmp_path, mode, args):
+def test_manual_compress_with_failed_summary_changes_nothing(
+    make_scenario, tmp_path, mode, args
+):
     sc = make_scenario(mode, threshold_tokens=HIGH_THRESHOLD)
-    specs = generate_transcript(7, PRE_TURNS + POST_TURNS + 1, tmp_path / "work", kinds=("tools", "parallel", "chat"))
+    specs = generate_transcript(
+        7,
+        PRE_TURNS + POST_TURNS + 1,
+        tmp_path / "work",
+        kinds=("tools", "parallel", "chat"),
+    )
     for spec in specs[:PRE_TURNS]:
         sc.run_turn(spec)
     rows_before = db_rows(sc.db_path, sc.session_id)
@@ -112,8 +151,12 @@ def test_manual_compress_with_failed_summary_changes_nothing(make_scenario, tmp_
 
     assert sc.summary_calls, "the summarizer was never asked"
     assert removed == 0
-    assert db_rows(sc.db_path, sc.session_id) == rows_before, f"a {mode} summary changed state.db"
-    assert norm_list(sc.history) == norm_list(history_before), f"a {mode} summary changed the live history"
+    assert db_rows(sc.db_path, sc.session_id) == rows_before, (
+        f"a {mode} summary changed state.db"
+    )
+    assert norm_list(sc.history) == norm_list(history_before), (
+        f"a {mode} summary changed the live history"
+    )
     _run_after(sc, specs[PRE_TURNS:], f"after failed /compress {args!r}")
 
 
@@ -121,11 +164,17 @@ def test_manual_compress_with_failed_summary_changes_nothing(make_scenario, tmp_
 def test_micro_compaction_keeps_every_invariant(make_scenario, tmp_path, seed):
     """Rolling micro-compaction folds one old exchange per turn into a summary marker between turns,
     carrying a non-contiguous prefix + suffix; summarized rows must be archived, carried rows kept."""
-    sc = make_scenario("good", threshold_tokens=HIGH_THRESHOLD, extra="  micro_compact: true\n")
-    specs = generate_transcript(seed, 10, tmp_path / "work", kinds=("tools", "parallel", "chat"))
+    sc = make_scenario(
+        "good", threshold_tokens=HIGH_THRESHOLD, extra="  micro_compact: true\n"
+    )
+    specs = generate_transcript(
+        seed, 10, tmp_path / "work", kinds=("tools", "parallel", "chat")
+    )
     for i, spec in enumerate(specs):
         if i == 6:
             sc.resume_from_db()
         sc.run_turn(spec)
     assert sc.summary_calls, "micro-compaction never ran"
-    assert sc.committed_compactions() > 0, "micro-compaction never archived a summarized exchange"
+    assert sc.committed_compactions() > 0, (
+        "micro-compaction never archived a summarized exchange"
+    )

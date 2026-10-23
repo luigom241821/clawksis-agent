@@ -51,10 +51,13 @@ def _float_env(name: str, default: float) -> float:
 def _exit_watchdog_timeout() -> float:
     """``CLAWK_EXIT_WATCHDOG_S`` as a float (default 30; ``0`` disables)."""
     from cli import _float_env
+
     return _float_env("CLAWK_EXIT_WATCHDOG_S", 30.0)
 
 
-def _arm_exit_watchdog(timeout_s: float | None = None, *, from_signal: bool = False) -> None:
+def _arm_exit_watchdog(
+    timeout_s: float | None = None, *, from_signal: bool = False
+) -> None:
     """Daemon timer that ``os._exit(0)``s after ``timeout_s`` once shutdown has begun.
 
     Backstop for a cleanup step wedged on network I/O and for interpreter teardown
@@ -66,6 +69,7 @@ def _arm_exit_watchdog(timeout_s: float | None = None, *, from_signal: bool = Fa
     so one tool thread wedged on a socket held the process open forever (#27563 class).
     """
     from cli import _exit_watchdog_timeout, _flush_logging_and_stdio
+
     if timeout_s is None:
         timeout_s = _exit_watchdog_timeout()
     if timeout_s <= 0:
@@ -92,6 +96,7 @@ def _arm_exit_watchdog(timeout_s: float | None = None, *, from_signal: bool = Fa
         # os._exit skips cleanup: a foreground command in its own process group would outlive us.
         with suppress(Exception):
             from tools.environments.base import kill_live_foreground_processes
+
             kill_live_foreground_processes(now=True)
         os._exit(0)
 
@@ -101,48 +106,59 @@ def _arm_exit_watchdog(timeout_s: float | None = None, *, from_signal: bool = Fa
 
 def _shutdown_agent_memory_provider(agent) -> None:
     """Memory-provider shutdown (on_session_end + shutdown_all) at the real session boundary."""
-    if not (agent and hasattr(agent, 'shutdown_memory_provider')):
+    if not (agent and hasattr(agent, "shutdown_memory_provider")):
         return
     # A /new shortly before exit leaves an LLM-bound boundary task queued; shutdown_all()'s
     # ~5s drain would cancel it, so give it a bounded head start (watchdog is the backstop).
-    _mm = getattr(agent, '_memory_manager', None)
-    if _mm is not None and hasattr(_mm, 'flush_pending'):
+    _mm = getattr(agent, "_memory_manager", None)
+    if _mm is not None and hasattr(_mm, "flush_pending"):
         with suppress(Exception):
             _mm.flush_pending(timeout=10)
     # Forward the agent's transcript so on_session_end hooks see the real conversation;
     # no-arg fallback for stubs / partially-initialised agents.
-    _session_msgs = getattr(agent, '_session_messages', None)
+    _session_msgs = getattr(agent, "_session_messages", None)
     _sid = getattr(agent, "session_id", None) or "<unknown>"
     # ``_session_messages`` is set on ``AIAgent.__init__`` and refreshed every turn via
     # ``_persist_session``. Fall back to no-arg on test stubs / partially-initialised agents where the
     # attribute is missing. See #15165.
     if isinstance(_session_msgs, list):
-        logger.info("CLI cleanup calling memory shutdown for session %s with %d message(s)", _sid, len(_session_msgs))
+        logger.info(
+            "CLI cleanup calling memory shutdown for session %s with %d message(s)",
+            _sid,
+            len(_session_msgs),
+        )
         agent.shutdown_memory_provider(_session_msgs)
     else:
-        logger.info("CLI cleanup calling memory shutdown for session %s without session message list", _sid)
+        logger.info(
+            "CLI cleanup calling memory shutdown for session %s without session message list",
+            _sid,
+        )
         agent.shutdown_memory_provider()
 
 
 def _stop_cli_wake_word() -> None:
     from tools.wake_word import stop_listening
+
     if _cli()._cli_wake_owner is not None:
         stop_listening(owner=_cli()._cli_wake_owner)
 
 
 def _interrupt_async_delegations() -> None:
     from tools.async_delegation import interrupt_all
+
     interrupt_all(reason="CLI shutdown")
 
 
 def _shutdown_mcp_servers() -> None:
     from tools.mcp_tool_lifecycle import shutdown_mcp_servers
+
     shutdown_mcp_servers()
 
 
 def _shutdown_cached_aux_clients() -> None:
     # Otherwise AsyncHttpxClientWrapper.__del__ fires on a closed loop ("Press ENTER to continue...").
     from agent.auxiliary_client import shutdown_cached_clients
+
     shutdown_cached_clients()
 
 
@@ -151,8 +167,10 @@ def _shutdown_cached_aux_clients() -> None:
 # Async delegations and MCP servers live in the gateway, which owns their lifetime: a CLI exit
 # neither interrupts the delegations nor tears down MCP servers.
 _CLEANUP_STEPS = (
-    ("_stop_cli_wake_word", Exception), ("_cleanup_all_terminals", Exception),
-    ("_cleanup_all_browsers", Exception), ("_shutdown_cached_aux_clients", Exception),
+    ("_stop_cli_wake_word", Exception),
+    ("_cleanup_all_terminals", Exception),
+    ("_cleanup_all_browsers", Exception),
+    ("_shutdown_cached_aux_clients", Exception),
 )
 
 
@@ -160,6 +178,7 @@ def _gateway_owns_session_end(agent) -> bool:
     """A gateway-backed session ends in the gateway: the viewer's ``end_session`` (``session.detach
     {end_reason}``) makes the owner run finalize and the memory commit (gateway/session_viewer_close)."""
     from clawk_cli.gateway_agent import GatewayAgent
+
     return isinstance(agent, GatewayAgent)
 
 
@@ -178,11 +197,16 @@ def _should_emit_cleanup_session_finalize(session_id: str | None) -> bool:
     return session_id not in _cli()._single_query_finalize_attempted_session_ids
 
 
-def _notify_session_finalize(*, session_id: str | None, platform: str = "cli", reason: str = "shutdown") -> list[str]:
+def _notify_session_finalize(
+    *, session_id: str | None, platform: str = "cli", reason: str = "shutdown"
+) -> list[str]:
     """Fire on_session_finalize; return the plugin messages meant for the user (never raises)."""
     with suppress(Exception):
         from clawk_cli.lifecycle import finalize_session, session_end_messages
-        return session_end_messages(finalize_session(session_id=session_id, platform=platform, reason=reason))
+
+        return session_end_messages(
+            finalize_session(session_id=session_id, platform=platform, reason=reason)
+        )
     return []
 
 
@@ -196,16 +220,23 @@ def _invoke_interrupted_session_end(agent, session_id, reason: str, **extra) -> 
     """Best-effort ``on_session_end`` hook for a turn cut short (never raises)."""
     with suppress(Exception):
         from clawk_cli.lifecycle import invoke_hook as _invoke_hook
+
         _invoke_hook(
-            "on_session_end", session_id=session_id, completed=False, interrupted=True,
-            model=getattr(agent, "model", None), platform=getattr(agent, "platform", None) or "cli",
-            reason=reason, **extra,
+            "on_session_end",
+            session_id=session_id,
+            completed=False,
+            interrupted=True,
+            model=getattr(agent, "model", None),
+            platform=getattr(agent, "platform", None) or "cli",
+            reason=reason,
+            **extra,
         )
 
 
 def _emit_interrupted_session_end(cli, *, reason: str = "keyboard_interrupt") -> None:
     """Best-effort on_session_end hook for interrupted non-interactive runs."""
     from cli import _invoke_interrupted_session_end, _oneshot_agent_and_session
+
     agent, session_id = _oneshot_agent_and_session(cli)
     if agent is None:
         return
@@ -221,7 +252,9 @@ def _emit_interrupted_session_end(cli, *, reason: str = "keyboard_interrupt") ->
             cli.session_id = session_id
 
     _invoke_interrupted_session_end(
-        agent, session_id, reason,
+        agent,
+        session_id,
+        reason,
         task_id=getattr(agent, "_current_task_id", "") or "",
         turn_id=getattr(agent, "_current_turn_id", "") or "",
         api_request_id=getattr(agent, "_current_api_request_id", "") or "",
@@ -230,6 +263,7 @@ def _emit_interrupted_session_end(cli, *, reason: str = "keyboard_interrupt") ->
 
 def _notify_single_query_session_finalize(cli, *, reason: str = "shutdown") -> None:
     from cli import _notify_session_finalize, _oneshot_agent_and_session
+
     agent, session_id = _oneshot_agent_and_session(cli)
     if session_id in _cli()._single_query_finalize_attempted_session_ids:
         return
@@ -241,7 +275,10 @@ def _notify_single_query_session_finalize(cli, *, reason: str = "shutdown") -> N
     try:
         # stderr: one-shot stdout is the answer scripts parse.
         for message in _notify_session_finalize(
-                session_id=session_id, platform=getattr(agent, "platform", None) or "cli", reason=reason):
+            session_id=session_id,
+            platform=getattr(agent, "platform", None) or "cli",
+            reason=reason,
+        ):
             print(message, file=sys.stderr, flush=True)
     finally:
         _cli()._single_query_finalize_attempted_session_ids.add(session_id)
@@ -265,6 +302,7 @@ def _flush_one_shot_session_store(cli) -> None:
     See #88234.
     """
     from cli import _oneshot_agent_and_session
+
     agent, session_id = _oneshot_agent_and_session(cli)
     if agent is None or not session_id or session_id in _cli()._handed_off_session_ids:
         return
@@ -356,7 +394,14 @@ def _finalize_single_query(cli) -> None:
     process's stale ``cli_close`` end-stamp, because phase 1 has already run it.
     """
     import cli as cli_module
-    from cli import _flush_one_shot_session_store, _notify_single_query_session_finalize, _run_cleanup, _shutdown_agent_memory_provider, _wait_for_oneshot_background_completions
+    from cli import (
+        _flush_one_shot_session_store,
+        _notify_single_query_session_finalize,
+        _run_cleanup,
+        _shutdown_agent_memory_provider,
+        _wait_for_oneshot_background_completions,
+    )
+
     try:
         try:
             _flush_one_shot_session_store(cli)
@@ -366,7 +411,9 @@ def _finalize_single_query(cli) -> None:
         try:
             # A failed goal-loop re-init leaves cli.agent None while the agent
             # that ran the turns is still the module's active ref.
-            _shutdown_agent_memory_provider(getattr(cli, "agent", None) or cli_module._active_agent_ref)
+            _shutdown_agent_memory_provider(
+                getattr(cli, "agent", None) or cli_module._active_agent_ref
+            )
         except Exception:
             logger.debug("one-shot memory provider shutdown failed", exc_info=True)
     finally:

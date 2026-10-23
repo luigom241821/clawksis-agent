@@ -17,12 +17,21 @@ from typing import Any, Dict, List, Optional, Set
 from clawk_constants import get_clawk_home
 from clawk_cli.config import cfg_get
 from clawk_cli.plugin_capabilities import VALID_CAPABILITY_IDS
-from clawk_cli.plugin_capabilities import parse_declared_capabilities as _parse_declared_capabilities
-from clawk_cli.plugins_manifest import (
-    PluginManifest, _detect_kind_from_source, manifest_key, _resolve_module_source,
-    parse_manifest_file, portable_plugin_manifest,
+from clawk_cli.plugin_capabilities import (
+    parse_declared_capabilities as _parse_declared_capabilities,
 )
-from clawk_cli.relay_plugin_cutover import LEGACY_RELAY_PLUGIN_KEYS, RELAY_PLUGINS_CONFIG_ENV
+from clawk_cli.plugins_manifest import (
+    PluginManifest,
+    _detect_kind_from_source,
+    manifest_key,
+    _resolve_module_source,
+    parse_manifest_file,
+    portable_plugin_manifest,
+)
+from clawk_cli.relay_plugin_cutover import (
+    LEGACY_RELAY_PLUGIN_KEYS,
+    RELAY_PLUGINS_CONFIG_ENV,
+)
 
 logger = logging.getLogger("clawk_cli.plugins")
 
@@ -32,9 +41,15 @@ ENTRY_POINT_CAPABILITIES_GROUP = "clawk_agent.plugin_capabilities"
 # Per-harness manifest directories plugin repos ship for OTHER agent harnesses (e.g. obra/superpowers keeps one
 # plugin.json per harness). Their plugin.json is not an Agent Plugins v1 manifest and can never validate, so
 # parsing it on every discovery pass only spams warnings (#101962).
-_FOREIGN_HARNESS_MANIFEST_DIRS = frozenset({
-    ".claude-plugin", ".codex-plugin", ".cursor-plugin", ".devin-plugin", ".kimi-plugin",
-})
+_FOREIGN_HARNESS_MANIFEST_DIRS = frozenset(
+    {
+        ".claude-plugin",
+        ".codex-plugin",
+        ".cursor-plugin",
+        ".devin-plugin",
+        ".kimi-plugin",
+    }
+)
 
 # Set while a caller reads a profile's config WITHOUT wanting that profile's plugins in this process:
 # the multiplex preflight loads a PARKED profile's gateway config for the duplicate-credential guard,
@@ -42,7 +57,8 @@ _FOREIGN_HARNESS_MANIFEST_DIRS = frozenset({
 # ``register()`` (threads, DB handles) for a profile the operator took out of the host (#123386).
 # A contextvar, not an env flag: it must not leak to other threads or outlive the read.
 _discovery_suppressed: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "clawk_plugin_discovery_suppressed", default=False)
+    "clawk_plugin_discovery_suppressed", default=False
+)
 
 
 @contextlib.contextmanager
@@ -85,18 +101,29 @@ def discover_entrypoint_manifests() -> list[PluginManifest]:
     for ep in group_eps:
         try:
             declared = {d.name for d in capability_eps if d.value == ep.value}
-            capabilities = [c for c in VALID_CAPABILITY_IDS if f"{ep.name}.{c}" in declared]
+            capabilities = [
+                c for c in VALID_CAPABILITY_IDS if f"{ep.name}.{c}" in declared
+            ]
             dist = getattr(ep, "dist", None)
             metadata = getattr(dist, "metadata", None)
-            manifests.append(PluginManifest(
-                name=ep.name, version=str(getattr(dist, "version", "") or ""),
-                description=str(metadata.get("Summary", "") or "") if metadata is not None else "",
-                source="entrypoint", path=ep.value, key=ep.name,
-                kind=_classify_entrypoint_value_kind(ep.value),
-                capabilities=_parse_declared_capabilities(capabilities, ep.name),
-            ))
+            manifests.append(
+                PluginManifest(
+                    name=ep.name,
+                    version=str(getattr(dist, "version", "") or ""),
+                    description=str(metadata.get("Summary", "") or "")
+                    if metadata is not None
+                    else "",
+                    source="entrypoint",
+                    path=ep.value,
+                    key=ep.name,
+                    kind=_classify_entrypoint_value_kind(ep.value),
+                    capabilities=_parse_declared_capabilities(capabilities, ep.name),
+                )
+            )
         except Exception as exc:
-            logger.debug("Entry-point manifest for %r skipped: %s", getattr(ep, "name", "?"), exc)
+            logger.debug(
+                "Entry-point manifest for %r skipped: %s", getattr(ep, "name", "?"), exc
+            )
     return manifests
 
 
@@ -104,7 +131,11 @@ def _classify_entrypoint_value_kind(value: str) -> str:
     """Classify an entry-point target by import-free source scan (unresolvable -> standalone)."""
     try:
         module_name = str(value).split(":", 1)[0].strip()
-        return (_detect_kind_from_source(_resolve_module_source(module_name)) if module_name else None) or "standalone"
+        return (
+            _detect_kind_from_source(_resolve_module_source(module_name))
+            if module_name
+            else None
+        ) or "standalone"
     except Exception:
         return "standalone"
 
@@ -113,6 +144,7 @@ def _get_disabled_plugins() -> set:
     """Read ``plugins.disabled`` — a deny-list that wins over ``plugins.enabled``."""
     try:
         from clawk_cli.config import load_config
+
         disabled = cfg_get(load_config(), "plugins", "disabled", default=[])
         return set(disabled) if isinstance(disabled, list) else set()
     except Exception:
@@ -125,6 +157,7 @@ def _get_enabled_plugins() -> Optional[set]:
     empty; else the allow-list."""
     try:
         from clawk_cli.config import load_config
+
         enabled = cfg_get(load_config(), "plugins", "enabled")
         return set(enabled) if isinstance(enabled, list) else None
     except Exception:
@@ -132,7 +165,12 @@ def _get_enabled_plugins() -> Optional[set]:
 
 
 def scan_directory(
-    path: Path, source: str, *, skip_names: Optional[set[str]] = None, prefix: str = "", depth: int = 0
+    path: Path,
+    source: str,
+    *,
+    skip_names: Optional[set[str]] = None,
+    prefix: str = "",
+    depth: int = 0,
 ) -> list[PluginManifest]:
     """Read manifests under *path*: flat ``<root>/<name>/plugin.yaml`` (key ``name``) or category
     ``<root>/<cat>/<name>/plugin.yaml`` (key ``cat/name``; a manifest-less directory recurses one level, depth
@@ -159,9 +197,18 @@ def scan_directory(
         # pathlib.Path.is_dir() swallows OSError, but injected Path-likes
         # and test doubles can still raise. Fail closed per child.
         try:
-            if not child.is_dir() or (depth == 0 and skip_names and child.name in skip_names):
+            if not child.is_dir() or (
+                depth == 0 and skip_names and child.name in skip_names
+            ):
                 continue
-            manifest_file = next((f for f in (child / "plugin.yaml", child / "plugin.yml") if f.exists()), None)
+            manifest_file = next(
+                (
+                    f
+                    for f in (child / "plugin.yaml", child / "plugin.yml")
+                    if f.exists()
+                ),
+                None,
+            )
             portable_file = child / "plugin.json"
             has_portable = portable_file.exists() or portable_file.is_symlink()
         except OSError as exc:
@@ -182,7 +229,9 @@ def scan_directory(
             logger.debug("Skipping %s (no plugin.yaml, depth cap reached)", child)
         else:
             sub_prefix = f"{prefix}/{child.name}" if prefix else child.name
-            manifests.extend(scan_directory(child, source, prefix=sub_prefix, depth=depth + 1))
+            manifests.extend(
+                scan_directory(child, source, prefix=sub_prefix, depth=depth + 1)
+            )
     return manifests
 
 
@@ -191,9 +240,12 @@ def collect_directory_manifests() -> list[PluginManifest]:
     project) without loading or mutating anything, so startup probes share the exact precedence/containment
     rules of the real discovery sweep."""
     from clawk_cli import plugins as _origin  # patched names resolve through the origin
+
     manifests: list[PluginManifest] = []
 
-    def _scan(label: str, directory: Path, source: str, skip_names: Optional[set[str]] = None) -> None:
+    def _scan(
+        label: str, directory: Path, source: str, skip_names: Optional[set[str]] = None
+    ) -> None:
         found = scan_directory(directory, source, skip_names=skip_names)
         logger.debug("  %s: %d manifest(s)", label, len(found))
         manifests.extend(found)
@@ -204,8 +256,18 @@ def collect_directory_manifests() -> list[PluginManifest]:
     # (``photon-platform``) stays an accepted alias through ``gate_manifest``.
     repo_plugins = _origin.get_bundled_plugins_dir()
     logger.debug("Scanning bundled plugins: %s", repo_plugins)
-    _scan("bundled (top-level)", repo_plugins, "bundled",
-          {"memory", "context_engine", "model-providers", "cron_providers", "computer_use"})
+    _scan(
+        "bundled (top-level)",
+        repo_plugins,
+        "bundled",
+        {
+            "memory",
+            "context_engine",
+            "model-providers",
+            "cron_providers",
+            "computer_use",
+        },
+    )
     user_dir = get_clawk_home() / "plugins"
     logger.debug("Scanning user plugins: %s", user_dir)
     _scan("user", user_dir, "user")
@@ -214,11 +276,15 @@ def collect_directory_manifests() -> list[PluginManifest]:
         logger.debug("Scanning project plugins: %s", project_dir)
         _scan("project", project_dir, "project")
     else:
-        logger.debug("Project plugins disabled (set CLAWK_ENABLE_PROJECT_PLUGINS=1 to enable)")
+        logger.debug(
+            "Project plugins disabled (set CLAWK_ENABLE_PROJECT_PLUGINS=1 to enable)"
+        )
     return manifests
 
 
-def resolve_manifest_winners(manifests: list[PluginManifest]) -> dict[str, PluginManifest]:
+def resolve_manifest_winners(
+    manifests: list[PluginManifest],
+) -> dict[str, PluginManifest]:
     """Later sources win on key collision (project > user > bundled): a same-named copy under
     ``~/.clawksis/plugins/<name>`` is the documented way to override a bundled plugin, and is logged. A flat
     user/project manifest that claims a bundled key from a *differently named* directory is an impostor, not
@@ -228,18 +294,31 @@ def resolve_manifest_winners(manifests: list[PluginManifest]) -> dict[str, Plugi
     for manifest in manifests:
         key = manifest_key(manifest)
         shadowed = winners.get(key)
-        if shadowed is not None and shadowed.source == "bundled" and manifest.source in {"user", "project"}:
+        if (
+            shadowed is not None
+            and shadowed.source == "bundled"
+            and manifest.source in {"user", "project"}
+        ):
             own_dir = Path(manifest.path).name if manifest.path else ""
             bundled_dir = Path(shadowed.path).name if shadowed.path else ""
             if own_dir and bundled_dir and own_dir != bundled_dir:
                 logger.warning(
                     "Ignoring %s plugin at %s: its manifest name '%s' is a bundled plugin's key but the "
                     "directory is named '%s'; rename the directory to '%s' to override the bundled plugin",
-                    manifest.source, manifest.path, key, own_dir, bundled_dir,
+                    manifest.source,
+                    manifest.path,
+                    key,
+                    own_dir,
+                    bundled_dir,
                 )
                 continue
-            logger.info("Plugin '%s' at %s (%s) shadows the bundled copy at %s", key, manifest.path,
-                        manifest.source, shadowed.path)
+            logger.info(
+                "Plugin '%s' at %s (%s) shadows the bundled copy at %s",
+                key,
+                manifest.path,
+                manifest.source,
+                shadowed.path,
+            )
         winners[key] = manifest
     return winners
 
@@ -248,7 +327,9 @@ def resolve_manifest_winners(manifests: list[PluginManifest]) -> dict[str, Plugi
 class ManifestGate:
     """Routing verdict for one winning manifest (see :func:`gate_manifest`)."""
 
-    action: str  # "load" (dependency-ordered pass) | "placeholder" | "load_now" | "defer"
+    action: (
+        str  # "load" (dependency-ordered pass) | "placeholder" | "load_now" | "defer"
+    )
     enabled: bool = False
     error: Optional[str] = None
     log: Optional[tuple] = None  # (level, message, *args)
@@ -262,11 +343,19 @@ def gate_manifest(
     then ``plugins.enabled`` opt-in (path-derived key or legacy bare name)."""
     lookup_key = manifest_key(manifest)
     from clawk_cli.left_core_migration import legacy_plugin_keys
+
     # A bundled key that left core (``observability/langfuse``) keeps selecting its catalog plugin.
     names = {lookup_key, manifest.name, *legacy_plugin_keys(lookup_key)}
 
-    def _placeholder(error: Optional[str], level: int, message: str, *args, enabled: bool = False) -> ManifestGate:
-        return ManifestGate("placeholder", enabled=enabled, error=error, log=(level, message, lookup_key, *args))
+    def _placeholder(
+        error: Optional[str], level: int, message: str, *args, enabled: bool = False
+    ) -> ManifestGate:
+        return ManifestGate(
+            "placeholder",
+            enabled=enabled,
+            error=error,
+            log=(level, message, lookup_key, *args),
+        )
 
     # Relay lifecycle is core-owned; an old plugin copy would compete for its registries.
     if names & LEGACY_RELAY_PLUGIN_KEYS:
@@ -274,20 +363,32 @@ def gate_manifest(
             "removed — Relay lifecycle is owned by Clawksis core; configure a standard user or system Relay "
             f"plugins.toml, or use {RELAY_PLUGINS_CONFIG_ENV} for an explicit user-file override"
         )
-        return _placeholder(error, logging.WARNING, "Refusing to load removed Clawksis Relay plugin '%s'; %s", error)
+        return _placeholder(
+            error,
+            logging.WARNING,
+            "Refusing to load removed Clawksis Relay plugin '%s'; %s",
+            error,
+        )
     if names & disabled:
-        return _placeholder("disabled via config", logging.DEBUG, "Skipping disabled plugin '%s'")
+        return _placeholder(
+            "disabled via config", logging.DEBUG, "Skipping disabled plugin '%s'"
+        )
     # Exclusive plugins (memory providers) have their own activation path; record only.
     if manifest.kind == "exclusive":
         return _placeholder(
-            "exclusive plugin — activate via <category>.provider config", logging.DEBUG,
+            "exclusive plugin — activate via <category>.provider config",
+            logging.DEBUG,
             "Skipping '%s' (exclusive, handled by category discovery)",
         )
     # Model providers load via providers/__init__.py; a second import here would create two ProviderProfile
     # instances and break the bundled-vs-user "last writer wins" override.
     if manifest.kind == "model-provider":
         return _placeholder(
-            None, logging.DEBUG, "Skipping '%s' (model-provider, handled by providers/ discovery)", enabled=True)
+            None,
+            logging.DEBUG,
+            "Skipping '%s' (model-provider, handled by providers/ discovery)",
+            enabled=True,
+        )
     if manifest.source == "bundled":
         # Bundled backends auto-load; selection among them is ``<category>.provider`` config.
         if manifest.kind == "backend":
@@ -298,16 +399,22 @@ def gate_manifest(
             return ManifestGate("defer")
     if enabled is None or not names & enabled:
         return _placeholder(
-            f"not enabled in config (run `clawk plugins enable {lookup_key}` to activate)", logging.DEBUG,
+            f"not enabled in config (run `clawk plugins enable {lookup_key}` to activate)",
+            logging.DEBUG,
             "Skipping '%s' (not in plugins.enabled)",
         )
     if manifest.source != "bundled":
         # The catalog kill list is enforced at install; a plugin recalled AFTER it was installed must not keep
         # loading. Offline check (in-tree list + cached live copy), honours an explicit install-time bypass.
         from clawk_cli.plugins_cmd_catalog import installed_plugin_removal
+
         removed = installed_plugin_removal(manifest.name, manifest.path)
         if removed is not None:
             error = f"removed from the Clawksis plugin catalog: {removed.reason or 'no reason recorded'}"
-            return _placeholder(error, logging.WARNING, "Refusing to load plugin '%s' — %s; run `clawk plugins remove`",
-                                error)
+            return _placeholder(
+                error,
+                logging.WARNING,
+                "Refusing to load plugin '%s' — %s; run `clawk plugins remove`",
+                error,
+            )
     return ManifestGate("load")

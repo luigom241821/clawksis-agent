@@ -26,16 +26,13 @@ def db(tmp_path):
         "s1",
         role="user",
         content=(
-            "Sarah prefers the standup meeting scheduled early on "
-            "Thursday mornings"
+            "Sarah prefers the standup meeting scheduled early on Thursday mornings"
         ),
     )
     d.append_message(
         "s1", role="assistant", content="Noted, standup moved to Thursday."
     )
-    d.append_message(
-        "s1", role="user", content="graphiti daemon looks healthy today"
-    )
+    d.append_message("s1", role="user", content="graphiti daemon looks healthy today")
     yield d
     try:
         d.close()
@@ -43,15 +40,18 @@ def db(tmp_path):
         pass
 
 
-@pytest.mark.parametrize("query, expected", [
-    ("sarah standup scheduled", "sarah OR standup OR scheduled"),
-    ("alpha AND beta", "alpha OR beta"),
-    ('"docker networking" tls', '"docker networking" OR tls'),
-    ("standup", None),
-    ('"docker networking"', None),
-    ("alpha OR beta", None),
-    ("python NOT java", None),
-])
+@pytest.mark.parametrize(
+    "query, expected",
+    [
+        ("sarah standup scheduled", "sarah OR standup OR scheduled"),
+        ("alpha AND beta", "alpha OR beta"),
+        ('"docker networking" tls', '"docker networking" OR tls'),
+        ("standup", None),
+        ('"docker networking"', None),
+        ("alpha OR beta", None),
+        ("python NOT java", None),
+    ],
+)
 def test_or_relaxed_query_rewrite(query, expected):
     """Implicit-AND terms and explicit AND become an any-term OR query; a quoted phrase is one
     unit; a single unit or explicit OR/NOT (exact semantics already expressed) does not relax."""
@@ -68,10 +68,15 @@ def test_paraphrased_query_recovers_via_or_retry(db):
     rows = db.search_messages("when does Sarah like her standup scheduled")
     assert rows and "standup" in " ".join(r["snippet"].lower() for r in rows)
 
-    joined = " ".join(r["snippet"].lower() for r in db.search_messages("sarah standup thursday daemon"))
+    joined = " ".join(
+        r["snippet"].lower()
+        for r in db.search_messages("sarah standup thursday daemon")
+    )
     assert "standup" in joined and "daemon" in joined
 
-    assistant_only = db.search_messages("when does Sarah like her standup scheduled", role_filter=["assistant"])
+    assistant_only = db.search_messages(
+        "when does Sarah like her standup scheduled", role_filter=["assistant"]
+    )
     assert assistant_only and all(r["role"] == "assistant" for r in assistant_only)
 
 
@@ -84,6 +89,8 @@ def test_relaxation_does_not_fire_for_exact_semantics_or_absent_terms(db, monkey
     assert db.search_messages("zebra xylophone quantum") == []
 
     calls = []
-    monkeypatch.setattr(SessionDB, "_or_relaxed_query", staticmethod(lambda q: calls.append(q)))
+    monkeypatch.setattr(
+        SessionDB, "_or_relaxed_query", staticmethod(lambda q: calls.append(q))
+    )
     assert db.search_messages("站会 周五") == []
     assert calls == []

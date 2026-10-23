@@ -22,23 +22,25 @@ def smart_app_control_block_message(error: BaseException) -> str | None:
     message = str(error)
     if "DLL load failed" not in message or "_ssl" not in message:
         return None
-    return "\n".join([
-        "✗ The embedded Python runtime is blocked by Windows security policy.",
-        "",
-        "Root cause: Python's SSL module (_ssl) could not be loaded:",
-        f"  {message}",
-        "",
-        "This happens when Windows Smart App Control or an Application Control",
-        "policy blocks the embedded Python runtime that ships with Clawksis Desktop.",
-        "A repair / reinstall loop cannot fix this — the packages are not missing,",
-        "the runtime's DLL is being blocked.",
-        "",
-        "Recovery options:",
-        "  1. Use a trusted system Python installation instead of the embedded",
-        "     runtime (if your organization allows it).",
-        "  2. Ask your IT administrator for an exemption for the Clawksis Desktop",
-        "     application (Smart App Control / Application Control).",
-        "  3. Use the CLI or gateway instead (they use your system Python).",
-        "",
-        "See https://aka.ms/smartappcontrol for Windows Smart App Control details.",
-    ])
+    return "\n".join(
+        [
+            "✗ The embedded Python runtime is blocked by Windows security policy.",
+            "",
+            "Root cause: Python's SSL module (_ssl) could not be loaded:",
+            f"  {message}",
+            "",
+            "This happens when Windows Smart App Control or an Application Control",
+            "policy blocks the embedded Python runtime that ships with Clawksis Desktop.",
+            "A repair / reinstall loop cannot fix this — the packages are not missing,",
+            "the runtime's DLL is being blocked.",
+            "",
+            "Recovery options:",
+            "  1. Use a trusted system Python installation instead of the embedded",
+            "     runtime (if your organization allows it).",
+            "  2. Ask your IT administrator for an exemption for the Clawksis Desktop",
+            "     application (Smart App Control / Application Control).",
+            "  3. Use the CLI or gateway instead (they use your system Python).",
+            "",
+            "See https://aka.ms/smartappcontrol for Windows Smart App Control details.",
+        ]
+    )

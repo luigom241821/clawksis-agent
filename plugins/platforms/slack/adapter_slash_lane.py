@@ -16,13 +16,20 @@ class SlashHandoffLanes:
         # Session key -> future of the newest slash still on its way through handle_message.
         self.tails: dict[str, asyncio.Future[None]] = {}
 
-    def reserve(self, key: str) -> tuple[asyncio.Future[None] | None, asyncio.Future[None]]:
+    def reserve(
+        self, key: str
+    ) -> tuple[asyncio.Future[None] | None, asyncio.Future[None]]:
         """Take the session's next slot; returns (slot ahead, this slot). Call before any await."""
         ahead = self.tails.get(key)
         self.tails[key] = handed_off = asyncio.get_running_loop().create_future()
         return ahead, handed_off
 
-    def release(self, key: str | None, ahead: asyncio.Future | None, handed_off: asyncio.Future | None) -> None:
+    def release(
+        self,
+        key: str | None,
+        ahead: asyncio.Future | None,
+        handed_off: asyncio.Future | None,
+    ) -> None:
         """Open the slot once this slash is done. Cancelled while waiting: the slash behind it
         still waits for the one ahead, or it reaches the gateway before unfinished earlier work."""
         if ahead is not None and not ahead.done():

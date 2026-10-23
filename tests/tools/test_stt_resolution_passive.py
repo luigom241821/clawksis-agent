@@ -18,8 +18,11 @@ def no_faster_whisper(monkeypatch):
     attempts: list[int] = []
     monkeypatch.setattr(transcription_tools, "_HAS_FASTER_WHISPER", False)
     monkeypatch.setattr(transcription_tools, "_has_local_command", lambda: False)
-    monkeypatch.setattr(transcription_tools, "_try_lazy_install_stt",
-                        lambda: attempts.append(1) or False)
+    monkeypatch.setattr(
+        transcription_tools,
+        "_try_lazy_install_stt",
+        lambda: attempts.append(1) or False,
+    )
     return transcription_tools, attempts
 
 

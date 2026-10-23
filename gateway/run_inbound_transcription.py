@@ -24,6 +24,7 @@ class GatewayInboundTranscriptionMixin:
         failed or STT is disabled) let callers echo them back before the agent loop. ``clip_memo``
         (path → ``_transcribe_one_clip`` result) skips clips an earlier pass already transcribed."""
         from gateway.run import _probe_audio_duration
+
         audio_paths = list(dict.fromkeys(audio_paths))
         if not getattr(self.config, "stt_enabled", True):
             notes = []
@@ -32,15 +33,22 @@ class GatewayInboundTranscriptionMixin:
                 duration_str = await _probe_audio_duration(abs_path)
                 suffix = f" (duration: {duration_str})" if duration_str else ""
                 notes.append(f"[The user sent a voice message: {abs_path}{suffix}]")
-            return (self._prepend_media_prefix("\n\n".join(notes), user_text) if notes else user_text), []
+            return (
+                self._prepend_media_prefix("\n\n".join(notes), user_text)
+                if notes
+                else user_text
+            ), []
 
         try:
             from tools.transcription_tools import (
-                transcribe_audio, transcribe_audio_local_fallback
+                transcribe_audio,
+                transcribe_audio_local_fallback,
             )
         except ModuleNotFoundError as e:
             logger.error("Transcription module unavailable: %s", e)
-            return self._prepend_media_prefix("[voice message could not be transcribed]", user_text), []
+            return self._prepend_media_prefix(
+                "[voice message could not be transcribed]", user_text
+            ), []
 
         enriched_parts = []
         successful_transcripts: list[str] = []
@@ -51,7 +59,9 @@ class GatewayInboundTranscriptionMixin:
                 else:
                     logger.debug("Transcribing user voice: %s", path)
                     transcript, note = await self._transcribe_one_clip(
-                        path, transcribe_audio, transcribe_audio_local_fallback,
+                        path,
+                        transcribe_audio,
+                        transcribe_audio_local_fallback,
                     )
                     if clip_memo is not None:
                         clip_memo[path] = (transcript, note)
@@ -63,14 +73,18 @@ class GatewayInboundTranscriptionMixin:
                 enriched_parts.append(self._untranscribed_audio_note(path))
 
         if enriched_parts:
-            user_text = self._prepend_media_prefix("\n\n".join(enriched_parts), user_text)
+            user_text = self._prepend_media_prefix(
+                "\n\n".join(enriched_parts), user_text
+            )
         return user_text, successful_transcripts
 
     def _pending_event_audio_paths(self, event) -> list[str]:
         """Return STT-eligible paths from a pending voice message."""
         from gateway.run import _event_media_is_stt_input
+
         return [
-            path for i, path in enumerate(getattr(event, "media_urls", None) or [])
+            path
+            for i, path in enumerate(getattr(event, "media_urls", None) or [])
             if _event_media_is_stt_input(event, i)
         ]
 
@@ -81,44 +95,76 @@ class GatewayInboundTranscriptionMixin:
         monitor and the pending-drain path both need it — one STT call and one echo per message.
         ``user_text`` is a deliberate override of the caption; ``None`` reads ``event.text`` live."""
         if hasattr(event, "_gateway_pending_stt_text"):
-            return event._gateway_pending_stt_text, list(getattr(event, "_gateway_pending_stt_transcripts", []) or [])
+            return event._gateway_pending_stt_text, list(
+                getattr(event, "_gateway_pending_stt_transcripts", []) or []
+            )
         audio_paths = self._pending_event_audio_paths(event)
         if not audio_paths:
-            return user_text if user_text is not None else (getattr(event, "text", None) or None), []
-        text = user_text if user_text is not None else (getattr(event, "text", "") or "")
+            return user_text if user_text is not None else (
+                getattr(event, "text", None) or None
+            ), []
+        text = (
+            user_text if user_text is not None else (getattr(event, "text", "") or "")
+        )
         # Per-clip results outlive the merged-event cache below (a merge drops only that), so every
         # re-run — this loop's or the drain path's — transcribes just the newly merged clips.
         clip_memo = getattr(event, "_gateway_pending_stt_clips", None)
         if clip_memo is None:
             clip_memo = {}
             event._gateway_pending_stt_clips = clip_memo
-        enriched_text, successful_transcripts = await self._enrich_message_with_transcription(text, audio_paths, clip_memo)
+        (
+            enriched_text,
+            successful_transcripts,
+        ) = await self._enrich_message_with_transcription(text, audio_paths, clip_memo)
         # A voice note merged in during the await dropped a cache that did not exist yet; re-run on
         # the merged media rather than publish a transcript that silently omits the new note.
         while self._pending_event_audio_paths(event) != audio_paths:
             audio_paths = self._pending_event_audio_paths(event)
-            text = user_text if user_text is not None else (getattr(event, "text", "") or "")
-            enriched_text, successful_transcripts = await self._enrich_message_with_transcription(
-                text, audio_paths, clip_memo,
+            text = (
+                user_text
+                if user_text is not None
+                else (getattr(event, "text", "") or "")
+            )
+            (
+                enriched_text,
+                successful_transcripts,
+            ) = await self._enrich_message_with_transcription(
+                text,
+                audio_paths,
+                clip_memo,
             )
         event._gateway_pending_stt_text = enriched_text
         event._gateway_pending_stt_transcripts = list(successful_transcripts)
         return enriched_text, successful_transcripts
 
     async def _echo_pending_stt_transcripts_once(
-        self, event, adapter, source, transcripts: list[str], *, metadata=None,
+        self,
+        event,
+        adapter,
+        source,
+        transcripts: list[str],
+        *,
+        metadata=None,
         log_context: str = "Transcript",
     ) -> None:
         """Echo pending-event STT transcripts to the chat at most once. Tracked as a COUNT (not a
         set — identical transcripts are distinct deliveries): ``merge_pending_message_event`` can
         append a second voice note and invalidate the cache; the re-run returns earlier transcripts
         as a prefix, so only the unsent tail is echoed."""
-        if not transcripts or not self._should_echo_stt_transcripts() or adapter is None:
+        if (
+            not transcripts
+            or not self._should_echo_stt_transcripts()
+            or adapter is None
+        ):
             return
         already_echoed = int(getattr(event, "_gateway_pending_stt_echoed", 0) or 0)
         event._gateway_pending_stt_echoed = max(already_echoed, len(transcripts))
         await self._echo_stt_transcripts(
-            adapter, source, transcripts[already_echoed:], metadata=metadata, log_context=log_context,
+            adapter,
+            source,
+            transcripts[already_echoed:],
+            metadata=metadata,
+            log_context=log_context,
         )
 
     async def _transcribe_and_echo_pending_voice(
@@ -132,11 +178,21 @@ class GatewayInboundTranscriptionMixin:
         if not self._pending_event_audio_paths(event):
             return text, []
         try:
-            enriched_text, transcripts = await self._transcribe_pending_audio_event_once(event)
+            (
+                enriched_text,
+                transcripts,
+            ) = await self._transcribe_pending_audio_event_once(event)
             if metadata is _UNSET:
-                metadata = self._thread_metadata_for_source(source, self._reply_anchor_for_event(event))
+                metadata = self._thread_metadata_for_source(
+                    source, self._reply_anchor_for_event(event)
+                )
             await self._echo_pending_stt_transcripts_once(
-                event, adapter, source, transcripts, metadata=metadata, log_context=log_context
+                event,
+                adapter,
+                source,
+                transcripts,
+                metadata=metadata,
+                log_context=log_context,
             )
             return enriched_text or text, transcripts
         except Exception as trans_exc:
@@ -157,19 +213,28 @@ class GatewayInboundTranscriptionMixin:
         """One minimal neutral marker for every STT failure. Never mention "no STT provider" or setup
         steps — persisted in history they make the model keep volunteering STT-setup advice."""
         from tools.credential_files import to_agent_visible_cache_path
+
         agent_path = to_agent_visible_cache_path(os.path.abspath(path))
         return f"[voice message could not be transcribed automatically; the audio is available at: {agent_path}]"
 
-    async def _transcribe_one_clip(self, path: str, transcribe_audio, transcribe_audio_local_fallback) -> tuple[Optional[str], str]:
+    async def _transcribe_one_clip(
+        self, path: str, transcribe_audio, transcribe_audio_local_fallback
+    ) -> tuple[Optional[str], str]:
         """``(transcript_or_None, note)`` for one clip via configured STT with local fallback."""
         result = await asyncio.to_thread(transcribe_audio, path, None, "gateway")
         if not result.get("success"):
             fallback = await asyncio.to_thread(transcribe_audio_local_fallback, path)
             if fallback.get("success"):
-                logger.info("Configured STT failed for %s; recovered with local STT", path)
+                logger.info(
+                    "Configured STT failed for %s; recovered with local STT", path
+                )
                 result = fallback
         if not result["success"]:
-            logger.info("Voice transcription failed for %s: %s", path, result.get("error", "unknown error"))
+            logger.info(
+                "Voice transcription failed for %s: %s",
+                path,
+                result.get("error", "unknown error"),
+            )
             return None, self._untranscribed_audio_note(path)
         transcript = result["transcript"]
         # STT may return success=True with an empty/whitespace transcript (silence, cut-off);

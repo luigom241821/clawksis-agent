@@ -64,8 +64,6 @@ class TestWinPtyBridgeUnavailable:
     web_server platform branch doesn't blow up at import time when pywinpty
     is missing or the host isn't Windows."""
 
-
-
     @pytest.mark.asyncio
     async def test_write_has_nonblocking_async_contract(self):
         class _FakeProc:
@@ -118,6 +116,7 @@ class TestWinPtyBridgeUnavailable:
         """A socket dropping mid-write is not a wedged child: the PTY outlives
         its socket by design, so a write that lands within the grace window
         must not terminate the process."""
+
         class _SlowProc:
             pid = 1
 
@@ -173,6 +172,7 @@ class TestWinPtyBridgeUnavailable:
     async def test_leaked_write_worker_is_logged(self, caplog):
         """terminate() that fails to unblock pywinpty leaves a thread parked in
         the default executor; that must be observable, not swallowed."""
+
         class _StuckProc:
             pid = 1
 
@@ -187,8 +187,10 @@ class TestWinPtyBridgeUnavailable:
 
         proc = _StuckProc()
         bridge = WinPtyBridge(proc)
-        with patch.object(win_pty_bridge, "_WRITE_SHUTDOWN_GRACE", 0.05), \
-                caplog.at_level(logging.WARNING, logger="clawk_cli.win_pty_bridge"):
+        with (
+            patch.object(win_pty_bridge, "_WRITE_SHUTDOWN_GRACE", 0.05),
+            caplog.at_level(logging.WARNING, logger="clawk_cli.win_pty_bridge"),
+        ):
             assert await bridge.write(b"x", timeout=0.01) is False
         proc.release_write.set()
         assert any("thread leaked" in r.getMessage() for r in caplog.records)
@@ -206,7 +208,6 @@ class TestWinPtyBridgeUnavailable:
 
 @pytest.mark.platforms("windows")
 class TestWinPtyBridgeSpawn:
-
     def test_spawn_returns_bridge_with_pid(self):
         bridge = WinPtyBridge.spawn(["cmd.exe", "/c", "exit 0"])
         try:
@@ -217,13 +218,14 @@ class TestWinPtyBridgeSpawn:
     def test_spawn_raises_on_missing_argv0(self, tmp_path):
         # pywinpty wraps CreateProcessW failures; surface as OSError / RuntimeError.
         bogus = str(tmp_path / "definitely-not-a-real-binary.exe")
-        with pytest.raises((FileNotFoundError, OSError, RuntimeError, PtyUnavailableError)):
+        with pytest.raises(
+            (FileNotFoundError, OSError, RuntimeError, PtyUnavailableError)
+        ):
             WinPtyBridge.spawn([bogus])
 
 
 @pytest.mark.platforms("windows")
 class TestWinPtyBridgeIO:
-
     @pytest.mark.asyncio
     async def test_write_sends_to_child_stdin(self):
         # python -c reads stdin, echoes a marker, exits.  More reliable than
@@ -241,7 +243,6 @@ class TestWinPtyBridgeIO:
             assert b"GOT:hello-pty" in output
         finally:
             bridge.close()
-
 
     def test_read_returns_none_after_child_exits(self):
         bridge = WinPtyBridge.spawn(["cmd.exe", "/c", "echo done"])
@@ -280,7 +281,6 @@ class TestWinPtyBridgeResize:
         finally:
             bridge.close()
 
-
     def test_resize_after_close_is_silent(self):
         bridge = WinPtyBridge.spawn(["cmd.exe", "/c", "exit 0"])
         bridge.close()
@@ -301,7 +301,6 @@ class TestClampDimension:
         assert _clamp(131072, _MAX_COLS) == _MAX_COLS
         assert _clamp(131072, _MAX_ROWS) == _MAX_ROWS
 
-
     def test_non_numeric_falls_back_to_min(self):
         from clawk_cli.win_pty_bridge import _MAX_COLS, _clamp
 
@@ -313,7 +312,6 @@ class TestClampDimension:
 
 @pytest.mark.platforms("windows")
 class TestWinPtyBridgeClose:
-
     def test_close_terminates_long_running_child(self):
         bridge = WinPtyBridge.spawn(
             [sys.executable, "-c", "import time; time.sleep(30)"]

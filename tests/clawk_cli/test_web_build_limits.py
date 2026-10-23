@@ -42,10 +42,12 @@ class TestWebBuildLimits:
     def test_explicit_env_overrides_win(self, monkeypatch):
         monkeypatch.delenv("NODE_OPTIONS", raising=False)
         monkeypatch.delenv("RAYON_NUM_THREADS", raising=False)
-        env = web_build_limits({
-            "CLAWK_WEB_BUILD_MAX_OLD_SPACE_SIZE": "3072",
-            "CLAWK_WEB_BUILD_THREADS": "1",
-        })
+        env = web_build_limits(
+            {
+                "CLAWK_WEB_BUILD_MAX_OLD_SPACE_SIZE": "3072",
+                "CLAWK_WEB_BUILD_THREADS": "1",
+            }
+        )
         assert "--max-old-space-size=3072" in env["NODE_OPTIONS"]
         assert env["RAYON_NUM_THREADS"] == "1"
 

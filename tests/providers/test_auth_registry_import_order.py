@@ -43,10 +43,12 @@ def test_tui_import_exposes_auth_registry_to_provider_plugins(tmp_path):
     env = os.environ.copy()
     env["CLAWK_HOME"] = str(clawk_home)
     env.pop("CLAWK_PROFILE", None)
-    env["PYTHONPATH"] = os.pathsep.join([
-        str(REPO_ROOT),
-        env.get("PYTHONPATH", ""),
-    ]).rstrip(os.pathsep)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [
+            str(REPO_ROOT),
+            env.get("PYTHONPATH", ""),
+        ]
+    ).rstrip(os.pathsep)
     probe = subprocess.run(
         [
             sys.executable,

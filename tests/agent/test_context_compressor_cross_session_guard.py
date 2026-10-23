@@ -27,6 +27,7 @@ sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
 from agent.context_compressor import ContextCompressor
 
+
 def _make_compressor():
     """Build a ContextCompressor with enough state to pass compress() guards."""
     c = ContextCompressor.__new__(ContextCompressor)
@@ -66,6 +67,7 @@ def _make_compressor():
     c.awaiting_real_usage_after_compression = False
     return c
 
+
 def _conversation_without_handoff(n_exchanges=12):
     """Build message list with no compaction handoff in it."""
     msgs = [{"role": "system", "content": "You are a helpful assistant."}]
@@ -74,15 +76,18 @@ def _conversation_without_handoff(n_exchanges=12):
         msgs.append({"role": "assistant", "content": f"Answer {i}"})
     return msgs
 
+
 def _conversation_with_handoff(n_exchanges=12):
     """Build message list WITH a compaction handoff in protected head."""
     from agent.context_compressor import SUMMARY_PREFIX
+
     msgs = [{"role": "system", "content": "You are a helpful assistant."}]
     msgs.append({"role": "user", "content": SUMMARY_PREFIX + "\nPrevious summary."})
     for i in range(n_exchanges):
         msgs.append({"role": "user", "content": f"Question {i}"})
         msgs.append({"role": "assistant", "content": f"Answer {i}"})
     return msgs
+
 
 def test_stale_previous_summary_cleared_when_no_handoff():
     """Cross-session guard: stale _previous_summary cleared when no handoff."""
@@ -92,8 +97,9 @@ def test_stale_previous_summary_cleared_when_no_handoff():
 
     messages = _conversation_without_handoff()
 
-    with patch.object(c, "_generate_summary",
-                      return_value="[CONTEXT COMPACTION] Fresh summary."):
+    with patch.object(
+        c, "_generate_summary", return_value="[CONTEXT COMPACTION] Fresh summary."
+    ):
         result = c.compress(messages)
 
     assert c._previous_summary is None, (
@@ -101,9 +107,8 @@ def test_stale_previous_summary_cleared_when_no_handoff():
         f"summary exists in current messages. Got: {c._previous_summary!r}"
     )
     assert result != messages
-    assert any(
-        "[CONTEXT COMPACTION]" in (m.get("content", "") or "") for m in result
-    )
+    assert any("[CONTEXT COMPACTION]" in (m.get("content", "") or "") for m in result)
+
 
 def test_previous_summary_preserved_when_handoff_found():
     """When a handoff IS found, _previous_summary should be preserved for
@@ -113,8 +118,9 @@ def test_previous_summary_preserved_when_handoff_found():
 
     messages = _conversation_with_handoff()
 
-    with patch.object(c, "_generate_summary",
-                      return_value="[CONTEXT COMPACTION] Updated summary."):
+    with patch.object(
+        c, "_generate_summary", return_value="[CONTEXT COMPACTION] Updated summary."
+    ):
         c.compress(messages)
 
     # When a handoff IS found, the staleness guard must NOT fire.

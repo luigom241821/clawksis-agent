@@ -20,6 +20,7 @@ def env(tmp_path, monkeypatch):
     import tools.skill_usage as usage
     from agent import curator
     import agent.curator_backup as cb
+
     for m in (usage, cb, curator):
         importlib.reload(m)
     monkeypatch.setattr(curator, "_load_config", dict)
@@ -35,10 +36,14 @@ def _snapshots(home: Path):
     return sorted(p.name for p in d.iterdir() if p.is_dir()) if d.exists() else []
 
 
-def test_prune_only_pass_takes_no_snapshot_but_still_ages_old_ones_out(env, monkeypatch):
+def test_prune_only_pass_takes_no_snapshot_but_still_ages_old_ones_out(
+    env, monkeypatch
+):
     cb, curator, home = env["cb"], env["curator"], env["home"]
     (home / "skills" / "alpha").mkdir()
-    (home / "skills" / "alpha" / "SKILL.md").write_text("---\nname: alpha\n---\n", encoding="utf-8")
+    (home / "skills" / "alpha" / "SKILL.md").write_text(
+        "---\nname: alpha\n---\n", encoding="utf-8"
+    )
     monkeypatch.setattr(cb, "get_keep", lambda: 5)
     for _ in range(3):
         assert cb.snapshot_skills(reason="old") is not None
@@ -47,12 +52,16 @@ def test_prune_only_pass_takes_no_snapshot_but_still_ages_old_ones_out(env, monk
 
     curator.run_curator_review(synchronous=True, consolidate=False)
     survivors = _snapshots(home)
-    assert len(survivors) == 1, "prune-only pass must apply retention without adding a snapshot"
+    assert len(survivors) == 1, (
+        "prune-only pass must apply retention without adding a snapshot"
+    )
 
     curator.run_curator_review(synchronous=True, consolidate=True)
     reasons = [r.get("reason") for r in cb.list_backups()]
     assert "pre-curator-run" in reasons, "consolidation still snapshots first"
-    assert len(reasons) <= 2, "and retention still applies (the new snapshot never prunes itself)"
+    assert len(reasons) <= 2, (
+        "and retention still applies (the new snapshot never prunes itself)"
+    )
 
 
 def test_only_one_process_claims_a_due_pass(env, monkeypatch):
@@ -72,10 +81,14 @@ def test_only_one_process_claims_a_due_pass(env, monkeypatch):
     holder.start()
     assert started.wait(5)
     try:
-        assert curator.maybe_run_curator() is None, "a second launch must not run the pass concurrently"
+        assert curator.maybe_run_curator() is None, (
+            "a second launch must not run the pass concurrently"
+        )
         assert len(runs) == 1
     finally:
         release.set()
         holder.join(5)
     assert not curator._run_claim_path().exists(), "claim released after the pass"
-    assert curator.maybe_run_curator() is not None, "and the next due pass can claim again"
+    assert curator.maybe_run_curator() is not None, (
+        "and the next due pass can claim again"
+    )

@@ -20,9 +20,14 @@ from unittest.mock import patch
 def _drop_row(db, session_id):
     """The row vanishes under the agent WITHOUT a retirement tombstone (in-place store rebuild,
     profile-repair move). A canonical delete retires the id instead; see the last test."""
+
     def _do(conn):
         conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-        assert conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,)).rowcount == 1
+        assert (
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,)).rowcount
+            == 1
+        )
+
     db._execute_write(_do)
 
 
@@ -56,21 +61,32 @@ def test_flush_recreates_row_deleted_under_live_agent():
             if history:
                 # Row removed under the idle live agent (store rebuild / repair move).
                 _drop_row(db, "sess-live")
-            tail = [{"role": "user", "content": f"turn {n}"}, {"role": "assistant", "content": f"answer {n}"}]
+            tail = [
+                {"role": "user", "content": f"turn {n}"},
+                {"role": "assistant", "content": f"answer {n}"},
+            ]
             messages = list(history) + tail
             assert agent._flush_messages_to_session_db(messages, history) is True
             history = messages
-            assert [r["content"] for r in db.get_messages("sess-live")] == [m["content"] for m in history]
+            assert [r["content"] for r in db.get_messages("sess-live")] == [
+                m["content"] for m in history
+            ]
 
         # A heal during a muted notification turn hides only that turn's new rows; the replayed
         # history rows (and their in-memory dicts) keep their visibility.
         _drop_row(db, "sess-live")
         agent._mute_notification_reply = True
-        tail = [{"role": "user", "content": "notif"}, {"role": "assistant", "content": "muted"}]
-        assert agent._flush_messages_to_session_db(list(history) + tail, history) is True
+        tail = [
+            {"role": "user", "content": "notif"},
+            {"role": "assistant", "content": "muted"},
+        ]
+        assert (
+            agent._flush_messages_to_session_db(list(history) + tail, history) is True
+        )
         rows = db.get_messages("sess-live")
         assert [(r["content"], r.get("display_kind")) for r in rows] == (
-            [(m["content"], None) for m in history] + [("notif", "hidden"), ("muted", "hidden")]
+            [(m["content"], None) for m in history]
+            + [("notif", "hidden"), ("muted", "hidden")]
         )
         assert [m.get("display_kind") for m in history] == [None] * len(history)
         db.close()
@@ -115,7 +131,10 @@ def test_flush_fails_closed_when_row_cannot_be_recreated(monkeypatch):
         # The heal recreates the row but its single retry write fails (lock/lease/disk): the next
         # flush finds a live row (no FK, no heal) and must still replay the history prefix.
         retry = _make_agent(db, "sess-retry")
-        t1 = [{"role": "user", "content": "one"}, {"role": "assistant", "content": "a1"}]
+        t1 = [
+            {"role": "user", "content": "one"},
+            {"role": "assistant", "content": "a1"},
+        ]
         assert retry._flush_messages_to_session_db(t1, []) is True
         _drop_row(db, "sess-retry")
         real_append, calls = db.append_messages_batch, []
@@ -131,13 +150,21 @@ def test_flush_fails_closed_when_row_cannot_be_recreated(monkeypatch):
         assert retry._flush_messages_to_session_db(t2, t1) is False
         t3 = t2 + [{"role": "assistant", "content": "a2"}]
         assert retry._flush_messages_to_session_db(t3, t2) is True
-        assert [r["content"] for r in db.get_messages("sess-retry")] == ["one", "a1", "two", "a2"]
+        assert [r["content"] for r in db.get_messages("sess-retry")] == [
+            "one",
+            "a1",
+            "two",
+            "a2",
+        ]
         monkeypatch.undo()
 
         # FK failure while the session row still exists (e.g. a sessions-table FK): no heal, and
         # no replay of the history prefix onto the live transcript.
         live = _make_agent(db, "sess-fk-live")
-        history = [{"role": "user", "content": "one"}, {"role": "assistant", "content": "a1"}]
+        history = [
+            {"role": "user", "content": "one"},
+            {"role": "assistant", "content": "a1"},
+        ]
         assert live._flush_messages_to_session_db(history, []) is True
         real_append, calls = db.append_messages_batch, []
 
@@ -148,7 +175,12 @@ def test_flush_fails_closed_when_row_cannot_be_recreated(monkeypatch):
             return real_append(*a, **kw)
 
         monkeypatch.setattr(db, "append_messages_batch", _fk_once)
-        assert live._flush_messages_to_session_db(list(history) + [{"role": "user", "content": "two"}], history) is False
+        assert (
+            live._flush_messages_to_session_db(
+                list(history) + [{"role": "user", "content": "two"}], history
+            )
+            is False
+        )
         assert [r["content"] for r in db.get_messages("sess-fk-live")] == ["one", "a1"]
         monkeypatch.undo()
 
@@ -157,7 +189,10 @@ def test_flush_fails_closed_when_row_cannot_be_recreated(monkeypatch):
         db.create_session("sess-parent", source="cli")
         child = _make_agent(db, "sess-child")
         child._parent_session_id = "sess-parent"
-        assert child._flush_messages_to_session_db([{"role": "user", "content": "x"}], []) is True
+        assert (
+            child._flush_messages_to_session_db([{"role": "user", "content": "x"}], [])
+            is True
+        )
         db.delete_session("sess-parent")
         db.delete_session("sess-child")
         real_get = db.get_session
@@ -168,7 +203,10 @@ def test_flush_fails_closed_when_row_cannot_be_recreated(monkeypatch):
             return real_get(sid)
 
         monkeypatch.setattr(db, "get_session", _parent_lookup_raises)
-        assert child._flush_messages_to_session_db([{"role": "user", "content": "y"}], []) is False
+        assert (
+            child._flush_messages_to_session_db([{"role": "user", "content": "y"}], [])
+            is False
+        )
         db.close()
 
 

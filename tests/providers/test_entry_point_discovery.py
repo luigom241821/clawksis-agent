@@ -49,7 +49,6 @@ def _restore_real_discovery():
     providers._discover_providers()
 
 
-
 class _FakeEP:
     def __init__(self, name, loader):
         self.name = name
@@ -86,7 +85,9 @@ def _register_via_callable():
 
     def register():
         providers.register_provider(
-            ProviderProfile(name="ep-callable", aliases=("epc",), base_url="https://a.test/v1")
+            ProviderProfile(
+                name="ep-callable", aliases=("epc",), base_url="https://a.test/v1"
+            )
         )
 
     return register  # ep.load() returns the callable; discovery invokes it

@@ -56,6 +56,7 @@ def _audio_event(path: str = "/tmp/song.mp3") -> MessageEvent:
 # 1. VOICE still goes through STT
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_voice_message_still_transcribed():
     """MessageType.VOICE must still be sent through _enrich_message_with_transcription."""
@@ -65,7 +66,11 @@ async def test_voice_message_still_transcribed():
 
     with patch(
         "tools.transcription_tools.transcribe_audio",
-        return_value={"success": True, "transcript": "hello world", "provider": "whisper"},
+        return_value={
+            "success": True,
+            "transcript": "hello world",
+            "provider": "whisper",
+        },
     ) as mock_transcribe:
         result = await runner._prepare_inbound_message_text(
             event=event,
@@ -117,4 +122,3 @@ async def test_audio_attachment_context_note_format():
 # ---------------------------------------------------------------------------
 # 4. Telegram gateway: msg.audio → MessageType.AUDIO (not VOICE)
 # ---------------------------------------------------------------------------
-

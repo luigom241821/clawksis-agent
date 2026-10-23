@@ -146,10 +146,9 @@ class TestScopedLockTakeoverReapsChildren:
         monkeypatch.setattr(
             status,
             "reap_gateway_children",
-            lambda children, *, parent_pid, timeout=5.0: events.append(
-                ("reap", parent_pid, children)
-            )
-            or len(children),
+            lambda children, *, parent_pid, timeout=5.0: (
+                events.append(("reap", parent_pid, children)) or len(children)
+            ),
         )
         monkeypatch.setattr(
             status,
@@ -182,8 +181,9 @@ async def test_start_gateway_replace_reaps_old_gateway_children_posix(
             from gateway.session import SessionStore
             from clawk_state import SessionDB
             from clawk_constants import get_clawk_home
-            self.session_store = SessionStore(get_clawk_home() / 'sessions', config)
-            self._session_db = SessionDB(get_clawk_home() / 'state.db')
+
+            self.session_store = SessionStore(get_clawk_home() / "sessions", config)
+            self._session_db = SessionDB(get_clawk_home() / "state.db")
             self.session_store._db = self._session_db
             self._draining = False
             self.config = config
@@ -233,10 +233,9 @@ async def test_start_gateway_replace_reaps_old_gateway_children_posix(
     )
     monkeypatch.setattr(
         "gateway.status.reap_gateway_children",
-        lambda children, *, parent_pid, timeout=5.0: events.append(
-            ("reap", parent_pid, children)
-        )
-        or len(children),
+        lambda children, *, parent_pid, timeout=5.0: (
+            events.append(("reap", parent_pid, children)) or len(children)
+        ),
     )
 
     def _mock_terminate_pid(pid, force=False):
@@ -244,9 +243,7 @@ async def test_start_gateway_replace_reaps_old_gateway_children_posix(
         _pid_state["alive"] = False
 
     monkeypatch.setattr("gateway.status.terminate_pid", _mock_terminate_pid)
-    monkeypatch.setattr(
-        "gateway.status._pid_exists", lambda pid: _pid_state["alive"]
-    )
+    monkeypatch.setattr("gateway.status._pid_exists", lambda pid: _pid_state["alive"])
     monkeypatch.setattr("gateway.run.os.getpid", lambda: 100)
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
@@ -269,5 +266,3 @@ async def test_start_gateway_replace_reaps_old_gateway_children_posix(
         ("terminate", 42, False),
         ("reap", 42, kids),
     ]
-
-

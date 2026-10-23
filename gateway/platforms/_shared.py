@@ -19,7 +19,9 @@ from agent.secret_scope import get_secret as _scoped_get_secret
 logger = logging.getLogger(__name__)
 
 
-def get_scoped_secret(name: str, default: Any = None, *, external_fallback: bool = False) -> Any:
+def get_scoped_secret(
+    name: str, default: Any = None, *, external_fallback: bool = False
+) -> Any:
     """Scope-aware credential read with the default-profile startup fallback.
 
     An installed profile secret scope is authoritative: a scoped miss returns
@@ -44,6 +46,7 @@ def get_scoped_secret(name: str, default: Any = None, *, external_fallback: bool
 
 def _current_scope():
     from agent.secret_scope import current_secret_scope
+
     return current_secret_scope()
 
 
@@ -57,11 +60,16 @@ def _unscoped_profile_secrets() -> dict:
         try:
             from agent.secret_scope import build_profile_secret_scope
             from clawk_constants import get_clawk_home
-            _UNSCOPED_PROFILE_SECRETS = dict(build_profile_secret_scope(get_clawk_home()))
+
+            _UNSCOPED_PROFILE_SECRETS = dict(
+                build_profile_secret_scope(get_clawk_home())
+            )
         except Exception:
             logger.warning(
                 "Could not build the profile secret scope; externally managed credentials will not be "
-                "visible to the startup gate (#95216)", exc_info=True)
+                "visible to the startup gate (#95216)",
+                exc_info=True,
+            )
             _UNSCOPED_PROFILE_SECRETS = {}
     return _UNSCOPED_PROFILE_SECRETS
 
@@ -103,8 +111,14 @@ def decode_json_list_literal(raw):
     return raw
 
 
-def extra_or_secret(extra: Optional[dict], key: str, env: str, default: Any = "",
-                    *, blank_is_unset: bool = True) -> Any:
+def extra_or_secret(
+    extra: Optional[dict],
+    key: str,
+    env: str,
+    default: Any = "",
+    *,
+    blank_is_unset: bool = True,
+) -> Any:
     """The ONE per-profile setting reader: explicit env ``env`` → the profile's YAML
     ``config.extra[key]`` → ``default``.
 
@@ -124,7 +138,9 @@ def extra_or_secret(extra: Optional[dict], key: str, env: str, default: Any = ""
         if env_value is not None and str(env_value).strip():
             return env_value
     value = (extra or {}).get(key)
-    if value is None or (blank_is_unset and isinstance(value, str) and not value.strip()):
+    if value is None or (
+        blank_is_unset and isinstance(value, str) and not value.strip()
+    ):
         return default
     return value
 
@@ -139,6 +155,7 @@ def profile_scoped() -> bool:
     """
     try:
         from agent.secret_scope import current_secret_scope, is_multiplex_active
+
         return bool(is_multiplex_active() and current_secret_scope() is not None)
     except Exception:
         return False
@@ -147,6 +164,7 @@ def profile_scoped() -> bool:
 # --------------------------------------------------------------------------- YAML → env config bridge
 # (apply_yaml_config_fn, #25443)
 # ---------------------------------------------------------------------------
+
 
 def yaml_env_setter() -> Callable[[str, Any], None]:
     """``set_env(name, value)`` for ``apply_yaml_config_fn`` hooks: writes ``os.environ[name]`` only
@@ -162,7 +180,9 @@ def yaml_env_setter() -> Callable[[str, Any], None]:
     def set_env(name: str, value: Any) -> None:
         if value is None or skip or os.getenv(name):
             return
-        os.environ[name] = ",".join(str(v) for v in value) if isinstance(value, list) else str(value)
+        os.environ[name] = (
+            ",".join(str(v) for v in value) if isinstance(value, list) else str(value)
+        )
 
     return set_env
 
@@ -172,6 +192,7 @@ def send_error(message: Any) -> dict:
     ``send_message`` uses), so a token or signed URL in an httpx/aiohttp error never reaches the
     model transcript."""
     from tools.send_message_senders import _error
+
     return _error(str(message))
 
 
@@ -205,8 +226,13 @@ def apply_yaml_bridge(cfg: dict, spec: Iterable[tuple[str, str, str]]) -> dict |
 # (env_enablement_fn)
 # ---------------------------------------------------------------------------
 
-def seed_extra_from_env(spec: Iterable[tuple[str, str, Callable[[str], Any] | None]], *,
-                        home_env: str | None = None, home_default: str = "") -> dict:
+
+def seed_extra_from_env(
+    spec: Iterable[tuple[str, str, Callable[[str], Any] | None]],
+    *,
+    home_env: str | None = None,
+    home_default: str = "",
+) -> dict:
     """Table-driven ``env_enablement_fn`` body: for each ``(ENV_VAR, extra_key, conv)`` row read the
     profile-scoped value, skip it when blank or when ``conv`` raises ``ValueError``, else seed
     ``conv(value)`` (``None`` conv keeps the stripped string).
@@ -226,7 +252,10 @@ def seed_extra_from_env(spec: Iterable[tuple[str, str, Callable[[str], Any] | No
     if home_env:
         home = str(get_scoped_secret(home_env, "") or "").strip() or home_default
         if home:
-            seed["home_channel"] = {"chat_id": home, "name": get_scoped_secret(f"{home_env}_NAME", "Home")}
+            seed["home_channel"] = {
+                "chat_id": home,
+                "name": get_scoped_secret(f"{home_env}_NAME", "Home"),
+            }
     return seed
 
 
@@ -237,6 +266,7 @@ def env_is_connected(*names: str) -> Callable[[Any], bool]:
 
     def is_connected(config: Any) -> bool:
         import clawk_cli.gateway as gateway_mod
+
         return all((gateway_mod.get_env_value(name) or "").strip() for name in names)
 
     return is_connected
@@ -247,7 +277,9 @@ def config_connected_extra(*keys: str) -> Callable[[Any], bool]:
     token/api_key or every ``extra`` key (no env fallback; that is ``is_connected``'s job)."""
 
     def config_connected(config: Any) -> bool:
-        return bool(config.token or config.api_key) or all(config.extra.get(k) for k in keys)
+        return bool(config.token or config.api_key) or all(
+            config.extra.get(k) for k in keys
+        )
 
     return config_connected
 

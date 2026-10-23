@@ -49,7 +49,9 @@ def _good_stream_cm():
     """Context manager whose stream completes (message_stop) and returns a valid message."""
     cm = MagicMock()
     stream = MagicMock()
-    stream.__iter__ = MagicMock(return_value=iter([SimpleNamespace(type="message_stop")]))
+    stream.__iter__ = MagicMock(
+        return_value=iter([SimpleNamespace(type="message_stop")])
+    )
     msg = MagicMock()
     msg.content = []
     msg.stop_reason = "end_turn"
@@ -73,14 +75,26 @@ class TestStreamStaleCircuitBreaker:
         agent = _make_anthropic_agent()
         agent._consecutive_stale_streams = 0
 
-        assert _record_interrupted_provider_wait(agent, 29.9, response_started=False) is False
-        assert _record_interrupted_provider_wait(agent, 45.0, response_started=True) is False
+        assert (
+            _record_interrupted_provider_wait(agent, 29.9, response_started=False)
+            is False
+        )
+        assert (
+            _record_interrupted_provider_wait(agent, 45.0, response_started=True)
+            is False
+        )
         assert agent._consecutive_stale_streams == 0
 
-        assert _record_interrupted_provider_wait(agent, 45.0, response_started=False) is True
+        assert (
+            _record_interrupted_provider_wait(agent, 45.0, response_started=False)
+            is True
+        )
         assert agent._consecutive_stale_streams == 1
 
-        assert _record_interrupted_provider_wait(agent, 60.0, response_started=False) is True
+        assert (
+            _record_interrupted_provider_wait(agent, 60.0, response_started=False)
+            is True
+        )
         with pytest.raises(RuntimeError, match="2 consecutive stale attempts"):
             _check_stale_giveup(agent)
 
@@ -155,7 +169,9 @@ class TestStreamStaleCircuitBreaker:
 
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @pytest.mark.parametrize("slow", ["worker_start", "worker_unwind"])
-    def test_one_attempt_counts_once_however_often_the_timer_fires(self, monkeypatch, caplog, slow):
+    def test_one_attempt_counts_once_however_often_the_timer_fires(
+        self, monkeypatch, caplog, slow
+    ):
         """The stale timer re-fires every window while the worker has not started its
         attempt yet (CPU-starved host) or has not unwound a kill; one attempt must still
         count once, or a single wedged turn trips the breaker for the next one."""
@@ -178,7 +194,9 @@ class TestStreamStaleCircuitBreaker:
             monkeypatch.setattr(h._StreamingCall, "_start_stream_attempt", _late_start)
             agent._abort_request_anthropic_client = lambda *a, **k: unblock.set()
         else:
-            agent._abort_request_anthropic_client = lambda *a, **k: None  # the kill never wakes the read
+            agent._abort_request_anthropic_client = lambda *a, **k: (
+                None
+            )  # the kill never wakes the read
 
         def _blocking_gen():
             unblock.wait(timeout=1.2)
@@ -194,7 +212,10 @@ class TestStreamStaleCircuitBreaker:
             return cm
 
         agent._anthropic_client.messages.stream.side_effect = _stream_side_effect
-        with caplog.at_level("WARNING", logger="agent.chat_completion_helpers"), pytest.raises(Exception):
+        with (
+            caplog.at_level("WARNING", logger="agent.chat_completion_helpers"),
+            pytest.raises(Exception),
+        ):
             agent._interruptible_streaming_api_call({})
 
         kills = sum("Stream stale for" in r.getMessage() for r in caplog.records)

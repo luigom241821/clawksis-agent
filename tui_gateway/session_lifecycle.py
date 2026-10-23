@@ -46,18 +46,37 @@ def _start_session_work(target, *, name: str, session: dict | None = None):
         raise
 
 
-def _notify_session_boundary(event_type: str, session_id: str | None, platform: str | None = None) -> list[str]:
+def _notify_session_boundary(
+    event_type: str, session_id: str | None, platform: str | None = None
+) -> list[str]:
     """Fire session lifecycle hooks with CLI parity; returns plugin ``on_session_finalize`` user messages."""
     with contextlib.suppress(Exception):
-        from clawk_cli.lifecycle import finalize_session, invoke_hook, session_end_messages
+        from clawk_cli.lifecycle import (
+            finalize_session,
+            invoke_hook,
+            session_end_messages,
+        )
+
         if event_type == "on_session_finalize":
-            return session_end_messages(finalize_session(session_id=session_id, platform=_resolve_agent_platform(platform)))
-        invoke_hook(event_type, session_id=session_id, platform=_resolve_agent_platform(platform))
+            return session_end_messages(
+                finalize_session(
+                    session_id=session_id, platform=_resolve_agent_platform(platform)
+                )
+            )
+        invoke_hook(
+            event_type,
+            session_id=session_id,
+            platform=_resolve_agent_platform(platform),
+        )
     return []
 
 
-_SESSION_OWNERSHIP_UNAVAILABLE = "Clawksis could not safely reserve this session. Try again."
-_AUTOMATIC_SESSION_END_REASONS = frozenset({"ws_orphan_reap", "ws_disconnect", "idle_timeout", "lru_evict", "tui_shutdown"})
+_SESSION_OWNERSHIP_UNAVAILABLE = (
+    "Clawksis could not safely reserve this session. Try again."
+)
+_AUTOMATIC_SESSION_END_REASONS = frozenset(
+    {"ws_orphan_reap", "ws_disconnect", "idle_timeout", "lru_evict", "tui_shutdown"}
+)
 
 
 def _lease_metadata(live_session_id: str) -> dict:
@@ -67,14 +86,23 @@ def _lease_metadata(live_session_id: str) -> dict:
 
 
 def _claim_active_session_slot(
-    session_key: str, *, live_session_id: str, surface: str = "tui", profile_home: str | Path | None = None
+    session_key: str,
+    *,
+    live_session_id: str,
+    surface: str = "tui",
+    profile_home: str | Path | None = None,
 ) -> tuple[Any, str | None]:
     try:
         from clawk_cli.active_sessions import try_acquire_active_session
+
         return try_acquire_active_session(
-            session_id=session_key, surface=surface, config=_load_cfg(), registry_home=profile_home,
+            session_id=session_key,
+            surface=surface,
+            config=_load_cfg(),
+            registry_home=profile_home,
             metadata=_lease_metadata(live_session_id),
-            track_liveness=str(surface or "").strip().lower() == "desktop")
+            track_liveness=str(surface or "").strip().lower() == "desktop",
+        )
     except Exception as exc:
         logger.warning("Failed to claim active session slot: %s", exc)
         # Fail CLOSED: an errored claim has NOT proven the session unowned; lease-less = silent double-writer hole.
@@ -113,9 +141,13 @@ def _install_borrowed_lease(sid: str, session: dict, frame: dict) -> None:
     if not key or str(vouch.get("session_id") or "") != key:
         return
     from clawk_cli.active_sessions import ActiveSessionLease
+
     session["active_session_lease"] = ActiveSessionLease(
-        lease_id=f"borrowed:{vouch.get('lease_id') or sid}", session_id=key,
-        surface=str(frame.get("source") or "desktop"), enabled=False)
+        lease_id=f"borrowed:{vouch.get('lease_id') or sid}",
+        session_id=key,
+        surface=str(frame.get("source") or "desktop"),
+        enabled=False,
+    )
 
 
 def _ensure_active_session_slot(sid: str, session: dict) -> str | None:
@@ -129,12 +161,19 @@ def _ensure_active_session_slot(sid: str, session: dict) -> str | None:
         return None
     key = str(session.get("session_key") or "")
     lease, limit_message = _claim_active_session_slot(
-        key, live_session_id=sid, surface=_session_source(session), profile_home=session.get("profile_home"))
+        key,
+        live_session_id=sid,
+        surface=_session_source(session),
+        profile_home=session.get("profile_home"),
+    )
     if limit_message is None:
         _attach_lease(session, lease)
         return None
     from clawk_cli.active_sessions import SESSION_NOT_OWNED
-    if getattr(limit_message, "reason", None) == SESSION_NOT_OWNED and _take_over_detached_runtime_lease(sid, session, key):
+
+    if getattr(
+        limit_message, "reason", None
+    ) == SESSION_NOT_OWNED and _take_over_detached_runtime_lease(sid, session, key):
         return None
     return limit_message
 
@@ -158,22 +197,34 @@ def _end_unless_ledger_busy(db, session_id: str, session_key, end_reason: str) -
         return True
 
     def write(conn):
-        row = conn.execute("SELECT chat_id FROM sessions WHERE id=?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT chat_id FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
         ids = {session_id, str(session_key or "")}
         if row is not None and str(row[0] or "").startswith("local-"):
             ids.add(str(row[0]))
         from clawk_state_local import local_lineage_owner
+
         ids.add(local_lineage_owner(conn, session_id))
         for sid in filter(None, ids):
             if conn.execute(_CANONICAL_PENDING_SQL, (sid, sid)).fetchone() is not None:
                 return False
-        db._end_and_bump(conn, "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
-                         (time.time(), end_reason, session_id), session_id, end_reason)
+        db._end_and_bump(
+            conn,
+            "UPDATE sessions SET ended_at = ?, end_reason = ? WHERE id = ? AND ended_at IS NULL",
+            (time.time(), end_reason, session_id),
+            session_id,
+            end_reason,
+        )
         return True
 
     if execute_write(write):
         return True
-    logger.info("Preserving session %s during %s: the gateway's ledger still holds its turn", session_id, end_reason)
+    logger.info(
+        "Preserving session %s during %s: the gateway's ledger still holds its turn",
+        session_id,
+        end_reason,
+    )
     return False
 
 
@@ -187,7 +238,11 @@ def _canonical_ledger_refusal(session: dict):
     first claim, because a gateway may admit work while this backend still holds its lease."""
     import sqlite3
     from clawk_cli.active_sessions import (
-        ActiveSessionRefusal, SESSION_COORDINATION_UNAVAILABLE, SESSION_NOT_OWNED)
+        ActiveSessionRefusal,
+        SESSION_COORDINATION_UNAVAILABLE,
+        SESSION_NOT_OWNED,
+    )
+
     key = str(session.get("session_key") or "")
     if not key:
         return None
@@ -200,14 +255,20 @@ def _canonical_ledger_refusal(session: dict):
                 row = next(iter(conn.execute(_CANONICAL_PENDING_SQL, (key, key))), None)
     except sqlite3.Error:
         logger.warning("canonical ledger read failed for %s", key, exc_info=True)
-        return ActiveSessionRefusal(_SESSION_OWNERSHIP_UNAVAILABLE, SESSION_COORDINATION_UNAVAILABLE)
+        return ActiveSessionRefusal(
+            _SESSION_OWNERSHIP_UNAVAILABLE, SESSION_COORDINATION_UNAVAILABLE
+        )
     if row is None:
         return None
-    logger.info("Refusing legacy turn for %s: canonical ledger holds %s work", key, row[0])
+    logger.info(
+        "Refusing legacy turn for %s: canonical ledger holds %s work", key, row[0]
+    )
     refusal = ActiveSessionRefusal(
         f"Session {key} has {'outcome-unknown' if row[0] == 'unknown' else 'pending'} work in the gateway's "
         "durable queue. Resume it through the gateway (clawk chat --resume, Desktop or the TUI) to "
-        "resolve it; nothing was run here.", SESSION_NOT_OWNED)
+        "resolve it; nothing was run here.",
+        SESSION_NOT_OWNED,
+    )
     # prompt.submit forwards a typed prompt to the owner's FIFO for work that ends on its own
     # (tui_gateway/owner_forward.py); an ``unknown`` admission is never forwarded past.
     refusal.ledger_status = row[0]
@@ -216,18 +277,28 @@ def _canonical_ledger_refusal(session: dict):
 
 def _attach_lease(session: dict, lease) -> None:
     session["active_session_lease"] = lease
-    session.pop("_lease_taken_over", None)  # owning again: its finalize ends the row like any owner
+    session.pop(
+        "_lease_taken_over", None
+    )  # owning again: its finalize ends the row like any owner
 
 
 def _detached_lease_holder(session: dict, key: str) -> tuple[str, dict] | None:
     """A sibling runtime of ``session`` (same key, same profile) holding an unreleased lease with no client.
     Caller holds ``_sessions_lock``."""
     for other_sid, other in _sessions.items():
-        if (other is session or other.get("_finalized") or str(other.get("session_key") or "") != key
-                or not _live_profile_matches(other, session.get("profile_home"))):
+        if (
+            other is session
+            or other.get("_finalized")
+            or str(other.get("session_key") or "") != key
+            or not _live_profile_matches(other, session.get("profile_home"))
+        ):
             continue
         lease = other.get("active_session_lease")
-        if lease is not None and not lease.released and _transport_is_dead(other.get("transport")):
+        if (
+            lease is not None
+            and not lease.released
+            and _transport_is_dead(other.get("transport"))
+        ):
             return other_sid, other
     return None
 
@@ -245,17 +316,25 @@ def _take_over_detached_runtime_lease(sid: str, session: dict, key: str) -> bool
     refusing — cross-process, multi-window and cross-profile (#100029) exclusivity are untouched. See #104691.
     """
     from clawk_cli.active_sessions import transfer_active_session
+
     with _session_resume_lock, _sessions_lock:
         if (found := _detached_lease_holder(session, key)) is None:
             return False
         other_sid, other = found
         lease = other["active_session_lease"]
-        if not transfer_active_session(lease, session_id=key, metadata=_lease_metadata(sid)):
+        if not transfer_active_session(
+            lease, session_id=key, metadata=_lease_metadata(sid)
+        ):
             return False
         del other["active_session_lease"]
         other["_lease_taken_over"] = True
         _attach_lease(session, lease)
-    logger.info("Session %s took over lease for %s from detached runtime %s", sid, key, other_sid)
+    logger.info(
+        "Session %s took over lease for %s from detached runtime %s",
+        sid,
+        key,
+        other_sid,
+    )
     try:
         _interrupt_session_turn(other_sid, other, request_id=f"lease-takeover-{sid}")
     except Exception:
@@ -282,7 +361,11 @@ def _release_active_session_slot(session: dict | None) -> bool:
     lease = session.get("active_session_lease") if session else None
     if lease is None:
         return True
-    if (err := _lease_retry(3 if getattr(lease, "track_liveness", False) else 1, lambda: lease.release())) is not None:
+    if (
+        err := _lease_retry(
+            3 if getattr(lease, "track_liveness", False) else 1, lambda: lease.release()
+        )
+    ) is not None:
         logger.warning("Failed to release active session slot", exc_info=err)
         return False
     if not (getattr(lease, "released", True) or not getattr(lease, "enabled", True)):
@@ -304,6 +387,7 @@ def _release_hosted_room_turn_slot(session: dict) -> None:
     stale lease and then runs lease-less; ``_admit_prompt_turn`` re-claims on the following turn.
     """
     from tui_gateway.hosted_room_driver import ROOM_SESSION_SOURCE
+
     if _session_source(session) == ROOM_SESSION_SOURCE:
         _release_active_session_slot(session)
 
@@ -312,9 +396,12 @@ def _own_live_lease_ids(*, exclude=None) -> set[str]:
     """Snapshot leases still backed by this process's live session records (plus leases deferred past a
     close for an unsettled isolated turn — still ours until the child settles)."""
     with _sessions_lock:
-        return {str(lease.lease_id) for session in _sessions.values()
-                if (lease := session.get("active_session_lease")) is not None and lease is not exclude
-                } | set(_deferred_active_session_leases)
+        return {
+            str(lease.lease_id)
+            for session in _sessions.values()
+            if (lease := session.get("active_session_lease")) is not None
+            and lease is not exclude
+        } | set(_deferred_active_session_leases)
 
 
 @contextlib.contextmanager
@@ -323,9 +410,16 @@ def _other_runtime_lease_guard(session_id: str, session: dict):
     the lifecycle -> preserve) when the guard can't be loaded/entered in 3 tries: unknown ownership never ends a row."""
     lease = session.get("active_session_lease")
     try:
-        from clawk_cli.active_sessions import active_session_liveness_guard, release_active_session_liveness_guard
+        from clawk_cli.active_sessions import (
+            active_session_liveness_guard,
+            release_active_session_liveness_guard,
+        )
     except Exception as exc:
-        logger.warning("Failed to load active session ownership guard; preserving session %s: %s", session_id, exc)
+        logger.warning(
+            "Failed to load active session ownership guard; preserving session %s: %s",
+            session_id,
+            exc,
+        )
         yield True
         return
     stack = contextlib.ExitStack()
@@ -335,26 +429,41 @@ def _other_runtime_lease_guard(session_id: str, session: dict):
     def _enter() -> None:
         stack.close()  # drop anything a half-failed previous attempt left behind
         if lease is not None and getattr(lease, "enabled", False):
-            guard = release_active_session_liveness_guard(lease, session_id, own_live_lease_ids=own_live_lease_ids)
+            guard = release_active_session_liveness_guard(
+                lease, session_id, own_live_lease_ids=own_live_lease_ids
+            )
         else:
             guard = active_session_liveness_guard(
-                session_id, registry_home=session.get("profile_home"), own_live_lease_ids=own_live_lease_ids)
+                session_id,
+                registry_home=session.get("profile_home"),
+                own_live_lease_ids=own_live_lease_ids,
+            )
         active[:] = [stack.enter_context(guard)]
 
     if (last_error := _lease_retry(3, _enter)) is not None:
         stack.close()
-        logger.warning("Failed to inspect active session leases; preserving session %s: %s", session_id, last_error)
+        logger.warning(
+            "Failed to inspect active session leases; preserving session %s: %s",
+            session_id,
+            last_error,
+        )
         yield True
         return
     try:
         yield active[0]
     finally:
         stack.close()
-        if lease is not None and getattr(lease, "released", False) and session.get("active_session_lease") is lease:
+        if (
+            lease is not None
+            and getattr(lease, "released", False)
+            and session.get("active_session_lease") is lease
+        ):
             session.pop("active_session_lease", None)
 
 
-def _transfer_active_session_slot(sid: str, session: dict, *, new_session_id: str) -> bool:
+def _transfer_active_session_slot(
+    sid: str, session: dict, *, new_session_id: str
+) -> bool:
     if not new_session_id:
         return False
     lease = session.get("active_session_lease")
@@ -362,7 +471,10 @@ def _transfer_active_session_slot(sid: str, session: dict, *, new_session_id: st
         return True
     try:
         from clawk_cli.active_sessions import transfer_active_session
-        if transfer_active_session(lease, session_id=new_session_id, metadata=_lease_metadata(sid)):
+
+        if transfer_active_session(
+            lease, session_id=new_session_id, metadata=_lease_metadata(sid)
+        ):
             return True
     except Exception:
         logger.debug("Failed to transfer active session slot", exc_info=True)
@@ -372,13 +484,23 @@ def _transfer_active_session_slot(sid: str, session: dict, *, new_session_id: st
     # a gateway at the cap can't grab the freed slot and leave this session lease-less; on failure KEEP the old lease.
     # See #49041.
     new_lease, limit_message = _claim_active_session_slot(
-        new_session_id, live_session_id=sid, surface=_session_source(session), profile_home=session.get("profile_home"))
+        new_session_id,
+        live_session_id=sid,
+        surface=_session_source(session),
+        profile_home=session.get("profile_home"),
+    )
     if new_lease is None:
         if limit_message:
-            logger.warning("Compression session lease re-anchor failed (kept old lease): sid=%s new_session_id=%s reason=%s",
-                           sid, new_session_id, limit_message)
+            logger.warning(
+                "Compression session lease re-anchor failed (kept old lease): sid=%s new_session_id=%s reason=%s",
+                sid,
+                new_session_id,
+                limit_message,
+            )
         return False
-    if (old := session.pop("active_session_lease", None)) is not None and (err := _lease_retry(1, old.release)):
+    if (old := session.pop("active_session_lease", None)) is not None and (
+        err := _lease_retry(1, old.release)
+    ):
         logger.debug("Failed to release stale active session slot", exc_info=err)
     session["active_session_lease"] = new_lease
     return True
@@ -388,9 +510,24 @@ def _transfer_active_session_slot(sid: str, session: dict, *, new_session_id: st
 # a viewer (ending one causes the Groundhog Day loop, see _finalize_session). Self-created/CLI sources are NOT gateway-owned.
 # Sources the TUI backend itself creates ("tui", plus whatever a client passes as its own ``source``) and
 # the CLI's own sessions are NOT gateway-owned. See #60609.
-_NON_GATEWAY_SOURCES = frozenset({
-    "", "tui", "cli", "webui", "desktop", "cron", "kanban", "subagent", "test",
-    "local", "acp", "webhook", "api_server", "msgraph_webhook"})
+_NON_GATEWAY_SOURCES = frozenset(
+    {
+        "",
+        "tui",
+        "cli",
+        "webui",
+        "desktop",
+        "cron",
+        "kanban",
+        "subagent",
+        "test",
+        "local",
+        "acp",
+        "webhook",
+        "api_server",
+        "msgraph_webhook",
+    }
+)
 
 
 def _is_gateway_owned_source(source: str) -> bool:
@@ -401,6 +538,7 @@ def _is_gateway_owned_source(source: str) -> bool:
         return False
     try:
         from gateway.config import Platform
+
         Platform(src)  # raises ValueError for arbitrary non-platform strings
         return True
     except Exception:
@@ -412,7 +550,10 @@ def _lifecycle_own_sid(session: dict, sid_hint: str = "") -> str:
     own_sid = str(sid_hint or session.get("_sid") or "")
     if not own_sid:
         with contextlib.suppress(Exception), _sessions_lock:
-            own_sid = next((cand_sid for cand_sid, cand in _sessions.items() if cand is session), "")
+            own_sid = next(
+                (cand_sid for cand_sid, cand in _sessions.items() if cand is session),
+                "",
+            )
     return own_sid
 
 
@@ -424,7 +565,9 @@ def _lock_vault_managers(session: dict) -> None:
         if sid := session.get("_sid"):
             unlock.release_session(sid)
     except Exception:
-        logging.getLogger(__name__).debug("vault manager lock on session end failed", exc_info=True)
+        logging.getLogger(__name__).debug(
+            "vault manager lock on session end failed", exc_info=True
+        )
 
 
 def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> None:
@@ -434,23 +577,29 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
         return
     session["_finalized"] = True
     _lock_vault_managers(session)
-    if (history_ready := session.get("resume_history_ready")) is not None and not history_ready.is_set():
+    if (
+        history_ready := session.get("resume_history_ready")
+    ) is not None and not history_ready.is_set():
         session["resume_history_error"] = "session resume cancelled"
         history_ready.set()
     _desktop_automatic_cleanup = (
-        end_reason in _AUTOMATIC_SESSION_END_REASONS and _session_source(session).strip().lower() == "desktop")
+        end_reason in _AUTOMATIC_SESSION_END_REASONS
+        and _session_source(session).strip().lower() == "desktop"
+    )
     # Automatic Desktop cleanup releases its lease inside the lifecycle guard below; other paths keep force/end semantics.
     if not _desktop_automatic_cleanup:
         _release_active_session_slot(session)
     if (stop_event := session.get("_notif_stop")) is not None:
         stop_event.set()
     agent = session.get("agent")
-    with (session.get("history_lock") or contextlib.nullcontext()):
+    with session.get("history_lock") or contextlib.nullcontext():
         history = list(session.get("history", []))
     # Persist via ``_persist_session``'s marker-based dedup (gateway-shutdown flush contract). Do NOT pass
     # ``conversation_history``: ``session["history"]`` and ``_session_messages`` alias the SAME list after a turn, so
     # the flush would treat every message as durable and skip it — data loss when finalize is the sole persist path.
-    if hasattr(agent, "_persist_session") and (snapshot := getattr(agent, "_session_messages", None)):
+    if hasattr(agent, "_persist_session") and (
+        snapshot := getattr(agent, "_session_messages", None)
+    ):
         with contextlib.suppress(Exception):
             agent._persist_session(snapshot)
     # interrupted=True so crash-recovery plugins can flush state (mirrors cli.py atexit). The end-of-session
@@ -462,10 +611,16 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
         if agent is not None:
             with contextlib.suppress(Exception):
                 from clawk_cli.lifecycle import invoke_hook
+
                 invoke_hook(
-                    "on_session_end", completed=False, interrupted=True,
-                    session_id=getattr(agent, "session_id", None) or session.get("session_key", ""),
-                    model=getattr(agent, "model", "unknown"), platform=getattr(agent, "platform", None) or "tui")
+                    "on_session_end",
+                    completed=False,
+                    interrupted=True,
+                    session_id=getattr(agent, "session_id", None)
+                    or session.get("session_key", ""),
+                    model=getattr(agent, "model", "unknown"),
+                    platform=getattr(agent, "platform", None) or "tui",
+                )
         if agent is not None and history and hasattr(agent, "commit_memory_session"):
             with contextlib.suppress(Exception):
                 agent.commit_memory_session(history)
@@ -473,34 +628,49 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
     session_key = session.get("session_key")
     session_id = getattr(agent, "session_id", None) or session_key
     # Returned to the client by ``session.close`` (the TUI shows them after its /new reset); reaper paths have no client.
-    session["_end_msgs"] = _notify_session_boundary("on_session_finalize", session_id, _session_source(session)) or []
+    session["_end_msgs"] = (
+        _notify_session_boundary(
+            "on_session_finalize", session_id, _session_source(session)
+        )
+        or []
+    )
     # End the state.db row so it doesn't linger as a ghost in /resume. Use session_id (agent.session_id), not
     # session_key: after compression the key may be the stale ended parent while session_id is the live continuation.
     # Fix for #20001.
     if _desktop_automatic_cleanup and not session_id:
         _release_active_session_slot(session)
     # ``_lease_taken_over``: a new runtime for the same chat owns the row and its delegations now.
-    _lifecycle_guard = (_other_runtime_lease_guard(session_id, session)
-                        if _desktop_automatic_cleanup and session_id
-                        else contextlib.nullcontext(bool(session.get("_lease_taken_over"))))
+    _lifecycle_guard = (
+        _other_runtime_lease_guard(session_id, session)
+        if _desktop_automatic_cleanup and session_id
+        else contextlib.nullcontext(bool(session.get("_lease_taken_over")))
+    )
     with _lifecycle_guard as _other_runtime_owns_lifecycle:
         _tui_owns_lifecycle = not _other_runtime_owns_lifecycle
         if _other_runtime_owns_lifecycle:
-            logger.info("Preserving session %s during %s: another backend owns an active lease", session_id, end_reason)
+            logger.info(
+                "Preserving session %s during %s: another backend owns an active lease",
+                session_id,
+                end_reason,
+            )
         if session_id:
             # The *session's* profile state.db (app-global remote mode), not the launch profile's.
             with contextlib.suppress(Exception), _session_db(session) as db:
                 if db is not None:
                     # Never end gateway-originated sessions: Groundhog Day loop (gateway self-heals to the parent,
                     # compression splits back to the reaped child, forever).
-                    if _is_gateway_owned_source((db.get_session(session_id) or {}).get("source", "")):
+                    if _is_gateway_owned_source(
+                        (db.get_session(session_id) or {}).get("source", "")
+                    ):
                         _tui_owns_lifecycle = False
                     elif _tui_owns_lifecycle and not _desktop_automatic_cleanup:
                         # Automatic Desktop cleanup (ws_orphan_reap, idle_timeout, etc.) reclaims
                         # runtime but must not end the durable row — the conversation stays open
                         # and resumable until the user explicitly closes or archives it.  #105588
                         # A turn the gateway's ledger still holds keeps the row open too (#140642).
-                        if not _end_unless_ledger_busy(db, session_id, session_key, end_reason):
+                        if not _end_unless_ledger_busy(
+                            db, session_id, session_key, end_reason
+                        ):
                             _tui_owns_lifecycle = False
     # ``_teardown_session`` follows with ``agent.close()``, whose ``_finalize_owned_session_row`` ends the row as
     # ``agent_close`` through the agent's own handle — every spare decision above would be undone one call later.
@@ -510,9 +680,12 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
     # sid; by durable session_key only when the TUI owns the lifecycle — a viewer tab must not kill gateway work.
     with contextlib.suppress(Exception):
         from tools.async_delegation import interrupt_for_session
+
         interrupt_for_session(
             session_key=str(session_key or "") if _tui_owns_lifecycle else "",
-            origin_ui_session_id=_lifecycle_own_sid(session), reason=end_reason)
+            origin_ui_session_id=_lifecycle_own_sid(session),
+            reason=end_reason,
+        )
     # Session-persistent code kernels (execute_code) share this owner key and die at the same boundary, like the
     # gateway's /stop and /new (approval.clear_session); otherwise each finished conversation keeps a live
     # interpreter until kernel_idle_timeout. Only when the TUI owns the lifecycle: a viewer tab over a
@@ -520,6 +693,7 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
     if _tui_owns_lifecycle and session_key:
         with contextlib.suppress(Exception):
             from tools.approval import clear_session
+
             clear_session(str(session_key))
     # A session's in-flight background memory/skill review ends WITH the session too (#102895): the
     # review fork is a SEPARATE AIAgent instance tracked only on the parent's
@@ -533,8 +707,12 @@ def _finalize_session(session: dict | None, end_reason: str = "tui_close") -> No
     if agent is not None:
         with contextlib.suppress(Exception):
             from agent.background_review import cancel_background_review_for_live_turn
+
             cancel_background_review_for_live_turn(
-                agent, message=f"session ended ({end_reason})", tool_reason="session ended")
+                agent,
+                message=f"session ended ({end_reason})",
+                tool_reason="session ended",
+            )
     # Close the slash-worker in this single ``_finalized``-guarded chokepoint (a direct caller can't leak it); idempotent.
     with contextlib.suppress(Exception):
         if worker := session.get("slash_worker"):
@@ -552,15 +730,21 @@ def _announce_session_reclaimed(session: dict, end_reason: str) -> None:
     if end_reason not in _RECLAIM_END_REASONS:
         return
     try:
-        _broadcast_global_event("session.reclaimed", {
-            "session_id": str(session.get("_sid") or ""),
-            "stored_session_id": str(session.get("session_key") or ""),
-            "reason": end_reason})
+        _broadcast_global_event(
+            "session.reclaimed",
+            {
+                "session_id": str(session.get("_sid") or ""),
+                "stored_session_id": str(session.get("session_key") or ""),
+                "reason": end_reason,
+            },
+        )
     except Exception:
         logger.debug("session.reclaimed broadcast failed", exc_info=True)
 
 
-def _announce_cancelled_gateway_approvals(session: dict, reason: str, *, session_id: str = "") -> None:
+def _announce_cancelled_gateway_approvals(
+    session: dict, reason: str, *, session_id: str = ""
+) -> None:
     """Tell connected clients pending gateway approvals are being dropped (interrupt/reap/teardown, #106678).
 
     Broadcast, not session-targeted: reap/interrupt run on timer threads with no live transport or contextvar,
@@ -573,6 +757,7 @@ def _announce_cancelled_gateway_approvals(session: dict, reason: str, *, session
         return
     try:
         from tools.approval import list_gateway_approvals
+
         pending = list_gateway_approvals(session_key)
     except Exception:
         logger.debug("list_gateway_approvals failed", exc_info=True)
@@ -582,12 +767,16 @@ def _announce_cancelled_gateway_approvals(session: dict, reason: str, *, session
     request_ids = [str(item.get("request_id") or "") for item in pending]
     request_ids = [rid for rid in request_ids if rid]
     try:
-        _broadcast_global_event("approval.cancelled", {
-            "session_id": str(session_id or session.get("_sid") or ""),
-            "stored_session_id": session_key,
-            "reason": reason,
-            "cancelled_count": len(pending),
-            "request_ids": request_ids})
+        _broadcast_global_event(
+            "approval.cancelled",
+            {
+                "session_id": str(session_id or session.get("_sid") or ""),
+                "stored_session_id": session_key,
+                "reason": reason,
+                "cancelled_count": len(pending),
+                "request_ids": request_ids,
+            },
+        )
     except Exception:
         logger.debug("approval.cancelled broadcast failed", exc_info=True)
 
@@ -605,6 +794,7 @@ def _teardown_session(session: dict | None, *, end_reason: str = "tui_close") ->
         _announce_cancelled_gateway_approvals(session, end_reason)
     with contextlib.suppress(Exception):
         from tools.approval import unregister_gateway_notify
+
         # One approval callback per key: after a takeover it is the new runtime's registration.
         if (key := session.get("session_key")) and not session.get("_lease_taken_over"):
             unregister_gateway_notify(key)
@@ -637,25 +827,41 @@ def _pop_session_by_id(sid: str) -> dict | None:
             from clawk_constants import get_clawk_home
 
             home = str(Path(session.get("profile_home") or get_clawk_home()).resolve())
-            last_active = time.time() if session.get("running") else float(session.get("last_active") or 0)
-            _closed_session_activity[home] = max(_closed_session_activity.get(home, 0), last_active)
+            last_active = (
+                time.time()
+                if session.get("running")
+                else float(session.get("last_active") or 0)
+            )
+            _closed_session_activity[home] = max(
+                _closed_session_activity.get(home, 0), last_active
+            )
             session["_closing"] = True
-            session["_sid"] = sid  # out of _sessions now, so teardown can't recover the live id by scanning
+            session["_sid"] = (
+                sid  # out of _sessions now, so teardown can't recover the live id by scanning
+            )
     return session
 
 
-def _teardown_popped_session(session: dict | None, *, end_reason: str = "tui_close") -> bool:
+def _teardown_popped_session(
+    session: dict | None, *, end_reason: str = "tui_close"
+) -> bool:
     """Finish a close after the caller has atomically detached the session."""
     if session is None:
         return False
     run_thread = session.get("_run_thread")
-    if end_reason != "tui_shutdown" and run_thread is not None and run_thread is not threading.current_thread():
+    if (
+        end_reason != "tui_shutdown"
+        and run_thread is not None
+        and run_thread is not threading.current_thread()
+    ):
         try:
             if run_thread.is_alive():
                 run_thread.join(timeout=_TURN_SETTLE_BEFORE_CLOSE_SECONDS)
             if run_thread.is_alive():
                 logger.warning(
-                    "session turn thread still alive after %.1fs teardown grace", _TURN_SETTLE_BEFORE_CLOSE_SECONDS)
+                    "session turn thread still alive after %.1fs teardown grace",
+                    _TURN_SETTLE_BEFORE_CLOSE_SECONDS,
+                )
         except Exception:
             logger.debug("failed waiting for session turn thread", exc_info=True)
     if end_reason != "tui_shutdown":
@@ -665,6 +871,7 @@ def _teardown_popped_session(session: dict | None, *, end_reason: str = "tui_clo
     finally:
         # finally: a raising finalize (callers log and move on) must still free the ring.
         from tui_gateway.event_replay import forget_session
+
         forget_session(session.get("_sid") or "")
     return True
 
@@ -680,7 +887,9 @@ def _settle_isolated_turn_before_close(session: dict) -> None:
     completion callback releases it on the correlated turn.end/turn.error (child death fails pending turns
     the same way). The RPC close is bounded; ownership ends with the child's last write, never with the
     grace timer, else a second backend acquires the stored session while the child is still writing."""
-    if not session.get("_compute_host_turn_id") or not _session_uses_compute_host(session):
+    if not session.get("_compute_host_turn_id") or not _session_uses_compute_host(
+        session
+    ):
         return
     with contextlib.suppress(Exception):
         _interrupt_session_turn(_lifecycle_own_sid(session), session)
@@ -688,13 +897,19 @@ def _settle_isolated_turn_before_close(session: dict) -> None:
     while session.get("_compute_host_turn_id") and time.monotonic() < deadline:
         time.sleep(0.05)
     with session["history_lock"]:
-        if not session.get("_compute_host_turn_id") or (lease := session.pop("active_session_lease", None)) is None:
+        if (
+            not session.get("_compute_host_turn_id")
+            or (lease := session.pop("active_session_lease", None)) is None
+        ):
             return
         session["_deferred_active_session_lease"] = lease
         _deferred_active_session_leases[str(lease.lease_id)] = lease
         _deferred_active_session_lease_ages[str(lease.lease_id)] = time.time()
-    logger.warning("isolated turn still live after %.1fs close grace; holding lease for %s until the child settles",
-                   _TURN_SETTLE_BEFORE_CLOSE_SECONDS, session.get("session_key"))
+    logger.warning(
+        "isolated turn still live after %.1fs close grace; holding lease for %s until the child settles",
+        _TURN_SETTLE_BEFORE_CLOSE_SECONDS,
+        session.get("session_key"),
+    )
 
 
 # A deferred lease is released by the compute-host turn's completion callback
@@ -713,7 +928,8 @@ def _reap_stale_deferred_leases(now: float | None = None) -> int:
     """Force-release deferred leases whose settlement callback never arrived. Returns the count."""
     now = time.time() if now is None else now
     stale = [
-        lease_id for lease_id, deferred_at in list(_deferred_active_session_lease_ages.items())
+        lease_id
+        for lease_id, deferred_at in list(_deferred_active_session_lease_ages.items())
         if now - deferred_at > _DEFERRED_ACTIVE_SESSION_LEASE_TTL_SECONDS
     ]
     reaped = 0
@@ -723,12 +939,18 @@ def _reap_stale_deferred_leases(now: float | None = None) -> int:
         if lease is None:
             continue
         if (err := _lease_retry(3, lease.release)) is not None:
-            logger.warning("Failed to force-release stale deferred active session lease %s", lease_id,
-                           exc_info=err)
+            logger.warning(
+                "Failed to force-release stale deferred active session lease %s",
+                lease_id,
+                exc_info=err,
+            )
             continue
-        logger.warning("Force-released deferred active session lease %s held past %.0fs without a "
-                       "compute-host settlement (zombie concurrency slot, #62823)",
-                       lease_id, _DEFERRED_ACTIVE_SESSION_LEASE_TTL_SECONDS)
+        logger.warning(
+            "Force-released deferred active session lease %s held past %.0fs without a "
+            "compute-host settlement (zombie concurrency slot, #62823)",
+            lease_id,
+            _DEFERRED_ACTIVE_SESSION_LEASE_TTL_SECONDS,
+        )
         reaped += 1
     return reaped
 
@@ -745,7 +967,11 @@ def _release_deferred_active_session_lease(session: dict) -> None:
 
 
 def _close_session_by_id(
-    sid: str, *, end_reason: str = "tui_close", predicate: Callable[[dict], bool] | None = None) -> bool:
+    sid: str,
+    *,
+    end_reason: str = "tui_close",
+    predicate: Callable[[dict], bool] | None = None,
+) -> bool:
     """Idempotent teardown funnel for callers with no resume race (resume-sensitive callers pop under
     ``_session_resume_lock`` and call ``_teardown_popped_session`` after releasing it). Automatic reapers pass
     ``predicate`` to revalidate under ``_sessions_lock`` right before the claim, so a stale scan can't close a
@@ -760,7 +986,11 @@ def _close_session_by_id(
 
 def _ws_session_is_detached(session: dict | None) -> bool:
     """True if a live session is still bound to the disconnected-WS sentinel."""
-    return bool(session and not session.get("_finalized") and session.get("transport") is _detached_ws_transport)
+    return bool(
+        session
+        and not session.get("_finalized")
+        and session.get("transport") is _detached_ws_transport
+    )
 
 
 def _ws_session_is_orphaned(session: dict | None) -> bool:
@@ -769,7 +999,11 @@ def _ws_session_is_orphaned(session: dict | None) -> bool:
 
 
 def _interrupt_session_turn(
-    sid: str, session: dict, *, request_id: str | None = None, orphan: bool = False,
+    sid: str,
+    session: dict,
+    *,
+    request_id: str | None = None,
+    orphan: bool = False,
 ) -> bool:
     """Apply the shared ``session.interrupt`` contract to one claimed session; returns whether the compute-host control
     channel was used. The WS orphan reaper reuses this so a dead client gets the same partial-history/queue semantics.
@@ -789,12 +1023,16 @@ def _interrupt_session_turn(
         if should_interrupt or session.get("_compute_host_active"):
             _get_compute_host_supervisor().interrupt(sid, request_id=request_id)
     else:
-        run_thread_alive = (rt := session.get("_run_thread")) is not None and rt.is_alive()
+        run_thread_alive = (
+            rt := session.get("_run_thread")
+        ) is not None and rt.is_alive()
     with session["history_lock"]:
         session["_turn_cancel_requested"] = True
         session["queued_prompt"] = None
         session.pop("queued_prompts", None)
-        session["_queued_prompt_generation"] = int(session.get("_queued_prompt_generation", 0)) + 1
+        session["_queued_prompt_generation"] = (
+            int(session.get("_queued_prompt_generation", 0)) + 1
+        )
     if should_interrupt:
         # Sibling of gateway/run_agent_cache.py::_interrupt_and_clear_session: a user-initiated stop of a
         # live TUI/desktop turn is the same "loop is gone" event for plugins holding per-turn external
@@ -804,25 +1042,35 @@ def _interrupt_session_turn(
         # profile (#125063). hydrate_secrets=False: observer-only, /stop must stay fast.
         try:
             from clawk_cli.plugins import invoke_hook as _invoke_hook
+
             with _session_profile_runtime_scope(session, hydrate_secrets=False):
                 _invoke_hook(
-                    "agent_loop_stopped", session_key=session.get("session_key", ""), platform="tui",
-                    reason="user_stop", invalidation_reason="session_interrupt",
+                    "agent_loop_stopped",
+                    session_key=session.get("session_key", ""),
+                    platform="tui",
+                    reason="user_stop",
+                    invalidation_reason="session_interrupt",
                 )
         except Exception:
             logger.debug("agent_loop_stopped hook dispatch failed", exc_info=True)
     if not use_compute_host:
         if should_interrupt:
             from agent.interrupt_compat import request_hard_interrupt
+
             request_hard_interrupt(session.get("agent"))
         # Background delegations are detached from the turn's interrupt fan-out; a stop ends them too
         # (own UI sid + spawner id only — a viewer tab must not kill gateway work). Each returns as an
         # interrupted completion with its partial output.
         with contextlib.suppress(Exception):
             from tools.async_delegation import interrupt_for_session
+
             interrupt_for_session(
-                origin_ui_session_id=_lifecycle_own_sid(session, sid), reason="user_stop",
-                parent_session_id=str(getattr(session.get("agent"), "session_id", "") or ""))
+                origin_ui_session_id=_lifecycle_own_sid(session, sid),
+                reason="user_stop",
+                parent_session_id=str(
+                    getattr(session.get("agent"), "session_id", "") or ""
+                ),
+            )
         if not run_thread_alive and not compressing:
             with session["history_lock"]:
                 if session.get("running"):
@@ -838,8 +1086,12 @@ def _interrupt_session_turn(
     if (agent_for_review := session.get("agent")) is not None:
         with contextlib.suppress(Exception):
             from agent.background_review import cancel_background_review_for_live_turn
+
             cancel_background_review_for_live_turn(
-                agent_for_review, message="session interrupted", tool_reason="session interrupted")
+                agent_for_review,
+                message="session interrupted",
+                tool_reason="session interrupted",
+            )
     _clear_pending(sid)
     with contextlib.suppress(Exception):
         # Deny-resolve every pending approval so no agent thread blocks on the queue. The
@@ -849,6 +1101,7 @@ def _interrupt_session_turn(
         reason = "ws_orphan_reap" if orphan else "interrupt"
         _announce_cancelled_gateway_approvals(session, reason, session_id=sid)
         from tools.approval import resolve_gateway_approval
+
         resolve_gateway_approval(session["session_key"], "deny", resolve_all=True)
     return use_compute_host
 
@@ -873,15 +1126,22 @@ def _session_has_active_delegations(sid: str, session: dict | None = None) -> bo
         # The row lives in the session's OWN store (a named-profile session's row is invisible to
         # the launch handle, which would leave this guard permanently dead).
         with contextlib.suppress(Exception), _session_db(session) as db:
-            if db is not None and _is_gateway_owned_source((db.get_session(session_id) or {}).get("source", "")):
+            if db is not None and _is_gateway_owned_source(
+                (db.get_session(session_id) or {}).get("source", "")
+            ):
                 owned_session_key = ""
     if not own_sid and not owned_session_key:
         return False
     try:
         from tools.async_delegation import has_live_for_session
-        return has_live_for_session(session_key=owned_session_key, origin_ui_session_id=own_sid)
+
+        return has_live_for_session(
+            session_key=owned_session_key, origin_ui_session_id=own_sid
+        )
     except Exception:
-        logger.debug("Failed to query active delegations for UI session %s", sid, exc_info=True)
+        logger.debug(
+            "Failed to query active delegations for UI session %s", sid, exc_info=True
+        )
         return True  # a transient registry/import failure must not become destructive cleanup
 
 
@@ -929,7 +1189,9 @@ def _rebind_live_transport(sid: str, session: dict, transport: Transport) -> Non
     session.setdefault("viewers", {})[transport] = time.time()
     # See #83716.
     if transport is not _detached_ws_transport:
-        _cancel_ws_orphan_reap(sid)  # the client is back — a pending ws-orphan reap must not fire
+        _cancel_ws_orphan_reap(
+            sid
+        )  # the client is back — a pending ws-orphan reap must not fire
 
 
 def _ws_orphan_turn_activity_is_fresh(session: dict) -> bool:
@@ -948,9 +1210,16 @@ def _ws_orphan_turn_activity_is_fresh(session: dict) -> bool:
     if session.get("_compute_host_turn_id"):
         with session["history_lock"]:
             stamp = session.get("_compute_host_activity_ns")
-            return (session.get("running", False) and isinstance(stamp, int)
-                    and 0 <= (time.perf_counter_ns() - stamp) / 1_000_000_000 < _WS_ORPHAN_ACTIVITY_STALE_S)
-    if not callable(summary_fn := getattr(session.get("agent"), "get_activity_summary", None)):
+            return (
+                session.get("running", False)
+                and isinstance(stamp, int)
+                and 0
+                <= (time.perf_counter_ns() - stamp) / 1_000_000_000
+                < _WS_ORPHAN_ACTIVITY_STALE_S
+            )
+    if not callable(
+        summary_fn := getattr(session.get("agent"), "get_activity_summary", None)
+    ):
         return False
     try:
         elapsed = summary_fn().get("seconds_since_activity")
@@ -960,7 +1229,10 @@ def _ws_orphan_turn_activity_is_fresh(session: dict) -> bool:
 
 
 def _schedule_ws_orphan_reap(
-    sid: str, *, delay_s: float | None = None, _expected_timer: threading.Timer | None = None,
+    sid: str,
+    *,
+    delay_s: float | None = None,
+    _expected_timer: threading.Timer | None = None,
 ) -> None:
     """After a grace window, reap session ``sid`` iff it's still orphaned. Called from the WS-disconnect path; a
     reconnect or ``session.resume`` cancels the reap by re-binding a live transport. Disabled when grace is 0.
@@ -995,7 +1267,9 @@ def _schedule_ws_orphan_reap(
                 # Re-arm through the public scheduler with THIS timer as the expected
                 # one: the fresh closure's identity guard then matches the entry it
                 # installs, so the awake-remainder fire proceeds to the real reap.
-                _schedule_ws_orphan_reap(sid, delay_s=rearm_delay, _expected_timer=timer)
+                _schedule_ws_orphan_reap(
+                    sid, delay_s=rearm_delay, _expected_timer=timer
+                )
                 return
         # Serialize the re-check against session.resume (rebinds under _session_resume_lock). Claim teardown by popping
         # under both locks, then release the resume lock before slow finalization. Order: resume_lock -> sessions_lock.
@@ -1019,31 +1293,44 @@ def _schedule_ws_orphan_reap(
                 _pending_ws_reaps.pop(sid, None)
                 return
             if _session_has_active_delegations(sid, current) or (
-                    not current.get("running")
-                    and not current.get("_client_gone_interrupt_requested")
-                    and (_session_owns_live_wakeup_schedule(current)
-                         or _session_owns_pending_process_notification(current))):
+                not current.get("running")
+                and not current.get("_client_gone_interrupt_requested")
+                and (
+                    _session_owns_live_wakeup_schedule(current)
+                    or _session_owns_pending_process_notification(current)
+                )
+            ):
                 # Live background work, or a wake-up only this process's poller can deliver: an active /loop or
                 # /heartbeat, or a running process that will notify this session. A settled client-gone interrupt
                 # wins over both: its latches block every tick and reattach.
                 reschedule_delay = _WS_ORPHAN_REAP_GRACE_S
             elif not current.get("running"):
                 session = _pop_session_by_id(sid)
-            elif not current.get("_client_gone_interrupt_requested") and _ws_orphan_turn_activity_is_fresh(current):
+            elif not current.get(
+                "_client_gone_interrupt_requested"
+            ) and _ws_orphan_turn_activity_is_fresh(current):
                 # Client-absent but producing: keep running detached (the sentinel buffers emits), re-check each grace.
-                logger.debug("client_gone sid=%s action=defer (turn activity fresh; stale threshold %.0fs)",
-                             sid, _WS_ORPHAN_ACTIVITY_STALE_S)
+                logger.debug(
+                    "client_gone sid=%s action=defer (turn activity fresh; stale threshold %.0fs)",
+                    sid,
+                    _WS_ORPHAN_ACTIVITY_STALE_S,
+                )
                 reschedule_delay = _WS_ORPHAN_REAP_GRACE_S
             else:
                 # Mid-turn detached sessions must never drop the single Timer: interrupt once after grace, then poll
                 # until turn-finalization settles.
-                polls = current["_client_gone_interrupt_polls"] = int(current.get("_client_gone_interrupt_polls") or 0) + 1
+                polls = current["_client_gone_interrupt_polls"] = (
+                    int(current.get("_client_gone_interrupt_polls") or 0) + 1
+                )
                 # See #85578.
                 if polls > _WS_ORPHAN_INTERRUPT_REAP_MAX_POLLS:
                     # Never settled inside the budget — force-reap rather than park forever.
                     logger.error(
                         "client_gone sid=%s: turn did not settle after %d interrupt polls (%.0fs) — force-reaping detached session",
-                        sid, polls - 1, (polls - 1) * _WS_ORPHAN_INTERRUPT_REAP_POLL_S)
+                        sid,
+                        polls - 1,
+                        (polls - 1) * _WS_ORPHAN_INTERRUPT_REAP_POLL_S,
+                    )
                     session = _pop_session_by_id(sid)
                 else:
                     if not current.get("_client_gone_interrupt_requested"):
@@ -1055,25 +1342,39 @@ def _schedule_ws_orphan_reap(
         if interrupt_session is not None:
             try:
                 isolated = _interrupt_session_turn(
-                    sid, interrupt_session, request_id=f"client-gone-{sid}", orphan=True)
-                logger.info("client_gone sid=%s action=interrupt turn_isolation=%s", sid, isolated)
+                    sid, interrupt_session, request_id=f"client-gone-{sid}", orphan=True
+                )
+                logger.info(
+                    "client_gone sid=%s action=interrupt turn_isolation=%s",
+                    sid,
+                    isolated,
+                )
             except Exception:
                 logger.exception("client_gone interrupt failed sid=%s", sid)
                 with _sessions_lock:
-                    if (_sessions.get(sid) is interrupt_session
-                            and _pending_ws_reaps.get(sid) is timer):
+                    if (
+                        _sessions.get(sid) is interrupt_session
+                        and _pending_ws_reaps.get(sid) is timer
+                    ):
                         interrupt_session.pop("_client_gone_interrupt_requested", None)
         if reschedule_delay is not None:
-            _schedule_ws_orphan_reap(sid, delay_s=reschedule_delay, _expected_timer=timer)
+            _schedule_ws_orphan_reap(
+                sid, delay_s=reschedule_delay, _expected_timer=timer
+            )
             return
         if session is not None and session.get("_client_gone_interrupt_requested"):
             logger.info("client_gone sid=%s action=reap", sid)
         _teardown_popped_session(session, end_reason="ws_orphan_reap")
 
     with _sessions_lock:
-        if _expected_timer is not None and _pending_ws_reaps.get(sid) is not _expected_timer:
+        if (
+            _expected_timer is not None
+            and _pending_ws_reaps.get(sid) is not _expected_timer
+        ):
             return
-        timer = threading.Timer(_WS_ORPHAN_REAP_GRACE_S if delay_s is None else max(0.0, delay_s), _reap)
+        timer = threading.Timer(
+            _WS_ORPHAN_REAP_GRACE_S if delay_s is None else max(0.0, delay_s), _reap
+        )
         timer.daemon = True
         prior = _pending_ws_reaps.pop(sid, None)
         _pending_ws_reaps[sid] = timer
@@ -1083,7 +1384,9 @@ def _schedule_ws_orphan_reap(
     timer.start()
 
 
-def _close_sessions_for_transport(transport, *, end_reason: str = "ws_disconnect") -> tuple[int, int]:
+def _close_sessions_for_transport(
+    transport, *, end_reason: str = "ws_disconnect"
+) -> tuple[int, int]:
     """Single WS-disconnect teardown entry point: reap close_on_disconnect sessions (sidecar/dashboard) immediately;
     re-point the rest at the detached transport (later emits miss the dead socket) for the grace-windowed WS-orphan
     reaper. Returns ``(reaped, detached)`` counts.
@@ -1124,7 +1427,11 @@ def _close_sessions_for_transport(transport, *, end_reason: str = "ws_disconnect
                 viewers = current.get("viewers") or {}
                 # See #83716.
                 viewers.pop(transport, None)
-                live = [vt for vt, ts in sorted(viewers.items(), key=lambda kv: kv[1]) if not _transport_is_dead(vt)]
+                live = [
+                    vt
+                    for vt, ts in sorted(viewers.items(), key=lambda kv: kv[1])
+                    if not _transport_is_dead(vt)
+                ]
                 if live:
                     _rebind_live_transport(sid, current, live[-1])
                 else:
@@ -1137,7 +1444,9 @@ def _close_sessions_for_transport(transport, *, end_reason: str = "ws_disconnect
                     with contextlib.suppress(Exception):
                         _schedule_ws_orphan_reap(sid)
         if claimed_for_teardown is not None:
-            reaped += _teardown_popped_session(claimed_for_teardown, end_reason=end_reason)
+            reaped += _teardown_popped_session(
+                claimed_for_teardown, end_reason=end_reason
+            )
         elif should_schedule_reap:
             detached += 1
     return reaped, detached

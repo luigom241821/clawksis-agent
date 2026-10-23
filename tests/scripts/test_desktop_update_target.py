@@ -41,7 +41,17 @@ if __name__ == '__main__':
 """
 
 
-def _run_handoff(tmp_path, target, *, windows=False, inherited_home=True, modern=False, code=0, userbin_only=False, foreign=False):
+def _run_handoff(
+    tmp_path,
+    target,
+    *,
+    windows=False,
+    inherited_home=True,
+    modern=False,
+    code=0,
+    userbin_only=False,
+    foreign=False,
+):
     install = tmp_path / "checkout with spaces"
     if windows and not modern:
         subprocess.run(
@@ -51,7 +61,9 @@ def _run_handoff(tmp_path, target, *, windows=False, inherited_home=True, modern
             timeout=60,
         )
     package = (
-        install / "venv" / "Lib" / "site-packages" if windows and not modern else install
+        install / "venv" / "Lib" / "site-packages"
+        if windows and not modern
+        else install
     ) / "clawk_cli"
     package.mkdir(parents=True)
     (package / "__init__.py").touch()
@@ -59,7 +71,7 @@ def _run_handoff(tmp_path, target, *, windows=False, inherited_home=True, modern
     if modern:
         launcher = publish_fixture_launcher(install, FAKE_CLI)
         if userbin_only:
-            userbin = tmp_path / '.local/bin'
+            userbin = tmp_path / ".local/bin"
             userbin.mkdir(parents=True)
             launcher.rename(userbin / launcher.name)
     capture = tmp_path / "calls.jsonl"
@@ -252,10 +264,18 @@ def test_windows_rejects_invalid_or_conflicting_target_before_update(tmp_path, t
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("code", [0, 1, 2])
 def test_pm_handoff_uses_published_launcher_and_does_not_retry(tmp_path, code):
-    result, calls, home, install = _run_handoff(tmp_path, ["--channel", "canary"], modern=True, code=code)
+    result, calls, home, install = _run_handoff(
+        tmp_path, ["--channel", "canary"], modern=True, code=code
+    )
     assert result.returncode == code, result.stdout + result.stderr
-    assert calls == [{"argv": ["update", "--yes", "--gateway", "--channel", "canary"],
-                      "home": str(home), "cwd": str(install), "install_root": str(install)}]
+    assert calls == [
+        {
+            "argv": ["update", "--yes", "--gateway", "--channel", "canary"],
+            "home": str(home),
+            "cwd": str(install),
+            "install_root": str(install),
+        }
+    ]
     receipt = json.loads((home / ".clawk-update-result.json").read_text())
     assert receipt["ok"] == (code == 0)
     assert not (install / "venv").exists()
@@ -263,9 +283,13 @@ def test_pm_handoff_uses_published_launcher_and_does_not_retry(tmp_path, code):
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("foreign", [False, True])
-def test_earlier_pm_userbin_publication_requires_exact_source_identity(tmp_path, foreign):
-    result, calls, _home, install = _run_handoff(tmp_path, [], modern=True, userbin_only=True, foreign=foreign)
+def test_earlier_pm_userbin_publication_requires_exact_source_identity(
+    tmp_path, foreign
+):
+    result, calls, _home, install = _run_handoff(
+        tmp_path, [], modern=True, userbin_only=True, foreign=foreign
+    )
     assert result.returncode == (3 if foreign else 0), result.stdout + result.stderr
     assert len(calls) == (0 if foreign else 1)
-    assert not (install / '.clawk/bin/clawk').exists()
-    assert not (install / 'venv').exists()
+    assert not (install / ".clawk/bin/clawk").exists()
+    assert not (install / "venv").exists()

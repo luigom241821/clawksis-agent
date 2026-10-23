@@ -19,14 +19,14 @@ from agent.file_safety import (
 )
 
 BLOCKED_PATHS = [
-    "\\??\\UNC\\attacker.example\\share\\x",        # NT object namespace — the canonical leak form
+    "\\??\\UNC\\attacker.example\\share\\x",  # NT object namespace — the canonical leak form
     "\\??\\C:\\Windows\\System32\\config\\SAM",
-    "/??/UNC/attacker.example/share/x",             # forward-slash spelling
-    "\\\\.\\PhysicalDrive0",                        # Win32 device namespace
+    "/??/UNC/attacker.example/share/x",  # forward-slash spelling
+    "\\\\.\\PhysicalDrive0",  # Win32 device namespace
     "\\\\.\\pipe\\evil",
     "//./pipe/evil",
-    "\\\\?\\UNC\\attacker.example\\share\\x",        # extended-length UNC (remote host)
-    "\\\\?\\unc\\attacker.example\\share\\x",        # case-insensitive
+    "\\\\?\\UNC\\attacker.example\\share\\x",  # extended-length UNC (remote host)
+    "\\\\?\\unc\\attacker.example\\share\\x",  # case-insensitive
     "\\\\?\\GLOBALROOT\\Device\\HarddiskVolume1\\x",  # NT-namespace re-entry
     "//?/UNC/attacker.example/share/x",
 ]
@@ -36,10 +36,10 @@ ALLOWED_PATHS = [
     "C:\\Users\\me\\notes.txt",
     "~/projects/readme.md",
     "relative/path.txt",
-    "\\\\?\\C:\\Users\\me\\notes.txt",   # extended-length LOCAL drive: routine, no remote-auth trigger
-    "\\\\server\\share\\file.txt",       # plain UNC share: separate policy question, not this guard
+    "\\\\?\\C:\\Users\\me\\notes.txt",  # extended-length LOCAL drive: routine, no remote-auth trigger
+    "\\\\server\\share\\file.txt",  # plain UNC share: separate policy question, not this guard
     "//server/share/file.txt",
-    "/tmp/??/weird-dir/file",            # '??' mid-path is data, not a namespace marker
+    "/tmp/??/weird-dir/file",  # '??' mid-path is data, not a namespace marker
 ]
 
 
@@ -62,15 +62,26 @@ class TestNtNamespaceGuard(unittest.TestCase):
         from pathlib import Path
 
         from agent import context_references, copilot_acp_client, tool_executor
-        from tools.file_tools import patch_tool, read_file_tool, search_tool, write_file_tool
+        from tools.file_tools import (
+            patch_tool,
+            read_file_tool,
+            search_tool,
+            write_file_tool,
+        )
 
         bad = "\\??\\UNC\\attacker.example\\share\\x"
-        with patch("agent.file_safety.Path") as fs_path, \
-                patch("tools.file_tools._resolve_path_for_task") as ft_resolve, \
-                patch("tools.file_tools_write_guards._resolve_path_for_task") as wg_resolve, \
-                patch("tools.file_tools_paths._resolve_path_for_task") as ckpt_resolve, \
-                patch.object(Path, "resolve", side_effect=AssertionError("must not resolve")), \
-                patch.object(os.path, "realpath", side_effect=AssertionError("must not realpath")):
+        with (
+            patch("agent.file_safety.Path") as fs_path,
+            patch("tools.file_tools._resolve_path_for_task") as ft_resolve,
+            patch("tools.file_tools_write_guards._resolve_path_for_task") as wg_resolve,
+            patch("tools.file_tools_paths._resolve_path_for_task") as ckpt_resolve,
+            patch.object(
+                Path, "resolve", side_effect=AssertionError("must not resolve")
+            ),
+            patch.object(
+                os.path, "realpath", side_effect=AssertionError("must not realpath")
+            ),
+        ):
             results = [
                 read_file_tool(bad),
                 write_file_tool(bad, "data"),
@@ -78,9 +89,14 @@ class TestNtNamespaceGuard(unittest.TestCase):
                 search_tool("x", path=bad),
             ]
             checkpoint_agent = SimpleNamespace(_checkpoint_mgr=MagicMock(enabled=True))
-            tool_executor._ensure_file_checkpoint(checkpoint_agent, "write_file", {"path": bad}, "default")
+            tool_executor._ensure_file_checkpoint(
+                checkpoint_agent, "write_file", {"path": bad}, "default"
+            )
             checkpoint_agent._checkpoint_mgr.ensure_checkpoint.assert_not_called()
-            for fs_handler in (copilot_acp_client._fs_read_text_file, copilot_acp_client._fs_write_text_file):
+            for fs_handler in (
+                copilot_acp_client._fs_read_text_file,
+                copilot_acp_client._fs_write_text_file,
+            ):
                 with self.assertRaisesRegex(PermissionError, "NT/device namespace"):
                     fs_handler({"path": bad, "content": "x"}, "/tmp")
             with self.assertRaisesRegex(ValueError, "NT/device namespace"):

@@ -11,7 +11,6 @@ import cli as cli_mod
 # ── A3.1 Test-First: verify _clear_terminal_on_exit gating ──────────────────
 
 
-
 def test_print_exit_summary_skips_clear_when_clear_screen_false(monkeypatch):
     """With clear_screen=False, _print_exit_summary() does NOT clear."""
     calls = []
@@ -23,13 +22,15 @@ def test_print_exit_summary_skips_clear_when_clear_screen_false(monkeypatch):
         def _clear_terminal_on_exit(self):
             calls.append("clear")
 
-    monkeypatch.setattr(cli_mod, "datetime", SimpleNamespace(
-        now=lambda: SimpleNamespace(
-            __sub__=lambda self, other: SimpleNamespace(
-                total_seconds=lambda: 0
+    monkeypatch.setattr(
+        cli_mod,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: SimpleNamespace(
+                __sub__=lambda self, other: SimpleNamespace(total_seconds=lambda: 0)
             )
-        )
-    ))
+        ),
+    )
 
     fake = FakeCLI()
     cli_mod.ClawksisCLI._print_exit_summary(fake, clear_screen=False)
@@ -61,9 +62,13 @@ def test_print_exit_summary_still_clears_in_interactive_path(monkeypatch):
         def _clear_terminal_on_exit(self):
             calls.append("clear")
 
-    monkeypatch.setattr(cli_mod, "datetime", SimpleNamespace(
-        now=lambda: real_datetime(2026, 1, 1, 12, 1, 0)  # 1 min elapsed
-    ))
+    monkeypatch.setattr(
+        cli_mod,
+        "datetime",
+        SimpleNamespace(
+            now=lambda: real_datetime(2026, 1, 1, 12, 1, 0)  # 1 min elapsed
+        ),
+    )
 
     fake = FakeCLI()
     cli_mod.ClawksisCLI._print_exit_summary(fake)  # default clear_screen=True
@@ -74,6 +79,7 @@ def test_print_exit_summary_still_clears_in_interactive_path(monkeypatch):
 
 
 # ── #116904: the escape-sequence fallback must not go through os.system() ───
+
 
 def _fallback_cli():
     """A stdout that is a tty but whose write() raises, forcing the clear fallback."""
@@ -101,8 +107,11 @@ def test_clear_fallback_spawns_no_shell(monkeypatch):
     import clawk_cli.cli_session_mixin as mixin_mod
 
     calls = []
-    monkeypatch.setattr(mixin_mod.shutil, "which",
-                        lambda exe: f"/usr/bin/{exe}" if exe == "clear" else None)
+    monkeypatch.setattr(
+        mixin_mod.shutil,
+        "which",
+        lambda exe: f"/usr/bin/{exe}" if exe == "clear" else None,
+    )
     monkeypatch.setattr(sp, "run", lambda argv, **kwargs: calls.append((argv, kwargs)))
 
     _, stdout = _fallback_cli()
@@ -110,7 +119,9 @@ def test_clear_fallback_spawns_no_shell(monkeypatch):
 
     mixin_mod.CLISessionMixin._clear_terminal_on_exit(SimpleNamespace())
 
-    assert calls == [(["/usr/bin/clear"], {"stdin": sp.DEVNULL, "creationflags": 0, "check": False})]
+    assert calls == [
+        (["/usr/bin/clear"], {"stdin": sp.DEVNULL, "creationflags": 0, "check": False})
+    ]
 
 
 @pytest.mark.platforms("windows")
@@ -131,7 +142,12 @@ def test_clear_fallback_windows_runs_cls_with_hidden_console(monkeypatch):
     mixin_mod.CLISessionMixin._clear_terminal_on_exit(SimpleNamespace())
 
     assert windows_hide_flags() == sp.CREATE_NO_WINDOW
-    assert calls == [(["cmd", "/c", "cls"], {"stdin": sp.DEVNULL, "creationflags": sp.CREATE_NO_WINDOW, "check": False})]
+    assert calls == [
+        (
+            ["cmd", "/c", "cls"],
+            {"stdin": sp.DEVNULL, "creationflags": sp.CREATE_NO_WINDOW, "check": False},
+        )
+    ]
 
 
 @pytest.mark.platforms("posix")  # POSIX `clear` lookup
@@ -143,6 +159,7 @@ def test_clear_fallback_skips_spawn_when_no_clear(monkeypatch):
     calls = []
     monkeypatch.setattr(mixin_mod.shutil, "which", lambda _exe: None)
     import subprocess as sp
+
     monkeypatch.setattr(sp, "run", lambda *a, **k: calls.append(a))
 
     _, stdout = _fallback_cli()

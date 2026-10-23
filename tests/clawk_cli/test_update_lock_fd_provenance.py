@@ -1,4 +1,5 @@
 """A same-process status reader cannot donate a descriptor to checkout custody."""
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,9 @@ from clawk_cli import update_lock
 
 @pytest.mark.platforms("posix")
 @pytest.mark.parametrize("descriptor_owner", ["incidental-open", "status-reader"])
-def test_checkout_custody_never_borrows_a_local_readers_descriptor(tmp_path, descriptor_owner):
+def test_checkout_custody_never_borrows_a_local_readers_descriptor(
+    tmp_path, descriptor_owner
+):
     root = tmp_path / "checkout"
     root.mkdir()
     lock_path = update_lock.checkout_lock_path(root)
@@ -31,6 +34,7 @@ def test_checkout_custody_never_borrows_a_local_readers_descriptor(tmp_path, des
                 opened.set()
                 assert resume.wait(20), "acquisition never released the status reader"
             return pause
+
         sys.settrace(pause)
         try:
             update_lock.checkout_lock_held(root)
@@ -63,9 +67,19 @@ def test_checkout_custody_never_borrows_a_local_readers_descriptor(tmp_path, des
             os.close(reader_fd)
             reader_fd = None
         result = subprocess.run(
-            [sys.executable, "-I", str(contender), str(Path(update_lock.__file__).parents[1]),
-             str(tmp_path / "other-home-marker"), str(root)],
-            capture_output=True, text=True, encoding="utf-8", timeout=20, check=True,
+            [
+                sys.executable,
+                "-I",
+                str(contender),
+                str(Path(update_lock.__file__).parents[1]),
+                str(tmp_path / "other-home-marker"),
+                str(root),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=20,
+            check=True,
         )
         assert json.loads(result.stdout)["acquired"] is False, (
             "a contender entered while the first owner was alive: its custody descriptor "
@@ -78,7 +92,9 @@ def test_checkout_custody_never_borrows_a_local_readers_descriptor(tmp_path, des
         if reader_fd is not None:
             os.close(reader_fd)
         lock.release()
-    assert not update_lock.checkout_lock_held(root), "release must leave no orphaned custody"
+    assert not update_lock.checkout_lock_held(root), (
+        "release must leave no orphaned custody"
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -91,20 +107,35 @@ def test_exec_child_reenters_the_lock_it_explicitly_inherited(tmp_path):
         "from clawk_cli.update_lock import UpdateLock\n"
         "lock=UpdateLock(path=Path(sys.argv[2])/'child-marker',install_root=Path(sys.argv[2]))\n"
         "assert lock.acquire(), lock.holder\nlock.release()\n"
-        "print('JOINED',flush=True)\nsys.stdin.readline()\n", encoding="utf-8")
+        "print('JOINED',flush=True)\nsys.stdin.readline()\n",
+        encoding="utf-8",
+    )
     owner = update_lock.UpdateLock(path=tmp_path / "parent-marker", install_root=root)
-    contender = update_lock.UpdateLock(path=tmp_path / "contender-marker", install_root=root)
+    contender = update_lock.UpdateLock(
+        path=tmp_path / "contender-marker", install_root=root
+    )
     assert owner.acquire()
     child = subprocess.Popen(
-        [sys.executable, "-I", str(child_script), str(Path(update_lock.__file__).parents[1]), str(root)],
-        pass_fds=update_lock.checkout_lock_fds(root), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        text=True, encoding="utf-8",
+        [
+            sys.executable,
+            "-I",
+            str(child_script),
+            str(Path(update_lock.__file__).parents[1]),
+            str(root),
+        ],
+        pass_fds=update_lock.checkout_lock_fds(root),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
     )
     try:
         assert child.stdout.readline().strip() == "JOINED"
         owner.release()
         assert child.poll() is None
-        assert not contender.acquire(), "the inherited OFD must outlive the original owner"
+        assert not contender.acquire(), (
+            "the inherited OFD must outlive the original owner"
+        )
         child.communicate("exit\n", timeout=20)
         assert child.returncode == 0
         assert contender.acquire(), "the last descendant's exit must release the lock"
@@ -117,15 +148,23 @@ def test_exec_child_reenters_the_lock_it_explicitly_inherited(tmp_path):
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root opens a mode-000 file")
-def test_an_unopenable_checkout_lock_reads_held_and_only_a_missing_one_reads_free(tmp_path):
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root opens a mode-000 file"
+)
+def test_an_unopenable_checkout_lock_reads_held_and_only_a_missing_one_reads_free(
+    tmp_path,
+):
     root = tmp_path / "checkout"
     root.mkdir()
     lock_path = update_lock.checkout_lock_path(root)
-    assert update_lock.checkout_lock_held(root) is False, "no lock file: nothing can hold it"
+    assert update_lock.checkout_lock_held(root) is False, (
+        "no lock file: nothing can hold it"
+    )
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.touch()
-    assert update_lock.checkout_lock_held(root) is False, "an openable, unlocked file is free"
+    assert update_lock.checkout_lock_held(root) is False, (
+        "an openable, unlocked file is free"
+    )
     lock_path.chmod(0)
     try:
         assert update_lock.checkout_lock_held(root) is True, (

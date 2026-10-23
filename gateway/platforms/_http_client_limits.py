@@ -41,7 +41,9 @@ def platform_httpx_limits() -> httpx.Limits | None:
     # max_connections stays at the httpx default (100) — plenty of headroom.
     return httpx.Limits(
         max_keepalive_connections=_positive_env(
-            "CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", _DEFAULT_MAX_KEEPALIVE, int),
+            "CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", _DEFAULT_MAX_KEEPALIVE, int
+        ),
         keepalive_expiry=_positive_env(
-            "CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", _DEFAULT_KEEPALIVE_EXPIRY_S, float),
+            "CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", _DEFAULT_KEEPALIVE_EXPIRY_S, float
+        ),
     )

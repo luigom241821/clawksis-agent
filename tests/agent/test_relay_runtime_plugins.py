@@ -63,7 +63,9 @@ class _FakeRelay:
     ) -> Any:
         self.events.append(("plugin.initialize", config))
         self.initialized_from.append(
-            str(additional_plugins_toml) if additional_plugins_toml is not None else None
+            str(additional_plugins_toml)
+            if additional_plugins_toml is not None
+            else None
         )
         if self.initialize_error is not None:
             raise self.initialize_error
@@ -566,7 +568,9 @@ def test_present_plugins_section_is_validated_even_when_falsey(
         host.shutdown()
 
 
-def test_active_log_names_every_loaded_configuration_file(explicit_static_config, caplog):
+def test_active_log_names_every_loaded_configuration_file(
+    explicit_static_config, caplog
+):
     report = {
         **ACTIVE_ACTIVATION_REPORT,
         "config_paths": [str(explicit_static_config), "/etc/nemo-relay/plugins.toml"],
@@ -576,7 +580,11 @@ def test_active_log_names_every_loaded_configuration_file(explicit_static_config
     with caplog.at_level("INFO"):
         host = relay_runtime.RelayRuntime(relay=relay, profile_key="profile")
     try:
-        [line] = [r.getMessage() for r in caplog.records if "active process-wide" in r.getMessage()]
+        [line] = [
+            r.getMessage()
+            for r in caplog.records
+            if "active process-wide" in r.getMessage()
+        ]
         assert all(path in line for path in report["config_paths"])
     finally:
         host.shutdown()

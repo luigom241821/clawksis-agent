@@ -36,7 +36,10 @@ ZH_DOCS = WEBSITE / "i18n" / "zh-Hans" / "docusaurus-plugin-content-docs" / "cur
 
 # Written by generate-skill-docs.py; edit the generator, never these outputs.
 GENERATED_PREFIXES = ("user-guide/skills/bundled/", "user-guide/skills/optional/")
-GENERATED_FILES = {"reference/skills-catalog.md", "reference/optional-skills-catalog.md"}
+GENERATED_FILES = {
+    "reference/skills-catalog.md",
+    "reference/optional-skills-catalog.md",
+}
 
 # Site routes that are not documents: React pages and static assets.
 NON_DOC_ROUTE_PREFIXES = ("/skills", "/plugins", "/img/", "/llms", "/api/")
@@ -96,7 +99,9 @@ def normalize_route(target: str) -> tuple[str, str]:
     return target, suffix
 
 
-def relative_link(source: Path, source_root: Path, target: Path, target_root: Path) -> str:
+def relative_link(
+    source: Path, source_root: Path, target: Path, target_root: Path
+) -> str:
     """Path from `source` to `target`, expressed inside the source's own tree.
 
     zh-Hans pages fall back to the EN file when no translation exists; the
@@ -158,7 +163,9 @@ def process_tree(
             findings.append(where)
             if fix:
                 root = docs_root if hit.is_relative_to(docs_root) else EN_DOCS
-                replacements[m.group(0)] = "](" + relative_link(path, docs_root, hit, root) + suffix + ")"
+                replacements[m.group(0)] = (
+                    "](" + relative_link(path, docs_root, hit, root) + suffix + ")"
+                )
         if fix and replacements and not unresolved:
             new_text = text
             for old, new in replacements.items():
@@ -169,14 +176,22 @@ def process_tree(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--fix", action="store_true", help="rewrite route-style links to relative file links")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="rewrite route-style links to relative file links",
+    )
     parser.add_argument(
         "--include-generated",
         action="store_true",
         help="also process generator outputs (only for a one-off migration; the generator owns them)",
     )
-    parser.add_argument("--en-only", action="store_true", help="skip the zh-Hans mirror")
+    parser.add_argument(
+        "--en-only", action="store_true", help="skip the zh-Hans mirror"
+    )
     args = parser.parse_args(argv)
 
     en_routes = route_map(EN_DOCS)
@@ -191,7 +206,10 @@ def main(argv: list[str] | None = None) -> int:
         rewritten += r
 
     if all_unresolved:
-        print("Route-style links that match no doc file (fix the target first):", file=sys.stderr)
+        print(
+            "Route-style links that match no doc file (fix the target first):",
+            file=sys.stderr,
+        )
         for line in all_unresolved:
             print(f"  {line}", file=sys.stderr)
         return 1

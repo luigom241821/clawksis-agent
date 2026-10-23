@@ -523,10 +523,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", lambda *a, **k: (True, "", ""))
 
         res = _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "css_selector": ".missing",
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "css_selector": ".missing",
+                }
+            )
         )
         assert res["ok"] is False
         assert "No content" in res["error"]
@@ -648,10 +650,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", tracking_run)
 
         res = _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "proxy": "http://user:pass@proxy:8080",
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "proxy": "http://user:pass@proxy:8080",
+                }
+            )
         )
         assert res["ok"] is False
         assert "proxy" in res["error"].lower()
@@ -710,10 +714,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         res = _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "proxy": "http://user:pass@proxy:8080",
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "proxy": "http://user:pass@proxy:8080",
+                }
+            )
         )
         assert res["ok"] is True
         assert captured["proxy"] == "http://user:pass@proxy:8080"
@@ -810,10 +816,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "format": "html",
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "format": "html",
+                }
+            )
         )
         assert captured["ext"] == ".html"
 
@@ -874,10 +882,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 120,
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": 120,
+                }
+            )
         )
         assert captured["timeout"] == 120
 
@@ -893,10 +903,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 3,  # below minimum → clamped to 10
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": 3,  # below minimum → clamped to 10
+                }
+            )
         )
         # clamp_timeout clamps to [10, 300], so 3 becomes 10
         assert captured["timeout"] == 10
@@ -913,10 +925,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 999,  # above maximum → clamped to 300
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": 999,  # above maximum → clamped to 300
+                }
+            )
         )
         assert captured["timeout"] == 300  # clamped to max
 
@@ -932,10 +946,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": "sixty",  # not an int
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": "sixty",  # not an int
+                }
+            )
         )
         assert captured["timeout"] == 45  # default for 'get'
 
@@ -951,10 +967,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 10,
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": 10,
+                }
+            )
         )
         assert captured["timeout"] == 10
 
@@ -970,10 +988,12 @@ class TestHandleScrape:
         monkeypatch.setattr(st, "_run_one", capturing_run)
 
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "timeout": 300,
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "timeout": 300,
+                }
+            )
         )
         assert captured["timeout"] == 300
 
@@ -990,11 +1010,13 @@ class TestHandleScrape:
 
         # force mode=fetch to skip the 'get' default-time path entirely
         _run_tool(
-            st._handle_scrape({
-                "url": "https://example.com",
-                "mode": "fetch",
-                "timeout": 150,
-            })
+            st._handle_scrape(
+                {
+                    "url": "https://example.com",
+                    "mode": "fetch",
+                    "timeout": 150,
+                }
+            )
         )
         assert len(captured) == 1
         assert captured[0] == ("fetch", 150)

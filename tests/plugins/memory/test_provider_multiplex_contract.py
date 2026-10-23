@@ -6,6 +6,7 @@ store from the ``clawk_home`` ``initialize`` receives, keeps that binding on the
 never rebinds a module/class-level one per call. These tests drive the real providers through real
 managers with two profiles interleaving on threads, with only the network/CLI backend faked.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,7 +26,9 @@ def homes(tmp_path, monkeypatch):
     alpha, beta = root / "profiles" / "alpha", root / "profiles" / "beta"
     for home in (alpha, beta):
         home.mkdir(parents=True)
-    monkeypatch.setenv("CLAWK_HOME", str(root))  # the launch profile: neither alpha nor beta
+    monkeypatch.setenv(
+        "CLAWK_HOME", str(root)
+    )  # the launch profile: neither alpha nor beta
     return alpha, beta
 
 
@@ -42,16 +45,23 @@ class _Scope:
 
 # -- ByteRover ---------------------------------------------------------------------------------------
 
+
 def test_byterover_binds_the_home_initialize_receives(homes):
     from plugins.memory.byterover import ByteRoverMemoryProvider
+
     alpha, _ = homes
     provider = ByteRoverMemoryProvider({})
-    provider.initialize("s", clawk_home=str(alpha))  # no context override: the ambient home is the root
+    provider.initialize(
+        "s", clawk_home=str(alpha)
+    )  # no context override: the ambient home is the root
     assert Path(provider._cwd) == alpha / "byterover"
 
 
-def test_byterover_two_profiles_interleaving_stay_in_their_own_trees(homes, monkeypatch):
+def test_byterover_two_profiles_interleaving_stay_in_their_own_trees(
+    homes, monkeypatch
+):
     from plugins.memory import byterover
+
     calls: list = []
     lock = threading.Lock()
 
@@ -67,16 +77,25 @@ def test_byterover_two_profiles_interleaving_stay_in_their_own_trees(homes, monk
         manager = MemoryManager()
         with _Scope(home):
             manager.add_provider(byterover.ByteRoverMemoryProvider({}))
-            manager.initialize_all(session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home))
+            manager.initialize_all(
+                session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home)
+            )
         managers[home] = manager
     _run_interleaved(managers, "brv_curate", {"content": None})
-    wait_until(lambda: len(calls) >= 2 * 3 * 5, what="every brv call from both profiles")
+    wait_until(
+        lambda: len(calls) >= 2 * 3 * 5, what="every brv call from both profiles"
+    )
     for home in homes:
-        mine = [c for c in calls if c[1].endswith(f"{home.name}-content") or f"{home.name}-" in c[1]]
+        mine = [
+            c
+            for c in calls
+            if c[1].endswith(f"{home.name}-content") or f"{home.name}-" in c[1]
+        ]
         assert mine and all(Path(cwd) == home / "byterover" for _, _, cwd in mine), mine
 
 
 # -- RetainDB ----------------------------------------------------------------------------------------
+
 
 class _FakeClient:
     calls: list = []
@@ -101,9 +120,14 @@ class _FakeClient:
 @pytest.fixture
 def fake_retaindb(monkeypatch):
     from plugins.memory import retaindb
+
     _FakeClient.calls = []
     monkeypatch.setattr(retaindb, "_Client", _FakeClient)
-    monkeypatch.setattr(retaindb, "get_secret", lambda name, default=None: "rdb-key" if name == "RETAINDB_API_KEY" else default)
+    monkeypatch.setattr(
+        retaindb,
+        "get_secret",
+        lambda name, default=None: "rdb-key" if name == "RETAINDB_API_KEY" else default,
+    )
     monkeypatch.setattr(retaindb, "_load_retaindb_config", dict)
     return retaindb
 
@@ -111,7 +135,9 @@ def fake_retaindb(monkeypatch):
 def test_retaindb_binds_the_home_initialize_receives(homes, fake_retaindb):
     alpha, _ = homes
     provider = fake_retaindb.RetainDBMemoryProvider()
-    provider.initialize("s", clawk_home=str(alpha))  # no context override: the ambient home is the root
+    provider.initialize(
+        "s", clawk_home=str(alpha)
+    )  # no context override: the ambient home is the root
     try:
         assert provider._queue._db_path == alpha / "retaindb_queue.db"
         assert provider._client.project == "clawk-alpha"
@@ -119,17 +145,24 @@ def test_retaindb_binds_the_home_initialize_receives(homes, fake_retaindb):
         provider.shutdown()
 
 
-def test_retaindb_two_profiles_interleaving_stay_in_their_own_projects(homes, fake_retaindb):
+def test_retaindb_two_profiles_interleaving_stay_in_their_own_projects(
+    homes, fake_retaindb
+):
     managers = {}
     for home in homes:
         manager = MemoryManager()
         with _Scope(home):
             manager.add_provider(fake_retaindb.RetainDBMemoryProvider())
-            manager.initialize_all(session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home))
+            manager.initialize_all(
+                session_id=f"s-{home.name}", platform="api_server", clawk_home=str(home)
+            )
         managers[home] = manager
     try:
         _run_interleaved(managers, "retaindb_remember", {"content": None})
-        wait_until(lambda: len(_FakeClient.calls) >= 2 * 3 * 5, what="every RetainDB write from both profiles")
+        wait_until(
+            lambda: len(_FakeClient.calls) >= 2 * 3 * 5,
+            what="every RetainDB write from both profiles",
+        )
     finally:
         for manager in managers.values():
             manager.shutdown_all()
@@ -142,6 +175,7 @@ def test_retaindb_two_profiles_interleaving_stay_in_their_own_projects(homes, fa
 
 # -- shared driver -----------------------------------------------------------------------------------
 
+
 def _run_interleaved(managers, tool, args_template, rounds=5):
     """Each profile's turn, on its own thread and scope: a tool call, a turn sync and a built-in
     memory-write mirror per round, all carrying that profile's name in their content."""
@@ -152,10 +186,17 @@ def _run_interleaved(managers, tool, args_template, rounds=5):
             with _Scope(home):
                 barrier.wait(timeout=5)
                 for i in range(rounds):
-                    args = {k: (v if v is not None else f"{home.name}-tool-{i}") for k, v in args_template.items()}
+                    args = {
+                        k: (v if v is not None else f"{home.name}-tool-{i}")
+                        for k, v in args_template.items()
+                    }
                     result = json.loads(manager.handle_tool_call(tool, args))
                     assert "error" not in result, result
-                    manager.sync_all(f"{home.name}-turn-{i} what did we decide", "the plan", session_id="s")
+                    manager.sync_all(
+                        f"{home.name}-turn-{i} what did we decide",
+                        "the plan",
+                        session_id="s",
+                    )
                     manager.on_memory_write("add", "memory", f"{home.name}-write-{i}")
                 assert manager.flush_pending(timeout=10)
         except Exception as exc:  # surfaced below

@@ -25,49 +25,53 @@ _VENDOR_PREFIXES: dict[str, str] = {
     "trinity": "arcee-ai",
     "nemotron": "nvidia",
     "llama": "meta-llama",
-    "step": "stepfun"}
+    "step": "stepfun",
+}
 
 # Providers whose APIs consume vendor/model slugs.
-_AGGREGATOR_PROVIDERS: frozenset[str] = frozenset({
-    "openrouter", "nous", "ai-gateway", "kilocode"})
+_AGGREGATOR_PROVIDERS: frozenset[str] = frozenset(
+    {"openrouter", "nous", "ai-gateway", "kilocode"}
+)
 
 # Providers that want bare names with dots replaced by hyphens.
-_DOT_TO_HYPHEN_PROVIDERS: frozenset[str] = frozenset({
-    "anthropic"})
+_DOT_TO_HYPHEN_PROVIDERS: frozenset[str] = frozenset({"anthropic"})
 
 # Providers that want bare names with dots preserved.
-_STRIP_VENDOR_ONLY_PROVIDERS: frozenset[str] = frozenset({
-    "copilot", "copilot-acp", "openai-codex"})
+_STRIP_VENDOR_ONLY_PROVIDERS: frozenset[str] = frozenset(
+    {"copilot", "copilot-acp", "openai-codex"}
+)
 
 # Providers whose native naming is authoritative -- pass through unchanged.
-_AUTHORITATIVE_NATIVE_PROVIDERS: frozenset[str] = frozenset({
-    "huggingface"})
+_AUTHORITATIVE_NATIVE_PROVIDERS: frozenset[str] = frozenset({"huggingface"})
 
 # Direct providers that accept bare native names but should repair a matching
 # provider/ prefix when users copy the aggregator form into config.yaml.
-_MATCHING_PREFIX_STRIP_PROVIDERS: frozenset[str] = frozenset({
-    "zai",
-    "kimi-coding",
-    # Providers whose endpoint does not accept image input, even though the provider's broader ecosystem has
-    # vision models available elsewhere. When `auxiliary.vision.provider: auto` sees one of these as the
-    # main provider, it must skip straight to the aggregator chain instead of returning a client that will
-    # 404 on every vision request. kimi-coding / kimi-coding-cn: the Kimi Coding Plan routes through
-    # api.kimi.com/coding (Anthropic Messages wire) which Kimi's own docs describe as having no image_in
-    # capability. Vision lives on the separate Kimi Platform (api.moonshot.ai, OpenAI-wire, pay-as-you-go).
-    # See #17076.
-    "kimi-coding-cn",
-    "minimax",
-    "minimax-oauth",
-    "minimax-cn",
-    "alibaba",
-    "qwen-oauth",
-    "xiaomi",
-    "arcee",
-    "ollama-cloud",
-    "nebius-token-factory",
-    "custom",
-    "gemini",
-    "xai"})
+_MATCHING_PREFIX_STRIP_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "zai",
+        "kimi-coding",
+        # Providers whose endpoint does not accept image input, even though the provider's broader ecosystem has
+        # vision models available elsewhere. When `auxiliary.vision.provider: auto` sees one of these as the
+        # main provider, it must skip straight to the aggregator chain instead of returning a client that will
+        # 404 on every vision request. kimi-coding / kimi-coding-cn: the Kimi Coding Plan routes through
+        # api.kimi.com/coding (Anthropic Messages wire) which Kimi's own docs describe as having no image_in
+        # capability. Vision lives on the separate Kimi Platform (api.moonshot.ai, OpenAI-wire, pay-as-you-go).
+        # See #17076.
+        "kimi-coding-cn",
+        "minimax",
+        "minimax-oauth",
+        "minimax-cn",
+        "alibaba",
+        "qwen-oauth",
+        "xiaomi",
+        "arcee",
+        "ollama-cloud",
+        "nebius-token-factory",
+        "custom",
+        "gemini",
+        "xai",
+    }
+)
 
 # Providers whose API serves ``vendor/model`` ids but whose endpoint can also
 # front arbitrary self-hosted models, so a bare name cannot be prefixed
@@ -78,13 +82,11 @@ _MATCHING_PREFIX_STRIP_PROVIDERS: frozenset[str] = frozenset({
 # provider id also points at local NIM containers with their own naming.
 # Without this repair a bare ``nemotron-3-ultra-550b-a55b`` reaches the API
 # and returns a bare ``404 page not found`` that never names the model (#78796).
-_CATALOGUE_PREFIX_REPAIR_PROVIDERS: frozenset[str] = frozenset({
-    "nvidia"})
+_CATALOGUE_PREFIX_REPAIR_PROVIDERS: frozenset[str] = frozenset({"nvidia"})
 
 # Providers whose APIs require lowercase model IDs (Xiaomi rejects ``MiMo-V2.5-Pro`` copied from
 # marketing docs; only ``mimo-v2.5-pro`` works). Applied after matching-prefix stripping.
-_LOWERCASE_MODEL_PROVIDERS: frozenset[str] = frozenset({
-    "xiaomi"})
+_LOWERCASE_MODEL_PROVIDERS: frozenset[str] = frozenset({"xiaomi"})
 
 # DeepSeek retired ``deepseek-chat`` / ``deepseek-reasoner`` on 2026-07-24 (HTTP 400 since); saved
 # configs still carry them, so they fold onto the current Flash id (thinking mode is controlled by
@@ -92,7 +94,9 @@ _LOWERCASE_MODEL_PROVIDERS: frozenset[str] = frozenset({
 # a shape-based allow-list swallowed the vendor's own ``deepseek-flash`` the day it shipped (#107206),
 # and any new id without a ``v<N>`` marker would have met the same fate.
 _DEEPSEEK_RETIRED_ALIASES: dict[str, str] = {
-    "deepseek-chat": "deepseek-flash", "deepseek-reasoner": "deepseek-flash"}
+    "deepseek-chat": "deepseek-flash",
+    "deepseek-reasoner": "deepseek-flash",
+}
 
 
 def _normalize_for_deepseek(model_name: str) -> str:
@@ -131,17 +135,23 @@ def _strip_matching_provider_prefix(model_name: str, target_provider: str) -> st
     counts, so an Ollama-style ``qwen3:8b`` tag is never split on a later colon. ``custom`` is a bucket,
     not a vendor: an alias resolving to it (``ollama``) may be a real LiteLLM-style routing prefix, so
     only a literal ``custom/`` / ``custom:`` prefix is redundant there."""
-    cut = min((i for i in (model_name.find("/"), model_name.find(":")) if i >= 0), default=-1)
+    cut = min(
+        (i for i in (model_name.find("/"), model_name.find(":")) if i >= 0), default=-1
+    )
     if cut < 0:
         return model_name
-    prefix, remainder = model_name[:cut], model_name[cut + 1:]
+    prefix, remainder = model_name[:cut], model_name[cut + 1 :]
     if not prefix.strip() or not remainder.strip():
         return model_name
     normalized_target = _normalize_provider_alias(target_provider)
     if normalized_target == "custom":
         return remainder.strip() if prefix.strip().lower() == "custom" else model_name
     normalized_prefix = _normalize_provider_alias(prefix)
-    return remainder.strip() if normalized_prefix and normalized_prefix == normalized_target else model_name
+    return (
+        remainder.strip()
+        if normalized_prefix and normalized_prefix == normalized_target
+        else model_name
+    )
 
 
 def detect_vendor(model_name: str) -> Optional[str]:
@@ -156,7 +166,14 @@ def detect_vendor(model_name: str) -> Optional[str]:
     first_token = name_lower.split("-")[0]
     if first_token in _VENDOR_PREFIXES:
         return _VENDOR_PREFIXES[first_token]
-    return next((vendor for prefix, vendor in _VENDOR_PREFIXES.items() if name_lower.startswith(prefix)), None)
+    return next(
+        (
+            vendor
+            for prefix, vendor in _VENDOR_PREFIXES.items()
+            if name_lower.startswith(prefix)
+        ),
+        None,
+    )
 
 
 def _prepend_vendor(model_name: str) -> str:
@@ -181,7 +198,11 @@ def _repair_prefix_from_catalogue(model_name: str, provider: str) -> str:
     # the ``:free`` entry, not its paid sibling.
     needle = model_name.strip().lower()
     catalogue = _PROVIDER_MODELS.get(provider) or []
-    matches = {e for e in catalogue if "/" in e and e.split("/", 1)[1].strip().lower() == needle}
+    matches = {
+        e
+        for e in catalogue
+        if "/" in e and e.split("/", 1)[1].strip().lower() == needle
+    }
     return matches.pop() if len(matches) == 1 else model_name
 
 
@@ -242,7 +263,9 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
     if provider in _STRIP_VENDOR_ONLY_PROVIDERS:
         stripped = _strip_matching_provider_prefix(name, provider)
         if stripped == name and name.startswith(("openai/", "openai:")):
-            return name[len("openai/"):]  # openai-codex maps openai/gpt-5.4 and openai:gpt-5.4 -> gpt-5.4
+            return name[
+                len("openai/") :
+            ]  # openai-codex maps openai/gpt-5.4 and openai:gpt-5.4 -> gpt-5.4
         return stripped
 
     if provider == "deepseek":

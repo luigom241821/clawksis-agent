@@ -5,6 +5,7 @@
 ``.env``, so that fallback either shipped another profile's credentials or hid the spawn-site bug the
 exception exists to surface. Contract: scope wins over environ; no scope while multiplexing raises.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -25,7 +26,9 @@ def multiplex(monkeypatch):
 
 
 @pytest.mark.parametrize("name", sorted(_READERS))
-def test_scoped_read_prefers_profile_scope_over_default_environ(name, monkeypatch, multiplex):
+def test_scoped_read_prefers_profile_scope_over_default_environ(
+    name, monkeypatch, multiplex
+):
     reader, var = _READERS[name]
     monkeypatch.setenv(var, "default-profile-value")
     token = secret_scope.set_secret_scope({var: " profile-b-value "})

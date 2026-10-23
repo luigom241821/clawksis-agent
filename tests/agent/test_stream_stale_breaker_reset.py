@@ -155,10 +155,6 @@ def test_fallback_exhaustion_keeps_stale_streak():
     assert agent._consecutive_stale_streams == 7
 
 
-
-
-
-
 class TestNonStreamingSibling:
     """interruptible_api_call carries the same breaker (#58962)."""
 

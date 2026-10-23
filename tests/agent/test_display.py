@@ -45,15 +45,13 @@ class TestBuildToolPreview:
         """Empty dict has no keys to preview."""
         assert build_tool_preview("terminal", {}) is None
 
-
-
-
-
-
-
-
     def test_memory_patch_preview_shows_the_span_being_edited(self):
-        args = {"action": "patch", "target": "memory", "old_text": "port 8080", "content": "port 9090"}
+        args = {
+            "action": "patch",
+            "target": "memory",
+            "old_text": "port 8080",
+            "content": "port 9090",
+        }
         assert build_tool_preview("memory", args) == '~memory: "port 8080"'
         assert '~memory: "port 8080"' in get_cute_tool_message("memory", args, 0.1)
 
@@ -79,20 +77,6 @@ class TestBuildToolPreview:
         assert safe_args["ref"] == "@e3"
         assert safe_args["text"].startswith("ghp_AB")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def test_delegate_task_batch_preview_respects_max_len(self):
         result = build_tool_preview(
             "delegate_task",
@@ -112,8 +96,12 @@ class TestBuildToolPreview:
         """max_len is a hard cap on every preview path — dedicated builder (terminal), generic
         fallback key (web_search), and the cute head-truncated path (#9439)."""
         from agent.display import _cute_path, set_tool_preview_max_len
+
         long = "abcdefghijklmnopqrstuvwxyz"
-        for tool, args in (("terminal", {"command": long}), ("web_search", {"query": long})):
+        for tool, args in (
+            ("terminal", {"command": long}),
+            ("web_search", {"query": long}),
+        ):
             preview = build_tool_preview(tool, args, max_len=max_len)
             assert preview and len(preview) <= max_len, (tool, preview)
         set_tool_preview_max_len(max_len)
@@ -162,20 +150,16 @@ class TestPrepareToolPreview:
 
 
 class TestCuteToolMessagePreviewLength:
-
-
     def test_search_files_preview_uses_positive_configured_limit_not_default(self):
         set_tool_preview_max_len(80)
-        pattern = "function.formatToolCall.context.preview.compactPreview.maxLength.truncate"
+        pattern = (
+            "function.formatToolCall.context.preview.compactPreview.maxLength.truncate"
+        )
 
         line = get_cute_tool_message("search_files", {"pattern": pattern}, 0.1)
 
         assert pattern in line
         assert "..." not in line
-
-
-
-
 
     def test_browser_type_cute_message_redacts_api_key(self):
         secret = "sk-proj-ABCD1234567890EFGH"
@@ -202,9 +186,6 @@ class TestCuteToolMessagePreviewLength:
 
 
 class TestEditDiffPreview:
-
-
-
     def test_extract_edit_diff_uses_local_snapshot_for_write_file(self, tmp_path):
         target = tmp_path / "note.txt"
         target.write_text("old\n", encoding="utf-8")
@@ -226,12 +207,13 @@ class TestEditDiffPreview:
         assert "-old" in diff
         assert "+new" in diff
 
-
-
     def test_render_edit_diff_with_delta_handles_renderer_errors(self, monkeypatch):
         printer = MagicMock()
 
-        monkeypatch.setattr("agent.display._summarize_rendered_diff_sections", MagicMock(side_effect=RuntimeError("boom")))
+        monkeypatch.setattr(
+            "agent.display._summarize_rendered_diff_sections",
+            MagicMock(side_effect=RuntimeError("boom")),
+        )
 
         rendered = render_edit_diff_with_delta(
             "patch",
@@ -242,11 +224,9 @@ class TestEditDiffPreview:
         assert rendered is False
         assert printer.call_count == 0
 
-
     def test_summarize_rendered_diff_sections_limits_file_count(self):
         diff = "".join(
-            f"--- a/file{i}.py\n+++ b/file{i}.py\n+line{i}\n"
-            for i in range(8)
+            f"--- a/file{i}.py\n+++ b/file{i}.py\n+line{i}\n" for i in range(8)
         )
 
         rendered = _summarize_rendered_diff_sections(diff, max_files=3, max_lines=50)
@@ -264,17 +244,10 @@ class TestBuildToolLabel:
     @pytest.fixture(autouse=True)
     def _enable_friendly(self):
         from agent.display import set_friendly_tool_labels
+
         set_friendly_tool_labels(True)
         yield
         set_friendly_tool_labels(True)
-
-
-
-
-
-
-
-
 
     def test_disabled_falls_back_to_preview(self):
         from agent.display import (
@@ -282,6 +255,7 @@ class TestBuildToolLabel:
             build_tool_preview,
             set_friendly_tool_labels,
         )
+
         set_friendly_tool_labels(False)
         args = {"query": "weather in NYC"}
         label = build_tool_label("web_search", args)
@@ -290,26 +264,19 @@ class TestBuildToolLabel:
         assert "Searching the web" not in (label or "")
 
 
-
 class TestBuildStatusPhrase:
     """build_status_phrase — live working-state text for Slack's status line."""
 
-
-
-
-
-
     def test_caps_length_for_slack_status_line(self):
         from agent.display import build_status_phrase
-        phrase = build_status_phrase(
-            "terminal", {"command": "x" * 300}, max_len=49
-        )
+
+        phrase = build_status_phrase("terminal", {"command": "x" * 300}, max_len=49)
         assert phrase is not None and len(phrase) <= 49
         assert phrase.endswith("…")
 
-
     def test_respects_friendly_labels_toggle(self):
         from agent.display import build_status_phrase, set_friendly_tool_labels
+
         set_friendly_tool_labels(False)
         try:
             assert build_status_phrase("terminal", {"command": "ls"}) is None

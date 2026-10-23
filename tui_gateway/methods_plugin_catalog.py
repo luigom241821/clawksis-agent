@@ -21,11 +21,17 @@ _profile_scoped = _registry.profile_scoped
 @method("plugins.catalog.lookup")
 @_profile_scoped
 def _(rid, params: dict) -> dict:
-    from clawk_cli.plugin_catalog import load_catalog_live, match_removed, resolved_removed_entries
+    from clawk_cli.plugin_catalog import (
+        load_catalog_live,
+        match_removed,
+        resolved_removed_entries,
+    )
     from clawk_cli.plugins_cmd_catalog import looks_like_catalog_name
 
     name = str(params.get("name") or "").strip()
-    if not looks_like_catalog_name(name):  # the same rule `clawk plugins install <name>` applies
+    if not looks_like_catalog_name(
+        name
+    ):  # the same rule `clawk plugins install <name>` applies
         return _ok(rid, {"status": "invalid_name"})
     # The loaders never raise: a dead host falls back to the cache, then to the in-tree catalog.
     # Nothing readable at all is "unavailable", never a guess.
@@ -35,10 +41,25 @@ def _(rid, params: dict) -> dict:
     entry = next((e for e in entries if e.name == name), None)
     # A removed name or repo is never offered: install would refuse it anyway.
     removed = resolved_removed_entries() if entry else []
-    if entry is None or match_removed(entry.name, removed) or match_removed(entry.repo, removed):
+    if (
+        entry is None
+        or match_removed(entry.name, removed)
+        or match_removed(entry.repo, removed)
+    ):
         return _ok(rid, {"status": "unknown"})
-    return _ok(rid, {"status": "found", "entry": {"name": entry.name, "repo": entry.repo, "sha": entry.sha,
-                                                  "subdir": entry.subdir, "tier": entry.tier}})
+    return _ok(
+        rid,
+        {
+            "status": "found",
+            "entry": {
+                "name": entry.name,
+                "repo": entry.repo,
+                "sha": entry.sha,
+                "subdir": entry.subdir,
+                "tier": entry.tier,
+            },
+        },
+    )
 
 
 def register(server) -> None:

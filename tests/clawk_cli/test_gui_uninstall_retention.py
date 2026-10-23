@@ -19,7 +19,10 @@ def installation(request, tmp_path, monkeypatch):
     protected = {
         root / "clawk_cli" / "__init__.py": b"# agent source\n",
         root / "venv" / "runtime": b"agent runtime",
-        root / "node_modules" / "shared-package" / "index.js": b"shared workspace dependency",
+        root
+        / "node_modules"
+        / "shared-package"
+        / "index.js": b"shared workspace dependency",
         home / "config.yaml": b"model: fixture-model\n",
         home / ".env": b"FIXTURE_TOKEN=fake\n",
         home / "sessions" / "saved.json": b'{"saved": true}',
@@ -30,7 +33,11 @@ def installation(request, tmp_path, monkeypatch):
     gui_files = {
         root / "apps" / "desktop" / "dist" / "index.html": b"renderer",
         root / "apps" / "desktop" / "release" / "artifact": b"release",
-        root / "apps" / "desktop" / "node_modules" / "private-module": b"desktop dependency",
+        root
+        / "apps"
+        / "desktop"
+        / "node_modules"
+        / "private-module": b"desktop dependency",
         home / "desktop-build-stamp.json": b'{"fixture": true}',
         bundle / "app": b"desktop app",
         userdata / "connections.json": b'{"fixture": true}',
@@ -52,7 +59,9 @@ def _run(monkeypatch, *args):
     return main.main()
 
 
-def test_gui_dry_run_never_confirms_or_removes_installed_state(installation, monkeypatch, capsys):
+def test_gui_dry_run_never_confirms_or_removes_installed_state(
+    installation, monkeypatch, capsys
+):
     protected, gui_files, record = installation
 
     def unexpected_input(*args):
@@ -75,7 +84,9 @@ def test_gui_dry_run_never_confirms_or_removes_installed_state(installation, mon
         assert path.read_bytes() == data
 
 
-def test_gui_removal_keeps_agent_data_and_shared_workspace_dependencies(installation, monkeypatch):
+def test_gui_removal_keeps_agent_data_and_shared_workspace_dependencies(
+    installation, monkeypatch
+):
     protected, gui_files, _ = installation
     _run(monkeypatch, "--yes")
     for path, data in protected.items():

@@ -68,31 +68,31 @@ def _run(outcome="completed", run_id=1, error=None):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_running_with_open_parents_fires_only_while_running():
     """A running card whose parent is not terminal is flagged; the same graph
     on a ready/todo card (the gate is holding it) and a done parent are not."""
-    graph = {"parents": [{"id": "t_parent", "title": "p", "status": "todo"}], "children": []}
-    diags = kd.compute_task_diagnostics(_task(status="running", started_at=100), [], [], graph=graph)
+    graph = {
+        "parents": [{"id": "t_parent", "title": "p", "status": "todo"}],
+        "children": [],
+    }
+    diags = kd.compute_task_diagnostics(
+        _task(status="running", started_at=100), [], [], graph=graph
+    )
     assert [d.kind for d in diags] == ["running_with_open_parents"]
     assert diags[0].data["open_parents"] == [{"id": "t_parent", "status": "todo"}]
-    assert "clawk kanban unlink t_parent t_demo00" in diags[0].actions[0].payload["command"]
+    assert (
+        "clawk kanban unlink t_parent t_demo00"
+        in diags[0].actions[0].payload["command"]
+    )
     assert kd.compute_task_diagnostics(_task(status="todo"), [], [], graph=graph) == []
-    done_graph = {"parents": [{"id": "t_parent", "title": "p", "status": "done"}], "children": []}
-    assert kd.compute_task_diagnostics(_task(status="running"), [], [], graph=done_graph) == []
+    done_graph = {
+        "parents": [{"id": "t_parent", "title": "p", "status": "done"}],
+        "children": [],
+    }
+    assert (
+        kd.compute_task_diagnostics(_task(status="running"), [], [], graph=done_graph)
+        == []
+    )
 
 
 def test_stuck_in_blocked_fires_past_threshold():
@@ -102,7 +102,10 @@ def test_stuck_in_blocked_fires_past_threshold():
         _event("blocked", ts=now - 3600 * 48, reason="needs approval"),
     ]
     diags = kd.compute_task_diagnostics(
-        task, events, [], now=now,
+        task,
+        events,
+        [],
+        now=now,
     )
     assert len(diags) == 1
     d = diags[0]
@@ -111,17 +114,9 @@ def test_stuck_in_blocked_fires_past_threshold():
     assert d.data["age_hours"] >= 48
 
 
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Severity sorting
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -141,21 +136,28 @@ def test_engine_works_on_sqlite_row_objects(kanban_home):
         real = kb.create_task(conn, title="r", assignee="x", created_by="w")
         with pytest.raises(kb.HallucinatedCardsError):
             kb.complete_task(
-                conn, parent,
-                summary="with phantom", created_cards=[real, "t_deadbeef1"],
+                conn,
+                parent,
+                summary="with phantom",
+                created_cards=[real, "t_deadbeef1"],
             )
         # Pull Row objects the way the API helper does.
         row = conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (parent,),
+            "SELECT * FROM tasks WHERE id = ?",
+            (parent,),
         ).fetchone()
-        events = list(conn.execute(
-            "SELECT * FROM task_events WHERE task_id = ? ORDER BY id",
-            (parent,),
-        ).fetchall())
-        runs = list(conn.execute(
-            "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id",
-            (parent,),
-        ).fetchall())
+        events = list(
+            conn.execute(
+                "SELECT * FROM task_events WHERE task_id = ? ORDER BY id",
+                (parent,),
+            ).fetchall()
+        )
+        runs = list(
+            conn.execute(
+                "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id",
+                (parent,),
+            ).fetchall()
+        )
         diags = kd.compute_task_diagnostics(row, events, runs)
         assert len(diags) == 1
         assert diags[0].kind == "hallucinated_cards"
@@ -167,8 +169,6 @@ def test_engine_works_on_sqlite_row_objects(kanban_home):
 # ---------------------------------------------------------------------------
 # Error-tolerance: a broken rule shouldn't 500 the whole compute call
 # ---------------------------------------------------------------------------
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -195,8 +195,6 @@ def test_stranded_in_ready_fires_when_age_exceeds_threshold():
     assert stranded[0].data["assignee"] == "demo"
 
 
-
-
 # ---------------------------------------------------------------------------
 # triage_aux_unavailable rule — auto-decompose aware
 # ---------------------------------------------------------------------------
@@ -204,12 +202,6 @@ def test_stranded_in_ready_fires_when_age_exceeds_threshold():
 
 def _triage_task():
     return _task(id="t_triage1", status="triage")
-
-
-
-
-
-
 
 
 def test_severity_at_or_above_uses_threshold_semantics():

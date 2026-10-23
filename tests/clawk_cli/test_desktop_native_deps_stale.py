@@ -3,6 +3,7 @@
 Regression for #62462: ``clawk desktop`` reported "content stamp matches" and
 launched a package that crashed on ``require('node-pty')``.
 """
+
 import sys
 
 import pytest
@@ -20,7 +21,9 @@ def packaged(tmp_path, monkeypatch):
     (dist / "index.html").write_text("<html></html>", encoding="utf-8")
     (tmp_path / ".gitignore").write_text("apps/desktop/release/\n", encoding="utf-8")
     # Executable lookup and the per-OS resources layout are covered natively elsewhere.
-    monkeypatch.setattr(main_desktop, "_desktop_packaged_executable", lambda _: dist / "Clawksis")
+    monkeypatch.setattr(
+        main_desktop, "_desktop_packaged_executable", lambda _: dist / "Clawksis"
+    )
     monkeypatch.setattr(main_desktop, "_renderer_bundle_dir", lambda *_a, **_k: dist)
     # The compiler owns receipts now. Hold that independent check current so
     # this test isolates the packaged native-binary boundary.
@@ -32,7 +35,9 @@ def _needed(root, desktop):
     return main_desktop._desktop_build_needed(desktop, root, source_mode=False)
 
 
-@pytest.mark.parametrize("stale", ["prebuilds/{platform}-x64/", "prebuilds/{other}-x64/pty.node"])
+@pytest.mark.parametrize(
+    "stale", ["prebuilds/{platform}-x64/", "prebuilds/{other}-x64/pty.node"]
+)
 def test_current_stamp_does_not_hide_missing_native_binary(packaged, stale):
     root, desktop, pty = packaged
     other = "linux" if sys.platform == "win32" else "win32"
@@ -45,7 +50,9 @@ def test_current_stamp_does_not_hide_missing_native_binary(packaged, stale):
     assert _needed(root, desktop)
 
 
-@pytest.mark.parametrize("location", ["build/Release/pty.node", "prebuilds/{platform}-arm64/pty.node"])
+@pytest.mark.parametrize(
+    "location", ["build/Release/pty.node", "prebuilds/{platform}-arm64/pty.node"]
+)
 def test_package_with_native_binary_stays_current(packaged, location):
     root, desktop, pty = packaged
     binary = pty / location.format(platform=sys.platform)

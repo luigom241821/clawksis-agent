@@ -5,6 +5,7 @@ with an EMPTY context, so a provider's prefetch/sync/writer thread would silentl
 profile's home (and fail closed on scoped secrets). Each case drives the provider's real spawn path
 with a fake backend and asserts the thread saw the parent's home.
 """
+
 from __future__ import annotations
 
 import threading
@@ -12,12 +13,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 
 def _probe_home(seen: dict, key: str = "home"):
     def _record(*_args, **_kwargs):
         seen[key] = get_clawk_home()
+
     return _record
 
 
@@ -26,7 +32,9 @@ def _retaindb(seen, tmp_path):
 
     p = retaindb.RetainDBMemoryProvider()
     p._client = MagicMock()
-    p._context_overlay = lambda query: {"context": seen.setdefault("home", get_clawk_home()) and "ctx"}
+    p._context_overlay = lambda query: {
+        "context": seen.setdefault("home", get_clawk_home()) and "ctx"
+    }
     p._client.ask_user.return_value = {"answer": ""}
     p._client.get_agent_model.return_value = {}
     p.queue_prefetch("what do you know")
@@ -42,12 +50,15 @@ def _byterover(seen, tmp_path):
 
 
 _PROVIDERS = {
-    "retaindb": _retaindb, "byterover": _byterover,
+    "retaindb": _retaindb,
+    "byterover": _byterover,
 }
 
 
 @pytest.mark.parametrize("name", sorted(_PROVIDERS))
-def test_provider_background_thread_sees_spawner_profile_home(name, tmp_path, monkeypatch):
+def test_provider_background_thread_sees_spawner_profile_home(
+    name, tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "default"))
     profile_home = tmp_path / "profiles" / "b"
     profile_home.mkdir(parents=True)
@@ -60,4 +71,6 @@ def test_provider_background_thread_sees_spawner_profile_home(name, tmp_path, mo
     for t in threads:
         if t is not None:
             t.join(timeout=10)
-    assert seen.get("home") == profile_home, f"{name}: background thread resolved {seen.get('home')}"
+    assert seen.get("home") == profile_home, (
+        f"{name}: background thread resolved {seen.get('home')}"
+    )

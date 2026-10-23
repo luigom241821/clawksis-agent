@@ -27,7 +27,11 @@ def _native_marker_indexes(messages):
             "cache_control" in message
             or any(
                 isinstance(part, dict) and "cache_control" in part
-                for part in (message.get("content") if isinstance(message.get("content"), list) else [])
+                for part in (
+                    message.get("content")
+                    if isinstance(message.get("content"), list)
+                    else []
+                )
             )
         )
     }
@@ -37,10 +41,22 @@ def _tool_heavy_native_history():
     return [
         {"role": "system", "content": "stable prefix\nvolatile suffix"},
         {"role": "user", "content": "first request"},
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "first", "function": {"name": "tool_00", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "first", "function": {"name": "tool_00", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "first", "content": "first result"},
         {"role": "user", "content": "second request"},
-        {"role": "assistant", "content": "", "tool_calls": [{"id": "second", "function": {"name": "tool_01", "arguments": "{}"}}]},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {"id": "second", "function": {"name": "tool_01", "arguments": "{}"}}
+            ],
+        },
         {"role": "tool", "tool_call_id": "second", "content": "second result"},
     ]
 
@@ -70,9 +86,16 @@ def test_t20880_tool_heavy_native_loop_reproduction():
         direct_native_tool_cache=True,
     )
     after_exchange = build_prompt_cache_plan(
-        _tool_heavy_native_history() + [
+        _tool_heavy_native_history()
+        + [
             {"role": "user", "content": "third request"},
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "third", "function": {"name": "tool_02", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {"id": "third", "function": {"name": "tool_02", "arguments": "{}"}}
+                ],
+            },
             {"role": "tool", "tool_call_id": "third", "content": "third result"},
         ],
         tools,
@@ -121,11 +144,14 @@ class TestPromptCachePlan:
         messages = _tool_heavy_native_history() + [
             {"role": "user", "content": "third request"},
             {
-                "role": "assistant", "content": "",
-                "tool_calls": [{
-                    "id": "third",
-                    "function": {"name": "tool_02", "arguments": "{}"},
-                }],
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "third",
+                        "function": {"name": "tool_02", "arguments": "{}"},
+                    }
+                ],
             },
             {"role": "tool", "tool_call_id": "third", "content": "third result"},
         ]
@@ -153,19 +179,25 @@ class TestPromptCachePlan:
         part_form = copy.deepcopy(plain)
         part_form[0]["content"] = [
             {"type": "text", "text": "stable prefix"},
-            {"type": "text", "text": plain[0]["content"][len("stable prefix"):]},
+            {"type": "text", "text": plain[0]["content"][len("stable prefix") :]},
         ]
         part_form[1]["content"] = [{"type": "text", "text": plain[1]["content"]}]
         original = copy.deepcopy(part_form)
         for native in (False, True):
             for direct in (False, True):
                 actual = build_prompt_cache_plan(
-                    part_form, _tool_heavy_native_tools(), native_anthropic=native,
-                    direct_native_tool_cache=direct, static_system_prefix="stable prefix",
+                    part_form,
+                    _tool_heavy_native_tools(),
+                    native_anthropic=native,
+                    direct_native_tool_cache=direct,
+                    static_system_prefix="stable prefix",
                 )
                 expected = build_prompt_cache_plan(
-                    plain, _tool_heavy_native_tools(), native_anthropic=native,
-                    direct_native_tool_cache=direct, static_system_prefix="stable prefix",
+                    plain,
+                    _tool_heavy_native_tools(),
+                    native_anthropic=native,
+                    direct_native_tool_cache=direct,
+                    static_system_prefix="stable prefix",
                 )
                 assert actual == expected
                 assert part_form == original
@@ -173,7 +205,16 @@ class TestPromptCachePlan:
     def test_unmarkable_endpoint_does_not_consume_a_slot(self):
         messages = [
             {"role": "system", "content": "stable prefix\nvolatile"},
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "pending", "function": {"name": "tool_00", "arguments": "{}"}}]},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "pending",
+                        "function": {"name": "tool_00", "arguments": "{}"},
+                    }
+                ],
+            },
         ]
         plan = build_prompt_cache_plan(
             messages,
@@ -255,7 +296,6 @@ class TestApplyCacheMarker:
         _apply_cache_marker(msg, MARKER, native_anthropic=False)
         assert "cache_control" not in msg
 
-
     def test_string_content_wrapped_in_list(self):
         msg = {"role": "user", "content": "Hello"}
         _apply_cache_marker(msg, MARKER)
@@ -267,43 +307,74 @@ class TestApplyCacheMarker:
 
 
 class TestCanCarryMarker:
-
-
     def test_openrouter_empty_or_none_does_not_carry_marker(self):
-        assert _can_carry_marker({"role": "assistant", "content": ""}, native_anthropic=False) is False
-        assert _can_carry_marker({"role": "assistant", "content": None}, native_anthropic=False) is False
-        assert _can_carry_marker({"role": "tool", "content": "result"}, native_anthropic=False) is True
-        assert _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=False) is False
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": ""}, native_anthropic=False
+            )
+            is False
+        )
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": None}, native_anthropic=False
+            )
+            is False
+        )
+        assert (
+            _can_carry_marker(
+                {"role": "tool", "content": "result"}, native_anthropic=False
+            )
+            is True
+        )
+        assert (
+            _can_carry_marker({"role": "tool", "content": ""}, native_anthropic=False)
+            is False
+        )
 
     def test_native_anthropic_empty_assistant_still_carries_marker(self):
         """Native envelope can attach a top-level marker even to an empty
         assistant turn; only the OpenRouter-style layout must skip it.
         """
-        assert _can_carry_marker({"role": "assistant", "content": None}, native_anthropic=True) is True
+        assert (
+            _can_carry_marker(
+                {"role": "assistant", "content": None}, native_anthropic=True
+            )
+            is True
+        )
 
     def test_openrouter_list_carrier_requires_last_part_dict(self):
         """Carrier predicate must agree with _apply_cache_marker, which only marks
         the LAST content part. A list whose last element isn't a dict cannot carry
         a marker and must not consume a breakpoint."""
         # Last part is a dict -> carrier.
-        assert _can_carry_marker(
-            {"role": "user", "content": [{"type": "text", "text": "a"}]},
-            native_anthropic=False,
-        ) is True
+        assert (
+            _can_carry_marker(
+                {"role": "user", "content": [{"type": "text", "text": "a"}]},
+                native_anthropic=False,
+            )
+            is True
+        )
         # Last part is a non-dict (stray raw string) -> NOT a carrier, even though
         # an earlier part is a dict. Previously this passed the gate but got no
         # marker, wasting a breakpoint.
-        assert _can_carry_marker(
-            {"role": "user", "content": [{"type": "text", "text": "a"}, "trailing raw"]},
-            native_anthropic=False,
-        ) is False
+        assert (
+            _can_carry_marker(
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "a"}, "trailing raw"],
+                },
+                native_anthropic=False,
+            )
+            is False
+        )
         # Empty list -> not a carrier.
-        assert _can_carry_marker({"role": "user", "content": []}, native_anthropic=False) is False
+        assert (
+            _can_carry_marker({"role": "user", "content": []}, native_anthropic=False)
+            is False
+        )
 
 
 class TestApplyAnthropicCacheControl:
-
-
     def test_caller_list_not_mutated_and_unmarked_msgs_shared(self):
         """Guard the shallow-copy change (was full deepcopy).
 
@@ -362,12 +433,18 @@ class TestApplyAnthropicCacheControl:
             marker = _build_marker(cache_ttl)
             used = 0
             if messages[0].get("role") == "system":
-                _apply_cache_marker(messages[0], marker, native_anthropic=native_anthropic)
+                _apply_cache_marker(
+                    messages[0], marker, native_anthropic=native_anthropic
+                )
                 used += 1
             remaining = 4 - used
-            non_sys = [i for i in range(len(messages)) if messages[i].get("role") != "system"]
+            non_sys = [
+                i for i in range(len(messages)) if messages[i].get("role") != "system"
+            ]
             for idx in non_sys[-remaining:]:
-                _apply_cache_marker(messages[idx], marker, native_anthropic=native_anthropic)
+                _apply_cache_marker(
+                    messages[idx], marker, native_anthropic=native_anthropic
+                )
             return messages
 
         base = [
@@ -387,7 +464,6 @@ class TestApplyAnthropicCacheControl:
                     copy.deepcopy(base), cache_ttl=ttl, native_anthropic=native
                 )
                 assert got == want, f"structural mismatch native={native} ttl={ttl}"
-
 
     def test_static_system_prefix_gets_its_own_marker(self):
         messages = [
@@ -418,7 +494,6 @@ class TestApplyAnthropicCacheControl:
         assert result[1]["content"] == "old request"
         assert result[2]["content"][0]["cache_control"] == {"type": "ephemeral"}
         assert result[3]["content"][0]["cache_control"] == {"type": "ephemeral"}
-
 
     def test_1h_ttl(self):
         msgs = [{"role": "system", "content": "System prompt"}]
@@ -498,14 +573,20 @@ class TestStripAnthropicCacheControl:
                     if isinstance(part, dict):
                         assert "cache_control" not in part
 
-
     def test_preserves_multimodal_part_structure(self):
         messages = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "see", "cache_control": {"type": "ephemeral"}},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
+                    {
+                        "type": "text",
+                        "text": "see",
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,xx"},
+                    },
                 ],
             }
         ]
@@ -530,15 +611,26 @@ class TestEffectiveCacheTtl:
 
     def test_5m_passthrough_everywhere(self):
         assert effective_cache_ttl("5m") == "5m"
-        assert effective_cache_ttl("5m", provider="opencode", model="qwen3.6-plus") == "5m"
+        assert (
+            effective_cache_ttl("5m", provider="opencode", model="qwen3.6-plus") == "5m"
+        )
 
     def test_1h_preserved_on_non_qwen_routes(self):
-        assert effective_cache_ttl("1h", provider="anthropic", model="claude-opus-4.8") == "1h"
-        assert effective_cache_ttl("1h", provider="openrouter", model="claude-3-5-sonnet") == "1h"
+        assert (
+            effective_cache_ttl("1h", provider="anthropic", model="claude-opus-4.8")
+            == "1h"
+        )
+        assert (
+            effective_cache_ttl("1h", provider="openrouter", model="claude-3-5-sonnet")
+            == "1h"
+        )
         assert effective_cache_ttl("1h", provider="", model="") == "1h"
 
     def test_1h_clamped_for_qwen_model_on_any_route(self):
-        assert effective_cache_ttl("1h", provider="openrouter", model="qwen3.6-plus") == "5m"
+        assert (
+            effective_cache_ttl("1h", provider="openrouter", model="qwen3.6-plus")
+            == "5m"
+        )
         assert effective_cache_ttl("1h", provider="anthropic", model="Qwen-Max") == "5m"
 
     def test_1h_clamped_for_alibaba_family_providers(self):
@@ -546,8 +638,13 @@ class TestEffectiveCacheTtl:
         # test_1h_preserved_on_measured_opencode_go_route. The rest stay
         # clamped because they are unmeasured, not because they are known bad.
         for provider in ("opencode", "opencode-zen", "alibaba"):
-            assert effective_cache_ttl("1h", provider=provider, model="qwen-max") == "5m", provider
-            assert effective_cache_ttl("1h", provider=provider.upper(), model="claude-x") == "5m", provider
+            assert (
+                effective_cache_ttl("1h", provider=provider, model="qwen-max") == "5m"
+            ), provider
+            assert (
+                effective_cache_ttl("1h", provider=provider.upper(), model="claude-x")
+                == "5m"
+            ), provider
 
     def test_1h_preserved_on_measured_opencode_go_route(self):
         """opencode-go was MEASURED to honour the 1h tier (#84733 follow-up).
@@ -565,24 +662,45 @@ class TestEffectiveCacheTtl:
         regardless of the ttl requested; that label is not evidence of the
         retention window.
         """
-        assert effective_cache_ttl("1h", provider="opencode-go", model="qwen3.8-max") == "1h"
-        assert effective_cache_ttl("1h", provider="opencode-go", model="glm-5.2") == "1h"
+        assert (
+            effective_cache_ttl("1h", provider="opencode-go", model="qwen3.8-max")
+            == "1h"
+        )
+        assert (
+            effective_cache_ttl("1h", provider="opencode-go", model="glm-5.2") == "1h"
+        )
 
     def test_1h_clamped_for_measured_no_1h_model_even_on_allowed_route(self):
-        assert effective_cache_ttl("1h", provider="opencode-go", model="minimax-m2.5") == "5m"
+        assert (
+            effective_cache_ttl("1h", provider="opencode-go", model="minimax-m2.5")
+            == "5m"
+        )
         # aggregator-prefixed spelling resolves to the same bare id
-        assert effective_cache_ttl("1h", provider="opencode-go", model="vendor/MiniMax-M2.5") == "5m"
+        assert (
+            effective_cache_ttl(
+                "1h", provider="opencode-go", model="vendor/MiniMax-M2.5"
+            )
+            == "5m"
+        )
 
     def test_unmeasured_opencode_routes_stay_clamped(self):
         # Not "known bad" -- simply not measured. Do not widen without a run.
-        assert effective_cache_ttl("1h", provider="opencode", model="qwen3.6-plus") == "5m"
-        assert effective_cache_ttl("1h", provider="opencode-zen", model="qwen3.6-plus") == "5m"
-
+        assert (
+            effective_cache_ttl("1h", provider="opencode", model="qwen3.6-plus") == "5m"
+        )
+        assert (
+            effective_cache_ttl("1h", provider="opencode-zen", model="qwen3.6-plus")
+            == "5m"
+        )
 
     def test_marker_built_from_clamped_ttl_has_no_1h_key(self):
-        marker = _build_marker(effective_cache_ttl("1h", provider="opencode", model="qwen3.6-plus"))
+        marker = _build_marker(
+            effective_cache_ttl("1h", provider="opencode", model="qwen3.6-plus")
+        )
         assert marker == {"type": "ephemeral"}
-        marker = _build_marker(effective_cache_ttl("1h", provider="anthropic", model="claude-x"))
+        marker = _build_marker(
+            effective_cache_ttl("1h", provider="anthropic", model="claude-x")
+        )
         assert marker == {"type": "ephemeral", "ttl": "1h"}
 
 
@@ -615,9 +733,15 @@ class TestApplyIdempotency:
         """
         messages = self._fixture_messages()
 
-        round1 = apply_anthropic_cache_control(messages, static_system_prefix="STATIC_PREFIX")
-        round2 = apply_anthropic_cache_control(round1, static_system_prefix="STATIC_PREFIX")
-        round3 = apply_anthropic_cache_control(round2, static_system_prefix="STATIC_PREFIX")
+        round1 = apply_anthropic_cache_control(
+            messages, static_system_prefix="STATIC_PREFIX"
+        )
+        round2 = apply_anthropic_cache_control(
+            round1, static_system_prefix="STATIC_PREFIX"
+        )
+        round3 = apply_anthropic_cache_control(
+            round2, static_system_prefix="STATIC_PREFIX"
+        )
 
         assert round1 == round2 == round3
         assert _count_cache_markers(round1, []) == 4
@@ -646,7 +770,11 @@ class TestApplyIdempotency:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"u{i}", "cache_control": {"type": "ephemeral"}},
+                    {
+                        "type": "text",
+                        "text": f"u{i}",
+                        "cache_control": {"type": "ephemeral"},
+                    },
                     {"type": "text", "text": "tail"},
                 ],
             }
@@ -691,7 +819,6 @@ class TestOpenCodeGoOneHourPrecedence:
 
     # -- the deployed case ---------------------------------------------------
 
-
     def test_deployed_qwen37_plus_marker_carries_ttl_1h(self):
         """M2/M6: the emitted marker must actually say ``ttl: "1h"``.
 
@@ -730,9 +857,10 @@ class TestOpenCodeGoOneHourPrecedence:
         )
         assert should_cache is True, "opencode-go/qwen lost prompt-cache eligibility"
         assert native_layout is False, "opencode-go takes the envelope layout"
-        assert effective_cache_ttl(
-            "1h", provider="opencode-go", model=self.DEPLOYED_MODEL
-        ) == "1h"
+        assert (
+            effective_cache_ttl("1h", provider="opencode-go", model=self.DEPLOYED_MODEL)
+            == "1h"
+        )
 
     # -- precedence ----------------------------------------------------------
 
@@ -745,9 +873,12 @@ class TestOpenCodeGoOneHourPrecedence:
         the second assertion red.
         """
         for model in ("qwen3.7-plus", "qwen3.8-max", "Qwen-Max"):
-            assert effective_cache_ttl("1h", provider="openrouter", model=model) == "5m", model
-            assert effective_cache_ttl("1h", provider="opencode-go", model=model) == "1h", model
-
+            assert (
+                effective_cache_ttl("1h", provider="openrouter", model=model) == "5m"
+            ), model
+            assert (
+                effective_cache_ttl("1h", provider="opencode-go", model=model) == "1h"
+            ), model
 
     def test_no_1h_denial_does_not_leak_off_the_measured_route(self):
         """The denial is scoped to the route it was measured on.
@@ -762,22 +893,33 @@ class TestOpenCodeGoOneHourPrecedence:
         make.
         """
         for provider in ("minimax", "minimax-cn", "anthropic", "openrouter"):
-            assert effective_cache_ttl("1h", provider=provider, model="MiniMax-M2.5") == "1h", provider
-
+            assert (
+                effective_cache_ttl("1h", provider=provider, model="MiniMax-M2.5")
+                == "1h"
+            ), provider
 
     # -- negative controls ---------------------------------------------------
 
-
     def test_allowance_is_provider_wide_not_pinned_to_one_model(self):
         """M5: repairing only the deployed model would leave siblings clamped."""
-        for model in ("qwen3.7-plus", "qwen3.8-max", "qwen3.6-plus", "qwen-max", "glm-5.2"):
-            assert effective_cache_ttl("1h", provider="opencode-go", model=model) == "1h", model
+        for model in (
+            "qwen3.7-plus",
+            "qwen3.8-max",
+            "qwen3.6-plus",
+            "qwen-max",
+            "glm-5.2",
+        ):
+            assert (
+                effective_cache_ttl("1h", provider="opencode-go", model=model) == "1h"
+            ), model
 
     def test_provider_spelling_variants_hit_the_allowance(self):
         """M7: alias/normalization must not route around the allow-list."""
         for spelling in ("opencode-go", "OpenCode-Go", "OPENCODE-GO"):
-            assert effective_cache_ttl("1h", provider=spelling, model=self.DEPLOYED_MODEL) == "1h", spelling
-
+            assert (
+                effective_cache_ttl("1h", provider=spelling, model=self.DEPLOYED_MODEL)
+                == "1h"
+            ), spelling
 
     # -- call-site coverage --------------------------------------------------
 

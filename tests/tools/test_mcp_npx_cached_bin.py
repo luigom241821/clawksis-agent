@@ -35,7 +35,9 @@ def _cache(tmp_path, *, package, deps=None, bin_field, make_bin=True, entry="abc
     bindir = root / "node_modules" / ".bin"
     bindir.mkdir(parents=True, exist_ok=True)
     name = bin_field if isinstance(bin_field, str) else next(iter(bin_field))
-    target = bindir / (os.path.basename(package) if isinstance(bin_field, str) else name)
+    target = bindir / (
+        os.path.basename(package) if isinstance(bin_field, str) else name
+    )
     if os.name == "nt":
         target = target.with_suffix(".cmd")
     if make_bin:
@@ -51,7 +53,9 @@ def _isolate_cache(tmp_path, monkeypatch):
 
 
 def test_cached_package_resolves_to_its_binary(tmp_path):
-    target = _cache(tmp_path, package="mcp-linear", bin_field={"mcp-linear": "dist/index.js"})
+    target = _cache(
+        tmp_path, package="mcp-linear", bin_field={"mcp-linear": "dist/index.js"}
+    )
 
     got = _npx_cached_bin(["-y", "mcp-linear"])
 
@@ -126,7 +130,9 @@ def test_unusable_args_are_ignored(args):
 
 
 @pytest.mark.parametrize("rejected", [False, True])
-def test_preflight_checks_original_package_before_cache_access(tmp_path, monkeypatch, rejected):
+def test_preflight_checks_original_package_before_cache_access(
+    tmp_path, monkeypatch, rejected
+):
     import asyncio
     from tools import mcp_tool
 
@@ -140,11 +146,17 @@ def test_preflight_checks_original_package_before_cache_access(tmp_path, monkeyp
 
     monkeypatch.setattr("tools.osv_check.check_package_for_malware", check)
     if rejected:
-        monkeypatch.setattr(mcp_tool, "_npx_cached_bin", lambda *a: pytest.fail("cache read before refusal"))
+        monkeypatch.setattr(
+            mcp_tool,
+            "_npx_cached_bin",
+            lambda *a: pytest.fail("cache read before refusal"),
+        )
         with pytest.raises(ValueError, match="malicious package"):
             asyncio.run(mcp_tool._preflight_stdio_command("server", "npx", args))
     else:
-        assert asyncio.run(mcp_tool._preflight_stdio_command("server", "npx", args)) == (str(target), ["--port", "7"])
+        assert asyncio.run(
+            mcp_tool._preflight_stdio_command("server", "npx", args)
+        ) == (str(target), ["--port", "7"])
     assert seen == [("npx", ["-y", "mcp-linear", "--port", "7"])]
 
 
@@ -161,12 +173,17 @@ def test_windows_selects_launchers_never_the_sh_script():
     from tools.mcp_tool_config import _npx_bin_candidates
 
     win = _npx_bin_candidates("/c/bin", "mcp-linear", windows=True)
-    assert win == [os.path.join("/c/bin", "mcp-linear.cmd"), os.path.join("/c/bin", "mcp-linear.exe")]
-    assert not any(c.endswith("mcp-linear") for c in win), "sh script must not be a candidate"
+    assert win == [
+        os.path.join("/c/bin", "mcp-linear.cmd"),
+        os.path.join("/c/bin", "mcp-linear.exe"),
+    ]
+    assert not any(c.endswith("mcp-linear") for c in win), (
+        "sh script must not be a candidate"
+    )
 
-    assert _npx_bin_candidates("/bin", "mcp-linear", windows=False) == [os.path.join("/bin", "mcp-linear")]
-
-
+    assert _npx_bin_candidates("/bin", "mcp-linear", windows=False) == [
+        os.path.join("/bin", "mcp-linear")
+    ]
 
 
 def test_flag_after_the_spec_is_left_to_npx(tmp_path):

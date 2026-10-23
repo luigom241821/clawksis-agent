@@ -32,6 +32,11 @@ def resolve_placeholder_terminal_cwd(
     messaging = (messaging_cwd or "").strip()
     if backend == "local":
         return messaging or home_fallback
-    if backend == "docker" and docker_mount_cwd_to_workspace and messaging and messaging not in CWD_PLACEHOLDERS:
+    if (
+        backend == "docker"
+        and docker_mount_cwd_to_workspace
+        and messaging
+        and messaging not in CWD_PLACEHOLDERS
+    ):
         return messaging
     return None

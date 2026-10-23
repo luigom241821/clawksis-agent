@@ -22,39 +22,95 @@ _IS_WINDOWS = platform.system() == "Windows"
 # The broad "CLAWK_" prefix is deliberately NOT safe — it leaked config vars
 # without a secret substring (CLAWK_BASE_URL, CLAWK_KANBAN_DB, *_WEBHOOK).
 # CLAWK_RPC_SOCKET / CLAWK_RPC_DIR / TZ / HOME are injected after scrubbing.
-_SAFE_ENV_PREFIXES = ("PATH", "HOME", "USER", "LANG", "LC_", "TERM", "TMPDIR", "TMP", "TEMP", "SHELL",
-                      "LOGNAME", "XDG_", "PYTHONPATH", "VIRTUAL_ENV", "CONDA")
+_SAFE_ENV_PREFIXES = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "LC_",
+    "TERM",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "SHELL",
+    "LOGNAME",
+    "XDG_",
+    "PYTHONPATH",
+    "VIRTUAL_ENV",
+    "CONDA",
+)
 # "PASS" is intentionally absent: it false-positives on BYPASS_CACHE /
 # COMPASS_DIR / PASSENGER_HOST while PASSWORD/PASSWD already cover credentials.
-_SECRET_SUBSTRINGS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "PASSWD", "AUTH", "DSN",
-                      "WEBHOOK", "CREDS", "BEARER", "APIKEY", "COOKIE")
+_SECRET_SUBSTRINGS = (
+    "KEY",
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "CREDENTIAL",
+    "PASSWD",
+    "AUTH",
+    "DSN",
+    "WEBHOOK",
+    "CREDS",
+    "BEARER",
+    "APIKEY",
+    "COOKIE",
+)
 
 
 def is_secret_env_name(name: str) -> bool:
     """The credential-name policy, shared with a local session's client environment (``agent.session_client_env``)."""
     return any(s in name.upper() for s in _SECRET_SUBSTRINGS)
 
+
 # Non-secret runtime-location flags that repo-root modules a sandbox script
 # imports may read at import time. CLAWK_DELEGATED_CHILD_CONTEXT must ride
 # along or a child that imports Clawksis code loses the Kanban mutation guard
 # while still inheriting CLAWK_HOME.
-_CLAWK_CHILD_ALLOWED = frozenset({
-    "CLAWK_HOME", "CLAWK_PROFILE", "CLAWK_CONFIG", "CLAWK_ENV", "CLAWK_DELEGATED_CHILD_CONTEXT",
-})
+_CLAWK_CHILD_ALLOWED = frozenset(
+    {
+        "CLAWK_HOME",
+        "CLAWK_PROFILE",
+        "CLAWK_CONFIG",
+        "CLAWK_ENV",
+        "CLAWK_DELEGATED_CHILD_CONTEXT",
+    }
+)
 
 # Windows-only: without these the CRT itself fails — socket.socket() raises
 # WinError 10106 (Winsock can't find mswsock.dll) and subprocess can't resolve
 # cmd.exe. Well-known OS paths, not secrets; the substring block still runs.
-_WINDOWS_ESSENTIAL_ENV_VARS = frozenset({
-    "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "OS",
-    "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS", "PUBLIC", "ALLUSERSPROFILE",
-    "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432",
-    "APPDATA", "LOCALAPPDATA", "USERPROFILE", "USERDOMAIN", "USERNAME",
-    "HOMEDRIVE", "HOMEPATH", "COMPUTERNAME",
-})
+_WINDOWS_ESSENTIAL_ENV_VARS = frozenset(
+    {
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "OS",
+        "PROCESSOR_ARCHITECTURE",
+        "NUMBER_OF_PROCESSORS",
+        "PUBLIC",
+        "ALLUSERSPROFILE",
+        "PROGRAMDATA",
+        "PROGRAMFILES",
+        "PROGRAMFILES(X86)",
+        "PROGRAMW6432",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERPROFILE",
+        "USERDOMAIN",
+        "USERNAME",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "COMPUTERNAME",
+    }
+)
 
 
-def _scrub_child_env(source_env, is_passthrough=None, is_windows=None, toolchain=frozenset()):
+def _scrub_child_env(
+    source_env, is_passthrough=None, is_windows=None, toolchain=frozenset()
+):
     """Produce the scrubbed child-process env for execute_code.
 
     Rules, in order: (1) passthrough vars (skill/config-declared) resolve
@@ -65,7 +121,11 @@ def _scrub_child_env(source_env, is_passthrough=None, is_windows=None, toolchain
     OS-essential allowlist passes by exact name.
     """
     try:
-        from tools.env_passthrough import is_env_passthrough, resolve_passthrough_value, scoped_passthrough_additions
+        from tools.env_passthrough import (
+            is_env_passthrough,
+            resolve_passthrough_value,
+            scoped_passthrough_additions,
+        )
     except Exception:
         is_env_passthrough = lambda _: False
         resolve_passthrough_value = lambda _name, _fallback: None
@@ -86,44 +146,64 @@ def _scrub_child_env(source_env, is_passthrough=None, is_windows=None, toolchain
             continue
         if is_secret_env_name(k):
             continue
-        if (any(k.startswith(p) for p in _SAFE_ENV_PREFIXES) or k in toolchain
-                or k in _CLAWK_CHILD_ALLOWED
-                or (is_windows and k.upper() in _WINDOWS_ESSENTIAL_ENV_VARS)):
+        if (
+            any(k.startswith(p) for p in _SAFE_ENV_PREFIXES)
+            or k in toolchain
+            or k in _CLAWK_CHILD_ALLOWED
+            or (is_windows and k.upper() in _WINDOWS_ESSENTIAL_ENV_VARS)
+        ):
             scrubbed[k] = v
         elif k.startswith("CLAWK_"):
             _dropped_clawk.append(k)
     # Declared names only the bound profile scope holds (a routed profile's own .env / sources
     # never enter the process env) — the loop above sees only names ``source_env`` carries.
-    scrubbed.update((k, v) for k, v in scoped_passthrough_additions(scrubbed).items() if is_passthrough(k))
+    scrubbed.update(
+        (k, v)
+        for k, v in scoped_passthrough_additions(scrubbed).items()
+        if is_passthrough(k)
+    )
     if _dropped_clawk:
         logger.debug(
             "execute_code: dropped %d non-allowlisted CLAWK_* var(s) from the "
             "sandbox child env (%s). This is intentional hardening (#27303); if "
             "a sandbox script legitimately needs one, declare it via "
             "env_passthrough in the skill/config so it passes by explicit opt-in.",
-            len(_dropped_clawk), ", ".join(sorted(_dropped_clawk)),
+            len(_dropped_clawk),
+            ", ".join(sorted(_dropped_clawk)),
         )
     # delegate_task children are marked by a ContextVar, not os.environ, and the sandbox crosses
     # a process boundary: strip dispatcher-owned Kanban vars AFTER the scrub so an explicit
     # passthrough cannot re-grant a delegated child the parent's board mutation capability.
     from agent.delegation_context import (
-        DELEGATED_CHILD_ENV_MARKER, delegated_child_subprocess_env,
+        DELEGATED_CHILD_ENV_MARKER,
+        delegated_child_subprocess_env,
     )
+
     scoped = delegated_child_subprocess_env(source_env)
     # Preserve location only when carrying the descendant fence, not for arbitrary
     # non-allowlisted CLAWK_* values in otherwise ordinary execution environments.
     if scoped.get(DELEGATED_CHILD_ENV_MARKER):
-        for key in (DELEGATED_CHILD_ENV_MARKER, "CLAWK_KANBAN_DB", "CLAWK_KANBAN_BOARD"):
+        for key in (
+            DELEGATED_CHILD_ENV_MARKER,
+            "CLAWK_KANBAN_DB",
+            "CLAWK_KANBAN_BOARD",
+        ):
             if key in scoped:
                 scrubbed[key] = scoped[key]
     return delegated_child_subprocess_env(scrubbed)
 
 
-def _build_child_env(*, rpc_endpoint: str, rpc_token: str, tmpdir: str,
-                     child_python: str) -> dict[str, str]:
+def _build_child_env(
+    *, rpc_endpoint: str, rpc_token: str, tmpdir: str, child_python: str
+) -> dict[str, str]:
     """Build the scrubbed child environment both execution paths share."""
-    from clawk_constants import apply_scratch_tmp_env, apply_subprocess_home_env, get_clawk_home_override
+    from clawk_constants import (
+        apply_scratch_tmp_env,
+        apply_subprocess_home_env,
+        get_clawk_home_override,
+    )
     from agent.session_client_env import tool_env, toolchain_environ
+
     # A local session's client toolchain replaces the daemon's PATH / venv, then the whole scrub (secret
     # names, delegated-child restrictions) runs over the merged environment.
     child_env = _scrub_child_env(toolchain_environ(), toolchain=frozenset(tool_env()))
@@ -153,7 +233,9 @@ def _build_child_env(*, rpc_endpoint: str, rpc_token: str, tmpdir: str,
     _home_override = get_clawk_home_override()
     if _home_override:
         child_env["CLAWK_HOME"] = _home_override
-        apply_scratch_tmp_env(child_env)  # TMPDIR follows the routed home, like HOME does
+        apply_scratch_tmp_env(
+            child_env
+        )  # TMPDIR follows the routed home, like HOME does
     # PYTHONPATH: the staging dir (clawk_tools.py) must always be importable even when project
     # mode changes CWD. Clawksis's root is added ONLY when the child runs in Clawksis's Python env —
     # exposing Clawksis's site-packages to an external interpreter can mix incompatible compiled
@@ -163,19 +245,26 @@ def _build_child_env(*, rpc_endpoint: str, rpc_token: str, tmpdir: str,
     # must not inherit Clawksis dependencies (#74817). PM's own interpreter, however, can be a
     # bare bundled Python whose dependencies live in the selected generation, not sys.prefix.
     from tools.environments.local_pythonpath import (
-        _strip_clawk_owned_pythonpath, _validated_runtime_venv, _same_path,
+        _strip_clawk_owned_pythonpath,
+        _validated_runtime_venv,
+        _same_path,
     )
+
     _runtime_path = None
     if child_python == sys.executable:
         runtime_venv = _validated_runtime_venv(child_env)
         if runtime_venv is not None:
             from pathlib import Path
             from pm.environments import site_packages
+
             candidate = site_packages(runtime_venv)
             # Restore only a dependency path the launcher actually supplied, not a newly
             # selected generation that this still-running interpreter has never loaded.
-            if any(_same_path(Path(entry), candidate)
-                   for entry in child_env.get("PYTHONPATH", "").split(os.pathsep) if entry):
+            if any(
+                _same_path(Path(entry), candidate)
+                for entry in child_env.get("PYTHONPATH", "").split(os.pathsep)
+                if entry
+            ):
                 _runtime_path = str(candidate)
     _strip_clawk_owned_pythonpath(child_env)
     _existing_pp = child_env.get("PYTHONPATH", "")
@@ -187,8 +276,11 @@ def _build_child_env(*, rpc_endpoint: str, rpc_token: str, tmpdir: str,
     elif child_python not in _external_env_logged:
         # Surface once per interpreter so "import clawk_constants fails" is diagnosable.
         _external_env_logged.add(child_python)
-        logger.info("execute_code: child interpreter %s is outside the Clawksis "
-                    "environment; clawk root omitted from PYTHONPATH", child_python)
+        logger.info(
+            "execute_code: child interpreter %s is outside the Clawksis "
+            "environment; clawk root omitted from PYTHONPATH",
+            child_python,
+        )
     if _existing_pp:
         _pp_parts.append(_existing_pp)
     child_env["PYTHONPATH"] = os.pathsep.join(_pp_parts)
@@ -216,10 +308,15 @@ def _probe_python(python_path: str, code: str, *, text: bool = False):
     """Run ``python_path -c code``; None if missing, unspawnable, or past the 5s timeout."""
     try:
         from agent.delegation_context import delegated_child_subprocess_env
+
         return subprocess.run(
-            [python_path, "-c", code], timeout=5, capture_output=True, text=text,
+            [python_path, "-c", code],
+            timeout=5,
+            capture_output=True,
+            text=text,
             creationflags=subprocess.CREATE_NO_WINDOW if _IS_WINDOWS else 0,
-            stdin=subprocess.DEVNULL, env=delegated_child_subprocess_env(),
+            stdin=subprocess.DEVNULL,
+            env=delegated_child_subprocess_env(),
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError):
@@ -231,7 +328,9 @@ def _is_usable_python(python_path: str) -> bool:
     cached = _usable_python_cache.get(python_path)
     if cached is not None:
         return cached
-    result = _probe_python(python_path, "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)")
+    result = _probe_python(
+        python_path, "import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)"
+    )
     if result is None:
         return False
     usable = result.returncode == 0
@@ -256,7 +355,9 @@ def _uses_clawk_python_environment(python_path: str) -> bool:
     """Whether *python_path* belongs to Clawksis's active Python environment. Short-circuits when
     it IS the running interpreter (by path or realpath — covers ``uv run`` venvs) so no probe
     runs on the default strict path and a flaky probe can never drop the clawk root."""
-    if python_path == sys.executable or os.path.realpath(python_path) == os.path.realpath(sys.executable):
+    if python_path == sys.executable or os.path.realpath(
+        python_path
+    ) == os.path.realpath(sys.executable):
         return True
     return _python_environment_prefix(python_path) == os.path.realpath(sys.prefix)
 
@@ -267,8 +368,15 @@ def _resolve_child_python(mode: str) -> str:
     if mode != "project":
         return sys.executable
     from agent.session_client_env import toolchain_environ
-    environ = toolchain_environ()  # a local session's: its client's venv/conda, not the daemon's
-    subdir, exe_names = ("Scripts", ("python.exe", "python3.exe")) if _IS_WINDOWS else ("bin", ("python", "python3"))
+
+    environ = (
+        toolchain_environ()
+    )  # a local session's: its client's venv/conda, not the daemon's
+    subdir, exe_names = (
+        ("Scripts", ("python.exe", "python3.exe"))
+        if _IS_WINDOWS
+        else ("bin", ("python", "python3"))
+    )
     for var in ("VIRTUAL_ENV", "CONDA_PREFIX"):
         root = environ.get(var, "").strip()
         for exe in exe_names if root else ():
@@ -277,8 +385,12 @@ def _resolve_child_python(mode: str) -> str:
                 continue
             if _is_usable_python(candidate):
                 return candidate
-            logger.info("execute_code: skipping %s=%s (Python version < 3.8 or broken). "
-                        "Using sys.executable instead.", var, candidate)
+            logger.info(
+                "execute_code: skipping %s=%s (Python version < 3.8 or broken). "
+                "Using sys.executable instead.",
+                var,
+                candidate,
+            )
             return sys.executable
     return sys.executable
 
@@ -295,6 +407,7 @@ def _resolve_child_cwd(mode: str, staging_dir: str, task_id: str = "") -> str:
     if task_id:
         try:
             from tools.terminal_tool import get_session_cwd
+
             recorded = get_session_cwd(task_id)
         except Exception:
             recorded = None
@@ -302,12 +415,14 @@ def _resolve_child_cwd(mode: str, staging_dir: str, task_id: str = "") -> str:
             return recorded
         try:
             from tools.file_tools_paths import _registered_task_cwd_override
+
             session_cwd = _registered_task_cwd_override(task_id)
         except Exception:
             session_cwd = None
         if session_cwd and os.path.isdir(session_cwd):
             return session_cwd
     from agent.runtime_cwd import scope_terminal_cwd
+
     raw = scope_terminal_cwd().strip()
     for candidate in (os.path.expanduser(raw) if raw else "", os.getcwd()):
         if candidate and os.path.isdir(candidate):

@@ -41,12 +41,16 @@ def clawk_env(tmp_path, monkeypatch, cron_owner):
     # Reload modules that cache get_clawk_home() at import time.
     import importlib
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.jobs
+
     importlib.reload(cron.jobs)
     import cron.monitor
+
     importlib.reload(cron.monitor)
     import cron.scheduler
+
     importlib.reload(cron.scheduler)
 
     return home
@@ -88,6 +92,7 @@ def _install_agent_stubs(monkeypatch, observed: dict):
     monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
 
     from clawk_cli import runtime_provider as _rtp
+
     monkeypatch.setattr(
         _rtp,
         "resolve_runtime_provider",
@@ -105,14 +110,13 @@ def _install_agent_stubs(monkeypatch, observed: dict):
     monkeypatch.setenv("CLAWK_CRON_TIMEOUT", "0")
 
     import dotenv
+
     monkeypatch.setattr(dotenv, "load_dotenv", lambda *_a, **_kw: True)
 
 
 # ---------------------------------------------------------------------------
 # create_job: data-layer semantics for monitor fields
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_create_job_monitor_script_and_url_mutually_exclusive(clawk_env):
@@ -209,8 +213,6 @@ def test_update_job_allows_clearing_monitor_then_no_agent(clawk_env):
     assert reloaded["no_agent"] is True
 
 
-
-
 # ---------------------------------------------------------------------------
 # cron.monitor: hashing + diff unit behavior
 # ---------------------------------------------------------------------------
@@ -244,7 +246,8 @@ def _make_monitor_job(clawk_env, script_body: str):
 
     _write_script(clawk_env, "mon.sh", script_body)
     return create_job(
-        prompt="Summarize what changed", model="test-model",
+        prompt="Summarize what changed",
+        model="test-model",
         schedule="every 5m",
         monitor_script="mon.sh",
         deliver="local",
@@ -381,10 +384,13 @@ def test_hash_persists_across_scheduler_restart(clawk_env, monkeypatch):
 
     # Simulate restart: reload the cron modules, dropping in-memory state.
     import cron.jobs
+
     importlib.reload(cron.jobs)
     import cron.monitor
+
     importlib.reload(cron.monitor)
     import cron.scheduler
+
     importlib.reload(cron.scheduler)
     _install_agent_stubs(monkeypatch, observed)
 

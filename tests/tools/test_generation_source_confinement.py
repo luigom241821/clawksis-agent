@@ -31,7 +31,8 @@ class TestConfineSourceImages:
     def test_local_backend_is_passthrough(self, monkeypatch):
         monkeypatch.setenv("TERMINAL_ENV", "local")
         url, refs, err = igt._confine_source_images(
-            "/some/host/pic.png", ["/other/ref.png"], "t1")
+            "/some/host/pic.png", ["/other/ref.png"], "t1"
+        )
         assert url == "/some/host/pic.png"
         assert refs == ["/other/ref.png"]
         assert err is None
@@ -40,7 +41,8 @@ class TestConfineSourceImages:
         monkeypatch.setenv("TERMINAL_ENV", "docker")
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "h"))
         url, refs, err = igt._confine_source_images(
-            "https://x/y.png", ["data:image/png;base64,AAAA"], "t1")
+            "https://x/y.png", ["data:image/png;base64,AAAA"], "t1"
+        )
         assert url == "https://x/y.png"
         assert refs == ["data:image/png;base64,AAAA"]
         assert err is None
@@ -57,13 +59,14 @@ class TestConfineSourceImages:
 
         b64 = base64.b64encode(PNG).decode()
         monkeypatch.setattr(
-            isrc, "_get_active_env",
+            isrc,
+            "_get_active_env",
             lambda tid: SimpleNamespace(
-                execute=lambda cmd, **kw: {"returncode": 0, "output": b64}),
+                execute=lambda cmd, **kw: {"returncode": 0, "output": b64}
+            ),
         )
 
-        url, refs, err = igt._confine_source_images(
-            "/workspace/pic.png", None, "t1")
+        url, refs, err = igt._confine_source_images("/workspace/pic.png", None, "t1")
         assert err is None
         assert url.startswith("data:image/png;base64,")
         assert base64.b64decode(url.split(",", 1)[1]) == PNG
@@ -100,8 +103,10 @@ class TestConfineSourceImages:
 
         dispatched = []
         monkeypatch.setattr(
-            igt, "_dispatch_to_plugin_provider",
-            lambda *a, **k: dispatched.append(1) or None)
+            igt,
+            "_dispatch_to_plugin_provider",
+            lambda *a, **k: dispatched.append(1) or None,
+        )
 
         out = igt._handle_image_generate(
             {"prompt": "edit it", "image_url": str(tmp_path / "nope.png")},

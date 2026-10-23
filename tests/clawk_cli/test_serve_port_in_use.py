@@ -77,14 +77,14 @@ def test_addr_in_use_error_classification():
     assert _is_addr_in_use_error(OSError(errno.EACCES, "denied")) is False
 
 
-
-
 # ---------------------------------------------------------------------------
 # E2E: real start_server in a subprocess (temp CLAWK_HOME)
 # ---------------------------------------------------------------------------
 
 
-def _spawn_serve(port: int, tmp_path: Path, merge_stderr: bool = True) -> subprocess.Popen:
+def _spawn_serve(
+    port: int, tmp_path: Path, merge_stderr: bool = True
+) -> subprocess.Popen:
     home = tmp_path / "clawk_home"
     home.mkdir(exist_ok=True)
     env = dict(os.environ)
@@ -94,8 +94,12 @@ def _spawn_serve(port: int, tmp_path: Path, merge_stderr: bool = True) -> subpro
         PYTHONUNBUFFERED="1",
     )
     # Ensure a stray desktop-parent env can't arm the watchdog/reaper paths.
-    for k in ("CLAWK_DESKTOP", "CLAWK_PARENT_PID", "CLAWK_PARENT_START_MARKER",
-              "CLAWK_PARENT_NONCE"):
+    for k in (
+        "CLAWK_DESKTOP",
+        "CLAWK_PARENT_PID",
+        "CLAWK_PARENT_START_MARKER",
+        "CLAWK_PARENT_NONCE",
+    ):
         env.pop(k, None)
     code = (
         "from clawk_cli.web_server import start_server\n"
@@ -159,8 +163,6 @@ def test_conflict_emits_sentinel_and_exit_75(tmp_path):
     assert "CLAWK_BACKEND_READY" not in out  # never claimed ready
     # exactly one machine sentinel line
     assert out.count("BACKEND_PORT_IN_USE") == 1
-
-
 
 
 def test_ephemeral_port_zero_unaffected(tmp_path):

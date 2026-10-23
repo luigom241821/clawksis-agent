@@ -9,7 +9,9 @@ from agent.periodic_scheduler import PeriodicScheduler
 def test_periodic_callback_keeps_schedule_context():
     """A callback must run in the Context that owned the scheduled handle."""
     scheduler = PeriodicScheduler()
-    profile_scope = ContextVar("periodic_scheduler_profile_scope", default="launch-profile")
+    profile_scope = ContextVar(
+        "periodic_scheduler_profile_scope", default="launch-profile"
+    )
     observed = []
     finished = threading.Event()
 

@@ -5,6 +5,7 @@ sitemap ``<loc>`` entries all route through ``tools.url_safety``: the URL is che
 front and every redirect hop is re-validated at TCP connect. A loopback listener records
 hits — the invariant is that it sees none for the hostile target.
 """
+
 from __future__ import annotations
 
 import http.server
@@ -36,8 +37,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         if self.path.endswith(".xml"):
-            body = (f"<sitemapindex><sitemap><loc>http://{self.headers['Host']}/sitemap-skills-1.xml"
-                    "</loc></sitemap></sitemapindex>").encode()
+            body = (
+                f"<sitemapindex><sitemap><loc>http://{self.headers['Host']}/sitemap-skills-1.xml"
+                "</loc></sitemap></sitemapindex>"
+            ).encode()
             ctype = "application/xml"
         elif self.path.endswith(".json"):
             body, ctype = b'{"pets": []}', "application/json"
@@ -69,7 +72,9 @@ def _sitemap_catalog(url: str, monkeypatch):
     monkeypatch.setattr(skills_hub_skillssh, "_cache_metas", lambda key, metas: None)
     src = skills_hub_skillssh.SkillsShSource(auth=MagicMock(spec=GitHubAuth))
     monkeypatch.setattr(src, "SITEMAP_INDEX_URL", url)
-    monkeypatch.setattr(src, "_featured_skills", lambda limit: [])  # the network fallback
+    monkeypatch.setattr(
+        src, "_featured_skills", lambda limit: []
+    )  # the network fallback
     return src._sitemap_catalog(limit=5)
 
 
@@ -82,19 +87,31 @@ def _fetch_manifest(url: str, monkeypatch):
 
 SITES = {
     "provider_media.save_url(image)": lambda u, mp, tmp: importlib.import_module(
-        "agent.image_gen_provider").save_url_image(u, timeout=5),
+        "agent.image_gen_provider"
+    ).save_url_image(u, timeout=5),
     "provider_media.save_url(video)": lambda u, mp, tmp: importlib.import_module(
-        "agent.video_gen_provider").save_url_video(u, timeout=5),
+        "agent.video_gen_provider"
+    ).save_url_video(u, timeout=5),
     "image_gen/openai::_load_image_bytes": lambda u, mp, tmp: importlib.import_module(
-        "plugins.image_gen.openai")._load_image_bytes(u),
-    "image_gen/openai-codex::_remote_image_to_data_url": lambda u, mp, tmp: importlib.import_module(
-        "plugins.image_gen.openai-codex")._remote_image_to_data_url(u),
-    "pet/store::_http_get": lambda u, mp, tmp: importlib.import_module("agent.pet.store")._http_get(u, 5),
-    "pet/store::_download": lambda u, mp, tmp: importlib.import_module("agent.pet.store")._download(
-        u, tmp / "sheet.png", timeout=5),
+        "plugins.image_gen.openai"
+    )._load_image_bytes(u),
+    "image_gen/openai-codex::_remote_image_to_data_url": lambda u, mp, tmp: (
+        importlib.import_module(
+            "plugins.image_gen.openai-codex"
+        )._remote_image_to_data_url(u)
+    ),
+    "pet/store::_http_get": lambda u, mp, tmp: importlib.import_module(
+        "agent.pet.store"
+    )._http_get(u, 5),
+    "pet/store::_download": lambda u, mp, tmp: importlib.import_module(
+        "agent.pet.store"
+    )._download(u, tmp / "sheet.png", timeout=5),
     "pet/manifest::fetch_manifest": lambda u, mp, tmp: _fetch_manifest(u, mp),
-    "tui_gateway/methods_images::_image_to_data_url": lambda u, mp, tmp: importlib.import_module(
-        "tui_gateway.methods_images")._image_to_data_url(u, 1_000_000),
+    "tui_gateway/methods_images::_image_to_data_url": lambda u, mp, tmp: (
+        importlib.import_module("tui_gateway.methods_images")._image_to_data_url(
+            u, 1_000_000
+        )
+    ),
     "skills_hub_skillssh::_sitemap_catalog": lambda u, mp, tmp: _sitemap_catalog(u, mp),
 }
 
@@ -105,17 +122,25 @@ def _run(site, url, monkeypatch, tmp_path):
         result = SITES[site](url, monkeypatch, tmp_path)
     except Exception:
         return None
-    if isinstance(result, list):  # catalogs: any entry means a hostile <loc> body was consumed
+    if isinstance(
+        result, list
+    ):  # catalogs: any entry means a hostile <loc> body was consumed
         return result or None
     return result
 
 
 @pytest.mark.parametrize("site", list(SITES))
-def test_remote_fetch_sites_refuse_internal_targets_before_connect(site, listener, monkeypatch, tmp_path):
+def test_remote_fetch_sites_refuse_internal_targets_before_connect(
+    site, listener, monkeypatch, tmp_path
+):
     from tools import url_safety
 
     base, hits = listener
-    suffix = "/index.xml" if "sitemap" in site else ("/manifest.json" if "manifest" in site else "/img.png")
+    suffix = (
+        "/index.xml"
+        if "sitemap" in site
+        else ("/manifest.json" if "manifest" in site else "/img.png")
+    )
 
     # Direct loopback target: refused up front, listener never sees a connection.
     monkeypatch.delenv("CLAWK_ALLOW_PRIVATE_URLS", raising=False)

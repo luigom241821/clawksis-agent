@@ -11,6 +11,7 @@ thing:
 - ``/handoff``: no gateway verb carries a handoff yet; refused as Ink and Desktop refuse it, instead
   of the store's ``request_handoff`` refusal dying silently in the process loop.
 """
+
 from __future__ import annotations
 
 from agent.i18n import t
@@ -22,6 +23,7 @@ def _diff(cli, connection, cmd):
     if "session" not in args:
         return False
     from clawk_cli.cli_commands_session_tools import _lines, _pr, _t, print_session_diff
+
     result = connection.call("rollback.session_diff", session_id=cli.session_id) or {}
     if not result.get("enabled"):
         _pr(*_lines(_t("diff.not_enabled")))
@@ -32,8 +34,11 @@ def _diff(cli, connection, cmd):
 
 def _reload(cli, connection, cmd):
     from clawk_cli.config import reload_env
+
     reload_env()
-    updated = (connection.call("reload.env", session_id=cli.session_id) or {}).get("updated", 0)
+    updated = (connection.call("reload.env", session_id=cli.session_id) or {}).get(
+        "updated", 0
+    )
     print(f"  {t('cli.reload.env_reloaded', count=updated)}")
     return True
 
@@ -41,6 +46,7 @@ def _reload(cli, connection, cmd):
 def _handoff(cli, connection, cmd):
     from cli import _cprint
     from clawk_cli.gateway_chat_commands import refusal
+
     _cprint(f"  {refusal('handoff')}")
     return True
 
@@ -56,6 +62,7 @@ def run(cli, canonical, cmd):
     if route is None:
         return False
     from clawk_cli.gateway_side import connection_for
+
     connection = connection_for(cli)
     if connection is None:
         return False
@@ -63,5 +70,6 @@ def run(cli, canonical, cmd):
         return route(cli, connection, (cmd or "").strip())
     except GatewayClientError as exc:
         from cli import _cprint
+
         _cprint(f"  /{canonical}: {exc}")
         return True

@@ -196,20 +196,29 @@ def test_watchdog_dump_the_turn_thread_stack_when_it_fires(caplog):
         parked.set()
         release.wait(10.0)
 
-    worker = threading.Thread(target=_turn_thread, name="prompt-turn-stalled", daemon=True)
+    worker = threading.Thread(
+        target=_turn_thread, name="prompt-turn-stalled", daemon=True
+    )
     worker.start()
     assert parked.wait(10.0), "turn thread never started"
 
     watchdog = turn_liveness.TurnLivenessWatchdog(
-        agent, session_id="stalled-session", timeout_s=600, poll_s=15,
-        stop_event=threading.Event(), activity_lock=agent._liveness_activity_lock(),
-        is_turn_active=lambda: True, commit_abort=lambda snapshot, message: True,
+        agent,
+        session_id="stalled-session",
+        timeout_s=600,
+        poll_s=15,
+        stop_event=threading.Event(),
+        activity_lock=agent._liveness_activity_lock(),
+        is_turn_active=lambda: True,
+        commit_abort=lambda snapshot, message: True,
         deactivate_turn=lambda: None,
     )
     try:
         with caplog.at_level(logging.ERROR, logger="agent.turn_liveness"):
             watchdog._surface_stall(
-                turn_liveness.ActivitySnapshot(generation=1, activity_ts=None, idle_seconds=610.0)
+                turn_liveness.ActivitySnapshot(
+                    generation=1, activity_ts=None, idle_seconds=610.0
+                )
             )
     finally:
         release.set()
@@ -225,6 +234,8 @@ def test_watchdog_dump_the_turn_thread_stack_when_it_fires(caplog):
     # generation must not dump again.
     records_before = len(caplog.records)
     watchdog._surface_stall(
-        turn_liveness.ActivitySnapshot(generation=1, activity_ts=None, idle_seconds=620.0)
+        turn_liveness.ActivitySnapshot(
+            generation=1, activity_ts=None, idle_seconds=620.0
+        )
     )
     assert len(caplog.records) == records_before

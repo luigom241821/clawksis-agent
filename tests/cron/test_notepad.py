@@ -21,9 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 def notepad(monkeypatch, tmp_path):
     import cron.notepad as notepad_mod
 
-    monkeypatch.setattr(
-        notepad_mod, "NOTEPAD_FILE", tmp_path / "cron" / "notepad.db"
-    )
+    monkeypatch.setattr(notepad_mod, "NOTEPAD_FILE", tmp_path / "cron" / "notepad.db")
     return notepad_mod
 
 
@@ -80,7 +78,6 @@ class TestNotepadCrud:
         assert notepad.get_note("job-1", "k") == "one"
         assert notepad.get_note("job-2", "k") == "two"
         assert len(notepad.list_notes("job-1")) == 1
-
 
     def test_clear_notepad_removes_all_keys_for_job_only(self, notepad):
         notepad.set_note("job-1", "a", "1")
@@ -222,7 +219,9 @@ class TestPromptInjection:
         assert _build_job_prompt(job) == baseline
         assert "notepad" not in baseline.lower()
 
-    def test_notepad_read_failure_does_not_break_prompt(self, cron_env, notepad, monkeypatch):
+    def test_notepad_read_failure_does_not_break_prompt(
+        self, cron_env, notepad, monkeypatch
+    ):
         from cron.jobs import create_job
         from cron.scheduler import _build_job_prompt
 
@@ -246,34 +245,57 @@ class TestNotepadCli:
     def test_cli_set_get_list_delete(self, notepad, capsys):
         from clawk_cli.cron import cron_notepad
 
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="set", key="cursor", value="42")) == 0
+        assert (
+            cron_notepad(
+                self._ns(job_id="job-1", notepad_action="set", key="cursor", value="42")
+            )
+            == 0
+        )
         assert notepad.get_note("job-1", "cursor") == "42"
 
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="get", key="cursor")) == 0
+        assert (
+            cron_notepad(self._ns(job_id="job-1", notepad_action="get", key="cursor"))
+            == 0
+        )
         assert "42" in capsys.readouterr().out
 
         assert cron_notepad(self._ns(job_id="job-1", notepad_action="list")) == 0
         assert "cursor" in capsys.readouterr().out
 
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="delete", key="cursor")) == 0
+        assert (
+            cron_notepad(
+                self._ns(job_id="job-1", notepad_action="delete", key="cursor")
+            )
+            == 0
+        )
         assert notepad.get_note("job-1", "cursor") is None
 
     def test_cli_get_missing_key_exits_nonzero(self, notepad, capsys):
         from clawk_cli.cron import cron_notepad
 
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="get", key="ghost")) == 1
+        assert (
+            cron_notepad(self._ns(job_id="job-1", notepad_action="get", key="ghost"))
+            == 1
+        )
 
     def test_cli_set_requires_key_and_value(self, notepad, capsys):
         from clawk_cli.cron import cron_notepad
 
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="set", key="k")) == 1
+        assert (
+            cron_notepad(self._ns(job_id="job-1", notepad_action="set", key="k")) == 1
+        )
         assert cron_notepad(self._ns(job_id="job-1", notepad_action="set")) == 1
 
     def test_cli_set_oversized_value_reports_error(self, notepad, capsys):
         from clawk_cli.cron import cron_notepad
 
         big = "x" * (notepad.MAX_VALUE_BYTES + 1)
-        assert cron_notepad(self._ns(job_id="job-1", notepad_action="set", key="k", value=big)) == 1
+        assert (
+            cron_notepad(
+                self._ns(job_id="job-1", notepad_action="set", key="k", value=big)
+            )
+            == 1
+        )
         assert notepad.get_note("job-1", "k") is None
 
     def test_cron_command_dispatches_notepad(self, notepad):

@@ -93,7 +93,9 @@ async def test_system_exit_from_turn_notifies_user_and_is_reraised():
     event = _event()
 
     with pytest.raises(SystemExit):
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
     assert adapter.sent, "platform send must be called on SystemExit"
     assert "error" in adapter.sent[0].lower(), (
@@ -108,7 +110,9 @@ async def test_keyboard_interrupt_from_turn_notifies_user_and_is_reraised():
     event = _event()
 
     with pytest.raises(KeyboardInterrupt):
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
     assert adapter.sent, "platform send must be called on KeyboardInterrupt"
 

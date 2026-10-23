@@ -19,7 +19,13 @@ _MISSING = object()
 
 
 def _stringify_filter_value(value: Any) -> str:
-    return "" if value is _MISSING else json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+    return (
+        ""
+        if value is _MISSING
+        else json.dumps(value, sort_keys=True)
+        if isinstance(value, (dict, list))
+        else str(value)
+    )
 
 
 def _resolve_profile_path(path_value: Any) -> Optional[Path]:
@@ -30,9 +36,10 @@ def _resolve_profile_path(path_value: Any) -> Optional[Path]:
     if not raw:
         return None
     from clawk_constants import get_clawk_home
+
     clawk_home = get_clawk_home()
     if raw == "~/.clawksis" or raw.startswith("~/.clawksis/"):
-        return clawk_home / raw[len("~/.clawksis/"):]
+        return clawk_home / raw[len("~/.clawksis/") :]
     path = Path(raw).expanduser()
     return path if path.is_absolute() else clawk_home / path
 
@@ -42,6 +49,7 @@ def _resolve_script_path(script_value: Any) -> tuple[Optional[Path], Optional[st
     if not isinstance(script_value, str) or not script_value.strip():
         return None, "script path is empty"
     from clawk_constants import get_clawk_home
+
     scripts_root = (get_clawk_home() / "scripts").resolve()
     raw_text = os.path.expandvars(script_value.strip())
     if raw_text == "~/.clawksis" or raw_text.startswith("~/.clawksis/"):
@@ -49,12 +57,18 @@ def _resolve_script_path(script_value: Any) -> tuple[Optional[Path], Optional[st
         candidate = mapped.resolve() if mapped is not None else scripts_root
     else:
         raw = Path(raw_text).expanduser()
-        candidate = raw.resolve() if raw.is_absolute() else (scripts_root / raw).resolve()
+        candidate = (
+            raw.resolve() if raw.is_absolute() else (scripts_root / raw).resolve()
+        )
     if not candidate.is_relative_to(scripts_root):
         return None, f"script path resolves outside {scripts_root}"
     if not candidate.exists():
         return None, f"script not found: {candidate}"
-    return (candidate, None) if candidate.is_file() else (None, f"script path is not a file: {candidate}")
+    return (
+        (candidate, None)
+        if candidate.is_file()
+        else (None, f"script path is not a file: {candidate}")
+    )
 
 
 def _load_filter_file_values(path_value: Any) -> list[Any]:
@@ -79,7 +93,11 @@ def _load_filter_file_values(path_value: Any) -> list[Any]:
 def _op_contains(value: Any, needle: Any) -> bool:
     if value is _MISSING:
         return False
-    return needle in value if isinstance(value, (list, tuple, set, dict)) else str(needle) in _stringify_filter_value(value)
+    return (
+        needle in value
+        if isinstance(value, (list, tuple, set, dict))
+        else str(needle) in _stringify_filter_value(value)
+    )
 
 
 def _op_regex(value: Any, pattern: Any) -> bool:
@@ -107,17 +125,26 @@ _FIELD_OPERATORS: tuple[tuple[str, Callable[[Any, Any], bool]], ...] = (
 class WebhookRouteProcessor:
     """Evaluate declarative filters and optional script transforms."""
 
-    def __init__(self, *, script_timeout_seconds: int = DEFAULT_SCRIPT_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self, *, script_timeout_seconds: int = DEFAULT_SCRIPT_TIMEOUT_SECONDS
+    ) -> None:
         self.script_timeout_seconds = max(1, int(script_timeout_seconds))
 
-    def resolve_filter_field(self, field: Any, payload: dict, event_type: str, headers: Any) -> Any:
+    def resolve_filter_field(
+        self, field: Any, payload: dict, event_type: str, headers: Any
+    ) -> Any:
         """Resolve a dotted filter field against payload/event/headers context; ``_MISSING`` when absent."""
         if not isinstance(field, str) or not field.strip():
             return _MISSING
         parts = [part for part in field.strip().split(".") if part]
         if not parts:
             return _MISSING
-        context = {"payload": payload.get("payload", payload), "event": event_type, "event_type": event_type, "headers": dict(headers or {})}
+        context = {
+            "payload": payload.get("payload", payload),
+            "event": event_type,
+            "event_type": event_type,
+            "headers": dict(headers or {}),
+        }
         value: Any = context[parts.pop(0)] if parts[0] in context else payload
         for part in parts:
             if isinstance(value, dict):
@@ -131,7 +158,9 @@ class WebhookRouteProcessor:
                 return _MISSING
         return value
 
-    def filter_matches(self, spec: Any, payload: dict, event_type: str, headers: Any) -> bool:
+    def filter_matches(
+        self, spec: Any, payload: dict, event_type: str, headers: Any
+    ) -> bool:
         """Evaluate one declarative webhook filter spec (``all``/``any``/``not`` combinators, then field ops)."""
         if not isinstance(spec, dict):
             logger.warning("[webhook] Ignoring invalid filter spec: %r", spec)
@@ -146,7 +175,9 @@ class WebhookRouteProcessor:
                 return isinstance(items, list) and combine(_sub(item) for item in items)
         if "not" in spec:
             return not _sub(spec.get("not"))
-        value = self.resolve_filter_field(spec.get("field"), payload, event_type, headers)
+        value = self.resolve_filter_field(
+            spec.get("field"), payload, event_type, headers
+        )
         if "exists" not in spec and spec.get("missing") is True:
             return value is _MISSING
         for key, predicate in _FIELD_OPERATORS:
@@ -155,7 +186,9 @@ class WebhookRouteProcessor:
         logger.warning("[webhook] Filter spec has no supported operator: %r", spec)
         return False
 
-    def route_filters_match(self, route_config: dict, payload: dict, event_type: str, headers: Any) -> bool:
+    def route_filters_match(
+        self, route_config: dict, payload: dict, event_type: str, headers: Any
+    ) -> bool:
         filters = route_config.get("filters") or []
         if not filters:
             return True
@@ -164,9 +197,13 @@ class WebhookRouteProcessor:
         if not isinstance(filters, list):
             logger.warning("[webhook] filters must be a list or object")
             return False
-        return all(self.filter_matches(spec, payload, event_type, headers) for spec in filters)
+        return all(
+            self.filter_matches(spec, payload, event_type, headers) for spec in filters
+        )
 
-    def run_route_script(self, script_value: Any, payload: dict) -> tuple[bool, Optional[dict]]:
+    def run_route_script(
+        self, script_value: Any, payload: dict
+    ) -> tuple[bool, Optional[dict]]:
         """Run a route script and return (should_continue, transformed_payload).
 
         Non-zero exit, empty/``[SILENT]`` stdout, or a ``[SILENT]``/``__clawk_ignore__`` flag drops the
@@ -182,6 +219,7 @@ class WebhookRouteProcessor:
             # ``shutil.which("bash")`` inherits PATH order and returns System32's WSL stub on
             # Windows hosts where System32 precedes Git (#116818); ``_find_bash`` probes Git Bash first.
             from tools.environments.local import _find_bash
+
             try:
                 interpreter = _find_bash()
             except RuntimeError as exc:
@@ -189,10 +227,21 @@ class WebhookRouteProcessor:
                 return False, None
         try:
             from tools.environments.local import build_subprocess_env
-            popen_kwargs = {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+
+            popen_kwargs = (
+                {"creationflags": 0x08000000} if sys.platform == "win32" else {}
+            )
             result = subprocess.run(
-                [interpreter, str(path)], input=json.dumps(payload), capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=self.script_timeout_seconds, cwd=str(path.parent), env=build_subprocess_env(), **popen_kwargs,
+                [interpreter, str(path)],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.script_timeout_seconds,
+                cwd=str(path.parent),
+                env=build_subprocess_env(),
+                **popen_kwargs,
                 check=False,
             )
         except subprocess.TimeoutExpired:
@@ -204,7 +253,11 @@ class WebhookRouteProcessor:
         stdout, stderr = (result.stdout or "").strip(), (result.stderr or "").strip()
         try:
             from agent.redact import redact_sensitive_text
-            stdout, stderr = redact_sensitive_text(stdout), redact_sensitive_text(stderr)
+
+            stdout, stderr = (
+                redact_sensitive_text(stdout),
+                redact_sensitive_text(stderr),
+            )
         except Exception as exc:
             logger.warning("[webhook] Failed to redact script output: %s", exc)
             stdout = stderr = "[REDACTED - redaction failed]"
@@ -212,7 +265,13 @@ class WebhookRouteProcessor:
             # A veto normally says why; rc!=0 with NO output at all is the "interpreter never
             # started" signature (WSL stub, missing shebang target) and must reach errors.log.
             level = logging.WARNING if not stdout and not stderr else logging.INFO
-            logger.log(level, "[webhook] script ignored webhook path=%s code=%s stderr=%s", path.name, result.returncode, stderr[:200])
+            logger.log(
+                level,
+                "[webhook] script ignored webhook path=%s code=%s stderr=%s",
+                path.name,
+                result.returncode,
+                stderr[:200],
+            )
         if result.returncode != 0 or not stdout or stdout == "[SILENT]":
             return False, None
         try:
@@ -222,5 +281,8 @@ class WebhookRouteProcessor:
         if not isinstance(transformed, dict):
             logger.warning("[webhook] script stdout must be a JSON object or text")
             return False, None
-        silenced = transformed.get("[SILENT]") is True or transformed.get("__clawk_ignore__") is True
+        silenced = (
+            transformed.get("[SILENT]") is True
+            or transformed.get("__clawk_ignore__") is True
+        )
         return (False, None) if silenced else (True, transformed)

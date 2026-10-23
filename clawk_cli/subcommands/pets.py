@@ -8,11 +8,13 @@ import logging
 def build_pets_parser(subparsers) -> None:
     """Attach the ``pets`` subcommand to ``subparsers``."""
     pets_parser = subparsers.add_parser(
-        "pets", help="Browse, install, and select petdex animated pets",
+        "pets",
+        help="Browse, install, and select petdex animated pets",
         description="Petdex (https://github.com/crafter-station/petdex) is a public "
-            "gallery of animated sprite pets for coding agents. Install one "
-            "and Clawksis shows it reacting to agent activity across the CLI, "
-            "TUI, and desktop app.")
+        "gallery of animated sprite pets for coding agents. Install one "
+        "and Clawksis shows it reacting to agent activity across the CLI, "
+        "TUI, and desktop app.",
+    )
     try:
         from clawk_cli.pets import register_cli as _register_pets_cli
 

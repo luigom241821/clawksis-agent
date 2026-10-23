@@ -10,20 +10,36 @@ _registry = HandlerRegistry()
 method = _registry.method
 
 _SUBAGENT_SNAPSHOT_FIELDS = (
-    "subagent_id", "parent_id", "depth", "goal", "delegation_id", "model",
-    "started_at", "status", "tool_count", "last_tool", "accepting_steer",
+    "subagent_id",
+    "parent_id",
+    "depth",
+    "goal",
+    "delegation_id",
+    "model",
+    "started_at",
+    "status",
+    "tool_count",
+    "last_tool",
+    "accepting_steer",
 )
 _SUBAGENT_TAIL_BYTES = 16384
 
 
 def _owned_subagent_records(session_id, transport, owner):
-    from tools.delegate_tool_registry import _active_subagents, _active_subagents_lock, _subagent_transport_matches
+    from tools.delegate_tool_registry import (
+        _active_subagents,
+        _active_subagents_lock,
+        _subagent_transport_matches,
+    )
 
     with _active_subagents_lock:
-        return [dict(r) for r in _active_subagents.values()
-                if r.get("owner_session_id") == session_id
-                and _subagent_transport_matches(r, transport)
-                and r.get("owner_session_record") is owner]
+        return [
+            dict(r)
+            for r in _active_subagents.values()
+            if r.get("owner_session_id") == session_id
+            and _subagent_transport_matches(r, transport)
+            and r.get("owner_session_record") is owner
+        ]
 
 
 def _visible_subagent_records(session_id, transport, owner):
@@ -36,18 +52,26 @@ def _visible_subagent_records(session_id, transport, owner):
     so the exact match alone hid every still-running child from the panel for good (#114909).
     Control RPCs (steer / interrupt / tail) keep the exact generation authority."""
     from tools.delegate_tool_registry import (
-        _active_subagents, _active_subagents_lock, _owns_subagent_record, _subagent_transport_matches,
+        _active_subagents,
+        _active_subagents_lock,
+        _owns_subagent_record,
+        _subagent_transport_matches,
     )
 
     with _active_subagents_lock:
         records = [dict(r) for r in _active_subagents.values()]
     agent = owner.get("agent")
     # Lineage resolution may read the session DB — evaluated outside the registry lock.
-    return [r for r in records
-            if (r.get("owner_session_id") == session_id
-                and _subagent_transport_matches(r, transport)
-                and r.get("owner_session_record") is owner)
-            or _owns_subagent_record(r, agent)]
+    return [
+        r
+        for r in records
+        if (
+            r.get("owner_session_id") == session_id
+            and _subagent_transport_matches(r, transport)
+            and r.get("owner_session_record") is owner
+        )
+        or _owns_subagent_record(r, agent)
+    ]
 
 
 @method("subagent.list")
@@ -57,10 +81,15 @@ def _(rid, params):
     if transport is None or owner is None:
         return _err(rid, 4001, "session not found or not owned by this transport")
     live = _visible_subagent_records(session_id, transport, owner)
-    return _ok(rid, {
-        "subagents": [{key: r.get(key) for key in _SUBAGENT_SNAPSHOT_FIELDS} for r in live],
-        "delegations": _failed_delegations(session_id, owner),
-    })
+    return _ok(
+        rid,
+        {
+            "subagents": [
+                {key: r.get(key) for key in _SUBAGENT_SNAPSHOT_FIELDS} for r in live
+            ],
+            "delegations": _failed_delegations(session_id, owner),
+        },
+    )
 
 
 def _failed_delegations(session_id, owner):
@@ -74,7 +103,11 @@ def _failed_delegations(session_id, owner):
         with _session_home_scope(owner):
             return failed_delegations_for_session(session_id, agent_session_id)
     except Exception:
-        logger.debug("subagent.list: failed-delegation read failed for %s", session_id, exc_info=True)
+        logger.debug(
+            "subagent.list: failed-delegation read failed for %s",
+            session_id,
+            exc_info=True,
+        )
         return []
 
 
@@ -89,14 +122,22 @@ def _(rid, params):
     transport, owner = _current_session_steer_authority(session_id)
     if transport is None or owner is None:
         return _err(rid, 4001, "session not found or not owned by this transport")
-    record = next((r for r in _owned_subagent_records(session_id, transport, owner)
-                   if r.get("subagent_id") == subagent_id), None)
+    record = next(
+        (
+            r
+            for r in _owned_subagent_records(session_id, transport, owner)
+            if r.get("subagent_id") == subagent_id
+        ),
+        None,
+    )
     agent = record.get("agent") if record else None
     # Interrupt the authorized object, never re-resolve a globally recyclable id.
     found = False
     if agent is not None:
         try:
-            found = bool(request_hard_interrupt(agent, f"Interrupted via TUI ({subagent_id})"))
+            found = bool(
+                request_hard_interrupt(agent, f"Interrupted via TUI ({subagent_id})")
+            )
         except Exception:
             logger.debug("subagent interrupt failed", exc_info=True)
     return _ok(rid, {"found": found, "subagent_id": subagent_id})
@@ -111,10 +152,23 @@ def _(rid, params):
     transport, owner = _current_session_steer_authority(session_id)
     if transport is None or owner is None:
         return _err(rid, 4001, "session not found or not owned by this transport")
-    result = {"subagent_id": subagent_id, "available": False, "text": "", "truncated": False}
-    record = next((r for r in _owned_subagent_records(session_id, transport, owner)
-                   if r.get("subagent_id") == subagent_id), None)
-    path = getattr(record.get("agent"), "_live_transcript_path", None) if record else None
+    result = {
+        "subagent_id": subagent_id,
+        "available": False,
+        "text": "",
+        "truncated": False,
+    }
+    record = next(
+        (
+            r
+            for r in _owned_subagent_records(session_id, transport, owner)
+            if r.get("subagent_id") == subagent_id
+        ),
+        None,
+    )
+    path = (
+        getattr(record.get("agent"), "_live_transcript_path", None) if record else None
+    )
     if not path:
         return _ok(rid, result)
     try:
@@ -125,7 +179,15 @@ def _(rid, params):
     except OSError:
         # Creation/cleanup races are normal while a child starts or ends.
         return _ok(rid, result)
-    return _ok(rid, {**result, "available": True, "text": text, "truncated": size > _SUBAGENT_TAIL_BYTES})
+    return _ok(
+        rid,
+        {
+            **result,
+            "available": True,
+            "text": text,
+            "truncated": size > _SUBAGENT_TAIL_BYTES,
+        },
+    )
 
 
 def register(server):

@@ -26,9 +26,18 @@ def _install_tts_extra(extra: str) -> bool:
 
 # sys.platform -> (manual install hint, install command); anything else uses "linux".
 _ESPEAK_INSTALL = {
-    "darwin": ("Install with: brew install espeak-ng", ["brew", "install", "espeak-ng"]),
-    "win32": ("Install with: choco install espeak-ng", ["choco", "install", "espeak-ng", "-y"]),
-    "linux": ("Install with: sudo apt install espeak-ng", ["sudo", "apt", "install", "-y", "espeak-ng"]),
+    "darwin": (
+        "Install with: brew install espeak-ng",
+        ["brew", "install", "espeak-ng"],
+    ),
+    "win32": (
+        "Install with: choco install espeak-ng",
+        ["choco", "install", "espeak-ng", "-y"],
+    ),
+    "linux": (
+        "Install with: sudo apt install espeak-ng",
+        ["sudo", "apt", "install", "-y", "espeak-ng"],
+    ),
 }
 
 
@@ -54,16 +63,26 @@ def _install_neutts_deps() -> bool:
                 _setup.print_info("Please install it manually and re-run setup.")
                 return False
         else:
-            _setup.print_warning("espeak-ng is required for NeuTTS. Install it manually before using NeuTTS.")
+            _setup.print_warning(
+                "espeak-ng is required for NeuTTS. Install it manually before using NeuTTS."
+            )
 
-    _setup._info(None, "Installing neutts Python package...",
-          "This will also download the TTS model (~300MB) on first use.", None)
+    _setup._info(
+        None,
+        "Installing neutts Python package...",
+        "This will also download the TTS model (~300MB) on first use.",
+        None,
+    )
     return _install_tts_extra("neutts")
 
 
 def _install_kittentts_deps() -> bool:
     """Install KittenTTS dependencies with user approval. Returns True on success."""
-    _setup._info(None, "Installing kittentts Python package (~25-80MB model downloaded on first use)...", None)
+    _setup._info(
+        None,
+        "Installing kittentts Python package (~25-80MB model downloaded on first use)...",
+        None,
+    )
     return _install_tts_extra("kittentts")
 
 
@@ -72,6 +91,7 @@ def _xai_oauth_logged_in_for_setup() -> bool:
     API-key prompt for users who logged in via ``clawk model`` -> xAI Grok OAuth."""
     try:
         from clawk_cli.auth import get_xai_oauth_auth_status
+
         return bool(get_xai_oauth_auth_status().get("logged_in"))
     except Exception:
         return False
@@ -83,8 +103,11 @@ def _run_xai_oauth_login_from_setup() -> bool:
     credentials for side tools). False on any failure (caller falls back)."""
     try:
         from clawk_cli.auth import (
-            _is_remote_session, _save_xai_oauth_tokens, _xai_oauth_device_code_login,
-            unsuppress_credential_source)
+            _is_remote_session,
+            _save_xai_oauth_tokens,
+            _xai_oauth_device_code_login,
+            unsuppress_credential_source,
+        )
     except Exception as exc:
         _setup.print_warning(f"xAI Grok OAuth helpers unavailable: {exc}")
         return False
@@ -92,8 +115,13 @@ def _run_xai_oauth_login_from_setup() -> bool:
     try:
         creds = _xai_oauth_device_code_login(open_browser=not _is_remote_session())
         _save_xai_oauth_tokens(
-            creds["tokens"], discovery=creds.get("discovery"), redirect_uri=creds.get("redirect_uri", ""),
-            last_refresh=creds.get("last_refresh"), auth_mode="oauth_device_code", set_active=False)
+            creds["tokens"],
+            discovery=creds.get("discovery"),
+            redirect_uri=creds.get("redirect_uri", ""),
+            last_refresh=creds.get("last_refresh"),
+            auth_mode="oauth_device_code",
+            set_active=False,
+        )
         # Mirror model/dashboard re-login: clear device_code suppression so the pool can seed
         # from the singleton after a prior `auth remove`.
         unsuppress_credential_source("xai-oauth", "device_code")
@@ -110,34 +138,79 @@ _TTS_PROVIDER_CHOICES = [
     ("xai", "xAI TTS (Grok voices — OAuth login or API key)"),
     ("minimax", "MiniMax TTS (high quality with voice cloning, needs API key)"),
     ("mistral", "Mistral Voxtral TTS (multilingual, native Opus, needs API key)"),
-    ("gemini", "Google Gemini TTS (30 prebuilt voices, prompt-controllable, needs API key)"),
+    (
+        "gemini",
+        "Google Gemini TTS (30 prebuilt voices, prompt-controllable, needs API key)",
+    ),
     ("neutts", "NeuTTS (local on-device, free, ~300MB model download)"),
-    ("kittentts", "KittenTTS (local on-device, free, lightweight ~25-80MB ONNX)")]
+    ("kittentts", "KittenTTS (local on-device, free, lightweight ~25-80MB ONNX)"),
+]
 # Short label = menu label minus its parenthetical ("Edge TTS", "Mistral Voxtral TTS", ...).
-_TTS_PROVIDER_LABELS = {key: label.split(" (")[0] for key, label in _TTS_PROVIDER_CHOICES}
+_TTS_PROVIDER_LABELS = {
+    key: label.split(" (")[0] for key, label in _TTS_PROVIDER_CHOICES
+}
 # provider -> (env vars that satisfy it, env var to save, prompt, success line, pre-prompt hint)
 _TTS_API_KEY_PROVIDERS = {
-    "elevenlabs": (("ELEVENLABS_API_KEY",), "ELEVENLABS_API_KEY", "ElevenLabs API key",
-                   "ElevenLabs API key saved", ""),
-    "openai": (("VOICE_TOOLS_OPENAI_KEY", "OPENAI_API_KEY"), "VOICE_TOOLS_OPENAI_KEY",
-               "OpenAI API key for TTS", "OpenAI TTS API key saved", ""),
-    "minimax": (("MINIMAX_API_KEY",), "MINIMAX_API_KEY", "MiniMax API key for TTS",
-                "MiniMax TTS API key saved", ""),
-    "mistral": (("MISTRAL_API_KEY",), "MISTRAL_API_KEY", "Mistral API key for TTS",
-                "Mistral TTS API key saved", ""),
-    "gemini": (("GEMINI_API_KEY", "GOOGLE_API_KEY"), "GEMINI_API_KEY", "Gemini API key for TTS",
-               "Gemini TTS API key saved", "Get a free API key at https://aistudio.google.com/app/apikey"),
+    "elevenlabs": (
+        ("ELEVENLABS_API_KEY",),
+        "ELEVENLABS_API_KEY",
+        "ElevenLabs API key",
+        "ElevenLabs API key saved",
+        "",
+    ),
+    "openai": (
+        ("VOICE_TOOLS_OPENAI_KEY", "OPENAI_API_KEY"),
+        "VOICE_TOOLS_OPENAI_KEY",
+        "OpenAI API key for TTS",
+        "OpenAI TTS API key saved",
+        "",
+    ),
+    "minimax": (
+        ("MINIMAX_API_KEY",),
+        "MINIMAX_API_KEY",
+        "MiniMax API key for TTS",
+        "MiniMax TTS API key saved",
+        "",
+    ),
+    "mistral": (
+        ("MISTRAL_API_KEY",),
+        "MISTRAL_API_KEY",
+        "Mistral API key for TTS",
+        "Mistral TTS API key saved",
+        "",
+    ),
+    "gemini": (
+        ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+        "GEMINI_API_KEY",
+        "Gemini API key for TTS",
+        "Gemini TTS API key saved",
+        "Get a free API key at https://aistudio.google.com/app/apikey",
+    ),
 }
 # provider -> (module, display name, requirement lines, install question, installer)
 _TTS_LOCAL_PROVIDERS = {
-    "neutts": ("neutts", "NeuTTS",
-               ("NeuTTS requires:", "  • Python package: neutts (~50MB install + ~300MB model on first use)",
-                "  • System package: espeak-ng (phonemizer)"),
-               "Install NeuTTS dependencies now?", _install_neutts_deps),
-    "kittentts": ("kittentts", "KittenTTS",
-                  ("KittenTTS is lightweight (~25-80MB, CPU-only, no API key required).",
-                   "Voices: Jasper, Bella, Luna, Bruno, Rosie, Hugo, Kiki, Leo"),
-                  "Install KittenTTS now?", _install_kittentts_deps)}
+    "neutts": (
+        "neutts",
+        "NeuTTS",
+        (
+            "NeuTTS requires:",
+            "  • Python package: neutts (~50MB install + ~300MB model on first use)",
+            "  • System package: espeak-ng (phonemizer)",
+        ),
+        "Install NeuTTS dependencies now?",
+        _install_neutts_deps,
+    ),
+    "kittentts": (
+        "kittentts",
+        "KittenTTS",
+        (
+            "KittenTTS is lightweight (~25-80MB, CPU-only, no API key required).",
+            "Voices: Jasper, Bella, Luna, Bruno, Rosie, Hugo, Kiki, Leo",
+        ),
+        "Install KittenTTS now?",
+        _install_kittentts_deps,
+    ),
+}
 
 
 def _tts_api_key_step(selected: str) -> str:
@@ -165,7 +238,8 @@ def _tts_local_install_step(selected: str) -> str:
     if not extra_supported(selected):
         _setup.print_warning(
             f"{name} is not supported by this Python/platform. "
-            "Your provider selection is saved, but speech requires a supported engine.")
+            "Your provider selection is saved, but speech requires a supported engine."
+        )
         return selected
     if _setup._module_installed(module):
         _setup.print_success(f"{name} is already installed")
@@ -175,10 +249,14 @@ def _tts_local_install_step(selected: str) -> str:
         _setup.print_info(line)
     print()
     if not _setup.prompt_yes_no(question, True):
-        _setup.print_info(f"Skipping install. Set tts.provider to '{selected}' after installing manually.")
+        _setup.print_info(
+            f"Skipping install. Set tts.provider to '{selected}' after installing manually."
+        )
         return "edge"
     if not installer():
-        _setup.print_warning(f"{name} installation incomplete. Falling back to Edge TTS.")
+        _setup.print_warning(
+            f"{name} installation incomplete. Falling back to Edge TTS."
+        )
         return "edge"
     return selected
 
@@ -197,8 +275,11 @@ def _xai_api_key_path():
         _setup.print_success("xAI TTS API key saved")
         return None
     from clawk_constants import display_clawk_home as _dhh
-    return ("No xAI API key provided for TTS. Configure XAI_API_KEY via clawk setup model "
-            f"or {_dhh()}/.env to use xAI TTS. Falling back to Edge TTS.")
+
+    return (
+        "No xAI API key provided for TTS. Configure XAI_API_KEY via clawk setup model "
+        f"or {_dhh()}/.env to use xAI TTS. Falling back to Edge TTS."
+    )
 
 
 def _tts_xai_step(config: dict) -> str:
@@ -206,23 +287,38 @@ def _tts_xai_step(config: dict) -> str:
     paths — matches runtime, where an explicit key wins over the subscription OAuth
     bearer (which 403s on metered /v1/tts). See #87045, #113727."""
     if _setup.get_env_value("XAI_API_KEY"):
-        _setup.print_success("xAI TTS will use your existing XAI_API_KEY (preferred over xAI Grok OAuth)")
+        _setup.print_success(
+            "xAI TTS will use your existing XAI_API_KEY (preferred over xAI Grok OAuth)"
+        )
     elif _xai_oauth_logged_in_for_setup():
-        _setup.print_success("xAI TTS will use your xAI Grok OAuth (SuperGrok / Premium+) credentials")
+        _setup.print_success(
+            "xAI TTS will use your xAI Grok OAuth (SuperGrok / Premium+) credentials"
+        )
     else:
         print()
         choice_idx = _setup.prompt_choice(
             "How do you want xAI TTS to authenticate?",
-            choices=["Sign in with xAI Grok OAuth (SuperGrok / Premium+) — browser login",
-                     "Paste an xAI API key (console.x.ai)", "Skip → fallback to Edge TTS"], default=0)
+            choices=[
+                "Sign in with xAI Grok OAuth (SuperGrok / Premium+) — browser login",
+                "Paste an xAI API key (console.x.ai)",
+                "Skip → fallback to Edge TTS",
+            ],
+            default=0,
+        )
         # Each path returns the fallback warning (result is then "edge") or None on success.
-        fallback = (_xai_oauth_path, _xai_api_key_path, lambda: "xAI TTS skipped. Falling back to Edge TTS.")[
-            choice_idx if choice_idx in (0, 1) else 2]()
+        fallback = (
+            _xai_oauth_path,
+            _xai_api_key_path,
+            lambda: "xAI TTS skipped. Falling back to Edge TTS.",
+        )[choice_idx if choice_idx in (0, 1) else 2]()
         if fallback:
             _setup.print_warning(fallback)
             return "edge"
     print()
-    voice_id = (_setup.prompt("xAI voice_id (Enter for 'eve', or paste a custom voice ID)") or "").strip()
+    voice_id = (
+        _setup.prompt("xAI voice_id (Enter for 'eve', or paste a custom voice ID)")
+        or ""
+    ).strip()
     if voice_id:
         config.setdefault("tts", {}).setdefault("xai", {})["voice_id"] = voice_id
         _setup.print_success(f"xAI voice_id set to: {voice_id}")
@@ -252,7 +348,9 @@ def _setup_tts_provider(config: dict):
         selected = _tts_xai_step(config)
     config.setdefault("tts", {})["provider"] = selected
     _setup.save_config(config)
-    _setup.print_success(f"TTS provider set to: {_TTS_PROVIDER_LABELS.get(selected, selected)}")
+    _setup.print_success(
+        f"TTS provider set to: {_TTS_PROVIDER_LABELS.get(selected, selected)}"
+    )
 
 
 def setup_tts(config: dict):

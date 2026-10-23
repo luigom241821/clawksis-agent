@@ -32,19 +32,29 @@ def db(tmp_path):
 def _compressed_gateway_parent(db: SessionDB) -> dict:
     """A gateway conversation that rotated on compression, i.e. the one case that inherits."""
     db.create_session(
-        "parent", source="telegram", session_key="agent:main:telegram:dm:42",
-        chat_id="42", chat_type="dm", thread_id="7", user_id="u1",
+        "parent",
+        source="telegram",
+        session_key="agent:main:telegram:dm:42",
+        chat_id="42",
+        chat_type="dm",
+        thread_id="7",
+        user_id="u1",
     )
     db.end_session("parent", "compression")
     return db.get_session("parent")
 
 
 @pytest.mark.parametrize("marker", ["_delegate_from", "_branched_from"])
-def test_delegate_and_branch_children_do_not_take_over_the_parent_route(db: SessionDB, marker: str) -> None:
+def test_delegate_and_branch_children_do_not_take_over_the_parent_route(
+    db: SessionDB, marker: str
+) -> None:
     parent = _compressed_gateway_parent(db)
 
     db.create_session(
-        "worker", source="subagent", parent_session_id="parent", model_config={marker: "parent"},
+        "worker",
+        source="subagent",
+        parent_session_id="parent",
+        model_config={marker: "parent"},
     )
     db.create_session("continuation", source="telegram", parent_session_id="parent")
 
@@ -56,18 +66,29 @@ def test_delegate_and_branch_children_do_not_take_over_the_parent_route(db: Sess
         assert worker[column] is None, column
 
 
-def test_compression_continuation_of_a_branch_child_keeps_inheriting(db: SessionDB) -> None:
+def test_compression_continuation_of_a_branch_child_keeps_inheriting(
+    db: SessionDB,
+) -> None:
     """A continuation copies model_config verbatim — the branch marker comes along — so the
     exclusion must match the marker's VALUE against the parent id, not its mere presence."""
     db.create_session("root", source="telegram")
     db.create_session(
-        "branch", source="telegram", parent_session_id="root", model_config={"_branched_from": "root"},
-        session_key="agent:main:telegram:dm:42", chat_id="42", chat_type="dm", user_id="u1",
+        "branch",
+        source="telegram",
+        parent_session_id="root",
+        model_config={"_branched_from": "root"},
+        session_key="agent:main:telegram:dm:42",
+        chat_id="42",
+        chat_type="dm",
+        user_id="u1",
     )
     db.end_session("branch", "compression")
 
     db.create_session(
-        "continuation", source="telegram", parent_session_id="branch", model_config={"_branched_from": "root"},
+        "continuation",
+        source="telegram",
+        parent_session_id="branch",
+        model_config={"_branched_from": "root"},
     )
 
     continuation = db.get_session("continuation")

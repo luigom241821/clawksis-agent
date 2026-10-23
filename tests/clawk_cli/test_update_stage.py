@@ -57,26 +57,35 @@ def test_marker_fallback_covers_the_old_shim(status_file, tmp_path, monkeypatch)
     """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / update_stage.MARKER_NAME).write_text(
-        f"80335\n{int(time.time())}\n", encoding="utf-8")
+        f"80335\n{int(time.time())}\n", encoding="utf-8"
+    )
     status_file.write_text('{"status":"running","message":"old"}', encoding="utf-8")
     monkeypatch.setenv("TMPDIR", str(tmp_path))
 
     update_stage.publish_stage("Updating Python dependencies (PM)")
 
-    _assert_running(status_file.read_text(encoding="utf-8"),
-                    "Updating Python dependencies (PM)")
+    _assert_running(
+        status_file.read_text(encoding="utf-8"), "Updating Python dependencies (PM)"
+    )
 
 
-def test_marker_fallback_uses_the_platform_home_without_env_var(status_file, tmp_path, monkeypatch):
+def test_marker_fallback_uses_the_platform_home_without_env_var(
+    status_file, tmp_path, monkeypatch
+):
     """The shim without CLAWK_HOME resolved the platform default, which is not ~/.clawksis
     on every host (sudo invoker, data-dir suffix); the marker must be looked up there."""
     import clawk_constants
 
     monkeypatch.delenv("CLAWK_HOME", raising=False)
-    monkeypatch.setattr(clawk_constants, "_get_platform_default_clawk_home", lambda: tmp_path / "platform")
+    monkeypatch.setattr(
+        clawk_constants,
+        "_get_platform_default_clawk_home",
+        lambda: tmp_path / "platform",
+    )
     (tmp_path / "platform").mkdir()
     (tmp_path / "platform" / update_stage.MARKER_NAME).write_text(
-        f"80335\n{int(time.time())}\n", encoding="utf-8")
+        f"80335\n{int(time.time())}\n", encoding="utf-8"
+    )
     status_file.write_text('{"status":"running","message":"old"}', encoding="utf-8")
     monkeypatch.setenv("TMPDIR", str(tmp_path))
 
@@ -96,7 +105,9 @@ def test_no_ui_sources_is_inert(status_file, tmp_path, monkeypatch):
 
 
 def test_publish_never_raises_on_unwritable_target(monkeypatch, tmp_path):
-    monkeypatch.setenv(update_stage.STATUS_FILE_ENV, str(tmp_path / "no" / "such" / "dir" / "f"))
+    monkeypatch.setenv(
+        update_stage.STATUS_FILE_ENV, str(tmp_path / "no" / "such" / "dir" / "f")
+    )
 
     update_stage.publish_stage("boom")  # must not raise
 

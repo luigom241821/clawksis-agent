@@ -75,14 +75,28 @@ def _zero_event_then_completed_client(seen_inputs: list):
     from tests.agent.test_run_agent_codex_responses import _FakeCreateStream
 
     events = [
-        SimpleNamespace(type="response.output_item.done", item=SimpleNamespace(
-            type="message", status="completed", content=[SimpleNamespace(type="output_text", text="ok")])),
-        SimpleNamespace(type="response.completed", response=SimpleNamespace(
-            status="completed", usage=SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2), id="r1")),
+        SimpleNamespace(
+            type="response.output_item.done",
+            item=SimpleNamespace(
+                type="message",
+                status="completed",
+                content=[SimpleNamespace(type="output_text", text="ok")],
+            ),
+        ),
+        SimpleNamespace(
+            type="response.completed",
+            response=SimpleNamespace(
+                status="completed",
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2),
+                id="r1",
+            ),
+        ),
     ]
 
     def _create(**kwargs):
-        seen_inputs.append(kwargs.get("input") or (kwargs.get("extra_body") or {}).get("input"))
+        seen_inputs.append(
+            kwargs.get("input") or (kwargs.get("extra_body") or {}).get("input")
+        )
         if len(seen_inputs) == 1:
             raise httpx.ConnectError("no first byte")
         return _FakeCreateStream(events)
@@ -91,21 +105,41 @@ def _zero_event_then_completed_client(seen_inputs: list):
 
 
 def _oversized_codex_kwargs(size: int) -> dict:
-    return {"model": "gpt-5-codex", "instructions": "You are Clawksis.", "store": False, "tools": None,
-            "input": [{"role": "user", "content": "look"},
-                      {"type": "function_call", "call_id": "call_browser", "name": "browser_exec", "arguments": "{}"},
-                      {"type": "function_call_output", "call_id": "call_browser", "output": "x" * size},
-                      {"role": "user", "content": "continue"}]}
+    return {
+        "model": "gpt-5-codex",
+        "instructions": "You are Clawksis.",
+        "store": False,
+        "tools": None,
+        "input": [
+            {"role": "user", "content": "look"},
+            {
+                "type": "function_call",
+                "call_id": "call_browser",
+                "name": "browser_exec",
+                "arguments": "{}",
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_browser",
+                "output": "x" * size,
+            },
+            {"role": "user", "content": "continue"},
+        ],
+    }
 
 
-def test_zero_event_retry_prunes_oversized_tool_output_and_logs_size_delta(monkeypatch, tmp_path, caplog):
+def test_zero_event_retry_prunes_oversized_tool_output_and_logs_size_delta(
+    monkeypatch, tmp_path, caplog
+):
     """#95429 criterion 3: a reconnect after a zero-event attempt must not resend the same oversized
     payload unchanged -- the inline tool output is spilled and the size delta is logged."""
     from tests.agent.test_run_agent_codex_responses import _build_agent
     from tools.tool_result_storage import PERSISTED_OUTPUT_TAG
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr("clawk_constants.get_clawk_home", lambda: tmp_path, raising=False)
+    monkeypatch.setattr(
+        "clawk_constants.get_clawk_home", lambda: tmp_path, raising=False
+    )
     agent = _build_agent(monkeypatch)
     seen: list = []
     agent.client = _zero_event_then_completed_client(seen)
@@ -118,14 +152,19 @@ def test_zero_event_retry_prunes_oversized_tool_output_and_logs_size_delta(monke
     assert second < first // 10
     retried_output = seen[1][2]["output"]
     assert PERSISTED_OUTPUT_TAG in retried_output and len(retried_output) < 10_000
-    assert Path(tmp_path, "cache", "spillover", "call_browser.txt").read_text() == "x" * 760_396
+    assert (
+        Path(tmp_path, "cache", "spillover", "call_browser.txt").read_text()
+        == "x" * 760_396
+    )
     assert seen[0][2]["output"] == "x" * 760_396  # the caller's kwargs are not mutated
     prune_logs = [r.message for r in caplog.records if "zero-event" in r.message]
     assert len(prune_logs) == 1 and "attempt 1/2" in prune_logs[0]
     assert re.search(r"serialized_input_bytes=\d+ -> \d+", prune_logs[0])
 
 
-def test_zero_event_retry_without_prunable_output_logs_unchanged_resend(monkeypatch, caplog):
+def test_zero_event_retry_without_prunable_output_logs_unchanged_resend(
+    monkeypatch, caplog
+):
     from tests.agent.test_run_agent_codex_responses import _build_agent
 
     agent = _build_agent(monkeypatch)
@@ -140,4 +179,8 @@ def test_zero_event_retry_without_prunable_output_logs_unchanged_resend(monkeypa
 
     assert response.status == "completed" and seen[0] == seen[1]
     (log,) = [r.message for r in caplog.records if "zero-event" in r.message]
-    assert "unchanged" in log and "attempt 1/2" in log and re.search(r"serialized_input_bytes=\d+", log)
+    assert (
+        "unchanged" in log
+        and "attempt 1/2" in log
+        and re.search(r"serialized_input_bytes=\d+", log)
+    )

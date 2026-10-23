@@ -33,8 +33,10 @@ def _commit(repo, n):
 @pytest.fixture
 def origin(tmp_path, monkeypatch):
     for key, value in {
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com",
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
         "GIT_CONFIG_NOSYSTEM": "1",
     }.items():
         monkeypatch.setenv(key, value)
@@ -67,8 +69,16 @@ def _count(monkeypatch, *, api):
 
     monkeypatch.setattr(source_check, "_github_compare_behind", fake_compare)
     plan = update_cmd._prepare_checkout_for_update(
-        ["git"], "main", "main", is_fork=False, assume_yes=True, gateway_mode=False,
-        gw_input_fn=input, switch_branch=False, _windows_gateway_resume=None)
+        ["git"],
+        "main",
+        "main",
+        is_fork=False,
+        assume_yes=True,
+        gateway_mode=False,
+        gw_input_fn=input,
+        switch_branch=False,
+        _windows_gateway_resume=None,
+    )
     return plan.commit_count, consulted
 
 
@@ -84,8 +94,13 @@ def test_shallow_count_is_recovered_via_compare_api(tmp_path, origin, monkeypatc
     clone = _checkout_behind(tmp_path, origin, monkeypatch, shallow=True)
     count, consulted = _count(monkeypatch, api=12)
     assert count == 12
-    head = subprocess.run(["git", "rev-parse", "HEAD", "origin/main"], cwd=clone,
-                          check=True, capture_output=True, text=True).stdout.split()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD", "origin/main"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
     assert consulted == [tuple(head)]
 
 

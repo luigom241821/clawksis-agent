@@ -31,14 +31,22 @@ async def test_write_tool_log_shares_one_logger_across_turns(tmp_path, monkeypat
     try:
         for i in range(2):
             q: queue.Queue = queue.Queue()
-            queues.append(q)  # kept alive: distinct id()s, the shape the per-turn name leaked on
-            q.put(f"2026-09-18 10:00:0{i}  terminal: \"echo {i}\"")
-            task = asyncio.ensure_future(GatewayTurnMixin._run_agent_write_tool_log(None, q))
+            queues.append(
+                q
+            )  # kept alive: distinct id()s, the shape the per-turn name leaked on
+            q.put(f'2026-09-18 10:00:0{i}  terminal: "echo {i}"')
+            task = asyncio.ensure_future(
+                GatewayTurnMixin._run_agent_write_tool_log(None, q)
+            )
             await asyncio.sleep(0.05)
             task.cancel()
             await task  # the writer swallows the cancel after draining
         assert set(logging.Logger.manager.loggerDict) - before <= {"clawk.tool_calls"}
-        lines = (tmp_path / "logs" / "tool_calls.log").read_text(encoding="utf-8").splitlines()
+        lines = (
+            (tmp_path / "logs" / "tool_calls.log")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        )
         assert [l.split()[-1] for l in lines] == ['0"', '1"']
     finally:
         for h in list(shared.handlers):

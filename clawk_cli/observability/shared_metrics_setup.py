@@ -94,33 +94,61 @@ def collection_enabled(clawk_home: Any = None) -> bool:
         return False
 
 
-def provider_setup_fields(*, surface: Any, provider: Any, event: Any, failure_class: Any = "none") -> dict[str, str] | None:
+def provider_setup_fields(
+    *, surface: Any, provider: Any, event: Any, failure_class: Any = "none"
+) -> dict[str, str] | None:
     from . import shared_metrics_contract as contract
     from .shared_metrics_catalog import provider_metric_name
 
-    if surface not in contract.PROVIDER_SETUP_SURFACES or event not in contract.PROVIDER_SETUP_EVENTS:
+    if (
+        surface not in contract.PROVIDER_SETUP_SURFACES
+        or event not in contract.PROVIDER_SETUP_EVENTS
+    ):
         return None
     failure = "none"
-    if event == "failed" and failure_class in _NOT_FAILURES:  # a cancel or a lapsed code is a walk-away
+    if (
+        event == "failed" and failure_class in _NOT_FAILURES
+    ):  # a cancel or a lapsed code is a walk-away
         event = "abandoned"
     elif event == "failed":
-        failure = failure_class if failure_class in contract.PROVIDER_SETUP_FAILURE_CLASSES - {"none"} else "other"
-    return {"event": event, "failure_class": failure, "provider": provider_metric_name(provider), "surface": surface}
+        failure = (
+            failure_class
+            if failure_class in contract.PROVIDER_SETUP_FAILURE_CLASSES - {"none"}
+            else "other"
+        )
+    return {
+        "event": event,
+        "failure_class": failure,
+        "provider": provider_metric_name(provider),
+        "surface": surface,
+    }
 
 
 def setup_failure_class(exc: BaseException) -> str:
     """Closed class for an exception that ended a setup flow; inert (type checks only). ``cancelled``
     and ``expired`` (the sign-in code ran out before approval) are recorded ``abandoned``."""
-    from clawk_cli.auth_error_copy import is_cancelled, is_device_code_expired, is_network_error
+    from clawk_cli.auth_error_copy import (
+        is_cancelled,
+        is_device_code_expired,
+        is_network_error,
+    )
 
     names = {cls.__name__ for cls in type(exc).__mro__}
-    if isinstance(getattr(exc, "setup_failure_class", None), str):  # classified where it was raised
+    if isinstance(
+        getattr(exc, "setup_failure_class", None), str
+    ):  # classified where it was raised
         return exc.setup_failure_class
     # Esc in the setup menus, or consent declined on the provider's page.
-    if is_cancelled(exc) or "_SetupCancelled" in names or getattr(exc, "oauth_error_code", "") == "access_denied":
+    if (
+        is_cancelled(exc)
+        or "_SetupCancelled" in names
+        or getattr(exc, "oauth_error_code", "") == "access_denied"
+    ):
         return "cancelled"
     # Before the expiry check: a code that ran out while the service kept failing is an outage.
-    if is_network_error(exc) or (exc.__cause__ is not None and is_network_error(exc.__cause__)):
+    if is_network_error(exc) or (
+        exc.__cause__ is not None and is_network_error(exc.__cause__)
+    ):
         return "network"
     if is_device_code_expired(exc):
         return "expired"
@@ -139,7 +167,9 @@ def _save_row(fields: dict[str, str] | None) -> bool:
     return emit_saved([(PROVIDER_SETUP_MARK, fields)]) == 1
 
 
-def begin_provider_setup(surface: str, provider: Any, *, clawk_home: Any = None) -> SetupFlow | None:
+def begin_provider_setup(
+    surface: str, provider: Any, *, clawk_home: Any = None
+) -> SetupFlow | None:
     """Record ``started`` and drop the pending marker; None (no files, no rows) when collection is off."""
     try:
         with _bound(clawk_home):
@@ -147,7 +177,9 @@ def begin_provider_setup(surface: str, provider: Any, *, clawk_home: Any = None)
 
             if not provider or provider in _NOT_A_PROVIDER or not enabled():
                 return None
-            fields = provider_setup_fields(surface=surface, provider=provider, event="started")
+            fields = provider_setup_fields(
+                surface=surface, provider=provider, event="started"
+            )
             if fields is None:
                 return None
             from gateway.status import get_process_start_time
@@ -160,20 +192,30 @@ def begin_provider_setup(surface: str, provider: Any, *, clawk_home: Any = None)
             pid = os.getpid()
             marker = directory / f"{surface}-{pid}-{time.time_ns()}.json"
             record = {
-                "pid": pid, "start_time": get_process_start_time(pid), "started_at": time.time(),
-                "surface": surface, "provider": fields["provider"],
+                "pid": pid,
+                "start_time": get_process_start_time(pid),
+                "started_at": time.time(),
+                "surface": surface,
+                "provider": fields["provider"],
             }
             tmp = marker.with_name(f".{marker.name}.tmp")
             tmp.write_text(json.dumps(record), encoding="utf-8")
             os.replace(tmp, marker)
             _save_row(fields)
-            return SetupFlow(home=str(home), surface=surface, provider=fields["provider"], marker=marker)
+            return SetupFlow(
+                home=str(home),
+                surface=surface,
+                provider=fields["provider"],
+                marker=marker,
+            )
     except Exception:
         logger.debug("Provider setup start not recorded", exc_info=True)
         return None
 
 
-def finish_provider_setup(flow: SetupFlow | None, event: str, failure_class: str = "none") -> None:
+def finish_provider_setup(
+    flow: SetupFlow | None, event: str, failure_class: str = "none"
+) -> None:
     """Record the flow's end once: only if its marker is still unclaimed (never raises)."""
     if flow is None:
         return
@@ -187,7 +229,10 @@ def finish_provider_setup(flow: SetupFlow | None, event: str, failure_class: str
             return
         with _bound(flow.home):
             fields = provider_setup_fields(
-                surface=flow.surface, provider=flow.provider, event=event, failure_class=failure_class,
+                surface=flow.surface,
+                provider=flow.provider,
+                event=event,
+                failure_class=failure_class,
             )
             settle_claim(claimed, flow.marker, _save_row(fields))
     except Exception:
@@ -234,13 +279,21 @@ def report_abandoned_setups(home: Path) -> None:
             os.replace(path, claimed)
         except OSError:  # a concurrent reporter or the finisher won
             continue
-        fields = provider_setup_fields(
-            surface=record.get("surface"), provider=record.get("provider"), event="abandoned",
-        ) if isinstance(record, dict) else None
+        fields = (
+            provider_setup_fields(
+                surface=record.get("surface"),
+                provider=record.get("provider"),
+                event="abandoned",
+            )
+            if isinstance(record, dict)
+            else None
+        )
         settle_claim(claimed, original, _save_row(fields))
 
 
-def record_provider_setup_done(surface: str, provider: Any, *, clawk_home: Any = None, background: bool = False) -> None:
+def record_provider_setup_done(
+    surface: str, provider: Any, *, clawk_home: Any = None, background: bool = False
+) -> None:
     """A setup that starts and lands in one action (an API key saved from a form): both rows at once.
     ``background`` keeps a request handler from waiting on a cold metrics runtime; the owning home is
     captured here, since a thread does not inherit the profile binding."""
@@ -255,10 +308,14 @@ def record_provider_setup_done(surface: str, provider: Any, *, clawk_home: Any =
             home = str(get_clawk_home())
 
         def run() -> None:
-            finish_provider_setup(begin_provider_setup(surface, provider, clawk_home=home), "completed")
+            finish_provider_setup(
+                begin_provider_setup(surface, provider, clawk_home=home), "completed"
+            )
 
         if background:
-            threading.Thread(target=run, name="clawk-setup-metrics", daemon=True).start()
+            threading.Thread(
+                target=run, name="clawk-setup-metrics", daemon=True
+            ).start()
         else:
             run()
     except Exception:
@@ -275,16 +332,29 @@ def provider_for_api_key_env(env_var: Any, *, connecting: bool = False) -> str |
 
     if env_var == "OPENROUTER_API_KEY":  # the aggregator is not a registry entry
         return "openrouter"
-    if not connecting and (env_var in _SHARED_TOKENS or any(
-        env_var == entry.get("key") for category in TOOL_CATEGORIES.values()
-        for row in category.get("providers", ()) for entry in row.get("env_vars") or ()
-    )):
+    if not connecting and (
+        env_var in _SHARED_TOKENS
+        or any(
+            env_var == entry.get("key")
+            for category in TOOL_CATEGORIES.values()
+            for row in category.get("providers", ())
+            for entry in row.get("env_vars") or ()
+        )
+    ):
         return None
-    return next((slug for slug, pconfig in PROVIDER_REGISTRY.items()
-                 if env_var in (getattr(pconfig, "api_key_env_vars", None) or ())), None)
+    return next(
+        (
+            slug
+            for slug, pconfig in PROVIDER_REGISTRY.items()
+            if env_var in (getattr(pconfig, "api_key_env_vars", None) or ())
+        ),
+        None,
+    )
 
 
-def record_api_key_saved(env_var: Any, value: Any, previous: Any, surface: str, *, connecting: bool = False) -> None:
+def record_api_key_saved(
+    env_var: Any, value: Any, previous: Any, surface: str, *, connecting: bool = False
+) -> None:
     """Count a provider API key saved from a settings form: only a new or changed non-empty value (a
     clear or a same-value re-save connects nothing; other variables are not setups)."""
     try:
@@ -292,7 +362,9 @@ def record_api_key_saved(env_var: Any, value: Any, previous: Any, surface: str, 
 
         if not isinstance(value, str) or not value.strip() or value == previous:
             return
-        if enabled() and (provider := provider_for_api_key_env(env_var, connecting=connecting)):
+        if enabled() and (
+            provider := provider_for_api_key_env(env_var, connecting=connecting)
+        ):
             record_provider_setup_done(surface, provider, background=True)
     except Exception:
         logger.debug("API key setup not recorded", exc_info=True)
@@ -340,7 +412,9 @@ def provider_setup_surface(surface: str) -> Iterator[None]:
     try:
         yield
     except BaseException as exc:
-        if not _is_go_back(exc):  # a Back replays the wizard section: its flow may resume there
+        if not _is_go_back(
+            exc
+        ):  # a Back replays the wizard section: its flow may resume there
             _close_backed_out()
         raise
     else:
@@ -364,7 +438,10 @@ def _resumes(flow: SetupFlow, surface: Any, provider: Any) -> bool:
     try:
         from .shared_metrics_catalog import provider_metric_name
 
-        return provider not in _NOT_A_PROVIDER and (flow.surface, flow.provider) == (surface, provider_metric_name(provider))
+        return provider not in _NOT_A_PROVIDER and (flow.surface, flow.provider) == (
+            surface,
+            provider_metric_name(provider),
+        )
     except Exception:
         return False
 
@@ -384,7 +461,10 @@ def cli_provider_setup(provider: Any) -> Iterator[None]:
     if pending is not None and not _resumes(pending[0], surface, provider):
         finish_provider_setup(pending[0], "abandoned")
         pending = None
-    flow, before = pending or (begin_provider_setup(surface, provider) if surface else None, None)
+    flow, before = pending or (
+        begin_provider_setup(surface, provider) if surface else None,
+        None,
+    )
     if flow is None:
         yield
         return
@@ -417,6 +497,7 @@ def cli_provider_setup(provider: Any) -> Iterator[None]:
 
 # ---- dashboard / Desktop OAuth sessions ------------------------------------------------------
 
+
 def web_setup_surface() -> str:
     from clawk_cli.process_identity import is_desktop_owned_backend
 
@@ -425,7 +506,9 @@ def web_setup_surface() -> str:
 
 def begin_oauth_setup(provider: str, clawk_home: Any) -> SetupFlow | None:
     try:
-        return begin_provider_setup(web_setup_surface(), provider, clawk_home=clawk_home)
+        return begin_provider_setup(
+            web_setup_surface(), provider, clawk_home=clawk_home
+        )
     except Exception:
         logger.debug("OAuth setup start not recorded", exc_info=True)
         return None
@@ -450,7 +533,11 @@ def settle_oauth_setup(sess: dict[str, Any] | None, *, abandoned: bool = False) 
         if not isinstance(sess, dict) or sess.get(_OAUTH_SESSION_KEY) is None:
             return
         status = "cancelled" if sess.get("cancelled") else str(sess.get("status") or "")
-        ending = _OAUTH_REASONS.get(str(sess.get("reason") or "")) if status in {"denied", "error"} else None
+        ending = (
+            _OAUTH_REASONS.get(str(sess.get("reason") or ""))
+            if status in {"denied", "error"}
+            else None
+        )
         ending = ending or _OAUTH_ENDINGS.get(status)
         if ending is None and status == "error":
             ending = ("failed", sess.get(_OAUTH_FAILURE_KEY) or "other")

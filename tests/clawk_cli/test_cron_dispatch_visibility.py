@@ -17,6 +17,7 @@ from clawk_cli.cron import (
     cron_list,
 )
 
+
 @pytest.fixture()
 def tmp_cron_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("cron.jobs.CRON_DIR", tmp_path / "cron")
@@ -24,12 +25,14 @@ def tmp_cron_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
     return tmp_path
 
+
 def _stamp_last_dispatch(job_id, stamp):
     jobs = load_jobs()
     for job in jobs:
         if job["id"] == job_id:
             job["last_dispatch"] = stamp
     save_jobs(jobs)
+
 
 def _catch_up_stamp(late_seconds=1860.0, kind="catch_up"):
     scheduled = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
@@ -40,11 +43,10 @@ def _catch_up_stamp(late_seconds=1860.0, kind="catch_up"):
         "kind": kind,
     }
 
+
 class TestCronListDispatchLine:
     def test_catch_up_dispatch_rendered(self, tmp_cron_dir, capsys, monkeypatch):
-        monkeypatch.setattr(
-            "clawk_cli.cron._warn_if_gateway_not_running", lambda: None
-        )
+        monkeypatch.setattr("clawk_cli.cron._warn_if_gateway_not_running", lambda: None)
         job = create_job(prompt="daily report", schedule="0 9 * * *")
         _stamp_last_dispatch(job["id"], _catch_up_stamp())
 
@@ -57,9 +59,7 @@ class TestCronListDispatchLine:
         assert "31m late" in out
 
     def test_on_time_dispatch_rendered_quietly(self, tmp_cron_dir, capsys, monkeypatch):
-        monkeypatch.setattr(
-            "clawk_cli.cron._warn_if_gateway_not_running", lambda: None
-        )
+        monkeypatch.setattr("clawk_cli.cron._warn_if_gateway_not_running", lambda: None)
         job = create_job(prompt="daily report", schedule="0 9 * * *")
         _stamp_last_dispatch(job["id"], _catch_up_stamp(30.0, kind="on_time"))
 
@@ -71,14 +71,13 @@ class TestCronListDispatchLine:
         assert "catch-up" not in out
 
     def test_no_stamp_no_dispatch_line(self, tmp_cron_dir, capsys, monkeypatch):
-        monkeypatch.setattr(
-            "clawk_cli.cron._warn_if_gateway_not_running", lambda: None
-        )
+        monkeypatch.setattr("clawk_cli.cron._warn_if_gateway_not_running", lambda: None)
         create_job(prompt="daily report", schedule="0 9 * * *")
 
         cron_list()
 
         assert "Dispatch:" not in capsys.readouterr().out
+
 
 class TestStatusLateJobsCallout:
     def test_late_jobs_called_out(self, capsys):
@@ -120,6 +119,7 @@ class TestStatusLateJobsCallout:
         _print_active_jobs_summary(jobs)
 
         assert "fired late" not in capsys.readouterr().out
+
 
 class TestDisplayHelpers:
     def test_format_lateness(self):

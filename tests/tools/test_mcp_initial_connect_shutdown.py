@@ -13,6 +13,7 @@ from tools import mcp_tool_loop as _mcp_loop
 
 def _reset_mcp_state(mcp_tool) -> None:
     from tools.mcp_tool_lifecycle import shutdown_mcp_servers
+
     shutdown_mcp_servers()
     with mcp_tool._lock:
         mcp_tool._servers.clear()
@@ -23,6 +24,7 @@ def _reset_mcp_state(mcp_tool) -> None:
 def _cleanup_mcp_state(mcp_tool, extra_servers=()) -> None:
     from tools.mcp_tool_lifecycle import shutdown_mcp_servers
     from tools.mcp_tool_loop import _run_on_mcp_loop
+
     with mcp_tool._lock:
         loop = mcp_tool._mcp_loop
     if loop is not None and loop.is_running():
@@ -71,24 +73,26 @@ def test_initial_connect_failure_is_registry_owned_and_reaped(monkeypatch, tmp_p
         )
 
     def _observed_stop(*, only_if_idle=False):
-        pending_at_stop.extend(
-            _mcp_loop._run_on_mcp_loop(_pending_tasks, timeout=5)
-        )
+        pending_at_stop.extend(_mcp_loop._run_on_mcp_loop(_pending_tasks, timeout=5))
         return real_stop(only_if_idle=only_if_idle)
 
     monkeypatch.setattr(_mcp_loop, "_stop_mcp_loop", _observed_stop)
 
     try:
-        assert _mcp_discovery.register_mcp_servers({
-            "initial-failure": {"command": "unused", "connect_timeout": 5}
-        }) == []
+        assert (
+            _mcp_discovery.register_mcp_servers(
+                {"initial-failure": {"command": "unused", "connect_timeout": 5}}
+            )
+            == []
+        )
 
         assert len(created) == 1
         server = created[0]
         with mcp_tool._lock:
             assert mcp_tool._servers["initial-failure"] is server
-            assert "deterministic initial failure" in (
-                mcp_tool._server_connect_errors["initial-failure"]
+            assert (
+                "deterministic initial failure"
+                in (mcp_tool._server_connect_errors["initial-failure"])
             )
         assert server._task is not None
         assert not server._task.done(), "recoverable initial failure was not parked"
@@ -96,8 +100,7 @@ def test_initial_connect_failure_is_registry_owned_and_reaped(monkeypatch, tmp_p
         _mcp_lifecycle.shutdown_mcp_servers()
 
         assert pending_at_stop == [], (
-            "shutdown left MCP tasks pending at loop stop: "
-            f"{pending_at_stop!r}"
+            f"shutdown left MCP tasks pending at loop stop: {pending_at_stop!r}"
         )
         assert server._task.done()
         with mcp_tool._lock:
@@ -144,15 +147,17 @@ def test_initial_connect_failure_revives_same_registered_server(monkeypatch, tmp
                 raise ConnectionError("backend still booting")
 
             self.session = _Session()
-            self._tools = [SimpleNamespace(
-                name="ping",
-                description="Return a deterministic revival result",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"value": {"type": "string"}},
-                    "required": ["value"],
-                },
-            )]
+            self._tools = [
+                SimpleNamespace(
+                    name="ping",
+                    description="Return a deterministic revival result",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {"value": {"type": "string"}},
+                        "required": ["value"],
+                    },
+                )
+            ]
             # Match the real transports: discovery runs before _ready is set.
             self._register_discovered_tools_if_needed()
             self._ready.set()
@@ -165,9 +170,7 @@ def test_initial_connect_failure_revives_same_registered_server(monkeypatch, tmp
     monkeypatch.setattr(mcp_tool, "_PARKED_RETRY_INTERVAL", 3600)
     monkeypatch.setattr(registry_module, "registry", mock_registry)
 
-    config = {
-        "recovering": {"command": "unused", "connect_timeout": 5}
-    }
+    config = {"recovering": {"command": "unused", "connect_timeout": 5}}
 
     try:
         assert _mcp_discovery.register_mcp_servers(config) == []
@@ -175,8 +178,9 @@ def test_initial_connect_failure_revives_same_registered_server(monkeypatch, tmp
         server = created[0]
         with mcp_tool._lock:
             assert mcp_tool._servers["recovering"] is server
-            assert "backend still booting" in (
-                mcp_tool._server_connect_errors["recovering"]
+            assert (
+                "backend still booting"
+                in (mcp_tool._server_connect_errors["recovering"])
             )
         assert not server._task.done()
 
@@ -195,9 +199,7 @@ def test_initial_connect_failure_revives_same_registered_server(monkeypatch, tmp
         entry = mock_registry.get_entry("mcp__recovering__ping")
         assert entry is not None
         assert entry.check_fn() is True
-        assert json.loads(entry.handler({"value": "ok"})) == {
-            "result": "revived:ok"
-        }
+        assert json.loads(entry.handler({"value": "ok"})) == {"result": "revived:ok"}
         assert state["tool_calls"] == 1
     finally:
         _cleanup_mcp_state(mcp_tool, created)
@@ -234,9 +236,12 @@ def test_initial_auth_failure_is_retained_and_reaped(monkeypatch, tmp_path):
     monkeypatch.setattr(_mcp_errors, "_is_auth_error", lambda exc: True)
 
     try:
-        assert _mcp_discovery.register_mcp_servers({
-            "auth-failure": {"command": "unused", "connect_timeout": 5}
-        }) == []
+        assert (
+            _mcp_discovery.register_mcp_servers(
+                {"auth-failure": {"command": "unused", "connect_timeout": 5}}
+            )
+            == []
+        )
         assert len(created) == 1
         server = created[0]
         assert not server._task.done(), (
@@ -244,8 +249,9 @@ def test_initial_auth_failure_is_retained_and_reaped(monkeypatch, tmp_path):
         )
         with mcp_tool._lock:
             assert mcp_tool._servers["auth-failure"] is server
-            assert "terminal authentication failure" in (
-                mcp_tool._server_connect_errors["auth-failure"]
+            assert (
+                "terminal authentication failure"
+                in (mcp_tool._server_connect_errors["auth-failure"])
             )
 
         _mcp_lifecycle.shutdown_mcp_servers()
@@ -254,7 +260,9 @@ def test_initial_auth_failure_is_retained_and_reaped(monkeypatch, tmp_path):
         _cleanup_mcp_state(mcp_tool, created)
 
 
-def test_standalone_failed_connect_is_reaped_without_global_owner(monkeypatch, tmp_path):
+def test_standalone_failed_connect_is_reaped_without_global_owner(
+    monkeypatch, tmp_path
+):
     """Probe-only _connect_server failures must not publish parked servers."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 

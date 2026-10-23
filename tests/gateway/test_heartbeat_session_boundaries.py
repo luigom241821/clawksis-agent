@@ -22,9 +22,14 @@ def test_reset_clears_only_the_departing_conversations_heartbeat(tmp_path):
     save_heartbeat("unrelated", state)
     db = store._db_for_key(key)
     db.publish_compression_child(
-        parent_session_id=parent, child_session_id=child, source="telegram",
-        require_compression_lease=False, model="offline", model_config={},
-        system_prompt="offline", messages=[{"role": "user", "content": "retained"}],
+        parent_session_id=parent,
+        child_session_id=child,
+        source="telegram",
+        require_compression_lease=False,
+        model="offline",
+        model_config={},
+        system_prompt="offline",
+        messages=[{"role": "user", "content": "retained"}],
     )
     assert migrate_heartbeat_to_session(parent, child)
     assert store.advance_compression_session(key, parent, child)

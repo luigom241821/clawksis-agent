@@ -12,8 +12,6 @@ from clawk_cli.setup_hidden_env import is_setup_hidden_env
 
 
 class TestIsSetupHiddenEnv:
-
-
     def test_applies_to_plugin_platforms_nobody_enumerated(self):
         """Suffix matching is the point — IRC/SimpleX/ntfy get this for free."""
         for key in (
@@ -26,14 +24,12 @@ class TestIsSetupHiddenEnv:
 
 
 class TestChannelCards:
-
     def test_no_card_shows_a_hidden_knob(self):
         from clawk_cli.web_server_messaging import _messaging_platform_catalog
 
         for entry in _messaging_platform_catalog():
             for key in entry["env_vars"]:
                 assert not is_setup_hidden_env(key), f"{entry['id']}: {key}"
-
 
     def test_hidden_knobs_move_to_the_keys_page_not_into_a_void(self):
         """Keys hides what a Channels card owns. Dropping these from the card
@@ -82,9 +78,7 @@ class TestCliWizard:
     def test_wizard_stops_asking_about_hidden_knobs(self, home, monkeypatch, capsys):
         # Only the three real answers. If the wizard still prompted for the
         # home channel it would read past them.
-        self._run(
-            ["https://mm.example.com", "tok-abc", "user26charid"], monkeypatch
-        )
+        self._run(["https://mm.example.com", "tok-abc", "user26charid"], monkeypatch)
 
         written = self._env(home)
         assert written.get("MATTERMOST_URL") == "https://mm.example.com"

@@ -29,7 +29,9 @@ _BARE_PHONE_RE = re.compile(r"^\+?[\d\s().\-]+$")
 def normalize_whatsapp_identifier(value: str) -> str:
     """Strip JID/LID/device/plus syntax down to the bare numeric identifier:
     ``"6012:47@s.whatsapp.net"``, ``"6012@lid"`` and ``"+6012"`` all become ``"6012"``."""
-    return str(value or "").strip().replace("+", "", 1).split(":", 1)[0].split("@", 1)[0]
+    return (
+        str(value or "").strip().replace("+", "", 1).split(":", 1)[0].split("@", 1)[0]
+    )
 
 
 def to_whatsapp_jid(value: str) -> str:
@@ -92,7 +94,9 @@ def expand_whatsapp_aliases(identifier: str) -> set[str]:
                     json.loads(mapping_path.read_text(encoding="utf-8-sig"))
                 )
             except (OSError, json.JSONDecodeError) as exc:
-                logger.debug("whatsapp_identity: failed to read %s: %s", mapping_path, exc)
+                logger.debug(
+                    "whatsapp_identity: failed to read %s: %s", mapping_path, exc
+                )
                 continue
             if mapped and mapped not in resolved:
                 queue.append(mapped)

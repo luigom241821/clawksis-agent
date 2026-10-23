@@ -41,7 +41,8 @@ class TestBackendHeartbeatRefresher:
         monkeypatch.setattr(server, "_heartbeat_refresher_started", False)
         # Use a stable backend id for assertion.
         monkeypatch.setattr(
-            server, "_backend_id_for_this_process",
+            server,
+            "_backend_id_for_this_process",
             lambda: "test-backend-A",
         )
 
@@ -59,7 +60,8 @@ class TestBackendHeartbeatRefresher:
         monkeypatch.setattr(server, "_HEARTBEAT_REFRESH_S", 0.0)
         monkeypatch.setattr(server, "_heartbeat_refresher_started", False)
         monkeypatch.setattr(
-            server, "_backend_id_for_this_process",
+            server,
+            "_backend_id_for_this_process",
             lambda: "test-backend-A",
         )
 
@@ -89,7 +91,6 @@ class TestBackendHeartbeatRefresher:
         server._start_backend_heartbeat_refresher()
 
 
-
 class TestEntryAndWsWiring:
     """The orphan-sweep wiring pattern (entry.main + handle_ws) extends
     to the heartbeat refresher: both sites must call the start helper."""
@@ -112,7 +113,9 @@ class TestEntryAndWsWiring:
         monkeypatch.setattr(entry, "write_json", lambda _payload: True)
         monkeypatch.setattr(entry.sys, "stdin", io.StringIO(""))
 
-        monkeypatch.setattr(model_switch_providers, "prewarm_picker_cache_async", lambda: None)
+        monkeypatch.setattr(
+            model_switch_providers, "prewarm_picker_cache_async", lambda: None
+        )
 
         entry.main()
         assert started["n"] == 1
@@ -124,7 +127,8 @@ class TestEntryAndWsWiring:
 
         started = {"n": 0}
         monkeypatch.setattr(
-            server, "_start_backend_heartbeat_refresher",
+            server,
+            "_start_backend_heartbeat_refresher",
             lambda: started.__setitem__("n", started["n"] + 1),
         )
         monkeypatch.setattr(server, "resolve_skin", lambda: "default")

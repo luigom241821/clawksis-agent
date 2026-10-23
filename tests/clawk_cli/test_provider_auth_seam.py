@@ -76,7 +76,9 @@ def install_provider(tmp_path, monkeypatch):
         plugin_dir.mkdir(parents=True, exist_ok=True)
         (plugin_dir / "plugin.yaml").write_text(
             f"name: {name}\nkind: model-provider\nversion: 0.0.1\n"
-            "description: provider auth seam fixture\n", encoding="utf-8")
+            "description: provider auth seam fixture\n",
+            encoding="utf-8",
+        )
         source = _PLUGIN_SOURCE.replace("__NAME__", name)
         if not with_handler:
             source = source.replace(", auth_handler=handler", "")
@@ -121,17 +123,51 @@ def _log(tmp_path: Path) -> list[dict]:
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        (["add", "fake-auth", "--label", "work", "--api-key", "sk-fixture"],
-         {"action": "add", "provider": "fake-auth", "label": "work", "target": None, "api_key": "sk-fixture"}),
-        (["status", "fake-auth"],
-         {"action": "status", "provider": "fake-auth", "label": None, "target": None, "api_key": None}),
-        (["logout", "fake-auth"],
-         {"action": "logout", "provider": "fake-auth", "label": None, "target": None, "api_key": None}),
-        (["refresh", "fake-auth", "acct-2"],
-         {"action": "refresh", "provider": "fake-auth", "label": None, "target": "acct-2", "api_key": None}),
+        (
+            ["add", "fake-auth", "--label", "work", "--api-key", "sk-fixture"],
+            {
+                "action": "add",
+                "provider": "fake-auth",
+                "label": "work",
+                "target": None,
+                "api_key": "sk-fixture",
+            },
+        ),
+        (
+            ["status", "fake-auth"],
+            {
+                "action": "status",
+                "provider": "fake-auth",
+                "label": None,
+                "target": None,
+                "api_key": None,
+            },
+        ),
+        (
+            ["logout", "fake-auth"],
+            {
+                "action": "logout",
+                "provider": "fake-auth",
+                "label": None,
+                "target": None,
+                "api_key": None,
+            },
+        ),
+        (
+            ["refresh", "fake-auth", "acct-2"],
+            {
+                "action": "refresh",
+                "provider": "fake-auth",
+                "label": None,
+                "target": "acct-2",
+                "api_key": None,
+            },
+        ),
     ],
 )
-def test_oauth_plugin_owns_every_auth_action(tmp_path, install_provider, capsys, argv, expected):
+def test_oauth_plugin_owns_every_auth_action(
+    tmp_path, install_provider, capsys, argv, expected
+):
     """An oauth_external plugin registers and `clawk auth <action>` reaches its handler, args included,
     before any built-in path (nothing printed, nothing written to the pool)."""
     install_provider()
@@ -149,7 +185,9 @@ def test_oauth_plugin_owns_every_auth_action(tmp_path, install_provider, capsys,
     assert not (tmp_path / "clawk" / "auth.json").exists()
 
 
-def test_oauth_plugin_without_handler_fails_loud_and_builtins_are_untouched(tmp_path, install_provider):
+def test_oauth_plugin_without_handler_fails_loud_and_builtins_are_untouched(
+    tmp_path, install_provider
+):
     """No handler on an oauth-shaped profile = a clear error naming the missing hook (never a silent
     api-key prompt or "Unknown provider"); a built-in provider never consults the seam."""
     install_provider("handlerless", with_handler=False)
@@ -158,9 +196,22 @@ def test_oauth_plugin_without_handler_fails_loud_and_builtins_are_untouched(tmp_
 
     with pytest.raises(SystemExit) as excinfo:
         auth_command(_parse_auth_args(["add", "handlerless"]))
-    assert "ships no auth_handler" in str(excinfo.value) and "oauth_external" in str(excinfo.value)
+    assert "ships no auth_handler" in str(excinfo.value) and "oauth_external" in str(
+        excinfo.value
+    )
 
-    auth_command(_parse_auth_args(["add", "openrouter", "--api-key", "sk-or-fixture", "--label", "personal"]))
+    auth_command(
+        _parse_auth_args(
+            ["add", "openrouter", "--api-key", "sk-or-fixture", "--label", "personal"]
+        )
+    )
     assert _log(tmp_path) == []
-    pool = json.loads((tmp_path / "clawk" / "auth.json").read_text(encoding="utf-8"))["credential_pool"]
-    assert next(e for e in pool["openrouter"] if e["access_token"] == "sk-or-fixture")["label"] == "personal"
+    pool = json.loads((tmp_path / "clawk" / "auth.json").read_text(encoding="utf-8"))[
+        "credential_pool"
+    ]
+    assert (
+        next(e for e in pool["openrouter"] if e["access_token"] == "sk-or-fixture")[
+            "label"
+        ]
+        == "personal"
+    )

@@ -92,6 +92,7 @@ def make_async_session_db(sync_mock=None):
     the facade works in tests. Returns (facade, sync_mock); configure return
     values and assert calls on sync_mock."""
     from clawk_state import AsyncSessionDB
+
     sync_mock = sync_mock if sync_mock is not None else MagicMock()
     return AsyncSessionDB(sync_mock), sync_mock
 
@@ -127,7 +128,10 @@ def _fake_str_enum(enum_name: str, **members: str):
     from types import SimpleNamespace
 
     return SimpleNamespace(
-        **{name: _FakeEnumMember(enum_name, name, value) for name, value in members.items()}
+        **{
+            name: _FakeEnumMember(enum_name, name, value)
+            for name, value in members.items()
+        }
     )
 
 
@@ -240,12 +244,15 @@ def _ensure_discord_mock() -> None:
             self.color = color
             self.fields = []
             self.footer = None
+
         def add_field(self, *, name=None, value=None, inline=False, **_):
             self.fields.append({"name": name, "value": value, "inline": inline})
             return self
+
         def set_footer(self, *, text=None, icon_url=None, **_):
             self.footer = {"text": text, "icon_url": icon_url}
             return self
+
     discord_mod.Embed = _FakeEmbed
 
     # ui.View / ui.Select / ui.Button: real classes (not MagicMock) so
@@ -255,8 +262,10 @@ def _ensure_discord_mock() -> None:
         def __init__(self, timeout=None):
             self.timeout = timeout
             self.children = []
+
         def add_item(self, item):
             self.children.append(item)
+
         def clear_items(self):
             self.children.clear()
 
@@ -269,8 +278,19 @@ def _ensure_discord_mock() -> None:
             self.disabled = False
 
     class _FakeButton:
-        def __init__(self, *, label=None, style=None, custom_id=None, emoji=None,
-                     url=None, disabled=False, row=None, sku_id=None, **_):
+        def __init__(
+            self,
+            *,
+            label=None,
+            style=None,
+            custom_id=None,
+            emoji=None,
+            url=None,
+            disabled=False,
+            row=None,
+            sku_id=None,
+            **_,
+        ):
             self.label = label
             self.style = style
             self.custom_id = custom_id
@@ -286,6 +306,7 @@ def _ensure_discord_mock() -> None:
             self.label = label
             self.value = value
             self.description = description
+
     discord_mod.SelectOption = _FakeSelectOption
 
     # AudioSource: real class so VoiceMixer(discord.AudioSource) can subclass
@@ -294,25 +315,38 @@ def _ensure_discord_mock() -> None:
     class _FakeAudioSource:
         def is_opus(self):
             return False
+
         def read(self):
             return b"\x00" * 3840  # one silent stereo s16 frame
+
         def cleanup(self):
             pass
+
     discord_mod.AudioSource = _FakeAudioSource
 
     discord_mod.ui = SimpleNamespace(
         View=_FakeView,
         Select=_FakeSelect,
         Button=_FakeButton,
-        button=lambda *a, **k: (lambda fn: fn),
+        button=lambda *a, **k: lambda fn: fn,
     )
     discord_mod.ButtonStyle = SimpleNamespace(
-        success=1, primary=2, secondary=2, danger=3,
-        green=1, grey=2, blurple=2, red=3,
+        success=1,
+        primary=2,
+        secondary=2,
+        danger=3,
+        green=1,
+        grey=2,
+        blurple=2,
+        red=3,
     )
     discord_mod.Color = SimpleNamespace(
-        orange=lambda: 1, green=lambda: 2, blue=lambda: 3,
-        red=lambda: 4, purple=lambda: 5, greyple=lambda: 6,
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+        greyple=lambda: 6,
         gold=lambda: 7,
     )
 
@@ -337,8 +371,8 @@ def _ensure_discord_mock() -> None:
             self.parent = parent
 
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
         Group=_FakeGroup,
         Command=_FakeCommand,
@@ -556,6 +590,7 @@ def pytest_configure(config):
     # tests/gateway/relay/* files under the 96-way per-file runner.
     try:
         from filelock import FileLock
+
         lock = FileLock(str(lock_file), timeout=120)
     except ImportError:
         # Fallback: no locking (still correct, just slower under contention).
@@ -563,8 +598,10 @@ def pytest_configure(config):
         class _NoLock:
             def __enter__(self):
                 return self
+
             def __exit__(self, *a):
                 pass
+
         lock = _NoLock()
 
     with lock:
@@ -654,12 +691,17 @@ def owner(tmp_path):
     from clawk_state import SessionDB
     from clawk_state_runtime import begin_runtime_epoch
 
-    db = SessionDB(tmp_path / 'state.db')
-    store = SessionStore(config=GatewayConfig(), sessions_dir=tmp_path / 'sessions')
+    db = SessionDB(tmp_path / "state.db")
+    store = SessionStore(config=GatewayConfig(), sessions_dir=tmp_path / "sessions")
     store._db = db  # production: the routing store and the authority share the profile's state.db
     runner = SimpleNamespace(_draining=False, session_store=store)
-    authority = SessionAuthority(runner, profile_id='default', instance_id='first', db=db,
-                                 epoch=begin_runtime_epoch(db, instance_id='first'))
+    authority = SessionAuthority(
+        runner,
+        profile_id="default",
+        instance_id="first",
+        db=db,
+        epoch=begin_runtime_epoch(db, instance_id="first"),
+    )
     runner.session_authority = authority
     yield authority
     db.close()
@@ -671,7 +713,7 @@ def api(owner, tmp_path, monkeypatch):
     from gateway.config import PlatformConfig
     from gateway.platforms.api_server import APIServerAdapter
 
-    monkeypatch.setenv('CLAWK_HOME', str(tmp_path))
+    monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     adapter = APIServerAdapter(PlatformConfig(enabled=True))
     adapter.gateway_runner = owner.runner
     adapter._session_db = owner.db
@@ -693,27 +735,60 @@ def hosted_owner(tmp_path, monkeypatch):
     from gateway.session_authority import initialize_session_authority
     from gateway.session_contract import Principal
     from gateway import run, session_policy
-    monkeypatch.setattr(run, '_load_gateway_config', lambda: {'model': {'default': 'fixture'}, 'platform_toolsets': {'cli': []}})
-    monkeypatch.setattr(run, '_resolve_gateway_model', lambda cfg: 'fixture')
+
+    monkeypatch.setattr(
+        run,
+        "_load_gateway_config",
+        lambda: {"model": {"default": "fixture"}, "platform_toolsets": {"cli": []}},
+    )
+    monkeypatch.setattr(run, "_resolve_gateway_model", lambda cfg: "fixture")
     # Parent-owned private restore hook, explicitly not an ordinary-daemon proof.
     original = session_policy.restore_policy
+
     def restore(data):
         from dataclasses import replace
-        if data['source'] == 'bot_room':
-            return replace(original({**data, 'source': 'gui', 'platform': 'desktop'}), source='bot_room', platform='bot_room')
+
+        if data["source"] == "bot_room":
+            return replace(
+                original({**data, "source": "gui", "platform": "desktop"}),
+                source="bot_room",
+                platform="bot_room",
+            )
         return original(data)
-    monkeypatch.setattr(session_policy, 'restore_policy', restore)
-    store = SessionStore(tmp_path / 'sessions', GatewayConfig())
+
+    monkeypatch.setattr(session_policy, "restore_policy", restore)
+    store = SessionStore(tmp_path / "sessions", GatewayConfig())
     agent = SimpleNamespace(interrupted=False)
-    agent.interrupt = lambda: setattr(agent, 'interrupted', True)
-    runner = SimpleNamespace(session_store=store, _session_db=store._db, adapters={}, _draining=False,
-                             _cached_agent_for=lambda route: agent)
+    agent.interrupt = lambda: setattr(agent, "interrupted", True)
+    runner = SimpleNamespace(
+        session_store=store,
+        _session_db=store._db,
+        adapters={},
+        _draining=False,
+        _cached_agent_for=lambda route: agent,
+    )
     loop = asyncio.new_event_loop()
     thread = threading.Thread(target=loop.run_forever)
     thread.start()
-    authority = asyncio.run_coroutine_threadsafe(initialize_session_authority(runner, profile_id='owned', instance_id='first'), loop).result()
-    monkeypatch.setattr(authority, '_schedule', lambda ref: None)
-    principal = Principal('durable-room-owner', 'owned', frozenset({'session:create', 'session:read', 'session:submit', 'session:control', 'session:approve'}), 'room-worker')
+    authority = asyncio.run_coroutine_threadsafe(
+        initialize_session_authority(runner, profile_id="owned", instance_id="first"),
+        loop,
+    ).result()
+    monkeypatch.setattr(authority, "_schedule", lambda ref: None)
+    principal = Principal(
+        "durable-room-owner",
+        "owned",
+        frozenset(
+            {
+                "session:create",
+                "session:read",
+                "session:submit",
+                "session:control",
+                "session:approve",
+            }
+        ),
+        "room-worker",
+    )
     yield authority, loop, principal, agent
     loop.call_soon_threadsafe(loop.stop)
     thread.join()

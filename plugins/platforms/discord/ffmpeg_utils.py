@@ -26,7 +26,11 @@ def resolve_ffmpeg_executable() -> str:
     if discovered := _shared_find_ffmpeg():
         return discovered
     if local_appdata := os.getenv("LOCALAPPDATA"):
-        candidates = sorted((Path(local_appdata) / "Microsoft" / "WinGet" / "Packages").glob("Gyan.FFmpeg_*/*/bin/ffmpeg.exe"))
+        candidates = sorted(
+            (Path(local_appdata) / "Microsoft" / "WinGet" / "Packages").glob(
+                "Gyan.FFmpeg_*/*/bin/ffmpeg.exe"
+            )
+        )
         if candidates:
             return str(candidates[-1])
     return "ffmpeg"

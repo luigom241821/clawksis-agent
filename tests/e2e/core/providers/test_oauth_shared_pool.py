@@ -32,9 +32,13 @@ from tests.e2e.core.providers._oauth_helpers import (
     wait_until,
 )
 
-pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="tagged-tree cleanup uses /proc")
+pytestmark = pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="tagged-tree cleanup uses /proc"
+)
 
-SLOW_TOKEN_ENDPOINT_S = 2.0  # vendor latency window while both processes contend, not synchronization
+SLOW_TOKEN_ENDPOINT_S = (
+    2.0  # vendor latency window while both processes contend, not synchronization
+)
 
 
 def _who(record: dict) -> str:
@@ -71,12 +75,28 @@ def test_concurrent_refresh_across_processes_spends_the_token_once(tmp_path) -> 
 
     rig.tokens.before_refresh_response = slow_token_endpoint
     box: dict = {}
-    thread_a = threading.Thread(target=lambda: box.setdefault("a", run_clawk(
-        rig.fh, ["-z", "PROCESS-ALPHA say hi"], extra_env=rig.child_env, timeout=150)), daemon=True)
+    thread_a = threading.Thread(
+        target=lambda: box.setdefault(
+            "a",
+            run_clawk(
+                rig.fh,
+                ["-z", "PROCESS-ALPHA say hi"],
+                extra_env=rig.child_env,
+                timeout=150,
+            ),
+        ),
+        daemon=True,
+    )
     try:
         thread_a.start()
-        wait_until(lambda: any(_who(r) == "A" for r in rig.messages.main_requests()), 90, "process A's first call")
-        proc_b = run_clawk(rig.fh, ["-z", "PROCESS-BRAVO say hi"], extra_env=rig.child_env, timeout=150)
+        wait_until(
+            lambda: any(_who(r) == "A" for r in rig.messages.main_requests()),
+            90,
+            "process A's first call",
+        )
+        proc_b = run_clawk(
+            rig.fh, ["-z", "PROCESS-BRAVO say hi"], extra_env=rig.child_env, timeout=150
+        )
         thread_a.join(150)
     finally:
         for ev in (b_arrived, both_rejected):
@@ -90,16 +110,35 @@ def test_concurrent_refresh_across_processes_spends_the_token_once(tmp_path) -> 
 
     grants = rig.tokens.refresh_grants()
     summary = [(g.presented, g.status, g.error) for g in grants]
-    assert sorted(rejected) == ["A", "B"], f"setup: both processes must see the 401 (saw {rejected})"
-    assert not rig.messages.schema_errors(), f"request bodies violate the SDK schema: {rig.messages.schema_errors()}"
+    assert sorted(rejected) == ["A", "B"], (
+        f"setup: both processes must see the 401 (saw {rejected})"
+    )
+    assert not rig.messages.schema_errors(), (
+        f"request bodies violate the SDK schema: {rig.messages.schema_errors()}"
+    )
     assert [g.status for g in grants] == [200], (
         f"the single-use refresh token must be spent exactly once across processes; grants={summary}\n"
-        f"{show('A', proc_a)}\n{show('B', proc_b)}")
-    new_access, new_refresh = grants[0].issued_access_token, grants[0].issued_refresh_token
+        f"{show('A', proc_a)}\n{show('B', proc_b)}"
+    )
+    new_access, new_refresh = (
+        grants[0].issued_access_token,
+        grants[0].issued_refresh_token,
+    )
     for name, proc in (("A", proc_a), ("B", proc_b)):
-        assert proc.returncode == 0 and f"ANSWER-{name}" in proc.stdout, show(name, proc)
-    retried = {_who(r): credential(r) for r in rig.messages.main_requests() if credential(r) != OLD_ACCESS}
-    assert retried == {"A": new_access, "B": new_access}, f"retries did not use the rotated bearer: {retried}"
+        assert proc.returncode == 0 and f"ANSWER-{name}" in proc.stdout, show(
+            name, proc
+        )
+    retried = {
+        _who(r): credential(r)
+        for r in rig.messages.main_requests()
+        if credential(r) != OLD_ACCESS
+    }
+    assert retried == {"A": new_access, "B": new_access}, (
+        f"retries did not use the rotated bearer: {retried}"
+    )
     row = rig.pool_row("e1")
-    assert row.get("refresh_token") == new_refresh and rig.tokens.is_live(new_refresh), (
-        f"auth.json does not hold the live rotated refresh token: disk={row.get('refresh_token')!r}")
+    assert row.get("refresh_token") == new_refresh and rig.tokens.is_live(
+        new_refresh
+    ), (
+        f"auth.json does not hold the live rotated refresh token: disk={row.get('refresh_token')!r}"
+    )

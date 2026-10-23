@@ -1,4 +1,5 @@
 """A gateway stop that wins the race with the dashboard's lifespan start never leaves it mounted."""
+
 import asyncio
 import sys
 import types
@@ -19,12 +20,16 @@ def test_close_during_lifespan_entry_unmounts_and_exits_the_lifespan(monkeypatch
         async def __aexit__(self, *exc):
             exits.append(exc)
 
-    app = types.SimpleNamespace(state=types.SimpleNamespace(gateway_runner=None),
-                                router=types.SimpleNamespace(lifespan_context=lambda app: _Lifespan()))
+    app = types.SimpleNamespace(
+        state=types.SimpleNamespace(gateway_runner=None),
+        router=types.SimpleNamespace(lifespan_context=lambda app: _Lifespan()),
+    )
     web = types.SimpleNamespace(app=app, _configure_auth_gate=lambda *a: None)
     monkeypatch.setitem(sys.modules, "clawk_cli.web_server", web)
     runner = types.SimpleNamespace(session_authority=object())
-    mount = GatewayDashboardMount(runner, types.SimpleNamespace(bound_host="127.0.0.1", bound_port=1))
+    mount = GatewayDashboardMount(
+        runner, types.SimpleNamespace(bound_host="127.0.0.1", bound_port=1)
+    )
 
     async def scenario():
         warm = asyncio.create_task(mount.ensure())

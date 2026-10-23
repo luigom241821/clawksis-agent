@@ -20,9 +20,10 @@ class TestParseTargetPlatformChat:
         assert target.chat_id == "12345"
         assert target.is_explicit is True
 
-
     def test_origin_with_source(self):
-        origin = SessionSource(platform=Platform.TELEGRAM, chat_id="789", thread_id="42")
+        origin = SessionSource(
+            platform=Platform.TELEGRAM, chat_id="789", thread_id="42"
+        )
         target = DeliveryTarget.parse("origin", origin=origin)
         assert target.platform == Platform.TELEGRAM
         assert target.chat_id == "789"
@@ -32,34 +33,33 @@ class TestParseTargetPlatformChat:
 
 class TestTargetToStringRoundtrip:
     def test_origin_roundtrip(self):
-        origin = SessionSource(platform=Platform.TELEGRAM, chat_id="111", thread_id="42")
+        origin = SessionSource(
+            platform=Platform.TELEGRAM, chat_id="111", thread_id="42"
+        )
         target = DeliveryTarget.parse("origin", origin=origin)
         assert target.to_string() == "origin"
 
 
 class TestCaseSensitiveChatIdParsing:
     """Test that chat IDs preserve their original case (issue #11768)."""
-    
+
     def test_slack_uppercase_chat_id_preserved(self):
         """Slack channel IDs like C123ABC should preserve case."""
         target = DeliveryTarget.parse("slack:C123ABC")
         assert target.platform == Platform.SLACK
         assert target.chat_id == "C123ABC"  # Should NOT be lowercased to c123abc
         assert target.is_explicit is True
-    
-    
-    
 
 
 class TestPlatformNameCaseInsensitivity:
     """Test that platform names are case-insensitive."""
-    
+
     def test_uppercase_platform_name(self):
         """Platform names should be case-insensitive."""
         target = DeliveryTarget.parse("TELEGRAM:12345")
         assert target.platform == Platform.TELEGRAM
         assert target.chat_id == "12345"
-    
+
 
 class _RelayDeliveryTransport:
     """Relay transport that advertises Slack and records outbound wire frames."""
@@ -71,7 +71,10 @@ class _RelayDeliveryTransport:
     async def send_outbound(self, action, *, platform=None):
         self.sent.append((action, platform))
         if not action.get("metadata", {}).get("user_id"):
-            return {"success": False, "error": "target not routed to an onboarded tenant"}
+            return {
+                "success": False,
+                "error": "target not routed to an onboarded tenant",
+            }
         return {"success": True, "message_id": "relay-message-1"}
 
 
@@ -94,8 +97,12 @@ def _make_relay(transport, platform="slack", max_message_length=4000):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("content", ["scheduled result", "x" * 5000], ids=["short", "oversized"])
-async def test_relay_fronted_target_delivers_without_prior_inbound_chat_state(tmp_path, monkeypatch, content):
+@pytest.mark.parametrize(
+    "content", ["scheduled result", "x" * 5000], ids=["short", "oversized"]
+)
+async def test_relay_fronted_target_delivers_without_prior_inbound_chat_state(
+    tmp_path, monkeypatch, content
+):
     """A persisted Slack home receives the complete payload from the gateway."""
     monkeypatch.setattr("gateway.delivery.get_clawk_home", lambda: tmp_path)
     transport = _RelayDeliveryTransport()
@@ -143,7 +150,9 @@ class RecordingAdapter:
         self.ensure_dm_topic_calls = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.calls.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        self.calls.append(
+            {"chat_id": chat_id, "content": content, "metadata": metadata}
+        )
         return {"success": True}
 
     async def ensure_dm_topic(self, chat_id, topic_name, force_create=False):
@@ -154,7 +163,9 @@ class RecordingAdapter:
 
 
 @pytest.mark.asyncio
-async def test_native_adapter_wins_when_relay_also_fronts_platform(tmp_path, monkeypatch):
+async def test_native_adapter_wins_when_relay_also_fronts_platform(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("gateway.delivery.get_clawk_home", lambda: tmp_path)
     native = RecordingAdapter()
     transport = _RelayDeliveryTransport()
@@ -224,9 +235,13 @@ class StaleTopicAdapter:
         self.ensure_dm_topic_calls = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.calls.append({"chat_id": chat_id, "content": content, "metadata": dict(metadata or {})})
+        self.calls.append(
+            {"chat_id": chat_id, "content": content, "metadata": dict(metadata or {})}
+        )
         if len(self.calls) == 1:
-            return SendResult(success=False, error="Bad Request: message thread not found")
+            return SendResult(
+                success=False, error="Bad Request: message thread not found"
+            )
         return SendResult(success=True, message_id="fresh-message")
 
     async def ensure_dm_topic(self, chat_id, topic_name, force_create=False):
@@ -237,7 +252,9 @@ class StaleTopicAdapter:
 
 
 @pytest.mark.asyncio
-async def test_named_telegram_private_topic_is_created_before_delivery(tmp_path, monkeypatch):
+async def test_named_telegram_private_topic_is_created_before_delivery(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("gateway.delivery.get_clawk_home", lambda: tmp_path)
     adapter = RecordingAdapter()
     router = DeliveryRouter(GatewayConfig(), adapters={Platform.TELEGRAM: adapter})
@@ -246,7 +263,11 @@ async def test_named_telegram_private_topic_is_created_before_delivery(tmp_path,
     await router._deliver_to_platform(target, "hello", metadata=None)
 
     assert adapter.ensure_dm_topic_calls == [
-        {"chat_id": "722341991", "topic_name": "Clawksis API Test", "force_create": False}
+        {
+            "chat_id": "722341991",
+            "topic_name": "Clawksis API Test",
+            "force_create": False,
+        }
     ]
     assert adapter.calls == [
         {
@@ -261,7 +282,9 @@ async def test_named_telegram_private_topic_is_created_before_delivery(tmp_path,
 
 
 @pytest.mark.asyncio
-async def test_explicit_telegram_private_thread_uses_reply_fallback_with_anchor(tmp_path, monkeypatch):
+async def test_explicit_telegram_private_thread_uses_reply_fallback_with_anchor(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("gateway.delivery.get_clawk_home", lambda: tmp_path)
     adapter = RecordingAdapter()
     router = DeliveryRouter(GatewayConfig(), adapters={Platform.TELEGRAM: adapter})
@@ -295,15 +318,19 @@ class FailingAdapter:
 # Cron output truncation / adapter-aware chunking (issue #50126)
 # ---------------------------------------------------------------------------
 
+
 class ChunkingAdapter:
     """Adapter that declares splits_long_messages=True (like Discord/Telegram)."""
+
     splits_long_messages = True
 
     def __init__(self):
         self.calls = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.calls.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        self.calls.append(
+            {"chat_id": chat_id, "content": content, "metadata": metadata}
+        )
         return {"success": True}
 
 
@@ -314,7 +341,9 @@ class NonChunkingAdapter:
         self.calls = []
 
     async def send(self, chat_id, content, metadata=None):
-        self.calls.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        self.calls.append(
+            {"chat_id": chat_id, "content": content, "metadata": metadata}
+        )
         return {"success": True}
 
 
@@ -362,11 +391,13 @@ def _simulate_windows_codepage_write(monkeypatch):
 
 # Non-ASCII content larger than MAX_PLATFORM_OUTPUT (4000) to force the
 # truncate-and-save branch in _deliver_to_platform.
-_NON_ASCII_OVERSIZED = ("数据备份完成 🎉 résumé — " * 250)
+_NON_ASCII_OVERSIZED = "数据备份完成 🎉 résumé — " * 250
 
 
 @pytest.mark.asyncio
-async def test_oversized_non_ascii_output_is_delivered_on_windows_codepage(tmp_path, monkeypatch):
+async def test_oversized_non_ascii_output_is_delivered_on_windows_codepage(
+    tmp_path, monkeypatch
+):
     """Oversized cron output containing emoji/CJK must still be delivered.
 
     Without an explicit utf-8 encoding the full-output save raises
@@ -413,7 +444,9 @@ def test_local_delivery_writes_non_ascii_on_windows_codepage(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
-async def test_relay_fronted_telegram_target_receives_payload_above_its_own_limit(tmp_path, monkeypatch):
+async def test_relay_fronted_telegram_target_receives_payload_above_its_own_limit(
+    tmp_path, monkeypatch
+):
     """The gateway does not pre-truncate for a relay-fronted Telegram chat.
 
     The connector splits egress against the negotiated max_message_length

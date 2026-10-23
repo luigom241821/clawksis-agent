@@ -37,8 +37,8 @@ def _make_flush_agent(db: SessionDB, session_id: str):
         _pending_cli_user_message=None,
     )
     agent._ensure_db_session = lambda: None
-    agent._flush_messages_to_session_db = (
-        AIAgent._flush_messages_to_session_db.__get__(agent, AIAgent)
+    agent._flush_messages_to_session_db = AIAgent._flush_messages_to_session_db.__get__(
+        agent, AIAgent
     )
     agent._flush_messages_to_session_db_unlocked = (
         AIAgent._flush_messages_to_session_db_unlocked.__get__(agent, AIAgent)
@@ -114,4 +114,3 @@ def test_rotation_flush_writes_only_new_tail(tmp_path: Path) -> None:
         "persisted answer",
         "new unpersisted turn",
     ]
-

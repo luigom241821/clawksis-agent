@@ -22,6 +22,7 @@ import json
 
 import pytest
 
+
 @pytest.fixture
 def clawk_env(tmp_path, monkeypatch):
     """Isolate CLAWK_HOME for each test so jobs don't leak."""
@@ -33,13 +34,17 @@ def clawk_env(tmp_path, monkeypatch):
     import importlib
 
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.jobs
+
     importlib.reload(cron.jobs)
     import cron.scheduler
+
     importlib.reload(cron.scheduler)
 
     return home
+
 
 def _create_job() -> dict:
     from tools.cronjob_tools import cronjob
@@ -53,6 +58,7 @@ def _create_job() -> dict:
             deliver="local",
         )
     )
+
 
 class TestCreateSurfacesGatewayLiveness:
     def test_create_with_gateway_running_has_no_warning(self, clawk_env):
@@ -69,11 +75,11 @@ class TestCreateSurfacesGatewayLiveness:
         ):
             result = _create_job()
 
-        assert result["success"] is True, (
-            "the job itself is still created successfully"
-        )
+        assert result["success"] is True, "the job itself is still created successfully"
         assert result["gateway_running"] is False
-        assert result.get("warning"), "the model must be told the job won't fire (#87033)"
+        assert result.get("warning"), (
+            "the model must be told the job won't fire (#87033)"
+        )
 
     def test_non_builtin_provider_is_exempt(self, clawk_env):
         """External schedulers (e.g. Chronos) fire without the gateway —
@@ -93,6 +99,7 @@ class TestCreateSurfacesGatewayLiveness:
         assert result["success"] is True
         assert result["gateway_running"] is None
         assert "warning" not in result
+
 
 class TestListSurfacesGatewayLiveness:
     """The `list` action has the same silent-inert-job failure mode as
@@ -121,7 +128,9 @@ class TestListSurfacesGatewayLiveness:
 
         assert result["success"] is True
         assert result["gateway_running"] is False
-        assert result.get("warning"), "the model must be told the listed jobs won't fire (#87033)"
+        assert result.get("warning"), (
+            "the model must be told the listed jobs won't fire (#87033)"
+        )
 
     def test_list_empty_without_gateway_stays_quiet(self, clawk_env):
         """Nothing scheduled + no gateway → no alarm; there is nothing inert."""
@@ -141,9 +150,11 @@ class TestListSurfacesGatewayLiveness:
         assert result["gateway_running"] is True
         assert "warning" not in result
 
+
 # ---------------------------------------------------------------------------
 
 from contextlib import ExitStack
+
 
 class _LivenessPatches:
     """Context manager patching the provider/gateway-pid probes.
@@ -200,8 +211,10 @@ class _LivenessPatches:
     def __exit__(self, *exc):
         return self._stack.__exit__(*exc)
 
+
 def patch_liveness(*, provider, pids, lock_active=False):
     return _LivenessPatches(provider=provider, pids=pids, lock_active=lock_active)
+
 
 class TestRuntimeLockFirstLiveness:
     """The gateway runtime lock is the primary liveness signal (#95947).

@@ -25,7 +25,8 @@ def _patch_config(monkeypatch, entries: dict) -> None:
     import clawk_cli.config as config_mod
 
     monkeypatch.setattr(
-        config_mod, "load_config",
+        config_mod,
+        "load_config",
         lambda *a, **k: {"plugins": {"entries": entries}},
     )
 
@@ -85,9 +86,7 @@ def test_default_deny_when_config_unreadable(monkeypatch):
 
 
 def test_unlisted_server_denied_even_with_other_grants(monkeypatch):
-    _patch_config(
-        monkeypatch, {"my-plugin": {"mcp_allowlist": ["knowledge_rag"]}}
-    )
+    _patch_config(monkeypatch, {"my-plugin": {"mcp_allowlist": ["knowledge_rag"]}})
     ctx = _make_ctx()
     with pytest.raises(PermissionError) as exc:
         ctx.call_mcp("github", "create_issue")
@@ -133,7 +132,9 @@ def test_allowed_call_routes_through_existing_handler(monkeypatch):
 
 def test_error_result_maps_to_ok_false(monkeypatch):
     _patch_config(monkeypatch, {"my-plugin": {"mcp_allowlist": ["github"]}})
-    _patch_handler(monkeypatch, json.dumps({"error": "MCP server 'github' is not connected"}))
+    _patch_handler(
+        monkeypatch, json.dumps({"error": "MCP server 'github' is not connected"})
+    )
 
     ctx = _make_ctx()
     result = ctx.call_mcp("github", "create_issue")
@@ -158,8 +159,6 @@ def test_structured_content_passthrough(monkeypatch):
 # ---------------------------------------------------------------------------
 # Timeout handling
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_timeout_defaults_and_bounds(monkeypatch):

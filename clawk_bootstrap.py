@@ -52,15 +52,21 @@ def _quiet_unregister(selector, sock) -> None:
         pass
 
 
-def _happy_eyeballs_create_connection(address: tuple[str, int], timeout: float | None,
-                                      source_address: tuple[str, int] | None = None, socket_options=()):
+def _happy_eyeballs_create_connection(
+    address: tuple[str, int],
+    timeout: float | None,
+    source_address: tuple[str, int] | None = None,
+    socket_options=(),
+):
     """RFC 8305-style connect: staggered non-blocking attempts across families.
 
     ``socket.create_connection`` tries addresses serially, so broken-but-
     advertised IPv6 can burn the whole timeout per AAAA record before IPv4.
     """
     host, port = address
-    addrinfos = _interleave_addrinfos(socket.getaddrinfo(host, port, type=socket.SOCK_STREAM))
+    addrinfos = _interleave_addrinfos(
+        socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    )
     if not addrinfos:
         raise OSError(f"getaddrinfo returned no addresses for {host}")
 
@@ -71,16 +77,27 @@ def _happy_eyeballs_create_connection(address: tuple[str, int], timeout: float |
     deadline = None if timeout is None else time.monotonic() + max(timeout, 0.0)
     next_launch = time.monotonic()
     pending = list(addrinfos)
-    in_progress = {0, errno.EINPROGRESS, errno.EWOULDBLOCK, errno.EALREADY, errno.EINTR, getattr(errno, "WSAEWOULDBLOCK", 10035)}
+    in_progress = {
+        0,
+        errno.EINPROGRESS,
+        errno.EWOULDBLOCK,
+        errno.EALREADY,
+        errno.EINTR,
+        getattr(errno, "WSAEWOULDBLOCK", 10035),
+    }
 
     def start_attempt(addrinfo):
         family, socktype, proto, _canonname, sockaddr = addrinfo
         candidate = socket.socket(family, socktype, proto)
         try:
             if source_address is not None:
-                local_infos = socket.getaddrinfo(source_address[0], source_address[1], family=family, type=socktype)
+                local_infos = socket.getaddrinfo(
+                    source_address[0], source_address[1], family=family, type=socktype
+                )
                 if not local_infos:
-                    raise OSError(f"getaddrinfo returned no local {family} address for {source_address[0]}")
+                    raise OSError(
+                        f"getaddrinfo returned no local {family} address for {source_address[0]}"
+                    )
                 candidate.bind(local_infos[0][4])
             candidate.setblocking(False)
             result = candidate.connect_ex(sockaddr)
@@ -114,7 +131,11 @@ def _happy_eyeballs_create_connection(address: tuple[str, int], timeout: float |
             wait_timeout = None if deadline is None else max(0.0, deadline - now)
             if pending:
                 until_launch = max(0.0, next_launch - now)
-                wait_timeout = until_launch if wait_timeout is None else min(wait_timeout, until_launch)
+                wait_timeout = (
+                    until_launch
+                    if wait_timeout is None
+                    else min(wait_timeout, until_launch)
+                )
             for key, _mask in selector.select(wait_timeout):
                 candidate = key.fileobj
                 error_code = candidate.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
@@ -131,7 +152,11 @@ def _happy_eyeballs_create_connection(address: tuple[str, int], timeout: float |
                 next_launch = time.monotonic()
 
         if winner is None:
-            raise last_error if last_error is not None else OSError(f"Could not connect to {host}:{port}")
+            raise (
+                last_error
+                if last_error is not None
+                else OSError(f"Could not connect to {host}:{port}")
+            )
         _quiet_unregister(selector, winner)
         active.discard(winner)
         winner.settimeout(timeout)
@@ -152,12 +177,20 @@ def _patch_urllib3_create_connection(module) -> None:
         return
     urllib3_sentinel = module._DEFAULT_TIMEOUT
 
-    def _urllib3_racer(address, timeout=urllib3_sentinel, source_address=None, socket_options=None):
-        effective = socket.getdefaulttimeout() if timeout is urllib3_sentinel else timeout
+    def _urllib3_racer(
+        address, timeout=urllib3_sentinel, source_address=None, socket_options=None
+    ):
+        effective = (
+            socket.getdefaulttimeout() if timeout is urllib3_sentinel else timeout
+        )
         # OSError = every candidate failed (identical to the serial original); anything else is a
         # racer bug and must surface rather than silently fall back to the serial stall.
         return _happy_eyeballs_create_connection(
-            address, effective, source_address=source_address, socket_options=tuple(socket_options or ()))
+            address,
+            effective,
+            source_address=source_address,
+            socket_options=tuple(socket_options or ()),
+        )
 
     _urllib3_racer._clawk_happy_eyeballs = True  # type: ignore[attr-defined]
     module.create_connection = _urllib3_racer
@@ -205,14 +238,26 @@ def install_happy_eyeballs_socket_connect() -> None:
     if getattr(socket.create_connection, "_clawk_happy_eyeballs", False):
         return
 
-    def _socket_racer(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None, *, all_errors=False):
+    def _socket_racer(
+        address,
+        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+        source_address=None,
+        *,
+        all_errors=False,
+    ):
         # Stock create_connection leaves the sentinel alone, so the socket keeps the
         # process default from socket.setdefaulttimeout(); the racer re-applies the
         # timeout on the winner, so it must resolve the sentinel the same way.
-        effective = socket.getdefaulttimeout() if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+        effective = (
+            socket.getdefaulttimeout()
+            if timeout is socket._GLOBAL_DEFAULT_TIMEOUT
+            else timeout
+        )
         # OSError = every candidate failed (identical to the serial original); anything else is a
         # racer bug and must surface rather than silently fall back to the serial stall.
-        return _happy_eyeballs_create_connection(address, effective, source_address=source_address)
+        return _happy_eyeballs_create_connection(
+            address, effective, source_address=source_address
+        )
 
     _socket_racer._clawk_happy_eyeballs = True  # type: ignore[attr-defined]
     socket.create_connection = _socket_racer
@@ -220,7 +265,9 @@ def install_happy_eyeballs_socket_connect() -> None:
     urllib3_connection = sys.modules.get(_URLLIB3_CONNECTION_MODULE)
     if urllib3_connection is not None:
         _patch_urllib3_create_connection(urllib3_connection)
-    elif not any(isinstance(finder, _Urllib3ConnectionPatcher) for finder in sys.meta_path):
+    elif not any(
+        isinstance(finder, _Urllib3ConnectionPatcher) for finder in sys.meta_path
+    ):
         sys.meta_path.insert(0, _Urllib3ConnectionPatcher())
 
 
@@ -287,7 +334,9 @@ def enable_windows_vt(streams=None) -> bool:
             continue
         if mode.value & _ENABLE_VIRTUAL_TERMINAL_PROCESSING:
             continue
-        if not kernel32.SetConsoleMode(handle, mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING):
+        if not kernel32.SetConsoleMode(
+            handle, mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        ):
             enabled = False
     if not enabled:
         os.environ.setdefault("NO_COLOR", "1")
@@ -312,8 +361,13 @@ def suppress_platform_ver_console() -> None:
         import platform
 
         if hasattr(platform, "_syscmd_ver"):
-            def _quiet_syscmd_ver(system="", release="", version="",
-                                  supported_platforms=("win32", "win16", "dos")):
+
+            def _quiet_syscmd_ver(
+                system="",
+                release="",
+                version="",
+                supported_platforms=("win32", "win16", "dos"),
+            ):
                 return system, release, version
 
             platform._syscmd_ver = _quiet_syscmd_ver
@@ -328,7 +382,10 @@ def _glibc_frees_environ() -> bool:
         return False
     try:
         libc, _, version = (os.confstr("CS_GNU_LIBC_VERSION") or "").partition(" ")
-        return libc == "glibc" and tuple(int(p) for p in version.split(".")[:2]) < (2, 41)
+        return libc == "glibc" and tuple(int(p) for p in version.split(".")[:2]) < (
+            2,
+            41,
+        )
     except (AttributeError, OSError, TypeError, ValueError):
         return False
 
@@ -352,7 +409,10 @@ def install_never_free_environ() -> None:
     ``getenv`` that started walking that array before our swap can still fault. None of
     the gateway's crash paths do this.
     """
-    if getattr(os.putenv, "_clawk_never_free_environ", False) or not _glibc_frees_environ():
+    if (
+        getattr(os.putenv, "_clawk_never_free_environ", False)
+        or not _glibc_frees_environ()
+    ):
         return
     import _thread
     import ctypes
@@ -369,10 +429,18 @@ def install_never_free_environ() -> None:
     # other's new name or undoes its replacement. Reentrant: audit hooks run inside it.
     lock = _thread.RLock()
     # A fork while another thread holds the lock would leave it held forever in the child.
-    os.register_at_fork(before=lock.acquire, after_in_parent=lock.release, after_in_child=lock.release)
-    lines: dict[bytes, ctypes.Array] = {}  # b"NAME=value" -> its C string (glibc's known_values)
-    arrays: list[tuple[ctypes.Array, int]] = []  # every array we published + its address; only the last grows
-    gen = [0]  # bumped by every publish, so a nested write inside an audited call forces a redo
+    os.register_at_fork(
+        before=lock.acquire, after_in_parent=lock.release, after_in_child=lock.release
+    )
+    lines: dict[
+        bytes, ctypes.Array
+    ] = {}  # b"NAME=value" -> its C string (glibc's known_values)
+    arrays: list[
+        tuple[ctypes.Array, int]
+    ] = []  # every array we published + its address; only the last grows
+    gen = [
+        0
+    ]  # bumped by every publish, so a nested write inside an audited call forces a redo
 
     def _putenv(key, value) -> None:
         name, val = os.fsencode(key), os.fsencode(value)
@@ -394,7 +462,11 @@ def install_never_free_environ() -> None:
                 # walk compares pointers instead of reading every string.
                 found = getenv(name)
                 target = found - len(prefix) if found else None
-                live = ctypes.cast(environ.value, ctypes.POINTER(ctypes.c_void_p)) if environ.value else None
+                live = (
+                    ctypes.cast(environ.value, ctypes.POINTER(ctypes.c_void_p))
+                    if environ.value
+                    else None
+                )
                 n, hit = 0, False
                 while live and (current := live[n]):
                     if current == target:
@@ -402,10 +474,16 @@ def install_never_free_environ() -> None:
                         break
                     n += 1
                 own, own_addr = arrays[-1] if arrays else (None, None)
-                grow = not hit and not (own is not None and environ.value == own_addr and n + 2 <= len(own))
+                grow = not hit and not (
+                    own is not None and environ.value == own_addr and n + 2 <= len(own)
+                )
                 if grow:
-                    fresh = (ctypes.c_void_p * max(2 * (n + 2), 64))(*(live[:n] if live else ()), entry)
-                    fresh_addr = ctypes.cast(fresh, ctypes.c_void_p).value  # unaudited, unlike addressof
+                    fresh = (ctypes.c_void_p * max(2 * (n + 2), 64))(
+                        *(live[:n] if live else ()), entry
+                    )
+                    fresh_addr = ctypes.cast(
+                        fresh, ctypes.c_void_p
+                    ).value  # unaudited, unlike addressof
                 if gen[0] == start:
                     break
             # No audited call from here on. Plain aligned stores: a concurrent walker sees them in
@@ -415,14 +493,18 @@ def install_never_free_environ() -> None:
             if hit:
                 live[n] = entry  # replace in place, as glibc does
             elif not grow:
-                own[n + 1] = None  # terminator first, so a walker never runs past the new entry
+                own[n + 1] = (
+                    None  # terminator first, so a walker never runs past the new entry
+                )
                 own[n] = entry
             else:
                 arrays.append((fresh, fresh_addr))
                 environ.value = fresh_addr
 
     def _unsetenv(key) -> None:
-        with lock:  # glibc shifts the entries of the live array (ours included) in place
+        with (
+            lock
+        ):  # glibc shifts the entries of the live array (ours included) in place
             real_unsetenv(key)
             gen[0] += 1
 
@@ -442,8 +524,10 @@ def harden_import_path(src_root: str | None = None) -> None:
     absent. ``src_root`` defaults to this module's directory (the repo root for every
     shipped entry point), so no spawner env var is required.
     """
-    root = src_root or os.environ.get("CLAWK_PYTHON_SRC_ROOT") or os.path.dirname(
-        os.path.abspath(__file__)
+    root = (
+        src_root
+        or os.environ.get("CLAWK_PYTHON_SRC_ROOT")
+        or os.path.dirname(os.path.abspath(__file__))
     )
 
     sys.path[:] = [p for p in sys.path if p not in ("", ".")]
@@ -463,6 +547,7 @@ def export_scratch_tmp_env() -> None:
     """
     try:
         from clawk_constants import export_scratch_tmp_env as _export
+
         _export()
     except Exception:
         pass  # a missing/unwritable home just leaves the system temp dir in place
@@ -518,7 +603,10 @@ def _settle_interrupted_update() -> None:
         from clawk_cli import _early_recovery as recovery
     except ImportError:
         moved_aside = _root / "clawk_cli.clawk-update-old" / "_early_recovery.py"
-        if not (_root / ".clawk-update-zip-swap").is_file() or not moved_aside.is_file():
+        if (
+            not (_root / ".clawk-update-zip-swap").is_file()
+            or not moved_aside.is_file()
+        ):
             return  # not a torn update: the imports below report the real damage
         import types
 
@@ -534,7 +622,9 @@ def _settle_interrupted_update() -> None:
             if recovery.restore_interrupted_pull(_root):
                 recovery.relaunch_after_restore()
         finally:
-            for name in [n for n in sys.modules if n == "clawk_cli" or n.startswith("clawk_cli.")]:
+            for name in [
+                n for n in sys.modules if n == "clawk_cli" or n.startswith("clawk_cli.")
+            ]:
                 del sys.modules[name]
         return
     if recovery.restore_interrupted_pull(_root):
@@ -549,7 +639,9 @@ def _pin_launcher_home() -> None:
     root. That needs ``clawk_constants`` from the checkout, so the launcher asks for it here, after
     the repair above: a merge killed while writing ``clawk_constants.py`` must not keep the repair
     from ever running. The flag name is ``_launchers.PIN_DEFAULT_HOME_FLAG``."""
-    if getattr(sys, "_clawk_pin_default_home", False) and not os.environ.get("CLAWK_HOME"):
+    if getattr(sys, "_clawk_pin_default_home", False) and not os.environ.get(
+        "CLAWK_HOME"
+    ):
         from clawk_constants import get_default_clawk_root
 
         os.environ["CLAWK_HOME"] = str(get_default_clawk_root())
@@ -571,6 +663,7 @@ if _legacy_post_swap is not None:
 class RelaunchExit(SystemExit):
     """Exit carrying a relaunched child's status: that child already produced this run's output,
     so callers that report their own boot failures (the Bot Chat delivery runner) must not."""
+
     relaunched = True
 
 
@@ -589,7 +682,10 @@ if not _pm_repair:
         if _launch_python is not None:
             _main_spec = getattr(sys.modules.get("__main__"), "__spec__", None)
             _command = relaunch_command(
-                _launch_python, _root, sys.argv, sys.orig_argv,
+                _launch_python,
+                _root,
+                sys.argv,
+                sys.orig_argv,
                 getattr(_main_spec, "name", None),
             )
             if os.name == "nt":
@@ -598,21 +694,27 @@ if not _pm_repair:
                 raise RelaunchExit(subprocess.call(_command))
             os.execv(str(_launch_python), _command)
     except Exception as exc:
-        if isinstance(exc, PermissionError) and (message := install_state_permission_message(_root, exc)):
+        if isinstance(exc, PermissionError) and (
+            message := install_state_permission_message(_root, exc)
+        ):
             print(f"clawk: {message}", file=sys.stderr)
             raise SystemExit(1) from None
         # Degrade, never brick the CLI: the previous dependency generation is still selected
         # (a failed sync commits nothing), so an offline or half-finished update leaves a
         # usable Clawksis plus a warning. Activation below is the real gate — a tree whose
         # dependencies cannot load still exits with the repair remedy.
-        print(f"clawk: source-update completion failed: {exc}; "
-              "running with the previous dependencies — run `clawk update` to finish it",
-              file=sys.stderr)
+        print(
+            f"clawk: source-update completion failed: {exc}; "
+            "running with the previous dependencies — run `clawk update` to finish it",
+            file=sys.stderr,
+        )
     try:
         recover_if_needed(_root)
         activate_dependencies(_root)
     except (RuntimeError, OSError) as exc:
-        if isinstance(exc, PermissionError) and (message := install_state_permission_message(_root, exc)):
+        if isinstance(exc, PermissionError) and (
+            message := install_state_permission_message(_root, exc)
+        ):
             print(f"clawk: {message}", file=sys.stderr)
             raise SystemExit(1) from None
         if command_argv(sys.argv[1:])[:1] != ["pm"]:

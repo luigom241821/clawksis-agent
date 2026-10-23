@@ -40,8 +40,9 @@ def _setup(tmp_path, *, ps1=b"WRITE-HOST current\n", sh=b"echo current\n"):
 
 
 def _run(home, root, branch="main"):
-    with patch.object(cli_main, "get_clawk_home", return_value=str(home)), patch.object(
-        cli_main, "PROJECT_ROOT", root
+    with (
+        patch.object(cli_main, "get_clawk_home", return_value=str(home)),
+        patch.object(cli_main, "PROJECT_ROOT", root),
     ):
         cli_main._refresh_bootstrap_cache_scripts(branch)
 

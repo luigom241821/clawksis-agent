@@ -21,8 +21,12 @@ READY_TIMEOUT = 120.0
 class StdioGateway:
     def __init__(self, home: WinHome) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "tui_gateway.entry"], cwd=home.project, env=home.env(),
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            [sys.executable, "-m", "tui_gateway.entry"],
+            cwd=home.project,
+            env=home.env(),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         self._frames: queue.Queue[bytes | None] = queue.Queue()
         self._stderr: list[bytes] = []
@@ -49,7 +53,9 @@ class StdioGateway:
 
     def send(self, obj: dict[str, Any]) -> None:
         assert self.proc.stdin is not None
-        self.proc.stdin.write(json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n")
+        self.proc.stdin.write(
+            json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n"
+        )
         self.proc.stdin.flush()
 
     def _pump(self, timeout: float) -> None:
@@ -58,7 +64,9 @@ class StdioGateway:
         except queue.Empty:
             return
         if raw is None:
-            raise AssertionError(f"tui_gateway closed stdout (rc={self.proc.poll()}):\n{self.stderr[-3000:]}")
+            raise AssertionError(
+                f"tui_gateway closed stdout (rc={self.proc.poll()}):\n{self.stderr[-3000:]}"
+            )
         try:
             msg = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
@@ -66,25 +74,44 @@ class StdioGateway:
         if msg.get("method") == "event":
             self.events.append(msg.get("params") or {})
         elif "id" in msg and "method" in msg:
-            self.send({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32601, "message": "unsupported"}})
+            self.send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg["id"],
+                    "error": {"code": -32601, "message": "unsupported"},
+                }
+            )
         elif "id" in msg:
             self._responses[str(msg["id"])] = msg
 
-    def call(self, method: str, params: dict[str, Any] | None = None, timeout: float = TURN_TIMEOUT) -> Any:
+    def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        timeout: float = TURN_TIMEOUT,
+    ) -> Any:
         self._next += 1
         rid = f"win-{self._next}"
-        self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}})
+        self.send(
+            {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
+        )
         deadline = time.monotonic() + timeout
         while rid not in self._responses:
             if time.monotonic() > deadline:
-                raise AssertionError(f"{method}: no response within {timeout}s\n{self.stderr[-2000:]}")
+                raise AssertionError(
+                    f"{method}: no response within {timeout}s\n{self.stderr[-2000:]}"
+                )
             self._pump(0.25)
         resp = self._responses.pop(rid)
         assert "error" not in resp, f"{method} failed: {resp['error']}"
         return resp.get("result")
 
-    def wait_event(self, etype: str, pred: Callable[[dict], bool] = lambda _e: True,
-                   timeout: float = TURN_TIMEOUT) -> dict[str, Any]:
+    def wait_event(
+        self,
+        etype: str,
+        pred: Callable[[dict], bool] = lambda _e: True,
+        timeout: float = TURN_TIMEOUT,
+    ) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         seen = 0
         while True:
@@ -95,7 +122,8 @@ class StdioGateway:
             if time.monotonic() > deadline:
                 raise AssertionError(
                     f"no {etype!r} within {timeout}s; saw {[e.get('type') for e in self.events][-20:]}\n"
-                    f"{self.stderr[-2000:]}")
+                    f"{self.stderr[-2000:]}"
+                )
             self._pump(0.25)
 
     def turn(self, text: str) -> str:

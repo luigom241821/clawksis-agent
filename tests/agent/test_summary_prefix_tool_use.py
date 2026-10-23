@@ -12,10 +12,6 @@ from agent.context_compressor import (
 
 
 class TestSummaryPrefixToolUseClause:
-
-
-
-
     def test_strip_recognizes_current_and_frozen_prefixes(self):
         """Re-compaction normalization must strip both the live prefix and the
         newly frozen one (the incident generation)."""

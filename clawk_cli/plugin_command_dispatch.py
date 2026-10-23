@@ -5,7 +5,10 @@ from __future__ import annotations
 import inspect
 from typing import Any, Callable
 
-_KEYWORD_KINDS = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+_KEYWORD_KINDS = (
+    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    inspect.Parameter.KEYWORD_ONLY,
+)
 
 
 def invoke_plugin_command(handler: Callable, raw_args: str, **context: Any) -> Any:

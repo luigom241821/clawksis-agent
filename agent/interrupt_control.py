@@ -3,6 +3,7 @@
 Soft/hard interrupt requests, tool-thread interrupt propagation, pending steer/redirect queues.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import contextlib
 import logging
 import threading
@@ -21,7 +22,9 @@ logger = logging.getLogger("run_agent")
 _REASON_HARD_STOP = "explicit stop requested"
 _REASON_NEW_MESSAGE = "user sent a new message"
 _REASON_USER_INTERRUPT = "user interrupt"
-USER_INTERRUPT_REASONS = frozenset({_REASON_HARD_STOP, _REASON_NEW_MESSAGE, _REASON_USER_INTERRUPT})
+USER_INTERRUPT_REASONS = frozenset(
+    {_REASON_HARD_STOP, _REASON_NEW_MESSAGE, _REASON_USER_INTERRUPT}
+)
 # ``tool_reason`` the gateway's restart/shutdown stop passes (gateway.run._INTERRUPT_TOOL_REASON_GATEWAY_SHUTDOWN).
 _REASON_GATEWAY_SHUTDOWN = "gateway shutdown"
 
@@ -50,10 +53,16 @@ def interrupt_skip_wording(agent) -> str:
 def interrupted_during_api_call_reason(agent) -> str:
     """Turn exit reason for an API call cut short by an interrupt (``turn_explainers`` matches the prefix)."""
     issuer = interrupt_issuer(agent)
-    return f"interrupted_during_api_call({issuer})" if issuer else "interrupted_during_api_call"
+    return (
+        f"interrupted_during_api_call({issuer})"
+        if issuer
+        else "interrupted_during_api_call"
+    )
 
 
-def _fence_cancel_before_commit(fence, *, when_in_flight: bool, failure_log: str) -> None:
+def _fence_cancel_before_commit(
+    fence, *, when_in_flight: bool, failure_log: str
+) -> None:
     """Call ``type(fence).cancel_before_commit(fence)`` when ``commit_in_flight`` matches.
 
     Hard-cancel admission has two halves (#99758 P1). BEFORE the generation claim is
@@ -62,7 +71,10 @@ def _fence_cancel_before_commit(fence, *, when_in_flight: bool, failure_log: str
     fence there would be irreversible for an abort that may yet be declined. AFTER the
     claim survived, only a still-pending commit is cancelled; one that started meanwhile
     owns the fence and completes on its own."""
-    if fence is None or bool(getattr(fence, "commit_in_flight", False)) is not when_in_flight:
+    if (
+        fence is None
+        or bool(getattr(fence, "commit_in_flight", False)) is not when_in_flight
+    ):
         return
     cancel_before_commit = getattr(type(fence), "cancel_before_commit", None)
     if callable(cancel_before_commit):
@@ -161,8 +173,12 @@ class InterruptControlMixin:
     """interrupt()/hard_interrupt()/clear_interrupt()/steer()/redirect() (see module docstring)."""
 
     def interrupt(
-        self, message: Optional[str] = None, *, hard_cancel: bool = False,
-        tool_reason: Optional[str] = None, require_generation: Optional[int] = None,
+        self,
+        message: Optional[str] = None,
+        *,
+        hard_cancel: bool = False,
+        tool_reason: Optional[str] = None,
+        require_generation: Optional[int] = None,
     ) -> bool:
         """Request the agent to interrupt its current tool-calling loop (call from another thread).
 
@@ -175,7 +191,10 @@ class InterruptControlMixin:
             # RESERVE the claim under the SAME lock `_touch_activity` stamps with; real progress invalidates
             # it and it is CONSUMED at the final mutation edge, so a resumed turn abandons the abort.
             with self._liveness_activity_lock():
-                if getattr(self, "_turn_liveness_activity_generation", 0) != require_generation:
+                if (
+                    getattr(self, "_turn_liveness_activity_generation", 0)
+                    != require_generation
+                ):
                     return False
                 self._turn_liveness_abort_claim = require_generation
 
@@ -185,28 +204,48 @@ class InterruptControlMixin:
         # message made it look like "the user sent a new message", so the abort was attributed to the user
         # and rendered as a user-stop placeholder (#130207).
         tool_interrupt_reason = (
-            (tool_reason or _REASON_HARD_STOP) if hard_cancel
-            else (tool_reason or (_REASON_NEW_MESSAGE if message else _REASON_USER_INTERRUPT))
+            (tool_reason or _REASON_HARD_STOP)
+            if hard_cancel
+            else (
+                tool_reason
+                or (_REASON_NEW_MESSAGE if message else _REASON_USER_INTERRUPT)
+            )
         )
 
         def _publish_interrupt_state() -> None:
             # A shutdown stop never relabels a user Stop already pending (the user's Stop wins): the turn
             # records the first cause, so it is not announced as interrupted by the restart. A pending
             # redirect (a mid-request correction) is not a Stop: the restart drops it and is the cause.
-            if not (tool_reason == _REASON_GATEWAY_SHUTDOWN and getattr(self, "_interrupt_requested", False)
-                    and getattr(self, "_tool_interrupt_reason", None) in USER_INTERRUPT_REASONS):
+            if not (
+                tool_reason == _REASON_GATEWAY_SHUTDOWN
+                and getattr(self, "_interrupt_requested", False)
+                and getattr(self, "_tool_interrupt_reason", None)
+                in USER_INTERRUPT_REASONS
+            ):
                 self._interrupt_message = message
                 self._tool_interrupt_reason = tool_interrupt_reason
             self._interrupt_requested = True
             self._turn_user_intervened = True
             # The turn record and the log must agree on WHO asked for the stop (#112647).
-            logger.info("Interrupt requested (%s): %s", "hard" if hard_cancel else "soft", tool_interrupt_reason)
-            _hard_event = getattr(self, "_hard_interrupt_requested", None) if hard_cancel else None
+            logger.info(
+                "Interrupt requested (%s): %s",
+                "hard" if hard_cancel else "soft",
+                tool_interrupt_reason,
+            )
+            _hard_event = (
+                getattr(self, "_hard_interrupt_requested", None)
+                if hard_cancel
+                else None
+            )
             if _hard_event is not None:
                 _hard_event.set()
 
         def _fence():  # re-read each time: a finished commit may replace or clear the slot
-            return vars(self).get("_active_compression_commit_fence") if hard_cancel else None
+            return (
+                vars(self).get("_active_compression_commit_fence")
+                if hard_cancel
+                else None
+            )
 
         # A hard stop and redirect share one lock so /stop cannot race with an accepted correction and
         # accidentally turn itself into a retry. The blocking in-flight-commit wait runs BEFORE the atomic
@@ -214,7 +253,9 @@ class InterruptControlMixin:
         # survives (#99758 P1).
         with _ic_lock(self, "_pending_redirect_lock"):
             _fence_cancel_before_commit(
-                _fence(), when_in_flight=True, failure_log="Compression hard-cancel fence wait failed"
+                _fence(),
+                when_in_flight=True,
+                failure_log="Compression hard-cancel fence wait failed",
             )
             if require_generation is None:
                 # No claim to race: publish WITHOUT the liveness lock (bare AIAgent stand-ins in other
@@ -225,12 +266,17 @@ class InterruptControlMixin:
                 # activity-lock critical section, so either the claim survives and commits before any later
                 # activity stamp, or the stamp landed first and the abort declines without publishing.
                 with self._liveness_activity_lock():
-                    if getattr(self, "_turn_liveness_abort_claim", None) != require_generation:
+                    if (
+                        getattr(self, "_turn_liveness_abort_claim", None)
+                        != require_generation
+                    ):
                         return False
                     self._turn_liveness_abort_claim = None
                     _publish_interrupt_state()
             _fence_cancel_before_commit(
-                _fence(), when_in_flight=False, failure_log="Compression hard-cancel fence admission failed"
+                _fence(),
+                when_in_flight=False,
+                failure_log="Compression hard-cancel fence admission failed",
             )
             self._pending_redirect = None
 
@@ -244,10 +290,14 @@ class InterruptControlMixin:
 
         # Cron turns request on the conversation thread (no nested interrupt-worker deadlock); their client
         # is registered here so this cross-thread interrupt can still shut the sockets.
-        _ic_abort_active_request(self, "interrupt_abort", "Failed to abort active inline request")
+        _ic_abort_active_request(
+            self, "interrupt_abort", "Failed to abort active inline request"
+        )
         # Scope the tool interrupt to this agent's execution thread so other in-process agents are unaffected.
         if self._execution_thread_id is not None:
-            _set_interrupt(True, self._execution_thread_id, reason=tool_interrupt_reason)
+            _set_interrupt(
+                True, self._execution_thread_id, reason=tool_interrupt_reason
+            )
             self._interrupt_thread_signal_pending = False
         else:
             # Interrupt arrived before run_conversation bound the execution thread: defer the tool-level
@@ -260,22 +310,39 @@ class InterruptControlMixin:
         for child in children_copy:
             try:
                 if hard_cancel:
-                    request_hard_interrupt(child, message, tool_reason=tool_interrupt_reason)
+                    request_hard_interrupt(
+                        child, message, tool_reason=tool_interrupt_reason
+                    )
                 else:
                     child.interrupt(message)
             except Exception as e:
                 logger.debug("Failed to propagate interrupt to child agent: %s", e)
         if not self.quiet_mode:
-            print("\n⚡ Interrupt requested" + (f": '{message[:40]}...'" if message and len(message) > 40 else f": '{message}'" if message else ""))
+            print(
+                "\n⚡ Interrupt requested"
+                + (
+                    f": '{message[:40]}...'"
+                    if message and len(message) > 40
+                    else f": '{message}'"
+                    if message
+                    else ""
+                )
+            )
         return True
 
-    def hard_interrupt(self, message: Optional[str] = None, *, tool_reason: Optional[str] = None) -> None:
+    def hard_interrupt(
+        self, message: Optional[str] = None, *, tool_reason: Optional[str] = None
+    ) -> None:
         """Explicit stop preserving the ``interrupt()`` ABI (frontends feature-detect this and fall back to
         legacy ``interrupt()`` for third-party agents). Bypasses dynamic dispatch: legacy subclasses may
         override interrupt(message=None) without hard_cancel."""
-        InterruptControlMixin.interrupt(self, message, hard_cancel=True, tool_reason=tool_reason)
+        InterruptControlMixin.interrupt(
+            self, message, hard_cancel=True, tool_reason=tool_reason
+        )
 
-    def clear_interrupt(self, *, preserve_redirect: bool = False, hard_cancel: bool = False) -> bool:
+    def clear_interrupt(
+        self, *, preserve_redirect: bool = False, hard_cancel: bool = False
+    ) -> bool:
         """Clear the interrupt request and per-thread tool signal. ``preserve_redirect`` is only for the
         conversation loop rebuilding the same logical turn after cancelling a model request.
         ``hard_cancel`` also drops an unconsumed pending steer: the aborted turn's next tool iteration
@@ -285,7 +352,9 @@ class InterruptControlMixin:
         drains — the pre-API inject, the post-batch append, or the finalizer's leftover handoff —
         instead of silently vanishing after the surface was told it was delivered."""
         with _ic_lock(self, "_pending_redirect_lock"):
-            if preserve_redirect and not _ic_slot(self, "_pending_redirect_lock", "_pending_redirect"):
+            if preserve_redirect and not _ic_slot(
+                self, "_pending_redirect_lock", "_pending_redirect"
+            ):
                 return False
             self._interrupt_requested = False
             self._interrupt_message = self._tool_interrupt_reason = None
@@ -367,7 +436,9 @@ class InterruptControlMixin:
             if self._interrupt_requested and not existing:
                 return False
             self._pending_redirect = (
-                f"{existing}\n\n[Additional user correction]\n{cleaned}" if existing else cleaned
+                f"{existing}\n\n[Additional user correction]\n{cleaned}"
+                if existing
+                else cleaned
             )
             self._interrupt_requested = True
             self._interrupt_message = None
@@ -380,7 +451,9 @@ class InterruptControlMixin:
             self._interrupt_thread_signal_pending = False
         else:
             self._interrupt_thread_signal_pending = True
-        _ic_abort_active_request(self, "redirect_abort", "Failed to abort request for redirect")
+        _ic_abort_active_request(
+            self, "redirect_abort", "Failed to abort request for redirect"
+        )
         return True
 
     def _has_pending_redirect(self) -> bool:
@@ -404,7 +477,10 @@ class InterruptControlMixin:
             for ticket, _ in parts:
                 if ticket is not None:
                     _steer_fates(self)[ticket] = True
-            self._steer_last_drain = (text, parts)  # requeue_drained_steer restores its tickets
+            self._steer_last_drain = (
+                text,
+                parts,
+            )  # requeue_drained_steer restores its tickets
         return text
 
     def _drain_leftover_steer(self) -> Optional[str]:

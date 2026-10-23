@@ -12,6 +12,7 @@ draft-west-cookie-prefixes: bare name over HTTP; ``__Host-`` on gated HTTPS with
 ``__Secure-`` behind a proxy prefix (``__Host-`` forbids Path != /). Setters and readers BOTH
 resolve the name via :func:`_resolved_name` — a mismatch silently breaks sessions.
 """
+
 from __future__ import annotations
 
 import base64
@@ -72,24 +73,53 @@ def _pkce_attrs(*, use_https: bool, prefix: str) -> dict:
     return attrs
 
 
-def _set(response: Response, bare: str, value: str, *, max_age: int,
-         use_https: bool, prefix: str, attrs: dict | None = None) -> None:
+def _set(
+    response: Response,
+    bare: str,
+    value: str,
+    *,
+    max_age: int,
+    use_https: bool,
+    prefix: str,
+    attrs: dict | None = None,
+) -> None:
     response.set_cookie(
-        _resolved_name(bare, use_https=use_https, prefix=prefix), value, max_age=max_age,
-        **(attrs if attrs is not None else _common_attrs(use_https=use_https, prefix=prefix)))
+        _resolved_name(bare, use_https=use_https, prefix=prefix),
+        value,
+        max_age=max_age,
+        **(
+            attrs
+            if attrs is not None
+            else _common_attrs(use_https=use_https, prefix=prefix)
+        ),
+    )
 
 
 def set_session_provider_cookie(
-    response: Response, *, provider: str, use_https: bool, prefix: str = "") -> None:
+    response: Response, *, provider: str, use_https: bool, prefix: str = ""
+) -> None:
     """Persist the non-secret provider routing hint for token refresh."""
     if provider:
-        _set(response, SESSION_PROVIDER_COOKIE, provider, max_age=_RT_MAX_AGE,
-             use_https=use_https, prefix=prefix)
+        _set(
+            response,
+            SESSION_PROVIDER_COOKIE,
+            provider,
+            max_age=_RT_MAX_AGE,
+            use_https=use_https,
+            prefix=prefix,
+        )
 
 
 def set_session_cookies(
-    response: Response, *, access_token: str, refresh_token: str, access_token_expires_in: int,
-    use_https: bool, prefix: str = "", provider: str = "") -> None:
+    response: Response,
+    *,
+    access_token: str,
+    refresh_token: str,
+    access_token_expires_in: int,
+    use_https: bool,
+    prefix: str = "",
+    provider: str = "",
+) -> None:
     """``access_token_expires_in`` is seconds (the provider's reported TTL). An empty
     ``refresh_token`` means "don't persist the RT cookie" — a literal empty cookie would be dead
     state at best, attack surface at worst.
@@ -98,25 +128,50 @@ def set_session_cookies(
     ``Session.refresh_token == ""`` and we simply don't persist the RT cookie — the session then behaves as
     access-token-only until the AT expires. No other branch changes between the two cases.
     """
-    _set(response, SESSION_AT_COOKIE, access_token, max_age=access_token_expires_in,
-         use_https=use_https, prefix=prefix)
+    _set(
+        response,
+        SESSION_AT_COOKIE,
+        access_token,
+        max_age=access_token_expires_in,
+        use_https=use_https,
+        prefix=prefix,
+    )
     if refresh_token:
-        _set(response, SESSION_RT_COOKIE, refresh_token, max_age=_RT_MAX_AGE,
-             use_https=use_https, prefix=prefix)
-    set_session_provider_cookie(response, provider=provider, use_https=use_https, prefix=prefix)
+        _set(
+            response,
+            SESSION_RT_COOKIE,
+            refresh_token,
+            max_age=_RT_MAX_AGE,
+            use_https=use_https,
+            prefix=prefix,
+        )
+    set_session_provider_cookie(
+        response, provider=provider, use_https=use_https, prefix=prefix
+    )
 
 
 def _clear_cookie_variants(
-    response: Response, bare_name: str, *, prefix: str,
-    https_samesite: Literal["lax", "strict", "none"], bare_attrs: dict) -> None:
+    response: Response,
+    bare_name: str,
+    *,
+    prefix: str,
+    https_samesite: Literal["lax", "strict", "none"],
+    bare_attrs: dict,
+) -> None:
     """Emit Max-Age=0 deletions for every plausible name variant (the setting request's shape is
     unknown). Prefixed names are rejected by the browser unless they carry ``Secure`` (``__Host-``
     additionally ``Path=/``), so those deletions always do; the bare deletion mirrors the setter's
     shape (``bare_attrs``), which works on both HTTP and HTTPS origins."""
     for variant, path in (("__Host-", "/"), ("__Secure-", _cookie_path(prefix))):
         response.set_cookie(
-            f"{variant}{bare_name}", "", max_age=0, path=path, httponly=True,
-            samesite=https_samesite, secure=True)
+            f"{variant}{bare_name}",
+            "",
+            max_age=0,
+            path=path,
+            httponly=True,
+            samesite=https_samesite,
+            secure=True,
+        )
     response.set_cookie(bare_name, "", max_age=0, **bare_attrs)
 
 
@@ -125,7 +180,8 @@ def clear_session_cookies(response: Response, *, prefix: str = "") -> None:
     bare_attrs = _common_attrs(use_https=False, prefix=prefix)
     for name in (SESSION_AT_COOKIE, SESSION_RT_COOKIE, SESSION_PROVIDER_COOKIE):
         _clear_cookie_variants(
-            response, name, prefix=prefix, https_samesite="lax", bare_attrs=bare_attrs)
+            response, name, prefix=prefix, https_samesite="lax", bare_attrs=bare_attrs
+        )
 
 
 def encode_pkce_payload(parts: dict[str, str]) -> str:
@@ -138,30 +194,49 @@ def encode_pkce_payload(parts: dict[str, str]) -> str:
 
 
 def set_pkce_cookie(
-    response: Response, *, payload: dict[str, str], use_https: bool, prefix: str = "") -> None:
+    response: Response, *, payload: dict[str, str], use_https: bool, prefix: str = ""
+) -> None:
     """``payload`` is the segment dict; see module docstring for the SameSite=None rationale."""
-    _set(response, PKCE_COOKIE, encode_pkce_payload(payload), max_age=_PKCE_MAX_AGE,
-         use_https=use_https, prefix=prefix, attrs=_pkce_attrs(use_https=use_https, prefix=prefix))
+    _set(
+        response,
+        PKCE_COOKIE,
+        encode_pkce_payload(payload),
+        max_age=_PKCE_MAX_AGE,
+        use_https=use_https,
+        prefix=prefix,
+        attrs=_pkce_attrs(use_https=use_https, prefix=prefix),
+    )
 
 
 def clear_pkce_cookie(response: Response, *, use_https: bool, prefix: str = "") -> None:
     """Delete every PKCE cookie variant (prefixed ones carry ``Secure; SameSite=None``)."""
     _clear_cookie_variants(
-        response, PKCE_COOKIE, prefix=prefix, https_samesite="none",
-        bare_attrs=_pkce_attrs(use_https=use_https, prefix=prefix))
+        response,
+        PKCE_COOKIE,
+        prefix=prefix,
+        https_samesite="none",
+        bare_attrs=_pkce_attrs(use_https=use_https, prefix=prefix),
+    )
 
 
 def _read_with_fallback(request: Request, bare_name: str) -> Optional[str]:
     """Try every prefix variant (the reading request may not match the setting request's shape)."""
-    return next((v for v in (request.cookies.get(f"{p}{bare_name}") for p in _NAME_VARIANTS)
-                 if v is not None), None)
+    return next(
+        (
+            v
+            for v in (request.cookies.get(f"{p}{bare_name}") for p in _NAME_VARIANTS)
+            if v is not None
+        ),
+        None,
+    )
 
 
 def read_session_cookies(request: Request) -> tuple[Optional[str], Optional[str]]:
     """Returns (access_token, refresh_token), either may be None."""
     return (
         _read_with_fallback(request, SESSION_AT_COOKIE),
-        _read_with_fallback(request, SESSION_RT_COOKIE))
+        _read_with_fallback(request, SESSION_RT_COOKIE),
+    )
 
 
 def read_session_provider(request: Request) -> Optional[str]:
@@ -199,10 +274,18 @@ def parse_pkce_payload(raw: str) -> dict[str, str]:
     return dict(seg.split("=", 1) for seg in flat.split(";") if "=" in seg)
 
 
-def set_sso_attempt_cookie(response: Response, *, use_https: bool, prefix: str = "") -> None:
+def set_sso_attempt_cookie(
+    response: Response, *, use_https: bool, prefix: str = ""
+) -> None:
     """Set the auto-SSO loop-guard marker; only its presence matters."""
-    _set(response, SSO_ATTEMPT_COOKIE, "1", max_age=_SSO_ATTEMPT_MAX_AGE,
-         use_https=use_https, prefix=prefix)
+    _set(
+        response,
+        SSO_ATTEMPT_COOKIE,
+        "1",
+        max_age=_SSO_ATTEMPT_MAX_AGE,
+        use_https=use_https,
+        prefix=prefix,
+    )
 
 
 def read_sso_attempt_cookie(request: Request) -> Optional[str]:
@@ -213,8 +296,12 @@ def read_sso_attempt_cookie(request: Request) -> Optional[str]:
 def clear_sso_attempt_cookie(response: Response, *, prefix: str = "") -> None:
     """Delete the auto-SSO marker (every variant) so it never suppresses a later silent attempt."""
     _clear_cookie_variants(
-        response, SSO_ATTEMPT_COOKIE, prefix=prefix, https_samesite="lax",
-        bare_attrs=_common_attrs(use_https=False, prefix=prefix))
+        response,
+        SSO_ATTEMPT_COOKIE,
+        prefix=prefix,
+        https_samesite="lax",
+        bare_attrs=_common_attrs(use_https=False, prefix=prefix),
+    )
 
 
 def detect_https(request: Request) -> bool:

@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from functools import wraps
 
 from telegram import Update
-from telegram.ext import Application, ApplicationHandlerStop, ConversationHandler, SimpleUpdateProcessor
+from telegram.ext import (
+    Application,
+    ApplicationHandlerStop,
+    ConversationHandler,
+    SimpleUpdateProcessor,
+)
 
 from gateway.platforms._shared import coerce_port
 from gateway.platforms.helpers import bounded_put
@@ -50,14 +55,21 @@ def _load_receipts(adapter, bot_id) -> None:
     except FileNotFoundError:
         return
     except (OSError, ValueError):
-        logger.warning("[Telegram] Ignoring unreadable update receipts at %s", path, exc_info=True)
+        logger.warning(
+            "[Telegram] Ignoring unreadable update receipts at %s", path, exc_info=True
+        )
         return
     ids = payload.get("update_ids") if isinstance(payload, dict) else None
     if not isinstance(ids, dict):
         return
     cutoff = time.time() - RECEIPT_TTL_SECONDS
-    fresh = sorted((float(ts), uid) for uid, ts in ids.items()
-                   if isinstance(ts, (int, float)) and ts > cutoff and str(uid).lstrip("-").isdigit())
+    fresh = sorted(
+        (float(ts), uid)
+        for uid, ts in ids.items()
+        if isinstance(ts, (int, float))
+        and ts > cutoff
+        and str(uid).lstrip("-").isdigit()
+    )
     seen = adapter._seen_update_ids
     for ts, uid in fresh:
         key = f"{bot_id}:{uid}"
@@ -72,7 +84,8 @@ def _record_receipt(adapter, key: str) -> None:
     if task is None or task.done():
         # One writer per adapter coalesces bursts; the fsync stays off the event loop.
         adapter._update_receipt_flush = asyncio.get_running_loop().create_task(
-            _flush_receipts(adapter), name="telegram-update-receipts")
+            _flush_receipts(adapter), name="telegram-update-receipts"
+        )
 
 
 async def _flush_receipts(adapter) -> None:
@@ -82,14 +95,23 @@ async def _flush_receipts(adapter) -> None:
         bot_id = adapter._update_receipts_dirty.pop()
         prefix, cutoff = f"{bot_id}:", time.time() - RECEIPT_TTL_SECONDS
         # Snapshot on the loop: admission mutates this dict only from loop callbacks.
-        ids = {key[len(prefix):]: ts for key, ts in adapter._seen_update_ids.items()
-               if key.startswith(prefix) and isinstance(ts, float) and ts > cutoff}
+        ids = {
+            key[len(prefix) :]: ts
+            for key, ts in adapter._seen_update_ids.items()
+            if key.startswith(prefix) and isinstance(ts, float) and ts > cutoff
+        }
         path = _receipt_path(adapter, bot_id)
         try:
             mkdir_under_clawk_home(path.parent)
-            await asyncio.to_thread(atomic_json_write, path, {"update_ids": ids}, indent=None)
+            await asyncio.to_thread(
+                atomic_json_write, path, {"update_ids": ids}, indent=None
+            )
         except Exception:
-            logger.warning("[Telegram] Failed to persist update receipts to %s", path, exc_info=True)
+            logger.warning(
+                "[Telegram] Failed to persist update receipts to %s",
+                path,
+                exc_info=True,
+            )
 
 
 @dataclass
@@ -155,6 +177,7 @@ class PerChatUpdateProcessor(SimpleUpdateProcessor):
                 await asyncio.shield(prev)
             await coroutine
         finally:
+
             def release(_prev=None):
                 done.set_result(None)
                 if self._tails.get(chat.id) is done:
@@ -172,8 +195,12 @@ def build_update_processor(extra, name: str) -> PerChatUpdateProcessor:
     raw = extra.get("max_concurrent_updates", DEFAULT_MAX_CONCURRENT_UPDATES)
     limit = coerce_port(raw, 0)
     if limit < 1:
-        logger.warning("[%s] Invalid max_concurrent_updates=%r; using %d",
-                       name, raw, DEFAULT_MAX_CONCURRENT_UPDATES)
+        logger.warning(
+            "[%s] Invalid max_concurrent_updates=%r; using %d",
+            name,
+            raw,
+            DEFAULT_MAX_CONCURRENT_UPDATES,
+        )
         limit = DEFAULT_MAX_CONCURRENT_UPDATES
     return PerChatUpdateProcessor(limit)
 
@@ -185,7 +212,9 @@ class TelegramApplication(Application):
         super().__init__(**kwargs)
         self.adapter = adapter
         if adapter._update_admission is None:
-            adapter._update_admission = ContextVar[_Claim | None]("telegram_update_claim", default=None)
+            adapter._update_admission = ContextVar[_Claim | None](
+                "telegram_update_claim", default=None
+            )
         self._current_claim: ContextVar[_Claim | None] = adapter._update_admission
 
     def add_handler(self, handler, group=0):
@@ -196,8 +225,11 @@ class TelegramApplication(Application):
         # ConversationHandler has no callback. Keep its identity (including persistence,
         # state transitions and block resolution) and instrument its selected children.
         if isinstance(handler, ConversationHandler):
-            for child in [*handler.entry_points, *handler.fallbacks,
-                          *(child for handlers in handler.states.values() for child in handlers)]:
+            for child in [
+                *handler.entry_points,
+                *handler.fallbacks,
+                *(child for handlers in handler.states.values() for child in handlers),
+            ]:
                 self._admit_callbacks(child)
             return
         callback = getattr(handler, "callback", None)
@@ -213,7 +245,10 @@ class TelegramApplication(Application):
             application = context.application
             admission = getattr(application, "_current_claim", None)
             claim = admission.get() if admission is not None else None
-            if claim is not None and getattr(callback, "__self__", None) is not application.adapter:
+            if (
+                claim is not None
+                and getattr(callback, "__self__", None) is not application.adapter
+            ):
                 claim.accepted = True
             result = await callback(update, context)
             if claim is not None:
@@ -238,11 +273,14 @@ class TelegramApplication(Application):
         else:
             super().add_error_handler(callback, block=block)
 
-    def _Application__create_task(self, coroutine, update=None, is_error_handler=False, name=None):
+    def _Application__create_task(
+        self, coroutine, update=None, is_error_handler=False, name=None
+    ):
         # PTB's process_error bypasses public create_task. Delegate at the shared task seam
         # without copying dispatch or losing its is_error_handler recursion protection.
         task = super()._Application__create_task(
-            coroutine, update=update, is_error_handler=is_error_handler, name=name)
+            coroutine, update=update, is_error_handler=is_error_handler, name=name
+        )
         claim = self._current_claim.get()
         if claim is not None and claim.owners:
             # Pin scheduled work before callback entry, including cancellation before entry.

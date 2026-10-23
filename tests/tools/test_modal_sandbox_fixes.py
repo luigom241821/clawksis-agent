@@ -23,22 +23,26 @@ if str(_repo_root) not in sys.path:
 
 try:
     import tools.terminal_tool
+
     _tt_mod = sys.modules["tools.terminal_tool"]
 except ImportError:
-    pytest.skip("clawksis-agent tools not importable (missing deps)", allow_module_level=True)
+    pytest.skip(
+        "clawksis-agent tools not importable (missing deps)", allow_module_level=True
+    )
 
 
 # =========================================================================
 # Test 1: Tool resolution includes terminal + file tools
 # =========================================================================
 
+
 class TestToolResolution:
     """Verify get_tool_definitions returns all expected tools for eval."""
-
 
     def test_terminal_tool_present(self):
         """The terminal tool must be present (not silently dropped)."""
         from model_tools import get_tool_definitions
+
         tools = get_tool_definitions(
             enabled_toolsets=["terminal", "file"],
             quiet_mode=True,
@@ -50,6 +54,7 @@ class TestToolResolution:
 # =========================================================================
 # Test 2-4: CWD handling for container backends
 # =========================================================================
+
 
 class TestCwdHandling:
     """Verify host paths are sanitized for container backends."""
@@ -128,7 +133,9 @@ class TestCwdHandling:
     @pytest.mark.platforms("linux")
     def test_docker_default_cwd_maps_current_directory_when_enabled(self, monkeypatch):
         """Docker should use /workspace when cwd mounting is explicitly enabled."""
-        monkeypatch.setattr("tools.terminal_tool.os.getcwd", lambda: "/home/user/project")
+        monkeypatch.setattr(
+            "tools.terminal_tool.os.getcwd", lambda: "/home/user/project"
+        )
         monkeypatch.setenv("TERMINAL_ENV", "docker")
         monkeypatch.setenv("TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE", "true")
         monkeypatch.delenv("TERMINAL_CWD", raising=False)
@@ -153,7 +160,10 @@ class TestCwdHandling:
             return sentinel
 
         from tools.terminal_tool_backends import _create_environment
-        monkeypatch.setattr("tools.terminal_tool_backends._DockerEnvironment", _fake_docker_environment)
+
+        monkeypatch.setattr(
+            "tools.terminal_tool_backends._DockerEnvironment", _fake_docker_environment
+        )
 
         env = _create_environment(
             env_type="docker",
@@ -186,11 +196,9 @@ class TestCwdHandling:
 # =========================================================================
 
 
-
 # =========================================================================
 # Test 6: ModalEnvironment defaults
 # =========================================================================
-
 
 
 # =========================================================================
@@ -198,10 +206,10 @@ class TestCwdHandling:
 # =========================================================================
 
 
-
 # =========================================================================
 # Test 8: Host prefix list completeness
 # =========================================================================
+
 
 class TestHostPrefixList:
     """Verify the host prefix list catches common host-only paths.
@@ -218,7 +226,12 @@ class TestHostPrefixList:
     def test_all_common_host_paths_flagged_unusable(self):
         """A host path under each user root must be rejected as a container cwd; in-sandbox
         absolute paths pass."""
-        for host_path in ("/Users/me/proj", "/home/me/proj", "C:\\Users\\me", "C:/Users/me"):
+        for host_path in (
+            "/Users/me/proj",
+            "/home/me/proj",
+            "C:\\Users\\me",
+            "C:/Users/me",
+        ):
             assert _tt_mod._is_unusable_container_cwd(host_path) is True, (
                 f"Host path {host_path!r} should be rejected as a container "
                 "cwd but was accepted."
@@ -231,6 +244,7 @@ class TestHostPrefixList:
         is a host path (#60962). On POSIX ``D:\\proj`` is also non-absolute so the container guard
         already rejected it; on a Windows host it IS absolute and only this predicate catches it."""
         from tools.terminal_tool_config import _is_host_cwd
+
         for host_path in ("C:\\Users\\me", "D:\\proj", "e:/work", "Z:\\"):
             assert _is_host_cwd(host_path) is True, host_path
         for not_host in ("/workspace", "/srv/app", "relative/dir", "C", "C:"):
@@ -245,35 +259,68 @@ class TestHostPrefixList:
 # (PR #6436, @Kolektori)
 # =========================================================================
 
+
 class TestDockerHostBindApproval:
     """Docker host bind mounts disable the container approval fast-path."""
 
     def test_docker_host_access_detection(self):
         """_docker_has_host_access flags bind-mounted host paths only."""
         # Isolated docker (no host binds) -> not host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "docker", "docker_volumes": [],
-             "host_cwd": None, "docker_mount_cwd_to_workspace": False}) is False
+        assert (
+            _tt_mod._docker_has_host_access(
+                {
+                    "env_type": "docker",
+                    "docker_volumes": [],
+                    "host_cwd": None,
+                    "docker_mount_cwd_to_workspace": False,
+                }
+            )
+            is False
+        )
         # Host-path bind mount -> host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "docker", "docker_volumes": ["/tmp:/hosttmp"]}) is True
+        assert (
+            _tt_mod._docker_has_host_access(
+                {"env_type": "docker", "docker_volumes": ["/tmp:/hosttmp"]}
+            )
+            is True
+        )
         # Named volume (not a host path) -> not host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "docker", "docker_volumes": ["myvol:/data"]}) is False
+        assert (
+            _tt_mod._docker_has_host_access(
+                {"env_type": "docker", "docker_volumes": ["myvol:/data"]}
+            )
+            is False
+        )
         # cwd auto-mount flag -> host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "docker", "host_cwd": "/home/u/p",
-             "docker_mount_cwd_to_workspace": True}) is True
+        assert (
+            _tt_mod._docker_has_host_access(
+                {
+                    "env_type": "docker",
+                    "host_cwd": "/home/u/p",
+                    "docker_mount_cwd_to_workspace": True,
+                }
+            )
+            is True
+        )
         # Windows host path -> host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "docker", "docker_volumes": ["C:\\Users:/data"]}) is True
+        assert (
+            _tt_mod._docker_has_host_access(
+                {"env_type": "docker", "docker_volumes": ["C:\\Users:/data"]}
+            )
+            is True
+        )
         # Other container backends never report host access.
-        assert _tt_mod._docker_has_host_access(
-            {"env_type": "modal", "docker_volumes": ["/tmp:/x"]}) is False
+        assert (
+            _tt_mod._docker_has_host_access(
+                {"env_type": "modal", "docker_volumes": ["/tmp:/x"]}
+            )
+            is False
+        )
 
     def test_should_skip_container_guards(self):
         """Docker skips only when isolated; other sandboxes always skip."""
         import tools.approval as A
+
         assert A._should_skip_container_guards("docker", has_host_access=False) is True
         assert A._should_skip_container_guards("docker", has_host_access=True) is False
         assert A._should_skip_container_guards("modal", has_host_access=True) is True
@@ -315,7 +362,9 @@ class TestDockerHostBindApproval:
             assert A._should_skip_container_guards(provider.name) is True
             assert A._should_skip_container_guards("unknown_plugin_backend") is False
         finally:
-            terminal_env_registry.restore_registration(provider.name, provider, previous)
+            terminal_env_registry.restore_registration(
+                provider.name, provider, previous
+            )
 
         class BrokenDisposablePlugin(DisposablePlugin):
             name = "broken_approval_disposable_plugin"
@@ -329,15 +378,19 @@ class TestDockerHostBindApproval:
         try:
             assert A._should_skip_container_guards(broken_provider.name) is False
         finally:
-            terminal_env_registry.restore_registration(broken_provider.name, broken_provider, None)
+            terminal_env_registry.restore_registration(
+                broken_provider.name, broken_provider, None
+            )
 
     def test_isolated_docker_keeps_fast_path(self, monkeypatch):
         """Isolated Docker still bypasses dangerous-command approval."""
         import tools.approval as A
+
         self._isolate_approval_state(monkeypatch)
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
-        res = A.check_all_command_guards("rm -rf /workspace", "docker",
-                                         has_host_access=False)
+        res = A.check_all_command_guards(
+            "rm -rf /workspace", "docker", has_host_access=False
+        )
         assert res["approved"] is True
 
     @staticmethod
@@ -360,6 +413,7 @@ class TestDockerHostBindApproval:
         Reset it explicitly so the tests exercise the guard, not the bypass.
         """
         import tools.approval as A
+
         monkeypatch.setattr(A, "_permanent_approved", set())
         monkeypatch.setattr(A, "_session_approved", {})
         monkeypatch.setattr(A, "_YOLO_MODE_FROZEN", False)
@@ -368,10 +422,12 @@ class TestDockerHostBindApproval:
     def test_host_bound_docker_requires_approval(self, monkeypatch):
         """Host-bound Docker dangerous command escalates instead of bypassing."""
         import tools.approval as A
+
         self._isolate_approval_state(monkeypatch)
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
-        res = A.check_all_command_guards("rm -rf /workspace", "docker",
-                                         has_host_access=True)
+        res = A.check_all_command_guards(
+            "rm -rf /workspace", "docker", has_host_access=True
+        )
         # Must NOT take the silent container fast-path.
         assert res.get("approved") is not True
         assert res.get("status") == "pending_approval"
@@ -379,27 +435,30 @@ class TestDockerHostBindApproval:
     def test_execute_code_isolated_docker_keeps_fast_path(self, monkeypatch):
         """Isolated Docker execute_code still bypasses the guard."""
         import tools.approval as A
+
         self._isolate_approval_state(monkeypatch)
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
-        res = A.check_execute_code_guard("import os", "docker",
-                                         has_host_access=False)
+        res = A.check_execute_code_guard("import os", "docker", has_host_access=False)
         assert res["approved"] is True
 
     def test_execute_code_host_bound_docker_requires_approval(self, monkeypatch):
         """Host-bound Docker execute_code does not get the container fast-path."""
         import tools.approval as A
+
         self._isolate_approval_state(monkeypatch)
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
         res = A.check_execute_code_guard(
-            "import os; os.system('rm -rf /workspace')", "docker",
-            has_host_access=True)
+            "import os; os.system('rm -rf /workspace')", "docker", has_host_access=True
+        )
         assert res.get("approved") is not True
         assert res.get("status") == "pending_approval"
 
     def test_execute_code_vercel_sandbox_always_skips(self, monkeypatch):
         """vercel_sandbox has no host-bind concept and stays always-skipped."""
         import tools.approval as A
+
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
-        res = A.check_execute_code_guard("import os", "vercel_sandbox",
-                                         has_host_access=True)
+        res = A.check_execute_code_guard(
+            "import os", "vercel_sandbox", has_host_access=True
+        )
         assert res["approved"] is True

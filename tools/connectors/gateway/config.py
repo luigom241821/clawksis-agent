@@ -28,7 +28,6 @@ _FALSE_STRINGS = frozenset({"false", "0", "no", "off", ""})
 
 @dataclass(frozen=True)
 class ConnectorConfig:
-
     enabled: bool = True
 
     @classmethod
@@ -114,9 +113,16 @@ def guest_identity_pending() -> bool:
     """No Nous identity or bearer yet, and a guest one may be created (``nous.guest`` is not false
     and no earlier mint was refused for good). No network: this feeds the ``check_fn``."""
     from clawk_cli.anon_auth import guest_allowed, last_mint_failure
-    from tools.managed_tool_gateway import _read_nous_provider_state, peek_nous_access_token
+    from tools.managed_tool_gateway import (
+        _read_nous_provider_state,
+        peek_nous_access_token,
+    )
 
-    if not guest_allowed() or _read_nous_provider_state() is not None or peek_nous_access_token():
+    if (
+        not guest_allowed()
+        or _read_nous_provider_state() is not None
+        or peek_nous_access_token()
+    ):
         return False
     failure = last_mint_failure()
     return not failure or bool(failure["retryable"])
@@ -131,7 +137,9 @@ def guest_setup_failure() -> Optional[str]:
 
     if not (failure := last_mint_failure()):
         return None
-    return _SETUP_FAILED + anon_failure_copy(failure["error_code"], retry_after=failure["retry_after"])
+    return _SETUP_FAILED + anon_failure_copy(
+        failure["error_code"], retry_after=failure["retry_after"]
+    )
 
 
 def ensure_guest_identity() -> Optional[str]:
@@ -165,5 +173,7 @@ def operation_session_key(session_id: Optional[str]) -> str:
 def session_platform() -> str:
     from gateway.session_context import get_session_env
 
-    platform = get_session_env("CLAWK_SESSION_PLATFORM", "") or get_session_env("CLAWK_SESSION_SOURCE", "")
+    platform = get_session_env("CLAWK_SESSION_PLATFORM", "") or get_session_env(
+        "CLAWK_SESSION_SOURCE", ""
+    )
     return str(platform or "").strip().lower()

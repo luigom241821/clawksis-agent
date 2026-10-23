@@ -92,10 +92,15 @@ async def test_compress_command_works_when_auto_compaction_disabled():
         return 100 if messages == history else 60
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -107,13 +112,18 @@ async def test_compress_command_works_when_auto_compaction_disabled():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("warning_notifications", [True, False])
-async def test_compress_command_surfaces_aux_model_failure_even_when_recovered(tmp_path, monkeypatch, warning_notifications):
+async def test_compress_command_surfaces_aux_model_failure_even_when_recovered(
+    tmp_path, monkeypatch, warning_notifications
+):
     """When the user's configured ``auxiliary.compression.model`` errors out
     but compression recovers by retrying on the main model, /compress must
     STILL inform the user.  Silent recovery hides broken config the user
     needs to fix."""
     import gateway.run as gateway_run
-    (tmp_path / "config.yaml").write_text(f"display: {{warning_notifications: {str(warning_notifications).lower()}}}")
+
+    (tmp_path / "config.yaml").write_text(
+        f"display: {{warning_notifications: {str(warning_notifications).lower()}}}"
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     history = _make_history()
     # Compressed transcript — normal successful compression, no placeholder.
@@ -153,10 +163,14 @@ async def test_compress_command_surfaces_aux_model_failure_even_when_recovered(t
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -209,10 +223,14 @@ async def test_compress_command_in_place_skips_destructive_rewrite():
         raise AssertionError(f"unexpected transcript: {messages!r}")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
-        patch("agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate),
+        patch(
+            "agent.model_metadata.estimate_request_tokens_rough", side_effect=_estimate
+        ),
     ):
         result = await runner._handle_compress_command(_make_event())
 
@@ -245,7 +263,10 @@ async def test_compress_command_preserves_platform_and_gateway_session_key():
     agent_instance._compression_skipped_due_to_lock = False
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance) as mock_agent,
         patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
@@ -258,7 +279,9 @@ async def test_compress_command_preserves_platform_and_gateway_session_key():
     # not the unbound "cli"/"local" fallback.
     assert kwargs.get("platform") == "telegram"
     # Stable gateway session key preserved, identical to a normal gateway turn.
-    assert kwargs.get("gateway_session_key") == runner._session_key_for_source(_make_source())
+    assert kwargs.get("gateway_session_key") == runner._session_key_for_source(
+        _make_source()
+    )
     assert kwargs["gateway_session_key"]
 
 
@@ -280,8 +303,14 @@ async def test_compress_command_agent_receives_configured_reasoning():
     agent_instance._compression_skipped_due_to_lock = False
 
     with (
-        patch("gateway.run._load_gateway_config", return_value={"agent": {"reasoning_effort": "none"}}),
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._load_gateway_config",
+            return_value={"agent": {"reasoning_effort": "none"}},
+        ),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="gpt-4o-mini"),
         patch("run_agent.AIAgent", return_value=agent_instance) as mock_agent,
         patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
@@ -306,8 +335,13 @@ async def test_compress_command_passes_tool_messages_to_compressor():
         {
             "role": "assistant",
             "content": None,
-            "tool_calls": [{"id": "t1", "type": "function",
-                            "function": {"name": "x", "arguments": "{}"}}],
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "x", "arguments": "{}"},
+                }
+            ],
         },
         {"role": "tool", "content": "BIG RESULT " * 50, "tool_call_id": "t1"},
         {"role": "assistant", "content": "done"},
@@ -325,7 +359,10 @@ async def test_compress_command_passes_tool_messages_to_compressor():
     agent_instance._compress_context.return_value = (list(history), "")
 
     with (
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "test-key"},
+        ),
         patch("gateway.run._resolve_gateway_model", return_value="test-model"),
         patch("run_agent.AIAgent", return_value=agent_instance),
         patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
@@ -339,8 +376,6 @@ async def test_compress_command_passes_tool_messages_to_compressor():
     # Assistant tool_calls stubs (content=None) must survive too, or the
     # tool message would dangle without its call.
     assert any(m.get("tool_calls") for m in passed), "assistant tool_calls stub dropped"
-
-
 
 
 @pytest.mark.asyncio
@@ -406,10 +441,15 @@ async def test_compress_command_multiplexed_runs_under_profile_secret_scope(tmp_
     ss.set_multiplex_active(True)
     try:
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "***"}),
+            patch(
+                "gateway.run._resolve_runtime_agent_kwargs",
+                return_value={"api_key": "***"},
+            ),
             patch("gateway.run._resolve_gateway_model", return_value="test-model"),
             patch("run_agent.AIAgent", return_value=agent_instance),
-            patch("agent.model_metadata.estimate_request_tokens_rough", return_value=100),
+            patch(
+                "agent.model_metadata.estimate_request_tokens_rough", return_value=100
+            ),
         ):
             result = await runner._handle_compress_command(_make_event())
     finally:
@@ -419,8 +459,6 @@ async def test_compress_command_multiplexed_runs_under_profile_secret_scope(tmp_
     assert "failed" not in result.lower(), result
     assert seen["base_url"] == "https://scoped.example/v1"
     runner._resolve_profile_home_for_source.assert_called_once()
-
-
 
 
 @pytest.mark.asyncio
@@ -485,7 +523,9 @@ async def test_compress_command_cleanup_does_not_block_event_loop():
             observed["ticks_during_block"] = ticks["n"] - baseline
             release_close.set()
 
-        observer = threading.Thread(target=_observer, name="compress-cleanup-observer", daemon=True)
+        observer = threading.Thread(
+            target=_observer, name="compress-cleanup-observer", daemon=True
+        )
         observer.start()
         release_close.wait()
         observer.join()
@@ -521,7 +561,9 @@ async def test_compress_command_cleanup_does_not_block_event_loop():
 
 
 @pytest.mark.parametrize("profile", ["main", "fitness"])
-def test_rotated_compress_keeps_atomically_published_foreign_tail(tmp_path, monkeypatch, profile):
+def test_rotated_compress_keeps_atomically_published_foreign_tail(
+    tmp_path, monkeypatch, profile
+):
     """A rotated /compress must NOT rewrite the atomically-published child.
 
     publish_compression_child() writes handoff + cloned foreign tail in one transaction;
@@ -539,13 +581,20 @@ def test_rotated_compress_keeps_atomically_published_foreign_tail(tmp_path, monk
     (root / "profiles" / "fitness").mkdir(parents=True)
     (root / "profiles" / "fitness" / "config.yaml").write_text("{}\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
-    store = SessionStore(sessions_dir=root / "sessions", config=GatewayConfig(multiplex_profiles=True))
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
+    store = SessionStore(
+        sessions_dir=root / "sessions", config=GatewayConfig(multiplex_profiles=True)
+    )
     parent, child = "parent", "child"
     entry = SessionEntry(
-        session_key=f"agent:{profile}:discord:thread:123:123", session_id=parent,
-        created_at=datetime.now(), updated_at=datetime.now(),
-        platform=Platform.DISCORD, chat_type="thread",
+        session_key=f"agent:{profile}:discord:thread:123:123",
+        session_id=parent,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.DISCORD,
+        chat_type="thread",
     )
     store._entries[entry.session_key] = entry
     db = store._db_for_key(entry.session_key)
@@ -556,13 +605,18 @@ def test_rotated_compress_keeps_atomically_published_foreign_tail(tmp_path, monk
     ceiling = db.get_active_message_watermark(parent)
     handoff = [{"role": "assistant", "content": "compressed summary"}]
     db.publish_compression_child(
-        parent_session_id=parent, child_session_id=child, source="discord",
-        messages=handoff, watermark=watermark, watermark_ceiling=ceiling,
+        parent_session_id=parent,
+        child_session_id=child,
+        source="discord",
+        messages=handoff,
+        watermark=watermark,
+        watermark_ceiling=ceiling,
         require_compression_lease=False,
     )
 
     def _destructive_rewrite(*_args, **_kwargs):
         raise AssertionError("published child must not be rewritten")
+
     store.rewrite_transcript = _destructive_rewrite
 
     runner = SimpleNamespace(
@@ -571,11 +625,15 @@ def test_rotated_compress_keeps_atomically_published_foreign_tail(tmp_path, monk
     )
     agent = SimpleNamespace(session_id=child)
     try:
-        asyncio.run(GatewaySessionCommandsMixin._persist_manual_compression(
-            runner, agent, entry, _make_source(), handoff))
+        asyncio.run(
+            GatewaySessionCommandsMixin._persist_manual_compression(
+                runner, agent, entry, _make_source(), handoff
+            )
+        )
         assert entry.session_id == child
         assert [m["content"] for m in db.get_messages(child)] == [
-            "compressed summary", "concurrent foreign turn",
+            "compressed summary",
+            "concurrent foreign turn",
         ]
     finally:
         store.close_all_db_handles()

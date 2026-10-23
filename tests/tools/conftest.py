@@ -81,6 +81,7 @@ def _materialize_mcp_sdk_symbols():
     """
     try:
         from tools import mcp_tool
+
         mcp_tool._ensure_mcp_sdk()
     except Exception:
         pass
@@ -97,6 +98,7 @@ def _clear_web_result_cache():
     mocked provider result.
     """
     from tools.web_result_cache import search_memo
+
     search_memo.clear()
     yield
     search_memo.clear()
@@ -159,6 +161,7 @@ def web_registry_populated():
     register_all_web_providers()
     yield
     from agent.web_search_registry import _reset_for_tests
+
     _reset_for_tests()
 
 

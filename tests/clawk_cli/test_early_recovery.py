@@ -23,18 +23,39 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.parametrize("prefix", [[], ["-p", "default"], ["--profile=default"]])
 def test_bootstrap_and_pm_cli_work_without_site_packages(tmp_path, prefix):
-    env = {**os.environ, "CLAWK_HOME": str(tmp_path / "home"), "PYTHONPATH": str(REPO_ROOT)}
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(tmp_path / "home"),
+        "PYTHONPATH": str(REPO_ROOT),
+    }
     result = subprocess.run(
-        [sys.executable, "-S", "-m", "clawk_cli.main", *prefix, "pm", "repair", "--help"],
-        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+        [
+            sys.executable,
+            "-S",
+            "-m",
+            "clawk_cli.main",
+            *prefix,
+            "pm",
+            "repair",
+            "--help",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert result.returncode == 0, result.stderr
     assert "clawk pm repair" in result.stdout
 
 
-@pytest.mark.parametrize("marker_name", [".update-incomplete", ".lazy-refresh-incomplete"])
-def test_marker_requests_pm_repair_then_clears(tmp_path, monkeypatch, capsys, marker_name):
+@pytest.mark.parametrize(
+    "marker_name", [".update-incomplete", ".lazy-refresh-incomplete"]
+)
+def test_marker_requests_pm_repair_then_clears(
+    tmp_path, monkeypatch, capsys, marker_name
+):
     root = _project(tmp_path)
     marker = root / marker_name
     marker.write_text("interrupted", encoding="utf-8")
@@ -46,16 +67,22 @@ def test_marker_requests_pm_repair_then_clears(tmp_path, monkeypatch, capsys, ma
     assert capsys.readouterr().out == ""
 
 
-@pytest.mark.parametrize("body", ["", "not json", '{"attempts": 1}', "started=1\npid=0\n"])
-def test_failed_repair_keeps_marker_and_stops_at_retry_limit(tmp_path, monkeypatch, capsys, body):
+@pytest.mark.parametrize(
+    "body", ["", "not json", '{"attempts": 1}', "started=1\npid=0\n"]
+)
+def test_failed_repair_keeps_marker_and_stops_at_retry_limit(
+    tmp_path, monkeypatch, capsys, body
+):
     root = _project(tmp_path)
     marker = root / ".update-incomplete"
     marker.write_text(body, encoding="utf-8")
     attempts = er._read_marker_attempts(marker)
     calls = []
+
     def fail(project):
         calls.append(project)
         raise RuntimeError("dependency build failed")
+
     monkeypatch.setattr(recovery, "repair_dependencies", fail)
     for expected in range(attempts + 1, er._EARLY_CORE_INSTALL_MAX_ATTEMPTS + 1):
         assert er.recover_if_needed(root, argv=[]) is False
@@ -92,13 +119,17 @@ def test_recovery_obeys_live_owner_and_single_flight(tmp_path, monkeypatch):
     assert calls == [root]
 
 
-def test_missing_environment_cannot_write_a_retry_marker_without_lock(tmp_path, monkeypatch):
+def test_missing_environment_cannot_write_a_retry_marker_without_lock(
+    tmp_path, monkeypatch
+):
     from pm.environments import install_state_dir, runtime_facts_path
     from pm.lock import Facts
 
     root = _project(tmp_path)
     state = install_state_dir(root)
-    Facts(runtime_facts_path(root)).record_state("venv", "old", [], environment=state / "environments" / "old" / "venv")
+    Facts(runtime_facts_path(root)).record_state(
+        "venv", "old", [], environment=state / "environments" / "old" / "venv"
+    )
     fd = er._claim_recovery_lock(root)
     assert fd is not None
     try:
@@ -110,13 +141,14 @@ def test_missing_environment_cannot_write_a_retry_marker_without_lock(tmp_path, 
 
 def test_pm_commands_and_healthy_startup_do_not_repair(tmp_path, monkeypatch):
     root = _project(tmp_path)
-    monkeypatch.setattr(recovery, "repair_dependencies", lambda _: pytest.fail("unexpected install"))
+    monkeypatch.setattr(
+        recovery, "repair_dependencies", lambda _: pytest.fail("unexpected install")
+    )
     assert er.recover_if_needed(root, argv=[]) is False
     marker = root / ".update-incomplete"
     marker.write_text("interrupted", encoding="utf-8")
     assert er.recover_if_needed(root, argv=["pm", "repair"]) is False
     assert marker.exists()
-
 
 
 def test_pid_liveness_recognizes_current_process():
@@ -170,12 +202,11 @@ def test_marker_owner_liveness_uses_recorded_pid(tmp_path, monkeypatch):
     marker = tmp_path / ".update-incomplete"
     marker.write_text("started=1\npid=4321\n", encoding="utf-8")
     seen = []
-    monkeypatch.setattr(
-        er, "_pid_is_running", lambda pid: seen.append(pid) or True
-    )
+    monkeypatch.setattr(er, "_pid_is_running", lambda pid: seen.append(pid) or True)
 
     assert er._marker_owner_is_live(marker) is True
     assert seen == [4321]
+
 
 def _project(tmp_path: Path, *, pyproject: bool = True) -> Path:
     root = tmp_path / "proj"
@@ -207,24 +238,38 @@ def test_zip_journal_writer_never_writes_through_a_preexisting_temp(tmp_path, li
             tmp.symlink_to(secret)
         except OSError:
             pytest.skip("symlinks need privileges here")
-    erz.write_zip_swap_journal(root, "staging", [["a.py", True, "", ""]], "0123456789ab")
+    erz.write_zip_swap_journal(
+        root, "staging", [["a.py", True, "", ""]], "0123456789ab"
+    )
     assert secret.read_text(encoding="utf-8-sig") == "API_KEY=keep\n"
     journal = root / er.ZIP_SWAP_JOURNAL
-    assert not journal.is_symlink() and '"phase": "staging"' in journal.read_text(encoding="utf-8-sig")
+    assert not journal.is_symlink() and '"phase": "staging"' in journal.read_text(
+        encoding="utf-8-sig"
+    )
 
 
-def test_zip_journal_publication_never_deletes_a_file_at_its_old_fixed_temp_name(tmp_path):
+def test_zip_journal_publication_never_deletes_a_file_at_its_old_fixed_temp_name(
+    tmp_path,
+):
     """The writer unlinked ``.clawk-update-zip-swap.tmp`` before its exclusive create: a user's file by
     that name was erased (review Z5). Its temp is now unpredictable: the file survives, byte for byte."""
     root = tmp_path / "install"
     root.mkdir()
     user = root / (er.ZIP_SWAP_JOURNAL + ".tmp")
     user.write_text("USER NOTES\n", encoding="utf-8")
-    erz.write_zip_swap_journal(root, "staging", [["a.py", True, "", ""]], "0123456789ab")
-    erz.write_zip_swap_journal(root, "swapping", [["a.py", True, "", ""]], "0123456789ab")
+    erz.write_zip_swap_journal(
+        root, "staging", [["a.py", True, "", ""]], "0123456789ab"
+    )
+    erz.write_zip_swap_journal(
+        root, "swapping", [["a.py", True, "", ""]], "0123456789ab"
+    )
     assert user.read_text(encoding="utf-8-sig") == "USER NOTES\n"
-    assert '"phase": "swapping"' in (root / er.ZIP_SWAP_JOURNAL).read_text(encoding="utf-8-sig")
-    assert sorted(p.name for p in root.iterdir()) == sorted([er.ZIP_SWAP_JOURNAL, user.name])
+    assert '"phase": "swapping"' in (root / er.ZIP_SWAP_JOURNAL).read_text(
+        encoding="utf-8-sig"
+    )
+    assert sorted(p.name for p in root.iterdir()) == sorted(
+        [er.ZIP_SWAP_JOURNAL, user.name]
+    )
 
 
 def _symlink_or_skip(link: Path, target: str) -> None:
@@ -246,35 +291,69 @@ def test_an_interrupted_swap_restores_its_backup_by_entry_not_by_target(tmp_path
     if kind == "regular":
         old.write_text("OLD", encoding="utf-8")
     else:
-        _symlink_or_skip(old, "gone.txt" if kind == "dangling-symlink" else "target.txt")
+        _symlink_or_skip(
+            old, "gone.txt" if kind == "dangling-symlink" else "target.txt"
+        )
     (root / "alpha").write_text("NEW", encoding="utf-8")
     # As the swap journals it: the staged copy (now live) and the moved-aside original by identity.
-    erz.write_zip_swap_journal(root, "swapping", [["alpha", True, erz.zip_entry_identity(root / "alpha"),
-                                                  erz.zip_entry_identity(old)]], "0123456789ab")
+    erz.write_zip_swap_journal(
+        root,
+        "swapping",
+        [
+            [
+                "alpha",
+                True,
+                erz.zip_entry_identity(root / "alpha"),
+                erz.zip_entry_identity(old),
+            ]
+        ],
+        "0123456789ab",
+    )
 
     assert erz.restore_interrupted_zip_swap(root) is True
     alpha = root / "alpha"
     if kind == "regular":
         assert not alpha.is_symlink() and alpha.read_text(encoding="utf-8") == "OLD"
     else:
-        assert alpha.is_symlink() and os.readlink(alpha) == ("gone.txt" if kind == "dangling-symlink" else "target.txt")
+        assert alpha.is_symlink() and os.readlink(alpha) == (
+            "gone.txt" if kind == "dangling-symlink" else "target.txt"
+        )
     assert not os.path.lexists(old) and not (root / er.ZIP_SWAP_JOURNAL).exists()
     assert (root / "target.txt").read_text(encoding="utf-8") == "T"
 
 
-@pytest.mark.parametrize("body", ["", "{not json", '{"phase": "swap", "entries": [["a.py", true]]}',
-                                  '{"phase": "swapping", "entries": [["../a.py", true]]}', "read-error"])
-def test_an_unparsed_zip_journal_keeps_itself_and_every_backup(tmp_path, monkeypatch, body):
+@pytest.mark.parametrize(
+    "body",
+    [
+        "",
+        "{not json",
+        '{"phase": "swap", "entries": [["a.py", true]]}',
+        '{"phase": "swapping", "entries": [["../a.py", true]]}',
+        "read-error",
+    ],
+)
+def test_an_unparsed_zip_journal_keeps_itself_and_every_backup(
+    tmp_path, monkeypatch, body
+):
     """A mid-swap tree (a.py new with its backup, b.py old with its staging copy) whose journal cannot
     be read or understood is never settled by guesswork: the journal and every sibling stay."""
     root = tmp_path / "install"
     root.mkdir()
-    for name, text in {"a.py": "NEW_A", "a.py.clawk-update-old": "OLD_A", "b.py": "OLD_B",
-                       "b.py.clawk-update-staging": "NEW_B"}.items():
+    for name, text in {
+        "a.py": "NEW_A",
+        "a.py.clawk-update-old": "OLD_A",
+        "b.py": "OLD_B",
+        "b.py.clawk-update-staging": "NEW_B",
+    }.items():
         (root / name).write_text(text, encoding="utf-8")
     journal = root / er.ZIP_SWAP_JOURNAL
-    journal.write_text('{"phase": "swapping", "gen": "0123456789ab", "entries": [["a.py", true, "", ""], '
-                       '["b.py", true, "", ""]]}' if body == "read-error" else body, encoding="utf-8")
+    journal.write_text(
+        '{"phase": "swapping", "gen": "0123456789ab", "entries": [["a.py", true, "", ""], '
+        '["b.py", true, "", ""]]}'
+        if body == "read-error"
+        else body,
+        encoding="utf-8",
+    )
     if body == "read-error":  # one transient read failure (AV scan, sharing violation)
         real = Path.read_text
 
@@ -286,12 +365,22 @@ def test_an_unparsed_zip_journal_keeps_itself_and_every_backup(tmp_path, monkeyp
         monkeypatch.setattr(Path, "read_text", flaky)
     assert erz.restore_interrupted_zip_swap(root) is False
     assert journal.is_file()
-    assert {p.name: p.read_text(encoding="utf-8-sig") for p in root.iterdir() if p != journal and p.suffix != ".lock"} == {
-        "a.py": "NEW_A", "a.py.clawk-update-old": "OLD_A", "b.py": "OLD_B", "b.py.clawk-update-staging": "NEW_B"}
+    assert {
+        p.name: p.read_text(encoding="utf-8-sig")
+        for p in root.iterdir()
+        if p != journal and p.suffix != ".lock"
+    } == {
+        "a.py": "NEW_A",
+        "a.py.clawk-update-old": "OLD_A",
+        "b.py": "OLD_B",
+        "b.py.clawk-update-staging": "NEW_B",
+    }
 
 
-@pytest.mark.skipif(sys.platform == "win32" or getattr(os, "geteuid", lambda: 0)() == 0,
-                    reason="POSIX modes; root ignores them")
+@pytest.mark.skipif(
+    sys.platform == "win32" or getattr(os, "geteuid", lambda: 0)() == 0,
+    reason="POSIX modes; root ignores them",
+)
 def test_dropping_a_staged_tree_never_changes_a_hardlinked_live_files_mode(tmp_path):
     live = tmp_path / "release"
     live.mkdir()
@@ -306,8 +395,16 @@ def test_dropping_a_staged_tree_never_changes_a_hardlinked_live_files_mode(tmp_p
     assert (live / "Clawksis.exe").stat().st_mode & 0o777 == 0o555
 
 
-@pytest.mark.parametrize("body", ['{"attempts": Infinity}', '{"attempts": -Infinity}', '{"attempts": NaN}',
-                                  '{"attempts": true}', '{"attempts": -4}'])
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"attempts": Infinity}',
+        '{"attempts": -Infinity}',
+        '{"attempts": NaN}',
+        '{"attempts": true}',
+        '{"attempts": -4}',
+    ],
+)
 def test_marker_attempts_from_a_hand_edited_body_are_a_nonnegative_int(tmp_path, body):
     marker = tmp_path / ".update-incomplete"
     marker.write_text(body, encoding="utf-8")
@@ -326,7 +423,9 @@ def test_a_failed_repair_counts_its_attempt_even_on_an_undecodable_marker(tmp_pa
     assert er._read_marker_attempts(marker) == 1
 
 
-def test_the_foreign_lock_record_is_fsynced_under_a_per_writer_temp(tmp_path, monkeypatch):
+def test_the_foreign_lock_record_is_fsynced_under_a_per_writer_temp(
+    tmp_path, monkeypatch
+):
     """_remember_foreign_lock rewrote the restore's only record through a fixed-name ``.tmp`` with no
     fsync (review C12, invariant 5): a crash could leave an empty marker, and two writers shared one temp."""
     marker, lock = tmp_path / "clawk-update-pull", tmp_path / "update.lock"
@@ -335,11 +434,19 @@ def test_the_foreign_lock_record_is_fsynced_under_a_per_writer_temp(tmp_path, mo
     synced, replaced = [], []
     real_fsync, real_replace = os.fsync, os.replace
     monkeypatch.setattr(os, "fsync", lambda fd: synced.append(fd) or real_fsync(fd))
-    monkeypatch.setattr(os, "replace", lambda src, dst: replaced.append((Path(src), Path(dst), len(synced)))
-                        or real_replace(src, dst))
+    monkeypatch.setattr(
+        os,
+        "replace",
+        lambda src, dst: (
+            replaced.append((Path(src), Path(dst), len(synced)))
+            or real_replace(src, dst)
+        ),
+    )
 
     er._remember_foreign_lock(marker, lock)
 
     assert [(dst, count > 0) for _src, dst, count in replaced] == [(marker, True)]
     assert replaced[0][0].name != marker.name + ".tmp"
-    assert marker.read_text(encoding="utf-8").endswith(f"foreign_lock={er._lock_identity(lock)}\n")
+    assert marker.read_text(encoding="utf-8").endswith(
+        f"foreign_lock={er._lock_identity(lock)}\n"
+    )

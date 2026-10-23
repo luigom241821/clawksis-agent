@@ -28,11 +28,15 @@ def _state():
 
 def _same_path(left: Path, right: Path) -> bool:
     """Compare path spellings with host filesystem case semantics."""
-    return [os.path.normcase(p) for p in left.parts] == [os.path.normcase(p) for p in right.parts]
+    return [os.path.normcase(p) for p in left.parts] == [
+        os.path.normcase(p) for p in right.parts
+    ]
 
 
 def _build_clawk_repo_root_aliases(
-    resolved_root: Path, lexical_root: Path, configured_home: Path,
+    resolved_root: Path,
+    lexical_root: Path,
+    configured_home: Path,
 ) -> tuple[Path, ...]:
     """Exact repo-root spellings emitted by Clawksis launchers. Mirrors
     ``gateway_windows._preserve_clawk_home_path`` (physical path under the resolved
@@ -50,8 +54,13 @@ def _build_clawk_repo_root_aliases(
         try:
             resolved_home = home.resolve()
             home_key = os.path.normcase(str(resolved_home))
-            if os.path.commonpath([home_key, os.path.normcase(str(resolved_root))]) == home_key:
-                candidates.append(home / os.path.relpath(str(resolved_root), str(resolved_home)))
+            if (
+                os.path.commonpath([home_key, os.path.normcase(str(resolved_root))])
+                == home_key
+            ):
+                candidates.append(
+                    home / os.path.relpath(str(resolved_root), str(resolved_home))
+                )
         except (OSError, ValueError):
             pass
     # Repo-level junction recovery (commonpath raises across drives, so the
@@ -59,7 +68,9 @@ def _build_clawk_repo_root_aliases(
     for home in home_candidates:
         repo_candidate = home / resolved_root.name
         try:
-            if repo_candidate.resolve(strict=True) == resolved_root.resolve(strict=True):
+            if repo_candidate.resolve(strict=True) == resolved_root.resolve(
+                strict=True
+            ):
                 candidates.append(repo_candidate)
         except OSError:
             pass
@@ -83,7 +94,10 @@ def _validated_runtime_venv(env: dict) -> Path | None:
         return selected_venv(root)
     try:
         shipped = payload_venv(root)
-    except (RuntimeError, OSError):  # a manifest that escapes its root reads as "not a payload"
+    except (
+        RuntimeError,
+        OSError,
+    ):  # a manifest that escapes its root reads as "not a payload"
         shipped = None
     # Require the real venv, as the VIRTUAL_ENV branch does: a stray manifest.json beside a
     # checkout must not hand back a phantom path that shadows the user's own venv.
@@ -91,7 +105,9 @@ def _validated_runtime_venv(env: dict) -> Path | None:
         return shipped
     candidate = Path(env.get("VIRTUAL_ENV") or "")
     if not env.get("VIRTUAL_ENV") or not any(
-            _same_path(candidate, root / "venv") for root in _state()._clawk_repo_root_aliases):
+        _same_path(candidate, root / "venv")
+        for root in _state()._clawk_repo_root_aliases
+    ):
         return None
     try:
         return candidate if (candidate / "pyvenv.cfg").is_file() else None
@@ -109,19 +125,24 @@ def _get_clawk_site_packages(env: dict) -> list[Path]:
         if local._in_venv:
             try:
                 import site
+
                 result.extend(Path(sp) for sp in site.getsitepackages())
             except Exception:
                 pass
             if not result:
                 pyver = f"python{sys.version_info[0]}.{sys.version_info[1]}"
-                result.append(Path(sys.prefix) / "Lib" / "site-packages" if _IS_WINDOWS
-                              else Path(sys.prefix) / "lib" / pyver / "site-packages")
+                result.append(
+                    Path(sys.prefix) / "Lib" / "site-packages"
+                    if _IS_WINDOWS
+                    else Path(sys.prefix) / "lib" / pyver / "site-packages"
+                )
         local._clawk_site_packages = list(result)
     result = list(local._clawk_site_packages)
 
     runtime_venv = _validated_runtime_venv(env)
     if runtime_venv is not None:
         from pm.environments import site_packages
+
         runtime_site_packages = site_packages(runtime_venv)
         if not any(_same_path(runtime_site_packages, existing) for existing in result):
             result.append(runtime_site_packages)
@@ -151,7 +172,9 @@ def _strip_clawk_owned_pythonpath(env: dict) -> None:
         return
     owned_paths = [*_get_clawk_site_packages(env), *_state()._clawk_repo_root_aliases]
     entries = pp.split(os.pathsep)
-    stripped = [e for e in entries if e and any(_same_path(Path(e), p) for p in owned_paths)]
+    stripped = [
+        e for e in entries if e and any(_same_path(Path(e), p) for p in owned_paths)
+    ]
     kept = [e for e in entries if e not in stripped]
     if kept:
         env["PYTHONPATH"] = os.pathsep.join(kept)

@@ -36,10 +36,10 @@ def test_models_and_runtimes_resolve_to_the_shared_root(profile_home):
     models = bootstrap.models_dir()
     runtimes = binaries.runtimes_root()
 
-    assert models == root / "models", (
-        f"models dir leaked into the profile: {models}")
+    assert models == root / "models", f"models dir leaked into the profile: {models}"
     assert runtimes == root / "runtimes" / "llamacpp", (
-        f"runtimes dir leaked into the profile: {runtimes}")
+        f"runtimes dir leaked into the profile: {runtimes}"
+    )
     assert "profiles" not in models.parts
     assert "profiles" not in runtimes.parts
 
@@ -58,8 +58,7 @@ def test_all_runtime_state_follows_runtimes_root(profile_home):
     # read_preset_decisions' default path must be the shared INI: write a
     # section there and read it back through the default-path branch.
     shared.mkdir(parents=True, exist_ok=True)
-    (shared / "presets.ini").write_text("[m1]\nctx-size = 65536\n",
-                                        encoding="utf-8")
+    (shared / "presets.ini").write_text("[m1]\nctx-size = 65536\n", encoding="utf-8")
     assert "m1" in read_preset_decisions()
 
 

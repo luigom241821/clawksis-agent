@@ -1,4 +1,5 @@
 """Portable transfers keep user files, not machine-specific PM state."""
+
 from argparse import Namespace
 from pathlib import Path
 import tarfile
@@ -18,9 +19,14 @@ def transfer_home(tmp_path, monkeypatch):
 
     # Restoring data must not install host services or modify the test user's shell.
     from clawk_cli import gateway_setup_service
-    monkeypatch.setattr(gateway_setup_service, "ensure_gateway_service", lambda *args, **kwargs: False)
+
+    monkeypatch.setattr(
+        gateway_setup_service, "ensure_gateway_service", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(gateway, "_is_service_running", lambda: False)
-    monkeypatch.setattr(profiles, "check_alias_collision", lambda name: "test has no aliases")
+    monkeypatch.setattr(
+        profiles, "check_alias_collision", lambda name: "test has no aliases"
+    )
     monkeypatch.setattr(backup, "_collect_memory_provider_external_paths", list)
     return home
 
@@ -32,13 +38,17 @@ def _write_files(root, files):
         target.write_text(content, encoding="utf-8")
 
 
-@pytest.mark.parametrize("route", ["backup", "default", "named", "distribution", "explicit"])
+@pytest.mark.parametrize(
+    "route", ["backup", "default", "named", "distribution", "explicit"]
+)
 def test_transfers_preserve_user_files_without_porting_pm_state(
     transfer_home, tmp_path, monkeypatch, route
 ):
     from clawk_cli.backup import run_backup, run_import
     from clawk_cli.profile_distribution import (
-        DistributionManifest, install_distribution, write_manifest,
+        DistributionManifest,
+        install_distribution,
+        write_manifest,
     )
     from clawk_cli.profiles import export_profile, get_profile_dir, import_profile
 
@@ -58,8 +68,12 @@ def test_transfers_preserve_user_files_without_porting_pm_state(
     source = get_profile_dir("porter") if route == "named" else transfer_home
     _write_files(source, portable | runtime)
     if route == "backup":
-        portable |= {f"profiles/coder/{rel}": text for rel, text in list(portable.items())}
-        runtime |= {f"profiles/coder/{rel}": text for rel, text in list(runtime.items())}
+        portable |= {
+            f"profiles/coder/{rel}": text for rel, text in list(portable.items())
+        }
+        runtime |= {
+            f"profiles/coder/{rel}": text for rel, text in list(runtime.items())
+        }
         _write_files(source, portable | runtime)
         archive = tmp_path / "portable.zip"
         run_backup(Namespace(output=str(archive)))
@@ -69,10 +83,20 @@ def test_transfers_preserve_user_files_without_porting_pm_state(
         name = "porter" if route == "named" else "default"
         archive = export_profile(name, str(tmp_path / "portable.tar.gz"))
         with tarfile.open(archive) as reader:
-            names = {member.name.removeprefix(f"{name}/") for member in reader if member.isfile()}
+            names = {
+                member.name.removeprefix(f"{name}/")
+                for member in reader
+                if member.isfile()
+            }
     else:
-        owned = sorted({Path(rel).parts[0] for rel in portable | runtime}) if route == "explicit" else []
-        write_manifest(source, DistributionManifest(name="portable", distribution_owned=owned))
+        owned = (
+            sorted({Path(rel).parts[0] for rel in portable | runtime})
+            if route == "explicit"
+            else []
+        )
+        write_manifest(
+            source, DistributionManifest(name="portable", distribution_owned=owned)
+        )
         names = None
 
     if names is not None:
@@ -97,13 +121,17 @@ def test_transfers_preserve_user_files_without_porting_pm_state(
         assert (source / rel).read_text(encoding="utf-8") == content
 
 
-@pytest.mark.parametrize("route", ["backup", "profile", "profile-denied", "distribution", "explicit"])
+@pytest.mark.parametrize(
+    "route", ["backup", "profile", "profile-denied", "distribution", "explicit"]
+)
 def test_incoming_runtime_state_never_replaces_target_runtime(
     transfer_home, tmp_path, monkeypatch, route
 ):
     from clawk_cli.backup import run_import
     from clawk_cli.profile_distribution import (
-        DistributionManifest, install_distribution, write_manifest,
+        DistributionManifest,
+        install_distribution,
+        write_manifest,
     )
     from clawk_cli.profiles import get_profile_dir, import_profile
 
@@ -119,8 +147,12 @@ def test_incoming_runtime_state_never_replaces_target_runtime(
         "cache": "foreign cache file\n",
     }
     if route == "backup":
-        incoming |= {f"profiles/coder/{rel}": text for rel, text in list(incoming.items())}
-        machine |= {f"profiles/coder/{rel}": text for rel, text in list(machine.items())}
+        incoming |= {
+            f"profiles/coder/{rel}": text for rel, text in list(incoming.items())
+        }
+        machine |= {
+            f"profiles/coder/{rel}": text for rel, text in list(machine.items())
+        }
     staged = tmp_path / "archive-source"
     _write_files(staged, incoming | machine)
     target = transfer_home if route == "backup" else get_profile_dir("restored")
@@ -157,9 +189,17 @@ def test_incoming_runtime_state_never_replaces_target_runtime(
             return
         target = import_profile(str(archive), name="restored")
     else:
-        owned = sorted({Path(rel).parts[0] for rel in incoming | machine}) if route == "explicit" else []
-        write_manifest(staged, DistributionManifest(name="legacy", distribution_owned=owned))
-        target = install_distribution(str(staged), name="restored", force=True).target_dir
+        owned = (
+            sorted({Path(rel).parts[0] for rel in incoming | machine})
+            if route == "explicit"
+            else []
+        )
+        write_manifest(
+            staged, DistributionManifest(name="legacy", distribution_owned=owned)
+        )
+        target = install_distribution(
+            str(staged), name="restored", force=True
+        ).target_dir
 
     for rel, content in incoming.items():
         assert (target / rel).read_text(encoding="utf-8") == content, (route, rel)
@@ -167,21 +207,35 @@ def test_incoming_runtime_state_never_replaces_target_runtime(
         if route == "profile":
             assert not (target / rel).exists(), rel
         else:
-            assert (target / rel).read_text(encoding="utf-8") == "target-owned runtime\n", (route, rel)
+            assert (target / rel).read_text(
+                encoding="utf-8"
+            ) == "target-owned runtime\n", (route, rel)
         assert (staged / rel).read_text(encoding="utf-8") == content
 
     if route == "explicit":
         # Windows-authored manifests use separators that must not bypass ownership.
-        write_manifest(staged, DistributionManifest(
-            name="legacy", distribution_owned=[rel.replace("/", "\\") for rel in incoming | machine],
-        ))
+        write_manifest(
+            staged,
+            DistributionManifest(
+                name="legacy",
+                distribution_owned=[
+                    rel.replace("/", "\\") for rel in incoming | machine
+                ],
+            ),
+        )
         install_distribution(str(staged), name="restored", force=True)
         for rel in machine:
-            assert (target / rel).read_text(encoding="utf-8") == "target-owned runtime\n", rel
+            assert (target / rel).read_text(
+                encoding="utf-8"
+            ) == "target-owned runtime\n", rel
     elif route == "backup":
         # An in-home traversal must not bypass the runtime-root classification.
         with zipfile.ZipFile(archive, "w") as writer:
             writer.writestr(".clawk/config.yaml", incoming["config.yaml"])
-            writer.writestr(".clawk/skills/../installs/key/facts.json", "foreign generation\n")
+            writer.writestr(
+                ".clawk/skills/../installs/key/facts.json", "foreign generation\n"
+            )
         run_import(Namespace(zipfile=str(archive), force=True))
-        assert (target / "installs/key/facts.json").read_text(encoding="utf-8") == "target-owned runtime\n"
+        assert (target / "installs/key/facts.json").read_text(
+            encoding="utf-8"
+        ) == "target-owned runtime\n"

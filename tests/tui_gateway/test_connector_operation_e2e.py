@@ -8,7 +8,11 @@ from contextlib import ExitStack, suppress
 
 import pytest
 
-from gateway.session_context import clear_session_vars, reset_session_vars, set_session_vars
+from gateway.session_context import (
+    clear_session_vars,
+    reset_session_vars,
+    set_session_vars,
+)
 from tools.connectors import live
 from tools.connectors.contract import Actor, TargetState
 from tools.connectors.operation import ConnectionOperation, Target
@@ -164,7 +168,9 @@ def _rpc(client, method, **params):
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         with client._frames_lock:
-            replies = [frame for frame in client.frames[before:] if frame.get("id") == 7]
+            replies = [
+                frame for frame in client.frames[before:] if frame.get("id") == 7
+            ]
         if replies:
             return replies[-1]
         time.sleep(0.01)
@@ -206,18 +212,25 @@ def test_desktop_connect_settles_through_callback_response(owned_session, monkey
     assert len(request["targets"]) == 2
     assert request["deadline_at"] > time.time()
 
-    initiated = _rpc(owner, "connectors.operation.status", op_id=request["op_id"])["result"]
+    initiated = _rpc(owner, "connectors.operation.status", op_id=request["op_id"])[
+        "result"
+    ]
     by_name = {target["name"]: target for target in initiated["targets"]}
     assert {name: target["state"] for name, target in by_name.items()} == {
         "gmail": "initiated",
         "notion": "initiated",
     }
-    assert all(target["connect_url"] == f"https://connect.example/{name}" for name, target in by_name.items())
+    assert all(
+        target["connect_url"] == f"https://connect.example/{name}"
+        for name, target in by_name.items()
+    )
 
     client.set_connected("gmail")
     assert owner.events(
         "connection.update",
-        lambda payload: payload.get("target") == "gmail" and payload.get("to") == "connected",
+        lambda payload: (
+            payload.get("target") == "gmail" and payload.get("to") == "connected"
+        ),
     )
 
     response = _rpc(
@@ -247,7 +260,9 @@ def test_desktop_connect_settles_through_callback_response(owned_session, monkey
     # in the last connection.update; the status RPC has nothing left to serve.
     closed = _rpc(owner, "connectors.operation.status", op_id=request["op_id"])
     assert closed["error"]["code"] == 4004
-    final_update = owner.events("connection.update", lambda payload: payload.get("settled") is True)[-1]
+    final_update = owner.events(
+        "connection.update", lambda payload: payload.get("settled") is True
+    )[-1]
     assert {target["name"]: target["state"] for target in final_update["targets"]} == {
         "gmail": "connected",
         "notion": "skipped",
@@ -280,7 +295,9 @@ def test_cli_connect_returns_urls_without_emitting_a_card(owned_session):
 
 def test_connection_respond_ignores_outcome_claims_and_rejects_strangers(owned_session):
     owner, stranger = owned_session
-    operation = ConnectionOperation([Target("gmail", "connector", "connect")], session_key=SID)
+    operation = ConnectionOperation(
+        [Target("gmail", "connector", "connect")], session_key=SID
+    )
     live.open(operation)
     operation.transition("gmail", TargetState.initiated, Actor.backend_watcher)
 

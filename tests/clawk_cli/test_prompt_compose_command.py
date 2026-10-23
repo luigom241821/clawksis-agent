@@ -26,9 +26,14 @@ def _fake_editor(tmp_path, body: str, mode: str = "append", exit_code: int = 0) 
     script.write_text(
         "import sys\nfrom pathlib import Path\n"
         "path = Path(sys.argv[1])\n"
-        + (f"path.write_text(path.read_text(encoding='utf-8') + {body!r}, encoding='utf-8')\n"
-           if mode == "append" else "path.write_text('', encoding='utf-8')\n")
-        + f"sys.exit({exit_code})\n", encoding="utf-8")
+        + (
+            f"path.write_text(path.read_text(encoding='utf-8') + {body!r}, encoding='utf-8')\n"
+            if mode == "append"
+            else "path.write_text('', encoding='utf-8')\n"
+        )
+        + f"sys.exit({exit_code})\n",
+        encoding="utf-8",
+    )
     return f'"{Path(sys.executable).as_posix()}" "{script.as_posix()}"'
 
 
@@ -40,7 +45,9 @@ def _no_visual(monkeypatch):
 
 @pytest.mark.platforms("linux")
 def test_compose_reads_and_strips_header(tmp_path, monkeypatch):
-    monkeypatch.setenv("EDITOR", _fake_editor(tmp_path, "Refactor the auth module.\nUse pytest."))
+    monkeypatch.setenv(
+        "EDITOR", _fake_editor(tmp_path, "Refactor the auth module.\nUse pytest.")
+    )
     out = _Stub()._compose_in_editor("")
     assert "Refactor the auth module." in out
     assert "Use pytest." in out
@@ -82,7 +89,9 @@ def test_editor_failure_never_falls_back_to_shell(monkeypatch):
 
 def test_nonzero_editor_exit_cancels_even_with_buffer_content(tmp_path, monkeypatch):
     """A failed editor may leave seeded or abandoned text in the buffer — cancel."""
-    monkeypatch.setenv("EDITOR", _fake_editor(tmp_path, "typed but abandoned\n", exit_code=3))
+    monkeypatch.setenv(
+        "EDITOR", _fake_editor(tmp_path, "typed but abandoned\n", exit_code=3)
+    )
     assert _Stub()._compose_in_editor("seed text from the command line") == ""
     stub = _Stub()
     stub._handle_prompt_compose_command("/prompt draft this")

@@ -35,7 +35,10 @@ def test_checkpoint_clear_all_removes_tree_with_read_only_object(tmp_path):
 
     root = tmp_path / "checkpoints"
     obj_dir = _read_only_object_dir(root)
-    assert not (obj_dir / "825dc642cb6eb9a060e54bf8d69288fbee4904").stat().st_mode & stat.S_IWUSR
+    assert (
+        not (obj_dir / "825dc642cb6eb9a060e54bf8d69288fbee4904").stat().st_mode
+        & stat.S_IWUSR
+    )
 
     out = clear_all(root)
 
@@ -49,7 +52,9 @@ def test_removes_read_only_file_in_writable_directory(tmp_path):
     root = tmp_path / "plugins" / "demo"
     obj_dir = root / ".git" / "objects" / "4b"
     obj_dir.mkdir(parents=True)
-    (obj_dir / "825dc642cb6eb9a060e54bf8d69288fbee4904").write_text("blob", encoding="utf-8")
+    (obj_dir / "825dc642cb6eb9a060e54bf8d69288fbee4904").write_text(
+        "blob", encoding="utf-8"
+    )
     (obj_dir / "825dc642cb6eb9a060e54bf8d69288fbee4904").chmod(stat.S_IREAD)
 
     rmtree_readonly(root)

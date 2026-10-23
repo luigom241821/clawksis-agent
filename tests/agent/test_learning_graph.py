@@ -18,8 +18,6 @@ def _node(name: str, category: str, related=None):
     return n
 
 
-
-
 def test_density_stats_count_isolated_nodes():
     nodes = {
         "a": _node("a", "x", related=["b"]),
@@ -31,8 +29,6 @@ def test_density_stats_count_isolated_nodes():
     assert stats["nodes"] == 3
     assert stats["linked_nodes"] == 2
     assert stats["isolated_pct"] == round(100 / 3, 1)
-
-
 
 
 def test_memory_is_cards_split_on_separator(tmp_path):
@@ -55,10 +51,6 @@ def test_memory_is_cards_split_on_separator(tmp_path):
     assert all(c["source"] in {"memory", "profile"} for c in graph["memory"])
     assert all("timestamp" in c for c in graph["memory"])
     assert any(n["kind"] == "memory" for n in graph["nodes"])
-
-
-
-
 
 
 def test_full_payload_shape_and_edge_integrity(tmp_path):
@@ -90,11 +82,16 @@ def test_foreground_created_skill_is_in_journey_before_first_use(tmp_path):
     for name in ("fresh-learn-skill", "hand-written"):
         (home / "skills" / "demo" / name).mkdir(parents=True)
         (home / "skills" / "demo" / name / "SKILL.md").write_text(
-            f"---\nname: {name}\ndescription: d.\n---\n\n# {name}\n", encoding="utf-8")
+            f"---\nname: {name}\ndescription: d.\n---\n\n# {name}\n", encoding="utf-8"
+        )
     token = set_clawk_home_override(home)
     try:
         skill_usage.record_created("fresh-learn-skill", agent_created=False)
-        skill_nodes = {n["id"] for n in learning_graph.build_learning_graph()["nodes"] if n["kind"] == "skill"}
+        skill_nodes = {
+            n["id"]
+            for n in learning_graph.build_learning_graph()["nodes"]
+            if n["kind"] == "skill"
+        }
     finally:
         reset_clawk_home_override(token)
 

@@ -1,4 +1,5 @@
 """Cron admission must not become a second writer or a completed-delivery claim."""
+
 from pathlib import Path
 import subprocess
 from unittest.mock import Mock
@@ -17,16 +18,23 @@ class _FakeAuthority:
     def publish(self, key, **changes):
         record = self.records[key]
         record.update(changes)
-        with mailbox._locked(record['profile_home']) as root:
-            mailbox._write(root / f'{key}.json', record)
+        with mailbox._locked(record["profile_home"]) as root:
+            mailbox._write(root / f"{key}.json", record)
 
     def __call__(self, home, params):
         record = self.records.get(params["id"])
         if record is None:
             record = self.records[params["id"]] = dict(
-                status="queued", delivery_id=params["id"], profile_home=str(Path(home).resolve()),
-                session_id="local-bot", message=params["message"], admission_id="adm-" + params["id"][:8],
-                reply="", error="", reason="")
+                status="queued",
+                delivery_id=params["id"],
+                profile_home=str(Path(home).resolve()),
+                session_id="local-bot",
+                message=params["message"],
+                admission_id="adm-" + params["id"][:8],
+                reply="",
+                error="",
+                reason="",
+            )
             with mailbox._locked(home) as root:
                 mailbox._write(root / f"{params['id']}.json", record)
         elif record["message"] != params["message"]:
@@ -35,8 +43,13 @@ class _FakeAuthority:
 
 
 def _owner(home):
-    return dict(profile_home=str(Path(home).resolve()), session_id="local-bot", canonical=True,
-                lease_id="authority-1", live_session_id="local-bot")
+    return dict(
+        profile_home=str(Path(home).resolve()),
+        session_id="local-bot",
+        canonical=True,
+        lease_id="authority-1",
+        live_session_id="local-bot",
+    )
 
 
 def test_live_delivery_retry_keeps_receipt_across_owner_loss(tmp_path, monkeypatch):
@@ -64,7 +77,9 @@ def test_live_delivery_retry_keeps_receipt_across_owner_loss(tmp_path, monkeypat
         # Same execution id -> same stable delivery id, no second admission.
         discovery.side_effect = AssertionError("receipt must precede discovery")
         assert delivery._deliver_to_bot_chat(dict(job), "payload", profile) == pending
-        assert key in authority.records and len(authority.records) == admitted_before + 1
+        assert (
+            key in authority.records and len(authority.records) == admitted_before + 1
+        )
         # The owner dies mid-execution: the authority reports the admission ambiguous.
         authority.publish(key, status="ambiguous", error="owner died")
         outcome = delivery._deliver_to_bot_chat(dict(job), "payload", profile)
@@ -84,7 +99,9 @@ def test_result_records_pending_until_terminal_receipt(tmp_path, monkeypatch):
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("_CLAWK_CRON_EXTERNAL_WORKER", raising=False)
-    monkeypatch.setattr(mailbox, "find_canonical_live_owner", lambda home: _owner(tmp_path))
+    monkeypatch.setattr(
+        mailbox, "find_canonical_live_owner", lambda home: _owner(tmp_path)
+    )
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
     monkeypatch.setattr(delivery._sched, "load_config", dict)
@@ -97,9 +114,18 @@ def test_result_records_pending_until_terminal_receipt(tmp_path, monkeypatch):
     assert error is None
     queued = updates[-1]["last_delivery_queued"]
     assert queued and next(iter(queued.values()))["status"] == "queued"
-    assert delivery._sched._classify_delivery_outcome(
-        delivery_error=error, delivery_queued=queued, should_deliver=True, unresolved_origin=False,
-        normalized_deliver="bot-chat", incident_acked=False, success=True) == "queued"
+    assert (
+        delivery._sched._classify_delivery_outcome(
+            delivery_error=error,
+            delivery_queued=queued,
+            should_deliver=True,
+            unresolved_origin=False,
+            normalized_deliver="bot-chat",
+            incident_acked=False,
+            success=True,
+        )
+        == "queued"
+    )
     (key,) = authority.records
     assert next(iter(queued.values()))["delivery_id"] == key
     authority.publish(key, status="settled", reply="done")

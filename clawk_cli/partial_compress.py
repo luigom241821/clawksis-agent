@@ -100,7 +100,9 @@ def summarize_compress_preview(
             f"({len(tail)} message(s)) verbatim."
         )
     elif partial:
-        lines.append("Boundary: 'here' split would keep everything — falling back to full compression.")
+        lines.append(
+            "Boundary: 'here' split would keep everything — falling back to full compression."
+        )
     if focus_topic:
         lines.append(f'Focus topic: "{focus_topic}"')
     lines.append("Run the command again without --preview to apply.")
@@ -183,6 +185,8 @@ def rejoin_compressed_head_and_tail(
             head[-1] = {**last, "content": f"{last_content}\n\n{first_content}"}
             rest = rest[1:]
         else:
-            head.append({"role": "assistant" if first_role == "user" else "user", "content": ""})
+            head.append(
+                {"role": "assistant" if first_role == "user" else "user", "content": ""}
+            )
 
     return head + rest

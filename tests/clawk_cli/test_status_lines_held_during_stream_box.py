@@ -1,6 +1,7 @@
 """Agent status lines (subagent ``✓ [set n · i/N]`` completions, background-process notices) arrive on other
 threads mid-stream. The CLI's ``agent._print_fn`` must park them while a response box is open and release them
 at the footer, never between two paragraphs of the reply."""
+
 import os
 import re
 import sys
@@ -76,11 +77,19 @@ def test_status_line_prints_immediately_outside_a_box(cli_stub):
     assert not getattr(cli, "_held_status_lines", [])
 
 
-@pytest.mark.parametrize("response, expect_panel", [
-    ("Partial answer.", False),  # the streamed text itself: already on screen
-    ("Operation interrupted: waiting for model response (3.0s elapsed).", True),  # never streamed
-])
-def test_interrupted_reply_panel_after_tool_call_boundary(cli_stub, monkeypatch, response, expect_panel):
+@pytest.mark.parametrize(
+    "response, expect_panel",
+    [
+        ("Partial answer.", False),  # the streamed text itself: already on screen
+        (
+            "Operation interrupted: waiting for model response (3.0s elapsed).",
+            True,
+        ),  # never streamed
+    ],
+)
+def test_interrupted_reply_panel_after_tool_call_boundary(
+    cli_stub, monkeypatch, response, expect_panel
+):
     """#65666: an interrupted reply streamed before a tool-call boundary reset per-segment stream
     state must not be re-rendered as a Panel, but an unstreamed interrupt status message still is."""
     from types import SimpleNamespace
@@ -88,18 +97,25 @@ def test_interrupted_reply_panel_after_tool_call_boundary(cli_stub, monkeypatch,
 
     cli, _ = cli_stub
     printed = []
-    monkeypatch.setattr(climod, "ChatConsole", lambda: SimpleNamespace(print=printed.append))
+    monkeypatch.setattr(
+        climod, "ChatConsole", lambda: SimpleNamespace(print=printed.append)
+    )
     cli._streamed_text_this_turn = ""
     cli._stream_delta("Partial answer.\n")
     cli._stream_delta(None)  # tool-call boundary: flush + per-segment reset
     cli._last_turn_interrupted = True
-    turn = SimpleNamespace(use_streaming_tts=False, box_opened=False,
-                           result={"interrupted": True, "final_response": response})
+    turn = SimpleNamespace(
+        use_streaming_tts=False,
+        box_opened=False,
+        result={"interrupted": True, "final_response": response},
+    )
     cli._chat_print_response_panel(turn, response)
     assert bool(printed) is expect_panel, printed
 
 
-def test_unstreamed_final_reply_after_streamed_segment_still_prints_panel(cli_stub, monkeypatch):
+def test_unstreamed_final_reply_after_streamed_segment_still_prints_panel(
+    cli_stub, monkeypatch
+):
     """#65666 scope: the turn-level streamed record only suppresses the Panel for interrupted results.
     A turn that streamed text A, crossed a tool boundary, then returned an unstreamed final B must
     still render B."""
@@ -108,12 +124,17 @@ def test_unstreamed_final_reply_after_streamed_segment_still_prints_panel(cli_st
 
     cli, _ = cli_stub
     printed = []
-    monkeypatch.setattr(climod, "ChatConsole", lambda: SimpleNamespace(print=printed.append))
+    monkeypatch.setattr(
+        climod, "ChatConsole", lambda: SimpleNamespace(print=printed.append)
+    )
     cli._streamed_text_this_turn = ""
     cli._stream_delta("Looking that up.\n")
     cli._stream_delta(None)  # tool-call boundary
     cli._last_turn_interrupted = False
-    turn = SimpleNamespace(use_streaming_tts=False, box_opened=False,
-                           result={"completed": True, "final_response": "Final B"})
+    turn = SimpleNamespace(
+        use_streaming_tts=False,
+        box_opened=False,
+        result={"completed": True, "final_response": "Final B"},
+    )
     cli._chat_print_response_panel(turn, "Final B")
     assert len(printed) == 1

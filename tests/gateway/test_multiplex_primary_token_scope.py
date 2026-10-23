@@ -12,6 +12,7 @@ this suite locks the complementary primary-path fixes:
    multiplex instead of connecting-and-failing forever.
 3. The reconnect watcher drops empty-token queued configs.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,8 +39,12 @@ class TestLoadGatewayConfigForRunner:
 
         home = tmp_path / "home"
         home.mkdir()
-        (home / ".env").write_text("TELEGRAM_BOT_TOKEN=from-default-env\n", encoding="utf-8")
-        (home / "config.yaml").write_text("gateway:\n  multiplex_profiles: false\n", encoding="utf-8")
+        (home / ".env").write_text(
+            "TELEGRAM_BOT_TOKEN=from-default-env\n", encoding="utf-8"
+        )
+        (home / "config.yaml").write_text(
+            "gateway:\n  multiplex_profiles: false\n", encoding="utf-8"
+        )
         monkeypatch.setenv("CLAWK_HOME", str(home))
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
 
@@ -49,7 +54,9 @@ class TestLoadGatewayConfigForRunner:
         cfg = run_mod.load_gateway_config_for_runner()
         assert cfg.multiplex_profiles is False
 
-    def test_scoped_reload_still_sees_container_api_server_env(self, tmp_path, monkeypatch):
+    def test_scoped_reload_still_sees_container_api_server_env(
+        self, tmp_path, monkeypatch
+    ):
         """#69379 — container-env API_SERVER_* visible during the scoped reload.
 
         Docker/systemd deployments enable the api_server platform via the
@@ -107,17 +114,22 @@ class TestLoadGatewayConfigForRunner:
         assert api.extra.get("port") == 8642
 
 
-
 class TestPlatformHasBotCredential:
     def test_telegram_empty_token_false(self):
         from gateway.run import _platform_has_bot_credential
 
-        assert _platform_has_bot_credential(
-            Platform.TELEGRAM, PlatformConfig(enabled=True, token="")
-        ) is False
-        assert _platform_has_bot_credential(
-            Platform.TELEGRAM, PlatformConfig(enabled=True, token=None)
-        ) is False
+        assert (
+            _platform_has_bot_credential(
+                Platform.TELEGRAM, PlatformConfig(enabled=True, token="")
+            )
+            is False
+        )
+        assert (
+            _platform_has_bot_credential(
+                Platform.TELEGRAM, PlatformConfig(enabled=True, token=None)
+            )
+            is False
+        )
 
     def test_matrix_password_login_is_a_credential(self):
         """Matrix password auth has no .token but is fully reconnectable.
@@ -144,7 +156,10 @@ class TestPlatformHasBotCredential:
             {},
             {"homeserver": "https://matrix.example.org", "password": "hunter2"},
             {"user_id": "@bot:matrix.example.org", "password": "hunter2"},
-            {"homeserver": "https://matrix.example.org", "user_id": "@bot:m.example.org"},
+            {
+                "homeserver": "https://matrix.example.org",
+                "user_id": "@bot:m.example.org",
+            },
             {"homeserver": "  ", "user_id": "  ", "password": "  "},
         ],
         ids=["empty", "no-user-id", "no-homeserver", "no-password", "blank"],
@@ -181,7 +196,8 @@ class TestPrimaryStartupSkipsEmptyTokenUnderMultiplex:
 
         cfg = GatewayConfig(multiplex_profiles=True)
         cfg.platforms[Platform.TELEGRAM] = PlatformConfig(
-            enabled=True, token=""  # empty — lives on secondary only
+            enabled=True,
+            token="",  # empty — lives on secondary only
         )
 
         runner = GatewayRunner.__new__(GatewayRunner)
@@ -205,9 +221,11 @@ class TestPrimaryStartupSkipsEmptyTokenUnderMultiplex:
         runner._abort_startup_if_shutdown_requested = MagicMock(return_value=False)  # type: ignore
         runner._update_platform_runtime_status = MagicMock()  # type: ignore
         runner._start_secondary_profile_adapters = MagicMock(return_value=0)  # type: ignore
+
         # Make the secondary call awaitable
         async def _sec():
             return 0
+
         runner._start_secondary_profile_adapters = _sec  # type: ignore
 
         # We only want the primary platform loop; extract and run a thin
@@ -263,7 +281,9 @@ class TestPrimaryMessageRuntimeScope:
         runner._handle_message = _handle_message  # type: ignore[method-assign]
         handler = runner._primary_message_handler()
 
-        assert await handler(SimpleNamespace(source=SimpleNamespace(profile=None))) is True
+        assert (
+            await handler(SimpleNamespace(source=SimpleNamespace(profile=None))) is True
+        )
         with pytest.raises(secret_scope.UnscopedSecretError):
             secret_scope.get_secret("DISCORD_BOT_TOKEN")
 
@@ -287,8 +307,7 @@ class TestPrimaryMessageRuntimeScope:
         home = tmp_path / "home"
         home.mkdir()
         (home / ".env").write_text(
-            "SIGNAL_ALLOWED_USERS=+15550001111\n"
-            "SIGNAL_ALLOW_ALL_USERS=false\n",
+            "SIGNAL_ALLOWED_USERS=+15550001111\nSIGNAL_ALLOW_ALL_USERS=false\n",
             encoding="utf-8",
         )
         sharik = tmp_path / "profiles" / "sharik"
@@ -302,8 +321,12 @@ class TestPrimaryMessageRuntimeScope:
         runner = GatewayRunner.__new__(GatewayRunner)
         runner.config = GatewayConfig(multiplex_profiles=True)
         runner._resolve_profile_home_for_source = lambda _source: sharik  # type: ignore[method-assign]
-        runner._session_key_for_source = lambda source: f"agent:{source.profile}:signal:dm:{source.chat_id}"  # type: ignore[method-assign]
-        runner._is_user_authorized_for_source = GatewayRunner._is_user_authorized_for_source.__get__(runner)  # type: ignore[method-assign]
+        runner._session_key_for_source = lambda source: (
+            f"agent:{source.profile}:signal:dm:{source.chat_id}"
+        )  # type: ignore[method-assign]
+        runner._is_user_authorized_for_source = (
+            GatewayRunner._is_user_authorized_for_source.__get__(runner)
+        )  # type: ignore[method-assign]
 
         async def _busy(event, session_key):
             assert session_key == "agent:sharik:signal:dm:+15550001111"

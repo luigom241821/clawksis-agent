@@ -13,6 +13,7 @@ Pipeline per transcript:
 
 Run from repo root with the project venv (needs a configured provider).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -88,7 +89,9 @@ QUESTION: {question}
 Answer in one or two sentences."""
 
 
-def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int = 2500) -> str:
+def keyword_search(
+    archive: list, query: str, top_k: int = 4, excerpt_chars: int = 2500
+) -> str:
     """Simulate session_search over the archived (compacted-away) region.
 
     Uses an in-memory SQLite FTS5 index with BM25 ranking — the same engine
@@ -109,14 +112,14 @@ def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int
     hits = []
     try:
         db = _sq.connect(":memory:")
-        db.execute("CREATE VIRTUAL TABLE arch USING fts5(content, role UNINDEXED, idx UNINDEXED)")
+        db.execute(
+            "CREATE VIRTUAL TABLE arch USING fts5(content, role UNINDEXED, idx UNINDEXED)"
+        )
         db.executemany(
             "INSERT INTO arch (content, role, idx) VALUES (?, ?, ?)",
             [(c, r, i) for i, r, c in rows],
         )
-        fts_query = " OR ".join(
-            '"' + t.replace('"', "") + '"' for t in terms
-        )
+        fts_query = " OR ".join('"' + t.replace('"', "") + '"' for t in terms)
         cur = db.execute(
             "SELECT idx, role, content, bm25(arch) AS rank, "
             "snippet(arch, 0, '', '', ' … ', 40) AS snip "
@@ -129,8 +132,7 @@ def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int
             start = max(0, first - excerpt_chars // 4)
             hits.append(
                 f"--- result (message #{idx}, role={role}) ---\n"
-                f"[match: {snip[:200]}]\n"
-                + content[start:start + excerpt_chars]
+                f"[match: {snip[:200]}]\n" + content[start : start + excerpt_chars]
             )
         db.close()
     except _sq.OperationalError:
@@ -148,12 +150,17 @@ def keyword_search(archive: list, query: str, top_k: int = 4, excerpt_chars: int
             start = max(0, first - excerpt_chars // 4)
             hits.append(
                 f"--- result (message #{i}, role={r}) ---\n"
-                + c[start:start + excerpt_chars]
+                + c[start : start + excerpt_chars]
             )
     return "\n\n".join(hits) if hits else "(no results)"
 
 
-EVAL_USAGE = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cached_tokens": 0}
+EVAL_USAGE = {
+    "calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+}
 
 
 def _call(prompt: str, max_tokens: int = 2000) -> str:
@@ -168,9 +175,13 @@ def _call(prompt: str, max_tokens: int = 2000) -> str:
     if usage is not None:
         EVAL_USAGE["calls"] += 1
         EVAL_USAGE["prompt_tokens"] += int(getattr(usage, "prompt_tokens", 0) or 0)
-        EVAL_USAGE["completion_tokens"] += int(getattr(usage, "completion_tokens", 0) or 0)
+        EVAL_USAGE["completion_tokens"] += int(
+            getattr(usage, "completion_tokens", 0) or 0
+        )
         details = getattr(usage, "prompt_tokens_details", None)
-        EVAL_USAGE["cached_tokens"] += int(getattr(details, "cached_tokens", 0) or 0) if details else 0
+        EVAL_USAGE["cached_tokens"] += (
+            int(getattr(details, "cached_tokens", 0) or 0) if details else 0
+        )
     if hasattr(resp, "choices"):
         return resp.choices[0].message.content or ""
     return str(resp)
@@ -197,7 +208,11 @@ def serialize_for_exam(messages, char_cap: int = 600_000) -> str:
     text = "\n\n".join(parts)
     if len(text) > char_cap:
         half = char_cap // 2
-        text = text[:half] + "\n\n...[middle elided for exam generation]...\n\n" + text[-half:]
+        text = (
+            text[:half]
+            + "\n\n...[middle elided for exam generation]...\n\n"
+            + text[-half:]
+        )
     return text
 
 
@@ -238,7 +253,10 @@ def openrouter_price_usd(model: str, input_tokens: int, output_tokens: int):
     if not _PRICES:
         try:
             import urllib.request
-            with urllib.request.urlopen("https://openrouter.ai/api/v1/models", timeout=30) as r:
+
+            with urllib.request.urlopen(
+                "https://openrouter.ai/api/v1/models", timeout=30
+            ) as r:
                 for m in json.load(r)["data"]:
                     _PRICES[m["id"]] = m.get("pricing") or {}
         except Exception:
@@ -246,7 +264,9 @@ def openrouter_price_usd(model: str, input_tokens: int, output_tokens: int):
     p = _PRICES.get(model) or _PRICES.get(model.split(":")[0])
     if not p:
         return None
-    return input_tokens * float(p.get("prompt") or 0) + output_tokens * float(p.get("completion") or 0)
+    return input_tokens * float(p.get("prompt") or 0) + output_tokens * float(
+        p.get("completion") or 0
+    )
 
 
 class _AuxMeter:
@@ -260,18 +280,29 @@ class _AuxMeter:
 
     def __enter__(self):
         import agent.context_compressor as cc
+
         self._cc, self._orig = cc, cc.call_llm
 
         def metered(*args, **kwargs):
             resp = self._orig(*args, **kwargs)
             self.calls += 1
-            usage = getattr(resp, "usage", None) or (resp.get("usage") if isinstance(resp, dict) else None)
+            usage = getattr(resp, "usage", None) or (
+                resp.get("usage") if isinstance(resp, dict) else None
+            )
             if usage is not None:
-                get = (lambda k: getattr(usage, k, None)) if not isinstance(usage, dict) else usage.get
+                get = (
+                    (lambda k: getattr(usage, k, None))
+                    if not isinstance(usage, dict)
+                    else usage.get
+                )
                 self.input_tokens += int(get("prompt_tokens") or 0)
                 self.output_tokens += int(get("completion_tokens") or 0)
             route = kwargs.get("route_info") or {}
-            model = route.get("model") or kwargs.get("model") or getattr(resp, "model", None)
+            model = (
+                route.get("model")
+                or kwargs.get("model")
+                or getattr(resp, "model", None)
+            )
             if model and model not in self.models:
                 self.models.append(model)
             return resp
@@ -289,7 +320,9 @@ class _AuxMeter:
             "compaction_input_tokens": self.input_tokens,
             "compaction_output_tokens": self.output_tokens,
             "compaction_model": model,
-            "compaction_cost_usd": openrouter_price_usd(model, self.input_tokens, self.output_tokens),
+            "compaction_cost_usd": openrouter_price_usd(
+                model, self.input_tokens, self.output_tokens
+            ),
         }
 
 
@@ -300,13 +333,24 @@ def _compress_with_policy(spec: dict, messages) -> tuple:
 
         comp = JevCompactor(options=JevOptions(**(spec.get("jev") or {})))
         try:
-            compressed = comp.compress(copy.deepcopy(messages), current_tokens=total_tokens(messages), force=True)
+            compressed = comp.compress(
+                copy.deepcopy(messages),
+                current_tokens=total_tokens(messages),
+                force=True,
+            )
         except ValueError as e:
             # The plugin throws here and Claude Code falls back to its built-in
             # summary; record the fallback rather than scoring an uncompressed arm.
             comp._last_summary_error = str(e)
-            return None, comp, {"jev_fallback": str(e), "compaction_calls": comp.usage.requests,
-                                "compaction_cost_usd": comp.usage.cost_usd}
+            return (
+                None,
+                comp,
+                {
+                    "jev_fallback": str(e),
+                    "compaction_calls": comp.usage.requests,
+                    "compaction_cost_usd": comp.usage.cost_usd,
+                },
+            )
         cost = {
             "compaction_calls": comp.usage.requests,
             "compaction_input_tokens": comp.usage.input_tokens,
@@ -323,24 +367,39 @@ def _compress_with_policy(spec: dict, messages) -> tuple:
     for key, value in (spec.get("ctor") or {}).items():
         setattr(comp, key, value)
     with _AuxMeter() as meter:
-        compressed = comp.compress(copy.deepcopy(messages), current_tokens=total_tokens(messages), force=True)
+        compressed = comp.compress(
+            copy.deepcopy(messages), current_tokens=total_tokens(messages), force=True
+        )
     return compressed, comp, meter.summary()
 
 
-def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
-               with_recovery: bool = False) -> dict:
+def run_policy(
+    name: str,
+    spec: dict,
+    messages,
+    questions,
+    out_dir: Path,
+    with_recovery: bool = False,
+) -> dict:
     before = copy.deepcopy(messages)
     t0 = time.time()
     compressed, comp, compaction_cost = _compress_with_policy(spec, messages)
     elapsed = time.time() - t0
     label = f"{name}+recovery" if with_recovery else name
     if compressed is None:
-        summary = {"policy": label, "before_tokens": total_tokens(before), "after_tokens": None,
-                   "recall_pct": None, "compress_seconds": round(elapsed, 1),
-                   "summary_error": comp._last_summary_error, **compaction_cost}
+        summary = {
+            "policy": label,
+            "before_tokens": total_tokens(before),
+            "after_tokens": None,
+            "recall_pct": None,
+            "compress_seconds": round(elapsed, 1),
+            "summary_error": comp._last_summary_error,
+            **compaction_cost,
+        }
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / f"{label.replace('+', '_')}.json").write_text(
-            json.dumps({"summary": summary, "results": []}, indent=1), encoding="utf-8")
+            json.dumps({"summary": summary, "results": []}, indent=1), encoding="utf-8"
+        )
         return summary
 
     # The archived region = original messages that did not survive verbatim.
@@ -350,8 +409,10 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         if isinstance(c, str) and c:
             surviving.add(c[:200])
     archive = [
-        m for m in before
-        if isinstance(m.get("content"), str) and (m.get("content") or "")[:200] not in surviving
+        m
+        for m in before
+        if isinstance(m.get("content"), str)
+        and (m.get("content") or "")[:200] not in surviving
     ]
 
     context_text = serialize_for_exam(compressed, char_cap=700_000)
@@ -363,12 +424,17 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
             # that portion plus the recent tail so it can mine anchor
             # identifiers (PR numbers, paths, error strings) for the query.
             hint = context_text[:60_000] + "\n...\n" + context_text[-8_000:]
-            query = _call(
-                SEARCH_QUERY_PROMPT.format(
-                    context_hint=hint, question=qa["q"],
-                ),
-                max_tokens=100,
-            ).strip().strip('"')
+            query = (
+                _call(
+                    SEARCH_QUERY_PROMPT.format(
+                        context_hint=hint,
+                        question=qa["q"],
+                    ),
+                    max_tokens=100,
+                )
+                .strip()
+                .strip('"')
+            )
             search_results = keyword_search(archive, query)
             answer = _call(
                 ANSWER_WITH_RECOVERY_PROMPT.format(
@@ -380,8 +446,14 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
             )
         else:
             query = None
-            answer = _call(ANSWER_PROMPT.format(context=context_text, question=qa["q"]), max_tokens=400)
-        verdict_raw = _call(JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer), max_tokens=300)
+            answer = _call(
+                ANSWER_PROMPT.format(context=context_text, question=qa["q"]),
+                max_tokens=400,
+            )
+        verdict_raw = _call(
+            JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer),
+            max_tokens=300,
+        )
         try:
             verdict = _extract_json(verdict_raw)
         except Exception:
@@ -398,13 +470,17 @@ def run_policy(name: str, spec: dict, messages, questions, out_dir: Path,
         "after_tokens": total_tokens(compressed),
         "after_msgs": len(compressed),
         "compress_seconds": round(elapsed, 1),
-        "recall_pct": round(100 * sum(scored) / (2 * len(scored)), 1) if scored else 0.0,
+        "recall_pct": round(100 * sum(scored) / (2 * len(scored)), 1)
+        if scored
+        else 0.0,
         "scores": scored,
         "summary_error": getattr(comp, "_last_summary_error", None),
         **compaction_cost,
     }
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"{label.replace('+', '_')}.json").write_text(json.dumps({"summary": summary, "results": results}, indent=1), encoding="utf-8")
+    (out_dir / f"{label.replace('+', '_')}.json").write_text(
+        json.dumps({"summary": summary, "results": results}, indent=1), encoding="utf-8"
+    )
     return summary
 
 
@@ -412,8 +488,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--transcript", required=True)
     ap.add_argument("--cap-tokens", type=int, default=500_000)
-    ap.add_argument("--policies", default="current+recovery",
-                    help="comma-separated arms; <name>+recovery = production path (summary + one session_search round-trip). Bare <name> is closed-book, opt-in only.")
+    ap.add_argument(
+        "--policies",
+        default="current+recovery",
+        help="comma-separated arms; <name>+recovery = production path (summary + one session_search round-trip). Bare <name> is closed-book, opt-in only.",
+    )
     ap.add_argument("--questions", type=int, default=15)
     ap.add_argument("--out", required=True)
     ap.add_argument("--also-uncompacted", action="store_true")
@@ -432,8 +511,14 @@ def main():
         context_text = serialize_for_exam(messages, char_cap=900_000)
         results = []
         for qa in questions:
-            answer = _call(ANSWER_PROMPT.format(context=context_text, question=qa["q"]), max_tokens=400)
-            verdict_raw = _call(JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer), max_tokens=300)
+            answer = _call(
+                ANSWER_PROMPT.format(context=context_text, question=qa["q"]),
+                max_tokens=400,
+            )
+            verdict_raw = _call(
+                JUDGE_PROMPT.format(question=qa["q"], gold=qa["gold"], answer=answer),
+                max_tokens=300,
+            )
             try:
                 verdict = _extract_json(verdict_raw)
             except Exception:
@@ -448,23 +533,36 @@ def main():
             "scores": scored,
         }
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "uncompacted_control.json").write_text(json.dumps({"summary": ctl, "results": results}, indent=1), encoding="utf-8")
+        (out_dir / "uncompacted_control.json").write_text(
+            json.dumps({"summary": ctl, "results": results}, indent=1), encoding="utf-8"
+        )
         summaries.append(ctl)
         print(json.dumps(ctl, indent=1))
 
     for name in args.policies.split(","):
         name = name.strip()
         with_recovery = name.endswith("+recovery")
-        base = name[:-len("+recovery")] if with_recovery else name
+        base = name[: -len("+recovery")] if with_recovery else name
         if base not in POLICIES:
-            print(f"unknown policy {base}, skipping"); continue
-        s = run_policy(base, POLICIES[base], messages, questions, out_dir,
-                       with_recovery=with_recovery)
+            print(f"unknown policy {base}, skipping")
+            continue
+        s = run_policy(
+            base,
+            POLICIES[base],
+            messages,
+            questions,
+            out_dir,
+            with_recovery=with_recovery,
+        )
         summaries.append(s)
         print(json.dumps(s, indent=1))
 
-    (out_dir / "scorecard.json").write_text(json.dumps(summaries, indent=1), encoding="utf-8")
-    (out_dir / "eval_usage.json").write_text(json.dumps(EVAL_USAGE, indent=1), encoding="utf-8")
+    (out_dir / "scorecard.json").write_text(
+        json.dumps(summaries, indent=1), encoding="utf-8"
+    )
+    (out_dir / "eval_usage.json").write_text(
+        json.dumps(EVAL_USAGE, indent=1), encoding="utf-8"
+    )
     print(f"\nscorecard -> {out_dir}/scorecard.json")
     print(f"eval LLM usage (questions+answers+judge): {EVAL_USAGE}")
 

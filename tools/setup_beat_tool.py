@@ -34,7 +34,13 @@ def _installed() -> dict:
     from clawk_cli.plugin_catalog_presence import onboarding_names
     from clawk_cli.plugins_cmd import _catalog_installed_dir
 
-    return {"installed": [name for name in onboarding_names() if _catalog_installed_dir(name) is not None]}
+    return {
+        "installed": [
+            name
+            for name in onboarding_names()
+            if _catalog_installed_dir(name) is not None
+        ]
+    }
 
 
 # A card closed without its own answer (words, a value, a skip, the deadline) still reports these.
@@ -47,7 +53,11 @@ def _present(beat: str) -> dict | None:
     try:
         return read()
     except Exception:
-        logger.warning("onboarding: could not read what the %s beat has on this machine", beat, exc_info=True)
+        logger.warning(
+            "onboarding: could not read what the %s beat has on this machine",
+            beat,
+            exc_info=True,
+        )
         return None
 
 
@@ -59,7 +69,11 @@ def _direct_event(beat: str, args: Mapping[str, Any]) -> flow.Event | None:
     if args.get("skip"):
         return flow.Skipped(beat, _present(beat))
     value = args.get("value")
-    return flow.Recorded(beat, value.strip(), _present(beat)) if isinstance(value, str) and value.strip() else None
+    return (
+        flow.Recorded(beat, value.strip(), _present(beat))
+        if isinstance(value, str) and value.strip()
+        else None
+    )
 
 
 def _reply_event(beat: str, reply: Mapping[str, Any] | None) -> flow.Event:
@@ -72,7 +86,11 @@ def _reply_event(beat: str, reply: Mapping[str, Any] | None) -> flow.Event:
         # A message sent instead of answering: the desktop sends it as the user's next turn.
         return flow.Wrote(beat, _present(beat))
     answer = reply.get("answer")
-    return flow.Answered(beat, answer) if isinstance(answer, dict) and answer else flow.TimedOut(beat, _present(beat))
+    return (
+        flow.Answered(beat, answer)
+        if isinstance(answer, dict) and answer
+        else flow.TimedOut(beat, _present(beat))
+    )
 
 
 def _skill_resolver() -> Callable[[str], str | None]:
@@ -82,15 +100,23 @@ def _skill_resolver() -> Callable[[str], str | None]:
     from tools.skills_tool import find_all_skills
 
     bundled = {skill["name"] for skill in find_all_skills()}
-    return lambda name: catalog_plugin_skill(name) if ":" in name else (name if name in bundled else None)
+    return lambda name: (
+        catalog_plugin_skill(name)
+        if ":" in name
+        else (name if name in bundled else None)
+    )
 
 
 def _result(step: flow.Step, beat: str | None = None, extra: str = "") -> str:
     facts = flow.Facts.from_stored(step.record["facts"])
     # Only a first task's reminder names skills; the skills scan is skipped for every other result.
-    resolve_skill = _skill_resolver() if step.reminder.startswith("build_") else (lambda name: name)
+    resolve_skill = (
+        _skill_resolver() if step.reminder.startswith("build_") else (lambda name: name)
+    )
     text = reminder(step.reminder, step.record, facts, beat, resolve_skill) + extra
-    return json.dumps({**step.result, **({"reminder": text} if text else {})}, ensure_ascii=False)
+    return json.dumps(
+        {**step.result, **({"reminder": text} if text else {})}, ensure_ascii=False
+    )
 
 
 def _connector_slugs() -> set[str] | None:
@@ -103,20 +129,35 @@ def _connector_slugs() -> set[str] | None:
 def _suggest_from(slugs: set[str] | None) -> str:
     # The model guesses an app's connector from what is installed (GitHub from the gh CLI); the card shows
     # only listed ones, so it names its suggestions from this list.
-    return f" Suggest only connectors from this list, by these slugs: {', '.join(sorted(slugs))}." if slugs else ""
+    return (
+        f" Suggest only connectors from this list, by these slugs: {', '.join(sorted(slugs))}."
+        if slugs
+        else ""
+    )
 
 
 def _unlisted_suggestions(args: Mapping[str, Any]) -> str | None:
     """The refusal for connector suggestions the card cannot show, or None when every one is listed."""
-    wanted = [str(slug).strip().lower() for slug in args.get("suggest") or () if str(slug).strip()]
+    wanted = [
+        str(slug).strip().lower()
+        for slug in args.get("suggest") or ()
+        if str(slug).strip()
+    ]
     slugs = _connector_slugs() if wanted else None
     unlisted = [slug for slug in wanted if slugs is not None and slug not in slugs]
     if not unlisted:
         return None
-    return json.dumps({"error": "not connectors here", "reminder": (
-        f"No card shown: {', '.join(unlisted)} cannot be connected here. Do not mention them as connections."
-        f"{_suggest_from(slugs)} Then call setup_beat(beat=\"connectors\", suggest=[...]) again, or without "
-        "suggest when none fits.")}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "error": "not connectors here",
+            "reminder": (
+                f"No card shown: {', '.join(unlisted)} cannot be connected here. Do not mention them as connections."
+                f'{_suggest_from(slugs)} Then call setup_beat(beat="connectors", suggest=[...]) again, or without '
+                "suggest when none fits."
+            ),
+        },
+        ensure_ascii=False,
+    )
 
 
 def _card(beat: str, step: flow.Step, args: Mapping[str, Any]) -> dict:
@@ -128,13 +169,23 @@ def _card(beat: str, step: flow.Step, args: Mapping[str, Any]) -> dict:
         # The account name goes to the card only; the model reads it if the user picks it.
         card = {"suggested": name} if (name := suggested_name()) else {}
     if beat == "connectors":
-        card = {"suggested": [str(slug) for slug in args.get("suggest") or () if str(slug).strip()]}
+        card = {
+            "suggested": [
+                str(slug) for slug in args.get("suggest") or () if str(slug).strip()
+            ]
+        }
     return card
 
 
-def setup_beat_tool(args: Mapping[str, Any], *, db=None, session_id: str = "", tool_call_id: str = "",
-                    callback: Callable[[dict], dict | None] | None = None,
-                    end_turn: Callable[[], object] | None = None) -> str:
+def setup_beat_tool(
+    args: Mapping[str, Any],
+    *,
+    db=None,
+    session_id: str = "",
+    tool_call_id: str = "",
+    callback: Callable[[dict], dict | None] | None = None,
+    end_turn: Callable[[], object] | None = None,
+) -> str:
     """``callback(payload) -> {answer?} | {said} | {wrote_instead: true} | None`` asks the desktop to show
     ``{beat, question, card}`` and blocks until the user answers or the card closes. ``end_turn`` ends the
     agent's turn once this result is in: a card the user wrote past, whose message is the next turn."""
@@ -151,19 +202,38 @@ def setup_beat_tool(args: Mapping[str, Any], *, db=None, session_id: str = "", t
     if beat == "next":
         beat = flow.next_beat(record) if flow.is_active(record) else None
         if beat is None:
-            return json.dumps({"next": "done", "reminder": finish_reminder(record)} if flow.is_active(record)
-                              else {"error": "Onboarding is over in this chat; it is a normal chat now."})
+            return json.dumps(
+                {"next": "done", "reminder": finish_reminder(record)}
+                if flow.is_active(record)
+                else {
+                    "error": "Onboarding is over in this chat; it is a normal chat now."
+                }
+            )
     if callback is None:
         return tool_error("setup_beat cards show only in the Clawksis desktop app.")
     if beat == "connectors" and (refused := _unlisted_suggestions(args)):
         return refused
-    shown = records.advance(db, session_id, flow.Shown(beat, tool_call_id, args.get("options"), args.get("suggest")))
+    shown = records.advance(
+        db,
+        session_id,
+        flow.Shown(beat, tool_call_id, args.get("options"), args.get("suggest")),
+    )
     if shown.result:  # refused, or a beat this machine skips
-        extra = _suggest_from(_connector_slugs()) if shown.reminder == "offer_first" else ""
+        extra = (
+            _suggest_from(_connector_slugs()) if shown.reminder == "offer_first" else ""
+        )
         return _result(shown, extra=extra)
-    question = str(args.get("question") or "").strip() or beat_question(beat, (record.get("facts") or {}).get("locale"))
-    reply = callback({"beat": beat, "question": question, "card": _card(beat, shown, args),
-                      "tool_call_id": tool_call_id or None})
+    question = str(args.get("question") or "").strip() or beat_question(
+        beat, (record.get("facts") or {}).get("locale")
+    )
+    reply = callback(
+        {
+            "beat": beat,
+            "question": question,
+            "card": _card(beat, shown, args),
+            "tool_call_id": tool_call_id or None,
+        }
+    )
     after = records.load(db, session_id)
     if after is not None and after["phase"] == flow.PHASE_SKIPPED:
         # Skip setup closed the card (onboarding.skip already wrote the record).
@@ -192,21 +262,41 @@ SETUP_BEAT_SCHEMA = {
         "properties": {
             "beat": {"type": "string", "enum": list(BEATS)},
             "question": {"type": "string", "description": "Your line above the card."},
-            "value": {"type": "string", "description": "Record an answer given in words (a name, or an option id). No card."},
-            "skip": {"type": "boolean", "description": "They skipped this beat in words. No card."},
-            "suggest": {"type": "array", "items": {"type": "string"},
-                        "description": "connectors only: slugs pinned as Suggested."},
-            "options": {"type": "array", "maxItems": 4, "description": "build only: up to four picks, ids from the list.",
-                        "items": {"type": "object", "required": ["id", "label"],
-                                  "properties": {"id": {"type": "string"},
-                                                 "label": {"type": "string", "maxLength": 32}}}},
+            "value": {
+                "type": "string",
+                "description": "Record an answer given in words (a name, or an option id). No card.",
+            },
+            "skip": {
+                "type": "boolean",
+                "description": "They skipped this beat in words. No card.",
+            },
+            "suggest": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "connectors only: slugs pinned as Suggested.",
+            },
+            "options": {
+                "type": "array",
+                "maxItems": 4,
+                "description": "build only: up to four picks, ids from the list.",
+                "items": {
+                    "type": "object",
+                    "required": ["id", "label"],
+                    "properties": {
+                        "id": {"type": "string"},
+                        "label": {"type": "string", "maxLength": 32},
+                    },
+                },
+            },
         },
     },
 }
 
 
 registry.register(
-    name="setup_beat", toolset="onboarding", schema=SETUP_BEAT_SCHEMA,
+    name="setup_beat",
+    toolset="onboarding",
+    schema=SETUP_BEAT_SCHEMA,
     # The agent loop runs it inline with the session's record and card callback
     # (agent/inline_tool_executors.py); a bare registry dispatch has neither.
     handler=lambda args, **kw: setup_beat_tool(args),

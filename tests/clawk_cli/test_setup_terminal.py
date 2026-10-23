@@ -16,7 +16,9 @@ def ssh_wizard(tmp_path, monkeypatch):
     def run(answers):
         it = iter(answers)
         monkeypatch.setattr(setup_mod, "prompt", lambda label, default="": next(it))
-        monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda label, default=True: False)
+        monkeypatch.setattr(
+            setup_mod, "prompt_yes_no", lambda label, default=True: False
+        )
         setup_terminal._setup_backend_ssh({})
 
     return run

@@ -9,6 +9,7 @@ every transcript when the restore is declined or fails its health check. The
 tracked .gitignore must cover the runtime state set, mirroring the
 .clawk-bootstrap-complete / .install_method precedent (#38529 / #66189).
 """
+
 import os
 import shutil
 import sqlite3
@@ -120,8 +121,13 @@ def flat_install_repo(tmp_path: Path) -> Path:
     _run_git(repo, "add", ".gitignore", "app.py")
     _run_git(
         repo,
-        "-c", "user.email=t@t", "-c", "user.name=t",
-        "commit", "-qm", "init",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-qm",
+        "init",
     )
     for rel in FLAT_INSTALL_RUNTIME_STATE:
         path = repo / rel
@@ -147,7 +153,11 @@ def test_untracked_autostash_cannot_sweep_runtime_state(flat_install_repo):
     (flat_install_repo / "app.py").write_text("print('changed')\n")
     _run_git(
         flat_install_repo,
-        "stash", "push", "--include-untracked", "-m", "clawk-update-autostash",
+        "stash",
+        "push",
+        "--include-untracked",
+        "-m",
+        "clawk-update-autostash",
     )
     assert (flat_install_repo / "app.py").read_text() == "print('clawk')\n"
     missing = [
@@ -183,7 +193,9 @@ def test_untracked_autostash_leaves_open_wal_database_readable(flat_install_repo
         assert stash_ref
         # Fresh connection, exactly as every cron.executions call opens one.
         with sqlite3.connect(db_path) as reader:
-            assert reader.execute("SELECT status FROM executions").fetchall() == [("ok",)]
+            assert reader.execute("SELECT status FROM executions").fetchall() == [
+                ("ok",)
+            ]
     finally:
         conn.close()
 

@@ -24,6 +24,7 @@ This is a module of its own because ``methods_profiles``'s bodies are rebound on
 globals (``method_ctx.bind_module``), which COPIES module-level dicts rather than sharing them — a
 cache declared there would be written to one copy and read from another.
 """
+
 from __future__ import annotations
 
 import copy
@@ -49,11 +50,18 @@ def _file_parts(path: Path, *, with_inode: bool = False) -> Optional[tuple]:
         stat = path.stat()
     except OSError:
         return None
-    return (path.name, stat.st_mtime_ns, stat.st_size) + ((stat.st_ino,) if with_inode else ())
+    return (path.name, stat.st_mtime_ns, stat.st_size) + (
+        (stat.st_ino,) if with_inode else ()
+    )
 
 
-def _cached(cache: dict, key: str, signature: Optional[tuple], compute: Callable[[], dict],
-            copier: Callable[[dict], dict]) -> dict[str, Any]:
+def _cached(
+    cache: dict,
+    key: str,
+    signature: Optional[tuple],
+    compute: Callable[[], dict],
+    copier: Callable[[dict], dict],
+) -> dict[str, Any]:
     """``compute()``'s fields, reused while *signature* holds. No signature means no cache."""
     if signature is None:
         return compute()
@@ -74,7 +82,9 @@ def store_signature(profile_path: str | Path) -> Optional[tuple]:
     mtime is fresh enough that a same-tick, same-size WAL rewrite could still hide behind it.
     """
     base = Path(profile_path)
-    parts = [p for p in (_file_parts(base / name) for name in _STORE_FILES) if p is not None]
+    parts = [
+        p for p in (_file_parts(base / name) for name in _STORE_FILES) if p is not None
+    ]
     # Our own read-only open creates an EMPTY -wal sidecar on a store that never had one; it
     # carries no frames, so it must not read as "the store moved" on the very next poll.
     parts = [p for p in parts if not (p[0].endswith("-wal") and p[2] == 0)]
@@ -88,25 +98,42 @@ def profile_yaml_signature(profile_dir: str | Path) -> Optional[tuple]:
     return _file_parts(Path(profile_dir) / "profile.yaml", with_inode=True)
 
 
-def cached_session_fields(profile_path: str | Path, compute: Callable[[], dict]) -> dict[str, Any]:
+def cached_session_fields(
+    profile_path: str | Path, compute: Callable[[], dict]
+) -> dict[str, Any]:
     """``compute()``'s fields, reused while the profile's session store has not moved."""
-    return _cached(_SESSION_CACHE, str(profile_path), store_signature(profile_path), compute, dict)
+    return _cached(
+        _SESSION_CACHE, str(profile_path), store_signature(profile_path), compute, dict
+    )
 
 
-def cached_reader_session_fields(profile_path: str | Path, reader: tuple,
-                                 compute: Callable[[], dict]) -> dict[str, Any]:
+def cached_reader_session_fields(
+    profile_path: str | Path, reader: tuple, compute: Callable[[], dict]
+) -> dict[str, Any]:
     """``cached_session_fields`` for fields that also depend on *reader*, a hashable principal key."""
-    return _cached(_READER_SESSION_CACHE, (str(profile_path), reader), store_signature(profile_path),
-                   compute, dict)
+    return _cached(
+        _READER_SESSION_CACHE,
+        (str(profile_path), reader),
+        store_signature(profile_path),
+        compute,
+        dict,
+    )
 
 
-def cached_ui_meta_fields(profile_dir: str | Path, compute: Callable[[], dict]) -> dict[str, Any]:
+def cached_ui_meta_fields(
+    profile_dir: str | Path, compute: Callable[[], dict]
+) -> dict[str, Any]:
     """``compute()``'s fields, reused while the profile's ``profile.yaml`` has not changed.
 
     Copied deeply: ``ui_meta`` is a nested mapping the caller hands to a client.
     """
-    return _cached(_UI_META_CACHE, str(profile_dir), profile_yaml_signature(profile_dir),
-                   compute, copy.deepcopy)
+    return _cached(
+        _UI_META_CACHE,
+        str(profile_dir),
+        profile_yaml_signature(profile_dir),
+        compute,
+        copy.deepcopy,
+    )
 
 
 def invalidate(profile_path: str | Path | None = None) -> None:
@@ -116,5 +143,9 @@ def invalidate(profile_path: str | Path | None = None) -> None:
             cache.clear()
         else:
             cache.pop(str(profile_path), None)
-    for key in [key for key in _READER_SESSION_CACHE if profile_path is None or key[0] == str(profile_path)]:
+    for key in [
+        key
+        for key in _READER_SESSION_CACHE
+        if profile_path is None or key[0] == str(profile_path)
+    ]:
         _READER_SESSION_CACHE.pop(key, None)

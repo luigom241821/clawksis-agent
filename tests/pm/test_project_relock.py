@@ -1,4 +1,5 @@
 """`clawk pm lock` with no arguments relocks uv.lock through PM and nothing else."""
+
 from __future__ import annotations
 
 from argparse import Namespace
@@ -30,7 +31,9 @@ provides-extras = ["alpha", "all"]
 """
 
 
-def test_relock_writes_nothing_when_current_and_names_new_opt_in_extras(tmp_path, monkeypatch, capsys):
+def test_relock_writes_nothing_when_current_and_names_new_opt_in_extras(
+    tmp_path, monkeypatch, capsys
+):
     (tmp_path / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8")
     (tmp_path / "uv.lock").write_text(LOCK, encoding="utf-8")
     monkeypatch.setattr(cli, "repo_root", lambda: tmp_path)
@@ -45,7 +48,9 @@ def test_relock_writes_nothing_when_current_and_names_new_opt_in_extras(tmp_path
             raise InstallError("venv", "The lockfile at `uv.lock` needs to be updated")
 
     monkeypatch.setattr(pm, "check_project_lock", check)
-    monkeypatch.setattr(pm, "lock_project", lambda source, **kw: relocks.append((source, kw)))
+    monkeypatch.setattr(
+        pm, "lock_project", lambda source, **kw: relocks.append((source, kw))
+    )
     monkeypatch.setattr(pm, "sync_venv", lambda *a, **kw: relocks.append("sync"))
 
     before = (tmp_path / "uv.lock").read_bytes()

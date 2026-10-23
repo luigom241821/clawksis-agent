@@ -79,9 +79,6 @@ class TestRegistration:
         assert tts_registry.get_provider("cartesia") is p
         assert [r.name for r in tts_registry.list_providers()] == ["cartesia"]
 
-
-
-
     @pytest.mark.parametrize("builtin", sorted(tts_registry._BUILTIN_NAMES))
     def test_rejects_builtin_shadow_with_warning(self, builtin, caplog):
         """Built-in names always win — plugin registration is silently ignored
@@ -95,20 +92,15 @@ class TestRegistration:
         assert tts_registry.list_providers() == []
 
 
-
-
 # ---------------------------------------------------------------------------
 # Lookup
 # ---------------------------------------------------------------------------
 
 
 class TestLookup:
-
     def test_get_provider_non_string_returns_none(self):
         assert tts_registry.get_provider(None) is None  # type: ignore[arg-type]
         assert tts_registry.get_provider(123) is None  # type: ignore[arg-type]
-
-
 
     def test_list_providers_sorted(self):
         tts_registry.register_provider(_FakeProvider(name="zylo"))
@@ -124,15 +116,6 @@ class TestLookup:
 
 
 class TestABCContract:
-
-
-
-
-
-
-
-
-
     def test_default_model_first_listed(self):
         class WithModels(_FakeProvider):
             def list_models(self):
@@ -161,8 +144,6 @@ class TestABCContract:
             next(p.stream("hello"))
 
 
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -172,10 +153,6 @@ class TestResolveOutputFormat:
     @pytest.mark.parametrize("valid", sorted(VALID_OUTPUT_FORMATS))
     def test_valid_passes_through(self, valid):
         assert resolve_output_format(valid) == valid
-
-
-
-
 
     def test_non_string_returns_default(self):
         assert resolve_output_format(123) == DEFAULT_OUTPUT_FORMAT  # type: ignore[arg-type]

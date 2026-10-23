@@ -162,7 +162,10 @@ def test_configure_defaults_pycache_prefix_to_home_cache(tmp_path, monkeypatch):
 
 def test_configure_keeps_a_user_set_pycache_prefix(tmp_path, monkeypatch):
     ns = _load()
-    environ = {"LOCALAPPDATA": str(tmp_path / "lad"), "PYTHONPYCACHEPREFIX": str(tmp_path / "mine")}
+    environ = {
+        "LOCALAPPDATA": str(tmp_path / "lad"),
+        "PYTHONPYCACHEPREFIX": str(tmp_path / "mine"),
+    }
     original = sys.pycache_prefix
     try:
         ns["configure"](str(tmp_path), environ=environ)
@@ -213,7 +216,9 @@ def test_rendered_wrapper_dispatches_to_the_entry_module(tmp_path):
     exit code."""
     bin_dir = tmp_path / "bin"
     (bin_dir / ".." / "repo" / "clawk_cli").mkdir(parents=True, exist_ok=True)
-    (bin_dir / ".." / "venv" / "Lib" / "site-packages").mkdir(parents=True, exist_ok=True)
+    (bin_dir / ".." / "venv" / "Lib" / "site-packages").mkdir(
+        parents=True, exist_ok=True
+    )
     (bin_dir / ".." / "repo" / "clawk_cli" / "__init__.py").write_text("")
     (bin_dir / ".." / "repo" / "clawk_bootstrap.py").write_text("READY = True\n")
     (bin_dir / ".." / "repo" / "clawk_cli" / "main.py").write_text(
@@ -225,11 +230,27 @@ def test_rendered_wrapper_dispatches_to_the_entry_module(tmp_path):
         "    import stubdep  # importable only via the venv site-packages entry\n"
         "    return 7\n"
     )
-    (bin_dir / ".." / "venv" / "Lib" / "site-packages" / "stubdep.py").write_text("X = 1\n")
+    (bin_dir / ".." / "venv" / "Lib" / "site-packages" / "stubdep.py").write_text(
+        "X = 1\n"
+    )
 
     wrapper = _render(tmp_path)
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME", "PYTHONPYCACHEPREFIX")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "PYTHONHOME", "PYTHONPYCACHEPREFIX")
+    }
     env["LOCALAPPDATA"] = str(tmp_path / "lad")
-    python = Path(sys.base_prefix) / "python.exe" if sys.platform == "win32" else sys.executable
-    proc = subprocess.run([str(python), str(wrapper), "--version"], capture_output=True, text=True, env=env, check=False)
+    python = (
+        Path(sys.base_prefix) / "python.exe"
+        if sys.platform == "win32"
+        else sys.executable
+    )
+    proc = subprocess.run(
+        [str(python), str(wrapper), "--version"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
     assert proc.returncode == 7, proc.stderr

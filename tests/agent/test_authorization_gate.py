@@ -49,7 +49,6 @@ def _make_gate(**kwargs) -> _ConcurrentToolAuthorizationGate:
 
 
 class TestHumanWaitTracker:
-
     def test_open_window_counts(self):
         opened = threading.Event()
         release = threading.Event()

@@ -40,7 +40,9 @@ class ScheduledHandle:
 
     __slots__ = ("_cancelled", "_context", "_fn", "_interval", "_runner", "_scheduler")
 
-    def __init__(self, scheduler: PeriodicScheduler, fn: Callable[[], object], interval: float):
+    def __init__(
+        self, scheduler: PeriodicScheduler, fn: Callable[[], object], interval: float
+    ):
         self._scheduler = scheduler
         self._fn = fn
         self._interval = interval
@@ -72,7 +74,9 @@ class PeriodicScheduler:
         with self._cond:
             self._requeue(handle)
             if self._thread is None or not self._thread.is_alive():
-                self._thread = threading.Thread(target=self._run, name=_THREAD_NAME, daemon=True)
+                self._thread = threading.Thread(
+                    target=self._run, name=_THREAD_NAME, daemon=True
+                )
                 self._thread.start()
             self._cond.notify()
         return handle
@@ -111,7 +115,9 @@ class PeriodicScheduler:
 
     def _requeue(self, handle: ScheduledHandle) -> None:
         """Push ``handle``'s next due time (``_cond`` held)."""
-        heapq.heappush(self._heap, (time.monotonic() + handle._interval, next(self._seq), handle))
+        heapq.heappush(
+            self._heap, (time.monotonic() + handle._interval, next(self._seq), handle)
+        )
 
     def _run_callback(self, handle: ScheduledHandle) -> None:
         stop = False

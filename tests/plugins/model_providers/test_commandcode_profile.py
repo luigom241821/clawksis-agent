@@ -21,6 +21,7 @@ import pytest
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def commandcode_profile():
     """Resolve the registered CommandCode (chat_completions) profile."""
@@ -46,27 +47,38 @@ def commandcode_anthropic_profile():
 # ── Chat Completions profile ──────────────────────────────────────────────────
 
 
-
 class TestCommandCodeReasoningWireControls:
     """DeepSeek V4+ defaults to thinking when ``thinking`` is omitted, so the profile
     must put the user's setting on the wire (#95232); other families stay a no-op."""
 
-    def test_deepseek_disabled_reasoning_sends_thinking_disabled(self, commandcode_profile):
+    def test_deepseek_disabled_reasoning_sends_thinking_disabled(
+        self, commandcode_profile
+    ):
         extra_body, top_level = commandcode_profile.build_api_kwargs_extras(
-            reasoning_config={"enabled": False}, model="deepseek/deepseek-v4-flash",
+            reasoning_config={"enabled": False},
+            model="deepseek/deepseek-v4-flash",
         )
         assert extra_body.get("thinking") == {"type": "disabled"}
         assert top_level == {}
 
-    def test_deepseek_effort_matches_native_profile_and_others_noop(self, commandcode_profile):
+    def test_deepseek_effort_matches_native_profile_and_others_noop(
+        self, commandcode_profile
+    ):
         from plugins.model_providers.deepseek import deepseek
 
         rc = {"enabled": True, "effort": "low"}
-        expected = deepseek.build_api_kwargs_extras(reasoning_config=rc, model="deepseek-v4.1-flash")
-        assert expected[1].get("reasoning_effort") == "low"  # equality below must not be ({}, {}) == ({}, {})
-        assert commandcode_profile.build_api_kwargs_extras(
-            reasoning_config=rc, model="deepseek/deepseek-v4.1-flash"
-        ) == expected
+        expected = deepseek.build_api_kwargs_extras(
+            reasoning_config=rc, model="deepseek-v4.1-flash"
+        )
+        assert (
+            expected[1].get("reasoning_effort") == "low"
+        )  # equality below must not be ({}, {}) == ({}, {})
+        assert (
+            commandcode_profile.build_api_kwargs_extras(
+                reasoning_config=rc, model="deepseek/deepseek-v4.1-flash"
+            )
+            == expected
+        )
         assert commandcode_profile.build_api_kwargs_extras(
             reasoning_config=rc, model="Qwen/Qwen3.7-Max"
         ) == ({}, {})
@@ -75,11 +87,6 @@ class TestCommandCodeReasoningWireControls:
 class TestCommandCodeAnthropicProfileIdentity:
     """Anthropic-compatible profile metadata."""
 
-
-
-
-
-
     def test_fallback_models_are_claude_family(self, commandcode_anthropic_profile):
         for model in commandcode_anthropic_profile.fallback_models:
             assert model.startswith("claude-"), (
@@ -87,10 +94,8 @@ class TestCommandCodeAnthropicProfileIdentity:
             )
 
 
-
-
-
 # ── Bearer Auth Recognition ───────────────────────────────────────────────────
+
 
 class TestCommandCodeAnthropicBearerAuth:
     """``agent/anthropic_adapter.py`` must recognize CommandCode as a
@@ -102,7 +107,10 @@ class TestCommandCodeAnthropicBearerAuth:
         from agent.anthropic_endpoints import _requires_bearer_auth
 
         assert _requires_bearer_auth("https://api.commandcode.ai/provider/v1") is True
-        assert _requires_bearer_auth("https://api.commandcode.ai/provider/v1/models") is True
+        assert (
+            _requires_bearer_auth("https://api.commandcode.ai/provider/v1/models")
+            is True
+        )
         assert _requires_bearer_auth("https://api.commandcode.ai/anthropic") is True
 
     def test_bearer_auth_does_not_affect_unrelated(self):
@@ -122,12 +130,11 @@ class TestCommandCodeAnthropicBearerAuth:
 # ── Registry integrity ───────────────────────────────────────────────────────
 
 
-
 # ── Model list filtering ──────────────────────────────────────────────────────
 
 
-
 # ── Picker contract ──────────────────────────────────────────────────────────
+
 
 class TestCommandCodeFetchModelsPickerContract:
     """``fetch_models`` must accept the kwargs the model picker passes.
@@ -138,7 +145,6 @@ class TestCommandCodeFetchModelsPickerContract:
     ``api_key``/``timeout``, so every picker open raised TypeError, which
     was swallowed, leaving the provider with zero models.
     """
-
 
     def test_resolve_provider_full(self):
         """Both profiles must resolve through the model-switch path.
@@ -161,6 +167,7 @@ class TestCommandCodeFetchModelsPickerContract:
 
 
 # ── base_url endpoint override ───────────────────────────────────────────────
+
 
 class TestCommandCodeBaseUrlOverride:
     """A custom base_url must redirect the catalog fetch; the default must not.
@@ -240,7 +247,9 @@ class TestCommandCodeBaseUrlOverride:
             captured["url"] = req.full_url
             return _FakeResp()
 
-        with mock_patch.object(cc_mod, "open_credentialed_url", side_effect=fake_urlopen):
+        with mock_patch.object(
+            cc_mod, "open_credentialed_url", side_effect=fake_urlopen
+        ):
             result = commandcode_profile.fetch_models(
                 api_key="k", base_url=cc_mod._COMMANDCODE_BASE + "/"
             )

@@ -35,11 +35,17 @@ def _clean_env(monkeypatch):
 # relay_relevance_policy() — the projection
 # --------------------------------------------------------------------------
 
+
 def test_projection_maps_require_mention_and_free_response(monkeypatch):
     monkeypatch.setenv("GATEWAY_RELAY_PLATFORMS", "discord")
     monkeypatch.setattr(
         "gateway.run._load_gateway_config",
-        lambda: {"discord": {"require_mention": True, "free_response_channels": ["c-support", "c-help"]}},
+        lambda: {
+            "discord": {
+                "require_mention": True,
+                "free_response_channels": ["c-support", "c-help"],
+            }
+        },
         raising=False,
     )
     pol = relay.relay_relevance_policy()
@@ -75,6 +81,7 @@ def test_projection_declares_explicit_require_mention_false(monkeypatch):
 # send_relay_policy() — the boot-time declaration
 # --------------------------------------------------------------------------
 
+
 def _arm(monkeypatch, *, url="wss://connector.example/relay"):
     monkeypatch.setenv("GATEWAY_RELAY_URL", url)
     monkeypatch.setenv("GATEWAY_RELAY_ID", "gw-x")
@@ -86,7 +93,12 @@ def test_send_posts_projected_policy_with_token(monkeypatch):
     _arm(monkeypatch)
     monkeypatch.setattr(
         "gateway.run._load_gateway_config",
-        lambda: {"discord": {"require_mention": True, "free_response_channels": ["c-support"]}},
+        lambda: {
+            "discord": {
+                "require_mention": True,
+                "free_response_channels": ["c-support"],
+            }
+        },
         raising=False,
     )
     captured = {}
@@ -115,7 +127,11 @@ def test_send_skips_when_no_secret(monkeypatch):
         raising=False,
     )
     called = {"n": 0}
-    monkeypatch.setattr(relay, "_post_policy", lambda **k: called.__setitem__("n", called["n"] + 1) or 200)
+    monkeypatch.setattr(
+        relay,
+        "_post_policy",
+        lambda **k: called.__setitem__("n", called["n"] + 1) or 200,
+    )
     assert relay.send_relay_policy() is False
     assert called["n"] == 0  # never attempted without a secret to auth with
 
@@ -134,5 +150,3 @@ def test_send_fail_soft_on_transport_error(monkeypatch):
     monkeypatch.setattr(relay, "_post_policy", _boom)
     # Never raises; returns False so boot proceeds.
     assert relay.send_relay_policy() is False
-
-

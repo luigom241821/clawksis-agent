@@ -20,7 +20,10 @@ from fastapi import APIRouter
 from clawk_cli.web_routers._common import http_failure
 from clawk_cli.web_deps import late
 from clawk_cli.web_server_chat import _ws_auth_ok, _ws_request_is_allowed
-from clawk_cli.web_server_gateway import _read_dashboard_json_response, _split_text_for_speak_stream
+from clawk_cli.web_server_gateway import (
+    _read_dashboard_json_response,
+    _split_text_for_speak_stream,
+)
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from clawk_cli.web_models import (
     AudioTranscriptionRequest,
@@ -40,16 +43,28 @@ _voice_list_error_logged_once = late("_voice_list_error_logged_once")
 load_env = late("load_env", "clawk_cli.config")
 
 _AUDIO_MIME_EXTENSIONS: dict[str, str] = {
-    "audio/aac": ".aac", "audio/flac": ".flac", "audio/m4a": ".m4a", "audio/mp3": ".mp3",
-    "audio/mp4": ".mp4", "audio/mpeg": ".mp3", "audio/ogg": ".ogg", "audio/wav": ".wav",
-    "audio/wave": ".wav", "audio/webm": ".webm", "audio/x-m4a": ".m4a", "audio/x-wav": ".wav",
+    "audio/aac": ".aac",
+    "audio/flac": ".flac",
+    "audio/m4a": ".m4a",
+    "audio/mp3": ".mp3",
+    "audio/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/webm": ".webm",
+    "audio/x-m4a": ".m4a",
+    "audio/x-wav": ".wav",
     "video/webm": ".webm",
 }
 
 _MAX_TRANSCRIPTION_UPLOAD_BYTES = 25 * 1024 * 1024
 
 _SPEAK_MIME_BY_EXT = {
-    ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".wav": "audio/wav",
     ".flac": "audio/flac",
 }
 
@@ -68,6 +83,7 @@ async def _run_config_scoped(profile: Optional[str], fn):
     provider round-trip and only need config/.env resolution, while
     ``_profile_scope`` holds a process-global skills lock for its entire body.
     """
+
     def _scoped():
         with _config_profile_scope(profile):
             return fn()
@@ -93,12 +109,21 @@ async def transcribe_audio_upload(
 
     header, encoded = data_url.split(",", 1)
     if ";base64" not in header:
-        raise HTTPException(status_code=400, detail="Audio payload must be base64 encoded")
+        raise HTTPException(
+            status_code=400, detail="Audio payload must be base64 encoded"
+        )
 
-    mime_type = (payload.mime_type or header[5:].split(";", 1)[0] or "audio/webm").strip()
+    mime_type = (
+        payload.mime_type or header[5:].split(";", 1)[0] or "audio/webm"
+    ).strip()
     normalized_mime_type = mime_type.split(";", 1)[0].lower()
-    if not (normalized_mime_type.startswith("audio/") or normalized_mime_type == "video/webm"):
-        raise HTTPException(status_code=400, detail="Payload must be an audio recording")
+    if not (
+        normalized_mime_type.startswith("audio/")
+        or normalized_mime_type == "video/webm"
+    ):
+        raise HTTPException(
+            status_code=400, detail="Payload must be an audio recording"
+        )
 
     try:
         audio_bytes = base64.b64decode(encoded, validate=True)
@@ -112,9 +137,12 @@ async def transcribe_audio_upload(
 
     temp_path = ""
     try:
-        with http_failure("Desktop voice transcription failed", 500, "Transcription failed"):
+        with http_failure(
+            "Desktop voice transcription failed", 500, "Transcription failed"
+        ):
             with tempfile.NamedTemporaryFile(
-                prefix="clawk-desktop-voice-", suffix=_audio_extension_for_mime(mime_type),
+                prefix="clawk-desktop-voice-",
+                suffix=_audio_extension_for_mime(mime_type),
                 delete=False,
             ) as tmp:
                 tmp.write(audio_bytes)
@@ -126,7 +154,9 @@ async def transcribe_audio_upload(
             # and re-listens instead of surfacing a 400 on every quiet turn.
             from tools.voice_mode import transcribe_recording
 
-            result = await _run_config_scoped(profile, lambda: transcribe_recording(temp_path))
+            result = await _run_config_scoped(
+                profile, lambda: transcribe_recording(temp_path)
+            )
     finally:
         if temp_path:
             _unlink_quietly(temp_path)
@@ -141,7 +171,8 @@ async def transcribe_audio_upload(
         raise HTTPException(status_code=400, detail=err)
 
     return {
-        "ok": True, "transcript": str(result.get("transcript") or "").strip(),
+        "ok": True,
+        "transcript": str(result.get("transcript") or "").strip(),
         "provider": result.get("provider"),
     }
 
@@ -163,6 +194,7 @@ async def get_client_voice_config(profile: Optional[str] = None):
     Gate: ``voice.client_direct`` in config.yaml (default true).
     """
     from tools.voice_client_config import resolve_client_voice_config
+
     try:
         result = await _run_config_scoped(profile, resolve_client_voice_config)
     except HTTPException:
@@ -180,13 +212,18 @@ async def get_voice_live_status(profile: Optional[str] = None):
     """Which voice chat mode the profile selected (``chained`` | ``gpt-live``) and whether GPT-Live
     can start. Non-secret: the desktop decides which conversation engine to mount from this."""
     from tools.voice_live import resolve_gpt_live_status
-    with http_failure("GPT-Live status resolution failed", 500, "GPT-Live status failed"):
+
+    with http_failure(
+        "GPT-Live status resolution failed", 500, "GPT-Live status failed"
+    ):
         result = await _run_config_scoped(profile, resolve_gpt_live_status)
     return {"ok": True, **result}
 
 
 @router.post("/api/audio/voice-live/session")
-async def create_voice_live_session(payload: VoiceLiveSessionRequest, profile: Optional[str] = None):
+async def create_voice_live_session(
+    payload: VoiceLiveSessionRequest, profile: Optional[str] = None
+):
     """Exchange the renderer's WebRTC SDP offer for a GPT-Live session answer.
 
     The project API key stays on this host; the renderer only receives the session id and the
@@ -194,13 +231,16 @@ async def create_voice_live_session(payload: VoiceLiveSessionRequest, profile: O
     renderer receives becomes a Clawksis turn on the session it belongs to.
     """
     from tools.voice_live import create_webrtc_session
+
     # Validate emptiness only: the vendor's SDP parser needs the offer byte-exact, including the
     # trailing CRLF (a stripped offer answers 400 "failed to unmarshal SDP: EOF").
     sdp = payload.sdp or ""
     if not sdp.strip():
         raise HTTPException(status_code=400, detail="An SDP offer is required")
     try:
-        result = await _run_config_scoped(profile, lambda: create_webrtc_session(sdp, payload.history))
+        result = await _run_config_scoped(
+            profile, lambda: create_webrtc_session(sdp, payload.history)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except RuntimeError as exc:
@@ -249,6 +289,7 @@ async def get_elevenlabs_voices(profile: Optional[str] = None):
     )
 
     try:
+
         def _fetch() -> dict[str, Any]:
             with urllib.request.urlopen(request, timeout=10) as response:
                 return _read_dashboard_json_response(response)
@@ -261,7 +302,9 @@ async def get_elevenlabs_voices(profile: Optional[str] = None):
         # most once until the error signature changes.
         if exc.code in (401, 403):
             if _voice_list_error_logged_once(f"http-{exc.code}"):
-                _log.info("ElevenLabs voices unavailable: %s — check ELEVENLABS_API_KEY", exc)
+                _log.info(
+                    "ElevenLabs voices unavailable: %s — check ELEVENLABS_API_KEY", exc
+                )
             return {"available": False, "voices": [], "error": "unauthorized"}
         if _voice_list_error_logged_once(f"http-{exc.code}"):
             _log.warning("ElevenLabs voice list failed: %s", exc)
@@ -281,10 +324,13 @@ async def get_elevenlabs_voices(profile: Optional[str] = None):
         if not voice_id:
             continue
 
-        voices.append({
-            "voice_id": voice_id, "name": str(voice.get("name") or voice_id),
-            "label": _elevenlabs_voice_label(voice),
-        })
+        voices.append(
+            {
+                "voice_id": voice_id,
+                "name": str(voice.get("name") or voice_id),
+                "label": _elevenlabs_voice_label(voice),
+            }
+        )
 
     voices.sort(key=lambda item: str(item.get("label") or "").lower())
     return {"available": True, "voices": voices}
@@ -307,23 +353,30 @@ async def speak_text(payload: TTSSpeakRequest, profile: Optional[str] = None):
     with http_failure("Desktop voice TTS failed", 500, "Speech synthesis failed"):
         from tools.tts_tool import text_to_speech_tool
 
-        result_json = await _run_config_scoped(profile, lambda: text_to_speech_tool(text))
+        result_json = await _run_config_scoped(
+            profile, lambda: text_to_speech_tool(text)
+        )
 
     try:
-        result = json.loads(result_json) if isinstance(result_json, str) else result_json
+        result = (
+            json.loads(result_json) if isinstance(result_json, str) else result_json
+        )
     except Exception:
         raise HTTPException(status_code=500, detail="Invalid TTS response")
 
     if not result.get("success"):
         raise HTTPException(
-            status_code=400, detail=result.get("error") or "Speech synthesis failed",
+            status_code=400,
+            detail=result.get("error") or "Speech synthesis failed",
         )
 
     file_path = result.get("file_path")
     if not file_path or not os.path.isfile(file_path):
         raise HTTPException(status_code=500, detail="Audio file missing")
 
-    mime_type = _SPEAK_MIME_BY_EXT.get(os.path.splitext(file_path)[1].lower(), "audio/mpeg")
+    mime_type = _SPEAK_MIME_BY_EXT.get(
+        os.path.splitext(file_path)[1].lower(), "audio/mpeg"
+    )
 
     def _read_and_unlink() -> bytes:
         # Off-loop: synthesized audio can be several MB; reading it inline
@@ -342,7 +395,9 @@ async def speak_text(payload: TTSSpeakRequest, profile: Optional[str] = None):
 
     encoded = base64.b64encode(audio_bytes).decode("ascii")
     return {
-        "ok": True, "data_url": f"data:{mime_type};base64,{encoded}", "mime_type": mime_type,
+        "ok": True,
+        "data_url": f"data:{mime_type};base64,{encoded}",
+        "mime_type": mime_type,
         "provider": result.get("provider"),
     }
 
@@ -364,6 +419,7 @@ async def tts_lease(payload: TTSLeaseRequest, profile: Optional[str] = None):
 
     def _apply():
         from tools.tts_tool_lifecycle import acquire_tts_lease, release_tts_lease
+
         if payload.active:
             with _config_profile_scope(profile):
                 return acquire_tts_lease(lease)
@@ -420,10 +476,16 @@ def _sync_sentence_to_pcm(text: str) -> tuple:
         except (TypeError, ValueError) as exc:
             raise RuntimeError("Invalid TTS response") from exc
         if not isinstance(payload, dict) or not payload.get("success"):
-            detail = str(payload.get("error") or "") if isinstance(payload, dict) else ""
+            detail = (
+                str(payload.get("error") or "") if isinstance(payload, dict) else ""
+            )
             raise RuntimeError(detail or "Speech synthesis failed")
         written = payload.get("file_path") or tmp_path
-        if not isinstance(written, str) or not os.path.isfile(written) or os.path.getsize(written) <= 0:
+        if (
+            not isinstance(written, str)
+            or not os.path.isfile(written)
+            or os.path.getsize(written) <= 0
+        ):
             raise RuntimeError("Audio file missing")
         if os.path.abspath(written) != os.path.abspath(tmp_path):
             extra = written
@@ -453,7 +515,11 @@ def _wav_s16le_mono(path: str) -> tuple:
 
     try:
         with wave.open(path, "rb") as wf:
-            if wf.getsampwidth() != 2 or wf.getnchannels() != 1 or wf.getframerate() <= 0:
+            if (
+                wf.getsampwidth() != 2
+                or wf.getnchannels() != 1
+                or wf.getframerate() <= 0
+            ):
                 return b"", 0
             return wf.readframes(wf.getnframes()), int(wf.getframerate())
     except (wave.Error, EOFError, OSError):
@@ -470,7 +536,19 @@ def _ffmpeg_s16le_mono(path: str) -> tuple:
         raise RuntimeError("ffmpeg is required to decode TTS audio for speak-stream")
     result = _ffmpeg_run(
         ffmpeg,
-        ["-i", path, "-f", "s16le", "-ac", "1", "-ar", "24000", "-loglevel", "error", "pipe:1"],
+        [
+            "-i",
+            path,
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-ar",
+            "24000",
+            "-loglevel",
+            "error",
+            "pipe:1",
+        ],
         timeout=60,
     )
     if result.returncode != 0 or not result.stdout:
@@ -498,6 +576,7 @@ async def stt_lease(payload: STTLeaseRequest, profile: Optional[str] = None):
 
     def _apply():
         from tools.stt_lease import acquire_stt_lease, release_stt_lease
+
         if payload.active:
             with _config_profile_scope(profile):
                 return acquire_stt_lease(lease)
@@ -539,15 +618,22 @@ async def transcribe_stream_ws(ws: WebSocket) -> None:
 
     def _open():
         from tools.transcription_streaming import open_streaming_session
+
         with _config_profile_scope(profile):
-            return open_streaming_session(on_partial=lambda text: loop.call_soon_threadsafe(partials.put_nowait, text))
+            return open_streaming_session(
+                on_partial=lambda text: loop.call_soon_threadsafe(
+                    partials.put_nowait, text
+                )
+            )
 
     session = None
     with contextlib.suppress(Exception):
         session = await loop.run_in_executor(None, _open)
     if session is None:
         with contextlib.suppress(Exception):
-            await ws.send_json({"type": "error", "message": "no live STT for the configured provider"})
+            await ws.send_json(
+                {"type": "error", "message": "no live STT for the configured provider"}
+            )
             await ws.close()
         return
 
@@ -583,10 +669,20 @@ async def transcribe_stream_ws(ws: WebSocket) -> None:
     forwarder.cancel()
     with contextlib.suppress(Exception):
         if result.get("success"):
-            await ws.send_json({"type": "final", "transcript": result.get("transcript", ""),
-                                "provider": result.get("provider", "")})
+            await ws.send_json(
+                {
+                    "type": "final",
+                    "transcript": result.get("transcript", ""),
+                    "provider": result.get("provider", ""),
+                }
+            )
         else:
-            await ws.send_json({"type": "error", "message": result.get("error") or "transcription failed"})
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "message": result.get("error") or "transcription failed",
+                }
+            )
         await ws.close()
 
 
@@ -628,7 +724,12 @@ async def speak_stream_ws(ws: WebSocket) -> None:
 
     def _resolve():
         from tools.tts_streaming import resolve_streaming_provider
-        from tools.tts_tool import _get_provider, _load_tts_config, _resolve_max_text_length
+        from tools.tts_tool import (
+            _get_provider,
+            _load_tts_config,
+            _resolve_max_text_length,
+        )
+
         with _config_profile_scope(profile):
             cfg = _load_tts_config()
             streamer = resolve_streaming_provider(cfg)
@@ -658,7 +759,11 @@ async def speak_stream_ws(ws: WebSocket) -> None:
             return
         start_sent = True
         await ws.send_json(
-            {"type": "start", "sample_rate": streamer.sample_rate, "channels": streamer.channels}
+            {
+                "type": "start",
+                "sample_rate": streamer.sample_rate,
+                "channels": streamer.channels,
+            }
         )
 
     stop = threading.Event()
@@ -679,7 +784,9 @@ async def speak_stream_ws(ws: WebSocket) -> None:
         from tools.tts_streaming import SentenceChunker
         from tools.tts_text_normalize import _strip_markdown_for_tts
 
-        chunker = SentenceChunker.from_config(cfg)  # the requesting profile's tts.streaming.min_len
+        chunker = SentenceChunker.from_config(
+            cfg
+        )  # the requesting profile's tts.streaming.min_len
 
         # The session stays open for a whole agent turn and no text arrives
         # during tool execution, so without an idle flush a narration line with
@@ -698,9 +805,14 @@ async def speak_stream_ws(ws: WebSocket) -> None:
                 except queue.Empty:
                     idle_polls += 1
                     buffered = chunker.buf.strip()
-                    if not buffered or ("<think" in chunker.buf and "</think>" not in chunker.buf):
+                    if not buffered or (
+                        "<think" in chunker.buf and "</think>" not in chunker.buf
+                    ):
                         continue
-                    if buffered.endswith((".", "!", "?", "…", ":")) or idle_polls >= idle_polls_before_force_flush:
+                    if (
+                        buffered.endswith((".", "!", "?", "…", ":"))
+                        or idle_polls >= idle_polls_before_force_flush
+                    ):
                         yield from chunker.flush()
                     continue
                 idle_polls = 0

@@ -126,9 +126,12 @@ class TestDmReclassificationStaysChatOnly:
         (#90309 caveat). The DM check keeps the kind-9-only comparison."""
         adapter = _make_group_adapter()
         adapter._may_reclassify_as_dm = lambda channel_id: True
-        assert adapter._is_direct_message_event(
-            CHANNEL, _event("f3", kind=45001, p_tag_self=True)
-        ) is False
+        assert (
+            adapter._is_direct_message_event(
+                CHANNEL, _event("f3", kind=45001, p_tag_self=True)
+            )
+            is False
+        )
 
     def test_ptagged_chat_message_can_still_be_a_dm(self):
         adapter = _make_group_adapter()

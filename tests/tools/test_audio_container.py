@@ -49,7 +49,6 @@ class TestSniffContainer:
     def test_magic_bytes(self, data, expected):
         assert sniff_container(data) == expected
 
-
     def test_every_container_has_an_extension(self):
         for data in (OGG, FLAC, WAV, MP3_ID3, AAC_ADTS, M4A, MP4_ISOM, WEBM):
             container = sniff_container(data)
@@ -71,8 +70,9 @@ class TestSniffAudioExt:
         ],
     )
     def test_container_wins_over_claimed_ext(self, data, expected):
-        assert sniff_audio_ext(data, ".ogg" if expected != ".ogg" else ".mp3") == expected
-
+        assert (
+            sniff_audio_ext(data, ".ogg" if expected != ".ogg" else ".mp3") == expected
+        )
 
     def test_fallback_without_dot_is_normalized(self):
         assert sniff_audio_ext(UNKNOWN, "mp3") == ".mp3"
@@ -84,11 +84,11 @@ class TestInboundCacheUsesSniffer:
     @pytest.mark.parametrize(
         "data,claimed,expected_suffix",
         [
-            (MP3_ID3, ".ogg", ".mp3"),   # MP3 bytes delivered as "voice.ogg"
-            (WAV, ".ogg", ".wav"),        # RIFF/WAVE in an .ogg wrapper claim
-            (M4A, ".ogg", ".m4a"),        # iOS voice note claimed as ogg
-            (OGG, ".mp3", ".ogg"),        # real opus claimed as mp3
-            (AAC_ADTS, ".ogg", ".aac"),   # Android ADTS AAC voice note
+            (MP3_ID3, ".ogg", ".mp3"),  # MP3 bytes delivered as "voice.ogg"
+            (WAV, ".ogg", ".wav"),  # RIFF/WAVE in an .ogg wrapper claim
+            (M4A, ".ogg", ".m4a"),  # iOS voice note claimed as ogg
+            (OGG, ".mp3", ".ogg"),  # real opus claimed as mp3
+            (AAC_ADTS, ".ogg", ".aac"),  # Android ADTS AAC voice note
             (WEBM, ".ogg", ".webm"),
             (FLAC, ".mp3", ".flac"),
         ],
@@ -102,7 +102,6 @@ class TestInboundCacheUsesSniffer:
         saved = tmp_path / os.path.basename(result)
         assert saved.suffix == expected_suffix
         assert saved.read_bytes() == data
-
 
     @pytest.mark.asyncio
     async def test_cache_audio_from_url_sniffs_too(self, tmp_path, monkeypatch):
@@ -144,7 +143,9 @@ class TestInboundCacheUsesSniffer:
         )
         monkeypatch.setattr("tools.url_safety.is_safe_url", lambda u: True)
 
-        result = await base.cache_audio_from_url("https://example.com/voice.ogg", ext=".ogg")
+        result = await base.cache_audio_from_url(
+            "https://example.com/voice.ogg", ext=".ogg"
+        )
         assert result.endswith(".mp3")
 
 

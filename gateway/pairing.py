@@ -18,7 +18,10 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from gateway.whatsapp_identity import expand_whatsapp_aliases, normalize_whatsapp_identifier
+from gateway.whatsapp_identity import (
+    expand_whatsapp_aliases,
+    normalize_whatsapp_identifier,
+)
 from clawk_constants import get_default_clawk_root, get_clawk_dir, get_clawk_home
 from utils import atomic_json_write, file_signature
 
@@ -29,12 +32,14 @@ logger = logging.getLogger(__name__)
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_LENGTH = 8
 
-CODE_TTL_SECONDS = 3600             # Codes expire after 1 hour
-RATE_LIMIT_SECONDS = 600            # 1 request per user per 10 minutes
-LOCKOUT_SECONDS = 3600              # Lockout duration after too many failures
-MAX_PENDING_PER_PLATFORM = 3        # Max pending codes per platform
-MAX_FAILED_ATTEMPTS = 5             # Failed approvals before lockout
-DECLINE_DEDUPE_SECONDS = 24 * 3600  # One polite decline per (platform, sender) per window (#88028)
+CODE_TTL_SECONDS = 3600  # Codes expire after 1 hour
+RATE_LIMIT_SECONDS = 600  # 1 request per user per 10 minutes
+LOCKOUT_SECONDS = 3600  # Lockout duration after too many failures
+MAX_PENDING_PER_PLATFORM = 3  # Max pending codes per platform
+MAX_FAILED_ATTEMPTS = 5  # Failed approvals before lockout
+DECLINE_DEDUPE_SECONDS = (
+    24 * 3600
+)  # One polite decline per (platform, sender) per window (#88028)
 
 # Default pairing directory override. Deliberately ``None``: an eagerly computed
 # path would freeze the CLAWK_HOME/profile context at gateway boot, ignoring later
@@ -56,7 +61,11 @@ PAIRING_DIR = None
 # ``patch("gateway.pairing.PAIRING_DIR", tmp_path)``); that continues to work unchanged, since a patched
 # (non-``None``) value takes precedence over recomputing.
 def _default_pairing_dir() -> Path:
-    return PAIRING_DIR if PAIRING_DIR is not None else get_clawk_dir("platforms/pairing", "pairing")
+    return (
+        PAIRING_DIR
+        if PAIRING_DIR is not None
+        else get_clawk_dir("platforms/pairing", "pairing")
+    )
 
 
 def _allowlist_env_for_platform(platform: str) -> Optional[str]:
@@ -70,11 +79,16 @@ def _allowlist_env_for_platform(platform: str) -> Optional[str]:
     platform = (platform or "").lower().strip()
     with contextlib.suppress(Exception):
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent
     with contextlib.suppress(Exception):
         from gateway.platform_env import authz_field
         from gateway.platform_registry import platform_registry
-        return authz_field(platform, "allowed_users_env", platform_registry.get(platform)) or None
+
+        return (
+            authz_field(platform, "allowed_users_env", platform_registry.get(platform))
+            or None
+        )
     return None
 
 
@@ -90,7 +104,11 @@ def _platform_uses_whatsapp_identity(platform: str) -> bool:
 def _normalize_user_id(platform: str, user_id: str) -> str:
     """Normalize platform-specific user IDs before persisting / comparing them."""
     raw_user_id = str(user_id or "").strip()
-    return (normalize_whatsapp_identifier(raw_user_id) or raw_user_id) if _platform_uses_whatsapp_identity(platform) else raw_user_id
+    return (
+        (normalize_whatsapp_identifier(raw_user_id) or raw_user_id)
+        if _platform_uses_whatsapp_identity(platform)
+        else raw_user_id
+    )
 
 
 def _user_id_aliases(platform: str, user_id: str) -> set[str]:
@@ -147,6 +165,7 @@ def _write_allowlist_env(env_var: str, ids: list) -> None:
     """Best-effort persist (empty list removes the key); the pairing store grant still authorizes via the union."""
     with contextlib.suppress(Exception):
         from clawk_cli.config import save_env_value, remove_env_value
+
         save_env_value(env_var, ",".join(ids)) if ids else remove_env_value(env_var)
 
 
@@ -166,10 +185,14 @@ def _iter_live_gateway_adapters():
     runner = None
     with contextlib.suppress(Exception):
         from gateway.run import _gateway_runner_ref
+
         runner = _gateway_runner_ref()
     if runner is None:
         return
-    mappings = [getattr(runner, "adapters", None) or {}, *(getattr(runner, "_profile_adapters", None) or {}).values()]
+    mappings = [
+        getattr(runner, "adapters", None) or {},
+        *(getattr(runner, "_profile_adapters", None) or {}).values(),
+    ]
     for mapping in mappings:
         for adapter in (mapping or {}).values():
             if adapter is not None:
@@ -183,8 +206,12 @@ def _adapter_platform_name(adapter) -> str:
 
 def _purge_allowlist_entries(entries, platform: str, user_id: str):
     """Drop alias-equivalent allowlist entries while preserving ``*``."""
+
     def keep(entry) -> bool:
-        return str(entry).strip() == "*" or not _user_ids_match(platform, str(entry), str(user_id))
+        return str(entry).strip() == "*" or not _user_ids_match(
+            platform, str(entry), str(user_id)
+        )
+
     if isinstance(entries, str):
         return ",".join(filter(keep, _split_allowlist(entries)))
     if isinstance(entries, (set, frozenset)):
@@ -218,7 +245,9 @@ def _sync_live_adapter_allowlist_remove(platform: str, user_id: str) -> None:
             for key in ("allow_from", "allowed_users"):
                 if key in extra:
                     with contextlib.suppress(Exception):
-                        extra[key] = _purge_allowlist_entries(extra.get(key), platform_name, user_id)
+                        extra[key] = _purge_allowlist_entries(
+                            extra.get(key), platform_name, user_id
+                        )
 
 
 def _sync_allowlist_remove(platform: str, user_id: str) -> None:
@@ -261,14 +290,19 @@ def _load_json_file(path: Path) -> dict:
             owner_info = f"owner_uid={st.st_uid} mode={oct(st.st_mode)[-4:]}"
         except OSError:
             owner_info = "<stat failed>"
-        euid = os.geteuid() if hasattr(os, "geteuid") else "n/a"  # no geteuid on Windows
+        euid = (
+            os.geteuid() if hasattr(os, "geteuid") else "n/a"
+        )  # no geteuid on Windows
         logger.warning(
             "Pairing file %s exists but is not readable as uid=%s (%s; %s). "
             "If you ran `docker exec <container> clawk pairing approve ...` as root, "
             "re-run with `docker exec -u clawk <container> ...` and "
             "chown the existing file to the clawk user, or restart the "
             "container so the entrypoint can fix ownership.",
-            path, euid, owner_info, e,
+            path,
+            euid,
+            owner_info,
+            e,
         )
         return {}
     except (json.JSONDecodeError, OSError):
@@ -279,7 +313,9 @@ def _save_json_file(path: Path, data: dict) -> None:
     atomic_json_write(path, data, mode=0o600)
 
 
-def _migrate_split_pairing_dirs(*, home: Optional[Path] = None, active: Optional[Path] = None) -> None:
+def _migrate_split_pairing_dirs(
+    *, home: Optional[Path] = None, active: Optional[Path] = None
+) -> None:
     """Merge split legacy (``pairing``) / new (``platforms/pairing``) data into the active dir.
 
     If both exist, approved users in the inactive location must not be silently
@@ -288,7 +324,11 @@ def _migrate_split_pairing_dirs(*, home: Optional[Path] = None, active: Optional
     home = home or get_clawk_home()
     old_dir = home / "pairing"
     active = active if active is not None else _default_pairing_dir()
-    alternate = home / "platforms" / "pairing" if active.resolve() == old_dir.resolve() else old_dir
+    alternate = (
+        home / "platforms" / "pairing"
+        if active.resolve() == old_dir.resolve()
+        else old_dir
+    )
     if not alternate.exists() or active.resolve() == alternate.resolve():
         return
     active.mkdir(parents=True, exist_ok=True)
@@ -336,11 +376,17 @@ class PairingStore:
         if profile:
             root = get_default_clawk_root()
             profile_home = root if profile == "default" else root / "profiles" / profile
-        self._dir = get_clawk_dir("platforms/pairing", "pairing", home=profile_home) if profile else _default_pairing_dir()
+        self._dir = (
+            get_clawk_dir("platforms/pairing", "pairing", home=profile_home)
+            if profile
+            else _default_pairing_dir()
+        )
         self._dir.mkdir(parents=True, exist_ok=True)
         # Merge the alternate old/new layout so upgrades cannot split approvals.
         _migrate_split_pairing_dirs(home=profile_home, active=self._dir)
-        self._lock = threading.RLock()  # adapters run concurrently in threads sharing one store
+        self._lock = (
+            threading.RLock()
+        )  # adapters run concurrently in threads sharing one store
         self._profile = profile  # for diagnostics / log lines
         self._approved_cache: dict = {}
 
@@ -367,8 +413,10 @@ class PairingStore:
         pending = self._load_json(path)
         now = time.time()
         live = {
-            k: v for k, v in pending.items()
-            if (created := _entry_created_at(v)) is not None and (now - created) <= CODE_TTL_SECONDS
+            k: v
+            for k, v in pending.items()
+            if (created := _entry_created_at(v)) is not None
+            and (now - created) <= CODE_TTL_SECONDS
         }
         if len(live) != len(pending):
             self._save_json(path, live)
@@ -381,10 +429,16 @@ class PairingStore:
         ``self._lock``, so holding it while waiting (up to 10 s) on another process would stall
         every chat on that loop. ``is_approved`` never takes the file lock, so the order is safe."""
         from clawk_cli.auth import _file_lock
-        with _file_lock(
-            self._dir / ".lock", _dir_lock_holder(self._dir), 10.0,
-            f"Timed out waiting for the pairing store lock ({self._dir})",
-        ), self._lock:
+
+        with (
+            _file_lock(
+                self._dir / ".lock",
+                _dir_lock_holder(self._dir),
+                10.0,
+                f"Timed out waiting for the pairing store lock ({self._dir})",
+            ),
+            self._lock,
+        ):
             yield
 
     _load_json = staticmethod(_load_json_file)
@@ -434,7 +488,10 @@ class PairingStore:
         normalized_user_id = _normalize_user_id(platform, user_id)
         for approved_user_id in _matching_ids(platform, approved, normalized_user_id):
             del approved[approved_user_id]
-        approved[normalized_user_id] = {"user_name": user_name, "approved_at": time.time()}
+        approved[normalized_user_id] = {
+            "user_name": user_name,
+            "approved_at": time.time(),
+        }
         self._save_json(self._approved_path(platform), approved)
         # Mirror the grant into the operator's allowlist when one is configured.
         _sync_allowlist_add(platform, normalized_user_id)
@@ -460,18 +517,25 @@ class PairingStore:
     def _hash_code(code: str, salt: bytes) -> str:
         return hashlib.sha256(salt + code.encode("utf-8")).hexdigest()
 
-    def _finish_approval(self, platform: str, pending: dict, matched_key: str, matched_entry: dict) -> dict:
+    def _finish_approval(
+        self, platform: str, pending: dict, matched_key: str, matched_entry: dict
+    ) -> dict:
         """Remove a pending request and approve its user. Must hold self._locked()."""
         del pending[matched_key]
         self._save_json(self._pending_path(platform), pending)
         # A successful approval proves legitimacy, so the persisted brute-force streak
         # must not carry over (isolated typos would accumulate into a spurious lockout).
         self._reset_failed_attempts(platform)
-        result = {"user_id": matched_entry["user_id"], "user_name": matched_entry.get("user_name", "")}
+        result = {
+            "user_id": matched_entry["user_id"],
+            "user_name": matched_entry.get("user_name", ""),
+        }
         self._approve_user(platform, result["user_id"], result["user_name"])
         return result
 
-    def generate_code(self, platform: str, user_id: str, user_name: str = "") -> Optional[str]:
+    def generate_code(
+        self, platform: str, user_id: str, user_name: str = ""
+    ) -> Optional[str]:
         """Generate a pairing code for a new user.
 
         Returns None if the user is rate-limited, the platform hit MAX_PENDING_PER_PLATFORM,
@@ -480,7 +544,9 @@ class PairingStore:
         with self._locked():
             self._cleanup_expired(platform)
             normalized_user_id = _normalize_user_id(platform, user_id)
-            if self._is_locked_out(platform) or self._is_rate_limited(platform, user_id):
+            if self._is_locked_out(platform) or self._is_rate_limited(
+                platform, user_id
+            ):
                 return None
             pending = self._load_json(self._pending_path(platform))
             if len(pending) >= MAX_PENDING_PER_PLATFORM:
@@ -489,8 +555,11 @@ class PairingStore:
             salt = os.urandom(16)
             # Keyed by a random entry id, not the code itself.
             pending[secrets.token_hex(8)] = {
-                "hash": self._hash_code(code, salt), "salt": salt.hex(),
-                "user_id": normalized_user_id, "user_name": user_name, "created_at": time.time(),
+                "hash": self._hash_code(code, salt),
+                "salt": salt.hex(),
+                "user_id": normalized_user_id,
+                "user_name": user_name,
+                "created_at": time.time(),
             }
             self._save_json(self._pending_path(platform), pending)
             self._record_rate_limit(platform, user_id)
@@ -549,7 +618,9 @@ class PairingStore:
                 return None
             pending = self._load_json(self._pending_path(platform))
             for entry_id, entry in pending.items():
-                if _is_hashed_entry(entry) and secrets.compare_digest(str(entry_id).lower(), request_id):
+                if _is_hashed_entry(entry) and secrets.compare_digest(
+                    str(entry_id).lower(), request_id
+                ):
                     return self._finish_approval(platform, pending, entry_id, entry)
             return None
 
@@ -564,13 +635,18 @@ class PairingStore:
                     created_at = _entry_created_at(info)
                     if created_at is None:
                         continue
-                    is_modern = isinstance(info.get("hash"), str) and isinstance(info.get("salt"), str)
-                    results.append({
-                        "platform": p,
-                        "request_id": str(entry_id) if is_modern else "",
-                        "user_id": info.get("user_id", ""), "user_name": info.get("user_name", ""),
-                        "age_minutes": int((time.time() - created_at) / 60),
-                    })
+                    is_modern = isinstance(info.get("hash"), str) and isinstance(
+                        info.get("salt"), str
+                    )
+                    results.append(
+                        {
+                            "platform": p,
+                            "request_id": str(entry_id) if is_modern else "",
+                            "user_id": info.get("user_id", ""),
+                            "user_name": info.get("user_name", ""),
+                            "age_minutes": int((time.time() - created_at) / 60),
+                        }
+                    )
         return results
 
     def clear_pending(self, platform: str | None = None) -> int:
@@ -612,7 +688,8 @@ class PairingStore:
         stamps = self._load_json(self._decline_stamp_path())
         now = time.time()
         return any(
-            isinstance(stamped := stamps.get(f"{platform}:{alias}"), (int, float)) and (now - stamped) < DECLINE_DEDUPE_SECONDS
+            isinstance(stamped := stamps.get(f"{platform}:{alias}"), (int, float))
+            and (now - stamped) < DECLINE_DEDUPE_SECONDS
             for alias in _user_id_aliases(platform, user_id)
         )
 
@@ -622,8 +699,10 @@ class PairingStore:
         with self._locked():
             now = time.time()
             stamps = {
-                key: value for key, value in self._load_json(self._decline_stamp_path()).items()
-                if isinstance(value, (int, float)) and (now - value) < DECLINE_DEDUPE_SECONDS
+                key: value
+                for key, value in self._load_json(self._decline_stamp_path()).items()
+                if isinstance(value, (int, float))
+                and (now - value) < DECLINE_DEDUPE_SECONDS
             }
             for alias in _user_id_aliases(platform, user_id):
                 stamps[f"{platform}:{alias}"] = now
@@ -641,8 +720,11 @@ class PairingStore:
         if fails >= MAX_FAILED_ATTEMPTS:
             limits[f"_lockout:{platform}"] = time.time() + LOCKOUT_SECONDS
             limits[fail_key] = 0
-            print(f"[pairing] Platform {platform} locked out for {LOCKOUT_SECONDS}s "
-                  f"after {MAX_FAILED_ATTEMPTS} failed attempts", flush=True)
+            print(
+                f"[pairing] Platform {platform} locked out for {LOCKOUT_SECONDS}s "
+                f"after {MAX_FAILED_ATTEMPTS} failed attempts",
+                flush=True,
+            )
         self._save_limits(limits)
 
     def _reset_failed_attempts(self, platform: str) -> None:
@@ -656,5 +738,9 @@ class PairingStore:
     def _all_platforms(self, suffix: str) -> list:
         """Platforms that have a ``-<suffix>.json`` data file (``_``-prefixed files are shared state)."""
         tail = f"-{suffix}.json"
-        platforms = (f.name.replace(tail, "") for f in self._dir.iterdir() if f.name.endswith(tail))
+        platforms = (
+            f.name.replace(tail, "")
+            for f in self._dir.iterdir()
+            if f.name.endswith(tail)
+        )
         return [p for p in platforms if not p.startswith("_")]

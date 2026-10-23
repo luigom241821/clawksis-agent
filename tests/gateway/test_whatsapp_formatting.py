@@ -13,6 +13,7 @@ import pytest
 
 from gateway.config import Platform
 
+
 @pytest.fixture(autouse=True)
 def _whatsapp_open_optin(monkeypatch):
     """Opt into WhatsApp allow-all so ``dm_policy: open`` dispatch tests run.
@@ -23,9 +24,11 @@ def _whatsapp_open_optin(monkeypatch):
     """
     monkeypatch.setenv("WHATSAPP_ALLOW_ALL_USERS", "true")
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_adapter():
     """Create a WhatsAppAdapter with test attributes (bypass __init__)."""
@@ -61,6 +64,7 @@ def _make_adapter():
     adapter._group_allow_from = set()
     return adapter
 
+
 class _AsyncCM:
     """Minimal async context manager returning a fixed value."""
 
@@ -73,9 +77,11 @@ class _AsyncCM:
     async def __aexit__(self, *exc):
         return False
 
+
 # ---------------------------------------------------------------------------
 # format_message tests
 # ---------------------------------------------------------------------------
+
 
 class TestFormatMessage:
     """WhatsApp markdown conversion."""
@@ -91,7 +97,7 @@ class TestFormatMessage:
         assert adapter.format_message("### Deep") == "*Deep*"
 
     def test_bold_header_does_not_double_wrap(self):
-        """"# **Title**" must become *Title*, not **Title** (WhatsApp would
+        """ "# **Title**" must become *Title*, not **Title** (WhatsApp would
         render the doubled asterisks literally)."""
         adapter = _make_adapter()
         assert adapter.format_message("# **Title**") == "*Title*"
@@ -104,9 +110,11 @@ class TestFormatMessage:
         # Already-WhatsApp _italic_ passes through unchanged
         assert adapter.format_message("_italic_") == "_italic_"
 
+
 # ---------------------------------------------------------------------------
 # MAX_MESSAGE_LENGTH tests
 # ---------------------------------------------------------------------------
+
 
 class TestMessageLimits:
     """WhatsApp message length limits."""
@@ -120,9 +128,11 @@ class TestMessageLimits:
             adapter.MAX_MESSAGE_LENGTH - len(adapter.DEFAULT_REPLY_PREFIX)
         )
 
+
 # ---------------------------------------------------------------------------
 # send() chunking tests
 # ---------------------------------------------------------------------------
+
 
 class TestSendChunking:
     """WhatsApp send() splits long messages into chunks."""
@@ -172,9 +182,11 @@ class TestSendChunking:
             final_text = adapter.DEFAULT_REPLY_PREFIX + payload["message"]
             assert len(final_text) <= adapter.MAX_MESSAGE_LENGTH
 
+
 # ---------------------------------------------------------------------------
 # bridge event metadata
 # ---------------------------------------------------------------------------
+
 
 class TestBridgeEventMetadata:
     """WhatsApp bridge metadata is preserved for downstream consumers."""
@@ -207,7 +219,9 @@ class TestBridgeEventMetadata:
         assert event.raw_message["hasQuotedMessage"] is True
 
     @pytest.mark.asyncio
-    async def test_reply_to_uncaptioned_image_attaches_quoted_media(self, tmp_path, monkeypatch):
+    async def test_reply_to_uncaptioned_image_attaches_quoted_media(
+        self, tmp_path, monkeypatch
+    ):
         # contextInfo.quotedMessage only ever carries a thumbnail-sized stub
         # for media (or nothing for an uncaptioned attachment). The bridge
         # resolves the quoted message's already-downloaded media via its own
@@ -224,8 +238,11 @@ class TestBridgeEventMetadata:
         quoted_image_path.write_bytes(b"fake-jpeg-bytes")
 
         from plugins.platforms.whatsapp import adapter as adapter_module
+
         monkeypatch.setattr(
-            adapter_module, "_is_allowed_bridge_path", lambda url: True,
+            adapter_module,
+            "_is_allowed_bridge_path",
+            lambda url: True,
         )
 
         data = {
@@ -256,21 +273,36 @@ class TestBridgeEventMetadata:
         assert event.media_types[idx] == "image/jpeg"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("content, inlined", [("small text", True), ("x" * (200 * 1024), False)], ids=["small", "large"])
-    async def test_document_marks_media_text_inlined(self, tmp_path, monkeypatch, content, inlined):
+    @pytest.mark.parametrize(
+        "content, inlined",
+        [("small text", True), ("x" * (200 * 1024), False)],
+        ids=["small", "large"],
+    )
+    async def test_document_marks_media_text_inlined(
+        self, tmp_path, monkeypatch, content, inlined
+    ):
         """The per-attachment flag must track whether the text was injected, so the document
         note never claims the content is inlined when the >100 KB gate skipped it."""
         adapter = _make_adapter()
         doc_path = tmp_path / "doc_abc_notes.txt"
         doc_path.write_text(content, encoding="utf-8")
         from plugins.platforms.whatsapp import adapter as adapter_module
+
         monkeypatch.setattr(adapter_module, "_is_allowed_bridge_path", lambda url: True)
 
-        event = await adapter._build_message_event({
-            "messageId": "doc-msg", "chatId": "15551234567@s.whatsapp.net",
-            "senderId": "15551234567@s.whatsapp.net", "senderName": "Ananya", "isGroup": False,
-            "body": "", "hasMedia": True, "mediaUrls": [str(doc_path)], "mediaType": "document",
-        })
+        event = await adapter._build_message_event(
+            {
+                "messageId": "doc-msg",
+                "chatId": "15551234567@s.whatsapp.net",
+                "senderId": "15551234567@s.whatsapp.net",
+                "senderName": "Ananya",
+                "isGroup": False,
+                "body": "",
+                "hasMedia": True,
+                "mediaUrls": [str(doc_path)],
+                "mediaType": "document",
+            }
+        )
 
         assert event is not None
         assert ("[Content of" in (event.text or "")) is inlined
@@ -284,8 +316,11 @@ class TestBridgeEventMetadata:
         adapter = _make_adapter()
 
         from plugins.platforms.whatsapp import adapter as adapter_module
+
         monkeypatch.setattr(
-            adapter_module, "_is_allowed_bridge_path", lambda url: False,
+            adapter_module,
+            "_is_allowed_bridge_path",
+            lambda url: False,
         )
 
         data = {
@@ -319,7 +354,9 @@ class TestBridgeEventMetadata:
         (cron chart, generated plot) must resolve from the outbound index written at send time —
         otherwise "what is this?" under the bot's own image reaches the agent with no image."""
         adapter = _make_adapter()
-        image = tmp_path / "chart.png"  # a workspace path, deliberately NOT inside a cache dir
+        image = (
+            tmp_path / "chart.png"
+        )  # a workspace path, deliberately NOT inside a cache dir
         image.write_bytes(b"\x89PNG fake")
         resp = MagicMock(status=200)
         resp.json = AsyncMock(return_value={"messageId": "BOT_IMG"})
@@ -328,18 +365,31 @@ class TestBridgeEventMetadata:
         sent = await adapter.send_image_file("15551234567", str(image))
         assert sent.success and sent.message_id == "BOT_IMG"
 
-        event = await adapter._build_message_event({
-            "messageId": "reply-1", "chatId": "15551234567@s.whatsapp.net",
-            "senderId": "15551234567@s.whatsapp.net", "senderName": "Alice", "isGroup": False,
-            "body": "what is this?", "hasMedia": False, "mediaUrls": [], "mediaType": "",
-            "quotedMessageId": "BOT_IMG", "quotedParticipant": "15550000000@s.whatsapp.net",
-            "hasQuotedMessage": True, "quotedText": "", "quotedMediaUrls": [], "quotedMediaType": "",
-            "botIds": ["15550000000@s.whatsapp.net"],
-        })
+        event = await adapter._build_message_event(
+            {
+                "messageId": "reply-1",
+                "chatId": "15551234567@s.whatsapp.net",
+                "senderId": "15551234567@s.whatsapp.net",
+                "senderName": "Alice",
+                "isGroup": False,
+                "body": "what is this?",
+                "hasMedia": False,
+                "mediaUrls": [],
+                "mediaType": "",
+                "quotedMessageId": "BOT_IMG",
+                "quotedParticipant": "15550000000@s.whatsapp.net",
+                "hasQuotedMessage": True,
+                "quotedText": "",
+                "quotedMediaUrls": [],
+                "quotedMediaType": "",
+                "botIds": ["15550000000@s.whatsapp.net"],
+            }
+        )
         assert event is not None
         assert event.reply_to_is_own_message is True
         assert event.media_urls == [str(image)]
         assert event.media_types == ["image/png"]
+
 
 # ---------------------------------------------------------------------------
 # display_config tier classification

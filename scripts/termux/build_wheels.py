@@ -31,9 +31,15 @@ from urllib.parse import urlsplit
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--resolved", required=True, help="tab-separated name/spec/marker file")
-    p.add_argument("--lock", required=True, help="uv.lock the resolved graph was exported from")
-    p.add_argument("--build-set", required=True, help="names needing sdist builds (one per line)")
+    p.add_argument(
+        "--resolved", required=True, help="tab-separated name/spec/marker file"
+    )
+    p.add_argument(
+        "--lock", required=True, help="uv.lock the resolved graph was exported from"
+    )
+    p.add_argument(
+        "--build-set", required=True, help="names needing sdist builds (one per line)"
+    )
     p.add_argument("--wheelhouse", required=True)
     p.add_argument("--retag", required=True, help="path to retag_wheel.py")
     p.add_argument("--platform-tag", required=True)
@@ -56,17 +62,31 @@ def normalize_reqs(export: Path, lock: Path, resolved: Path) -> None:
         source = req.url or ""
         if source:
             repository, separator, commit = source.removeprefix("git+").rpartition("@")
-            if not source.startswith("git+") or not separator or not re.fullmatch(r"[a-f0-9]{40}", commit):
-                raise ValueError(f"Source requirement needs an exact Git commit: {name}")
-            matches = [p for p in packages if canonicalize_name(p["name"]) == name
-                       and (git := p.get("source", {}).get("git"))
-                       and urlsplit(git).fragment == commit
-                       and git.split("?", 1)[0].split("#", 1)[0] == repository]
+            if (
+                not source.startswith("git+")
+                or not separator
+                or not re.fullmatch(r"[a-f0-9]{40}", commit)
+            ):
+                raise ValueError(
+                    f"Source requirement needs an exact Git commit: {name}"
+                )
+            matches = [
+                p
+                for p in packages
+                if canonicalize_name(p["name"]) == name
+                and (git := p.get("source", {}).get("git"))
+                and urlsplit(git).fragment == commit
+                and git.split("?", 1)[0].split("#", 1)[0] == repository
+            ]
             if len(matches) != 1:
-                raise ValueError(f"Source requirement does not match one locked package: {name}")
+                raise ValueError(
+                    f"Source requirement does not match one locked package: {name}"
+                )
             spec = f"=={matches[0]['version']}"
         rows.append((name, spec, str(req.marker) if req.marker else "", source))
-    resolved.write_text("".join("\t".join(row) + "\n" for row in rows), encoding="utf-8")
+    resolved.write_text(
+        "".join("\t".join(row) + "\n" for row in rows), encoding="utf-8"
+    )
 
 
 def load_entries(resolved: Path) -> dict[str, str]:
@@ -132,8 +152,13 @@ def _dist_version(name: str, spec: str) -> str | None:
     return spec.strip().lstrip("=") if spec.strip().startswith("==") else None
 
 
-def build_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path,
-                 *, python: str = sys.executable) -> None:
+def build_wheels(
+    build_set: list[str],
+    specs: dict[str, str],
+    wheelhouse: Path,
+    *,
+    python: str = sys.executable,
+) -> None:
     for name in build_set:
         spec = specs.get(name, "")
         req = f"{name}{spec}" if spec else name
@@ -141,7 +166,9 @@ def build_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path,
         if ver is not None and any(
             wheelhouse.glob(f"{name.replace('-', '_')}-{ver}-*.whl")
         ):
-            print(f"==> {name} {ver} already in the wheelhouse (cache restore); skipping")
+            print(
+                f"==> {name} {ver} already in the wheelhouse (cache restore); skipping"
+            )
             continue
         if name == "uvloop":
             print(f"==> building {name} (download + extract + pre-build fixups)")
@@ -150,13 +177,27 @@ def build_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path,
                 sdist_dir = tmp / "sdist"
                 sdist_dir.mkdir()
                 subprocess.run(
-                    [python, "-m", "pip", "download", "--no-deps", "--no-binary", ":all:",
-                     "--no-build-isolation", "-d", str(sdist_dir), req],
-                    check=True, cwd=tmp,
+                    [
+                        python,
+                        "-m",
+                        "pip",
+                        "download",
+                        "--no-deps",
+                        "--no-binary",
+                        ":all:",
+                        "--no-build-isolation",
+                        "-d",
+                        str(sdist_dir),
+                        req,
+                    ],
+                    check=True,
+                    cwd=tmp,
                 )
                 archives = list(sdist_dir.glob("*.tar.gz"))
                 if len(archives) != 1:
-                    raise RuntimeError(f"expected exactly one sdist archive for {name}, got {len(archives)}")
+                    raise RuntimeError(
+                        f"expected exactly one sdist archive for {name}, got {len(archives)}"
+                    )
                 src = safe_extract(archives[0], tmp / "src")
                 # uvloop vendors libuv at vendor/libuv/ WITH its own
                 # autogen.sh + generated configure; the build backend
@@ -171,35 +212,68 @@ def build_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path,
                     # non-exec mode (extraction preserves it). autogen
                     # also (re)writes ./configure WITHOUT the exec bit
                     # (setup.py then 127s) -- chmod after bootstrap.
-                    proc = subprocess.run(["bash", "autogen.sh"], cwd=libuv,
-                                          check=False, capture_output=True, text=True, encoding="utf-8")
+                    proc = subprocess.run(
+                        ["bash", "autogen.sh"],
+                        cwd=libuv,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                    )
                     if proc.returncode == 0 and (libuv / "configure").is_file():
                         # Run configure under the container's own sh
                         # (its #!/bin/sh shebang can't exec here).
                         cfg_proc = subprocess.run(
                             [os.environ["PREFIX"] + "/bin/sh", "./configure"],
-                            cwd=libuv, check=False, capture_output=True, text=True, encoding="utf-8",
+                            cwd=libuv,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
                         )
                         if cfg_proc.returncode != 0:
                             print(f"FIXUP FAILED (libuv configure) for {name}")
                             print("stdout:", cfg_proc.stdout[-1500:])
                             print("stderr:", cfg_proc.stderr[-1500:])
-                            raise subprocess.CalledProcessError(cfg_proc.returncode, cfg_proc.args)
+                            raise subprocess.CalledProcessError(
+                                cfg_proc.returncode, cfg_proc.args
+                            )
                     if proc.returncode != 0:
                         # autogen needs autoreconf when configure is
                         # stale; fall back to explicit bootstrap
-                        proc2 = subprocess.run(["autoreconf", "-i"], cwd=libuv,
-                                               check=False, capture_output=True, text=True, encoding="utf-8")
+                        proc2 = subprocess.run(
+                            ["autoreconf", "-i"],
+                            cwd=libuv,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            encoding="utf-8",
+                        )
                         if proc2.returncode != 0:
                             print(f"FIXUP FAILED (libuv bootstrap) for {name}")
                             print("autogen stdout:", proc.stdout[-1200:])
                             print("autogen stderr:", proc.stderr[-1200:])
                             print("autoreconf stderr:", proc2.stderr[-1200:])
-                            raise subprocess.CalledProcessError(proc2.returncode, proc2.args)
+                            raise subprocess.CalledProcessError(
+                                proc2.returncode, proc2.args
+                            )
                 proc = subprocess.run(
-                    [python, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation",
-                     "-w", str(wheelhouse), str(src)],
-                    check=False, cwd=tmp, capture_output=True, text=True, encoding="utf-8",
+                    [
+                        python,
+                        "-m",
+                        "pip",
+                        "wheel",
+                        "--no-deps",
+                        "--no-build-isolation",
+                        "-w",
+                        str(wheelhouse),
+                        str(src),
+                    ],
+                    check=False,
+                    cwd=tmp,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
                 )
                 if proc.returncode != 0:
                     print(f"BUILD FAILED: {name}")
@@ -214,9 +288,22 @@ def build_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path,
             # never resolves/compiles -- the build container may fetch.
             print(f"==> building {name} (direct pip wheel, isolated backend)")
             proc = subprocess.run(
-                [python, "-m", "pip", "wheel", "--no-deps",
-                 "--no-binary", ":all:", "-w", str(wheelhouse), req],
-                check=False, capture_output=True, text=True, encoding="utf-8",
+                [
+                    python,
+                    "-m",
+                    "pip",
+                    "wheel",
+                    "--no-deps",
+                    "--no-binary",
+                    ":all:",
+                    "-w",
+                    str(wheelhouse),
+                    req,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
             )
             if proc.returncode != 0:
                 print(f"BUILD FAILED: {name}")
@@ -250,6 +337,7 @@ def _marker_admits(marker: str) -> bool:
     if not marker:
         return True
     from packaging.markers import Marker
+
     return Marker(marker).evaluate(TARGET_ENV)
 
 
@@ -266,7 +354,9 @@ def _parse_full(resolved: Path) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def fetch_pure_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: Path, resolved: Path) -> None:
+def fetch_pure_wheels(
+    build_set: list[str], specs: dict[str, str], wheelhouse: Path, resolved: Path
+) -> None:
     """Fetch every APPLICABLE dep's py3-none-any wheel into the wheelhouse.
 
     The offline completeness gate installs the FULL marker-admitted graph
@@ -294,9 +384,22 @@ def fetch_pure_wheels(build_set: list[str], specs: dict[str, str], wheelhouse: P
     if not reqs:
         return
     proc = subprocess.run(
-        [sys.executable, "-m", "pip", "download", "--no-deps",
-         "--only-binary", ":all:", "-d", str(wheelhouse), *reqs],
-        check=False, capture_output=True, text=True, encoding="utf-8",
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "download",
+            "--no-deps",
+            "--only-binary",
+            ":all:",
+            "-d",
+            str(wheelhouse),
+            *reqs,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     if proc.returncode != 0:
         print("PURE-WHEEL FETCH FAILED")
@@ -319,22 +422,33 @@ def retag_all(wheelhouse: Path, retag_script: Path, platform_tag: str) -> None:
     android_tagged = [w for w in wheels if "android" in w.name]
     if linux_tagged:
         subprocess.run(
-            [sys.executable, str(retag_script), "--platform-tag", platform_tag, *linux_tagged],
+            [
+                sys.executable,
+                str(retag_script),
+                "--platform-tag",
+                platform_tag,
+                *linux_tagged,
+            ],
             check=True,
         )
     retagged = list(wheelhouse.glob(f"*{platform_tag}*.whl"))
     total_android = len(retagged)
     if total_android == 0:
         raise RuntimeError(f"no wheels retagged to {platform_tag}")
-    print(f"  retagged {len(linux_tagged)} linux-tagged wheels; {len(android_tagged)} were android-tagged at build; {total_android} android wheels total")
+    print(
+        f"  retagged {len(linux_tagged)} linux-tagged wheels; {len(android_tagged)} were android-tagged at build; {total_android} android wheels total"
+    )
 
 
 def import_native_modules(build_set: list[str]) -> None:
     import importlib
 
     modules = {
-        "ruamel-yaml-clib": "_ruamel_yaml", "cffi": "_cffi_backend",
-        "pillow": "PIL._imaging", "pyyaml": "yaml._yaml", "firecrawl-anydoc": "anydoc",
+        "ruamel-yaml-clib": "_ruamel_yaml",
+        "cffi": "_cffi_backend",
+        "pillow": "PIL._imaging",
+        "pyyaml": "yaml._yaml",
+        "firecrawl-anydoc": "anydoc",
         # import pillow_heif alone never fails on a dead link: its
         # __init__ swallows the _pillow_heif ImportError into a
         # DeferredError that only fires on first use. Import the C
@@ -347,7 +461,9 @@ def import_native_modules(build_set: list[str]) -> None:
         print("  imported", module, flush=True)
 
 
-def wheelhouse_gates(resolved: Path, wheelhouse: Path, build_set: list[str], lock: Path) -> None:
+def wheelhouse_gates(
+    resolved: Path, wheelhouse: Path, build_set: list[str], lock: Path
+) -> None:
     """Offline install of every marker-admitted dep into ONE clean venv,
     shared by both gates (the full offline install runs once, not twice).
 
@@ -366,8 +482,12 @@ def wheelhouse_gates(resolved: Path, wheelhouse: Path, build_set: list[str], loc
         reqs = tmp / "reqs.txt"
         write_reqs_file(resolved, reqs)
         vp = build_requirements_environment(
-            reqs.read_text(encoding="utf-8-sig").splitlines(), out=tmp / "venv",
-            python=Path(sys.executable), wheelhouse=wheelhouse, offline=True, explicit=True,
+            reqs.read_text(encoding="utf-8-sig").splitlines(),
+            out=tmp / "venv",
+            python=Path(sys.executable),
+            wheelhouse=wheelhouse,
+            offline=True,
+            explicit=True,
             lock=lock,
         )
         print("  completeness gate: offline install of the marker-admitted graph OK")
@@ -376,7 +496,6 @@ def wheelhouse_gates(resolved: Path, wheelhouse: Path, build_set: list[str], loc
             check=True,
         )
         print("  import gate: every built native wheel imports")
-
 
 
 def main() -> int:
@@ -388,7 +507,11 @@ def main() -> int:
         return 0
     args = parse_args()
     resolved = Path(args.resolved)
-    build_set = [l.strip() for l in Path(args.build_set).read_text(encoding="utf-8-sig").splitlines() if l.strip()]
+    build_set = [
+        l.strip()
+        for l in Path(args.build_set).read_text(encoding="utf-8-sig").splitlines()
+        if l.strip()
+    ]
     wheelhouse = Path(args.wheelhouse)
     wheelhouse.mkdir(parents=True, exist_ok=True)
     specs = load_entries(resolved)
@@ -404,9 +527,13 @@ def main() -> int:
     for wheel in sorted(wheelhouse.glob("*.whl")):
         repaired = repair_wheel(wheel, library)
         if repaired:
-            print(f"  linked {repaired} native extensions to {library.name}: {wheel.name}")
+            print(
+                f"  linked {repaired} native extensions to {library.name}: {wheel.name}"
+            )
     wheelhouse_gates(resolved, wheelhouse, build_set, Path(args.lock))
-    print(f"wheelhouse complete: {len(list(wheelhouse.glob('*.whl')))} wheels in {wheelhouse}")
+    print(
+        f"wheelhouse complete: {len(list(wheelhouse.glob('*.whl')))} wheels in {wheelhouse}"
+    )
     return 0
 
 

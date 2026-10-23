@@ -13,7 +13,10 @@ import time
 import threading as _threading
 from dataclasses import dataclass, field
 from typing import Any, List, Optional
-from agent.command_token_source import build_command_token_provider, materialize_probe_api_key
+from agent.command_token_source import (
+    build_command_token_provider,
+    materialize_probe_api_key,
+)
 from clawk_cli.providers import custom_provider_aliases, custom_provider_slug, get_label
 from utils import base_url_host_matches
 
@@ -23,21 +26,30 @@ logger = logging.getLogger("clawk_cli.model_switch")
 # Rows never capped by max_models: aggregators whose full catalogs (70+ models) must stay visible, and
 # rows that are already a curated list (Nous = curated + Portal picks, OpenRouter = curated ∩ live),
 # where the cap only cut the bottom "Free tier" block and the Portal's appended recommendations.
-_UNCAPPED_PICKER_PROVIDERS: frozenset[str] = frozenset({"opencode-zen", "opencode-go", "nous", "openrouter"})
+_UNCAPPED_PICKER_PROVIDERS: frozenset[str] = frozenset(
+    {"opencode-zen", "opencode-go", "nous", "openrouter"}
+)
 
 
 def _save_discovered_models_to_config(
-    api_url: str, model_ids: list[str], *, api_mode: Optional[str] = None,
-    headers: Optional[dict[str, str]] = None, credential_identity: str | None = None) -> None:
+    api_url: str,
+    model_ids: list[str],
+    *,
+    api_mode: Optional[str] = None,
+    headers: Optional[dict[str, str]] = None,
+    credential_identity: str | None = None,
+) -> None:
     """Persist a successful ``/v1/models`` probe into the matching ``custom_providers`` entry.
 
     Matches by base_url (slash-normalised), api_mode and headers. A failed config write is
     swallowed — the picker still shows the live models for this session."""
     from clawk_cli.model_switch import _extra_headers_from_config
+
     if not api_url or not model_ids:
         return
     try:
         from clawk_cli.config import load_config, save_config
+
         cfg = load_config()
         providers = cfg.get("custom_providers") or []
         if not isinstance(providers, list):
@@ -49,11 +61,18 @@ def _save_discovered_models_to_config(
             if not isinstance(entry, dict):
                 continue
             entry_url = (entry.get("base_url", "") or entry.get("url", "")).strip()
-            if entry_url.rstrip("/").lower() != norm_url or _entry_api_mode(entry) != api_mode:
+            if (
+                entry_url.rstrip("/").lower() != norm_url
+                or _entry_api_mode(entry) != api_mode
+            ):
                 continue
             if headers is not None and _extra_headers_from_config(entry) != headers:
                 continue
-            if credential_identity is not None and _entry_credentials(entry, "key_env", "api_key_env")[2] != credential_identity:
+            if (
+                credential_identity is not None
+                and _entry_credentials(entry, "key_env", "api_key_env")[2]
+                != credential_identity
+            ):
                 continue
             if not _discovered_catalog_stale(entry, model_ids):
                 continue
@@ -76,7 +95,10 @@ def _discovered_catalog_stale(entry: dict, model_ids: list[str]) -> bool:
     refresh, but only when stale; a legacy-shape entry is always rewritten so the save migrates
     it to the clean entry-level flag."""
     existing = entry.get("models")
-    legacy_discovered = isinstance(existing, dict) and existing.get("__discovered_model_catalog__") is True
+    legacy_discovered = (
+        isinstance(existing, dict)
+        and existing.get("__discovered_model_catalog__") is True
+    )
     entry_discovered = entry.get("models_discovered") is True or legacy_discovered
     if isinstance(existing, dict):
         return entry_discovered and (legacy_discovered or list(existing) != model_ids)
@@ -90,11 +112,22 @@ class _NativePickerModelList(list[str]):
 
 
 def _fetch_picker_live_models(
-    api_key: Any, api_url: str, native_catalog_provider: str, preserve_native_models: bool,
-    headers: dict[str, str] | None = None, timeout: float = 5.0,
-    api_mode: str | None = None, *, cache: bool = True) -> list[str] | None:
+    api_key: Any,
+    api_url: str,
+    native_catalog_provider: str,
+    preserve_native_models: bool,
+    headers: dict[str, str] | None = None,
+    timeout: float = 5.0,
+    api_mode: str | None = None,
+    *,
+    cache: bool = True,
+) -> list[str] | None:
     """Fetch picker models with native Ollama and cached generic discovery."""
-    from clawk_cli.models import _get_ollama_native_headers, cached_fetch_api_models, fetch_api_models
+    from clawk_cli.models import (
+        _get_ollama_native_headers,
+        cached_fetch_api_models,
+        fetch_api_models,
+    )
     from clawk_cli.models_local import (
         _OLLAMA_LOCAL_MODELS_CACHE_TTL,
         _normalize_openai_base_url,
@@ -105,10 +138,22 @@ def _fetch_picker_live_models(
     if callable(api_key):
         # Let the catalog cache decide whether any token or network I/O is needed.
         return cached_fetch_api_models(
-            api_key, api_url, timeout=timeout, headers=headers, api_mode=api_mode,
+            api_key,
+            api_url,
+            timeout=timeout,
+            headers=headers,
+            api_mode=api_mode,
             fetch_models=lambda: _fetch_picker_live_models(
-                materialize_probe_api_key(api_key), api_url, native_catalog_provider,
-                preserve_native_models, headers, timeout, api_mode, cache=False))
+                materialize_probe_api_key(api_key),
+                api_url,
+                native_catalog_provider,
+                preserve_native_models,
+                headers,
+                timeout,
+                api_mode,
+                cache=False,
+            ),
+        )
 
     candidate_headers = _get_ollama_native_headers(api_url, api_key=api_key)
 
@@ -117,7 +162,9 @@ def _fetch_picker_live_models(
             if pred(key.lower()):
                 del candidate_headers[key]
 
-    caller_has_authorization = any(key.lower() == "authorization" for key in (headers or {}))
+    caller_has_authorization = any(
+        key.lower() == "authorization" for key in (headers or {})
+    )
     if headers:
         lowered = {existing.lower() for existing in headers}
         _drop(lambda k: k in lowered)
@@ -126,7 +173,8 @@ def _fetch_picker_live_models(
         _drop(lambda k: k == "authorization")
         candidate_headers["Authorization"] = f"Bearer {api_key}"
     use_native = should_use_ollama_native_catalog(
-        native_catalog_provider, api_url, headers=candidate_headers or None)
+        native_catalog_provider, api_url, headers=candidate_headers or None
+    )
     resolved_headers = candidate_headers or None if use_native else headers
 
     if use_native:
@@ -134,7 +182,9 @@ def _fetch_picker_live_models(
             return None
 
         def _probe_native_catalog() -> _NativePickerModelList | None:
-            models = fetch_ollama_local_models(api_url, timeout=timeout, headers=resolved_headers)
+            models = fetch_ollama_local_models(
+                api_url, timeout=timeout, headers=resolved_headers
+            )
             return None if models is None else _NativePickerModelList(models)
 
         # Admit the native catalog to the SHARED disk cache: a no-probe picker open (every endpoint
@@ -148,15 +198,24 @@ def _fetch_picker_live_models(
         # locally pulled model must not stay invisible for the generic 1h TTL.
         native_models = (
             cached_fetch_api_models(
-                api_key, api_url, timeout=timeout, headers=headers, api_mode=api_mode,
-                fetch_models=_probe_native_catalog, ttl_seconds=_OLLAMA_LOCAL_MODELS_CACHE_TTL)
-            if cache else _probe_native_catalog())
+                api_key,
+                api_url,
+                timeout=timeout,
+                headers=headers,
+                api_mode=api_mode,
+                fetch_models=_probe_native_catalog,
+                ttl_seconds=_OLLAMA_LOCAL_MODELS_CACHE_TTL,
+            )
+            if cache
+            else _probe_native_catalog()
+        )
         if native_models is not None:
             return native_models
         # A failed native probe is not authoritative: retry the cached generic catalog.
         api_url = _normalize_openai_base_url(api_url)
     generic_models = (cached_fetch_api_models if cache else fetch_api_models)(
-        api_key, api_url, timeout=timeout, headers=resolved_headers, api_mode=api_mode)
+        api_key, api_url, timeout=timeout, headers=resolved_headers, api_mode=api_mode
+    )
     return generic_models if generic_models or use_native else None
 
 
@@ -165,7 +224,9 @@ def _fetch_picker_live_models(
 _picker_prewarm_done = _threading.Event()
 
 
-def _credential_pool_is_usable(provider: str, *, raw_pool_present: bool = False, for_picker: bool = False) -> bool:
+def _credential_pool_is_usable(
+    provider: str, *, raw_pool_present: bool = False, for_picker: bool = False
+) -> bool:
     """Whether *provider* has a credential that can be selected now.
 
     Legacy opaque ``auth.json`` pool values that do not deserialize into ``PooledCredential``
@@ -175,6 +236,7 @@ def _credential_pool_is_usable(provider: str, *, raw_pool_present: bool = False,
     one, and limits are per-model for many providers, so another model may still work."""
     try:
         from agent.credential_pool import load_pool
+
         pool = load_pool(provider)
         if pool.has_credentials():
             return for_picker or pool.has_available()
@@ -190,6 +252,7 @@ def prewarm_picker_cache_async() -> Optional[_threading.Thread]:
     live ``/v1/models`` fetches. Fire-and-forget, at most once per process, fully
     exception-isolated. Returns the thread (for tests) or None if already warmed."""
     from clawk_cli.model_switch import list_authenticated_providers
+
     if _picker_prewarm_done.is_set():
         return None
     _picker_prewarm_done.set()
@@ -197,13 +260,17 @@ def prewarm_picker_cache_async() -> Optional[_threading.Thread]:
     def _warm() -> None:
         try:
             from clawk_cli.inventory import load_picker_context
+
             ctx = load_picker_context()
             # The result is discarded; the warm disk cache is the point.
             list_authenticated_providers(
-                current_provider=ctx.current_provider, current_base_url=ctx.current_base_url,
-                current_model=ctx.current_model, user_providers=ctx.user_providers,
+                current_provider=ctx.current_provider,
+                current_base_url=ctx.current_base_url,
+                current_model=ctx.current_model,
+                user_providers=ctx.user_providers,
                 custom_providers=ctx.custom_providers,
-                excluded_providers=ctx.excluded_providers or [])
+                excluded_providers=ctx.excluded_providers or [],
+            )
         except Exception:
             logger.debug("picker cache prewarm failed", exc_info=True)
 
@@ -222,8 +289,12 @@ def _prefetch_provider_models_parallel(provider_slugs: list[str]) -> None:
     non-blocking serial read for a parallel fetch the picker waits on. Persistence is
     ``cached_provider_model_ids``'s own locked write; workers add none of their own."""
     from clawk_cli.models import (
-        _credential_fingerprint, _disk_serve_tier, _load_provider_models_cache,
-        _normalized_cache_slug, cached_provider_model_ids)
+        _credential_fingerprint,
+        _disk_serve_tier,
+        _load_provider_models_cache,
+        _normalized_cache_slug,
+        cached_provider_model_ids,
+    )
 
     now = time.time()
 
@@ -235,14 +306,23 @@ def _prefetch_provider_models_parallel(provider_slugs: list[str]) -> None:
     cache = _load_provider_models_cache()
     for slug in provider_slugs:
         key = _normalized_cache_slug(slug)
-        if key and _disk_serve_tier(cache.get(key), _credential_fingerprint(key), now,
-                                    is_ollama=key == "ollama") is None:
+        if (
+            key
+            and _disk_serve_tier(
+                cache.get(key),
+                _credential_fingerprint(key),
+                now,
+                is_ollama=key == "ollama",
+            )
+            is None
+        ):
             stale_slugs.append(key)
 
     if not stale_slugs:
         return
 
     import concurrent.futures
+
     def _fetch_one(slug: str) -> None:
         try:
             cached_provider_model_ids(slug, force_refresh=True)
@@ -250,7 +330,8 @@ def _prefetch_provider_models_parallel(provider_slugs: list[str]) -> None:
             pass  # best-effort; picker falls back to curated list
 
     with concurrent.futures.ThreadPoolExecutor(
-        max_workers=min(8, len(stale_slugs)), thread_name_prefix="model-cache-prefetch",
+        max_workers=min(8, len(stale_slugs)),
+        thread_name_prefix="model-cache-prefetch",
     ) as executor:
         list(executor.map(_fetch_one, stale_slugs))
 
@@ -276,12 +357,18 @@ def _iter_builtin_candidates(models_dev_data: dict, excluded: set, seen: set):
     from clawk_cli.auth import PROVIDER_REGISTRY, is_runtime_provider_routable
     from clawk_cli.models import _AGGREGATOR_PROVIDERS
     from clawk_cli.providers import ALIASES
+
     for clawk_id, mdev_id in PROVIDER_TO_MODELS_DEV.items():
         alias_target = ALIASES.get(clawk_id)
-        if alias_target and alias_target != clawk_id and alias_target in _AGGREGATOR_PROVIDERS:
+        if (
+            alias_target
+            and alias_target != clawk_id
+            and alias_target in _AGGREGATOR_PROVIDERS
+        ):
             continue
         try:
             from providers import get_provider_profile
+
             prof = get_provider_profile(clawk_id)
             if prof is not None and prof.name != clawk_id:
                 continue
@@ -295,9 +382,15 @@ def _iter_builtin_candidates(models_dev_data: dict, excluded: set, seen: set):
         if not isinstance(pdata, dict):
             continue
         pconfig = PROVIDER_REGISTRY.get(clawk_id)
-        if (pconfig and pconfig.auth_type != "api_key") or not is_runtime_provider_routable(clawk_id):
+        if (
+            pconfig and pconfig.auth_type != "api_key"
+        ) or not is_runtime_provider_routable(clawk_id):
             continue
-        env_vars = list(pconfig.api_key_env_vars) if pconfig and pconfig.api_key_env_vars else pdata.get("env", [])
+        env_vars = (
+            list(pconfig.api_key_env_vars)
+            if pconfig and pconfig.api_key_env_vars
+            else pdata.get("env", [])
+        )
         if isinstance(env_vars, list):
             yield clawk_id, mdev_id, pconfig, env_vars
 
@@ -306,6 +399,7 @@ def _auth_store_has_provider(*keys: str) -> bool:
     """True when ``auth.json`` has a ``providers`` entry under any of *keys*."""
     try:
         from clawk_cli.auth import _load_auth_store
+
         store = _load_auth_store()
         providers_store = store.get("providers", {})
         return bool(store and any(k in providers_store for k in keys))
@@ -318,9 +412,12 @@ def _raw_pool_usable(clawk_id: str, *, for_picker: bool = False) -> bool:
     """Section-1 pool check: only consult the pool when auth.json lists a raw entry."""
     try:
         from clawk_cli.auth import _load_auth_store
+
         store = _load_auth_store()
         if store and store.get("credential_pool", {}).get(clawk_id):
-            return _credential_pool_is_usable(clawk_id, raw_pool_present=True, for_picker=for_picker)
+            return _credential_pool_is_usable(
+                clawk_id, raw_pool_present=True, for_picker=for_picker
+            )
     except Exception:
         pass
     return False
@@ -340,10 +437,12 @@ def _overlay_has_env_creds(pid: str, clawk_slug: str, overlay, read_env) -> bool
     Vertex authenticates via OAuth2 (service-account JSON / ADC), not an API key, so it gets its
     own probe; otherwise the provider is hidden from the picker even when fully configured."""
     from clawk_cli.auth import PROVIDER_REGISTRY
+
     has_creds = False
     if overlay.auth_type == "vertex":
         try:
             from agent.vertex_adapter import has_vertex_credentials
+
             has_creds = has_vertex_credentials()
         except Exception as exc:
             logger.debug("Vertex credential check failed: %s", exc)
@@ -352,7 +451,11 @@ def _overlay_has_env_creds(pid: str, clawk_slug: str, overlay, read_env) -> bool
     if not has_creds and overlay.auth_type == "api_key":
         for key in (pid, clawk_slug):
             pcfg = PROVIDER_REGISTRY.get(key)
-            if pcfg and pcfg.api_key_env_vars and _any_env(pcfg.api_key_env_vars, read_env):
+            if (
+                pcfg
+                and pcfg.api_key_env_vars
+                and _any_env(pcfg.api_key_env_vars, read_env)
+            ):
                 return True
     if not has_creds and clawk_slug == "azure-foundry":
         has_creds = _azure_entra_configured(read_env)
@@ -364,11 +467,17 @@ def _azure_entra_configured(read_env=os.environ.get) -> bool:
     ``AZURE_FOUNDRY_API_KEY`` ever exists; the row is configured once the runtime resolver's own
     inputs are (provider + auth_mode + an endpoint). No token is minted here (#27989)."""
     from clawk_cli.models import _get_model_config_dict
+
     model_cfg = _get_model_config_dict()
-    if (str(model_cfg.get("provider") or "").strip().lower() != "azure-foundry"
-            or str(model_cfg.get("auth_mode") or "").strip().lower() != "entra_id"):
+    if (
+        str(model_cfg.get("provider") or "").strip().lower() != "azure-foundry"
+        or str(model_cfg.get("auth_mode") or "").strip().lower() != "entra_id"
+    ):
         return False
-    return bool(str(model_cfg.get("base_url") or "").strip() or read_env("AZURE_FOUNDRY_BASE_URL"))
+    return bool(
+        str(model_cfg.get("base_url") or "").strip()
+        or read_env("AZURE_FOUNDRY_BASE_URL")
+    )
 
 
 def _has_fast_aws_sdk_signal() -> bool:
@@ -376,14 +485,23 @@ def _has_fast_aws_sdk_signal() -> bool:
 
     Deliberately avoids botocore's full credential chain: picker discovery runs for non-Bedrock
     providers too, and botocore may probe EC2 IMDS (169.254.169.254) before giving up."""
+
     def _set(name: str) -> bool:
         return bool(os.environ.get(name, "").strip())
+
     return (
         _set("AWS_BEARER_TOKEN_BEDROCK")
         or (_set("AWS_ACCESS_KEY_ID") and _set("AWS_SECRET_ACCESS_KEY"))
-        or any(_set(name) for name in (
-            "AWS_PROFILE", "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
-            "AWS_CONTAINER_CREDENTIALS_FULL_URI", "AWS_WEB_IDENTITY_TOKEN_FILE")))
+        or any(
+            _set(name)
+            for name in (
+                "AWS_PROFILE",
+                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "AWS_WEB_IDENTITY_TOKEN_FILE",
+            )
+        )
+    )
 
 
 def _has_aws_sdk_creds_for_listing(slug: str, current_provider: str) -> bool:
@@ -394,6 +512,7 @@ def _has_aws_sdk_creds_for_listing(slug: str, current_provider: str) -> bool:
         return False
     try:
         from agent.bedrock_adapter import has_aws_credentials
+
         return bool(has_aws_credentials())
     except Exception:
         return False
@@ -403,13 +522,22 @@ def _is_aws_sdk(pconfig) -> bool:
     return bool(pconfig) and getattr(pconfig, "auth_type", "") == "aws_sdk"
 
 
-def _live_or_curated_ids(slug: str, curated: dict, *fallback_keys: str, merge_models_dev: bool = True,
-                         non_blocking: bool = False) -> list:
+def _live_or_curated_ids(
+    slug: str,
+    curated: dict,
+    *fallback_keys: str,
+    merge_models_dev: bool = True,
+    non_blocking: bool = False,
+) -> list:
     """``cached_provider_model_ids`` (the SAME disk-cached list ``clawk model`` builds), falling
     back to the curated list (merged with models.dev for preferred providers) when live is empty.
     ``non_blocking`` (GUI read path) reads the disk cache only — a provider that is slow or down
     contributes its curated list instead of stalling the whole picker (#114215)."""
-    from clawk_cli.models import _MODELS_DEV_PREFERRED, _merge_with_models_dev, cached_provider_model_ids
+    from clawk_cli.models import (
+        _MODELS_DEV_PREFERRED,
+        _merge_with_models_dev,
+        cached_provider_model_ids,
+    )
     from clawk_cli.chat_catalog import without_generation_models
 
     model_ids = cached_provider_model_ids(slug, non_blocking=non_blocking)
@@ -430,13 +558,22 @@ def _first_curated(curated: dict, keys) -> list:
     return model_ids
 
 
-def _aws_live_or_curated_ids(slug: str, curated: dict, *fallback_keys: str,
-                             non_blocking: bool = False) -> list:
+def _aws_live_or_curated_ids(
+    slug: str, curated: dict, *fallback_keys: str, non_blocking: bool = False
+) -> list:
     """Bedrock: live discovery reflects the active region (eu.*, ap.*) rather than the static
     us.* list; any failure falls back to the curated list."""
     try:
-        return _live_or_curated_ids(slug, curated, *fallback_keys, merge_models_dev=False,
-                                    non_blocking=non_blocking) or []
+        return (
+            _live_or_curated_ids(
+                slug,
+                curated,
+                *fallback_keys,
+                merge_models_dev=False,
+                non_blocking=non_blocking,
+            )
+            or []
+        )
     except Exception:
         return _first_curated(curated, fallback_keys or (slug,)) or []
 
@@ -456,25 +593,38 @@ def _nous_picker_model_ids(curated: dict, force_fresh_nous_tier: bool) -> list:
             union_with_portal_paid_recommendations,
         )
         from clawk_cli.auth import get_provider_auth_state
+
         # Cache-only: a cold cache must not hold the picker open. The Portal unions only append ids;
         # the on-sale union reads the rows the background prewarm filled under the same key the
         # fetcher registers (base + credential fingerprint), so a logged-in account's cached_only
         # read finds them.
         pricing = get_pricing_for_provider("nous", cached_only=True) or {}
         try:
-            portal = (get_provider_auth_state("nous") or {}).get("portal_base_url", "") or ""
+            portal = (get_provider_auth_state("nous") or {}).get(
+                "portal_base_url", ""
+            ) or ""
         except Exception:
             portal = ""
         if check_nous_free_tier(force_fresh=force_fresh_nous_tier):
-            model_ids, _ = union_with_portal_free_recommendations(model_ids, pricing, portal)
+            model_ids, _ = union_with_portal_free_recommendations(
+                model_ids, pricing, portal
+            )
         else:
-            model_ids, _ = union_with_portal_paid_recommendations(model_ids, pricing, portal)
+            model_ids, _ = union_with_portal_paid_recommendations(
+                model_ids, pricing, portal
+            )
             model_ids = union_with_nous_on_sale_models(model_ids, pricing)
     except Exception:
         pass
     try:
-        from clawk_cli.models_pricing import nous_policy_allowed_ids, restrict_to_nous_policy
-        model_ids = restrict_to_nous_policy(model_ids, nous_policy_allowed_ids(), rescue_empty=True)
+        from clawk_cli.models_pricing import (
+            nous_policy_allowed_ids,
+            restrict_to_nous_policy,
+        )
+
+        model_ids = restrict_to_nous_policy(
+            model_ids, nous_policy_allowed_ids(), rescue_empty=True
+        )
     except Exception:
         logger.debug("Nous model policy filter failed", exc_info=True)
     try:
@@ -482,6 +632,7 @@ def _nous_picker_model_ids(curated: dict, force_fresh_nous_tier: bool) -> list:
         # the last snapshot at any age answers — a long-running gateway's 60s cache has usually lapsed
         # by the time someone opens /model.
         from clawk_cli.model_picker_usage import featured_first, nous_picker_usage
+
         usage = nous_picker_usage(any_age=True)
         if usage is not None:
             model_ids = featured_first(model_ids, usage.featured_model_ids)
@@ -500,6 +651,7 @@ def _free_tier_nous_row(row: dict) -> dict | None:
     row through untouched. Builders that compute the full catalog lazily should pass
     ``models=[]`` and only compute when the returned row still has no models."""
     from clawk_cli import anon_auth
+
     if not anon_auth.has_guest():
         return row
     if not anon_auth.guest_allowed():
@@ -530,7 +682,12 @@ def _absorb_entry_models(grp: dict, entry: dict, active_model: Any) -> None:
     ``models:`` ids. The active selection alone never suppresses discovery, and a dict-shaped
     ``models:`` is metadata rather than an allowlist (see ``_models_config_is_allowlist``), so only
     list/string shapes pin the row."""
-    from clawk_cli.model_switch import _declared_model_ids, _entry_models_discovered, _models_config_is_allowlist
+    from clawk_cli.model_switch import (
+        _declared_model_ids,
+        _entry_models_discovered,
+        _models_config_is_allowlist,
+    )
+
     _extend_unique(grp["models"], [active_model])
     models_field = entry.get("models")
     if _models_config_is_allowlist(models_field, _entry_models_discovered(entry)):
@@ -568,17 +725,28 @@ def _entry_base_url(entry: dict, keys: tuple = ("base_url", "url", "api")) -> st
 
 
 def _entry_api_mode(entry: dict) -> str | None:
-    return str(entry.get("api_mode") or entry.get("transport") or "").strip().lower() or None
+    return (
+        str(entry.get("api_mode") or entry.get("transport") or "").strip().lower()
+        or None
+    )
 
 
 def _entry_credentials(entry: dict, *key_env_keys: str) -> tuple[Any, str, str]:
     """Unminted credential, env fallback, and stable grouping identity."""
-    key_env = str(next((entry.get(k) for k in key_env_keys if entry.get(k)), "")).strip()
-    source = build_command_token_provider(entry.get("key_cmd", ""), entry.get("name") or "custom")
+    key_env = str(
+        next((entry.get(k) for k in key_env_keys if entry.get(k)), "")
+    ).strip()
+    source = build_command_token_provider(
+        entry.get("key_cmd", ""), entry.get("name") or "custom"
+    )
     if source is not None:
         return source, key_env, source.cache_identity
     inline_api_key = str(entry.get("api_key", "") or "").strip()
-    return inline_api_key, key_env, inline_api_key or (f"env:{key_env}" if key_env else "")
+    return (
+        inline_api_key,
+        key_env,
+        inline_api_key or (f"env:{key_env}" if key_env else ""),
+    )
 
 
 def _discover_flag(entry: dict):
@@ -591,7 +759,9 @@ def _discover_flag(entry: dict):
 
 def _display_prefix(name: str) -> str:
     """Text before the per-model separator Clawksis's own writer uses ("—" / " - ")."""
-    return next((name.split(sep)[0].strip() for sep in ("—", " - ") if sep in name), name)
+    return next(
+        (name.split(sep)[0].strip() for sep in ("—", " - ") if sep in name), name
+    )
 
 
 def _group_display_name(display_name: str) -> str:
@@ -600,16 +770,27 @@ def _group_display_name(display_name: str) -> str:
     >= 2 words remain (avoids over-trimming)."""
     grp_display = _display_prefix(display_name)
     toks = grp_display.split()
-    cut_at = next((i for i, t in enumerate(toks) if any(c.isdigit() for c in t.strip(".,()"))), None)
+    cut_at = next(
+        (i for i, t in enumerate(toks) if any(c.isdigit() for c in t.strip(".,()"))),
+        None,
+    )
     if cut_at is not None and cut_at >= 2:
         grp_display = " ".join(toks[:cut_at]).strip()
     return grp_display or display_name
 
 
 def _discover_endpoint_models(
-    api_key: Any, api_url: str, native_catalog_provider: str, has_explicit_models: bool, *,
-    headers: dict | None, api_mode: str | None, probe_live: bool, discovery_allowed: bool,
-    fast_custom_probe: bool) -> tuple[list | None, bool]:
+    api_key: Any,
+    api_url: str,
+    native_catalog_provider: str,
+    has_explicit_models: bool,
+    *,
+    headers: dict | None,
+    api_mode: str | None,
+    probe_live: bool,
+    discovery_allowed: bool,
+    fast_custom_probe: bool,
+) -> tuple[list | None, bool]:
     """Return ``(models, native_catalog_empty)`` for a custom endpoint row.
 
     ``probe_live`` runs the native-aware picker fetch; otherwise, when discovery is allowed, a
@@ -626,32 +807,59 @@ def _discover_endpoint_models(
     if probe_live:
         try:
             live_models = _fetch_picker_live_models(
-                api_key, api_url, native_catalog_provider, has_explicit_models,
-                headers=headers, timeout=timeout, api_mode=api_mode)
+                api_key,
+                api_url,
+                native_catalog_provider,
+                has_explicit_models,
+                headers=headers,
+                timeout=timeout,
+                api_mode=api_mode,
+            )
             is_native = isinstance(live_models, _NativePickerModelList)
             if is_native and has_explicit_models:
                 return None, False
-            if live_models is not None and (live_models or not has_explicit_models or is_native):
+            if live_models is not None and (
+                live_models or not has_explicit_models or is_native
+            ):
                 return live_models, (is_native and not live_models)
         except Exception:
             pass
     elif discovery_allowed:
         try:
             from clawk_cli.models import cached_fetch_api_models
+
             cached_models = cached_fetch_api_models(
-                api_key, api_url, cache_only=True, timeout=timeout, headers=headers, api_mode=api_mode,
+                api_key,
+                api_url,
+                cache_only=True,
+                timeout=timeout,
+                headers=headers,
+                api_mode=api_mode,
             )
-            if has_explicit_models and isinstance(cached_models, _NativePickerModelList):
+            if has_explicit_models and isinstance(
+                cached_models, _NativePickerModelList
+            ):
                 return None, False
             if cached_models or isinstance(cached_models, _NativePickerModelList):
-                return cached_models, isinstance(cached_models, _NativePickerModelList) and not cached_models
-        except (ImportError, OSError, RuntimeError, TimeoutError, TypeError, ValueError, http.client.HTTPException):
+                return cached_models, isinstance(
+                    cached_models, _NativePickerModelList
+                ) and not cached_models
+        except (
+            ImportError,
+            OSError,
+            RuntimeError,
+            TimeoutError,
+            TypeError,
+            ValueError,
+            http.client.HTTPException,
+        ):
             pass
     return None, False
 
 
 def _collect_authed_provider_slugs(
-    models_dev_data: dict, curated: dict[str, list[str]], excluded: list[str]) -> list[str]:
+    models_dev_data: dict, curated: dict[str, list[str]], excluded: list[str]
+) -> list[str]:
     """Quick-scan which providers have credentials, without fetching model lists.
 
     Mirrors the credential checks of sections 1, 2 and 2b of :func:`list_authenticated_providers`
@@ -663,6 +871,7 @@ def _collect_authed_provider_slugs(
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.providers import CLAWK_OVERLAYS
     from clawk_cli.models import CANONICAL_PROVIDERS
+
     excluded_set = {str(p).strip().lower() for p in excluded if p}
     slugs: list[str] = []
     seen: set[str] = set()
@@ -671,7 +880,9 @@ def _collect_authed_provider_slugs(
         slugs.append(slug)
         seen.update(k.lower() for k in keys)
 
-    for clawk_id, _mdev_id, _pconfig, env_vars in _iter_builtin_candidates(models_dev_data, excluded_set, seen):
+    for clawk_id, _mdev_id, _pconfig, env_vars in _iter_builtin_candidates(
+        models_dev_data, excluded_set, seen
+    ):
         if _any_env(env_vars, _scoped_key_env) or _raw_pool_usable(clawk_id):
             _emit(clawk_id, clawk_id)
 
@@ -682,7 +893,9 @@ def _collect_authed_provider_slugs(
             continue
         if (
             _overlay_has_env_creds(pid, clawk_slug, overlay, _scoped_key_env)
-            or _auth_store_has_provider(pid, clawk_slug) or _pool_usable(clawk_slug)):
+            or _auth_store_has_provider(pid, clawk_slug)
+            or _pool_usable(clawk_slug)
+        ):
             _emit(clawk_slug, pid, clawk_slug)
 
     for cp in CANONICAL_PROVIDERS:
@@ -690,7 +903,10 @@ def _collect_authed_provider_slugs(
             continue
         cp_config = PROVIDER_REGISTRY.get(cp.slug)
         has_creds = bool(
-            cp_config and cp_config.api_key_env_vars and _any_env(cp_config.api_key_env_vars, _scoped_key_env))
+            cp_config
+            and cp_config.api_key_env_vars
+            and _any_env(cp_config.api_key_env_vars, _scoped_key_env)
+        )
         if has_creds or _auth_store_has_provider(cp.slug) or _pool_usable(cp.slug):
             _emit(cp.slug, cp.slug)
 
@@ -705,6 +921,7 @@ class _PickerBuild:
     models.dev, 2 Clawksis-only overlays, 2b canonical providers missed by 1/2, 3 ``providers:``
     entries + 3b the bare active custom endpoint, 4 ``custom_providers:`` entries. Row-builder
     imports of ``clawk_cli.auth/models`` stay lazy so tests can patch those modules."""
+
     current_provider: str
     current_base_url: str
     current_model: str
@@ -723,7 +940,9 @@ class _PickerBuild:
     # GUI read path: catalogs are read from cache only; stale/missing ones warm in the background.
     non_blocking_catalogs: bool = False
     results: list = field(default_factory=list)
-    seen_slugs: set = field(default_factory=set)  # lowercase-normalized to catch case variants
+    seen_slugs: set = field(
+        default_factory=set
+    )  # lowercase-normalized to catch case variants
     # Effective base URLs of every built-in row: section 4 hides ``custom_providers`` duplicates.
     builtin_endpoints: set = field(default_factory=set)
     # (display_name, base_url) pairs from section 3 so section 4 skips overlapping rows.
@@ -740,30 +959,56 @@ class _PickerBuild:
     @property
     def resolved_fast_custom_probe(self) -> bool:
         """None defers to for_picker so pre-existing callers keep their timeout."""
-        return self.for_picker if self.fast_custom_probe is None else self.fast_custom_probe
+        return (
+            self.for_picker
+            if self.fast_custom_probe is None
+            else self.fast_custom_probe
+        )
 
     def can_probe_custom(self, *, row_is_current: bool) -> bool:
-        return bool(self.probe_custom_providers or (self.probe_current_custom_provider and row_is_current))
+        return bool(
+            self.probe_custom_providers
+            or (self.probe_current_custom_provider and row_is_current)
+        )
 
     def record_builtin_endpoint(self, slug: str) -> None:
         """Prefer the live env override (e.g. DASHSCOPE_BASE_URL) over the static inference_base_url
         so dedup matches what a user typing that URL into custom_providers would actually hit."""
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         pcfg = PROVIDER_REGISTRY.get(slug)
         if not pcfg:
             return
-        url = os.environ.get(pcfg.base_url_env_var, "") if getattr(pcfg, "base_url_env_var", "") else ""
+        url = (
+            os.environ.get(pcfg.base_url_env_var, "")
+            if getattr(pcfg, "base_url_env_var", "")
+            else ""
+        )
         normed = _norm_url(url or getattr(pcfg, "inference_base_url", "") or "")
         if normed:
             self.builtin_endpoints.add(normed)
 
     def add_builtin_row(
-        self, slug: str, name: str, is_current: bool, model_ids: list, source: str, *, uncapped_ok: bool = True,
+        self,
+        slug: str,
+        name: str,
+        is_current: bool,
+        model_ids: list,
+        source: str,
+        *,
+        uncapped_ok: bool = True,
     ) -> None:
         row = {
-            "slug": slug, "name": name, "is_current": is_current, "is_user_defined": False,
-            "models": _cap_models(model_ids, self.max_models, slug if uncapped_ok else ""),
-            "total_models": len(model_ids), "source": source}
+            "slug": slug,
+            "name": name,
+            "is_current": is_current,
+            "is_user_defined": False,
+            "models": _cap_models(
+                model_ids, self.max_models, slug if uncapped_ok else ""
+            ),
+            "total_models": len(model_ids),
+            "source": source,
+        }
         if slug == "nous":
             # Free-tier identity: one row "Nous · free tier" / nous/welcome, or no row when
             # nous.guest is off. Still marks the slug seen so a later lap cannot re-emit it.
@@ -774,13 +1019,31 @@ class _PickerBuild:
         self.record_builtin_endpoint(slug)
 
     def add_endpoint_row(
-        self, slug: str, name: str, api_url: str, models: list, is_current: bool, native_catalog_empty: bool,
-        *, source: str = "user-config", shown: list | None = None) -> None:
+        self,
+        slug: str,
+        name: str,
+        api_url: str,
+        models: list,
+        is_current: bool,
+        native_catalog_empty: bool,
+        *,
+        source: str = "user-config",
+        shown: list | None = None,
+    ) -> None:
         """Append a user-defined endpoint row (sections 3, 3b, 4)."""
-        self.results.append({
-            "slug": slug, "name": name, "is_current": is_current, "is_user_defined": True,
-            "models": models if shown is None else shown, "total_models": len(models), "source": source,
-            "api_url": api_url, "native_catalog_empty": native_catalog_empty})
+        self.results.append(
+            {
+                "slug": slug,
+                "name": name,
+                "is_current": is_current,
+                "is_user_defined": True,
+                "models": models if shown is None else shown,
+                "total_models": len(models),
+                "source": source,
+                "api_url": api_url,
+                "native_catalog_empty": native_catalog_empty,
+            }
+        )
         self.seen_slugs.add(slug.lower())
 
     def record_section3_pair(self, name: str, url_norm: str) -> bool:
@@ -791,18 +1054,32 @@ class _PickerBuild:
         self.section3_pairs.add(pair)
         return True
 
-    def endpoint_is_current(self, slug: str, aliases: set, url_norm: str, *, url_match_ok: bool = True) -> bool:
+    def endpoint_is_current(
+        self, slug: str, aliases: set, url_norm: str, *, url_match_ok: bool = True
+    ) -> bool:
         """Row is current by slug/alias, or (bare ``custom`` provider) by matching base_url."""
         return (
             str(slug).strip().lower() == self.current_provider_norm
             or self.current_provider_norm in aliases
             or (
-                self.current_provider_norm == "custom" and bool(self.current_base_url_norm)
-                and url_norm == self.current_base_url_norm and url_match_ok))
+                self.current_provider_norm == "custom"
+                and bool(self.current_base_url_norm)
+                and url_norm == self.current_base_url_norm
+                and url_match_ok
+            )
+        )
 
     def discover_endpoint(
-        self, api_key: Any, api_url: str, native_provider: str, has_explicit_models: bool, *,
-        headers: dict | None, api_mode: str | None, discovery_allowed: bool, is_current: bool,
+        self,
+        api_key: Any,
+        api_url: str,
+        native_provider: str,
+        has_explicit_models: bool,
+        *,
+        headers: dict | None,
+        api_mode: str | None,
+        discovery_allowed: bool,
+        is_current: bool,
     ) -> tuple[list | None, bool, bool]:
         """Probe policy shared by sections 3 and 4 (returns ``(models, native_empty, probed)``):
         with an api_key live /models is the source of truth (replaces the partial ``models:``
@@ -810,12 +1087,21 @@ class _PickerBuild:
         the probe. A dict-shaped ``models:`` is metadata, so still probe; pin with
         ``discover_models: false``."""
         probe_live = (
-            discovery_allowed and (bool(api_key) or not has_explicit_models)
-            and self.can_probe_custom(row_is_current=is_current))
+            discovery_allowed
+            and (bool(api_key) or not has_explicit_models)
+            and self.can_probe_custom(row_is_current=is_current)
+        )
         discovered, native_catalog_empty = _discover_endpoint_models(
-            api_key, api_url, native_provider, has_explicit_models,
-            headers=headers, api_mode=api_mode, probe_live=probe_live,
-            discovery_allowed=discovery_allowed, fast_custom_probe=self.resolved_fast_custom_probe)
+            api_key,
+            api_url,
+            native_provider,
+            has_explicit_models,
+            headers=headers,
+            api_mode=api_mode,
+            probe_live=probe_live,
+            discovery_allowed=discovery_allowed,
+            fast_custom_probe=self.resolved_fast_custom_probe,
+        )
         return discovered, native_catalog_empty, probe_live
 
 
@@ -831,14 +1117,23 @@ def _lap_lmstudio_row(b: _PickerBuild, user_providers: dict) -> None:
     if "lmstudio" in b.excluded or "lmstudio" in b.seen_slugs:
         return
     configured = user_providers.get("lmstudio")
-    if isinstance(configured, dict) and _entry_base_url(configured, ("base_url", "api", "url")):
+    if isinstance(configured, dict) and _entry_base_url(
+        configured, ("base_url", "api", "url")
+    ):
         return
     is_current = b.current_provider_norm == "lmstudio"
     if not (is_current or isinstance(configured, dict)):
         return
     from clawk_cli.model_switch import _declared_model_ids
-    configured_models = _declared_model_ids(configured.get("models")) if isinstance(configured, dict) else []
-    model_ids = list(dict.fromkeys([*configured_models, *b.curated.get("lmstudio", [])]))
+
+    configured_models = (
+        _declared_model_ids(configured.get("models"))
+        if isinstance(configured, dict)
+        else []
+    )
+    model_ids = list(
+        dict.fromkeys([*configured_models, *b.curated.get("lmstudio", [])])
+    )
     b.add_builtin_row("lmstudio", get_label("lmstudio"), is_current, model_ids, "clawk")
 
 
@@ -846,21 +1141,44 @@ def _lap_builtin_rows(b: _PickerBuild, data: dict, user_providers: dict) -> None
     """Section 1: models.dev-mapped providers with api_key auth."""
     from clawk_cli.model_switch import _declared_model_ids, _scoped_key_env
     from agent.models_dev import get_provider_info
-    for clawk_id, mdev_id, pconfig, env_vars in _iter_builtin_candidates(data, b.excluded, b.seen_slugs):
+
+    for clawk_id, mdev_id, pconfig, env_vars in _iter_builtin_candidates(
+        data, b.excluded, b.seen_slugs
+    ):
         # Per-profile scope, never raw os.environ: a secondary profile's picker otherwise listed the
         # LAUNCH profile's env-keyed providers and hid its own .env-keyed ones.
-        if not (_any_env(env_vars, _scoped_key_env) or _raw_pool_usable(clawk_id, for_picker=b.for_picker)):
+        if not (
+            _any_env(env_vars, _scoped_key_env)
+            or _raw_pool_usable(clawk_id, for_picker=b.for_picker)
+        ):
             continue
-        model_ids = _live_or_curated_ids(clawk_id, b.curated, non_blocking=b.non_blocking_catalogs)
+        model_ids = _live_or_curated_ids(
+            clawk_id, b.curated, non_blocking=b.non_blocking_catalogs
+        )
         # A providers.<built-in>.models block extends the discovered catalog; section 3 cannot
         # emit it later because this row owns the slug.
-        configured = user_providers.get(clawk_id) if isinstance(user_providers, dict) else None
-        configured_models = _declared_model_ids(configured.get("models")) if isinstance(configured, dict) else []
+        configured = (
+            user_providers.get(clawk_id) if isinstance(user_providers, dict) else None
+        )
+        configured_models = (
+            _declared_model_ids(configured.get("models"))
+            if isinstance(configured, dict)
+            else []
+        )
         model_ids = list(dict.fromkeys([*configured_models, *model_ids]))
         pinfo = get_provider_info(mdev_id)
-        display_name = pconfig.name if pconfig and pconfig.name else (pinfo.name if pinfo else mdev_id)
+        display_name = (
+            pconfig.name
+            if pconfig and pconfig.name
+            else (pinfo.name if pinfo else mdev_id)
+        )
         b.add_builtin_row(
-            clawk_id, display_name, b.current_provider in (clawk_id, mdev_id), model_ids, "built-in")
+            clawk_id,
+            display_name,
+            b.current_provider in (clawk_id, mdev_id),
+            model_ids,
+            "built-in",
+        )
 
 
 def _overlay_has_creds(b: _PickerBuild, pid: str, clawk_slug: str, overlay) -> bool:
@@ -870,6 +1188,7 @@ def _overlay_has_creds(b: _PickerBuild, pid: str, clawk_slug: str, overlay) -> b
         has_creds = _has_aws_sdk_creds_for_listing(clawk_slug, b.current_provider)
     else:
         from clawk_cli.model_switch import _scoped_key_env
+
         has_creds = _overlay_has_env_creds(pid, clawk_slug, overlay, _scoped_key_env)
     # External-process providers (copilot-acp) hold no key/token/pool entry by design — the
     # spawned ACP subprocess brings its own auth. "Configured" means the executable resolves.
@@ -879,8 +1198,11 @@ def _overlay_has_creds(b: _PickerBuild, pid: str, clawk_slug: str, overlay) -> b
     if not has_creds and overlay.auth_type == "external_process":
         try:
             from clawk_cli.auth import get_auth_status
+
             _ext_status = get_auth_status(clawk_slug) or {}
-            has_creds = bool(_ext_status.get("logged_in") or _ext_status.get("configured"))
+            has_creds = bool(
+                _ext_status.get("logged_in") or _ext_status.get("configured")
+            )
         except Exception as exc:
             logger.debug("External-process check failed for %s: %s", pid, exc)
     # Auth store / credential pool cover OAuth providers AND api_key providers that also support
@@ -898,10 +1220,16 @@ def _overlay_has_creds(b: _PickerBuild, pid: str, clawk_slug: str, overlay) -> b
         # The pool gates anthropic behind is_provider_explicitly_configured() (aux tasks must not
         # consume Claude Code tokens); the picker is discovery-oriented, so read the files directly.
         try:
-            from agent.anthropic_credentials import read_claude_code_credentials, read_clawk_oauth_credentials
+            from agent.anthropic_credentials import (
+                read_claude_code_credentials,
+                read_clawk_oauth_credentials,
+            )
+
             clawk_creds = read_clawk_oauth_credentials()
             cc_creds = read_claude_code_credentials()
-            if (clawk_creds and clawk_creds.get("accessToken")) or (cc_creds and cc_creds.get("accessToken")):
+            if (clawk_creds and clawk_creds.get("accessToken")) or (
+                cc_creds and cc_creds.get("accessToken")
+            ):
                 has_creds = True
         except Exception as exc:
             logger.debug("Anthropic external creds check failed: %s", exc)
@@ -926,27 +1254,60 @@ def _lap_overlay_rows(b: _PickerBuild, data: dict, user_providers: dict) -> None
         if clawk_slug in {"openai-codex", "copilot", "copilot-acp"}:
             # Live OAuth-backed discovery so Pro-only Codex slugs not in the static catalog
             # appear; falls back to curated when unreachable (or not yet cached on the read path).
-            model_ids = _live_or_curated_ids(clawk_slug, b.curated, merge_models_dev=False,
-                                             non_blocking=b.non_blocking_catalogs)
+            model_ids = _live_or_curated_ids(
+                clawk_slug,
+                b.curated,
+                merge_models_dev=False,
+                non_blocking=b.non_blocking_catalogs,
+            )
         elif overlay.auth_type == "aws_sdk":
-            model_ids = _aws_live_or_curated_ids(clawk_slug, b.curated, clawk_slug, pid,
-                                                 non_blocking=b.non_blocking_catalogs)
+            model_ids = _aws_live_or_curated_ids(
+                clawk_slug,
+                b.curated,
+                clawk_slug,
+                pid,
+                non_blocking=b.non_blocking_catalogs,
+            )
         elif clawk_slug == "nous":
             # A guest identity never needs the Portal catalog: add_builtin_row pins nous/welcome
             # (or drops the row when nous.guest is off), so only a real account fetches.
-            tier_row = _free_tier_nous_row({"name": get_label(clawk_slug), "models": []})
+            tier_row = _free_tier_nous_row(
+                {"name": get_label(clawk_slug), "models": []}
+            )
             real_account = tier_row is not None and not tier_row["models"]
-            model_ids = _nous_picker_model_ids(b.curated, b.force_fresh_nous_tier) if real_account else []
+            model_ids = (
+                _nous_picker_model_ids(b.curated, b.force_fresh_nous_tier)
+                if real_account
+                else []
+            )
         else:
-            model_ids = _live_or_curated_ids(clawk_slug, b.curated, clawk_slug, pid,
-                                             non_blocking=b.non_blocking_catalogs)
+            model_ids = _live_or_curated_ids(
+                clawk_slug,
+                b.curated,
+                clawk_slug,
+                pid,
+                non_blocking=b.non_blocking_catalogs,
+            )
         # A providers.<overlay>.models block extends the row exactly as it does for built-in rows
         # (section 1); section 3 never emits it because this row owns the slug (#27989).
-        configured = user_providers.get(clawk_slug) or user_providers.get(pid) if isinstance(user_providers, dict) else None
+        configured = (
+            user_providers.get(clawk_slug) or user_providers.get(pid)
+            if isinstance(user_providers, dict)
+            else None
+        )
         if isinstance(configured, dict):
-            model_ids = list(dict.fromkeys([*_declared_model_ids(configured.get("models")), *model_ids]))
+            model_ids = list(
+                dict.fromkeys(
+                    [*_declared_model_ids(configured.get("models")), *model_ids]
+                )
+            )
         b.add_builtin_row(
-            clawk_slug, get_label(clawk_slug), b.current_provider in (clawk_slug, pid), model_ids, "clawk")
+            clawk_slug,
+            get_label(clawk_slug),
+            b.current_provider in (clawk_slug, pid),
+            model_ids,
+            "clawk",
+        )
         b.seen_slugs.add(pid.lower())
 
 
@@ -956,6 +1317,7 @@ def _lap_canonical_rows(b: _PickerBuild) -> None:
     from clawk_cli.auth import PROVIDER_REGISTRY
     from clawk_cli.models import CANONICAL_PROVIDERS
     from clawk_cli.models_catalog_static import DORMANT_NOUS_PROVIDER
+
     entries = list(CANONICAL_PROVIDERS)
     if not any(cp.slug == DORMANT_NOUS_PROVIDER.slug for cp in entries):
         entries.insert(0, DORMANT_NOUS_PROVIDER)
@@ -970,30 +1332,61 @@ def _lap_canonical_rows(b: _PickerBuild) -> None:
             # A regional "-cn" twin lit only by key vars shared with its non-CN sibling is a
             # phantom row: hide it unless it is the current provider, and only when it has a
             # dedicated var of its own the user could set.
-            sib = PROVIDER_REGISTRY.get(cp.slug[:-3]) if cp.slug.endswith("-cn") else None
+            sib = (
+                PROVIDER_REGISTRY.get(cp.slug[:-3]) if cp.slug.endswith("-cn") else None
+            )
             sib_vars = set(sib.api_key_env_vars) if sib else set()
-            if lit and lit <= sib_vars < set(cp_config.api_key_env_vars) and cp.slug != b.current_provider:
+            if (
+                lit
+                and lit <= sib_vars < set(cp_config.api_key_env_vars)
+                and cp.slug != b.current_provider
+            ):
                 continue
-        has_creds = has_creds or _auth_store_has_provider(cp.slug) or _pool_usable(cp.slug, for_picker=b.for_picker) or (
-            _is_aws_sdk(cp_config) and _has_aws_sdk_creds_for_listing(cp.slug, b.current_provider))
-        if not has_creds and cp_config is not None and cp_config.auth_type == "external_process":
+        has_creds = (
+            has_creds
+            or _auth_store_has_provider(cp.slug)
+            or _pool_usable(cp.slug, for_picker=b.for_picker)
+            or (
+                _is_aws_sdk(cp_config)
+                and _has_aws_sdk_creds_for_listing(cp.slug, b.current_provider)
+            )
+        )
+        if (
+            not has_creds
+            and cp_config is not None
+            and cp_config.auth_type == "external_process"
+        ):
             # Subprocess-backed providers own their auth; the binary resolving is the credential
             # evidence for listing (same gate as the copilot-acp overlay row and clawk auth status).
             try:
                 from clawk_cli.auth import get_external_process_provider_status
-                has_creds = bool(get_external_process_provider_status(cp.slug).get("configured"))
+
+                has_creds = bool(
+                    get_external_process_provider_status(cp.slug).get("configured")
+                )
             except Exception as exc:
                 logger.debug("External-process check failed for %s: %s", cp.slug, exc)
         if not has_creds:
             continue
         if _is_aws_sdk(cp_config):
-            model_ids = _aws_live_or_curated_ids(cp.slug, b.curated, non_blocking=b.non_blocking_catalogs)
+            model_ids = _aws_live_or_curated_ids(
+                cp.slug, b.curated, non_blocking=b.non_blocking_catalogs
+            )
         else:
-            model_ids = _live_or_curated_ids(cp.slug, b.curated, merge_models_dev=False,
-                                             non_blocking=b.non_blocking_catalogs)
+            model_ids = _live_or_curated_ids(
+                cp.slug,
+                b.curated,
+                merge_models_dev=False,
+                non_blocking=b.non_blocking_catalogs,
+            )
         b.add_builtin_row(
-            cp.slug, cp.label, cp.slug == b.current_provider, model_ids, "canonical",
-            uncapped_ok=cp.slug == DORMANT_NOUS_PROVIDER.slug)  # the curated Nous list is never capped
+            cp.slug,
+            cp.label,
+            cp.slug == b.current_provider,
+            model_ids,
+            "canonical",
+            uncapped_ok=cp.slug == DORMANT_NOUS_PROVIDER.slug,
+        )  # the curated Nous list is never capped
 
 
 def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
@@ -1003,28 +1396,49 @@ def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
     key_env/api_mode/headers keeps distinct rows since the wire protocol or tenant differs."""
     from clawk_cli.model_switch import _extra_headers_from_config, _scoped_key_env
     from clawk_cli.config import coerce_provider_id, is_provider_enabled
+
     ep_groups: dict[tuple, dict] = {}
     for ep_name, ep_cfg in user_providers.items():
-        if not isinstance(ep_cfg, dict) or not is_provider_enabled(ep_cfg) or ep_name.lower() in b.seen_slugs:
+        if (
+            not isinstance(ep_cfg, dict)
+            or not is_provider_enabled(ep_cfg)
+            or ep_name.lower() in b.seen_slugs
+        ):
             continue
         display_name = coerce_provider_id(ep_cfg.get("name")) or ep_name
         api_url = _entry_base_url(ep_cfg, ("base_url", "api", "url"))
-        inline_api_key, key_env, cred_identity = _entry_credentials(ep_cfg, "key_env", "api_key_env")
+        inline_api_key, key_env, cred_identity = _entry_credentials(
+            ep_cfg, "key_env", "api_key_env"
+        )
         headers = _extra_headers_from_config(ep_cfg)
-        group_key = (_norm_url(api_url), cred_identity, _entry_api_mode(ep_cfg), tuple(sorted(headers.items())))
+        group_key = (
+            _norm_url(api_url),
+            cred_identity,
+            _entry_api_mode(ep_cfg),
+            tuple(sorted(headers.items())),
+        )
 
         if group_key not in ep_groups:
             # slug = first ep_name encountered; probe key from the first member (inline api_key,
             # else key_env through the per-profile secret scope).
             ep_groups[group_key] = {
-                "slug": ep_name, "name": _group_display_name(display_name), "api_url": api_url, "models": [],
+                "slug": ep_name,
+                "name": _group_display_name(display_name),
+                "api_url": api_url,
+                "models": [],
                 "has_explicit_models": False,
                 "api_key": inline_api_key or _scoped_key_env(key_env),
-                "headers": headers, "api_mode": ep_cfg.get("api_mode"),
-                "discovery_allowed": bool(api_url) and _discover_flag(ep_cfg), "raw_names": [], "aliases": set()}
+                "headers": headers,
+                "api_mode": ep_cfg.get("api_mode"),
+                "discovery_allowed": bool(api_url) and _discover_flag(ep_cfg),
+                "raw_names": [],
+                "aliases": set(),
+            }
         grp = ep_groups[group_key]
         # ``default_model`` is the legacy key; ``model`` matches custom_providers.
-        _absorb_entry_models(grp, ep_cfg, ep_cfg.get("default_model", "") or ep_cfg.get("model", ""))
+        _absorb_entry_models(
+            grp, ep_cfg, ep_cfg.get("default_model", "") or ep_cfg.get("model", "")
+        )
         grp["raw_names"].append(display_name)
         grp["aliases"].update(custom_provider_aliases(display_name, str(ep_name)))
 
@@ -1032,21 +1446,37 @@ def _lap_user_provider_rows(b: _PickerBuild, user_providers: dict) -> None:
         ep_name, display_name, api_url = grp["slug"], grp["name"], grp["api_url"]
         models_list = list(grp["models"])
         # Official OpenAI rows often have base_url but no models: dict — avoid a misleading zero count.
-        if not models_list and base_url_host_matches(str(api_url).strip().lower(), "api.openai.com"):
+        if not models_list and base_url_host_matches(
+            str(api_url).strip().lower(), "api.openai.com"
+        ):
             models_list = list(b.curated.get("openai") or [])
 
         ep_url_norm = _norm_url(api_url)
         ep_aliases = {str(alias).lower() for alias in grp["aliases"]}
         is_current = b.endpoint_is_current(ep_name, ep_aliases, ep_url_norm)
         discovered, native_catalog_empty, _ = b.discover_endpoint(
-            grp["api_key"], api_url,
-            ep_name if str(ep_name).strip().lower() in {"ollama", "custom:ollama"} else "custom",
-            grp["has_explicit_models"], headers=grp["headers"] or None, api_mode=grp["api_mode"],
-            discovery_allowed=grp["discovery_allowed"], is_current=is_current)
+            grp["api_key"],
+            api_url,
+            ep_name
+            if str(ep_name).strip().lower() in {"ollama", "custom:ollama"}
+            else "custom",
+            grp["has_explicit_models"],
+            headers=grp["headers"] or None,
+            api_mode=grp["api_mode"],
+            discovery_allowed=grp["discovery_allowed"],
+            is_current=is_current,
+        )
         if discovered is not None:
             models_list = discovered
 
-        b.add_endpoint_row(ep_name, display_name, api_url, models_list, is_current, native_catalog_empty)
+        b.add_endpoint_row(
+            ep_name,
+            display_name,
+            api_url,
+            models_list,
+            is_current,
+            native_catalog_empty,
+        )
         b.seen_slugs.update(ep_aliases)
         # Record every raw member name so section 4 can match per-model custom_providers rows
         # even though the group label was collapsed.
@@ -1075,6 +1505,7 @@ def _lap_bare_custom_row(b: _PickerBuild, custom_providers: list | None) -> None
     else:
         try:
             from clawk_cli.config import load_config
+
             cfg_model = load_config().get("model")
         except Exception:  # health: allow BLE001 -- config.yaml may be user-edited or mid-migration; a read failure must degrade to "no row", never crash the picker
             cfg_model = None
@@ -1083,30 +1514,54 @@ def _lap_bare_custom_row(b: _PickerBuild, custom_providers: list | None) -> None
         if not isinstance(cfg_model, dict):
             return
         base_url = str(cfg_model.get("base_url") or "").strip()
-        if str(cfg_model.get("provider") or "").strip().lower() != "custom" or not base_url:
+        if (
+            str(cfg_model.get("provider") or "").strip().lower() != "custom"
+            or not base_url
+        ):
             return
-        default_model = str(cfg_model.get("default", cfg_model.get("name", "")) or "").strip()
+        default_model = str(
+            cfg_model.get("default", cfg_model.get("name", "")) or ""
+        ).strip()
     if any(
         isinstance(cp, dict) and _norm_url(_entry_base_url(cp)) == _norm_url(base_url)
-        for cp in (custom_providers or [])):
+        for cp in (custom_providers or [])
+    ):
         return
     api_url = base_url.strip().rstrip("/")
-    is_current = b.current_provider_norm == "custom" and b.current_base_url_norm == _norm_url(api_url)
+    is_current = (
+        b.current_provider_norm == "custom"
+        and b.current_base_url_norm == _norm_url(api_url)
+    )
     models = [default_model] if default_model else []
     native_catalog_empty = False
     try:
         discovered, native_catalog_empty = _discover_endpoint_models(
-            "", api_url, "custom", False, headers=None, api_mode=None,
-            probe_live=bool(b.refresh or (b.probe_current_custom_provider and is_current)),
+            "",
+            api_url,
+            "custom",
+            False,
+            headers=None,
+            api_mode=None,
+            probe_live=bool(
+                b.refresh or (b.probe_current_custom_provider and is_current)
+            ),
             discovery_allowed=True,
-            fast_custom_probe=b.resolved_fast_custom_probe)
+            fast_custom_probe=b.resolved_fast_custom_probe,
+        )
         if discovered is not None:
             models = discovered
     except Exception:
         pass
     b.add_endpoint_row(
-        "custom", "Custom endpoint", api_url, models, is_current, native_catalog_empty,
-        source="model-config", shown=_cap_models(models, b.max_models))
+        "custom",
+        "Custom endpoint",
+        api_url,
+        models,
+        is_current,
+        native_catalog_empty,
+        source="model-config",
+        shown=_cap_models(models, b.max_models),
+    )
 
 
 def _lap_custom_provider_rows(b: _PickerBuild, custom_providers: list) -> None:
@@ -1116,6 +1571,7 @@ def _lap_custom_provider_rows(b: _PickerBuild, custom_providers: list) -> None:
     their own rows."""
     from clawk_cli.model_switch import _extra_headers_from_config, _scoped_key_env
     from clawk_cli.config import coerce_provider_id
+
     groups: dict[tuple, dict] = {}
     for entry in custom_providers:
         if not isinstance(entry, dict):
@@ -1131,23 +1587,45 @@ def _lap_custom_provider_rows(b: _PickerBuild, custom_providers: list) -> None:
         entry_extra_headers = _extra_headers_from_config(entry)
         prefix = _display_prefix(raw_name)
         provider_key = str(entry.get("provider_key") or "").strip()
-        group_key = (api_url, cred_identity, api_mode, tuple(sorted(entry_extra_headers.items())), prefix.lower())
+        group_key = (
+            api_url,
+            cred_identity,
+            api_mode,
+            tuple(sorted(entry_extra_headers.items())),
+            prefix.lower(),
+        )
         display_name = prefix or raw_name
-        grp = groups.setdefault(group_key, {
-            "slug": custom_provider_slug(display_name, provider_key), "name": display_name,
-            "api_url": api_url, "api_key": "", "credential_identity": cred_identity, "models": [], "has_explicit_models": False,
-            "discover_models": True, "api_mode": api_mode, "extra_headers": entry_extra_headers,
-            "aliases": set()})
+        grp = groups.setdefault(
+            group_key,
+            {
+                "slug": custom_provider_slug(display_name, provider_key),
+                "name": display_name,
+                "api_url": api_url,
+                "api_key": "",
+                "credential_identity": cred_identity,
+                "models": [],
+                "has_explicit_models": False,
+                "discover_models": True,
+                "api_mode": api_mode,
+                "extra_headers": entry_extra_headers,
+                "aliases": set(),
+            },
+        )
         grp["api_key"] = grp["api_key"] or api_key  # first member with a key wins
-        grp["discover_models"] = grp["discover_models"] and discover  # one opt-out pins the whole row
+        grp["discover_models"] = (
+            grp["discover_models"] and discover
+        )  # one opt-out pins the whole row
         grp["aliases"].update(custom_provider_aliases(raw_name, provider_key))
         # ``model:`` is only the active selection; every configured model lives under ``models:``.
         _absorb_entry_models(grp, entry, (entry.get("model") or "").strip())
 
     section4_slugs: set = set()
     current_url_group_count = sum(
-        1 for grp in groups.values()
-        if b.current_base_url_norm and _norm_url(grp["api_url"]) == b.current_base_url_norm)
+        1
+        for grp in groups.values()
+        if b.current_base_url_norm
+        and _norm_url(grp["api_url"]) == b.current_base_url_norm
+    )
     for grp in groups.values():
         api_url, api_key, slug = grp["api_url"], grp.get("api_key", ""), grp["slug"]
         # Slug claimed by a built-in/overlay/providers: row -> skip (don't shadow).
@@ -1169,24 +1647,47 @@ def _lap_custom_provider_rows(b: _PickerBuild, custom_providers: list) -> None:
         if grp_url_norm and grp_url_norm in b.builtin_endpoints:
             continue
         is_current = b.endpoint_is_current(
-            slug, {str(alias).lower() for alias in grp["aliases"]}, grp_url_norm,
-            url_match_ok=current_url_group_count == 1)
+            slug,
+            {str(alias).lower() for alias in grp["aliases"]},
+            grp_url_norm,
+            url_match_ok=current_url_group_count == 1,
+        )
         discovered, native_catalog_empty, probe_live = b.discover_endpoint(
-            api_key, api_url,
-            "ollama" if "ollama" in {str(slug).strip().lower(), str(grp.get("name") or "").strip().lower()} else "custom",
-            bool(grp.get("has_explicit_models")), headers=grp.get("extra_headers") or None,
-            api_mode=grp.get("api_mode"), discovery_allowed=bool(api_url) and grp.get("discover_models", True),
-            is_current=is_current)
+            api_key,
+            api_url,
+            "ollama"
+            if "ollama"
+            in {str(slug).strip().lower(), str(grp.get("name") or "").strip().lower()}
+            else "custom",
+            bool(grp.get("has_explicit_models")),
+            headers=grp.get("extra_headers") or None,
+            api_mode=grp.get("api_mode"),
+            discovery_allowed=bool(api_url) and grp.get("discover_models", True),
+            is_current=is_current,
+        )
         if discovered is not None:
             grp["models"] = discovered
-            if probe_live:  # a successful live probe persists the catalog for no-probe surfaces
+            if (
+                probe_live
+            ):  # a successful live probe persists the catalog for no-probe surfaces
                 try:
                     _save_discovered_models_to_config(
-                        api_url, discovered, api_mode=grp.get("api_mode"), headers=grp.get("extra_headers") or None,
-                        credential_identity=grp["credential_identity"])
+                        api_url,
+                        discovered,
+                        api_mode=grp.get("api_mode"),
+                        headers=grp.get("extra_headers") or None,
+                        credential_identity=grp["credential_identity"],
+                    )
                 except Exception:
                     pass
-        b.add_endpoint_row(slug, grp["name"], grp["api_url"], grp["models"], is_current, native_catalog_empty)
+        b.add_endpoint_row(
+            slug,
+            grp["name"],
+            grp["api_url"],
+            grp["models"],
+            is_current,
+            native_catalog_empty,
+        )
         section4_slugs.add(slug.lower())
 
 
@@ -1203,27 +1704,46 @@ def _lap_ollama_row(b: _PickerBuild) -> None:
         model_ids = [m for m in cookbook.ollama_models() if m]
         if not model_ids:
             return
-        is_current = (b.current_provider_norm == "ollama"
-                      or _norm_url(b.current_base_url) == _norm_url(cookbook.OLLAMA_OPENAI_URL))
-        b.results.append({
-            "slug": "ollama", "name": "Ollama (local)", "is_current": is_current, "is_user_defined": False,
-            "models": _cap_models(model_ids, b.max_models), "total_models": len(model_ids), "source": "local"})
+        is_current = b.current_provider_norm == "ollama" or _norm_url(
+            b.current_base_url
+        ) == _norm_url(cookbook.OLLAMA_OPENAI_URL)
+        b.results.append(
+            {
+                "slug": "ollama",
+                "name": "Ollama (local)",
+                "is_current": is_current,
+                "is_user_defined": False,
+                "models": _cap_models(model_ids, b.max_models),
+                "total_models": len(model_ids),
+                "source": "local",
+            }
+        )
         b.seen_slugs.add("ollama")
     except Exception:
         logger.debug("Ollama picker row discovery failed", exc_info=True)
 
 
-def _build_curated_lists(current_provider: str, current_base_url: str, current_model: str,
-                        non_blocking: bool = False) -> dict[str, list[str]]:
+def _build_curated_lists(
+    current_provider: str,
+    current_base_url: str,
+    current_model: str,
+    non_blocking: bool = False,
+) -> dict[str, list[str]]:
     """Curated model lists keyed by clawk provider id, plus the dynamic ones (nous manifest,
     Ollama Cloud, LM Studio live probe). ``non_blocking`` (GUI read path) takes cached Ollama Cloud
     ids and warms them in the background rather than waiting on an 8s probe (#114215)."""
-    from clawk_cli.models import OPENROUTER_MODELS, _PROVIDER_MODELS, get_curated_nous_model_ids
+    from clawk_cli.models import (
+        OPENROUTER_MODELS,
+        _PROVIDER_MODELS,
+        get_curated_nous_model_ids,
+    )
+
     curated: dict[str, list[str]] = dict(_PROVIDER_MODELS)
     curated["openrouter"] = [mid for mid, _ in OPENROUTER_MODELS]
     # Plugin profiles without a static row: their fallback_models are the curated floor, so the
     # non-blocking GUI read (cold catalog cache) lists them instead of an empty provider row.
     from providers import list_providers
+
     for _pp in list_providers():
         if _pp.fallback_models and not curated.get(_pp.name):
             curated[_pp.name] = list(_pp.fallback_models)
@@ -1231,6 +1751,7 @@ def _build_curated_lists(current_provider: str, current_base_url: str, current_m
     curated["nous"] = get_curated_nous_model_ids()
     if "ollama-cloud" not in curated:
         from clawk_cli.models import fetch_ollama_cloud_models
+
         # Read path: cache only; the row's own SWR refresh (cached_provider_model_ids) warms it.
         curated["ollama-cloud"] = fetch_ollama_cloud_models(cache_only=non_blocking)
     # LM Studio has no static catalog: probe its native endpoint live. Base URL precedence:
@@ -1239,15 +1760,23 @@ def _build_curated_lists(current_provider: str, current_base_url: str, current_m
     # Left live even on the non-blocking path: it is a loopback endpoint with a 1.5s timeout, so it
     # cannot be the degraded remote provider this path must never wait on.
     is_current_lmstudio = current_provider.strip().lower() == "lmstudio"
-    if "lmstudio" not in curated and (os.environ.get("LM_API_KEY") or os.environ.get("LM_BASE_URL") or is_current_lmstudio):
+    if "lmstudio" not in curated and (
+        os.environ.get("LM_API_KEY")
+        or os.environ.get("LM_BASE_URL")
+        or is_current_lmstudio
+    ):
         from clawk_cli.models_local import fetch_lmstudio_models
         from clawk_cli.auth import AuthError
+
         lm_base = (
             os.environ.get("LM_BASE_URL")
             or (current_base_url if is_current_lmstudio and current_base_url else None)
-            or "http://127.0.0.1:1234/v1")
+            or "http://127.0.0.1:1234/v1"
+        )
         try:
-            live = fetch_lmstudio_models(api_key=os.environ.get("LM_API_KEY", ""), base_url=lm_base, timeout=1.5)
+            live = fetch_lmstudio_models(
+                api_key=os.environ.get("LM_API_KEY", ""), base_url=lm_base, timeout=1.5
+            )
         except AuthError:
             live = []
         if not live and is_current_lmstudio and current_model:
@@ -1257,12 +1786,22 @@ def _build_curated_lists(current_provider: str, current_base_url: str, current_m
 
 
 def list_authenticated_providers(
-    current_provider: str = "", current_base_url: str = "", user_providers: dict | None = None,
-    custom_providers: list | None = None, *, force_fresh_nous_tier: bool = False,
-    max_models: int | None = None, current_model: str = "", refresh: bool = False,
-    probe_custom_providers: bool = True, probe_current_custom_provider: bool = False,
-    for_picker: bool = False, excluded_providers: list | None = None,
-    non_blocking_catalogs: bool = False, fast_custom_probe: bool | None = None) -> list[dict]:
+    current_provider: str = "",
+    current_base_url: str = "",
+    user_providers: dict | None = None,
+    custom_providers: list | None = None,
+    *,
+    force_fresh_nous_tier: bool = False,
+    max_models: int | None = None,
+    current_model: str = "",
+    refresh: bool = False,
+    probe_custom_providers: bool = True,
+    probe_current_custom_provider: bool = False,
+    for_picker: bool = False,
+    excluded_providers: list | None = None,
+    non_blocking_catalogs: bool = False,
+    fast_custom_probe: bool | None = None,
+) -> list[dict]:
     """Detect which providers have credentials and list their curated (not full models.dev) models.
 
     Returns dicts with ``slug`` (the --provider value), ``name``, ``is_current``,
@@ -1288,9 +1827,12 @@ def list_authenticated_providers(
     # can fall back to the curated static list when its live fetch fails, silently dropping
     # live-only models the user had seen.
     if refresh:
-        non_blocking_catalogs = False  # an explicit refresh is allowed to block on live probes
+        non_blocking_catalogs = (
+            False  # an explicit refresh is allowed to block on live probes
+        )
         try:
             from clawk_cli.models import clear_provider_models_cache
+
             clear_provider_models_cache()
         except Exception:
             pass
@@ -1306,21 +1848,36 @@ def list_authenticated_providers(
     # A single excluded entry like ``copilot`` hides the provider under every key it surfaces
     # as (clawk_id / mdev_id / canonical slug).
     b = _PickerBuild(
-        current_provider=current_provider, current_base_url=current_base_url, current_model=current_model,
-        max_models=max_models, for_picker=for_picker, force_fresh_nous_tier=force_fresh_nous_tier,
-        probe_custom_providers=probe_custom_providers, probe_current_custom_provider=probe_current_custom_provider,
-        refresh=refresh, excluded={str(p).strip().lower() for p in (excluded_providers or []) if p},
-        non_blocking_catalogs=non_blocking_catalogs, fast_custom_probe=fast_custom_probe,
-        curated=_build_curated_lists(current_provider, current_base_url, current_model,
-                                     non_blocking=non_blocking_catalogs))
+        current_provider=current_provider,
+        current_base_url=current_base_url,
+        current_model=current_model,
+        max_models=max_models,
+        for_picker=for_picker,
+        force_fresh_nous_tier=force_fresh_nous_tier,
+        probe_custom_providers=probe_custom_providers,
+        probe_current_custom_provider=probe_current_custom_provider,
+        refresh=refresh,
+        excluded={str(p).strip().lower() for p in (excluded_providers or []) if p},
+        non_blocking_catalogs=non_blocking_catalogs,
+        fast_custom_probe=fast_custom_probe,
+        curated=_build_curated_lists(
+            current_provider,
+            current_base_url,
+            current_model,
+            non_blocking=non_blocking_catalogs,
+        ),
+    )
 
     # Warm the disk cache in parallel before the serial section loops (otherwise 15-30s of live
     # round-trips on a cold cache). Skipped when refresh=True (serial path force-refreshes) and
     # for <=3 providers (serial is fast enough; avoids thread-pool overhead). The GUI read path
     # collects nothing either: every cache-only row read spawns its own deduped background refresh,
     # so no thread pool is joined and no probe can hold up the response.
-    prefetch_slugs = ([] if (refresh or non_blocking_catalogs)
-                      else _collect_authed_provider_slugs(data, b.curated, excluded_providers or []))
+    prefetch_slugs = (
+        []
+        if (refresh or non_blocking_catalogs)
+        else _collect_authed_provider_slugs(data, b.curated, excluded_providers or [])
+    )
     if len(prefetch_slugs) > 3:
         try:
             _prefetch_provider_models_parallel(prefetch_slugs)
@@ -1347,15 +1904,20 @@ def _finalize_picker_rows(results: list, user_providers, current_model: str) -> 
     # gate; matched by slug and ``provider_id``.
     try:
         from clawk_cli.config import is_provider_enabled
+
         if isinstance(user_providers, dict):
             disabled = {
-                str(name).strip().lower() for name, cfg in user_providers.items()
-                if isinstance(cfg, dict) and not is_provider_enabled(cfg)}
+                str(name).strip().lower()
+                for name, cfg in user_providers.items()
+                if isinstance(cfg, dict) and not is_provider_enabled(cfg)
+            }
             if disabled:
                 results = [
-                    r for r in results
+                    r
+                    for r in results
                     if str(r.get("provider_id", "")).strip().lower() not in disabled
-                    and str(r.get("slug", "")).strip().lower() not in disabled]
+                    and str(r.get("slug", "")).strip().lower() not in disabled
+                ]
     except Exception:
         pass
 
@@ -1381,7 +1943,9 @@ def _finalize_picker_rows(results: list, user_providers, current_model: str) -> 
     return results
 
 
-def _prepend_moa_picker_provider(providers: list[dict], current_provider: str = "") -> list[dict]:
+def _prepend_moa_picker_provider(
+    providers: list[dict], current_provider: str = ""
+) -> list[dict]:
     """Add the virtual MoA provider row used by interactive model pickers.
 
     ``list_authenticated_providers()`` only returns real/auth-backed providers; the CLI inventory
@@ -1389,20 +1953,30 @@ def _prepend_moa_picker_provider(providers: list[dict], current_provider: str = 
     inventory's single row builder so the row shape stays defined in one place."""
     try:
         from clawk_cli.inventory import _moa_provider_row
+
         moa_row = _moa_provider_row(current_provider)
         if moa_row is None:
             return providers
-        return [moa_row] + [p for p in providers if str(p.get("slug", "")).lower() != "moa"]
+        return [moa_row] + [
+            p for p in providers if str(p.get("slug", "")).lower() != "moa"
+        ]
     except Exception:
         return providers
 
 
 def list_picker_providers(
-    current_provider: str = "", current_base_url: str = "", user_providers: dict | None = None,
-    custom_providers: list | None = None, max_models: int | None = None, current_model: str = "",
-    include_moa: bool = False, excluded_providers: list | None = None,
-    non_blocking_catalogs: bool = False, probe_custom_providers: bool = True,
-    probe_current_custom_provider: bool = False) -> list[dict]:
+    current_provider: str = "",
+    current_base_url: str = "",
+    user_providers: dict | None = None,
+    custom_providers: list | None = None,
+    max_models: int | None = None,
+    current_model: str = "",
+    include_moa: bool = False,
+    excluded_providers: list | None = None,
+    non_blocking_catalogs: bool = False,
+    probe_custom_providers: bool = True,
+    probe_current_custom_provider: bool = False,
+) -> list[dict]:
     """Interactive-picker variant of :func:`list_authenticated_providers`.
 
     OpenRouter's list is replaced with :func:`clawk_cli.models.fetch_openrouter_models` (curated
@@ -1412,20 +1986,35 @@ def list_picker_providers(
     background, OpenRouter's stale disk copy is served as-is; the ``probe_*`` flags are forwarded."""
     from clawk_cli.model_switch import list_authenticated_providers
     from clawk_cli.models import fetch_openrouter_models
+
     providers = list_authenticated_providers(
-        current_provider=current_provider, current_base_url=current_base_url,
-        user_providers=user_providers, custom_providers=custom_providers, max_models=max_models,
-        current_model=current_model, for_picker=True, excluded_providers=excluded_providers,
-        non_blocking_catalogs=non_blocking_catalogs, probe_custom_providers=probe_custom_providers,
-        probe_current_custom_provider=probe_current_custom_provider)
+        current_provider=current_provider,
+        current_base_url=current_base_url,
+        user_providers=user_providers,
+        custom_providers=custom_providers,
+        max_models=max_models,
+        current_model=current_model,
+        for_picker=True,
+        excluded_providers=excluded_providers,
+        non_blocking_catalogs=non_blocking_catalogs,
+        probe_custom_providers=probe_custom_providers,
+        probe_current_custom_provider=probe_current_custom_provider,
+    )
     if include_moa:
-        providers = _prepend_moa_picker_provider(providers, current_provider=current_provider)
+        providers = _prepend_moa_picker_provider(
+            providers, current_provider=current_provider
+        )
 
     filtered: list[dict] = []
     for p in providers:
         if str(p.get("slug", "")).lower() == "openrouter":
             try:
-                live_ids = [mid for mid, _ in fetch_openrouter_models(cache_only=non_blocking_catalogs)]
+                live_ids = [
+                    mid
+                    for mid, _ in fetch_openrouter_models(
+                        cache_only=non_blocking_catalogs
+                    )
+                ]
             except Exception:
                 live_ids = list(p.get("models", []))
             p = dict(p)
@@ -1449,18 +2038,32 @@ def _attach_window_model_notes(providers: list[dict]) -> None:
     limit reached · resets in 21h · paid models now use your credits (pay as you go)").
     Every field is omitted when empty and for any account not on a window plan. Never raises."""
     try:
-        nous = next((p for p in providers if str(p.get("slug", "")).lower() == "nous"), None)
+        nous = next(
+            (p for p in providers if str(p.get("slug", "")).lower() == "nous"), None
+        )
         if nous is None:
             return
-        from clawk_cli.model_picker_usage import nous_picker_usage, usage_level_label, usage_levels
+        from clawk_cli.model_picker_usage import (
+            nous_picker_usage,
+            usage_level_label,
+            usage_levels,
+        )
+
         fresh = nous_picker_usage()
         usage = fresh or nous_picker_usage(any_age=True)
         if usage is None:
             return
         from agent.plan_limits import cached_pricing
-        pricing = cached_pricing()  # this profile's catalog only (cache-only, no credential refresh)
+
+        pricing = (
+            cached_pricing()
+        )  # this profile's catalog only (cache-only, no credential refresh)
         models = [str(m) for m in nous.get("models", [])]
-        labels = {m: label for m, lv in usage_levels(models, pricing).items() if (label := usage_level_label(lv))}
+        labels = {
+            m: label
+            for m, lv in usage_levels(models, pricing).items()
+            if (label := usage_level_label(lv))
+        }
         if labels:
             nous["model_labels"] = labels
         if fresh is None:

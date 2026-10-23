@@ -96,8 +96,6 @@ def test_boundary_commit_delivers_end_strictly_before_switch():
     assert provider._caller_thread_ids[0] != threading.get_ident()
 
 
-
-
 def test_boundary_commit_switch_still_fires_when_end_raises():
     """A failing provider extraction must not strand providers on the old sid."""
 
@@ -108,9 +106,9 @@ def test_boundary_commit_switch_still_fires_when_end_raises():
     provider = _ExplodingEndProvider()
     mm = _make_manager(provider)
 
-    mm.commit_session_boundary_async([{"role": "user", "content": "x"}], new_session_id="new-sid")
+    mm.commit_session_boundary_async(
+        [{"role": "user", "content": "x"}], new_session_id="new-sid"
+    )
     assert mm.flush_pending(timeout=5)
 
     assert ("switch", "new-sid", True) in provider.calls
-
-

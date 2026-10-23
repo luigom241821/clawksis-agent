@@ -133,7 +133,9 @@ class TestGetSandboxMirrorWarning:
         warn = get_sandbox_mirror_warning(str(target))
         assert warn is not None
         # Must name the mirror root so the user can locate the sandbox.
-        assert os.path.join("sandboxes", "docker", "default", "home", ".clawksis") in warn
+        assert (
+            os.path.join("sandboxes", "docker", "default", "home", ".clawksis") in warn
+        )
         # Must hint at what the agent likely meant.
         assert os.path.join("profiles", "group1", "SOUL.md") in warn
         # Must name the bypass kwarg shared with the cross-profile guard.

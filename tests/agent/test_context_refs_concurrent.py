@@ -8,6 +8,7 @@ partners that never arrive and the test fails; with asyncio.gather it passes.
 The output-contract test guards that concurrency does NOT change ordering,
 warnings, blocks, or token accounting.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +16,7 @@ import asyncio
 import pytest
 
 from agent.context_references import preprocess_context_references_async
+
 
 @pytest.mark.asyncio
 async def test_refs_expand_concurrently(tmp_path):
@@ -51,9 +53,15 @@ async def test_refs_expand_concurrently(tmp_path):
 
     try:
         res = await preprocess_context_references_async(
-            msg, cwd=tmp_path, context_length=100_000, url_fetcher=barrier_fetcher,
+            msg,
+            cwd=tmp_path,
+            context_length=100_000,
+            url_fetcher=barrier_fetcher,
         )
-    except (asyncio.BrokenBarrierError, TimeoutError):  # pragma: no cover - serial regression
+    except (
+        asyncio.BrokenBarrierError,
+        TimeoutError,
+    ):  # pragma: no cover - serial regression
         pytest.fail(
             "references did not expand concurrently: a fetch reached the "
             f"rendezvous alone, so expansion never had {N_REFS} fetches in "
@@ -66,5 +74,6 @@ async def test_refs_expand_concurrently(tmp_path):
     # All three blocks present, in order.
     assert res.expanded
     body = res.message
-    assert body.index("a.example") < body.index("b.example") < body.index("c.example"), \
-        "reference blocks must stay in original order"
+    assert (
+        body.index("a.example") < body.index("b.example") < body.index("c.example")
+    ), "reference blocks must stay in original order"

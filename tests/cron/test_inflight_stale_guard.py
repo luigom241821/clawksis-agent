@@ -69,8 +69,7 @@ def _clean_inflight():
             obj.clear()
 
 
-def _job(job_id="wedged", minutes=60, kind="interval", cron_expr=None,
-         repeat=None):
+def _job(job_id="wedged", minutes=60, kind="interval", cron_expr=None, repeat=None):
     """Build a job row using the PERSISTED schedule dict shape."""
     if kind == "interval":
         schedule = {
@@ -111,7 +110,9 @@ def _inject_stale_claim(job_id: str, home) -> None:
     sched._running_job_ids.add(sched._inflight_key(job_id, home))
     running_since = getattr(sched, "_running_since", None)
     if running_since is not None:
-        running_since[sched._inflight_key(job_id, home)] = time.time() - 6 * 60 * 60  # 6h old
+        running_since[sched._inflight_key(job_id, home)] = (
+            time.time() - 6 * 60 * 60
+        )  # 6h old
 
 
 class TestStaleInflightLeak:
@@ -126,11 +127,13 @@ class TestStaleInflightLeak:
         job_id = job["id"]
         _inject_stale_claim(job_id, tmp_path)
 
-        with caplog.at_level("WARNING"), \
-             patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.jobs.load_jobs", return_value=[job]), \
-             patch.object(sched, "get_due_jobs", return_value=[]), \
-             patch.object(sched, "mark_job_run") as mark:
+        with (
+            caplog.at_level("WARNING"),
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch("cron.jobs.load_jobs", return_value=[job]),
+            patch.object(sched, "get_due_jobs", return_value=[]),
+            patch.object(sched, "mark_job_run") as mark,
+        ):
             sched.tick(verbose=False)
 
         # RED: on the unfixed scheduler the tick never releases the id — it
@@ -147,9 +150,7 @@ class TestStaleInflightLeak:
         assert "in-flight" in args[2]
 
         # …and emits the countable forced-release signal (log + probe stats).
-        assert any(
-            "cron.inflight.forced_release" in r.message for r in caplog.records
-        )
+        assert any("cron.inflight.forced_release" in r.message for r in caplog.records)
         stats = sched.get_inflight_guard_stats()
         assert stats["forced_releases"] == 1
 
@@ -164,10 +165,12 @@ class TestStaleInflightLeak:
         if running_since is not None:
             running_since[job_id] = time.time() - 60  # 1 minute old
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.jobs.load_jobs", return_value=[job]), \
-             patch.object(sched, "get_due_jobs", return_value=[]), \
-             patch.object(sched, "mark_job_run") as mark:
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch("cron.jobs.load_jobs", return_value=[job]),
+            patch.object(sched, "get_due_jobs", return_value=[]),
+            patch.object(sched, "mark_job_run") as mark,
+        ):
             sched.tick(verbose=False)
 
         assert job_id in sched.get_running_job_ids()
@@ -213,7 +216,9 @@ class TestStaleInflightSweep:
         """A slow-but-healthy 6h job is not clipped by the 30m floor."""
         job = _job(minutes=360)
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 4 * 60 * 60  # 4h < 12h
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 4 * 60 * 60
+        )  # 4h < 12h
 
         with patch.object(sched, "_get_clawk_home", return_value=tmp_path):
             assert sched.sweep_stale_inflight([job]) == []
@@ -224,7 +229,9 @@ class TestStaleInflightSweep:
         30m floor — the Blocker-1 regression against the live store shape."""
         job = _job(job_id="guide-curator", minutes=4320)
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 4 * 60 * 60  # 4h ≪ 144h
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 4 * 60 * 60
+        )  # 4h ≪ 144h
 
         with patch.object(sched, "_get_clawk_home", return_value=tmp_path):
             assert sched.sweep_stale_inflight([job]) == []
@@ -235,7 +242,9 @@ class TestStaleInflightSweep:
         claim is still healthy (allowance 20160m)."""
         job = _job(job_id="weekly", kind="cron", cron_expr="0 9 * * 1")
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 24 * 60 * 60
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 24 * 60 * 60
+        )
 
         with patch.object(sched, "_get_clawk_home", return_value=tmp_path):
             assert sched.sweep_stale_inflight([job]) == []
@@ -249,7 +258,9 @@ class TestStaleInflightSweep:
         job = _job()
         fut: concurrent.futures.Future = concurrent.futures.Future()
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 10 * 60 * 60
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 10 * 60 * 60
+        )
         sched._running_futures[sched._inflight_key(job["id"], tmp_path)] = fut
 
         with patch.object(sched, "_get_clawk_home", return_value=tmp_path):
@@ -258,8 +269,10 @@ class TestStaleInflightSweep:
         fut.set_result(True)
 
         # Once the future is done but the id somehow survived, it IS stale.
-        with patch.object(sched, "mark_job_run"), \
-             patch.object(sched, "_get_clawk_home", return_value=tmp_path):
+        with (
+            patch.object(sched, "mark_job_run"),
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+        ):
             assert sched.sweep_stale_inflight([job]) == [job["id"]]
 
     def test_pending_sentinel_released_when_submit_hung(self, tmp_path):
@@ -267,11 +280,17 @@ class TestStaleInflightSweep:
         allowance (the SessionDB-init wedge class) and must be released."""
         job = _job()
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 5 * 60 * 60
-        sched._running_futures[sched._inflight_key(job["id"], tmp_path)] = sched._FUTURE_PENDING
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 5 * 60 * 60
+        )
+        sched._running_futures[sched._inflight_key(job["id"], tmp_path)] = (
+            sched._FUTURE_PENDING
+        )
 
-        with patch.object(sched, "mark_job_run") as mark, \
-             patch.object(sched, "_get_clawk_home", return_value=tmp_path):
+        with (
+            patch.object(sched, "mark_job_run") as mark,
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+        ):
             assert sched.sweep_stale_inflight([job]) == [job["id"]]
         assert mark.call_count == 1
 
@@ -279,11 +298,17 @@ class TestStaleInflightSweep:
         """A young pending claim (submit still in flight) is safe."""
         job = _job()
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 60  # 1 minute
-        sched._running_futures[sched._inflight_key(job["id"], tmp_path)] = sched._FUTURE_PENDING
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 60
+        )  # 1 minute
+        sched._running_futures[sched._inflight_key(job["id"], tmp_path)] = (
+            sched._FUTURE_PENDING
+        )
 
-        with patch.object(sched, "mark_job_run") as mark, \
-             patch.object(sched, "_get_clawk_home", return_value=tmp_path):
+        with (
+            patch.object(sched, "mark_job_run") as mark,
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+        ):
             assert sched.sweep_stale_inflight([job]) == []
         assert job["id"] in sched.get_running_job_ids()
         mark.assert_not_called()
@@ -293,10 +318,14 @@ class TestStaleInflightSweep:
         auto-delete the row; the claim is released, the row untouched."""
         job = _job(repeat={"times": 1, "completed": 0})
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 5 * 60 * 60
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 5 * 60 * 60
+        )
 
-        with patch.object(sched, "mark_job_run") as mark, \
-             patch.object(sched, "_get_clawk_home", return_value=tmp_path):
+        with (
+            patch.object(sched, "mark_job_run") as mark,
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+        ):
             assert sched.sweep_stale_inflight([job]) == [job["id"]]
         assert job["id"] not in sched.get_running_job_ids()
         mark.assert_not_called()
@@ -311,28 +340,34 @@ class TestStaleInflightSweep:
         with patch.object(sched, "_get_clawk_home", return_value=tmp_path):
             assert sched.sweep_stale_inflight([job]) == []
             assert sched._inflight_key(job["id"], tmp_path) in sched._running_since
-            sched._running_since[sched._inflight_key(job["id"], tmp_path)] -= 5 * 60 * 60
+            sched._running_since[sched._inflight_key(job["id"], tmp_path)] -= (
+                5 * 60 * 60
+            )
             with patch.object(sched, "mark_job_run"):
                 assert sched.sweep_stale_inflight([job]) == [job["id"]]
-
 
 
 class TestWedgedJobRefiresWithoutRestart:
     def test_tick_sweeps_then_dispatches_the_previously_wedged_job(self, tmp_path):
         """End-to-end symptom: before the fix, tick() returned 0 forever."""
-        job = dict(_job(), enabled=True, next_run_at="2020-01-01T00:00:00",
-                   deliver="local")
+        job = dict(
+            _job(), enabled=True, next_run_at="2020-01-01T00:00:00", deliver="local"
+        )
         sched._running_job_ids.add(sched._inflight_key(job["id"], tmp_path))
-        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = time.time() - 6 * 60 * 60
+        sched._running_since[sched._inflight_key(job["id"], tmp_path)] = (
+            time.time() - 6 * 60 * 60
+        )
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch.object(sched, "get_due_jobs", return_value=[job]), \
-             patch("cron.jobs.load_jobs", return_value=[job]), \
-             patch.object(sched, "advance_next_runs"), \
-             patch.object(sched, "mark_job_run"), \
-             patch.object(sched, "create_execution", return_value={"id": "exec-1"}), \
-             patch.object(sched, "finish_execution"), \
-             patch.object(sched, "run_one_job", return_value=True):
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch.object(sched, "get_due_jobs", return_value=[job]),
+            patch("cron.jobs.load_jobs", return_value=[job]),
+            patch.object(sched, "advance_next_runs"),
+            patch.object(sched, "mark_job_run"),
+            patch.object(sched, "create_execution", return_value={"id": "exec-1"}),
+            patch.object(sched, "finish_execution"),
+            patch.object(sched, "run_one_job", return_value=True),
+        ):
             n = sched.tick(verbose=False)
 
         assert n == 1, "wedged job must fire again without a gateway restart"
@@ -369,16 +404,16 @@ class TestLedgerTerminalReconciliation:
     @staticmethod
     def _row_at(offset_seconds: float) -> str:
         """ISO claimed_at at now+offset (aware, local tz)."""
-        return datetime.fromtimestamp(
-            time.time() + offset_seconds, tz=UTC
-        ).isoformat()
+        return datetime.fromtimestamp(time.time() + offset_seconds, tz=UTC).isoformat()
 
     def _inject_young_claim(self, job_id: str, home) -> None:
         """Claim is YOUNG (inside the 30m floor) so only the ledger-terminal
         path, never the age path, can release it."""
         sched._running_job_ids.add(sched._inflight_key(job_id, home))
         if hasattr(sched, "_running_since"):
-            sched._running_since[sched._inflight_key(job_id, home)] = time.time() - 60  # 1 minute old
+            sched._running_since[sched._inflight_key(job_id, home)] = (
+                time.time() - 60
+            )  # 1 minute old
 
     def test_young_claim_with_terminal_ledger_row_is_released(self, tmp_path):
         """RED/GREEN: a terminal ledger row from THIS claim's run proves the
@@ -389,12 +424,20 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         self._inject_young_claim(job_id, tmp_path)
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={
-                 job_id: {"status": "failed", "id": "exec-x",
-                          "claimed_at": self._row_at(-30)},  # after claim (-60)
-             }), \
-             patch.object(sched, "mark_job_run") as mark:
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch(
+                "cron.executions.latest_executions",
+                return_value={
+                    job_id: {
+                        "status": "failed",
+                        "id": "exec-x",
+                        "claimed_at": self._row_at(-30),
+                    },  # after claim (-60)
+                },
+            ),
+            patch.object(sched, "mark_job_run") as mark,
+        ):
             released = sched.sweep_stale_inflight([job])
 
         # RED on the age-only sweep: the young claim is NOT released.  GREEN
@@ -404,7 +447,9 @@ class TestLedgerTerminalReconciliation:
         # Ledger-terminal is authoritative: no synthetic failure written.
         mark.assert_not_called()
 
-    def test_terminal_row_from_previous_run_does_not_release_fresh_claim(self, tmp_path):
+    def test_terminal_row_from_previous_run_does_not_release_fresh_claim(
+        self, tmp_path
+    ):
         """RACE GUARD: a terminal row OLDER than the in-memory claim is the
         PREVIOUS run's outcome — the fresh claim (e.g. in the window between
         try_register_running_job and create_execution, or a finished run whose
@@ -414,12 +459,20 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         self._inject_young_claim(job_id, tmp_path)
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={
-                 job_id: {"status": "completed", "id": "exec-prev",
-                          "claimed_at": self._row_at(-600)},  # before claim (-60)
-             }), \
-             patch.object(sched, "mark_job_run"):
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch(
+                "cron.executions.latest_executions",
+                return_value={
+                    job_id: {
+                        "status": "completed",
+                        "id": "exec-prev",
+                        "claimed_at": self._row_at(-600),
+                    },  # before claim (-60)
+                },
+            ),
+            patch.object(sched, "mark_job_run"),
+        ):
             released = sched.sweep_stale_inflight([job])
 
         assert job_id not in released, (
@@ -435,11 +488,16 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         self._inject_young_claim(job_id, tmp_path)
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={
-                 job_id: {"status": "failed", "id": "exec-x"},
-             }), \
-             patch.object(sched, "mark_job_run"):
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch(
+                "cron.executions.latest_executions",
+                return_value={
+                    job_id: {"status": "failed", "id": "exec-x"},
+                },
+            ),
+            patch.object(sched, "mark_job_run"),
+        ):
             released = sched.sweep_stale_inflight([job])
 
         assert job_id not in released
@@ -453,9 +511,11 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         self._inject_young_claim(job_id, tmp_path)
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={}), \
-             patch.object(sched, "mark_job_run"):
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch("cron.executions.latest_executions", return_value={}),
+            patch.object(sched, "mark_job_run"),
+        ):
             released = sched.sweep_stale_inflight([job])
 
         assert job_id not in released
@@ -469,11 +529,16 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         self._inject_young_claim(job_id, tmp_path)
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={
-                 job_id: {"status": "running", "id": "exec-y"},
-             }), \
-             patch.object(sched, "mark_job_run"):
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch(
+                "cron.executions.latest_executions",
+                return_value={
+                    job_id: {"status": "running", "id": "exec-y"},
+                },
+            ),
+            patch.object(sched, "mark_job_run"),
+        ):
             released = sched.sweep_stale_inflight([job])
 
         assert job_id not in released
@@ -486,14 +551,24 @@ class TestLedgerTerminalReconciliation:
         job_id = job["id"]
         sched._running_job_ids.add(sched._inflight_key(job_id, tmp_path))
         if hasattr(sched, "_running_since"):
-            sched._running_since[sched._inflight_key(job_id, tmp_path)] = time.time() - 6 * 60 * 60  # 6h old
+            sched._running_since[sched._inflight_key(job_id, tmp_path)] = (
+                time.time() - 6 * 60 * 60
+            )  # 6h old
 
-        with patch.object(sched, "_get_clawk_home", return_value=tmp_path), \
-             patch("cron.executions.latest_executions", return_value={
-                 job_id: {"status": "completed", "id": "exec-z",
-                          "claimed_at": self._row_at(-3 * 60 * 60)},  # after claim (-6h)
-             }), \
-             patch.object(sched, "mark_job_run") as mark:
+        with (
+            patch.object(sched, "_get_clawk_home", return_value=tmp_path),
+            patch(
+                "cron.executions.latest_executions",
+                return_value={
+                    job_id: {
+                        "status": "completed",
+                        "id": "exec-z",
+                        "claimed_at": self._row_at(-3 * 60 * 60),
+                    },  # after claim (-6h)
+                },
+            ),
+            patch.object(sched, "mark_job_run") as mark,
+        ):
             released = sched.sweep_stale_inflight([job])
 
         assert job_id in released

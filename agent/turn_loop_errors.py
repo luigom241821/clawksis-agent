@@ -33,8 +33,16 @@ class OuterErrorVerdict:
 
 
 def handle_outer_loop_error(
-    agent: Any, *, e: Any, _outer_error_count: Any, api_call_count: Any, messages: Any,
-    conversation_history: Any, _turn_exit_reason: Any, failed: Any, final_response: Any,
+    agent: Any,
+    *,
+    e: Any,
+    _outer_error_count: Any,
+    api_call_count: Any,
+    messages: Any,
+    conversation_history: Any,
+    _turn_exit_reason: Any,
+    failed: Any,
+    final_response: Any,
 ) -> OuterErrorVerdict:
     """Handle an exception that escaped the response-processing block. Shutdown and
     local-processing errors are deterministic and end the turn; API-path errors retry until
@@ -42,14 +50,20 @@ def handle_outer_loop_error(
     message is never appended here: a prefill/interim assistant may already be the tail
     (assistant→assistant); ``finalize_turn`` appends only when safe."""
     from agent.conversation_loop import (
-        _API_CALL_MODULES, _LOCAL_PROCESSING_MODULES, _MAX_OUTER_LOOP_ERRORS,
-        _is_interpreter_shutdown_error, _ra,
+        _API_CALL_MODULES,
+        _LOCAL_PROCESSING_MODULES,
+        _MAX_OUTER_LOOP_ERRORS,
+        _is_interpreter_shutdown_error,
+        _ra,
     )
 
     def _verdict(action: str) -> OuterErrorVerdict:
         return OuterErrorVerdict(
-            action=action, _outer_error_count=_outer_error_count,
-            _turn_exit_reason=_turn_exit_reason, failed=failed, final_response=final_response,
+            action=action,
+            _outer_error_count=_outer_error_count,
+            _turn_exit_reason=_turn_exit_reason,
+            failed=failed,
+            final_response=final_response,
         )
 
     # Count every escaped exception before classification so permanent failures
@@ -85,7 +99,8 @@ def handle_outer_loop_error(
         failed = True
         _sid = getattr(agent, "session_id", None)
         final_response = site_copy(
-            "interpreter_shutdown", resume=f" (CLI: `clawk --resume {_sid}`)" if _sid else "",
+            "interpreter_shutdown",
+            resume=f" (CLI: `clawk --resume {_sid}`)" if _sid else "",
         )
         return _verdict("break")
 
@@ -94,11 +109,13 @@ def handle_outer_loop_error(
     tb_module_names: set[str] = set()
     _tb = e.__traceback__
     while _tb is not None:
-        tb_module_names.add(os.path.splitext(os.path.basename(_tb.tb_frame.f_code.co_filename))[0])
+        tb_module_names.add(
+            os.path.splitext(os.path.basename(_tb.tb_frame.f_code.co_filename))[0]
+        )
         _tb = _tb.tb_next
-    _is_local_processing_error = bool(tb_module_names & _LOCAL_PROCESSING_MODULES) and not (
-        tb_module_names & _API_CALL_MODULES
-    )
+    _is_local_processing_error = bool(
+        tb_module_names & _LOCAL_PROCESSING_MODULES
+    ) and not (tb_module_names & _API_CALL_MODULES)
 
     if _is_local_processing_error:
         error_msg = f"Error during local message processing after API call #{api_call_count}: {e!s}"
@@ -128,17 +145,20 @@ def handle_outer_loop_error(
         if msg.get("role") == "assistant" and msg.get("tool_calls"):
             answered_ids = {
                 m["tool_call_id"]
-                for m in messages[idx + 1:]
+                for m in messages[idx + 1 :]
                 if isinstance(m, dict) and m.get("role") == "tool"
             }
             for tc in msg["tool_calls"]:
                 if tc and isinstance(tc, dict) and tc["id"] not in answered_ids:
-                    append_message(messages, {
-                        "role": "tool",
-                        "name": _ra().AIAgent._get_tool_call_name_static(tc),
-                        "tool_call_id": tc["id"],
-                        "content": f"Error executing tool: {error_msg}",
-                    })
+                    append_message(
+                        messages,
+                        {
+                            "role": "tool",
+                            "name": _ra().AIAgent._get_tool_call_name_static(tc),
+                            "tool_call_id": tc["id"],
+                            "content": f"Error executing tool: {error_msg}",
+                        },
+                    )
         break
 
     # Non-tool errors are already printed; a synthetic message would pollute history

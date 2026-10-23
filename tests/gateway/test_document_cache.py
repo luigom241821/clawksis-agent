@@ -22,6 +22,7 @@ from gateway.platforms.base import (
 # Fixture: redirect DOCUMENT_CACHE_DIR to a temp directory for every test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _redirect_cache(tmp_path, monkeypatch):
     """Point the module-level DOCUMENT_CACHE_DIR to a fresh tmp_path."""
@@ -37,6 +38,7 @@ def _redirect_cache(tmp_path, monkeypatch):
 # TestGetDocumentCacheDir
 # ---------------------------------------------------------------------------
 
+
 class TestGetDocumentCacheDir:
     def test_creates_directory(self, tmp_path):
         cache_dir = get_document_cache_dir()
@@ -47,6 +49,7 @@ class TestGetDocumentCacheDir:
 # ---------------------------------------------------------------------------
 # TestCacheDocumentFromBytes
 # ---------------------------------------------------------------------------
+
 
 class TestCacheDocumentFromBytes:
     def test_basic_caching(self):
@@ -68,6 +71,7 @@ class TestCacheDocumentFromBytes:
 # TestCleanupDocumentCache
 # ---------------------------------------------------------------------------
 
+
 class TestCleanupDocumentCache:
     def test_removes_old_files(self, tmp_path):
         cache_dir = get_document_cache_dir()
@@ -85,6 +89,7 @@ class TestCleanupDocumentCache:
 # ---------------------------------------------------------------------------
 # TestSupportedDocumentTypes
 # ---------------------------------------------------------------------------
+
 
 class TestSupportedDocumentTypes:
     def test_all_extensions_have_mime_types(self):
@@ -107,7 +112,10 @@ _PNG_1PX = bytes.fromhex(
 class TestCacheMediaBytes:
     def test_pdf_routes_to_document(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"%PDF-1.4 body", filename="report.pdf", mime_type="application/pdf")
+
+        result = cache_media_bytes(
+            b"%PDF-1.4 body", filename="report.pdf", mime_type="application/pdf"
+        )
         assert result is not None
         assert result.kind == "document"
         assert result.media_type == "application/pdf"
@@ -117,12 +125,14 @@ class TestCacheMediaBytes:
 
     def test_png_routes_to_image(self):
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(_PNG_1PX, filename="photo.png", mime_type="image/png")
+
+        result = cache_media_bytes(
+            _PNG_1PX, filename="photo.png", mime_type="image/png"
+        )
         assert result is not None
         assert result.kind == "image"
         assert result.media_type == "image/png"
         assert os.path.exists(result.path)
-
 
     def test_unknown_document_cached_as_octet_stream(self):
         """Unknown file types are cached (not dropped) so the agent can inspect them.
@@ -130,11 +140,12 @@ class TestCacheMediaBytes:
         Authorization to message the agent is the gate, not the file extension.
         """
         from gateway.platforms.base import cache_media_bytes
-        result = cache_media_bytes(b"MZ", filename="program.exe", mime_type="application/x-msdownload")
+
+        result = cache_media_bytes(
+            b"MZ", filename="program.exe", mime_type="application/x-msdownload"
+        )
         assert result is not None
         assert result.kind == "document"
         # Caller-supplied MIME is preserved when present.
         assert result.media_type == "application/x-msdownload"
         assert os.path.exists(result.path)
-
-

@@ -9,6 +9,7 @@ must not be cached for the lifetime of the process. Cache only when:
 All other ``None`` outcomes (no credentials yet, config read error, explicit
 provider instantiation failure) leave the cache unset so the next call retries.
 """
+
 import logging
 from unittest.mock import Mock
 
@@ -45,8 +46,12 @@ class TestCloudProviderCachePolicy:
             resolutions.append(home)
             return providers[home]
 
-        monkeypatch.setattr("tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_cloud._registry_get_browser_provider", resolve)
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._registry_get_browser_provider", resolve
+        )
         home_a = tmp_path / "browser-a"
         home_b = tmp_path / "browser-b"
         providers[str(home_a)] = Mock(name="provider-a")
@@ -101,7 +106,9 @@ class TestCloudProviderCachePolicy:
             "clawk_cli.config.read_raw_config",
             lambda: {"browser": {"cloud_provider": "cache-replacement"}},
         )
-        monkeypatch.setattr("tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None
+        )
         token = set_clawk_home_override(home)
         try:
             browser_registry.register_provider(first, scope=home)
@@ -172,8 +179,12 @@ class TestCloudProviderCachePolicy:
             "clawk_cli.config.read_raw_config",
             lambda: {"browser": {"cloud_provider": "cache-race"}},
         )
-        monkeypatch.setattr("tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_cloud._registry_get_browser_provider", racing_get)
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._registry_get_browser_provider", racing_get
+        )
         browser_registry.register_provider(first, scope=home)
 
         def resolve():
@@ -216,7 +227,6 @@ class TestCloudProviderCachePolicy:
         )
         assert bt_cloud._get_cloud_provider() is None
 
-
     def test_no_credentials_yet_does_not_cache_none(self, monkeypatch):
         """Auto-detect path with no creds: must NOT poison the cache."""
         monkeypatch.setattr(
@@ -229,10 +239,12 @@ class TestCloudProviderCachePolicy:
         bb_unconfigured = Mock()
         bb_unconfigured.is_available.return_value = False
         monkeypatch.setattr(
-            "plugins.browser.browser_use.provider.BrowserUseBrowserProvider", lambda: bu_unconfigured
+            "plugins.browser.browser_use.provider.BrowserUseBrowserProvider",
+            lambda: bu_unconfigured,
         )
         monkeypatch.setattr(
-            "plugins.browser.browserbase.provider.BrowserbaseBrowserProvider", lambda: bb_unconfigured
+            "plugins.browser.browserbase.provider.BrowserbaseBrowserProvider",
+            lambda: bb_unconfigured,
         )
 
         assert bt_cloud._get_cloud_provider() is None
@@ -241,21 +253,28 @@ class TestCloudProviderCachePolicy:
         # Credentials self-heal — next call must retry and pick up the provider.
         healed = Mock(name="healed-provider")
         healed.is_available.return_value = True
-        monkeypatch.setattr("plugins.browser.browser_use.provider.BrowserUseBrowserProvider", lambda: healed)
+        monkeypatch.setattr(
+            "plugins.browser.browser_use.provider.BrowserUseBrowserProvider",
+            lambda: healed,
+        )
 
         assert bt_cloud._get_cloud_provider() is healed
         assert browser_tool._cloud_provider_resolved is True
-
 
     def test_explicit_provider_instantiation_failure_does_not_cache(
         self, monkeypatch, caplog
     ):
         """If instantiating the registered provider raises, log warning and don't cache."""
+
         def exploding_factory(name):
             raise RuntimeError("missing dependency")
 
-        monkeypatch.setattr("tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_cloud._registry_get_browser_provider", exploding_factory)
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._ensure_browser_plugins_loaded", lambda: None
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_cloud._registry_get_browser_provider", exploding_factory
+        )
         monkeypatch.setattr(
             "clawk_cli.config.read_raw_config",
             lambda: {"browser": {"cloud_provider": "browser-use"}},

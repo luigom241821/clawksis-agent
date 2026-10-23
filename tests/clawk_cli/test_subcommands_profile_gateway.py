@@ -23,10 +23,6 @@ def _h_gateway_enroll(args):  # pragma: no cover - identity only
     return "gateway_enroll"
 
 
-
-
-
-
 def _gateway_parser():
     p = argparse.ArgumentParser(prog="clawk")
     sub = p.add_subparsers(dest="command")
@@ -37,14 +33,6 @@ def _gateway_parser():
         cmd_gateway_enroll=_h_gateway_enroll,
     )
     return p
-
-
-
-
-
-
-
-
 
 
 def test_gateway_enroll_dispatch():

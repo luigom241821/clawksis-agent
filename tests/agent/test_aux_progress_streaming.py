@@ -39,9 +39,17 @@ from agent.conversation_compression import CompressionCommitFence
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _chunk(content=None, reasoning=None, reasoning_details=None,
-           finish_reason=None, usage=None, tool_calls=None, model="m1",
-           chunk_id="c1"):
+
+def _chunk(
+    content=None,
+    reasoning=None,
+    reasoning_details=None,
+    finish_reason=None,
+    usage=None,
+    tool_calls=None,
+    model="m1",
+    chunk_id="c1",
+):
     delta = SimpleNamespace(
         content=content,
         reasoning=reasoning,
@@ -51,7 +59,10 @@ def _chunk(content=None, reasoning=None, reasoning_details=None,
     )
     choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
     return SimpleNamespace(
-        id=chunk_id, model=model, choices=[choice], usage=usage,
+        id=chunk_id,
+        model=model,
+        choices=[choice],
+        usage=usage,
     )
 
 
@@ -76,12 +87,16 @@ class _FakeClient:
 
 
 _COMPLETE = SimpleNamespace(
-    id="r1", model="m1", object="chat.completion",
-    choices=[SimpleNamespace(
-        index=0,
-        message=SimpleNamespace(role="assistant", content="non-streamed"),
-        finish_reason="stop",
-    )],
+    id="r1",
+    model="m1",
+    object="chat.completion",
+    choices=[
+        SimpleNamespace(
+            index=0,
+            message=SimpleNamespace(role="assistant", content="non-streamed"),
+            finish_reason="stop",
+        )
+    ],
     usage=None,
 )
 
@@ -90,6 +105,7 @@ _COMPLETE = SimpleNamespace(
 # aux_progress_hook plumbing
 # ---------------------------------------------------------------------------
 
+
 class TestAuxProgressHook:
     def test_hook_installed_and_restored(self):
         ticks = []
@@ -97,8 +113,6 @@ class TestAuxProgressHook:
             _notify_aux_progress()
         _notify_aux_progress()  # outside — must not tick
         assert ticks == [1]
-
-
 
     def test_hook_is_thread_local(self):
         ticks = []
@@ -120,8 +134,8 @@ class TestAuxProgressHook:
 # _create_with_progress
 # ---------------------------------------------------------------------------
 
-class TestCreateWithProgress:
 
+class TestCreateWithProgress:
     def test_hook_upgrades_to_streaming_and_ticks_only_for_payload(self):
         empty_tool_call = SimpleNamespace(
             index=0,
@@ -133,15 +147,20 @@ class TestCreateWithProgress:
             _chunk(content="", reasoning="", tool_calls=[empty_tool_call]),
             _chunk(reasoning="thinking..."),
             _chunk(content="Hello "),
-            _chunk(content="world", finish_reason="stop",
-                   usage=SimpleNamespace(prompt_tokens=5, completion_tokens=2,
-                                         total_tokens=7)),
+            _chunk(
+                content="world",
+                finish_reason="stop",
+                usage=SimpleNamespace(
+                    prompt_tokens=5, completion_tokens=2, total_tokens=7
+                ),
+            ),
         ]
         client = _FakeClient(stream_chunks=chunks)
         ticks = []
         with aux_progress_hook(lambda: ticks.append(1)):
             result = _create_with_progress(
-                client, {"model": "m1", "messages": [], "timeout": 30},
+                client,
+                {"model": "m1", "messages": [], "timeout": 30},
             )
         assert client.calls[0]["stream"] is True
         assert result.choices[0].message.content == "Hello world"
@@ -160,9 +179,13 @@ class TestCreateWithProgress:
         client = _FakeClient(stream_chunks=[chunk])
         ticks = []
         with aux_progress_hook(lambda: ticks.append(1)):
-            result = _create_with_progress(client, {"model": "m1", "messages": [], "timeout": 30})
+            result = _create_with_progress(
+                client, {"model": "m1", "messages": [], "timeout": 30}
+            )
         assert result.choices[0].message.reasoning == "thinking..."
-        assert ticks == [1]  # the reasoning chunk only; dispatch is not progress (#114938)
+        assert ticks == [
+            1
+        ]  # the reasoning chunk only; dispatch is not progress (#114938)
 
     def test_completed_response_ticks_only_terminal_signals(self):
         calls = []
@@ -192,7 +215,8 @@ class TestCreateWithProgress:
         )
         with aux_progress_hook(lambda: None):
             result = _create_with_progress(
-                client, {"model": "m1", "messages": []},
+                client,
+                {"model": "m1", "messages": []},
             )
         assert result is _COMPLETE
         # streamed attempt + non-streaming fallback
@@ -217,27 +241,29 @@ class TestCreateWithProgress:
             pytest.raises(_AuthError),
         ):
             _create_with_progress_once(
-                client, {"model": "m1", "messages": [], "timeout": 30},
+                client,
+                {"model": "m1", "messages": [], "timeout": 30},
             )
         assert dispatches == [1]  # dispatch telemetry preserved
         assert fence.progress_observed is False
-
-
 
 
 # ---------------------------------------------------------------------------
 # _aggregate_chat_stream
 # ---------------------------------------------------------------------------
 
+
 class TestAggregateChatStream:
     def test_tool_call_deltas_are_reassembled(self):
         tc0 = SimpleNamespace(
-            index=0, id="call_1",
+            index=0,
+            id="call_1",
             function=SimpleNamespace(name="do_thing", arguments='{"a"'),
         )
         tc1 = SimpleNamespace(
-            index=0, id=None,
-            function=SimpleNamespace(name=None, arguments=': 1}'),
+            index=0,
+            id=None,
+            function=SimpleNamespace(name=None, arguments=": 1}"),
         )
         chunks = [
             _chunk(tool_calls=[tc0]),
@@ -250,7 +276,6 @@ class TestAggregateChatStream:
         assert tool_calls[0].function.name == "do_thing"
         assert tool_calls[0].function.arguments == '{"a": 1}'
         assert result.choices[0].finish_reason == "tool_calls"
-
 
     def test_stream_close_is_called(self):
         closed = []
@@ -273,14 +298,29 @@ class TestAggregateChatStream:
         import json
 
         def frame(handler, payload):
-            raw = (payload if isinstance(payload, str) else f"data: {json.dumps(payload)}\n\n").encode()
+            raw = (
+                payload
+                if isinstance(payload, str)
+                else f"data: {json.dumps(payload)}\n\n"
+            ).encode()
             handler.wfile.write(b"%x\r\n%s\r\n" % (len(raw), raw))
             handler.wfile.flush()
 
         def chunk(content=None, finish=None, usage=None):
-            return {"id": "c1", "object": "chat.completion.chunk", "created": 0, "model": "m",
-                    "choices": [{"index": 0, "delta": {"content": content} if content else {},
-                                 "finish_reason": finish}], **({"usage": usage} if usage else {})}
+            return {
+                "id": "c1",
+                "object": "chat.completion.chunk",
+                "created": 0,
+                "model": "m",
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"content": content} if content else {},
+                        "finish_reason": finish,
+                    }
+                ],
+                **({"usage": usage} if usage else {}),
+            }
 
         class _Handler(http.server.BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -289,23 +329,41 @@ class TestAggregateChatStream:
                 pass
 
             def do_POST(self):
-                script = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))["model"]
+                script = json.loads(
+                    self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                )["model"]
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 self.wfile.flush()
                 try:
-                    if script in ("openai/o3", "slow"):  # silent reasoning before the first token
+                    if script in (
+                        "openai/o3",
+                        "slow",
+                    ):  # silent reasoning before the first token
                         time.sleep(2.0)
                     if script == "b":
                         gates["b_started"].set()
                     frame(self, chunk(content="partial"))
-                    if script == "usage":  # terminal chunk with billed usage, then a stalled teardown
-                        frame(self, chunk(finish="stop", usage={
-                            "prompt_tokens": 100, "completion_tokens": 9, "total_tokens": 109}))
+                    if (
+                        script == "usage"
+                    ):  # terminal chunk with billed usage, then a stalled teardown
+                        frame(
+                            self,
+                            chunk(
+                                finish="stop",
+                                usage={
+                                    "prompt_tokens": 100,
+                                    "completion_tokens": 9,
+                                    "total_tokens": 109,
+                                },
+                            ),
+                        )
                     gates.get(script, gates["release"]).wait(30)
-                    if script != "a":  # "a" ends its body at EOF (no [DONE]), freeing the keepalive socket
+                    if (
+                        script != "a"
+                    ):  # "a" ends its body at EOF (no [DONE]), freeing the keepalive socket
                         frame(self, "data: [DONE]\n\n")
                     self.wfile.write(b"0\r\n\r\n")
                     self.wfile.flush()
@@ -323,23 +381,43 @@ class TestAggregateChatStream:
         window is 3s and ``auxiliary.compression.no_progress_timeout`` is 0.4s."""
         import openai
 
-        gates = {name: threading.Event() for name in ("release", "a", "b", "b_started", "usage")}
+        gates = {
+            name: threading.Event()
+            for name in ("release", "a", "b", "b_started", "usage")
+        }
         server = self._sse_server(gates)
-        monkeypatch.setattr("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 3.0)
-        monkeypatch.setattr("agent.auxiliary_client._get_task_no_progress_timeout",
-                            lambda task: 0.4 if task == "compression" else None)
+        monkeypatch.setattr(
+            "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 3.0
+        )
+        monkeypatch.setattr(
+            "agent.auxiliary_client._get_task_no_progress_timeout",
+            lambda task: 0.4 if task == "compression" else None,
+        )
         # Loopback stands in for a remote endpoint: the first-token window applies to non-local ones.
-        monkeypatch.setattr("agent.model_metadata.is_local_endpoint", lambda _url: False)
-        client = openai.OpenAI(api_key="k", base_url=f"http://127.0.0.1:{server.server_port}/v1", max_retries=0)
+        monkeypatch.setattr(
+            "agent.model_metadata.is_local_endpoint", lambda _url: False
+        )
+        client = openai.OpenAI(
+            api_key="k",
+            base_url=f"http://127.0.0.1:{server.server_port}/v1",
+            max_retries=0,
+        )
 
         def call(model, task, *, via_relay_seam=False, provider=None):
-            from agent.auxiliary_client import _relay_aux_call_scope, _relay_sync_completion
+            from agent.auxiliary_client import (
+                _relay_aux_call_scope,
+                _relay_sync_completion,
+            )
 
             request = {"model": model, "messages": [], "timeout": 20.0}
             with aux_progress_hook(lambda: None):
-                if via_relay_seam:  # a recovery rung / credential retry: the default relay callback
+                if (
+                    via_relay_seam
+                ):  # a recovery rung / credential retry: the default relay callback
                     with _relay_aux_call_scope((task,), {}):
-                        return _relay_sync_completion(client, request, provider=provider)
+                        return _relay_sync_completion(
+                            client, request, provider=provider
+                        )
                 return _create_with_progress(client, request, task)
 
         try:
@@ -350,8 +428,12 @@ class TestAggregateChatStream:
             server.shutdown()
             client.close()
 
-    @pytest.mark.parametrize("via_relay_seam", [False, True], ids=["primary", "recovery_rung"])
-    def test_silent_stream_fails_fast_through_the_real_transport(self, sse, via_relay_seam):
+    @pytest.mark.parametrize(
+        "via_relay_seam", [False, True], ids=["primary", "recovery_rung"]
+    )
+    def test_silent_stream_fails_fast_through_the_real_transport(
+        self, sse, via_relay_seam
+    ):
         """#100501: an endpoint that sends one chunk then goes silent fails at the task's no-progress
         window as a timeout (so retry/fallback run), not at the request read timeout. Recovery rungs
         go through the default relay callback and must keep the task's window."""
@@ -365,8 +447,15 @@ class TestAggregateChatStream:
         assert "stalled: no new output for 0.4s" in str(excinfo.value)
         assert _should_skip_same_provider_retry("compression", excinfo.value)
 
-    @pytest.mark.parametrize("case", ["reasoning_before_first_token", "provider_stale_timeout_before_first_token",
-                                      "stall_after_terminal_usage", "late_timer_after_pool_reuse"])
+    @pytest.mark.parametrize(
+        "case",
+        [
+            "reasoning_before_first_token",
+            "provider_stale_timeout_before_first_token",
+            "stall_after_terminal_usage",
+            "late_timer_after_pool_reuse",
+        ],
+    )
     def test_watchdog_only_cuts_its_own_unfinished_stream(self, sse, case, monkeypatch):
         """The no-progress watchdog must not cut (a) a model thinking silently before its first token
         for 5x the inter-chunk window (main-loop reasoning floor, or the routed provider's explicit
@@ -376,28 +465,40 @@ class TestAggregateChatStream:
         gates, call = sse
         if case == "reasoning_before_first_token":
             gates["release"].set()  # the stream ends right after its first chunk
-            assert call("openai/o3", "compression").choices[0].message.content == "partial"
+            assert (
+                call("openai/o3", "compression").choices[0].message.content == "partial"
+            )
             return
         if case == "provider_stale_timeout_before_first_token":
             gates["release"].set()
             monkeypatch.setenv("CLAWK_STREAM_STALE_TIMEOUT", "0.5")
-            monkeypatch.setattr("clawk_cli.config.load_config_readonly",
-                                lambda: {"providers": {"openrouter": {"stale_timeout_seconds": 900}}})
-            result = call("slow", "compression", via_relay_seam=True, provider="openrouter")
+            monkeypatch.setattr(
+                "clawk_cli.config.load_config_readonly",
+                lambda: {"providers": {"openrouter": {"stale_timeout_seconds": 900}}},
+            )
+            result = call(
+                "slow", "compression", via_relay_seam=True, provider="openrouter"
+            )
             assert result.choices[0].message.content == "partial"
             return
         if case == "stall_after_terminal_usage":
             result = call("usage", "compression")
             assert result.choices[0].message.content == "partial"
-            assert (result.usage.prompt_tokens, result.usage.completion_tokens) == (100, 9)
+            assert (result.usage.prompt_tokens, result.usage.completion_tokens) == (
+                100,
+                9,
+            )
             return
         # Hold the stalled attempt's timer at the moment it shuts a socket down; meanwhile let
         # attempt A end at EOF (its connection may return to the pool) and start B on the client.
         paused, resume, outcome = threading.Event(), threading.Event(), {}
 
         def tracer(frame, event, _arg):
-            if (event == "call" and frame.f_code.co_name == "_shutdown_socket"
-                    and not paused.is_set()):
+            if (
+                event == "call"
+                and frame.f_code.co_name == "_shutdown_socket"
+                and not paused.is_set()
+            ):
                 paused.set()
                 resume.wait(3)
 
@@ -430,7 +531,6 @@ class TestAggregateChatStream:
         assert outcome["b"].choices[0].message.content == "partial"
 
 
-
 # ---------------------------------------------------------------------------
 # Content-bearing progress classification
 # ---------------------------------------------------------------------------
@@ -441,8 +541,12 @@ class TestContentBearingProgress:
         "event",
         [
             SimpleNamespace(type="response.created"),
-            SimpleNamespace(type="response.output_item.added", item={"type": "message"}),
-            SimpleNamespace(type="response.content_part.added", part={"type": "output_text"}),
+            SimpleNamespace(
+                type="response.output_item.added", item={"type": "message"}
+            ),
+            SimpleNamespace(
+                type="response.content_part.added", part={"type": "output_text"}
+            ),
             SimpleNamespace(type="response.output_text.delta", delta=""),
             SimpleNamespace(type="response.reasoning_summary_text.delta", delta=""),
             SimpleNamespace(type="response.function_call_arguments.delta", delta=""),
@@ -460,8 +564,12 @@ class TestContentBearingProgress:
         "event",
         [
             SimpleNamespace(type="response.output_text.delta", delta="token"),
-            SimpleNamespace(type="response.reasoning_summary_text.delta", delta="thought"),
-            SimpleNamespace(type="response.function_call_arguments.delta", delta='{"x"'),
+            SimpleNamespace(
+                type="response.reasoning_summary_text.delta", delta="thought"
+            ),
+            SimpleNamespace(
+                type="response.function_call_arguments.delta", delta='{"x"'
+            ),
             SimpleNamespace(
                 type="response.output_item.added",
                 item=SimpleNamespace(
@@ -482,7 +590,10 @@ class TestContentBearingProgress:
         [
             (SimpleNamespace(type="text_delta", text="", thinking=None), False),
             (SimpleNamespace(type="text_delta", text="token", thinking=None), True),
-            (SimpleNamespace(type="thinking_delta", text=None, thinking="thought"), True),
+            (
+                SimpleNamespace(type="thinking_delta", text=None, thinking="thought"),
+                True,
+            ),
             (SimpleNamespace(type="input_json_delta", partial_json=""), False),
             (SimpleNamespace(type="input_json_delta", partial_json='{"x"'), True),
             # Signed-thinking / citation payloads the transport emits
@@ -671,7 +782,9 @@ class TestContentBearingProgress:
         through _ChatStreamAccumulator ticked the fence, so a stalled
         summary stream never hit the inactivity timeout."""
         now = [10.0]
-        monkeypatch.setattr("agent.conversation_compression.time.monotonic", lambda: now[0])
+        monkeypatch.setattr(
+            "agent.conversation_compression.time.monotonic", lambda: now[0]
+        )
         fence = CompressionCommitFence()
         now[0] = 20.0
         accumulator = _ChatStreamAccumulator()
@@ -704,7 +817,9 @@ class TestContentBearingProgress:
         accumulator = _ChatStreamAccumulator()
 
         with (
-            _aux_thread_local_hook(_aux_provider_response, lambda: responses.append("response")),
+            _aux_thread_local_hook(
+                _aux_provider_response, lambda: responses.append("response")
+            ),
             aux_progress_hook(lambda: None),
         ):
             accumulator.feed(keepalive)
@@ -712,11 +827,9 @@ class TestContentBearingProgress:
         assert responses, "content-free first frame must still record TTFP"
 
 
-
 # ---------------------------------------------------------------------------
 # Ceiling arithmetic
 # ---------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------
@@ -724,32 +837,35 @@ class TestContentBearingProgress:
 # ---------------------------------------------------------------------------
 
 
-
 # ---------------------------------------------------------------------------
 # Stream-only providers (credit @kudi88, PR #60686)
 # ---------------------------------------------------------------------------
 
-class TestProviderRequiresStream:
 
+class TestProviderRequiresStream:
     def test_normal_endpoints_are_not(self):
-        assert _provider_requires_stream(
-            "openrouter", "https://openrouter.ai/api/v1"
-        ) is False
+        assert (
+            _provider_requires_stream("openrouter", "https://openrouter.ai/api/v1")
+            is False
+        )
         assert _provider_requires_stream("auto", None) is False
         assert _provider_requires_stream("auto", "") is False
 
     def test_config_marker_matches_custom_endpoint(self):
         with patch(
             "clawk_cli.config.load_config",
-            return_value={"auxiliary": {"stream_only_base_urls": ["my-proxy.example.com"]}},
+            return_value={
+                "auxiliary": {"stream_only_base_urls": ["my-proxy.example.com"]}
+            },
         ):
-            assert _provider_requires_stream(
-                "custom", "https://my-proxy.example.com/v1"
-            ) is True
-            assert _provider_requires_stream(
-                "custom", "https://other.example.com/v1"
-            ) is False
-
+            assert (
+                _provider_requires_stream("custom", "https://my-proxy.example.com/v1")
+                is True
+            )
+            assert (
+                _provider_requires_stream("custom", "https://other.example.com/v1")
+                is False
+            )
 
 
 class TestForceStream:
@@ -758,7 +874,9 @@ class TestForceStream:
         client = _FakeClient(stream_chunks=chunks)
         # NO aux_progress_hook installed — force_stream alone must stream.
         result = _create_with_progress(
-            client, {"model": "m1", "messages": []}, force_stream=True,
+            client,
+            {"model": "m1", "messages": []},
+            force_stream=True,
         )
         assert client.calls[0]["stream"] is True
         assert result.choices[0].message.content == "hi"
@@ -770,7 +888,9 @@ class TestForceStream:
         )
         with pytest.raises(RuntimeError, match="bad request"):
             _create_with_progress(
-                client, {"model": "m1", "messages": []}, force_stream=True,
+                client,
+                {"model": "m1", "messages": []},
+                force_stream=True,
             )
         # No silent non-streaming retry — the provider rejects those anyway.
         assert len(client.calls) == 1
@@ -784,11 +904,13 @@ class TestAsyncStreamAggregation:
         # ``async for``. Verify the async aggregator consumes a real async
         # iterator and preserves tool-call deltas.
         tc0 = SimpleNamespace(
-            index=0, id="call_9",
+            index=0,
+            id="call_9",
             function=SimpleNamespace(name="lookup", arguments='{"q":'),
         )
         tc1 = SimpleNamespace(
-            index=0, id=None,
+            index=0,
+            id=None,
             function=SimpleNamespace(name=None, arguments='"x"}'),
         )
         raw_chunks = [
@@ -848,10 +970,12 @@ class TestAsyncStreamAggregation:
                 return _AsyncStream([_chunk(content="ok", finish_reason="stop")])
 
         result = await _acreate_with_stream(
-            _AsyncClient(), {"model": "m1", "messages": [], "timeout": 30},
+            _AsyncClient(),
+            {"model": "m1", "messages": [], "timeout": 30},
         )
         assert calls[0]["stream"] is True
         assert result.choices[0].message.content == "ok"
+
     @pytest.mark.asyncio
     async def test_async_dispatch_only_auth_failure_does_not_tick_progress(self):
         """Async twin of the #114938 pin: a 401 dispatch must not reset the
@@ -876,7 +1000,8 @@ class TestAsyncStreamAggregation:
             pytest.raises(_AuthError),
         ):
             await _acreate_with_progress(
-                _AsyncClient(), {"model": "m1", "messages": [], "timeout": 30},
+                _AsyncClient(),
+                {"model": "m1", "messages": [], "timeout": 30},
             )
         assert dispatches == [1]
         assert fence.progress_observed is False

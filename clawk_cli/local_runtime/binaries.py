@@ -69,7 +69,9 @@ def _candidates(requested: str, gpu_vendor: str | None, target: str) -> tuple[st
         if requested not in BACKEND_PACKAGES:
             raise BinaryResolutionError(f"unknown backend {requested}")
         return (requested,)
-    preferred = select_backend(gpu_vendor, "macos" if target.startswith("darwin-") else "other")
+    preferred = select_backend(
+        gpu_vendor, "macos" if target.startswith("darwin-") else "other"
+    )
     fallback = ("vulkan", "cpu") if gpu_vendor else ("cpu",)
     return tuple(dict.fromkeys((preferred, *fallback)))
 
@@ -88,8 +90,9 @@ def unavailable_reason(backend: str, target: str | None = None) -> str | None:
     return None
 
 
-def resolve_backend(requested: str = "auto", *, gpu_vendor: str | None = None,
-                    target: str | None = None) -> str:
+def resolve_backend(
+    requested: str = "auto", *, gpu_vendor: str | None = None, target: str | None = None
+) -> str:
     """Explicit choices are strict. Auto only falls back to compatible pinned builds."""
     if requested == "auto" and target is None and gpu_vendor is None:
         from clawk_cli.local_runtime.bootstrap import _detect_gpu_vendor
@@ -107,13 +110,17 @@ def resolve_backend(requested: str = "auto", *, gpu_vendor: str | None = None,
 
 def _installed(candidates: tuple[str, ...], allow_outdated: bool) -> Engine | None:
     for candidate in candidates:
-        found = pm.installed_package(BACKEND_PACKAGES[candidate], allow_outdated=allow_outdated)
+        found = pm.installed_package(
+            BACKEND_PACKAGES[candidate], allow_outdated=allow_outdated
+        )
         if found is not None and found.binary is not None:
             return Engine(candidate, f"b{found.version}", found.binary)
     return None
 
 
-def installed_engine(backend: str = "auto", *, allow_outdated: bool = True) -> Engine | None:
+def installed_engine(
+    backend: str = "auto", *, allow_outdated: bool = True
+) -> Engine | None:
     """Boot may retain a prior PM pin and moves a pre-PM engine into PM's store once; it never downloads."""
     vendor = None
     if backend == "auto":
@@ -122,7 +129,9 @@ def installed_engine(backend: str = "auto", *, allow_outdated: bool = True) -> E
         vendor = _detect_gpu_vendor()
     candidates = _candidates(backend, vendor, pm.current_target())
     engine = _installed(candidates, allow_outdated)
-    if engine is None and any(adopt_legacy_engine(candidate) for candidate in candidates):
+    if engine is None and any(
+        adopt_legacy_engine(candidate) for candidate in candidates
+    ):
         engine = _installed(candidates, allow_outdated)
     return engine
 
@@ -145,21 +154,33 @@ def _legacy_installs(backend: str) -> list[tuple[str, Path, dict]]:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError):
             continue
-        if (isinstance(manifest, dict) and manifest.get("tag") == tag and manifest.get("backend") == backend
-                and manifest.get("verified_version") and isinstance(manifest.get("assets"), dict)
-                and manifest_path.parent not in _LEFT_IN_PLACE):
+        if (
+            isinstance(manifest, dict)
+            and manifest.get("tag") == tag
+            and manifest.get("backend") == backend
+            and manifest.get("verified_version")
+            and isinstance(manifest.get("assets"), dict)
+            and manifest_path.parent not in _LEFT_IN_PLACE
+        ):
             found.append((number, str(number), manifest_path.parent, manifest))
-    return [(version, path, manifest) for _, version, path, manifest in sorted(found, reverse=True)]
+    return [
+        (version, path, manifest)
+        for _, version, path, manifest in sorted(found, reverse=True)
+    ]
 
 
-def _legacy_artifacts(package, version: str, target: str, assets: dict) -> list[str] | None:
+def _legacy_artifacts(
+    package, version: str, target: str, assets: dict
+) -> list[str] | None:
     """The manifest's archive digests in PM's archive order, or None when one is missing.
 
     The pre-PM installer fetched only llama.cpp's own release assets. On Linux PM also pins the
     libgomp .deb, so an adopted engine there records fewer archives than the lock and counts as
     outdated: usable now (its manifest proves it ran against the host's libgomp), update offered."""
     shas = [assets.get(name) for name in package._asset_names(version, target)]
-    if not shas or not all(isinstance(sha, str) and _SHA256.fullmatch(sha) for sha in shas):
+    if not shas or not all(
+        isinstance(sha, str) and _SHA256.fullmatch(sha) for sha in shas
+    ):
         return None
     return shas
 
@@ -196,7 +217,11 @@ def adopt_legacy_engine(backend: str) -> bool:
         package = pm.get_package(name)
         target = pm.current_target()
         root = pm_paths.writable_store_root()
-        facts_path = pm_paths.facts_path() if root == pm_paths.store_root() else root / "facts.json"
+        facts_path = (
+            pm_paths.facts_path()
+            if root == pm_paths.store_root()
+            else root / "facts.json"
+        )
         with _ADOPTION_LOCK, _store_lock(root) as held:
             if not held or pm.installed_package(name, allow_outdated=True) is not None:
                 return False
@@ -205,12 +230,23 @@ def adopt_legacy_engine(backend: str) -> bool:
                     return True
                 _LEFT_IN_PLACE.add(source)
     except Exception as exc:
-        logger.warning("could not move the pre-PM llama.cpp %s engine into the PM store: %s", backend, exc)
+        logger.warning(
+            "could not move the pre-PM llama.cpp %s engine into the PM store: %s",
+            backend,
+            exc,
+        )
     return False
 
 
-def _adopt(package, version: str, target: str, source: Path, manifest: dict, root: Path,
-           facts_path: Path) -> bool:
+def _adopt(
+    package,
+    version: str,
+    target: str,
+    source: Path,
+    manifest: dict,
+    root: Path,
+    facts_path: Path,
+) -> bool:
     from pm.store import tree_digest
 
     artifacts = _legacy_artifacts(package, version, target, manifest["assets"])
@@ -228,26 +264,50 @@ def _adopt(package, version: str, target: str, source: Path, manifest: dict, roo
         logger.warning("pre-PM llama.cpp at %s left in place: %s", source, exc)
         return False
     try:
-        pm.Facts(facts_path).record(package.name, version, entry_name, package.env(entry, target), root,
-                                    target=target, artifacts=artifacts, digest=tree_digest(entry))
+        pm.Facts(facts_path).record(
+            package.name,
+            version,
+            entry_name,
+            package.env(entry, target),
+            root,
+            target=target,
+            artifacts=artifacts,
+            digest=tree_digest(entry),
+        )
     except BaseException:
         with suppress(OSError):
             os.rename(entry, source)
         raise
     with suppress(OSError):
         source.parent.rmdir()
-    logger.info("moved llama.cpp b%s (%s) from %s into the PM store", version, package.name, source)
+    logger.info(
+        "moved llama.cpp b%s (%s) from %s into the PM store",
+        version,
+        package.name,
+        source,
+    )
     return True
 
 
-def ensure_engine(backend: str, *, progress: Callable[[str, int, int, str], None] | None = None,
-                  pause_event: threading.Event | None = None,
-                  download_progress: ProgressFn | None = None) -> Engine:
+def ensure_engine(
+    backend: str,
+    *,
+    progress: Callable[[str, int, int, str], None] | None = None,
+    pause_event: threading.Event | None = None,
+    download_progress: ProgressFn | None = None,
+) -> Engine:
     """Only deliberate install/update jobs call this. PM verifies every archive and publishes."""
     resolved = resolve_backend(backend)
-    pm.ensure(BACKEND_PACKAGES[resolved], explicit=True, progress=progress,
-              pause_event=pause_event, download_progress=download_progress)
+    pm.ensure(
+        BACKEND_PACKAGES[resolved],
+        explicit=True,
+        progress=progress,
+        pause_event=pause_event,
+        download_progress=download_progress,
+    )
     engine = installed_engine(resolved, allow_outdated=False)
     if engine is None:
-        raise BinaryResolutionError(f"llama.cpp {resolved} install has no usable pinned binary")
+        raise BinaryResolutionError(
+            f"llama.cpp {resolved} install has no usable pinned binary"
+        )
     return engine

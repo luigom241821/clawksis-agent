@@ -20,7 +20,9 @@ from tools.browser_supervisor_capture import CapturedCDPInvalid
 
 class _FakeCDP:
     def __init__(self) -> None:
-        self.frames: list[tuple[int, str, str | None]] = []  # (connection no, method, sessionId)
+        self.frames: list[
+            tuple[int, str, str | None]
+        ] = []  # (connection no, method, sessionId)
         self.connections: list = []
         self.url = ""
         self.loop = asyncio.new_event_loop()
@@ -49,17 +51,27 @@ class _FakeCDP:
             if method == "Test.hang":
                 continue
             if method == "Test.error":
-                await ws.send(json.dumps({"id": msg["id"], "error": {"code": -32000, "message": "boom"}}))
+                await ws.send(
+                    json.dumps(
+                        {"id": msg["id"], "error": {"code": -32000, "message": "boom"}}
+                    )
+                )
                 continue
             result = {"echo": method, "sessionId": sid, "params": msg.get("params")}
             if method == "Target.getTargets":
-                result = {"targetInfos": [{"targetId": "T1", "type": "page", "url": "about:blank"}]}
+                result = {
+                    "targetInfos": [
+                        {"targetId": "T1", "type": "page", "url": "about:blank"}
+                    ]
+                }
             elif method == "Target.attachToTarget":
                 result = {"sessionId": f"S{conn}"}
             await ws.send(json.dumps({"id": msg["id"], "result": result}))
 
     def drop_current(self) -> None:
-        asyncio.run_coroutine_threadsafe(self.connections[-1].close(), self.loop).result(5)
+        asyncio.run_coroutine_threadsafe(
+            self.connections[-1].close(), self.loop
+        ).result(5)
 
     def methods_on(self, conn: int) -> list[str]:
         return [m for c, m, _ in self.frames if c == conn]
@@ -91,9 +103,17 @@ def test_call_round_trips_on_captured_connection(cdp, registry):
     handle = registry.capture("t")
     assert handle.is_valid() and handle.page_session_id == "S1"
 
-    reply = handle.call("Runtime.evaluate", {"expression": "1"}, session_id=handle.page_session_id)
-    assert reply["result"] == {"echo": "Runtime.evaluate", "sessionId": "S1", "params": {"expression": "1"}}
-    assert handle.call("Target.getTargets")["result"]["targetInfos"][0]["targetId"] == "T1"  # browser-level
+    reply = handle.call(
+        "Runtime.evaluate", {"expression": "1"}, session_id=handle.page_session_id
+    )
+    assert reply["result"] == {
+        "echo": "Runtime.evaluate",
+        "sessionId": "S1",
+        "params": {"expression": "1"},
+    }
+    assert (
+        handle.call("Target.getTargets")["result"]["targetInfos"][0]["targetId"] == "T1"
+    )  # browser-level
 
     with pytest.raises(RuntimeError, match="boom"):
         handle.call("Test.error")
@@ -101,7 +121,9 @@ def test_call_round_trips_on_captured_connection(cdp, registry):
     with pytest.raises(TimeoutError):
         handle.call("Test.hang", timeout=0.3)
     assert time.monotonic() - started < 2
-    assert handle.is_valid()  # neither an error reply nor a timeout invalidates the handle
+    assert (
+        handle.is_valid()
+    )  # neither an error reply nor a timeout invalidates the handle
 
     with pytest.raises(CapturedCDPInvalid):
         registry.capture("no-such-task")
@@ -113,7 +135,9 @@ def test_handle_never_follows_a_reconnect_or_replacement(cdp, registry):
 
     # A call in flight when the socket drops fails promptly as invalidation, not at its timeout.
     errors: list = []
-    caller = threading.Thread(target=lambda: errors.append(_raises(lambda: old.call("Test.hang", timeout=30))))
+    caller = threading.Thread(
+        target=lambda: errors.append(_raises(lambda: old.call("Test.hang", timeout=30)))
+    )
     caller.start()
     _wait(lambda: "Test.hang" in cdp.methods_on(1))
     started = time.monotonic()
@@ -130,7 +154,12 @@ def test_handle_never_follows_a_reconnect_or_replacement(cdp, registry):
 
     fresh = registry.capture("t")
     assert fresh.page_session_id == "S2"
-    assert fresh.call("Probe.fresh", session_id=fresh.page_session_id)["result"]["sessionId"] == "S2"
+    assert (
+        fresh.call("Probe.fresh", session_id=fresh.page_session_id)["result"][
+            "sessionId"
+        ]
+        == "S2"
+    )
 
     registry.stop("t")  # stop / replacement in the registry invalidates too
     assert not fresh.is_valid()

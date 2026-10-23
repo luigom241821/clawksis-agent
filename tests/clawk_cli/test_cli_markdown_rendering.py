@@ -8,7 +8,9 @@ from cli import _render_final_assistant_content
 
 def _render_to_text(renderable) -> str:
     buf = StringIO()
-    Console(file=buf, width=80, force_terminal=False, color_system=None).print(renderable)
+    Console(file=buf, width=80, force_terminal=False, color_system=None).print(
+        renderable
+    )
     return buf.getvalue()
 
 
@@ -22,18 +24,12 @@ def test_final_assistant_content_uses_markdown_renderable():
     assert "two" in output
 
 
-
-
 def test_final_assistant_content_keeps_non_path_markdown_escapes():
     renderable = _render_final_assistant_content(r"1\. Not an ordered list")
 
     output = _render_to_text(renderable)
     assert "1. Not an ordered list" in output
     assert r"1\." not in output
-
-
-
-
 
 
 def test_strip_mode_preserves_lists():
@@ -49,8 +45,6 @@ def test_strip_mode_preserves_lists():
     assert "**" not in output
 
 
-
-
 def test_strip_mode_preserves_blockquotes():
     renderable = _render_final_assistant_content(
         "> This is quoted text\n> Another quoted line",
@@ -60,10 +54,6 @@ def test_strip_mode_preserves_blockquotes():
     output = _render_to_text(renderable)
     assert "> This is quoted" in output
     assert "> Another quoted" in output
-
-
-
-
 
 
 def test_strip_mode_preserves_cron_asterisks_in_plain_text():
@@ -76,8 +66,6 @@ def test_strip_mode_preserves_cron_asterisks_in_plain_text():
     renderable = _render_final_assistant_content("* * *", mode="strip")
     output = _render_to_text(renderable)
     assert "* * *" not in output
-
-
 
 
 def test_strip_mode_preserves_intraword_underscores_in_snake_case_identifiers():

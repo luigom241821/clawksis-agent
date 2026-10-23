@@ -12,7 +12,6 @@ Covers the three seams added for remote Desktop backends:
     rejected, replay rejected, unknown session rejected).
 """
 
-
 import pytest
 
 from clawk_constants import get_clawk_home
@@ -71,7 +70,16 @@ def _fake_worker_publishes_url(monkeypatch, state="teststate123"):
     carrying *state* and then waits for the callback like the real worker's
     SDK does."""
 
-    def worker(clawk_home, server_name, cfg, reconnect_live, *, flow, on_done=None, **_card_options):
+    def worker(
+        clawk_home,
+        server_name,
+        cfg,
+        reconnect_live,
+        *,
+        flow,
+        on_done=None,
+        **_card_options,
+    ):
         import asyncio
 
         asyncio.run(
@@ -147,18 +155,24 @@ def test_start_flow_client_redirect_skips_gateway_listener(monkeypatch):
 
     # A pre-registered client owns its pinned listener inside the SDK; the receiver picker must
     # publish that URI without attempting a second bind.
-    pinned = DashboardOAuthFlow(
-        "pinned", "asana", None, str(get_clawk_home()), ""
-    )
+    pinned = DashboardOAuthFlow("pinned", "asana", None, str(get_clawk_home()), "")
     pinned_bound = []
     monkeypatch.setattr(
         mcp_oauth, "_start_loopback_receiver", lambda flow: pinned_bound.append(flow)
     )
-    assert mcp_oauth.choose_callback_receiver(
-        pinned,
-        {"oauth": {"client_id": "asana-client", "redirect_host": "localhost",
-                   "redirect_port": 27890}},
-    ) is None
+    assert (
+        mcp_oauth.choose_callback_receiver(
+            pinned,
+            {
+                "oauth": {
+                    "client_id": "asana-client",
+                    "redirect_host": "localhost",
+                    "redirect_port": 27890,
+                }
+            },
+        )
+        is None
+    )
     assert pinned.redirect_uri == "http://localhost:27890/callback"
     assert pinned_bound == []
 
@@ -232,8 +246,13 @@ def test_oauth_callback_rpc_relays_iss():
 
     flow = _make_session()
     contract = contracts.METHODS["mcp.servers.oauth.callback"]
-    params = {"session_id": "sess-relay-1", "name": "hosp", "code": "abc", "state": "s3cr3tstate",
-              "iss": "https://as.example.com"}
+    params = {
+        "session_id": "sess-relay-1",
+        "name": "hosp",
+        "code": "abc",
+        "state": "s3cr3tstate",
+        "iss": "https://as.example.com",
+    }
     params, problem = contracts.validate_params(contract, params)
     assert problem is None
     out = srv._methods["mcp.servers.oauth.callback"](1, params)
@@ -245,7 +264,9 @@ def test_loopback_listener_forwards_iss():
     """The gateway-hosted loopback listener parses ``iss`` off the redirect rather than dropping it."""
     import urllib.request
 
-    flow = _make_session(session_id="sess-relay-loop", server="loopy", state="loopstate")
+    flow = _make_session(
+        session_id="sess-relay-loop", server="loopy", state="loopstate"
+    )
     httpd = mcp_oauth._start_loopback_receiver(flow)
     try:
         port = httpd.server_address[1]

@@ -2,6 +2,7 @@
 
 The image must ship no separate headless-shell package or store entry.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,8 @@ from tests.docker.conftest import docker_exec, docker_exec_sh, start_container
 
 
 def test_stage2_discovers_chromium_binary(
-    built_image: str, container_name: str,
+    built_image: str,
+    container_name: str,
 ) -> None:
     """Stage2 must export the baked full-browser path, not a shell or .so.
 
@@ -57,7 +59,8 @@ def test_stage2_discovers_chromium_binary(
 
     r = docker_exec(
         container_name,
-        "python3", "-c",
+        "python3",
+        "-c",
         "import json; from pathlib import Path; "
         "root = Path('/opt/clawksis/tools'); "
         "packages = json.loads((root / 'facts.json').read_text())['packages']; "

@@ -97,9 +97,7 @@ class TestHealLogEscalation:
 
         with caplog.at_level(logging.WARNING, logger="run_agent"):
             for _ in range(5):
-                out = repair_empty_non_final_messages(
-                    [dict(m) for m in durable]
-                )
+                out = repair_empty_non_final_messages([dict(m) for m in durable])
                 assert out[1]["content"] == _INTERRUPTED_PLACEHOLDER
                 assert durable[1]["content"] == ""
 
@@ -134,9 +132,7 @@ class TestHealLogEscalation:
 class TestOneTimeUserNotice:
     def _heal_n(self, n):
         for _ in range(n):
-            repair_empty_non_final_messages(
-                [dict(m) for m in _poisoned_rows()]
-            )
+            repair_empty_non_final_messages([dict(m) for m in _poisoned_rows()])
 
     def test_notice_queued_once_at_threshold(self, monkeypatch):
         import agent.agent_runtime_helpers as arh
@@ -208,9 +204,7 @@ class TestOneTimeUserNotice:
             raise RuntimeError("no config")
 
         monkeypatch.setattr("clawk_cli.config.load_config_readonly", _boom)
-        assert (
-            arh._heal_escalation_threshold() == arh._EMPTY_HEAL_ESCALATE_AFTER
-        )
+        assert arh._heal_escalation_threshold() == arh._EMPTY_HEAL_ESCALATE_AFTER
 
 
 class TestHealStatsSurface:
@@ -220,9 +214,7 @@ class TestHealStatsSurface:
         monkeypatch.setattr(arh, "_heal_escalation_threshold", lambda: 3)
         set_session_context("sess-stats")
         for _ in range(4):
-            repair_empty_non_final_messages(
-                [dict(m) for m in _poisoned_rows()]
-            )
+            repair_empty_non_final_messages([dict(m) for m in _poisoned_rows()])
 
         stats = get_sanitizer_heal_stats()
         assert stats["sess-stats"]["heal_events"] == 4
@@ -236,17 +228,14 @@ class TestHealStatsSurface:
         monkeypatch.setattr(arh, "_heal_escalation_threshold", lambda: 2)
         set_session_context("sess-report")
         for _ in range(2):
-            repair_empty_non_final_messages(
-                [dict(m) for m in _poisoned_rows()]
-            )
+            repair_empty_non_final_messages([dict(m) for m in _poisoned_rows()])
 
         empty = LogSnapshot(path=None, tail_text="", full_text="")
         report = collect_debug_report(
             log_lines=5,
             dump_text="dump",
             log_snapshots={
-                k: empty
-                for k in ("agent", "errors", "gateway", "gui", "desktop")
+                k: empty for k in ("agent", "errors", "gateway", "gui", "desktop")
             },
         )
         assert "sess-report" in report
@@ -382,6 +371,4 @@ class TestProjectionStopsReheal:
         # never injected into the wire copy or durable history
         wire = agent.client.chat.completions.create.call_args.kwargs["messages"]
         assert all("repeated repair" not in str(m.get("content")) for m in wire)
-        assert all(
-            "repeated repair" not in str(m.get("content")) for m in history
-        )
+        assert all("repeated repair" not in str(m.get("content")) for m in history)

@@ -171,5 +171,3 @@ def test_event_from_wire_stamps_routed_profile():
         }
     )
     assert event.source.profile == "reviewer"
-
-

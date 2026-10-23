@@ -38,6 +38,7 @@ import pytest
 def loop_agent():
     """AIAgent with a mocked OpenAI client (mirrors test_run_agent's fixture)."""
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -76,14 +77,16 @@ def _run_text_turn(agent, answer: str, *, flush_side_effect=None):
     events: list[tuple[str, object]] = []
 
     def _record_flush(messages, conversation_history=None):
-        events.append((
-            "flush",
-            [
-                (m.get("role"), m.get("content"))
-                for m in messages
-                if isinstance(m, dict)
-            ],
-        ))
+        events.append(
+            (
+                "flush",
+                [
+                    (m.get("role"), m.get("content"))
+                    for m in messages
+                    if isinstance(m, dict)
+                ],
+            )
+        )
         if flush_side_effect is not None:
             raise flush_side_effect
         return True
@@ -92,9 +95,7 @@ def _run_text_turn(agent, answer: str, *, flush_side_effect=None):
         events.append(("persist_session", None))
 
     with (
-        patch.object(
-            agent, "_flush_messages_to_session_db", side_effect=_record_flush
-        ),
+        patch.object(agent, "_flush_messages_to_session_db", side_effect=_record_flush),
         patch.object(agent, "_persist_session", side_effect=_record_persist),
         patch.object(agent, "_save_trajectory"),
         patch.object(agent, "_cleanup_task_resources"),

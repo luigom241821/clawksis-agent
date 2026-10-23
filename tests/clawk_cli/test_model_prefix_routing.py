@@ -60,23 +60,34 @@ class TestVendorPrefixRouting:
     def test_unknown_vendor_prefix_still_unmatched(self, monkeypatch):
         monkeypatch.setattr(models, "_find_openrouter_slug", lambda _name: None)
         monkeypatch.setattr(models, "_configured_provider_ids", lambda: {"ollama"})
-        assert models.detect_provider_for_model("notaprovider/foo-model", "anthropic") is None
+        assert (
+            models.detect_provider_for_model("notaprovider/foo-model", "anthropic")
+            is None
+        )
 
     def test_openrouter_slug_still_wins_over_prefix_routing(self, monkeypatch):
         """Aggregator-native slugs keep their existing OpenRouter routing (when OpenRouter is
         authenticated — an unkeyed aggregator is never auto-selected)."""
         from clawk_cli import models_detect
-        monkeypatch.setattr(models_detect, "provider_has_credentials", lambda p: p == "openrouter")
+
+        monkeypatch.setattr(
+            models_detect, "provider_has_credentials", lambda p: p == "openrouter"
+        )
         monkeypatch.setattr(
             models, "_find_openrouter_slug", lambda _name: "deepseek/deepseek-chat"
         )
         monkeypatch.setattr(models, "_configured_provider_ids", lambda: {"deepseek"})
-        detected = models.detect_provider_for_model("deepseek/deepseek-chat", "anthropic")
+        detected = models.detect_provider_for_model(
+            "deepseek/deepseek-chat", "anthropic"
+        )
         assert detected == ("openrouter", "deepseek/deepseek-chat")
 
     def test_bare_model_detection_unchanged(self, monkeypatch):
         from clawk_cli import models_detect
-        monkeypatch.setattr(models_detect, "provider_has_credentials", lambda p: p == "deepseek")
+
+        monkeypatch.setattr(
+            models_detect, "provider_has_credentials", lambda p: p == "deepseek"
+        )
         monkeypatch.setattr(models, "_find_openrouter_slug", lambda _name: None)
         detected = models.detect_provider_for_model("deepseek-chat", "anthropic")
         assert detected == ("deepseek", "deepseek-chat")
@@ -116,7 +127,9 @@ class TestDictModelAliases:
         aliases = self._load_with(monkeypatch, cfg)
         da = aliases["qwen"]
         assert (da.model, da.provider, da.base_url) == (
-            "qwen3.5:4b", "ollama", "http://localhost:11434/v1",
+            "qwen3.5:4b",
+            "ollama",
+            "http://localhost:11434/v1",
         )
 
     def test_dict_entry_without_provider_uses_model_provider(self, monkeypatch):

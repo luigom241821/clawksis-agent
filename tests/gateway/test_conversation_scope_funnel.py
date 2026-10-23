@@ -36,8 +36,6 @@ def test_funnel_leaves_turn_scoped_and_generation_state_alone():
     assert runner._session_run_generation[KEY] == 7
 
 
-
-
 def test_funnel_also_clears_boundary_security_state():
     runner = _bare_runner()
     runner._pending_approvals = {KEY: {"cmd": "rm -rf"}, OTHER: {}}

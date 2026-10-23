@@ -18,7 +18,11 @@ from fastapi import APIRouter, HTTPException, Request
 from clawk_cli import web_git as _web_git
 from clawk_cli._subprocess_compat import bounded_probe_run
 from clawk_cli.web_deps import late
-from clawk_cli.web_server_files import _fs_path, _hosted_fs_path_allowed, _hosted_fs_read_guard
+from clawk_cli.web_server_files import (
+    _fs_path,
+    _hosted_fs_path_allowed,
+    _hosted_fs_read_guard,
+)
 from clawk_cli.web_models import (
     GitBranchSwitchBody,
     GitCommitBody,
@@ -123,19 +127,29 @@ async def git_base_branches_route(path: str):
 
 
 @router.get("/api/git/review/list")
-async def git_review_list_route(path: str, scope: str = "uncommitted", base: Optional[str] = None):
+async def git_review_list_route(
+    path: str, scope: str = "uncommitted", base: Optional[str] = None
+):
     return await _git_op(_web_git.review_list, _git_path(path), scope, base)
 
 
 @router.get("/api/git/review/diff")
 async def git_review_diff_route(
-    path: str, file: str, request: Request,
-    scope: str = "uncommitted", base: Optional[str] = None, staged: bool = False
+    path: str,
+    file: str,
+    request: Request,
+    scope: str = "uncommitted",
+    base: Optional[str] = None,
+    staged: bool = False,
 ):
     cwd = _git_path(path)
     target = _fs_path(file, cwd=cwd)
     _hosted_fs_read_guard(target, request)
-    return {"diff": await _git_op(_web_git.review_diff, cwd, str(target), scope, base, staged)}
+    return {
+        "diff": await _git_op(
+            _web_git.review_diff, cwd, str(target), scope, base, staged
+        )
+    }
 
 
 @router.get("/api/git/file-diff")
@@ -166,7 +180,9 @@ async def git_ship_info_route(path: str):
 
 @router.post("/api/git/review/pr-list")
 async def git_pr_list_route(body: GitPrListBody):
-    return await _git_op(_web_git.review_pr_list, _git_path(body.path), body.branches, body.numbers)
+    return await _git_op(
+        _web_git.review_pr_list, _git_path(body.path), body.branches, body.numbers
+    )
 
 
 @router.post("/api/git/review/stage")
@@ -186,7 +202,9 @@ async def git_revert_route(body: GitFileBody):
 
 @router.post("/api/git/review/commit")
 async def git_commit_route(body: GitCommitBody):
-    return await _git_op(_web_git.review_commit, _git_path(body.path), body.message, body.push)
+    return await _git_op(
+        _web_git.review_commit, _git_path(body.path), body.message, body.push
+    )
 
 
 @router.post("/api/git/review/push")
@@ -203,7 +221,9 @@ async def git_create_pr_route(body: GitPathBody):
 async def git_worktree_add_route(body: GitWorktreeAddBody):
     options = {
         key: value
-        for key, value in body.model_dump(include={"name", "branch", "base", "existingBranch"}).items()
+        for key, value in body.model_dump(
+            include={"name", "branch", "base", "existingBranch"}
+        ).items()
         if value
     }
     return await _git_op(_web_git.worktree_add, _git_path(body.path), options)
@@ -212,7 +232,10 @@ async def git_worktree_add_route(body: GitWorktreeAddBody):
 @router.post("/api/git/worktree/remove")
 async def git_worktree_remove_route(body: GitWorktreeRemoveBody):
     return await _git_op(
-        _web_git.worktree_remove, _git_path(body.path), _git_path(body.worktreePath), body.force
+        _web_git.worktree_remove,
+        _git_path(body.path),
+        _git_path(body.worktreePath),
+        body.force,
     )
 
 

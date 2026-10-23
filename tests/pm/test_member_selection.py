@@ -1,4 +1,5 @@
 """The workspace and admission paths agree on scoped keys and disabled plugins."""
+
 from pm.workspace import enabled_member_dirs
 
 
@@ -10,11 +11,17 @@ def test_scoped_members_respect_disabled_and_keep_other_profiles(tmp_path, monke
     other = other_home / "plugins" / "same"
     for member in (current, other):
         member.mkdir(parents=True)
-        (member / "pyproject.toml").write_text('[project]\nname="test"\nversion="1"\ndependencies=["requests>=2"]\n')
-    (home / "config.yaml").write_text('plugins:\n  enabled: [group/plugin]\n  disabled: []\n')
-    (other_home / "config.yaml").write_text('plugins:\n  enabled: [same]\n')
+        (member / "pyproject.toml").write_text(
+            '[project]\nname="test"\nversion="1"\ndependencies=["requests>=2"]\n'
+        )
+    (home / "config.yaml").write_text(
+        "plugins:\n  enabled: [group/plugin]\n  disabled: []\n"
+    )
+    (other_home / "config.yaml").write_text("plugins:\n  enabled: [same]\n")
     assert set(enabled_member_dirs()) == {current, other}
-    (home / "config.yaml").write_text('plugins:\n  enabled: [group/plugin]\n  disabled: [group/plugin]\n')
+    (home / "config.yaml").write_text(
+        "plugins:\n  enabled: [group/plugin]\n  disabled: [group/plugin]\n"
+    )
     assert enabled_member_dirs() == [other]
 
 
@@ -29,11 +36,18 @@ def test_manifest_only_member_is_named_after_its_plugin_dir_and_stays_unique(tmp
     for home in ("home-a", "home-b"):
         plugin = tmp_path / home / "plugins" / "My Plugin!"
         plugin.mkdir(parents=True)
-        (plugin / "plugin.yaml").write_text("name: my-plugin\npip_dependencies: [left-pad-py]\n", encoding="utf-8")
+        (plugin / "plugin.yaml").write_text(
+            "name: my-plugin\npip_dependencies: [left-pad-py]\n", encoding="utf-8"
+        )
         root = tmp_path / f"gen-{home}"
         root.mkdir()
         members.append(_workspace_member(plugin, root, identity=plugin))
-    names = [tomllib.loads((m / "pyproject.toml").read_text(encoding="utf-8"))["project"]["name"] for m in members]
+    names = [
+        tomllib.loads((m / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+            "name"
+        ]
+        for m in members
+    ]
     assert all(name.startswith("clawk-plugin-my-plugin-") for name in names), names
     assert names[0] != names[1]
     assert members[0].name != members[1].name
@@ -60,10 +74,17 @@ def test_pyproject_member_is_renamed_by_its_key_and_stays_unique(tmp_path):
         root = tmp_path / f"gen-{home}"
         root.mkdir()
         members.append(_workspace_member(plugin, root, identity=plugin))
-    names = [tomllib.loads((m / "pyproject.toml").read_text(encoding="utf-8"))["project"]["name"] for m in members]
+    names = [
+        tomllib.loads((m / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+            "name"
+        ]
+        for m in members
+    ]
     assert all(name.startswith("clawk-plugin-hindsight-") for name in names), names
     assert names[0] != names[1]
-    document = tomllib.loads((members[0] / "pyproject.toml").read_text(encoding="utf-8"))
+    document = tomllib.loads(
+        (members[0] / "pyproject.toml").read_text(encoding="utf-8")
+    )
     assert document["project"]["version"] == "1.0.0"
     assert document["project"]["dependencies"] == ["hindsight-client>=0.10.1"]
 
@@ -86,7 +107,8 @@ def test_buildable_pyproject_member_keeps_its_declared_name(tmp_path):
     root.mkdir()
     member = _workspace_member(plugin, root, identity=plugin)
     assert (member / "pyproject.toml").read_text(encoding="utf-8") == (
-        plugin / "pyproject.toml").read_text(encoding="utf-8")
+        plugin / "pyproject.toml"
+    ).read_text(encoding="utf-8")
 
 
 def test_virtual_member_without_project_metadata_gets_a_version(tmp_path):
@@ -100,11 +122,15 @@ def test_virtual_member_without_project_metadata_gets_a_version(tmp_path):
 
     plugin = tmp_path / "home" / "plugins" / "clawk-lcm"
     plugin.mkdir(parents=True)
-    (plugin / "pyproject.toml").write_text('[tool.ruff]\ntarget-version = "py311"\n', encoding="utf-8")
+    (plugin / "pyproject.toml").write_text(
+        '[tool.ruff]\ntarget-version = "py311"\n', encoding="utf-8"
+    )
     root = tmp_path / "gen"
     root.mkdir()
     member = _workspace_member(plugin, root, identity=plugin)
-    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
     assert project["version"] == "0.0.0"
 
 
@@ -126,7 +152,9 @@ def test_virtual_member_declaring_dynamic_version_is_left_alone(tmp_path):
     root = tmp_path / "gen"
     root.mkdir()
     member = _workspace_member(plugin, root, identity=plugin)
-    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
     assert "version" not in project
     assert project["dynamic"] == ["version"]
 
@@ -147,5 +175,7 @@ def test_buildable_member_without_a_version_gets_one_and_keeps_its_name(tmp_path
     root = tmp_path / "gen"
     root.mkdir()
     member = _workspace_member(plugin, root, identity=plugin)
-    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    project = tomllib.loads((member / "pyproject.toml").read_text(encoding="utf-8"))[
+        "project"
+    ]
     assert project == {"name": "noversion-plugin", "version": "0.0.0"}

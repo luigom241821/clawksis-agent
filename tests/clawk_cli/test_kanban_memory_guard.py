@@ -52,8 +52,6 @@ def test_derived_cap_small_vm_floors_at_two():
     assert kbd.derive_default_max_in_progress({"mem_total_kib": GIB // 4}) == 2
 
 
-
-
 def test_derived_cap_fails_open_without_memtotal():
     assert kbd.derive_default_max_in_progress({}) is None
     assert kbd.derive_default_max_in_progress({"mem_total_kib": 0}) is None
@@ -88,10 +86,6 @@ def test_resolve_max_in_progress_unset_and_unknown_memory_is_uncapped(monkeypatc
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # dispatch_once under pressure
 # ---------------------------------------------------------------------------
@@ -107,7 +101,9 @@ def _pressure_sample(level: str) -> dict:
 
 
 def test_dispatch_spawns_nothing_under_critical_pressure(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     monkeypatch.setattr(
         kbd, "_system_memory_sample", lambda: _pressure_sample("critical")
@@ -129,7 +125,9 @@ def test_dispatch_spawns_nothing_under_critical_pressure(
 
 
 def test_dispatch_critical_pressure_defers_not_drops(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     """Tasks skipped under pressure stay 'ready' and spawn once memory clears."""
     sample = {"value": _pressure_sample("critical")}
@@ -155,7 +153,9 @@ def test_dispatch_critical_pressure_defers_not_drops(
 
 
 def test_dispatch_elevated_pressure_spawns_at_most_one(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     monkeypatch.setattr(
         kbd, "_system_memory_sample", lambda: _pressure_sample("elevated")
@@ -176,7 +176,9 @@ def test_dispatch_elevated_pressure_spawns_at_most_one(
 
 
 def test_dispatch_elevated_pressure_does_not_widen_tighter_budget(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     """A caller cap already at 0 remaining must not be widened to 1."""
     monkeypatch.setattr(
@@ -199,7 +201,9 @@ def test_dispatch_elevated_pressure_does_not_widen_tighter_budget(
 
 
 def test_dispatch_unknown_pressure_imposes_no_restriction(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     monkeypatch.setattr(kbd, "_system_memory_sample", dict)
     spawns = []
@@ -218,7 +222,9 @@ def test_dispatch_unknown_pressure_imposes_no_restriction(
 
 
 def test_dispatch_critical_pressure_still_runs_reclaim_bookkeeping(
-    kanban_home, all_assignees_spawnable, monkeypatch,
+    kanban_home,
+    all_assignees_spawnable,
+    monkeypatch,
 ):
     """The guard must only stop NEW spawns — reclaim/promotion still run."""
     monkeypatch.setattr(
@@ -227,7 +233,10 @@ def test_dispatch_critical_pressure_still_runs_reclaim_bookkeeping(
     with kbc.connect() as conn:
         parent = kb.create_task(conn, title="parent", assignee="alice")
         child = kb.create_task(
-            conn, title="child", assignee="alice", parents=[parent],
+            conn,
+            title="child",
+            assignee="alice",
+            parents=[parent],
         )
         conn.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (parent,))
         res = kbd.dispatch_once(conn, spawn_fn=lambda *a, **k: 42)

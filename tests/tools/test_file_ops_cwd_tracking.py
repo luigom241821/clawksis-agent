@@ -14,6 +14,7 @@ the patch landed in a different directory's copy of the same file).
 Fix: _exec() now prefers the LIVE ``env.cwd`` over the init-time
 ``self.cwd``.  Explicit ``cwd`` arg to _exec still wins over both.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -38,6 +39,7 @@ class _FakeEnv:
 
     def execute(self, command: str, cwd: str | None = None, **kwargs) -> dict:
         import subprocess
+
         self.calls.append({"command": command, "cwd": cwd})
         # Simulate cd by updating self.cwd (the real env does the same
         # via _extract_cwd_from_output after a successful command)
@@ -73,9 +75,16 @@ class _WrapperEnv:
     def execute(self, command, cwd=None, **kwargs):
         import shlex
         import subprocess
+
         script = f"builtin cd -- {shlex.quote(cwd)} || exit 126\n{command}"
-        proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True, encoding="utf-8",
-                              input=kwargs.get("stdin_data"), check=False)
+        proc = subprocess.run(
+            ["bash", "-c", script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            input=kwargs.get("stdin_data"),
+            check=False,
+        )
         return {"output": proc.stdout + proc.stderr, "returncode": proc.returncode}
 
 
@@ -107,7 +116,6 @@ class TestShellFileOpsCwdTracking:
             "Stale ops.cwd leaked through — _exec must prefer env.cwd."
         )
 
-
     def test_env_without_cwd_attribute_falls_back_to_self_cwd(self, tmp_path):
         """Backends without a cwd attribute still work via init-time cwd."""
         dir_a = tmp_path / "fixed"
@@ -117,8 +125,14 @@ class TestShellFileOpsCwdTracking:
         class _NoCwdEnv:
             def execute(self, command, cwd=None, **kwargs):
                 import subprocess
-                proc = subprocess.run(["bash", "-c", command], cwd=cwd,
-                                      capture_output=True, text=True, check=False)
+
+                proc = subprocess.run(
+                    ["bash", "-c", command],
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
                 return {"output": proc.stdout, "returncode": proc.returncode}
 
         env = _NoCwdEnv()
@@ -161,11 +175,17 @@ class TestShellFileOpsCwdTracking:
 
         assert result.error is not None
         assert "terminal.cwd" in result.error and host_cwd in result.error
-        assert "No such file or directory" in result.error  # the shell's own line is kept
+        assert (
+            "No such file or directory" in result.error
+        )  # the shell's own line is kept
         assert not (tmp_path / "probe.py").exists()
 
-    @pytest.mark.parametrize("op", ["read_file", "read_file_raw", "read_file_bytes", "patch", "search"])
-    def test_wrapper_cd_failure_is_reported_as_such_on_every_read_path(self, tmp_path, op):
+    @pytest.mark.parametrize(
+        "op", ["read_file", "read_file_raw", "read_file_bytes", "patch", "search"]
+    )
+    def test_wrapper_cd_failure_is_reported_as_such_on_every_read_path(
+        self, tmp_path, op
+    ):
         """#98723: a wrapper-level failure must be reported as what it is on the
         paths that do NOT embed stdout (stat-probe reads, patch pre-image, search),
         never as 'environment unavailable' / 'file not found' / 'rg or find missing';
@@ -180,7 +200,10 @@ class TestShellFileOpsCwdTracking:
             "patch": lambda: ops.patch_replace(str(target), "hello", "bye"),
             "search": lambda: ops.search("t*", str(tmp_path), target="files"),
         }[op]()
-        assert "/Users/nobody/ws" in result.error and "No such file or directory" in result.error
+        assert (
+            "/Users/nobody/ws" in result.error
+            and "No such file or directory" in result.error
+        )
         assert "unavailable" not in result.error and "requires" not in result.error
         assert ops._has_command("find") is False
         assert ops._command_cache == {}  # a later valid cwd must re-probe
@@ -188,7 +211,11 @@ class TestShellFileOpsCwdTracking:
     def test_container_hint_only_for_container_backends(self, tmp_path):
         """The in-container path hint misdirects on local/ssh backends (the cwd may
         be an explicit arg, a session ``cd`` or a deleted directory)."""
-        local = ShellFileOperations(_WrapperEnv("/nope/local", env_type="local")).read_file_raw("/x")
-        docker = ShellFileOperations(_WrapperEnv("/nope/docker", env_type="docker")).read_file_raw("/x")
+        local = ShellFileOperations(
+            _WrapperEnv("/nope/local", env_type="local")
+        ).read_file_raw("/x")
+        docker = ShellFileOperations(
+            _WrapperEnv("/nope/docker", env_type="docker")
+        ).read_file_raw("/x")
         assert "/workspace" not in local.error
         assert "/workspace" in docker.error

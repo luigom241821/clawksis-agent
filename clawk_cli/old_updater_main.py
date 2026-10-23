@@ -21,7 +21,9 @@ class ShimQuarantineError(RuntimeError):
     # historical exception payload without performing or claiming quarantine.
     def __init__(self, failed_shims: list[str]):
         self.failed_shims = list(failed_shims)
-        super().__init__("could not quarantine live shim(s): " + ", ".join(self.failed_shims))
+        super().__init__(
+            "could not quarantine live shim(s): " + ", ".join(self.failed_shims)
+        )
 
 
 def _desktop_stamp_path() -> NoReturn:
@@ -30,7 +32,9 @@ def _desktop_stamp_path() -> NoReturn:
 
 
 def _detect_broken_lazy_refresh_imports(
-    install_cmd_prefix: list[str], *, env: dict[str, str] | None = None,
+    install_cmd_prefix: list[str],
+    *,
+    env: dict[str, str] | None = None,
 ) -> None:
     # Shim to stop the old updater doing work until relaunch: unknown, not healthy [].
     return None
@@ -67,21 +71,28 @@ def _parse_pe_machine(path: Path) -> NoReturn:
 
 
 def _quarantine_running_clawk_exe(
-    scripts_dir: Path, *, max_attempts: int = 4, failed_out: list[str] | None = None,
+    scripts_dir: Path,
+    *,
+    max_attempts: int = 4,
+    failed_out: list[str] | None = None,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not rename live executables.
     stop_for_relaunch()
 
 
 def _repair_broken_lazy_refresh_imports(
-    install_cmd_prefix: list[str], packages: list[str], *, env: dict[str, str] | None = None,
+    install_cmd_prefix: list[str],
+    packages: list[str],
+    *,
+    env: dict[str, str] | None = None,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not repair or claim health.
     stop_for_relaunch()
 
 
 def _resolve_install_target_python(
-    install_cmd_prefix: list[str], env: dict[str, str] | None,
+    install_cmd_prefix: list[str],
+    env: dict[str, str] | None,
 ) -> None:
     # Shim to stop the old updater doing work until relaunch: no interpreter to probe.
     return None
@@ -93,19 +104,27 @@ def _restore_quarantined_exes(moved: list[tuple[Path, Path]]) -> None:
 
 
 def _run_install_with_heartbeat(
-    cmd: list[str], *, env: dict[str, str] | None = None, heartbeat_interval_seconds: int = 30,
+    cmd: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    heartbeat_interval_seconds: int = 30,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not run pip/uv or report success.
     stop_for_relaunch()
 
 
-def _run_package_only_install(cmd: list[str], *, env: dict[str, str] | None = None) -> NoReturn:
+def _run_package_only_install(
+    cmd: list[str], *, env: dict[str, str] | None = None
+) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not run a package-only retry.
     stop_for_relaunch()
 
 
 def _run_quarantined_install(
-    cmd: list[str], *, env: dict[str, str] | None = None, scripts_dir: Path | None = None,
+    cmd: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    scripts_dir: Path | None = None,
     strict_quarantine: bool = False,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not install or enable fallback.
@@ -113,7 +132,11 @@ def _run_quarantined_install(
 
 
 def _run_with_idle_timeout(
-    cmd: list[str], cwd: Path, *, idle_timeout_seconds: int = 180, indent: str = "    ",
+    cmd: list[str],
+    cwd: Path,
+    *,
+    idle_timeout_seconds: int = 180,
+    indent: str = "    ",
     env: dict[str, str] | None = None,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not build or synthesize success.
@@ -126,14 +149,19 @@ def _self() -> NoReturn:
 
 
 def _verify_console_scripts_installed(
-    install_cmd_prefix: list[str], *, env: dict[str, str] | None = None,
+    install_cmd_prefix: list[str],
+    *,
+    env: dict[str, str] | None = None,
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not reinstall entry points.
     stop_for_relaunch()
 
 
 def _verify_core_dependencies_installed(
-    install_cmd_prefix: list[str], *, env: dict[str, str] | None = None, group: str = "all",
+    install_cmd_prefix: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    group: str = "all",
 ) -> NoReturn:
     # Shim to stop the old updater doing work until relaunch, not reinstall missing packages.
     stop_for_relaunch()

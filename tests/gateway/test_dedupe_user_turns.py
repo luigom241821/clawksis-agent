@@ -17,7 +17,6 @@ class TestHasPlatformMessageId:
         db.create_session("s1", "cli")
         return db
 
-
     def test_returns_false_for_different_session(self, tmp_path):
         db = self._make_db(tmp_path)
         db.create_session("s2", "cli")
@@ -29,9 +28,5 @@ class TestHasPlatformMessageId:
         )
         assert not db.has_platform_message_id("s2", "msg-123")
 
-
-
-
         # The gateway code checks this before calling append_to_transcript,
         # so the second append should never fire.
-

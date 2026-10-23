@@ -22,6 +22,7 @@ from gateway.platforms.event import MessageType
 # Discord mock setup (copied from test_discord_free_response.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_discord_mock():
     """Install a mock discord module when discord.py isn't available."""
     if "discord" in sys.modules and hasattr(sys.modules["discord"], "__file__"):
@@ -34,14 +35,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -65,6 +76,7 @@ from plugins.platforms.discord.adapter import DiscordAdapter
 # Fake channel / thread types
 # ---------------------------------------------------------------------------
 
+
 class FakeDMChannel:
     def __init__(self, channel_id: int = 1):
         self.id = channel_id
@@ -85,6 +97,7 @@ class FakeThread:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _redirect_cache(tmp_path, monkeypatch):
     """Point document cache to tmp_path so tests never write to ~/.clawksis."""
@@ -95,7 +108,9 @@ def _redirect_cache(tmp_path, monkeypatch):
 
 @pytest.fixture
 def adapter(monkeypatch):
-    monkeypatch.setattr(discord_platform.discord, "DMChannel", FakeDMChannel, raising=False)
+    monkeypatch.setattr(
+        discord_platform.discord, "DMChannel", FakeDMChannel, raising=False
+    )
     monkeypatch.setattr(discord_platform.discord, "Thread", FakeThread, raising=False)
     # These tests mock the actual download. Do not let host DNS/proxy mappings
     # for cdn.discordapp.com decide whether document handling is exercised.
@@ -111,6 +126,7 @@ def adapter(monkeypatch):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_attachment(
     *,
@@ -160,9 +176,8 @@ def _mock_aiohttp_download(raw_bytes: bytes):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestIncomingDocumentHandling:
-
-
     @pytest.mark.asyncio
     async def test_txt_content_injected(self, adapter):
         """.txt file under 100KB should have its content injected into event.text."""
@@ -170,7 +185,9 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(file_content):
             msg = make_message(
-                attachments=[make_attachment(filename="notes.txt", content_type="text/plain")],
+                attachments=[
+                    make_attachment(filename="notes.txt", content_type="text/plain")
+                ],
                 content="summarize this",
             )
             await adapter._handle_message(msg)
@@ -182,9 +199,6 @@ class TestIncomingDocumentHandling:
         # injection prepended before caption
         assert event.text.index("[Content of") < event.text.index("summarize this")
 
-
-
-
     @pytest.mark.asyncio
     async def test_large_txt_cached_not_injected(self, adapter):
         """.txt over 100KB should be cached but NOT injected into event.text."""
@@ -192,7 +206,13 @@ class TestIncomingDocumentHandling:
 
         with _mock_aiohttp_download(large_content):
             msg = make_message(
-                attachments=[make_attachment(filename="big.txt", content_type="text/plain", size=len(large_content))],
+                attachments=[
+                    make_attachment(
+                        filename="big.txt",
+                        content_type="text/plain",
+                        size=len(large_content),
+                    )
+                ],
                 content="",
             )
             await adapter._handle_message(msg)
@@ -203,13 +223,23 @@ class TestIncomingDocumentHandling:
         assert "[Content of" not in (event.text or "")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("content, inlined", [(b"small text", True), (b"x" * (200 * 1024), False)], ids=["small", "large"])
+    @pytest.mark.parametrize(
+        "content, inlined",
+        [(b"small text", True), (b"x" * (200 * 1024), False)],
+        ids=["small", "large"],
+    )
     async def test_document_marks_media_text_inlined(self, adapter, content, inlined):
         """The per-attachment flag must track whether the text was injected, so the document
         note never claims the content is inlined when the >100 KB gate skipped it."""
         with _mock_aiohttp_download(content):
             msg = make_message(
-                attachments=[make_attachment(filename="notes.txt", content_type="text/plain", size=len(content))],
+                attachments=[
+                    make_attachment(
+                        filename="notes.txt",
+                        content_type="text/plain",
+                        size=len(content),
+                    )
+                ],
                 content="",
             )
             await adapter._handle_message(msg)
@@ -248,7 +278,9 @@ class TestIncomingDocumentHandling:
 
             return FakeSession()
 
-        with patch("aiohttp.ClientSession", return_value=make_session([content1, content2])):
+        with patch(
+            "aiohttp.ClientSession", return_value=make_session([content1, content2])
+        ):
             msg = make_message(
                 attachments=[
                     make_attachment(filename="file1.txt", content_type="text/plain"),
@@ -280,9 +312,13 @@ class TestAllowAnyAttachment:
     async def test_unknown_type_cached_by_default(self, adapter):
         """Default: unknown extension is cached, not dropped."""
         with _mock_aiohttp_download(b"\x00\x01\x02 binary payload"):
-            msg = make_message([
-                make_attachment(filename="weird.xyz", content_type="application/x-custom")
-            ])
+            msg = make_message(
+                [
+                    make_attachment(
+                        filename="weird.xyz", content_type="application/x-custom"
+                    )
+                ]
+            )
             await adapter._handle_message(msg)
 
         event = adapter.handle_message.call_args[0][0]
@@ -295,19 +331,20 @@ class TestAllowAnyAttachment:
         # emits the path-pointing note based on DOCUMENT + octet-stream MIME.
         assert "[Content of" not in (event.text or "")
 
-
     @pytest.mark.asyncio
     async def test_max_attachment_bytes_caps_uploads(self, adapter):
         """discord.max_attachment_bytes overrides the historical 32 MiB cap."""
         adapter.config.extra["max_attachment_bytes"] = 1024  # 1 KiB
 
-        msg = make_message([
-            make_attachment(
-                filename="too_big.xyz",
-                content_type="application/x-custom",
-                size=2048,
-            )
-        ])
+        msg = make_message(
+            [
+                make_attachment(
+                    filename="too_big.xyz",
+                    content_type="application/x-custom",
+                    size=2048,
+                )
+            ]
+        )
         await adapter._handle_message(msg)
 
         event = adapter.handle_message.call_args[0][0]
@@ -320,16 +357,16 @@ class TestAllowAnyAttachment:
 
         # 64 MiB — would normally exceed the historical 32 MiB hardcoded cap.
         with _mock_aiohttp_download(b"x" * 16):
-            msg = make_message([
-                make_attachment(
-                    filename="huge.xyz",
-                    content_type="application/x-custom",
-                    size=64 * 1024 * 1024,
-                )
-            ])
+            msg = make_message(
+                [
+                    make_attachment(
+                        filename="huge.xyz",
+                        content_type="application/x-custom",
+                        size=64 * 1024 * 1024,
+                    )
+                ]
+            )
             await adapter._handle_message(msg)
 
         event = adapter.handle_message.call_args[0][0]
         assert len(event.media_urls) == 1
-
-

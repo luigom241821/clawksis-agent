@@ -25,8 +25,11 @@ def _resolve_sessions_index() -> Path:
     changed it, else live profile-scoped CLAWK_HOME — under the multiplexed gateway one process
     serves every profile, so the import-time constant would resolve every profile's pre-migration
     session lookup against the launch profile's index."""
-    return (_SESSIONS_INDEX if _SESSIONS_INDEX != _SESSIONS_INDEX_AT_IMPORT
-            else get_clawk_home() / "sessions" / "sessions.json")
+    return (
+        _SESSIONS_INDEX
+        if _SESSIONS_INDEX != _SESSIONS_INDEX_AT_IMPORT
+        else get_clawk_home() / "sessions" / "sessions.json"
+    )
 
 
 def _origin_user_id(entry: dict) -> str:
@@ -34,8 +37,14 @@ def _origin_user_id(entry: dict) -> str:
 
 
 def mirror_to_session(
-    platform: str, chat_id: str, message_text: str, source_label: str = "cli", thread_id: Optional[str] = None,
-    user_id: Optional[str] = None, role: str = "assistant", session_id: Optional[str] = None,
+    platform: str,
+    chat_id: str,
+    message_text: str,
+    source_label: str = "cli",
+    thread_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    role: str = "assistant",
+    session_id: Optional[str] = None,
 ) -> bool:
     """Append a delivery-mirror message to the target session's SQLite transcript.
 
@@ -54,26 +63,50 @@ def mirror_to_session(
     """
     try:
         if not session_id:
-            session_id = _find_session_id(platform, str(chat_id), thread_id=thread_id, user_id=user_id)
+            session_id = _find_session_id(
+                platform, str(chat_id), thread_id=thread_id, user_id=user_id
+            )
         if not session_id:
             logger.warning(
                 "Mirror: no session found for %s:%s thread=%s user=%s (explicit_id=none, origin-scan bailed)",
-                platform, chat_id, thread_id, user_id,
+                platform,
+                chat_id,
+                thread_id,
+                user_id,
             )
             return False
-        _append_to_sqlite(session_id, {
-            "role": role, "content": message_text, "timestamp": datetime.now().isoformat(),
-            "mirror": True, "mirror_source": source_label,
-        })
+        _append_to_sqlite(
+            session_id,
+            {
+                "role": role,
+                "content": message_text,
+                "timestamp": datetime.now().isoformat(),
+                "mirror": True,
+                "mirror_source": source_label,
+            },
+        )
         logger.debug("Mirror: wrote to session %s (from %s)", session_id, source_label)
         return True
     except Exception as e:
         # WARNING, not debug: a silent mirror drop is the cron continuation-amnesia bug.
-        logger.warning("Mirror failed for %s:%s thread=%s user=%s session=%s: %s", platform, chat_id, thread_id, user_id, session_id, e)
+        logger.warning(
+            "Mirror failed for %s:%s thread=%s user=%s session=%s: %s",
+            platform,
+            chat_id,
+            thread_id,
+            user_id,
+            session_id,
+            e,
+        )
         return False
 
 
-def _find_session_id(platform: str, chat_id: str, thread_id: Optional[str] = None, user_id: Optional[str] = None) -> Optional[str]:
+def _find_session_id(
+    platform: str,
+    chat_id: str,
+    thread_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> Optional[str]:
     """Active session_id for a platform + chat_id pair.
 
     state.db is primary; sessions.json is the pre-migration fallback.  DM keys
@@ -86,10 +119,20 @@ def _find_session_id(platform: str, chat_id: str, thread_id: Optional[str] = Non
     """
     try:
         from clawk_state_registry import acquire, release_or_close
+
         db = acquire()
         try:
             finder = getattr(db, "find_session_by_origin", None)
-            session_id = finder(platform=platform, chat_id=chat_id, thread_id=thread_id, user_id=user_id) if callable(finder) else None
+            session_id = (
+                finder(
+                    platform=platform,
+                    chat_id=chat_id,
+                    thread_id=thread_id,
+                    user_id=user_id,
+                )
+                if callable(finder)
+                else None
+            )
             if session_id:
                 return str(session_id)
         finally:
@@ -107,23 +150,40 @@ def _find_session_id(platform: str, chat_id: str, thread_id: Optional[str] = Non
 
     def _matches(entry: dict) -> bool:
         origin = entry.get("origin") or {}
-        return ((origin.get("platform") or entry.get("platform", "")).lower() == platform.lower()
-                and str(origin.get("chat_id", "")) == str(chat_id)
-                and (thread_id is None or str(origin.get("thread_id") or "") == str(thread_id)))
+        return (
+            (origin.get("platform") or entry.get("platform", "")).lower()
+            == platform.lower()
+            and str(origin.get("chat_id", "")) == str(chat_id)
+            and (
+                thread_id is None
+                or str(origin.get("thread_id") or "") == str(thread_id)
+            )
+        )
 
     # Keys starting with "_" (e.g. the gateway's "_README") are metadata sentinels.
-    candidates = [e for k, e in data.items() if not str(k).startswith("_") and isinstance(e, dict) and _matches(e)]
+    candidates = [
+        e
+        for k, e in data.items()
+        if not str(k).startswith("_") and isinstance(e, dict) and _matches(e)
+    ]
     if not candidates:
         return None
     if user_id:
-        exact_user_matches = [e for e in candidates if _origin_user_id(e) == str(user_id)]
+        exact_user_matches = [
+            e for e in candidates if _origin_user_id(e) == str(user_id)
+        ]
         if exact_user_matches:
             candidates = exact_user_matches
         elif len(candidates) > 1:
             return None
-    elif len(candidates) > 1 and len({u.strip() for u in map(_origin_user_id, candidates) if u.strip()}) > 1:
+    elif (
+        len(candidates) > 1
+        and len({u.strip() for u in map(_origin_user_id, candidates) if u.strip()}) > 1
+    ):
         return None
-    return max(candidates, key=lambda entry: entry.get("updated_at", "")).get("session_id")
+    return max(candidates, key=lambda entry: entry.get("updated_at", "")).get(
+        "session_id"
+    )
 
 
 def _append_to_sqlite(session_id: str, message: dict) -> None:
@@ -136,6 +196,10 @@ def _append_to_sqlite(session_id: str, message: dict) -> None:
 
     db = acquire()
     try:
-        db.append_message(session_id=session_id, role=message.get("role", "assistant"), content=message.get("content"))
+        db.append_message(
+            session_id=session_id,
+            role=message.get("role", "assistant"),
+            content=message.get("content"),
+        )
     finally:
         release_or_close(db)

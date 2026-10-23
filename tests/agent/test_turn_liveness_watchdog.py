@@ -35,6 +35,7 @@ import pytest
 
 from run_agent import AIAgent
 
+
 class _DB:
     def __init__(self, session_exists=True, acquire_result=True):
         self.events = []
@@ -68,6 +69,7 @@ class _DB:
     def release_session_turn_lease(self, session_id, holder):
         self.events.append(("release", session_id, holder))
 
+
 class _BlockingCommitFence:
     """Controllable compression commit fence for the stall-abort witness.
 
@@ -100,6 +102,7 @@ class _BlockingCommitFence:
         self.entered.set()
         assert self.release.wait(10.0), "fence was never released"
         return True
+
 
 class _ParkingReleaseLock:
     """Activity-lock wrapper that parks the releasing thread at one exact
@@ -135,6 +138,7 @@ class _ParkingReleaseLock:
                 "parked activity-lock release was never released"
             )
         return result
+
 
 def _agent_with_db(db, *, session_id="stalled-session", platform="desktop"):
     agent = AIAgent.__new__(AIAgent)
@@ -173,6 +177,7 @@ def _agent_with_db(db, *, session_id="stalled-session", platform="desktop"):
     agent._session_turn_lease_refresh_interval = 60.0
     return agent
 
+
 @pytest.fixture
 def watchdog_config(monkeypatch):
     """Arm the watchdog fast through config.yaml — the only supported surface.
@@ -194,6 +199,7 @@ def watchdog_config(monkeypatch):
     )
     return monkeypatch
 
+
 def _run_turn(agent, inner_loop, monkeypatch):
     """Drive AIAgent.run_conversation with a fake inner conversation loop."""
     from agent import conversation_loop as loop_module
@@ -205,13 +211,17 @@ def _run_turn(agent, inner_loop, monkeypatch):
         conversation_history=[{"role": "user", "content": "stale"}],
     )
 
-def test_watchdog_force_aborts_silently_stalled_turn(watchdog_config, monkeypatch, caplog):
+
+def test_watchdog_force_aborts_silently_stalled_turn(
+    watchdog_config, monkeypatch, caplog
+):
     """A turn with zero observable progress past the bound is surfaced and
     force-aborted as an interrupted turn instead of hanging forever."""
     db = _DB()
     agent = _agent_with_db(db)
 
     interrupt_seen = {}
+
     def stalled_loop(_agent, _message, _system, history, *_args, **_kwargs):
         # Simulate the #95548 zombie: the loop makes no progress and never
         # touches the activity clock. It only notices the watchdog's
@@ -247,6 +257,7 @@ def test_watchdog_force_aborts_silently_stalled_turn(watchdog_config, monkeypatc
     # The durable lease was released on the interrupted exit path.
     assert db.events[-1][0] == "release"
     assert db.events[-1][1] == "stalled-session"
+
 
 def test_watchdog_does_not_fire_while_turn_still_making_progress(
     watchdog_config, monkeypatch, caplog
@@ -285,6 +296,7 @@ def test_watchdog_does_not_fire_while_turn_still_making_progress(
     # The lease refresher ran during the turn — renewal is orthogonal to the
     # watchdog and continued while the turn was alive.
     assert len(db.refresh_times) >= 1
+
 
 def test_watchdog_stops_lease_renewal_when_interrupt_cannot_unwind_wedge(
     watchdog_config, monkeypatch
@@ -327,15 +339,14 @@ def test_watchdog_stops_lease_renewal_when_interrupt_cannot_unwind_wedge(
     # 0.05s would have produced ~8 more events in the 0.5s post-fire wedge if
     # renewal had continued. Tolerate only in-flight refreshes racing the
     # stop (<= 0.15s window).
-    late_refreshes = [
-        t for t in db.refresh_times if t > fire_ts["at"] + 0.15
-    ]
+    late_refreshes = [t for t in db.refresh_times if t > fire_ts["at"] + 0.15]
     assert late_refreshes == [], (
         f"lease renewal continued after watchdog fired: {len(late_refreshes)} "
         "post-fire refreshes"
     )
     # The lease row was still released when the turn finally unwound.
     assert [e[0] for e in db.events][-1] == "release"
+
 
 def test_watchdog_declines_abort_when_activity_resumes_during_warning(
     watchdog_config, monkeypatch, caplog
@@ -412,16 +423,15 @@ def test_watchdog_declines_abort_when_activity_resumes_during_warning(
     # "Force-aborting … stopping lease renewal" outcome — this assertion
     # is what made that witness red.
     assert not any(
-        "watchdog aborted turn" in record.getMessage()
-        for record in caplog.records
+        "watchdog aborted turn" in record.getMessage() for record in caplog.records
     ), "declined abort published a committed-abort settlement"
     assert not any(
-        "Force-aborting" in record.getMessage()
-        for record in caplog.records
+        "Force-aborting" in record.getMessage() for record in caplog.records
     ), "pre-commit surface published the definitive abort outcome"
     # …and the lease kept renewing through the resumed turn.
     assert len(db.refresh_times) >= 1
     assert db.events[-1][0] == "release"
+
 
 def test_watchdog_declines_abort_when_activity_resumes_after_revalidation(
     watchdog_config, monkeypatch, caplog
@@ -463,9 +473,7 @@ def test_watchdog_declines_abort_when_activity_resumes_after_revalidation(
                 tool_reason=tool_reason,
                 require_generation=require_generation,
             )
-        return real_interrupt(
-            message, hard_cancel=hard_cancel, tool_reason=tool_reason
-        )
+        return real_interrupt(message, hard_cancel=hard_cancel, tool_reason=tool_reason)
 
     agent.interrupt = intercepting_interrupt
 
@@ -515,6 +523,7 @@ def test_watchdog_declines_abort_when_activity_resumes_after_revalidation(
     # …and the lease kept renewing through the resumed turn.
     assert len(db.refresh_times) >= 1
     assert db.events[-1][0] == "release"
+
 
 def test_watchdog_declines_abort_when_activity_resumes_inside_interrupt_publication(
     watchdog_config, monkeypatch, caplog
@@ -600,6 +609,7 @@ def test_watchdog_declines_abort_when_activity_resumes_inside_interrupt_publicat
     assert len(db.refresh_times) >= 1
     assert db.events[-1][0] == "release"
 
+
 def test_watchdog_declines_abort_when_interrupt_publish_raises(
     watchdog_config, monkeypatch, caplog
 ):
@@ -671,6 +681,7 @@ def test_watchdog_declines_abort_when_interrupt_publish_raises(
     # …and the lease kept renewing because the abort was declined.
     assert len(db.refresh_times) >= 1
     assert db.events[-1][0] == "release"
+
 
 def test_declined_abort_does_not_cancel_pending_compression_commit():
     """#99758 P1 review: a stale liveness claim must not cancel a legitimate
@@ -773,9 +784,15 @@ def test_host_sleep_is_not_a_stalled_turn(monkeypatch, during_sample):
     agent._touch_activity("starting new turn")
     abort = MagicMock(return_value=True)
     watchdog = turn_liveness.TurnLivenessWatchdog(
-        agent, session_id="test", timeout_s=600, poll_s=15,
-        stop_event=threading.Event(), activity_lock=agent._liveness_activity_lock(),
-        is_turn_active=lambda: True, commit_abort=abort, deactivate_turn=MagicMock(),
+        agent,
+        session_id="test",
+        timeout_s=600,
+        poll_s=15,
+        stop_event=threading.Event(),
+        activity_lock=agent._liveness_activity_lock(),
+        is_turn_active=lambda: True,
+        commit_abort=abort,
+        deactivate_turn=MagicMock(),
     )
 
     pending_sleep = [0.0]

@@ -31,8 +31,23 @@ logger = logging.getLogger(__name__)
 # Bundled catalogs (compat: tests and the parity check iterate this). ``supported_languages()`` is the
 # live set including overlay and pack languages.
 SUPPORTED_LANGUAGES: tuple[str, ...] = (
-    "en", "zh", "zh-hant", "ja", "de", "es", "fr", "tr", "uk",
-    "af", "ko", "it", "ga", "pt", "ru", "hu", "ar",
+    "en",
+    "zh",
+    "zh-hant",
+    "ja",
+    "de",
+    "es",
+    "fr",
+    "tr",
+    "uk",
+    "af",
+    "ko",
+    "it",
+    "ga",
+    "pt",
+    "ru",
+    "hu",
+    "ar",
 )
 DEFAULT_LANGUAGE = "en"
 
@@ -41,26 +56,80 @@ DEFAULT_LANGUAGE = "en"
 # Taiwan/HK/Macau tags route to the distinct Traditional catalog. pt-br shares
 # the pt catalog unless a pack supplies a real pt-br one (a supplied id always wins over an alias).
 _LANGUAGE_ALIASES: dict[str, str] = {
-    "english": "en", "en-us": "en", "en-gb": "en",
-    "chinese": "zh", "mandarin": "zh", "zh-cn": "zh", "zh-hans": "zh", "zh-sg": "zh",
-    "traditional-chinese": "zh-hant", "traditional_chinese": "zh-hant",
-    "zh-tw": "zh-hant", "zh-hk": "zh-hant", "zh-mo": "zh-hant",
-    "japanese": "ja", "jp": "ja", "ja-jp": "ja",
-    "german": "de", "deutsch": "de", "de-de": "de", "de-at": "de", "de-ch": "de",
-    "spanish": "es", "español": "es", "espanol": "es", "es-es": "es", "es-mx": "es", "es-ar": "es",
-    "french": "fr", "français": "fr", "france": "fr", "fr-fr": "fr", "fr-be": "fr", "fr-ca": "fr", "fr-ch": "fr",
-    "ukrainian": "uk", "ukrainisch": "uk", "українська": "uk", "uk-ua": "uk", "ua": "uk",
-    "turkish": "tr", "türkçe": "tr", "tr-tr": "tr",
-    "afrikaans": "af", "af-za": "af",
-    "korean": "ko", "한국어": "ko", "ko-kr": "ko",
-    "italian": "it", "italiano": "it", "it-it": "it", "it-ch": "it",
-    "irish": "ga", "gaeilge": "ga", "ga-ie": "ga",
-    "portuguese": "pt", "português": "pt", "portugues": "pt",
-    "pt-pt": "pt", "pt-br": "pt", "brazilian": "pt", "brasileiro": "pt",
-    "russian": "ru", "русский": "ru", "ru-ru": "ru",
-    "hungarian": "hu", "magyar": "hu", "hu-hu": "hu",
-    "arabic": "ar", "العربية": "ar",
-    "ar-sa": "ar", "ar-eg": "ar", "ar-ae": "ar", "ar-ma": "ar", "ar-dz": "ar",
+    "english": "en",
+    "en-us": "en",
+    "en-gb": "en",
+    "chinese": "zh",
+    "mandarin": "zh",
+    "zh-cn": "zh",
+    "zh-hans": "zh",
+    "zh-sg": "zh",
+    "traditional-chinese": "zh-hant",
+    "traditional_chinese": "zh-hant",
+    "zh-tw": "zh-hant",
+    "zh-hk": "zh-hant",
+    "zh-mo": "zh-hant",
+    "japanese": "ja",
+    "jp": "ja",
+    "ja-jp": "ja",
+    "german": "de",
+    "deutsch": "de",
+    "de-de": "de",
+    "de-at": "de",
+    "de-ch": "de",
+    "spanish": "es",
+    "español": "es",
+    "espanol": "es",
+    "es-es": "es",
+    "es-mx": "es",
+    "es-ar": "es",
+    "french": "fr",
+    "français": "fr",
+    "france": "fr",
+    "fr-fr": "fr",
+    "fr-be": "fr",
+    "fr-ca": "fr",
+    "fr-ch": "fr",
+    "ukrainian": "uk",
+    "ukrainisch": "uk",
+    "українська": "uk",
+    "uk-ua": "uk",
+    "ua": "uk",
+    "turkish": "tr",
+    "türkçe": "tr",
+    "tr-tr": "tr",
+    "afrikaans": "af",
+    "af-za": "af",
+    "korean": "ko",
+    "한국어": "ko",
+    "ko-kr": "ko",
+    "italian": "it",
+    "italiano": "it",
+    "it-it": "it",
+    "it-ch": "it",
+    "irish": "ga",
+    "gaeilge": "ga",
+    "ga-ie": "ga",
+    "portuguese": "pt",
+    "português": "pt",
+    "portugues": "pt",
+    "pt-pt": "pt",
+    "pt-br": "pt",
+    "brazilian": "pt",
+    "brasileiro": "pt",
+    "russian": "ru",
+    "русский": "ru",
+    "ru-ru": "ru",
+    "hungarian": "hu",
+    "magyar": "hu",
+    "hu-hu": "hu",
+    "arabic": "ar",
+    "العربية": "ar",
+    "ar-sa": "ar",
+    "ar-eg": "ar",
+    "ar-ae": "ar",
+    "ar-ma": "ar",
+    "ar-dz": "ar",
 }
 
 # (home, lang) -> merged catalog (packs over overlay over bundled). home -> supported tuple.
@@ -81,13 +150,15 @@ def _locales_dir() -> Path:
     if override:
         logger.warning(
             "CLAWK_BUNDLED_LOCALES points to a non-directory path (%s); "
-            "falling back to bundled/source locale resolution", override,
+            "falling back to bundled/source locale resolution",
+            override,
         )
     return Path(__file__).resolve().parent.parent / "locales"
 
 
 def _current_home() -> str:
     from clawk_constants import get_clawk_home
+
     return str(get_clawk_home())
 
 
@@ -161,7 +232,9 @@ def _load_catalog(lang: str, home: str | None = None) -> dict[str, str]:
     return merged
 
 
-def surface_catalog(lang: str, surface: str = i18n_layers.CORE_SURFACE) -> dict[str, str]:
+def surface_catalog(
+    lang: str, surface: str = i18n_layers.CORE_SURFACE
+) -> dict[str, str]:
     """What ``i18n.catalog`` serves for one surface: packs > overlay > bundled ``locales/<lang>.<surface>.yaml``.
 
     The core surface omits the bundled layer (the Python renderer already has it); the TUI ships only an
@@ -182,6 +255,7 @@ def _config_language_cached(clawk_home: str) -> str | None:
     profile's language for every other profile."""
     try:
         from clawk_cli.config import load_config_readonly
+
         lang = (load_config_readonly().get("display") or {}).get("language")
         return _normalize_lang(lang, clawk_home) if lang else None
     except Exception as exc:
@@ -206,11 +280,18 @@ def reset_language_cache() -> None:
 
 def _resolve_language(home: str) -> str:
     from agent.secret_scope import UnscopedSecretError, get_secret
+
     try:
         env_lang = get_secret("CLAWK_LANGUAGE")
     except UnscopedSecretError:
-        env_lang = os.environ.get("CLAWK_LANGUAGE")  # unscoped default-profile path: environ IS its own value
-    return _normalize_lang(env_lang, home) if env_lang else _config_language_cached(home) or DEFAULT_LANGUAGE
+        env_lang = os.environ.get(
+            "CLAWK_LANGUAGE"
+        )  # unscoped default-profile path: environ IS its own value
+    return (
+        _normalize_lang(env_lang, home)
+        if env_lang
+        else _config_language_cached(home) or DEFAULT_LANGUAGE
+    )
 
 
 def get_language() -> str:
@@ -239,7 +320,13 @@ def t(key: str, lang: str | None = None, **format_kwargs: Any) -> str:
     try:
         return value.format(**format_kwargs)
     except (KeyError, IndexError, ValueError) as exc:
-        logger.warning("i18n format failed for key=%r lang=%r kwargs=%r: %s", key, target, format_kwargs, exc)
+        logger.warning(
+            "i18n format failed for key=%r lang=%r kwargs=%r: %s",
+            key,
+            target,
+            format_kwargs,
+            exc,
+        )
         return value
 
 

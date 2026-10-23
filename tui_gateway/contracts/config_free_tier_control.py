@@ -59,8 +59,12 @@ class ConfigGetResult(Result):
     mcp_rev: str | None = None
 
 
-method("config.get", params=ConfigGetParams, result=ConfigGetResult,
-       doc="Read one normalised config value (or the whole effective config) the way the UIs render it.")
+method(
+    "config.get",
+    params=ConfigGetParams,
+    result=ConfigGetResult,
+    doc="Read one normalised config value (or the whole effective config) the way the UIs render it.",
+)
 
 
 # ── config.set ────────────────────────────────────────────────────────────────────────────────
@@ -98,8 +102,12 @@ class ConfigSetResult(Result):
     info: SessionLiveInfo | None = None
 
 
-method("config.set", params=ConfigSetParams, result=ConfigSetResult,
-       doc="Change one config key (persisted or session-scoped) and read back the normalised value.")
+method(
+    "config.set",
+    params=ConfigSetParams,
+    result=ConfigSetResult,
+    doc="Change one config key (persisted or session-scoped) and read back the normalised value.",
+)
 
 
 # ── setup readiness ───────────────────────────────────────────────────────────────────────────
@@ -124,8 +132,12 @@ class SetupStatusResult(Result):
     retry_after: int | None = None
 
 
-method("setup.status", params=ProfileParams, result=SetupStatusResult,
-       doc="Loose provider check: is ANY provider auth state discoverable for the (launch or named) profile.")
+method(
+    "setup.status",
+    params=ProfileParams,
+    result=SetupStatusResult,
+    doc="Loose provider check: is ANY provider auth state discoverable for the (launch or named) profile.",
+)
 
 
 class SetupRuntimeCheckParams(ProfileParams):
@@ -145,8 +157,12 @@ class SetupRuntimeCheckResult(Result):
     profile: str | None = None
 
 
-method("setup.runtime_check", params=SetupRuntimeCheckParams, result=SetupRuntimeCheckResult,
-       doc="Strict provider check through the same runtime resolution the agent uses on session creation.")
+method(
+    "setup.runtime_check",
+    params=SetupRuntimeCheckParams,
+    result=SetupRuntimeCheckResult,
+    doc="Strict provider check through the same runtime resolution the agent uses on session creation.",
+)
 
 
 # ── free tier ─────────────────────────────────────────────────────────────────────────────────
@@ -188,22 +204,32 @@ class FreeTierStatusResult(Result):
     connector_nudge_due_in: int | None = None
 
 
-method("free_tier.status", params=ProfileParams, result=FreeTierStatusResult,
-       doc="Pure read of the focused profile's free-tier identity state (no network, no side effects).")
+method(
+    "free_tier.status",
+    params=ProfileParams,
+    result=FreeTierStatusResult,
+    doc="Pure read of the focused profile's free-tier identity state (no network, no side effects).",
+)
 
 
 class FreeTierChallengeResultParams(ProfileParams):
     url: str
     attempt: int = 0
-    outcome: Literal["done", "failed", "closed", "timeout", "refused", "error", "unsupported"]
+    outcome: Literal[
+        "done", "failed", "closed", "timeout", "refused", "error", "unsupported"
+    ]
 
 
 class FreeTierChallengeResult(Result):
     accepted: bool
 
 
-method("free_tier.challenge_result", params=FreeTierChallengeResultParams, result=FreeTierChallengeResult,
-       doc="Report a browser window outcome for the matching pending attempt; mint remains authoritative.")
+method(
+    "free_tier.challenge_result",
+    params=FreeTierChallengeResultParams,
+    result=FreeTierChallengeResult,
+    doc="Report a browser window outcome for the matching pending attempt; mint remains authoritative.",
+)
 
 
 class FreeTierProvisionResult(Result):
@@ -215,16 +241,24 @@ class FreeTierProvisionResult(Result):
     retry_after: int | None = None
 
 
-method("free_tier.provision", params=ProfileParams, result=FreeTierProvisionResult,
-       doc="Explicit retry of the free-tier identity mint when the boot bootstrap could not create it.")
+method(
+    "free_tier.provision",
+    params=ProfileParams,
+    result=FreeTierProvisionResult,
+    doc="Explicit retry of the free-tier identity mint when the boot bootstrap could not create it.",
+)
 
 
 class FreeTierAckNoticeResult(Result):
     acked: bool
 
 
-method("free_tier.ack_notice", params=ProfileParams, result=FreeTierAckNoticeResult,
-       doc="Mark the one-time availability notice as shown on the free-tier identity.")
+method(
+    "free_tier.ack_notice",
+    params=ProfileParams,
+    result=FreeTierAckNoticeResult,
+    doc="Mark the one-time availability notice as shown on the free-tier identity.",
+)
 
 
 class FreeTierClaimNudgeParams(ProfileParams):
@@ -235,8 +269,12 @@ class FreeTierClaimNudgeResult(Result):
     claimed: bool
 
 
-method("free_tier.claim_nudge", params=FreeTierClaimNudgeParams, result=FreeTierClaimNudgeResult,
-       doc="Claim the due sign-in offer; true for exactly one caller each time an offer comes due.")
+method(
+    "free_tier.claim_nudge",
+    params=FreeTierClaimNudgeParams,
+    result=FreeTierClaimNudgeResult,
+    doc="Claim the due sign-in offer; true for exactly one caller each time an offer comes due.",
+)
 
 
 # ── shared metrics consent ────────────────────────────────────────────────────────────────────
@@ -254,8 +292,12 @@ class SharedMetricsConsentResult(Result):
     reask: bool = False
 
 
-method("shared_metrics.status", params=ProfileParams, result=SharedMetricsConsentResult,
-       doc="Pure read of the focused profile's shared-metrics opt-ins (collection, upload, answered).")
+method(
+    "shared_metrics.status",
+    params=ProfileParams,
+    result=SharedMetricsConsentResult,
+    doc="Pure read of the focused profile's shared-metrics opt-ins (collection, upload, answered).",
+)
 
 
 class SharedMetricsSetParams(ProfileParams):
@@ -266,8 +308,12 @@ class SharedMetricsSetParams(ProfileParams):
     first_run: bool = False
 
 
-method("shared_metrics.set", params=SharedMetricsSetParams, result=SharedMetricsConsentResult,
-       doc="Write both shared-metrics opt-ins at once (send requires collection) and reconcile consent windows.")
+method(
+    "shared_metrics.set",
+    params=SharedMetricsSetParams,
+    result=SharedMetricsConsentResult,
+    doc="Write both shared-metrics opt-ins at once (send requires collection) and reconcile consent windows.",
+)
 
 
 class SharedMetricsSlashCommandParams(ProfileParams):
@@ -282,9 +328,12 @@ class SharedMetricsSlashCommandResult(Result):
     ok: bool
 
 
-method("shared_metrics.slash_command", params=SharedMetricsSlashCommandParams,
-       result=SharedMetricsSlashCommandResult,
-       doc="Count one user-typed slash command (fire-and-forget; a no-op unless shared metrics are on).")
+method(
+    "shared_metrics.slash_command",
+    params=SharedMetricsSlashCommandParams,
+    result=SharedMetricsSlashCommandResult,
+    doc="Count one user-typed slash command (fire-and-forget; a no-op unless shared metrics are on).",
+)
 
 
 class SharedMetricsStartupLatencyParams(ProfileParams):
@@ -304,9 +353,12 @@ class SharedMetricsStartupLatencyResult(Result):
     ok: bool
 
 
-method("shared_metrics.startup_latency", params=SharedMetricsStartupLatencyParams,
-       result=SharedMetricsStartupLatencyResult,
-       doc="Record one client launch-to-ready latency (fire-and-forget; a no-op unless shared metrics are on).")
+method(
+    "shared_metrics.startup_latency",
+    params=SharedMetricsStartupLatencyParams,
+    result=SharedMetricsStartupLatencyResult,
+    doc="Record one client launch-to-ready latency (fire-and-forget; a no-op unless shared metrics are on).",
+)
 
 
 # ---- v4 reliability ----
@@ -328,8 +380,12 @@ class SharedMetricsUpdateRunResult(Result):
     ok: bool
 
 
-method("shared_metrics.update_run", params=SharedMetricsUpdateRunParams, result=SharedMetricsUpdateRunResult,
-       doc="Count one Desktop packaged self-update outcome (fire-and-forget; a no-op unless shared metrics are on).")
+method(
+    "shared_metrics.update_run",
+    params=SharedMetricsUpdateRunParams,
+    result=SharedMetricsUpdateRunResult,
+    doc="Count one Desktop packaged self-update outcome (fire-and-forget; a no-op unless shared metrics are on).",
+)
 # ---- end v4 reliability ----
 
 
@@ -341,9 +397,12 @@ class SharedMetricsDesktopFeatureUseParams(ProfileParams):
     area: str
 
 
-method("shared_metrics.desktop_feature_use", params=SharedMetricsDesktopFeatureUseParams,
-       result=OkResult,
-       doc="Count one Desktop area used today (fire-and-forget; once per area per UTC day; a no-op unless on).")
+method(
+    "shared_metrics.desktop_feature_use",
+    params=SharedMetricsDesktopFeatureUseParams,
+    result=OkResult,
+    doc="Count one Desktop area used today (fire-and-forget; once per area per UTC day; a no-op unless on).",
+)
 
 
 class SharedMetricsDesktopFrictionParams(ProfileParams):
@@ -355,9 +414,12 @@ class SharedMetricsDesktopFrictionParams(ProfileParams):
     detail: str
 
 
-method("shared_metrics.desktop_friction", params=SharedMetricsDesktopFrictionParams,
-       result=OkResult,
-       doc="Count one Desktop friction event (fire-and-forget; capped per day; a no-op unless on).")
+method(
+    "shared_metrics.desktop_friction",
+    params=SharedMetricsDesktopFrictionParams,
+    result=OkResult,
+    doc="Count one Desktop friction event (fire-and-forget; capped per day; a no-op unless on).",
+)
 
 
 class SharedMetricsDesktopOnboardingParams(ProfileParams):
@@ -367,9 +429,12 @@ class SharedMetricsDesktopOnboardingParams(ProfileParams):
     event: str
 
 
-method("shared_metrics.desktop_onboarding", params=SharedMetricsDesktopOnboardingParams,
-       result=OkResult,
-       doc="Count one Desktop first-run step transition (fire-and-forget; once per step+event; a no-op unless on).")
+method(
+    "shared_metrics.desktop_onboarding",
+    params=SharedMetricsDesktopOnboardingParams,
+    result=OkResult,
+    doc="Count one Desktop first-run step transition (fire-and-forget; once per step+event; a no-op unless on).",
+)
 
 
 class SharedMetricsDesktopDislikeParams(ProfileParams):
@@ -383,9 +448,12 @@ class SharedMetricsDesktopDislikeParams(ProfileParams):
     setting: str | None = None
 
 
-method("shared_metrics.desktop_dislike", params=SharedMetricsDesktopDislikeParams,
-       result=OkResult,
-       doc="Count one Desktop dislike signal (fire-and-forget; capped per signal per day; a no-op unless on).")
+method(
+    "shared_metrics.desktop_dislike",
+    params=SharedMetricsDesktopDislikeParams,
+    result=OkResult,
+    doc="Count one Desktop dislike signal (fire-and-forget; capped per signal per day; a no-op unless on).",
+)
 
 
 class SharedMetricsDesktopModeDay(Params):
@@ -414,9 +482,12 @@ class SharedMetricsDesktopDailyResult(Result):
     recorded: bool
 
 
-method("shared_metrics.desktop_daily", params=SharedMetricsDesktopDailyParams,
-       result=SharedMetricsDesktopDailyResult,
-       doc="Record one finished Desktop day (mode use + button presses); recorded=false keeps it for a retry.")
+method(
+    "shared_metrics.desktop_daily",
+    params=SharedMetricsDesktopDailyParams,
+    result=SharedMetricsDesktopDailyResult,
+    doc="Record one finished Desktop day (mode use + button presses); recorded=false keeps it for a retry.",
+)
 # ---- end v5 desktop ----
 
 
@@ -548,8 +619,12 @@ class ModelOptionsResult(Result):
     provider: str = ""
 
 
-method("model.options", params=ModelOptionsParams, result=ModelOptionsResult,
-       doc="Provider/model inventory for the picker, layered over the session's live provider when given.")
+method(
+    "model.options",
+    params=ModelOptionsParams,
+    result=ModelOptionsResult,
+    doc="Provider/model inventory for the picker, layered over the session's live provider when given.",
+)
 
 
 # ── image.generate ────────────────────────────────────────────────────────────────────────────
@@ -573,8 +648,12 @@ class ImageGenerateResult(Result):
     error: str | None = None
 
 
-method("image.generate", params=ImageGenerateParams, result=ImageGenerateResult,
-       doc="Generate an image through the tool's provider dispatcher and hand the renderer a data URL.")
+method(
+    "image.generate",
+    params=ImageGenerateParams,
+    result=ImageGenerateResult,
+    doc="Generate an image through the tool's provider dispatcher and hand the renderer a data URL.",
+)
 
 
 # ── session.control ───────────────────────────────────────────────────────────────────────────
@@ -625,7 +704,9 @@ class GoalSnapshot(Result):
     paused_reason: str | None = None
     last_verdict: str | None = None
     last_reason: str | None = None
-    wait_barrier: WaitBarrierUntil | WaitBarrierTarget | None = Field(default=None, discriminator="type")
+    wait_barrier: WaitBarrierUntil | WaitBarrierTarget | None = Field(
+        default=None, discriminator="type"
+    )
 
 
 class LoopSnapshot(Result):
@@ -677,8 +758,12 @@ class SessionControlReadResult(Result):
     control: SessionControlSnapshot
 
 
-method("session.control.read", params=SessionControlReadParams, result=SessionControlReadResult,
-       doc="Stable, allowlisted snapshot of one live session's goal / loop / heartbeat state.")
+method(
+    "session.control.read",
+    params=SessionControlReadParams,
+    result=SessionControlReadResult,
+    doc="Stable, allowlisted snapshot of one live session's goal / loop / heartbeat state.",
+)
 
 
 class SessionControlAction(WireEnum):
@@ -728,8 +813,12 @@ class SessionControlResult(Result):
     dispatch: SessionControlDispatch
 
 
-method("session.control", params=SessionControlParams, result=SessionControlResult,
-       doc="Run one allowlisted goal / loop / subgoal / heartbeat action and return the exact resulting snapshot.")
+method(
+    "session.control",
+    params=SessionControlParams,
+    result=SessionControlResult,
+    doc="Run one allowlisted goal / loop / subgoal / heartbeat action and return the exact resulting snapshot.",
+)
 
 
 # ── verification.status ───────────────────────────────────────────────────────────────────────
@@ -773,5 +862,9 @@ class VerificationStatusResult(Result):
     verification: VerificationStatusInfo
 
 
-method("verification.status", params=VerificationStatusParams, result=VerificationStatusResult,
-       doc="Best known verification evidence for a cwd/session; read-only, never runs checks.")
+method(
+    "verification.status",
+    params=VerificationStatusParams,
+    result=VerificationStatusResult,
+    doc="Best known verification evidence for a cwd/session; read-only, never runs checks.",
+)

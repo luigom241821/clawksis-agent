@@ -8,10 +8,14 @@ import pytest
 from clawk_cli.console_engine import ClawksisConsoleEngine, run_console_repl
 
 
-def test_sessions_optimize_accepts_the_force_override_it_advertises(_isolate_clawk_home):
+def test_sessions_optimize_accepts_the_force_override_it_advertises(
+    _isolate_clawk_home,
+):
     """The held-store refusal this command prints points at `sessions optimize --force`; if the
     console rejected the flag, the command could only ever refuse whenever a gateway is running."""
-    result = ClawksisConsoleEngine().execute("sessions optimize --force", confirmed=True)
+    result = ClawksisConsoleEngine().execute(
+        "sessions optimize --force", confirmed=True
+    )
 
     assert result.status == "ok", result.output
     assert "Usage:" not in result.output
@@ -256,14 +260,12 @@ def test_capture_output_surfaces_string_exit_code_as_command_error():
     from clawk_cli.console_engine import ConsoleCommandError, _capture_output
 
     def _boom():
-        sys.exit("No credential matching \"nope\".")
+        sys.exit('No credential matching "nope".')
 
     with pytest.raises(ConsoleCommandError) as exc_info:
         _capture_output(_boom)
 
     assert "No credential matching" in str(exc_info.value)
-
-
 
 
 def test_execute_handler_string_exit_returns_error_not_crash(_isolate_clawk_home):
@@ -277,7 +279,12 @@ def test_execute_handler_string_exit_returns_error_not_crash(_isolate_clawk_home
 
 _ORPHAN_STORE_STATUS = {
     "projects": [
-        {"hash": "abc123", "workdir": "/gone/v2-project", "exists": False, "commits": 4},
+        {
+            "hash": "abc123",
+            "workdir": "/gone/v2-project",
+            "exists": False,
+            "commits": 4,
+        },
     ],
     "pre_v2_projects": [],
 }
@@ -330,8 +337,6 @@ def test_console_checkpoints_prune_does_not_reprompt_for_orphans(
     # No preview was shown, so there is nothing to bind the deletion to — the
     # documented `--force` case for `orphan_allowlist`.
     assert prune_calls[0]["orphan_allowlist"] is None
-
-
 
 
 def test_config_set_on_unparseable_yaml_reports_error_not_crash(tmp_path, monkeypatch):

@@ -113,26 +113,31 @@ class TestContextCompressionTimeoutState:
         assert seen == {"main": False, "worker": True}
 
 
-
 class TestResolveContextCompressionTimeouts:
     @pytest.fixture(autouse=True)
     def _no_aux_floor(self, monkeypatch):
         # The aux compression request budget floors the idle window (#114594); pin it off so the legacy
         # clamps below are judged on their own, and on in the dedicated test.
         import agent.auxiliary_client as aux
-        monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 0.0)
 
+        monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 0.0)
 
     def test_idle_is_floored_at_the_aux_compression_request_budget(self, monkeypatch):
         """The host must never judge silence before the summary request itself would time out; a budget
         above the ceiling raises the ceiling too, and a larger explicit idle is kept."""
         import agent.auxiliary_client as aux
+
         monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 300.0)
         assert resolve_context_compression_timeouts({}) == (300.0, 600.0)
-        assert resolve_context_compression_timeouts({"context_timeout_seconds": 900}) == (900.0, 900.0)
+        assert resolve_context_compression_timeouts(
+            {"context_timeout_seconds": 900}
+        ) == (900.0, 900.0)
         monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 900.0)
         assert resolve_context_compression_timeouts({}) == (900.0, 900.0)
-        assert resolve_context_compression_timeouts({"context_timeout_seconds": 0}) == (0.0, 600.0)
+        assert resolve_context_compression_timeouts({"context_timeout_seconds": 0}) == (
+            0.0,
+            600.0,
+        )
 
     def test_zero_idle_disables_wrapper(self):
         idle, ceiling = resolve_context_compression_timeouts(
@@ -343,9 +348,7 @@ class TestRunCompressContextWithProgressTimeout:
                 system_prompt_fallback="fallback",
                 idle_timeout_seconds=ceiling,
                 total_ceiling_seconds=ceiling,
-                on_commit_overrun=lambda waited, ceil: overruns.append(
-                    (waited, ceil)
-                ),
+                on_commit_overrun=lambda waited, ceil: overruns.append((waited, ceil)),
             )
 
         records = []
@@ -364,9 +367,7 @@ class TestRunCompressContextWithProgressTimeout:
             # Still blocked past the pre-commit ceiling while commit holds
             # the fence.
             time.sleep(ceiling + 0.25)
-            assert t.is_alive(), (
-                "waiter must block on an in-flight commit past ceiling"
-            )
+            assert t.is_alive(), "waiter must block on an in-flight commit past ceiling"
             release.set()
             t.join(timeout=5)
             assert not t.is_alive()
@@ -441,7 +442,6 @@ class TestRunCompressContextWithProgressTimeout:
                 total_ceiling_seconds=1,
             )
 
-
     def test_propagates_conversation_context_into_worker(self):
         from agent.portal_tags import (
             get_conversation_context,
@@ -452,6 +452,7 @@ class TestRunCompressContextWithProgressTimeout:
         seen = {}
         token = set_conversation_context("conv-timeout-ctx")
         try:
+
             def worker(fence: CompressionCommitFence):
                 seen["ctx"] = get_conversation_context()
                 if not fence.begin_commit():
@@ -502,7 +503,6 @@ class TestRunCompressContextWithProgressTimeout:
         assert msgs[0]["content"] == "ok"
 
 
-
 class TestCompressContextForwarderOwnsTimeout:
     """AIAgent._compress_context wraps when no caller fence is supplied."""
 
@@ -521,6 +521,7 @@ class TestCompressContextForwarderOwnsTimeout:
         # Use the real record_timeout_failure method so the cooldown ladder
         # is exercised end-to-end (not auto-mocked by MagicMock).
         from agent.context_compressor import ContextCompressor
+
         agent.context_compressor.record_timeout_failure = (
             ContextCompressor.record_timeout_failure.__get__(
                 agent.context_compressor, MagicMock
@@ -557,9 +558,7 @@ class TestCompressContextForwarderOwnsTimeout:
         )
 
         original = [{"role": "user", "content": "stay"}]
-        out_msgs, out_prompt = AIAgent._compress_context(
-            agent, original, "sys"
-        )
+        out_msgs, out_prompt = AIAgent._compress_context(agent, original, "sys")
         hang.set()
 
         assert out_msgs is original
@@ -629,9 +628,7 @@ class TestCompressContextForwarderOwnsTimeout:
 
         original = [{"role": "user", "content": "stay"}]
         try:
-            out_msgs, out_prompt = AIAgent._compress_context(
-                agent, original, "sys"
-            )
+            out_msgs, out_prompt = AIAgent._compress_context(agent, original, "sys")
         finally:
             release.set()
 
@@ -641,10 +638,9 @@ class TestCompressContextForwarderOwnsTimeout:
         assert "total ceiling" in warning
         assert "summary output was observed" in warning
         assert "no output" not in warning
-        cooldown_error = (
-            agent.context_compressor._record_compression_failure_cooldown
-            .call_args.args[1]
-        )
+        cooldown_error = agent.context_compressor._record_compression_failure_cooldown.call_args.args[
+            1
+        ]
         assert "total ceiling exhausted" in cooldown_error
 
     def test_fallback_prompt_resolved_lazily_on_timeout(self, monkeypatch):
@@ -691,9 +687,7 @@ class TestCompressContextForwarderOwnsTimeout:
         )
 
         original = [{"role": "user", "content": "stay"}]
-        out_msgs, out_prompt = AIAgent._compress_context(
-            agent, original, "sys"
-        )
+        out_msgs, out_prompt = AIAgent._compress_context(agent, original, "sys")
         hang.set()
 
         assert out_msgs is original

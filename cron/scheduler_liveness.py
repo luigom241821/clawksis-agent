@@ -28,8 +28,13 @@ owner_progress: dict[str, float] = {}
 
 
 def _inactivity_watchdog_loop(
-    *, get_idle_seconds: Callable[[], float], limit_s: float, poll_s: float, stop: threading.Event,
-    future_done: Callable[[], bool], meter: Optional[AwakeIdleMeter] = None,
+    *,
+    get_idle_seconds: Callable[[], float],
+    limit_s: float,
+    poll_s: float,
+    stop: threading.Event,
+    future_done: Callable[[], bool],
+    meter: Optional[AwakeIdleMeter] = None,
 ) -> bool:
     """Poll idle time until limit (-> True), stop, or the future completes (-> False). Uses
     ``threading.Event.wait``, not asyncio, so a blocked event loop cannot disable the watchdog.
@@ -56,7 +61,11 @@ def _inactivity_watchdog_loop(
 
 class ExecutionProgressStamper:
     def __init__(
-        self, execution_id: str, job_name: str, *, idle_seconds: Callable[[], float],
+        self,
+        execution_id: str,
+        job_name: str,
+        *,
+        idle_seconds: Callable[[], float],
         every_seconds: float,
     ):
         self._execution_id = execution_id
@@ -80,4 +89,8 @@ class ExecutionProgressStamper:
         try:
             touch_execution_progress(self._execution_id)
         except Exception:
-            logger.debug("Job '%s': execution progress stamp failed", self._job_name, exc_info=True)
+            logger.debug(
+                "Job '%s': execution progress stamp failed",
+                self._job_name,
+                exc_info=True,
+            )

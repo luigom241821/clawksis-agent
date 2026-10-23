@@ -25,7 +25,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -52,10 +54,14 @@ def linked_home(tmp_path_factory, provider):
 
 
 def _pending_markers(sb: I.Sandbox) -> list[str]:
-    return sorted(str(p) for p in (sb.clawk_home / "installs").glob("*/source-completion-pending"))
+    return sorted(
+        str(p) for p in (sb.clawk_home / "installs").glob("*/source-completion-pending")
+    )
 
 
-def test_per_task_home_sharing_the_tools_store_by_symlink_is_current(linked_home, provider):
+def test_per_task_home_sharing_the_tools_store_by_symlink_is_current(
+    linked_home, provider
+):
     """An orchestrator's per-task CLAWK_HOME whose ``tools``/``installs`` link back to the main home.
 
     Precondition: the main home is itself a symlink, and plain launches through it are current; the
@@ -63,8 +69,12 @@ def test_per_task_home_sharing_the_tools_store_by_symlink_is_current(linked_home
     """
     sb, first = linked_home["sb"], linked_home["install"]
     assert sb.clawk_home.is_symlink(), "harness: ~/.clawksis is not a symlink"
-    assert first.returncode == 0, "install.sh failed with ~/.clawksis behind a symlink:\n" + I.describe(first)
-    assert (linked_home["real"] / "clawksis-agent" / ".git").exists(), "install did not land on the symlink's target"
+    assert first.returncode == 0, (
+        "install.sh failed with ~/.clawksis behind a symlink:\n" + I.describe(first)
+    )
+    assert (linked_home["real"] / "clawksis-agent" / ".git").exists(), (
+        "install did not land on the symlink's target"
+    )
     X.configure(sb, provider)
     alt = linked_home["root"] / "per-task home ü"
     alt.mkdir()
@@ -72,12 +82,22 @@ def test_per_task_home_sharing_the_tools_store_by_symlink_is_current(linked_home
         os.symlink(sb.clawk_home / name, alt / name)
     for name in ("config.yaml", ".env"):
         shutil.copy(sb.clawk_home / name, alt / name)
-    launches = [X.turn(sb, provider, f"turn {i} through the symlinked main home") for i in range(2)]
+    launches = [
+        X.turn(sb, provider, f"turn {i} through the symlinked main home")
+        for i in range(2)
+    ]
     reruns = [i for i, cp in enumerate(launches) if X.reran_completion(cp)]
-    assert not reruns, (f"plain launches {reruns} through a symlinked ~/.clawksis re-ran the source-update completion:\n"
-                        + I.describe(launches[reruns[0]]))
-    assert not _pending_markers(sb), f"a plain launch left source-completion-pending markers: {_pending_markers(sb)}"
-    task = X.turn(sb, provider, "turn in a per-task home", env=dict(sb.env, CLAWK_HOME=str(alt)))
+    assert not reruns, (
+        f"plain launches {reruns} through a symlinked ~/.clawksis re-ran the source-update completion:\n"
+        + I.describe(launches[reruns[0]])
+    )
+    assert not _pending_markers(sb), (
+        f"a plain launch left source-completion-pending markers: {_pending_markers(sb)}"
+    )
+    task = X.turn(
+        sb, provider, "turn in a per-task home", env=dict(sb.env, CLAWK_HOME=str(alt))
+    )
     assert not X.reran_completion(task), (
         "a per-task CLAWK_HOME whose tools/installs symlink to the main home re-ran the source-update "
-        "completion on a current install:\n" + I.describe(task))
+        "completion on a current install:\n" + I.describe(task)
+    )

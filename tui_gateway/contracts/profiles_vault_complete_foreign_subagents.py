@@ -43,8 +43,12 @@ class CompletePathParams(ProfileParams):
     session_id: str | None = None
 
 
-method("complete.path", params=CompletePathParams, result=CompletionItemsResult,
-       doc="Path / @-reference completions for the composer (files, folders, profiles, plugin providers).")
+method(
+    "complete.path",
+    params=CompletePathParams,
+    result=CompletionItemsResult,
+    doc="Path / @-reference completions for the composer (files, folders, profiles, plugin providers).",
+)
 
 
 class CompleteSlashParams(Params):
@@ -63,8 +67,12 @@ class CompleteSlashResult(Result):
     replace_from: int | None = None
 
 
-method("complete.slash", params=CompleteSlashParams, result=CompleteSlashResult,
-       doc="Ranked slash-command / skill completions for a ``/`` token.")
+method(
+    "complete.slash",
+    params=CompleteSlashParams,
+    result=CompleteSlashResult,
+    doc="Ranked slash-command / skill completions for a ``/`` token.",
+)
 
 
 class PasteCollapseParams(Params):
@@ -77,8 +85,12 @@ class PasteCollapseResult(Result):
     lines: int
 
 
-method("paste.collapse", params=PasteCollapseParams, result=PasteCollapseResult,
-       doc="Spill a large paste to a file and hand back the inline placeholder.")
+method(
+    "paste.collapse",
+    params=PasteCollapseParams,
+    result=PasteCollapseResult,
+    doc="Spill a large paste to a file and hand back the inline placeholder.",
+)
 
 
 class ModelSaveKeyParams(Params):
@@ -91,8 +103,12 @@ class ModelSaveKeyResult(Result):
     provider: ModelOptionProvider
 
 
-method("model.save_key", params=ModelSaveKeyParams, result=ModelSaveKeyResult,
-       doc="Save an API key for a provider and return its refreshed inventory row.")
+method(
+    "model.save_key",
+    params=ModelSaveKeyParams,
+    result=ModelSaveKeyResult,
+    doc="Save an API key for a provider and return its refreshed inventory row.",
+)
 
 
 class ModelDisconnectParams(Params):
@@ -106,8 +122,12 @@ class ModelDisconnectResult(Result):
     disconnected: bool
 
 
-method("model.disconnect", params=ModelDisconnectParams, result=ModelDisconnectResult,
-       doc="Remove every credential (env keys and OAuth state) for a provider.")
+method(
+    "model.disconnect",
+    params=ModelDisconnectParams,
+    result=ModelDisconnectResult,
+    doc="Remove every credential (env keys and OAuth state) for a provider.",
+)
 
 
 # ── profiles (methods_profiles) ───────────────────────────────────────────────────────────────
@@ -181,8 +201,12 @@ class ProfilesListResult(Result):
     install_id: str = ""
 
 
-method("profiles.list", params=ProfilesListParams, result=ProfilesListResult,
-       doc="Roster of profiles with previews so a client paints without N follow-up calls.")
+method(
+    "profiles.list",
+    params=ProfilesListParams,
+    result=ProfilesListResult,
+    doc="Roster of profiles with previews so a client paints without N follow-up calls.",
+)
 
 
 class ProfilesCreateParams(ProfileParams):
@@ -221,8 +245,12 @@ class ProfilesCreateResult(Result):
     mirrored: ProfileMirrored
 
 
-method("profiles.create", params=ProfilesCreateParams, result=ProfilesCreateResult,
-       doc="Create a profile (ws twin of POST /api/profiles), mirroring launch credentials by default.")
+method(
+    "profiles.create",
+    params=ProfilesCreateParams,
+    result=ProfilesCreateResult,
+    doc="Create a profile (ws twin of POST /api/profiles), mirroring launch credentials by default.",
+)
 
 
 class ProfileNameParams(ProfileParams):
@@ -262,8 +290,12 @@ class ProfilesDescribeResult(Result):
     mcp_servers: list[McpServerEntry] = Field(default_factory=list)
 
 
-method("profiles.describe", params=ProfileNameParams, result=ProfilesDescribeResult,
-       doc="Everything the profile editor shows: soul, model pin, skills, toolsets, MCP servers.")
+method(
+    "profiles.describe",
+    params=ProfileNameParams,
+    result=ProfilesDescribeResult,
+    doc="Everything the profile editor shows: soul, model pin, skills, toolsets, MCP servers.",
+)
 
 
 class ProfilesConfigureParams(ProfileParams):
@@ -310,8 +342,12 @@ class ProfilesConfigureResult(Result):
     confirm_message: str | None = None
 
 
-method("profiles.configure", params=ProfilesConfigureParams, result=ProfilesConfigureResult,
-       doc="Editor Save: apply any subset of a profile's sections and report each one.")
+method(
+    "profiles.configure",
+    params=ProfilesConfigureParams,
+    result=ProfilesConfigureResult,
+    doc="Editor Save: apply any subset of a profile's sections and report each one.",
+)
 
 
 class ProfilesSetAssetParams(ProfileParams):
@@ -330,8 +366,12 @@ class ProfilesSetAssetResult(Result):
     removed: int | None = None
 
 
-method("profiles.set_asset", params=ProfilesSetAssetParams, result=ProfilesSetAssetResult,
-       doc="Store or clear a profile asset (avatar) atomically.")
+method(
+    "profiles.set_asset",
+    params=ProfilesSetAssetParams,
+    result=ProfilesSetAssetResult,
+    doc="Store or clear a profile asset (avatar) atomically.",
+)
 
 
 class ProfilesGetAssetParams(ProfileParams):
@@ -348,8 +388,12 @@ class ProfilesGetAssetResult(Result):
     data: str | None = None
 
 
-method("profiles.get_asset", params=ProfilesGetAssetParams, result=ProfilesGetAssetResult,
-       doc="A profile asset as a data URL.")
+method(
+    "profiles.get_asset",
+    params=ProfilesGetAssetParams,
+    result=ProfilesGetAssetResult,
+    doc="A profile asset as a data URL.",
+)
 
 
 # ── onboarding (methods_onboarding) ───────────────────────────────────────────────────────────
@@ -375,8 +419,12 @@ class OnboardingRunStateResult(Result):
     run_id: str | None = None
 
 
-method("onboarding.state", params=OnboardingStateParams, result=OnboardingRunStateResult,
-       doc="Whether desktop first-run onboarding is due, and the chat in progress; reads the root profile's config.")
+method(
+    "onboarding.state",
+    params=OnboardingStateParams,
+    result=OnboardingRunStateResult,
+    doc="Whether desktop first-run onboarding is due, and the chat in progress; reads the root profile's config.",
+)
 
 
 class OnboardingSetRunParams(Params):
@@ -387,8 +435,12 @@ class OnboardingSetRunParams(Params):
     mark_profile_offered: bool = False
 
 
-method("onboarding.set_run", params=OnboardingSetRunParams, result=OnboardingRunStateResult,
-       doc="Write onboarding.run in the root profile's config.yaml; answers the new state.")
+method(
+    "onboarding.set_run",
+    params=OnboardingSetRunParams,
+    result=OnboardingRunStateResult,
+    doc="Write onboarding.run in the root profile's config.yaml; answers the new state.",
+)
 
 
 class OnboardingFactsSource(WireEnum):
@@ -424,8 +476,12 @@ class OnboardingStartResult(Result):
     run_id: str
 
 
-method("onboarding.start", params=OnboardingStartParams, result=OnboardingStartResult,
-       doc="Open the onboarding chat in the default profile: create it, write its run record and play the opening.")
+method(
+    "onboarding.start",
+    params=OnboardingStartParams,
+    result=OnboardingStartResult,
+    doc="Open the onboarding chat in the default profile: create it, write its run record and play the opening.",
+)
 
 
 class OnboardingSkipParams(SessionParams):
@@ -436,8 +492,12 @@ class OnboardingSkipResult(Result):
     skipped: bool
 
 
-method("onboarding.skip", params=OnboardingSkipParams, result=OnboardingSkipResult,
-       doc="Skip setup: end the session's onboarding run and close the card that waits.")
+method(
+    "onboarding.skip",
+    params=OnboardingSkipParams,
+    result=OnboardingSkipResult,
+    doc="Skip setup: end the session's onboarding run and close the card that waits.",
+)
 
 
 # ── vault (methods_vault) ─────────────────────────────────────────────────────────────────────
@@ -467,8 +527,12 @@ class VaultListResult(Result):
     items: list[VaultItem] = Field(default_factory=list)
 
 
-method("vault.list", params=ProfileParams, result=VaultListResult,
-       doc="Metadata-only listing across the local vault and every unlocked password manager.")
+method(
+    "vault.list",
+    params=ProfileParams,
+    result=VaultListResult,
+    doc="Metadata-only listing across the local vault and every unlocked password manager.",
+)
 
 
 class VaultSource(Result):
@@ -484,8 +548,12 @@ class VaultSourcesResult(Result):
     sources: list[VaultSource] = Field(default_factory=list)
 
 
-method("vault.sources", params=ProfileParams, result=VaultSourcesResult,
-       doc="Status of every login source (local vault + detected password managers).")
+method(
+    "vault.sources",
+    params=ProfileParams,
+    result=VaultSourcesResult,
+    doc="Status of every login source (local vault + detected password managers).",
+)
 
 
 class VaultSourceSetParams(ProfileParams):
@@ -498,8 +566,12 @@ class VaultSourceSetResult(Result):
     enabled: bool
 
 
-method("vault.source.set", params=VaultSourceSetParams, result=VaultSourceSetResult,
-       doc="Enable or disable an external password manager (disabling also locks it).")
+method(
+    "vault.source.set",
+    params=VaultSourceSetParams,
+    result=VaultSourceSetResult,
+    doc="Enable or disable an external password manager (disabling also locks it).",
+)
 
 
 class VaultUnlockParams(ProfileParams):
@@ -514,8 +586,12 @@ class VaultUnlockResult(Result):
     unlocked: bool = True
 
 
-method("vault.unlock", params=VaultUnlockParams, result=VaultUnlockResult,
-       doc="Unlock a password manager for this session with its master password.")
+method(
+    "vault.unlock",
+    params=VaultUnlockParams,
+    result=VaultUnlockResult,
+    doc="Unlock a password manager for this session with its master password.",
+)
 
 
 class VaultLockParams(ProfileParams):
@@ -526,8 +602,12 @@ class VaultLockResult(Result):
     locked: bool = True
 
 
-method("vault.lock", params=VaultLockParams, result=VaultLockResult,
-       doc="Forget a manager's session token (every manager when no name is given).")
+method(
+    "vault.lock",
+    params=VaultLockParams,
+    result=VaultLockResult,
+    doc="Forget a manager's session token (every manager when no name is given).",
+)
 
 
 class VaultAddParams(ProfileParams):
@@ -543,8 +623,12 @@ class VaultAddResult(Result):
     id: str
 
 
-method("vault.add", params=VaultAddParams, result=VaultAddResult,
-       doc="Add a login / payment / address item to the local vault.")
+method(
+    "vault.add",
+    params=VaultAddParams,
+    result=VaultAddResult,
+    doc="Add a login / payment / address item to the local vault.",
+)
 
 
 class VaultRemoveParams(ProfileParams):
@@ -555,8 +639,12 @@ class VaultRemoveResult(Result):
     removed: bool
 
 
-method("vault.remove", params=VaultRemoveParams, result=VaultRemoveResult,
-       doc="Remove a local vault item by id.")
+method(
+    "vault.remove",
+    params=VaultRemoveParams,
+    result=VaultRemoveResult,
+    doc="Remove a local vault item by id.",
+)
 
 
 # ── foreign histories (methods_session_foreign) ───────────────────────────────────────────────
@@ -596,8 +684,12 @@ class SessionForeignListResult(Result):
     unreadable: int = 0
 
 
-method("session.foreign.list", params=SessionForeignListParams, result=SessionForeignListResult,
-       doc="One page of Claude Code / Codex sessions found on the serving backend.")
+method(
+    "session.foreign.list",
+    params=SessionForeignListParams,
+    result=SessionForeignListResult,
+    doc="One page of Claude Code / Codex sessions found on the serving backend.",
+)
 
 
 class ForeignTurn(Result):
@@ -619,8 +711,12 @@ class SessionForeignPreviewResult(Result):
     cwd: str | None = None
 
 
-method("session.foreign.preview", params=SessionForeignIdParams, result=SessionForeignPreviewResult,
-       doc="Preview a foreign session's tail before importing it.")
+method(
+    "session.foreign.preview",
+    params=SessionForeignIdParams,
+    result=SessionForeignPreviewResult,
+    doc="Preview a foreign session's tail before importing it.",
+)
 
 
 class SessionForeignImportResult(Result):
@@ -628,8 +724,12 @@ class SessionForeignImportResult(Result):
     already_imported: bool = False
 
 
-method("session.foreign.import", params=SessionForeignIdParams, result=SessionForeignImportResult,
-       doc="Import a foreign session into this profile's history (idempotent per origin).")
+method(
+    "session.foreign.import",
+    params=SessionForeignIdParams,
+    result=SessionForeignImportResult,
+    doc="Import a foreign session into this profile's history (idempotent per origin).",
+)
 
 
 # ── subagents (methods_subagents) ─────────────────────────────────────────────────────────────
@@ -670,8 +770,12 @@ class SubagentListResult(Result):
     delegations: list[FailedDelegation] = Field(default_factory=list)
 
 
-method("subagent.list", params=SessionParams, result=SubagentListResult,
-       doc="Live children owned by this session (other sessions' children never leak).")
+method(
+    "subagent.list",
+    params=SessionParams,
+    result=SubagentListResult,
+    doc="Live children owned by this session (other sessions' children never leak).",
+)
 
 
 class SubagentIdParams(SessionParams):
@@ -683,8 +787,12 @@ class SubagentInterruptResult(Result):
     subagent_id: str
 
 
-method("subagent.interrupt", params=SubagentIdParams, result=SubagentInterruptResult,
-       doc="Hard-interrupt one owned child; ``found`` is false when it already finished.")
+method(
+    "subagent.interrupt",
+    params=SubagentIdParams,
+    result=SubagentInterruptResult,
+    doc="Hard-interrupt one owned child; ``found`` is false when it already finished.",
+)
 
 
 class SubagentTailResult(Result):
@@ -696,5 +804,9 @@ class SubagentTailResult(Result):
     truncated: bool = False
 
 
-method("subagent.tail", params=SubagentIdParams, result=SubagentTailResult,
-       doc="Last 16KB of an owned child's live transcript.")
+method(
+    "subagent.tail",
+    params=SubagentIdParams,
+    result=SubagentTailResult,
+    doc="Last 16KB of an owned child's live transcript.",
+)

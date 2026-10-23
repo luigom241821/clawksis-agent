@@ -23,10 +23,13 @@ def clawk_env(tmp_path, monkeypatch):
     import importlib
 
     import clawk_constants
+
     importlib.reload(clawk_constants)
     import cron.jobs
+
     importlib.reload(cron.jobs)
     import cron.scheduler
+
     importlib.reload(cron.scheduler)
     return home
 
@@ -42,6 +45,7 @@ def test_create_persists_explicit_empty_allowlist_and_survives_reload(clawk_env)
     # A fresh process (module reload) must read the restriction back from jobs.json as [],
     # not null — null would read as 'no restriction' and widen the job.
     import cron.jobs
+
     importlib.reload(cron.jobs)
     reloaded = cron.jobs.get_job(job["id"])
     assert reloaded is not None and reloaded["enabled_toolsets"] == []
@@ -73,8 +77,14 @@ def test_cronjob_tool_roundtrip_preserves_explicit_empty(clawk_env):
     from cron.jobs import get_job
     from tools.cronjob_tools import cronjob
 
-    result = json.loads(cronjob(
-        action="create", prompt="daily digest", schedule="every 1h", enabled_toolsets=[]))
+    result = json.loads(
+        cronjob(
+            action="create",
+            prompt="daily digest",
+            schedule="every 1h",
+            enabled_toolsets=[],
+        )
+    )
     assert result["success"] is True, result
 
     job = get_job(result["job_id"])

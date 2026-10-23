@@ -25,13 +25,21 @@ from tools.environments.local import clawk_subprocess_env
 logger = logging.getLogger(__name__)
 
 MUTATOR_ROUTE_TABLE: dict[str, str] = {
-    "prompt.submit": "turn-path", "session.interrupt": "turn-path", "reload.mcp": "run-concurrent",
-    "session.save": "run-concurrent", "session.compress": "idle-gated",
-    "prompt.submit.truncate": "idle-gated", "slash.model": "idle-gated",
-    "slash.personality": "idle-gated", "slash.prompt": "idle-gated", "slash.compress": "idle-gated",
+    "prompt.submit": "turn-path",
+    "session.interrupt": "turn-path",
+    "reload.mcp": "run-concurrent",
+    "session.save": "run-concurrent",
+    "session.compress": "idle-gated",
+    "prompt.submit.truncate": "idle-gated",
+    "slash.model": "idle-gated",
+    "slash.personality": "idle-gated",
+    "slash.prompt": "idle-gated",
+    "slash.compress": "idle-gated",
     "slash.refine": "idle-gated",
-    "session.reset": "idle-gated", "session.history.reload": "idle-gated",
-    "slash.retry": "idle-gated"}
+    "session.reset": "idle-gated",
+    "session.history.reload": "idle-gated",
+    "slash.retry": "idle-gated",
+}
 
 _REGISTRY_NAME = "dashboard-compute-host.json"
 _RESPAWN_WINDOW_SECS = 300.0
@@ -44,9 +52,17 @@ _HELLO_TIMEOUT_SECS = 10.0
 _LATE_CONTROL_TTL_SECS = 1800.0
 _LATE_CONTROL_MAX = 64
 # Host frames whose ``request_id`` resolves a pending/late control waiter.
-_CONTROL_REPLY_TYPES = frozenset({
-    "control.ack", "control.error", "respond.ack", "respond.error", "interrupt.ack",
-    "reload_mcp.ack", "shutdown.ack"})
+_CONTROL_REPLY_TYPES = frozenset(
+    {
+        "control.ack",
+        "control.error",
+        "respond.ack",
+        "respond.error",
+        "interrupt.ack",
+        "reload_mcp.ack",
+        "shutdown.ack",
+    }
+)
 
 
 def append_log_record(path: str | Path, record: str) -> None:
@@ -59,10 +75,17 @@ def append_log_record(path: str | Path, record: str) -> None:
         import win32con
         import win32file
         from ntsecuritycon import FILE_APPEND_DATA
+
         handle = win32file.CreateFile(
-            str(path), FILE_APPEND_DATA,
-            win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE | win32con.FILE_SHARE_DELETE,
-            None, win32con.OPEN_ALWAYS, win32con.FILE_ATTRIBUTE_NORMAL, None,
+            str(path),
+            FILE_APPEND_DATA,
+            win32con.FILE_SHARE_READ
+            | win32con.FILE_SHARE_WRITE
+            | win32con.FILE_SHARE_DELETE,
+            None,
+            win32con.OPEN_ALWAYS,
+            win32con.FILE_ATTRIBUTE_NORMAL,
+            None,
         )
         try:
             win32file.WriteFile(handle, text.encode("utf-8", errors="replace"))
@@ -84,14 +107,23 @@ def _check_output(argv: list[str], **kwargs: Any) -> str:
     """Stripped stdout of a short subprocess, or ``""`` on any failure."""
     with contextlib.suppress(Exception):
         return subprocess.check_output(
-            argv, stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace", stderr=subprocess.DEVNULL,
-            timeout=2, **kwargs).strip()
+            argv,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            **kwargs,
+        ).strip()
     return ""
 
 
 def _build_sha() -> str:
     """HEAD sha or ``"unknown"``; shared with ``compute_host`` so the hello handshake agrees."""
-    return _check_output(["git", "rev-parse", "HEAD"], cwd=str(_repo_root())) or "unknown"
+    return (
+        _check_output(["git", "rev-parse", "HEAD"], cwd=str(_repo_root())) or "unknown"
+    )
 
 
 def _call_logged(cb: Callable[[dict], None], frame: dict, failure: str) -> None:
@@ -142,23 +174,38 @@ class HostSupervisor:
     """Own one persistent compute-host child and relay its frames."""
 
     def __init__(
-        self, *, registry_path: str | Path | None = None, argv: list[str] | None = None,
-        cwd: str | Path | None = None, env: dict[str, str] | None = None,
-        rpc_sink: Callable[[dict], None] | None = None, respawn_max: int = 3,
-        heartbeat_secs: int = 15, expected_build_sha: str | None = None,
-        expected_clawk_home: str | None = None, autostart: bool = True) -> None:
+        self,
+        *,
+        registry_path: str | Path | None = None,
+        argv: list[str] | None = None,
+        cwd: str | Path | None = None,
+        env: dict[str, str] | None = None,
+        rpc_sink: Callable[[dict], None] | None = None,
+        respawn_max: int = 3,
+        heartbeat_secs: int = 15,
+        expected_build_sha: str | None = None,
+        expected_clawk_home: str | None = None,
+        autostart: bool = True,
+    ) -> None:
         self.registry_path = (
-            Path(registry_path) if registry_path is not None
-            else get_clawk_home() / "state" / _REGISTRY_NAME)
+            Path(registry_path)
+            if registry_path is not None
+            else get_clawk_home() / "state" / _REGISTRY_NAME
+        )
         self.argv = argv or [sys.executable, "-m", "tui_gateway.compute_host"]
         self.cwd = Path(cwd) if cwd is not None else _repo_root()
         self.env = env
         self.rpc_sink = rpc_sink or (lambda _obj: None)
         self.respawn_max = max(0, int(respawn_max))
         self.heartbeat_secs = max(1, int(heartbeat_secs))
-        self.expected_build_sha = _build_sha() if expected_build_sha is None else expected_build_sha
+        self.expected_build_sha = (
+            _build_sha() if expected_build_sha is None else expected_build_sha
+        )
         self.expected_clawk_home = (
-            str(get_clawk_home()) if expected_clawk_home is None else expected_clawk_home)
+            str(get_clawk_home())
+            if expected_clawk_home is None
+            else expected_clawk_home
+        )
         self._lock = threading.RLock()
         self._proc: subprocess.Popen[str] | None = None
         self._hello_event = threading.Event()
@@ -172,7 +219,9 @@ class HostSupervisor:
         # host work still runs, so the eventual control.ack is not silently dropped.
         # The host emits its control.ack whenever it finishes; without this the ack matched no queue and was
         # silently dropped. See #97948.
-        self._late_control_handlers: dict[str, tuple[float, Callable[[dict], None]]] = {}
+        self._late_control_handlers: dict[
+            str, tuple[float, Callable[[dict], None]]
+        ] = {}
         self._stderr_tail: list[str] = []
         self._last_progress_counter = 0
         if autostart:
@@ -203,7 +252,9 @@ class HostSupervisor:
             return
         try:
             if proc.poll() is None and proc.stdin is not None:
-                self._send_frame({"type": "shutdown", "request_id": f"shutdown-{uuid.uuid4().hex}"})
+                self._send_frame(
+                    {"type": "shutdown", "request_id": f"shutdown-{uuid.uuid4().hex}"}
+                )
                 proc.wait(timeout=_SHUTDOWN_TIMEOUT_SECS)
         except Exception:
             self._terminate_process(proc)
@@ -227,14 +278,21 @@ class HostSupervisor:
         elif pid <= 0 or not _pid_alive(pid):
             outcome = "not-running"
         elif not self._pid_matches_compute_host(pid):
-            outcome = "pid-reuse-ignored"  # PID reused by another process: never signal it
+            outcome = (
+                "pid-reuse-ignored"  # PID reused by another process: never signal it
+            )
         else:
             self._terminate_pid(pid, timeout=_SHUTDOWN_TIMEOUT_SECS)
             outcome = "terminated"
         self._remove_registry()
         return outcome
 
-    def submit_turn(self, frame: dict[str, Any], *, on_complete: Callable[[dict], None] | None = None) -> str:
+    def submit_turn(
+        self,
+        frame: dict[str, Any],
+        *,
+        on_complete: Callable[[dict], None] | None = None,
+    ) -> str:
         self.start()
         request_id = str(frame.get("request_id") or uuid.uuid4().hex)
         sid = str(frame.get("sid") or "")
@@ -247,15 +305,27 @@ class HostSupervisor:
             with self._lock:
                 self._pending_turns.pop(request_id, None)
             if on_complete is not None:
-                on_complete({"type": "turn.error", "sid": sid, "request_id": request_id,
-                             "reason": "send_failed", "message": str(exc)})
+                on_complete(
+                    {
+                        "type": "turn.error",
+                        "sid": sid,
+                        "request_id": request_id,
+                        "reason": "send_failed",
+                        "message": str(exc),
+                    }
+                )
             raise
         return request_id
 
     def interrupt(self, sid: str, *, request_id: str | None = None) -> None:
         self.start()
         self._send_frame(
-            {"type": "interrupt", "sid": sid, "request_id": request_id or uuid.uuid4().hex})
+            {
+                "type": "interrupt",
+                "sid": sid,
+                "request_id": request_id or uuid.uuid4().hex,
+            }
+        )
 
     def has_pending_turn(self, sid: str) -> bool:
         """True when a host completion callback is still registered for ``sid``.
@@ -268,7 +338,9 @@ class HostSupervisor:
         with self._lock:
             return any(s == sid for s, _cb in self._pending_turns.values())
 
-    def _await_reply(self, frame: dict[str, Any], request_id: str, timeout: float) -> dict:
+    def _await_reply(
+        self, frame: dict[str, Any], request_id: str, timeout: float
+    ) -> dict:
         """Send ``frame`` and block for the host reply carrying ``request_id``."""
         q: queue.Queue[dict] = queue.Queue(maxsize=1)
         with self._lock:
@@ -280,20 +352,37 @@ class HostSupervisor:
             with self._lock:
                 self._pending_controls.pop(request_id, None)
 
-    def respond(self, sid: str, params: dict[str, Any], *, timeout: float = 15.0) -> dict:
+    def respond(
+        self, sid: str, params: dict[str, Any], *, timeout: float = 15.0
+    ) -> dict:
         """Deliver an interactive prompt response to the host that owns it."""
         self.start()
         request_id = uuid.uuid4().hex
-        frame = {"type": "respond", "sid": sid, "request_id": request_id, "params": dict(params)}
+        frame = {
+            "type": "respond",
+            "sid": sid,
+            "request_id": request_id,
+            "params": dict(params),
+        }
         return self._await_reply(frame, request_id, timeout)
 
     def reload_mcp(self, sid: str, *, request_id: str | None = None) -> dict:
-        payload = {"type": "reload_mcp", "sid": sid, "request_id": request_id or uuid.uuid4().hex}
+        payload = {
+            "type": "reload_mcp",
+            "sid": sid,
+            "request_id": request_id or uuid.uuid4().hex,
+        }
         return self.control(sid, route_name="reload.mcp", wait=True, payload=payload)
 
     def control(
-        self, sid: str, *, route_name: str, payload: dict[str, Any] | None = None,
-        wait: bool = True, timeout: float = 30.0, on_late_ack: Callable[[dict], None] | None = None,
+        self,
+        sid: str,
+        *,
+        route_name: str,
+        payload: dict[str, Any] | None = None,
+        wait: bool = True,
+        timeout: float = 30.0,
+        on_late_ack: Callable[[dict], None] | None = None,
     ) -> dict:
         """Send a control frame; with ``wait`` block up to ``timeout`` for its ack. ``on_late_ack``
         (only with ``wait``) keeps the request adoptable after the waiter gives up: the host's
@@ -304,8 +393,13 @@ class HostSupervisor:
         self.start()
         payload = payload or {}
         request_id = str(payload.get("request_id") or uuid.uuid4().hex)
-        frame = {"type": "control", **payload, "sid": sid, "route_name": route_name,
-                 "request_id": request_id}
+        frame = {
+            "type": "control",
+            **payload,
+            "sid": sid,
+            "route_name": route_name,
+            "request_id": request_id,
+        }
         if not wait:
             self._send_frame(frame)
             return {"status": "sent", "request_id": request_id}
@@ -316,11 +410,17 @@ class HostSupervisor:
                 self._register_late_control_handler(request_id, on_late_ack)
             raise
 
-    def _register_late_control_handler(self, request_id: str, handler: Callable[[dict], None]) -> None:
+    def _register_late_control_handler(
+        self, request_id: str, handler: Callable[[dict], None]
+    ) -> None:
         now = time.monotonic()
         with self._lock:
             handlers = self._late_control_handlers
-            for rid in [r for r, (at, _cb) in handlers.items() if now - at > _LATE_CONTROL_TTL_SECS]:
+            for rid in [
+                r
+                for r, (at, _cb) in handlers.items()
+                if now - at > _LATE_CONTROL_TTL_SECS
+            ]:
                 handlers.pop(rid, None)
             while len(handlers) >= _LATE_CONTROL_MAX:
                 handlers.pop(min(handlers, key=lambda rid: handlers[rid][0]), None)
@@ -329,19 +429,31 @@ class HostSupervisor:
     def _deliver_control_frame(self, request_id: str, frame: dict[str, Any]) -> None:
         with self._lock:
             q = self._pending_controls.get(request_id)
-            late = None if q is not None else self._late_control_handlers.pop(request_id, None)
+            late = (
+                None
+                if q is not None
+                else self._late_control_handlers.pop(request_id, None)
+            )
         if q is not None:
             with contextlib.suppress(queue.Full):
                 q.put_nowait(frame)
         elif late is not None:
-            _call_logged(late[1], frame, f"compute host late control ack handler failed (request_id={request_id})")
+            _call_logged(
+                late[1],
+                frame,
+                f"compute host late control ack handler failed (request_id={request_id})",
+            )
 
     def _spawn_locked(self, *, reason: str) -> None:
         if self._stopped_respawning:
             raise RuntimeError("compute host respawn disabled after crash loop")
         self._hello_event.clear()
         self._hello = {}
-        env = {**clawk_subprocess_env(inherit_credentials=True), **os.environ, **(self.env or {})}
+        env = {
+            **clawk_subprocess_env(inherit_credentials=True),
+            **os.environ,
+            **(self.env or {}),
+        }
         env["CLAWK_COMPUTE_HOST_HEARTBEAT_SECS"] = str(self.heartbeat_secs)
         root = str(_repo_root())
         env.setdefault("PYTHONPATH", root)
@@ -349,17 +461,32 @@ class HostSupervisor:
             env["PYTHONPATH"] = root + os.pathsep + env["PYTHONPATH"]
         # Lossy UTF-8 decode: a locale-mismatched byte must not raise inside the drain threads.
         proc = subprocess.Popen(
-            self.argv, cwd=str(self.cwd), env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", bufsize=1,
-            start_new_session=True)
+            self.argv,
+            cwd=str(self.cwd),
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            start_new_session=True,
+        )
         self._proc = proc
-        for target, name in ((self._drain_stdout, "compute-host-stdout"),
-                             (self._drain_stderr, "compute-host-stderr"),
-                             (self._wait_for_exit, "compute-host-wait")):
-            threading.Thread(target=target, args=(proc,), name=name, daemon=True).start()
+        for target, name in (
+            (self._drain_stdout, "compute-host-stdout"),
+            (self._drain_stderr, "compute-host-stderr"),
+            (self._wait_for_exit, "compute-host-wait"),
+        ):
+            threading.Thread(
+                target=target, args=(proc,), name=name, daemon=True
+            ).start()
         if not self._hello_event.wait(timeout=_HELLO_TIMEOUT_SECS):
             self._terminate_process(proc)
-            raise RuntimeError(f"compute host did not send hello; stderr={self._stderr_tail[-5:]}")
+            raise RuntimeError(
+                f"compute host did not send hello; stderr={self._stderr_tail[-5:]}"
+            )
         self._validate_hello()
         self._persist_registry()
         logger.info("compute host started pid=%s reason=%s", proc.pid, reason)
@@ -371,7 +498,8 @@ class HostSupervisor:
         got_home = str(hello.get("clawk_home") or "")
         if got_home and got_home != self.expected_clawk_home:
             raise RuntimeError(
-                f"compute host CLAWK_HOME mismatch: {got_home} != {self.expected_clawk_home}")
+                f"compute host CLAWK_HOME mismatch: {got_home} != {self.expected_clawk_home}"
+            )
         got_sha = str(hello.get("build_sha") or "")
         expected = self.expected_build_sha
         if expected != "unknown" and got_sha not in {"", "unknown", expected}:
@@ -380,9 +508,13 @@ class HostSupervisor:
     def _persist_registry(self) -> None:
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.registry_path.with_suffix(self.registry_path.suffix + ".tmp")
-        payload = {"host_pid": self.pid, "boot_id": self._hello.get("boot_id") or "",
-                   "build_sha": self._hello.get("build_sha") or "", "started_at": time.time(),
-                   "argv": self.argv}
+        payload = {
+            "host_pid": self.pid,
+            "boot_id": self._hello.get("boot_id") or "",
+            "build_sha": self._hello.get("build_sha") or "",
+            "started_at": time.time(),
+            "argv": self.argv,
+        }
         tmp.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
         tmp.replace(self.registry_path)
 
@@ -397,7 +529,9 @@ class HostSupervisor:
             proc = self._proc
             if proc is None or proc.poll() is not None or proc.stdin is None:
                 raise RuntimeError("compute host is not running")
-            proc.stdin.write(json.dumps(frame, separators=(",", ":"), ensure_ascii=False) + "\n")
+            proc.stdin.write(
+                json.dumps(frame, separators=(",", ":"), ensure_ascii=False) + "\n"
+            )
             proc.stdin.flush()
 
     def _drain_stdout(self, proc: subprocess.Popen[str]) -> None:
@@ -427,7 +561,9 @@ class HostSupervisor:
             self._hello = dict(frame)
             self._hello_event.set()
         elif ftype == "hb":
-            self._last_progress_counter = int(frame.get("progress_counter") or self._last_progress_counter)
+            self._last_progress_counter = int(
+                frame.get("progress_counter") or self._last_progress_counter
+            )
             logger.debug("compute host heartbeat: %s", frame)
         elif ftype == "rpc":
             if isinstance(frame.get("message"), dict):
@@ -436,7 +572,9 @@ class HostSupervisor:
             with self._lock:
                 pending = self._pending_turns.pop(request_id, None)
             if pending is not None and pending[1] is not None:
-                _call_logged(pending[1], frame, "compute host turn completion callback failed")
+                _call_logged(
+                    pending[1], frame, "compute host turn completion callback failed"
+                )
 
     def _wait_for_exit(self, proc: subprocess.Popen[str]) -> None:
         code = proc.wait()
@@ -447,7 +585,9 @@ class HostSupervisor:
                 return
             self._proc = None
         self._remove_registry()
-        self._fail_pending_turns(reason="crash", message=f"compute host exited with code {code}")
+        self._fail_pending_turns(
+            reason="crash", message=f"compute host exited with code {code}"
+        )
         self._maybe_respawn_after_crash()
 
     def _fail_pending_turns(self, *, reason: str, message: str) -> None:
@@ -456,10 +596,24 @@ class HostSupervisor:
             self._pending_turns = {}
         failure = {"reason": reason, "message": message}
         for request_id, (sid, cb) in pending.items():
-            self.rpc_sink({"jsonrpc": "2.0", "method": "event",
-                           "params": {"type": "error", "session_id": sid, "payload": dict(failure)}})
+            self.rpc_sink(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": "error",
+                        "session_id": sid,
+                        "payload": dict(failure),
+                    },
+                }
+            )
             if cb is not None:
-                frame = {"type": "turn.error", "sid": sid, "request_id": request_id, **failure}
+                frame = {
+                    "type": "turn.error",
+                    "sid": sid,
+                    "request_id": request_id,
+                    **failure,
+                }
                 _call_logged(cb, frame, "compute host error callback failed")
         # A crashed host never emits the late acks timed-out control waiters still expect; fail
         # them too so the client's "still running" notice can't hang.
@@ -468,16 +622,21 @@ class HostSupervisor:
             self._late_control_handlers = {}
         for request_id, (_registered_at, handler) in late.items():
             frame = {"type": "control.error", "request_id": request_id, **failure}
-            _call_logged(handler, frame, "compute host late control error handler failed")
+            _call_logged(
+                handler, frame, "compute host late control error handler failed"
+            )
 
     def _maybe_respawn_after_crash(self) -> None:
         now = time.monotonic()
-        self._restart_times = [t for t in self._restart_times if now - t <= _RESPAWN_WINDOW_SECS]
+        self._restart_times = [
+            t for t in self._restart_times if now - t <= _RESPAWN_WINDOW_SECS
+        ]
         if len(self._restart_times) >= self.respawn_max:
             self._stopped_respawning = True
             logger.error(
                 "compute host crash loop: max %s restarts per 5min reached; not respawning",
-                self.respawn_max)
+                self.respawn_max,
+            )
             return
         self._restart_times.append(now)
         # Small bounded backoff; tests and first recovery stay quick.
@@ -492,11 +651,16 @@ class HostSupervisor:
                     self._spawn_locked(reason="crash")
                 except Exception:
                     logger.exception("compute host respawn failed")
-        threading.Thread(target=_respawn, name="compute-host-respawn", daemon=True).start()
+
+        threading.Thread(
+            target=_respawn, name="compute-host-respawn", daemon=True
+        ).start()
 
     _pid_matches_compute_host = staticmethod(is_compute_host_identity)
 
-    def _terminate_pid(self, pid: int, *, timeout: float = _SHUTDOWN_TIMEOUT_SECS) -> None:
+    def _terminate_pid(
+        self, pid: int, *, timeout: float = _SHUTDOWN_TIMEOUT_SECS
+    ) -> None:
         if not _signal_pid(pid, signal.SIGTERM, "SIGTERM"):
             return
         deadline = time.monotonic() + timeout
@@ -518,4 +682,9 @@ class HostSupervisor:
                 step()
 
 
-__all__ = ["MUTATOR_ROUTE_TABLE", "HostSupervisor", "append_log_record", "is_compute_host_identity"]
+__all__ = [
+    "MUTATOR_ROUTE_TABLE",
+    "HostSupervisor",
+    "append_log_record",
+    "is_compute_host_identity",
+]

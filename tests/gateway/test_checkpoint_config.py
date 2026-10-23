@@ -38,5 +38,3 @@ def test_gateway_checkpoint_config_reaches_real_agent(tmp_path, monkeypatch):
         assert manager.max_file_size_mb == 6
     finally:
         agent.close()
-
-

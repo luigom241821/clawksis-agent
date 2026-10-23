@@ -91,5 +91,3 @@ def test_readiness_uses_running_session_store_state_over_independent_probe(
         },
     )
     assert recovered["checks"]["session_store"] == {"status": "ok"}
-
-

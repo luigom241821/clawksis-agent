@@ -1,4 +1,5 @@
 """Session observers retain output across attachment and disconnect."""
+
 import threading
 
 from tui_gateway import server

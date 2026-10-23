@@ -40,19 +40,42 @@ def assert_timed_out(result):
 
 
 def test_timeout_helper_strips_only_trailing_marker():
-    assert _search_stdout_and_limit(ExecuteResult(timeout_output("a.py"), 124)) == ("a.py", "search_timeout")
-    assert _search_stdout_and_limit(ExecuteResult("a.py\nnot a marker", 0)) == ("a.py\nnot a marker", None)
+    assert _search_stdout_and_limit(ExecuteResult(timeout_output("a.py"), 124)) == (
+        "a.py",
+        "search_timeout",
+    )
+    assert _search_stdout_and_limit(ExecuteResult("a.py\nnot a marker", 0)) == (
+        "a.py\nnot a marker",
+        None,
+    )
 
 
 @pytest.mark.parametrize(
     ("target", "output_mode", "raw", "expected"),
     [
-        ("files", "content", timeout_output("src/a.py", "src/b.py"), ["src/a.py", "src/b.py"]),
-        ("content", "files_only", timeout_output("src/a.py", "src/b.py"), ["src/a.py", "src/b.py"]),
-        ("content", "content", timeout_output("src/a.py:10:foo", "src/b.py:20:foo"), ["src/a.py", "src/b.py"]),
+        (
+            "files",
+            "content",
+            timeout_output("src/a.py", "src/b.py"),
+            ["src/a.py", "src/b.py"],
+        ),
+        (
+            "content",
+            "files_only",
+            timeout_output("src/a.py", "src/b.py"),
+            ["src/a.py", "src/b.py"],
+        ),
+        (
+            "content",
+            "content",
+            timeout_output("src/a.py:10:foo", "src/b.py:20:foo"),
+            ["src/a.py", "src/b.py"],
+        ),
     ],
 )
-def test_rg_timeout_returns_partial_results_without_marker(ops, monkeypatch, target, output_mode, raw, expected):
+def test_rg_timeout_returns_partial_results_without_marker(
+    ops, monkeypatch, target, output_mode, raw, expected
+):
     ops.env.execute.side_effect = path_exists_or(raw)
     monkeypatch.setattr(ops, "_has_command", lambda cmd: cmd == "rg")
 
@@ -99,7 +122,8 @@ class FindRecordingEnvironment:
     @property
     def find_commands(self):
         return [
-            item for item in self.commands
+            item
+            for item in self.commands
             if item[0].startswith("find ") or "; find " in item[0]
         ]
 
@@ -108,7 +132,9 @@ class MultiRootFindEnvironment(FindRecordingEnvironment):
     def execute(self, command, **kwargs):
         self.commands.append((command, kwargs))
         if command.startswith("test -e "):
-            output = "not_found\n" if "'/one/.hidden /two/.cache'" in command else "exists\n"
+            output = (
+                "not_found\n" if "'/one/.hidden /two/.cache'" in command else "exists\n"
+            )
             return {"output": output, "returncode": 0}
         if command.startswith("command -v find"):
             return {"output": "yes\n", "returncode": 0}
@@ -120,7 +146,9 @@ class MultiRootFindEnvironment(FindRecordingEnvironment):
 
 
 def test_find_discovery_is_one_unsorted_pruned_bounded_scan():
-    env = FindRecordingEnvironment("/narrow/a.py\n/narrow/b.py\n/narrow/c.py\n/narrow/d.py\n")
+    env = FindRecordingEnvironment(
+        "/narrow/a.py\n/narrow/b.py\n/narrow/c.py\n/narrow/d.py\n"
+    )
     result = ShellFileOperations(env)._search_files(
         "*.py", "/narrow", limit=2, offset=1, order="discovery"
     )
@@ -136,7 +164,9 @@ def test_find_discovery_is_one_unsorted_pruned_bounded_scan():
 
 
 def test_find_modified_is_one_exact_scan_without_bsd_retry():
-    env = FindRecordingEnvironment("30 /narrow/new.py\n20 /narrow/mid.py\n10 /narrow/old.py\n")
+    env = FindRecordingEnvironment(
+        "30 /narrow/new.py\n20 /narrow/mid.py\n10 /narrow/old.py\n"
+    )
     result = ShellFileOperations(env)._search_files(
         "*.py", "/narrow", limit=1, offset=1, order="modified"
     )
@@ -150,9 +180,7 @@ def test_find_modified_is_one_exact_scan_without_bsd_retry():
 
 
 def test_no_rg_multi_root_modified_is_one_globally_sorted_scan():
-    env = MultiRootFindEnvironment(
-        "30 /two/.cache/new.py\n10 /one/.hidden/old.py\n"
-    )
+    env = MultiRootFindEnvironment("30 /two/.cache/new.py\n10 /one/.hidden/old.py\n")
 
     result = ShellFileOperations(env).search(
         "*.py",
@@ -177,9 +205,7 @@ def test_no_rg_multi_root_modified_is_one_globally_sorted_scan():
     assert kwargs["timeout"] <= 60
 
 
-def test_find_dash_prefixed_relative_root_is_an_explicit_operand(
-    tmp_path, monkeypatch
-):
+def test_find_dash_prefixed_relative_root_is_an_explicit_operand(tmp_path, monkeypatch):
     dash_root = tmp_path / "--version"
     ordinary_root = tmp_path / "ordinary"
     dash_root.mkdir()
@@ -198,9 +224,7 @@ def test_find_dash_prefixed_relative_root_is_an_explicit_operand(
         return real_exec(command, **kwargs)
 
     monkeypatch.setattr(ops, "_exec", recording_exec)
-    result = ops._search_files(
-        "*.py", ["--version", "ordinary"], limit=10, offset=0
-    )
+    result = ops._search_files("*.py", ["--version", "ordinary"], limit=10, offset=0)
 
     assert result.error is None
     assert sorted(result.files) == ["./--version/dash.py", "ordinary/plain.py"]
@@ -234,9 +258,9 @@ def test_find_modified_capability_failure_is_actionable_without_retry():
     ],
 )
 def test_find_sigpipe_is_benign_only_after_fetch_limit_rows(order, output):
-    result = ShellFileOperations(FindRecordingEnvironment(output, code=141))._search_files(
-        "*.py", "/narrow", limit=2, offset=1, order=order
-    )
+    result = ShellFileOperations(
+        FindRecordingEnvironment(output, code=141)
+    )._search_files("*.py", "/narrow", limit=2, offset=1, order=order)
 
     assert result.error is None
     assert result.files == ["/narrow/b.py", "/narrow/c.py"]
@@ -253,9 +277,9 @@ def test_find_sigpipe_is_benign_only_after_fetch_limit_rows(order, output):
 def test_find_sigpipe_with_fewer_than_fetch_limit_rows_fails_closed(
     order, output, error_fragment
 ):
-    result = ShellFileOperations(FindRecordingEnvironment(output, code=141))._search_files(
-        "*.py", "/narrow", limit=2, offset=1, order=order
-    )
+    result = ShellFileOperations(
+        FindRecordingEnvironment(output, code=141)
+    )._search_files("*.py", "/narrow", limit=2, offset=1, order=order)
 
     assert error_fragment in (result.error or "")
     assert result.files == []

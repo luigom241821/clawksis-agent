@@ -54,7 +54,11 @@ def parse_point_in_time(value: str, flag: str) -> float:
 
 def format_epoch(ts: Optional[float]) -> str:
     """Render an epoch timestamp as a short local-time string; ``-`` when unset or corrupt."""
-    return "-" if (ts := coerce_epoch(ts)) is None else datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    return (
+        "-"
+        if (ts := coerce_epoch(ts)) is None
+        else datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    )
 
 
 # (filter key, argparse attr, CLI flag, description template) for the four epoch bounds.
@@ -67,7 +71,13 @@ _TIME_BOUNDS = (
 # (lower key, upper key, window label, lower flag, upper flag); checked in this order.
 _WINDOWS = (
     ("started_after", "started_before", "start-time", "--after", "--before"),
-    ("last_active_after", "last_active_before", "activity", "--newer-than", "--older-than"),
+    (
+        "last_active_after",
+        "last_active_before",
+        "activity",
+        "--newer-than",
+        "--older-than",
+    ),
 )
 # (filter key, argparse attr, description template) for pass-through filters, in describe order.
 # Numeric (min_/max_) filters are described when not None, text filters only when truthy.
@@ -100,11 +110,17 @@ def build_prune_filters(args: Any) -> dict[str, Any]:
     latest message / ``started_at``); ``--before`` / ``--after`` bound session start time.
     """
     bounds: dict[str, Optional[float]] = {
-        key: None if (raw := getattr(args, attr, None)) is None else parse_point_in_time(raw, flag)
+        key: None
+        if (raw := getattr(args, attr, None)) is None
+        else parse_point_in_time(raw, flag)
         for key, attr, flag, _ in _TIME_BOUNDS
     }
     for lo, hi, label, lo_flag, hi_flag in _WINDOWS:
-        if bounds[hi] is not None and bounds[lo] is not None and bounds[lo] >= bounds[hi]:
+        if (
+            bounds[hi] is not None
+            and bounds[lo] is not None
+            and bounds[lo] >= bounds[hi]
+        ):
             raise ValueError(
                 f"Empty {label} window: the {lo_flag} bound "
                 f"({format_epoch(bounds[lo])}) is not earlier than the "
@@ -113,16 +129,26 @@ def build_prune_filters(args: Any) -> dict[str, Any]:
 
     # older_than_days=None: the epoch bounds are the whole story; otherwise prune_sessions' default
     # 90-day cutoff would silently cap an --after/--newer-than-only window.
-    return {"older_than_days": None, **bounds, **{key: getattr(args, attr, None) for key, attr, _ in _ARG_FILTERS}}
+    return {
+        "older_than_days": None,
+        **bounds,
+        **{key: getattr(args, attr, None) for key, attr, _ in _ARG_FILTERS},
+    }
 
 
 def describe_filters(filters: dict[str, Any]) -> str:
     """Human-readable summary of active filters for confirmation prompts."""
     parts = [
-        template.format(v=format_epoch(filters[key])) for key, _, _, template in _TIME_BOUNDS
+        template.format(v=format_epoch(filters[key]))
+        for key, _, _, template in _TIME_BOUNDS
         if filters.get(key) is not None
     ] + [
-        template.format(v=filters[key]) for key, _, template in _ARG_FILTERS
-        if ((filters.get(key) is not None) if key.startswith(("min_", "max_")) else bool(filters.get(key)))
+        template.format(v=filters[key])
+        for key, _, template in _ARG_FILTERS
+        if (
+            (filters.get(key) is not None)
+            if key.startswith(("min_", "max_"))
+            else bool(filters.get(key))
+        )
     ]
     return ", ".join(parts) if parts else "no filters (all ended sessions)"

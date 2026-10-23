@@ -14,21 +14,9 @@ def _strip_leaked_terminal_responses(text: str) -> str:
 
 
 class TestStripLeakedTerminalResponses:
-
-
-
-
     def test_strips_multiple_dsr_responses(self):
         text = "a\x1b[53;1Rb\x1b[51;1Rc\x1b[50;9Rd"
         assert _strip_leaked_terminal_responses(text) == "abcd"
-
-
-
-
-
-
-
-
 
     def test_strips_sgr_mouse_report_with_large_coordinates(self):
         text = "abc\x1b[<10000;12345;98765Mdef"
@@ -37,4 +25,3 @@ class TestStripLeakedTerminalResponses:
     def test_strips_multiple_concatenated_sgr_mouse_reports(self):
         text = "<65;1;49M<35;1;42Mhello<64;1;40m"
         assert _strip_leaked_terminal_responses(text) == "hello"
-

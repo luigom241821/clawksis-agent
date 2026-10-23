@@ -10,6 +10,7 @@ and each skill's support dirs — files ``skills_list``/``skill_view`` never off
 never counts, and the prompt's own skills index never lists. So archiving a skill, or the curator
 writing a backup, flipped the epoch and rebuilt a prompt whose skills section had not changed.
 """
+
 from __future__ import annotations
 
 import pytest

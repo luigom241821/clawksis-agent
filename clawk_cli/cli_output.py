@@ -34,7 +34,11 @@ def print_truncated(more: int | None, hint: str = "") -> None:
     one row past its cap (``LIMIT n+1``) and knows just that at least one more exists.
     ``hint`` names how to see the rest (``"use --limit 40 to see more"``).
     """
-    count = t("cli.shared.n_more", count=str(more)) if more is not None else t("cli.shared.more_not_shown")
+    count = (
+        t("cli.shared.n_more", count=str(more))
+        if more is not None
+        else t("cli.shared.more_not_shown")
+    )
     suffix = f" ({hint})" if hint else ""
     print(color(f"  … {count}{suffix}", Colors.DIM))
 
@@ -69,7 +73,9 @@ def prompt(question: str, default: str | None = None, password: bool = False) ->
     suffix = f" [{default}]" if default else ""
     display = color(f"  {question}{suffix}: ", Colors.YELLOW)
     try:
-        value = (masked_secret_prompt(display) if password else line_input(display)).strip()
+        value = (
+            masked_secret_prompt(display) if password else line_input(display)
+        ).strip()
         return value if value else (default or "")
     except (KeyboardInterrupt, EOFError):
         print()
@@ -77,7 +83,11 @@ def prompt(question: str, default: str | None = None, password: bool = False) ->
 
 
 def prompt_yes_no(question: str, default: bool = True) -> bool:
-    hint = t("cli.shared.yes_no_default_yes") if default else t("cli.shared.yes_no_default_no")
+    hint = (
+        t("cli.shared.yes_no_default_yes")
+        if default
+        else t("cli.shared.yes_no_default_no")
+    )
     answer = prompt(f"{question} ({hint})")
     if not answer:
         return default

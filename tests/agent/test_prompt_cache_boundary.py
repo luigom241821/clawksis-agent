@@ -76,7 +76,7 @@ class TestRegistry:
         message = "\n".join(parts)
 
         assert message.startswith(stable_prefix)
-        assert message[len(stable_prefix):] == instruction
+        assert message[len(stable_prefix) :] == instruction
 
     def test_requires_proper_prefix(self):
         register_stable_prefix("scaffold")
@@ -196,15 +196,22 @@ class TestRequestLocalSplit:
         assert plan.messages[0]["content"][0]["cache_control"] == MARKER
         assert "cache_control" not in plan.messages[0]["content"][1]
 
-    @pytest.mark.parametrize("later_turns", [0, 4], ids=["holds-a-marker", "outside-the-marker-window"])
-    def test_strip_reconstructs_exact_string_and_redecorates_identically(self, later_turns):
+    @pytest.mark.parametrize(
+        "later_turns", [0, 4], ids=["holds-a-marker", "outside-the-marker-window"]
+    )
+    def test_strip_reconstructs_exact_string_and_redecorates_identically(
+        self, later_turns
+    ):
         """Caches key on content, so the scaffold goes out as the same [scaffold, tail] parts on
         every request, marked or not; the failover stripper must flatten either shape."""
         scaffold = "stable scaffold\n\n" + _SINGLE_SKILL_INSTRUCTION
         register_stable_prefix(scaffold)
         original = [{"role": "user", "content": scaffold + "ticket=one"}]
-        original += [{"role": role, "content": f"turn {i}"} for i in range(later_turns)
-                     for role in ("assistant", "user")]
+        original += [
+            {"role": role, "content": f"turn {i}"}
+            for i in range(later_turns)
+            for role in ("assistant", "user")
+        ]
 
         marked = apply_anthropic_cache_control(copy.deepcopy(original))
         assert [p["text"] for p in marked[0]["content"]] == [scaffold, "ticket=one"]
@@ -221,7 +228,11 @@ class TestRequestLocalSplit:
         scaffold = "stable scaffold\n\n" + _SINGLE_SKILL_INSTRUCTION
         register_stable_prefix(scaffold)
         original = [{"role": "user", "content": scaffold + "ticket=one"}]
-        original += [{"role": role, "content": f"turn {i}"} for i in range(4) for role in ("assistant", "user")]
+        original += [
+            {"role": role, "content": f"turn {i}"}
+            for i in range(4)
+            for role in ("assistant", "user")
+        ]
 
         unmarked = apply_anthropic_cache_control(copy.deepcopy(original))
         assert all("cache_control" not in part for part in unmarked[0]["content"])
@@ -237,12 +248,23 @@ class TestRequestLocalSplit:
         scaffold = "stable scaffold\n\n" + _SINGLE_SKILL_INSTRUCTION
         register_stable_prefix(scaffold)
         history = [{"role": "user", "content": scaffold + "ticket=one"}]
-        history += [{"role": role, "content": f"turn {i}"} for i in range(4) for role in ("assistant", "user")]
-        tools = [{"type": "function", "function": {"name": "terminal", "parameters": {}}}]
+        history += [
+            {"role": role, "content": f"turn {i}"}
+            for i in range(4)
+            for role in ("assistant", "user")
+        ]
+        tools = [
+            {"type": "function", "function": {"name": "terminal", "parameters": {}}}
+        ]
 
-        plan = build_prompt_cache_plan(history, tools, native_anthropic=True, direct_native_tool_cache=True)
+        plan = build_prompt_cache_plan(
+            history, tools, native_anthropic=True, direct_native_tool_cache=True
+        )
 
-        assert plan.messages[0]["content"] == [{"type": "text", "text": scaffold}, {"type": "text", "text": "ticket=one"}]
+        assert plan.messages[0]["content"] == [
+            {"type": "text", "text": scaffold},
+            {"type": "text", "text": "ticket=one"},
+        ]
         assert isinstance(history[0]["content"], str)
 
     def test_strip_flattens_even_after_the_prefix_was_evicted(self):
@@ -339,9 +361,9 @@ class TestRealBuilders:
 
     def test_bare_invocation_keeps_whole_block_layout(self, skills):
         message = skill_commands.build_skill_invocation_message("/triage")
-        blocks = apply_anthropic_cache_control(
-            [{"role": "user", "content": message}]
-        )[0]["content"]
+        blocks = apply_anthropic_cache_control([{"role": "user", "content": message}])[
+            0
+        ]["content"]
         assert blocks == [{"type": "text", "text": message, "cache_control": MARKER}]
 
     def test_builder_round_trip_survives_failover_strip(self, skills):
@@ -361,12 +383,10 @@ class TestCronBuilder:
     def _prompts(self, jobs):
         from cron.scheduler import _build_job_prompt
 
-        with patch(
-            "agent.skill_bundles.resolve_bundle_command_key", return_value=None
-        ), patch(
-            "tools.skills_tool.skill_view", side_effect=self._skill_view
-        ), patch(
-            "tools.skill_usage.bump_use"
+        with (
+            patch("agent.skill_bundles.resolve_bundle_command_key", return_value=None),
+            patch("tools.skills_tool.skill_view", side_effect=self._skill_view),
+            patch("tools.skill_usage.bump_use"),
         ):
             return [_build_job_prompt(job) for job in jobs]
 
@@ -379,7 +399,11 @@ class TestCronBuilder:
         return json.dumps({"success": True, "content": f"Stable content for {name}."})
 
     def test_cron_runs_share_the_marked_scaffold(self):
-        common = {"id": "job-cache", "name": "cache boundary", "skills": ["alpha", "beta"]}
+        common = {
+            "id": "job-cache",
+            "name": "cache boundary",
+            "skills": ["alpha", "beta"],
+        }
         first, second = self._prompts(
             [
                 {**common, "prompt": "ticket=one time=10:00"},
@@ -403,7 +427,11 @@ class TestCronBuilder:
         assert first_blocks[1]["text"].endswith("ticket=one time=10:00")
 
     def test_missing_skill_notice_stays_in_the_stable_prefix(self):
-        common = {"id": "job-skip", "name": "skip notice", "skills": ["missing", "alpha"]}
+        common = {
+            "id": "job-skip",
+            "name": "skip notice",
+            "skills": ["missing", "alpha"],
+        }
         first, second = self._prompts(
             [{**common, "prompt": "ticket=one"}, {**common, "prompt": "ticket=two"}]
         )

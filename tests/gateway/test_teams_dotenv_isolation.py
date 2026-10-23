@@ -64,9 +64,7 @@ def _install_fake_teams_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
     api_models_card.AdaptiveCardActionMessageResponse = type(
         "AdaptiveCardActionMessageResponse", (), {}
     )
-    api_models_invoke = types.ModuleType(
-        "microsoft_teams.api.models.invoke_response"
-    )
+    api_models_invoke = types.ModuleType("microsoft_teams.api.models.invoke_response")
     api_models_invoke.InvokeResponse = type("InvokeResponse", (), {})
     api_models_invoke.AdaptiveCardInvokeResponse = type(
         "AdaptiveCardInvokeResponse", (), {}
@@ -222,9 +220,7 @@ class TestTeamsAdapterImportDoesNotLeakDotenv:
             target_globals.update(bound)
             return True
 
-        monkeypatch.setattr(
-            "pm.extras.ensure_and_bind", _fake_ensure_and_bind
-        )
+        monkeypatch.setattr("pm.extras.ensure_and_bind", _fake_ensure_and_bind)
         assert teams_adapter.check_teams_requirements() is True
         assert CANARY_KEY not in os.environ
         assert teams_adapter.App is not None
@@ -237,9 +233,7 @@ class TestLoadGatewayConfigApiServerExplicitDisable:
         clawk_home = tmp_path / ".clawk"
         clawk_home.mkdir()
         (clawk_home / "config.yaml").write_text(
-            "platforms:\n"
-            "  api_server:\n"
-            "    enabled: false\n",
+            "platforms:\n  api_server:\n    enabled: false\n",
             encoding="utf-8",
         )
         monkeypatch.setenv("CLAWK_HOME", str(clawk_home))

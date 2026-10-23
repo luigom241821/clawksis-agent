@@ -34,20 +34,26 @@ def _resolve_key(env_var: str, provider_id: str) -> str:
     ALL streaming-provider key lookups go through here — never bare ``get_env_value``."""
     try:
         from tools.tts_tool import _resolve_provider_key
+
         return _resolve_provider_key(env_var, provider_id) or ""
     except Exception:
         from clawk_cli.config import get_env_value
+
         return get_env_value(env_var) or ""
 
 
 def _gemini_key() -> str:
-    return _resolve_key("GEMINI_API_KEY", "gemini") or _resolve_key("GOOGLE_API_KEY", "gemini")
+    return _resolve_key("GEMINI_API_KEY", "gemini") or _resolve_key(
+        "GOOGLE_API_KEY", "gemini"
+    )
 
 
 # Interruption latch: a barge-in on a spoken reply marks it; the next turn's submit path takes it
 # and prepends SPEECH_INTERRUPTED_NOTE to the model-bound message (API-call local, never
 # persisted). The TTL keeps a stale barge from annotating an unrelated message minutes later.
-SPEECH_INTERRUPTED_NOTE = "[Note: the user interrupted your previous spoken reply before it finished.]"
+SPEECH_INTERRUPTED_NOTE = (
+    "[Note: the user interrupted your previous spoken reply before it finished.]"
+)
 _INTERRUPT_TTL_S = 120.0
 _interrupted_at: Optional[float] = None
 
@@ -63,12 +69,15 @@ def take_speech_interrupted() -> bool:
     at, _interrupted_at = _interrupted_at, None
     return at is not None and time.monotonic() - at < _INTERRUPT_TTL_S
 
+
 # Sentence boundary: after .!? followed by whitespace, or a blank line.
 SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])(?:\s|\n)|(?:\n\n)")
 # Reasoning tags come from the one canonical list (agent.think_scrubber), matched case-insensitively,
 # so feed() and flush() strip/cut exactly the tags every other reasoning-hiding surface does.
 _THINK_NAMES = "|".join(re.escape(name) for name in THINK_TAG_NAMES)
-_THINK_BLOCK_RE = re.compile(rf"<({_THINK_NAMES})[\s>].*?</\1>", flags=re.DOTALL | re.IGNORECASE)
+_THINK_BLOCK_RE = re.compile(
+    rf"<({_THINK_NAMES})[\s>].*?</\1>", flags=re.DOTALL | re.IGNORECASE
+)
 _THINK_OPEN_RE = re.compile(rf"<(?:{_THINK_NAMES})(?=[\s>]|$)", flags=re.IGNORECASE)
 
 
@@ -87,8 +96,16 @@ class SentenceChunker:
         characters is a whole clause, so voice setups lower it to speak the first sentence
         alone instead of buffering it behind the second. Floor 1: 0 would emit every boundary."""
         try:
-            return cls(min_len=max(1, int((tts_config.get("streaming") or {}).get("min_len", 20))))
-        except (AttributeError, TypeError, ValueError):  # non-mapping / non-numeric → default
+            return cls(
+                min_len=max(
+                    1, int((tts_config.get("streaming") or {}).get("min_len", 20))
+                )
+            )
+        except (
+            AttributeError,
+            TypeError,
+            ValueError,
+        ):  # non-mapping / non-numeric → default
             return cls()
 
     def feed(self, delta: str) -> list[str]:
@@ -104,7 +121,7 @@ class SentenceChunker:
                 start = m.end()
                 continue
             out.append(head)
-            self.buf = self.buf[m.end():]
+            self.buf = self.buf[m.end() :]
             start = 0
         return out
 
@@ -147,10 +164,13 @@ class StreamingTTSProvider(ABC):
 _REGISTRY: dict[str, type[StreamingTTSProvider]] = {}
 
 
-def register(name: str) -> Callable[[type[StreamingTTSProvider]], type[StreamingTTSProvider]]:
+def register(
+    name: str,
+) -> Callable[[type[StreamingTTSProvider]], type[StreamingTTSProvider]]:
     def _wrap(cls: type[StreamingTTSProvider]) -> type[StreamingTTSProvider]:
         _REGISTRY[name] = cls
         return cls
+
     return _wrap
 
 
@@ -185,8 +205,11 @@ class _PluginPCMStreamer(StreamingTTSProvider):
 
     def stream(self, text: str) -> Iterator[bytes]:
         yield from _capped(
-            self._provider.stream(text, format="pcm", **_plugin_voice_kwargs(self.tts_config)),
-            f"plugin streamer {self._provider.name}")
+            self._provider.stream(
+                text, format="pcm", **_plugin_voice_kwargs(self.tts_config)
+            ),
+            f"plugin streamer {self._provider.name}",
+        )
 
 
 def _plugin_streamer(name: str, tts_config: dict) -> Optional[StreamingTTSProvider]:
@@ -195,7 +218,8 @@ def _plugin_streamer(name: str, tts_config: dict) -> Optional[StreamingTTSProvid
 
 
 def resolve_streaming_provider(
-    tts_config: dict, preferred: Optional[str] = None) -> Optional[StreamingTTSProvider]:
+    tts_config: dict, preferred: Optional[str] = None
+) -> Optional[StreamingTTSProvider]:
     """Return a ready streamer for the *configured* provider, else ``None``.
     ``tts.streaming.provider`` when set: a name pins that exact streamer (``None`` if unusable);
     ``auto`` returns the first usable in ``_PROVIDER_PRIORITY``. Otherwise the configured TTS
@@ -205,7 +229,9 @@ def resolve_streaming_provider(
 
     A plugin ``TTSProvider`` that opted into raw PCM (``streams_pcm``) streams here too, after the
     built-ins and under the same rules (a pinned name never substitutes another voice)."""
-    pinned = str((tts_config.get("streaming") or {}).get("provider") or "").lower().strip()
+    pinned = (
+        str((tts_config.get("streaming") or {}).get("provider") or "").lower().strip()
+    )
     if pinned == "auto":
         for name in _PROVIDER_PRIORITY:
             if (inst := _try_instantiate(name, tts_config)) is not None:
@@ -221,7 +247,11 @@ def _capped(chunks: Iterator[bytes], label: str) -> Iterator[bytes]:
     for chunk in chunks:
         total += len(chunk)
         if total > _STREAM_SENTENCE_BYTE_CAP:
-            logger.warning("%s exceeded %d bytes for one sentence; truncating", label, _STREAM_SENTENCE_BYTE_CAP)
+            logger.warning(
+                "%s exceeded %d bytes for one sentence; truncating",
+                label,
+                _STREAM_SENTENCE_BYTE_CAP,
+            )
             return
         yield chunk
 
@@ -237,16 +267,24 @@ class ElevenLabsStreamer(StreamingTTSProvider):
     def stream(self, text: str) -> Iterator[bytes]:
         from tools.tts_tool import _import_elevenlabs
         from tools.tts_tool_providers import (
-            DEFAULT_ELEVENLABS_STREAMING_MODEL_ID, DEFAULT_ELEVENLABS_VOICE_ID, _elevenlabs_environment_kwargs,
+            DEFAULT_ELEVENLABS_STREAMING_MODEL_ID,
+            DEFAULT_ELEVENLABS_VOICE_ID,
+            _elevenlabs_environment_kwargs,
         )
+
         client = _import_elevenlabs()(
-            api_key=_resolve_key("ELEVENLABS_API_KEY", "elevenlabs"), **_elevenlabs_environment_kwargs(self.section),
+            api_key=_resolve_key("ELEVENLABS_API_KEY", "elevenlabs"),
+            **_elevenlabs_environment_kwargs(self.section),
         )
         yield from client.text_to_speech.convert(
-            text=text, voice_id=self.section.get("voice_id", DEFAULT_ELEVENLABS_VOICE_ID),
-            model_id=self.section.get("streaming_model_id",
-                                      self.section.get("model_id", DEFAULT_ELEVENLABS_STREAMING_MODEL_ID)),
-            output_format="pcm_24000")
+            text=text,
+            voice_id=self.section.get("voice_id", DEFAULT_ELEVENLABS_VOICE_ID),
+            model_id=self.section.get(
+                "streaming_model_id",
+                self.section.get("model_id", DEFAULT_ELEVENLABS_STREAMING_MODEL_ID),
+            ),
+            output_format="pcm_24000",
+        )
 
 
 def _openai_config_api_key() -> str:
@@ -264,7 +302,11 @@ def _sample_rate_from_headers(headers) -> Optional[int]:
         return None
     raw = headers.get("x-audio-sample-rate")
     if raw is None:
-        m = re.search(r"(?:^|[;\s])rate\s*=\s*(\d+)", str(headers.get("content-type") or ""), re.IGNORECASE)
+        m = re.search(
+            r"(?:^|[;\s])rate\s*=\s*(\d+)",
+            str(headers.get("content-type") or ""),
+            re.IGNORECASE,
+        )
         raw = m.group(1) if m else None
     try:
         rate = int(str(raw).strip())
@@ -285,9 +327,17 @@ class OpenAIStreamer(StreamingTTSProvider):
     def __init__(self, tts_config: dict, section: dict):
         super().__init__(tts_config, section)
         configured = section.get("pcm_sample_rate", self.sample_rate)
-        if isinstance(configured, bool) or not isinstance(configured, (int, float, str)) \
-                or not str(configured).strip().isdigit() or int(str(configured).strip()) <= 0:
-            logger.warning("Invalid tts.openai.pcm_sample_rate %r; using %d Hz", configured, self.sample_rate)
+        if (
+            isinstance(configured, bool)
+            or not isinstance(configured, (int, float, str))
+            or not str(configured).strip().isdigit()
+            or int(str(configured).strip()) <= 0
+        ):
+            logger.warning(
+                "Invalid tts.openai.pcm_sample_rate %r; using %d Hz",
+                configured,
+                self.sample_rate,
+            )
         else:
             self.sample_rate = int(str(configured).strip())
 
@@ -298,20 +348,34 @@ class OpenAIStreamer(StreamingTTSProvider):
     def stream(self, text: str) -> Iterator[bytes]:
         from openai import OpenAI
         from clawk_cli.config import get_env_value
+
         client = OpenAI(
             api_key=(self.section.get("api_key") or resolve_openai_audio_api_key()),
-            base_url=(self.section.get("base_url") or get_env_value("OPENAI_BASE_URL") or None))
+            base_url=(
+                self.section.get("base_url") or get_env_value("OPENAI_BASE_URL") or None
+            ),
+        )
         from tools.tts_tool_openai import _openai_extra_body
-        extra = {"extra_body": body} if (body := _openai_extra_body(self.section)) else {}
+
+        extra = (
+            {"extra_body": body} if (body := _openai_extra_body(self.section)) else {}
+        )
         with client.audio.speech.with_streaming_response.create(
-            model=self.section.get("model", "gpt-4o-mini-tts"), voice=self.section.get("voice", "alloy"),
-            input=text, response_format="pcm", **extra,
+            model=self.section.get("model", "gpt-4o-mini-tts"),
+            voice=self.section.get("voice", "alloy"),
+            input=text,
+            response_format="pcm",
+            **extra,
         ) as response:
             # Runs on the first next(), before any audio is yielded, so consumers reading
             # ``sample_rate`` after the first chunk open their device at the endpoint's rate.
             rate = _sample_rate_from_headers(getattr(response, "headers", None))
             if rate is not None and rate != self.sample_rate:
-                logger.info("TTS endpoint reports %d Hz PCM (expected %d Hz); honoring it", rate, self.sample_rate)
+                logger.info(
+                    "TTS endpoint reports %d Hz PCM (expected %d Hz); honoring it",
+                    rate,
+                    self.sample_rate,
+                )
                 self.sample_rate = rate
             yield from _capped(response.iter_bytes(), "OpenAI streaming TTS")
 
@@ -333,37 +397,62 @@ class GeminiStreamer(StreamingTTSProvider):
         import json as _json
         import requests
         from tools.tts_tool_providers import (
-            DEFAULT_GEMINI_TTS_BASE_URL, DEFAULT_GEMINI_TTS_MODEL, DEFAULT_GEMINI_TTS_VOICE)
+            DEFAULT_GEMINI_TTS_BASE_URL,
+            DEFAULT_GEMINI_TTS_MODEL,
+            DEFAULT_GEMINI_TTS_VOICE,
+        )
         from clawk_cli.config import get_env_value
+
         api_key = _gemini_key()
-        model = str(self.section.get("model", DEFAULT_GEMINI_TTS_MODEL)).strip() or DEFAULT_GEMINI_TTS_MODEL
-        voice = str(self.section.get("voice", DEFAULT_GEMINI_TTS_VOICE)).strip() or DEFAULT_GEMINI_TTS_VOICE
+        model = (
+            str(self.section.get("model", DEFAULT_GEMINI_TTS_MODEL)).strip()
+            or DEFAULT_GEMINI_TTS_MODEL
+        )
+        voice = (
+            str(self.section.get("voice", DEFAULT_GEMINI_TTS_VOICE)).strip()
+            or DEFAULT_GEMINI_TTS_VOICE
+        )
         from agent.gemini_native_adapter import normalize_gemini_base_url
+
         base_url = normalize_gemini_base_url(
-            self.section.get("base_url") or get_env_value("GEMINI_BASE_URL") or DEFAULT_GEMINI_TTS_BASE_URL,
+            self.section.get("base_url")
+            or get_env_value("GEMINI_BASE_URL")
+            or DEFAULT_GEMINI_TTS_BASE_URL,
         )
         payload = {
             "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
-                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
+                "speechConfig": {
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}
+                },
+            },
+        }
         url = f"{base_url}/models/{model}:streamGenerateContent"
 
         def _sse_chunks() -> Iterator[bytes]:
             with requests.post(
-                url, params={"alt": "sse"}, headers={"x-goog-api-key": api_key},
-                json=payload, timeout=60, stream=True,
+                url,
+                params={"alt": "sse"},
+                headers={"x-goog-api-key": api_key},
+                json=payload,
+                timeout=60,
+                stream=True,
             ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines(decode_unicode=True):
                     if not line or not line.startswith("data: "):
                         continue
                     try:
-                        parts = _json.loads(line[len("data: "):])["candidates"][0]["content"]["parts"]
+                        parts = _json.loads(line[len("data: ") :])["candidates"][0][
+                            "content"
+                        ]["parts"]
                     except (ValueError, KeyError, IndexError, TypeError):
                         continue
                     for part in parts:
-                        b64 = (part.get("inlineData") or part.get("inline_data") or {}).get("data", "")
+                        b64 = (
+                            part.get("inlineData") or part.get("inline_data") or {}
+                        ).get("data", "")
                         if not b64:
                             continue
                         try:
@@ -416,9 +505,15 @@ class XAIStreamer(StreamingTTSProvider):
     def available() -> bool:
         try:
             from tools.xai_http import resolve_xai_http_credentials
+
             # Same ordering as the sync path: the subscription OAuth bearer
             # authorizes but 403s on metered TTS, so an explicit key wins (#87045).
-            return bool(str(resolve_xai_http_credentials(prefer_api_key=True).get("api_key") or "").strip())
+            return bool(
+                str(
+                    resolve_xai_http_credentials(prefer_api_key=True).get("api_key")
+                    or ""
+                ).strip()
+            )
         except Exception:
             return False
 
@@ -459,7 +554,10 @@ class XAIStreamer(StreamingTTSProvider):
                 _put_unless_stopped(q, done, stop)
 
         threading.Thread(
-            target=copy_context().run, args=(_pump_thread,), name="xai-tts-pump", daemon=True
+            target=copy_context().run,
+            args=(_pump_thread,),
+            name="xai-tts-pump",
+            daemon=True,
         ).start()
         try:
             while True:
@@ -484,20 +582,29 @@ class XAIStreamer(StreamingTTSProvider):
 
         from tools.tts_tool_providers import DEFAULT_XAI_LANGUAGE, DEFAULT_XAI_VOICE_ID
         from tools.xai_http import resolve_xai_http_credentials
-        api_key = str(resolve_xai_http_credentials(prefer_api_key=True).get("api_key") or "").strip()
+
+        api_key = str(
+            resolve_xai_http_credentials(prefer_api_key=True).get("api_key") or ""
+        ).strip()
         if not api_key:
             raise RuntimeError("No xAI credentials for streaming TTS")
-        voice = str(self.section.get("voice_id", DEFAULT_XAI_VOICE_ID)).strip() or DEFAULT_XAI_VOICE_ID
-        language = str(self.section.get("language", DEFAULT_XAI_LANGUAGE)).strip() or DEFAULT_XAI_LANGUAGE
-        base = str(
-            self.section.get("streaming_url") or "wss://api.x.ai/v1/tts"
-        ).strip()
-        params = urlencode({
-            "voice": voice,
-            "language": language,
-            "codec": "pcm",
-            "sample_rate": self.sample_rate,
-        })
+        voice = (
+            str(self.section.get("voice_id", DEFAULT_XAI_VOICE_ID)).strip()
+            or DEFAULT_XAI_VOICE_ID
+        )
+        language = (
+            str(self.section.get("language", DEFAULT_XAI_LANGUAGE)).strip()
+            or DEFAULT_XAI_LANGUAGE
+        )
+        base = str(self.section.get("streaming_url") or "wss://api.x.ai/v1/tts").strip()
+        params = urlencode(
+            {
+                "voice": voice,
+                "language": language,
+                "codec": "pcm",
+                "sample_rate": self.sample_rate,
+            }
+        )
         sep = "&" if "?" in base else "?"
         ws_url = f"{base}{sep}{params}"
 
@@ -513,7 +620,9 @@ class XAIStreamer(StreamingTTSProvider):
                         ws.recv(), timeout=self._RECV_TIMEOUT_S
                     )
                 except TimeoutError:
-                    raise RuntimeError(f"xAI streaming TTS: no audio for {self._RECV_TIMEOUT_S}s")
+                    raise RuntimeError(
+                        f"xAI streaming TTS: no audio for {self._RECV_TIMEOUT_S}s"
+                    )
                 except websockets.exceptions.ConnectionClosedOK:
                     return  # clean close, with or without audio.done
                 except websockets.exceptions.ConnectionClosedError as exc:

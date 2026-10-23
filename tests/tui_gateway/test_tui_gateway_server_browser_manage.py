@@ -3,6 +3,7 @@
 Since CLI-9 (#134889) the live ``/browser connect`` endpoint is the requesting profile's (a per-home
 map in ``tools.browser_tool_cdp``), and only that profile's browsers are reaped.
 """
+
 import json
 import os
 import sys
@@ -35,7 +36,11 @@ def _stub_urlopen(monkeypatch, *, ok: bool):
 
     import urllib.request
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout))
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector,
+        "open",
+        lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout),
+    )
 
 
 def _stub_urlopen_capture(monkeypatch, *, ok: bool):
@@ -58,7 +63,11 @@ def _stub_urlopen_capture(monkeypatch, *, ok: bool):
 
     import urllib.request
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout))
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector,
+        "open",
+        lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout),
+    )
     return urls
 
 
@@ -87,10 +96,15 @@ def test_browser_manage_status_falls_back_to_config_cdp_url(monkeypatch):
             {"id": "1", "method": "browser.manage", "params": {"action": "status"}}
         )
 
-    assert {k: resp["result"][k] for k in ("connected", "url")} == {"connected": True, "url": "http://lan:9222"}
+    assert {k: resp["result"][k] for k in ("connected", "url")} == {
+        "connected": True,
+        "url": "http://lan:9222",
+    }
 
 
-def test_browser_manage_use_swaps_the_profiles_browser_tools_for_new_agents(monkeypatch, tmp_path):
+def test_browser_manage_use_swaps_the_profiles_browser_tools_for_new_agents(
+    monkeypatch, tmp_path
+):
     """Desktop/TUI ``/browser use [off]``: the target profile's ``browser.backend`` flips, ``status``
     reports it, and the tool surface a NEW agent resolves swaps (stale check_fn verdicts dropped).
     ``profile`` scopes the write: the launch profile's config stays untouched."""
@@ -101,9 +115,18 @@ def test_browser_manage_use_swaps_the_profiles_browser_tools_for_new_agents(monk
     import clawk_yaml as yaml
 
     monkeypatch.setattr(browser_use_cli, "_find_cli", lambda: ["browser-harness"])
-    manage = lambda **p: server.handle_request({"id": "1", "method": "browser.manage", "params": p})["result"]
-    exec_offered = lambda: "browser_exec" in {
-        t["function"]["name"] for t in model_tools.get_tool_definitions(enabled_toolsets=["browser", "terminal"])}
+    manage = lambda **p: server.handle_request(
+        {"id": "1", "method": "browser.manage", "params": p}
+    )["result"]
+    exec_offered = lambda: (
+        "browser_exec"
+        in {
+            t["function"]["name"]
+            for t in model_tools.get_tool_definitions(
+                enabled_toolsets=["browser", "terminal"]
+            )
+        }
+    )
 
     assert manage(action="use", enabled=False)["browser_use"] is False
     assert manage(action="status")["browser_use"] is False and not exec_offered()
@@ -112,9 +135,13 @@ def test_browser_manage_use_swaps_the_profiles_browser_tools_for_new_agents(monk
 
     other_home = tmp_path / "profiles" / "other"
     other_home.mkdir(parents=True)
-    monkeypatch.setattr(server, "_profile_home", lambda name: other_home if name == "other" else None)
+    monkeypatch.setattr(
+        server, "_profile_home", lambda name: other_home if name == "other" else None
+    )
     manage(action="use", enabled=False, profile="other")
-    backend = lambda home: yaml.safe_load((home / "config.yaml").read_text())["browser"]["backend"]
+    backend = lambda home: yaml.safe_load((home / "config.yaml").read_text())[
+        "browser"
+    ]["backend"]
     assert (backend(other_home), backend(get_clawk_home())) == ("off", "browser-use")
 
 
@@ -122,12 +149,14 @@ def test_browser_manage_use_swaps_the_profiles_browser_tools_for_new_agents(monk
 def _no_live_cdp(monkeypatch):
     """Each test starts with no profile's live ``/browser connect`` endpoint."""
     from tools import browser_tool_cdp
+
     monkeypatch.setattr(browser_tool_cdp, "_live_overrides", {})
 
 
 def _live_cdp() -> str:
     """The launch profile's live ``/browser connect`` endpoint (per profile since CLI-9)."""
     from tools.browser_tool_cdp import live_cdp_override
+
     return live_cdp_override()
 
 
@@ -204,7 +233,10 @@ def test_browser_manage_connect_default_local_reports_launch_hint(monkeypatch):
                 return_value=ChromeDebugLaunch(),
             ),
             patch("clawk_cli.browser_connect.local_port_in_use", return_value=False),
-            patch("clawk_cli.browser_connect.manual_chrome_debug_command", return_value=None),
+            patch(
+                "clawk_cli.browser_connect.manual_chrome_debug_command",
+                return_value=None,
+            ),
             patch(
                 "clawk_cli.browser_connect.get_chrome_debug_candidates",
                 return_value=[],
@@ -252,7 +284,10 @@ def test_browser_manage_connect_no_session_skips_progress_events(monkeypatch):
                 "clawk_cli.browser_connect.launch_chrome_debug",
                 return_value=ChromeDebugLaunch(),
             ),
-            patch("clawk_cli.browser_connect.manual_chrome_debug_command", return_value=None),
+            patch(
+                "clawk_cli.browser_connect.manual_chrome_debug_command",
+                return_value=None,
+            ),
             patch(
                 "clawk_cli.browser_connect.get_chrome_debug_candidates",
                 return_value=[],
@@ -339,7 +374,11 @@ def test_browser_manage_connect_default_local_retries_after_launch(monkeypatch):
 
     import urllib.request
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout))
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector,
+        "open",
+        lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout),
+    )
     launched = ChromeDebugLaunch(launched=True)
     with patch.dict(sys.modules, {"tools.browser_tool_lifecycle": fake}):
         with (
@@ -384,7 +423,11 @@ def test_browser_manage_connect_finds_ipv6_only_browser(monkeypatch):
 
     import urllib.request
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout))
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector,
+        "open",
+        lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout),
+    )
     with patch.dict(sys.modules, {"tools.browser_tool_lifecycle": fake}):
         resp = server.handle_request(
             {"id": "1", "method": "browser.manage", "params": {"action": "connect"}}
@@ -422,7 +465,11 @@ def test_browser_manage_connect_squatted_port_launches_on_alternate(monkeypatch)
 
     import urllib.request
 
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout))
+    monkeypatch.setattr(
+        urllib.request.OpenerDirector,
+        "open",
+        lambda _self, url, *a, timeout=2.0, **k: _opener(url, timeout=timeout),
+    )
     launch_ports: list[int] = []
 
     def _launch(port, _system):
@@ -448,12 +495,11 @@ def test_browser_manage_connect_squatted_port_launches_on_alternate(monkeypatch)
 def test_browser_manage_connect_rejects_unreachable_endpoint(monkeypatch):
     """An unreachable endpoint must NOT mutate the env or reap sessions."""
     from tools.browser_tool_cdp import set_live_cdp_override
+
     set_live_cdp_override("http://existing:9222")
     cleanup_calls: list[str] = []
     fake = types.SimpleNamespace(
-        cleanup_profile_browsers=lambda _key: cleanup_calls.append(
-            _live_cdp()
-        ),
+        cleanup_profile_browsers=lambda _key: cleanup_calls.append(_live_cdp()),
         _get_cdp_override=lambda: os.environ.get("BROWSER_CDP_URL", ""),
     )
     with patch.dict(sys.modules, {"tools.browser_tool_lifecycle": fake}):
@@ -692,7 +738,10 @@ def test_browser_manage_connect_concrete_ws_tcp_unreachable(monkeypatch):
 
 def test_browser_manage_disconnect_drops_env_and_cleans(monkeypatch):
     from tools.browser_tool_cdp import set_live_cdp_override
-    monkeypatch.setenv("BROWSER_CDP_URL", "http://operator:9222")  # an operator's env is not the live connect
+
+    monkeypatch.setenv(
+        "BROWSER_CDP_URL", "http://operator:9222"
+    )  # an operator's env is not the live connect
     set_live_cdp_override("http://127.0.0.1:9222")
     cleanup_count = {"n": 0}
     fake = types.SimpleNamespace(

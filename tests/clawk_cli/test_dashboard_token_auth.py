@@ -6,6 +6,7 @@ flag, the registry filter, bearer extraction, provider stacking (verify_token),
 and the route-agnostic middleware seam's fail-closed / 503 / pass-through
 behaviour.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -142,8 +143,6 @@ def test_oauth_provider_defaults_supports_token_false():
     assert _OAuthOnly().supports_token is False
 
 
-
-
 class _NonInteractiveProvider(_TokenProvider):
     """A token-only credential with no interactive session."""
 
@@ -155,8 +154,6 @@ class _NonInteractiveProvider(_TokenProvider):
 # --------------------------------------------------------------------------
 # Bearer extraction
 # --------------------------------------------------------------------------
-
-
 
 
 # --------------------------------------------------------------------------
@@ -221,10 +218,6 @@ async def _call_next_ok(request):
     return JSONResponse({"ok": True}, status_code=200)
 
 
-
-
-
-
 def test_seam_rejects_wrong_token_401():
     register_provider(_TokenProvider(secret="good"))
     token_auth.register_token_route("/api/gateway/drain")
@@ -233,5 +226,3 @@ def test_seam_rejects_wrong_token_401():
     )
     resp = _run(token_auth.token_auth_middleware(req, _call_next_ok))
     assert resp.status_code == 401
-
-

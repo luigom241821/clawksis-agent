@@ -19,12 +19,19 @@ from typing import Any, Callable, Dict, List, Optional
 from agent.memory_provider import ctx_bound
 from tools import tts_command_provider
 from tools.tts_command_provider import (
-    BUILTIN_TTS_PROVIDERS, _get_command_tts_timeout, _get_named_provider_config,
-    _is_command_provider_config, command_env_passthrough as _command_provider_env_passthrough,
-    render_command_template as _render_command_tts_template)
+    BUILTIN_TTS_PROVIDERS,
+    _get_command_tts_timeout,
+    _get_named_provider_config,
+    _is_command_provider_config,
+    command_env_passthrough as _command_provider_env_passthrough,
+    render_command_template as _render_command_tts_template,
+)
 from tools.tts_tool_delivery import _origin
 from tools.tts_tool_local import (
-    _LOCAL_TTS_MODEL_CACHES, _load_kittentts_model_for_config, _load_piper_voice_for_config)
+    _LOCAL_TTS_MODEL_CACHES,
+    _load_kittentts_model_for_config,
+    _load_piper_voice_for_config,
+)
 from tools.tts_tool_plugins import _lookup_plugin_provider
 
 logger = logging.getLogger("tools.tts_tool")
@@ -43,14 +50,21 @@ def _local_tts_warmers() -> dict[str, Callable[[dict[str, Any]], Any]]:
     """Provider name → loader populating that engine's cache slot (same key synthesis uses)."""
     return {
         "piper": lambda cfg: _load_piper_voice_for_config(cfg)[0],
-        "kittentts": lambda cfg: _load_kittentts_model_for_config(cfg)[0]}
+        "kittentts": lambda cfg: _load_kittentts_model_for_config(cfg)[0],
+    }
 
 
 # pm extra for providers whose SDK installs on first use.
-_LAZY_SDK_FEATURES = {"edge": "edge-tts", "elevenlabs": "tts-premium", "mistral": "mistral"}
+_LAZY_SDK_FEATURES = {
+    "edge": "edge-tts",
+    "elevenlabs": "tts-premium",
+    "mistral": "mistral",
+}
 
 
-def _signal_user_tts_provider(name: str, tts_config: dict[str, Any], hook: str) -> Optional[str]:
+def _signal_user_tts_provider(
+    name: str, tts_config: dict[str, Any], hook: str
+) -> Optional[str]:
     """Forward a lease ``hook`` (``"warm"``/``"release"``) to a user-declared provider; returns the action.
     Command providers run their optional ``<hook>_command`` (same template/env/timeout rules as
     ``command``) on a background thread so a toggle never waits on a model server; plugins get
@@ -63,20 +77,29 @@ def _signal_user_tts_provider(name: str, tts_config: dict[str, Any], hook: str) 
             template = str(cfg.get(f"{hook}_command") or "").strip()
             if not template:
                 return None
-            command = _render_command_tts_template(template, {
-                "voice": str(cfg.get("voice", "")),
-                "model": str(cfg.get("model", "")),
-                "speed": str(cfg.get("speed", tts_config.get("speed", "")))})
+            command = _render_command_tts_template(
+                template,
+                {
+                    "voice": str(cfg.get("voice", "")),
+                    "model": str(cfg.get("model", "")),
+                    "speed": str(cfg.get("speed", tts_config.get("speed", ""))),
+                },
+            )
 
             def _run() -> None:
                 try:
                     tts_command_provider.run_command_provider(
-                        command, _get_command_tts_timeout(cfg),
-                        env_passthrough=_command_provider_env_passthrough(cfg))
+                        command,
+                        _get_command_tts_timeout(cfg),
+                        env_passthrough=_command_provider_env_passthrough(cfg),
+                    )
                 except Exception as exc:
                     logger.debug("[TTS] %s_command for %s failed: %s", hook, name, exc)
+
             # ctx_bound: env_passthrough resolves through the caller's profile secret scope.
-            threading.Thread(target=ctx_bound(_run), name=f"tts-{hook}-{name}", daemon=True).start()
+            threading.Thread(
+                target=ctx_bound(_run), name=f"tts-{hook}-{name}", daemon=True
+            ).start()
             return hook
         plugin_provider = _lookup_plugin_provider(name)
         if plugin_provider is None:
@@ -88,7 +111,9 @@ def _signal_user_tts_provider(name: str, tts_config: dict[str, Any], hook: str) 
         return "error"
 
 
-def warm_tts_provider(tts_config: Optional[dict[str, Any]] = None, provider: Optional[str] = None) -> dict[str, Any]:
+def warm_tts_provider(
+    tts_config: Optional[dict[str, Any]] = None, provider: Optional[str] = None
+) -> dict[str, Any]:
     """Pre-load the configured TTS provider so the next synthesis starts hot (blocking; never raises).
     Local engines fill the same LRU slot synthesis reads (including first-use download); lazily
     installed cloud SDKs are made importable; user-declared providers get their warm hook;
@@ -108,9 +133,13 @@ def warm_tts_provider(tts_config: Optional[dict[str, Any]] = None, provider: Opt
             result.update(action="error", error=str(exc))
             return result
         result.update(
-            warmed=True, action="loaded" if len(cache) > before else "cached",
-            elapsed_ms=int((time.monotonic() - started) * 1000))
-        logger.info("[TTS] warm-up %s: %s in %dms", name, result["action"], result["elapsed_ms"])
+            warmed=True,
+            action="loaded" if len(cache) > before else "cached",
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
+        logger.info(
+            "[TTS] warm-up %s: %s in %dms", name, result["action"], result["elapsed_ms"]
+        )
         return result
     signalled = _signal_user_tts_provider(name, tts_config, "warm")
     if signalled is not None:
@@ -121,6 +150,7 @@ def warm_tts_provider(tts_config: Optional[dict[str, Any]] = None, provider: Opt
     if feature is not None:
         try:
             import pm
+
             if pm.available(feature):
                 result.update(warmed=True, action="cached")
             else:
@@ -138,7 +168,9 @@ def release_tts_provider(provider: Optional[str] = None) -> dict[str, Any]:
     name = (provider or "").lower().strip()
     if not name:
         tts_config = _origin()._load_tts_config()
-        _signal_user_tts_provider(_origin()._get_provider(tts_config), tts_config, "release")
+        _signal_user_tts_provider(
+            _origin()._get_provider(tts_config), tts_config, "release"
+        )
     released = 0
     for cache_name, cache in _LOCAL_TTS_MODEL_CACHES.items():
         if not name or cache_name == name:
@@ -151,7 +183,11 @@ def release_tts_provider(provider: Optional[str] = None) -> dict[str, Any]:
 
 def _keep_warm_seconds() -> float:
     """``tts.keep_warm_seconds``, read per call so each profile's config applies; ``0`` = unload now."""
-    raw = _origin()._load_tts_config().get("keep_warm_seconds", _DEFAULT_KEEP_WARM_SECONDS)
+    raw = (
+        _origin()
+        ._load_tts_config()
+        .get("keep_warm_seconds", _DEFAULT_KEEP_WARM_SECONDS)
+    )
     try:
         return max(0.0, float(raw))
     except (TypeError, ValueError):
@@ -176,7 +212,8 @@ def _schedule_release_locked() -> int:
         return release_tts_provider()["released"]
     # ctx_bound: the unload reads config/secrets under the releasing caller's profile scope.
     timer = _make_keep_warm_timer(
-        delay, ctx_bound(_release_after_keep_warm), args=(_keep_warm_generation,))
+        delay, ctx_bound(_release_after_keep_warm), args=(_keep_warm_generation,)
+    )
     timer.daemon = True
     _keep_warm_timer = timer
     timer.start()
@@ -192,7 +229,9 @@ def _release_after_keep_warm(generation: int) -> None:
         release_tts_provider()
 
 
-def acquire_tts_lease(lease: str, tts_config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def acquire_tts_lease(
+    lease: str, tts_config: Optional[dict[str, Any]] = None
+) -> dict[str, Any]:
     """Register ``lease`` (e.g. ``"desktop:read-aloud"``) and warm the provider. Re-acquiring is
     idempotent but still re-warms (cheap on a cache hit; heals a cache cleared elsewhere). An
     acquire inside the keep-warm window cancels the pending unload."""

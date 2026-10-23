@@ -18,8 +18,6 @@ def _write_config(home, body: str) -> None:
     (home / "config.yaml").write_text(textwrap.dedent(body))
 
 
-
-
 def test_dashboard_ws_values_propagate_from_yaml(_temp_home):
     from clawk_cli.config import load_config
 

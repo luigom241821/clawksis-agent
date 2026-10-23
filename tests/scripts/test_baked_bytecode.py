@@ -13,10 +13,20 @@ def _make_payload(root: Path) -> Path:
     (root / "clawksis-agent" / "pkg").mkdir(parents=True)
     (root / "clawksis-agent" / "pkg" / "__init__.py").write_text("")
     (root / "clawksis-agent" / "pkg" / "mod.py").write_text("X = 1\n")
-    site = root / "venv" / f"lib/python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+    site = (
+        root
+        / "venv"
+        / f"lib/python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
     site.mkdir(parents=True)
     (site / "dep.py").write_text("Y = 2\n")
-    pm = root / "pm-runtime" / f"lib/python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+    pm = (
+        root
+        / "pm-runtime"
+        / f"lib/python{sys.version_info.major}.{sys.version_info.minor}"
+        / "site-packages"
+    )
     pm.mkdir(parents=True)
     (pm / "pmdep.py").write_text("Z = 3\n")
     return root
@@ -40,8 +50,11 @@ def test_bake_fails_closed_on_uncompilable_module(tmp_path):
     """Strict compileall: an unparseable module fails the whole bake instead of
     silently shipping cold-compile-every-launch bytecode."""
     import subprocess as _sp
+
     root = _make_payload(tmp_path)
-    (root / "clawksis-agent" / "pkg" / "broken.py").write_text("this is (( not python\n")
+    (root / "clawksis-agent" / "pkg" / "broken.py").write_text(
+        "this is (( not python\n"
+    )
     with pytest.raises(_sp.CalledProcessError):
         bake_bytecode(root, Path(sys.executable))
 
@@ -50,9 +63,11 @@ def test_uncovered_reports_parseable_module_without_pyc(tmp_path):
     """The coverage gate: a parseable module lacking bytecode is reported
     before it can ship as a cold-compile stall."""
     from importlib.util import cache_from_source
+
     root = _make_payload(tmp_path)
     bake_bytecode(root, Path(sys.executable))
     from scripts.bundles.bytecode import _uncovered
+
     missing, unparseable = _uncovered(root / "clawksis-agent")
     assert missing == [] and unparseable == 0
     pyc = Path(cache_from_source(root / "clawksis-agent" / "pkg" / "mod.py"))
@@ -72,7 +87,9 @@ def _load_wrapper():
     """Import the wrapper with placeholders substituted, like the build does."""
     from scripts.build.launchers import render_wrapper
 
-    text = render_wrapper("stubmod.entry:main", "../clawksis-agent", "../venv/Lib/site-packages")
+    text = render_wrapper(
+        "stubmod.entry:main", "../clawksis-agent", "../venv/Lib/site-packages"
+    )
     namespace: dict = {"__name__": "launcher_wrapper_under_test"}
     wrapper = Path("scripts/build/launcher_wrapper.py")
     exec(compile(text, str(wrapper), "exec"), namespace)
@@ -107,6 +124,7 @@ def test_launcher_keeps_user_cache_redirect_without_marker(tmp_path):
     try:
         ns["configure"](str(here), environ=environ)
         assert environ["PYTHONPYCACHEPREFIX"] == str(
-            tmp_path / "userhome" / ".cache" / "clawk-pycache")
+            tmp_path / "userhome" / ".cache" / "clawk-pycache"
+        )
     finally:
         sys.pycache_prefix = original

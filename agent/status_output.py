@@ -4,6 +4,7 @@ Safe printing, quiet-mode gating, deduped context-overflow warnings, and the buf
 chatter that is shown only when every retry/fallback is exhausted.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import logging
 import sys
 
@@ -36,7 +37,10 @@ class StatusOutputMixin:
             return
         if diagnostic and not self._warning_presentation_enabled():
             return
-        if force or not (getattr(self, "_mute_post_response", False) or (self._has_stream_consumers() and not self._executing_tools)):
+        if force or not (
+            getattr(self, "_mute_post_response", False)
+            or (self._has_stream_consumers() and not self._executing_tools)
+        ):
             self._safe_print(*args, **kwargs)
 
     def _should_start_quiet_spinner(self) -> bool:
@@ -60,7 +64,11 @@ class StatusOutputMixin:
         """
         if getattr(self, "suppress_status_output", False):
             return False
-        return self.quiet_mode and not self.tool_progress_callback and getattr(self, "platform", "") == "cli"
+        return (
+            self.quiet_mode
+            and not self.tool_progress_callback
+            and getattr(self, "platform", "") == "cli"
+        )
 
     def _call_callback(self, name: str, *args, origin: str) -> None:
         """Invoke ``self.<name>(*args)`` if set, swallowing errors — a driver callback must never break the loop."""
@@ -74,8 +82,12 @@ class StatusOutputMixin:
     def _emit_status_kind(self, kind: str, message: str, *, origin: str) -> None:
         """Print to the CLI (``_vprint(force=True)``) and forward to ``status_callback(kind, message)``. Never raises."""
         from gateway.warning_notifications import is_warning_status
+
         try:
-            if not is_warning_status(kind, message) or self._warning_presentation_enabled():
+            if (
+                not is_warning_status(kind, message)
+                or self._warning_presentation_enabled()
+            ):
                 self._vprint(f"{self.log_prefix}{message}", force=True)
         except Exception:
             pass
@@ -83,9 +95,12 @@ class StatusOutputMixin:
 
     def _warning_presentation_enabled(self) -> bool:
         from gateway.warning_notifications import warning_notifications_enabled
+
         try:
             return warning_notifications_enabled(
-                getattr(self, "_notification_platform", getattr(self, "platform", "cli")),
+                getattr(
+                    self, "_notification_platform", getattr(self, "platform", "cli")
+                ),
                 getattr(self, "_notification_config", None),
             )
         except Exception:
@@ -95,6 +110,7 @@ class StatusOutputMixin:
     def _emit_diagnostic_status(self, message: str) -> None:
         """A diagnostic on the lifecycle rail, without changing legacy formatting."""
         from gateway.warning_notifications import DiagnosticText
+
         self._emit_status(DiagnosticText(message))
 
     def _emit_status(self, message: str) -> None:
@@ -120,12 +136,17 @@ class StatusOutputMixin:
         from agent.credits_tracker import AgentNotice
 
         key = f"startup-warning.{zlib.crc32(message.encode()):08x}"
-        level = "success" if message.startswith("✓") else "warn"  # a recovered provider is good news
+        level = (
+            "success" if message.startswith("✓") else "warn"
+        )  # a recovered provider is good news
         notice = AgentNotice(text=message, level=level, kind="sticky", key=key, id=key)
         if getattr(self, "notice_callback", None):
             self._emit_notice(notice)
         else:
-            self._pending_startup_notices = [*getattr(self, "_pending_startup_notices", ()), notice]
+            self._pending_startup_notices = [
+                *getattr(self, "_pending_startup_notices", ()),
+                notice,
+            ]
 
     def _replay_startup_warnings(self) -> None:
         pending = getattr(self, "_pending_startup_notices", None)
@@ -134,7 +155,9 @@ class StatusOutputMixin:
             for notice in pending:
                 self._emit_notice(notice)
 
-    def _warn_context_overflow_blocked(self, reason: str, preflight_tokens: int, threshold_tokens: int) -> None:
+    def _warn_context_overflow_blocked(
+        self, reason: str, preflight_tokens: int, threshold_tokens: int
+    ) -> None:
         """Warn (deduped on the block *kind* — ``cooldown`` / ``ineffective`` — not the countdown string;
         cleared by ``_clear_context_overflow_warn``) when context is over the threshold but compression is blocked."""
         _warn_kind = (reason or "unknown").split(":", 1)[0]
@@ -142,16 +165,27 @@ class StatusOutputMixin:
         if getattr(self, "_last_ctx_overflow_warn", None) == _warn_key:
             return
         self._last_ctx_overflow_warn = _warn_key
-        from agent.conversation_compression import CONTEXT_OVERFLOW_BLOCKED_WARNING_TEMPLATE
+        from agent.conversation_compression import (
+            CONTEXT_OVERFLOW_BLOCKED_WARNING_TEMPLATE,
+        )
 
         # cooldown + anti-thrash (ineffective) are both "compression blocked".
         if _warn_kind in ("cooldown", "ineffective"):
-            self._touch_activity(f"compression blocked ({reason})", provenance=ActivityProvenance.AGENT_COMPRESSION_COOLDOWN)
-        self._emit_warning(CONTEXT_OVERFLOW_BLOCKED_WARNING_TEMPLATE.format(
-            tokens=preflight_tokens, threshold=threshold_tokens, reason=reason,
-        ))
+            self._touch_activity(
+                f"compression blocked ({reason})",
+                provenance=ActivityProvenance.AGENT_COMPRESSION_COOLDOWN,
+            )
+        self._emit_warning(
+            CONTEXT_OVERFLOW_BLOCKED_WARNING_TEMPLATE.format(
+                tokens=preflight_tokens,
+                threshold=threshold_tokens,
+                reason=reason,
+            )
+        )
 
-    def _warn_uncompressed_context_overflow(self, preflight_tokens: int, context_length: int) -> None:
+    def _warn_uncompressed_context_overflow(
+        self, preflight_tokens: int, context_length: int
+    ) -> None:
         """Deduped warning when uncompressed context exceeds the model limit; points the user at /compact.
 
         When compression is explicitly disabled (compression.enabled: false), long sessions can grow past
@@ -161,8 +195,13 @@ class StatusOutputMixin:
         _warn_key = ("uncompressed_ctx_overflow", context_length)
         if getattr(self, "_last_ctx_overflow_warn", None) != _warn_key:
             self._last_ctx_overflow_warn = _warn_key
-            self._emit_warning(t("display.notice.uncompressed_context_overflow",
-                                 tokens=f"{preflight_tokens:,}", context_length=f"{context_length:,}"))
+            self._emit_warning(
+                t(
+                    "display.notice.uncompressed_context_overflow",
+                    tokens=f"{preflight_tokens:,}",
+                    context_length=f"{context_length:,}",
+                )
+            )
 
     def _clear_context_overflow_warn(self) -> None:
         """Reset the blocked-overflow warning dedup so it can re-fire on the next blocked turn."""
@@ -184,6 +223,7 @@ class StatusOutputMixin:
 
     def _emit_diagnostic_wait(self, text: str) -> None:
         from gateway.warning_notifications import DiagnosticText
+
         self._emit_wait_notice(DiagnosticText(text))
 
     # ── Buffered retry/fallback status: shown only when every retry/fallback is exhausted, dropped on
@@ -205,6 +245,7 @@ class StatusOutputMixin:
 
     def _buffer_diagnostic_status(self, message: str) -> None:
         from gateway.warning_notifications import DiagnosticText
+
         self._buffer_status(DiagnosticText(message))
 
     def _buffer_vprint(self, message: str) -> None:

@@ -1,4 +1,5 @@
 """A real bootstrap reader pins its generation before GC can select victims."""
+
 import json
 import os
 import subprocess
@@ -25,20 +26,28 @@ def test_bootstrap_lease_survives_selection_change(tmp_path, monkeypatch):
 
     def select(name):
         environment = state / "environments" / name / "venv"
-        runtime_facts_path(repo).write_text(json.dumps({"packages": {"venv": {"environment": str(environment)}}}))
+        runtime_facts_path(repo).write_text(
+            json.dumps({"packages": {"venv": {"environment": str(environment)}}})
+        )
         return environment
 
     first = select("first")
-    code = '''
+    code = """
 import sys
 from pathlib import Path
 from pm.environments import activate_dependencies
 activate_dependencies(Path(sys.argv[1]))
 print("ready", flush=True)
 sys.stdin.readline()
-'''
-    child = subprocess.Popen([sys.executable, "-c", code, str(repo)], env=dict(os.environ),
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+"""
+    child = subprocess.Popen(
+        [sys.executable, "-c", code, str(repo)],
+        env=dict(os.environ),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert child.stdout.readline().strip() == "ready"
         select("second")

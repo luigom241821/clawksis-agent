@@ -1,4 +1,5 @@
 """Invariant: every skill a cron blueprint loads ships as a bundled skill."""
+
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from agent.monitoring.emitter import MonitoringEmitter
 
+
 def test_emit_never_raises_when_disabled():
     em = MonitoringEmitter(enabled=False)
     em.emit({"event": "gateway_health", "name": "gateway.health_snapshot"})
     assert em.stats()["queued"] == 0
     em.close()
+
 
 def test_process_singleton_stays_dormant_until_subscribed():
     from agent.monitoring import emitter
@@ -27,6 +29,7 @@ def test_process_singleton_stays_dormant_until_subscribed():
         singleton.unsubscribe(subscriber)
     finally:
         emitter.reset_emitter_for_tests()
+
 
 def test_unsubscribe_stops_delivery():
     em = MonitoringEmitter()

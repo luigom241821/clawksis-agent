@@ -5,6 +5,7 @@ URL previews. Clawksis routes URL-only outbound messages to the sidecar's
 rich-link endpoint and preserves inbound rich-link URLs when Spectrum emits
 that content type.
 """
+
 from __future__ import annotations
 
 import base64
@@ -235,5 +236,3 @@ def _preview_attachment_by_id(
     payload["id"] = attachment_id
     payload["name"] = None
     return payload
-
-

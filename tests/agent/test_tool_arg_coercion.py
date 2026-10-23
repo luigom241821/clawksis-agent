@@ -32,23 +32,11 @@ class TestCoerceNumber:
     def test_negative_integer(self):
         assert _coerce_number("-7") == -7
 
-
-
-
     def test_integer_only_rejects_float(self):
         """When integer_only=True, "3.14" should stay as string."""
         result = _coerce_number("3.14", integer_only=True)
         assert result == "3.14"
         assert isinstance(result, str)
-
-
-
-
-
-
-
-
-
 
 
 class TestCoerceBoolean:
@@ -57,16 +45,10 @@ class TestCoerceBoolean:
     def test_true_lowercase(self):
         assert _coerce_boolean("true") is True
 
-
-
-
-
-
     def test_one_zero_not_coerced(self):
         """'1' and '0' are not boolean values."""
         assert _coerce_boolean("1") == "1"
         assert _coerce_boolean("0") == "0"
-
 
 
 class TestCoerceValue:
@@ -75,22 +57,10 @@ class TestCoerceValue:
     def test_integer_type(self):
         assert _coerce_value("5", "integer") == 5
 
-
-
-
-
-
-
-
     def test_array_type_parsed_from_json_string(self):
         """Stringified JSON arrays are parsed into native lists."""
         assert _coerce_value('["a", "b"]', "array") == ["a", "b"]
         assert _coerce_value("[1, 2, 3]", "array") == [1, 2, 3]
-
-
-
-
-
 
 
 # ── Full coerce_tool_args with registry ───────────────────────────────────
@@ -118,9 +88,6 @@ class TestCoerceToolArgs:
             assert result["limit"] == 10
             assert isinstance(result["limit"], int)
 
-
-
-
     def test_leaves_already_correct_types(self):
         schema = self._mock_schema({"limit": {"type": "integer"}})
         with patch("tools.arg_coercion.registry.get_schema", return_value=schema):
@@ -128,25 +95,8 @@ class TestCoerceToolArgs:
             result = coerce_tool_args("test_tool", args)
             assert result["limit"] == 10
 
-
     def test_empty_args(self):
         assert coerce_tool_args("test_tool", {}) == {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def test_real_read_file_schema(self):
         """Test against the actual read_file schema from the registry."""
@@ -171,20 +121,24 @@ class TestSchemaAcceptsKind:
         assert _schema_accepts_kind({"type": "object"}, "object") is True
         assert _schema_accepts_kind({"type": "string"}, "array") is False
 
-
-
     def test_non_dict(self):
         assert _schema_accepts_kind(None, "array") is False
 
     def test_recursive_union_refs_keep_noncyclic_alternatives(self):
         for union_key in ("anyOf", "oneOf", "allOf"):
-            root = {"$defs": {"Node": {
-                union_key: [{"$ref": "#/$defs/Node"}, {"type": "object"}],
-            }}}
+            root = {
+                "$defs": {
+                    "Node": {
+                        union_key: [{"$ref": "#/$defs/Node"}, {"type": "object"}],
+                    }
+                }
+            }
             schema = {"type": "array", "items": {"$ref": "#/$defs/Node"}}
             assert _schema_accepts_kind(root["$defs"]["Node"], "array", root) is False
             assert _normalize_json_strings_for_schema(
-                ['{"street": "Alpha Ave"}'], schema, root,
+                ['{"street": "Alpha Ave"}'],
+                schema,
+                root,
             ) == [{"street": "Alpha Ave"}]
 
 
@@ -195,9 +149,6 @@ class TestNormalizeJsonStringsForSchema:
         schema = {"type": "array", "items": {"type": "string"}}
         out = _normalize_json_strings_for_schema('["git status", "bun test"]', schema)
         assert out == ["git status", "bun test"]
-
-
-
 
     def test_native_list_preserved_identity(self):
         schema = {"type": "array", "items": {"type": "object", "properties": {}}}
@@ -278,7 +229,10 @@ class TestCoerceToolArgsNested:
                 "$defs": {"Count": {"type": "integer"}, "Flag": {"type": "boolean"}},
                 "properties": {
                     "count": {"$ref": "#/$defs/Count"},
-                    "verbose": {"$ref": "#/$defs/Flag", "description": "a keyword beside $ref"},
+                    "verbose": {
+                        "$ref": "#/$defs/Flag",
+                        "description": "a keyword beside $ref",
+                    },
                 },
             },
         }
@@ -325,7 +279,12 @@ class TestCoerceToolArgsNested:
             "description": "test",
             "parameters": {
                 "type": "object",
-                "$defs": {"Person": {"type": "object", "properties": {"first name": {"type": "string"}}}},
+                "$defs": {
+                    "Person": {
+                        "type": "object",
+                        "properties": {"first name": {"type": "string"}},
+                    }
+                },
                 "properties": {"person": {"$ref": "#/$defs/Person"}},
             },
         }
@@ -377,7 +336,6 @@ class TestCoerceToolArgsNested:
                 result = coerce_tool_args("test_tool", {"address": raw})
                 assert result["address"] == raw
 
-
     def test_string_subfield_with_json_content_preserved(self):
         """A string-typed sub-field whose value looks like JSON must NOT be parsed."""
         schema = self._array_of_objects_schema()
@@ -386,11 +344,12 @@ class TestCoerceToolArgsNested:
             result = coerce_tool_args("test_tool", args)
             assert result["items"][0]["content"] == '{"not": "parsed"}'
 
-
-
     def test_real_todo_schema_element_strings(self):
         """Against the real todo schema from the registry."""
         import json as _json
-        args = {"todos": [_json.dumps({"id": "1", "content": "x", "status": "pending"})]}
+
+        args = {
+            "todos": [_json.dumps({"id": "1", "content": "x", "status": "pending"})]
+        }
         result = coerce_tool_args("todo_list", args)
         assert result["todos"][0] == {"id": "1", "content": "x", "status": "pending"}

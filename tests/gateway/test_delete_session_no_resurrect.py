@@ -61,28 +61,48 @@ def _routing_rows(store: SessionStore) -> dict:
 
 def _mirror_entries(store: SessionStore) -> dict:
     import json
+
     mirror = store.sessions_dir / "sessions.json"
     if not mirror.exists():
         return {}
-    return {k: v for k, v in json.loads(mirror.read_text()).items() if not k.startswith("_")}
+    return {
+        k: v for k, v in json.loads(mirror.read_text()).items() if not k.startswith("_")
+    }
 
 
 class TestRemoveBySessionId:
     def test_drops_every_route_for_the_id_and_persists_both_copies(self, store):
         sid = "20260926_120000_deadbeef"
-        entry_kwargs = dict(created_at=datetime.now(), updated_at=datetime.now(),
-                            platform=Platform.DISCORD, chat_type="dm")
-        for key in ("agent:main:discord:chan-1:user-1", "agent:main:discord:chan-1:user-2"):
-            store._entries[key] = SessionEntry(session_key=key, session_id=sid, **entry_kwargs)
+        entry_kwargs = dict(
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            platform=Platform.DISCORD,
+            chat_type="dm",
+        )
+        for key in (
+            "agent:main:discord:chan-1:user-1",
+            "agent:main:discord:chan-1:user-2",
+        ):
+            store._entries[key] = SessionEntry(
+                session_key=key, session_id=sid, **entry_kwargs
+            )
         store._entries["agent:main:discord:chan-2:user-3"] = SessionEntry(
-            session_key="agent:main:discord:chan-2:user-3", session_id="other-sid", **entry_kwargs)
+            session_key="agent:main:discord:chan-2:user-3",
+            session_id="other-sid",
+            **entry_kwargs,
+        )
 
         dropped = store.remove_by_session_id(sid)
 
         assert dropped == 2
         assert not [k for k, e in store._entries.items() if e.session_id == sid]
-        assert store._entries["agent:main:discord:chan-2:user-3"].session_id == "other-sid"
-        for key in ("agent:main:discord:chan-1:user-1", "agent:main:discord:chan-1:user-2"):
+        assert (
+            store._entries["agent:main:discord:chan-2:user-3"].session_id == "other-sid"
+        )
+        for key in (
+            "agent:main:discord:chan-1:user-1",
+            "agent:main:discord:chan-1:user-2",
+        ):
             assert key not in _routing_rows(store)
             assert key not in _mirror_entries(store)
         assert "agent:main:discord:chan-2:user-3" in _routing_rows(store)
@@ -135,7 +155,9 @@ class TestDeleteEndpointClearsRouting:
         adapter._session_db = db
         app = web.Application()
         app["gateway_runner"] = type("Runner", (), {"session_store": store})()
-        app.router.add_delete("/api/sessions/{session_id}", adapter._handle_delete_session)
+        app.router.add_delete(
+            "/api/sessions/{session_id}", adapter._handle_delete_session
+        )
 
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.delete(f"/api/sessions/{sid}")

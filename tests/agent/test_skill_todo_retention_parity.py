@@ -92,9 +92,7 @@ class TestPrunedSkillReloadNotice:
             + "\n"
             + _skill_pruned_marker("frontend-design")
         )
-        notice = _pruned_skill_reload_notice(
-            [{"role": "user", "content": summary}]
-        )
+        notice = _pruned_skill_reload_notice([{"role": "user", "content": summary}])
         assert notice.startswith(_PRUNED_SKILL_RELOAD_NOTICE_HEADER)
         assert "skill_view(name='hodle-design-system')" in notice
         assert "skill_view(name='frontend-design')" in notice
@@ -141,7 +139,6 @@ class TestPrunedSkillReloadNotice:
         notice = _pruned_skill_reload_notice([{"role": "user", "content": text}])
         assert notice.count("skill_view(name=") == _MAX_PRUNED_SKILL_MARKERS
 
-
     def test_notice_does_not_feed_the_marker_extractor(self):
         """The notice must never re-trigger marker extraction on the next
         boundary — it references skills WITHOUT the canonical prefix."""
@@ -174,9 +171,7 @@ class TestSkillGuidanceSurvivesWithTodos:
                 "status": "pending",
             }
         ]
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
         db.close()
         return compressed
 
@@ -198,7 +193,6 @@ class TestSkillGuidanceSurvivesWithTodos:
         assert tail_text.index(TODO_INJECTION_HEADER) < tail_text.index(
             _PRUNED_SKILL_RELOAD_NOTICE_HEADER
         )
-
 
     def test_synthetic_row_classification_unbroken(self, tmp_path):
         """A snapshot+notice appended as its own row must still classify as
@@ -222,9 +216,7 @@ class TestSkillGuidanceSurvivesWithTodos:
         agent._todo_store._items = [
             {"id": "t1", "content": "task A", "status": "pending"}
         ]
-        compressed, _ = agent._compress_context(
-            _msgs(), "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(_msgs(), "sys", approx_tokens=120_000)
         db.close()
         snapshot_rows = [
             m
@@ -272,7 +264,10 @@ class TestNoticeStripLifecycle:
         stripped = _strip_stale_todo_snapshot(content)
         assert len(stripped) == 2
         assert stripped[0] == {"type": "text", "text": "real user words"}
-        assert stripped[1] == {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}}
+        assert stripped[1] == {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,..."},
+        }
 
     def test_repeated_boundaries_keep_single_notice(self, tmp_path):
         """Second compaction with a tail already carrying snapshot+notice
@@ -304,9 +299,7 @@ class TestNoticeStripLifecycle:
         agent._todo_store._items = [
             {"id": "t1", "content": "fresh task", "status": "pending"}
         ]
-        compressed, _ = agent._compress_context(
-            original, "sys", approx_tokens=120_000
-        )
+        compressed, _ = agent._compress_context(original, "sys", approx_tokens=120_000)
         db.close()
         tail_text = str(compressed[-1]["content"])
         assert tail_text.count(TODO_INJECTION_HEADER) == 1

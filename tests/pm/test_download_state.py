@@ -1,4 +1,5 @@
 """GC and downloads acquire the same partial owner before changing its files."""
+
 from __future__ import annotations
 
 from contextlib import nullcontext
@@ -45,7 +46,10 @@ def test_pause_interrupts_an_owner_wait(tmp_path):
 
     destination = tmp_path / "already-present"
     destination.write_bytes(b"complete")
-    download = Download([Source("https://example.invalid/model", destination)], partials_dir=tmp_path / "partials")
+    download = Download(
+        [Source("https://example.invalid/model", destination)],
+        partials_dir=tmp_path / "partials",
+    )
     waiting = Event()
     finished = Event()
     errors = []

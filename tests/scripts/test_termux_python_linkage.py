@@ -1,4 +1,5 @@
 """Exercise the linker repair against a real native extension on Linux."""
+
 from __future__ import annotations
 
 import shutil
@@ -16,7 +17,9 @@ from scripts.termux import python_linkage
 def test_python_symbols_gain_an_explicit_library_dependency(tmp_path):
     import _cffi_backend
 
-    library = Path(sysconfig.get_config_var("LIBDIR")) / sysconfig.get_config_var("LDLIBRARY")
+    library = Path(sysconfig.get_config_var("LIBDIR")) / sysconfig.get_config_var(
+        "LDLIBRARY"
+    )
     if not library.is_file():
         # A relocatable python-build-standalone reports its build-time prefix (/install)
         # and links libpython statically; there is no shared library to name here.
@@ -24,19 +27,32 @@ def test_python_symbols_gain_an_explicit_library_dependency(tmp_path):
     if shutil.which("patchelf") is None:
         pytest.skip("patchelf is not on PATH")
     extension = tmp_path / Path(_cffi_backend.__file__).name
-    shutil.copyfile(_cffi_backend.__file__, extension)  # Writable scratch even from a read-only Nix store.
-    original = subprocess.check_output(["patchelf", "--print-needed", str(extension)], text=True).splitlines()
+    shutil.copyfile(
+        _cffi_backend.__file__, extension
+    )  # Writable scratch even from a read-only Nix store.
+    original = subprocess.check_output(
+        ["patchelf", "--print-needed", str(extension)], text=True
+    ).splitlines()
     for name in original:
         if name.startswith("libpython"):
-            subprocess.run(["patchelf", "--remove-needed", name, str(extension)], check=True)
+            subprocess.run(
+                ["patchelf", "--remove-needed", name, str(extension)], check=True
+            )
     assert python_linkage.link_extension(extension, library)
-    needed = subprocess.check_output(["patchelf", "--print-needed", str(extension)], text=True).splitlines()
-    soname = subprocess.check_output(["patchelf", "--print-soname", str(library)], text=True).strip()
+    needed = subprocess.check_output(
+        ["patchelf", "--print-needed", str(extension)], text=True
+    ).splitlines()
+    soname = subprocess.check_output(
+        ["patchelf", "--print-soname", str(library)], text=True
+    ).strip()
     assert soname in needed
-    assert not python_linkage.link_extension(extension, library), "a second pass must not edit a correct extension"
+    assert not python_linkage.link_extension(extension, library), (
+        "a second pass must not edit a correct extension"
+    )
     subprocess.run(
         [sys.executable, "-c", "import _cffi_backend; print(_cffi_backend.__file__)"],
-        cwd=tmp_path, check=True,
+        cwd=tmp_path,
+        check=True,
     )
 
 
@@ -61,4 +77,6 @@ def test_wheel_rewrite_regenerates_record_for_changed_member(tmp_path):
     verify_record(retagged)
     with zipfile.ZipFile(retagged) as archive:
         assert archive.read("fakedep/_native.so") == b"repaired native bytes"
-        assert b"Tag: py3-none-android_24_arm64_v8a\n" in archive.read("fakedep-1.2.3.dist-info/WHEEL")
+        assert b"Tag: py3-none-android_24_arm64_v8a\n" in archive.read(
+            "fakedep-1.2.3.dist-info/WHEEL"
+        )

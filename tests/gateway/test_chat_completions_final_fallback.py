@@ -16,7 +16,10 @@ def _run_stream(queued, final_response):
 
     async def fake_agent():
         return {"final_response": final_response, "completed": True}, {
-            "input_tokens": 1, "output_tokens": 1, "total_tokens": 2}
+            "input_tokens": 1,
+            "output_tokens": 1,
+            "total_tokens": 2,
+        }
 
     async def run():
         stream_q = ThreadSafeAsyncQueue()
@@ -29,8 +32,12 @@ def _run_stream(queued, final_response):
         resp.prepare = AsyncMock()
         req = MagicMock()
         req.headers = {}
-        with patch("gateway.platforms.api_server.web.StreamResponse", return_value=resp):
-            await adapter._write_sse_chat_completion(req, "cmpl-1", "m", 1, stream_q, agent_task)
+        with patch(
+            "gateway.platforms.api_server.web.StreamResponse", return_value=resp
+        ):
+            await adapter._write_sse_chat_completion(
+                req, "cmpl-1", "m", 1, stream_q, agent_task
+            )
 
     asyncio.run(run())
     contents = []

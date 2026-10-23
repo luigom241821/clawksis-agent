@@ -52,9 +52,7 @@ def test_gateway_session_key_uses_its_recorded_cwd(monkeypatch):
     record_session_cwd("gateway-key", "/remote/gateway-workspace")
     monkeypatch.setattr(
         "gateway.session_context.get_session_env",
-        lambda name, default: (
-            "gateway-key" if name == "CLAWK_SESSION_KEY" else default
-        ),
+        lambda name, default: "gateway-key" if name == "CLAWK_SESSION_KEY" else default,
     )
     monkeypatch.setattr(
         runtime_cwd,

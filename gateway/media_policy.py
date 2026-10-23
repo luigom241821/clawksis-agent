@@ -18,7 +18,10 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-_FLAG_ENVS = (("strict", "CLAWK_MEDIA_DELIVERY_STRICT"), ("trust_recent_files", "CLAWK_MEDIA_TRUST_RECENT_FILES"))
+_FLAG_ENVS = (
+    ("strict", "CLAWK_MEDIA_DELIVERY_STRICT"),
+    ("trust_recent_files", "CLAWK_MEDIA_TRUST_RECENT_FILES"),
+)
 _ALLOW_DIRS_ENV = "CLAWK_MEDIA_ALLOW_DIRS"
 _TRUST_RECENT_SECONDS_ENV = "CLAWK_MEDIA_TRUST_RECENT_SECONDS"
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
@@ -29,10 +32,12 @@ def _routed_gateway_cfg() -> Optional[dict[str, Any]]:
     (multiplexed turn), else None. The env bridge is one process-wide copy of the launch profile's
     policy, so a secondary's deliveries must read their own config instead of ``os.environ``."""
     from clawk_constants import get_clawk_home_override
+
     if not get_clawk_home_override():
         return None
     try:
         from clawk_cli.config import load_config_readonly
+
         gateway_cfg = load_config_readonly().get("gateway")
     except Exception:
         return {}
@@ -58,7 +63,13 @@ def media_delivery_trust_recent() -> bool:
     cfg = _routed_gateway_cfg()
     if cfg is not None:
         return bool(cfg.get("trust_recent_files", True))
-    return os.environ.get(_FLAG_ENVS[1][1], "1").strip().lower() not in ("0", "false", "no", "off", "")
+    return os.environ.get(_FLAG_ENVS[1][1], "1").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+        "",
+    )
 
 
 def media_delivery_trust_recent_seconds() -> str:
@@ -68,7 +79,6 @@ def media_delivery_trust_recent_seconds() -> str:
         raw = cfg.get("trust_recent_files_seconds")
         return "" if raw is None else str(raw)
     return os.environ.get(_TRUST_RECENT_SECONDS_ENV, "")
-
 
 
 def _load_gateway_cfg(config: Optional[dict[str, Any]] = None) -> dict[str, Any]:
@@ -104,6 +114,7 @@ def apply_media_policy_env(config: Optional[dict[str, Any]] = None) -> None:
     fire would hand its allowlist and strictness to the launch profile and its children."""
     try:
         from clawk_constants import get_clawk_home_override
+
         if get_clawk_home_override():
             return
         gateway_cfg = _load_gateway_cfg(config)

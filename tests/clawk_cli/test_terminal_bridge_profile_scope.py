@@ -48,9 +48,9 @@ def test_process_clawk_home_ignores_task_override(tmp_path, monkeypatch):
 
     token = set_clawk_home_override(str(other_home))
     try:
-        assert (
-            env_loader._process_clawk_home().resolve() == launch_home.resolve()
-        ), "process home leaked to the per-task override profile"
+        assert env_loader._process_clawk_home().resolve() == launch_home.resolve(), (
+            "process home leaked to the per-task override profile"
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -68,10 +68,7 @@ def test_secondary_profile_reload_does_not_bridge_into_shared_env(
     other_home = tmp_path / "tommy"
     _write_terminal_config(
         launch_home,
-        "terminal:\n"
-        "  backend: ssh\n"
-        "  ssh_host: 10.10.0.103\n"
-        "  ssh_user: bergmann\n",
+        "terminal:\n  backend: ssh\n  ssh_host: 10.10.0.103\n  ssh_user: bergmann\n",
     )
     _write_terminal_config(other_home, "terminal:\n  backend: local\n")
     monkeypatch.setenv("CLAWK_HOME", str(launch_home))

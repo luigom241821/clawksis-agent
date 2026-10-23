@@ -13,12 +13,15 @@ from agent.transports import get_transport
 @pytest.fixture
 def transport():
     import agent.transports.codex
+
     return get_transport("codex_responses")
 
 
 def test_github_responses_requests_reasoning_summary(transport):
     kw = transport.build_kwargs(
-        model="gpt-5.4", messages=[{"role": "user", "content": "Hi"}], tools=[],
+        model="gpt-5.4",
+        messages=[{"role": "user", "content": "Hi"}],
+        tools=[],
         is_github_responses=True,
         github_reasoning_extra={"effort": "medium"},
     )

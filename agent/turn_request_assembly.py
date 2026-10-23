@@ -37,7 +37,9 @@ class AssembledRequest:
     total_chars: Any
 
 
-def _append_moa_context(agent: Any, api_messages: Any, moa_config: Any, original_user_message: Any) -> None:
+def _append_moa_context(
+    agent: Any, api_messages: Any, moa_config: Any, original_user_message: Any
+) -> None:
     """Run the MoA reference models and append their aggregated context to the last user
     message (as a trailing text part on multimodal turns). Fail-open."""
     try:
@@ -56,8 +58,9 @@ def _append_moa_context(agent: Any, api_messages: Any, moa_config: Any, original
             reference_models=moa_config.get("reference_models") or [],
             aggregator=moa_config.get("aggregator") or {},
             temperature=_preset_temperature(moa_config, "reference_temperature"),
-            aggregator_temperature=_preset_temperature(moa_config, "aggregator_temperature"),
-
+            aggregator_temperature=_preset_temperature(
+                moa_config, "aggregator_temperature"
+            ),
             # None = no per-preset override; inherit auxiliary.moa_reference.timeout.
             reference_timeout=(
                 float(moa_config["reference_timeout"])
@@ -77,13 +80,18 @@ def _append_moa_context(agent: Any, api_messages: Any, moa_config: Any, original
                 if isinstance(_base, str):
                     _msg["content"] = _base + "\n\n" + _moa_context
                 elif isinstance(_base, list):
-                    _msg["content"] = [*_base, {"type": "text", "text": "\n\n" + _moa_context}]
+                    _msg["content"] = [
+                        *_base,
+                        {"type": "text", "text": "\n\n" + _moa_context},
+                    ]
                 break
     except Exception as _moa_exc:
         logger.warning("MoA context aggregation failed: %s", _moa_exc)
 
 
-def _prepare_moa_request(agent: Any, api_messages: Any, pending_moa_prepared_request: Any) -> tuple:
+def _prepare_moa_request(
+    agent: Any, api_messages: Any, pending_moa_prepared_request: Any
+) -> tuple:
     """Persistent-MoA request: rebase the pending prepared request onto the new messages
     when the client supports it, else prepare a fresh one. Returns
     ``(prepared_request, api_messages, pending_moa_prepared_request)``."""
@@ -104,16 +112,28 @@ def _prepare_moa_request(agent: Any, api_messages: Any, pending_moa_prepared_req
 
 
 def assemble_api_request(
-    agent: Any, *, messages: Any, current_turn_user_idx: Any, _ext_prefetch_cache: Any,
-    _plugin_user_context: Any, moa_config: Any, active_system_prompt: Any,
-    original_user_message: Any, pending_moa_prepared_request: Any, request_logger: Any,
+    agent: Any,
+    *,
+    messages: Any,
+    current_turn_user_idx: Any,
+    _ext_prefetch_cache: Any,
+    _plugin_user_context: Any,
+    moa_config: Any,
+    active_system_prompt: Any,
+    original_user_message: Any,
+    pending_moa_prepared_request: Any,
+    request_logger: Any,
 ) -> AssembledRequest:
     """Assemble the request in the original order. ORDER IS LOAD-BEARING: cache breakpoints
     are injected only after whitespace normalization, the orphan sweep, thinking-only drop /
     user merge and surrogate stripping, so the same row's bytes never vary across turns."""
     from agent.conversation_loop import (
-        _CODEX_INCOMPLETE_NUDGE, _apply_context_engine_selection, _canonicalize_api_tool_calls,
-        _clone_message_for_send, _midturn_request_pressure_tokens, _pressure_with_real_floor,
+        _CODEX_INCOMPLETE_NUDGE,
+        _apply_context_engine_selection,
+        _canonicalize_api_tool_calls,
+        _clone_message_for_send,
+        _midturn_request_pressure_tokens,
+        _pressure_with_real_floor,
     )
     from agent.model_metadata import (
         estimate_messages_tokens_rough,
@@ -121,9 +141,13 @@ def assemble_api_request(
     )
 
     api_messages, effective_system = build_api_messages(
-        agent, messages, current_turn_user_idx=current_turn_user_idx,
-        ext_prefetch_cache=_ext_prefetch_cache, plugin_user_context=_plugin_user_context,
-        moa_config=moa_config, active_system_prompt=active_system_prompt,
+        agent,
+        messages,
+        current_turn_user_idx=current_turn_user_idx,
+        ext_prefetch_cache=_ext_prefetch_cache,
+        plugin_user_context=_plugin_user_context,
+        moa_config=moa_config,
+        active_system_prompt=active_system_prompt,
     )
 
     if moa_config:
@@ -131,7 +155,9 @@ def assemble_api_request(
 
     # Ephemeral prefill messages go right after the system prompt, API-call-time only.
     if agent.prefill_messages:
-        sys_offset = 1 if (api_messages and api_messages[0].get("role") == "system") else 0
+        sys_offset = (
+            1 if (api_messages and api_messages[0].get("role") == "system") else 0
+        )
         for idx, pfm in enumerate(agent.prefill_messages):
             # Structural clone: the in-place sanitizers below must not write
             # through into agent.prefill_messages' nested containers.
@@ -140,7 +166,9 @@ def assemble_api_request(
     # Per-turn context selection hook: an engine may select/replace context for THIS
     # call only — request-only, fail-open, and independent of should_compress().
     _sel_incoming = (
-        messages[current_turn_user_idx] if 0 <= current_turn_user_idx < len(messages) else None
+        messages[current_turn_user_idx]
+        if 0 <= current_turn_user_idx < len(messages)
+        else None
     )
     api_messages = _apply_context_engine_selection(
         agent, api_messages, messages, _sel_incoming, logger=request_logger
@@ -182,7 +210,8 @@ def assemble_api_request(
     # alongside the opaque replay state.
     _cross_protocol = agent.api_mode != "codex_responses"
     api_messages = agent._drop_thinking_only_and_merge_users(
-        api_messages, drop_codex_reasoning_items=_cross_protocol,
+        api_messages,
+        drop_codex_reasoning_items=_cross_protocol,
         drop_nudge_marker=_CODEX_INCOMPLETE_NUDGE if _cross_protocol else None,
     )
 
@@ -218,7 +247,9 @@ def assemble_api_request(
             ),
             native_anthropic=agent._use_native_cache_layout,
             static_system_prefix=(
-                _static_system_prefix if isinstance(_static_system_prefix, str) else None
+                _static_system_prefix
+                if isinstance(_static_system_prefix, str)
+                else None
             ),
             direct_native_tool_cache=agent._direct_native_anthropic_tool_cache_capability(),
             # LiteLLM-style envelope routes forward part-level markers into
@@ -235,8 +266,8 @@ def assemble_api_request(
     # prepared request instead of running the advisors again.
     _moa_prepared_request = None
     if agent.provider == "moa":
-        _moa_prepared_request, api_messages, pending_moa_prepared_request = _prepare_moa_request(
-            agent, api_messages, pending_moa_prepared_request
+        _moa_prepared_request, api_messages, pending_moa_prepared_request = (
+            _prepare_moa_request(agent, api_messages, pending_moa_prepared_request)
         )
 
     # One image-stripped estimate feeds both figures; tools counted separately (50+
@@ -246,18 +277,24 @@ def assemble_api_request(
 
     if _agent_stale_thinking_on_wire(agent):
         if getattr(agent, "api_mode", "") == "anthropic_messages":
-            from agent.anthropic_thinking_policy import native_anthropic_preserves_prior_thinking
+            from agent.anthropic_thinking_policy import (
+                native_anthropic_preserves_prior_thinking,
+            )
 
             if native_anthropic_preserves_prior_thinking(
                 getattr(agent, "base_url", ""), getattr(agent, "model", "")
             ):
-                approx_tokens = estimate_native_anthropic_messages_tokens_rough(api_messages)
+                approx_tokens = estimate_native_anthropic_messages_tokens_rough(
+                    api_messages
+                )
             else:
                 approx_tokens = estimate_messages_tokens_rough(api_messages)
         else:
             approx_tokens = estimate_messages_tokens_rough(api_messages)
     else:
-        approx_tokens = estimate_messages_tokens_rough(api_messages, charge_stale_thinking=False)
+        approx_tokens = estimate_messages_tokens_rough(
+            api_messages, charge_stale_thinking=False
+        )
     # Route-aware: native Responses compaction prunes the wire payload, so the raw
     # history figure overstates it and fires needless local compression.
     # Route-aware pressure: when the upcoming request is eligible for native Responses compaction the
@@ -269,7 +306,9 @@ def assemble_api_request(
     )
     # Usage-anchored override: real prompt_tokens (incl. system + tool schemas) +
     # delta estimate replaces the whole-history heuristic when the anchor is fresh.
-    _anchored_pressure = anchored_context_tokens(messages, getattr(agent, "_usage_anchor", None))
+    _anchored_pressure = anchored_context_tokens(
+        messages, getattr(agent, "_usage_anchor", None)
+    )
     agent._request_pressure_anchored = _anchored_pressure is not None
     if _anchored_pressure is not None:
         request_pressure_tokens = _anchored_pressure
@@ -281,6 +320,12 @@ def assemble_api_request(
             agent.context_compressor, request_pressure_tokens
         )
     return AssembledRequest(
-        "fallthrough", api_messages, tools_for_api, _moa_prepared_request,
-        pending_moa_prepared_request, approx_tokens, request_pressure_tokens, approx_tokens * 4,
+        "fallthrough",
+        api_messages,
+        tools_for_api,
+        _moa_prepared_request,
+        pending_moa_prepared_request,
+        approx_tokens,
+        request_pressure_tokens,
+        approx_tokens * 4,
     )

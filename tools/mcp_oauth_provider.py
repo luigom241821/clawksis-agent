@@ -22,7 +22,10 @@ logger = logging.getLogger(__name__)
 _ISS_OMITTING_ISSUERS = frozenset({"https://api.figma.com"})
 
 # Authorization-server metadata documents the SDK tries in its 401 branch (RFC 8414 / OIDC discovery).
-_ASM_DISCOVERY_PATHS = ("/.well-known/oauth-authorization-server", "/.well-known/openid-configuration")
+_ASM_DISCOVERY_PATHS = (
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/openid-configuration",
+)
 _DISCOVERY_CONTEXT_LEAD = "Could not read authorization-server metadata"
 
 
@@ -30,6 +33,7 @@ def _default_auth_request_user_agent() -> str:
     """``Clawksis/<version>`` for SDK-built OAuth requests that would otherwise carry no User-Agent at
     all; versioned so an operator debugging a WAF block can tell which client they are looking at."""
     from clawk_cli.version_info import get_version_info
+
     return f"Clawksis/{get_version_info().base_version}"
 
 
@@ -58,19 +62,23 @@ def _asm_discovery_failure(response) -> str | None:
     if req is None or status is None or 200 <= status < 300:
         return None
     url = str(req.url)
-    return f"{status} from {url}" if any(p in url for p in _ASM_DISCOVERY_PATHS) else None
+    return (
+        f"{status} from {url}" if any(p in url for p in _ASM_DISCOVERY_PATHS) else None
+    )
 
 
 def _with_discovery_context(exc: Exception, failures: list[str]):
     """Re-shape a registration error raised after every metadata fetch failed: lead with the discovery
     failure, since the 404 on the guessed ``/register`` URL is only its consequence (#113771)."""
-    return type(exc)(f"{_DISCOVERY_CONTEXT_LEAD} ({'; '.join(failures)}); dynamic client registration "
-                     f"then fell back to a guessed endpoint on the MCP host and failed: {exc}")
-
+    return type(exc)(
+        f"{_DISCOVERY_CONTEXT_LEAD} ({'; '.join(failures)}); dynamic client registration "
+        f"then fell back to a guessed endpoint on the MCP host and failed: {exc}"
+    )
 
 
 class _RefreshCompletedByPeer(Exception):
     """Restart the SDK auth flow: a peer rotated the grant we were about to present."""
+
 
 class ClawksisProviderMixin:
     """Token-endpoint fixes layered over the SDK's ``OAuthClientProvider`` (must precede it in
@@ -87,7 +95,13 @@ class ClawksisProviderMixin:
 
     _clawk_logger: logging.Logger = logger
 
-    def __init__(self, *args: Any, token_user_agent: str | None = None, oauth_flow: str = "browser", **kwargs: Any):
+    def __init__(
+        self,
+        *args: Any,
+        token_user_agent: str | None = None,
+        oauth_flow: str = "browser",
+        **kwargs: Any,
+    ):
         super().__init__(*args, **kwargs)
         self._clawk_oauth_flow = oauth_flow
         # oauth.user_agent — stamped onto token-endpoint requests only; some authorization servers/WAFs
@@ -97,12 +111,16 @@ class ClawksisProviderMixin:
     async def _perform_authorization(self):
         info = self.context.client_info
         grants = getattr(info, "grant_types", None) or []
-        if (getattr(self, "_clawk_oauth_flow", "browser") == "device"
-                or ("urn:ietf:params:oauth:grant-type:device_code" in grants and "authorization_code" not in grants)):
+        if getattr(self, "_clawk_oauth_flow", "browser") == "device" or (
+            "urn:ietf:params:oauth:grant-type:device_code" in grants
+            and "authorization_code" not in grants
+        ):
             from tools.mcp_oauth import OAuthNonInteractiveError
+
             raise OAuthNonInteractiveError(
                 "MCP device authorization requires `clawk mcp login <server> --flow device`; "
-                "background reconnects cannot start a device login")
+                "background reconnects cannot start a device login"
+            )
         self._tolerate_missing_iss_for_known_server()
         self._request_google_offline_access()
         return await super()._perform_authorization()
@@ -121,8 +139,12 @@ class ClawksisProviderMixin:
             result = await inner()
             if getattr(result, "iss", None) is None and getattr(result, "code", None):
                 self._clawk_logger.warning(
-                    "MCP OAuth: %s omitted the iss parameter it advertises; accepting the redirect for that issuer only", issuer)
-                result = result.model_copy(update={"iss": str(self.context.oauth_metadata.issuer)})
+                    "MCP OAuth: %s omitted the iss parameter it advertises; accepting the redirect for that issuer only",
+                    issuer,
+                )
+                result = result.model_copy(
+                    update={"iss": str(self.context.oauth_metadata.issuer)}
+                )
             return result
 
         self.context.callback_handler = _fill_iss
@@ -149,7 +171,17 @@ class ClawksisProviderMixin:
             query = dict(parse_qsl(parts.query, keep_blank_values=True))
             query.update(params)
             query.setdefault("prompt", "consent")
-            await inner(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+            await inner(
+                urlunsplit(
+                    (
+                        parts.scheme,
+                        parts.netloc,
+                        parts.path,
+                        urlencode(query),
+                        parts.fragment,
+                    )
+                )
+            )
 
         _with_offline_access._clawk_offline_access = True  # type: ignore[attr-defined]
         self.context.redirect_handler = _with_offline_access
@@ -172,21 +204,30 @@ class ClawksisProviderMixin:
         # the OAuth state semaphore.
         req = getattr(response, "request", None)
         request_path = urlsplit(str(req.url)).path if req is not None else ""
-        if not any(request_path == base or request_path.startswith(f"{base}/")
-                   for base in _ASM_DISCOVERY_PATHS):
+        if not any(
+            request_path == base or request_path.startswith(f"{base}/")
+            for base in _ASM_DISCOVERY_PATHS
+        ):
             return response
 
         from mcp.shared.auth import OAuthMetadata
         from pydantic import ValidationError
+
         try:
             metadata = OAuthMetadata.model_validate_json(await response.aread())
         except ValidationError:
             return response
-        if not metadata_issued_by_origin(metadata, self.context.auth_server_url, response):
+        if not metadata_issued_by_origin(
+            metadata, self.context.auth_server_url, response
+        ):
             return response
         self._clawk_logger.info(
             "MCP OAuth: accepting authorization-server metadata from %s whose issuer %s is the origin of the "
-            "advertised server %s", response.url, metadata.issuer, self.context.auth_server_url)
+            "advertised server %s",
+            response.url,
+            metadata.issuer,
+            self.context.auth_server_url,
+        )
         self.context.oauth_metadata = metadata
         return type(response)(204, request=response.request)
 
@@ -210,13 +251,16 @@ class ClawksisProviderMixin:
             return
         from mcp.shared.auth import OAuthClientInformationFull
         from tools.mcp_oauth import ClawksisTokenStorage
+
         data = info.model_dump(mode="json", exclude_none=True)
         if ClawksisTokenStorage._coerce_secret_auth_method(data):
             self.context.client_info = OAuthClientInformationFull.model_validate(data)
 
     async def _exchange_token_authorization_code(self, *args: Any, **kwargs: Any):
         self._coerce_client_secret_post()
-        return self._prepare_token_request(await super()._exchange_token_authorization_code(*args, **kwargs))
+        return self._prepare_token_request(
+            await super()._exchange_token_authorization_code(*args, **kwargs)
+        )
 
     # Locked descriptor while this provider owns the refresh fence; cleared by
     # _clawk_release_refresh_fence. Never shared across instances.
@@ -257,9 +301,15 @@ class ClawksisProviderMixin:
                         break
                     except Exception as exc:
                         from mcp.client.auth.oauth2 import OAuthRegistrationError
-                        if (isinstance(exc, OAuthRegistrationError) and discovery_failures
-                                and self.context.oauth_metadata is None):
-                            raise _with_discovery_context(exc, discovery_failures) from exc
+
+                        if (
+                            isinstance(exc, OAuthRegistrationError)
+                            and discovery_failures
+                            and self.context.oauth_metadata is None
+                        ):
+                            raise _with_discovery_context(
+                                exc, discovery_failures
+                            ) from exc
                         raise
                     if out is not request:
                         stamp_default_user_agent(out)
@@ -404,7 +454,11 @@ class ClawksisProviderMixin:
         await super()._initialize()
         storage = self.context.storage
         from tools.mcp_oauth import ClawksisTokenStorage
-        if isinstance(storage, ClawksisTokenStorage) and self.context.oauth_metadata is None:
+
+        if (
+            isinstance(storage, ClawksisTokenStorage)
+            and self.context.oauth_metadata is None
+        ):
             meta = storage.load_oauth_metadata()
             if meta is not None:
                 self.context.oauth_metadata = meta
@@ -423,12 +477,19 @@ class ClawksisProviderMixin:
         HTML "Request blocked" page vs the issuer's ``invalid_grant`` JSON (#115329) — so a short,
         tag-stripped, redacted excerpt rides along with the status."""
         from mcp.client.auth.oauth2 import OAuthTokenError
+
         if not (200 <= response.status_code < 300):
             from tools.mcp_tool_common import _sanitize_error
+
             excerpt = " ".join(re.sub(r"<[^>]+>", " ", response.text).split())[:200]
-            raise OAuthTokenError(f"Token exchange failed ({response.status_code}): {_sanitize_error(excerpt)}".rstrip(": "))
+            raise OAuthTokenError(
+                f"Token exchange failed ({response.status_code}): {_sanitize_error(excerpt)}".rstrip(
+                    ": "
+                )
+            )
         from httpx import HTTPError
         from mcp.client.auth.utils import handle_token_response_scopes
+
         try:
             token_response = await handle_token_response_scopes(response)
         except (HTTPError, OAuthTokenError):
@@ -464,10 +525,13 @@ class ClawksisProviderMixin:
         from httpx import HTTPError
         from mcp.shared.auth import OAuthToken
         from pydantic import ValidationError
+
         try:
             token_response = OAuthToken.model_validate_json(await response.aread())
         except (HTTPError, ValidationError):
-            self._clawk_logger.warning("Invalid refresh response: %s", response.status_code)
+            self._clawk_logger.warning(
+                "Invalid refresh response: %s", response.status_code
+            )
             self.context.clear_tokens()
             return False
         # RFC 6749 §6: a refresh response may omit refresh_token (AS does not rotate) and scope
@@ -522,7 +586,9 @@ def _metadata_issuer(context: Any) -> str | None:
     return (str(issuer).rstrip("/") or None) if issuer else None
 
 
-def metadata_issued_by_origin(metadata: Any, auth_server_url: str | None, response: Any) -> bool:
+def metadata_issued_by_origin(
+    metadata: Any, auth_server_url: str | None, response: Any
+) -> bool:
     """Whether *metadata* may stand in for the exact-issuer match of RFC 8414 §3.3 because it is the
     document of the path-scoped authorization server *auth_server_url* and names that server's origin.
 
@@ -539,12 +605,19 @@ def metadata_issued_by_origin(metadata: Any, auth_server_url: str | None, respon
     different path, the root or OIDC fallback documents, a redirect target) still goes through the
     exact-string check."""
     from urllib.parse import urlsplit
+
     if not auth_server_url:
         return False
     parts = urlsplit(auth_server_url)
     path = parts.path.rstrip("/")
-    if (not path or ".." in path.split("/") or parts.username is not None or parts.query or parts.fragment
-            or response.status_code != 200):
+    if (
+        not path
+        or ".." in path.split("/")
+        or parts.username is not None
+        or parts.query
+        or parts.fragment
+        or response.status_code != 200
+    ):
         return False
     origin = f"{parts.scheme}://{parts.netloc}"
     derived = f"{origin}/.well-known/oauth-authorization-server{path}"
@@ -559,6 +632,7 @@ def google_offline_access_params(context: Any) -> dict[str, str]:
     process, cron) fails back to an interactive login it cannot perform (#117510). Empty for every
     other issuer, whose requests keep the SDK-built parameters untouched."""
     from urllib.parse import urlsplit
+
     issuer = _metadata_issuer(context)
     if issuer is None or urlsplit(issuer).netloc != "accounts.google.com":
         return {}
@@ -569,6 +643,7 @@ def bind_issuer_from_context(context: Any) -> None:
     """Record the discovered issuer so the next ``storage.set_tokens`` (exchange or refresh) carries
     it. No-op when metadata is not discovered yet or storage is not Clawksis'."""
     from tools.mcp_oauth import ClawksisTokenStorage
+
     storage = getattr(context, "storage", None)
     issuer = _metadata_issuer(context)
     if isinstance(storage, ClawksisTokenStorage) and issuer:
@@ -585,40 +660,59 @@ def enforce_refresh_token_issuer(context: Any) -> None:
     adopt the current issuer once rather than forcing a re-login. Runs after ``_initialize`` restored
     tokens + metadata, before the SDK's ``can_refresh_token()`` decision."""
     from tools.mcp_oauth import ClawksisTokenStorage
+
     storage = getattr(context, "storage", None)
     tokens = getattr(context, "current_tokens", None)
-    if not isinstance(storage, ClawksisTokenStorage) or tokens is None or not getattr(tokens, "refresh_token", None):
+    if (
+        not isinstance(storage, ClawksisTokenStorage)
+        or tokens is None
+        or not getattr(tokens, "refresh_token", None)
+    ):
         return
     current = _metadata_issuer(context)
-    if current is None:  # not discovered yet; the SDK's 401-branch discovery + _store_tokens stamp it later
+    if (
+        current is None
+    ):  # not discovered yet; the SDK's 401-branch discovery + _store_tokens stamp it later
         return
     stored = (storage.loaded_issuer or "").rstrip("/") or None
     if stored is None:
         storage.stamp_issuer(current)
         return
     if stored != current:
-        logger.warning("MCP OAuth: authorization server issuer changed (%s -> %s); dropping the stored "
-                       "refresh token rather than sending it to a different issuer", stored, current)
+        logger.warning(
+            "MCP OAuth: authorization server issuer changed (%s -> %s); dropping the stored "
+            "refresh token rather than sending it to a different issuer",
+            stored,
+            current,
+        )
         storage.strip_refresh_token()
         tokens.refresh_token = None
 
 
-def prepare_oauth_config(server_name: str, server_url: str, oauth_config: dict | None) -> tuple[dict, ClawksisTokenStorage]:
+def prepare_oauth_config(
+    server_name: str, server_url: str, oauth_config: dict | None
+) -> tuple[dict, ClawksisTokenStorage]:
     """Copy the ``oauth:`` block, apply provider defaults, open its token storage. The copy
     matters: later steps record ``_resolved_port`` / ``_cimd_url`` in the dict, which must
     never leak back into the caller's config."""
     from tools import mcp_oauth as mo
+
     cfg = dict(oauth_config or {})
-    mo.apply_oauth_provider_defaults(cfg, server_name=server_name, server_url=server_url)
+    mo.apply_oauth_provider_defaults(
+        cfg, server_name=server_name, server_url=server_url
+    )
     return cfg, mo.ClawksisTokenStorage(server_name)
 
 
-def build_provider_kwargs(cfg: dict, storage: ClawksisTokenStorage, *, ssh_proxy_hint: bool) -> dict[str, Any]:
+def build_provider_kwargs(
+    cfg: dict, storage: ClawksisTokenStorage, *, ssh_proxy_hint: bool
+) -> dict[str, Any]:
     """Resolve the callback port and return the shared provider constructor kwargs. Order
     matters: metadata needs the resolved port, pre-registration needs the metadata.
     ``ssh_proxy_hint`` lets the redirect handler tailor its remote-session hint to a configured
     proxy ``redirect_uri``. Helpers are looked up on ``tools.mcp_oauth`` so tests can patch them."""
     from tools import mcp_oauth as mo
+
     port = mo._configure_callback_port(cfg, storage)
     client_metadata = mo._build_client_metadata(cfg)
     mo._maybe_preregister_client(storage, cfg, client_metadata)
@@ -626,10 +720,15 @@ def build_provider_kwargs(cfg: dict, storage: ClawksisTokenStorage, *, ssh_proxy
     return {
         "client_metadata": client_metadata,
         "storage": storage,
-        "redirect_handler": mo._make_redirect_handler(port, redirect_uri=redirect_uri, redirect_host=cfg.get("redirect_host")),
+        "redirect_handler": mo._make_redirect_handler(
+            port, redirect_uri=redirect_uri, redirect_host=cfg.get("redirect_host")
+        ),
         # mcp 2.0 dropped OAuthClientProvider's own `timeout`; the configured
         # `oauth.timeout` bounds the callback waiter's poll loop instead.
-        "callback_handler": mo._make_callback_waiter(port, cfg.get("_cimd_url"), timeout=float(cfg.get("timeout", 300))),
+        "callback_handler": mo._make_callback_waiter(
+            port, cfg.get("_cimd_url"), timeout=float(cfg.get("timeout", 300))
+        ),
         "token_user_agent": mo.token_request_user_agent(cfg),
         "oauth_flow": cfg.get("flow", "browser"),
-        **mo.cimd_provider_kwargs(cfg)}
+        **mo.cimd_provider_kwargs(cfg),
+    }

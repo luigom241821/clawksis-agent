@@ -1,4 +1,5 @@
 """Skills configuration for Clawksis. `clawk skills` enters this module."""
+
 from typing import List, Optional, Set
 
 from clawk_cli.config import cfg_get, load_config, save_config
@@ -32,6 +33,7 @@ def get_disabled_skills(config: dict, platform: Optional[str] = None) -> set[str
     if not isinstance(skills_cfg, dict):
         return set()
     from agent.skill_utils import ESSENTIAL_SKILLS
+
     disabled = _normalize_skill_names(skills_cfg.get("disabled"))
     if platform is not None:
         platform_disabled = cfg_get(skills_cfg, "platform_disabled", platform)
@@ -40,10 +42,13 @@ def get_disabled_skills(config: dict, platform: Optional[str] = None) -> set[str
     return disabled - ESSENTIAL_SKILLS
 
 
-def save_disabled_skills(config: dict, disabled: set[str], platform: Optional[str] = None):
+def save_disabled_skills(
+    config: dict, disabled: set[str], platform: Optional[str] = None
+):
     """Persist disabled skill names to config; essential skills (e.g. ``clawksis-agent``) are
     silently dropped — they cannot be disabled from any surface."""
     from agent.skill_utils import ESSENTIAL_SKILLS
+
     disabled = set(disabled) - ESSENTIAL_SKILLS
     config.setdefault("skills", {})
     if platform is None:
@@ -58,6 +63,7 @@ def _list_all_skills() -> list[dict]:
     """Return all installed skills (ignoring disabled state)."""
     try:
         from tools.skills_tool import find_all_skills
+
         return find_all_skills(skip_disabled=True)
     except Exception:
         return []
@@ -92,15 +98,25 @@ def _select_platform() -> Optional[str]:
 def _toggle_by_category(skills: list[dict], disabled: set[str]) -> set[str]:
     """Toggle all skills in a category at once."""
     from clawk_cli.curses_ui import curses_checklist
+
     categories = _get_categories(skills)
-    cat_skills = [{s["name"] for s in skills if (s["category"] or "uncategorized") == cat}
-                  for cat in categories]
-    cat_labels = [f"{cat} ({len(names)} skills)" for cat, names in zip(categories, cat_skills)]
+    cat_skills = [
+        {s["name"] for s in skills if (s["category"] or "uncategorized") == cat}
+        for cat in categories
+    ]
+    cat_labels = [
+        f"{cat} ({len(names)} skills)" for cat, names in zip(categories, cat_skills)
+    ]
     # A category is "enabled" (checked) when NOT all its skills are disabled
-    pre_selected = {i for i, names in enumerate(cat_skills)
-                    if not all(s in disabled for s in names)}
-    chosen = curses_checklist("Categories — toggle entire categories",
-                              cat_labels, pre_selected, cancel_returns=pre_selected)
+    pre_selected = {
+        i for i, names in enumerate(cat_skills) if not all(s in disabled for s in names)
+    }
+    chosen = curses_checklist(
+        "Categories — toggle entire categories",
+        cat_labels,
+        pre_selected,
+        cancel_returns=pre_selected,
+    )
     new_disabled = set(disabled)
     for i, names in enumerate(cat_skills):
         if i in chosen:
@@ -113,6 +129,7 @@ def _toggle_by_category(skills: list[dict], disabled: set[str]) -> set[str]:
 def skills_command(args=None):
     """Entry point for `clawk skills`."""
     from clawk_cli.curses_ui import curses_checklist
+
     config = load_config()
     skills = _list_all_skills()
     if not skills:
@@ -120,7 +137,9 @@ def skills_command(args=None):
         return
 
     platform = _select_platform()
-    platform_label = PLATFORMS.get(platform, "All platforms") if platform else "All platforms"
+    platform_label = (
+        PLATFORMS.get(platform, "All platforms") if platform else "All platforms"
+    )
     print()
     print(color(f"  Configure for: {platform_label}", Colors.DIM))
     print()
@@ -136,13 +155,21 @@ def skills_command(args=None):
     if mode == "2":
         new_disabled = _toggle_by_category(skills, disabled)
     else:
-        labels = [f"{s['name']}  ({s['category'] or 'uncategorized'})  —  {s['description'][:55]}"
-                  for s in skills]
+        labels = [
+            f"{s['name']}  ({s['category'] or 'uncategorized'})  —  {s['description'][:55]}"
+            for s in skills
+        ]
         # "selected" = enabled (not disabled) — matches the [✓] convention
         pre_selected = {i for i, s in enumerate(skills) if s["name"] not in disabled}
-        chosen = curses_checklist(f"Skills for {platform_label}",
-                                  labels, pre_selected, cancel_returns=pre_selected)
-        new_disabled = {skills[i]["name"] for i in range(len(skills)) if i not in chosen}
+        chosen = curses_checklist(
+            f"Skills for {platform_label}",
+            labels,
+            pre_selected,
+            cancel_returns=pre_selected,
+        )
+        new_disabled = {
+            skills[i]["name"] for i in range(len(skills)) if i not in chosen
+        }
 
     if new_disabled == disabled:
         print(color("  No changes.", Colors.DIM))
@@ -150,4 +177,9 @@ def skills_command(args=None):
 
     save_disabled_skills(config, new_disabled, platform)
     enabled_count = len(skills) - len(new_disabled)
-    print(color(f"✓ Saved: {enabled_count} enabled, {len(new_disabled)} disabled ({platform_label}).", Colors.GREEN))
+    print(
+        color(
+            f"✓ Saved: {enabled_count} enabled, {len(new_disabled)} disabled ({platform_label}).",
+            Colors.GREEN,
+        )
+    )

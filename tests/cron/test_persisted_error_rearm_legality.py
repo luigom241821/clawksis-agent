@@ -6,6 +6,7 @@ whose Friday run errored would fire on SATURDAY).  Cron jobs re-arm to the
 next LEGAL occurrence instead; interval jobs (the 2026-08-14 incident class)
 still re-arm to now — an immediate catch-up is always legal for intervals.
 """
+
 from __future__ import annotations
 
 import sys
@@ -92,7 +93,9 @@ class TestCronRearmRespectsScheduleLegality:
     def test_interval_job_still_rearms_to_now(self, cron_store):
         """Interval jobs (the 2026-08-14 incident class) keep the immediate
         catch-up: re-armed to now, due on this same scan."""
-        job = J.create_job(prompt="probe", schedule="every 10m", no_agent=True, script="p.py")
+        job = J.create_job(
+            prompt="probe", schedule="every 10m", no_agent=True, script="p.py"
+        )
         now = datetime(2026, 8, 22, 12, 0, tzinfo=UTC)
         _wedge(
             job["id"],

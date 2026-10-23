@@ -74,14 +74,21 @@ def _stop(proc: subprocess.Popen[str], holder: psutil.Process | None = None) -> 
 
 
 def _spawn_lock_holder(
-    bin_dir: Path, home: Path, *, as_gateway: bool,
+    bin_dir: Path,
+    home: Path,
+    *,
+    as_gateway: bool,
 ) -> tuple[subprocess.Popen[str], psutil.Process]:
     bin_dir.mkdir(parents=True, exist_ok=True)
     script = bin_dir / ("clawk" if as_gateway else "holder.py")
     script.write_text(_HOLDER.format(root=str(PROJECT_ROOT)), encoding="utf-8")
     argv = [sys.executable, str(script), *(["gateway", "run"] if as_gateway else [])]
     proc = subprocess.Popen(
-        argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
         env={**os.environ, "CLAWK_HOME": str(home)},
     )
     assert proc.stdout is not None
@@ -138,18 +145,26 @@ class TestStrictIdentityWithLiveLock:
         assert identity[0] == gateway_holder[1]
         assert identity == with_pid_file
 
-    def test_updater_discovery_maps_the_profile_without_a_pid_file(self, home, gateway_holder, monkeypatch):
+    def test_updater_discovery_maps_the_profile_without_a_pid_file(
+        self, home, gateway_holder, monkeypatch
+    ):
         from clawk_cli.gateway import find_profile_gateway_processes
 
         monkeypatch.setattr("clawk_cli.profiles._get_default_clawk_home", lambda: home)
-        monkeypatch.setattr("clawk_cli.profiles._get_profiles_root", lambda: home / "no-profiles")
+        monkeypatch.setattr(
+            "clawk_cli.profiles._get_profiles_root", lambda: home / "no-profiles"
+        )
         (home / "gateway.pid").unlink()
 
         procs = find_profile_gateway_processes(strict=True)
 
-        assert [(Path(p.path).resolve(), p.pid) for p in procs] == [(home.resolve(), gateway_holder[1])]
+        assert [(Path(p.path).resolve(), p.pid) for p in procs] == [
+            (home.resolve(), gateway_holder[1])
+        ]
 
-    def test_pid_file_that_disagrees_with_the_lock_still_aborts(self, home, gateway_holder):
+    def test_pid_file_that_disagrees_with_the_lock_still_aborts(
+        self, home, gateway_holder
+    ):
         record = json.loads((home / "gateway.pid").read_text(encoding="utf-8-sig"))
         record["pid"] = gateway_holder[1] + 1
         (home / "gateway.pid").write_text(json.dumps(record), encoding="utf-8")

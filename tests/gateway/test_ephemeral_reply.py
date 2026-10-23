@@ -76,9 +76,7 @@ class _DeleteCapableAdapter(BasePlatformAdapter):
 
 
 def _no_delete_adapter():
-    return _NoDeleteAdapter(
-        PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM
-    )
+    return _NoDeleteAdapter(PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM)
 
 
 def _delete_adapter():
@@ -103,8 +101,6 @@ def _make_event(text="/stop", chat_id="42"):
 # ---------------------------------------------------------------------------
 # _unwrap_ephemeral
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_unwrap_ephemeral_handles_unreadable_config():
@@ -180,8 +176,9 @@ async def test_process_message_unwraps_ephemeral_before_send():
 
     event = _make_event()
     session_key = "agent:main:telegram:private:42"
-    with patch("gateway.platforms.base.asyncio.sleep", _fake_sleep), patch.object(
-        adapter, "_keep_typing", new=AsyncMock()
+    with (
+        patch("gateway.platforms.base.asyncio.sleep", _fake_sleep),
+        patch.object(adapter, "_keep_typing", new=AsyncMock()),
     ):
         await adapter._process_message_background(event, session_key)
         # Pump until the detached delete task completes.
@@ -219,8 +216,9 @@ async def test_process_message_incapable_platform_does_not_schedule_delete():
 
     event = _make_event()
     session_key = "agent:main:telegram:private:42"
-    with patch("gateway.platforms.base.asyncio.sleep", AsyncMock()), patch.object(
-        adapter, "_keep_typing", new=AsyncMock()
+    with (
+        patch("gateway.platforms.base.asyncio.sleep", AsyncMock()),
+        patch.object(adapter, "_keep_typing", new=AsyncMock()),
     ):
         await adapter._process_message_background(event, session_key)
         for _ in range(10):
@@ -236,5 +234,3 @@ async def test_process_message_incapable_platform_does_not_schedule_delete():
     # Monkeypatching the instance does NOT change the class, so this test
     # verifies the gate uses the class method to detect capability.
     assert delete_calls == []
-
-

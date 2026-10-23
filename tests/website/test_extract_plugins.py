@@ -57,6 +57,7 @@ def _write_entry(catalog_dir: Path, name: str, **overrides) -> Path:
 # Entry loading + validation
 # --------------------------------------------------------------------------
 
+
 def test_valid_entry_is_extracted_with_install_command(mod, tmp_path):
     catalog = tmp_path / "plugin-catalog"
     catalog.mkdir()
@@ -133,15 +134,30 @@ def test_unknown_tier_normalizes_to_community(mod, tmp_path):
     assert entries[0]["tier"] == "community"
 
 
-def test_version_and_image_are_emitted_and_offhost_image_is_dropped_not_fatal(mod, tmp_path):
+def test_version_and_image_are_emitted_and_offhost_image_is_dropped_not_fatal(
+    mod, tmp_path
+):
     catalog = tmp_path / "plugin-catalog"
     catalog.mkdir()
-    _write_entry(catalog, "labelled", version="1.4.0", image="https://raw.githubusercontent.com/owner/repo/38fe0fb53eff98d477f807432e965429e665ca33/banner.png")
-    _write_entry(catalog, "offhost", version="1.4.0", image="https://cdn.example.com/banner.png")
+    _write_entry(
+        catalog,
+        "labelled",
+        version="1.4.0",
+        image="https://raw.githubusercontent.com/owner/repo/38fe0fb53eff98d477f807432e965429e665ca33/banner.png",
+    )
+    _write_entry(
+        catalog, "offhost", version="1.4.0", image="https://cdn.example.com/banner.png"
+    )
 
     entries = {e["name"]: e for e in mod.load_catalog_entries(catalog)}
-    assert entries["labelled"]["version"] == "1.4.0" and entries["labelled"]["image"] == "https://raw.githubusercontent.com/owner/repo/38fe0fb53eff98d477f807432e965429e665ca33/banner.png"
-    assert entries["offhost"]["image"] == "" and entries["offhost"]["version"] == "1.4.0"
+    assert (
+        entries["labelled"]["version"] == "1.4.0"
+        and entries["labelled"]["image"]
+        == "https://raw.githubusercontent.com/owner/repo/38fe0fb53eff98d477f807432e965429e665ca33/banner.png"
+    )
+    assert (
+        entries["offhost"]["image"] == "" and entries["offhost"]["version"] == "1.4.0"
+    )
 
 
 def test_page_fields_screenshots_readme_url_and_maintainer_slug(mod, tmp_path):
@@ -151,8 +167,14 @@ def test_page_fields_screenshots_readme_url_and_maintainer_slug(mod, tmp_path):
     catalog = tmp_path / "plugin-catalog"
     catalog.mkdir()
     shot = "https://raw.githubusercontent.com/owner/repo/38fe0fb53eff98d477f807432e965429e665ca33/docs/1.png"
-    _write_entry(catalog, "gh", screenshots=[shot, "https://cdn.example.com/x.png"], readme=True, subdir="catalog",
-                 maintainer="Nous Research")
+    _write_entry(
+        catalog,
+        "gh",
+        screenshots=[shot, "https://cdn.example.com/x.png"],
+        readme=True,
+        subdir="catalog",
+        maintainer="Nous Research",
+    )
     _write_entry(catalog, "gl", repo="https://gitlab.com/group/proj", readme=True)
     _write_entry(catalog, "other", repo="https://codeberg.org/o/r", readme=True)
     _write_entry(catalog, "plain")
@@ -162,18 +184,28 @@ def test_page_fields_screenshots_readme_url_and_maintainer_slug(mod, tmp_path):
     assert entries["gh"]["screenshots"] == [shot]
     assert entries["gh"]["readme"] is True
     assert entries["gh"]["readmeUrl"] == (
-        "https://raw.githubusercontent.com/example/gh/38fe0fb53eff98d477f807432e965429e665ca33/catalog/README.md")
+        "https://raw.githubusercontent.com/example/gh/38fe0fb53eff98d477f807432e965429e665ca33/catalog/README.md"
+    )
     assert entries["gh"]["maintainerSlug"] == "nous-research"
-    assert entries["gl"]["readmeUrl"] == "https://gitlab.com/group/proj/-/raw/38fe0fb53eff98d477f807432e965429e665ca33/README.md"
+    assert (
+        entries["gl"]["readmeUrl"]
+        == "https://gitlab.com/group/proj/-/raw/38fe0fb53eff98d477f807432e965429e665ca33/README.md"
+    )
     assert entries["other"]["readme"] is False and entries["other"]["readmeUrl"] == ""
-    assert entries["plain"]["readme"] is True and entries["plain"]["readmeUrl"].endswith("/README.md")
-    assert entries["plain"]["screenshots"] == [] and entries["plain"]["maintainerSlug"] == "example"
+    assert entries["plain"]["readme"] is True and entries["plain"][
+        "readmeUrl"
+    ].endswith("/README.md")
+    assert (
+        entries["plain"]["screenshots"] == []
+        and entries["plain"]["maintainerSlug"] == "example"
+    )
     assert entries["optout"]["readme"] is False and entries["optout"]["readmeUrl"] == ""
 
 
 # --------------------------------------------------------------------------
 # Full run: outputs + graceful degradation
 # --------------------------------------------------------------------------
+
 
 def test_main_writes_catalog_and_meta(mod, tmp_path):
     catalog = tmp_path / "plugin-catalog"
@@ -183,9 +215,15 @@ def test_main_writes_catalog_and_meta(mod, tmp_path):
     _write_entry(catalog, "gamma")
     # Star cache from fetch-plugin-stars.py: ranking is stars only; the official tier gets no boost.
     (tmp_path / "api").mkdir()
-    (tmp_path / "api" / "plugin-stars.json").write_text(json.dumps({
-        "fetched_at": "2026-09-15T00:00:00+00:00",
-        "stars": {"example/gamma": 50, "example/beta": 3}}), encoding="utf-8")
+    (tmp_path / "api" / "plugin-stars.json").write_text(
+        json.dumps(
+            {
+                "fetched_at": "2026-09-15T00:00:00+00:00",
+                "stars": {"example/gamma": 50, "example/beta": 3},
+            }
+        ),
+        encoding="utf-8",
+    )
     (catalog / "removed.yaml").write_text(
         "removed:\n  - name: gone\n", encoding="utf-8"
     )
@@ -196,35 +234,62 @@ def test_main_writes_catalog_and_meta(mod, tmp_path):
     assert rc == 0
     plugins = json.loads((out_dir / "plugins.json").read_text(encoding="utf-8"))
     meta = json.loads((out_dir / "plugins-meta.json").read_text(encoding="utf-8"))
-    assert [p["name"] for p in plugins] == ["gamma", "beta", "alpha"]  # stars desc, unknown stars last
-    assert {p["name"]: p["stars"] for p in plugins} == {"alpha": None, "gamma": 50, "beta": 3}
+    assert [p["name"] for p in plugins] == [
+        "gamma",
+        "beta",
+        "alpha",
+    ]  # stars desc, unknown stars last
+    assert {p["name"]: p["stars"] for p in plugins} == {
+        "alpha": None,
+        "gamma": 50,
+        "beta": 3,
+    }
     assert meta["total"] == 3
     assert meta["byTier"] == {"official": 1, "verified": 0, "community": 2}
-    assert {p["name"]: p["category"] for p in plugins} == {"alpha": "memory", "beta": "desktop", "gamma": "desktop"}
+    assert {p["name"]: p["category"] for p in plugins} == {
+        "alpha": "memory",
+        "beta": "desktop",
+        "gamma": "desktop",
+    }
     assert meta["byCategory"] == {"desktop": 2, "memory": 1}
     assert meta["starsFetchedAt"] == "2026-09-15T00:00:00+00:00"
     assert meta["removedCount"] == 1
     assert meta["generatedAt"]
     # The live-refresh document consumed by installed clients: loader-schema entries + the kill list.
     from clawk_cli.plugin_catalog import entry_from_mapping
+
     live = json.loads((out_dir / "plugin-catalog.json").read_text(encoding="utf-8"))
-    assert [entry_from_mapping(raw, "live").name for raw in live["entries"]] == ["alpha", "beta", "gamma"]
+    assert [entry_from_mapping(raw, "live").name for raw in live["entries"]] == [
+        "alpha",
+        "beta",
+        "gamma",
+    ]
     assert live["removed"] == [{"name": "gone"}]
 
 
-def test_curated_featured_ranks_are_stamped_from_the_curation_file(mod, tmp_path, monkeypatch):
+def test_curated_featured_ranks_are_stamped_from_the_curation_file(
+    mod, tmp_path, monkeypatch
+):
     catalog = tmp_path / "plugin-catalog"
     catalog.mkdir()
     for name in ("alpha", "beta", "gamma"):
         _write_entry(catalog, name)
     curation = tmp_path / "apps" / "shared" / "src" / "catalog-curation.json"
     curation.parent.mkdir(parents=True)
-    curation.write_text(json.dumps({"featured": {"plugins": ["gamma", "missing", "alpha"]}}), encoding="utf-8")
+    curation.write_text(
+        json.dumps({"featured": {"plugins": ["gamma", "missing", "alpha"]}}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
 
     assert mod.main(catalog_dir=catalog, output_dir=tmp_path / "api") == 0
 
-    plugins = {p["name"]: p for p in json.loads((tmp_path / "api" / "plugins.json").read_text(encoding="utf-8"))}
+    plugins = {
+        p["name"]: p
+        for p in json.loads(
+            (tmp_path / "api" / "plugins.json").read_text(encoding="utf-8")
+        )
+    }
     # Rank is the position in the curated list, so a pick missing from the catalog keeps its slot.
     assert plugins["gamma"]["featured"] == 1
     assert plugins["alpha"]["featured"] == 3
@@ -276,16 +341,24 @@ def test_script_exits_zero_as_subprocess_when_catalog_missing(tmp_path):
 # addedAt / updatedAt from git history
 # --------------------------------------------------------------------------
 
+
 def _git(repo: Path, *args: str, date: str) -> None:
     env = {
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_AUTHOR_DATE": date,
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "GIT_COMMITTER_DATE": date,
-        "HOME": str(repo), "PATH": __import__("os").environ["PATH"],
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_AUTHOR_DATE": date,
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+        "GIT_COMMITTER_DATE": date,
+        "HOME": str(repo),
+        "PATH": __import__("os").environ["PATH"],
     }
     subprocess.run(["git", *args], cwd=repo, env=env, check=True, capture_output=True)
 
 
-def test_git_dates_added_is_first_commit_updated_is_last_and_renames_keep_added(mod, tmp_path):
+def test_git_dates_added_is_first_commit_updated_is_last_and_renames_keep_added(
+    mod, tmp_path
+):
     repo = tmp_path / "repo"
     catalog = repo / "plugin-catalog"
     catalog.mkdir(parents=True)
@@ -298,13 +371,25 @@ def test_git_dates_added_is_first_commit_updated_is_last_and_renames_keep_added(
     _write_entry(catalog, "alpha", sha="a" * 40)
     _git(repo, "commit", "-q", "-am", "bump alpha", date="2026-02-01T00:00:00+00:00")
     # Rename old-name → new-name (content unchanged so git detects the rename).
-    _git(repo, "mv", "plugin-catalog/old-name.yaml", "plugin-catalog/new-name.yaml", date="2026-03-01T00:00:00+00:00")
+    _git(
+        repo,
+        "mv",
+        "plugin-catalog/old-name.yaml",
+        "plugin-catalog/new-name.yaml",
+        date="2026-03-01T00:00:00+00:00",
+    )
     _git(repo, "commit", "-q", "-m", "rename", date="2026-03-01T00:00:00+00:00")
 
     dates = mod.load_git_dates(catalog)
 
-    assert dates["alpha.yaml"] == {"addedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-02-01T00:00:00Z"}
-    assert dates["new-name.yaml"] == {"addedAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-03-01T00:00:00Z"}
+    assert dates["alpha.yaml"] == {
+        "addedAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-02-01T00:00:00Z",
+    }
+    assert dates["new-name.yaml"] == {
+        "addedAt": "2026-01-01T00:00:00Z",
+        "updatedAt": "2026-03-01T00:00:00Z",
+    }
     entries = mod.load_catalog_entries(catalog, dates=dates)
     by_name = {e["name"]: e for e in entries}
     assert by_name["alpha"]["addedAt"] == "2026-01-01T00:00:00Z"

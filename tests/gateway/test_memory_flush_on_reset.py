@@ -16,6 +16,7 @@ The fix: in ``_cleanup_agent_resources``, call
 ``agent._memory_manager.flush_pending(timeout=10)`` BEFORE
 ``shutdown_memory_provider``.
 """
+
 import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call
@@ -70,7 +71,9 @@ class _RecordingProvider(MemoryProvider):
     def handle_tool_call(self, tool_name, args, **kwargs) -> str:
         return ""
 
-    def sync_turn(self, user_content, assistant_content, *, session_id: str = "", messages=None) -> None:
+    def sync_turn(
+        self, user_content, assistant_content, *, session_id: str = "", messages=None
+    ) -> None:
         if assistant_content == "__GATE__":
             time.sleep(self._gate_delay)
             return
@@ -139,5 +142,3 @@ def test_cleanup_flushes_pending_writes_before_shutdown(monkeypatch):
         f"#73297 regression: pending memory write lost across reset. "
         f"expected >= {last_known_state_before_reset}, got {disk_state_after_reset}"
     )
-
-

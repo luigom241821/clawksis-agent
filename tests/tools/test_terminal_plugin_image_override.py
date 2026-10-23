@@ -10,7 +10,9 @@ def test_plugin_backend_reads_its_own_per_task_image_override():
     assert tt._select_image("acmebox", overrides, {}) == "python:3.12"
     assert tt._select_image("acmebox", {"docker_image": "python:3.12"}, {}) == ""
     assert tt._select_image("local", overrides, {}) == ""
-    assert tt._select_image("docker", overrides, {"docker_image": "cfg"}) == "python:3.12"
+    assert (
+        tt._select_image("docker", overrides, {"docker_image": "cfg"}) == "python:3.12"
+    )
 
 
 def test_plugin_image_override_marks_an_isolated_rollout(monkeypatch):

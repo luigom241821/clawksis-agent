@@ -44,7 +44,10 @@ def test_queued_and_running_rpc_hold_admission_until_the_response(runtime, monke
         monkeypatch.setattr(server, "_pool", pool)
         blocked = pool.submit(release_pool.wait, 10)
         try:
-            assert server.dispatch({"id": "test", "method": "test.retirement"}, transport) is None
+            assert (
+                server.dispatch({"id": "test", "method": "test.retirement"}, transport)
+                is None
+            )
             assert fence.prepare() == {"ok": False, "idle": False}
             assert idle_proof()["idle"] is False
             release_pool.set()
@@ -58,17 +61,28 @@ def test_queued_and_running_rpc_hold_admission_until_the_response(runtime, monke
             release_handler.set()
     assert idle_proof()["idle"] is True
     token = fence.prepare()["token"]
-    assert server.dispatch({"id": "late", "method": "test.retirement"}, transport)["error"]["code"] == 5035
+    assert (
+        server.dispatch({"id": "late", "method": "test.retirement"}, transport)[
+            "error"
+        ]["code"]
+        == 5035
+    )
     assert fence.cancel(token) == {"ok": True}
 
 
-def test_prompt_claim_and_automatic_continuations_cannot_cross_prepare(runtime, monkeypatch):
+def test_prompt_claim_and_automatic_continuations_cannot_cross_prepare(
+    runtime, monkeypatch
+):
     server, fence = runtime
     session = {"history_lock": threading.RLock(), "running": False, "history": []}
     dispatched = []
-    monkeypatch.setattr(server, "_run_prompt_submit", lambda *a, **kw: dispatched.append(a))
+    monkeypatch.setattr(
+        server, "_run_prompt_submit", lambda *a, **kw: dispatched.append(a)
+    )
     token = fence.prepare()["token"]
-    err, _ = server._lock_in_submit_turn("r", "s", session, "hello", {}, False, None, None, None)
+    err, _ = server._lock_in_submit_turn(
+        "r", "s", session, "hello", {}, False, None, None, None
+    )
     assert err and err["error"]["code"] == 5035
     assert session["running"] is False
     session["queued_prompt"] = {"text": "next", "transport": None}

@@ -146,11 +146,13 @@ def test_wedged_dispatch_does_not_starve_later_tools(monkeypatch):
     stop = threading.Event()
     _wedge_first_tool(agent, "tool_a", dispatched, stop)
 
-    msg = _FakeAssistantMsg([
-        _FakeToolCall("tool_a", "tc_a"),
-        _FakeToolCall("tool_b", "tc_b"),
-        _FakeToolCall("tool_c", "tc_c"),
-    ])
+    msg = _FakeAssistantMsg(
+        [
+            _FakeToolCall("tool_a", "tc_a"),
+            _FakeToolCall("tool_b", "tc_b"),
+            _FakeToolCall("tool_c", "tc_c"),
+        ]
+    )
     messages: list = []
     try:
         agent._execute_tool_calls_concurrent(msg, messages, "task")
@@ -185,10 +187,12 @@ def test_gate_timeout_stays_under_the_batch_deadline(monkeypatch):
     stop = threading.Event()
     _wedge_first_tool(agent, "tool_a", dispatched, stop)
 
-    msg = _FakeAssistantMsg([
-        _FakeToolCall("tool_a", "tc_a"),
-        _FakeToolCall("tool_b", "tc_b"),
-    ])
+    msg = _FakeAssistantMsg(
+        [
+            _FakeToolCall("tool_a", "tc_a"),
+            _FakeToolCall("tool_b", "tc_b"),
+        ]
+    )
     messages: list = []
     try:
         agent._execute_tool_calls_concurrent(msg, messages, "task")
@@ -224,10 +228,12 @@ def test_abandoned_batch_does_not_dispatch_late(monkeypatch):
 
     threading.Thread(target=_fire_interrupt, daemon=True).start()
 
-    msg = _FakeAssistantMsg([
-        _FakeToolCall("tool_a", "tc_a"),
-        _FakeToolCall("tool_b", "tc_b"),
-    ])
+    msg = _FakeAssistantMsg(
+        [
+            _FakeToolCall("tool_a", "tc_a"),
+            _FakeToolCall("tool_b", "tc_b"),
+        ]
+    )
     messages: list = []
     started = time.monotonic()
     try:
@@ -260,7 +266,9 @@ def test_dict_error_result_reaches_the_model_from_a_concurrent_worker(monkeypatc
     """
     agent = _make_agent(monkeypatch)
     agent._tool_guardrails = MagicMock()
-    agent._tool_guardrails.before_call = lambda name, args: MagicMock(allows_execution=True)
+    agent._tool_guardrails.before_call = lambda name, args: MagicMock(
+        allows_execution=True
+    )
     payload = {"exit_code": 2, "output": "", "error": "boom"}
     agent._invoke_tool = MagicMock(return_value=payload)
 

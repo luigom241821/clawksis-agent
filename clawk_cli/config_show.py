@@ -24,12 +24,22 @@ def _show_managed_banner() -> None:
     if not managed_keys and not managed_env:
         return
     print()
-    print(color(
-        f"  ⚷ Some settings are managed by your administrator ({managed_scope.get_managed_dir()}) "
-        f"and cannot be changed", Colors.YELLOW, Colors.BOLD))
+    print(
+        color(
+            f"  ⚷ Some settings are managed by your administrator ({managed_scope.get_managed_dir()}) "
+            f"and cannot be changed",
+            Colors.YELLOW,
+            Colors.BOLD,
+        )
+    )
     for label, keys in (("config", managed_keys), ("env", managed_env)):
         if keys:
-            print(color(f"    Managed {label} keys: {', '.join(sorted(keys))}", Colors.YELLOW))
+            print(
+                color(
+                    f"    Managed {label} keys: {', '.join(sorted(keys))}",
+                    Colors.YELLOW,
+                )
+            )
 
 
 _SHOW_CONFIG_API_KEYS = (
@@ -42,13 +52,16 @@ _SHOW_CONFIG_API_KEYS = (
     ("PERPLEXITY_API_KEY", "Perplexity"),
     ("BROWSERBASE_API_KEY", "Browserbase"),
     ("BROWSER_USE_API_KEY", "Browser Use"),
-    ("FAL_KEY", "FAL"))
+    ("FAL_KEY", "FAL"),
+)
 
 
 def _show_model_section(config: dict[str, Any]) -> None:
     _section("Model")
     print(f"  Model:        {_cfg.redact_config_value(config.get('model', 'not set'))}")
-    cfg_max_turns = config.get('agent', {}).get('max_turns', _cfg.DEFAULT_CONFIG['agent']['max_turns'])
+    cfg_max_turns = config.get("agent", {}).get(
+        "max_turns", _cfg.DEFAULT_CONFIG["agent"]["max_turns"]
+    )
     print(f"  Max turns:    {cfg_max_turns}")
     # Read the .env FILE directly so a stale CLAWK_MAX_ITERATIONS ghost is caught even when the
     # gateway bridge already overrode os.environ.
@@ -57,87 +70,115 @@ def _show_model_section(config: dict[str, Any]) -> None:
     except Exception:
         env_ghost = None
     if env_ghost is not None and str(env_ghost).strip() != str(cfg_max_turns).strip():
-        print(color(f"                ⚠ .env has stale CLAWK_MAX_ITERATIONS={env_ghost} "
-                    f"(run 'clawk doctor --fix' to remove)", Colors.YELLOW))
+        print(
+            color(
+                f"                ⚠ .env has stale CLAWK_MAX_ITERATIONS={env_ghost} "
+                f"(run 'clawk doctor --fix' to remove)",
+                Colors.YELLOW,
+            )
+        )
 
 
 def _show_display_section(config: dict[str, Any]) -> None:
     _section("Display")
-    display = config.get('display', {})
+    display = config.get("display", {})
     try:
         from clawk_cli.personality import active_personality_name
-        active_personality = active_personality_name(config) or 'none'
+
+        active_personality = active_personality_name(config) or "none"
     except Exception:
-        active_personality = display.get('personality') or 'none'
-    on_off = lambda flag: 'on' if flag else 'off'
+        active_personality = display.get("personality") or "none"
+    on_off = lambda flag: "on" if flag else "off"
     print(f"  Personality:  {active_personality}")
     print(f"  Reasoning:    {on_off(display.get('show_reasoning', True))}")
     print(
         f"  Bell:         complete={on_off(display.get('bell_on_complete', False))}, "
-        f"prompt={on_off(display.get('bell_on_prompt', False))}")
-    ump = display.get('user_message_preview', {})
+        f"prompt={on_off(display.get('bell_on_prompt', False))}"
+    )
+    ump = display.get("user_message_preview", {})
     ump = ump if isinstance(ump, dict) else {}
-    print(f"  User preview: first {ump.get('first_lines', 2)} line(s), last {ump.get('last_lines', 2)} line(s)")
+    print(
+        f"  User preview: first {ump.get('first_lines', 2)} line(s), last {ump.get('last_lines', 2)} line(s)"
+    )
 
 
 def _show_terminal_section(config: dict[str, Any]) -> None:
     _section("Terminal")
-    terminal = config.get('terminal', {})
+    terminal = config.get("terminal", {})
     print(f"  Backend:      {terminal.get('backend', 'local')}")
     print(f"  Working dir:  {terminal.get('cwd', '.')}")
     print(f"  Timeout:      {terminal.get('timeout', 60)}s")
 
-    configured = lambda *names: 'configured' if all(_cfg.get_env_value(n) for n in names) else '(not set)'
-    from clawk_cli.config_defaults import DEFAULT_SANDBOX_IMAGE as default_img, DEFAULT_VERCEL_IMAGE as _DEFAULT_VERCEL_IMAGE
+    configured = lambda *names: (
+        "configured" if all(_cfg.get_env_value(n) for n in names) else "(not set)"
+    )
+    from clawk_cli.config_defaults import (
+        DEFAULT_SANDBOX_IMAGE as default_img,
+        DEFAULT_VERCEL_IMAGE as _DEFAULT_VERCEL_IMAGE,
+    )
+
     backend_lines = {
-        'docker': lambda: [f"  Docker image: {terminal.get('docker_image', default_img)}"],
-        'modal': lambda: [
+        "docker": lambda: [
+            f"  Docker image: {terminal.get('docker_image', default_img)}"
+        ],
+        "modal": lambda: [
             f"  Modal image:  {terminal.get('modal_image', default_img)}",
-            f"  Modal token:  {configured('MODAL_TOKEN_ID')}"],
-        'daytona': lambda: [
+            f"  Modal token:  {configured('MODAL_TOKEN_ID')}",
+        ],
+        "daytona": lambda: [
             f"  Daytona image: {terminal.get('daytona_image', default_img)}",
-            f"  API key:      {configured('DAYTONA_API_KEY')}"],
-        'vercel_sandbox': lambda: [
+            f"  API key:      {configured('DAYTONA_API_KEY')}",
+        ],
+        "vercel_sandbox": lambda: [
             f"  Vercel image:   {terminal.get('vercel_runtime') or terminal.get('vercel_image') or _DEFAULT_VERCEL_IMAGE}",
             f"  Vercel auth:    {'configured' if _cfg.get_env_value('VERCEL_OIDC_TOKEN') or (_cfg.get_env_value('VERCEL_TOKEN') and _cfg.get_env_value('VERCEL_PROJECT_ID') and _cfg.get_env_value('VERCEL_TEAM_ID')) else '(not set)'}",
         ],
-        'ssh': lambda: [
+        "ssh": lambda: [
             f"  SSH host:     {_cfg.get_env_value('TERMINAL_SSH_HOST') or '(not set)'}",
-            f"  SSH user:     {_cfg.get_env_value('TERMINAL_SSH_USER') or '(not set)'}"]}
-    for line in backend_lines.get(terminal.get('backend'), list)():
+            f"  SSH user:     {_cfg.get_env_value('TERMINAL_SSH_USER') or '(not set)'}",
+        ],
+    }
+    for line in backend_lines.get(terminal.get("backend"), list)():
         print(line)
 
 
 def _show_compression_section(config: dict[str, Any]) -> None:
     _section("Context Compression")
-    compression = config.get('compression', {})
-    enabled = compression.get('enabled', True)
+    compression = config.get("compression", {})
+    enabled = compression.get("enabled", True)
     print(f"  Enabled:      {'yes' if enabled else 'no'}")
     if not enabled:
         return
     print(f"  Threshold:    {compression.get('threshold', 0.50) * 100:.0f}%")
-    tt = compression.get('threshold_tokens')
+    tt = compression.get("threshold_tokens")
     try:
         if tt is not None and int(tt) > 0:
-            print(f"  Token cap:    {int(tt):,} tokens (takes lower of ratio vs absolute)")
+            print(
+                f"  Token cap:    {int(tt):,} tokens (takes lower of ratio vs absolute)"
+            )
     except (TypeError, ValueError):
         pass
-    print(f"  Target ratio: {compression.get('target_ratio', 0.20) * 100:.0f}% of threshold preserved")
+    print(
+        f"  Target ratio: {compression.get('target_ratio', 0.20) * 100:.0f}% of threshold preserved"
+    )
     print(f"  Protect last: {compression.get('protect_last_n', 20)} messages")
-    print(f"  Protect first: {compression.get('protect_first_n', 3)} non-system head messages")
-    aux_comp = config.get('auxiliary', {}).get('compression', {})
+    print(
+        f"  Protect first: {compression.get('protect_first_n', 3)} non-system head messages"
+    )
+    aux_comp = config.get("auxiliary", {}).get("compression", {})
     print(f"  Model:        {aux_comp.get('model', '') or '(auto)'}")
-    comp_provider = aux_comp.get('provider', 'auto')
-    if comp_provider and comp_provider != 'auto':
+    comp_provider = aux_comp.get("provider", "auto")
+    if comp_provider and comp_provider != "auto":
         print(f"  Provider:     {comp_provider}")
 
 
 def _show_aux_overrides(config: dict[str, Any]) -> None:
-    aux_tasks = {"Vision": config.get('auxiliary', {}).get('vision', {})}
+    aux_tasks = {"Vision": config.get("auxiliary", {}).get("vision", {})}
     overrides = {
-        label: (t.get('provider', 'auto'), t.get('model', ''))
+        label: (t.get("provider", "auto"), t.get("model", ""))
         for label, t in aux_tasks.items()
-        if t.get('provider', 'auto') != 'auto' or t.get('model', '')}
+        if t.get("provider", "auto") != "auto" or t.get("model", "")
+    }
     if not overrides:
         return
     _section("Auxiliary Models (overrides)")
@@ -148,7 +189,11 @@ def _show_aux_overrides(config: dict[str, Any]) -> None:
 
 def _show_skill_settings() -> None:
     try:
-        from agent.skill_utils import discover_all_skill_config_vars, resolve_skill_config_values
+        from agent.skill_utils import (
+            discover_all_skill_config_vars,
+            resolve_skill_config_values,
+        )
+
         skill_vars = discover_all_skill_config_vars()
         if not skill_vars:
             return
@@ -168,9 +213,21 @@ def show_config():
     config = _cfg.load_config()
 
     print()
-    print(color("┌─────────────────────────────────────────────────────────┐", Colors.CYAN))
-    print(color("│              ∇ Clawksis Configuration                    │", Colors.CYAN))
-    print(color("└─────────────────────────────────────────────────────────┘", Colors.CYAN))
+    print(
+        color(
+            "┌─────────────────────────────────────────────────────────┐", Colors.CYAN
+        )
+    )
+    print(
+        color(
+            "│              ∇ Clawksis Configuration                    │", Colors.CYAN
+        )
+    )
+    print(
+        color(
+            "└─────────────────────────────────────────────────────────┘", Colors.CYAN
+        )
+    )
     _show_managed_banner()
 
     _section("Paths")
@@ -182,6 +239,7 @@ def show_config():
     for env_key, name in _SHOW_CONFIG_API_KEYS:
         print(f"  {name:<14} {_cfg.redact_key(_cfg.get_env_value(env_key))}")
     from clawk_cli.auth import get_anthropic_key
+
     print(f"  {'Anthropic':<14} {_cfg.redact_key(get_anthropic_key())}")
 
     _show_model_section(config)
@@ -189,15 +247,22 @@ def show_config():
     _show_terminal_section(config)
 
     _section("Timezone")
-    tz = config.get('timezone', '')
+    tz = config.get("timezone", "")
     print(f"  Timezone:     {tz or color('(server-local)', Colors.DIM)}")
 
     _show_compression_section(config)
     _show_aux_overrides(config)
 
     _section("Messaging Platforms")
-    for label, env_key in (("Telegram", "TELEGRAM_BOT_TOKEN"), ("Discord", "DISCORD_BOT_TOKEN")):
-        state = 'configured' if _cfg.get_env_value(env_key) else color('not configured', Colors.DIM)
+    for label, env_key in (
+        ("Telegram", "TELEGRAM_BOT_TOKEN"),
+        ("Discord", "DISCORD_BOT_TOKEN"),
+    ):
+        state = (
+            "configured"
+            if _cfg.get_env_value(env_key)
+            else color("not configured", Colors.DIM)
+        )
         print(f"  {label + ':':<13} {state}")
 
     _show_skill_settings()

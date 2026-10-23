@@ -3,6 +3,7 @@
 Boot-time dependency selection (``clawk_cli.runtime_state``) imports these, so nothing here
 may import a dependency or another PM module.
 """
+
 from __future__ import annotations
 
 import errno
@@ -61,7 +62,7 @@ def native(path: str | os.PathLike[str]) -> str:
     environment values, hashed identities, records and messages."""
     text = os.fspath(path)
     if text.startswith(_VERBATIM_UNC):
-        return "\\\\" + text[len(_VERBATIM_UNC):]
+        return "\\\\" + text[len(_VERBATIM_UNC) :]
     return text.removeprefix(_VERBATIM)
 
 
@@ -70,6 +71,7 @@ def lock_fd(fd: int, *, wait: bool, timeout: float | None = None) -> bool:
     deadline = None if timeout is None else time.monotonic() + timeout
     if os.name == "nt":
         import msvcrt
+
         while True:
             try:
                 os.lseek(fd, 0, os.SEEK_SET)
@@ -83,6 +85,7 @@ def lock_fd(fd: int, *, wait: bool, timeout: float | None = None) -> bool:
             time.sleep(_LOCK_POLL_SECONDS)
     else:
         import fcntl
+
         while True:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -153,13 +156,30 @@ def remove_tree(path: Path) -> None:
     would follow a symlink out of the tree. Lives here, not in ``clawk_cli``: PM installs run
     before the rest of the tree exists (the Docker toolchain stage copies only ``pm/``).
     """
+
     def _retry_writable(func, failed, error):
         error = error[1] if isinstance(error, tuple) else error
-        if os.name != "nt" or func not in (os.unlink, os.rmdir) or not isinstance(error, PermissionError):
+        if (
+            os.name != "nt"
+            or func not in (os.unlink, os.rmdir)
+            or not isinstance(error, PermissionError)
+        ):
             raise error
         # Windows >= 3.13 chmod follows links; the attribute to clear is the link's own.
-        os.chmod(failed, stat.S_IWRITE, **({"follow_symlinks": False} if os.chmod in os.supports_follow_symlinks else {}))
+        os.chmod(
+            failed,
+            stat.S_IWRITE,
+            **(
+                {"follow_symlinks": False}
+                if os.chmod in os.supports_follow_symlinks
+                else {}
+            ),
+        )
         func(failed)
 
-    handler = {"onexc": _retry_writable} if sys.version_info >= (3, 12) else {"onerror": _retry_writable}
+    handler = (
+        {"onexc": _retry_writable}
+        if sys.version_info >= (3, 12)
+        else {"onerror": _retry_writable}
+    )
     shutil.rmtree(path, **handler)

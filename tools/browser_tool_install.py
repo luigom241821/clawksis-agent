@@ -40,7 +40,12 @@ def _merge_browser_path(existing_path: str = "") -> str:
     path_parts = [p for p in (existing_path or "").split(os.pathsep) if p]
     prefix_parts: list[str] = []
     for part in _browser_candidate_path_dirs():
-        if part and part not in path_parts and part not in prefix_parts and os.path.isdir(part):
+        if (
+            part
+            and part not in path_parts
+            and part not in prefix_parts
+            and os.path.isdir(part)
+        ):
             prefix_parts.append(part)
     return os.pathsep.join(prefix_parts + path_parts)
 
@@ -114,9 +119,14 @@ def _maybe_autoinstall_chromium() -> bool:
     if _bt._chromium_autoinstall_attempted:
         return _chromium_installed()
     _bt._chromium_autoinstall_attempted = True
-    if _running_in_docker() or _is_termux_environment() or os.environ.get("AGENT_BROWSER_EXECUTABLE_PATH"):
+    if (
+        _running_in_docker()
+        or _is_termux_environment()
+        or os.environ.get("AGENT_BROWSER_EXECUTABLE_PATH")
+    ):
         return False
     from pm import InstallError, ensure, lazy_installs_allowed
+
     if not lazy_installs_allowed():
         return False
     _bt.logger.info("browser: installing PM's pinned Chromium")
@@ -182,4 +192,5 @@ def check_browser_vision_requirements() -> bool:
     if not check_browser_requirements():
         return False
     from tools.vision_tools import check_vision_requirements
+
     return check_vision_requirements()

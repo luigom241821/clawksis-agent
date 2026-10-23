@@ -34,16 +34,27 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from tests.e2e.core.terminal._gateway_client import Backend, RpcError, WSClient, etype, poll_until
+from tests.e2e.core.terminal._gateway_client import (
+    Backend,
+    RpcError,
+    WSClient,
+    etype,
+    poll_until,
+)
 from tests.fakes.fake_llm_provider import Text
 
 # Not marked ``integration`` (that marker means external services and is deselected by addopts): the backend is
 # loopback-only. ``tests/e2e`` is outside default discovery; run with ``scripts/run_tests.sh --include-integration``.
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX process-group lifecycle for the spawned backend")
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX process-group lifecycle for the spawned backend",
+)
 
 CANARY_RE = re.compile(r"cnry-s\d+-\d{3}")
 FILLER = " ".join(["stream"] * 45)
-ABSENCE_S = 3.0  # far below the 30 s WS send deadline and the reaper's activity-stale threshold
+ABSENCE_S = (
+    3.0  # far below the 30 s WS send deadline and the reaper's activity-stale threshold
+)
 GRACE_S = 2  # CLAWK_TUI_WS_ORPHAN_REAP_GRACE_S: short so owner-death paths finish inside the test
 STEP_TIMEOUT = 90.0
 
@@ -51,7 +62,9 @@ STEP_TIMEOUT = 90.0
 def _text_of(message: dict) -> str:
     content = message.get("content")
     if isinstance(content, list):
-        return " ".join(str(part.get("text") or "") for part in content if isinstance(part, dict))
+        return " ".join(
+            str(part.get("text") or "") for part in content if isinstance(part, dict)
+        )
     return str(content or "")
 
 
@@ -71,8 +84,12 @@ def _responder(record: dict):
 @pytest.fixture(scope="module")
 def backend(tmp_path_factory):
     root = tmp_path_factory.mktemp("c14")
-    be = Backend(root, _responder, extra_config="display:\n  busy_input_mode: queue\n",
-                 env={"CLAWK_TUI_WS_ORPHAN_REAP_GRACE_S": str(GRACE_S)})
+    be = Backend(
+        root,
+        _responder,
+        extra_config="display:\n  busy_input_mode: queue\n",
+        env={"CLAWK_TUI_WS_ORPHAN_REAP_GRACE_S": str(GRACE_S)},
+    )
     be.start()
     try:
         yield be
@@ -87,7 +104,9 @@ class Turn:
     sid: str
     client: str
     slow: bool
-    attached: set[int]  # id() of connections attached to ``sid`` when the prompt was accepted
+    attached: set[
+        int
+    ]  # id() of connections attached to ``sid`` when the prompt was accepted
     interrupted: bool = False
     # id() of each connection attached at submit -> ITS frame count when the accepted prompt.submit went out:
     # every connection has its own history length, so a watcher scans from its own index, not the submitter's.
@@ -154,6 +173,7 @@ class Model:
         def idle() -> bool:
             rows = [r for r in self.active_rows() if r.get("session_key") == key]
             return all(r.get("status") == "idle" for r in rows)
+
         poll_until(idle, timeout=STEP_TIMEOUT, interval=0.1, what=f"session {key} idle")
 
     def resume(self, slot: Slot, key: str) -> str:
@@ -166,17 +186,22 @@ class Model:
             idx = len(conn.snapshot())
             frame = conn.request("session.resume", {"session_id": key, "cols": 100})
             if "error" in frame:
-                if frame["error"].get("code") == 4009:  # client-gone interrupt settling: documented retry
+                if (
+                    frame["error"].get("code") == 4009
+                ):  # client-gone interrupt settling: documented retry
                     return None
                 raise RpcError("session.resume", frame["error"])
             return idx, frame["result"]
 
-        idx, result = poll_until(attempt, timeout=STEP_TIMEOUT, interval=0.2, what=f"resume {key}")
+        idx, result = poll_until(
+            attempt, timeout=STEP_TIMEOUT, interval=0.2, what=f"resume {key}"
+        )
         sid = result["session_id"]
         if holders:
             assert sid == old, (
                 f"resume of {key} minted runtime {sid} while connection(s) "
-                f"{[c.name for c in holders]} still hold live runtime {old}: two runtimes for one chat")
+                f"{[c.name for c in holders]} still hold live runtime {old}: two runtimes for one chat"
+            )
         self.sessions[key].sid = sid
         self.sessions[key].closed = False
         self.sid_key[sid] = key
@@ -195,30 +220,53 @@ class Model:
         sent_at: list[dict[int, int]] = [{}]
 
         def attempt():
-            sent_at[0] = {id(c): len(c.snapshot()) for c in [*self.attached_live(slot.sid), conn]}
-            frame = conn.request("prompt.submit", {"session_id": slot.sid, "text": text})
+            sent_at[0] = {
+                id(c): len(c.snapshot()) for c in [*self.attached_live(slot.sid), conn]
+            }
+            frame = conn.request(
+                "prompt.submit", {"session_id": slot.sid, "text": text}
+            )
             if "error" not in frame:
                 return frame["result"]
             err = frame["error"]
             code = err.get("code")
             if code == 4009:  # settling fence
                 return None
-            if code in (4001, 4007):  # runtime reaped under us: the client re-resumes, as Desktop does
+            if code in (
+                4001,
+                4007,
+            ):  # runtime reaped under us: the client re-resumes, as Desktop does
                 self.resume(slot, key)
                 return None
-            if code == 4090:  # ownership refusal: retried until the deadline, then a zombie lease
+            if (
+                code == 4090
+            ):  # ownership refusal: retried until the deadline, then a zombie lease
                 refusals.append(str(err.get("message")))
                 return None
             raise RpcError("prompt.submit", err)
 
         try:
-            result = poll_until(attempt, timeout=45.0, interval=0.25, what=f"prompt.submit to {key}")
+            result = poll_until(
+                attempt, timeout=45.0, interval=0.25, what=f"prompt.submit to {key}"
+            )
         except AssertionError as exc:
-            raise AssertionError(f"{exc}; ownership refusals: {refusals[-3:]}") from None
-        assert result.get("status") == "streaming", f"prompt to idle {key} was not started: {result}"
+            raise AssertionError(
+                f"{exc}; ownership refusals: {refusals[-3:]}"
+            ) from None
+        assert result.get("status") == "streaming", (
+            f"prompt to idle {key} was not started: {result}"
+        )
         sid = slot.sid
         assert sid is not None
-        turn = Turn(canary, key, sid, slot.name, slow, {id(c) for c in self.attached_live(sid)}, frame_idx=sent_at[0])
+        turn = Turn(
+            canary,
+            key,
+            sid,
+            slot.name,
+            slow,
+            {id(c) for c in self.attached_live(sid)},
+            frame_idx=sent_at[0],
+        )
         self.turns[canary] = turn
         self.sessions[key].prompts.append(canary)
         return turn
@@ -226,18 +274,34 @@ class Model:
     def wait_first_delta(self, turn: Turn, conn: WSClient) -> None:
         # From this turn's submit on, in THIS connection's frame history: an earlier turn's delta on the
         # same sid is not this turn streaming.
-        assert id(conn) in turn.frame_idx, f"{conn.name} was not attached when {turn.canary} was submitted"
-        conn.wait_for(lambda f: etype(f) == "message.delta" and f["params"].get("session_id") == turn.sid,
-                      timeout=STEP_TIMEOUT, start=turn.frame_idx[id(conn)], what=f"first delta of {turn.canary}")
+        assert id(conn) in turn.frame_idx, (
+            f"{conn.name} was not attached when {turn.canary} was submitted"
+        )
+        conn.wait_for(
+            lambda f: (
+                etype(f) == "message.delta"
+                and f["params"].get("session_id") == turn.sid
+            ),
+            timeout=STEP_TIMEOUT,
+            start=turn.frame_idx[id(conn)],
+            what=f"first delta of {turn.canary}",
+        )
 
     def db_has_reply(self, turn: Turn) -> bool:
-        return bool(self.be.db_rows(
-            "SELECT 1 FROM messages WHERE session_id=? AND role='assistant' AND content LIKE ?",
-            (turn.key, f"%ACK {turn.canary} %DONE%")))
+        return bool(
+            self.be.db_rows(
+                "SELECT 1 FROM messages WHERE session_id=? AND role='assistant' AND content LIKE ?",
+                (turn.key, f"%ACK {turn.canary} %DONE%"),
+            )
+        )
 
     def complete_frames(self, conn: WSClient, turn: Turn) -> list[dict]:
-        return [f for f in conn.events(turn.sid, "message.complete")
-                if f"ACK {turn.canary}" in str((f["params"].get("payload") or {}).get("text") or "")]
+        return [
+            f
+            for f in conn.events(turn.sid, "message.complete")
+            if f"ACK {turn.canary}"
+            in str((f["params"].get("payload") or {}).get("text") or "")
+        ]
 
     # -- ops ---------------------------------------------------------------------------------
     def op_create(self, slot: Slot) -> None:
@@ -255,7 +319,9 @@ class Model:
         for key, sess in self.sessions.items():
             if sess.deleted:
                 continue
-            if sess.prompts or (sess.sid and self.attached_live(sess.sid) and not sess.closed):
+            if sess.prompts or (
+                sess.sid and self.attached_live(sess.sid) and not sess.closed
+            ):
                 out.append(key)
         return out
 
@@ -270,7 +336,11 @@ class Model:
     def ensure_selected(self, slot: Slot) -> None:
         if slot.conn is None:
             self.op_reconnect(slot)
-        if slot.key is None or self.sessions[slot.key].deleted or self.sessions[slot.key].closed:
+        if (
+            slot.key is None
+            or self.sessions[slot.key].deleted
+            or self.sessions[slot.key].closed
+        ):
             self.op_create(slot)
 
     def op_prompt(self, slot: Slot, slow: bool = False) -> Turn:
@@ -291,13 +361,22 @@ class Model:
             self.submit(slot, slow=False)
         key = slot.key
         assert slot.conn is not None and key is not None
-        before = self.be.db_rows("SELECT COUNT(*) FROM messages WHERE session_id=?", (key,))
+        before = self.be.db_rows(
+            "SELECT COUNT(*) FROM messages WHERE session_id=?", (key,)
+        )
         frame = slot.conn.request("session.delete", {"session_id": key})
-        assert "error" in frame, f"session.delete of LIVE session {key} succeeded: {frame}"
-        assert self.be.db_rows("SELECT COUNT(*) FROM sessions WHERE id=?", (key,)) == [(1,)], (
-            f"refused delete still removed live session {key}")
-        after = self.be.db_rows("SELECT COUNT(*) FROM messages WHERE session_id=?", (key,))
-        assert after >= before, f"refused delete of {key} dropped messages: {before} -> {after}"
+        assert "error" in frame, (
+            f"session.delete of LIVE session {key} succeeded: {frame}"
+        )
+        assert self.be.db_rows("SELECT COUNT(*) FROM sessions WHERE id=?", (key,)) == [
+            (1,)
+        ], f"refused delete still removed live session {key}"
+        after = self.be.db_rows(
+            "SELECT COUNT(*) FROM messages WHERE session_id=?", (key,)
+        )
+        assert after >= before, (
+            f"refused delete of {key} dropped messages: {before} -> {after}"
+        )
 
     def op_close_and_delete(self, slot: Slot) -> None:
         # A private chat: create, prompt, close (the runtime ends), then delete the inactive row.
@@ -307,17 +386,28 @@ class Model:
         key, sid = turn.key, turn.sid
         assert slot.conn is not None
         self.wait_idle(key)
-        poll_until(lambda: self.db_has_reply(turn), timeout=STEP_TIMEOUT, what=f"reply persisted for {turn.canary}")
+        poll_until(
+            lambda: self.db_has_reply(turn),
+            timeout=STEP_TIMEOUT,
+            what=f"reply persisted for {turn.canary}",
+        )
         slot.conn.call("session.close", session_id=sid)
         self.sessions[key].closed = True
         self.sessions[key].sid = None
         slot.key = slot.sid = None
-        poll_until(lambda: not any(r.get("session_key") == key for r in self.active_rows()),
-                   timeout=STEP_TIMEOUT, what=f"closed session {key} gone from the live list")
+        poll_until(
+            lambda: not any(r.get("session_key") == key for r in self.active_rows()),
+            timeout=STEP_TIMEOUT,
+            what=f"closed session {key} gone from the live list",
+        )
         slot.conn.call("session.delete", session_id=key)
         self.sessions[key].deleted = True
-        assert self.be.db_rows("SELECT COUNT(*) FROM sessions WHERE id=?", (key,)) == [(0,)]
-        assert self.be.db_rows("SELECT COUNT(*) FROM messages WHERE session_id=?", (key,)) == [(0,)]
+        assert self.be.db_rows("SELECT COUNT(*) FROM sessions WHERE id=?", (key,)) == [
+            (0,)
+        ]
+        assert self.be.db_rows(
+            "SELECT COUNT(*) FROM messages WHERE session_id=?", (key,)
+        ) == [(0,)]
 
     def op_drop_mid_turn(self, slot: Slot) -> None:
         turn = self.op_prompt(slot, slow=True)
@@ -326,12 +416,19 @@ class Model:
         slot.conn.drop()
         conn = self.connect(slot)
         self.resume(slot, turn.key)
-        poll_until(lambda: self.complete_frames(conn, turn) or self.db_has_reply(turn),
-                   timeout=STEP_TIMEOUT, what=f"completion of in-flight {turn.canary} after reconnect")
+        poll_until(
+            lambda: self.complete_frames(conn, turn) or self.db_has_reply(turn),
+            timeout=STEP_TIMEOUT,
+            what=f"completion of in-flight {turn.canary} after reconnect",
+        )
         self.wait_idle(turn.key)
-        assert self.db_has_reply(turn), f"turn {turn.canary} was cut short by the ws drop (no full reply persisted)"
+        assert self.db_has_reply(turn), (
+            f"turn {turn.canary} was cut short by the ws drop (no full reply persisted)"
+        )
         for frame in self.complete_frames(conn, turn):
-            assert (frame["params"].get("payload") or {}).get("status", "complete") == "complete", frame
+            assert (frame["params"].get("payload") or {}).get(
+                "status", "complete"
+            ) == "complete", frame
 
     def orphan(self, slot: Slot, *, running: bool) -> None:
         """The owner of a private chat dies (no reconnect); another client must take it over."""
@@ -347,10 +444,16 @@ class Model:
         slot.conn = None
         assert not self.attached_live(sid)
         # Nobody else watches: the runtime must be released in bounded time (grace + turn end).
-        poll_until(lambda: not any(r.get("session_key") == key for r in self.active_rows()),
-                   timeout=STEP_TIMEOUT, interval=0.2, what=f"orphaned {key} released after its owner died")
+        poll_until(
+            lambda: not any(r.get("session_key") == key for r in self.active_rows()),
+            timeout=STEP_TIMEOUT,
+            interval=0.2,
+            what=f"orphaned {key} released after its owner died",
+        )
         if turn is not None:
-            assert self.db_has_reply(turn), f"owner death cut fresh turn {turn.canary} short (no full reply)"
+            assert self.db_has_reply(turn), (
+                f"owner death cut fresh turn {turn.canary} short (no full reply)"
+            )
         taker = self.rng.choice([s for s in self.slots.values() if s is not slot])
         if taker.conn is None:
             self.connect(taker)
@@ -380,10 +483,15 @@ class Model:
         assert slot.conn is not None
         slot.conn.drop()
         slot.conn = None
-        poll_until(lambda: self.complete_frames(watcher.conn, turn), timeout=STEP_TIMEOUT,
-                   what=f"watcher {watcher.name} gets {turn.canary} after the prompting window died")
+        poll_until(
+            lambda: self.complete_frames(watcher.conn, turn),
+            timeout=STEP_TIMEOUT,
+            what=f"watcher {watcher.name} gets {turn.canary} after the prompting window died",
+        )
         (frame,) = self.complete_frames(watcher.conn, turn)
-        assert (frame["params"].get("payload") or {}).get("status", "complete") == "complete", frame
+        assert (frame["params"].get("payload") or {}).get(
+            "status", "complete"
+        ) == "complete", frame
         assert self.db_has_reply(turn)
         self.submit(watcher, slow=False)
 
@@ -393,13 +501,21 @@ class Model:
         assert conn is not None
         self.wait_first_delta(turn, conn)
         conn.pause()
-        time.sleep(ABSENCE_S)  # the scenario itself (laptop lid closed), not a synchronisation wait
+        time.sleep(
+            ABSENCE_S
+        )  # the scenario itself (laptop lid closed), not a synchronisation wait
         conn.resume()
-        poll_until(lambda: self.complete_frames(conn, turn), timeout=STEP_TIMEOUT,
-                   what=f"{turn.canary} completion after a {ABSENCE_S}s absence")
+        poll_until(
+            lambda: self.complete_frames(conn, turn),
+            timeout=STEP_TIMEOUT,
+            what=f"{turn.canary} completion after a {ABSENCE_S}s absence",
+        )
         (frame,) = self.complete_frames(conn, turn)
-        assert (frame["params"].get("payload") or {}).get("status", "complete") == "complete", (
-            f"client absence ended turn {turn.canary}: {frame['params'].get('payload')}")
+        assert (frame["params"].get("payload") or {}).get(
+            "status", "complete"
+        ) == "complete", (
+            f"client absence ended turn {turn.canary}: {frame['params'].get('payload')}"
+        )
 
     def op_reconnect(self, slot: Slot) -> None:
         if slot.conn is not None and not slot.conn.dropped:
@@ -426,20 +542,28 @@ class Model:
                 first = self.attach_idx[id(conn)].get(sid)
                 assert first is not None and idx >= first, (
                     f"{conn.name} received {params.get('type')} for session {sid} "
-                    f"({self.sid_key.get(sid, 'foreign')}) it never attached to")
+                    f"({self.sid_key.get(sid, 'foreign')}) it never attached to"
+                )
                 if isinstance(params.get("seq"), int):
                     seqs[sid].append(params["seq"])
                 if params.get("type") == "message.complete":
                     text = str((params.get("payload") or {}).get("text") or "")
                     for canary in CANARY_RE.findall(text):
                         owner = self.turns.get(canary)
-                        assert owner is not None and owner.key == self.sid_key.get(sid), (
+                        assert owner is not None and owner.key == self.sid_key.get(
+                            sid
+                        ), (
                             f"{conn.name}: reply for {canary} (sent to "
-                            f"{owner.key if owner else '?'}) delivered as session {self.sid_key.get(sid)}")
+                            f"{owner.key if owner else '?'}) delivered as session {self.sid_key.get(sid)}"
+                        )
             for sid, values in seqs.items():
                 dupes = [s for s, n in Counter(values).items() if n > 1]
-                assert not dupes, f"{conn.name} got session {sid} events twice: duplicate seq {dupes[:5]}"
-                assert values == sorted(values), f"{conn.name} got session {sid} events out of order"
+                assert not dupes, (
+                    f"{conn.name} got session {sid} events twice: duplicate seq {dupes[:5]}"
+                )
+                assert values == sorted(values), (
+                    f"{conn.name} got session {sid} events out of order"
+                )
 
     def check_single_runtime(self) -> None:
         keys = Counter(r.get("session_key") for r in self.active_rows())
@@ -452,12 +576,16 @@ class Model:
                 self.wait_idle(key)
         prefix = f"cnry-s{self.seed}-"
         rows = self.be.db_rows(
-            "SELECT session_id, role, content FROM messages WHERE content LIKE ? ORDER BY id", (f"%{prefix}%",))
+            "SELECT session_id, role, content FROM messages WHERE content LIKE ? ORDER BY id",
+            (f"%{prefix}%",),
+        )
         user_by_key: dict[str, list[str]] = defaultdict(list)
         replies: Counter = Counter()
         full: Counter = Counter()
         for key, role, content in rows:
-            found = [c for c in CANARY_RE.findall(str(content or "")) if c.startswith(prefix)]
+            found = [
+                c for c in CANARY_RE.findall(str(content or "")) if c.startswith(prefix)
+            ]
             if role == "user":
                 user_by_key[key].extend(found)
             elif role == "assistant":
@@ -469,20 +597,31 @@ class Model:
                 assert not user_by_key.get(key), f"deleted session {key} still has rows"
                 continue
             assert user_by_key.get(key, []) == sess.prompts, (
-                f"session {key}: persisted prompts {user_by_key.get(key, [])} != sent {sess.prompts}")
+                f"session {key}: persisted prompts {user_by_key.get(key, [])} != sent {sess.prompts}"
+            )
         stray = set(user_by_key) - set(self.sessions)
         assert not stray, f"prompts persisted to sessions nobody selected: {stray}"
         for canary, turn in self.turns.items():
             if self.sessions[turn.key].deleted:
                 continue
             owner_replies = replies.get((turn.key, canary), 0)
-            elsewhere = {k: n for (k, c), n in replies.items() if c == canary and k != turn.key}
-            assert not elsewhere, f"reply to {canary} persisted into other session(s) {elsewhere}"
+            elsewhere = {
+                k: n for (k, c), n in replies.items() if c == canary and k != turn.key
+            }
+            assert not elsewhere, (
+                f"reply to {canary} persisted into other session(s) {elsewhere}"
+            )
             if turn.interrupted:
-                assert owner_replies <= 1, f"interrupted {canary} has {owner_replies} replies"
+                assert owner_replies <= 1, (
+                    f"interrupted {canary} has {owner_replies} replies"
+                )
             else:
-                assert owner_replies == 1, f"{canary} in {turn.key}: {owner_replies} persisted replies (want 1)"
-                assert full[(turn.key, canary)] == 1, f"{canary} in {turn.key}: reply was cut short"
+                assert owner_replies == 1, (
+                    f"{canary} in {turn.key}: {owner_replies} persisted replies (want 1)"
+                )
+                assert full[(turn.key, canary)] == 1, (
+                    f"{canary} in {turn.key}: reply was cut short"
+                )
         survivors = {id(c) for c in self.live_conns()}
         for canary, turn in self.turns.items():
             if turn.interrupted or self.sessions[turn.key].deleted:
@@ -490,12 +629,34 @@ class Model:
             for conn in self.conns:
                 if id(conn) in turn.attached and id(conn) in survivors:
                     got = len(self.complete_frames(conn, turn))
-                    assert got == 1, f"{conn.name} saw {got} completions of {canary} (want exactly 1)"
+                    assert got == 1, (
+                        f"{conn.name} saw {got} completions of {canary} (want exactly 1)"
+                    )
 
 
-MANDATORY = ["prompt", "prompt_slow", "interrupt_mid_turn", "switch", "delete_active", "close_and_delete",
-             "drop_mid_turn", "orphan_idle", "orphan_running", "shared_owner_drop", "absence", "reconnect"]
-EXTRA = ["prompt", "prompt_slow", "switch", "switch", "prompt", "create", "delete_active"]
+MANDATORY = [
+    "prompt",
+    "prompt_slow",
+    "interrupt_mid_turn",
+    "switch",
+    "delete_active",
+    "close_and_delete",
+    "drop_mid_turn",
+    "orphan_idle",
+    "orphan_running",
+    "shared_owner_drop",
+    "absence",
+    "reconnect",
+]
+EXTRA = [
+    "prompt",
+    "prompt_slow",
+    "switch",
+    "switch",
+    "prompt",
+    "create",
+    "delete_active",
+]
 
 
 @pytest.mark.parametrize("seed", [11, 23, 37])
@@ -521,9 +682,13 @@ def test_multiclient_session_model(backend: Backend, seed: int) -> None:
             model.log.append(f"{time.monotonic() - t0:.1f}s")
         model.check_final()
         model.check_events()
-        print(f"seed={seed} steps={model.log} turns={len(model.turns)} sessions={len(model.sessions)}")
+        print(
+            f"seed={seed} steps={model.log} turns={len(model.turns)} sessions={len(model.sessions)}"
+        )
     except AssertionError as exc:
-        raise AssertionError(f"seed={seed} steps={model.log}\n{exc}\n{backend.logs(25)}") from None
+        raise AssertionError(
+            f"seed={seed} steps={model.log}\n{exc}\n{backend.logs(25)}"
+        ) from None
     finally:
         for conn in model.conns:
             conn.close()

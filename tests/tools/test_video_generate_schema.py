@@ -8,6 +8,7 @@ guaranteed two ways:
 2. every FAL video family must carry the per-family keys the fal provider's
    active-model capabilities() resolution reads;
 """
+
 import os
 import sys
 import unittest
@@ -35,8 +36,14 @@ CAPABILITY_AXES = (
 )
 
 # Per-family keys the FAL provider's capabilities() resolution reads.
-FAL_FAMILY_KEYS = ("durations", "aspect_ratios", "resolutions", "audio",
-                   "negative", "seed")
+FAL_FAMILY_KEYS = (
+    "durations",
+    "aspect_ratios",
+    "resolutions",
+    "audio",
+    "negative",
+    "seed",
+)
 
 
 class TestFleetCapabilityCoverage(unittest.TestCase):
@@ -80,14 +87,21 @@ class TestFleetCapabilityCoverage(unittest.TestCase):
         class _P(VideoGenProvider):
             name = "t"
             display_name = "T"
+
             def generate(self, prompt, **kw):
                 return {}
+
             def list_models(self):
                 return []
+
         caps = _P().capabilities()
         self.assertEqual(caps.get("modalities"), ["text"])
-        for axis in ("supports_audio", "supports_negative_prompt",
-                     "supports_seed", "supports_upscale"):
+        for axis in (
+            "supports_audio",
+            "supports_negative_prompt",
+            "supports_seed",
+            "supports_upscale",
+        ):
             self.assertFalse(caps.get(axis), axis)
         for axis in CAPABILITY_AXES:
             self.assertIn(axis, caps, f"ABC default missing {axis}")
@@ -109,8 +123,7 @@ class TestFleetCapabilityCoverage(unittest.TestCase):
                 # never both — that would be contradictory.
                 self.assertFalse(
                     meta.get("audio") and meta.get("audio_native"),
-                    f"{fam}: audio toggle and always-on are mutually "
-                    "exclusive",
+                    f"{fam}: audio toggle and always-on are mutually exclusive",
                 )
 
     def test_always_on_audio_surfaces_in_description_not_param(self):
@@ -118,15 +131,19 @@ class TestFleetCapabilityCoverage(unittest.TestCase):
         always-on (no API toggle) must TELL the model about the audio in
         the description rather than advertise a dead `audio` param."""
         schema = TestDynamicParamGating._schema_with(
-            TestDynamicParamGating(), {
+            TestDynamicParamGating(),
+            {
                 "modalities": ["text", "image"],
-                "supports_audio": False, "audio_always_on": True,
-                "supports_negative_prompt": False, "supports_seed": False,
-                "supports_upscale": False, "max_reference_images": 0,
-            })
+                "supports_audio": False,
+                "audio_always_on": True,
+                "supports_negative_prompt": False,
+                "supports_seed": False,
+                "supports_upscale": False,
+                "max_reference_images": 0,
+            },
+        )
         self.assertNotIn("audio", schema["parameters"]["properties"])
         self.assertIn("always on", schema["description"])
-
 
 
 class TestDynamicParamGating(unittest.TestCase):
@@ -134,30 +151,46 @@ class TestDynamicParamGating(unittest.TestCase):
         class _Prov:
             name = "fake"
             display_name = "Fake"
+
             def capabilities(self):
                 return caps
+
             def list_models(self):
                 return [dict({"id": "m1"}, **(model_meta or {}))]
+
             def default_model(self):
                 return "m1"
-        with patch.object(vt, "_resolve_active_provider",
-                          return_value=_Prov()), \
-             patch.object(vt, "_read_configured_video_model",
-                          return_value="m1"):
+
+        with (
+            patch.object(vt, "_resolve_active_provider", return_value=_Prov()),
+            patch.object(vt, "_read_configured_video_model", return_value="m1"),
+        ):
             return _build_dynamic_video_schema()
 
     def test_full_featured_backend_gets_all_params(self):
-        schema = self._schema_with({
-            "modalities": ["text", "image"],
-            "aspect_ratios": ["16:9"], "resolutions": ["720p"],
-            "min_duration": 2, "max_duration": 12,
-            "supports_audio": True, "supports_negative_prompt": True,
-            "supports_seed": True, "supports_upscale": True,
-            "max_reference_images": 7,
-        })
+        schema = self._schema_with(
+            {
+                "modalities": ["text", "image"],
+                "aspect_ratios": ["16:9"],
+                "resolutions": ["720p"],
+                "min_duration": 2,
+                "max_duration": 12,
+                "supports_audio": True,
+                "supports_negative_prompt": True,
+                "supports_seed": True,
+                "supports_upscale": True,
+                "max_reference_images": 7,
+            }
+        )
         props = schema["parameters"]["properties"]
-        for p in ("image_url", "reference_image_urls", "negative_prompt",
-                  "audio", "seed", "upscale"):
+        for p in (
+            "image_url",
+            "reference_image_urls",
+            "negative_prompt",
+            "audio",
+            "seed",
+            "upscale",
+        ):
             self.assertIn(p, props, p)
         self.assertEqual(props["reference_image_urls"]["maxItems"], 7)
         self.assertEqual(props["duration"]["minimum"], 2)
@@ -165,24 +198,39 @@ class TestDynamicParamGating(unittest.TestCase):
         self.assertEqual(props["aspect_ratio"]["enum"], ["16:9"])
 
     def test_minimal_backend_gets_bare_params(self):
-        schema = self._schema_with({
-            "modalities": ["text"],
-            "supports_audio": False, "supports_negative_prompt": False,
-            "supports_seed": False, "supports_upscale": False,
-            "max_reference_images": 0,
-        })
+        schema = self._schema_with(
+            {
+                "modalities": ["text"],
+                "supports_audio": False,
+                "supports_negative_prompt": False,
+                "supports_seed": False,
+                "supports_upscale": False,
+                "max_reference_images": 0,
+            }
+        )
         props = schema["parameters"]["properties"]
-        for p in ("image_url", "reference_image_urls", "negative_prompt",
-                  "audio", "seed", "upscale"):
+        for p in (
+            "image_url",
+            "reference_image_urls",
+            "negative_prompt",
+            "audio",
+            "seed",
+            "upscale",
+        ):
             self.assertNotIn(p, props, p)
         self.assertIn("text-to-video only", schema["description"])
 
     def test_i2v_only_model_overrides_backend_union(self):
         # gemini-omni-flash case: dual-modality backend, i2v-only model.
         schema = self._schema_with(
-            {"modalities": ["text", "image"], "max_reference_images": 0,
-             "supports_audio": False, "supports_negative_prompt": False,
-             "supports_seed": False, "supports_upscale": False},
+            {
+                "modalities": ["text", "image"],
+                "max_reference_images": 0,
+                "supports_audio": False,
+                "supports_negative_prompt": False,
+                "supports_seed": False,
+                "supports_upscale": False,
+            },
             model_meta={"modalities": ["image"]},
         )
         self.assertIn("image_url", schema["parameters"]["properties"])
@@ -192,7 +240,6 @@ class TestDynamicParamGating(unittest.TestCase):
         with patch.object(vt, "_resolve_active_provider", return_value=None):
             schema = _build_dynamic_video_schema()
         self.assertEqual(sorted(schema["parameters"]["properties"]), ["prompt"])
-
 
 
 if __name__ == "__main__":

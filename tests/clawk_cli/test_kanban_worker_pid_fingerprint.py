@@ -28,15 +28,21 @@ def board(tmp_path, monkeypatch):
 
 
 def _claimed_running(conn, *, pid: int, started_at, max_runtime=None) -> str:
-    tid = kb.create_task(conn, title="job", assignee="worker", max_runtime_seconds=max_runtime)
+    tid = kb.create_task(
+        conn, title="job", assignee="worker", max_runtime_seconds=max_runtime
+    )
     kb.claim_task(conn, tid)
     kbd._set_worker_pid(conn, tid, pid)
     old = int(time.time()) - 3600
     with kb.write_txn(conn):
-        conn.execute("UPDATE tasks SET worker_started_at = ?, started_at = ?, claim_expires = ? WHERE id = ?",
-                     (started_at, old, old, tid))
-        conn.execute("UPDATE task_runs SET started_at = ? WHERE id = (SELECT current_run_id FROM tasks WHERE id = ?)",
-                     (old, tid))
+        conn.execute(
+            "UPDATE tasks SET worker_started_at = ?, started_at = ?, claim_expires = ? WHERE id = ?",
+            (started_at, old, old, tid),
+        )
+        conn.execute(
+            "UPDATE task_runs SET started_at = ? WHERE id = (SELECT current_run_id FROM tasks WHERE id = ?)",
+            (old, tid),
+        )
     return tid
 
 
@@ -46,16 +52,25 @@ def test_recycled_pid_is_reclaimed_without_being_signalled(board):
     conn = board
     killed = []
     stranger_fingerprint = 1  # no live process started at tick 1
-    tid = _claimed_running(conn, pid=os.getpid(), started_at=stranger_fingerprint, max_runtime=1)
+    tid = _claimed_running(
+        conn, pid=os.getpid(), started_at=stranger_fingerprint, max_runtime=1
+    )
 
     assert kbd._worker_alive(os.getpid(), stranger_fingerprint) is False
-    assert tid in kbd.enforce_max_runtime(conn, signal_fn=lambda pid, sig: killed.append((pid, sig)))
+    assert tid in kbd.enforce_max_runtime(
+        conn, signal_fn=lambda pid, sig: killed.append((pid, sig))
+    )
     assert killed == []
     task = kb.get_task(conn, tid)
     assert task.status == "ready" and task.worker_pid is None
 
     tid2 = _claimed_running(conn, pid=os.getpid(), started_at=stranger_fingerprint)
-    assert kb.release_stale_claims(conn, signal_fn=lambda pid, sig: killed.append((pid, sig))) == 1
+    assert (
+        kb.release_stale_claims(
+            conn, signal_fn=lambda pid, sig: killed.append((pid, sig))
+        )
+        == 1
+    )
     assert killed == []
     assert kb.get_task(conn, tid2).status == "ready"
 
@@ -67,7 +82,9 @@ def test_matching_fingerprint_keeps_the_live_worker(board):
 
     conn = board
     killed = []
-    tid = _claimed_running(conn, pid=os.getpid(), started_at=get_process_start_time(os.getpid()))
+    tid = _claimed_running(
+        conn, pid=os.getpid(), started_at=get_process_start_time(os.getpid())
+    )
     assert kbd._worker_alive(os.getpid(), get_process_start_time(os.getpid())) is True
     assert kb.release_stale_claims(conn) == 0
     assert kb.get_task(conn, tid).status == "running"
@@ -90,16 +107,23 @@ def test_same_pid_and_start_tick_on_another_boot_is_foreign(board, monkeypatch):
     killed = []
     live_fingerprint = kbd._process_fingerprint(os.getpid())
     assert live_fingerprint is not None and live_fingerprint.split("|", 1)[1] == str(
-        __import__("gateway.status", fromlist=["x"]).get_process_start_time(os.getpid()))
-    tid = _claimed_running(conn, pid=os.getpid(), started_at=live_fingerprint, max_runtime=1)
+        __import__("gateway.status", fromlist=["x"]).get_process_start_time(os.getpid())
+    )
+    tid = _claimed_running(
+        conn, pid=os.getpid(), started_at=live_fingerprint, max_runtime=1
+    )
     assert kbd._worker_alive(os.getpid(), live_fingerprint) is True
 
     # Same PID, same start tick, different boot identity.
     other_boot = "deadbeef-boot:1|" + live_fingerprint.split("|", 1)[1]
     with kb.write_txn(conn):
-        conn.execute("UPDATE tasks SET worker_started_at = ? WHERE id = ?", (other_boot, tid))
+        conn.execute(
+            "UPDATE tasks SET worker_started_at = ? WHERE id = ?", (other_boot, tid)
+        )
     assert kbd._worker_alive(os.getpid(), other_boot) is False
-    assert tid in kbd.enforce_max_runtime(conn, signal_fn=lambda pid, sig: killed.append((pid, sig)))
+    assert tid in kbd.enforce_max_runtime(
+        conn, signal_fn=lambda pid, sig: killed.append((pid, sig))
+    )
     assert killed == []
     task = kb.get_task(conn, tid)
     assert task.status == "ready" and task.worker_pid is None
@@ -122,14 +146,21 @@ def test_unverified_fingerprint_capture_never_authorizes_a_signal(board, monkeyp
     tid = kb.create_task(conn, title="job", assignee="worker", max_runtime_seconds=1)
     kb.claim_task(conn, tid)
     kbd._set_worker_pid(conn, tid, os.getpid())
-    row = conn.execute("SELECT worker_started_at FROM tasks WHERE id = ?", (tid,)).fetchone()
+    row = conn.execute(
+        "SELECT worker_started_at FROM tasks WHERE id = ?", (tid,)
+    ).fetchone()
     assert row["worker_started_at"] == kbd.UNVERIFIED_WORKER_FINGERPRINT
     monkeypatch.undo()
     old = int(time.time()) - 3600
     with kb.write_txn(conn):
-        conn.execute("UPDATE tasks SET started_at = ?, claim_expires = ? WHERE id = ?", (old, old, tid))
-        conn.execute("UPDATE task_runs SET started_at = ? WHERE id = (SELECT current_run_id FROM tasks WHERE id = ?)",
-                     (old, tid))
+        conn.execute(
+            "UPDATE tasks SET started_at = ?, claim_expires = ? WHERE id = ?",
+            (old, old, tid),
+        )
+        conn.execute(
+            "UPDATE task_runs SET started_at = ? WHERE id = (SELECT current_run_id FROM tasks WHERE id = ?)",
+            (old, tid),
+        )
 
     sig = lambda pid, s: killed.append((pid, s))
     assert kbd.enforce_max_runtime(conn, signal_fn=sig) == []
@@ -144,8 +175,10 @@ def test_unverified_fingerprint_capture_never_authorizes_a_signal(board, monkeyp
     tid2 = kb.create_task(conn, title="job2", assignee="worker")
     kb.claim_task(conn, tid2)
     with kb.write_txn(conn):
-        conn.execute("UPDATE tasks SET worker_pid = ?, worker_started_at = ?, claim_expires = ? WHERE id = ?",
-                     (os.getpid(), kbd.UNVERIFIED_WORKER_FINGERPRINT, old, tid2))
+        conn.execute(
+            "UPDATE tasks SET worker_pid = ?, worker_started_at = ?, claim_expires = ? WHERE id = ?",
+            (os.getpid(), kbd.UNVERIFIED_WORKER_FINGERPRINT, old, tid2),
+        )
     monkeypatch.setattr(kb, "_pid_alive", lambda pid: False)
     assert kb.release_stale_claims(conn, signal_fn=sig) == 1
     assert killed == [] and kb.get_task(conn, tid2).status == "ready"

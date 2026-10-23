@@ -4,12 +4,6 @@ import clawk_state
 from clawk_state import format_session_db_unavailable
 
 
-
-
-
-
-
-
 def test_db_unavailable_is_one_line_for_chat_surfaces_by_default():
     clawk_state._set_last_init_error("OperationalError: database is locked")
     try:
@@ -21,11 +15,9 @@ def test_db_unavailable_is_one_line_for_chat_surfaces_by_default():
     assert text.startswith("Cannot resume:")
 
 
-
-
-
-
-def test_db_unavailable_commands_are_pinned_to_the_failing_profile(monkeypatch, tmp_path):
+def test_db_unavailable_commands_are_pinned_to_the_failing_profile(
+    monkeypatch, tmp_path
+):
     """Both fallbacks that bypass the shared cause table (no cause; network-drive gloss) name the
     profile whose store failed, like the table's actions do."""
     from clawk_constants import profile_cli_selector
@@ -56,7 +48,11 @@ def test_db_unavailable_details_line_carries_raw_cause_only_below_the_lead():
         clawk_state._set_last_init_error(None)
     lead, *rest = text.splitlines()
     assert "OperationalError" not in lead
-    assert len(rest) == 1 and rest[0].startswith("Details: ") and "database is locked" in rest[0]
+    assert (
+        len(rest) == 1
+        and rest[0].startswith("Details: ")
+        and "database is locked" in rest[0]
+    )
 
     no_cause = format_session_db_unavailable(details=True)
     assert "\n" not in no_cause and "Details:" not in no_cause

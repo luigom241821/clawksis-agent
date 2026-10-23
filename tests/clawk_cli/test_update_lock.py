@@ -57,7 +57,9 @@ def marker(tmp_path):
 @pytest.fixture
 def other_pid():
     """A live process that is not us: the stand-in for another updater (our own pid is ours)."""
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], stdin=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)"], stdin=subprocess.DEVNULL
+    )
     yield proc.pid
     proc.kill()
     proc.wait()
@@ -65,12 +67,19 @@ def other_pid():
 
 def _claim(marker, pid, started_at=None):
     """A v1 (legacy, pid-only) claim."""
-    marker.write_text(f"{pid}\n{int(time.time() if started_at is None else started_at)}\n", encoding="utf-8")
+    marker.write_text(
+        f"{pid}\n{int(time.time() if started_at is None else started_at)}\n",
+        encoding="utf-8",
+    )
 
 
 def _claim_v2(marker, pid, started_at=None, ct_offset=0.0):
     started = int(time.time() if started_at is None else started_at)
-    marker.write_text(f"{pid}\n{started}\nct:{process_create_time(pid) + ct_offset:.3f}\n", encoding="utf-8", newline="")
+    marker.write_text(
+        f"{pid}\n{started}\nct:{process_create_time(pid) + ct_offset:.3f}\n",
+        encoding="utf-8",
+        newline="",
+    )
 
 
 def test_marker_path_is_the_profile_tree_root(tmp_path, monkeypatch):
@@ -97,9 +106,9 @@ def test_acquire_writes_pid_and_start_time(marker):
         "the Electron gate probes this pid for liveness"
     )
     assert int(lines[1]) == pytest.approx(time.time(), abs=5)
-    assert float(lines[2].removeprefix("ct:")) == pytest.approx(process_create_time(), abs=0.01), (
-        "line 3 is our creation time: readers tell a reused pid from us by it"
-    )
+    assert float(lines[2].removeprefix("ct:")) == pytest.approx(
+        process_create_time(), abs=0.01
+    ), "line 3 is our creation time: readers tell a reused pid from us by it"
     assert len(lines) == 3
 
 
@@ -174,7 +183,9 @@ def test_marker_naming_our_own_pid_is_adopted(marker, monkeypatch):
     real_time = time.time
     monkeypatch.setattr(time, "time", lambda: real_time() + 60)
     holder = read_live_update(path=marker)
-    assert holder is not None and holder.pid == os.getpid(), "a second updater would start mid-run"
+    assert holder is not None and holder.pid == os.getpid(), (
+        "a second updater would start mid-run"
+    )
     lock.release()
     assert not marker.exists()
 
@@ -185,15 +196,24 @@ def test_v2_marker_naming_our_pid_at_a_nearby_creation_time_is_a_killed_update(m
     Read as ours, the launch adopted a dead claim and silently skipped the tail the kill owed."""
     _claim_v2(marker, os.getpid(), ct_offset=-1.5)
 
-    assert read_live_update(path=marker) is None, "a dead update's claim reads as a live one"
+    assert read_live_update(path=marker) is None, (
+        "a dead update's claim reads as a live one"
+    )
     _claim_v2(marker, os.getpid(), ct_offset=-1.5)
     lock = UpdateLock(path=marker)
-    assert lock.acquire() is True and lock.acquired is True, "adopted a killed update's claim"
-    assert marker.read_text(encoding="utf-8-sig").splitlines()[2] == f"ct:{process_create_time():.3f}"
+    assert lock.acquire() is True and lock.acquired is True, (
+        "adopted a killed update's claim"
+    )
+    assert (
+        marker.read_text(encoding="utf-8-sig").splitlines()[2]
+        == f"ct:{process_create_time():.3f}"
+    )
     lock.release()
 
 
-def test_one_incarnation_rule_when_our_own_creation_time_is_unreadable(marker, monkeypatch):
+def test_one_incarnation_rule_when_our_own_creation_time_is_unreadable(
+    marker, monkeypatch
+):
     """Degraded (our creation time unreadable): we write no-ct claims, so a no-ct claim naming our
     pid is ours and a ct one is a previous incarnation. The marker reader said so while the
     holder-record reader answered "unprovable" and named the dead incarnation as the holder."""
@@ -201,11 +221,16 @@ def test_one_incarnation_rule_when_our_own_creation_time_is_unreadable(marker, m
 
     monkeypatch.setattr(update_lock, "_OWN_CT", {"pid": os.getpid(), "ct": None})
     now = int(time.time())
-    for text, ours in ((f"{os.getpid()}\n{now}\n", True), (f"{os.getpid()}\n{now}\nct:{now - 1}.000\n", False)):
+    for text, ours in (
+        (f"{os.getpid()}\n{now}\n", True),
+        (f"{os.getpid()}\n{now}\nct:{now - 1}.000\n", False),
+    ):
         marker.write_text(text, encoding="utf-8")
         parsed = update_lock._parse_marker(marker.read_bytes())
         assert parsed.owner_live() is ours
-        assert update_lock.incarnation_live(os.getpid(), parsed.create_time) is ours, text
+        assert update_lock.incarnation_live(os.getpid(), parsed.create_time) is ours, (
+            text
+        )
         assert update_lock._lock_holder(marker).held is not ours, text
 
 
@@ -249,7 +274,9 @@ def test_v2_live_owner_is_live_regardless_of_age(marker, other_pid):
     assert lock.acquire() is False
     assert lock.holder is not None and lock.holder.pid == other_pid
     assert read_live_update(path=marker) is not None
-    assert marker.read_bytes() == before, "a refused claimant never rewrites the owner's marker"
+    assert marker.read_bytes() == before, (
+        "a refused claimant never rewrites the owner's marker"
+    )
 
 
 def test_v2_marker_whose_pid_was_reused_is_reclaimed(marker, other_pid):
@@ -261,7 +288,9 @@ def test_v2_marker_whose_pid_was_reused_is_reclaimed(marker, other_pid):
     assert int(marker.read_text(encoding="utf-8-sig").splitlines()[0]) == os.getpid()
 
 
-def test_delegate_keeps_the_claim_live_after_the_partner_dies(marker, monkeypatch, other_pid):
+def test_delegate_keeps_the_claim_live_after_the_partner_dies(
+    marker, monkeypatch, other_pid
+):
     """Rule 6: `clawk update` adopting a hand-off claim names itself on line 4, restores
     lines 1-3 byte-identical on exit, and is what keeps the claim visible if the partner dies."""
     _claim_v2(marker, other_pid)
@@ -271,27 +300,50 @@ def test_delegate_keeps_the_claim_live_after_the_partner_dies(marker, monkeypatc
     lock = UpdateLock(path=marker)
     assert lock.acquire() is True and lock.acquired is False
     lines = marker.read_text(encoding="utf-8-sig").splitlines()
-    assert marker.read_bytes().startswith(base) and lines[3].startswith(f"delegate:{os.getpid()} ct:")
+    assert marker.read_bytes().startswith(base) and lines[3].startswith(
+        f"delegate:{os.getpid()} ct:"
+    )
 
     dead_partner = f"{DEAD_PID}\n{int(time.time())}\nct:1.000\n{lines[3]}\n"
     marker.write_text(dead_partner, encoding="utf-8", newline="")
     holder = read_live_update(path=marker)
-    assert holder is not None and holder.pid == os.getpid(), "the running delegate keeps the update visible"
+    assert holder is not None and holder.pid == os.getpid(), (
+        "the running delegate keeps the update visible"
+    )
     marker.write_bytes(base + f"{lines[3]}\n".encode())
     lock.release()
-    assert marker.read_bytes() == base, "the live partner gets its own claim back, byte-identical"
+    assert marker.read_bytes() == base, (
+        "the live partner gets its own claim back, byte-identical"
+    )
 
 
 @pytest.mark.parametrize(
     "body",
-    ["", "not-a-pid\n123\n", "\n\n", "12345", "{live}\n{now}.5\n", "1_0\n{now}\n", "{live}\nsoon\n"],
-    ids=["empty", "garbage-pid", "blank-lines", "no-start-time", "fractional-start", "underscore-pid",
-         "garbage-start"],
+    [
+        "",
+        "not-a-pid\n123\n",
+        "\n\n",
+        "12345",
+        "{live}\n{now}.5\n",
+        "1_0\n{now}\n",
+        "{live}\nsoon\n",
+    ],
+    ids=[
+        "empty",
+        "garbage-pid",
+        "blank-lines",
+        "no-start-time",
+        "fractional-start",
+        "underscore-pid",
+        "garbage-start",
+    ],
 )
 def test_malformed_markers_never_block_an_update(marker, body, other_pid):
     """Contract A2: line 1 and line 2 are integers or the marker is malformed, i.e. dead, in
     every reader (a fractional start time used to be live in Python and dead in the others)."""
-    marker.write_text(body.format(live=other_pid, now=int(time.time())), encoding="utf-8")
+    marker.write_text(
+        body.format(live=other_pid, now=int(time.time())), encoding="utf-8"
+    )
     old = time.time() - 60
     os.utime(marker, (old, old))  # past the empty-file grace (A3)
 
@@ -341,7 +393,9 @@ def test_claim_publishes_whole_and_reclaims_dead_writers_tmp_files(marker):
     lock = UpdateLock(path=marker)
     assert lock.acquire() is True
     assert marker.read_text(encoding="utf-8").startswith(f"{os.getpid()}\n")
-    leftovers = sorted(p.name for p in marker.parent.iterdir() if p.name.endswith(".tmp"))
+    leftovers = sorted(
+        p.name for p in marker.parent.iterdir() if p.name.endswith(".tmp")
+    )
     assert leftovers == [mine.name]
     lock.release()
 
@@ -363,7 +417,9 @@ def test_stale_tmp_under_our_own_pid_number_is_reclaimed(marker):
     assert fresh.exists()
 
 
-@pytest.mark.parametrize("owner", ["\u00b2", "\u2460"], ids=["superscript-two", "circled-one"])
+@pytest.mark.parametrize(
+    "owner", ["\u00b2", "\u2460"], ids=["superscript-two", "circled-one"]
+)
 def test_tmp_litter_with_a_digit_lookalike_pid_never_breaks_admission(marker, owner):
     """A sibling whose pid field is a Unicode digit lookalike is not a pid we can judge: it is
     left alone and the claim still lands (``str.isdigit`` accepts it, ``int`` refuses it)."""
@@ -406,10 +462,15 @@ def test_failed_exclusive_create_leaves_no_torn_claim(marker, monkeypatch):
     assert read_live_update(path=marker) is None
 
 
-@pytest.mark.platforms("posix")  # replacing a file someone holds open needs POSIX unlink
-def test_withdrawing_a_torn_claim_never_deletes_a_replacement(marker, monkeypatch, other_pid):
+@pytest.mark.platforms(
+    "posix"
+)  # replacing a file someone holds open needs POSIX unlink
+def test_withdrawing_a_torn_claim_never_deletes_a_replacement(
+    marker, monkeypatch, other_pid
+):
     """The withdrawal deletes only the inode it created: a claimant that reclaimed the torn
     marker and published its own in between keeps its claim."""
+
     def replace():
         marker.unlink()
         _claim_v2(marker, other_pid)
@@ -430,10 +491,14 @@ def test_unreadable_creation_time_gets_the_v1_ceiling(marker, other_pid, monkeyp
     fresh = marker.read_text(encoding="utf-8")
     monkeypatch.setattr(update_lock, "process_create_time", lambda pid=None: None)
     assert read_live_update(path=marker) is not None
-    _claim_v2(marker, other_pid, started_at=time.time() - UPDATE_MARKER_MAX_AGE_SECONDS - 300)
+    _claim_v2(
+        marker, other_pid, started_at=time.time() - UPDATE_MARKER_MAX_AGE_SECONDS - 300
+    )
     monkeypatch.undo()
     aged = marker.read_text(encoding="utf-8")
-    assert read_live_update(path=marker) is not None, "a matching creation time is live at any age"
+    assert read_live_update(path=marker) is not None, (
+        "a matching creation time is live at any age"
+    )
     monkeypatch.setattr(update_lock, "process_create_time", lambda pid=None: None)
     assert read_live_update(path=marker) is None and not marker.exists(), (fresh, aged)
 
@@ -484,8 +549,9 @@ def test_unwritable_marker_location_refuses_instead_of_running_unlocked(tmp_path
     assert "Cannot lock this install" in describe_holder(lock.holder)
 
 
-
-def test_an_unwritable_marker_location_says_why_the_update_needs_it_and_how_to_fix_it(tmp_path):
+def test_an_unwritable_marker_location_says_why_the_update_needs_it_and_how_to_fix_it(
+    tmp_path,
+):
     """Review P2 (5411135165): the refusal stays (the marker is what the Desktop gate, gateways and
     the other updaters read), so it must say what the path is for and how to make it writable."""
     blocker = tmp_path / "home"
@@ -497,6 +563,7 @@ def test_an_unwritable_marker_location_says_why_the_update_needs_it_and_how_to_f
     assert str(blocker) in message
     assert "Desktop app" in message and "other updaters" in message, message
     assert "read-only filesystem" in message, message
+
 
 _HOLD_CHECKOUT = """
 import sys, time
@@ -515,8 +582,17 @@ def test_checkout_lock_excludes_an_update_from_another_home(tmp_path):
     install = tmp_path / "checkout"
     install.mkdir()
     holder = subprocess.Popen(
-        [sys.executable, "-c", _HOLD_CHECKOUT, str(REPO_ROOT), str(install), str(tmp_path / "homeA" / "m")],
-        stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        [
+            sys.executable,
+            "-c",
+            _HOLD_CHECKOUT,
+            str(REPO_ROOT),
+            str(install),
+            str(tmp_path / "homeA" / "m"),
+        ],
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
     )
     try:
         assert holder.stdout.readline().strip() == "held"
@@ -535,7 +611,9 @@ def test_checkout_lock_excludes_an_update_from_another_home(tmp_path):
 
 
 @pytest.mark.platforms("posix")
-def test_an_unjudgeable_marker_never_admits_a_contender_past_a_held_checkout_lock(tmp_path, monkeypatch):
+def test_an_unjudgeable_marker_never_admits_a_contender_past_a_held_checkout_lock(
+    tmp_path, monkeypatch
+):
     """L5: read_live_update never raises, so a marker it cannot judge (any exception) reads as
     "no live update". That fails open on the marker only: the checkout kernel lock stays the
     guard, so update_in_progress still answers True and a contender's acquire is refused."""
@@ -545,8 +623,17 @@ def test_an_unjudgeable_marker_never_admits_a_contender_past_a_held_checkout_loc
     install.mkdir()
     marker_path = tmp_path / "marker"
     holder = subprocess.Popen(
-        [sys.executable, "-c", _HOLD_CHECKOUT, str(REPO_ROOT), str(install), str(tmp_path / "homeA" / "m")],
-        stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        [
+            sys.executable,
+            "-c",
+            _HOLD_CHECKOUT,
+            str(REPO_ROOT),
+            str(install),
+            str(tmp_path / "homeA" / "m"),
+        ],
+        stdout=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
     )
     try:
         assert holder.stdout.readline().strip() == "held"
@@ -557,7 +644,9 @@ def test_an_unjudgeable_marker_never_admits_a_contender_past_a_held_checkout_loc
 
         monkeypatch.setattr(update_lock, "_read_marker", unjudgeable)
         assert read_live_update(path=marker_path, install_root=install) is None
-        assert update_in_progress(install), "an unjudgeable marker hid a held checkout lock"
+        assert update_in_progress(install), (
+            "an unjudgeable marker hid a held checkout lock"
+        )
         lock = UpdateLock(path=marker_path, install_root=install)
         assert lock.acquire() is False, "a contender got past a held checkout lock"
     finally:
@@ -572,31 +661,57 @@ def test_checkout_lock_outlives_its_owner_while_an_inheriting_child_runs(tmp_pat
     install.mkdir()
     lock = UpdateLock(path=tmp_path / "marker", install_root=install)
     assert lock.acquire() is True
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
-                             pass_fds=checkout_lock_fds(install), stdin=subprocess.DEVNULL)
+    child = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)"],
+        pass_fds=checkout_lock_fds(install),
+        stdin=subprocess.DEVNULL,
+    )
     try:
         lock.release()
-        assert update_in_progress(install), "the owner's exit must not free a lock its child holds"
+        assert update_in_progress(install), (
+            "the owner's exit must not free a lock its child holds"
+        )
     finally:
         child.kill()
         child.wait()
     assert not update_in_progress(install)
-    assert checkout_lock_path(install).name == ".clawk-update.lock"  # no .git: a ZIP install
+    assert (
+        checkout_lock_path(install).name == ".clawk-update.lock"
+    )  # no .git: a ZIP install
 
 
-def test_git_checkout_lock_lives_in_the_common_git_dir_and_never_dirties_the_tree(tmp_path):
+def test_git_checkout_lock_lives_in_the_common_git_dir_and_never_dirties_the_tree(
+    tmp_path,
+):
     """A held lock must never show in `git status`: the updater's autostash would stash its own
     lock file in any tree whose .gitignore lacks it (fixtures, forks, a branch switch)."""
     install = tmp_path / "checkout"
     env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
     def git(*args, cwd=install):
-        return subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True,
-                              text=True, encoding="utf-8").stdout
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        ).stdout
 
     install.mkdir()
     git("init", "-q")
-    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "one")
+    git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "one",
+    )
     linked = tmp_path / "linked"
     git("worktree", "add", "-q", "--detach", str(linked))
     common = Path(os.path.normpath(install / ".git"))
@@ -607,7 +722,9 @@ def test_git_checkout_lock_lives_in_the_common_git_dir_and_never_dirties_the_tre
     assert lock.acquire() is True
     try:
         assert git("status", "--porcelain", "--untracked-files=all") == ""
-        assert update_in_progress(linked), "a linked worktree shares the repository's lock"
+        assert update_in_progress(linked), (
+            "a linked worktree shares the repository's lock"
+        )
     finally:
         lock.release()
 
@@ -631,7 +748,9 @@ class TestHandoffFromOrchestratingUpdater:
     HANDOFF_PID_ENV; a live holder matching it is our own orchestrator.
     """
 
-    def test_child_runs_under_the_parents_live_claim(self, marker, monkeypatch, other_pid):
+    def test_child_runs_under_the_parents_live_claim(
+        self, marker, monkeypatch, other_pid
+    ):
         # other_pid stands in for the live parent updater.
         _claim(marker, other_pid)
         monkeypatch.setenv(HANDOFF_PID_ENV, str(other_pid))
@@ -675,7 +794,9 @@ class TestHandoffFromOrchestratingUpdater:
         lock = UpdateLock(path=marker)
         assert lock.acquire() is True
         assert lock.acquired is True
-        assert int(marker.read_text(encoding="utf-8-sig").splitlines()[0]) == os.getpid()
+        assert (
+            int(marker.read_text(encoding="utf-8-sig").splitlines()[0]) == os.getpid()
+        )
 
 
 class TestAncestryHandoff:
@@ -706,7 +827,9 @@ class TestAncestryHandoff:
         assert marker.exists(), "the parent still needs its marker after our stage ends"
 
     @pytest.mark.platforms("any")
-    def test_grandchild_adopts_orchestrator_marker_without_psutil(self, marker, tmp_path):
+    def test_grandchild_adopts_orchestrator_marker_without_psutil(
+        self, marker, tmp_path
+    ):
         """Regression: the desktop hand-off's grandchild refused its own orchestrator.
 
         The posix shim (grandparent) holds the marker and spawns ``clawk update``
@@ -755,15 +878,21 @@ class TestAncestryHandoff:
 
         result = subprocess.run(
             [sys.executable, "-I", "-B", "-c", middle],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
             check=False,
         )
         assert result.returncode == 0, result.stderr
         assert "ADOPTED" in result.stdout
-        assert marker.exists(), "the orchestrator still needs its marker after the leaf ends"
+        assert marker.exists(), (
+            "the orchestrator still needs its marker after the leaf ends"
+        )
 
     @pytest.mark.platforms("any")
-    def test_unrelated_live_holder_is_still_refused_under_stdlib_walk(self, marker, tmp_path):
+    def test_unrelated_live_holder_is_still_refused_under_stdlib_walk(
+        self, marker, tmp_path
+    ):
         """The stdlib fallback must not widen the lock: a foreign pid stays foreign.
 
         The marker owner is a live *sibling* of the leaf (a sleeper spawned by
@@ -776,9 +905,13 @@ class TestAncestryHandoff:
         import time as time_mod
         from textwrap import dedent
 
-        sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+        sleeper = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(300)"]
+        )
         try:
-            marker.write_text(f"{sleeper.pid}\n{int(time_mod.time())}\n", encoding="utf-8")
+            marker.write_text(
+                f"{sleeper.pid}\n{int(time_mod.time())}\n", encoding="utf-8"
+            )
             assert read_live_update(path=marker) is not None
 
             leaf = dedent(
@@ -793,7 +926,9 @@ class TestAncestryHandoff:
             ) % {"root": str(REPO_ROOT), "marker": str(marker)}
             result = subprocess.run(
                 [sys.executable, "-I", "-S", "-B", "-c", leaf],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
                 check=False,
             )
             assert result.returncode == 0, result.stderr
@@ -925,7 +1060,9 @@ class TestAncestryUnderUnreadableProcesses:
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes any file")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes any file"
+)
 def test_unwritable_lock_file_still_locks_the_checkout(tmp_path):
     """Contract A5: a `sudo clawk update` leaves the lock file root-owned; later updates take the
     kernel lock on a read-only fd instead of refusing forever, and still exclude each other."""
@@ -935,18 +1072,29 @@ def test_unwritable_lock_file_still_locks_the_checkout(tmp_path):
     lock_file.write_text("0\n0\n")
     lock_file.chmod(0o444)
 
-    first = UpdateLock(path=tmp_path / "a" / ".clawk-update-in-progress", install_root=root)
+    first = UpdateLock(
+        path=tmp_path / "a" / ".clawk-update-in-progress", install_root=root
+    )
     assert first.acquire() is True, first.holder
     second = subprocess.run(
-        [sys.executable, "-c",
-         "import sys; from clawk_cli.update_lock import UpdateLock; "
-         "sys.exit(0 if UpdateLock(path=__import__('pathlib').Path(sys.argv[1]), install_root=sys.argv[2]).acquire() else 3)",
-         str(tmp_path / "b" / ".clawk-update-in-progress"), str(root)],
-        cwd=REPO_ROOT, env={**os.environ, "PYTHONPATH": str(REPO_ROOT)}, stdin=subprocess.DEVNULL, timeout=60,
+        [
+            sys.executable,
+            "-c",
+            "import sys; from clawk_cli.update_lock import UpdateLock; "
+            "sys.exit(0 if UpdateLock(path=__import__('pathlib').Path(sys.argv[1]), install_root=sys.argv[2]).acquire() else 3)",
+            str(tmp_path / "b" / ".clawk-update-in-progress"),
+            str(root),
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        stdin=subprocess.DEVNULL,
+        timeout=60,
         check=False,
     )
     first.release()
-    assert second.returncode == 3, "a second update ran while the read-only-locked checkout was held"
+    assert second.returncode == 3, (
+        "a second update ran while the read-only-locked checkout was held"
+    )
 
 
 @pytest.mark.platforms("windows")
@@ -958,7 +1106,9 @@ def test_read_only_lock_file_is_refused_on_windows(tmp_path):
     root.mkdir()
     lock_file = checkout_lock_path(root)
     lock_file.write_bytes(b"0\n0\n")
-    lock_file.chmod(0o444)  # FILE_ATTRIBUTE_READONLY: O_RDWR is denied, the read-only open works
+    lock_file.chmod(
+        0o444
+    )  # FILE_ATTRIBUTE_READONLY: O_RDWR is denied, the read-only open works
     marker = tmp_path / "home" / ".clawk-update-in-progress"
     try:
         lock = UpdateLock(path=marker, install_root=root)
@@ -969,8 +1119,12 @@ def test_read_only_lock_file_is_refused_on_windows(tmp_path):
         lock_file.chmod(0o666)
 
 
-@pytest.mark.parametrize("link", [pytest.param("symlink", marks=pytest.mark.platforms("posix")), "link"])
-def test_checkout_lock_never_writes_through_a_link_to_a_file_outside_the_install(tmp_path, link):
+@pytest.mark.parametrize(
+    "link", [pytest.param("symlink", marks=pytest.mark.platforms("posix")), "link"]
+)
+def test_checkout_lock_never_writes_through_a_link_to_a_file_outside_the_install(
+    tmp_path, link
+):
     """The holder record is written into the lock file itself: a symlink or hard link planted at
     its name is refused, never followed into truncating the file it points at."""
     root = tmp_path / "install"
@@ -979,7 +1133,9 @@ def test_checkout_lock_never_writes_through_a_link_to_a_file_outside_the_install
     outside.write_bytes(b"PRECIOUS USER DATA")
     getattr(os, link)(outside, checkout_lock_path(root))
 
-    lock = UpdateLock(path=tmp_path / "home" / ".clawk-update-in-progress", install_root=root)
+    lock = UpdateLock(
+        path=tmp_path / "home" / ".clawk-update-in-progress", install_root=root
+    )
     assert lock.acquire() is False
     assert lock.holder is not None and lock.holder.reason
     assert outside.read_bytes() == b"PRECIOUS USER DATA"
@@ -998,8 +1154,11 @@ def test_whole_second_creation_time_in_our_own_second_is_us(marker):
     marker.write_text(
         f"{parent}\n{int(time.time())}\nct:{math.floor(process_create_time(parent))}.000\n"
         f"delegate:{os.getpid()} ct:{math.floor(own)}.000\n",
-        encoding="utf-8", newline="",
+        encoding="utf-8",
+        newline="",
     )
     assert update_lock.judge_marker(marker.read_bytes())[0] == "ours"
     # A whole second from an EARLIER second is a killed update's pid reused: still not us.
-    assert update_lock.incarnation_live(os.getpid(), float(math.floor(own)) - 1) is False
+    assert (
+        update_lock.incarnation_live(os.getpid(), float(math.floor(own)) - 1) is False
+    )

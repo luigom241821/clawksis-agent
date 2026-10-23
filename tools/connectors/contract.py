@@ -40,11 +40,14 @@ RESOLVED_STATES = frozenset({TargetState.connected, TargetState.skipped})
 # reason. Counting it as open held the model's turn until the deadline while nobody clicked. Try
 # again still works while another row keeps the operation open, and the failed row keeps its state
 # and reason when the operation settles.
-_RESOLVED_BY_KIND = {kind: RESOLVED_STATES | {TargetState.failed} for kind in ("plugin", "skill")}
+_RESOLVED_BY_KIND = {
+    kind: RESOLVED_STATES | {TargetState.failed} for kind in ("plugin", "skill")
+}
 
 
 def resolves(kind: str, state: TargetState) -> bool:
     return state in _RESOLVED_BY_KIND.get(kind, RESOLVED_STATES)
+
 
 _S, _A = TargetState, Actor
 
@@ -52,14 +55,29 @@ _S, _A = TargetState, Actor
 # backend: the gateway's account list for a managed target, the install / enable / OAuth worker for
 # an MCP one. The card can only skip a target, or ask for a failed one to be run again.
 TRANSITIONS: dict[tuple[str, TargetState], dict[TargetState, Actor]] = {
-    ("connector", _S.pending): {_S.initiated: _A.backend_watcher, _S.failed: _A.backend_watcher, _S.skipped: _A.user},
+    ("connector", _S.pending): {
+        _S.initiated: _A.backend_watcher,
+        _S.failed: _A.backend_watcher,
+        _S.skipped: _A.user,
+    },
     ("connector", _S.initiated): {
-        _S.connected: _A.backend_watcher, _S.failed: _A.backend_watcher, _S.expired: _A.clock, _S.skipped: _A.user,
+        _S.connected: _A.backend_watcher,
+        _S.failed: _A.backend_watcher,
+        _S.expired: _A.clock,
+        _S.skipped: _A.user,
     },
     ("connector", _S.failed): {_S.initiated: _A.user, _S.skipped: _A.user},
     ("connector", _S.expired): {_S.initiated: _A.user, _S.skipped: _A.user},
-    ("mcp", _S.pending): {_S.initiated: _A.backend_watcher, _S.failed: _A.backend_watcher, _S.skipped: _A.user},
-    ("mcp", _S.initiated): {_S.connected: _A.backend_watcher, _S.failed: _A.backend_watcher, _S.skipped: _A.user},
+    ("mcp", _S.pending): {
+        _S.initiated: _A.backend_watcher,
+        _S.failed: _A.backend_watcher,
+        _S.skipped: _A.user,
+    },
+    ("mcp", _S.initiated): {
+        _S.connected: _A.backend_watcher,
+        _S.failed: _A.backend_watcher,
+        _S.skipped: _A.user,
+    },
     ("mcp", _S.failed): {_S.initiated: _A.user, _S.skipped: _A.user},
 }
 # ``manage_catalog`` rows install like an MCP entry: approve starts the host's install, the install

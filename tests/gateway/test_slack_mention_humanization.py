@@ -23,6 +23,7 @@ import pytest
 # Mock slack-bolt if not installed (same pattern as test_slack_mention.py)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_slack_mock():
     if "slack_bolt" in sys.modules and hasattr(sys.modules["slack_bolt"], "__file__"):
         return
@@ -39,8 +40,10 @@ def _ensure_slack_mock():
         ("slack_bolt.async_app", slack_bolt.async_app),
         ("slack_bolt.adapter", slack_bolt.adapter),
         ("slack_bolt.adapter.socket_mode", slack_bolt.adapter.socket_mode),
-        ("slack_bolt.adapter.socket_mode.async_handler",
-         slack_bolt.adapter.socket_mode.async_handler),
+        (
+            "slack_bolt.adapter.socket_mode.async_handler",
+            slack_bolt.adapter.socket_mode.async_handler,
+        ),
         ("slack_sdk", slack_sdk),
         ("slack_sdk.web", slack_sdk.web),
         ("slack_sdk.web.async_client", slack_sdk.web.async_client),
@@ -52,6 +55,7 @@ def _ensure_slack_mock():
 _ensure_slack_mock()
 
 import plugins.platforms.slack.adapter as _slack_mod
+
 _slack_mod.SLACK_AVAILABLE = True
 
 from plugins.platforms.slack.adapter import SlackAdapter
@@ -126,9 +130,7 @@ async def test_named_group_reference_does_not_reinject_the_raw_id():
 
 @pytest.mark.asyncio
 async def test_one_odd_name_does_not_break_the_other_mentions():
-    adapter = _adapter_with_names(
-        {"U07DEV": r"dev\ops", "U07ALICE": "Alice Example"}
-    )
+    adapter = _adapter_with_names({"U07DEV": r"dev\ops", "U07ALICE": "Alice Example"})
     out = await adapter._humanize_user_mentions(
         "<@U07DEV> and <@U07ALICE> ship it", chat_id="C1"
     )
@@ -137,11 +139,10 @@ async def test_one_odd_name_does_not_break_the_other_mentions():
 
 # ----- _build_identity_prompt --------------------------------------------------
 
+
 def test_identity_prompt_names_the_bot():
     adapter = _make_adapter()
     adapter._bot_display_name = "TestBot"
     adapter._team_bot_names = {}
     prompt = adapter._build_identity_prompt(team_id="T1")
     assert "@TestBot" in prompt
-
-

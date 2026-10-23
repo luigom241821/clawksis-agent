@@ -30,9 +30,9 @@ class TestMessageDeduplicatorTTL:
 
         # Fast-forward time past TTL
         dedup._seen["msg-1"] = time.time() - 10  # 10s ago, TTL is 5s
-        assert dedup.is_duplicate("msg-1") is False, \
+        assert dedup.is_duplicate("msg-1") is False, (
             "Expired entry should not be treated as duplicate"
-
+        )
 
     def test_contains_expires_stale_message_without_refreshing_it(self):
         dedup = MessageDeduplicator(ttl_seconds=5)
@@ -56,5 +56,3 @@ class TestMessageDeduplicatorTTL:
         assert len(dedup._seen) == 4
         assert "old-0" not in dedup._seen
         assert "new-0" in dedup._seen
-
-

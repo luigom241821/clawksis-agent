@@ -26,31 +26,37 @@ __all__ = [
 @dataclass(frozen=True)
 class CommandContext:
     """Surface-provided inputs for a shared command executor."""
-    surface: str = "cli"                # "cli" | "gateway" | "tui" — decoration only
-    args: str = ""                      # raw argument string after the command word
-    options: Mapping[str, Any] = field(default_factory=dict)  # surface params (page_size, ...)
-    config_get: Callable[[str, Any], Any] | None = None       # optional config accessor
+
+    surface: str = "cli"  # "cli" | "gateway" | "tui" — decoration only
+    args: str = ""  # raw argument string after the command word
+    options: Mapping[str, Any] = field(
+        default_factory=dict
+    )  # surface params (page_size, ...)
+    config_get: Callable[[str, Any], Any] | None = None  # optional config accessor
 
 
 @dataclass(frozen=True)
 class CommandReply:
     """Canonical result of a shared executor: surface-independent ``text`` plus the structured
     ``data`` it derived so a surface can re-render with its own decoration."""
+
     text: str
     data: Mapping[str, Any] = field(default_factory=dict)
-    format: str = "plain"               # "plain" | "markdown" (hint, not a contract)
+    format: str = "plain"  # "plain" | "markdown" (hint, not a contract)
 
 
 # Executors — pure formatters, no agent/session mutation.
 def _exec_version(ctx: CommandContext) -> CommandReply:
     """Core /version text — the banner version label."""
     from clawk_cli.banner import format_banner_version_label
+
     return CommandReply(format_banner_version_label())
 
 
 def _exec_egress(ctx: CommandContext) -> CommandReply:
     """Core /egress text — Docker egress proxy status."""
     from clawk_cli.proxy_cli import format_status_text
+
     return CommandReply(format_status_text())
 
 
@@ -62,23 +68,38 @@ def _exec_profile(ctx: CommandContext) -> CommandReply:
     """
     from clawk_cli.profiles import get_active_profile_name
     from clawk_constants import display_clawk_home
-    profile_name = str(ctx.options.get("profile_name") or "").strip() or get_active_profile_name()
-    home_display = str(ctx.options.get("home_display") or "").strip() or display_clawk_home()
+
+    profile_name = (
+        str(ctx.options.get("profile_name") or "").strip() or get_active_profile_name()
+    )
+    home_display = (
+        str(ctx.options.get("home_display") or "").strip() or display_clawk_home()
+    )
     # Presentation-only display name (profile.yaml); `data.profile` stays the canonical id.
     label = profile_name
     try:
-        from clawk_cli.profiles import format_profile_label, get_profile_dir, read_profile_meta
-        display = read_profile_meta(get_profile_dir(profile_name)).get("display_name", "")
+        from clawk_cli.profiles import (
+            format_profile_label,
+            get_profile_dir,
+            read_profile_meta,
+        )
+
+        display = read_profile_meta(get_profile_dir(profile_name)).get(
+            "display_name", ""
+        )
         label = format_profile_label(profile_name, display)
     except Exception:
         pass
-    return CommandReply(t("gateway.profile.plain", profile=label, home=home_display),
-                        data={"profile": profile_name, "home": home_display})
+    return CommandReply(
+        t("gateway.profile.plain", profile=label, home=home_display),
+        data={"profile": profile_name, "home": home_display},
+    )
 
 
 def _exec_autoprune(ctx: CommandContext) -> CommandReply:
     """Core /autoprune text — record the auto-prune decision or show its state."""
     from clawk_cli.prune_advisor import run_command
+
     return CommandReply(run_command(ctx.args))
 
 
@@ -87,16 +108,30 @@ def _exec_bundles(ctx: CommandContext) -> CommandReply:
     try:
         from agent.skill_bundles import _bundles_dir, list_bundles
     except Exception as exc:  # pragma: no cover - env-specific
-        return CommandReply(t("gateway.bundles.unavailable", error=exc), data={"error": str(exc)})
+        return CommandReply(
+            t("gateway.bundles.unavailable", error=exc), data={"error": str(exc)}
+        )
     bundles = list_bundles()
     bundles_dir = str(_bundles_dir())
     if not bundles:
-        return CommandReply(t("gateway.bundles.none_plain", dir=bundles_dir), data={"bundles": [], "dir": bundles_dir})
+        return CommandReply(
+            t("gateway.bundles.none_plain", dir=bundles_dir),
+            data={"bundles": [], "dir": bundles_dir},
+        )
     lines = [t("gateway.bundles.header_plain", count=len(bundles))]
     for info in bundles:
         skills = info.get("skills", [])
-        desc = info.get("description") or t("gateway.bundles.default_desc", count=len(skills))
-        lines.append(t("gateway.bundles.item_plain", slug=info["slug"], desc=desc, count=len(skills)))
+        desc = info.get("description") or t(
+            "gateway.bundles.default_desc", count=len(skills)
+        )
+        lines.append(
+            t(
+                "gateway.bundles.item_plain",
+                slug=info["slug"],
+                desc=desc,
+                count=len(skills),
+            )
+        )
         lines.extend(f"    · {s}" for s in skills)
     lines.append(t("gateway.bundles.invoke_hint_plain"))
     return CommandReply("\n".join(lines), data={"bundles": bundles, "dir": bundles_dir})
@@ -106,6 +141,7 @@ def _skill_commands() -> dict:
     """Registered skill commands, or ``{}`` when the skill subsystem is unavailable."""
     try:
         from agent.skill_commands import get_skill_commands
+
         return get_skill_commands() or {}
     except Exception:
         return {}
@@ -114,6 +150,7 @@ def _skill_commands() -> dict:
 def _exec_help(ctx: CommandContext) -> CommandReply:
     """Core gateway /help body (pre platform mention decoration)."""
     from clawk_cli.commands import gateway_help_lines
+
     # ``allowed_commands`` (gateway, non-admin caller): only the commands the slash-access
     # policy lets this user run; skill commands are hidden too since the gate refuses them.
     allowed = ctx.options.get("allowed_commands")
@@ -122,11 +159,17 @@ def _exec_help(ctx: CommandContext) -> CommandReply:
     try:
         if skill_cmds:
             lines.append(t("gateway.help.skill_header", count=len(skill_cmds)))
-            sorted_cmds = sorted(skill_cmds)  # first 10, then point to /commands for the rest
-            lines.extend(f"`{cmd}` — {skill_cmds[cmd]['description']}"
-                         for cmd in sorted_cmds[:10])
+            sorted_cmds = sorted(
+                skill_cmds
+            )  # first 10, then point to /commands for the rest
+            lines.extend(
+                f"`{cmd}` — {skill_cmds[cmd]['description']}"
+                for cmd in sorted_cmds[:10]
+            )
             if len(sorted_cmds) > 10:
-                lines.append(t("gateway.help.more_use_commands", count=len(sorted_cmds) - 10))
+                lines.append(
+                    t("gateway.help.more_use_commands", count=len(sorted_cmds) - 10)
+                )
     except Exception:
         pass
     return CommandReply("\n".join(lines), format="markdown")
@@ -138,6 +181,7 @@ def _exec_commands(ctx: CommandContext) -> CommandReply:
     ``ctx.options["page_size"]`` is a surface parameter (Telegram uses 15, everything else 20).
     """
     from clawk_cli.commands import gateway_help_lines
+
     try:
         requested_page = int((ctx.args or "").strip() or 1)
     except ValueError:
@@ -150,13 +194,24 @@ def _exec_commands(ctx: CommandContext) -> CommandReply:
         if skill_cmds:
             entries.extend(["", t("gateway.commands.skill_header")])
             for cmd in sorted(skill_cmds):
-                desc = skill_cmds[cmd].get("description", "").strip() or t("gateway.commands.default_desc")
+                desc = skill_cmds[cmd].get("description", "").strip() or t(
+                    "gateway.commands.default_desc"
+                )
                 entries.append(f"`{cmd}` — {desc}")
         # Skills kept off the menu because a built-in owns the name (agent.skill_commands guard).
         from agent.skill_commands import skill_command_collision_note
         from tools.skills_tool import find_all_skills
-        entries.extend(f"⚠ {note}" for note in filter(None, map(
-            skill_command_collision_note, sorted(s["name"] for s in find_all_skills()))))
+
+        entries.extend(
+            f"⚠ {note}"
+            for note in filter(
+                None,
+                map(
+                    skill_command_collision_note,
+                    sorted(s["name"] for s in find_all_skills()),
+                ),
+            )
+        )
     except Exception:
         pass
 
@@ -170,14 +225,29 @@ def _exec_commands(ctx: CommandContext) -> CommandReply:
     total_pages = max(1, (len(entries) + page_size - 1) // page_size)
     page = max(1, min(requested_page, total_pages))
     start = (page - 1) * page_size
-    lines = [t("gateway.commands.header", total=len(entries), page=page, total_pages=total_pages),
-             "", *entries[start:start + page_size]]
+    lines = [
+        t(
+            "gateway.commands.header",
+            total=len(entries),
+            page=page,
+            total_pages=total_pages,
+        ),
+        "",
+        *entries[start : start + page_size],
+    ]
     if total_pages > 1:
-        nav_parts = ([t("gateway.commands.nav_prev", page=page - 1)] if page > 1 else []) + (
-            [t("gateway.commands.nav_next", page=page + 1)] if page < total_pages else [])
+        nav_parts = (
+            [t("gateway.commands.nav_prev", page=page - 1)] if page > 1 else []
+        ) + (
+            [t("gateway.commands.nav_next", page=page + 1)]
+            if page < total_pages
+            else []
+        )
         lines.extend(["", " | ".join(nav_parts)])
     if page != requested_page:
-        lines.append(t("gateway.commands.out_of_range", requested=requested_page, page=page))
+        lines.append(
+            t("gateway.commands.out_of_range", requested=requested_page, page=page)
+        )
     return CommandReply("\n".join(lines), format="markdown")
 
 
@@ -188,7 +258,8 @@ EXECUTORS: dict[str, Callable[[CommandContext], CommandReply]] = {
     "bundles": _exec_bundles,
     "autoprune": _exec_autoprune,
     "gateway_help": _exec_help,
-    "gateway_commands": _exec_commands}
+    "gateway_commands": _exec_commands,
+}
 
 
 def resolve_executor(cmd_def: Any) -> Callable[[CommandContext], CommandReply] | None:
@@ -205,6 +276,7 @@ def run_execute(cmd_def: Any, ctx: CommandContext) -> CommandReply | None:
 def execute_command(name: str, ctx: CommandContext) -> CommandReply:
     """Run the shared executor for ``name``; ``LookupError`` when unknown or not migrated."""
     from clawk_cli.commands import resolve_command
+
     cmd_def = resolve_command(name)
     reply = run_execute(cmd_def, ctx) if cmd_def is not None else None
     if reply is None:

@@ -21,14 +21,24 @@ _CLASH_NO_PROXY = "127.0.0.1,localhost,::1,[::1]"
 
 @pytest.fixture
 def clash_env(monkeypatch):
-    for key in ("NO_PROXY", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-                "http_proxy", "https_proxy", "all_proxy"):
+    for key in (
+        "NO_PROXY",
+        "no_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("NO_PROXY", _CLASH_NO_PROXY)
     monkeypatch.setenv("no_proxy", _CLASH_NO_PROXY)
 
 
-def test_run_probes_sanitizes_env_before_any_worker_builds_a_client(clash_env, monkeypatch):
+def test_run_probes_sanitizes_env_before_any_worker_builds_a_client(
+    clash_env, monkeypatch
+):
     import httpx
 
     def probe_building_a_bare_client():

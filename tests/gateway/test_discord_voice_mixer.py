@@ -21,7 +21,9 @@ np = pytest.importorskip("numpy")
 # same way the adapter does.
 _DISCORD_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "plugins", "platforms", "discord",
+    "plugins",
+    "platforms",
+    "discord",
 )
 if _DISCORD_DIR not in sys.path:
     sys.path.insert(0, _DISCORD_DIR)
@@ -33,8 +35,8 @@ import voice_mixer as vm
 # Pure mixer unit tests
 # =====================================================================
 
-class TestVoiceMixerCore:
 
+class TestVoiceMixerCore:
     def test_empty_mixer_returns_silence_frames(self):
         mx = vm.VoiceMixer()
         for _ in range(5):
@@ -51,8 +53,10 @@ class TestVoiceMixerCore:
         amb = vm.synth_ambient_pcm(seconds=0.5)
         assert len(amb) % vm.FRAME_SIZE == 0  # frame-aligned for seamless loop
         mx.set_ambient(amb)
-        peaks = [int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
-                 for _ in range(100)]  # 2s >> 0.5s loop
+        peaks = [
+            int(np.max(np.abs(np.frombuffer(mx.read(), dtype=np.int16))))
+            for _ in range(100)
+        ]  # 2s >> 0.5s loop
         # Produces audio after the fade-in and stays under the configured gain.
         assert any(p > 0 for p in peaks[10:])
         assert max(peaks) < int(32767 * 0.5)
@@ -62,9 +66,11 @@ class TestVoiceMixerCore:
 # Adapter integration
 # =====================================================================
 
+
 def _make_adapter(fx_cfg=None):
     from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.config import Platform, PlatformConfig
+
     config = PlatformConfig(enabled=True, extra={})
     config.token = "fake-token"
     adapter = object.__new__(DiscordAdapter)
@@ -80,14 +86,21 @@ def _make_adapter(fx_cfg=None):
     adapter._voice_listen_tasks = {}
     adapter._voice_mixers = {}
     adapter._ambient_pcm_cache = None
-    adapter._voice_fx_cfg = fx_cfg if fx_cfg is not None else {
-        "enabled": True, "ambient_enabled": True, "ambient_path": "",
-        "ambient_gain": 0.18, "duck_gain": 0.06, "speech_gain": 1.0,
-        "ack_enabled": True, "ack_phrases": ["One moment."],
-    }
+    adapter._voice_fx_cfg = (
+        fx_cfg
+        if fx_cfg is not None
+        else {
+            "enabled": True,
+            "ambient_enabled": True,
+            "ambient_path": "",
+            "ambient_gain": 0.18,
+            "duck_gain": 0.06,
+            "speech_gain": 1.0,
+            "ack_enabled": True,
+            "ack_phrases": ["One moment."],
+        }
+    )
     return adapter
-
-
 
 
 class TestPlayInVoiceChannelMixerPath:
@@ -132,7 +145,6 @@ class TestLeadSilence:
         adapter = _make_adapter()  # default cfg has no lead_silence_ms
         assert adapter._lead_silence_bytes() == b""
 
-
     def test_bytes_length_matches_ms(self):
         adapter = _make_adapter({"lead_silence_ms": 200})
         lead = adapter._lead_silence_bytes()
@@ -146,5 +158,3 @@ class TestPlayAckInVoice:
         adapter = _make_adapter({"ack_enabled": False})
         adapter._voice_mixers[111] = MagicMock()
         assert await adapter.play_ack_in_voice(111) is False
-
-

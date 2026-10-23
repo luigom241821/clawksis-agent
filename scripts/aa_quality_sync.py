@@ -53,8 +53,11 @@ def fetch_aa_models(api_key: str) -> dict[str, dict]:
 def main() -> int:
     api_key = os.environ.get("AA_API_KEY", "").strip()
     if not api_key:
-        print("AA_API_KEY not set — create a free key at "
-              "https://artificialanalysis.ai and export it.", file=sys.stderr)
+        print(
+            "AA_API_KEY not set — create a free key at "
+            "https://artificialanalysis.ai and export it.",
+            file=sys.stderr,
+        )
         return 2
 
     catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8-sig"))
@@ -67,14 +70,19 @@ def main() -> int:
         current = model.get("quality", 0)
         slug = AA_SLUG_BY_ENTRY.get(entry_id)
         if not slug:
-            print(f"{entry_id:24s} {current:>9d} {'—':>9s}  editorial only (no AA mapping)")
+            print(
+                f"{entry_id:24s} {current:>9d} {'—':>9s}  editorial only (no AA mapping)"
+            )
             continue
         hit = aa.get(slug)
         if hit is None:
-            print(f"{entry_id:24s} {current:>9d} {'—':>9s}  not in AA data (slug {slug!r})")
+            print(
+                f"{entry_id:24s} {current:>9d} {'—':>9s}  not in AA data (slug {slug!r})"
+            )
             continue
         index = (hit.get("evaluations") or {}).get(
-            "artificial_analysis_intelligence_index")
+            "artificial_analysis_intelligence_index"
+        )
         if index is None:
             print(f"{entry_id:24s} {current:>9d} {'—':>9s}  AA row lacks the index")
             continue
@@ -82,11 +90,12 @@ def main() -> int:
         marker = "" if proposed == current else "  <-- proposes change"
         print(f"{entry_id:24s} {current:>9d} {proposed:>9d}{marker}")
 
-    print("\nReview against the decision table before editing: a quality "
-          "change that flips cells in tests/clawk_cli/"
-          "test_local_recommendation.py is the actual decision being made.")
-    print("Attribution: scores by Artificial Analysis "
-          "(https://artificialanalysis.ai).")
+    print(
+        "\nReview against the decision table before editing: a quality "
+        "change that flips cells in tests/clawk_cli/"
+        "test_local_recommendation.py is the actual decision being made."
+    )
+    print("Attribution: scores by Artificial Analysis (https://artificialanalysis.ai).")
     return 0
 
 

@@ -27,7 +27,6 @@ def runner_with_home(tmp_path, monkeypatch):
 
 
 class TestStuckLoopDetection:
-
     def test_increment_creates_file(self, runner_with_home):
         runner, home = runner_with_home
         runner._increment_restart_failure_counts({"session:a", "session:b"})
@@ -36,7 +35,6 @@ class TestStuckLoopDetection:
         counts = json.loads(path.read_text())
         assert counts["session:a"] == 1
         assert counts["session:b"] == 1
-
 
     def test_suspend_at_threshold(self, runner_with_home):
         runner, _home = runner_with_home
@@ -68,11 +66,14 @@ class TestStuckLoopDetection:
         assert suspended == 0
         assert mock_entry.suspended is False
 
-    def test_concurrent_clears_do_not_resurrect_each_others_counter(self, runner_with_home, monkeypatch):
+    def test_concurrent_clears_do_not_resurrect_each_others_counter(
+        self, runner_with_home, monkeypatch
+    ):
         """Two sessions completing at once each clear their counter; neither may rewrite the other's
         stale snapshot (race audit lostupdate-6: a resurrected counter can later auto-suspend a healthy session)."""
         import gateway.stuck_loop_counts as counts_module
         import utils
+
         runner, home = runner_with_home
         path = home / runner._STUCK_LOOP_FILE
         counts_lock = ContentionObservedLock()
@@ -98,8 +99,10 @@ class TestStuckLoopDetection:
                 first_write.set()
                 # Unserialized clears let the other session read the not-yet-rewritten file here;
                 # serialized ones are seen blocking on the counters lock instead.
-                wait_until(lambda: second_read.is_set() or counts_lock.contended.is_set(),
-                           what="the other clear read the file or blocked on the counters lock")
+                wait_until(
+                    lambda: second_read.is_set() or counts_lock.contended.is_set(),
+                    what="the other clear read the file or blocked on the counters lock",
+                )
             return real_write(target, data, **kwargs)
 
         monkeypatch.setattr(utils, "atomic_json_write", parked_write)

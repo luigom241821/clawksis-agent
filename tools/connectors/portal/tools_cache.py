@@ -11,7 +11,11 @@ from typing import Callable, Literal, Protocol
 from pydantic import ValidationError
 
 from clawk_constants import get_clawk_home
-from tools.connectors.gateway.errors import GatewayAuthError, GatewayUnavailable, ToolGatewayError
+from tools.connectors.gateway.errors import (
+    GatewayAuthError,
+    GatewayUnavailable,
+    ToolGatewayError,
+)
 from tools.connectors.portal.client import NotModified, validate_slug
 from tools.connectors.portal.errors import PortalToolsUnavailable
 from tools.connectors.portal.wire import ConnectorTool, ConnectorToolsListing
@@ -23,7 +27,9 @@ class ToolsClient(Protocol):
 
     def authorization_token(self) -> str | None: ...
 
-    def tools(self, slug: str, *, if_none_match: str | None = None) -> ConnectorToolsListing | NotModified: ...
+    def tools(
+        self, slug: str, *, if_none_match: str | None = None
+    ) -> ConnectorToolsListing | NotModified: ...
 
 
 TTL_SECONDS = 24 * 60 * 60
@@ -59,7 +65,14 @@ def _member_key(token: str | None) -> str | None:
 
 def _cache_path(origin: str, member_key: str, slug: str):
     origin_key = hashlib.sha256(origin.encode("utf-8")).hexdigest()[:16]
-    return get_clawk_home() / "cache" / "connectors" / origin_key / member_key / f"{slug}.json"
+    return (
+        get_clawk_home()
+        / "cache"
+        / "connectors"
+        / origin_key
+        / member_key
+        / f"{slug}.json"
+    )
 
 
 def _cached(path) -> ToolsRead | None:
@@ -106,7 +119,9 @@ def read_tools(
     if member_key is None:
         listing = client.tools(slug)
         if isinstance(listing, NotModified):
-            raise PortalToolsUnavailable("portal tools unavailable", code="INVALID_RESPONSE")
+            raise PortalToolsUnavailable(
+                "portal tools unavailable", code="INVALID_RESPONSE"
+            )
         return ToolsRead(
             connector=listing.connector,
             toolkit_version=listing.toolkit_version,
@@ -120,10 +135,17 @@ def read_tools(
     cached = _cached(path)
     fetched_at = now()
     age = fetched_at - cached.fetched_at if cached is not None else None
-    if cached is not None and not refresh and age is not None and 0 <= age < TTL_SECONDS:
+    if (
+        cached is not None
+        and not refresh
+        and age is not None
+        and 0 <= age < TTL_SECONDS
+    ):
         return cached
     try:
-        listing = client.tools(slug, if_none_match=cached.etag if cached is not None else None)
+        listing = client.tools(
+            slug, if_none_match=cached.etag if cached is not None else None
+        )
     except GatewayUnavailable:
         path.unlink(missing_ok=True)
         raise
@@ -135,14 +157,21 @@ def read_tools(
         return replace(cached, stale=True)
     if isinstance(listing, NotModified):
         if cached is None:
-            raise PortalToolsUnavailable("portal tools unavailable", code="INVALID_RESPONSE")
-        return _store(path, replace(cached, fetched_at=fetched_at, source="revalidated"))
-    return _store(path, ToolsRead(
-        connector=listing.connector,
-        toolkit_version=listing.toolkit_version,
-        etag=listing.etag,
-        fetched_at=fetched_at,
-        source="network",
-        stale=False,
-        tools=listing.tools,
-    ))
+            raise PortalToolsUnavailable(
+                "portal tools unavailable", code="INVALID_RESPONSE"
+            )
+        return _store(
+            path, replace(cached, fetched_at=fetched_at, source="revalidated")
+        )
+    return _store(
+        path,
+        ToolsRead(
+            connector=listing.connector,
+            toolkit_version=listing.toolkit_version,
+            etag=listing.etag,
+            fetched_at=fetched_at,
+            source="network",
+            stale=False,
+            tools=listing.tools,
+        ),
+    )

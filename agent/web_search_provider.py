@@ -47,7 +47,9 @@ def get_provider_env(name: str) -> str:
     if val is None and multiplex_active and not scope_bound:
         from agent.secret_scope import UnscopedSecretError
 
-        raise UnscopedSecretError(name, f"get_provider_env({name!r}) called with no active profile scope")
+        raise UnscopedSecretError(
+            name, f"get_provider_env({name!r}) called with no active profile scope"
+        )
     if val is None and not scope_bound:
         val = os.getenv(name, "")
     return (val or "").strip()

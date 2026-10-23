@@ -10,6 +10,7 @@ the multiplexer boots on (``gateway_multiplex_mode.host_serves_named_profile``):
 the retired ``false`` that boot settles like unset — the served set the last multiplexer recorded in
 the root's ``gateway_state.json`` (a standalone default gateway clears it).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +19,7 @@ from pathlib import Path
 def multiplexer_root_for(home: Path) -> Path | None:
     """Default root that may multiplex *home*, when *home* is a named profile under it."""
     from clawk_constants import named_profile_home
+
     if named_profile_home(home) is None:
         return None
     root = home.parent.parent
@@ -35,6 +37,7 @@ def implied_host_root(home: Path) -> Path | None:
     if root is None:
         return None
     from clawk_cli.gateway_multiplex_mode import host_serves_named_profile
+
     return None if host_serves_named_profile(root, home) is False else root
 
 
@@ -51,12 +54,16 @@ def multiplexer_serves_home(home: Path) -> Path | None:
     if root is None:
         return None
     from clawk_cli.gateway_multiplex_mode import host_serves_named_profile
+
     verdict = host_serves_named_profile(root, home)
     if verdict is not None:
         return root if verdict else None
     from gateway.status import read_runtime_status
     from clawk_cli.profiles import normalize_profile_name
-    served = (read_runtime_status(root / "gateway_state.json") or {}).get("served_profiles")
+
+    served = (read_runtime_status(root / "gateway_state.json") or {}).get(
+        "served_profiles"
+    )
     if not isinstance(served, list):
         return None
     names = {normalize_profile_name(str(p)) for p in served if p}

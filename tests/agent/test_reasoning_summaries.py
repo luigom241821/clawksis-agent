@@ -7,9 +7,7 @@ def _stream(deltas):
     """Accumulate *deltas* the way the chat-completions stream loop does."""
     parts: list[str] = []
     for delta in deltas:
-        parts.append(
-            separate_glued_reasoning_blocks(parts[-1] if parts else "", delta)
-        )
+        parts.append(separate_glued_reasoning_blocks(parts[-1] if parts else "", delta))
     return "".join(parts)
 
 
@@ -56,7 +54,10 @@ def test_token_streamed_reasoning_is_untouched():
 
 def test_bold_word_mid_sentence_is_not_a_boundary():
     # Emphasis inside token-streamed prose arrives after a space.
-    assert separate_glued_reasoning_blocks("I see the ", "**signature**") == "**signature**"
+    assert (
+        separate_glued_reasoning_blocks("I see the ", "**signature**")
+        == "**signature**"
+    )
 
 
 def test_unclosed_emphasis_fragment_is_not_a_boundary():

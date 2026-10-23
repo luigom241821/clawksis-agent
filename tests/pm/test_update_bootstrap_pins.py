@@ -26,8 +26,13 @@ VERSION = "99.0.0"
 
 def _update(lock):
     targets = [t for t in ALL_TARGETS if t != "linux-arm64-bionic"]
-    decision = Resolved("uv", lock.version("uv"), "semver", version=VERSION,
-                        per_target=dict.fromkeys(targets, VERSION))
+    decision = Resolved(
+        "uv",
+        lock.version("uv"),
+        "semver",
+        version=VERSION,
+        per_target=dict.fromkeys(targets, VERSION),
+    )
     return cli._apply_pins([decision], lock)
 
 
@@ -37,10 +42,16 @@ def _bump(lock):
 
 @pytest.fixture
 def checkout(tmp_path, monkeypatch):
-    for rel in ("scripts/gen-bootstrap-pins.py", "scripts/install.sh", "scripts/install.ps1"):
+    for rel in (
+        "scripts/gen-bootstrap-pins.py",
+        "scripts/install.sh",
+        "scripts/install.ps1",
+    ):
         (tmp_path / rel).parent.mkdir(exist_ok=True)
         shutil.copy2(REPO / rel, tmp_path / rel)
-    shutil.copytree(REPO / "pm", tmp_path / "pm", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(
+        REPO / "pm", tmp_path / "pm", ignore=shutil.ignore_patterns("__pycache__")
+    )
     lock = Lockfile(tmp_path / "pm" / "lock.json")
     monkeypatch.setattr(cli, "_lockfile", lambda: lock)
     monkeypatch.setattr(cli, "hash_url", lambda url: "0" * 64)
@@ -52,7 +63,10 @@ def checkout(tmp_path, monkeypatch):
 def _fragments_check(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(root / "scripts" / "gen-bootstrap-pins.py"), "--check"],
-        capture_output=True, text=True, timeout=60, check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
     )
 
 
@@ -64,12 +78,16 @@ def test_uv_repin_regenerates_installer_pins(repin, checkout):
     assert check.returncode == 0, check.stderr
 
 
-def test_retry_with_current_pins_repairs_fragments_a_failed_run_left_stale(checkout, monkeypatch):
+def test_retry_with_current_pins_repairs_fragments_a_failed_run_left_stale(
+    checkout, monkeypatch
+):
     root, lock = checkout
     regenerate = cli._regenerate_bootstrap_pins
     monkeypatch.setattr(cli, "_regenerate_bootstrap_pins", lambda lockfile: 1)
     assert _update(lock) == 1
-    assert _fragments_check(root).returncode != 0, "the failed run must leave the fragments stale"
+    assert _fragments_check(root).returncode != 0, (
+        "the failed run must leave the fragments stale"
+    )
 
     monkeypatch.setattr(cli, "_regenerate_bootstrap_pins", regenerate)
     assert cli._apply_pins([], lock) == 0

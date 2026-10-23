@@ -29,17 +29,36 @@ _ALL_TOOLSETS = {"all", "*"}
 # ``interrupted`` / ``turn_exit_reason`` say WHY ``completed`` is false, so a pipeline can tell
 # an iteration-budget stop from a Ctrl-C without parsing stderr (#111770).
 _USAGE_KEYS = (
-    "estimated_cost_usd", "cost_status", "cost_source", "input_tokens", "output_tokens",
-    "cache_read_tokens", "cache_write_tokens", "reasoning_tokens", "total_tokens", "api_calls",
-    "model", "provider", "session_id", "completed", "partial", "interrupted", "turn_exit_reason",
+    "estimated_cost_usd",
+    "cost_status",
+    "cost_source",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+    "total_tokens",
+    "api_calls",
+    "model",
+    "provider",
+    "session_id",
+    "completed",
+    "partial",
+    "interrupted",
+    "turn_exit_reason",
 )
 
 # Counters summed per auxiliary task (vision, compression, title_generation, ...) into the
 # ``auxiliary`` block of the report. The main-loop keys above stay main-loop-only (backward
 # compatible); ``total_including_auxiliary`` carries the grand total pipelines bill on (#112848).
 _AUX_COUNTERS = (
-    "api_calls", "input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens",
-    "reasoning_tokens", "estimated_cost_usd",
+    "api_calls",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_write_tokens",
+    "reasoning_tokens",
+    "estimated_cost_usd",
 )
 
 
@@ -54,8 +73,12 @@ def _auxiliary_usage(session_db, session_id: Optional[str]) -> dict[str, dict]:
         return {}
 
 
-def _attach_auxiliary_usage(result: dict, session_db, before: dict[str, dict],
-                            fallback_session_id: Optional[str] = None) -> None:
+def _attach_auxiliary_usage(
+    result: dict,
+    session_db,
+    before: dict[str, dict],
+    fallback_session_id: Optional[str] = None,
+) -> None:
     """Store this run's auxiliary usage on *result* as the delta against the pre-turn snapshot
     (a resumed session already carries earlier runs' aux rows). Waits (bounded) for the auto-title
     thread first: it bills from a daemon thread and can still be in flight when the turn returns.
@@ -63,11 +86,16 @@ def _attach_auxiliary_usage(result: dict, session_db, before: dict[str, dict],
     from agent.title_generator import wait_for_title_upgrades
 
     wait_for_title_upgrades()
-    after = _auxiliary_usage(session_db, result.get("session_id") or fallback_session_id)
+    after = _auxiliary_usage(
+        session_db, result.get("session_id") or fallback_session_id
+    )
     by_task: dict[str, dict] = {}
     for task, counters in after.items():
         prior = before.get(task, {})
-        delta = {key: (counters.get(key) or 0) - (prior.get(key) or 0) for key in _AUX_COUNTERS}
+        delta = {
+            key: (counters.get(key) or 0) - (prior.get(key) or 0)
+            for key in _AUX_COUNTERS
+        }
         if any(delta.values()):
             by_task[task] = delta
     result["auxiliary_usage"] = by_task
@@ -75,15 +103,20 @@ def _attach_auxiliary_usage(result: dict, session_db, before: dict[str, dict],
 
 def _auxiliary_report(report: dict, by_task: dict[str, dict]) -> None:
     """Add the ``auxiliary`` breakdown and ``total_including_auxiliary`` to the ledger."""
-    totals = {key: sum(t.get(key) or 0 for t in by_task.values()) for key in _AUX_COUNTERS}
+    totals = {
+        key: sum(t.get(key) or 0 for t in by_task.values()) for key in _AUX_COUNTERS
+    }
     totals["total_tokens"] = totals["input_tokens"] + totals["output_tokens"]
     report["auxiliary"] = {**totals, "by_task": by_task}
     main_cost = report.get("estimated_cost_usd")
     report["total_including_auxiliary"] = {
-        "estimated_cost_usd": None if main_cost is None else main_cost + totals["estimated_cost_usd"],
+        "estimated_cost_usd": None
+        if main_cost is None
+        else main_cost + totals["estimated_cost_usd"],
         "total_tokens": (report.get("total_tokens") or 0) + totals["total_tokens"],
         "api_calls": (report.get("api_calls") or 0) + totals["api_calls"],
     }
+
 
 # Exit code for a turn stopped by an interrupt (SIGINT convention, same as ``chat -Q``).
 _INTERRUPTED_EXIT_CODE = 130
@@ -100,7 +133,11 @@ def _oneshot_exit_code(response: Optional[str], result: dict) -> int:
     """
     if result.get("interrupted"):
         return _INTERRUPTED_EXIT_CODE
-    if result.get("failed") or result.get("partial") or result.get("completed") is False:
+    if (
+        result.get("failed")
+        or result.get("partial")
+        or result.get("completed") is False
+    ):
         return 2
     if not (response or "").strip():
         return 1
@@ -112,7 +149,9 @@ def _normalize_toolsets(toolsets: object = None) -> list[str] | None:
     if not toolsets:
         return None
     items = toolsets if isinstance(toolsets, (list, tuple)) else [toolsets]
-    parts = [str(item).split(",") if isinstance(item, str) else [str(item)] for item in items]
+    parts = [
+        str(item).split(",") if isinstance(item, str) else [str(item)] for item in items
+    ]
     return [p.strip() for chunk in parts for p in chunk if p.strip()] or None
 
 
@@ -127,9 +166,14 @@ def _build_preloaded_skills_prompt(skills: object = None) -> str | None:
     if not parsed_skills:
         return None
 
-    from agent.skill_commands import build_preloaded_skills_prompt, format_missing_skills
+    from agent.skill_commands import (
+        build_preloaded_skills_prompt,
+        format_missing_skills,
+    )
 
-    skills_prompt, loaded_skills, missing_skills = build_preloaded_skills_prompt(parsed_skills)
+    skills_prompt, loaded_skills, missing_skills = build_preloaded_skills_prompt(
+        parsed_skills
+    )
     if missing_skills:
         if not loaded_skills:
             raise ValueError(format_missing_skills(missing_skills))
@@ -148,7 +192,9 @@ def _configured_mcp_servers() -> tuple[set[str], set[str]]:
         from tools.mcp_tool_common import mcp_server_enabled
 
         cfg = read_raw_config()
-        mcp_servers = cfg.get("mcp_servers") if isinstance(cfg.get("mcp_servers"), dict) else {}
+        mcp_servers = (
+            cfg.get("mcp_servers") if isinstance(cfg.get("mcp_servers"), dict) else {}
+        )
         enabled: set[str] = set()
         disabled: set[str] = set()
         for name, server_cfg in mcp_servers.items():
@@ -161,7 +207,9 @@ def _configured_mcp_servers() -> tuple[set[str], set[str]]:
         return set(), set()
 
 
-def _validate_explicit_toolsets(toolsets: object = None) -> tuple[list[str] | None, str | None]:
+def _validate_explicit_toolsets(
+    toolsets: object = None,
+) -> tuple[list[str] | None, str | None]:
     normalized = _normalize_toolsets(toolsets)
     if normalized is None:
         return None, None
@@ -194,14 +242,22 @@ def _validate_explicit_toolsets(toolsets: object = None) -> tuple[list[str] | No
             )
         return None, None
 
-    mcp_names, mcp_disabled = _configured_mcp_servers() if unresolved else (set(), set())
+    mcp_names, mcp_disabled = (
+        _configured_mcp_servers() if unresolved else (set(), set())
+    )
     mcp_valid = [name for name in unresolved if name in mcp_names]
     disabled = [name for name in unresolved if name in mcp_disabled]
-    unknown = [name for name in unresolved if name not in mcp_names and name not in mcp_disabled]
+    unknown = [
+        name
+        for name in unresolved
+        if name not in mcp_names and name not in mcp_disabled
+    ]
     valid = built_in + mcp_valid
 
     if unknown:
-        sys.stderr.write(f"clawk -z: ignoring unknown --toolsets entries: {', '.join(unknown)}\n")
+        sys.stderr.write(
+            f"clawk -z: ignoring unknown --toolsets entries: {', '.join(unknown)}\n"
+        )
     if disabled:
         sys.stderr.write(
             "clawk -z: ignoring disabled MCP servers (set enabled: true in config.yaml to use): "
@@ -212,7 +268,9 @@ def _validate_explicit_toolsets(toolsets: object = None) -> tuple[list[str] | No
     return valid, None
 
 
-def _write_usage_file(path: Optional[str], result: dict, failure: Optional[str] = None) -> None:
+def _write_usage_file(
+    path: Optional[str], result: dict, failure: Optional[str] = None
+) -> None:
     """Best-effort JSON usage report for pipelines (``-z --usage-file``).
 
     Written even on failure so callers can always account for spend. Never raises — a broken usage
@@ -292,7 +350,11 @@ def run_oneshot(
     response: Optional[str] = None
     result: dict = {}
     failure: BaseException | None = None
-    with open(os.devnull, "w", encoding="utf-8") as devnull, redirect_stdout(devnull), redirect_stderr(devnull):
+    with (
+        open(os.devnull, "w", encoding="utf-8") as devnull,
+        redirect_stdout(devnull),
+        redirect_stderr(devnull),
+    ):
         try:
             response, result = _run_agent(
                 prompt,
@@ -337,7 +399,9 @@ def run_oneshot(
 
     exit_code = _oneshot_exit_code(response, result)
     if exit_code == 1:
-        real_stderr.write("clawk -z: no final response was produced; treating the run as failed.\n")
+        real_stderr.write(
+            "clawk -z: no final response was produced; treating the run as failed.\n"
+        )
         real_stderr.flush()
     return exit_code
 
@@ -376,7 +440,9 @@ def _configured_model(model_cfg: object) -> str:
     return str(raw or "")
 
 
-def _resolve_model_and_provider(cfg: dict, model: Optional[str], provider: Optional[str]) -> _ModelChoice:
+def _resolve_model_and_provider(
+    cfg: dict, model: Optional[str], provider: Optional[str]
+) -> _ModelChoice:
     """Effective model = arg → env → config; provider = arg → auto-detect → config/env.
 
     Auto-detection only runs when the model was explicitly requested (arg or env var) — same
@@ -388,13 +454,16 @@ def _resolve_model_and_provider(cfg: dict, model: Optional[str], provider: Optio
     model_cfg = cfg.get("model") or {}
     env_model = os.getenv("CLAWK_INFERENCE_MODEL", "").strip()
     explicit_model = (model or "").strip() or env_model
-    choice = _ModelChoice(explicit_model or _configured_model(model_cfg), (provider or "").strip() or None)
+    choice = _ModelChoice(
+        explicit_model or _configured_model(model_cfg), (provider or "").strip() or None
+    )
     if choice.provider is not None or not explicit_model:
         return choice
 
     # DIRECT_ALIASES (config.yaml ``model_aliases:``) map a user alias to (model, provider,
     # base_url) for endpoints outside any catalog (local servers, custom proxies, ...).
     from clawk_cli import model_switch as _ms
+
     try:
         _ms._ensure_direct_aliases()
         direct = _ms.DIRECT_ALIASES.get(explicit_model.strip().lower())
@@ -404,13 +473,20 @@ def _resolve_model_and_provider(cfg: dict, model: Optional[str], provider: Optio
         cfg_provider = ""
         if isinstance(model_cfg, dict):
             cfg_provider = str(model_cfg.get("provider") or "").strip().lower()
-        current_provider = cfg_provider or os.getenv("CLAWK_INFERENCE_PROVIDER", "").strip().lower() or "auto"
+        current_provider = (
+            cfg_provider
+            or os.getenv("CLAWK_INFERENCE_PROVIDER", "").strip().lower()
+            or "auto"
+        )
         # Same owner as ClawksisCLI startup: a provider-qualified string (``custom:<name>:<model>``,
         # ``<provider>/<model>``) selects that provider before auto-detection can hand the unsplit
         # string to the configured default (#73943).
         route = _ms.resolve_startup_model_route(
-            explicit_model, current_provider=current_provider,
-            user_providers=cfg.get("providers"), custom_providers=cfg.get("custom_providers"))
+            explicit_model,
+            current_provider=current_provider,
+            user_providers=cfg.get("providers"),
+            custom_providers=cfg.get("custom_providers"),
+        )
         if route is not None:
             choice.provider, choice.model = route.provider, route.model
             return choice
@@ -434,7 +510,9 @@ def _resolve_model_and_provider(cfg: dict, model: Optional[str], provider: Optio
     return choice
 
 
-def _load_resume_target(session_db, resume: Optional[str]) -> tuple[Optional[str], list, Optional[dict]]:
+def _load_resume_target(
+    session_db, resume: Optional[str]
+) -> tuple[Optional[str], list, Optional[dict]]:
     """Resolve ``resume`` to ``(session_id, conversation_history, session_meta)`` for a oneshot turn.
 
     Follows the same contract as the interactive CLI resume: compression-chain redirect via
@@ -463,6 +541,7 @@ def _load_resume_target(session_db, resume: Optional[str]) -> tuple[Optional[str
     # A Kanban worker transcript resumes only through a dispatcher-owned run (#68779): a
     # quiet one-shot resume would be a write-capable process the board cannot observe.
     from clawk_cli.kanban_resume_guard import kanban_resume_refusal
+
     if (kanban_refusal := kanban_resume_refusal(session_db, resolved)) is not None:
         raise RuntimeError(f"cannot resume session {resume}: {kanban_refusal}")
     session_db.assert_resume_safe(resolved, tip_only=True)
@@ -471,12 +550,19 @@ def _load_resume_target(session_db, resume: Optional[str]) -> tuple[Optional[str
     try:
         session_db.reopen_session(resolved)
     except Exception:
-        logging.debug("reopen_session failed for resumed one-shot session %s", resolved, exc_info=True)
+        logging.debug(
+            "reopen_session failed for resumed one-shot session %s",
+            resolved,
+            exc_info=True,
+        )
     return resolved, history, session_meta
 
 
 def _apply_stored_session_runtime(
-    choice: _ModelChoice, session_meta: Optional[dict], *, explicit_model: bool,
+    choice: _ModelChoice,
+    session_meta: Optional[dict],
+    *,
+    explicit_model: bool,
 ) -> _ModelChoice:
     """Run a resumed one-shot on the session's stored runtime, not the ambient config — the same
     contract as the interactive ``_restore_session_model``, via the shared ``stored_session_route``.
@@ -487,10 +573,18 @@ def _apply_stored_session_runtime(
         return choice
     from clawk_cli.cli_model_switch_mixin import stored_session_route
 
-    route = stored_session_route(session_meta, current_model=choice.model, current_provider=choice.provider)
+    route = stored_session_route(
+        session_meta, current_model=choice.model, current_provider=choice.provider
+    )
     if route is None:
         return choice
-    choice.model, stored_provider, stored_base_url, stored_api_mode, provider_changed = route
+    (
+        choice.model,
+        stored_provider,
+        stored_base_url,
+        stored_api_mode,
+        provider_changed,
+    ) = route
     if provider_changed:
         choice.provider = stored_provider
         choice.base_url = stored_base_url
@@ -525,8 +619,12 @@ def _run_agent(
     # replace the ambient config (see _apply_stored_session_runtime) and the ended row must
     # be reopened before the agent can stamp a new lifecycle boundary.
     session_db = _create_session_db_for_oneshot()
-    resume_sid, conversation_history, resume_meta = _load_resume_target(session_db, resume)
-    choice = _apply_stored_session_runtime(choice, resume_meta, explicit_model=bool((model or "").strip()))
+    resume_sid, conversation_history, resume_meta = _load_resume_target(
+        session_db, resume
+    )
+    choice = _apply_stored_session_runtime(
+        choice, resume_meta, explicit_model=bool((model or "").strip())
+    )
     # Resolution-time fallback (#81209): a quota-exhausted/expired primary raises AuthError here, before
     # AIAgent (and its mid-session ``fallback_model`` wiring) exists, so walk the chain like the gateway.
     runtime, fallback_entry = resolve_runtime_with_fallback(
@@ -538,8 +636,12 @@ def _run_agent(
     )
     if fallback_entry is not None:
         # The chosen entry names the model that will be sent; the primary's stored api_mode no longer applies.
-        choice = dataclasses.replace(choice, model=fallback_entry["model"], provider=runtime.get("provider"),
-                                     api_mode=None)
+        choice = dataclasses.replace(
+            choice,
+            model=fallback_entry["model"],
+            provider=runtime.get("provider"),
+            api_mode=None,
+        )
     if choice.api_mode:
         runtime["api_mode"] = choice.api_mode
 
@@ -549,7 +651,9 @@ def _run_agent(
     if reasoning is not None and str(reasoning).strip():
         parsed_reasoning = parse_reasoning_effort(reasoning)
         if parsed_reasoning is None:
-            logging.warning("Unknown --reasoning '%s', keeping the configured level", reasoning)
+            logging.warning(
+                "Unknown --reasoning '%s', keeping the configured level", reasoning
+            )
         else:
             reasoning_config = parsed_reasoning
 
@@ -566,7 +670,9 @@ def _run_agent(
     # ONE turn and no between-turns late-binding refresh (#38448).
     from clawk_cli.mcp_startup import ensure_mcp_discovery_before_agent_build
 
-    ensure_mcp_discovery_before_agent_build(logger=logging.getLogger(__name__), single_query=True)
+    ensure_mcp_discovery_before_agent_build(
+        logger=logging.getLogger(__name__), single_query=True
+    )
 
     skills_prompt = _build_preloaded_skills_prompt(skills)
 
@@ -606,10 +712,16 @@ def _run_agent(
         # Relay keys the root conversation to the id at turn entry; compression may rotate
         # agent.session_id mid-turn without opening a second root, so keep the entry id.
         relay_session_id = getattr(agent, "session_id", None)
-        result = agent.run_conversation(prompt, conversation_history=conversation_history or None)
+        result = agent.run_conversation(
+            prompt, conversation_history=conversation_history or None
+        )
         if ledger:
-            _attach_auxiliary_usage(result, session_db, aux_before,
-                                    fallback_session_id=agent.session_id or resume_sid)
+            _attach_auxiliary_usage(
+                result,
+                session_db,
+                aux_before,
+                fallback_session_id=agent.session_id or resume_sid,
+            )
         return (result.get("final_response") or "", result)
     finally:
         _close_agent(agent, session_db, relay_session_id)
@@ -646,12 +758,20 @@ def _close_agent(agent, session_db, relay_session_id=None) -> None:
             # next turn and os._exit skips atexit, so close the root (and fire on_session_finalize).
             from clawk_cli.lifecycle import finalize_session
 
-            _quietly("session finalize", lambda: finalize_session(
-                session_id=relay_session_id, platform=getattr(agent, "platform", None) or "cli",
-                reason="shutdown"))
+            _quietly(
+                "session finalize",
+                lambda: finalize_session(
+                    session_id=relay_session_id,
+                    platform=getattr(agent, "platform", None) or "cli",
+                    reason="shutdown",
+                ),
+            )
         session_messages = getattr(agent, "_session_messages", None)
         memory_args = (session_messages,) if isinstance(session_messages, list) else ()
-        _quietly("memory/context cleanup", lambda: agent.shutdown_memory_provider(*memory_args))
+        _quietly(
+            "memory/context cleanup",
+            lambda: agent.shutdown_memory_provider(*memory_args),
+        )
         _quietly("agent cleanup", lambda: agent.close())
     # agent.close() ends the session but leaves the connection open; close it to checkpoint the WAL.
     if session_db is not None:
@@ -660,6 +780,11 @@ def _close_agent(agent, session_db, relay_session_id=None) -> None:
 
 def _oneshot_clarify_callback(questions: list) -> dict:
     """Clarify is disabled in oneshot mode — tell the agent to pick a default and proceed."""
-    return {"answers": {}, "outcome": "undelivered", "notice": (
-        "oneshot mode: no user available. Pick the best choices using your own judgment, "
-        "or make the most reasonable assumption you can, and continue.")}
+    return {
+        "answers": {},
+        "outcome": "undelivered",
+        "notice": (
+            "oneshot mode: no user available. Pick the best choices using your own judgment, "
+            "or make the most reasonable assumption you can, and continue."
+        ),
+    }

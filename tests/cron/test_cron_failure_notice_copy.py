@@ -19,11 +19,9 @@ def _no_chain(monkeypatch):
     monkeypatch.setattr(scheduler, "get_fallback_chain", lambda cfg: [])
 
 
-
-
-
-
-def test_auth_failure_names_the_pinned_provider_and_the_failing_profile(monkeypatch, tmp_path):
+def test_auth_failure_names_the_pinned_provider_and_the_failing_profile(
+    monkeypatch, tmp_path
+):
     """A profile's credentials are its own (93889b770da): the notice must send the operator to
     THIS profile's sign-in for the job's pinned provider, never a bare placeholder (#114012)."""
     _no_chain(monkeypatch)
@@ -32,10 +30,13 @@ def test_auth_failure_names_the_pinned_provider_and_the_failing_profile(monkeypa
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_HOME", str(profile_home))
     msg = _summarize_cron_failure_for_delivery(
-        {**JOB, "provider": "openai-codex"}, "Error code: 401 - Unauthorized")
+        {**JOB, "provider": "openai-codex"}, "Error code: 401 - Unauthorized"
+    )
     assert "`clawk -p ops auth add openai-codex --type oauth`" in msg, msg
     assert "<provider>" not in msg
-    unpinned = _summarize_cron_failure_for_delivery(JOB, "Error code: 401 - Unauthorized")
+    unpinned = _summarize_cron_failure_for_delivery(
+        JOB, "Error code: 401 - Unauthorized"
+    )
     assert "`clawk -p ops auth add <provider>`" in unpinned, unpinned
 
 
@@ -52,7 +53,9 @@ def test_rate_and_usage_limit_phrases_still_yield_a_provider_notice(monkeypatch)
         msg = _summarize_cron_failure_for_delivery(JOB, text)
         assert "limit" in msg.lower(), msg
         assert not _HTTP_LEAD.search(msg), msg
-        assert "`clawk cron run ab12cd34`" in msg or "`clawk cron edit ab12cd34" in msg, msg
+        assert (
+            "`clawk cron run ab12cd34`" in msg or "`clawk cron edit ab12cd34" in msg
+        ), msg
 
 
 def test_cron_cause_gloss_is_the_shared_table():
@@ -61,18 +64,25 @@ def test_cron_cause_gloss_is_the_shared_table():
     from cron.scheduler_failure_copy import provider_failure_notice
 
     for reason in FAILURE_CAUSE_GLOSS:
-        notice = provider_failure_notice("Morning brief", "ab12cd34", reason, backup_provider_phrase="x.")
+        notice = provider_failure_notice(
+            "Morning brief", "ab12cd34", reason, backup_provider_phrase="x."
+        )
         assert notice is not None and "`clawk cron" in notice, reason
-    assert provider_failure_notice("Morning brief", "ab12cd34", "unknown", backup_provider_phrase="x.") is None
-
-
-
-
+    assert (
+        provider_failure_notice(
+            "Morning brief", "ab12cd34", "unknown", backup_provider_phrase="x."
+        )
+        is None
+    )
 
 
 def test_blocked_config_notice_says_it_did_not_run_and_will_self_heal():
     text, blocked, *_ = _compose_run_delivery(
-        JOB, success=False, error="[blocked_config] provider credential missing: no key",
-        final_response="", output_file=None)
+        JOB,
+        success=False,
+        error="[blocked_config] provider credential missing: no key",
+        final_response="",
+        output_file=None,
+    )
     assert blocked is True
     assert "provider credential missing: no key" in text

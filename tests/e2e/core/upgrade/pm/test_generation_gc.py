@@ -33,7 +33,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -68,19 +70,27 @@ def home(tmp_path_factory, provider):
     return {"sb": sb, "origin": origin, "root": root}
 
 
-def _rebuild_collects(sb: I.Sandbox, provider: FakeLLMServer, what: str, rebuild) -> tuple:
+def _rebuild_collects(
+    sb: I.Sandbox, provider: FakeLLMServer, what: str, rebuild
+) -> tuple:
     before_sel = P.selected_generation(sb).name
     aged = _age_all_generations(sb)
-    assert before_sel in aged, f"harness: selected generation {before_sel} carries no lease stamp: {aged}"
+    assert before_sel in aged, (
+        f"harness: selected generation {before_sel} carries no lease stamp: {aged}"
+    )
     cp = rebuild()
     assert cp.returncode == 0, f"{what} failed:\n" + P.diagnostics(sb, cp)
     selected = P.selected_generation(sb).name
-    assert selected != before_sel, f"harness: {what} did not build a new generation\n" + P.diagnostics(sb, cp)
+    assert selected != before_sel, (
+        f"harness: {what} did not build a new generation\n" + P.diagnostics(sb, cp)
+    )
     left = P.generations(sb)
     # The generation the rebuilding process itself ran from is leased by it until it exits; every
     # OTHER superseded generation older than a day must be gone.
     kept_old = sorted((set(aged) & set(left)) - {before_sel})
-    assert selected in left, f"{what} collected the generation it selected: {selected} not in {left}"
+    assert selected in left, (
+        f"{what} collected the generation it selected: {selected} not in {left}"
+    )
     P.turn(sb, provider, f"turn after {what}")
     return kept_old, left, selected, before_sel, cp
 
@@ -90,7 +100,8 @@ def _assert_collected(sb: I.Sandbox, what: str, result) -> None:
     assert not kept_old, (
         f"{what} kept superseded generations built two days ago: {kept_old} (all: {left}, selected "
         f"{selected}, previous {before_sel}); every rebuild adds one and nothing reclaims them\n"
-        + P.diagnostics(sb, cp))
+        + P.diagnostics(sb, cp)
+    )
 
 
 def test_repeated_updates_collect_superseded_generations(home, provider):
@@ -98,8 +109,14 @@ def test_repeated_updates_collect_superseded_generations(home, provider):
     results = []
     for n in (1, 2):
         target = P.publish_dependency_release(home["origin"], home["root"], n)
-        results.append(_rebuild_collects(sb, provider, f"`clawk update` #{n}",
-                                         lambda: P.update(sb, env=P.lazy_env(sb))))
+        results.append(
+            _rebuild_collects(
+                sb,
+                provider,
+                f"`clawk update` #{n}",
+                lambda: P.update(sb, env=P.lazy_env(sb)),
+            )
+        )
         assert I.git("rev-parse", "HEAD", cwd=sb.checkout) == target
     for n, result in enumerate(results, 1):
         _assert_collected(sb, f"`clawk update` #{n}", result)
@@ -107,9 +124,16 @@ def test_repeated_updates_collect_superseded_generations(home, provider):
 
 def test_repeated_repairs_collect_superseded_generations(home, provider):
     sb = home["sb"]
-    results = [_rebuild_collects(sb, provider, f"`clawk pm repair` #{n}",
-                                 lambda: P.run_env(sb, [sb.clawk, "pm", "repair"], P.lazy_env(sb),
-                                                   timeout=P.UPDATE_TIMEOUT))
-               for n in (1, 2)]
+    results = [
+        _rebuild_collects(
+            sb,
+            provider,
+            f"`clawk pm repair` #{n}",
+            lambda: P.run_env(
+                sb, [sb.clawk, "pm", "repair"], P.lazy_env(sb), timeout=P.UPDATE_TIMEOUT
+            ),
+        )
+        for n in (1, 2)
+    ]
     for n, result in enumerate(results, 1):
         _assert_collected(sb, f"`clawk pm repair` #{n}", result)

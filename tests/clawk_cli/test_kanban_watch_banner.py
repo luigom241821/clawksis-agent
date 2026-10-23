@@ -14,7 +14,9 @@ from clawk_cli.kanban_parser import build_parser
     "environment,explicit,expected",
     [(None, None, "alpha"), ("beta", None, "beta"), ("alpha", "beta", "beta")],
 )
-def test_watch_names_resolved_board(tmp_path, monkeypatch, capsys, environment, explicit, expected):
+def test_watch_names_resolved_board(
+    tmp_path, monkeypatch, capsys, environment, explicit, expected
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setenv("CLAWK_KANBAN_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_KANBAN_DB", raising=False)

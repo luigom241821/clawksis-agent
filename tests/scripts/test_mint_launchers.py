@@ -62,16 +62,32 @@ def payload_tree(tmp_path: Path):
     shutil.copytree(
         base / "Lib",
         py_dir / "Lib",
-        ignore=shutil.ignore_patterns("__pycache__", "site-packages", "test", "idlelib", "tkinter", "turtledemo", "config-*"),
+        ignore=shutil.ignore_patterns(
+            "__pycache__",
+            "site-packages",
+            "test",
+            "idlelib",
+            "tkinter",
+            "turtledemo",
+            "config-*",
+        ),
     )
 
     # Exercise the real bootstrap before the fixture entry point.
-    for relative in ("clawk_bootstrap.py", "clawk_constants.py", "clawk_cli/__init__.py",
-                     "pm/environments.py", "pm/filesystem.py", "clawk_cli/runtime_state.py",
-                     "clawk_cli/_early_recovery.py", "clawk_cli/_parser.py",
-                     # prepare_launch returns early for a fixture repo (no .git), but the bootstrap
-                     # imports these two before it can tell.
-                     "clawk_cli/venv_sync.py", "clawk_cli/steward.py"):
+    for relative in (
+        "clawk_bootstrap.py",
+        "clawk_constants.py",
+        "clawk_cli/__init__.py",
+        "pm/environments.py",
+        "pm/filesystem.py",
+        "clawk_cli/runtime_state.py",
+        "clawk_cli/_early_recovery.py",
+        "clawk_cli/_parser.py",
+        # prepare_launch returns early for a fixture repo (no .git), but the bootstrap
+        # imports these two before it can tell.
+        "clawk_cli/venv_sync.py",
+        "clawk_cli/steward.py",
+    ):
         shutil.copy2(_REPO / relative, repo / relative)
     (repo / "clawk_cli" / "main.py").write_text(
         "import os, sys\n"
@@ -86,9 +102,17 @@ def payload_tree(tmp_path: Path):
     (site / "stubdep.py").write_text("X = 1\n", encoding="utf-8")
     # Real payloads ship this beside repo/ (scripts/build/agent.py); boot selects its venv from it.
     (tmp_path / "stage" / "manifest.json").write_text(
-        json.dumps({"schema": 1, "repo": "repo", "venv": "venv", "store": "tools"}), encoding="utf-8")
+        json.dumps({"schema": 1, "repo": "repo", "venv": "venv", "store": "tools"}),
+        encoding="utf-8",
+    )
 
-    return {"bin": bin_dir, "root": tmp_path / "stage", "tmp": tmp_path, "site": site, "repo": repo}
+    return {
+        "bin": bin_dir,
+        "root": tmp_path / "stage",
+        "tmp": tmp_path,
+        "site": site,
+        "repo": repo,
+    }
 
 
 def _mint(bin_dir: Path, wrapper: Path, specs) -> list[str]:
@@ -99,13 +123,20 @@ def _mint(bin_dir: Path, wrapper: Path, specs) -> list[str]:
         CLAWK_MINT_WRAPPER=str(wrapper),
         CLAWK_MINT_PYTHON=r"<launcher_dir>\..\tools\py-1\python.exe",
     )
-    proc = subprocess.run([sys.executable, str(_MINT)], capture_output=True, text=True, env=env, check=False)
+    proc = subprocess.run(
+        [sys.executable, str(_MINT)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
     assert proc.returncode == 0, proc.stderr
     return proc.stdout.split()
 
 
 def _render_wrapper(tmp_path: Path) -> Path:
     from scripts.build.launchers import render_wrapper
+
     text = render_wrapper("clawk_cli.main:main", "../repo", "../venv/Lib/site-packages")
     out = tmp_path / "wrapper.py"
     out.write_text(text, encoding="utf-8")
@@ -114,23 +145,41 @@ def _render_wrapper(tmp_path: Path) -> Path:
 
 def test_mint_writes_exactly_one_named_exe_per_spec(payload_tree, tmp_path):
     wrapper = _render_wrapper(tmp_path)
-    out = _mint(payload_tree["bin"], wrapper, [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}])
+    out = _mint(
+        payload_tree["bin"],
+        wrapper,
+        [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}],
+    )
     assert out == ["clawk.exe"] or out == [str(payload_tree["bin"] / "clawk.exe")]
-    assert sorted(p.name for p in payload_tree["bin"].iterdir()) == ["clawk.exe"], "no versioned twin may remain"
+    assert sorted(p.name for p in payload_tree["bin"].iterdir()) == ["clawk.exe"], (
+        "no versioned twin may remain"
+    )
 
 
-def test_minted_launcher_shebang_carries_the_launcher_dir_placeholder(payload_tree, tmp_path):
+def test_minted_launcher_shebang_carries_the_launcher_dir_placeholder(
+    payload_tree, tmp_path
+):
     wrapper = _render_wrapper(tmp_path)
-    _mint(payload_tree["bin"], wrapper, [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}])
+    _mint(
+        payload_tree["bin"],
+        wrapper,
+        [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}],
+    )
     exe = payload_tree["bin"] / "clawk.exe"
     blob = exe.read_bytes()
-    shebang = blob[blob.rfind(b"#!"):]
-    assert shebang.startswith(b"#!<launcher_dir>\\..\\tools\\py-1\\python.exe\n"), shebang[:60]
+    shebang = blob[blob.rfind(b"#!") :]
+    assert shebang.startswith(b"#!<launcher_dir>\\..\\tools\\py-1\\python.exe\n"), (
+        shebang[:60]
+    )
 
 
 def test_minted_launcher_runs_relocated_and_forwards_exit_code(payload_tree, tmp_path):
     wrapper = _render_wrapper(tmp_path)
-    _mint(payload_tree["bin"], wrapper, [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}])
+    _mint(
+        payload_tree["bin"],
+        wrapper,
+        [{"name": "clawk", "module": "clawk_cli.main", "func": "main"}],
+    )
 
     # RELOCATE the whole tree before running: the launcher must resolve the
     # interpreter and the payload paths relative to its own dir, wherever
@@ -139,9 +188,20 @@ def test_minted_launcher_runs_relocated_and_forwards_exit_code(payload_tree, tmp
     shutil.move(str(payload_tree["root"]), str(moved))
     exe = moved / "bin" / "clawk.exe"
 
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME", "PYTHONPYCACHEPREFIX")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "PYTHONHOME", "PYTHONPYCACHEPREFIX")
+    }
     env["LOCALAPPDATA"] = str(payload_tree["tmp"] / "lad")
-    proc = subprocess.run([str(exe), "--version"], capture_output=True, text=True, cwd=tmp_path, env=env, check=False)
+    proc = subprocess.run(
+        [str(exe), "--version"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        check=False,
+    )
     assert proc.returncode == 7, proc.stderr[-800:]
     assert proc.stdout.strip() == "OK None"  # PYTHONHOME was dropped
 
@@ -160,6 +220,12 @@ def test_mint_rejects_a_non_launcher_dir_shebang(tmp_path):
     wrapper = tmp_path / "w.py"
     wrapper.write_text("x = 1\n", encoding="utf-8")
     env["CLAWK_MINT_WRAPPER"] = str(wrapper)
-    proc = subprocess.run([sys.executable, str(_MINT)], capture_output=True, text=True, env=env, check=False)
+    proc = subprocess.run(
+        [sys.executable, str(_MINT)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
     assert proc.returncode != 0
     assert "launcher_dir" in proc.stderr

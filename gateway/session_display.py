@@ -6,15 +6,16 @@ first-run kickoffs): model-facing text no client may render as a user bubble. A 
 the admission row as ``display_v1`` so a retry, a queued drain or a managed child applies exactly what
 was admitted, and bound to that admission's own event, never to a later turn on the same task.
 """
+
 from contextlib import contextmanager
 from contextvars import ContextVar
 
 from clawk_state_runtime import RuntimeStoreError
 
-HIDDEN = 'hidden'
+HIDDEN = "hidden"
 _TITLE_PREVIEW_LIMIT = 1000
-_SUBMIT_FIELDS = ('display_kind', 'title_preview')
-_display_turn: ContextVar[tuple | None] = ContextVar('display_turn', default=None)
+_SUBMIT_FIELDS = ("display_kind", "title_preview")
+_display_turn: ContextVar[tuple | None] = ContextVar("display_turn", default=None)
 
 
 def submit_display_fields(params):
@@ -27,27 +28,34 @@ def admit_display(params):
 
     Only ``hidden`` is a client-authorable kind; anything else is refused rather than rendered,
     so a typo can never turn machine text into a visible user row."""
-    kind, preview = params.get('display_kind'), params.get('title_preview')
+    kind, preview = params.get("display_kind"), params.get("title_preview")
     if kind is not None and kind != HIDDEN:
-        raise RuntimeStoreError('invalid_params')
+        raise RuntimeStoreError("invalid_params")
     if preview is not None and not isinstance(preview, str):
-        raise RuntimeStoreError('invalid_params')
+        raise RuntimeStoreError("invalid_params")
     committed = {}
     if kind:
-        committed['kind'] = HIDDEN
+        committed["kind"] = HIDDEN
     if preview and preview.strip():
-        committed['title_preview'] = preview[:_TITLE_PREVIEW_LIMIT]
-    return {'display_v1': committed} if committed else {}
+        committed["title_preview"] = preview[:_TITLE_PREVIEW_LIMIT]
+    return {"display_v1": committed} if committed else {}
 
 
 def restore_display(committed):
     """A committed ``display_v1`` arriving across a process boundary (managed worker), re-checked by the
     admission validator: only an object admission itself could have committed is accepted."""
-    if not isinstance(committed, dict) or not committed or set(committed) - {'kind', 'title_preview'}:
-        raise RuntimeStoreError('invalid_params')
-    wire = {'display_kind': committed.get('kind'), 'title_preview': committed.get('title_preview')}
-    if admit_display(wire).get('display_v1') != committed:
-        raise RuntimeStoreError('invalid_params')
+    if (
+        not isinstance(committed, dict)
+        or not committed
+        or set(committed) - {"kind", "title_preview"}
+    ):
+        raise RuntimeStoreError("invalid_params")
+    wire = {
+        "display_kind": committed.get("kind"),
+        "title_preview": committed.get("title_preview"),
+    }
+    if admit_display(wire).get("display_v1") != committed:
+        raise RuntimeStoreError("invalid_params")
     return committed
 
 
@@ -64,7 +72,7 @@ def admission_display(event):
     """The committed presentation of the admission ``event`` executes (its ``message_id`` is the
     admission id), ``{}`` for any other event: a follow-up on the same task never inherits it."""
     bound = _display_turn.get()
-    if bound is None or event is None or getattr(event, 'message_id', None) != bound[0]:
+    if bound is None or event is None or getattr(event, "message_id", None) != bound[0]:
         return {}
     return bound[1]
 
@@ -73,6 +81,19 @@ def worker_display_kwargs():
     """``run_conversation`` persistence kwargs of the managed child's single admitted turn."""
     bound = _display_turn.get()
     committed = bound[1] if bound is not None else {}
-    return {**({'persist_user_display_kind': HIDDEN} if committed.get('kind') == HIDDEN else {}),
-            **({'persist_user_display_metadata': {'title_preview': committed['title_preview']}}
-               if committed.get('title_preview') else {})}
+    return {
+        **(
+            {"persist_user_display_kind": HIDDEN}
+            if committed.get("kind") == HIDDEN
+            else {}
+        ),
+        **(
+            {
+                "persist_user_display_metadata": {
+                    "title_preview": committed["title_preview"]
+                }
+            }
+            if committed.get("title_preview")
+            else {}
+        ),
+    }

@@ -69,10 +69,6 @@ def test_op_env_autoloads_bootstrap_token_in_cron_context(tmp_path, monkeypatch)
     assert os.environ["OP_SERVICE_ACCOUNT_TOKEN"] == "test-token"
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # Patch 2 — credential_pool prefers resolved value over raw op:// ref
 # ---------------------------------------------------------------------------
@@ -96,9 +92,7 @@ def _seed_openrouter_token(monkeypatch, dotenv_value, environ_value):
     else:
         monkeypatch.setenv("OPENROUTER_API_KEY", environ_value)
     # Never treat the synthetic source as suppressed.
-    monkeypatch.setattr(
-        "clawk_cli.auth.is_source_suppressed", lambda _p, _s: False
-    )
+    monkeypatch.setattr("clawk_cli.auth.is_source_suppressed", lambda _p, _s: False)
 
     entries: list = []
     changed, _sources = credential_pool._seed_from_env("openrouter", entries)

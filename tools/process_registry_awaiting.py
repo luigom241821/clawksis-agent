@@ -85,7 +85,9 @@ def drained_for(registry, owns):
 def retained_for_delivery(s) -> bool:
     """A finished entry whose completion is not yet published: pruning it would erase the only record that a notice
     is coming, so the registry keeps it until publication."""
-    return bool(getattr(s, "_finish_claimed", False)) and not s._completion_event.is_set()
+    return (
+        bool(getattr(s, "_finish_claimed", False)) and not s._completion_event.is_set()
+    )
 
 
 def _notifies(s) -> bool:
@@ -105,8 +107,14 @@ def awaits_notification(registry, owner_task_ids) -> bool:
     with registry._lock:
         # (2) Exit recorded, completion not yet published. Entries closed without a collected exit (recovered PID
         # gone or reused) set _completion_event too, so they never count.
-        if any(s.owner_task_id in owners and s.notify_on_complete and s.exited and not s._completion_event.is_set()
-               for store in (registry._running, registry._finished) for s in store.values()):
+        if any(
+            s.owner_task_id in owners
+            and s.notify_on_complete
+            and s.exited
+            and not s._completion_event.is_set()
+            for store in (registry._running, registry._finished)
+            for s in store.values()
+        ):
             return True
     queue = registry.completion_queue
     with queue.mutex:  # (3) queued and (4) in flight, read together: take_ready moves events between them here

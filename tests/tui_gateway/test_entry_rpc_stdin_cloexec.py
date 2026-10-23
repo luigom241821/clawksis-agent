@@ -17,7 +17,9 @@ def test_rpc_stdin_is_closed_before_a_bare_child_executes(monkeypatch):
     try:
         os.dup2(reader, 0)
         os.write(writer, b'{"method":"prompt.submit"}\n')
-        monkeypatch.setattr(entry.sys, "stdin", type("RpcStdin", (), {"fileno": lambda _: 0})())
+        monkeypatch.setattr(
+            entry.sys, "stdin", type("RpcStdin", (), {"fileno": lambda _: 0})()
+        )
 
         entry._close_rpc_stdin_on_exec()
 

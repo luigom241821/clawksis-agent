@@ -170,40 +170,55 @@ class TestStructuredRead:
             "updated_at": 0,
         }
 
-    def test_goal_contract_subgoals_and_gates_are_structured_and_sanitized(self, server, session):
+    def test_goal_contract_subgoals_and_gates_are_structured_and_sanitized(
+        self, server, session
+    ):
         from clawk_cli.goals import GoalContract, GoalGate
 
         sid, key, _ = session
-        contract = GoalContract(outcome="Card is correct", verification="Run focused tests")
+        contract = GoalContract(
+            outcome="Card is correct", verification="Run focused tests"
+        )
         _save_goal(
             key,
             contract=contract,
             subgoals=["Keep command routing narrow", "Document event hydration seam"],
-            gates=[GoalGate(
-                command="scripts/run_tests.sh tests/tui_gateway/test_session_control.py",
-                timeout_seconds=90,
-                max_retries=2,
-                attempts=1,
-                last_exit_code=1,
-                last_output_tail="private output must stay private",
-            )],
+            gates=[
+                GoalGate(
+                    command="scripts/run_tests.sh tests/tui_gateway/test_session_control.py",
+                    timeout_seconds=90,
+                    max_retries=2,
+                    attempts=1,
+                    last_exit_code=1,
+                    last_output_tail="private output must stay private",
+                )
+            ],
         )
 
         goal = _control(server, sid)["goal"]
         assert goal["title"] == "Finish the desktop control card"
         assert goal["contract"] == contract.to_dict()
-        assert goal["subgoals"] == ["Keep command routing narrow", "Document event hydration seam"]
-        assert goal["gates"] == [{
-            "command": "scripts/run_tests.sh tests/tui_gateway/test_session_control.py",
-            "timeout_seconds": 90,
-            "max_retries": 2,
-            "attempts": 1,
-            "last_exit_code": 1,
-        }]
+        assert goal["subgoals"] == [
+            "Keep command routing narrow",
+            "Document event hydration seam",
+        ]
+        assert goal["gates"] == [
+            {
+                "command": "scripts/run_tests.sh tests/tui_gateway/test_session_control.py",
+                "timeout_seconds": 90,
+                "max_retries": 2,
+                "attempts": 1,
+                "last_exit_code": 1,
+            }
+        ]
         serialized = json.dumps(goal)
         for forbidden in (
-            "last_output_tail", "private output",
-            "route", "session_id", "credential", "api_key",
+            "last_output_tail",
+            "private output",
+            "route",
+            "session_id",
+            "credential",
+            "api_key",
         ):
             assert forbidden not in serialized
 
@@ -215,7 +230,9 @@ class TestStructuredRead:
             ("heartbeat", lambda key: _save_heartbeat(key)),
         ],
     )
-    def test_revision_is_stable_then_changes_for_each_visible_control(self, server, session, kind, setup):
+    def test_revision_is_stable_then_changes_for_each_visible_control(
+        self, server, session, kind, setup
+    ):
         sid, key, _ = session
         setup(key)
         before = _control(server, sid)
@@ -230,6 +247,7 @@ class TestStructuredRead:
             _save_heartbeat(key, prompt="A visibly changed heartbeat prompt")
 
         assert _control(server, sid)["revision"] != before["revision"]
+
 
 class TestDispatcherBackedMutations:
     def test_goal_pause_resume_clear_mutate_real_persisted_state(self, server, session):
@@ -264,29 +282,58 @@ class TestDispatcherBackedMutations:
 
 
 class TestManagerOnlyMutations:
-    def test_subgoal_add_remove_clear_are_real_one_based_mutations_without_dispatch(self, server, session, monkeypatch):
+    def test_subgoal_add_remove_clear_are_real_one_based_mutations_without_dispatch(
+        self, server, session, monkeypatch
+    ):
         from clawk_cli.goals import load_goal
 
         sid, key, _ = session
         _save_goal(key, subgoals=["First criterion"])
         _forbid_dispatch(server, monkeypatch)
 
-        added = _call(server, "session.control", session_id=sid, action="subgoal.add", args={"text": "Second criterion"})
+        added = _call(
+            server,
+            "session.control",
+            session_id=sid,
+            action="subgoal.add",
+            args={"text": "Second criterion"},
+        )
         assert "error" not in added
         assert load_goal(key).subgoals == ["First criterion", "Second criterion"]
 
-        removed = _call(server, "session.control", session_id=sid, action="subgoal.remove", args={"index": 1})
+        removed = _call(
+            server,
+            "session.control",
+            session_id=sid,
+            action="subgoal.remove",
+            args={"index": 1},
+        )
         assert "error" not in removed
         assert load_goal(key).subgoals == ["Second criterion"]
 
-        cleared = _call(server, "session.control", session_id=sid, action="subgoal.clear")
+        cleared = _call(
+            server, "session.control", session_id=sid, action="subgoal.clear"
+        )
         assert "error" not in cleared
         assert load_goal(key).subgoals == []
 
-    def test_subgoal_requires_a_goal_and_valid_arguments_without_dispatch(self, server, session, monkeypatch):
+    def test_subgoal_requires_a_goal_and_valid_arguments_without_dispatch(
+        self, server, session, monkeypatch
+    ):
         sid, key, _ = session
         _forbid_dispatch(server, monkeypatch)
-        assert _error(_call(server, "session.control", session_id=sid, action="subgoal.add", args={"text": "criterion"}))["code"] == 4004
+        assert (
+            _error(
+                _call(
+                    server,
+                    "session.control",
+                    session_id=sid,
+                    action="subgoal.add",
+                    args={"text": "criterion"},
+                )
+            )["code"]
+            == 4004
+        )
 
         _save_goal(key, subgoals=["Only criterion"])
         for args in (
@@ -298,34 +345,59 @@ class TestManagerOnlyMutations:
             {"index": 2},
         ):
             action = "subgoal.add" if "text" in args else "subgoal.remove"
-            assert _error(_call(server, "session.control", session_id=sid, action=action, args=args))["code"] == 4004
+            assert (
+                _error(
+                    _call(
+                        server,
+                        "session.control",
+                        session_id=sid,
+                        action=action,
+                        args=args,
+                    )
+                )["code"]
+                == 4004
+            )
 
-    def test_goal_unwait_clears_the_real_barrier_through_shared_command(self, server, session):
+    def test_goal_unwait_clears_the_real_barrier_through_shared_command(
+        self, server, session
+    ):
         from clawk_cli.goals import GoalManager
 
         sid, key, _ = session
         _save_goal(key)
         GoalManager(key).wait_for_seconds(60, reason="backoff")
 
-        response = _call(server, "session.control", session_id=sid, action="goal.unwait")
+        response = _call(
+            server, "session.control", session_id=sid, action="goal.unwait"
+        )
         assert "error" not in response
         assert GoalManager(key).state.waiting_until == 0.0
 
-    def test_heartbeat_pause_resume_clear_and_no_heartbeat_messages_do_not_dispatch(self, server, session, monkeypatch):
+    def test_heartbeat_pause_resume_clear_and_no_heartbeat_messages_do_not_dispatch(
+        self, server, session, monkeypatch
+    ):
         sid, key, _ = session
         _forbid_dispatch(server, monkeypatch)
         for action in ("heartbeat.pause", "heartbeat.resume", "heartbeat.clear"):
             empty = _call(server, "session.control", session_id=sid, action=action)
-            assert "error" not in empty and empty["result"]["control"]["heartbeat"] is None
+            assert (
+                "error" not in empty and empty["result"]["control"]["heartbeat"] is None
+            )
 
         _save_heartbeat(key, status="active", last_fired_at=1.0)
-        paused = _call(server, "session.control", session_id=sid, action="heartbeat.pause")
+        paused = _call(
+            server, "session.control", session_id=sid, action="heartbeat.pause"
+        )
         assert paused["result"]["control"]["heartbeat"]["status"] == "paused"
 
-        resumed = _call(server, "session.control", session_id=sid, action="heartbeat.resume")
+        resumed = _call(
+            server, "session.control", session_id=sid, action="heartbeat.resume"
+        )
         assert resumed["result"]["control"]["heartbeat"]["last_fired_at"] > 1.0
 
-        cleared = _call(server, "session.control", session_id=sid, action="heartbeat.clear")
+        cleared = _call(
+            server, "session.control", session_id=sid, action="heartbeat.clear"
+        )
         assert cleared["result"]["control"]["heartbeat"] is None
 
 
@@ -339,36 +411,69 @@ class TestErrorsAndEvents:
             ("subgoal.add", []),
         ],
     )
-    def test_invalid_actions_and_malformed_args_return_4004_without_dispatch(self, server, session, monkeypatch, action, args):
+    def test_invalid_actions_and_malformed_args_return_4004_without_dispatch(
+        self, server, session, monkeypatch, action, args
+    ):
         sid, _, _ = session
         _forbid_dispatch(server, monkeypatch)
-        assert _error(_call(server, "session.control", session_id=sid, action=action, args=args))["code"] == 4004
+        assert (
+            _error(
+                _call(
+                    server, "session.control", session_id=sid, action=action, args=args
+                )
+            )["code"]
+            == 4004
+        )
 
     def test_unknown_session_returns_4001(self, server):
-        assert _error(_call(server, "session.control", session_id="gone", action="goal.pause"))["code"] == 4001
-        assert _error(_call(server, "session.control.read", session_id="gone"))["code"] == 4001
+        assert (
+            _error(
+                _call(server, "session.control", session_id="gone", action="goal.pause")
+            )["code"]
+            == 4001
+        )
+        assert (
+            _error(_call(server, "session.control.read", session_id="gone"))["code"]
+            == 4001
+        )
 
     def test_dispatch_error_emits_no_update(self, server, session, monkeypatch):
         sid, key, _ = session
         _save_goal(key)
         emitted = []
         monkeypatch.setattr(server, "_emit", lambda *event: emitted.append(event))
-        monkeypatch.setitem(server._methods, "command.dispatch", lambda rid, params: server._err(rid, 4018, "dispatch failed"))
+        monkeypatch.setitem(
+            server._methods,
+            "command.dispatch",
+            lambda rid, params: server._err(rid, 4018, "dispatch failed"),
+        )
 
         response = _call(server, "session.control", session_id=sid, action="goal.pause")
         assert _error(response)["code"] == 4018
         assert emitted == []
 
-    def test_adapter_error_becomes_4004_and_emits_no_update(self, server, session, monkeypatch):
+    def test_adapter_error_becomes_4004_and_emits_no_update(
+        self, server, session, monkeypatch
+    ):
         from clawk_cli.goals import GoalManager
 
         sid, key, _ = session
         _save_goal(key)
         emitted = []
         monkeypatch.setattr(server, "_emit", lambda *event: emitted.append(event))
-        monkeypatch.setattr(GoalManager, "add_subgoal", lambda self, text: (_ for _ in ()).throw(RuntimeError("blocked")))
+        monkeypatch.setattr(
+            GoalManager,
+            "add_subgoal",
+            lambda self, text: (_ for _ in ()).throw(RuntimeError("blocked")),
+        )
 
-        response = _call(server, "session.control", session_id=sid, action="subgoal.add", args={"text": "criterion"})
+        response = _call(
+            server,
+            "session.control",
+            session_id=sid,
+            action="subgoal.add",
+            args={"text": "criterion"},
+        )
         assert _error(response)["code"] == 4004
         assert emitted == []
 
@@ -379,54 +484,91 @@ class TestUpdatePublication:
 
     def _capture(self, server, monkeypatch):
         emitted = []
-        monkeypatch.setattr(server, "_emit", lambda event, event_sid, payload=None: emitted.append((event, event_sid, payload)))
+        monkeypatch.setattr(
+            server,
+            "_emit",
+            lambda event, event_sid, payload=None: emitted.append(
+                (event, event_sid, payload)
+            ),
+        )
         return emitted
 
-    def test_control_action_publishes_exactly_one_update_matching_the_response(self, server, session, monkeypatch):
+    def test_control_action_publishes_exactly_one_update_matching_the_response(
+        self, server, session, monkeypatch
+    ):
         sid, key, _ = session
         _save_goal(key)
         emitted = self._capture(server, monkeypatch)
         response = _call(server, "session.control", session_id=sid, action="goal.pause")
         updates = [e for e in emitted if e[0] == "session.control.update"]
-        assert updates == [("session.control.update", sid, {"control": response["result"]["control"]})]
+        assert updates == [
+            ("session.control.update", sid, {"control": response["result"]["control"]})
+        ]
 
-    def test_a_tool_completion_racing_a_user_change_never_publishes_the_older_snapshot(self, server, session, monkeypatch):
+    def test_a_tool_completion_racing_a_user_change_never_publishes_the_older_snapshot(
+        self, server, session, monkeypatch
+    ):
         """The tool-completion republish runs on the agent thread: if it read the goal just before the user
         added a criterion, that older snapshot must not be emitted after the user's (Ink/Desktop keep the last)."""
         sid, key, entry = session
         _save_goal(key)
         server._publish_session_control_snapshot(sid, entry)
         emitted = self._capture(server, monkeypatch)
-        read, release, real_snapshot = threading.Event(), threading.Event(), server._snapshot_control
+        read, release, real_snapshot = (
+            threading.Event(),
+            threading.Event(),
+            server._snapshot_control,
+        )
 
-        def snapshot_then_stall(session_key):  # scheduling only: the tool thread stalls after its read
+        def snapshot_then_stall(
+            session_key,
+        ):  # scheduling only: the tool thread stalls after its read
             control = real_snapshot(session_key)
             if threading.current_thread().name == "tool":
                 read.set()
                 release.wait(5)
             return control
+
         monkeypatch.setattr(server, "_snapshot_control", snapshot_then_stall)
-        tool = threading.Thread(name="tool", target=server._on_tool_complete,
-                                args=(sid, "call", "terminal", {"command": "true"}, '{"exit_code": 0}'))
+        tool = threading.Thread(
+            name="tool",
+            target=server._on_tool_complete,
+            args=(sid, "call", "terminal", {"command": "true"}, '{"exit_code": 0}'),
+        )
         tool.start()
         assert read.wait(5)
-        user = threading.Thread(target=_call, args=(server, "session.control"),
-                                kwargs={"session_id": sid, "action": "subgoal.add", "args": {"text": "newer criterion"}})
+        user = threading.Thread(
+            target=_call,
+            args=(server, "session.control"),
+            kwargs={
+                "session_id": sid,
+                "action": "subgoal.add",
+                "args": {"text": "newer criterion"},
+            },
+        )
         user.start()
         user.join(0.5)
         release.set()
         tool.join(5)
         user.join(5)
-        updates = [payload["control"]["goal"]["subgoals"] for event, _sid, payload in emitted
-                   if event == "session.control.update"]
+        updates = [
+            payload["control"]["goal"]["subgoals"]
+            for event, _sid, payload in emitted
+            if event == "session.control.update"
+        ]
         assert updates[-1] == ["newer criterion"]
 
-    def test_a_stalled_client_write_never_delays_another_sessions_publish(self, server, session, monkeypatch):
+    def test_a_stalled_client_write_never_delays_another_sessions_publish(
+        self, server, session, monkeypatch
+    ):
         """Ordering is per session: while one session's socket write stalls (up to the transport's write
         timeout), an unrelated session's control update and tool completions still go out."""
         sid, key, entry = session
         _save_goal(key)
-        other_sid, other_key = f"sid-control-{uuid.uuid4().hex}", f"control-{uuid.uuid4().hex}"
+        other_sid, other_key = (
+            f"sid-control-{uuid.uuid4().hex}",
+            f"control-{uuid.uuid4().hex}",
+        )
         other = {**entry, "session_key": other_key, "history_lock": threading.Lock()}
         server._sessions[other_sid] = other
         _save_goal(other_key)
@@ -437,25 +579,37 @@ class TestUpdatePublication:
                 stalled.set()
                 release.wait(5)
             emitted.append(event_sid)
+
         monkeypatch.setattr(server, "_emit", emit)
-        slow = threading.Thread(target=server._publish_session_control_snapshot, args=(sid, entry))
+        slow = threading.Thread(
+            target=server._publish_session_control_snapshot, args=(sid, entry)
+        )
         slow.start()
         try:
             assert stalled.wait(5)
-            fast = threading.Thread(target=server._publish_session_control_snapshot, args=(other_sid, other))
+            fast = threading.Thread(
+                target=server._publish_session_control_snapshot, args=(other_sid, other)
+            )
             fast.start()
-            fast.join(2)  # >= 2 s per tests/AGENTS.md; below the stalled writer's 5 s wait
-            assert not fast.is_alive(), "another session's stalled write blocked this publish"
+            fast.join(
+                2
+            )  # >= 2 s per tests/AGENTS.md; below the stalled writer's 5 s wait
+            assert not fast.is_alive(), (
+                "another session's stalled write blocked this publish"
+            )
             assert emitted == [other_sid]
         finally:
             release.set()
             slow.join(5)
             server._sessions.pop(other_sid, None)
             from clawk_cli.goals import GoalManager
+
             GoalManager(other_key).clear()
 
     @pytest.mark.parametrize("name,arg", [("goal", "pause"), ("loop", "pause")])
-    def test_typed_slash_via_command_dispatch_publishes_the_new_state(self, server, session, monkeypatch, name, arg):
+    def test_typed_slash_via_command_dispatch_publishes_the_new_state(
+        self, server, session, monkeypatch, name, arg
+    ):
         """/goal and /loop never reach the slash worker (``_PENDING_INPUT_COMMANDS``) — the built-in path must
         publish too, or the structured card stays stale until the next turn."""
         sid, key, _ = session
@@ -475,10 +629,18 @@ class TestUpdatePublication:
     def test_unknown_dispatch_publishes_nothing(self, server, session, monkeypatch):
         sid, _, _ = session
         emitted = self._capture(server, monkeypatch)
-        assert "error" in _call(server, "command.dispatch", session_id=sid, name="definitely-not-a-command", arg="")
+        assert "error" in _call(
+            server,
+            "command.dispatch",
+            session_id=sid,
+            name="definitely-not-a-command",
+            arg="",
+        )
         assert [e for e in emitted if e[0] == "session.control.update"] == []
 
-    def test_real_turn_publishes_after_the_goal_judge_ran(self, server, session, monkeypatch, tmp_path):
+    def test_real_turn_publishes_after_the_goal_judge_ran(
+        self, server, session, monkeypatch, tmp_path
+    ):
         """``message.complete`` precedes the post-turn goal judge, so a client refresh keyed on that event reads
         the pre-judge turn count. A real ``_run_prompt_submit`` turn (inline thread, stub agent) must publish the
         snapshot AFTER the judge with the incremented count."""
@@ -487,7 +649,9 @@ class TestUpdatePublication:
         emitted = self._capture(server, monkeypatch)
 
         class _InlineThread:
-            def __init__(self, target=None, daemon=None, args=(), kwargs=None, name=None):
+            def __init__(
+                self, target=None, daemon=None, args=(), kwargs=None, name=None
+            ):
                 self._t, self._a, self._k = target, args, kwargs or {}
 
             def start(self):
@@ -500,10 +664,14 @@ class TestUpdatePublication:
                 return None
 
         for name, value in {
-            "_wire_callbacks": lambda sid_: None, "_sync_agent_model_with_config": lambda sid_, s: None,
-            "_session_cwd": lambda s: str(tmp_path), "_register_session_cwd": lambda s: None,
-            "_tts_stream_begin": lambda: None, "_sync_session_key_after_compress": lambda *a, **k: None,
-            "_get_usage": lambda agent: {}, "_clawk_home": tmp_path,
+            "_wire_callbacks": lambda sid_: None,
+            "_sync_agent_model_with_config": lambda sid_, s: None,
+            "_session_cwd": lambda s: str(tmp_path),
+            "_register_session_cwd": lambda s: None,
+            "_tts_stream_begin": lambda: None,
+            "_sync_session_key_after_compress": lambda *a, **k: None,
+            "_get_usage": lambda agent: {},
+            "_clawk_home": tmp_path,
         }.items():
             monkeypatch.setattr(server, name, value)
         monkeypatch.setattr(server.threading, "Thread", _InlineThread)
@@ -518,14 +686,30 @@ class TestUpdatePublication:
             return {"should_continue": False, "message": ""}
 
         monkeypatch.setattr(GoalManager, "evaluate_after_turn", judge)
-        entry.update({"image_counter": 0, "slash_worker": None, "show_reasoning": False, "tool_progress_mode": "all",
-                      "inflight_turn": None, "running": True,
-                      "agent": SimpleNamespace(session_id=key, clear_interrupt=lambda: None,
-                                               run_conversation=lambda message, **kw: {"final_response": "done"})})
+        entry.update(
+            {
+                "image_counter": 0,
+                "slash_worker": None,
+                "show_reasoning": False,
+                "tool_progress_mode": "all",
+                "inflight_turn": None,
+                "running": True,
+                "agent": SimpleNamespace(
+                    session_id=key,
+                    clear_interrupt=lambda: None,
+                    run_conversation=lambda message, **kw: {"final_response": "done"},
+                ),
+            }
+        )
 
         assert server._run_prompt_submit("rid", sid, entry, "work on it")
 
         order = [e[0] for e in emitted]
         assert "message.complete" in order and "session.control.update" in order
         assert order.index("message.complete") < order.index("session.control.update")
-        assert emitted[order.index("session.control.update")][2]["control"]["goal"]["turns_used"] == 4
+        assert (
+            emitted[order.index("session.control.update")][2]["control"]["goal"][
+                "turns_used"
+            ]
+            == 4
+        )

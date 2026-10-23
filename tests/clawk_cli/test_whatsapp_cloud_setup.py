@@ -50,12 +50,10 @@ class TestPhoneNumberIdValidator:
 
 
 class TestAccessTokenValidator:
-
     def test_rejects_empty(self):
         ok, reason = _validate_access_token("")
         assert not ok
         assert "required" in reason.lower()
-
 
     def test_rejects_github_token_with_helpful_message(self):
         ok, reason = _validate_access_token("ghp_abcdefghijklmnop")
@@ -64,8 +62,6 @@ class TestAccessTokenValidator:
 
 
 class TestAppSecretValidator:
-
-
     def test_rejects_wrong_length(self):
         ok, reason = _validate_app_secret("0123456789abcdef")  # 16 chars
         assert not ok
@@ -77,9 +73,7 @@ class TestAppSecretValidator:
         assert "hex" in reason.lower()
 
 
-
 class TestWabaIdValidator:
-
     def test_rejects_non_numeric(self):
         ok, _ = _validate_waba_id("abc-def")
         assert not ok
@@ -120,15 +114,17 @@ def _env_value(clawk_home: Path, key: str) -> str | None:
 class TestWizardFlow:
     def test_happy_path_minimal(self, isolated_home, monkeypatch):
         """Provide only the required fields; skip optional steps."""
-        inputs = iter([
-            "",                                       # press Enter to continue
-            "7794189252778687",                       # Phone Number ID
-            "EAA" + "x" * 200,                        # Access Token
-            "0123456789abcdef0123456789abcdef",       # App Secret
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "15551234567",                            # Allowed users
-        ])
+        inputs = iter(
+            [
+                "",  # press Enter to continue
+                "7794189252778687",  # Phone Number ID
+                "EAA" + "x" * 200,  # Access Token
+                "0123456789abcdef0123456789abcdef",  # App Secret
+                "",  # App ID — skip
+                "",  # WABA ID — skip
+                "15551234567",  # Allowed users
+            ]
+        )
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -137,29 +133,37 @@ class TestWizardFlow:
         out = buf.getvalue()
         assert "SETUP COMPLETE" in out
         # Required fields written
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID") == "7794189252778687"
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ACCESS_TOKEN").startswith("EAA")
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_PHONE_NUMBER_ID")
+            == "7794189252778687"
+        )
+        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ACCESS_TOKEN").startswith(
+            "EAA"
+        )
         assert len(_env_value(isolated_home, "WHATSAPP_CLOUD_APP_SECRET")) == 32
-        assert _env_value(isolated_home, "WHATSAPP_CLOUD_ALLOWED_USERS") == "15551234567"
+        assert (
+            _env_value(isolated_home, "WHATSAPP_CLOUD_ALLOWED_USERS") == "15551234567"
+        )
         # Verify token auto-generated
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_VERIFY_TOKEN")
         # Optional fields stayed unset
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_APP_ID") is None
         assert _env_value(isolated_home, "WHATSAPP_CLOUD_WABA_ID") is None
 
-
     def test_verify_token_is_auto_generated(self, isolated_home, monkeypatch):
         """The verify token is one of the few things the user shouldn't
         have to invent. Wizard generates a strong random one."""
-        inputs = iter([
-            "",                                       # continue
-            "7794189252778687",                       # Phone ID
-            "EAA" + "x" * 200,                        # Token
-            "0123456789abcdef0123456789abcdef",       # App Secret
-            "",                                       # App ID — skip
-            "",                                       # WABA ID — skip
-            "15551234567",                            # Allowed users
-        ])
+        inputs = iter(
+            [
+                "",  # continue
+                "7794189252778687",  # Phone ID
+                "EAA" + "x" * 200,  # Token
+                "0123456789abcdef0123456789abcdef",  # App Secret
+                "",  # App ID — skip
+                "",  # WABA ID — skip
+                "15551234567",  # Allowed users
+            ]
+        )
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -170,8 +174,6 @@ class TestWizardFlow:
         assert len(verify_token) >= 32
         # Should also be echoed to user output so they can paste into Meta
         assert verify_token in buf.getvalue()
-
-
 
 
 # =========================================================================
@@ -185,22 +187,23 @@ class TestProfilePolishGuidance:
     Verify that the SETUP COMPLETE block points the user at the right
     place rather than leaving them to figure it out on their own."""
 
-
     def test_polish_block_deeplinks_when_waba_id_known(
         self, isolated_home, monkeypatch
     ):
         """If the user gave us the WABA ID earlier in the wizard, the
         Business Manager URL should pre-select their account."""
         waba = "987654321098765"
-        inputs = iter([
-            "",
-            "7794189252778687",
-            "EAA" + "x" * 200,
-            "0123456789abcdef0123456789abcdef",
-            "",                          # App ID — skip
-            waba,                        # WABA ID — provided
-            "15551234567",
-        ])
+        inputs = iter(
+            [
+                "",
+                "7794189252778687",
+                "EAA" + "x" * 200,
+                "0123456789abcdef0123456789abcdef",
+                "",  # App ID — skip
+                waba,  # WABA ID — provided
+                "15551234567",
+            ]
+        )
         monkeypatch.setattr("builtins.input", lambda *a, **kw: next(inputs))
         buf = io.StringIO()
         with redirect_stdout(buf):

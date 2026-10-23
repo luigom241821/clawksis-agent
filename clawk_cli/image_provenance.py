@@ -36,7 +36,14 @@ class ImageProvenance:
 
 
 def _invalid(path: Path, reason: str) -> ImageProvenance:
-    return ImageProvenance(IMAGE_PROVENANCE_SCHEMA, "image", "unknown", marker_path=str(path), valid=False, error=reason)
+    return ImageProvenance(
+        IMAGE_PROVENANCE_SCHEMA,
+        "image",
+        "unknown",
+        marker_path=str(path),
+        valid=False,
+        error=reason,
+    )
 
 
 def _optional_string(payload: dict, name: str) -> Optional[str]:
@@ -46,7 +53,9 @@ def _optional_string(payload: dict, name: str) -> Optional[str]:
     return (value.strip() or None) if value is not None else None
 
 
-def read_image_provenance(marker_path: Optional[Path] = None) -> Optional[ImageProvenance]:
+def read_image_provenance(
+    marker_path: Optional[Path] = None,
+) -> Optional[ImageProvenance]:
     """Read the baked marker without consulting environment or config. Never raises.
     ``marker_path`` is a dependency-injection seam for tests and alternate image builders."""
     path = IMAGE_PROVENANCE_PATH
@@ -58,7 +67,9 @@ def read_image_provenance(marker_path: Optional[Path] = None) -> Optional[ImageP
         marker_stat = path.lstat()
     except FileNotFoundError:
         return None
-    except BaseException as exc:  # permission errors and other lookup failures do not prove absence
+    except (
+        BaseException
+    ) as exc:  # permission errors and other lookup failures do not prove absence
         return _invalid(path, f"marker_presence_unreadable:{type(exc).__name__}")
     if not stat.S_ISREG(marker_stat.st_mode):
         return _invalid(path, "marker_not_regular_file")
@@ -80,7 +91,16 @@ def read_image_provenance(marker_path: Optional[Path] = None) -> Optional[ImageP
     if not isinstance(manager, str) or not manager.strip():
         return _invalid(path, "missing_manager")
     try:
-        optional = {name: _optional_string(payload, name) for name in ("image", "version", "revision")}
+        optional = {
+            name: _optional_string(payload, name)
+            for name in ("image", "version", "revision")
+        }
     except TypeError as exc:
         return _invalid(path, f"invalid_{exc.args[0]}")
-    return ImageProvenance(IMAGE_PROVENANCE_SCHEMA, "image", manager.strip(), marker_path=str(path), **optional)
+    return ImageProvenance(
+        IMAGE_PROVENANCE_SCHEMA,
+        "image",
+        manager.strip(),
+        marker_path=str(path),
+        **optional,
+    )

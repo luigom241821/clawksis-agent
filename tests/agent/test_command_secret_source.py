@@ -143,7 +143,10 @@ def test_fetch_parses_dotenv_blob(tmp_path):
     )
     result = CommandSource().fetch({"enabled": True, "command": str(helper)}, tmp_path)
     assert result.error is None
-    assert result.secrets == {"CMDTEST_API_KEY": "sk-applied", "CMDTEST_TOKEN": "tok-applied"}
+    assert result.secrets == {
+        "CMDTEST_API_KEY": "sk-applied",
+        "CMDTEST_TOKEN": "tok-applied",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +157,7 @@ def test_fetch_parses_dotenv_blob(tmp_path):
 @pytest.fixture(autouse=True)
 def _clean_registry():
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
     yield
     registry._reset_registry_for_tests()
@@ -165,10 +169,7 @@ def test_registry_command_source_applies_and_records_source(tmp_path, monkeypatc
         tmp_path, "printf 'CMDTEST_API_KEY=sk-dispatch\\nCMDTEST_TOKEN=tok-dispatch\\n'"
     )
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n"
-        "  command:\n"
-        "    enabled: true\n"
-        f"    command: {helper}\n",
+        f"secrets:\n  command:\n    enabled: true\n    command: {helper}\n",
         encoding="utf-8",
     )
 
@@ -187,8 +188,7 @@ def test_registry_status_line_printed_once_per_home(tmp_path, monkeypatch, capsy
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     helper = _write_helper(tmp_path, "printf 'CMDTEST_API_KEY=sk-once\\n'")
     (tmp_path / "config.yaml").write_text(
-        "secrets:\n  command:\n    enabled: true\n"
-        f"    command: {helper}\n",
+        f"secrets:\n  command:\n    enabled: true\n    command: {helper}\n",
         encoding="utf-8",
     )
 

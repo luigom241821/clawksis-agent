@@ -3,6 +3,7 @@
 The SDK still owns runtime requests and refresh. Device authorization is only
 started by `clawk mcp login/reauth`, never a background reconnect.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,11 +30,14 @@ async def _discover(client, provider):
         extract_resource_metadata_from_www_auth,
         handle_protected_resource_response,
     )
+
     context = provider.context
     response = await client.get(context.server_url)
     challenge = extract_resource_metadata_from_www_auth(response)
     prm = None
-    for url in build_protected_resource_metadata_discovery_urls(challenge, context.server_url):
+    for url in build_protected_resource_metadata_discovery_urls(
+        challenge, context.server_url
+    ):
         response = await client.get(url)
         prm = await handle_protected_resource_response(response)
         if prm:
@@ -46,7 +50,9 @@ async def _discover(client, provider):
     failures = []
     for auth_server_url in servers:
         try:
-            metadata = await _device_metadata(client, context.server_url, auth_server_url)
+            metadata = await _device_metadata(
+                client, context.server_url, auth_server_url
+            )
         except (RuntimeError, OAuthFlowError, ValueError) as exc:
             failures.append((auth_server_url, exc))
             continue
@@ -55,23 +61,31 @@ async def _discover(client, provider):
         return
     if len(failures) == 1:
         raise failures[0][1]
-    raise RuntimeError("No advertised authorization server supports device login: "
-                       + "; ".join(f"{url}: {exc}" for url, exc in failures))
+    raise RuntimeError(
+        "No advertised authorization server supports device login: "
+        + "; ".join(f"{url}: {exc}" for url, exc in failures)
+    )
 
 
 async def _device_metadata(client, server_url, auth_server_url):
     """Issuer-bound device metadata of one authorization server; raises when it is unusable."""
-    from mcp.client.auth.utils import build_oauth_authorization_server_metadata_discovery_urls
+    from mcp.client.auth.utils import (
+        build_oauth_authorization_server_metadata_discovery_urls,
+    )
 
     from tools.mcp_oauth_provider import metadata_issued_by_origin
 
-    for url in build_oauth_authorization_server_metadata_discovery_urls(auth_server_url, server_url):
+    for url in build_oauth_authorization_server_metadata_discovery_urls(
+        auth_server_url, server_url
+    ):
         response = await client.get(url)
         if response.status_code == 404:
             continue
         data = _payload(response, "OAuth metadata")
         if not data.get("device_authorization_endpoint"):
-            raise RuntimeError("Server does not advertise device authorization; use --flow browser if supported")
+            raise RuntimeError(
+                "Server does not advertise device authorization; use --flow browser if supported"
+            )
         metadata = DeviceOAuthMetadata.model_validate(data)
         # The advertised identifier reaches here as str(AnyHttpUrl) with a trailing "/" (pydantic
         # normalizes a host-only URL to its root path) while the document issuer keeps the advertised
@@ -83,7 +97,10 @@ async def _device_metadata(client, server_url, auth_server_url):
         if expected and not metadata_issued_by_origin(metadata, expected, response):
             if str(metadata.issuer).rstrip("/") != expected:
                 from mcp.client.auth.exceptions import OAuthFlowError
-                raise OAuthFlowError(f"Authorization server metadata issuer mismatch: {metadata.issuer} != {expected}")
+
+                raise OAuthFlowError(
+                    f"Authorization server metadata issuer mismatch: {metadata.issuer} != {expected}"
+                )
         grants = metadata.grant_types_supported
         if grants is not None and DEVICE_GRANT not in grants:
             raise RuntimeError("Server does not advertise the device_code grant")
@@ -118,7 +135,9 @@ async def _register(client, provider, cfg):
     else:
         endpoint = context.oauth_metadata.registration_endpoint
         if not endpoint:
-            raise RuntimeError("Server has no registration endpoint; configure oauth.client_id (and client_secret if required)")
+            raise RuntimeError(
+                "Server has no registration endpoint; configure oauth.client_id (and client_secret if required)"
+            )
         response = await client.post(str(endpoint), json=metadata)
         data = _payload(response, "Client registration")
     # SEP-2352: bind the credentials to the identifier the SDK's runtime flow compares them against — the
@@ -131,7 +150,9 @@ async def _register(client, provider, cfg):
     try:
         check_registration_usable(context.client_info)
     except OAuthRegistrationError:
-        raise RuntimeError("Device OAuth client has unsupported or incomplete token endpoint authentication") from None
+        raise RuntimeError(
+            "Device OAuth client has unsupported or incomplete token endpoint authentication"
+        ) from None
 
 
 def _positive_seconds(value, label):
@@ -152,36 +173,61 @@ async def _authorize(client, provider, cfg):
         data["scope"] = context.client_metadata.scope
     data.update(google_offline_access_params(context))
     data, headers = context.prepare_token_auth(data, {})
-    response = await client.post(str(context.oauth_metadata.device_authorization_endpoint), data=data, headers=headers)
+    response = await client.post(
+        str(context.oauth_metadata.device_authorization_endpoint),
+        data=data,
+        headers=headers,
+    )
     authorization = _payload(response, "Device authorization")
     for key in ("device_code", "user_code", "verification_uri"):
         if not isinstance(authorization.get(key), str) or not authorization[key]:
             raise RuntimeError(f"Device authorization is missing {key}")
     verification = AnyHttpUrl(authorization["verification_uri"])
     interval = _positive_seconds(authorization.get("interval", 5), "interval")
-    deadline = time.monotonic() + min(_positive_seconds(authorization["expires_in"], "expires_in"),
-                                     _positive_seconds(cfg.get("timeout", 300), "timeout"))
-    print(f"\n  MCP OAuth: open {verification} on any device.\n  Code: {authorization['user_code']}\n"
-          "  Waiting for approval...\n", file=sys.stderr, flush=True)
-    token_data = {"client_id": context.client_info.client_id, "device_code": authorization["device_code"],
-                  "grant_type": DEVICE_GRANT, "resource": resource}
+    deadline = time.monotonic() + min(
+        _positive_seconds(authorization["expires_in"], "expires_in"),
+        _positive_seconds(cfg.get("timeout", 300), "timeout"),
+    )
+    print(
+        f"\n  MCP OAuth: open {verification} on any device.\n  Code: {authorization['user_code']}\n"
+        "  Waiting for approval...\n",
+        file=sys.stderr,
+        flush=True,
+    )
+    token_data = {
+        "client_id": context.client_info.client_id,
+        "device_code": authorization["device_code"],
+        "grant_type": DEVICE_GRANT,
+        "resource": resource,
+    }
     token_data, headers = context.prepare_token_auth(token_data, {})
     httpx = sdk_httpx()
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= interval:
-            raise RuntimeError("Device authorization expired before approval; run login again")
+            raise RuntimeError(
+                "Device authorization expired before approval; run login again"
+            )
         await asyncio.sleep(interval)
-        request = provider._prepare_token_request(httpx.Request("POST", str(context.oauth_metadata.token_endpoint),
-                                                               data=token_data, headers=headers))
+        request = provider._prepare_token_request(
+            httpx.Request(
+                "POST",
+                str(context.oauth_metadata.token_endpoint),
+                data=token_data,
+                headers=headers,
+            )
+        )
         try:
-            response = await asyncio.wait_for(client.send(request), timeout=deadline - time.monotonic())
+            response = await asyncio.wait_for(
+                client.send(request), timeout=deadline - time.monotonic()
+            )
         except (TimeoutError, httpx.TimeoutException):
             # RFC 8628 requires reducing polling frequency after connection timeouts.
             interval *= 2
             continue
         if 200 <= response.status_code < 300:
             from mcp.shared.auth import OAuthToken
+
             tokens = OAuthToken.model_validate(_payload(response, "Device token"))
             if not tokens.access_token:
                 raise RuntimeError("Device token response has no access token")
@@ -197,7 +243,11 @@ async def _authorize(client, provider, cfg):
         if error == "slow_down":
             interval += 5
             continue
-        safe_error = error if error in {"access_denied", "expired_token"} else f"HTTP {response.status_code}"
+        safe_error = (
+            error
+            if error in {"access_denied", "expired_token"}
+            else f"HTTP {response.status_code}"
+        )
         raise RuntimeError(f"Device authorization failed: {safe_error}")
 
 
@@ -211,9 +261,13 @@ async def login_device(name, server_url, oauth_config):
     cfg, storage = prepare_oauth_config(name, server_url, oauth_config)
     # Device flow never binds a callback socket or uses the hosted browser CIMD.
     cfg["_resolved_port"] = cfg.get("redirect_port", 8420)
-    provider = ClawksisMCPOAuthProvider(server_url=server_url, server_name=name, storage=storage,
-                                     client_metadata=_build_client_metadata(cfg),
-                                     token_user_agent=cfg.get("user_agent"))
+    provider = ClawksisMCPOAuthProvider(
+        server_url=server_url,
+        server_name=name,
+        storage=storage,
+        client_metadata=_build_client_metadata(cfg),
+        token_user_agent=cfg.get("user_agent"),
+    )
     httpx = sdk_httpx()
     try:
         async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:

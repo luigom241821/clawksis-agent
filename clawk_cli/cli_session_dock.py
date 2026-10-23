@@ -5,6 +5,7 @@ countdown, and the prompts waiting in ``/queue`` around the subagent and process
 visible while the agent works instead of only through ``/goal status``, ``/loop status`` and
 ``/queue list``.
 """
+
 from __future__ import annotations
 
 import math
@@ -33,7 +34,11 @@ def goal_line(cli) -> str:
     the spinner thread every second and must never be the thing that opens state.db.
     """
     mgr = getattr(cli, "_goal_manager", None)
-    if mgr is None or mgr.session_id != getattr(cli, "session_id", None) or not mgr.has_goal():
+    if (
+        mgr is None
+        or mgr.session_id != getattr(cli, "session_id", None)
+        or not mgr.has_goal()
+    ):
         return ""
     return mgr.status_line()
 
@@ -61,10 +66,18 @@ def loop_row(cli, now: float | None = None) -> tuple[str, str, str]:
     """
     mgr = getattr(cli, "_loop_manager", None)
     # One read of ``state``: the input thread's ``/loop stop`` sets it to None under this spinner-thread poll.
-    s = mgr.state if mgr is not None and mgr.session_id == getattr(cli, "session_id", None) else None
+    s = (
+        mgr.state
+        if mgr is not None and mgr.session_id == getattr(cli, "session_id", None)
+        else None
+    )
     if s is None or s.status not in {"active", "paused"}:
         return "", "", ""
-    runs = f"{s.ticks_fired}/{s.times} runs" if s.times else f"{s.ticks_fired} run{'s' if s.ticks_fired != 1 else ''}"
+    runs = (
+        f"{s.ticks_fired}/{s.times} runs"
+        if s.times
+        else f"{s.ticks_fired} run{'s' if s.ticks_fired != 1 else ''}"
+    )
     if s.status == "paused":
         reason = f" · {s.paused_reason}" if s.paused_reason else ""
         return "⏸ loop paused", f"⏸ loop paused{reason} · {runs} · {s.prompt}", s.prompt
@@ -72,26 +85,38 @@ def loop_row(cli, now: float | None = None) -> tuple[str, str, str]:
         when = "running now"
     else:
         remaining = s.next_due_at - (time.time() if now is None else now)
-        when = f"next in {countdown(remaining)}" if remaining > 0 else "due, waiting for idle"
-    return f"↻ loop {when}", f"↻ loop · {s.cadence_label()} · {runs} · {when} · {s.prompt}", s.prompt
+        when = (
+            f"next in {countdown(remaining)}"
+            if remaining > 0
+            else "due, waiting for idle"
+        )
+    return (
+        f"↻ loop {when}",
+        f"↻ loop · {s.cadence_label()} · {runs} · {when} · {s.prompt}",
+        s.prompt,
+    )
 
 
 def _prompt_text(item) -> str:
     if isinstance(item, tuple):  # (text, images) from an image-attached submit
         item = item[0]
     # TimelineNotification carries a compact title; voice/seeded sentinels wrap their text.
-    text = getattr(item, "display_text", None) or getattr(item, "text", None) or str(item)
+    text = (
+        getattr(item, "display_text", None) or getattr(item, "text", None) or str(item)
+    )
     return " ".join(str(text).split())
 
 
 def queued_prompts(cli) -> list[str]:
     """One-line previews of the turns waiting in ``_pending_input``, oldest first."""
     from clawk_cli.gateway_tools_notify import gateway_store
+
     owned: list = []
     store = gateway_store(cli) if getattr(cli, "session_id", None) else None
     if store is not None:
         # The gateway's FIFO runs first (#134889 N5): its queued admissions as the owner last published them.
         from clawk_cli.gateway_queue import published_queue
+
         owned = published_queue(cli, store)
     pending = getattr(cli, "_pending_input", None)
     if pending is None:

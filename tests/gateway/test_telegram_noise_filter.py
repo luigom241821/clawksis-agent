@@ -117,7 +117,9 @@ def test_telegram_status_suppresses_auxiliary_and_retry_noise():
     ]
 
     for message in noisy_messages:
-        assert _prepare_gateway_status_message(Platform.TELEGRAM, "warn", message) is None
+        assert (
+            _prepare_gateway_status_message(Platform.TELEGRAM, "warn", message) is None
+        )
 
 
 def test_programmatic_surfaces_keep_raw_status():
@@ -137,7 +139,10 @@ def test_programmatic_surfaces_keep_raw_status():
 @pytest.mark.parametrize("message", ["still on it", "⏳ Working — 3 min"])
 def test_telegram_status_keeps_legitimate_heartbeat_messages(message):
     """The compression filter must not swallow user-facing work heartbeats."""
-    assert _prepare_gateway_status_message(Platform.TELEGRAM, "lifecycle", message) == message
+    assert (
+        _prepare_gateway_status_message(Platform.TELEGRAM, "lifecycle", message)
+        == message
+    )
 
 
 @pytest.mark.parametrize("platform", CHAT_PLATFORMS)
@@ -261,9 +266,18 @@ def test_chat_gateways_drop_interrupt_sentinel(platform):
         ("<|eos|><|eos|>\n", ""),
         ("normal answer<|eos|>", "normal answer"),
         ("normal answer<|eos|>  \n", "normal answer"),
-        ("literal <|eos|> in the middle stays visible", "literal <|eos|> in the middle stays visible"),
-        ("case variant remains literal: <|EOS|>", "case variant remains literal: <|EOS|>"),
-        ("inline code remains literal: `<|eos|>`", "inline code remains literal: `<|eos|>`"),
+        (
+            "literal <|eos|> in the middle stays visible",
+            "literal <|eos|> in the middle stays visible",
+        ),
+        (
+            "case variant remains literal: <|EOS|>",
+            "case variant remains literal: <|EOS|>",
+        ),
+        (
+            "inline code remains literal: `<|eos|>`",
+            "inline code remains literal: `<|eos|>`",
+        ),
     ],
 )
 def test_chat_gateways_strip_terminal_eos_control_tokens(platform, raw, expected):
@@ -273,7 +287,10 @@ def test_chat_gateways_strip_terminal_eos_control_tokens(platform, raw, expected
 
 def test_local_surface_keeps_terminal_eos_control_token():
     """Raw/programmatic surfaces retain provider output byte-for-byte."""
-    assert _sanitize_gateway_final_response("local", "normal answer<|eos|>") == "normal answer<|eos|>"
+    assert (
+        _sanitize_gateway_final_response("local", "normal answer<|eos|>")
+        == "normal answer<|eos|>"
+    )
 
 
 def test_telegram_status_sanitizes_raw_provider_security_errors():
@@ -319,8 +336,6 @@ def test_telegram_final_response_redacts_auth_secrets():
     assert "sign-in" in sanitized.lower()
     assert "/login" in sanitized
     assert "sk-live" not in sanitized
-
-
 
 
 # Synthetic credential shapes from #23810. Bodies are placeholder gibberish —

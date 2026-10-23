@@ -17,9 +17,19 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 from clawk_cli.local_runtime.context_policy import (
-    FLOOR, RUNTIME_OVERHEAD_BYTES, TARGET_WINDOW, LaunchPlan, plan_launch)
+    FLOOR,
+    RUNTIME_OVERHEAD_BYTES,
+    TARGET_WINDOW,
+    LaunchPlan,
+    plan_launch,
+)
 from clawk_cli.local_runtime.estimator import (
-    HardwareBudget, LayerKind, ModelProfile, PhysicsRefusal, as_loaded)
+    HardwareBudget,
+    LayerKind,
+    ModelProfile,
+    PhysicsRefusal,
+    as_loaded,
+)
 from clawk_cli.local_runtime.gguf import model_id_from_stem
 from clawk_platform.host.products import is_nvidia_n1x_pci_id
 
@@ -35,11 +45,15 @@ class AssetFile:
     router never lists them.
     """
 
-    path: str                   # repo-relative (may include a subdir)
+    path: str  # repo-relative (may include a subdir)
     size_bytes: int
     local: str | None = None
-    repo: str | None = None     # HF repo when it is not the entry's own (a companion published elsewhere)
-    revision: str = "main"      # commit whose bytes size_bytes and the entry's pricing describe
+    repo: str | None = (
+        None  # HF repo when it is not the entry's own (a companion published elsewhere)
+    )
+    revision: str = (
+        "main"  # commit whose bytes size_bytes and the entry's pricing describe
+    )
 
     @property
     def local_name(self) -> str:
@@ -51,16 +65,18 @@ class QuantVariant:
     """One downloadable build. Split GGUFs list every part in files; the model loads from the
     first part."""
 
-    quant: str                  # e.g. "UD-Q4_K_M"
-    files: tuple                # AssetFile, first = the load target
-    validated: bool = False     # proven end-to-end on real hardware
+    quant: str  # e.g. "UD-Q4_K_M"
+    files: tuple  # AssetFile, first = the load target
+    validated: bool = False  # proven end-to-end on real hardware
     # Bytes of tensors the engine reads from the file on demand instead of loading (see
     # gguf._LAZY_READ_TENSORS), taken from the build's tensor table at authoring time.
     lazy_bytes: int = 0
 
     @property
     def model_id(self) -> str:
-        return model_id_from_stem(PurePosixPath(self.files[0].path).name.removesuffix(".gguf"))
+        return model_id_from_stem(
+            PurePosixPath(self.files[0].path).name.removesuffix(".gguf")
+        )
 
     @property
     def size_bytes(self) -> int:
@@ -76,22 +92,22 @@ class QuantVariant:
 
 @dataclass(frozen=True)
 class CatalogEntry:
-    id: str                     # stable family id (variant-independent)
+    id: str  # stable family id (variant-independent)
     display_name: str
-    description: str            # one line, plain language
-    repo: str                   # HF repo
-    variants: tuple             # QuantVariant (exactly one, Q4-class)
+    description: str  # one line, plain language
+    repo: str  # HF repo
+    variants: tuple  # QuantVariant (exactly one, Q4-class)
     # Estimator inputs (measured or config-derived; quant changes weights, never KV). Gated
     # upstream configs carry a conservative same-family prior — the GGUF header is the authority
     # after download.
     n_ctx_train: int
     full_layers: int
     recurrent_layers: int
-    per_layer_f16: int          # KV bytes/token per full-attention layer
+    per_layer_f16: int  # KV bytes/token per full-attention layer
     swa_layers: int = 0
     swa_window: int = 0
     moe: bool = False
-    mtp: bool = False           # ships MTP heads (spec decode when loaded)
+    mtp: bool = False  # ships MTP heads (spec decode when loaded)
     # Speculative draft depth for MTP models: per-model and measured — deeper drafting pays only
     # while draft acceptance holds, and the break-even depth differs by model.
     mtp_draft_depth: int = 3
@@ -101,14 +117,14 @@ class CatalogEntry:
     # GGUF general.architecture; prices architecture-specific buffers (estimator._WINDOW_COMPUTE_BYTES)
     # before the file is on disk.
     architecture: str = ""
-    mmproj: AssetFile | None = None    # vision projector, downloads with model
-    draft: AssetFile | None = None     # spec-decode draft model (e.g. DSpark)
+    mmproj: AssetFile | None = None  # vision projector, downloads with model
+    draft: AssetFile | None = None  # spec-decode draft model (e.g. DSpark)
     # How the draft decodes. draft-dspark drafts only for a model spilled past GPU memory;
     # draft-dflash replaces MTP whenever it fits, on one slot (each slot keeps a recurrent-state
     # copy per draft position). Optional: a missing draft leaves the model as it was.
     draft_spec_type: str = "draft-dspark"
     draft_depth: int = 3
-    draft_min_engine: str = ""          # oldest llama.cpp release that loads the draft
+    draft_min_engine: str = ""  # oldest llama.cpp release that loads the draft
     # MTP head shipped as its own file (the model carries none): the engine loads it as the
     # draft for MTP spec decode. Downloads with the model.
     mtp_head: AssetFile | None = None
@@ -140,23 +156,39 @@ class CatalogEntry:
         return sum(a.size_bytes for a in (self.mmproj, self.mtp_head) if a is not None)
 
     def profile(self, variant: QuantVariant) -> ModelProfile:
-        layers = ([(LayerKind.FULL, self.per_layer_f16)] * self.full_layers
-                  + [(LayerKind.SWA, self.per_layer_f16)] * self.swa_layers
-                  + [(LayerKind.RECURRENT, 0)] * self.recurrent_layers)
+        layers = (
+            [(LayerKind.FULL, self.per_layer_f16)] * self.full_layers
+            + [(LayerKind.SWA, self.per_layer_f16)] * self.swa_layers
+            + [(LayerKind.RECURRENT, 0)] * self.recurrent_layers
+        )
         return ModelProfile(
-            name=variant.model_id, weights_bytes=variant.weights_bytes, embd_table_bytes=0,
-            n_ctx_train=self.n_ctx_train, layers=layers, swa_window=self.swa_window, moe=self.moe,
-            architecture=self.architecture, n_vocab=self.n_vocab,
-            kv_scale=1.2 if self.mtp_capable else 1.0, lazy_bytes=variant.lazy_bytes)
+            name=variant.model_id,
+            weights_bytes=variant.weights_bytes,
+            embd_table_bytes=0,
+            n_ctx_train=self.n_ctx_train,
+            layers=layers,
+            swa_window=self.swa_window,
+            moe=self.moe,
+            architecture=self.architecture,
+            n_vocab=self.n_vocab,
+            kv_scale=1.2 if self.mtp_capable else 1.0,
+            lazy_bytes=variant.lazy_bytes,
+        )
 
     def launch_plan(self, variant: QuantVariant, budget: HardwareBudget) -> LaunchPlan:
         # Optional external drafts may use spare memory after download, never reduce this grant.
-        return plan_launch(as_loaded(self.profile(variant), budget), budget, mtp_capable=self.mtp_capable,
-                           fixed_overhead=RUNTIME_OVERHEAD_BYTES + self.companion_bytes)
+        return plan_launch(
+            as_loaded(self.profile(variant), budget),
+            budget,
+            mtp_capable=self.mtp_capable,
+            fixed_overhead=RUNTIME_OVERHEAD_BYTES + self.companion_bytes,
+        )
 
     def download_files(self, variant: QuantVariant) -> tuple:
         """Everything a download job fetches for this variant, in order."""
-        extras = tuple(a for a in (self.mmproj, self.draft, self.mtp_head) if a is not None)
+        extras = tuple(
+            a for a in (self.mmproj, self.draft, self.mtp_head) if a is not None
+        )
         return tuple(variant.files) + extras
 
     def download_bytes(self, variant: QuantVariant) -> int:
@@ -191,8 +223,14 @@ def select_variant(entry: CatalogEntry, budget: HardwareBudget) -> VariantChoice
     if isinstance(decision, PhysicsRefusal):
         return None
     if decision.spilled:
-        return VariantChoice(variant, zero_spill=False, reason_key="smallest-fits-spilled")
-    reason = "best-large-window" if decision.window >= min(TARGET_WINDOW, entry.n_ctx_train or FLOOR) else "best-fits"
+        return VariantChoice(
+            variant, zero_spill=False, reason_key="smallest-fits-spilled"
+        )
+    reason = (
+        "best-large-window"
+        if decision.window >= min(TARGET_WINDOW, entry.n_ctx_train or FLOOR)
+        else "best-fits"
+    )
     return VariantChoice(variant, zero_spill=True, reason_key=reason)
 
 
@@ -205,9 +243,9 @@ def select_variant(entry: CatalogEntry, budget: HardwareBudget) -> VariantChoice
 # bandwidth could replace these class constants without touching the rule; predictions order
 # candidates and gate the floor — they are not display values.
 
-_DISCRETE_BANDWIDTH_GB_S = 1000.0   # representative GDDR6X/GDDR7 class
-_UMA_BANDWIDTH_GB_S = 210.0         # measured on unified-memory NVIDIA
-_HOST_BANDWIDTH_GB_S = 80.0         # spilled weights stream over host DRAM
+_DISCRETE_BANDWIDTH_GB_S = 1000.0  # representative GDDR6X/GDDR7 class
+_UMA_BANDWIDTH_GB_S = 210.0  # measured on unified-memory NVIDIA
+_HOST_BANDWIDTH_GB_S = 80.0  # spilled weights stream over host DRAM
 
 # Below this predicted decode speed a model stops feeling pleasant for agentic use (roughly
 # reading speed with headroom for tool-call bursts). Distinct from the growth policy's 6 tok/s
@@ -220,8 +258,7 @@ PLEASANT_FLOOR_TOK_S = 20.0
 # 18.82 tok/s: this is a baseline estimate, not a context-independent guarantee.
 # Unmatched hardware, backend, quant or draft depth retains the bandwidth estimate.
 _MEASURED_DECODE_TOK_S = {
-    ("win32", "cuda", "NVIDIA RTX Spark N1X",
-     "qwen3.8-27b", "UD-Q4_K_M", 2): 21.9,
+    ("win32", "cuda", "NVIDIA RTX Spark N1X", "qwen3.8-27b", "UD-Q4_K_M", 2): 21.9,
 }
 
 
@@ -242,27 +279,52 @@ def _hardware_key(budget: HardwareBudget, backend: str) -> tuple[str, str, str]:
     gpu_name = budget.gpu_name.partition(" (")[0]
     # Resolve PCI identity to the existing reference key; names only backfill missing IDs.
     if budget.gpu_pci_id is not None:
-        gpu_name = "NVIDIA RTX Spark N1X" if is_nvidia_n1x_pci_id(budget.gpu_pci_id) else ""
+        gpu_name = (
+            "NVIDIA RTX Spark N1X" if is_nvidia_n1x_pci_id(budget.gpu_pci_id) else ""
+        )
     effective_backend = "cuda" if backend == "auto" and gpu_name else backend
     return (budget.platform, effective_backend, gpu_name)
 
 
-def predicted_decode_tok_s(entry: CatalogEntry, variant: QuantVariant, budget: HardwareBudget, *,
-                           spilled: bool = False, backend: str = "auto") -> float:
+def predicted_decode_tok_s(
+    entry: CatalogEntry,
+    variant: QuantVariant,
+    budget: HardwareBudget,
+    *,
+    spilled: bool = False,
+    backend: str = "auto",
+) -> float:
     """Shipped measured baseline where matched, otherwise the memory-bound estimate."""
-    key = (*_hardware_key(budget, backend), entry.id, variant.quant, entry.mtp_draft_depth)
-    if budget.uma and entry.mtp and not spilled and (measured := _MEASURED_DECODE_TOK_S.get(key)) is not None:
+    key = (
+        *_hardware_key(budget, backend),
+        entry.id,
+        variant.quant,
+        entry.mtp_draft_depth,
+    )
+    if (
+        budget.uma
+        and entry.mtp
+        and not spilled
+        and (measured := _MEASURED_DECODE_TOK_S.get(key)) is not None
+    ):
         return measured
-    bandwidth = (_HOST_BANDWIDTH_GB_S if spilled
-                 else _UMA_BANDWIDTH_GB_S if budget.uma
-                 else _DISCRETE_BANDWIDTH_GB_S)
+    bandwidth = (
+        _HOST_BANDWIDTH_GB_S
+        if spilled
+        else _UMA_BANDWIDTH_GB_S
+        if budget.uma
+        else _DISCRETE_BANDWIDTH_GB_S
+    )
     bytes_per_token = max(1.0, variant.size_bytes * entry.decode_fraction)
     return bandwidth * 1e9 / bytes_per_token
 
 
-def recommended_entry(budget: HardwareBudget,
-                      entries: tuple[CatalogEntry, ...] | None = None, *, backend: str = "auto"
-                      ) -> tuple[CatalogEntry, str] | None:
+def recommended_entry(
+    budget: HardwareBudget,
+    entries: tuple[CatalogEntry, ...] | None = None,
+    *,
+    backend: str = "auto",
+) -> tuple[CatalogEntry, str] | None:
     """The catalog's default pick for THIS machine, with its reason key.
 
     Callers pass pre-filtered entries when some are ineligible for reasons the catalog can't know
@@ -279,7 +341,9 @@ def recommended_entry(budget: HardwareBudget,
         return None
 
     def speed(t, spilled=False):
-        return predicted_decode_tok_s(t[0], t[1].variant, budget, spilled=spilled, backend=backend)
+        return predicted_decode_tok_s(
+            t[0], t[1].variant, budget, spilled=spilled, backend=backend
+        )
 
     resident = [(e, c) for e, c in fitting if c.zero_spill]
     product_default = _PRODUCT_DEFAULTS.get(_hardware_key(budget, backend))
@@ -304,8 +368,10 @@ def recommended_entry(budget: HardwareBudget,
 # packaged copy remains the offline truth. A reverted commit on main heals every install on its
 # next fetch, and day-0 entries reach users without an app release.
 
-_CATALOG_URL = ("https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent"
-                "/main/clawk_cli/local_runtime/catalog.json")
+_CATALOG_URL = (
+    "https://raw.githubusercontent.com/samuelgradientai-sys/clawksis-agent"
+    "/main/clawk_cli/local_runtime/catalog.json"
+)
 _SCHEMA_VERSION = 3  # bump when an older app would read a newer catalog but launch its entries wrongly
 _REFRESH_TTL_S = 6 * 3600
 _refresh_lock = threading.Lock()
@@ -317,19 +383,35 @@ _last_refresh_attempt: float | None = None
 def _asset_from(d: dict | None) -> AssetFile | None:
     if not d:
         return None
-    return AssetFile(path=d["path"], size_bytes=int(d["size_bytes"]), local=d.get("local"),
-                     repo=d.get("repo"), revision=d.get("revision", "main"))
+    return AssetFile(
+        path=d["path"],
+        size_bytes=int(d["size_bytes"]),
+        local=d.get("local"),
+        repo=d.get("repo"),
+        revision=d.get("revision", "main"),
+    )
 
 
 # Scalar CatalogEntry fields parsed from JSON: key -> (coerce, default); None default = required.
 _SCALAR_FIELDS = {
-    "n_ctx_train": (int, None), "full_layers": (int, None),
-    "recurrent_layers": (int, None), "per_layer_f16": (int, None),
-    "swa_layers": (int, 0), "swa_window": (int, 0),
-    "moe": (bool, False), "mtp": (bool, False), "mtp_draft_depth": (int, 3),
-    "n_vocab": (int, 0), "sampling": (dict, {}), "min_engine": (str, ""),
-    "quality": (int, 0), "decode_fraction": (float, 1.0), "architecture": (str, ""),
-    "recommend": (bool, True), "draft_spec_type": (str, "draft-dspark"), "draft_depth": (int, 3),
+    "n_ctx_train": (int, None),
+    "full_layers": (int, None),
+    "recurrent_layers": (int, None),
+    "per_layer_f16": (int, None),
+    "swa_layers": (int, 0),
+    "swa_window": (int, 0),
+    "moe": (bool, False),
+    "mtp": (bool, False),
+    "mtp_draft_depth": (int, 3),
+    "n_vocab": (int, 0),
+    "sampling": (dict, {}),
+    "min_engine": (str, ""),
+    "quality": (int, 0),
+    "decode_fraction": (float, 1.0),
+    "architecture": (str, ""),
+    "recommend": (bool, True),
+    "draft_spec_type": (str, "draft-dspark"),
+    "draft_depth": (int, 3),
     "draft_min_engine": (str, ""),
 }
 
@@ -338,29 +420,49 @@ def _load_catalog(doc: dict) -> tuple[CatalogEntry, ...]:
     """Parse a catalog document. Unknown fields are ignored (newer catalogs stay readable by older
     apps); a major schema bump is the signal that they wouldn't be, and the caller skips it."""
     if int(doc.get("schema_version", 0)) != _SCHEMA_VERSION:
-        raise ValueError(f"catalog schema {doc.get('schema_version')!r} "
-                         f"(this build reads {_SCHEMA_VERSION})")
+        raise ValueError(
+            f"catalog schema {doc.get('schema_version')!r} "
+            f"(this build reads {_SCHEMA_VERSION})"
+        )
     entries = []
     for m in doc["models"]:
-        variants = tuple(QuantVariant(quant=v["quant"], validated=bool(v.get("validated")),
-                                      files=tuple(_asset_from(f) for f in v["files"]),
-                                      lazy_bytes=int(v.get("lazy_bytes", 0)))
-                         for v in m["variants"])
-        scalars = {k: coerce(m[k] if default is None else m.get(k, default))
-                   for k, (coerce, default) in _SCALAR_FIELDS.items()}
-        entries.append(CatalogEntry(
-            id=m["id"], display_name=m["display_name"],
-            description=m["description"], repo=m["repo"], variants=variants,
-            mmproj=_asset_from(m.get("mmproj")), draft=_asset_from(m.get("draft")),
-            mtp_head=_asset_from(m.get("mtp_head")),
-            **scalars))
+        variants = tuple(
+            QuantVariant(
+                quant=v["quant"],
+                validated=bool(v.get("validated")),
+                files=tuple(_asset_from(f) for f in v["files"]),
+                lazy_bytes=int(v.get("lazy_bytes", 0)),
+            )
+            for v in m["variants"]
+        )
+        scalars = {
+            k: coerce(m[k] if default is None else m.get(k, default))
+            for k, (coerce, default) in _SCALAR_FIELDS.items()
+        }
+        entries.append(
+            CatalogEntry(
+                id=m["id"],
+                display_name=m["display_name"],
+                description=m["description"],
+                repo=m["repo"],
+                variants=variants,
+                mmproj=_asset_from(m.get("mmproj")),
+                draft=_asset_from(m.get("draft")),
+                mtp_head=_asset_from(m.get("mtp_head")),
+                **scalars,
+            )
+        )
     return tuple(entries)
 
 
 def _packaged_catalog() -> tuple[CatalogEntry, ...]:
     from importlib.resources import files
 
-    raw = files("clawk_cli.local_runtime").joinpath("catalog.json").read_text(encoding="utf-8-sig")
+    raw = (
+        files("clawk_cli.local_runtime")
+        .joinpath("catalog.json")
+        .read_text(encoding="utf-8-sig")
+    )
     return _load_catalog(json.loads(raw))
 
 
@@ -375,11 +477,17 @@ def refresh_catalog(force: bool = False) -> bool:
 
     now = time.monotonic()
     with _refresh_lock:
-        if not force and _last_refresh_attempt is not None and now - _last_refresh_attempt < _REFRESH_TTL_S:
+        if (
+            not force
+            and _last_refresh_attempt is not None
+            and now - _last_refresh_attempt < _REFRESH_TTL_S
+        ):
             return False
         _last_refresh_attempt = now
     try:
-        req = urllib.request.Request(_CATALOG_URL, headers={"User-Agent": "clawk-local-runtime"})
+        req = urllib.request.Request(
+            _CATALOG_URL, headers={"User-Agent": "clawk-local-runtime"}
+        )
         with urllib.request.urlopen(req, timeout=10) as r:
             fetched = _load_catalog(json.load(r))
     except Exception as exc:
@@ -397,7 +505,9 @@ def refresh_catalog_soon() -> None:
     last = _last_refresh_attempt
     if last is not None and time.monotonic() - last < _REFRESH_TTL_S:
         return
-    threading.Thread(target=refresh_catalog, daemon=True, name="catalog-refresh").start()
+    threading.Thread(
+        target=refresh_catalog, daemon=True, name="catalog-refresh"
+    ).start()
 
 
 def catalog_by_id() -> dict[str, CatalogEntry]:

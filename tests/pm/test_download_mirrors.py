@@ -1,4 +1,5 @@
 """Pinned downloads keep their identity when the upstream disappears."""
+
 import hashlib
 
 import pytest
@@ -8,15 +9,23 @@ from tests.pm._range_server import RangeHandler, dl_server, url
 
 
 @pytest.mark.parametrize("phase", ["probe", "body"])
-def test_fallback_retains_hash_destination_and_progress(tmp_path, dl_server, monkeypatch, phase):
+def test_fallback_retains_hash_destination_and_progress(
+    tmp_path, dl_server, monkeypatch, phase
+):
     payload = b"the same pinned bytes" * 100
-    RangeHandler.payloads = {"/primary": payload, "/mirror": payload, "/other": b"other"}
+    RangeHandler.payloads = {
+        "/primary": payload,
+        "/mirror": payload,
+        "/other": b"other",
+    }
     requests = []
     original = RangeHandler.do_GET
 
     def respond(handler):
         requests.append(handler.path)
-        if handler.path == "/primary" and (phase == "probe" or handler.headers.get("Range") != "bytes=0-0"):
+        if handler.path == "/primary" and (
+            phase == "probe" or handler.headers.get("Range") != "bytes=0-0"
+        ):
             handler.send_error(404)
         else:
             original(handler)
@@ -24,12 +33,19 @@ def test_fallback_retains_hash_destination_and_progress(tmp_path, dl_server, mon
     monkeypatch.setattr(RangeHandler, "do_GET", respond)
     digest = hashlib.sha256(payload).hexdigest()
     destination = tmp_path / "original-name.zip"
-    sources = [Source(url(dl_server, "/primary"), destination, digest,
-                      fallbacks=(url(dl_server, "/mirror"),)),
-               Source(url(dl_server, "/other"), tmp_path / "other")]
+    sources = [
+        Source(
+            url(dl_server, "/primary"),
+            destination,
+            digest,
+            fallbacks=(url(dl_server, "/mirror"),),
+        ),
+        Source(url(dl_server, "/other"), tmp_path / "other"),
+    ]
     ticks = []
     result = Download(sources, partials_dir=tmp_path / "partials", connections=1).run(
-        progress=lambda done, total, ranges: ticks.append((done, total, ranges)))
+        progress=lambda done, total, ranges: ticks.append((done, total, ranges))
+    )
     assert result == [source.dest for source in sources]
     assert destination.read_bytes() == payload
     expected = len(payload) + len(b"other")
@@ -42,8 +58,12 @@ def test_bad_hash_is_not_a_mirror_miss(tmp_path, dl_server):
     RangeHandler.payloads = {"/primary": b"changed upstream", "/mirror": b"pinned"}
     destination = tmp_path / "keep.zip"
     destination.write_bytes(b"previous destination")
-    source = Source(url(dl_server, "/primary"), destination, hashlib.sha256(b"pinned").hexdigest(),
-                    fallbacks=(url(dl_server, "/mirror"),))
+    source = Source(
+        url(dl_server, "/primary"),
+        destination,
+        hashlib.sha256(b"pinned").hexdigest(),
+        fallbacks=(url(dl_server, "/mirror"),),
+    )
     with pytest.raises(HashError):
         Download([source], partials_dir=tmp_path / "partials").run()
     assert destination.read_bytes() == b"previous destination"
@@ -51,7 +71,9 @@ def test_bad_hash_is_not_a_mirror_miss(tmp_path, dl_server):
 
 
 @pytest.mark.parametrize("mirror_status", [401, 403, 404])
-def test_exhausted_mirrors_name_each_attempted_url(tmp_path, dl_server, monkeypatch, mirror_status):
+def test_exhausted_mirrors_name_each_attempted_url(
+    tmp_path, dl_server, monkeypatch, mirror_status
+):
     original = RangeHandler.do_GET
 
     def respond(handler):
@@ -63,15 +85,19 @@ def test_exhausted_mirrors_name_each_attempted_url(tmp_path, dl_server, monkeypa
     monkeypatch.setattr(RangeHandler, "do_GET", respond)
     primary, mirror = (url(dl_server, path) for path in ("/missing", "/also-missing"))
     with pytest.raises(DownloadError) as failure:
-        Download([Source(primary, tmp_path / "absent", "0" * 64, fallbacks=(mirror,))],
-                 partials_dir=tmp_path / "partials").run()
+        Download(
+            [Source(primary, tmp_path / "absent", "0" * 64, fallbacks=(mirror,))],
+            partials_dir=tmp_path / "partials",
+        ).run()
     assert primary in str(failure.value) and mirror in str(failure.value)
     assert "404" in str(failure.value) and str(mirror_status) in str(failure.value)
     assert not (tmp_path / "absent").exists()
 
 
 @pytest.mark.parametrize("failure", ["503", "521", "dns", "tls", "disk", "pause"])
-def test_only_availability_failures_can_use_a_mirror(tmp_path, dl_server, monkeypatch, failure):
+def test_only_availability_failures_can_use_a_mirror(
+    tmp_path, dl_server, monkeypatch, failure
+):
     import socket
     import ssl
     import urllib.error
@@ -82,9 +108,17 @@ def test_only_availability_failures_can_use_a_mirror(tmp_path, dl_server, monkey
     original = downloader._OPENER.open
     requests = []
     waits = []
-    dl = Download([Source(url(dl_server, "/primary"), tmp_path / "tool",
-                          hashlib.sha256(payload).hexdigest(), fallbacks=(url(dl_server, "/mirror"),))],
-                  partials_dir=tmp_path / "partials")
+    dl = Download(
+        [
+            Source(
+                url(dl_server, "/primary"),
+                tmp_path / "tool",
+                hashlib.sha256(payload).hexdigest(),
+                fallbacks=(url(dl_server, "/mirror"),),
+            )
+        ],
+        partials_dir=tmp_path / "partials",
+    )
     monkeypatch.setattr(dl, "_wait_retry", waits.append)
 
     def open_request(request, **kwargs):
@@ -97,13 +131,19 @@ def test_only_availability_failures_can_use_a_mirror(tmp_path, dl_server, monkey
             if failure == "pause":
                 dl.pause()
             if failure == "503":
-                raise urllib.error.HTTPError(request.full_url, 503, "Unavailable", {}, None)
+                raise urllib.error.HTTPError(
+                    request.full_url, 503, "Unavailable", {}, None
+                )
             if failure == "521":
                 # A CDN's origin-down answer (macOS ffmpeg's only upstream, 2026-10-21).
-                raise urllib.error.HTTPError(request.full_url, 521, "Web Server Is Down", {}, None)
+                raise urllib.error.HTTPError(
+                    request.full_url, 521, "Web Server Is Down", {}, None
+                )
             if failure == "dns":
                 # The macOS runner's error for an upstream host it cannot resolve.
-                raise urllib.error.URLError(socket.gaierror(socket.EAI_NONAME, "nodename nor servname provided"))
+                raise urllib.error.URLError(
+                    socket.gaierror(socket.EAI_NONAME, "nodename nor servname provided")
+                )
         return original(request, **kwargs)
 
     monkeypatch.setattr(downloader._OPENER, "open", open_request)

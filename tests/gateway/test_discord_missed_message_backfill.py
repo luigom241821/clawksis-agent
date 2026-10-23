@@ -24,15 +24,25 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.Object = lambda *, id: SimpleNamespace(id=id)
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -86,7 +96,15 @@ def adapter(monkeypatch, tmp_path):
     return adapter
 
 
-def make_message(*, message_id=1, author_id=42, content="please ingest", reactions=None, channel=None, mentions=None):
+def make_message(
+    *,
+    message_id=1,
+    author_id=42,
+    content="please ingest",
+    reactions=None,
+    channel=None,
+    mentions=None,
+):
     channel = channel or FakeChannel()
     return SimpleNamespace(
         id=message_id,
@@ -103,7 +121,9 @@ def make_message(*, message_id=1, author_id=42, content="please ingest", reactio
     )
 
 
-def make_bot_message(*, message_id=1, content="please ingest", channel=None, mentions=None):
+def make_bot_message(
+    *, message_id=1, content="please ingest", channel=None, mentions=None
+):
     message = make_message(
         message_id=message_id,
         content=content,
@@ -115,7 +135,9 @@ def make_bot_message(*, message_id=1, content="please ingest", channel=None, men
 
 
 @pytest.mark.asyncio
-async def test_configured_bot_sender_is_left_for_shared_ingress_policy(adapter, monkeypatch):
+async def test_configured_bot_sender_is_left_for_shared_ingress_policy(
+    adapter, monkeypatch
+):
     bot_user = adapter._client.user
     monkeypatch.setenv("DISCORD_ALLOW_BOTS", "mentions")
     message = make_bot_message(
@@ -143,7 +165,9 @@ async def test_should_not_backfill_message_with_non_down_bot_response(adapter):
 
 
 @pytest.mark.asyncio
-async def test_parent_channel_unreferenced_bot_message_does_not_suppress_backfill(adapter):
+async def test_parent_channel_unreferenced_bot_message_does_not_suppress_backfill(
+    adapter,
+):
     unrelated_bot_post = SimpleNamespace(
         id=2,
         content="Done — captured a different item.",
@@ -215,8 +239,12 @@ async def test_run_backfill_dispatches_unaddressed_messages(adapter, monkeypatch
         yield message
 
     monkeypatch.setenv("DISCORD_MISSED_MESSAGE_BACKFILL_CHANNELS", "123")
-    monkeypatch.setattr(adapter, "_iter_missed_message_backfill_candidates", fake_candidates)
-    monkeypatch.setattr(adapter, "_should_backfill_discord_message", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        adapter, "_iter_missed_message_backfill_candidates", fake_candidates
+    )
+    monkeypatch.setattr(
+        adapter, "_should_backfill_discord_message", AsyncMock(return_value=True)
+    )
     monkeypatch.setattr(adapter, "_missed_message_backfill_max_dispatches", lambda: 10)
     monkeypatch.setattr(adapter, "_missed_message_backfill_channels", lambda: {"123"})
     monkeypatch.setattr("asyncio.sleep", AsyncMock())
@@ -252,7 +280,9 @@ async def test_repeated_ready_coalesces_instead_of_cancelling_active_recovery(ad
 
 
 @pytest.mark.asyncio
-async def test_recovered_mention_reuses_live_auth_and_mention_gates(adapter, monkeypatch):
+async def test_recovered_mention_reuses_live_auth_and_mention_gates(
+    adapter, monkeypatch
+):
     bot_user = adapter._client.user
     monkeypatch.delenv("DISCORD_ALLOW_ALL_USERS", raising=False)
     denied = make_message(
@@ -308,8 +338,12 @@ def test_missed_message_backfill_config_stays_per_adapter():
         },
     )
 
-    first = DiscordAdapter(PlatformConfig(enabled=True, token="one", extra=first_extra or {}))
-    second = DiscordAdapter(PlatformConfig(enabled=True, token="two", extra=second_extra or {}))
+    first = DiscordAdapter(
+        PlatformConfig(enabled=True, token="one", extra=first_extra or {})
+    )
+    second = DiscordAdapter(
+        PlatformConfig(enabled=True, token="two", extra=second_extra or {})
+    )
 
     assert first._missed_message_backfill_enabled() is True
     assert first._missed_message_backfill_channels() == {"111"}
@@ -328,11 +362,21 @@ def test_explicit_empty_backfill_channel_list_disables_the_scan(monkeypatch):
     allowed ∪ free-response default (which would scan channels they disabled). The default
     ``channels: ""`` still falls through."""
     monkeypatch.setenv("DISCORD_ALLOWED_CHANNELS", "555")
-    explicit = DiscordAdapter(PlatformConfig(
-        enabled=True, token="one", extra={"missed_message_backfill": {"enabled": True, "channels": []}}))
+    explicit = DiscordAdapter(
+        PlatformConfig(
+            enabled=True,
+            token="one",
+            extra={"missed_message_backfill": {"enabled": True, "channels": []}},
+        )
+    )
     assert explicit._missed_message_backfill_channels() == set()
-    default = DiscordAdapter(PlatformConfig(
-        enabled=True, token="two", extra={"missed_message_backfill": {"enabled": True, "channels": ""}}))
+    default = DiscordAdapter(
+        PlatformConfig(
+            enabled=True,
+            token="two",
+            extra={"missed_message_backfill": {"enabled": True, "channels": ""}},
+        )
+    )
     assert "555" in default._missed_message_backfill_channels()
 
 
@@ -377,6 +421,7 @@ async def test_send_offloads_final_delivery_ledger_write(adapter, monkeypatch):
 
     def slow_record(**_kwargs):
         import time
+
         time.sleep(0.1)
 
     monkeypatch.setattr(adapter, "_record_discord_response", slow_record)
@@ -437,14 +482,16 @@ async def test_unthreaded_final_reply_records_recovery_completion(adapter):
 
 
 @pytest.mark.asyncio
-async def test_iter_candidates_keeps_latest_messages_when_window_exceeds_limit(adapter, monkeypatch):
+async def test_iter_candidates_keeps_latest_messages_when_window_exceeds_limit(
+    adapter, monkeypatch
+):
     class RealisticChannel(FakeChannel):
         def history(self, **kwargs):
             async def _gen():
                 messages = list(self._history_messages)
                 if not kwargs["oldest_first"]:
                     messages.reverse()
-                for message in messages[:kwargs["limit"]]:
+                for message in messages[: kwargs["limit"]]:
                     yield message
 
             return _gen()
@@ -469,7 +516,9 @@ async def test_iter_candidates_keeps_latest_messages_when_window_exceeds_limit(a
 
 
 @pytest.mark.asyncio
-async def test_iter_candidates_skips_obfuscated_channel_on_explicit_ids(adapter, monkeypatch):
+async def test_iter_candidates_skips_obfuscated_channel_on_explicit_ids(
+    adapter, monkeypatch
+):
     """A channel the bot lost VIEW_CHANNEL on (Discord obfuscation) is dropped even when
     listed by explicit id — history reads on it always fail (#90154)."""
     from gateway.platforms.helpers import DISCORD_CHANNEL_OBFUSCATED_FLAG
@@ -480,7 +529,10 @@ async def test_iter_candidates_skips_obfuscated_channel_on_explicit_ids(adapter,
     hidden.flags = SimpleNamespace(value=DISCORD_CHANNEL_OBFUSCATED_FLAG)
     adapter._client.get_channel = lambda channel_id: {1: visible, 2: hidden}[channel_id]
 
-    got = [msg.id async for msg in adapter._iter_missed_message_backfill_candidates({"1", "2"})]
+    got = [
+        msg.id
+        async for msg in adapter._iter_missed_message_backfill_candidates({"1", "2"})
+    ]
 
     assert got == [11]
 
@@ -489,14 +541,24 @@ def test_success_outcome_completes_row_without_reply_anchor(adapter):
     """A delivered final with no Discord reply anchor (reply_to_mode=off, streamed edit, media-only
     reply) must still complete the ledger row, or backfill re-dispatches it on every reconnect."""
     message = make_message(message_id=93)
-    event = MessageEvent(text=message.content, message_type=MessageType.TEXT, raw_message=message, message_id="93")
+    event = MessageEvent(
+        text=message.content,
+        message_type=MessageType.TEXT,
+        raw_message=message,
+        message_id="93",
+    )
 
     adapter._record_discord_processing_start(event, emoji_ack=False)
     adapter._record_discord_processing_complete(event, ProcessingOutcome.SUCCESS)
     assert adapter._discord_message_is_persistently_complete("93") is True
 
     failed = make_message(message_id=94)
-    failed_event = MessageEvent(text=failed.content, message_type=MessageType.TEXT, raw_message=failed, message_id="94")
+    failed_event = MessageEvent(
+        text=failed.content,
+        message_type=MessageType.TEXT,
+        raw_message=failed,
+        message_id="94",
+    )
     adapter._record_discord_processing_start(failed_event, emoji_ack=False)
     adapter._record_discord_processing_complete(failed_event, ProcessingOutcome.FAILURE)
     assert adapter._discord_message_is_persistently_complete("94") is False
@@ -507,12 +569,16 @@ async def test_redispatch_of_one_message_is_bounded(adapter, monkeypatch):
     """A row that never completes is dispatched at most max_attempts times across scans, and a scan
     must not erase the in-flight claim of a dispatch that has not finished yet."""
     bot_user = adapter._client.user
-    message = make_message(message_id=95, content=f"<@{bot_user.id}> please ingest", mentions=[bot_user])
+    message = make_message(
+        message_id=95, content=f"<@{bot_user.id}> please ingest", mentions=[bot_user]
+    )
 
     async def fake_candidates(_channels):
         yield message
 
-    monkeypatch.setattr(adapter, "_iter_missed_message_backfill_candidates", fake_candidates)
+    monkeypatch.setattr(
+        adapter, "_iter_missed_message_backfill_candidates", fake_candidates
+    )
     monkeypatch.setattr(adapter, "_missed_message_backfill_channels", lambda: {"123"})
     monkeypatch.setattr(adapter, "_missed_message_backfill_max_attempts", lambda: 2)
 
@@ -525,24 +591,32 @@ async def test_redispatch_of_one_message_is_bounded(adapter, monkeypatch):
     for _ in range(3):
         adapter._dedup.discard("95")
         await adapter._run_missed_message_backfill()
-    assert adapter._handle_message.await_count == 1  # active claim survives the scan's 'discovered' write
+    assert (
+        adapter._handle_message.await_count == 1
+    )  # active claim survives the scan's 'discovered' write
 
     # Claim expired (turn died): the lifetime cap still bounds total re-dispatch.
     def _expire(conn):
-        conn.execute("UPDATE discord_messages SET status='failed' WHERE message_id='95'")
+        conn.execute(
+            "UPDATE discord_messages SET status='failed' WHERE message_id='95'"
+        )
+
     adapter._with_discord_recovery_db(_expire)
     adapter._handle_message = AsyncMock(return_value=True)
     for _ in range(4):
         adapter._dedup.discard("95")
         await adapter._run_missed_message_backfill()
         adapter._with_discord_recovery_db(_expire)
-    assert adapter._handle_message.await_count == 1  # attempts: 1 (above) + 1 == max_attempts
+    assert (
+        adapter._handle_message.await_count == 1
+    )  # attempts: 1 (above) + 1 == max_attempts
 
 
 @pytest.mark.asyncio
 async def test_stored_cursor_cannot_widen_scan_window_or_leak_into_threads(adapter):
     """after = max(cursor, now - window): an old cursor must not resurrect messages outside the window,
     and a parent channel's cursor is never applied to its child threads."""
+
     class RecordingChannel(FakeChannel):
         def __init__(self, *args, threads=(), **kwargs):
             super().__init__(*args, **kwargs)
@@ -556,17 +630,28 @@ async def test_stored_cursor_cannot_widen_scan_window_or_leak_into_threads(adapt
     thread = RecordingChannel(channel_id=456, parent_id=123)
     channel = RecordingChannel(channel_id=123, threads=[thread])
     window_floor = datetime.now(dt.UTC) - dt.timedelta(hours=1)
-    old_cursor = ((int((window_floor - dt.timedelta(hours=11)).timestamp() * 1000) - 1420070400000) << 22)
-    fresh_cursor = ((int((window_floor + dt.timedelta(minutes=30)).timestamp() * 1000) - 1420070400000) << 22)
+    old_cursor = (
+        int((window_floor - dt.timedelta(hours=11)).timestamp() * 1000) - 1420070400000
+    ) << 22
+    fresh_cursor = (
+        int((window_floor + dt.timedelta(minutes=30)).timestamp() * 1000)
+        - 1420070400000
+    ) << 22
 
     adapter._advance_discord_recovery_cursor("123", str(old_cursor))
-    async for _ in adapter._iter_channel_and_thread_messages(channel, limit=10, after=window_floor, seen_channels=set()):
+    async for _ in adapter._iter_channel_and_thread_messages(
+        channel, limit=10, after=window_floor, seen_channels=set()
+    ):
         pass
     assert channel.seen_after == [window_floor]  # stale cursor ignored
     assert thread.seen_after == [window_floor]  # parent's cursor not inherited
 
     adapter._advance_discord_recovery_cursor("123", str(fresh_cursor))
-    async for _ in adapter._iter_channel_and_thread_messages(channel, limit=10, after=window_floor, seen_channels=set()):
+    async for _ in adapter._iter_channel_and_thread_messages(
+        channel, limit=10, after=window_floor, seen_channels=set()
+    ):
         pass
-    assert not isinstance(channel.seen_after[-1], dt.datetime)  # newer cursor narrows (discord.Object)
+    assert not isinstance(
+        channel.seen_after[-1], dt.datetime
+    )  # newer cursor narrows (discord.Object)
     assert thread.seen_after[-1] == window_floor

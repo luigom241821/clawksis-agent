@@ -24,12 +24,17 @@ def _seed_and_compact(db, turns=4):
         db.append_message(STRANDED_ID, "assistant", f"answer {i}")
     tail = db.get_messages(STRANDED_ID)[-2:]
     db.archive_and_compact(
-        STRANDED_ID, [{"role": "user", "content": "[summary of turns 1-3]"}, *tail], tail_count=2)
+        STRANDED_ID,
+        [{"role": "user", "content": "[summary of turns 1-3]"}, *tail],
+        tail_count=2,
+    )
 
 
 def _shape(db, **flags):
-    return [(m["role"], m["content"], m.get("active", 1), m.get("compacted", 0))
-            for m in db.get_messages(STRANDED_ID, **flags)]
+    return [
+        (m["role"], m["content"], m.get("active", 1), m.get("compacted", 0))
+        for m in db.get_messages(STRANDED_ID, **flags)
+    ]
 
 
 def test_export_all_round_trips_compacted_history(tmp_path):
@@ -40,7 +45,9 @@ def test_export_all_round_trips_compacted_history(tmp_path):
         shown_before = _shape(src, include_compacted=True)
         live_before = _shape(src)
         all_before = _shape(src, include_inactive=True)
-        assert len(shown_before) > len(live_before), "compacted turns must be archived, not deleted"
+        assert len(shown_before) > len(live_before), (
+            "compacted turns must be archived, not deleted"
+        )
 
         # The transfer projection through real JSONL (what `sessions export` writes).
         payload = json.loads(json.dumps(src.export_all(include_inactive=True)))
@@ -48,17 +55,25 @@ def test_export_all_round_trips_compacted_history(tmp_path):
         result = dst.import_sessions(payload)
 
         assert result["ok"] and result["imported"] == 1, result
-        assert _shape(dst, include_inactive=True) == all_before, "every row must survive with its state"
-        assert _shape(dst, include_compacted=True) == shown_before, "display history must be unchanged"
-        assert _shape(dst) == live_before, "archived turns must not re-enter live model context"
+        assert _shape(dst, include_inactive=True) == all_before, (
+            "every row must survive with its state"
+        )
+        assert _shape(dst, include_compacted=True) == shown_before, (
+            "display history must be unchanged"
+        )
+        assert _shape(dst) == live_before, (
+            "archived turns must not re-enter live model context"
+        )
         # Session counters count live rows only.
         assert dst.get_session(STRANDED_ID)["message_count"] == len(live_before)
 
         # Hand-edited/foreign JSONL: string flags ("0" is truthy) and null for live rows must not
         # flip archived rows live or live rows archived.
         for msg in payload[0]["messages"]:
-            msg["active"], msg["compacted"] = (str(msg["active"]) if not msg["active"] else None,
-                                               str(msg["compacted"]))
+            msg["active"], msg["compacted"] = (
+                str(msg["active"]) if not msg["active"] else None,
+                str(msg["compacted"]),
+            )
         edited = SessionDB(db_path=tmp_path / "edited.db")
         try:
             assert edited.import_sessions(payload)["ok"]

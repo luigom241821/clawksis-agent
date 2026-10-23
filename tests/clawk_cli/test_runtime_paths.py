@@ -15,13 +15,29 @@ def test_store_resolution_follows_relocated_payload(tmp_path, monkeypatch):
     repo = payload / "clawksis-agent"
     repo.mkdir(parents=True)
     stamp = repo / "install-stamp.json"
-    stamp.write_text(json.dumps({"payload": "bundled", "runtime": {
-        "repoDir": "clawksis-agent", "toolsDir": "tools",
-    }}))
+    stamp.write_text(
+        json.dumps(
+            {
+                "payload": "bundled",
+                "runtime": {
+                    "repoDir": "clawksis-agent",
+                    "toolsDir": "tools",
+                },
+            }
+        )
+    )
     manifest = payload / "manifest.json"
-    manifest.write_text(json.dumps({"schema": 1, "repo": "clawksis-agent",
-                                    "venv": "venv", "store": "tools",
-                                    "runtime": {"toolsDir": "tools"}}))
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "repo": "clawksis-agent",
+                "venv": "venv",
+                "store": "tools",
+                "runtime": {"toolsDir": "tools"},
+            }
+        )
+    )
     tools = payload / "tools"
     tools.mkdir()
     facts = {"schema": 1, "packages": {"node": {"entry": "node-test"}}}
@@ -59,13 +75,19 @@ def test_payload_store_cannot_escape_payload(tmp_path, monkeypatch, escape):
     values = {"relative": "../outside", "absolute": str(outside), "symlink": "tools"}
     if escape == "symlink":
         (payload / "tools").symlink_to(outside, target_is_directory=True)
-    (payload / "manifest.json").write_text(json.dumps({
-        "repo": "clawksis-agent", "store": values[escape],
-    }))
+    (payload / "manifest.json").write_text(
+        json.dumps(
+            {
+                "repo": "clawksis-agent",
+                "store": values[escape],
+            }
+        )
+    )
     with pytest.raises(RuntimeError, match="payload store escapes its root"):
         store_root(repo)
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(outside))
     assert store_root(repo) == outside
+
 
 def test_site_packages_follows_the_venv_python_not_the_caller(tmp_path):
     """Regression: the tree must be dated from the venv, not from this process.
@@ -78,7 +100,9 @@ def test_site_packages_follows_the_venv_python_not_the_caller(tmp_path):
     """
     venv = tmp_path / "venv"
     (venv / "lib" / "python3.9" / "site-packages").mkdir(parents=True)
-    (venv / "pyvenv.cfg").write_text("home = /usr/bin\nversion = 3.9.20\n", encoding="utf-8")
+    (venv / "pyvenv.cfg").write_text(
+        "home = /usr/bin\nversion = 3.9.20\n", encoding="utf-8"
+    )
 
     assert venv_python_version(venv) == (3, 9)
     if os.name != "nt":
@@ -92,7 +116,9 @@ def test_venv_python_version_reads_uv_version_info(tmp_path):
     # uv and virtualenv record ``version_info``; Windows has no lib/python3.X to fall back to.
     venv = tmp_path / "venv"
     venv.mkdir()
-    (venv / "pyvenv.cfg").write_text("home = C:\\Python311\nversion_info = 3.11.9\n", encoding="utf-8")
+    (venv / "pyvenv.cfg").write_text(
+        "home = C:\\Python311\nversion_info = 3.11.9\n", encoding="utf-8"
+    )
 
     assert venv_python_version(venv) == (3, 11)
 

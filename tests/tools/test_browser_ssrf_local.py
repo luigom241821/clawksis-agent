@@ -66,7 +66,9 @@ class TestPreNavigationSsrf:
         assert result["success"] is False
         assert "private or internal address" in result["error"]
 
-    def test_cloud_allows_private_url_when_setting_true(self, monkeypatch, _common_patches):
+    def test_cloud_allows_private_url_when_setting_true(
+        self, monkeypatch, _common_patches
+    ):
         """Private URLs pass in cloud mode when allow_private_urls is True."""
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: True)
@@ -75,7 +77,6 @@ class TestPreNavigationSsrf:
         result = json.loads(browser_tool.browser_navigate(self.PRIVATE_URL))
 
         assert result["success"] is True
-
 
     # -- Local mode: SSRF skipped ----------------------------------------------
 
@@ -108,10 +109,10 @@ class TestPreNavigationSsrf:
     # browser_snapshot. The always-blocked floor must fire regardless of
     # routing.
     IMDS_URLS = [
-        "http://169.254.169.254/latest/meta-data/",      # AWS / GCP / Azure / DO / Oracle
-        "http://169.254.169.253/metadata/instance",        # Azure IMDS wire server
-        "http://169.254.170.2/v2/credentials",             # AWS ECS task metadata
-        "http://100.100.100.200/latest/meta-data/",        # Alibaba Cloud
+        "http://169.254.169.254/latest/meta-data/",  # AWS / GCP / Azure / DO / Oracle
+        "http://169.254.169.253/metadata/instance",  # Azure IMDS wire server
+        "http://169.254.170.2/v2/credentials",  # AWS ECS task metadata
+        "http://100.100.100.200/latest/meta-data/",  # Alibaba Cloud
         "http://metadata.google.internal/computeMetadata/v1/",  # GCP hostname
     ]
 
@@ -153,7 +154,9 @@ class TestPreNavigationSsrf:
             "http://myservice.local/",
         ):
             result = json.loads(browser_tool.browser_navigate(private))
-            assert result["success"] is True, f"Unexpected block for {private}: {result}"
+            assert result["success"] is True, (
+                f"Unexpected block for {private}: {result}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +178,6 @@ class TestIsLocalBackend:
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: None)
 
         assert bt_cloud._is_local_backend() is True
-
 
     def test_camofox_overrides_container_backend(self, monkeypatch):
         """Camofox mode always counts as local, even with container terminal."""
@@ -219,7 +221,9 @@ class TestPostRedirectSsrf:
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: False)
         monkeypatch.setattr(
-            browser_tool, "_is_safe_url", lambda url: "192.168" not in url,
+            browser_tool,
+            "_is_safe_url",
+            lambda url: "192.168" not in url,
         )
         monkeypatch.setattr(
             bt_session,
@@ -232,12 +236,16 @@ class TestPostRedirectSsrf:
         assert result["success"] is False
         assert "redirect landed on a private/internal address" in result["error"]
 
-    def test_cloud_allows_redirect_to_private_when_setting_true(self, monkeypatch, _common_patches):
+    def test_cloud_allows_redirect_to_private_when_setting_true(
+        self, monkeypatch, _common_patches
+    ):
         """Redirects to private addresses pass in cloud mode with allow_private_urls."""
         monkeypatch.setattr(bt_cloud, "_is_local_backend", lambda: False)
         monkeypatch.setattr(bt_cloud, "_allow_private_urls", lambda: True)
         monkeypatch.setattr(
-            browser_tool, "_is_safe_url", lambda url: "192.168" not in url,
+            browser_tool,
+            "_is_safe_url",
+            lambda url: "192.168" not in url,
         )
         monkeypatch.setattr(
             bt_session,
@@ -251,7 +259,6 @@ class TestPostRedirectSsrf:
         assert result["url"] == self.PRIVATE_FINAL_URL
 
     # -- Local mode: redirect SSRF skipped -------------------------------------
-
 
     def test_cloud_allows_redirect_to_public(self, monkeypatch, _common_patches):
         """Redirects to public addresses always pass (cloud mode)."""

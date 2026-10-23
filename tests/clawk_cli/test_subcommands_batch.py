@@ -16,16 +16,12 @@ from clawk_cli.subcommands.config import build_config_parser
 from clawk_cli.subcommands.login import build_login_parser
 
 
-
 def _h(name):
     def handler(args):  # pragma: no cover - identity only
         return name
+
     handler.__name__ = f"cmd_{name}"
     return handler
-
-
-
-
 
 
 def test_config_get_unset_subcommands_parse():
@@ -47,8 +43,6 @@ def test_config_get_unset_subcommands_parse():
     assert ns.key == "terminal.backend"
 
 
-
-
 # ── deprecated `clawk login` fails gracefully, not with argparse error ────
 #
 # `clawk login` is a removed command; its handler (`login_command` in
@@ -58,10 +52,6 @@ def test_config_get_unset_subcommands_parse():
 #      `anthropic`) must parse and reach the handler — never crash in argparse
 #      with `invalid choice` before the friendly redirect is printed (#24756).
 #   2. The subcommand must not advertise itself in the parser help row.
-
-
-
-
 
 
 def test_login_subparser_help_is_suppressed():

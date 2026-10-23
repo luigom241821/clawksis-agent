@@ -78,7 +78,11 @@ def _ollama_host_from_env(env_host: str) -> str:
                 hostname = parsed.hostname
                 if ":" in hostname and not hostname.startswith("["):
                     hostname = f"[{hostname}]"
-                userinfo = parsed.netloc.rsplit("@", 1)[0] + "@" if "@" in parsed.netloc else ""
+                userinfo = (
+                    parsed.netloc.rsplit("@", 1)[0] + "@"
+                    if "@" in parsed.netloc
+                    else ""
+                )
                 return parsed._replace(netloc=f"{userinfo}{hostname}:{port}").geturl()
         except ValueError:
             pass
@@ -97,6 +101,7 @@ def _get_ollama_base_url() -> str:
     (otherwise the picker would probe an unrelated endpoint and hide the local catalog) →
     ``OLLAMA_HOST`` → Ollama's local default."""
     from clawk_cli.models import _get_model_config_dict
+
     configured = _configured_ollama_base_url()
     if configured:
         return configured
@@ -125,7 +130,9 @@ def _api_key_from_provider_config(entry: dict, *env_keys: str) -> str:
     api_key = str(entry.get("api_key") or "").strip()
     if api_key:
         return api_key
-    key_env = str(next((entry.get(k) for k in env_keys if entry.get(k)), "") or "").strip()
+    key_env = str(
+        next((entry.get(k) for k in env_keys if entry.get(k)), "") or ""
+    ).strip()
     return get_secret_str(key_env, "").strip() if key_env else ""
 
 
@@ -138,6 +145,7 @@ def _drop_authorization(headers: dict[str, str]) -> None:
 def _get_ollama_request_headers() -> dict[str, str]:
     """Return configured headers and credentials for native Ollama requests."""
     from clawk_cli.models import _get_provider_config_dict
+
     entry = _get_provider_config_dict("ollama")
     try:
         from clawk_cli.config import normalize_extra_headers
@@ -152,14 +160,21 @@ def _get_ollama_request_headers() -> dict[str, str]:
     return result
 
 
-def _get_ollama_native_headers(base_url: Optional[str], *, api_key: Optional[str] = None) -> dict[str, str]:
+def _get_ollama_native_headers(
+    base_url: Optional[str], *, api_key: Optional[str] = None
+) -> dict[str, str]:
     """Ollama credentials and headers for one endpoint origin. Configured headers apply only when
     *base_url* shares the configured Ollama root; an explicit *api_key* replaces any configured
     Authorization variant rather than inheriting it."""
     configured_base = _configured_ollama_base_url()
     from agent.command_token_source import materialize_probe_api_key
+
     explicit_key = materialize_probe_api_key(api_key)
-    configured_matches = bool(configured_base and base_url and _same_ollama_native_root(base_url, configured_base))
+    configured_matches = bool(
+        configured_base
+        and base_url
+        and _same_ollama_native_root(base_url, configured_base)
+    )
     if not configured_matches and not explicit_key:
         return {}
     headers = _get_ollama_request_headers() if configured_matches else {}
@@ -197,8 +212,12 @@ def _remember_ollama_cache(cache: dict[str, Any], key: str, value: Any) -> None:
 def _ollama_probe_cache_key(root: str, headers: Optional[dict[str, str]]) -> str:
     if not headers:
         return root
-    normalized_headers = sorted((str(key).lower(), str(value)) for key, value in headers.items())
-    header_blob = json.dumps(normalized_headers, ensure_ascii=False, separators=(",", ":")).encode("utf-8", errors="replace")
+    normalized_headers = sorted(
+        (str(key).lower(), str(value)) for key, value in headers.items()
+    )
+    header_blob = json.dumps(
+        normalized_headers, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8", errors="replace")
     return f"{root}|headers:{hashlib.blake2b(header_blob, digest_size=8).hexdigest()}"
 
 
@@ -227,14 +246,22 @@ def probe_ollama_local_models(
     """Probe local Ollama-compatible models from native ``/api/tags`` (Ollama's authoritative local
     catalog; ``/v1/models`` is not required for local servers). ``None`` when the endpoint cannot be
     reached or returns malformed data; a list (possibly empty) when it was reachable."""
-    from clawk_cli.models import _CLAWK_USER_AGENT, _get_ollama_base_url, _urlopen_model_catalog_request
+    from clawk_cli.models import (
+        _CLAWK_USER_AGENT,
+        _get_ollama_base_url,
+        _urlopen_model_catalog_request,
+    )
+
     root = _root_for_ollama_native_api(base_url or _get_ollama_base_url())
     if not root:
         return None
     cache_key = _ollama_probe_cache_key(root, headers)
     failure_key = f"{cache_key}|timeout:{float(timeout):.3f}"
     cached = _OLLAMA_LOCAL_MODELS_CACHE.get(cache_key)
-    if cached is not None and time.monotonic() - cached[1] < _OLLAMA_LOCAL_MODELS_CACHE_TTL:
+    if (
+        cached is not None
+        and time.monotonic() - cached[1] < _OLLAMA_LOCAL_MODELS_CACHE_TTL
+    ):
         return list(cached[0])
     failed_at = _OLLAMA_LOCAL_PROBE_FAILURE_CACHE.get(failure_key)
     if failed_at is not None:
@@ -243,19 +270,32 @@ def probe_ollama_local_models(
         _OLLAMA_LOCAL_PROBE_FAILURE_CACHE.pop(failure_key, None)
     try:
         request_headers = {"User-Agent": _CLAWK_USER_AGENT, **(headers or {})}
-        req = urllib.request.Request(root.rstrip("/") + "/api/tags", headers=request_headers)
+        req = urllib.request.Request(
+            root.rstrip("/") + "/api/tags", headers=request_headers
+        )
         with _urlopen_model_catalog_request(req, timeout=timeout) as resp:
             models = _parse_ollama_tags(json.loads(resp.read().decode()))
-    except (ValueError, OSError, TimeoutError, http.client.HTTPException, urllib.error.URLError,
-            json.JSONDecodeError, UnicodeDecodeError):
+    except (
+        ValueError,
+        OSError,
+        TimeoutError,
+        http.client.HTTPException,
+        urllib.error.URLError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ):
         models = None
     if models is None:
         _remember_ollama_cache(_OLLAMA_LOCAL_PROBE_REACHABLE, cache_key, False)
-        _remember_ollama_cache(_OLLAMA_LOCAL_PROBE_FAILURE_CACHE, failure_key, time.monotonic())
+        _remember_ollama_cache(
+            _OLLAMA_LOCAL_PROBE_FAILURE_CACHE, failure_key, time.monotonic()
+        )
         return None
     _remember_ollama_cache(_OLLAMA_LOCAL_PROBE_REACHABLE, cache_key, True)
     _OLLAMA_LOCAL_PROBE_FAILURE_CACHE.pop(failure_key, None)
-    _remember_ollama_cache(_OLLAMA_LOCAL_MODELS_CACHE, cache_key, (tuple(models), time.monotonic()))
+    _remember_ollama_cache(
+        _OLLAMA_LOCAL_MODELS_CACHE, cache_key, (tuple(models), time.monotonic())
+    )
     return models
 
 
@@ -277,16 +317,27 @@ def _same_ollama_native_root(left: str, right: str) -> bool:
     try:
         left_parts = urllib.parse.urlsplit(left_root)
         right_parts = urllib.parse.urlsplit(right_root)
-        return (
-            url_origin(left_root) == url_origin(right_root)
-            and left_parts.path.rstrip("/") == right_parts.path.rstrip("/")
-        )
+        return url_origin(left_root) == url_origin(
+            right_root
+        ) and left_parts.path.rstrip("/") == right_parts.path.rstrip("/")
     except (AttributeError, ValueError):
         return False
 
 
-_NEVER_OLLAMA_PROVIDERS = frozenset({"openrouter", "nous", "anthropic", "openai", "openai-codex", "gemini", "ollama-cloud"})
-_LOCAL_LIKE_PROVIDERS = frozenset({"", "custom", "local", "llamacpp", "llama.cpp", "llama-cpp", "vllm"})
+_NEVER_OLLAMA_PROVIDERS = frozenset(
+    {
+        "openrouter",
+        "nous",
+        "anthropic",
+        "openai",
+        "openai-codex",
+        "gemini",
+        "ollama-cloud",
+    }
+)
+_LOCAL_LIKE_PROVIDERS = frozenset(
+    {"", "custom", "local", "llamacpp", "llama.cpp", "llama-cpp", "vllm"}
+)
 
 
 def should_use_ollama_native_catalog(
@@ -317,7 +368,10 @@ def should_use_ollama_native_catalog(
         if not root:
             return False
         if configured_base and not _same_ollama_native_root(root, configured_base):
-            return probe_ollama_local_models(root, timeout=0.5, headers=headers) is not None
+            return (
+                probe_ollama_local_models(root, timeout=0.5, headers=headers)
+                is not None
+            )
         return True
 
     if configured_base and _same_ollama_native_root(root, configured_base):
@@ -346,6 +400,7 @@ def _ollama_local_catalog(force_refresh: bool) -> list[str]:
     Ollama server, else the OpenAI-style ``/v1/models`` of the configured gateway (incl. Ollama
     Cloud)."""
     from clawk_cli.models import _get_provider_config_dict, fetch_api_models
+
     if force_refresh:
         _OLLAMA_LOCAL_MODELS_CACHE.clear()
         _OLLAMA_LOCAL_PROBE_FAILURE_CACHE.clear()
@@ -353,29 +408,47 @@ def _ollama_local_catalog(force_refresh: bool) -> list[str]:
     base_url = _get_ollama_base_url()
     headers = _get_ollama_native_headers(base_url)
     if should_use_ollama_native_catalog("ollama", base_url, headers=headers):
-        native_models = fetch_ollama_local_models(base_url, headers=headers) if headers else fetch_ollama_local_models(base_url)
-        native_key = _ollama_probe_cache_key(_root_for_ollama_native_api(base_url), headers or None)
+        native_models = (
+            fetch_ollama_local_models(base_url, headers=headers)
+            if headers
+            else fetch_ollama_local_models(base_url)
+        )
+        native_key = _ollama_probe_cache_key(
+            _root_for_ollama_native_api(base_url), headers or None
+        )
         if native_models or _OLLAMA_LOCAL_PROBE_REACHABLE.get(native_key) is True:
             return native_models or []
     config = _get_provider_config_dict("ollama")
     fallback_key = _api_key_from_provider_config(config, "key_env")
     fallback_base = _normalize_openai_base_url(config.get("base_url") or base_url)
     fallback_headers = _get_ollama_native_headers(fallback_base, api_key=fallback_key)
-    return fetch_api_models(fallback_key, fallback_base, headers=fallback_headers or None) or []
+    return (
+        fetch_api_models(fallback_key, fallback_base, headers=fallback_headers or None)
+        or []
+    )
 
 
 def _lmstudio_server_root(base_url: Optional[str]) -> Optional[str]:
     """LM Studio server root: users paste the OpenAI runtime URL (``.../v1``) or the native prefix
     (``.../api``, ``.../api/v1``); native probes append ``/api/v1/...`` themselves."""
-    return _strip_suffixes((base_url or "").strip().rstrip("/"), ("/api/v1", "/api", "/v1")) or None
+    return (
+        _strip_suffixes(
+            (base_url or "").strip().rstrip("/"), ("/api/v1", "/api", "/v1")
+        )
+        or None
+    )
 
 
 def _lmstudio_request_headers(api_key: Optional[str] = None) -> dict:
     """HTTP headers for LM Studio native API requests."""
     from clawk_cli.models import _CLAWK_USER_AGENT
     from agent.command_token_source import materialize_probe_api_key
+
     token = materialize_probe_api_key(api_key)
-    return {"User-Agent": _CLAWK_USER_AGENT, **({"Authorization": f"Bearer {token}"} if token else {})}
+    return {
+        "User-Agent": _CLAWK_USER_AGENT,
+        **({"Authorization": f"Bearer {token}"} if token else {}),
+    }
 
 
 def _lmstudio_fetch_raw_models(
@@ -386,17 +459,21 @@ def _lmstudio_fetch_raw_models(
     """Raw model list from LM Studio's ``/api/v1/models``; None on network errors / malformed
     payloads; raises ``AuthError`` on HTTP 401/403."""
     from clawk_cli.models import _urlopen_model_catalog_request
+
     server_root = _lmstudio_server_root(base_url)
     if not server_root:
         return None
 
-    request = urllib.request.Request(server_root + "/api/v1/models", headers=_lmstudio_request_headers(api_key))
+    request = urllib.request.Request(
+        server_root + "/api/v1/models", headers=_lmstudio_request_headers(api_key)
+    )
     try:
         with _urlopen_model_catalog_request(request, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         if exc.code in {401, 403}:
             from clawk_cli.auth import AuthError
+
             raise AuthError(
                 f"LM Studio rejected the request with HTTP {exc.code}.",
                 provider="lmstudio",
@@ -410,7 +487,10 @@ def _lmstudio_fetch_raw_models(
 
     raw_models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(raw_models, list):
-        logger.debug("LM Studio probe at %s returned malformed payload (no `models` list)", server_root)
+        logger.debug(
+            "LM Studio probe at %s returned malformed payload (no `models` list)",
+            server_root,
+        )
         return None
     return raw_models
 
@@ -418,14 +498,18 @@ def _lmstudio_fetch_raw_models(
 def _lmstudio_raw_models_or_none(api_key, base_url, timeout) -> Optional[list[dict]]:
     """``_lmstudio_fetch_raw_models`` with every failure (incl. AuthError) collapsed to None."""
     try:
-        return _lmstudio_fetch_raw_models(api_key=api_key, base_url=base_url, timeout=timeout)
+        return _lmstudio_fetch_raw_models(
+            api_key=api_key, base_url=base_url, timeout=timeout
+        )
     except Exception:
         return None
 
 
 def _lmstudio_entry_for(raw_models: list, model: str) -> Optional[dict]:
     for raw in raw_models:
-        if isinstance(raw, dict) and (raw.get("key") == model or raw.get("id") == model):
+        if isinstance(raw, dict) and (
+            raw.get("key") == model or raw.get("id") == model
+        ):
             return raw
     return None
 
@@ -438,13 +522,18 @@ def probe_lmstudio_models(
     """Chat-capable LM Studio model keys — a valid empty list when the server is reachable but has
     no non-embedding models; ``None`` on network errors, malformed responses, or bad base URLs.
     Raises ``AuthError`` on HTTP 401/403 so token issues surface separately from reachability."""
-    raw_models = _lmstudio_fetch_raw_models(api_key=api_key, base_url=base_url, timeout=timeout)
+    raw_models = _lmstudio_fetch_raw_models(
+        api_key=api_key, base_url=base_url, timeout=timeout
+    )
     if raw_models is None:
         return None
 
     keys: list[str] = []
     for raw in raw_models:
-        if not isinstance(raw, dict) or str(raw.get("type") or "").strip().lower() == "embedding":
+        if (
+            not isinstance(raw, dict)
+            or str(raw.get("type") or "").strip().lower() == "embedding"
+        ):
             continue
         key = str(raw.get("key") or raw.get("id") or "").strip()
         if key and key not in keys:
@@ -459,7 +548,9 @@ def fetch_lmstudio_models(
 ) -> list[str]:
     """LM Studio chat-capable model keys; ``[]`` when unreachable/malformed. Raises ``AuthError`` on
     HTTP 401/403 so callers can tell a wrong ``LM_API_KEY`` from an unreachable server."""
-    return probe_lmstudio_models(api_key=api_key, base_url=base_url, timeout=timeout) or []
+    return (
+        probe_lmstudio_models(api_key=api_key, base_url=base_url, timeout=timeout) or []
+    )
 
 
 class LMStudioLoadResult(NamedTuple):
@@ -483,7 +574,9 @@ def _lmstudio_loaded_context(entry: Optional[dict]) -> Optional[int]:
         return None
     for instance in instances:
         config = instance.get("config") if isinstance(instance, dict) else None
-        parsed = _positive_int(config.get("context_length") if isinstance(config, dict) else None)
+        parsed = _positive_int(
+            config.get("context_length") if isinstance(config, dict) else None
+        )
         if parsed is not None:
             return parsed
     return None
@@ -505,7 +598,12 @@ def ensure_lmstudio_model_loaded(
     refreshed state."""
     from clawk_cli.models import _urlopen_model_catalog_request
 
-    def _result(context_length: Optional[int], *, load_attempted: bool = False, rejected: bool = False):
+    def _result(
+        context_length: Optional[int],
+        *,
+        load_attempted: bool = False,
+        rejected: bool = False,
+    ):
         result = LMStudioLoadResult(context_length, load_attempted, rejected)
         return result if return_load_result else context_length
 
@@ -516,12 +614,18 @@ def ensure_lmstudio_model_loaded(
     explicit_context = _positive_int(target_context_length)
     if target_context_length is not None and explicit_context is None:
         return _result(None)
-    target_entry = _lmstudio_entry_for(_lmstudio_raw_models_or_none(api_key, base_url, 10) or [], model)
+    target_entry = _lmstudio_entry_for(
+        _lmstudio_raw_models_or_none(api_key, base_url, 10) or [], model
+    )
     if target_entry is None:
         return _result(None)
 
     max_ctx = _positive_int(target_entry.get("max_context_length"))
-    if explicit_context is not None and max_ctx is not None and explicit_context > max_ctx:
+    if (
+        explicit_context is not None
+        and max_ctx is not None
+        and explicit_context > max_ctx
+    ):
         return _result(None, rejected=True)
 
     current_context = _lmstudio_loaded_context(target_entry)
@@ -539,7 +643,10 @@ def ensure_lmstudio_model_loaded(
         load_request = urllib.request.Request(
             server_root + "/api/v1/models/load",
             data=json.dumps(load_payload).encode(),
-            headers={**_lmstudio_request_headers(api_key), "Content-Type": "application/json"},
+            headers={
+                **_lmstudio_request_headers(api_key),
+                "Content-Type": "application/json",
+            },
             method="POST",
         )
         with _urlopen_model_catalog_request(load_request, timeout=timeout) as resp:
@@ -551,15 +658,26 @@ def ensure_lmstudio_model_loaded(
         response_payload = json.loads(response_body.decode())
     except Exception:
         response_payload = None
-    load_config = response_payload.get("load_config") if isinstance(response_payload, dict) else None
-    applied_context = _positive_int(load_config.get("context_length")) if isinstance(load_config, dict) else None
+    load_config = (
+        response_payload.get("load_config")
+        if isinstance(response_payload, dict)
+        else None
+    )
+    applied_context = (
+        _positive_int(load_config.get("context_length"))
+        if isinstance(load_config, dict)
+        else None
+    )
     if applied_context is not None:
         return _result(applied_context, load_attempted=True)
 
     refreshed_models = _lmstudio_raw_models_or_none(api_key, base_url, 10)
     if refreshed_models is None:
         return _result(None, load_attempted=True)
-    return _result(_lmstudio_loaded_context(_lmstudio_entry_for(refreshed_models, model)), load_attempted=True)
+    return _result(
+        _lmstudio_loaded_context(_lmstudio_entry_for(refreshed_models, model)),
+        load_attempted=True,
+    )
 
 
 def lmstudio_model_reasoning_options(
@@ -570,7 +688,9 @@ def lmstudio_model_reasoning_options(
 ) -> list[str]:
     """Reasoning ``allowed_options`` LM Studio publishes for ``model`` under
     ``capabilities.reasoning`` in ``/api/v1/models``; ``[]`` when unknown, unreachable, or absent."""
-    raw = _lmstudio_entry_for(_lmstudio_raw_models_or_none(api_key, base_url, timeout) or [], model)
+    raw = _lmstudio_entry_for(
+        _lmstudio_raw_models_or_none(api_key, base_url, timeout) or [], model
+    )
     if raw is None:
         return []
     caps = raw.get("capabilities")
@@ -599,9 +719,13 @@ def ollama_model_supports_thinking(
         return None
 
     from agent.command_token_source import materialize_probe_api_key
+
     token = materialize_probe_api_key(api_key)
     try:
-        with httpx.Client(timeout=timeout, headers={"Authorization": f"Bearer {token}"} if token else {}) as client:
+        with httpx.Client(
+            timeout=timeout,
+            headers={"Authorization": f"Bearer {token}"} if token else {},
+        ) as client:
             resp = client.post(f"{server_url}/api/show", json={"name": bare_model})
             if resp.status_code != 200:
                 return None
@@ -627,6 +751,7 @@ def _strip_ollama_cloud_suffix(model_id: str) -> str:
 
 def _ollama_cloud_cache_path() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "ollama_cloud_models_cache.json"
 
 
@@ -639,7 +764,10 @@ def _load_ollama_cloud_cache(*, ignore_ttl: bool = False) -> Optional[dict]:
         models = data.get("models") if data is not None else None
         if not (isinstance(models, list) and models):
             return None
-        if not ignore_ttl and (time.time() - data.get("cached_at", 0)) > _OLLAMA_CLOUD_CACHE_TTL:
+        if (
+            not ignore_ttl
+            and (time.time() - data.get("cached_at", 0)) > _OLLAMA_CLOUD_CACHE_TTL
+        ):
             return None  # stale
         return data
     except Exception:
@@ -651,7 +779,11 @@ def _save_ollama_cloud_cache(models: list[str]) -> None:
     from clawk_cli.models import _write_json_cache
 
     try:
-        _write_json_cache(_ollama_cloud_cache_path(), {"models": models, "cached_at": time.time()}, indent=None)
+        _write_json_cache(
+            _ollama_cloud_cache_path(),
+            {"models": models, "cached_at": time.time()},
+            indent=None,
+        )
     except Exception:
         pass
 
@@ -668,6 +800,7 @@ def fetch_ollama_cloud_models(
     only → ``[]``. ``cache_only`` (GUI read path) never runs the 8s network probe and never writes
     the disk cache. Never None."""
     from clawk_cli.models import fetch_api_models
+
     if not force_refresh:
         cached = _load_ollama_cloud_cache()
         if cached is not None:
@@ -677,10 +810,17 @@ def fetch_ollama_cloud_models(
     base_url = base_url or os.getenv("OLLAMA_BASE_URL", "") or "https://ollama.com/v1"
     # cache_only (GUI read path): skip only the network probe. The models.dev additions are a local
     # cache read, so the row still populates with what is known; the live catalog lands next open.
-    live_models = [] if cache_only else ((fetch_api_models(api_key, base_url, timeout=8.0) or []) if api_key else [])
+    live_models = (
+        []
+        if cache_only
+        else (
+            (fetch_api_models(api_key, base_url, timeout=8.0) or []) if api_key else []
+        )
+    )
     mdev_models: list[str] = []
     try:
         from agent.models_dev import list_agentic_models
+
         mdev_models = list_agentic_models("ollama-cloud")
     except Exception:
         pass

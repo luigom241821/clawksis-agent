@@ -22,6 +22,7 @@ _BYTECODE_FINGERPRINT_FILE = ".bytecode-fingerprint"
 def _record_bytecode_fingerprint() -> None:
     """Persist the current checkout fingerprint after a bytecode sweep. Never raises."""
     from clawk_cli.main import PROJECT_ROOT, _read_git_revision_fingerprint
+
     try:
         fingerprint = _read_git_revision_fingerprint(PROJECT_ROOT)
         if not fingerprint:
@@ -47,7 +48,12 @@ def _sweep_stale_bytecode_if_checkout_changed() -> None:
     ``__pycache__`` retains bytecode from the previous revision, and a later process trusts the stale
     ``.pyc`` instead of the fresh source.
     """
-    from clawk_cli.main import PROJECT_ROOT, _clear_bytecode_cache, _read_git_revision_fingerprint
+    from clawk_cli.main import (
+        PROJECT_ROOT,
+        _clear_bytecode_cache,
+        _read_git_revision_fingerprint,
+    )
+
     try:
         fingerprint = _read_git_revision_fingerprint(PROJECT_ROOT)
         if not fingerprint:
@@ -63,7 +69,10 @@ def _sweep_stale_bytecode_if_checkout_changed() -> None:
         if removed:
             logger.info(
                 "Checkout changed since last launch (%s -> %s): cleared %d stale __pycache__ director%s",
-                recorded or "unknown", fingerprint, removed, "y" if removed == 1 else "ies",
+                recorded or "unknown",
+                fingerprint,
+                removed,
+                "y" if removed == 1 else "ies",
             )
         _record_bytecode_fingerprint()
     except Exception as exc:
@@ -83,12 +92,15 @@ def _web_dist_dir(web_dir: Path) -> Path:
 def _web_ui_build_needed(web_dir: Path) -> bool:
     from clawk_cli.source_build import source_product_current
 
-    return not source_product_current(_web_project_root(web_dir), "web", _web_dist_dir(web_dir))
+    return not source_product_current(
+        _web_project_root(web_dir), "web", _web_dist_dir(web_dir)
+    )
 
 
 def _write_web_ui_build_stamp(project_root: Path, web_dir: Path) -> None:
     """Historical updater entrypoint; current builders publish their own receipts."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
@@ -98,28 +110,43 @@ def _console_print(text: str) -> None:
         print(text)
     except UnicodeEncodeError:
         encoding = getattr(sys.stdout, "encoding", None) or "ascii"
-        print(text.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+        print(
+            text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        )
 
 
 def _run_with_idle_timeout(
-    cmd: list[str], cwd: Path, *, idle_timeout_seconds: int = 180, indent: str = "    ",
-    env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    cmd: list[str],
+    cwd: Path,
+    *,
+    idle_timeout_seconds: int = 180,
+    indent: str = "    ",
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Stop an old updater instead of running the retired build path."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
 def _nixos_build_env() -> dict[str, str] | None:
     """Stop an old updater instead of running the retired build path."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
 def _run_npm_install_deterministic(
-    npm: str, cwd: Path, *, extra_args: tuple[str, ...] = (), capture_output: bool = True,
-    env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    npm: str,
+    cwd: Path,
+    *,
+    extra_args: tuple[str, ...] = (),
+    capture_output: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Stop an old updater instead of running the retired build path."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch()
 
 
@@ -130,7 +157,9 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     if not (web_dir / "package.json").exists():
         return True
     try:
-        with (_web_project_root(web_dir) / ".web_ui_build.lock").open("ab") as lock_file:
+        with (_web_project_root(web_dir) / ".web_ui_build.lock").open(
+            "ab"
+        ) as lock_file:
             _lock(lock_file.fileno(), wait=True)
             return _do_build_web_ui(web_dir, fatal=fatal)
     except OSError as exc:
@@ -140,7 +169,11 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
 
 def _do_build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     """Build stale dashboard sources; failure is never reported as a usable build."""
-    from clawk_cli.source_build import build_source_web, prepare_launch_dependencies, source_build_env
+    from clawk_cli.source_build import (
+        build_source_web,
+        prepare_launch_dependencies,
+        source_build_env,
+    )
 
     if not (web_dir / "package.json").exists() or not _web_ui_build_needed(web_dir):
         return True

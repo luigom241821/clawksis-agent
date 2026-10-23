@@ -26,8 +26,12 @@ def _make_runner(extra=None):
         }
     )
     adapter = MagicMock()
-    adapter.send = AsyncMock(return_value=SendResult(success=True, message_id="public-1"))
-    adapter.send_private_notice = AsyncMock(return_value=SendResult(success=True, message_id="private-1"))
+    adapter.send = AsyncMock(
+        return_value=SendResult(success=True, message_id="public-1")
+    )
+    adapter.send_private_notice = AsyncMock(
+        return_value=SendResult(success=True, message_id="private-1")
+    )
     runner.adapters = {Platform.SLACK: adapter}
     return runner, adapter
 
@@ -48,5 +52,3 @@ async def test_deliver_platform_notice_uses_private_delivery_when_configured():
         metadata={"thread_id": "111.222", "user_id": "U123"},
     )
     adapter.send.assert_not_awaited()
-
-

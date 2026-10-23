@@ -9,13 +9,15 @@ from gateway import shutdown_flush
 
 
 def test_recovery_payload_memory_does_not_scale_with_backlog(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(shutdown_flush, "_get_flush_dir", lambda: tmp_path)
     content = "x" * (256 * 1024)
     for seq in range(24):
         shutdown_flush.spool_dropped_transcript_message(
-            "sess", {"role": "user", "content": content, "timestamp": seq},
+            "sess",
+            {"role": "user", "content": content, "timestamp": seq},
         )
 
     class Sink:
@@ -35,7 +37,8 @@ def test_recovery_payload_memory_does_not_scale_with_backlog(
 
 
 def test_same_second_shutdown_slot_precedes_overflow(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from types import SimpleNamespace
     from unittest.mock import MagicMock
@@ -43,12 +46,31 @@ def test_same_second_shutdown_slot_precedes_overflow(
     monkeypatch.setattr(shutdown_flush, "_get_flush_dir", lambda: tmp_path)
     monkeypatch.setattr(shutdown_flush.time, "time", lambda: 100)
     names = iter(["zzz", "aaa", "bbb"])
-    monkeypatch.setattr(shutdown_flush.uuid, "uuid4", lambda: SimpleNamespace(hex=next(names)))
-    assert shutdown_flush.flush_pending_to_file({"session": {"text": "A", "session_id": "sess"}}) == 1
-    assert shutdown_flush.flush_overflow_to_file({"session": [
-        {"text": "B", "session_id": "sess"}, {"text": "C", "session_id": "sess"},
-    ]}) == 2
+    monkeypatch.setattr(
+        shutdown_flush.uuid, "uuid4", lambda: SimpleNamespace(hex=next(names))
+    )
+    assert (
+        shutdown_flush.flush_pending_to_file(
+            {"session": {"text": "A", "session_id": "sess"}}
+        )
+        == 1
+    )
+    assert (
+        shutdown_flush.flush_overflow_to_file(
+            {
+                "session": [
+                    {"text": "B", "session_id": "sess"},
+                    {"text": "C", "session_id": "sess"},
+                ]
+            }
+        )
+        == 2
+    )
     db = MagicMock()
     assert shutdown_flush.recover_pending_to_db(db) == 3
-    assert [call.kwargs["content"] for call in db.append_message.call_args_list] == ["A", "B", "C"]
+    assert [call.kwargs["content"] for call in db.append_message.call_args_list] == [
+        "A",
+        "B",
+        "C",
+    ]
     assert not list(tmp_path.glob("*.json"))

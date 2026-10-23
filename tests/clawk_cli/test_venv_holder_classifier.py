@@ -6,11 +6,15 @@ from clawk_cli.update_cmd import (
     _clawk_holder_subcommand,
 )
 
+
 class TestHolderSubcommand:
     @pytest.mark.parametrize(
         ("cmdline", "expected"),
         [
-            (r"C:\x\venv\Scripts\python.exe -m clawk_cli.main serve --host 127.0.0.1", "serve"),
+            (
+                r"C:\x\venv\Scripts\python.exe -m clawk_cli.main serve --host 127.0.0.1",
+                "serve",
+            ),
             (r"C:\x\venv\Scripts\python.exe -m clawk_cli.main dashboard", "dashboard"),
             (r"python.exe -m clawk_cli.main gateway run", "gateway"),
             # profile selector skipped; its VALUE must not become the subcommand
@@ -46,5 +50,9 @@ class TestHolderSubcommand:
 
         from clawk_cli._launchers import runtime_command
 
-        cmdline = shlex.join(runtime_command(Path("/opt/clawksis-agent"), ["dashboard"], python="/opt/store/python"))
+        cmdline = shlex.join(
+            runtime_command(
+                Path("/opt/clawksis-agent"), ["dashboard"], python="/opt/store/python"
+            )
+        )
         assert _clawk_holder_subcommand(cmdline) == "dashboard"

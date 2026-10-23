@@ -57,7 +57,7 @@ def _install_aiohttp() -> None:
     async def _request(self, method, str_or_url, *args, **kwargs):
         url = str(str_or_url)
         if url.startswith(_REAL_API):
-            str_or_url = _API + url[len(_REAL_API):]
+            str_or_url = _API + url[len(_REAL_API) :]
         return await original(self, method, str_or_url, *args, **kwargs)
 
     _request._standin_wrapped = True  # type: ignore[attr-defined]

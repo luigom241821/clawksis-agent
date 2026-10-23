@@ -40,4 +40,4 @@ def test_status_surfaces_env_inheritance_hint_when_unavailable(monkeypatch, caps
 
     assert "not available" in out
     assert "HINDSIGHT_API_KEY" in out  # names the missing var
-    assert ".env" in out               # systemd/gateway root-cause hint
+    assert ".env" in out  # systemd/gateway root-cause hint

@@ -17,7 +17,14 @@ from pathlib import Path
 import pytest
 
 from tests.e2e.core.providers._catalog_helpers import (
-    SHARDS, Row, TurnResult, check_row, discover_catalog, drive_shard, shard_of, shard_params,
+    SHARDS,
+    Row,
+    TurnResult,
+    check_row,
+    discover_catalog,
+    drive_shard,
+    shard_of,
+    shard_params,
 )
 
 SHARD = 0
@@ -40,5 +47,7 @@ def test_catalog_is_discovered_not_listed() -> None:
     dirs = {d.name for d in root.iterdir() if (d / "__init__.py").exists()}
     names = {r.name for r in discover_catalog()}
     assert dirs, "no bundled model-provider plugins found"
-    assert dirs <= names, f"plugin dirs with no discovered profile: {sorted(dirs - names)}"
+    assert dirs <= names, (
+        f"plugin dirs with no discovered profile: {sorted(dirs - names)}"
+    )
     assert {shard_of(n) for n in names} <= set(range(SHARDS))

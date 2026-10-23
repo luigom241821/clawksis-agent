@@ -22,10 +22,6 @@ def _telegram_descriptor(**overrides) -> CapabilityDescriptor:
     return CapabilityDescriptor(**base)
 
 
-
-
-
-
 # ─────────────── supported_ops (op-level capability discovery, Phase 1) ───────────────
 
 

@@ -44,10 +44,12 @@ def _classified_confirmed():
     e = MockAPIError(
         "Your credit balance is too low to access the Anthropic API.",
         status_code=400,
-        body={"error": {
-            "type": "invalid_request_error",
-            "message": "Your credit balance is too low to access the Anthropic API.",
-        }},
+        body={
+            "error": {
+                "type": "invalid_request_error",
+                "message": "Your credit balance is too low to access the Anthropic API.",
+            }
+        },
     )
     return classify_api_error(e, provider="anthropic")
 
@@ -108,7 +110,6 @@ class TestTerminalResponse:
         block = result["billing_block"]
         if block is not None:
             assert "unverified" not in block
-
 
 
 # ── Credential-pool plumbing ─────────────────────────────────────────────────

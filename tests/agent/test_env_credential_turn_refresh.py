@@ -48,9 +48,7 @@ def env(monkeypatch):
     values = {}
     import agent.credential_pool as cp
 
-    monkeypatch.setattr(
-        cp, "get_env_prefer_dotenv", lambda key: values.get(key, "")
-    )
+    monkeypatch.setattr(cp, "get_env_prefer_dotenv", lambda key: values.get(key, ""))
     return values
 
 
@@ -204,8 +202,6 @@ class TestFailedRebuildRetries:
         assert agent._try_refresh_env_client_credentials() is True
         assert agent.base_url == LOCAL_BASE
         assert agent._client_kwargs["base_url"] == LOCAL_BASE
-
-
 
 
 CUSTOM_BASE = "https://api.longcat.example/openai/v1"

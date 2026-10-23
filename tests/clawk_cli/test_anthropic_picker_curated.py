@@ -19,9 +19,9 @@ from clawk_cli import models as M
 def test_anthropic_merge_dedupes_overlap_and_appends_live_only():
     """Models in both lists appear once; live-only models are appended."""
     live = [
-        "claude-opus-4-8",          # overlaps curated
-        "claude-sonnet-4-6",        # overlaps curated
-        "claude-future-9-99",       # live-only, not curated
+        "claude-opus-4-8",  # overlaps curated
+        "claude-sonnet-4-6",  # overlaps curated
+        "claude-future-9-99",  # live-only, not curated
     ]
     with patch.object(M, "_fetch_anthropic_models", return_value=live):
         result = M.provider_model_ids("anthropic")
@@ -32,7 +32,7 @@ def test_anthropic_merge_dedupes_overlap_and_appends_live_only():
     assert "claude-future-9-99" in result
     # Curated entries lead, live-only trails.
     curated = list(M._PROVIDER_MODELS["anthropic"])
-    assert result[:len(curated)] == curated and result[-1] == "claude-future-9-99"
+    assert result[: len(curated)] == curated and result[-1] == "claude-future-9-99"
 
 
 def test_anthropic_falls_back_to_curated_when_live_unavailable():

@@ -33,7 +33,11 @@ pytestmark = pytest.mark.platforms("macos")
 def _lstart(pid: int, tz: str) -> str:
     env = dict(os.environ, TZ=tz)
     out = subprocess.run(
-        ["ps", "-p", str(pid), "-o", "lstart="], capture_output=True, text=True, env=env, check=True
+        ["ps", "-p", str(pid), "-o", "lstart="],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
     ).stdout
     return " ".join(out.split())
 
@@ -100,7 +104,9 @@ def test_live_backend_survives_timezone_drifted_parent_marker(tmp_path):
             text=True,
         )
 
-        assert _read_until(serve, "CLAWK_BACKEND_READY"), "backend never announced READY"
+        assert _read_until(serve, "CLAWK_BACKEND_READY"), (
+            "backend never announced READY"
+        )
 
         # Before the fix the watchdog fired on its very first poll. Several
         # polls later the backend must still be here.

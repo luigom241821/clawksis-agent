@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+
 class TestRunReferenceSlotMaxTokens:
     """Legacy slot settings cannot override internal advisor task budgets."""
 
@@ -25,11 +26,26 @@ class TestRunReferenceSlotMaxTokens:
             mock_resp.usage = None
             return mock_resp
 
-        slot = {"provider": "openrouter", "model": "deepseek/deepseek-v4-pro", "max_tokens": 600}
+        slot = {
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-pro",
+            "max_tokens": 600,
+        }
 
-        with patch("agent.moa_loop._slot_runtime", return_value={"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"}), \
-             patch("agent.moa_loop.call_llm", side_effect=fake_call_llm), \
-             patch("agent.moa_loop._maybe_apply_moa_cache_control", side_effect=lambda msgs, rt, **kwargs: msgs):
+        with (
+            patch(
+                "agent.moa_loop._slot_runtime",
+                return_value={
+                    "provider": "openrouter",
+                    "model": "deepseek/deepseek-v4-pro",
+                },
+            ),
+            patch("agent.moa_loop.call_llm", side_effect=fake_call_llm),
+            patch(
+                "agent.moa_loop._maybe_apply_moa_cache_control",
+                side_effect=lambda msgs, rt, **kwargs: msgs,
+            ),
+        ):
             _run_reference(slot, [{"role": "user", "content": "hi"}], max_tokens=2000)
 
         assert captured_kwargs.get("max_tokens") == 2000

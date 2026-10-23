@@ -19,7 +19,10 @@ def _send_through_hooks(client, url: str, payload: dict):
 
 
 def test_official_codex_responses_body_is_zstd_and_lossless():
-    payload = {"model": "gpt-6.1-sol", "input": [{"role": "user", "content": "hi " * 500}]}
+    payload = {
+        "model": "gpt-6.1-sol",
+        "input": [{"role": "user", "content": "hi " * 500}],
+    }
     client = build_keepalive_http_client(OFFICIAL)
     try:
         request = _send_through_hooks(client, f"{OFFICIAL}/responses", payload)
@@ -30,11 +33,17 @@ def test_official_codex_responses_body_is_zstd_and_lossless():
     assert json.loads(zstd.decompress(request.content)) == payload
 
 
-@pytest.mark.parametrize("base_url, path", [
-    ("https://my-proxy.example.com/backend-api/codex", "/responses"),  # custom proxy: never compressed
-    ("https://api.openai.com/v1", "/responses"),
-    (OFFICIAL, "/models"),  # official host, non-Responses endpoint
-])
+@pytest.mark.parametrize(
+    "base_url, path",
+    [
+        (
+            "https://my-proxy.example.com/backend-api/codex",
+            "/responses",
+        ),  # custom proxy: never compressed
+        ("https://api.openai.com/v1", "/responses"),
+        (OFFICIAL, "/models"),  # official host, non-Responses endpoint
+    ],
+)
 def test_other_destinations_stay_raw_json(base_url, path):
     payload = {"model": "x", "input": "hello"}
     client = build_keepalive_http_client(base_url)

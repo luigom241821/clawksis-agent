@@ -58,8 +58,14 @@ class TestBatchDuplicateGoalsAllowed(unittest.TestCase):
     """
 
     def _completed(self, idx):
-        return {"task_index": idx, "status": "completed", "summary": "ok",
-                "api_calls": 1, "duration_seconds": 1.0, "_child_role": None}
+        return {
+            "task_index": idx,
+            "status": "completed",
+            "summary": "ok",
+            "api_calls": 1,
+            "duration_seconds": 1.0,
+            "_child_role": None,
+        }
 
     def test_exact_duplicate_goals_accepted(self):
         with patch("tools.delegate_tool._run_single_child") as mock_run:
@@ -90,12 +96,16 @@ class TestBatchPlaceholderGoals(unittest.TestCase):
         self.assertIn("placeholder", result["error"].lower())
 
     def test_unexpanded_angle_template_marker_rejected(self):
-        result = _call([{"goal": GOOD_A}, {"goal": "Implement <feature_name> end to end"}])
+        result = _call(
+            [{"goal": GOOD_A}, {"goal": "Implement <feature_name> end to end"}]
+        )
         self.assertIn("error", result)
         self.assertIn("template", result["error"].lower())
 
     def test_unexpanded_brace_template_marker_rejected(self):
-        result = _call([{"goal": GOOD_A}, {"goal": "Summarize {file_path} for the report"}])
+        result = _call(
+            [{"goal": GOOD_A}, {"goal": "Summarize {file_path} for the report"}]
+        )
         self.assertIn("error", result)
         self.assertIn("template", result["error"].lower())
 
@@ -114,10 +124,22 @@ class TestBatchPlaceholderGoals(unittest.TestCase):
         for bad_free_goal in code_goals:
             with patch("tools.delegate_tool._run_single_child") as mock_run:
                 mock_run.side_effect = [
-                    {"task_index": 0, "status": "completed", "summary": "ok",
-                     "api_calls": 1, "duration_seconds": 1.0, "_child_role": None},
-                    {"task_index": 1, "status": "completed", "summary": "ok",
-                     "api_calls": 1, "duration_seconds": 1.0, "_child_role": None},
+                    {
+                        "task_index": 0,
+                        "status": "completed",
+                        "summary": "ok",
+                        "api_calls": 1,
+                        "duration_seconds": 1.0,
+                        "_child_role": None,
+                    },
+                    {
+                        "task_index": 1,
+                        "status": "completed",
+                        "summary": "ok",
+                        "api_calls": 1,
+                        "duration_seconds": 1.0,
+                        "_child_role": None,
+                    },
                 ]
                 result = _call([{"goal": GOOD_A}, {"goal": bad_free_goal}])
             self.assertNotIn("error", result, bad_free_goal)
@@ -137,7 +159,6 @@ class TestBatchPlaceholderGoals(unittest.TestCase):
         self.assertIn("error", result)
 
 
-
 class TestSingleTaskBatch(unittest.TestCase):
     def test_one_task_batch_is_valid_single_task_shape(self):
         """A one-entry tasks[] array is the canonical single-task call (the
@@ -145,8 +166,12 @@ class TestSingleTaskBatch(unittest.TestCase):
         and short goals are legitimate for a single task."""
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed", "summary": "done",
-                "api_calls": 1, "duration_seconds": 1.0, "_child_role": None,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "done",
+                "api_calls": 1,
+                "duration_seconds": 1.0,
+                "_child_role": None,
             }
             result = _call([{"goal": GOOD_A}])
         self.assertNotIn("error", result)
@@ -156,10 +181,22 @@ class TestValidBatchStillRuns(unittest.TestCase):
     def test_two_distinct_goals_pass_validation(self):
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
-                {"task_index": 0, "status": "completed", "summary": "A done",
-                 "api_calls": 1, "duration_seconds": 1.0, "_child_role": None},
-                {"task_index": 1, "status": "completed", "summary": "B done",
-                 "api_calls": 1, "duration_seconds": 1.0, "_child_role": None},
+                {
+                    "task_index": 0,
+                    "status": "completed",
+                    "summary": "A done",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": None,
+                },
+                {
+                    "task_index": 1,
+                    "status": "completed",
+                    "summary": "B done",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": None,
+                },
             ]
             result = _call([{"goal": GOOD_A}, {"goal": GOOD_B}])
         self.assertNotIn("error", result)
@@ -170,8 +207,12 @@ class TestValidBatchStillRuns(unittest.TestCase):
         parent = _make_mock_parent()
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed", "summary": "ok",
-                "api_calls": 1, "duration_seconds": 1.0, "_child_role": None,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "ok",
+                "api_calls": 1,
+                "duration_seconds": 1.0,
+                "_child_role": None,
             }
             result = json.loads(delegate_task(goal="test", parent_agent=parent))
         self.assertNotIn("error", result)
@@ -188,9 +229,18 @@ class TestOwnerRefusalMidBatch(unittest.TestCase):
         built = MagicMock()
         parent = _make_mock_parent()
         refusal = ValueError("the gateway owner refused another subagent")
-        with patch("tools.delegate_tool._build_child_preserving_parent_tools", side_effect=[built, refusal]), \
-                patch("tools.delegate_tool._run_single_child") as mock_run:
-            result = json.loads(delegate_task(tasks=[{"goal": GOOD_A}, {"goal": GOOD_B}], parent_agent=parent))
+        with (
+            patch(
+                "tools.delegate_tool._build_child_preserving_parent_tools",
+                side_effect=[built, refusal],
+            ),
+            patch("tools.delegate_tool._run_single_child") as mock_run,
+        ):
+            result = json.loads(
+                delegate_task(
+                    tasks=[{"goal": GOOD_A}, {"goal": GOOD_B}], parent_agent=parent
+                )
+            )
         self.assertIn("refused another subagent", result["error"])
         mock_run.assert_not_called()
         built.close.assert_called_once_with()

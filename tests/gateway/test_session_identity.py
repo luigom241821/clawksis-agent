@@ -18,7 +18,11 @@ from gateway.platforms.base import BasePlatformAdapter
 from gateway.profile_routing import parse_profile_routes
 from gateway.session import SessionSource, build_session_key
 from gateway.session_identity import (
-    IdentityUnresolved, RoutingIdentity, identity_of, replace_source, resolve_identity,
+    IdentityUnresolved,
+    RoutingIdentity,
+    identity_of,
+    replace_source,
+    resolve_identity,
 )
 
 
@@ -42,7 +46,9 @@ def _runner(home, *, multiplex, routes=()):
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(multiplex_profiles=multiplex)
-    runner.config.platforms = {Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})}
+    runner.config.platforms = {
+        Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})
+    }
     runner.config.profile_routes = parse_profile_routes(list(routes))
     runner.pairing_store = PairingStore(profile="default")
     runner.pairing_stores = {}
@@ -63,14 +69,37 @@ def mux(tmp_path, monkeypatch):
     for name in ("ops", "team_b"):
         (home / "profiles" / name).mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
-    served = [("default", home), ("ops", home / "profiles" / "ops"), ("team_b", home / "profiles" / "team_b")]
-    rig = _runner(home, multiplex=True, routes=[
-        {"name": "admin-dm", "platform": "telegram", "profile": "ops", "chat_id": "72719239"},
-        {"name": "ghost", "platform": "telegram", "profile": "ghost", "chat_id": "4040"},
-    ])
-    with patch("clawk_cli.profiles.profiles_to_serve", return_value=served), \
-            patch("clawk_cli.profiles.get_profile_dir", side_effect=lambda n: home if n == "default" else home / "profiles" / n), \
-            patch("clawk_cli.profiles.profile_exists", return_value=True):
+    served = [
+        ("default", home),
+        ("ops", home / "profiles" / "ops"),
+        ("team_b", home / "profiles" / "team_b"),
+    ]
+    rig = _runner(
+        home,
+        multiplex=True,
+        routes=[
+            {
+                "name": "admin-dm",
+                "platform": "telegram",
+                "profile": "ops",
+                "chat_id": "72719239",
+            },
+            {
+                "name": "ghost",
+                "platform": "telegram",
+                "profile": "ghost",
+                "chat_id": "4040",
+            },
+        ],
+    )
+    with (
+        patch("clawk_cli.profiles.profiles_to_serve", return_value=served),
+        patch(
+            "clawk_cli.profiles.get_profile_dir",
+            side_effect=lambda n: home if n == "default" else home / "profiles" / n,
+        ),
+        patch("clawk_cli.profiles.profile_exists", return_value=True),
+    ):
         yield rig
 
 
@@ -78,36 +107,62 @@ def test_identity_is_one_frozen_value_that_every_reader_agrees_on(mux):
     """Shared bot → routed satellite: transport stays default (authorization), runtime is ``ops``;
     the pinned identity is frozen, equal by value, and the legacy readers all report the same
     answer it does. A dedicated secondary resolves to itself on both axes."""
-    routed = mux.primary.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+    routed = mux.primary.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     identity = resolve_identity(routed, runner=mux.runner)
 
     assert identity == RoutingIdentity(
-        transport_profile="default", runtime_profile="ops", authorization_home=mux.home,
-        runtime_home=mux.home / "profiles" / "ops")
-    assert identity.namespace == "agent:ops" and identity.store_path == mux.home / "profiles" / "ops" / "state.db"
+        transport_profile="default",
+        runtime_profile="ops",
+        authorization_home=mux.home,
+        runtime_home=mux.home / "profiles" / "ops",
+    )
+    assert (
+        identity.namespace == "agent:ops"
+        and identity.store_path == mux.home / "profiles" / "ops" / "state.db"
+    )
     assert identity.adapter() is mux.primary
     with pytest.raises(dataclasses.FrozenInstanceError):
         identity.runtime_profile = "default"
     assert identity_of(routed) is identity
     # Thin readers: same object, same answers — no second derivation.
     assert mux.runner._authorization_home_for_source(routed) == mux.home
-    assert mux.runner._resolve_profile_home_for_source(routed) == mux.home / "profiles" / "ops"
+    assert (
+        mux.runner._resolve_profile_home_for_source(routed)
+        == mux.home / "profiles" / "ops"
+    )
     assert mux.runner._transport_owner(routed) == (mux.primary, None)
     assert mux.primary._source_session_key(routed) == "agent:ops:telegram:dm:72719239"
-    assert mux.runner._session_key_for_source(routed) == mux.primary._source_session_key(routed)
+    assert mux.runner._session_key_for_source(
+        routed
+    ) == mux.primary._source_session_key(routed)
 
-    own = mux.team_b.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+    own = mux.team_b.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     own_identity = resolve_identity(own, runner=mux.runner, transport_profile="team_b")
-    assert (own_identity.transport_profile, own_identity.runtime_profile) == ("team_b", "team_b")
-    assert own_identity.authorization_home == own_identity.runtime_home == mux.home / "profiles" / "team_b"
+    assert (own_identity.transport_profile, own_identity.runtime_profile) == (
+        "team_b",
+        "team_b",
+    )
+    assert (
+        own_identity.authorization_home
+        == own_identity.runtime_home
+        == mux.home / "profiles" / "team_b"
+    )
     assert own_identity != identity
     # Provenance is not identity: a second event from the same bot has the same identity.
-    again = mux.primary.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+    again = mux.primary.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     assert resolve_identity(again, runner=mux.runner) == identity
     assert hash(resolve_identity(again, runner=mux.runner)) == hash(identity)
 
 
-def test_unresolved_under_multiplex_raises_and_never_means_default(mux, tmp_path, monkeypatch):
+def test_unresolved_under_multiplex_raises_and_never_means_default(
+    mux, tmp_path, monkeypatch
+):
     """A route to an unserved profile raises ``IdentityUnresolved`` (the runner drops the event);
     outside multiplexing the same source resolves to an explicit default identity whose keys stay
     byte-identical to the legacy ``agent:main`` namespace."""
@@ -123,16 +178,30 @@ def test_unresolved_under_multiplex_raises_and_never_means_default(mux, tmp_path
     solo = _runner(solo_home, multiplex=False)
     source = solo.primary.build_source(chat_id="4040", chat_type="dm", user_id="4040")
     identity = resolve_identity(source, runner=solo.runner)
-    assert (identity.transport_profile, identity.runtime_profile, identity.multiplexed) == ("default", "default", False)
+    assert (
+        identity.transport_profile,
+        identity.runtime_profile,
+        identity.multiplexed,
+    ) == ("default", "default", False)
     assert identity.runtime_home == solo_home
     assert identity.namespace == "agent:main"
-    assert solo.primary._source_session_key(source) == build_session_key(source) == "agent:main:telegram:dm:4040"
+    assert (
+        solo.primary._source_session_key(source)
+        == build_session_key(source)
+        == "agent:main:telegram:dm:4040"
+    )
     assert source.profile is None  # wire format untouched
-    assert solo.runner._authorization_home_for_source(source) is None  # ambient scope, as before
+    assert (
+        solo.runner._authorization_home_for_source(source) is None
+    )  # ambient scope, as before
 
 
-def test_replace_source_keeps_identity_and_transport_where_dataclasses_replace_drops_them(mux):
-    routed = mux.primary.build_source(chat_id="72719239", chat_type="dm", user_id="72719239")
+def test_replace_source_keeps_identity_and_transport_where_dataclasses_replace_drops_them(
+    mux,
+):
+    routed = mux.primary.build_source(
+        chat_id="72719239", chat_type="dm", user_id="72719239"
+    )
     identity = resolve_identity(routed, runner=mux.runner)
 
     bare = dataclasses.replace(routed)

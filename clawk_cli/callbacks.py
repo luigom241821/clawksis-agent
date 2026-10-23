@@ -29,8 +29,13 @@ def _clear_secret_input(cli) -> None:
 
 def _skipped(var_name: str, reason: str, message: str) -> dict:
     return {
-        "success": True, "reason": reason, "stored_as": var_name,
-        "validated": False, "skipped": True, "message": message}
+        "success": True,
+        "reason": reason,
+        "stored_as": var_name,
+        "validated": False,
+        "skipped": True,
+        "message": message,
+    }
 
 
 def _secret_result(var_name: str, value: str) -> dict:
@@ -43,11 +48,14 @@ def _secret_result(var_name: str, value: str) -> dict:
     except ValueError as exc:  # a locked or denylisted key: the skill setup only logs it, so say why here
         cprint(f"\n  ✗ {exc}")
         raise
-    cprint(f"\n{_DIM}  ✓ Stored secret in {display_clawk_home()}/.env as {var_name}{_RST}")
+    cprint(
+        f"\n{_DIM}  ✓ Stored secret in {display_clawk_home()}/.env as {var_name}{_RST}"
+    )
     return {
         **stored,
         "skipped": False,
-        "message": "Secret stored securely. The secret value was not exposed to the model."}
+        "message": "Secret stored securely. The secret value was not exposed to the model.",
+    }
 
 
 def prompt_for_secret(cli, var_name: str, prompt: str, metadata=None) -> dict:
@@ -62,7 +70,9 @@ def prompt_for_secret(cli, var_name: str, prompt: str, metadata=None) -> dict:
         if not hasattr(cli, "_secret_deadline"):
             cli._secret_deadline = 0
         try:
-            value = masked_secret_prompt(f"{prompt} (hidden, ESC or empty Enter to skip): ")
+            value = masked_secret_prompt(
+                f"{prompt} (hidden, ESC or empty Enter to skip): "
+            )
         except (EOFError, KeyboardInterrupt):
             value = ""
         return _secret_result(var_name, value)
@@ -72,7 +82,8 @@ def prompt_for_secret(cli, var_name: str, prompt: str, metadata=None) -> dict:
         "var_name": var_name,
         "prompt": prompt,
         "metadata": metadata or {},
-        "response_queue": response_queue}
+        "response_queue": response_queue,
+    }
     cli._secret_deadline = _time.monotonic() + 120
     if hasattr(cli, "_ring_bell"):
         cli._ring_bell(prompt=True, context=f"secret needed ({var_name})")

@@ -66,6 +66,7 @@ def _make_runner():
     runner._running_agents = {}
     runner._pending_messages = {}
     import itertools as _it
+
     runner._slash_confirm_counter = _it.count(1)
     runner.hooks = SimpleNamespace(
         emit=AsyncMock(),
@@ -82,8 +83,11 @@ async def test_gate_on_pending_confirm_registered(monkeypatch):
     """When the gate is on, a pending slash-confirm entry is registered for
     the session — the user's /approve reply will resolve it."""
     from tools import slash_confirm as _slash_confirm_mod
+
     runner = _make_runner()
-    runner._read_user_config = lambda: {"approvals": {"destructive_slash_confirm": True}}
+    runner._read_user_config = lambda: {
+        "approvals": {"destructive_slash_confirm": True}
+    }
     session_key = build_session_key(_make_source())
     runner._session_key_for_source = lambda src: session_key
     _slash_confirm_mod.clear(session_key)
@@ -109,8 +113,11 @@ async def test_resolve_always_persists_opt_out_and_runs_execute(monkeypatch):
     """Resolving with 'always' must (a) flip the config gate to False,
     (b) run execute, and (c) include a one-time opt-out note in the reply."""
     from tools import slash_confirm as _slash_confirm_mod
+
     runner = _make_runner()
-    runner._read_user_config = lambda: {"approvals": {"destructive_slash_confirm": True}}
+    runner._read_user_config = lambda: {
+        "approvals": {"destructive_slash_confirm": True}
+    }
     session_key = build_session_key(_make_source())
     runner._session_key_for_source = lambda src: session_key
     _slash_confirm_mod.clear(session_key)
@@ -122,6 +129,7 @@ async def test_resolve_always_persists_opt_out_and_runs_execute(monkeypatch):
         return True
 
     import cli as cli_mod
+
     monkeypatch.setattr(cli_mod, "save_config_value", _fake_save)
 
     execute = AsyncMock(return_value="✨ fresh")
@@ -137,7 +145,9 @@ async def test_resolve_always_persists_opt_out_and_runs_execute(monkeypatch):
     pending = _slash_confirm_mod.get_pending(session_key)
     assert pending is not None
     resolved = await _slash_confirm_mod.resolve(
-        session_key, pending["confirm_id"], "always",
+        session_key,
+        pending["confirm_id"],
+        "always",
     )
 
     execute.assert_awaited_once()

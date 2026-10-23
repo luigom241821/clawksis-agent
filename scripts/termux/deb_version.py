@@ -66,11 +66,15 @@ def main(argv: list[str]) -> int:
         channel_mode = True
         args = args[1:]
     if len(args) != 1:
-        mode = "deb_version.py --channel <tag>" if channel_mode else "deb_version.py <tag>"
+        mode = (
+            "deb_version.py --channel <tag>" if channel_mode else "deb_version.py <tag>"
+        )
         print(f"usage: {mode}", file=sys.stderr)
         return 2
     try:
-        print(channel_for_tag(args[0]) if channel_mode else deb_version_for_tag(args[0]))
+        print(
+            channel_for_tag(args[0]) if channel_mode else deb_version_for_tag(args[0])
+        )
     except ValueError as exc:
         print(f"deb_version: {exc}", file=sys.stderr)
         return 1

@@ -12,7 +12,10 @@ from dataclasses import dataclass
 import logging
 from typing import Any
 
-from agent.message_sanitization import sanitize_outbound_kwargs, strip_images_for_rejecting_model
+from agent.message_sanitization import (
+    sanitize_outbound_kwargs,
+    strip_images_for_rejecting_model,
+)
 from clawk_cli.observability.shared_metrics_efficiency import observe_request_tools
 from utils import env_var_enabled
 
@@ -41,15 +44,27 @@ def _set_extra_header(api_kwargs: Any, key: str, value: str) -> None:
 
 
 def _fire_pre_api_request_hook(
-    agent: Any, api_kwargs: Any, api_messages: Any, _llm_middleware_trace: Any, *, messages: Any,
-    original_user_message: Any, approx_tokens: Any, total_chars: Any, retry_count: Any,
-    api_call_count: Any, api_request_id: Any, api_start_time: Any, effective_task_id: Any,
+    agent: Any,
+    api_kwargs: Any,
+    api_messages: Any,
+    _llm_middleware_trace: Any,
+    *,
+    messages: Any,
+    original_user_message: Any,
+    approx_tokens: Any,
+    total_chars: Any,
+    retry_count: Any,
+    api_call_count: Any,
+    api_request_id: Any,
+    api_start_time: Any,
+    effective_task_id: Any,
     turn_id: Any,
 ) -> None:
     from agent.conversation_loop import _system_prompt_for_hooks
 
     try:
         from clawk_cli.lifecycle import has_hook, invoke_hook as _invoke_hook
+
         if has_hook("pre_api_request"):
             request_messages = api_kwargs.get("messages")
             if not isinstance(request_messages, list):
@@ -75,7 +90,9 @@ def _fire_pre_api_request_hook(
                 api_mode=agent.api_mode,
                 api_call_count=api_call_count,
                 retry_count=retry_count,
-                request_messages=list(request_messages) if isinstance(request_messages, list) else [],
+                request_messages=list(request_messages)
+                if isinstance(request_messages, list)
+                else [],
                 system_prompt=_system_prompt_for_hooks(api_kwargs, request_messages),
                 message_count=len(api_messages),
                 tool_count=len(agent.tools or []),
@@ -91,15 +108,28 @@ def _fire_pre_api_request_hook(
 
 
 def build_api_request(
-    agent: Any, *, api_messages: Any, _moa_prepared_request: Any, tools_for_api: Any,
-    system_message: Any, messages: Any, original_user_message: Any, approx_tokens: Any,
-    total_chars: Any, retry_count: Any, api_call_count: Any, api_request_id: Any,
-    api_start_time: Any, effective_task_id: Any, turn_id: Any,
+    agent: Any,
+    *,
+    api_messages: Any,
+    _moa_prepared_request: Any,
+    tools_for_api: Any,
+    system_message: Any,
+    messages: Any,
+    original_user_message: Any,
+    approx_tokens: Any,
+    total_chars: Any,
+    retry_count: Any,
+    api_call_count: Any,
+    api_request_id: Any,
+    api_start_time: Any,
+    effective_task_id: Any,
+    turn_id: Any,
 ) -> ApiRequestBuild:
     """Assemble the attempt's request in the original order (every mutation happens BEFORE
     middleware/hooks/debug dumps observe the payload)."""
     from agent.conversation_loop import (
-        _moa_client_consumes_prepared_request, _redecorate_prompt_cache_for_provider,
+        _moa_client_consumes_prepared_request,
+        _redecorate_prompt_cache_for_provider,
     )
 
     agent._reset_stream_delivery_tracking()
@@ -111,7 +141,10 @@ def build_api_request(
     agent._reapply_reasoning_echo_for_provider(api_messages)
     api_messages, _moa_prepared_request, tools_for_api = (
         _redecorate_prompt_cache_for_provider(
-            agent, api_messages, system_message=system_message, moa_prepared=_moa_prepared_request,
+            agent,
+            api_messages,
+            system_message=system_message,
+            moa_prepared=_moa_prepared_request,
             tools_for_api=tools_for_api,
         )
     )
@@ -127,7 +160,9 @@ def build_api_request(
     sanitize_outbound_kwargs(agent, api_kwargs)
     if agent.api_mode == "codex_responses":
         api_kwargs = agent._get_transport().preflight_kwargs(
-            api_kwargs, allow_stream=False, is_github_responses=agent._is_copilot_url(),
+            api_kwargs,
+            allow_stream=False,
+            is_github_responses=agent._is_copilot_url(),
             sanitize_harmony_tokens=agent._is_codex_backend(),
         )
     # OpenRouter caching replays identical responses, even empty ones; an empty-response
@@ -143,9 +178,16 @@ def build_api_request(
         from clawk_cli.middleware import apply_llm_request_middleware
 
         _llm_request_mw = apply_llm_request_middleware(
-            api_kwargs, task_id=effective_task_id, turn_id=turn_id, api_request_id=api_request_id,
-            session_id=agent.session_id or "", platform=agent.platform or "", model=agent.model,
-            provider=agent.provider, base_url=agent.base_url, api_mode=agent.api_mode,
+            api_kwargs,
+            task_id=effective_task_id,
+            turn_id=turn_id,
+            api_request_id=api_request_id,
+            session_id=agent.session_id or "",
+            platform=agent.platform or "",
+            model=agent.model,
+            provider=agent.provider,
+            base_url=agent.base_url,
+            api_mode=agent.api_mode,
             api_call_count=api_call_count,
         )
         api_kwargs = _llm_request_mw.payload
@@ -156,11 +198,20 @@ def build_api_request(
         _llm_middleware_trace = []
 
     _fire_pre_api_request_hook(
-        agent, api_kwargs, api_messages, _llm_middleware_trace, messages=messages,
-        original_user_message=original_user_message, approx_tokens=approx_tokens,
-        total_chars=total_chars, retry_count=retry_count, api_call_count=api_call_count,
-        api_request_id=api_request_id, api_start_time=api_start_time,
-        effective_task_id=effective_task_id, turn_id=turn_id,
+        agent,
+        api_kwargs,
+        api_messages,
+        _llm_middleware_trace,
+        messages=messages,
+        original_user_message=original_user_message,
+        approx_tokens=approx_tokens,
+        total_chars=total_chars,
+        retry_count=retry_count,
+        api_call_count=api_call_count,
+        api_request_id=api_request_id,
+        api_start_time=api_start_time,
+        effective_task_id=effective_task_id,
+        turn_id=turn_id,
     )
 
     if env_var_enabled("CLAWK_DUMP_REQUESTS"):
@@ -180,6 +231,11 @@ def build_api_request(
                 type(agent.client).__name__,
             )
     return ApiRequestBuild(
-        "fallthrough", api_messages, _moa_prepared_request, tools_for_api, api_kwargs,
-        _original_api_kwargs, _llm_middleware_trace,
+        "fallthrough",
+        api_messages,
+        _moa_prepared_request,
+        tools_for_api,
+        api_kwargs,
+        _original_api_kwargs,
+        _llm_middleware_trace,
     )

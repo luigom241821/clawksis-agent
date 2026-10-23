@@ -61,8 +61,8 @@ def loop_agent():
         agent.save_trajectories = False
         # Every API call itself SUCCEEDS — #92450's spin happens after the
         # response arrives, when final-response assembly keeps crashing.
-        agent.client.chat.completions.create.side_effect = (
-            lambda *a, **k: _mock_response(content="ok", finish_reason="stop")
+        agent.client.chat.completions.create.side_effect = lambda *a, **k: (
+            _mock_response(content="ok", finish_reason="stop")
         )
         return agent
 
@@ -93,9 +93,7 @@ class TestOuterErrorRetryBound:
         boom = _PermanentError("permanent assembly contract violation")
 
         with (
-            patch.object(
-                loop_agent, "_build_assistant_message", side_effect=boom
-            ),
+            patch.object(loop_agent, "_build_assistant_message", side_effect=boom),
             patch.object(loop_agent, "_persist_session"),
             patch.object(loop_agent, "_save_trajectory"),
             patch.object(loop_agent, "_cleanup_task_resources"),
@@ -188,9 +186,7 @@ class TestOuterErrorRetryBound:
         boom = _PermanentError("permanent assembly failure")
 
         with (
-            patch.object(
-                loop_agent, "_build_assistant_message", side_effect=boom
-            ),
+            patch.object(loop_agent, "_build_assistant_message", side_effect=boom),
             patch.object(loop_agent, "_persist_session"),
             patch.object(loop_agent, "_save_trajectory"),
             patch.object(loop_agent, "_cleanup_task_resources"),
@@ -200,6 +196,6 @@ class TestOuterErrorRetryBound:
         # Budget of 3 → the legacy guard fires on error #2 (api_call_count 2
         # >= 3 - 1); the new cap would fire at error #3, so the legacy path
         # must win here.
-        assert result["turn_exit_reason"].startswith(
-            "error_near_max_iterations"
-        ), f"legacy near-limit path must govern: {result['turn_exit_reason']}"
+        assert result["turn_exit_reason"].startswith("error_near_max_iterations"), (
+            f"legacy near-limit path must govern: {result['turn_exit_reason']}"
+        )

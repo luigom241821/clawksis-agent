@@ -33,6 +33,7 @@ from tools.skills_guard import content_hash
 # uninstall_skill: path traversal guard
 # =============================================================================
 
+
 class TestUninstallPathTraversal:
     """The ``install_path`` field in ``lock.json`` is attacker-controllable
     if a malicious skill is ever installed (or if the hub's lockfile is
@@ -51,6 +52,7 @@ class TestUninstallPathTraversal:
         is the standard tool for this.
         """
         import tools.skills_hub as hub
+
         skills_dir = tmp_path / "skills"
         hub_dir = skills_dir / ".hub"
         hub_dir.mkdir(parents=True)
@@ -82,13 +84,16 @@ class TestUninstallPathTraversal:
     def test_traversal_via_parent_segments_rejected(self, hub_setup):
         """install_path: "../do-not-delete" must NOT escape SKILLS_DIR."""
         _skills_dir, hub_dir, victim = hub_setup
-        self._write_lock(hub_dir, {
-            "evil": {
-                "install_path": "../do-not-delete",
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "evil": {
+                    "install_path": "../do-not-delete",
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, _msg = uninstall_skill("evil")
 
@@ -100,13 +105,16 @@ class TestUninstallPathTraversal:
     def test_absolute_path_rejected(self, hub_setup):
         """install_path that's an absolute path outside SKILLS_DIR must be refused."""
         _skills_dir, hub_dir, victim = hub_setup
-        self._write_lock(hub_dir, {
-            "evil": {
-                "install_path": str(victim),
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "evil": {
+                    "install_path": str(victim),
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, _msg = uninstall_skill("evil")
 
@@ -124,13 +132,16 @@ class TestUninstallPathTraversal:
         evil_link = skills_dir / "trapdoor"
         evil_link.symlink_to(victim)
 
-        self._write_lock(hub_dir, {
-            "trap": {
-                "install_path": "trapdoor",
-                "source": "https://example.com",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "trap": {
+                    "install_path": "trapdoor",
+                    "source": "https://example.com",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, _msg = uninstall_skill("trap")
 
@@ -146,23 +157,28 @@ class TestUninstallPathTraversal:
         legit.mkdir(parents=True)
         (legit / "SKILL.md").write_text("test")
 
-        self._write_lock(hub_dir, {
-            "my-skill": {
-                "install_path": "category/my-skill",
-                "source": "https://example.com",
-                "trust_level": "community",
-                "version": "1.0",
+        self._write_lock(
+            hub_dir,
+            {
+                "my-skill": {
+                    "install_path": "category/my-skill",
+                    "source": "https://example.com",
+                    "trust_level": "community",
+                    "version": "1.0",
+                },
             },
-        })
+        )
 
         ok, _msg = uninstall_skill("my-skill")
 
         assert ok is True
         assert not legit.exists()
 
+
 # =============================================================================
 # Bundle / disk hash symmetry + filename inclusion
 # =============================================================================
+
 
 class TestBundleHashFilenameSensitivity:
     """Hashes must change when filenames are swapped, even if combined
@@ -199,12 +215,15 @@ class TestBundleHashFilenameSensitivity:
         (skill_dir / "scripts").mkdir()
         (skill_dir / "scripts" / "run.sh").write_text("world")
 
-        bundle = self._make_bundle({
-            "SKILL.md": "hello",
-            "scripts/run.sh": "world",
-        })
+        bundle = self._make_bundle(
+            {
+                "SKILL.md": "hello",
+                "scripts/run.sh": "world",
+            }
+        )
 
         assert bundle_content_hash(bundle) == content_hash(skill_dir)
+
 
 # =============================================================================
 # PairingStore.list_pending: must hold the lock

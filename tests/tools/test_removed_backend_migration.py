@@ -55,13 +55,17 @@ class TestRemovedBackendNote:
 
 class TestSelectionErrorRemovedBackend:
     def test_removed_backend_gets_specific_explanation(self, legacy_removed):
-        msg = selection_error("web", "'legacysearch'", "no registered web search provider has that name")
+        msg = selection_error(
+            "web", "'legacysearch'", "no registered web search provider has that name"
+        )
         assert _NOTE in msg
         # generic failure text replaced, not appended
         assert "no registered web search provider" not in msg
 
     def test_live_backend_keeps_caller_failure_text(self, legacy_removed):
-        msg = selection_error("web", "'exa'", "no registered web search provider has that name")
+        msg = selection_error(
+            "web", "'exa'", "no registered web search provider has that name"
+        )
         assert "no registered web search provider has that name" in msg
         assert "removed" not in msg
 
@@ -70,7 +74,8 @@ class TestStartupWarningForRemovedWebBackend:
     @staticmethod
     def _removed_issues(config):
         return [
-            i for i in validate_config_structure(config)
+            i
+            for i in validate_config_structure(config)
             if "removed" in i.message and "legacysearch" in i.message
         ]
 
@@ -80,12 +85,22 @@ class TestStartupWarningForRemovedWebBackend:
         assert issues[0].severity == "warning"
 
     def test_per_capability_keys_are_checked(self, legacy_removed):
-        assert len(self._removed_issues({"web": {"search_backend": "legacysearch"}})) == 1
-        assert len(self._removed_issues({"web": {"extract_backend": "legacysearch"}})) == 1
+        assert (
+            len(self._removed_issues({"web": {"search_backend": "legacysearch"}})) == 1
+        )
+        assert (
+            len(self._removed_issues({"web": {"extract_backend": "legacysearch"}})) == 1
+        )
 
     def test_same_stale_value_warns_once(self, legacy_removed):
         issues = self._removed_issues(
-            {"web": {"backend": "legacysearch", "search_backend": "legacysearch", "extract_backend": "legacysearch"}}
+            {
+                "web": {
+                    "backend": "legacysearch",
+                    "search_backend": "legacysearch",
+                    "extract_backend": "legacysearch",
+                }
+            }
         )
         assert len(issues) == 1
 

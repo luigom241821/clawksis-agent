@@ -43,6 +43,7 @@ _spillover_pruned_homes: set = set()  # profile home keys already swept this pro
 def get_spillover_dir():
     """Return $CLAWK_HOME/cache/spillover as a Path (not created)."""
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / SPILLOVER_SUBDIR
 
 
@@ -53,10 +54,17 @@ def _spillover_retention_hours() -> int:
     Falls back to the legacy 24h cache age when the config is unreadable."""
     try:
         from clawk_cli.config import load_config_readonly
-        days = float((load_config_readonly().get("sessions") or {}).get("retention_days", 90))
-        if not math.isfinite(days):  # YAML ``.inf`` / ``.nan`` parse as floats; int() would raise
+
+        days = float(
+            (load_config_readonly().get("sessions") or {}).get("retention_days", 90)
+        )
+        if not math.isfinite(
+            days
+        ):  # YAML ``.inf`` / ``.nan`` parse as floats; int() would raise
             return SPILLOVER_MAX_AGE_HOURS
-    except Exception:  # health: allow BLE001 -- any config read/parse failure means the legacy floor
+    except (
+        Exception
+    ):  # health: allow BLE001 -- any config read/parse failure means the legacy floor
         return SPILLOVER_MAX_AGE_HOURS
     # ``retention_days: 0`` is legal (ended sessions pruned at once) but session prune never
     # touches OPEN sessions, while a zero-hour spill cutoff deletes the file the first spill
@@ -71,7 +79,9 @@ def _spillover_retention_hours() -> int:
 # Either separator: Windows host paths are backslashed (JSON-escaped as ``\\`` inside structured content).
 _SPILLOVER_NAME_RE = re.compile(r"spillover(?:/|\\+)([A-Za-z0-9_.-]+)")
 # instr(), not LIKE: structured content is stored behind a NUL sentinel and LIKE stops at NUL.
-SPILLOVER_SQL_FILTER = "(instr(content, 'spillover') > 0 OR instr(api_content, 'spillover') > 0)"
+SPILLOVER_SQL_FILTER = (
+    "(instr(content, 'spillover') > 0 OR instr(api_content, 'spillover') > 0)"
+)
 
 
 _ARCHIVE_PATH_RE = re.compile(r"(?:^|[/\\])(?:spillover|clawk-results)[/\\][^/\\]+$")
@@ -82,11 +92,15 @@ def expired_archive_fields(path: str) -> dict:
     so the model gets "expired" instead of a generic miss it might take for a typo (#126351)."""
     if not isinstance(path, str) or not _ARCHIVE_PATH_RE.search(path):
         return {}
-    return {"expired": True, "hint": (
+    return {
+        "expired": True,
+        "hint": (
             "This was a persisted tool result archive and it has expired (pruned with its "
             "session or by the cache sweep); the full output is no longer recoverable. Inspect "
             "the current state before re-running the original tool — the call that produced it "
-            "may already have taken effect.")}
+            "may already have taken effect."
+        ),
+    }
 
 
 def spillover_names_in_text(*texts) -> set:
@@ -168,6 +182,7 @@ def _prune_spillover_once() -> None:
     housekeeping; a multiplexed gateway must sweep every profile's ``cache/spillover``, not just the
     first one that spilled)."""
     from clawk_constants import clawk_home_key
+
     home_key = clawk_home_key()
     with _spillover_prune_lock:
         if home_key in _spillover_pruned_homes:
@@ -187,6 +202,7 @@ def _is_host_side_env(env) -> bool:
         return True
     try:
         from tools.environments.local import LocalEnvironment
+
         return isinstance(env, LocalEnvironment)
     except Exception:
         return False
@@ -213,7 +229,9 @@ def _write_to_spillover(content: str, filename: str):
         logger.warning(
             "Spillover write for %s is not lossless (%d bytes on disk, "
             "expected %d) — discarding archive",
-            filename, persisted_size, len(data),
+            filename,
+            persisted_size,
+            len(data),
         )
         try:
             path.unlink()
@@ -231,6 +249,7 @@ def _sandbox_visible_spillover_path(host_path: str, env) -> str | None:
     fall back to the in-sandbox write."""
     try:
         from tools.credential_files import to_agent_visible_cache_path
+
         visible = to_agent_visible_cache_path(host_path)
     except Exception as exc:
         logger.debug("Spillover path translation failed: %s", exc)
@@ -241,7 +260,12 @@ def _sandbox_visible_spillover_path(host_path: str, env) -> str | None:
     except Exception as exc:
         logger.debug("Spillover sync failed: %s", exc)
     try:
-        if env.execute(f"test -r {shlex.quote(visible)}", timeout=15).get("returncode", 1) == 0:
+        if (
+            env.execute(f"test -r {shlex.quote(visible)}", timeout=15).get(
+                "returncode", 1
+            )
+            == 0
+        ):
             return visible
     except Exception as exc:
         logger.debug("Spillover readability probe failed: %s", exc)
@@ -273,12 +297,14 @@ def _safe_result_filename(tool_use_id: str) -> str:
     return f"{safe_stem}.txt"
 
 
-def generate_preview(content: str, max_chars: int = DEFAULT_PREVIEW_SIZE_CHARS) -> tuple[str, bool]:
+def generate_preview(
+    content: str, max_chars: int = DEFAULT_PREVIEW_SIZE_CHARS
+) -> tuple[str, bool]:
     """Truncate at last newline within max_chars. Returns (preview, has_more)."""
     if len(content) <= max_chars:
         return content, False
     last_nl = content.rfind("\n", 0, max_chars)
-    return content[:last_nl + 1 if last_nl > max_chars // 2 else max_chars], True
+    return content[: last_nl + 1 if last_nl > max_chars // 2 else max_chars], True
 
 
 def _pageable_text(content: str) -> str:
@@ -307,7 +333,11 @@ def _pageable_text(content: str) -> str:
         payload = json.loads(content)
     except (TypeError, ValueError):
         return content
-    if not isinstance(payload, dict) or not payload or not set(payload) <= _MCP_ENVELOPE_KEYS:
+    if (
+        not isinstance(payload, dict)
+        or not payload
+        or not set(payload) <= _MCP_ENVELOPE_KEYS
+    ):
         return content
     text = payload.get("result")
     if not isinstance(text, str) or not text:
@@ -316,7 +346,9 @@ def _pageable_text(content: str) -> str:
     if not extras:
         return text
     try:
-        metadata = json.dumps(extras, ensure_ascii=False, indent=1, sort_keys=True, default=str)
+        metadata = json.dumps(
+            extras, ensure_ascii=False, indent=1, sort_keys=True, default=str
+        )
     except (TypeError, ValueError):
         return text
     return f"{text}\n\n{_ENVELOPE_METADATA_TAG}\n{metadata}\n{_ENVELOPE_METADATA_CLOSING_TAG}\n"
@@ -335,8 +367,8 @@ def _write_to_sandbox(content: str, remote_path: str, env) -> bool:
     # Private dir: archived results carry tool output (can hold secrets) under a
     # shared temp root on remote backends. The umask also covers the cat redirect.
     from tools.code_execution_rpc import _private_dirs_cmd
-    cmd = (f"{_private_dirs_cmd(storage_dir)} "
-           f"&& cat > {shlex.quote(remote_path)}")
+
+    cmd = f"{_private_dirs_cmd(storage_dir)} && cat > {shlex.quote(remote_path)}"
     if env.execute(cmd, timeout=30, stdin_data=content).get("returncode", 1) != 0:
         return False
 
@@ -354,8 +386,12 @@ def _write_to_sandbox(content: str, remote_path: str, env) -> bool:
     persisted_size = int(raw[-1])
     if persisted_size == expected:
         return True
-    logger.warning("Sandbox spill for %s is not lossless (%d bytes in sandbox, expected %d) — discarding archive",
-                   remote_path, persisted_size, expected)
+    logger.warning(
+        "Sandbox spill for %s is not lossless (%d bytes in sandbox, expected %d) — discarding archive",
+        remote_path,
+        persisted_size,
+        expected,
+    )
     try:
         env.execute(f"rm -f {shlex.quote(remote_path)}", timeout=15)
     except Exception:
@@ -363,8 +399,9 @@ def _write_to_sandbox(content: str, remote_path: str, env) -> bool:
     return False
 
 
-def _build_persisted_message(preview: str, has_more: bool, original_size: int,
-                             file_path: str) -> str:
+def _build_persisted_message(
+    preview: str, has_more: bool, original_size: int, file_path: str
+) -> str:
     """Build the <persisted-output> replacement block."""
     size_kb = original_size / 1024
     size_str = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.1f} KB"
@@ -379,8 +416,10 @@ def _build_persisted_message(preview: str, has_more: bool, original_size: int,
         "it. If it is missing, inspect the current state before retrying — the call "
         "that produced it may already have taken effect.\n\n"
         f"Preview (first {len(preview)} chars):\n"
-        + preview + ("\n..." if has_more else "")
-        + f"\n{PERSISTED_OUTPUT_CLOSING_TAG}")
+        + preview
+        + ("\n..." if has_more else "")
+        + f"\n{PERSISTED_OUTPUT_CLOSING_TAG}"
+    )
 
 
 _PERSISTED_PATH_RE = re.compile(r"^Full output saved to: (.+)$", re.MULTILINE)
@@ -389,14 +428,22 @@ _PERSISTED_PATH_RE = re.compile(r"^Full output saved to: (.+)$", re.MULTILINE)
 def extract_persisted_path(content: str) -> str | None:
     """File path from a <persisted-output> block, or None (lets the result-reference stubbing
     guard in agent/tool_guardrails.py carry the spillover path instead of leaving it dangling)."""
-    match = (_PERSISTED_PATH_RE.search(content)
-             if isinstance(content, str) and PERSISTED_OUTPUT_TAG in content else None)
+    match = (
+        _PERSISTED_PATH_RE.search(content)
+        if isinstance(content, str) and PERSISTED_OUTPUT_TAG in content
+        else None
+    )
     return match.group(1).strip() if match else None
 
 
-def maybe_persist_tool_result(content: str, tool_name: str, tool_use_id: str, env=None,
-                              config: BudgetConfig = DEFAULT_BUDGET,
-                              threshold: float | None = None) -> str:
+def maybe_persist_tool_result(
+    content: str,
+    tool_name: str,
+    tool_use_id: str,
+    env=None,
+    config: BudgetConfig = DEFAULT_BUDGET,
+    threshold: float | None = None,
+) -> str:
     """Layer 2: persist an oversized result, return preview + path. ``threshold`` overrides
     ``config.resolve_threshold(tool_name)``; falls back to inline truncation when no write
     location succeeds."""
@@ -408,11 +455,19 @@ def maybe_persist_tool_result(content: str, tool_name: str, tool_use_id: str, en
     # and the preview carry the pageable text inside an MCP envelope (#90426).
     persisted_content = _pageable_text(content)
     filename = _safe_result_filename(tool_use_id)
-    preview, has_more = generate_preview(persisted_content, max_chars=config.preview_size)
+    preview, has_more = generate_preview(
+        persisted_content, max_chars=config.preview_size
+    )
 
     def _persisted(path: str, host_suffix: str = "") -> str:
-        logger.info("Persisted large tool result: %s (%s, %d chars -> %s%s)",
-                    tool_name, tool_use_id, len(persisted_content), path, host_suffix)
+        logger.info(
+            "Persisted large tool result: %s (%s, %d chars -> %s%s)",
+            tool_name,
+            tool_use_id,
+            len(persisted_content),
+            path,
+            host_suffix,
+        )
         return _build_persisted_message(preview, has_more, len(persisted_content), path)
 
     # Always persist host-side first: cache/spillover is the single canonical home.
@@ -432,44 +487,73 @@ def maybe_persist_tool_result(content: str, tool_name: str, tool_use_id: str, en
                 return _persisted(remote_path)
         except Exception as exc:
             logger.warning("Sandbox write failed for %s: %s", tool_use_id, exc)
-    logger.info("Inline-truncating large tool result: %s (%d chars, no sandbox write)",
-                tool_name, len(content))
-    return (f"{preview}\n\n[Truncated: tool response was {len(content):,} chars. "
-            "Full output could not be saved to sandbox.]")
+    logger.info(
+        "Inline-truncating large tool result: %s (%d chars, no sandbox write)",
+        tool_name,
+        len(content),
+    )
+    return (
+        f"{preview}\n\n[Truncated: tool response was {len(content):,} chars. "
+        "Full output could not be saved to sandbox.]"
+    )
 
 
 def _content_text_size(content) -> int:
     """Characters of TEXT a tool message carries: a string's length, or the summed text parts of a multimodal
     part list (image parts are governed by the vision embed budget, and a list's ``len`` counts parts)."""
     if isinstance(content, list):
-        return sum(len(p.get("text") or "") for p in content if isinstance(p, dict) and p.get("type") == "text")
+        return sum(
+            len(p.get("text") or "")
+            for p in content
+            if isinstance(p, dict) and p.get("type") == "text"
+        )
     return len(content or "")
 
 
-def _spill_largest_text_part(parts: list, tool_use_id: str, env, config: BudgetConfig) -> tuple[list, int]:
+def _spill_largest_text_part(
+    parts: list, tool_use_id: str, env, config: BudgetConfig
+) -> tuple[list, int]:
     """Persist the largest non-persisted text part of a multimodal list; ``(new parts, chars saved)``."""
-    texts = [(i, p["text"]) for i, p in enumerate(parts) if isinstance(p, dict) and p.get("type") == "text"
-             and isinstance(p.get("text"), str) and PERSISTED_OUTPUT_TAG not in p["text"]]
+    texts = [
+        (i, p["text"])
+        for i, p in enumerate(parts)
+        if isinstance(p, dict)
+        and p.get("type") == "text"
+        and isinstance(p.get("text"), str)
+        and PERSISTED_OUTPUT_TAG not in p["text"]
+    ]
     if not texts:
         return parts, 0
     idx, text = max(texts, key=lambda t: len(t[1]))
-    replacement = maybe_persist_tool_result(content=text, tool_name=_BUDGET_TOOL_NAME,
-                                            tool_use_id=f"{tool_use_id}_part{idx}", env=env, config=config, threshold=0)
+    replacement = maybe_persist_tool_result(
+        content=text,
+        tool_name=_BUDGET_TOOL_NAME,
+        tool_use_id=f"{tool_use_id}_part{idx}",
+        env=env,
+        config=config,
+        threshold=0,
+    )
     if replacement == text:
         return parts, 0
-    return [*parts[:idx], {**parts[idx], "text": replacement}, *parts[idx + 1:]], len(text) - len(replacement)
+    return [*parts[:idx], {**parts[idx], "text": replacement}, *parts[idx + 1 :]], len(
+        text
+    ) - len(replacement)
 
 
-def enforce_turn_budget(tool_messages: list[dict], env=None,
-                        config: BudgetConfig = DEFAULT_BUDGET) -> list[dict]:
+def enforce_turn_budget(
+    tool_messages: list[dict], env=None, config: BudgetConfig = DEFAULT_BUDGET
+) -> list[dict]:
     """Layer 3: persist the largest non-persisted results first until the turn's aggregate is
     under budget. Mutates the list in-place and returns it. A multimodal result (part list) counts its
     text characters and spills its largest text part; its images stay inline."""
     sizes = [_content_text_size(msg.get("content", "")) for msg in tool_messages]
     total_size = sum(sizes)
-    candidates = [(i, size) for i, size in enumerate(sizes)
-                  if isinstance(tool_messages[i].get("content"), list)
-                  or PERSISTED_OUTPUT_TAG not in tool_messages[i].get("content", "")]
+    candidates = [
+        (i, size)
+        for i, size in enumerate(sizes)
+        if isinstance(tool_messages[i].get("content"), list)
+        or PERSISTED_OUTPUT_TAG not in tool_messages[i].get("content", "")
+    ]
     if total_size <= config.turn_budget:
         return tool_messages
     for idx, size in sorted(candidates, key=lambda x: x[1], reverse=True):
@@ -482,14 +566,26 @@ def enforce_turn_budget(tool_messages: list[dict], env=None,
             if saved:
                 total_size -= saved
                 tool_messages[idx]["content"] = parts
-                logger.info("Budget enforcement: persisted a text part of tool result %s (%d chars)", tool_use_id, saved)
+                logger.info(
+                    "Budget enforcement: persisted a text part of tool result %s (%d chars)",
+                    tool_use_id,
+                    saved,
+                )
             continue
         replacement = maybe_persist_tool_result(
-            content=content, tool_name=_BUDGET_TOOL_NAME, tool_use_id=tool_use_id,
-            env=env, config=config, threshold=0)
+            content=content,
+            tool_name=_BUDGET_TOOL_NAME,
+            tool_use_id=tool_use_id,
+            env=env,
+            config=config,
+            threshold=0,
+        )
         if replacement != content:
             total_size += len(replacement) - size
             tool_messages[idx]["content"] = replacement
-            logger.info("Budget enforcement: persisted tool result %s (%d chars)",
-                        tool_use_id, size)
+            logger.info(
+                "Budget enforcement: persisted tool result %s (%d chars)",
+                tool_use_id,
+                size,
+            )
     return tool_messages

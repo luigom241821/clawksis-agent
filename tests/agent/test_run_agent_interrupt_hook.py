@@ -18,10 +18,21 @@ _mock_plugin_discovery = _base._mock_plugin_discovery
 
 
 class TestExecuteToolCallsInterruptHook:
-    @pytest.mark.parametrize("concurrent", [False, True], ids=["sequential", "concurrent"])
-    def test_keyboard_interrupt_emits_cancelled_post_tool_hook(self, agent, monkeypatch, concurrent):
-        calls = [_mock_tool_call(name="web_search", arguments='{"q":"test"}', call_id=f"c{i}") for i in (1, 2)]
-        mock_msg = _mock_assistant_msg(content="", tool_calls=calls if concurrent else calls[:1])
+    @pytest.mark.parametrize(
+        "concurrent", [False, True], ids=["sequential", "concurrent"]
+    )
+    def test_keyboard_interrupt_emits_cancelled_post_tool_hook(
+        self, agent, monkeypatch, concurrent
+    ):
+        calls = [
+            _mock_tool_call(
+                name="web_search", arguments='{"q":"test"}', call_id=f"c{i}"
+            )
+            for i in (1, 2)
+        ]
+        mock_msg = _mock_assistant_msg(
+            content="", tool_calls=calls if concurrent else calls[:1]
+        )
         messages = []
         hook_calls = []
         agent.session_id = "session-1"
@@ -40,12 +51,21 @@ class TestExecuteToolCallsInterruptHook:
             patch("run_agent._set_interrupt"),
             patch("agent.interrupt_control._set_interrupt"),
             # The concurrent worker absorbs Ctrl-C into a cancelled result; sequential re-raises.
-            contextlib.nullcontext() if concurrent else pytest.raises(KeyboardInterrupt),
+            contextlib.nullcontext()
+            if concurrent
+            else pytest.raises(KeyboardInterrupt),
         ):
-            run = agent._execute_tool_calls_concurrent if concurrent else agent._execute_tool_calls_sequential
+            run = (
+                agent._execute_tool_calls_concurrent
+                if concurrent
+                else agent._execute_tool_calls_sequential
+            )
             run(mock_msg, messages, "task-1")
 
-        post_calls = sorted((kwargs for name, kwargs in hook_calls if name == "post_tool_call"), key=lambda kw: kw["tool_call_id"])
+        post_calls = sorted(
+            (kwargs for name, kwargs in hook_calls if name == "post_tool_call"),
+            key=lambda kw: kw["tool_call_id"],
+        )
         assert len(post_calls) == len(mock_msg.tool_calls)
         assert post_calls[0]["tool_name"] == "web_search"
         assert post_calls[0]["tool_call_id"] == "c1"
@@ -56,4 +76,6 @@ class TestExecuteToolCallsInterruptHook:
         assert post_calls[0]["error_type"] == "keyboard_interrupt"
         assert json.loads(post_calls[0]["result"])["status"] == "cancelled"
         # The hook sees the user-interrupt attribution, not the generic "Turn interrupted".
-        assert post_calls[0]["error_message"] == "Tool execution cancelled. User interrupt"
+        assert (
+            post_calls[0]["error_message"] == "Tool execution cancelled. User interrupt"
+        )

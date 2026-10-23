@@ -30,18 +30,26 @@ class Receiver:
 
 
 def _running_turn(runner, key, receiver):
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="c1", user_id="u1", chat_type="dm")
-    opening = MessageEvent(text="What is the weather in Shanghai?", source=source, message_id="A")
+    source = SessionSource(
+        platform=Platform.TELEGRAM, chat_id="c1", user_id="u1", chat_type="dm"
+    )
+    opening = MessageEvent(
+        text="What is the weather in Shanghai?", source=source, message_id="A"
+    )
     ctx = TurnContext(session_key=key, event_message_id="A", inbound_message_id="A")
     turn = runner._session_state(key).turn
     turn.agent, turn.event, turn.ctx = receiver, opening, ctx
-    redirecting = MessageEvent(text="What day is tomorrow?", source=source, message_id="B")
+    redirecting = MessageEvent(
+        text="What day is tomorrow?", source=source, message_id="B"
+    )
     return opening, ctx, redirecting, source
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("route", ["busy_interrupt", "priority"])
-async def test_successful_redirect_moves_the_turn_reply_anchor_to_the_redirecting_message(route):
+async def test_successful_redirect_moves_the_turn_reply_anchor_to_the_redirecting_message(
+    route,
+):
     runner = GatewayRunner(config=GatewayConfig())
     receiver = Receiver()
     opening, ctx, redirecting, source = _running_turn(runner, "key", receiver)
@@ -49,7 +57,9 @@ async def test_successful_redirect_moves_the_turn_reply_anchor_to_the_redirectin
     if route == "priority":
         await runner._hm_busy_interrupt(redirecting, source, receiver, "key")
     else:
-        outcome = await runner._resolve_busy_steer_or_redirect(redirecting, "key", "interrupt", receiver)
+        outcome = await runner._resolve_busy_steer_or_redirect(
+            redirecting, "key", "interrupt", receiver
+        )
         assert outcome.redirected is True
 
     # The final send is bracketed against the OPENING event: it now quotes B and is ledgered as B.
@@ -66,7 +76,9 @@ async def test_refused_or_foreign_redirect_leaves_the_anchor_on_the_opening_mess
     runner = GatewayRunner(config=GatewayConfig())
     refusing = Receiver(accept=False)
     opening, ctx, redirecting, _ = _running_turn(runner, "key", refusing)
-    outcome = await runner._resolve_busy_steer_or_redirect(redirecting, "key", "interrupt", refusing)
+    outcome = await runner._resolve_busy_steer_or_redirect(
+        redirecting, "key", "interrupt", refusing
+    )
     assert outcome.redirected is False
     assert _reply_anchor_for_event(opening) == "A" and opening.ledger_message_id is None
     assert ctx.event_message_id == "A"
@@ -75,14 +87,26 @@ async def test_refused_or_foreign_redirect_leaves_the_anchor_on_the_opening_mess
     # must not re-anchor the newer turn.
     displaced = Receiver()
     opening2, ctx2, redirecting2, _ = _running_turn(runner, "key2", Receiver())
-    assert await runner._resolve_busy_steer_or_redirect(redirecting2, "key2", "interrupt", displaced)
+    assert await runner._resolve_busy_steer_or_redirect(
+        redirecting2, "key2", "interrupt", displaced
+    )
     assert _reply_anchor_for_event(opening2) == "A" and ctx2.event_message_id == "A"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "route", ["busy_interrupt", "priority_interrupt", "busy_steer", "priority_steer", "slash_steer"])
-async def test_a_turn_that_takes_in_an_addressed_message_keeps_the_silence_fallback(route):
+    "route",
+    [
+        "busy_interrupt",
+        "priority_interrupt",
+        "busy_steer",
+        "priority_steer",
+        "slash_steer",
+    ],
+)
+async def test_a_turn_that_takes_in_an_addressed_message_keeps_the_silence_fallback(
+    route,
+):
     """Redirect and steer fold a new message into the running turn, which then answers it too: if
     that message was addressed to the bot, a bare silence marker must not end the turn silently."""
     runner = GatewayRunner(config=GatewayConfig())
@@ -96,9 +120,13 @@ async def test_a_turn_that_takes_in_an_addressed_message_keeps_the_silence_fallb
         runner._hm_busy_steer(incoming, receiver, "key")
     elif route == "slash_steer":
         incoming.text = "/steer " + incoming.text
-        assert (await runner._busy_steer_command(incoming, "key", source)).startswith("⏩")
+        assert (await runner._busy_steer_command(incoming, "key", source)).startswith(
+            "⏩"
+        )
     else:
-        outcome = await runner._resolve_busy_steer_or_redirect(incoming, "key", route[5:], receiver)
+        outcome = await runner._resolve_busy_steer_or_redirect(
+            incoming, "key", route[5:], receiver
+        )
         assert outcome.redirected or outcome.steered
 
     assert (opening.reply_expected, ctx.reply_expected) == (True, True)

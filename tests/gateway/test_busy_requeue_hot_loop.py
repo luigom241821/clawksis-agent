@@ -32,8 +32,13 @@ from tests.gateway.restart_test_helpers import RestartTestAdapter
 
 
 def _source() -> SessionSource:
-    return SessionSource(platform=Platform.TELEGRAM, user_id="u1", chat_id="c1",
-                         user_name="tester", chat_type="dm")
+    return SessionSource(
+        platform=Platform.TELEGRAM,
+        user_id="u1",
+        chat_id="c1",
+        user_name="tester",
+        chat_type="dm",
+    )
 
 
 def _runner_with_running_agent(adapter, *, compression_in_flight):
@@ -43,13 +48,20 @@ def _runner_with_running_agent(adapter, *, compression_in_flight):
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(
-        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")})
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="***")}
+    )
     runner.adapters = {Platform.TELEGRAM: adapter}
     runner._voice_mode = {}
     runner.hooks = SimpleNamespace(emit=AsyncMock(), loaded_hooks=False)
     sk = build_session_key(_source())
-    entry = SessionEntry(session_key=sk, session_id="sess-1", created_at=datetime.now(),
-                         updated_at=datetime.now(), platform=Platform.TELEGRAM, chat_type="dm")
+    entry = SessionEntry(
+        session_key=sk,
+        session_id="sess-1",
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
+    )
     store = MagicMock()
     store.get_or_create_session.return_value = entry
     store.load_transcript.return_value = []
@@ -74,25 +86,39 @@ def _runner_with_running_agent(adapter, *, compression_in_flight):
     runner._draining = False
     runner._busy_input_mode = "interrupt"
     runner._agent_has_active_subagents = lambda _agent: False
-    runner._session_has_compression_in_flight = AsyncMock(return_value=compression_in_flight)
+    runner._session_has_compression_in_flight = AsyncMock(
+        return_value=compression_in_flight
+    )
     agent = MagicMock()
     agent.get_activity_summary.return_value = {
-        "seconds_since_activity": 0.0, "last_activity_desc": "api_call",
-        "api_call_count": 1, "max_iterations": 60}
+        "seconds_since_activity": 0.0,
+        "last_activity_desc": "api_call",
+        "api_call_count": 1,
+        "max_iterations": 60,
+    }
     runner._running_agents[sk] = agent
     runner._running_agents_ts[sk] = time.time() - 120
     return runner, agent, sk
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("rewrite_hook,message_id,busy_mode", [
-    (False, "m1", "interrupt"),
-    (True, "m1", "interrupt"),
-    (True, None, "interrupt"),  # id-less rewrite copy: only the copied timestamp ties it back
-    # The demotion route is orthogonal to the identity axis; steer covers the other route.
-    (False, "m1", "steer"),
-])
-async def test_requeued_busy_event_does_not_hot_loop(rewrite_hook, message_id, busy_mode):
+@pytest.mark.parametrize(
+    "rewrite_hook,message_id,busy_mode",
+    [
+        (False, "m1", "interrupt"),
+        (True, "m1", "interrupt"),
+        (
+            True,
+            None,
+            "interrupt",
+        ),  # id-less rewrite copy: only the copied timestamp ties it back
+        # The demotion route is orthogonal to the identity axis; steer covers the other route.
+        (False, "m1", "steer"),
+    ],
+)
+async def test_requeued_busy_event_does_not_hot_loop(
+    rewrite_hook, message_id, busy_mode
+):
     adapter = RestartTestAdapter()
     runner, agent, sk = _runner_with_running_agent(adapter, compression_in_flight=True)
     # interrupt: demoted to queue (compression in flight); steer: agent refuses -> queue fallback.
@@ -113,7 +139,8 @@ async def test_requeued_busy_event_does_not_hot_loop(rewrite_hook, message_id, b
     # The new adapter holds no guard for the session (the reconnect replaced it mid-turn).
     assert sk not in adapter._active_sessions
     await adapter.handle_message(
-        MessageEvent(text="still there?", source=_source(), message_id=message_id))
+        MessageEvent(text="still there?", source=_source(), message_id=message_id)
+    )
     # Measure after the first dispatch so a cold first handler call can't eat the window.
     for _ in range(1000):
         if busy_calls:
@@ -147,7 +174,9 @@ async def test_requeued_event_runs_once_the_agent_finishes():
             await asyncio.sleep(0.02)
             nxt = {"queued msg": "f1", "f1": "f2", "f2": "f3"}.get(event.text)
             if nxt:  # a genuine follow-up reaches the runner mid-turn and is queued behind it
-                await real_handle(MessageEvent(text=nxt, source=_source(), message_id=nxt))
+                await real_handle(
+                    MessageEvent(text=nxt, source=_source(), message_id=nxt)
+                )
             await asyncio.sleep(0.03)
             runner._running_agents.pop(sk, None)
             ends.append(time.monotonic())
@@ -155,7 +184,9 @@ async def test_requeued_event_runs_once_the_agent_finishes():
         return await real_handle(event)
 
     adapter.set_message_handler(handler)
-    await adapter.handle_message(MessageEvent(text="queued msg", source=_source(), message_id="m2"))
+    await adapter.handle_message(
+        MessageEvent(text="queued msg", source=_source(), message_id="m2")
+    )
     # Wait for a real back-off (not a fixed sleep: a cold first dispatch can take >1s under load).
     for _ in range(2000):
         if adapter._requeue_counts.get(sk, 0) >= 2 and sk in adapter._pending_messages:
@@ -165,7 +196,9 @@ async def test_requeued_event_runs_once_the_agent_finishes():
     await adapter.cancel_session_processing(sk, discard_pending=False)
     assert adapter._pending_messages[sk].text == "queued msg"
     runner._running_agents.pop(sk)  # the long turn finishes
-    await adapter._drain_pending_after_session_command(sk, asyncio.Event())  # /stop tail replays it
+    await adapter._drain_pending_after_session_command(
+        sk, asyncio.Event()
+    )  # /stop tail replays it
     for _ in range(2000):
         if len(ends) >= 4:
             break

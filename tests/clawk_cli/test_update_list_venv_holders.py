@@ -16,7 +16,9 @@ from clawk_cli import update_cmd_windows
 
 
 def _args(**overrides):
-    base = dict(list_venv_holders=True, plan=False, check=False, gateway=False, branch=None)
+    base = dict(
+        list_venv_holders=True, plan=False, check=False, gateway=False, branch=None
+    )
     base.update(overrides)
     return argparse.Namespace(**base)
 
@@ -28,11 +30,25 @@ def _quiet_preflight(monkeypatch):
     monkeypatch.setattr(update_cmd_windows, "_psutil", lambda: None)
 
 
-def test_list_venv_holders_json_and_exit_3_when_holders_present(monkeypatch, capsys, _quiet_preflight):
+def test_list_venv_holders_json_and_exit_3_when_holders_present(
+    monkeypatch, capsys, _quiet_preflight
+):
     holders = [
-        (4242, "python.exe", r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main serve --port 8642"),
-        (4343, "python.exe", r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main gateway run"),
-        (4444, "python.exe", r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main -p work kanban list"),
+        (
+            4242,
+            "python.exe",
+            r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main serve --port 8642",
+        ),
+        (
+            4343,
+            "python.exe",
+            r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main gateway run",
+        ),
+        (
+            4444,
+            "python.exe",
+            r"C:\clawk\venv\Scripts\python.exe -m clawk_cli.main -p work kanban list",
+        ),
         (4545, "python.exe", r"C:\clawk\venv\Scripts\python.exe some_script.py"),
     ]
     monkeypatch.setattr(cli_main, "_detect_venv_python_processes", lambda: holders)
@@ -43,15 +59,23 @@ def test_list_venv_holders_json_and_exit_3_when_holders_present(monkeypatch, cap
     assert exc.value.code == update_cmd_windows.VENV_HOLDERS_EXIT == 3
     payload = json.loads(capsys.readouterr().out)
     assert [(h["pid"], h["kind"]) for h in payload] == [
-        (4242, "backend"), (4343, "gateway"), (4444, "clawk:kanban"), (4545, "python")]
+        (4242, "backend"),
+        (4343, "gateway"),
+        (4444, "clawk:kanban"),
+        (4545, "python"),
+    ]
     assert set(payload[0]) == {"pid", "exe", "argv", "kind"}
     assert payload[0]["argv"].endswith("serve --port 8642")
 
 
-def test_list_venv_holders_empty_list_exits_zero_without_updating(monkeypatch, capsys, _quiet_preflight):
+def test_list_venv_holders_empty_list_exits_zero_without_updating(
+    monkeypatch, capsys, _quiet_preflight
+):
     monkeypatch.setattr(cli_main, "_detect_venv_python_processes", list)
 
-    def _boom(*_a, **_k):  # the mutating update body must never run behind the read-only flag
+    def _boom(
+        *_a, **_k
+    ):  # the mutating update body must never run behind the read-only flag
         raise AssertionError("update body ran")
 
     monkeypatch.setattr("clawk_cli.update_cmd._cmd_update_impl", _boom)

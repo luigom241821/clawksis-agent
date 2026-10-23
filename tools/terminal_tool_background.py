@@ -16,13 +16,13 @@ logger = logging.getLogger("tools.terminal_tool")
 # only for servers/watchers; for bounded tasks the agent almost always wanted a
 # notification and forgot the flag, so nudge it (cheap false positive).
 _SILENT_BACKGROUND_HINT = (
-    'background=true without notify_on_complete=true means this process runs SILENTLY — you '
-    'will not be told when it exits. If this is a bounded task (test suite, build, CI poller, '
-    'deploy, anything with a defined end), you almost certainly wanted notify_on_complete=true '
-    'so the system pings you on exit. Re-launch with notify_on_complete=true, or call '
+    "background=true without notify_on_complete=true means this process runs SILENTLY — you "
+    "will not be told when it exits. If this is a bounded task (test suite, build, CI poller, "
+    "deploy, anything with a defined end), you almost certainly wanted notify_on_complete=true "
+    "so the system pings you on exit. Re-launch with notify_on_complete=true, or call "
     "process(action='poll') / process(action='wait') yourself to learn the outcome. Only "
-    'ignore this hint for genuine long-lived processes that never exit (servers, watchers, '
-    'daemons).'
+    "ignore this hint for genuine long-lived processes that never exit (servers, watchers, "
+    "daemons)."
 )
 
 # Homebrewed CI pollers built on `gh pr view --json statusCheckRollup` or
@@ -31,20 +31,20 @@ _SILENT_BACKGROUND_HINT = (
 # confusion declares all-green early, TTY-only banners never appear piped).
 # Detector is deliberately narrow: the canonical column-2 awk poller is fine.
 _HOMEBREW_CI_POLLER_HINT = (
-    'This looks like a homebrewed CI poller built from `gh pr view --json statusCheckRollup` '
-    'and/or `gh pr checks | jq`. That shape has burned us repeatedly in clawksis-agent dev work '
-    '(PRs #31329, #31448, #31695, #31709, #31745, #32264, #33131) — stdout buffering kills '
-    'output capture, jq null-key edge cases silently exit the loop, conclusion-vs-status field '
-    'confusion exits early with bogus all-green verdicts, TTY-only summary banners never '
-    'appear when piped. Use the canonical snippets in the green-ci-policy skill instead: the '
-    'exit-code-driven `gh pr checks $PR >/dev/null` (rc 0 = green, 8 = pending, else fail) for '
+    "This looks like a homebrewed CI poller built from `gh pr view --json statusCheckRollup` "
+    "and/or `gh pr checks | jq`. That shape has burned us repeatedly in clawksis-agent dev work "
+    "(PRs #31329, #31448, #31695, #31709, #31745, #32264, #33131) — stdout buffering kills "
+    "output capture, jq null-key edge cases silently exit the loop, conclusion-vs-status field "
+    "confusion exits early with bogus all-green verdicts, TTY-only summary banners never "
+    "appear when piped. Use the canonical snippets in the green-ci-policy skill instead: the "
+    "exit-code-driven `gh pr checks $PR >/dev/null` (rc 0 = green, 8 = pending, else fail) for "
     'exit-on-first-fail behavior, or the column-2 awk-on-tabs poller (`awk -F"\\t" '
     '"$2==\\"pending\\""`) for sharded matrices. Load '
     "skill_view(name='github/clawksis-agent-dev', file_path='references/green-ci-policy.md') for "
-    'the verbatim snippets. If you must roll a custom loop with rich structured output, write '
+    "the verbatim snippets. If you must roll a custom loop with rich structured output, write "
     "each tick to a known file (`tee -a $TMPDIR/ci.log`) and rely on `process(action='log')` to "
-    'read THAT file — do not rely on background-process stdout capture for line-buffered shell '
-    'loops.'
+    "read THAT file — do not rely on background-process stdout capture for line-buffered shell "
+    "loops."
 )
 
 # A foreground call whose only backgrounding was a trailing `&` is spawned as background=true.
@@ -54,9 +54,9 @@ _AUTO_BACKGROUND_NOTE = (
 )
 
 _ASYNC_UNSUPPORTED_NOTE = (
-    'notify_on_complete / watch_patterns are not available in this session — it cannot receive '
-    'an async completion after the turn ends (a one-shot runner such as `clawk -z`, a cron '
-    'job, a Kanban worker, or a stateless HTTP endpoint). The process is running in the '
+    "notify_on_complete / watch_patterns are not available in this session — it cannot receive "
+    "an async completion after the turn ends (a one-shot runner such as `clawk -z`, a cron "
+    "job, a Kanban worker, or a stateless HTTP endpoint). The process is running in the "
     "background; retrieve its result with process(action='poll') or process(action='wait')."
 )
 
@@ -92,14 +92,33 @@ def _stamp_gateway_routing(proc_session, get_session_env) -> None:
         setattr(proc_session, attr, get_session_env(var, ""))
 
 
-def _spawn(process_registry, *, env, env_type, command, cwd, effective_task_id, task_id,
-           session_key, effective_pty, persist_on_release: bool = False):
-    common = dict(command=command, cwd=cwd, task_id=effective_task_id,
-                  owner_task_id=task_id or effective_task_id, session_key=session_key,
-                  persist_on_release=persist_on_release)
+def _spawn(
+    process_registry,
+    *,
+    env,
+    env_type,
+    command,
+    cwd,
+    effective_task_id,
+    task_id,
+    session_key,
+    effective_pty,
+    persist_on_release: bool = False,
+):
+    common = dict(
+        command=command,
+        cwd=cwd,
+        task_id=effective_task_id,
+        owner_task_id=task_id or effective_task_id,
+        session_key=session_key,
+        persist_on_release=persist_on_release,
+    )
     if env_type == "local":
         return process_registry.spawn_local(
-            env_vars=env.env if hasattr(env, 'env') else None, use_pty=effective_pty, **common)
+            env_vars=env.env if hasattr(env, "env") else None,
+            use_pty=effective_pty,
+            **common,
+        )
     return process_registry.spawn_via_env(env=env, **common)
 
 
@@ -116,8 +135,11 @@ def _apply_async_support(proc_session, result_data, notify_on_complete, watch_pa
         return notify_on_complete, watch_patterns
     result_data["notify_on_complete"] = False
     result_data["notify_unsupported"] = _ASYNC_UNSUPPORTED_NOTE
-    logger.info("background proc %s: async delivery unsupported on this "
-                "session; notify_on_complete/watch_patterns disabled", proc_session.id)
+    logger.info(
+        "background proc %s: async delivery unsupported on this "
+        "session; notify_on_complete/watch_patterns disabled",
+        proc_session.id,
+    )
     return False, None
 
 
@@ -132,11 +154,16 @@ def _register_completion_watcher(process_registry, proc_session, session_key) ->
     startup / post-turn drain instead."""
     proc_session.watcher_interval = 5
     watcher = {
-        "session_id": proc_session.id, "check_interval": 5, "session_key": session_key,
+        "session_id": proc_session.id,
+        "check_interval": 5,
+        "session_key": session_key,
         "platform": proc_session.watcher_platform,
-        **{attr.removeprefix("watcher_"): getattr(proc_session, attr)
-           for attr, _ in _ROUTING_FIELDS[:-1]},
-        "notify_on_complete": True, "parent_session_id": proc_session.parent_session_id,
+        **{
+            attr.removeprefix("watcher_"): getattr(proc_session, attr)
+            for attr, _ in _ROUTING_FIELDS[:-1]
+        },
+        "notify_on_complete": True,
+        "parent_session_id": proc_session.parent_session_id,
     }
     runner_ref = getattr(sys.modules.get("gateway.run"), "_gateway_runner_ref", None)
     runner = runner_ref() if callable(runner_ref) else None
@@ -146,9 +173,19 @@ def _register_completion_watcher(process_registry, proc_session, session_key) ->
 
 
 def spawn_background_process(
-    *, command: str, env: Any, env_type: str, effective_task_id: str, task_id: Optional[str],
-    session_key: str, workdir: Optional[str], cwd: str, effective_pty: bool,
-    notify_on_complete: bool, watch_patterns: Optional[list[str]], approval_note: Optional[str],
+    *,
+    command: str,
+    env: Any,
+    env_type: str,
+    effective_task_id: str,
+    task_id: Optional[str],
+    session_key: str,
+    workdir: Optional[str],
+    cwd: str,
+    effective_pty: bool,
+    notify_on_complete: bool,
+    watch_patterns: Optional[list[str]],
+    approval_note: Optional[str],
     completion_output_chars: int = 0,
     pty_disabled_reason: Optional[str],
     heartbeat_seconds: int = 0,
@@ -166,22 +203,41 @@ def spawn_background_process(
     """
     from tools.process_registry import process_registry
     from tools.terminal_tool import (
-        _redact_terminal_error_text, _resolve_command_cwd, _resolve_notification_flag_conflict,
+        _redact_terminal_error_text,
+        _resolve_command_cwd,
+        _resolve_notification_flag_conflict,
     )
 
     effective_cwd = _resolve_command_cwd(
-        workdir=workdir, default_cwd=cwd, session_key=session_key, env_type=env_type,
-        mounted_host=mounted_host if mounted_host is not None else getattr(env, "host_cwd", None),
+        workdir=workdir,
+        default_cwd=cwd,
+        session_key=session_key,
+        env_type=env_type,
+        mounted_host=mounted_host
+        if mounted_host is not None
+        else getattr(env, "host_cwd", None),
         env=env,
     )
     try:
         proc_session = _spawn(
-            process_registry, env=env, env_type=env_type, command=command, cwd=effective_cwd,
-            effective_task_id=effective_task_id, task_id=task_id, session_key=session_key,
-            effective_pty=effective_pty, persist_on_release=persist_on_release,
+            process_registry,
+            env=env,
+            env_type=env_type,
+            command=command,
+            cwd=effective_cwd,
+            effective_task_id=effective_task_id,
+            task_id=task_id,
+            session_key=session_key,
+            effective_pty=effective_pty,
+            persist_on_release=persist_on_release,
         )
-        result_data = {"output": "Background process started", "session_id": proc_session.id,
-                       "pid": proc_session.pid, "exit_code": 0, "error": None}
+        result_data = {
+            "output": "Background process started",
+            "session_id": proc_session.id,
+            "pid": proc_session.pid,
+            "exit_code": 0,
+            "error": None,
+        }
         if persist_on_release:
             result_data["persist_on_release"] = True
         if approval_note:
@@ -194,13 +250,19 @@ def spawn_background_process(
             result_data["hint"] = _SILENT_BACKGROUND_HINT
         if command and _looks_like_homebrew_ci_poller(command):
             existing = result_data.get("hint", "")
-            result_data["hint"] = (existing + "\n\n" + _HOMEBREW_CI_POLLER_HINT if existing
-                                   else _HOMEBREW_CI_POLLER_HINT)
+            result_data["hint"] = (
+                existing + "\n\n" + _HOMEBREW_CI_POLLER_HINT
+                if existing
+                else _HOMEBREW_CI_POLLER_HINT
+            )
 
         notify_on_complete, watch_patterns = _apply_async_support(
-            proc_session, result_data, notify_on_complete, watch_patterns)
+            proc_session, result_data, notify_on_complete, watch_patterns
+        )
         watch_patterns, conflict_note = _resolve_notification_flag_conflict(
-            notify_on_complete=bool(notify_on_complete), watch_patterns=watch_patterns, background=True,
+            notify_on_complete=bool(notify_on_complete),
+            watch_patterns=watch_patterns,
+            background=True,
         )
         if conflict_note:
             logger.warning("background proc %s: %s", proc_session.id, conflict_note)
@@ -211,26 +273,39 @@ def spawn_background_process(
             if completion_output_chars:
                 proc_session.completion_output_chars = int(completion_output_chars)
             if proc_session.watcher_platform:
-                _register_completion_watcher(process_registry, proc_session, session_key)
+                _register_completion_watcher(
+                    process_registry, proc_session, session_key
+                )
             from agent.delegation_context import is_delegated_child_context
+
             if is_delegated_child_context():
                 result_data["notify_on_complete"] = False
                 result_data["subagent_note"] = _SUBAGENT_NOTIFY_NOTE
             elif heartbeat_seconds:
                 # Heartbeats ride the same delivery path as the completion notice, so they are
                 # only armed where that notice can actually reach the agent.
-                result_data["heartbeat_seconds"] = process_registry.arm_heartbeat(proc_session, heartbeat_seconds)
+                result_data["heartbeat_seconds"] = process_registry.arm_heartbeat(
+                    proc_session, heartbeat_seconds
+                )
         elif heartbeat_seconds:
-            result_data["heartbeat_ignored"] = "heartbeat needs notify=true delivery, which this session cannot receive"
+            result_data["heartbeat_ignored"] = (
+                "heartbeat needs notify=true delivery, which this session cannot receive"
+            )
         if watch_patterns:
             proc_session.watch_patterns = list(watch_patterns)
             result_data["watch_patterns"] = proc_session.watch_patterns
         return json.dumps(result_data, ensure_ascii=False)
     except Exception as e:
-        return json.dumps({
-            "output": "", "exit_code": -1,
-            "error": _redact_terminal_error_text(f"Failed to start background process: {e}"),
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "output": "",
+                "exit_code": -1,
+                "error": _redact_terminal_error_text(
+                    f"Failed to start background process: {e}"
+                ),
+            },
+            ensure_ascii=False,
+        )
 
 
 _SUBAGENT_NOTIFY_NOTE = (
@@ -249,8 +324,13 @@ _YIELDED_NOTE = (
 
 
 def yield_to_background_handler(
-    *, command: str, env_type: str, cwd: Optional[str], effective_task_id: str,
-    task_id: Optional[str], session_key: str,
+    *,
+    command: str,
+    env_type: str,
+    cwd: Optional[str],
+    effective_task_id: str,
+    task_id: Optional[str],
+    session_key: str,
 ):
     """Build the ``yield_handler`` a foreground ``env.execute`` calls when the tool thread is
     asked to yield (a user message arrived mid-command). Local backend only: the live Popen
@@ -262,21 +342,36 @@ def yield_to_background_handler(
 
     def _handler(proc, output_so_far: str) -> dict:
         from tools.process_registry import process_registry
+
         session = process_registry.adopt_local(
-            proc, command=command, cwd=cwd, task_id=effective_task_id,
-            owner_task_id=task_id or effective_task_id, session_key=session_key,
-            output_so_far=output_so_far)
+            proc,
+            command=command,
+            cwd=cwd,
+            task_id=effective_task_id,
+            owner_task_id=task_id or effective_task_id,
+            session_key=session_key,
+            output_so_far=output_so_far,
+        )
         _stamp_routing_if_gateway(process_registry, session, session_key)
-        logger.info("foreground command yielded to background as %s (pid %s)", session.id, session.pid)
+        logger.info(
+            "foreground command yielded to background as %s (pid %s)",
+            session.id,
+            session.pid,
+        )
         return {
-            "output": output_so_far, "returncode": None, "yielded_session_id": session.id, "pid": session.pid,
+            "output": output_so_far,
+            "returncode": None,
+            "yielded_session_id": session.id,
+            "pid": session.pid,
         }
+
     return _handler
 
 
 def _stamp_routing_if_gateway(process_registry, session, session_key) -> None:
     """Route the adopted session's completion like a normal notify_on_complete spawn."""
     from gateway.session_context import async_delivery_supported, get_session_env
+
     if not async_delivery_supported():
         session.notify_on_complete = False
         return

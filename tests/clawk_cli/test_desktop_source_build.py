@@ -1,4 +1,5 @@
 """Desktop launch prepares once, then stages and publishes the local pack."""
+
 from argparse import Namespace
 import subprocess
 
@@ -13,7 +14,9 @@ def desktop_source(source_products, monkeypatch):
     root, acquired = source_products
     monkeypatch.setattr(main, "PROJECT_ROOT", root)
     monkeypatch.setattr(main_desktop, "_desktop_launch_env", lambda args: ({}, []))
-    monkeypatch.setattr(main_desktop, "_register_linux_desktop_entry", lambda **kwargs: None)
+    monkeypatch.setattr(
+        main_desktop, "_register_linux_desktop_entry", lambda **kwargs: None
+    )
     return root, acquired
 
 
@@ -61,6 +64,6 @@ def test_skip_build_source_checks_artifacts_without_provisioning(desktop_source)
     (dist / "index.html").write_text("prepared renderer")
     electron = root / "node_modules/electron"
     electron.mkdir(parents=True)
-    (electron / "package.json").write_text('{}')
+    (electron / "package.json").write_text("{}")
     main_desktop.cmd_gui(Namespace(source=True, skip_build=True, build_only=True))
     assert acquired == []

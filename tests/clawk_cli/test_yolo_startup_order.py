@@ -27,9 +27,7 @@ def _run_main_and_capture_yolo_at_startup(monkeypatch, argv):
     def spy_prepare_startup(args):
         yolo_at_startup["value"] = os.environ.get("CLAWK_YOLO_MODE")
 
-    monkeypatch.setattr(
-        "clawk_cli.main._prepare_agent_startup", spy_prepare_startup
-    )
+    monkeypatch.setattr("clawk_cli.main._prepare_agent_startup", spy_prepare_startup)
     # Stub cmd_chat so main() returns cleanly without entering chat.
     monkeypatch.setattr("clawk_cli.main.cmd_chat", lambda args: None)
     monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
@@ -45,13 +43,9 @@ def _run_main_and_capture_yolo_at_startup(monkeypatch, argv):
 def test_top_level_yolo_flag_sets_env_before_startup(monkeypatch):
     """clawk --yolo must set CLAWK_YOLO_MODE before
     _prepare_agent_startup imports tools.approval."""
-    result = _run_main_and_capture_yolo_at_startup(
-        monkeypatch, ["clawk", "--yolo"]
-    )
+    result = _run_main_and_capture_yolo_at_startup(monkeypatch, ["clawk", "--yolo"])
     assert result == "1", (
         "CLAWK_YOLO_MODE was not '1' when _prepare_agent_startup was "
         "called from main() with --yolo. This is the #60328 regression: "
         "the env var is set too late (inside cmd_chat, after tool imports)."
     )
-
-

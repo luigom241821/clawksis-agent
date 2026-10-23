@@ -20,11 +20,18 @@ from clawk_cli.gitlock import fetch_full_commit_graph
 def _server_repo(tmp_path: Path) -> Path:
     root = tmp_path / "server"
     root.mkdir()
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.invalid",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.invalid"}
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.invalid",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.invalid",
+    }
 
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=root, env=env, check=True, capture_output=True)
+        subprocess.run(
+            ["git", *args], cwd=root, env=env, check=True, capture_output=True
+        )
 
     git("init", "-q", "-b", "main")
     (root / "tracked").write_text("release\n", encoding="utf-8")
@@ -37,13 +44,25 @@ def _server_repo(tmp_path: Path) -> Path:
 
 
 def _git(root: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True,
-                          text=True, encoding="utf-8").stdout.strip()
+    return subprocess.run(
+        ["git", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.strip()
 
 
 def _config_values(root: Path, key: str) -> list[str]:
-    proc = subprocess.run(["git", "config", "--get-all", key], cwd=root,
-                          capture_output=True, text=True, encoding="utf-8", check=False)
+    proc = subprocess.run(
+        ["git", "config", "--get-all", key],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
@@ -54,8 +73,11 @@ def _has_promisor_config(root: Path) -> bool:
 
 def _clone(tmp_path: Path, server: Path, name: str, *clone_args: str) -> Path:
     checkout = tmp_path / name
-    subprocess.run(["git", "clone", "-q", *clone_args, server.as_uri(), str(checkout)],
-                   check=True, capture_output=True)
+    subprocess.run(
+        ["git", "clone", "-q", *clone_args, server.as_uri(), str(checkout)],
+        check=True,
+        capture_output=True,
+    )
     return checkout
 
 
@@ -84,11 +106,16 @@ def test_tag_fetch_preserves_a_non_default_partial_clone_filter(tmp_path):
 
     fetch_full_commit_graph(checkout)
 
-    assert _git(checkout, "config", "--get", "remote.origin.partialclonefilter") == "blob:none"
+    assert (
+        _git(checkout, "config", "--get", "remote.origin.partialclonefilter")
+        == "blob:none"
+    )
     assert "v0.21.6" in _git(checkout, "tag", "--list")
 
 
-def test_a_tag_refresh_is_bounded_short_and_a_history_fill_keeps_the_long_budget(tmp_path, monkeypatch):
+def test_a_tag_refresh_is_bounded_short_and_a_history_fill_keeps_the_long_budget(
+    tmp_path, monkeypatch
+):
     # A tags-only refresh on a full-history checkout is a ref listing; a slow remote must not hold
     # the update for 15 minutes when a miss only leaves the version label stale. Filling a shallow
     # checkout's history really transfers commits, so it keeps the long budget.

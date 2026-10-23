@@ -18,6 +18,7 @@ from tests.waiting import wait_until
 def _clear_clarify_state():
     """Reset module-level state between tests."""
     from tools import clarify_gateway as cm
+
     with cm._lock:
         cm._entries.clear()
         cm._session_index.clear()
@@ -77,7 +78,6 @@ class TestClarifyPrimitive:
         assert pending is not None
         assert pending.clarify_id == "id2"
 
-
     def test_include_choice_prompts_returns_multi_choice_entry(self):
         """Gateway typed replies must see active choice prompts too."""
         from tools import clarify_gateway as cm
@@ -86,7 +86,6 @@ class TestClarifyPrimitive:
         pending = cm.get_pending_for_session("sk3b", include_choice_prompts=True)
         assert pending is not None
         assert pending.clarify_id == "id3b"
-
 
     def test_clear_session_cancels_pending_entries(self):
         """clear_session unblocks blocked threads."""
@@ -104,7 +103,6 @@ class TestClarifyPrimitive:
             assert cancelled == 1
             result = fut.result(timeout=10.0)
             assert result == cm.CANCELLED
-
 
     def test_clear_session_preserves_resolved_response(self):
         """clear_session must not clobber an answer that already won.
@@ -133,19 +131,17 @@ class TestClarifyPrimitive:
             # The real answer must survive cleanup, not the "" cancellation.
             assert result == "B"
 
-
     def test_session_index_isolation(self):
         """Entries from different sessions don't leak across get_pending lookups."""
         from tools import clarify_gateway as cm
 
         cm.register("idA", "alpha", "Q?", None)  # auto-await text
-        cm.register("idB", "beta", "Q?", None)   # auto-await text
+        cm.register("idB", "beta", "Q?", None)  # auto-await text
 
         a = cm.get_pending_for_session("alpha")
         b = cm.get_pending_for_session("beta")
         assert a is not None and a.clarify_id == "idA"
         assert b is not None and b.clarify_id == "idB"
-
 
 
 class TestGatewayTextIntercept:
@@ -175,6 +171,7 @@ class TestGatewayTextIntercept:
         pending2 = cm.get_pending_for_session("sk")
         assert pending2 is not None
         assert pending2.clarify_id == "first"
+
     def test_text_fallback_enables_awaiting_text_for_multi_choice(self):
         """When base send_clarify renders choices as text, mark_awaiting_text
         is called so the gateway text-intercept can capture the reply."""
@@ -192,7 +189,7 @@ class TestGatewayTextIntercept:
         pending = cm.get_pending_for_session("sk-tf")
         assert pending is not None
         assert pending.clarify_id == "id-tf"
-        
+
         # Clean up
         cm.clear_session("sk-tf")
 
@@ -209,21 +206,20 @@ class TestCoverageGaps:
 
         assert cm.wait_for_response("nonexistent-id", timeout=0.1) is None
 
-
     def test_get_clarify_timeout_exception_returns_default(self, monkeypatch):
         """get_clarify_timeout returns 3600 when load_config raises."""
         from tools import clarify_gateway as cm
 
-        monkeypatch.setattr("clawk_cli.config.load_config",
-                            lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
         assert cm.get_clarify_timeout() == 3600
 
 
 class TestClarifyTimeoutResolution:
     """resolve_clarify_timeout is the single source of truth for the clarify
     timeout, shared by the CLI, TUI/desktop, and messaging-gateway paths."""
-
-
 
     def test_cli_defaults_do_not_shadow_agent_clarify_timeout(self):
         """The classic CLI builds its config from ``cli._cli_config_defaults()``; a seeded
@@ -238,7 +234,6 @@ class TestClarifyTimeoutResolution:
         assert cm.resolve_clarify_timeout(defaults) == 3600
         cli._merge_file_config(defaults, {"agent": {"clarify_timeout": 900}})
         assert cm.resolve_clarify_timeout(defaults) == 900
-
 
     def test_non_positive_preserved_as_unlimited_sentinel(self):
         """<= 0 is passed through verbatim — the waiting loops read it as
@@ -291,7 +286,9 @@ class TestUnlimitedWait:
             box["tid"] = threading.get_ident()
             box["r"] = cm.wait_for_response("u2", timeout=0)
 
-        t = threading.Thread(target=waiter, daemon=True)  # a regression must fail, not hang exit
+        t = threading.Thread(
+            target=waiter, daemon=True
+        )  # a regression must fail, not hang exit
         t.start()
         wait_until(lambda: "tid" in box, timeout=5, what="the waiter thread to start")
         try:
@@ -319,23 +316,23 @@ class TestMultiSelectTextFallback:
 
     def _register_multi(self, cid="m1", choices=("A", "B", "C")):
         from tools import clarify_gateway as cm
+
         entry = cm.register(cid, "sk", "Pick some", list(choices), multi_select=True)
         # Text fallback path always flips awaiting_text on.
         cm.mark_awaiting_text(cid)
         return entry
 
-
-
     def test_multi_select_without_choices_is_ignored(self):
         """multi_select on an open-ended clarify is meaningless — dropped."""
         from tools import clarify_gateway as cm
+
         entry = cm.register("s2", "sk", "Q?", None, multi_select=True)
         assert entry.multi_select is False
-
 
     def test_duplicate_selections_deduped(self):
         import json
         from tools import clarify_gateway as cm
+
         entry = self._register_multi()
         coerced = cm._coerce_text_response(entry, "1, 1, 2")
         assert json.loads(coerced) == ["A", "B"]
@@ -344,6 +341,7 @@ class TestMultiSelectTextFallback:
         """resolve_text_response_for_session delivers the JSON array to the waiter."""
         import json
         from tools import clarify_gateway as cm
+
         self._register_multi(cid="m3")
         result_box = {}
 
@@ -360,11 +358,13 @@ class TestMultiSelectTextFallback:
     def test_single_select_regression_numeric(self):
         """Single-select coercion unchanged: '2' maps to the choice label string."""
         from tools import clarify_gateway as cm
+
         entry = cm.register("s3", "sk", "Q?", ["A", "B", "C"])
         assert cm._coerce_text_response(entry, "2") == "B"
 
     def test_single_select_regression_label(self):
         from tools import clarify_gateway as cm
+
         entry = cm.register("s4", "sk", "Q?", ["A", "B"])
         assert cm._coerce_text_response(entry, "b") == "B"
 
@@ -384,7 +384,11 @@ class TestNativeRejectClassification:
         from tools import clarify_gateway as cm
 
         entry = cm.register(
-            "ms-oor", "sk-ms", "Pick some", ["A", "B", "C"], multi_select=True,
+            "ms-oor",
+            "sk-ms",
+            "Pick some",
+            ["A", "B", "C"],
+            multi_select=True,
         )
         assert entry.awaiting_text is False
         value, reason = cm._coerce_text_response_detailed(entry, "99")
@@ -401,7 +405,11 @@ class TestNativeRejectClassification:
         from tools import clarify_gateway as cm
 
         entry = cm.register(
-            "ms-bad", "sk-ms2", "Pick some", ["A", "B", "C"], multi_select=True,
+            "ms-bad",
+            "sk-ms2",
+            "Pick some",
+            ["A", "B", "C"],
+            multi_select=True,
         )
         value, reason = cm._coerce_text_response_detailed(entry, "1,99")
         assert value is None
@@ -417,16 +425,25 @@ class TestNativeRejectClassification:
         from tools import clarify_gateway as cm
 
         entry = cm.register(
-            "ms-prose", "sk-ms3", "Pick some", ["A", "B"], multi_select=True,
+            "ms-prose",
+            "sk-ms3",
+            "Pick some",
+            ["A", "B"],
+            multi_select=True,
         )
         value, reason = cm._coerce_text_response_detailed(
-            entry, "just checking the visual UI, no need to pass any data",
+            entry,
+            "just checking the visual UI, no need to pass any data",
         )
         assert value is None
         assert reason == "prose"
-        assert cm.attempt_text_response_for_session(
-            "sk-ms3", "just checking the visual UI, no need to pass any data",
-        ) == cm.TEXT_REJECTED_PROSE
+        assert (
+            cm.attempt_text_response_for_session(
+                "sk-ms3",
+                "just checking the visual UI, no need to pass any data",
+            )
+            == cm.TEXT_REJECTED_PROSE
+        )
 
     def test_single_select_out_of_range_is_invalid_selection(self):
         from tools import clarify_gateway as cm
@@ -444,7 +461,8 @@ class TestNativeRejectClassification:
 
         entry = cm.register("ss-prose", "sk-ss2", "Pick one", ["A", "B"])
         value, reason = cm._coerce_text_response_detailed(
-            entry, "one more unrelated thought",
+            entry,
+            "one more unrelated thought",
         )
         assert value is None
         assert reason == "prose"

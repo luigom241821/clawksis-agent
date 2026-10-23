@@ -1,4 +1,5 @@
 """Tests for the SignalAttachmentScheduler token-bucket simulator."""
+
 import asyncio
 
 import pytest
@@ -8,6 +9,7 @@ from plugins.platforms.signal.signal_rate_limit import (
     _reset_scheduler,
 )
 
+
 @pytest.fixture(autouse=True)
 def _reset_signal_scheduler():
     """Drop the process-wide scheduler so each test gets a clean bucket."""
@@ -15,11 +17,13 @@ def _reset_signal_scheduler():
     yield
     _reset_scheduler()
 
+
 def _patch_sleep_and_time(monkeypatch, capture: list):
     """Replace asyncio.sleep inside the scheduler module so tests don't
     actually wait and advances time.monotonic to simulate time passing.
     Captures the requested duration per call."""
     offset = 0.0
+
     async def _fake_sleep(seconds):
         capture.append(seconds)
         nonlocal offset
@@ -32,8 +36,8 @@ def _patch_sleep_and_time(monkeypatch, capture: list):
         "plugins.platforms.signal.signal_rate_limit.time.monotonic", lambda: offset
     )
 
-class TestEstimateWait:
 
+class TestEstimateWait:
     def test_proportional_to_deficit_when_empty(self, monkeypatch):
         """Freeze monotonic so estimate_wait doesn't see fractional refill."""
         s = SignalAttachmentScheduler()
@@ -46,8 +50,8 @@ class TestEstimateWait:
         assert s.estimate_wait(32) == pytest.approx(32 / s.refill_rate)
         assert s.estimate_wait(1) == pytest.approx(1 / s.refill_rate)
 
-class TestAcquire:
 
+class TestAcquire:
     @pytest.mark.asyncio
     async def test_acquire_within_capacity_no_sleep(self, monkeypatch):
         sleeps: list = []
@@ -78,6 +82,7 @@ class TestAcquire:
         # After sleep+acquire+rpc call, the bucket is empty again.
         assert s.tokens == pytest.approx(0.0)
 
+
 class TestFeedback:
     def test_calibrates_refill_rate_from_retry_after(self):
         s = SignalAttachmentScheduler()
@@ -85,6 +90,7 @@ class TestFeedback:
         s.feedback(retry_after=42.0, n_attempted=1)
         assert s.refill_rate == pytest.approx(1.0 / 42.0)
         assert s.refill_rate != original
+
 
 class TestRefillClamping:
     def test_refill_does_not_exceed_capacity(self, monkeypatch):
@@ -98,6 +104,7 @@ class TestRefillClamping:
         )
         s._refill()
         assert s.tokens == s.capacity
+
 
 class TestFifoAcquire:
     @pytest.mark.asyncio

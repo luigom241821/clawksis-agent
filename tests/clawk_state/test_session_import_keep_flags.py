@@ -31,28 +31,50 @@ def test_restored_sessions_keep_the_pin_and_the_sweeps_archive_provenance(tmp_pa
             source.append_message(sid, "user", "keep this one")
             source.end_session(sid, "user_exit")
             old = time.time() - age_days * 86400
-            source._conn.execute("UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?", (old, old, sid))
-            source._conn.execute("UPDATE messages SET timestamp = ? WHERE session_id = ?", (old, sid))
+            source._conn.execute(
+                "UPDATE sessions SET started_at = ?, ended_at = ? WHERE id = ?",
+                (old, old, sid),
+            )
+            source._conn.execute(
+                "UPDATE messages SET timestamp = ? WHERE session_id = ?", (old, sid)
+            )
         source._conn.commit()
         source.set_session_pinned(SESSION_ID, True)
         assert source.archive_stale_sessions(7) == 1
         payload = json.loads(json.dumps(source.export_all(include_inactive=True)))
         # An export that predates the durable flags still imports as an ordinary, visible session.
-        payload.append({"id": "legacy", "source": "cli", "messages": [{"role": "user", "content": "old"}]})
+        payload.append(
+            {
+                "id": "legacy",
+                "source": "cli",
+                "messages": [{"role": "user", "content": "old"}],
+            }
+        )
         # A hand-edited export's string "0" flags are coerced like the int columns, not by truthiness,
         # and a live row is never marked as the sweep's archive.
         flags = ("archived", "auto_archived", "pinned", "hidden")
-        payload.append({"id": "edited", "source": "cli", **{flag: "0" for flag in flags}, "auto_archived": 1})
+        payload.append(
+            {
+                "id": "edited",
+                "source": "cli",
+                **{flag: "0" for flag in flags},
+                "auto_archived": 1,
+            }
+        )
 
         assert target.import_sessions(payload)["imported"] == 4
         target.maybe_auto_prune_and_vacuum(retention_days=90, vacuum=False)
 
         restored = target.get_session(SESSION_ID)
-        assert restored is not None, "the startup prune deleted a session the user pinned to keep"
+        assert restored is not None, (
+            "the startup prune deleted a session the user pinned to keep"
+        )
         assert restored["pinned"]
         assert target.get_session(swept)["archived"]
         target.reopen_session(swept)
-        assert not target.get_session(swept)["archived"], "a restored sweep archive became a manual one"
+        assert not target.get_session(swept)["archived"], (
+            "a restored sweep archive became a manual one"
+        )
         for sid in ("legacy", "edited"):
             assert all(target.get_session(sid)[flag] == 0 for flag in flags), sid
     finally:

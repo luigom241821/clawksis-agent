@@ -6,7 +6,12 @@ from clawk_cli.web_server_mcp import _coerce_sequence, _mcp_server_summary
 
 def test_summary_parses_json_string_env_and_args():
     summary = _mcp_server_summary(
-        "srv", {"command": "npx", "args": '["-y", "pkg"]', "env": '{"API_KEY": "sk-abcdef123456"}'}
+        "srv",
+        {
+            "command": "npx",
+            "args": '["-y", "pkg"]',
+            "env": '{"API_KEY": "sk-abcdef123456"}',
+        },
     )
 
     assert summary["args"] == ["-y", "pkg"]
@@ -15,7 +20,9 @@ def test_summary_parses_json_string_env_and_args():
 
 
 def test_summary_survives_unparseable_strings():
-    summary = _mcp_server_summary("srv", {"command": "srv-bin", "args": "--stdio", "env": "not json"})
+    summary = _mcp_server_summary(
+        "srv", {"command": "srv-bin", "args": "--stdio", "env": "not json"}
+    )
 
     assert summary["args"] == ["--stdio"]  # one arg, not a char sequence
     assert summary["env"] == {}

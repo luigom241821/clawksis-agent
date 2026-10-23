@@ -59,13 +59,16 @@ def main() -> None:
         return f"{os.environ.get('PARITY_MCP_CANARY', 'NO-CANARY')}:{nonce}"
 
     if os.environ.get("PARITY_MCP_DEATH_TOOL") == "1":
+
         @server.tool()
         def parity_die(nonce: str = "") -> str:
             """Crash this MCP server mid-call: the RPC never gets a response."""
             # A helper that inherits our stdio keeps the pipe open after we die (the
             # npx/uvx-wrapper shape), so the client never sees EOF: only the child
             # liveness watch can end the call.
-            holder = subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(60)"])
+            holder = subprocess.Popen(
+                [sys.executable, "-c", "import time\nwhile True: time.sleep(60)"]
+            )
             _log_pid("pipe_holder", holder.pid)
             _log_pid("dying_server", os.getpid())
             threading.Timer(0.3, lambda: os._exit(3)).start()

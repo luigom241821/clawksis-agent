@@ -94,5 +94,3 @@ class TestMediaTagCjkTerminators:
 
         m = MEDIA_EXTENSIONLESS_TAG_RE.search("MEDIA:/tmp/Caddyfile：内容")
         assert m is not None and m.group("path") == "/tmp/Caddyfile"
-
-

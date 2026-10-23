@@ -4,6 +4,7 @@ cannot send never cancels the control handler the serial lane is running.
 
 The real ``handle_ws`` dispatcher; only ``_dispatch_request`` is a gated async stand-in.
 """
+
 import asyncio
 import json
 
@@ -61,7 +62,11 @@ def rig(monkeypatch):
     monkeypatch.setattr(server, "_ensure_skin_watcher", lambda: None)
     monkeypatch.setattr(server, "_ensure_lease_watcher", lambda: None)
     monkeypatch.setattr(server, "_WS_ORPHAN_REAP_GRACE_S", 0)
-    monkeypatch.setattr(server, "_close_sessions_for_transport", lambda transport, end_reason: (log.append("teardown"), (0, 0))[1])
+    monkeypatch.setattr(
+        server,
+        "_close_sessions_for_transport",
+        lambda transport, end_reason: (log.append("teardown"), (0, 0))[1],
+    )
     return Socket(), gates, log
 
 
@@ -89,9 +94,17 @@ async def test_waiting_context_reads_keep_reader_backpressure(rig):
     try:
         # A bounded reader parks with frames unread; give it every chance to drain them all.
         assert not await settle(lambda: sock.inbound.empty(), timeout=2.0)
-        bound = ws_mod._WS_DISPATCH_QUEUE_MAX + ws_mod._WS_CONCURRENT_READ_LIMIT + ws_mod._WS_WAITING_READ_LIMIT + 2
+        bound = (
+            ws_mod._WS_DISPATCH_QUEUE_MAX
+            + ws_mod._WS_CONCURRENT_READ_LIMIT
+            + ws_mod._WS_WAITING_READ_LIMIT
+            + 2
+        )
         assert sock.received <= bound, (sock.received, bound)
-        assert sum(entry.startswith("start:") for entry in log) == ws_mod._WS_CONCURRENT_READ_LIMIT
+        assert (
+            sum(entry.startswith("start:") for entry in log)
+            == ws_mod._WS_CONCURRENT_READ_LIMIT
+        )
     finally:
         release.set()
     assert await settle(lambda: sock.inbound.empty())
@@ -124,9 +137,13 @@ async def test_hang_up_drops_reads_that_never_started(rig):
     task = asyncio.create_task(ws_mod.handle_ws(sock))
     for n in range(6):
         sock.inbound.put_nowait(rpc(n))
-    assert await settle(lambda: sock.received == 6 and sum(e.startswith("start:") for e in log) == 2)
+    assert await settle(
+        lambda: sock.received == 6 and sum(e.startswith("start:") for e in log) == 2
+    )
     sock.inbound.put_nowait(None)
-    assert not await settle(lambda: "teardown" in log, timeout=2.0), "teardown ran under a started read"
+    assert not await settle(lambda: "teardown" in log, timeout=2.0), (
+        "teardown ran under a started read"
+    )
     release.set()
     await asyncio.wait_for(task, 10)
     assert sorted(e for e in log if e.startswith("start:")) == ["start:0", "start:1"]
@@ -147,7 +164,9 @@ async def test_a_failed_read_reply_does_not_cancel_the_running_control(rig):
     assert await settle(lambda: "start:submit" in log)
     read_gate.set()  # the read's reply now fails while the submit is mid-await
     assert await settle(lambda: "done:read" in log)
-    assert not await settle(lambda: task.done(), timeout=2.0), "the link ended under the running control"
+    assert not await settle(lambda: task.done(), timeout=2.0), (
+        "the link ended under the running control"
+    )
     release.set()
     await asyncio.wait_for(task, 10)
     assert "cancelled:submit" not in log and "done:submit" in log

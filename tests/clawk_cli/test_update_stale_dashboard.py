@@ -44,7 +44,9 @@ def _refresh_bindings_against_live_module():
 
     _find_stale_dashboard_pids = main_dashboard._find_stale_dashboard_pids
     _kill_stale_dashboard_processes = dashboard_procs._kill_stale_dashboard_processes
-    _restart_managed_dashboard_service = main_dashboard._restart_managed_dashboard_service
+    _restart_managed_dashboard_service = (
+        main_dashboard._restart_managed_dashboard_service
+    )
     yield
 
 
@@ -69,11 +71,13 @@ def _ps_runner(stdout: str):
     scan path without having to re-stub every unrelated subprocess call
     made later in ``_kill_stale_dashboard_processes``.
     """
+
     def _side_effect(args, *a, **kw):
         if isinstance(args, (list, tuple)) and args and args[0] == "ps":
             return MagicMock(returncode=0, stdout=stdout, stderr="")
         # Any other subprocess.run (e.g. taskkill) — benign success stub.
         return MagicMock(returncode=0, stdout="", stderr="")
+
     return _side_effect
 
 
@@ -83,20 +87,24 @@ def _write_valid_ssh_backend_lock(tmp_path, monkeypatch) -> int:
     spawn_nonce = "b" * 16
     lock_dir = tmp_path / "desktop-ssh" / ownership_id
     lock_dir.mkdir(parents=True)
-    (lock_dir / "backend.lock.json").write_text(json.dumps({
-        "schemaVersion": 2,
-        "protocolVersion": 1,
-        "ownershipId": ownership_id,
-        "spawnNonce": spawn_nonce,
-        "tokenFingerprint": "c" * 32,
-        "pid": pid,
-        "port": 46369,
-        "profile": "default",
-        "clawkPath": "/opt/clawksis/bin/clawk",
-        "clawkHome": str(tmp_path),
-        "logPath": f"{tmp_path}/desktop-ssh/{ownership_id}/{spawn_nonce}.log",
-        "startedAt": "2026-08-21T15:27:39Z",
-    }))
+    (lock_dir / "backend.lock.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 2,
+                "protocolVersion": 1,
+                "ownershipId": ownership_id,
+                "spawnNonce": spawn_nonce,
+                "tokenFingerprint": "c" * 32,
+                "pid": pid,
+                "port": 46369,
+                "profile": "default",
+                "clawkPath": "/opt/clawksis/bin/clawk",
+                "clawkHome": str(tmp_path),
+                "logPath": f"{tmp_path}/desktop-ssh/{ownership_id}/{spawn_nonce}.log",
+                "startedAt": "2026-08-21T15:27:39Z",
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_DESKTOP_CHILD_PID", raising=False)
     return pid
@@ -118,14 +126,19 @@ def test_update_cleanup_spares_backend_owned_by_valid_ssh_lock(tmp_path, monkeyp
         calls.append(list(args))
         return MagicMock(returncode=0, stdout="", stderr="")
 
-    with patch("subprocess.run", side_effect=fake_run), patch(
-        "clawk_cli.main_dashboard._find_stale_dashboard_pids",
-        side_effect=assert_owned_pid_is_excluded,
+    with (
+        patch("subprocess.run", side_effect=fake_run),
+        patch(
+            "clawk_cli.main_dashboard._find_stale_dashboard_pids",
+            side_effect=assert_owned_pid_is_excluded,
+        ),
     ):
         result = _kill_stale_dashboard_processes(restart_managed=True)
 
     assert result == {"matched": [], "killed": [], "failed": []}
-    assert all(call[:1] == ["systemctl"] and "list-unit-files" in call for call in calls)
+    assert all(
+        call[:1] == ["systemctl"] and "list-unit-files" in call for call in calls
+    )
     # Windows has no systemd: the managed-unit probe returns before running anything.
     assert bool(calls) == (sys.platform != "win32")
 
@@ -152,26 +165,27 @@ def test_explicit_stop_does_not_spare_backend_owned_by_valid_ssh_lock(
 class TestFindStaleDashboardPids:
     """Unit tests for the ps/wmic-based detection step."""
 
-
-
     @pytest.mark.skipif(sys.platform == "win32", reason="ps-based scan path")
     def test_self_pid_excluded(self):
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout="\n".join([
-                    _ps_line(os.getpid(), "python3 -m clawk_cli.main dashboard"),
-                    _ps_line(12345, "clawk dashboard --port 9119"),
-                ]) + "\n",
+                stdout="\n".join(
+                    [
+                        _ps_line(os.getpid(), "python3 -m clawk_cli.main dashboard"),
+                        _ps_line(12345, "clawk dashboard --port 9119"),
+                    ]
+                )
+                + "\n",
                 stderr="",
             )
             pids = _find_stale_dashboard_pids()
         assert os.getpid() not in pids
         assert 12345 in pids
 
-
     def _assert_ps_timeout_returns_empty(self):
         import subprocess as sp
+
         with patch("subprocess.run", side_effect=sp.TimeoutExpired("ps", 10)):
             assert _find_stale_dashboard_pids() == []
 
@@ -184,12 +198,9 @@ class TestFindStaleDashboardPids:
         self._assert_ps_timeout_returns_empty()
 
 
-
-
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX kill semantics")
 class TestKillStaleDashboardPosix:
     """Kill path on Linux / macOS: SIGTERM then SIGKILL any survivors."""
-
 
     def test_sigterm_graceful_exit(self, capsys):
         """Processes that exit on SIGTERM (the probe gets ProcessLookupError)
@@ -205,10 +216,14 @@ class TestKillStaleDashboardPosix:
                 raise ProcessLookupError
             # SIGTERM itself: succeed silently.
 
-        with patch("clawk_cli.main_dashboard._find_stale_dashboard_pids",
-                   return_value=[12345, 12346]), \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch(
+                "clawk_cli.main_dashboard._find_stale_dashboard_pids",
+                return_value=[12345, 12346],
+            ),
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes()
 
         # Both got SIGTERM.
@@ -219,10 +234,6 @@ class TestKillStaleDashboardPosix:
         assert result["matched"] == [12345, 12346]
         assert result["killed"] == [12345, 12346]
         assert result["failed"] == []
-
-
-
-
 
     def test_user_scope_restart_never_falls_back_to_system_or_sudo(self, capsys):
         """A user unit is discovered and restarted through ``systemctl --user``.
@@ -238,26 +249,52 @@ class TestKillStaleDashboardPosix:
 
         def fake_run(args, *a, **kw):
             calls.append(list(args))
-            if args == ["systemctl", "--user", "list-unit-files", "clawksis-dashboard.service", "--no-legend", "--no-pager"]:
-                return MagicMock(returncode=0, stdout="clawksis-dashboard.service enabled enabled\n", stderr="")
-            if args == ["systemctl", "--user", "is-active", "clawksis-dashboard.service"]:
+            if args == [
+                "systemctl",
+                "--user",
+                "list-unit-files",
+                "clawksis-dashboard.service",
+                "--no-legend",
+                "--no-pager",
+            ]:
+                return MagicMock(
+                    returncode=0,
+                    stdout="clawksis-dashboard.service enabled enabled\n",
+                    stderr="",
+                )
+            if args == [
+                "systemctl",
+                "--user",
+                "is-active",
+                "clawksis-dashboard.service",
+            ]:
                 return MagicMock(returncode=0, stdout="active\n", stderr="")
-            if args == ["systemctl", "--user", "is-enabled", "clawksis-dashboard.service"]:
+            if args == [
+                "systemctl",
+                "--user",
+                "is-enabled",
+                "clawksis-dashboard.service",
+            ]:
                 return MagicMock(returncode=0, stdout="enabled\n", stderr="")
             if args == ["systemctl", "--user", "restart", "clawksis-dashboard.service"]:
                 return MagicMock(returncode=0, stdout="", stderr="")
             raise AssertionError(f"unexpected subprocess.run call: {args}")
 
-        with patch("subprocess.run", side_effect=fake_run), \
-             patch("clawk_cli.main_dashboard._find_stale_dashboard_pids", return_value=[]), \
-             patch("os.kill") as kill:
+        with (
+            patch("subprocess.run", side_effect=fake_run),
+            patch(
+                "clawk_cli.main_dashboard._find_stale_dashboard_pids", return_value=[]
+            ),
+            patch("os.kill") as kill,
+        ):
             _kill_stale_dashboard_processes(restart_managed=True)
 
         assert ["systemctl", "--user", "restart", "clawksis-dashboard.service"] in calls
-        assert all(call[:1] != ["sudo"] and call[:2] == ["systemctl", "--user"] for call in calls)
+        assert all(
+            call[:1] != ["sudo"] and call[:2] == ["systemctl", "--user"]
+            for call in calls
+        )
         kill.assert_not_called()
-
-
 
 
 class TestKillStaleDashboardWindows:
@@ -274,43 +311,54 @@ class TestKillStaleDashboardWindows:
             # taskkill returns 0 on success
             return MagicMock(returncode=0, stdout="", stderr="")
 
-        with patch("clawk_cli.main_dashboard._find_stale_dashboard_pids",
-                   return_value=[12345, 12346]), \
-             patch("gateway.status.get_process_start_time", return_value=123), \
-             patch("clawk_cli._subprocess_compat.pid_is_clawk", return_value=True), \
-             patch("subprocess.run", side_effect=fake_run) as mock_run:
+        with (
+            patch(
+                "clawk_cli.main_dashboard._find_stale_dashboard_pids",
+                return_value=[12345, 12346],
+            ),
+            patch("gateway.status.get_process_start_time", return_value=123),
+            patch("clawk_cli._subprocess_compat.pid_is_clawk", return_value=True),
+            patch("subprocess.run", side_effect=fake_run) as mock_run,
+        ):
             _kill_stale_dashboard_processes()
 
         # Each PID triggered a taskkill /PID <n> /F invocation.
         taskkill_calls = [
-            c for c in mock_run.call_args_list
+            c
+            for c in mock_run.call_args_list
             if c.args and isinstance(c.args[0], list) and c.args[0][:1] == ["taskkill"]
         ]
         assert len(taskkill_calls) == 2
-        assert ["taskkill", "/PID", "12345", "/F"] in [c.args[0] for c in taskkill_calls]
-        assert ["taskkill", "/PID", "12346", "/F"] in [c.args[0] for c in taskkill_calls]
-
-
+        assert ["taskkill", "/PID", "12345", "/F"] in [
+            c.args[0] for c in taskkill_calls
+        ]
+        assert ["taskkill", "/PID", "12346", "/F"] in [
+            c.args[0] for c in taskkill_calls
+        ]
 
 
 class TestDashboardUpdateCleanup:
     """The git and Windows ZIP update paths share this final cleanup."""
 
-    def test_all_failed_stops_do_not_claim_the_dashboard_was_stopped(self, capsys, monkeypatch, tmp_path):
+    def test_all_failed_stops_do_not_claim_the_dashboard_was_stopped(
+        self, capsys, monkeypatch, tmp_path
+    ):
         own_home = tmp_path / "profiles" / "work"
         monkeypatch.setenv("CLAWK_HOME", str(own_home))
         with patch(
             "clawk_cli.main._kill_stale_dashboard_processes",
-            return_value={"matched": [12345], "killed": [], "failed": [(12345, "denied")],
-                          "unrecovered": []},
+            return_value={
+                "matched": [12345],
+                "killed": [],
+                "failed": [(12345, "denied")],
+                "unrecovered": [],
+            },
         ) as kill:
             update_cmd_maint._refresh_dashboard_after_update()
 
         # The sweep only touches this home's backends (#113978).
         assert kill.call_args.kwargs["scope_home"] == str(own_home)
         assert "stopped during update" not in capsys.readouterr().out
-
-
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX kill + systemd restart")
@@ -330,15 +378,27 @@ class TestSupervisedBackendRestart:
             if sig == 0:
                 raise ProcessLookupError
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path",
-                          return_value="/system.slice/clawk-serve.service"), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid",
-                          return_value="clawk-serve.service"), \
-             patch.object(main_dashboard, "_try_restart_systemd_service", return_value=True) as restart, \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]),
+            patch.object(
+                main_dashboard,
+                "_get_pid_cgroup_path",
+                return_value="/system.slice/clawk-serve.service",
+            ),
+            patch.object(
+                main_dashboard,
+                "_get_systemd_service_for_pid",
+                return_value="clawk-serve.service",
+            ),
+            patch.object(
+                main_dashboard, "_try_restart_systemd_service", return_value=True
+            ) as restart,
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             _kill_stale_dashboard_processes(restart_managed=True)
 
         restart.assert_called_once_with(
@@ -354,15 +414,25 @@ class TestSupervisedBackendRestart:
         skip killing/restarting it again here."""
         live = self._live()
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path",
-                          return_value="/system.slice/clawk-serve.service"), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid",
-                          return_value="clawk-serve.service"), \
-             patch.object(main_dashboard, "_try_restart_systemd_service") as restart, \
-             patch("os.kill") as kill, \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]),
+            patch.object(
+                main_dashboard,
+                "_get_pid_cgroup_path",
+                return_value="/system.slice/clawk-serve.service",
+            ),
+            patch.object(
+                main_dashboard,
+                "_get_systemd_service_for_pid",
+                return_value="clawk-serve.service",
+            ),
+            patch.object(main_dashboard, "_try_restart_systemd_service") as restart,
+            patch("os.kill") as kill,
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes(
                 restart_managed=True, already_restarted_units={"clawk-serve"}
             )
@@ -371,9 +441,14 @@ class TestSupervisedBackendRestart:
         restart.assert_not_called()
         assert result == {"matched": [], "killed": [], "failed": []}
 
-    @pytest.mark.parametrize("main_pid, restarted", [("991", False), ("4321", True)],
-                             ids=["foreign-unit-cgroup", "unit-main-process"])
-    def test_only_the_unit_whose_main_process_is_the_backend_is_restarted(self, main_pid, restarted):
+    @pytest.mark.parametrize(
+        "main_pid, restarted",
+        [("991", False), ("4321", True)],
+        ids=["foreign-unit-cgroup", "unit-main-process"],
+    )
+    def test_only_the_unit_whose_main_process_is_the_backend_is_restarted(
+        self, main_pid, restarted
+    ):
         """A dashboard started by hand from a shell inside some unit (CI runner agent, cron, tmux,
         the gateway's terminal tool) sits in that unit's cgroup. Only a unit whose MainPID IS the
         backend supervises it; any other unit is not restarted and the backend is respawned from
@@ -392,23 +467,39 @@ class TestSupervisedBackendRestart:
             if sig == 0:
                 raise ProcessLookupError
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]), \
-             patch.object(main_dashboard, "_pid_unified_cgroup_entries", lambda pid: iter([unit_cgroup])), \
-             patch.object(main_dashboard, "_run_probe", side_effect=fake_probe), \
-             patch.object(main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv), \
-             patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None), \
-             patch.object(live, "_respawn_dashboard_processes", return_value=[]) as respawn, \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[4321]),
+            patch.object(
+                main_dashboard,
+                "_pid_unified_cgroup_entries",
+                lambda pid: iter([unit_cgroup]),
+            ),
+            patch.object(main_dashboard, "_run_probe", side_effect=fake_probe),
+            patch.object(
+                main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv
+            ),
+            patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None),
+            patch.object(
+                live, "_respawn_dashboard_processes", return_value=[]
+            ) as respawn,
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes(restart_managed=True)
 
         restarts = [c for c in probes if "restart" in c]
         if restarted:
-            assert restarts == [["systemctl", "restart", "hosted-compute-agent.service"]]
+            assert restarts == [
+                ["systemctl", "restart", "hosted-compute-agent.service"]
+            ]
             respawn.assert_not_called()
         else:
-            assert restarts == [], f"restarted a unit that does not supervise the dashboard: {restarts}"
+            assert restarts == [], (
+                f"restarted a unit that does not supervise the dashboard: {restarts}"
+            )
             respawn.assert_called_once_with([argv])
         assert result["unrecovered"] == []
 
@@ -420,8 +511,9 @@ class TestManualBackendRespawn:
     def _live(self):
         return main_dashboard
 
-
-    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX cmdline capture + respawn")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX cmdline capture + respawn"
+    )
     def test_argv_capture_failure_falls_back_to_hint(self, capsys):
         live = self._live()
 
@@ -429,20 +521,30 @@ class TestManualBackendRespawn:
             if sig == 0:
                 raise ProcessLookupError
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[5555]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid", return_value=None), \
-             patch.object(main_dashboard, "_dashboard_cmdline_for_pid", return_value=None), \
-             patch.object(live, "_respawn_dashboard_processes") as respawn, \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[5555]),
+            patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None),
+            patch.object(
+                main_dashboard, "_get_systemd_service_for_pid", return_value=None
+            ),
+            patch.object(
+                main_dashboard, "_dashboard_cmdline_for_pid", return_value=None
+            ),
+            patch.object(live, "_respawn_dashboard_processes") as respawn,
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes(restart_managed=True)
 
         respawn.assert_not_called()
         assert result["unrecovered"] == [5555]
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX cmdline capture + respawn")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX cmdline capture + respawn"
+    )
     def test_non_orphan_fixed_port_still_respawns(self, capsys):
         """A supervised-by-shell dashboard with a fixed port is still restarted."""
         live = self._live()
@@ -452,43 +554,70 @@ class TestManualBackendRespawn:
             if sig == 0:
                 raise ProcessLookupError
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[6001]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid", return_value=None), \
-             patch.object(main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv), \
-             patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None), \
-             patch.object(live, "_respawn_dashboard_processes", return_value=[]) as respawn, \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[6001]),
+            patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None),
+            patch.object(
+                main_dashboard, "_get_systemd_service_for_pid", return_value=None
+            ),
+            patch.object(
+                main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv
+            ),
+            patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None),
+            patch.object(
+                live, "_respawn_dashboard_processes", return_value=[]
+            ) as respawn,
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             _kill_stale_dashboard_processes(restart_managed=True)
 
         respawn.assert_called_once_with([argv])
         assert "when you're ready" not in capsys.readouterr().out
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX cmdline capture + respawn")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX cmdline capture + respawn"
+    )
     def test_port_zero_serves_killed_without_respawn(self, capsys):
         """``serve --port 0`` backends are stopped but not resurrected (#78821)."""
         live = self._live()
         argv = [
-            "python", "-m", "clawk_cli.main",
-            "serve", "--host", "127.0.0.1", "--port", "0",
+            "python",
+            "-m",
+            "clawk_cli.main",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
         ]
 
         def fake_kill(pid, sig):
             if sig == 0:
                 raise ProcessLookupError
 
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids",
-                          return_value=[7001, 7002, 7003]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid", return_value=None), \
-             patch.object(main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv), \
-             patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None), \
-             patch.object(live, "_respawn_dashboard_processes") as respawn, \
-             patch("os.kill", side_effect=fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(
+                live, "_find_stale_dashboard_pids", return_value=[7001, 7002, 7003]
+            ),
+            patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None),
+            patch.object(
+                main_dashboard, "_get_systemd_service_for_pid", return_value=None
+            ),
+            patch.object(
+                main_dashboard, "_dashboard_cmdline_for_pid", return_value=argv
+            ),
+            patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None),
+            patch.object(live, "_respawn_dashboard_processes") as respawn,
+            patch("os.kill", side_effect=fake_kill),
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes(restart_managed=True)
 
         respawn.assert_not_called()
@@ -496,7 +625,6 @@ class TestManualBackendRespawn:
         # Intentional skips are not "unrecovered" — no noisy manual hint.
         assert result["unrecovered"] == []
         assert "when you're ready" not in capsys.readouterr().out
-
 
     def test_respawn_adds_no_open_to_dashboard_commands(self, tmp_path, monkeypatch):
         """Respawned `dashboard` argv gains --no-open; `serve` argv untouched."""
@@ -511,12 +639,16 @@ class TestManualBackendRespawn:
             def poll(self):
                 return None
 
-        with patch.object(live.subprocess, "Popen", _FakePopen), \
-             patch.object(live.time, "sleep"):
-            failed = live._respawn_dashboard_processes([
-                ["clawk", "dashboard", "--port", "8300"],
-                ["clawk", "serve", "--host", "0.0.0.0"],
-            ])
+        with (
+            patch.object(live.subprocess, "Popen", _FakePopen),
+            patch.object(live.time, "sleep"),
+        ):
+            failed = live._respawn_dashboard_processes(
+                [
+                    ["clawk", "dashboard", "--port", "8300"],
+                    ["clawk", "serve", "--host", "0.0.0.0"],
+                ]
+            )
 
         assert failed == []
         assert spawned[0] == ["clawk", "dashboard", "--port", "8300", "--no-open"]
@@ -526,13 +658,17 @@ class TestManualBackendRespawn:
         live = self._live()
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
 
-        with patch.object(live.subprocess, "Popen", side_effect=OSError("no such file")), \
-             patch.object(live.time, "sleep"):
+        with (
+            patch.object(live.subprocess, "Popen", side_effect=OSError("no such file")),
+            patch.object(live.time, "sleep"),
+        ):
             failed = live._respawn_dashboard_processes([["clawk", "serve"]])
 
         assert failed == [["clawk", "serve"]]
 
-    def test_pre_takeover_interpreter_launcher_argv_is_rebuilt(self, tmp_path, monkeypatch):
+    def test_pre_takeover_interpreter_launcher_argv_is_rebuilt(
+        self, tmp_path, monkeypatch
+    ):
         """A kernel-captured ``[old venv python, launcher, ...]`` argv is respawned through
         this install's launcher command instead of being replayed verbatim after the PM
         takeover rewrote the launcher into a shell shim (#124778)."""
@@ -548,23 +684,34 @@ class TestManualBackendRespawn:
                 return None
 
         captured = [
-            "/old/venv/bin/python", "/home/u/.local/bin/clawk",
-            "dashboard", "--no-open", "--host", "127.0.0.1", "--port", "34553",
+            "/old/venv/bin/python",
+            "/home/u/.local/bin/clawk",
+            "dashboard",
+            "--no-open",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "34553",
         ]
         from clawk_cli import _launchers
         from clawk_cli._launchers import runtime_command
 
-        with patch.object(live.subprocess, "Popen", _FakePopen), \
-             patch.object(live.time, "sleep"), \
-             patch.object(_launchers, "resolve_store_python", return_value=None):
+        with (
+            patch.object(live.subprocess, "Popen", _FakePopen),
+            patch.object(live.time, "sleep"),
+            patch.object(_launchers, "resolve_store_python", return_value=None),
+        ):
             failed = live._respawn_dashboard_processes([captured])
-            expected = runtime_command(Path(live.__file__).resolve().parents[1], captured[2:])
+            expected = runtime_command(
+                Path(live.__file__).resolve().parents[1], captured[2:]
+            )
 
         assert failed == []
         assert spawned == [expected]
 
     def test_child_exiting_within_the_grace_window_is_a_reported_failure(
-            self, tmp_path, monkeypatch, capsys):
+        self, tmp_path, monkeypatch, capsys
+    ):
         """A respawn that dies at once (parse error on a stale argv, port already bound)
         must surface as a failure, never as ``✓ restarted`` (#124778), reported with the
         caller's argv so it matches the stopped PID's cmdline (#109290)."""
@@ -580,9 +727,13 @@ class TestManualBackendRespawn:
             def poll(self):
                 return 1
 
-        with patch.object(live.subprocess, "Popen", _DyingPopen), \
-             patch.object(live.time, "sleep"):
-            failed = live._respawn_dashboard_processes([["clawk", "dashboard", "--port", "8300"]])
+        with (
+            patch.object(live.subprocess, "Popen", _DyingPopen),
+            patch.object(live.time, "sleep"),
+        ):
+            failed = live._respawn_dashboard_processes(
+                [["clawk", "dashboard", "--port", "8300"]]
+            )
 
         out = capsys.readouterr().out
         assert failed == [["clawk", "dashboard", "--port", "8300"]]
@@ -597,20 +748,39 @@ class TestFilterDashboardRespawnCandidates:
         from clawk_cli.dashboard_procs import _filter_dashboard_respawn_candidates
 
         argv = [
-            "python", "-m", "clawk_cli.main",
-            "--profile", "mini-cat",
-            "serve", "--host", "127.0.0.1", "--port", "0",
+            "python",
+            "-m",
+            "clawk_cli.main",
+            "--profile",
+            "mini-cat",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
         ]
-        assert _filter_dashboard_respawn_candidates([
-            (42, argv, "/home/u/.clawksis/profiles/mini-cat"),
-        ]) == []
+        assert (
+            _filter_dashboard_respawn_candidates(
+                [
+                    (42, argv, "/home/u/.clawksis/profiles/mini-cat"),
+                ]
+            )
+            == []
+        )
 
     def test_skips_legacy_dashboard_port_zero(self):
         from clawk_cli.dashboard_procs import _filter_dashboard_respawn_candidates
 
         argv = [
-            "clawk", "--profile", "coder",
-            "dashboard", "--no-open", "--host", "127.0.0.1", "--port", "0",
+            "clawk",
+            "--profile",
+            "coder",
+            "dashboard",
+            "--no-open",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "0",
         ]
         assert _filter_dashboard_respawn_candidates([(7, argv, None)]) == []
 
@@ -620,16 +790,17 @@ class TestFilterDashboardRespawnCandidates:
         argv = ["clawk", "serve", "--port=0"]
         assert _filter_dashboard_respawn_candidates([(1, argv, None)]) == []
 
-
     def test_dedupes_identical_normalized_cmdlines(self):
         from clawk_cli.dashboard_procs import _filter_dashboard_respawn_candidates
 
         a = ["/usr/bin/python3", "-m", "clawk_cli.main", "dashboard", "--port", "8300"]
         b = ["/other/python", "-m", "clawk_cli.main", "dashboard", "--port", "8300"]
-        out = _filter_dashboard_respawn_candidates([
-            (1, a, None),
-            (2, b, None),
-        ])
+        out = _filter_dashboard_respawn_candidates(
+            [
+                (1, a, None),
+                (2, b, None),
+            ]
+        )
         assert out == [a]
 
     def test_caps_one_per_profile(self):
@@ -638,11 +809,13 @@ class TestFilterDashboardRespawnCandidates:
         a = ["clawk", "--profile", "coder", "dashboard", "--port", "8300"]
         b = ["clawk", "--profile", "coder", "dashboard", "--port", "8301"]
         c = ["clawk", "--profile", "writer", "dashboard", "--port", "8302"]
-        out = _filter_dashboard_respawn_candidates([
-            (1, a, None),
-            (2, b, None),
-            (3, c, None),
-        ])
+        out = _filter_dashboard_respawn_candidates(
+            [
+                (1, a, None),
+                (2, b, None),
+                (3, c, None),
+            ]
+        )
         assert out == [a, c]
 
     def test_caps_one_per_clawk_home(self):
@@ -665,10 +838,12 @@ class TestFilterDashboardRespawnCandidates:
 
         a = ["clawk", "--profile", "coder", "dashboard", "--port", "8300"]
         b = ["clawk", "dashboard", "--port", "8301"]
-        out = _filter_dashboard_respawn_candidates([
-            (1, a, None),
-            (2, b, "/home/u/.clawksis/profiles/coder"),
-        ])
+        out = _filter_dashboard_respawn_candidates(
+            [
+                (1, a, None),
+                (2, b, "/home/u/.clawksis/profiles/coder"),
+            ]
+        )
         assert out == [a]
 
     def test_default_profile_same_root_home_caps(self):
@@ -713,8 +888,14 @@ class TestFilterDashboardRespawnCandidates:
 
         argv = [
             "/Users/u/.clawk-sidecar/clawksis-agent/venv/bin/python",
-            "-m", "clawk_cli.main",
-            "serve", "--host", "127.0.0.1", "--port", "9118", "--skip-build",
+            "-m",
+            "clawk_cli.main",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9118",
+            "--skip-build",
         ]
         out = _filter_dashboard_respawn_candidates(
             [(15364, argv, "/Users/u/.clawk-lifeos")],
@@ -771,16 +952,18 @@ class TestFilterDashboardRespawnCandidates:
             clawk_constants, "get_clawk_home", lambda: Path("/home/u/.clawksis")
         )
         argv = ["clawk", "serve", "--port", "9118"]
-        foreign = _filter_dashboard_respawn_candidates([
-            (1, argv, "/Users/u/.clawk-lifeos"),
-        ])
+        foreign = _filter_dashboard_respawn_candidates(
+            [
+                (1, argv, "/Users/u/.clawk-lifeos"),
+            ]
+        )
         assert foreign == []
-        own = _filter_dashboard_respawn_candidates([
-            (1, argv, "/home/u/.clawksis"),
-        ])
+        own = _filter_dashboard_respawn_candidates(
+            [
+                (1, argv, "/home/u/.clawksis"),
+            ]
+        )
         assert own == [argv]
-
-
 
 
 class TestCmdlineCapture:
@@ -809,8 +992,10 @@ class TestCmdlineCapture:
                 return real_open(proc_file, *a, **kw)
             return real_open(path, *a, **kw)
 
-        with patch.object(live.os.path, "exists", fake_exists), \
-             patch("builtins.open", fake_open):
+        with (
+            patch.object(live.os.path, "exists", fake_exists),
+            patch("builtins.open", fake_open),
+        ):
             argv = main_dashboard._dashboard_cmdline_for_pid(777)
 
         assert argv == ["/usr/bin/python3", "-m", "clawk_cli.main", "serve"]
@@ -821,10 +1006,14 @@ class TestCmdlineCapture:
 
         def fake_run(args, *a, **kw):
             assert args == ["ps", "-p", "888", "-o", "command="]
-            return MagicMock(returncode=0, stdout="clawk serve --port 8300\n", stderr="")
+            return MagicMock(
+                returncode=0, stdout="clawk serve --port 8300\n", stderr=""
+            )
 
-        with patch.object(live.os.path, "exists", return_value=False), \
-             patch("subprocess.run", side_effect=fake_run):
+        with (
+            patch.object(live.os.path, "exists", return_value=False),
+            patch("subprocess.run", side_effect=fake_run),
+        ):
             argv = main_dashboard._dashboard_cmdline_for_pid(888)
 
         assert argv == ["clawk", "serve", "--port", "8300"]
@@ -873,8 +1062,16 @@ class TestLaunchdSupervisedBackends:
     fails with "port already in use" and the backend that IS running is no longer supervised."""
 
     ARGV = [
-        "/opt/clawksis/venv/bin/python", "-m", "clawk_cli.main",
-        "dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--skip-build",
+        "/opt/clawksis/venv/bin/python",
+        "-m",
+        "clawk_cli.main",
+        "dashboard",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "9119",
+        "--no-open",
+        "--skip-build",
     ]
 
     @staticmethod
@@ -884,23 +1081,43 @@ class TestLaunchdSupervisedBackends:
 
     def _run(self, pid, jobs, *, restart_ok=True, restart_managed=True):
         live = main_dashboard
-        with patch.object(main_dashboard, "_restart_managed_dashboard_service", return_value=False), \
-             patch.object(live, "_find_stale_dashboard_pids", return_value=[pid]), \
-             patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None), \
-             patch.object(main_dashboard, "_get_systemd_service_for_pid", return_value=None), \
-             patch.object(main_dashboard, "_dashboard_cmdline_for_pid", return_value=list(self.ARGV)), \
-             patch.object(main_dashboard, "_loaded_launchd_backend_jobs", return_value=jobs), \
-             patch.object(main_dashboard, "_restart_launchd_job", return_value=restart_ok) as restart, \
-             patch("clawk_cli.dashboard_procs._process_ancestors", return_value=[]), \
-             patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None), \
-             patch.object(live, "_respawn_dashboard_processes", return_value=[]) as respawn, \
-             patch("os.kill", side_effect=self._fake_kill), \
-             patch("time.sleep"):
+        with (
+            patch.object(
+                main_dashboard, "_restart_managed_dashboard_service", return_value=False
+            ),
+            patch.object(live, "_find_stale_dashboard_pids", return_value=[pid]),
+            patch.object(main_dashboard, "_get_pid_cgroup_path", return_value=None),
+            patch.object(
+                main_dashboard, "_get_systemd_service_for_pid", return_value=None
+            ),
+            patch.object(
+                main_dashboard,
+                "_dashboard_cmdline_for_pid",
+                return_value=list(self.ARGV),
+            ),
+            patch.object(
+                main_dashboard, "_loaded_launchd_backend_jobs", return_value=jobs
+            ),
+            patch.object(
+                main_dashboard, "_restart_launchd_job", return_value=restart_ok
+            ) as restart,
+            patch("clawk_cli.dashboard_procs._process_ancestors", return_value=[]),
+            patch("clawk_cli.dashboard_procs._clawk_home_for_pid", return_value=None),
+            patch.object(
+                live, "_respawn_dashboard_processes", return_value=[]
+            ) as respawn,
+            patch("os.kill", side_effect=self._fake_kill),
+            patch("time.sleep"),
+        ):
             result = _kill_stale_dashboard_processes(restart_managed=restart_managed)
         return result, restart, respawn
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX cmdline capture + respawn")
-    def test_launchd_owned_backend_restarts_through_launchd_never_as_a_detached_respawn(self, capsys):
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX cmdline capture + respawn"
+    )
+    def test_launchd_owned_backend_restarts_through_launchd_never_as_a_detached_respawn(
+        self, capsys
+    ):
         """The reporter's state: the job is loaded but has no live process (it keeps failing on the
         port) and a detached copy runs its exact ProgramArguments. The copy is stopped and the JOB
         is kickstarted; an argv respawn would recreate the port conflict. A failed kickstart counts
@@ -913,18 +1130,38 @@ class TestLaunchdSupervisedBackends:
         assert result["killed"] == [9102] and result["unrecovered"] == []
         assert "when you're ready" not in capsys.readouterr().out
 
-        result, restart, respawn = self._run(9103, [("gui/501", "ai.clawk.dashboard", list(self.ARGV), 9103)],
-                                             restart_ok=False)
+        result, restart, respawn = self._run(
+            9103,
+            [("gui/501", "ai.clawk.dashboard", list(self.ARGV), 9103)],
+            restart_ok=False,
+        )
         respawn.assert_not_called()
         assert result["unrecovered"] == [9103]
-        assert "run: launchctl kickstart -k gui/501/ai.clawk.dashboard" in capsys.readouterr().out
+        assert (
+            "run: launchctl kickstart -k gui/501/ai.clawk.dashboard"
+            in capsys.readouterr().out
+        )
 
         # A LaunchDaemon lives in the system domain: kickstart needs root, so a non-root hint says sudo.
-        with patch("clawk_cli.dashboard_procs.os.geteuid", return_value=501, create=True):  # windows-footgun: ok — patch target string, create=True
-            self._run(9105, [("system", "ai.clawk.serve", list(self.ARGV), None)], restart_ok=False)
-        assert "run: sudo launchctl kickstart -k system/ai.clawk.serve" in capsys.readouterr().out
+        with patch(
+            "clawk_cli.dashboard_procs.os.geteuid", return_value=501, create=True
+        ):  # windows-footgun: ok — patch target string, create=True
+            self._run(
+                9105,
+                [("system", "ai.clawk.serve", list(self.ARGV), None)],
+                restart_ok=False,
+            )
+        assert (
+            "run: sudo launchctl kickstart -k system/ai.clawk.serve"
+            in capsys.readouterr().out
+        )
 
-        other = ("gui/501", "ai.clawk.other", ["clawk", "dashboard", "--port", "8300"], 777)
+        other = (
+            "gui/501",
+            "ai.clawk.other",
+            ["clawk", "dashboard", "--port", "8300"],
+            777,
+        )
         result, restart, respawn = self._run(9104, [other])
         restart.assert_not_called()
         respawn.assert_called_once_with([list(self.ARGV)])
@@ -935,20 +1172,46 @@ class TestLaunchdSupervisedBackends:
         ancestor (exec-less ``/bin/sh -c`` wrapper plist) or by exact argv (the detached copy),
         never otherwise."""
         uid = 501
-        backend_argv = ["/opt/clawksis/venv/bin/python", "-m", "clawk_cli.main", "dashboard", "--port", "9119"]
-        serve_argv = ["/opt/clawksis/venv/bin/python", "-m", "clawk_cli.main", "serve", "--port", "8642"]
+        backend_argv = [
+            "/opt/clawksis/venv/bin/python",
+            "-m",
+            "clawk_cli.main",
+            "dashboard",
+            "--port",
+            "9119",
+        ]
+        serve_argv = [
+            "/opt/clawksis/venv/bin/python",
+            "-m",
+            "clawk_cli.main",
+            "serve",
+            "--port",
+            "8642",
+        ]
         jobs = [
             (f"user/{uid}", "ai.clawk.dashboard", backend_argv, 4242),
             ("system", "ai.clawk.serve", serve_argv, None),
         ]
 
         owning = main_dashboard._launchd_job_owning_backend
-        assert owning(4242, ["something", "else"], jobs) == (f"user/{uid}", "ai.clawk.dashboard", 4242)
-        assert owning(9999, ["python"], jobs, ancestors=[4242, 1]) == (f"user/{uid}", "ai.clawk.dashboard", 4242)
+        assert owning(4242, ["something", "else"], jobs) == (
+            f"user/{uid}",
+            "ai.clawk.dashboard",
+            4242,
+        )
+        assert owning(9999, ["python"], jobs, ancestors=[4242, 1]) == (
+            f"user/{uid}",
+            "ai.clawk.dashboard",
+            4242,
+        )
         assert owning(9999, serve_argv, jobs) == ("system", "ai.clawk.serve", None)
         # An earlier detached respawn runs the plist argv plus the ``--no-open`` the respawn path
         # appends; it must still be attributed to the job, or every update respawns it again.
-        assert owning(9999, backend_argv + ["--no-open"], jobs) == (f"user/{uid}", "ai.clawk.dashboard", 4242)
+        assert owning(9999, backend_argv + ["--no-open"], jobs) == (
+            f"user/{uid}",
+            "ai.clawk.dashboard",
+            4242,
+        )
         assert owning(9999, serve_argv[:-1] + ["8643"], jobs) is None
         assert owning(9999, None, jobs) is None
         assert owning(4242, None, []) is None

@@ -8,7 +8,9 @@ inside the Python body failed closed as an oversized "script".
 
 import pytest
 
-from cron.lifecycle_guard import contains_gateway_lifecycle_command_or_referenced_script as guard
+from cron.lifecycle_guard import (
+    contains_gateway_lifecycle_command_or_referenced_script as guard,
+)
 
 
 def _big_file(tmp_path):
@@ -52,7 +54,9 @@ def test_inert_heredoc_body_script_path_still_read(tmp_path):
     assert guard(command, cwd=str(tmp_path)) is True
 
 
-def test_mentioned_data_file_that_cannot_be_scanned_is_not_a_verdict(tmp_path, monkeypatch):
+def test_mentioned_data_file_that_cannot_be_scanned_is_not_a_verdict(
+    tmp_path, monkeypatch
+):
     """A file only MENTIONED in an inert body may exhaust the text budget (one >64 KiB line), pull
     in 64+ remote-read misses (a markdown table of paths) or be a live SQLite database: each is
     "nothing to scan", never a block (#113944). The same file *executed* still fails closed."""
@@ -62,7 +66,10 @@ def test_mentioned_data_file_that_cannot_be_scanned_is_not_a_verdict(tmp_path, m
     minified = tmp_path / "minified.json"
     minified.write_text("[" + "1," * 40000 + "1]", encoding="utf-8")
     notes = tmp_path / "notes.md"
-    notes.write_text("\n".join(f"| /opt/frag{i}/tool-{i}.md | note |" for i in range(70)), encoding="utf-8")
+    notes.write_text(
+        "\n".join(f"| /opt/frag{i}/tool-{i}.md | note |" for i in range(70)),
+        encoding="utf-8",
+    )
     db = tmp_path / "state.db"
     conn = connect_tracked(db)
     monkeypatch.setattr(lifecycle_guard, "_MAX_LIFECYCLE_SCAN_REMOTE_READS", 8)
@@ -74,8 +81,12 @@ def test_mentioned_data_file_that_cannot_be_scanned_is_not_a_verdict(tmp_path, m
     try:
         for data in (minified, notes, db):
             command = f"cd {tmp_path} && python3 - <<'PY'\nt = open('{data}', encoding='utf-8').read()\nPY"
-            assert guard(command, cwd=str(tmp_path), read_remote_script=remote) is False, data.name
-        assert remote_misses  # the notes table was walked and its misses were bounded, not fatal
+            assert (
+                guard(command, cwd=str(tmp_path), read_remote_script=remote) is False
+            ), data.name
+        assert (
+            remote_misses
+        )  # the notes table was walked and its misses were bounded, not fatal
         unsafe, refusal = lifecycle_guard.scan_gateway_lifecycle(f"bash {minified}")
         assert unsafe is True and "budget" in refusal
         unsafe, refusal = lifecycle_guard.scan_gateway_lifecycle(f"bash {db}")
@@ -92,7 +103,10 @@ def test_mentioned_script_with_lifecycle_command_still_blocks(tmp_path):
     script = tmp_path / "restart.sh"
     script.write_text("#!/bin/sh\nclawk gateway restart\n", encoding="utf-8")
     command = f"cd {tmp_path} && python3 - <<'PY'\nimport os\nos.system('{script}')\nPY"
-    assert lifecycle_guard.scan_gateway_lifecycle(command, cwd=str(tmp_path)) == (True, None)
+    assert lifecycle_guard.scan_gateway_lifecycle(command, cwd=str(tmp_path)) == (
+        True,
+        None,
+    )
 
 
 @pytest.mark.parametrize("shape", ["oversized", "sqlite"])

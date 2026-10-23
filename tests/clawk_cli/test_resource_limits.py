@@ -76,9 +76,12 @@ def test_never_lowers_an_already_higher_soft_limit(monkeypatch):
     fake_resource = _FakeResource(soft=8192, hard=16384)
     monkeypatch.setattr(resource_limits, "_resource", fake_resource)
 
-    assert resource_limits.apply_nofile_soft_limit(
-        {"runtime": {"nofile_soft_limit": 4096}}
-    ) is False
+    assert (
+        resource_limits.apply_nofile_soft_limit(
+            {"runtime": {"nofile_soft_limit": 4096}}
+        )
+        is False
+    )
     assert fake_resource.set_calls == []
     assert fake_resource.limits == (8192, 16384)
 
@@ -88,9 +91,12 @@ def test_explicit_values_disable(monkeypatch, disabled):
     fake_resource = _FakeResource(soft=256, hard=4096)
     monkeypatch.setattr(resource_limits, "_resource", fake_resource)
 
-    assert resource_limits.apply_nofile_soft_limit(
-        {"runtime": {"nofile_soft_limit": disabled}}
-    ) is False
+    assert (
+        resource_limits.apply_nofile_soft_limit(
+            {"runtime": {"nofile_soft_limit": disabled}}
+        )
+        is False
+    )
     assert fake_resource.set_calls == []
 
 
@@ -135,9 +141,12 @@ def test_invalid_values_are_safe_noops(monkeypatch, invalid):
     fake_resource = _FakeResource(soft=256, hard=4096)
     monkeypatch.setattr(resource_limits, "_resource", fake_resource)
 
-    assert resource_limits.apply_nofile_soft_limit(
-        {"runtime": {"nofile_soft_limit": invalid}}
-    ) is False
+    assert (
+        resource_limits.apply_nofile_soft_limit(
+            {"runtime": {"nofile_soft_limit": invalid}}
+        )
+        is False
+    )
     assert fake_resource.set_calls == []
 
 
@@ -225,7 +234,9 @@ def test_serve_startup_applies_limit_before_web_server(monkeypatch):
     monkeypatch.setattr(cli_main, "_sync_bundled_skills_quietly", lambda: None)
     monkeypatch.setattr(cli_main, "_build_web_ui", lambda *args, **kwargs: True)
     monkeypatch.setattr(main_web_build, "_build_web_ui", lambda *args, **kwargs: True)
-    monkeypatch.setattr(cli_main, "_maybe_setup_dashboard_auth_interactively", lambda args: None)
+    monkeypatch.setattr(
+        cli_main, "_maybe_setup_dashboard_auth_interactively", lambda args: None
+    )
     monkeypatch.setattr(clawk_cli.plugins, "discover_plugins", lambda: None)
     served: dict = {}
     monkeypatch.setattr(
@@ -338,7 +349,9 @@ def test_dashboard_lifecycle_flags_skip_limit_adjustment(monkeypatch, lifecycle_
     )
     monkeypatch.setattr(dashboard_procs, "_scan_dashboard_processes", list)
     monkeypatch.setattr(cli_main, "_find_stale_dashboard_pids", lambda **_: [])
-    monkeypatch.setattr(clawk_cli_main_dashboard, "_find_stale_dashboard_pids", lambda **_: [])
+    monkeypatch.setattr(
+        clawk_cli_main_dashboard, "_find_stale_dashboard_pids", lambda **_: []
+    )
 
     args = SimpleNamespace(
         status=lifecycle_flag == "status",

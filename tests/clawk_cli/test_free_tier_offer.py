@@ -37,7 +37,9 @@ def _take_due_offer(clock: _Clock) -> None:
     assert free_tier_offer.claim_offer() is True
 
 
-def test_first_offer_is_due_after_the_delay_from_the_first_task_and_later_tasks_do_not_move_it(clock):
+def test_first_offer_is_due_after_the_delay_from_the_first_task_and_later_tasks_do_not_move_it(
+    clock,
+):
     assert free_tier_offer.offer_due_in() is None
     free_tier_offer.record_task_done()
     assert free_tier_offer.offer_due_in() == DELAY
@@ -64,11 +66,20 @@ def test_no_reoffer_without_a_task_finished_after_the_offer(clock):
     assert free_tier_offer.claim_offer() is False
 
 
-@pytest.mark.parametrize("task_after_offer_s,due_in", [
-    (60, BACKOFF[0] - 60),  # a task soon after the offer: the back-off decides
-    (BACKOFF[0], DELAY),    # a task after the back-off ran out: the delay after that task decides
-], ids=["back-off-bound", "task-bound"])
-def test_reoffer_is_the_later_of_task_plus_delay_and_offer_plus_back_off(clock, task_after_offer_s, due_in):
+@pytest.mark.parametrize(
+    "task_after_offer_s,due_in",
+    [
+        (60, BACKOFF[0] - 60),  # a task soon after the offer: the back-off decides
+        (
+            BACKOFF[0],
+            DELAY,
+        ),  # a task after the back-off ran out: the delay after that task decides
+    ],
+    ids=["back-off-bound", "task-bound"],
+)
+def test_reoffer_is_the_later_of_task_plus_delay_and_offer_plus_back_off(
+    clock, task_after_offer_s, due_in
+):
     free_tier_offer.record_task_done()
     _take_due_offer(clock)
     clock.now += task_after_offer_s
@@ -90,7 +101,10 @@ def test_concurrent_claims_grant_exactly_one(clock):
     free_tier_offer.record_task_done()
     clock.now += DELAY
     results: list[bool] = []
-    threads = [threading.Thread(target=lambda: results.append(free_tier_offer.claim_offer())) for _ in range(8)]
+    threads = [
+        threading.Thread(target=lambda: results.append(free_tier_offer.claim_offer()))
+        for _ in range(8)
+    ]
     for t in threads:
         t.start()
     for t in threads:
@@ -113,15 +127,20 @@ def test_never_offered_off_the_free_tier(clock, monkeypatch):
     assert free_tier_offer.claim_offer() is False
 
 
-@pytest.mark.parametrize("guest,connected,trial,allowed,offered", [
-    (True, True, False, True, True),     # a guest on its own key that connected an app
-    (True, False, False, True, False),   # a guest that connected nothing
-    (True, True, True, True, False),     # the trial makes its own offer
-    (False, True, False, True, False),   # signed in: no guest, no offer
-    (True, True, False, False, False),   # nous.guest: false, the guest left on disk
-], ids=["connector-guest", "nothing-connected", "on-trial", "signed-in", "guests-off"])
+@pytest.mark.parametrize(
+    "guest,connected,trial,allowed,offered",
+    [
+        (True, True, False, True, True),  # a guest on its own key that connected an app
+        (True, False, False, True, False),  # a guest that connected nothing
+        (True, True, True, True, False),  # the trial makes its own offer
+        (False, True, False, True, False),  # signed in: no guest, no offer
+        (True, True, False, False, False),  # nous.guest: false, the guest left on disk
+    ],
+    ids=["connector-guest", "nothing-connected", "on-trial", "signed-in", "guests-off"],
+)
 def test_connector_offer_is_only_for_a_guest_that_connected_an_app_without_the_trial(
-        clock, monkeypatch, guest, connected, trial, allowed, offered):
+    clock, monkeypatch, guest, connected, trial, allowed, offered
+):
     state = {"auth_method": anon_auth.ANON_AUTH_METHOD if guest else "device_code"}
     if connected:
         state[free_tier_offer.CONNECTED_APP_FLAG] = True
@@ -129,5 +148,7 @@ def test_connector_offer_is_only_for_a_guest_that_connected_an_app_without_the_t
     monkeypatch.setattr(anon_auth, "free_inference_active", lambda state=None: trial)
     monkeypatch.setattr(anon_auth, "guest_allowed", lambda: allowed)
     free_tier_offer.record_task_done(free_tier_offer.CONNECTOR)
-    assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) == (DELAY if offered else None)
+    assert free_tier_offer.offer_due_in(free_tier_offer.CONNECTOR) == (
+        DELAY if offered else None
+    )
     assert free_tier_offer.offer_due_in() is None  # the trial's record is its own

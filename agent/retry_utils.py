@@ -66,17 +66,24 @@ def parse_retry_after_seconds(value_or_headers: Any) -> Optional[float]:
 
 # Free-text "reset" grammars providers put in error bodies, tried in order. One table so the
 # conversation loop's error context and the credential pool's cooldown agree on the same wait.
-_QUOTA_RESET_DELAY_RE = re.compile(r"quotaResetDelay[:\s\"]+(\d+(?:\.\d+)?)(ms|s)", re.IGNORECASE)
+_QUOTA_RESET_DELAY_RE = re.compile(
+    r"quotaResetDelay[:\s\"]+(\d+(?:\.\d+)?)(ms|s)", re.IGNORECASE
+)
 # "Resets in 4hr 5min" (weekly usage limits), "resets in 2 hours 5 minutes", "resets in 30s".
 _RESETS_IN_RE = re.compile(
     r"resets?\s+in\s+"
     r"(?:(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b\s*)?"
     r"(?:(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)\b\s*)?"
-    r"(?:(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b)?", re.IGNORECASE,
+    r"(?:(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b)?",
+    re.IGNORECASE,
 )
-_RETRY_AFTER_SECONDS_RE = re.compile(r"retry\s+(?:after\s+)?(\d+(?:\.\d+)?)\s*(?:sec|secs|seconds|s\b)", re.IGNORECASE)
+_RETRY_AFTER_SECONDS_RE = re.compile(
+    r"retry\s+(?:after\s+)?(\d+(?:\.\d+)?)\s*(?:sec|secs|seconds|s\b)", re.IGNORECASE
+)
 # The plan usage-limit body field as it appears once stringified: ``'resets_in_seconds': 30995``.
-_RESETS_IN_SECONDS_FIELD_RE = re.compile(r"resets_in_seconds\W{1,4}(\d+(?:\.\d+)?)", re.IGNORECASE)
+_RESETS_IN_SECONDS_FIELD_RE = re.compile(
+    r"resets_in_seconds\W{1,4}(\d+(?:\.\d+)?)", re.IGNORECASE
+)
 
 
 def _quota_reset_seconds(m: re.Match[str]) -> float:
@@ -87,7 +94,11 @@ def _quota_reset_seconds(m: re.Match[str]) -> float:
 def _resets_in_seconds(m: re.Match[str]) -> Optional[float]:
     if not any(m.groups()):  # "resets in" with no unit-bearing number: not this grammar
         return None
-    return float(m.group(1) or 0) * 3600 + float(m.group(2) or 0) * 60 + float(m.group(3) or 0)
+    return (
+        float(m.group(1) or 0) * 3600
+        + float(m.group(2) or 0) * 60
+        + float(m.group(3) or 0)
+    )
 
 
 # An explicit "retry after N s" wins over "resets in ..." (the credential pool's precedence):
@@ -104,7 +115,9 @@ RETRY_DELAY_PATTERNS = (
 def format_reset_window(seconds: float) -> str:
     """``~9h`` / ``~45 min`` for chat copy naming when a quota window reopens (ceilinged)."""
     seconds = int(seconds)
-    return f"~{-(-seconds // 3600)}h" if seconds >= 3600 else f"~{-(-seconds // 60)} min"
+    return (
+        f"~{-(-seconds // 3600)}h" if seconds >= 3600 else f"~{-(-seconds // 60)} min"
+    )
 
 
 def reset_delay_from_message(message: str) -> Optional[float]:
@@ -118,7 +131,13 @@ def reset_delay_from_message(message: str) -> Optional[float]:
     return None
 
 
-def jittered_backoff(attempt: int, *, base_delay: float = 5.0, max_delay: float = 120.0, jitter_ratio: float = 0.5) -> float:
+def jittered_backoff(
+    attempt: int,
+    *,
+    base_delay: float = 5.0,
+    max_delay: float = 120.0,
+    jitter_ratio: float = 0.5,
+) -> float:
     """min(base * 2^(attempt-1), max_delay) + uniform jitter in
     [0, jitter_ratio * delay]. ``attempt`` is 1-based."""
     global _jitter_counter
@@ -127,7 +146,11 @@ def jittered_backoff(attempt: int, *, base_delay: float = 5.0, max_delay: float 
         tick = _jitter_counter
 
     exponent = max(0, attempt - 1)
-    delay = max_delay if (exponent >= 63 or base_delay <= 0) else min(base_delay * (2 ** exponent), max_delay)
+    delay = (
+        max_delay
+        if (exponent >= 63 or base_delay <= 0)
+        else min(base_delay * (2**exponent), max_delay)
+    )
 
     # Seed from time + counter so coarse clocks still decorrelate.
     seed = (time.time_ns() ^ (tick * 0x9E3779B9)) & 0xFFFFFFFF
@@ -136,11 +159,18 @@ def jittered_backoff(attempt: int, *, base_delay: float = 5.0, max_delay: float 
 
 def _error_text(error: Any) -> str:
     """Best-effort flattened provider error text for retry classification."""
-    parts = [error, getattr(error, "message", None), getattr(error, "body", None), getattr(error, "response", None)]
+    parts = [
+        error,
+        getattr(error, "message", None),
+        getattr(error, "body", None),
+        getattr(error, "response", None),
+    ]
     return " ".join(str(part) for part in parts if part is not None).lower()
 
 
-def is_zai_coding_overload_error(*, base_url: str | None, model: str | None, error: Any) -> bool:
+def is_zai_coding_overload_error(
+    *, base_url: str | None, model: str | None, error: Any
+) -> bool:
     """True only for the narrow Z.AI Coding Plan overload shape (429 + code
     1305 / "temporarily overloaded"), so ordinary quota 429s still fail fast."""
     text = _error_text(error)
@@ -153,7 +183,12 @@ def is_zai_coding_overload_error(*, base_url: str | None, model: str | None, err
 
 
 def adaptive_rate_limit_backoff(
-    attempt: int, *, base_url: str | None, model: str | None, error: Any, default_wait: float,
+    attempt: int,
+    *,
+    base_url: str | None,
+    model: str | None,
+    error: Any,
+    default_wait: float,
     short_attempts: int = _ZAI_CODING_OVERLOAD_SHORT_ATTEMPTS,
 ) -> tuple[float, str | None]:
     """``(wait_seconds, reason_label)``: ``default_wait`` for most providers; Z.AI Coding GLM-5.2 overloads keep
@@ -164,10 +199,14 @@ def adaptive_rate_limit_backoff(
         return default_wait, "zai_coding_overload_short"
     idx = min(attempt - short_attempts - 1, len(_ZAI_CODING_OVERLOAD_LONG_BACKOFF) - 1)
     base_delay = _ZAI_CODING_OVERLOAD_LONG_BACKOFF[idx]
-    return jittered_backoff(1, base_delay=base_delay, max_delay=base_delay, jitter_ratio=0.2), "zai_coding_overload_long"
+    return jittered_backoff(
+        1, base_delay=base_delay, max_delay=base_delay, jitter_ratio=0.2
+    ), "zai_coding_overload_long"
 
 
-def zai_coding_overload_retry_ceiling(short_attempts: int = _ZAI_CODING_OVERLOAD_SHORT_ATTEMPTS) -> int:
+def zai_coding_overload_retry_ceiling(
+    short_attempts: int = _ZAI_CODING_OVERLOAD_SHORT_ATTEMPTS,
+) -> int:
     """Retry-loop ceiling for the full Z.AI overload schedule: one past the last long entry,
     because the loop gives up when ``retry_count >= ceiling`` BEFORE computing the attempt's
     backoff (the default ``api_max_retries`` of 3 equals ``short_attempts``)."""
@@ -186,10 +225,14 @@ def provider_retry_after_seconds(error: Any) -> Optional[float]:
     """Provider-declared cooldown: the ``Retry-After`` header, else a ``retry_after`` body field
     (top level or nested under ``error``). None when absent, unparseable or zero: a zero or expired
     cooldown carries no usable wait, and treating it as one would hot-loop the provider."""
-    value = parse_retry_after_seconds(getattr(getattr(error, "response", None), "headers", None))
+    value = parse_retry_after_seconds(
+        getattr(getattr(error, "response", None), "headers", None)
+    )
     if value is None:
         body = getattr(error, "body", None)
         if isinstance(body, dict):
             nested = body.get("error")
-            value = parse_retry_after_seconds((nested if isinstance(nested, dict) else body).get("retry_after"))
+            value = parse_retry_after_seconds(
+                (nested if isinstance(nested, dict) else body).get("retry_after")
+            )
     return value if value is not None and value > 0 else None

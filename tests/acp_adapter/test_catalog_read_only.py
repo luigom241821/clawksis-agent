@@ -1,4 +1,5 @@
 """Browsing ACP history is not an execution/storage owner."""
+
 import sqlite3
 
 from acp_adapter.session import SessionManager
@@ -17,7 +18,12 @@ def test_catalog_reads_committed_history_without_schema_writes(tmp_path, monkeyp
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     path = tmp_path / "state.db"
     with SessionDB(path) as db:
-        db.create_session(session_id="catalog", source="acp", model="fixture", model_config={"cwd": str(tmp_path)})
+        db.create_session(
+            session_id="catalog",
+            source="acp",
+            model="fixture",
+            model_config={"cwd": str(tmp_path)},
+        )
         db.append_message("catalog", "user", "catalog input")
     with sqlite3.connect(path) as conn:
         conn.execute("PRAGMA journal_mode=DELETE")

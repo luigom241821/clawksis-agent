@@ -23,8 +23,10 @@ def test_agent_cbs_includes_interim_callback_when_enabled():
     def fake_emit(event_type, sid, payload=None):
         emitted.append((event_type, sid, payload))
 
-    with patch("tui_gateway.server._load_cfg", return_value={}), \
-         patch("tui_gateway.server._emit", side_effect=fake_emit):
+    with (
+        patch("tui_gateway.server._load_cfg", return_value={}),
+        patch("tui_gateway.server._emit", side_effect=fake_emit),
+    ):
         cbs = _agent_cbs("test-session")
 
         assert "interim_assistant_callback" in cbs

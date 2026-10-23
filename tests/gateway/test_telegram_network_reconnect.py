@@ -20,9 +20,13 @@ from gateway.run import GatewayRunner
 @pytest.fixture(autouse=True)
 def _no_auto_discovery(monkeypatch):
     """Disable DoH auto-discovery so connect() uses the plain builder chain."""
+
     async def _noop():
         return []
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.discover_fallback_ips", _noop)
+
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.discover_fallback_ips", _noop
+    )
 
 
 def _make_adapter() -> TelegramAdapter:
@@ -86,9 +90,7 @@ async def test_retry_exhaustion_queues_reconnect_before_child_disconnect(tmp_pat
     handler never gets to queue background reconnection.
     """
     config = GatewayConfig(
-        platforms={
-            Platform.TELEGRAM: PlatformConfig(enabled=True, token="test-token")
-        },
+        platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="test-token")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
@@ -113,6 +115,7 @@ async def test_retry_exhaustion_queues_reconnect_before_child_disconnect(tmp_pat
 # ---------------------------------------------------------------------------
 # Connection pool drain tests (PR #16466 salvage)
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_app():
     """Build a mock Application with an explicit polling request object."""
@@ -254,10 +257,7 @@ async def test_reconnect_continues_if_drain_hangs(monkeypatch):
     assert adapter._polling_network_error_count == 2
     # The tracked task must not be stuck pending — otherwise every
     # escalation path stays gated behind an in-flight guard.
-    assert (
-        adapter._polling_error_task is None
-        or adapter._polling_error_task.done()
-    )
+    assert adapter._polling_error_task is None or adapter._polling_error_task.done()
 
 
 @pytest.mark.asyncio
@@ -444,14 +444,14 @@ async def test_conflict_retry_also_drains_polling_connections():
     adapter._app = mock_app
 
     with patch("asyncio.sleep", new_callable=AsyncMock):
-        await adapter._handle_polling_conflict(Exception("Conflict: terminated by other getUpdates"))
+        await adapter._handle_polling_conflict(
+            Exception("Conflict: terminated by other getUpdates")
+        )
 
     # Polling request must be drained during conflict retry too
     mock_polling_req.shutdown.assert_called_once()
     mock_polling_req.initialize.assert_called_once()
     mock_app.updater.start_polling.assert_called_once()
-
-
 
 
 # ── Heartbeat probe ──────────────────────────────────────────────────────
@@ -632,7 +632,10 @@ async def test_heartbeat_loop_skips_reconnect_if_already_in_progress():
         raise TimeoutError()
 
     with patch("asyncio.sleep", side_effect=fast_sleep):
-        with patch("plugins.platforms.telegram.adapter.asyncio.wait_for", side_effect=timeout_wait_for):
+        with patch(
+            "plugins.platforms.telegram.adapter.asyncio.wait_for",
+            side_effect=timeout_wait_for,
+        ):
             await adapter._polling_heartbeat_loop()
 
     # _handle_polling_network_error must NOT have been called — existing task still running.
@@ -842,9 +845,13 @@ class TestIterExceptionGraph:
 
     def test_diamond_no_duplicates(self):
         root = ValueError("root")
-        left = RuntimeError("left"); left.__cause__ = root
-        right = TypeError("right"); right.__cause__ = root
-        top = Exception("top"); top.__cause__ = left; top.__context__ = right
+        left = RuntimeError("left")
+        left.__cause__ = root
+        right = TypeError("right")
+        right.__cause__ = root
+        top = Exception("top")
+        top.__cause__ = left
+        top.__context__ = right
         seen = list(tg_adapter._iter_exception_graph(top))
         assert seen.count(root) == 1
 
@@ -868,54 +875,70 @@ class TestPoolTimeoutClassifier:
     def test_httpx_pooltimeout_class_name(self):
         class FakePoolTimeout(Exception):
             pass
+
         err = Exception("Timed out")
         err.__cause__ = FakePoolTimeout("x")
         assert TelegramAdapter._looks_like_pool_timeout(err) is True
 
     def test_generic_timeout_negative(self):
         assert TelegramAdapter._looks_like_pool_timeout(Exception("Timed out")) is False
-        assert TelegramAdapter._looks_like_pool_timeout(Exception("Bad Gateway")) is False
+        assert (
+            TelegramAdapter._looks_like_pool_timeout(Exception("Bad Gateway")) is False
+        )
 
     def test_occupied_connection_pool_substring(self):
         # Both substrings present -> match even without "pool timeout" phrasing.
-        assert TelegramAdapter._looks_like_pool_timeout(
-            Exception("All connections in the connection pool are occupied")
-        ) is True
+        assert (
+            TelegramAdapter._looks_like_pool_timeout(
+                Exception("All connections in the connection pool are occupied")
+            )
+            is True
+        )
         # "occupied" alone (no "connection pool") must not match.
-        assert TelegramAdapter._looks_like_pool_timeout(
-            Exception("seat was occupied")
-        ) is False
+        assert (
+            TelegramAdapter._looks_like_pool_timeout(Exception("seat was occupied"))
+            is False
+        )
         # "connection pool" alone (no "occupied") must not match.
-        assert TelegramAdapter._looks_like_pool_timeout(
-            Exception("connection pool sizing")
-        ) is False
+        assert (
+            TelegramAdapter._looks_like_pool_timeout(
+                Exception("connection pool sizing")
+            )
+            is False
+        )
 
 
 class TestConnectTimeoutClassifier:
     def test_class_name_match(self):
         class FakeConnectTimeout(Exception):
             pass
-        assert TelegramAdapter._looks_like_connect_timeout(FakeConnectTimeout("x")) is True
+
+        assert (
+            TelegramAdapter._looks_like_connect_timeout(FakeConnectTimeout("x")) is True
+        )
 
     def test_message_match(self):
-        assert TelegramAdapter._looks_like_connect_timeout(
-            Exception("connect timeout")
-        ) is True
-        assert TelegramAdapter._looks_like_connect_timeout(
-            Exception("connect timed out")
-        ) is True
+        assert (
+            TelegramAdapter._looks_like_connect_timeout(Exception("connect timeout"))
+            is True
+        )
+        assert (
+            TelegramAdapter._looks_like_connect_timeout(Exception("connect timed out"))
+            is True
+        )
 
     def test_wrapped_in_cause(self):
         class FakeConnectTimeout(Exception):
             pass
+
         err = Exception("Timed out")
         err.__cause__ = FakeConnectTimeout("x")
         assert TelegramAdapter._looks_like_connect_timeout(err) is True
 
     def test_generic_negative(self):
-        assert TelegramAdapter._looks_like_connect_timeout(Exception("Timed out")) is False
-
-
+        assert (
+            TelegramAdapter._looks_like_connect_timeout(Exception("Timed out")) is False
+        )
 
 
 @pytest.mark.asyncio

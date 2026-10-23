@@ -44,19 +44,23 @@ def _make_agent(config_context_length=None):
     agent._primary_runtime = {}
     agent._create_openai_client = lambda *_args, **_kwargs: MagicMock()
     agent.context_compressor = ContextCompressor(
-        model="model-a", threshold_percent=0.50, base_url=OTHER_ROUTE,
-        api_key="sk-primary", provider="openrouter", quiet_mode=True,
+        model="model-a",
+        threshold_percent=0.50,
+        base_url=OTHER_ROUTE,
+        api_key="sk-primary",
+        provider="openrouter",
+        quiet_mode=True,
     )
     return agent
 
 
 def _switch(agent, model, provider, base_url):
     """Switch and return the ``config_context_length`` the compressor resolution ran with."""
-    with patch("agent.model_metadata.get_model_context_length", return_value=200_000) as ctx_len:
+    with patch(
+        "agent.model_metadata.get_model_context_length", return_value=200_000
+    ) as ctx_len:
         agent.switch_model(model, provider, api_key="sk-new", base_url=base_url)
     return ctx_len.call_args.kwargs.get("config_context_length")
-
-
 
 
 def test_switch_back_to_configured_default_route_restores_context_pin():
@@ -69,8 +73,12 @@ def test_switch_back_to_configured_default_route_restores_context_pin():
         patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("agent.model_metadata.get_model_context_length", return_value=1_000_000),
     ):
-        agent.switch_model("other-model", "openrouter", api_key="sk-new", base_url=OTHER_ROUTE)
-        assert agent._config_context_length is None  # pin does not describe the other route
+        agent.switch_model(
+            "other-model", "openrouter", api_key="sk-new", base_url=OTHER_ROUTE
+        )
+        assert (
+            agent._config_context_length is None
+        )  # pin does not describe the other route
         applied = _switch(agent, "model-b", "custom:acme", ROUTE)
 
     assert applied == PIN

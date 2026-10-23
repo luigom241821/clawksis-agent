@@ -22,10 +22,16 @@ logger = logging.getLogger(__name__)
 _GO_LIVE_LOCK = threading.Lock()
 
 # Hooks the gateway consults per inbound/outbound message: live as soon as the registry holds them.
-_GATEWAY_TRANSFORM_HOOKS = frozenset({
-    "transform_llm_output", "transform_tool_result", "transform_terminal_output", "pre_gateway_dispatch",
-    "gateway_platform_event", "pre_command",
-})
+_GATEWAY_TRANSFORM_HOOKS = frozenset(
+    {
+        "transform_llm_output",
+        "transform_tool_result",
+        "transform_terminal_output",
+        "pre_gateway_dispatch",
+        "gateway_platform_event",
+        "pre_command",
+    }
+)
 
 
 def plugin_activation_summary(manager: Any, plugin_key: str) -> dict[str, Any]:
@@ -41,7 +47,11 @@ def plugin_activation_summary(manager: Any, plugin_key: str) -> dict[str, Any]:
     loaded = manager._plugins.get(plugin_key)
     manifest = getattr(loaded, "manifest", None)
     name = getattr(manifest, "name", None) or plugin_key
-    regs = [r for r in manager._ownership_ledger.get(plugin_key, []) if getattr(r, "active", True)]
+    regs = [
+        r
+        for r in manager._ownership_ledger.get(plugin_key, [])
+        if getattr(r, "active", True)
+    ]
     kinds: dict[str, list[str]] = {}
     for reg in regs:
         kinds.setdefault(reg.kind, []).append(str(reg.key))
@@ -53,22 +63,36 @@ def plugin_activation_summary(manager: Any, plugin_key: str) -> dict[str, Any]:
         now["gateway_transforms"] = sorted(hooks & _GATEWAY_TRANSFORM_HOOKS)
     if hooks - _GATEWAY_TRANSFORM_HOOKS:
         now["hooks"] = sorted(hooks - _GATEWAY_TRANSFORM_HOOKS)
-    callbacks = sorted(platform for platform, factories in manager._platform_handler_factories.items()
-                       if any(plugin == name for _f, plugin in factories))
+    callbacks = sorted(
+        platform
+        for platform, factories in manager._platform_handler_factories.items()
+        if any(plugin == name for _f, plugin in factories)
+    )
     callbacks += [f"slack:{a}" for a in kinds.get("slack_action_handler", ())]
     if callbacks:
         now["callbacks"] = callbacks
-    if kinds.get("locale"):  # language-pack layers: the i18n caches reset on registration, so live at once
+    if kinds.get(
+        "locale"
+    ):  # language-pack layers: the i18n caches reset on registration, so live at once
         now["locales"] = sorted(kinds["locale"])
     deferred: dict[str, list[str]] = {}
-    tools = sorted(set(kinds.get("tool", ())) | set(getattr(loaded, "tools_registered", None) or ())
-                   | set(getattr(manifest, "provides_tools", None) or ()))
+    tools = sorted(
+        set(kinds.get("tool", ()))
+        | set(getattr(loaded, "tools_registered", None) or ())
+        | set(getattr(manifest, "provides_tools", None) or ())
+    )
     if tools:
         deferred["tools"] = tools
     if kinds.get("system_prompt_section"):
         deferred["prompt"] = sorted(kinds["system_prompt_section"])
-    servers = sorted(set(kinds.get("portable_mcp", ())) | {
-        s for s, owner in manager._portable_mcp_server_plugins.items() if owner == plugin_key})
+    servers = sorted(
+        set(kinds.get("portable_mcp", ()))
+        | {
+            s
+            for s, owner in manager._portable_mcp_server_plugins.items()
+            if owner == plugin_key
+        }
+    )
     if servers:
         deferred["mcp_servers"] = servers
     return {"name": name, "key": plugin_key, "activated_now": now, "deferred": deferred}
@@ -84,7 +108,9 @@ def activation_summaries(manager: Any) -> list[dict[str, Any]]:
     return out
 
 
-def find_activation(summaries: Optional[list[dict[str, Any]]], name: str) -> Optional[dict[str, Any]]:
+def find_activation(
+    summaries: Optional[list[dict[str, Any]]], name: str
+) -> Optional[dict[str, Any]]:
     """The summary for ``name`` (manifest name, canonical key, or bare leaf of the key)."""
     for entry in summaries or ():
         key = str(entry.get("key") or "")
@@ -106,14 +132,23 @@ def activate_plugin_now(name: str, *, in_process: bool = True) -> dict[str, Any]
     for the next session. ``restart_required`` is True only when no gateway answered (old gateway, not
     running)."""
     from clawk_constants import get_clawk_home
-    activation: Optional[dict[str, Any]] = load_and_go_live(name) if in_process else None
+
+    activation: Optional[dict[str, Any]] = (
+        load_and_go_live(name) if in_process else None
+    )
     if not in_process:
-        activation = (notify_serve_backend(name, Path(get_clawk_home())) or {}).get("activation")
+        activation = (notify_serve_backend(name, Path(get_clawk_home())) or {}).get(
+            "activation"
+        )
     answer = reload_running_gateway()
     reloaded = bool(answer and answer.get("reloaded"))
     if reloaded and activation is None:
         activation = find_activation((answer or {}).get("activations"), name)
-    return {"gateway_reloaded": reloaded, "activation": activation, "restart_required": not reloaded}
+    return {
+        "gateway_reloaded": reloaded,
+        "activation": activation,
+        "restart_required": not reloaded,
+    }
 
 
 def reload_running_gateway() -> Optional[dict[str, Any]]:
@@ -123,11 +158,14 @@ def reload_running_gateway() -> Optional[dict[str, Any]]:
     try:
         from gateway.control_socket import reload_gateway_plugins
         from clawk_constants import get_default_clawk_root, get_clawk_home
+
         home = Path(get_clawk_home())
         answer = reload_gateway_plugins(home)
         if answer is None:
             root = Path(get_default_clawk_root())
-            if root.resolve() != home.resolve():  # a served secondary: the multiplexer's socket
+            if (
+                root.resolve() != home.resolve()
+            ):  # a served secondary: the multiplexer's socket
                 answer = reload_gateway_plugins(root, profile_home=home)
         return answer
     except Exception:
@@ -140,14 +178,20 @@ def gateway_reload_hint(answer: Optional[dict[str, Any]], name: str) -> str:
     applies (an open session stops running its commands at once). Callbacks the plugin already
     wired into platform adapters outlive a reload (the plugin guide), so a restart still ends those."""
     if answer and answer.get("reloaded"):
-        return (f"The running gateway reloaded its plugins and unloaded {name}; platform hooks it already "
-                "wired up stay until a gateway restart (clawk gateway restart).")
+        return (
+            f"The running gateway reloaded its plugins and unloaded {name}; platform hooks it already "
+            "wired up stay until a gateway restart (clawk gateway restart)."
+        )
     if answer is not None:  # a gateway answered and refused: say so, with its reason
-        return (f"The running gateway refused to reload its plugins: {answer.get('error') or 'no reason given'}.\n"
-                "Only the saved config changed; restart the gateway serving this profile to apply it:\n"
-                "  clawk gateway restart")
-    return ("No running gateway answered. If one is running, restart it for this to take effect:\n"
-            "  clawk gateway restart")
+        return (
+            f"The running gateway refused to reload its plugins: {answer.get('error') or 'no reason given'}.\n"
+            "Only the saved config changed; restart the gateway serving this profile to apply it:\n"
+            "  clawk gateway restart"
+        )
+    return (
+        "No running gateway answered. If one is running, restart it for this to take effect:\n"
+        "  clawk gateway restart"
+    )
 
 
 def load_and_go_live(name: str) -> Optional[dict[str, Any]]:
@@ -164,9 +208,15 @@ def load_and_go_live(name: str) -> Optional[dict[str, Any]]:
 
 
 def _go_live(name: str) -> Optional[dict[str, Any]]:
-    from clawk_cli.plugins_activation_live import connect_plugin_mcp, live_notice, plugin_skills
+    from clawk_cli.plugins_activation_live import (
+        connect_plugin_mcp,
+        live_notice,
+        plugin_skills,
+    )
+
     try:
         from clawk_cli.plugins import _join_background_discovery, get_plugin_manager
+
         _join_background_discovery()
         manager = get_plugin_manager()
         # Other forced passes (a reload-plugins verb, the dashboard) do not take the go-live lock, so the
@@ -177,28 +227,41 @@ def _go_live(name: str) -> Optional[dict[str, Any]]:
             portable = manager.get_portable_mcp_servers()
             skills = plugin_skills(activation["key"]) if activation else []
     except Exception:
-        logger.debug("in-process plugin reload after change to %r failed", name, exc_info=True)
+        logger.debug(
+            "in-process plugin reload after change to %r failed", name, exc_info=True
+        )
         return None
     if activation is None:
         return None
     servers = connect_plugin_mcp(activation, portable)
     activation["live_now"] = {"mcp_servers": servers, "skills": skills}
-    activation["deferred"] = {k: v for k, v in (activation.get("deferred") or {}).items() if k != "mcp_servers"}
+    activation["deferred"] = {
+        k: v
+        for k, v in (activation.get("deferred") or {}).items()
+        if k != "mcp_servers"
+    }
     import sys
+
     server = sys.modules.get("tui_gateway.server")  # loaded == this process hosts chats
     note = live_notice(activation)
     if server is not None and (servers or note):
         from clawk_constants import get_clawk_home
+
         try:
-            server.refresh_plugin_sessions(Path(get_clawk_home()), activation["key"], note)
+            server.refresh_plugin_sessions(
+                Path(get_clawk_home()), activation["key"], note
+            )
         except Exception:
-            logger.warning("open chats were not refreshed after activating %r", name, exc_info=True)
+            logger.warning(
+                "open chats were not refreshed after activating %r", name, exc_info=True
+            )
     return activation
 
 
 def _serve_backend_record():
     """The host-owner record, else the Desktop child's (a Desktop-only box has no host owner)."""
     from gateway import host_rendezvous as hr
+
     for role in (hr.ROLE_SERVE, hr.ROLE_DESKTOP_SERVE):
         record = hr.read_record(role)
         if record is not None and record.port and hr.record_token_is_consistent(record):
@@ -214,6 +277,7 @@ def notify_serve_backend(name: str, home: Path) -> Optional[dict[str, Any]]:
         import urllib.request
         from gateway import host_rendezvous as hr
         from clawk_cli.url_utils import format_url_host
+
         record = _serve_backend_record()
         if record is None:
             return None
@@ -221,8 +285,13 @@ def notify_serve_backend(name: str, home: Path) -> Optional[dict[str, Any]]:
         request = urllib.request.Request(
             f"http://{format_url_host(hr.dial_host(record))}:{record.port}"
             "/api/dashboard/agent-plugins/activate",
-            data=json.dumps({"name": name, "home": str(home)}).encode("utf-8"), method="POST",
-            headers={"Content-Type": "application/json", "X-Clawksis-Session-Token": token})
+            data=json.dumps({"name": name, "home": str(home)}).encode("utf-8"),
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "X-Clawksis-Session-Token": token,
+            },
+        )
         with urllib.request.urlopen(request, timeout=60) as response:
             return json.loads(response.read().decode("utf-8"))
     except Exception:
@@ -236,9 +305,14 @@ def _gateway_present() -> bool:
     from gateway.status import get_running_pid
     from clawk_cli.gateway import _installed_service_kind
     from clawk_constants import get_default_clawk_root, get_clawk_home
+
     homes = {Path(get_clawk_home()).resolve(), Path(get_default_clawk_root()).resolve()}
-    return (any(get_running_pid(home / "gateway.pid", cleanup_stale=False) for home in homes)
-            or _installed_service_kind() is not None)
+    return (
+        any(
+            get_running_pid(home / "gateway.pid", cleanup_stale=False) for home in homes
+        )
+        or _installed_service_kind() is not None
+    )
 
 
 def report_activation(console, name: str) -> None:
@@ -257,23 +331,43 @@ def activation_hint(result: dict[str, Any]) -> str:
     lines = []
     if connected or live.get("skills"):
         tools = sum(len(s.get("tools") or ()) for s in connected)
-        lines.append(f"Live in open chats now: {tools} MCP tools, {len(live.get('skills') or ())} skills.")
-    lines.extend(f"MCP server {s['name']} not connected: {s.get('error') or 'unknown error'}"
-                 for s in live.get("mcp_servers") or () if not s.get("connected"))
+        lines.append(
+            f"Live in open chats now: {tools} MCP tools, {len(live.get('skills') or ())} skills."
+        )
+    lines.extend(
+        f"MCP server {s['name']} not connected: {s.get('error') or 'unknown error'}"
+        for s in live.get("mcp_servers") or ()
+        if not s.get("connected")
+    )
     if not result.get("gateway_reloaded"):
         # Live in open chats, or no gateway runs or is installed for this profile (first-time setup):
         # a messaging gateway that starts later loads it at boot, so a restart applies to nothing.
         if lines or not _gateway_present():
             return "\n".join(lines)
-        return "\n".join([*lines, "Restart the gateway for the plugin to take effect:\n  clawk gateway restart"])
+        return "\n".join(
+            [
+                *lines,
+                "Restart the gateway for the plugin to take effect:\n  clawk gateway restart",
+            ]
+        )
     now, deferred = act.get("activated_now") or {}, act.get("deferred") or {}
     parts = []
     if now:
         parts.append("active in the running gateway now: " + ", ".join(sorted(now)))
     if deferred:
-        labels: dict[str, str] = {"tools": "tools (next session)", "prompt": "system prompt (next session)",
-                                  "mcp_servers": "MCP servers (next session)"}
-        parts.append("deferred: " + ", ".join(labels.get(k, k) for k in sorted(deferred)))
+        labels: dict[str, str] = {
+            "tools": "tools (next session)",
+            "prompt": "system prompt (next session)",
+            "mcp_servers": "MCP servers (next session)",
+        }
+        parts.append(
+            "deferred: " + ", ".join(labels.get(k, k) for k in sorted(deferred))
+        )
     if not parts:
-        return "\n".join([*lines, "Gateway reloaded plugins; nothing of this plugin needs a session or restart."])
+        return "\n".join(
+            [
+                *lines,
+                "Gateway reloaded plugins; nothing of this plugin needs a session or restart.",
+            ]
+        )
     return "\n".join([*lines, "Gateway reloaded plugins — " + "; ".join(parts) + "."])

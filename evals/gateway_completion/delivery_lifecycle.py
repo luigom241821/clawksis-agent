@@ -28,11 +28,13 @@ async def main():
     sends = []
 
     async def agent_boundary(event, *args, **kwargs):
-        turns.append({
-            "text": event.text,
-            "internal": event.internal,
-            "chat": event.source.chat_id,
-        })
+        turns.append(
+            {
+                "text": event.text,
+                "internal": event.internal,
+                "chat": event.source.chat_id,
+            }
+        )
         return "FAKE_MODEL_BOUNDARY reached"
 
     async def send_boundary(chat_id, content, *args, **kwargs):
@@ -103,11 +105,13 @@ async def main():
     await asyncio.sleep(1)
     print(
         "WATCH_IDLE",
-        json.dumps({
-            "spawn": result,
-            "turns": turns,
-            "queue_types": [e["type"] for e in list(pr.completion_queue.queue)],
-        }),
+        json.dumps(
+            {
+                "spawn": result,
+                "turns": turns,
+                "queue_types": [e["type"] for e in list(pr.completion_queue.queue)],
+            }
+        ),
     )
     assert len(turns) == 1
     assert not any(e["type"] == "watch_match" for e in list(pr.completion_queue.queue))
@@ -120,14 +124,16 @@ async def main():
     sends.clear()
     # Raw legacy/restored watcher deliberately only sends a notice without a model turn.
     result = spawn("RAW_NOTICE")
-    await runner._run_process_watcher({
-        "session_id": result["session_id"],
-        "check_interval": 0.05,
-        "session_key": key,
-        "platform": "discord",
-        "chat_id": "123",
-        "notify_on_complete": False,
-    })
+    await runner._run_process_watcher(
+        {
+            "session_id": result["session_id"],
+            "check_interval": 0.05,
+            "session_key": key,
+            "platform": "discord",
+            "chat_id": "123",
+            "notify_on_complete": False,
+        }
+    )
     await settle()
     print(
         "RAW_NOTIFICATION_ONLY",
@@ -168,12 +174,14 @@ async def main():
     h, row = await dispatch_case(key)
     print(
         "ASYNC_DISCORD_IDLE",
-        json.dumps({
-            "handle": h,
-            "delivery_state": row["delivery_state"],
-            "attempts": row["delivery_attempts"],
-            "turns": turns,
-        }),
+        json.dumps(
+            {
+                "handle": h,
+                "delivery_state": row["delivery_state"],
+                "attempts": row["delivery_attempts"],
+                "turns": turns,
+            }
+        ),
     )
     assert len(turns) == 1 and row["delivery_state"] == "delivered"
     turns.clear()
@@ -181,13 +189,15 @@ async def main():
     h, row = await dispatch_case("raw_session_without_api_adapter")
     print(
         "ASYNC_RAW_NO_TRANSPORT",
-        json.dumps({
-            "handle": h,
-            "delivery_state": row["delivery_state"],
-            "attempts": row["delivery_attempts"],
-            "queue_size": pr.completion_queue.qsize(),
-            "turns": turns,
-        }),
+        json.dumps(
+            {
+                "handle": h,
+                "delivery_state": row["delivery_state"],
+                "attempts": row["delivery_attempts"],
+                "queue_size": pr.completion_queue.qsize(),
+                "turns": turns,
+            }
+        ),
     )
     assert (
         not turns

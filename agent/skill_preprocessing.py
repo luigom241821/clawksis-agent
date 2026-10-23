@@ -25,6 +25,7 @@ def load_skills_config() -> dict:
     """Load the ``skills`` section of config.yaml (best-effort)."""
     try:
         from clawk_cli.config import load_config_readonly
+
         skills_cfg = (load_config_readonly() or {}).get("skills")
         if isinstance(skills_cfg, dict):
             return skills_cfg
@@ -33,7 +34,9 @@ def load_skills_config() -> dict:
     return {}
 
 
-def substitute_template_vars(content: str, skill_dir: Path | None, session_id: str | None) -> str:
+def substitute_template_vars(
+    content: str, skill_dir: Path | None, session_id: str | None
+) -> str:
     """Replace ${CLAWK_SKILL_DIR} / ${CLAWK_SESSION_ID}; tokens without a value stay in place."""
     if not content:
         return content
@@ -50,18 +53,22 @@ def run_inline_shell(command: str, cwd: Path | None, timeout: int) -> str:
     of raising, so one bad snippet can't wreck the whole skill message."""
     _popen_kwargs = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {}
     from agent.delegation_context import delegated_child_subprocess_env
+
     try:
         bash = "bash"
         if IS_WINDOWS:
             # CreateProcess searches System32 before PATH and may pick WSL's
             # launcher. Reuse the terminal's native Git Bash resolution.
             from tools.environments.local import _find_bash
+
             bash = _find_bash()
         completed = subprocess.run(
             [bash, "-c", command],
             cwd=str(cwd) if cwd else None,
             capture_output=True,
-            text=True, encoding='utf-8', errors='replace',
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=max(1, int(timeout)),
             check=False,
             stdin=subprocess.DEVNULL,
@@ -75,10 +82,14 @@ def run_inline_shell(command: str, cwd: Path | None, timeout: int) -> str:
     except Exception as exc:
         # tests/conftest.py's live-system guard may block the os.kill that
         # subprocess.run uses to clean up a timed-out shell; report the timeout.
-        if isinstance(exc, RuntimeError) and "live-system guard: blocked os.kill" in str(exc):
+        if isinstance(
+            exc, RuntimeError
+        ) and "live-system guard: blocked os.kill" in str(exc):
             return f"[inline-shell timeout after {timeout}s: {command}]"
         return f"[inline-shell error: {exc}]"
-    output = (completed.stdout or "").rstrip("\n") or (completed.stderr or "").rstrip("\n")
+    output = (completed.stdout or "").rstrip("\n") or (completed.stderr or "").rstrip(
+        "\n"
+    )
     if completed.returncode != 0 and not output:
         # rc!=0 with no output at all is indistinguishable from a legit empty result; it is the
         # "interpreter never ran the command" signature (WSL stub without a distro) — say so.
@@ -90,9 +101,11 @@ def expand_inline_shell(content: str, skill_dir: Path | None, timeout: int) -> s
     """Replace every !`cmd` snippet with its stdout, run with the skill dir as CWD."""
     if "!`" not in content:
         return content
+
     def _replace(match: re.Match) -> str:
         cmd = match.group(1).strip()
         return run_inline_shell(cmd, skill_dir, timeout) if cmd else ""
+
     return _INLINE_SHELL_RE.sub(_replace, content)
 
 
@@ -124,18 +137,31 @@ def _is_community_hub_skill(skill_dir: Path | None) -> bool:
             if not (target.is_relative_to(root) and lock_path.is_file()):
                 continue
             try:
-                installed = json.loads(lock_path.read_text(encoding="utf-8-sig"))["installed"]
+                installed = json.loads(lock_path.read_text(encoding="utf-8-sig"))[
+                    "installed"
+                ]
                 entries = [e for e in installed.values() if isinstance(e, dict)]
             except (OSError, ValueError, KeyError, TypeError, AttributeError):
-                logger.debug("Unreadable hub lock %s; inline shell stays off for its tree", lock_path, exc_info=True)
+                logger.debug(
+                    "Unreadable hub lock %s; inline shell stays off for its tree",
+                    lock_path,
+                    exc_info=True,
+                )
                 return True
             for entry in entries:
                 rel = str(entry.get("install_path") or "")
-                if entry.get("trust_level") == "community" and rel and target.is_relative_to((root / rel).resolve()):
+                if (
+                    entry.get("trust_level") == "community"
+                    and rel
+                    and target.is_relative_to((root / rel).resolve())
+                ):
                     return True
         return False
     except Exception:
-        logger.debug("Could not resolve hub provenance for inline-shell trust scoping", exc_info=True)
+        logger.debug(
+            "Could not resolve hub provenance for inline-shell trust scoping",
+            exc_info=True,
+        )
         return True
 
 
@@ -152,5 +178,7 @@ def preprocess_skill_content(
     if cfg.get("template_vars", True):
         content = substitute_template_vars(content, skill_dir, session_id)
     if cfg.get("inline_shell", False) and not _is_community_hub_skill(skill_dir):
-        content = expand_inline_shell(content, skill_dir, int(cfg.get("inline_shell_timeout", 10) or 10))
+        content = expand_inline_shell(
+            content, skill_dir, int(cfg.get("inline_shell_timeout", 10) or 10)
+        )
     return content

@@ -49,11 +49,14 @@ class BackendIdentity:
 
     @classmethod
     def build(
-        cls, provider: Optional[str] = None, model: Optional[str] = None,
+        cls,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
         base_url: Optional[str] = None,
     ) -> BackendIdentity:
         return cls(
-            provider=_norm(provider), model=_norm(model),
+            provider=_norm(provider),
+            model=_norm(model),
             base_url=normalize_route_base_url(base_url),
         )
 
@@ -119,13 +122,16 @@ def same_deployment(a: BackendIdentity, b: BackendIdentity) -> bool:
 
 
 _SCOPE_PREDICATES = {
-    FailureScope.CREDENTIAL: same_credential_surface, FailureScope.ENDPOINT: same_endpoint,
+    FailureScope.CREDENTIAL: same_credential_surface,
+    FailureScope.ENDPOINT: same_endpoint,
     FailureScope.MODEL: same_deployment,
 }
 
 
 def should_skip_candidate(
-    candidate: BackendIdentity, failed: BackendIdentity, scope: FailureScope = FailureScope.MODEL
+    candidate: BackendIdentity,
+    failed: BackendIdentity,
+    scope: FailureScope = FailureScope.MODEL,
 ) -> bool:
     """THE skip predicate: would trying ``candidate`` just repeat the failure?
     True when it is the same backend as ``failed`` along the axis ``scope`` invalidated.

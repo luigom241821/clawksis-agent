@@ -5,6 +5,7 @@ Drives the pure functions directly (no AIAgent):
   2. estimate_messages_tokens_rough (memoized) vs a reference reimplementation
   3. _flush_messages_to_session_db bounded scan — simulated via a stub agent
 """
+
 import copy
 import json
 import random
@@ -20,26 +21,55 @@ def build_history(n):
     msgs = []
     i = 0
     while len(msgs) < n:
-        msgs.append({"role": "user", "content": f"question {i} {UNI} " + "x" * _rng.randint(10, 400)})
+        msgs.append(
+            {
+                "role": "user",
+                "content": f"question {i} {UNI} " + "x" * _rng.randint(10, 400),
+            }
+        )
         if i % 3 == 0:
             args = json.dumps({"q": f"val {i}", "u": UNI, "n": i})
             if i % 9 == 0:
                 args = '{"broken": tru'  # malformed
             elif i % 6 == 0:
                 args = ""  # empty
-            msgs.append({
-                "role": "assistant", "content": "",
-                "tool_calls": [{"id": f"call_{i}", "type": "function",
-                                "function": {"name": "web_search", "arguments": args}}],
-            })
-            msgs.append({"role": "tool", "tool_call_id": f"call_{i}",
-                         "name": "web_search", "content": f"result {i} {UNI}"})
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": f"call_{i}",
+                            "type": "function",
+                            "function": {"name": "web_search", "arguments": args},
+                        }
+                    ],
+                }
+            )
+            msgs.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": f"call_{i}",
+                    "name": "web_search",
+                    "content": f"result {i} {UNI}",
+                }
+            )
         else:
-            msgs.append({"role": "assistant", "content": f"answer {i} " + "y" * _rng.randint(10, 600),
-                         "reasoning_content": f"thinking {i}"})
+            msgs.append(
+                {
+                    "role": "assistant",
+                    "content": f"answer {i} " + "y" * _rng.randint(10, 600),
+                    "reasoning_content": f"thinking {i}",
+                }
+            )
         if i % 7 == 0 and msgs:
-            msgs[-1]["content"] = [{"type": "text", "text": f"part {i}"},
-                                   {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]
+            msgs[-1]["content"] = [
+                {"type": "text", "text": f"part {i}"},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ]
         i += 1
     return msgs[:n]
 
@@ -91,10 +121,22 @@ def test_parity_sanitize_cursor():
             assert old_list == new_list, f"list mismatch n={n} it={iteration}"
             # append a new exchange (one malformed) between iterations
             for lst in (old_list, new_list):
-                lst.append({"role": "assistant", "content": "",
-                            "tool_calls": [{"id": f"c{iteration}", "type": "function",
-                                            "function": {"name": "t", "arguments": '{"bad": '}}]})
-                lst.append({"role": "tool", "tool_call_id": f"c{iteration}", "content": "ok"})
+                lst.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": f"c{iteration}",
+                                "type": "function",
+                                "function": {"name": "t", "arguments": '{"bad": '},
+                            }
+                        ],
+                    }
+                )
+                lst.append(
+                    {"role": "tool", "tool_call_id": f"c{iteration}", "content": "ok"}
+                )
             if iteration == 1:
                 simulate_compression(old_list)
                 simulate_compression(new_list)
@@ -122,13 +164,26 @@ def test_parity_token_memo():
         # mutate a string in place-ish: replace content of an existing dict
         msgs[0]["content"] = "EDITED " + UNI
         api = [m.copy() for m in msgs]
-        assert estimate_messages_tokens_rough_OLD(api) == estimate_messages_tokens_rough(api)
+        assert estimate_messages_tokens_rough_OLD(
+            api
+        ) == estimate_messages_tokens_rough(api)
         # odd types fall through the memo
-        weird = [{"role": "user", "content": {"_multimodal": True, "text_summary": "s"}},
-                 {"role": "user", "content": None}, "not-a-dict",
-                 {"role": "tool", "content": [{"type": "text", "text": UNI}, "raw"], "meta": (1, 2)}]
-        assert estimate_messages_tokens_rough_OLD(weird) == estimate_messages_tokens_rough(weird)
-        print(f"  n={n}: OK (equal across 3 iterations + compression + in-place edit + odd types)")
+        weird = [
+            {"role": "user", "content": {"_multimodal": True, "text_summary": "s"}},
+            {"role": "user", "content": None},
+            "not-a-dict",
+            {
+                "role": "tool",
+                "content": [{"type": "text", "text": UNI}, "raw"],
+                "meta": (1, 2),
+            },
+        ]
+        assert estimate_messages_tokens_rough_OLD(
+            weird
+        ) == estimate_messages_tokens_rough(weird)
+        print(
+            f"  n={n}: OK (equal across 3 iterations + compression + in-place edit + odd types)"
+        )
 
 
 def test_parity_persist_bounded_scan():
@@ -139,8 +194,10 @@ def test_parity_persist_bounded_scan():
     class FakeDB:
         def __init__(self):
             self.rows = []
+
         def append_message(self, **kw):
             self.rows.append({k: copy.deepcopy(v) for k, v in kw.items()})
+
         def append_messages_batch(self, session_id, messages, **kw):
             for m in messages:
                 row = {k: copy.deepcopy(v) for k, v in m.items()}
@@ -171,12 +228,19 @@ def test_parity_persist_bounded_scan():
             ra_ok = A._flush_messages_to_session_db_unlocked(la, None)
             rb_ok = B._flush_messages_to_session_db_unlocked(lb, None)
             assert ra_ok is True and rb_ok is True
-            assert A._session_db.rows == B._session_db.rows, f"rows diverge n={n} it={iteration}"
+            assert A._session_db.rows == B._session_db.rows, (
+                f"rows diverge n={n} it={iteration}"
+            )
             assert la == lb
             for lst in (la, lb):
                 lst.append({"role": "user", "content": f"turn {iteration} {UNI}"})
-                lst.append({"role": "assistant", "content": f"reply {iteration}",
-                            "_empty_recovery_synthetic": iteration == 0})  # scaffolding once
+                lst.append(
+                    {
+                        "role": "assistant",
+                        "content": f"reply {iteration}",
+                        "_empty_recovery_synthetic": iteration == 0,
+                    }
+                )  # scaffolding once
             if iteration == 1:
                 # compression-style rewrite: fresh copies without markers
                 for lst in (la, lb):
@@ -191,4 +255,6 @@ def test_parity_persist_bounded_scan():
         A._flush_messages_to_session_db_unlocked(la, None)
         B._flush_messages_to_session_db_unlocked(lb, None)
         assert A._session_db.rows == B._session_db.rows and la == lb
-        print(f"  n={n}: OK (identical DB rows + marker stamps across 3 flushes + compression rewrite)")
+        print(
+            f"  n={n}: OK (identical DB rows + marker stamps across 3 flushes + compression rewrite)"
+        )

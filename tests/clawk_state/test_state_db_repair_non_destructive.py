@@ -93,9 +93,7 @@ def _writer_after_stage(
     conn = sqlite3.connect(db_path, timeout=0.75, isolation_level=None)
     try:
         try:
-            conn.execute(
-                "INSERT INTO messages (body) VALUES ('committed-after-stage')"
-            )
+            conn.execute("INSERT INTO messages (body) VALUES ('committed-after-stage')")
             result.put(("committed", None))
         except sqlite3.Error as exc:
             result.put(("failed", str(exc)))
@@ -319,9 +317,7 @@ def test_committed_writer_after_staging_is_never_lost(
 
     def staged_strategy(scratch_path, report):
         with sqlite3.connect(str(scratch_path)) as conn:
-            conn.execute(
-                "INSERT INTO sessions (name) VALUES ('repaired-before-race')"
-            )
+            conn.execute("INSERT INTO sessions (name) VALUES ('repaired-before-race')")
             conn.commit()
         start.set()
         # Make the race deterministic: an unguarded implementation lets the
@@ -344,12 +340,8 @@ def test_committed_writer_after_staging_is_never_lost(
     assert report["repaired"] is True
 
     with sqlite3.connect(str(db)) as conn:
-        rows = {
-            body for (body,) in conn.execute("SELECT body FROM messages")
-        }
-        names = {
-            name for (name,) in conn.execute("SELECT name FROM sessions")
-        }
+        rows = {body for (body,) in conn.execute("SELECT body FROM messages")}
+        names = {name for (name,) in conn.execute("SELECT name FROM sessions")}
     assert "repaired-before-race" in names
     if outcome == "committed":
         assert "committed-after-stage" in rows, (
@@ -366,7 +358,8 @@ def test_environmental_aborts_do_not_burn_repair_ledger(tmp_path, monkeypatch):
         clawk_state_repair, "_db_opens_cleanly", lambda _path: "forced-unhealthy"
     )
     monkeypatch.setattr(
-        clawk_state_repair, "_repair_scratch_space_error",
+        clawk_state_repair,
+        "_repair_scratch_space_error",
         lambda _path: "temporary disk pressure",
     )
 
@@ -378,7 +371,9 @@ def test_environmental_aborts_do_not_burn_repair_ledger(tmp_path, monkeypatch):
     ledger_path = clawk_state_repair._repair_ledger_path(db)
     assert not ledger_path.exists(), "environmental aborts must not consume attempts"
 
-    monkeypatch.setattr(clawk_state_repair, "_repair_scratch_space_error", lambda _path: None)
+    monkeypatch.setattr(
+        clawk_state_repair, "_repair_scratch_space_error", lambda _path: None
+    )
 
     def successful_strategy(scratch_path, report):
         with sqlite3.connect(str(scratch_path)) as conn:
@@ -388,7 +383,9 @@ def test_environmental_aborts_do_not_burn_repair_ledger(tmp_path, monkeypatch):
         report["strategy"] = "after_environmental_aborts"
         return report
 
-    monkeypatch.setattr(clawk_state_repair, "_run_repair_strategies", successful_strategy)
+    monkeypatch.setattr(
+        clawk_state_repair, "_run_repair_strategies", successful_strategy
+    )
     report = repair_state_db_schema(db, backup=False)
     assert report["repaired"] is True
     assert report["strategy"] == "after_environmental_aborts"
@@ -487,7 +484,9 @@ def test_exhaustion_is_rechecked_after_acquiring_repair_lock(tmp_path, monkeypat
     monkeypatch.setattr(
         clawk_state_repair, "_persistent_repair_attempts_exhausted", exhaustion_probe
     )
-    monkeypatch.setattr(clawk_state_repair, "_live_writer_holds_db", lambda _path: False)
+    monkeypatch.setattr(
+        clawk_state_repair, "_live_writer_holds_db", lambda _path: False
+    )
     surgery_calls = []
 
     def unexpected_surgery(_db_path, *, backup, report):
@@ -530,9 +529,7 @@ def test_scratch_budget_counts_sidecars_in_vacuum_multiplier(tmp_path, monkeypat
     assert "VACUUM may need another" in error
 
 
-def test_environmental_promotion_failures_do_not_burn_ledger(
-    tmp_path, monkeypatch
-):
+def test_environmental_promotion_failures_do_not_burn_ledger(tmp_path, monkeypatch):
     """Transient promotion disk errors remain retriable across three passes."""
     db = tmp_path / "state.db"
     _make_repair_test_db(db)
@@ -545,7 +542,9 @@ def test_environmental_promotion_failures_do_not_burn_ledger(
         report["strategy"] = "promotion_environment_test"
         return report
 
-    monkeypatch.setattr(clawk_state_repair, "_run_repair_strategies", successful_strategy)
+    monkeypatch.setattr(
+        clawk_state_repair, "_run_repair_strategies", successful_strategy
+    )
     real_copy = clawk_state_repair._copy_database_snapshot
     copy_calls = 0
 
@@ -586,7 +585,9 @@ def test_corrupt_promotion_failure_consumes_one_attempt(tmp_path, monkeypatch):
         report["strategy"] = "corrupt-promotion-test"
         return report
 
-    monkeypatch.setattr(clawk_state_repair, "_run_repair_strategies", successful_strategy)
+    monkeypatch.setattr(
+        clawk_state_repair, "_run_repair_strategies", successful_strategy
+    )
     real_copy = clawk_state_repair._copy_database_snapshot
     calls = 0
 
@@ -628,9 +629,7 @@ def test_snapshot_includes_committed_wal_frames(tmp_path):
 
 
 @pytest.mark.requires_wal
-def test_failed_wal_repair_preserves_committed_rows_semantically(
-    tmp_path, monkeypatch
-):
+def test_failed_wal_repair_preserves_committed_rows_semantically(tmp_path, monkeypatch):
     """WAL correctness is about committed recovery state, not main-file bytes."""
     db = tmp_path / "state.db"
     _make_repair_test_db(db)
@@ -664,9 +663,7 @@ def test_failed_wal_repair_preserves_committed_rows_semantically(
     assert strategy_calls == [True], "the test must exercise strategy failure"
 
     with sqlite3.connect(str(db)) as conn:
-        bodies = {
-            body for (body,) in conn.execute("SELECT body FROM messages")
-        }
+        bodies = {body for (body,) in conn.execute("SELECT body FROM messages")}
     assert {"seed", "committed-wal-row"} <= bodies
 
 
@@ -679,7 +676,9 @@ def test_snapshot_deadline_has_a_floor_and_scales_with_source_size(
     # Lower the throughput only for this arithmetic test so a 72 MiB fixture
     # crosses the floor without allocating a multi-GB file.
     monkeypatch.setattr(
-        clawk_state_repair, "_REPAIR_SNAPSHOT_MIN_THROUGHPUT_BYTES_PER_SECOND", 256 * 1024
+        clawk_state_repair,
+        "_REPAIR_SNAPSHOT_MIN_THROUGHPUT_BYTES_PER_SECOND",
+        256 * 1024,
     )
 
     db = tmp_path / "state.db"

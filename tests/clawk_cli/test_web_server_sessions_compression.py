@@ -46,13 +46,19 @@ class TestSessionStatsCompressionChildren(_SessionsCompressionEndpoints):
             db.create_session(session_id="comp-root", source="cli")
             db.append_message("comp-root", role="user", content="root")
             db.end_session("comp-root", end_reason="compression")
-            db.create_session(session_id="comp-child1", source="cli", parent_session_id="comp-root")
+            db.create_session(
+                session_id="comp-child1", source="cli", parent_session_id="comp-root"
+            )
             db.append_message("comp-child1", role="user", content="child1")
             db.end_session("comp-child1", end_reason="compression")
-            db.create_session(session_id="comp-child2", source="cli", parent_session_id="comp-child1")
+            db.create_session(
+                session_id="comp-child2", source="cli", parent_session_id="comp-child1"
+            )
             db.append_message("comp-child2", role="user", content="child2")
             db.end_session("comp-child2", end_reason="compression")
-            db.create_session(session_id="comp-tip", source="cli", parent_session_id="comp-child2")
+            db.create_session(
+                session_id="comp-tip", source="cli", parent_session_id="comp-child2"
+            )
             db.append_message("comp-tip", role="user", content="tip")
             # an archived standalone session
             db.create_session(session_id="archived", source="cli")
@@ -97,15 +103,28 @@ class TestDeleteSessionCompressionChain(_SessionsCompressionEndpoints):
             )
             # The dashboard never opens a second writer: DELETE admits through the owner.
             authority = SessionAuthority(
-                SimpleNamespace(_draining=False), profile_id=str(get_clawk_home()),
-                instance_id="owner", db=db, epoch=begin_runtime_epoch(db, instance_id="owner"))
+                SimpleNamespace(_draining=False),
+                profile_id=str(get_clawk_home()),
+                instance_id="owner",
+                db=db,
+                epoch=begin_runtime_epoch(db, instance_id="owner"),
+            )
             authority.sessions["conv_tip"] = LiveSession(None, "route")
-            monkeypatch.setattr(app.state, "session_authority", authority, raising=False)
+            monkeypatch.setattr(
+                app.state, "session_authority", authority, raising=False
+            )
 
-            snap = self.auth_client.get("/api/sessions/conv_tip/mutation-snapshot").json()
-            resp = self.auth_client.delete("/api/sessions/conv_tip", params={
-                "request_id": "delete-chain", "expected_revision": snap["runtime_revision"],
-                "expected_generation": snap["runtime_generation"]})
+            snap = self.auth_client.get(
+                "/api/sessions/conv_tip/mutation-snapshot"
+            ).json()
+            resp = self.auth_client.delete(
+                "/api/sessions/conv_tip",
+                params={
+                    "request_id": "delete-chain",
+                    "expected_revision": snap["runtime_revision"],
+                    "expected_generation": snap["runtime_generation"],
+                },
+            )
             assert resp.status_code == 200, resp.text
             assert resp.json().get("ok") is True
 

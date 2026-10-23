@@ -23,9 +23,7 @@ def _make_flush_dir(tmp_path: Path) -> Path:
 
 def test_flush_writes_string_pending_to_file(tmp_path, monkeypatch):
     flush_dir = _make_flush_dir(tmp_path)
-    monkeypatch.setattr(
-        "gateway.shutdown_flush._get_flush_dir", lambda: flush_dir
-    )
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
     pending = {"agent:main:telegram:supergroup:123": "hello world"}
     count = flush_pending_to_file(pending, reason="shutdown")
     assert count == 1
@@ -41,9 +39,7 @@ def test_flush_writes_string_pending_to_file(tmp_path, monkeypatch):
 
 def test_flush_writes_message_event_to_file(tmp_path, monkeypatch):
     flush_dir = _make_flush_dir(tmp_path)
-    monkeypatch.setattr(
-        "gateway.shutdown_flush._get_flush_dir", lambda: flush_dir
-    )
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
     event = MagicMock()
     event.text = "user message"
     event.session_id = "20260728_120000_abc"
@@ -65,9 +61,7 @@ def test_flush_writes_message_event_to_file(tmp_path, monkeypatch):
 
 def test_recover_inserts_via_append_message_and_deletes_file(tmp_path, monkeypatch):
     flush_dir = _make_flush_dir(tmp_path)
-    monkeypatch.setattr(
-        "gateway.shutdown_flush._get_flush_dir", lambda: flush_dir
-    )
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
     ts = int(time.time())
     # Write a flush file with session_id
     payload = {
@@ -140,9 +134,7 @@ def test_recover_closes_owned_db_when_unexpected_exception_escapes(
 ):
     """Owned SessionDB must close even when recovery is interrupted."""
     flush_dir = _make_flush_dir(tmp_path)
-    monkeypatch.setattr(
-        "gateway.shutdown_flush._get_flush_dir", lambda: flush_dir
-    )
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
     (flush_dir / "pending.json").write_text(
         json.dumps(
             {
@@ -197,9 +189,7 @@ def test_recover_skips_failing_payload_and_continues(tmp_path, monkeypatch):
     boot, stranding a different subset of messages each time.
     """
     flush_dir = _make_flush_dir(tmp_path)
-    monkeypatch.setattr(
-        "gateway.shutdown_flush._get_flush_dir", lambda: flush_dir
-    )
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
     bad = _write_flush_file(flush_dir, "pending-a.json", "sid-bad", "first")
     good = _write_flush_file(flush_dir, "pending-b.json", "sid-good", "second")
 
@@ -220,8 +210,6 @@ def test_recover_skips_failing_payload_and_continues(tmp_path, monkeypatch):
     assert bad.exists()
 
 
-
-
 def test_get_flush_dir_uses_get_clawk_home(tmp_path, monkeypatch):
     """Flush dir must use get_clawk_home(), not hardcoded Path.home()."""
     import gateway.shutdown_flush as mod
@@ -232,14 +220,10 @@ def test_get_flush_dir_uses_get_clawk_home(tmp_path, monkeypatch):
         captured["called"] = True
         return tmp_path
 
-    monkeypatch.setattr(
-        "clawk_constants.get_clawk_home", fake_get_clawk_home
-    )
+    monkeypatch.setattr("clawk_constants.get_clawk_home", fake_get_clawk_home)
     result = mod._get_flush_dir()
     assert captured.get("called") is True
     assert result == tmp_path / "pending_messages"
-
-
 
 
 # ── FIFO overflow tail durability (#99882) ─────────────────────────────
@@ -258,7 +242,9 @@ def _overflow_event(text: str, session_id: str = "20260901_120000_fifo"):
     return event
 
 
-def test_flush_overflow_writes_one_payload_per_event_in_arrival_order(tmp_path, monkeypatch):
+def test_flush_overflow_writes_one_payload_per_event_in_arrival_order(
+    tmp_path, monkeypatch
+):
     """The FIFO tail (queued_events) must survive shutdown like the slot does.
 
     Each overflow entry is its own recover_pending_to_db-compatible payload,
@@ -313,7 +299,10 @@ def test_flush_overflow_noop_on_empty():
 
 def test_drain_transcript_spool_skips_parseable_non_dict_payload(tmp_path, monkeypatch):
     """A scalar/list JSON spool file must not abort the drain; the healthy payload still replays."""
-    from gateway.shutdown_flush import drain_transcript_spool, spool_dropped_transcript_message
+    from gateway.shutdown_flush import (
+        drain_transcript_spool,
+        spool_dropped_transcript_message,
+    )
 
     flush_dir = _make_flush_dir(tmp_path)
     monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)

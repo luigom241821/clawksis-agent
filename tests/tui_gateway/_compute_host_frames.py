@@ -36,7 +36,9 @@ class FrameSink:
         with self._condition:
             return list(self._frames)
 
-    def wait_for(self, predicate: Callable[[dict], bool], timeout: float = 20.0) -> dict:
+    def wait_for(
+        self, predicate: Callable[[dict], bool], timeout: float = 20.0
+    ) -> dict:
         """Wait on frame publication; ``timeout`` is only a deadlock guard."""
         deadline = time.monotonic() + timeout
         with self._condition:
@@ -50,7 +52,9 @@ class FrameSink:
                 self._condition.wait(remaining)
 
 
-def start_test_work(target, *, name: str, session: dict | None = None) -> threading.Thread:
+def start_test_work(
+    target, *, name: str, session: dict | None = None
+) -> threading.Thread:
     """Start the real turn thread without process-retirement/import side paths."""
     thread = threading.Thread(target=target, name=name)
     if session is not None:

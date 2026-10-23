@@ -26,7 +26,9 @@ import pytest
 import gateway.relay.ws_transport as ws_transport_mod
 from gateway.relay.ws_transport import WebSocketRelayTransport, WEBSOCKETS_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
+pytestmark = pytest.mark.skipif(
+    not WEBSOCKETS_AVAILABLE, reason="websockets not installed"
+)
 
 if WEBSOCKETS_AVAILABLE:
     from websockets.exceptions import ConnectionClosedError
@@ -66,12 +68,16 @@ async def test_read_loop_exit_fails_pending_futures_promptly():
     """When the socket drops unexpectedly, in-flight _request_response callers
     must get {"success": False, ...} promptly — not block ~30s on a future
     only the (now dead) reader could have resolved."""
-    t = WebSocketRelayTransport("ws://unused", "discord", "bot1", outbound_timeout_s=30.0)
+    t = WebSocketRelayTransport(
+        "ws://unused", "discord", "bot1", outbound_timeout_s=30.0
+    )
     fake = _DroppingWS()
     t._ws = fake
     t._reader = asyncio.create_task(t._read_loop())
 
-    send_task = asyncio.create_task(t.send_outbound({"op": "send_message", "text": "hi"}))
+    send_task = asyncio.create_task(
+        t.send_outbound({"op": "send_message", "text": "hi"})
+    )
     # Let the outbound frame go out and its future register in _pending.
     for _ in range(50):
         if t._pending:
@@ -206,8 +212,6 @@ async def test_send_allowed_once_redial_installs_fresh_socket(monkeypatch):
                 pass
 
 
-
-
 async def _run_reader_to_exit(t: WebSocketRelayTransport, fake: _DroppingWS) -> None:
     """Start the reader on ``fake``, drop the socket, and wait for the reader
     to fully unwind — the state every post-drop assertion depends on."""
@@ -222,7 +226,9 @@ async def test_read_loop_without_socket_still_fails_pending():
     """If the reader is ever scheduled with no socket (lifecycle bug), it must
     still settle in-flight waiters on its way out — the old `assert` escaped
     before the fail-pending cleanup and left them to the full 30s timeout."""
-    t = WebSocketRelayTransport("ws://unused", "discord", "bot1", outbound_timeout_s=30.0)
+    t = WebSocketRelayTransport(
+        "ws://unused", "discord", "bot1", outbound_timeout_s=30.0
+    )
     loop = asyncio.get_running_loop()
     fut: asyncio.Future = loop.create_future()
     t._pending["rid"] = fut
@@ -231,7 +237,10 @@ async def test_read_loop_without_socket_still_fails_pending():
     await t._read_loop()  # must not raise
 
     assert fut.done()
-    assert fut.result() == {"success": False, "error": "relay transport connection lost"}
+    assert fut.result() == {
+        "success": False,
+        "error": "relay transport connection lost",
+    }
     assert t._pending == {}
 
 
@@ -313,7 +322,9 @@ async def test_send_raising_socket_returns_error_dict():
         async def close(self):
             pass
 
-    t = WebSocketRelayTransport("ws://unused", "discord", "bot1", outbound_timeout_s=5.0)
+    t = WebSocketRelayTransport(
+        "ws://unused", "discord", "bot1", outbound_timeout_s=5.0
+    )
     fake = _RaisingWS()
     t._ws = fake
     t._reader = asyncio.create_task(t._read_loop())
@@ -352,7 +363,9 @@ async def test_redial_hold_parks_the_supervisor_until_released(monkeypatch):
     try:
         # Well past the cadence: unheld, this would have dialled many times.
         await asyncio.sleep(0.15)
-        assert dials == [], "supervisor re-dialled while a brokered suspend was in flight"
+        assert dials == [], (
+            "supervisor re-dialled while a brokered suspend was in flight"
+        )
 
         # A refused suspend releases it and the re-dial resumes.
         t.release_redial()

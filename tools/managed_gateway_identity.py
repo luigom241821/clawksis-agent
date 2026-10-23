@@ -59,7 +59,9 @@ def _platform_name() -> str:
         return turn.lease.platform
     if platform := session_platform():
         return platform
-    return "cron" if is_truthy_value(get_session_env("CLAWK_CRON_SESSION", "")) else "cli"
+    return (
+        "cron" if is_truthy_value(get_session_env("CLAWK_CRON_SESSION", "")) else "cli"
+    )
 
 
 def request_surface() -> str:
@@ -120,16 +122,28 @@ def response_request_id(response: object) -> Optional[str]:
 
 
 def log_connector_outcome(
-    route: str, status: Optional[int], *, code: Optional[str] = None, request_id: Optional[str] = None,
+    route: str,
+    status: Optional[int],
+    *,
+    code: Optional[str] = None,
+    request_id: Optional[str] = None,
     call: Optional[CallRef] = None,
 ) -> None:
     """One line per connector HTTP outcome: failures at WARNING, success and expected misses at DEBUG.
 
     The ``code`` makes a line a failure, not the status: a 200 whose body failed carries one, and a
     304 that refreshed a cached list does not."""
-    level = logging.WARNING if code is not None and code not in _EXPECTED_MISSES else logging.DEBUG
+    level = (
+        logging.WARNING
+        if code is not None and code not in _EXPECTED_MISSES
+        else logging.DEBUG
+    )
     logger.log(
-        level, "connector %s %s %s request_id=%s dispatch=%s",
-        route, status if status is not None else "transport", code or "-", request_id or "-",
+        level,
+        "connector %s %s %s request_id=%s dispatch=%s",
+        route,
+        status if status is not None else "transport",
+        code or "-",
+        request_id or "-",
         (call.tool_call_id if call else None) or "-",
     )

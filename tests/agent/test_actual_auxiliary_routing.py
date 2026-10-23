@@ -39,13 +39,15 @@ def actual_endpoint(monkeypatch):
                 self.send_error(404)
                 return
             if payload["model"] == "unavailable-model":
-                body = json.dumps({
-                    "error": {
-                        "message": "The model is not supported with this account",
-                        "type": "invalid_request_error",
-                        "code": "unsupported_model",
+                body = json.dumps(
+                    {
+                        "error": {
+                            "message": "The model is not supported with this account",
+                            "type": "invalid_request_error",
+                            "code": "unsupported_model",
+                        }
                     }
-                }).encode()
+                ).encode()
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -541,9 +543,15 @@ def test_actual_key_reload_keeps_yaml_endpoint(tmp_path, monkeypatch, actual_end
     monkeypatch.setenv("ACTUAL_API_KEY", "actual-test-key")
     monkeypatch.setenv("ACTUAL_BASE_URL", "http://127.0.0.1:1")
     (tmp_path / "config.yaml").write_text(
-        yaml.safe_dump({
-            "model": {"provider": "aci", "default": "test-model", "base_url": base_url},
-        }),
+        yaml.safe_dump(
+            {
+                "model": {
+                    "provider": "aci",
+                    "default": "test-model",
+                    "base_url": base_url,
+                },
+            }
+        ),
         encoding="utf-8",
     )
     env_path = tmp_path / ".env"

@@ -80,14 +80,22 @@ class Screen:
             lines = [ln[:cols] + [" "] * max(0, cols - len(ln)) for ln in grid.lines]
             if grid is self._main and len(lines) > rows:
                 # xterm keeps the cursor row visible: push surplus top rows into scrollback.
-                surplus = max(0, min(len(lines) - rows, self.y - rows + 1 if not self.alt_active else 0))
+                surplus = max(
+                    0,
+                    min(
+                        len(lines) - rows,
+                        self.y - rows + 1 if not self.alt_active else 0,
+                    ),
+                )
                 surplus = max(surplus, 0)
                 for ln in lines[:surplus]:
                     self._push_history("".join(ln))
                 lines = lines[surplus:]
                 if not self.alt_active:
                     self.y -= surplus
-            lines = lines[:rows] + [[" "] * cols for _ in range(rows - len(lines[:rows]))]
+            lines = lines[:rows] + [
+                [" "] * cols for _ in range(rows - len(lines[:rows]))
+            ]
             grid.lines, grid.rows, grid.cols = lines, rows, cols
         self.rows, self.cols = rows, cols
         self.top, self.bottom = 0, rows - 1
@@ -95,10 +103,14 @@ class Screen:
         self._pending_wrap = False
 
     def display(self) -> list[str]:
-        return ["".join(c for c in ln if c is not None).rstrip() for ln in self.grid.lines]
+        return [
+            "".join(c for c in ln if c is not None).rstrip() for ln in self.grid.lines
+        ]
 
     def main_display(self) -> list[str]:
-        return ["".join(c for c in ln if c is not None).rstrip() for ln in self._main.lines]
+        return [
+            "".join(c for c in ln if c is not None).rstrip() for ln in self._main.lines
+        ]
 
     def transcript(self) -> list[str]:
         """Scrollback followed by the visible main screen (what a user can scroll through)."""
@@ -240,8 +252,10 @@ class Screen:
 
     def _csi(self, raw: str, final: str) -> None:
         private = raw[:1] if raw[:1] in "?<>=" else ""
-        body = raw[len(private):]
-        if any(c in body for c in " !\"#$%&'*+,-./"):  # intermediates (DECSCUSR etc.): ignore
+        body = raw[len(private) :]
+        if any(
+            c in body for c in " !\"#$%&'*+,-./"
+        ):  # intermediates (DECSCUSR etc.): ignore
             return
         try:
             args = [int(p) if p else 0 for p in body.split(";")] if body else []
@@ -268,7 +282,9 @@ class Screen:
         if final == "A":
             self.y = max(self.top if self.y >= self.top else 0, self.y - a())
         elif final == "B" or final == "e":
-            self.y = min(self.bottom if self.y <= self.bottom else self.rows - 1, self.y + a())
+            self.y = min(
+                self.bottom if self.y <= self.bottom else self.rows - 1, self.y + a()
+            )
         elif final == "C" or final == "a":
             self.x = min(self.cols - 1, self.x + a())
         elif final == "D":
@@ -287,7 +303,7 @@ class Screen:
         elif final == "J":
             mode = args[0] if args else 0
             if mode == 0:
-                g.lines[self.y][self.x:] = [" "] * (self.cols - self.x)
+                g.lines[self.y][self.x :] = [" "] * (self.cols - self.x)
                 for r in range(self.y + 1, self.rows):
                     g.lines[r] = g.blank()
             elif mode == 1:
@@ -302,24 +318,24 @@ class Screen:
             mode = args[0] if args else 0
             line = g.lines[self.y]
             if mode == 0:
-                line[self.x:] = [" "] * (self.cols - self.x)
+                line[self.x :] = [" "] * (self.cols - self.x)
             elif mode == 1:
                 line[: self.x + 1] = [" "] * (self.x + 1)
             else:
                 g.lines[self.y] = g.blank()
         elif final == "X":
             n = min(a(), self.cols - self.x)
-            g.lines[self.y][self.x:self.x + n] = [" "] * n
+            g.lines[self.y][self.x : self.x + n] = [" "] * n
         elif final == "P":
             line = g.lines[self.y]
             n = min(a(), self.cols - self.x)
-            del line[self.x:self.x + n]
+            del line[self.x : self.x + n]
             line.extend([" "] * n)
         elif final == "@":
             line = g.lines[self.y]
             n = min(a(), self.cols - self.x)
-            line[self.x:self.x] = [" "] * n
-            del line[self.cols:]
+            line[self.x : self.x] = [" "] * n
+            del line[self.cols :]
         elif final in "LM":
             if self.top <= self.y <= self.bottom:
                 for _ in range(min(a(), self.bottom - self.y + 1)):

@@ -60,6 +60,7 @@ class _FakeAgent:
         self.context_compressor = types.SimpleNamespace(
             protect_first_n=2, protect_last_n=2
         )
+
         # Make the fake compressor honour the ContextEngine contract that the
         # real code now relies on (should_compress_info returns a (bool, reason)
         # tuple). Without it build_turn_context raises AttributeError.
@@ -96,7 +97,9 @@ class _FakeAgent:
         # is called (regression guard for #45499 turn-setup ordering).
         self._ensure_db_prompt_at_call = "<unset>"
 
-    def _warn_context_overflow_blocked(self, reason, preflight_tokens, threshold_tokens):
+    def _warn_context_overflow_blocked(
+        self, reason, preflight_tokens, threshold_tokens
+    ):
         # Mirror the real AIAgent helper so tests can assert the warning fired.
         _warn_kind = (reason or "unknown").split(":", 1)[0]
         _warn_key = ("ctx_overflow_blocked", _warn_kind)
@@ -216,7 +219,9 @@ def test_preflight_timeout_stops_turn_before_provider_boundary():
         context = _build(agent, conversation_history=oversized_history)
         provider_call(context.messages)
 
-    with pytest.raises(PreflightCompressionTimedOut, match="provider call was not sent"):
+    with pytest.raises(
+        PreflightCompressionTimedOut, match="provider call was not sent"
+    ):
         run_turn()
 
     agent._compress_context.assert_called_once()
@@ -269,18 +274,29 @@ def test_prefetch_runs_for_substantive_user_message():
 def test_turn_author_is_normalized_then_reaches_on_turn_start_and_the_agent_stash():
     agent, mm = _agent_with_memory_manager()
 
-    _build(agent, user_message="what did we decide about the deploy pipeline?",
-           turn_author={"id": " bot:al\x00pha ", "name": "Alpha", "is_bot": 1, "x": 1})
+    _build(
+        agent,
+        user_message="what did we decide about the deploy pipeline?",
+        turn_author={"id": " bot:al\x00pha ", "name": "Alpha", "is_bot": 1, "x": 1},
+    )
 
     kwargs = mm.on_turn_start.call_args.kwargs
-    assert (kwargs["author_id"], kwargs["author_name"], kwargs["author_is_bot"]) == ("bot:alpha", "Alpha", True)
+    assert (kwargs["author_id"], kwargs["author_name"], kwargs["author_is_bot"]) == (
+        "bot:alpha",
+        "Alpha",
+        True,
+    )
     # The end-of-turn sync reads this back off the agent.
     assert agent._turn_author == {"id": "bot:alpha", "name": "Alpha", "is_bot": True}
 
 
 def test_turn_without_author_clears_previous_bot_author():
     agent, mm = _agent_with_memory_manager()
-    _build(agent, user_message="first turn", turn_author={"id": "bot:alpha", "name": "Alpha", "is_bot": True})
+    _build(
+        agent,
+        user_message="first turn",
+        turn_author={"id": "bot:alpha", "name": "Alpha", "is_bot": True},
+    )
     assert agent._turn_author["id"] == "bot:alpha"
 
     _build(agent, user_message="second turn")
@@ -299,18 +315,41 @@ def test_turn_author_reaches_the_agent_through_the_real_facade(monkeypatch):
 
     class _Completions:
         def create(self, **_kw):
-            return SimpleNamespace(choices=[SimpleNamespace(
-                message=SimpleNamespace(content="ok", tool_calls=None, reasoning=None, reasoning_content=None),
-                finish_reason="stop")], usage=None, model="test-model")
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content="ok",
+                            tool_calls=None,
+                            reasoning=None,
+                            reasoning_content=None,
+                        ),
+                        finish_reason="stop",
+                    )
+                ],
+                usage=None,
+                model="test-model",
+            )
 
-    monkeypatch.setattr("agent.process_bootstrap.OpenAI",
-                        lambda **_kw: SimpleNamespace(chat=SimpleNamespace(completions=_Completions())))
+    monkeypatch.setattr(
+        "agent.process_bootstrap.OpenAI",
+        lambda **_kw: SimpleNamespace(chat=SimpleNamespace(completions=_Completions())),
+    )
     monkeypatch.setattr("model_tools.get_tool_definitions", lambda *a, **k: [])
-    agent = AIAgent(model="test-model", api_key="k", base_url="http://localhost:1/v1", platform="cli",
-                    max_iterations=2, quiet_mode=True, skip_memory=True)
+    agent = AIAgent(
+        model="test-model",
+        api_key="k",
+        base_url="http://localhost:1/v1",
+        platform="cli",
+        max_iterations=2,
+        quiet_mode=True,
+        skip_memory=True,
+    )
     agent._disable_streaming = True
 
-    agent.run_conversation("hi", turn_author={"id": "bot:alpha", "name": "Alpha", "is_bot": True})
+    agent.run_conversation(
+        "hi", turn_author={"id": "bot:alpha", "name": "Alpha", "is_bot": True}
+    )
     assert agent._turn_author == {"id": "bot:alpha", "name": "Alpha", "is_bot": True}
     agent.run_conversation("hi again")
     assert agent._turn_author is None
@@ -452,12 +491,18 @@ def test_between_turns_refresh_adds_late_tool_when_servers_registered():
     """R1: a tool that registered since build lands in this turn's snapshot."""
     agent = _FakeAgent()
 
-    new_def = {"type": "function", "function": {"name": "mcp_x_tool", "description": "", "parameters": {}}}
+    new_def = {
+        "type": "function",
+        "function": {"name": "mcp_x_tool", "description": "", "parameters": {}},
+    }
 
     import model_tools
     import tools.mcp_tool
-    with patch("tools.mcp_tool_discovery.has_registered_mcp_tools", return_value=True), \
-         patch.object(model_tools, "get_tool_definitions", return_value=[new_def]):
+
+    with (
+        patch("tools.mcp_tool_discovery.has_registered_mcp_tools", return_value=True),
+        patch.object(model_tools, "get_tool_definitions", return_value=[new_def]),
+    ):
         _build(agent)
 
     assert "mcp_x_tool" in agent.valid_tool_names
@@ -515,17 +560,22 @@ def test_prologue_names_a_subagent_run_after_its_goal_without_a_model_call():
     agent._session_db.set_auto_title.return_value = True
     with patch("agent.title_generator.maybe_auto_title") as titler:
         turn_context._maybe_title_session_at_turn_start(
-            agent, [{"role": "user", "content": "Audit the billing module\n\nContext: ..."}])
+            agent,
+            [{"role": "user", "content": "Audit the billing module\n\nContext: ..."}],
+        )
     assert not titler.called
     agent._session_db.set_auto_title.assert_called_once_with(
-        "sess-1", "Subagent: Audit the billing module", source="derived")
+        "sess-1", "Subagent: Audit the billing module", source="derived"
+    )
 
 
 def test_prologue_leaves_cron_runs_untitled():
     agent = _TitlingAgent("cron")
     from agent import turn_context
 
-    turn_context._maybe_title_session_at_turn_start(agent, [{"role": "user", "content": "Run the job"}])
+    turn_context._maybe_title_session_at_turn_start(
+        agent, [{"role": "user", "content": "Run the job"}]
+    )
     assert not agent._session_db.set_auto_title.called
 
 
@@ -537,7 +587,12 @@ def test_prologue_forwards_the_submit_title_preview_to_the_titler():
     with patch("agent.title_generator.maybe_auto_title") as titler:
         turn_context._maybe_title_session_at_turn_start(
             _TitlingAgent("desktop"),
-            [{"role": "user", "content": "x" * 5000,
-              "display_metadata": {"title_preview": "Pasted 5000 chars"}}],
+            [
+                {
+                    "role": "user",
+                    "content": "x" * 5000,
+                    "display_metadata": {"title_preview": "Pasted 5000 chars"},
+                }
+            ],
         )
     assert titler.call_args.kwargs["title_preview"] == "Pasted 5000 chars"

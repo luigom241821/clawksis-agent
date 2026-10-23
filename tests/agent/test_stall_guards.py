@@ -56,9 +56,7 @@ def test_keeps_firing_past_threshold():
 def test_does_not_fire_when_arguments_differ():
     c = ToolCallGuardrailController()
     for i in range(5):
-        notice = c.observe_call(
-            "web_search", {"query": f"q{i}"}, "same result"
-        ).notice
+        notice = c.observe_call("web_search", {"query": f"q{i}"}, "same result").notice
         assert notice is None
 
 
@@ -95,8 +93,6 @@ def test_allowlisted_pollers_never_fire():
             assert c.observe_call(tool, {"id": "j1"}, "Generating").notice is None
 
 
-
-
 def test_resets_per_turn():
     c = ToolCallGuardrailController()
     assert _observe_n(c, 2)[-1] is None
@@ -130,14 +126,12 @@ def _fake_agent(stall_guards=True):
         _tool_guardrail_halt_decision=None,
     )
     agent._stall_guards_enabled = lambda: AIAgent._stall_guards_enabled(agent)
-    agent._set_tool_guardrail_halt = (
-        lambda decision: AIAgent._set_tool_guardrail_halt(agent, decision)
+    agent._set_tool_guardrail_halt = lambda decision: AIAgent._set_tool_guardrail_halt(
+        agent, decision
     )
-    agent._append = (
-        lambda name, args, result, failed=False, tool_call_id="": (
-            AIAgent._append_guardrail_observation(
-                agent, name, args, result, failed=failed, tool_call_id=tool_call_id
-            )
+    agent._append = lambda name, args, result, failed=False, tool_call_id="": (
+        AIAgent._append_guardrail_observation(
+            agent, name, args, result, failed=failed, tool_call_id=tool_call_id
         )
     )
     return agent
@@ -222,7 +216,9 @@ def test_no_stub_below_min_chars():
     agent._append("web_search", args, small, tool_call_id="c1")
     r2 = agent._append("web_search", args, small, tool_call_id="c2")
     assert "byte-identical" not in r2
-    assert r2.startswith(small)  # full payload kept (pre-existing warning suffix allowed)
+    assert r2.startswith(
+        small
+    )  # full payload kept (pre-existing warning suffix allowed)
 
 
 def test_no_stub_for_error_results():
@@ -372,9 +368,7 @@ def test_ignores_plain_final_answers():
 
 def test_ignores_conversational_future_offers():
     # "I will" without the immediate-action shape must not trip the guard.
-    assert not trailing_continue_intent(
-        "I can help with that tomorrow if you'd like."
-    )
+    assert not trailing_continue_intent("I can help with that tomorrow if you'd like.")
     assert not trailing_continue_intent(
         "If you want, I will happily review the PR once CI is green. Just say so!"
     )
@@ -390,8 +384,10 @@ def test_repeating_two_call_cycle_fires_notice_and_halts_under_hard_stop():
     from agent.tool_guardrails import ToolCallGuardrailConfig
 
     c = ToolCallGuardrailController(ToolCallGuardrailConfig(hard_stop_enabled=True))
-    pairs = (({"command": "make build"}, "error: X\n"),
-             ({"command": "tail -5 build.log"}, "still broken\n"))
+    pairs = (
+        ({"command": "make build"}, "error: X\n"),
+        ({"command": "tail -5 build.log"}, "still broken\n"),
+    )
     first_notice_call = None
     calls = 0
     for _ in range(30):
@@ -414,16 +410,27 @@ def test_cycle_guard_stays_silent_for_progressing_and_poller_cycles():
     of poller-exempt tools is legitimate waiting. Neither may fire."""
     from agent.tool_guardrails import ToolCallGuardrailConfig
 
-    progressing = ToolCallGuardrailController(ToolCallGuardrailConfig(hard_stop_enabled=True))
+    progressing = ToolCallGuardrailController(
+        ToolCallGuardrailConfig(hard_stop_enabled=True)
+    )
     for i in range(20):
         for args in ({"command": "make"}, {"command": "tail log"}):
-            assert progressing.observe_call("terminal", args, f"output {i}").notice is None
+            assert (
+                progressing.observe_call("terminal", args, f"output {i}").notice is None
+            )
     assert progressing.halt_decision is None
 
-    pollers = ToolCallGuardrailController(ToolCallGuardrailConfig(hard_stop_enabled=True))
+    pollers = ToolCallGuardrailController(
+        ToolCallGuardrailConfig(hard_stop_enabled=True)
+    )
     for _ in range(20):
-        for args in ({"action": "poll", "session_id": "a"}, {"action": "poll", "session_id": "b"}):
-            assert pollers.observe_call("process_manage", args, "running").notice is None
+        for args in (
+            {"action": "poll", "session_id": "a"},
+            {"action": "poll", "session_id": "b"},
+        ):
+            assert (
+                pollers.observe_call("process_manage", args, "running").notice is None
+            )
     assert pollers.halt_decision is None
 
 
@@ -444,7 +451,9 @@ def test_promoted_reasoning_detector_catches_first_person_plan_tails():
         assert not trailing_continue_intent(tail), tail
         assert promoted_reasoning_announces_action(tail), tail
     # Long monologue: only the tail decides (no 400-char cap on this path).
-    assert promoted_reasoning_announces_action(("Thinking about the task. " * 60) + "Let me read the file.")
+    assert promoted_reasoning_announces_action(
+        ("Thinking about the task. " * 60) + "Let me read the file."
+    )
 
 
 def test_promoted_reasoning_detector_ignores_stated_answers():

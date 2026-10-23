@@ -34,15 +34,13 @@ class RelayTransport(Protocol):
         """Open the connection to the connector; return True on success."""
         ...
 
-    async def disconnect(self) -> None:
-        ...
+    async def disconnect(self) -> None: ...
 
     async def handshake(self) -> CapabilityDescriptor:
         """Return the capability descriptor the connector advertises."""
         ...
 
-    def set_inbound_handler(self, handler: InboundHandler) -> None:
-        ...
+    def set_inbound_handler(self, handler: InboundHandler) -> None: ...
 
     def set_passthrough_handler(self, handler: PassthroughHandler) -> None:
         """Register the callback for each forwarded passthrough request (§5.1).
@@ -69,7 +67,9 @@ class RelayTransport(Protocol):
         """Proxy a chat-info lookup to the connector."""
         ...
 
-    async def send_interrupt(self, session_key: str, reason: Optional[str] = None) -> None:
+    async def send_interrupt(
+        self, session_key: str, reason: Optional[str] = None
+    ) -> None:
         """Route a mid-turn /stop to the connector for ``session_key`` (OUTBOUND
         direction; the actual cancellation happens when the connector echoes an
         interrupt inbound down the socket owning that session)."""

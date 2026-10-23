@@ -36,7 +36,8 @@ class StopGateVerdict:
 def _verify_on_stop_nudge(agent) -> Optional[str]:
     try:
         from agent.verification_stop import (
-            build_verify_on_stop_nudge, verify_on_stop_enabled
+            build_verify_on_stop_nudge,
+            verify_on_stop_enabled,
         )
 
         if verify_on_stop_enabled():
@@ -64,13 +65,19 @@ def _pre_verify_nudge(agent, final_response, attempt: int) -> Optional[str]:
             coding = getattr(agent, "_resolved_is_coding", None)
             if coding is None:
                 from agent.coding_context import is_coding_context
-                coding = bool(is_coding_context(platform=getattr(agent, "platform", "") or ""))
+
+                coding = bool(
+                    is_coding_context(platform=getattr(agent, "platform", "") or "")
+                )
                 agent._resolved_is_coding = coding
             return get_pre_verify_continue_message(
                 session_id=getattr(agent, "session_id", None) or "",
                 platform=getattr(agent, "platform", "") or "",
-                model=getattr(agent, "model", "") or "", coding=coding, attempt=attempt,
-                final_response=final_response, changed_paths=_edited,
+                model=getattr(agent, "model", "") or "",
+                coding=coding,
+                attempt=attempt,
+                final_response=final_response,
+                changed_paths=_edited,
             )
     except Exception:
         logger.debug("pre_verify hook check failed", exc_info=True)
@@ -112,12 +119,16 @@ def _late_lsp_verdicts(agent) -> Optional[str]:
     if not notes:
         return None
     body = "\n\n".join(text for _path, text in notes)
-    return ("[System note: the language server reported problems in files you edited this turn, after "
-            "those tool results had returned. Fix them if they are real, then give your final answer.]\n\n"
-            + body)
+    return (
+        "[System note: the language server reported problems in files you edited this turn, after "
+        "those tool results had returned. Fix them if they are real, then give your final answer.]\n\n"
+        + body
+    )
 
 
-def _append_interim_answer(agent, final_msg, messages, conversation_history, flush_fail_msg: str) -> None:
+def _append_interim_answer(
+    agent, final_msg, messages, conversation_history, flush_fail_msg: str
+) -> None:
     """Real content: persist and emit as interim so the user sees the attempted answer;
     only the nudge is flagged synthetic (#65919)."""
     agent._emit_interim_assistant_message(final_msg)
@@ -129,8 +140,13 @@ def _append_interim_answer(agent, final_msg, messages, conversation_history, flu
 
 
 def apply_stop_gates(
-    agent: Any, final_msg: dict[str, Any], *, final_response: Any, messages: list[dict[str, Any]],
-    conversation_history: Any, pending_verification_response: Any,
+    agent: Any,
+    final_msg: dict[str, Any],
+    *,
+    final_response: Any,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    pending_verification_response: Any,
     pending_verification_response_previewed: Any,
 ) -> StopGateVerdict:
     """Run verify-on-stop → pre_verify hook → kanban stop guard, in that order. Nudges
@@ -146,7 +162,8 @@ def apply_stop_gates(
         # the finalizer can tell this gate from error exits. Mark previewed only if the
         # candidate is reused (#61631).
         return StopGateVerdict(
-            continue_turn=True, final_response=None,
+            continue_turn=True,
+            final_response=None,
             pending_verification_response=final_response,
             # Prefix semantics on purpose: the streamed prefix IS on screen here. The gateway
             # interim verdict uses _interim_content_fully_streamed instead (#88954).
@@ -157,31 +174,52 @@ def apply_stop_gates(
 
     _lsp_note = _late_lsp_verdicts(agent)
     if _lsp_note:
-        agent._lsp_turn_end_notes = getattr(agent, "_lsp_turn_end_notes", 0) + 1  # int: checked above
+        agent._lsp_turn_end_notes = (
+            getattr(agent, "_lsp_turn_end_notes", 0) + 1
+        )  # int: checked above
         final_msg["finish_reason"] = "verification_required"
         _append_interim_answer(
-            agent, final_msg, messages, conversation_history, "late-LSP interim flush failed"
+            agent,
+            final_msg,
+            messages,
+            conversation_history,
+            "late-LSP interim flush failed",
         )
         # A durable row (no scaffolding flag): it is never stripped, so no sent byte changes later.
         append_message(messages, {"role": "user", "content": _lsp_note})
         agent._session_messages = messages
-        logger.debug("late LSP verdicts delivered before the final answer (%d)", agent._lsp_turn_end_notes)
+        logger.debug(
+            "late LSP verdicts delivered before the final answer (%d)",
+            agent._lsp_turn_end_notes,
+        )
         return StopGateVerdict(
-            continue_turn=True, final_response=None,
+            continue_turn=True,
+            final_response=None,
             pending_verification_response=final_response,
-            pending_verification_response_previewed=agent._interim_content_was_streamed(final_response or ""),
+            pending_verification_response_previewed=agent._interim_content_was_streamed(
+                final_response or ""
+            ),
         )
 
     _verify_nudge = _verify_on_stop_nudge(agent)
     if _verify_nudge:
-        agent._verification_stop_nudges = getattr(agent, "_verification_stop_nudges", 0) + 1
+        agent._verification_stop_nudges = (
+            getattr(agent, "_verification_stop_nudges", 0) + 1
+        )
         final_msg["finish_reason"] = "verification_required"
         _append_interim_answer(
-            agent, final_msg, messages, conversation_history, "verify-on-stop interim flush failed"
+            agent,
+            final_msg,
+            messages,
+            conversation_history,
+            "verify-on-stop interim flush failed",
         )
         verdict = _continue(_verify_nudge, "_verification_stop_synthetic")
         # Internal nudge: stay silent on the terminal, debug-log only.
-        logger.debug("verification stop-loop nudge issued (attempt %d)", agent._verification_stop_nudges)
+        logger.debug(
+            "verification stop-loop nudge issued (attempt %d)",
+            agent._verification_stop_nudges,
+        )
         return verdict
 
     _attempt = getattr(agent, "_pre_verify_nudges", 0)
@@ -190,7 +228,11 @@ def apply_stop_gates(
         agent._pre_verify_nudges = _attempt + 1
         final_msg["finish_reason"] = "verify_hook_continue"
         _append_interim_answer(
-            agent, final_msg, messages, conversation_history, "pre_verify interim flush failed"
+            agent,
+            final_msg,
+            messages,
+            conversation_history,
+            "pre_verify interim flush failed",
         )
         verdict = _continue(_verify_nudge2, "_pre_verify_synthetic")
         logger.debug("pre_verify nudge issued (attempt %d)", agent._pre_verify_nudges)
@@ -214,7 +256,8 @@ def apply_stop_gates(
         )
         return verdict
     return StopGateVerdict(
-        continue_turn=False, final_response=final_response,
+        continue_turn=False,
+        final_response=final_response,
         pending_verification_response=pending_verification_response,
         pending_verification_response_previewed=pending_verification_response_previewed,
     )

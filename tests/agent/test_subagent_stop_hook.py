@@ -60,6 +60,7 @@ def _stub_child_builder(monkeypatch):
     """Replace _build_child_agent with a MagicMock factory so delegate_task
     never transitively imports run_agent / openai.  Keeps the test runnable
     in environments without heavyweight runtime deps installed."""
+
     def _fake_build_child(task_index, **kwargs):
         child = MagicMock()
         child._delegate_saved_tool_names = []
@@ -67,7 +68,8 @@ def _stub_child_builder(monkeypatch):
         return child
 
     monkeypatch.setattr(
-        "tools.delegate_tool._build_child_agent", _fake_build_child,
+        "tools.delegate_tool._build_child_agent",
+        _fake_build_child,
     )
 
 
@@ -120,11 +122,16 @@ class TestSingleTask:
                 dispatch_threads.append(threading.current_thread())
             return real_invoke(hook_name, **kwargs)
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run, \
-             patch("clawk_cli.plugins.invoke_hook", side_effect=_tracking_invoke):
+        with (
+            patch("tools.delegate_tool._run_single_child") as mock_run,
+            patch("clawk_cli.plugins.invoke_hook", side_effect=_tracking_invoke),
+        ):
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": None,
             }
             delegate_task(goal="go", parent_agent=_make_parent())
@@ -138,8 +145,11 @@ class TestSingleTask:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": None,
             }
             delegate_task(
@@ -159,15 +169,30 @@ class TestBatchMode:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
-                {"task_index": 0, "status": "completed",
-                 "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
-                 "_child_role": "role-a"},
-                {"task_index": 1, "status": "completed",
-                 "summary": "B", "api_calls": 2, "duration_seconds": 2.0,
-                 "_child_role": "role-b"},
-                {"task_index": 2, "status": "completed",
-                 "summary": "C", "api_calls": 3, "duration_seconds": 3.0,
-                 "_child_role": "role-c"},
+                {
+                    "task_index": 0,
+                    "status": "completed",
+                    "summary": "A",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": "role-a",
+                },
+                {
+                    "task_index": 1,
+                    "status": "completed",
+                    "summary": "B",
+                    "api_calls": 2,
+                    "duration_seconds": 2.0,
+                    "_child_role": "role-b",
+                },
+                {
+                    "task_index": 2,
+                    "status": "completed",
+                    "summary": "C",
+                    "api_calls": 3,
+                    "duration_seconds": 3.0,
+                    "_child_role": "role-c",
+                },
             ]
             delegate_task(
                 tasks=[
@@ -194,15 +219,27 @@ class TestBatchMode:
                 dispatch_threads.append(threading.current_thread())
             return real_invoke(hook_name, **kwargs)
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run, \
-             patch("clawk_cli.plugins.invoke_hook", side_effect=_tracking_invoke):
+        with (
+            patch("tools.delegate_tool._run_single_child") as mock_run,
+            patch("clawk_cli.plugins.invoke_hook", side_effect=_tracking_invoke),
+        ):
             mock_run.side_effect = [
-                {"task_index": 0, "status": "completed",
-                 "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
-                 "_child_role": None},
-                {"task_index": 1, "status": "completed",
-                 "summary": "B", "api_calls": 2, "duration_seconds": 2.0,
-                 "_child_role": None},
+                {
+                    "task_index": 0,
+                    "status": "completed",
+                    "summary": "A",
+                    "api_calls": 1,
+                    "duration_seconds": 1.0,
+                    "_child_role": None,
+                },
+                {
+                    "task_index": 1,
+                    "status": "completed",
+                    "summary": "B",
+                    "api_calls": 2,
+                    "duration_seconds": 2.0,
+                    "_child_role": None,
+                },
             ]
             delegate_task(
                 tasks=[
@@ -230,41 +267,42 @@ class TestPayloadShape:
                 "summary": "wrote the report",
                 "api_calls": 1,
                 "duration_seconds": 0.1,
-                "tool_trace": [{
-                    "tool": "write_file",
-                    "args_bytes": 128,
-                    "result_bytes": 32,
-                    "status": "ok",
-                    "input_summary": {
-                        "argument_keys": ["content", "path", "token"],
-                        "targets": {
-                            "path": "/private/report.json",
-                            "url": "https://user:password@example.test:8443/upload?token=secret",
-                            "token": "must-not-leak",
+                "tool_trace": [
+                    {
+                        "tool": "write_file",
+                        "args_bytes": 128,
+                        "result_bytes": 32,
+                        "status": "ok",
+                        "input_summary": {
+                            "argument_keys": ["content", "path", "token"],
+                            "targets": {
+                                "path": "/private/report.json",
+                                "url": "https://user:password@example.test:8443/upload?token=secret",
+                                "token": "must-not-leak",
+                            },
                         },
-                    },
-                    "args": {"path": "/private/report.json"},
-                    "result": "secret output",
-                }],
+                        "args": {"path": "/private/report.json"},
+                        "result": "secret output",
+                    }
+                ],
             }
             delegate_task(goal="do X", parent_agent=_make_parent())
 
-        assert captured[0]["tool_call_history"] == [{
-            "tool_name": "write_file",
-            "tool_input": {
-                "argument_keys": ["content", "path", "token"],
-                "targets": {
-                    "path": "/private/report.json",
-                    "url": "https://example.test:8443/upload",
+        assert captured[0]["tool_call_history"] == [
+            {
+                "tool_name": "write_file",
+                "tool_input": {
+                    "argument_keys": ["content", "path", "token"],
+                    "targets": {
+                        "path": "/private/report.json",
+                        "url": "https://example.test:8443/upload",
+                    },
                 },
-            },
-            "input_bytes": 128,
-            "output_bytes": 32,
-            "status": "ok",
-        }]
-
-
-
+                "input_bytes": 128,
+                "output_bytes": 32,
+                "status": "ok",
+            }
+        ]
 
     def test_result_does_not_leak_child_role_field(self):
         """The internal _child_role key must be stripped before the
@@ -273,8 +311,11 @@ class TestPayloadShape:
 
         with patch("tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
-                "task_index": 0, "status": "completed",
-                "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
+                "task_index": 0,
+                "status": "completed",
+                "summary": "x",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
                 "_child_role": "leaf",
             }
             raw = delegate_task(goal="do X", parent_agent=_make_parent())

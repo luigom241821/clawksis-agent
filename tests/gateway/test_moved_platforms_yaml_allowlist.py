@@ -31,13 +31,19 @@ def test_yaml_allowed_users_admits_listed_dm_sender_only(monkeypatch, platform):
     p = Platform(platform)
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig()
-    runner.adapters = {p: SimpleNamespace(config=PlatformConfig(enabled=True, extra={"allowed_users": ["listed-1"]}))}
+    runner.adapters = {
+        p: SimpleNamespace(
+            config=PlatformConfig(enabled=True, extra={"allowed_users": ["listed-1"]})
+        )
+    }
     runner._profile_adapters = {}
     runner.pairing_store = MagicMock()
     runner.pairing_store.is_approved.return_value = False
 
     def dm(user_id):
-        return SessionSource(platform=p, user_id=user_id, chat_id=user_id, user_name="u", chat_type="dm")
+        return SessionSource(
+            platform=p, user_id=user_id, chat_id=user_id, user_name="u", chat_type="dm"
+        )
 
     assert runner._is_user_authorized(dm("listed-1")) is True
     assert runner._is_user_authorized(dm("stranger-9")) is False

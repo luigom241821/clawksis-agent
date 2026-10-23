@@ -43,10 +43,7 @@ def test_cwd_only_override_collapses_to_default():
         "acp-session-abc", {"cwd": "/home/user/project"}
     )
     try:
-        assert (
-            terminal_tool._resolve_container_task_id("acp-session-abc")
-            == "default"
-        )
+        assert terminal_tool._resolve_container_task_id("acp-session-abc") == "default"
     finally:
         terminal_tool.clear_task_env_overrides("acp-session-abc")
 
@@ -57,10 +54,7 @@ def test_env_type_override_keeps_own_id():
         "bench-env", {"env_type": "sandbox", "cwd": "/work"}
     )
     try:
-        assert (
-            terminal_tool._resolve_container_task_id("bench-env")
-            == "bench-env"
-        )
+        assert terminal_tool._resolve_container_task_id("bench-env") == "bench-env"
     finally:
         terminal_tool.clear_task_env_overrides("bench-env")
 
@@ -127,9 +121,7 @@ def test_session_key_from_contextvar_without_environ(monkeypatch):
     monkeypatch.delenv("CLAWK_SESSION_KEY", raising=False)
     tokens = set_session_vars(session_key="sess-ctx")
     try:
-        assert (
-            terminal_tool._resolve_container_task_id(None) == "session:sess-ctx"
-        )
+        assert terminal_tool._resolve_container_task_id(None) == "session:sess-ctx"
         # Subagents inherit the same ContextVar and collapse onto the parent.
         assert (
             terminal_tool._resolve_container_task_id("subagent-1-cafe")
@@ -149,9 +141,7 @@ def test_contextvar_session_key_wins_over_environ(monkeypatch):
     monkeypatch.setenv("CLAWK_SESSION_KEY", "sess-ENV")
     tokens = set_session_vars(session_key="sess-CTX")
     try:
-        assert (
-            terminal_tool._resolve_container_task_id(None) == "session:sess-CTX"
-        )
+        assert terminal_tool._resolve_container_task_id(None) == "session:sess-CTX"
     finally:
         clear_session_vars(tokens)
 
@@ -192,7 +182,9 @@ def test_persistent_docker_two_sessions_same_profile_share_container(monkeypatch
         a = terminal_tool._resolve_container_task_id(None)
     finally:
         clear_session_vars(tokens)
-    tokens = set_session_vars(session_key="agent:main:discord:guild:456", profile="work")
+    tokens = set_session_vars(
+        session_key="agent:main:discord:guild:456", profile="work"
+    )
     try:
         b = terminal_tool._resolve_container_task_id(None)
     finally:

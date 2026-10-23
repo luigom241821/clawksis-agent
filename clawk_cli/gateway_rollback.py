@@ -5,6 +5,7 @@ cwd), so the CLI process has no manager of its own: it renders main's text over 
 answers. A whole-tree restore also rewinds the newest user turn on the owner (``history_removed``);
 the CLI then re-reads the transcript so its warm history matches.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,12 +20,20 @@ def _t(key, **kw):
 
 def _checkpoint_rows(result):
     """``rollback.list`` rows as ``format_checkpoint_list`` reads them."""
-    return [{"hash": c.get("hash", ""), "short_hash": (c.get("hash") or "")[:7], "timestamp": c.get("timestamp", ""),
-             "reason": c.get("message", "")} for c in result.get("checkpoints") or []]
+    return [
+        {
+            "hash": c.get("hash", ""),
+            "short_hash": (c.get("hash") or "")[:7],
+            "timestamp": c.get("timestamp", ""),
+            "reason": c.get("message", ""),
+        }
+        for c in result.get("checkpoints") or []
+    ]
 
 
 def rollback(cli, connection, command):
     from tools.checkpoint_manager import format_checkpoint_list
+
     words = command.split()[1:]
     args = [a for a in words if a.lower() not in ("--all", "--force")]
     restore_all = len(args) != len(words)
@@ -34,7 +43,12 @@ def rollback(cli, connection, command):
         if not args:
             listed = connection.call("rollback.list", session_id=sid)
             if not listed.get("enabled"):
-                return print("\n".join(f"  {line}" if line else "" for line in _t("rollback.not_enabled").splitlines()))
+                return print(
+                    "\n".join(
+                        f"  {line}" if line else ""
+                        for line in _t("rollback.not_enabled").splitlines()
+                    )
+                )
             return print(format_checkpoint_list(_checkpoint_rows(listed), cwd))
         if args[0].lower() == "diff":
             if len(args) < 2:
@@ -44,8 +58,15 @@ def rollback(cli, connection, command):
         if len(args) > 1:
             params["file_path"] = args[1]
         elif restore_all:
-            params["all"] = True  # main's --all/--force: also revert the user's hand-edits
-        _restored(cli, connection, connection.call("rollback.restore", **params), params.get("file_path"))
+            params["all"] = (
+                True  # main's --all/--force: also revert the user's hand-edits
+            )
+        _restored(
+            cli,
+            connection,
+            connection.call("rollback.restore", **params),
+            params.get("file_path"),
+        )
     except GatewayClientError as exc:
         print(f"  ❌ {exc}")
 
@@ -68,15 +89,25 @@ def _diff(result):
 def _restored(cli, connection, result, file_path):
     if not result.get("success"):
         return print(f"  ❌ {result.get('error')}")
-    restored = {"hash": result.get("restored_to", ""), "reason": result.get("reason", "")}
-    print(f"  {_t('rollback.restored_file', file=file_path, **restored)}" if file_path
-          else f"  {_t('rollback.restored_all', **restored)}")
+    restored = {
+        "hash": result.get("restored_to", ""),
+        "reason": result.get("reason", ""),
+    }
+    print(
+        f"  {_t('rollback.restored_file', file=file_path, **restored)}"
+        if file_path
+        else f"  {_t('rollback.restored_all', **restored)}"
+    )
     from clawk_cli.cli_commands_session_tools import _rollback_kept
+
     _rollback_kept(result)  # the in-process CLI's own lines
     print(f"  {_t('rollback.snapshot_saved')}")
     if result.get("history_removed"):
         snapshot = connection.call("session.resume", session_id=cli.session_id)
         connection.state(cli.session_id).adopt_snapshot(snapshot)
-        cli.conversation_history = [{k: v for k, v in m.items() if k != "row_id"}
-                                    for m in snapshot.get("messages") or [] if not m.get("archived")]
+        cli.conversation_history = [
+            {k: v for k, v in m.items() if k != "row_id"}
+            for m in snapshot.get("messages") or []
+            if not m.get("archived")
+        ]
         print(f"  {_t('rollback.chat_turn_undone')}")

@@ -63,9 +63,18 @@ CHUNK = 1 << 20
 # Top-level files whose content must survive verbatim.
 JUDGED_FILES = ("config.yaml", ".env", "auth.json", "state.db", "gateway_state.json")
 # Trees that must survive: every entry under them is judged.
-JUDGED_ROOTS = ("memories", "cron", "sessions", "profiles", "photon",
-                "desktop-plugins", "tui-widgets", "skins", "pets",
-                "skills/" + SKILL_ARCHIVE)
+JUDGED_ROOTS = (
+    "memories",
+    "cron",
+    "sessions",
+    "profiles",
+    "photon",
+    "desktop-plugins",
+    "tui-widgets",
+    "skins",
+    "pets",
+    "skills/" + SKILL_ARCHIVE,
+)
 # Trees recorded for the report but never judged (see the module docstring).
 ADVISORY_ROOTS = (SKILLS_ROOT,)
 
@@ -75,7 +84,9 @@ ADVISORY_ROOTS = (SKILLS_ROOT,)
 # is reported, not failed. Derived from the migration source so a newly retired
 # var cannot drift out of this set; unreadable source retires nothing, which
 # keeps every .env change fatal.
-MIGRATION_SOURCE = Path(__file__).resolve().parents[3] / "clawk_cli" / "config_migrations.py"
+MIGRATION_SOURCE = (
+    Path(__file__).resolve().parents[3] / "clawk_cli" / "config_migrations.py"
+)
 EMPTY_VALUE_DIGEST = hashlib.sha256(b"").hexdigest()[:12]
 # state.db tables whose row counts stand in for "the user's data is still here".
 # Counting rows rather than hashing bytes: a live SQLite file changes for
@@ -126,12 +137,16 @@ def _db_counts(path: str) -> dict | None:
     except sqlite3.Error:
         return None
     try:
-        names = {row[0] for row in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'")}
+        names = {
+            row[0]
+            for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
         counts = {}
         for table in COUNTED_TABLES:
             if table in names:
-                counts[table] = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                counts[table] = con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[
+                    0
+                ]
         return counts
     except sqlite3.Error:
         return None
@@ -153,7 +168,8 @@ def _is_bundled_skill(rel: str, *, profiles: bool) -> bool:
     parts = rel.split("/")
     if not profiles:
         return parts[0] == SKILLS_ROOT and not (
-            len(parts) > 1 and parts[1] == SKILL_ARCHIVE)
+            len(parts) > 1 and parts[1] == SKILL_ARCHIVE
+        )
     if len(parts) >= 3 and parts[2] == SKILLS_ROOT:
         return not (len(parts) > 3 and parts[3] == SKILL_ARCHIVE)
     return False
@@ -178,11 +194,13 @@ def _env_key_hashes(path: str) -> dict[str, str]:
         if not text or text.startswith("#"):
             continue
         if text.startswith("export "):
-            text = text[len("export "):].lstrip()
+            text = text[len("export ") :].lstrip()
         key, sep, value = text.partition("=")
         key = key.strip()
         if sep and key:
-            digests[key] = hashlib.sha256(value.strip().encode("utf-8")).hexdigest()[:12]
+            digests[key] = hashlib.sha256(value.strip().encode("utf-8")).hexdigest()[
+                :12
+            ]
     return digests
 
 
@@ -192,7 +210,9 @@ def _env_key_diff(before: dict, after: dict) -> dict:
     return {
         "keys_added": sorted(set(right) - set(left)),
         "keys_removed": sorted(set(left) - set(right)),
-        "keys_changed": sorted(key for key in set(left) & set(right) if left[key] != right[key]),
+        "keys_changed": sorted(
+            key for key in set(left) & set(right) if left[key] != right[key]
+        ),
     }
 
 
@@ -231,12 +251,16 @@ def retired_env_vars(source: Path | None = None) -> frozenset[str]:
         if not any(_clears_loop_var(call, node.target.id) for call in ast.walk(node)):
             continue
         retired.update(
-            element.value for element in ast.walk(node.iter)
-            if isinstance(element, ast.Constant) and isinstance(element.value, str))
+            element.value
+            for element in ast.walk(node.iter)
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        )
     return frozenset(retired)
 
 
-def retired_env_clear(rel: str, pair: dict, retired: frozenset[str] | None = None) -> list[str]:
+def retired_env_clear(
+    rel: str, pair: dict, retired: frozenset[str] | None = None
+) -> list[str]:
     """Names a .env change may carry: the tree's retired vars, and emptied.
 
     Everything else stays fatal -- an added or removed key, a live key's value,
@@ -271,9 +295,17 @@ def _env_line_summary(path: str) -> dict:
         return {"lines": 0, "comments": 0, "blanks": 0, "key_order": []}
     comments = sum(1 for line in lines if line.strip().startswith("#"))
     blanks = sum(1 for line in lines if not line.strip())
-    order = [line.split("=", 1)[0].strip() for line in lines
-             if "=" in line and line.strip() and not line.strip().startswith("#")]
-    return {"lines": len(lines), "comments": comments, "blanks": blanks, "key_order": order}
+    order = [
+        line.split("=", 1)[0].strip()
+        for line in lines
+        if "=" in line and line.strip() and not line.strip().startswith("#")
+    ]
+    return {
+        "lines": len(lines),
+        "comments": comments,
+        "blanks": blanks,
+        "key_order": order,
+    }
 
 
 def _entry_record_unless_vanished(rel: str, abs_path: str) -> dict | None:
@@ -348,7 +380,11 @@ def _walk_root(home: str, root_rel: str, *, profiles: bool, judged: bool):
     root_abs = os.path.join(home, root_rel.replace("/", os.sep))
     if not _lexists(root_abs):
         return
-    yield root_rel, root_abs, judged and not _is_bundled_skill(root_rel, profiles=profiles)
+    yield (
+        root_rel,
+        root_abs,
+        judged and not _is_bundled_skill(root_rel, profiles=profiles),
+    )
     # Top-level entries include plain FILES (config.yaml, state.db): only a real
     # directory can be descended, and a symlink must never be followed.
     if _is_link(root_abs) or not os.path.isdir(root_abs):
@@ -367,7 +403,9 @@ def _walk_root(home: str, root_rel: str, *, profiles: bool, judged: bool):
                 continue
             # The judged skills/.archive tree is walked as its own root, so the
             # advisory walk of skills/ must not claim it.
-            if not judged and (rel.split("/")[-1] == SKILL_ARCHIVE or "/" + SKILL_ARCHIVE + "/" in rel):
+            if not judged and (
+                rel.split("/")[-1] == SKILL_ARCHIVE or "/" + SKILL_ARCHIVE + "/" in rel
+            ):
                 continue
             entry_judged = judged and not _is_bundled_skill(rel, profiles=profiles)
             if _is_link(abs_path):
@@ -385,7 +423,7 @@ def snapshot_home(home: str, profiles_dir: str | None = None) -> dict:
     entries: dict[str, dict] = {}
     advisory: dict[str, dict] = {}
 
-    targets: list[tuple[str, bool, bool]] = []   # (rel, profiles_style, judged)
+    targets: list[tuple[str, bool, bool]] = []  # (rel, profiles_style, judged)
     for name in JUDGED_FILES:
         targets.append((name, False, True))
     for name in JUDGED_ROOTS:
@@ -394,13 +432,17 @@ def snapshot_home(home: str, profiles_dir: str | None = None) -> dict:
         targets.append((name, False, False))
 
     for rel_root, profiles, judged in targets:
-        for rel, abs_path, entry_judged in _walk_root(home, rel_root, profiles=profiles, judged=judged):
+        for rel, abs_path, entry_judged in _walk_root(
+            home, rel_root, profiles=profiles, judged=judged
+        ):
             record = _entry_record_unless_vanished(rel, abs_path)
             if record is not None:
                 (entries if entry_judged else advisory)[rel] = record
 
     # Profiles may live somewhere else entirely (a test harness override).
-    if profiles_dir and os.path.abspath(profiles_dir) != os.path.join(home, PROFILES_DIR):
+    if profiles_dir and os.path.abspath(profiles_dir) != os.path.join(
+        home, PROFILES_DIR
+    ):
         override_abs = os.path.abspath(profiles_dir)
         if _lexists(override_abs):
             entries["profiles"] = {"kind": "dir"}
@@ -410,12 +452,15 @@ def snapshot_home(home: str, profiles_dir: str | None = None) -> dict:
                 entries[rel] = _entry_record(abs_path)
                 if os.path.isdir(abs_path) and not _is_link(abs_path):
                     for sub_rel, sub_abs, sub_judged in _walk_root(
-                            override_abs, name, profiles=True, judged=True):
+                        override_abs, name, profiles=True, judged=True
+                    ):
                         if sub_rel == name:
                             continue
                         record = _entry_record_unless_vanished(sub_rel, sub_abs)
                         if record is not None:
-                            (entries if sub_judged else advisory)[f"{PROFILES_DIR}/{sub_rel}"] = record
+                            (entries if sub_judged else advisory)[
+                                f"{PROFILES_DIR}/{sub_rel}"
+                            ] = record
 
     return {
         "schema": SCHEMA_VERSION,
@@ -429,9 +474,11 @@ def _diff(before: dict, after: dict) -> dict:
     return {
         "deleted": sorted(set(before) - set(after)),
         "added": sorted(set(after) - set(before)),
-        "modified": {key: {"before": before[key], "after": after[key]}
-                     for key in sorted(set(before) & set(after))
-                     if before[key] != after[key]},
+        "modified": {
+            key: {"before": before[key], "after": after[key]}
+            for key in sorted(set(before) & set(after))
+            if before[key] != after[key]
+        },
     }
 
 
@@ -449,7 +496,11 @@ def _modification_allowed(rel: str) -> bool:
     so its bytes must move. It stays judged -- losing it still fails.
     """
     name = rel.rsplit("/", 1)[-1]
-    if name in ("config.yaml", "state.db") or name.endswith(".db") or rel == "gateway_state.json":
+    if (
+        name in ("config.yaml", "state.db")
+        or name.endswith(".db")
+        or rel == "gateway_state.json"
+    ):
         return True
     parent = rel.rsplit("/", 1)[0] if "/" in rel else ""
     is_cron = parent == "cron" or parent.endswith("/cron")
@@ -476,8 +527,10 @@ def _rows_shrank(rel: str, before: dict, after: dict) -> bool:
     old, new = before.get("rows"), after.get("rows")
     if not isinstance(old, dict) or not isinstance(new, dict):
         return False
-    return any(isinstance(old.get(k), int) and isinstance(new.get(k), int)
-               and new[k] < old[k] for k in old)
+    return any(
+        isinstance(old.get(k), int) and isinstance(new.get(k), int) and new[k] < old[k]
+        for k in old
+    )
 
 
 def verify_home(home: str, snap: dict) -> dict:
@@ -486,12 +539,16 @@ def verify_home(home: str, snap: dict) -> dict:
     judged = _diff(snap["entries"], fresh["entries"])
     advisory = _diff(snap.get("advisory", {}), fresh["advisory"])
 
-    failing_modified = {k: v for k, v in judged["modified"].items()
-                        if not _modification_allowed(k)}
+    failing_modified = {
+        k: v for k, v in judged["modified"].items() if not _modification_allowed(k)
+    }
     failing_deleted = sorted(k for k in judged["deleted"] if not _volatile_sidecar(k))
     tolerated_deleted = sorted(k for k in judged["deleted"] if _volatile_sidecar(k))
-    shrank = sorted(k for k, v in judged["modified"].items()
-                    if _rows_shrank(k, v["before"], v["after"]))
+    shrank = sorted(
+        k
+        for k, v in judged["modified"].items()
+        if _rows_shrank(k, v["before"], v["after"])
+    )
     tolerated_modified = sorted(set(judged["modified"]) - set(failing_modified))
     # A rewritten .env is fatal by design -- except when the tree's own migration
     # is what rewrote it, clearing a key that tree no longer reads.
@@ -519,8 +576,9 @@ def verify_home(home: str, snap: dict) -> dict:
             "added": len(judged["added"]),
             "tolerated_modified": len(tolerated_modified),
             "tolerated_deleted": len(tolerated_deleted),
-            "advisory_changed": len(advisory["deleted"]) + len(advisory["modified"])
-                                + len(advisory["added"]),
+            "advisory_changed": len(advisory["deleted"])
+            + len(advisory["modified"])
+            + len(advisory["added"]),
         },
         "deleted": failing_deleted,
         "tolerated_deleted": tolerated_deleted,
@@ -541,7 +599,8 @@ def _render(report: dict) -> str:
         f"user state: {counts['before']} -> {counts['after']} entries "
         f"({counts['deleted']} deleted, {counts['modified']} modified, "
         f"{counts['added']} added, {counts['tolerated_modified']} tolerated, "
-        f"{counts['advisory_changed']} advisory)")
+        f"{counts['advisory_changed']} advisory)"
+    )
     for label, key in (("DELETED", "deleted"), ("MODIFIED", "modified")):
         for rel in report[key]:
             lines.append(f"  {label} {rel}")
@@ -551,15 +610,23 @@ def _render(report: dict) -> str:
             continue
         named = ", ".join(
             f"{kind}={','.join(detail[field])}"
-            for kind, field in (("added", "keys_added"), ("removed", "keys_removed"),
-                                ("changed", "keys_changed"))
-            if detail.get(field))
+            for kind, field in (
+                ("added", "keys_added"),
+                ("removed", "keys_removed"),
+                ("changed", "keys_changed"),
+            )
+            if detail.get(field)
+        )
         if named:
-            lines.append(f"    {rel}: variables {named} (names only; values are never recorded)")
+            lines.append(
+                f"    {rel}: variables {named} (names only; values are never recorded)"
+            )
         else:
-            lines.append(f"    {rel}: no key differs -- comments/order/blanks only "
-                         f"(before {pair['before'].get('env_lines')}, after {pair['after'].get('env_lines')}; "
-                         f"counts and names, never content)")
+            lines.append(
+                f"    {rel}: no key differs -- comments/order/blanks only "
+                f"(before {pair['before'].get('env_lines')}, after {pair['after'].get('env_lines')}; "
+                f"counts and names, never content)"
+            )
     for rel in report["rows_shrank"]:
         lines.append(f"  ROWS SHRANK {rel}")
     for rel, names in report.get("retired_env_cleared", {}).items():
@@ -571,7 +638,10 @@ def _render(report: dict) -> str:
     for rel in report.get("tolerated_deleted", []):
         lines.append(f"  tolerated (sidecar or lock) {rel}")
     advisory = report["advisory"]
-    for label, key in (("advisory deleted", "deleted"), ("advisory modified", "modified")):
+    for label, key in (
+        ("advisory deleted", "deleted"),
+        ("advisory modified", "modified"),
+    ):
         for rel in advisory[key]:
             lines.append(f"  {label} (skills sync) {rel}")
     return "\n".join(lines)
@@ -588,7 +658,10 @@ def env_key_report(home: str, profiles_dir: str | None = None) -> list[str]:
     """
     snap = snapshot_home(home, profiles_dir)
     lines: list[str] = []
-    for label, entries in (("judged", snap["entries"]), ("advisory", snap.get("advisory", {}))):
+    for label, entries in (
+        ("judged", snap["entries"]),
+        ("advisory", snap.get("advisory", {})),
+    ):
         for rel in sorted(entries):
             if not rel.endswith(".env"):
                 continue
@@ -605,8 +678,9 @@ def main(argv: list[str] | None = None) -> int:
     p_snap = sub.add_parser("snapshot", help="record durable user state to JSON")
     p_snap.add_argument("--home", required=True)
     p_snap.add_argument("--out", required=True)
-    p_snap.add_argument("--profiles-dir",
-                        help="override the profiles root (default <home>/profiles)")
+    p_snap.add_argument(
+        "--profiles-dir", help="override the profiles root (default <home>/profiles)"
+    )
 
     p_ver = sub.add_parser("verify", help="compare current state to a snapshot")
     p_ver.add_argument("--home", required=True)
@@ -614,8 +688,9 @@ def main(argv: list[str] | None = None) -> int:
     p_ver.add_argument("--report")
     p_ver.add_argument("--profiles-dir")
 
-    p_env = sub.add_parser("env-keys",
-                           help="print every judged .env and its key names (names only)")
+    p_env = sub.add_parser(
+        "env-keys", help="print every judged .env and its key names (names only)"
+    )
     p_env.add_argument("--home", required=True)
     p_env.add_argument("--profiles-dir")
 
@@ -641,16 +716,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"snapshot failed: {exc}", file=sys.stderr)
             return 2
         if not snap["entries"]:
-            print("snapshot INCONCLUSIVE: zero judged entries — was this home "
-                  "ever used? Refusing to record an empty contract.",
-                  file=sys.stderr)
+            print(
+                "snapshot INCONCLUSIVE: zero judged entries — was this home "
+                "ever used? Refusing to record an empty contract.",
+                file=sys.stderr,
+            )
             return 3
         if args.profiles_dir:
             snap["_profiles_dir"] = args.profiles_dir
         with open(args.out, "w", encoding="utf-8") as handle:
             json.dump(snap, handle, indent=2, sort_keys=True)
-        print(f"snapshot: {len(snap['entries'])} judged entries "
-              f"({len(snap['advisory'])} advisory) -> {args.out}")
+        print(
+            f"snapshot: {len(snap['entries'])} judged entries "
+            f"({len(snap['advisory'])} advisory) -> {args.out}"
+        )
         return 0
 
     with open(args.snapshot, "r", encoding="utf-8") as handle:
@@ -669,9 +748,11 @@ def main(argv: list[str] | None = None) -> int:
             handle.write(rendered)
 
     if not snap.get("entries"):
-        print("USER-STATE PRESERVATION INCONCLUSIVE: the snapshot is empty; "
-              "refusing to claim preservation over zero recorded entries.",
-              file=sys.stderr)
+        print(
+            "USER-STATE PRESERVATION INCONCLUSIVE: the snapshot is empty; "
+            "refusing to claim preservation over zero recorded entries.",
+            file=sys.stderr,
+        )
         return 3
 
     if report["ok"]:
@@ -679,9 +760,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(_render(report), file=sys.stderr)
     counts = report["counts"]
-    print("USER-STATE PRESERVATION FAILED: "
-          f"{counts['deleted']} deleted, {counts['modified']} modified, "
-          f"{len(report['rows_shrank'])} with fewer rows", file=sys.stderr)
+    print(
+        "USER-STATE PRESERVATION FAILED: "
+        f"{counts['deleted']} deleted, {counts['modified']} modified, "
+        f"{len(report['rows_shrank'])} with fewer rows",
+        file=sys.stderr,
+    )
     return 1
 
 

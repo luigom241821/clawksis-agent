@@ -39,6 +39,7 @@ class TestNoteFireForwardFailure:
         assert err["detail"] == "gateway unreachable"
         # Timestamp parses as ISO.
         from datetime import datetime
+
         datetime.fromisoformat(err["at"])
 
     def test_unknown_job_returns_false(self, tmp_cron_dir):
@@ -50,7 +51,6 @@ class TestNoteFireForwardFailure:
         note_fire_forward_failure(job["id"], "second miss")
         err = get_job(job["id"])["last_fire_error"]
         assert err["detail"] == "second miss"
-
 
     def test_successful_run_clears_stamp(self, tmp_cron_dir):
         """The stamp describes CURRENT auto-fire health — a run that made it

@@ -25,13 +25,25 @@ import pytest
 
 from tests.e2e.core._pending_fixes import known_gate
 from tests.e2e.core.providers import _native_helpers as nh
-from tests.fakes.providers.gemini_native import CLAWK_ENV, Call, Calls, GeminiFake, Recorded, Text, clawk_model
+from tests.fakes.providers.gemini_native import (
+    CLAWK_ENV,
+    Call,
+    Calls,
+    GeminiFake,
+    Recorded,
+    Text,
+    clawk_model,
+)
 
 KNOWN: dict[str, tuple[str, str]] = {
-    "ref_dropped_v1": (r"\$ref-typed parameter lost its shape on the v1 wire",
-                       "#99438 legacy `parameters` path drops $ref/$defs instead of inlining (empty schema)"),
-    "array_items_v1": (r"Google rejected the item-less array: .*items: missing field",
-                       "#71804 array parameter without `items` is sent as-is; Google 400s 'items: missing field'"),
+    "ref_dropped_v1": (
+        r"\$ref-typed parameter lost its shape on the v1 wire",
+        "#99438 legacy `parameters` path drops $ref/$defs instead of inlining (empty schema)",
+    ),
+    "array_items_v1": (
+        r"Google rejected the item-less array: .*items: missing field",
+        "#71804 array parameter without `items` is sent as-is; Google 400s 'items: missing field'",
+    ),
 }
 
 TOOL = "mcp__hostile__lookup"
@@ -48,17 +60,34 @@ HOSTILE: dict[str, Any] = {
     "properties": {
         "query": {"type": "string", "minLength": 1, "examples": ["x"]},
         "mode": {"$ref": "#/$defs/Mode"},
-        "limit": {"type": ["integer", "null"], "exclusiveMinimum": 0, "enum": [1, 5, 10]},
-        "filters": {"type": "array", "items": {"oneOf": [
-            {"type": "string"},
-            {"type": "object", "properties": {"k": {"type": "string"}}, "additionalProperties": False}]}},
+        "limit": {
+            "type": ["integer", "null"],
+            "exclusiveMinimum": 0,
+            "enum": [1, 5, 10],
+        },
+        "filters": {
+            "type": "array",
+            "items": {
+                "oneOf": [
+                    {"type": "string"},
+                    {
+                        "type": "object",
+                        "properties": {"k": {"type": "string"}},
+                        "additionalProperties": False,
+                    },
+                ]
+            },
+        },
         "flag": {"const": True},
     },
     "required": ["query", "not_a_property"],
 }
-ITEMLESS: dict[str, Any] = {"type": "object", "properties": {"tags": {"type": "array", "description": "tags"}}}
+ITEMLESS: dict[str, Any] = {
+    "type": "object",
+    "properties": {"tags": {"type": "array", "description": "tags"}},
+}
 
-_MCP_SERVER = textwrap.dedent('''
+_MCP_SERVER = textwrap.dedent("""
     import json, sys
     TOOLS = json.loads(sys.argv[1])
     CANARY = sys.argv[2]
@@ -82,7 +111,7 @@ _MCP_SERVER = textwrap.dedent('''
             print(json.dumps({"jsonrpc": "2.0", "id": mid, "error": err}), flush=True)
             continue
         print(json.dumps({"jsonrpc": "2.0", "id": mid, "result": res}), flush=True)
-''')
+""")
 
 
 @dataclass
@@ -94,51 +123,77 @@ class Outcome:
     def declaration(self) -> dict[str, Any]:
         assert self.calls, self.result.describe()
         decl = self.calls[0].declarations().get(TOOL)
-        assert decl is not None, f"{TOOL} not declared: {sorted(self.calls[0].declarations())}"
+        assert decl is not None, (
+            f"{TOOL} not declared: {sorted(self.calls[0].declarations())}"
+        )
         return decl
 
     def function_responses(self) -> list[dict[str, Any]]:
-        return [p["functionResponse"] for rec in self.calls for p in rec.parts("functionResponse")]
+        return [
+            p["functionResponse"]
+            for rec in self.calls
+            for p in rec.parts("functionResponse")
+        ]
 
 
 def _scenario(root: Path, schema: dict[str, Any], base_url: str | None) -> Outcome:
     root.mkdir(parents=True)
     server = root / "hostile_mcp.py"
     server.write_text(_MCP_SERVER, encoding="utf-8")
-    tools = [{"name": "lookup", "description": "Look something up.", "inputSchema": schema}]
+    tools = [
+        {"name": "lookup", "description": "Look something up.", "inputSchema": schema}
+    ]
     extra = {
         # Keep the MCP tool in the model-facing array (not behind the tool_search bridge) and let
         # discovery finish before the one-shot turn is built.
         "tools": {"tool_search": {"enabled": "off"}},
         "mcp_discovery_timeout": 60,
         "mcp_single_query_discovery_timeout": 60,
-        "mcp_servers": {"hostile": {"command": sys.executable,
-                                    "args": [str(server), json.dumps(tools), MCP_CANARY]}},
+        "mcp_servers": {
+            "hostile": {
+                "command": sys.executable,
+                "args": [str(server), json.dumps(tools), MCP_CANARY],
+            }
+        },
     }
-    home = nh.make_home(root, clawk_model(base_url), env_file=CLAWK_ENV, extra_config=extra)
+    home = nh.make_home(
+        root, clawk_model(base_url), env_file=CLAWK_ENV, extra_config=extra
+    )
     script = [Calls([Call(TOOL, {"query": "q1", "mode": "fast"})]), Text(DONE)]
     with GeminiFake(root / "fake", script) as fake:
         result = nh.run_chat(home, "Use the lookup tool for q1.", env=fake.child_env())
     return Outcome(result, fake.generate_calls(), fake.rejections())
 
 
-SCENARIOS = {"v1beta": (HOSTILE, None), "v1": (HOSTILE, V1), "v1_itemless": (ITEMLESS, V1)}
+SCENARIOS = {
+    "v1beta": (HOSTILE, None),
+    "v1": (HOSTILE, V1),
+    "v1_itemless": (ITEMLESS, V1),
+}
 
 
 @pytest.fixture(scope="module")
 def outcomes(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Outcome]:
     base = tmp_path_factory.mktemp("gemini_schema")
     with ThreadPoolExecutor(len(SCENARIOS)) as pool:
-        futures = {k: pool.submit(_scenario, base / k, *v) for k, v in SCENARIOS.items()}
+        futures = {
+            k: pool.submit(_scenario, base / k, *v) for k, v in SCENARIOS.items()
+        }
         return {k: f.result() for k, f in futures.items()}
 
 
 def _assert_round_trip(o: Outcome, version: str) -> None:
     assert o.rejections == [], o.rejections
-    assert [c.version for c in o.calls] == [version, version], [(c.version, c.status) for c in o.calls]
+    assert [c.version for c in o.calls] == [version, version], [
+        (c.version, c.status) for c in o.calls
+    ]
     responses = [r for r in o.function_responses() if r.get("name") == TOOL]
-    assert responses and MCP_CANARY in json.dumps(responses[0]["response"]), o.function_responses()
-    assert f"{MCP_CANARY} query=q1" in json.dumps(responses[0]["response"]), responses[0]
+    assert responses and MCP_CANARY in json.dumps(responses[0]["response"]), (
+        o.function_responses()
+    )
+    assert f"{MCP_CANARY} query=q1" in json.dumps(responses[0]["response"]), responses[
+        0
+    ]
     assert o.result.returncode == 0 and DONE in o.result.stdout, o.result.describe()
 
 
@@ -152,15 +207,21 @@ def _walk(node: Any):
             yield from _walk(v)
 
 
-def test_v1beta_json_schema_declaration_is_sanitized(outcomes: dict[str, Outcome]) -> None:
+def test_v1beta_json_schema_declaration_is_sanitized(
+    outcomes: dict[str, Outcome],
+) -> None:
     o = outcomes["v1beta"]
     _assert_round_trip(o, "v1beta")
     schema = o.declaration().get("parametersJsonSchema")
     assert isinstance(schema, dict), o.declaration()
     leaked = [k for node in _walk(schema) for k in node if k in _FORBIDDEN_ANYWHERE]
     assert leaked == [], f"reference/meta keywords reached Google: {leaked} in {schema}"
-    assert schema["properties"]["mode"].get("enum") == ["fast", "slow"], schema["properties"]["mode"]
-    assert set(schema.get("required") or []) <= set(schema["properties"]), schema.get("required")
+    assert schema["properties"]["mode"].get("enum") == ["fast", "slow"], schema[
+        "properties"
+    ]["mode"]
+    assert set(schema.get("required") or []) <= set(schema["properties"]), schema.get(
+        "required"
+    )
 
 
 def test_v1_proto_schema_declaration_is_accepted(outcomes: dict[str, Outcome]) -> None:
@@ -168,7 +229,9 @@ def test_v1_proto_schema_declaration_is_accepted(outcomes: dict[str, Outcome]) -
     o = outcomes["v1"]
     _assert_round_trip(o, "v1")
     params = o.declaration().get("parameters")
-    assert isinstance(params, dict) and "parametersJsonSchema" not in o.declaration(), o.declaration()
+    assert isinstance(params, dict) and "parametersJsonSchema" not in o.declaration(), (
+        o.declaration()
+    )
     assert params["required"] == ["query"], params
 
 
@@ -177,7 +240,9 @@ def test_v1_ref_parameter_keeps_its_shape(outcomes: dict[str, Outcome]) -> None:
     mode = outcomes["v1"].declaration()["parameters"]["properties"]["mode"]
     with known_gate(KNOWN, "ref_dropped_v1", raises=nh.KnownSymptom):
         if mode == {}:
-            raise nh.KnownSymptom(f"$ref-typed parameter lost its shape on the v1 wire: {mode}")
+            raise nh.KnownSymptom(
+                f"$ref-typed parameter lost its shape on the v1 wire: {mode}"
+            )
     assert mode.get("enum") == ["fast", "slow"], mode
 
 
@@ -186,5 +251,7 @@ def test_v1_array_without_items_is_accepted(outcomes: dict[str, Outcome]) -> Non
     assert o.calls, o.result.describe()
     with known_gate(KNOWN, "array_items_v1", raises=nh.KnownSymptom):
         if any("items: missing field" in r for r in o.rejections):
-            raise nh.KnownSymptom(f"Google rejected the item-less array: {o.rejections}")
+            raise nh.KnownSymptom(
+                f"Google rejected the item-less array: {o.rejections}"
+            )
     _assert_round_trip(o, "v1")

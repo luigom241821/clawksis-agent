@@ -56,17 +56,20 @@ class _BoundedOutputCollector:
         try:
             if self._spill_fh is None:
                 from tools.spill_safety import ensure_spill_dir, open_exclusive
+
                 # Raw pre-redaction output: private perms + symlink-refusing
                 # exclusive create (a planted link must fail, never redirect).
                 ensure_spill_dir(self._spill_path.parent, private=True)
-                self._spill_fh = open_exclusive(self._spill_path, private=True, errors="replace")
+                self._spill_fh = open_exclusive(
+                    self._spill_path, private=True, errors="replace"
+                )
                 # Backfill what's retained so the file holds the stream from byte 0.
                 backlog = "".join(self._head) + "".join(self._tail)
                 self._spill_fh.write(backlog)
                 self._spill_chars = len(backlog)
             budget = self._SPILL_CAP_CHARS - self._spill_chars
             if budget <= 0 or len(text) > budget:
-                self._spill_fh.write(text[:max(0, budget)])
+                self._spill_fh.write(text[: max(0, budget)])
                 self._spill_fh.write("\n... [spill capped at 5,000,000 chars] ...\n")
                 self._spill_capped = True
             else:
@@ -105,7 +108,9 @@ class _BoundedOutputCollector:
             text_len = len(text)
             # Spill tee activates at the first overflow, then mirrors every chunk.
             if self._spill_path is not None and (
-                self._spill_fh is not None or self._total_chars + text_len > self.max_chars):
+                self._spill_fh is not None
+                or self._total_chars + text_len > self.max_chars
+            ):
                 self._maybe_spill(text)
             self._total_chars += text_len
             start = 0
@@ -176,13 +181,17 @@ def _new_output_collector(proc, bounded_capture: bool) -> _BoundedOutputCollecto
         return _BoundedOutputCollector(_UNBOUNDED_CAPTURE_CHARS)
     try:
         from tools.tool_output_limits import get_max_bytes
+
         capture_limit = get_max_bytes()
     except Exception:
         capture_limit = 50_000
     spill_path = None
     try:
         spill_dir = get_clawk_home() / "cache" / "terminal-output"
-        spill_path = spill_dir / f"out-{int(time.time())}-{os.getpid()}-{id(proc) & 0xffff:x}.log"
+        spill_path = (
+            spill_dir
+            / f"out-{int(time.time())}-{os.getpid()}-{id(proc) & 0xFFFF:x}.log"
+        )
         if spill_dir.is_dir():
             cutoff = time.time() - _SPILL_MAX_AGE_S
             for old in spill_dir.glob("out-*.log"):
@@ -196,7 +205,9 @@ def _new_output_collector(proc, bounded_capture: bool) -> _BoundedOutputCollecto
     return _BoundedOutputCollector(capture_limit, spill_path=spill_path)
 
 
-def _finalize_wait_result(collector: _BoundedOutputCollector, rendered: str, returncode: int | None) -> dict:
+def _finalize_wait_result(
+    collector: _BoundedOutputCollector, rendered: str, returncode: int | None
+) -> dict:
     """Assemble a wait result, attaching spill metadata when overflow occurred."""
     result = {"output": rendered, "returncode": returncode}
     spill = collector.close_spill()
@@ -227,7 +238,11 @@ def _pipe_stdin(proc: subprocess.Popen, data: str) -> None:
         # reach the finally-close, or the child hangs on EOF forever.
         target = getattr(proc.stdin, "buffer", proc.stdin)
         try:
-            raw = data.encode("utf-8", "surrogateescape") if isinstance(data, str) else data
+            raw = (
+                data.encode("utf-8", "surrogateescape")
+                if isinstance(data, str)
+                else data
+            )
             written = target.write(raw)
             if written != len(raw):
                 # A short write from a buffered writer is a real failure.
@@ -248,7 +263,9 @@ def _pipe_stdin(proc: subprocess.Popen, data: str) -> None:
     thread.start()
 
 
-def _popen_bash(cmd: list[str], stdin_data: str | None = None, **kwargs) -> subprocess.Popen:
+def _popen_bash(
+    cmd: list[str], stdin_data: str | None = None, **kwargs
+) -> subprocess.Popen:
     """Spawn a subprocess with standard stdout/stderr/stdin setup; *stdin_data* is written
     asynchronously via :func:`_pipe_stdin`. Backends with special Popen needs (e.g. local's
     ``preexec_fn``) can bypass this and call :func:`_pipe_stdin` directly."""
@@ -258,8 +275,11 @@ def _popen_bash(cmd: list[str], stdin_data: str | None = None, **kwargs) -> subp
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
-        text=True, encoding="utf-8", errors="replace",
-        **kwargs)
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        **kwargs,
+    )
     if stdin_data is not None:
         _pipe_stdin(proc, stdin_data)
     return proc
@@ -286,7 +306,11 @@ class _ThreadedProcessHandle:
     ``exec_fn() -> (output_str, exit_code)`` on a background thread behind a ProcessHandle
     interface. ``cancel_fn`` is invoked on ``kill()`` for backend-specific cancellation."""
 
-    def __init__(self, exec_fn: Callable[[], tuple[str, int]], cancel_fn: Callable[[], None] | None = None):
+    def __init__(
+        self,
+        exec_fn: Callable[[], tuple[str, int]],
+        cancel_fn: Callable[[], None] | None = None,
+    ):
         self._cancel_fn = cancel_fn
         self._done = threading.Event()
         self._returncode: int | None = None
@@ -339,7 +363,11 @@ class _ThreadedProcessHandle:
 
 
 # --- Stdout drain thread ---
-def _drain_stdout(proc: ProcessHandle, output: _BoundedOutputCollector, stop: threading.Event | None = None) -> None:
+def _drain_stdout(
+    proc: ProcessHandle,
+    output: _BoundedOutputCollector,
+    stop: threading.Event | None = None,
+) -> None:
     """Drain ``proc.stdout`` into *output* until EOF or shortly after exit.
     ``for line in proc.stdout`` would block on ``readline()`` until EOF, and a backgrounded
     grandchild (``cmd &``, ``setsid cmd & disown``) inherits the pipe's write end — so the
@@ -377,7 +405,11 @@ def _drain_stdout(proc: ProcessHandle, output: _BoundedOutputCollector, stop: th
         if not isinstance(fd, int) or fd < 0:
             for piece in stream:
                 if piece is not None:
-                    output.append(decoder.decode(piece) if isinstance(piece, bytes) else str(piece))
+                    output.append(
+                        decoder.decode(piece)
+                        if isinstance(piece, bytes)
+                        else str(piece)
+                    )
         elif os.name == "nt":
             _drain_fd_windows(proc, fd, output, decoder, stop)
         else:
@@ -394,7 +426,9 @@ def _drain_stdout(proc: ProcessHandle, output: _BoundedOutputCollector, stop: th
             pass
 
 
-def _drain_fd_select(proc, fd: int, output: _BoundedOutputCollector, decoder, stop=None) -> None:
+def _drain_fd_select(
+    proc, fd: int, output: _BoundedOutputCollector, decoder, stop=None
+) -> None:
     """POSIX drain: selector readiness (no FD_SETSIZE ceiling, #94928), stopping ~300ms after
     bash exits with the pipe idle, or when *stop* is set (the pipe is being handed to another
     reader — yield-to-background)."""
@@ -407,7 +441,9 @@ def _drain_fd_select(proc, fd: int, output: _BoundedOutputCollector, decoder, st
         waiter.close()
 
 
-def _drain_fd_waiter(proc, fd: int, waiter, output: _BoundedOutputCollector, decoder, stop) -> None:
+def _drain_fd_waiter(
+    proc, fd: int, waiter, output: _BoundedOutputCollector, decoder, stop
+) -> None:
     idle_after_exit = 0
     while True:
         if stop is not None and stop.is_set():
@@ -429,7 +465,9 @@ def _drain_fd_waiter(proc, fd: int, waiter, output: _BoundedOutputCollector, dec
                 return
 
 
-def _drain_fd_windows(proc, fd: int, output: _BoundedOutputCollector, decoder, stop=None) -> None:
+def _drain_fd_windows(
+    proc, fd: int, output: _BoundedOutputCollector, decoder, stop=None
+) -> None:
     """Windows drain: poll ``PeekNamedPipe`` because ``select`` cannot poll pipes.
 
     ``os.read`` on a Windows pipe blocks until data is available or every writer
@@ -455,7 +493,9 @@ def _drain_fd_windows(proc, fd: int, output: _BoundedOutputCollector, decoder, s
         if stop is not None and stop.is_set():
             return
         try:
-            ok = kernel32.PeekNamedPipe(handle, None, 0, None, ctypes.byref(available), None)
+            ok = kernel32.PeekNamedPipe(
+                handle, None, 0, None, ctypes.byref(available), None
+            )
         except OSError:
             return
         if not ok:
@@ -478,9 +518,13 @@ def _drain_fd_windows(proc, fd: int, output: _BoundedOutputCollector, decoder, s
 
 
 def _start_drain_thread(
-        proc: ProcessHandle, output: _BoundedOutputCollector, stop: threading.Event | None = None,
+    proc: ProcessHandle,
+    output: _BoundedOutputCollector,
+    stop: threading.Event | None = None,
 ) -> threading.Thread:
     """Start the daemon thread running :func:`_drain_stdout`; *stop* ends it early."""
-    thread = threading.Thread(target=_drain_stdout, args=(proc, output, stop), daemon=True)
+    thread = threading.Thread(
+        target=_drain_stdout, args=(proc, output, stop), daemon=True
+    )
     thread.start()
     return thread

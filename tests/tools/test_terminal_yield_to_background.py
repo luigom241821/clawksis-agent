@@ -6,6 +6,7 @@ the user's message until it exited. Now redirect() also asks the tool workers to
 local terminal backend hands the still-running process to the process registry as a
 notify-on-complete background session and returns immediately, without killing it.
 """
+
 import json
 import os
 import threading
@@ -37,7 +38,9 @@ class _Agent(InterruptControlMixin):
 
 
 @pytest.mark.live_system_guard_bypass
-def test_redirect_mid_command_yields_it_to_background_without_killing_it(tmp_path, monkeypatch):
+def test_redirect_mid_command_yields_it_to_background_without_killing_it(
+    tmp_path, monkeypatch
+):
     """Real signal delivery is required: the registry SIGTERMs the shell first, so its
     ``sleep`` child is reparented to init before the registry reaps it from the descendant
     snapshot — the conftest guard's parent-chain walk can no longer see it under the test PID."""
@@ -51,17 +54,25 @@ def test_redirect_mid_command_yields_it_to_background_without_killing_it(tmp_pat
         with agent._tool_worker_threads_lock:
             agent._tool_worker_threads.add(threading.current_thread().ident)
         t0 = time.monotonic()
-        res["result"] = json.loads(terminal_tool("echo started; sleep 60; echo done", task_id="yield-test", timeout=90))
+        res["result"] = json.loads(
+            terminal_tool(
+                "echo started; sleep 60; echo done", task_id="yield-test", timeout=90
+            )
+        )
         res["elapsed"] = time.monotonic() - t0
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
     time.sleep(1.5)
     assert agent.redirect("also, check the session ids") is True
-    assert agent._pending_steer == "also, check the session ids"  # still delivered as a steer
+    assert (
+        agent._pending_steer == "also, check the session ids"
+    )  # still delivered as a steer
 
     t.join(timeout=15)
-    assert not t.is_alive(), "terminal tool still blocked on the command after redirect()"
+    assert not t.is_alive(), (
+        "terminal tool still blocked on the command after redirect()"
+    )
     r = res["result"]
     try:
         assert r["status"] == "yielded_to_background"
@@ -77,7 +88,9 @@ def test_redirect_mid_command_yields_it_to_background_without_killing_it(tmp_pat
         killed = process_registry.kill_process(r["session_id"])
     assert killed["status"] == "killed", killed
     # The shell exits on SIGTERM before its child does; the orphaned child must still be reaped.
-    assert not any(process_registry._proc_alive(p) for p in descendants), "orphaned descendant survived kill"
+    assert not any(process_registry._proc_alive(p) for p in descendants), (
+        "orphaned descendant survived kill"
+    )
     evt = process_registry.completion_queue.get(timeout=5)
     assert evt["session_id"] == r["session_id"]
 

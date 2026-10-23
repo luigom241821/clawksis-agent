@@ -15,8 +15,6 @@ from clawk_constants import clawk_home_key
 from tui_gateway import entry
 
 
-
-
 def test_wait_falls_through_to_shared_owner(monkeypatch):
     monkeypatch.setattr(entry, "_mcp_discovery_thread", None)
     # The fall-through to the shared owner only exists for the stdio TUI,
@@ -28,7 +26,9 @@ def test_wait_falls_through_to_shared_owner(monkeypatch):
     )
     thread = threading.Thread(target=lambda: time.sleep(0.05), daemon=True)
     thread.start()
-    monkeypatch.setattr(mcp_startup, "_mcp_discovery_thread", {clawk_home_key(): thread})
+    monkeypatch.setattr(
+        mcp_startup, "_mcp_discovery_thread", {clawk_home_key(): thread}
+    )
 
     start = time.monotonic()
     entry.wait_for_mcp_discovery(timeout=2.0)
@@ -46,8 +46,6 @@ def test_wait_noop_when_no_owner_has_a_thread(monkeypatch):
     entry.wait_for_mcp_discovery(timeout=2.0)
 
     assert time.monotonic() - start < 0.5
-
-
 
 
 def test_wait_reinvokes_shared_spawn_when_discovery_enabled(monkeypatch):

@@ -38,7 +38,10 @@ def test_wal_restoration_reuses_exclusive_repair_connection(tmp_path, monkeypatc
     # The mode itself is whatever apply_wal_with_fallback resolves on this
     # runtime (WAL, or DELETE on WAL-reset-vulnerable SQLite builds); the
     # contract under test is the connection reuse, asserted above.
-    assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() in ("wal", "delete")
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() in (
+        "wal",
+        "delete",
+    )
     conn.close()
 
 
@@ -47,9 +50,13 @@ def test_repair_never_reopens_after_the_guard_releases(tmp_path, monkeypatch):
     opens is opened while the exclusive guard is still held, and none after."""
     db = tmp_path / "state.db"
     _make_db(db)
-    monkeypatch.setattr(clawk_state_repair, "_db_opens_cleanly", lambda path: "forced-unhealthy")
+    monkeypatch.setattr(
+        clawk_state_repair, "_db_opens_cleanly", lambda path: "forced-unhealthy"
+    )
     # The scratch-space pre-flight wants ~10GB headroom; irrelevant here.
-    monkeypatch.setattr(clawk_state_repair, "_repair_scratch_space_error", lambda path: None)
+    monkeypatch.setattr(
+        clawk_state_repair, "_repair_scratch_space_error", lambda path: None
+    )
 
     def fake_strategies(scratch_path, report):
         report["repaired"] = True

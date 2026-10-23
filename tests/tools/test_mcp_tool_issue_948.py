@@ -17,6 +17,7 @@ from tools.mcp_tool_config import _which_with_config_pathext
 # Ensure the mcp module symbols exist for patching even when the SDK isn't installed
 if not _MCP_AVAILABLE:
     import tools.mcp_tool as _mcp_mod
+
     if not hasattr(_mcp_mod, "StdioServerParameters"):
         _mcp_mod.StdioServerParameters = MagicMock
     if not hasattr(_mcp_mod, "stdio_client"):
@@ -49,9 +50,11 @@ def test_resolve_stdio_command_skips_unknown_commands():
     """Bare command names outside the npx/npm/node/uv/uvx launcher set must NOT
     be matched against the fallback paths — that would rewrite ``command:
     my-tool`` into a coincidentally-named file at /opt/homebrew/bin/my-tool."""
-    with patch("tools.mcp_tool_config.shutil.which", return_value=None), \
-         patch("tools.mcp_tool_config.os.path.isfile", return_value=True), \
-         patch("tools.mcp_tool_config.os.access", return_value=True):
+    with (
+        patch("tools.mcp_tool_config.shutil.which", return_value=None),
+        patch("tools.mcp_tool_config.os.path.isfile", return_value=True),
+        patch("tools.mcp_tool_config.os.access", return_value=True),
+    ):
         command, _env = _resolve_stdio_command("my-tool", {"PATH": "/usr/bin:/bin"})
 
     assert command == "my-tool"
@@ -141,6 +144,7 @@ def test_run_stdio_malware_check_does_not_block_event_loop():
     """The blocking OSV check runs off the loop (asyncio.to_thread), so a
     concurrent coroutine keeps making progress while it runs."""
     import time
+
     mock_stdio_cm, mock_session_cm = _stdio_mocks()
 
     def slow_check(_command, _args):
@@ -156,11 +160,13 @@ def test_run_stdio_malware_check_does_not_block_event_loop():
             ticks["n"] += 1
 
     async def _test():
-        with patch("tools.osv_check.check_package_for_malware", side_effect=slow_check), \
-             patch("tools.mcp_tool_config._managed_launcher", return_value=None), \
-             patch("tools.mcp_tool.StdioServerParameters"), \
-             patch("tools.mcp_tool.stdio_client", return_value=mock_stdio_cm), \
-             patch("tools.mcp_tool.ClientSession", return_value=mock_session_cm):
+        with (
+            patch("tools.osv_check.check_package_for_malware", side_effect=slow_check),
+            patch("tools.mcp_tool_config._managed_launcher", return_value=None),
+            patch("tools.mcp_tool.StdioServerParameters"),
+            patch("tools.mcp_tool.stdio_client", return_value=mock_stdio_cm),
+            patch("tools.mcp_tool.ClientSession", return_value=mock_session_cm),
+        ):
             server = MCPServerTask("srv")
             ticker = asyncio.create_task(_ticker())
             await server.start({"command": "npx", "args": ["-y", "pkg"]})
@@ -177,19 +183,24 @@ def test_run_stdio_malware_check_times_out_fail_open():
     """A check that hangs past the timeout must NOT freeze startup: it times
     out, logs, and proceeds (fail-open) so the server still starts."""
     import time
+
     mock_stdio_cm, mock_session_cm = _stdio_mocks()
 
     def hung_check(_command, _args):
-        time.sleep(0.5)  # outlasts the 0.2s timeout 2.5x; short enough not to stall teardown
+        time.sleep(
+            0.5
+        )  # outlasts the 0.2s timeout 2.5x; short enough not to stall teardown
         return "MALWARE"  # would block startup if awaited to completion
 
     async def _test():
-        with patch("tools.osv_check.check_package_for_malware", side_effect=hung_check), \
-             patch("tools.mcp_tool._OSV_MALWARE_CHECK_TIMEOUT_S", 0.2), \
-             patch("tools.mcp_tool_config._managed_launcher", return_value=None), \
-             patch("tools.mcp_tool.StdioServerParameters"), \
-             patch("tools.mcp_tool.stdio_client", return_value=mock_stdio_cm), \
-             patch("tools.mcp_tool.ClientSession", return_value=mock_session_cm):
+        with (
+            patch("tools.osv_check.check_package_for_malware", side_effect=hung_check),
+            patch("tools.mcp_tool._OSV_MALWARE_CHECK_TIMEOUT_S", 0.2),
+            patch("tools.mcp_tool_config._managed_launcher", return_value=None),
+            patch("tools.mcp_tool.StdioServerParameters"),
+            patch("tools.mcp_tool.stdio_client", return_value=mock_stdio_cm),
+            patch("tools.mcp_tool.ClientSession", return_value=mock_session_cm),
+        ):
             server = MCPServerTask("srv")
             start = time.monotonic()
             await server.start({"command": "npx", "args": ["-y", "pkg"]})
@@ -216,9 +227,14 @@ def _pm_ships(monkeypatch, *, node_dirs=(), uv=None):
     import pm
 
     monkeypatch.setattr(pm, "ensure", lambda name, **kw: None)
-    monkeypatch.setattr(clawk_constants, "with_clawk_node_path",
-                        lambda env: {**env, "PATH": os.pathsep.join(map(str, node_dirs))})
-    monkeypatch.setattr(pm, "uv_launcher", lambda name: uv.with_name(name) if uv else None)
+    monkeypatch.setattr(
+        clawk_constants,
+        "with_clawk_node_path",
+        lambda env: {**env, "PATH": os.pathsep.join(map(str, node_dirs))},
+    )
+    monkeypatch.setattr(
+        pm, "uv_launcher", lambda name: uv.with_name(name) if uv else None
+    )
 
 
 def test_bare_node_launchers_resolve_pm_node_ahead_of_the_users(tmp_path, monkeypatch):
@@ -229,10 +245,17 @@ def test_bare_node_launchers_resolve_pm_node_ahead_of_the_users(tmp_path, monkey
     node_bin = _toolchain_bin(tmp_path / "store" / "node" / "bin", "node")
     _pm_ships(monkeypatch, node_dirs=(npm_bin, node_bin))
 
-    command, env = _resolve_stdio_command("npx", {"PATH": os.pathsep.join([str(user_bin), "/usr/bin"])})
+    command, env = _resolve_stdio_command(
+        "npx", {"PATH": os.pathsep.join([str(user_bin), "/usr/bin"])}
+    )
 
     assert os.path.dirname(command) == str(npm_bin)
-    assert env["PATH"].split(os.pathsep) == [str(npm_bin), str(node_bin), str(user_bin), "/usr/bin"]
+    assert env["PATH"].split(os.pathsep) == [
+        str(npm_bin),
+        str(node_bin),
+        str(user_bin),
+        "/usr/bin",
+    ]
 
 
 def _sealed_npx(tmp_path, monkeypatch):
@@ -241,13 +264,17 @@ def _sealed_npx(tmp_path, monkeypatch):
 
     npm_bin = _toolchain_bin(tmp_path / "store" / "npm", "npx")
     (npm_bin / "node_modules" / "npm" / "bin").mkdir(parents=True)
-    (npm_bin / "node_modules" / "npm" / "bin" / "npm-cli.js").write_text("", encoding="utf-8")
+    (npm_bin / "node_modules" / "npm" / "bin" / "npm-cli.js").write_text(
+        "", encoding="utf-8"
+    )
     node_bin = tmp_path / "store" / "node"
     node_bin.mkdir(parents=True)
     node = _bare_exe(node_bin, "node")
     monkeypatch.setattr(pm.user_facing, "applies", lambda: True)
     sealed = {"node": [str(node_bin)], "npm": [str(npm_bin)]}
-    monkeypatch.setattr(pm.user_facing, "_sealed_dirs", lambda name: sealed.get(name, []))
+    monkeypatch.setattr(
+        pm.user_facing, "_sealed_dirs", lambda name: sealed.get(name, [])
+    )
     return npm_bin, node
 
 
@@ -266,7 +293,9 @@ def test_packaged_npx_runs_the_package_bin_on_the_packaged_node(tmp_path, monkey
         calls.append(argv)
         pkg = Path(argv[argv.index("--prefix") + 1]) / "node_modules" / "@scope" / "srv"
         pkg.mkdir(parents=True, exist_ok=True)
-        (pkg / "package.json").write_text('{"bin": {"srv": "dist/index.js"}}', encoding="utf-8")
+        (pkg / "package.json").write_text(
+            '{"bin": {"srv": "dist/index.js"}}', encoding="utf-8"
+        )
         return subprocess.CompletedProcess(argv, 0, "", "")
 
     monkeypatch.setattr(subprocess, "run", fake_install)
@@ -275,14 +304,18 @@ def test_packaged_npx_runs_the_package_bin_on_the_packaged_node(tmp_path, monkey
     command, argv = _packaged_npx_entry(str(npm_bin / "npx.cmd"), args)
     # which() reports the PATHEXT spelling (node.EXE), so compare case-normalised.
     assert os.path.normcase(command) == os.path.normcase(str(node))
-    assert argv[1:] == ["--port", "1"] and argv[0].endswith(os.path.join("@scope", "srv", "dist", "index.js"))
+    assert argv[1:] == ["--port", "1"] and argv[0].endswith(
+        os.path.join("@scope", "srv", "dist", "index.js")
+    )
     assert "--ignore-scripts" in calls[0]
     assert calls[0][0] == command
     # Like npx: an unpinned spec re-resolves on every start, an exact version is reused.
     assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), args) == (command, argv)
     assert len(calls) == 2
     pinned = ["-y", "@scope/srv@1.2.3"]
-    assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), pinned) == _packaged_npx_entry(str(npm_bin / "npx.cmd"), pinned)
+    assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), pinned) == _packaged_npx_entry(
+        str(npm_bin / "npx.cmd"), pinned
+    )
     assert len(calls) == 3
     # npm installs a git/URL/path spec under a name the spec does not show: plain npx, no install.
     assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), ["-y", "github:u/r"]) is None
@@ -290,12 +323,18 @@ def test_packaged_npx_runs_the_package_bin_on_the_packaged_node(tmp_path, monkey
     assert _packaged_npx_entry(str(tmp_path / "user-node" / "npx.cmd"), args) is None
 
 
-@pytest.mark.parametrize("failure", [
-    subprocess.TimeoutExpired("node", 600),
-    PermissionError(13, "Access is denied"),
-    subprocess.CompletedProcess([], 1, "", "npm ERR!"),
-], ids=["timeout", "oserror", "nonzero-exit"])
-def test_packaged_npx_install_failure_degrades_to_plain_npx(tmp_path, monkeypatch, failure):
+@pytest.mark.parametrize(
+    "failure",
+    [
+        subprocess.TimeoutExpired("node", 600),
+        PermissionError(13, "Access is denied"),
+        subprocess.CompletedProcess([], 1, "", "npm ERR!"),
+    ],
+    ids=["timeout", "oserror", "nonzero-exit"],
+)
+def test_packaged_npx_install_failure_degrades_to_plain_npx(
+    tmp_path, monkeypatch, failure
+):
     """A hung, unstartable or failing install must return None (plain npx, an honest failure),
     never raise into the MCP connect loop where it would burn the server's retry budget."""
     from tools.mcp_tool_config import _packaged_npx_entry
@@ -313,11 +352,21 @@ def test_packaged_npx_install_failure_degrades_to_plain_npx(tmp_path, monkeypatc
     # A refresh that fails (offline) keeps the package an earlier start installed.
     from clawk_constants import get_clawk_home
     import hashlib
-    pkg = (Path(get_clawk_home()) / "cache" / "mcp-npx" / hashlib.sha256(b"@scope/srv").hexdigest()[:16]
-           / "node_modules" / "@scope" / "srv")
+
+    pkg = (
+        Path(get_clawk_home())
+        / "cache"
+        / "mcp-npx"
+        / hashlib.sha256(b"@scope/srv").hexdigest()[:16]
+        / "node_modules"
+        / "@scope"
+        / "srv"
+    )
     pkg.mkdir(parents=True)
     (pkg / "package.json").write_text('{"bin": "cli.js"}', encoding="utf-8")
-    assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), ["-y", "@scope/srv"])[1] == [str(pkg / "cli.js")]
+    assert _packaged_npx_entry(str(npm_bin / "npx.cmd"), ["-y", "@scope/srv"])[1] == [
+        str(pkg / "cli.js")
+    ]
 
 
 def test_outside_package_swaps_the_sealed_dirs_for_pm_copies(tmp_path, monkeypatch):
@@ -339,7 +388,9 @@ def test_outside_package_swaps_the_sealed_dirs_for_pm_copies(tmp_path, monkeypat
     assert _outside_package("npx", managed, [sealed_dir]) == (managed, [sealed_dir])
 
 
-def test_bare_uvx_resolves_pm_uv_and_an_absolute_command_stays_the_users(tmp_path, monkeypatch):
+def test_bare_uvx_resolves_pm_uv_and_an_absolute_command_stays_the_users(
+    tmp_path, monkeypatch
+):
     user_bin = _toolchain_bin(tmp_path / "user" / ".local" / "bin", "uvx")
     uv_dir = _toolchain_bin(tmp_path / "store" / "uv-0.1", "uv", "uvx")
     _pm_ships(monkeypatch, uv=uv_dir / "uv")
@@ -351,8 +402,6 @@ def test_bare_uvx_resolves_pm_uv_and_an_absolute_command_stays_the_users(tmp_pat
     explicit = str(user_bin / "uvx")
     command, _env = _resolve_stdio_command(explicit, {"PATH": "/usr/bin"})
     assert command == explicit
-
-
 
 
 def _bare_exe(directory, name):
@@ -370,12 +419,15 @@ def _bare_exe(directory, name):
     return exe
 
 
-def test_bare_python3_steps_past_the_managed_runtime_to_the_user_hit(tmp_path, monkeypatch):
+def test_bare_python3_steps_past_the_managed_runtime_to_the_user_hit(
+    tmp_path, monkeypatch
+):
     """Two PATH hits for a bare non-launcher command: the managed runtime's and the
     user's. The user's wins; the resolved env prepends the user's dir (helpers the
     server spawns resolve against the same interpreter). The user dir must sit OUTSIDE
     the clawk home — everything under it counts as managed."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     home = tmp_path / "home"
     managed_bin = home / "bin"  # <CLAWK_HOME>/bin — a managed dir by definition
     managed_bin.mkdir(parents=True)
@@ -385,8 +437,9 @@ def test_bare_python3_steps_past_the_managed_runtime_to_the_user_hit(tmp_path, m
     user_exe = _bare_exe(user_bin, "python3")
     token = set_clawk_home_override(home)
     try:
-        command, env = _resolve_stdio_command("python3", {
-            "PATH": os.pathsep.join([str(managed_bin), str(user_bin)])})
+        command, env = _resolve_stdio_command(
+            "python3", {"PATH": os.pathsep.join([str(managed_bin), str(user_bin)])}
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -397,11 +450,14 @@ def test_bare_python3_steps_past_the_managed_runtime_to_the_user_hit(tmp_path, m
     assert env["PATH"] == os.pathsep.join([str(managed_bin), str(user_bin)])
 
 
-def test_bare_python3_keeps_the_managed_hit_when_the_user_has_none(tmp_path, monkeypatch):
+def test_bare_python3_keeps_the_managed_hit_when_the_user_has_none(
+    tmp_path, monkeypatch
+):
     """A managed-only PATH keeps the managed hit: no user hit exists to prefer, and a
     resolved absolute path still beats an ENOENT at execvp. The trailing user dir is a
     real directory with no executables — not /usr/bin, which may genuinely carry one."""
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     home = tmp_path / "home"
     managed_bin = home / "bin"
     managed_bin.mkdir(parents=True)
@@ -410,8 +466,9 @@ def test_bare_python3_keeps_the_managed_hit_when_the_user_has_none(tmp_path, mon
     empty_bin.mkdir()
     token = set_clawk_home_override(home)
     try:
-        command, _env = _resolve_stdio_command("python3", {
-            "PATH": os.pathsep.join([str(managed_bin), str(empty_bin)])})
+        command, _env = _resolve_stdio_command(
+            "python3", {"PATH": os.pathsep.join([str(managed_bin), str(empty_bin)])}
+        )
     finally:
         reset_clawk_home_override(token)
 
@@ -437,13 +494,21 @@ def test_first_user_which_hit_follows_the_child_env_pathext(tmp_path):
     wrapper.chmod(0o755)
     pathext = {"PATHEXT": ".COM;.EXE;.BAT;.CMD"}
 
-    assert _first_user_which_hit("srv", str(user_bin), pathext, windows=True) == str(bat)
+    assert _first_user_which_hit("srv", str(user_bin), pathext, windows=True) == str(
+        bat
+    )
     # No double extension (wrap.cmd.exe) for a command that already carries a suffix
-    assert _first_user_which_hit("wrap.cmd", str(user_bin), pathext, windows=True) == str(wrapper)
-    assert _first_user_which_hit("missing", str(user_bin), pathext, windows=True) is None
+    assert _first_user_which_hit(
+        "wrap.cmd", str(user_bin), pathext, windows=True
+    ) == str(wrapper)
+    assert (
+        _first_user_which_hit("missing", str(user_bin), pathext, windows=True) is None
+    )
 
 
-def test_bare_launcher_commands_keep_the_managed_first_resolution(tmp_path, monkeypatch):
+def test_bare_launcher_commands_keep_the_managed_first_resolution(
+    tmp_path, monkeypatch
+):
     """The launcher family is exempt from the user-hit step: a bare ``uvx``/``npx``
     resolves through PM's managed tree (``_managed_launcher``), never through
     ``_first_user_which_hit`` — even when a user copy of the launcher exists on the
@@ -452,7 +517,9 @@ def test_bare_launcher_commands_keep_the_managed_first_resolution(tmp_path, monk
     uv_dir = _toolchain_bin(tmp_path / "store" / "uv-0.1", "uv", "uvx")
     _pm_ships(monkeypatch, uv=uv_dir / "uv")
 
-    command, _env = _resolve_stdio_command("uvx", {"PATH": os.pathsep.join([str(user_bin)])})
+    command, _env = _resolve_stdio_command(
+        "uvx", {"PATH": os.pathsep.join([str(user_bin)])}
+    )
 
     assert command == str(uv_dir / "uvx")
 

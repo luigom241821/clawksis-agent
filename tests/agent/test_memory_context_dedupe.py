@@ -9,6 +9,7 @@ already said.
 Structure is not touched: headings, prose, blank lines and ``---`` rules survive as written, so a
 provider's sections still read the way it wrote them.
 """
+
 from __future__ import annotations
 
 from agent.memory_context import build_memory_context_block
@@ -41,8 +42,10 @@ def test_a_repeated_bullet_is_kept_once_in_first_position():
 def test_a_bullet_with_continuation_lines_is_never_touched():
     """Two entries can share a headline and differ underneath it. Dropping one would re-parent its
     provenance under the other and invent a record neither provider reported."""
-    raw = ("- prefers draft PRs\n  (logged 12 Jan, source: supermemory)\n"
-           "- prefers draft PRs\n  (logged 3 Feb, source: builtin)\n")
+    raw = (
+        "- prefers draft PRs\n  (logged 12 Jan, source: supermemory)\n"
+        "- prefers draft PRs\n  (logged 3 Feb, source: builtin)\n"
+    )
     nested = "- Project A\n  - status: active\n- Project B\n  - status: active\n"
 
     assert _body(build_memory_context_block(raw)) == raw

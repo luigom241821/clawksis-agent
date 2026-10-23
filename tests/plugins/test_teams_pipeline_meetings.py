@@ -23,7 +23,16 @@ class FakeGraphClient:
 
 @pytest.mark.anyio
 async def test_join_url_can_use_organizer_scoped_graph_lookup():
-    client = FakeGraphClient({"value": [{"id": "meeting-1", "joinWebUrl": "https://teams.microsoft.com/meet/code"}]})
+    client = FakeGraphClient(
+        {
+            "value": [
+                {
+                    "id": "meeting-1",
+                    "joinWebUrl": "https://teams.microsoft.com/meet/code",
+                }
+            ]
+        }
+    )
 
     meeting = await resolve_meeting_reference(
         client,

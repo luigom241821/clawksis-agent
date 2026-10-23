@@ -29,8 +29,15 @@ def make_scenario(provider, tmp_path, monkeypatch):
     server, dispatch = provider
     made: list[Scenario] = []
 
-    def make(mode: str = "good", *, extra: str = "", platform: str = "cli", window: int | None = None,
-             threshold_tokens: int = THRESHOLD_TOKENS, name: str = "clawk_home") -> Scenario:
+    def make(
+        mode: str = "good",
+        *,
+        extra: str = "",
+        platform: str = "cli",
+        window: int | None = None,
+        threshold_tokens: int = THRESHOLD_TOKENS,
+        name: str = "clawk_home",
+    ) -> Scenario:
         # The hermetic root conftest already isolates CLAWK_HOME per test; HOME stays put because the
         # state.db live-system guard treats $HOME/.clawksis as production.
         clawk_home = tmp_path / name
@@ -44,11 +51,25 @@ def make_scenario(provider, tmp_path, monkeypatch):
             # watchdog) to seconds so a hung summarizer is judged inside a unit-test budget.
             import agent.auxiliary_client as aux
 
-            monkeypatch.setattr(aux, "_COMPRESSION_TIMEOUT_FLOOR_SECONDS", SLOW_SUMMARY_TIMEOUT_SECONDS)
+            monkeypatch.setattr(
+                aux, "_COMPRESSION_TIMEOUT_FLOOR_SECONDS", SLOW_SUMMARY_TIMEOUT_SECONDS
+            )
             extra += f"  context_timeout_seconds: {SLOW_SUMMARY_TIMEOUT_SECONDS}\n"
-        write_home(clawk_home, server.base_url,
-                   compaction_config(extra=extra, slow=slow, threshold_tokens=threshold_tokens))
-        sc = Scenario(server=server, dispatch=dispatch, home=clawk_home, mode=mode, platform=platform, window=window)
+        write_home(
+            clawk_home,
+            server.base_url,
+            compaction_config(
+                extra=extra, slow=slow, threshold_tokens=threshold_tokens
+            ),
+        )
+        sc = Scenario(
+            server=server,
+            dispatch=dispatch,
+            home=clawk_home,
+            mode=mode,
+            platform=platform,
+            window=window,
+        )
         made.append(sc)
         return sc
 

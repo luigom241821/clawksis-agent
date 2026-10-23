@@ -16,6 +16,7 @@ def _make_cli():
     the /exit branch touches.
     """
     from cli import ClawksisCLI
+
     cli = ClawksisCLI.__new__(ClawksisCLI)
     cli.config = {}
     cli.console = MagicMock()
@@ -27,8 +28,6 @@ def _make_cli():
 
 
 class TestExitDeleteFlag:
-
-
     def test_exit_delete_arms_flag(self):
         cli = _make_cli()
         result = cli.process_command("/exit --delete")
@@ -48,14 +47,11 @@ class TestExitDeleteFlag:
         assert result is False
         assert cli._delete_session_on_exit is True
 
-
-
     def test_delete_flag_trims_whitespace(self):
         cli = _make_cli()
         result = cli.process_command("/exit   --delete   ")
         assert result is False
         assert cli._delete_session_on_exit is True
-
 
     def test_unknown_exit_argument_prints_help(self):
         cli = _make_cli()
@@ -69,9 +65,9 @@ class TestExitDeleteFlag:
 
 
 class TestCommandRegistry:
-
     def test_exit_alias_resolves_to_quit_with_hint(self):
         from clawk_cli.commands import resolve_command
+
         cmd = resolve_command("exit")
         assert cmd is not None
         assert cmd.name == "quit"

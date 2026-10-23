@@ -15,7 +15,9 @@ from clawk_cli import gateway_windows
 
 
 @pytest.mark.platforms("windows")
-def test_status_warns_and_uninstall_removes_pre_suffix_launchers(tmp_path, monkeypatch, capsys):
+def test_status_warns_and_uninstall_removes_pre_suffix_launchers(
+    tmp_path, monkeypatch, capsys
+):
     # The shared isolation fixture uses tmp_path / "clawk" as the Windows native default.
     home = tmp_path / "custom-clawk"
     (home / "gateway-service").mkdir(parents=True)
@@ -25,7 +27,9 @@ def test_status_warns_and_uninstall_removes_pre_suffix_launchers(tmp_path, monke
     startup.mkdir(parents=True)
     monkeypatch.setenv("APPDATA", str(appdata))
     monkeypatch.setattr(gateway_windows, "_gateway_pids", lambda *a, **k: [])
-    monkeypatch.setattr(gateway_windows, "_print_start_attestation_warning", lambda: None)
+    monkeypatch.setattr(
+        gateway_windows, "_print_start_attestation_warning", lambda: None
+    )
 
     current = gateway_windows.get_task_name()
     assert current != "Clawksis_Gateway", "a temp home must carry a profile suffix"
@@ -34,20 +38,39 @@ def test_status_warns_and_uninstall_removes_pre_suffix_launchers(tmp_path, monke
     # Both objects must point INTO this home: a bare-named task/entry targeting another home is a
     # sibling install (the default profile's live gateway) and is deliberately left alone.
     legacy_vbs = startup / "Clawksis_Gateway.vbs"
-    legacy_vbs.write_text(gateway_windows._build_startup_launcher(legacy_pair.with_suffix(".cmd")), encoding="utf-8")
+    legacy_vbs.write_text(
+        gateway_windows._build_startup_launcher(legacy_pair.with_suffix(".cmd")),
+        encoding="utf-8",
+    )
 
     schtasks = shutil.which("schtasks") or "schtasks"
     create = subprocess.run(
-        [schtasks, "/Create", "/F", "/TN", "Clawksis_Gateway", "/SC", "ONLOGON", "/TR", f"wscript.exe //B {legacy_pair}"],
-        capture_output=True, text=True, timeout=60,
+        [
+            schtasks,
+            "/Create",
+            "/F",
+            "/TN",
+            "Clawksis_Gateway",
+            "/SC",
+            "ONLOGON",
+            "/TR",
+            f"wscript.exe //B {legacy_pair}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert create.returncode == 0, create.stderr
     try:
         gateway_windows.status()
         out = capsys.readouterr().out
-        assert "legacy pre-suffix Scheduled Task still installed: Clawksis_Gateway" in out
-        assert f"legacy pre-suffix Windows login item still installed: {legacy_vbs}" in out
+        assert (
+            "legacy pre-suffix Scheduled Task still installed: Clawksis_Gateway" in out
+        )
+        assert (
+            f"legacy pre-suffix Windows login item still installed: {legacy_vbs}" in out
+        )
         assert f"legacy pre-suffix task launcher still installed: {legacy_pair}" in out
         assert "clawk gateway uninstall" in out
 
@@ -56,10 +79,22 @@ def test_status_warns_and_uninstall_removes_pre_suffix_launchers(tmp_path, monke
         assert "Removed legacy pre-suffix Scheduled Task 'Clawksis_Gateway'" in out
         assert not legacy_vbs.exists()
         assert not legacy_pair.exists()
-        query = subprocess.run([schtasks, "/Query", "/TN", "Clawksis_Gateway"], capture_output=True, text=True, timeout=60, check=False)
+        query = subprocess.run(
+            [schtasks, "/Query", "/TN", "Clawksis_Gateway"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
         assert query.returncode != 0, "the pre-suffix task must be gone after uninstall"
 
         gateway_windows.status()
         assert "legacy pre-suffix" not in capsys.readouterr().out
     finally:
-        subprocess.run([schtasks, "/Delete", "/F", "/TN", "Clawksis_Gateway"], capture_output=True, text=True, timeout=60, check=False)
+        subprocess.run(
+            [schtasks, "/Delete", "/F", "/TN", "Clawksis_Gateway"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )

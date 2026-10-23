@@ -73,12 +73,6 @@ def profile_and_root(tmp_path, monkeypatch):
     return profile_path, root_path
 
 
-
-
-
-
-
-
 def test_global_write_through_preserves_concurrent_root_update(
     profile_and_root, monkeypatch
 ):
@@ -143,7 +137,9 @@ def test_global_write_through_preserves_concurrent_root_update(
             A._save_auth_store(store, target_path=root_path)
         writer_done.set()
 
-    helper = threading.Thread(target=profile_write_through, name="profile-write-through")
+    helper = threading.Thread(
+        target=profile_write_through, name="profile-write-through"
+    )
     helper.start()
     assert helper_loaded.wait(timeout=5)
 
@@ -282,9 +278,7 @@ def test_write_through_fires_on_every_refresh_not_just_first(
 
     # ---- REFRESH 1 ----
     _write_store(profile_path, {"version": 1})
-    entry1 = _entry(
-        provider, id="c1", access_token="ac1", refresh_token="rf1"
-    )
+    entry1 = _entry(provider, id="c1", access_token="ac1", refresh_token="rf1")
     pool1 = CredentialPool(provider, [entry1])
     pool1._sync_device_code_entry_to_auth_store(entry1)
 
@@ -305,9 +299,7 @@ def test_write_through_fires_on_every_refresh_not_just_first(
     )
 
     # ---- REFRESH 2 (same scenario, rotated tokens) ----
-    entry2 = _entry(
-        provider, id="c2", access_token="ac2", refresh_token="rf2"
-    )
+    entry2 = _entry(provider, id="c2", access_token="ac2", refresh_token="rf2")
     pool2 = CredentialPool(provider, [entry2])
     pool2._sync_device_code_entry_to_auth_store(entry2)
 
@@ -331,11 +323,15 @@ def test_clawk_pkce_refresh_writes_back_to_singleton(tmp_path, monkeypatch):
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True)
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True
+    )
 
     oauth_file = clawk_home / ".anthropic_oauth.json"
     oauth_file.write_text(
-        json.dumps({"accessToken": "sk-ant-oat-rt0", "refreshToken": "rt0", "expiresAt": 0}),
+        json.dumps(
+            {"accessToken": "sk-ant-oat-rt0", "refreshToken": "rt0", "expiresAt": 0}
+        ),
         encoding="utf-8",
     )
     _write_store(clawk_home / "auth.json", {"version": 1, "providers": {}})
@@ -348,7 +344,9 @@ def test_clawk_pkce_refresh_writes_back_to_singleton(tmp_path, monkeypatch):
             "expires_at_ms": int(time.time() * 1000) + 3_600_000,
         },
     )
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
 
     entry = PooledCredential(
         provider="anthropic",
@@ -373,7 +371,9 @@ def test_clawk_pkce_refresh_writes_back_to_singleton(tmp_path, monkeypatch):
     )
 
     reloaded = load_pool("anthropic")
-    reloaded_entries = [e for e in reloaded.entries() if e.source.endswith("clawk_pkce")]
+    reloaded_entries = [
+        e for e in reloaded.entries() if e.source.endswith("clawk_pkce")
+    ]
     assert reloaded_entries, "clawk_pkce entry should still be present after reload"
     assert reloaded_entries[0].refresh_token == "rt1", (
         "regression: fresh load_pool() re-seeded the pre-refresh refresh "
@@ -389,8 +389,12 @@ def test_manual_clawk_pkce_refresh_does_not_create_duplicate_singleton(
     clawk_home = tmp_path / "clawk"
     clawk_home.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True)
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True
+    )
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
     monkeypatch.setattr(
         "agent.anthropic_credentials.refresh_anthropic_oauth_pure",
         lambda refresh_token, use_json=False: {
@@ -428,4 +432,3 @@ def test_manual_clawk_pkce_refresh_does_not_create_duplicate_singleton(
     assert len(matching) == 1
     assert matching[0].source == "manual:clawk_pkce"
     assert matching[0].refresh_token == "manual-rt-1"
-

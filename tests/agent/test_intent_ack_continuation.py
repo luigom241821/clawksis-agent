@@ -49,8 +49,6 @@ CODE_ACK = "Let me inspect the repository files first."
 # ── mode resolution ────────────────────────────────────────────────────────
 
 
-
-
 def test_true_is_all_api_modes():
     for am in ("chat_completions", "anthropic", "codex_responses"):
         assert intent_ack_continuation_mode(_agent(True, am)) == "all"
@@ -58,21 +56,18 @@ def test_true_is_all_api_modes():
         assert intent_ack_continuation_mode(_agent(s, "chat_completions")) == "all"
 
 
-
-
-
-
-
-
 def test_missing_attr_defaults_to_auto():
-    bare = SimpleNamespace(api_mode="chat_completions", model="x", _strip_think_blocks=lambda c: c)
+    bare = SimpleNamespace(
+        api_mode="chat_completions", model="x", _strip_think_blocks=lambda c: c
+    )
     assert intent_ack_continuation_mode(bare) == "off"
-    bare_codex = SimpleNamespace(api_mode="codex_responses", model="x", _strip_think_blocks=lambda c: c)
+    bare_codex = SimpleNamespace(
+        api_mode="codex_responses", model="x", _strip_think_blocks=lambda c: c
+    )
     assert intent_ack_continuation_mode(bare_codex) == "codex_only"
 
+
 # ── detector: workspace requirement ─────────────────────────────────────────
-
-
 
 
 def test_codex_only_path_accepts_pronounless_workspace_announcement():
@@ -252,10 +247,3 @@ def test_pronounless_action_guardrails_reject_questions_and_finals():
 
 
 # ── detector: guardrails that hold regardless of workspace ───────────────────
-
-
-
-
-
-
-

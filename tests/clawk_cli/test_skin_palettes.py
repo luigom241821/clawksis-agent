@@ -171,19 +171,25 @@ def test_base_palette_contrast_and_polarity(skin, palette, is_light):
         for key in STRONG_FG:
             ratio = contrast(palette[key], pole)
             if ratio < STRONG_MIN:
-                problems.append(f"{key}={palette[key]} contrast {ratio:.2f} < {STRONG_MIN} vs {pole}")
+                problems.append(
+                    f"{key}={palette[key]} contrast {ratio:.2f} < {STRONG_MIN} vs {pole}"
+                )
 
         for key in SOFT_FG:
             ratio = contrast(palette[key], pole)
             if ratio < SOFT_MIN:
-                problems.append(f"{key}={palette[key]} contrast {ratio:.2f} < {SOFT_MIN} vs {pole}")
+                problems.append(
+                    f"{key}={palette[key]} contrast {ratio:.2f} < {SOFT_MIN} vs {pole}"
+                )
 
     status_bg = palette["status_bar_bg"]
     for key in ON_STATUS_BAR:
         floor = STRONG_MIN if key == "status_bar_strong" else SOFT_MIN
         ratio = contrast(palette[key], status_bg)
         if ratio < floor:
-            problems.append(f"{key}={palette[key]} contrast {ratio:.2f} < {floor} vs status_bar_bg {status_bg}")
+            problems.append(
+                f"{key}={palette[key]} contrast {ratio:.2f} < {floor} vs status_bar_bg {status_bg}"
+            )
 
     _check_fills(palette, is_light, FILLS, problems)
     _check_chip(palette, problems)
@@ -191,7 +197,9 @@ def test_base_palette_contrast_and_polarity(skin, palette, is_light):
     assert not problems, f"{skin}.colors:\n  " + "\n  ".join(problems)
 
 
-@pytest.mark.parametrize(("skin", "block", "palette", "is_light"), OVERLAYS, ids=OVERLAY_IDS)
+@pytest.mark.parametrize(
+    ("skin", "block", "palette", "is_light"), OVERLAYS, ids=OVERLAY_IDS
+)
 def test_overlay_keys_and_fill_polarity(skin, block, palette, is_light):
     unknown = palette.keys() - REQUIRED_KEYS
     assert not unknown, f"{skin}.{block} has unknown keys: {sorted(unknown)}"
@@ -208,14 +216,20 @@ def _check_fills(palette, is_light, keys, problems):
     for key in keys:
         lum = luminance(palette[key])
         if is_light and lum < 0.4:
-            problems.append(f"{key}={palette[key]} is a dark fill (lum {lum:.2f}) in a light palette")
+            problems.append(
+                f"{key}={palette[key]} is a dark fill (lum {lum:.2f}) in a light palette"
+            )
         if not is_light and lum > 0.35:
-            problems.append(f"{key}={palette[key]} is a light fill (lum {lum:.2f}) in a dark palette")
+            problems.append(
+                f"{key}={palette[key]} is a light fill (lum {lum:.2f}) in a dark palette"
+            )
 
 
 def _check_chip(palette, problems):
     # The selection chip must remain distinguishable from the menu surface.
-    chip = contrast(palette["completion_menu_current_bg"], palette["completion_menu_bg"])
+    chip = contrast(
+        palette["completion_menu_current_bg"], palette["completion_menu_bg"]
+    )
     if chip < 1.15:
         problems.append(
             f"completion_menu_current_bg={palette['completion_menu_current_bg']} "

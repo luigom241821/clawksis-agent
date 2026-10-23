@@ -13,17 +13,25 @@ def test_models_analytics_skips_hidden_models(monkeypatch, tmp_path):
     from clawk_cli.web_routers import analytics
 
     db = SessionDB(tmp_path / "state.db")
-    for sid, model, provider in (("s1", "kept-model", "openrouter"), ("s2", "gone-model", "openrouter"),
-                                 ("s3", "bare-hidden", "nous")):
+    for sid, model, provider in (
+        ("s1", "kept-model", "openrouter"),
+        ("s2", "gone-model", "openrouter"),
+        ("s3", "bare-hidden", "nous"),
+    ):
         db.create_session(sid, source="cli", model=model)
         with db._lock:
             db._conn.execute(
                 "UPDATE sessions SET billing_provider = ?, started_at = ?, input_tokens = 10 WHERE id = ?",
-                (provider, time.time(), sid))
+                (provider, time.time(), sid),
+            )
             db._conn.commit()
-    monkeypatch.setattr(analytics, "_open_session_db_for_profile", lambda profile, read_only=True: db)
+    monkeypatch.setattr(
+        analytics, "_open_session_db_for_profile", lambda profile, read_only=True: db
+    )
     monkeypatch.setattr(db, "close", lambda: None)
-    monkeypatch.setattr(analytics, "_hidden_models", lambda: {"openrouter|gone-model", "bare-hidden"})
+    monkeypatch.setattr(
+        analytics, "_hidden_models", lambda: {"openrouter|gone-model", "bare-hidden"}
+    )
 
     models = {m["model"] for m in analytics._get_models_analytics(days=30)["models"]}
 

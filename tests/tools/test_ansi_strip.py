@@ -14,7 +14,6 @@ class TestStripAnsiBasicSGR:
     def test_reset(self):
         assert strip_ansi("\x1b[0m") == ""
 
-
     def test_truecolor_colon_separated(self):
         """Modern terminals use colon-separated SGR params."""
         assert strip_ansi("\x1b[38:2:255:0:0m") == ""
@@ -27,8 +26,6 @@ class TestStripAnsiCSIPrivateMode:
     def test_cursor_show_hide(self):
         assert strip_ansi("\x1b[?25h") == ""
         assert strip_ansi("\x1b[?25l") == ""
-
-
 
 
 class TestStripAnsiCSIIntermediate:
@@ -46,11 +43,11 @@ class TestStripAnsiOSC:
     def test_bel_terminator(self):
         assert strip_ansi("\x1b]0;title\x07") == ""
 
-
     def test_hyperlink_preserves_text(self):
-        assert strip_ansi(
-            "\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\"
-        ) == "click"
+        assert (
+            strip_ansi("\x1b]8;;https://example.com\x1b\\click\x1b]8;;\x1b\\")
+            == "click"
+        )
 
 
 class TestStripAnsiDECPrivate:
@@ -67,8 +64,6 @@ class TestStripAnsiDECPrivate:
 
 class TestStripAnsiFe:
     """Fe (C1 as 7-bit) escape sequences."""
-
-
 
     def test_index_and_newline(self):
         assert strip_ansi("\x1bD") == ""
@@ -109,15 +104,16 @@ class TestStripAnsiRealWorld:
 
     def test_colored_shebang(self):
         """The original reported bug: shebang corrupted by color codes."""
-        assert strip_ansi(
-            "\x1b[32m#!/usr/bin/env python3\x1b[0m\nprint('hello')"
-        ) == "#!/usr/bin/env python3\nprint('hello')"
-
+        assert (
+            strip_ansi("\x1b[32m#!/usr/bin/env python3\x1b[0m\nprint('hello')")
+            == "#!/usr/bin/env python3\nprint('hello')"
+        )
 
     def test_ansi_mid_code(self):
-        assert strip_ansi(
-            "def foo(\x1b[33m):\x1b[0m\n    return 42"
-        ) == "def foo():\n    return 42"
+        assert (
+            strip_ansi("def foo(\x1b[33m):\x1b[0m\n    return 42")
+            == "def foo():\n    return 42"
+        )
 
 
 class TestStripAnsiPassthrough:
@@ -128,7 +124,6 @@ class TestStripAnsiPassthrough:
 
     def test_empty(self):
         assert strip_ansi("") == ""
-
 
     def test_square_brackets_in_code(self):
         """Array indexing must not be confused with CSI."""
@@ -143,9 +138,6 @@ class TestSanitizeDisplayText:
     replayed into a terminal UI (e.g. the /resume recap) must not be able
     to clear the screen, retitle the window, or corrupt adjacent output.
     """
-
-
-
 
     def test_empty(self):
         assert sanitize_display_text("") == ""

@@ -18,7 +18,6 @@ from gateway.config import Platform
 
 
 class TestSendViaAdapterCrossLoopDispatch:
-
     @pytest.mark.asyncio
     async def test_cross_loop_dispatches_to_gateway_loop(self, monkeypatch):
         """adapter.send() runs on gateway loop, not the caller's loop."""

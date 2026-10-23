@@ -39,7 +39,9 @@ def clawk_home(tmp_path, monkeypatch):
         (None, None),
     ],
 )
-def test_env_var_names_the_managing_system(clawk_home, monkeypatch, env_value, expected):
+def test_env_var_names_the_managing_system(
+    clawk_home, monkeypatch, env_value, expected
+):
     if env_value is None:
         monkeypatch.delenv("CLAWK_MANAGED", raising=False)
     else:
@@ -113,7 +115,9 @@ def test_a_stamp_can_name_every_managed_system(
     install_tree = tmp_path / "install"
     install_tree.mkdir()
 
-    (install_tree / ".install_method").write_text(managed_value + "\n", encoding="utf-8")
+    (install_tree / ".install_method").write_text(
+        managed_value + "\n", encoding="utf-8"
+    )
 
     assert config_mod.detect_install_method(install_tree) == managed_value
 

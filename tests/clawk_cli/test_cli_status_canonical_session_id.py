@@ -21,9 +21,17 @@ from clawk_state_keys import local_identity
 def _status_text(session_db, session_id: str) -> str:
     rendered: list[str] = []
     cli = SimpleNamespace(
-        _session_db=session_db, session_id=session_id, session_start=datetime(2031, 1, 1), agent=None,
-        provider="custom", model="loopback-model", _agent_running=False, reasoning_config=None,
-        show_reasoning=None, session_key="", _get_status_bar_snapshot=dict,
+        _session_db=session_db,
+        session_id=session_id,
+        session_start=datetime(2031, 1, 1),
+        agent=None,
+        provider="custom",
+        model="loopback-model",
+        _agent_running=False,
+        reasoning_config=None,
+        show_reasoning=None,
+        session_key="",
+        _get_status_bar_snapshot=dict,
         _console_print=lambda text, **_kw: rendered.append(text),
     )
     CLISessionMixin._show_session_status(cli)

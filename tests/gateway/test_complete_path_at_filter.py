@@ -35,9 +35,14 @@ def _fixture(tmp_path: Path):
 
 
 def _items(word: str):
-    resp = server.handle_request({"id": "1", "method": "complete.path", "params": {"word": word}})
+    resp = server.handle_request(
+        {"id": "1", "method": "complete.path", "params": {"word": word}}
+    )
 
-    return [(it["text"], it["display"], it.get("meta", "")) for it in resp["result"]["items"]]
+    return [
+        (it["text"], it["display"], it.get("meta", ""))
+        for it in resp["result"]["items"]
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -98,15 +103,23 @@ def _fake_remote_backend(monkeypatch, remote_root: Path) -> list:
     def fake_terminal_tool(command, **kwargs):
         calls.append((command, kwargs.get("task_id")))
         proc = subprocess.run(
-            command, shell=True, cwd=remote_root, capture_output=True, text=True,
-            env={"PATH": os.environ.get("PATH", ""), "HOME": str(remote_root)}, check=False)
+            command,
+            shell=True,
+            cwd=remote_root,
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ.get("PATH", ""), "HOME": str(remote_root)},
+            check=False,
+        )
         return json.dumps({"output": proc.stdout, "exit_code": proc.returncode})
 
     monkeypatch.setattr(terminal_tool_mod, "terminal_tool", fake_terminal_tool)
     return calls
 
 
-def test_remote_backend_completion_lists_the_backend_not_the_host(tmp_path, monkeypatch):
+def test_remote_backend_completion_lists_the_backend_not_the_host(
+    tmp_path, monkeypatch
+):
     """With ``terminal.backend: ssh`` the composer listed the gateway host's directory — a same-named
     workspace on both machines made wrong suggestions look right (#112963). The listing must come
     from the session's terminal backend, addressed by the session key."""
@@ -121,17 +134,26 @@ def test_remote_backend_completion_lists_the_backend_not_the_host(tmp_path, monk
     monkeypatch.setitem(server._sessions, "remote-sid", {"session_key": "remote-key"})
     calls = _fake_remote_backend(monkeypatch, remote)
 
-    resp = server.handle_request({
-        "id": "1", "method": "complete.path", "params": {"word": "re", "session_id": "remote-sid"}})
+    resp = server.handle_request(
+        {
+            "id": "1",
+            "method": "complete.path",
+            "params": {"word": "re", "session_id": "remote-sid"},
+        }
+    )
     texts = [it["text"] for it in resp["result"]["items"]]
 
     assert texts == ["remote-dir/", "remote-only.txt"], texts
     assert calls and calls[0][1] == "remote-key"
     # Desktop's composer sends the session cwd; on a non-local backend it names the backend's directory.
     (remote / "elsewhere" / "other-dir").mkdir(parents=True)
-    resp = server.handle_request({
-        "id": "2", "method": "complete.path",
-        "params": {"word": "ot", "session_id": "remote-sid", "cwd": "elsewhere"}})
+    resp = server.handle_request(
+        {
+            "id": "2",
+            "method": "complete.path",
+            "params": {"word": "ot", "session_id": "remote-sid", "cwd": "elsewhere"},
+        }
+    )
     assert [it["text"] for it in resp["result"]["items"]] == ["other-dir/"]
 
 
@@ -151,7 +173,9 @@ def test_remote_backend_completion_expands_tilde_on_the_backend(tmp_path, monkey
     assert os.path.expanduser("~") not in calls[0][0]
 
 
-def test_remote_backend_completion_speaks_posix_from_a_windows_host(tmp_path, monkeypatch):
+def test_remote_backend_completion_speaks_posix_from_a_windows_host(
+    tmp_path, monkeypatch
+):
     """A Windows gateway host (Desktop's in-process gateway) with an ssh/docker backend must still address the
     backend with POSIX paths: ``os.path`` arithmetic there turns ``ws`` + ``sub/`` into ``ws\\sub``, which the
     backend's listing script cannot resolve, so every non-local completion came back empty."""
@@ -217,7 +241,9 @@ def test_fuzzy_at_finds_file_without_directory_prefix(tmp_path, monkeypatch):
 
     # Display is the basename, meta is the containing directory, so the
     # picker can show `appChrome.tsx  ui-tui/src/components` on one row.
-    row = next(r for r in entries if r[0] == "@file:ui-tui/src/components/appChrome.tsx")
+    row = next(
+        r for r in entries if r[0] == "@file:ui-tui/src/components/appChrome.tsx"
+    )
     assert row[1] == "appChrome.tsx"
     assert row[2] == "ui-tui/src/components"
 
@@ -235,7 +261,9 @@ def test_fuzzy_paths_relative_to_cwd_inside_subdir(tmp_path, monkeypatch):
     import subprocess
 
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True
+    )
     subprocess.run(["git", "config", "user.name", "test"], cwd=tmp_path, check=True)
 
     (tmp_path / "apps" / "web" / "src").mkdir(parents=True)
@@ -356,5 +384,3 @@ def test_completion_ignores_real_terminal_cwd(tmp_path, monkeypatch):
         f"_completion_cwd resolved to {resolved} instead of {tmp_path} — "
         f"the autouse fixture may not be patching _launch_configured_cwd"
     )
-
-

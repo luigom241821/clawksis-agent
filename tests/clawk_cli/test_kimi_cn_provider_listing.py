@@ -31,9 +31,7 @@ def test_kimi_cn_appears_when_only_cn_key_set():
 
     # kimi-coding-cn must be listed (it has credentials)
     cn = next((p for p in providers if p["slug"] == "kimi-coding-cn"), None)
-    assert cn is not None, (
-        "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
-    )
+    assert cn is not None, "kimi-coding-cn should appear when KIMI_CN_API_KEY is set"
     assert cn["is_current"] is True
     assert cn["total_models"] > 0
 
@@ -50,15 +48,17 @@ def test_kimi_cn_appears_when_only_cn_key_set():
 # -- Both keys set -----------------------------------------------------------
 
 
-
 # -- Both aliases deduped correctly ------------------------------------------
 
 
-
-@patch.dict(os.environ, {
-    "KIMI_API_KEY": "sk-intl-fake",
-    "KIMI_CN_API_KEY": "sk-cn-fake",
-}, clear=False)
+@patch.dict(
+    os.environ,
+    {
+        "KIMI_API_KEY": "sk-intl-fake",
+        "KIMI_CN_API_KEY": "sk-cn-fake",
+    },
+    clear=False,
+)
 def test_resolve_provider_full_preserves_kimi_cn_provider_identity():
     """Explicit kimi-coding-cn must not collapse to shared models.dev alias.
 
@@ -72,5 +72,3 @@ def test_resolve_provider_full_preserves_kimi_cn_provider_identity():
     assert pdef.id == "kimi-coding-cn"
     assert pdef.base_url == "https://api.moonshot.cn/v1"
     assert pdef.api_key_env_vars == ("KIMI_CN_API_KEY",)
-
-

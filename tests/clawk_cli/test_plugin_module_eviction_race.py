@@ -34,10 +34,15 @@ def test_evict_modules_survives_a_concurrent_mapping_insert(monkeypatch):
                 worker.join()
             return str.startswith(self, *args)
 
-    for name in ("clawk_plugins.discord_platform", "clawk_plugins.discord_platform.adapter"):
+    for name in (
+        "clawk_plugins.discord_platform",
+        "clawk_plugins.discord_platform.adapter",
+    ):
         modules[name] = types.ModuleType(name)
     modules[_SwitchPoint("unrelated")] = types.ModuleType("unrelated")
-    modules["clawk_plugins.discord_platform.tools"] = types.ModuleType("clawk_plugins.discord_platform.tools")
+    modules["clawk_plugins.discord_platform.tools"] = types.ModuleType(
+        "clawk_plugins.discord_platform.tools"
+    )
     monkeypatch.setattr(plugins_loader, "sys", types.SimpleNamespace(modules=modules))
 
     plugins_loader._evict_modules("clawk_plugins.discord_platform")

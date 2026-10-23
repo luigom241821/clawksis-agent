@@ -29,6 +29,7 @@ from agent.transports.types import (
 # build_tool_call
 # ---------------------------------------------------------------------------
 
+
 class TestBuildToolCall:
     def test_dict_arguments_serialized(self):
         tc = build_tool_call(id="call_1", name="terminal", arguments={"cmd": "ls"})
@@ -39,6 +40,7 @@ class TestBuildToolCall:
 # ---------------------------------------------------------------------------
 # map_finish_reason
 # ---------------------------------------------------------------------------
+
 
 class TestMapFinishReason:
     ANTHROPIC_MAP = {
@@ -66,10 +68,10 @@ class TestMapFinishReason:
 # Backward-compat property tests
 # ---------------------------------------------------------------------------
 
+
 class TestToolCallBackwardCompat:
     """Test duck-typing properties that let ToolCall pass through code expecting
     the old SimpleNamespace(id, type, function=SimpleNamespace(name, arguments)) shape."""
-
 
     def test_function_name_matches(self):
         tc = ToolCall(id="1", name="search", arguments='{"q":"test"}')
@@ -81,14 +83,14 @@ class TestToolCallBackwardCompat:
         assert tc.function.arguments == '{"q":"test"}'
         assert tc.function.arguments == tc.arguments
 
-
     def test_getattr_pattern_matches_agent_loop(self):
         """run_agent.py uses getattr(tool_call, 'call_id', None) — verify it works."""
-        tc = ToolCall(id="1", name="fn", arguments="{}", provider_data={"call_id": "c1"})
+        tc = ToolCall(
+            id="1", name="fn", arguments="{}", provider_data={"call_id": "c1"}
+        )
         assert getattr(tc, "call_id", None) == "c1"
         tc_no_pd = ToolCall(id="1", name="fn", arguments="{}")
         assert getattr(tc_no_pd, "call_id", None) is None
-
 
     def test_extra_content_getattr_pattern(self):
         """_build_assistant_message uses getattr(tc, 'extra_content', None).
@@ -99,7 +101,9 @@ class TestToolCallBackwardCompat:
         causing HTTP 400 on subsequent turns (issue #14488).
         """
         ec = {"google": {"thought_signature": "SIG_ABC123"}}
-        tc = ToolCall(id="1", name="fn", arguments="{}", provider_data={"extra_content": ec})
+        tc = ToolCall(
+            id="1", name="fn", arguments="{}", provider_data={"extra_content": ec}
+        )
         assert getattr(tc, "extra_content", None) == ec
 
         tc_no_extra = ToolCall(id="1", name="fn", arguments="{}")
@@ -111,7 +115,9 @@ class TestNormalizedResponseBackwardCompat:
 
     def test_reasoning_content_from_provider_data(self):
         nr = NormalizedResponse(
-            content="hi", tool_calls=None, finish_reason="stop",
+            content="hi",
+            tool_calls=None,
+            finish_reason="stop",
             provider_data={"reasoning_content": "thought process"},
         )
         assert nr.reasoning_content == "thought process"
@@ -123,7 +129,9 @@ class TestNormalizedResponseBackwardCompat:
     def test_reasoning_details_from_provider_data(self):
         details = [{"type": "thinking", "thinking": "hmm"}]
         nr = NormalizedResponse(
-            content="hi", tool_calls=None, finish_reason="stop",
+            content="hi",
+            tool_calls=None,
+            finish_reason="stop",
             provider_data={"reasoning_details": details},
         )
         assert nr.reasoning_details == details

@@ -33,8 +33,11 @@ def reload_env(monkeypatch, tmp_path):
             scoped_homes.append(clawk_constants.clawk_home_key())
 
     monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", _discover)
-    monkeypatch.setattr(_mcp_agent, "refresh_agent_mcp_tools",
-                        lambda agent, **_kw: refreshed.append(agent.name) or set())
+    monkeypatch.setattr(
+        _mcp_agent,
+        "refresh_agent_mcp_tools",
+        lambda agent, **_kw: refreshed.append(agent.name) or set(),
+    )
     monkeypatch.setattr(srv, "_compute_mcp_rev", lambda: "rev-a")
     monkeypatch.setattr(srv, "_emit", lambda *_a, **_k: True)
     monkeypatch.setattr(srv, "_session_info", lambda agent, session=None: {})
@@ -42,17 +45,31 @@ def reload_env(monkeypatch, tmp_path):
     monkeypatch.setattr(srv, "_mcp_reload_loaded_rev", "")
 
     def _session(name, profile_home=None):
-        return {"agent": SimpleNamespace(name=name), "history": [], "history_lock": threading.RLock(),
-                "running": False, "profile_home": profile_home}
+        return {
+            "agent": SimpleNamespace(name=name),
+            "history": [],
+            "history_lock": threading.RLock(),
+            "running": False,
+            "profile_home": profile_home,
+        }
 
     profile_b = tmp_path / "profile-b"
     profile_b.mkdir()
-    monkeypatch.setattr(srv, "_sessions", {
-        "A": _session("agent-A"), "B": _session("agent-B", profile_home=str(profile_b)),
-        "lazy": {"agent": None, "history_lock": threading.RLock()},
-    })
-    return SimpleNamespace(refreshed=refreshed, discovered_homes=discovered_homes,
-                           scoped_homes=scoped_homes, profile_b=profile_b)
+    monkeypatch.setattr(
+        srv,
+        "_sessions",
+        {
+            "A": _session("agent-A"),
+            "B": _session("agent-B", profile_home=str(profile_b)),
+            "lazy": {"agent": None, "history_lock": threading.RLock()},
+        },
+    )
+    return SimpleNamespace(
+        refreshed=refreshed,
+        discovered_homes=discovered_homes,
+        scoped_homes=scoped_homes,
+        profile_b=profile_b,
+    )
 
 
 def test_reload_from_one_session_refreshes_every_live_agent(reload_env):
@@ -76,7 +93,10 @@ def test_reload_rediscovers_under_each_live_profile_scope(reload_env):
     srv._methods["reload.mcp"](1, {"session_id": "A", "confirm": True})
 
     assert clawk_constants.clawk_home_key() in reload_env.discovered_homes
-    assert clawk_constants.clawk_home_key(reload_env.profile_b) in reload_env.discovered_homes
+    assert (
+        clawk_constants.clawk_home_key(reload_env.profile_b)
+        in reload_env.discovered_homes
+    )
 
 
 def test_reload_rediscovers_the_launch_profile_under_its_own_secret_scope(reload_env):
@@ -85,7 +105,9 @@ def test_reload_rediscovers_the_launch_profile_under_its_own_secret_scope(reload
     the RPC still answers "reloaded" (#113746). Every rediscovery, launch home included, is scoped."""
     srv._methods["reload.mcp"](1, {"session_id": "A", "confirm": True})
 
-    assert sorted(set(reload_env.scoped_homes)) == sorted(set(reload_env.discovered_homes))
+    assert sorted(set(reload_env.scoped_homes)) == sorted(
+        set(reload_env.discovered_homes)
+    )
     assert clawk_constants.clawk_home_key() in reload_env.scoped_homes
 
 

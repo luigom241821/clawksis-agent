@@ -85,7 +85,7 @@ class TestReasoningOffOneShotOverride:
         assert _reasoning_config_for_wire(agent) is None
 
     def test_mandatory_reasoning_route_steps_a_disable_up_to_the_floor(self):
-        """"Reasoning is mandatory ... cannot be disabled" understands the field: the session's
+        """ "Reasoning is mandatory ... cannot be disabled" understands the field: the session's
         disable becomes the floor effort (closest to what the user asked for), while a config that
         already reasons still goes out verbatim (cache key preserved)."""
         from agent.auxiliary_reasoning_floor import REASONING_FLOOR_EFFORT
@@ -94,7 +94,10 @@ class TestReasoningOffOneShotOverride:
         agent = _AgentStandIn({"enabled": False})
         agent._reasoning_disable_rejected = True
         agent._reasoning_floor_required = True
-        assert _reasoning_config_for_wire(agent) == {"enabled": True, "effort": REASONING_FLOOR_EFFORT}
+        assert _reasoning_config_for_wire(agent) == {
+            "enabled": True,
+            "effort": REASONING_FLOOR_EFFORT,
+        }
 
         agent.reasoning_config = {"enabled": True, "effort": "high"}
         assert _reasoning_config_for_wire(agent) == {"enabled": True, "effort": "high"}
@@ -133,11 +136,13 @@ def _thinking_only_length_response():
     return SimpleNamespace(
         id="chatcmpl-thinking-exhausted",
         model="test/model",
-        choices=[SimpleNamespace(
-            index=0,
-            message=_mock_assistant_msg(content=""),
-            finish_reason=FINISH_REASON_LENGTH,
-        )],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=""),
+                finish_reason=FINISH_REASON_LENGTH,
+            )
+        ],
         usage=None,
     )
 
@@ -165,7 +170,8 @@ def _run(agent, message, history=None):
 
 def _no_empty_assistant_rows(messages):
     return [
-        m for m in messages
+        m
+        for m in messages
         if m.get("role") == "assistant"
         and not (m.get("content") or "").strip()
         and not m.get("tool_calls")
@@ -200,7 +206,6 @@ class TestThinkingOnlyTruncation:
             "The one-shot reasoning-off override must be consumed by the "
             "continuation call."
         )
-
 
     def test_full_ceiling_with_empty_fragments_still_settles(self, loop_agent):
         """All four attempts thinking-only: the turn must exit through the
@@ -238,6 +243,7 @@ class TestThinkingOnlyTruncation:
         assert "and the ending." in (result["final_response"] or "")
         assert _no_empty_assistant_rows(result["messages"]) == []
 
+
 class TestReasoningOffReachesTheWire:
     def test_continuation_request_carries_reasoning_off_on_the_wire(self, loop_agent):
         """The flag is only useful if the continuation REQUEST goes out with
@@ -260,7 +266,9 @@ class TestReasoningOffReachesTheWire:
             f"continuation must be sent with thinking off, got {second!r}"
         )
 
-    def test_reasoning_off_is_exactly_one_request_and_prefix_stays_stable(self, loop_agent):
+    def test_reasoning_off_is_exactly_one_request_and_prefix_stays_stable(
+        self, loop_agent
+    ):
         """Prompt-cache invariant for the override.
 
         The reasoning parameter is part of the provider's cache key on
@@ -287,16 +295,15 @@ class TestReasoningOffReachesTheWire:
 
         calls = loop_agent.client.chat.completions.create.call_args_list
         assert len(calls) == 3
-        wire = [
-            (c.kwargs.get("extra_body") or {}).get("reasoning") for c in calls
-        ]
+        wire = [(c.kwargs.get("extra_body") or {}).get("reasoning") for c in calls]
         assert wire[0] == {"enabled": True, "effort": "high"}, wire
         assert wire[1] == {"enabled": False, "effort": "none"}, wire
         assert wire[2] == {"enabled": True, "effort": "high"}, (
             f"reasoning must be restored on the very next request; got {wire!r}"
         )
         system_prompts = {
-            c.kwargs["messages"][0]["content"] for c in calls
+            c.kwargs["messages"][0]["content"]
+            for c in calls
             if c.kwargs["messages"][0].get("role") == "system"
         }
         assert len(system_prompts) == 1, (

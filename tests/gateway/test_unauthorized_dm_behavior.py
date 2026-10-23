@@ -23,8 +23,11 @@ def _clear_auth_env(monkeypatch) -> None:
         "SMS_ALLOWED_USERS",
         "MATTERMOST_ALLOWED_USERS",
         "MATRIX_ALLOWED_USERS",
-        "DINGTALK_ALLOWED_USERS", "FEISHU_ALLOWED_USERS", "WECOM_ALLOWED_USERS",
-        "QQ_ALLOWED_USERS", "QQ_GROUP_ALLOWED_USERS",
+        "DINGTALK_ALLOWED_USERS",
+        "FEISHU_ALLOWED_USERS",
+        "WECOM_ALLOWED_USERS",
+        "QQ_ALLOWED_USERS",
+        "QQ_GROUP_ALLOWED_USERS",
         "GATEWAY_ALLOWED_USERS",
         "TELEGRAM_ALLOW_ALL_USERS",
         "DISCORD_ALLOW_ALL_USERS",
@@ -35,7 +38,9 @@ def _clear_auth_env(monkeypatch) -> None:
         "SMS_ALLOW_ALL_USERS",
         "MATTERMOST_ALLOW_ALL_USERS",
         "MATRIX_ALLOW_ALL_USERS",
-        "DINGTALK_ALLOW_ALL_USERS", "FEISHU_ALLOW_ALL_USERS", "WECOM_ALLOW_ALL_USERS",
+        "DINGTALK_ALLOW_ALL_USERS",
+        "FEISHU_ALLOW_ALL_USERS",
+        "WECOM_ALLOW_ALL_USERS",
         "QQ_ALLOW_ALL_USERS",
         "GATEWAY_ALLOW_ALL_USERS",
     ):
@@ -85,7 +90,8 @@ def _make_runner(platform: Platform, config: GatewayConfig):
 
 
 def test_whatsapp_lid_user_matches_phone_allowlist_via_modern_session_mapping(
-    monkeypatch, tmp_path,
+    monkeypatch,
+    tmp_path,
 ):
     """Modern ``platforms/`` installs store bridge mappings under
     ``platforms/whatsapp/session`` — the LID→phone resolution (and therefore
@@ -98,10 +104,12 @@ def test_whatsapp_lid_user_matches_phone_allowlist_via_modern_session_mapping(
     session_dir = tmp_path / "platforms" / "whatsapp" / "session"
     session_dir.mkdir(parents=True)
     (session_dir / "lid-mapping-15550000001.json").write_text(
-        '"900000000000001"', encoding="utf-8",
+        '"900000000000001"',
+        encoding="utf-8",
     )
     (session_dir / "lid-mapping-900000000000001_reverse.json").write_text(
-        '"15550000001"', encoding="utf-8",
+        '"15550000001"',
+        encoding="utf-8",
     )
 
     runner, _adapter = _make_runner(
@@ -130,21 +138,26 @@ def test_whatsapp_lid_user_matches_phone_allowlist_via_modern_session_mapping(
         ("4", True),
     ],
 )
-def test_simplex_allowlist_matches_contact_id_not_display_name(monkeypatch, allowlist, expected):
+def test_simplex_allowlist_matches_contact_id_not_display_name(
+    monkeypatch, allowlist, expected
+):
     """SIMPLEX_ALLOWED_USERS matches only the numeric contactId (user_id),
     never the contact's display name (user_name)."""
     _clear_auth_env(monkeypatch)
     monkeypatch.setenv("SIMPLEX_ALLOWED_USERS", allowlist)
 
     from gateway.platform_registry import platform_registry, PlatformEntry
-    platform_registry.register(PlatformEntry(
-        name="simplex",
-        label="SimpleX Chat",
-        adapter_factory=lambda cfg: None,
-        check_fn=lambda: True,
-        allowed_users_env="SIMPLEX_ALLOWED_USERS",
-        allow_all_env="SIMPLEX_ALLOW_ALL_USERS",
-    ))
+
+    platform_registry.register(
+        PlatformEntry(
+            name="simplex",
+            label="SimpleX Chat",
+            adapter_factory=lambda cfg: None,
+            check_fn=lambda: True,
+            allowed_users_env="SIMPLEX_ALLOWED_USERS",
+            allow_all_env="SIMPLEX_ALLOW_ALL_USERS",
+        )
+    )
 
     simplex = Platform("simplex")
     runner, _adapter = _make_runner(
@@ -154,9 +167,9 @@ def test_simplex_allowlist_matches_contact_id_not_display_name(monkeypatch, allo
 
     source = SessionSource(
         platform=simplex,
-        user_id="4",            # adapter sets this to the numeric contactId
+        user_id="4",  # adapter sets this to the numeric contactId
         chat_id="hujikuji",
-        user_name="hujikuji",   # adapter sets this to displayName
+        user_name="hujikuji",  # adapter sets this to displayName
         chat_type="dm",
     )
     assert runner._is_user_authorized(source) is expected
@@ -174,7 +187,9 @@ def test_telegram_group_users_legacy_chat_ids_still_authorize(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     source = SessionSource(
@@ -195,7 +210,9 @@ def test_telegram_group_users_mixed_sender_and_legacy_chat(monkeypatch):
 
     runner, _adapter = _make_runner(
         Platform.TELEGRAM,
-        GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}),
+        GatewayConfig(
+            platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="t")}
+        ),
     )
 
     # Legacy chat ID path: any sender in the listed chat is authorized
@@ -254,7 +271,9 @@ async def test_unauthorized_bot_dm_is_never_offered_a_pairing_code(monkeypatch):
     runner, adapter = _make_runner(Platform.WHATSAPP, config)
     jid = "15551234567@s.whatsapp.net"
 
-    result = await runner._handle_message(_make_event(Platform.WHATSAPP, jid, jid, is_bot=True))
+    result = await runner._handle_message(
+        _make_event(Platform.WHATSAPP, jid, jid, is_bot=True)
+    )
 
     assert result is None
     runner.pairing_store.generate_code.assert_not_called()
@@ -291,6 +310,7 @@ async def test_unauthorized_whatsapp_dm_can_be_ignored(monkeypatch):
 # Allowlist-configured platforms default to "ignore" for unauthorized users
 # (#9337: Signal gateway sends pairing spam when allowlist is configured)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_signal_with_allowlist_ignores_unauthorized_dm(monkeypatch):
@@ -424,20 +444,27 @@ def test_qqbot_with_allowlist_ignores_unauthorized_dm(monkeypatch):
 # "decline" behavior: one-time polite decline instead of a pairing code (#88028)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_unauthorized_dm_decline_sends_once_then_stays_silent(monkeypatch):
     """First DM: stamp recorded BEFORE the send, custom text delivered, no pairing code. A sender
     with a recent stamp gets nothing."""
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={Platform.WHATSAPP: PlatformConfig(enabled=True, extra={"unauthorized_dm_behavior": "decline"})},
+        platforms={
+            Platform.WHATSAPP: PlatformConfig(
+                enabled=True, extra={"unauthorized_dm_behavior": "decline"}
+            )
+        },
     )
     config.unauthorized_dm_decline_message = "Sorry, this assistant is private."
     runner, adapter = _make_runner(Platform.WHATSAPP, config)
     jid = "15551234567@s.whatsapp.net"
     runner.pairing_store.has_recent_decline.return_value = False
 
-    assert await runner._handle_message(_make_event(Platform.WHATSAPP, jid, jid)) is None
+    assert (
+        await runner._handle_message(_make_event(Platform.WHATSAPP, jid, jid)) is None
+    )
 
     runner.pairing_store.generate_code.assert_not_called()
     runner.pairing_store.record_decline.assert_called_once_with("whatsapp", jid)
@@ -447,7 +474,9 @@ async def test_unauthorized_dm_decline_sends_once_then_stays_silent(monkeypatch)
     adapter.send.reset_mock()
     runner.pairing_store.record_decline.reset_mock()
 
-    assert await runner._handle_message(_make_event(Platform.WHATSAPP, jid, jid)) is None
+    assert (
+        await runner._handle_message(_make_event(Platform.WHATSAPP, jid, jid)) is None
+    )
 
     runner.pairing_store.record_decline.assert_not_called()
     adapter.send.assert_not_awaited()
@@ -480,7 +509,10 @@ def test_decline_config_and_stamp_roundtrip(monkeypatch, tmp_path):
     assert config.get_unauthorized_dm_behavior(Platform.TELEGRAM) == "pair"
     assert config.get_unauthorized_dm_behavior(Platform.WHATSAPP) == "decline"
     assert config.get_unauthorized_dm_behavior(Platform.DISCORD) == "decline"
-    assert GatewayConfig.from_dict(config.to_dict()).unauthorized_dm_decline_message == "custom text"
+    assert (
+        GatewayConfig.from_dict(config.to_dict()).unauthorized_dm_decline_message
+        == "custom text"
+    )
 
     with _patch("gateway.pairing.PAIRING_DIR", tmp_path):
         store = pairing_mod.PairingStore()
@@ -488,5 +520,8 @@ def test_decline_config_and_stamp_roundtrip(monkeypatch, tmp_path):
         store.record_decline("telegram", "12345")
         assert store.has_recent_decline("telegram", "12345") is True
         assert store.has_recent_decline("telegram", "67890") is False
-        with _patch("gateway.pairing.time.time", return_value=time.time() + pairing_mod.DECLINE_DEDUPE_SECONDS + 1):
+        with _patch(
+            "gateway.pairing.time.time",
+            return_value=time.time() + pairing_mod.DECLINE_DEDUPE_SECONDS + 1,
+        ):
             assert store.has_recent_decline("telegram", "12345") is False

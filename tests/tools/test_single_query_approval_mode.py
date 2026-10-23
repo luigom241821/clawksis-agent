@@ -16,7 +16,11 @@ import pytest
 
 import tools.approval as approval_module
 from tools import approval_context
-from gateway.session_context import clear_session_vars, reset_session_vars, set_session_vars
+from gateway.session_context import (
+    clear_session_vars,
+    reset_session_vars,
+    set_session_vars,
+)
 from tools.approval import check_all_command_guards, check_dangerous_command
 from tools.approval_context import _get_single_query_approval_mode
 
@@ -38,46 +42,72 @@ def _clear_approval_state():
 # _get_single_query_approval_mode() config parsing
 # ---------------------------------------------------------------------------
 
+
 class TestSingleQueryApprovalModeParsing:
     def test_default_is_deny(self):
         """When no config is set, single_query_mode defaults to 'deny'."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {}}):
-            assert _get_single_query_approval_mode() == "deny"
 
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly", return_value={"approvals": {}}
+        ):
+            assert _get_single_query_approval_mode() == "deny"
 
     def test_explicit_approve(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {"single_query_mode": "approve"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            return_value={"approvals": {"single_query_mode": "approve"}},
+        ):
             assert _get_single_query_approval_mode() == "approve"
 
     def test_off_maps_to_approve(self):
         """'off' is an alias for 'approve' (matches --yolo semantics)."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {"single_query_mode": "off"}}):
-            assert _get_single_query_approval_mode() == "approve"
 
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            return_value={"approvals": {"single_query_mode": "off"}},
+        ):
+            assert _get_single_query_approval_mode() == "approve"
 
     def test_case_insensitive(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {"single_query_mode": "APPROVE"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            return_value={"approvals": {"single_query_mode": "APPROVE"}},
+        ):
             assert _get_single_query_approval_mode() == "approve"
 
     def test_unknown_value_defaults_to_deny(self):
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {"single_query_mode": "maybe"}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            return_value={"approvals": {"single_query_mode": "maybe"}},
+        ):
             assert _get_single_query_approval_mode() == "deny"
 
     def test_config_load_failure_defaults_to_deny(self):
         """If config loading fails entirely, default to deny (safe)."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", side_effect=RuntimeError("config broken")):
+
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            side_effect=RuntimeError("config broken"),
+        ):
             assert _get_single_query_approval_mode() == "deny"
 
     def test_yaml_boolean_false_maps_to_deny(self):
         """YAML 1.1 parses bare 'off' as False. Ensure it maps to deny."""
         from unittest.mock import patch as mock_patch
-        with mock_patch("clawk_cli.config.load_config_readonly", return_value={"approvals": {"single_query_mode": False}}):
+
+        with mock_patch(
+            "clawk_cli.config.load_config_readonly",
+            return_value={"approvals": {"single_query_mode": False}},
+        ):
             # str(False) = "False", which is not in the approve set, so deny
             assert _get_single_query_approval_mode() == "deny"
 
@@ -85,6 +115,7 @@ class TestSingleQueryApprovalModeParsing:
 # ---------------------------------------------------------------------------
 # Single-query context detection
 # ---------------------------------------------------------------------------
+
 
 class TestSingleQueryContextDetection:
     def test_env_var_marks_single_query(self, monkeypatch):
@@ -115,6 +146,7 @@ class TestSingleQueryContextDetection:
 # check_dangerous_command() with a single-query session
 # ---------------------------------------------------------------------------
 
+
 class TestSingleQueryDenyMode:
     """When CLAWK_SINGLE_QUERY_SESSION is set and single_query_mode=deny,
     dangerous commands are blocked deterministically instead of waiting a full
@@ -127,7 +159,11 @@ class TestSingleQueryDenyMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert not result["approved"]
             assert "BLOCKED" in result["message"]
@@ -141,7 +177,11 @@ class TestSingleQueryDenyMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = check_dangerous_command("ls -la", "local")
             assert result["approved"]
 
@@ -157,7 +197,11 @@ class TestSingleQueryApproveMode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="approve",
+        ):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert result["approved"]
 
@@ -165,6 +209,7 @@ class TestSingleQueryApproveMode:
 # ---------------------------------------------------------------------------
 # check_all_command_guards() with a single-query session
 # ---------------------------------------------------------------------------
+
 
 class TestSingleQueryDenyModeAllGuards:
     """The combined guard function also respects single_query_mode."""
@@ -177,7 +222,11 @@ class TestSingleQueryDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = check_all_command_guards("rm -rf /tmp/stuff", "local")
             assert not result["approved"]
             assert "BLOCKED" in result["message"]
@@ -191,7 +240,11 @@ class TestSingleQueryDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = check_all_command_guards("echo hello", "local")
             assert result["approved"]
 
@@ -203,7 +256,11 @@ class TestSingleQueryDenyModeAllGuards:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="approve",
+        ):
             result = check_all_command_guards("rm -rf /tmp/stuff", "local")
             assert result["approved"]
 
@@ -211,6 +268,7 @@ class TestSingleQueryDenyModeAllGuards:
 # ---------------------------------------------------------------------------
 # check_execute_code_guard(): the -q escape hatch is closed
 # ---------------------------------------------------------------------------
+
 
 class TestSingleQueryExecuteCode:
     """execute_code auto-approves in plain non-gateway mode. A -q run must not
@@ -224,7 +282,11 @@ class TestSingleQueryExecuteCode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = approval_module.check_execute_code_guard("import os", "local")
             assert not result["approved"]
             assert result["outcome"] == "blocked"
@@ -238,11 +300,17 @@ class TestSingleQueryExecuteCode:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="approve",
+        ):
             result = approval_module.check_execute_code_guard("import os", "local")
             assert result["approved"]
 
-    def test_headless_execute_code_still_auto_approves_outside_single_query(self, monkeypatch):
+    def test_headless_execute_code_still_auto_approves_outside_single_query(
+        self, monkeypatch
+    ):
         """Without the single-query marker, headless execute_code keeps its
         documented auto-approve contract (no behavior change outside -q)."""
         monkeypatch.delenv("CLAWK_SINGLE_QUERY_SESSION", raising=False)
@@ -259,6 +327,7 @@ class TestSingleQueryExecuteCode:
 # Edge cases: single-query mode interaction with other mechanisms
 # ---------------------------------------------------------------------------
 
+
 class TestSingleQueryModeInteractions:
     """Single-query mode should NOT interfere with other approval mechanisms."""
 
@@ -270,7 +339,11 @@ class TestSingleQueryModeInteractions:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             result = check_dangerous_command("rm -rf /", "docker")
             assert result["approved"]
 
@@ -287,9 +360,13 @@ class TestSingleQueryModeInteractions:
         # module attribute directly to simulate process-startup with
         # CLAWK_YOLO_MODE=1.
         from unittest.mock import patch as mock_patch
+
         with (
             mock_patch.object(approval_module, "_YOLO_MODE_FROZEN", True),
-            mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"),
+            mock_patch(
+                "tools.approval_context._get_single_query_approval_mode",
+                return_value="deny",
+            ),
         ):
             result = check_dangerous_command("rm -rf /tmp/stuff", "local")
             assert result["approved"]
@@ -302,7 +379,11 @@ class TestSingleQueryModeInteractions:
         monkeypatch.delenv("CLAWK_YOLO_MODE", raising=False)
 
         from unittest.mock import patch as mock_patch
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="approve"):
+
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="approve",
+        ):
             result = check_all_command_guards("rm -rf /", "local")
             assert not result["approved"]
 
@@ -311,23 +392,49 @@ class TestDaemonOneshotTurns:
     """Over the daemon, `-q` and `-z` are both finite, but only `-z` keeps the legacy
     oneshot auto-approve (oneshot.py set CLAWK_YOLO_MODE: nobody can answer a prompt)."""
 
-    def test_unattended_finite_turn_approves_execute_code_but_plain_finite_stays_single_query(self, monkeypatch):
+    def test_unattended_finite_turn_approves_execute_code_but_plain_finite_stays_single_query(
+        self, monkeypatch
+    ):
         from unittest.mock import patch as mock_patch
         from gateway.session_finite import admit_finite, finite_turn_scope
         from clawk_state_runtime import RuntimeStoreError
 
-        for key in ("CLAWK_SINGLE_QUERY_SESSION", "CLAWK_GATEWAY_SESSION", "CLAWK_EXEC_ASK", "CLAWK_YOLO_MODE"):
+        for key in (
+            "CLAWK_SINGLE_QUERY_SESSION",
+            "CLAWK_GATEWAY_SESSION",
+            "CLAWK_EXEC_ASK",
+            "CLAWK_YOLO_MODE",
+        ):
             monkeypatch.delenv(key, raising=False)
-        assert admit_finite({"finite": True, "unattended": True}) == {"finite": True, "unattended": True}
+        assert admit_finite({"finite": True, "unattended": True}) == {
+            "finite": True,
+            "unattended": True,
+        }
         assert admit_finite({"finite": True, "unattended": False}) == {"finite": True}
-        for bad in ({"unattended": True}, {"finite": False, "unattended": True}, {"finite": True, "unattended": 1}):
+        for bad in (
+            {"unattended": True},
+            {"finite": False, "unattended": True},
+            {"finite": True, "unattended": 1},
+        ):
             with pytest.raises(RuntimeStoreError):
                 admit_finite(bad)
-        with mock_patch("tools.approval_context._get_single_query_approval_mode", return_value="deny"):
+        with mock_patch(
+            "tools.approval_context._get_single_query_approval_mode",
+            return_value="deny",
+        ):
             with finite_turn_scope(True, unattended=True):
-                assert approval_module.check_execute_code_guard("import os", "local")["approved"]
+                assert approval_module.check_execute_code_guard("import os", "local")[
+                    "approved"
+                ]
             with finite_turn_scope(True):
-                assert approval_module.check_execute_code_guard("import os", "local")["outcome"] == "blocked"
+                assert (
+                    approval_module.check_execute_code_guard("import os", "local")[
+                        "outcome"
+                    ]
+                    == "blocked"
+                )
             with finite_turn_scope(False, unattended=True):
-                assert approval_module.check_execute_code_guard("import os", "local")["approved"]  # headless default
+                assert approval_module.check_execute_code_guard("import os", "local")[
+                    "approved"
+                ]  # headless default
                 assert not approval_module._yolo_active()

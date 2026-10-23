@@ -34,8 +34,13 @@ _LOAD_WAITERS: dict[int, str] = {}  # thread id -> module whose load it waits fo
 def _waits_for(tid: int) -> set:
     """Threads *tid* is blocked on: a loader lock owner, or an importlib module-lock owner."""
     owners = {_LOAD_OWNERS.get(_LOAD_WAITERS.get(tid, ""))}
-    blocked = getattr(importlib._bootstrap, "_blocking_on", {}).get(tid)  # list on 3.12+, lock on 3.11
-    owners.update(getattr(lk, "owner", None) for lk in (blocked if isinstance(blocked, list) else [blocked]))
+    blocked = getattr(importlib._bootstrap, "_blocking_on", {}).get(
+        tid
+    )  # list on 3.12+, lock on 3.11
+    owners.update(
+        getattr(lk, "owner", None)
+        for lk in (blocked if isinstance(blocked, list) else [blocked])
+    )
     return owners - {None}
 
 
@@ -82,6 +87,7 @@ def user_plugins_dir() -> Optional[Path]:
     """Return ``$CLAWK_HOME/plugins/`` or None if unavailable."""
     try:
         from clawk_constants import get_clawk_home
+
         d = get_clawk_home() / "plugins"
         return d if d.is_dir() else None
     except Exception:
@@ -99,7 +105,9 @@ def iter_plugin_dirs(root: Path) -> list[Path]:
         try:
             if child.is_dir() and (child / "__init__.py").exists():
                 dirs.append(child)
-        except OSError as exc:  # one mode-000 / ACL-denied child must not abort the listing
+        except (
+            OSError
+        ) as exc:  # one mode-000 / ACL-denied child must not abort the listing
             _log.warning("Skipping unreadable plugin directory %s: %s", child, exc)
     return dirs
 
@@ -116,10 +124,13 @@ def read_plugin_description(plugin_dir: Path) -> str:
         return ""
 
 
-def _new_module(name: str, file: Path, search_locations: Optional[list[str]] = None) -> Optional[Any]:
+def _new_module(
+    name: str, file: Path, search_locations: Optional[list[str]] = None
+) -> Optional[Any]:
     """spec -> module -> sys.modules[name] (NOT executed); None if no spec."""
     spec = importlib.util.spec_from_file_location(
-        name, str(file), submodule_search_locations=search_locations)
+        name, str(file), submodule_search_locations=search_locations
+    )
     if not spec:
         return None
     mod = importlib.util.module_from_spec(spec)
@@ -141,8 +152,14 @@ def _exec(mod: Any, logger: Optional[logging.Logger] = None) -> bool:
         return False
 
 
-def load_plugin_module(module_name: str, plugin_dir: Path, *, parents: tuple[str, ...],
-                       logger: logging.Logger, synthetic_namespace: Optional[str] = None) -> Optional[Any]:
+def load_plugin_module(
+    module_name: str,
+    plugin_dir: Path,
+    *,
+    parents: tuple[str, ...],
+    logger: logging.Logger,
+    synthetic_namespace: Optional[str] = None,
+) -> Optional[Any]:
     """Import ``plugin_dir/__init__.py`` as *module_name* (reusing sys.modules when loaded).
     Order matters: parents first (relative imports need them), then siblings as ``module_name.<stem>``
     (so ``from ._x import Y`` resolves), then the module. Finally child is bound onto parent and
@@ -150,9 +167,14 @@ def load_plugin_module(module_name: str, plugin_dir: Path, *, parents: tuple[str
     init_file = plugin_dir / "__init__.py"
     if not init_file.exists():
         return None
-    if synthetic_namespace:  # user code: never imported in-process under plugins.isolation: host
+    if (
+        synthetic_namespace
+    ):  # user code: never imported in-process under plugins.isolation: host
         from clawk_cli.plugin_isolation import in_process_import_refusal
-        refusal = in_process_import_refusal(f"plugin {plugin_dir.name!r} (loaded as {module_name})")
+
+        refusal = in_process_import_refusal(
+            f"plugin {plugin_dir.name!r} (loaded as {module_name})"
+        )
         if refusal:
             logger.warning("%s", refusal)
             return None
@@ -162,26 +184,40 @@ def load_plugin_module(module_name: str, plugin_dir: Path, *, parents: tuple[str
     # The wait polls for a cross-thread cycle through importlib's module locks; in a cycle, accept the
     # partial module like importlib does. It is bounded only inside bounded_load_wait() (per-turn callers).
     lock, me = _module_load_lock(module_name), threading.get_ident()
-    deadline = float("inf") if not _BOUNDED_WAIT.get() else time.monotonic() + (
-        0 if module_name in _STALLED_LOADS else _CONCURRENT_LOAD_WAIT_SECS)
+    deadline = (
+        float("inf")
+        if not _BOUNDED_WAIT.get()
+        else time.monotonic()
+        + (0 if module_name in _STALLED_LOADS else _CONCURRENT_LOAD_WAIT_SECS)
+    )
     _LOAD_WAITERS[me] = module_name
     try:
         while not lock.acquire(timeout=0.05):
             if _load_would_deadlock(me):
-                logger.debug("Concurrent circular load of %s; using the partial module", module_name)
+                logger.debug(
+                    "Concurrent circular load of %s; using the partial module",
+                    module_name,
+                )
                 return sys.modules.get(module_name)
             if time.monotonic() >= deadline:
                 _STALLED_LOADS.add(module_name)
-                logger.warning("Skipping plugin %s: another thread's load of it has not finished "
-                               "(import still running after %.0fs)", module_name, _CONCURRENT_LOAD_WAIT_SECS)
+                logger.warning(
+                    "Skipping plugin %s: another thread's load of it has not finished "
+                    "(import still running after %.0fs)",
+                    module_name,
+                    _CONCURRENT_LOAD_WAIT_SECS,
+                )
                 return None
     finally:
         _LOAD_WAITERS.pop(me, None)
-    outermost = module_name not in _LOAD_OWNERS  # the RLock re-enters on this thread's recursive loads
+    outermost = (
+        module_name not in _LOAD_OWNERS
+    )  # the RLock re-enters on this thread's recursive loads
     _LOAD_OWNERS.setdefault(module_name, me)
     try:
-        return _load_plugin_module_locked(module_name, plugin_dir, init_file, parents, logger,
-                                          synthetic_namespace)
+        return _load_plugin_module_locked(
+            module_name, plugin_dir, init_file, parents, logger, synthetic_namespace
+        )
     finally:
         if outermost:
             _LOAD_OWNERS.pop(module_name, None)
@@ -189,9 +225,14 @@ def load_plugin_module(module_name: str, plugin_dir: Path, *, parents: tuple[str
         lock.release()
 
 
-def _load_plugin_module_locked(module_name: str, plugin_dir: Path, init_file: Path,
-                               parents: tuple[str, ...], logger: logging.Logger,
-                               synthetic_namespace: Optional[str]) -> Optional[Any]:
+def _load_plugin_module_locked(
+    module_name: str,
+    plugin_dir: Path,
+    init_file: Path,
+    parents: tuple[str, ...],
+    logger: logging.Logger,
+    synthetic_namespace: Optional[str],
+) -> Optional[Any]:
     # A synthetic package shell has no __file__; only reuse modules loaded from disk.
     cached = sys.modules.get(module_name)
     if cached is not None and getattr(cached, "__file__", None):
@@ -234,11 +275,20 @@ class NoopPluginContext:
     def _noop(self, *args, **kwargs):
         pass
 
-    register_tool = register_hook = register_cli_command = register_memory_provider = _noop
+    register_tool = register_hook = register_cli_command = register_memory_provider = (
+        _noop
+    )
 
 
-def instance_from_module(mod: Any, *, collector: Any, collected_attr: str, base_cls: type, name: str,
-                         logger: logging.Logger) -> Optional[Any]:
+def instance_from_module(
+    mod: Any,
+    *,
+    collector: Any,
+    collected_attr: str,
+    base_cls: type,
+    name: str,
+    logger: logging.Logger,
+) -> Optional[Any]:
     """Extract the provider instance: ``register(ctx)`` first, then any ``base_cls`` subclass."""
     if hasattr(mod, "register"):
         try:
@@ -250,14 +300,25 @@ def instance_from_module(mod: Any, *, collector: Any, collected_attr: str, base_
             logger.debug("register() failed for %s: %s", name, e)
     for attr_name in dir(mod):
         attr = getattr(mod, attr_name, None)
-        if isinstance(attr, type) and issubclass(attr, base_cls) and attr is not base_cls:
+        if (
+            isinstance(attr, type)
+            and issubclass(attr, base_cls)
+            and attr is not base_cls
+        ):
             with contextlib.suppress(Exception):
                 return attr()
     return None
 
 
-def load_named(name: str, plugin_dir: Path, load_from_dir: Callable[[Path], Optional[Any]], *, kind: str,
-               noun: str, logger: logging.Logger) -> Optional[Any]:
+def load_named(
+    name: str,
+    plugin_dir: Path,
+    load_from_dir: Callable[[Path], Optional[Any]],
+    *,
+    kind: str,
+    noun: str,
+    logger: logging.Logger,
+) -> Optional[Any]:
     """Shared body of ``load_<kind>(name)``: load from *plugin_dir*, warn + None on failure."""
     try:
         instance = load_from_dir(plugin_dir)
@@ -273,6 +334,8 @@ def probe_availability(load: Callable[[], Optional[Any]]) -> bool:
     """True iff *load()* returns an instance whose ``is_available()`` (if any) is truthy."""
     try:
         instance = load()
-        return instance is not None and (instance.is_available() if hasattr(instance, "is_available") else True)
+        return instance is not None and (
+            instance.is_available() if hasattr(instance, "is_available") else True
+        )
     except Exception:
         return False

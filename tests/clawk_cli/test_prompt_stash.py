@@ -26,6 +26,7 @@ from clawk_cli.prompt_stash import (
     resolve_ctrl_s,
 )
 
+
 class _FakeClock:
     """Deterministic monotonic clock for age assertions."""
 
@@ -38,11 +39,14 @@ class _FakeClock:
     def advance(self, secs: float) -> None:
         self.now += secs
 
+
 @pytest.fixture
 def stash():
     return PromptStash(clock=_FakeClock())
 
+
 # --------------------------------------------------------------- no-op cases
+
 
 class TestStashNoOp:
     """An empty or whitespace-only composer must not create a stash entry."""
@@ -72,7 +76,9 @@ class TestStashNoOp:
         assert len(stash) == 1
         assert stash.peek().preview == "(images only)"
 
+
 # ------------------------------------------------------------- round-tripping
+
 
 class TestRoundTrip:
     """Restore must return the draft byte-for-byte."""
@@ -120,7 +126,9 @@ class TestRoundTrip:
         imgs.append("/tmp/three.png")
         assert restored == ["/tmp/one.png", "/tmp/two.png"]
 
+
 # --------------------------------------------------------------- no clobbering
+
 
 class TestNoSilentClobber:
     """A second Ctrl+S must not destroy the first draft."""
@@ -164,7 +172,9 @@ class TestNoSilentClobber:
             stash.stash(f"d{i}")
         assert len(stash) == MAX_STASH_ITEMS
 
+
 # -------------------------------------------------------------- indicator state
+
 
 class TestIndicatorState:
     def test_empty_stash_has_no_indicator(self, stash):
@@ -201,7 +211,9 @@ class TestIndicatorState:
         assert stash.panel_cursor == 0
         assert stash.indicator() == ""
 
+
 # ----------------------------------------------------------------- previewing
+
 
 class TestBuildPreview:
     def test_empty_text(self):
@@ -228,6 +240,7 @@ class TestBuildPreview:
     def test_whitespace_runs_collapsed(self):
         assert build_preview("a     b\t\tc") == "a b c"
 
+
 class TestStashEntry:
     def test_as_dict_shape_matches_panel_renderer(self, stash):
         stash.stash("draft text")
@@ -253,7 +266,9 @@ class TestStashEntry:
         assert entries[0].stashed_at == 560.0  # newest first
         assert entries[1].stashed_at == 500.0
 
+
 # --------------------------------------------------------------- panel browsing
+
 
 class TestPanelBrowsing:
     @pytest.fixture
@@ -318,7 +333,9 @@ class TestPanelBrowsing:
         assert three.pop(-1) is None
         assert len(three) == 3
 
+
 # ------------------------------------------------------ resolve_ctrl_s table
+
 
 class TestResolveCtrlS:
     def test_empty_buffer_empty_stash_is_noop(self, stash):
@@ -356,5 +373,6 @@ class TestResolveCtrlS:
         action, payload = resolve_ctrl_s(stash, "   ")
         assert action == ACTION_RESTORED
         assert payload == ("real draft", [])
+
 
 # --------------------------------------------------------------------- ages

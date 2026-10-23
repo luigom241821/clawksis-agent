@@ -20,10 +20,6 @@ def emitted(monkeypatch):
     return sent
 
 
-
-
-
-
 def test_requires_the_desktop_bridge(monkeypatch):
     """Outside the desktop GUI there is no emitter — a clear error, no crash."""
     monkeypatch.setattr(tt.desktop_ui, "emit", lambda _event, _payload: False)
@@ -35,7 +31,10 @@ def test_requires_the_desktop_bridge(monkeypatch):
 
 def test_needs_both_something_to_say_and_somewhere_to_point(emitted):
     assert "tip needs text" in json.loads(tt.tip_tool(text="", selector="#a"))["error"]
-    assert "tip needs a selector" in json.loads(tt.tip_tool(text="Hi", selector=" "))["error"]
+    assert (
+        "tip needs a selector"
+        in json.loads(tt.tip_tool(text="Hi", selector=" "))["error"]
+    )
     assert not emitted
 
 
@@ -47,10 +46,14 @@ def test_rejects_an_unknown_side(emitted):
 
 
 def test_emits_the_renderer_event_omitting_unset_fields(emitted):
-    result = json.loads(tt.tip_tool(text="  The model name is a button  ", selector="  #model  "))
+    result = json.loads(
+        tt.tip_tool(text="  The model name is a button  ", selector="  #model  ")
+    )
 
     assert result == {"success": True, "selector": "#model"}
-    assert emitted == [("tip.show", {"selector": "#model", "text": "The model name is a button"})]
+    assert emitted == [
+        ("tip.show", {"selector": "#model", "text": "The model name is a button"})
+    ]
 
 
 def test_carries_title_and_side_when_given(emitted):
@@ -70,4 +73,7 @@ def test_bridge_failure_is_reported(monkeypatch):
 
     monkeypatch.setattr(tt.desktop_ui, "emit", _boom)
 
-    assert "renderer went away" in json.loads(tt.tip_tool(text="Hi", selector="#a"))["error"]
+    assert (
+        "renderer went away"
+        in json.loads(tt.tip_tool(text="Hi", selector="#a"))["error"]
+    )

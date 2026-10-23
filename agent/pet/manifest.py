@@ -94,7 +94,9 @@ class ManifestError(RuntimeError):
     """Raised when the manifest can't be fetched or parsed."""
 
 
-def fetch_manifest(*, timeout: float = _DEFAULT_TIMEOUT, force: bool = False) -> list[ManifestEntry]:
+def fetch_manifest(
+    *, timeout: float = _DEFAULT_TIMEOUT, force: bool = False
+) -> list[ManifestEntry]:
     """Every approved pet from the public manifest; cached for ``_MANIFEST_TTL`` s unless *force*. Raises :class:`ManifestError`."""
     global _cache
     if not force and _cache_is_warm():
@@ -107,9 +109,13 @@ def fetch_manifest(*, timeout: float = _DEFAULT_TIMEOUT, force: bool = False) ->
         from tools.url_safety import create_ssrf_safe_client, is_safe_url
 
         if not is_safe_url(MANIFEST_URL):
-            raise ManifestError(f"Pet manifest URL failed the SSRF safety check: {MANIFEST_URL}")
+            raise ManifestError(
+                f"Pet manifest URL failed the SSRF safety check: {MANIFEST_URL}"
+            )
         with create_ssrf_safe_client(timeout=timeout, follow_redirects=True) as client:
-            resp = client.get(MANIFEST_URL, headers={"User-Agent": "clawksis-agent-petdex"})
+            resp = client.get(
+                MANIFEST_URL, headers={"User-Agent": "clawksis-agent-petdex"}
+            )
         resp.raise_for_status()
         payload = resp.json()
     except Exception as exc:
@@ -127,4 +133,11 @@ def fetch_manifest(*, timeout: float = _DEFAULT_TIMEOUT, force: bool = False) ->
 def find_entry(slug: str, *, timeout: float = _DEFAULT_TIMEOUT) -> ManifestEntry | None:
     """Return the manifest entry for *slug*, or ``None`` if not listed."""
     slug = slug.strip().lower()
-    return next((entry for entry in fetch_manifest(timeout=timeout) if entry.slug.lower() == slug), None)
+    return next(
+        (
+            entry
+            for entry in fetch_manifest(timeout=timeout)
+            if entry.slug.lower() == slug
+        ),
+        None,
+    )

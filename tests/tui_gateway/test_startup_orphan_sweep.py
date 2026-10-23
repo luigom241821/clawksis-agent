@@ -231,13 +231,13 @@ class TestScheduleStartupOrphanSweep:
         monkeypatch.setattr(server, "_load_cfg", dict)
         assert server._session_orphan_reaper_enabled() is True
 
-        monkeypatch.setattr(server, "_load_cfg", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+        monkeypatch.setattr(
+            server, "_load_cfg", lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
         assert server._session_orphan_reaper_enabled() is True
 
 
 class TestEntryAndWsWiring:
-
-
     def test_schedule_failure_does_not_break_main(self, monkeypatch):
         def _boom():
             raise RuntimeError("nope")
@@ -252,6 +252,8 @@ class TestEntryAndWsWiring:
         monkeypatch.setattr(entry, "write_json", lambda _payload: True)
         monkeypatch.setattr(entry.sys, "stdin", io.StringIO(""))
 
-        monkeypatch.setattr(model_switch_providers, "prewarm_picker_cache_async", lambda: None)
+        monkeypatch.setattr(
+            model_switch_providers, "prewarm_picker_cache_async", lambda: None
+        )
 
         entry.main()  # must not raise

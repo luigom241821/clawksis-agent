@@ -43,20 +43,27 @@ def test_quickstart_unknown_model_404s(client):
     assert r.status_code == 404
 
 
-def test_quickstart_without_recommendation_requires_explicit_choice(client, monkeypatch):
+def test_quickstart_without_recommendation_requires_explicit_choice(
+    client, monkeypatch
+):
     """One budget: automatic setup refuses; an explicit spilled choice reaches activation."""
     from clawk_cli.local_runtime.estimator import HardwareBudget
     import clawk_cli.web_routers.local_models as lm
 
     gib = 1 << 30
     budget = HardwareBudget(
-        usable_vram_bytes=14 * gib, total_device_bytes=16 * gib,
-        ram_available_bytes=64 * gib, uma=False,
+        usable_vram_bytes=14 * gib,
+        total_device_bytes=16 * gib,
+        ram_available_bytes=64 * gib,
+        uma=False,
     )
     monkeypatch.setattr(lm.hardware, "probe_budget", lambda **kw: budget)
     monkeypatch.setattr(lm.catalog, "refresh_catalog_soon", lambda: None)
-    monkeypatch.setattr(lm.binaries, "installed_engine",
-                        lambda *args, **kwargs: lm.binaries.Engine("cpu", "b1", Path("unused")))
+    monkeypatch.setattr(
+        lm.binaries,
+        "installed_engine",
+        lambda *args, **kwargs: lm.binaries.Engine("cpu", "b1", Path("unused")),
+    )
     monkeypatch.setattr(lm, "_runtime_target", lambda requested=None: ("b1", "cpu"))
     monkeypatch.setattr(lm.bootstrap, "staged_model_ids", lambda: set())
     config = lm.config_mod.load_config()
@@ -96,7 +103,9 @@ def test_quickstart_without_recommendation_requires_explicit_choice(client, monk
     assert calls == []
     assert lm.config_mod.load_config()["local_runtime"]["enabled"] is False
 
-    explicit = client.post("/api/local-models/quickstart", json={"model_id": chosen["id"]})
+    explicit = client.post(
+        "/api/local-models/quickstart", json={"model_id": chosen["id"]}
+    )
     assert explicit.status_code == 200, explicit.text
     result = explicit.json()
     assert result["model_id"] == chosen["id"]
@@ -115,7 +124,8 @@ def test_quickstart_refuses_when_nothing_fits(client, monkeypatch):
     """Preflight is synchronous: a machine no catalog entry fits gets a 409
     with guidance, not a doomed background job."""
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.catalog.select_variant", lambda *a, **k: None)
+        "clawk_cli.local_runtime.catalog.select_variant", lambda *a, **k: None
+    )
     r = client.post("/api/local-models/quickstart", json={})
     assert r.status_code == 409
     assert "Local Models" in r.json()["detail"]
@@ -129,13 +139,17 @@ def capable_hardware(monkeypatch):
 
     gib = 1 << 30
     budget = HardwareBudget(
-        usable_vram_bytes=64 * gib, total_device_bytes=64 * gib,
-        ram_available_bytes=128 * gib, uma=False,
+        usable_vram_bytes=64 * gib,
+        total_device_bytes=64 * gib,
+        ram_available_bytes=128 * gib,
+        uma=False,
     )
     monkeypatch.setattr(hardware, "probe_budget", lambda **kw: budget)
 
 
-def test_quickstart_runs_all_three_legs(client, capable_hardware, monkeypatch, tmp_path):
+def test_quickstart_runs_all_three_legs(
+    client, capable_hardware, monkeypatch, tmp_path
+):
     """Fresh machine: install runtime -> download recommended -> activate.
     Each leg is asserted by its observable call, in order."""
     calls: list[str] = []
@@ -150,10 +164,13 @@ def test_quickstart_runs_all_three_legs(client, capable_hardware, monkeypatch, t
 
     # Leg 1: no runtime installed yet; install is the stubbed binaries call.
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.binaries.installed_engine", lambda *args, **kwargs: None)
+        "clawk_cli.local_runtime.binaries.installed_engine",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(
         "clawk_cli.local_runtime.binaries.ensure_engine",
-        lambda backend, **kwargs: calls.append("install"))
+        lambda backend, **kwargs: calls.append("install"),
+    )
 
     # Leg 2: nothing staged; the download writes the files the plan names.
     def _fake_download(job, plan):
@@ -163,18 +180,22 @@ def test_quickstart_runs_all_three_legs(client, capable_hardware, monkeypatch, t
         calls.append("download")
 
     monkeypatch.setattr(
-        "clawk_cli.web_routers.local_models._download_job", _fake_download)
+        "clawk_cli.web_routers.local_models._download_job", _fake_download
+    )
 
     # Leg 3: activation — stub the server start and the model assignment.
     monkeypatch.setattr(
         "clawk_cli.local_runtime.bootstrap.ensure_local_runtime",
-        lambda config, force=False: calls.append("server") or None)
+        lambda config, force=False: calls.append("server") or None,
+    )
     monkeypatch.setattr(
         "clawk_cli.web_routers.local_models._state_endpoint",
-        lambda: {"base_url": "http://127.0.0.1:1/v1", "api_key": "k"})
+        lambda: {"base_url": "http://127.0.0.1:1/v1", "api_key": "k"},
+    )
     monkeypatch.setattr(
         "clawk_cli.web_server_config._apply_model_assignment_sync",
-        lambda *a, **k: calls.append("assign"))
+        lambda *a, **k: calls.append("assign"),
+    )
 
     r = client.post("/api/local-models/quickstart", json={})
     assert r.status_code == 200
@@ -203,10 +224,13 @@ def test_quickstart_skips_satisfied_legs(client, capable_hardware, monkeypatch):
     calls: list[str] = []
 
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.binaries.installed_engine", lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")))
+        "clawk_cli.local_runtime.binaries.installed_engine",
+        lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")),
+    )
     monkeypatch.setattr(
         "clawk_cli.local_runtime.binaries.ensure_engine",
-        lambda backend, **kwargs: calls.append("install"))
+        lambda backend, **kwargs: calls.append("install"),
+    )
 
     # Every model file and companion is already present.
     from clawk_cli.local_runtime.catalog import CATALOG
@@ -219,16 +243,20 @@ def test_quickstart_skips_satisfied_legs(client, capable_hardware, monkeypatch):
                 dest.write_bytes(b"downloaded fixture")
     monkeypatch.setattr(
         "clawk_cli.web_routers.local_models._download_job",
-        lambda *a, **k: calls.append("download"))
+        lambda *a, **k: calls.append("download"),
+    )
     monkeypatch.setattr(
         "clawk_cli.local_runtime.bootstrap.ensure_local_runtime",
-        lambda config, force=False: None)
+        lambda config, force=False: None,
+    )
     monkeypatch.setattr(
         "clawk_cli.web_routers.local_models._state_endpoint",
-        lambda: {"base_url": "http://127.0.0.1:1/v1", "api_key": "k"})
+        lambda: {"base_url": "http://127.0.0.1:1/v1", "api_key": "k"},
+    )
     monkeypatch.setattr(
         "clawk_cli.web_server_config._apply_model_assignment_sync",
-        lambda *a, **k: calls.append("assign"))
+        lambda *a, **k: calls.append("assign"),
+    )
 
     r = client.post("/api/local-models/quickstart", json={})
     assert r.status_code == 200
@@ -252,15 +280,18 @@ def quickstart_ready(monkeypatch):
     from clawk_cli.local_runtime.catalog import VariantChoice
 
     monkeypatch.setattr(
-        "clawk_cli.local_runtime.binaries.installed_engine", lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")))
+        "clawk_cli.local_runtime.binaries.installed_engine",
+        lambda *args, **kwargs: Engine("cpu", "b10362", Path("unused")),
+    )
     monkeypatch.setattr(
         "clawk_cli.local_runtime.catalog.select_variant",
-        lambda entry, budget: VariantChoice(variant=entry.variants[0],
-                                            zero_spill=True,
-                                            reason_key="best-fits"))
+        lambda entry, budget: VariantChoice(
+            variant=entry.variants[0], zero_spill=True, reason_key="best-fits"
+        ),
+    )
     monkeypatch.setattr(
-        "clawk_cli.web_routers.local_models._engine_too_old",
-        lambda min_engine: False)
+        "clawk_cli.web_routers.local_models._engine_too_old", lambda min_engine: False
+    )
 
 
 def test_quickstart_is_single_flight(client, quickstart_ready, monkeypatch):
@@ -287,7 +318,8 @@ def test_assign_default_reaches_model_assignment(monkeypatch):
     seen: list[tuple] = []
     monkeypatch.setattr(
         "clawk_cli.web_server_config._apply_model_assignment_sync",
-        lambda *a, **k: seen.append(a))
+        lambda *a, **k: seen.append(a),
+    )
     lm._assign_default({}, "some-model")
     assert seen == [("main", "llamacpp", "some-model", "", "", "")]
 
@@ -300,31 +332,64 @@ def test_quickstart_prices_after_installing_the_engine(client, monkeypatch):
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
     gib = 1 << 30
-    as_ram = HardwareBudget(usable_vram_bytes=50 * gib, total_device_bytes=50 * gib,
-                            ram_available_bytes=128 * gib, uma=True)
-    as_card = HardwareBudget(usable_vram_bytes=22 * gib, total_device_bytes=24 * gib,
-                             ram_available_bytes=128 * gib, uma=False)
+    as_ram = HardwareBudget(
+        usable_vram_bytes=50 * gib,
+        total_device_bytes=50 * gib,
+        ram_available_bytes=128 * gib,
+        uma=True,
+    )
+    as_card = HardwareBudget(
+        usable_vram_bytes=22 * gib,
+        total_device_bytes=24 * gib,
+        ram_available_bytes=128 * gib,
+        uma=False,
+    )
     guess, fit = CATALOG[0], CATALOG[1]
     installed: list[str] = []
     downloaded: list[str] = []
     assigned: list[str] = []
 
-    monkeypatch.setattr(lm.hardware, "probe_budget", lambda **kw: as_card if installed else as_ram)
-    monkeypatch.setattr(lm.catalog, "recommended_entry",
-                        lambda budget, entries=None, backend="auto": (guess if budget is as_ram else fit, "best-fits"))
-    monkeypatch.setattr(lm.catalog, "select_variant", lambda entry, budget: VariantChoice(
-        variant=entry.variants[0], zero_spill=True, reason_key="best-fits"))
+    monkeypatch.setattr(
+        lm.hardware, "probe_budget", lambda **kw: as_card if installed else as_ram
+    )
+    monkeypatch.setattr(
+        lm.catalog,
+        "recommended_entry",
+        lambda budget, entries=None, backend="auto": (
+            guess if budget is as_ram else fit,
+            "best-fits",
+        ),
+    )
+    monkeypatch.setattr(
+        lm.catalog,
+        "select_variant",
+        lambda entry, budget: VariantChoice(
+            variant=entry.variants[0], zero_spill=True, reason_key="best-fits"
+        ),
+    )
     monkeypatch.setattr(lm, "_engine_too_old", lambda min_engine: False)
     monkeypatch.setattr(lm, "_runtime_target", lambda backend=None: ("b1", "vulkan"))
     monkeypatch.setattr(lm.binaries, "installed_engine", lambda *a, **k: None)
-    monkeypatch.setattr(lm.binaries, "ensure_engine", lambda backend, **kw: installed.append(backend))
-    monkeypatch.setattr(lm, "_run_download_plan", lambda job, plan, label, entry=None: downloaded.append(label))
+    monkeypatch.setattr(
+        lm.binaries, "ensure_engine", lambda backend, **kw: installed.append(backend)
+    )
+    monkeypatch.setattr(
+        lm,
+        "_run_download_plan",
+        lambda job, plan, label, entry=None: downloaded.append(label),
+    )
     monkeypatch.setattr(lm, "_ensure_server", lambda *a, **k: None)
-    monkeypatch.setattr(lm, "_assign_default", lambda job, model_id: assigned.append(model_id))
+    monkeypatch.setattr(
+        lm, "_assign_default", lambda job, model_id: assigned.append(model_id)
+    )
 
     r = client.post("/api/local-models/quickstart", json={})
     assert r.status_code == 200
     job = _wait_job(client, r.json()["job_id"])
     assert job["status"] == "done", job["error"]
     assert installed == ["vulkan"]
-    assert (job["model_id"], downloaded, assigned) == (fit.id, [fit.display_name], [fit.variants[0].model_id])
+    assert (job["model_id"], downloaded, assigned) == (
+        fit.id,
+        [fit.display_name],
+        [fit.variants[0].model_id],
+    )

@@ -102,7 +102,6 @@ class TestKeepTypingTimeoutPerTick:
             f"on a slow send_typing"
         )
 
-
     @pytest.mark.asyncio
     async def test_send_typing_exception_does_not_kill_loop(self, monkeypatch):
         """A send_typing that raises (e.g. transient HTTP 500) must be
@@ -135,7 +134,6 @@ class TestKeepTypingTimeoutPerTick:
             f"loop exited after first send_typing exception; expected it to "
             f"keep ticking (got {tick_count['n']} ticks)"
         )
-
 
     @pytest.mark.asyncio
     async def test_stop_typing_refresh_blocks_late_cancel_tick(self, monkeypatch):
@@ -247,8 +245,7 @@ class TestPreDeliveryTypingSuspend:
         await asyncio.wait_for(task, timeout=1.0)
 
         assert len(ticks) >= 2, (
-            f"expected the unpaused refresh loop to keep ticking, "
-            f"got {len(ticks)}"
+            f"expected the unpaused refresh loop to keep ticking, got {len(ticks)}"
         )
 
 
@@ -266,22 +263,32 @@ async def test_process_message_pauses_typing_before_a_stalled_final_send():
 
     async def _stalled_final_send(*args, **kwargs):
         send_started.set()
-        await never.wait()  # platform accepted the message; the HTTP ack never comes back
+        await (
+            never.wait()
+        )  # platform accepted the message; the HTTP ack never comes back
 
     async def _handler(evt):
         return "a long final answer the user can already read"
 
     adapter.set_message_handler(_handler)
     adapter._send_final_text = _stalled_final_send
-    adapter._start_typing_refresh = MagicMock(return_value=None)  # loop shape irrelevant here
+    adapter._start_typing_refresh = MagicMock(
+        return_value=None
+    )  # loop shape irrelevant here
     event = MessageEvent(
-        text="hi", message_id="msg-1", message_type=MessageType.TEXT,
+        text="hi",
+        message_id="msg-1",
+        message_type=MessageType.TEXT,
         source=SessionSource(platform=Platform.TELEGRAM, chat_id="77", user_id="u-1"),
     )
-    turn = asyncio.create_task(adapter._process_message_background(event, "agent:main:telegram:private:77"))
+    turn = asyncio.create_task(
+        adapter._process_message_background(event, "agent:main:telegram:private:77")
+    )
     try:
         await asyncio.wait_for(send_started.wait(), timeout=5)
-        assert "77" in adapter._typing_paused, "typing not paused while the final send is stalled"
+        assert "77" in adapter._typing_paused, (
+            "typing not paused while the final send is stalled"
+        )
     finally:
         turn.cancel()
         with pytest.raises(asyncio.CancelledError):

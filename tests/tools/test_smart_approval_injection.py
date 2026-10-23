@@ -14,7 +14,11 @@ Defenses under test:
 import unittest
 from unittest.mock import MagicMock, patch
 
-from tools.approval_smart import _strip_line_comment, _strip_shell_comments, _smart_approve
+from tools.approval_smart import (
+    _strip_line_comment,
+    _strip_shell_comments,
+    _smart_approve,
+)
 
 
 # ── _strip_line_comment ──────────────────────────────────────────────────
@@ -29,12 +33,10 @@ class TestStripLineComment(unittest.TestCase):
     def test_no_comment(self):
         assert _strip_line_comment("echo hello") == "echo hello"
 
-
     def test_escaped_hash_in_double_quotes(self):
         """Escaped characters inside double quotes should be handled."""
         line = r'echo "path\\# thing"'
         assert _strip_line_comment(line) == line
-
 
     def test_injection_payload_in_comment(self):
         """The primary attack vector: injection payload hidden in a comment."""
@@ -67,7 +69,6 @@ class TestStripShellComments(unittest.TestCase):
         assert "Ignore" not in result
         assert "echo done" in result
         assert "rm -rf important/" in result
-
 
     def test_trailing_whitespace_cleaned(self):
         cmd = "echo hello   # greeting   "
@@ -149,7 +150,6 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
         # But the actual dangerous command must still be present
         assert "rm -rf /critical/data" in user_content
 
-
     @patch("agent.auxiliary_client.call_llm")
     def test_approve_response(self, mock_call_llm):
         mock_call_llm.return_value = self._make_response("APPROVE")
@@ -163,7 +163,9 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
     @patch("agent.auxiliary_client.call_llm")
     def test_ambiguous_response_escalates(self, mock_call_llm):
         """Unrecognizable LLM output must default to escalate (fail safe)."""
-        mock_call_llm.return_value = self._make_response("I think this is probably fine")
+        mock_call_llm.return_value = self._make_response(
+            "I think this is probably fine"
+        )
         assert _smart_approve("rm -rf /", "recursive delete") == "escalate"
 
     @patch("agent.auxiliary_client.call_llm")
@@ -177,8 +179,9 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
         mock_call_llm.return_value = response
         with self.assertLogs("tools.approval", level="WARNING") as logs:
             assert _smart_approve("rm -rf /", "recursive delete") == "escalate"
-        assert any("empty answer" in message and "length" in message
-                   for message in logs.output), logs.output
+        assert any(
+            "empty answer" in message and "length" in message for message in logs.output
+        ), logs.output
 
     @patch("agent.auxiliary_client.call_llm")
     def test_empty_answer_without_finish_reason_still_warns(self, mock_call_llm):
@@ -189,7 +192,9 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
         mock_call_llm.return_value = response
         with self.assertLogs("tools.approval", level="WARNING") as logs:
             assert _smart_approve("rm -rf /", "recursive delete") == "escalate"
-        assert any("finish_reason=None" in message for message in logs.output), logs.output
+        assert any("finish_reason=None" in message for message in logs.output), (
+            logs.output
+        )
 
     @patch("agent.auxiliary_client.call_llm")
     def test_recognized_verdict_does_not_warn(self, mock_call_llm):
@@ -197,7 +202,9 @@ class TestSmartApprovePromptHardening(unittest.TestCase):
         train operators to skim past it, the exact failure #117428 describes."""
         mock_call_llm.return_value = self._make_response("APPROVE")
         with self.assertNoLogs("tools.approval", level="WARNING"):
-            assert _smart_approve("python -c 'print(1)'", "script execution") == "approve"
+            assert (
+                _smart_approve("python -c 'print(1)'", "script execution") == "approve"
+            )
 
 
 if __name__ == "__main__":

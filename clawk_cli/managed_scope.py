@@ -6,6 +6,7 @@ independent and may coexist. v1 enforcement is filesystem permissions only (see
 ``docs/design/managed-scope.md`` §7); ``get_managed_dir()`` is the single seam for adding
 macOS / Windows native locations later.
 """
+
 from __future__ import annotations
 
 import copy
@@ -81,7 +82,7 @@ def _cached_read(path: Path, cache: dict[str, tuple], parse):
     path_key = str(path)
     with _CACHE_LOCK:
         hit = cache.get(path_key)
-        if hit is not None and hit[:len(key)] == key:
+        if hit is not None and hit[: len(key)] == key:
             return copy.deepcopy(hit[len(key)])
     try:
         parsed = parse(path)
@@ -89,7 +90,9 @@ def _cached_read(path: Path, cache: dict[str, tuple], parse):
         logger.warning(
             "managed scope: failed to parse %s: %s — IGNORING this managed file. "
             "Admin policy from this file is NOT being applied. Fix and restart.",
-            path, exc)
+            path,
+            exc,
+        )
         return None
     with _CACHE_LOCK:
         cache[path_key] = (*key, copy.deepcopy(parsed))
@@ -106,7 +109,11 @@ def _load_managed_file(name: str, cache: dict[str, tuple], parse) -> dict:
 
 def load_managed_config() -> dict:
     """Parsed managed config.yaml, or {} when absent/malformed (fail-open)."""
-    return _load_managed_file("config.yaml", _CONFIG_CACHE, lambda p: fast_safe_load(p.read_text(encoding="utf-8-sig")) or {})
+    return _load_managed_file(
+        "config.yaml",
+        _CONFIG_CACHE,
+        lambda p: fast_safe_load(p.read_text(encoding="utf-8-sig")) or {},
+    )
 
 
 def load_managed_env() -> dict[str, str]:
@@ -117,7 +124,9 @@ def load_managed_env() -> dict[str, str]:
 def _parse_managed_env(path: Path) -> dict[str, str]:
     from agent.secret_scope import load_env_file
 
-    path.read_text(encoding="utf-8-sig")  # load_env_file swallows decode errors; an admin file must fail LOUD
+    path.read_text(
+        encoding="utf-8-sig"
+    )  # load_env_file swallows decode errors; an admin file must fail LOUD
     return load_env_file(path)
 
 
@@ -135,7 +144,12 @@ def apply_managed_overlay(config: dict) -> dict:
         if not managed:
             return config
         # Imported lazily to avoid an import cycle (config imports managed_scope).
-        from clawk_cli.config import _deep_merge, _expand_env_vars, _normalize_root_model_keys
+        from clawk_cli.config import (
+            _deep_merge,
+            _expand_env_vars,
+            _normalize_root_model_keys,
+        )
+
         managed_expanded = _normalize_root_model_keys(_expand_env_vars(managed))
         # _normalize_root_model_keys only promotes the string when root provider/base_url
         # keys exist to migrate; handle the bare case here (matches cli.py) so _deep_merge

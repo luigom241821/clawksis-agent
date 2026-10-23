@@ -4,14 +4,19 @@ import importlib.util
 
 # Load the hyphenated script name dynamically
 repo_root = Path(__file__).parent.parent.parent
-script_path = repo_root / "optional-skills" / "security" / "oss-forensics" / "scripts" / "evidence-store.py"
+script_path = (
+    repo_root
+    / "optional-skills"
+    / "security"
+    / "oss-forensics"
+    / "scripts"
+    / "evidence-store.py"
+)
 
 spec = importlib.util.spec_from_file_location("evidence_store", str(script_path))
 evidence_store = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evidence_store)
 EvidenceStore = evidence_store.EvidenceStore
-
-
 
 
 def test_evidence_store_add(tmp_path):
@@ -37,8 +42,6 @@ def test_evidence_store_add(tmp_path):
     assert len(store.data["evidence"][0]["content_sha256"]) == 64
 
 
-
-
 def test_evidence_store_sequential_ids(tmp_path):
     store_file = tmp_path / "test_evidence.json"
     store = EvidenceStore(str(store_file))
@@ -50,8 +53,6 @@ def test_evidence_store_sequential_ids(tmp_path):
     assert eid1 == "EV-0001"
     assert eid2 == "EV-0002"
     assert eid3 == "EV-0003"
-
-
 
 
 def test_evidence_store_verify_integrity(tmp_path):
@@ -68,13 +69,16 @@ def test_evidence_store_verify_integrity(tmp_path):
     assert issues[0]["id"] == "EV-0001"
 
 
-
-
 def test_evidence_store_query_searches_multiple_fields(tmp_path):
     store_file = tmp_path / "test_evidence.json"
     store = EvidenceStore(str(store_file))
 
-    store.add(source="git_fsck", content="dangling commit abc123", evidence_type="git", actor="attacker")
+    store.add(
+        source="git_fsck",
+        content="dangling commit abc123",
+        evidence_type="git",
+        actor="attacker",
+    )
     store.add(source="manual", content="clean", evidence_type="manual")
 
     # Search by source
@@ -103,7 +107,12 @@ def test_evidence_store_export_markdown(tmp_path):
     store_file = tmp_path / "test_evidence.json"
     store = EvidenceStore(str(store_file))
 
-    store.add(source="git_log", content="suspicious commit", evidence_type="git", actor="actor1")
+    store.add(
+        source="git_log",
+        content="suspicious commit",
+        evidence_type="git",
+        actor="actor1",
+    )
 
     md = store.export_markdown()
     assert "# Evidence Registry" in md

@@ -15,6 +15,7 @@ callables that core consults BEFORE any built-in, name-keyed path:
 Every function here late-imports ``clawk_cli.auth`` names: this module is imported by the auth facade
 right after ``PROVIDER_REGISTRY`` exists, and by ``agent.credential_pool``.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__)
 # Providers handled outside the registry: copilot/kimi/zai have bespoke token refresh in auth.py;
 # openrouter/custom are aggregator/user-supplied and runtime_provider relies on
 # ``openrouter not in PROVIDER_REGISTRY``.
-_REGISTRY_PLUGIN_SKIP = frozenset({"copilot", "kimi-coding", "kimi-coding-cn", "zai", "openrouter", "custom"})
+_REGISTRY_PLUGIN_SKIP = frozenset(
+    {"copilot", "kimi-coding", "kimi-coding-cn", "zai", "openrouter", "custom"}
+)
 
 PLUGIN_AUTH_ACTIONS = ("add", "status", "logout", "refresh")
 
@@ -38,8 +41,10 @@ PLUGIN_MIRRORED_PROVIDERS: set[str] = set()
 def _api_key_env_fields(pp: Any) -> tuple[tuple, str]:
     """Split a profile's ``env_vars`` into (api-key vars, base-URL var); the URL var may be ""."""
     is_url = lambda v: v.endswith("_BASE_URL") or v.endswith("_URL")
-    return (tuple(v for v in pp.env_vars if not is_url(v)) or pp.env_vars,
-            next((v for v in pp.env_vars if is_url(v)), None) or "")
+    return (
+        tuple(v for v in pp.env_vars if not is_url(v)) or pp.env_vars,
+        next((v for v in pp.env_vars if is_url(v)), None) or "",
+    )
 
 
 def register_plugin_provider(pp: Any) -> None:
@@ -55,9 +60,16 @@ def register_plugin_provider(pp: Any) -> None:
     if pp.auth_type == "api_key":
         if not pp.env_vars:
             return
-        pconfig = _api_key_provider(pp.name, pp.display_name or pp.name, pp.base_url, *_api_key_env_fields(pp))
+        pconfig = _api_key_provider(
+            pp.name, pp.display_name or pp.name, pp.base_url, *_api_key_env_fields(pp)
+        )
     else:
-        pconfig = ProviderConfig(pp.name, pp.display_name or pp.name, pp.auth_type, inference_base_url=pp.base_url)
+        pconfig = ProviderConfig(
+            pp.name,
+            pp.display_name or pp.name,
+            pp.auth_type,
+            inference_base_url=pp.base_url,
+        )
     PROVIDER_REGISTRY[pp.name] = pconfig
     PLUGIN_MIRRORED_PROVIDERS.add(pp.name)
     mirror_aliases(pconfig, pp)
@@ -70,7 +82,11 @@ def _user_owns_alias(pp: Any, alias: str) -> bool:
     except Exception:
         return False
     owner = get_provider_profile(alias)
-    return owner is not None and owner.name == pp.name and provider_source(pp.name) == "user"
+    return (
+        owner is not None
+        and owner.name == pp.name
+        and provider_source(pp.name) == "user"
+    )
 
 
 def mirror_aliases(pconfig: Any, pp: Any) -> None:
@@ -119,6 +135,7 @@ def sync_plugin_provider_registry() -> int:
 
     try:
         from providers import list_providers, provider_source
+
         profiles = list_providers()
     except Exception:
         return 0
@@ -127,8 +144,14 @@ def sync_plugin_provider_registry() -> int:
         if pp.name in PROVIDER_REGISTRY:
             # Only rows core wrote (built-in or mirrored) — a row the plugin injected itself is its
             # own, more specific declaration and stays as written.
-            core_row = pp.name in BUILTIN_PROVIDER_IDS or pp.name in PLUGIN_MIRRORED_PROVIDERS
-            if core_row and pp.name not in _REGISTRY_PLUGIN_SKIP and provider_source(pp.name) == "user":
+            core_row = (
+                pp.name in BUILTIN_PROVIDER_IDS or pp.name in PLUGIN_MIRRORED_PROVIDERS
+            )
+            if (
+                core_row
+                and pp.name not in _REGISTRY_PLUGIN_SKIP
+                and provider_source(pp.name) == "user"
+            ):
                 override_registry_row(PROVIDER_REGISTRY[pp.name], pp)
                 mirror_aliases(PROVIDER_REGISTRY[pp.name], pp)
             continue
@@ -174,7 +197,10 @@ def is_refreshable_oauth_provider(provider: str) -> bool:
     """Built-in refreshable set OR a plugin profile shipping ``refresh_credential``."""
     from agent.credential_pool import REFRESHABLE_OAUTH_PROVIDERS
 
-    return provider in REFRESHABLE_OAUTH_PROVIDERS or plugin_refresh_hook(provider) is not None
+    return (
+        provider in REFRESHABLE_OAUTH_PROVIDERS
+        or plugin_refresh_hook(provider) is not None
+    )
 
 
 def dispatch_plugin_auth(action: str, args: Any, provider: str) -> bool:
@@ -197,10 +223,14 @@ def dispatch_plugin_auth(action: str, args: Any, provider: str) -> bool:
     except SystemExit:
         raise
     except Exception as exc:
-        raise SystemExit(f"{provider} auth handler failed for `{action}`: {type(exc).__name__}: {exc}") from exc
+        raise SystemExit(
+            f"{provider} auth handler failed for `{action}`: {type(exc).__name__}: {exc}"
+        ) from exc
 
 
-def plugin_missing_auth_handler_error(provider: str, action: str) -> Optional[SystemExit]:
+def plugin_missing_auth_handler_error(
+    provider: str, action: str
+) -> Optional[SystemExit]:
     """Fail loud for a registered non-api-key plugin that ships no ``auth_handler``.
 
     Its login is not something core can perform (there is no token endpoint to call), and silently
@@ -209,12 +239,17 @@ def plugin_missing_auth_handler_error(provider: str, action: str) -> Optional[Sy
     if provider not in PLUGIN_MIRRORED_PROVIDERS:
         return None
     profile = plugin_profile(provider)
-    if profile is None or profile.auth_type == "api_key" or plugin_auth_handler(provider) is not None:
+    if (
+        profile is None
+        or profile.auth_type == "api_key"
+        or plugin_auth_handler(provider) is not None
+    ):
         return None
     return SystemExit(
         f"Provider '{provider}' declares auth_type '{profile.auth_type}' but its plugin ships no "
         f"auth_handler, so `clawk auth {action} {provider}` cannot be handled. Add "
-        "`auth_handler=` to its ProviderProfile (see the model-provider plugin guide).")
+        "`auth_handler=` to its ProviderProfile (see the model-provider plugin guide)."
+    )
 
 
 def _pool_entry_expired(entry: Any) -> bool:
@@ -242,11 +277,24 @@ def get_plugin_oauth_auth_status(provider_id: str) -> dict[str, Any]:
         return {"logged_in": False}
     from agent.credential_pool import load_pool
 
-    entries = [e for e in load_pool(provider_id).entries() if (e.access_token or e.agent_key or "").strip()]
+    entries = [
+        e
+        for e in load_pool(provider_id).entries()
+        if (e.access_token or e.agent_key or "").strip()
+    ]
     live = [e for e in entries if not _pool_entry_expired(e)]
-    refreshable = [e for e in entries if e.refresh_token] if not live and plugin_refresh_hook(provider_id) else []
+    refreshable = (
+        [e for e in entries if e.refresh_token]
+        if not live and plugin_refresh_hook(provider_id)
+        else []
+    )
     return {
-        "configured": True, "provider": provider_id, "logged_in": bool(live),
-        "needs_refresh": bool(refreshable), "accounts": len(entries),
-        "base_url": next((e.base_url for e in live + refreshable if e.base_url), "") or "",
-        "hint": "" if live else f"Run `clawk auth add {provider_id}` to sign in."}
+        "configured": True,
+        "provider": provider_id,
+        "logged_in": bool(live),
+        "needs_refresh": bool(refreshable),
+        "accounts": len(entries),
+        "base_url": next((e.base_url for e in live + refreshable if e.base_url), "")
+        or "",
+        "hint": "" if live else f"Run `clawk auth add {provider_id}` to sign in.",
+    }

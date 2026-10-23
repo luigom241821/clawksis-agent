@@ -24,37 +24,62 @@ async def _ensure_hosted_member_session(self, dispatch: Any) -> str:
     title = f"Group: {dispatch.room_id}"
     seed = (
         f"{dispatch.home_install_id}\0{dispatch.room_id}\0"
-        f"{dispatch.member_id}\0{dispatch.target_profile}")
+        f"{dispatch.member_id}\0{dispatch.target_profile}"
+    )
     session_id = f"room_{hashlib.sha256(seed.encode()).hexdigest()[:32]}"
     from gateway.session_authorities import active_authority
+
     authority = active_authority(self.gateway_runner)
     if authority is not None:
-        from gateway.session_api import bind_api_steps, hosted_member_session, run_steps_off_loop
+        from gateway.session_api import (
+            bind_api_steps,
+            hosted_member_session,
+            run_steps_off_loop,
+        )
+
         if db is not authority.db:
-            raise RuntimeError('profile_mismatch')
+            raise RuntimeError("profile_mismatch")
         # A member session the user deleted stays deleted: the room moves to its next generation.
-        identity = [dispatch.home_install_id, dispatch.room_id, dispatch.member_id, dispatch.target_profile]
-        session_id = (await asyncio.to_thread(hosted_member_session, authority.db, identity))[1]
+        identity = [
+            dispatch.home_install_id,
+            dispatch.room_id,
+            dispatch.member_id,
+            dispatch.target_profile,
+        ]
+        session_id = (
+            await asyncio.to_thread(hosted_member_session, authority.db, identity)
+        )[1]
         # The binding transaction runs off the owner loop, in admission order (as API admission does).
-        return (await run_steps_off_loop(authority, bind_api_steps(
-            authority, session_id, hosted_dispatch=dispatch.as_mapping()))).session_id
+        return (
+            await run_steps_off_loop(
+                authority,
+                bind_api_steps(
+                    authority, session_id, hosted_dispatch=dispatch.as_mapping()
+                ),
+            )
+        ).session_id
 
     def atomic(conn):
-        row = conn.execute("SELECT id, title, source FROM sessions WHERE id=?", (session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT id, title, source FROM sessions WHERE id=?", (session_id,)
+        ).fetchone()
         if row is not None:
             if row["title"] != title or row["source"] != "bot_room":
                 raise RuntimeError("room session identity conflicts with existing data")
             return session_id
         clean_title = db.sanitize_title(title)
         conflict = conn.execute(
-            "SELECT id FROM sessions WHERE title=? AND id!=?", (clean_title, session_id)).fetchone()
+            "SELECT id FROM sessions WHERE title=? AND id!=?", (clean_title, session_id)
+        ).fetchone()
         if conflict:
             raise RuntimeError(
                 "Another group already uses this room title on the target gateway. "
-                "Rename or migrate that group before retrying.")
+                "Rename or migrate that group before retrying."
+            )
         conn.execute(
             "INSERT INTO sessions(id, source, title, hidden, started_at) VALUES(?, 'bot_room', ?, 1, ?)",
-            (session_id, clean_title, time.time()))
+            (session_id, clean_title, time.time()),
+        )
         return session_id
 
     return await asyncio.to_thread(db._execute_write, atomic)
@@ -73,30 +98,49 @@ def _room_dispatch_error(exc: Exception, *, _openai_error) -> web.Response:
 
 
 async def _normalize_room_dispatch(
-    self, request: web.Request, body: Any, *, _api_server) -> tuple[Any, web.Response | None]:
+    self, request: web.Request, body: Any, *, _api_server
+) -> tuple[Any, web.Response | None]:
     """Validate and normalize a scoped RoomLink dispatch request."""
-    _openai_error, room_token = _api_server._openai_error, self._room_grant_token(request)
+    _openai_error, room_token = (
+        _api_server._openai_error,
+        self._room_grant_token(request),
+    )
     if not room_token:
         return body, None
     if not isinstance(body, dict) or set(body) - {"input", "hosted_room_dispatch"}:
         return body, _json_error(
-            _openai_error, "Room dispatch accepts only input and hosted_room_dispatch.",
-            code="invalid_room_dispatch", status=400)
+            _openai_error,
+            "Room dispatch accepts only input and hosted_room_dispatch.",
+            code="invalid_room_dispatch",
+            status=400,
+        )
     try:
         from gateway import hosted_rooms
-        from gateway.hosted_room_peer import GatewayRoomCatalog, HostedMemberDispatch, verify_room_grant
+        from gateway.hosted_room_peer import (
+            GatewayRoomCatalog,
+            HostedMemberDispatch,
+            verify_room_grant,
+        )
         from gateway.hosted_room_execution_policy import RoomExecutionPolicy
         from gateway.platforms.api_server_room_grants import _local_room_catalog
+
         dispatch = HostedMemberDispatch.from_mapping(body.get("hosted_room_dispatch"))
-        verify_room_grant(self._room_grant_secret(), room_token, dispatch, permission="dispatch")
+        verify_room_grant(
+            self._room_grant_secret(), room_token, dispatch, permission="dispatch"
+        )
         active_profile = _api_server._api_request_profile.get() or "default"
         local_install = hosted_rooms.local_authority_gateway_id()
-        if dispatch.target_profile != active_profile or dispatch.target_install_id != local_install:
+        if (
+            dispatch.target_profile != active_profile
+            or dispatch.target_install_id != local_install
+        ):
             raise ValueError("room dispatch target does not match this profile")
         _, catalog_map = _local_room_catalog(self, active_profile, local_install)
         catalog = GatewayRoomCatalog.from_mapping(catalog_map)
         policy = RoomExecutionPolicy.from_mapping(catalog.execution_policy.as_mapping())
-        if not hmac.compare_digest(policy.policy_digest, dispatch.execution_policy_digest):
+        if not hmac.compare_digest(
+            policy.policy_digest, dispatch.execution_policy_digest
+        ):
             raise ValueError("room execution policy changed")
         if not hmac.compare_digest(catalog.catalog_digest, dispatch.capability_digest):
             raise ValueError("room capability catalog changed")

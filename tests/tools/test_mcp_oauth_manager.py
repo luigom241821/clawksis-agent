@@ -4,6 +4,7 @@ The manager consolidates the eight scattered MCP-OAuth call sites into a
 single object with disk-mtime watch, dedup'd 401 handling, and a provider
 cache. See `tools/mcp_oauth_manager.py` for design rationale.
 """
+
 import json
 import time
 from unittest.mock import MagicMock
@@ -29,8 +30,9 @@ def test_manager_isolates_same_named_servers_by_profile_home(tmp_path, monkeypat
             storage = ClawksisTokenStorage("shared")
             storage._tokens_path().parent.mkdir(parents=True, exist_ok=True)
             storage._tokens_path().write_text(
-                f'{{"access_token":"{access_token}","token_type":"Bearer","expires_in":3600}}'
-            , encoding="utf-8")
+                f'{{"access_token":"{access_token}","token_type":"Bearer","expires_in":3600}}',
+                encoding="utf-8",
+            )
         finally:
             reset_clawk_home_override(token)
 
@@ -39,7 +41,9 @@ def test_manager_isolates_same_named_servers_by_profile_home(tmp_path, monkeypat
     for home in (profile_a, profile_b):
         token = set_clawk_home_override(home)
         try:
-            provider = manager.get_or_build_provider("shared", "https://mcp.example/mcp", {})
+            provider = manager.get_or_build_provider(
+                "shared", "https://mcp.example/mcp", {}
+            )
             asyncio.run(provider._initialize())
             providers.append(provider)
         finally:
@@ -62,8 +66,12 @@ def test_manager_restore_entry_preserves_newer_concurrent_entry(tmp_path, monkey
 
     manager.restore_entry("shared", old_entry)
 
-    assert manager.get_or_build_provider("shared", "https://new.example", {}) is new_provider
+    assert (
+        manager.get_or_build_provider("shared", "https://new.example", {})
+        is new_provider
+    )
     assert new_provider is not old_provider
+
 
 def _set_interactive_stdin(monkeypatch, *, is_tty: bool = True) -> None:
     mock_stdin = MagicMock()
@@ -71,10 +79,10 @@ def _set_interactive_stdin(monkeypatch, *, is_tty: bool = True) -> None:
     monkeypatch.setattr("tools.mcp_oauth.sys.stdin", mock_stdin)
 
 
-
-
 @pytest.mark.asyncio
-async def test_first_observation_401_still_allows_in_place_refresh(tmp_path, monkeypatch):
+async def test_first_observation_401_still_allows_in_place_refresh(
+    tmp_path, monkeypatch
+):
     """A 401 on the first disk observation seeds the baseline but must still
     report refreshable when the SDK can refresh in place (GH#39551)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -82,7 +90,9 @@ async def test_first_observation_401_still_allows_in_place_refresh(tmp_path, mon
 
     token_dir = tmp_path / "mcp-tokens"
     token_dir.mkdir(parents=True)
-    (token_dir / "srv.json").write_text(json.dumps({"access_token": "OLD"}), encoding="utf-8")
+    (token_dir / "srv.json").write_text(
+        json.dumps({"access_token": "OLD"}), encoding="utf-8"
+    )
 
     class _Ctx:
         current_tokens = object()  # tokens already in memory (in-process sign-in)
@@ -97,7 +107,9 @@ async def test_first_observation_401_still_allows_in_place_refresh(tmp_path, mon
     mgr = MCPOAuthManager()
     provider = _Provider()
     mgr._entries[mgr._key("srv")] = _ProviderEntry(
-        server_url="https://example.com/mcp", oauth_config=None, provider=provider,
+        server_url="https://example.com/mcp",
+        oauth_config=None,
+        provider=provider,
     )
     assert await mgr.handle_401("srv", failed_access_token="OLD") is True
     # Baseline seeding must not have torn down the live provider.
@@ -106,7 +118,9 @@ async def test_first_observation_401_still_allows_in_place_refresh(tmp_path, mon
 
 
 @pytest.mark.asyncio
-async def test_external_login_after_absent_tokens_file_forces_reload(tmp_path, monkeypatch):
+async def test_external_login_after_absent_tokens_file_forces_reload(
+    tmp_path, monkeypatch
+):
     """Provider built before login (no file, no in-memory tokens) must reload
     once another process writes the tokens file (GH#39551 review)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -122,18 +136,24 @@ async def test_external_login_after_absent_tokens_file_forces_reload(tmp_path, m
     mgr = MCPOAuthManager()
     provider = _Provider()
     mgr._entries[mgr._key("srv")] = _ProviderEntry(
-        server_url="https://example.com/mcp", oauth_config=None, provider=provider,
+        server_url="https://example.com/mcp",
+        oauth_config=None,
+        provider=provider,
     )
     assert await mgr.invalidate_if_disk_changed("srv") is False  # file absent
     token_dir = tmp_path / "mcp-tokens"
     token_dir.mkdir(parents=True)
-    (token_dir / "srv.json").write_text(json.dumps({"access_token": "NEW"}), encoding="utf-8")
+    (token_dir / "srv.json").write_text(
+        json.dumps({"access_token": "NEW"}), encoding="utf-8"
+    )
     assert await mgr.invalidate_if_disk_changed("srv") is True
     assert provider._initialized is False
 
 
 @pytest.mark.asyncio
-async def test_handle_401_dedup_survives_even_if_task_reference_dropped(tmp_path, monkeypatch):
+async def test_handle_401_dedup_survives_even_if_task_reference_dropped(
+    tmp_path, monkeypatch
+):
     """Concurrent 401s share one handler task and all callers resolve.
 
     Regression guard: if the manager ever stops holding a strong reference
@@ -201,6 +221,7 @@ def _fake_response(status, url, body):
 
 def _provider_with_token_endpoint(tmp_path, oauth_config, token_endpoint, monkeypatch):
     from tools.mcp_oauth_manager import MCPOAuthManager, reset_manager_for_tests
+
     reset_manager_for_tests()
     # Provider construction fails fast in a non-interactive environment with no
     # cached tokens (mcp_oauth_manager.py guard). The hermetic test env has no
@@ -213,8 +234,6 @@ def _provider_with_token_endpoint(tmp_path, oauth_config, token_endpoint, monkey
     return provider
 
 
-
-
 def test_invalid_client_metadata_does_not_trip(tmp_path, monkeypatch):
     """RFC 7591 `invalid_client_metadata` must NOT be mistaken for invalid_client."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -225,7 +244,9 @@ def test_invalid_client_metadata_does_not_trip(tmp_path, monkeypatch):
         tmp_path, {}, "https://idp.example.com/oauth/token", monkeypatch
     )
     resp = _fake_response(
-        400, "https://idp.example.com/oauth/token", b'{"error":"invalid_client_metadata"}'
+        400,
+        "https://idp.example.com/oauth/token",
+        b'{"error":"invalid_client_metadata"}',
     )
 
     asyncio.run(provider._maybe_flag_poisoned_client(resp))
@@ -268,6 +289,7 @@ def test_bridge_forwards_requests_and_poisons_on_token_endpoint_400(
             forwarded.append(("in", response))
 
     from mcp.client.auth.oauth2 import OAuthClientProvider
+
     monkeypatch.setattr(OAuthClientProvider, "async_auth_flow", fake_base_flow)
 
     provider = _provider_with_token_endpoint(tmp_path, {}, token_ep, monkeypatch)
@@ -293,8 +315,12 @@ def test_bridge_forwards_requests_and_poisons_on_token_endpoint_400(
     assert not (d / "srv.client.json").exists()
     assert provider._initialized is False
     assert provider.context.client_info is None
+
+
 @pytest.mark.asyncio
-async def test_manager_provider_token_exchange_includes_dcr_secret(tmp_path, monkeypatch):
+async def test_manager_provider_token_exchange_includes_dcr_secret(
+    tmp_path, monkeypatch
+):
     """The manager provider path applies the same Supabase DCR secret fix."""
     from urllib.parse import parse_qs
 
@@ -306,23 +332,29 @@ async def test_manager_provider_token_exchange_includes_dcr_secret(tmp_path, mon
     _set_interactive_stdin(monkeypatch)
 
     mgr = MCPOAuthManager()
-    provider = mgr.get_or_build_provider("supabase", "https://mcp.supabase.com/mcp", None)
+    provider = mgr.get_or_build_provider(
+        "supabase", "https://mcp.supabase.com/mcp", None
+    )
     assert provider is not None
     redirect_uris = provider.context.client_metadata.redirect_uris
     assert redirect_uris is not None
-    provider.context.client_info = OAuthClientInformationFull.model_validate({
-        "client_id": "client-id",
-        "client_secret": "secret",
-        "redirect_uris": [str(redirect_uris[0])],
-        "token_endpoint_auth_method": "none",
-    })
+    provider.context.client_info = OAuthClientInformationFull.model_validate(
+        {
+            "client_id": "client-id",
+            "client_secret": "secret",
+            "redirect_uris": [str(redirect_uris[0])],
+            "token_endpoint_auth_method": "none",
+        }
+    )
 
     request = await provider._exchange_token_authorization_code("auth-code", "verifier")
     body = parse_qs(request.content.decode())
 
     assert body["client_secret"] == ["secret"]
     assert provider.context.client_info is not None
-    assert provider.context.client_info.token_endpoint_auth_method == "client_secret_post"
+    assert (
+        provider.context.client_info.token_endpoint_auth_method == "client_secret_post"
+    )
 
 
 @pytest.mark.asyncio
@@ -419,7 +451,9 @@ async def test_manager_refresh_read_error_clears_tokens(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_refresh_response_without_refresh_token_keeps_stored_one(tmp_path, monkeypatch):
+async def test_refresh_response_without_refresh_token_keeps_stored_one(
+    tmp_path, monkeypatch
+):
     """RFC 6749 §6: an AS that does not rotate omits refresh_token; the prior one must survive in
     the live provider AND on disk, or the server dies at the next expiry (#62333)."""
     import json
@@ -430,7 +464,11 @@ async def test_refresh_response_without_refresh_token_keeps_stored_one(tmp_path,
         tmp_path, {}, "https://idp.example.com/oauth/token", monkeypatch
     )
     provider.context.current_tokens = OAuthToken(
-        access_token="at-1", token_type="Bearer", expires_in=3600, refresh_token="rt-keep", scope="read"
+        access_token="at-1",
+        token_type="Bearer",
+        expires_in=3600,
+        refresh_token="rt-keep",
+        scope="read",
     )
     provider.context.client_info = SimpleNamespace(client_id="cid")
 
@@ -439,9 +477,15 @@ async def test_refresh_response_without_refresh_token_keeps_stored_one(tmp_path,
         _fake_response(200, "https://idp.example.com/oauth/token", body)
     )
 
-    on_disk = json.loads((tmp_path / "mcp-tokens" / "srv.json").read_text(encoding="utf-8"))
+    on_disk = json.loads(
+        (tmp_path / "mcp-tokens" / "srv.json").read_text(encoding="utf-8")
+    )
     assert provider.context.current_tokens.access_token == "at-2"
-    assert provider.context.current_tokens.refresh_token == "rt-keep" == on_disk["refresh_token"]
+    assert (
+        provider.context.current_tokens.refresh_token
+        == "rt-keep"
+        == on_disk["refresh_token"]
+    )
     assert provider.context.current_tokens.scope == "read" == on_disk["scope"]
     assert provider.context.can_refresh_token()
 
@@ -457,7 +501,10 @@ async def test_refresh_response_with_new_refresh_token_rotates(tmp_path, monkeyp
         tmp_path, {}, "https://idp.example.com/oauth/token", monkeypatch
     )
     provider.context.current_tokens = OAuthToken(
-        access_token="at-1", token_type="Bearer", expires_in=3600, refresh_token="rt-old"
+        access_token="at-1",
+        token_type="Bearer",
+        expires_in=3600,
+        refresh_token="rt-old",
     )
 
     body = b'{"access_token": "at-2", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "rt-new"}'
@@ -465,8 +512,14 @@ async def test_refresh_response_with_new_refresh_token_rotates(tmp_path, monkeyp
         _fake_response(200, "https://idp.example.com/oauth/token", body)
     )
 
-    on_disk = json.loads((tmp_path / "mcp-tokens" / "srv.json").read_text(encoding="utf-8"))
-    assert provider.context.current_tokens.refresh_token == "rt-new" == on_disk["refresh_token"]
+    on_disk = json.loads(
+        (tmp_path / "mcp-tokens" / "srv.json").read_text(encoding="utf-8")
+    )
+    assert (
+        provider.context.current_tokens.refresh_token
+        == "rt-new"
+        == on_disk["refresh_token"]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -543,12 +596,8 @@ async def test_refresh_400_rejects_disk_token_without_refresh_token(
     assert provider.context.current_tokens is None
 
 
-
-
-
 @pytest.mark.asyncio
 async def test_refresh_400_still_clears_when_disk_is_same_token(tmp_path, monkeypatch):
-
     """No peer wrote anything: the credential really is dead — clear it."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     provider = _provider_with_token_endpoint(
@@ -588,9 +637,7 @@ async def test_refresh_400_does_not_recover_expired_disk_token(tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_refresh_400_does_not_recover_tokenless_disk_entry(
-    tmp_path, monkeypatch
-):
+async def test_refresh_400_does_not_recover_tokenless_disk_entry(tmp_path, monkeypatch):
     """A disk entry without an access token is not a recovery."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     provider = _provider_with_token_endpoint(
@@ -686,7 +733,9 @@ async def _drive_flow(provider, responder):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_refresh_presents_single_use_token_exactly_once(tmp_path, monkeypatch):
+async def test_concurrent_refresh_presents_single_use_token_exactly_once(
+    tmp_path, monkeypatch
+):
     """Two providers on one token store: R1 is POSTed once, both end on the rotated pair."""
     from urllib.parse import parse_qs
 
@@ -705,7 +754,9 @@ async def test_concurrent_refresh_presents_single_use_token_exactly_once(tmp_pat
         refresh = parse_qs(request.content.decode())["refresh_token"][0]
         presented.append(refresh)
         if presented == ["R1"]:
-            body = json.dumps(_token("A2", "R2").model_dump(mode="json", exclude_none=True)).encode()
+            body = json.dumps(
+                _token("A2", "R2").model_dump(mode="json", exclude_none=True)
+            ).encode()
             return _fake_response(200, endpoint, body)
         # A single-use provider rejects any second presentation.
         return _fake_response(400, endpoint, b'{"error":"invalid_grant"}')
@@ -713,8 +764,14 @@ async def test_concurrent_refresh_presents_single_use_token_exactly_once(tmp_pat
     await asyncio.gather(_drive_flow(a, responder), _drive_flow(b, responder))
 
     assert presented == ["R1"], presented
-    assert (a.context.current_tokens.access_token, a.context.current_tokens.refresh_token) == ("A2", "R2")
-    assert (b.context.current_tokens.access_token, b.context.current_tokens.refresh_token) == ("A2", "R2")
+    assert (
+        a.context.current_tokens.access_token,
+        a.context.current_tokens.refresh_token,
+    ) == ("A2", "R2")
+    assert (
+        b.context.current_tokens.access_token,
+        b.context.current_tokens.refresh_token,
+    ) == ("A2", "R2")
     assert a._clawk_fence is None and b._clawk_fence is None
 
 
@@ -730,12 +787,16 @@ async def test_refresh_fails_closed_while_a_peer_holds_the_fence(tmp_path, monke
     provider = _fenced_provider(tmp_path, monkeypatch, endpoint)
     await provider.context.storage.set_tokens(_token("A1", "R1"))
     monkeypatch.setattr(
-        mcp_oauth, "acquire_refresh_fence", functools.partial(mcp_oauth.acquire_refresh_fence, timeout=0.2)
+        mcp_oauth,
+        "acquire_refresh_fence",
+        functools.partial(mcp_oauth.acquire_refresh_fence, timeout=0.2),
     )
 
     sent = []
 
-    peer_fd = await mcp_oauth.acquire_refresh_fence(provider.context.storage._tokens_path())
+    peer_fd = await mcp_oauth.acquire_refresh_fence(
+        provider.context.storage._tokens_path()
+    )
     try:
         with pytest.raises(mcp_oauth.RefreshFenceTimeout):
             await _drive_flow(provider, sent.append)
@@ -749,7 +810,9 @@ async def test_refresh_fails_closed_while_a_peer_holds_the_fence(tmp_path, monke
 
 
 @pytest.mark.asyncio
-async def test_refresh_adopts_expired_peer_pair_and_posts_its_refresh_token(tmp_path, monkeypatch):
+async def test_refresh_adopts_expired_peer_pair_and_posts_its_refresh_token(
+    tmp_path, monkeypatch
+):
     """A peer rotated to (A2, R2) but A2 already expired: we must POST R2, never R1.
 
     The adopt path installs the rotated pair even without a live access
@@ -768,7 +831,9 @@ async def test_refresh_adopts_expired_peer_pair_and_posts_its_refresh_token(tmp_
         if request.method != "POST":
             return _fake_response(200, str(request.url), b"{}")
         presented.append(parse_qs(request.content.decode())["refresh_token"][0])
-        body = json.dumps(_token("A3", "R3").model_dump(mode="json", exclude_none=True)).encode()
+        body = json.dumps(
+            _token("A3", "R3").model_dump(mode="json", exclude_none=True)
+        ).encode()
         return _fake_response(200, endpoint, body)
 
     await _drive_flow(provider, responder)
@@ -778,7 +843,9 @@ async def test_refresh_adopts_expired_peer_pair_and_posts_its_refresh_token(tmp_
 
 
 @pytest.mark.asyncio
-async def test_refresh_adopts_peer_pair_without_expiry_and_skips_the_post(tmp_path, monkeypatch):
+async def test_refresh_adopts_peer_pair_without_expiry_and_skips_the_post(
+    tmp_path, monkeypatch
+):
     """A peer rotated to (A2, R2) with no ``expires_in`` (RFC 6749 optional): that pair is live.
 
     Treating a missing expiry as expired would POST R2 needlessly and burn a
@@ -798,12 +865,19 @@ async def test_refresh_adopts_peer_pair_without_expiry_and_skips_the_post(tmp_pa
 
     await _drive_flow(provider, responder)
 
-    assert posted == [], "a live peer pair must be adopted without presenting a refresh token"
-    assert (provider.context.current_tokens.access_token, provider.context.current_tokens.refresh_token) == ("A2", "R2")
+    assert posted == [], (
+        "a live peer pair must be adopted without presenting a refresh token"
+    )
+    assert (
+        provider.context.current_tokens.access_token,
+        provider.context.current_tokens.refresh_token,
+    ) == ("A2", "R2")
 
 
 @pytest.mark.asyncio
-async def test_refresh_restarts_flow_when_disk_pair_is_from_another_issuer(tmp_path, monkeypatch):
+async def test_refresh_restarts_flow_when_disk_pair_is_from_another_issuer(
+    tmp_path, monkeypatch
+):
     """A disk pair bound to a different issuer loses its refresh token on adoption.
 
     With nothing left to refresh, _refresh_token must restart the SDK flow
@@ -822,13 +896,17 @@ async def test_refresh_restarts_flow_when_disk_pair_is_from_another_issuer(tmp_p
     with pytest.raises(_RefreshCompletedByPeer):
         await provider._refresh_token()
 
-    assert not provider.context.current_tokens.refresh_token, "foreign refresh token must be stripped"
+    assert not provider.context.current_tokens.refresh_token, (
+        "foreign refresh token must be stripped"
+    )
     assert (await storage.get_tokens()).refresh_token is None, "strip must reach disk"
     assert provider._clawk_fence is None
 
 
 @pytest.mark.asyncio
-async def test_refresh_fence_surfaces_non_contention_lock_errors_immediately(tmp_path, monkeypatch):
+async def test_refresh_fence_surfaces_non_contention_lock_errors_immediately(
+    tmp_path, monkeypatch
+):
     """A lock syscall failing for a reason other than contention must not spin to the deadline."""
     import errno
 
@@ -850,7 +928,9 @@ async def test_refresh_fence_surfaces_non_contention_lock_errors_immediately(tmp
 
 
 @pytest.mark.asyncio
-async def test_refresh_400_recovery_rejects_disk_pair_from_another_issuer(tmp_path, monkeypatch):
+async def test_refresh_400_recovery_rejects_disk_pair_from_another_issuer(
+    tmp_path, monkeypatch
+):
     """A 400 must not be "recovered" with a disk pair bound to a different issuer.
 
     The enforcer strips that pair's refresh token on install; a stripped pair
@@ -870,4 +950,6 @@ async def test_refresh_400_recovery_rejects_disk_pair_from_another_issuer(tmp_pa
 
     assert recovered is False
     assert provider.context.current_tokens is None
-    assert (await storage.get_tokens()).refresh_token is None, "foreign refresh token must not survive on disk"
+    assert (await storage.get_tokens()).refresh_token is None, (
+        "foreign refresh token must not survive on disk"
+    )

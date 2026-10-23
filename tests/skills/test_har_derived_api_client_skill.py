@@ -17,6 +17,7 @@ SKILL_DIR = (
 )
 DERIVE = SKILL_DIR / "scripts" / "har_to_client.py"
 
+
 def _load_module(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec and spec.loader
@@ -24,7 +25,9 @@ def _load_module(path: Path, name: str):
     spec.loader.exec_module(mod)
     return mod
 
+
 # --- behavioral: derivation logic -----------------------------------------
+
 
 def _make_har() -> dict:
     return {
@@ -37,7 +40,10 @@ def _make_har() -> dict:
                         "url": "https://api.example.com/v1/items/12345/reviews?limit=5",
                         "queryString": [{"name": "limit", "value": "5"}],
                         "headers": [
-                            {"name": "User-Agent", "value": "Mozilla/5.0 TestBrowser/1.0"},
+                            {
+                                "name": "User-Agent",
+                                "value": "Mozilla/5.0 TestBrowser/1.0",
+                            },
                             {"name": "accept", "value": "application/json"},
                             {"name": "referer", "value": "https://example.com/"},
                         ],
@@ -56,13 +62,22 @@ def _make_har() -> dict:
                         "method": "GET",
                         "url": "https://cdn.example.com/app.js",
                         "queryString": [],
-                        "headers": [{"name": "User-Agent", "value": "Mozilla/5.0 TestBrowser/1.0"}],
+                        "headers": [
+                            {
+                                "name": "User-Agent",
+                                "value": "Mozilla/5.0 TestBrowser/1.0",
+                            }
+                        ],
                     },
-                    "response": {"status": 200, "content": {"mimeType": "application/javascript"}},
+                    "response": {
+                        "status": 200,
+                        "content": {"mimeType": "application/javascript"},
+                    },
                 },
             ]
         }
     }
+
 
 def test_derives_endpoint_and_filters_static(tmp_path, capsys):
     mod = _load_module(DERIVE, "har_to_client_undertest")
@@ -90,6 +105,7 @@ def test_derives_endpoint_and_filters_static(tmp_path, capsys):
     assert "referer" not in out
     # replay hint carries the browser UA
     assert "User-Agent (send this): Mozilla/5.0 TestBrowser/1.0" in out
+
 
 def test_path_template_collapses_ids():
     mod = _load_module(DERIVE, "har_to_client_undertest2")

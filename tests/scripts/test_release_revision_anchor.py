@@ -16,7 +16,9 @@ def test_get_commits_attributes_each_revision_not_current_head(tmp_path, monkeyp
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
+    )
 
     (repo / ".mailmap").write_text("", encoding="utf-8")
     subprocess.run(["git", "add", ".mailmap"], cwd=repo, check=True)
@@ -28,14 +30,18 @@ def test_get_commits_attributes_each_revision_not_current_head(tmp_path, monkeyp
     subprocess.run(["git", "commit", "-qm", "feat: payload"], cwd=repo, check=True)
     payload_sha = _git(repo, "rev-parse", "HEAD")
 
-    (repo / ".mailmap").write_text("Mapped Person <mapped@example.com> Test <test@example.com>\n",
-                                    encoding="utf-8")
+    (repo / ".mailmap").write_text(
+        "Mapped Person <mapped@example.com> Test <test@example.com>\n", encoding="utf-8"
+    )
     subprocess.run(["git", "add", ".mailmap"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-qm", "chore: add mailmap"], cwd=repo, check=True)
 
     monkeypatch.setattr(release, "REPO_ROOT", repo)
     assert _git(repo, "show", "-s", "--format=%aN", payload_sha) == "Mapped Person"
-    assert _git(repo, "show", "-s", "--use-mailmap", "--format=%aN", payload_sha) == "Mapped Person"
+    assert (
+        _git(repo, "show", "-s", "--use-mailmap", "--format=%aN", payload_sha)
+        == "Mapped Person"
+    )
     monkeypatch.setitem(authors.AUTHOR_MAP, "test@example.com", "test-user")
     commits = release.get_commits(since_tag="base")
     payload = next(commit for commit in commits if commit["sha"] == payload_sha)

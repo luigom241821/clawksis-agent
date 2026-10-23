@@ -19,8 +19,6 @@ def _reset_guard():
     model_switch_providers._picker_prewarm_done.clear()
 
 
-
-
 def test_prewarm_guard_is_once_per_process():
     """The process-level Event guard must make repeat calls no-ops so a
     long-lived process never leaks one OS thread per call."""
@@ -128,5 +126,3 @@ def test_prewarm_warms_the_active_custom_endpoint_for_the_next_open(monkeypatch)
     assert row2["models"] == ["gateway-model-a", "gateway-model-b"]
 
     _reset_guard()
-
-

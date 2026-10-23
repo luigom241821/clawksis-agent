@@ -19,7 +19,7 @@ from tests.pm.activation_support import bash
 NASTY = {
     "PLAIN": "value",
     "SPACES": "a b  c",
-    "QUOTES": "it's a \"test\"",
+    "QUOTES": 'it\'s a "test"',
     "SHELL_SYNTAX": "$HOME `id` $(id) ; & | > < * ? [x] ~ #",
     "BACKSLASHES": "C:\\path\\to\\ \\n \\'",
     "EMPTY": "",
@@ -43,7 +43,13 @@ def _shell(dialect: str) -> list[str]:
 @pytest.mark.parametrize("dialect", ["sh", "fish"])
 def test_a_real_shell_reads_every_value_back_unchanged(dialect):
     script = shell_exports(NASTY, dialect) + "\n" + PROBE
-    run = subprocess.run([*_shell(dialect), script], capture_output=True, text=True, timeout=30, check=False)
+    run = subprocess.run(
+        [*_shell(dialect), script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert run.returncode == 0, run.stderr
     assert run.stdout.split("\0")[:-1] == list(NASTY.values())
 
@@ -53,7 +59,9 @@ def test_fish_keeps_path_variables_as_lists():
     script = shell_exports({"PATH": "/a b:/c", "PYTHONPATH": "/x:/y"}, "fish")
     run = subprocess.run(
         [*_shell("fish"), script + "\nprintf '%s ' (count $PATH) (count $PYTHONPATH)"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert run.returncode == 0, run.stderr
@@ -62,15 +70,24 @@ def test_fish_keeps_path_variables_as_lists():
 
 @pytest.mark.platforms("posix")
 def test_fish_read_only_variables_do_not_abort_the_script():
-    script = shell_exports({"PWD": "/elsewhere", "SHLVL": "9", "AFTER": "reached"}, "fish")
-    run = subprocess.run([*_shell("fish"), script + "\nprintf %s $AFTER"],
-                         capture_output=True, text=True, timeout=30, check=False)
+    script = shell_exports(
+        {"PWD": "/elsewhere", "SHLVL": "9", "AFTER": "reached"}, "fish"
+    )
+    run = subprocess.run(
+        [*_shell("fish"), script + "\nprintf %s $AFTER"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert run.returncode == 0 and run.stderr == "", run.stderr
     assert run.stdout == "reached"
 
 
 @pytest.mark.parametrize("dialect", ["sh", "fish"])
 def test_names_no_shell_can_assign_are_left_out(dialect):
-    script = shell_exports({"ProgramFiles(ARM)": "x", "1BAD": "x", "GOOD": "y"}, dialect)
+    script = shell_exports(
+        {"ProgramFiles(ARM)": "x", "1BAD": "x", "GOOD": "y"}, dialect
+    )
     assert "GOOD" in script
     assert "ProgramFiles" not in script and "1BAD" not in script

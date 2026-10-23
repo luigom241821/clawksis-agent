@@ -33,11 +33,21 @@ class _Child:
 
     def run_conversation(self, **_kwargs):
         self.release.wait()
-        return {"final_response": f"DONE-{self.session_id}", "completed": True, "api_calls": 3, "messages": []}
+        return {
+            "final_response": f"DONE-{self.session_id}",
+            "completed": True,
+            "api_calls": 3,
+            "messages": [],
+        }
 
     def get_activity_summary(self):
         # Frozen fingerprint: the stale verdict trips at the idle threshold.
-        return {"api_call_count": 3, "current_tool": None, "last_activity_ts": 1000.0, "max_iterations": 50}
+        return {
+            "api_call_count": 3,
+            "current_tool": None,
+            "last_activity_ts": 1000.0,
+            "max_iterations": 50,
+        }
 
     def hard_interrupt(self, *_args, **_kwargs):
         self.interrupted.set()
@@ -74,7 +84,9 @@ def _fast_watchdog(monkeypatch, *, grace: float):
     monkeypatch.setattr(delegate_tool, "_HEARTBEAT_STALE_CYCLES_IDLE", 2)
     # raising=False: on the unfixed base the constant does not exist yet, so the
     # assertions fail on BEHAVIOR (synthesized timeout vs. collected result).
-    monkeypatch.setattr(delegate_tool, "_STALE_RESULT_GRACE_SECONDS", grace, raising=False)
+    monkeypatch.setattr(
+        delegate_tool, "_STALE_RESULT_GRACE_SECONDS", grace, raising=False
+    )
     monkeypatch.setattr(delegate_tool, "_get_child_timeout", lambda: None)
     monkeypatch.setattr(delegate_tool, "_get_worktree_isolation", lambda: False)
 
@@ -87,13 +99,19 @@ def _finish_soon(child: _Child, delay: float) -> threading.Timer:
     return timer
 
 
-def test_stale_verdict_collects_a_result_that_lands_within_the_grace_window(monkeypatch):
+def test_stale_verdict_collects_a_result_that_lands_within_the_grace_window(
+    monkeypatch,
+):
     """The wedge: verdict fires while the worker is mid-unwind; the real result must win."""
     child = _Child("grace")
     _fast_watchdog(monkeypatch, grace=1.0)
-    timer = _finish_soon(child, 0.15)  # after the verdict (~0.02s), well inside the grace
+    timer = _finish_soon(
+        child, 0.15
+    )  # after the verdict (~0.02s), well inside the grace
     try:
-        entry = delegate_tool._run_single_child(0, "review", child=child, parent_agent=_parent())
+        entry = delegate_tool._run_single_child(
+            0, "review", child=child, parent_agent=_parent()
+        )
     finally:
         timer.cancel()
         child.release.set()
@@ -112,7 +130,9 @@ def test_stale_verdict_without_a_result_in_the_grace_window_is_a_timeout(monkeyp
     valve = _finish_soon(child, 5.0)
     started = time.monotonic()
     try:
-        entry = delegate_tool._run_single_child(0, "review", child=child, parent_agent=_parent())
+        entry = delegate_tool._run_single_child(
+            0, "review", child=child, parent_agent=_parent()
+        )
     finally:
         valve.cancel()
         child.release.set()

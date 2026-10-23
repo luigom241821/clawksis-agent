@@ -46,6 +46,7 @@ class _FakeDB:
     def close(self):
         self.closed = True
 
+
 def _run(monkeypatch, capsys, argv_tail, db):
     import clawk_cli.main as main_mod
     import clawk_state
@@ -63,6 +64,7 @@ def _run(monkeypatch, capsys, argv_tail, db):
         code = e.code or 0
     return code, capsys.readouterr().out
 
+
 def test_pin_accepts_unique_prefix(monkeypatch, capsys):
     db = _FakeDB()
     code, out = _run(monkeypatch, capsys, ["pin", "20260315_092437"], db)
@@ -71,11 +73,13 @@ def test_pin_accepts_unique_prefix(monkeypatch, capsys):
     assert "(Alpha Work)" in out
     assert code == 0
 
+
 def test_unpin_writes_false(monkeypatch, capsys):
     db = _FakeDB()
     _code, out = _run(monkeypatch, capsys, ["unpin", "20260315_092437_c9a6ff"], db)
     assert db.pin_calls == [("20260315_092437_c9a6ff", False)]
     assert "Unpinned session" in out
+
 
 def test_pin_multiple_ids_one_missing(monkeypatch, capsys):
     db = _FakeDB(known=("aaa111", "bbb222"))
@@ -84,6 +88,7 @@ def test_pin_multiple_ids_one_missing(monkeypatch, capsys):
     assert ("bbb222", True) in db.pin_calls
     assert "No session 'nope'" in out and "clawk sessions list" in out
     assert code == 1
+
 
 def test_pinned_lists_only_pinned_rows(monkeypatch, capsys):
     rows = [
@@ -111,6 +116,7 @@ def test_pinned_lists_only_pinned_rows(monkeypatch, capsys):
     assert "pinned_one" in out
     assert "Keep Me" in out
     assert "recent_unpinned" not in out
+
 
 def test_pinned_json_output(monkeypatch, capsys):
     rows = [

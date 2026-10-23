@@ -55,9 +55,7 @@ class TestToggleToolsetInstallOnEnable:
 
         calls = self._spawn_recorder(monkeypatch)
         # Binary missing → the cua_driver predicate reports unsatisfied.
-        monkeypatch.setattr(
-            tools_config_cua, "_resolved_cua_driver_cmd", lambda: None
-        )
+        monkeypatch.setattr(tools_config_cua, "_resolved_cua_driver_cmd", lambda: None)
         monkeypatch.setattr(
             tools_config_post_setup, "_cua_driver_install_ready", lambda: False
         )
@@ -74,9 +72,7 @@ class TestToggleToolsetInstallOnEnable:
         assert subcommand[-3:] == ("tools", "post-setup", "cua_driver")
         assert action_name == "tools-post-setup"
 
-    def test_enable_computer_use_skips_install_when_binary_present(
-        self, monkeypatch
-    ):
+    def test_enable_computer_use_skips_install_when_binary_present(self, monkeypatch):
         from clawk_cli import tools_config
         from clawk_cli import tools_config_cua
         from clawk_cli import tools_config_post_setup
@@ -102,9 +98,7 @@ class TestToggleToolsetInstallOnEnable:
         from clawk_cli import tools_config_post_setup
 
         calls = self._spawn_recorder(monkeypatch)
-        monkeypatch.setattr(
-            tools_config_cua, "_resolved_cua_driver_cmd", lambda: None
-        )
+        monkeypatch.setattr(tools_config_cua, "_resolved_cua_driver_cmd", lambda: None)
         monkeypatch.setattr(
             tools_config_post_setup, "_cua_driver_install_ready", lambda: False
         )
@@ -122,9 +116,7 @@ class TestToggleToolsetInstallOnEnable:
         from clawk_cli import tools_config_post_setup
         from clawk_cli import web_server
 
-        monkeypatch.setattr(
-            tools_config_cua, "_resolved_cua_driver_cmd", lambda: None
-        )
+        monkeypatch.setattr(tools_config_cua, "_resolved_cua_driver_cmd", lambda: None)
         monkeypatch.setattr(
             tools_config_post_setup, "_cua_driver_install_ready", lambda: False
         )
@@ -148,9 +140,7 @@ class TestToggleToolsetInstallOnEnable:
         contract — no spawn, post_setup_started stays None."""
         calls = self._spawn_recorder(monkeypatch)
 
-        resp = self.client.put(
-            "/api/tools/toolsets/web", json={"enabled": True}
-        )
+        resp = self.client.put("/api/tools/toolsets/web", json={"enabled": True})
         assert resp.status_code == 200
         assert resp.json()["post_setup_started"] is None
         assert calls == []

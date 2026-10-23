@@ -85,10 +85,14 @@ class _PendingVoiceAgent:
         self._interrupt_message = message
         self._interrupted.set()
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **kwargs
+    ):
         type(self).messages.append(message)
         if len(type(self).messages) == 1:
-            assert self._interrupted.wait(timeout=3), "pending voice interrupt was not delivered"
+            assert self._interrupted.wait(timeout=3), (
+                "pending voice interrupt was not delivered"
+            )
             return {
                 "final_response": "interrupted",
                 "messages": [],
@@ -139,7 +143,10 @@ async def test_pending_voice_interrupt_reuses_transcript_and_echo():
         "tools.transcription_tools.transcribe_audio",
         return_value={"success": True, "transcript": "hello once", "provider": "mock"},
     ) as mock_transcribe:
-        interrupt_text, interrupt_transcripts = await runner._transcribe_pending_audio_event_once(
+        (
+            interrupt_text,
+            interrupt_transcripts,
+        ) = await runner._transcribe_pending_audio_event_once(
             event,
             event.text,
         )
@@ -150,7 +157,10 @@ async def test_pending_voice_interrupt_reuses_transcript_and_echo():
             interrupt_transcripts,
         )
 
-        drain_text, drain_transcripts = await runner._transcribe_pending_audio_event_once(
+        (
+            drain_text,
+            drain_transcripts,
+        ) = await runner._transcribe_pending_audio_event_once(
             event,
             event.text,
         )
@@ -179,8 +189,12 @@ async def test_monitor_to_drain_transcribes_and_echoes_pending_voice_once(
 ):
     monkeypatch.setenv("CLAWK_TOOL_PROGRESS_MODE", "off")
     monkeypatch.setenv("CLAWK_GATEWAY_NOTIFY_INTERVAL", "0")
-    monkeypatch.setitem(sys.modules, "dotenv", types.SimpleNamespace(load_dotenv=lambda: None))
-    monkeypatch.setitem(sys.modules, "run_agent", types.SimpleNamespace(AIAgent=_PendingVoiceAgent))
+    monkeypatch.setitem(
+        sys.modules, "dotenv", types.SimpleNamespace(load_dotenv=lambda: None)
+    )
+    monkeypatch.setitem(
+        sys.modules, "run_agent", types.SimpleNamespace(AIAgent=_PendingVoiceAgent)
+    )
 
     adapter = _PendingVoiceAdapter()
     runner = _run_agent_runner(adapter)
@@ -200,10 +214,17 @@ async def test_monitor_to_drain_transcribes_and_echoes_pending_voice_once(
 
     with (
         patch("gateway.run._clawk_home", tmp_path),
-        patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "fake"}),
+        patch(
+            "gateway.run._resolve_runtime_agent_kwargs",
+            return_value={"api_key": "fake"},
+        ),
         patch(
             "tools.transcription_tools.transcribe_audio",
-            return_value={"success": True, "transcript": "hello once", "provider": "mock"},
+            return_value={
+                "success": True,
+                "transcript": "hello once",
+                "provider": "mock",
+            },
         ) as mock_transcribe,
     ):
         result = await runner._run_agent(
@@ -217,7 +238,9 @@ async def test_monitor_to_drain_transcribes_and_echoes_pending_voice_once(
 
     assert result["final_response"] == "follow-up complete"
     assert _PendingVoiceAgent.messages == ["initial turn", '"hello once"']
-    mock_transcribe.assert_called_once_with("/tmp/telegram-pending-voice.ogg", None, "gateway")
+    mock_transcribe.assert_called_once_with(
+        "/tmp/telegram-pending-voice.ogg", None, "gateway"
+    )
     assert adapter.sent == [("12345", '🎙️ "hello once"', None)]
 
 
@@ -226,10 +249,12 @@ async def test_telegram_video_size_gate_rejects_oversized_media_before_download(
     adapter = object.__new__(TelegramAdapter)
     adapter._max_doc_bytes = 1024
     adapter._should_process_message = lambda _message: True
-    adapter._build_message_event = lambda _message, _type, update_id=None: SimpleNamespace(
-        text="caption",
-        media_urls=[],
-        media_types=[],
+    adapter._build_message_event = lambda _message, _type, update_id=None: (
+        SimpleNamespace(
+            text="caption",
+            media_urls=[],
+            media_types=[],
+        )
     )
     adapter._apply_telegram_group_observe_attribution = lambda event: event
 
@@ -277,8 +302,6 @@ def _voice_event(source, urls, text=""):
     )
 
 
-
-
 @pytest.mark.asyncio
 async def test_voice_note_merged_during_pending_stt_is_transcribed():
     """A 2nd voice note merged into the pending event while the interrupt monitor's STT is in
@@ -301,13 +324,17 @@ async def test_voice_note_merged_during_pending_stt_is_transcribed():
     merge_pending_message_event(pending, "k", _voice_event(source, ["/tmp/A.ogg"]))
     event = pending["k"]
 
-    monitor = asyncio.create_task(runner._transcribe_pending_audio_event_once(event, ""))
+    monitor = asyncio.create_task(
+        runner._transcribe_pending_audio_event_once(event, "")
+    )
     await stt_started.wait()
     merge_pending_message_event(pending, "k", _voice_event(source, ["/tmp/B.ogg"]))
     release.set()
     await monitor
 
-    drain_text, drain_transcripts = await runner._transcribe_pending_audio_event_once(event, "")
+    drain_text, drain_transcripts = await runner._transcribe_pending_audio_event_once(
+        event, ""
+    )
 
     assert drain_transcripts == ["<A.ogg>", "<B.ogg>"]
     assert "<B.ogg>" in drain_text
@@ -332,19 +359,33 @@ async def test_caption_of_voice_note_merged_during_pending_stt_is_kept():
 
     runner._enrich_message_with_transcription = fake_enrich
     pending = {}
-    merge_pending_message_event(pending, "k", _voice_event(source, ["/tmp/A.ogg"], "first caption"))
+    merge_pending_message_event(
+        pending, "k", _voice_event(source, ["/tmp/A.ogg"], "first caption")
+    )
     event = pending["k"]
 
-    interrupt = asyncio.create_task(runner._transcribe_and_echo_pending_voice(
-        event, None, source, event.text or "", log_context="Voice-priority-interrupt",
-    ))
+    interrupt = asyncio.create_task(
+        runner._transcribe_and_echo_pending_voice(
+            event,
+            None,
+            source,
+            event.text or "",
+            log_context="Voice-priority-interrupt",
+        )
+    )
     await stt_started.wait()
-    merge_pending_message_event(pending, "k", _voice_event(source, ["/tmp/B.ogg"], "second caption"))
+    merge_pending_message_event(
+        pending, "k", _voice_event(source, ["/tmp/B.ogg"], "second caption")
+    )
     release.set()
     interrupt_text, _ = await interrupt
 
     drain_text, _ = await runner._transcribe_and_echo_pending_voice(
-        event, None, source, event.text or "", log_context="Voice-drain",
+        event,
+        None,
+        source,
+        event.text or "",
+        log_context="Voice-drain",
     )
 
     for text in (interrupt_text, drain_text):
@@ -369,8 +410,12 @@ async def test_burst_of_merged_voice_notes_transcribes_each_clip_once():
 
     async def fake_clip(path, *_stt):
         calls.append(Path(path).name)
-        if burst:  # the next note of the burst arrives while this clip is being transcribed
-            merge_pending_message_event(pending, "k", _voice_event(source, [burst.pop(0)]))
+        if (
+            burst
+        ):  # the next note of the burst arrives while this clip is being transcribed
+            merge_pending_message_event(
+                pending, "k", _voice_event(source, [burst.pop(0)])
+            )
         await asyncio.sleep(0)
         return f"<{Path(path).name}>", f"<{Path(path).name}>"
 

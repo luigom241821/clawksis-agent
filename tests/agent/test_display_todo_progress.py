@@ -7,56 +7,68 @@ todo tool call paths: read, create (merge=False), update (merge=True).
 import json
 from agent.display import get_cute_tool_message
 
+
 def _todo_result(total: int, completed: int) -> str:
     """Build a fake todo_tool return value."""
-    return json.dumps({
-        "todos": [],
-        "summary": {
-            "total": total,
-            "pending": total - completed,
-            "in_progress": 0,
-            "completed": completed,
-            "cancelled": 0,
-        },
-    })
+    return json.dumps(
+        {
+            "todos": [],
+            "summary": {
+                "total": total,
+                "pending": total - completed,
+                "in_progress": 0,
+                "completed": completed,
+                "cancelled": 0,
+            },
+        }
+    )
+
 
 class TestTodoCreate:
     """get_cute_tool_message when merge=False (new plan creation)."""
 
     def test_create_with_result_zero_done(self):
         """New plan with 0 done — plain count, no progress fraction."""
-        msg = get_cute_tool_message("todo_list",
-                                    {"todos": [
-                                        {"id": "a", "content": "x", "status": "pending"},
-                                        {"id": "b", "content": "y", "status": "pending"},
-                                    ]},
-                                    0.3,
-                                    result=_todo_result(2, 0))
+        msg = get_cute_tool_message(
+            "todo_list",
+            {
+                "todos": [
+                    {"id": "a", "content": "x", "status": "pending"},
+                    {"id": "b", "content": "y", "status": "pending"},
+                ]
+            },
+            0.3,
+            result=_todo_result(2, 0),
+        )
         assert "2 task(s)" in msg
         assert "/" not in msg
+
 
 class TestTodoUpdate:
     """get_cute_tool_message when merge=True (incremental update)."""
 
     def test_update_halfway(self):
         """2/4 — midpoint progress."""
-        msg = get_cute_tool_message("todo_list",
-                                    {"todos": [{"id": "b", "status": "in_progress"}],
-                                     "merge": True},
-                                    0.7,
-                                    result=_todo_result(4, 2))
+        msg = get_cute_tool_message(
+            "todo_list",
+            {"todos": [{"id": "b", "status": "in_progress"}], "merge": True},
+            0.7,
+            result=_todo_result(4, 2),
+        )
         assert "2/4" in msg
         assert "✓" in msg
 
     def test_update_total_not_in_summary(self):
         """Result summary missing total key."""
-        msg = get_cute_tool_message("todo_list",
-                                    {"todos": [{"id": "a", "status": "completed"}],
-                                     "merge": True},
-                                    0.3,
-                                    result=json.dumps({"summary": {"completed": 2}}))
+        msg = get_cute_tool_message(
+            "todo_list",
+            {"todos": [{"id": "a", "status": "completed"}], "merge": True},
+            0.3,
+            result=json.dumps({"summary": {"completed": 2}}),
+        )
         assert "update 1 task(s)" in msg
         assert "✓" not in msg
+
 
 class TestWebExtractDisplay:
     """get_cute_tool_message for web_extract handles dict objects from web_search results.

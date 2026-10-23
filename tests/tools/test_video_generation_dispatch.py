@@ -63,7 +63,9 @@ class _RaisingProvider(VideoGenProvider):
 
 
 class TestUnifiedDispatch:
-    def _run(self, args: dict[str, Any], *, configured: Optional[str] = None) -> dict[str, Any]:
+    def _run(
+        self, args: dict[str, Any], *, configured: Optional[str] = None
+    ) -> dict[str, Any]:
         from tools import video_generation_tool
         import clawk_cli.plugins as plugins_module
 
@@ -87,9 +89,6 @@ class TestUnifiedDispatch:
         result = self._run({"prompt": "a dog"}, configured="ghost")
         assert result["success"] is False
         assert result["error_type"] == "provider_not_registered"
-
-
-
 
     def test_upscale_in_schema_and_forwarded(self):
         """`upscale` is advertised per-capability by the dynamic builder

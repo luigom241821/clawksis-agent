@@ -2,6 +2,7 @@
 
 # ─── Curses UI Status Bar Tests ──────────────────────────────────────────────
 
+
 def test_curses_checklist_numbered_fallback_shows_status(monkeypatch, capsys):
     """The numbered fallback should print the status_fn output."""
     from clawk_cli.curses_ui import _numbered_fallback
@@ -23,5 +24,6 @@ def test_curses_checklist_numbered_fallback_shows_status(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Selected 2 items" in captured.out
     assert result == {0, 2}
+
 
 # ─── Registry get_schema Tests ───────────────────────────────────────────────

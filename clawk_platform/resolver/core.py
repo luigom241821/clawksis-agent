@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Generic, Literal, TypeVar
 
-Kind = Literal["explicit_path", "path_executable", "known_path", "package_runner", "missing"]
+Kind = Literal[
+    "explicit_path", "path_executable", "known_path", "package_runner", "missing"
+]
 
 T = TypeVar("T")
 
@@ -113,7 +115,9 @@ def _expand(path: str) -> str:
     return os.path.expandvars(os.path.expanduser(path))
 
 
-def locate_command(name: str, ctx: LookupContext | None = None, *, known_dirs: tuple[str, ...] = ()) -> Resolution:
+def locate_command(
+    name: str, ctx: LookupContext | None = None, *, known_dirs: tuple[str, ...] = ()
+) -> Resolution:
     """Find `name` on PATH, then in `known_dirs`, recording every candidate in probe order."""
     ctx = ctx or LookupContext()
     name = name.strip()
@@ -129,7 +133,9 @@ def locate_command(name: str, ctx: LookupContext | None = None, *, known_dirs: t
     candidates.append(Candidate(hit or name, "PATH", hit is not None))
     for d in known_dirs:
         base = os.path.join(_expand(d), name)
-        found = next((v for v in _known_dir_variants(base) if _is_executable_file(v)), None)
+        found = next(
+            (v for v in _known_dir_variants(base) if _is_executable_file(v)), None
+        )
         candidates.append(Candidate(found or base, f"known_dir:{d}", found is not None))
 
     kind: Kind = "missing"
@@ -144,5 +150,7 @@ def _known_dir_variants(base: str) -> tuple[str, ...]:
     """On Windows a bare name in a known dir may carry any PATHEXT suffix; one candidate is recorded per dir."""
     if os.name != "nt":
         return (base,)
-    exts = [e for e in os.environ.get("PATHEXT", ".EXE;.CMD;.BAT").split(os.pathsep) if e]
+    exts = [
+        e for e in os.environ.get("PATHEXT", ".EXE;.CMD;.BAT").split(os.pathsep) if e
+    ]
     return (base, *[base + e for e in exts])

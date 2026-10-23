@@ -17,7 +17,12 @@ from typing import Awaitable, Callable
 
 from agent.file_safety import HOME_CREDENTIAL_DIRS
 from agent.model_metadata import CHARS_PER_TOKEN, estimate_tokens_rough
-from clawk_cli._subprocess_compat import IS_WINDOWS, harden_git_argv, noninteractive_git_env, windows_hide_flags
+from clawk_cli._subprocess_compat import (
+    IS_WINDOWS,
+    harden_git_argv,
+    noninteractive_git_env,
+    windows_hide_flags,
+)
 from clawk_cli.sqlite_safe_read import LiveConnectionError, offline_file_access
 from clawk_cli.sizefmt import format_bytes
 
@@ -48,7 +53,9 @@ class ContextReferenceProvider(ABC):
     description: str = ""  # shown in autocomplete meta column
 
     @abstractmethod
-    async def autocomplete(self, query: str, *, limit: int = 10) -> list[ContextCompletionItem]:
+    async def autocomplete(
+        self, query: str, *, limit: int = 10
+    ) -> list[ContextCompletionItem]:
         """Return autocomplete items for the given query string."""
 
     @abstractmethod
@@ -92,11 +99,35 @@ TRAILING_PUNCTUATION = ",.;!?"
 _OPENERS = {")": "(", "]": "[", "}": "{"}
 _NEEDS_QUOTING = re.compile(r"""[\s()\[\]{}<>"'`]""")
 _SENSITIVE_CLAWK_DIRS = (Path("skills") / ".hub",)
-_SENSITIVE_HOME_FILES = tuple(Path(p) for p in (
-    ".ssh/authorized_keys", ".ssh/id_rsa", ".ssh/id_ed25519", ".ssh/config", ".bashrc", ".zshrc",
-    ".profile", ".bash_profile", ".zprofile", ".netrc", ".pgpass", ".npmrc", ".pypirc",
-))
-_TEXT_EXTENSIONS = (".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".js", ".ts")
+_SENSITIVE_HOME_FILES = tuple(
+    Path(p)
+    for p in (
+        ".ssh/authorized_keys",
+        ".ssh/id_rsa",
+        ".ssh/id_ed25519",
+        ".ssh/config",
+        ".bashrc",
+        ".zshrc",
+        ".profile",
+        ".bash_profile",
+        ".zprofile",
+        ".netrc",
+        ".pgpass",
+        ".npmrc",
+        ".pypirc",
+    )
+)
+_TEXT_EXTENSIONS = (
+    ".py",
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".js",
+    ".ts",
+)
 # Bound the work one message can force: each expanded ref reads at most a bounded prefix /
 # window, and at most this many refs are expanded per message.
 _MAX_EXPANDED_REFERENCES = 16
@@ -105,10 +136,21 @@ _LINE_COUNT_MAX_BYTES = 4 * 1024 * 1024
 # Per-command stdout/stderr ceiling for the ``git``/``rg`` helpers; past it the child is
 # killed and the nonzero returncode routes the caller to its fallback path.
 _MAX_QUIET_OUTPUT_BYTES = 4 * 1024 * 1024
-_OUTPUT_CAP_EXCEEDED_RETURNCODE = 137  # 128 + SIGKILL, the code a shell reports for a killed child
+_OUTPUT_CAP_EXCEEDED_RETURNCODE = (
+    137  # 128 + SIGKILL, the code a shell reports for a killed child
+)
 _FENCE_LANGUAGES = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "tsx", ".jsx": "jsx",
-    ".json": "json", ".md": "markdown", ".sh": "bash", ".yml": "yaml", ".yaml": "yaml", ".toml": "toml",
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".jsx": "jsx",
+    ".json": "json",
+    ".md": "markdown",
+    ".sh": "bash",
+    ".yml": "yaml",
+    ".yaml": "yaml",
+    ".toml": "toml",
 }
 
 
@@ -149,7 +191,9 @@ def format_reference_value(value: str) -> str:
     return value
 
 
-def parse_context_references(message: str, *, plugins: bool = True) -> list[ContextReference]:
+def parse_context_references(
+    message: str, *, plugins: bool = True
+) -> list[ContextReference]:
     """``plugins=False`` reads built-in kinds only (a safe-mode / config-bypass session loads no plugins)."""
     refs: list[ContextReference] = []
     if not message:
@@ -163,27 +207,53 @@ def parse_context_references(message: str, *, plugins: bool = True) -> list[Cont
             target, line_start, line_end = _parse_file_reference_value(value)
         else:
             target, line_start, line_end = _strip_reference_wrappers(value), None, None
-        refs.append(ContextReference(match.group(0), kind, target, match.start(), match.end(), line_start, line_end))
+        refs.append(
+            ContextReference(
+                match.group(0),
+                kind,
+                target,
+                match.start(),
+                match.end(),
+                line_start,
+                line_end,
+            )
+        )
 
     # Second pass: plugin-registered prefixes the built-in pattern missed.
-    for match in _PLUGIN_REFERENCE_PATTERN.finditer(message) if plugins and _context_reference_providers else ():
+    for match in (
+        _PLUGIN_REFERENCE_PATTERN.finditer(message)
+        if plugins and _context_reference_providers
+        else ()
+    ):
         kind = match.group("kind")
         if kind in BUILTIN_PREFIXES or kind not in _context_reference_providers:
             continue
         if any(r.kind == kind and r.start == match.start() for r in refs):
             continue
-        target = _strip_reference_wrappers(_strip_trailing_punctuation(match.group("value") or ""))
-        refs.append(ContextReference(match.group(0), kind, target, match.start(), match.end()))
+        target = _strip_reference_wrappers(
+            _strip_trailing_punctuation(match.group("value") or "")
+        )
+        refs.append(
+            ContextReference(match.group(0), kind, target, match.start(), match.end())
+        )
     return refs
 
 
 def preprocess_context_references(
-    message: str, *, cwd: str | Path, context_length: int, url_fetcher: UrlFetcher = None,
+    message: str,
+    *,
+    cwd: str | Path,
+    context_length: int,
+    url_fetcher: UrlFetcher = None,
     allowed_root: str | Path | None = None,
 ) -> ContextReferenceResult:
     """Sync wrapper; safe both without a loop (CLI) and inside a running loop (gateway)."""
     coro = preprocess_context_references_async(
-        message, cwd=cwd, context_length=context_length, url_fetcher=url_fetcher, allowed_root=allowed_root
+        message,
+        cwd=cwd,
+        context_length=context_length,
+        url_fetcher=url_fetcher,
+        allowed_root=allowed_root,
     )
     try:
         asyncio.get_running_loop()
@@ -191,6 +261,7 @@ def preprocess_context_references(
         return asyncio.run(coro)
     import concurrent.futures
     import contextvars
+
     # The side thread starts with an empty Context: without the caller's copy the served profile's
     # CLAWK_HOME override is lost and the credential-path guard checks the launch profile's .env.
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -198,23 +269,37 @@ def preprocess_context_references(
 
 
 async def preprocess_context_references_async(
-    message: str, *, cwd: str | Path, context_length: int, url_fetcher: UrlFetcher = None,
-    allowed_root: str | Path | None = None, plugins: bool = True,
+    message: str,
+    *,
+    cwd: str | Path,
+    context_length: int,
+    url_fetcher: UrlFetcher = None,
+    allowed_root: str | Path | None = None,
+    plugins: bool = True,
 ) -> ContextReferenceResult:
     refs = parse_context_references(message, plugins=plugins)
     if not refs:
         return ContextReferenceResult(message=message, original_message=message)
     cwd_path = Path(cwd).expanduser().resolve()
     # Default root = cwd so @ references cannot escape the workspace unless a caller widens it.
-    allowed_root_path = Path(allowed_root).expanduser().resolve() if allowed_root is not None else cwd_path
+    allowed_root_path = (
+        Path(allowed_root).expanduser().resolve()
+        if allowed_root is not None
+        else cwd_path
+    )
     # Expand concurrently (each ref is independent; several @url: refs would otherwise
     # serialize web_extract round-trips). gather preserves order, so warnings/blocks
     # are assembled in ref order; the token-budget check runs once afterwards.
     hard_limit = max(1, int(context_length * 0.50))
     soft_limit = max(1, int(context_length * 0.25))
     tasks = (
-        _expand_reference(ref, cwd_path, url_fetcher=url_fetcher, allowed_root=allowed_root_path,
-                          max_inline_tokens=hard_limit)
+        _expand_reference(
+            ref,
+            cwd_path,
+            url_fetcher=url_fetcher,
+            allowed_root=allowed_root_path,
+            max_inline_tokens=hard_limit,
+        )
         for ref in refs[:_MAX_EXPANDED_REFERENCES]
     )
     expanded = await asyncio.gather(*tasks)
@@ -226,22 +311,32 @@ async def preprocess_context_references_async(
     blocks = [block for _, block in expanded if block]
     injected_tokens = sum(estimate_tokens_rough(block) for block in blocks)
     result = ContextReferenceResult(
-        message=message, original_message=message, references=refs, warnings=warnings, injected_tokens=injected_tokens
+        message=message,
+        original_message=message,
+        references=refs,
+        warnings=warnings,
+        injected_tokens=injected_tokens,
     )
 
     if injected_tokens > hard_limit:
-        warnings.append(f"@ context injection refused: {injected_tokens} tokens exceeds the 50% hard limit ({hard_limit}).")
+        warnings.append(
+            f"@ context injection refused: {injected_tokens} tokens exceeds the 50% hard limit ({hard_limit})."
+        )
         result.blocked = True
         return result
     if injected_tokens > soft_limit:
-        warnings.append(f"@ context injection warning: {injected_tokens} tokens exceeds the 25% soft limit ({soft_limit}).")
+        warnings.append(
+            f"@ context injection warning: {injected_tokens} tokens exceeds the 25% soft limit ({soft_limit})."
+        )
 
     # The `@file:`/`@folder:` tokens stay where the user typed them: the token IS the
     # reference (clients render it as an inline chip); stripping it left a hole in the
     # sentence and forced the desktop to re-derive refs from the attached block.
     final = message
     if warnings:
-        final = f"{final}\n\n--- Context Warnings ---\n" + "\n".join(f"- {warning}" for warning in warnings)
+        final = f"{final}\n\n--- Context Warnings ---\n" + "\n".join(
+            f"- {warning}" for warning in warnings
+        )
     if blocks:
         final = f"{final}\n\n--- Attached Context ---\n\n" + "\n\n".join(blocks)
     result.message = final.strip()
@@ -258,20 +353,31 @@ _GIT_REFERENCE_ARGS: dict[str, Callable[[ContextReference], list[str]]] = {
 
 
 async def _expand_reference(
-    ref: ContextReference, cwd: Path, *, url_fetcher: UrlFetcher = None, allowed_root: Path | None = None,
+    ref: ContextReference,
+    cwd: Path,
+    *,
+    url_fetcher: UrlFetcher = None,
+    allowed_root: Path | None = None,
     max_inline_tokens: int | None = None,
 ) -> Expansion:
     try:
         if ref.kind in ("file", "folder"):
-            return _expand_path_reference(ref, cwd, allowed_root=allowed_root, max_inline_tokens=max_inline_tokens)
+            return _expand_path_reference(
+                ref, cwd, allowed_root=allowed_root, max_inline_tokens=max_inline_tokens
+            )
         if ref.kind in _GIT_REFERENCE_ARGS:
             git_args = _GIT_REFERENCE_ARGS[ref.kind](ref)
-            return _expand_git_reference(ref, cwd, git_args, "git " + " ".join(git_args))
+            return _expand_git_reference(
+                ref, cwd, git_args, "git " + " ".join(git_args)
+            )
         if ref.kind == "url":
             content = await _fetch_url_content(ref.target, url_fetcher=url_fetcher)
             if not content:
                 return f"{ref.raw}: no content extracted", None
-            return None, f"🌐 {ref.raw} ({estimate_tokens_rough(content)} tokens)\n{content}"
+            return (
+                None,
+                f"🌐 {ref.raw} ({estimate_tokens_rough(content)} tokens)\n{content}",
+            )
     except Exception as exc:
         return f"{ref.raw}: {exc}", None
     provider = _context_reference_providers.get(ref.kind)
@@ -279,14 +385,22 @@ async def _expand_reference(
         try:
             plugin_content = await provider.expand(ref.target)
             if plugin_content is not None:
-                return None, f"📌 {ref.raw} ({estimate_tokens_rough(plugin_content)} tokens)\n{plugin_content}"
+                return (
+                    None,
+                    f"📌 {ref.raw} ({estimate_tokens_rough(plugin_content)} tokens)\n{plugin_content}",
+                )
         except Exception as exc:
             return f"{ref.raw}: plugin expansion error: {exc}", None
     return f"{ref.raw}: unsupported reference type", None
 
 
-def _expand_path_reference(ref: ContextReference, cwd: Path, *, allowed_root: Path | None = None,
-                           max_inline_tokens: int | None = None) -> Expansion:
+def _expand_path_reference(
+    ref: ContextReference,
+    cwd: Path,
+    *,
+    allowed_root: Path | None = None,
+    max_inline_tokens: int | None = None,
+) -> Expansion:
     """``@file:`` / ``@folder:``: resolve, allow-check, then inline text / binary stub / listing."""
     is_folder = ref.kind == "folder"
     path = _resolve_path(cwd, ref.target, allowed_root=allowed_root)
@@ -297,7 +411,10 @@ def _expand_path_reference(ref: ContextReference, cwd: Path, *, allowed_root: Pa
         return f"{ref.raw}: path is not a {ref.kind}", None
     if is_folder:
         listing = _build_folder_listing(path, cwd, display_base=allowed_root)
-        return None, f"📁 {ref.raw} ({estimate_tokens_rough(listing)} tokens)\n{listing}"
+        return (
+            None,
+            f"📁 {ref.raw} ({estimate_tokens_rough(listing)} tokens)\n{listing}",
+        )
     try:
         # Keep admission through every sniff, stat and text read (a connection can start
         # between a check and a later open otherwise), but release it before token
@@ -306,7 +423,9 @@ def _expand_path_reference(ref: ContextReference, cwd: Path, *, allowed_root: Pa
             early, text = _read_file_reference(ref, path, max_inline_tokens)
     except LiveConnectionError:
         return None, _on_disk_reference_block(
-            ref, path, descriptor="live SQLite database file",
+            ref,
+            path,
+            descriptor="live SQLite database file",
             reason="not previewed: raw access would cancel SQLite's POSIX locks.",
             guidance="Do not open this file directly while its database connection is live.",
         )
@@ -314,7 +433,9 @@ def _expand_path_reference(ref: ContextReference, cwd: Path, *, allowed_root: Pa
 
 
 def _read_file_reference(
-    ref: ContextReference, path: Path, max_inline_tokens: int | None,
+    ref: ContextReference,
+    path: Path,
+    max_inline_tokens: int | None,
 ) -> tuple[Expansion | None, str]:
     """Raw file I/O for an @file ref: ``(early, text)`` where ``early`` is a refusal block
     (then ``text`` is empty) or ``None`` with the text to inline."""
@@ -327,7 +448,9 @@ def _read_file_reference(
         # file serves :1-5 without being materialized. Lines are read in bounded pieces
         # (budget + 1) so even a single-line giant (minified JSON, one-line logs) cannot
         # force an unbounded string into memory; skipped lines are discarded, not kept.
-        char_budget = None if max_inline_tokens is None else max_inline_tokens * CHARS_PER_TOKEN
+        char_budget = (
+            None if max_inline_tokens is None else max_inline_tokens * CHARS_PER_TOKEN
+        )
         line_cap = None if char_budget is None else char_budget + 1
 
         def _next_line(fh, collect: bool, remaining: int | None = None) -> str | None:
@@ -355,12 +478,23 @@ def _read_file_reference(
                 if _next_line(fh, collect=False) is None:
                     break
             for _ in range((ref.line_end or ref.line_start) - ref.line_start + 1):
-                line = _next_line(fh, collect=True, remaining=None if char_budget is None else char_budget - total_chars)
+                line = _next_line(
+                    fh,
+                    collect=True,
+                    remaining=None
+                    if char_budget is None
+                    else char_budget - total_chars,
+                )
                 if line is None:
                     break
                 total_chars += len(line)
                 if char_budget is not None and total_chars > char_budget:
-                    return (None, _oversized_text_reference_block(ref, path, total_chars // CHARS_PER_TOKEN)), ""
+                    return (
+                        None,
+                        _oversized_text_reference_block(
+                            ref, path, total_chars // CHARS_PER_TOKEN
+                        ),
+                    ), ""
                 parts.append(line)
         text = "".join(parts)
     else:
@@ -368,12 +502,17 @@ def _read_file_reference(
         # file past that byte ceiling is certainly oversized; refuse without reading it.
         size = path.stat().st_size
         if max_inline_tokens is not None and size > max_inline_tokens * CHARS_PER_TOKEN:
-            return (None, _oversized_text_reference_block(ref, path, size // CHARS_PER_TOKEN)), ""
+            return (
+                None,
+                _oversized_text_reference_block(ref, path, size // CHARS_PER_TOKEN),
+            ), ""
         text = path.read_text(encoding="utf-8-sig")
     return None, text
 
 
-def _format_file_reference(ref: ContextReference, path: Path, text: str, max_inline_tokens: int | None) -> Expansion:
+def _format_file_reference(
+    ref: ContextReference, path: Path, text: str, max_inline_tokens: int | None
+) -> Expansion:
     lang = _FENCE_LANGUAGES.get(path.suffix.lower(), "")
     text_tokens = estimate_tokens_rough(text)
     # Check BEFORE building the fenced block: an oversized file is not going to be
@@ -387,7 +526,9 @@ def _format_file_reference(ref: ContextReference, path: Path, text: str, max_inl
     return None, f"📄 {ref.raw} ({text_tokens} tokens)\n```{lang}\n{text}\n```"
 
 
-def _run_quiet(cmd: list[str], cwd: Path, timeout: int, env: dict | None = None) -> subprocess.CompletedProcess:
+def _run_quiet(
+    cmd: list[str], cwd: Path, timeout: int, env: dict | None = None
+) -> subprocess.CompletedProcess:
     """Captured text output with bounded pipes, no stdin, and no console flash on Windows.
 
     ``capture_output=True`` buffers the child's entire stdout — an unbounded ``git diff``
@@ -399,8 +540,14 @@ def _run_quiet(cmd: list[str], cwd: Path, timeout: int, env: dict | None = None)
     """
     popen_kwargs: dict = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {}
     proc = subprocess.Popen(
-        cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        **popen_kwargs, **({} if env is None else {"env": env}))
+        cmd,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **popen_kwargs,
+        **({} if env is None else {"env": env}),
+    )
 
     truncated = threading.Event()
 
@@ -440,16 +587,26 @@ def _run_quiet(cmd: list[str], cwd: Path, timeout: int, env: dict | None = None)
     return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
 
 
-def _expand_git_reference(ref: ContextReference, cwd: Path, args: list[str], label: str) -> Expansion:
+def _expand_git_reference(
+    ref: ContextReference, cwd: Path, args: list[str], label: str
+) -> Expansion:
     try:
         # Repo-supplied config/attributes must never execute code (GHSA-7x36-8jrh-v4pw).
-        result = _run_quiet(["git", *harden_git_argv(args)], cwd, 30, env=noninteractive_git_env())
+        result = _run_quiet(
+            ["git", *harden_git_argv(args)], cwd, 30, env=noninteractive_git_env()
+        )
     except subprocess.TimeoutExpired:
         return f"{ref.raw}: git command timed out (30s)", None
     if result.returncode != 0:
-        return f"{ref.raw}: {(result.stderr or '').strip() or 'git command failed'}", None
+        return (
+            f"{ref.raw}: {(result.stderr or '').strip() or 'git command failed'}",
+            None,
+        )
     content = result.stdout.strip() or "(no output)"
-    return None, f"🧾 {label} ({estimate_tokens_rough(content)} tokens)\n```diff\n{content}\n```"
+    return (
+        None,
+        f"🧾 {label} ({estimate_tokens_rough(content)} tokens)\n```diff\n{content}\n```",
+    )
 
 
 async def _fetch_url_content(url: str, *, url_fetcher: UrlFetcher = None) -> str:
@@ -461,8 +618,15 @@ async def _fetch_url_content(url: str, *, url_fetcher: UrlFetcher = None) -> str
 
 async def _default_url_fetcher(url: str) -> str:
     from tools.web_tools import web_extract_tool
-    docs = json.loads(await web_extract_tool([url], format="markdown")).get("results", [])
-    return str(docs[0].get("content") or docs[0].get("raw_content") or "").strip() if docs else ""
+
+    docs = json.loads(await web_extract_tool([url], format="markdown")).get(
+        "results", []
+    )
+    return (
+        str(docs[0].get("content") or docs[0].get("raw_content") or "").strip()
+        if docs
+        else ""
+    )
 
 
 def _is_under(path: Path, root: Path) -> bool:
@@ -482,6 +646,7 @@ COMPOSER_PASTES_DIRNAME = "composer-pastes"
 
 def _composer_paste_roots() -> list[Path]:
     from agent.file_safety import _clawk_dirs
+
     return [clawk_dir / COMPOSER_PASTES_DIRNAME for clawk_dir in _clawk_dirs()]
 
 
@@ -500,17 +665,27 @@ def _agent_staged_path(path: Path) -> bool:
     """
     try:
         from tools.credential_files import get_cache_directory_mounts
-        return any(_is_under(path, Path(entry["host_path"]).expanduser().resolve())
-                   for entry in get_cache_directory_mounts())
+
+        return any(
+            _is_under(path, Path(entry["host_path"]).expanduser().resolve())
+            for entry in get_cache_directory_mounts()
+        )
     except Exception:
         return False
 
 
 def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -> Path:
     from agent.file_safety import is_nt_namespace_path
-    if is_nt_namespace_path(target):  # raw-string check: resolving such a path is the NTLM-leak trigger
-        raise ValueError("path uses a Windows NT/device namespace prefix and cannot be attached")
-    resolved = (cwd / Path(os.path.expanduser(target))).resolve()  # `/` keeps an absolute target as-is
+
+    if is_nt_namespace_path(
+        target
+    ):  # raw-string check: resolving such a path is the NTLM-leak trigger
+        raise ValueError(
+            "path uses a Windows NT/device namespace prefix and cannot be attached"
+        )
+    resolved = (
+        cwd / Path(os.path.expanduser(target))
+    ).resolve()  # `/` keeps an absolute target as-is
     if (
         allowed_root is not None
         and not _is_under(resolved, allowed_root)
@@ -524,39 +699,60 @@ def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -
 def _ensure_reference_path_allowed(path: Path) -> None:
     """Refuse credential/internal paths. Fails CLOSED: the gateway feeds untrusted remote text here."""
     from clawk_constants import get_clawk_home
-    home, clawk_home = Path(os.path.expanduser("~")).resolve(), get_clawk_home().resolve()
-    blocked_exact = {home / rel for rel in _SENSITIVE_HOME_FILES} | {clawk_home / ".env"}
-    blocked_dirs = [home / rel for rel in HOME_CREDENTIAL_DIRS] + [clawk_home / rel for rel in _SENSITIVE_CLAWK_DIRS]
+
+    home, clawk_home = (
+        Path(os.path.expanduser("~")).resolve(),
+        get_clawk_home().resolve(),
+    )
+    blocked_exact = {home / rel for rel in _SENSITIVE_HOME_FILES} | {
+        clawk_home / ".env"
+    }
+    blocked_dirs = [home / rel for rel in HOME_CREDENTIAL_DIRS] + [
+        clawk_home / rel for rel in _SENSITIVE_CLAWK_DIRS
+    ]
     if path in blocked_exact:
         raise ValueError("path is a sensitive credential file and cannot be attached")
     if any(_is_under(path, blocked_dir) for blocked_dir in blocked_dirs):
-        raise ValueError("path is a sensitive credential or internal Clawksis path and cannot be attached")
+        raise ValueError(
+            "path is a sensitive credential or internal Clawksis path and cannot be attached"
+        )
     # Anchor to the canonical read deny-list (agent/file_safety.get_read_block_error): the
     # narrow list above never caught auth.json, .anthropic_oauth.json, mcp-tokens/, webhook
     # secrets or project .env files, and it grows automatically with that deny-list.
     try:
         from agent.file_safety import get_read_block_error
+
         blocked = get_read_block_error(str(path)) is not None
     except ValueError:
         raise
     except Exception:
         # If the canonical lookup fails, falling through would re-open the exact hole this
         # guard closes; a spurious block is recoverable, a leaked credential is not.
-        raise ValueError("path could not be verified against the credential deny-list and cannot be attached")
+        raise ValueError(
+            "path could not be verified against the credential deny-list and cannot be attached"
+        )
     if blocked:
-        raise ValueError("path is a sensitive credential or internal Clawksis path and cannot be attached")
+        raise ValueError(
+            "path is a sensitive credential or internal Clawksis path and cannot be attached"
+        )
 
 
 def _strip_trailing_punctuation(value: str) -> str:
     stripped = value.rstrip(TRAILING_PUNCTUATION)
     # Drop unbalanced closers so "(see @file:x.py)" does not swallow the ")".
-    while stripped.endswith((")", "]", "}")) and stripped.count(stripped[-1]) > stripped.count(_OPENERS[stripped[-1]]):
+    while stripped.endswith((")", "]", "}")) and stripped.count(
+        stripped[-1]
+    ) > stripped.count(_OPENERS[stripped[-1]]):
         stripped = stripped[:-1]
     return stripped
 
 
 def _strip_reference_wrappers(value: str) -> str:
-    return value[1:-1] if len(value) >= 2 and value[0] == value[-1] and value[0] in "`\"'" else value
+    return (
+        value[1:-1]
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "`\"'"
+        else value
+    )
 
 
 def _parse_file_reference_value(value: str) -> tuple[str, int | None, int | None]:
@@ -569,13 +765,19 @@ def _parse_file_reference_value(value: str) -> tuple[str, int | None, int | None
 
 def _is_binary_file(path: Path) -> bool:
     mime = mimetypes.guess_type(path.name)[0]
-    if mime and not mime.startswith("text/") and not path.name.endswith(_TEXT_EXTENSIONS):
+    if (
+        mime
+        and not mime.startswith("text/")
+        and not path.name.endswith(_TEXT_EXTENSIONS)
+    ):
         return True
     with path.open("rb") as fh:  # sniff only; read_bytes() materialized the whole file
         return b"\x00" in fh.read(4096)
 
 
-def _build_folder_listing(path: Path, cwd: Path, limit: int = 200, display_base: Path | None = None) -> str:
+def _build_folder_listing(
+    path: Path, cwd: Path, limit: int = 200, display_base: Path | None = None
+) -> str:
     # The target may sit outside cwd when the caller widened allowed_root: show it relative to
     # cwd when possible, else relative to the allowed root, else the absolute path.
     shown: str | None = None
@@ -593,7 +795,11 @@ def _build_folder_listing(path: Path, cwd: Path, limit: int = 200, display_base:
     entries = _iter_visible_entries(path, cwd, limit=limit)
     for entry in entries:
         indent = "  " * max(len(entry.relative_to(path).parts) - 1, 0)
-        lines.append(f"{indent}- {entry.name}/" if entry.is_dir() else f"{indent}- {entry.name} ({_file_metadata(entry)})")
+        lines.append(
+            f"{indent}- {entry.name}/"
+            if entry.is_dir()
+            else f"{indent}- {entry.name} ({_file_metadata(entry)})"
+        )
     if len(entries) >= limit:
         lines.append("- ...")
     return "\n".join(lines)
@@ -611,17 +817,23 @@ def _iter_visible_entries(path: Path, cwd: Path, limit: int) -> list[Path]:
         output: list[Path] = []
         seen_dirs: set[Path] = set()
         for line in [ln.strip() for ln in rg.stdout.splitlines() if ln.strip()][:limit]:
-            full = cwd / Path(line)  # absolute lines pass through unchanged; defensive for relative
+            full = cwd / Path(
+                line
+            )  # absolute lines pass through unchanged; defensive for relative
             for parent in full.parents:
                 if parent in seen_dirs or path not in {parent, *parent.parents}:
                     continue
                 seen_dirs.add(parent)
                 output.append(parent)
             output.append(full)
-        return sorted({p for p in output if p.exists()}, key=lambda p: (not p.is_dir(), str(p)))
+        return sorted(
+            {p for p in output if p.exists()}, key=lambda p: (not p.is_dir(), str(p))
+        )
     output = []
     for root, dirs, files in os.walk(path):
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "__pycache__")
+        dirs[:] = sorted(
+            d for d in dirs if not d.startswith(".") and d != "__pycache__"
+        )
         files = sorted(f for f in files if not f.startswith("."))
         for name in dirs + files:
             output.append(Path(root) / name)
@@ -637,14 +849,18 @@ def _agent_visible_path(path: Path) -> str:
     # gateways that never bridged terminal.* config still see the active backend.
     try:
         from tools.terminal_tool import _ensure_terminal_env_bridged
+
         _ensure_terminal_env_bridged()
         from tools.credential_files import to_agent_visible_cache_path
+
         return to_agent_visible_cache_path(str(path))
     except Exception:
         return str(path)
 
 
-def _on_disk_reference_block(ref: ContextReference, path: Path, descriptor: str, reason: str, guidance: str) -> str:
+def _on_disk_reference_block(
+    ref: ContextReference, path: Path, descriptor: str, reason: str, guidance: str
+) -> str:
     """Shared 📎 shape: the file was not inlined, but it IS on disk where the agent's
     tools run — hand the model the path and a nudge instead of a dead-end warning."""
     try:
@@ -660,21 +876,25 @@ def _on_disk_reference_block(ref: ContextReference, path: Path, descriptor: str,
 def _binary_reference_block(ref: ContextReference, path: Path) -> str:
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     return _on_disk_reference_block(
-        ref, path,
+        ref,
+        path,
         descriptor=mime,
         reason="binary file, not inlined as text.",
         guidance="Use your tools to work with it (read or convert it, extract its text, "
-                 "or view/render it as needed); do not tell the user the file type is unsupported.",
+        "or view/render it as needed); do not tell the user the file type is unsupported.",
     )
 
 
-def _oversized_text_reference_block(ref: ContextReference, path: Path, text_tokens: int) -> str:
+def _oversized_text_reference_block(
+    ref: ContextReference, path: Path, text_tokens: int
+) -> str:
     return _on_disk_reference_block(
-        ref, path,
+        ref,
+        path,
         descriptor=f"text file, approximately {text_tokens} tokens",
         reason="too large to inline safely.",
         guidance="Use read_file with a narrow line range, search_files, or terminal/code tools "
-                 "to inspect only the relevant parts; do not load the entire file into context.",
+        "to inspect only the relevant parts; do not load the entire file into context.",
     )
 
 
@@ -694,7 +914,9 @@ def _file_metadata(path: Path) -> str:
             with path.open("rb") as fh:
                 # UTF-8 never embeds 0x0A inside a multibyte sequence, so counting bytes
                 # matches a decoded newline while streaming instead of read_text.
-                lines = sum(chunk.count(b"\n") for chunk in iter(lambda: fh.read(1 << 20), b""))
+                lines = sum(
+                    chunk.count(b"\n") for chunk in iter(lambda: fh.read(1 << 20), b"")
+                )
             return f"{lines + 1} lines"
     except (LiveConnectionError, OSError):
         return f"{size} bytes"

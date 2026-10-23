@@ -138,9 +138,7 @@ class TestPromptAckDoesNotSealDraft:
         # resolve_gateway_approval is imported inside the handler; a session
         # with no waiting entry returns 0 -> "expired" label. Either label
         # shape exercises the same send path.
-        consumed = await a._consume_prompt_response(
-            FakeEvent(prompt_id, "once")
-        )
+        consumed = await a._consume_prompt_response(FakeEvent(prompt_id, "once"))
         assert consumed is True
         # The ack rides a background task now (deadlock fix): yield so it runs.
         await asyncio.sleep(0.05)
@@ -151,9 +149,7 @@ class TestPromptAckDoesNotSealDraft:
             "duplicate-final bug"
         )
         # The ack egressed as a plain send op, not a draft seal.
-        ack_frames = [
-            f for f, _ in a._transport.frames if f["op"] == "send"
-        ]
+        ack_frames = [f for f, _ in a._transport.frames if f["op"] == "send"]
         assert ack_frames, "ack was not sent at all"
         seal_frames = [
             f

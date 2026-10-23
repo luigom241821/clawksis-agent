@@ -35,21 +35,36 @@ def test_docker_recovery_marks_pending_and_finalizer_warns(monkeypatch):
     env._labels = {}
     env._image = ""
     monkeypatch.setattr(
-        docker_env.DockerEnvironment, "_find_reusable_container",
-        lambda self, *a: ("newcid", "running"))
+        docker_env.DockerEnvironment,
+        "_find_reusable_container",
+        lambda self, *a: ("newcid", "running"),
+    )
     monkeypatch.setattr(docker_env.DockerEnvironment, "init_session", lambda self: None)
     assert env._recreate_container() is True
     assert getattr(env, "_recreated_notice_pending", False) is True
 
     common: dict = dict(
-        command="echo hi", env=env, env_type="docker", effective_task_id="t",
-        task_id="t", session_id="s", session_key="k", workdir=None,
-        command_cwd=None, approval_note=None)
+        command="echo hi",
+        env=env,
+        env_type="docker",
+        effective_task_id="t",
+        task_id="t",
+        session_id="s",
+        session_key="k",
+        workdir=None,
+        command_cwd=None,
+        approval_note=None,
+    )
 
-    flagged = json.loads(finalize_foreground_result(
-        result={"output": "hi", "returncode": 0, "environment_recreated": True}, **common))
+    flagged = json.loads(
+        finalize_foreground_result(
+            result={"output": "hi", "returncode": 0, "environment_recreated": True},
+            **common,
+        )
+    )
     assert "recreated" in flagged.get("environment_recreated", "")
 
-    clean = json.loads(finalize_foreground_result(
-        result={"output": "hi", "returncode": 0}, **common))
+    clean = json.loads(
+        finalize_foreground_result(result={"output": "hi", "returncode": 0}, **common)
+    )
     assert "environment_recreated" not in clean

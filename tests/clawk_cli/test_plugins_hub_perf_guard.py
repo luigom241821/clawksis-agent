@@ -19,30 +19,39 @@ from tools import registry as tools_registry
 _PLUGIN_ROW = [("demo", "1.0.0", "demo plugin", "user", "/tmp/demo-plugin", "demo")]
 
 
-def _patch_minimal_hub_dependencies(monkeypatch, *, check_fn, discover_all_plugins=None):
-    monkeypatch.setattr(web_server, "_get_dashboard_plugins", lambda force_rescan=False: [])
+def _patch_minimal_hub_dependencies(
+    monkeypatch, *, check_fn, discover_all_plugins=None
+):
+    monkeypatch.setattr(
+        web_server, "_get_dashboard_plugins", lambda force_rescan=False: []
+    )
     monkeypatch.setattr(_web_server_memory, "_discover_memory_provider_statuses", list)
     monkeypatch.setattr(_cfg_mod, "get_clawk_home", lambda: Path("/tmp/clawk-home"))
-    monkeypatch.setattr(_cfg_mod, "load_config", lambda: {"dashboard": {"hidden_plugins": []}})
+    monkeypatch.setattr(
+        _cfg_mod, "load_config", lambda: {"dashboard": {"hidden_plugins": []}}
+    )
 
     monkeypatch.setattr(
         plugins_cmd,
         "_discover_all_plugins",
         discover_all_plugins or (lambda: list(_PLUGIN_ROW)),
     )
-    monkeypatch.setattr(plugins_cmd, "_get_current_context_engine", lambda: "compressor")
+    monkeypatch.setattr(
+        plugins_cmd, "_get_current_context_engine", lambda: "compressor"
+    )
     monkeypatch.setattr(plugins_cmd, "_get_current_memory_provider", lambda: "")
     monkeypatch.setattr(plugins_cmd, "_discover_context_engines", list)
     monkeypatch.setattr(plugins_cmd, "_get_disabled_set", lambda: set())
     monkeypatch.setattr(plugins_cmd, "_get_enabled_set", lambda: {"demo"})
-    monkeypatch.setattr(plugins_cmd, "_read_manifest", lambda _path: {"provides_tools": ["demo_tool"]})
+    monkeypatch.setattr(
+        plugins_cmd, "_read_manifest", lambda _path: {"provides_tools": ["demo_tool"]}
+    )
 
     monkeypatch.setattr(
         tools_registry.registry,
         "get_entry",
         lambda _name: SimpleNamespace(check_fn=check_fn),
     )
-
 
 
 def test_plugins_hub_does_not_probe_cold_check_fns(monkeypatch):
@@ -88,7 +97,9 @@ def test_plugins_hub_cold_cache_schedules_background_probe(monkeypatch):
         scheduled.append(thread)
         return thread
 
-    monkeypatch.setattr(_web_server_dashboard, "_schedule_check_fn_probe", tracking_schedule)
+    monkeypatch.setattr(
+        _web_server_dashboard, "_schedule_check_fn_probe", tracking_schedule
+    )
 
     # Cold cache → the fetch schedules a background probe and reports the
     # verdict as unknown (auth_required stays False for now).
@@ -106,7 +117,6 @@ def test_plugins_hub_cold_cache_schedules_background_probe(monkeypatch):
     assert refreshed["plugins"][0]["auth_command"] == "clawk auth demo"
 
 
-
 def test_plugins_hub_uses_cached_failed_check_fn_verdict(monkeypatch):
     tools_registry.invalidate_check_fn_cache()
     _web_server_dashboard._invalidate_plugins_hub_cache()
@@ -121,9 +131,6 @@ def test_plugins_hub_uses_cached_failed_check_fn_verdict(monkeypatch):
 
     assert payload["plugins"][0]["auth_required"] is True
     assert payload["plugins"][0]["auth_command"] == "clawk auth demo"
-
-
-
 
 
 def test_plugins_hub_route_builds_catalog_annotations_off_event_loop(monkeypatch):

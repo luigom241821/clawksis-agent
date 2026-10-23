@@ -33,8 +33,12 @@ from tests.e2e.core.windows_update._machine import (
 )
 from tests.fakes.fake_llm_provider import FakeLLMServer
 
-pytestmark = [pytest.mark.platforms("windows"), pytest.mark.integration,
-              pytest.mark.live_system_guard_bypass, REQUIRES_OPT_IN]
+pytestmark = [
+    pytest.mark.platforms("windows"),
+    pytest.mark.integration,
+    pytest.mark.live_system_guard_bypass,
+    REQUIRES_OPT_IN,
+]
 
 REFUSAL = "Another Clawksis update is already running"
 SURVIVAL_SECONDS = 30
@@ -71,16 +75,29 @@ def journey(tmp_path_factory):
         out["machine"] = machine
         try:
             install = machine.install()
-            assert install.returncode == 0, fail_with(machine, f"install.ps1 exited {install.returncode}", install)
-            pythons = sorted(machine.clawk_home.glob("installs/*/environments/*/venv/Scripts/python.exe"))
-            assert pythons, fail_with(machine, "harness: the install has no venv python")
+            assert install.returncode == 0, fail_with(
+                machine, f"install.ps1 exited {install.returncode}", install
+            )
+            pythons = sorted(
+                machine.clawk_home.glob(
+                    "installs/*/environments/*/venv/Scripts/python.exe"
+                )
+            )
+            assert pythons, fail_with(
+                machine, "harness: the install has no venv python"
+            )
             other_home = machine.root / "other-home"
             other_home.mkdir()
             machine.advance()
             owner = subprocess.Popen(
-                [str(pythons[0]), "-c", _OWNER, str(machine.install_dir)], cwd=machine.profile,
-                env=machine.env({"CLAWK_HOME": str(other_home)}), stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
+                [str(pythons[0]), "-c", _OWNER, str(machine.install_dir)],
+                cwd=machine.profile,
+                env=machine.env({"CLAWK_HOME": str(other_home)}),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
             machine._spawned.append(owner)
             assert owner.stdout is not None
             first = owner.stdout.readline().decode("utf-8", "replace")
@@ -88,23 +105,44 @@ def journey(tmp_path_factory):
             if len(line) != 2 or not line[0].isdigit():
                 owner.kill()
                 rest = owner.communicate(timeout=60)[0].decode("utf-8", "replace")
-                raise AssertionError(fail_with(machine, f"owner failed to start:\n{first}{rest}"))
+                raise AssertionError(
+                    fail_with(machine, f"owner failed to start:\n{first}{rest}")
+                )
             child, out["root_lock"] = int(line[0]), line[1] == "True"
             out["child_alive"] = _alive(child)
-            out["held_status"] = harness_git("-C", str(machine.install_dir), "status", "--porcelain",
-                                             "--untracked-files=all")
+            out["held_status"] = harness_git(
+                "-C",
+                str(machine.install_dir),
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+            )
             # (a) a real update of the same checkout from the machine's own home
             out["a_update"] = machine.update(label="update-while-held")
             out["a_head"] = machine.installed_head()
             # (b) kill the owner only; the job must take its child down
-            subprocess.run(["taskkill", "/F", "/PID", str(owner.pid)], capture_output=True, timeout=60, check=False)
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(owner.pid)],
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
             owner.wait(timeout=60)
             try:
-                wait_until(lambda: not _alive(child), 20, "the bound child to die with its owner")
+                wait_until(
+                    lambda: not _alive(child),
+                    20,
+                    "the bound child to die with its owner",
+                )
                 out["b_child_dead"] = True
             except AssertionError:
                 out["b_child_dead"] = False
-                subprocess.run(["taskkill", "/F", "/PID", str(child)], capture_output=True, timeout=60, check=False)
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(child)],
+                    capture_output=True,
+                    timeout=60,
+                    check=False,
+                )
             # (c) the tree is gone: the lock is free
             out["c_update"] = machine.update(label="update-after-tree")
             out["c_head"] = machine.installed_head()
@@ -115,46 +153,68 @@ def journey(tmp_path_factory):
 
 def test_second_home_update_is_refused_while_the_checkout_is_held(journey) -> None:
     m, run = journey["machine"], journey["a_update"]
-    assert journey["child_alive"], fail_with(m, "premise: the owner's update-tree child never ran")
+    assert journey["child_alive"], fail_with(
+        m, "premise: the owner's update-tree child never ran"
+    )
     assert journey["held_status"] == "", fail_with(
-        m, f"the held update lock shows in `git status` (autostash would take it): {journey['held_status']!r}")
-    assert run.returncode == 2 and REFUSAL in run.stdout and journey["a_head"] == m.head, fail_with(
-        m, f"a second `clawk update` of one checkout ran while another home's update held it "
-           f"(rc={run.returncode}, checkout {journey['a_head']} vs HEAD {m.head}, "
-           f"install-root lock in this tree: {journey['root_lock']})", run)
+        m,
+        f"the held update lock shows in `git status` (autostash would take it): {journey['held_status']!r}",
+    )
+    assert (
+        run.returncode == 2 and REFUSAL in run.stdout and journey["a_head"] == m.head
+    ), fail_with(
+        m,
+        f"a second `clawk update` of one checkout ran while another home's update held it "
+        f"(rc={run.returncode}, checkout {journey['a_head']} vs HEAD {m.head}, "
+        f"install-root lock in this tree: {journey['root_lock']})",
+        run,
+    )
 
 
 def test_killed_owner_takes_its_update_tree_down(journey) -> None:
     assert journey["b_child_dead"], fail_with(
-        journey["machine"], "`taskkill /F` of the update owner left its update-tree child running")
+        journey["machine"],
+        "`taskkill /F` of the update owner left its update-tree child running",
+    )
 
 
 def test_free_lock_lets_the_next_update_land(journey) -> None:
     m, run = journey["machine"], journey["c_update"]
     assert run.returncode == 0 and journey["c_head"] == m.next, fail_with(
-        m, f"after the whole update tree exited, `clawk update` did not land NEXT "
-           f"(rc={run.returncode}, checkout {journey['c_head']}, NEXT {m.next})", run)
+        m,
+        f"after the whole update tree exited, `clawk update` did not land NEXT "
+        f"(rc={run.returncode}, checkout {journey['c_head']}, NEXT {m.next})",
+        run,
+    )
 
 
 @pytest.fixture(scope="module")
 def gateway_journey(tmp_path_factory):
     out: dict = {}
     with FakeLLMServer() as srv:
-        machine = new_machine(tmp_path_factory.mktemp("lg"), srv.base_url, label="lg", system_git=True)
+        machine = new_machine(
+            tmp_path_factory.mktemp("lg"), srv.base_url, label="lg", system_git=True
+        )
         out["machine"] = machine
         try:
             install = machine.install()
-            assert install.returncode == 0, fail_with(machine, f"install.ps1 exited {install.returncode}", install)
+            assert install.returncode == 0, fail_with(
+                machine, f"install.ps1 exited {install.returncode}", install
+            )
             with machine.gateway_phase():
                 machine.spawn_gateway()
                 old_pid = int(machine.wait_gateway_running().get("pid") or 0)
                 machine.advance()
                 out["update"] = machine.update(label="update-with-gateway")
                 exited = time.monotonic()
-                out["relaunched"] = int(machine.wait_gateway_running(not_pid=old_pid).get("pid") or 0)
+                out["relaunched"] = int(
+                    machine.wait_gateway_running(not_pid=old_pid).get("pid") or 0
+                )
                 time.sleep(max(0.0, SURVIVAL_SECONDS - (time.monotonic() - exited)))
                 out["alive_after"] = _alive(out["relaunched"])
-                out["status"] = machine.clawk("gateway", "status", label="status-after-30s")
+                out["status"] = machine.clawk(
+                    "gateway", "status", label="status-after-30s"
+                )
                 machine.kill_owned()
             yield out
         finally:
@@ -162,9 +222,18 @@ def gateway_journey(tmp_path_factory):
 
 
 def test_restarted_gateway_outlives_the_update(gateway_journey) -> None:
-    m, run, pid = gateway_journey["machine"], gateway_journey["update"], gateway_journey["relaunched"]
-    assert run.returncode == 0, fail_with(m, f"`clawk update` with a running gateway exited {run.returncode}", run)
+    m, run, pid = (
+        gateway_journey["machine"],
+        gateway_journey["update"],
+        gateway_journey["relaunched"],
+    )
+    assert run.returncode == 0, fail_with(
+        m, f"`clawk update` with a running gateway exited {run.returncode}", run
+    )
     status = gateway_journey["status"]
     assert gateway_journey["alive_after"] and str(pid) in status.stdout, fail_with(
-        m, f"the gateway the update restarted (pid {pid}) died with the update's job: alive "
-           f"{SURVIVAL_SECONDS}s after `clawk update` exited = {gateway_journey['alive_after']}", status)
+        m,
+        f"the gateway the update restarted (pid {pid}) died with the update's job: alive "
+        f"{SURVIVAL_SECONDS}s after `clawk update` exited = {gateway_journey['alive_after']}",
+        status,
+    )

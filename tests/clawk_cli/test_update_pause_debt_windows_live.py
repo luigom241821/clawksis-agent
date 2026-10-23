@@ -32,8 +32,17 @@ pytestmark = [pytest.mark.platforms("windows"), pytest.mark.live_system_guard_by
 def _hold(path: Path) -> subprocess.Popen:
     """Another process reading *path* with a plain ``open`` (shares read/write, not delete)."""
     proc = subprocess.Popen(
-        [sys.executable, "-c", "import sys; f = open(sys.argv[1], 'rb'); print('held', flush=True); sys.stdin.read()",
-         str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
+        [
+            sys.executable,
+            "-c",
+            "import sys; f = open(sys.argv[1], 'rb'); print('held', flush=True); sys.stdin.read()",
+            str(path),
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
     assert proc.stdout.readline().strip() == "held"
     return proc
 
@@ -44,7 +53,11 @@ def _release(proc: subprocess.Popen) -> None:
 
 
 def _record_files(home: Path) -> list[str]:
-    return sorted(p.name for p in home.glob(pause_record.RECORD_STEM + "*") if p.suffix in (".json", ".claim"))
+    return sorted(
+        p.name
+        for p in home.glob(pause_record.RECORD_STEM + "*")
+        if p.suffix in (".json", ".claim")
+    )
 
 
 def _orphan(profiles: dict) -> dict:
@@ -66,53 +79,87 @@ print("discharged", flush=True)
 
 
 @pytest.mark.parametrize("carrier", ["claim", "record"])
-def test_a_completed_obligation_never_runs_again_from_a_copy_windows_kept(tmp_path, monkeypatch, carrier):
+def test_a_completed_obligation_never_runs_again_from_a_copy_windows_kept(
+    tmp_path, monkeypatch, carrier
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     src = pause_record.record_path()
-    if carrier == "claim":  # a recovering launch claims an orphan and finishes its resume
+    if (
+        carrier == "claim"
+    ):  # a recovering launch claims an orphan and finishes its resume
         _orphan({"default": 4242, "work": 4343})
         holder = _hold(src)
         try:
             won = pause_record.claim(src)
-            assert won is not None and src.exists(), "premise: Windows refused to delete the claimed source"
-            pause_record._hand_back(won[0], won[1], {**won[1]["token"], "resume_needed": False, "profiles": {}},
-                                    {"profiles": {}, "unmapped": []})
-            assert pause_record.orphans() == [], "the completed set is owed again from the copy Windows kept"
+            assert won is not None and src.exists(), (
+                "premise: Windows refused to delete the claimed source"
+            )
+            pause_record._hand_back(
+                won[0],
+                won[1],
+                {**won[1]["token"], "resume_needed": False, "profiles": {}},
+                {"profiles": {}, "unmapped": []},
+            )
+            assert pause_record.orphans() == [], (
+                "the completed set is owed again from the copy Windows kept"
+            )
         finally:
             _release(holder)
     else:  # the update that paused them resumes them all and discharges its record, then exits
-        updater = subprocess.Popen([sys.executable, "-c", textwrap.dedent(_UPDATER), uuid.uuid4().hex],
-                                   cwd=REPO, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8",
-                                   env={**os.environ, "CLAWK_HOME": str(tmp_path), "PYTHONPATH": str(REPO)})
+        updater = subprocess.Popen(
+            [sys.executable, "-c", textwrap.dedent(_UPDATER), uuid.uuid4().hex],
+            cwd=REPO,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            env={**os.environ, "CLAWK_HOME": str(tmp_path), "PYTHONPATH": str(REPO)},
+        )
         assert updater.stdout.readline().strip() == "written"
         holder = _hold(src)
         try:
             out, _ = updater.communicate("go\n", timeout=60)
-            assert "discharged" in out and src.exists(), "premise: Windows refused to delete the discharged record"
-            assert pause_record.orphans() == [], "a dead updater's discharged record is owed again"
+            assert "discharged" in out and src.exists(), (
+                "premise: Windows refused to delete the discharged record"
+            )
+            assert pause_record.orphans() == [], (
+                "a dead updater's discharged record is owed again"
+            )
         finally:
             _release(holder)
     pause_record.retire_redundant()  # the next launch, once nothing holds the copy
     assert _record_files(tmp_path) == []
     assert pause_record.orphans() == []
-    assert not src.with_suffix(".retired").exists(), "the retired list outlived every copy it guarded"
+    assert not src.with_suffix(".retired").exists(), (
+        "the retired list outlived every copy it guarded"
+    )
 
 
-def test_a_partly_resumed_claim_is_what_the_next_launch_resumes_not_the_copy_windows_kept(tmp_path, monkeypatch):
+def test_a_partly_resumed_claim_is_what_the_next_launch_resumes_not_the_copy_windows_kept(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     src = pause_record.record_path()
     _orphan({"default": 4242, "work": 4343})
     holder = _hold(src)
     try:
         won = pause_record.claim(src)
-        assert won is not None and src.exists(), "premise: Windows refused to delete the claimed source"
+        assert won is not None and src.exists(), (
+            "premise: Windows refused to delete the claimed source"
+        )
         # default came back; work did not: the claim goes back unowned still owing work only.
-        pause_record._hand_back(won[0], won[1], {**won[1]["token"], "profiles": {"work": 4343}},
-                                {"profiles": {}, "unmapped": []})
+        pause_record._hand_back(
+            won[0],
+            won[1],
+            {**won[1]["token"], "profiles": {"work": 4343}},
+            {"profiles": {}, "unmapped": []},
+        )
         owed = [body["token"]["profiles"] for _src, body in pause_record.orphans()]
     finally:
         _release(holder)
-    assert owed == [{"work": 4343}], "the next launch would restart a gateway this launch already restarted"
+    assert owed == [{"work": 4343}], (
+        "the next launch would restart a gateway this launch already restarted"
+    )
 
 
 # --- SCM: a running wrapper is not a ready gateway ---------------------------------------------
@@ -146,22 +193,42 @@ public class Wrapper : ServiceBase {
 def service_wrapper(tmp_path_factory) -> Path:
     """A real SCM service executable that starts one configured child process, like a service wrapper."""
     windir = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Microsoft.NET"
-    csc = next((c for c in sorted(windir.glob("Framework*/v4.*/csc.exe"), reverse=True)), None)
+    csc = next(
+        (c for c in sorted(windir.glob("Framework*/v4.*/csc.exe"), reverse=True)), None
+    )
     assert csc is not None, f"no .NET Framework C# compiler under {windir}"
     out = tmp_path_factory.mktemp("scm-wrapper")
     (out / "wrapper.cs").write_text(_WRAPPER_CS, encoding="utf-8")
-    subprocess.run([str(csc), "/nologo", "/target:exe", "/reference:System.ServiceProcess.dll",
-                    f"/out:{out / 'wrapper.exe'}", str(out / "wrapper.cs")], check=True, capture_output=True)
+    subprocess.run(
+        [
+            str(csc),
+            "/nologo",
+            "/target:exe",
+            "/reference:System.ServiceProcess.dll",
+            f"/out:{out / 'wrapper.exe'}",
+            str(out / "wrapper.cs"),
+        ],
+        check=True,
+        capture_output=True,
+    )
     return out / "wrapper.exe"
 
 
 def _sc(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["sc.exe", *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          check=False)
+    return subprocess.run(
+        ["sc.exe", *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
 
 
 @pytest.mark.parametrize("gateway", ["absent", "ready"])
-def test_a_running_service_owes_its_gateway_until_that_gateway_is_ready(tmp_path, monkeypatch, service_wrapper, gateway):
+def test_a_running_service_owes_its_gateway_until_that_gateway_is_ready(
+    tmp_path, monkeypatch, service_wrapper, gateway
+):
     from clawk_cli import update_cmd_windows as w
 
     home = tmp_path / "home"
@@ -171,21 +238,42 @@ def test_a_running_service_owes_its_gateway_until_that_gateway_is_ready(tmp_path
     bin_dir.mkdir()
     exe = bin_dir / "wrapper.exe"
     exe.write_bytes(service_wrapper.read_bytes())
-    child = ([sys.executable, "-c \"import time; time.sleep(900)\""] if gateway == "absent"
-             else [sys.executable, "-m clawk_cli.main gateway run"])
-    (bin_dir / "child.txt").write_text("\n".join([*child, str(REPO), f"CLAWK_HOME={home}", f"PYTHONPATH={REPO}",
-                                                  "PYTHONIOENCODING=utf-8"]) + "\n", encoding="utf-8")
+    child = (
+        [sys.executable, '-c "import time; time.sleep(900)"']
+        if gateway == "absent"
+        else [sys.executable, "-m clawk_cli.main gateway run"]
+    )
+    (bin_dir / "child.txt").write_text(
+        "\n".join(
+            [
+                *child,
+                str(REPO),
+                f"CLAWK_HOME={home}",
+                f"PYTHONPATH={REPO}",
+                "PYTHONIOENCODING=utf-8",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     name = f"clawk-r8-debt-{gateway}-{os.getpid()}"
     created = _sc("create", name, "binPath=", f'"{exe}"', "start=", "demand")
     assert created.returncode == 0, created.stdout + created.stderr
     if gateway == "absent":  # the budget only bounds how long the miss takes to report
         monkeypatch.setattr(w, "_SERVICE_READY_TIMEOUT_S", 20.0, raising=False)
-    token = {"services": [name], "expected_services": [name], "restarted_services": [], "service_profiles": {name: "default"}}
+    token = {
+        "services": [name],
+        "expected_services": [name],
+        "restarted_services": [],
+        "service_profiles": {name: "default"},
+    }
     try:
         if gateway == "absent":
             with pytest.raises(RuntimeError):
                 w._resume_windows_services(token)
-            assert token["services"] == [name], "SCM 'running' retired the debt of a gateway that never started"
+            assert token["services"] == [name], (
+                "SCM 'running' retired the debt of a gateway that never started"
+            )
         else:
             try:
                 w._resume_windows_services(token)
@@ -197,7 +285,11 @@ def test_a_running_service_owes_its_gateway_until_that_gateway_is_ready(tmp_path
         with suppress(Exception):
             pid = int(psutil.win_service_get(name).pid() or 0)  # type: ignore[attr-defined]
         if pid:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True, check=False)
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                capture_output=True,
+                check=False,
+            )
         _sc("delete", name)
 
 
@@ -211,7 +303,9 @@ print(json.dumps({"seconds": time.monotonic() - started,
 """
 
 
-def test_a_launch_recovering_an_unready_service_keeps_the_debt_without_stalling(tmp_path, monkeypatch, service_wrapper):
+def test_a_launch_recovering_an_unready_service_keeps_the_debt_without_stalling(
+    tmp_path, monkeypatch, service_wrapper
+):
     """Two CLI launches in a row recover an orphaned pause whose SCM service runs but whose gateway
     never comes up: the debt stays owed, and neither launch waits out the update's full readiness budget."""
     home = tmp_path / "home"
@@ -221,21 +315,41 @@ def test_a_launch_recovering_an_unready_service_keeps_the_debt_without_stalling(
     bin_dir.mkdir()
     exe = bin_dir / "wrapper.exe"
     exe.write_bytes(service_wrapper.read_bytes())
-    (bin_dir / "child.txt").write_text("\n".join([sys.executable, "-c \"import time; time.sleep(900)\"", str(REPO)]) + "\n",
-                                       encoding="utf-8")
+    (bin_dir / "child.txt").write_text(
+        "\n".join([sys.executable, '-c "import time; time.sleep(900)"', str(REPO)])
+        + "\n",
+        encoding="utf-8",
+    )
     name = f"clawk-r9-recover-{os.getpid()}"
     created = _sc("create", name, "binPath=", f'"{exe}"', "start=", "demand")
     assert created.returncode == 0, created.stdout + created.stderr
     # The record a killed update left; the tree gate passes (HEAD and tracked changes as stamped).
-    pause_record.write(pause_record.stamp_tree({
-        "resume_needed": True, "services": [name], "expected_services": [name], "restarted_services": [],
-        "service_profiles": {name: "default"}}), owner=pause_record.UNOWNED)
+    pause_record.write(
+        pause_record.stamp_tree(
+            {
+                "resume_needed": True,
+                "services": [name],
+                "expected_services": [name],
+                "restarted_services": [],
+                "service_profiles": {name: "default"},
+            }
+        ),
+        owner=pause_record.UNOWNED,
+    )
     try:
         launches = []
         for _ in range(2):
-            done = subprocess.run([sys.executable, "-c", _RECOVERING_LAUNCH], cwd=REPO, capture_output=True,
-                                  text=True, encoding="utf-8", errors="replace", timeout=300,
-                                  env={**os.environ, "CLAWK_HOME": str(home), "PYTHONPATH": str(REPO)}, check=False)
+            done = subprocess.run(
+                [sys.executable, "-c", _RECOVERING_LAUNCH],
+                cwd=REPO,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
+                env={**os.environ, "CLAWK_HOME": str(home), "PYTHONPATH": str(REPO)},
+                check=False,
+            )
             assert done.returncode == 0, done.stdout + done.stderr
             launches.append(json.loads(done.stdout.strip().splitlines()[-1]))
     finally:
@@ -243,23 +357,40 @@ def test_a_launch_recovering_an_unready_service_keeps_the_debt_without_stalling(
         with suppress(Exception):
             pid = int(psutil.win_service_get(name).pid() or 0)  # type: ignore[attr-defined]
         if pid:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True, check=False)
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(pid)],
+                capture_output=True,
+                check=False,
+            )
         _sc("delete", name)
-    assert [launch["owed"] for launch in launches] == [[[name]], [[name]]], f"the unready service's debt was lost: {launches}"
+    assert [launch["owed"] for launch in launches] == [[[name]], [[name]]], (
+        f"the unready service's debt was lost: {launches}"
+    )
     first, second = (launch["seconds"] for launch in launches)
-    assert first < 40, f"the first launch stalled {first:.0f}s on the service's readiness"
-    assert second < 20, f"the next launch stalled {second:.0f}s on a service it had just found unready"
+    assert first < 40, (
+        f"the first launch stalled {first:.0f}s on the service's readiness"
+    )
+    assert second < 20, (
+        f"the next launch stalled {second:.0f}s on a service it had just found unready"
+    )
 
 
 def _logs(home: Path) -> str:
-    return "\n".join(f"--- {p}\n{p.read_text(encoding='utf-8-sig', errors='replace')[-3000:]}"
-                     for p in sorted((home / "logs").glob("*.log")))
+    return "\n".join(
+        f"--- {p}\n{p.read_text(encoding='utf-8-sig', errors='replace')[-3000:]}"
+        for p in sorted((home / "logs").glob("*.log"))
+    )
 
 
 # --- force-kill identity ------------------------------------------------------------------------
 
-@pytest.mark.parametrize("discovered", ["this process", "an earlier process at this pid"])
-def test_a_pause_force_kills_only_the_process_it_discovered(tmp_path, monkeypatch, discovered):
+
+@pytest.mark.parametrize(
+    "discovered", ["this process", "an earlier process at this pid"]
+)
+def test_a_pause_force_kills_only_the_process_it_discovered(
+    tmp_path, monkeypatch, discovered
+):
     from clawk_cli import update_cmd_windows as w
     from clawk_cli.gateway import ProfileGatewayProcess
 
@@ -268,21 +399,33 @@ def test_a_pause_force_kills_only_the_process_it_discovered(tmp_path, monkeypatc
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setenv("CLAWK_RESTART_DRAIN_TIMEOUT", "1")
     # Never answers its pause, so it survives the drain and reaches the force-kill.
-    victim = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"], stdin=subprocess.DEVNULL)
+    victim = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(600)"], stdin=subprocess.DEVNULL
+    )
     try:
         born = psutil.Process(victim.pid).create_time()
         # The gateway discovered at this PID: this very process, or one born earlier that exited
         # during the drain while Windows handed its PID to the process running now.
         seen = born if discovered == "this process" else born - 5.0
-        found = ProfileGatewayProcess(profile="r8kill", path=home, pid=victim.pid, create_time=seen)
+        found = ProfileGatewayProcess(
+            profile="r8kill", path=home, pid=victim.pid, create_time=seen
+        )
         w._stop_windows_gateways([victim.pid], {victim.pid: found}, set(), [], [])
         deadline = time.monotonic() + 15
         while victim.poll() is None and time.monotonic() < deadline:
             time.sleep(0.1)
         if discovered == "this process":
-            assert victim.poll() is not None, "the discovered gateway survived its force-kill"
+            assert victim.poll() is not None, (
+                "the discovered gateway survived its force-kill"
+            )
         else:
-            assert victim.poll() is None, "force-kill took a process born after discovery (a reused PID)"
+            assert victim.poll() is None, (
+                "force-kill took a process born after discovery (a reused PID)"
+            )
     finally:
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(victim.pid)], capture_output=True, check=False)
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(victim.pid)],
+            capture_output=True,
+            check=False,
+        )
         victim.wait(timeout=30)

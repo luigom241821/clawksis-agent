@@ -28,9 +28,13 @@ def _mock_subprocess_run(monkeypatch):
         calls.append((list(cmd) if isinstance(cmd, list) else cmd, kwargs))
         if isinstance(cmd, list) and len(cmd) >= 2:
             if cmd[1] == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if cmd[1] == "run":
-                return subprocess.CompletedProcess(cmd, 0, stdout="fake-container-id\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="fake-container-id\n", stderr=""
+                )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
@@ -70,7 +74,9 @@ def test_ensure_docker_available_raises_when_not_found(monkeypatch):
     monkeypatch.setattr(
         docker_env.subprocess,
         "run",
-        lambda *args, **kwargs: pytest.fail("subprocess.run should not be called when docker is missing"),
+        lambda *args, **kwargs: pytest.fail(
+            "subprocess.run should not be called when docker is missing"
+        ),
     )
 
     with pytest.raises(RuntimeError):
@@ -92,12 +98,14 @@ def test_auto_mount_host_cwd_adds_volume(monkeypatch, tmp_path):
     )
 
     # Find the docker run call and check its args
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args_str = " ".join(run_calls[0][0])
     assert f"{project_dir}:/workspace" in run_args_str
-
-
 
 
 def _make_execute_only_env(forward_env=None):
@@ -107,7 +115,10 @@ def _make_execute_only_env(forward_env=None):
     env._forward_env = forward_env or []
     env._env = {}
     env._prepare_command = lambda command: (command, None)
-    env._timeout_result = lambda timeout: {"output": f"timed out after {timeout}", "returncode": 124}
+    env._timeout_result = lambda timeout: {
+        "output": f"timed out after {timeout}",
+        "returncode": 124,
+    }
     env._container_id = "test-container"
     env._docker_exe = "/usr/bin/docker"
     # Base class attributes needed by unified execute()
@@ -128,7 +139,11 @@ def test_init_env_args_uses_clawk_dotenv_for_allowlisted_env(monkeypatch):
     env = _make_execute_only_env(["DATABASE_URL"])
 
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.setattr(docker_env, "_load_clawk_env_vars", lambda: {"DATABASE_URL": "value_from_dotenv"})
+    monkeypatch.setattr(
+        docker_env,
+        "_load_clawk_env_vars",
+        lambda: {"DATABASE_URL": "value_from_dotenv"},
+    )
 
     args = env._build_init_env_args()
 
@@ -144,7 +159,11 @@ def test_init_env_args_prefers_shell_env_over_clawk_dotenv(monkeypatch):
     env = _make_execute_only_env(["DATABASE_URL"])
 
     monkeypatch.setenv("DATABASE_URL", "value_from_shell")
-    monkeypatch.setattr(docker_env, "_load_clawk_env_vars", lambda: {"DATABASE_URL": "value_from_dotenv"})
+    monkeypatch.setattr(
+        docker_env,
+        "_load_clawk_env_vars",
+        lambda: {"DATABASE_URL": "value_from_dotenv"},
+    )
 
     args = env._build_init_env_args()
 
@@ -163,7 +182,9 @@ def test_init_env_args_uses_clawk_dotenv_for_empty_shell_env(monkeypatch):
     env = _make_execute_only_env(["MY_SECRET"])
 
     monkeypatch.setenv("MY_SECRET", "")
-    monkeypatch.setattr(docker_env, "_load_clawk_env_vars", lambda: {"MY_SECRET": "value_from_dotenv"})
+    monkeypatch.setattr(
+        docker_env, "_load_clawk_env_vars", lambda: {"MY_SECRET": "value_from_dotenv"}
+    )
 
     args = env._build_init_env_args()
 
@@ -224,7 +245,9 @@ def test_runtime_exec_tracks_scope_and_clears_missing_value(monkeypatch):
     monkeypatch.setattr(
         docker_env,
         "_popen_bash",
-        lambda cmd, stdin_data=None, **kw: calls.append((cmd, stdin_data, kw)) or object(),
+        lambda cmd, stdin_data=None, **kw: (
+            calls.append((cmd, stdin_data, kw)) or object()
+        ),
     )
     ss.set_multiplex_active(True)
     token = ss.set_secret_scope({"SERVICE_TOKEN": "token-for-profile-a"})
@@ -248,13 +271,15 @@ def test_runtime_exec_tracks_scope_and_clears_missing_value(monkeypatch):
     first_env = calls[0][2].get("env") or {}
     assert first_env.get("SERVICE_TOKEN") == "token-for-profile-a"
     second_cmd = calls[1][0]
-    second_env = (calls[1][2].get("env") or {})
+    second_env = calls[1][2].get("env") or {}
     assert second_env.get("SERVICE_TOKEN") != "token-for-profile-a"
     assert not any("token-for-profile-a" in str(a) for a in second_cmd)
     assert "unset SERVICE_TOKEN" in second_cmd[-1]
 
 
-def test_wrapped_exec_scopes_explicit_forward_env_across_profiles(monkeypatch, tmp_path):
+def test_wrapped_exec_scopes_explicit_forward_env_across_profiles(
+    monkeypatch, tmp_path
+):
     """The shared snapshot must not resurrect an explicit forward-only value."""
     from agent import secret_scope as ss
 
@@ -313,9 +338,9 @@ def test_wrapped_exec_scopes_explicit_forward_env_across_profiles(monkeypatch, t
 
             assert result["returncode"] == 0
             assert result["output"] == expected
-            assert "EXPLICIT_TOKEN=" not in (
-                tmp_path / "snapshot.sh"
-            ).read_text(encoding="utf-8")
+            assert "EXPLICIT_TOKEN=" not in (tmp_path / "snapshot.sh").read_text(
+                encoding="utf-8"
+            )
     finally:
         ss.set_multiplex_active(False)
 
@@ -328,9 +353,18 @@ def test_docker_env_appears_in_run_command(monkeypatch):
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     calls = _mock_subprocess_run(monkeypatch)
 
-    _make_dummy_env(env={"SSH_AUTH_SOCK": "/run/user/1000/ssh-agent.sock", "GNUPGHOME": "/root/.gnupg"})
+    _make_dummy_env(
+        env={
+            "SSH_AUTH_SOCK": "/run/user/1000/ssh-agent.sock",
+            "GNUPGHOME": "/root/.gnupg",
+        }
+    )
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args, run_kwargs = run_calls[0]
     run_args_str = " ".join(run_args)
@@ -344,7 +378,11 @@ def test_docker_env_appears_in_run_command(monkeypatch):
 
 
 def _node_options_from_run(calls):
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     args, kwargs = run_calls[0]
     if "NODE_OPTIONS" in args and "-e" in args:
@@ -358,7 +396,8 @@ def test_egress_node_options_overrides_conflicting_ca_flag(monkeypatch):
     not left to survive alongside it (final Node trust would depend on order)."""
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     monkeypatch.setattr(
-        docker_env, "_egress_proxy_args_for_docker",
+        docker_env,
+        "_egress_proxy_args_for_docker",
         lambda: ([], {"_CLAWK_EGRESS_NODE_OPTIONS_APPEND": "--use-openssl-ca"}, []),
     )
     calls = _mock_subprocess_run(monkeypatch)
@@ -389,13 +428,15 @@ def test_forward_env_overrides_docker_env_in_init_args(monkeypatch):
 
 def test_normalize_env_dict_filters_invalid_keys():
     """_normalize_env_dict should reject invalid variable names."""
-    result = docker_env._normalize_env_dict({
-        "VALID_KEY": "ok",
-        "123bad": "rejected",
-        "": "rejected",
-        "also valid": "rejected",  # spaces invalid
-        "GOOD": "ok",
-    })
+    result = docker_env._normalize_env_dict(
+        {
+            "VALID_KEY": "ok",
+            "123bad": "rejected",
+            "": "rejected",
+            "also valid": "rejected",  # spaces invalid
+            "GOOD": "ok",
+        }
+    )
     assert result == {"VALID_KEY": "ok", "GOOD": "ok"}
 
 
@@ -418,14 +459,16 @@ def test_security_args_include_setuid_setgid_for_privdrop(monkeypatch):
 
     _make_dummy_env()
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args = run_calls[0][0]
 
     added = {
-        run_args[i + 1]
-        for i, flag in enumerate(run_args[:-1])
-        if flag == "--cap-add"
+        run_args[i + 1] for i, flag in enumerate(run_args[:-1]) if flag == "--cap-add"
     }
     assert "SETUID" in added, "SETUID cap missing — image privilege-drop will fail"
     assert "SETGID" in added, "SETGID cap missing — image privilege-drop will fail"
@@ -440,14 +483,23 @@ def test_snap_compat_drops_only_init_and_no_new_privileges(monkeypatch):
     def run_args(**kw):
         calls = _mock_subprocess_run(monkeypatch)
         _make_dummy_env(**kw)
-        return next(c[0] for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run")
+        return next(
+            c[0]
+            for c in calls
+            if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+        )
 
     default, compat = run_args(), run_args(snap_compat=True)
     assert "--init" in default and "no-new-privileges" in default
     assert "--init" not in compat and "no-new-privileges" not in compat
 
     def strip(argv):  # everything except the two flags and the random container name
-        return [a for a in argv if a not in ("--init", "--security-opt", "no-new-privileges") and not a.startswith("clawk-")]
+        return [
+            a
+            for a in argv
+            if a not in ("--init", "--security-opt", "no-new-privileges")
+            and not a.startswith("clawk-")
+        ]
 
     assert strip(default) == strip(compat)
 
@@ -464,7 +516,11 @@ def test_run_as_host_user_passes_uid_gid(monkeypatch):
 
     _make_dummy_env(run_as_host_user=True)
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args = run_calls[0][0]
 
@@ -487,13 +543,15 @@ def test_run_as_host_user_drops_setuid_setgid_caps(monkeypatch):
 
     _make_dummy_env(run_as_host_user=True)
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     run_args = run_calls[0][0]
 
     added = {
-        run_args[i + 1]
-        for i, flag in enumerate(run_args[:-1])
-        if flag == "--cap-add"
+        run_args[i + 1] for i, flag in enumerate(run_args[:-1]) if flag == "--cap-add"
     }
     assert "SETUID" not in added, (
         "SETUID cap should be dropped when running as host user — no privilege drop is needed"
@@ -513,7 +571,8 @@ def test_run_as_host_user_drops_setuid_setgid_caps(monkeypatch):
 def _run_args_from_calls(calls):
     """Pull the argv list passed to the first ``docker run`` invocation."""
     run_calls = [
-        c for c in calls
+        c
+        for c in calls
         if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
     ]
     assert run_calls, "docker run should have been called"
@@ -523,9 +582,7 @@ def _run_args_from_calls(calls):
 def _labels_in_run_args(run_args):
     """Return the set of ``key=value`` strings passed via ``--label``."""
     return {
-        run_args[i + 1]
-        for i, flag in enumerate(run_args[:-1])
-        if flag == "--label"
+        run_args[i + 1] for i, flag in enumerate(run_args[:-1]) if flag == "--label"
     }
 
 
@@ -592,7 +649,9 @@ def test_reuse_environment_fingerprint_tracks_immutable_configuration():
     )
 
 
-def test_reuse_environment_fingerprint_ignores_volatile_temp_mounts(tmp_path, monkeypatch):
+def test_reuse_environment_fingerprint_ignores_volatile_temp_mounts(
+    tmp_path, monkeypatch
+):
     """A mount whose host source is a per-process tempdir must not churn the
     reuse label: symlinked skills trees are served from a fresh mkdtemp copy
     every process (``_safe_skills_path``), so hashing that path made the
@@ -603,22 +662,34 @@ def test_reuse_environment_fingerprint_ignores_volatile_temp_mounts(tmp_path, mo
     stable_source = str(tmp_path / "data")
     process_a = docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
-                    "-v", f"{stable_source}:/data:ro"],
+        mount_args=[
+            "-v",
+            f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
+            "-v",
+            f"{stable_source}:/data:ro",
+        ],
         clawk_home="/profiles/alpha",
     )
     process_b = docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-d4e5f6:/root/.clawksis/skills:ro",
-                    "-v", f"{stable_source}:/data:ro"],
+        mount_args=[
+            "-v",
+            f"{temp_root}/clawk-skills-safe-d4e5f6:/root/.clawksis/skills:ro",
+            "-v",
+            f"{stable_source}:/data:ro",
+        ],
         clawk_home="/profiles/alpha",
     )
     assert process_a == process_b
     # A real mount change still forces a fresh container.
     assert process_a != docker_env._reuse_environment_fingerprint(
         image="python:3.11",
-        mount_args=["-v", f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
-                    "-v", f"{tmp_path}/other-data:/data:ro"],
+        mount_args=[
+            "-v",
+            f"{temp_root}/clawk-skills-safe-a1b2c3:/root/.clawksis/skills:ro",
+            "-v",
+            f"{tmp_path}/other-data:/data:ro",
+        ],
         clawk_home="/profiles/alpha",
     )
 
@@ -642,11 +713,7 @@ def test_run_command_sanitizes_unsafe_task_id(monkeypatch):
 
 def _bind_mount_specs(run_args):
     """Return every spec string passed via ``-v``."""
-    return [
-        run_args[i + 1]
-        for i, flag in enumerate(run_args[:-1])
-        if flag == "-v"
-    ]
+    return [run_args[i + 1] for i, flag in enumerate(run_args[:-1]) if flag == "-v"]
 
 
 @pytest.mark.platforms("linux")
@@ -722,9 +789,7 @@ def test_sandbox_dir_name_drops_separators_docker_and_the_fs_reserve():
         "../../etc",
     ):
         name = docker_env._sandbox_dir_name(value)
-        assert not (set(name) & set(':/\\')), name
-
-
+        assert not (set(name) & set(":/\\")), name
 
 
 def test_sandbox_dir_name_bounds_pathological_ids():
@@ -740,7 +805,7 @@ def test_sandbox_dir_name_never_resolves_to_the_sandbox_root():
     for value in ("", ".", "..", "  ", None):
         name = docker_env._sandbox_dir_name(value)
         assert name not in {"", ".", ".."}, repr(value)
-        assert not (set(name) & set(':/\\')), name
+        assert not (set(name) & set(":/\\")), name
 
 
 @pytest.mark.require_symlinks
@@ -800,7 +865,9 @@ def test_labels_attribute_populated_after_init(monkeypatch):
 
 
 @pytest.mark.parametrize("changed_setting", ["image", "volumes", "clawk_home"])
-def test_reuse_probe_filters_on_environment_fingerprint(monkeypatch, tmp_path, changed_setting):
+def test_reuse_probe_filters_on_environment_fingerprint(
+    monkeypatch, tmp_path, changed_setting
+):
     """Reuse and recovery must select the requested configuration, not stale mounts."""
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     monkeypatch.setattr(docker_env, "_get_active_profile_name", lambda: "default")
@@ -812,8 +879,11 @@ def test_reuse_probe_filters_on_environment_fingerprint(monkeypatch, tmp_path, c
 
     def reuse_filters():
         return tuple(
-            arg for cmd, _ in calls if isinstance(cmd, list) and cmd[1] == "ps"
-            for arg in cmd if arg.startswith("label=")
+            arg
+            for cmd, _ in calls
+            if isinstance(cmd, list) and cmd[1] == "ps"
+            for arg in cmd
+            if arg.startswith("label=")
         )
 
     config = {"image": "python:3.11", "volumes": ["volume-a:/workspace"]}
@@ -827,13 +897,20 @@ def test_reuse_probe_filters_on_environment_fingerprint(monkeypatch, tmp_path, c
     if changed_setting == "clawk_home":
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "beta"))
     else:
-        config[changed_setting] = {"image": "python:3.12", "volumes": ["volume-b:/workspace"]}[changed_setting]
+        config[changed_setting] = {
+            "image": "python:3.12",
+            "volumes": ["volume-b:/workspace"],
+        }[changed_setting]
     calls.clear()
     env = _make_dummy_env(**config)
     changed_filters = reuse_filters()
     assert changed_filters != original_filters
-    assert f"label=clawk-environment={env._labels['clawk-environment']}" in changed_filters
-    assert set(f.removeprefix("label=") for f in changed_filters) <= _labels_in_run_args(_run_args_from_calls(calls))
+    assert (
+        f"label=clawk-environment={env._labels['clawk-environment']}" in changed_filters
+    )
+    assert set(
+        f.removeprefix("label=") for f in changed_filters
+    ) <= _labels_in_run_args(_run_args_from_calls(calls))
 
     calls.clear()
     assert env._recreate_container()
@@ -851,8 +928,10 @@ def test_shared_container_key_replaces_profile_identity(monkeypatch, tmp_path):
     monkeypatch.setattr(docker_env, "_get_active_profile_name", lambda: "coding")
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "coding"))
     b = _make_dummy_env(
-        task_id="abc", shared_container_key="team/workspace",
-        image="python:3.12", volumes=["team-volume:/workspace"],
+        task_id="abc",
+        shared_container_key="team/workspace",
+        image="python:3.12",
+        volumes=["team-volume:/workspace"],
     )
 
     # Deterministic across processes/profiles, not the profile label, and
@@ -901,8 +980,9 @@ def test_empty_shared_container_key_preserves_profile_isolation(monkeypatch):
 # ── Cross-process container reuse (issue #20561) ──────────────────
 
 
-def _mock_subprocess_run_with_reuse(monkeypatch, ps_state: str | None,
-                                     start_succeeds: bool = True):
+def _mock_subprocess_run_with_reuse(
+    monkeypatch, ps_state: str | None, start_succeeds: bool = True
+):
     """Reuse-aware subprocess.run mock.
 
     ``ps_state`` controls what ``docker ps -a --filter ...`` returns:
@@ -922,14 +1002,17 @@ def _mock_subprocess_run_with_reuse(monkeypatch, ps_state: str | None,
         if isinstance(cmd, list) and len(cmd) >= 2:
             sub = cmd[1]
             if sub == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if sub == "ps":
                 if ps_state is None:
                     return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
                 # 2-field format: ID, State. The egress posture is enforced
                 # by the label filters on the ps command itself (#99213).
                 return subprocess.CompletedProcess(
-                    cmd, 0,
+                    cmd,
+                    0,
                     stdout=f"reused-cid\t{ps_state}\n",
                     stderr="",
                 )
@@ -937,10 +1020,16 @@ def _mock_subprocess_run_with_reuse(monkeypatch, ps_state: str | None,
                 if not start_succeeds:
                     # Real subprocess.run with check=True raises on non-zero exit;
                     # mirror that so the production code's except clause fires.
-                    raise subprocess.CalledProcessError(1, cmd, output="", stderr="no such container")
-                return subprocess.CompletedProcess(cmd, 0, stdout="reused-cid\n", stderr="")
+                    raise subprocess.CalledProcessError(
+                        1, cmd, output="", stderr="no such container"
+                    )
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="reused-cid\n", stderr=""
+                )
             if sub == "run":
-                return subprocess.CompletedProcess(cmd, 0, stdout="fresh-cid\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="fresh-cid\n", stderr=""
+                )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
@@ -963,12 +1052,20 @@ def test_reuse_attaches_to_running_container_without_docker_run(monkeypatch):
         f"expected reused container id, got {env._container_id!r}"
     )
     # And it must NOT have run `docker run`.
-    run_invocations = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_invocations = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert not run_invocations, (
         f"docker run should be skipped on reuse, got: {run_invocations}"
     )
     # And it must have NOT issued a `docker start` for an already-running container.
-    start_invocations = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "start"]
+    start_invocations = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "start"
+    ]
     assert not start_invocations, (
         f"docker start should be skipped when container already running, got: {start_invocations}"
     )
@@ -996,14 +1093,18 @@ def test_egress_enabled_does_not_reuse_pre_egress_container(monkeypatch):
         if isinstance(cmd, list) and len(cmd) >= 2:
             sub = cmd[1]
             if sub == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if sub == "ps":
                 # Simulate an old pre-egress container: without the egress label
                 # filter it would match; with the filter Docker returns no match.
                 assert any(str(part).startswith("label=clawk-egress=") for part in cmd)
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
             if sub == "run":
-                return subprocess.CompletedProcess(cmd, 0, stdout="fresh-cid\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="fresh-cid\n", stderr=""
+                )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
@@ -1012,7 +1113,8 @@ def test_egress_enabled_does_not_reuse_pre_egress_container(monkeypatch):
 
     assert env._container_id == "fresh-cid"
     run_invocations = [
-        c for c in calls
+        c
+        for c in calls
         if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
     ]
     assert run_invocations, "egress-enabled containers require a fresh docker run"
@@ -1035,25 +1137,34 @@ def test_reuse_probe_format_is_podman_compatible(monkeypatch):
         if isinstance(cmd, list) and len(cmd) >= 2:
             sub = cmd[1]
             if sub == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="podman version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="podman version", stderr=""
+                )
             if sub == "ps":
                 if "--format" in cmd:
                     fmt = cmd[cmd.index("--format") + 1]
                     if "{{.Label" in fmt:
                         # Mirror podman's real failure mode
                         return subprocess.CompletedProcess(
-                            cmd, 125, stdout="",
+                            cmd,
+                            125,
+                            stdout="",
                             stderr="Error: can't evaluate field Label in type struct",
                         )
-                    assert any(
-                        str(part) == "label=clawk-egress=off" for part in cmd
-                    ), "egress=off posture must be expressed as a label filter"
+                    assert any(str(part) == "label=clawk-egress=off" for part in cmd), (
+                        "egress=off posture must be expressed as a label filter"
+                    )
                     return subprocess.CompletedProcess(
-                        cmd, 0, stdout="podman-cid\trunning\n", stderr="",
+                        cmd,
+                        0,
+                        stdout="podman-cid\trunning\n",
+                        stderr="",
                     )
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
             if sub == "run":
-                return subprocess.CompletedProcess(cmd, 0, stdout="fresh-cid\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="fresh-cid\n", stderr=""
+                )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
@@ -1064,8 +1175,7 @@ def test_reuse_probe_format_is_podman_compatible(monkeypatch):
         f"podman backend must reuse the labeled container, got {env._container_id!r}"
     )
     run_invocations = [
-        c for c in calls
-        if isinstance(c, list) and len(c) >= 2 and c[1] == "run"
+        c for c in calls if isinstance(c, list) and len(c) >= 2 and c[1] == "run"
     ]
     assert not run_invocations, "docker run should be skipped on podman reuse"
 
@@ -1140,7 +1250,9 @@ def test_forward_env_non_suffixed_egress_name_refuses_under_egress(monkeypatch):
         (["-dit", "-p8080:80", "-v/tmp:/tmp", "--name", "de", "-e", "FOO=bar"], False),
     ],
 )
-def test_extra_args_egress_collision_follows_docker_shorthand_parsing(extra_args, collides):
+def test_extra_args_egress_collision_follows_docker_shorthand_parsing(
+    extra_args, collides
+):
     """Docker's pflag CLI accepts a value-taking shorthand joined to its value
     and chained after boolean shorthands; every spelling of ``-e`` that injects
     a critical env name must collide, and nothing else may (#115887)."""
@@ -1175,9 +1287,17 @@ def test_reuse_starts_stopped_container_before_attaching(monkeypatch):
     env = _make_dummy_env(task_id="reuse-stopped")
 
     assert env._container_id == "reused-cid"
-    start_invocations = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "start"]
+    start_invocations = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "start"
+    ]
     assert start_invocations, "expected docker start for exited container"
-    run_invocations = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_invocations = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert not run_invocations, "should not docker run when reusing an exited container"
 
 
@@ -1200,7 +1320,9 @@ def test_failed_docker_run_cleans_up_orphaned_container(monkeypatch):
         if isinstance(cmd, list) and len(cmd) >= 2:
             sub = cmd[1]
             if sub == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if sub == "ps":
                 # No reusable container -> fall through to a fresh `docker run`.
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -1218,10 +1340,14 @@ def test_failed_docker_run_cleans_up_orphaned_container(monkeypatch):
     with pytest.raises(subprocess.CalledProcessError):
         _make_dummy_env()
 
-    assert len(cleanup_calls) == 1, "docker rm should be called once for the orphaned container"
+    assert len(cleanup_calls) == 1, (
+        "docker rm should be called once for the orphaned container"
+    )
     rm_cmd = cleanup_calls[0]
     assert rm_cmd[1] == "rm" and rm_cmd[2] == "-f"
-    assert rm_cmd[3].startswith("clawk-"), "should remove the container by its generated name"
+    assert rm_cmd[3].startswith("clawk-"), (
+        "should remove the container by its generated name"
+    )
 
 
 def test_docker_run_timeout_cleans_up_orphaned_container(monkeypatch):
@@ -1238,7 +1364,9 @@ def test_docker_run_timeout_cleans_up_orphaned_container(monkeypatch):
         if isinstance(cmd, list) and len(cmd) >= 2:
             sub = cmd[1]
             if sub == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if sub == "ps":
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
             if sub == "run":
@@ -1253,12 +1381,14 @@ def test_docker_run_timeout_cleans_up_orphaned_container(monkeypatch):
     with pytest.raises(subprocess.TimeoutExpired):
         _make_dummy_env()
 
-    assert len(cleanup_calls) == 1, "docker rm should be called once for the orphaned container"
+    assert len(cleanup_calls) == 1, (
+        "docker rm should be called once for the orphaned container"
+    )
     rm_cmd = cleanup_calls[0]
     assert rm_cmd[1] == "rm" and rm_cmd[2] == "-f"
-    assert rm_cmd[3].startswith("clawk-"), "should remove the container by its generated name"
-
-
+    assert rm_cmd[3].startswith("clawk-"), (
+        "should remove the container by its generated name"
+    )
 
 
 # ── Cleanup correctness (issue #20561) ────────────────────────────
@@ -1289,6 +1419,7 @@ class _FakeThread:
 
 def _install_fake_thread(monkeypatch):
     import threading
+
     monkeypatch.setattr(threading, "Thread", _FakeThread)
 
 
@@ -1323,8 +1454,16 @@ def test_cleanup_with_persist_is_noop_for_container(monkeypatch):
 
     env.cleanup()
 
-    stops = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"]
-    rms = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"]
+    stops = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"
+    ]
+    rms = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"
+    ]
     assert not stops, (
         f"docker stop must NOT be called when persist_across_processes=True; "
         f"container has to stay running so background processes survive. "
@@ -1377,15 +1516,22 @@ def test_cleanup_vm_default_honors_persist_mode(monkeypatch):
     finally:
         terminal_tool._active_environments.pop("session-close-test", None)
 
-    stops = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"]
-    rms = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"]
+    stops = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"
+    ]
+    rms = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"
+    ]
     assert not stops, (
         f"cleanup_vm() default must not docker stop a persist-mode container; "
         f"got: {stops}"
     )
     assert not rms, (
-        f"cleanup_vm() default must not docker rm a persist-mode container; "
-        f"got: {rms}"
+        f"cleanup_vm() default must not docker rm a persist-mode container; got: {rms}"
     )
 
 
@@ -1404,8 +1550,11 @@ def test_cleanup_with_persist_disabled_stops_and_rms(monkeypatch):
     # Note: persistent_filesystem=True (the prior-leak scenario) + the new
     # cross-process toggle OFF must still result in a clean rm.
     env = docker_env.DockerEnvironment(
-        image="python:3.11", cwd="/root", timeout=60,
-        task_id="cleanup-no-persist", persistent_filesystem=True,
+        image="python:3.11",
+        cwd="/root",
+        timeout=60,
+        task_id="cleanup-no-persist",
+        persistent_filesystem=True,
         persist_across_processes=False,
     )
 
@@ -1420,15 +1569,21 @@ def test_cleanup_with_persist_disabled_stops_and_rms(monkeypatch):
 
     env.cleanup()
 
-    stops = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"]
-    rms = [c for c in cleanup_calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"]
+    stops = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "stop"
+    ]
+    rms = [
+        c
+        for c in cleanup_calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "rm"
+    ]
     assert stops, "expected docker stop"
     assert rms, (
         "docker rm MUST run when persist_across_processes=False, even with "
         "persistent_filesystem=True — that gating was the leak source in #20561."
     )
-
-
 
 
 def test_cleanup_on_env_with_no_container_id_does_not_raise(monkeypatch):
@@ -1452,6 +1607,7 @@ def test_cleanup_on_env_with_no_container_id_does_not_raise(monkeypatch):
 def _now_iso(offset_seconds: int = 0) -> str:
     """Return an RFC3339 timestamp ``offset_seconds`` in the past."""
     import datetime
+
     t = datetime.datetime.now(datetime.UTC) - datetime.timedelta(seconds=offset_seconds)
     # Format like Docker emits — with nanoseconds-style trailing digits.
     return t.isoformat().replace("+00:00", ".123456789Z")
@@ -1470,7 +1626,10 @@ def test_reap_orphan_continues_after_individual_rm_failure(monkeypatch):
         sub = cmd[1]
         if sub == "ps":
             return subprocess.CompletedProcess(
-                cmd, 0, stdout="cid-a\ncid-b\ncid-c\n", stderr="",
+                cmd,
+                0,
+                stdout="cid-a\ncid-b\ncid-c\n",
+                stderr="",
             )
         if sub == "inspect":
             return subprocess.CompletedProcess(cmd, 0, stdout=old + "\n", stderr="")
@@ -1478,14 +1637,18 @@ def test_reap_orphan_continues_after_individual_rm_failure(monkeypatch):
             rm_calls.append(cmd[-1])
             # cid-b fails; cid-a and cid-c succeed.
             if cmd[-1] == "cid-b":
-                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="no such container")
+                return subprocess.CompletedProcess(
+                    cmd, 1, stdout="", stderr="no such container"
+                )
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
 
     removed = docker_env.reap_orphan_containers(
-        max_age_seconds=600, profile_filter="default", docker_exe="/usr/bin/docker",
+        max_age_seconds=600,
+        profile_filter="default",
+        docker_exe="/usr/bin/docker",
     )
 
     # All three were attempted, two succeeded.
@@ -1511,7 +1674,10 @@ def test_reap_orphan_uses_plain_rm_so_running_containers_fail_safe(monkeypatch):
         sub = cmd[1]
         if sub == "ps":
             return subprocess.CompletedProcess(
-                cmd, 0, stdout="cid-a\ncid-b\n", stderr="",
+                cmd,
+                0,
+                stdout="cid-a\ncid-b\n",
+                stderr="",
             )
         if sub == "inspect":
             return subprocess.CompletedProcess(cmd, 0, stdout=old + "\n", stderr="")
@@ -1521,7 +1687,9 @@ def test_reap_orphan_uses_plain_rm_so_running_containers_fail_safe(monkeypatch):
                 # cid-b was restarted by a sibling after the ps snapshot: the
                 # daemon refuses a plain rm on a running container.
                 return subprocess.CompletedProcess(
-                    cmd, 1, stdout="",
+                    cmd,
+                    1,
+                    stdout="",
                     stderr='cannot remove container "cid-b": container is running',
                 )
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
@@ -1530,7 +1698,9 @@ def test_reap_orphan_uses_plain_rm_so_running_containers_fail_safe(monkeypatch):
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
 
     removed = docker_env.reap_orphan_containers(
-        max_age_seconds=600, profile_filter="default", docker_exe="/usr/bin/docker",
+        max_age_seconds=600,
+        profile_filter="default",
+        docker_exe="/usr/bin/docker",
     )
 
     assert removed == 1
@@ -1548,7 +1718,8 @@ def test_container_finished_at_parses_nanosecond_timestamp(monkeypatch):
 
     def _run(cmd, **kwargs):
         return subprocess.CompletedProcess(
-            cmd, 0,
+            cmd,
+            0,
             stdout="2026-05-28T13:45:00.123456789Z\n",
             stderr="",
         )
@@ -1558,6 +1729,7 @@ def test_container_finished_at_parses_nanosecond_timestamp(monkeypatch):
     result = docker_env._container_finished_at("/usr/bin/docker", "test-cid")
     assert result is not None, "must parse RFC3339 with nanoseconds"
     import datetime
+
     assert result.tzinfo == datetime.UTC
     assert result.year == 2026 and result.month == 5 and result.day == 28
 
@@ -1575,14 +1747,19 @@ def test_container_finished_at_returns_none_on_zero_value():
             self.stderr = ""
 
     import unittest.mock
+
     with unittest.mock.patch.object(
-        docker_env.subprocess, "run", return_value=_MockRun("0001-01-01T00:00:00Z\n"),
+        docker_env.subprocess,
+        "run",
+        return_value=_MockRun("0001-01-01T00:00:00Z\n"),
     ):
         result = docker_env._container_finished_at("/usr/bin/docker", "never-finished")
     assert result is None
 
 
-def test_credential_mount_skipped_when_source_is_directory(monkeypatch, tmp_path, caplog):
+def test_credential_mount_skipped_when_source_is_directory(
+    monkeypatch, tmp_path, caplog
+):
     """Credential mount should be skipped when source path is a directory.
 
     In Docker-in-Docker scenarios, Docker may auto-create the source path as
@@ -1598,7 +1775,10 @@ def test_credential_mount_skipped_when_source_is_directory(monkeypatch, tmp_path
 
     # Mock get_credential_file_mounts to return the corrupted entry
     fake_mounts = [
-        {"host_path": str(corrupted_dir), "container_path": "/root/.clawksis/google_token.json"},
+        {
+            "host_path": str(corrupted_dir),
+            "container_path": "/root/.clawksis/google_token.json",
+        },
     ]
     monkeypatch.setattr(
         "tools.credential_files.get_credential_file_mounts",
@@ -1617,7 +1797,11 @@ def test_credential_mount_skipped_when_source_is_directory(monkeypatch, tmp_path
         _make_dummy_env()
 
     # The corrupted mount should be skipped
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args_str = " ".join(run_calls[0][0])
     assert "google_token.json" not in run_args_str
@@ -1632,7 +1816,10 @@ def test_credential_mount_skipped_when_source_missing(monkeypatch, tmp_path, cap
     calls = _mock_subprocess_run(monkeypatch)
 
     fake_mounts = [
-        {"host_path": str(missing_path), "container_path": "/root/.clawksis/deleted_token.json"},
+        {
+            "host_path": str(missing_path),
+            "container_path": "/root/.clawksis/deleted_token.json",
+        },
     ]
     monkeypatch.setattr(
         "tools.credential_files.get_credential_file_mounts",
@@ -1650,7 +1837,11 @@ def test_credential_mount_skipped_when_source_missing(monkeypatch, tmp_path, cap
     with caplog.at_level(logging.WARNING):
         _make_dummy_env()
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args_str = " ".join(run_calls[0][0])
     assert "deleted_token.json" not in run_args_str
@@ -1669,11 +1860,17 @@ def _mock_subprocess_run_with_entrypoint(monkeypatch, entrypoint_json):
         calls.append((list(cmd) if isinstance(cmd, list) else cmd, kwargs))
         if isinstance(cmd, list) and len(cmd) >= 2:
             if cmd[1] == "version":
-                return subprocess.CompletedProcess(cmd, 0, stdout="Docker version", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="Docker version", stderr=""
+                )
             if cmd[1] == "image" and len(cmd) >= 3 and cmd[2] == "inspect":
-                return subprocess.CompletedProcess(cmd, 0, stdout=entrypoint_json + "\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=entrypoint_json + "\n", stderr=""
+                )
             if cmd[1] == "run":
-                return subprocess.CompletedProcess(cmd, 0, stdout="fake-container-id\n", stderr="")
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout="fake-container-id\n", stderr=""
+                )
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(docker_env.subprocess, "run", _run)
@@ -1688,13 +1885,19 @@ def test_s6_image_skips_docker_init_and_mounts_run_exec(monkeypatch):
 
     _make_dummy_env(image="clawksis-agent:latest")
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     run_args = run_calls[0][0]
 
     assert "--init" not in run_args, "s6 /init image must not get Docker --init"
 
-    tmpfs_vals = [run_args[i + 1] for i, a in enumerate(run_args[:-1]) if a == "--tmpfs"]
+    tmpfs_vals = [
+        run_args[i + 1] for i, a in enumerate(run_args[:-1]) if a == "--tmpfs"
+    ]
     run_mounts = [v for v in tmpfs_vals if v.startswith("/run:")]
     assert run_mounts, f"no /run tmpfs mount found in {tmpfs_vals}"
     assert "exec" in run_mounts[0] and "noexec" not in run_mounts[0], (
@@ -1731,7 +1934,9 @@ def test_execute_does_not_recover_when_not_persistent(monkeypatch):
     )
 
     result = env.execute("echo hi")
-    assert result.get("returncode") == 1, "the original error must pass through unchanged"
+    assert result.get("returncode") == 1, (
+        "the original error must pass through unchanged"
+    )
 
 
 def test_execute_does_not_recover_on_ordinary_failure(monkeypatch):
@@ -1765,7 +1970,11 @@ def test_execute_does_not_recover_on_ordinary_failure(monkeypatch):
 
 
 def _shm_run_args(calls):
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     return run_calls[0][0]
 
@@ -1882,7 +2091,11 @@ def test_docker_run_secret_values_never_in_argv(monkeypatch):
 
     _make_dummy_env(env={"MY_TOKEN": secret})
 
-    run_calls = [c for c in calls if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"]
+    run_calls = [
+        c
+        for c in calls
+        if isinstance(c[0], list) and len(c[0]) >= 2 and c[0][1] == "run"
+    ]
     assert run_calls, "docker run should have been called"
     args, kwargs = run_calls[0]
     assert "MY_TOKEN" in args
@@ -1899,7 +2112,9 @@ def test_docker_env_warnings_never_echo_values(caplog):
     assert "TOKEN" in caplog.text and "sk-live-value" not in caplog.text
 
 
-@pytest.mark.parametrize("base", ["default", "profile:research-assistant-for-the-quarterly-ops"])
+@pytest.mark.parametrize(
+    "base", ["default", "profile:research-assistant-for-the-quarterly-ops"]
+)
 def test_workspace_container_labels_identify_it_to_the_orphan_reaper(monkeypatch, base):
     """The orphan reaper must recognise an idle-STOPPED workspace container from the labels the
     create path actually stamps. ``clawk-task-id`` is truncated to 63 chars, so a profile name of
@@ -1908,11 +2123,15 @@ def test_workspace_container_labels_identify_it_to_the_orphan_reaper(monkeypatch
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     calls = _mock_subprocess_run(monkeypatch)
     _make_dummy_env(task_id=f"{base}:ws:0123456789abcdef")
-    labels = dict(lbl.split("=", 1) for lbl in _labels_in_run_args(_run_args_from_calls(calls)))
+    labels = dict(
+        lbl.split("=", 1) for lbl in _labels_in_run_args(_run_args_from_calls(calls))
+    )
 
     def _inspect(cmd, **kwargs):
         key = re.search(r'Labels "([^"]+)"', cmd[cmd.index("--format") + 1]).group(1)
-        return subprocess.CompletedProcess(cmd, 0, stdout=labels.get(key, "<no value>") + "\n", stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=labels.get(key, "<no value>") + "\n", stderr=""
+        )
 
     monkeypatch.setattr(docker_env.subprocess, "run", _inspect)
     assert docker_env._is_idle_workspace_container("/usr/bin/docker", "cid"), labels
@@ -1922,11 +2141,15 @@ def test_non_workspace_container_is_not_an_idle_workspace(monkeypatch):
     monkeypatch.setattr(docker_env, "find_docker", lambda: "/usr/bin/docker")
     calls = _mock_subprocess_run(monkeypatch)
     _make_dummy_env(task_id="profile:research-assistant-for-the-quarterly-ops")
-    labels = dict(lbl.split("=", 1) for lbl in _labels_in_run_args(_run_args_from_calls(calls)))
+    labels = dict(
+        lbl.split("=", 1) for lbl in _labels_in_run_args(_run_args_from_calls(calls))
+    )
 
     def _inspect(cmd, **kwargs):
         key = re.search(r'Labels "([^"]+)"', cmd[cmd.index("--format") + 1]).group(1)
-        return subprocess.CompletedProcess(cmd, 0, stdout=labels.get(key, "<no value>") + "\n", stderr="")
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=labels.get(key, "<no value>") + "\n", stderr=""
+        )
 
     monkeypatch.setattr(docker_env.subprocess, "run", _inspect)
     assert not docker_env._is_idle_workspace_container("/usr/bin/docker", "cid"), labels

@@ -11,7 +11,11 @@ SOURCE = "playwright e2e"
 
 
 def _files(root: Path, pattern: str) -> list[Path]:
-    return sorted(path for path in root.rglob(pattern) if path.is_file()) if root.exists() else []
+    return (
+        sorted(path for path in root.rglob(pattern) if path.is_file())
+        if root.exists()
+        else []
+    )
 
 
 def _is_explicit_screenshot(path: Path) -> bool:
@@ -24,8 +28,13 @@ def _is_explicit_screenshot(path: Path) -> bool:
 
 def build_manifest(results_dir: Path) -> dict:
     """Record stable screenshot names from one E2E run for main/PR comparison."""
-    screenshots = [path for path in _files(results_dir, "*.png") if _is_explicit_screenshot(path)]
-    return {"version": 1, "screenshot_names": sorted({path.name for path in screenshots})}
+    screenshots = [
+        path for path in _files(results_dir, "*.png") if _is_explicit_screenshot(path)
+    ]
+    return {
+        "version": 1,
+        "screenshot_names": sorted({path.name for path in screenshots}),
+    }
 
 
 def _base_screenshot_names(path: Path | None) -> set[str] | None:
@@ -45,10 +54,15 @@ def _base_screenshot_names(path: Path | None) -> set[str] | None:
 def select_evidence(results_dir: Path, base_manifest: Path | None = None) -> dict:
     """Select only screenshots new to main, plus every generated visual diff."""
     base_names = _base_screenshot_names(base_manifest)
-    screenshots = [] if base_names is None else [
-        path for path in _files(results_dir, "*.png")
-        if _is_explicit_screenshot(path) and path.name not in base_names
-    ]
+    screenshots = (
+        []
+        if base_names is None
+        else [
+            path
+            for path in _files(results_dir, "*.png")
+            if _is_explicit_screenshot(path) and path.name not in base_names
+        ]
+    )
     diffs: list[dict[str, Path]] = []
     for diff in _files(results_dir, "*-diff.png"):
         stem = diff.with_name(diff.name.removesuffix("-diff.png"))
@@ -74,7 +88,9 @@ def build_status(selection: dict, artifact_url: str = "") -> list[dict]:
             f"{len(screenshots)} new screenshot{'s' if len(screenshots) != 1 else ''} vs main"
         )
     if diffs:
-        summary_parts.append(f"{len(diffs)} visual diff{'s' if len(diffs) != 1 else ''}")
+        summary_parts.append(
+            f"{len(diffs)} visual diff{'s' if len(diffs) != 1 else ''}"
+        )
 
     result: dict[str, str] = {
         "kind": "info",
@@ -97,7 +113,8 @@ def main() -> int:
     args = parser.parse_args()
 
     args.manifest_output.write_text(
-        json.dumps(build_manifest(args.results_dir), sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(build_manifest(args.results_dir), sort_keys=True) + "\n",
+        encoding="utf-8",
     )
     selection = select_evidence(args.results_dir, args.base_manifest)
     args.output.write_text(

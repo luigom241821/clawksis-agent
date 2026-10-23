@@ -39,7 +39,9 @@ class _TextAdapter(_CardAdapter):
     retire_clarify_card = None  # type: ignore[assignment]
 
 
-_ONE_QUESTION = [{"qid": "q0", "question": "Pick one", "choices": ["a", "b"], "multi_select": False}]
+_ONE_QUESTION = [
+    {"qid": "q0", "question": "Pick one", "choices": ["a", "b"], "multi_select": False}
+]
 
 
 def _asked(adapter):
@@ -56,15 +58,24 @@ def _run_clarify(adapter, questions=_ONE_QUESTION, answers=(), via_tool=False):
     from tools import clarify_gateway as cm
 
     runner = object.__new__(TurnRunner)
-    runner._approval_owner = None  # no owning authority: the controls snapshot is skipped
+    runner._approval_owner = (
+        None  # no owning authority: the controls snapshot is skipped
+    )
     runner._ctx = SimpleNamespace(
-        _status_adapter=adapter, _status_chat_id="C1", _status_thread_metadata={},
-        session_key="sk1", stream_consumer_holder=[None])
+        _status_adapter=adapter,
+        _status_chat_id="C1",
+        _status_thread_metadata={},
+        session_key="sk1",
+        stream_consumer_holder=[None],
+    )
     labels: list[str] = []
 
     class _Fut:
-        def __init__(self, r): self._r = r
-        def result(self, timeout=None): return self._r
+        def __init__(self, r):
+            self._r = r
+
+        def result(self, timeout=None):
+            return self._r
 
     def _schedule(coro, label):
         labels.append(label)
@@ -84,11 +95,16 @@ def _run_clarify(adapter, questions=_ONE_QUESTION, answers=(), via_tool=False):
             cm.resolve_gateway_clarify(kwargs["clarify_id"], target)
         return entry
 
-    with patch.object(cm, "register", _register), \
-            patch("tools.clarify_gateway.get_clarify_timeout", return_value=0.05):
+    with (
+        patch.object(cm, "register", _register),
+        patch("tools.clarify_gateway.get_clarify_timeout", return_value=0.05),
+    ):
         if via_tool:
             from tools.clarify_tool import clarify_tool
-            return clarify_tool(questions, callback=runner._clarify_callback_sync), labels
+
+            return clarify_tool(
+                questions, callback=runner._clarify_callback_sync
+            ), labels
         return runner._clarify_callback_sync(questions), labels
 
 
@@ -119,22 +135,51 @@ def test_real_answer_starting_with_a_bracket_is_not_mistaken_for_a_sentinel():
 # --- Batches: one card per question, stop at the first unanswered one -----
 
 
-_THREE_QUESTIONS = [{"qid": f"q{i}", "question": q, "choices": ["a", "b"], "multi_select": False}
-                    for i, q in enumerate(("One?", "Two?", "Three?"))]
+_THREE_QUESTIONS = [
+    {"qid": f"q{i}", "question": q, "choices": ["a", "b"], "multi_select": False}
+    for i, q in enumerate(("One?", "Two?", "Three?"))
+]
 
 
-@pytest.mark.parametrize("answers,asked,payload,resumed", [
-    # Nobody answers question 1: the batch ends there instead of re-asking — every further
-    # question used to cost another full clarify_timeout — and reports the walk-away.
-    ((), ["One?"], {"answers": {}, "outcome": "timed_out", "notice": "[user did not respond within 0m]"}, 0),
-    # Answers already given survive; the unanswered question is not invented.
-    (("use postgres",), ["One?", "Two?"],
-     {"answers": {"q0": "use postgres"}, "outcome": "timed_out", "notice": "[user did not respond within 0m]"}, 0),
-    # A fully answered batch re-arms typing once, at the end: between two cards the re-arm
-    # would only open a bubble the next question's boundary finalizes.
-    (("one", "two", "three"), ["One?", "Two?", "Three?"],
-     {"answers": {"q0": "one", "q1": "two", "q2": "three"}, "outcome": "submitted"}, 1),
-])
+@pytest.mark.parametrize(
+    "answers,asked,payload,resumed",
+    [
+        # Nobody answers question 1: the batch ends there instead of re-asking — every further
+        # question used to cost another full clarify_timeout — and reports the walk-away.
+        (
+            (),
+            ["One?"],
+            {
+                "answers": {},
+                "outcome": "timed_out",
+                "notice": "[user did not respond within 0m]",
+            },
+            0,
+        ),
+        # Answers already given survive; the unanswered question is not invented.
+        (
+            ("use postgres",),
+            ["One?", "Two?"],
+            {
+                "answers": {"q0": "use postgres"},
+                "outcome": "timed_out",
+                "notice": "[user did not respond within 0m]",
+            },
+            0,
+        ),
+        # A fully answered batch re-arms typing once, at the end: between two cards the re-arm
+        # would only open a bubble the next question's boundary finalizes.
+        (
+            ("one", "two", "three"),
+            ["One?", "Two?", "Three?"],
+            {
+                "answers": {"q0": "one", "q1": "two", "q2": "three"},
+                "outcome": "submitted",
+            },
+            1,
+        ),
+    ],
+)
 def test_batch_routing(answers, asked, payload, resumed):
     adapter = _CardAdapter()
     reply, _labels = _run_clarify(adapter, questions=_THREE_QUESTIONS, answers=answers)
@@ -153,17 +198,25 @@ class _UndeliverableAdapter(_CardAdapter):
         return SendResult(success=False, error="Bad Request: chat not found")
 
 
-@pytest.mark.parametrize("adapter_cls,outcome,notice", [
-    (_CardAdapter, "timed_out", "[user did not respond within 0m]"),
-    # #112684: an undelivered card must not read as user inactivity — the outcome says
-    # undelivered and the delivery notice rides along.
-    (_UndeliverableAdapter, "undelivered", "[clarify prompt could not be delivered]"),
-])
-def test_clarify_tool_batch_route_answers_and_stops_together(adapter_cls, outcome, notice):
+@pytest.mark.parametrize(
+    "adapter_cls,outcome,notice",
+    [
+        (_CardAdapter, "timed_out", "[user did not respond within 0m]"),
+        # #112684: an undelivered card must not read as user inactivity — the outcome says
+        # undelivered and the delivery notice rides along.
+        (
+            _UndeliverableAdapter,
+            "undelivered",
+            "[clarify prompt could not be delivered]",
+        ),
+    ],
+)
+def test_clarify_tool_batch_route_answers_and_stops_together(
+    adapter_cls, outcome, notice
+):
     """End to end: the tool sees unanswered questions + the outcome + the surface's notice."""
     adapter = adapter_cls()
-    raw, _labels = _run_clarify(
-        adapter, questions=_THREE_QUESTIONS[:2], via_tool=True)
+    raw, _labels = _run_clarify(adapter, questions=_THREE_QUESTIONS[:2], via_tool=True)
     assert _asked(adapter) == ["One?"]
     result = json.loads(raw)
     assert result["outcome"] == outcome
@@ -177,19 +230,29 @@ def test_skip_hint_only_on_messaging_platforms(platform, hinted):
     """The messaging "Reply \"skip\"" hint is for chat adapters, where a typed reply answers the card.
     A local viewer (TUI / Desktop / CLI) renders a modal with its own skip key, as on main (row 8)."""
     from gateway.config import Platform
+
     adapter = _CardAdapter()
     from gateway.run_turn_runner import TurnRunner
     from tools import clarify_gateway as cm
+
     runner = object.__new__(TurnRunner)
     runner._approval_owner = None
     runner._ctx = SimpleNamespace(
-        _status_adapter=adapter, _status_chat_id="C1", _status_thread_metadata={},
-        session_key="sk1", stream_consumer_holder=[None],
-        source=SimpleNamespace(platform=Platform(platform)))
+        _status_adapter=adapter,
+        _status_chat_id="C1",
+        _status_thread_metadata={},
+        session_key="sk1",
+        stream_consumer_holder=[None],
+        source=SimpleNamespace(platform=Platform(platform)),
+    )
 
     class _Fut:
-        def __init__(self, r): self._r = r
-        def result(self, timeout=None): return self._r
+        def __init__(self, r):
+            self._r = r
+
+        def result(self, timeout=None):
+            return self._r
+
     runner._schedule = lambda coro, label: _Fut(asyncio.run(coro))
     runner._close_native_stream_boundary = lambda *a, **k: None
     real_register = cm.register
@@ -198,8 +261,11 @@ def test_skip_hint_only_on_messaging_platforms(platform, hinted):
         entry = real_register(**kwargs)
         cm.resolve_gateway_clarify(kwargs["clarify_id"], "a")
         return entry
-    with patch.object(cm, "register", _register), \
-            patch("tools.clarify_gateway.get_clarify_timeout", return_value=0.05):
+
+    with (
+        patch.object(cm, "register", _register),
+        patch("tools.clarify_gateway.get_clarify_timeout", return_value=0.05),
+    ):
         runner._clarify_callback_sync(_ONE_QUESTION)
     assert adapter.asked[0].startswith("Pick one")
     assert ("skip" in adapter.asked[0]) is hinted, adapter.asked

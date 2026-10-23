@@ -55,7 +55,9 @@ class _SpyProvider:
 
 
 @pytest.mark.asyncio
-async def test_valid_fire_reservation_blocks_drain_before_body_and_task(adapter, monkeypatch):
+async def test_valid_fire_reservation_blocks_drain_before_body_and_task(
+    adapter, monkeypatch
+):
     runner = SimpleNamespace(_draining=False, _external_drain_active=False)
     body_started = asyncio.Event()
     release_body = asyncio.Event()
@@ -78,14 +80,17 @@ async def test_valid_fire_reservation_blocks_drain_before_body_and_task(adapter,
         await release_body.wait()
         return await original_json(request)
 
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", BlockingProvider)
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler", BlockingProvider
+    )
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
     app = _create_app(adapter)
-    with patch("gateway.run._gateway_runner_ref", lambda: runner), patch.object(
-        web.Request, "json", delayed_json
+    with (
+        patch("gateway.run._gateway_runner_ref", lambda: runner),
+        patch.object(web.Request, "json", delayed_json),
     ):
         async with TestClient(TestServer(app)) as cli:
             request_task = asyncio.create_task(
@@ -113,16 +118,20 @@ async def test_valid_fire_reservation_blocks_drain_before_body_and_task(adapter,
 
 
 @pytest.mark.asyncio
-async def test_admission_failure_is_retryable_and_never_dispatches(adapter, monkeypatch):
+async def test_admission_failure_is_retryable_and_never_dispatches(
+    adapter, monkeypatch
+):
     class FailingProvider(_SpyProvider):
         def claim_fire(self, job_id):
             raise OSError("ledger unavailable")
 
     provider = FailingProvider()
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: provider)
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler", lambda: provider
+    )
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     app = _create_app(adapter)
@@ -150,10 +159,12 @@ async def test_accepted_response_waits_for_durable_admission(adapter, monkeypatc
             return super().claim_fire(job_id)
 
     provider = BlockingAdmissionProvider()
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: provider)
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler", lambda: provider
+    )
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     app = _create_app(adapter)
@@ -191,14 +202,14 @@ async def test_missing_job_id_400(adapter, monkeypatch):
     monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: spy)
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     app = _create_app(adapter)
     async with TestClient(TestServer(app)) as cli:
-        resp = await cli.post("/api/cron/fire",
-                              headers={"Authorization": "Bearer good"},
-                              json={})
+        resp = await cli.post(
+            "/api/cron/fire", headers={"Authorization": "Bearer good"}, json={}
+        )
         assert resp.status == 400
     assert spy.fired == []
 
@@ -211,15 +222,17 @@ async def test_fire_does_not_require_api_server_key(adapter, monkeypatch):
     monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: spy)
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     app = _create_app(adapter)
     async with TestClient(TestServer(app)) as cli:
         # Bearer is the FIRE token, not the API_SERVER_KEY "sk-secret".
-        resp = await cli.post("/api/cron/fire",
-                              headers={"Authorization": "Bearer nas-jwt"},
-                              json={"job_id": "j9"})
+        resp = await cli.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer nas-jwt"},
+            json={"job_id": "j9"},
+        )
         assert resp.status == 202
     for _ in range(50):
         if spy.fired:
@@ -252,9 +265,11 @@ async def test_sync_verifier_runs_off_the_event_loop(adapter, monkeypatch):
 
     app = _create_app(adapter)
     async with TestClient(TestServer(app)) as cli:
-        resp = await cli.post("/api/cron/fire",
-                              headers={"Authorization": "Bearer good"},
-                              json={"job_id": "off-loop"})
+        resp = await cli.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer good"},
+            json={"job_id": "off-loop"},
+        )
         assert resp.status == 202
 
     # If the verifier had run inline on the loop, its thread id would equal the
@@ -281,9 +296,11 @@ async def test_crashing_verifier_fails_closed_401(adapter, monkeypatch):
 
     app = _create_app(adapter)
     async with TestClient(TestServer(app)) as cli:
-        resp = await cli.post("/api/cron/fire",
-                              headers={"Authorization": "Bearer boom"},
-                              json={"job_id": "abc123"})
+        resp = await cli.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer boom"},
+            json={"job_id": "abc123"},
+        )
         assert resp.status == 401
 
     await asyncio.sleep(0.05)
@@ -308,9 +325,11 @@ async def test_async_verifier_is_awaited(adapter, monkeypatch):
 
     app = _create_app(adapter)
     async with TestClient(TestServer(app)) as cli:
-        resp = await cli.post("/api/cron/fire",
-                              headers={"Authorization": "Bearer good"},
-                              json={"job_id": "async-ok"})
+        resp = await cli.post(
+            "/api/cron/fire",
+            headers={"Authorization": "Bearer good"},
+            json={"job_id": "async-ok"},
+        )
         assert resp.status == 202
 
     for _ in range(50):
@@ -351,15 +370,17 @@ async def test_fire_passes_live_adapters_to_provider(adapter, monkeypatch):
     )
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     with patch("gateway.run._gateway_runner_ref", lambda: runner):
         app = _create_app(adapter)
         async with TestClient(TestServer(app)) as cli:
-            resp = await cli.post("/api/cron/fire",
-                                  headers={"Authorization": "Bearer good"},
-                                  json={"job_id": "with-adapters"})
+            resp = await cli.post(
+                "/api/cron/fire",
+                headers={"Authorization": "Bearer good"},
+                json={"job_id": "with-adapters"},
+            )
             assert resp.status == 202
 
         for _ in range(50):
@@ -372,10 +393,10 @@ async def test_fire_passes_live_adapters_to_provider(adapter, monkeypatch):
     assert seen.get("loop") is not None
 
 
-
-
 @pytest.mark.asyncio
-async def test_estop_refuses_fire_before_admission_and_lifts_on_resume(adapter, monkeypatch, tmp_path):
+async def test_estop_refuses_fire_before_admission_and_lifts_on_resume(
+    adapter, monkeypatch, tmp_path
+):
     """`clawk pause` must stop the NAS-driven door too: 503 + Retry-After (NAS redelivers
     after `clawk resume`) and no ``claim_fire`` — a claim followed by a 503 would leave a
     claimed job that the retry and the misfire backstop both race for."""
@@ -384,10 +405,12 @@ async def test_estop_refuses_fire_before_admission_and_lifts_on_resume(adapter, 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     estop._logged_components.clear()
     provider = _SpyProvider()
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: provider)
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler", lambda: provider
+    )
     monkeypatch.setattr(
         "plugins.cron_providers.chronos.verify.get_fire_verifier",
-        lambda: (lambda **kw: {"purpose": "cron_fire"}),
+        lambda: lambda **kw: {"purpose": "cron_fire"},
     )
 
     app = _create_app(adapter)

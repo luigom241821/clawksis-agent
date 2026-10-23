@@ -1,4 +1,5 @@
 """Native HTTP replay boundaries and deterministic provider-level concurrency."""
+
 import logging
 import threading
 import time
@@ -33,9 +34,16 @@ class Provider(StubAuthProvider):
             raise RefreshExpiredError("expired")
         if self.outcome == "outage":
             raise ProviderError("temporarily unavailable")
-        return Session(user_id=self.name, email="test@example.test", display_name=self.name,
-                       org_id="test", provider=self.name, expires_at=int(time.time()) + 3600,
-                       access_token=f"access-{self.name}", refresh_token=f"rotated-{self.name}")
+        return Session(
+            user_id=self.name,
+            email="test@example.test",
+            display_name=self.name,
+            org_id="test",
+            provider=self.name,
+            expires_at=int(time.time()) + 3600,
+            access_token=f"access-{self.name}",
+            refresh_token=f"rotated-{self.name}",
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -51,10 +59,28 @@ def isolated_registry():
         replay._cache.clear()
 
 
-@pytest.mark.parametrize("case", ["hint-fallback", "negative", "outage", "replacement",
-                                      "ttl", "capacity", "independent", "network-hop"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "hint-fallback",
+        "negative",
+        "outage",
+        "replacement",
+        "ttl",
+        "capacity",
+        "independent",
+        "network-hop",
+    ],
+)
 def test_native_http_refresh_boundaries(case, monkeypatch):
-    owner = Provider("owner", "expired" if case == "negative" else "outage" if case == "outage" else "success")
+    owner = Provider(
+        "owner",
+        "expired"
+        if case == "negative"
+        else "outage"
+        if case == "outage"
+        else "success",
+    )
     other = Provider("other", "success" if case == "independent" else "expired")
     register_provider(owner)
     register_provider(other)
@@ -63,11 +89,18 @@ def test_native_http_refresh_boundaries(case, monkeypatch):
     now = [100.0]
     monkeypatch.setattr(replay.time, "monotonic", lambda: now[0])
     with TestClient(app) as client:
+
         def request(hint="owner", token="opaque-old-token", **kwargs):
-            return client.post("/auth/native/refresh", json={"refresh_token": token, "provider": hint}, **kwargs)
+            return client.post(
+                "/auth/native/refresh",
+                json={"refresh_token": token, "provider": hint},
+                **kwargs,
+            )
 
         first = request()
-        assert first.status_code == (401 if case == "negative" else 503 if case == "outage" else 200)
+        assert first.status_code == (
+            401 if case == "negative" else 503 if case == "outage" else 200
+        )
         if case in {"hint-fallback", "negative", "outage"}:
             for hint in ("other", "", "unknown-a", "unknown-b", "owner"):
                 response = request(hint)
@@ -92,7 +125,9 @@ def test_native_http_refresh_boundaries(case, monkeypatch):
             for token in ("new-token-1", "new-token-2", "new-token-3"):
                 assert request(token=token).status_code == 200
             assert len(replay._cache) == 2
-            assert all(isinstance(key[1], bytes) and len(key[1]) == 32 for key in replay._cache)
+            assert all(
+                isinstance(key[1], bytes) and len(key[1]) == 32 for key in replay._cache
+            )
         elif case == "independent":
             response = request("other")
             assert response.status_code == 200
@@ -103,16 +138,25 @@ def test_native_http_refresh_boundaries(case, monkeypatch):
             # A burst that straddles a network change (laptop wakes on another Wi-Fi) still
             # coalesces: the RT identifies the session, the peer address does not.
             with TestClient(app, client=("192.0.2.12", 2345)) as another_client:
-                assert another_client.post("/auth/native/refresh", json={"refresh_token": "opaque-old-token"}).json() == first.json()
+                assert (
+                    another_client.post(
+                        "/auth/native/refresh",
+                        json={"refresh_token": "opaque-old-token"},
+                    ).json()
+                    == first.json()
+                )
             assert owner.calls == 1
 
 
-@pytest.mark.parametrize("outcome, independent", [("success", False), ("expired", False),
-                                                  ("outage", False), ("success", True)])
+@pytest.mark.parametrize(
+    "outcome, independent",
+    [("success", False), ("expired", False), ("outage", False), ("success", True)],
+)
 def test_concurrent_refresh_uses_concrete_provider_identity(outcome, independent):
     def coalesced(token, hint):
         return replay.refresh_session_coalesced(
-            token, hint, phase="test", log=logging.getLogger(__name__))
+            token, hint, phase="test", log=logging.getLogger(__name__)
+        )
 
     owner = Provider("owner", outcome)
     other = Provider("other", "success" if independent else "expired")
@@ -127,16 +171,23 @@ def test_concurrent_refresh_uses_concrete_provider_identity(outcome, independent
         second = pool.submit(coalesced, "same-token", "other")
         try:
             if independent:
-                assert other.entered.wait(3), "unrelated providers must not share a lock"
+                assert other.entered.wait(3), (
+                    "unrelated providers must not share a lock"
+                )
             else:
                 deadline = time.monotonic() + 3
                 while time.monotonic() < deadline:
                     with replay._guard:
-                        if any(key[0] == id(owner) and flight.users == 2 for key, flight in replay._flights.items()):
+                        if any(
+                            key[0] == id(owner) and flight.users == 2
+                            for key, flight in replay._flights.items()
+                        ):
                             break
                     time.sleep(0.005)
                 else:
-                    pytest.fail("different hints did not converge on the concrete issuer lock")
+                    pytest.fail(
+                        "different hints did not converge on the concrete issuer lock"
+                    )
                 assert owner.calls == 1
         finally:
             owner.release.set()
@@ -151,7 +202,10 @@ def test_concurrent_refresh_uses_concrete_provider_identity(outcome, independent
             if outcome == "expired":
                 assert results == [None, None]
             else:
-                assert [result[1] for result in results] == ["owner", "other" if independent else "owner"]
+                assert [result[1] for result in results] == [
+                    "owner",
+                    "other" if independent else "owner",
+                ]
             assert owner.calls == 1
         assert not replay._flights
 
@@ -173,16 +227,26 @@ class _RotatingReuseDetectingProvider(Provider):
         self.rotated.add(refresh_token)
         self.entered.set()
         assert self.release.wait(5), "test provider timed out"
-        return Session(user_id="u", email="u@example.test", display_name="u", org_id="o",
-                       provider=self.name, expires_at=int(time.time()) + 900,
-                       access_token="fresh-at", refresh_token=f"rt-{self.calls}")
+        return Session(
+            user_id="u",
+            email="u@example.test",
+            display_name="u",
+            org_id="o",
+            provider=self.name,
+            expires_at=int(time.time()) + 900,
+            access_token="fresh-at",
+            refresh_token=f"rt-{self.calls}",
+        )
 
 
 @pytest.fixture
 def gated_web_app():
     from clawk_cli import web_server
 
-    prev = {k: getattr(web_server.app.state, k, None) for k in ("bound_host", "bound_port", "auth_required")}
+    prev = {
+        k: getattr(web_server.app.state, k, None)
+        for k in ("bound_host", "bound_port", "auth_required")
+    }
     web_server.app.state.bound_host = "gw.example.test"
     web_server.app.state.bound_port = 443
     web_server.app.state.auth_required = True
@@ -197,8 +261,11 @@ def test_cookie_gate_burst_with_stale_rt_rotates_once(gated_web_app):
     provider = _RotatingReuseDetectingProvider()
     provider.release.clear()
     register_provider(provider)
-    cookies = {"clawk_session_at": "expired-at", "clawk_session_rt": "stale-rt",
-               "clawk_session_provider": "stub"}
+    cookies = {
+        "clawk_session_at": "expired-at",
+        "clawk_session_rt": "stale-rt",
+        "clawk_session_provider": "stub",
+    }
     clients_ready = threading.Barrier(5)
 
     def call():

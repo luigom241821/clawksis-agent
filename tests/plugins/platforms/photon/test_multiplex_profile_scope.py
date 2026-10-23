@@ -21,6 +21,7 @@ config.yaml extra.
 
 Mirrors the LINE/DingTalk/IRC/Mattermost fix for #98738.
 """
+
 from __future__ import annotations
 
 import os
@@ -102,6 +103,7 @@ class TestAuthMultiplexProfileScope:
         assert adapter.require_mention is False
         assert adapter._reactions_enabled() is False
 
+
 class TestAdapterMultiplexProfileScope:
     """PhotonAdapter.__init__ / _env_enablement / _reactions_enabled (adapter.py)."""
 
@@ -119,4 +121,3 @@ class TestAdapterMultiplexProfileScope:
         )
         adapter = PhotonAdapter(cfg)
         assert adapter._project_id == "profile-project-id"
-

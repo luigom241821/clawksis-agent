@@ -1,6 +1,7 @@
 """Tests for ``agent/turn_api_call.py::handle_api_interrupt`` — the plain (non-redirect)
 interrupt that lands mid provider call and records the streamed partial as the interrupted
 assistant row."""
+
 from __future__ import annotations
 
 import threading
@@ -32,8 +33,14 @@ def _bare_agent(streamed: str) -> AIAgent:
 def _interrupt(streamed: str):
     messages = [{"role": "user", "content": "start"}]
     verdict = handle_api_interrupt(
-        _bare_agent(streamed), _retry=TurnRetryState(), thinking_spinner=None, messages=messages,
-        conversation_history=[], api_start_time=time.time(), interrupted=False, final_response=None,
+        _bare_agent(streamed),
+        _retry=TurnRetryState(),
+        thinking_spinner=None,
+        messages=messages,
+        conversation_history=[],
+        api_start_time=time.time(),
+        interrupted=False,
+        final_response=None,
     )
     return messages, verdict
 
@@ -71,6 +78,9 @@ def test_distinct_batch_rows_are_not_mistaken_for_a_loop():
 def test_ordinary_partial_is_kept_as_the_interrupted_row():
     messages, verdict = _interrupt("Visible draft.")
 
-    assert (messages[-1]["role"], messages[-1]["content"]) == ("assistant", "Visible draft.")
+    assert (messages[-1]["role"], messages[-1]["content"]) == (
+        "assistant",
+        "Visible draft.",
+    )
     assert messages[-1]["display_metadata"] == {"interrupted": True}
     assert verdict.final_response == "Visible draft."

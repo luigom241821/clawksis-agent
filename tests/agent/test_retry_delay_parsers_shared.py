@@ -14,7 +14,9 @@ from agent.retry_utils import parse_retry_after_seconds, reset_delay_from_messag
 
 
 def _http_date(seconds_ahead: int) -> str:
-    return format_datetime(datetime.now(UTC) + timedelta(seconds=seconds_ahead), usegmt=True)
+    return format_datetime(
+        datetime.now(UTC) + timedelta(seconds=seconds_ahead), usegmt=True
+    )
 
 
 class TestRetryAfterHeaderOneParser:
@@ -41,22 +43,25 @@ class TestRetryAfterHeaderOneParser:
         from clawk_cli.observability.shared_metrics_sender import _retry_after_seconds
 
         assert _retry_after_seconds(_http_date(120), 7) in (119, 120)
-        assert _retry_after_seconds("0", 7) == 1          # floor survives
+        assert _retry_after_seconds("0", 7) == 1  # floor survives
         assert _retry_after_seconds("99999999", 7) == 86_400  # cap survives
         assert _retry_after_seconds("garbage", 7) == 7
 
 
 class TestResetDelayOneTable:
-    @pytest.mark.parametrize("message, seconds", [
-        ("Weekly usage limit reached. Resets in 6hr 29min.", 6 * 3600 + 29 * 60),
-        ("resets in 2 hours 5 minutes", 2 * 3600 + 5 * 60),
-        ("Limit hit; resets in 45s", 45.0),
-        ('"quotaResetDelay": "1500ms"', 1.5),
-        ("please retry after 12 seconds", 12.0),
-        # Both grammars in one body: the explicit retry-after wins (pool precedence), not the
-        # multi-hour quota window.
-        ("Rate limited. Retry after 30s; resets in 4hr", 30.0),
-    ])
+    @pytest.mark.parametrize(
+        "message, seconds",
+        [
+            ("Weekly usage limit reached. Resets in 6hr 29min.", 6 * 3600 + 29 * 60),
+            ("resets in 2 hours 5 minutes", 2 * 3600 + 5 * 60),
+            ("Limit hit; resets in 45s", 45.0),
+            ('"quotaResetDelay": "1500ms"', 1.5),
+            ("please retry after 12 seconds", 12.0),
+            # Both grammars in one body: the explicit retry-after wins (pool precedence), not the
+            # multi-hour quota window.
+            ("Rate limited. Retry after 30s; resets in 4hr", 30.0),
+        ],
+    )
     def test_credential_pool_and_error_context_agree(self, message, seconds):
         """The pooled-credential cooldown and the UI's error context read the same table, so the
         long-form "hours/minutes" grammar (which the pool used to miss) resolves at both sites."""
@@ -71,4 +76,6 @@ class TestResetDelayOneTable:
         from agent.credential_pool import _normalize_error_context
 
         assert reset_delay_from_message("resets in the future, maybe") is None
-        assert "reset_at" not in _normalize_error_context({"message": "resets in the future, maybe"})
+        assert "reset_at" not in _normalize_error_context(
+            {"message": "resets in the future, maybe"}
+        )

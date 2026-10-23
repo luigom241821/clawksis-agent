@@ -38,10 +38,12 @@ class _RecordingHandler(BaseHTTPRequestHandler):
     requests: list[tuple[str, dict[str, str]]] = []
 
     def _record(self) -> None:
-        type(self).requests.append((
-            self.command,
-            {name.lower(): value for name, value in self.headers.items()},
-        ))
+        type(self).requests.append(
+            (
+                self.command,
+                {name.lower(): value for name, value in self.headers.items()},
+            )
+        )
 
     def do_GET(self):
         if self.path.startswith("/redirect"):
@@ -423,7 +425,12 @@ def test_resolved_https_context_defers_to_the_platform_store(monkeypatch, tmp_pa
 
     assert urllib_security._resolved_https_context() is None
 
-    for var in ("CLAWK_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+    for var in (
+        "CLAWK_CA_BUNDLE",
+        "SSL_CERT_FILE",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    ):
         monkeypatch.setenv(var, str(tmp_path / "nope.pem"))
     assert urllib_security._resolved_https_context() is None
 

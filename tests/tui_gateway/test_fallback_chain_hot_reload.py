@@ -26,8 +26,12 @@ class _StopAfterSync(Exception):
 
 def _session(chain=None):
     agent = SimpleNamespace(
-        _fallback_chain=list(chain or []), _fallback_model=(chain or [None])[0], _fallback_index=0,
-        _fallback_activated=False, _rate_limited_until=0, _unavailable_fallback_keys=set(),
+        _fallback_chain=list(chain or []),
+        _fallback_model=(chain or [None])[0],
+        _fallback_index=0,
+        _fallback_activated=False,
+        _rate_limited_until=0,
+        _unavailable_fallback_keys=set(),
     )
     return {"agent": agent, "session_key": "session-95066"}, agent
 
@@ -37,37 +41,58 @@ def _admit_turn(monkeypatch, tmp_path, session, config_text: str) -> None:
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(config_text, encoding="utf-8")
     monkeypatch.setattr(server, "_active_config_path", lambda: cfg_path)
-    monkeypatch.setattr(server, "_profile_runtime_scope_tokens", lambda profile_home: None)
+    monkeypatch.setattr(
+        server, "_profile_runtime_scope_tokens", lambda profile_home: None
+    )
     monkeypatch.setattr(server, "_set_session_context", lambda *a, **k: [])
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    for name in ("_apply_pending_model_switch", "_sync_agent_model_with_config", "_sync_agent_compression_with_config"):
+    for name in (
+        "_apply_pending_model_switch",
+        "_sync_agent_model_with_config",
+        "_sync_agent_compression_with_config",
+    ):
         monkeypatch.setattr(server, name, lambda sid, session: None)
 
     def stop(sid, session):
         raise _StopAfterSync()
 
     monkeypatch.setattr(server, "_sync_bot_capabilities", stop)
-    st = server._TurnRun(agent=None, one_turn_restore=None, terminal_callback=None, receipt_committed=False)
+    st = server._TurnRun(
+        agent=None,
+        one_turn_restore=None,
+        terminal_callback=None,
+        receipt_committed=False,
+    )
     with pytest.raises(_StopAfterSync):
         server._prepare_turn_input("sid", session, st, "hello", [])
 
 
-def test_chain_added_after_open_reaches_the_live_agent_at_turn_admission(monkeypatch, tmp_path):
+def test_chain_added_after_open_reaches_the_live_agent_at_turn_admission(
+    monkeypatch, tmp_path
+):
     session, agent = _session()
 
-    _admit_turn(monkeypatch, tmp_path, session,
-                "fallback_providers:\n  - provider: xai-oauth\n    model: grok-4.6\n")
+    _admit_turn(
+        monkeypatch,
+        tmp_path,
+        session,
+        "fallback_providers:\n  - provider: xai-oauth\n    model: grok-4.6\n",
+    )
 
     assert agent._fallback_chain == FALLBACK
     assert agent._fallback_model == FALLBACK[0]
     assert agent._fallback_index == 0
 
 
-def test_torn_config_keeps_the_last_known_good_chain_but_removal_still_applies(monkeypatch, tmp_path):
+def test_torn_config_keeps_the_last_known_good_chain_but_removal_still_applies(
+    monkeypatch, tmp_path
+):
     session, agent = _session(FALLBACK)
 
     # Torn mid-edit write: an unparsable config.yaml must NOT read as "chain removed".
-    _admit_turn(monkeypatch, tmp_path, session, "fallback_providers: [\n  - provider: {{{\n")
+    _admit_turn(
+        monkeypatch, tmp_path, session, "fallback_providers: [\n  - provider: {{{\n"
+    )
     assert agent._fallback_chain == FALLBACK
     assert agent._fallback_model == FALLBACK[0]
 

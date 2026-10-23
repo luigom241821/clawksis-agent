@@ -30,7 +30,11 @@ def _is_compression_end(row: Any) -> bool:
 
 
 def build_session_provenance(
-    db: Any, acp_session_id: str, current_clawk_session_id: str, *, previous_clawk_session_id: Optional[str] = None,
+    db: Any,
+    acp_session_id: str,
+    current_clawk_session_id: str,
+    *,
+    previous_clawk_session_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Build ``_meta.clawk.sessionProvenance`` for an ACP session.
 
@@ -63,9 +67,12 @@ def build_session_provenance(
     is_continuation = bool(parent_id) and _is_compression_end(_get_row(db, parent_id))
 
     provenance: dict[str, Any] = {
-        "acpSessionId": acp_session_id, "currentClawksisSessionId": current_clawk_session_id,
-        "rootClawksisSessionId": root_id, "parentClawksisSessionId": parent_id,
-        "sessionKind": "continuation" if is_continuation else "root", "compressionDepth": compression_depth,
+        "acpSessionId": acp_session_id,
+        "currentClawksisSessionId": current_clawk_session_id,
+        "rootClawksisSessionId": root_id,
+        "parentClawksisSessionId": parent_id,
+        "sessionKind": "continuation" if is_continuation else "root",
+        "compressionDepth": compression_depth,
     }
     if previous_clawk_session_id:
         provenance["previousClawksisSessionId"] = previous_clawk_session_id
@@ -78,9 +85,17 @@ def build_session_provenance(
 
 
 def session_provenance_meta(
-    db: Any, acp_session_id: str, current_clawk_session_id: str, *, previous_clawk_session_id: Optional[str] = None,
+    db: Any,
+    acp_session_id: str,
+    current_clawk_session_id: str,
+    *,
+    previous_clawk_session_id: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Return a ready ``_meta`` payload: ``{"clawk": {"sessionProvenance": ...}}``."""
-    prov = build_session_provenance(db, acp_session_id, current_clawk_session_id,
-                                    previous_clawk_session_id=previous_clawk_session_id)
+    prov = build_session_provenance(
+        db,
+        acp_session_id,
+        current_clawk_session_id,
+        previous_clawk_session_id=previous_clawk_session_id,
+    )
     return None if prov is None else {"clawk": {"sessionProvenance": prov}}

@@ -3,6 +3,7 @@
 A GUI session is offered the ``desktop_ui`` tools; on the authority their emitter, GUI callbacks
 and process-registry sinks must reach the session's viewers, and be released with the turn.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,7 +40,9 @@ class _Fanout:
     def write(self, frame, **_kw):
         self.requests.append(frame)
         if frame.get("method") in _ANSWERS and frame["method"] not in self.silent:
-            session_server_requests.resolve({"id": frame["id"], "result": _ANSWERS[frame["method"]]})
+            session_server_requests.resolve(
+                {"id": frame["id"], "result": _ANSWERS[frame["method"]]}
+            )
         return True
 
 
@@ -52,6 +55,7 @@ def window(monkeypatch):
     monkeypatch.setattr(local_desktop_ui, "_emitter_installed", False)
     monkeypatch.setattr(local_desktop_ui, "_process_sinks_installed", False)
     from tools.connectors.operation import ConnectionOperation
+
     monkeypatch.setattr(ConnectionOperation, "on_change", None)
     monkeypatch.setattr(desktop_ui, "_emit", None)
     monkeypatch.setattr(process_registry, "on_output", None)
@@ -60,27 +64,47 @@ def window(monkeypatch):
     published, streamed, requests, silent = [], [], [], set()
     stream = SimpleNamespace(
         fanout=_Fanout(requests, silent),
-        publish=lambda session_id, payload, *, event_type: streamed.append((session_id, event_type, payload)))
+        publish=lambda session_id, payload, *, event_type: streamed.append(
+            (session_id, event_type, payload)
+        ),
+    )
     from clawk_constants import get_clawk_home
-    authority = SimpleNamespace(sessions={"canon": SimpleNamespace(event_stream=stream)}, profile_id=str(get_clawk_home()))
+
+    authority = SimpleNamespace(
+        sessions={"canon": SimpleNamespace(event_stream=stream)},
+        profile_id=str(get_clawk_home()),
+    )
     turn = SimpleNamespace(
         _ctx=SimpleNamespace(session_id="phys", session_key="agent:main:local:dm:1"),
         _approval_owner=(authority, "canon", 1),
-        _publish_execution=lambda kind, payload: published.append((kind, payload)) or True)
+        _publish_execution=lambda kind, payload: (
+            published.append((kind, payload)) or True
+        ),
+    )
     agent = SimpleNamespace(_interrupt_requested=False)
     tokens = set_session_vars(session_id="phys")
-    yield SimpleNamespace(turn=turn, agent=agent, published=published, streamed=streamed,
-                          requests=requests, silent=silent)
+    yield SimpleNamespace(
+        turn=turn,
+        agent=agent,
+        published=published,
+        streamed=streamed,
+        requests=requests,
+        silent=silent,
+    )
     clear_session_vars(tokens)
 
 
 def _emit(event, payload):
-    return desktop_ui.emit_or_error(event, payload, "failed: ", "desktop only", {"success": True})
+    return desktop_ui.emit_or_error(
+        event, payload, "failed: ", "desktop only", {"success": True}
+    )
 
 
 def test_window_events_reach_the_turns_stream(window):
     sinks = local_viewer_events.wire(window.turn, window.agent)
-    assert json.loads(_emit("preview.open", {"url": "https://example.com"})) == {"success": True}
+    assert json.loads(_emit("preview.open", {"url": "https://example.com"})) == {
+        "success": True
+    }
     assert window.published[-1] == ("preview.open", {"url": "https://example.com"})
     local_viewer_events.restore(window.agent, sinks)
     assert "failed: " in _emit("preview.open", {"url": "https://example.com"})
@@ -91,24 +115,36 @@ def test_gui_reads_are_server_requests_to_the_session_viewers(window):
     assert window.agent.read_preview_callback() == "page text"
     assert window.agent.read_terminal_callback(start=0, count=2) == "tick 1\ntick 2"
     assert json.loads(window.agent.read_window_below_callback()) == {"app": "Finder"}
-    assert json.loads(window.agent.drive_preview_callback({"action": "click"}))["success"] is True
+    assert (
+        json.loads(window.agent.drive_preview_callback({"action": "click"}))["success"]
+        is True
+    )
     terminal = next(f for f in window.requests if f["method"] == "terminal.read")
     assert terminal["params"] == {"session_id": "canon", "start": 0, "count": 2}
 
 
 def test_set_theme_applies_and_picks(window):
     local_viewer_events.wire(window.turn, window.agent)
-    assert window.agent.theme_callback({"accent": "violet"}) == {"applied": {"accent": "violet"}}
-    assert window.agent.theme_callback({"picker": "accent"}) == {"success": True, "picked": {"accent": "violet"}}
+    assert window.agent.theme_callback({"accent": "violet"}) == {
+        "applied": {"accent": "violet"}
+    }
+    assert window.agent.theme_callback({"picker": "accent"}) == {
+        "success": True,
+        "picked": {"accent": "violet"},
+    }
 
 
 def test_tour_fails_fast_once_no_window_answered(window, monkeypatch):
     monkeypatch.setattr(local_desktop_ui, "_TOUR_PROBE_TIMEOUT_S", 0.3)
     window.silent.add("tour")
     local_viewer_events.wire(window.turn, window.agent)
-    assert "No Clawksis Desktop window answered the tour" in window.agent.tour_callback({"action": "start"})
+    assert "No Clawksis Desktop window answered the tour" in window.agent.tour_callback(
+        {"action": "start"}
+    )
     sent = len(window.requests)
-    assert "No Clawksis Desktop window answered the tour" in window.agent.tour_callback({"action": "start"})
+    assert "No Clawksis Desktop window answered the tour" in window.agent.tour_callback(
+        {"action": "start"}
+    )
     assert len(window.requests) == sent
 
 
@@ -119,8 +155,13 @@ def test_background_process_output_follows_its_session_after_the_turn(window):
     process_registry.on_output(proc, "tick 1\n")
     process_registry.on_close(proc, "proc_1")
     assert window.streamed == [
-        ("canon", "agent.terminal.output", {"process_id": "proc_1", "chunk": "tick 1\n"}),
-        ("canon", "terminal.close", {"process_id": "proc_1"})]
+        (
+            "canon",
+            "agent.terminal.output",
+            {"process_id": "proc_1", "chunk": "tick 1\n"},
+        ),
+        ("canon", "terminal.close", {"process_id": "proc_1"}),
+    ]
 
 
 def test_restore_puts_the_agents_callbacks_back(window):
@@ -131,14 +172,18 @@ def test_restore_puts_the_agents_callbacks_back(window):
     assert local_desktop_ui._turns == {}
 
 
-def test_the_connection_card_opens_and_updates_on_the_owning_session(window, monkeypatch):
+def test_the_connection_card_opens_and_updates_on_the_owning_session(
+    window, monkeypatch
+):
     from tools.connectors import live
     from tools.connectors.contract import Actor, TargetState
     from tools.connectors.operation import ConnectionOperation, Target
 
     monkeypatch.setattr(live, "_open", {})
     local_viewer_events.wire(window.turn, window.agent)
-    operation = ConnectionOperation([Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1")
+    operation = ConnectionOperation(
+        [Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1"
+    )
     live.open(operation)
     assert window.agent.connection_callback(operation.request_payload()) is None
     assert window.published[-1][0] == "connection.request"
@@ -150,7 +195,9 @@ def test_the_connection_card_opens_and_updates_on_the_owning_session(window, mon
     assert payload["targets"][0]["state"] == "skipped"
 
 
-def test_connection_updates_reach_the_owner_in_either_install_order(window, monkeypatch):
+def test_connection_updates_reach_the_owner_in_either_install_order(
+    window, monkeypatch
+):
     """The sidecar's hook may be installed after ours; an operation of another profile with the same route is not ours."""
     from tools.connectors import live
     from tools.connectors.contract import Actor, TargetState
@@ -159,13 +206,19 @@ def test_connection_updates_reach_the_owner_in_either_install_order(window, monk
     monkeypatch.setattr(live, "_open", {})
     local_viewer_events.wire(window.turn, window.agent)
     sidecar = []
-    ConnectionOperation.on_change = staticmethod(lambda operation, change, snapshot: sidecar.append(operation.op_id))
+    ConnectionOperation.on_change = staticmethod(
+        lambda operation, change, snapshot: sidecar.append(operation.op_id)
+    )
     local_viewer_events.wire(window.turn, window.agent)
-    ours = ConnectionOperation([Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1")
+    ours = ConnectionOperation(
+        [Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1"
+    )
     live.open(ours)
     ours.transition("linear", TargetState.skipped, Actor.user)
     assert window.streamed[-1][1] == "connection.update" and sidecar == []
-    other = ConnectionOperation([Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1")
+    other = ConnectionOperation(
+        [Target("linear", "mcp", "install")], session_key="agent:main:local:dm:1"
+    )
     other.profile_key = "another-profile"
     count = len(window.streamed)
     other.transition("linear", TargetState.skipped, Actor.user)

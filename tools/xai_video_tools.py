@@ -7,7 +7,11 @@ import json
 from typing import Any, Dict, Optional
 
 from clawk_cli.config import load_config
-from plugins.video_gen.xai import has_xai_video_credentials, run_xai_video_edit, run_xai_video_extend
+from plugins.video_gen.xai import (
+    has_xai_video_credentials,
+    run_xai_video_edit,
+    run_xai_video_extend,
+)
 from tools.registry import registry, tool_error
 
 
@@ -46,7 +50,9 @@ _VIDEO_URL_PARAM = {
 }
 
 
-def _xai_video_schema(name: str, verb: str, noun: str, prompt_verb: str, extra: dict[str, Any]) -> dict[str, Any]:
+def _xai_video_schema(
+    name: str, verb: str, noun: str, prompt_verb: str, extra: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "name": name,
         "description": (
@@ -70,10 +76,16 @@ def _xai_video_schema(name: str, verb: str, noun: str, prompt_verb: str, extra: 
     }
 
 
-XAI_VIDEO_EDIT_SCHEMA: dict[str, Any] = _xai_video_schema("xai_video_edit", "Edit", "editing", "modify", {})
+XAI_VIDEO_EDIT_SCHEMA: dict[str, Any] = _xai_video_schema(
+    "xai_video_edit", "Edit", "editing", "modify", {}
+)
 
 XAI_VIDEO_EXTEND_SCHEMA: dict[str, Any] = _xai_video_schema(
-    "xai_video_extend", "Extend", "extension", "continue", {
+    "xai_video_extend",
+    "Extend",
+    "extension",
+    "continue",
+    {
         "duration": {
             "type": "integer",
             "description": (
@@ -86,24 +98,31 @@ XAI_VIDEO_EXTEND_SCHEMA: dict[str, Any] = _xai_video_schema(
 
 
 def _run_xai_video_tool(args: dict[str, Any], op: str, run, **extra: Any) -> str:
-    prompt, video_url = _clean_string(args.get("prompt")), _clean_string(args.get("video_url"))
+    prompt, video_url = (
+        _clean_string(args.get("prompt")),
+        _clean_string(args.get("video_url")),
+    )
     if not prompt:
         return tool_error(f"prompt is required for xAI video {op}")
-    if not (video_url and video_url.lower().startswith(("http://", "https://"))):  # public URL only
+    if not (
+        video_url and video_url.lower().startswith(("http://", "https://"))
+    ):  # public URL only
         return tool_error(
             "video_url must be a public HTTPS MP4 URL (the `video`/`public_url` "
             "from a prior Imagine result)"
         )
     if not _configured_for_xai_video():
-        return json.dumps({
-            "success": False,
-            "error": (
-                "xAI video edit/extend tools require `video_gen.provider` to be "
-                "configured as `xai` via `clawk tools` -> Video Generation."
-            ),
-            "error_type": "provider_not_configured",
-            "provider": "xai",
-        })
+        return json.dumps(
+            {
+                "success": False,
+                "error": (
+                    "xAI video edit/extend tools require `video_gen.provider` to be "
+                    "configured as `xai` via `clawk tools` -> Video Generation."
+                ),
+                "error_type": "provider_not_configured",
+                "provider": "xai",
+            }
+        )
     return json.dumps(run(prompt=prompt, video_url=video_url, **extra))
 
 
@@ -112,7 +131,9 @@ def _handle_xai_video_edit(args: dict[str, Any], **_kw: Any) -> str:
 
 
 def _handle_xai_video_extend(args: dict[str, Any], **_kw: Any) -> str:
-    return _run_xai_video_tool(args, "extend", run_xai_video_extend, duration=_coerce_int(args.get("duration")))
+    return _run_xai_video_tool(
+        args, "extend", run_xai_video_extend, duration=_coerce_int(args.get("duration"))
+    )
 
 
 for _name, _schema, _handler in (
@@ -120,6 +141,12 @@ for _name, _schema, _handler in (
     ("xai_video_extend", XAI_VIDEO_EXTEND_SCHEMA, _handle_xai_video_extend),
 ):
     registry.register(
-        name=_name, toolset="video_gen", schema=_schema, handler=_handler,
-        check_fn=_check_xai_video_requirements, requires_env=[], is_async=False, emoji="video",
+        name=_name,
+        toolset="video_gen",
+        schema=_schema,
+        handler=_handler,
+        check_fn=_check_xai_video_requirements,
+        requires_env=[],
+        is_async=False,
+        emoji="video",
     )

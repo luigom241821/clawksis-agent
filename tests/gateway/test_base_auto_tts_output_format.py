@@ -76,9 +76,7 @@ def _hold_typing():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "platform", [Platform.DISCORD, Platform.SLACK, "irc", None]
-)
+@pytest.mark.parametrize("platform", [Platform.DISCORD, Platform.SLACK, "irc", None])
 def test_output_path_is_mp3_for_non_opus_platforms(platform):
     path = build_auto_tts_output_path(platform)
     assert path.endswith(".mp3"), path
@@ -88,24 +86,29 @@ def test_output_path_is_mp3_for_non_opus_platforms(platform):
 # Base-adapter auto-TTS block: explicit output_path, no contextvar reliance
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_base_auto_tts_skips_playback_when_tool_reports_failure():
     """A success=False tool result must not deliver a stale/partial file."""
     adapter = _DummyAdapter(Platform.TELEGRAM)
     adapter._keep_typing = _hold_typing()
     adapter._should_auto_tts_for_chat = lambda _chat_id: True
-    adapter.play_tts = AsyncMock(return_value=SendResult(success=True, message_id="tts-1"))
+    adapter.play_tts = AsyncMock(
+        return_value=SendResult(success=True, message_id="tts-1")
+    )
     adapter.set_message_handler(lambda _event: asyncio.sleep(0, result="reply text"))
     event = _make_voice_event(Platform.TELEGRAM)
 
     def fake_tts(*, text, output_path=None):
         from pathlib import Path
+
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_bytes(b"partial")
         return json.dumps({"success": False, "error": "backend exploded"})
 
-    with patch("tools.tts_tool.check_tts_requirements", return_value=True), patch(
-        "tools.tts_tool.text_to_speech_tool", side_effect=fake_tts
+    with (
+        patch("tools.tts_tool.check_tts_requirements", return_value=True),
+        patch("tools.tts_tool.text_to_speech_tool", side_effect=fake_tts),
     ):
         await adapter._process_message_background(
             event, build_session_key(event.source)

@@ -11,7 +11,9 @@ from clawk_cli import gateway_runtime
 import clawk_constants
 
 
-_SCRIPT = Path(__file__).resolve().parents[2] / "ui-tui" / "scripts" / "gateway_bootstrap.py"
+_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "ui-tui" / "scripts" / "gateway_bootstrap.py"
+)
 
 
 def _load_bootstrap():
@@ -37,7 +39,9 @@ def test_served_secondary_uses_multiplexer_control_home(monkeypatch, tmp_path):
     receipt = SimpleNamespace(state="ready", endpoint=endpoint, reason_code=None)
 
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: secondary)
-    monkeypatch.setattr(gateway_runtime, "discover_gateway_endpoint", lambda home, timeout=5: receipt)
+    monkeypatch.setattr(
+        gateway_runtime, "discover_gateway_endpoint", lambda home, timeout=5: receipt
+    )
 
     seen = {}
 
@@ -47,17 +51,21 @@ def test_served_secondary_uses_multiplexer_control_home(monkeypatch, tmp_path):
         def query_runtime_control(home, request, timeout):
             seen["control_home"] = Path(home).resolve()
             seen["request"] = json.loads(request)
-            return json.dumps({
-                "ok": True,
-                "id": 1,
-                "result": {
-                    "instance_id": endpoint.instance_id,
-                    "profile_id": endpoint.profile_id,
-                    "ticket": "served-grant",
-                },
-            }).encode()
+            return json.dumps(
+                {
+                    "ok": True,
+                    "id": 1,
+                    "result": {
+                        "instance_id": endpoint.instance_id,
+                        "profile_id": endpoint.profile_id,
+                        "ticket": "served-grant",
+                    },
+                }
+            ).encode()
 
-        monkeypatch.setattr(windows_bootstrap, "query_runtime_control", query_runtime_control)
+        monkeypatch.setattr(
+            windows_bootstrap, "query_runtime_control", query_runtime_control
+        )
     else:
         import clawk_cli.gateway_runtime_discovery as discovery
 
@@ -69,15 +77,17 @@ def test_served_secondary_uses_multiplexer_control_home(monkeypatch, tmp_path):
                 return False
 
             def readline(self, _limit):
-                return json.dumps({
-                    "ok": True,
-                    "id": 1,
-                    "result": {
-                        "instance_id": endpoint.instance_id,
-                        "profile_id": endpoint.profile_id,
-                        "ticket": "served-grant",
-                    },
-                }).encode()
+                return json.dumps(
+                    {
+                        "ok": True,
+                        "id": 1,
+                        "result": {
+                            "instance_id": endpoint.instance_id,
+                            "profile_id": endpoint.profile_id,
+                            "ticket": "served-grant",
+                        },
+                    }
+                ).encode()
 
         class FakeSocket:
             def __enter__(self):

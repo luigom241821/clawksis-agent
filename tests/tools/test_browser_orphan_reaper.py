@@ -20,6 +20,7 @@ def fake_tmpdir(tmp_path):
 def _isolate_sessions():
     """Ensure _active_sessions is empty for each test."""
     import tools.browser_tool as bt
+
     orig = bt._active_sessions.copy()
     bt._active_sessions.clear()
     yield
@@ -49,10 +50,10 @@ def _make_socket_dir(tmpdir, session_name, pid=None, owner_pid=None):
 class TestReapOrphanedBrowserSessions:
     """Tests for the orphan reaper function."""
 
-
     def test_stale_dir_without_pid_file_is_removed(self, fake_tmpdir):
         """Socket dir with no PID file is cleaned up."""
         from tools.browser_tool_lifecycle import _reap_orphaned_browser_sessions
+
         d = _make_socket_dir(fake_tmpdir, "h_abc1234567")
         assert d.exists()
         with patch(
@@ -75,7 +76,6 @@ class TestReapOrphanedBrowserSessions:
 
         assert d.exists()
 
-
     def test_alive_legacy_daemon_is_reaped(self, fake_tmpdir):
         """Alive, untracked, legacy (no owner_pid) daemon is reaped.
 
@@ -96,10 +96,18 @@ class TestReapOrphanedBrowserSessions:
         def mock_terminate(pid, expected_start=None):
             terminate_calls.append(pid)
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("gateway.status.get_process_start_time", return_value=777), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid", side_effect=mock_terminate):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("gateway.status.get_process_start_time", return_value=777),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=mock_terminate,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 in terminate_calls
@@ -112,17 +120,28 @@ class TestReapOrphanedBrowserSessions:
         import tools.browser_tool as bt
         from tools.browser_tool_lifecycle import _reap_orphaned_browser_sessions
 
-        d = _make_socket_dir(fake_tmpdir, bt._REAL_PROFILE_SESSION, pid=4242, owner_pid=99999)
+        d = _make_socket_dir(
+            fake_tmpdir, bt._REAL_PROFILE_SESSION, pid=4242, owner_pid=99999
+        )
         terminate_calls = []
 
         def _pid_exists(pid):
             return pid == 4242  # daemon alive, owning clawk gone
 
-        with patch("gateway.status._pid_exists", side_effect=_pid_exists), \
-             patch("gateway.status.get_process_start_time", return_value=777), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=lambda pid, expected_start=None: terminate_calls.append(pid)):
+        with (
+            patch("gateway.status._pid_exists", side_effect=_pid_exists),
+            patch("gateway.status.get_process_start_time", return_value=777),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=lambda pid, expected_start=None: terminate_calls.append(
+                    pid
+                ),
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert terminate_calls == [4242]
@@ -141,15 +160,23 @@ class TestReapOrphanedBrowserSessions:
         _make_socket_dir(fake_tmpdir, "h_perm7654321", pid=12345)
         terminate_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("gateway.status.get_process_start_time", return_value=None), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=lambda pid, expected_start=None: terminate_calls.append(pid)):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("gateway.status.get_process_start_time", return_value=None),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=lambda pid, expected_start=None: terminate_calls.append(
+                    pid
+                ),
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert terminate_calls == []
-
 
     def test_corrupt_pid_file_is_cleaned(self, fake_tmpdir):
         """PID file with non-integer content is cleaned up."""
@@ -189,17 +216,17 @@ class TestOwnerPidCrossProcess:
             kill_calls.append(pid)
 
         # Owner alive → reaper skips without ever probing the daemon.
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid", side_effect=mock_terminate):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=mock_terminate,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 not in kill_calls
         assert d.exists()
-
-
-
-
-
 
 
 class TestReaperIdentityGuard:
@@ -212,8 +239,9 @@ class TestReaperIdentityGuard:
     """
 
     class _FakeProc:
-        def __init__(self, name="agent-browser", cmdline=None, environ=None,
-                     raise_environ=False):
+        def __init__(
+            self, name="agent-browser", cmdline=None, environ=None, raise_environ=False
+        ):
             self._name = name
             self._cmdline = cmdline if cmdline is not None else []
             self._environ = environ or {}
@@ -228,11 +256,19 @@ class TestReaperIdentityGuard:
         def environ(self):
             if self._raise_environ:
                 import psutil
+
                 raise psutil.AccessDenied()
             return self._environ
 
-    def _run(self, fake_proc, socket_dir, session_name="h_sess123456",
-             daemon_pid=12345, no_such=False, access_denied=False):
+    def _run(
+        self,
+        fake_proc,
+        socket_dir,
+        session_name="h_sess123456",
+        daemon_pid=12345,
+        no_such=False,
+        access_denied=False,
+    ):
         import psutil
         from tools.browser_tool_lifecycle import _verify_reapable_browser_daemon
 
@@ -244,15 +280,20 @@ class TestReaperIdentityGuard:
             return fake_proc
 
         with patch("psutil.Process", side_effect=_factory):
-            return _verify_reapable_browser_daemon(
-                daemon_pid, socket_dir, session_name)
+            return _verify_reapable_browser_daemon(daemon_pid, socket_dir, session_name)
 
     def test_real_daemon_bound_via_cmdline_is_reapable(self):
         socket_dir = "/tmp/agent-browser-h_sess123456"
         proc = self._FakeProc(
             name="agent-browser",
-            cmdline=["agent-browser", "open", "--session", "h_sess123456",
-                     "--socket-dir", socket_dir],
+            cmdline=[
+                "agent-browser",
+                "open",
+                "--session",
+                "h_sess123456",
+                "--socket-dir",
+                socket_dir,
+            ],
         )
         assert self._run(proc, socket_dir) is True
 
@@ -265,7 +306,6 @@ class TestReaperIdentityGuard:
         )
         assert self._run(proc, socket_dir) is True
 
-
     def test_recycled_pid_browser_not_bound_to_our_dir_is_refused(self):
         """An agent-browser process for a DIFFERENT session must not be reaped.
 
@@ -275,10 +315,15 @@ class TestReaperIdentityGuard:
         socket_dir = "/tmp/agent-browser-h_sess123456"
         proc = self._FakeProc(
             name="agent-browser",
-            cmdline=["agent-browser", "open", "--session", "h_OTHER999",
-                     "--socket-dir", "/tmp/agent-browser-h_OTHER999"],
-            environ={"AGENT_BROWSER_SOCKET_DIR":
-                     "/tmp/agent-browser-h_OTHER999"},
+            cmdline=[
+                "agent-browser",
+                "open",
+                "--session",
+                "h_OTHER999",
+                "--socket-dir",
+                "/tmp/agent-browser-h_OTHER999",
+            ],
+            environ={"AGENT_BROWSER_SOCKET_DIR": "/tmp/agent-browser-h_OTHER999"},
         )
         assert self._run(proc, socket_dir) is False
 
@@ -303,7 +348,6 @@ class TestReaperIdentityGuard:
         )
         assert self._run(bound, socket_dir) is True
 
-
     def test_planted_pid_survives_full_reaper_path(self, fake_tmpdir):
         """End-to-end through the reaper: a planted non-browser PID is spared.
 
@@ -318,16 +362,18 @@ class TestReaperIdentityGuard:
         terminate_calls = []
         proc = self._FakeProc(name="sleep", cmdline=["/bin/sleep", "600"])
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("psutil.Process", return_value=proc), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=lambda pid: terminate_calls.append(pid)):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("psutil.Process", return_value=proc),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=lambda pid: terminate_calls.append(pid),
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert terminate_calls == [], "planted non-browser PID must not be killed"
         assert d.exists(), "socket dir retained for a later sweep"
-
-
 
 
 def _age_socket_dir(d, seconds):
@@ -343,8 +389,8 @@ class TestSocketDirIdleSeconds:
 
     def test_missing_dir_returns_none(self, tmp_path):
         from tools.browser_tool_lifecycle import _socket_dir_idle_seconds
-        assert _socket_dir_idle_seconds(str(tmp_path / "nope")) is None
 
+        assert _socket_dir_idle_seconds(str(tmp_path / "nope")) is None
 
     def test_entry_mtime_beats_stale_dir_mtime(self, tmp_path):
         """Rewriting an existing file must count as activity.
@@ -355,6 +401,7 @@ class TestSocketDirIdleSeconds:
         as idle and reap it.  The reaper must scan entries too.
         """
         from tools.browser_tool_lifecycle import _socket_dir_idle_seconds
+
         d = tmp_path / "agent-browser-h_reuse"
         d.mkdir()
         f = d / "_stdout_click"
@@ -390,10 +437,17 @@ class TestLeakedDaemonWithLiveOwner:
         )
         kill_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=kill_calls.append):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=kill_calls.append,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 not in kill_calls
@@ -410,11 +464,18 @@ class TestLeakedDaemonWithLiveOwner:
         _age_socket_dir(d, BROWSER_ORPHAN_GRACE_SECONDS + 600)
         kill_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("gateway.status.get_process_start_time", return_value=777), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=lambda pid, expected_start=None: kill_calls.append(pid)):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("gateway.status.get_process_start_time", return_value=777),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=lambda pid, expected_start=None: kill_calls.append(pid),
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 in kill_calls
@@ -437,10 +498,17 @@ class TestLeakedDaemonWithLiveOwner:
         bt._active_sessions["task-1"] = {"session_name": "h_tracked_old"}
         kill_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=kill_calls.append):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=kill_calls.append,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 not in kill_calls
@@ -455,11 +523,21 @@ class TestLeakedDaemonWithLiveOwner:
         )
         kill_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.browser_tool_lifecycle._socket_dir_idle_seconds", return_value=None), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=kill_calls.append):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch(
+                "tools.browser_tool_lifecycle._socket_dir_idle_seconds",
+                return_value=None,
+            ),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=True,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=kill_calls.append,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 not in kill_calls
@@ -480,10 +558,17 @@ class TestLeakedDaemonWithLiveOwner:
         _age_socket_dir(d, BROWSER_ORPHAN_GRACE_SECONDS + 600)
         kill_calls = []
 
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", return_value=False), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid",
-                   side_effect=kill_calls.append):
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch(
+                "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+                return_value=False,
+            ),
+            patch(
+                "tools.process_registry.ProcessRegistry._terminate_host_pid",
+                side_effect=kill_calls.append,
+            ),
+        ):
             _reap_orphaned_browser_sessions()
 
         assert 12345 not in kill_calls
@@ -513,11 +598,17 @@ class TestPeriodicOrphanReap:
         orig_running = bt._cleanup_running
         bt._cleanup_running = True
         try:
-            with patch("tools.browser_tool_lifecycle._reap_orphaned_browser_sessions",
-                       side_effect=lambda: reap_calls.append(1)), \
-                 patch("tools.browser_tool_lifecycle._cleanup_inactive_browser_sessions",
-                       side_effect=fake_cleanup), \
-                 patch("tools.browser_tool.time.sleep"):
+            with (
+                patch(
+                    "tools.browser_tool_lifecycle._reap_orphaned_browser_sessions",
+                    side_effect=lambda: reap_calls.append(1),
+                ),
+                patch(
+                    "tools.browser_tool_lifecycle._cleanup_inactive_browser_sessions",
+                    side_effect=fake_cleanup,
+                ),
+                patch("tools.browser_tool.time.sleep"),
+            ):
                 bt_lifecycle._browser_cleanup_thread_worker()
         finally:
             bt._cleanup_running = orig_running

@@ -10,6 +10,7 @@ from typing import Optional, Sequence
 
 try:
     from winpty import PtyProcess  # type: ignore
+
     _PTY_AVAILABLE = sys.platform.startswith("win")
 except ImportError:  # pragma: no cover - non-Windows or pywinpty missing
     PtyProcess = None  # type: ignore
@@ -55,20 +56,35 @@ class WinPtyBridge:
 
     @classmethod
     def spawn(
-        cls, argv: Sequence[str], *, cwd: Optional[str] = None, env: Optional[dict] = None,
-        cols: int = 80, rows: int = 24) -> WinPtyBridge:
+        cls,
+        argv: Sequence[str],
+        *,
+        cwd: Optional[str] = None,
+        env: Optional[dict] = None,
+        cols: int = 80,
+        rows: int = 24,
+    ) -> WinPtyBridge:
         if not _PTY_AVAILABLE:
             if PtyProcess is None:
-                raise PtyUnavailableError("pywinpty is not installed. Run clawk pm repair, then restart Clawksis.")
+                raise PtyUnavailableError(
+                    "pywinpty is not installed. Run clawk pm repair, then restart Clawksis."
+                )
             raise PtyUnavailableError("ConPTY is unavailable on this platform.")
         # See pty_bridge.py: exact-preservation factory for the env=None fallback.
         from tools.environments.local import build_subprocess_env
+
         spawn_env = (
             build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
-            if env is None else dict(env))
+            if env is None
+            else dict(env)
+        )
         spawn_env["TERM"] = spawn_env.get("TERM") or "xterm-256color"
         # pywinpty mirrors ptyprocess: dimensions=(rows, cols).
-        return cls(PtyProcess.spawn(list(argv), cwd=cwd, env=spawn_env, dimensions=(rows, cols)))  # type: ignore[union-attr]
+        return cls(
+            PtyProcess.spawn(
+                list(argv), cwd=cwd, env=spawn_env, dimensions=(rows, cols)
+            )
+        )  # type: ignore[union-attr]
 
     @property
     def pid(self) -> int:
@@ -104,7 +120,9 @@ class WinPtyBridge:
         if not data:
             return True
         try:
-            self._proc.write(data.decode("utf-8", errors="replace"))  # pywinpty wants text
+            self._proc.write(
+                data.decode("utf-8", errors="replace")
+            )  # pywinpty wants text
         except Exception:
             return False
         return True
@@ -142,7 +160,9 @@ class WinPtyBridge:
     async def _settle_or_stop_write(self, write_future: asyncio.Future) -> None:
         """Let a cancelled write finish within the grace window; terminate only if it stalls."""
         try:
-            await asyncio.wait_for(asyncio.shield(write_future), timeout=_WRITE_SHUTDOWN_GRACE)
+            await asyncio.wait_for(
+                asyncio.shield(write_future), timeout=_WRITE_SHUTDOWN_GRACE
+            )
             return
         except TimeoutError:
             pass

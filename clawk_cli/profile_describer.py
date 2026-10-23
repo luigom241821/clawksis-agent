@@ -106,10 +106,13 @@ def _sample_skills(names: list[str]) -> list[str]:
 
 def _extract_json_blob(raw: str) -> Optional[dict]:
     from clawk_cli.kanban_specify import _extract_json_blob as _extract
+
     return _extract(raw, _FENCE_RE)
 
 
-def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Optional[int] = None) -> DescribeOutcome:
+def describe_profile(
+    profile_name: str, *, overwrite: bool = False, timeout: Optional[int] = None
+) -> DescribeOutcome:
     """Auto-generate a description for one profile. Expected failures (profile missing, no aux
     client, API error, malformed response) return ``ok=False`` so a sweep continues.
 
@@ -121,18 +124,28 @@ def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Opt
     try:
         if canon == "default":
             from clawk_constants import get_clawk_home  # type: ignore
+
             profile_dir = Path(get_clawk_home())
         else:
             profile_dir = profiles_mod.get_profile_dir(canon)
     except Exception as exc:
         return DescribeOutcome(canon, False, f"cannot resolve profile dir: {exc}")
     existing = profiles_mod.read_profile_meta(profile_dir)
-    if existing.get("description") and not existing.get("description_auto") and not overwrite:
+    if (
+        existing.get("description")
+        and not existing.get("description_auto")
+        and not overwrite
+    ):
         return DescribeOutcome(
-            canon, False, "profile already has a user-authored description (use --overwrite to replace)"
+            canon,
+            False,
+            "profile already has a user-authored description (use --overwrite to replace)",
         )
     all_skills = _collect_skills(profile_dir)
-    skill_list = "\n".join(f"  - {n}" for n in _sample_skills(all_skills)) or "  (no skills installed)"
+    skill_list = (
+        "\n".join(f"  - {n}" for n in _sample_skills(all_skills))
+        or "  (no skills installed)"
+    )
     try:
         model, provider = profiles_mod._read_config_model(profile_dir)
     except Exception:
@@ -143,8 +156,12 @@ def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Opt
         logger.debug("describe: auxiliary client import failed: %s", exc)
         return DescribeOutcome(canon, False, "auxiliary client unavailable")
     user_msg = _USER_TEMPLATE.format(
-        name=canon, model=(model or "(unset)"), provider=(provider or "(unset)"), skill_count=len(all_skills),
-        skill_cap=MAX_SKILLS_FOR_PROMPT, skill_list=skill_list,
+        name=canon,
+        model=(model or "(unset)"),
+        provider=(provider or "(unset)"),
+        skill_count=len(all_skills),
+        skill_cap=MAX_SKILLS_FOR_PROMPT,
+        skill_list=skill_list,
     )
     try:
         # call_llm applies auxiliary.profile_describer.* config (provider/model/base_url,
@@ -152,7 +169,10 @@ def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Opt
         # See #35566.
         resp = call_llm(
             task="profile_describer",
-            messages=[{"role": "system", "content": _SYSTEM_PROMPT}, {"role": "user", "content": user_msg}],
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
             temperature=0.3,
             max_tokens=400,
             timeout=timeout or 60,
@@ -172,9 +192,12 @@ def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Opt
         if stripped.startswith("{"):
             logger.info(
                 "describe: %s aux response looked JSON-shaped but failed to parse "
-                "(likely truncated) -- refusing to persist the raw fragment", canon,
+                "(likely truncated) -- refusing to persist the raw fragment",
+                canon,
             )
-            return DescribeOutcome(canon, False, "LLM returned malformed/truncated JSON response")
+            return DescribeOutcome(
+                canon, False, "LLM returned malformed/truncated JSON response"
+            )
         # Fall back: raw text trimmed to one paragraph.
         text = raw.strip().split("\n\n", 1)[0]
         if not text:
@@ -183,10 +206,14 @@ def describe_profile(profile_name: str, *, overwrite: bool = False, timeout: Opt
     else:
         val = parsed.get("description")
         if not isinstance(val, str) or not val.strip():
-            return DescribeOutcome(canon, False, "LLM response missing 'description' field")
+            return DescribeOutcome(
+                canon, False, "LLM response missing 'description' field"
+            )
         description = val.strip()[:280]
     try:
-        profiles_mod.write_profile_meta(profile_dir, description=description, description_auto=True)
+        profiles_mod.write_profile_meta(
+            profile_dir, description=description, description_auto=True
+        )
     except Exception as exc:
         return DescribeOutcome(canon, False, f"failed to write profile.yaml: {exc}")
     return DescribeOutcome(canon, True, "described", description=description)
@@ -196,6 +223,9 @@ def list_describable_profiles(*, missing_only: bool = True) -> list[str]:
     """Profile names that can be described; ``missing_only`` keeps only those without a
     user-authored description."""
     return [
-        p.name for p in profiles_mod.list_profiles()
-        if not (missing_only and (p.description or "").strip() and not p.description_auto)
+        p.name
+        for p in profiles_mod.list_profiles()
+        if not (
+            missing_only and (p.description or "").strip() and not p.description_auto
+        )
     ]

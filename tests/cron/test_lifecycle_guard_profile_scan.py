@@ -10,7 +10,7 @@ import pytest
 @pytest.mark.parametrize("profile", ["default", "sibling"])
 def test_long_profile_scan_preserves_targeting(profile):
     # A process timeout can interrupt a C regex holding the GIL; a thread cannot.
-    script = r'''
+    script = r"""
 from cron import lifecycle_guard as guard
 
 guard._current_profile_name = lambda: "default"
@@ -25,7 +25,7 @@ for selector in (f"-p {profile}", f"--profile {profile}", f"--profile={profile}"
         command = f"clawk {before}{selector} {after}gateway stop"
         assert guard.contains_gateway_lifecycle_command(command) is expected
         assert guard.contains_gateway_lifecycle_command_or_referenced_script(command) is expected
-'''.replace("PROFILE", repr(profile))
+""".replace("PROFILE", repr(profile))
     subprocess.run(
         [sys.executable, "-c", script],
         cwd=Path(__file__).resolve().parents[2],
@@ -37,7 +37,7 @@ for selector in (f"-p {profile}", f"--profile {profile}", f"--profile={profile}"
 
 
 def test_nonmatching_flag_runs_finish():
-    script = r'''
+    script = r"""
 from cron import lifecycle_guard as guard
 
 for command in (
@@ -47,7 +47,7 @@ for command in (
     "clawk " + ("--option" + " " * 100 + "value " ) * 58,
 ):
     assert guard.contains_gateway_lifecycle_command(command) is False
-'''
+"""
     subprocess.run(
         [sys.executable, "-c", script],
         cwd=Path(__file__).resolve().parents[2],

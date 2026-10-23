@@ -102,13 +102,30 @@ def owner_execution_runner():
         ref = SessionRef("test-profile", "cron-" + identity)
         db.create_session(ref.session_id, source="cron")
         authority = SimpleNamespace(
-            db=db, sessions={ref.session_id: SimpleNamespace(
-                source=SimpleNamespace(user_id="cron-owner"))}, pending_results={})
+            db=db,
+            sessions={
+                ref.session_id: SimpleNamespace(
+                    source=SimpleNamespace(user_id="cron-owner")
+                )
+            },
+            pending_results={},
+        )
         request_id = execution_id or identity
-        row = {"admission_id": identity, "request_id": request_id,
-               "principal_id": "cron-owner", "payload": {"text": extra_prompt or ""}}
-        policy = SimpleNamespace(request_json=json.dumps({
-            "cron_job": job, "extra_prompt": extra_prompt, "request_id": request_id}))
+        row = {
+            "admission_id": identity,
+            "request_id": request_id,
+            "principal_id": "cron-owner",
+            "payload": {"text": extra_prompt or ""},
+        }
+        policy = SimpleNamespace(
+            request_json=json.dumps(
+                {
+                    "cron_job": job,
+                    "extra_prompt": extra_prompt,
+                    "request_id": request_id,
+                }
+            )
+        )
 
         async def execute_job():
             previous = current_execution()

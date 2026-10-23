@@ -1,6 +1,7 @@
 """Inline-shell expansion is trust-scoped (#63307): community hub installs never
 auto-execute `` !`cmd` `` snippets, mirroring the hub scan's INSTALL_POLICY trust
 gate — a ``--force`` or pre-scanner community install must not re-arm them."""
+
 import json
 from unittest.mock import patch
 
@@ -28,9 +29,15 @@ def _record_hub_install(install_path: str, trust_level: str):
     from tools.skills_hub import HubLockFile
 
     HubLockFile().record_install(
-        name=install_path.rsplit("/", 1)[-1], source="github", identifier=f"o/r/{install_path}",
-        trust_level=trust_level, scan_verdict="caution", skill_hash="sha256:0",
-        install_path=install_path, files=["SKILL.md"])
+        name=install_path.rsplit("/", 1)[-1],
+        source="github",
+        identifier=f"o/r/{install_path}",
+        trust_level=trust_level,
+        scan_verdict="caution",
+        skill_hash="sha256:0",
+        install_path=install_path,
+        files=["SKILL.md"],
+    )
 
 
 def test_community_hub_install_does_not_expand(tmp_path):
@@ -68,9 +75,14 @@ def test_slash_invocation_leaves_community_snippet_raw(tmp_path):
     _record_hub_install("dyn-comm", "community")
     with (
         patch("tools.skills_tool.SKILLS_DIR", tmp_path),
-        patch("agent.skill_commands._load_skills_config",
-              return_value={"template_vars": True, "inline_shell": True,
-                            "inline_shell_timeout": 5}),
+        patch(
+            "agent.skill_commands._load_skills_config",
+            return_value={
+                "template_vars": True,
+                "inline_shell": True,
+                "inline_shell_timeout": 5,
+            },
+        ),
     ):
         scan_skill_commands()
         msg = build_skill_invocation_message("/dyn-comm")
@@ -90,21 +102,62 @@ def _community_bundle_home(home, lock_text=None):
     _make_skill(skills, "mine")
     lock = skills / ".hub" / "lock.json"
     lock.parent.mkdir(parents=True)
-    lock.write_text(lock_text if lock_text is not None else json.dumps({"version": 1, "installed": {
-        "outer": {"trust_level": "community", "install_path": "outer"}}}), encoding="utf-8")
+    lock.write_text(
+        lock_text
+        if lock_text is not None
+        else json.dumps(
+            {
+                "version": 1,
+                "installed": {
+                    "outer": {"trust_level": "community", "install_path": "outer"}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return skills
 
 
-@pytest.mark.parametrize("lock_text, viewer, rel, expands", [
-    (None, "owner", "outer/agents/inner", False),  # nested SKILL.md inside a community bundle
-    (None, "other", "outer", False),  # another profile reaching it through external_dirs
-    (None, "other", "outer/agents/inner", False),
-    ('{"version": 1, "inst', "owner", "outer", False),  # truncated lock fails closed
-    ('{"version": 1, "installed": []}', "other", "outer", False),  # wrong shape fails closed
-    (None, "owner", "mine", True),  # user-created skill beside the install keeps the opt-in
-    (None, "other", "mine", True),
-])
-def test_community_provenance_follows_the_owning_lock(tmp_path, lock_text, viewer, rel, expands):
+@pytest.mark.parametrize(
+    "lock_text, viewer, rel, expands",
+    [
+        (
+            None,
+            "owner",
+            "outer/agents/inner",
+            False,
+        ),  # nested SKILL.md inside a community bundle
+        (
+            None,
+            "other",
+            "outer",
+            False,
+        ),  # another profile reaching it through external_dirs
+        (None, "other", "outer/agents/inner", False),
+        (
+            '{"version": 1, "inst',
+            "owner",
+            "outer",
+            False,
+        ),  # truncated lock fails closed
+        (
+            '{"version": 1, "installed": []}',
+            "other",
+            "outer",
+            False,
+        ),  # wrong shape fails closed
+        (
+            None,
+            "owner",
+            "mine",
+            True,
+        ),  # user-created skill beside the install keeps the opt-in
+        (None, "other", "mine", True),
+    ],
+)
+def test_community_provenance_follows_the_owning_lock(
+    tmp_path, lock_text, viewer, rel, expands
+):
     owner = _community_bundle_home(tmp_path / "owner", lock_text)
     active = owner if viewer == "owner" else (tmp_path / "other" / "skills")
     active.mkdir(parents=True, exist_ok=True)

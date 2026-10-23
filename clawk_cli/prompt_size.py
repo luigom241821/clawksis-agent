@@ -42,7 +42,11 @@ def _tool_name(tool: Any) -> str:
     if not isinstance(tool, dict):
         return ""
     fn = tool.get("function")
-    return str(fn["name"]) if isinstance(fn, dict) and fn.get("name") else str(tool.get("name", ""))
+    return (
+        str(fn["name"])
+        if isinstance(fn, dict) and fn.get("name")
+        else str(tool.get("name", ""))
+    )
 
 
 def _build_inspection_agent(platform: str) -> Any:
@@ -60,9 +64,14 @@ def _build_inspection_agent(platform: str) -> Any:
     agent_cfg = cfg.get("agent") or {}
     return AIAgent(
         model=model_cfg.get("default") or model_cfg.get("model") or "",
-        api_key="inspect-only", base_url="https://openrouter.ai/api/v1", quiet_mode=True, save_trajectories=False,
-        platform=platform, enabled_toolsets=sorted(_get_platform_tools(cfg, platform)),
-        disabled_toolsets=parse_config_string_list(agent_cfg.get("disabled_toolsets")) or None,
+        api_key="inspect-only",
+        base_url="https://openrouter.ai/api/v1",
+        quiet_mode=True,
+        save_trajectories=False,
+        platform=platform,
+        enabled_toolsets=sorted(_get_platform_tools(cfg, platform)),
+        disabled_toolsets=parse_config_string_list(agent_cfg.get("disabled_toolsets"))
+        or None,
     )
 
 
@@ -71,7 +80,11 @@ def _skill_md_paths_by_name() -> dict[str, Path]:
     Local skills win over external dirs (``get_all_skills_dirs`` yields local first), matching
     the index's own precedence.
     """
-    from agent.skill_utils import get_all_skills_dirs, iter_skill_index_files, parse_frontmatter
+    from agent.skill_utils import (
+        get_all_skills_dirs,
+        iter_skill_index_files,
+        parse_frontmatter,
+    )
 
     mapping: dict[str, Path] = {}
     for skills_dir in get_all_skills_dirs():
@@ -86,7 +99,9 @@ def _skill_md_paths_by_name() -> dict[str, Path]:
                 frontmatter_name = str(frontmatter.get("name") or dir_name)
             except Exception:
                 frontmatter_name = dir_name
-            mapping.setdefault(frontmatter_name, skill_file)  # first (local) occurrence wins
+            mapping.setdefault(
+                frontmatter_name, skill_file
+            )  # first (local) occurrence wins
             mapping.setdefault(dir_name, skill_file)
     return mapping
 
@@ -101,31 +116,54 @@ def _compute_skills_breakdown(skills_block: str) -> list[dict[str, Any]]:
     name_to_path = _skill_md_paths_by_name()
     entries: list[dict[str, Any]] = []
 
-    def append_entry(name: str, **index_fields: int) -> None:  # kwarg order == output key order
+    def append_entry(
+        name: str, **index_fields: int
+    ) -> None:  # kwarg order == output key order
         path = name_to_path.get(name)
         md_bytes: Optional[int] = None
         try:
             md_bytes = path.stat().st_size if path is not None else None
         except OSError:
             pass
-        entries.append({"name": name, **index_fields, "skill_md_bytes": md_bytes, "path": str(path) if path is not None else ""})
+        entries.append(
+            {
+                "name": name,
+                **index_fields,
+                "skill_md_bytes": md_bytes,
+                "path": str(path) if path is not None else "",
+            }
+        )
 
     for line in skills_block.splitlines():
         line_bytes = _bytes(line)
         if (compact_match := _NAMES_ONLY_LINE_RE.match(line)) is not None:
-            names = [n.strip() for n in compact_match.group("names").split(",") if n.strip()]
+            names = [
+                n.strip() for n in compact_match.group("names").split(",") if n.strip()
+            ]
             name_bytes = [_bytes(name) for name in names]
-            shared_base, shared_remainder = divmod(line_bytes - sum(name_bytes), len(names)) if names else (0, 0)
+            shared_base, shared_remainder = (
+                divmod(line_bytes - sum(name_bytes), len(names)) if names else (0, 0)
+            )
             for index, name in enumerate(names):
                 shared = shared_base + (1 if index < shared_remainder else 0)
-                append_entry(name, index_line_bytes=name_bytes[index] + shared, index_line_total_bytes=line_bytes,
-                             index_line_shared_bytes=shared, index_line_skill_count=len(names))
+                append_entry(
+                    name,
+                    index_line_bytes=name_bytes[index] + shared,
+                    index_line_total_bytes=line_bytes,
+                    index_line_shared_bytes=shared,
+                    index_line_skill_count=len(names),
+                )
         elif line.startswith(_SKILL_LINE_PREFIX):
             # Partition on ``": "`` (not ``:``) so namespaced names like ``codex:rescue`` stay intact.
-            name = line[len(_SKILL_LINE_PREFIX):].partition(": ")[0].strip()
+            name = line[len(_SKILL_LINE_PREFIX) :].partition(": ")[0].strip()
             if name:
-                append_entry(name, index_line_bytes=line_bytes, index_line_total_bytes=line_bytes,
-                             index_line_shared_bytes=0, index_line_skill_count=1)
+                append_entry(
+                    name,
+                    index_line_bytes=line_bytes,
+                    index_line_total_bytes=line_bytes,
+                    index_line_shared_bytes=0,
+                    index_line_skill_count=1,
+                )
     entries.sort(key=lambda e: (-(e["skill_md_bytes"] or 0), e["name"]))
     return entries
 
@@ -140,7 +178,9 @@ def _compute_toolsets_breakdown(tools: list[Any]) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Any]] = {}
     for tool in tools:
         toolset = tool_to_toolset.get(_tool_name(tool)) or "(unknown)"
-        group = groups.setdefault(toolset, {"toolset": toolset, "tool_count": 0, "json_bytes": 0})
+        group = groups.setdefault(
+            toolset, {"toolset": toolset, "tool_count": 0, "json_bytes": 0}
+        )
         group["tool_count"] += 1
         group["json_bytes"] += _bytes(json.dumps(tool, ensure_ascii=False))
     return sorted(groups.values(), key=lambda g: (-g["json_bytes"], g["toolset"]))
@@ -156,7 +196,9 @@ def compute_prompt_breakdown(platform: str = "cli") -> dict[str, Any]:
     agent = _build_inspection_agent(platform)
     parts = build_system_prompt_parts(agent)
     full = build_system_prompt(agent)
-    stable, context, volatile = (parts.get(k, "") for k in ("stable", "context", "volatile"))
+    stable, context, volatile = (
+        parts.get(k, "") for k in ("stable", "context", "volatile")
+    )
 
     # The skills index lives in the volatile tier (moved from stable so skill edits don't
     # invalidate the cached identity prefix); fall back to stable for older layouts.
@@ -179,8 +221,11 @@ def compute_prompt_breakdown(platform: str = "cli") -> dict[str, Any]:
     tools = getattr(agent, "tools", None) or []
     sections: list[tuple[str, int, int]] = [
         (label, len(text), _bytes(text))
-        for label, text in (("stable (identity/guidance/skills)", stable), ("context (AGENTS.md/cwd files)", context),
-                            ("volatile (memory/profile/timestamp)", volatile))
+        for label, text in (
+            ("stable (identity/guidance/skills)", stable),
+            ("context (AGENTS.md/cwd files)", context),
+            ("volatile (memory/profile/timestamp)", volatile),
+        )
     ]
     return {
         "platform": platform,
@@ -189,7 +234,10 @@ def compute_prompt_breakdown(platform: str = "cli") -> dict[str, Any]:
         "skills_index": _size(skills_index),
         "memory": _size(memory_block),
         "user_profile": _size(user_block),
-        "tools": {"count": len(tools), "json_bytes": _bytes(json.dumps(tools, ensure_ascii=False))},
+        "tools": {
+            "count": len(tools),
+            "json_bytes": _bytes(json.dumps(tools, ensure_ascii=False)),
+        },
         "sections": sections,
         "skills_breakdown": _compute_skills_breakdown(skills_index),
         "toolsets_breakdown": _compute_toolsets_breakdown(tools),
@@ -201,24 +249,46 @@ def render_breakdown(data: dict[str, Any]) -> str:
     sp = data["system_prompt"]
     tools = data["tools"]
     lines: list[str] = [
-        f"Prompt-size breakdown (platform={data['platform']}, model={data['model'] or 'unset'})", "",
-        f"  System prompt total : {sp['bytes']:>8,} B  ({_fmt_kb(sp['bytes'])}, {sp['chars']:,} chars)", "",
+        f"Prompt-size breakdown (platform={data['platform']}, model={data['model'] or 'unset'})",
+        "",
+        f"  System prompt total : {sp['bytes']:>8,} B  ({_fmt_kb(sp['bytes'])}, {sp['chars']:,} chars)",
+        "",
         "  Major blocks:",
     ]
-    for label, key in (("skills index", "skills_index"), ("memory", "memory"), ("user profile", "user_profile")):
+    for label, key in (
+        ("skills index", "skills_index"),
+        ("memory", "memory"),
+        ("user profile", "user_profile"),
+    ):
         byts = data[key]["bytes"]
         lines.append(f"    {label:<19}: {byts:>8,} B  ({_fmt_kb(byts)})")
-    lines += ["", "  Prompt tiers:"] + [f"    {label:<36}: {byts:>8,} B  ({_fmt_kb(byts)})" for label, _chars, byts in data["sections"]]
-    lines += ["", f"  Tool schemas         : {tools['json_bytes']:>8,} B  ({_fmt_kb(tools['json_bytes'])}, {tools['count']} tools)"]
+    lines += ["", "  Prompt tiers:"] + [
+        f"    {label:<36}: {byts:>8,} B  ({_fmt_kb(byts)})"
+        for label, _chars, byts in data["sections"]
+    ]
+    lines += [
+        "",
+        f"  Tool schemas         : {tools['json_bytes']:>8,} B  ({_fmt_kb(tools['json_bytes'])}, {tools['count']} tools)",
+    ]
 
     if toolsets := data.get("toolsets_breakdown") or []:
-        lines += ["", "  Toolsets by size (tool-schema JSON, largest first):", f"    {'toolset':<22} {'tools':>5}  {'schema':>10}"]
-        lines += [f"    {ts['toolset']:<22} {ts['tool_count']:>5}  {ts['json_bytes']:>8,} B  ({_fmt_kb(ts['json_bytes'])})" for ts in toolsets]
+        lines += [
+            "",
+            "  Toolsets by size (tool-schema JSON, largest first):",
+            f"    {'toolset':<22} {'tools':>5}  {'schema':>10}",
+        ]
+        lines += [
+            f"    {ts['toolset']:<22} {ts['tool_count']:>5}  {ts['json_bytes']:>8,} B  ({_fmt_kb(ts['json_bytes'])})"
+            for ts in toolsets
+        ]
 
     # Per-skill cost — index line (always shipped) vs SKILL.md (read on load).
     if skills := data.get("skills_breakdown") or []:
-        lines += ["", "  Skills by size (SKILL.md on-disk = read cost; index cost = attributed always-on bytes, largest first):",
-                  f"    {'skill':<28} {'SKILL.md':>10}  {'index cost':>10}"]
+        lines += [
+            "",
+            "  Skills by size (SKILL.md on-disk = read cost; index cost = attributed always-on bytes, largest first):",
+            f"    {'skill':<28} {'SKILL.md':>10}  {'index cost':>10}",
+        ]
         shown = skills[:_SKILLS_TABLE_LIMIT]
         for sk in shown:
             md = sk["skill_md_bytes"]
@@ -237,4 +307,8 @@ def cmd_prompt_size(args: Any) -> None:
     except Exception as e:
         print(f"Could not compute prompt-size breakdown: {e}")
         return
-    print(json.dumps(data, ensure_ascii=False, indent=2) if getattr(args, "json", False) else render_breakdown(data))
+    print(
+        json.dumps(data, ensure_ascii=False, indent=2)
+        if getattr(args, "json", False)
+        else render_breakdown(data)
+    )

@@ -21,7 +21,9 @@ from typing import Optional
 _SKIP = frozenset({"", "auto", "openrouter", "custom"})
 
 
-def current_provider_catalog_match(model_name: str, current_provider: str) -> Optional[str]:
+def current_provider_catalog_match(
+    model_name: str, current_provider: str
+) -> Optional[str]:
     """Return the current provider's own spelling of *model_name* when its live (disk-cached)
     catalog serves it — exact id, or the bare part after ``vendor/`` — else ``None``.
 
@@ -31,7 +33,11 @@ def current_provider_catalog_match(model_name: str, current_provider: str) -> Op
     from clawk_cli.models import cached_provider_model_ids, normalize_provider
 
     provider = (current_provider or "").strip().lower()
-    if provider in _SKIP or provider.startswith("custom:") or normalize_provider(provider) in _SKIP:
+    if (
+        provider in _SKIP
+        or provider.startswith("custom:")
+        or normalize_provider(provider) in _SKIP
+    ):
         return None
     wanted = (model_name or "").strip().lower()
     if not wanted:
@@ -41,7 +47,13 @@ def current_provider_catalog_match(model_name: str, current_provider: str) -> Op
     except Exception:
         return None
     return next((mid for mid in catalog if mid.lower() == wanted), None) or next(
-        (mid for mid in catalog if "/" in mid and mid.split("/", 1)[1].lower() == wanted), None)
+        (
+            mid
+            for mid in catalog
+            if "/" in mid and mid.split("/", 1)[1].lower() == wanted
+        ),
+        None,
+    )
 
 
 def current_provider_owns_vendor(model_name: str, current_provider: str) -> bool:
@@ -54,7 +66,11 @@ def current_provider_owns_vendor(model_name: str, current_provider: str) -> bool
     switch there". Aggregators, custom endpoints and multi-vendor resellers (nvidia, alibaba, ...)
     have no single native vendor and are skipped."""
     from clawk_cli.model_normalize import detect_vendor
-    from clawk_cli.models import _AGGREGATOR_PROVIDERS, _PROVIDER_MODELS, normalize_provider
+    from clawk_cli.models import (
+        _AGGREGATOR_PROVIDERS,
+        _PROVIDER_MODELS,
+        normalize_provider,
+    )
 
     provider = (current_provider or "").strip().lower()
     if provider in _SKIP or provider.startswith("custom:"):
@@ -84,7 +100,9 @@ def provider_has_credentials(provider: str) -> bool:
     if pid == "custom" or pid.startswith("custom:"):
         return True
     try:
-        if pid == "openrouter" and has_usable_secret(get_env_value_prefer_dotenv("OPENROUTER_API_KEY")):
+        if pid == "openrouter" and has_usable_secret(
+            get_env_value_prefer_dotenv("OPENROUTER_API_KEY")
+        ):
             return True
         status = get_auth_status(pid) or {}
         if status.get("logged_in") or status.get("configured"):

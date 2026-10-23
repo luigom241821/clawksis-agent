@@ -33,7 +33,10 @@ def _assert_whatsapp_bridge_stopped(session_path: Path) -> None:
     if current_start is None:
         raise HTTPException(status_code=409, detail=unknown)
     if current_start == recorded_start:
-        raise HTTPException(status_code=409, detail="The WhatsApp bridge is still running. Stop it before re-pairing.")
+        raise HTTPException(
+            status_code=409,
+            detail="The WhatsApp bridge is still running. Stop it before re-pairing.",
+        )
     # Both fingerprints are available and differ. This is a recycled PID,
     # not evidence that the old bridge still owns the session.
 
@@ -42,16 +45,28 @@ def _backup_whatsapp_session(session_path: Path) -> None:
     """Called while onboarding owns the session reservation. Never delete keys."""
     _assert_whatsapp_bridge_stopped(session_path)
     if session_path.is_symlink():
-        raise HTTPException(status_code=409, detail="The WhatsApp session is a symbolic link. Back it up manually before re-pairing.")
+        raise HTTPException(
+            status_code=409,
+            detail="The WhatsApp session is a symbolic link. Back it up manually before re-pairing.",
+        )
     backup = None
     try:
         if session_path.exists():
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-            backup = Path(tempfile.mkdtemp(prefix=f"session-backup-{stamp}-", dir=session_path.parent)) / "session"
+            backup = (
+                Path(
+                    tempfile.mkdtemp(
+                        prefix=f"session-backup-{stamp}-", dir=session_path.parent
+                    )
+                )
+                / "session"
+            )
             session_path.rename(backup)
             session_path.mkdir(mode=0o700)
     except OSError as exc:
-        detail = f"Could not back up the WhatsApp session: {exc}. Pairing was not started."
+        detail = (
+            f"Could not back up the WhatsApp session: {exc}. Pairing was not started."
+        )
         if backup is not None and backup.exists():
             detail += f" The previous session is preserved at {backup}."
         raise HTTPException(status_code=500, detail=detail) from exc

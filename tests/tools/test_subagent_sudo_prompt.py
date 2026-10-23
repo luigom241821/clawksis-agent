@@ -100,7 +100,9 @@ class TestDelegatedChildNeverPrompts:
         """The fix must not break interactive prompting outside children."""
         monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
         monkeypatch.setattr(
-            tts, "_prompt_for_sudo_password", lambda timeout_seconds=45, *, command="": "hunter2"
+            tts,
+            "_prompt_for_sudo_password",
+            lambda timeout_seconds=45, *, command="": "hunter2",
         )
 
         transformed, sudo_stdin = tts._transform_sudo_command("sudo whoami")
@@ -145,8 +147,11 @@ def test_single_query_never_prompts(monkeypatch):
     monkeypatch.setenv("CLAWK_SINGLE_QUERY_SESSION", "1")
     calls = []
     tt.set_sudo_password_callback(lambda: calls.append(1) or "pw")
-    monkeypatch.setattr(tts, "_prompt_for_sudo_password",
-                        lambda timeout_seconds=45, *, command="": calls.append(2) or "pw")
+    monkeypatch.setattr(
+        tts,
+        "_prompt_for_sudo_password",
+        lambda timeout_seconds=45, *, command="": calls.append(2) or "pw",
+    )
 
     transformed, sudo_stdin = tts._transform_sudo_command("sudo whoami")
 
@@ -155,7 +160,9 @@ def test_single_query_never_prompts(monkeypatch):
     assert transformed == "sudo whoami"
 
 
-def test_single_query_sudo_failure_gets_the_headless_tip_and_no_reprompt_promise(monkeypatch):
+def test_single_query_sudo_failure_gets_the_headless_tip_and_no_reprompt_promise(
+    monkeypatch,
+):
     """A -q sudo failure is told how to fix it (SUDO_PASSWORD), never promised a prompt it will not get."""
     from tools.terminal_tool_result import _sudo_annotations
 
@@ -167,6 +174,8 @@ def test_single_query_sudo_failure_gets_the_headless_tip_and_no_reprompt_promise
 
     tt.set_sudo_password_callback(lambda: "pw")
     tts._set_cached_sudo_password("wrong")
-    out, auth_failed, cache_cleared = _sudo_annotations("sudo whoami", "sudo: 3 incorrect password attempts", "local")
+    out, auth_failed, cache_cleared = _sudo_annotations(
+        "sudo whoami", "sudo: 3 incorrect password attempts", "local"
+    )
     assert auth_failed and cache_cleared
     assert "prompted again" not in out

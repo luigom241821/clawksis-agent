@@ -17,7 +17,9 @@ import hashlib
 import logging
 
 from clawk_cli.dashboard_auth.ws_tickets import (
-    INTERNAL_PROVIDER as _INTERNAL_PROVIDER, INTERNAL_USER_ID as _INTERNAL_USER_ID)
+    INTERNAL_PROVIDER as _INTERNAL_PROVIDER,
+    INTERNAL_USER_ID as _INTERNAL_USER_ID,
+)
 
 from .method_ctx import HandlerRegistry, bind_module
 
@@ -50,6 +52,7 @@ def _is_authenticated_identity(identity: object) -> bool:
 def _principal_digest(identity: dict) -> str:
     """Server-derived principal id: stable per user, unspoofable without the minted identity."""
     from gateway.session_identity import authenticated_subject
+
     raw = authenticated_subject(identity)
     return f"principal:dashboard:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:32]}"
 
@@ -60,16 +63,22 @@ def _broker_event_writer(transport: object, session_id: str):
 
     def send(frame: dict) -> None:
         try:
-            accepted = transport.write({
-                "jsonrpc": "2.0", "method": "event",
-                "params": {
-                    "type": frame.get("method"), "session_id": session_id,
-                    "payload": frame.get("params"),
-                }})
+            accepted = transport.write(
+                {
+                    "jsonrpc": "2.0",
+                    "method": "event",
+                    "params": {
+                        "type": frame.get("method"),
+                        "session_id": session_id,
+                        "payload": frame.get("params"),
+                    },
+                }
+            )
         except Exception:
             logger.exception(
                 "browser controller event write failed session=%s frame=%s",
-                session_id, frame.get("method"),
+                session_id,
+                frame.get("method"),
             )
             raise
         if accepted is False:
@@ -79,8 +88,13 @@ def _broker_event_writer(transport: object, session_id: str):
 
 
 def _controller_method(
-    name: str, *, identity_message: str = _IDENTITY_REQUIRED, lookup_scope: bool = True,
-    missing_scope_message: str = _NO_CONTROLLER, precheck=None):
+    name: str,
+    *,
+    identity_message: str = _IDENTITY_REQUIRED,
+    lookup_scope: bool = True,
+    missing_scope_message: str = _NO_CONTROLLER,
+    precheck=None,
+):
     """Register a handler behind the shared fail-closed (4403) controller gates.
 
     Order: ``precheck(rid, params)`` (may return an error envelope) → caller holds a
@@ -111,20 +125,26 @@ def _controller_method(
                 # peer that registered the controller included. The broker's is_owner check below still
                 # keys on the transport that attached the scope.
                 if not _session_transport_contains(session, transport):
-                    return _err(rid, _ERR_FORBIDDEN, "session is not owned by this transport")
+                    return _err(
+                        rid, _ERR_FORBIDDEN, "session is not owned by this transport"
+                    )
             broker = browser_control_broker.get_browser_control_broker()
             scope = None
             if lookup_scope:
                 scope = broker.scope_for_session(
-                    session_id=session_id, principal_id=_principal_digest(identity),
-                    transport_family=_CLOUD_TRANSPORT_FAMILY)
+                    session_id=session_id,
+                    principal_id=_principal_digest(identity),
+                    transport_family=_CLOUD_TRANSPORT_FAMILY,
+                )
                 if scope is None:
                     return _err(rid, _ERR_FORBIDDEN, missing_scope_message)
                 # Defense in depth: the broker's exact-scope ops already reject foreign
                 # scopes; the owner check makes the same-transport rule explicit here too.
                 if not broker.is_owner(scope, transport):
                     return _err(rid, _ERR_FORBIDDEN, _NOT_OWNED)
-            return fn(rid, params, transport, identity, session_id, broker, scope, session)
+            return fn(
+                rid, params, transport, identity, session_id, broker, scope, session
+            )
 
         handler.__doc__ = fn.__doc__
         return method(name)(handler)
@@ -138,10 +158,13 @@ def _register_precheck(rid, params: dict):
     if not browser_control_broker.browser_control_enabled():
         return _err(rid, _ERR_FORBIDDEN, "browser.extension_control.enabled is not set")
     broker_mod = browser_control_broker
-    if not broker_mod.browser_control_protocol_supported(params.get("protocol_version")):
+    if not broker_mod.browser_control_protocol_supported(
+        params.get("protocol_version")
+    ):
         expected = broker_mod.BROWSER_CONTROL_PROTOCOL_VERSION
         return _err(
-            rid, _ERR_FORBIDDEN,
+            rid,
+            _ERR_FORBIDDEN,
             f"unsupported browser-control protocol version; expected {expected}",
         )
     return None
@@ -150,8 +173,12 @@ def _register_precheck(rid, params: dict):
 @_controller_method(
     "browser.controller.register",
     identity_message="browser.controller.register requires an authenticated non-internal identity",
-    lookup_scope=False, precheck=_register_precheck)
-def _(rid, params: dict, transport, identity, session_id, broker, _scope, session) -> dict:
+    lookup_scope=False,
+    precheck=_register_precheck,
+)
+def _(
+    rid, params: dict, transport, identity, session_id, broker, _scope, session
+) -> dict:
     """Attach this connection as the browser controller for one session; fails closed (4403) unless
     the flag is on, the protocol version is supported, the gates pass and a capability survives."""
     from gateway import browser_control_broker
@@ -161,30 +188,47 @@ def _(rid, params: dict, transport, identity, session_id, broker, _scope, sessio
     profile_id = str(session.get("profile") or "").strip()
     if not controller_id or not browser_profile_id or not profile_id:
         return _err(
-            rid, _ERR_FORBIDDEN,
+            rid,
+            _ERR_FORBIDDEN,
             "controller_id, browser_profile_id, and server session profile are required",
         )
     capabilities = browser_control_broker.filter_browser_control_capabilities(
         params.get("capabilities")
     )
     if not capabilities:
-        return _err(rid, _ERR_FORBIDDEN, "no permitted controller capabilities requested")
+        return _err(
+            rid, _ERR_FORBIDDEN, "no permitted controller capabilities requested"
+        )
     scope = browser_control_broker.ControllerScope(
-        principal_id=_principal_digest(identity), profile_id=profile_id, session_id=session_id,
-        controller_id=controller_id, browser_profile_id=browser_profile_id,
-        transport_family=_CLOUD_TRANSPORT_FAMILY, capabilities=capabilities)
+        principal_id=_principal_digest(identity),
+        profile_id=profile_id,
+        session_id=session_id,
+        controller_id=controller_id,
+        browser_profile_id=browser_profile_id,
+        transport_family=_CLOUD_TRANSPORT_FAMILY,
+        capabilities=capabilities,
+    )
     broker.attach(scope, _broker_event_writer(transport, session_id), owner=transport)
-    return _ok(rid, {
-        "scope": {
-            "principal_id": scope.principal_id, "profile_id": scope.profile_id,
-            "session_id": scope.session_id, "controller_id": scope.controller_id,
-            "browser_profile_id": scope.browser_profile_id,
-            "transport_family": scope.transport_family,
-            "capabilities": sorted(scope.capabilities)}})
+    return _ok(
+        rid,
+        {
+            "scope": {
+                "principal_id": scope.principal_id,
+                "profile_id": scope.profile_id,
+                "session_id": scope.session_id,
+                "controller_id": scope.controller_id,
+                "browser_profile_id": scope.browser_profile_id,
+                "transport_family": scope.transport_family,
+                "capabilities": sorted(scope.capabilities),
+            }
+        },
+    )
 
 
 @_controller_method("browser.controller.result")
-def _(rid, params: dict, _transport, _identity, _session_id, broker, scope, _session) -> dict:
+def _(
+    rid, params: dict, _transport, _identity, _session_id, broker, scope, _session
+) -> dict:
     """Deliver one command result to the broker; ``accepted`` is False for unknown / resolved /
     cancelled command ids (the broker's idempotent answer, surfaced verbatim)."""
     command_id = str(params.get("command_id") or "")
@@ -192,7 +236,11 @@ def _(rid, params: dict, _transport, _identity, _session_id, broker, scope, _ses
         return _err(rid, _ERR_FORBIDDEN, "command_id required")
     ok = params.get("ok") is True
     accepted = broker.complete(
-        command_id, scope=scope, ok=ok, result=params.get("result") if ok else params.get("error"))
+        command_id,
+        scope=scope,
+        ok=ok,
+        result=params.get("result") if ok else params.get("error"),
+    )
     return _ok(rid, {"accepted": accepted})
 
 
@@ -207,7 +255,9 @@ def _(rid, params: dict, *_gate) -> dict:
 
 
 @_controller_method("browser.controller.detach", missing_scope_message=_NOT_OWNED)
-def _(rid, params: dict, transport, _identity, _session_id, broker, scope, _session) -> dict:
+def _(
+    rid, params: dict, transport, _identity, _session_id, broker, scope, _session
+) -> dict:
     """Hard-detach only the controller owned by this authenticated transport."""
     broker.detach(scope, owner=transport, notify_controller=False)
     return _ok(rid, {"detached": True})

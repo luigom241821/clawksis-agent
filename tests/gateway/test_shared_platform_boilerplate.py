@@ -16,7 +16,16 @@ import agent.secret_scope as ss
 import gateway.platforms._shared as shared
 import clawk_cli.config as cli_config
 
-_ENV_ENABLEMENT_PLUGINS = ("buzz", "google_chat", "irc", "line", "ntfy", "photon", "simplex", "teams")
+_ENV_ENABLEMENT_PLUGINS = (
+    "buzz",
+    "google_chat",
+    "irc",
+    "line",
+    "ntfy",
+    "photon",
+    "simplex",
+    "teams",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -37,14 +46,29 @@ def test_env_enablement_reads_only_through_scoped_getter(plugin, monkeypatch):
         if var.startswith(plugin.upper().replace("GOOGLE_CHAT", "GOOGLE")):
             monkeypatch.delenv(var, raising=False)
     fake_scope = {
-        "BUZZ_RELAY_URL": "wss://relay", "BUZZ_PRIVATE_KEY": "k" * 8, "BUZZ_CHANNELS": "a,b",
-        "GOOGLE_CHAT_PROJECT_ID": "p", "GOOGLE_CHAT_SUBSCRIPTION_NAME": "s", "GOOGLE_CHAT_MAX_MESSAGES": "3",
-        "IRC_SERVER": "irc.example", "IRC_CHANNEL": "#h", "IRC_PORT": "6697",
-        "LINE_CHANNEL_ACCESS_TOKEN": "t", "LINE_CHANNEL_SECRET": "s", "LINE_PORT": "8081",
-        "NTFY_TOPIC": "topic", "NTFY_TOKEN": "tok",
-        "PHOTON_PROJECT_ID": "pid", "PHOTON_PROJECT_SECRET": "sec", "PHOTON_HOME_CHANNEL": "line-1",
-        "SIMPLEX_WS_URL": "ws://x", "SIMPLEX_GROUP_ALLOWED": "g",
-        "TEAMS_CLIENT_ID": "c", "TEAMS_CLIENT_SECRET": "s", "TEAMS_TENANT_ID": "t", "TEAMS_PORT": "3979",
+        "BUZZ_RELAY_URL": "wss://relay",
+        "BUZZ_PRIVATE_KEY": "k" * 8,
+        "BUZZ_CHANNELS": "a,b",
+        "GOOGLE_CHAT_PROJECT_ID": "p",
+        "GOOGLE_CHAT_SUBSCRIPTION_NAME": "s",
+        "GOOGLE_CHAT_MAX_MESSAGES": "3",
+        "IRC_SERVER": "irc.example",
+        "IRC_CHANNEL": "#h",
+        "IRC_PORT": "6697",
+        "LINE_CHANNEL_ACCESS_TOKEN": "t",
+        "LINE_CHANNEL_SECRET": "s",
+        "LINE_PORT": "8081",
+        "NTFY_TOPIC": "topic",
+        "NTFY_TOKEN": "tok",
+        "PHOTON_PROJECT_ID": "pid",
+        "PHOTON_PROJECT_SECRET": "sec",
+        "PHOTON_HOME_CHANNEL": "line-1",
+        "SIMPLEX_WS_URL": "ws://x",
+        "SIMPLEX_GROUP_ALLOWED": "g",
+        "TEAMS_CLIENT_ID": "c",
+        "TEAMS_CLIENT_SECRET": "s",
+        "TEAMS_TENANT_ID": "t",
+        "TEAMS_PORT": "3979",
     }
     scoped_hits: list[str] = []
     raw_hits: list[str] = []
@@ -55,9 +79,15 @@ def test_env_enablement_reads_only_through_scoped_getter(plugin, monkeypatch):
         return fake_scope.get(name, default)
 
     monkeypatch.setattr(shared, "get_scoped_secret", spy)
-    monkeypatch.setattr(shared, "_scoped_get_secret", lambda name, default=None: fake_scope.get(name, default))
+    monkeypatch.setattr(
+        shared,
+        "_scoped_get_secret",
+        lambda name, default=None: fake_scope.get(name, default),
+    )
     monkeypatch.setattr(cli_config, "get_env_value", lambda key: raw_hits.append(key))
-    monkeypatch.setattr(os, "getenv", lambda key, default=None: raw_hits.append(key) or default)
+    monkeypatch.setattr(
+        os, "getenv", lambda key, default=None: raw_hits.append(key) or default
+    )
 
     seed = mod._env_enablement()
 
@@ -70,14 +100,33 @@ def test_env_enablement_reads_only_through_scoped_getter(plugin, monkeypatch):
 def test_home_channel_name_defaults_to_home_everywhere(monkeypatch):
     """One rule for ``home_channel.name`` across adapters: ``<HOME_ENV>_NAME`` else the literal ``Home``
     (irc/ntfy/buzz previously used the chat id as its own name)."""
-    monkeypatch.setattr(shared, "get_scoped_secret", lambda n, d=None, **k: {"X_HOME": "room"}.get(n, d))
+    monkeypatch.setattr(
+        shared, "get_scoped_secret", lambda n, d=None, **k: {"X_HOME": "room"}.get(n, d)
+    )
     seed = shared.seed_extra_from_env((), home_env="X_HOME")
     assert seed["home_channel"] == {"chat_id": "room", "name": "Home"}
-    monkeypatch.setattr(shared, "get_scoped_secret", lambda n, d=None, **k: {"X_HOME": "room", "X_HOME_NAME": "Ops"}.get(n, d))
-    assert shared.seed_extra_from_env((), home_env="X_HOME")["home_channel"]["name"] == "Ops"
-    assert shared.seed_extra_from_env((), home_env="X_HOME", home_default="fallback")["home_channel"]["chat_id"] == "room"
+    monkeypatch.setattr(
+        shared,
+        "get_scoped_secret",
+        lambda n, d=None, **k: {"X_HOME": "room", "X_HOME_NAME": "Ops"}.get(n, d),
+    )
+    assert (
+        shared.seed_extra_from_env((), home_env="X_HOME")["home_channel"]["name"]
+        == "Ops"
+    )
+    assert (
+        shared.seed_extra_from_env((), home_env="X_HOME", home_default="fallback")[
+            "home_channel"
+        ]["chat_id"]
+        == "room"
+    )
     monkeypatch.setattr(shared, "get_scoped_secret", lambda n, d=None, **k: d)
-    assert shared.seed_extra_from_env((), home_env="X_HOME", home_default="fallback")["home_channel"]["chat_id"] == "fallback"
+    assert (
+        shared.seed_extra_from_env((), home_env="X_HOME", home_default="fallback")[
+            "home_channel"
+        ]["chat_id"]
+        == "fallback"
+    )
     assert "home_channel" not in shared.seed_extra_from_env((), home_env="X_HOME")
 
 
@@ -86,16 +135,52 @@ def test_buzz_yaml_bridge_seeds_extra_for_a_secondary_profile(monkeypatch):
     ``PlatformConfig.extra`` — a ``None`` return left a secondary Buzz profile with neither."""
     import plugins.platforms.buzz.adapter as buzz
 
-    for var in ("BUZZ_RELAY_URL", "BUZZ_REPLY_TO_MODE", "BUZZ_CHANNELS", "BUZZ_REQUIRE_MENTION"):
+    for var in (
+        "BUZZ_RELAY_URL",
+        "BUZZ_REPLY_TO_MODE",
+        "BUZZ_CHANNELS",
+        "BUZZ_REQUIRE_MENTION",
+    ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(shared, "profile_scoped", lambda: True)
-    seeded = buzz._apply_yaml_config({}, {"extra": {
-        "relay_url": "wss://p.relay", "reply_to_mode": "off", "channels": ["a", "b"], "require_mention": False}})
-    assert seeded == {"relay_url": "wss://p.relay", "reply_to_mode": "off", "channels": ["a", "b"], "require_mention": False}
-    assert not any(v in os.environ for v in ("BUZZ_RELAY_URL", "BUZZ_REPLY_TO_MODE", "BUZZ_CHANNELS", "BUZZ_REQUIRE_MENTION"))
+    seeded = buzz._apply_yaml_config(
+        {},
+        {
+            "extra": {
+                "relay_url": "wss://p.relay",
+                "reply_to_mode": "off",
+                "channels": ["a", "b"],
+                "require_mention": False,
+            }
+        },
+    )
+    assert seeded == {
+        "relay_url": "wss://p.relay",
+        "reply_to_mode": "off",
+        "channels": ["a", "b"],
+        "require_mention": False,
+    }
+    assert not any(
+        v in os.environ
+        for v in (
+            "BUZZ_RELAY_URL",
+            "BUZZ_REPLY_TO_MODE",
+            "BUZZ_CHANNELS",
+            "BUZZ_REQUIRE_MENTION",
+        )
+    )
 
     monkeypatch.setattr(shared, "profile_scoped", lambda: False)
-    buzz._apply_yaml_config({}, {"extra": {"reply_to_mode": "off", "channels": ["a", "b"], "require_mention": False}})
+    buzz._apply_yaml_config(
+        {},
+        {
+            "extra": {
+                "reply_to_mode": "off",
+                "channels": ["a", "b"],
+                "require_mention": False,
+            }
+        },
+    )
     assert os.environ["BUZZ_REPLY_TO_MODE"] == "off"
     assert os.environ["BUZZ_CHANNELS"] == "a,b"
     assert os.environ["BUZZ_REQUIRE_MENTION"] == "false"
@@ -106,21 +191,52 @@ def test_buzz_yaml_bridge_seeds_extra_for_a_secondary_profile(monkeypatch):
 def test_extra_or_secret_precedence_env_then_yaml_then_default(monkeypatch):
     """Explicit scoped env → the profile's YAML → default; a blank env value is unset (#108440, #109032)."""
     env: dict = {}
-    monkeypatch.setattr(shared, "get_scoped_secret", lambda n, d=None, **k: env.get(n, d))
+    monkeypatch.setattr(
+        shared, "get_scoped_secret", lambda n, d=None, **k: env.get(n, d)
+    )
     # YAML alone: explicit False is a real value; blank/None fall to the default.
-    assert shared.extra_or_secret({"require_mention": False}, "require_mention", "X", "true") is False
-    assert shared.extra_or_secret({"require_mention": ""}, "require_mention", "X", "true") == "true"
+    assert (
+        shared.extra_or_secret(
+            {"require_mention": False}, "require_mention", "X", "true"
+        )
+        is False
+    )
+    assert (
+        shared.extra_or_secret({"require_mention": ""}, "require_mention", "X", "true")
+        == "true"
+    )
     assert shared.extra_or_secret(None, "require_mention", "X", "true") == "true"
     # Readers where a blank YAML value means "cleared" (channel whitelists) keep it as a value.
-    assert shared.extra_or_secret({"allowed_channels": ""}, "allowed_channels", "X", "dflt", blank_is_unset=False) == ""
-    assert shared.extra_or_secret({}, "allowed_channels", "X", "dflt", blank_is_unset=False) == "dflt"
+    assert (
+        shared.extra_or_secret(
+            {"allowed_channels": ""},
+            "allowed_channels",
+            "X",
+            "dflt",
+            blank_is_unset=False,
+        )
+        == ""
+    )
+    assert (
+        shared.extra_or_secret(
+            {}, "allowed_channels", "X", "dflt", blank_is_unset=False
+        )
+        == "dflt"
+    )
     # An explicit env value beats YAML in either direction; a blank env value does not.
     env["X"] = "false"
-    assert shared.extra_or_secret({"reactions": True}, "reactions", "X", "true") == "false"
+    assert (
+        shared.extra_or_secret({"reactions": True}, "reactions", "X", "true") == "false"
+    )
     env["X"] = "true"
-    assert shared.extra_or_secret({"reactions": False}, "reactions", "X", "false") == "true"
+    assert (
+        shared.extra_or_secret({"reactions": False}, "reactions", "X", "false")
+        == "true"
+    )
     env["X"] = "  "
-    assert shared.extra_or_secret({"reactions": False}, "reactions", "X", "true") is False
+    assert (
+        shared.extra_or_secret({"reactions": False}, "reactions", "X", "true") is False
+    )
 
 
 def test_extra_or_secret_scoped_miss_never_reads_launch_env(monkeypatch):
@@ -130,13 +246,19 @@ def test_extra_or_secret_scoped_miss_never_reads_launch_env(monkeypatch):
     ss.set_multiplex_active(True)
     token = ss.set_secret_scope({})
     try:
-        assert shared.extra_or_secret({"flag": "yaml-value"}, "flag", "X_FLAG", "dflt") == "yaml-value"
+        assert (
+            shared.extra_or_secret({"flag": "yaml-value"}, "flag", "X_FLAG", "dflt")
+            == "yaml-value"
+        )
         assert shared.extra_or_secret({}, "flag", "X_FLAG", "dflt") == "dflt"
     finally:
         ss.reset_secret_scope(token)
     # Unscoped (single-profile / default profile): env-over-YAML exactly as documented.
     ss.set_multiplex_active(False)
-    assert shared.extra_or_secret({"flag": "yaml-value"}, "flag", "X_FLAG", "dflt") == "launch-value"
+    assert (
+        shared.extra_or_secret({"flag": "yaml-value"}, "flag", "X_FLAG", "dflt")
+        == "launch-value"
+    )
 
 
 def test_external_fallback_consults_profile_scope_only_when_unscoped(monkeypatch):

@@ -31,7 +31,9 @@ class TestExitSummaryResumeHint:
 
     def test_resume_hint_no_profile_flag_on_default(self, capsys):
         cli_obj = _make_cli()
-        with patch("clawk_cli.profiles.get_active_profile_name", return_value="default"):
+        with patch(
+            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        ):
             cli_obj._print_exit_summary()
         out = capsys.readouterr().out
         # No `-p` for the default profile.
@@ -54,7 +56,9 @@ class TestExitSummaryResumeHint:
         out = capsys.readouterr().out
         assert "clawk --resume 20260524_000001_abc123 -p dev" in out
 
-    def test_resume_hint_includes_profile_flag_on_title_hint_too(self, capsys, tmp_path):
+    def test_resume_hint_includes_profile_flag_on_title_hint_too(
+        self, capsys, tmp_path
+    ):
         """When a session title is available, the `clawk -c "title"` hint
         must also include the `-p` flag for non-default profiles.
         """
@@ -98,8 +102,9 @@ class TestTuiExitSummaryResumeHint:
     point from the classic CLI summary above and must carry the same ``-p`` flag (#125078)."""
 
     def test_tui_hints_include_profile_flag_for_named_profile(self, capsys):
-        with patch("clawk_state.SessionDB", _tui_session_db), patch(
-            "clawk_cli.profiles.get_active_profile_name", return_value="dev"
+        with (
+            patch("clawk_state.SessionDB", _tui_session_db),
+            patch("clawk_cli.profiles.get_active_profile_name", return_value="dev"),
         ):
             _print_tui_exit_summary("20260524_000001_abc123")
         out = capsys.readouterr().out
@@ -107,8 +112,9 @@ class TestTuiExitSummaryResumeHint:
         assert 'clawk --tui -c "My TUI Session" -p dev' in out
 
     def test_tui_hints_no_profile_flag_on_default(self, capsys):
-        with patch("clawk_state.SessionDB", _tui_session_db), patch(
-            "clawk_cli.profiles.get_active_profile_name", return_value="default"
+        with (
+            patch("clawk_state.SessionDB", _tui_session_db),
+            patch("clawk_cli.profiles.get_active_profile_name", return_value="default"),
         ):
             _print_tui_exit_summary("20260524_000001_abc123")
         out = capsys.readouterr().out

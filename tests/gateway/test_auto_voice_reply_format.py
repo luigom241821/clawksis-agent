@@ -13,8 +13,6 @@ from gateway.session import SessionSource
 
 
 class TestAutoVoiceReplyFormat:
-
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "platform",
@@ -38,12 +36,14 @@ class TestAutoVoiceReplyFormat:
             requested_paths.append(output_path)
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             Path(output_path).write_bytes(b"fake ogg opus")
-            return json.dumps({
-                "success": True,
-                "file_path": output_path,
-                "provider": "gemini",
-                "voice_compatible": True,
-            })
+            return json.dumps(
+                {
+                    "success": True,
+                    "file_path": output_path,
+                    "provider": "gemini",
+                    "voice_compatible": True,
+                }
+            )
 
         with patch("tools.tts_tool.text_to_speech_tool", side_effect=fake_tts):
             await runner._send_voice_reply(event, "hello from auto tts")
@@ -69,9 +69,10 @@ class TestAutoVoiceReplyFormat:
             Platform.TELEGRAM, chat_id="123", message_type=MessageType.VOICE
         )
 
-        assert runner._should_send_voice_reply(
-            voice_event, "hello", [], already_sent=True
-        ) is True
+        assert (
+            runner._should_send_voice_reply(voice_event, "hello", [], already_sent=True)
+            is True
+        )
 
     def test_should_send_voice_reply_voice_only_still_requires_voice_input(self):
         """Explicit voice_only must not widen to text input (#73508 regression).
@@ -90,8 +91,13 @@ class TestAutoVoiceReplyFormat:
 
         assert runner._should_send_voice_reply(event, "hello", []) is False
 
-        voice_event = _make_event(Platform.TELEGRAM, chat_id="123", message_type=MessageType.VOICE)
-        assert runner._should_send_voice_reply(voice_event, "hello", [], already_sent=True) is True
+        voice_event = _make_event(
+            Platform.TELEGRAM, chat_id="123", message_type=MessageType.VOICE
+        )
+        assert (
+            runner._should_send_voice_reply(voice_event, "hello", [], already_sent=True)
+            is True
+        )
 
     def test_should_send_voice_reply_a2a_ignores_global_auto_tts(self):
         """A2A text tasks must stay text even when voice.auto_tts is on.
@@ -166,12 +172,15 @@ class TestAutoVoiceReplyFormat:
         telegram_adapter._auto_tts_disabled_chats = set()
         telegram_adapter._auto_tts_enabled_chats = set()
 
-        with patch("clawk_cli.config.load_config", return_value={"voice": {"auto_tts": True}}):
+        with patch(
+            "clawk_cli.config.load_config", return_value={"voice": {"auto_tts": True}}
+        ):
             runner._sync_voice_mode_state_to_adapter(a2a_adapter)
             runner._sync_voice_mode_state_to_adapter(telegram_adapter)
 
         assert a2a_adapter._auto_tts_default is False
         assert telegram_adapter._auto_tts_default is True
+
 
 def _make_runner() -> GatewayRunner:
     with patch("gateway.run.GatewayRunner._load_voice_modes", return_value={}):
@@ -188,7 +197,11 @@ def _make_adapter(platform: Platform) -> MagicMock:
     return adapter
 
 
-def _make_event(platform: Platform, chat_id: str = "123", message_type: MessageType = MessageType.TEXT) -> MessageEvent:
+def _make_event(
+    platform: Platform,
+    chat_id: str = "123",
+    message_type: MessageType = MessageType.TEXT,
+) -> MessageEvent:
     return MessageEvent(
         text="trigger",
         source=SessionSource(

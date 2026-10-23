@@ -56,11 +56,19 @@ def test_room_link_store_is_private_transactional_and_upserted(tmp_path):
 @pytest.mark.platforms("posix")
 def test_room_link_store_has_owner_only_mode(tmp_path):
     path = tmp_path / "state.db"
-    save_room_link(path, make_stored_link(
-        room_id="room", member_id="member", target_url="https://peer.example.test",
-        target_profile="default", grant="grant", catalog=_catalog(),
-        cancellation_scope_id="cancel", trace_id="trace",
-    ))
+    save_room_link(
+        path,
+        make_stored_link(
+            room_id="room",
+            member_id="member",
+            target_url="https://peer.example.test",
+            target_profile="default",
+            grant="grant",
+            catalog=_catalog(),
+            cancellation_scope_id="cancel",
+            trace_id="trace",
+        ),
+    )
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 

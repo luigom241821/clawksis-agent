@@ -97,15 +97,14 @@ def test_no_shadowed_definitions_in_test_modules():
 
 def test_guard_detects_a_known_duplicate_shape():
     """The guard must actually fire, not vacuously pass."""
-    src = (
-        "def test_a():\n    pass\n\n"
-        "def test_a():\n    pass\n"
-    )
+    src = "def test_a():\n    pass\n\ndef test_a():\n    pass\n"
     tree = ast.parse(src)
     assert _duplicates_in(tree.body, "<module>", "fake.py")
 
 
-@pytest.mark.parametrize("decorator", ["@property", "@x.setter", "@functools.singledispatch"])
+@pytest.mark.parametrize(
+    "decorator", ["@property", "@x.setter", "@functools.singledispatch"]
+)
 def test_guard_allows_legitimate_redefinition(decorator):
     src = (
         "class C:\n"

@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 _EXACT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 # Secret-shaped keys are refused in config seeds and stripped from exports; packs declare secrets
 # via each plugin's ``requires_env``, which prompts at install time.
-_SECRET_KEY_RE = re.compile(r"(?i)(token|secret|passw(or)?d|api[_-]?key|private[_-]?key|credential|auth)")
+_SECRET_KEY_RE = re.compile(
+    r"(?i)(token|secret|passw(or)?d|api[_-]?key|private[_-]?key|credential|auth)"
+)
 # plugins.entries.<id> keys a pack may never set (consent state; allow_* gates are also refused).
 _RESERVED_ENTRY_KEYS = frozenset({"granted_capabilities", "capabilities_consent"})
 _MAX_PACK_BYTES = 1 * 1024 * 1024  # a pack is a small manifest, not a payload
@@ -33,10 +35,10 @@ class PackError(Exception):
 class PackPluginEntry:
     """One pinned plugin in a pack."""
 
-    ref: str                          # exact 40-char commit SHA (lowercased)
-    name: Optional[str] = None        # bare community-index name…
-    repo: Optional[str] = None        # …or owner/repo shorthand / git URL
-    subdir: Optional[str] = None      # path within the repo
+    ref: str  # exact 40-char commit SHA (lowercased)
+    name: Optional[str] = None  # bare community-index name…
+    repo: Optional[str] = None  # …or owner/repo shorthand / git URL
+    subdir: Optional[str] = None  # path within the repo
 
     @property
     def display(self) -> str:
@@ -67,6 +69,7 @@ class PluginPack:
 
 
 # ── Parse + validate ────────────────────────────────────────────────────────────────────────
+
 
 def _entry_label(item: Any, index: int) -> str:
     if isinstance(item, dict):
@@ -105,9 +108,13 @@ def _strip_forbidden_keys(value: Any) -> Any:
     """Copy of *value* with forbidden keys and non-YAML-scalar leaves removed at every depth."""
     if isinstance(value, dict):
         return {
-            key: _strip_forbidden_keys(child) for key, child in value.items()
-            if isinstance(key, str) and _forbidden_key_reason(key) is None
-            and (child is None or isinstance(child, (str, int, float, bool, list, dict)))
+            key: _strip_forbidden_keys(child)
+            for key, child in value.items()
+            if isinstance(key, str)
+            and _forbidden_key_reason(key) is None
+            and (
+                child is None or isinstance(child, (str, int, float, bool, list, dict))
+            )
         }
     if isinstance(value, list):
         return [_strip_forbidden_keys(child) for child in value]
@@ -119,10 +126,13 @@ def validate_config_seed(plugin_id: str, seed: Any) -> dict[str, Any]:
     reserved consent keys, ``allow_*`` trust gates, and secret-shaped keys — at any depth."""
     if not isinstance(seed, dict):
         raise PackError(
-            f"Pack config for plugin '{plugin_id}' must be a mapping of plugins.entries.{plugin_id} keys.")
+            f"Pack config for plugin '{plugin_id}' must be a mapping of plugins.entries.{plugin_id} keys."
+        )
     for key in seed:
         if not isinstance(key, str) or not key.strip():
-            raise PackError(f"Pack config for plugin '{plugin_id}' has an invalid key: {key!r}.")
+            raise PackError(
+                f"Pack config for plugin '{plugin_id}' has an invalid key: {key!r}."
+            )
     found = _first_forbidden_key(seed)
     if found is not None:
         key, reason = found
@@ -130,17 +140,20 @@ def validate_config_seed(plugin_id: str, seed: Any) -> dict[str, Any]:
             raise PackError(
                 f"Pack config for plugin '{plugin_id}' sets reserved key "
                 f"'{key}': packs cannot pre-grant capabilities or trust gates. "
-                "Capability consent happens interactively at install time.")
+                "Capability consent happens interactively at install time."
+            )
         raise PackError(
             f"Pack config for plugin '{plugin_id}' sets secret-shaped key "
             f"'{key}': secrets never travel in packs. Declare the secret in "
-            "the plugin's requires_env instead — it is prompted at install.")
+            "the plugin's requires_env instead — it is prompted at install."
+        )
     return dict(seed)
 
 
 def parse_pack(text: str, *, source: str = "<pack>") -> PluginPack:
     """Parse and validate a pack YAML document."""
     import clawk_yaml as yaml
+
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
@@ -156,21 +169,34 @@ def parse_pack(text: str, *, source: str = "<pack>") -> PluginPack:
     plugins_raw = raw.get("plugins")
     if not isinstance(plugins_raw, list) or not plugins_raw:
         raise PackError(f"Pack {source} must declare a non-empty 'plugins' list.")
-    entries = [_parse_pack_entry(item, _entry_label(item, i)) for i, item in enumerate(plugins_raw)]
+    entries = [
+        _parse_pack_entry(item, _entry_label(item, i))
+        for i, item in enumerate(plugins_raw)
+    ]
 
     config_raw = raw.get("config") or {}
     if not isinstance(config_raw, dict):
-        raise PackError(f"Pack {source} 'config' must be a mapping of plugin id → settings.")
-    config = {str(pid): validate_config_seed(str(pid), seed) for pid, seed in config_raw.items()}
+        raise PackError(
+            f"Pack {source} 'config' must be a mapping of plugin id → settings."
+        )
+    config = {
+        str(pid): validate_config_seed(str(pid), seed)
+        for pid, seed in config_raw.items()
+    }
 
     skills_raw = raw.get("skills") or []
     if not isinstance(skills_raw, list):
         raise PackError(f"Pack {source} 'skills' must be a list of skill ids.")
 
     return PluginPack(
-        name=name.strip(), description=str(meta.get("description") or ""),
-        author=str(meta.get("author") or ""), version=str(meta.get("version") or ""), plugins=entries,
-        config=config, skills=[str(s).strip() for s in skills_raw if str(s).strip()])
+        name=name.strip(),
+        description=str(meta.get("description") or ""),
+        author=str(meta.get("author") or ""),
+        version=str(meta.get("version") or ""),
+        plugins=entries,
+        config=config,
+        skills=[str(s).strip() for s in skills_raw if str(s).strip()],
+    )
 
 
 def _parse_pack_entry(item: Any, label: str) -> PackPluginEntry:
@@ -181,25 +207,32 @@ def _parse_pack_entry(item: Any, label: str) -> PackPluginEntry:
     entry_repo = item.get("repo") or item.get("source")
     if isinstance(entry_repo, str):
         entry_repo = entry_repo.removeprefix("github:").strip() or None
-    if entry_name is not None and (not isinstance(entry_name, str) or not entry_name.strip()):
+    if entry_name is not None and (
+        not isinstance(entry_name, str) or not entry_name.strip()
+    ):
         raise PackError(f"Pack plugin entry {label} has an invalid 'name'.")
     entry_name = entry_name.strip() if isinstance(entry_name, str) else None
     if not entry_name and not entry_repo:
         raise PackError(
             f"Pack plugin entry {label} needs either 'name' (community "
-            "index) or 'repo' (owner/repo or git URL).")
+            "index) or 'repo' (owner/repo or git URL)."
+        )
     ref = item.get("ref") or item.get("version")
     if not isinstance(ref, str) or not _EXACT_SHA_RE.fullmatch(ref.strip()):
         raise PackError(
             f"Pack plugin entry {label} has ref {ref!r}: refs must be "
             "exact 40-character commit SHAs (tags and branch names are "
-            "rejected — pin the commit for reproducible installs).")
+            "rejected — pin the commit for reproducible installs)."
+        )
     subdir = item.get("subdir")
     if subdir is not None and (not isinstance(subdir, str) or not subdir.strip("/")):
         raise PackError(f"Pack plugin entry {label} has an invalid 'subdir'.")
     return PackPluginEntry(
-        ref=ref.strip().lower(), name=entry_name, repo=entry_repo,
-        subdir=subdir.strip("/") if isinstance(subdir, str) else None)
+        ref=ref.strip().lower(),
+        name=entry_name,
+        repo=entry_repo,
+        subdir=subdir.strip("/") if isinstance(subdir, str) else None,
+    )
 
 
 def load_pack(path_or_url: str) -> PluginPack:
@@ -228,12 +261,13 @@ def load_pack(path_or_url: str) -> PluginPack:
 
 # ── Resolution (bare index names → owner/repo) + review screen ──────────────────────────────
 
+
 @dataclass
 class ResolvedPackPlugin:
     """A pack entry resolved to an installable identifier."""
 
     entry: PackPluginEntry
-    identifier: Optional[str]        # None when index resolution failed
+    identifier: Optional[str]  # None when index resolution failed
     index_capabilities: list[str] = field(default_factory=list)
     resolve_error: Optional[str] = None
 
@@ -245,31 +279,55 @@ def resolve_pack_plugins(pack: PluginPack) -> list[ResolvedPackPlugin]:
     catalog_entries = None
     for entry in pack.plugins:
         if entry.install_identifier is not None:
-            resolved.append(ResolvedPackPlugin(entry=entry, identifier=entry.install_identifier))
+            resolved.append(
+                ResolvedPackPlugin(entry=entry, identifier=entry.install_identifier)
+            )
             continue
         try:
             if catalog_entries is None:
                 from clawk_cli.plugin_catalog import load_catalog_live
+
                 catalog_entries = load_catalog_live()
         except Exception as exc:  # catalog load must not crash pack handling
-            resolved.append(ResolvedPackPlugin(
-                entry=entry, identifier=None, resolve_error=f"plugin catalog unavailable: {exc}"))
+            resolved.append(
+                ResolvedPackPlugin(
+                    entry=entry,
+                    identifier=None,
+                    resolve_error=f"plugin catalog unavailable: {exc}",
+                )
+            )
             continue
         match = next((e for e in catalog_entries if e.name == (entry.name or "")), None)
         if match is None:
-            resolved.append(ResolvedPackPlugin(
-                entry=entry, identifier=None, resolve_error="not found in the plugin catalog"))
+            resolved.append(
+                ResolvedPackPlugin(
+                    entry=entry,
+                    identifier=None,
+                    resolve_error="not found in the plugin catalog",
+                )
+            )
             continue
         caps = match.capabilities
-        resolved.append(ResolvedPackPlugin(
-            entry=entry, identifier=match.install_identifier,
-            index_capabilities=[*caps.provides_tools, *caps.provides_hooks, *caps.provides_middleware]))
+        resolved.append(
+            ResolvedPackPlugin(
+                entry=entry,
+                identifier=match.install_identifier,
+                index_capabilities=[
+                    *caps.provides_tools,
+                    *caps.provides_hooks,
+                    *caps.provides_middleware,
+                ],
+            )
+        )
     return resolved
 
 
-def render_pack_review(console, pack: PluginPack, resolved: list[ResolvedPackPlugin]) -> None:
+def render_pack_review(
+    console, pack: PluginPack, resolved: list[ResolvedPackPlugin]
+) -> None:
     """Print the full pack review screen (mandatory before install)."""
     from rich.table import Table
+
     header = f"[bold]{pack.name}[/bold]" + (f" v{pack.version}" if pack.version else "")
     if pack.author:
         header += f" — by {pack.author}"
@@ -283,7 +341,11 @@ def render_pack_review(console, pack: PluginPack, resolved: list[ResolvedPackPlu
     table.add_column("Pinned ref")
     table.add_column("Capabilities (declared)")
     for rp in resolved:
-        caps = ", ".join(rp.index_capabilities) if rp.index_capabilities else "(shown at install)"
+        caps = (
+            ", ".join(rp.index_capabilities)
+            if rp.index_capabilities
+            else "(shown at install)"
+        )
         source = rp.identifier or f"[red]unresolved: {rp.resolve_error}[/red]"
         table.add_row(rp.entry.display, source, rp.entry.ref[:12], caps)
     console.print(table)
@@ -295,15 +357,21 @@ def render_pack_review(console, pack: PluginPack, resolved: list[ResolvedPackPlu
                 console.print(f"  {plugin_id}.{key} = {value!r}")
     if pack.skills:
         console.print(
-            "[yellow]Pack lists skills (NOT auto-installed yet):[/yellow] " + ", ".join(pack.skills))
-        console.print("[dim]Install them manually, e.g. `clawk skills install <id>`.[/dim]")
+            "[yellow]Pack lists skills (NOT auto-installed yet):[/yellow] "
+            + ", ".join(pack.skills)
+        )
+        console.print(
+            "[dim]Install them manually, e.g. `clawk skills install <id>`.[/dim]"
+        )
     console.print(
         "\n[dim]Installing a pack runs third-party code × "
         f"{len(resolved)} plugins. Each plugin's declared capabilities still "
-        "require individual consent after install — a pack never bulk-grants.[/dim]")
+        "require individual consent after install — a pack never bulk-grants.[/dim]"
+    )
 
 
 # ── Install fan-out ─────────────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class PackInstallResult:
@@ -318,18 +386,26 @@ class PackInstallResult:
 def _seed_plugin_config(plugin_id: str, seed: dict[str, Any], console) -> None:
     """Seed plugins.entries.<plugin_id> keys that are not already set (user values always win)."""
     from clawk_cli.config import load_config, save_config
+
     seed = validate_config_seed(plugin_id, seed)
     config = load_config()
-    entry = config.setdefault("plugins", {}).setdefault("entries", {}).setdefault(plugin_id, {})
+    entry = (
+        config.setdefault("plugins", {})
+        .setdefault("entries", {})
+        .setdefault(plugin_id, {})
+    )
     if not isinstance(entry, dict):
         console.print(
             f"[yellow]Warning:[/yellow] plugins.entries.{plugin_id} is not a "
-            "mapping; skipping pack config seed.")
+            "mapping; skipping pack config seed."
+        )
         return
     wrote = False
     for key, value in seed.items():
         if key in entry:
-            console.print(f"[dim]  plugins.entries.{plugin_id}.{key} already set — keeping your value.[/dim]")
+            console.print(
+                f"[dim]  plugins.entries.{plugin_id}.{key} already set — keeping your value.[/dim]"
+            )
             continue
         entry[key] = value
         wrote = True
@@ -361,6 +437,7 @@ def install_pack_plugins(
     )
     from clawk_cli.plugins_admission import AdmissionRefused
     from clawk_cli.plugins_cmd_install import recorded_install
+
     results: list[PackInstallResult] = []
 
     def _fail(display: str, error: str) -> None:
@@ -376,8 +453,12 @@ def install_pack_plugins(
         try:
             # A bare pack name resolved through the plugin catalog; repo entries are custom sources.
             _target, manifest, installed_name = recorded_install(
-                lambda: _install_plugin_core(rp.identifier, force=force, ref=rp.entry.ref),
-                catalog_name=None if rp.entry.repo else rp.entry.name, identifier=rp.identifier)
+                lambda: _install_plugin_core(
+                    rp.identifier, force=force, ref=rp.entry.ref
+                ),
+                catalog_name=None if rp.entry.repo else rp.entry.name,
+                identifier=rp.identifier,
+            )
         except PluginOperationError as exc:
             _fail(display, str(exc))
             continue
@@ -390,7 +471,9 @@ def install_pack_plugins(
         try:
             _prompt_plugin_env_vars(manifest, console)
         except Exception:
-            logger.debug("requires_env prompt failed for %s", installed_name, exc_info=True)
+            logger.debug(
+                "requires_env prompt failed for %s", installed_name, exc_info=True
+            )
 
         try:
             _set_plugin_enabled(installed_name, enable=True)
@@ -402,7 +485,9 @@ def install_pack_plugins(
         # bulk-grants capabilities.
         declared = _declared_capabilities_from_manifest(manifest, installed_name)
         if declared:
-            _run_capability_consent(console, installed_name, declared, context="install")
+            _run_capability_consent(
+                console, installed_name, declared, context="install"
+            )
 
         seed = pack.config.get(installed_name)
         if seed is None and rp.entry.name and rp.entry.name != installed_name:
@@ -413,14 +498,20 @@ def install_pack_plugins(
             except PackError as exc:
                 console.print(f"[yellow]Warning:[/yellow] {exc}")
 
-        console.print(f"[green]✓[/green] {display} installed as [bold]{installed_name}[/bold].")
-        results.append(PackInstallResult(display=display, ok=True, installed_name=installed_name))
+        console.print(
+            f"[green]✓[/green] {display} installed as [bold]{installed_name}[/bold]."
+        )
+        results.append(
+            PackInstallResult(display=display, ok=True, installed_name=installed_name)
+        )
     return results
 
 
 # ── Export ──────────────────────────────────────────────────────────────────────────────────
 
-_GITHUB_HTTPS_RE = re.compile(r"^https://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s#]+?)(?:\.git)?$")
+_GITHUB_HTTPS_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[^/\s]+)/(?P<repo>[^/\s#]+?)(?:\.git)?$"
+)
 
 
 def _source_to_repo_subdir(source: str) -> tuple[Optional[str], Optional[str]]:
@@ -450,14 +541,25 @@ def _sanitized_entry_config(plugin_id: str) -> dict[str, Any]:
     return _strip_forbidden_keys(entry)
 
 
-def export_pack(*, enabled_only: bool = False, pack_name: str = "my-clawk-pack") -> tuple[str, list[str]]:
+def export_pack(
+    *, enabled_only: bool = False, pack_name: str = "my-clawk-pack"
+) -> tuple[str, list[str]]:
     """Build pack YAML from the current install; returns ``(yaml_text, warnings)``. Plugins with
     unknown Git provenance (no install metadata) become warnings + YAML comments, never entries."""
     import clawk_yaml as yaml
-    from clawk_cli.plugins_cmd import _get_enabled_set, _plugins_dir, _read_install_metadata
+    from clawk_cli.plugins_cmd import (
+        _get_enabled_set,
+        _plugins_dir,
+        _read_install_metadata,
+    )
+
     metadata = _read_install_metadata()
     enabled = _get_enabled_set()
-    installed = sorted(d.name for d in _plugins_dir().iterdir() if d.is_dir() and not d.name.startswith("."))
+    installed = sorted(
+        d.name
+        for d in _plugins_dir().iterdir()
+        if d.is_dir() and not d.name.startswith(".")
+    )
     if enabled_only:
         installed = [n for n in installed if n in enabled]
 
@@ -469,10 +571,15 @@ def export_pack(*, enabled_only: bool = False, pack_name: str = "my-clawk-pack")
         source = record.get("source")
         revision = record.get("revision")
         repo, subdir = _source_to_repo_subdir(str(source or ""))
-        if not repo or not isinstance(revision, str) or not _EXACT_SHA_RE.fullmatch(revision):
+        if (
+            not repo
+            or not isinstance(revision, str)
+            or not _EXACT_SHA_RE.fullmatch(revision)
+        ):
             warnings.append(
                 f"{plugin_id}: no Git provenance (local-only or pre-metadata "
-                "install) — listed as a comment, not installable from this pack.")
+                "install) — listed as a comment, not installable from this pack."
+            )
             continue
         entry: dict[str, Any] = {"repo": repo, "ref": revision.lower()}
         if subdir:
@@ -493,15 +600,19 @@ def export_pack(*, enabled_only: bool = False, pack_name: str = "my-clawk-pack")
 
     text = yaml.safe_dump(doc, sort_keys=False, default_flow_style=False)
     if warnings:
-        text = "\n".join(f"# WARNING (not exported): {w}" for w in warnings) + f"\n{text}"
+        text = (
+            "\n".join(f"# WARNING (not exported): {w}" for w in warnings) + f"\n{text}"
+        )
     return text, warnings
 
 
 # ── CLI commands ────────────────────────────────────────────────────────────────────────────
 
+
 def _load_and_review(console, source: str):
     """Load *source* (exit 1 on PackError), resolve it, print the review screen."""
     from clawk_cli.plugins_cmd import _fail
+
     try:
         pack = load_pack(source)
     except PackError as exc:
@@ -514,35 +625,49 @@ def _load_and_review(console, source: str):
 def cmd_pack_show(source: str) -> None:
     """``clawk plugins pack show <path-or-url>`` — dry-run review."""
     from clawk_cli.plugins_cmd import _console
+
     console = _console()
     _pack, resolved = _load_and_review(console, source)
     unresolved = [rp for rp in resolved if rp.identifier is None]
     if unresolved:
         console.print(
             f"\n[yellow]{len(unresolved)} entr{'y' if len(unresolved) == 1 else 'ies'} "
-            "could not be resolved — install would skip them and exit non-zero.[/yellow]")
-    console.print("\n[dim]Dry run only. Install with `clawk plugins pack install ...`.[/dim]")
+            "could not be resolved — install would skip them and exit non-zero.[/yellow]"
+        )
+    console.print(
+        "\n[dim]Dry run only. Install with `clawk plugins pack install ...`.[/dim]"
+    )
 
 
 def cmd_pack_install(source: str, *, force: bool = False) -> None:
     """``clawk plugins pack install <path-or-url>``: mandatory review screen -> one pack-level
     consent -> pinned fan-out installs -> per-plugin capability consent. Exit 1 if any failed."""
     from clawk_cli.plugins_cmd import _ask_yes, _console, _fail, _is_tty
+
     console = _console()
     pack, resolved = _load_and_review(console, source)
 
     # Mandatory review confirmation — no --yes in v1 (arbitrary third-party code × N).
     if not _is_tty():
-        _fail(console, (
-            "[red]Error:[/red] Pack install requires an interactive terminal "
-            "to review and confirm the pack contents (no --yes in v1)."))
-    if not _ask_yes(f"\nInstall {len(resolved)} plugin(s) from pack '{pack.name}'? [y/N] ", console.input):
+        _fail(
+            console,
+            (
+                "[red]Error:[/red] Pack install requires an interactive terminal "
+                "to review and confirm the pack contents (no --yes in v1)."
+            ),
+        )
+    if not _ask_yes(
+        f"\nInstall {len(resolved)} plugin(s) from pack '{pack.name}'? [y/N] ",
+        console.input,
+    ):
         _fail(console, "[dim]Aborted — nothing installed.[/dim]")
 
     results = install_pack_plugins(pack, resolved, console, force=force)
     ok = [r for r in results if r.ok]
     failed = [r for r in results if not r.ok]
-    console.print(f"\n[bold]Pack '{pack.name}':[/bold] {len(ok)} installed, {len(failed)} failed.")
+    console.print(
+        f"\n[bold]Pack '{pack.name}':[/bold] {len(ok)} installed, {len(failed)} failed."
+    )
     for r in failed:
         console.print(f"  [red]✗[/red] {r.display}: {r.error}")
     if ok:
@@ -555,6 +680,7 @@ def cmd_pack_install(source: str, *, force: bool = False) -> None:
 def cmd_pack_export(*, enabled_only: bool = False, name: str = "my-clawk-pack") -> None:
     """``clawk plugins pack export [--enabled-only]`` — pack YAML on stdout."""
     from rich.console import Console
+
     console = Console(stderr=True)
     try:
         text, warnings = export_pack(enabled_only=enabled_only, pack_name=name)
@@ -571,14 +697,21 @@ def pack_command(args) -> None:
     handler = _PACK_ACTIONS.get(getattr(args, "pack_action", None))
     if handler is None:
         from clawk_cli.plugins_cmd import _console, _fail
-        _fail(_console(), "[red]Error:[/red] Usage: clawk plugins pack {install|export|show}")
+
+        _fail(
+            _console(),
+            "[red]Error:[/red] Usage: clawk plugins pack {install|export|show}",
+        )
     handler(args)
 
 
 _PACK_ACTIONS = {
-    "install": lambda args: cmd_pack_install(args.source, force=getattr(args, "force", False)),
+    "install": lambda args: cmd_pack_install(
+        args.source, force=getattr(args, "force", False)
+    ),
     "export": lambda args: cmd_pack_export(
         enabled_only=getattr(args, "enabled_only", False),
-        name=getattr(args, "name", None) or "my-clawk-pack"),
+        name=getattr(args, "name", None) or "my-clawk-pack",
+    ),
     "show": lambda args: cmd_pack_show(args.source),
 }

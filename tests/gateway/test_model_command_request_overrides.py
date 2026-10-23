@@ -86,7 +86,9 @@ custom_providers:
     )
 
     runner = _make_runner()
-    event = _make_event("/model rotator-openrouter-coding --provider custom:local-(127.0.0.1:4141)")
+    event = _make_event(
+        "/model rotator-openrouter-coding --provider custom:local-(127.0.0.1:4141)"
+    )
 
     result = await runner._handle_model_command(event)
 

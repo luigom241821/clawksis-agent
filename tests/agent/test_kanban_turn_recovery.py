@@ -58,15 +58,30 @@ def clear_kanban_env(monkeypatch):
     return monkeypatch
 
 
-def _failed(*, retryable: bool = True, reason: str = "timeout",
-            error: str = "peer closed connection") -> dict:
-    return {"failed": True, "failure_retryable": retryable, "failure_reason": reason,
-            "error": error, "final_response": f"API call failed after 3 retries: {error}",
-            "completed": False, "messages": []}
+def _failed(
+    *,
+    retryable: bool = True,
+    reason: str = "timeout",
+    error: str = "peer closed connection",
+) -> dict:
+    return {
+        "failed": True,
+        "failure_retryable": retryable,
+        "failure_reason": reason,
+        "error": error,
+        "final_response": f"API call failed after 3 retries: {error}",
+        "completed": False,
+        "messages": [],
+    }
 
 
 def _success() -> dict:
-    return {"failed": False, "completed": True, "final_response": "done", "messages": []}
+    return {
+        "failed": False,
+        "completed": True,
+        "final_response": "done",
+        "messages": [],
+    }
 
 
 def _interrupted() -> dict:
@@ -80,14 +95,22 @@ def _settled() -> dict:
     claim while the result still reads ``completed=False`` — and here it ALSO carries a
     retryable failure stamp (the loop exhausted its provider retries, then hit the
     iteration cap). The settlement veto must win over the eligible-looking stamp."""
-    return {**_failed(retryable=True), "turn_exit_reason": "max_iterations_reached(60/60)"}
+    return {
+        **_failed(retryable=True),
+        "turn_exit_reason": "max_iterations_reached(60/60)",
+    }
 
 
 def _partial() -> dict:
     """An outcome, not retry authority: truncation repair belongs in the conversation
     loop (#89289)."""
-    return {"partial": True, "completed": False, "final_response": "cut off",
-            "error": "truncated", "messages": []}
+    return {
+        "partial": True,
+        "completed": False,
+        "final_response": "cut off",
+        "error": "truncated",
+        "messages": [],
+    }
 
 
 # ── enablement / budget ──────────────────────────────────────────────
@@ -175,9 +198,18 @@ def test_should_recover_turn_refuses(result, clear_kanban_env):
 # ── live run/claim proof (the adversarial boundaries) ────────────────
 
 
-def _make_board(tmp_path, *, status="running", task_pid=None, run_id=1, lock="lk",
-                run_ended=None, run_pid=None, task_expires=_FAR_FUTURE_EXPIRY,
-                run_expires=_FAR_FUTURE_EXPIRY):
+def _make_board(
+    tmp_path,
+    *,
+    status="running",
+    task_pid=None,
+    run_id=1,
+    lock="lk",
+    run_ended=None,
+    run_pid=None,
+    task_expires=_FAR_FUTURE_EXPIRY,
+    run_expires=_FAR_FUTURE_EXPIRY,
+):
     """A synthetic board whose task carries a LIVE, unexpired task+run lease by default
     (current-main dispatcher shape: ``claim_task`` sets ``claim_expires`` on both rows
     and ``heartbeat_claim`` mirrors the extension)."""
@@ -189,11 +221,15 @@ def _make_board(tmp_path, *, status="running", task_pid=None, run_id=1, lock="lk
         "CREATE TABLE task_runs (id INTEGER PRIMARY KEY, ended_at INTEGER,"
         " worker_pid INTEGER, claim_expires INTEGER);"
     )
-    conn.execute("INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?)",
-                 ("t_live", status, task_pid, run_id, lock, task_expires))
+    conn.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?)",
+        ("t_live", status, task_pid, run_id, lock, task_expires),
+    )
     if run_id is not None:
-        conn.execute("INSERT INTO task_runs VALUES (?, ?, ?, ?)",
-                     (run_id, run_ended, run_pid, run_expires))
+        conn.execute(
+            "INSERT INTO task_runs VALUES (?, ?, ?, ?)",
+            (run_id, run_ended, run_pid, run_expires),
+        )
     conn.commit()
     conn.close()
     return db
@@ -252,8 +288,11 @@ def test_missing_pinned_carrier_fails_closed(clear_kanban_env, tmp_path):
     _pin_carrier(clear_kanban_env, db)
     assert worker_claim_is_live() is True  # sanity: the full carrier proves live
 
-    for missing, value in (("CLAWK_KANBAN_DB", str(db)), ("CLAWK_KANBAN_RUN_ID", "1"),
-                           ("CLAWK_KANBAN_CLAIM_LOCK", "lk")):
+    for missing, value in (
+        ("CLAWK_KANBAN_DB", str(db)),
+        ("CLAWK_KANBAN_RUN_ID", "1"),
+        ("CLAWK_KANBAN_CLAIM_LOCK", "lk"),
+    ):
         clear_kanban_env.delenv(missing, raising=False)
         assert worker_claim_is_live() is False, missing  # a missing pin denies
         clear_kanban_env.setenv(missing, value)
@@ -306,14 +345,18 @@ def test_lease_expired_during_the_backoff_blocks_model_reentry(
 
     db = _make_board(tmp_path, task_expires=1_600, run_expires=1_600)
     _pin_carrier(clear_kanban_env, db, run_id="1", lock="lk")
-    clock = iter([1_000, 1_700])  # pre-backoff proof sees a live lease; the re-proof does not
+    clock = iter(
+        [1_000, 1_700]
+    )  # pre-backoff proof sees a live lease; the re-proof does not
     monkeypatch.setattr(rec, "_now", lambda: next(clock))
     turns: list[str] = []
     emitted: list[str] = []
 
     attempts = rec.recover_failed_kanban_turns(
-        lambda nudge: turns.append(nudge), lambda: _failed(),
-        sleep_fn=lambda s: None, emit=emitted.append,  # default claim_check: the real proof
+        lambda nudge: turns.append(nudge),
+        lambda: _failed(),
+        sleep_fn=lambda s: None,
+        emit=emitted.append,  # default claim_check: the real proof
     )
     assert attempts == 1
     assert turns == []  # the expired lease vetoed re-entry before the model call
@@ -339,7 +382,10 @@ def test_recovery_loop_retries_until_success_and_reports(clear_kanban_env):
         latest["r"] = _success()  # provider recovered
 
     attempts = recover_failed_kanban_turns(
-        turn_fn, lambda: latest["r"], sleep_fn=delays.append, emit=emitted.append,
+        turn_fn,
+        lambda: latest["r"],
+        sleep_fn=delays.append,
+        emit=emitted.append,
         claim_check=_loop_ok(),
     )
     assert attempts == 1
@@ -356,7 +402,9 @@ def test_recovery_loop_bounded_when_result_never_changes(clear_kanban_env):
     attempts = recover_failed_kanban_turns(
         lambda nudge: None,
         lambda: _failed(),  # stuck result: must NOT loop forever
-        sleep_fn=delays.append, emit=lambda m: None, claim_check=_loop_ok(),
+        sleep_fn=delays.append,
+        emit=lambda m: None,
+        claim_check=_loop_ok(),
     )
     assert attempts == DEFAULT_MAX_RECOVERY_ATTEMPTS
     assert delays == [15.0, 45.0, 90.0]
@@ -382,8 +430,11 @@ def test_recovery_loop_order_is_check_sleep_check_turn(clear_kanban_env):
         latest["r"] = _success()
 
     attempts = recover_failed_kanban_turns(
-        turn_fn, lambda: latest["r"], sleep_fn=lambda s: events.append("sleep"),
-        emit=lambda m: None, claim_check=claim_check,
+        turn_fn,
+        lambda: latest["r"],
+        sleep_fn=lambda s: events.append("sleep"),
+        emit=lambda m: None,
+        claim_check=claim_check,
     )
     assert events == ["check", "sleep", "check"]  # the lost run vetoed re-entry
     assert attempts == 1  # the attempt was authorised …
@@ -392,8 +443,11 @@ def test_recovery_loop_order_is_check_sleep_check_turn(clear_kanban_env):
     events.clear()
     latest["r"] = _failed()
     attempts = recover_failed_kanban_turns(
-        turn_fn, lambda: latest["r"], sleep_fn=lambda s: events.append("sleep"),
-        emit=lambda m: None, claim_check=lambda: (events.append("check"), True)[1],
+        turn_fn,
+        lambda: latest["r"],
+        sleep_fn=lambda s: events.append("sleep"),
+        emit=lambda m: None,
+        claim_check=lambda: (events.append("check"), True)[1],
     )
     assert attempts == 1
     assert events == ["check", "sleep", "check", "turn"]
@@ -401,7 +455,9 @@ def test_recovery_loop_order_is_check_sleep_check_turn(clear_kanban_env):
 
 def test_nudge_terminal_contract(clear_kanban_env):
     clear_kanban_env.setenv("CLAWK_KANBAN_TASK", "t_probe")
-    nudge = build_recovery_nudge(_failed(error="peer closed connection"), attempt=1, max_attempts=3)
+    nudge = build_recovery_nudge(
+        _failed(error="peer closed connection"), attempt=1, max_attempts=3
+    )
     assert "t_probe" in nudge
     assert "1/3" in nudge
     assert "kanban_complete" in nudge
@@ -423,7 +479,10 @@ def test_exit_mapping_composes_with_the_stripped_worker_predicate(monkeypatch):
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "   ")
     assert _single_query_exit_code(_failed(reason="rate_limit")) == 1
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "  t_probe  ")
-    assert _single_query_exit_code(_failed(reason="rate_limit")) == KANBAN_RATE_LIMIT_EXIT_CODE
+    assert (
+        _single_query_exit_code(_failed(reason="rate_limit"))
+        == KANBAN_RATE_LIMIT_EXIT_CODE
+    )
 
 
 def test_explicit_blank_carrier_never_falls_back_to_the_env_pin(clear_kanban_env):
@@ -456,11 +515,18 @@ def owner_worker(tmp_path, clear_kanban_env, monkeypatch):
     from clawk_cli.kanban_db_connect import connect_closing
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    for key, value in (("CLAWK_KANBAN_TASK", "t_foreign"), ("CLAWK_KANBAN_DB", str(tmp_path / "nope.db")),
-                       ("CLAWK_KANBAN_RUN_ID", "999"), ("CLAWK_KANBAN_CLAIM_LOCK", "foreign")):
+    for key, value in (
+        ("CLAWK_KANBAN_TASK", "t_foreign"),
+        ("CLAWK_KANBAN_DB", str(tmp_path / "nope.db")),
+        ("CLAWK_KANBAN_RUN_ID", "999"),
+        ("CLAWK_KANBAN_CLAIM_LOCK", "foreign"),
+    ):
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(rec, "RECOVERY_DELAYS_SECONDS", (0.0,))
-    monkeypatch.setattr("agent.skill_commands.build_preloaded_skills_prompt", lambda *a, **k: ("", [], []))
+    monkeypatch.setattr(
+        "agent.skill_commands.build_preloaded_skills_prompt",
+        lambda *a, **k: ("", [], []),
+    )
 
     def install(script, *, goal_mode=False, expires=None, recovery=None):
         if recovery is not None:
@@ -472,15 +538,35 @@ def owner_worker(tmp_path, clear_kanban_env, monkeypatch):
             task = kb.claim_task(conn, task_id, claimer="private-host:owner")
             assert task is not None
             with kb.write_txn(conn):
-                kb._append_event(conn, task_id, "worker_bound",
-                                 {"pid": os.getpid(), "claim_lock": task.claim_lock}, run_id=task.current_run_id)
-                if expires is not None:  # status/run/lock all still match: only the lease moves
-                    conn.execute("UPDATE tasks SET claim_expires = ? WHERE id = ?", (expires, task_id))
-                    conn.execute("UPDATE task_runs SET claim_expires = ? WHERE id = ?",
-                                 (expires, task.current_run_id))
-        context = {"db": str(path), "task_id": task_id, "run_id": task.current_run_id,
-                   "claim_lock": task.claim_lock, "skills": [], "context": "", "goal_mode": goal_mode,
-                   "goal_text": "g", "goal_max_turns": 2}
+                kb._append_event(
+                    conn,
+                    task_id,
+                    "worker_bound",
+                    {"pid": os.getpid(), "claim_lock": task.claim_lock},
+                    run_id=task.current_run_id,
+                )
+                if (
+                    expires is not None
+                ):  # status/run/lock all still match: only the lease moves
+                    conn.execute(
+                        "UPDATE tasks SET claim_expires = ? WHERE id = ?",
+                        (expires, task_id),
+                    )
+                    conn.execute(
+                        "UPDATE task_runs SET claim_expires = ? WHERE id = ?",
+                        (expires, task.current_run_id),
+                    )
+        context = {
+            "db": str(path),
+            "task_id": task_id,
+            "run_id": task.current_run_id,
+            "claim_lock": task.claim_lock,
+            "skills": [],
+            "context": "",
+            "goal_mode": goal_mode,
+            "goal_text": "g",
+            "goal_max_turns": 2,
+        }
         entered: list[str] = []
         seen = {"n": 0}
 
@@ -533,10 +619,17 @@ def test_budget_exhausted_stops_and_releases(owner_worker):
     [
         pytest.param([None], 1, id="nothing-settled"),
         pytest.param([_partial()], 1, id="denial-unfinished-turn"),
-        pytest.param([_failed(reason="rate_limit")], KANBAN_RATE_LIMIT_EXIT_CODE, id="quota-wall"),
-        pytest.param([_failed(reason="billing")], KANBAN_RATE_LIMIT_EXIT_CODE, id="billing-wall"),
-        pytest.param([_failed(reason="upstream_rate_limit")], KANBAN_RATE_LIMIT_EXIT_CODE,
-                     id="upstream-quota-wall"),
+        pytest.param(
+            [_failed(reason="rate_limit")], KANBAN_RATE_LIMIT_EXIT_CODE, id="quota-wall"
+        ),
+        pytest.param(
+            [_failed(reason="billing")], KANBAN_RATE_LIMIT_EXIT_CODE, id="billing-wall"
+        ),
+        pytest.param(
+            [_failed(reason="upstream_rate_limit")],
+            KANBAN_RATE_LIMIT_EXIT_CODE,
+            id="upstream-quota-wall",
+        ),
     ],
 )
 def test_single_turn_route_outcomes(script, code, owner_worker):
@@ -581,7 +674,9 @@ def test_claim_denial_stops_before_model_reentry(owner_worker, caplog):
     assert "no longer holds a live run/claim" in caplog.text
 
 
-def test_worker_client_reports_the_owner_exit_and_reply(owner_worker, monkeypatch, capsys):
+def test_worker_client_reports_the_owner_exit_and_reply(
+    owner_worker, monkeypatch, capsys
+):
     """The dispatcher-spawned process is the client half: it exits with the code the owner
     booked for this exact attempt, ends its log with the attempt's reply, and writes the
     exit trailer the dead-worker sweep reads — so an exhausted wall still releases as 75."""
@@ -601,7 +696,10 @@ def test_worker_client_reports_the_owner_exit_and_reply(owner_worker, monkeypatc
         async def rpc(self, method, **params):
             submitted.append(method)
             assert method == "kanban.run" and params["task_id"] == context["task_id"]
-            return {"session_id": "s1", "receipt": {"status": "terminal", "admission_id": "a1"}}
+            return {
+                "session_id": "s1",
+                "receipt": {"status": "terminal", "admission_id": "a1"},
+            }
 
     @asynccontextmanager
     async def _connect():
@@ -609,10 +707,13 @@ def test_worker_client_reports_the_owner_exit_and_reply(owner_worker, monkeypatc
 
     monkeypatch.setattr(gateway_client, "connect_gateway", _connect)
     monkeypatch.delenv("CLAWK_TUI_GATEWAY_URL", raising=False)
-    for key, value in (("CLAWK_KANBAN_BOARD", "default"), ("CLAWK_KANBAN_TASK", context["task_id"]),
-                       ("CLAWK_KANBAN_RUN_ID", str(context["run_id"])),
-                       ("CLAWK_KANBAN_CLAIM_LOCK", context["claim_lock"]),
-                       ("CLAWK_KANBAN_DB", context["db"])):
+    for key, value in (
+        ("CLAWK_KANBAN_BOARD", "default"),
+        ("CLAWK_KANBAN_TASK", context["task_id"]),
+        ("CLAWK_KANBAN_RUN_ID", str(context["run_id"])),
+        ("CLAWK_KANBAN_CLAIM_LOCK", context["claim_lock"]),
+        ("CLAWK_KANBAN_DB", context["db"]),
+    ):
         monkeypatch.setenv(key, value)
     capsys.readouterr()
 
@@ -639,16 +740,30 @@ async def test_non_worker_one_shot_prints_its_exit_summary(capsys):
 
         async def rpc(self, method, **params):
             submitted.append(method)
-            self.events.put_nowait({"method": "event", "params": {
-                "type": "message.complete", "session_id": "stored", "admission_id": "mine",
-                "payload": {"text": "API call failed after 3 retries", "outcome": "failed"}}})
+            self.events.put_nowait(
+                {
+                    "method": "event",
+                    "params": {
+                        "type": "message.complete",
+                        "session_id": "stored",
+                        "admission_id": "mine",
+                        "payload": {
+                            "text": "API call failed after 3 retries",
+                            "outcome": "failed",
+                        },
+                    },
+                }
+            )
             return {"admission_id": "mine"}
 
     view = GatewayChatView(_Owner(), {"stored_session_id": "stored"}, quiet=True)
     assert await asyncio.wait_for(view.run("hello", oneshot=True), 2) == 1
     out, err = capsys.readouterr()
     # One admission, never a resubmit; the settled-result read (prompt.receipt) is read-only.
-    assert submitted.count("prompt.submit") == 1 and set(submitted) <= {"prompt.submit", "prompt.receipt"}
+    assert submitted.count("prompt.submit") == 1 and set(submitted) <= {
+        "prompt.submit",
+        "prompt.receipt",
+    }
     assert "API call failed" in out and "session_id: stored" in err
 
 
@@ -662,11 +777,23 @@ def _goal_cases():
     neutral = KANBAN_RATE_LIMIT_EXIT_CODE
     return [
         pytest.param("recovery-denied", {"expires": 1}, _failed, neutral, 1),
-        pytest.param("lease-expired-during-backoff", {"expires": 1_600, "clock": (1_000, 1_700)},
-                     _failed, neutral, 1),
-        pytest.param("quota-wall-billing", {}, lambda: _failed(reason="billing"), neutral, 1),
-        pytest.param("quota-wall-upstream", {}, lambda: _failed(reason="upstream_rate_limit"),
-                     neutral, 1),
+        pytest.param(
+            "lease-expired-during-backoff",
+            {"expires": 1_600, "clock": (1_000, 1_700)},
+            _failed,
+            neutral,
+            1,
+        ),
+        pytest.param(
+            "quota-wall-billing", {}, lambda: _failed(reason="billing"), neutral, 1
+        ),
+        pytest.param(
+            "quota-wall-upstream",
+            {},
+            lambda: _failed(reason="upstream_rate_limit"),
+            neutral,
+            1,
+        ),
         pytest.param("interrupt", {}, _interrupted, 130, 1),
         pytest.param("terminal-settlement", {}, _settled, neutral, 1),
         pytest.param("budget-exhausted", {"recovery": 1}, _failed, neutral, 2),
@@ -680,21 +807,30 @@ def goal_spy(monkeypatch):
     pre-existing (its status check sees only run identity, not the claim lease); the
     invariant under test is the call-site veto."""
     calls: list = []
-    monkeypatch.setattr("clawk_cli.goals.run_kanban_goal_loop", lambda **kw: calls.append(kw))
+    monkeypatch.setattr(
+        "clawk_cli.goals.run_kanban_goal_loop", lambda **kw: calls.append(kw)
+    )
     return calls
 
 
-@pytest.mark.parametrize(("case_id", "setup", "script", "code", "entries"), _goal_cases())
-def test_goal_mode_does_not_continue(case_id, setup, script, code, entries, owner_worker, goal_spy,
-                                     monkeypatch):
+@pytest.mark.parametrize(
+    ("case_id", "setup", "script", "code", "entries"), _goal_cases()
+)
+def test_goal_mode_does_not_continue(
+    case_id, setup, script, code, entries, owner_worker, goal_spy, monkeypatch
+):
     """With goal mode ON, every refusal path reaches the honest exit without a judge-driven
     continuation: the goal loop's own status check sees only run identity, not the claim
     lease, so continuing would re-enter the model under an authority this worker can no
     longer prove."""
     import agent.kanban_turn_recovery as rec
 
-    run, entered, _ = owner_worker(script, goal_mode=True, expires=setup.get("expires"),
-                                   recovery=setup.get("recovery"))
+    run, entered, _ = owner_worker(
+        script,
+        goal_mode=True,
+        expires=setup.get("expires"),
+        recovery=setup.get("recovery"),
+    )
     if setup.get("clock"):
         clock = iter(setup["clock"])  # pre-backoff proof live; the re-proof is not
         monkeypatch.setattr(rec, "_now", lambda: next(clock))
@@ -704,7 +840,9 @@ def test_goal_mode_does_not_continue(case_id, setup, script, code, entries, owne
     assert goal_spy == []  # no continuation after a refused recovery
 
 
-def test_goal_mode_continues_after_a_successful_authorized_recovery(owner_worker, goal_spy):
+def test_goal_mode_continues_after_a_successful_authorized_recovery(
+    owner_worker, goal_spy
+):
     """Positive control: a settled, authorized recovery still continues in goal mode — the
     veto must not swallow the happy path — and the judge receives the RECOVERED response,
     not the initial provider error."""

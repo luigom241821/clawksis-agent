@@ -52,21 +52,30 @@ async def test_real_sdk_start_with_issue_type_error_is_bounded_and_fatal(caplog)
     import websockets.exceptions
 
     adapter = _adapter()
-    client = dingtalk_stream.DingTalkStreamClient(dingtalk_stream.Credential("id", "secret"))
-    client.open_connection = lambda: {"endpoint": "wss://example.invalid", "ticket": "t"}
+    client = dingtalk_stream.DingTalkStreamClient(
+        dingtalk_stream.Credential("id", "secret")
+    )
+    client.open_connection = lambda: {
+        "endpoint": "wss://example.invalid",
+        "ticket": "t",
+    }
     adapter._stream_client = client
 
     def bad_connect(uri):
-        raise TypeError("'coroutine' object does not support the asynchronous context manager protocol")
+        raise TypeError(
+            "'coroutine' object does not support the asynchronous context manager protocol"
+        )
 
     real_sleep = asyncio.sleep
 
     async def fast_sleep(secs, *a, **k):
         await real_sleep(0)
 
-    with caplog.at_level(logging.INFO), \
-            patch.object(dingtalk_stream.stream.websockets, "connect", bad_connect), \
-            patch("asyncio.sleep", new=fast_sleep):
+    with (
+        caplog.at_level(logging.INFO),
+        patch.object(dingtalk_stream.stream.websockets, "connect", bad_connect),
+        patch("asyncio.sleep", new=fast_sleep),
+    ):
         try:
             await asyncio.wait_for(adapter._run_stream(), timeout=2.0)
         except TimeoutError:
@@ -74,4 +83,6 @@ async def test_real_sdk_start_with_issue_type_error_is_bounded_and_fatal(caplog)
     sdk = [r for r in caplog.records if r.name == "dingtalk_stream.client"]
     assert len(sdk) <= 5, len(sdk)
     assert getattr(adapter, "_fatal_error_code", None) == "dingtalk_stream_error"
-    assert adapter._fatal_error_retryable is False  # reinstall + restart only; no gateway reconnect churn
+    assert (
+        adapter._fatal_error_retryable is False
+    )  # reinstall + restart only; no gateway reconnect churn

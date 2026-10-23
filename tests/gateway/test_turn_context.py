@@ -40,9 +40,7 @@ class TestTurnContext:
         assert b._cleanup_msg_ids == []
 
 
-
 class TestTurnRunner:
-
     def test_send_progress_messages_no_queue_returns(self):
         ctx = TurnContext(progress_queue=None)
         runner = _make_runner(ctx)

@@ -21,12 +21,13 @@ def proj(tmp_path, monkeypatch):
 
 
 class TestZeroMatchProbe:
-
     def test_case_mismatch_hint_names_the_files(self, proj):
         # The probe already ran the -i search; it must hand over the paths,
         # not just a count (issue #80522: hint-only sent weak models into
         # 5-search casing-variant spirals — +6 turns measured on the A/B eval).
-        r = json.loads(search_tool("token_alpha", path=str(proj / "proj"), task_id="t-zm"))
+        r = json.loads(
+            search_tool("token_alpha", path=str(proj / "proj"), task_id="t-zm")
+        )
         w = r.get("warning", "")
         assert "a.py" in w and "b.py" in w
 
@@ -39,7 +40,11 @@ class TestZeroMatchProbe:
         assert "meta.py" in r.get("warning", "")
 
     def test_true_zero_match_no_hint(self, proj):
-        r = json.loads(search_tool("zzz_totally_absent_zzz", path=str(proj / "proj"), task_id="t-zm"))
+        r = json.loads(
+            search_tool(
+                "zzz_totally_absent_zzz", path=str(proj / "proj"), task_id="t-zm"
+            )
+        )
         assert r["total_count"] == 0
         assert "warning" not in r
 
@@ -65,7 +70,11 @@ class TestZeroMatchProbe:
         local_file.write_text("BOUNDED_HIDDEN_TOKEN = true\n")
         (d / ".gitignore").write_text("node_modules/\n.project-local/\n")
 
-        r = json.loads(search_tool("BOUNDED_HIDDEN_TOKEN", path=str(d), task_id="t-zm-pruned-hidden"))
+        r = json.loads(
+            search_tool(
+                "BOUNDED_HIDDEN_TOKEN", path=str(d), task_id="t-zm-pruned-hidden"
+            )
+        )
         warning = r.get("warning", "")
 
         assert r["total_count"] == 0
@@ -80,18 +89,21 @@ class TestZeroMatchProbe:
         (dependency / "dependency.js").write_text("EXPLICIT_ROOT_TOKEN = true\n")
         (d / ".gitignore").write_text("node_modules/\n")
 
-        r = json.loads(search_tool(
-            "EXPLICIT_ROOT_TOKEN",
-            path=str(d / "node_modules"),
-            task_id="t-zm-explicit-pruned-root",
-        ))
+        r = json.loads(
+            search_tool(
+                "EXPLICIT_ROOT_TOKEN",
+                path=str(d / "node_modules"),
+                task_id="t-zm-explicit-pruned-root",
+            )
+        )
 
         assert r["total_count"] == 0
         assert "warning" not in r
 
-
     def test_matching_search_unaffected(self, proj):
-        r = json.loads(search_tool("TOKEN_ALPHA", path=str(proj / "proj"), task_id="t-zm"))
+        r = json.loads(
+            search_tool("TOKEN_ALPHA", path=str(proj / "proj"), task_id="t-zm")
+        )
         assert r["total_count"] >= 2
         assert "warning" not in r
 
@@ -104,7 +116,9 @@ class TestMultiPathRecovery:
         assert r["total_count"] >= 3
         blob = json.dumps(r)
         assert "a.py" in blob and "c.txt" in blob
-        assert "2 entries" in r.get("warning", "") or "searched 2" in r.get("warning", "")
+        assert "2 entries" in r.get("warning", "") or "searched 2" in r.get(
+            "warning", ""
+        )
 
     def test_missing_path_skipped_with_note(self, proj):
         p = f"{proj / 'proj'} {proj / 'nonexistent_dir'}"
@@ -126,7 +140,9 @@ class TestMultiPathRecovery:
 
     def test_single_missing_path_keeps_similar_hint(self, proj):
         # single-path miss must keep the existing "Similar paths" behavior
-        r = json.loads(search_tool("TOKEN_ALPHA", path=str(proj / "pro"), task_id="t-mp"))
+        r = json.loads(
+            search_tool("TOKEN_ALPHA", path=str(proj / "pro"), task_id="t-mp")
+        )
         assert "error" in r
 
     def test_files_target_multi_path(self, proj):
@@ -240,10 +256,14 @@ class TestSymlinkedRootOnTheFilesLane:
 
     @pytest.mark.parametrize("engine", ["find", "rg"])
     @pytest.mark.parametrize("lane", ["linkdir", "link.md"])
-    def test_symlinked_root_lists_the_target_files(self, linked, monkeypatch, engine, lane):
+    def test_symlinked_root_lists_the_target_files(
+        self, linked, monkeypatch, engine, lane
+    ):
         from tools.file_tools import _get_file_ops
 
-        ops = _get_file_ops(task_id=f"t-symlink-files-{engine}-{lane.replace('.', '-')}")
+        ops = _get_file_ops(
+            task_id=f"t-symlink-files-{engine}-{lane.replace('.', '-')}"
+        )
         if not ops._has_command(engine):
             pytest.skip(f"{engine} not installed")
         self._pin_engine(monkeypatch, ops, engine)
@@ -251,7 +271,8 @@ class TestSymlinkedRootOnTheFilesLane:
         assert r.error is None, r.error
         assert r.total_count >= 1 and any(f.endswith(".md") for f in r.files), (
             f"a symlinked root ({lane}) listed nothing and said nothing on the {engine} "
-            f"lane: total_count={r.total_count} files={r.files!r}")
+            f"lane: total_count={r.total_count} files={r.files!r}"
+        )
 
     def test_plain_and_empty_roots_keep_their_answer(self, linked, monkeypatch):
         """Following the operand must not invent matches or move an ordinary root."""
@@ -261,13 +282,18 @@ class TestSymlinkedRootOnTheFilesLane:
         self._pin_engine(monkeypatch, ops, "find")
         plain = ops.search("*.md", path=str(linked / "target"), target="files")
         assert plain.error is None, plain.error
-        assert plain.total_count >= 1 and any(f.endswith("real.md") for f in plain.files)
+        assert plain.total_count >= 1 and any(
+            f.endswith("real.md") for f in plain.files
+        )
         for root in (str(linked / "empty"), str(linked / "emptylink")):
             nothing = ops.search("*.md", path=root, target="files")
             assert nothing.error is None and nothing.total_count == 0, (
-                f"an empty root ({root}) answered {nothing.total_count} file(s): {nothing.files!r}")
+                f"an empty root ({root}) answered {nothing.total_count} file(s): {nothing.files!r}"
+            )
 
-    def test_symlinked_content_root_under_a_dot_dir_matches_on_the_grep_lane(self, tmp_path, monkeypatch):
+    def test_symlinked_content_root_under_a_dot_dir_matches_on_the_grep_lane(
+        self, tmp_path, monkeypatch
+    ):
         """The pruned grep lane (root under a dot-dir) must search through a symlinked
         root instead of answering a silent zero (#116270).
 
@@ -291,11 +317,16 @@ class TestSymlinkedRootOnTheFilesLane:
             r = ops.search("NEEDLE", path=str(hidden / root), target="content")
             assert r.error is None, r.error
             assert r.total_count == 1, (
-                f"symlinked root {root} answered total_count={r.total_count} on the grep lane")
-        miss = ops.search("ABSENT_TOKEN", path=str(hidden / "dirlink"), target="content")
+                f"symlinked root {root} answered total_count={r.total_count} on the grep lane"
+            )
+        miss = ops.search(
+            "ABSENT_TOKEN", path=str(hidden / "dirlink"), target="content"
+        )
         assert miss.error is None and miss.total_count == 0
 
-    def test_a_symlinked_root_pointing_at_home_is_still_refused(self, tmp_path, monkeypatch):
+    def test_a_symlinked_root_pointing_at_home_is_still_refused(
+        self, tmp_path, monkeypatch
+    ):
         """The no-rg breadth guard must classify the link's target (#116270)."""
         from tools import file_operations
         from tools.environments.local import LocalEnvironment

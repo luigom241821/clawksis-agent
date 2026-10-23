@@ -19,19 +19,36 @@ from fastapi import APIRouter, HTTPException
 from clawk_cli.web_deps import late
 from clawk_cli.web_server_dashboard import _invalidate_plugins_hub_cache
 from clawk_cli.web_server_memory import (
-    _coerce_bool, _field_default, _field_is_set, _field_value, _field_visible, _load_memory_provider, _memory_provider_manifest, _memory_provider_setup_info, _memory_provider_setup_manifest, _normalize_memory_provider_schema, _read_memory_provider_existing_values, _require_memory_provider_ready, _run_setup_command,
+    _coerce_bool,
+    _field_default,
+    _field_is_set,
+    _field_value,
+    _field_visible,
+    _load_memory_provider,
+    _memory_provider_manifest,
+    _memory_provider_setup_info,
+    _memory_provider_setup_manifest,
+    _normalize_memory_provider_schema,
+    _read_memory_provider_existing_values,
+    _require_memory_provider_ready,
+    _run_setup_command,
 )
 from clawk_cli.web_models import MemoryProviderConfigUpdate, MemoryProviderSetupRequest
 from clawk_cli.web_routers._common import _CONFIG_MUTATION_LOCK, scoped_to_thread
 from plugins.memory.config_schema import (
-    STORAGE_HONCHO_HOST_BLOCK, ProviderConfigSchema, ProviderField, get_provider_config_schema,
+    STORAGE_HONCHO_HOST_BLOCK,
+    ProviderConfigSchema,
+    ProviderField,
+    get_provider_config_schema,
 )
 
 _log = logging.getLogger("clawk_cli.web_server")
 router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_discover_memory_provider_statuses = late("_discover_memory_provider_statuses", "clawk_cli.web_server_memory")
+_discover_memory_provider_statuses = late(
+    "_discover_memory_provider_statuses", "clawk_cli.web_server_memory"
+)
 get_clawk_home = late("get_clawk_home", "clawk_cli.config")
 load_config = late("load_config", "clawk_cli.config")
 save_config = late("save_config", "clawk_cli.config")
@@ -67,6 +84,7 @@ def _value_errors_as_http(log_msg: str, name: str, *, passthrough_http: bool = T
 
 # ── Declared-schema surface (plugins.memory.config_schema) ────────────────────
 
+
 def _coerce_field_value(field: ProviderField, raw: str) -> Any:
     """Coerce a submitted non-secret string to its native JSON type.
 
@@ -82,6 +100,7 @@ def _coerce_field_value(field: ProviderField, raw: str) -> Any:
         return value
     if kind == "bool":
         from utils import is_truthy_value
+
         return is_truthy_value(value)
     if not value:
         return _UNSET
@@ -131,7 +150,9 @@ def _honcho_resolvers(name: str):
     return client.resolve_active_host, client.resolve_config_path, client._host_block
 
 
-def _save_submitted_secrets(provider: ProviderConfigSchema, values: dict[str, str]) -> list:
+def _save_submitted_secrets(
+    provider: ProviderConfigSchema, values: dict[str, str]
+) -> list:
     """Persist each non-blank secret submission to the env store (when the field has an
     ``env_key``); return the ``(field, submitted)`` pairs for backend-specific handling."""
     saved = []
@@ -145,7 +166,9 @@ def _save_submitted_secrets(provider: ProviderConfigSchema, values: dict[str, st
     return saved
 
 
-def _apply_field_values(provider: ProviderConfigSchema, values: dict[str, str], target_for) -> None:
+def _apply_field_values(
+    provider: ProviderConfigSchema, values: dict[str, str], target_for
+) -> None:
     """Apply submitted non-secret fields to their backend dict, in place.
 
     Only keys present in ``values`` are touched, so a partial save never
@@ -167,24 +190,31 @@ def _apply_field_values(provider: ProviderConfigSchema, values: dict[str, str], 
 def _write_json_0600(path: Path, data: dict[str, Any]) -> None:
     from utils import atomic_json_write
     from clawk_constants import mkdir_under_clawk_home
+
     mkdir_under_clawk_home(path.parent)
     atomic_json_write(path, data, mode=0o600)
 
 
-def _write_provider_flat(provider: ProviderConfigSchema, values: dict[str, str]) -> None:
+def _write_provider_flat(
+    provider: ProviderConfigSchema, values: dict[str, str]
+) -> None:
     existing = _read_flat_json(provider)
     _save_submitted_secrets(provider, values)
     _apply_field_values(provider, values, lambda field: existing)
     _write_json_0600(_flat_json_path(provider), existing)
 
 
-def _write_provider_honcho(provider: ProviderConfigSchema, values: dict[str, str]) -> None:
+def _write_provider_honcho(
+    provider: ProviderConfigSchema, values: dict[str, str]
+) -> None:
     """Persist submitted fields to Honcho's real config for the active host (partial
     saves touch only submitted keys; blank text clears a key — see ``_apply_field_values``)."""
     from plugins.memory import import_provider_module
 
     oauth = import_provider_module(provider.name, "oauth")
-    resolve_active_host, resolve_config_path, host_block_of = _honcho_resolvers(provider.name)
+    resolve_active_host, resolve_config_path, host_block_of = _honcho_resolvers(
+        provider.name
+    )
     host = resolve_active_host()
     # Write the file reads resolve, or a save shadows it with a sparse copy.
     path = resolve_config_path()
@@ -197,16 +227,24 @@ def _write_provider_honcho(provider: ProviderConfigSchema, values: dict[str, str
         cfg["hosts"] = hosts = hosts if isinstance(hosts, dict) else {}
         # Update the block reads resolve (legacy dot-form included), never shadow it.
         existing = host_block_of(cfg, host)
-        host_key = next((k for k, v in hosts.items() if v is existing), host) if existing else host
+        host_key = (
+            next((k for k, v in hosts.items() if v is existing), host)
+            if existing
+            else host
+        )
         host_block = hosts.setdefault(host_key, existing)
 
         for field, submitted in _save_submitted_secrets(provider, values):
             # Persist where the client reads first; an OAuth token owns that slot.
             stored = host_block.get(field.key)
-            if not (isinstance(stored, str) and stored.startswith(oauth.ACCESS_TOKEN_PREFIX)):
+            if not (
+                isinstance(stored, str) and stored.startswith(oauth.ACCESS_TOKEN_PREFIX)
+            ):
                 host_block[field.key] = submitted
 
-        _apply_field_values(provider, values, lambda field: host_block if field.scope == "host" else cfg)
+        _apply_field_values(
+            provider, values, lambda field: host_block if field.scope == "host" else cfg
+        )
         _write_json_0600(path, cfg)
 
 
@@ -217,6 +255,7 @@ def _serialize_field_value(field: ProviderField, value: Any) -> str:
         return field.default
     if field.kind == "bool":
         from utils import is_truthy_value
+
         return "true" if is_truthy_value(value) else "false"
     if field.kind == "json" and isinstance(value, (dict, list)):
         return json.dumps(value)
@@ -239,8 +278,13 @@ def _read_field(field: ProviderField, sources: tuple, env: dict[str, str]) -> An
     return None
 
 
-def _declared_field_is_set(field: ProviderField, sources: tuple, env: dict[str, str]) -> bool:
-    if any(env_key and env.get(env_key) for env_key in (field.env_key, *field.env_fallbacks)):
+def _declared_field_is_set(
+    field: ProviderField, sources: tuple, env: dict[str, str]
+) -> bool:
+    if any(
+        env_key and env.get(env_key)
+        for env_key in (field.env_key, *field.env_fallbacks)
+    ):
         return True
     return any(source.get(k) for source in sources for k in (field.key, *field.aliases))
 
@@ -249,7 +293,9 @@ def _declared_provider_payload(provider: ProviderConfigSchema) -> dict[str, Any]
     env = load_env()
     is_honcho = provider.storage == STORAGE_HONCHO_HOST_BLOCK
     if is_honcho:
-        resolve_active_host, resolve_config_path, host_block_of = _honcho_resolvers(provider.name)
+        resolve_active_host, resolve_config_path, host_block_of = _honcho_resolvers(
+            provider.name
+        )
         host = resolve_active_host()
         raw = _read_json_dict(resolve_config_path(), "Honcho config")
         host_block = host_block_of(raw, host)
@@ -264,8 +310,23 @@ def _declared_provider_payload(provider: ProviderConfigSchema) -> dict[str, Any]
 
     fields: list[dict[str, Any]] = []
     for field in provider.fields:
-        entry = {k: getattr(field, k) for k in ("key", "label", "kind", "description", "info", "placeholder", "inline", "group")}
-        entry["options"] = [{"value": o.value, "label": o.label, "description": o.description} for o in field.options]
+        entry = {
+            k: getattr(field, k)
+            for k in (
+                "key",
+                "label",
+                "kind",
+                "description",
+                "info",
+                "placeholder",
+                "inline",
+                "group",
+            )
+        }
+        entry["options"] = [
+            {"value": o.value, "label": o.label, "description": o.description}
+            for o in field.options
+        ]
         sources = sources_for(field)
         if field.is_secret:
             entry["value"] = ""  # secrets are write-only over the API
@@ -283,7 +344,12 @@ def _declared_provider_payload(provider: ProviderConfigSchema) -> dict[str, Any]
         # Presence, not truthiness — a stored False/0 is still "set".
         entry["is_set"] = native is not None if is_honcho else bool(value)
         fields.append(entry)
-    return {"name": provider.name, "label": provider.label, "docs_url": provider.docs_url, "fields": fields}
+    return {
+        "name": provider.name,
+        "label": provider.label,
+        "docs_url": provider.docs_url,
+        "fields": fields,
+    }
 
 
 def _stringify_submitted(value: Any) -> str:
@@ -305,8 +371,14 @@ def _memory_section(config: dict[str, Any]) -> dict[str, Any]:
     return memory_config
 
 
-def _update_memory_provider_config(provider: ProviderConfigSchema, values: dict[str, str]) -> None:
-    writer = _write_provider_honcho if provider.storage == STORAGE_HONCHO_HOST_BLOCK else _write_provider_flat
+def _update_memory_provider_config(
+    provider: ProviderConfigSchema, values: dict[str, str]
+) -> None:
+    writer = (
+        _write_provider_honcho
+        if provider.storage == STORAGE_HONCHO_HOST_BLOCK
+        else _write_provider_flat
+    )
     writer(provider, values)
     with _CONFIG_MUTATION_LOCK:  # RMW span vs. the dashboard's config autosave
         config = load_config()
@@ -318,20 +390,31 @@ def _update_memory_provider_config(provider: ProviderConfigSchema, values: dict[
 
 # ── Setup: dependency installation ────────────────────────────────────────────
 
+
 def _trim_setup_output(value: Optional[str], limit: int = 4000) -> str:
     text = str(value or "")
     return text if len(text) <= limit else f"{text[:limit]}\n... truncated ..."
 
 
 def _command_result(
-    *, kind: str, name: str, status: str, command: str = "",
-    completed: Optional[subprocess.CompletedProcess] = None, error: Optional[str] = None,
+    *,
+    kind: str,
+    name: str,
+    status: str,
+    command: str = "",
+    completed: Optional[subprocess.CompletedProcess] = None,
+    error: Optional[str] = None,
 ) -> dict[str, Any]:
     return {
-        "kind": kind, "name": name, "status": status, "command": command,
+        "kind": kind,
+        "name": name,
+        "status": status,
+        "command": command,
         "returncode": None if completed is None else completed.returncode,
         "stdout": "" if completed is None else _trim_setup_output(completed.stdout),
-        "stderr": _trim_setup_output(error or ("" if completed is None else completed.stderr)),
+        "stderr": _trim_setup_output(
+            error or ("" if completed is None else completed.stderr)
+        ),
     }
 
 
@@ -342,22 +425,54 @@ def _install_memory_provider_python_dependencies(name: str) -> list[dict[str, An
     try:
         _manifest, status = prepare_memory_provider_dependencies(name)
     except Exception as exc:
-        return [_command_result(kind="pip", name=name, status="failed", command=command, error=str(exc))]
-    return [_command_result(kind="pip", name=name, status=status, command=command)] if status else []
+        return [
+            _command_result(
+                kind="pip", name=name, status="failed", command=command, error=str(exc)
+            )
+        ]
+    return (
+        [_command_result(kind="pip", name=name, status=status, command=command)]
+        if status
+        else []
+    )
 
 
-def _run_setup_step(results: list, kind: str, name: str, command: str, status_of, **kwargs) -> Optional[int]:
+def _run_setup_step(
+    results: list, kind: str, name: str, command: str, status_of, **kwargs
+) -> Optional[int]:
     """Run a setup command, append its result row; returncode or None on spawn failure."""
     try:
-        completed = _run_setup_command(command if kwargs.get("shell") else shlex.split(command), display=command, **kwargs)
+        completed = _run_setup_command(
+            command if kwargs.get("shell") else shlex.split(command),
+            display=command,
+            **kwargs,
+        )
     except Exception as exc:
-        results.append(_command_result(kind=kind, name=name, status=status_of(None), command=command, error=str(exc)))
+        results.append(
+            _command_result(
+                kind=kind,
+                name=name,
+                status=status_of(None),
+                command=command,
+                error=str(exc),
+            )
+        )
         return None
-    results.append(_command_result(kind=kind, name=name, status=status_of(completed.returncode == 0), command=command, completed=completed))
+    results.append(
+        _command_result(
+            kind=kind,
+            name=name,
+            status=status_of(completed.returncode == 0),
+            command=command,
+            completed=completed,
+        )
+    )
     return completed.returncode
 
 
-def _install_memory_provider_external_dependencies(dependencies: list[dict[str, str]]) -> list[dict[str, Any]]:
+def _install_memory_provider_external_dependencies(
+    dependencies: list[dict[str, str]],
+) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for dep in dependencies:
         name = dep.get("name") or "dependency"
@@ -365,19 +480,43 @@ def _install_memory_provider_external_dependencies(dependencies: list[dict[str, 
         install_cmd = dep.get("install") or ""
         # Check first: "already_installed" short-circuits; a failed check is
         # "missing" when an install step can fix it, "failed" otherwise.
-        if check_cmd and _run_setup_step(
-            results, "external_check", name, check_cmd,
-            lambda ok: "already_installed" if ok else ("missing" if install_cmd else "failed"), timeout=20,
-        ) == 0:
+        if (
+            check_cmd
+            and _run_setup_step(
+                results,
+                "external_check",
+                name,
+                check_cmd,
+                lambda ok: (
+                    "already_installed"
+                    if ok
+                    else ("missing" if install_cmd else "failed")
+                ),
+                timeout=20,
+            )
+            == 0
+        ):
             continue
         if not install_cmd:
             continue
         rc = _run_setup_step(
-            results, "external_install", name, install_cmd, lambda ok: "installed" if ok else "failed",
-            shell=True, timeout=300,
+            results,
+            "external_install",
+            name,
+            install_cmd,
+            lambda ok: "installed" if ok else "failed",
+            shell=True,
+            timeout=300,
         )
         if check_cmd and rc == 0:
-            _run_setup_step(results, "external_check", name, check_cmd, lambda ok: "verified" if ok else "failed", timeout=20)
+            _run_setup_step(
+                results,
+                "external_check",
+                name,
+                check_cmd,
+                lambda ok: "verified" if ok else "failed",
+                timeout=20,
+            )
     return results
 
 
@@ -390,31 +529,57 @@ def _install_memory_provider_setup(name: str) -> dict[str, Any]:
     try:
         setup, _inputs = _memory_provider_setup_manifest(name)
     except Exception as exc:
-        results.append(_command_result(kind="setup", name=name, status="failed", error=str(exc)))
+        results.append(
+            _command_result(kind="setup", name=name, status="failed", error=str(exc))
+        )
         setup = {"external_dependencies": []}
-    results.extend(_install_memory_provider_external_dependencies(setup["external_dependencies"]))
+    results.extend(
+        _install_memory_provider_external_dependencies(setup["external_dependencies"])
+    )
     if not results:
-        results.append(_command_result(kind="setup", name=name, status="no_declared_steps"))
+        results.append(
+            _command_result(kind="setup", name=name, status="no_declared_steps")
+        )
     ok = all(result["status"] != "failed" for result in results)
     statuses = {row["name"]: row for row in _discover_memory_provider_statuses()}
-    return {"ok": ok, "provider": name, "results": results, "status": statuses.get(name)}
+    return {
+        "ok": ok,
+        "provider": name,
+        "results": results,
+        "status": statuses.get(name),
+    }
 
 
 # ── Legacy provider surface (provider.config_schema()) ────────────────────────
+
 
 def _memory_provider_payload(name: str, provider: Any) -> dict[str, Any]:
     data = _read_memory_provider_existing_values(name)
     fields = [
         {
-            **{k: field[k] for k in ("key", "label", "kind", "description", "placeholder", "required")},
+            **{
+                k: field[k]
+                for k in (
+                    "key",
+                    "label",
+                    "kind",
+                    "description",
+                    "placeholder",
+                    "required",
+                )
+            },
             "value": "" if field["kind"] == "secret" else _field_value(field, data),
-            "is_set": _field_is_set(field, data), "options": field.get("options", []), "url": field.get("url", ""),
+            "is_set": _field_is_set(field, data),
+            "options": field.get("options", []),
+            "url": field.get("url", ""),
             **{k: field.get(k) for k in ("when", "minimum", "maximum", "step")},
         }
         for field in _normalize_memory_provider_schema(name, provider)
     ]
     return {
-        "name": name, "label": name.replace("_", " ").replace("-", " ").title(), "fields": fields,
+        "name": name,
+        "label": name.replace("_", " ").replace("-", " ").title(),
+        "fields": fields,
         "setup": _memory_provider_setup_info(name),
     }
 
@@ -441,7 +606,9 @@ def _coerce_schema_number(field: dict[str, Any], raw: Any) -> int | float:
 def _coerce_schema_field(field: dict[str, Any], raw: Any) -> Any:
     kind = field["kind"]
     if kind == "boolean":
-        return _coerce_bool(raw, default=_coerce_bool(_field_default(field), default=False))
+        return _coerce_bool(
+            raw, default=_coerce_bool(_field_default(field), default=False)
+        )
     if kind in {"integer", "number"}:
         return _coerce_schema_number(field, raw)
     value = str(raw if raw is not None else "").strip()
@@ -453,13 +620,18 @@ def _coerce_schema_field(field: dict[str, Any], raw: Any) -> Any:
     return value or _field_default(field)
 
 
-def _save_memory_provider_native_config(name: str, provider: Any, values: dict[str, Any]) -> None:
+def _save_memory_provider_native_config(
+    name: str, provider: Any, values: dict[str, Any]
+) -> None:
     if provider is not None and hasattr(provider, "save_config"):
         try:
             from agent.memory_provider import MemoryProvider as _BaseMemoryProvider
         except Exception:
             _BaseMemoryProvider = None
-        if _BaseMemoryProvider is None or type(provider).save_config is not _BaseMemoryProvider.save_config:
+        if (
+            _BaseMemoryProvider is None
+            or type(provider).save_config is not _BaseMemoryProvider.save_config
+        ):
             provider.save_config(values, str(get_clawk_home()))
             return
     with _CONFIG_MUTATION_LOCK:  # RMW span vs. the dashboard's config autosave
@@ -470,7 +642,9 @@ def _save_memory_provider_native_config(name: str, provider: Any, values: dict[s
         save_config(cfg)
 
 
-def _write_memory_provider_config_values(name: str, provider: Any, values: dict[str, Any]) -> None:
+def _write_memory_provider_config_values(
+    name: str, provider: Any, values: dict[str, Any]
+) -> None:
     existing = _read_memory_provider_existing_values(name)
     fields = _normalize_memory_provider_schema(name, provider)
     fields_by_key = {field["key"]: field for field in fields}
@@ -494,6 +668,7 @@ def _write_memory_provider_config_values(name: str, provider: Any, values: dict[
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 def _require_valid_memory_provider_name(name: str) -> None:
     """Reject provider names that could traverse outside the plugin dirs.
 
@@ -506,7 +681,9 @@ def _require_valid_memory_provider_name(name: str) -> None:
 
 
 @router.get("/api/memory/providers/{name}/config")
-async def get_memory_provider_config(name: str, surface: Optional[str] = None, profile: Optional[str] = None):
+async def get_memory_provider_config(
+    name: str, surface: Optional[str] = None, profile: Optional[str] = None
+):
     _require_valid_memory_provider_name(name)
 
     def _run():
@@ -519,15 +696,21 @@ async def get_memory_provider_config(name: str, surface: Optional[str] = None, p
             return _declared_provider_payload(declared)
         provider = _load_memory_provider(name)
         if provider is None:
-            return {"name": name, "label": name, "fields": [], "setup": _memory_provider_setup_info(name)}
+            return {
+                "name": name,
+                "label": name,
+                "fields": [],
+                "setup": _memory_provider_setup_info(name),
+            }
         return _memory_provider_payload(name, provider)
 
     return await scoped_to_thread(profile, _run)
 
 
 @router.post("/api/memory/providers/{name}/setup")
-async def setup_memory_provider(name: str, body: MemoryProviderSetupRequest,
-                                profile: Optional[str] = None):
+async def setup_memory_provider(
+    name: str, body: MemoryProviderSetupRequest, profile: Optional[str] = None
+):
     _require_valid_memory_provider_name(name)
 
     def _run():
@@ -539,8 +722,11 @@ async def setup_memory_provider(name: str, body: MemoryProviderSetupRequest,
             # installed yet — that's the setup use case.)
             raise _unknown_provider(name)
         if provider is not None and body.values:
-            with _value_errors_as_http("Failed to persist memory provider setup values for %s", name,
-                                       passthrough_http=False):
+            with _value_errors_as_http(
+                "Failed to persist memory provider setup values for %s",
+                name,
+                passthrough_http=False,
+            ):
                 _write_memory_provider_config_values(name, provider, body.values)
         _invalidate_plugins_hub_cache()
         return _install_memory_provider_setup(name)
@@ -550,7 +736,10 @@ async def setup_memory_provider(name: str, body: MemoryProviderSetupRequest,
 
 @router.put("/api/memory/providers/{name}/config")
 async def update_memory_provider_config(
-    name: str, body: MemoryProviderConfigUpdate, surface: Optional[str] = None, profile: Optional[str] = None
+    name: str,
+    body: MemoryProviderConfigUpdate,
+    surface: Optional[str] = None,
+    profile: Optional[str] = None,
 ):
     _require_valid_memory_provider_name(name)
     values = body.values or {}
@@ -560,7 +749,9 @@ async def update_memory_provider_config(
             declared = get_provider_config_schema(name)
             if declared is None:
                 raise _unknown_provider(name)
-            _update_memory_provider_config(declared, {k: _stringify_submitted(v) for k, v in values.items()})
+            _update_memory_provider_config(
+                declared, {k: _stringify_submitted(v) for k, v in values.items()}
+            )
             _invalidate_plugins_hub_cache()
             return {"ok": True}
         provider = _load_memory_provider(name)

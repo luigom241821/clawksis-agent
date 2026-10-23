@@ -75,7 +75,9 @@ def _interval_seconds(value: Optional[int]) -> int:
     except (TypeError, ValueError):
         logger.warning(
             "Ignoring invalid nous.%s=%r; using %ds",
-            NOUS_AUTH_KEEPALIVE_INTERVAL_CONFIG_KEY, raw, NOUS_AUTH_KEEPALIVE_INTERVAL_SECONDS,
+            NOUS_AUTH_KEEPALIVE_INTERVAL_CONFIG_KEY,
+            raw,
+            NOUS_AUTH_KEEPALIVE_INTERVAL_SECONDS,
         )
         return NOUS_AUTH_KEEPALIVE_INTERVAL_SECONDS
 
@@ -101,7 +103,9 @@ def _tick_seconds(configured_interval: int, lifetime: Optional[int]) -> int:
     if not lifetime or lifetime <= 0:
         return configured_interval
     derived = lifetime // NOUS_AUTH_KEEPALIVE_TICKS_PER_LIFETIME
-    return max(NOUS_AUTH_KEEPALIVE_MIN_INTERVAL_SECONDS, min(configured_interval, derived))
+    return max(
+        NOUS_AUTH_KEEPALIVE_MIN_INTERVAL_SECONDS, min(configured_interval, derived)
+    )
 
 
 def _refresh_horizon_seconds(tick_seconds: int, floor_seconds: int) -> int:
@@ -112,10 +116,15 @@ def _refresh_horizon_seconds(tick_seconds: int, floor_seconds: int) -> int:
 
 
 def _entry_state(entry: object) -> dict:
-    return {k: getattr(entry, k, None) for k in ("agent_key", "agent_key_expires_at", "scope")}
+    return {
+        k: getattr(entry, k, None)
+        for k in ("agent_key", "agent_key_expires_at", "scope")
+    }
 
 
-def _refresh_selected_pool_entry(*, min_key_ttl_seconds: int, min_access_ttl_seconds: Optional[int] = None) -> Optional[bool]:
+def _refresh_selected_pool_entry(
+    *, min_key_ttl_seconds: int, min_access_ttl_seconds: Optional[int] = None
+) -> Optional[bool]:
     """Refresh the current pool entry when stale. True = usable/refreshed; False = pool exists but
     no usable entry; None = no Nous pool.
     """
@@ -137,7 +146,9 @@ def _refresh_selected_pool_entry(*, min_key_ttl_seconds: int, min_access_ttl_sec
         return False
     if min_access_ttl_seconds is None:
         min_access_ttl_seconds = ACCESS_TOKEN_REFRESH_SKEW_SECONDS
-    access_expiring = _is_expiring(getattr(entry, "expires_at", None), min_access_ttl_seconds)
+    access_expiring = _is_expiring(
+        getattr(entry, "expires_at", None), min_access_ttl_seconds
+    )
     key_usable = _agent_key_is_usable(_entry_state(entry), min_key_ttl_seconds)
     if access_expiring or not key_usable:
         if pool.try_refresh_current() is None:
@@ -147,8 +158,10 @@ def _refresh_selected_pool_entry(*, min_key_ttl_seconds: int, min_access_ttl_sec
 
 
 def refresh_nous_auth_keepalive_once(
-    *, min_key_ttl_seconds: int = NOUS_INVOKE_JWT_MIN_TTL_SECONDS,
-    min_access_ttl_seconds: Optional[int] = None, timeout_seconds: Optional[float] = None,
+    *,
+    min_key_ttl_seconds: int = NOUS_INVOKE_JWT_MIN_TTL_SECONDS,
+    min_access_ttl_seconds: Optional[int] = None,
+    timeout_seconds: Optional[float] = None,
 ) -> bool:
     """Refresh Nous auth once if credentials are configured (pool entry first, then singleton state)."""
     # This runs in a bare daemon thread, so it does not inherit a request's ContextVars. Once a
@@ -158,7 +171,8 @@ def refresh_nous_auth_keepalive_once(
 
     with launch_profile_scope_if_multiplexed():
         pool_result = _refresh_selected_pool_entry(
-            min_key_ttl_seconds=max(60, int(min_key_ttl_seconds)), min_access_ttl_seconds=min_access_ttl_seconds
+            min_key_ttl_seconds=max(60, int(min_key_ttl_seconds)),
+            min_access_ttl_seconds=min_access_ttl_seconds,
         )
         if pool_result is not None:
             return pool_result
@@ -169,14 +183,18 @@ def refresh_nous_auth_keepalive_once(
         # started): its tokens are minted on demand, and an inference mint here would put a guest
         # who only uses connectors through the free-inference challenge every tick.
         from clawk_cli.anon_auth import is_guest_state
+
         if is_guest_state(state):
             return False
         try:
             # Nobody is waiting on a keepalive tick: a free-tier browser challenge is announced to the
             # desktop (so it can clear before a token is needed) but never waited on here.
             from clawk_cli.anon_challenge import background_caller
+
             with background_caller():
-                resolve_nous_runtime_credentials(timeout_seconds=_timeout_seconds(timeout_seconds))
+                resolve_nous_runtime_credentials(
+                    timeout_seconds=_timeout_seconds(timeout_seconds)
+                )
             logger.debug("Nous auth keepalive: refreshed singleton auth state")
             return True
         except Exception as exc:
@@ -188,8 +206,12 @@ def refresh_nous_auth_keepalive_once(
 
 
 def _keepalive_loop(
-    stop_event: threading.Event, *, interval_seconds: int, initial_delay_seconds: int,
-    min_key_ttl_seconds: int, timeout_seconds: Optional[float],
+    stop_event: threading.Event,
+    *,
+    interval_seconds: int,
+    initial_delay_seconds: int,
+    min_key_ttl_seconds: int,
+    timeout_seconds: Optional[float],
 ) -> None:
     if initial_delay_seconds > 0 and stop_event.wait(initial_delay_seconds):
         return
@@ -199,20 +221,25 @@ def _keepalive_loop(
         tick = _tick_seconds(interval_seconds, _observed_lifetime_seconds())
         horizon = _refresh_horizon_seconds(tick, min_key_ttl_seconds)
         refresh_nous_auth_keepalive_once(
-            min_key_ttl_seconds=horizon, min_access_ttl_seconds=horizon, timeout_seconds=timeout_seconds
+            min_key_ttl_seconds=horizon,
+            min_access_ttl_seconds=horizon,
+            timeout_seconds=timeout_seconds,
         )
         stop_event.wait(tick)
 
 
 def start_nous_auth_keepalive(
-    *, interval_seconds: Optional[int] = None,
+    *,
+    interval_seconds: Optional[int] = None,
     initial_delay_seconds: int = NOUS_AUTH_KEEPALIVE_INITIAL_DELAY_SECONDS,
-    min_key_ttl_seconds: int = NOUS_INVOKE_JWT_MIN_TTL_SECONDS, timeout_seconds: Optional[float] = None,
+    min_key_ttl_seconds: int = NOUS_INVOKE_JWT_MIN_TTL_SECONDS,
+    timeout_seconds: Optional[float] = None,
 ) -> Optional[threading.Thread]:
     """Start the process-wide Nous auth keepalive thread (idempotent; None when disabled)."""
     # Free-tier handoff retries run in every long-lived Nous process, guest or not and keepalive or
     # not: a CLI sign-in in another process may have left a move this one has to finish.
     from clawk_cli.guest_handoff import start_worker
+
     start_worker()
     interval_seconds = _interval_seconds(interval_seconds)
     if interval_seconds <= 0:
@@ -220,6 +247,7 @@ def start_nous_auth_keepalive(
     # The free tier has no refresh token to keep alive: its access token is re-minted from the
     # anon credential on demand by the request path, so a background refresher has nothing to do.
     from clawk_cli.anon_auth import is_guest_state
+
     try:
         if is_guest_state(get_provider_auth_state("nous")):
             logger.debug("Nous auth keepalive skipped: free tier has no refresh token")
@@ -232,7 +260,10 @@ def start_nous_auth_keepalive(
             return _keepalive_thread
         _keepalive_stop.clear()
         _keepalive_thread = threading.Thread(
-            target=_keepalive_loop, args=(_keepalive_stop,), daemon=True, name="nous-auth-keepalive",
+            target=_keepalive_loop,
+            args=(_keepalive_stop,),
+            daemon=True,
+            name="nous-auth-keepalive",
             kwargs={
                 "interval_seconds": int(interval_seconds),
                 "initial_delay_seconds": max(0, int(initial_delay_seconds)),
@@ -248,6 +279,7 @@ def start_nous_auth_keepalive(
 def stop_nous_auth_keepalive(timeout: float = 5.0) -> None:
     """Stop the keepalive thread. Intended for graceful shutdown/tests."""
     from clawk_cli.guest_handoff import stop_worker
+
     stop_worker(timeout)
     global _keepalive_thread
     with _keepalive_lock:

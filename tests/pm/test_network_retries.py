@@ -16,11 +16,25 @@ from pm.store import Store, current_target
 from tests.pm._range_server import RangeHandler, dl_server, url
 
 
-@pytest.mark.parametrize("failure_phase,install_path", [
-    (phase, "install") for phase in ("probe", "probe-disconnect", "probe-empty-body", "ranged", "single",
-                                   "interrupted", "single-interrupted")
-] + [("ranged", "stage")])
-def test_install_recovers_from_transient_http_failure(tmp_path, dl_server, monkeypatch, failure_phase, install_path):
+@pytest.mark.parametrize(
+    "failure_phase,install_path",
+    [
+        (phase, "install")
+        for phase in (
+            "probe",
+            "probe-disconnect",
+            "probe-empty-body",
+            "ranged",
+            "single",
+            "interrupted",
+            "single-interrupted",
+        )
+    ]
+    + [("ranged", "stage")],
+)
+def test_install_recovers_from_transient_http_failure(
+    tmp_path, dl_server, monkeypatch, failure_phase, install_path
+):
     payload = io.BytesIO()
     with zipfile.ZipFile(payload, "w") as archive:
         archive.writestr("tool.txt", b"verified tool bytes")
@@ -48,7 +62,9 @@ def test_install_recovers_from_transient_http_failure(tmp_path, dl_server, monke
             elif failure_phase.endswith("interrupted"):
                 handler.send_response(200 if RangeHandler.no_range else 206)
                 if not RangeHandler.no_range:
-                    handler.send_header("Content-Range", f"bytes 0-{len(body) - 1}/{len(body)}")
+                    handler.send_header(
+                        "Content-Range", f"bytes 0-{len(body) - 1}/{len(body)}"
+                    )
                 handler.send_header("Content-Length", str(len(body)))
                 handler.end_headers()
                 handler.wfile.write(body[: len(body) // 2])
@@ -66,10 +82,16 @@ def test_install_recovers_from_transient_http_failure(tmp_path, dl_server, monke
     store = Store(tmp_path / "store")
     facts = Facts(store.root / "facts.json")
     lock = Lockfile(tmp_path / "lock.json")
-    lock.set_pin(package.name, "1.0", {"any": {
-        "url": url(dl_server, "/tool.zip"),
-        "sha256": hashlib.sha256(body).hexdigest(),
-    }})
+    lock.set_pin(
+        package.name,
+        "1.0",
+        {
+            "any": {
+                "url": url(dl_server, "/tool.zip"),
+                "sha256": hashlib.sha256(body).hexdigest(),
+            }
+        },
+    )
     ensure = importlib.import_module("pm.install")
     if install_path == "install":
         ensure._install(package, lock, facts, store, current_target())
@@ -91,7 +113,9 @@ def test_install_recovers_from_transient_http_failure(tmp_path, dl_server, monke
 
 @pytest.mark.parametrize("reader_name", ["hash", "json", "text", "digests"])
 @pytest.mark.parametrize("short_body", [False, True])
-def test_pm_metadata_reads_retry_transient_http_failure(dl_server, monkeypatch, reader_name, short_body):
+def test_pm_metadata_reads_retry_transient_http_failure(
+    dl_server, monkeypatch, reader_name, short_body
+):
     from pm import packages, store, update
 
     body = b'{"assets": [{"name": "tool.zip", "digest": "sha256:abc123"}]}'
@@ -118,7 +142,10 @@ def test_pm_metadata_reads_retry_transient_http_failure(dl_server, monkeypatch, 
     endpoint = url(dl_server, "/metadata")
     readers = {
         "hash": (lambda: store.hash_url(endpoint), hashlib.sha256(body).hexdigest()),
-        "json": (lambda: update._get_json(endpoint), {"assets": [{"name": "tool.zip", "digest": "sha256:abc123"}]}),
+        "json": (
+            lambda: update._get_json(endpoint),
+            {"assets": [{"name": "tool.zip", "digest": "sha256:abc123"}]},
+        ),
         "text": (lambda: update._get_text(endpoint), body.decode()),
     }
     if reader_name == "digests":
@@ -128,12 +155,18 @@ def test_pm_metadata_reads_retry_transient_http_failure(dl_server, monkeypatch, 
             def https_open(self, request):
                 assert request.host == "api.github.com"
                 return urllib.request.urlopen(
-                    urllib.request.Request(endpoint, headers=request.headers), timeout=request.timeout,
+                    urllib.request.Request(endpoint, headers=request.headers),
+                    timeout=request.timeout,
                 )
 
-        monkeypatch.setattr(urllib.request, "_opener", urllib.request.build_opener(LocalRelease()))
+        monkeypatch.setattr(
+            urllib.request, "_opener", urllib.request.build_opener(LocalRelease())
+        )
         monkeypatch.setattr(packages, "_release_digest_cache", {})
-        readers["digests"] = (lambda: packages._github_release_digests("test/repo", "test"), {"tool.zip": "abc123"})
+        readers["digests"] = (
+            lambda: packages._github_release_digests("test/repo", "test"),
+            {"tool.zip": "abc123"},
+        )
     read, expected = readers[reader_name]
     assert read() == expected
     assert len(requests) == 2

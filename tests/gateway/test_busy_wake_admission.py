@@ -1,4 +1,5 @@
 """Trusted wakes cross the real adapter busy boundary, not external-user auth."""
+
 import asyncio
 
 import pytest
@@ -42,7 +43,9 @@ async def unused_handler(event):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("human_pending", [False, True])
-async def test_completed_board_wake_is_admitted_without_changing_human_input(tmp_path, monkeypatch, human_pending):
+async def test_completed_board_wake_is_admitted_without_changing_human_input(
+    tmp_path, monkeypatch, human_pending
+):
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "board.db"))
     kb.init_db()
     with kbc.connect() as conn:
@@ -52,7 +55,9 @@ async def test_completed_board_wake_is_admitted_without_changing_human_input(tmp
     assert task is not None and task.status == "done"
     text = f"[Kanban task completed] {task.result}"
     adapter, runner, source, key = busy_gateway()
-    human = MessageEvent(text="human follow-up", message_type=MessageType.TEXT, source=source)
+    human = MessageEvent(
+        text="human follow-up", message_type=MessageType.TEXT, source=source
+    )
     if human_pending:
         adapter._pending_messages[key] = human
     assert runner._is_user_authorized(source) is False
@@ -76,7 +81,9 @@ def busy_gateway():
     runner.adapters = {Platform.TELEGRAM: adapter}
     runner._draining = False
     source = SessionSource(platform=Platform.TELEGRAM, chat_id="123", chat_type="dm")
-    key = adapter._event_session_key(MessageEvent(text="", message_type=MessageType.TEXT, source=source))
+    key = adapter._event_session_key(
+        MessageEvent(text="", message_type=MessageType.TEXT, source=source)
+    )
     adapter.set_message_handler(unused_handler)
     adapter.set_busy_session_handler(runner._handle_active_session_busy_message)
     adapter._active_sessions[key] = asyncio.Event()
@@ -87,7 +94,9 @@ def busy_gateway():
 async def test_identityless_external_input_is_still_rejected():
     adapter, runner, source, key = busy_gateway()
     for _ in range(2):
-        await adapter.handle_message(MessageEvent(text="external", message_type=MessageType.TEXT, source=source))
+        await adapter.handle_message(
+            MessageEvent(text="external", message_type=MessageType.TEXT, source=source)
+        )
     assert key not in adapter._pending_messages
     assert not runner._overflow_queue(key)
     assert not adapter.sent

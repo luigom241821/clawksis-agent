@@ -13,7 +13,9 @@ from acp_adapter.session import SessionState
 def test_version_flag_displays_derived_version(monkeypatch, capsys):
     monkeypatch.setattr(
         "clawk_cli.version_info.get_version_info",
-        lambda: SimpleNamespace(base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"),
+        lambda: SimpleNamespace(
+            base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"
+        ),
     )
 
     entry.main(["--version"])
@@ -24,19 +26,25 @@ def test_version_flag_displays_derived_version(monkeypatch, capsys):
 def test_version_slash_command_displays_derived_version(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.version_info.get_version_info",
-        lambda: SimpleNamespace(base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"),
+        lambda: SimpleNamespace(
+            base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"
+        ),
     )
 
     agent = object.__new__(ClawksisACPAgent)
     state = cast(SessionState, SimpleNamespace(cwd="."))
-    assert agent._handle_slash_command("/version", state) == "Clawksis v1.2.3+4.gabcdef0"
+    assert (
+        agent._handle_slash_command("/version", state) == "Clawksis v1.2.3+4.gabcdef0"
+    )
 
 
 @pytest.mark.asyncio
 async def test_initialize_advertises_base_version(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.version_info.get_version_info",
-        lambda: SimpleNamespace(base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"),
+        lambda: SimpleNamespace(
+            base_version="1.2.3", derived_version="1.2.3+4.gabcdef0"
+        ),
     )
 
     response = await object.__new__(ClawksisACPAgent).initialize()

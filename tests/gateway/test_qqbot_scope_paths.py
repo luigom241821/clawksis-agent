@@ -262,9 +262,7 @@ class TestDirectSendScope:
             {"QQ_APP_ID": "profileA-app", "QQ_CLIENT_SECRET": "profileA-secret"}
         )
         try:
-            await _send_qqbot(
-                PlatformConfig(enabled=True, extra={}), "chat-1", "hi"
-            )
+            await _send_qqbot(PlatformConfig(enabled=True, extra={}), "chat-1", "hi")
         finally:
             ss.reset_secret_scope(tok)
         assert captured, "token request never issued"

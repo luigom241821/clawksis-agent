@@ -20,7 +20,9 @@ from gateway.config import PlatformConfig
 
 
 @pytest.mark.asyncio
-async def test_batched_thread_updates_retire_the_alias_through_connected_bot(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_batched_thread_updates_retire_the_alias_through_connected_bot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # The parent E2E conftest installs SDK mocks. Require the real messaging
     # extra here: an absent dependency must fail the owning CI lane, never skip.
     with patch.dict(sys.modules):
@@ -35,8 +37,9 @@ async def test_batched_thread_updates_retire_the_alias_through_connected_bot(mon
         monkeypatch.setattr(discord_platform, "Intents", discord.Intents)
         monkeypatch.setattr(discord_platform, "DISCORD_AVAILABLE", True)
         monkeypatch.setattr(discord_platform, "_load_opus_codec", lambda: None)
-        adapter = discord_platform.DiscordAdapter(PlatformConfig(
-            enabled=True, token="fake", extra={"slash_commands": False}))
+        adapter = discord_platform.DiscordAdapter(
+            PlatformConfig(enabled=True, token="fake", extra={"slash_commands": False})
+        )
         monkeypatch.setattr(adapter, "_start_liveness_probe", lambda: None)
 
         async def start(client: Any, token: str, **kwargs: Any) -> None:
@@ -48,7 +51,9 @@ async def test_batched_thread_updates_retire_the_alias_through_connected_bot(mon
         assert await adapter.connect()
         try:
             assert not adapter._platform_events_subscribed()
-            parent = SimpleNamespace(id=700, name="ops", guild=SimpleNamespace(name="Clawksis Server"))
+            parent = SimpleNamespace(
+                id=700, name="ops", guild=SimpleNamespace(name="Clawksis Server")
+            )
 
             class CachedThread:
                 id, parent_id = 800, 700
@@ -59,28 +64,48 @@ async def test_batched_thread_updates_retire_the_alias_through_connected_bot(mon
                 def _update(self, data: dict[str, Any]) -> None:
                     self.name = data["name"]
 
-                async def edit(self, *, name: str, reason: str | None = None) -> SimpleNamespace:
+                async def edit(
+                    self, *, name: str, reason: str | None = None
+                ) -> SimpleNamespace:
                     return SimpleNamespace(name=name)
 
             thread = CachedThread()
             thread.parent = parent
             monkeypatch.setattr(adapter._client, "get_channel", lambda _id: thread)
             first = adapter._format_thread_chat_name(thread)
-            assert await adapter.rename_thread("800", "Database outage", only_if_current_name=thread.name)
+            assert await adapter.rename_thread(
+                "800", "Database outage", only_if_current_name=thread.name
+            )
             # Do not call the formatter on Clawksis's title before the moderator
             # roundtrip: its cache-lag fallback would otherwise hide this seam.
             guild = SimpleNamespace(get_thread=lambda _id: thread)
-            state = SimpleNamespace(_get_guild=lambda _id: guild, dispatch=adapter._client.dispatch)
+            state = SimpleNamespace(
+                _get_guild=lambda _id: guild, dispatch=adapter._client.dispatch
+            )
             scheduled_before = asyncio.all_tasks()
-            state_type.parse_thread_update(state, {
-                "id": "800", "guild_id": "1", "parent_id": "700", "type": 11, "name": "Database outage",
-            })
+            state_type.parse_thread_update(
+                state,
+                {
+                    "id": "800",
+                    "guild_id": "1",
+                    "parent_id": "700",
+                    "type": 11,
+                    "name": "Database outage",
+                },
+            )
             await asyncio.gather(*(asyncio.all_tasks() - scheduled_before))
             scheduled_before = asyncio.all_tasks()
             for name in ("what broke?", "Database outage"):
-                state_type.parse_thread_update(state, {
-                    "id": "800", "guild_id": "1", "parent_id": "700", "type": 11, "name": name,
-                })
+                state_type.parse_thread_update(
+                    state,
+                    {
+                        "id": "800",
+                        "guild_id": "1",
+                        "parent_id": "700",
+                        "type": 11,
+                        "name": name,
+                    },
+                )
             # Both cached callbacks now share the final name. Only raw payloads
             # retain the intermediate moderator edit, with no hook subscriber.
             assert thread.name == "Database outage"

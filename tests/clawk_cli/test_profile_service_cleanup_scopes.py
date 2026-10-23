@@ -2,6 +2,7 @@
 Task, not only the user unit / launchd plist. Both carry ``--profile <old>`` with CLAWK_HOME
 pinned to a dir that no longer exists, so a survivor restarts the removed profile at boot.
 """
+
 from __future__ import annotations
 
 import sys
@@ -26,7 +27,9 @@ def victim(tmp_path, monkeypatch):
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("euid", [0, 1000])
-def test_cleanup_handles_the_system_scope_unit(victim, tmp_path, monkeypatch, capsys, euid):
+def test_cleanup_handles_the_system_scope_unit(
+    victim, tmp_path, monkeypatch, capsys, euid
+):
     system_dir = tmp_path / "etc-systemd-system"
     system_dir.mkdir()
     unit = system_dir / "clawk-gateway-victim.service"
@@ -35,8 +38,13 @@ def test_cleanup_handles_the_system_scope_unit(victim, tmp_path, monkeypatch, ca
     monkeypatch.setattr(profiles.os, "geteuid", lambda: euid)
     calls: list[list[str]] = []
     import clawk_cli.profiles_service_cleanup as psc
-    monkeypatch.setattr(psc.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)))
-    monkeypatch.setattr(profiles.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)))
+
+    monkeypatch.setattr(
+        psc.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd))
+    )
+    monkeypatch.setattr(
+        profiles.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd))
+    )
 
     removed = profiles._cleanup_gateway_service("victim", victim)
 
@@ -47,7 +55,10 @@ def test_cleanup_handles_the_system_scope_unit(victim, tmp_path, monkeypatch, ca
         # Not root: the unit cannot be unlinked, so the exact leftover and command are named.
         assert not removed and unit.exists()
         out = capsys.readouterr().out
-        assert str(unit) in out and "sudo systemctl disable --now clawk-gateway-victim" in out
+        assert (
+            str(unit) in out
+            and "sudo systemctl disable --now clawk-gateway-victim" in out
+        )
 
 
 def test_cleanup_deletes_the_windows_scheduled_task(victim, tmp_path, monkeypatch):
@@ -66,8 +77,10 @@ def test_cleanup_deletes_the_windows_scheduled_task(victim, tmp_path, monkeypatc
     # `from clawk_cli import gateway_windows` reads the package attribute first when an earlier
     # test already imported the real module, so the fake must be bound there too.
     import clawk_cli
+
     monkeypatch.setattr(clawk_cli, "gateway_windows", fake, raising=False)
     import platform
+
     monkeypatch.setattr(platform, "system", lambda: "Windows")
 
     assert profiles._cleanup_gateway_service("victim", victim) is True

@@ -1,4 +1,5 @@
 """Model probes share chat's TLS policy, with scoped redirect credentials."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -28,7 +29,11 @@ def stream(url: str, *, headers=None, params=None, timeout=10.0, verify=None):
     from clawk_cli.urllib_security import url_origin
 
     origin = url_origin(url)
-    private_headers = {name.lower() for name in headers or {} if name.lower() not in {"accept", "user-agent"}}
+    private_headers = {
+        name.lower()
+        for name in headers or {}
+        if name.lower() not in {"accept", "user-agent"}
+    }
     private_headers.update({"authorization", "cookie", "proxy-authorization"})
 
     def scope_credentials(request):
@@ -50,6 +55,8 @@ def stream(url: str, *, headers=None, params=None, timeout=10.0, verify=None):
 
 
 def get(url: str, *, headers=None, params=None, timeout=10.0, verify=None):
-    with stream(url, headers=headers, params=params, timeout=timeout, verify=verify) as response:
+    with stream(
+        url, headers=headers, params=params, timeout=timeout, verify=verify
+    ) as response:
         response.read()
         return response

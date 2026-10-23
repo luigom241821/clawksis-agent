@@ -53,14 +53,6 @@ def _sample_session():
     }
 
 
-
-
-
-
-
-
-
-
 def test_html_export_escapes_tool_call_names():
     payload = '<img src=x onerror="alert(document.domain)">'
 
@@ -81,10 +73,8 @@ def test_html_export_escapes_tool_call_names():
     )
 
     assert payload not in rendered
-    assert '&lt;img src=x onerror=&quot;alert(document.domain)&quot;&gt;' in rendered
+    assert "&lt;img src=x onerror=&quot;alert(document.domain)&quot;&gt;" in rendered
     assert "&lt;b&gt;x&lt;/b&gt;" in rendered
-
-
 
 
 def test_export_record_count_switches_unit_for_prompt_only_exports():
@@ -110,7 +100,16 @@ def test_sessions_export_cli_prompt_only_stdout(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["clawk", "sessions", "export", "-", "--session-id", "sess", "--only", "user-prompts"],
+        [
+            "clawk",
+            "sessions",
+            "export",
+            "-",
+            "--session-id",
+            "sess",
+            "--only",
+            "user-prompts",
+        ],
     )
 
     main_mod.main()
@@ -122,5 +121,3 @@ def test_sessions_export_cli_prompt_only_stdout(monkeypatch, capsys, tmp_path):
         "Only show me the prompts.",
     ]
     assert path.read_bytes() == before
-
-

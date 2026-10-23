@@ -4,27 +4,60 @@ Cron owns which persisted fields are *authored* (create_job) versus *advanced by
 scheduler* (next_run_at, state, run counters...). Callers merging an authored store
 into a live one (profile distributions) import this rather than duplicating the list.
 """
+
 from typing import Any, Dict
 
-from cron.jobs import _apply_schedule_update, _jobs_lock, is_job_runnable, load_jobs, parse_schedule, save_jobs
+from cron.jobs import (
+    _apply_schedule_update,
+    _jobs_lock,
+    is_job_runnable,
+    load_jobs,
+    parse_schedule,
+    save_jobs,
+)
 from cron.quota_hold import clear_state as _clear_quota_hold
 from clawk_time import now as _clawk_now
 
-JOB_DEFINITION_FIELDS = frozenset({
-    "name", "prompt", "skills", "skill", "model", "provider", "base_url",
-    "script", "no_agent", "monitor_script", "monitor_url", "context_from",
-    "schedule", "schedule_display", "deliver", "origin", "enabled_toolsets",
-    "workdir", "attach_to_session", "reasoning_effort", "failure_deliver",
-})
+JOB_DEFINITION_FIELDS = frozenset(
+    {
+        "name",
+        "prompt",
+        "skills",
+        "skill",
+        "model",
+        "provider",
+        "base_url",
+        "script",
+        "no_agent",
+        "monitor_script",
+        "monitor_url",
+        "context_from",
+        "schedule",
+        "schedule_display",
+        "deliver",
+        "origin",
+        "enabled_toolsets",
+        "workdir",
+        "attach_to_session",
+        "reasoning_effort",
+        "failure_deliver",
+    }
+)
 
 
-def merge_job_definition(local: dict[str, Any], authored: dict[str, Any]) -> dict[str, Any]:
+def merge_job_definition(
+    local: dict[str, Any], authored: dict[str, Any]
+) -> dict[str, Any]:
     """Refresh authored fields while preserving this store's scheduler-owned state.
 
     Raises ValueError when the authored schedule cannot be scheduled (unparseable string,
     past one-shot for a live job)."""
-    merged = {key: value for key, value in local.items() if key not in JOB_DEFINITION_FIELDS}
-    merged.update((key, authored[key]) for key in JOB_DEFINITION_FIELDS if key in authored)
+    merged = {
+        key: value for key, value in local.items() if key not in JOB_DEFINITION_FIELDS
+    }
+    merged.update(
+        (key, authored[key]) for key in JOB_DEFINITION_FIELDS if key in authored
+    )
     merged["repeat"] = {
         "completed": (local.get("repeat") or {}).get("completed", 0),
         "times": (authored.get("repeat") or {}).get("times"),
@@ -39,13 +72,17 @@ def merge_job_definition(local: dict[str, Any], authored: dict[str, Any]) -> dic
             updates = {"schedule": merged["schedule"]}
             if "schedule_display" in authored:
                 updates["schedule_display"] = authored["schedule_display"]
-            _apply_schedule_update(merged, updates, str(merged.get("id") or "imported job"))
+            _apply_schedule_update(
+                merged, updates, str(merged.get("id") or "imported job")
+            )
         else:
             merged["next_run_at"] = None
     return merged
 
 
-def import_job_definitions(shipped: dict[str, dict[str, Any]], *, paused_reason: str) -> None:
+def import_job_definitions(
+    shipped: dict[str, dict[str, Any]], *, paused_reason: str
+) -> None:
     """Merge *shipped* (job id -> authored record) into the active store under its lock.
 
     Unknown ids arrive with the marker set ``create_job(paused=True)`` writes; known ids keep
@@ -65,8 +102,13 @@ def import_job_definitions(shipped: dict[str, dict[str, Any]], *, paused_reason:
         merged = []
         for local in load_jobs():
             incoming = pending.pop(local.get("id"), None)
-            merged.append(local if incoming is None else _merge_or_name(local, incoming))
-        merged.extend(_merge_or_name({"id": job_id, **seed}, incoming) for job_id, incoming in pending.items())
+            merged.append(
+                local if incoming is None else _merge_or_name(local, incoming)
+            )
+        merged.extend(
+            _merge_or_name({"id": job_id, **seed}, incoming)
+            for job_id, incoming in pending.items()
+        )
         save_jobs(merged)
 
 
@@ -74,4 +116,6 @@ def _merge_or_name(local: dict[str, Any], authored: dict[str, Any]) -> dict[str,
     try:
         return merge_job_definition(local, authored)
     except ValueError as exc:
-        raise ValueError(f"cron job {authored.get('name') or local.get('id')!r}: {exc}") from exc
+        raise ValueError(
+            f"cron job {authored.get('name') or local.get('id')!r}: {exc}"
+        ) from exc

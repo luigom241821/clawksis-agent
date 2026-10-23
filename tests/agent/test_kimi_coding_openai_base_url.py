@@ -7,6 +7,7 @@ def _fake_openai_factory(captured_kwargs):
     def fake_openai(**kwargs):
         captured_kwargs.update(kwargs)
         return MagicMock()
+
     return fake_openai
 
 
@@ -19,14 +20,18 @@ def test_create_openai_client_normalizes_kimi_coding_base_url(monkeypatch):
     mock_agent._client_log_context.return_value = "test_context"
 
     captured_kwargs = {}
-    monkeypatch.setattr("agent.process_bootstrap.OpenAI", _fake_openai_factory(captured_kwargs))
+    monkeypatch.setattr(
+        "agent.process_bootstrap.OpenAI", _fake_openai_factory(captured_kwargs)
+    )
 
     client_kwargs = {
         "api_key": "sk-kimi-test12345",
         "base_url": "https://api.kimi.com/coding",
     }
 
-    client = create_openai_client(mock_agent, client_kwargs, reason="test", shared=False)
+    client = create_openai_client(
+        mock_agent, client_kwargs, reason="test", shared=False
+    )
     assert client is not None
     assert captured_kwargs.get("base_url") == "https://api.kimi.com/coding/v1"
 
@@ -39,7 +44,9 @@ def test_create_openai_client_preserves_already_suffixed_kimi_url(monkeypatch):
     mock_agent._client_log_context.return_value = "test_context"
 
     captured_kwargs = {}
-    monkeypatch.setattr("agent.process_bootstrap.OpenAI", _fake_openai_factory(captured_kwargs))
+    monkeypatch.setattr(
+        "agent.process_bootstrap.OpenAI", _fake_openai_factory(captured_kwargs)
+    )
 
     client_kwargs = {
         "api_key": "sk-kimi-test12345",

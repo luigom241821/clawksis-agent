@@ -133,7 +133,6 @@ class TestParseLoopArgs:
         p = parse_loop_args("2m poll --times zero")
         assert p["error"] is not None
 
-
     def test_start_now_word_in_prompt_kept_verbatim(self):
         from clawk_cli.loops import parse_loop_args
 
@@ -189,7 +188,10 @@ class TestResponseSignalsComplete:
     def test_marker_mid_sentence_does_not_count(self):
         from clawk_cli.loops import response_signals_complete
 
-        assert response_signals_complete("I will emit LOOP_COMPLETE when finished") is False
+        assert (
+            response_signals_complete("I will emit LOOP_COMPLETE when finished")
+            is False
+        )
 
     def test_no_marker(self):
         from clawk_cli.loops import response_signals_complete
@@ -417,7 +419,10 @@ class TestTickLifecycle:
         state = mgr.set("poll", interval_seconds=300, until="the suite is green")
         state.next_due_at = time.time() - 1
         mgr.fire_tick()
-        with patch("clawk_cli.goals.judge_goal", return_value=("done", "suite green", False, None, False)):
+        with patch(
+            "clawk_cli.goals.judge_goal",
+            return_value=("done", "suite green", False, None, False),
+        ):
             decision = mgr.complete_tick("All 500 tests passed.")
         assert decision["stopped"] is True
         assert decision["status"] == "done"
@@ -429,7 +434,10 @@ class TestTickLifecycle:
         state = mgr.set("poll", interval_seconds=300, until="the suite is green")
         state.next_due_at = time.time() - 1
         mgr.fire_tick()
-        with patch("clawk_cli.goals.judge_goal", return_value=("continue", "3 failures", False, None, False)):
+        with patch(
+            "clawk_cli.goals.judge_goal",
+            return_value=("continue", "3 failures", False, None, False),
+        ):
             decision = mgr.complete_tick("3 tests still failing")
         assert decision["stopped"] is False
 
@@ -438,11 +446,18 @@ class TestTickLifecycle:
         from clawk_cli.loops import LoopManager
 
         mgr = LoopManager(session_id="t11b")
-        state = mgr.set("poll", interval_seconds=300, until="the deleted repo's CI is green")
+        state = mgr.set(
+            "poll", interval_seconds=300, until="the deleted repo's CI is green"
+        )
         state.next_due_at = time.time() - 1
         mgr.fire_tick()
-        with patch("clawk_cli.goals.judge_goal", return_value=("blocked", "repo no longer exists", False, None, False)):
-            decision = mgr.complete_tick("The repository was deleted; there is no CI to watch.")
+        with patch(
+            "clawk_cli.goals.judge_goal",
+            return_value=("blocked", "repo no longer exists", False, None, False),
+        ):
+            decision = mgr.complete_tick(
+                "The repository was deleted; there is no CI to watch."
+            )
         assert decision["stopped"] is True
         assert decision["status"] == "paused"
         assert "unachievable" in decision["message"]
@@ -543,7 +558,6 @@ class TestControls:
         assert mgr.state.awaiting_response is False
 
 
-
 # ──────────────────────────────────────────────────────────────────────
 # /goal mixing
 # ──────────────────────────────────────────────────────────────────────
@@ -587,7 +601,6 @@ class TestGoalMixing:
 
 
 class TestDispatchLoopCommand:
-
     def test_create_self_paced(self, clawk_home):
         from clawk_cli.loops import LoopManager, dispatch_loop_command
 
@@ -632,7 +645,6 @@ class TestDispatchLoopCommand:
         dispatch_loop_command(mgr, "5m ping", route=route)
         assert load_loop("d5").route == route
 
-
     def test_bad_times_error(self, clawk_home):
         from clawk_cli.loops import LoopManager, dispatch_loop_command
 
@@ -645,8 +657,6 @@ class TestDispatchLoopCommand:
 # ──────────────────────────────────────────────────────────────────────
 # Command registry
 # ──────────────────────────────────────────────────────────────────────
-
-
 
 
 # ──────────────────────────────────────────────────────────────────────

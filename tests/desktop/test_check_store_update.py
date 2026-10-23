@@ -1,4 +1,5 @@
 """Store update contracts use the actual API's sequence and result shapes."""
+
 from __future__ import annotations
 
 import importlib
@@ -57,10 +58,18 @@ def checker():
 
 @pytest.mark.parametrize("mode", ["check", "download", "install"])
 @pytest.mark.parametrize("state", [State.COMPLETED, State.CANCELED, State.DOWNLOADING])
-def test_store_operation_passes_update_sequence_and_requires_completed(checker, mode, state):
-    updates = [SimpleNamespace(package=SimpleNamespace(id=SimpleNamespace(full_name="package-v2")))]
+def test_store_operation_passes_update_sequence_and_requires_completed(
+    checker, mode, state
+):
+    updates = [
+        SimpleNamespace(
+            package=SimpleNamespace(id=SimpleNamespace(full_name="package-v2"))
+        )
+    ]
     context = Context(updates, state)
-    result = checker.perform(context, mode, lambda operation: operation.result, State.COMPLETED)
+    result = checker.perform(
+        context, mode, lambda operation: operation.result, State.COMPLETED
+    )
     assert context.calls == (["check"] if mode == "check" else ["check", mode])
     assert result["available"] is True
     assert result["packages"] == ["package-v2"]
@@ -68,8 +77,12 @@ def test_store_operation_passes_update_sequence_and_requires_completed(checker, 
         assert result["ok"] is (state == State.COMPLETED)
         assert ("error" in result) is (state != State.COMPLETED)
     empty = Context([])
-    assert checker.perform(empty, mode, lambda operation: operation.result, State.COMPLETED) == {
-        "available": False, "packages": [], "ok": True,
+    assert checker.perform(
+        empty, mode, lambda operation: operation.result, State.COMPLETED
+    ) == {
+        "available": False,
+        "packages": [],
+        "ok": True,
     }
     assert empty.calls == ["check"]
 
@@ -96,8 +109,14 @@ def test_native_projection_has_required_update_contract(tmp_path):
         "assert callable(win32gui.PumpWaitingMessages); "
         "del c; uninit_apartment(); print('store projection ready')"
     )
-    result = subprocess.run([sys.executable, "-I", "-c", code], cwd=tmp_path,
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "store projection ready"
 
@@ -105,10 +124,17 @@ def test_native_projection_has_required_update_contract(tmp_path):
 def test_entry_reports_json_when_the_projection_is_unavailable(tmp_path):
     # The desktop spawns `python -P -m <module>` and parses stdout as JSON; a
     # failure inside the checker must still reach it as JSON, never as nothing.
-    (tmp_path / "winrt.py").write_text("raise ImportError('fixture unavailable')", encoding="utf-8")
-    child = subprocess.run([sys.executable, "-P", "-m", MODULE, "--mode", "check"], capture_output=True,
-                           text=True, timeout=30,
-                           env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])}, check=False)
+    (tmp_path / "winrt.py").write_text(
+        "raise ImportError('fixture unavailable')", encoding="utf-8"
+    )
+    child = subprocess.run(
+        [sys.executable, "-P", "-m", MODULE, "--mode", "check"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])},
+        check=False,
+    )
     assert child.returncode == 1, child.stderr
     payload = json.loads(child.stdout)
     assert payload["ok"] is False and payload["available"] is None

@@ -24,12 +24,11 @@ class TestBehaviourIsPreserved:
     """The reword must not cost the prompt its meaning — it still has to tell
     the model to record workflows as skills and to patch stale ones."""
 
-
     def test_real_newlines_preserved(self):
         """The block must contain REAL newlines (not escaped backslash-n
         literals) so the safety-rule heading renders as a heading."""
         assert chr(10) in SKILLS_GUIDANCE
-        assert (chr(92) + 'n') not in SKILLS_GUIDANCE
+        assert (chr(92) + "n") not in SKILLS_GUIDANCE
 
 
 class TestGuidanceReachesTheSystemPrompt:
@@ -40,7 +39,9 @@ class TestGuidanceReachesTheSystemPrompt:
 
         from agent import system_prompt
 
-        agent = SimpleNamespace(valid_tool_names={"skill_manage"}, _kanban_worker_guidance="")
+        agent = SimpleNamespace(
+            valid_tool_names={"skill_manage"}, _kanban_worker_guidance=""
+        )
         assert SKILLS_GUIDANCE in (system_prompt._tool_guidance_block(agent) or "")
         agent.valid_tool_names = {"terminal"}
         assert SKILLS_GUIDANCE not in (system_prompt._tool_guidance_block(agent) or "")

@@ -101,7 +101,9 @@ def _post(endpoint: str, payload: bytes, *, timeout: int) -> _Response:
         body = gzip.compress(payload, mtime=0)
         headers["Content-Encoding"] = "gzip"
 
-    request = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
+    request = urllib.request.Request(
+        endpoint, data=body, headers=headers, method="POST"
+    )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return _Response(
@@ -144,7 +146,8 @@ def reconcile_send_consent(
     ).fetchone()
     if previous_obs is not None:
         ceiling = _isoformat(
-            _parse_stamp(str(previous_obs[0])) + timedelta(seconds=MAX_OBS_ADVANCE_SECONDS)
+            _parse_stamp(str(previous_obs[0]))
+            + timedelta(seconds=MAX_OBS_ADVANCE_SECONDS)
         )
         stamp = min(stamp, ceiling)
     connection.execute(
@@ -288,8 +291,11 @@ class SharedMetricsSender:
                 (_isoformat(lease_until), token, package_id),
             )
             return {
-                "package_id": package_id, "payload_json": str(row[1]), "derived": str(derived),
-                "claim_token": token, "skip": False,
+                "package_id": package_id,
+                "payload_json": str(row[1]),
+                "derived": str(derived),
+                "claim_token": token,
+                "skip": False,
             }
 
     @staticmethod
@@ -308,7 +314,9 @@ class SharedMetricsSender:
             reason = "unreadable payload"
         else:
             # Valid JSON is not enough: a top-level array/string/number parses cleanly.
-            install_id = payload.get("install_id") if isinstance(payload, dict) else None
+            install_id = (
+                payload.get("install_id") if isinstance(payload, dict) else None
+            )
             if not isinstance(payload, dict):
                 reason = f"payload is {type(payload).__name__}, expected object"
             elif not isinstance(install_id, str) or not install_id.strip():
@@ -317,7 +325,9 @@ class SharedMetricsSender:
                 reason = None
 
         if reason is not None:
-            logger.warning("Shared-metrics package %s cannot be sent (%s)", package_id, reason)
+            logger.warning(
+                "Shared-metrics package %s cannot be sent (%s)", package_id, reason
+            )
             connection.execute(
                 """
                 UPDATE package_outbox
@@ -395,7 +405,12 @@ class SharedMetricsSender:
             return False
 
     def _defer(
-        self, package_id: str, delay_seconds: int, reason: str, *, token: str | None = None
+        self,
+        package_id: str,
+        delay_seconds: int,
+        reason: str,
+        *,
+        token: str | None = None,
     ) -> None:
         # Clamp to >= 1s so a past deadline can never make the row instantly re-eligible.
         retry_at = self._now().timestamp() + max(1, int(delay_seconds))
@@ -426,18 +441,24 @@ class SharedMetricsSender:
             # reclaims. The ingest key is minute-prefixed: duplicates are distinct objects.
             if not self._renew_claim(package_id, token):
                 logger.info(
-                    "Shared-metrics claim on %s superseded or expired; yielding", package_id
+                    "Shared-metrics claim on %s superseded or expired; yielding",
+                    package_id,
                 )
                 return "deferred"
             try:
-                response = self._post(self._endpoint, body, timeout=REQUEST_TIMEOUT_SECONDS)
+                response = self._post(
+                    self._endpoint, body, timeout=REQUEST_TIMEOUT_SECONDS
+                )
             except Exception as exc:  # transport failure: offline, DNS, TLS
                 reason = f"{type(exc).__name__}: {exc}"
             else:
                 if response.status == 202:
                     self._mark(
-                        package_id, token=token, send_state="sent",
-                        sent_at=_isoformat(self._now()), last_error=None,
+                        package_id,
+                        token=token,
+                        send_state="sent",
+                        sent_at=_isoformat(self._now()),
+                        last_error=None,
                     )
                     return "sent"
                 if response.status in _PERMANENT_STATUSES:
@@ -447,13 +468,17 @@ class SharedMetricsSender:
                         response.status,
                     )
                     self._mark(
-                        package_id, token=token, send_state="rejected",
+                        package_id,
+                        token=token,
+                        send_state="rejected",
                         last_error=f"HTTP {response.status}: {response.body[:400]}",
                     )
                     return "rejected"
                 if response.status == 429:
                     return defer(
-                        _retry_after_seconds(response.retry_after, _FAILURE_BACKOFF_SECONDS),
+                        _retry_after_seconds(
+                            response.retry_after, _FAILURE_BACKOFF_SECONDS
+                        ),
                         "rate limited",
                     )
                 # 5xx and anything unexpected: retryable.
@@ -467,7 +492,9 @@ class SharedMetricsSender:
     @staticmethod
     def _backoff(attempt: int) -> float:
         """1s, 5s, 25s with full jitter."""
-        return random.uniform(0, _BACKOFF_BASE_SECONDS * (_BACKOFF_FACTOR ** (attempt - 1)))
+        return random.uniform(
+            0, _BACKOFF_BASE_SECONDS * (_BACKOFF_FACTOR ** (attempt - 1))
+        )
 
     # -- entry point -------------------------------------------------------
 
@@ -487,7 +514,9 @@ class SharedMetricsSender:
             try:
                 package = self._claim_next(self._now(), seen)
             except Exception:
-                logger.warning("Unable to select shared-metrics packages", exc_info=True)
+                logger.warning(
+                    "Unable to select shared-metrics packages", exc_info=True
+                )
                 break
             if package is None:
                 break
@@ -500,7 +529,9 @@ class SharedMetricsSender:
                 try:
                     result = self._send_one(package)
                 except Exception:
-                    logger.warning("Unable to send shared-metrics package", exc_info=True)
+                    logger.warning(
+                        "Unable to send shared-metrics package", exc_info=True
+                    )
                     result = "deferred"
             setattr(outcome, result, getattr(outcome, result) + 1)
         return outcome
@@ -522,5 +553,7 @@ class SharedMetricsSender:
             return bool(self._consent_check())
         except Exception:
             # Fail CLOSED: if consent cannot be established, do not transmit.
-            logger.warning("Unable to confirm shared-metrics send consent; stopping", exc_info=True)
+            logger.warning(
+                "Unable to confirm shared-metrics send consent; stopping", exc_info=True
+            )
             return False

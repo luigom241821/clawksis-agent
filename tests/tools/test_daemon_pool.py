@@ -34,7 +34,9 @@ def test_initializer_runs_on_each_worker_before_tasks():
         ready.wait()
         return local.value, threading.current_thread()
 
-    with DaemonThreadPoolExecutor(max_workers=2, initializer=initialize, initargs=(marker,)) as pool:
+    with DaemonThreadPoolExecutor(
+        max_workers=2, initializer=initialize, initargs=(marker,)
+    ) as pool:
         futures = [pool.submit(task) for _ in range(2)]
         results = [future.result(timeout=10) for future in futures]
 
@@ -134,7 +136,9 @@ def test_worker_gets_context_when_executor_builds_worker_contexts(monkeypatch):
     ``(executor_ref, ctx, work_queue)`` — reading the legacy fields raised
     ``AttributeError`` on every pool spawn."""
     pool = DaemonThreadPoolExecutor(max_workers=1)
-    monkeypatch.setattr(pool, "_create_worker_context", lambda: "worker-context", raising=False)
+    monkeypatch.setattr(
+        pool, "_create_worker_context", lambda: "worker-context", raising=False
+    )
     monkeypatch.delattr(pool, "_initializer", raising=False)
     monkeypatch.delattr(pool, "_initargs", raising=False)
     seen = _capture_worker_args(monkeypatch, pool)

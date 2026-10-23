@@ -38,7 +38,9 @@ def test_gateway_housekeeping_drains_cron_delivery_with_live_adapters(monkeypatc
     assert calls == [(adapters, loop)]
 
 
-def test_gateway_housekeeping_drains_cron_delivery_without_connected_adapters(monkeypatch):
+def test_gateway_housekeeping_drains_cron_delivery_without_connected_adapters(
+    monkeypatch,
+):
     adapters = {}
     loop = object()
     calls = []
@@ -85,10 +87,15 @@ def test_multiplex_housekeeping_scopes_primary_and_drains_each_profile(
 
     monkeypatch.setattr(gateway_run, "_profile_runtime_scope", fake_scope)
     from gateway import run_profile_reconcile
-    monkeypatch.setattr(run_profile_reconcile, "_mcp_config_reconciler", lambda runner: lambda: None)
+
+    monkeypatch.setattr(
+        run_profile_reconcile, "_mcp_config_reconciler", lambda runner: lambda: None
+    )
     # The per-tick plugin update chore also binds every served profile's scope; this test
     # asserts the DRAIN's scope sequence, so keep the chore wrapper out of the recording.
-    monkeypatch.setattr(run_profile_reconcile, "_for_each_served_profile", lambda runner, body: None)
+    monkeypatch.setattr(
+        run_profile_reconcile, "_for_each_served_profile", lambda runner, body: None
+    )
     monkeypatch.setattr(
         scheduler,
         "drain_delivery_queue",
@@ -141,7 +148,9 @@ def test_multiplex_housekeeping_uses_primary_routes_for_credentialless_satellite
 
     monkeypatch.setattr(gateway_run, "_profile_runtime_scope", fake_scope)
     monkeypatch.setattr(sched_preflight, "SharedRouteAdapters", FakeSharedRouteAdapters)
-    monkeypatch.setattr(sched_preflight, "_primary_profile_routes_for_current_home",
+    monkeypatch.setattr(
+        sched_preflight,
+        "_primary_profile_routes_for_current_home",
         lambda: ["route-to-secondary"],
     )
     monkeypatch.setattr(
@@ -150,9 +159,7 @@ def test_multiplex_housekeeping_uses_primary_routes_for_credentialless_satellite
         lambda adapters, _loop: calls.append(("drain", adapters)),
     )
 
-    gateway_run._drain_restart_safe_cron_deliveries(
-        root_adapters, object(), runner
-    )
+    gateway_run._drain_restart_safe_cron_deliveries(root_adapters, object(), runner)
 
     assert calls == [
         ("drain", root_adapters),
@@ -162,7 +169,8 @@ def test_multiplex_housekeeping_uses_primary_routes_for_credentialless_satellite
 
 
 def test_primary_drain_delivers_credentialless_satellite_queue_row_through_primary_adapter(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Regression for #115656 (the chain #101113's tests skipped): an external restart-safe worker
     durably queues a routed satellite's result; the PRIMARY gateway PID claims the row under the
@@ -183,13 +191,29 @@ def test_primary_drain_delivers_credentialless_satellite_queue_row_through_prima
     root = tmp_path / "root"
     satellite_home = root / "profiles" / "satellite"
     (satellite_home / "cron").mkdir(parents=True)
-    (root / "config.yaml").write_text(yaml.safe_dump({
-        "gateway": {"multiplex_profiles": True, "profile_routes": [
-            {"platform": "discord", "guild_id": "G1", "chat_id": "C1", "profile": "satellite"}]},
-    }), encoding="utf-8")
+    (root / "config.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "gateway": {
+                    "multiplex_profiles": True,
+                    "profile_routes": [
+                        {
+                            "platform": "discord",
+                            "guild_id": "G1",
+                            "chat_id": "C1",
+                            "profile": "satellite",
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     # The satellite names its home channel but holds no token: block present, ``enabled`` False.
     (satellite_home / "config.yaml").write_text(
-        yaml.safe_dump({"platforms": {"discord": {"home_channel": "C1"}}}), encoding="utf-8")
+        yaml.safe_dump({"platforms": {"discord": {"home_channel": "C1"}}}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     monkeypatch.delenv("DISCORD_BOT_TOKEN", raising=False)
 
@@ -207,18 +231,32 @@ def test_primary_drain_delivers_credentialless_satellite_queue_row_through_prima
     # The external worker: no adapters, queues under the OWNING (satellite) home.
     token = set_clawk_home_override(str(satellite_home))
     try:
-        delivery_queue.enqueue("exec-1", {"id": "job1", "name": "probe", "deliver": "discord:C1"}, "hello")
+        delivery_queue.enqueue(
+            "exec-1", {"id": "job1", "name": "probe", "deliver": "discord:C1"}, "hello"
+        )
     finally:
         reset_clawk_home_override(token)
 
     loop = asyncio.new_event_loop()
     threading.Thread(target=loop.run_forever, daemon=True).start()
-    runner = SimpleNamespace(config=SimpleNamespace(multiplex_profiles=True), _profile_adapters={"satellite": {}})
-    monkeypatch.setattr(gateway_run, "_handoff_watch_scopes", lambda _r: [("satellite", satellite_home)])
+    runner = SimpleNamespace(
+        config=SimpleNamespace(multiplex_profiles=True),
+        _profile_adapters={"satellite": {}},
+    )
+    monkeypatch.setattr(
+        gateway_run, "_handoff_watch_scopes", lambda _r: [("satellite", satellite_home)]
+    )
     try:
-        with patch("tools.send_message_tool._send_to_platform", _standalone), \
-             patch("cron.scheduler.load_config", return_value={"cron": {"wrap_response": False}}):
-            gateway_run._drain_restart_safe_cron_deliveries({Platform.DISCORD: PrimaryDiscord()}, loop, runner)
+        with (
+            patch("tools.send_message_tool._send_to_platform", _standalone),
+            patch(
+                "cron.scheduler.load_config",
+                return_value={"cron": {"wrap_response": False}},
+            ),
+        ):
+            gateway_run._drain_restart_safe_cron_deliveries(
+                {Platform.DISCORD: PrimaryDiscord()}, loop, runner
+            )
     finally:
         loop.call_soon_threadsafe(loop.stop)
 
@@ -231,7 +269,9 @@ def test_primary_drain_delivers_credentialless_satellite_queue_row_through_prima
     assert sent == ["C1"] and standalone == []
 
 
-def test_a_queued_worker_delivery_is_drained_before_the_next_housekeeping_tick(tmp_path, monkeypatch):
+def test_a_queued_worker_delivery_is_drained_before_the_next_housekeeping_tick(
+    tmp_path, monkeypatch
+):
     """Regression for #117307: the worker's send waited for the 60 s tick. With the queue
     file watched between ticks it is drained within seconds of the enqueue."""
     import threading
@@ -251,14 +291,18 @@ def test_a_queued_worker_delivery_is_drained_before_the_next_housekeeping_tick(t
     stop = threading.Event()
     thread = threading.Thread(
         target=gateway_run._start_gateway_housekeeping,
-        args=(stop,), kwargs={"adapters": {"slack": object()}, "loop": object(), "interval": 60},
-        daemon=True)
+        args=(stop,),
+        kwargs={"adapters": {"slack": object()}, "loop": object(), "interval": 60},
+        daemon=True,
+    )
     thread.start()
     try:
         assert drained.wait(5.0), "the tick's own drain did not run"
         drained.clear()
         queued_at = time.monotonic()
-        delivery_queue.enqueue("exec-117307", {"id": "job", "name": "reminder"}, "hello")
+        delivery_queue.enqueue(
+            "exec-117307", {"id": "job", "name": "reminder"}, "hello"
+        )
         assert drained.wait(5.0), "the queued delivery waited for the next tick"
         assert drains[-1] - queued_at < 5.0
     finally:
@@ -277,7 +321,10 @@ def test_the_watch_settles_after_the_drain_wrote_its_outcome(tmp_path, monkeypat
     passes = []
     watch = DeliveryQueueWatch(
         lambda: [None],
-        lambda: passes.append(delivery_queue.drain(lambda job, content, for_failure: None)))
+        lambda: passes.append(
+            delivery_queue.drain(lambda job, content, for_failure: None)
+        ),
+    )
     assert watch.changed() is False, "no queue file, nothing to wake on"
 
     delivery_queue.enqueue("exec-1", {"id": "job"}, "hello")

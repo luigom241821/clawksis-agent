@@ -39,7 +39,10 @@ def test_no_focus_prompt_is_byte_identical():
 def test_focus_is_appended_to_prompt():
     agent = _bare_agent()
     _target, prompt = spawn_background_review_thread(
-        agent, [], review_memory=True, review_skills=True,
+        agent,
+        [],
+        review_memory=True,
+        review_skills=True,
         focus="save the deploy workflow as a skill",
     )
     assert prompt.startswith(_COMBINED_REVIEW_PROMPT)
@@ -49,7 +52,11 @@ def test_focus_is_appended_to_prompt():
 def test_focus_works_with_memory_only_prompt():
     agent = _bare_agent()
     _target, prompt = spawn_background_review_thread(
-        agent, [], review_memory=True, review_skills=False, focus="remember my timezone",
+        agent,
+        [],
+        review_memory=True,
+        review_skills=False,
+        focus="remember my timezone",
     )
     assert prompt.startswith(_MEMORY_REVIEW_PROMPT)
     assert "remember my timezone" in prompt

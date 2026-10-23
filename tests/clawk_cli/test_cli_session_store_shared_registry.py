@@ -14,8 +14,13 @@ def test_cli_session_store_is_the_gateway_store_and_opens_no_writer(monkeypatch)
     from clawk_cli.gateway_session_store import GatewaySessionStore
 
     constructed = []
-    monkeypatch.setattr(clawk_state_registry, "_open_session_db", lambda path: constructed.append(path))
+    monkeypatch.setattr(
+        clawk_state_registry, "_open_session_db", lambda path: constructed.append(path)
+    )
     cli = SimpleNamespace()
     ClawksisCLI._init_session_store(cli)
-    assert isinstance(cli._session_db, GatewaySessionStore) and not cli._session_db_unavailable
+    assert (
+        isinstance(cli._session_db, GatewaySessionStore)
+        and not cli._session_db_unavailable
+    )
     assert constructed == []

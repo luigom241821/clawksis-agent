@@ -33,7 +33,7 @@ class StreamThinkFilterMixin:
         last_nl = preceding.rfind("\n")
         if last_nl == -1:
             return acc_boundary and preceding.strip() == ""
-        return preceding[last_nl + 1:].strip() == ""
+        return preceding[last_nl + 1 :].strip() == ""
 
     def _earliest_open_tag(self, buf: str, lower_buf: str) -> tuple[int, int]:
         """(index, length) of the earliest block-boundary opening tag, or (-1, 0)."""
@@ -62,10 +62,12 @@ class StreamThinkFilterMixin:
             # Case-insensitive: models emit <Think>, <THINKING>, …
             lower_buf = buf.lower()
             if self._in_think_block:
-                best_idx, best_len = _Scrubber._find_first_tag(buf, self._CLOSE_THINK_TAGS)
+                best_idx, best_len = _Scrubber._find_first_tag(
+                    buf, self._CLOSE_THINK_TAGS
+                )
                 if best_len:
                     self._in_think_block = False
-                    buf = buf[best_idx + best_len:]
+                    buf = buf[best_idx + best_len :]
                 else:
                     # Hold a tail that could be a partial close tag; discard the rest.
                     max_tag = max(len(t) for t in self._CLOSE_THINK_TAGS)
@@ -76,10 +78,12 @@ class StreamThinkFilterMixin:
                 if best_len:
                     self._append_accumulated(buf[:best_idx])
                     self._in_think_block = True
-                    buf = buf[best_idx + best_len:]
+                    buf = buf[best_idx + best_len :]
                 else:
                     # Hold back a partial open tag at the tail.
-                    held_back = _Scrubber._max_partial_suffix(buf, self._OPEN_THINK_TAGS)
+                    held_back = _Scrubber._max_partial_suffix(
+                        buf, self._OPEN_THINK_TAGS
+                    )
                     if held_back:
                         self._append_accumulated(buf[:-held_back])
                         self._think_buffer = buf[-held_back:]

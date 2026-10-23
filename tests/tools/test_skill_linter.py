@@ -1,6 +1,5 @@
 """Tests for tools/skill_linter.py — the advisory SKILL.md convention linter."""
 
-
 from tools.skill_linter import (
     ERROR,
     WARNING,
@@ -44,9 +43,7 @@ def test_clean_skill_has_no_findings():
 
 def test_description_too_long_is_warning():
     long_desc = "x" * 80
-    content = CLEAN.replace(
-        "Search arXiv papers by keyword, author, or ID.", long_desc
-    )
+    content = CLEAN.replace("Search arXiv papers by keyword, author, or ID.", long_desc)
     findings = lint_content(content)
     assert "description-length" in _rules(findings)
     assert all(f.severity == WARNING for f in findings)
@@ -195,6 +192,7 @@ def test_incident_log_shape_flagged_and_rule_shape_not():
 
 def test_references_sprawl_flagged_above_cap(tmp_path):
     from tools.skill_linter import _MAX_REFERENCE_FILES
+
     skill_dir = tmp_path / "my-skill"
     refs = skill_dir / "references"
     refs.mkdir(parents=True)
@@ -211,6 +209,7 @@ def test_oversized_body_flagged_above_budget_and_not_below():
     # body has a soft budget. Threshold-relative on purpose: the number is a calibration, not a
     # contract. The finding names the size so the author sees how far over they are.
     from tools.skill_linter import _BODY_SOFT_BUDGET_CHARS
+
     filler = "- Prefer the native tool; the shell path loses the structured result.\n"
     over = CLEAN + filler * (_BODY_SOFT_BUDGET_CHARS // len(filler) + 1)
     under = CLEAN + filler * (_BODY_SOFT_BUDGET_CHARS // len(filler) // 2)

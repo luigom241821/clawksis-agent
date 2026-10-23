@@ -8,8 +8,8 @@ from agent.oneshot import (
     _truncate,
 )
 
-class TestRenderTemplate:
 
+class TestRenderTemplate:
     def test_commit_message_includes_diff_and_recent(self):
         instructions, user = render_template(
             "commit_message",
@@ -23,9 +23,12 @@ class TestRenderTemplate:
         # Passing the previous message must instruct the model not to repeat it,
         # so "regenerate" yields a different result even on greedy models.
         _, plain = render_template("commit_message", {"diff": "d"})
-        _, regen = render_template("commit_message", {"diff": "d", "avoid": "feat: prior"})
+        _, regen = render_template(
+            "commit_message", {"diff": "d", "avoid": "feat: prior"}
+        )
         assert "feat: prior" in regen
         assert "feat: prior" not in plain
+
 
 class TestRunOneshot:
     def _mock_response(self, content):
@@ -56,8 +59,8 @@ class TestRunOneshot:
         ):
             assert run_oneshot(instructions="x", user_input="y") == "fix: bug"
 
-class TestHelpers:
 
+class TestHelpers:
     def test_truncate_over_limit_marks_truncation(self):
         out = _truncate("x" * 200, 50)
         assert out.endswith("…(truncated)")

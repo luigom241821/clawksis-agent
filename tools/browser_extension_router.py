@@ -32,8 +32,11 @@ def _bound_identity() -> tuple[Optional[str], Optional[str], Optional[str]]:
 
     return tuple(  # type: ignore[return-value]
         get_session_env(key, "") or None
-        for key in ("CLAWK_SESSION_ID", "CLAWK_BROWSER_CONTROL_PRINCIPAL",
-                    "CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY")
+        for key in (
+            "CLAWK_SESSION_ID",
+            "CLAWK_BROWSER_CONTROL_PRINCIPAL",
+            "CLAWK_BROWSER_CONTROL_TRANSPORT_FAMILY",
+        )
     )
 
 
@@ -48,7 +51,10 @@ def extension_controller_available(action: str) -> bool:
     Runs during tool-schema assembly inside the request's session context;
     consults the process-local broker directly and fails closed on any gap."""
     try:
-        from gateway.browser_control_broker import browser_control_enabled, get_browser_control_broker
+        from gateway.browser_control_broker import (
+            browser_control_enabled,
+            get_browser_control_broker,
+        )
 
         if not browser_control_enabled():
             return False
@@ -56,17 +62,31 @@ def extension_controller_available(action: str) -> bool:
         if not all(identity):
             return False
         broker = get_browser_control_broker()
-        scope = broker.scope_for_session(session_id=session_id, principal_id=principal_id, transport_family=transport_family)
+        scope = broker.scope_for_session(
+            session_id=session_id,
+            principal_id=principal_id,
+            transport_family=transport_family,
+        )
         return scope is not None and broker.select(scope, action) is not None
     except Exception:
-        logger.debug("browser extension availability check failed for %s", action, exc_info=True)
+        logger.debug(
+            "browser extension availability check failed for %s", action, exc_info=True
+        )
         return False
 
 
 def route_browser_tool(
-    action: str, args: dict[str, Any], *, fallback: Callable[[], Any], broker: Any, enabled: bool,
-    session_id: Optional[str] = None, task_id: Optional[str] = None, principal_id: Optional[str] = None,
-    transport_family: Optional[str] = None, tool_call_id: Optional[str] = "",
+    action: str,
+    args: dict[str, Any],
+    *,
+    fallback: Callable[[], Any],
+    broker: Any,
+    enabled: bool,
+    session_id: Optional[str] = None,
+    task_id: Optional[str] = None,
+    principal_id: Optional[str] = None,
+    transport_family: Optional[str] = None,
+    tool_call_id: Optional[str] = "",
 ) -> Any:
     """Route one browser action through the extension-control broker.
 
@@ -75,10 +95,19 @@ def route_browser_tool(
     called exactly once when the feature is off or no server-bound identity
     exists; once a controller is selected its result/exception is final.
     """
-    if not enabled or not str(principal_id or "").strip() or not str(transport_family or "").strip():
+    if (
+        not enabled
+        or not str(principal_id or "").strip()
+        or not str(transport_family or "").strip()
+    ):
         return fallback()
 
-    identity = dict(session_id=session_id, task_id=task_id, principal_id=principal_id, transport_family=transport_family)
+    identity = dict(
+        session_id=session_id,
+        task_id=task_id,
+        principal_id=principal_id,
+        transport_family=transport_family,
+    )
     scope = broker.scope_for_session(**identity)
     if scope is None:
         # A stamped identity only becomes authoritative once a controller has
@@ -87,15 +116,21 @@ def route_browser_tool(
         lane_bound = getattr(broker, "lane_registered", None)
         if callable(lane_bound) and not lane_bound(**identity):
             return fallback()
-        raise _controller_unavailable(f"bound browser controller unavailable for {action}")
+        raise _controller_unavailable(
+            f"bound browser controller unavailable for {action}"
+        )
 
     if broker.select(scope, action) is None:
-        raise _controller_unavailable(f"bound browser controller cannot execute {action}")
+        raise _controller_unavailable(
+            f"bound browser controller cannot execute {action}"
+        )
 
     # Controller is authoritative: never retry the legacy backend. Registry
     # handlers must return a string; keep string results byte-identical and
     # serialize decoded JSON values at this boundary.
-    result = broker.dispatch(scope, action=action, arguments=args, tool_call_id=tool_call_id)
+    result = broker.dispatch(
+        scope, action=action, arguments=args, tool_call_id=tool_call_id
+    )
     return result if isinstance(result, str) else json.dumps(result, ensure_ascii=False)
 
 
@@ -110,16 +145,27 @@ def current_tool_call_id() -> str:
 
 
 def routed_browser_handler(
-    action: str, args: dict[str, Any], *, fallback: Callable[[], Any], task_id: Optional[str] = None,
-    session_id: Optional[str] = None, principal_id: Optional[str] = None,
-    transport_family: Optional[str] = None, tool_call_id: Optional[str] = None,
+    action: str,
+    args: dict[str, Any],
+    *,
+    fallback: Callable[[], Any],
+    task_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    principal_id: Optional[str] = None,
+    transport_family: Optional[str] = None,
+    tool_call_id: Optional[str] = None,
 ) -> Any:
     """Lazy registry-handler route wrapper for ``browser_*`` tools.
     Feature off (or gateway unimportable) ⇒ the legacy handler runs unchanged."""
     try:
-        from gateway.browser_control_broker import browser_control_enabled, get_browser_control_broker
+        from gateway.browser_control_broker import (
+            browser_control_enabled,
+            get_browser_control_broker,
+        )
     except Exception as exc:  # pragma: no cover - defensive, gateway always present
-        logger.debug("browser extension router unavailable (%s); using legacy backend", exc)
+        logger.debug(
+            "browser extension router unavailable (%s); using legacy backend", exc
+        )
         return fallback()
     if not browser_control_enabled():
         return fallback()
@@ -130,8 +176,14 @@ def routed_browser_handler(
         env_session = env_principal = env_transport = None
 
     return route_browser_tool(
-        action, args, fallback=fallback, broker=get_browser_control_broker(), enabled=True,
-        session_id=session_id or env_session, task_id=task_id, principal_id=principal_id or env_principal,
+        action,
+        args,
+        fallback=fallback,
+        broker=get_browser_control_broker(),
+        enabled=True,
+        session_id=session_id or env_session,
+        task_id=task_id,
+        principal_id=principal_id or env_principal,
         transport_family=transport_family or env_transport,
         tool_call_id=current_tool_call_id() if tool_call_id is None else tool_call_id,
     )

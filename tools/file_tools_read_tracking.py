@@ -52,10 +52,17 @@ _NOT_FOUND_TTL_SECONDS = 60.0  # a path that didn't exist may be created soon
 def _task_data(task_id: str) -> dict:
     """Get-or-create the tracker entry for *task_id*, back-filling missing containers
     (search_tool / tests create partial entries). Lock must be held."""
-    task_data = _read_tracker.setdefault(task_id, {
-        "last_key": None, "consecutive": 0, "read_history": set()})
-    for key in ("dedup", "dedup_hits", "read_timestamps", "read_coverage", "full_write_baselines",
-                "blind_patches"):
+    task_data = _read_tracker.setdefault(
+        task_id, {"last_key": None, "consecutive": 0, "read_history": set()}
+    )
+    for key in (
+        "dedup",
+        "dedup_hits",
+        "read_timestamps",
+        "read_coverage",
+        "full_write_baselines",
+        "blind_patches",
+    ):
         task_data.setdefault(key, {})
     task_data.setdefault("dedup_generation_reads", set())
     return task_data
@@ -94,7 +101,8 @@ def _cap_read_tracker_data(task_data: dict) -> None:
         ("read_coverage", _READ_TIMESTAMPS_CAP),
         ("full_write_baselines", _FULL_WRITE_BASELINES_CAP),
         ("blind_patches", _FULL_WRITE_BASELINES_CAP),
-        ("not_found", _NOT_FOUND_CAP)):
+        ("not_found", _NOT_FOUND_CAP),
+    ):
         container = task_data.get(key)
         if container is not None and len(container) > cap:
             _evict_oldest(container, cap)
@@ -123,7 +131,11 @@ def _check_not_found_cache(op: str, resolved_str: str, task_id: str) -> str | No
     """
     with _read_tracker_lock:
         task_data = _read_tracker.get(task_id)
-        entry = (task_data.get("not_found") or {}).get((op, resolved_str)) if task_data else None
+        entry = (
+            (task_data.get("not_found") or {}).get((op, resolved_str))
+            if task_data
+            else None
+        )
         if entry is None:
             return None
         ts, cached_json = entry
@@ -140,11 +152,16 @@ def _check_not_found_cache(op: str, resolved_str: str, task_id: str) -> str | No
     return cached_json
 
 
-def _record_not_found(op: str, resolved_str: str, task_id: str, error_json: str) -> None:
+def _record_not_found(
+    op: str, resolved_str: str, task_id: str, error_json: str
+) -> None:
     """Cache a not-found error so the next *op* call for *resolved_str* skips I/O."""
     with _read_tracker_lock:
         task_data = _task_data(task_id)
-        task_data.setdefault("not_found", {})[(op, resolved_str)] = (time.monotonic(), error_json)
+        task_data.setdefault("not_found", {})[(op, resolved_str)] = (
+            time.monotonic(),
+            error_json,
+        )
         _cap_read_tracker_data(task_data)
 
 
@@ -178,10 +195,14 @@ def reset_file_dedup(task_id: str | None = None):
             if "dedup_hits" in task_data:
                 task_data["dedup_hits"].clear()
             task_data.setdefault("dedup_generation_reads", set()).clear()
-        candidates = [(task_data, dict(task_data.get("full_write_baselines", {})))
-                      for task_data in targets]
+        candidates = [
+            (task_data, dict(task_data.get("full_write_baselines", {})))
+            for task_data in targets
+        ]
     for task_data, baselines in candidates:
-        changed = {p for p, version in baselines.items() if _file_metadata(p) != version[:-1]}
+        changed = {
+            p for p, version in baselines.items() if _file_metadata(p) != version[:-1]
+        }
         if changed:
             with _read_tracker_lock:
                 for p in changed:
@@ -259,7 +280,10 @@ def _file_version(resolved: str) -> tuple | None:
     try:
         if not stat.S_ISREG(os.stat(resolved).st_mode):
             return None
-        fd = os.open(resolved, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
+        fd = os.open(
+            resolved,
+            os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0),
+        )
         with os.fdopen(fd, "rb") as stream:
             before = os.fstat(stream.fileno())
             if not stat.S_ISREG(before.st_mode):
@@ -275,12 +299,16 @@ def _file_version(resolved: str) -> tuple | None:
         return None
 
 
-def _mark_full_write_baseline(resolved: str, task_id: str, expected_sha256: str | None = None) -> None:
+def _mark_full_write_baseline(
+    resolved: str, task_id: str, expected_sha256: str | None = None
+) -> None:
     """Record that *task_id* saw the whole current content of *resolved* (full
     unredacted read_file, or its own successful write_file), so a later
     write_file may replace the file. Acquires the lock itself."""
     version = _file_version(resolved)
-    if version is None or (expected_sha256 is not None and version[-1].hex() != expected_sha256):
+    if version is None or (
+        expected_sha256 is not None and version[-1].hex() != expected_sha256
+    ):
         return
     with _read_tracker_lock:
         task_data = _task_data(task_id)
@@ -300,7 +328,9 @@ def _known_full_content_sha256(resolved_paths, task_id: str) -> dict:
     """``{resolved: sha256 hex}`` for each path whose recorded full-write baseline still
     matches the bytes on disk. Call under the per-path locks, before a patch reads."""
     with _read_tracker_lock:
-        baselines = dict((_read_tracker.get(task_id) or {}).get("full_write_baselines", {}))
+        baselines = dict(
+            (_read_tracker.get(task_id) or {}).get("full_write_baselines", {})
+        )
     known = {}
     for resolved in {str(r) for r in resolved_paths if r}:
         baseline = baselines.get(resolved)
@@ -309,7 +339,9 @@ def _known_full_content_sha256(resolved_paths, task_id: str) -> dict:
     return known
 
 
-def _carry_full_write_baselines(task_id: str, known: dict, writes, path_to_resolved: dict) -> None:
+def _carry_full_write_baselines(
+    task_id: str, known: dict, writes, path_to_resolved: dict
+) -> None:
     """After this task's own successful patch: keep the whole-file baseline of each written
     path when the task knew the exact bytes the patch read (``known``, from
     ``_known_full_content_sha256``) or the patch created the file (read sha ``""``). Then
@@ -325,7 +357,9 @@ def _carry_full_write_baselines(task_id: str, known: dict, writes, path_to_resol
         resolved = lookup.get(path)
         if resolved is None:
             continue  # a backend-side path (sandbox, translated mount): no host baseline
-        vouched = read_sha == "" or (read_sha is not None and read_sha == known.get(resolved))
+        vouched = read_sha == "" or (
+            read_sha is not None and read_sha == known.get(resolved)
+        )
         known[resolved] = written_sha if vouched else None
         written[resolved] = written_sha
     for resolved, written_sha in written.items():
@@ -344,7 +378,9 @@ def _is_own_blind_patch(resolved: str, task_id: str) -> bool:
     """True when the bytes on disk are exactly what this task's own patch wrote without a
     full-content baseline (a blind patch, or one after a partial view)."""
     with _read_tracker_lock:
-        written_sha = ((_read_tracker.get(task_id) or {}).get("blind_patches") or {}).get(str(resolved))
+        written_sha = (
+            (_read_tracker.get(task_id) or {}).get("blind_patches") or {}
+        ).get(str(resolved))
     if written_sha is None:
         return False
     version = _file_version(resolved)
@@ -354,8 +390,15 @@ def _is_own_blind_patch(resolved: str, task_id: str) -> bool:
 _READ_COVERAGE_RANGES_CAP = 256
 
 
-def _note_read_coverage(task_data: dict, resolved: str, version: tuple, start: int, end: int,
-                        total_lines, redacted: bool) -> tuple[bool, bool]:
+def _note_read_coverage(
+    task_data: dict,
+    resolved: str,
+    version: tuple,
+    start: int,
+    end: int,
+    total_lines,
+    redacted: bool,
+) -> tuple[bool, bool]:
     """Merge the page ``start..end`` into this task's coverage of *resolved* and return
     ``(complete, redacted_any)``: whether pages taken at this same *version* now reach from
     line 1 to *total_lines*, and whether any of them came back redacted. A file too large
@@ -364,8 +407,16 @@ def _note_read_coverage(task_data: dict, resolved: str, version: tuple, start: i
     coverage (the earlier pages describe a file that no longer exists). Lock must be held."""
     coverage = task_data.setdefault("read_coverage", {})
     entry = coverage.get(resolved)
-    if entry is None or entry["version"] != version or len(entry["ranges"]) > _READ_COVERAGE_RANGES_CAP:
-        entry = coverage[resolved] = {"version": version, "ranges": [], "redacted": False}
+    if (
+        entry is None
+        or entry["version"] != version
+        or len(entry["ranges"]) > _READ_COVERAGE_RANGES_CAP
+    ):
+        entry = coverage[resolved] = {
+            "version": version,
+            "ranges": [],
+            "redacted": False,
+        }
     entry["redacted"] = entry["redacted"] or redacted
     merged: list[tuple[int, int]] = []
     for s, e in sorted(entry["ranges"] + [(start, end)]):
@@ -374,8 +425,12 @@ def _note_read_coverage(task_data: dict, resolved: str, version: tuple, start: i
         else:
             merged.append((s, e))
     entry["ranges"] = merged
-    complete = (isinstance(total_lines, int) and total_lines > 0
-                and merged[0][0] <= 1 and merged[0][1] >= total_lines)
+    complete = (
+        isinstance(total_lines, int)
+        and total_lines > 0
+        and merged[0][0] <= 1
+        and merged[0][1] >= total_lines
+    )
     return complete, entry["redacted"]
 
 
@@ -387,7 +442,9 @@ def _read_mtime_drifted(filepath: str, task_id: str) -> bool:
         return False
     with _read_tracker_lock:
         task_data = _read_tracker.get(task_id)
-        read_mtime = task_data.get("read_timestamps", {}).get(resolved) if task_data else None
+        read_mtime = (
+            task_data.get("read_timestamps", {}).get(resolved) if task_data else None
+        )
     if read_mtime is None:
         return False
     try:
@@ -402,12 +459,14 @@ def _check_file_staleness(filepath: str, task_id: str) -> str | None:
         return (
             f"Warning: {filepath} was modified since you last read it "
             "(external edit or concurrent agent). The content you read may be "
-            "stale. Consider re-reading the file to verify before writing.")
+            "stale. Consider re-reading the file to verify before writing."
+        )
     return None
 
 
-def _mark_verification_stale(task_id: str, resolved_paths: list[str],
-                             session_id: str | None = None) -> None:
+def _mark_verification_stale(
+    task_id: str, resolved_paths: list[str], session_id: str | None = None
+) -> None:
     """Best-effort note that successful edits made prior verification stale. cwd: the
     first edited path's recognised project root, else the workspace root, else the first parent."""
     from pathlib import Path
@@ -420,8 +479,11 @@ def _mark_verification_stale(task_id: str, resolved_paths: list[str],
         from agent.verification_evidence import mark_workspace_edited
 
         parents = [str(Path(p).parent) for p in paths]
-        cwd = (next((c for c in parents if project_facts_for(c)), None)
-               or _authoritative_workspace_root(task_id) or parents[0])
+        cwd = (
+            next((c for c in parents if project_facts_for(c)), None)
+            or _authoritative_workspace_root(task_id)
+            or parents[0]
+        )
         mark_workspace_edited(session_id=session_id or task_id, cwd=cwd, paths=paths)
     except Exception:
         logger.debug("verification stale marker failed", exc_info=True)

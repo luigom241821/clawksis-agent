@@ -55,10 +55,6 @@ def test_registered_pattern_masks_token():
     assert "nvapi-" in out and "..." in out
 
 
-
-
-
-
 def test_builtins_unaffected_by_registration():
     register_redaction_patterns([NVAPI_PATTERN], source="test")
     sk = "sk-proj-AbCdEf1234567890GhIjKl"
@@ -89,7 +85,9 @@ def test_duplicate_and_builtin_patterns_deduped():
     assert register_redaction_patterns([builtin], source="test") == 0
     # Same pattern twice in one call counts once.
     _reset_plugin_redaction_patterns()
-    assert register_redaction_patterns([NVAPI_PATTERN, NVAPI_PATTERN], source="test") == 1
+    assert (
+        register_redaction_patterns([NVAPI_PATTERN, NVAPI_PATTERN], source="test") == 1
+    )
 
 
 def test_non_string_and_empty_entries_skipped():
@@ -100,7 +98,9 @@ def test_non_string_and_empty_entries_skipped():
 def test_file_read_sentinel_uses_plugin_prefix_label():
     register_redaction_patterns([NVAPI_PATTERN], source="test")
     out = redact_sensitive_text(
-        f"api_base_key: {NVAPI_KEY}", force=True, file_read=True,
+        f"api_base_key: {NVAPI_KEY}",
+        force=True,
+        file_read=True,
     )
     assert NVAPI_KEY not in out
     # Non-reusable sentinel carries the vendor label, no secret bytes.
@@ -160,9 +160,10 @@ def test_top_level_alternation_rejected():
 
 def test_grouped_alternation_and_literal_pipe_accepted():
     # Alternation inside a group after the prefix keeps the guarantee.
-    assert register_redaction_patterns(
-        [r"zq(?:tok|key)-[A-Za-z0-9]{20,}"], source="test"
-    ) == 1
+    assert (
+        register_redaction_patterns([r"zq(?:tok|key)-[A-Za-z0-9]{20,}"], source="test")
+        == 1
+    )
     # Escaped pipes and character-class pipes are literals, not branches.
     assert register_redaction_patterns([r"xy\|[A-Za-z0-9]{20,}"], source="test") == 1
     assert register_redaction_patterns([r"wv[|][A-Za-z0-9]{20,}"], source="test") == 1
@@ -183,7 +184,10 @@ def test_nested_unbounded_quantifiers_rejected():
 def test_bounded_and_sibling_quantifiers_accepted():
     # A single unbounded quantifier is fine, as are siblings and a
     # bounded quantifier inside an unbounded group.
-    assert register_redaction_patterns([r"zr(?:tok)?-[A-Za-z0-9]{20,}"], source="test") == 1
+    assert (
+        register_redaction_patterns([r"zr(?:tok)?-[A-Za-z0-9]{20,}"], source="test")
+        == 1
+    )
     assert register_redaction_patterns([r"qm-[a-z]+[0-9]+"], source="test") == 1
     assert register_redaction_patterns([r"pv(?:x{1,5}y)+"], source="test") == 1
     # Quantifier chars inside a character class are literals, not repeats.
@@ -220,7 +224,8 @@ def test_plugin_register_end_to_end(tmp_path):
     demo.register(plugins_mod.PluginContext(manifest, manager))
 
     out = redact_sensitive_text(
-        f"NIM request failed: 401 for key {NVAPI_KEY}", force=True,
+        f"NIM request failed: 401 for key {NVAPI_KEY}",
+        force=True,
     )
     assert NVAPI_KEY not in out
     assert "nvapi-" in out  # label survives for debuggability

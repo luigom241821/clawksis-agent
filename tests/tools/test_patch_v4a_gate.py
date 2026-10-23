@@ -6,6 +6,7 @@ trained on. Base schema = replace-only (mode gone, path/old/new required);
 the V4A layer renders only for OpenAI-family mains. Handler accepts both
 shapes from any model (replay compat; mode defaults to replace).
 """
+
 import json
 import os
 import sys
@@ -19,14 +20,18 @@ import tools.file_tools as ft
 
 
 def _family(prov, model):
-    with patch("agent.auxiliary_client._read_main_provider", return_value=prov), \
-         patch("agent.auxiliary_client._read_main_model", return_value=model):
+    with (
+        patch("agent.auxiliary_client._read_main_provider", return_value=prov),
+        patch("agent.auxiliary_client._read_main_model", return_value=model),
+    ):
         return ft._is_openai_family_main()
 
 
 def _override(prov, model):
-    with patch("agent.auxiliary_client._read_main_provider", return_value=prov), \
-         patch("agent.auxiliary_client._read_main_model", return_value=model):
+    with (
+        patch("agent.auxiliary_client._read_main_provider", return_value=prov),
+        patch("agent.auxiliary_client._read_main_model", return_value=model),
+    ):
         return ft._patch_schema_overrides()
 
 
@@ -45,7 +50,6 @@ class TestPatchV4AGate(unittest.TestCase):
         ]:
             self.assertEqual(_family(prov, model), want, (prov, model))
 
-
     def test_openai_family_gets_v4a_layer(self):
         o = _override("openai", "gpt-5.2")
         self.assertIn("mode", o["parameters"]["properties"])
@@ -63,9 +67,7 @@ class TestPatchV4AGate(unittest.TestCase):
         r = json.loads(ft.patch_tool(path=f1, old_string="beta", new_string="B"))
         self.assertFalse(r.get("error"), r)
         v4a = (
-            "*** Begin Patch\n"
-            f"*** Update File: {f1}\n@@\n-alpha B\n+A B\n"
-            "*** End Patch"
+            f"*** Begin Patch\n*** Update File: {f1}\n@@\n-alpha B\n+A B\n*** End Patch"
         )
         r = json.loads(ft.patch_tool(mode="patch", patch=v4a))
         self.assertFalse(r.get("error"), r)

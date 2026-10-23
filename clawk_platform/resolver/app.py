@@ -101,7 +101,9 @@ class AppResolver:
     def inspect(self, res: Resolution, ctx: LookupContext | None = None) -> Inspection:
         if not res.found:
             return Inspection(Observation.not_checked(), Observation.not_checked())
-        return Inspection(version=self._version(res.command[0]), signer=Observation.not_checked())
+        return Inspection(
+            version=self._version(res.command[0]), signer=Observation.not_checked()
+        )
 
     def _version(self, path: str) -> Observation[str]:
         kind = self.definition.version_kind
@@ -116,7 +118,9 @@ class AppResolver:
                 return _uninstall_registry_version(self.definition.version_arg)
         except Exception as exc:  # a vendor's plist/PE/registry entry is untrusted input; never abort the caller
             return Observation(CheckState.ERROR, detail=exc.__class__.__name__)
-        return Observation(CheckState.UNAVAILABLE, detail=f"unknown version kind {kind}")
+        return Observation(
+            CheckState.UNAVAILABLE, detail=f"unknown version kind {kind}"
+        )
 
     # ---- probe: fresh, never cached ------------------------------------------------------
 
@@ -133,18 +137,28 @@ class AppResolver:
             return None
         return Endpoint(endpoint.value, session.token)
 
-    def probe(self, res: Resolution, *, effort: Effort, deadline_s: float = 3.0) -> Probe:
+    def probe(
+        self, res: Resolution, *, effort: Effort, deadline_s: float = 3.0
+    ) -> Probe:
         d = self.definition
         nc: Observation = Observation.not_checked()
         if d.liveness_kind != "server_json":
             return Probe(running=nc, answering=nc, endpoint=nc)
         session = _read_server_json(_expand(d.liveness_path), d)
         if session is None:
-            absent = Observation(CheckState.ABSENT, False, "runtime file missing or unreadable")
-            return Probe(running=absent, answering=nc, endpoint=Observation(CheckState.ABSENT))
+            absent = Observation(
+                CheckState.ABSENT, False, "runtime file missing or unreadable"
+            )
+            return Probe(
+                running=absent, answering=nc, endpoint=Observation(CheckState.ABSENT)
+            )
         running = _pid_alive(session.pid)
         endpoint_obs = _endpoint_observation(session.url, d.endpoint_path)
-        if effort is Effort.LOCAL or running.value is not True or endpoint_obs.state is not CheckState.PRESENT:
+        if (
+            effort is Effort.LOCAL
+            or running.value is not True
+            or endpoint_obs.state is not CheckState.PRESENT
+        ):
             return Probe(running=running, answering=nc, endpoint=endpoint_obs)
         answering = _mcp_initialize(session, endpoint_obs.value or "", deadline_s)
         return Probe(running=running, answering=answering, endpoint=endpoint_obs)
@@ -158,7 +172,9 @@ _Locator = Callable[[AppDef, AppLocation, LookupContext | None], list[_Hit]]
 
 def _present(presence: PresenceKind, path: str) -> bool:
     if presence == "bundle":
-        return os.path.isdir(path) and os.path.isfile(os.path.join(path, "Contents", "Info.plist"))
+        return os.path.isdir(path) and os.path.isfile(
+            os.path.join(path, "Contents", "Info.plist")
+        )
     return os.path.isfile(path)
 
 
@@ -168,7 +184,10 @@ def _hit(d: AppDef, source: str, path: str) -> _Hit:
 
 
 def _version_order(path: str) -> list:
-    return [(1, int(part)) if part.isdigit() else (0, part) for part in re.split(r"(\d+)", path)]
+    return [
+        (1, int(part)) if part.isdigit() else (0, part)
+        for part in re.split(r"(\d+)", path)
+    ]
 
 
 def _path_hits(d: AppDef, loc: AppLocation, ctx: LookupContext | None) -> list[_Hit]:
@@ -186,21 +205,39 @@ def _path_hits(d: AppDef, loc: AppLocation, ctx: LookupContext | None) -> list[_
 
 def _command_hits(d: AppDef, loc: AppLocation, ctx: LookupContext | None) -> list[_Hit]:
     res = locate_command(loc.value, ctx)
-    return [(Candidate(c.value, f"app:{d.app_id}:{loc.kind}", c.present), "path_executable") for c in res.candidates]
+    return [
+        (Candidate(c.value, f"app:{d.app_id}:{loc.kind}", c.present), "path_executable")
+        for c in res.candidates
+    ]
 
 
-def _uninstall_hits(d: AppDef, loc: AppLocation, ctx: LookupContext | None) -> list[_Hit]:
+def _uninstall_hits(
+    d: AppDef, loc: AppLocation, ctx: LookupContext | None
+) -> list[_Hit]:
     if sys.platform != "win32":
         return []
     # A UNC InstallLocation is skipped so a presence check never touches the network.
-    return [_hit(d, f"app:{d.app_id}:{loc.kind}", os.path.join(entry["InstallLocation"], loc.file))
-            for entry in _uninstall_entries(loc.value)
-            if entry.get("InstallLocation") and not entry["InstallLocation"].startswith(("\\\\", "//"))]
+    return [
+        _hit(
+            d,
+            f"app:{d.app_id}:{loc.kind}",
+            os.path.join(entry["InstallLocation"], loc.file),
+        )
+        for entry in _uninstall_entries(loc.value)
+        if entry.get("InstallLocation")
+        and not entry["InstallLocation"].startswith(("\\\\", "//"))
+    ]
 
 
 def _in_dirs(dirs: Callable[[], tuple[str, ...]]) -> _Locator:
     def hits(d: AppDef, loc: AppLocation, ctx: LookupContext | None) -> list[_Hit]:
-        return [_hit(d, f"app:{d.app_id}:{loc.kind}", os.path.join(_expand(root), loc.value)) for root in dirs()]
+        return [
+            _hit(
+                d, f"app:{d.app_id}:{loc.kind}", os.path.join(_expand(root), loc.value)
+            )
+            for root in dirs()
+        ]
+
     return hits
 
 
@@ -219,10 +256,18 @@ class LocationSpec:
 
 LOCATION_KINDS: dict[str, LocationSpec] = {
     "command": LocationSpec(None, "name", "executable", _command_hits),
-    "uninstall_registry": LocationSpec("win32", "display_name_prefix", "executable", _uninstall_hits, needs_file=True),
-    "app_bundle": LocationSpec("darwin", "name", "bundle", _in_dirs(known_dirs.mac_application_dirs)),
-    "flatpak": LocationSpec("linux", "app_id", "executable", _in_dirs(known_dirs.flatpak_export_dirs)),
-    "snap": LocationSpec("linux", "name", "executable", _in_dirs(known_dirs.snap_bin_dirs)),
+    "uninstall_registry": LocationSpec(
+        "win32", "display_name_prefix", "executable", _uninstall_hits, needs_file=True
+    ),
+    "app_bundle": LocationSpec(
+        "darwin", "name", "bundle", _in_dirs(known_dirs.mac_application_dirs)
+    ),
+    "flatpak": LocationSpec(
+        "linux", "app_id", "executable", _in_dirs(known_dirs.flatpak_export_dirs)
+    ),
+    "snap": LocationSpec(
+        "linux", "name", "executable", _in_dirs(known_dirs.snap_bin_dirs)
+    ),
 }
 
 
@@ -235,11 +280,15 @@ def _locator(kind: str) -> _Locator:
 
 
 def _plist_version(bundle: str) -> Observation[str]:
-    with open(os.path.join(bundle, "Contents", "Info.plist"), "rb") as fh:  # windows-footgun: ok — binary mode
+    with open(
+        os.path.join(bundle, "Contents", "Info.plist"), "rb"
+    ) as fh:  # windows-footgun: ok — binary mode
         info = plistlib.load(fh)
     value = info.get("CFBundleShortVersionString") or info.get("CFBundleVersion")
     if not value:
-        return Observation(CheckState.UNAVAILABLE, detail="no version key in Info.plist")
+        return Observation(
+            CheckState.UNAVAILABLE, detail="no version key in Info.plist"
+        )
     return Observation(CheckState.PRESENT, str(value))
 
 
@@ -250,26 +299,44 @@ def _pe_version(path: str) -> Observation[str]:
     from ctypes import wintypes
 
     ver = ctypes.windll.version  # type: ignore[attr-defined]
-    ver.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(wintypes.DWORD)]
+    ver.GetFileVersionInfoSizeW.argtypes = [
+        wintypes.LPCWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
     ver.GetFileVersionInfoSizeW.restype = wintypes.DWORD
     size = ver.GetFileVersionInfoSizeW(path, None)
     if not size:
         return Observation(CheckState.UNAVAILABLE, detail="no version resource")
     buf = ctypes.create_string_buffer(size)
-    ver.GetFileVersionInfoW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
+    ver.GetFileVersionInfoW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    ]
     ver.GetFileVersionInfoW.restype = wintypes.BOOL
     if not ver.GetFileVersionInfoW(path, 0, size, buf):
         return Observation(CheckState.ERROR, detail="GetFileVersionInfoW failed")
     ptr = ctypes.c_void_p()
     length = wintypes.UINT()
-    ver.VerQueryValueW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.UINT)]
+    ver.VerQueryValueW.argtypes = [
+        ctypes.c_void_p,
+        wintypes.LPCWSTR,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.UINT),
+    ]
     ver.VerQueryValueW.restype = wintypes.BOOL
-    if not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(length)) or not ptr.value:
+    if (
+        not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(length))
+        or not ptr.value
+    ):
         return Observation(CheckState.UNAVAILABLE, detail="no fixed file info")
     # VS_FIXEDFILEINFO: dwFileVersionMS at offset 8, dwFileVersionLS at offset 12.
     ms = ctypes.cast(ptr.value + 8, ctypes.POINTER(wintypes.DWORD)).contents.value
     ls = ctypes.cast(ptr.value + 12, ctypes.POINTER(wintypes.DWORD)).contents.value
-    return Observation(CheckState.PRESENT, f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}")
+    return Observation(
+        CheckState.PRESENT, f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+    )
 
 
 def _uninstall_values(entry: Any) -> dict[str, str]:
@@ -301,9 +368,18 @@ def _uninstall_entries(display_name_prefix: str) -> Iterator[dict[str, str]]:
     import winreg
 
     roots = (
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
-        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
-        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+        ),
+        (
+            winreg.HKEY_CURRENT_USER,
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        ),
     )
     for hive, root in roots:
         try:
@@ -319,7 +395,9 @@ def _uninstall_entries(display_name_prefix: str) -> Iterator[dict[str, str]]:
 
 def _uninstall_registry_version(display_name_prefix: str) -> Observation[str]:
     if sys.platform != "win32":
-        return Observation(CheckState.UNAVAILABLE, detail="uninstall_registry needs Windows")
+        return Observation(
+            CheckState.UNAVAILABLE, detail="uninstall_registry needs Windows"
+        )
     entry = next(_uninstall_entries(display_name_prefix), None)
     if entry is None:
         return Observation(CheckState.ABSENT, detail="no uninstall entry")
@@ -369,14 +447,18 @@ def _pid_alive(pid: int | None) -> Observation[bool]:
         k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
         k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         k32.OpenProcess.restype = wintypes.HANDLE
-        handle = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        handle = k32.OpenProcess(
+            0x1000, False, pid
+        )  # PROCESS_QUERY_LIMITED_INFORMATION
         if not handle:
             return Observation(CheckState.ABSENT, False)
         k32.CloseHandle.argtypes = [wintypes.HANDLE]
         k32.CloseHandle(handle)
         return Observation(CheckState.PRESENT, True)
     try:
-        os.kill(pid, 0)  # windows-footgun: ok — POSIX only, the win32 branch returned above
+        os.kill(
+            pid, 0
+        )  # windows-footgun: ok — POSIX only, the win32 branch returned above
     except ProcessLookupError:
         return Observation(CheckState.ABSENT, False)
     except PermissionError:
@@ -390,29 +472,51 @@ def _endpoint_observation(raw_url: str, fixed_path: str) -> Observation[str]:
         return Observation(CheckState.UNAVAILABLE, detail="no url in runtime file")
     try:
         parts = urlsplit(raw_url)
-        hostname, port, username, password = parts.hostname, parts.port, parts.username, parts.password
+        hostname, port, username, password = (
+            parts.hostname,
+            parts.port,
+            parts.username,
+            parts.password,
+        )
     except ValueError:
         return Observation(CheckState.UNAVAILABLE, detail="malformed endpoint")
     if parts.scheme != "http" or username or password:
-        return Observation(CheckState.UNAVAILABLE, detail="endpoint must be plain http without userinfo")
+        return Observation(
+            CheckState.UNAVAILABLE,
+            detail="endpoint must be plain http without userinfo",
+        )
     if hostname not in _LOOPBACK_HOSTS:
         return Observation(CheckState.UNAVAILABLE, detail="endpoint must be loopback")
     if port is None or not (1 <= port <= 65535):
-        return Observation(CheckState.UNAVAILABLE, detail="endpoint needs a numeric port")
+        return Observation(
+            CheckState.UNAVAILABLE, detail="endpoint needs a numeric port"
+        )
     return Observation(CheckState.PRESENT, f"http://{hostname}:{port}{fixed_path}")
 
 
-def _mcp_initialize(session: _Session, endpoint: str, deadline_s: float) -> Observation[bool]:
+def _mcp_initialize(
+    session: _Session, endpoint: str, deadline_s: float
+) -> Observation[bool]:
     """One MCP `initialize` POST under one absolute deadline covering connect, headers, and body."""
     import http.client
 
     parts = urlsplit(endpoint)
-    body = json.dumps({
-        "jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                   "clientInfo": {"name": "clawk", "version": "probe"}},
-    }).encode()
-    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    body = json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "clawk", "version": "probe"},
+            },
+        }
+    ).encode()
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
     if session.token:
         headers["Authorization"] = f"Bearer {session.token}"
     deadline = time.monotonic() + max(0.1, deadline_s)
@@ -423,13 +527,17 @@ def _mcp_initialize(session: _Session, endpoint: str, deadline_s: float) -> Obse
             raise TimeoutError
         return left
 
-    conn = http.client.HTTPConnection(parts.hostname or "127.0.0.1", parts.port or 80, timeout=remaining())
+    conn = http.client.HTTPConnection(
+        parts.hostname or "127.0.0.1", parts.port or 80, timeout=remaining()
+    )
     try:
         conn.request("POST", parts.path or "/", body=body, headers=headers)
         conn.sock.settimeout(remaining())
         status = conn.getresponse().status
     except TimeoutError:
-        return Observation(CheckState.ABSENT, False, f"no answer within {deadline_s:g} s")
+        return Observation(
+            CheckState.ABSENT, False, f"no answer within {deadline_s:g} s"
+        )
     except (OSError, http.client.HTTPException):
         return Observation(CheckState.ABSENT, False, "connection refused or timed out")
     finally:

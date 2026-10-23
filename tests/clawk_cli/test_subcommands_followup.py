@@ -18,12 +18,9 @@ from clawk_cli.subcommands.mcp import build_mcp_parser
 def _h(name):
     def handler(args):  # pragma: no cover - identity only
         return name
+
     handler.__name__ = f"cmd_{name}"
     return handler
-
-
-
-
 
 
 def test_mcp_and_acp_accept_hooks_flag():

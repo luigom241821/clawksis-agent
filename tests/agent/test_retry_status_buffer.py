@@ -99,8 +99,6 @@ def test_flush_empty_buffer_is_noop():
     assert emitted == []
 
 
-
-
 def test_mixed_kinds_replay_through_correct_channels():
     agent = _make_bare_agent()
     agent.log_prefix = ""
@@ -134,7 +132,9 @@ def test_pending_fallback_notice_emitted_once_on_success():
     # Simulate try_activate_fallback: buffer the noisy switch line AND record
     # the durable one-shot notice.
     agent._buffer_status("🔄 Primary model failed — switching to fallback: m2 via p2")
-    agent._pending_fallback_notice = "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    agent._pending_fallback_notice = (
+        "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    )
 
     # Success path order: emit pending notice, then drop the buffer.
     agent._emit_pending_fallback_notice()
@@ -181,8 +181,6 @@ def test_pending_fallback_notice_continues_after_callback_error():
     assert agent._pending_fallback_notice is None
 
 
-
-
 def test_flush_discards_pending_fallback_notice():
     """On terminal failure the flushed buffer already carries the switch line,
     so the one-shot notice is discarded to avoid a stale duplicate later."""
@@ -191,7 +189,9 @@ def test_flush_discards_pending_fallback_notice():
     agent._emit_status = lambda msg: emitted.append(msg)
 
     agent._buffer_status("🔄 Primary model failed — switching to fallback: m2 via p2")
-    agent._pending_fallback_notice = "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    agent._pending_fallback_notice = (
+        "🔄 Switched to fallback model: m1 via p1 → m2 via p2"
+    )
 
     # Terminal failure flushes the buffered trace...
     agent._flush_status_buffer()
@@ -202,8 +202,6 @@ def test_flush_discards_pending_fallback_notice():
     emitted.clear()
     agent._emit_pending_fallback_notice()
     assert emitted == []
-
-
 
 
 def test_flush_swallows_callback_exceptions():

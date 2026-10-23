@@ -40,7 +40,9 @@ def _walk_spy(monkeypatch, root):
     real_scandir = os.scandir
 
     def scandir(path=".", *a, **k):
-        if isinstance(path, (str, os.PathLike)) and os.fspath(path).startswith(str(root) + os.sep):
+        if isinstance(path, (str, os.PathLike)) and os.fspath(path).startswith(
+            str(root) + os.sep
+        ):
             walked.append(os.fspath(path))
         return real_scandir(path, *a, **k)
 
@@ -50,14 +52,20 @@ def _walk_spy(monkeypatch, root):
 
 
 def _lines(log_file, entry):
-    return [ln for ln in log_file.read_text(encoding="utf-8-sig").splitlines() if repr(str(entry)) in ln]
+    return [
+        ln
+        for ln in log_file.read_text(encoding="utf-8-sig").splitlines()
+        if repr(str(entry)) in ln
+    ]
 
 
 def _walked(walked, entry):
     return any(p == str(entry) or p.startswith(str(entry) + os.sep) for p in walked)
 
 
-def test_undeletable_or_unreadable_entry_logged_once_then_skipped_without_walk(tmp_path, monkeypatch):
+def test_undeletable_or_unreadable_entry_logged_once_then_skipped_without_walk(
+    tmp_path, monkeypatch
+):
     root = tmp_path / "scratch"
     entry, ro = _undeletable_entry(root)
     # A dir this user may not even list (root-owned 0700): the idle scan itself fails.
@@ -80,7 +88,9 @@ def test_undeletable_or_unreadable_entry_logged_once_then_skipped_without_walk(t
         monkeypatch.setattr(scratch.time, "time", lambda: later)
         assert scratch.prune_idle_entries(root, 24, frozenset(), log_file) == 0
         for e in (entry, sealed):
-            assert not _walked(walked, e), f"a known-stuck entry must not be re-walked every pass: {e}"
+            assert not _walked(walked, e), (
+                f"a known-stuck entry must not be re-walked every pass: {e}"
+            )
             lines = _lines(log_file, e)
             assert len(lines) == 1, lines
             assert f"sudo rm -rf {e}" in lines[0], lines[0]

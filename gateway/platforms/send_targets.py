@@ -12,13 +12,18 @@ Pure ``re``/dataclasses: core imports this module before any adapter is material
 
 from dataclasses import dataclass
 
-NOT_EXPLICIT = object()  # sentinel: stop parsing, target is NOT explicit (skip generic rules)
+NOT_EXPLICIT = (
+    object()
+)  # sentinel: stop parsing, target is NOT explicit (skip generic rules)
 
 
 def regex_groups_parser(regex, *, thread_group=True):
     """Explicit when ``regex`` fully matches: chat_id = group 1, thread = group 2 (or None)."""
-    return lambda ref: ((m.group(1), m.group(2) if thread_group else None)
-                        if (m := regex.fullmatch(ref)) else None)
+    return lambda ref: (
+        (m.group(1), m.group(2) if thread_group else None)
+        if (m := regex.fullmatch(ref))
+        else None
+    )
 
 
 def regex_stripped_parser(regex):
@@ -41,10 +46,14 @@ class StandaloneSendPolicy:
     label: str = ""  # names the platform in "<label> plugin not registered ..." errors
     media: bool = False  # sends that carry media bypass the live adapter
     all_sends: bool = False  # every send bypasses it, text included (Discord)
-    captionable: bool = False  # one captionable file + short text ride as the media caption
+    captionable: bool = (
+        False  # one captionable file + short text ride as the media caption
+    )
     # Non-final chunks get ``media_files=[]`` (True) or ``media_files=None`` (False).
     empty_list_between_chunks: bool = False
-    forward_force_document: bool = False  # pass ``force_document`` through to the sender
+    forward_force_document: bool = (
+        False  # pass ``force_document`` through to the sender
+    )
     # ``mentions`` (re-pinged per message, so only the first payload carries them) force this route.
     mentions: bool = False
     # Generic text-only path: call the sender per chunk directly, skipping the live adapter and

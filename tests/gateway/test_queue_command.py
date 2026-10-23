@@ -7,6 +7,7 @@ Previously the handler rebuilt the event with only text/type/source/
 message_id/channel_prompt, silently dropping any photo/document/reply
 metadata the user attached to the /queue message.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

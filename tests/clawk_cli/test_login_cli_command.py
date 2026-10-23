@@ -10,6 +10,7 @@ from agent.i18n import t
 from clawk_cli import anon_auth
 from clawk_cli import cli_commands_mixin as commands
 
+
 class _Thread:
     def __init__(self, target):
         self.target = target
@@ -21,6 +22,7 @@ class _Thread:
     def join(self):
         self.target()
 
+
 def _cli(monkeypatch):
     cli = SimpleNamespace(console=MagicMock())
     workers = []
@@ -31,22 +33,35 @@ def _cli(monkeypatch):
         return thread
 
     cli._side_worker = side_worker
-    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(cli)
+    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(
+        cli
+    )
     output = []
     monkeypatch.setattr(commands, "_cp", lambda *lines: output.extend(lines))
     return cli, workers, output
 
+
 def test_the_cli_handler_prints_the_code_then_drains_off_thread(monkeypatch):
     cli, workers, output = _cli(monkeypatch)
-    states = iter([
-        anon_auth.Code("https://example.test/sign-in", "CODE-1", 900, 5),
-        anon_auth.Completed(email="person@example.test", model="model-1", model_changed=True,
-                            handoff=("Your apps moved to person@example.test: gmail.",)),
-    ])
+    states = iter(
+        [
+            anon_auth.Code("https://example.test/sign-in", "CODE-1", 900, 5),
+            anon_auth.Completed(
+                email="person@example.test",
+                model="model-1",
+                model_changed=True,
+                handoff=("Your apps moved to person@example.test: gmail.",),
+            ),
+        ]
+    )
     monkeypatch.setattr(anon_auth, "run_sign_in", lambda **_kwargs: states)
     monkeypatch.setattr(
-        anon_auth, "render_sign_in_cli_code",
-        lambda state, **kwargs: kwargs["printer"](state.link, state.code, f"  {state.copy_with_wait}"))
+        anon_auth,
+        "render_sign_in_cli_code",
+        lambda state, **kwargs: kwargs["printer"](
+            state.link, state.code, f"  {state.copy_with_wait}"
+        ),
+    )
 
     cli._handle_login_command("/login")
 
@@ -59,40 +74,62 @@ def test_the_cli_handler_prints_the_code_then_drains_off_thread(monkeypatch):
     assert workers[0][0].started is True
     assert workers[0][0].target() == (
         "Signed in as person@example.test.\nYour apps moved to person@example.test: gmail.\n"
-        "Default model is now model-1.")
+        "Default model is now model-1."
+    )
+
 
 @pytest.mark.parametrize(
     "terminal,initial_model,expected_model",
     [
-        (anon_auth.Completed(model="model-1", model_changed=True), anon_auth.GUEST_MODEL, "model-1"),
-        (anon_auth.Completed(model="model-1", model_changed=True),
-         "openrouter/some-model", "openrouter/some-model"),
+        (
+            anon_auth.Completed(model="model-1", model_changed=True),
+            anon_auth.GUEST_MODEL,
+            "model-1",
+        ),
+        (
+            anon_auth.Completed(model="model-1", model_changed=True),
+            "openrouter/some-model",
+            "openrouter/some-model",
+        ),
         (anon_auth.Cancelled(), anon_auth.GUEST_MODEL, anon_auth.GUEST_MODEL),
     ],
 )
 def test_the_drain_only_moves_the_free_tier_model_on_completion(
-        monkeypatch, terminal, initial_model, expected_model):
+    monkeypatch, terminal, initial_model, expected_model
+):
     cli, workers, _output = _cli(monkeypatch)
     cli.model = initial_model
-    monkeypatch.setattr(anon_auth, "run_sign_in", lambda **_kwargs: iter([
-        anon_auth.Code("https://example.test/sign-in", "CODE-1", 900, 5),
-        terminal,
-    ]))
-    monkeypatch.setattr(anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        anon_auth,
+        "run_sign_in",
+        lambda **_kwargs: iter(
+            [
+                anon_auth.Code("https://example.test/sign-in", "CODE-1", 900, 5),
+                terminal,
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None
+    )
 
     cli._handle_login_command("/login")
     workers[0][0].join()
 
     assert cli.model == expected_model
 
+
 def test_a_precondition_prints_without_starting_a_thread(monkeypatch):
     cli, workers, output = _cli(monkeypatch)
-    monkeypatch.setattr(anon_auth, "run_sign_in", lambda **_kwargs: iter([anon_auth.AlreadySignedIn()]))
+    monkeypatch.setattr(
+        anon_auth, "run_sign_in", lambda **_kwargs: iter([anon_auth.AlreadySignedIn()])
+    )
 
     cli._handle_login_command("/login")
 
     assert output == ["  Starting sign-in...", "  Already signed in."]
     assert workers == []
+
 
 def test_ctrl_c_during_the_first_advance_prints_the_cancelled_copy(monkeypatch):
     cli, workers, output = _cli(monkeypatch)
@@ -113,10 +150,14 @@ def test_ctrl_c_during_the_first_advance_prints_the_cancelled_copy(monkeypatch):
     assert closed.is_set()
     assert workers == []
 
+
 def test_the_handler_never_calls_input_and_uses_the_short_timeout(monkeypatch):
     cli, _workers, _output = _cli(monkeypatch)
     seen = []
-    monkeypatch.setattr("builtins.input", lambda *_args: (_ for _ in ()).throw(AssertionError("input called")))
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("input called")),
+    )
 
     def flow(**kwargs):
         seen.append(kwargs)
@@ -127,9 +168,12 @@ def test_the_handler_never_calls_input_and_uses_the_short_timeout(monkeypatch):
 
     assert seen == [{"timeout_seconds": 8.0}]
 
+
 def test_the_command_resolves_through_the_cli_fallback():
     from cli import ClawksisCLI
+
     assert ClawksisCLI._slash_handler("login") == ("_handle_login_command", True)
+
 
 def test_the_drain_writes_to_the_console_captured_at_start(monkeypatch):
     old_buf, new_buf = StringIO(), StringIO()
@@ -151,9 +195,13 @@ def test_the_drain_writes_to_the_console_captured_at_start(monkeypatch):
         return thread
 
     cli._side_worker = side_worker
-    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(cli)
+    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(
+        cli
+    )
     monkeypatch.setattr(commands, "_cp", lambda *_lines: None)
-    monkeypatch.setattr(anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None
+    )
 
     def flow(**_kwargs):
         yield anon_auth.Code("https://example.test/sign-in", "CODE", 60, 1)
@@ -169,7 +217,10 @@ def test_the_drain_writes_to_the_console_captured_at_start(monkeypatch):
     assert "Signed in as person@example.test." in old_buf.getvalue()
     assert new_buf.getvalue() == ""
 
-def test_the_live_tui_drain_prints_through_cprint_instead_of_the_captured_console(monkeypatch):
+
+def test_the_live_tui_drain_prints_through_cprint_instead_of_the_captured_console(
+    monkeypatch,
+):
     import cli as cli_module
 
     old_buf, new_buf = StringIO(), StringIO()
@@ -192,10 +243,16 @@ def test_the_live_tui_drain_prints_through_cprint_instead_of_the_captured_consol
         return thread
 
     cli._side_worker = side_worker
-    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(cli)
+    cli._handle_login_command = commands.CLICommandsMixin._handle_login_command.__get__(
+        cli
+    )
     monkeypatch.setattr(commands, "_cp", lambda *lines: output.extend(lines))
-    monkeypatch.setattr(cli_module, "_cprint", lambda *lines, **_kwargs: output.extend(lines))
-    monkeypatch.setattr(anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli_module, "_cprint", lambda *lines, **_kwargs: output.extend(lines)
+    )
+    monkeypatch.setattr(
+        anon_auth, "render_sign_in_cli_code", lambda *_args, **_kwargs: None
+    )
 
     def flow(**_kwargs):
         yield anon_auth.Code("https://example.test/sign-in", "CODE", 60, 1)

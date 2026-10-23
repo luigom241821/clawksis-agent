@@ -23,38 +23,83 @@ def portal(monkeypatch):
     class FakePortal:
         def list_accounts(self):
             return [
-                {"connectionId": "conn-work", "connector": "gmail", "status": "active", "label": "a@x.test",
-                 "alias": "work", "active": True},
-                {"connectionId": "conn-home", "connector": "gmail", "status": "active", "label": "b@x.test",
-                 "alias": "home", "active": True},
-                {"connectionId": "conn-old", "connector": "gmail", "status": "revoked", "label": "c@x.test",
-                 "alias": None, "active": False},
-                {"connectionId": "conn-retired", "connector": "gmail", "status": "inactive", "label": "d@x.test",
-                 "alias": None, "active": False, "disabled": True},
+                {
+                    "connectionId": "conn-work",
+                    "connector": "gmail",
+                    "status": "active",
+                    "label": "a@x.test",
+                    "alias": "work",
+                    "active": True,
+                },
+                {
+                    "connectionId": "conn-home",
+                    "connector": "gmail",
+                    "status": "active",
+                    "label": "b@x.test",
+                    "alias": "home",
+                    "active": True,
+                },
+                {
+                    "connectionId": "conn-old",
+                    "connector": "gmail",
+                    "status": "revoked",
+                    "label": "c@x.test",
+                    "alias": None,
+                    "active": False,
+                },
+                {
+                    "connectionId": "conn-retired",
+                    "connector": "gmail",
+                    "status": "inactive",
+                    "label": "d@x.test",
+                    "alias": None,
+                    "active": False,
+                    "disabled": True,
+                },
             ]
 
         def delete_account(self, connection_id):
             calls.append((connection_id, "deleted"))
-            return {"connectionId": connection_id, "connector": "gmail", "status": "removed"}
+            return {
+                "connectionId": connection_id,
+                "connector": "gmail",
+                "status": "removed",
+            }
 
         def rename_account(self, connection_id, alias):
             calls.append((connection_id, alias))
-            return {"connectionId": connection_id, "connector": "gmail", "alias": alias, "label": "a@x.test"}
+            return {
+                "connectionId": connection_id,
+                "connector": "gmail",
+                "alias": alias,
+                "label": "a@x.test",
+            }
 
-    monkeypatch.setattr("tools.connectors.portal.client.PortalConnectorClient", FakePortal)
-    monkeypatch.setattr("tools.connectors.connectors_available", lambda: True, raising=False)
+    monkeypatch.setattr(
+        "tools.connectors.portal.client.PortalConnectorClient", FakePortal
+    )
+    monkeypatch.setattr(
+        "tools.connectors.connectors_available", lambda: True, raising=False
+    )
     return calls
 
 
 def test_rename_parses_app_name_and_new_name():
     args = _parse("connectors", "rename", "gmail", "work", "--to", "home")
 
-    assert (args.connectors_action, args.app, args.name, args.to) == ("rename", "gmail", "work", "home")
+    assert (args.connectors_action, args.app, args.name, args.to) == (
+        "rename",
+        "gmail",
+        "work",
+        "home",
+    )
     assert args.func is cmd_connectors
 
 
 def test_rename_targets_the_named_account(portal, capsys):
-    rc = cmd_connectors(_parse("connectors", "rename", "gmail", "work", "--to", "office"))
+    rc = cmd_connectors(
+        _parse("connectors", "rename", "gmail", "work", "--to", "office")
+    )
 
     assert rc == 0
     assert portal == [("conn-work", "office")]
@@ -62,7 +107,9 @@ def test_rename_targets_the_named_account(portal, capsys):
 
 
 def test_rename_to_an_invalid_name_calls_nothing(portal, capsys):
-    rc = cmd_connectors(_parse("connectors", "rename", "gmail", "work", "--to", "Bad Name"))
+    rc = cmd_connectors(
+        _parse("connectors", "rename", "gmail", "work", "--to", "Bad Name")
+    )
 
     assert rc == 1
     assert portal == []
@@ -80,18 +127,33 @@ def test_reconnect_repairs_an_unnamed_account_by_its_id(portal, monkeypatch):
 
     monkeypatch.setattr(account, "find_or_start_operation", stop_after_start)
     with pytest.raises(KeyboardInterrupt):
-        cmd_connectors(_parse("connectors", "connect", "gmail", "--reconnect", "--alias", "c@x.test"))
+        cmd_connectors(
+            _parse(
+                "connectors", "connect", "gmail", "--reconnect", "--alias", "c@x.test"
+            )
+        )
 
-    assert started == [{"names": ["gmail"], "action": "reconnect", "profile_home": None, "repair_id": "conn-old"}]
+    assert started == [
+        {
+            "names": ["gmail"],
+            "action": "reconnect",
+            "profile_home": None,
+            "repair_id": "conn-old",
+        }
+    ]
 
 
 def test_reconnect_on_a_connected_account_starts_nothing(portal, monkeypatch, capsys):
     from tools.connectors import account
 
     started: list[dict] = []
-    monkeypatch.setattr(account, "find_or_start_operation", lambda names, **kw: started.append(kw))
+    monkeypatch.setattr(
+        account, "find_or_start_operation", lambda names, **kw: started.append(kw)
+    )
 
-    rc = cmd_connectors(_parse("connectors", "connect", "gmail", "--reconnect", "--alias", "work"))
+    rc = cmd_connectors(
+        _parse("connectors", "connect", "gmail", "--reconnect", "--alias", "work")
+    )
 
     assert rc == 0
     assert started == []
@@ -109,13 +171,25 @@ def test_forced_reconnect_on_a_connected_account_repairs_it_by_id(portal, monkey
 
     monkeypatch.setattr(account, "find_or_start_operation", stop_after_start)
     with pytest.raises(KeyboardInterrupt):
-        cmd_connectors(_parse("connectors", "connect", "gmail", "--reconnect", "--force", "--alias", "work"))
+        cmd_connectors(
+            _parse(
+                "connectors",
+                "connect",
+                "gmail",
+                "--reconnect",
+                "--force",
+                "--alias",
+                "work",
+            )
+        )
 
     assert started[0]["repair_id"] == "conn-work"
 
 
 def test_disconnect_can_remove_a_retired_account_by_its_label(portal):
-    rc = cmd_connectors(_parse("connectors", "disconnect", "gmail", "--alias", "d@x.test", "--yes"))
+    rc = cmd_connectors(
+        _parse("connectors", "disconnect", "gmail", "--alias", "d@x.test", "--yes")
+    )
 
     assert rc == 0
     assert portal == [("conn-retired", "deleted")]

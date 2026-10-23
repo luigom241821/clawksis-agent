@@ -47,7 +47,9 @@ def canon(text: str) -> str:
     return _WS.sub("", text)
 
 
-def poll(fn: Callable[[], object], *, timeout: float, what: str, interval: float = 0.05):
+def poll(
+    fn: Callable[[], object], *, timeout: float, what: str, interval: float = 0.05
+):
     deadline = time.monotonic() + timeout
     while True:
         value = fn()
@@ -60,6 +62,7 @@ def poll(fn: Callable[[], object], *, timeout: float, what: str, interval: float
 
 def _operator_home() -> Path:
     import pwd
+
     return Path(pwd.getpwuid(os.getuid()).pw_dir)
 
 
@@ -94,7 +97,12 @@ def session_members(sid: int) -> list[int]:
 
 def cmdline(pid: int) -> str:
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        return (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode(errors="replace")
+        )
     except OSError:
         return "?"
 
@@ -102,15 +110,25 @@ def cmdline(pid: int) -> str:
 class PtyClawksis:
     """One interactive ``clawk`` process on a PTY with an emulated screen."""
 
-    def __init__(self, root: Path, argv_tail: list[str], llm: FakeLLMServer | None, *, rows: int, cols: int,
-                 extra_config: str = "") -> None:
+    def __init__(
+        self,
+        root: Path,
+        argv_tail: list[str],
+        llm: FakeLLMServer | None,
+        *,
+        rows: int,
+        cols: int,
+        extra_config: str = "",
+    ) -> None:
         """``llm=None``: the caller already wrote ``root/home/.clawk`` (e.g. a native-runtime home)."""
         self.root = root
         self.home = root / "home"
         self.clawk_home = self.home / ".clawksis"
         operator = (_operator_home() / ".clawk").resolve()
-        assert operator not in (self.clawk_home.resolve(), *self.clawk_home.resolve().parents), (
-            f"sandbox {self.clawk_home} sits inside the operator's Clawksis home")
+        assert operator not in (
+            self.clawk_home.resolve(),
+            *self.clawk_home.resolve().parents,
+        ), f"sandbox {self.clawk_home} sits inside the operator's Clawksis home"
         if llm is not None:
             write_clawk_home(self.clawk_home, llm.base_url, extra_config=extra_config)
         self.llm = llm
@@ -121,22 +139,45 @@ class PtyClawksis:
         (root / "work").mkdir(parents=True, exist_ok=True)
         env = {k: os.environ[k] for k in ("PATH", "LANG", "LC_ALL") if k in os.environ}
         env.update(
-            HOME=str(self.home), CLAWK_HOME=str(self.clawk_home), PYTHONPATH=str(REPO_ROOT),
-            TMPDIR=str(root / "tmp"), TERM="xterm-256color", COLORTERM="truecolor",
-            PYTHONUNBUFFERED="1", CLAWK_STATE_DB_GUARD_BYPASS="1",
+            HOME=str(self.home),
+            CLAWK_HOME=str(self.clawk_home),
+            PYTHONPATH=str(REPO_ROOT),
+            TMPDIR=str(root / "tmp"),
+            TERM="xterm-256color",
+            COLORTERM="truecolor",
+            PYTHONUNBUFFERED="1",
+            CLAWK_STATE_DB_GUARD_BYPASS="1",
         )
         master, slave = os.openpty()
         self._set_winsize(master, rows, cols)
         self.master = master
         self.pts = os.ttyname(slave)
         self.proc = subprocess.Popen(
-            [sys.executable, "-c", _SESSION_LEADER, sys.executable, "-m", "clawk_cli.main", *argv_tail],
-            stdin=slave, stdout=slave, stderr=slave, cwd=str(root / "work"), env=env,
-            start_new_session=True, close_fds=True)
+            [
+                sys.executable,
+                "-c",
+                _SESSION_LEADER,
+                sys.executable,
+                "-m",
+                "clawk_cli.main",
+                *argv_tail,
+            ],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            cwd=str(root / "work"),
+            env=env,
+            start_new_session=True,
+            close_fds=True,
+        )
         os.close(slave)
-        self.sid = self.proc.pid  # start_new_session: the child is its own session leader
+        self.sid = (
+            self.proc.pid
+        )  # start_new_session: the child is its own session leader
         self.seen_members: set[tuple[int, int]] = set()
-        self._reader = threading.Thread(target=self._read_loop, name="pty-reader", daemon=True)
+        self._reader = threading.Thread(
+            target=self._read_loop, name="pty-reader", daemon=True
+        )
         self._reader.start()
 
     # -- io -------------------------------------------------------------------------------------
@@ -162,7 +203,9 @@ class PtyClawksis:
 
     def resize(self, rows: int, cols: int) -> None:
         with self._lock:
-            self._set_winsize(self.master, rows, cols)  # kernel delivers SIGWINCH to the fg pgrp
+            self._set_winsize(
+                self.master, rows, cols
+            )  # kernel delivers SIGWINCH to the fg pgrp
             self.screen.resize(rows, cols)
 
     # -- screen views ---------------------------------------------------------------------------
@@ -171,7 +214,11 @@ class PtyClawksis:
         """What the user can see or scroll back to: the alt screen when a fullscreen UI owns it,
         otherwise scrollback + the main screen. Scrollbar glyphs in the last column are dropped."""
         with self._lock:
-            rows = self.screen.display() if self.screen.alt_active else self.screen.transcript()
+            rows = (
+                self.screen.display()
+                if self.screen.alt_active
+                else self.screen.transcript()
+            )
             cols = self.screen.cols
         out = []
         for line in rows:
@@ -188,18 +235,25 @@ class PtyClawksis:
 
     def wait_for_text(self, needle: str, timeout: float = 60.0) -> None:
         try:
-            poll(lambda: canon(needle) in self.text() or self._dead(), timeout=timeout,
-                 what=f"{needle[:40]!r} on screen")
+            poll(
+                lambda: canon(needle) in self.text() or self._dead(),
+                timeout=timeout,
+                what=f"{needle[:40]!r} on screen",
+            )
         except AssertionError as exc:
             raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}") from None
-        assert self.proc.poll() is None, f"clawk exited ({self.proc.returncode}) waiting for {needle[:40]!r}\n{self.dump()}"
+        assert self.proc.poll() is None, (
+            f"clawk exited ({self.proc.returncode}) waiting for {needle[:40]!r}\n{self.dump()}"
+        )
 
     def wait_quiet(self, idle: float = 1.0, timeout: float = 30.0) -> None:
         """Wait for a settled frame: the screen has not changed for ``idle`` seconds, ignoring
         digits (status-bar clocks such as elapsed/since-last-turn tick every second while idle;
         a busy spinner or a still-streaming reply changes non-digit cells and keeps us waiting)."""
+
         def frame() -> str:
             return _DIGITS.sub("#", "\n".join(self.lines()))
+
         state = {"frame": frame(), "since": time.monotonic()}
 
         def settled() -> bool:
@@ -209,12 +263,15 @@ class PtyClawksis:
             if cur != state["frame"]:
                 state["frame"], state["since"] = cur, now
             return now - state["since"] >= idle
+
         try:
             poll(settled, timeout=timeout, what="a settled frame", interval=0.1)
         except AssertionError as exc:
             with self._lock:
                 tail = bytes(self.raw[-600:])
-            raise AssertionError(f"{exc}\n--- screen ---\n{self.dump()}\n--- last bytes ---\n{tail!r}") from None
+            raise AssertionError(
+                f"{exc}\n--- screen ---\n{self.dump()}\n--- last bytes ---\n{tail!r}"
+            ) from None
 
     def _raw_mode(self) -> bool:
         """The app put the slave side in full raw mode (cfmakeraw / libuv RAW: no canonical
@@ -232,9 +289,14 @@ class PtyClawksis:
         deadline = time.monotonic() + timeout
         while True:
             remaining = max(1.0, deadline - time.monotonic())
-            poll(lambda: self._dead() or self._raw_mode(), timeout=remaining,
-                 what="the UI to take the terminal (raw mode)")
-            assert self.proc.poll() is None, f"clawk exited ({self.proc.returncode}) during startup\n{self.dump()}"
+            poll(
+                lambda: self._dead() or self._raw_mode(),
+                timeout=remaining,
+                what="the UI to take the terminal (raw mode)",
+            )
+            assert self.proc.poll() is None, (
+                f"clawk exited ({self.proc.returncode}) during startup\n{self.dump()}"
+            )
             self.wait_quiet(1.0, timeout=max(1.0, deadline - time.monotonic()))
             if self._raw_mode():
                 return
@@ -253,7 +315,11 @@ class PtyClawksis:
         """Type ``text``, wait for its echo in the composer, then press Enter in a separate write."""
         before = self.count(text)
         self.write(text)
-        poll(lambda: self.count(text) > before or self._dead(), timeout=timeout, what=f"echo of {text!r}")
+        poll(
+            lambda: self.count(text) > before or self._dead(),
+            timeout=timeout,
+            what=f"echo of {text!r}",
+        )
         # Not synchronization but input pacing: the classic CLI treats an Enter arriving within
         # 50 ms of the last buffer change as a pasted newline (_RAPID_INPUT_ENTER_WINDOW_S), so a
         # human-speed gap (10x that window) must separate the text from the submitting CR.
@@ -266,7 +332,11 @@ class PtyClawksis:
         found = {(pid, _start_time(pid)) for pid in session_members(self.sid)}
         try:
             import psutil
-            found |= {(c.pid, _start_time(c.pid)) for c in psutil.Process(self.proc.pid).children(recursive=True)}
+
+            found |= {
+                (c.pid, _start_time(c.pid))
+                for c in psutil.Process(self.proc.pid).children(recursive=True)
+            }
         except Exception:
             pass
         self.seen_members.update(item for item in found if item[1] is not None)
@@ -279,7 +349,9 @@ class PtyClawksis:
             self.track_members()
             time.sleep(0.05)
         if self.proc.poll() is None:
-            raise AssertionError(f"clawk did not exit within {timeout:.0f}s of {command}\n{self.dump()}")
+            raise AssertionError(
+                f"clawk did not exit within {timeout:.0f}s of {command}\n{self.dump()}"
+            )
         return self.proc.returncode
 
     def leftover_processes(self, timeout: float = 15.0) -> list[str]:
@@ -293,8 +365,13 @@ class PtyClawksis:
         def alive() -> list[int]:
             pids = set(session_members(self.sid))
             # Same pid AND same start time: a recycled pid is not our leftover.
-            pids |= {pid for pid, started in self.seen_members if _start_time(pid) == started}
-            return sorted(pid for pid in pids if not looks_like_gateway_command_line(cmdline(pid)))
+            pids |= {
+                pid for pid, started in self.seen_members if _start_time(pid) == started
+            }
+            return sorted(
+                pid for pid in pids if not looks_like_gateway_command_line(cmdline(pid))
+            )
+
         try:
             poll(lambda: not alive(), timeout=timeout, what="the PTY session to empty")
         except AssertionError:
@@ -307,8 +384,12 @@ class PtyClawksis:
             os.killpg(self.sid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
-        leftovers = set(session_members(self.sid))  # members that moved to their own process group
-        leftovers |= {pid for pid, started in self.seen_members if _start_time(pid) == started}
+        leftovers = set(
+            session_members(self.sid)
+        )  # members that moved to their own process group
+        leftovers |= {
+            pid for pid, started in self.seen_members if _start_time(pid) == started
+        }
         for pid in leftovers:
             try:
                 os.kill(pid, signal.SIGKILL)
@@ -331,6 +412,7 @@ class PtyClawksis:
         """Block until state.db holds ``n_replies`` non-empty assistant rows: the agent finished the
         turn (a completion signal independent of what the screen shows, so a garbled render is
         reported by the rendering assertions instead of as a timeout)."""
+
         def done() -> bool:
             if self._dead():
                 return True
@@ -338,9 +420,20 @@ class PtyClawksis:
                 rows = self.persisted_messages()
             except sqlite3.Error:
                 return False
-            return sum(1 for _s, r, c in rows if r == "assistant" and c.strip()) >= n_replies
-        poll(done, timeout=timeout, what=f"{n_replies} assistant replies persisted", interval=0.1)
-        assert self.proc.poll() is None, f"clawk exited ({self.proc.returncode}) mid-turn\n{self.dump()}"
+            return (
+                sum(1 for _s, r, c in rows if r == "assistant" and c.strip())
+                >= n_replies
+            )
+
+        poll(
+            done,
+            timeout=timeout,
+            what=f"{n_replies} assistant replies persisted",
+            interval=0.1,
+        )
+        assert self.proc.poll() is None, (
+            f"clawk exited ({self.proc.returncode}) mid-turn\n{self.dump()}"
+        )
 
     def persisted_messages(self) -> list[tuple[str, str, str]]:
         """(session_id, role, content) for every user/assistant row in the sandbox state.db."""
@@ -351,7 +444,8 @@ class PtyClawksis:
         try:
             rows = conn.execute(
                 "SELECT session_id, role, COALESCE(content, '') FROM messages "
-                "WHERE role IN ('user', 'assistant') ORDER BY id").fetchall()
+                "WHERE role IN ('user', 'assistant') ORDER BY id"
+            ).fetchall()
         finally:
             conn.close()
         return [(str(s), str(r), str(c)) for s, r, c in rows]

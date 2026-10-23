@@ -35,8 +35,16 @@ def reload_env(monkeypatch):
     calls = {"discover": 0, "shutdown": 0}
     rev_box = {"rev": "rev-a"}
 
-    monkeypatch.setattr(_mcp_lifecycle, "shutdown_mcp_servers", lambda: calls.__setitem__("shutdown", calls["shutdown"] + 1))
-    monkeypatch.setattr(_mcp_discovery, "discover_mcp_tools", lambda: calls.__setitem__("discover", calls["discover"] + 1))
+    monkeypatch.setattr(
+        _mcp_lifecycle,
+        "shutdown_mcp_servers",
+        lambda: calls.__setitem__("shutdown", calls["shutdown"] + 1),
+    )
+    monkeypatch.setattr(
+        _mcp_discovery,
+        "discover_mcp_tools",
+        lambda: calls.__setitem__("discover", calls["discover"] + 1),
+    )
     monkeypatch.setattr(srv, "_compute_mcp_rev", lambda: rev_box["rev"])
 
     saved = (srv._mcp_reload_gen, srv._mcp_reload_loaded_rev)
@@ -83,7 +91,9 @@ def test_failed_reload_is_an_error_and_no_generation_advance(reload_env, monkeyp
     assert srv._mcp_reload_loaded_rev == ""
 
 
-def test_leader_rehashes_until_stable_when_config_changes_mid_reload(reload_env, monkeypatch):
+def test_leader_rehashes_until_stable_when_config_changes_mid_reload(
+    reload_env, monkeypatch
+):
     """Revision A starts a reload; the config changes to revision B while
     discovery is connecting servers. The leader must not mark A complete —
     it re-hashes after discovery and reloads again until stable, so the
@@ -152,11 +162,19 @@ def _run_leader_follower(reload_env, monkeypatch, follower_rev):
 
     results: dict = {}
 
-    lt = threading.Thread(target=lambda: results.__setitem__("leader", _reload(rev="rev-a", rid=1)), daemon=True)
+    lt = threading.Thread(
+        target=lambda: results.__setitem__("leader", _reload(rev="rev-a", rid=1)),
+        daemon=True,
+    )
     lt.start()
     assert leader_in_discovery.wait(timeout=10)
 
-    ft = threading.Thread(target=lambda: results.__setitem__("follower", _reload(rev=follower_rev, rid=2)), daemon=True)
+    ft = threading.Thread(
+        target=lambda: results.__setitem__(
+            "follower", _reload(rev=follower_rev, rid=2)
+        ),
+        daemon=True,
+    )
     ft.start()
     # The follower has snapshotted gen_before once it blocks on the lock.
     assert lock.waiting.wait(timeout=10)
@@ -179,7 +197,9 @@ def test_follower_with_matching_rev_coalesces(reload_env, monkeypatch):
     assert calls["discover"] == 1
 
 
-def test_legacy_request_without_rev_still_coalesces_on_generation(reload_env, monkeypatch):
+def test_legacy_request_without_rev_still_coalesces_on_generation(
+    reload_env, monkeypatch
+):
     """Manual /reload-mcp and older clients send no rev — generation-only
     coalescing (the pre-existing contract) still applies."""
     results, calls = _run_leader_follower(reload_env, monkeypatch, follower_rev=None)  # type: ignore[arg-type]

@@ -19,7 +19,11 @@ _CURRENT_SUFFIX = "  ← currently in use"
 
 
 def _confirm_selection_guards(
-    model_id: str, *, provider: str = "", base_url: str = "", api_key: str = "",
+    model_id: str,
+    *,
+    provider: str = "",
+    base_url: str = "",
+    api_key: str = "",
     include_kinds: Optional[list[str]] = None,
 ) -> bool:
     """Prompt before saving a model that trips any selection guard (cost, data-policy, ...).
@@ -27,9 +31,17 @@ def _confirm_selection_guards(
     Shows one [y/N] confirm listing every warning that fired. Returns True to proceed.
     """
     try:
-        from clawk_cli.model_selection_guards import combined_message, selection_warnings
+        from clawk_cli.model_selection_guards import (
+            combined_message,
+            selection_warnings,
+        )
+
         warnings = selection_warnings(
-            model_id, provider=provider, base_url=base_url, api_key=api_key, include_kinds=include_kinds,
+            model_id,
+            provider=provider,
+            base_url=base_url,
+            api_key=api_key,
+            include_kinds=include_kinds,
         )
     except Exception:
         warnings = []
@@ -66,11 +78,20 @@ class _ModelPickerRows:
     """
 
     def __init__(
-        self, all_models: list[str], pricing: Optional[dict[str, dict[str, str]]], *,
-        current_model: str, sale_chrome: bool, usage=None,
+        self,
+        all_models: list[str],
+        pricing: Optional[dict[str, dict[str, str]]],
+        *,
+        current_model: str,
+        sale_chrome: bool,
+        usage=None,
         notes: Optional[dict[str, str]] = None,
     ) -> None:
-        from clawk_cli.models_pricing import _format_price_per_mtok, compute_sale_discount
+        from clawk_cli.models_pricing import (
+            _format_price_per_mtok,
+            compute_sale_discount,
+        )
+
         self.current_model = current_model
         # Per-model dim annotation (e.g. "usage credits"); the row stays selectable.
         self.notes = notes or {}
@@ -81,6 +102,7 @@ class _ModelPickerRows:
         self.usage = usage
         if self.window_mode:
             from clawk_cli.model_picker_usage import usage_levels
+
             self.levels = usage_levels(all_models, pricing)
             self.has_pricing = False
             self.has_cache = False
@@ -95,7 +117,11 @@ class _ModelPickerRows:
         self.has_pricing = bool(pricing and any(pricing.get(m) for m in all_models))
         # Leave room for a leading "★ " on sale rows (Nous only).
         name_pad = 3 if sale_chrome else 2
-        self.name_col = max((len(m) for m in all_models), default=0) + name_pad if self.has_pricing else 0
+        self.name_col = (
+            max((len(m) for m in all_models), default=0) + name_pad
+            if self.has_pricing
+            else 0
+        )
         # (inp, out, cache, pct|None, was_inp, was_out)
         self._price_cache: dict[str, tuple[str, str, str, int | None, str, str]] = {}
         self.price_col = 3  # minimum width
@@ -120,7 +146,13 @@ class _ModelPickerRows:
                 cache = _format_price_per_mtok(cache_read) if cache_read else ""
                 if cache:
                     self.has_cache = True
-                sale = compute_sale_discount(p.get("prompt", ""), p.get("completion", ""), p.get("original")) if sale_chrome else None
+                sale = (
+                    compute_sale_discount(
+                        p.get("prompt", ""), p.get("completion", ""), p.get("original")
+                    )
+                    if sale_chrome
+                    else None
+                )
                 if sale is not None:
                     self.any_on_sale = True
                     pct, was_prompt_raw, was_out_raw = sale
@@ -136,11 +168,19 @@ class _ModelPickerRows:
 
     def _cost_segments(self, mid: str) -> list[tuple[str, str | None]]:
         """Window row: padded name (dim when a full allowance stops it) + Large / Free."""
-        segs: list[tuple[str, str | None]] = [(f"{mid:<{self.name_col}}", "dim" if self.usage.blocks(mid) else None)]
+        segs: list[tuple[str, str | None]] = [
+            (f"{mid:<{self.name_col}}", "dim" if self.usage.blocks(mid) else None)
+        ]
         from clawk_cli.model_picker_usage import usage_level_label
+
         level = self.levels.get(mid)
         word = usage_level_label(level, "en")
-        segs.extend(((_GAUGE_GAP, None), (f"{word:<{_COST_COL}}", _LEVEL_STYLE.get(level or ""))))
+        segs.extend(
+            (
+                (_GAUGE_GAP, None),
+                (f"{word:<{_COST_COL}}", _LEVEL_STYLE.get(level or "")),
+            )
+        )
         return segs
 
     def segments(self, mid: str) -> list[tuple[str, str | None]]:
@@ -152,11 +192,16 @@ class _ModelPickerRows:
         if not self.has_pricing:
             return [(mid, None), *note, *current]
 
-        inp, out, cache, pct, was_inp, was_out = self._price_cache.get(mid, ("", "", "", None, "", ""))
+        inp, out, cache, pct, was_inp, was_out = self._price_cache.get(
+            mid, ("", "", "", None, "", "")
+        )
         on_sale = pct is not None
         # Reserve 2 columns for "★ " so sale and non-sale names share alignment.
         if on_sale:
-            segs: list[tuple[str, str | None]] = [("★ ", "yellow"), (f"{mid:<{self.name_col - 2}}", None)]
+            segs: list[tuple[str, str | None]] = [
+                ("★ ", "yellow"),
+                (f"{mid:<{self.name_col - 2}}", None),
+            ]
         else:
             segs = [(f"{mid:<{self.name_col}}", None)]
 
@@ -181,6 +226,7 @@ class _ModelPickerRows:
         lines: list[str] = []
         if self.window_mode:
             from clawk_cli.model_picker_usage import plan_gauge_lines
+
             for i, line in enumerate(plan_gauge_lines(self.usage)):
                 suffix = f" — {self.usage.included_summary}" if i == 0 else ""
                 lines.append(f"{pad}{line}{suffix}")
@@ -206,10 +252,13 @@ class _ModelPickerRows:
         if not self.has_top_tier:
             return ""
         from clawk_cli.model_picker_usage import TOP_TIER_FOOTNOTE
+
         return TOP_TIER_FOOTNOTE
 
 
-def _picker_order(model_ids: list[str], current_model: str, window_usage) -> tuple[list[str], dict[int, str], int]:
+def _picker_order(
+    model_ids: list[str], current_model: str, window_usage
+) -> tuple[list[str], dict[int, str], int]:
     """``(ordered ids, {row index: section heading}, cursor start)`` for the picker.
 
     Window plan: "Recommended" (the plan's featured picks) then "Other models", with the current
@@ -217,8 +266,15 @@ def _picker_order(model_ids: list[str], current_model: str, window_usage) -> tup
     """
     sections: dict[int, str] = {}
     if window_usage is not None:
-        from clawk_cli.model_picker_usage import SECTION_OTHER, SECTION_RECOMMENDED, split_recommended
-        head, rest = split_recommended(list(dict.fromkeys(model_ids)), window_usage.featured_model_ids)
+        from clawk_cli.model_picker_usage import (
+            SECTION_OTHER,
+            SECTION_RECOMMENDED,
+            split_recommended,
+        )
+
+        head, rest = split_recommended(
+            list(dict.fromkeys(model_ids)), window_usage.featured_model_ids
+        )
         ordered = head + rest
         if head:
             sections[0] = SECTION_RECOMMENDED
@@ -226,16 +282,33 @@ def _picker_order(model_ids: list[str], current_model: str, window_usage) -> tup
                 sections[len(head)] = SECTION_OTHER
     else:
         # Reorder: current model first, then the rest (deduplicated)
-        ordered = list(dict.fromkeys(
-            ([current_model] if current_model and current_model in model_ids else []) + list(model_ids)
-        ))
-    return ordered, sections, (ordered.index(current_model) if current_model in ordered else 0)
+        ordered = list(
+            dict.fromkeys(
+                (
+                    [current_model]
+                    if current_model and current_model in model_ids
+                    else []
+                )
+                + list(model_ids)
+            )
+        )
+    return (
+        ordered,
+        sections,
+        (ordered.index(current_model) if current_model in ordered else 0),
+    )
 
 
-def _print_numbered_rows(rows: _ModelPickerRows, menu_title: str, ordered: list[str], sections: dict[int, str]) -> int:
+def _print_numbered_rows(
+    rows: _ModelPickerRows,
+    menu_title: str,
+    ordered: list[str],
+    sections: dict[int, str],
+) -> int:
     """The no-curses fallback's title, numbered rows (+ custom / skip) and footnote; returns the number width."""
     from clawk_cli.curses_ui import colorize_gauge_bars_ansi, format_radio_item_ansi
     from clawk_cli.colors import Colors, color
+
     n, _DIM, _RESET = len(ordered), "\033[2m", "\033[0m"
     for line in menu_title.splitlines():
         if rows.window_mode:
@@ -254,12 +327,18 @@ def _print_numbered_rows(rows: _ModelPickerRows, menu_title: str, ordered: list[
 
 
 def _prompt_model_selection(
-    model_ids: list[str], current_model: str = "",
+    model_ids: list[str],
+    current_model: str = "",
     pricing: Optional[dict[str, dict[str, str]]] = None,
-    unavailable_models: Optional[list[str]] = None, portal_url: str = "",
-    unavailable_message: str = "", confirm_provider: str = "", confirm_base_url: str = "",
-    confirm_api_key: str = "", usage=None,
-    notes: Optional[dict[str, str]] = None, title: str = "Select default model:",
+    unavailable_models: Optional[list[str]] = None,
+    portal_url: str = "",
+    unavailable_message: str = "",
+    confirm_provider: str = "",
+    confirm_base_url: str = "",
+    confirm_api_key: str = "",
+    usage=None,
+    notes: Optional[dict[str, str]] = None,
+    title: str = "Select default model:",
 ) -> Optional[str]:
     """Interactive model picker; current_model listed first. Returns the chosen model ID or None. *title* heads
     the menu (a plugin picking a model for something other than the default says so).
@@ -270,6 +349,7 @@ def _prompt_model_selection(
     gateway's per-model usage word on a usage-window plan.
     """
     from clawk_cli.cli_output import line_input
+
     _unavailable = unavailable_models or []
     # Sale chrome is Nous Portal-only, even if pricing.original is present for another provider.
     sale_chrome = (confirm_provider or "").strip().lower() == "nous"
@@ -279,7 +359,10 @@ def _prompt_model_selection(
             return None
         # Cost guard needs a known provider; id-keyed guards (data policy) always run.
         ok = _confirm_selection_guards(
-            mid, provider=confirm_provider, base_url=confirm_base_url, api_key=confirm_api_key,
+            mid,
+            provider=confirm_provider,
+            base_url=confirm_base_url,
+            api_key=confirm_api_key,
             include_kinds=None if confirm_provider else ["data_policy"],
         )
         return mid if ok else None
@@ -296,8 +379,13 @@ def _prompt_model_selection(
     ordered, sections, start = _picker_order(model_ids, current_model, window_usage)
 
     rows = _ModelPickerRows(
-        ordered + list(_unavailable), pricing, current_model=current_model, sale_chrome=sale_chrome,
-        usage=window_usage, notes=notes)
+        ordered + list(_unavailable),
+        pricing,
+        current_model=current_model,
+        sale_chrome=sale_chrome,
+        usage=window_usage,
+        notes=notes,
+    )
     _DIM = "\033[2m"
     _RESET = "\033[0m"
 
@@ -308,6 +396,7 @@ def _prompt_model_selection(
     # Try arrow-key menu first, fall back to number input.
     try:
         from clawk_cli.curses_ui import curses_radiolist
+
         choices = [rows.segments(mid) for mid in ordered] + [_CUSTOM_LABEL, _SKIP_LABEL]
 
         unavailable_footer = unavailable_message.strip()
@@ -325,10 +414,13 @@ def _prompt_model_selection(
         # Search haystack = label + aliases for brand-less wire ids (Kimi `k3` ↔ "kimi"); skip when
         # model_search_text adds nothing beyond the bare id.
         from clawk_cli.model_search import model_search_text
+
         model_search_labels = []
         for mid in ordered:
             label, haystack = rows.label(mid), model_search_text(mid)
-            model_search_labels.append(label if haystack == mid else f"{label} {haystack}")
+            model_search_labels.append(
+                label if haystack == mid else f"{label} {haystack}"
+            )
         model_search_labels += [_CUSTOM_LABEL, _SKIP_LABEL]
 
         idx = curses_radiolist(
@@ -384,7 +476,9 @@ def _prompt_model_selection(
             return None
 
 
-_model_choice_saves = 0  # bumped per saved pick; `clawk model` reads it to know a pick landed
+_model_choice_saves = (
+    0  # bumped per saved pick; `clawk model` reads it to know a pick landed
+)
 
 
 def model_choice_save_count() -> int:
@@ -395,6 +489,7 @@ def _save_model_choice(model_id: str) -> None:
     """Save the selected model to config.yaml only — NOT .env, which would stomp in multi-agent setups."""
     global _model_choice_saves
     from clawk_cli.config import save_config, load_config
+
     _model_choice_saves += 1
     config = load_config()
     # Always use dict format so provider/base_url can be stored alongside

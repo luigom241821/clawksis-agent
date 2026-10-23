@@ -26,8 +26,12 @@ class GatewayPluginRewireMixin:
 
     _plugin_rewire_unsubscribe: Optional[dict[str, Callable[[], None]]] = None
 
-    def _subscribe_plugin_rewire(self, manager: Any, profile_name: Optional[str] = None,
-                                 profile_home: Optional[Path] = None) -> None:
+    def _subscribe_plugin_rewire(
+        self,
+        manager: Any,
+        profile_name: Optional[str] = None,
+        profile_home: Optional[Path] = None,
+    ) -> None:
         """Idempotent per manager scope: a served-profile rescan re-enters ``_load_secondary_profile_config``
         and must not stack a second listener (two listeners = two re-wire passes, still deduped, but noise)."""
         subs = self._plugin_rewire_unsubscribe
@@ -46,24 +50,33 @@ class GatewayPluginRewireMixin:
             # adapters own PTB/Bolt handler tables, so always hop onto the gateway loop.
             if loop is None or loop.is_closed():
                 return
-            loop.call_soon_threadsafe(self._rewire_plugin_handlers, profile_name, profile_home)
+            loop.call_soon_threadsafe(
+                self._rewire_plugin_handlers, profile_name, profile_home
+            )
 
         subs[scope] = manager.on_plugin_loaded(_on_loaded)
 
-    def _rewire_plugin_handlers(self, profile_name: Optional[str] = None,
-                                profile_home: Optional[Path] = None) -> int:
+    def _rewire_plugin_handlers(
+        self, profile_name: Optional[str] = None, profile_home: Optional[Path] = None
+    ) -> int:
         """Call ``rewire_plugin_handlers()`` on every live adapter of one profile (``None`` = the launch
         profile's ``self.adapters``); a secondary's adapters read their own manager, so bind its scope.
         Returns the number of adapters re-wired."""
         if profile_name is None:
             adapters = dict(getattr(self, "adapters", None) or {})
         else:
-            adapters = dict((getattr(self, "_profile_adapters", None) or {}).get(profile_name) or {})
+            adapters = dict(
+                (getattr(self, "_profile_adapters", None) or {}).get(profile_name) or {}
+            )
         if not adapters:
             return 0
         from gateway.run import _profile_runtime_scope
-        scope = (_profile_runtime_scope(profile_home, hydrate_secrets=False)
-                 if profile_home is not None else contextlib.nullcontext())
+
+        scope = (
+            _profile_runtime_scope(profile_home, hydrate_secrets=False)
+            if profile_home is not None
+            else contextlib.nullcontext()
+        )
         count = 0
         with scope:
             for platform, adapter in adapters.items():
@@ -71,14 +84,22 @@ class GatewayPluginRewireMixin:
                     adapter.rewire_plugin_handlers()
                     count += 1
                 except Exception:
-                    logger.warning("[%s] plugin handler re-wire failed", getattr(platform, "value", platform),
-                                   exc_info=True)
-        logger.info("Re-wired plugin handlers on %d adapter(s)%s", count,
-                    f" for profile '{profile_name}'" if profile_name else "")
+                    logger.warning(
+                        "[%s] plugin handler re-wire failed",
+                        getattr(platform, "value", platform),
+                        exc_info=True,
+                    )
+        logger.info(
+            "Re-wired plugin handlers on %d adapter(s)%s",
+            count,
+            f" for profile '{profile_name}'" if profile_name else "",
+        )
         return count
 
 
-def reload_plugins_verb(runner: Any, loop: asyncio.AbstractEventLoop) -> Callable[..., dict]:
+def reload_plugins_verb(
+    runner: Any, loop: asyncio.AbstractEventLoop
+) -> Callable[..., dict]:
     """Control-socket ``reload-plugins``: force re-discovery under the requested home's scope so a plugin
     installed/enabled by another process (CLI, Desktop, ``plugins.manage``) loads now; the loaded event
     then re-wires that profile's adapters. Only the gateway home and served profile homes are accepted.
@@ -91,6 +112,7 @@ def reload_plugins_verb(runner: Any, loop: asyncio.AbstractEventLoop) -> Callabl
         from clawk_cli.plugins import discover_plugins, get_plugin_manager
         from clawk_cli.plugins_activation import activation_summaries
         from gateway.run import _profile_runtime_scope
+
         params = params or {}
         gateway_home = Path(get_clawk_home())
         requested = Path(str(params.get("home") or gateway_home)).expanduser()
@@ -98,23 +120,41 @@ def reload_plugins_verb(runner: Any, loop: asyncio.AbstractEventLoop) -> Callabl
         profile_name: Optional[str] = None
         if req_key != clawk_home_key(gateway_home):
             served = (getattr(runner, "_served_profile_homes", None) or {}).items()
-            profile_name = next((str(n) for n, h in served if clawk_home_key(h) == req_key), None)
+            profile_name = next(
+                (str(n) for n, h in served if clawk_home_key(h) == req_key), None
+            )
             if profile_name is None:
-                return {"reloaded": False, "error": "home is not served by this gateway", "home": str(requested)}
-            if profile_name == (getattr(runner, "_primary_profile_name", None) or "default"):
+                return {
+                    "reloaded": False,
+                    "error": "home is not served by this gateway",
+                    "home": str(requested),
+                }
+            if profile_name == (
+                getattr(runner, "_primary_profile_name", None) or "default"
+            ):
                 profile_name = None
-        scope = (_profile_runtime_scope(requested, hydrate_secrets=False) if profile_name
-                 else contextlib.nullcontext())
+        scope = (
+            _profile_runtime_scope(requested, hydrate_secrets=False)
+            if profile_name
+            else contextlib.nullcontext()
+        )
         with scope:
             discover_plugins(force=True)
             manager = get_plugin_manager()
             names, activations = sorted(manager._plugins), activation_summaries(manager)
         try:
-            rewired = asyncio.run_coroutine_threadsafe(_count_adapters(runner, profile_name), loop).result(timeout=5.0)
+            rewired = asyncio.run_coroutine_threadsafe(
+                _count_adapters(runner, profile_name), loop
+            ).result(timeout=5.0)
         except Exception:
             rewired = None
-        return {"reloaded": True, "home": str(requested), "plugins": names, "activations": activations,
-                "adapters_rewired": rewired}
+        return {
+            "reloaded": True,
+            "home": str(requested),
+            "plugins": names,
+            "activations": activations,
+            "adapters_rewired": rewired,
+        }
 
     return _handler
 
@@ -123,4 +163,6 @@ async def _count_adapters(runner: Any, profile_name: Optional[str]) -> int:
     """Live adapters for the profile; scheduled after the loaded-event callback, so they are re-wired."""
     if profile_name is None:
         return len(getattr(runner, "adapters", None) or {})
-    return len((getattr(runner, "_profile_adapters", None) or {}).get(profile_name) or {})
+    return len(
+        (getattr(runner, "_profile_adapters", None) or {}).get(profile_name) or {}
+    )

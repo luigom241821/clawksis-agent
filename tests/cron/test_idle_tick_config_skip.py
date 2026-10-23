@@ -38,8 +38,6 @@ def _run_idle_tick(**kwargs):
 
 
 class TestIdleTickSkipsConfigLoad:
-
-
     def test_idle_tick_still_sweeps_mcp_orphans(self):
         """The idle-tick orphan sweep is intentional on main — must survive."""
         rc, calls = _run_idle_tick(verbose=False)

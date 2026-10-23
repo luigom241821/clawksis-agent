@@ -6,6 +6,7 @@ so the delivery ledger held the answer until the next gateway boot — hours
 later. QQBot already waits; these tests pin the same contract on Telegram,
 including the reconnect-watcher case that *replaces* the adapter object.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -8,7 +8,13 @@ from unittest import mock
 
 import pytest
 
-SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "optional-skills" / "social-media" / "reddit-reading" / "scripts"
+SCRIPTS_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "optional-skills"
+    / "social-media"
+    / "reddit-reading"
+    / "scripts"
+)
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import reddit
@@ -24,7 +30,9 @@ THREAD_ATOM = b"""<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"
 
 
 def _http_error(code, headers):
-    return urllib.error.HTTPError("https://www.reddit.com/x", code, "msg", headers, io.BytesIO(b""))
+    return urllib.error.HTTPError(
+        "https://www.reddit.com/x", code, "msg", headers, io.BytesIO(b"")
+    )
 
 
 def test_anonymous_thread_uses_atom_feed_and_waits_out_a_429_exactly_once(monkeypatch):
@@ -52,19 +60,31 @@ def test_anonymous_thread_uses_atom_feed_and_waits_out_a_429_exactly_once(monkey
             raise _http_error(429, {"x-ratelimit-reset": "7"})
         return Resp(THREAD_ATOM)
 
-    with mock.patch.object(reddit.urllib.request, "urlopen", fake_urlopen), \
-         mock.patch.object(reddit.time, "sleep", sleeps.append):
+    with (
+        mock.patch.object(reddit.urllib.request, "urlopen", fake_urlopen),
+        mock.patch.object(reddit.time, "sleep", sleeps.append),
+    ):
         post = reddit.atom_thread("test", "abc123", limit=10)
 
-    assert calls[0].startswith("https://www.reddit.com/r/test/comments/abc123/.rss") and len(calls) == 2
+    assert (
+        calls[0].startswith("https://www.reddit.com/r/test/comments/abc123/.rss")
+        and len(calls) == 2
+    )
     assert sleeps == [8]  # reset + 1s margin, one retry only
     assert post["title"] == "Post title" and post["author"] == "op"
-    assert post["body"] == "body text"  # "submitted by … [link] [comments]" footer stripped
+    assert (
+        post["body"] == "body text"
+    )  # "submitted by … [link] [comments]" footer stripped
     assert [c["author"] for c in post["comments"]] == ["c1"]
 
     # a second 429 after the retry propagates instead of looping
-    with mock.patch.object(reddit.urllib.request, "urlopen", side_effect=_http_error(429, {})), \
-         mock.patch.object(reddit.time, "sleep", lambda s: None), pytest.raises(urllib.error.HTTPError):
+    with (
+        mock.patch.object(
+            reddit.urllib.request, "urlopen", side_effect=_http_error(429, {})
+        ),
+        mock.patch.object(reddit.time, "sleep", lambda s: None),
+        pytest.raises(urllib.error.HTTPError),
+    ):
         reddit._get("https://www.reddit.com/r/test/.rss")
 
 
@@ -76,12 +96,58 @@ def test_oauth_credentials_route_to_oauth_host_and_flatten_nested_comments(monke
     assert reddit.oauth_credentials() == ("cid", "sec")
 
     listing = [
-        {"data": {"children": [{"kind": "t3", "data": {"title": "T", "author": "op", "subreddit": "test", "score": 42,
-                                                      "num_comments": 2, "created_utc": 1.0, "permalink": "/r/test/comments/abc123/t/",
-                                                      "is_self": True, "url": "https://www.reddit.com/r/test/comments/abc123/t/", "selftext": "s"}}]}},
-        {"data": {"children": [{"kind": "t1", "data": {"author": "a", "score": 5, "body": "top", "permalink": "/p/1",
-                                                      "replies": {"data": {"children": [{"kind": "t1", "data": {"author": "b", "score": 1, "body": "reply", "replies": ""}}]}}}},
-                               {"kind": "more", "data": {}}]}},
+        {
+            "data": {
+                "children": [
+                    {
+                        "kind": "t3",
+                        "data": {
+                            "title": "T",
+                            "author": "op",
+                            "subreddit": "test",
+                            "score": 42,
+                            "num_comments": 2,
+                            "created_utc": 1.0,
+                            "permalink": "/r/test/comments/abc123/t/",
+                            "is_self": True,
+                            "url": "https://www.reddit.com/r/test/comments/abc123/t/",
+                            "selftext": "s",
+                        },
+                    }
+                ]
+            }
+        },
+        {
+            "data": {
+                "children": [
+                    {
+                        "kind": "t1",
+                        "data": {
+                            "author": "a",
+                            "score": 5,
+                            "body": "top",
+                            "permalink": "/p/1",
+                            "replies": {
+                                "data": {
+                                    "children": [
+                                        {
+                                            "kind": "t1",
+                                            "data": {
+                                                "author": "b",
+                                                "score": 1,
+                                                "body": "reply",
+                                                "replies": "",
+                                            },
+                                        }
+                                    ]
+                                }
+                            },
+                        },
+                    },
+                    {"kind": "more", "data": {}},
+                ]
+            }
+        },
     ]
     seen = {}
 
@@ -93,8 +159,14 @@ def test_oauth_credentials_route_to_oauth_host_and_flatten_nested_comments(monke
         post = reddit.api_thread("tok", "test", "abc123", limit=10)
 
     assert seen == {"path": "/r/test/comments/abc123", "token": "tok"}
-    assert post["score"] == 42 and post["url"] == "https://www.reddit.com/r/test/comments/abc123/t/"
-    assert [(c["author"], c["depth"], c["score"]) for c in post["comments"]] == [("a", 0, 5), ("b", 1, 1)]
+    assert (
+        post["score"] == 42
+        and post["url"] == "https://www.reddit.com/r/test/comments/abc123/t/"
+    )
+    assert [(c["author"], c["depth"], c["score"]) for c in post["comments"]] == [
+        ("a", 0, 5),
+        ("b", 1, 1),
+    ]
 
     # the bearer header actually reaches the OAuth host
     captured = {}

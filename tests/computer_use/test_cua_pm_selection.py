@@ -72,8 +72,12 @@ def test_setup_acquires_through_pm_and_validates_real_manifest(cua_home, monkeyp
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("permission_mode", ["bounded", "unrestricted"])
-@pytest.mark.parametrize("preinstalled", [False, True], ids=["cold", "previous-selection"])
-def test_private_start_uses_post_ensure_binary(cua_home, monkeypatch, permission_mode, preinstalled):
+@pytest.mark.parametrize(
+    "preinstalled", [False, True], ids=["cold", "previous-selection"]
+)
+def test_private_start_uses_post_ensure_binary(
+    cua_home, monkeypatch, permission_mode, preinstalled
+):
     """Real PM lookup and manifest processes; only daemon/MCP serving is stubbed."""
     import subprocess
     from types import SimpleNamespace
@@ -84,9 +88,14 @@ def test_private_start_uses_post_ensure_binary(cua_home, monkeypatch, permission
     monkeypatch.setenv("PATH", "")
     manifest_path = cua_home / "capabilities.yaml"
     manifest_path.write_text("version: 3\n", encoding="utf-8")
-    monkeypatch.setattr(backend_module, "_computer_use_cfg", lambda: {
-        "capability_manifest": str(manifest_path), "no_overlay": False,
-    })
+    monkeypatch.setattr(
+        backend_module,
+        "_computer_use_cfg",
+        lambda: {
+            "capability_manifest": str(manifest_path),
+            "no_overlay": False,
+        },
+    )
     if preinstalled:
         previous = record_driver()
         previous.write_text(f"#!{sys.executable}\nprint('{{}}')\n", encoding="utf-8")
@@ -123,12 +132,19 @@ def test_private_start_uses_post_ensure_binary(cua_home, monkeypatch, permission
             command = launches[-1]
             assert command[0] == acquired[-1]
             assert command[command.index("--permission-mode") + 1] == permission_mode
-            assert command[command.index("--capability-manifest") + 1] == str(manifest_path)
+            assert command[command.index("--capability-manifest") + 1] == str(
+                manifest_path
+            )
             assert "--approve-capability-manifest" in command
-            assert ("--dangerously-bypass-approvals" in command) == (permission_mode == "unrestricted")
+            assert ("--dangerously-bypass-approvals" in command) == (
+                permission_mode == "unrestricted"
+            )
             proxy, args = backend._embedded_daemon.proxy_invocation()
             assert proxy == acquired[-1]
-            assert args[args.index("--socket") + 1] == command[command.index("--socket") + 1]
+            assert (
+                args[args.index("--socket") + 1]
+                == command[command.index("--socket") + 1]
+            )
         finally:
             backend.stop()
 

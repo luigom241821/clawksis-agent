@@ -32,10 +32,14 @@ def two_homes(tmp_path, monkeypatch):
     b = root / "profiles" / "b"
     b.mkdir(parents=True)
     (root / ".env").write_text(f"A_ONLY_TOKEN={A_VAL}\n", encoding="utf-8")
-    (b / ".env").write_text(f"B_ONLY_TOKEN={B_VAL}\nSHARED_TOKEN=b-dotenv-stale\n", encoding="utf-8")
+    (b / ".env").write_text(
+        f"B_ONLY_TOKEN={B_VAL}\nSHARED_TOKEN=b-dotenv-stale\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.setenv("A_ONLY_TOKEN", A_VAL)
-    monkeypatch.setenv("INJECTED_TOKEN", ENV_VAL)  # systemd / op run credential injection, no file
+    monkeypatch.setenv(
+        "INJECTED_TOKEN", ENV_VAL
+    )  # systemd / op run credential injection, no file
     monkeypatch.setattr(server, "_clawk_home", root)
     monkeypatch.setattr(server, "_served_profile_homes", set())
     monkeypatch.setattr(lpp, "_snapshot", None)
@@ -51,11 +55,15 @@ def test_send_keeps_external_source_value_over_raw_dotenv(two_homes, monkeypatch
 
     _root, b = two_homes
     # B's secret manager already hydrated for this process (a hydrated home is not re-pulled).
-    monkeypatch.setattr(env_loader, "_SECRET_SOURCE_VALUES_BY_HOME",
-                        {str(b.resolve()): {"SHARED_TOKEN": "b-manager-fresh"}})
+    monkeypatch.setattr(
+        env_loader,
+        "_SECRET_SOURCE_VALUES_BY_HOME",
+        {str(b.resolve()): {"SHARED_TOKEN": "b-manager-fresh"}},
+    )
     monkeypatch.setattr(env_loader, "_APPLIED_HOMES", {str(b.resolve())})
     with server._session_profile_runtime_scope({"profile_home": str(b)}):
         from agent.secret_scope import current_secret_scope, get_secret
+
         assert get_secret("SHARED_TOKEN") == "b-manager-fresh"
         _load_clawk_env()
         assert get_secret("SHARED_TOKEN") == "b-manager-fresh"
@@ -83,13 +91,22 @@ def test_launch_body_survives_first_secondary_activation(two_homes):
     t = threading.Thread(target=launch_body)
     t.start()
     assert entered.wait(10)
-    assert server._profile_home("b") == b  # first secondary: freezes the launch env, flips fail-closed
+    assert (
+        server._profile_home("b") == b
+    )  # first secondary: freezes the launch env, flips fail-closed
     activated.set()
     t.join(10)
-    assert seen == {"before": ENV_VAL, "multiplex_now": True, "after": ENV_VAL, "b_leak": None}
+    assert seen == {
+        "before": ENV_VAL,
+        "multiplex_now": True,
+        "after": ENV_VAL,
+        "b_leak": None,
+    }
 
 
-def test_launch_body_survives_first_secondary_activation_on_the_dashboard(two_homes, monkeypatch):
+def test_launch_body_survives_first_secondary_activation_on_the_dashboard(
+    two_homes, monkeypatch
+):
     pytest.importorskip("fastapi")
     from agent.secret_scope import get_secret
     from clawk_cli import web_server_profiles as wsp

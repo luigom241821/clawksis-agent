@@ -80,12 +80,16 @@ def _sweep_killed_run_roots(root: str) -> None:
 def _rmtree_force(path: str) -> None:
     def _chmod_retry(fn, p, _exc):
         try:
-            os.chmod(os.path.dirname(p) if fn is os.rmdir or fn is os.listdir else p, 0o700)
+            os.chmod(
+                os.path.dirname(p) if fn is os.rmdir or fn is os.listdir else p, 0o700
+            )
             os.chmod(p, 0o700)
             fn(p)
         except OSError:
             pass
+
     shutil.rmtree(path, onerror=_chmod_retry)
+
 
 def _runner_scratch_root() -> str:
     """Per-run temp roots live on DISK, never the system temp dir: a full-suite run writes
@@ -101,13 +105,14 @@ def _runner_scratch_root() -> str:
     back that does not need root. Keying by uid means no run is blocked by another's leftovers.
     """
     name = "clawk-pytest" + (f"-{os.getuid()}" if hasattr(os, "getuid") else "")
-    if os.name == "nt" or not os.path.isdir("/var/tmp"):  # no-tmp: ok — probing the disk-backed FHS root
+    if os.name == "nt" or not os.path.isdir(
+        "/var/tmp"
+    ):  # no-tmp: ok — probing the disk-backed FHS root
         root = os.path.join(tempfile.gettempdir(), name)
     else:
         root = f"/var/tmp/{name}"  # no-tmp: ok — /var/tmp is disk-backed by FHS, never tmpfs
     os.makedirs(root, exist_ok=True)
     return root
-
 
 
 # Default test discovery roots.
@@ -193,6 +198,7 @@ def _split_pathspec(value: str) -> list[str]:
             i += 1
     return [p for p in parts if p.strip()]
 
+
 # Host-OS gating (see the ``_OS_MARKS`` block in tests/conftest.py): tests
 # marked for another host are collected and SKIPPED by the conftest hook —
 # this runner never executes them, by construction. The summary calls that
@@ -224,7 +230,9 @@ def _apply_pytest_ignores(
                 i += 1
                 value = pytest_args[i] if i < len(pytest_args) else ""
             if value:
-                anchored = Path(value) if Path(value).is_absolute() else repo_root / value
+                anchored = (
+                    Path(value) if Path(value).is_absolute() else repo_root / value
+                )
                 if flag == "--ignore":
                     paths.append(anchored.resolve())
                 else:
@@ -237,13 +245,19 @@ def _apply_pytest_ignores(
         real = file.resolve()
         if any(real == p or p in real.parents for p in paths):
             return True
-        return any(fnmatch.fnmatch(str(file), g) or fnmatch.fnmatch(str(real), g) for g in globs)
+        return any(
+            fnmatch.fnmatch(str(file), g) or fnmatch.fnmatch(str(real), g)
+            for g in globs
+        )
 
     kept = [f for f in files if not _ignored(f)]
     ignored = len(files) - len(kept)
     if ignored:
-        print(f"note: --ignore/--ignore-glob excluded {ignored} test "
-              f"file{'s' if ignored != 1 else ''} from this run.", flush=True)
+        print(
+            f"note: --ignore/--ignore-glob excluded {ignored} test "
+            f"file{'s' if ignored != 1 else ''} from this run.",
+            flush=True,
+        )
     return kept
 
 
@@ -254,9 +268,7 @@ def _select_files(
     # --files / --files-from: explicit file list (argv or file-backed) from
     # the CI generate job — skip discovery.
     if args.files and args.files_from:
-        print(
-            "error: --files and --files-from are mutually exclusive", file=sys.stderr
-        )
+        print("error: --files and --files-from are mutually exclusive", file=sys.stderr)
         sys.exit(2)
     roots: list[Path] = []
     if args.files:
@@ -332,9 +344,7 @@ def _off_host_marker_files(files: list[Path]) -> dict[str, int]:
     return counts
 
 
-def _approximately_count_tests(
-    files: list[Path], repo_root: Path
-) -> dict[Path, int]:
+def _approximately_count_tests(files: list[Path], repo_root: Path) -> dict[Path, int]:
     """
     Make a decent estimate at individual tests per file.
     Running ``pytest --co -q`` is WAY too slow because it actually imports everything.
@@ -387,9 +397,7 @@ def _discover_files(roots: list[Path]) -> list[Path]:
         # skip for that subtree. Compute the set of skip-parts the user
         # opted into, and only filter files whose path crosses a
         # skip-part *outside* that opt-in.
-        root_skip_overrides = {
-            part for part in root.parts if part in _SKIP_PARTS
-        }
+        root_skip_overrides = {part for part in root.parts if part in _SKIP_PARTS}
         effective_skips = _SKIP_PARTS - root_skip_overrides
         for path in root.rglob("test_*.py"):
             if any(part in effective_skips for part in path.parts):
@@ -434,7 +442,6 @@ def _kill_tree(proc: subprocess.Popen, pgid: int | None = None) -> None:
 
     if sys.platform == "win32":
         try:
-            
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                 stdout=subprocess.DEVNULL,
@@ -450,6 +457,7 @@ def _kill_tree(proc: subprocess.Popen, pgid: int | None = None) -> None:
         if pgid is not None:
             try:
                 import signal as _signal
+
                 os.killpg(pgid, _signal.SIGKILL)  # windows-footgun: ok
             except (ProcessLookupError, PermissionError, OSError):
                 pass
@@ -486,7 +494,9 @@ def _kill_detached_leftovers(temproot: str) -> None:
                 values = [item.partition(b"=")[2] for item in fh.read().split(b"\0")]
             if not any(v == root or v.startswith(root + b"/") for v in values):
                 continue
-            os.kill(int(entry), _signal.SIGKILL)  # windows-footgun: ok — /proc exists only on Linux
+            os.kill(
+                int(entry), _signal.SIGKILL
+            )  # windows-footgun: ok — /proc exists only on Linux
         except OSError:
             continue
 
@@ -654,7 +664,9 @@ def _run_one_file_once(
         cwd=repo_root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         env=env,
         # POSIX: place the child at the head of its own process group so
         # _kill_tree can SIGKILL the group atomically.
@@ -684,10 +696,7 @@ def _run_one_file_once(
         except subprocess.TimeoutExpired:
             output = "(file timeout exceeded; output unavailable)"
         rc = 124  # de facto convention for "killed by timeout".
-        output = (
-            f"({file_timeout:.0f}s exceeded; "
-            f"process tree SIGKILL'd)\n{output}"
-        )
+        output = f"({file_timeout:.0f}s exceeded; process tree SIGKILL'd)\n{output}"
     except BaseException:
         # KeyboardInterrupt / runner crash — make sure no zombie
         # grandchildren outlive us.
@@ -698,7 +707,7 @@ def _run_one_file_once(
         # case it left grandchildren behind; already-dead is a no-op.
         _kill_tree(proc, pgid=pgid)
 
-        output +=  "\n"
+        output += "\n"
     finally:
         _kill_detached_leftovers(temproot)
         # Delete the temp root for this attempt. Nothing reads it after the
@@ -708,7 +717,7 @@ def _run_one_file_once(
         _rmtree_force(temproot)
 
     if rc not in (0, 5) and not output.strip():
-        output = f"pytest child exited {rc} (0x{rc & 0xffffffff:08x}) with no output: {file}\n"
+        output = f"pytest child exited {rc} (0x{rc & 0xFFFFFFFF:08x}) with no output: {file}\n"
 
     if rc == 5:
         # No tests collected in THIS file — legitimate per-file: a
@@ -747,7 +756,9 @@ def _parse_pytest_summary(output: str) -> dict[str, int]:
         if not line:
             continue
         # Match "N passed", "N failed", "N skipped", "N errors", "N xfailed", "N xpassed"
-        for m in re.finditer(r"(\d+)\s+(passed|failed|skipped|errors|xfailed|xpassed)", line):
+        for m in re.finditer(
+            r"(\d+)\s+(passed|failed|skipped|errors|xfailed|xpassed)", line
+        ):
             result[m.group(2)] = int(m.group(1))
         # Also match "N error" (singular — pytest uses this sometimes).
         for m in re.finditer(r"(\d+)\s+error\b", line):
@@ -779,7 +790,7 @@ def _describe_interpreter_crash(rc: int, output: str) -> Optional[str]:
     if fatal:
         # The faulthandler banner is appended to the progress dots of the
         # last test; keep only the banner.
-        fatal = fatal[fatal.index("Fatal Python error:"):]
+        fatal = fatal[fatal.index("Fatal Python error:") :]
     if rc < 0:
         import signal as _signal
 
@@ -901,12 +912,18 @@ def _print_inline_failure(
     tail = "\n".join(lines[-30:])
 
     print(flush=True)
-    print(f"  ╔╍ Failed: {rel} ╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍", flush=True)
+    print(
+        f"  ╔╍ Failed: {rel} ╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍",
+        flush=True,
+    )
     for line in tail.splitlines():
         print(f"  ║ {line}", flush=True)
     print("  ║", flush=True)
     print(f"  ║  Repro: {repro}", flush=True)
-    print("  ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍", flush=True)
+    print(
+        "  ╚╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍",
+        flush=True,
+    )
     print(flush=True)
 
 
@@ -1019,9 +1036,7 @@ def _slice_files(
     bucket_files = _compute_lpt_slices(sorted(files), slice_count, {}, repo_root)
 
     target = bucket_files[slice_index - 1]
-    target_dur = sum(
-        durations.get(_format_file(f, repo_root), 2.0) for f in target
-    )
+    target_dur = sum(durations.get(_format_file(f, repo_root), 2.0) for f in target)
     total_dur = sum(
         durations.get(_format_file(f, repo_root), 2.0)
         for bucket in bucket_files
@@ -1094,7 +1109,8 @@ def _pytest_flag_error(tokens: list[str]) -> Optional[str]:
 
 
 def _report_skips(
-    skipped_files: list[tuple[Path, int]], repo_root: Path,
+    skipped_files: list[tuple[Path, int]],
+    repo_root: Path,
 ) -> bool:
     """--fail-on-skip: a skip is a failure of the lane, not of a test.
 
@@ -1105,14 +1121,17 @@ def _report_skips(
     if not total:
         return False
     print()
-    print(f"=== ✗ {total} test{'s' if total != 1 else ''} SKIPPED under --fail-on-skip. This is NOT a pass. ===")
+    print(
+        f"=== ✗ {total} test{'s' if total != 1 else ''} SKIPPED under --fail-on-skip. This is NOT a pass. ==="
+    )
     for file, n in sorted(skipped_files, key=lambda item: str(item[0])):
         print(f"  {_format_file(file, repo_root)}  ({n} skipped)")
     return True
 
 
 def _print_failure_report(
-    failures: list[tuple[Path, str, dict[str, int]]], repo_root: Path,
+    failures: list[tuple[Path, str, dict[str, int]]],
+    repo_root: Path,
 ) -> None:
     """Every failing file's output, then the failures grouped by cause."""
     print()
@@ -1126,26 +1145,38 @@ def _print_failure_report(
     crashed_files = [(f, o, s) for f, o, s in failures if s.get("crashed")]
     rest = [(f, s) for f, _o, s in failures if not s.get("crashed")]
     test_fail_files = [(f, s) for f, s in rest if s.get("failed", 0) > 0]
-    all_passed_but_nonzero = [(f, s) for f, s in rest
-                              if s.get("failed", 0) == 0 and s.get("passed", 0) > 0]
-    no_tests_ran = [(f, s) for f, s in rest
-                    if s.get("failed", 0) == 0 and s.get("passed", 0) == 0]
+    all_passed_but_nonzero = [
+        (f, s) for f, s in rest if s.get("failed", 0) == 0 and s.get("passed", 0) > 0
+    ]
+    no_tests_ran = [
+        (f, s) for f, s in rest if s.get("failed", 0) == 0 and s.get("passed", 0) == 0
+    ]
     if crashed_files:
-        print(f"=== {len(crashed_files)} file{'s' if len(crashed_files) != 1 else ''} where the interpreter CRASHED mid-run (native fault — a real bug, not a collection error; the tests that did run are not counted) ===")
+        print(
+            f"=== {len(crashed_files)} file{'s' if len(crashed_files) != 1 else ''} where the interpreter CRASHED mid-run (native fault — a real bug, not a collection error; the tests that did run are not counted) ==="
+        )
         for file, output, _s in crashed_files:
             print(f"  {_format_file(file, repo_root)}  {output.splitlines()[0]}")
     if test_fail_files:
         total_tf = sum(s.get("failed", 0) for _, s in test_fail_files)
-        print(f"=== {len(test_fail_files)} file{'s' if len(test_fail_files) != 1 else ''} with test failures ({total_tf} test{'s' if total_tf != 1 else ''} failed) ===")
+        print(
+            f"=== {len(test_fail_files)} file{'s' if len(test_fail_files) != 1 else ''} with test failures ({total_tf} test{'s' if total_tf != 1 else ''} failed) ==="
+        )
         for file, s in test_fail_files:
             nf = s.get("failed", 0)
-            print(f"  {_format_file(file, repo_root)}  ({nf} test{'s' if nf != 1 else ''} failed)")
+            print(
+                f"  {_format_file(file, repo_root)}  ({nf} test{'s' if nf != 1 else ''} failed)"
+            )
     if all_passed_but_nonzero:
-        print(f"=== {len(all_passed_but_nonzero)} file{'s' if len(all_passed_but_nonzero) != 1 else ''} where all tests passed but pytest exited non-zero (warnings-as-errors, hook failures, etc.) ===")
+        print(
+            f"=== {len(all_passed_but_nonzero)} file{'s' if len(all_passed_but_nonzero) != 1 else ''} where all tests passed but pytest exited non-zero (warnings-as-errors, hook failures, etc.) ==="
+        )
         for file, s in all_passed_but_nonzero:
             print(f"  {_format_file(file, repo_root)}  ({s.get('passed', 0)} passed)")
     if no_tests_ran:
-        print(f"=== {len(no_tests_ran)} file{'s' if len(no_tests_ran) != 1 else ''} where no tests ran (collection/import error, timeout before collection, etc.) ===")
+        print(
+            f"=== {len(no_tests_ran)} file{'s' if len(no_tests_ran) != 1 else ''} where no tests ran (collection/import error, timeout before collection, etc.) ==="
+        )
         for file, s in no_tests_ran:
             print(f"  {_format_file(file, repo_root)}")
 
@@ -1186,15 +1217,13 @@ def main() -> int:
         help=(
             "Per-file wall-clock cap in seconds. On timeout, the pytest "
             "subprocess and its full process tree are SIGKILL'd. "
-            f"Default: {_DEFAULT_FILE_TIMEOUT_SECONDS}s ({round(_DEFAULT_FILE_TIMEOUT_SECONDS/60)} min), env: CLAWK_TEST_FILE_TIMEOUT."
+            f"Default: {_DEFAULT_FILE_TIMEOUT_SECONDS}s ({round(_DEFAULT_FILE_TIMEOUT_SECONDS / 60)} min), env: CLAWK_TEST_FILE_TIMEOUT."
         ),
     )
     parser.add_argument(
         "--file-retries",
         type=int,
-        default=int(
-            os.environ.get("CLAWK_TEST_FILE_RETRIES", _DEFAULT_FILE_RETRIES)
-        ),
+        default=int(os.environ.get("CLAWK_TEST_FILE_RETRIES", _DEFAULT_FILE_RETRIES)),
         help=(
             "Re-run a failing test FILE this many times in a fresh subprocess "
             "before declaring it failed. A pass-on-retry counts as passed but "
@@ -1221,7 +1250,7 @@ def main() -> int:
             "Discover test files, distribute them across N slices using "
             "LPT on cached durations, and print a JSON matrix to stdout "
             "then exit (no tests run). The JSON has the shape "
-            "'{\"slices\": [{\"index\": 1, \"files\": [\"tests/foo.py\", ...]}, ...]}' "
+            '\'{"slices": [{"index": 1, "files": ["tests/foo.py", ...]}, ...]}\' '
             "so the CI generate job can feed it directly into a matrix."
         ),
     )
@@ -1284,9 +1313,19 @@ def main() -> int:
     # it never reaches our positional ``paths``. ``=``-joined forms
     # (``-k=expr``, ``--tb=long``) are self-contained and need no lookahead.
     OUR_FLAGS = {
-        "-h", "--help", "-j", "--jobs", "--paths", "--include-integration",
-        "--file-timeout", "--file-retries", "--slice", "--generate-slices", "--files",
-        "--files-from", "--fail-on-skip",
+        "-h",
+        "--help",
+        "-j",
+        "--jobs",
+        "--paths",
+        "--include-integration",
+        "--file-timeout",
+        "--file-retries",
+        "--slice",
+        "--generate-slices",
+        "--files",
+        "--files-from",
+        "--fail-on-skip",
     }
     # pytest short flags that consume the NEXT token as their value.
     PYTEST_VALUE_FLAGS = {"-k", "-m", "-p", "-o", "-c", "-r", "-W"}
@@ -1401,7 +1440,10 @@ def main() -> int:
             slice_index = int(idx_s)
             slice_count = int(count_s)
         except (ValueError, AttributeError):
-            print(f"error: --slice must be I/N (e.g. 1/4), got: {slice_raw!r}", file=sys.stderr)
+            print(
+                f"error: --slice must be I/N (e.g. 1/4), got: {slice_raw!r}",
+                file=sys.stderr,
+            )
             sys.exit(2)
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -1415,9 +1457,7 @@ def main() -> int:
     # --generate-slices: compute LPT distribution and emit JSON, then exit.
     if args.generate_slices is not None:
         durations = _load_durations(repo_root)
-        slices = _compute_lpt_slices(
-            files, args.generate_slices, durations, repo_root
-        )
+        slices = _compute_lpt_slices(files, args.generate_slices, durations, repo_root)
         matrix = {
             "slice": [
                 {
@@ -1444,7 +1484,10 @@ def main() -> int:
         approx_total_tests = sum(test_counts.values())
 
     if roots:
-        roots_str = [str(r.relative_to(repo_root)) if r.is_relative_to(repo_root) else str(r) for r in roots]
+        roots_str = [
+            str(r.relative_to(repo_root)) if r.is_relative_to(repo_root) else str(r)
+            for r in roots
+        ]
         print(
             f"Discovered {len(files)} test files (~{approx_total_tests} tests) under "
             f"{roots_str}; running with -j {args.jobs}",
@@ -1460,7 +1503,9 @@ def main() -> int:
     # Capture and print on completion (out-of-order is fine — keeps the
     # terminal clean rather than interleaving N parallel pytest outputs).
     failures: list[tuple[Path, str, dict[str, int]]] = []
-    file_times: list[tuple[Path, float]] = []  # (file, subprocess_wall) for distribution
+    file_times: list[
+        tuple[Path, float]
+    ] = []  # (file, subprocess_wall) for distribution
     started = time.monotonic()
     files_done = 0
     tests_done = 0
@@ -1478,8 +1523,19 @@ def main() -> int:
     files_crashed = 0
     lock = threading.Lock()
 
-    def _on_done(file: Path, started_at: float, fut: Future[tuple[Path, int, str, dict[str, int], float]]) -> None:
-        nonlocal files_done, tests_done, pass_count, fail_count, tests_passed, tests_failed, tests_skipped
+    def _on_done(
+        file: Path,
+        started_at: float,
+        fut: Future[tuple[Path, int, str, dict[str, int], float]],
+    ) -> None:
+        nonlocal \
+            files_done, \
+            tests_done, \
+            pass_count, \
+            fail_count, \
+            tests_passed, \
+            tests_failed, \
+            tests_skipped
         nonlocal tests_collected, files_crashed
         n_tests = test_counts.get(file, 0)
         try:
@@ -1491,9 +1547,14 @@ def main() -> int:
                 fail_count += 1
                 failures.append((file, f"runner crashed: {exc!r}", {}))
                 _print_progress(
-                    tests_done, approx_total_tests, file, 1,
+                    tests_done,
+                    approx_total_tests,
+                    file,
+                    1,
                     time.monotonic() - started_at,
-                    repo_root, tests_passed, tests_failed,
+                    repo_root,
+                    tests_passed,
+                    tests_failed,
                     test_counts,
                     subproc_wall=0.0,
                 )
@@ -1519,9 +1580,14 @@ def main() -> int:
                 fail_count += 1
                 failures.append((fpath, output, summary))
             _print_progress(
-                tests_done, approx_total_tests, fpath, rc,
+                tests_done,
+                approx_total_tests,
+                fpath,
+                rc,
                 time.monotonic() - started_at,
-                repo_root, tests_passed, tests_failed,
+                repo_root,
+                tests_passed,
+                tests_failed,
                 test_counts,
                 file_summary=summary,
                 subproc_wall=subproc_wall,
@@ -1542,7 +1608,10 @@ def main() -> int:
         for file in files:
             t0 = time.monotonic()
             fut = pool.submit(
-                _run_one_file, file, pytest_passthrough, repo_root,
+                _run_one_file,
+                file,
+                pytest_passthrough,
+                repo_root,
                 _effective_file_timeout(
                     file, repo_root, args.file_timeout, timeout_durations
                 ),
@@ -1564,9 +1633,12 @@ def main() -> int:
     # everyone reads, or "0 failed" + exit 1 looks like a runner bug.
     crashed_note = (
         f", {files_crashed} file{'s' if files_crashed != 1 else ''} CRASHED"
-        if files_crashed else ""
+        if files_crashed
+        else ""
     )
-    print(f"=== Summary: {len(files)} files, {tests_passed} tests passed, {tests_failed} failed{crashed_note}{skipped_note} ({pct:.0f}% complete) in {elapsed:.1f}s ({args.jobs} workers) ===")
+    print(
+        f"=== Summary: {len(files)} files, {tests_passed} tests passed, {tests_failed} failed{crashed_note}{skipped_note} ({pct:.0f}% complete) in {elapsed:.1f}s ({args.jobs} workers) ==="
+    )
 
     # Host-OS gating note: tests marked for another OS were skipped by the
     # conftest hook, not run. Say so explicitly — a green local run on Linux
@@ -1607,7 +1679,9 @@ def main() -> int:
     # loudly reported so they get fixed instead of silently re-flaking.
     if _FLAKY_RESULTS:
         print()
-        print(f"=== ⚠ {len(_FLAKY_RESULTS)} FLAKY file{'s' if len(_FLAKY_RESULTS) != 1 else ''} (failed once, passed on retry — fix these) ===")
+        print(
+            f"=== ⚠ {len(_FLAKY_RESULTS)} FLAKY file{'s' if len(_FLAKY_RESULTS) != 1 else ''} (failed once, passed on retry — fix these) ==="
+        )
         for f, output in _FLAKY_RESULTS:
             print(f"  {_format_file(f, repo_root)}")
             print(output.rstrip())
@@ -1616,7 +1690,9 @@ def main() -> int:
     # scaler, see _effective_file_timeout). _save_durations merges with any
     # existing cache so entries from previous runs aren't lost.
     clean_times = _clean_pass_durations(
-        file_times, failures, _FLAKY_RESULTS,
+        file_times,
+        failures,
+        _FLAKY_RESULTS,
     )
     if clean_times:
         _save_durations(clean_times, repo_root)
@@ -1639,16 +1715,24 @@ def main() -> int:
         print()
         print("=== Per-file subprocess time distribution ===")
         print(f"  Files:   {len(times)}")
-        print(f"  Total subprocess CPU-wall: {total_subproc:.1f}s  (runner wall: {elapsed:.1f}s, parallelism: {args.jobs}x)")
-        print(f"  P50: {p50:.2f}s  P90: {p90:.2f}s  P95: {p95:.2f}s  P99: {p99:.2f}s  Max: {max_t:.2f}s")
-        print(f"  <1s: {fast} files ({fast/len(times)*100:.0f}%)  <2s: {fast_2s} files ({fast_2s/len(times)*100:.0f}%)")
+        print(
+            f"  Total subprocess CPU-wall: {total_subproc:.1f}s  (runner wall: {elapsed:.1f}s, parallelism: {args.jobs}x)"
+        )
+        print(
+            f"  P50: {p50:.2f}s  P90: {p90:.2f}s  P95: {p95:.2f}s  P99: {p99:.2f}s  Max: {max_t:.2f}s"
+        )
+        print(
+            f"  <1s: {fast} files ({fast / len(times) * 100:.0f}%)  <2s: {fast_2s} files ({fast_2s / len(times) * 100:.0f}%)"
+        )
         # Top 10 slowest files — likely the ones dragging the run.
         slowest = sorted(file_times, key=lambda x: x[1], reverse=True)[:10]
         print("  Top 10 slowest:")
         for f, t in slowest:
             print(f"    {t:>6.2f}s  {_format_file(f, repo_root)}")
 
-    skips_fail_the_run = bool(args.fail_on_skip) and _report_skips(skipped_files, repo_root)
+    skips_fail_the_run = bool(args.fail_on_skip) and _report_skips(
+        skipped_files, repo_root
+    )
 
     if failures:
         _print_failure_report(failures, repo_root)

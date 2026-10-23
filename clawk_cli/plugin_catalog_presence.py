@@ -16,7 +16,9 @@ from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-_GITHUB = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$")
+_GITHUB = re.compile(
+    r"^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?$"
+)
 _TIMEOUT = 5.0
 _MAX_BYTES = 256 * 1024
 _DISCLOSURE = re.compile(r"\bDisclosure\s*[:\u2014]\s*(.+)")
@@ -84,7 +86,9 @@ def _server_presence(decl: Any, liveness_raw: Any, title: str) -> Presence:
         return Presence("missing_app", f"needs {gpu_label(decl.required_gpu)}")
     if available.state == "version_too_old":
         found = f" (found {available.version})" if available.version else ""
-        return Presence("missing_app", f"needs {title} {available.min_version} or newer{found}")
+        return Presence(
+            "missing_app", f"needs {title} {available.min_version} or newer{found}"
+        )
     try:
         live = parse_liveness(liveness_raw) if liveness_raw is not None else None
     except ValueError:
@@ -92,15 +96,23 @@ def _server_presence(decl: Any, liveness_raw: Any, title: str) -> Presence:
     if live is None or live.kind == "static":
         return Presence("present")
     if live.kind == "interactive_session":
-        return Presence("present") if facts.interactive_session() else Presence(
-            "app_not_running", f"{title} needs an interactive desktop session")
+        return (
+            Presence("present")
+            if facts.interactive_session()
+            else Presence(
+                "app_not_running", f"{title} needs an interactive desktop session"
+            )
+        )
     definition = decl.app_for(facts.os_family())
     if definition is None:
         return Presence("missing_app", f"needs {title}")
     resolver = AppResolver(live.app_definition(definition))
     probe = resolver.probe(resolver.locate(), effort=Effort.LOCAL)
-    return Presence("present") if probe.running.value is True else Presence(
-        "app_not_running", f"{title} is not running")
+    return (
+        Presence("present")
+        if probe.running.value is True
+        else Presence("app_not_running", f"{title} is not running")
+    )
 
 
 def presence(entry: Any) -> Presence:
@@ -110,17 +122,26 @@ def presence(entry: Any) -> Presence:
     manifest = _pinned_manifest(entry.repo, entry.sha, entry.subdir)
     if not manifest:
         return UNKNOWN
-    raw_servers = (manifest.get("extensions") or {}).get("com.nousresearch.clawk", {}).get("servers") or {}
+    raw_servers = (manifest.get("extensions") or {}).get(
+        "com.nousresearch.clawk", {}
+    ).get("servers") or {}
     if not isinstance(raw_servers, dict) or not raw_servers:
         return UNKNOWN
     try:
-        declarations = _server_declarations(manifest, {name: {} for name in raw_servers})
+        declarations = _server_declarations(
+            manifest, {name: {} for name in raw_servers}
+        )
     except Exception as exc:
-        logger.debug("plugin catalog presence: %s declaration invalid: %s", entry.name, exc)
+        logger.debug(
+            "plugin catalog presence: %s declaration invalid: %s", entry.name, exc
+        )
         return UNKNOWN
     title = getattr(entry, "title", "") or entry.name
     rank = {"missing_app": 0, "app_not_running": 1, "present": 2, "unknown": 3}
-    found = [_server_presence(d.declaration, d.liveness, title) for d in declarations.values()]
+    found = [
+        _server_presence(d.declaration, d.liveness, title)
+        for d in declarations.values()
+    ]
     return min(found, key=lambda p: rank[p.state]) if found else UNKNOWN
 
 
@@ -131,8 +152,12 @@ def _onboarding_catalog() -> list:
     from clawk_platform.host.facts import os_family
 
     here = os_family()
-    return [entry for entry in load_catalog_live()
-            if entry.onboarding and (not entry.platforms or here in normalized_platforms(entry.platforms))]
+    return [
+        entry
+        for entry in load_catalog_live()
+        if entry.onboarding
+        and (not entry.platforms or here in normalized_platforms(entry.platforms))
+    ]
 
 
 def onboarding_names() -> list[str]:
@@ -146,15 +171,17 @@ def onboarding_entries() -> list[dict[str, Any]]:
     rows = []
     for entry in _onboarding_catalog():
         found = presence(entry)
-        rows.append({
-            "name": entry.name,
-            "title": entry.title or entry.name,
-            "description": _first_sentence(entry.description),
-            "tier": entry.tier,
-            "platforms": list(entry.platforms),
-            "app_state": found.state,
-            "sentence": found.sentence,
-        })
+        rows.append(
+            {
+                "name": entry.name,
+                "title": entry.title or entry.name,
+                "description": _first_sentence(entry.description),
+                "tier": entry.tier,
+                "platforms": list(entry.platforms),
+                "app_state": found.state,
+                "sentence": found.sentence,
+            }
+        )
     return rows
 
 
@@ -169,16 +196,30 @@ def presence_for(names: list[str]) -> list[dict[str, Any]]:
 
     here = os_family()
     by_name = {entry.name: entry for entry in load_catalog_live()}
-    entries = [by_name[name] for name in dict.fromkeys(names) if name in by_name
-               and (not by_name[name].platforms or here in normalized_platforms(by_name[name].platforms))]
+    entries = [
+        by_name[name]
+        for name in dict.fromkeys(names)
+        if name in by_name
+        and (
+            not by_name[name].platforms
+            or here in normalized_platforms(by_name[name].platforms)
+        )
+    ]
     if not entries:
         return []
     # Each manifest read is bounded by _TIMEOUT; in parallel the whole answer waits one timeout, not one per name.
     with ThreadPoolExecutor(max_workers=len(entries)) as pool:
         found = list(pool.map(presence, entries))
-    return [{"name": entry.name, "title": entry.title or entry.name, "state": state.state,
-             "sentence": state.sentence, "disclosure": _disclosure(entry.description)}
-            for entry, state in zip(entries, found)]
+    return [
+        {
+            "name": entry.name,
+            "title": entry.title or entry.name,
+            "state": state.state,
+            "sentence": state.sentence,
+            "disclosure": _disclosure(entry.description),
+        }
+        for entry, state in zip(entries, found)
+    ]
 
 
 def _disclosure(text: str) -> str:

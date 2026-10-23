@@ -77,19 +77,23 @@ class TestInactivityWatchdogLoop:
         assert not watcher.is_alive()
 
 
-
 class TestHostSleep:
     """A sleeping host freezes the whole job, so the nap is not job inactivity."""
 
     @pytest.mark.parametrize("during_sample", [False, True])
-    def test_sleep_is_not_idle_time_but_awake_idle_still_fires(self, monkeypatch, during_sample):
+    def test_sleep_is_not_idle_time_but_awake_idle_still_fires(
+        self, monkeypatch, during_sample
+    ):
         from agent import session_activity
         from cron.scheduler_liveness import _inactivity_watchdog_loop
 
         # Wall time keeps running while the host sleeps; monotonic time pauses (macOS, Linux).
         clock = SimpleNamespace(wall=1_000_000.0, mono=50.0)
         monkeypatch.setattr(
-            session_activity, "time", SimpleNamespace(time=lambda: clock.wall, monotonic=lambda: clock.mono))
+            session_activity,
+            "time",
+            SimpleNamespace(time=lambda: clock.wall, monotonic=lambda: clock.mono),
+        )
         last_activity_wall, start_mono = clock.wall, clock.mono
         polls = []
 
@@ -105,7 +109,9 @@ class TestHostSleep:
         def read_idle():
             idle = clock.wall - last_activity_wall
             if during_sample and len(polls) == 3:
-                clock.wall += 900.0  # suspend after the activity read, before meter clocks
+                clock.wall += (
+                    900.0  # suspend after the activity read, before meter clocks
+                )
             return idle
 
         fired = _inactivity_watchdog_loop(
@@ -141,7 +147,8 @@ def test_sleep_before_watchdog_thread_starts(monkeypatch):
         def get_activity_summary(self):
             return session_activity.build_activity_snapshot(
                 last_activity_at=self._last_activity_ts,
-                last_activity_description=self._last_activity_desc)
+                last_activity_description=self._last_activity_desc,
+            )
 
         def interrupt(self, message, **kwargs):
             interrupted_at.append(clock.mono - 1000.0)
@@ -156,7 +163,10 @@ def test_sleep_before_watchdog_thread_starts(monkeypatch):
         return original_start(thread)
 
     def wait(event, timeout=None):
-        if threading.current_thread().name.startswith("cron-inactivity-") and timeout == 5.0:
+        if (
+            threading.current_thread().name.startswith("cron-inactivity-")
+            and timeout == 5.0
+        ):
             clock.wall += timeout
             clock.mono += timeout
             return event.is_set()
@@ -170,8 +180,14 @@ def test_sleep_before_watchdog_thread_starts(monkeypatch):
     try:
         with pytest.raises(TimeoutError):
             scheduler._run_agent_with_watchdog(
-                Agent(), "probe", {"schedule": {"kind": "every"}},
-                "probe", "probe", "probe", None)
+                Agent(),
+                "probe",
+                {"schedule": {"kind": "every"}},
+                "probe",
+                "probe",
+                "probe",
+                None,
+            )
     finally:
         finish.set()
     assert interrupted_at and min(interrupted_at) >= 600.0

@@ -26,7 +26,9 @@ logger = logging.getLogger("cron.jobs")
 
 PROBE_INTERVAL_SECONDS = 60.0
 # Store-write failures that degrade the store (the tick keeps running) instead of failing the tick.
-UNWRITABLE_ERRNOS = frozenset({errno.EROFS, errno.EACCES, errno.EPERM, errno.ENOSPC, errno.EDQUOT})
+UNWRITABLE_ERRNOS = frozenset(
+    {errno.EROFS, errno.EACCES, errno.EPERM, errno.ENOSPC, errno.EDQUOT}
+)
 # `clawk doctor` warns below this, before the store actually starts failing.
 LOW_FREE_BYTES = 100 << 20
 FIX_HINT = "free disk space, remount it read-write, or fix permissions on {store}"
@@ -40,8 +42,17 @@ def describe_error(exc: OSError) -> str:
 
 def _report_fields(store: str, error: str, since: Optional[float]) -> dict:
     """The fields `cron status`, doctor and the home-channel notices print for an unwritable store."""
-    since_text = "unknown" if since is None else datetime.fromtimestamp(since).astimezone().isoformat(timespec="seconds")
-    return {"store": store, "error": error, "since": since_text, "fix": FIX_HINT.format(store=store)}
+    since_text = (
+        "unknown"
+        if since is None
+        else datetime.fromtimestamp(since).astimezone().isoformat(timespec="seconds")
+    )
+    return {
+        "store": store,
+        "error": error,
+        "since": since_text,
+        "fix": FIX_HINT.format(store=store),
+    }
 
 
 @dataclass
@@ -49,9 +60,13 @@ class StoreDegraded:
     store: str
     since: float  # epoch seconds of the first failed write
     error: str
-    recovered_at: Optional[float] = None  # epoch seconds of the first write that landed again
+    recovered_at: Optional[float] = (
+        None  # epoch seconds of the first write that landed again
+    )
     sites: set = field(default_factory=set)
-    skipped: set = field(default_factory=set)  # distinct (job id, scheduled instant) not run
+    skipped: set = field(
+        default_factory=set
+    )  # distinct (job id, scheduled instant) not run
     # Monotonic time of the last failed dispatch write or re-probe. None until a dispatch write
     # fails, so a due one-shot reaches its claim and settles its ``failed`` row once per probe.
     last_probe: Optional[float] = None
@@ -61,7 +76,10 @@ class StoreDegraded:
         return len(self.skipped)
 
     def notice_fields(self) -> dict:
-        return dict(_report_fields(self.store, self.error, self.since), skipped=self.skipped_runs)
+        return dict(
+            _report_fields(self.store, self.error, self.since),
+            skipped=self.skipped_runs,
+        )
 
 
 _DISPATCH_SITES = frozenset({"advance", "claim"})
@@ -92,6 +110,7 @@ def _notify(event: str, record: StoreDegraded) -> None:
 
 def _active_cron_dir() -> Path:
     from cron.jobs import _current_cron_store
+
     return _current_cron_store().cron_dir
 
 
@@ -105,8 +124,13 @@ def _run_keys(jobs: Iterable[dict]) -> set:
     return {(job.get("id"), job.get("next_run_at")) for job in jobs}
 
 
-def note_unwritable(exc: OSError, consequence: str, site: str, skipped_jobs: Iterable[dict] = (),
-                    cron_dir: Optional[Path] = None) -> None:
+def note_unwritable(
+    exc: OSError,
+    consequence: str,
+    site: str,
+    skipped_jobs: Iterable[dict] = (),
+    cron_dir: Optional[Path] = None,
+) -> None:
     """Record a failed write to ``cron_dir`` (default: the active store); WARN once, when the store
     enters the degraded state. Callers skip the dispatch that needed the write: no job runs
     without a durable advance/fire claim."""
@@ -114,7 +138,9 @@ def note_unwritable(exc: OSError, consequence: str, site: str, skipped_jobs: Ite
     with _lock:
         record = _degraded.get(store)
         entered = record is None
-        if entered:  # an ended outage not yet seen by a saved scan carries over: keep its start
+        if (
+            entered
+        ):  # an ended outage not yet seen by a saved scan carries over: keep its start
             ended = _recovered.pop(store, None)
             since = ended.since if ended is not None else time.time()
             record = _degraded[store] = StoreDegraded(store, since, describe_error(exc))
@@ -129,8 +155,12 @@ def note_unwritable(exc: OSError, consequence: str, site: str, skipped_jobs: Ite
     if entered:
         logger.warning(
             "Cron store %s is unwritable (%s); %s. Scheduled jobs are skipped until it accepts writes "
-            "again, then each due job fires once. Fix: %s.", store, exc, consequence,
-            FIX_HINT.format(store=store))
+            "again, then each due job fires once. Fix: %s.",
+            store,
+            exc,
+            consequence,
+            FIX_HINT.format(store=store),
+        )
         _notify("unwritable", record)
     elif new_site:
         logger.info("Cron store %s still unwritable (%s); %s", store, exc, consequence)
@@ -147,8 +177,11 @@ def note_writable(cron_dir: Path) -> None:
             _recovered[record.store] = record
     if record is None:
         return
-    logger.warning("Cron store %s is writable again; %d skipped run(s), catching up once per job",
-                   record.store, record.skipped_runs)
+    logger.warning(
+        "Cron store %s is writable again; %d skipped run(s), catching up once per job",
+        record.store,
+        record.skipped_runs,
+    )
     _notify("recovered", record)
 
 
@@ -158,8 +191,12 @@ def degraded_record(cron_dir: Optional[Path] = None) -> Optional[StoreDegraded]:
 
 def outage_covers(cron_dir: Path, due_at: float, grace: float) -> bool:
     """Whether a run due at ``due_at`` fell inside this store's current or just-ended outage."""
-    return any(r is not None and r.since <= due_at + grace and (r.recovered_at is None or due_at <= r.recovered_at)
-               for r in (_degraded.get(_key(cron_dir)), _recovered.get(_key(cron_dir))))
+    return any(
+        r is not None
+        and r.since <= due_at + grace
+        and (r.recovered_at is None or due_at <= r.recovered_at)
+        for r in (_degraded.get(_key(cron_dir)), _recovered.get(_key(cron_dir)))
+    )
 
 
 def store_key(home) -> str:
@@ -194,7 +231,9 @@ def dispatch_blocked(due_jobs: list) -> bool:
         return False
     now = time.monotonic()
     throttled = now - record.last_probe < PROBE_INTERVAL_SECONDS
-    error = None if throttled else probe_store(cron_dir)  # file I/O stays outside the lock
+    error = (
+        None if throttled else probe_store(cron_dir)
+    )  # file I/O stays outside the lock
     with _lock:
         if not throttled:
             record.last_probe = now
@@ -223,12 +262,16 @@ def recheck_idle() -> None:
     cron_dir = _active_cron_dir()
     record = _degraded.get(_key(cron_dir))
     now = time.monotonic()
-    if record is None or (record.last_probe is not None and now - record.last_probe < PROBE_INTERVAL_SECONDS):
+    if record is None or (
+        record.last_probe is not None
+        and now - record.last_probe < PROBE_INTERVAL_SECONDS
+    ):
         return
     record.last_probe = now
     error = probe_store(cron_dir)
     if error is None:
         from cron.jobs import _jobs_lock, load_jobs, save_jobs
+
         try:
             with _jobs_lock():
                 save_jobs(load_jobs())
@@ -273,6 +316,7 @@ def probe_store(cron_dir: Path) -> Optional[OSError]:
     if not cron_dir.is_dir():
         return None
     from utils import mkstemp_beside
+
     jobs_file = cron_dir / "jobs.json"
     try:
         size = jobs_file.stat().st_size + 4096
@@ -288,8 +332,10 @@ def probe_store(cron_dir: Path) -> Optional[OSError]:
     try:
         fd, tmp = mkstemp_beside(jobs_file, prefix=".probe_")
         with os.fdopen(fd, "wb") as f:
-            for offset in range(0, size, len(chunk)):  # bounded memory for a large jobs.json
-                f.write(chunk[:size - offset])
+            for offset in range(
+                0, size, len(chunk)
+            ):  # bounded memory for a large jobs.json
+                f.write(chunk[: size - offset])
             f.flush()
             os.fsync(f.fileno())
     except OSError as exc:

@@ -4,6 +4,7 @@ GatewayConnection kept its finished loop thread, so after a gateway restart ever
 "Gateway disconnected" and the CLI never re-attached, even once another client had started a new
 gateway. Each prompt then failed with copy that read as a model failure ("Run /model to switch").
 """
+
 import asyncio
 import threading
 import types
@@ -20,8 +21,17 @@ SID = "local-abc"
 
 
 def _frame(kind, payload):
-    return {"jsonrpc": "2.0", "method": "event", "params": {
-        "type": kind, "session_id": SID, "admission_id": "adm-1", "execution_generation": 7, "payload": payload}}
+    return {
+        "jsonrpc": "2.0",
+        "method": "event",
+        "params": {
+            "type": kind,
+            "session_id": SID,
+            "admission_id": "adm-1",
+            "execution_generation": 7,
+            "payload": payload,
+        },
+    }
 
 
 class Life:
@@ -39,18 +49,43 @@ class Life:
         if method == "session.resume" and self.resume_errors:
             raise self.resume_errors.pop(0)
         if method == "session.resume":
-            return {"stored_session_id": params["session_id"], "subscription_id": f"sub-{self.number}",
-                    "revision": 1, "execution_generation": 7, "messages": []}
+            return {
+                "stored_session_id": params["session_id"],
+                "subscription_id": f"sub-{self.number}",
+                "revision": 1,
+                "execution_generation": 7,
+                "messages": [],
+            }
         if method == "prompt.submit":
             loop = asyncio.get_running_loop()
-            if self.drop_on_submit:  # restarted mid-turn: the outcome is unknown to this client
-                loop.call_soon(self.events.put_nowait, GatewayClientError("Gateway disconnected"))
+            if (
+                self.drop_on_submit
+            ):  # restarted mid-turn: the outcome is unknown to this client
+                loop.call_soon(
+                    self.events.put_nowait, GatewayClientError("Gateway disconnected")
+                )
             else:
-                loop.call_soon(self.events.put_nowait, _frame(
-                    "message.complete", {"text": f"reply {self.number}", "outcome": "completed", "status": "complete"}))
-            return {"admission_id": "adm-1", "status": "queued", "execution_generation": 7}
+                loop.call_soon(
+                    self.events.put_nowait,
+                    _frame(
+                        "message.complete",
+                        {
+                            "text": f"reply {self.number}",
+                            "outcome": "completed",
+                            "status": "complete",
+                        },
+                    ),
+                )
+            return {
+                "admission_id": "adm-1",
+                "status": "queued",
+                "execution_generation": 7,
+            }
         if method == "prompt.receipt":
-            return {"result": {"final_response": f"reply {self.number}", "completed": True}, "usage": {}}
+            return {
+                "result": {"final_response": f"reply {self.number}", "completed": True},
+                "usage": {},
+            }
         if method in ("prompt.background", "prompt.btw"):
             return {"task_id": f"task-{self.number}"}
         return {"status": "ok", "life": self.number}
@@ -74,8 +109,14 @@ class Gateway:
             await asyncio.to_thread(self.hold.wait, 5)
         if self.refusals:
             self.refusals -= 1
-            raise GatewayClientError("Gateway starting: deadline. Your message was not sent.")
-        life = Life(len(self.lives) + 1, drop_on_submit=self.drop_next_submit, resume_errors=self.resume_errors)
+            raise GatewayClientError(
+                "Gateway starting: deadline. Your message was not sent."
+            )
+        life = Life(
+            len(self.lives) + 1,
+            drop_on_submit=self.drop_next_submit,
+            resume_errors=self.resume_errors,
+        )
         self.drop_next_submit = False
         self.lives.append(life)
         yield life
@@ -83,7 +124,9 @@ class Gateway:
     def hang_up(self, conn):
         """The current life goes away (``gateway restart``); the loop thread ends with it."""
         thread = conn._thread
-        conn.loop.call_soon_threadsafe(self.lives[-1].events.put_nowait, GatewayClientError("Gateway disconnected"))
+        conn.loop.call_soon_threadsafe(
+            self.lives[-1].events.put_nowait, GatewayClientError("Gateway disconnected")
+        )
         thread.join(5)
         assert not thread.is_alive()
 
@@ -97,7 +140,9 @@ def gateway():
 def conn(gateway):
     connection = GatewayConnection(connect=gateway.dial)
     connection.start(5)
-    connection.state(SID).adopt_snapshot(connection.call("session.resume", session_id=SID))
+    connection.state(SID).adopt_snapshot(
+        connection.call("session.resume", session_id=SID)
+    )
     yield connection
     connection.close()
 
@@ -130,7 +175,9 @@ def test_a_failed_redial_is_retried_on_the_next_call(gateway, conn):
     assert conn.call("status") == {"status": "ok", "life": 2}
 
 
-def test_a_failed_redial_is_retried_even_while_its_loop_thread_is_still_exiting(gateway, conn):
+def test_a_failed_redial_is_retried_even_while_its_loop_thread_is_still_exiting(
+    gateway, conn
+):
     """The failed dial's loop thread reports ready before it returns; the next call must not read
     that still-alive thread as a dial in progress and re-raise its stale error."""
     gateway.hang_up(conn)
@@ -169,20 +216,31 @@ def test_a_first_connect_failure_is_still_final(gateway):
     assert gateway.refusals == 1  # never redialed: nothing to come back to
 
 
-def test_a_turn_lost_to_a_restart_is_reported_plainly_and_the_next_turn_runs(gateway, conn):
+def test_a_turn_lost_to_a_restart_is_reported_plainly_and_the_next_turn_runs(
+    gateway, conn
+):
     agent = GatewayAgent(connection=conn, session_id=SID)
     gateway.lives[0].drop_on_submit = True
 
     lost = agent.run_conversation("first")
     assert lost["failed"] and lost["failure_reason"] == "gateway_connection"
-    assert "turn outcome is unknown" in lost["error"] or "Gateway disconnected" in lost["error"]
+    assert (
+        "turn outcome is unknown" in lost["error"]
+        or "Gateway disconnected" in lost["error"]
+    )
     # The panel shows the transport error itself, not "The model request failed. Run /model ...".
-    assert chat_error_response(lost["error"], failure_reason=lost["failure_reason"]) == lost["error"]
+    assert (
+        chat_error_response(lost["error"], failure_reason=lost["failure_reason"])
+        == lost["error"]
+    )
 
     conn._thread.join(5)
     result = agent.run_conversation("second")
     assert not result.get("failed") and result["final_response"] == "reply 2"
-    assert [method for method, _ in gateway.lives[1].calls][:2] == ["session.resume", "prompt.submit"]
+    assert [method for method, _ in gateway.lives[1].calls][:2] == [
+        "session.resume",
+        "prompt.submit",
+    ]
 
 
 def test_the_previous_connections_loss_never_fails_a_live_turn(gateway, conn):
@@ -195,25 +253,34 @@ def test_the_previous_connections_loss_never_fails_a_live_turn(gateway, conn):
 
 
 def _resumes(life):
-    return [params["session_id"] for method, params in life.calls if method == "session.resume"]
+    return [
+        params["session_id"]
+        for method, params in life.calls
+        if method == "session.resume"
+    ]
 
 
 @pytest.fixture
 def store(conn):
     from clawk_cli.gateway_session_store import GatewaySessionStore
+
     db = GatewaySessionStore(conn)
     db.attach(SID)
     return db
 
 
-def test_ending_a_session_after_a_reconnect_detaches_its_current_subscription(gateway, conn, store):
+def test_ending_a_session_after_a_reconnect_detaches_its_current_subscription(
+    gateway, conn, store
+):
     """The redial resubscribed under a new id; detaching with the first one is refused gateway-side,
     leaving a closed session attached and its close bookkeeping skipped."""
     gateway.hang_up(conn)
     conn.call("status")
     store.end_session(SID, "new_session")
-    assert gateway.lives[1].calls[-1] == ("session.detach", {
-        "session_id": SID, "subscription_id": "sub-2", "end_reason": "new_session"})
+    assert gateway.lives[1].calls[-1] == (
+        "session.detach",
+        {"session_id": SID, "subscription_id": "sub-2", "end_reason": "new_session"},
+    )
     # Left by this viewer: a later reconnect does not resume it again.
     gateway.hang_up(conn)
     conn.call("status")
@@ -239,9 +306,14 @@ def test_a_session_gone_during_the_restart_is_skipped_and_not_retried(gateway, c
     assert _resumes(gateway.lives[2]) == []
 
 
-@pytest.mark.parametrize("failure", [GatewayClientError("storage_unavailable"), TimeoutError()],
-                         ids=["storage_unavailable", "timeout"])
-def test_a_transient_resume_failure_fails_the_reconnect_and_the_next_call_retries(gateway, conn, failure):
+@pytest.mark.parametrize(
+    "failure",
+    [GatewayClientError("storage_unavailable"), TimeoutError()],
+    ids=["storage_unavailable", "timeout"],
+)
+def test_a_transient_resume_failure_fails_the_reconnect_and_the_next_call_retries(
+    gateway, conn, failure
+):
     """Ready without the subscription, every later prompt.submit is refused (permission_denied) on a
     live socket that never redials: the reconnect must fail instead, so the next call dials again."""
     gateway.resume_errors.append(failure)
@@ -286,6 +358,7 @@ async def test_a_cancelled_reconnect_cancels_its_session_resume():
     resubscribe cancels the request with it. One left pending on the client held a worker thread
     that process exit joins until the request timed out."""
     from clawk_cli.gateway_client import GatewayClient
+
     conn = GatewayConnection()
     conn.state(SID).subscription_id = "sub-1"
     socket = _Unanswered()
@@ -305,6 +378,7 @@ def _cli(store):
 @pytest.fixture
 def tools(conn, monkeypatch):
     from clawk_cli import gateway_tools
+
     monkeypatch.setattr(gateway_tools, "_view", None)
     gateway_tools.bind(types.SimpleNamespace(connection=conn, session_id=SID))
     return gateway_tools
@@ -319,32 +393,43 @@ def test_a_hung_up_store_stays_open_and_its_next_call_redials(gateway, conn, sto
     assert store
 
 
-def test_bg_and_btw_after_a_hang_up_run_on_the_gateway_not_in_this_process(gateway, conn, store):
+def test_bg_and_btw_after_a_hang_up_run_on_the_gateway_not_in_this_process(
+    gateway, conn, store
+):
     """None here sends /bg down the in-process AIAgent path (a local ``bg_HHMMSS_xxxxxx`` task)."""
     from clawk_cli import gateway_side
+
     gateway.hang_up(conn)
     assert gateway_side.connection_for(_cli(store)) is conn
     task_id, _wait = gateway_side.start(conn, SID, "background", "later")
     assert task_id == "task-2" and gateway.lives[1].calls[-1][0] == "prompt.background"
 
 
-def test_a_side_answer_lost_to_a_restart_fails_instead_of_waiting_forever(gateway, conn):
+def test_a_side_answer_lost_to_a_restart_fails_instead_of_waiting_forever(
+    gateway, conn
+):
     """The task died with the old gateway; another thread's redial must not make the wait endless."""
     from clawk_cli import gateway_side
+
     _task, wait = gateway_side.start(conn, SID, "btw", "q")
     gateway.hang_up(conn)
     conn.call("status")
     outcome = []
-    waiter = threading.Thread(target=lambda: outcome.append(pytest.raises(RuntimeError, wait)), daemon=True)
+    waiter = threading.Thread(
+        target=lambda: outcome.append(pytest.raises(RuntimeError, wait)), daemon=True
+    )
     waiter.start()
     waiter.join(10)
     assert not waiter.is_alive() and "outcome is unknown" in str(outcome[0].value)
 
 
-def test_a_redial_between_admission_and_the_waiter_still_ends_the_wait(gateway, conn, monkeypatch):
+def test_a_redial_between_admission_and_the_waiter_still_ends_the_wait(
+    gateway, conn, monkeypatch
+):
     """Another caller redials after the old gateway admitted the task but before its waiter exists:
     the wait belongs to the admitting life, not to whatever epoch is current by then."""
     from clawk_cli import gateway_side
+
     register = conn.side_waiter
 
     def redial_first(task_id):
@@ -356,7 +441,9 @@ def test_a_redial_between_admission_and_the_waiter_still_ends_the_wait(gateway, 
     task, wait = gateway_side.start(conn, SID, "btw", "q")
     assert task == "task-1" and conn.epoch == 2
     outcome = []
-    waiter = threading.Thread(target=lambda: outcome.append(pytest.raises(RuntimeError, wait)), daemon=True)
+    waiter = threading.Thread(
+        target=lambda: outcome.append(pytest.raises(RuntimeError, wait)), daemon=True
+    )
     waiter.start()
     waiter.join(10)
     assert not waiter.is_alive() and "outcome is unknown" in str(outcome[0].value)
@@ -367,28 +454,47 @@ def test_the_dock_and_stop_after_a_hang_up_redial(gateway, conn, tools):
     view = tools.process_view()
     assert view is not None and tools.process_registry() is view
     view.kill_all()
-    assert [method for method, _ in gateway.lives[1].calls][:2] == ["session.resume", "process.stop"]
+    assert [method for method, _ in gateway.lives[1].calls][:2] == [
+        "session.resume",
+        "process.stop",
+    ]
 
 
-def test_shared_keeps_a_hung_up_connection_instead_of_opening_a_second(gateway, conn, monkeypatch):
+def test_shared_keeps_a_hung_up_connection_instead_of_opening_a_second(
+    gateway, conn, monkeypatch
+):
     monkeypatch.setattr(GatewayConnection, "_shared", conn)
     gateway.hang_up(conn)
     assert GatewayConnection.shared() is conn
 
 
-def test_new_after_a_hang_up_redials_and_detaches_with_the_end_reason(gateway, conn, store):
+def test_new_after_a_hang_up_redials_and_detaches_with_the_end_reason(
+    gateway, conn, store
+):
     """Dropping the subscription without ``session.detach`` leaves the owner never ending the row."""
     gateway.hang_up(conn)
     store.end_session(SID, "new_session")
-    assert gateway.lives[1].calls == [("session.resume", {"session_id": SID}), ("session.detach", {
-        "session_id": SID, "subscription_id": "sub-2", "end_reason": "new_session"})]
+    assert gateway.lives[1].calls == [
+        ("session.resume", {"session_id": SID}),
+        (
+            "session.detach",
+            {
+                "session_id": SID,
+                "subscription_id": "sub-2",
+                "end_reason": "new_session",
+            },
+        ),
+    ]
     gateway.hang_up(conn)
     conn.call("status")
     assert _resumes(gateway.lives[2]) == []
 
 
-def test_after_close_every_reader_reports_the_connection_gone(gateway, conn, store, tools, monkeypatch):
+def test_after_close_every_reader_reports_the_connection_gone(
+    gateway, conn, store, tools, monkeypatch
+):
     from clawk_cli import gateway_side
+
     monkeypatch.setattr(GatewayConnection, "_shared", conn)
     gateway.hang_up(conn)
     conn.close()
@@ -424,7 +530,9 @@ def test_a_call_racing_a_redial_waits_for_it_and_is_sent(gateway, conn):
     gateway.hold, gateway.dialing = threading.Event(), threading.Event()
     conn._ready = _Waiters(gateway.hold, 2)
     results = []
-    first = threading.Thread(target=lambda: results.append(conn.call("status")), daemon=True)
+    first = threading.Thread(
+        target=lambda: results.append(conn.call("status")), daemon=True
+    )
     first.start()
     assert gateway.dialing.wait(5)
     try:
@@ -440,7 +548,11 @@ def test_lost_before():
     error = GatewayClientError("Gateway disconnected")
     assert not lost_before(error, 2)  # untagged: a live loss
     error.connection_epoch = 1
-    assert lost_before(error, 2) and not lost_before(error, 1) and not lost_before(error, None)
+    assert (
+        lost_before(error, 2)
+        and not lost_before(error, 1)
+        and not lost_before(error, None)
+    )
     assert not lost_before({"connection_epoch": 1}, 2)
 
 
@@ -455,14 +567,33 @@ def test_chat_q_says_why_a_turn_was_interrupted(capsys):
 
         async def rpc(self, method, **params):
             if method == "prompt.submit":
-                asyncio.get_running_loop().call_soon(self.events.put_nowait, _frame(
-                    "message.complete", {"text": "", "outcome": "cancelled", "status": "interrupted"}))
-                return {"admission_id": "adm-1", "status": "queued", "execution_generation": 7}
+                asyncio.get_running_loop().call_soon(
+                    self.events.put_nowait,
+                    _frame(
+                        "message.complete",
+                        {"text": "", "outcome": "cancelled", "status": "interrupted"},
+                    ),
+                )
+                return {
+                    "admission_id": "adm-1",
+                    "status": "queued",
+                    "execution_generation": 7,
+                }
             if method == "prompt.receipt":
-                return {"result": {"final_response": "", "interrupted": True,
-                                   "interrupt_message": "Gateway shutting down"}}
+                return {
+                    "result": {
+                        "final_response": "",
+                        "interrupted": True,
+                        "interrupt_message": "Gateway shutting down",
+                    }
+                }
             return {}
 
-    code = asyncio.run(GatewayChatView(Client(), {"stored_session_id": SID}).run("hi", oneshot=True))
+    code = asyncio.run(
+        GatewayChatView(Client(), {"stored_session_id": SID}).run("hi", oneshot=True)
+    )
     assert code == 130
-    assert "Turn interrupted (Gateway shutting down); it was not retried." in capsys.readouterr().err
+    assert (
+        "Turn interrupted (Gateway shutting down); it was not retried."
+        in capsys.readouterr().err
+    )

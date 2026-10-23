@@ -26,6 +26,7 @@ Report-only by default. ``--apply`` refuses while a gateway owning any touched s
 holds the routing index in memory and writes it back), takes a quick snapshot of every store it
 will mutate, and is idempotent: a second run finds nothing.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -44,6 +45,7 @@ _VOICE_MODE_FILE = "gateway_voice_mode.json"
 @dataclass(frozen=True)
 class Store:
     """One profile's ``state.db``; ``routing`` marks the store that owns the multiplexer's index."""
+
     profile: str
     home: Path
     routing: bool = False
@@ -59,17 +61,25 @@ class Finding:
     store: str
     subject: str
     detail: str
-    action: Optional[str] = None      # what --apply does; None = report only
-    reason: Optional[str] = None      # why it is report only
-    _fix: Optional[Callable[[_Session], dict[str, int]]] = field(default=None, repr=False, compare=False)
+    action: Optional[str] = None  # what --apply does; None = report only
+    reason: Optional[str] = None  # why it is report only
+    _fix: Optional[Callable[[_Session], dict[str, int]]] = field(
+        default=None, repr=False, compare=False
+    )
 
     @property
     def repairable(self) -> bool:
         return self._fix is not None
 
     def as_dict(self) -> dict[str, Any]:
-        return {"kind": self.kind, "store": self.store, "subject": self.subject, "detail": self.detail,
-                "action": self.action, "reason": self.reason}
+        return {
+            "kind": self.kind,
+            "store": self.store,
+            "subject": self.subject,
+            "detail": self.detail,
+            "action": self.action,
+            "reason": self.reason,
+        }
 
 
 class _Session:
@@ -86,14 +96,19 @@ class _Session:
         if path not in self._dbs:
             if self.read_only:
                 from clawk_state import SessionDB
-                self._dbs[path] = SessionDB(path, read_only=True) if path.exists() else _EMPTY_STORE
+
+                self._dbs[path] = (
+                    SessionDB(path, read_only=True) if path.exists() else _EMPTY_STORE
+                )
             else:
                 from clawk_state_registry import acquire
+
                 self._dbs[path] = acquire(path)
         return self._dbs[path]
 
     def close(self) -> None:
         from clawk_state_registry import release_or_close
+
         for db in self._dbs.values():
             if db is _EMPTY_STORE:
                 continue
@@ -104,6 +119,7 @@ class _Session:
 
 class _EmptyStore:
     """Stand-in for a live profile whose ``state.db`` does not exist yet: nothing to find."""
+
     def find_crossed_profile_sessions(self, owner):
         return {"mislabelled": [], "foreign": [], "crossed_parents": []}
 
@@ -122,11 +138,13 @@ _EMPTY_STORE = _EmptyStore()
 
 # ── enumeration ───────────────────────────────────────────────────────────────
 
+
 def enumerate_stores() -> list[Store]:
     """Default root plus every live named profile (a live profile claims its namespace whether or not
     it has written a ``state.db`` yet). The root store owns the routing index: the multiplexer's
     ``_routing_home`` is its launch home, the root."""
     from clawk_cli.profiles import _get_default_clawk_home, _iter_named_profile_dirs
+
     root = _get_default_clawk_home()
     stores = [Store("default", root, routing=True)]
     stores.extend(Store(entry.name, entry) for entry in _iter_named_profile_dirs())
@@ -138,6 +156,7 @@ def _gateway_multiplexes(root: Path) -> bool:
     record, else the explicit flag, else False — an unset flag is a verdict only the gateway reaches,
     and guessing "yes" would uproot a standalone gateway's own routing index."""
     from clawk_cli.gateway_multiplex_mode import default_gateway_multiplexes
+
     try:
         return default_gateway_multiplexes(root)
     except Exception:
@@ -146,6 +165,7 @@ def _gateway_multiplexes(root: Path) -> bool:
 
 def live_gateway_homes(stores: Iterable[Store]) -> list[tuple[str, int]]:
     from gateway.status import live_gateway_pid_for_home
+
     live = []
     for store in stores:
         pid = live_gateway_pid_for_home(store.home)
@@ -156,6 +176,7 @@ def live_gateway_homes(stores: Iterable[Store]) -> list[tuple[str, int]]:
 
 # ── scan ──────────────────────────────────────────────────────────────────────
 
+
 class RepairPlan:
     def __init__(self, stores: list[Store], *, legacy_main: str = "report") -> None:
         if legacy_main not in _LEGACY_MAIN_CHOICES:
@@ -165,7 +186,11 @@ class RepairPlan:
         self.claimed: set[str] = set(self.by_profile)
         self.routing_store = next((s for s in stores if s.routing), None)
         self.legacy_main = legacy_main
-        self.multiplexes = _gateway_multiplexes(self.routing_store.home) if self.routing_store else False
+        self.multiplexes = (
+            _gateway_multiplexes(self.routing_store.home)
+            if self.routing_store
+            else False
+        )
         self.findings: list[Finding] = []
         self._moves: dict[tuple[Path, Path], _MoveBatch] = {}
 
@@ -193,33 +218,58 @@ class RepairPlan:
         db = session.db(store)
         crossed = db.find_crossed_profile_sessions(store.profile)
         moving: set[str] = set()
-        held = _ledgered_lineages([r for r in crossed["foreign"] if self._would_move(store, r)])
+        held = _ledgered_lineages(
+            [r for r in crossed["foreign"] if self._would_move(store, r)]
+        )
         for row in crossed["foreign"]:
             if row["id"] in held:
-                moving.add(row["id"])  # neither relabelled nor severed in place: it is a stray
-                self._add(Finding(
-                    "wrong_store", store.profile, row["id"],
-                    f"key {row['session_key']!r} ({row['message_count']} messages) sits in the "
-                    f"{store.profile} store", reason=held[row["id"]]))
+                moving.add(
+                    row["id"]
+                )  # neither relabelled nor severed in place: it is a stray
+                self._add(
+                    Finding(
+                        "wrong_store",
+                        store.profile,
+                        row["id"],
+                        f"key {row['session_key']!r} ({row['message_count']} messages) sits in the "
+                        f"{store.profile} store",
+                        reason=held[row["id"]],
+                    )
+                )
                 continue
             self._plan_foreign_row(store, row, moving)
         for row in crossed["mislabelled"]:
             if row["id"] in moving:
                 continue  # the move stamps the right label
-            self._add(Finding(
-                "mislabelled", store.profile, row["id"],
-                f"profile_name={row['profile_name']!r} but key {row['session_key']!r} belongs to "
-                f"{row['key_profile']!r}", action=f"relabel to {row['key_profile']!r}",
-                _fix=lambda s, st=store, sid=row["id"]: {
-                    "relabelled": s.db(st).relabel_sessions_to_key_profile([sid])}))
+            self._add(
+                Finding(
+                    "mislabelled",
+                    store.profile,
+                    row["id"],
+                    f"profile_name={row['profile_name']!r} but key {row['session_key']!r} belongs to "
+                    f"{row['key_profile']!r}",
+                    action=f"relabel to {row['key_profile']!r}",
+                    _fix=lambda s, st=store, sid=row["id"]: {
+                        "relabelled": s.db(st).relabel_sessions_to_key_profile([sid])
+                    },
+                )
+            )
         for row in crossed["crossed_parents"]:
             if row["id"] in moving:
                 continue  # the import drops a parent that is not in the target store
-            self._add(Finding(
-                "crossed_parent", store.profile, row["id"],
-                f"{row['key_profile']!r} row inherits from parent {row['parent_session_id']} keyed under "
-                f"{row['parent_profile']!r}", action="sever parent_session_id",
-                _fix=lambda s, st=store, sid=row["id"]: {"severed": s.db(st).sever_crossed_parents([sid])}))
+            self._add(
+                Finding(
+                    "crossed_parent",
+                    store.profile,
+                    row["id"],
+                    f"{row['key_profile']!r} row inherits from parent {row['parent_session_id']} keyed under "
+                    f"{row['parent_profile']!r}",
+                    action="sever parent_session_id",
+                    _fix=lambda s, st=store, sid=row["id"]: {
+                        "severed": s.db(st).sever_crossed_parents([sid])
+                    },
+                )
+            )
 
     def _would_move(self, store: Store, row: dict[str, Any]) -> bool:
         """Mirror of :meth:`_plan_foreign_row`: does the plan copy this row to another store?"""
@@ -227,41 +277,82 @@ class RepairPlan:
             return self.legacy_main == "move" and self.routing_store is not None
         return row["key_profile"] in self.claimed
 
-    def _plan_foreign_row(self, store: Store, row: dict[str, Any], moving: set[str]) -> None:
+    def _plan_foreign_row(
+        self, store: Store, row: dict[str, Any], moving: set[str]
+    ) -> None:
         key_profile, sid = row["key_profile"], row["id"]
         detail = f"key {row['session_key']!r} ({row['message_count']} messages) sits in the {store.profile} store"
         if key_profile == "default" and store.profile != "default":
             self._plan_legacy_main_row(store, row, moving)
             return
         if key_profile not in self.claimed:
-            self._add(Finding(
-                "unclaimed_namespace", store.profile, sid, detail,
-                reason=f"no live profile named {key_profile!r}; create it, then rerun, or "
-                       f"`clawk profile migrate-identity {key_profile} <target>`"))
+            self._add(
+                Finding(
+                    "unclaimed_namespace",
+                    store.profile,
+                    sid,
+                    detail,
+                    reason=f"no live profile named {key_profile!r}; create it, then rerun, or "
+                    f"`clawk profile migrate-identity {key_profile} <target>`",
+                )
+            )
             return
         moving.add(sid)
-        self._add(Finding(
-            "wrong_store", store.profile, sid, detail, action=f"move to the {key_profile} store",
-            _fix=self._move_batch(store, self.by_profile[key_profile]).fix_for(sid)))
+        self._add(
+            Finding(
+                "wrong_store",
+                store.profile,
+                sid,
+                detail,
+                action=f"move to the {key_profile} store",
+                _fix=self._move_batch(store, self.by_profile[key_profile]).fix_for(sid),
+            )
+        )
 
-    def _plan_legacy_main_row(self, store: Store, row: dict[str, Any], moving: set[str]) -> None:
+    def _plan_legacy_main_row(
+        self, store: Store, row: dict[str, Any], moving: set[str]
+    ) -> None:
         sid = row["id"]
-        detail = (f"legacy default-namespace key {row['session_key']!r} ({row['message_count']} messages) "
-                  f"in the {store.profile} store")
+        detail = (
+            f"legacy default-namespace key {row['session_key']!r} ({row['message_count']} messages) "
+            f"in the {store.profile} store"
+        )
         if self.legacy_main == "rekey":
-            self._add(Finding(
-                "legacy_main", store.profile, sid, detail, action=f"rekey to agent:{store.profile}:",
-                _fix=lambda s, st=store, i=sid: {"rekeyed": s.db(st).rekey_legacy_main_sessions([i], st.profile)}))
+            self._add(
+                Finding(
+                    "legacy_main",
+                    store.profile,
+                    sid,
+                    detail,
+                    action=f"rekey to agent:{store.profile}:",
+                    _fix=lambda s, st=store, i=sid: {
+                        "rekeyed": s.db(st).rekey_legacy_main_sessions([i], st.profile)
+                    },
+                )
+            )
         elif self.legacy_main == "move" and self.routing_store is not None:
             moving.add(sid)
-            self._add(Finding(
-                "legacy_main", store.profile, sid, detail, action="move to the default store",
-                _fix=self._move_batch(store, self.routing_store).fix_for(sid)))
+            self._add(
+                Finding(
+                    "legacy_main",
+                    store.profile,
+                    sid,
+                    detail,
+                    action="move to the default store",
+                    _fix=self._move_batch(store, self.routing_store).fix_for(sid),
+                )
+            )
         else:
-            self._add(Finding(
-                "legacy_main", store.profile, sid, detail,
-                reason="either a standalone gateway's own history (--legacy-main rekey) or a default "
-                       "chat that leaked in (--legacy-main move); the row cannot say which"))
+            self._add(
+                Finding(
+                    "legacy_main",
+                    store.profile,
+                    sid,
+                    detail,
+                    reason="either a standalone gateway's own history (--legacy-main rekey) or a default "
+                    "chat that leaked in (--legacy-main move); the row cannot say which",
+                )
+            )
 
     def _move_batch(self, src: Store, dst: Store) -> _MoveBatch:
         return self._moves.setdefault((src.db_path, dst.db_path), _MoveBatch(src, dst))
@@ -269,14 +360,22 @@ class RepairPlan:
     def _scan_topics(self, session: _Session, store: Store) -> None:
         rows = session.db(store).find_profile_less_telegram_topic_rows()
         for row in rows:
-            self._add(Finding(
-                "topic_profile_less", store.profile, f"chat {row['chat_id']} thread {row['thread_id']}",
-                f"telegram topic binding labelled 'default' but keyed {row['session_key']!r}",
-                action=f"relabel to {row['key_profile']!r}",
-                _fix=lambda s, st=store, r=row: s.db(st).relabel_telegram_topic_rows([r])))
+            self._add(
+                Finding(
+                    "topic_profile_less",
+                    store.profile,
+                    f"chat {row['chat_id']} thread {row['thread_id']}",
+                    f"telegram topic binding labelled 'default' but keyed {row['session_key']!r}",
+                    action=f"relabel to {row['key_profile']!r}",
+                    _fix=lambda s, st=store, r=row: s.db(
+                        st
+                    ).relabel_telegram_topic_rows([r]),
+                )
+            )
 
     def _scan_routing(self, session: _Session, store: Store) -> None:
         from clawk_state_profile_repair import session_key_profile
+
         rows = session.db(store).list_gateway_routing_rows()
         for row in rows:
             key_profile = session_key_profile(row["session_key"])
@@ -285,29 +384,49 @@ class RepairPlan:
             subject = f"{row['session_key']} (scope {row['scope']!r})"
             if store.routing:
                 if key_profile not in self.claimed:
-                    self._add(Finding(
-                        "routing_unclaimed", store.profile, subject,
-                        f"routing row for a namespace no live profile claims ({key_profile!r}); every "
-                        "inbound event on it logs a missing-profile error", action="delete",
-                        _fix=lambda s, st=store, r=row: {
-                            "routing_deleted": s.db(st).delete_gateway_routing_rows([(r["scope"], r["session_key"])])}))
+                    self._add(
+                        Finding(
+                            "routing_unclaimed",
+                            store.profile,
+                            subject,
+                            f"routing row for a namespace no live profile claims ({key_profile!r}); every "
+                            "inbound event on it logs a missing-profile error",
+                            action="delete",
+                            _fix=lambda s, st=store, r=row: {
+                                "routing_deleted": s.db(st).delete_gateway_routing_rows(
+                                    [(r["scope"], r["session_key"])]
+                                )
+                            },
+                        )
+                    )
                 continue
             if key_profile == store.profile and not self.multiplexes:
                 continue  # a standalone gateway's own index lives in its own store
             routing_store = self.routing_store
             if routing_store is None:
                 continue
-            self._add(Finding(
-                "routing_stray", store.profile, subject,
-                f"routing row in the {store.profile} store; the index lives in the default store",
-                action="move to the default store (existing row there wins)",
-                _fix=lambda s, st=store, r=row, rs=routing_store: self._move_routing_row(s, st, rs, r)))
+            self._add(
+                Finding(
+                    "routing_stray",
+                    store.profile,
+                    subject,
+                    f"routing row in the {store.profile} store; the index lives in the default store",
+                    action="move to the default store (existing row there wins)",
+                    _fix=lambda s, st=store, r=row, rs=routing_store: (
+                        self._move_routing_row(s, st, rs, r)
+                    ),
+                )
+            )
 
-    def _move_routing_row(self, session: _Session, store: Store, routing_store: Store,
-                          row: dict[str, Any]) -> dict[str, int]:
+    def _move_routing_row(
+        self, session: _Session, store: Store, routing_store: Store, row: dict[str, Any]
+    ) -> dict[str, int]:
         adopted = session.db(routing_store).insert_gateway_routing_rows_if_absent(
-            [(row["scope"], row["session_key"], row["entry_json"], row["updated_at"])])
-        deleted = session.db(store).delete_gateway_routing_rows([(row["scope"], row["session_key"])])
+            [(row["scope"], row["session_key"], row["entry_json"], row["updated_at"])]
+        )
+        deleted = session.db(store).delete_gateway_routing_rows(
+            [(row["scope"], row["session_key"])]
+        )
         return {"routing_adopted": adopted, "routing_deleted": deleted}
 
     def _scan_voice_modes(self, session: _Session, store: Store) -> None:
@@ -326,20 +445,33 @@ class RepairPlan:
             if not owners or "default" in owners:
                 continue  # the default bot speaks there: the unprefixed key is its own
             if len(owners) > 1:
-                self._add(Finding(
-                    "voice_profile_less", store.profile, key,
-                    f"voice mode entry without a profile; chat is held by {sorted(owners)}",
-                    reason="more than one non-default bot speaks in this chat"))
+                self._add(
+                    Finding(
+                        "voice_profile_less",
+                        store.profile,
+                        key,
+                        f"voice mode entry without a profile; chat is held by {sorted(owners)}",
+                        reason="more than one non-default bot speaks in this chat",
+                    )
+                )
                 continue
             owner = next(iter(owners))
-            self._add(Finding(
-                "voice_profile_less", store.profile, key,
-                f"voice mode {data[key]!r} without a profile; chat is held only by {owner!r}",
-                action=f"rekey to {owner}:{key}",
-                _fix=lambda s, p=path, k=key, o=owner: _rekey_voice_mode_entry(p, k, o)))
+            self._add(
+                Finding(
+                    "voice_profile_less",
+                    store.profile,
+                    key,
+                    f"voice mode {data[key]!r} without a profile; chat is held only by {owner!r}",
+                    action=f"rekey to {owner}:{key}",
+                    _fix=lambda s, p=path, k=key, o=owner: _rekey_voice_mode_entry(
+                        p, k, o
+                    ),
+                )
+            )
 
     def _scan_sessions_json(self, store: Store) -> None:
         from clawk_state_profile_repair import session_key_profile
+
         path = store.home / "sessions" / "sessions.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -347,18 +479,28 @@ class RepairPlan:
             return
         if not isinstance(data, dict):
             return
-        for key in sorted(k for k in data if isinstance(k, str) and not k.startswith("_")):
+        for key in sorted(
+            k for k in data if isinstance(k, str) and not k.startswith("_")
+        ):
             key_profile = session_key_profile(key)
             if key_profile is None or key_profile in self.claimed:
                 continue
-            self._add(Finding(
-                "sessions_json_unclaimed", store.profile, key,
-                f"sessions.json mirror entry for a namespace no live profile claims ({key_profile!r}); "
-                "the legacy import re-injects it into routing on every boot", action="delete entry",
-                _fix=lambda s, p=path, k=key: _drop_sessions_json_entry(p, k)))
+            self._add(
+                Finding(
+                    "sessions_json_unclaimed",
+                    store.profile,
+                    key,
+                    f"sessions.json mirror entry for a namespace no live profile claims ({key_profile!r}); "
+                    "the legacy import re-injects it into routing on every boot",
+                    action="delete entry",
+                    _fix=lambda s, p=path, k=key: _drop_sessions_json_entry(p, k),
+                )
+            )
 
     # -- apply --
-    def apply(self, session: _Session, *, snapshot: Callable[[Store], Optional[str]]) -> dict[str, Any]:
+    def apply(
+        self, session: _Session, *, snapshot: Callable[[Store], Optional[str]]
+    ) -> dict[str, Any]:
         """Run every repairable fix; snapshots every store first. Fixes are independent and each
         re-checks its precondition, so a partial run leaves a state the next run completes."""
         snapshots = {s.profile: snapshot(s) for s in self.stores if s.db_path.exists()}
@@ -370,10 +512,22 @@ class RepairPlan:
             try:
                 for key, count in (fix(session) or {}).items():
                     totals[key] = totals.get(key, 0) + int(count)
-            except Exception as exc:  # one bad row must not abandon the rest of the plan
-                logger.warning("repair-profiles: %s on %s failed", finding.kind, finding.subject, exc_info=True)
-                failures.append({"kind": finding.kind, "subject": finding.subject,
-                                 "error": f"{type(exc).__name__}: {exc}"})
+            except (
+                Exception
+            ) as exc:  # one bad row must not abandon the rest of the plan
+                logger.warning(
+                    "repair-profiles: %s on %s failed",
+                    finding.kind,
+                    finding.subject,
+                    exc_info=True,
+                )
+                failures.append(
+                    {
+                        "kind": finding.kind,
+                        "subject": finding.subject,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
         return {"snapshots": snapshots, "totals": totals, "failures": failures}
 
 
@@ -407,39 +561,63 @@ class _MoveBatch:
             return self._result
         src_db, dst_db = session.db(self.src), session.db(self.dst)
         from clawk_state_profile_repair import SessionLedgeredError
+
         payloads: dict[str, Optional[dict[str, Any]]] = {}
         for sid in self.ids:
             try:
                 payloads[sid] = src_db.export_session_for_move(sid)
-            except SessionLedgeredError as exc:  # gained ledger rows since the scan: never copied
+            except (
+                SessionLedgeredError
+            ) as exc:  # gained ledger rows since the scan: never copied
                 self._errors[sid] = exc
         ordered = _parents_first([p for p in payloads.values() if p is not None])
-        result: dict[str, dict[str, int]] = {sid: {"missing": 1} for sid, p in payloads.items()
-                                             if p is None and sid not in self._errors}
+        result: dict[str, dict[str, int]] = {
+            sid: {"missing": 1}
+            for sid, p in payloads.items()
+            if p is None and sid not in self._errors
+        }
         for payload in ordered:
-            sid, parent = payload["session"]["id"], payload["session"].get("parent_session_id")
+            sid, parent = (
+                payload["session"]["id"],
+                payload["session"].get("parent_session_id"),
+            )
             if parent in self._errors:
                 # Imported now, it would land without the parent and never regain the link.
                 self._errors[sid] = RuntimeError(
-                    f"its parent {parent} did not move; kept in the {self.src.profile} store with it")
+                    f"its parent {parent} did not move; kept in the {self.src.profile} store with it"
+                )
                 continue
             try:
-                outcome = dst_db.import_moved_session(payload, profile_name=self.dst.profile)
+                outcome = dst_db.import_moved_session(
+                    payload, profile_name=self.dst.profile
+                )
             except Exception as exc:
                 self._errors[sid] = exc
                 continue
             if dst_db.count_messages_all(sid) < len(payload["messages"]):
-                logger.warning("repair-profiles: %s copied into %s with fewer messages than the source; "
-                               "source row kept", sid, self.dst.profile)
+                logger.warning(
+                    "repair-profiles: %s copied into %s with fewer messages than the source; "
+                    "source row kept",
+                    sid,
+                    self.dst.profile,
+                )
                 result[sid] = {"copied_incomplete": 1}
                 continue
             result[sid] = {outcome: 1}
         # Deleting a row detaches its children still in the source; a child that did not move
         # must find its parent there on the next run.
-        awaited = {p["session"].get("parent_session_id") for p in ordered if p["session"]["id"] in self._errors}
+        awaited = {
+            p["session"].get("parent_session_id")
+            for p in ordered
+            if p["session"]["id"] in self._errors
+        }
         for payload in ordered:
             sid = payload["session"]["id"]
-            if sid not in result or sid in awaited or "copied_incomplete" in result[sid]:
+            if (
+                sid not in result
+                or sid in awaited
+                or "copied_incomplete" in result[sid]
+            ):
                 continue
             try:
                 if src_db.delete_moved_session(sid):
@@ -468,9 +646,13 @@ def _ledgered_lineages(foreign: list[dict[str, Any]]) -> dict[str, str]:
     for sid, row in by_id.items():
         anchors = sorted(m for m in groups[sid] if by_id[m].get("ledgered"))
         if row.get("ledgered"):
-            held[sid] = "has gateway admission/worker history, which a move cannot carry"
+            held[sid] = (
+                "has gateway admission/worker history, which a move cannot carry"
+            )
         elif anchors:
-            held[sid] = f"its lineage holds {anchors[0]}, which has gateway admission/worker history"
+            held[sid] = (
+                f"its lineage holds {anchors[0]}, which has gateway admission/worker history"
+            )
     return held
 
 
@@ -480,7 +662,11 @@ def _parents_first(payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
     pending = {p["session"]["id"]: p for p in payloads}
     ordered: list[dict[str, Any]] = []
     while pending:
-        ready = [sid for sid, p in pending.items() if p["session"].get("parent_session_id") not in pending]
+        ready = [
+            sid
+            for sid, p in pending.items()
+            if p["session"].get("parent_session_id") not in pending
+        ]
         if not ready:
             ready = list(pending)
         for sid in ready:
@@ -490,6 +676,7 @@ def _parents_first(payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _rekey_voice_mode_entry(path: Path, key: str, owner: str) -> dict[str, int]:
     from utils import atomic_json_write
+
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     if key not in data:
         return {}
@@ -501,6 +688,7 @@ def _rekey_voice_mode_entry(path: Path, key: str, owner: str) -> dict[str, int]:
 
 def _drop_sessions_json_entry(path: Path, key: str) -> dict[str, int]:
     from utils import atomic_json_write
+
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     if key not in data:
         return {}
@@ -511,8 +699,13 @@ def _drop_sessions_json_entry(path: Path, key: str) -> dict[str, int]:
 
 # ── entry points ──────────────────────────────────────────────────────────────
 
-def scan_stores(stores: Optional[list[Store]] = None, *, legacy_main: str = "report",
-                read_only: bool = True) -> tuple[RepairPlan, _Session]:
+
+def scan_stores(
+    stores: Optional[list[Store]] = None,
+    *,
+    legacy_main: str = "report",
+    read_only: bool = True,
+) -> tuple[RepairPlan, _Session]:
     """Open every store and build the plan. The caller owns the returned session (close it)."""
     stores = enumerate_stores() if stores is None else stores
     session = _Session(read_only=read_only)
@@ -526,6 +719,7 @@ def scan_stores(stores: Optional[list[Store]] = None, *, legacy_main: str = "rep
 
 def default_snapshot(store: Store) -> Optional[str]:
     from clawk_cli.backup import create_quick_snapshot
+
     try:
         return create_quick_snapshot(label="repair-profiles", clawk_home=store.home)
     except Exception as exc:

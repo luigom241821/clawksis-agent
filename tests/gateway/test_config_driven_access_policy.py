@@ -142,7 +142,9 @@ def test_own_policy_allowlist_authorized_without_env_allowlist(monkeypatch, plat
     """
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={platform: PlatformConfig(enabled=True, extra={"dm_policy": "allowlist"})}
+        platforms={
+            platform: PlatformConfig(enabled=True, extra={"dm_policy": "allowlist"})
+        }
     )
     runner, _adapter = _make_runner(platform, config, enforces=True)
 
@@ -162,10 +164,13 @@ def test_stored_route_cannot_reuse_prior_adapter_authorization(monkeypatch, plat
     )
     runner, _adapter = _make_runner(platform, config, enforces=True)
 
-    assert runner._is_user_authorized(
-        _source(platform),
-        allow_adapter_delegation=False,
-    ) is False
+    assert (
+        runner._is_user_authorized(
+            _source(platform),
+            allow_adapter_delegation=False,
+        )
+        is False
+    )
 
 
 @pytest.mark.parametrize("platform", _OWN_POLICY_PLATFORMS)
@@ -220,7 +225,9 @@ def test_own_policy_allowlist_authorized_for_group_chat(monkeypatch, platform):
     """A config-only ``group_policy: allowlist`` is trusted for group traffic."""
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={platform: PlatformConfig(enabled=True, extra={"group_policy": "allowlist"})}
+        platforms={
+            platform: PlatformConfig(enabled=True, extra={"group_policy": "allowlist"})
+        }
     )
     runner, _adapter = _make_runner(platform, config, enforces=True)
 
@@ -232,7 +239,9 @@ def test_own_policy_open_group_not_authorized_without_allowlist(monkeypatch, pla
     """``group_policy: open`` is the same fail-open class as DM open → deny."""
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={platform: PlatformConfig(enabled=True, extra={"group_policy": "open"})}
+        platforms={
+            platform: PlatformConfig(enabled=True, extra={"group_policy": "open"})
+        }
     )
     runner, _adapter = _make_runner(platform, config, enforces=True)
 
@@ -249,7 +258,10 @@ def test_own_policy_open_group_not_authorized_without_allowlist(monkeypatch, pla
     ],
 )
 def test_pairing_dm_policy_strict_intake_auth_denies_unknown(
-    monkeypatch, module_path, class_name, dm_helper,
+    monkeypatch,
+    module_path,
+    class_name,
+    dm_helper,
 ):
     """Default ``dm_policy: pairing`` must not admit senders via strict auth."""
     _clear_auth_env(monkeypatch)
@@ -300,7 +312,9 @@ def test_wecom_open_group_with_per_group_sender_allowlist_is_authorized(monkeypa
     )
     runner, _adapter = _make_runner(Platform.WECOM, config, enforces=True)
 
-    assert runner._is_user_authorized(_source(Platform.WECOM, chat_type="group")) is True
+    assert (
+        runner._is_user_authorized(_source(Platform.WECOM, chat_type="group")) is True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -329,11 +343,15 @@ def test_wecom_open_group_with_per_group_sender_allowlist_is_authorized(monkeypa
         ("pairing", "pair"),
     ],
 )
-def test_unauthorized_dm_behavior_follows_config_dm_policy(monkeypatch, dm_policy, expected):
+def test_unauthorized_dm_behavior_follows_config_dm_policy(
+    monkeypatch, dm_policy, expected
+):
     """A restrictive dm_policy drops unauthorized DMs; pairing opts back in."""
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={Platform.WECOM: PlatformConfig(enabled=True, extra={"dm_policy": dm_policy})}
+        platforms={
+            Platform.WECOM: PlatformConfig(enabled=True, extra={"dm_policy": dm_policy})
+        }
     )
     runner, _adapter = _make_runner(Platform.WECOM, config, enforces=True)
 
@@ -344,7 +362,9 @@ def test_unauthorized_dm_behavior_open_policy_keeps_default(monkeypatch):
     """``dm_policy: open`` is not restrictive → falls through to the default."""
     _clear_auth_env(monkeypatch)
     config = GatewayConfig(
-        platforms={Platform.WECOM: PlatformConfig(enabled=True, extra={"dm_policy": "open"})}
+        platforms={
+            Platform.WECOM: PlatformConfig(enabled=True, extra={"dm_policy": "open"})
+        }
     )
     runner, _adapter = _make_runner(Platform.WECOM, config, enforces=True)
 

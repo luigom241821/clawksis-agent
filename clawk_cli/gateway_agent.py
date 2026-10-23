@@ -8,6 +8,7 @@ never runs a tool and never writes ``state.db``: the turn runs in the gateway.
 Event contract: wave_a.md (frozen). Every frame is a gateway ``event`` with params
 ``{type, session_id, execution_generation, admission_id?, payload}``.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,19 +32,34 @@ _POLL = 0.1
 VOICE_STOPPED = "voice_stopped"
 
 _RESULT_DEFAULTS = {
-    "final_response": "", "failed": False, "partial": False, "error": None, "failure_reason": None,
-    "completed": True, "interrupted": False, "interrupt_message": None, "api_calls": 0,
-    "pending_steer": None, "last_reasoning": None, "response_previewed": False,
-    "response_transformed": False, "pre_transform_response": None, "billing_block": None,
+    "final_response": "",
+    "failed": False,
+    "partial": False,
+    "error": None,
+    "failure_reason": None,
+    "completed": True,
+    "interrupted": False,
+    "interrupt_message": None,
+    "api_calls": 0,
+    "pending_steer": None,
+    "last_reasoning": None,
+    "response_previewed": False,
+    "response_transformed": False,
+    "pre_transform_response": None,
+    "billing_block": None,
     "auxiliary_usage": {},
 }
 # ``session.usage`` / ``session.stats`` (wave_a2 contract, session-cumulative) → the agent attributes
 # main's status bar, spinner (``↓ N tok``) and /usage read off ``AIAgent``.
 _COUNTER_FROM_USAGE = {
-    "session_input_tokens": "input_tokens", "session_output_tokens": "output_tokens",
-    "session_prompt_tokens": "prompt_tokens", "session_completion_tokens": "completion_tokens",
-    "session_total_tokens": "total_tokens", "session_cache_read_tokens": "cache_read_tokens",
-    "session_cache_write_tokens": "cache_write_tokens", "session_reasoning_tokens": "reasoning_tokens",
+    "session_input_tokens": "input_tokens",
+    "session_output_tokens": "output_tokens",
+    "session_prompt_tokens": "prompt_tokens",
+    "session_completion_tokens": "completion_tokens",
+    "session_total_tokens": "total_tokens",
+    "session_cache_read_tokens": "cache_read_tokens",
+    "session_cache_write_tokens": "cache_write_tokens",
+    "session_reasoning_tokens": "reasoning_tokens",
     "session_api_calls": "api_calls",
 }
 
@@ -90,16 +106,43 @@ class GatewayAgent:
     platform = "cli"
     _supports_active_turn_redirect = True
 
-    def __init__(self, *, session_db=None, session_id=None, model=None, provider=None, base_url=None,
-                 api_mode=None, max_iterations=90, quiet_mode=True, tool_progress_mode="all",
-                 reasoning_config=None, service_tier=None, clarify_callback=None, connection_callback=None,
-                 connection_update_callback=None,
-                 reasoning_callback=None, thinking_callback=None, tool_progress_callback=None,
-                 tool_start_callback=None, tool_complete_callback=None, stream_delta_callback=None,
-                 tool_gen_callback=None, notice_callback=None, notice_clear_callback=None,
-                 reaction_callback=None, interim_assistant_callback=None, connection=None,
-                 push_reasoning=False, model_confirm_callback=None, modal_withdraw_callback=None,
-                 one_turn=False, one_turn_reasoning=None, one_turn_alias="", **_ignored):
+    def __init__(
+        self,
+        *,
+        session_db=None,
+        session_id=None,
+        model=None,
+        provider=None,
+        base_url=None,
+        api_mode=None,
+        max_iterations=90,
+        quiet_mode=True,
+        tool_progress_mode="all",
+        reasoning_config=None,
+        service_tier=None,
+        clarify_callback=None,
+        connection_callback=None,
+        connection_update_callback=None,
+        reasoning_callback=None,
+        thinking_callback=None,
+        tool_progress_callback=None,
+        tool_start_callback=None,
+        tool_complete_callback=None,
+        stream_delta_callback=None,
+        tool_gen_callback=None,
+        notice_callback=None,
+        notice_clear_callback=None,
+        reaction_callback=None,
+        interim_assistant_callback=None,
+        connection=None,
+        push_reasoning=False,
+        model_confirm_callback=None,
+        modal_withdraw_callback=None,
+        one_turn=False,
+        one_turn_reasoning=None,
+        one_turn_alias="",
+        **_ignored,
+    ):
         conn = connection or getattr(session_db, "connection", None)
         if conn is None:
             raise GatewayClientError("Gateway session unavailable; no local fallback")
@@ -136,7 +179,9 @@ class GatewayAgent:
         # Closes the CLI's open modal for one server-request method when the gateway withdraws it
         # (``request.cancel``: another viewer answered, the turn ended); called off the agent thread.
         self.modal_withdraw_callback = modal_withdraw_callback
-        self._open_request = None  # (request id, method) of the server request a modal is answering
+        self._open_request = (
+            None  # (request id, method) of the server request a modal is answering
+        )
         # Set by the CLI after construction: a ``session.control.update`` mid-turn (a tool moved the goal
         # or loop) marks its mirrored managers stale; the dock re-reads them off this thread.
         self.control_update_callback = None
@@ -160,7 +205,9 @@ class GatewayAgent:
         self._active_children: list = []
         self._turn_ask_index = None
         self._usage_stale = False
-        self._current_task_id = self._current_turn_id = self._current_api_request_id = ""
+        self._current_task_id = self._current_turn_id = self._current_api_request_id = (
+            ""
+        )
         self._memory_manager = None
         self._memory_store = None
         self._checkpoint_mgr = None
@@ -169,6 +216,7 @@ class GatewayAgent:
         # Main's store type, the one /new, /resume and /branch swap in: a read-only mirror of the gateway's
         # todo snapshot (``_set_todos``), read by the pet's done-plan beat.
         from tools.todo_tool import TodoStore
+
         self._todo_store = TodoStore()
         # Part of the _compress_context seam: it sets the owner's report here and compress_now reads it.
         self.compression_summary = None
@@ -198,13 +246,21 @@ class GatewayAgent:
         # ``/model --once``: chat retires the agent that switch_model touched and builds this one.
         # Capture the pick, and the alias it resolved through, before ``_apply_info`` copies the session
         # model over it.
-        self._turn_route = self._route_off_session(model, provider, one_turn_alias) if one_turn else None
-        self._taken_turn_route = None  # the pick the admission being sent took (``_take_turn_route``)
+        self._turn_route = (
+            self._route_off_session(model, provider, one_turn_alias)
+            if one_turn
+            else None
+        )
+        self._taken_turn_route = (
+            None  # the pick the admission being sent took (``_take_turn_route``)
+        )
         # ``/model B --once --reasoning X``: X rides that admission's ``model_override``, never a session pin.
         self._turn_reasoning = one_turn_reasoning if one_turn else None
         self._apply_info(self._state().info)
         if self._turn_route:
-            self.model = model  # the resolved model, never the alias the admission sends
+            self.model = (
+                model  # the resolved model, never the alias the admission sends
+            )
             if self._turn_route.get("provider"):
                 self.provider = self._turn_route["provider"]
         self.reasoning_callback = reasoning_callback
@@ -224,12 +280,19 @@ class GatewayAgent:
     def tool_progress_mode(self, mode):
         """``/verbose`` / ``/focus``: ``config.set verbose`` with the explicit mode (never ``cycle``, which
         could drift from the CLI's own cycle)."""
-        if mode == self._tool_progress_mode or mode not in {"off", "new", "all", "verbose"}:
+        if mode == self._tool_progress_mode or mode not in {
+            "off",
+            "new",
+            "all",
+            "verbose",
+        }:
             self._tool_progress_mode = mode
             return
         self._tool_progress_mode = mode
         try:
-            self.connection.call("config.set", session_id=self.session_id, key="verbose", value=mode)
+            self.connection.call(
+                "config.set", session_id=self.session_id, key="verbose", value=mode
+            )
         except GatewayClientError as exc:
             logger.debug("config.set verbose failed: %s", exc)
 
@@ -269,12 +332,19 @@ class GatewayAgent:
         if not explicit and info.get("reasoning_effort") == effort:
             return True
         try:
-            snapshot = self.connection.call("session.resume", session_id=self.session_id)
+            snapshot = self.connection.call(
+                "session.resume", session_id=self.session_id
+            )
             # A policy mutation is generation-fenced: the owner refuses it without the generation.
-            self.connection.call("session.mutate", session_id=self.session_id, request_id=uuid.uuid4().hex,
-                                 expected_revision=snapshot["revision"],
-                                 expected_generation=snapshot["execution_generation"], operation="reasoning",
-                                 payload={"effort": effort})
+            self.connection.call(
+                "session.mutate",
+                session_id=self.session_id,
+                request_id=uuid.uuid4().hex,
+                expected_revision=snapshot["revision"],
+                expected_generation=snapshot["execution_generation"],
+                operation="reasoning",
+                payload={"effort": effort},
+            )
             info["reasoning_effort"] = effort
             return True
         except (GatewayClientError, KeyError, TypeError) as exc:
@@ -288,12 +358,27 @@ class GatewayAgent:
         model: two aliases may name one model at different endpoints, so the owner must not re-resolve
         it. An alias makes even the session's own model a one-turn override."""
         state = self._state()
-        if not model or not (state.info or {}).get("model") or (state.runs_route(model, provider) and not alias):
+        if (
+            not model
+            or not (state.info or {}).get("model")
+            or (state.runs_route(model, provider) and not alias)
+        ):
             return None
         return {"model": alias or model, **({"provider": provider} if provider else {})}
 
-    def switch_model(self, new_model, new_provider="", api_key="", base_url="", api_mode="", capabilities=None, *,
-                     once=False, restore=False, alias=""):
+    def switch_model(
+        self,
+        new_model,
+        new_provider="",
+        api_key="",
+        base_url="",
+        api_mode="",
+        capabilities=None,
+        *,
+        once=False,
+        restore=False,
+        alias="",
+    ):
         """Session-scoped ``/model`` and /resume commit ``session.mutate model``.
 
         ``once=True`` does not write the session. The next ``chat`` builds a new agent; that
@@ -311,7 +396,11 @@ class GatewayAgent:
         own fields back."""
         if once or restore:
             # ``alias``: the ``model_aliases`` entry a ``--once`` pick resolved through (``_route_off_session``).
-            self._turn_route = None if restore else self._route_off_session(new_model, new_provider, alias)
+            self._turn_route = (
+                None
+                if restore
+                else self._route_off_session(new_model, new_provider, alias)
+            )
             if restore:
                 self._turn_reasoning = None
             if new_model:
@@ -319,36 +408,65 @@ class GatewayAgent:
             if new_provider:
                 self.provider = new_provider
             return True
-        if new_model == self.model and (not new_provider or new_provider == self.provider):
+        if new_model == self.model and (
+            not new_provider or new_provider == self.provider
+        ):
             if self._route_off_session(new_model, new_provider) is None:
                 self._turn_route = None
                 return True
         from clawk_cli.gateway_mutations import model_refusal_text
-        payload = {"model": new_model, **({"provider": new_provider} if new_provider else {})}
+
+        payload = {
+            "model": new_model,
+            **({"provider": new_provider} if new_provider else {}),
+        }
         snapshot = self.connection.call("session.resume", session_id=self.session_id)
-        fence = dict(session_id=self.session_id, operation="model", expected_revision=snapshot["revision"],
-                     expected_generation=snapshot["execution_generation"])
-        result = self.connection.call("session.mutate", request_id=uuid.uuid4().hex, payload=payload, **fence) or {}
+        fence = dict(
+            session_id=self.session_id,
+            operation="model",
+            expected_revision=snapshot["revision"],
+            expected_generation=snapshot["execution_generation"],
+        )
+        result = (
+            self.connection.call(
+                "session.mutate", request_id=uuid.uuid4().hex, payload=payload, **fence
+            )
+            or {}
+        )
         if result.get("status") == "confirmation_required":
             if self.model_confirm_callback is None:
                 raise GatewayClientError(model_refusal_text(result))
             if not self.model_confirm_callback(result):
                 return False
             # The refusal wrote nothing: the same fence is re-sent with the owner's token.
-            result = self.connection.call("session.mutate", request_id=uuid.uuid4().hex,
-                                          payload={**payload, "confirm": result["confirm"]}, **fence) or {}
+            result = (
+                self.connection.call(
+                    "session.mutate",
+                    request_id=uuid.uuid4().hex,
+                    payload={**payload, "confirm": result["confirm"]},
+                    **fence,
+                )
+                or {}
+            )
             if result.get("status") == "confirmation_required":
                 raise GatewayClientError(model_refusal_text(result, confirmed=True))
         state = self._state()
         try:
-            state.adopt_snapshot(self.connection.call("session.resume", session_id=self.session_id))
+            state.adopt_snapshot(
+                self.connection.call("session.resume", session_id=self.session_id)
+            )
         except (GatewayClientError, KeyError, TypeError) as exc:
             # Committed: the next turn runs on the new model, so main must not roll its fields back.
-            logger.warning("session.resume after the committed model switch failed: %s", exc)
+            logger.warning(
+                "session.resume after the committed model switch failed: %s", exc
+            )
         # A rebuilt stand-in reads the session's info: it must show the committed model.
         provider = result.get("provider") or new_provider
-        state.info = {**(state.info or {}), "model": result.get("model") or new_model,
-                      **({"provider": provider} if provider else {})}
+        state.info = {
+            **(state.info or {}),
+            "model": result.get("model") or new_model,
+            **({"provider": provider} if provider else {}),
+        }
         # The session now runs this route, so a leftover one-turn override must not ride the next submit.
         self._turn_route = None
         self._apply_info(state.info)
@@ -419,11 +537,18 @@ class GatewayAgent:
         gets the same switch: the session's ``show_reasoning`` display flag, sent on each change."""
         self._reasoning_callback = callback
         wanted = (self.session_id, callback is not None)
-        if wanted == self._show_reasoning_sent:  # per session: a rotated id gets its own flag
+        if (
+            wanted == self._show_reasoning_sent
+        ):  # per session: a rotated id gets its own flag
             return
         try:
-            self.connection.call("config.set", session_id=self.session_id, key="show_reasoning",
-                                 value="1" if wanted[1] else "0", timeout=10)
+            self.connection.call(
+                "config.set",
+                session_id=self.session_id,
+                key="show_reasoning",
+                value="1" if wanted[1] else "0",
+                timeout=10,
+            )
         except GatewayClientError as exc:
             logger.debug("config.set show_reasoning failed: %s", exc)
             return
@@ -446,8 +571,13 @@ class GatewayAgent:
         if wanted == sent or (sent is None and not tier):
             return
         try:
-            self.connection.call("config.set", session_id=self.session_id, key="service_tier",
-                                 value=wanted, timeout=10)
+            self.connection.call(
+                "config.set",
+                session_id=self.session_id,
+                key="service_tier",
+                value=wanted,
+                timeout=10,
+            )
         except GatewayClientError as exc:
             logger.debug("config.set service_tier failed: %s", exc)
             return
@@ -496,19 +626,28 @@ class GatewayAgent:
             compressor.context_length = int(usage["context_length"])
         if "config_context_length" in usage:
             pin = usage.get("config_context_length")
-            compressor._config_context_length = self._config_context_length = pin if isinstance(pin, int) else None
+            compressor._config_context_length = self._config_context_length = (
+                pin if isinstance(pin, int) else None
+            )
         if isinstance(usage.get("compression_count"), int):
             compressor.compression_count = usage["compression_count"]
         source = usage.get("context_source")
         if source is not None:
             # context_display_source(): a "local_estimate" reading is a shown value != the real one.
             compressor.last_real_prompt_tokens = (
-                None if source == "provider_usage" else compressor.last_prompt_tokens + 1)
+                None
+                if source == "provider_usage"
+                else compressor.last_prompt_tokens + 1
+            )
         if isinstance(usage.get("context_tokens"), int):
             self._context_tokens = usage["context_tokens"]
             self._anchor_display()
         latency, tps = usage.get("avg_latency_s"), usage.get("tokens_per_s")
-        if isinstance(latency, (int, float)) and latency > 0 and isinstance(tps, (int, float)):
+        if (
+            isinstance(latency, (int, float))
+            and latency > 0
+            and isinstance(tps, (int, float))
+        ):
             # The bar averages these deques (mean latency, sum/sum velocity): one aligned sample each.
             self._api_latency_history = [float(latency)]
             self._api_output_history = [float(tps) * float(latency)]
@@ -537,7 +676,11 @@ class GatewayAgent:
         for attr in _COUNTER_FROM_USAGE:
             setattr(self, attr, 0)
         compressor = self.context_compressor
-        compressor.last_prompt_tokens, compressor.last_real_prompt_tokens, compressor.compression_count = 0, None, 0
+        (
+            compressor.last_prompt_tokens,
+            compressor.last_real_prompt_tokens,
+            compressor.compression_count,
+        ) = 0, None, 0
         self._context_tokens = self._turn_calls_base = 0
         self._turn_base_usage_anchor = self._turn_api_calls = None
         self._api_latency_history, self._api_output_history = [], []
@@ -583,8 +726,12 @@ class GatewayAgent:
         if generation is None:
             generation = self._state().execution_generation
         try:
-            self.connection.call("session.interrupt", session_id=self.session_id,
-                                 execution_generation=generation, timeout=5)
+            self.connection.call(
+                "session.interrupt",
+                session_id=self.session_id,
+                execution_generation=generation,
+                timeout=5,
+            )
         except Exception as exc:  # health: allow BLE001 -- the settle wait below bounds a lost interrupt
             logger.debug("session.interrupt failed: %s", exc)
 
@@ -599,18 +746,32 @@ class GatewayAgent:
         if generation is None:
             return False
         try:
-            result = self.connection.call(f"session.{verb}", session_id=self.session_id, text=text,
-                                          execution_generation=generation)
+            result = self.connection.call(
+                f"session.{verb}",
+                session_id=self.session_id,
+                text=text,
+                execution_generation=generation,
+            )
         except GatewayClientError:
             return False
         if (result or {}).get("voice_stopped") is True:
             from agent.i18n import t
+
             self._emit_print(t("cli.voice.stop_phrase_typed"))
             return VOICE_STOPPED
         return (result or {}).get("status") in {"queued", "redirected"}
 
-    def _compress_context(self, messages, system_message=None, *, approx_tokens=None, focus_topic=None,
-                          force=True, verbatim_tail=None, **_kw):
+    def _compress_context(
+        self,
+        messages,
+        system_message=None,
+        *,
+        approx_tokens=None,
+        focus_topic=None,
+        force=True,
+        verbatim_tail=None,
+        **_kw,
+    ):
         """Main's manual ``/compress`` seam (``compress_now``) as ``session.mutate compress``: the
         gateway summarizes and commits; the returned transcript is the gateway's compacted history.
         ``verbatim_tail`` rows are stamped as stored, so ``compress_now`` does not rejoin them.
@@ -620,19 +781,31 @@ class GatewayAgent:
         from agent.context_compressor import _DB_PERSISTED_MARKER
         from agent.conversation_compression import COMPACTION_STATUS
         from clawk_cli.gateway_client import COMPRESS_RPC_TIMEOUT
+
         payload = {}
         if focus_topic:
             payload["focus"] = focus_topic
         if verbatim_tail:
             payload["partial"] = True
-            payload["keep_last"] = max(1, sum(1 for m in verbatim_tail if m.get("role") == "user"))
+            payload["keep_last"] = max(
+                1, sum(1 for m in verbatim_tail if m.get("role") == "user")
+            )
         self._emit_print(COMPACTION_STATUS)
         self.compression_summary = None
         snapshot = self.connection.call("session.resume", session_id=self.session_id)
-        result = self.connection.call("session.mutate", timeout=COMPRESS_RPC_TIMEOUT, session_id=self.session_id,
-                                      request_id=uuid.uuid4().hex, expected_revision=snapshot["revision"],
-                                      expected_generation=snapshot["execution_generation"],
-                                      operation="compress", payload=payload) or {}
+        result = (
+            self.connection.call(
+                "session.mutate",
+                timeout=COMPRESS_RPC_TIMEOUT,
+                session_id=self.session_id,
+                request_id=uuid.uuid4().hex,
+                expected_revision=snapshot["revision"],
+                expected_generation=snapshot["execution_generation"],
+                operation="compress",
+                payload=payload,
+            )
+            or {}
+        )
         if isinstance(result.get("summary"), dict):
             self.compression_summary = result["summary"]
         if result.get("status") == "noop":
@@ -645,8 +818,11 @@ class GatewayAgent:
         compressor.compression_count += 1
         compressor.last_prompt_tokens = -1
         self._turn_base_usage_anchor = None
-        return [{k: v for k, v in m.items() if k != "row_id"} for m in after.get("messages") or []
-                if not m.get("archived")], system_message
+        return [
+            {k: v for k, v in m.items() if k != "row_id"}
+            for m in after.get("messages") or []
+            if not m.get("archived")
+        ], system_message
 
     def steer(self, text):
         return self._correct("steer", text)
@@ -668,8 +844,16 @@ class GatewayAgent:
             user_message, attachments = self._stage_content_parts(user_message)
             if isinstance(persist_user_message, list):
                 persist_user_message = user_message
-        text = persist_user_message if isinstance(persist_user_message, str) else user_message
-        params = {"session_id": self.session_id, "submission_id": uuid.uuid4().hex, "text": text}
+        text = (
+            persist_user_message
+            if isinstance(persist_user_message, str)
+            else user_message
+        )
+        params = {
+            "session_id": self.session_id,
+            "submission_id": uuid.uuid4().hex,
+            "text": text,
+        }
         if attachments:
             params["attachments"] = attachments
         if isinstance(user_message, str) and user_message != text:
@@ -691,7 +875,10 @@ class GatewayAgent:
         if pending:
             # /model --once: this admission alone runs the pick. The session row stays put.
             params["model_override"] = pending
-        elif self._moa_preset and (info.get("provider"), info.get("model")) != ("moa", self._moa_preset):
+        elif self._moa_preset and (info.get("provider"), info.get("model")) != (
+            "moa",
+            self._moa_preset,
+        ):
             # /moa one-shot: this admission alone runs the preset (unless it is the session's own
             # route); the session's route is untouched.
             params["model_override"] = {"model": self._moa_preset, "provider": "moa"}
@@ -728,27 +915,56 @@ class GatewayAgent:
                 continue
             if part.get("type") == "text":
                 lines = str(part.get("text") or "").splitlines()
-                texts.append("\n".join(ln for ln in lines if not ln.startswith("[Image attached")).strip())
+                texts.append(
+                    "\n".join(
+                        ln for ln in lines if not ln.startswith("[Image attached")
+                    ).strip()
+                )
             elif part.get("type") == "image_url":
-                url = (part.get("image_url") or {}).get("url") if isinstance(part.get("image_url"), dict) else None
+                url = (
+                    (part.get("image_url") or {}).get("url")
+                    if isinstance(part.get("image_url"), dict)
+                    else None
+                )
                 if isinstance(url, str) and url.startswith("data:image/"):
-                    staged = self.connection.call("image.attach_bytes", session_id=self.session_id, content_base64=url)
+                    staged = self.connection.call(
+                        "image.attach_bytes",
+                        session_id=self.session_id,
+                        content_base64=url,
+                    )
                     attachments.append({"path": staged["path"], "mime": staged["mime"]})
         return "\n\n".join(t for t in texts if t), attachments
 
-    def run_conversation(self, user_message, conversation_history=None, stream_callback=None,
-                         task_id=None, persist_user_message=None, turn_author=None, **_kw):
-        turn = self._turn = _Turn(self.session_id)  # first: a turn main gave up on stops consuming
+    def run_conversation(
+        self,
+        user_message,
+        conversation_history=None,
+        stream_callback=None,
+        task_id=None,
+        persist_user_message=None,
+        turn_author=None,
+        **_kw,
+    ):
+        turn = self._turn = _Turn(
+            self.session_id
+        )  # first: a turn main gave up on stops consuming
         history = list(conversation_history or [])
-        self._turn_ask_index = len(history)  # the staged ask's row in this turn's transcript
+        self._turn_ask_index = len(
+            history
+        )  # the staged ask's row in this turn's transcript
         self._turn_api_calls = None
         self._turn_calls_base = self.session_api_calls
         self._usage_stale = True
         self._interrupt_requested = False
         self._interrupt_sent_at = None
         from clawk_cli.gateway_tools_notify import take_admitted_turn
-        adopted = take_admitted_turn(self, persist_user_message if isinstance(persist_user_message, str)
-                                     else user_message)
+
+        adopted = take_admitted_turn(
+            self,
+            persist_user_message
+            if isinstance(persist_user_message, str)
+            else user_message,
+        )
         if adopted is not None:
             # A turn the gateway already admitted and is running (its frames are queued). A recovered
             # ``/queue`` turn missed some frames: its reply is completed from the receipt.
@@ -761,15 +977,27 @@ class GatewayAgent:
                 # Inside the try: staging an image is a gateway call, and its failure is a failed turn.
                 # Building the params consumes a ``/model --once`` pick (``_take_turn_route``).
                 state = self._state()
-                if state.gaps != state.attached_gaps:  # a replay gap between turns retired the subscription
+                if (
+                    state.gaps != state.attached_gaps
+                ):  # a replay gap between turns retired the subscription
                     self.connection.reattach(turn.session_id, abandon=self._stop(turn))
-                params = self._submit_params(user_message, persist_user_message, turn_author)
+                params = self._submit_params(
+                    user_message, persist_user_message, turn_author
+                )
                 if self._stop(turn)():
                     raise CallStopped("prompt.submit")
-                receipt = self.connection.call("prompt.submit", **{**params, "session_id": turn.session_id})
-            except CallStopped:  # main moved on (a later turn, /new, Ctrl-C's bound) before the submit
+                receipt = self.connection.call(
+                    "prompt.submit", **{**params, "session_id": turn.session_id}
+                )
+            except (
+                CallStopped
+            ):  # main moved on (a later turn, /new, Ctrl-C's bound) before the submit
                 self._give_back_turn_route()  # nothing was sent: the pick is still owed
-                return self._failed(history, user_message, "Stopped before the prompt was sent; nothing was sent.")
+                return self._failed(
+                    history,
+                    user_message,
+                    "Stopped before the prompt was sent; nothing was sent.",
+                )
             except GatewayRPCError as exc:
                 # The owner answered and refused: not a lost connection. Only its own site code
                 # (session_busy: send again) is a verdict; any other refusal stays unclassified.
@@ -777,10 +1005,17 @@ class GatewayAgent:
                 if busy:
                     # Nothing was admitted: the resend carries the pick (the CLI keeps its restore).
                     self._give_back_turn_route()
-                return self._failed(history, user_message, str(exc),
-                                    failure_reason="session_busy" if busy else None, retryable=busy)
+                return self._failed(
+                    history,
+                    user_message,
+                    str(exc),
+                    failure_reason="session_busy" if busy else None,
+                    retryable=busy,
+                )
             except GatewayClientError as exc:
-                return self._failed(history, user_message, str(exc), failure_reason="gateway_connection")
+                return self._failed(
+                    history, user_message, str(exc), failure_reason="gateway_connection"
+                )
             if (receipt or {}).get("voice_stopped") is True:
                 return self._voice_stopped(history)
         self._epoch = getattr(self.connection, "epoch", None)
@@ -790,16 +1025,32 @@ class GatewayAgent:
         starts: dict = {}
         try:
             settled = (adopted or {}).get("receipt")
-            outcome = {"_receipt": settled} if settled else self._pump(stream_callback, starts, turn)
+            outcome = (
+                {"_receipt": settled}
+                if settled
+                else self._pump(stream_callback, starts, turn)
+            )
         finally:
             if self._owns(turn):
                 self._generation_done()
         if isinstance(outcome, Exception) and self._owns(turn):
-            return self._failed(history, user_message, str(outcome) or DISCONNECTED,
-                                failure_reason="gateway_connection")
-        result = self._result(history, user_message, outcome, turn) if self._owns(turn) else None
-        if not self._owns(turn):  # a later turn or a session switch took over: it reads and paints nothing
-            return self._failed(history, user_message, "A later turn took over this terminal.")
+            return self._failed(
+                history,
+                user_message,
+                str(outcome) or DISCONNECTED,
+                failure_reason="gateway_connection",
+            )
+        result = (
+            self._result(history, user_message, outcome, turn)
+            if self._owns(turn)
+            else None
+        )
+        if not self._owns(
+            turn
+        ):  # a later turn or a session switch took over: it reads and paints nothing
+            return self._failed(
+                history, user_message, "A later turn took over this terminal."
+            )
         if turn.gapped:
             self._paint_owed(turn, result, outcome, stream_callback)
         return result
@@ -808,6 +1059,7 @@ class GatewayAgent:
         """Frames left from an earlier turn of this viewer (a late settlement) are not this turn's. A
         ``/queue`` admission's start among them is remembered: that turn is painted after this one."""
         from clawk_cli.gateway_tools_notify import missed_start
+
         while True:
             try:
                 frame = self.connection.events.get_nowait()
@@ -826,7 +1078,10 @@ class GatewayAgent:
         self._generation = None
 
     def _expired(self):
-        return self._interrupt_sent_at is not None and time.monotonic() - self._interrupt_sent_at > INTERRUPT_SETTLE_SECONDS
+        return (
+            self._interrupt_sent_at is not None
+            and time.monotonic() - self._interrupt_sent_at > INTERRUPT_SETTLE_SECONDS
+        )
 
     def _owns(self, turn):
         return self._turn is turn and self.session_id == turn.session_id
@@ -846,7 +1101,11 @@ class GatewayAgent:
         events = self.connection.events
         while self._owns(turn):
             if self._expired():
-                return {"status": "interrupted", "outcome": "cancelled", "_settle_timeout": True}
+                return {
+                    "status": "interrupted",
+                    "outcome": "cancelled",
+                    "_settle_timeout": True,
+                }
             try:
                 frame = events.get(timeout=_POLL)
             except queue.Empty:
@@ -860,16 +1119,24 @@ class GatewayAgent:
                     continue  # the previous connection's loss, already reported; this turn is live
                 return frame
             params = frame.get("params") if isinstance(frame, dict) else None
-            if not isinstance(params, dict) or params.get("session_id") != self.session_id:
+            if (
+                not isinstance(params, dict)
+                or params.get("session_id") != self.session_id
+            ):
                 continue
             if frame.get("method") in _SERVER_REQUESTS and "id" in frame:
                 self._answer_request(frame)
                 continue
             kind, payload = params.get("type"), params.get("payload") or {}
-            admission = params.get("admission_id") or (payload.get("admission_id") if isinstance(payload, dict) else None)
+            admission = params.get("admission_id") or (
+                payload.get("admission_id") if isinstance(payload, dict) else None
+            )
             if self._admission and admission and admission != self._admission:
                 from clawk_cli.gateway_tools_notify import missed_start
-                missed_start(self._state(), params)  # a /queue turn run ahead of this one: painted after it
+
+                missed_start(
+                    self._state(), params
+                )  # a /queue turn run ahead of this one: painted after it
                 continue
             if params.get("execution_generation") is not None:
                 self._generation = params["execution_generation"]
@@ -891,26 +1158,59 @@ class GatewayAgent:
         """``gateway_replay_gap``: re-attach, answer the controls the hole hid, stop painting live text. A
         turn the snapshot no longer lists settles from its receipt; None waits for the live completion."""
         from clawk_cli.gateway_replay_gap import settled
-        lost, stop = GatewayClientError("session_replay_gap: " + DISCONNECTED), self._stop(turn)
+
+        lost, stop = (
+            GatewayClientError("session_replay_gap: " + DISCONNECTED),
+            self._stop(turn),
+        )
         try:
             snapshot = self.connection.reattach(turn.session_id, abandon=stop)
-            row = next((r for r in snapshot.get("pending") or [] if r.get("admission_id") == turn.admission), {})
+            row = next(
+                (
+                    r
+                    for r in snapshot.get("pending") or []
+                    if r.get("admission_id") == turn.admission
+                ),
+                {},
+            )
             if row.get("status") == "unknown":
-                return lost  # its completion was the one the hole lost: no other is owed
-            turn.gapped |= row.get("status") != "queued"  # one still queued lost nothing
+                return (
+                    lost  # its completion was the one the hole lost: no other is owed
+                )
+            turn.gapped |= (
+                row.get("status") != "queued"
+            )  # one still queued lost nothing
             self._restore_connection_card(snapshot.get("pending_connection"))
             for prompt in snapshot.get("prompts") or []:
-                if row.get("status") == "started" and prompt.get("execution_generation") == row.get("execution_generation") \
-                        and prompt.get("prompt_id") not in turn.answered and not stop():
+                if (
+                    row.get("status") == "started"
+                    and prompt.get("execution_generation")
+                    == row.get("execution_generation")
+                    and prompt.get("prompt_id") not in turn.answered
+                    and not stop()
+                ):
                     turn.answered.add(prompt.get("prompt_id"))
                     try:
-                        self._dispatch(f"{prompt.get('kind')}.request", prompt, None, {})
-                    except Exception:  # a broken modal is a skipped answer, never a failed turn
-                        logger.debug("control %s dispatch failed", prompt.get("prompt_id"), exc_info=True)
+                        self._dispatch(
+                            f"{prompt.get('kind')}.request", prompt, None, {}
+                        )
+                    except (
+                        Exception
+                    ):  # a broken modal is a skipped answer, never a failed turn
+                        logger.debug(
+                            "control %s dispatch failed",
+                            prompt.get("prompt_id"),
+                            exc_info=True,
+                        )
             if row or not turn.admission or stop():
                 return None
-            receipt = self.connection.call("prompt.receipt", session_id=turn.session_id, admission_id=turn.admission,
-                                           include_result=True, abandon=stop)
+            receipt = self.connection.call(
+                "prompt.receipt",
+                session_id=turn.session_id,
+                admission_id=turn.admission,
+                include_result=True,
+                abandon=stop,
+            )
         except CallStopped:
             return None
         except GatewayClientError:
@@ -949,7 +1249,9 @@ class GatewayAgent:
         self._close_segment(starts)
         self._turn.seen.add(str(text or "").strip())
         if self.interim_assistant_callback is not None:
-            self.interim_assistant_callback(text, already_streamed=bool(payload.get("already_streamed")))
+            self.interim_assistant_callback(
+                text, already_streamed=bool(payload.get("already_streamed"))
+            )
         elif text and str(text).strip():
             self._emit_print(text)
 
@@ -959,9 +1261,16 @@ class GatewayAgent:
 
     def _on_tool_progress(self, payload, stream_callback, starts):
         if self.tool_progress_callback is not None:
-            self.tool_progress_callback("tool.progress", payload.get("name"), payload.get("message"), None,
-                                        tool_call_id=payload.get("tool_id"), progress=payload.get("progress"),
-                                        total=payload.get("total"), percent=payload.get("percent"))
+            self.tool_progress_callback(
+                "tool.progress",
+                payload.get("name"),
+                payload.get("message"),
+                None,
+                tool_call_id=payload.get("tool_id"),
+                progress=payload.get("progress"),
+                total=payload.get("total"),
+                percent=payload.get("percent"),
+            )
 
     def _on_tool_start(self, payload, stream_callback, starts):
         self._close_segment(starts)
@@ -977,7 +1286,10 @@ class GatewayAgent:
             self._refresh_stats()
         if self.tool_progress_callback is not None:
             from agent.display import build_tool_preview
-            self.tool_progress_callback("tool.started", name, build_tool_preview(name, args), args)
+
+            self.tool_progress_callback(
+                "tool.started", name, build_tool_preview(name, args), args
+            )
         # No tool_start_callback: main's snapshots the local FS for inline diffs; the gateway
         # snapshots before its tool writes and ships ``tool.complete.inline_diff`` instead.
 
@@ -991,10 +1303,18 @@ class GatewayAgent:
             started = starts.pop(call_id, None)
             duration = (time.monotonic() - started) if started is not None else 0.0
         if self.tool_progress_callback is not None:
-            self.tool_progress_callback("tool.completed", name, None, None, duration=duration,
-                                        is_error=bool(payload.get("is_error")), result=result)
+            self.tool_progress_callback(
+                "tool.completed",
+                name,
+                None,
+                None,
+                duration=duration,
+                is_error=bool(payload.get("is_error")),
+                result=result,
+            )
         self._usage_stale = True
         from clawk_cli.gateway_tools import mark_dirty
+
         mark_dirty()  # a terminal/process call may have started or stopped a background process
         if name == "todo":
             self._todo_from_result(result)
@@ -1002,6 +1322,7 @@ class GatewayAgent:
         if isinstance(diff, str) and diff:
             from cli import _cprint
             from clawk_cli.cli_modern_layout import diff_printer
+
             emit = diff_printer(_cprint)
             for line in diff.rstrip("\n").splitlines():
                 emit(line)
@@ -1025,7 +1346,9 @@ class GatewayAgent:
         """The gateway's ``{todos, revision}`` into the CLI's ``TodoStore`` (``restore``: no new revision)."""
         if isinstance(snapshot.get("todos"), list):
             try:
-                self._todo_store.restore(snapshot["todos"], revision=snapshot.get("revision"))
+                self._todo_store.restore(
+                    snapshot["todos"], revision=snapshot.get("revision")
+                )
             except (ValueError, TypeError) as exc:
                 logger.debug("todo snapshot not mirrored: %s", exc)
 
@@ -1043,15 +1366,28 @@ class GatewayAgent:
 
     def _on_reasoning_available(self, payload, stream_callback, starts):
         if self.tool_progress_callback is not None:
-            self.tool_progress_callback("reasoning.available", "_thinking", (payload.get("text") or "")[:500], None)
+            self.tool_progress_callback(
+                "reasoning.available",
+                "_thinking",
+                (payload.get("text") or "")[:500],
+                None,
+            )
 
     def _on_notice(self, payload, stream_callback, starts):
         if self.notice_callback is None:
             return
         from agent.credits_tracker import AgentNotice
-        self.notice_callback(AgentNotice(text=str(payload.get("text") or ""), level=payload.get("level") or "info",
-                                         kind=payload.get("kind") or "sticky", ttl_ms=payload.get("ttl_ms"),
-                                         key=payload.get("key"), id=payload.get("id")))
+
+        self.notice_callback(
+            AgentNotice(
+                text=str(payload.get("text") or ""),
+                level=payload.get("level") or "info",
+                kind=payload.get("kind") or "sticky",
+                ttl_ms=payload.get("ttl_ms"),
+                key=payload.get("key"),
+                id=payload.get("id"),
+            )
+        )
 
     def _on_notice_clear(self, payload, stream_callback, starts):
         if self.notice_clear_callback is not None:
@@ -1076,37 +1412,63 @@ class GatewayAgent:
 
     def _on_approval(self, payload, stream_callback, starts):
         from tools.terminal_tool import _get_approval_callback
+
         callback = _get_approval_callback()
         choices = list(payload.get("choices") or [])
         choice = "deny"
         if callback is not None:
             try:
-                choice = callback(payload.get("command") or "", payload.get("description") or "",
-                                  allow_permanent="always" in choices, allow_session="session" in choices,
-                                  smart_denied=False)
+                choice = callback(
+                    payload.get("command") or "",
+                    payload.get("description") or "",
+                    allow_permanent="always" in choices,
+                    allow_session="session" in choices,
+                    smart_denied=False,
+                )
             except TypeError:
-                choice = callback(payload.get("command") or "", payload.get("description") or "")
+                choice = callback(
+                    payload.get("command") or "", payload.get("description") or ""
+                )
         if choice not in choices:
             choice = "deny"
-        self.connection.call("approval.respond", session_id=self.session_id,
-                             execution_generation=payload.get("execution_generation", self._generation),
-                             prompt_id=payload.get("prompt_id"), choice=choice)
+        self.connection.call(
+            "approval.respond",
+            session_id=self.session_id,
+            execution_generation=payload.get("execution_generation", self._generation),
+            prompt_id=payload.get("prompt_id"),
+            choice=choice,
+        )
 
     def _on_clarify(self, payload, stream_callback, starts):
         answer = ""
         if self.clarify_callback is not None:
             qid = payload.get("prompt_id") or "q0"
-            reply = self.clarify_callback([{"qid": qid, "question": payload.get("question") or "",
-                                            "choices": list(payload.get("choices") or []),
-                                            "multi_select": bool(payload.get("multi_select"))}])
+            reply = self.clarify_callback(
+                [
+                    {
+                        "qid": qid,
+                        "question": payload.get("question") or "",
+                        "choices": list(payload.get("choices") or []),
+                        "multi_select": bool(payload.get("multi_select")),
+                    }
+                ]
+            )
             if isinstance(reply, dict):
                 value = (reply.get("answers") or {}).get(qid)
-                answer = ", ".join(map(str, value)) if isinstance(value, (list, tuple)) else (value or "")
+                answer = (
+                    ", ".join(map(str, value))
+                    if isinstance(value, (list, tuple))
+                    else (value or "")
+                )
             elif isinstance(reply, str):
                 answer = reply
-        self.connection.call("clarify.respond", session_id=self.session_id,
-                             execution_generation=payload.get("execution_generation", self._generation),
-                             prompt_id=payload.get("prompt_id"), answer=str(answer))
+        self.connection.call(
+            "clarify.respond",
+            session_id=self.session_id,
+            execution_generation=payload.get("execution_generation", self._generation),
+            prompt_id=payload.get("prompt_id"),
+            answer=str(answer),
+        )
 
     def _on_connection_request(self, payload, stream_callback, starts):
         if self.connection_callback is not None:
@@ -1127,13 +1489,21 @@ class GatewayAgent:
 
     def connection_respond(self, op_id, result):
         """The card's answer to the gateway's open operation (``connection.respond``); returns its result."""
-        return self.connection.call("connection.respond", op_id=op_id, result=result,
-                                    owner={"type": "session", "session_id": self.session_id})
+        return self.connection.call(
+            "connection.respond",
+            op_id=op_id,
+            result=result,
+            owner={"type": "session", "session_id": self.session_id},
+        )
 
     def connection_retry(self, name):
         """The card's Try again on a failed or expired row: the gateway re-mints it on the open operation."""
-        return self.connection.call("connectors.connect", connectors=[name], reconnect=True,
-                                    owner={"type": "session", "session_id": self.session_id})
+        return self.connection.call(
+            "connectors.connect",
+            connectors=[name],
+            reconnect=True,
+            owner={"type": "session", "session_id": self.session_id},
+        )
 
     def _answer_request(self, frame):
         """A gateway server→client request (``sudo``, ``secret``, ``clarify``): main's own modal
@@ -1143,7 +1513,9 @@ class GatewayAgent:
         self._open_request = (frame["id"], method)
         try:
             answer = _SERVER_REQUESTS[method](self, frame.get("params") or {})
-        except Exception:  # health: allow BLE001 -- a broken modal is a skip, never a hung tool
+        except (
+            Exception
+        ):  # health: allow BLE001 -- a broken modal is a skip, never a hung tool
             logger.debug("server request %s failed", method, exc_info=True)
             answer = {"outcome": "cancelled"} if method == "clarify" else ""
         finally:
@@ -1151,7 +1523,9 @@ class GatewayAgent:
         if method == "clarify":
             self.connection.reply(frame["id"], answer)
         else:
-            self.connection.reply(frame["id"], {"value": answer if isinstance(answer, str) else ""})
+            self.connection.reply(
+                frame["id"], {"value": answer if isinstance(answer, str) else ""}
+            )
 
     def _on_request_withdrawn(self, payload):
         """``request.cancel`` (connection loop thread): the gateway settled or withdrew a request. When
@@ -1159,7 +1533,11 @@ class GatewayAgent:
         turn timed out or was interrupted), release that modal so the pump reads the turn's remaining
         frames; its late reply to the already-settled request is dropped by the gateway."""
         current = self._open_request
-        if current is None or payload.get("id") != current[0] or self.modal_withdraw_callback is None:
+        if (
+            current is None
+            or payload.get("id") != current[0]
+            or self.modal_withdraw_callback is None
+        ):
             return
         try:
             self.modal_withdraw_callback(current[1])
@@ -1171,6 +1549,7 @@ class GatewayAgent:
 
     def _ask_sudo(self, params):
         from tools.terminal_tool import _get_sudo_password_callback
+
         callback = _get_sudo_password_callback()
         return (callback() or "") if callback is not None else ""
 
@@ -1179,19 +1558,29 @@ class GatewayAgent:
         ``clawk_cli.callbacks.prompt_for_secret``) collects the value and prints main's lines; the
         gateway, not this process, saves it in the profile ``.env``, so the panel's save is captured."""
         from tools import skills_tool
+
         callback = skills_tool._secret_capture_callback
         if callback is None:
             return ""
         from clawk_cli import callbacks
+
         captured = []
 
         def capture(key, value):
             captured.append(value)
             return {"success": True, "stored_as": key, "validated": False}
+
         with _SECRET_LOCK:
-            saver, callbacks.save_env_value_secure = callbacks.save_env_value_secure, capture
+            saver, callbacks.save_env_value_secure = (
+                callbacks.save_env_value_secure,
+                capture,
+            )
             try:
-                callback(params.get("env_var") or "", params.get("prompt") or "", params.get("metadata"))
+                callback(
+                    params.get("env_var") or "",
+                    params.get("prompt") or "",
+                    params.get("metadata"),
+                )
             finally:
                 callbacks.save_env_value_secure = saver
         return captured[0] if captured else ""
@@ -1208,15 +1597,30 @@ class GatewayAgent:
         on by another viewer) as the end of that chat and admitted nothing, so no ``message.complete``
         will come. The turn ends at once with main's typed-stop notice; the history is unchanged."""
         from agent.i18n import t
+
         self._give_back_turn_route()  # nothing was admitted: a ``/model --once`` pick is still owed
         self._emit_print(t("cli.voice.stop_phrase_typed"))
-        return {**_RESULT_DEFAULTS, "messages": list(history), "voice_stopped": True, "session_id": self.session_id}
+        return {
+            **_RESULT_DEFAULTS,
+            "messages": list(history),
+            "voice_stopped": True,
+            "session_id": self.session_id,
+        }
 
-    def _failed(self, history, user_message, error, *, failure_reason=None, retryable=False):
+    def _failed(
+        self, history, user_message, error, *, failure_reason=None, retryable=False
+    ):
         """``failure_reason="gateway_connection"``: the CLI shows ``error`` as written instead of
         classifying a lost gateway as a model failure ("Run /model to switch...")."""
-        out = {**_RESULT_DEFAULTS, "final_response": "", "messages": history + [self._user_row(user_message)],
-               "failed": True, "completed": False, "error": error, "session_id": self.session_id}
+        out = {
+            **_RESULT_DEFAULTS,
+            "final_response": "",
+            "messages": history + [self._user_row(user_message)],
+            "failed": True,
+            "completed": False,
+            "error": error,
+            "session_id": self.session_id,
+        }
         if failure_reason:
             out.update(failure_reason=failure_reason, failure_retryable=retryable)
         return out
@@ -1227,8 +1631,16 @@ class GatewayAgent:
             complete = {"outcome": receipt.get("outcome")}
         elif turn.admission:
             try:
-                receipt = self.connection.call("prompt.receipt", session_id=turn.session_id, abandon=self._lost(turn),
-                                               admission_id=turn.admission, include_result=True) or {}
+                receipt = (
+                    self.connection.call(
+                        "prompt.receipt",
+                        session_id=turn.session_id,
+                        abandon=self._lost(turn),
+                        admission_id=turn.admission,
+                        include_result=True,
+                    )
+                    or {}
+                )
             except GatewayClientError as exc:
                 logger.debug("prompt.receipt failed: %s", exc)
         stored = dict(receipt.get("result") or {})
@@ -1236,28 +1648,45 @@ class GatewayAgent:
         status = (complete or {}).get("status") or (complete or {}).get("outcome")
         out = {**_RESULT_DEFAULTS, **stored}
         if "final_response" not in stored:
-            out["final_response"] = (complete or {}).get("text") or (complete or {}).get("content") or ""
-        if status in {"interrupted", "cancelled"} or (complete or {}).get("outcome") == "cancelled":
+            out["final_response"] = (
+                (complete or {}).get("text") or (complete or {}).get("content") or ""
+            )
+        if (
+            status in {"interrupted", "cancelled"}
+            or (complete or {}).get("outcome") == "cancelled"
+        ):
             out["interrupted"] = True
             out["completed"] = False
         elif status in {"error", "failed"} and not stored:
             out.update(failed=True, completed=False)
-        suffix = stored.get("messages") if isinstance(stored.get("messages"), list) else None
+        suffix = (
+            stored.get("messages") if isinstance(stored.get("messages"), list) else None
+        )
         if suffix is not None and stored.get("_compressed"):
             out["messages"] = list(suffix)
         else:
-            out["messages"] = history + [self._user_row(user_message)] + list(suffix or [])
+            out["messages"] = (
+                history + [self._user_row(user_message)] + list(suffix or [])
+            )
         if not suffix and out.get("final_response") and not out.get("failed"):
-            out["messages"].append({"role": "assistant", "content": out["final_response"]})
+            out["messages"].append(
+                {"role": "assistant", "content": out["final_response"]}
+            )
         out["session_id"] = self.session_id
-        if not self._owns(turn):  # taken over during that read: the newer turn's state stays untouched
+        if not self._owns(
+            turn
+        ):  # taken over during that read: the newer turn's state stays untouched
             return out
         self._session_messages = out["messages"]
         calls = stored.get("api_calls")
         # An interrupted turn's own count includes the attempt Ctrl-C cut off (the agent counts a call
         # before the request goes out). Only a response prices the ask: fall back to the gateway's
         # cumulative count, which moves per response, so an unanswered ask stays main's ``~`` estimate.
-        counted = isinstance(calls, int) and not isinstance(calls, bool) and not out.get("interrupted")
+        counted = (
+            isinstance(calls, int)
+            and not isinstance(calls, bool)
+            and not out.get("interrupted")
+        )
         self._turn_api_calls = calls if counted else None
         self._apply_usage(stored, usage, turn)
         return out
@@ -1266,14 +1695,33 @@ class GatewayAgent:
         """After a replay gap, the reply once (``owed_reply``): a reuse this terminal showed whole stays
         the only copy; otherwise main's panel shows what streaming did not."""
         from clawk_cli.gateway_replay_gap import owed_reply
-        reply = out.get("pre_transform_response") if out.get("response_transformed") else None
+
+        reply = (
+            out.get("pre_transform_response")
+            if out.get("response_transformed")
+            else None
+        )
         reply = reply if isinstance(reply, str) else out.get("final_response")
         if out.get("failed") or not isinstance(reply, str) or not reply.strip():
             return
-        reused = out.get("response_previewed") or out.get("response_reused") or complete.get("response_reused")
-        out["response_previewed"] = bool(reused) and reply.strip() in turn.seen | {turn.shown.strip(), turn.spoken.strip()}
-        for consumer, got in ((self.stream_delta_callback, turn.shown), (stream_callback, turn.spoken)):
-            owed = owed_reply(got, reply) if consumer is not None and not out["response_previewed"] else ""
+        reused = (
+            out.get("response_previewed")
+            or out.get("response_reused")
+            or complete.get("response_reused")
+        )
+        out["response_previewed"] = bool(reused) and reply.strip() in turn.seen | {
+            turn.shown.strip(),
+            turn.spoken.strip(),
+        }
+        for consumer, got in (
+            (self.stream_delta_callback, turn.shown),
+            (stream_callback, turn.spoken),
+        ):
+            owed = (
+                owed_reply(got, reply)
+                if consumer is not None and not out["response_previewed"]
+                else ""
+            )
             if owed:  # each consumer completes what it got itself, never twice
                 consumer(owed)
 
@@ -1285,26 +1733,46 @@ class GatewayAgent:
         multi-call turn are the estimated delta (main's ``~``); a single reply is covered by the anchor."""
         from agent.model_metadata import estimate_messages_tokens_rough
         from agent.usage_anchor import capture_usage_anchor
-        messages = self._session_messages if isinstance(self._session_messages, list) else []
+
+        messages = (
+            self._session_messages if isinstance(self._session_messages, list) else []
+        )
         tokens = getattr(self, "_context_tokens", 0) or 0
         if tokens <= 0 or not messages or self._generation is not None:
-            self._turn_base_usage_anchor = None  # mid-turn: the bar falls back to last_prompt_tokens
+            self._turn_base_usage_anchor = (
+                None  # mid-turn: the bar falls back to last_prompt_tokens
+            )
             return
         # Main anchors on the turn's FIRST response, priced over the transcript through the turn's ask.
         # A turn with no completed call (interrupted before a response) keeps the previous anchor, so
         # its ask is estimated delta too.
         # The turn's own ask, never a later user-role row of the same turn (a mid-turn /steer row).
         ask = getattr(self, "_turn_ask_index", None)
-        last_user = ask if isinstance(ask, int) and 0 <= ask < len(messages) and messages[ask].get("role") == "user" \
-            else next((i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"),
-                      len(messages) - 1)
+        last_user = (
+            ask
+            if isinstance(ask, int)
+            and 0 <= ask < len(messages)
+            and messages[ask].get("role") == "user"
+            else next(
+                (
+                    i
+                    for i in range(len(messages) - 1, -1, -1)
+                    if messages[i].get("role") == "user"
+                ),
+                len(messages) - 1,
+            )
+        )
         # Did this turn complete an API call? The turn result's own count when the gateway sent one: a
         # rebuilt gateway agent (/personality, /model, and /undo, /retry bumping the runtime generation)
         # restarts its session counters, so the cumulative delta can read "no call" for a turn that
         # answered; without that count a LOWER cumulative is a new agent that made calls, never "no call".
         turn_calls = self._turn_api_calls
         calls, turn_base = self.session_api_calls, self._turn_calls_base
-        made_call = turn_calls > 0 if isinstance(turn_calls, int) else (calls > turn_base or 0 < calls < turn_base)
+        made_call = (
+            turn_calls > 0
+            if isinstance(turn_calls, int)
+            else (calls > turn_base or 0 < calls < turn_base)
+        )
         base = last_user + 1 if made_call else last_user
         if base <= 0:
             self._turn_base_usage_anchor = None
@@ -1312,18 +1780,32 @@ class GatewayAgent:
         delta = messages[base:]
         if delta and delta[0].get("role") == "assistant":
             delta = delta[1:]
-        estimate = estimate_messages_tokens_rough(delta, charge_stale_thinking=False) if delta else 0
-        self._turn_base_usage_anchor = capture_usage_anchor(max(1, tokens - estimate), 0, messages[:base])
+        estimate = (
+            estimate_messages_tokens_rough(delta, charge_stale_thinking=False)
+            if delta
+            else 0
+        )
+        self._turn_base_usage_anchor = capture_usage_anchor(
+            max(1, tokens - estimate), 0, messages[:base]
+        )
 
     def _refresh_stats(self, turn=None):
         """``session.stats`` → the same attributes ``session.usage`` sets; False when unavailable."""
         try:
-            stats = self.connection.call("session.stats", session_id=self.session_id, timeout=10,
-                                         abandon=turn and self._lost(turn))
+            stats = self.connection.call(
+                "session.stats",
+                session_id=self.session_id,
+                timeout=10,
+                abandon=turn and self._lost(turn),
+            )
         except GatewayClientError as exc:
             logger.debug("session.stats unavailable: %s", exc)
             return False
-        stats = stats.get("usage") if isinstance(stats, dict) and isinstance(stats.get("usage"), dict) else stats
+        stats = (
+            stats.get("usage")
+            if isinstance(stats, dict) and isinstance(stats.get("usage"), dict)
+            else stats
+        )
         if not (isinstance(stats, dict) and isinstance(stats.get("api_calls"), int)):
             return False
         if turn is None or self._owns(turn):
@@ -1337,15 +1819,23 @@ class GatewayAgent:
             return
         # Fallback: the classic-CLI result carries the gateway agent's session_* counters
         # (turn_finalizer _SESSION_TOKEN_KEYS); per-turn receipt usage only accumulates what is missing.
-        usage = {key: stored[key] for key in _COUNTER_FROM_USAGE.values() if isinstance(stored.get(key), int)}
+        usage = {
+            key: stored[key]
+            for key in _COUNTER_FROM_USAGE.values()
+            if isinstance(stored.get(key), int)
+        }
         for key in ("input_tokens", "output_tokens"):
             if key not in usage and isinstance(receipt_usage.get(key), int):
                 attr = "session_" + key
                 usage[key] = getattr(self, attr) + receipt_usage[key]
         usage.setdefault("prompt_tokens", usage.get("input_tokens"))
         usage.setdefault("completion_tokens", usage.get("output_tokens"))
-        if isinstance(usage.get("prompt_tokens"), int) and isinstance(usage.get("completion_tokens"), int):
-            usage.setdefault("total_tokens", usage["prompt_tokens"] + usage["completion_tokens"])
+        if isinstance(usage.get("prompt_tokens"), int) and isinstance(
+            usage.get("completion_tokens"), int
+        ):
+            usage.setdefault(
+                "total_tokens", usage["prompt_tokens"] + usage["completion_tokens"]
+            )
         if isinstance(stored.get("api_calls"), int):
             usage["api_calls"] = self.session_api_calls + stored["api_calls"]
         for key in ("last_prompt_tokens", "context_length", "model"):
@@ -1369,11 +1859,22 @@ def _rate_limit_state(data):
     if not isinstance(data, dict):
         return None
     from agent.rate_limit_tracker import RateLimitBucket, RateLimitState
-    buckets = {name: RateLimitBucket(**{k: v for k, v in (data.get(name) or {}).items()
-                                        if k in {"limit", "remaining", "reset_seconds", "captured_at"}})
-               for name in ("requests_min", "requests_hour", "tokens_min", "tokens_hour")}
-    return RateLimitState(**buckets, captured_at=float(data.get("captured_at") or 0.0),
-                          provider=str(data.get("provider") or ""))
+
+    buckets = {
+        name: RateLimitBucket(
+            **{
+                k: v
+                for k, v in (data.get(name) or {}).items()
+                if k in {"limit", "remaining", "reset_seconds", "captured_at"}
+            }
+        )
+        for name in ("requests_min", "requests_hour", "tokens_min", "tokens_hour")
+    }
+    return RateLimitState(
+        **buckets,
+        captured_at=float(data.get("captured_at") or 0.0),
+        provider=str(data.get("provider") or ""),
+    )
 
 
 def review_summary_line(payload):
@@ -1388,30 +1889,49 @@ def _moa_handler(kind):
     def handler(agent, payload, stream_callback, starts):
         if agent.tool_progress_callback is None:
             return
-        extra = {k: v for k, v in payload.items() if k not in {"label", "text", "name", "preview", "index", "count"}}
+        extra = {
+            k: v
+            for k, v in payload.items()
+            if k not in {"label", "text", "name", "preview", "index", "count"}
+        }
         # Main's _on_tool_progress reads moa_index / moa_count (the gateway frame uses the TUI keys).
         if payload.get("index") is not None:
             extra["moa_index"] = payload["index"]
         if payload.get("count") is not None:
             extra["moa_count"] = payload["count"]
-        agent.tool_progress_callback(kind, payload.get("label") or payload.get("name"),
-                                     payload.get("text") or payload.get("preview"), None, **extra)
+        agent.tool_progress_callback(
+            kind,
+            payload.get("label") or payload.get("name"),
+            payload.get("text") or payload.get("preview"),
+            None,
+            **extra,
+        )
+
     return handler
 
 
 def clarify_reply(callback, params) -> dict:
     """Main's batch clarify panel (``callback(questions)``, ``ClawksisCLI._clarify_callback``) answering a
     ``clarify`` server request's whole question set: its ``ClarifyResult``."""
-    questions = [{"qid": q.get("qid"), "question": q.get("question") or "",
-                  "choices": list(q.get("choices") or []), "multi_select": bool(q.get("multi_select"))}
-                 for q in params.get("questions") or [] if isinstance(q, dict) and q.get("qid")]
+    questions = [
+        {
+            "qid": q.get("qid"),
+            "question": q.get("question") or "",
+            "choices": list(q.get("choices") or []),
+            "multi_select": bool(q.get("multi_select")),
+        }
+        for q in params.get("questions") or []
+        if isinstance(q, dict) and q.get("qid")
+    ]
     if callback is None or not questions:
         return {"outcome": "cancelled"}
     reply = callback(questions)
     if not isinstance(reply, dict):
         return {"outcome": "cancelled"}
-    answers = {qid: (value if isinstance(value, str) or value is None else json.dumps(value))
-               for qid, value in (reply.get("answers") or {}).items()}
+    answers = {
+        qid: (value if isinstance(value, str) or value is None else json.dumps(value))
+        for qid, value in (reply.get("answers") or {}).items()
+    }
     out = {"answers": answers}
     if reply.get("outcome") in ("submitted", "timed_out", "cancelled"):
         out["outcome"] = reply["outcome"]

@@ -10,17 +10,25 @@ def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):
     # Ollama defaults num_ctx to 2048, so detect the max window and send num_ctx per request.
     # model.ollama_num_ctx overrides; model.context_length caps the detected value (VRAM).
     agent._ollama_num_ctx: int | None = None
-    _override = _model_cfg.get("ollama_num_ctx") if isinstance(_model_cfg, dict) else None
+    _override = (
+        _model_cfg.get("ollama_num_ctx") if isinstance(_model_cfg, dict) else None
+    )
     if _override is not None:
         try:
             agent._ollama_num_ctx = int(_override)
         except (TypeError, ValueError):
             _ra().logger.debug("Invalid ollama_num_ctx config value: %r", _override)
-    if agent._ollama_num_ctx is None and agent.base_url and is_local_endpoint(agent.base_url):
+    if (
+        agent._ollama_num_ctx is None
+        and agent.base_url
+        and is_local_endpoint(agent.base_url)
+    ):
         try:
             # api_key may be a callable (Entra token provider); detection needs a string.
             _key = agent.api_key if isinstance(agent.api_key, str) else ""
-            _detected = query_ollama_num_ctx(agent.model, agent.base_url, api_key=_key or "")
+            _detected = query_ollama_num_ctx(
+                agent.model, agent.base_url, api_key=_key or ""
+            )
             if _detected and _detected > 0:
                 agent._ollama_num_ctx = _detected
         except Exception as exc:
@@ -35,7 +43,8 @@ def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):
     ):
         _ra().logger.info(
             "Ollama num_ctx capped: %d -> %d (model.context_length override)",
-            agent._ollama_num_ctx, _config_context_length,
+            agent._ollama_num_ctx,
+            _config_context_length,
         )
         agent._ollama_num_ctx = _config_context_length
     if agent._ollama_num_ctx and not agent.quiet_mode:
@@ -43,7 +52,9 @@ def _configure_ollama_num_ctx(agent, _model_cfg, _config_context_length):
         _ra().logger.info(
             "Local server num_ctx: will request %d tokens (%s)",
             agent._ollama_num_ctx,
-            "model.ollama_num_ctx" if _override is not None else "model max from Ollama /api/show",
+            "model.ollama_num_ctx"
+            if _override is not None
+            else "model max from Ollama /api/show",
         )
 
 
@@ -56,12 +67,22 @@ def _clamp_compressor_to_ollama_num_ctx(agent):
     # window to the effective num_ctx so threshold math operates on the context the server actually serves.
     # (Overlaps #60103's silent-clamp dead zone; this is the init-order half.)
     _cc_window = getattr(agent.context_compressor, "context_length", 0) or 0
-    if agent._ollama_num_ctx and agent._ollama_num_ctx > 0 and _cc_window and agent._ollama_num_ctx < _cc_window:
+    if (
+        agent._ollama_num_ctx
+        and agent._ollama_num_ctx > 0
+        and _cc_window
+        and agent._ollama_num_ctx < _cc_window
+    ):
         _ra().logger.info(
             "Compressor window clamped to Ollama num_ctx: %d -> %d",
-            _cc_window, agent._ollama_num_ctx,
+            _cc_window,
+            agent._ollama_num_ctx,
         )
         agent.context_compressor.update_model(
-            model=agent.model, context_length=agent._ollama_num_ctx, base_url=agent.base_url,
-            api_key=getattr(agent, "api_key", ""), provider=agent.provider, api_mode=agent.api_mode,
+            model=agent.model,
+            context_length=agent._ollama_num_ctx,
+            base_url=agent.base_url,
+            api_key=getattr(agent, "api_key", ""),
+            provider=agent.provider,
+            api_mode=agent.api_mode,
         )

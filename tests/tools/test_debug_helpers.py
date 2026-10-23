@@ -30,8 +30,6 @@ class TestDebugSessionEnabled:
         assert ds.active is True
         assert ds.enabled is True
 
-
-
     def test_save_empty_log(self, tmp_path):
         ds = self._make_enabled(tmp_path)
         ds.save()

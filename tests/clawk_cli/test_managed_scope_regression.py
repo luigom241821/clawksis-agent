@@ -3,6 +3,7 @@
 Every test here must keep passing through all later phases when NO managed scope
 is present. They are the 'managed scope is invisible when absent' contract.
 """
+
 import os
 import textwrap
 
@@ -73,5 +74,3 @@ def test_user_env_overrides_shell(tmp_path, monkeypatch):
     monkeypatch.setenv("FOO_TOKEN", "from_shell")
     load_clawk_dotenv(clawk_home=str(home))
     assert os.environ["FOO_TOKEN"] == "from_user_env"
-
-

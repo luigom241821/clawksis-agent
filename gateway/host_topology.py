@@ -74,21 +74,30 @@ def _from_host_record() -> Optional[HostGatewayTopology]:
     # Another tenant root's gateway is a name collision, not this tenant's host process (#121352).
     if launched_by_other_tenant(record.home, get_clawk_home()):
         return None
-    return HostGatewayTopology(pid=int(record.pid), profiles=tuple(record.profiles), source="host_record",
-                               home=record_home(record))
+    return HostGatewayTopology(
+        pid=int(record.pid),
+        profiles=tuple(record.profiles),
+        source="host_record",
+        home=record_home(record),
+    )
 
 
 def _from_served_record() -> Optional[HostGatewayTopology]:
     """A gateway started before the host record existed still publishes ``served_profiles`` into
     the default home's ``gateway_state.json``; that plus a proven-live PID is the same fact."""
-    from clawk_cli.gateway_multiplex_served import live_default_gateway_pid, recorded_served_profiles
+    from clawk_cli.gateway_multiplex_served import (
+        live_default_gateway_pid,
+        recorded_served_profiles,
+    )
 
     pid = live_default_gateway_pid()
     if pid is None:
         return None
     served = recorded_served_profiles() or []
     roster = ["default"] + [str(p) for p in served if _normalized(p) != "default"]
-    return HostGatewayTopology(pid=int(pid), profiles=tuple(roster), source="served_record")
+    return HostGatewayTopology(
+        pid=int(pid), profiles=tuple(roster), source="served_record"
+    )
 
 
 def host_gateway_topology() -> Optional[HostGatewayTopology]:
@@ -100,7 +109,9 @@ def host_gateway_topology() -> Optional[HostGatewayTopology]:
     return None
 
 
-def host_gateway_serving(profile_name: Optional[str] = None) -> Optional[HostGatewayTopology]:
+def host_gateway_serving(
+    profile_name: Optional[str] = None,
+) -> Optional[HostGatewayTopology]:
     """The host gateway when it serves ``profile_name`` (default: the active profile), else None."""
     topology = host_gateway_topology()
     if topology is None:

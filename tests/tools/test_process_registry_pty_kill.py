@@ -18,7 +18,9 @@ import tools.process_registry as module
 from tools.process_registry import ProcessRegistry
 
 _POSIX_PTY = pytest.mark.skipif(
-    sys.platform == "win32" or shutil.which("setsid") is None, reason="POSIX PTY + setsid")
+    sys.platform == "win32" or shutil.which("setsid") is None,
+    reason="POSIX PTY + setsid",
+)
 
 # The escapee exits on its own (it is reparented to init, outside what a test may signal).
 # Before the fix the kill could only return once it had, so the kill deadline is shorter.
@@ -60,7 +62,9 @@ def _spawn_with_escapee(registry, tmp_path, late_output=""):
     # ``systemd-run --scope`` with environment expansion, ``$$`` reaches the shell as ``$``.
     session = registry.spawn_local(
         f"setsid sh -c 'sh -c \"echo \\$PPID\" > {pidfile}; {late}exec sleep {_ESCAPEE_LIFETIME_S}' & sleep 120",
-        cwd=str(tmp_path), use_pty=True)
+        cwd=str(tmp_path),
+        use_pty=True,
+    )
     try:
         assert _wait_for(lambda: pidfile.exists() and pidfile.read_text().strip(), 5)
     except BaseException:
@@ -72,10 +76,13 @@ def _spawn_with_escapee(registry, tmp_path, late_output=""):
 def _kill_within_deadline(registry, session):
     result = {}
     killer = threading.Thread(
-        target=lambda: result.update(registry.kill_process(session.id)), daemon=True)
+        target=lambda: result.update(registry.kill_process(session.id)), daemon=True
+    )
     killer.start()
     killer.join(_KILL_DEADLINE_S)
-    assert not killer.is_alive(), "kill_process blocked closing the PTY under a live reader"
+    assert not killer.is_alive(), (
+        "kill_process blocked closing the PTY under a live reader"
+    )
     return result
 
 
@@ -103,7 +110,9 @@ def test_kill_returns_while_escaped_descendant_holds_the_pty(tmp_path, unscoped)
 
 
 @_POSIX_PTY
-def test_output_after_the_kill_is_not_added_to_the_killed_session(tmp_path, monkeypatch, unscoped):
+def test_output_after_the_kill_is_not_added_to_the_killed_session(
+    tmp_path, monkeypatch, unscoped
+):
     pytest.importorskip("ptyprocess")
     registry = ProcessRegistry()
     emit, emitted = registry._emit_output, []
@@ -147,7 +156,8 @@ def test_chunk_read_before_the_kill_is_not_added_after_it(tmp_path, unscoped):
     registry._ingest_output = paused_ingest
     registry._emit_output = recording_emit
     session = registry.spawn_local(
-        "sleep 0.2; echo RACE-MARKER; exec sleep 15", cwd=str(tmp_path), use_pty=True)
+        "sleep 0.2; echo RACE-MARKER; exec sleep 15", cwd=str(tmp_path), use_pty=True
+    )
     try:
         assert entered.wait(5), "reader never read the marker"
         result = registry.kill_process(session.id)

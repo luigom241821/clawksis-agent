@@ -64,14 +64,13 @@ def test_scopes_include_root_first_then_every_secondary_home(monkeypatch):
 
 def test_scopes_degrade_to_root_when_resolution_raises(monkeypatch):
     """A broken profile resolver must not disable the watcher entirely."""
+
     def _boom(_cfg):
         raise RuntimeError("profiles dir unreadable")
 
     monkeypatch.setattr(run, "_multiplex_profile_homes", _boom)
     runner = types.SimpleNamespace(config=_FakeConfig(multiplex=True))
     assert run._handoff_watch_scopes(runner) == [(None, None)]
-
-
 
 
 class _RecordingDB:
@@ -137,8 +136,8 @@ async def test_watcher_gates_profile_scope_on_pending_handoffs(monkeypatch):
 
     async def _run_once(pending_by_home):
         monkeypatch.setattr(
-            goals, "_DB_CACHE",
-            {str(h): _ProbeDB(pending_by_home[h]) for h in homes})
+            goals, "_DB_CACHE", {str(h): _ProbeDB(pending_by_home[h]) for h in homes}
+        )
         entered.clear()
         db = _RecordingDB()
         states = iter([True, False])
@@ -167,14 +166,16 @@ async def test_watcher_gates_profile_scope_on_pending_handoffs(monkeypatch):
     # startup reclaim enters them, once each); the unscoped root poll still runs.
     db = await _run_once({h: False for h in homes})
     assert entered == homes, (
-        f"only the startup reclaim may enter idle profile scopes; got {entered}")
+        f"only the startup reclaim may enter idle profile scopes; got {entered}"
+    )
     assert db.polls == 1, "only the root store is polled when no profile has work"
 
     # Work in one profile → the tick enters THAT profile's scope (reclaim + tick),
     # while the still-idle profile is entered only by the reclaim.
     db = await _run_once({homes[0]: True, homes[1]: False})
     assert entered == [homes[0], homes[1], homes[0]], (
-        f"tick must enter exactly the profile with pending work; got {entered}")
+        f"tick must enter exactly the profile with pending work; got {entered}"
+    )
     assert db.polls == 2, "root + the busy profile are polled"
 
 
@@ -273,16 +274,25 @@ async def test_watcher_resolves_scopes_off_the_event_loop(monkeypatch):
     async def _process_handoff(row, profile_name=None):
         return None
 
-    fake = types.SimpleNamespace(_session_db=_RecordingDB(), _running=_Running(),
-                                 _process_handoff=_process_handoff,
-                                 _run_in_executor_with_context=asyncio.to_thread)
-    await asyncio.wait_for(run.GatewayRunner._handoff_watcher(fake, interval=0.0), timeout=5)
+    fake = types.SimpleNamespace(
+        _session_db=_RecordingDB(),
+        _running=_Running(),
+        _process_handoff=_process_handoff,
+        _run_in_executor_with_context=asyncio.to_thread,
+    )
+    await asyncio.wait_for(
+        run.GatewayRunner._handoff_watcher(fake, interval=0.0), timeout=5
+    )
 
-    assert on_loop == [False, False], f"reclaim + tick must resolve scopes off-loop; got {on_loop}"
+    assert on_loop == [False, False], (
+        f"reclaim + tick must resolve scopes off-loop; got {on_loop}"
+    )
 
 
 @pytest.mark.asyncio
-async def test_slow_profile_secret_load_does_not_block_event_loop(monkeypatch, tmp_path):
+async def test_slow_profile_secret_load_does_not_block_event_loop(
+    monkeypatch, tmp_path
+):
     """A slow profile ``.env`` read must not stall unrelated loop work."""
     profile_home = tmp_path / "profiles" / "slow"
     profile_home.mkdir(parents=True)
@@ -300,9 +310,7 @@ async def test_slow_profile_secret_load_does_not_block_event_loop(monkeypatch, t
 
     def _slow_build(_home):
         load_started.set()
-        ticker_progressed_while_loading.append(
-            ticker_progressed.wait(timeout=2)
-        )
+        ticker_progressed_while_loading.append(ticker_progressed.wait(timeout=2))
         return {}
 
     monkeypatch.setattr(secret_scope, "build_profile_secret_scope", _slow_build)
@@ -327,6 +335,7 @@ async def test_slow_profile_secret_load_does_not_block_event_loop(monkeypatch, t
         await real_sleep(0 if seconds == 5 else seconds)
 
     monkeypatch.setattr(run.asyncio, "sleep", _skip_initial_delay)
+
     async def _ticker():
         assert await asyncio.to_thread(load_started.wait, 5)
         ticker_progressed.set()

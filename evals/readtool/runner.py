@@ -71,8 +71,9 @@ def _count_metrics(messages: list) -> dict:
     }
 
 
-def run_task(task, model: str, provider: str, timeout_mult: float,
-             toolsets: list[str]) -> dict:
+def run_task(
+    task, model: str, provider: str, timeout_mult: float, toolsets: list[str]
+) -> dict:
     ws = Path(tempfile.mkdtemp(prefix=f"readtool-{task.task_id}-"))
     clawk_home = Path(tempfile.mkdtemp(prefix="readtool-home-")) / ".clawk"
     clawk_home.mkdir(parents=True)
@@ -120,7 +121,10 @@ def run_task(task, model: str, provider: str, timeout_mult: float,
         )
     except Exception as exc:
         msg = f"{type(exc).__name__}: {exc}"
-        if "No LLM provider configured" in str(exc) or "authentication" in str(exc).lower():
+        if (
+            "No LLM provider configured" in str(exc)
+            or "authentication" in str(exc).lower()
+        ):
             # Harness misconfiguration, not a model result. Abort the whole
             # run rather than writing poisoned zero-score records.
             raise SystemExit(f"ABORT (harness config error, not a result): {msg}")
@@ -146,7 +150,9 @@ def main() -> int:
     ap.add_argument("--provider", required=True)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--label", required=True, help="e.g. baseline, feat-fifo-guard")
-    ap.add_argument("--tasks", default="", help="comma-separated task ids (default all)")
+    ap.add_argument(
+        "--tasks", default="", help="comma-separated task ids (default all)"
+    )
     ap.add_argument("--timeout-mult", type=float, default=1.0)
     ap.add_argument(
         "--toolsets",
@@ -166,9 +172,7 @@ def main() -> int:
         )
 
     slate = (
-        [TASKS_BY_ID[t] for t in args.tasks.split(",") if t]
-        if args.tasks
-        else TASKS
+        [TASKS_BY_ID[t] for t in args.tasks.split(",") if t] if args.tasks else TASKS
     )
     slug = args.model.replace("/", "_")
     out_dir = EVAL_DIR / "results" / args.label / slug
@@ -182,8 +186,13 @@ def main() -> int:
         records = []
         for task in slate:
             print(f"[rep{rep}] {task.task_id} ...", flush=True)
-            rec = run_task(task, args.model, args.provider, args.timeout_mult,
-                           [t for t in args.toolsets.split(",") if t])
+            rec = run_task(
+                task,
+                args.model,
+                args.provider,
+                args.timeout_mult,
+                [t for t in args.toolsets.split(",") if t],
+            )
             print(
                 f"[rep{rep}] {task.task_id}: score={rec['score']:.2f} "
                 f"turns={rec.get('api_turns', '?')} tok={rec.get('total_tokens', '?')} "
@@ -193,8 +202,13 @@ def main() -> int:
             records.append(rec)
         rep_path.write_text(
             json.dumps(
-                {"model": args.model, "provider": args.provider, "label": args.label,
-                 "rep": rep, "records": records},
+                {
+                    "model": args.model,
+                    "provider": args.provider,
+                    "label": args.label,
+                    "rep": rep,
+                    "records": records,
+                },
                 indent=2,
             )
         )

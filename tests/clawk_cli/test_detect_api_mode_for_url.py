@@ -24,7 +24,9 @@ from clawk_cli.runtime_provider import _detect_api_mode_for_url
 
 class TestCodexResponsesDetection:
     def test_openai_api_returns_codex_responses(self):
-        assert _detect_api_mode_for_url("https://api.openai.com/v1") == "codex_responses"
+        assert (
+            _detect_api_mode_for_url("https://api.openai.com/v1") == "codex_responses"
+        )
 
 
 class TestDirectAnthropicHost:
@@ -36,7 +38,6 @@ class TestDirectAnthropicHost:
     "out of extra usage" the moment a request lands there. The detector
     must keep ``api.anthropic.com`` on the native Messages API.
     """
-
 
     def test_lookalike_subdomain_does_not_match(self):
         # ``api.anthropic.com.attacker.test`` is an attacker-controlled
@@ -54,7 +55,5 @@ class TestAnthropicMessagesDetection:
 
 
 class TestDefaultCase:
-
-
     def test_localhost_returns_none(self):
         assert _detect_api_mode_for_url("http://localhost:11434/v1") is None

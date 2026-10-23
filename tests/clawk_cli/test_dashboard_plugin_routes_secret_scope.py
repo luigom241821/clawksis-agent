@@ -30,9 +30,14 @@ def client(monkeypatch, _isolate_clawk_home):
 
     monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", get_clawk_home() / "state.db")
     # The launch profile's own credential source: what a scoped read must return.
-    (get_clawk_home() / ".env").write_text("GITHUB_TOKEN=ghp_launch_token\n", encoding="utf-8")
-    return TestClient(app, raise_server_exceptions=False,
-                      headers={_SESSION_HEADER_NAME: _SESSION_TOKEN})
+    (get_clawk_home() / ".env").write_text(
+        "GITHUB_TOKEN=ghp_launch_token\n", encoding="utf-8"
+    )
+    return TestClient(
+        app,
+        raise_server_exceptions=False,
+        headers={_SESSION_HEADER_NAME: _SESSION_TOKEN},
+    )
 
 
 @pytest.fixture
@@ -64,18 +69,24 @@ def _stub_action(monkeypatch, name: str, seen: dict, result: dict | None = None)
     monkeypatch.setattr(plugins_cmd, name, _stub)
 
 
-def test_install_route_reads_the_git_credential_in_profile_scope(client, multiplexed, monkeypatch):
+def test_install_route_reads_the_git_credential_in_profile_scope(
+    client, multiplexed, monkeypatch
+):
     seen: dict = {}
     _stub_action(monkeypatch, "dashboard_install_plugin", seen)
 
-    resp = client.post("/api/dashboard/agent-plugins/install", json={"identifier": "owner/repo"})
+    resp = client.post(
+        "/api/dashboard/agent-plugins/install", json={"identifier": "owner/repo"}
+    )
 
     assert resp.status_code == 200, resp.text
     assert seen["token"] == "ghp_launch_token"
     assert seen["on_event_loop"] is False  # the clone/pull body runs off the event loop
 
 
-def test_update_route_reads_the_git_credential_in_profile_scope(client, multiplexed, monkeypatch):
+def test_update_route_reads_the_git_credential_in_profile_scope(
+    client, multiplexed, monkeypatch
+):
     seen: dict = {}
     _stub_action(monkeypatch, "dashboard_update_user_plugin", seen)
 
@@ -85,17 +96,27 @@ def test_update_route_reads_the_git_credential_in_profile_scope(client, multiple
     assert seen["token"] == "ghp_launch_token"
 
 
-def test_failure_and_request_shape_errors_are_unchanged(client, multiplexed, monkeypatch):
+def test_failure_and_request_shape_errors_are_unchanged(
+    client, multiplexed, monkeypatch
+):
     """Backward compat: a failed action is still a 400 carrying its own message, and the
     identifier/catalog_name check still precedes the scoped body."""
     seen: dict = {}
-    _stub_action(monkeypatch, "dashboard_install_plugin", seen,
-                 result={"ok": False, "error": "Install failed: no such plugin."})
+    _stub_action(
+        monkeypatch,
+        "dashboard_install_plugin",
+        seen,
+        result={"ok": False, "error": "Install failed: no such plugin."},
+    )
 
-    failed = client.post("/api/dashboard/agent-plugins/install", json={"identifier": "owner/repo"})
+    failed = client.post(
+        "/api/dashboard/agent-plugins/install", json={"identifier": "owner/repo"}
+    )
     assert failed.status_code == 400
     assert "no such plugin" in failed.json()["detail"]
 
-    malformed = client.post("/api/dashboard/agent-plugins/install", json={"identifier": ""})
+    malformed = client.post(
+        "/api/dashboard/agent-plugins/install", json={"identifier": ""}
+    )
     assert malformed.status_code == 400
     assert "catalog_name" in malformed.json()["detail"]

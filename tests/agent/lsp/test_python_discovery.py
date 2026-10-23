@@ -31,8 +31,13 @@ def _seed_pm_python(tmp_path, monkeypatch):
     exe.write_text("", encoding="utf-8")
     (payload / "manifest.json").write_text("{}", encoding="utf-8")
     Facts(paths.facts_path()).record(
-        "python", version, python_entry.name, package.env(python_entry, target), store,
-        target=target, artifacts=[a["sha256"] for a in lock.artifacts("python", target)],
+        "python",
+        version,
+        python_entry.name,
+        package.env(python_entry, target),
+        store,
+        target=target,
+        artifacts=[a["sha256"] for a in lock.artifacts("python", target)],
     )
     return exe
 
@@ -45,8 +50,10 @@ def test_pyright_uses_the_project_interpreter_before_clawk(tmp_path, monkeypatch
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     pm_python = _seed_pm_python(tmp_path, monkeypatch)
     context = servers.ServerContext(
-        workspace_root=str(project), install_strategy="off",
-        binary_overrides={"pyright": [sys.executable]}, trusted=True,
+        workspace_root=str(project),
+        install_strategy="off",
+        binary_overrides={"pyright": [sys.executable]},
+        trusted=True,
     )
     server = servers.find_server_for_file(str(project / "app.py"))
     assert server is not None
@@ -62,9 +69,14 @@ def test_pyright_uses_the_project_interpreter_before_clawk(tmp_path, monkeypatch
     for environment in (project / ".venv", tmp_path / "explicit-environment"):
         subprocess.run(
             [sys.executable, "-m", "venv", "--without-pip", str(environment)],
-            check=True, capture_output=True, text=True, timeout=30,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
-        python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        python = environment / (
+            "Scripts/python.exe" if os.name == "nt" else "bin/python"
+        )
         if environment.name == "explicit-environment":
             monkeypatch.setenv("VIRTUAL_ENV", str(environment))
         spec = server.build_spawn(str(project), context)
@@ -73,6 +85,9 @@ def test_pyright_uses_the_project_interpreter_before_clawk(tmp_path, monkeypatch
         assert Path(selected) == python
         child = subprocess.run(
             [selected, "-I", "-c", "import sys; print(sys.prefix)"],
-            check=True, capture_output=True, text=True, timeout=10,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         assert Path(child.stdout.strip()) == environment

@@ -59,7 +59,9 @@ class RateLimited(ToolGatewayError):
         self.retry_after = retry_after
 
 
-def parse_gateway_error(status: int, body: Any, headers: Optional[Mapping[str, Any]] = None) -> ToolGatewayError:
+def parse_gateway_error(
+    status: int, body: Any, headers: Optional[Mapping[str, Any]] = None
+) -> ToolGatewayError:
     """Parse every gateway error envelope without raising on a malformed body.
 
     Three envelope shapes exist: ``{error: {code, message}}`` on most routes, ``{error: "<code>"}``
@@ -101,7 +103,11 @@ def parse_gateway_error(status: int, body: Any, headers: Optional[Mapping[str, A
         return IdempotencyConflict(message, **kwargs)
     if status == 429:
         header = (headers or {}).get("Retry-After") if headers else None
-        retry_after = float(header) if header not in (None, "") else (retry_after_ms or 1000.0) / 1000.0
+        retry_after = (
+            float(header)
+            if header not in (None, "")
+            else (retry_after_ms or 1000.0) / 1000.0
+        )
         return RateLimited(message, retry_after=retry_after, **kwargs)
     return ToolGatewayError(message, retryable=status >= 500, **kwargs)
 
@@ -131,7 +137,11 @@ EXPIRED_LINK_HINT = "The connection expired. Show the user the connect_url to re
 
 _HINTS = {
     "CONNECTION_REQUIRED": {SIDE: SIDE_AGENT_HINT, CARD: CARD_HINT},
-    "CONNECTION_EXPIRED": {SIDE: EXPIRED_SIDE_AGENT_HINT, CARD: EXPIRED_CARD_HINT, LINK: EXPIRED_LINK_HINT},
+    "CONNECTION_EXPIRED": {
+        SIDE: EXPIRED_SIDE_AGENT_HINT,
+        CARD: EXPIRED_CARD_HINT,
+        LINK: EXPIRED_LINK_HINT,
+    },
 }
 
 

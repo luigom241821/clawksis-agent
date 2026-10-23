@@ -10,6 +10,7 @@ Before the #13383 fix, this class of failure fell through as a plain
 tool error with no recovery path, so every subsequent call on the
 affected MCP server failed until the gateway was manually restarted.
 """
+
 import asyncio
 import json
 import threading
@@ -28,6 +29,7 @@ from tools import mcp_tool_loop as _mcp_loop
 def test_is_session_expired_detects_invalid_or_expired_session():
     """Reporter's exact wpcom-mcp error message (#13383)."""
     from tools.mcp_tool_errors import _is_session_expired_error
+
     exc = RuntimeError("Invalid params: Invalid or expired session")
     assert _is_session_expired_error(exc) is True
 
@@ -36,6 +38,7 @@ def test_is_session_expired_detects_expired_session_variant():
     """Generic ``session expired`` / ``expired session`` phrasings used
     by other SDK servers."""
     from tools.mcp_tool_errors import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("Session expired")) is True
     assert _is_session_expired_error(RuntimeError("expired session: abc")) is True
 
@@ -44,6 +47,7 @@ def test_is_session_expired_detects_session_not_found():
     """Server-side GC produces ``session not found`` / ``unknown session``
     on some implementations."""
     from tools.mcp_tool_errors import _is_session_expired_error
+
     assert _is_session_expired_error(RuntimeError("session not found")) is True
     assert _is_session_expired_error(RuntimeError("Unknown session: abc123")) is True
 
@@ -149,7 +153,9 @@ def _install_stub_server(name: str = "wpcom"):
     ],
     ids=["stdio", "http"],
 )
-@pytest.mark.parametrize("application_error", [False, True], ids=["success", "application-error"])
+@pytest.mark.parametrize(
+    "application_error", [False, True], ids=["success", "application-error"]
+)
 def test_call_tool_handler_rebuilds_configured_server_transport(
     monkeypatch, tmp_path, transport_config, expected_route, application_error
 ):
@@ -204,9 +210,7 @@ def test_call_tool_handler_rebuilds_configured_server_transport(
     mcp_tool._tool_read_only_hints.setdefault("resumed", {})["health"] = True
     loop = mcp_tool._mcp_loop
     assert loop is not None
-    run_future = asyncio.run_coroutine_threadsafe(
-        server.run(transport_config), loop
-    )
+    run_future = asyncio.run_coroutine_threadsafe(server.run(transport_config), loop)
 
     try:
         assert transport_ready.wait(3), "server lifecycle did not establish transport"
@@ -222,7 +226,9 @@ def test_call_tool_handler_rebuilds_configured_server_transport(
             assert parsed == {"error" if application_error else "result": "reconnected"}
             # The recovered result is the tool's real answer either way; an application error is
             # still one breaker strike (#10447), a success resets the counter.
-            assert mcp_tool._server_error_counts.get("resumed", 0) == (1 if application_error else 0)
+            assert mcp_tool._server_error_counts.get("resumed", 0) == (
+                1 if application_error else 0
+            )
             assert call_count["n"] == 2
         assert routes == [expected_route, expected_route]
         assert configs == [transport_config, transport_config]
@@ -352,8 +358,11 @@ def test_session_expired_handler_returns_none_without_loop(monkeypatch):
         # A write-capable call still gets the outcome-uncertain verdict: a generic "call failed"
         # would invite the model to replay a write that may have landed.
         out = _handle_session_expired_and_retry(
-            "srv-noloop", RuntimeError("Invalid or expired session"), lambda: '{"ok": true}',
-            "tools/call", call_may_have_side_effects=True,
+            "srv-noloop",
+            RuntimeError("Invalid or expired session"),
+            lambda: '{"ok": true}',
+            "tools/call",
+            call_may_have_side_effects=True,
         )
         assert out is not None and json.loads(out).get("outcome_uncertain") is True
     finally:
@@ -364,6 +373,7 @@ def test_session_expired_handler_returns_none_without_server_record():
     """If the server has been torn down / isn't in _servers, fall
     through cleanly — nothing to reconnect to."""
     from tools.mcp_tool_handlers import _handle_session_expired_and_retry
+
     out = _handle_session_expired_and_retry(
         "does-not-exist",
         RuntimeError("Invalid or expired session"),
@@ -382,10 +392,30 @@ def test_session_expired_handler_returns_none_without_server_record():
 @pytest.mark.parametrize(
     "handler_factory, handler_kwargs, session_method, op_label",
     [
-        ("_make_list_resources_handler", {"tool_timeout": 10.0}, "list_resources", "list_resources"),
-        ("_make_read_resource_handler", {"tool_timeout": 10.0}, "read_resource", "read_resource"),
-        ("_make_list_prompts_handler", {"tool_timeout": 10.0}, "list_prompts", "list_prompts"),
-        ("_make_get_prompt_handler", {"tool_timeout": 10.0}, "get_prompt", "get_prompt"),
+        (
+            "_make_list_resources_handler",
+            {"tool_timeout": 10.0},
+            "list_resources",
+            "list_resources",
+        ),
+        (
+            "_make_read_resource_handler",
+            {"tool_timeout": 10.0},
+            "read_resource",
+            "read_resource",
+        ),
+        (
+            "_make_list_prompts_handler",
+            {"tool_timeout": 10.0},
+            "list_prompts",
+            "list_prompts",
+        ),
+        (
+            "_make_get_prompt_handler",
+            {"tool_timeout": 10.0},
+            "get_prompt",
+            "get_prompt",
+        ),
     ],
 )
 def test_non_tool_handlers_also_reconnect_on_session_expired(
@@ -422,6 +452,7 @@ def test_non_tool_handlers_also_reconnect_on_session_expired(
     setattr(server.session, session_method, _sequence)
 
     from tools import mcp_tool_handlers as _mcp_handlers
+
     factory = getattr(_mcp_handlers, handler_factory)
     # list_resources / list_prompts take (server_name, timeout).
     # read_resource / get_prompt take the same signature.
@@ -440,9 +471,7 @@ def test_non_tool_handlers_also_reconnect_on_session_expired(
         assert reconnect_flag.is_set(), (
             f"{op_label}: reconnect should fire for session-expired"
         )
-        assert call_count["n"] == 2, (
-            f"{op_label}: expected 1 original + 1 retry"
-        )
+        assert call_count["n"] == 2, f"{op_label}: expected 1 original + 1 retry"
     finally:
         mcp_tool._servers.pop(f"srv-{op_label}", None)
         mcp_tool._server_error_counts.pop(f"srv-{op_label}", None)
@@ -457,7 +486,9 @@ def test_non_tool_handlers_also_reconnect_on_session_expired(
 
 
 @pytest.mark.parametrize("read_only", [False, True], ids=["write-capable", "read-only"])
-def test_session_expired_retry_only_for_read_only_tools(monkeypatch, tmp_path, read_only):
+def test_session_expired_retry_only_for_read_only_tools(
+    monkeypatch, tmp_path, read_only
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
     from tools import mcp_tool

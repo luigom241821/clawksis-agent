@@ -41,12 +41,6 @@ def _stub(monkeypatch, *, managed: bool):
     return calls
 
 
-
-
-
-
-
-
 def test_pin_still_refuses_bundled_skills(monkeypatch, capsys):
     import clawk_cli.curator as curator_cli
     from tools import skill_usage

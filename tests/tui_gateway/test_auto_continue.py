@@ -102,11 +102,15 @@ def turn_env(monkeypatch, tmp_path, marker_home):
     """Neutralize the turn pipeline's environment-heavy side paths."""
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    monkeypatch.setattr(server, "_sync_agent_model_with_config", lambda sid, session: None)
+    monkeypatch.setattr(
+        server, "_sync_agent_model_with_config", lambda sid, session: None
+    )
     monkeypatch.setattr(server, "_session_cwd", lambda session: str(tmp_path))
     monkeypatch.setattr(server, "_register_session_cwd", lambda session: None)
     monkeypatch.setattr(server, "_tts_stream_begin", lambda: None)
-    monkeypatch.setattr(server, "_sync_session_key_after_compress", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_sync_session_key_after_compress", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_get_usage", lambda agent: {})
 
 
@@ -136,7 +140,9 @@ def test_marker_survives_corrupt_sidecar(tmp_path):
     assert read_turn_marker(tmp_path, "abc")["prompt"] == "prompt"
 
 
-def test_sibling_backend_record_does_not_resurrect_a_cleared_marker(tmp_path, monkeypatch):
+def test_sibling_backend_record_does_not_resurrect_a_cleared_marker(
+    tmp_path, monkeypatch
+):
     """Two backends on one CLAWK_HOME: B loads the marker file to start S2, A clears its concluded
     S1, then B stores — B's stale snapshot must not bring S1 back (resume would re-run a finished turn)."""
     from clawk_cli import auth
@@ -145,7 +151,9 @@ def test_sibling_backend_record_does_not_resurrect_a_cleared_marker(tmp_path, mo
     record_turn_start(tmp_path, "S1", "first prompt")
     context = multiprocessing.get_context("spawn")
     loaded, proceed = context.Event(), context.Event()
-    backend_b = context.Process(target=record_after_parent_moves, args=(str(tmp_path), "S2", loaded, proceed))
+    backend_b = context.Process(
+        target=record_after_parent_moves, args=(str(tmp_path), "S2", loaded, proceed)
+    )
     backend_b.start()
     assert loaded.wait(timeout=30)
 
@@ -196,7 +204,9 @@ def test_interrupt_ack_retires_marker_before_run_thread_exits(monkeypatch, marke
 
     _patch_local_interrupt(monkeypatch, session)
 
-    response = server._methods["session.interrupt"]("request-1", {"session_id": "runtime-1"})
+    response = server._methods["session.interrupt"](
+        "request-1", {"session_id": "runtime-1"}
+    )
 
     assert response["result"]["status"] == "interrupted"
     assert interrupted == [True]
@@ -225,7 +235,9 @@ def test_interrupt_racing_marker_write_cannot_leave_recovery_state(
             "stop-during-write", {"session_id": "runtime-race"}
         )
         assert response["result"]["status"] == "interrupted"
-        record_turn_start(home, key, prompt, attempts=attempts, auto_continue=auto_continue)
+        record_turn_start(
+            home, key, prompt, attempts=attempts, auto_continue=auto_continue
+        )
 
     monkeypatch.setattr(server, "record_turn_start", write_after_stop)
 
@@ -354,7 +366,9 @@ def test_continuation_turn_records_attempt_and_original_prompt(
         _auto_continue_prompt="the original prompt",
     )
 
-    server._run_prompt_submit("rid", "sid", session, server._auto_continue_note("the original prompt"))
+    server._run_prompt_submit(
+        "rid", "sid", session, server._auto_continue_note("the original prompt")
+    )
 
     assert [(m["attempts"], m["prompt"]) for m in seen] == [(2, "the original prompt")]
     # Consumed, so the NEXT user turn starts from a clean slate.
@@ -384,7 +398,10 @@ def test_older_agent_still_gets_the_post_turn_stamp(emits, turn_env, marker_home
     note = server._auto_continue_note("the original prompt")
 
     server._run_prompt_submit(
-        "rid", "sid", _session(agent=agent, running=True), note,
+        "rid",
+        "sid",
+        _session(agent=agent, running=True),
+        note,
         display_kind="auto_continue",
     )
 
@@ -419,7 +436,7 @@ def test_fresh_marker_schedules_continuation(emits, schedule_env, marker_home):
     assert result["attempt"] == 1
     assert session["running"] is True
     assert session["_auto_continue_attempt"] == 1
-    (text, kwargs), = schedule_env
+    ((text, kwargs),) = schedule_env
     assert text.startswith("[System note: Your previous turn was interrupted")
     assert "fix the flaky test" in text
     assert kwargs["display_kind"] == "auto_continue"
@@ -495,7 +512,9 @@ def test_disabled_by_config(schedule_env, marker_home, monkeypatch):
 
 
 def test_no_marker_means_no_continuation(schedule_env, marker_home):
-    assert server._maybe_schedule_auto_continue("sid", _session(), "session-key") is None
+    assert (
+        server._maybe_schedule_auto_continue("sid", _session(), "session-key") is None
+    )
     assert not schedule_env
 
 
@@ -591,12 +610,17 @@ def _wait_for_marker(home, key, timeout=30.0):
 def test_marker_writer_state_rejects_a_recycled_pid():
     """Same pid, different process: the create time is what makes the pid an
     identity. A start time from yesterday cannot be this process."""
-    assert marker_writer_state(
-        {"writer_pid": os.getpid(), "writer_start_time": time.time() - 86400}
-    ) != "alive"
+    assert (
+        marker_writer_state(
+            {"writer_pid": os.getpid(), "writer_start_time": time.time() - 86400}
+        )
+        != "alive"
+    )
 
 
-def test_second_backend_defers_to_a_live_marker_writer(emits, schedule_env, marker_home):
+def test_second_backend_defers_to_a_live_marker_writer(
+    emits, schedule_env, marker_home
+):
     """Two backends, one CLAWK_HOME, one session: A is mid-turn (alive writer)
 
     B resumes S and must read the marker as ownership evidence, not crash
@@ -629,28 +653,39 @@ def test_second_backend_defers_to_a_live_marker_writer(emits, schedule_env, mark
         assert marker_writer_state(written) == "alive"
 
         session = _session()
-        assert server._maybe_schedule_auto_continue("sid", session, "session-key") is None
+        assert (
+            server._maybe_schedule_auto_continue("sid", session, "session-key") is None
+        )
         assert not schedule_env  # nothing queued behind the live writer
         assert session.get("_auto_continue_scheduled") is None  # not even claimed
         assert not [e for e in emits if e[0] in ("status.update", "message.start")]
-        assert read_turn_marker(marker_home, "session-key") is not None  # A's marker intact
+        assert (
+            read_turn_marker(marker_home, "session-key") is not None
+        )  # A's marker intact
 
         child.terminate()  # the launcher; the real writer exits on the sentinel below
         child.wait(timeout=10)
         (marker_home / "writer-exit").write_text("go", encoding="utf-8")
         deadline = time.time() + 30
-        while time.time() < deadline and marker_writer_state(
-            read_turn_marker(marker_home, "session-key")
-        ) != "dead":
+        while (
+            time.time() < deadline
+            and marker_writer_state(read_turn_marker(marker_home, "session-key"))
+            != "dead"
+        ):
             time.sleep(0.05)
-        assert marker_writer_state(read_turn_marker(marker_home, "session-key")) == "dead", (
-            f"writer pid {writer_pid} (child pid {child.pid}) still reads live"
-        )
+        assert (
+            marker_writer_state(read_turn_marker(marker_home, "session-key")) == "dead"
+        ), f"writer pid {writer_pid} (child pid {child.pid}) still reads live"
 
-        assert server._maybe_schedule_auto_continue("sid", _session(), "session-key") is not None
+        assert (
+            server._maybe_schedule_auto_continue("sid", _session(), "session-key")
+            is not None
+        )
         assert len(schedule_env) == 1
     finally:
-        (marker_home / "writer-exit").touch()  # release the child even on an early failure
+        (
+            marker_home / "writer-exit"
+        ).touch()  # release the child even on an early failure
         if child.poll() is None:
             child.kill()
         child.wait(timeout=10)

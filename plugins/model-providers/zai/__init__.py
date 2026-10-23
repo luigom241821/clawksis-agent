@@ -28,7 +28,9 @@ def _has_token(model: str | None, tokens: tuple[str, ...]) -> bool:
     return any(token in m for token in tokens)
 
 
-def _glm_5_2_reasoning_effort(reasoning_config: dict | None, *, model: str | None = None) -> str | None:
+def _glm_5_2_reasoning_effort(
+    reasoning_config: dict | None, *, model: str | None = None
+) -> str | None:
     """Clawksis effort -> GLM vocabulary (5.2: high/max; 5.3: low..max). Below-floor
     efforts clamp to the floor; disabled/unset leaves the server default."""
     effort = re_.requested_effort(reasoning_config)
@@ -46,7 +48,11 @@ class ZaiProfile(ProviderProfile):
     """Z.AI / GLM — extra_body.thinking on/off + GLM-5.2 reasoning_effort."""
 
     def build_api_kwargs_extras(
-        self, *, reasoning_config: dict | None = None, model: str | None = None, **context
+        self,
+        *,
+        reasoning_config: dict | None = None,
+        model: str | None = None,
+        **context,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         extra_body: dict[str, Any] = {}
         top_level: dict[str, Any] = {}
@@ -62,7 +68,11 @@ class ZaiProfile(ProviderProfile):
                 top_level["reasoning_effort"] = "low"
             # Preserved Thinking: with thinking on, the standard endpoint drops replayed prior-turn
             # reasoning_content unless clear_thinking is false (docs.z.ai/guides/capabilities/thinking-mode).
-            extra_body["thinking"] = {"type": "enabled", "clear_thinking": False} if enabled else {"type": "disabled"}
+            extra_body["thinking"] = (
+                {"type": "enabled", "clear_thinking": False}
+                if enabled
+                else {"type": "disabled"}
+            )
         if is_5_2:
             effort = _glm_5_2_reasoning_effort(reasoning_config, model=model)
             if effort is not None:
@@ -71,10 +81,14 @@ class ZaiProfile(ProviderProfile):
 
 
 zai = ZaiProfile(
-    name="zai", aliases=("glm", "z-ai", "z.ai", "zhipu"),
-    env_vars=("GLM_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY"), display_name="Z.AI (GLM)",
-    description="Z.AI / GLM — Zhipu AI models", signup_url="https://z.ai/",
-    fallback_models=("glm-5.2", "glm-5", "glm-4-9b"), base_url="https://api.z.ai/api/paas/v4",
+    name="zai",
+    aliases=("glm", "z-ai", "z.ai", "zhipu"),
+    env_vars=("GLM_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY"),
+    display_name="Z.AI (GLM)",
+    description="Z.AI / GLM — Zhipu AI models",
+    signup_url="https://z.ai/",
+    fallback_models=("glm-5.2", "glm-5", "glm-4-9b"),
+    base_url="https://api.z.ai/api/paas/v4",
     default_aux_model="glm-4.5-flash",
 )
 

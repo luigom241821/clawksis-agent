@@ -140,9 +140,7 @@ def clear_notepad(job_id: str) -> int:
     if not _current_notepad_file().exists():
         return 0
     with _transaction() as conn:
-        cur = conn.execute(
-            "DELETE FROM cron_notepad WHERE job_id=?", (str(job_id),)
-        )
+        cur = conn.execute("DELETE FROM cron_notepad WHERE job_id=?", (str(job_id),))
     return cur.rowcount
 
 

@@ -58,25 +58,69 @@ GIT_NO_DETACH = ("-c", "gc.autoDetach=false", "-c", "maintenance.auto=false")
 # hooks either (F1): a hook inherits the fd, and one that backgrounds a process (a post-merge
 # daemon) kept a completed update's checkout locked until it exited. Per command only: the
 # repository's own hook configuration is untouched.
-_MUTATOR_CONFIG = ("-c", "core.fsmonitor=false", "-c", "credential.helper=", "-c", f"core.hooksPath={os.devnull}")
+_MUTATOR_CONFIG = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "credential.helper=",
+    "-c",
+    f"core.hooksPath={os.devnull}",
+)
 
 # git subcommands that write the worktree, the index or refs on THIS machine. Only these inherit
 # the checkout lock fd: if the updater dies mid-command, the checkout stays locked until git exits.
 # No `pull` (fetch + merge: its network half must not hold the fd; the updater fetches, then
 # merges). `gc` packs refs (and its repack writes the object store); `pack-objects` is the pack
 # tidy's merge, whose output the update moves into the object store.
-LOCAL_MUTATORS = frozenset({
-    "add", "am", "apply", "checkout", "checkout-index", "cherry-pick", "clean", "commit", "gc",
-    "merge", "mv", "pack-objects", "read-tree", "rebase", "reset", "restore", "revert", "rm", "stash",
-    "switch", "update-index", "update-ref", "symbolic-ref", "tag", "branch", "worktree",
-})
+LOCAL_MUTATORS = frozenset(
+    {
+        "add",
+        "am",
+        "apply",
+        "checkout",
+        "checkout-index",
+        "cherry-pick",
+        "clean",
+        "commit",
+        "gc",
+        "merge",
+        "mv",
+        "pack-objects",
+        "read-tree",
+        "rebase",
+        "reset",
+        "restore",
+        "revert",
+        "rm",
+        "stash",
+        "switch",
+        "update-index",
+        "update-ref",
+        "symbolic-ref",
+        "tag",
+        "branch",
+        "worktree",
+    }
+)
 # Mutators that move the checkout to another commit: what they read from a promisor remote is
 # fetched first, without the fd (_prefetch_for_move).
 _MOVES = frozenset({"checkout", "merge", "read-tree", "reset", "switch"})
 
 # Global options before the subcommand that take a separate value argument.
-_GLOBAL_WITH_VALUE = frozenset({"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path",
-                                "--config-env", "--super-prefix", "--attr-source", "--list-cmds"})
+_GLOBAL_WITH_VALUE = frozenset(
+    {
+        "-c",
+        "-C",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--exec-path",
+        "--config-env",
+        "--super-prefix",
+        "--attr-source",
+        "--list-cmds",
+    }
+)
 
 _CREATE_SUSPENDED = 0x00000004
 
@@ -93,12 +137,15 @@ class CustodyRefused(OSError):
         self.reason = (
             f"Windows would not put `{name}` in this update's process job ({cause}), so it was not "
             "run: a checkout writer outside the job could outlive a killed update and write the "
-            "checkout after its lock is released.")
+            "checkout after its lock is released."
+        )
         super().__init__(f"{self.reason} {_RETRY.format(command='the command')}")
 
 
-_RETRY = ("Run {command} again from a regular terminal, outside any sandbox or tool that confines "
-          "the processes it starts.")
+_RETRY = (
+    "Run {command} again from a regular terminal, outside any sandbox or tool that confines "
+    "the processes it starts."
+)
 
 
 # This run's custody (m2): whether an update child already ran in custody, and the first refusal.
@@ -108,7 +155,9 @@ _RETRY = ("Run {command} again from a regular terminal, outside any sandbox or t
 _RUN: dict = {"ran": False, "refused": None}
 
 
-def _refuse(argv: Sequence[str], cause: object, *, receipted: bool = False) -> CustodyRefused:
+def _refuse(
+    argv: Sequence[str], cause: object, *, receipted: bool = False
+) -> CustodyRefused:
     """The :class:`CustodyRefused` for ``argv``: logged, noted in the receipt (unless the caller
     already did) and kept as this run's first refusal."""
     argv = list(argv) if isinstance(argv, (list, tuple)) else [argv]
@@ -135,7 +184,9 @@ def _past_commit() -> bool:
         current = _current.get()
     except Exception:  # health: allow BLE001 -- fail closed: unknown = past commit, never "nothing changed"
         return True
-    return current is not None and any(stage.get("name") == "apply" for stage in current.data.get("stages") or ())
+    return current is not None and any(
+        stage.get("name") == "apply" for stage in current.data.get("stages") or ()
+    )
 
 
 def refusal_notice(command: str = "clawk update") -> str | None:
@@ -144,8 +195,11 @@ def refusal_notice(command: str = "clawk update") -> str | None:
     if _RUN["refused"] is None:
         return None
     exc, unchanged = _RUN["refused"]
-    outcome = ("Nothing was changed: no update step had run yet." if unchanged else
-               "Update steps before it had already run.")
+    outcome = (
+        "Nothing was changed: no update step had run yet."
+        if unchanged
+        else "Update steps before it had already run."
+    )
     return f"✗ `{command}` stopped: {exc.reason}\n  {outcome}\n  {_RETRY.format(command=f'`{command}`')}"
 
 
@@ -167,7 +221,9 @@ def is_local_mutator(args: Sequence[str]) -> bool:
 def git_argv(git_cmd: Sequence[str], args: Sequence[str]) -> list[str]:
     """``git_cmd + args`` with the custody config inserted before the subcommand."""
     git_cmd, args = list(git_cmd), list(args)
-    extra = GIT_NO_DETACH + (_MUTATOR_CONFIG if is_local_mutator(git_cmd[1:] + args) else ())
+    extra = GIT_NO_DETACH + (
+        _MUTATOR_CONFIG if is_local_mutator(git_cmd[1:] + args) else ()
+    )
     return [*git_cmd, *extra, *args]
 
 
@@ -190,7 +246,9 @@ def _death_signal_preexec():
     import ctypes
     import os
 
-    prctl = ctypes.CDLL(None, use_errno=True).prctl  # resolved before fork: the child only calls
+    prctl = ctypes.CDLL(
+        None, use_errno=True
+    ).prctl  # resolved before fork: the child only calls
     parent = os.getpid()
 
     def _arm():
@@ -238,7 +296,9 @@ def _bind_suspended(proc: subprocess.Popen) -> None:
     _RUN["ran"] = True
 
 
-def popen(argv: Sequence[str], *, inherit_lock: bool = False, **kwargs) -> subprocess.Popen:
+def popen(
+    argv: Sequence[str], *, inherit_lock: bool = False, **kwargs
+) -> subprocess.Popen:
     """``subprocess.Popen`` in the update tree's custody (see the module doc)."""
     if sys.platform == "win32" and _held() is not None:
         kwargs["creationflags"] = kwargs.get("creationflags", 0) | _CREATE_SUSPENDED
@@ -253,7 +313,9 @@ def popen(argv: Sequence[str], *, inherit_lock: bool = False, **kwargs) -> subpr
     return subprocess.Popen(list(argv), **_custody_kwargs(inherit_lock, kwargs))
 
 
-def run(argv: Sequence[str], *, inherit_lock: bool = False, **kwargs) -> subprocess.CompletedProcess:
+def run(
+    argv: Sequence[str], *, inherit_lock: bool = False, **kwargs
+) -> subprocess.CompletedProcess:
     """``subprocess.run`` in the update tree's custody. Off Windows (or outside an update) it IS
     ``subprocess.run`` with the caller's kwargs untouched, plus the lock fd for mutators (or the
     parent-death signal for the rest); on Windows inside an update it is the same contract over
@@ -283,7 +345,9 @@ def run(argv: Sequence[str], *, inherit_lock: bool = False, **kwargs) -> subproc
             raise
         code = proc.poll()
     if check and code:
-        raise subprocess.CalledProcessError(code, proc.args, output=stdout, stderr=stderr)
+        raise subprocess.CalledProcessError(
+            code, proc.args, output=stdout, stderr=stderr
+        )
     return subprocess.CompletedProcess(proc.args, code, stdout, stderr)
 
 
@@ -302,8 +366,10 @@ def popen_post_commit(argv: Sequence[str], *, label: str, **kwargs) -> subproces
     try:
         refusal = bind_child_to_update_tree(proc)
         if refusal is not None:
-            detail = (f"the update's job would not take the {label} ({refusal}), so it runs outside "
-                      "the job, holding its own checkout lease")
+            detail = (
+                f"the update's job would not take the {label} ({refusal}), so it runs outside "
+                "the job, holding its own checkout lease"
+            )
             print(f"  ⚠ {detail}", flush=True)
             with contextlib.suppress(Exception):
                 from clawk_cli.update_receipt import record_step
@@ -321,15 +387,22 @@ def popen_post_commit(argv: Sequence[str], *, label: str, **kwargs) -> subproces
 _DRAIN_SECONDS = 5
 
 
-def run_git(git_cmd: Sequence[str], args: Sequence[str], **kwargs) -> subprocess.CompletedProcess:
+def run_git(
+    git_cmd: Sequence[str], args: Sequence[str], **kwargs
+) -> subprocess.CompletedProcess:
     """THE updater git runner: custody config in argv, the lock fd only into local mutators,
     Windows job binding inside an update. ``kwargs`` are ``subprocess.run``'s."""
     argv = git_argv(git_cmd, args)
     mutator = is_local_mutator(argv[1:])
     if mutator:
         _prefetch_for_move(list(git_cmd), list(args), kwargs)
-    elif git_subcommand(argv[1:]) in _FD_LESS_REF_WRITERS and sys.platform != "win32" \
-            and _held() is not None and "preexec_fn" not in kwargs and _death_signal_preexec() is None:
+    elif (
+        git_subcommand(argv[1:]) in _FD_LESS_REF_WRITERS
+        and sys.platform != "win32"
+        and _held() is not None
+        and "preexec_fn" not in kwargs
+        and _death_signal_preexec() is None
+    ):
         return _run_owner_watched(argv, kwargs)
     return run(argv, inherit_lock=mutator, **kwargs)
 
@@ -358,28 +431,43 @@ def _owner_watch(pid: int):
     it did before; only the owner's death mid-fetch is then unfenced)."""
     import os
 
-    read_end, write_end = os.pipe()  # non-inheritable: no other child keeps the owner's end open
+    read_end, write_end = (
+        os.pipe()
+    )  # non-inheritable: no other child keeps the owner's end open
     try:
-        watcher = subprocess.Popen([sys.executable, "-I", "-S", "-c", _OWNER_WATCH, str(pid)], stdin=read_end,
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        watcher = subprocess.Popen(
+            [sys.executable, "-I", "-S", "-c", _OWNER_WATCH, str(pid)],
+            stdin=read_end,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
     except OSError as exc:
         os.close(write_end)
-        logger.warning("Could not watch update child %s for its owner's death: %s", pid, exc)
+        logger.warning(
+            "Could not watch update child %s for its owner's death: %s", pid, exc
+        )
         return None
     finally:
         os.close(read_end)
 
     def dismiss() -> None:
-        with contextlib.suppress(OSError):  # the watcher already gone: nothing left to tell it
+        with contextlib.suppress(
+            OSError
+        ):  # the watcher already gone: nothing left to tell it
             os.write(write_end, b"x")
         os.close(write_end)
-        with contextlib.suppress(subprocess.TimeoutExpired):  # it exits on the byte; never block on it
+        with contextlib.suppress(
+            subprocess.TimeoutExpired
+        ):  # it exits on the byte; never block on it
             watcher.wait(timeout=5)
 
     return dismiss
 
 
-def _run_owner_watched(argv: Sequence[str], kwargs: dict) -> subprocess.CompletedProcess:
+def _run_owner_watched(
+    argv: Sequence[str], kwargs: dict
+) -> subprocess.CompletedProcess:
     """``subprocess.run`` for an fd-less ref writer, under :func:`_owner_watch` while it runs."""
     input, timeout = kwargs.pop("input", None), kwargs.pop("timeout", None)
     check = kwargs.pop("check", False)
@@ -407,7 +495,9 @@ def _run_owner_watched(argv: Sequence[str], kwargs: dict) -> subprocess.Complete
                 dismiss()
         code = proc.poll()
     if check and code:
-        raise subprocess.CalledProcessError(code, proc.args, output=stdout, stderr=stderr)
+        raise subprocess.CalledProcessError(
+            code, proc.args, output=stdout, stderr=stderr
+        )
     return subprocess.CompletedProcess(proc.args, code, stdout, stderr)
 
 
@@ -423,8 +513,13 @@ def _partial_clone(git_cmd: Sequence[str], kwargs: dict) -> bool:
             cwd = Path(cwd or ".") / value
     common = _git_common_dir(Path(cwd or "."))
     try:
-        return common is not None and "partialclone" in \
-            (common / "config").read_text(encoding="utf-8-sig", errors="replace").lower()
+        return (
+            common is not None
+            and "partialclone"
+            in (common / "config")
+            .read_text(encoding="utf-8-sig", errors="replace")
+            .lower()
+        )
     except OSError:
         return False
 
@@ -441,28 +536,55 @@ def _prefetch_for_move(git_cmd: list[str], args: list[str], kwargs: dict) -> Non
     common = {key: kwargs[key] for key in ("cwd", "env") if key in kwargs}
 
     def resolve(*query: str, stdin: str | None = None) -> str | None:
-        out = run(git_argv(git_cmd, list(query)), capture_output=True, text=True, encoding="utf-8",
-                  errors="replace", input=stdin, **({} if stdin is not None else {"stdin": subprocess.DEVNULL}),
-                  **common)
-        return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else None
+        out = run(
+            git_argv(git_cmd, list(query)),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            input=stdin,
+            **({} if stdin is not None else {"stdin": subprocess.DEVNULL}),
+            **common,
+        )
+        return (
+            out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else None
+        )
 
     try:
         targets = []
-        for arg in args[args.index(sub) + 1:]:
+        for arg in args[args.index(sub) + 1 :]:
             if arg == "--":
                 break
             if not arg.startswith("-"):
-                targets.append(resolve("rev-parse", "--verify", "-q", f"{arg}^{{commit}}"))
+                targets.append(
+                    resolve("rev-parse", "--verify", "-q", f"{arg}^{{commit}}")
+                )
         targets = [target for target in dict.fromkeys(targets) if target]
         if not targets:
             return
         # An unborn HEAD (a fresh clone) has nothing checked out: diff from the empty tree.
-        base = resolve("rev-parse", "--verify", "-q", "HEAD^{commit}") \
-            or resolve("hash-object", "-t", "tree", "--stdin", stdin="")
+        base = resolve("rev-parse", "--verify", "-q", "HEAD^{commit}") or resolve(
+            "hash-object", "-t", "tree", "--stdin", stdin=""
+        )
         for target in targets:
             if base and target != base:
-                run(git_argv(git_cmd, ["diff", "--binary", "--no-ext-diff", "--no-textconv", base, target]),
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **common)
+                run(
+                    git_argv(
+                        git_cmd,
+                        [
+                            "diff",
+                            "--binary",
+                            "--no-ext-diff",
+                            "--no-textconv",
+                            base,
+                            target,
+                        ],
+                    ),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    **common,
+                )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         logger.debug("Could not prefetch the objects for git %s: %s", sub, exc)
 
@@ -578,7 +700,9 @@ def _report_refused_join(report: str, argv: Sequence[str]) -> str | None:
     with contextlib.suppress(Exception):
         from clawk_cli.update_receipt import record_step
 
-        record_step("update_custody", False, f"{note}: {' '.join(str(arg) for arg in argv[:2])}")
+        record_step(
+            "update_custody", False, f"{note}: {' '.join(str(arg) for arg in argv[:2])}"
+        )
     return note
 
 
@@ -760,9 +884,21 @@ def contained_command(argv: Sequence[str], *, inherit_lock: bool = True, root=No
     if not (sys.platform == "win32" and _held() is not None):
         from clawk_cli.update_lock import checkout_lock_fds
 
-        fds = tuple(checkout_lock_fds(root)) if inherit_lock and root is not None else _lock_fds(inherit_lock)
+        fds = (
+            tuple(checkout_lock_fds(root))
+            if inherit_lock and root is not None
+            else _lock_fds(inherit_lock)
+        )
         if fds:
-            argv = [sys.executable, "-I", "-S", "-c", _REAP_TREE, ",".join(map(str, fds)), *argv]
+            argv = [
+                sys.executable,
+                "-I",
+                "-S",
+                "-c",
+                _REAP_TREE,
+                ",".join(map(str, fds)),
+                *argv,
+            ]
         yield argv, ({"pass_fds": fds} if fds else {})
         return
     try:
@@ -777,8 +913,19 @@ def contained_command(argv: Sequence[str], *, inherit_lock: bool = True, root=No
     try:
         info = subprocess.STARTUPINFO()
         info.lpAttributeList = {"handle_list": [handle]}
-        yield ([_join_launcher_python(), "-I", "-S", "-c", _JOIN_JOB, str(handle), report, *argv],
-               {"startupinfo": info})
+        yield (
+            [
+                _join_launcher_python(),
+                "-I",
+                "-S",
+                "-c",
+                _JOIN_JOB,
+                str(handle),
+                report,
+                *argv,
+            ],
+            {"startupinfo": info},
+        )
     finally:
         import ctypes
 
@@ -801,9 +948,15 @@ def _inheritable_job_handle() -> int:
         job = update_tree_job()
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-        kernel32.DuplicateHandle.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                                             ctypes.POINTER(ctypes.c_void_p), ctypes.c_ulong, ctypes.c_int,
-                                             ctypes.c_ulong]
+        kernel32.DuplicateHandle.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_ulong,
+        ]
         me, dup = kernel32.GetCurrentProcess(), ctypes.c_void_p()
         # DUPLICATE_SAME_ACCESS, inheritable
         if not kernel32.DuplicateHandle(me, job, me, ctypes.byref(dup), 0, True, 0x2):

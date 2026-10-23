@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 # account access, so fidelity can vary by configured backend.
 _REF_CAPABLE = ("nous", "openai", "openai-codex", "openrouter", "krea")
 # Friendly display label per reference-capable provider (desktop pet-gen picker).
-_PROVIDER_LABELS = {"nous": "Nous Portal", "openrouter": "OpenRouter", "openai": "OpenAI", "openai-codex": "OpenAI (Codex)", "krea": "Krea"}
+_PROVIDER_LABELS = {
+    "nous": "Nous Portal",
+    "openrouter": "OpenRouter",
+    "openai": "OpenAI",
+    "openai-codex": "OpenAI (Codex)",
+    "krea": "Krea",
+}
 
 
 class GenerationError(RuntimeError):
@@ -53,7 +59,9 @@ def _available(name: str):
     return provider if provider is not None and provider.is_available() else None
 
 
-def resolve_provider(*, require_references: bool = True, prefer: str | None = None) -> SpriteProvider:
+def resolve_provider(
+    *, require_references: bool = True, prefer: str | None = None
+) -> SpriteProvider:
     """Pick the image provider for sprite work.
 
     Preference: ``CLAWK_PET_IMAGE_PROVIDER`` (QA override, unknown values ignored),
@@ -74,12 +82,20 @@ def resolve_provider(*, require_references: bool = True, prefer: str | None = No
         active = None
     active_name = getattr(active, "name", "") if active is not None else ""
     if active_name in _REF_CAPABLE and active.is_available():
-        return SpriteProvider(name=active_name, provider=active, supports_references=True)
+        return SpriteProvider(
+            name=active_name, provider=active, supports_references=True
+        )
     for name in _REF_CAPABLE:
         if (provider := _available(name)) is not None:
-            return SpriteProvider(name=name, provider=provider, supports_references=True)
+            return SpriteProvider(
+                name=name, provider=provider, supports_references=True
+            )
     if not require_references and active is not None and active.is_available():
-        return SpriteProvider(name=getattr(active, "name", "unknown"), provider=active, supports_references=False)
+        return SpriteProvider(
+            name=getattr(active, "name", "unknown"),
+            provider=active,
+            supports_references=False,
+        )
     raise GenerationError(
         "Pet generation needs an image backend that supports reference images. "
         "Open `clawk tools` → Image Generation and configure OpenRouter, "
@@ -95,7 +111,11 @@ def list_sprite_providers() -> list[dict]:
     except GenerationError:
         default_name = ""
     return [
-        {"name": name, "label": _PROVIDER_LABELS.get(name, name), "default": name == default_name}
+        {
+            "name": name,
+            "label": _PROVIDER_LABELS.get(name, name),
+            "default": name == default_name,
+        }
         for name in _REF_CAPABLE
         if _available(name) is not None
     ]
@@ -113,7 +133,9 @@ def _save_local(image_ref: str, *, prefix: str) -> Path:
 def _rejected_background(error: str) -> bool:
     """True when a provider error is specifically about ``background=transparent`` (a per-model capability; we retry without it)."""
     lowered = (error or "").lower()
-    return "background" in lowered and ("not supported" in lowered or "transparent" in lowered)
+    return "background" in lowered and (
+        "not supported" in lowered or "transparent" in lowered
+    )
 
 
 def generate(
@@ -145,11 +167,15 @@ def generate(
     # Providers disagree on the ref kwarg name: our OpenRouter/Nous backends read
     # ``reference_images``, OpenAI's gpt-image-2 reads ``reference_image_urls``.
     # Send both; each ignores the other.
-    ref_kwargs = {"reference_images": refs, "reference_image_urls": refs} if refs else {}
+    ref_kwargs = (
+        {"reference_images": refs, "reference_image_urls": refs} if refs else {}
+    )
 
     def _run(extra: dict) -> tuple[Path | None, str]:
         try:
-            result = sprite.provider.generate(prompt, aspect_ratio=aspect_ratio, **extra, **ref_kwargs)
+            result = sprite.provider.generate(
+                prompt, aspect_ratio=aspect_ratio, **extra, **ref_kwargs
+            )
         except Exception as exc:
             logger.debug("provider.generate crashed: %s", exc)
             return None, str(exc)

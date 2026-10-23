@@ -37,8 +37,13 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 
 def _run_cli(ph: ParityHome, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        clawk_argv(*args), cwd=ph.project, env=ph.env(), capture_output=True, text=True,
-        timeout=TURN_TIMEOUT, stdin=subprocess.DEVNULL,
+        clawk_argv(*args),
+        cwd=ph.project,
+        env=ph.env(),
+        capture_output=True,
+        text=True,
+        timeout=TURN_TIMEOUT,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
 
@@ -46,13 +51,21 @@ def _run_cli(ph: ParityHome, *args: str) -> subprocess.CompletedProcess:
 def _client_turn(ph: ParityHome, label: str, *args: str) -> DriveResult:
     proc = _run_cli(ph, *args)
     try:
-        assert proc.returncode == 0, f"{label} exited {proc.returncode}: {proc.stderr[-2000:]}"
+        assert proc.returncode == 0, (
+            f"{label} exited {proc.returncode}: {proc.stderr[-2000:]}"
+        )
     finally:
         # The daemon is the surface's process; a failed client still leaves it to stop.
         stopped = stop_profile_gateway(ph)
     return DriveResult(
-        final_text=proc.stdout.strip(), toolset="clawk-cli", graceful_exit=stopped,
-        extra={"exit_code": proc.returncode, "stderr_tail": proc.stderr[-2000:], "gateway_stopped": stopped},
+        final_text=proc.stdout.strip(),
+        toolset="clawk-cli",
+        graceful_exit=stopped,
+        extra={
+            "exit_code": proc.returncode,
+            "stderr_tail": proc.stderr[-2000:],
+            "gateway_stopped": stopped,
+        },
     )
 
 

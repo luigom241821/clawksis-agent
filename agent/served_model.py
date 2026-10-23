@@ -17,7 +17,10 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-SERVED_MODEL_HEADERS: tuple[str, ...] = ("x-litellm-model-id", "x-litellm-model-api-base")
+SERVED_MODEL_HEADERS: tuple[str, ...] = (
+    "x-litellm-model-id",
+    "x-litellm-model-api-base",
+)
 _HOOK_MARK = "_clawk_served_model_hook"
 
 
@@ -44,14 +47,19 @@ def install_served_model_capture(agent: Any, client: Any) -> None:
     def _on_response(response: Any) -> None:
         try:
             if 200 <= int(getattr(response, "status_code", 0)) < 300:
-                agent.last_served_model = served_model_from_headers(getattr(response, "headers", None))
+                agent.last_served_model = served_model_from_headers(
+                    getattr(response, "headers", None)
+                )
         except Exception:
             logger.debug("served-model header capture skipped", exc_info=True)
 
     setattr(_on_response, _HOOK_MARK, True)
     try:
         # httpx copies on assignment; rebuild the mapping instead of mutating the live list.
-        http_client.event_hooks = {**hooks, "response": [*hooks.get("response", ()), _on_response]}
+        http_client.event_hooks = {
+            **hooks,
+            "response": [*hooks.get("response", ()), _on_response],
+        }
     except Exception:
         logger.debug("served-model hook install skipped", exc_info=True)
 
@@ -62,7 +70,9 @@ def result_model_fields(agent: Any) -> dict[str, Optional[str]]:
     served = getattr(agent, "last_served_model", None)
     requested = agent.model
     if not served and getattr(agent, "_fallback_activated", False):
-        primary = str((getattr(agent, "_primary_runtime", None) or {}).get("model") or "").strip()
+        primary = str(
+            (getattr(agent, "_primary_runtime", None) or {}).get("model") or ""
+        ).strip()
         if primary and primary != agent.model:
             requested, served = primary, agent.model
     return {"requested_model": requested, "served_model": served or None}

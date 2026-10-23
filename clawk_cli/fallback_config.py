@@ -50,6 +50,7 @@ def resolve_entry_api_key(entry: dict[str, Any] | None) -> str | None:
         return inline
     if key_env := str(entry.get("key_env") or entry.get("api_key_env") or "").strip():
         from agent.secret_scope import get_secret
+
         return (get_secret(key_env) or "").strip() or None
     return None
 
@@ -76,9 +77,7 @@ def effective_runtime_provider(
     if resolved.lower() != "custom":
         return resolved
     requested = str(
-        runtime.get("requested_provider")
-        or (entry or {}).get("provider")
-        or ""
+        runtime.get("requested_provider") or (entry or {}).get("provider") or ""
     ).strip()
     if requested and requested.lower() != "custom":
         return requested
@@ -86,19 +85,29 @@ def effective_runtime_provider(
 
 
 def pre_agent_fallback_notice(
-    primary_provider: Any, primary_model: Any, fallback_provider: Any, fallback_model: Any
+    primary_provider: Any,
+    primary_model: Any,
+    fallback_provider: Any,
+    fallback_model: Any,
 ) -> str:
     """User-visible one-shot line for a provider switch made during credential resolution, before
     any AIAgent exists (#74349). Shared by the messaging gateway, the TUI/Desktop gateway and cron
     so the three pre-agent fallback paths cannot drift in wording."""
-    primary_desc = "/".join(str(p).strip() for p in (primary_provider, primary_model) if p) or "primary"
-    fallback_desc = "/".join(str(p).strip() for p in (fallback_provider, fallback_model) if p) or "fallback"
+    primary_desc = (
+        "/".join(str(p).strip() for p in (primary_provider, primary_model) if p)
+        or "primary"
+    )
+    fallback_desc = (
+        "/".join(str(p).strip() for p in (fallback_provider, fallback_model) if p)
+        or "fallback"
+    )
     return f"⚠️ Provider fallback: {primary_desc} unavailable; using {fallback_desc} for this response."
 
 
-
 def _iter_fallback_entries(raw: Any) -> list[dict[str, Any]]:
-    candidates = [raw] if isinstance(raw, dict) else raw if isinstance(raw, list) else []
+    candidates = (
+        [raw] if isinstance(raw, dict) else raw if isinstance(raw, list) else []
+    )
     entries: list[dict[str, Any]] = []
     for entry in candidates:
         if not isinstance(entry, dict):
@@ -144,7 +153,11 @@ def get_fallback_chain(config: dict[str, Any] | None) -> list[dict[str, Any]]:
 
 
 def scoped_fallback_chain(
-    inherited: list[dict[str, Any]] | None, declared: Any, *, pinned: bool, owner: str,
+    inherited: list[dict[str, Any]] | None,
+    declared: Any,
+    *,
+    pinned: bool,
+    owner: str,
 ) -> list[dict[str, Any]] | None:
     """Fallback chain for a route owner that can pin its own primary (delegated child, cron job).
 
@@ -162,6 +175,9 @@ def scoped_fallback_chain(
         return None
     normalized = get_fallback_chain({"fallback_providers": declared})
     if not normalized:
-        logger.warning("%s fallback_providers has no usable routes; using the %s default",
-                       owner, "pinned" if pinned else "inherited")
+        logger.warning(
+            "%s fallback_providers has no usable routes; using the %s default",
+            owner,
+            "pinned" if pinned else "inherited",
+        )
     return normalized or default

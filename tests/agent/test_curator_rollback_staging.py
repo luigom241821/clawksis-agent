@@ -96,8 +96,10 @@ def test_retain_staging_never_raises(tmp_path, monkeypatch, mode):
     monkeypatch.setattr(curator.shutil, "move", fail_move)
     backups = skills / ".curator_backups"
     if mode == "rename_fails":
+
         def boom(self, *a, **k):
             raise PermissionError("injected rename")
+
         monkeypatch.setattr(Path, "rename", boom)
     else:
         monkeypatch.setattr(curator, "_utc_id", lambda: "2020-01-01T00-00-00Z")

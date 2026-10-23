@@ -3,6 +3,7 @@
 make_tool_result_message() sets tool_name on every tool-result dict at construction
 time. This test verifies that the value survives the flush path into the session DB.
 """
+
 from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent

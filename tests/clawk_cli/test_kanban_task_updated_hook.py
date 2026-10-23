@@ -17,6 +17,7 @@ from clawk_cli import kanban_db as kb
 from clawk_cli import kanban_db_connect as kbc
 from clawk_cli.plugins import get_plugin_manager
 
+
 @pytest.fixture
 def kanban_home(tmp_path, monkeypatch):
     home = tmp_path / ".clawk"
@@ -25,6 +26,7 @@ def kanban_home(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     kb.init_db()
     return home
+
 
 @pytest.fixture
 def captured_updates(monkeypatch):
@@ -38,6 +40,7 @@ def captured_updates(monkeypatch):
         yield events
     finally:
         mgr._hooks = saved
+
 
 def test_assign_fires_updated_with_changed_fields(kanban_home, captured_updates):
     """assign_task fires the observer post-commit with the changed field."""
@@ -75,6 +78,7 @@ def test_assign_fires_updated_with_changed_fields(kanban_home, captured_updates)
     assert "board" in kw
     assert "run_id" in kw
     assert assignee_at_fire_time == ["bob"]
+
 
 def test_raising_callback_does_not_break_assign(kanban_home):
     mgr = get_plugin_manager()

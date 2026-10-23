@@ -15,13 +15,15 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 #: ``_compress_context`` rotation, so ``--aggressive`` is refused rather than mis-parsed as a focus topic.
 AGGRESSIVE_UNSUPPORTED = (
     "--aggressive is not supported; use '/compress here [N]' to keep only recent exchanges, "
-    "or /undo to drop turns.")
+    "or /undo to drop turns."
+)
 MIN_MESSAGES = 4
 
 
 @dataclass
 class CompressRequest:
     """Parsed ``/compress`` arguments (``extract_compress_flags`` + ``parse_partial_compress_args``)."""
+
     preview: bool = False
     aggressive: bool = False
     partial: bool = False
@@ -37,9 +39,13 @@ class CompressResult:
     before_tokens: int
     after_tokens: int
     request: CompressRequest
-    lines: list[str] = field(default_factory=list)  # preview report lines (status == "preview")
+    lines: list[str] = field(
+        default_factory=list
+    )  # preview report lines (status == "preview")
     lock_holder: Any = None
-    summary: Optional[dict[str, Any]] = None  # ``summarize_manual_compression`` payload when compressed
+    summary: Optional[dict[str, Any]] = (
+        None  # ``summarize_manual_compression`` payload when compressed
+    )
 
     @property
     def removed(self) -> int:
@@ -48,27 +54,44 @@ class CompressResult:
 
 def parse_compress_args(raw_args: str) -> CompressRequest:
     """One parser for every surface: flags anywhere, then the boundary-aware / focus positional forms."""
-    from clawk_cli.partial_compress import extract_compress_flags, parse_partial_compress_args
+    from clawk_cli.partial_compress import (
+        extract_compress_flags,
+        parse_partial_compress_args,
+    )
+
     rest, preview, aggressive = extract_compress_flags((raw_args or "").strip())
     partial, keep_last, focus_topic = parse_partial_compress_args(rest)
-    return CompressRequest(preview=preview, aggressive=aggressive, partial=partial, keep_last=keep_last,
-                           focus_topic=focus_topic or None)
+    return CompressRequest(
+        preview=preview,
+        aggressive=aggressive,
+        partial=partial,
+        keep_last=keep_last,
+        focus_topic=focus_topic or None,
+    )
 
 
 def estimate_request_tokens(agent: Any, messages: Sequence[dict[str, Any]]) -> int:
     """Transcript + system prompt + tool schemas: a transcript-only figure understates real request pressure
     and can even appear to grow after a dense handoff summary replaces many short turns (#6217)."""
     from agent.model_metadata import estimate_request_tokens_rough
+
     if not messages:
         return 0
     return estimate_request_tokens_rough(
-        list(messages), system_prompt=getattr(agent, "_cached_system_prompt", "") or "",
-        tools=getattr(agent, "tools", None) or None)
+        list(messages),
+        system_prompt=getattr(agent, "_cached_system_prompt", "") or "",
+        tools=getattr(agent, "tools", None) or None,
+    )
 
 
 def compress_now(
-    agent: Any, history: Sequence[dict[str, Any]], request: CompressRequest, *,
-    system_message: Any = None, task_id: str = "default", skip_without_window: bool = False,
+    agent: Any,
+    history: Sequence[dict[str, Any]],
+    request: CompressRequest,
+    *,
+    system_message: Any = None,
+    task_id: str = "default",
+    skip_without_window: bool = False,
     snapshot_is_current: Optional[Callable[[], bool]] = None,
 ) -> CompressResult:
     """Run one manual compression of ``history`` on ``agent`` and return the outcome; the caller installs
@@ -86,11 +109,19 @@ def compress_now(
     ``_compress_context`` still does useful work there — codex_app_server native compaction, and the
     phase-1 tool-result prune / blank-echo drop that ``ContextCompressor.compress`` commits even when no
     summary window exists."""
-    from agent.context_compressor import _DB_PERSISTED_MARKER, _fresh_compaction_message_copy
-    from agent.conversation_compression import finalize_context_engine_compression_notification
+    from agent.context_compressor import (
+        _DB_PERSISTED_MARKER,
+        _fresh_compaction_message_copy,
+    )
+    from agent.conversation_compression import (
+        finalize_context_engine_compression_notification,
+    )
     from agent.manual_compression_feedback import summarize_manual_compression
     from clawk_cli.partial_compress import (
-        rejoin_compressed_head_and_tail, split_history_for_partial_compress, summarize_compress_preview)
+        rejoin_compressed_head_and_tail,
+        split_history_for_partial_compress,
+        summarize_compress_preview,
+    )
 
     before = list(history)
     before_tokens = estimate_request_tokens(agent, before)
@@ -100,13 +131,29 @@ def compress_now(
         if not tail:  # degenerate split: nothing to keep verbatim → full compression
             head = before
     if request.preview:
-        report = summarize_compress_preview(before, request.partial, request.keep_last, request.focus_topic, before_tokens)
-        return CompressResult("preview", before, before, before_tokens, before_tokens, request, lines=report["lines"])
+        report = summarize_compress_preview(
+            before,
+            request.partial,
+            request.keep_last,
+            request.focus_topic,
+            before_tokens,
+        )
+        return CompressResult(
+            "preview",
+            before,
+            before,
+            before_tokens,
+            before_tokens,
+            request,
+            lines=report["lines"],
+        )
 
     compressor = getattr(agent, "context_compressor", None)
     has_content = getattr(compressor, "has_content_to_compress", None)
     if skip_without_window and callable(has_content) and has_content(head) is False:
-        return CompressResult("nothing_to_do", before, before, before_tokens, before_tokens, request)
+        return CompressResult(
+            "nothing_to_do", before, before, before_tokens, before_tokens, request
+        )
     # An in-place commit archives every durable row under the lease watermark, the kept tail's included, so
     # it must store the tail again itself. It gets copies because the insert writes row ids onto them. A copy
     # keeps its source's row id only while the source is unchanged since it was loaded (marker present): a
@@ -119,7 +166,11 @@ def compress_now(
             # folded into it were still in the compressor's input. Keep them named so the
             # commit archives those originals instead of cloning them beside the tail.
             dropped = row.pop("_row_id", None)
-            if isinstance(dropped, int) and not isinstance(dropped, bool) and dropped > 0:
+            if (
+                isinstance(dropped, int)
+                and not isinstance(dropped, bool)
+                and dropped > 0
+            ):
                 absorbed = [*(row.get("_absorbed_row_ids") or ())]
                 if dropped not in absorbed:
                     absorbed.append(dropped)
@@ -127,10 +178,20 @@ def compress_now(
         tail_rows.append(row)
     try:
         compressed, _ = agent._compress_context(
-            head, system_message, approx_tokens=before_tokens, focus_topic=request.focus_topic, force=True,
-            defer_context_engine_notification=True, **({"task_id": task_id} if task_id != "default" else {}),
-            **({"snapshot_is_current": snapshot_is_current} if snapshot_is_current is not None else {}),
-            **({"verbatim_tail": tail_rows} if tail_rows else {}))
+            head,
+            system_message,
+            approx_tokens=before_tokens,
+            focus_topic=request.focus_topic,
+            force=True,
+            defer_context_engine_notification=True,
+            **({"task_id": task_id} if task_id != "default" else {}),
+            **(
+                {"snapshot_is_current": snapshot_is_current}
+                if snapshot_is_current is not None
+                else {}
+            ),
+            **({"verbatim_tail": tail_rows} if tail_rows else {}),
+        )
     except Exception:
         finalize_context_engine_compression_notification(agent, committed=False)
         raise
@@ -139,8 +200,15 @@ def compress_now(
     if lock_signal is True or isinstance(lock_signal, str):
         agent._compression_skipped_due_to_lock = None
         finalize_context_engine_compression_notification(agent, committed=False)
-        return CompressResult("lock_skipped", before, before, before_tokens, before_tokens, request,
-                              lock_holder=lock_signal if isinstance(lock_signal, str) else None)
+        return CompressResult(
+            "lock_skipped",
+            before,
+            before,
+            before_tokens,
+            before_tokens,
+            request,
+            lock_holder=lock_signal if isinstance(lock_signal, str) else None,
+        )
     # Stamped copies mean the commit (in place or rotated) stored the tail and already returned head + tail.
     # A no-op or a rolled-back commit leaves them unstamped, and the tail is then only in the caller's dicts.
     if tail and not all(row.get(_DB_PERSISTED_MARKER) is True for row in tail_rows):
@@ -150,9 +218,22 @@ def compress_now(
     # flags: the owner's report is the result. Type-pinned (dict) for the MagicMock reason above.
     summary = getattr(agent, "compression_summary", None)
     if not isinstance(summary, dict):
-        summary = summarize_manual_compression(before, compressed, before_tokens, after_tokens,
-                                               compression_state=compressor)
-    return CompressResult("compressed", before, list(compressed), before_tokens, after_tokens, request, summary=summary)
+        summary = summarize_manual_compression(
+            before,
+            compressed,
+            before_tokens,
+            after_tokens,
+            compression_state=compressor,
+        )
+    return CompressResult(
+        "compressed",
+        before,
+        list(compressed),
+        before_tokens,
+        after_tokens,
+        request,
+        summary=summary,
+    )
 
 
 def render_compress_result(result: CompressResult, *, prefix: str = "") -> list[str]:
@@ -161,8 +242,17 @@ def render_compress_result(result: CompressResult, *, prefix: str = "") -> list[
         return [f"{prefix}{line}" for line in result.lines]
     if result.status == "lock_skipped":
         from agent.manual_compression_feedback import describe_compression_lock_skip
+
         return [f"{prefix}{describe_compression_lock_skip(result.lock_holder or True)}"]
     if result.status == "nothing_to_do":
         return [f"{prefix}Nothing to compress yet."]
     summary = result.summary or {}
-    return [f"{prefix}{line}" for line in (summary.get("headline"), summary.get("token_line"), summary.get("note")) if line]
+    return [
+        f"{prefix}{line}"
+        for line in (
+            summary.get("headline"),
+            summary.get("token_line"),
+            summary.get("note"),
+        )
+        if line
+    ]

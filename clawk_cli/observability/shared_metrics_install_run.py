@@ -34,7 +34,17 @@ PENDING_DIRNAME = "pending_installs"
 RECORDED_DIRNAME = "recorded_installs"
 _RECORDED_KEEP = 64
 _RECEIPT_ID = re.compile(r"[0-9a-f]{32}")
-_RECEIPT_KEYS = frozenset({"id", "installer", "outcome", "failed_stage", "failure_class", "started_at", "finished_at"})
+_RECEIPT_KEYS = frozenset(
+    {
+        "id",
+        "installer",
+        "outcome",
+        "failed_stage",
+        "failure_class",
+        "started_at",
+        "finished_at",
+    }
+)
 # A receipt no start recorded within a week is dropped: the row would carry the recording client's
 # version, not the installer's, and per-version install failure rates would drift onto later releases.
 MAX_RECEIPT_AGE_SECONDS = 7 * 86_400
@@ -49,7 +59,11 @@ def purge_pending_installs(home: Path) -> None:
 
 
 def _epoch(value: Any) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0
+        else None
+    )
 
 
 def install_run_fields(receipt: Any) -> dict[str, str] | None:
@@ -74,7 +88,9 @@ def install_run_fields(receipt: Any) -> dict[str, str] | None:
         return None
     # A success names no stage and no class; a failure names both.
     succeeded = fields["outcome"] == "success"
-    if succeeded != (fields["failed_stage"] == "none") or succeeded != (fields["failure_class"] == "none"):
+    if succeeded != (fields["failed_stage"] == "none") or succeeded != (
+        fields["failure_class"] == "none"
+    ):
         return None
     return fields
 
@@ -89,7 +105,9 @@ def _mark_recorded(latch: Path) -> None:
     try:
         latch.parent.mkdir(parents=True, exist_ok=True)
         latch.touch()
-        for stale in sorted(latch.parent.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)[_RECORDED_KEEP:]:
+        for stale in sorted(
+            latch.parent.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+        )[_RECORDED_KEEP:]:
             stale.unlink(missing_ok=True)
     except OSError:  # a concurrent prune won; the next latch prunes again
         pass
@@ -99,7 +117,9 @@ def _today_start() -> str:
     """Today's package ``period_start``, in the store's stamp format (``shared_metrics._isoformat``)."""
     from .shared_metrics import _isoformat, _utc_now
 
-    return _isoformat(datetime.combine(_utc_now().date(), datetime.min.time(), tzinfo=UTC))
+    return _isoformat(
+        datetime.combine(_utc_now().date(), datetime.min.time(), tzinfo=UTC)
+    )
 
 
 def consented_day(home: Path) -> bool:
@@ -120,7 +140,9 @@ def consented_day(home: Path) -> bool:
 
     root = home / "telemetry" / "shared_metrics"
     try:
-        with SharedMetricsStore(root / "metrics.sqlite3", root / "outbox")._connection() as connection:
+        with SharedMetricsStore(
+            root / "metrics.sqlite3", root / "outbox"
+        )._connection() as connection:
             row = connection.execute(
                 "SELECT 1 FROM send_consent_windows WHERE closed_at IS NULL AND opened_at <= ? LIMIT 1",
                 (_today_start(),),
@@ -137,7 +159,9 @@ def _claim_receipt(path: Path) -> Path | None:
 
     if path.name.endswith(_REPORTING) and _claimer_alive(path):
         return None
-    claimed = path.with_name(f"{path.name.split('.json')[0]}.json.{os.getpid()}{_REPORTING}")
+    claimed = path.with_name(
+        f"{path.name.split('.json')[0]}.json.{os.getpid()}{_REPORTING}"
+    )
     try:
         os.replace(path, claimed)
     except OSError:  # a concurrent reporter won
@@ -173,7 +197,9 @@ def report_pending_installs(home: Path) -> None:
         for path in sorted(directory.iterdir()):
             if path.name.startswith(".") or ".json" not in path.name:
                 continue
-            claimed = _claim_receipt(path)  # a concurrent start that loses the rename records nothing
+            claimed = _claim_receipt(
+                path
+            )  # a concurrent start that loses the rename records nothing
             if claimed is None:
                 continue
             try:
@@ -181,7 +207,9 @@ def report_pending_installs(home: Path) -> None:
             except (OSError, ValueError):
                 receipt = None
             fields = install_run_fields(receipt)
-            if fields is None or not isinstance(receipt, dict) or _stale(receipt):  # never to be counted
+            if (
+                fields is None or not isinstance(receipt, dict) or _stale(receipt)
+            ):  # never to be counted
                 settle_claim(claimed, path, True)
                 continue
             latch = _recorded_latch(home, receipt["id"])

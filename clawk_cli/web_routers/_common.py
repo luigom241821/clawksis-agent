@@ -76,16 +76,24 @@ def destructive_profile(profile: Optional[str], route: str) -> Optional[str]:
     if (profile or "").strip():
         return profile
     from agent.secret_scope import is_multiplex_active
+
     if is_multiplex_active():
         raise HTTPException(
             status_code=400,
             detail=f"{route} requires an explicit profile: this backend serves several profiles, "
-                   "so an unnamed target would act on the wrong profile's data.")
+            "so an unnamed target would act on the wrong profile's data.",
+        )
     return profile
 
 
 @contextlib.contextmanager
-def http_failure(log_msg: str, status: int, prefix: Optional[str] = None, *, detail: Optional[str] = None):
+def http_failure(
+    log_msg: str,
+    status: int,
+    prefix: Optional[str] = None,
+    *,
+    detail: Optional[str] = None,
+):
     """Map unexpected exceptions to an ``HTTPException``.
 
     ``HTTPException`` passes through; anything else is logged with ``log_msg`` (traceback),
@@ -98,7 +106,10 @@ def http_failure(log_msg: str, status: int, prefix: Optional[str] = None, *, det
         raise
     except Exception as exc:
         log.exception(log_msg)
-        raise HTTPException(status_code=status, detail=detail if detail is not None else f"{prefix}: {exc}")
+        raise HTTPException(
+            status_code=status,
+            detail=detail if detail is not None else f"{prefix}: {exc}",
+        )
 
 
 def spawn_profile_action(
@@ -119,9 +130,7 @@ def require(value: Optional[str], detail: str) -> str:
     return stripped
 
 
-REDACTED_CREDENTIAL_WRITE_DETAIL = (
-    "Refusing to save a redacted credential preview; re-enter the full secret to replace it."
-)
+REDACTED_CREDENTIAL_WRITE_DETAIL = "Refusing to save a redacted credential preview; re-enter the full secret to replace it."
 
 
 def redacted_credential_preview(value: Any) -> Optional[str]:
@@ -129,6 +138,7 @@ def redacted_credential_preview(value: Any) -> Optional[str]:
     if not value:
         return None
     from clawk_cli.config import redact_key
+
     return f"«redacted:{redact_key(str(value))}»"
 
 
@@ -167,29 +177,39 @@ CORRUPT_STORE_DETAIL = {
 DELETED_WAL_DETAIL = {
     "error": "state_db_deleted_wal",
     "message": "another Clawksis process still holds an old copy of the session database's write-ahead log — "
-               "quit every Clawksis process on this profile, run `clawk doctor` (it names the holders), "
-               "then start Clawksis again. Do not run `clawk doctor --fix` while they run.",
+    "quit every Clawksis process on this profile, run `clawk doctor` (it names the holders), "
+    "then start Clawksis again. Do not run `clawk doctor --fix` while they run.",
 }
 STATE_DB_REPLACED_DETAIL = {
     "error": "state_db_replaced",
     "message": "state.db was replaced while Clawksis was running — stop Clawksis, run `clawk doctor`, "
-               "then start it again. Do not run `clawk doctor --fix`, which would repair the wrong file in place.",
+    "then start it again. Do not run `clawk doctor --fix`, which would repair the wrong file in place.",
 }
 # Every other bucket a malformed image can classify as ("corrupt", "fts_index") is the corrupt payload.
-_STORE_STATUS_DETAIL_BY_CAUSE = {"deleted_wal": DELETED_WAL_DETAIL, "replaced": STATE_DB_REPLACED_DETAIL}
+_STORE_STATUS_DETAIL_BY_CAUSE = {
+    "deleted_wal": DELETED_WAL_DETAIL,
+    "replaced": STATE_DB_REPLACED_DETAIL,
+}
 
 
 def corrupt_store_status(db_path, exc) -> HTTPException:
     """The structured ``state_db_corrupt`` 503 for a malformed store, warning once per store per
     :data:`_CORRUPT_STORE_WARN_INTERVAL_S` (debug afterwards). Callers ``raise ... from exc``."""
     from clawk_state_errors import classify_persistence_error
+
     key, now = str(db_path), time.monotonic()
     last = _corrupt_store_warned_at.get(key)
-    detail = _STORE_STATUS_DETAIL_BY_CAUSE.get(classify_persistence_error(exc), CORRUPT_STORE_DETAIL)
+    detail = _STORE_STATUS_DETAIL_BY_CAUSE.get(
+        classify_persistence_error(exc), CORRUPT_STORE_DETAIL
+    )
     if last is None or now - last >= _CORRUPT_STORE_WARN_INTERVAL_S:
         _corrupt_store_warned_at[key] = now
-        log.warning("state.db at %s is unreadable (%s); dashboard reads return a status payload until it is "
-                    "repaired — run `clawk doctor`", db_path, exc)
+        log.warning(
+            "state.db at %s is unreadable (%s); dashboard reads return a status payload until it is "
+            "repaired — run `clawk doctor`",
+            db_path,
+            exc,
+        )
     else:
         log.debug("state.db at %s still has error: %s", db_path, exc)
     return HTTPException(status_code=503, detail={**detail, "path": key})
@@ -200,7 +220,11 @@ def corrupt_store_as_status(db_path):
     """Map a corrupt-image ``sqlite3.DatabaseError`` or ``StateDbReplacedError`` from a state.db read to a 503 status
     payload, warning once per store per :data:`_CORRUPT_STORE_WARN_INTERVAL_S`.
     Busy/locked and every other error propagate unchanged."""
-    from clawk_state_errors import StateDbReplacedError, classify_persistence_error, is_malformed_db_error
+    from clawk_state_errors import (
+        StateDbReplacedError,
+        classify_persistence_error,
+        is_malformed_db_error,
+    )
 
     try:
         yield

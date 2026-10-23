@@ -29,9 +29,10 @@ def test_defaults_when_config_missing_or_unset():
         DEFAULT_TURN_LIVENESS_POLL_S,
     )
     # Section present but keys absent.
-    assert resolve_turn_liveness_settings(
-        {"agent": {"turn_liveness": {}}}
-    ) == (DEFAULT_TURN_LIVENESS_TIMEOUT_S, DEFAULT_TURN_LIVENESS_POLL_S)
+    assert resolve_turn_liveness_settings({"agent": {"turn_liveness": {}}}) == (
+        DEFAULT_TURN_LIVENESS_TIMEOUT_S,
+        DEFAULT_TURN_LIVENESS_POLL_S,
+    )
 
 
 def test_precedence_explicit_values_win_over_defaults():
@@ -58,9 +59,12 @@ def test_timeout_zero_is_documented_opt_out():
     assert timeout is None
     assert poll == 15.0
     # Negative is the same documented "disabled" path.
-    assert resolve_turn_liveness_settings(
-        {"agent": {"turn_liveness": {"timeout_s": -1}}}
-    )[0] is None
+    assert (
+        resolve_turn_liveness_settings({"agent": {"turn_liveness": {"timeout_s": -1}}})[
+            0
+        ]
+        is None
+    )
 
 
 def test_typo_does_not_crash_and_falls_back_to_default(caplog):

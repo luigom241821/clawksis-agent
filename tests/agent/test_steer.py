@@ -5,6 +5,7 @@ interrupting the current tool call. The agent sees the note inline with
 tool output on its next iteration, preserving message-role alternation
 and prompt-cache integrity.
 """
+
 from __future__ import annotations
 
 import threading
@@ -66,13 +67,6 @@ def _bare_agent() -> AIAgent:
     return agent
 
 
-
-
-
-
-
-
-
 class TestSteerDrain:
     def test_drain_returns_and_clears(self):
         agent = _bare_agent()
@@ -92,7 +86,9 @@ class TestSteerDrain:
         assert agent.withdraw_steer("t4") is True
         assert agent._pending_steer == "first\ntwo"
 
-    def test_withdraw_after_a_drain_took_the_ticket_is_refused_even_if_its_text_is_buffered_again(self):
+    def test_withdraw_after_a_drain_took_the_ticket_is_refused_even_if_its_text_is_buffered_again(
+        self,
+    ):
         agent = _bare_agent()
         agent.steer("alpha", ticket="a")
         assert agent._drain_pending_steer() == "alpha"
@@ -103,6 +99,7 @@ class TestSteerDrain:
 
     def test_a_drained_steer_put_back_undelivered_keeps_its_ticket(self):
         from agent.agent_runtime_helpers import _requeue_pending_steer
+
         agent = _bare_agent()
         agent.steer("note")
         agent.steer("queued prompt", ticket="t")
@@ -128,7 +125,6 @@ class TestSteerDrain:
         agent.clear_interrupt(hard_cancel=True)
         assert agent._pending_steer is None
         assert agent.withdraw_steer("t") is True, "dropped unread: never delivered"
-
 
 
 class TestActiveTurnRedirect:
@@ -243,7 +239,6 @@ class TestActiveTurnRedirect:
 
         assert calls == ["interrupt"]
 
-
     def test_redirect_during_tool_execution_uses_safe_steer_boundary(self):
         agent = _bare_agent()
         agent._executing_tools = True
@@ -262,7 +257,10 @@ class TestActiveTurnRedirectCheckpoint:
         from agent.conversation_loop import _apply_active_turn_redirect
         from agent.repetition_guard import REPETITION_LOOP_INTERRUPTED
 
-        repeated = ("The same degenerate partial response keeps repeating without progress.\n" * 10)
+        repeated = (
+            "The same degenerate partial response keeps repeating without progress.\n"
+            * 10
+        )
         agent = _bare_agent()
         agent._current_streamed_assistant_text = repeated
         messages = [{"role": "user", "content": "start"}]
@@ -340,9 +338,7 @@ class TestActiveTurnRedirectCheckpoint:
                 if tail_role == "assistant":
                     messages.append({"role": "assistant", "content": "committed"})
                 else:
-                    messages.append(
-                        {"role": "assistant", "tool_calls": [{"id": "a"}]}
-                    )
+                    messages.append({"role": "assistant", "tool_calls": [{"id": "a"}]})
                     messages.append(
                         {"role": "tool", "content": "out", "tool_call_id": "a"}
                     )
@@ -354,9 +350,8 @@ class TestActiveTurnRedirectCheckpoint:
                         # Scaffold must never live on an assistant row at all
                         # — content OR api_content (API replay substitutes the
                         # sidecar back into content).
-                        blob = (
-                            str(msg.get("content") or "")
-                            + str(msg.get("api_content") or "")
+                        blob = str(msg.get("content") or "") + str(
+                            msg.get("api_content") or ""
                         )
                         for marker in scaffolding:
                             assert marker not in blob, (
@@ -378,7 +373,9 @@ class TestActiveTurnRedirectCheckpoint:
                 # ...and the model still receives the interrupted context,
                 # but only via the user correction's api_content sidecar.
                 replayed = messages[-1].get("api_content") or ""
-                assert "[This response was interrupted by a user correction.]" in replayed
+                assert (
+                    "[This response was interrupted by a user correction.]" in replayed
+                )
                 if streamed:
                     assert streamed in replayed
 
@@ -414,8 +411,6 @@ class TestActiveTurnRedirectCheckpoint:
             assert "Visible draft." in serialized
 
 
-
-
 class TestEmptyHiddenAssistantRehealRegression:
     """#88955: a no-visible-text redirect persisted an empty
     ``display_kind="hidden"`` assistant placeholder that the pre-call sanitizer
@@ -449,12 +444,9 @@ class TestEmptyHiddenAssistantRehealRegression:
         )
         # #81841: the interrupt scaffold must never reach assistant content or
         # api_content (API replay substitutes api_content back into content).
-        assert (
-            "[This response was interrupted by a user correction.]"
-            not in str(placeholder.get("content") or "")
-            + str(placeholder.get("api_content") or "")
-        )
-
+        assert "[This response was interrupted by a user correction.]" not in str(
+            placeholder.get("content") or ""
+        ) + str(placeholder.get("api_content") or "")
 
     def test_empty_non_final_sanitizer_still_repairs_unmarked_empty_assistant(self):
         """Control: a genuinely empty non-final assistant with no provider-replay
@@ -521,8 +513,6 @@ class TestSteerInjection:
         agent._apply_pending_steer_to_tool_results(messages, num_tool_msgs=1)
         assert messages[-1]["content"] == "output"  # unchanged
 
-
-
     def test_persisted_steer_row_is_never_merged_with_the_next_prompt(self):
         """A run that ends right after a steered batch leaves user(steer) as the persisted tail.
         The next real prompt makes two consecutive user rows; the alternation repair must leave
@@ -532,7 +522,9 @@ class TestSteerInjection:
 
         steer = steer_user_row("focus on error handling")
         before = dict(steer)
-        merged, repairs = _merge_consecutive_users([steer, {"role": "user", "content": "next question"}])
+        merged, repairs = _merge_consecutive_users(
+            [steer, {"role": "user", "content": "next question"}]
+        )
         assert steer == before
         assert repairs == 0
         assert [m["role"] for m in merged] == ["user", "user"]
@@ -549,10 +541,9 @@ class TestSteerInjection:
             {"role": "tool", "content": list(original_blocks), "tool_call_id": "1"}
         ]
         agent._apply_pending_steer_to_tool_results(messages, num_tool_msgs=1)
-        assert messages[0]["content"] == original_blocks       # untouched
+        assert messages[0]["content"] == original_blocks  # untouched
         assert messages[-1]["role"] == "user"
         assert "extra note" in messages[-1]["content"]
-
 
 
 class TestSteerThreadSafety:
@@ -684,7 +675,8 @@ class TestSteerSurvivesRedirectRebuild:
             payloads.append([dict(m) for m in api_kwargs["messages"]])
             if len(payloads) == 1:
                 tool_call = SimpleNamespace(
-                    id="call_1", type="function",
+                    id="call_1",
+                    type="function",
                     function=SimpleNamespace(name=_STEER_SURVIVAL_TOOL, arguments="{}"),
                 )
                 return _mock_response(
@@ -742,21 +734,25 @@ class TestPreApiCallSteerDrain:
         before = dict(tool_row)
         messages = [
             {"role": "user", "content": "do something"},
-            {"role": "assistant", "content": "ok", "tool_calls": [
-                {"id": "tc1", "function": {"name": "terminal", "arguments": "{}"}}
-            ]},
+            {
+                "role": "assistant",
+                "content": "ok",
+                "tool_calls": [
+                    {"id": "tc1", "function": {"name": "terminal", "arguments": "{}"}}
+                ],
+            },
             tool_row,
         ]
         agent.steer("focus on error handling")
-        _inject_steer_after_newest_tool_result(agent, messages, agent._drain_pending_steer())
+        _inject_steer_after_newest_tool_result(
+            agent, messages, agent._drain_pending_steer()
+        )
         assert tool_row == before
         assert messages[-2] is tool_row
         assert messages[-1]["role"] == "user"
         assert STEER_MARKER_OPEN in messages[-1]["content"]
         assert "focus on error handling" in messages[-1]["content"]
         assert agent._pending_steer is None
-
-
 
 
 class TestSteerMarkerContract:
@@ -768,10 +764,10 @@ class TestSteerMarkerContract:
 
         emitted = format_steer_marker("hi")
         assert STEER_MARKER_OPEN in emitted and STEER_MARKER_CLOSE in emitted
-        assert STEER_MARKER_OPEN in STEER_CHANNEL_NOTE and STEER_MARKER_CLOSE in STEER_CHANNEL_NOTE
-
-
-
+        assert (
+            STEER_MARKER_OPEN in STEER_CHANNEL_NOTE
+            and STEER_MARKER_CLOSE in STEER_CHANNEL_NOTE
+        )
 
 
 class TestSteerRowIsHumanInput:
@@ -794,7 +790,12 @@ class TestSteerRowIsHumanInput:
             db.create_session(session_id="s1", source="cli")
             db.append_message("s1", role="user", content="first question")
             db.append_message("s1", role="assistant", content="first answer")
-            db.append_message("s1", role="user", content=row["content"], display_kind=row["display_kind"])
+            db.append_message(
+                "s1",
+                role="user",
+                content=row["content"],
+                display_kind=row["display_kind"],
+            )
             recents = db.list_recent_user_messages("s1", limit=5)
             assert [r["preview"][:5] for r in recents] == [row["content"][:5], "first"]
         finally:
@@ -802,14 +803,16 @@ class TestSteerRowIsHumanInput:
 
 
 class TestSteerCommandRegistry:
-
     def test_steer_in_bypass_set(self):
         """When the agent is running, /steer MUST bypass the Level-1
         base-adapter queue so it reaches the gateway runner's /steer
         handler. Otherwise it would be queued as user text and only
         delivered at turn end — defeating the whole point.
         """
-        from clawk_cli.commands import ACTIVE_SESSION_BYPASS_COMMANDS, should_bypass_active_session
+        from clawk_cli.commands import (
+            ACTIVE_SESSION_BYPASS_COMMANDS,
+            should_bypass_active_session,
+        )
 
         assert "steer" in ACTIVE_SESSION_BYPASS_COMMANDS
         assert should_bypass_active_session("steer") is True
@@ -876,6 +879,7 @@ class TestLegacyHiddenPlaceholderWireSubstitution:
                 ]
             )
             return _real_repair(messages, *a, **k)
+
         # Legacy pre-fix row: no api_content sidecar.
         history = [
             {"role": "user", "content": "start"},

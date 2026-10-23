@@ -37,7 +37,16 @@ class _PlainProvider(TerminalEnvironmentProvider):
     def is_available(self):
         return True
 
-    def create_environment(self, *, cwd, timeout, task_id="default", image=None, container_config=None, **kwargs):
+    def create_environment(
+        self,
+        *,
+        cwd,
+        timeout,
+        task_id="default",
+        image=None,
+        container_config=None,
+        **kwargs,
+    ):
         return _SpaceEnv(cwd, home=f"/home/{task_id}")  # every sandbox has its own home
 
 
@@ -75,7 +84,9 @@ def _create(backend, task_id, cwd="~"):
 
 def test_plugin_default_cwd_replaces_root_and_absorbs_host_paths(monkeypatch):
     assert terminal_tool._resolve_config_cwd("spacebox", False) == ("/home/space", None)
-    monkeypatch.setenv("TERMINAL_CWD", "/Users/me/project")  # host-shaped: never valid in the sandbox
+    monkeypatch.setenv(
+        "TERMINAL_CWD", "/Users/me/project"
+    )  # host-shaped: never valid in the sandbox
     assert terminal_tool._resolve_config_cwd("spacebox", False) == ("/home/space", None)
     monkeypatch.delenv("TERMINAL_CWD")
     assert terminal_tool._resolve_config_cwd("plainbox", False) == ("/root", None)
@@ -86,30 +97,53 @@ def test_home_default_stays_per_sandbox_and_is_never_expanded_on_the_host():
     alice, bob = _create("homebox", "alice"), _create("homebox", "bob")
     # A second sandbox still gets "~" and resolves its OWN home, not the first one's.
     assert terminal_tool._resolve_config_cwd("homebox", False) == ("~", None)
-    assert (alice._clawk_sandbox_home, bob._clawk_sandbox_home) == ("/home/alice", "/home/bob")
+    assert (alice._clawk_sandbox_home, bob._clawk_sandbox_home) == (
+        "/home/alice",
+        "/home/bob",
+    )
 
 
-def test_a_cd_inside_the_sandbox_home_survives_while_host_workspaces_are_still_dropped(monkeypatch):
+def test_a_cd_inside_the_sandbox_home_survives_while_host_workspaces_are_still_dropped(
+    monkeypatch,
+):
     env = _create("homebox", "alice")
+
     def resolve():
         return terminal_tool._resolve_command_cwd(
-            workdir=None, default_cwd="~", session_key="alice", env_type="homebox", env=env)
+            workdir=None,
+            default_cwd="~",
+            session_key="alice",
+            env_type="homebox",
+            env=env,
+        )
 
-    monkeypatch.setattr(terminal_tool, "get_session_cwd", lambda _key: "/home/alice/project")
+    monkeypatch.setattr(
+        terminal_tool, "get_session_cwd", lambda _key: "/home/alice/project"
+    )
     assert resolve() == "/home/alice/project"
-    monkeypatch.setattr(terminal_tool, "get_session_cwd", lambda _key: "/home/mark/workspace")
+    monkeypatch.setattr(
+        terminal_tool, "get_session_cwd", lambda _key: "/home/mark/workspace"
+    )
     assert resolve() == "~"
 
 
 def test_file_tools_anchor_relative_paths_at_their_own_sandbox_home(monkeypatch):
     monkeypatch.setenv("TERMINAL_ENV", "homebox")
-    monkeypatch.setattr(file_tools, "_get_file_ops",
-                        lambda task_id="default": SimpleNamespace(env=_create("homebox", task_id)))
+    monkeypatch.setattr(
+        file_tools,
+        "_get_file_ops",
+        lambda task_id="default": SimpleNamespace(env=_create("homebox", task_id)),
+    )
     assert file_tools_paths._container_default_cwd("sess") == "/home/sess"
 
 
-@pytest.mark.parametrize(("backend", "expected"), [("spacebox", placement.TERMINAL), ("plainbox", placement.REFUSED)])
-def test_placement_follows_a_plugin_backend_only_when_it_declares_streams(monkeypatch, backend, expected):
+@pytest.mark.parametrize(
+    ("backend", "expected"),
+    [("spacebox", placement.TERMINAL), ("plainbox", placement.REFUSED)],
+)
+def test_placement_follows_a_plugin_backend_only_when_it_declares_streams(
+    monkeypatch, backend, expected
+):
     monkeypatch.setattr(placement, "_setting", lambda: "auto")
     monkeypatch.setattr(placement, "_terminal_backend", lambda: backend)
     monkeypatch.setattr(placement, "_plugin_host_isolated", lambda: False)
@@ -128,18 +162,39 @@ def test_placement_refuses_a_streaming_plugin_under_host_isolation(monkeypatch):
 
 def test_streams_spawn_through_the_plugin_environments_exec_prefix(monkeypatch):
     spawned: list[list[str]] = []
-    monkeypatch.setattr(subprocess, "Popen", lambda argv, **kw: spawned.append(argv) or object())
-    streams.open_stream(_SpaceEnv(), ["cua-driver", "mcp"], child_env={"DISPLAY": ":20"})
+    monkeypatch.setattr(
+        subprocess, "Popen", lambda argv, **kw: spawned.append(argv) or object()
+    )
+    streams.open_stream(
+        _SpaceEnv(), ["cua-driver", "mcp"], child_env={"DISPLAY": ":20"}
+    )
     assert spawned[0][:6] == ["spacectl", "exec", "box-1", "--", "bash", "-c"]
-    assert "export DISPLAY=:20;" in spawned[0][6] and "exec cua-driver mcp" in spawned[0][6]
+    assert (
+        "export DISPLAY=:20;" in spawned[0][6]
+        and "exec cua-driver mcp" in spawned[0][6]
+    )
 
 
-def test_a_declared_home_is_kept_when_terminal_cwd_starts_the_sandbox_elsewhere(monkeypatch):
-    env = _create("spacebox", "t1", cwd="/workspace")  # terminal.cwd picked another in-sandbox directory
+def test_a_declared_home_is_kept_when_terminal_cwd_starts_the_sandbox_elsewhere(
+    monkeypatch,
+):
+    env = _create(
+        "spacebox", "t1", cwd="/workspace"
+    )  # terminal.cwd picked another in-sandbox directory
     assert env._clawk_sandbox_home == "/home/space"
-    monkeypatch.setattr(terminal_tool, "get_session_cwd", lambda _key: "/home/space/project")
-    assert terminal_tool._resolve_command_cwd(
-        workdir=None, default_cwd="/workspace", session_key="t1", env_type="spacebox", env=env) == "/home/space/project"
+    monkeypatch.setattr(
+        terminal_tool, "get_session_cwd", lambda _key: "/home/space/project"
+    )
+    assert (
+        terminal_tool._resolve_command_cwd(
+            workdir=None,
+            default_cwd="/workspace",
+            session_key="t1",
+            env_type="spacebox",
+            env=env,
+        )
+        == "/home/space/project"
+    )
 
 
 def test_a_string_exec_prefix_is_refused_instead_of_split_into_characters():
@@ -160,7 +215,9 @@ def test_a_failed_sandbox_bring_up_is_not_retried_on_every_path_resolution(monke
         raise ConnectionError("sandbox unreachable")
 
     monkeypatch.setenv("TERMINAL_ENV", "homebox")
-    monkeypatch.setattr(terminal_tool_lifecycle, "get_active_env", lambda _task_id: None)
+    monkeypatch.setattr(
+        terminal_tool_lifecycle, "get_active_env", lambda _task_id: None
+    )
     monkeypatch.setattr(file_tools, "_get_file_ops", _unreachable)
     assert file_tools_paths._container_default_cwd("sess") is None
     assert file_tools_paths._container_default_cwd("sess") is None
@@ -174,13 +231,17 @@ def test_desktop_scratch_dir_works_for_an_environment_without_get_temp_dir():
     assert sandbox_host._remote_dir(_SpaceEnv(), "p1") == "/tmp/clawk-bot-desktop/p1"
 
 
-def test_missing_desktop_stack_hint_names_no_config_key_for_a_plugin_backend(monkeypatch):
+def test_missing_desktop_stack_hint_names_no_config_key_for_a_plugin_backend(
+    monkeypatch,
+):
     from tools.bot_desktop import runtime, sandbox_host
 
     monkeypatch.setattr(placement, "_setting", lambda: "auto")
     monkeypatch.setattr(placement, "_terminal_backend", lambda: "spacebox")
     monkeypatch.setattr(placement, "_plugin_host_isolated", lambda: False)
-    monkeypatch.setattr(placement, "terminal_environment", lambda *, create=True: _SpaceEnv())
+    monkeypatch.setattr(
+        placement, "terminal_environment", lambda *, create=True: _SpaceEnv()
+    )
     monkeypatch.setattr(sandbox_host, "missing_binaries", lambda env: ["Xvnc"])
     monkeypatch.setattr(sandbox_host, "published_env", lambda env, profile: {})
     blocker = runtime.status().blocker

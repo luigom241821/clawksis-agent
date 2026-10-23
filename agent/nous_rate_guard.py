@@ -17,7 +17,12 @@ from typing import Any, Mapping, Optional
 from utils import atomic_write_text
 from agent.retry_utils import parse_retry_after_seconds
 from agent.rate_limit_tracker import (
-    _BUCKET_TAGS, _fmt_seconds, _safe_float, _safe_int, has_rate_limit_headers, lower_headers,
+    _BUCKET_TAGS,
+    _fmt_seconds,
+    _safe_float,
+    _safe_int,
+    has_rate_limit_headers,
+    lower_headers,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,12 +43,15 @@ def _state_path(*, anonymous: bool = False) -> str:
     """Path to the Nous rate limit state file."""
     try:
         from clawk_constants import get_clawk_home
+
         base = get_clawk_home()
     except ImportError:
         base = os.path.join(os.path.expanduser("~"), ".clawksis")
     # Signing in must not inherit the anonymous allowance's cooldown (or clear it for
     # another anonymous session). Keep the existing named-account file unchanged.
-    return os.path.join(base, "rate_limits", "nous-anonymous.json" if anonymous else "nous.json")
+    return os.path.join(
+        base, "rate_limits", "nous-anonymous.json" if anonymous else "nous.json"
+    )
 
 
 def _parse_reset_seconds(headers: Optional[Mapping[str, str]]) -> Optional[float]:
@@ -58,7 +66,9 @@ def _parse_reset_seconds(headers: Optional[Mapping[str, str]]) -> Optional[float
 
 
 def record_nous_rate_limit(
-    *, headers: Optional[Mapping[str, str]] = None, error_context: Optional[dict[str, Any]] = None,
+    *,
+    headers: Optional[Mapping[str, str]] = None,
+    error_context: Optional[dict[str, Any]] = None,
     default_cooldown: float = 300.0,
     anonymous: bool = False,
 ) -> None:
@@ -74,7 +84,10 @@ def record_nous_rate_limit(
         ctx_reset = error_context.get("reset_at")
         if isinstance(ctx_reset, (int, float)) and ctx_reset > now:
             reset_at = float(ctx_reset)
-    if reset_at is None and (header_seconds := _parse_reset_seconds(headers)) is not None:
+    if (
+        reset_at is None
+        and (header_seconds := _parse_reset_seconds(headers)) is not None
+    ):
         reset_at = now + header_seconds
     if reset_at is None:
         reset_at = now + default_cooldown
@@ -82,7 +95,11 @@ def record_nous_rate_limit(
     state = {"reset_at": reset_at, "recorded_at": now, "reset_seconds": reset_at - now}
     try:
         atomic_write_text(_state_path(anonymous=anonymous), json.dumps(state))
-        logger.info("Nous rate limit recorded: resets in %.0fs (at %.0f)", reset_at - now, reset_at)
+        logger.info(
+            "Nous rate limit recorded: resets in %.0fs (at %.0f)",
+            reset_at - now,
+            reset_at,
+        )
     except Exception as exc:
         logger.debug("Failed to write Nous rate limit state: %s", exc)
 
@@ -124,7 +141,9 @@ def _is_exhausted(remaining: Optional[int], reset: Optional[float]) -> bool:
 
 
 def is_genuine_nous_rate_limit(
-    *, headers: Optional[Mapping[str, str]] = None, last_known_state: Optional[Any] = None,
+    *,
+    headers: Optional[Mapping[str, str]] = None,
+    last_known_state: Optional[Any] = None,
 ) -> bool:
     """Decide whether a 429 from Nous Portal is a real account rate limit.
 
@@ -136,7 +155,9 @@ def is_genuine_nous_rate_limit(
     """
     if _has_exhausted_bucket(_parse_buckets_from_headers(headers)):
         return True
-    return last_known_state is not None and _has_exhausted_bucket_in_object(last_known_state)
+    return last_known_state is not None and _has_exhausted_bucket_in_object(
+        last_known_state
+    )
 
 
 def is_long_welcome_rate_limit(error_context: Any) -> bool:
@@ -153,7 +174,9 @@ def is_long_welcome_rate_limit(error_context: Any) -> bool:
 
 
 def welcome_refusal_from_headers(
-    headers: Optional[Mapping[str, str]], *, body_wait: Optional[float] = None,
+    headers: Optional[Mapping[str, str]],
+    *,
+    body_wait: Optional[float] = None,
 ) -> dict[str, Any]:
     """A free-tier 429 that carried no structured ``reason``, read from its headers (else the wait
     its body named) into the ``parse_welcome_refusal`` shape. Long wait or an empty bucket =
@@ -161,13 +184,32 @@ def welcome_refusal_from_headers(
     breaker never trips on a guess."""
     buckets = _parse_buckets_from_headers(headers).values()
     # Only an empty bucket's reset is a wait; a healthy bucket's reset is just its window end.
-    exhausted_wait = max((reset for remaining, reset in buckets
-                          if remaining is not None and remaining <= 0 and (reset or 0) > 0), default=None)
-    wait = (exhausted_wait or parse_retry_after_seconds(lower_headers(headers).get("retry-after"))
-            or body_wait or 0.0)
-    empty = any(remaining is not None and remaining <= 0 for remaining, _reset in buckets)
-    reason = "rate_limited" if wait >= WELCOME_LONG_WAIT_SECONDS or empty else "at_capacity"
-    return {"reason": reason, "retry_after": max(0, int(wait)), "alternates": [], "upgrade_url": ""}
+    exhausted_wait = max(
+        (
+            reset
+            for remaining, reset in buckets
+            if remaining is not None and remaining <= 0 and (reset or 0) > 0
+        ),
+        default=None,
+    )
+    wait = (
+        exhausted_wait
+        or parse_retry_after_seconds(lower_headers(headers).get("retry-after"))
+        or body_wait
+        or 0.0
+    )
+    empty = any(
+        remaining is not None and remaining <= 0 for remaining, _reset in buckets
+    )
+    reason = (
+        "rate_limited" if wait >= WELCOME_LONG_WAIT_SECONDS or empty else "at_capacity"
+    )
+    return {
+        "reason": reason,
+        "retry_after": max(0, int(wait)),
+        "alternates": [],
+        "upgrade_url": "",
+    }
 
 
 def _parse_buckets_from_headers(
@@ -186,7 +228,9 @@ def _parse_buckets_from_headers(
     return result
 
 
-def _has_exhausted_bucket(buckets: Mapping[str, tuple[Optional[int], Optional[float]]]) -> bool:
+def _has_exhausted_bucket(
+    buckets: Mapping[str, tuple[Optional[int], Optional[float]]],
+) -> bool:
     return any(_is_exhausted(remaining, reset) for remaining, reset in buckets.values())
 
 

@@ -34,8 +34,6 @@ def test_load_env_preserves_concatenated_text_as_value_data():
         env_path.unlink(missing_ok=True)
 
 
-
-
 def test_env_loader_does_not_split_concatenated_text():
     """Verify sanitization preserves one assignment per physical line."""
     from clawk_cli.env_loader import _sanitize_env_file_if_needed

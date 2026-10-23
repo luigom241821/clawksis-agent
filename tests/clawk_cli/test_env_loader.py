@@ -72,23 +72,29 @@ def test_bom_first_key_is_seen_by_installer_and_scrub_alike(tmp_path, monkeypatc
         b"COMMENTED_KEY=value # trailing comment\n"
         b"EMPTY_KEY=\n"
     )
-    for key in ("FIRST_KEY", "EXPORTED_KEY", "COMMENTED_KEY", "EMPTY_KEY", "\ufeffFIRST_KEY"):
+    for key in (
+        "FIRST_KEY",
+        "EXPORTED_KEY",
+        "COMMENTED_KEY",
+        "EMPTY_KEY",
+        "\ufeffFIRST_KEY",
+    ):
         monkeypatch.delenv(key, raising=False)
 
     load_clawk_dotenv(clawk_home=home)
-    installed = {k for k in ("FIRST_KEY", "EXPORTED_KEY", "COMMENTED_KEY", "EMPTY_KEY") if k in os.environ}
+    installed = {
+        k
+        for k in ("FIRST_KEY", "EXPORTED_KEY", "COMMENTED_KEY", "EMPTY_KEY")
+        if k in os.environ
+    }
     scoped = load_env_file(env_file)
 
     assert _env_keys_defined_in_dotenv(env_file) == installed == set(scoped)
     assert "\ufeffFIRST_KEY" not in _env_keys_defined_in_dotenv(env_file)
-    assert scoped["EXPORTED_KEY"] == os.environ["EXPORTED_KEY"] == "quoted # not a comment"
+    assert (
+        scoped["EXPORTED_KEY"] == os.environ["EXPORTED_KEY"] == "quoted # not a comment"
+    )
     assert scoped["COMMENTED_KEY"] == os.environ["COMMENTED_KEY"] == "value"
-
-
-
-
-
-
 
 
 def test_utf8_bom_plus_invalid_utf8_preserves_first_key(tmp_path, monkeypatch):
@@ -102,9 +108,7 @@ def test_utf8_bom_plus_invalid_utf8_preserves_first_key(tmp_path, monkeypatch):
     home.mkdir()
     env_file = home / ".env"
     # BOM + valid first key + latin-1 é (0xE9) in a later value.
-    env_file.write_bytes(
-        b"\xef\xbb\xbfANTHROPIC_API_KEY=sk-test-123\nBAD=caf\xe9\n"
-    )
+    env_file.write_bytes(b"\xef\xbb\xbfANTHROPIC_API_KEY=sk-test-123\nBAD=caf\xe9\n")
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("BAD", raising=False)
@@ -141,6 +145,7 @@ def test_latin1_fallback_stream_honors_override(tmp_path, monkeypatch):
     assert os.getenv("OVERRIDE_PROBE") == "from-file"
     assert os.getenv("LATIN1_VALUE") == "café"
 
+
 def test_latin1_fallback_stream_preserves_interpolation(tmp_path, monkeypatch):
     """Stream/latin-1 path must still expand ${VAR} like the dotenv_path form."""
     home = tmp_path / "clawk"
@@ -159,6 +164,7 @@ def test_latin1_fallback_stream_preserves_interpolation(tmp_path, monkeypatch):
     assert os.getenv("FOO") == "bar"
     assert os.getenv("BAR") == "bar"
     assert os.getenv("LATIN1_VALUE") == "café"
+
 
 # ---------------------------------------------------------------------------
 # UTF-16 / UTF-32 .env sanitizer coverage
@@ -179,8 +185,6 @@ def _assert_clean_utf8_env_on_disk(env_file, *, first_key: str) -> None:
     assert "\ufffd" not in text
     assert text.startswith(f"{first_key}=") or f"\n{first_key}=" in text
     assert first_key.encode("ascii") in after
-
-
 
 
 def test_utf16_le_bom_preserves_non_ascii_values(tmp_path, monkeypatch):
@@ -235,8 +239,6 @@ def test_utf32_le_bom_leaves_file_untouched(tmp_path, caplog):
     assert any("UTF-32" in r.message for r in caplog.records)
 
 
-
-
 def test_utf32_warning_fires_once_per_path(tmp_path, caplog, monkeypatch):
     """Three sanitize calls on the same UTF-32 file → exactly one warning.
 
@@ -264,8 +266,6 @@ def test_utf32_warning_fires_once_per_path(tmp_path, caplog, monkeypatch):
     utf32_warnings = [r for r in caplog.records if "UTF-32" in r.message]
     assert len(utf32_warnings) == 1
     assert env_file.read_bytes() == raw
-
-
 
 
 def test_plain_utf8_env_regression(tmp_path, monkeypatch):
@@ -502,7 +502,8 @@ def test_config_yaml_terminal_backend_overrides_stale_env(tmp_path, monkeypatch)
     must not silently override the user's choice in config.yaml. config.yaml
     is the documented source of truth, so its value must win after load."""
     home = _seed_terminal_home(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         config_yaml="terminal:\n  backend: local\n",
         env_text="TERMINAL_ENV=docker\n",
     )
@@ -518,7 +519,8 @@ def test_config_yaml_terminal_backend_overrides_stale_shell(tmp_path, monkeypatc
     """config.yaml must also beat a stale TERMINAL_ENV exported in the shell
     (e.g. set in ~/.zshrc when the user was experimenting with docker)."""
     home = _seed_terminal_home(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         config_yaml="terminal:\n  backend: local\n",
     )
 
@@ -534,7 +536,8 @@ def test_no_terminal_section_leaves_env_value_alone(tmp_path, monkeypatch):
     user's active setting — the bridge must NOT clobber it with merged
     defaults."""
     home = _seed_terminal_home(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         config_yaml="display:\n  streaming: true\n",
         env_text="TERMINAL_ENV=docker\n",
     )
@@ -550,7 +553,8 @@ def test_config_yaml_terminal_omitted_key_does_not_clear_env(tmp_path, monkeypat
     """If config.yaml has a terminal block but no `backend`, the .env value
     must survive (only explicit config keys override env)."""
     home = _seed_terminal_home(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         config_yaml="terminal:\n  timeout: 600\n",
         env_text="TERMINAL_ENV=docker\n",
     )
@@ -602,7 +606,9 @@ def test_parent_injected_dashboard_session_token_survives_dotenv(tmp_path, monke
 
     load_clawk_dotenv(clawk_home=home)
     assert os.environ["CLAWK_DASHBOARD_SESSION_TOKEN"] == "link-token"
-    assert os.environ["CLAWK_DASHBOARD_PUBLIC_URL"] == "http://127.0.0.1:1"  # control: .env still wins
+    assert (
+        os.environ["CLAWK_DASHBOARD_PUBLIC_URL"] == "http://127.0.0.1:1"
+    )  # control: .env still wins
 
     # Reload with the same injection: the injected value still holds.
     load_clawk_dotenv(clawk_home=home)
@@ -615,10 +621,14 @@ def test_dotenv_published_dashboard_session_token_still_reloads(tmp_path, monkey
     home = tmp_path / "clawk"
     home.mkdir()
     monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
-    (home / ".env").write_text("CLAWK_DASHBOARD_SESSION_TOKEN=first\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "CLAWK_DASHBOARD_SESSION_TOKEN=first\n", encoding="utf-8"
+    )
     load_clawk_dotenv(clawk_home=home)
     assert os.environ["CLAWK_DASHBOARD_SESSION_TOKEN"] == "first"
 
-    (home / ".env").write_text("CLAWK_DASHBOARD_SESSION_TOKEN=second\n", encoding="utf-8")
+    (home / ".env").write_text(
+        "CLAWK_DASHBOARD_SESSION_TOKEN=second\n", encoding="utf-8"
+    )
     load_clawk_dotenv(clawk_home=home)
     assert os.environ["CLAWK_DASHBOARD_SESSION_TOKEN"] == "second"

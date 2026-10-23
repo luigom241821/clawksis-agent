@@ -21,7 +21,9 @@ def _config_with_slack_extra(extra=None):
 
 
 @pytest.mark.asyncio
-async def test_runner_drops_slack_ignored_channel_before_auth_hooks_and_sessions(monkeypatch):
+async def test_runner_drops_slack_ignored_channel_before_auth_hooks_and_sessions(
+    monkeypatch,
+):
     runner = object.__new__(GatewayRunner)
     runner.config = _config_with_slack_extra({"ignored_channels": "C_PRD"})
     runner._startup_restore_in_progress = False
@@ -31,9 +33,13 @@ async def test_runner_drops_slack_ignored_channel_before_auth_hooks_and_sessions
     runner.session_store = object()
     monkeypatch.setattr(
         "clawk_cli.plugins.invoke_hook",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("hook should not run")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("hook should not run")
+        ),
     )
-    runner._is_user_authorized = lambda source: (_ for _ in ()).throw(AssertionError("auth should not run"))
+    runner._is_user_authorized = lambda source: (_ for _ in ()).throw(
+        AssertionError("auth should not run")
+    )
 
     event = MessageEvent(
         text="<@U_BOT> review this PRD",

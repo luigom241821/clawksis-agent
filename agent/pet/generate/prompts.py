@@ -72,7 +72,9 @@ def style_hint(style: str | None) -> str:
     return _STYLE_HINTS.get((style or "auto").strip().lower(), "")
 
 
-_ASSUMED_STRIP_WIDTH = 1536  # landscape row canvas; used only to cite concrete pixel numbers
+_ASSUMED_STRIP_WIDTH = (
+    1536  # landscape row canvas; used only to cite concrete pixel numbers
+)
 
 
 def _spacing_spec(frame_count: int) -> tuple[int, int]:
@@ -99,7 +101,9 @@ BASE_VARIATIONS: tuple[str, ...] = (
 )
 
 
-def build_base_prompt(concept: str, *, style: str | None = "auto", variation: str = "") -> str:
+def build_base_prompt(
+    concept: str, *, style: str | None = "auto", variation: str = ""
+) -> str:
     """The base look: a single, clean, centered full-body mascot; *variation* differentiates drafts."""
     concept = (concept or "a distinctive mascot creature").strip()
     nudge = f" Make this design distinct: {variation}." if variation else ""
@@ -118,7 +122,9 @@ def build_base_prompt(concept: str, *, style: str | None = "auto", variation: st
     )
 
 
-def build_row_prompt(state: str, frame_count: int, concept: str, *, style: str | None = "auto") -> str:
+def build_row_prompt(
+    state: str, frame_count: int, concept: str, *, style: str | None = "auto"
+) -> str:
     """A row strip: *frame_count* poses of the SAME character, left→right, identity locked to the attached base image."""
     action = STATE_ACTIONS.get(state, "a simple idle pose")
     concept = (concept or "the mascot").strip()

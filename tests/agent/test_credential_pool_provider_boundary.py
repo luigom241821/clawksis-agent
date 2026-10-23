@@ -86,13 +86,12 @@ def test_runtime_pool_key_resolves_all_custom_runtime_identities():
                 "provider_key": "gemini-no-filter",
                 "base_url": endpoint,
             },
-        )
+        ),
     ]
     with patch("agent.credential_pool._iter_custom_providers", return_value=configured):
         assert resolve_runtime_pool_key("custom", endpoint) == "sibling-provider"
         assert (
-            resolve_runtime_pool_key("gemini-no-filter", endpoint)
-            == "gemini-no-filter"
+            resolve_runtime_pool_key("gemini-no-filter", endpoint) == "gemini-no-filter"
         )
         assert (
             resolve_runtime_pool_key("custom:gemini-no-filter", endpoint)
@@ -126,8 +125,7 @@ def test_runtime_pool_key_resolves_modern_provider_in_mixed_config():
 
     with patch("agent.credential_pool._load_config_safe", return_value=config):
         assert (
-            resolve_runtime_pool_key("gemini-no-filter", endpoint)
-            == "gemini-no-filter"
+            resolve_runtime_pool_key("gemini-no-filter", endpoint) == "gemini-no-filter"
         )
         assert (
             resolve_runtime_pool_key("custom:gemini-no-filter", endpoint)

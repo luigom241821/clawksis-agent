@@ -79,9 +79,7 @@ class TestWatermarkTailCountInterplay:
 
         # Carried-forward tail originals: rewind flags (hidden from recall).
         for content in ("seen-2", "seen-3"):
-            originals = [
-                r for r in by_content[content] if r["active"] == 0
-            ]
+            originals = [r for r in by_content[content] if r["active"] == 0]
             assert originals, content
             assert all(r["compacted"] == 0 for r in originals), (
                 f"{content} original stamped compacted=1 — recall duplicate"
@@ -94,9 +92,7 @@ class TestWatermarkTailCountInterplay:
             (row,) = by_content[content]
             assert (row["active"], row["compacted"]) == (0, 1)
 
-    def test_concurrent_tail_original_takes_rewind_flags(
-        self, db: SessionDB
-    ) -> None:
+    def test_concurrent_tail_original_takes_rewind_flags(self, db: SessionDB) -> None:
         """The watermark clone's original is a superseded byte-identical
         duplicate — it must not satisfy recall next to its live clone."""
         sid = "s-wm-clone"
@@ -125,9 +121,7 @@ class TestWatermarkTailCountInterplay:
 
         # Recall filter surfaces exactly ONE copy.
         hits = [
-            r
-            for r in db.search_messages("zqx-token")
-            if r.get("session_id") == sid
+            r for r in db.search_messages("zqx-token") if r.get("session_id") == sid
         ]
         assert len(hits) == 1
 

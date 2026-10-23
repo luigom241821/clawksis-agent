@@ -39,7 +39,9 @@ def test_gateway_runner_skips_wiring_without_msgraph_adapter(monkeypatch):
     assert called is False
 
 
-def test_build_pipeline_runtime_skips_sender_when_adapter_layer_is_unavailable(monkeypatch):
+def test_build_pipeline_runtime_skips_sender_when_adapter_layer_is_unavailable(
+    monkeypatch,
+):
     gateway = SimpleNamespace(
         config=SimpleNamespace(
             platforms={
@@ -76,5 +78,3 @@ def test_build_pipeline_runtime_skips_sender_when_adapter_layer_is_unavailable(m
     runtime = build_pipeline_runtime(gateway)
 
     assert runtime.teams_sender is None
-
-

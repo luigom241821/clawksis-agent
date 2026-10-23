@@ -17,19 +17,21 @@ class TestInterpretExitCode:
 
     # ---- grep / rg family: exit 1 = no matches ----
 
-    @pytest.mark.parametrize("cmd", [
-        "grep 'pattern' file.txt",
-        "egrep 'pattern' file.txt",
-        "fgrep 'pattern' file.txt",
-        "rg 'foo' .",
-        "ag 'foo' .",
-        "ack 'foo' .",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "grep 'pattern' file.txt",
+            "egrep 'pattern' file.txt",
+            "fgrep 'pattern' file.txt",
+            "rg 'foo' .",
+            "ag 'foo' .",
+            "ack 'foo' .",
+        ],
+    )
     def test_grep_family_no_matches(self, cmd):
         result = _interpret_exit_code(cmd, 1)
         assert result is not None
         assert "no matches" in result.lower()
-
 
     # ---- diff: exit 1 = files differ ----
 
@@ -38,8 +40,6 @@ class TestInterpretExitCode:
         assert result is not None
         assert "differ" in result.lower()
 
-
-
     # ---- test / [: exit 1 = condition false ----
 
     def test_test_condition_false(self):
@@ -47,30 +47,21 @@ class TestInterpretExitCode:
         assert result is not None
         assert "false" in result.lower()
 
-
     # ---- find: exit 1 = partial success ----
-
 
     # ---- curl: various informational codes ----
 
-
     # ---- git: exit 1 is context-dependent ----
-
 
     # ---- pipeline / chain handling ----
 
-
     # ---- full paths ----
-
 
     # ---- env var prefix ----
 
-
     # ---- unknown commands return None ----
 
-
     # ---- edge cases ----
-
 
     def test_only_env_vars(self):
         """Command with only env var assignments, no actual command."""

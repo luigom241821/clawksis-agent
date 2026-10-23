@@ -43,8 +43,6 @@ def test_notify_helper_calls_provider_on_jobs_changed(monkeypatch):
     assert calls == [1]
 
 
-
-
 def test_create_registers_first_trigger_with_active_provider(
     temp_home, monkeypatch, make_cron_provider
 ):
@@ -124,7 +122,9 @@ def test_tool_create_reports_partial_registration_failure(
     from tools.cronjob_tools import cronjob
     import json
 
-    out = json.loads(cronjob(action="create", prompt="echo hi", schedule="every 5m", name="w"))
+    out = json.loads(
+        cronjob(action="create", prompt="echo hi", schedule="every 5m", name="w")
+    )
     assert out["success"] is False
     assert out["job_saved"] is True
     assert out["scheduler_registered"] is False

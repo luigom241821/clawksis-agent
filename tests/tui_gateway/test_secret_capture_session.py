@@ -91,7 +91,10 @@ def test_secret_prompt_goes_to_active_turn_not_last_wired_session(monkeypatch):
     try:
         assert get_session_env("CLAWK_UI_SESSION_ID") == "session-A"
         frames, stored, result = _capture(
-            server, server_requests, skills_tool, monkeypatch,
+            server,
+            server_requests,
+            skills_tool,
+            monkeypatch,
             values={"session-A": "owner-secret", "session-B": "closure-secret"},
         )
     finally:
@@ -104,7 +107,11 @@ def test_secret_prompt_goes_to_active_turn_not_last_wired_session(monkeypatch):
     assert [frame["method"] for frame in frames] == ["secret"]
     assert frames[0]["params"]["session_id"] == "session-A"
     assert stored == [("DEMO_TOKEN", "owner-secret")]
-    assert result == {"missing_names": [], "setup_skipped": False, "gateway_setup_hint": None}
+    assert result == {
+        "missing_names": [],
+        "setup_skipped": False,
+        "gateway_setup_hint": None,
+    }
     assert server_requests.open_requests("session-A") == []
     assert server_requests.open_requests("session-B") == []
 
@@ -120,7 +127,10 @@ def test_secret_prompt_without_bound_owner_is_skipped_not_guessed(monkeypatch):
     try:
         assert get_session_env("CLAWK_UI_SESSION_ID") == ""
         frames, stored, result = _capture(
-            server, server_requests, skills_tool, monkeypatch,
+            server,
+            server_requests,
+            skills_tool,
+            monkeypatch,
             values={"only-session": "guessed-secret"},
         )
     finally:
@@ -129,7 +139,11 @@ def test_secret_prompt_without_bound_owner_is_skipped_not_guessed(monkeypatch):
 
     assert frames == []
     assert stored == []
-    assert result == {"missing_names": ["DEMO_TOKEN"], "setup_skipped": True, "gateway_setup_hint": None}
+    assert result == {
+        "missing_names": ["DEMO_TOKEN"],
+        "setup_skipped": True,
+        "gateway_setup_hint": None,
+    }
 
 
 _SKILL = """---
@@ -163,7 +177,9 @@ def _saved_tokens(home):
     return [line for line in lines if line.startswith("DEMO_TOKEN=")]
 
 
-def test_background_prompt_secret_reaches_its_own_session_and_profile(two_profiles, monkeypatch):
+def test_background_prompt_secret_reaches_its_own_session_and_profile(
+    two_profiles, monkeypatch
+):
     """prompt.background for A after B wired last: A is asked, and A's answer lands in A/.env.
 
     The real RPC, worker thread, profile scope, skill_view readiness path, request settlement and
@@ -184,18 +200,28 @@ def test_background_prompt_secret_reaches_its_own_session_and_profile(two_profil
     monkeypatch.setattr("run_agent.AIAgent", ModelBoundary)
     monkeypatch.setattr(server, "_background_agent_kwargs", lambda _agent, _task_id: {})
     sessions = {
-        sid: {"agent": object(), "session_key": f"key-{sid}", "profile_home": str(home), "cwd": str(home)}
+        sid: {
+            "agent": object(),
+            "session_key": f"key-{sid}",
+            "profile_home": str(home),
+            "cwd": str(home),
+        }
         for sid, home in (("session-A", home_a), ("session-B", home_b))
     }
     frames, completed = _client(
-        server, server_requests, monkeypatch, {"session-A": "a-secret", "session-B": "b-secret"})
+        server,
+        server_requests,
+        monkeypatch,
+        {"session-A": "a-secret", "session-B": "b-secret"},
+    )
     with server._sessions_lock:
         server._sessions.update(sessions)
     try:
         server._wire_callbacks("session-A")
         server._wire_callbacks("session-B")  # B owns the process-global callback now
         reply = server._methods["prompt.background"](
-            "rid", {"session_id": "session-A", "text": "load secret-skill"})
+            "rid", {"session_id": "session-A", "text": "load secret-skill"}
+        )
         assert "error" not in reply, reply
         assert completed.wait(30), "background worker never completed"
     finally:
@@ -205,12 +231,20 @@ def test_background_prompt_secret_reaches_its_own_session_and_profile(two_profil
         server_requests.reset_for_tests()
 
     asks = [frame["params"] for frame in frames if frame.get("method") == "secret"]
-    assert [(ask["session_id"], ask["env_var"]) for ask in asks] == [("session-A", "DEMO_TOKEN")]
+    assert [(ask["session_id"], ask["env_var"]) for ask in asks] == [
+        ("session-A", "DEMO_TOKEN")
+    ]
     assert _saved_tokens(home_a) == ["DEMO_TOKEN=a-secret"]
     assert _saved_tokens(home_b) == []
     assert _saved_tokens(launch) == []
-    done = [frame["params"] for frame in frames if (frame.get("params") or {}).get("type") == "background.complete"]
-    assert [(event["session_id"], event["payload"]["text"]) for event in done] == [("session-A", "available")]
+    done = [
+        frame["params"]
+        for frame in frames
+        if (frame.get("params") or {}).get("type") == "background.complete"
+    ]
+    assert [(event["session_id"], event["payload"]["text"]) for event in done] == [
+        ("session-A", "available")
+    ]
 
 
 def test_closed_runtime_secret_request_is_refused(two_profiles, monkeypatch):
@@ -230,10 +264,16 @@ def test_closed_runtime_secret_request_is_refused(two_profiles, monkeypatch):
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
 
     ask_gate = threading.Event()  # main → worker: resume the ask
-    ask_reached = threading.Event()  # worker → main: paused right before credential capture
+    ask_reached = (
+        threading.Event()
+    )  # worker → main: paused right before credential capture
     agent_a = object()
     session_a = {
-        "agent": agent_a, "session_key": "key-session-A", "profile_home": str(home_a), "cwd": str(home_a)}
+        "agent": agent_a,
+        "session_key": "key-session-A",
+        "profile_home": str(home_a),
+        "cwd": str(home_a),
+    }
 
     class ModelBoundary:
         def __init__(self, **_kw):
@@ -247,18 +287,23 @@ def test_closed_runtime_secret_request_is_refused(two_profiles, monkeypatch):
 
     monkeypatch.setattr("run_agent.AIAgent", ModelBoundary)
     monkeypatch.setattr(server, "_background_agent_kwargs", lambda _agent, _task_id: {})
-    frames, completed = _client(server, server_requests, monkeypatch, {"session-A": "a-secret"})
+    frames, completed = _client(
+        server, server_requests, monkeypatch, {"session-A": "a-secret"}
+    )
     with server._sessions_lock:
         server._sessions["session-A"] = session_a
     try:
         server._wire_callbacks("session-B")  # closure sid must not be borrowed either
         reply = server._methods["prompt.background"](
-            "rid", {"session_id": "session-A", "text": "load secret-skill"})
+            "rid", {"session_id": "session-A", "text": "load secret-skill"}
+        )
         assert "error" not in reply, reply
         assert ask_reached.wait(30), "background worker never reached the ask"
 
         # The real close path: the close handler pops the session and tears it down.
-        assert "error" not in server._methods["session.close"]("rid2", {"session_id": "session-A"})
+        assert "error" not in server._methods["session.close"](
+            "rid2", {"session_id": "session-A"}
+        )
         with server._sessions_lock:
             assert "session-A" not in server._sessions
         ask_gate.set()  # resume the worker: its secret ask arrives AFTER the close
@@ -274,5 +319,11 @@ def test_closed_runtime_secret_request_is_refused(two_profiles, monkeypatch):
     assert _saved_tokens(home_a) == []
     assert _saved_tokens(home_b) == []
     assert _saved_tokens(launch) == []
-    done = [frame["params"] for frame in frames if (frame.get("params") or {}).get("type") == "background.complete"]
-    assert [(event["session_id"], event["payload"]["text"]) for event in done] == [("session-A", "setup_needed")]
+    done = [
+        frame["params"]
+        for frame in frames
+        if (frame.get("params") or {}).get("type") == "background.complete"
+    ]
+    assert [(event["session_id"], event["payload"]["text"]) for event in done] == [
+        ("session-A", "setup_needed")
+    ]

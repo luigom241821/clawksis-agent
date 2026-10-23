@@ -38,7 +38,6 @@ class TestAuthHeaders:
         monkeypatch.delenv("CAMOFOX_API_KEY", raising=False)
         assert _auth_headers() == {}
 
-
     def test_empty_when_key_blank(self, monkeypatch):
         monkeypatch.setenv("CAMOFOX_API_KEY", "   ")
         assert _auth_headers() == {}
@@ -48,7 +47,9 @@ class TestAuthHeaders:
 
         monkeypatch.setenv("CAMOFOX_API_KEY", "default-profile-key")
         secret_scope.set_multiplex_active(True)
-        token = secret_scope.set_secret_scope({"CAMOFOX_API_KEY": "secondary-profile-key"})
+        token = secret_scope.set_secret_scope(
+            {"CAMOFOX_API_KEY": "secondary-profile-key"}
+        )
         try:
             assert _auth_headers() == {"Authorization": "Bearer secondary-profile-key"}
         finally:
@@ -81,9 +82,7 @@ class TestAuthHeaders:
         )
         try:
             assert get_camofox_url() == "https://secondary.example"
-            assert _auth_headers() == {
-                "Authorization": "Bearer secondary-profile-key"
-            }
+            assert _auth_headers() == {"Authorization": "Bearer secondary-profile-key"}
         finally:
             secret_scope.reset_secret_scope(token)
             secret_scope.set_multiplex_active(False)
@@ -103,7 +102,6 @@ class TestAuthHeadersSent:
         camofox_navigate("https://example.com", task_id="auth_test_1")
         _, kwargs = mock_post.call_args
         assert kwargs["headers"] == {"Authorization": "Bearer my-api-key"}
-
 
     @patch("tools.browser_camofox.requests.post")
     @patch("tools.browser_camofox.requests.delete")

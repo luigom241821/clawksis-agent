@@ -38,7 +38,12 @@ def b64url(obj: dict[str, Any]) -> str:
 
 def make_jwt(tag: str, *, ttl_s: int = 3600, scope: str = NOUS_INVOKE_SCOPE) -> str:
     """Unsigned JWT-shaped bearer: the client only decodes claims (``scope``/``exp``)."""
-    claims = {"sub": "oauth-e2e-user", "scope": scope, "exp": int(time.time()) + ttl_s, "tag": tag}
+    claims = {
+        "sub": "oauth-e2e-user",
+        "scope": scope,
+        "exp": int(time.time()) + ttl_s,
+        "tag": tag,
+    }
     return ".".join([b64url({"alg": "none", "typ": "JWT"}), b64url(claims), "sig"])
 
 
@@ -54,15 +59,25 @@ class Req:
     @property
     def bearer(self) -> str:
         auth = self.headers.get("authorization", "")
-        return auth[7:] if auth.lower().startswith("bearer ") else self.headers.get("x-api-key", "")
+        return (
+            auth[7:]
+            if auth.lower().startswith("bearer ")
+            else self.headers.get("x-api-key", "")
+        )
 
 
 class OAuthFake:
     """Threaded loopback vendor. Use as a context manager."""
 
-    def __init__(self, *, reply: str = "OAUTH-TURN-COMPLETE", device_interval: int = 2,
-                 poll_script: list[str] | None = None, valid_refresh: set[str] | None = None,
-                 revoked: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        reply: str = "OAUTH-TURN-COMPLETE",
+        device_interval: int = 2,
+        poll_script: list[str] | None = None,
+        valid_refresh: set[str] | None = None,
+        revoked: set[str] | None = None,
+    ) -> None:
         self.reply = reply
         self.device_interval = device_interval
         self.poll_script = list(poll_script or [])
@@ -77,7 +92,9 @@ class OAuthFake:
         server = ThreadingHTTPServer(("127.0.0.1", 0), _handler_for(self))
         server.daemon_threads = True
         self._server = server
-        threading.Thread(target=server.serve_forever, name="oauth-fake", daemon=True).start()
+        threading.Thread(
+            target=server.serve_forever, name="oauth-fake", daemon=True
+        ).start()
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -92,16 +109,28 @@ class OAuthFake:
 
     # --- views -----------------------------------------------------------------------------
     def device_polls(self) -> list[Req]:
-        return [r for r in self.requests
-                if r.path == "/api/oauth/token" and r.form.get("grant_type", "").endswith("device_code")]
+        return [
+            r
+            for r in self.requests
+            if r.path == "/api/oauth/token"
+            and r.form.get("grant_type", "").endswith("device_code")
+        ]
 
     def refreshes(self) -> list[Req]:
-        return [r for r in self.requests if r.path in ("/api/oauth/token", "/oauth/token")
-                and r.form.get("grant_type") == "refresh_token"]
+        return [
+            r
+            for r in self.requests
+            if r.path in ("/api/oauth/token", "/oauth/token")
+            and r.form.get("grant_type") == "refresh_token"
+        ]
 
     def inference(self) -> list[Req]:
-        return [r for r in self.requests
-                if r.method == "POST" and r.path.split("?")[0].endswith(("/chat/completions", "/messages"))]
+        return [
+            r
+            for r in self.requests
+            if r.method == "POST"
+            and r.path.split("?")[0].endswith(("/chat/completions", "/messages"))
+        ]
 
     # --- token issuance --------------------------------------------------------------------
     def _issue(self, kind: str) -> dict[str, Any]:
@@ -109,8 +138,13 @@ class OAuthFake:
             n = len(self.issued) + 1
             rt = f"rt-{kind}-{n}"
             self.valid_refresh.add(rt)
-            tok = {"access_token": make_jwt(f"{kind}-{n}"), "refresh_token": rt, "token_type": "Bearer",
-                   "expires_in": 3600, "scope": NOUS_INVOKE_SCOPE}
+            tok = {
+                "access_token": make_jwt(f"{kind}-{n}"),
+                "refresh_token": rt,
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "scope": NOUS_INVOKE_SCOPE,
+            }
             self.issued.append(tok)
             return tok
 
@@ -155,16 +189,27 @@ def _handler_for(fake: OAuthFake) -> type[BaseHTTPRequestHandler]:
             with fake._lock:
                 fake.requests.append(Req("GET", self.path, headers, {}, None))
             if self.path.split("?")[0].rstrip("/").endswith("/models"):
-                self._json(200, {"object": "list", "data": [{"id": "oauth-e2e/model", "object": "model"}]})
+                self._json(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [{"id": "oauth-e2e/model", "object": "model"}],
+                    },
+                )
                 return
             self._json(404, {"error": "not_found"})
 
         def do_POST(self) -> None:
-            raw = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode("utf-8", "replace")
+            raw = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode(
+                "utf-8", "replace"
+            )
             headers = {k.lower(): v for k, v in self.headers.items()}
             ctype = headers.get("content-type", "")
-            form = ({k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
-                    if "x-www-form-urlencoded" in ctype else {})
+            form = (
+                {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+                if "x-www-form-urlencoded" in ctype
+                else {}
+            )
             try:
                 body = json.loads(raw) if raw.startswith(("{", "[")) else None
             except json.JSONDecodeError:
@@ -174,7 +219,8 @@ def _handler_for(fake: OAuthFake) -> type[BaseHTTPRequestHandler]:
                 fake.requests.append(req)
             path = self.path.split("?")[0].rstrip("/")
             route = _ROUTES.get(path) or next(
-                (fn for suffix, fn in _SUFFIX_ROUTES if path.endswith(suffix)), None)
+                (fn for suffix, fn in _SUFFIX_ROUTES if path.endswith(suffix)), None
+            )
             if route is None:
                 self._json(404, {"error": {"message": f"unsupported path {self.path}"}})
                 return
@@ -187,10 +233,17 @@ def _handler_for(fake: OAuthFake) -> type[BaseHTTPRequestHandler]:
 
 
 def _device_code(h: Any, fake: OAuthFake, _req: Req) -> None:
-    h._json(200, {"device_code": "dc-oauth-e2e", "user_code": "OAUT-HE2E",
-                  "verification_uri": f"{fake.origin}/device",
-                  "verification_uri_complete": f"{fake.origin}/device?code=OAUT-HE2E",
-                  "expires_in": 120, "interval": fake.device_interval})
+    h._json(
+        200,
+        {
+            "device_code": "dc-oauth-e2e",
+            "user_code": "OAUT-HE2E",
+            "verification_uri": f"{fake.origin}/device",
+            "verification_uri_complete": f"{fake.origin}/device?code=OAUT-HE2E",
+            "expires_in": 120,
+            "interval": fake.device_interval,
+        },
+    )
 
 
 def _nous_token(h: Any, fake: OAuthFake, req: Req) -> None:
@@ -205,7 +258,13 @@ def _nous_token(h: Any, fake: OAuthFake, req: Req) -> None:
         return
     if grant == "refresh_token":
         if not fake._redeem(req.headers.get("x-nous-refresh-token", "")):
-            h._json(400, {"error": "invalid_grant", "error_description": "refresh token already used or unknown"})
+            h._json(
+                400,
+                {
+                    "error": "invalid_grant",
+                    "error_description": "refresh token already used or unknown",
+                },
+            )
             return
         h._json(200, fake._issue("nous-rot"))
         return
@@ -213,19 +272,37 @@ def _nous_token(h: Any, fake: OAuthFake, req: Req) -> None:
 
 
 def _minimax_token(h: Any, fake: OAuthFake, req: Req) -> None:
-    if req.form.get("grant_type") != "refresh_token" or not fake._redeem(req.form.get("refresh_token", "")):
+    if req.form.get("grant_type") != "refresh_token" or not fake._redeem(
+        req.form.get("refresh_token", "")
+    ):
         h._json(400, {"status": "error", "error": "invalid_grant"})
         return
     tok = fake._issue("mm-rot")
-    h._json(200, {"status": "success", "access_token": tok["access_token"],
-                  "refresh_token": tok["refresh_token"], "expired_in": 3600, "token_type": "Bearer"})
+    h._json(
+        200,
+        {
+            "status": "success",
+            "access_token": tok["access_token"],
+            "refresh_token": tok["refresh_token"],
+            "expired_in": 3600,
+            "token_type": "Bearer",
+        },
+    )
 
 
 def _reject_revoked(h: Any, fake: OAuthFake, req: Req) -> bool:
     if req.bearer and req.bearer not in fake.revoked:
         return False
-    h._json(401, {"error": {"message": "invalid or revoked access token", "type": "authentication_error",
-                            "code": "invalid_api_key"}})
+    h._json(
+        401,
+        {
+            "error": {
+                "message": "invalid or revoked access token",
+                "type": "authentication_error",
+                "code": "invalid_api_key",
+            }
+        },
+    )
     return True
 
 
@@ -234,40 +311,122 @@ def _chat(h: Any, fake: OAuthFake, req: Req) -> None:
         return
     body = req.body or {}
     usage = {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
-    base = {"id": "chatcmpl-oauth", "created": int(time.time()), "model": body.get("model") or "m"}
+    base = {
+        "id": "chatcmpl-oauth",
+        "created": int(time.time()),
+        "model": body.get("model") or "m",
+    }
     if not body.get("stream"):
-        h._json(200, {**base, "object": "chat.completion", "usage": usage, "choices": [
-            {"index": 0, "message": {"role": "assistant", "content": fake.reply}, "finish_reason": "stop"}]})
+        h._json(
+            200,
+            {
+                **base,
+                "object": "chat.completion",
+                "usage": usage,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": fake.reply},
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
         return
     chunk = {**base, "object": "chat.completion.chunk"}
-    h._sse([(None, {**chunk, "choices": [{"index": 0, "delta": {"role": "assistant", "content": fake.reply},
-                                          "finish_reason": None}]}),
-            (None, {**chunk, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}], "usage": usage})],
-           done=True)
+    h._sse(
+        [
+            (
+                None,
+                {
+                    **chunk,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": fake.reply},
+                            "finish_reason": None,
+                        }
+                    ],
+                },
+            ),
+            (
+                None,
+                {
+                    **chunk,
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                    "usage": usage,
+                },
+            ),
+        ],
+        done=True,
+    )
 
 
 def _messages(h: Any, fake: OAuthFake, req: Req) -> None:
     if _reject_revoked(h, fake, req):
         return
     body = req.body or {}
-    msg = {"id": "msg_oauth", "type": "message", "role": "assistant", "model": body.get("model") or "m",
-           "stop_sequence": None}
+    msg = {
+        "id": "msg_oauth",
+        "type": "message",
+        "role": "assistant",
+        "model": body.get("model") or "m",
+        "stop_sequence": None,
+    }
     if not body.get("stream"):
-        h._json(200, {**msg, "content": [{"type": "text", "text": fake.reply}], "stop_reason": "end_turn",
-                      "usage": {"input_tokens": 10, "output_tokens": 2}})
+        h._json(
+            200,
+            {
+                **msg,
+                "content": [{"type": "text", "text": fake.reply}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 10, "output_tokens": 2},
+            },
+        )
         return
-    h._sse([
-        ("message_start", {"type": "message_start", "message": {
-            **msg, "content": [], "stop_reason": None, "usage": {"input_tokens": 10, "output_tokens": 1}}}),
-        ("content_block_start", {"type": "content_block_start", "index": 0,
-                                 "content_block": {"type": "text", "text": ""}}),
-        ("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                 "delta": {"type": "text_delta", "text": fake.reply}}),
-        ("content_block_stop", {"type": "content_block_stop", "index": 0}),
-        ("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence": None},
-                           "usage": {"output_tokens": 2}}),
-        ("message_stop", {"type": "message_stop"}),
-    ], done=False)
+    h._sse(
+        [
+            (
+                "message_start",
+                {
+                    "type": "message_start",
+                    "message": {
+                        **msg,
+                        "content": [],
+                        "stop_reason": None,
+                        "usage": {"input_tokens": 10, "output_tokens": 1},
+                    },
+                },
+            ),
+            (
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            ),
+            (
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": fake.reply},
+                },
+            ),
+            ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+            (
+                "message_delta",
+                {
+                    "type": "message_delta",
+                    "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                    "usage": {"output_tokens": 2},
+                },
+            ),
+            ("message_stop", {"type": "message_stop"}),
+        ],
+        done=False,
+    )
 
 
 _ROUTES = {

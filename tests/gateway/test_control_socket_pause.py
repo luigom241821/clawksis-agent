@@ -35,8 +35,12 @@ def test_pause_verb_dispatches_and_returns_ack(tmp_path):
 
     def handler():
         calls.append(1)
-        return {"pausing": True, "already_stopping": False, "pid": 111,
-                "drain_timeout": 30.0}
+        return {
+            "pausing": True,
+            "already_stopping": False,
+            "pid": 111,
+            "drain_timeout": 30.0,
+        }
 
     server = _make_server(tmp_path, handler)
     raw = json.dumps({"verb": "pause-for-update", "id": 7}).encode()
@@ -65,8 +69,12 @@ def test_pause_client_roundtrip_over_real_socket(tmp_path):
 
         def handler():
             acks.append(1)
-            return {"pausing": True, "already_stopping": False,
-                    "pid": 4242, "drain_timeout": 12.5}
+            return {
+                "pausing": True,
+                "already_stopping": False,
+                "pid": 4242,
+                "drain_timeout": 12.5,
+            }
 
         server = _make_server(tmp_path, handler)
         assert await server.start()

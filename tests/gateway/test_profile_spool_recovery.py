@@ -17,8 +17,15 @@ import agent.secret_scope as ss
 from gateway.config import GatewayConfig
 from gateway.platforms.base import Platform, SessionSource
 from gateway.session import SessionEntry, SessionStore
-from gateway.shutdown_flush import recover_gateway_pending, spool_dropped_transcript_message
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from gateway.shutdown_flush import (
+    recover_gateway_pending,
+    spool_dropped_transcript_message,
+)
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 
 @pytest.fixture
@@ -32,7 +39,9 @@ def multiplex_homes(tmp_path, monkeypatch):
     (profile / "config.yaml").write_text("{}\n", encoding="utf-8")  # identity marker
     monkeypatch.setenv("CLAWK_HOME", str(root))
     # Resolve state.db through get_clawk_home(), as production does (see the sibling suite).
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     ss.set_multiplex_active(True)
     yield root, profile
     ss.set_multiplex_active(False)
@@ -41,9 +50,15 @@ def multiplex_homes(tmp_path, monkeypatch):
 def _session(store: SessionStore, key: str, sid: str):
     now = datetime.now()
     store._entries[key] = SessionEntry(
-        session_key=key, session_id=sid, created_at=now, updated_at=now,
-        origin=SessionSource(platform=Platform.TELEGRAM, chat_id="42", chat_type="dm", user_id="42"),
-        platform=Platform.TELEGRAM, chat_type="dm",
+        session_key=key,
+        session_id=sid,
+        created_at=now,
+        updated_at=now,
+        origin=SessionSource(
+            platform=Platform.TELEGRAM, chat_id="42", chat_type="dm", user_id="42"
+        ),
+        platform=Platform.TELEGRAM,
+        chat_type="dm",
     )
     db = store._db_for_key(key)
     db.create_session(sid, source="telegram", session_key=key)
@@ -62,7 +77,10 @@ def _spool_under(home, sid: str, text: str) -> None:
 def test_boot_recovery_replays_a_routed_profiles_spooled_backlog(multiplex_homes):
     root, profile = multiplex_homes
     with patch("gateway.session.SessionStore._ensure_loaded"):
-        store = SessionStore(sessions_dir=root / "sessions", config=GatewayConfig(multiplex_profiles=True))
+        store = SessionStore(
+            sessions_dir=root / "sessions",
+            config=GatewayConfig(multiplex_profiles=True),
+        )
     store._loaded = True
 
     default_sid, work_sid = "20260926_000000_default0", "20260926_000000_work0000"
@@ -72,10 +90,18 @@ def test_boot_recovery_replays_a_routed_profiles_spooled_backlog(multiplex_homes
     _spool_under(root, default_sid, "default while locked")
     _spool_under(profile, work_sid, "work while locked")
 
-    recovered = recover_gateway_pending(SimpleNamespace(config=store.config, session_store=store))
+    recovered = recover_gateway_pending(
+        SimpleNamespace(config=store.config, session_store=store)
+    )
 
     assert recovered == 2
-    assert [m["content"] for m in default_db.get_messages(default_sid)] == ["default while locked"]
-    assert [m["content"] for m in work_db.get_messages(work_sid)] == ["work while locked"]
+    assert [m["content"] for m in default_db.get_messages(default_sid)] == [
+        "default while locked"
+    ]
+    assert [m["content"] for m in work_db.get_messages(work_sid)] == [
+        "work while locked"
+    ]
     assert not list(root.glob("**/pending_messages/*.json"))
-    assert get_clawk_home() == root  # A→B→A: the launch scope is restored after the routed pass
+    assert (
+        get_clawk_home() == root
+    )  # A→B→A: the launch scope is restored after the routed pass

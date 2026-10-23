@@ -23,8 +23,12 @@ def launch(tmp_path, monkeypatch):
 
     root = tmp_path / "checkout"
     (root / ".git").mkdir(parents=True)
-    (root / "pyproject.toml").write_text("[project]\nname='example'\n", encoding="utf-8")
-    (root / "install-stamp.json").write_text('{"updateMechanism": "self"}', encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        "[project]\nname='example'\n", encoding="utf-8"
+    )
+    (root / "install-stamp.json").write_text(
+        '{"updateMechanism": "self"}', encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("CLAWK_DISABLE_LAZY_INSTALLS", raising=False)
     monkeypatch.setattr(pm, "venv_is_current", lambda **kw: True)
@@ -35,7 +39,9 @@ def launch(tmp_path, monkeypatch):
     monkeypatch.setattr(venv_sync, "publish_launchers", published.append)
 
     def run(*, store_spelling: Path, executable: Path):
-        monkeypatch.setattr(_launchers, "resolve_store_python", lambda _: store_spelling)
+        monkeypatch.setattr(
+            _launchers, "resolve_store_python", lambda _: store_spelling
+        )
         monkeypatch.setattr(sys, "executable", str(executable))
         return venv_sync.prepare_launch(root, []), published
 

@@ -8,6 +8,7 @@ source dir → run in place; (3) read-only with baked, current ``node_modules`` 
 is left alone so the lockfile-vs-install-marker check triggers ``npm ci`` inside the mirror.
 Resolution never happens at import time (it probes/copies on disk).
 """
+
 from __future__ import annotations
 
 import filecmp
@@ -22,7 +23,12 @@ logger = logging.getLogger(__name__)
 SOURCE_SIDECAR_DIR = Path(__file__).parent / "sidecar"
 # Files that define the sidecar; node_modules is deliberately absent (baked on managed
 # images or installed by npm in the mirror).
-_MIRROR_FILES = ("index.mjs", "package.json", "package-lock.json", "patch-spectrum-mixed-attachments.mjs")
+_MIRROR_FILES = (
+    "index.mjs",
+    "package.json",
+    "package-lock.json",
+    "patch-spectrum-mixed-attachments.mjs",
+)
 # Tests monkeypatch these module globals directly; the accessors honor a non-None value.
 _SIDECAR_DIR: Optional[Path] = None
 # Written by `clawk photon install-sidecar` on npm failure so check_requirements() can
@@ -70,12 +76,15 @@ def resolve_sidecar_dir(source_dir: Optional[Path] = None) -> Path:
     if (source / "node_modules").exists() and not _lock_newer_than_install(source):
         return source
     from clawk_constants import get_clawk_home
+
     mirror = get_clawk_home() / "photon" / "sidecar"
     try:
         mirror.mkdir(parents=True, exist_ok=True)
         for name in _MIRROR_FILES:
             src, dst = source / name, mirror / name
-            if src.exists() and (not dst.exists() or not filecmp.cmp(str(src), str(dst), shallow=False)):
+            if src.exists() and (
+                not dst.exists() or not filecmp.cmp(str(src), str(dst), shallow=False)
+            ):
                 shutil.copy2(str(src), str(dst))
         return mirror
     except OSError as exc:
@@ -83,7 +92,9 @@ def resolve_sidecar_dir(source_dir: Optional[Path] = None) -> Path:
             "[photon] install tree is read-only and mirroring the sidecar "
             "to %s failed (%s) — falling back to the read-only source dir; "
             "dependency installs will not be possible",
-            mirror, exc)
+            mirror,
+            exc,
+        )
         return source
 
 
@@ -97,4 +108,8 @@ def _sidecar_dir() -> Path:
 
 def _npm_error_log() -> Path:
     """Path of the persisted npm-failure log (derived from the sidecar dir)."""
-    return _NPM_ERROR_LOG if _NPM_ERROR_LOG is not None else _sidecar_dir() / ".photon-npm-error.log"
+    return (
+        _NPM_ERROR_LOG
+        if _NPM_ERROR_LOG is not None
+        else _sidecar_dir() / ".photon-npm-error.log"
+    )

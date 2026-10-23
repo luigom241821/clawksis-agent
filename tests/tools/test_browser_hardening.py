@@ -9,9 +9,11 @@ from tools import browser_tool_install as bt_install
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _reset_caches():
     """Reset all module-level caches so tests start clean."""
     import tools.browser_tool as bt
+
     bt._cached_agent_browser = None
     bt._agent_browser_resolved = False
     bt._cached_command_timeout = None
@@ -20,11 +22,13 @@ def _reset_caches():
     if hasattr(bt_install._discover_homebrew_node_dirs, "cache_clear"):
         bt_install._discover_homebrew_node_dirs.cache_clear()
 
+
 @pytest.fixture(autouse=True)
 def _clean_caches():
     _reset_caches()
     yield
     _reset_caches()
+
 
 # ---------------------------------------------------------------------------
 # Dead code removal
@@ -38,21 +42,27 @@ def _clean_caches():
 # Caching: _get_command_timeout
 # ---------------------------------------------------------------------------
 
-class TestSessionInactivityTimeout:
 
+class TestSessionInactivityTimeout:
     def test_default_matches_config_default(self, monkeypatch):
         from clawk_cli.config import DEFAULT_CONFIG
         from tools.browser_tool import _get_session_inactivity_timeout
+
         monkeypatch.delenv("BROWSER_INACTIVITY_TIMEOUT", raising=False)
         with patch("clawk_cli.config.read_raw_config", return_value={}):
-            assert _get_session_inactivity_timeout() == DEFAULT_CONFIG["browser"]["inactivity_timeout"]
+            assert (
+                _get_session_inactivity_timeout()
+                == DEFAULT_CONFIG["browser"]["inactivity_timeout"]
+            )
 
     def test_invalid_config_preserves_env_fallback(self, monkeypatch):
         from tools.browser_tool import _get_session_inactivity_timeout
+
         monkeypatch.setenv("BROWSER_INACTIVITY_TIMEOUT", "240")
         cfg = {"browser": {"inactivity_timeout": "not-an-int"}}
         with patch("clawk_cli.config.read_raw_config", return_value=cfg):
             assert _get_session_inactivity_timeout() == 240
+
 
 # ---------------------------------------------------------------------------
 # Caching: _discover_homebrew_node_dirs
@@ -61,6 +71,7 @@ class TestSessionInactivityTimeout:
 # ---------------------------------------------------------------------------
 # Security: URL-decoded secret check
 # ---------------------------------------------------------------------------
+
 
 class TestUrlDecodedSecretCheck:
     """Verify that URL-encoded API keys are caught by the exfiltration guard."""
@@ -79,6 +90,7 @@ class TestUrlDecodedSecretCheck:
         assert result["success"] is False
         assert "API key" in result["error"] or "Blocked" in result["error"]
 
+
 # ---------------------------------------------------------------------------
 # Thread safety: _recording_sessions
 # ---------------------------------------------------------------------------
@@ -87,16 +99,18 @@ class TestUrlDecodedSecretCheck:
 # Structure-aware _truncate_snapshot
 # ---------------------------------------------------------------------------
 
-class TestTruncateSnapshot:
 
+class TestTruncateSnapshot:
     def test_short_snapshot_unchanged(self):
         from tools.browser_tool_snapshot import _truncate_snapshot
+
         short = '- heading "Example" [ref=e1]\n- link "More" [ref=e2]'
         assert _truncate_snapshot(short) == short
 
     def test_long_snapshot_truncated_at_line_boundary(self):
         from tools.browser_tool import DEFAULT_SNAPSHOT_THRESHOLD
         from tools.browser_tool_snapshot import _truncate_snapshot
+
         # Create a snapshot that exceeds the summarize threshold
         lines = [f'- item "Element {i}" [ref=e{i}]' for i in range(1000)]
         snapshot = "\n".join(lines)
@@ -165,6 +179,7 @@ class TestTruncateSnapshot:
 
         assert "truncated" in result.lower()
         assert "read_file" in result
+
 
 # ---------------------------------------------------------------------------
 # Scroll optimization

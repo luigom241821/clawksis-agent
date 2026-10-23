@@ -45,8 +45,15 @@ def _update_in_progress() -> bool:
         return True  # cannot prove the swap is over: wait
 
 
-def _run_retirement_watchdog(server, *, observe: Callable[[], Optional[str]], fence, poll_s: float,
-                             max_polls: Optional[int], thread_name: str) -> threading.Thread:
+def _run_retirement_watchdog(
+    server,
+    *,
+    observe: Callable[[], Optional[str]],
+    fence,
+    poll_s: float,
+    max_polls: Optional[int],
+    thread_name: str,
+) -> threading.Thread:
     """Daemon thread shared by the SSH-isolated retirement watchdogs: ``observe`` returns the log
     reason while retirement is warranted (else None); after ``_CONFIRMATIONS`` consecutive reasons
     the backend exits only through the retirement fence (proven idle, admission closed first)."""
@@ -57,7 +64,9 @@ def _run_retirement_watchdog(server, *, observe: Callable[[], Optional[str]], fe
 
     def _loop() -> None:
         seen = polls = 0
-        while not getattr(server, "should_exit", False) and (max_polls is None or polls < max_polls):
+        while not getattr(server, "should_exit", False) and (
+            max_polls is None or polls < max_polls
+        ):
             polls += 1
             reason = observe()
             seen = seen + 1 if reason else 0
@@ -74,10 +83,15 @@ def _run_retirement_watchdog(server, *, observe: Callable[[], Optional[str]], fe
     return thread
 
 
-def start_code_skew_watchdog(server, *, skew_fn: Optional[Callable[[], Skew]] = None,
-                             update_probe: Callable[[], bool] = _update_in_progress,
-                             fence=None, poll_s: float = DEFAULT_SKEW_POLL_S,
-                             max_polls: Optional[int] = None) -> threading.Thread:
+def start_code_skew_watchdog(
+    server,
+    *,
+    skew_fn: Optional[Callable[[], Skew]] = None,
+    update_probe: Callable[[], bool] = _update_in_progress,
+    fence=None,
+    poll_s: float = DEFAULT_SKEW_POLL_S,
+    max_polls: Optional[int] = None,
+) -> threading.Thread:
     """Daemon thread that sets ``server.should_exit`` once the loaded code is provably stale and
     the backend is provably idle. ``max_polls`` bounds the loop for tests only."""
     if skew_fn is None:
@@ -88,10 +102,21 @@ def start_code_skew_watchdog(server, *, skew_fn: Optional[Callable[[], Skew]] = 
 
     def _observe() -> Optional[str]:
         skew = read_skew()
-        if not (skew and should_retire_for_skew(skew=skew, update_in_progress=update_probe())):
+        if not (
+            skew
+            and should_retire_for_skew(skew=skew, update_in_progress=update_probe())
+        ):
             return None
-        return ("SSH-isolated backend loaded {} but the install is now at {}; "
-                "retiring so its client respawns it on the new code.".format(*skew))
+        return (
+            "SSH-isolated backend loaded {} but the install is now at {}; "
+            "retiring so its client respawns it on the new code.".format(*skew)
+        )
 
-    return _run_retirement_watchdog(server, observe=_observe, fence=fence, poll_s=poll_s,
-                                    max_polls=max_polls, thread_name="ssh-isolated-skew-watchdog")
+    return _run_retirement_watchdog(
+        server,
+        observe=_observe,
+        fence=fence,
+        poll_s=poll_s,
+        max_polls=max_polls,
+        thread_name="ssh-isolated-skew-watchdog",
+    )

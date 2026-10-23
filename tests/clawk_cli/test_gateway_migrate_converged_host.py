@@ -48,31 +48,58 @@ def converged_host(tmp_path, monkeypatch):
     # What a live multiplexer leaves on disk: its own pid file + runtime record in the launch
     # home, and a runtime record stamped into EVERY served profile's home.
     (root / "gateway.pid").write_text(json.dumps({"pid": pid, "clawk_home": str(root)}))
-    (root / "gateway_state.json").write_text(json.dumps(
-        {"pid": pid, "clawk_home": str(root), "gateway_state": "running", "served_profiles": served}))
+    (root / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "pid": pid,
+                "clawk_home": str(root),
+                "gateway_state": "running",
+                "served_profiles": served,
+            }
+        )
+    )
     for name in ("coder", "ops"):
         home = root / "profiles" / name
-        (home / "gateway_state.json").write_text(json.dumps(
-            {"pid": pid, "clawk_home": str(home), "gateway_state": "running"}))
+        (home / "gateway_state.json").write_text(
+            json.dumps(
+                {"pid": pid, "clawk_home": str(home), "gateway_state": "running"}
+            )
+        )
 
     from gateway import status
     from gateway import host_attach, host_rendezvous as hr
+
     monkeypatch.setattr(status, "_read_process_cmdline", lambda p: "clawk gateway run")
     # The WIRE only: the owner's control socket answer. Everything that reads it is real.
-    monkeypatch.setattr("gateway.control_socket.identify_gateway",
-                        lambda home: {"pid": pid, "clawk_home": str(root), "served_profiles": served})
+    monkeypatch.setattr(
+        "gateway.control_socket.identify_gateway",
+        lambda home: {"pid": pid, "clawk_home": str(root), "served_profiles": served},
+    )
     # A live owner holds the host lock for its lifetime (run.py claims before it publishes).
     assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
     hr.publish_record(hr.ROLE_GATEWAY, profiles=tuple(served), home=str(root))
     host_attach.invalidate_host_gateway_cache()
 
     signals: list[tuple] = []
-    monkeypatch.setattr(gm, "_service_op",
-                        lambda kind, system, verb, home, **kw: signals.append(("service", verb, str(home))))
-    monkeypatch.setattr(gm, "_stop_gateway_process", lambda home: signals.append(("stop", str(home))))
-    monkeypatch.setattr(gm, "_spawn_detached_gateway", lambda home: signals.append(("spawn", str(home))) or True)
+    monkeypatch.setattr(
+        gm,
+        "_service_op",
+        lambda kind, system, verb, home, **kw: signals.append(
+            ("service", verb, str(home))
+        ),
+    )
+    monkeypatch.setattr(
+        gm, "_stop_gateway_process", lambda home: signals.append(("stop", str(home)))
+    )
+    monkeypatch.setattr(
+        gm,
+        "_spawn_detached_gateway",
+        lambda home: signals.append(("spawn", str(home))) or True,
+    )
     monkeypatch.setattr(gm, "_host_supports_migration", lambda: None)
-    yield type("Fixture", (), {"root": root, "signals": signals, "pid": pid, "served": served})
+    yield type(
+        "Fixture", (), {"root": root, "signals": signals, "pid": pid, "served": served}
+    )
     hr.clear_record(hr.ROLE_GATEWAY)
     hr.release_host_lock(hr.ROLE_GATEWAY)
 
@@ -88,7 +115,9 @@ def test_the_host_gateway_pid_is_reported_for_every_secondary(converged_host):
 def test_a_converged_host_is_already_multiplexed_and_owns_nothing(converged_host):
     plan = gm.build_migration_plan()
     assert [p.name for p in plan.standalone_secondaries] == []
-    assert all(p.pid is None for p in plan.secondaries), "a served profile does not OWN the host gateway"
+    assert all(p.pid is None for p in plan.secondaries), (
+        "a served profile does not OWN the host gateway"
+    )
     assert plan.default.pid == converged_host.pid, "the launch home does own it"
     assert plan.already_multiplexed and not plan.interrupted
     assert not plan.eligible_for_migration()
@@ -97,10 +126,15 @@ def test_a_converged_host_is_already_multiplexed_and_owns_nothing(converged_host
 def test_three_consecutive_runs_signal_nothing(converged_host, capsys):
     """The update hook and the explicit command, three times over, on an untouched host."""
     from types import SimpleNamespace
+
     for _ in range(3):
         gm.maybe_auto_migrate_after_update()
-        gm.cmd_migrate(SimpleNamespace(multiplex=True, dry_run=False, yes=True))  # returns, never exits
+        gm.cmd_migrate(
+            SimpleNamespace(multiplex=True, dry_run=False, yes=True)
+        )  # returns, never exits
     out = capsys.readouterr().out
-    assert converged_host.signals == [], f"a converged host was signalled: {converged_host.signals}"
+    assert converged_host.signals == [], (
+        f"a converged host was signalled: {converged_host.signals}"
+    )
     assert "Half-migrated" not in out and "SIGTERM" not in out
     assert "already multiplexing" in out

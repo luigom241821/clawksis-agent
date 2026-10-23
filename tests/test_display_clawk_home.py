@@ -8,6 +8,7 @@ appends sub-paths (the skill_manage schema showed the agent
 ``~/AppData\\Local\\clawk/skills/``). The ``~/`` shorthand implies POSIX
 rendering; the whole string must be consistent.
 """
+
 import os
 import sys
 import unittest
@@ -33,15 +34,18 @@ class TestDisplayClawkHomePosix(unittest.TestCase):
     def test_default_home_unchanged(self):
         import clawk_constants as hc
 
-        with patch.object(hc, "get_clawk_home",
-                          return_value=Path.home() / ".clawksis"):
+        with patch.object(hc, "get_clawk_home", return_value=Path.home() / ".clawksis"):
             out = hc.display_clawk_home()
         self.assertEqual(out, "~/.clawksis")
 
     def test_outside_home_falls_back_to_absolute(self):
         import clawk_constants as hc
 
-        outside = Path("/opt/clawksis-custom") if os.name != "nt" else Path("C:/opt/clawksis-custom")
+        outside = (
+            Path("/opt/clawksis-custom")
+            if os.name != "nt"
+            else Path("C:/opt/clawksis-custom")
+        )
         with patch.object(hc, "get_clawk_home", return_value=outside):
             out = hc.display_clawk_home()
         self.assertEqual(out, str(outside))

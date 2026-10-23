@@ -147,16 +147,18 @@ def _state_empty(home):
 
 def _state_one_canonical(home):
     db = _db(home)
-    _add_session(db, "forever", title=CANON, ts=1000, hidden=True,
-                 text="forever chat content")
+    _add_session(
+        db, "forever", title=CANON, ts=1000, hidden=True, text="forever chat content"
+    )
     db.close()
 
 
 def _state_canonical_plus_newer(home):
     """#92040 shape: newer ordinary sessions must never outrank the registry."""
     db = _db(home)
-    _add_session(db, "forever", title=CANON, ts=1000, hidden=True,
-                 text="forever chat content")
+    _add_session(
+        db, "forever", title=CANON, ts=1000, hidden=True, text="forever chat content"
+    )
     _add_session(db, "draft1", title="Scratch", ts=5000, text="stray draft")
     _add_session(db, "draft2", title="", ts=9000, text="newest untitled")
     db.close()
@@ -169,10 +171,12 @@ def _state_rotated(home):
     remembered session id — a stale pointer must never be consulted.
     """
     db = _db(home)
-    _add_session(db, "old-forever", title="Bot Chat (retired)", ts=1000,
-                 text="old generation")
-    _add_session(db, "new-forever", title=CANON, ts=2000, hidden=True,
-                 text="new generation")
+    _add_session(
+        db, "old-forever", title="Bot Chat (retired)", ts=1000, text="old generation"
+    )
+    _add_session(
+        db, "new-forever", title=CANON, ts=2000, hidden=True, text="new generation"
+    )
     db.close()
 
 

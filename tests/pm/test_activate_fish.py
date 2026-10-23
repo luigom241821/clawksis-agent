@@ -22,10 +22,21 @@ pytestmark = [
 ]
 
 
-def _fish(root: Path, env: dict, script: str, tmp_path: Path) -> subprocess.CompletedProcess:
+def _fish(
+    root: Path, env: dict, script: str, tmp_path: Path
+) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["fish", "--no-config", "-c", script.replace("@ACTIVATE@", posix(root / "activate.fish"))],
-        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60,
+        [
+            "fish",
+            "--no-config",
+            "-c",
+            script.replace("@ACTIVATE@", posix(root / "activate.fish")),
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
 
@@ -33,7 +44,10 @@ def _fish(root: Path, env: dict, script: str, tmp_path: Path) -> subprocess.Comp
 def test_activate_applies_the_environment_and_deactivate_restores_the_shell(tmp_path):
     root, env = sync_checkout(tmp_path)
     fake_store(tmp_path)
-    run = _fish(root, env, """
+    run = _fish(
+        root,
+        env,
+        """
         set -gx PYTHONPATH caller-original
         set -gx VIRTUAL_ENV caller-venv
         set -l original_path (string join : $PATH)
@@ -60,7 +74,9 @@ def test_activate_applies_the_environment_and_deactivate_restores_the_shell(tmp_
         functions -q clawk; and exit 26
         functions -q __clawk_saved_fish_prompt; and exit 27
         exit 0
-    """, tmp_path)
+    """,
+        tmp_path,
+    )
     assert run.returncode == 0, run.stdout + run.stderr
     assert run.stdout.splitlines()[0] == str(root)
     assert "/first/venv/" in run.stdout.splitlines()[1]
@@ -70,7 +86,10 @@ def test_setup_failure_leaves_the_caller_unchanged(tmp_path):
     root, env = sync_checkout(tmp_path)
     fake_store(tmp_path)
     (root / "fail").touch()
-    run = _fish(root, env, """
+    run = _fish(
+        root,
+        env,
+        """
         set -gx PYTHONPATH caller-path
         set -l before (env | sort | string collect)
 
@@ -81,6 +100,8 @@ def test_setup_failure_leaves_the_caller_unchanged(tmp_path):
         set -q __CLAWK_ACTIVATED; and exit 12
         functions -q deactivate; and exit 13
         exit 0
-    """, tmp_path)
+    """,
+        tmp_path,
+    )
     assert run.returncode == 0, run.stdout + run.stderr
     assert "setup failed" in run.stderr

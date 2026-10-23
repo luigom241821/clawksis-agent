@@ -53,7 +53,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -74,7 +76,14 @@ def world(tmp_path_factory, provider):
     sb, origin = P.install_head(root)
     P.configure(sb, provider.base_url)
     shim = sb.root / "wrap" / "git"
-    world = {"sb": sb, "origin": origin, "root": root, "shim": shim, "shim_text": shim.read_text(encoding="utf-8-sig"), "n": 0}
+    world = {
+        "sb": sb,
+        "origin": origin,
+        "root": root,
+        "shim": shim,
+        "shim_text": shim.read_text(encoding="utf-8-sig"),
+        "n": 0,
+    }
     yield world
     shim.write_text(world["shim_text"], encoding="utf-8")
 
@@ -84,12 +93,16 @@ def _hostile_git(world, body: str) -> None:
     updater process that spawned git)."""
     text = world["shim_text"]
     head, _, rest = text.partition("\n")
-    world["shim"].write_text(f'{head}\nREAL="{REAL_GIT}"\n{body}\n{rest}', encoding="utf-8")
+    world["shim"].write_text(
+        f'{head}\nREAL="{REAL_GIT}"\n{body}\n{rest}', encoding="utf-8"
+    )
 
 
 def _release(world, files: dict[str, str]) -> str:
     world["n"] += 1
-    return I.publish_commit(world["origin"], world["root"], f"release: hostile commit {world['n']}", files)
+    return I.publish_commit(
+        world["origin"], world["root"], f"release: hostile commit {world['n']}", files
+    )
 
 
 def _head(sb) -> str:
@@ -102,48 +115,85 @@ def _tracked_dirty(sb) -> str:
 
 def _stamp_commit(sb) -> str:
     try:
-        return json.loads((sb.checkout / "install-stamp.json").read_text(encoding="utf-8-sig")).get("commit") or ""
+        return (
+            json.loads(
+                (sb.checkout / "install-stamp.json").read_text(encoding="utf-8-sig")
+            ).get("commit")
+            or ""
+        )
     except (OSError, ValueError):
         return ""
 
 
 def _launch(sb, marker: str) -> subprocess.CompletedProcess:
     """A later real launch by the user (fresh pid, lazy installs on: the real launch path)."""
-    return P.run_env(sb, [*_RETRY_PREFIX, sb.clawk, "-z", marker], P.lazy_env(sb), timeout=P.UPDATE_TIMEOUT)
+    return P.run_env(
+        sb,
+        [*_RETRY_PREFIX, sb.clawk, "-z", marker],
+        P.lazy_env(sb),
+        timeout=P.UPDATE_TIMEOUT,
+    )
 
 
 def _update(sb) -> subprocess.CompletedProcess:
-    return P.run_env(sb, [*_RETRY_PREFIX, sb.clawk, "update", "--yes", "--branch", "main", "--no-gateway-restart"],
-                     sb.env, timeout=P.UPDATE_TIMEOUT)
+    return P.run_env(
+        sb,
+        [
+            *_RETRY_PREFIX,
+            sb.clawk,
+            "update",
+            "--yes",
+            "--branch",
+            "main",
+            "--no-gateway-restart",
+        ],
+        sb.env,
+        timeout=P.UPDATE_TIMEOUT,
+    )
 
 
 def _artifacts(sb) -> list[str]:
-    return sorted(p.name for p in sb.checkout.iterdir() if p.name.endswith(ARTIFACT_SUFFIXES))
+    return sorted(
+        p.name for p in sb.checkout.iterdir() if p.name.endswith(ARTIFACT_SUFFIXES)
+    )
 
 
 def test_kill_after_tree_moved_still_owes_the_tail(world):
     sb = world["sb"]
     pre = _head(sb)
-    assert _stamp_commit(sb) == pre and not P.pending_marker(sb).exists(), "harness: install not settled"
+    assert _stamp_commit(sb) == pre and not P.pending_marker(sb).exists(), (
+        "harness: install not settled"
+    )
     target = _release(world, {"e2e_hostile_release.py": "RELEASE = 1\n"})
     # git completes the fast-forward, then the updater dies before it can spawn the completion child.
-    _hostile_git(world, 'case " $* " in *" merge --ff-only "*) "$REAL" "$@"; rc=$?; kill -KILL $PPID; exit $rc;; esac')
+    _hostile_git(
+        world,
+        'case " $* " in *" merge --ff-only "*) "$REAL" "$@"; rc=$?; kill -KILL $PPID; exit $rc;; esac',
+    )
     killed = _update(sb)
     _hostile_git(world, "")
-    assert _head(sb) == target, "harness: the kill did not land after the tree moved\n" + I.describe(killed)
+    assert _head(sb) == target, (
+        "harness: the kill did not land after the tree moved\n" + I.describe(killed)
+    )
     owed = P.pending_marker(sb).exists()
 
     launch = _launch(sb, "first launch after a kill past the swap")
-    assert owed, ("the tree moved to the release but no source-completion tail was owed: the kill "
-                  "before the completion child lost it\n" + P.diagnostics(sb, killed, launch))
+    assert owed, (
+        "the tree moved to the release but no source-completion tail was owed: the kill "
+        "before the completion child lost it\n" + P.diagnostics(sb, killed, launch)
+    )
     assert not P.pending_marker(sb).exists() and _stamp_commit(sb) == target, (
-        "the next launch did not finish the owed tail for the moved tree\n" + P.diagnostics(sb, killed, launch))
+        "the next launch did not finish the owed tail for the moved tree\n"
+        + P.diagnostics(sb, killed, launch)
+    )
 
 
 def test_torn_tree_on_git_failure_is_restored(world):
     sb = world["sb"]
     # Release 1 adds a file under a directory; the user makes that directory read-only.
-    ok = _release(world, {"aaa_e2e_first.py": "V = 1\n", "zzz_e2e_locked/mod.py": "V = 1\n"})
+    ok = _release(
+        world, {"aaa_e2e_first.py": "V = 1\n", "zzz_e2e_locked/mod.py": "V = 1\n"}
+    )
     P.ok(_update(sb), "harness: plain update to the first release failed")
     assert _head(sb) == ok
     _release(world, {"aaa_e2e_first.py": "V = 2\n", "zzz_e2e_locked/mod.py": "V = 2\n"})
@@ -153,11 +203,16 @@ def test_torn_tree_on_git_failure_is_restored(world):
         failed = _update(sb)
     finally:
         locked.chmod(0o755)
-    assert failed.returncode != 0, "harness: git did not fail on the read-only directory\n" + I.describe(failed)
+    assert failed.returncode != 0, (
+        "harness: git did not fail on the read-only directory\n" + I.describe(failed)
+    )
     launch = _launch(sb, "first launch after a torn pull")
     assert _head(sb) == ok and not _tracked_dirty(sb), (
         "git failed mid-pull and the checkout was left torn (marker dropped, nothing restores it):\n"
-        + _tracked_dirty(sb) + "\n" + P.diagnostics(sb, failed, launch))
+        + _tracked_dirty(sb)
+        + "\n"
+        + P.diagnostics(sb, failed, launch)
+    )
 
 
 def test_kill_during_branch_switch_is_restored(world):
@@ -170,16 +225,21 @@ def test_kill_during_branch_switch_is_restored(world):
     parked = _head(sb)
     _release(world, {"e2e_cp0_c.py": "C = 1\n"})
     # CP0: `git checkout main` dies after rewriting one file of main's tree.
-    _hostile_git(world, 'if [ "${@: -1}" = main ] && case " $* " in *" checkout "*) true;; *) false;; esac; then '
-                        '"$REAL" show main:e2e_cp0_a.py > e2e_cp0_a.py; kill -KILL $PPID; exit 137; fi')
+    _hostile_git(
+        world,
+        'if [ "${@: -1}" = main ] && case " $* " in *" checkout "*) true;; *) false;; esac; then '
+        '"$REAL" show main:e2e_cp0_a.py > e2e_cp0_a.py; kill -KILL $PPID; exit 137; fi',
+    )
     killed = _update(sb)
     _hostile_git(world, "")
     assert (sb.checkout / "e2e_cp0_a.py").is_file() and _head(sb) == parked, (
-        "harness: the kill did not land mid-switch\n" + I.describe(killed))
+        "harness: the kill did not land mid-switch\n" + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill during the branch switch")
     assert _head(sb) == parked and not (sb.checkout / "e2e_cp0_a.py").exists(), (
         "a kill during the CP0 branch switch left main's files in the parked checkout\n"
-        + P.diagnostics(sb, killed, launch))
+        + P.diagnostics(sb, killed, launch)
+    )
 
 
 def test_syntax_error_target_is_refused_before_head_moves(world):
@@ -193,7 +253,10 @@ def test_syntax_error_target_is_refused_before_head_moves(world):
     assert refused.returncode != 0 and _head(sb) == pre, I.describe(refused)
     assert reflog_after == reflog_before, (
         "HEAD moved onto the uncompilable release before the syntax guard refused it:\n"
-        + reflog_after.replace(reflog_before, "").strip() + "\n" + I.describe(refused))
+        + reflog_after.replace(reflog_before, "").strip()
+        + "\n"
+        + I.describe(refused)
+    )
 
 
 _ZIP_DRIVER = r"""
@@ -225,14 +288,32 @@ z._download_and_swap_zip("main", sys.argv[1])
 def _zip_killed_at(world, kill_at: str, files: dict[str, str] | None = None):
     """A ZIP update of a fresh release, SIGKILLed at ``kill_at`` (N-th entry swapped in, or a named point)."""
     sb = world["sb"]
-    target = _release(world, {"e2e_zip_release.py": f"Z = {world['n']}\n", "clawk_cli/e2e_zip_marker.py": "M = 1\n",
-                              **(files or {})})
+    target = _release(
+        world,
+        {
+            "e2e_zip_release.py": f"Z = {world['n']}\n",
+            "clawk_cli/e2e_zip_marker.py": "M = 1\n",
+            **(files or {}),
+        },
+    )
     archive = world["root"] / f"release-{world['n']}.zip"
-    I.git("archive", "--format=zip", "--prefix=clawksis-agent-main/", "-o", str(archive), target, cwd=world["origin"])
+    I.git(
+        "archive",
+        "--format=zip",
+        "--prefix=clawksis-agent-main/",
+        "-o",
+        str(archive),
+        target,
+        cwd=world["origin"],
+    )
     driver = world["root"] / "zip_driver.py"
     driver.write_text(_ZIP_DRIVER, encoding="utf-8")
-    return P.run_env(sb, [sb.python, str(driver), archive.as_uri(), kill_at, str(sb.checkout)], sb.env,
-                     timeout=P.UPDATE_TIMEOUT)
+    return P.run_env(
+        sb,
+        [sb.python, str(driver), archive.as_uri(), kill_at, str(sb.checkout)],
+        sb.env,
+        timeout=P.UPDATE_TIMEOUT,
+    )
 
 
 def test_kill_mid_zip_swap_is_settled_by_the_next_launch(world):
@@ -240,19 +321,33 @@ def test_kill_mid_zip_swap_is_settled_by_the_next_launch(world):
     pre = _head(sb)
     # Killed right after a TRACKED file's new bytes landed: the swap order follows the archive's
     # directory listing, so a "kill at the N-th swap" can land on N unchanged entries only.
-    agents = I.git("show", "HEAD:AGENTS.md", cwd=world["origin"]) + "\n<!-- e2e zip swap -->\n"
+    agents = (
+        I.git("show", "HEAD:AGENTS.md", cwd=world["origin"])
+        + "\n<!-- e2e zip swap -->\n"
+    )
     killed = _zip_killed_at(world, "after:AGENTS.md", {"AGENTS.md": agents})
-    at_kill = {"artifacts": _artifacts(sb), "dirty": _tracked_dirty(sb),
-               "new_entry": (sb.checkout / "e2e_zip_release.py").exists()}
+    at_kill = {
+        "artifacts": _artifacts(sb),
+        "dirty": _tracked_dirty(sb),
+        "new_entry": (sb.checkout / "e2e_zip_release.py").exists(),
+    }
     assert at_kill["artifacts"] and at_kill["dirty"], (
-        f"harness: the ZIP swap was not killed mid-rename ({at_kill['dirty']!r})\n" + I.describe(killed))
+        f"harness: the ZIP swap was not killed mid-rename ({at_kill['dirty']!r})\n"
+        + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill mid ZIP swap")
     leftovers = _artifacts(sb)
-    assert not leftovers, (f"{len(leftovers)} staging/backup siblings leaked and wedge the next update: "
-                           f"{leftovers[:5]} (at kill: {len(at_kill['artifacts'])} siblings, "
-                           f"tracked changes {at_kill['dirty']!r})\n" + I.describe(launch))
+    assert not leftovers, (
+        f"{len(leftovers)} staging/backup siblings leaked and wedge the next update: "
+        f"{leftovers[:5]} (at kill: {len(at_kill['artifacts'])} siblings, "
+        f"tracked changes {at_kill['dirty']!r})\n" + I.describe(launch)
+    )
     assert _head(sb) == pre and not _tracked_dirty(sb), (
-        "the interrupted ZIP swap left a mixed tree:\n" + _tracked_dirty(sb) + "\n" + I.describe(launch))
+        "the interrupted ZIP swap left a mixed tree:\n"
+        + _tracked_dirty(sb)
+        + "\n"
+        + I.describe(launch)
+    )
 
 
 def test_kill_mid_zip_swap_with_clawk_cli_moved_aside_reaches_recovery(world):
@@ -262,13 +357,24 @@ def test_kill_mid_zip_swap_with_clawk_cli_moved_aside_reaches_recovery(world):
     sb = world["sb"]
     pre = _head(sb)
     killed = _zip_killed_at(world, "clawk_cli-moved-aside")
-    assert not (sb.checkout / "clawk_cli").exists() and (sb.checkout / "clawk_cli.clawk-update-old").is_dir(), (
-        "harness: the ZIP swap was not killed with clawk_cli/ moved aside\n" + I.describe(killed))
+    assert (
+        not (sb.checkout / "clawk_cli").exists()
+        and (sb.checkout / "clawk_cli.clawk-update-old").is_dir()
+    ), (
+        "harness: the ZIP swap was not killed with clawk_cli/ moved aside\n"
+        + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill with clawk_cli moved aside")
-    assert launch.returncode == 0 and (sb.checkout / "clawk_cli" / "main.py").is_file(), (
-        "the launch after a kill with clawk_cli/ moved aside could not reach recovery\n" + I.describe(launch))
+    assert (
+        launch.returncode == 0 and (sb.checkout / "clawk_cli" / "main.py").is_file()
+    ), (
+        "the launch after a kill with clawk_cli/ moved aside could not reach recovery\n"
+        + I.describe(launch)
+    )
     assert not _artifacts(sb) and _head(sb) == pre and not _tracked_dirty(sb), (
-        f"left {_artifacts(sb)[:5]} / tracked changes {_tracked_dirty(sb)!r}\n" + I.describe(launch))
+        f"left {_artifacts(sb)[:5]} / tracked changes {_tracked_dirty(sb)!r}\n"
+        + I.describe(launch)
+    )
     P.ok(_update(sb), "the update after the restored swap failed")
 
 
@@ -282,19 +388,35 @@ def test_failed_upstream_sync_after_origin_pull_keeps_the_tail_owed(world):
     assert _head(sb) == first and _stamp_commit(sb) == first
     moved = _release(world, {"e2e_fork_origin.py": "B = 1\n"})
     upstream = root / "upstream.git"
-    I.git("clone", "-q", "--bare", "--shared", str(world["origin"]), str(upstream), cwd=root)
-    up = I.publish_commit(upstream, root, "upstream: touches the locked dir", {"zzz_e2e_fork/mod.py": "V = 2\n"})
+    I.git(
+        "clone",
+        "-q",
+        "--bare",
+        "--shared",
+        str(world["origin"]),
+        str(upstream),
+        cwd=root,
+    )
+    up = I.publish_commit(
+        upstream,
+        root,
+        "upstream: touches the locked dir",
+        {"zzz_e2e_fork/mod.py": "V = 2\n"},
+    )
     I.git("remote", "add", "upstream", str(upstream), cwd=sb.checkout)
     flag = sb.checkout / ".git" / "e2e-upstream-ff-failed"
     # origin reads as a fork (the sandbox shim otherwise reports the official URL). Kill the updater at
     # its next branch check once the upstream merge has failed (and been settled).
-    _hostile_git(world, 'case " $* " in *" remote get-url origin "*) echo https://github.com/e2e-fork/clawksis-agent.git; '
-                        'exit 0;; esac\n'
-                        # The sync fast-forwards to the upstream commit it resolved (one SHA, m2).
-                        f'case " $* " in *" merge --ff-only "*"{up} "*) "$REAL" "$@"; rc=$?; '
-                        f'[ $rc != 0 ] && touch "{flag}"; exit $rc;; esac\n'
-                        f'if [ -e "{flag}" ]; then case " $* " in *" rev-parse --abbrev-ref HEAD "*) '
-                        'kill -KILL $PPID; exit 137;; esac; fi')
+    _hostile_git(
+        world,
+        'case " $* " in *" remote get-url origin "*) echo https://github.com/e2e-fork/clawksis-agent.git; '
+        "exit 0;; esac\n"
+        # The sync fast-forwards to the upstream commit it resolved (one SHA, m2).
+        f'case " $* " in *" merge --ff-only "*"{up} "*) "$REAL" "$@"; rc=$?; '
+        f'[ $rc != 0 ] && touch "{flag}"; exit $rc;; esac\n'
+        f'if [ -e "{flag}" ]; then case " $* " in *" rev-parse --abbrev-ref HEAD "*) '
+        "kill -KILL $PPID; exit 137;; esac; fi",
+    )
     locked = sb.checkout / "zzz_e2e_fork"
     locked.chmod(0o555)
     try:
@@ -302,14 +424,25 @@ def test_failed_upstream_sync_after_origin_pull_keeps_the_tail_owed(world):
     finally:
         locked.chmod(0o755)
         _hostile_git(world, "")
-    assert flag.exists() and killed.returncode != 0 and _head(sb) == moved and not _tracked_dirty(sb), (
-        "harness: the upstream ff did not fail after the origin pull moved the tree\n" + I.describe(killed))
+    assert (
+        flag.exists()
+        and killed.returncode != 0
+        and _head(sb) == moved
+        and not _tracked_dirty(sb)
+    ), (
+        "harness: the upstream ff did not fail after the origin pull moved the tree\n"
+        + I.describe(killed)
+    )
     owed = P.pending_marker(sb).exists()
     launch = _launch(sb, "first launch after a failed upstream sync")
-    assert owed, ("the origin pull moved the tree but the failed upstream ff disarmed its owed tail\n"
-                  + P.diagnostics(sb, killed, launch))
+    assert owed, (
+        "the origin pull moved the tree but the failed upstream ff disarmed its owed tail\n"
+        + P.diagnostics(sb, killed, launch)
+    )
     assert _stamp_commit(sb) == moved and not P.pending_marker(sb).exists(), (
-        "the next launch did not finish the tail for the moved tree\n" + P.diagnostics(sb, killed, launch))
+        "the next launch did not finish the tail for the moved tree\n"
+        + P.diagnostics(sb, killed, launch)
+    )
 
 
 def test_kill_mid_zip_swap_over_leftover_backup_keeps_the_entry(world):
@@ -321,15 +454,27 @@ def test_kill_mid_zip_swap_over_leftover_backup_keeps_the_entry(world):
     P.ok(_update(sb), "harness: plain update failed")
     lost = sb.checkout / "e2e_zip_lost"
     lost.rename(sb.checkout / "e2e_zip_lost.clawk-update-old")
-    killed = _zip_killed_at(world, "after:e2e_zip_lost", {"e2e_zip_lost/m.py": "NEW = 1\n"})
-    assert (lost / "m.py").read_text(encoding="utf-8-sig") == "NEW = 1\n" and (sb.checkout / "e2e_zip_lost.clawk-update-old").is_dir(), (
-        "harness: the swap was not killed right after e2e_zip_lost landed\n" + I.describe(killed))
+    killed = _zip_killed_at(
+        world, "after:e2e_zip_lost", {"e2e_zip_lost/m.py": "NEW = 1\n"}
+    )
+    assert (lost / "m.py").read_text(encoding="utf-8-sig") == "NEW = 1\n" and (
+        sb.checkout / "e2e_zip_lost.clawk-update-old"
+    ).is_dir(), (
+        "harness: the swap was not killed right after e2e_zip_lost landed\n"
+        + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill over a leftover backup")
-    assert (lost / "m.py").is_file() and (lost / "m.py").read_text(encoding="utf-8-sig") == "OLD = 1\n", (
+    assert (lost / "m.py").is_file() and (lost / "m.py").read_text(
+        encoding="utf-8-sig"
+    ) == "OLD = 1\n", (
         "recovery deleted both copies of an entry whose backup was healed before the swap: "
-        f"{sorted(p.name for p in sb.checkout.iterdir() if p.name.startswith('e2e_zip'))}\n" + I.describe(launch))
+        f"{sorted(p.name for p in sb.checkout.iterdir() if p.name.startswith('e2e_zip'))}\n"
+        + I.describe(launch)
+    )
     assert not _artifacts(sb) and _head(sb) == pre and not _tracked_dirty(sb), (
-        f"left {_artifacts(sb)[:5]} / tracked changes {_tracked_dirty(sb)!r}\n" + I.describe(launch))
+        f"left {_artifacts(sb)[:5]} / tracked changes {_tracked_dirty(sb)!r}\n"
+        + I.describe(launch)
+    )
 
 
 def test_kill_during_branch_switch_without_local_branch_is_restored(world):
@@ -346,20 +491,25 @@ def test_kill_during_branch_switch_without_local_branch_is_restored(world):
     # Die after writing one of main's files, in the checkout that moves the tree: a local main
     # exists, `-B` was given, or git may guess (no --no-guess) and create main from origin/main.
     # `-B main` names the resolved commit, not the ref (review O2), so it moves whatever comes last.
-    _hostile_git(world, 'case " $* " in *" checkout "*) moves=0; case " $* " in *" -B main "*) moves=1;; esac; '
-                        'case "${@: -1}" in main|origin/main) '
-                        '"$REAL" rev-parse -q --verify refs/heads/main >/dev/null && moves=1; '
-                        'case " $* " in *" --no-guess "*) ;; *) moves=1;; esac;; esac; '
-                        'if [ $moves = 1 ]; then "$REAL" show origin/main:e2e_dwim_a.py > e2e_dwim_a.py; '
-                        'kill -KILL $PPID; exit 137; fi;; esac')
+    _hostile_git(
+        world,
+        'case " $* " in *" checkout "*) moves=0; case " $* " in *" -B main "*) moves=1;; esac; '
+        'case "${@: -1}" in main|origin/main) '
+        '"$REAL" rev-parse -q --verify refs/heads/main >/dev/null && moves=1; '
+        'case " $* " in *" --no-guess "*) ;; *) moves=1;; esac;; esac; '
+        'if [ $moves = 1 ]; then "$REAL" show origin/main:e2e_dwim_a.py > e2e_dwim_a.py; '
+        "kill -KILL $PPID; exit 137; fi;; esac",
+    )
     killed = _update(sb)
     _hostile_git(world, "")
     assert (sb.checkout / "e2e_dwim_a.py").is_file() and _head(sb) == parked, (
-        "harness: the kill did not land mid-switch\n" + I.describe(killed))
+        "harness: the kill did not land mid-switch\n" + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill during a guessed branch switch")
     assert _head(sb) == parked and not (sb.checkout / "e2e_dwim_a.py").exists(), (
         "a kill while git created main from origin/main left main's files in the parked checkout "
-        "(no interrupted-pull marker)\n" + P.diagnostics(sb, killed, launch))
+        "(no interrupted-pull marker)\n" + P.diagnostics(sb, killed, launch)
+    )
 
 
 def test_kill_during_syntax_rollback_lands_on_the_pre_update_commit(world):
@@ -369,22 +519,39 @@ def test_kill_during_syntax_rollback_lands_on_the_pre_update_commit(world):
     sb = world["sb"]
     pre = _head(sb)
     constants = I.git("show", "main:clawk_constants.py", cwd=world["origin"])
-    broken = _release(world, {"clawk_constants.py": constants + "\ndef broken(:\n",
-                              "e2e_rollback_extra.py": "X = 1\n"})
-    _hostile_git(world, 'case " $* " in *" show "*":clawk_constants.py "*) "$REAL" show HEAD:clawk_constants.py; '
-                        'exit $?;; '
-                        '*" cat-file --batch "*) sed "s#^[^ ]*:clawk_constants.py\\$#HEAD:clawk_constants.py#" | "$REAL" "$@"; exit $?;; '
-                        '*" reset --hard "*) "$REAL" show "${@: -1}:clawk_constants.py" > clawk_constants.py; '
-                        'kill -KILL $PPID; exit 137;; esac')
+    broken = _release(
+        world,
+        {
+            "clawk_constants.py": constants + "\ndef broken(:\n",
+            "e2e_rollback_extra.py": "X = 1\n",
+        },
+    )
+    _hostile_git(
+        world,
+        'case " $* " in *" show "*":clawk_constants.py "*) "$REAL" show HEAD:clawk_constants.py; '
+        "exit $?;; "
+        '*" cat-file --batch "*) sed "s#^[^ ]*:clawk_constants.py\\$#HEAD:clawk_constants.py#" | "$REAL" "$@"; exit $?;; '
+        '*" reset --hard "*) "$REAL" show "${@: -1}:clawk_constants.py" > clawk_constants.py; '
+        "kill -KILL $PPID; exit 137;; esac",
+    )
     killed = _update(sb)
     _hostile_git(world, "")
     assert "syntax error" in (killed.stdout or "") + (killed.stderr or ""), (
-        "harness: the post-pull guard did not fire\n" + I.describe(killed))
-    assert (sb.checkout / "e2e_rollback_extra.py").exists(), "harness: the kill did not land mid-rollback\n" + I.describe(killed)
+        "harness: the post-pull guard did not fire\n" + I.describe(killed)
+    )
+    assert (sb.checkout / "e2e_rollback_extra.py").exists(), (
+        "harness: the kill did not land mid-rollback\n" + I.describe(killed)
+    )
     launch = _launch(sb, "first launch after a kill during the syntax rollback")
-    assert _head(sb) == pre and not _tracked_dirty(sb) and not (sb.checkout / "e2e_rollback_extra.py").exists(), (
+    assert (
+        _head(sb) == pre
+        and not _tracked_dirty(sb)
+        and not (sb.checkout / "e2e_rollback_extra.py").exists()
+    ), (
         f"the launch after a kill mid-rollback did not land on {pre[:10]} (HEAD {_head(sb)[:10]}, broken "
-        f"{broken[:10]}; tracked changes {_tracked_dirty(sb)!r})\n" + P.diagnostics(sb, killed, launch))
+        f"{broken[:10]}; tracked changes {_tracked_dirty(sb)!r})\n"
+        + P.diagnostics(sb, killed, launch)
+    )
 
 
 # Run by the git shim inside the sandbox: start the real git under an inotify watch on its git dir and
@@ -416,34 +583,52 @@ def test_git_killed_inside_the_rollback_reset_is_finished_by_the_next_launch(wor
     # A critical module the launcher imports only after the launch-time repair ran (the launcher's own
     # first import, clawk_constants, is a documented limit: a broken copy dies before any repair).
     tools = I.git("show", "main:model_tools.py", cwd=world["origin"])
-    broken = _release(world, {"model_tools.py": tools + "\ndef broken(:\n",
-                              "e2e_rollback_reset_extra.py": "X = 1\n"})
+    broken = _release(
+        world,
+        {
+            "model_tools.py": tools + "\ndef broken(:\n",
+            "e2e_rollback_reset_extra.py": "X = 1\n",
+        },
+    )
     killer = world["root"] / "git_killer.py"
     killer.write_text(_GIT_KILLER, encoding="utf-8")
-    once = sb.root / "rollback-reset-killed"  # the sandbox can write only under its own root
+    once = (
+        sb.root / "rollback-reset-killed"
+    )  # the sandbox can write only under its own root
     # The preflight reads the old file (so the broken release passes it); the rollback's first step,
     # `reset -q <pre>` (HEAD and index, no file), runs once under the killer.
-    _hostile_git(world, 'case " $* " in *" show "*":model_tools.py "*) "$REAL" show HEAD:model_tools.py; '
-                        'exit $?;; '
-                        '*" cat-file --batch "*) sed "s#^[^ ]*:model_tools.py\\$#HEAD:model_tools.py#" | "$REAL" "$@"; exit $?;; '
-                        f'*" reset -q {pre} "*) if [ ! -e "{once}" ]; then : > "{once}"; '
-                        f'exec "{sb.python}" "{killer}" "$REAL" "$@"; fi;; esac')
+    _hostile_git(
+        world,
+        'case " $* " in *" show "*":model_tools.py "*) "$REAL" show HEAD:model_tools.py; '
+        "exit $?;; "
+        '*" cat-file --batch "*) sed "s#^[^ ]*:model_tools.py\\$#HEAD:model_tools.py#" | "$REAL" "$@"; exit $?;; '
+        f'*" reset -q {pre} "*) if [ ! -e "{once}" ]; then : > "{once}"; '
+        f'exec "{sb.python}" "{killer}" "$REAL" "$@"; fi;; esac',
+    )
     killed = _update(sb)
     _hostile_git(world, "")
     output = (killed.stdout or "") + (killed.stderr or "")
     lock = sb.checkout / ".git" / "index.lock"
-    assert "syntax error" in output and once.exists(), "harness: the rollback reset never ran\n" + I.describe(killed)
+    assert "syntax error" in output and once.exists(), (
+        "harness: the rollback reset never ran\n" + I.describe(killed)
+    )
     assert lock.exists() and _head(sb) == broken, (
-        "harness: the kill did not land while git held index.lock\n" + I.describe(killed))
+        "harness: the kill did not land while git held index.lock\n"
+        + I.describe(killed)
+    )
     assert killed.returncode != 0 and "Rollback complete" not in output, (
-        "the updater reported a rollback that never happened\n" + I.describe(killed))
+        "the updater reported a rollback that never happened\n" + I.describe(killed)
+    )
     assert (sb.checkout / ".git" / "clawk-update-pull").is_file(), (
         "the killed rollback erased its own recovery record while HEAD is still the broken release\n"
-        + I.describe(killed))
+        + I.describe(killed)
+    )
 
     launch = _launch(sb, "first launch after git was killed inside the rollback")
     assert _head(sb) == pre and not _tracked_dirty(sb) and not lock.exists(), (
         f"the launch did not finish the rollback to {pre[:10]} (HEAD {_head(sb)[:10]}, broken {broken[:10]}, "
-        f"lock {lock.exists()}, tracked changes {_tracked_dirty(sb)!r})\n" + P.diagnostics(sb, killed, launch))
+        f"lock {lock.exists()}, tracked changes {_tracked_dirty(sb)!r})\n"
+        + P.diagnostics(sb, killed, launch)
+    )
     assert not (sb.checkout / "e2e_rollback_reset_extra.py").exists()
     assert not (sb.checkout / ".git" / "clawk-update-pull").exists()

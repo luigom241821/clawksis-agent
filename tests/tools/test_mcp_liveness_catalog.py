@@ -8,7 +8,11 @@ from tools.registry import registry
 
 
 def _schema(name):
-    return {"name": name, "description": "fixture", "parameters": {"type": "object", "properties": {}}}
+    return {
+        "name": name,
+        "description": "fixture",
+        "parameters": {"type": "object", "properties": {}},
+    }
 
 
 def _decl(tmp_path):
@@ -21,7 +25,9 @@ def _decl(tmp_path):
     )
 
 
-def test_hidden_declared_server_appears_in_listing_and_empty_summary(tmp_path, monkeypatch):
+def test_hidden_declared_server_appears_in_listing_and_empty_summary(
+    tmp_path, monkeypatch
+):
     from clawk_cli import agent_plugins
     from tools.tool_search import ToolSearchConfig, dispatch_tool_search
     from tools.tool_search_catalog import build_catalog_listing_with_form
@@ -29,7 +35,9 @@ def test_hidden_declared_server_appears_in_listing_and_empty_summary(tmp_path, m
     server = "example-hidden"
     tool_name = "mcp__example-hidden__inspect"
     declaration.register(server, _decl(tmp_path))
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False)
+    monkeypatch.setattr(
+        agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False
+    )
     registry.register(
         name=tool_name,
         toolset=f"mcp-{server}",
@@ -40,11 +48,19 @@ def test_hidden_declared_server_appears_in_listing_and_empty_summary(tmp_path, m
     try:
         first = build_catalog_listing_with_form([], max_tokens=4000)
         second = build_catalog_listing_with_form([], max_tokens=4000)
-        result = json.loads(dispatch_tool_search(
-            {"queries": ["inspect"]},
-            current_tool_defs=[],
-            config=ToolSearchConfig(enabled="on", threshold_pct=50.0, search_default_limit=10, max_search_limit=50, defer_tools=frozenset({tool_name})),
-        ))
+        result = json.loads(
+            dispatch_tool_search(
+                {"queries": ["inspect"]},
+                current_tool_defs=[],
+                config=ToolSearchConfig(
+                    enabled="on",
+                    threshold_pct=50.0,
+                    search_default_limit=10,
+                    max_search_limit=50,
+                    defer_tools=frozenset({tool_name}),
+                ),
+            )
+        )
     finally:
         registry.deregister(tool_name)
         declaration.unregister(server)

@@ -19,14 +19,26 @@ from agent.transports.chat_completions import (
 @pytest.mark.parametrize(
     "model,disabled_field",
     [
-        ("gemini-2.5-flash", ("thinkingBudget", 0)),      # 2.5 still documents thinkingBudget
-        ("gemini-3.6-flash", ("thinkingLevel", "low")),   # 3+ deprecated thinkingBudget → thinkingLevel
+        (
+            "gemini-2.5-flash",
+            ("thinkingBudget", 0),
+        ),  # 2.5 still documents thinkingBudget
+        (
+            "gemini-3.6-flash",
+            ("thinkingLevel", "low"),
+        ),  # 3+ deprecated thinkingBudget → thinkingLevel
         ("gemini-3.1-pro", ("thinkingLevel", "low")),
-        ("gemini-4-argon", ("thinkingLevel", "low")),     # a new generation is not treated as legacy
+        (
+            "gemini-4-argon",
+            ("thinkingLevel", "low"),
+        ),  # a new generation is not treated as legacy
         ("google/gemini-4-argon", ("thinkingLevel", "low")),
-        ("gemini-flash-lite-latest", ("thinkingLevel", "low")),  # every -latest alias, not just flash
+        (
+            "gemini-flash-lite-latest",
+            ("thinkingLevel", "low"),
+        ),  # every -latest alias, not just flash
         ("gemini-flash-latest", ("thinkingLevel", "low")),
-        ("gemini-1.5-flash", None),                        # pre-2.5: thinking control undocumented
+        ("gemini-1.5-flash", None),  # pre-2.5: thinking control undocumented
     ],
 )
 def test_disabled_reasoning_bounds_thinking_where_supported(model, disabled_field):
@@ -58,9 +70,13 @@ def test_enabled_reasoning_never_bounds_thinking_and_non_gemini_gets_nothing():
 
 
 def test_snake_case_translation_carries_thinking_controls():
-    translated = _snake_case_gemini_thinking_config({"includeThoughts": False, "thinkingBudget": 0})
+    translated = _snake_case_gemini_thinking_config(
+        {"includeThoughts": False, "thinkingBudget": 0}
+    )
     assert translated == {"include_thoughts": False, "thinking_budget": 0}
-    translated = _snake_case_gemini_thinking_config({"includeThoughts": False, "thinkingLevel": "low"})
+    translated = _snake_case_gemini_thinking_config(
+        {"includeThoughts": False, "thinkingLevel": "low"}
+    )
     assert translated == {"include_thoughts": False, "thinking_level": "low"}
     translated = _snake_case_gemini_thinking_config({"includeThoughts": False})
     assert translated == {"include_thoughts": False}
@@ -69,26 +85,47 @@ def test_snake_case_translation_carries_thinking_controls():
 @pytest.mark.parametrize(
     "reasoning,level,shown,budget",
     [
-        ({"effort": "none"}, "low", False, None),  # Gemini 4 cannot stop thinking: floor level, hidden
+        (
+            {"effort": "none"},
+            "low",
+            False,
+            None,
+        ),  # Gemini 4 cannot stop thinking: floor level, hidden
         ({"effort": "minimal"}, "low", True, None),  # "minimal" 400s on Gemini 4
         ({"effort": "medium"}, "medium", True, None),
         ({"effort": "high"}, "high", True, None),
-        ({"effort": "xhigh"}, "high", True, 262_144),  # above high buys long-decode budget instead
+        (
+            {"effort": "xhigh"},
+            "high",
+            True,
+            262_144,
+        ),  # above high buys long-decode budget instead
         ({"effort": "max"}, "high", True, 1_048_576),
     ],
 )
-def test_gemini4_maps_effort_to_thinking_level_and_long_decode_budget(reasoning, level, shown, budget):
+def test_gemini4_maps_effort_to_thinking_level_and_long_decode_budget(
+    reasoning, level, shown, budget
+):
     from providers import get_provider_profile
 
     config = _build_gemini_thinking_config("gemini-4-argon", reasoning)
-    assert config == {"includeThoughts": shown, "thinkingLevel": level}  # never thinkingBudget (400 with a level)
+    assert config == {
+        "includeThoughts": shown,
+        "thinkingLevel": level,
+    }  # never thinkingBudget (400 with a level)
     profile = get_provider_profile("gemini")
-    native = profile.build_extra_body(model="gemini-4-argon", reasoning_config=reasoning,
-                                      base_url="https://generativelanguage.googleapis.com/v1beta")
+    native = profile.build_extra_body(
+        model="gemini-4-argon",
+        reasoning_config=reasoning,
+        base_url="https://generativelanguage.googleapis.com/v1beta",
+    )
     assert native.get("max_output_tokens") == budget
     # The OpenAI-compat subpath has no long decode: no budget rides there.
-    compat = profile.build_extra_body(model="gemini-4-argon", reasoning_config=reasoning,
-                                      base_url="https://generativelanguage.googleapis.com/v1beta/openai")
+    compat = profile.build_extra_body(
+        model="gemini-4-argon",
+        reasoning_config=reasoning,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+    )
     assert "max_output_tokens" not in compat
 
 
@@ -107,12 +144,18 @@ def test_gemini4_maps_effort_to_thinking_level_and_long_decode_budget(reasoning,
         ("gemini-pro-latest", "high", "high"),
     ],
 )
-def test_enabled_reasoning_maps_effort_to_thinking_level_on_gemini_3_and_later(model, effort, level):
+def test_enabled_reasoning_maps_effort_to_thinking_level_on_gemini_3_and_later(
+    model, effort, level
+):
     config = _build_gemini_thinking_config(model, {"enabled": True, "effort": effort})
     assert config == {"includeThoughts": True, "thinkingLevel": level}
 
 
 def test_unversioned_non_alias_gemini_ids_get_no_thinking_level():
     # Only a version >= 3 or a -latest alias earns a level; unknown ids keep the no-guess default.
-    assert _build_gemini_thinking_config("gemini-exp-1206", {"effort": "high"}) == {"includeThoughts": True}
-    assert _build_gemini_thinking_config("gemini-1.5-pro", {"effort": "high"}) == {"includeThoughts": True}
+    assert _build_gemini_thinking_config("gemini-exp-1206", {"effort": "high"}) == {
+        "includeThoughts": True
+    }
+    assert _build_gemini_thinking_config("gemini-1.5-pro", {"effort": "high"}) == {
+        "includeThoughts": True
+    }

@@ -12,7 +12,14 @@ from __future__ import annotations
 
 import pytest
 
-from tests.e2e.core.compaction._helpers import REFUSAL_TEXT, SEEDS, TRUNCATED_TEXT, db_rows, drive, warned
+from tests.e2e.core.compaction._helpers import (
+    REFUSAL_TEXT,
+    SEEDS,
+    TRUNCATED_TEXT,
+    db_rows,
+    drive,
+    warned,
+)
 
 FAILING_MODES = ("empty", "refusal", "truncated", "slow")
 
@@ -23,17 +30,23 @@ def test_failed_summary_never_commits(make_scenario, tmp_path, seed, mode):
     sc = make_scenario(mode)
     drive(sc, seed, tmp_path / "work")
     assert sc.summary_calls, "the seeded session never crossed the compaction trigger"
-    assert sc.committed_compactions() == 0, f"a {mode} summary committed a compaction (history archived)"
+    assert sc.committed_compactions() == 0, (
+        f"a {mode} summary committed a compaction (history archived)"
+    )
     bad = {"refusal": REFUSAL_TEXT, "truncated": TRUNCATED_TEXT}.get(mode)
     if bad:
         for rec in sc.turns:
             for body in rec.main_requests:
-                assert not any(bad in str(m.get("content")) for m in body["messages"]), (
-                    f"the {mode} summary text reached the model")
-        assert not any(bad in (r["content"] or "") for r in db_rows(sc.db_path, sc.session_id)), (
-            f"the {mode} summary text was written to state.db")
+                assert not any(
+                    bad in str(m.get("content")) for m in body["messages"]
+                ), f"the {mode} summary text reached the model"
+        assert not any(
+            bad in (r["content"] or "") for r in db_rows(sc.db_path, sc.session_id)
+        ), f"the {mode} summary text was written to state.db"
     # The session is over the trigger with no usable summary: the user must be told.
-    assert warned(sc), f"{mode} summarizer: compaction failed silently (no warning surfaced)"
+    assert warned(sc), (
+        f"{mode} summarizer: compaction failed silently (no warning surfaced)"
+    )
 
 
 @pytest.mark.parametrize("seed", SEEDS[:1])

@@ -23,8 +23,13 @@ def _make_adapter():
 async def test_typing_transient_failure_enters_cooldown(monkeypatch):
     adapter = _make_adapter()
     now = {"value": 1000.0}
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.asyncio.get_running_loop", lambda: type("Loop", (), {"time": lambda self: now["value"]})())
-    monkeypatch.setattr(adapter, "_telegram_typing_cooldown_seconds", 30.0, raising=False)
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.asyncio.get_running_loop",
+        lambda: type("Loop", (), {"time": lambda self: now["value"]})(),
+    )
+    monkeypatch.setattr(
+        adapter, "_telegram_typing_cooldown_seconds", 30.0, raising=False
+    )
 
     async def fail_once(**kwargs):
         raise OSError("temporary telegram network failure")
@@ -48,7 +53,10 @@ async def test_typing_transient_failure_enters_cooldown(monkeypatch):
 @pytest.mark.asyncio
 async def test_typing_dm_topic_fallback_success_does_not_cool_down(monkeypatch):
     adapter = _make_adapter()
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.asyncio.get_running_loop", lambda: type("Loop", (), {"time": lambda self: 10.0})())
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.asyncio.get_running_loop",
+        lambda: type("Loop", (), {"time": lambda self: 10.0})(),
+    )
 
     calls = []
 
@@ -71,7 +79,10 @@ async def test_typing_dm_topic_fallback_success_does_not_cool_down(monkeypatch):
 @pytest.mark.asyncio
 async def test_typing_bad_thread_failure_does_not_cool_down(monkeypatch):
     adapter = _make_adapter()
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.asyncio.get_running_loop", lambda: type("Loop", (), {"time": lambda self: 10.0})())
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.asyncio.get_running_loop",
+        lambda: type("Loop", (), {"time": lambda self: 10.0})(),
+    )
 
     async def bad_request(**kwargs):
         raise ValueError("message thread not found")

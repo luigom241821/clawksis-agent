@@ -27,8 +27,7 @@ def _assert_nonindexed_updates_bypass_missing_fts_target(
     assert _trigger_sql(db._conn, "messages_fts_update") is not None
 
     db._conn.execute(
-        "UPDATE messages SET active = 0, compacted = 1, observed = 1 "
-        "WHERE id = ?",
+        "UPDATE messages SET active = 0, compacted = 1, observed = 1 WHERE id = ?",
         (message_id,),
     )
     with pytest.raises(sqlite3.OperationalError, match=r"no such table.*messages_fts"):
@@ -121,8 +120,6 @@ def test_migrate_replaces_broad_update_trigger(tmp_path: Path):
         db.close()
 
 
-
-
 def test_v23_status_only_update_bypasses_fts_trigger_body(tmp_path: Path):
     db = SessionDB(db_path=tmp_path / "state.db")
     try:
@@ -144,9 +141,10 @@ def test_legacy_status_only_update_bypasses_migrated_fts_trigger(tmp_path: Path)
 
         assert db._db_has_legacy_inline_fts(db._conn)
         assert db._migrate_broad_fts_update_triggers(db._conn) >= 1
-        assert "AFTER UPDATE OF" in " ".join(
-            _trigger_sql(db._conn, "messages_fts_update").split()
-        ).upper()
+        assert (
+            "AFTER UPDATE OF"
+            in " ".join(_trigger_sql(db._conn, "messages_fts_update").split()).upper()
+        )
 
         _assert_nonindexed_updates_bypass_missing_fts_target(db, mid)
     finally:

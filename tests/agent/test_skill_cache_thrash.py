@@ -1,4 +1,5 @@
 """Regression test for #104849: skill command cache thrash from platform/home flapping."""
+
 from pathlib import Path
 from unittest.mock import patch
 from agent.skill_commands import get_skill_commands, scan_skill_commands
@@ -135,6 +136,7 @@ def test_cache_creates_multiple_slots_for_distinct_platform_or_home(tmp_path):
         assert cmds_a_telegram_again is cmds_a_telegram
         assert scan_count == 3  # No rescan
 
+
 def test_cache_keys_project_as_third_dimension(tmp_path):
     """Two sessions in different repos share (platform, home) but must NOT share
     a cache slot: the project root is part of the identity (#114359). A 2-tuple
@@ -177,7 +179,9 @@ def test_cache_keys_project_as_third_dimension(tmp_path):
     try:
         with (
             patch.object(sc_mod, "_skill_commands_by_key", {}),
-            patch("agent.skill_commands.scan_skill_commands", side_effect=counting_scan),
+            patch(
+                "agent.skill_commands.scan_skill_commands", side_effect=counting_scan
+            ),
             patch.object(skill_utils, "find_project_root", fake_find_project_root),
             patch.object(skill_utils, "get_project_skills_dirs", fake_project_dirs),
         ):
@@ -234,8 +238,10 @@ def test_reload_invalidates_every_identity_slot(tmp_path):
         token = set_clawk_home_override(profile_a)
         try:
             result = reload_skills()
-            assert "/a-second-skill" in {item["name"] for item in result["added"]} or \
-                result["added"], result
+            assert (
+                "/a-second-skill" in {item["name"] for item in result["added"]}
+                or result["added"]
+            ), result
         finally:
             reset_clawk_home_override(token)
         # reload_skills() repopulated ONLY the current (A) slot with a fresh view

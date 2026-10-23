@@ -169,7 +169,6 @@ class TestSendDraft:
         (stream,) = _open_streams(adapter)
         assert stream["ts"] == "124.000"
 
-
     @pytest.mark.asyncio
     async def test_expired_stream_reopens_seeded_with_only_the_unsent_tail(self):
         """Slack seals a native draft stream server-side after a few minutes of a
@@ -184,7 +183,9 @@ class TestSendDraft:
         await adapter.send_draft("D1", 7, "Hello wo", metadata=META)
 
         client.chat_appendStream = AsyncMock(
-            side_effect=_StreamExpiredError("expired", {"ok": False, "error": "message_not_in_streaming_state"})
+            side_effect=_StreamExpiredError(
+                "expired", {"ok": False, "error": "message_not_in_streaming_state"}
+            )
         )
         client.chat_startStream = AsyncMock(return_value={"ok": True, "ts": "124.000"})
 
@@ -193,10 +194,14 @@ class TestSendDraft:
         assert result.success
         assert result.message_id == "124.000"
         kwargs = client.chat_startStream.await_args.kwargs
-        assert kwargs["markdown_text"] == "rld!"  # sealed message already shows "Hello wo"
+        assert (
+            kwargs["markdown_text"] == "rld!"
+        )  # sealed message already shows "Hello wo"
         (reopened,) = _open_streams(adapter)  # same per-thread key, dead ts replaced
         assert reopened["ts"] == "124.000"
-        assert reopened["sent"] == "Hello world!"  # full segment: deltas diff against it
+        assert (
+            reopened["sent"] == "Hello world!"
+        )  # full segment: deltas diff against it
         assert reopened["base"] == len("Hello wo")
         assert kwargs["thread_ts"] == META["thread_id"]
         assert adapter._native_stream_unsupported is False  # not the feature-gate path
@@ -259,7 +264,6 @@ class TestSendFinalization:
         client.chat_postMessage.assert_not_awaited()
         assert not _open_streams(adapter)
 
-
     @pytest.mark.asyncio
     async def test_unrelated_send_passes_through(self):
         adapter, client = _make_adapter()
@@ -275,15 +279,18 @@ class TestSendFinalization:
         """/status, /approve and clarify answers are notify sends in the SAME thread; they
         must not overwrite the half-streamed answer in place."""
         adapter, client = _make_adapter()
-        await adapter.send_draft("D1", 7, "Partial answer being streamed", metadata=META)
-        result = await adapter.send("D1", "Status: running, 3 tools", metadata={**META, "notify": True})
+        await adapter.send_draft(
+            "D1", 7, "Partial answer being streamed", metadata=META
+        )
+        result = await adapter.send(
+            "D1", "Status: running, 3 tools", metadata={**META, "notify": True}
+        )
         assert result.message_id == "999.111"
         client.chat_postMessage.assert_awaited_once()
         client.chat_stopStream.assert_not_awaited()
         client.chat_update.assert_not_awaited()
         (stream,) = _open_streams(adapter)
         assert stream["sent"] == "Partial answer being streamed"
-
 
     @pytest.mark.asyncio
     async def test_stop_and_update_both_fail_falls_back_to_fresh_post(self):
@@ -301,7 +308,6 @@ class TestSendFinalization:
         assert client.chat_update.await_count == 1
         assert not _open_streams(adapter)
 
-
     @pytest.mark.asyncio
     async def test_two_threads_finalize_their_own_streams(self):
         adapter, client = _make_adapter()
@@ -318,13 +324,14 @@ class TestSendFinalization:
         client.chat_postMessage.assert_not_awaited()
         assert not _open_streams(adapter, "C1")
 
-
     @pytest.mark.asyncio
     async def test_rewritten_turn_final_replaces_stream_in_place(self):
         """A mrkdwn-rewritten turn-final (notify=True) replaces the sealed stream; no 2nd post."""
         adapter, client = _make_adapter()
         await adapter.send_draft("D1", 7, "*Done:* all good", metadata=META)
-        result = await adapter.send("D1", "_Done:_ all good", metadata=dict(META, notify=True))
+        result = await adapter.send(
+            "D1", "_Done:_ all good", metadata=dict(META, notify=True)
+        )
         assert result.success
         client.chat_stopStream.assert_awaited_once()
         client.chat_update.assert_awaited()
@@ -335,9 +342,13 @@ class TestSendFinalization:
     @pytest.mark.asyncio
     async def test_rewritten_turn_final_posts_when_update_fails(self):
         adapter, client = _make_adapter()
-        await adapter.send_draft("D1", 7, "*Draft:* answer that got restyled", metadata=META)
+        await adapter.send_draft(
+            "D1", 7, "*Draft:* answer that got restyled", metadata=META
+        )
         client.chat_update = AsyncMock(side_effect=Exception("update failed"))
-        result = await adapter.send("D1", "_Draft:_ answer that got restyled", metadata=dict(META, notify=True))
+        result = await adapter.send(
+            "D1", "_Draft:_ answer that got restyled", metadata=dict(META, notify=True)
+        )
         assert result.success
         client.chat_postMessage.assert_awaited_once()
         assert not _open_streams(adapter)
@@ -348,7 +359,6 @@ RICH_MD = "# Title\n\nbody text with **bold**\n\n| a | b |\n|---|---|\n| 1 | 2 |
 
 class TestRichBlocksAfterSeal:
     """G: with ``rich_blocks`` the sealed stream gets its layout via chat.update, once."""
-
 
     @pytest.mark.asyncio
     async def test_rich_blocks_applied_after_seal(self):

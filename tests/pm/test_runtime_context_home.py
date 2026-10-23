@@ -27,7 +27,9 @@ def test_context_home_publication_recovers_from_its_own_process(tmp_path, monkey
             context_home / "plugins": ["old"],
         }
         with runtime_lock(project):
-            PluginSelection({"home": str(config.parent), "enabled": ["new"], "disabled": []}).publish(project)
+            PluginSelection(
+                {"home": str(config.parent), "enabled": ["new"], "disabled": []}
+            ).publish(project)
         assert config.read_bytes() != original
     finally:
         reset_clawk_home_override(token)

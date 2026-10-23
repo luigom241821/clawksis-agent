@@ -40,14 +40,20 @@ def test_finite_chat_joins_parallel_children_before_final_response(tmp_path, mod
 
         def do_POST(self):
             try:
-                request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                request = json.loads(
+                    self.rfile.read(int(self.headers["Content-Length"]))
+                )
                 messages = request.get("messages", [])
                 if not messages:
                     self.send_error(404)
                     return
-                users = [str(m.get("content", "")) for m in messages if m["role"] == "user"]
+                users = [
+                    str(m.get("content", "")) for m in messages if m["role"] == "user"
+                ]
                 worker = next((w for w in workers if w in users[-1]), None)
-                results = [json.loads(m["content"]) for m in messages if m["role"] == "tool"]
+                results = [
+                    json.loads(m["content"]) for m in messages if m["role"] == "tool"
+                ]
                 message: dict[str, Any]
                 if worker:
                     with lock:
@@ -59,32 +65,69 @@ def test_finite_chat_joins_parallel_children_before_final_response(tmp_path, mod
                         joined_results.extend(results)
                     summaries = json.dumps(results)
                     joined = all(w + "_COMPLETE" in summaries for w in workers)
-                    message = {"role": "assistant", "content": (
-                        "FANOUT_JOINED_AND_SYNTHESIZED" if joined else "PARENT_ENDED_BEFORE_JOIN"
-                    )}
+                    message = {
+                        "role": "assistant",
+                        "content": (
+                            "FANOUT_JOINED_AND_SYNTHESIZED"
+                            if joined
+                            else "PARENT_ENDED_BEFORE_JOIN"
+                        ),
+                    }
                 else:
-                    message = {"role": "assistant", "content": None, "tool_calls": [{
-                        "id": "call_fanout", "type": "function", "function": {
-                            "name": "delegate_task", "arguments": json.dumps({
-                                "tasks": [{"goal": f"Complete {w} and return its completion token."}
-                                          for w in workers],
-                            }),
-                        },
-                    }]}
+                    message = {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": "call_fanout",
+                                "type": "function",
+                                "function": {
+                                    "name": "delegate_task",
+                                    "arguments": json.dumps(
+                                        {
+                                            "tasks": [
+                                                {
+                                                    "goal": f"Complete {w} and return its completion token."
+                                                }
+                                                for w in workers
+                                            ],
+                                        }
+                                    ),
+                                },
+                            }
+                        ],
+                    }
                 response = {
-                    "id": "chatcmpl-local", "object": "chat.completion", "created": 1,
-                    "model": "test-model", "choices": [{
-                        "index": 0, "message": message,
-                        "finish_reason": "tool_calls" if "tool_calls" in message else "stop",
-                    }], "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+                    "id": "chatcmpl-local",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": "test-model",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": message,
+                            "finish_reason": "tool_calls"
+                            if "tool_calls" in message
+                            else "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 20,
+                        "completion_tokens": 10,
+                        "total_tokens": 30,
+                    },
                 }
                 content_type = "application/json"
                 if request.get("stream"):
                     response["object"] = "chat.completion.chunk"
-                    response["choices"][0]["delta"] = response["choices"][0].pop("message")
+                    response["choices"][0]["delta"] = response["choices"][0].pop(
+                        "message"
+                    )
                     for index, tool in enumerate(message.get("tool_calls", [])):
                         tool["index"] = index
-                    raw = ("data: " + json.dumps(response) + "\n\ndata: [DONE]\n\n").encode()
+                    raw = (
+                        "data: " + json.dumps(response) + "\n\ndata: [DONE]\n\n"
+                    ).encode()
                     content_type = "text/event-stream"
                 else:
                     raw = json.dumps(response).encode()
@@ -116,31 +159,82 @@ def test_finite_chat_joins_parallel_children_before_final_response(tmp_path, mod
         encoding="utf-8",
     )
     query = tmp_path / "query.txt"
-    query.write_text("Delegate two independent tasks, then synthesize their results.", encoding="utf-8")
+    query.write_text(
+        "Delegate two independent tasks, then synthesize their results.",
+        encoding="utf-8",
+    )
     # Retain native Windows location variables, but never inherited credentials
     # or another session's finite/approval/runtime markers.
-    env = {key: os.environ[key] for key in (
-        "PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP", "LOCALAPPDATA", "APPDATA",
-    ) if key in os.environ}
-    env.update(HOME=str(tmp_path), USERPROFILE=str(tmp_path), CLAWK_HOME=str(home),
-               CLAWK_MANAGED_DIR=str(tmp_path / "managed"), TERMINAL_CWD=str(tmp_path),
-               OPENAI_BASE_URL=url, OPENAI_API_KEY="local-test-only", PYTHONPATH=str(REPO_ROOT),
-               PYTHONDONTWRITEBYTECODE="1", LANG="C.UTF-8")
-    mode_flags = {"quiet": ["-Q"], "oneshot": ["--oneshot"], "redirected": [],
-                  "resumed": ["-Q"]}
+    env = {
+        key: os.environ[key]
+        for key in (
+            "PATH",
+            "SYSTEMROOT",
+            "WINDIR",
+            "COMSPEC",
+            "TEMP",
+            "TMP",
+            "LOCALAPPDATA",
+            "APPDATA",
+        )
+        if key in os.environ
+    }
+    env.update(
+        HOME=str(tmp_path),
+        USERPROFILE=str(tmp_path),
+        CLAWK_HOME=str(home),
+        CLAWK_MANAGED_DIR=str(tmp_path / "managed"),
+        TERMINAL_CWD=str(tmp_path),
+        OPENAI_BASE_URL=url,
+        OPENAI_API_KEY="local-test-only",
+        PYTHONPATH=str(REPO_ROOT),
+        PYTHONDONTWRITEBYTECODE="1",
+        LANG="C.UTF-8",
+    )
+    mode_flags = {
+        "quiet": ["-Q"],
+        "oneshot": ["--oneshot"],
+        "redirected": [],
+        "resumed": ["-Q"],
+    }
     command = [
-        sys.executable, "-c", "from clawk_cli.main import main; main()", "chat",
-        *mode_flags[mode], "--provider", "custom", "--model", "test-model", "--base-url", url,
-        "--toolsets", "delegation", "--ignore-rules", "--query-file", str(query),
-        "--reasoning", "high", "--max-turns", "10",
+        sys.executable,
+        "-c",
+        "from clawk_cli.main import main; main()",
+        "chat",
+        *mode_flags[mode],
+        "--provider",
+        "custom",
+        "--model",
+        "test-model",
+        "--base-url",
+        url,
+        "--toolsets",
+        "delegation",
+        "--ignore-rules",
+        "--query-file",
+        str(query),
+        "--reasoning",
+        "high",
+        "--max-turns",
+        "10",
     ]
     from tests.gateway.fixtures.local_recovery_probe import daemon, rpc, websocket
 
     async def create_resume_target(desc):
         async with websocket(home, desc) as ws:
-            created = await rpc(ws, "session.create", request_id="interactive-origin", source="cli",
-                                model="test-model", provider="custom", base_url=url,
-                                toolsets=["delegation"], cwd=str(tmp_path), ignore_rules=True)
+            created = await rpc(
+                ws,
+                "session.create",
+                request_id="interactive-origin",
+                source="cli",
+                model="test-model",
+                provider="custom",
+                base_url=url,
+                toolsets=["delegation"],
+                cwd=str(tmp_path),
+                ignore_rules=True,
+            )
             return created["result"]["stored_session_id"]
 
     async def check_receipt(desc, row):
@@ -151,27 +245,60 @@ def test_finite_chat_joins_parallel_children_before_final_response(tmp_path, mod
             assert "result" in await rpc(ws, "session.resume", session_id=sid)
             # The row stores the committed admission; its ``cli_turn_v1`` block holds the per-turn CLI
             # fields under their wire names, so the retry re-sends exactly what the CLI submitted.
-            wire = {key: value for key, value in payload.items() if key != "cli_turn_v1"}
-            retry = dict(session_id=sid, input_id=request_id, **wire, **payload.get("cli_turn_v1", {}))
-            assert (await rpc(ws, "prompt.submit", **retry))["result"]["status"] == "terminal"
+            wire = {
+                key: value for key, value in payload.items() if key != "cli_turn_v1"
+            }
+            retry = dict(
+                session_id=sid,
+                input_id=request_id,
+                **wire,
+                **payload.get("cli_turn_v1", {}),
+            )
+            assert (await rpc(ws, "prompt.submit", **retry))["result"][
+                "status"
+            ] == "terminal"
             conflict = await rpc(ws, "prompt.submit", **{**retry, "finite": False})
             assert conflict["error"]["message"] == "admission_conflict"
             invalid = await rpc(ws, "prompt.submit", **{**retry, "finite": "true"})
             assert invalid["error"]["message"] == "invalid_params"
+
     try:
         # Own the ordinary authority explicitly: a finite viewer must not own its lifetime.
         with daemon(REPO_ROOT, home, env, barrier=False) as (owner, desc):
             if mode == "resumed":
                 sid = asyncio.run(create_resume_target(desc))
-                command = command[:5] + ["-Q", "--resume", sid, "--query-file", str(query)]
-            result = subprocess.run(command, cwd=tmp_path, env=env, stdin=subprocess.DEVNULL,
-                                    capture_output=True, text=True, encoding="utf-8", timeout=75, check=False)
+                command = command[:5] + [
+                    "-Q",
+                    "--resume",
+                    sid,
+                    "--query-file",
+                    str(query),
+                ]
+            result = subprocess.run(
+                command,
+                cwd=tmp_path,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=75,
+                check=False,
+            )
             assert owner.poll() is None
-            with closing(sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True)) as db:
-                admissions = db.execute("SELECT status FROM session_admissions").fetchall()
-                saved = db.execute("SELECT target_session_id,request_id,payload_json FROM session_admissions").fetchone()
+            with closing(
+                sqlite3.connect(f"file:{home / 'state.db'}?mode=ro", uri=True)
+            ) as db:
+                admissions = db.execute(
+                    "SELECT status FROM session_admissions"
+                ).fetchall()
+                saved = db.execute(
+                    "SELECT target_session_id,request_id,payload_json FROM session_admissions"
+                ).fetchone()
                 # Inline children never leave a detached-result receipt for a later viewer.
-                assert db.execute("SELECT count(*) FROM async_delegations").fetchone() == (0,)
+                assert db.execute(
+                    "SELECT count(*) FROM async_delegations"
+                ).fetchone() == (0,)
             assert admissions == [("terminal",)], admissions
             asyncio.run(check_receipt(desc, saved))
     finally:
@@ -185,11 +312,18 @@ def test_finite_chat_joins_parallel_children_before_final_response(tmp_path, mod
     assert sorted(children) == sorted(workers), diagnostic
     assert not errors, diagnostic
     assert len(joined_results) == 1, diagnostic
-    assert [r["status"] for r in joined_results[0]["results"]] == ["completed", "completed"]
-    assert [r["summary"] for r in joined_results[0]["results"]] == [w + "_COMPLETE" for w in workers]
+    assert [r["status"] for r in joined_results[0]["results"]] == [
+        "completed",
+        "completed",
+    ]
+    assert [r["summary"] for r in joined_results[0]["results"]] == [
+        w + "_COMPLETE" for w in workers
+    ]
 
 
-@pytest.mark.parametrize("query,image", [("Delegate a task", None), (None, "image.png")])
+@pytest.mark.parametrize(
+    "query,image", [("Delegate a task", None), (None, "image.png")]
+)
 def test_tty_seeded_chat_keeps_background_delegation(monkeypatch, query, image):
     """A TTY -q (or image seed) still owns a later-turn completion consumer."""
     import cli
@@ -203,14 +337,25 @@ def test_tty_seeded_chat_keeps_background_delegation(monkeypatch, query, image):
     monkeypatch.delenv("CLAWK_KANBAN_TASK", raising=False)
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
-    monkeypatch.setattr(cli, "_collect_query_images", lambda q, i: (q, [i] if i else []))
+    monkeypatch.setattr(
+        cli, "_collect_query_images", lambda q, i: (q, [i] if i else [])
+    )
     parent = _make_mock_parent()
     parent.session_id = "interactive-parent"
     monkeypatch.setattr(dt, "_build_child_agent", lambda **kw: MagicMock())
-    monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **kw: {
-        "model": "test-model", "provider": "custom", "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
-    })
+    monkeypatch.setattr(
+        dt,
+        "_resolve_delegation_credentials",
+        lambda *a, **kw: {
+            "model": "test-model",
+            "provider": "custom",
+            "base_url": None,
+            "api_key": None,
+            "api_mode": None,
+            "command": None,
+            "args": None,
+        },
+    )
     dispatched = []
 
     def dispatch(unit, unit_id, slot_key, routing):
@@ -218,9 +363,12 @@ def test_tty_seeded_chat_keeps_background_delegation(monkeypatch, query, image):
         return {"status": "dispatched", "delegation_id": "interactive-delegation"}
 
     monkeypatch.setattr("tools.delegate_tool_dispatch._dispatch_unit", dispatch)
-    seeded = SimpleNamespace(run=lambda: AIAgent._dispatch_delegate_task(
-        parent, {"tasks": [{"goal": "independent task"}]},
-    ))
+    seeded = SimpleNamespace(
+        run=lambda: AIAgent._dispatch_delegate_task(
+            parent,
+            {"tasks": [{"goal": "independent task"}]},
+        )
+    )
     try:
         result = cli._run_single_query_mode(seeded, query, image, False, False)
         assert isinstance(result, str)

@@ -1,6 +1,7 @@
 """Regression tests for #40597: _APPLIED_HOMES must be marked AFTER a real
 fetch attempt, so early failures (malformed config, disabled sources) stay
 retryable within the process instead of being permanently skipped."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,15 +17,13 @@ def _reset():
     yield
     env_loader.reset_secret_source_cache()
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
 
 
 def _write_enabled_config(home: Path):
     (home / "config.yaml").write_text(
-        "secrets:\n"
-        "  bitwarden:\n"
-        "    enabled: true\n"
-        "    project_id: proj\n"
+        "secrets:\n  bitwarden:\n    enabled: true\n    project_id: proj\n"
     )
 
 
@@ -42,6 +41,7 @@ def test_malformed_config_does_not_permanently_skip(tmp_path, monkeypatch):
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "0.t")
 
     import agent.secret_sources.bitwarden as bw
+
     calls = {"n": 0}
 
     def fake_fetch(**kwargs):
@@ -53,6 +53,7 @@ def test_malformed_config_does_not_permanently_skip(tmp_path, monkeypatch):
     monkeypatch.delenv("NEW_KEY_40597", raising=False)
 
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
 
     env_loader._apply_external_secret_sources(home)
@@ -76,6 +77,7 @@ def test_disabled_sources_do_not_mark_applied(tmp_path):
         "secrets:\n  bitwarden:\n    enabled: false\n    project_id: p\n"
     )
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
     env_loader._apply_external_secret_sources(home)
     assert str(home.resolve()) not in env_loader._APPLIED_HOMES
@@ -91,6 +93,7 @@ def test_fetch_error_still_marks_applied(tmp_path, monkeypatch):
     monkeypatch.setenv("BWS_ACCESS_TOKEN", "0.dead")
 
     import agent.secret_sources.bitwarden as bw
+
     calls = {"n": 0}
 
     def boom(**kwargs):
@@ -101,6 +104,7 @@ def test_fetch_error_still_marks_applied(tmp_path, monkeypatch):
     monkeypatch.setattr(bw, "fetch_bitwarden_secrets", boom)
 
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
 
     env_loader._apply_external_secret_sources(home)
@@ -117,6 +121,7 @@ def test_success_marks_applied_and_second_call_noop(tmp_path, monkeypatch):
     monkeypatch.delenv("KEY_OK_40597", raising=False)
 
     import agent.secret_sources.bitwarden as bw
+
     calls = {"n": 0}
 
     def fake_fetch(**kwargs):
@@ -127,6 +132,7 @@ def test_success_marks_applied_and_second_call_noop(tmp_path, monkeypatch):
     monkeypatch.setattr(bw, "fetch_bitwarden_secrets", fake_fetch)
 
     from agent.secret_sources import registry
+
     registry._reset_registry_for_tests()
 
     env_loader._apply_external_secret_sources(home)

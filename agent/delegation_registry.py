@@ -25,7 +25,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_BACKEND = "default"
 
 _registry: ProviderRegistry[DelegationProvider] = ProviderRegistry(
-    label="Delegation", provider_cls=DelegationProvider, logger=logger, normalize=lower_key,
+    label="Delegation",
+    provider_cls=DelegationProvider,
+    logger=logger,
+    normalize=lower_key,
 )
 _registry.export(globals())
 
@@ -54,6 +57,7 @@ class _BundledRegistrar:
 
 def _bundled_disabled(name: str) -> bool:
     from clawk_cli.plugins_discovery import _get_disabled_plugins
+
     return bool({name, f"delegation/{name}"} & _get_disabled_plugins())
 
 
@@ -64,7 +68,10 @@ def _load_bundled(name: str) -> Optional[DelegationProvider]:
     disable takes effect without a restart."""
     from clawk_cli.plugins import get_bundled_plugins_dir
     from plugins import plugin_loader
-    if not _BUNDLED_NAME_RE.match(name) or _bundled_disabled(name):  # the name comes from config.yaml: never a path
+
+    if not _BUNDLED_NAME_RE.match(name) or _bundled_disabled(
+        name
+    ):  # the name comes from config.yaml: never a path
         return None
     if name in _first_use:
         return _first_use[name]
@@ -72,8 +79,11 @@ def _load_bundled(name: str) -> Optional[DelegationProvider]:
     if not (plugin_dir / "plugin.yaml").is_file():
         return None
     module = plugin_loader.load_plugin_module(
-        f"plugins.delegation.{name.replace('-', '_')}", plugin_dir, parents=("plugins", "plugins.delegation"),
-        logger=logger)
+        f"plugins.delegation.{name.replace('-', '_')}",
+        plugin_dir,
+        parents=("plugins", "plugins.delegation"),
+        logger=logger,
+    )
     if module is None:
         return None
     module.register(_BundledRegistrar(name))
@@ -82,7 +92,8 @@ def _load_bundled(name: str) -> Optional[DelegationProvider]:
 
 def _available(provider: Optional[DelegationProvider]) -> bool:
     return provider is not None and is_available_safe(
-        provider, logger, "delegation provider %s.is_available() raised %s")
+        provider, logger, "delegation provider %s.is_available() raised %s"
+    )
 
 
 def _usable(name: str) -> Optional[DelegationProvider]:
@@ -97,6 +108,7 @@ def _usable(name: str) -> Optional[DelegationProvider]:
         return bundled
     if registered is None and bundled is None:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()
         registered = _registry.get_provider(name)
         if _available(registered):
@@ -112,17 +124,21 @@ def backend_status(name: str) -> tuple[Optional[DelegationProvider], str]:
         return provider, ""
     registered = _registry.get_provider(name)
     if registered is None and name == DEFAULT_BACKEND:
-        return None, ("No default delegation strategy is available: the bundled plugin delegation/default is "
-                      "disabled. Remove it from plugins.disabled in config.yaml.")
+        return None, (
+            "No default delegation strategy is available: the bundled plugin delegation/default is "
+            "disabled. Remove it from plugins.disabled in config.yaml."
+        )
     if registered is None:
         return None, (
             f"Delegation backend '{name}' is not installed: no enabled plugin provides it. Install or enable the "
             f"plugin that does (`clawk plugins list`), or switch back to the default backend "
-            f"(`clawk config set delegation.backend default`).")
+            f"(`clawk config set delegation.backend default`)."
+        )
     return registered, (
         f"Delegation backend '{name}' is unavailable here (its plugin reports it cannot run). Fix its setup, or "
         f"switch back to the default backend: `/delegation default` for this session, or "
-        f"`clawk config set delegation.backend default`.")
+        f"`clawk config set delegation.backend default`."
+    )
 
 
 def get_active_provider(config: Mapping[str, Any]) -> DelegationProvider:

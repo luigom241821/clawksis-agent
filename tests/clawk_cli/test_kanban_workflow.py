@@ -56,21 +56,42 @@ def test_can_move_is_total_over_task_statuses():
         assert any(W.can_move(src, dst) for dst in kb.VALID_STATUSES)
 
 
-@pytest.mark.parametrize("call", [
-    lambda: W.can_move("bogus", kw.ARCHIVED),
-    lambda: W.can_move("ready", "bogus"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: W.can_move("bogus", kw.ARCHIVED),
+        lambda: W.can_move("ready", "bogus"),
+    ],
+)
 def test_unknown_column_keys_are_rejected_not_defaulted(call):
     with pytest.raises(ValueError, match="unknown kanban workflow column"):
         call()
 
 
-@pytest.mark.parametrize("mutate, message", [
-    (lambda w: replace(w, columns=w.columns + (w.columns[0],)), "duplicate"),
-    (lambda w: replace(w, columns=w.columns + (kw.Column(key=kw.ARCHIVED, label="A"),)), "reserved"),
-    (lambda w: replace(w, manual=MappingProxyType({"ready": frozenset({"gone"})})), "manual"),
-    (lambda w: replace(w, manual=MappingProxyType({"gone": frozenset({"ready"})})), "manual"),
-])
+@pytest.mark.parametrize(
+    "mutate, message",
+    [
+        (lambda w: replace(w, columns=w.columns + (w.columns[0],)), "duplicate"),
+        (
+            lambda w: replace(
+                w, columns=w.columns + (kw.Column(key=kw.ARCHIVED, label="A"),)
+            ),
+            "reserved",
+        ),
+        (
+            lambda w: replace(
+                w, manual=MappingProxyType({"ready": frozenset({"gone"})})
+            ),
+            "manual",
+        ),
+        (
+            lambda w: replace(
+                w, manual=MappingProxyType({"gone": frozenset({"ready"})})
+            ),
+            "manual",
+        ),
+    ],
+)
 def test_validate_rejects_inconsistent_workflows(mutate, message):
     with pytest.raises(ValueError, match=message):
         mutate(W).validate()

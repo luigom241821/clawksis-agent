@@ -36,6 +36,7 @@ from gateway.session import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_runner(**attrs):
     from gateway.run import GatewayRunner
 
@@ -82,7 +83,9 @@ def _make_context(
         scope_id=guild_id,
         message_id=message_id,
     )
-    connected = connected if connected is not None else [Platform.DISCORD, Platform.TELEGRAM]
+    connected = (
+        connected if connected is not None else [Platform.DISCORD, Platform.TELEGRAM]
+    )
     if home_channels is None:
         home_channels = {
             Platform.DISCORD: HomeChannel(
@@ -116,6 +119,7 @@ def _render(context, redact_pii=False):
 # ---------------------------------------------------------------------------
 # 1. Parity: key <-> render (the maintained invariant)
 # ---------------------------------------------------------------------------
+
 
 class TestEphemeralChangeKeyParity:
     # Single-field mutations spanning every rendered input.  For each:
@@ -162,21 +166,21 @@ class TestEphemeralChangeKeyParity:
         ("message_id_cleared", dict(message_id=None)),
     ]
 
-
     def test_redact_pii_flip_changes_key(self):
         # PII redaction only rewrites bytes on pii-safe platforms; the key
         # must react wherever the render does.
         runner = _make_runner()
-        ctx = _make_context(platform=Platform.TELEGRAM, thread_id=None, parent_chat_id=None)
+        ctx = _make_context(
+            platform=Platform.TELEGRAM, thread_id=None, parent_chat_id=None
+        )
         assert _render(ctx, False) != _render(ctx, True)
         assert _key(runner, ctx, False) != _key(runner, ctx, True)
-
-
 
 
 # ---------------------------------------------------------------------------
 # 2. The pin: reuse verbatim on hit, exactly one legit bust on change
 # ---------------------------------------------------------------------------
+
 
 class TestSessionContextPin:
     def test_pin_hit_returns_identical_object(self):
@@ -189,10 +193,10 @@ class TestSessionContextPin:
         assert second is first
 
 
-
 # ---------------------------------------------------------------------------
 # 4. Voice-channel sidecar note: only-when-changed
 # ---------------------------------------------------------------------------
+
 
 def _source():
     return SessionSource(
@@ -293,7 +297,9 @@ class TestVoiceChannelSidecarNoteMultiplexed:
         runner, _primary, _secondary = _multiplex_vc_runner(
             "**Voice:** ops-vc (5 members)", ""
         )
-        note = runner._voice_channel_sidecar_note(_vc_event(), _secondary_source(), "sk")
+        note = runner._voice_channel_sidecar_note(
+            _vc_event(), _secondary_source(), "sk"
+        )
         assert note is None
 
     def test_disconnected_secondary_fails_closed(self):
@@ -301,7 +307,9 @@ class TestVoiceChannelSidecarNoteMultiplexed:
             "**Voice:** ops-vc (5 members)", ""
         )
         runner._profile_adapters = {}
-        note = runner._voice_channel_sidecar_note(_vc_event(), _secondary_source(), "sk")
+        note = runner._voice_channel_sidecar_note(
+            _vc_event(), _secondary_source(), "sk"
+        )
         assert note is None
 
 
@@ -344,14 +352,20 @@ class TestVoiceAckFollowsTheAnsweringBot:
 
     def test_ack_plays_through_the_answering_bot(self):
         from gateway.run_turn_progress import GatewayTurnProgressMixin
+
         runner, _primary, secondary = self._runner(True, True)
         source = _secondary_source()
         source._transport_adapter_ref = lambda: secondary
         scheduled = []
         progress = SimpleNamespace(
             _runner=runner,
-            _ctx=SimpleNamespace(_voice_ack_fired=[False], _voice_ack_guild=[77], _run_still_current=lambda: True,
-                                 _voice_ack_loop=None, source=source),
+            _ctx=SimpleNamespace(
+                _voice_ack_fired=[False],
+                _voice_ack_guild=[77],
+                _run_still_current=lambda: True,
+                _voice_ack_loop=None,
+                source=source,
+            ),
             _schedule=lambda coro, msg, loop=None: scheduled.append(coro),
         )
         GatewayTurnProgressMixin.voice_ack_callback(progress, "call1", "web_search", {})
@@ -365,17 +379,21 @@ class TestVoiceAckFollowsTheAnsweringBot:
 # 5. Sidecar note staging: one-shot per turn
 # ---------------------------------------------------------------------------
 
+
 class TestSidecarNoteStaging:
     def test_set_then_consume_once(self):
         runner = _make_runner()
         runner._set_pending_turn_sidecar_notes("sk", ["[System note: reset]"])
-        assert runner._consume_pending_turn_sidecar_notes("sk") == ["[System note: reset]"]
+        assert runner._consume_pending_turn_sidecar_notes("sk") == [
+            "[System note: reset]"
+        ]
         assert runner._consume_pending_turn_sidecar_notes("sk") == []
 
 
 # ---------------------------------------------------------------------------
 # 6. Connected platforms: stable order
 # ---------------------------------------------------------------------------
+
 
 class TestConnectedPlatformsOrder:
     def test_sorted_regardless_of_insertion_order(self):

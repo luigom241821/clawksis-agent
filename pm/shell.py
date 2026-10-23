@@ -78,11 +78,19 @@ def windows_bash_candidates(on_path: str | None, env: Mapping[str, str]) -> list
     if env.get("ProgramFiles(x86)"):
         roots.append(ntpath.join(env["ProgramFiles(x86)"], "Git"))
     if env.get("LOCALAPPDATA"):
-        roots.extend((ntpath.join(env["LOCALAPPDATA"], "clawk", "git"),
-                      ntpath.join(env["LOCALAPPDATA"], "Programs", "Git")))
+        roots.extend(
+            (
+                ntpath.join(env["LOCALAPPDATA"], "clawk", "git"),
+                ntpath.join(env["LOCALAPPDATA"], "Programs", "Git"),
+            )
+        )
     for root in roots:
-        candidates.extend((ntpath.join(root, "bin", "bash.exe"),
-                           ntpath.join(root, "usr", "bin", "bash.exe")))
+        candidates.extend(
+            (
+                ntpath.join(root, "bin", "bash.exe"),
+                ntpath.join(root, "usr", "bin", "bash.exe"),
+            )
+        )
     if on_path:
         norm = ntpath.normpath(on_path).lower()
         if not any(stub in norm for stub in _WINDOWS_BASH_STUB_DIRS):
@@ -93,12 +101,18 @@ def windows_bash_candidates(on_path: str | None, env: Mapping[str, str]) -> list
 def _bash_starts(candidate: str) -> bool:
     """An existing bash.exe can still be broken or be a launcher stub."""
     try:
-        return subprocess.run(
-            [candidate, "-c", "exit 0"], stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            timeout=5, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            check=False,
-        ).returncode == 0
+        return (
+            subprocess.run(
+                [candidate, "-c", "exit 0"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                check=False,
+            ).returncode
+            == 0
+        )
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -111,8 +125,14 @@ def bash() -> str | None:
 
     on_path = shutil.which("bash")
     if os.name == "nt":
-        return next((c for c in windows_bash_candidates(on_path, os.environ)
-                     if os.path.isfile(c) and _bash_starts(c)), None)
+        return next(
+            (
+                c
+                for c in windows_bash_candidates(on_path, os.environ)
+                if os.path.isfile(c) and _bash_starts(c)
+            ),
+            None,
+        )
     if on_path:
         return on_path
 

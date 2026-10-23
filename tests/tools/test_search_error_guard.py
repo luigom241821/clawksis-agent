@@ -27,7 +27,10 @@ import shutil
 import pytest
 
 from tools.file_operations import ShellFileOperations
-from tools.file_operations_search import _pattern_has_regex_newline, _split_tool_diagnostics
+from tools.file_operations_search import (
+    _pattern_has_regex_newline,
+    _split_tool_diagnostics,
+)
 from tools.environments.local import LocalEnvironment
 
 
@@ -65,9 +68,15 @@ if shutil.which("rg"):
 
 def _search(ops, method, pattern, path, **kw):
     fn = getattr(ops, method)
-    return fn(pattern, str(path), kw.get("file_glob"), kw.get("limit", 50),
-              kw.get("offset", 0), kw.get("output_mode", "content"),
-              kw.get("context", 0))
+    return fn(
+        pattern,
+        str(path),
+        kw.get("file_glob"),
+        kw.get("limit", 50),
+        kw.get("offset", 0),
+        kw.get("output_mode", "content"),
+        kw.get("context", 0),
+    )
 
 
 @pytest.mark.parametrize("method", _METHODS)
@@ -85,10 +94,14 @@ class TestSearchErrorGuard:
         assert "Search failed" in res.error
         assert not res.matches
 
-
     def test_count_mode_with_partial_error(self, method, partial_error_tree):
-        res = _search(_ops(partial_error_tree), method, "needle",
-                      partial_error_tree, output_mode="count")
+        res = _search(
+            _ops(partial_error_tree),
+            method,
+            "needle",
+            partial_error_tree,
+            output_mode="count",
+        )
         assert res.error is None
         assert res.total_count >= 4
 
@@ -97,7 +110,6 @@ class TestSearchContentNewlineWarning:
     def test_odd_backslash_n_is_detected_as_regex_newline(self):
         assert _pattern_has_regex_newline(r"needle\n")
         assert _pattern_has_regex_newline(r"needle\\\n")
-
 
     def test_literal_backslash_n_pattern_does_not_warn(self, match_tree):
         res = _ops(match_tree).search(
@@ -119,7 +131,6 @@ class TestSplitToolDiagnostics:
         diagnostics, payload = _split_tool_diagnostics(out)
         assert payload.strip() == ""
         assert "regex parse error" in diagnostics
-
 
     def test_context_lines_and_separator_are_payload(self):
         out = "a.py:5:hit\na.py-6-after\n--\nb.py:9:hit\n"

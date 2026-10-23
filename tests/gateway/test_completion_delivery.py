@@ -98,7 +98,9 @@ def _completion_event(*, started_at, session_id="proc_reused"):
 def _stop_after_sleeps(monkeypatch, runner, count, *, minutes_apart=False):
     """``minutes_apart``: each watcher tick is a minute later, so a refused retry's backoff is due."""
     sleep_calls = 0
-    clock = install_module_clock(monkeypatch, run_notifications) if minutes_apart else None
+    clock = (
+        install_module_clock(monkeypatch, run_notifications) if minutes_apart else None
+    )
 
     async def _bounded_sleep(_delay):
         nonlocal sleep_calls
@@ -128,7 +130,8 @@ def test_duplicate_async_queue_replay_injects_once(monkeypatch, isolated_registr
 
 
 def test_unroutable_async_event_remains_retryable(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     isolated = queue.Queue()
     monkeypatch.setattr(isolated_registry, "completion_queue", isolated)
@@ -155,15 +158,21 @@ def test_concurrent_claims_share_the_same_narrow_delivery_seam():
         entered.set()
         await release.wait()
 
-    adapter = SimpleNamespace(handle_message=AdmittingHandler(side_effect=_blocked_injection))
+    adapter = SimpleNamespace(
+        handle_message=AdmittingHandler(side_effect=_blocked_injection)
+    )
     runner = _runner(adapter)
     event = _async_event()
     text = "completion"
 
     async def _exercise():
-        first = asyncio.create_task(runner._deliver_completion_notification(text, dict(event)))
+        first = asyncio.create_task(
+            runner._deliver_completion_notification(text, dict(event))
+        )
         await entered.wait()
-        second = asyncio.create_task(runner._deliver_completion_notification(text, dict(event)))
+        second = asyncio.create_task(
+            runner._deliver_completion_notification(text, dict(event))
+        )
         await asyncio.sleep(0)
         release.set()
         return await asyncio.gather(first, second)
@@ -173,7 +182,8 @@ def test_concurrent_claims_share_the_same_narrow_delivery_seam():
 
 
 def test_failed_async_injection_is_retried_and_only_success_is_acked(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     isolated = queue.Queue()
     monkeypatch.setattr(isolated_registry, "completion_queue", isolated)
@@ -204,17 +214,22 @@ def test_failed_async_injection_is_retried_and_only_success_is_acked(
 def _persist_pending_completion(event):
     from tools import async_delegation
 
-    async_delegation._persist_dispatch({
-        "delegation_id": event["delegation_id"],
-        "session_key": event["session_key"],
-        "origin_ui_session_id": "",
-        "parent_session_id": event.get("parent_session_id"),
-        "dispatched_at": event["dispatched_at"],
-    })
-    async_delegation._persist_completion(event, {
-        "status": "completed",
-        "summary": event["summary"],
-    })
+    async_delegation._persist_dispatch(
+        {
+            "delegation_id": event["delegation_id"],
+            "session_key": event["session_key"],
+            "origin_ui_session_id": "",
+            "parent_session_id": event.get("parent_session_id"),
+            "dispatched_at": event["dispatched_at"],
+        }
+    )
+    async_delegation._persist_completion(
+        event,
+        {
+            "status": "completed",
+            "summary": event["summary"],
+        },
+    )
 
 
 def test_explicit_kill_returns_output_before_consuming_notification(monkeypatch):
@@ -248,15 +263,19 @@ def test_explicit_kill_returns_output_before_consuming_notification(monkeypatch)
         pass
 
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-    asyncio.run(runner._run_process_watcher({
-        "session_id": session.id,
-        "check_interval": 0,
-        "session_key": "agent:main:telegram:dm:123",
-        "platform": "telegram",
-        "chat_type": "dm",
-        "chat_id": "123",
-        "notify_on_complete": True,
-    }))
+    asyncio.run(
+        runner._run_process_watcher(
+            {
+                "session_id": session.id,
+                "check_interval": 0,
+                "session_key": "agent:main:telegram:dm:123",
+                "platform": "telegram",
+                "chat_type": "dm",
+                "chat_id": "123",
+                "notify_on_complete": True,
+            }
+        )
+    )
 
     adapter.handle_message.assert_not_awaited()
 
@@ -284,10 +303,14 @@ def test_process_tool_redacts_explicit_kill_output(monkeypatch):
 
     monkeypatch.setattr(pr_module, "_redact_process_result", _redact)
 
-    result = json.loads(pr_module._handle_process({
-        "action": "kill",
-        "session_id": session.id,
-    }))
+    result = json.loads(
+        pr_module._handle_process(
+            {
+                "action": "kill",
+                "session_id": session.id,
+            }
+        )
+    )
     assert result["output"] == "PRIVATE_TOKEN=<redacted>\n"
 
 
@@ -318,15 +341,19 @@ def test_autonomous_completion_redacts_real_command_and_output_secrets(monkeypat
         pass
 
     monkeypatch.setattr(asyncio, "sleep", _instant_sleep)
-    asyncio.run(runner._run_process_watcher({
-        "session_id": session.id,
-        "check_interval": 0,
-        "session_key": "agent:main:telegram:dm:123",
-        "platform": "telegram",
-        "chat_type": "dm",
-        "chat_id": "123",
-        "notify_on_complete": True,
-    }))
+    asyncio.run(
+        runner._run_process_watcher(
+            {
+                "session_id": session.id,
+                "check_interval": 0,
+                "session_key": "agent:main:telegram:dm:123",
+                "platform": "telegram",
+                "chat_type": "dm",
+                "chat_id": "123",
+                "notify_on_complete": True,
+            }
+        )
+    )
 
     delivered = adapter.handle_message.await_args.args[0]
     assert secret not in delivered.text
@@ -351,25 +378,26 @@ def test_concurrent_process_watchers_coalesce_one_session_completion_turn(monkey
             notify_on_complete=True,
         )
         registry._finished[session.id] = session
-        watchers.append({
-            "session_id": session.id,
-            "check_interval": 0,
-            "session_key": "agent:main:telegram:dm:123",
-            "platform": "telegram",
-            "chat_type": "dm",
-            "chat_id": "123",
-            "notify_on_complete": True,
-        })
+        watchers.append(
+            {
+                "session_id": session.id,
+                "check_interval": 0,
+                "session_key": "agent:main:telegram:dm:123",
+                "platform": "telegram",
+                "chat_type": "dm",
+                "chat_id": "123",
+                "notify_on_complete": True,
+            }
+        )
     monkeypatch.setattr(pr_module, "process_registry", registry)
 
     adapter = SimpleNamespace(handle_message=AdmittingHandler())
     runner = _runner(adapter)
 
     async def _exercise():
-        await asyncio.gather(*(
-            runner._run_process_watcher(watcher)
-            for watcher in watchers
-        ))
+        await asyncio.gather(
+            *(runner._run_process_watcher(watcher) for watcher in watchers)
+        )
 
     asyncio.run(_exercise())
 
@@ -397,15 +425,19 @@ def test_completion_arriving_during_batch_delivery_schedules_next_flush():
     runner = _runner(adapter)
 
     async def _exercise():
-        first = asyncio.create_task(runner._enqueue_process_completion_notification(
-            "first completion",
-            _completion_event(started_at=1.0, session_id="proc_first"),
-        ))
+        first = asyncio.create_task(
+            runner._enqueue_process_completion_notification(
+                "first completion",
+                _completion_event(started_at=1.0, session_id="proc_first"),
+            )
+        )
         await first_delivery_entered.wait()
-        second = asyncio.create_task(runner._enqueue_process_completion_notification(
-            "second completion",
-            _completion_event(started_at=2.0, session_id="proc_second"),
-        ))
+        second = asyncio.create_task(
+            runner._enqueue_process_completion_notification(
+                "second completion",
+                _completion_event(started_at=2.0, session_id="proc_second"),
+            )
+        )
         release_first_delivery.set()
         assert await first is True
         assert await asyncio.wait_for(second, timeout=1.0) is True
@@ -451,10 +483,12 @@ def test_failed_coalesced_delivery_retries_all_entries():
     ]
 
     async def _enqueue_all():
-        return await asyncio.gather(*(
-            runner._enqueue_process_completion_notification(f"event-{index}", event)
-            for index, event in enumerate(events)
-        ))
+        return await asyncio.gather(
+            *(
+                runner._enqueue_process_completion_notification(f"event-{index}", event)
+                for index, event in enumerate(events)
+            )
+        )
 
     async def _exercise():
         assert await _enqueue_all() == [False, False]
@@ -473,10 +507,12 @@ def test_coalesced_success_records_every_completion_identity():
     ]
 
     async def _exercise():
-        return await asyncio.gather(*(
-            runner._enqueue_process_completion_notification(f"event-{index}", event)
-            for index, event in enumerate(events)
-        ))
+        return await asyncio.gather(
+            *(
+                runner._enqueue_process_completion_notification(f"event-{index}", event)
+                for index, event in enumerate(events)
+            )
+        )
 
     assert asyncio.run(_exercise()) == [True, True, True]
     for event in events:
@@ -518,15 +554,14 @@ def test_coalesced_format_force_redacts_output_when_redaction_disabled(monkeypat
     async def _format():
         loop = asyncio.get_running_loop()
         first = _completion_event(started_at=1.0, session_id="proc_secret")
-        first["output"] = (
-            f"MY_SERVICE_TOKEN={secret}\n"
-            "HOME=/home/user\n"
-        )
+        first["output"] = f"MY_SERVICE_TOKEN={secret}\nHOME=/home/user\n"
         second = _completion_event(started_at=2.0, session_id="proc_control")
-        return GatewayRunner._format_coalesced_process_completions([
-            ("first", first, loop.create_future()),
-            ("second", second, loop.create_future()),
-        ])
+        return GatewayRunner._format_coalesced_process_completions(
+            [
+                ("first", first, loop.create_future()),
+                ("second", second, loop.create_future()),
+            ]
+        )
 
     text = asyncio.run(_format())
 
@@ -546,10 +581,12 @@ def test_coalesced_format_redacts_before_truncating_output(monkeypatch):
         first = _completion_event(started_at=1.0, session_id="proc_long_secret")
         first["output"] = f"MY_SERVICE_TOKEN={'x' * 900}{marker}\n"
         second = _completion_event(started_at=2.0, session_id="proc_control")
-        return GatewayRunner._format_coalesced_process_completions([
-            ("first", first, loop.create_future()),
-            ("second", second, loop.create_future()),
-        ])
+        return GatewayRunner._format_coalesced_process_completions(
+            [
+                ("first", first, loop.create_future()),
+                ("second", second, loop.create_future()),
+            ]
+        )
 
     text = asyncio.run(_format())
 
@@ -590,10 +627,12 @@ def test_batch_format_failure_resolves_waiters_for_retry(monkeypatch):
     ]
 
     async def _exercise():
-        pending = asyncio.gather(*(
-            runner._enqueue_process_completion_notification(f"event-{index}", event)
-            for index, event in enumerate(events)
-        ))
+        pending = asyncio.gather(
+            *(
+                runner._enqueue_process_completion_notification(f"event-{index}", event)
+                for index, event in enumerate(events)
+            )
+        )
         return await asyncio.wait_for(pending, timeout=1.0)
 
     assert asyncio.run(_exercise()) == [False, False]
@@ -643,7 +682,9 @@ def test_shutdown_cancels_blocked_batch_delivery_and_keeps_it_retryable():
         delivery_entered.set()
         await asyncio.Event().wait()
 
-    adapter = SimpleNamespace(handle_message=AdmittingHandler(side_effect=_blocked_delivery))
+    adapter = SimpleNamespace(
+        handle_message=AdmittingHandler(side_effect=_blocked_delivery)
+    )
     runner = _runner(adapter)
     runner._completion_notification_batch_window = 0
     event = _completion_event(started_at=1.0, session_id="proc_cancel_delivery")
@@ -659,8 +700,14 @@ def test_shutdown_cancels_blocked_batch_delivery_and_keeps_it_retryable():
 
         assert await asyncio.wait_for(pending, timeout=1.0) is False
         assert flush_task.cancelled()
-        assert runner._completion_delivery_identity(event) not in runner._completion_deliveries_inflight
-        assert runner._completion_delivery_identity(event) not in runner._completion_deliveries_delivered
+        assert (
+            runner._completion_delivery_identity(event)
+            not in runner._completion_deliveries_inflight
+        )
+        assert (
+            runner._completion_delivery_identity(event)
+            not in runner._completion_deliveries_delivered
+        )
         assert runner._completion_notification_batches == {}
         assert runner._completion_notification_batch_tasks == {}
 
@@ -711,7 +758,9 @@ def test_shutdown_cancels_overlapping_flushes_for_same_route():
         delivery_entered.set()
         await asyncio.Event().wait()
 
-    adapter = SimpleNamespace(handle_message=AdmittingHandler(side_effect=_blocked_delivery))
+    adapter = SimpleNamespace(
+        handle_message=AdmittingHandler(side_effect=_blocked_delivery)
+    )
     runner = _runner(adapter)
     runner._completion_notification_batch_window = 0
     first_event = _completion_event(started_at=1.0, session_id="proc_old_flush")
@@ -754,7 +803,9 @@ def test_shutdown_cancels_overlapping_flushes_for_same_route():
 # ---------------------------------------------------------------------------
 
 
-def _distinct_async_event(delegation_id, session_key="agent:main:telegram:dm:12345:678"):
+def _distinct_async_event(
+    delegation_id, session_key="agent:main:telegram:dm:12345:678"
+):
     event = _async_event(delegation_id)
     event["session_key"] = session_key
     event["summary"] = f"Result for {delegation_id}"
@@ -762,7 +813,8 @@ def _distinct_async_event(delegation_id, session_key="agent:main:telegram:dm:123
 
 
 def test_same_tick_async_batch_coalesces_into_one_turn_and_acks_all_rows(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """Three same-session async completions in one drain -> one synthetic turn.
 
@@ -797,14 +849,18 @@ def test_same_tick_async_batch_coalesces_into_one_turn_and_acks_all_rows(
 
 
 def test_same_tick_async_events_for_different_sessions_do_not_coalesce(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     isolated = queue.Queue()
     monkeypatch.setattr(isolated_registry, "completion_queue", isolated)
     isolated.put(_distinct_async_event("deleg_route_a"))
-    isolated.put(_distinct_async_event(
-        "deleg_route_b", session_key="agent:main:telegram:dm:99999:678",
-    ))
+    isolated.put(
+        _distinct_async_event(
+            "deleg_route_b",
+            session_key="agent:main:telegram:dm:99999:678",
+        )
+    )
 
     adapter = SimpleNamespace(handle_message=AdmittingHandler())
     runner = _runner(adapter)
@@ -820,7 +876,8 @@ def test_same_tick_async_events_for_different_sessions_do_not_coalesce(
 
 
 def test_single_async_event_latency_and_text_are_unchanged(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """A lone completion keeps the plain per-event formatter output."""
     isolated = queue.Queue()
@@ -840,7 +897,8 @@ def test_single_async_event_latency_and_text_are_unchanged(
 
 
 def test_failed_coalesced_async_batch_releases_claims_and_retries(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """A rejected consolidated injection leaves every durable row pending."""
     from tools import async_delegation
@@ -870,7 +928,8 @@ def test_failed_coalesced_async_batch_releases_claims_and_retries(
 
 
 def test_sibling_claimed_by_other_consumer_is_not_double_delivered(
-    monkeypatch, isolated_registry,
+    monkeypatch,
+    isolated_registry,
 ):
     """A sibling owned elsewhere is excluded from the consolidated turn."""
     from tools import async_delegation
@@ -883,7 +942,8 @@ def test_sibling_claimed_by_other_consumer_is_not_double_delivered(
         isolated.put(dict(event))
     # Simulate another live consumer holding the second row's claim.
     assert async_delegation.claim_completion_delivery(
-        events[1]["delegation_id"], "other-consumer:claim",
+        events[1]["delegation_id"],
+        "other-consumer:claim",
     )
 
     adapter = SimpleNamespace(handle_message=AdmittingHandler())
@@ -900,9 +960,13 @@ def test_sibling_claimed_by_other_consumer_is_not_double_delivered(
     assert row["delivery_state"] == "pending"
 
 
-@pytest.mark.parametrize("unavailable", ["raw_adapter", "transport", "owner_db", "api_db"])
+@pytest.mark.parametrize(
+    "unavailable", ["raw_adapter", "transport", "owner_db", "api_db"]
+)
 @pytest.mark.parametrize("batch_size", [1, 2])
-def test_unavailable_delivery_preserves_budget_across_restarts(tmp_path, unavailable, batch_size):
+def test_unavailable_delivery_preserves_budget_across_restarts(
+    tmp_path, unavailable, batch_size
+):
     """Unavailable owners/transports cannot consume any sibling's durable attempts."""
     from clawk_state import SessionDB
     from tools import async_delegation
@@ -917,7 +981,9 @@ def test_unavailable_delivery_preserves_budget_across_restarts(tmp_path, unavail
         _persist_pending_completion(event)
 
     adapter = SimpleNamespace(handle_message=AdmittingHandler())
-    api = SimpleNamespace(supports_async_delivery=False, _ensure_session_db=lambda: None)
+    api = SimpleNamespace(
+        supports_async_delivery=False, _ensure_session_db=lambda: None
+    )
     for _restart in range(3):
         runner = _runner(adapter)
         runner.adapters = {Platform.API_SERVER: api} if unavailable == "api_db" else {}
@@ -936,7 +1002,9 @@ def test_unavailable_delivery_preserves_budget_across_restarts(tmp_path, unavail
             api._ensure_session_db = lambda: db
             runner.adapters = {Platform.API_SERVER: api}
         if unavailable == "owner_db":
-            runner._session_db = SimpleNamespace(get_session=AsyncMock(return_value={"ended_at": None}))
+            runner._session_db = SimpleNamespace(
+                get_session=AsyncMock(return_value={"ended_at": None})
+            )
         assert asyncio.run(runner._deliver_async_delegation_group(events)) is True
         for event in events:
             row = async_delegation.get_durable_delegation(event["delegation_id"])
@@ -953,15 +1021,23 @@ def test_unavailable_delivery_preserves_budget_across_restarts(tmp_path, unavail
 
 
 @pytest.mark.parametrize("available", [False, True])
-def test_completion_profile_transport_never_falls_back(monkeypatch, isolated_registry, available):
+def test_completion_profile_transport_never_falls_back(
+    monkeypatch, isolated_registry, available
+):
     primary = SimpleNamespace(handle_message=AdmittingHandler(), send=AsyncMock())
     secondary = SimpleNamespace(handle_message=AdmittingHandler(), send=AsyncMock())
     runner = _runner(primary)
-    runner._profile_adapters = {"research": {Platform.TELEGRAM: secondary}} if available else {}
-    evt = dict(_completion_event(started_at=1), session_key="agent:research:telegram:dm:12345")
+    runner._profile_adapters = (
+        {"research": {Platform.TELEGRAM: secondary}} if available else {}
+    )
+    evt = dict(
+        _completion_event(started_at=1), session_key="agent:research:telegram:dm:12345"
+    )
     result = asyncio.run(runner._inject_watch_notification("private result", evt))
     assert result is available
-    asyncio.run(runner._send_watcher_message("telegram", "12345", None, "raw result", evt))
+    asyncio.run(
+        runner._send_watcher_message("telegram", "12345", None, "raw result", evt)
+    )
     primary.send.assert_not_awaited()
     assert secondary.send.await_count == int(available)
     primary.handle_message.assert_not_awaited()
@@ -972,12 +1048,19 @@ def test_completion_profile_transport_never_falls_back(monkeypatch, isolated_reg
 
 @pytest.mark.parametrize("event_type", ["watch_match", "watch_disabled"])
 @pytest.mark.parametrize("mode", ["concise", "off"])
-def test_idle_watch_drain_respects_notify_mode(monkeypatch, isolated_registry, event_type, mode):
+def test_idle_watch_drain_respects_notify_mode(
+    monkeypatch, isolated_registry, event_type, mode
+):
     adapter = SimpleNamespace(handle_message=AdmittingHandler())
     runner = _runner(adapter)
     runner._load_background_notifications_mode = lambda: mode
-    evt = dict(_completion_event(started_at=1), type=event_type,
-               pattern="READY", output="READY", message="Watch patterns disabled")
+    evt = dict(
+        _completion_event(started_at=1),
+        type=event_type,
+        pattern="READY",
+        output="READY",
+        message="Watch patterns disabled",
+    )
     isolated_registry.completion_queue.put(evt)
     _stop_after_sleeps(monkeypatch, runner, count=2)
     asyncio.run(runner._async_delegation_watcher(interval=0))
@@ -986,10 +1069,17 @@ def test_idle_watch_drain_respects_notify_mode(monkeypatch, isolated_registry, e
 
 
 def test_watch_drain_retries_transport_failure(monkeypatch, isolated_registry):
-    adapter = SimpleNamespace(handle_message=AdmittingHandler(side_effect=[RuntimeError("offline"), None]))
+    adapter = SimpleNamespace(
+        handle_message=AdmittingHandler(side_effect=[RuntimeError("offline"), None])
+    )
     runner = _runner(adapter)
     runner._load_background_notifications_mode = lambda: "concise"
-    evt = dict(_completion_event(started_at=1), type="watch_match", pattern="READY", output="READY")
+    evt = dict(
+        _completion_event(started_at=1),
+        type="watch_match",
+        pattern="READY",
+        output="READY",
+    )
     isolated_registry.completion_queue.put(evt)
     _stop_after_sleeps(monkeypatch, runner, count=3)
     # The refused event backs off (#140899): each watcher tick is a minute later, so the retry is due.
@@ -999,6 +1089,7 @@ def test_watch_drain_retries_transport_failure(monkeypatch, isolated_registry):
     async def minute_later(delay):
         clock.now += 60
         await bounded_sleep(delay)
+
     monkeypatch.setattr(asyncio, "sleep", minute_later)
     asyncio.run(runner._async_delegation_watcher(interval=0))
     assert adapter.handle_message.await_count == 2

@@ -3,9 +3,9 @@
 from clawk_cli.setup import setup_agent_settings
 
 
-
-
-def test_setup_agent_settings_prefers_config_over_stale_env(tmp_path, monkeypatch, capsys):
+def test_setup_agent_settings_prefers_config_over_stale_env(
+    tmp_path, monkeypatch, capsys
+):
     """Config.yaml wins even when a stale .env value disagrees.
 
     Regression guard for the bug where `.env CLAWK_MAX_ITERATIONS=60`
@@ -27,7 +27,9 @@ def test_setup_agent_settings_prefers_config_over_stale_env(tmp_path, monkeypatc
         "clawk_cli.setup.get_env_value",
         lambda key: "60" if key == "CLAWK_MAX_ITERATIONS" else "",
     )
-    monkeypatch.setattr("clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_answers))
+    monkeypatch.setattr(
+        "clawk_cli.setup.prompt", lambda *args, **kwargs: next(prompt_answers)
+    )
     monkeypatch.setattr("clawk_cli.setup.prompt_choice", lambda *args, **kwargs: 4)
     monkeypatch.setattr("clawk_cli.setup.save_env_value", lambda *args, **kwargs: None)
 

@@ -69,19 +69,21 @@ API_BASE = "https://api.github.com"
 
 # Job names that are infrastructure (this script, the gate, the detector)
 # and should never appear in the review comment.
-_INFRA_JOBS = frozenset({
-    "detect",
-    "all-checks-pass",
-    "comment-pending",
-    "comment-results",
-    "comment-live",
-    "CI review comment (pending)",
-    "CI review comment (results)",
-    "CI review comment (live)",
-    "All required checks pass",
-    "All required checks pass (v2)",
-    "Detect affected areas",
-})
+_INFRA_JOBS = frozenset(
+    {
+        "detect",
+        "all-checks-pass",
+        "comment-pending",
+        "comment-results",
+        "comment-live",
+        "CI review comment (pending)",
+        "CI review comment (results)",
+        "CI review comment (live)",
+        "All required checks pass",
+        "All required checks pass (v2)",
+        "Detect affected areas",
+    }
+)
 
 # Map GitHub API conclusion values to our result strings.
 _CONCLUSION_MAP = {
@@ -94,7 +96,10 @@ _CONCLUSION_MAP = {
     "action_required": "skipped",
 }
 
-def classify_jobs(api_jobs: list[dict]) -> tuple[dict[str, str], list[str], dict[str, str]]:
+
+def classify_jobs(
+    api_jobs: list[dict],
+) -> tuple[dict[str, str], list[str], dict[str, str]]:
     """Classify raw API job dicts into completed + pending + job_urls.
 
     Returns ``(completed, pending, job_urls)``:
@@ -146,12 +151,15 @@ def classify_jobs(api_jobs: list[dict]) -> tuple[dict[str, str], list[str], dict
 
 def _api_request(url: str, token: str) -> dict:
     """Authenticated GitHub API GET (single page)."""
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "ci-live-comment",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "ci-live-comment",
+        },
+    )
     with urllib.request.urlopen(req) as resp:
         data: dict = json.loads(resp.read())
         return data
@@ -161,12 +169,15 @@ def _api_get_paginated(url: str, token: str, list_key: str | None = None) -> lis
     """Authenticated GitHub API GET with pagination."""
     results: list = []
     while url:
-        req = urllib.request.Request(url, headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "ci-live-comment",
-        })
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "ci-live-comment",
+            },
+        )
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read())
             link_header = resp.headers.get("Link", "")
@@ -182,7 +193,7 @@ def _api_get_paginated(url: str, token: str, list_key: str | None = None) -> lis
         for part in link_header.split(","):
             part = part.strip()
             if 'rel="next"' in part:
-                next_url = part[part.find("<") + 1:part.find(">")]
+                next_url = part[part.find("<") + 1 : part.find(">")]
                 break
         url = next_url
 
@@ -190,7 +201,9 @@ def _api_get_paginated(url: str, token: str, list_key: str | None = None) -> lis
 
 
 def select_watched_runs(
-    runs: list[dict], watch_names: list[str], exclude_run_id: str = "",
+    runs: list[dict],
+    watch_names: list[str],
+    exclude_run_id: str = "",
 ) -> list[dict]:
     """Pick the sibling runs whose jobs belong in the comment.
 
@@ -213,7 +226,9 @@ def select_watched_runs(
         if exclude_run_id and str(candidate.get("id", "")) == str(exclude_run_id):
             continue
         current = newest.get(name)
-        if current is None or str(candidate.get("created_at", "")) > str(current.get("created_at", "")):
+        if current is None or str(candidate.get("created_at", "")) > str(
+            current.get("created_at", "")
+        ):
             newest[name] = candidate
 
     return list(newest.values())
@@ -235,7 +250,10 @@ def runs_all_completed(runs: list[dict]) -> bool:
 
 
 def collect_run_jobs(
-    token: str, repo: str, run_id: str, watch_workflows: list[str] | None = None,
+    token: str,
+    repo: str,
+    run_id: str,
+    watch_workflows: list[str] | None = None,
 ) -> tuple[list[dict], bool]:
     """Collect all jobs in the CI run + any watched sibling runs.
 
@@ -251,14 +269,17 @@ def collect_run_jobs(
     prefixed here.
     """
     owner, repo_name = repo.split("/")
-    run_info = _api_request(f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs/{run_id}", token)
+    run_info = _api_request(
+        f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs/{run_id}", token
+    )
     head_sha = run_info.get("head_sha", "")
 
     # CI run jobs (includes every reusable-workflow job).
     all_jobs: list[dict] = []
     orch_jobs = _api_get_paginated(
         f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs/{run_id}/jobs",
-        token, list_key="jobs",
+        token,
+        list_key="jobs",
     )
 
     # Skip workflow-call placeholder steps (they're sub-workflow triggers,
@@ -277,14 +298,18 @@ def collect_run_jobs(
     # first polls. Then classify_jobs() shows nothing for it.
     sibling_runs = _api_get_paginated(
         f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs?head_sha={head_sha}&per_page=100",
-        token, list_key="workflow_runs",
+        token,
+        list_key="workflow_runs",
     )
     relevant_runs = [run_info]
-    for watched in select_watched_runs(sibling_runs, watch_workflows, exclude_run_id=run_id):
+    for watched in select_watched_runs(
+        sibling_runs, watch_workflows, exclude_run_id=run_id
+    ):
         relevant_runs.append(watched)
         watched_jobs = _api_get_paginated(
             f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs/{watched['id']}/jobs",
-            token, list_key="jobs",
+            token,
+            list_key="jobs",
         )
         for job in watched_jobs:
             job["_workflow_name"] = watched.get("name", "")
@@ -323,13 +348,18 @@ def upsert_comment(
         method = "POST"
 
     data = json.dumps({"body": body}).encode("utf-8")
-    req = urllib.request.Request(url, data=data, method=method, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json",
-        "User-Agent": "ci-live-comment",
-    })
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+            "User-Agent": "ci-live-comment",
+        },
+    )
     try:
         with urllib.request.urlopen(req) as resp:
             result = json.loads(resp.read())
@@ -355,7 +385,8 @@ def _list_artifacts(token: str, repo: str, run_id: str) -> list[dict]:
     owner, repo_name = repo.split("/")
     return _api_get_paginated(
         f"{API_BASE}/repos/{owner}/{repo_name}/actions/runs/{run_id}/artifacts",
-        token, list_key="artifacts",
+        token,
+        list_key="artifacts",
     )
 
 
@@ -367,7 +398,10 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _download_artifact(
-    token: str, repo: str, artifact: dict, dest_dir: Path,
+    token: str,
+    repo: str,
+    artifact: dict,
+    dest_dir: Path,
 ) -> Path | None:
     """Download a single artifact zip via the API and extract it.
 
@@ -386,12 +420,18 @@ def _download_artifact(
     opener = urllib.request.build_opener(_NoRedirectHandler)
     location = ""
     try:
-        opener.open(urllib.request.Request(archive_download_url, headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "ci-live-comment",
-        }), timeout=30)
+        opener.open(
+            urllib.request.Request(
+                archive_download_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": "ci-live-comment",
+                },
+            ),
+            timeout=30,
+        )
     except urllib.error.HTTPError as e:
         location = e.headers.get("Location", "") if e.code == 302 else ""
     except Exception:
@@ -438,7 +478,9 @@ def _parse_status_file(status_file: Path) -> list[dict]:
 
 
 def fetch_all_review_statuses(
-    token: str, repo: str, run_id: str,
+    token: str,
+    repo: str,
+    run_id: str,
 ) -> list[dict]:
     """Fetch and merge all review-status artifacts from the run.
 
@@ -460,7 +502,8 @@ def fetch_all_review_statuses(
         return all_statuses
 
     rs_artifacts = [
-        a for a in artifacts
+        a
+        for a in artifacts
         if a.get("name", "").startswith(_REVIEW_STATUS_ARTIFACT_PREFIX)
     ]
     if not rs_artifacts:
@@ -504,6 +547,7 @@ def _import_assembler():
     here = Path(__file__).resolve().parent
     sys.path.insert(0, str(here))
     import assemble_review_comment as asm
+
     return asm
 
 
@@ -576,7 +620,9 @@ def run(
             break
 
         try:
-            jobs, runs_completed = collect_run_jobs(token, repo, run_id, watch_workflows)
+            jobs, runs_completed = collect_run_jobs(
+                token, repo, run_id, watch_workflows
+            )
         except Exception as e:
             print(f"  API error collecting jobs: {e}", file=sys.stderr)
             time.sleep(interval)
@@ -585,28 +631,40 @@ def run(
         completed, pending, job_urls = classify_jobs(jobs)
         total = len(completed) + len(pending)
         infra_count = len(jobs) - total
-        print(f"  [{elapsed:.0f}s] fetched {len(jobs)} jobs from API "
-              f"({infra_count} infra filtered) → {len(completed)} completed, "
-              f"{len(pending)} pending ({total} review jobs)")
+        print(
+            f"  [{elapsed:.0f}s] fetched {len(jobs)} jobs from API "
+            f"({infra_count} infra filtered) → {len(completed)} completed, "
+            f"{len(pending)} pending ({total} review jobs)"
+        )
 
         # Log transitions since last poll.
         new_completed = {k: v for k, v in completed.items() if k not in prev_completed}
         new_pending = [j for j in pending if j not in prev_pending]
-        gone_pending = [j for j in prev_pending if j not in pending and j not in completed]
+        gone_pending = [
+            j for j in prev_pending if j not in pending and j not in completed
+        ]
         if new_completed:
             parts = [f"{name}={result}" for name, result in new_completed.items()]
-            print(f"  → {len(new_completed)} job(s) newly completed: {', '.join(parts)}")
+            print(
+                f"  → {len(new_completed)} job(s) newly completed: {', '.join(parts)}"
+            )
         if new_pending:
-            print(f"  → {len(new_pending)} job(s) newly appeared: {', '.join(new_pending)}")
+            print(
+                f"  → {len(new_pending)} job(s) newly appeared: {', '.join(new_pending)}"
+            )
         if gone_pending:
-            print(f"  → {len(gone_pending)} job(s) disappeared from pending: {', '.join(gone_pending)}")
+            print(
+                f"  → {len(gone_pending)} job(s) disappeared from pending: {', '.join(gone_pending)}"
+            )
 
         # Dynamically fetch all review-status artifacts from the run.
         artifact_statuses = fetch_all_review_statuses(token, repo, run_id)
         artifact_count_changed = len(artifact_statuses) != prev_artifact_count
         if artifact_count_changed:
-            print(f"  Found {len(artifact_statuses)} review status entries from artifacts "
-                  f"(was {prev_artifact_count} last poll)")
+            print(
+                f"  Found {len(artifact_statuses)} review status entries from artifacts "
+                f"(was {prev_artifact_count} last poll)"
+            )
         prev_artifact_count = len(artifact_statuses)
 
         merged_json = json.dumps(artifact_statuses) if artifact_statuses else ""
@@ -617,7 +675,11 @@ def run(
         current_commit_info = _commit_info_for_state(commit_info, pending=not all_done)
 
         body = build_comment_body(
-            asm, completed, pending, run_url, job_urls,
+            asm,
+            completed,
+            pending,
+            run_url,
+            job_urls,
             merged_json,
             current_commit_info,
             waiting=not runs_completed,
@@ -647,11 +709,16 @@ def run(
                 if cid:
                     print(f"  Updated comment {cid} ({reason})")
                 else:
-                    print(f"  Failed to update comment ({reason}, will retry)", file=sys.stderr)
+                    print(
+                        f"  Failed to update comment ({reason}, will retry)",
+                        file=sys.stderr,
+                    )
             last_body = body
         else:
             if pending:
-                print(f"  No change since last poll. Still waiting on: {', '.join(pending)}")
+                print(
+                    f"  No change since last poll. Still waiting on: {', '.join(pending)}"
+                )
             else:
                 print("  No change since last poll.")
 
@@ -660,8 +727,10 @@ def run(
 
         if all_done and not quiet_grace_used:
             quiet_grace_used = True
-            print("  No jobs pending and runs report completed — "
-                  "waiting 10s for downstream jobs to appear.")
+            print(
+                "  No jobs pending and runs report completed — "
+                "waiting 10s for downstream jobs to appear."
+            )
             time.sleep(10)
             continue
 
@@ -674,8 +743,10 @@ def run(
             break
 
         if not pending:
-            print("  No visible jobs pending, but a run is still queued or "
-                  "in progress — waiting for its jobs to appear.")
+            print(
+                "  No visible jobs pending, but a run is still queued or "
+                "in progress — waiting for its jobs to appear."
+            )
 
         quiet_grace_used = False
         time.sleep(interval)
@@ -717,12 +788,20 @@ def resolve_pr_number(token: str, repo: str, head_sha: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--interval", type=int, default=15,
-                        help="Seconds between polls (default: 15).")
-    parser.add_argument("--timeout", type=int, default=1800,
-                        help="Max seconds to poll before giving up (default: 1800).")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print comment body instead of posting to PR.")
+    parser.add_argument(
+        "--interval", type=int, default=15, help="Seconds between polls (default: 15)."
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=1800,
+        help="Max seconds to poll before giving up (default: 1800).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print comment body instead of posting to PR.",
+    )
     args = parser.parse_args()
 
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -769,7 +848,9 @@ def main() -> int:
             # Truncate commit message to first line, max 60 chars.
             first_line = commit_msg.split("\n")[0][:60]
             if commit_url:
-                commit_info = f"<sub>running on [{short_sha}]({commit_url}) — {first_line}</sub>"
+                commit_info = (
+                    f"<sub>running on [{short_sha}]({commit_url}) — {first_line}</sub>"
+                )
             else:
                 commit_info = f"<sub>running on {short_sha} — {first_line}</sub>"
         elif commit_url:

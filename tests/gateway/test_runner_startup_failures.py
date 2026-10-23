@@ -16,7 +16,9 @@ def _host_attach_gate_is_not_under_test(monkeypatch):
     there makes ``start_gateway`` attach and return before reaching the code under test. The host
     role claimed along the way is released afterwards, so one test's owner is not the next one's.
     """
-    monkeypatch.setattr("gateway.run._host_attach_or_none", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        "gateway.run._host_attach_or_none", AsyncMock(return_value=None)
+    )
     yield
     from gateway import host_rendezvous as hr
 
@@ -27,11 +29,11 @@ def _host_attach_gate_is_not_under_test(monkeypatch):
 @pytest.mark.parametrize(
     "code, expected",
     [
-        ("telegram-bot-token_lock", True),   # BasePlatformAdapter._acquire_platform_lock
+        ("telegram-bot-token_lock", True),  # BasePlatformAdapter._acquire_platform_lock
         ("discord-bot-token_lock", True),
         ("whatsapp-session_lock", True),
         ("feishu_app_lock", True),
-        ("lock_conflict", True),             # buzz / irc / line identity conflicts
+        ("lock_conflict", True),  # buzz / irc / line identity conflicts
         ("telegram_connect_error", False),
         ("telegram_auth_error", False),
         ("relay_membership_required", False),
@@ -101,7 +103,9 @@ class _SuccessfulAdapter(BasePlatformAdapter):
 
 
 @pytest.mark.asyncio
-async def test_start_gateway_verbosity_imports_redacting_formatter(monkeypatch, tmp_path):
+async def test_start_gateway_verbosity_imports_redacting_formatter(
+    monkeypatch, tmp_path
+):
     """Verbosity != None must not crash with NameError on RedactingFormatter (#8044)."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
 
@@ -110,8 +114,9 @@ async def test_start_gateway_verbosity_imports_redacting_formatter(monkeypatch, 
             from gateway.session import SessionStore
             from clawk_state import SessionDB
             from clawk_constants import get_clawk_home
-            self.session_store = SessionStore(get_clawk_home() / 'sessions', config)
-            self._session_db = SessionDB(get_clawk_home() / 'state.db')
+
+            self.session_store = SessionStore(get_clawk_home() / "sessions", config)
+            self._session_db = SessionDB(get_clawk_home() / "state.db")
             self.session_store._db = self._session_db
             self._draining = False
             self.config = config
@@ -130,8 +135,12 @@ async def test_start_gateway_verbosity_imports_redacting_formatter(monkeypatch, 
 
     monkeypatch.setattr("gateway.status.get_running_pid", lambda: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _CleanExitRunner)
 
     from gateway.run import start_gateway
@@ -203,8 +212,12 @@ async def test_start_gateway_replace_aborts_when_force_killed_pid_still_alive(
     monkeypatch.setattr("gateway.run.os.kill", lambda pid, sig: None)
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _RunnerShouldNotStart)
 
     from gateway.run import start_gateway
@@ -242,12 +255,16 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
         )
         # Actually write the marker so we can verify cleanup later
         from gateway.status import _get_takeover_marker_path, _write_json_file
-        _write_json_file(_get_takeover_marker_path(), {
-            "target_pid": target_pid,
-            "target_start_time": 0,
-            "replacer_pid": 100,
-            "written_at": "2026-04-17T00:00:00+00:00",
-        })
+
+        _write_json_file(
+            _get_takeover_marker_path(),
+            {
+                "target_pid": target_pid,
+                "target_start_time": 0,
+                "replacer_pid": 100,
+                "written_at": "2026-04-17T00:00:00+00:00",
+            },
+        )
         return True
 
     def record_terminate(pid, force=False, **kwargs):
@@ -258,8 +275,9 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
             from gateway.session import SessionStore
             from clawk_state import SessionDB
             from clawk_constants import get_clawk_home
-            self.session_store = SessionStore(get_clawk_home() / 'sessions', config)
-            self._session_db = SessionDB(get_clawk_home() / 'state.db')
+
+            self.session_store = SessionStore(get_clawk_home() / "sessions", config)
+            self._session_db = SessionDB(get_clawk_home() / "state.db")
             self.session_store._db = self._session_db
             self._draining = False
             self.config = config
@@ -276,10 +294,13 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
             self._session_db.close()
 
     _pid_state = {"alive": True}
+
     def _mock_get_running_pid():
         return 42 if _pid_state["alive"] else None
+
     def _mock_remove_pid_file():
         _pid_state["alive"] = False
+
     monkeypatch.setattr("gateway.status.get_running_pid", _mock_get_running_pid)
     monkeypatch.setattr("gateway.status.remove_pid_file", _mock_remove_pid_file)
     # Ownership guard (#89315): this test simulates a legitimate same-home
@@ -313,8 +334,12 @@ async def test_start_gateway_replace_writes_takeover_marker_before_sigterm(
     )
     monkeypatch.setattr("time.sleep", lambda _: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _CleanExitRunner)
 
     from gateway.run import start_gateway
@@ -339,12 +364,16 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
 
     def write_marker(target_pid: int) -> bool:
         from gateway.status import _get_takeover_marker_path, _write_json_file
-        _write_json_file(_get_takeover_marker_path(), {
-            "target_pid": target_pid,
-            "target_start_time": 0,
-            "replacer_pid": 100,
-            "written_at": "2026-04-17T00:00:00+00:00",
-        })
+
+        _write_json_file(
+            _get_takeover_marker_path(),
+            {
+                "target_pid": target_pid,
+                "target_start_time": 0,
+                "replacer_pid": 100,
+                "written_at": "2026-04-17T00:00:00+00:00",
+            },
+        )
         return True
 
     def raise_permission(pid, force=False, **kwargs):
@@ -370,8 +399,12 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
     monkeypatch.setattr("gateway.status.terminate_pid", raise_permission)
     monkeypatch.setattr("gateway.run.os.getpid", lambda: 100)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
 
     from gateway.run import start_gateway
 
@@ -384,7 +417,9 @@ async def test_start_gateway_replace_clears_marker_on_permission_denied(
 
 
 @pytest.mark.asyncio
-async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch, tmp_path, caplog):
+async def test_runner_degrades_gracefully_when_all_adapters_missing(
+    monkeypatch, tmp_path, caplog
+):
     """When all enabled platforms have no adapter (missing library or credentials),
     the gateway should NOT return failure — it should warn and continue running for
     cron job execution, matching the behaviour of 'no platforms enabled' (#5196).
@@ -406,9 +441,12 @@ async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch,
     # missing credentials — no connection attempt ever made).
     monkeypatch.setattr(runner, "_create_adapter", lambda platform, cfg: None)
     # ...because no plugin registered them, so the reconnect watcher may still heal them.
-    monkeypatch.setattr("gateway.platform_registry.platform_registry.is_registered", lambda name: False)
+    monkeypatch.setattr(
+        "gateway.platform_registry.platform_registry.is_registered", lambda name: False
+    )
 
     import logging
+
     with caplog.at_level(logging.WARNING):
         ok = await runner.start()
 
@@ -426,13 +464,13 @@ async def test_runner_degrades_gracefully_when_all_adapters_missing(monkeypatch,
         assert state["platforms"][platform]["needs_attention"] is True
     # A warning must be emitted explaining why no platforms connected.
     assert any(
-        "No adapter could be created" in record.message
-        for record in caplog.records
+        "No adapter could be created" in record.message for record in caplog.records
     ), "Expected degraded-mode warning when all adapters are missing"
 
 
 class _NonRetryableFailureAdapter(BasePlatformAdapter):
     """Simulates a fatal config error like token collision."""
+
     def __init__(self):
         super().__init__(PlatformConfig(enabled=True, token="***"), Platform.DISCORD)
 
@@ -455,20 +493,24 @@ class _NonRetryableFailureAdapter(BasePlatformAdapter):
 
 
 @pytest.mark.asyncio
-async def test_runner_exits_with_ex_config_on_nonretryable_startup_error(monkeypatch, tmp_path):
+async def test_runner_exits_with_ex_config_on_nonretryable_startup_error(
+    monkeypatch, tmp_path
+):
     """Non-retryable startup errors (token collision, no platforms) must
     set exit_code to 78 (EX_CONFIG) so the s6 finish script can translate
     it to exit 125 (permanent failure).  See #51228."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config = GatewayConfig(
-        platforms={
-            Platform.DISCORD: PlatformConfig(enabled=True, token="***")
-        },
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="***")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
 
-    monkeypatch.setattr(runner, "_create_adapter", lambda platform, platform_config: _NonRetryableFailureAdapter())
+    monkeypatch.setattr(
+        runner,
+        "_create_adapter",
+        lambda platform, platform_config: _NonRetryableFailureAdapter(),
+    )
 
     ok = await runner.start()
 
@@ -496,8 +538,9 @@ async def test_start_gateway_propagates_fatal_config_exit_code(monkeypatch, tmp_
             from gateway.session import SessionStore
             from clawk_state import SessionDB
             from clawk_constants import get_clawk_home
-            self.session_store = SessionStore(get_clawk_home() / 'sessions', config)
-            self._session_db = SessionDB(get_clawk_home() / 'state.db')
+
+            self.session_store = SessionStore(get_clawk_home() / "sessions", config)
+            self._session_db = SessionDB(get_clawk_home() / "state.db")
             self.session_store._db = self._session_db
             self._draining = False
             self.config = config
@@ -515,8 +558,12 @@ async def test_start_gateway_propagates_fatal_config_exit_code(monkeypatch, tmp_
 
     monkeypatch.setattr("gateway.status.get_running_pid", lambda: None)
     monkeypatch.setattr("tools.skills_sync.sync_skills", lambda quiet=True: None)
-    monkeypatch.setattr("clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path)
-    monkeypatch.setattr("clawk_logging._add_rotating_handler", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "clawk_logging.setup_logging", lambda clawk_home, mode: tmp_path
+    )
+    monkeypatch.setattr(
+        "clawk_logging._add_rotating_handler", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr("gateway.run.GatewayRunner", _FatalConfigRunner)
 
     from gateway.run import start_gateway
@@ -552,7 +599,9 @@ class _ForeignTokenLockAdapter(BasePlatformAdapter):
 
 
 @pytest.mark.asyncio
-async def test_live_foreign_token_lock_at_startup_exits_ex_config(monkeypatch, tmp_path):
+async def test_live_foreign_token_lock_at_startup_exits_ex_config(
+    monkeypatch, tmp_path
+):
     """Salvage of #83183 claim 1: a LIVE foreign holder of the bot token at
     zero-connected startup is a single-writer conflict, not a transient blip.
 
@@ -567,7 +616,12 @@ async def test_live_foreign_token_lock_at_startup_exits_ex_config(monkeypatch, t
         "gateway.status.acquire_scoped_lock",
         lambda scope, identity, metadata=None: (
             False,
-            {"pid": 424242, "start_time": 1, "clawk_home": "/other/home", "profile": "other"},
+            {
+                "pid": 424242,
+                "start_time": 1,
+                "clawk_home": "/other/home",
+                "profile": "other",
+            },
         ),
     )
     config = GatewayConfig(
@@ -576,7 +630,9 @@ async def test_live_foreign_token_lock_at_startup_exits_ex_config(monkeypatch, t
     )
     runner = GatewayRunner(config)
     monkeypatch.setattr(
-        runner, "_create_adapter", lambda platform, platform_config: _ForeignTokenLockAdapter()
+        runner,
+        "_create_adapter",
+        lambda platform, platform_config: _ForeignTokenLockAdapter(),
     )
 
     ok = await runner.start()
@@ -600,7 +656,10 @@ async def test_token_lock_plus_retryable_peer_stays_alive(monkeypatch, tmp_path)
     monkeypatch.setenv("CLAWK_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
     monkeypatch.setattr(
         "gateway.status.acquire_scoped_lock",
-        lambda scope, identity, metadata=None: (False, {"pid": 424242, "start_time": 1}),
+        lambda scope, identity, metadata=None: (
+            False,
+            {"pid": 424242, "start_time": 1},
+        ),
     )
     config = GatewayConfig(
         platforms={
@@ -621,7 +680,9 @@ async def test_token_lock_plus_retryable_peer_stays_alive(monkeypatch, tmp_path)
         runner,
         "_create_adapter",
         lambda platform, cfg: (
-            _ForeignTokenLockAdapter() if platform is Platform.TELEGRAM else _DiscordBlip()
+            _ForeignTokenLockAdapter()
+            if platform is Platform.TELEGRAM
+            else _DiscordBlip()
         ),
     )
 

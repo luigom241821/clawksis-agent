@@ -11,6 +11,7 @@ tripped for the lifetime of the process. These tests lock in the
 half-open / cooldown / reconnect-resets-breaker behavior that fixes
 that.
 """
+
 import json
 from unittest.mock import MagicMock
 
@@ -355,6 +356,7 @@ def test_circuit_breaker_cleared_on_reconnect(monkeypatch, tmp_path):
     mcp_tool._server_error_counts["srv"] = mcp_tool._CIRCUIT_BREAKER_THRESHOLD + 2
     if hasattr(mcp_tool, "_server_breaker_opened_at"):
         import time as _time
+
         mcp_tool._server_breaker_opened_at["srv"] = _time.monotonic()
 
     # Force handle_401 to claim recovery succeeded.
@@ -493,7 +495,9 @@ def test_run_loop_parks_instead_of_exiting_then_revives(monkeypatch, tmp_path):
     asyncio.run(_scenario())
 
 
-def test_initial_connect_budget_parks_instead_of_exiting_then_revives(monkeypatch, tmp_path):
+def test_initial_connect_budget_parks_instead_of_exiting_then_revives(
+    monkeypatch, tmp_path
+):
     """Initial connection failures must park, not permanently exit the task.
 
     Regression for #57129's remaining live case: a slow HTTP/SSE server or
@@ -573,7 +577,9 @@ def test_initial_connect_budget_parks_instead_of_exiting_then_revives(monkeypatc
     asyncio.run(_scenario())
 
 
-def test_breaker_opened_by_tool_errors_says_rejected_not_unreachable(monkeypatch, tmp_path):
+def test_breaker_opened_by_tool_errors_says_rejected_not_unreachable(
+    monkeypatch, tmp_path
+):
     """Three completed calls whose payload is an error still open the breaker (#10447), but the
     open-breaker message must not claim the server is unreachable — it answered every time
     (#11113); a single transport strike in the streak makes it "unreachable" again."""
@@ -601,7 +607,7 @@ def test_breaker_opened_by_tool_errors_says_rejected_not_unreachable(monkeypatch
         assert "rejected" in tripped and "unreachable" not in tripped, tripped
 
         mcp_tool._reset_server_error("srv")
-        mcp_tool._bump_server_error("srv")                      # transport strike
+        mcp_tool._bump_server_error("srv")  # transport strike
         mcp_tool._bump_server_error("srv", application=True)
         mcp_tool._bump_server_error("srv", application=True)
         assert "unreachable" in json.loads(handler({}))["error"].lower()

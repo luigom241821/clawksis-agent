@@ -29,14 +29,18 @@ def test_startup_prune_reclaims_only_provably_deleted_checkouts(tmp_path, monkey
     live_root = tmp_path / "home" / "clawksis-agent"
     live_root.mkdir(parents=True)
     live = _state(installs, "aaaa", live_root)
-    gone_scratch = _state(installs, "bbbb", tmp_path / "home" / "cache" / "scratch" / "clone")
+    gone_scratch = _state(
+        installs, "bbbb", tmp_path / "home" / "cache" / "scratch" / "clone"
+    )
     gone_worktree = _state(installs, "cccc", repo / ".worktrees" / "removed-by-hand")
     # Pre-record state (no .project-root) has no evidence either way: never touched.
     unknown = installs / "dddd"
     (unknown / "environments").mkdir(parents=True)
     # A data root shared across a mount boundary records checkouts this process cannot see:
     # a host install from inside a container, a container install from the host.
-    host_install = _state(installs, "eeee", tmp_path / "other-host-home" / ".clawk" / "clawksis-agent")
+    host_install = _state(
+        installs, "eeee", tmp_path / "other-host-home" / ".clawk" / "clawksis-agent"
+    )
     container_install = _state(installs, "ffff", tmp_path / "opt-clawk")
 
     assert orphan_install_states(installs) == [gone_scratch, gone_worktree]
@@ -54,8 +58,10 @@ def test_held_orphan_is_kept(tmp_path):
     runtime = _state(installs, "ffff", tmp_path / "gone-c")
 
     fds = [os.open(locked / ".install.lock", os.O_CREAT | os.O_RDWR, 0o600)]
-    for lease_dir in (leased / "environments" / "gen" / ".leases",
-                      runtime / "pm-runtime" / "generations" / "gen" / ".leases"):
+    for lease_dir in (
+        leased / "environments" / "gen" / ".leases",
+        runtime / "pm-runtime" / "generations" / "gen" / ".leases",
+    ):
         lease_dir.mkdir(parents=True)
         fds.append(os.open(lease_dir / "reader", os.O_CREAT | os.O_RDWR, 0o600))
     assert all(lock_fd(fd, wait=False) for fd in fds)
@@ -66,11 +72,17 @@ def test_held_orphan_is_kept(tmp_path):
         for fd in fds:
             os.close(fd)
     # Locks released (owner exited): all are reclaimed on the next pass.
-    assert sorted(p.name for p in collect_orphan_install_states(installs)) == ["dddd", "eeee", "ffff"]
+    assert sorted(p.name for p in collect_orphan_install_states(installs)) == [
+        "dddd",
+        "eeee",
+        "ffff",
+    ]
 
 
 @pytest.mark.platforms("posix")
-@pytest.mark.skipif(getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores directory modes")
+@pytest.mark.skipif(
+    getattr(os, "geteuid", lambda: 1)() == 0, reason="root ignores directory modes"
+)
 def test_partly_removed_orphan_keeps_its_record_until_retried(tmp_path):
     installs = tmp_path / "installs"
     state = _state(installs, "aaaa", tmp_path / "gone")

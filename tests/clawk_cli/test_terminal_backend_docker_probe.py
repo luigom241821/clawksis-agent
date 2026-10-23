@@ -43,7 +43,9 @@ def test_probe_ready_when_only_podman_is_configured(tmp_path, monkeypatch):
 
     def _run(argv, **kwargs):
         captured.append(list(argv))
-        return subprocess.CompletedProcess(argv, 0, stdout="podman version 5.0.0\n", stderr="")
+        return subprocess.CompletedProcess(
+            argv, 0, stdout="podman version 5.0.0\n", stderr=""
+        )
 
     monkeypatch.setattr(remote_common, "run_capture", _run)
 

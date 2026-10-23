@@ -1,4 +1,5 @@
 """GitHub Actions file commands around the real, stdlib-only PM bootstrap."""
+
 from __future__ import annotations
 
 import argparse
@@ -58,7 +59,8 @@ def parse_extras(value: str) -> list[str] | None:
     except ValueError as exc:
         raise argparse.ArgumentTypeError(message) from exc
     if not isinstance(extras, list) or any(
-        not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name)
+        not isinstance(name, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name)
         for name in extras
     ):
         raise argparse.ArgumentTypeError(message)
@@ -71,14 +73,18 @@ def prepare(args) -> None:
     target = current_target()
     names = packages(args.toolchain, args.packages)
     values = {
-        "packages": json.dumps(names), "target": target, "arch": target.split("-")[1],
+        "packages": json.dumps(names),
+        "target": target,
+        "arch": target.split("-")[1],
         "store": str(home / "tools"),
     }
     for name in names:
         version = lock.version(name)
         if not version or not lock.artifacts(name, target):
             raise ValueError(f"{name} has no pinned artifact for {target}")
-        values[f"{name}-version"] = version.partition("+")[0] if name == "python" else version
+        values[f"{name}-version"] = (
+            version.partition("+")[0] if name == "python" else version
+        )
     # Cache-key fragment for the tools cache: empty when no extras, so every
     # existing key stays byte-identical.
     values["extra-packages"] = "".join(f"-{name}" for name in (args.packages or []))
@@ -87,11 +93,14 @@ def prepare(args) -> None:
     values["os-version"] = platform.platform()
     values["bootstrap-python"] = sys.executable
     file_commands("GITHUB_OUTPUT", values)
-    file_commands("GITHUB_ENV", {
-        "CLAWK_HOME": home,
-        "CLAWK_RUNTIME_DIR": home / "tools",
-        "PYTHONUTF8": "1",
-    })
+    file_commands(
+        "GITHUB_ENV",
+        {
+            "CLAWK_HOME": home,
+            "CLAWK_RUNTIME_DIR": home / "tools",
+            "PYTHONUTF8": "1",
+        },
+    )
 
 
 def add_path(directories: list[str]) -> None:
@@ -119,8 +128,16 @@ def archive_inputs(args) -> None:
     from scripts.ci.archive_inputs import Archive, pinned_inputs, stage_inputs
     from scripts.releases import r2
 
-    pins = pinned_inputs(repo_root(), target=current_target(), packages=set(packages(args.toolchain, args.packages)))
-    stage_inputs(pins, archive=Archive(*r2.credentials()), store=Store(args.home.resolve() / "tools"))
+    pins = pinned_inputs(
+        repo_root(),
+        target=current_target(),
+        packages=set(packages(args.toolchain, args.packages)),
+    )
+    stage_inputs(
+        pins,
+        archive=Archive(*r2.credentials()),
+        store=Store(args.home.resolve() / "tools"),
+    )
 
 
 def install(args) -> None:
@@ -160,26 +177,39 @@ def install(args) -> None:
         # PM prepares the empty command environment through its normal builder.
         commands = args.home.resolve() / "python" / facts.get("python")["entry"]
         if not (commands / "pyvenv.cfg").is_file():
-            build_requirements_environment([], out=commands, python=binaries["python"],
-                                           env=environment, explicit=True)
+            build_requirements_environment(
+                [],
+                out=commands,
+                python=binaries["python"],
+                env=environment,
+                explicit=True,
+            )
         python = commands / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
         python3_alias(python)
         path.insert(0, str(python.parent))
         outputs["python-path"] = str(python)
-        exported.update({
-            "CLAWK_PYTHON": python,
-        })
+        exported.update(
+            {
+                "CLAWK_PYTHON": python,
+            }
+        )
         outputs["uv-cache-path"] = str(uv_cache_dir())
     if "npm" in names:
         cache = subprocess.check_output(
             [str(binaries["npm"]), "config", "get", "cache"],
-            env=environment, text=True, encoding="utf-8", timeout=60,
+            env=environment,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
         ).strip()
         outputs["npm-cache-path"] = cache
     file_commands("GITHUB_ENV", exported)
     file_commands("GITHUB_OUTPUT", outputs)
     add_path(path)
-    print("PM toolchain ready: " + ", ".join(f"{name} {facts.get(name)['version']}" for name in names))
+    print(
+        "PM toolchain ready: "
+        + ", ".join(f"{name} {facts.get(name)['version']}" for name in names)
+    )
 
 
 def dependencies(args) -> None:
@@ -193,7 +223,9 @@ def dependencies(args) -> None:
     from pm.paths import repo_root
 
     project = repo_root()
-    metadata = tomllib.loads((project / "pyproject.toml").read_text(encoding="utf-8-sig"))
+    metadata = tomllib.loads(
+        (project / "pyproject.toml").read_text(encoding="utf-8-sig")
+    )
     extras = args.extras or []
     unknown = set(extras) - metadata["project"].get("optional-dependencies", {}).keys()
     if unknown:
@@ -212,11 +244,14 @@ def dependencies(args) -> None:
     bindir = venv / ("Scripts" if os.name == "nt" else "bin")
     python = bindir / ("python.exe" if os.name == "nt" else "python")
     python3_alias(python)
-    file_commands("GITHUB_ENV", {
-        "CLAWK_PYTHON": python,
-        "VIRTUAL_ENV": venv,
-        "PYTHONPATH": project,
-    })
+    file_commands(
+        "GITHUB_ENV",
+        {
+            "CLAWK_PYTHON": python,
+            "VIRTUAL_ENV": venv,
+            "PYTHONPATH": project,
+        },
+    )
     file_commands("GITHUB_OUTPUT", {"python-path": python, "venv": venv})
     add_path([str(bindir)])
     print(f"PM dependencies ready: {args.extras} in {venv}")
@@ -224,13 +259,25 @@ def dependencies(args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    phases = {"prepare": prepare, "archive-inputs": archive_inputs, "install": install, "dependencies": dependencies}
+    phases = {
+        "prepare": prepare,
+        "archive-inputs": archive_inputs,
+        "install": install,
+        "dependencies": dependencies,
+    }
     parser.add_argument("phase", choices=list(phases))
-    parser.add_argument("--toolchain", choices=["python", "node", "all"], default="python")
+    parser.add_argument(
+        "--toolchain", choices=["python", "node", "all"], default="python"
+    )
     parser.add_argument("--home", type=Path, required=True)
     parser.add_argument("--extras", type=parse_extras, default="")
     parser.add_argument("--test-environment", action="store_true")
-    parser.add_argument("--packages", type=parse_package_list, default=[], help="extra PM tools beyond the toolchain roots (e.g. ffmpeg)")
+    parser.add_argument(
+        "--packages",
+        type=parse_package_list,
+        default=[],
+        help="extra PM tools beyond the toolchain roots (e.g. ffmpeg)",
+    )
     args = parser.parse_args()
     if args.toolchain == "node" and (args.extras is not None or args.test_environment):
         parser.error("Python dependencies require the python or all toolchain")

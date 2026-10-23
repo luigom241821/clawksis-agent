@@ -23,6 +23,7 @@ def _fresh(monkeypatch, tmp_path):
     managed.mkdir()
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
     import clawk_cli.memory_provider_migration as mpm
+
     monkeypatch.setattr(mpm, "catalog_source", lambda name: name)
 
 
@@ -36,34 +37,57 @@ def _home(tmp_path: Path, *, env: str = "", config: str = "") -> Path:
     return home
 
 
-@pytest.mark.parametrize(("env", "config", "in_use"), [
-    ("", "terminal:\n  backend: singularity\n", True),
-    ("", "terminal:\n  env_type: singularity\n", True),                  # legacy key the bridge maps
-    ("TERMINAL_ENV=singularity\n", "", True),
-    ("TERMINAL_ENV=singularity\n", "terminal:\n  backend: docker\n", False),  # config.yaml wins, as in the bridge
-    ("", "terminal:\n  backend: docker\n  singularity_image: docker://x\n", False),  # an image key alone is not use
-    ("", "", False),
-])
+@pytest.mark.parametrize(
+    ("env", "config", "in_use"),
+    [
+        ("", "terminal:\n  backend: singularity\n", True),
+        (
+            "",
+            "terminal:\n  env_type: singularity\n",
+            True,
+        ),  # legacy key the bridge maps
+        ("TERMINAL_ENV=singularity\n", "", True),
+        (
+            "TERMINAL_ENV=singularity\n",
+            "terminal:\n  backend: docker\n",
+            False,
+        ),  # config.yaml wins, as in the bridge
+        (
+            "",
+            "terminal:\n  backend: docker\n  singularity_image: docker://x\n",
+            False,
+        ),  # an image key alone is not use
+        ("", "", False),
+    ],
+)
 def test_singularity_in_use_is_the_configured_backend(tmp_path, env, config, in_use):
     assert lcm.singularity_in_use(_home(tmp_path, env=env, config=config)) is in_use
 
 
-@pytest.mark.parametrize(("home_env", "managed_env", "in_use"), [
-    ("TERMINAL_ENV=local\n", "TERMINAL_ENV=singularity\n", True),
-    ("TERMINAL_ENV=singularity\n", "TERMINAL_ENV=local\n", False),
-    ("", "TERMINAL_ENV=singularity\n", True),
-])
-def test_the_managed_env_beats_the_homes_env_as_in_load_clawk_dotenv(tmp_path, home_env, managed_env, in_use):
+@pytest.mark.parametrize(
+    ("home_env", "managed_env", "in_use"),
+    [
+        ("TERMINAL_ENV=local\n", "TERMINAL_ENV=singularity\n", True),
+        ("TERMINAL_ENV=singularity\n", "TERMINAL_ENV=local\n", False),
+        ("", "TERMINAL_ENV=singularity\n", True),
+    ],
+)
+def test_the_managed_env_beats_the_homes_env_as_in_load_clawk_dotenv(
+    tmp_path, home_env, managed_env, in_use
+):
     # load_clawk_dotenv applies the administrator-managed .env last, with override.
     (tmp_path / "managed" / ".env").write_text(managed_env, encoding="utf-8")
     assert lcm.singularity_in_use(_home(tmp_path, env=home_env)) is in_use
 
 
-@pytest.mark.parametrize("env", [
-    "HPC_BACKEND=singularity\nTERMINAL_ENV=${HPC_BACKEND}\n",
-    "TERMINAL_ENV=${SITE_BACKEND}\n",                    # the process environment supplies the value
-    "TERMINAL_ENV=${UNSET_BACKEND:-singularity}\n",
-])
+@pytest.mark.parametrize(
+    "env",
+    [
+        "HPC_BACKEND=singularity\nTERMINAL_ENV=${HPC_BACKEND}\n",
+        "TERMINAL_ENV=${SITE_BACKEND}\n",  # the process environment supplies the value
+        "TERMINAL_ENV=${UNSET_BACKEND:-singularity}\n",
+    ],
+)
 def test_dotenv_references_resolve_as_in_load_clawk_dotenv(tmp_path, monkeypatch, env):
     # load_clawk_dotenv expands ${VAR} / ${VAR:-default} against the file's earlier lines and the
     # process environment before TERMINAL_ENV picks the backend.
@@ -77,7 +101,9 @@ def test_process_env_backend_counts_only_for_the_launch_home(tmp_path, monkeypat
     secondary = tmp_path / "profiles" / "work"
     secondary.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(launch))
-    monkeypatch.setenv("TERMINAL_ENV", "singularity")  # the launch process's backend (systemd unit, export)
+    monkeypatch.setenv(
+        "TERMINAL_ENV", "singularity"
+    )  # the launch process's backend (systemd unit, export)
     assert lcm.singularity_in_use(launch) is False
     assert lcm.singularity_in_use(launch, process_env=True) is True
     # Gateway start runs the startup migration for every served home: a secondary with no backend of its
@@ -86,7 +112,10 @@ def test_process_env_backend_counts_only_for_the_launch_home(tmp_path, monkeypat
 
 
 def test_a_singularity_home_gets_the_plugin_once(tmp_path):
-    home = _home(tmp_path, config="terminal:\n  backend: singularity\n  singularity_image: docker://python:3.12\n")
+    home = _home(
+        tmp_path,
+        config="terminal:\n  backend: singularity\n  singularity_image: docker://python:3.12\n",
+    )
     calls, said = [], []
 
     def install(name):
@@ -125,9 +154,12 @@ def test_the_backend_name_is_free_for_the_plugin(monkeypatch):
         reg.restore_registration("singularity", provider, previous)
 
 
-def test_without_the_plugin_the_backend_error_names_the_install_command(tmp_path, monkeypatch):
+def test_without_the_plugin_the_backend_error_names_the_install_command(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(_home(tmp_path)))
     from tools import terminal_tool_backends as backends
+
     assert backends._check_plugin_requirements({"env_type": "singularity"}) is False
     reason = backends.terminal_backend_unavailable_reason()
     assert "moved out of core into the 'singularity' plugin" in reason
@@ -141,21 +173,30 @@ def test_config_unset_removes_the_env_copy_core_used_to_write(tmp_path, monkeypa
     # While core shipped the backend, `clawk config set terminal.singularity_image` also wrote
     # TERMINAL_SINGULARITY_IMAGE to .env, and the plugin still falls back to it: unset must remove both,
     # or the old image comes back instead of the default.
-    home = _home(tmp_path, env="TERMINAL_SINGULARITY_IMAGE=docker://old:1\n",
-                 config="terminal:\n  backend: singularity\n  singularity_image: docker://old:1\n")
+    home = _home(
+        tmp_path,
+        env="TERMINAL_SINGULARITY_IMAGE=docker://old:1\n",
+        config="terminal:\n  backend: singularity\n  singularity_image: docker://old:1\n",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     from clawk_cli.config import unset_config_value
+
     unset_config_value("terminal.singularity_image")
     assert "singularity_image" not in (home / "config.yaml").read_text(encoding="utf-8")
-    assert "TERMINAL_SINGULARITY_IMAGE" not in (home / ".env").read_text(encoding="utf-8")
+    assert "TERMINAL_SINGULARITY_IMAGE" not in (home / ".env").read_text(
+        encoding="utf-8"
+    )
 
 
-def test_config_set_and_get_still_recognize_the_image_key(tmp_path, monkeypatch, capsys):
+def test_config_set_and_get_still_recognize_the_image_key(
+    tmp_path, monkeypatch, capsys
+):
     # The plugin reads terminal.singularity_image and its setup text says `clawk config set
     # terminal.singularity_image <image>`; leaving DEFAULT_CONFIG must not make it an unknown key.
     home = _home(tmp_path, config="terminal:\n  backend: singularity\n")
     monkeypatch.setenv("CLAWK_HOME", str(home))
     from clawk_cli.config import get_config_value, set_config_value
+
     set_config_value("terminal.singularity_image", "docker://python:3.12")
     get_config_value("terminal.singularity_image")
     out = capsys.readouterr()

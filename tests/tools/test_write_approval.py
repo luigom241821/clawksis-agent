@@ -14,6 +14,7 @@ import shutil
 
 import pytest
 
+
 @pytest.fixture
 def clawk_home(monkeypatch):
     d = tempfile.mkdtemp(prefix="clawk_wa_test_")
@@ -23,29 +24,40 @@ def clawk_home(monkeypatch):
     yield home
     shutil.rmtree(d, ignore_errors=True)
 
+
 def _set_approval(subsystem, enabled):
     import clawk_cli.config as cfg
+
     c = cfg.load_config()
     c.setdefault(subsystem, {})["write_approval"] = enabled
     cfg.save_config(c)
+
 
 # ---------------------------------------------------------------------------
 # Config resolution
 # ---------------------------------------------------------------------------
 
+
 def test_list_pending_skips_non_dict_record(clawk_home):
     """A parseable-but-non-object pending file must be skipped, not crash the sort."""
     from tools import write_approval as wa
-    wa.stage_write("memory", {"action": "add", "target": "user", "content": "ok"},
-                   summary="ok", origin="foreground")
+
+    wa.stage_write(
+        "memory",
+        {"action": "add", "target": "user", "content": "ok"},
+        summary="ok",
+        origin="foreground",
+    )
     pending_dir = wa._pending_path("memory", "").parent
     (pending_dir / "bad.json").write_text('"not a record"', encoding="utf-8")
     records = wa.list_pending("memory")
     assert len(records) == 1 and records[0]["payload"]["content"] == "ok"
     assert wa.get_pending("memory", "bad") is None
 
+
 def test_normalize_enabled_coerces_values():
     from tools import write_approval as wa
+
     # Real bools pass through.
     assert wa._normalize_enabled(True) is True
     assert wa._normalize_enabled(False) is False
@@ -58,19 +70,24 @@ def test_normalize_enabled_coerces_values():
     assert wa._normalize_enabled("garbage") is False
     assert wa._normalize_enabled(None) is False
 
+
 # ---------------------------------------------------------------------------
 # Memory gate
 # ---------------------------------------------------------------------------
+
 
 def test_memory_gate_off_allows_write(clawk_home):
     # Default (gate off) → write straight through, no staging.
     from tools.memory_tool import memory_tool, MemoryStore
     from tools import write_approval as wa
-    store = MemoryStore(); store.load_from_disk()
+
+    store = MemoryStore()
+    store.load_from_disk()
     r = json.loads(memory_tool("add", "user", "save me", store=store))
     assert r["success"] is True
     assert r["entry_count"] == 1
     assert wa.pending_count("memory") == 0
+
 
 def test_cli_memory_approve_without_live_agent_uses_fresh_store(clawk_home, capsys):
     """#46783: ``/memory approve`` from a context with no live agent (e.g. the
@@ -83,8 +100,11 @@ def test_cli_memory_approve_without_live_agent_uses_fresh_store(clawk_home, caps
     from clawk_cli.cli_commands_mixin import CLICommandsMixin
 
     _set_approval("memory", True)
-    staging = MemoryStore(); staging.load_from_disk()
-    r = json.loads(memory_tool("add", "memory", "remember the launch date", store=staging))
+    staging = MemoryStore()
+    staging.load_from_disk()
+    r = json.loads(
+        memory_tool("add", "memory", "remember the launch date", store=staging)
+    )
     assert r.get("pending_id"), r
     assert wa.pending_count("memory") == 1
 
@@ -98,10 +118,14 @@ def test_cli_memory_approve_without_live_agent_uses_fresh_store(clawk_home, caps
     assert "Approved 1" in out, out
     assert wa.pending_count("memory") == 0
     # The approved write landed in a freshly loaded on-disk store (MEMORY.md).
-    reloaded = MemoryStore(); reloaded.load_from_disk()
+    reloaded = MemoryStore()
+    reloaded.load_from_disk()
     assert any("remember the launch date" in e for e in reloaded.memory_entries)
 
-def test_load_on_disk_store_honors_configured_limits_and_permissions(clawk_home, monkeypatch):
+
+def test_load_on_disk_store_honors_configured_limits_and_permissions(
+    clawk_home, monkeypatch
+):
     """Fresh approval stores must match the live agent's limits and target gates."""
     from tools.memory_tool import MemoryStore, load_on_disk_store
 
@@ -135,23 +159,36 @@ def test_load_on_disk_store_honors_configured_limits_and_permissions(clawk_home,
     assert fallback.memory_enabled is True
     assert fallback.user_profile_enabled is True
 
+
 # ---------------------------------------------------------------------------
 # Shared command handler
 # ---------------------------------------------------------------------------
+
 
 def test_handle_approve_all(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import MemoryStore
     from tools import write_approval as wa
-    store = MemoryStore(); store.load_from_disk()
-    wa.stage_write("memory", {"action": "add", "target": "user", "content": "a"},
-                   summary="a", origin="foreground")
-    wa.stage_write("memory", {"action": "add", "target": "user", "content": "b"},
-                   summary="b", origin="foreground")
+
+    store = MemoryStore()
+    store.load_from_disk()
+    wa.stage_write(
+        "memory",
+        {"action": "add", "target": "user", "content": "a"},
+        summary="a",
+        origin="foreground",
+    )
+    wa.stage_write(
+        "memory",
+        {"action": "add", "target": "user", "content": "b"},
+        summary="b",
+        origin="foreground",
+    )
     out = handle_pending_subcommand(wa.MEMORY, ["approve", "all"], memory_store=store)
     assert "Approved 2" in out
     assert wa.pending_count("memory") == 0
     assert len(store.user_entries) == 2
+
 
 def test_handle_approve_surfaces_overwritten_entry(clawk_home):
     """#117952: on the /memory approve surface a partial-entry replace must show the
@@ -160,13 +197,28 @@ def test_handle_approve_surfaces_overwritten_entry(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import MemoryStore
     from tools import write_approval as wa
-    store = MemoryStore(); store.load_from_disk()
+
+    store = MemoryStore()
+    store.load_from_disk()
     entry = "RULE A: gate merges. RULE B: ci per HEAD. RULE C: never squash."
     store.add("memory", entry)
-    wa.stage_write("memory", {"action": "batch", "target": "memory", "operations": [
-        {"action": "replace", "old_text": "RULE B: ci per HEAD.", "content": "RULE B: CI is per-head.",
-         "matched_entry": entry}]},
-        summary="batch", origin="background_review")
+    wa.stage_write(
+        "memory",
+        {
+            "action": "batch",
+            "target": "memory",
+            "operations": [
+                {
+                    "action": "replace",
+                    "old_text": "RULE B: ci per HEAD.",
+                    "content": "RULE B: CI is per-head.",
+                    "matched_entry": entry,
+                }
+            ],
+        },
+        summary="batch",
+        origin="background_review",
+    )
     out = handle_pending_subcommand(wa.MEMORY, ["approve", "all"], memory_store=store)
     assert "Approved 1" in out and entry in out
     assert store.memory_entries == ["RULE B: CI is per-head."]
@@ -178,16 +230,34 @@ def test_handle_approve_lists_a_patch_as_the_entry_before_the_edit(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import MemoryStore
     from tools import write_approval as wa
-    store = MemoryStore(); store.load_from_disk()
+
+    store = MemoryStore()
+    store.load_from_disk()
     entry = "RULE A: gate merges. RULE B: ci per HEAD. RULE C: never squash."
     store.add("memory", entry)
-    wa.stage_write("memory", {"action": "batch", "target": "memory", "operations": [
-        {"action": "patch", "old_text": "ci per HEAD", "content": "CI is per-head", "matched_entry": entry}]},
-        summary="batch", origin="background_review")
+    wa.stage_write(
+        "memory",
+        {
+            "action": "batch",
+            "target": "memory",
+            "operations": [
+                {
+                    "action": "patch",
+                    "old_text": "ci per HEAD",
+                    "content": "CI is per-head",
+                    "matched_entry": entry,
+                }
+            ],
+        },
+        summary="batch",
+        origin="background_review",
+    )
     out = handle_pending_subcommand(wa.MEMORY, ["approve", "all"], memory_store=store)
     assert "Patched entry (as it was before the edit):" in out and entry in out
     assert "Overwrote" not in out
-    assert store.memory_entries == ["RULE A: gate merges. RULE B: CI is per-head. RULE C: never squash."]
+    assert store.memory_entries == [
+        "RULE A: gate merges. RULE B: CI is per-head. RULE C: never squash."
+    ]
 
 
 _KEPT = "Repo lives in ~/src/app; tests via make test"
@@ -197,14 +267,27 @@ _REVIEWED = "Staging DB: pg-staging-2 (old cluster, retiring)"
 def _review_stages_remove(shape):
     """Seed memory, then stage a remove the way the unattended background review does."""
     from tools.memory_tool import MemoryStore, memory_tool
-    from tools.skill_provenance import (reset_current_write_origin, reset_review_attended,
-                                        set_current_write_origin, set_review_attended)
-    store = MemoryStore(); store.load_from_disk()
+    from tools.skill_provenance import (
+        reset_current_write_origin,
+        reset_review_attended,
+        set_current_write_origin,
+        set_review_attended,
+    )
+
+    store = MemoryStore()
+    store.load_from_disk()
     for entry in (_KEPT, _REVIEWED):
         assert store.add("memory", entry)["success"]
     op = {"action": "remove", "old_text": "Staging DB"}
-    kwargs = op if shape == "single" else {"operations": [op, {"action": "add", "content": "Deploys via make ship"}]}
-    origin, attended = set_current_write_origin("background_review"), set_review_attended(False)
+    kwargs = (
+        op
+        if shape == "single"
+        else {"operations": [op, {"action": "add", "content": "Deploys via make ship"}]}
+    )
+    origin, attended = (
+        set_current_write_origin("background_review"),
+        set_review_attended(False),
+    )
     try:
         staged = json.loads(memory_tool(target="memory", store=store, **kwargs))
     finally:
@@ -221,11 +304,16 @@ def test_approve_refuses_staged_remove_whose_entry_changed(clawk_home, shape):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import load_on_disk_store, memory_tool
     from tools import write_approval as wa
+
     store, pid = _review_stages_remove(shape)
     newer = "Staging DB: pg-staging-3 (migrated 2026-09-20, creds in vault 'stg')"
-    assert json.loads(memory_tool(action="patch", old_text=_REVIEWED, content=newer, store=store))["success"]
+    assert json.loads(
+        memory_tool(action="patch", old_text=_REVIEWED, content=newer, store=store)
+    )["success"]
 
-    out = handle_pending_subcommand(wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store())
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
 
     assert load_on_disk_store().memory_entries == [_KEPT, newer], out
     assert "changed since it was staged" in out
@@ -240,8 +328,11 @@ def test_approve_names_the_entry_a_remove_deleted(clawk_home, shape):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import load_on_disk_store
     from tools import write_approval as wa
+
     _store, pid = _review_stages_remove(shape)
-    out = handle_pending_subcommand(wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store())
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
     assert _REVIEWED not in load_on_disk_store().memory_entries, out
     assert _REVIEWED in out
 
@@ -252,6 +343,7 @@ def test_approve_refuses_unpinned_legacy_remove(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools.memory_tool import load_on_disk_store
     from tools import write_approval as wa
+
     _store, pid = _review_stages_remove("single")
     path = wa._pending_path(wa.MEMORY, pid)
     record = json.loads(path.read_text(encoding="utf-8"))
@@ -259,33 +351,42 @@ def test_approve_refuses_unpinned_legacy_remove(clawk_home):
     path.write_text(json.dumps(record), encoding="utf-8")
     assert "unpinned legacy target" in handle_pending_subcommand(wa.MEMORY, ["pending"])
 
-    out = handle_pending_subcommand(wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store())
+    out = handle_pending_subcommand(
+        wa.MEMORY, ["approve", pid], memory_store=load_on_disk_store()
+    )
 
     assert "Approved 0" in out and "predates entry pinning" in out, out
     assert _REVIEWED in load_on_disk_store().memory_entries
     assert wa.get_pending(wa.MEMORY, pid) is not None
 
+
 def test_handle_approval_on(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools import write_approval as wa
+
     captured = {}
     out = handle_pending_subcommand(
-        wa.MEMORY, ["approval", "on"],
+        wa.MEMORY,
+        ["approval", "on"],
         set_mode_fn=lambda enabled: captured.update(enabled=enabled),
     )
     assert captured["enabled"] is True
     assert "on" in out
 
+
 def test_handle_approval_off(clawk_home):
     from clawk_cli.write_approval_commands import handle_pending_subcommand
     from tools import write_approval as wa
+
     captured = {}
     out = handle_pending_subcommand(
-        wa.SKILLS, ["approval", "off"],
+        wa.SKILLS,
+        ["approval", "off"],
         set_mode_fn=lambda enabled: captured.update(enabled=enabled),
     )
     assert captured["enabled"] is False
     assert "off" in out
+
 
 # ---------------------------------------------------------------------------
 # Inline (interactive CLI) approval path — regression for the bug where the
@@ -293,25 +394,32 @@ def test_handle_approval_off(clawk_home):
 # so every gated foreground memory write was silently denied.
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def approval_callback_cleanup():
     yield
     from tools.terminal_tool import set_approval_callback
+
     set_approval_callback(None)
+
 
 def test_memory_inline_approve_writes(clawk_home, approval_callback_cleanup):
     from tools.memory_tool import memory_tool, MemoryStore
     from tools.terminal_tool import set_approval_callback
     from tools import write_approval as wa
+
     _set_approval("memory", True)
 
     calls = []
+
     def approve_cb(command, description, **kw):
         calls.append((command, description))
         return "once"
+
     set_approval_callback(approve_cb)
 
-    store = MemoryStore(); store.load_from_disk()
+    store = MemoryStore()
+    store.load_from_disk()
     r = json.loads(memory_tool("add", "memory", "approved fact", store=store))
     assert r["success"] is True
     assert r.get("staged") is None  # real write, not staged
@@ -321,14 +429,17 @@ def test_memory_inline_approve_writes(clawk_home, approval_callback_cleanup):
     assert len(calls) == 1
     assert "approved fact" in calls[0][0]
 
+
 def test_memory_inline_deny_blocks(clawk_home, approval_callback_cleanup):
     from tools.memory_tool import memory_tool, MemoryStore
     from tools.terminal_tool import set_approval_callback
     from tools import write_approval as wa
+
     _set_approval("memory", True)
     set_approval_callback(lambda command, description, **kw: "deny")
 
-    store = MemoryStore(); store.load_from_disk()
+    store = MemoryStore()
+    store.load_from_disk()
     r = json.loads(memory_tool("add", "memory", "denied fact", store=store))
     assert r["success"] is False
     assert "denied" in r["error"].lower()
@@ -347,8 +458,13 @@ def test_headless_memory_write_stages_without_inline_prompt(
     from tools import write_approval as wa
 
     _set_approval("memory", True)
-    monkeypatch.setenv(*{"single_query": ("CLAWK_SINGLE_QUERY_SESSION", "1"), "cron": ("CLAWK_CRON_SESSION", "1"),
-                         "webhook": ("CLAWK_SESSION_PLATFORM", "webhook")}[context])
+    monkeypatch.setenv(
+        *{
+            "single_query": ("CLAWK_SINGLE_QUERY_SESSION", "1"),
+            "cron": ("CLAWK_CRON_SESSION", "1"),
+            "webhook": ("CLAWK_SESSION_PLATFORM", "webhook"),
+        }[context]
+    )
 
     calls = []
 
@@ -374,8 +490,10 @@ def test_memory_invalid_params_rejected_before_staging(clawk_home):
     # immediately instead of staged and failing at approve time.
     from tools.memory_tool import memory_tool, MemoryStore
     from tools import write_approval as wa
+
     _set_approval("memory", True)
-    store = MemoryStore(); store.load_from_disk()
+    store = MemoryStore()
+    store.load_from_disk()
     r = json.loads(memory_tool("add", "memory", None, store=store))
     assert r["success"] is False
     assert wa.pending_count("memory") == 0
@@ -385,9 +503,12 @@ def test_memory_invalid_params_rejected_before_staging(clawk_home):
 # Staged-write review hint is surface-aware (#98330)
 # ---------------------------------------------------------------------------
 
+
 def _stage_one_memory_write():
     from tools.memory_tool import memory_tool, MemoryStore
-    store = MemoryStore(); store.load_from_disk()
+
+    store = MemoryStore()
+    store.load_from_disk()
     r = json.loads(memory_tool("add", "memory", "surface hint fact", store=store))
     assert r.get("staged") is True, r
     return r
@@ -395,6 +516,7 @@ def _stage_one_memory_write():
 
 def test_staged_hint_names_the_review_command_on_slash_surfaces(clawk_home):
     from tools import write_approval as wa
+
     _set_approval("memory", True)
     r = _stage_one_memory_write()
     # No headless markers bound (plain foreground turn) → the slash hint stands.
@@ -402,8 +524,11 @@ def test_staged_hint_names_the_review_command_on_slash_surfaces(clawk_home):
     assert wa.pending_count("memory") == 1
 
 
-def test_staged_hint_names_the_pending_dir_on_headless_surfaces(clawk_home, monkeypatch):
+def test_staged_hint_names_the_pending_dir_on_headless_surfaces(
+    clawk_home, monkeypatch
+):
     from tools import write_approval as wa
+
     _set_approval("memory", True)
     monkeypatch.setenv("CLAWK_CRON_SESSION", "1")
     r = _stage_one_memory_write()

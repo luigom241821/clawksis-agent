@@ -15,7 +15,9 @@ from clawk_cli.config_home import initialize_home
 _SUBDIRS = ("cron", "sessions", "logs", "memories")
 
 
-@pytest.mark.parametrize("target", ["SOUL.md", "missing-dir/SOUL.md"], ids=["cyclic", "dangling"])
+@pytest.mark.parametrize(
+    "target", ["SOUL.md", "missing-dir/SOUL.md"], ids=["cyclic", "dangling"]
+)
 def test_initialize_home_replaces_unwritable_soul_symlink(tmp_path, target):
     home = tmp_path / ".clawk"
     home.mkdir()

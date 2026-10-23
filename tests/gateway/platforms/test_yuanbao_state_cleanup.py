@@ -13,6 +13,7 @@ Covers the salvage of PRs #23383 / #23384:
 * ``_member_cache`` entries past ``MEMBER_CACHE_TTL_S`` must actually be
   evicted on read (the dict shrinks), while fresh entries survive.
 """
+
 import asyncio
 import time
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ from plugins.platforms.yuanbao.adapter import MessageSender, YuanbaoAdapter
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _SlowNotifierStub:
     async def start(self, chat_id):
@@ -61,17 +63,14 @@ def _run_turn(monkeypatch, adapter, event, session_key, during_turn=None):
         if during_turn is not None:
             during_turn()
 
-    monkeypatch.setattr(
-        BasePlatformAdapter, "_process_message_background", _base_stub
-    )
-    asyncio.run(
-        YuanbaoAdapter._process_message_background(adapter, event, session_key)
-    )
+    monkeypatch.setattr(BasePlatformAdapter, "_process_message_background", _base_stub)
+    asyncio.run(YuanbaoAdapter._process_message_background(adapter, event, session_key))
 
 
 # ---------------------------------------------------------------------------
 # _processing_msg_ids / _processing_msg_texts cleanup (PR #23383)
 # ---------------------------------------------------------------------------
+
 
 def test_tracking_entries_cleared_after_normal_turn(monkeypatch):
     """A turn whose msg_id still owns the tracking entry clears it on exit."""
@@ -102,7 +101,10 @@ def test_idless_event_must_not_erase_drain_tasks_entry(monkeypatch):
         adapter._processing_msg_texts[sk] = "recallable text"
 
     _run_turn(
-        monkeypatch, adapter, _event(None), sk,
+        monkeypatch,
+        adapter,
+        _event(None),
+        sk,
         during_turn=_pending_message_arrives,
     )
 
@@ -124,7 +126,10 @@ def test_overwritten_entry_not_erased_by_outdated_turn(monkeypatch):
         adapter._processing_msg_texts[sk] = "second"
 
     _run_turn(
-        monkeypatch, adapter, _event("m1"), sk,
+        monkeypatch,
+        adapter,
+        _event("m1"),
+        sk,
         during_turn=_newer_message_arrives,
     )
 
@@ -135,6 +140,7 @@ def test_overwritten_entry_not_erased_by_outdated_turn(monkeypatch):
 # ---------------------------------------------------------------------------
 # _member_cache TTL eviction (PR #23384)
 # ---------------------------------------------------------------------------
+
 
 def _bare_sender(adapter_stub):
     sender = object.__new__(MessageSender)

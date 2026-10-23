@@ -55,11 +55,17 @@ def _clean_stt_state():
     from tools import stt_lease, transcription_tools
 
     stt_lease._reset_stt_leases_for_tests()
-    saved_model, saved_name = transcription_tools._local_model, transcription_tools._local_model_name
+    saved_model, saved_name = (
+        transcription_tools._local_model,
+        transcription_tools._local_model_name,
+    )
     transcription_tools._local_model, transcription_tools._local_model_name = None, None
     yield
     stt_lease._reset_stt_leases_for_tests()
-    transcription_tools._local_model, transcription_tools._local_model_name = saved_model, saved_name
+    transcription_tools._local_model, transcription_tools._local_model_name = (
+        saved_model,
+        saved_name,
+    )
 
 
 def _local_cfg(monkeypatch, model="tiny"):
@@ -80,11 +86,16 @@ def test_active_acquires_and_warms(client, monkeypatch):
     monkeypatch.setattr(
         stt_lease,
         "warm_stt_provider",
-        lambda cfg=None, provider=None: warmed.append(1)
-        or {"provider": "local", "warmed": True, "action": "loaded"},
+        lambda cfg=None, provider=None: (
+            warmed.append(1)
+            or {"provider": "local", "warmed": True, "action": "loaded"}
+        ),
     )
 
-    resp = client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:abc", "active": True})
+    resp = client.post(
+        "/api/audio/stt-lease",
+        json={"lease": "desktop:voice-input:abc", "active": True},
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
@@ -100,20 +111,37 @@ def test_inactive_releases_without_unloading(client, monkeypatch):
     from tools import stt_lease, transcription_tools
 
     monkeypatch.setattr(
-        stt_lease, "warm_stt_provider", lambda cfg=None, provider=None: {"action": "noop", "warmed": False, "provider": "openai"}
+        stt_lease,
+        "warm_stt_provider",
+        lambda cfg=None, provider=None: {
+            "action": "noop",
+            "warmed": False,
+            "provider": "openai",
+        },
     )
-    client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:a", "active": True})
-    client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:b", "active": True})
+    client.post(
+        "/api/audio/stt-lease", json={"lease": "desktop:voice-input:a", "active": True}
+    )
+    client.post(
+        "/api/audio/stt-lease", json={"lease": "desktop:voice-input:b", "active": True}
+    )
 
     # A resident model shared with other surfaces must survive the releases.
     sentinel = object()
-    transcription_tools._local_model, transcription_tools._local_model_name = sentinel, "tiny"
+    transcription_tools._local_model, transcription_tools._local_model_name = (
+        sentinel,
+        "tiny",
+    )
 
-    first = client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:a", "active": False}).json()
+    first = client.post(
+        "/api/audio/stt-lease", json={"lease": "desktop:voice-input:a", "active": False}
+    ).json()
     assert first["leases"] == 1
     assert transcription_tools._local_model is sentinel
 
-    last = client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:b", "active": False}).json()
+    last = client.post(
+        "/api/audio/stt-lease", json={"lease": "desktop:voice-input:b", "active": False}
+    ).json()
     assert last["leases"] == 0
     assert transcription_tools._local_model is sentinel
 
@@ -125,7 +153,10 @@ def test_warm_failure_is_reported_not_an_http_error(client, monkeypatch):
         raise RuntimeError("engine exploded")
 
     monkeypatch.setattr(stt_lease, "warm_stt_provider", _boom)
-    resp = client.post("/api/audio/stt-lease", json={"lease": "desktop:voice-input:abc", "active": True})
+    resp = client.post(
+        "/api/audio/stt-lease",
+        json={"lease": "desktop:voice-input:abc", "active": True},
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["ok"] is True
@@ -165,7 +196,10 @@ def test_warm_reports_cached_when_model_already_resident(monkeypatch):
 
     _local_cfg(monkeypatch, model="tiny")
     sentinel = object()
-    transcription_tools._local_model, transcription_tools._local_model_name = sentinel, "tiny"
+    transcription_tools._local_model, transcription_tools._local_model_name = (
+        sentinel,
+        "tiny",
+    )
     calls = []
     monkeypatch.setattr(
         transcription_tools,
@@ -186,11 +220,15 @@ def test_warm_reports_cached_when_model_already_resident(monkeypatch):
 def test_warm_is_noop_for_cloud_providers(monkeypatch):
     from tools import stt_lease, transcription_tools
 
-    monkeypatch.setattr(transcription_tools, "_load_stt_config", lambda: {"provider": "openai"})
+    monkeypatch.setattr(
+        transcription_tools, "_load_stt_config", lambda: {"provider": "openai"}
+    )
     monkeypatch.setattr(transcription_tools, "_get_provider", lambda cfg: "openai")
     calls = []
     monkeypatch.setattr(
-        transcription_tools, "_get_or_load_local_model", lambda name, cfg: calls.append(name)
+        transcription_tools,
+        "_get_or_load_local_model",
+        lambda name, cfg: calls.append(name),
     )
 
     result = stt_lease.warm_stt_provider()
@@ -286,7 +324,9 @@ def test_warm_reacquire_after_eviction_restarts_watcher(monkeypatch):
     monkeypatch.setattr(transcription_tools, "_local_model", None)
     monkeypatch.setattr(transcription_tools, "_local_model_name", None)
     monkeypatch.setattr(
-        transcription_tools, "_idle_unload_thread", type("Dead", (), {"is_alive": lambda self: False})()
+        transcription_tools,
+        "_idle_unload_thread",
+        type("Dead", (), {"is_alive": lambda self: False})(),
     )
 
     real_model = object()
@@ -345,15 +385,23 @@ def _watch_under_profiles(monkeypatch, *owners):
     monkeypatch.setattr(
         transcription_tools,
         "_load_stt_config",
-        lambda: {"local": {"model": "tiny", "unload_after_idle_seconds": idle_by_profile[profile.get()]}},
+        lambda: {
+            "local": {
+                "model": "tiny",
+                "unload_after_idle_seconds": idle_by_profile[profile.get()],
+            }
+        },
     )
     monkeypatch.setattr(transcription_tools, "_IDLE_UNLOAD_CHECK_INTERVAL", 0.01)
     monkeypatch.setattr(transcription_tools, "_idle_unload_thread", None)
-    monkeypatch.setattr(transcription_tools, "_last_transcription_time", time.monotonic() - 2)
+    monkeypatch.setattr(
+        transcription_tools, "_last_transcription_time", time.monotonic() - 2
+    )
     transcription_tools._local_model = object()
     transcription_tools._local_model_name = "tiny"
 
     for name, idle in owners:
+
         def _call(name=name, idle=idle):
             profile.set(name)
             transcription_tools._start_idle_unload_watcher(idle)
@@ -386,5 +434,9 @@ def test_idle_watcher_applies_the_profile_that_warmed_the_model(monkeypatch):
 def test_idle_watcher_follows_the_latest_owner_of_the_shared_model(monkeypatch):
     """A → B → A: the live watcher adopts each new owner's policy instead of keeping the one
     it was started under."""
-    assert _watch_under_profiles(monkeypatch, ("alpha", 3600), ("worker_beta", 1)) is True
-    assert _watch_under_profiles(monkeypatch, ("worker_beta", 1), ("alpha", 3600)) is False
+    assert (
+        _watch_under_profiles(monkeypatch, ("alpha", 3600), ("worker_beta", 1)) is True
+    )
+    assert (
+        _watch_under_profiles(monkeypatch, ("worker_beta", 1), ("alpha", 3600)) is False
+    )

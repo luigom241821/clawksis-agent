@@ -19,10 +19,13 @@ import tui_gateway.methods_session
 
 DATA_URI = "data:image/png;base64," + "a" * 128
 IMAGE_TURN = [
-    {"role": "user", "content": [
-        {"type": "text", "text": "what is this?"},
-        {"type": "image_url", "image_url": {"url": DATA_URI}},
-    ]},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "what is this?"},
+            {"type": "image_url", "image_url": {"url": DATA_URI}},
+        ],
+    },
     {"role": "assistant", "content": "a chart"},
 ]
 
@@ -59,12 +62,16 @@ def test_resume_cold_carries_the_switch(tmp_path, monkeypatch):
     monkeypatch.setattr("clawk_state.DEFAULT_DB_PATH", home / "state.db")
     db = SessionDB(home / "state.db")
     db.create_session("img-chat", source="desktop")
-    db.append_messages_batch("img-chat", [{"role": "user", "content": IMAGE_TURN[0]["content"]}])
+    db.append_messages_batch(
+        "img-chat", [{"role": "user", "content": IMAGE_TURN[0]["content"]}]
+    )
     try:
         monkeypatch.setattr(srv, "_get_db", lambda: db)
         monkeypatch.setattr(srv, "_enable_gateway_prompts", lambda: None)
         monkeypatch.setattr(srv, "_schedule_agent_build", lambda *a, **k: None)
-        monkeypatch.setattr(srv, "_schedule_session_cap_enforcement", lambda *a, **k: None)
+        monkeypatch.setattr(
+            srv, "_schedule_session_cap_enforcement", lambda *a, **k: None
+        )
         monkeypatch.setattr(srv, "_maybe_schedule_auto_continue", lambda *a, **k: None)
         monkeypatch.setattr(srv, "_stored_session_runtime_overrides", lambda _found: {})
         known = set(srv._sessions)
@@ -73,7 +80,9 @@ def test_resume_cold_carries_the_switch(tmp_path, monkeypatch):
             assert "error" not in resp, resp
             assert DATA_URI in resp["result"]["messages"][0]["text"]
 
-            resp = srv._methods["session.resume"](1, {"session_id": "img-chat", "inline_images": False})
+            resp = srv._methods["session.resume"](
+                1, {"session_id": "img-chat", "inline_images": False}
+            )
             assert "error" not in resp, resp
             assert "[image]" in resp["result"]["messages"][0]["text"]
             assert DATA_URI not in resp["result"]["messages"][0]["text"]
@@ -94,11 +103,17 @@ def test_resume_live_reattach_carries_the_switch(tmp_path, monkeypatch, inline_i
     db = SessionDB(home / "state.db")
     record = {
         # In-memory history (no DB rows for the key): the payload projects from session["history"].
-        "history": list(IMAGE_TURN), "display_history_prefix": [], "last_active": 0.0, "running": False,
-        "session_key": "live-img", "source": "desktop",
+        "history": list(IMAGE_TURN),
+        "display_history_prefix": [],
+        "last_active": 0.0,
+        "running": False,
+        "session_key": "live-img",
+        "source": "desktop",
     }
     monkeypatch.setattr(srv, "_get_db", lambda: db)
-    monkeypatch.setattr(srv, "_find_live_session_by_key", lambda key, *_a: ("live-sid", record))
+    monkeypatch.setattr(
+        srv, "_find_live_session_by_key", lambda key, *_a: ("live-sid", record)
+    )
     monkeypatch.setattr(srv, "_profile_home", lambda _p: None)
     monkeypatch.setattr(srv, "_reattach_refusal", lambda *_a: None)
     monkeypatch.setattr(srv, "_cancel_ws_orphan_reap", lambda *_a: None)
@@ -107,7 +122,8 @@ def test_resume_live_reattach_carries_the_switch(tmp_path, monkeypatch, inline_i
     srv._sessions["live-sid"] = record
     try:
         resp = srv._methods["session.resume"](
-            1, {"session_id": "live-img", "inline_images": inline_images})
+            1, {"session_id": "live-img", "inline_images": inline_images}
+        )
         assert "error" not in resp, resp
         text = resp["result"]["messages"][0]["text"]
         assert (DATA_URI in text) is inline_images

@@ -19,7 +19,7 @@ class TestAnnotateFailureBasics:
         assert annotate_failure("./x", 1, "some unrecognized error") is None
 
     def test_only_first_matching_hint(self):
-        out = 'CONFLICT (content): Merge conflict in a.py\npython: command not found'
+        out = "CONFLICT (content): Merge conflict in a.py\npython: command not found"
         hint = annotate_failure("git merge x && python t.py", 1, out)
         assert "conflict" in hint.lower()
         assert "python3" not in hint
@@ -51,8 +51,10 @@ class TestCommandNotFound:
 
 class TestModuleNotFound:
     def test_module_named(self):
-        out = ("Traceback (most recent call last):\n  File \"x.py\", line 1\n"
-               "ModuleNotFoundError: No module named 'requests'")
+        out = (
+            'Traceback (most recent call last):\n  File "x.py", line 1\n'
+            "ModuleNotFoundError: No module named 'requests'"
+        )
         hint = annotate_failure("python3 x.py", 1, out)
         assert "requests" in hint
 
@@ -63,7 +65,6 @@ class TestModuleNotFound:
 
 
 class TestGitShapes:
-
     def test_branch_already_exists(self):
         out = "fatal: a branch named 'fix/x' already exists"
         hint = annotate_failure("git checkout -b fix/x", 128, out)
@@ -77,7 +78,9 @@ class TestGitShapes:
 
 class TestPermissionDenied:
     def test_permission_denied(self):
-        hint = annotate_failure("touch /etc/x", 1, "touch: cannot touch '/etc/x': Permission denied")
+        hint = annotate_failure(
+            "touch /etc/x", 1, "touch: cannot touch '/etc/x': Permission denied"
+        )
         assert "Permission denied" in hint
 
 
@@ -90,8 +93,6 @@ class TestBoundedScan:
         # A hint raising must not propagate.
         with mock_patch("tools.terminal_hints._OUTPUT_HINTS", [lambda c, o: 1 / 0]):
             assert annotate_failure("x", 1, "boom") is None
-
-
 
 
 class TestMaskedSuccess:
@@ -108,7 +109,6 @@ class TestMaskedSuccess:
             "cargo build --release 2>&1 | tail -20", self._fail_out()
         )
         assert hint is not None
-
 
     def test_or_echo_fallback_flagged(self):
         hint = annotate_masked_success(

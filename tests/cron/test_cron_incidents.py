@@ -20,7 +20,9 @@ def _point_db(monkeypatch, tmp_path):
     """Point the incident store at a throwaway executions.db (same file shape
     the scheduler uses). ``cron.executions.EXECUTIONS_FILE`` stays None so the
     incident store falls back to its own override."""
-    monkeypatch.setattr(incidents, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        incidents, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
     return incidents
 
 
@@ -59,21 +61,25 @@ def _tick_failing(job, tmp_path, deliveries, error="boom unrelated", *, settle=F
             sched._mark_incident_alerted(jb.get("_failure_incident_id"))
         return {"status": "pending"}
 
-    with cron_jobs.use_cron_store(tmp_path), \
-         patch("cron.scheduler._clawk_home", tmp_path), \
-         patch("cron.scheduler_delivery._resolve_origin", return_value=None), \
-         patch("clawk_cli.env_loader.load_clawk_dotenv"), \
-         patch("clawk_cli.env_loader.reset_secret_source_cache"), \
-         patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]), \
-         patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-               return_value={
-                   "api_key": "test-key",
-                   "base_url": "https://example.invalid/v1",
-                   "provider": "openrouter",
-                   "api_mode": "chat_completions",
-               }), \
-         patch("cron.delivery_queue.enqueue", side_effect=fake_deliver), \
-         patch("run_agent.AIAgent") as mock_agent_cls:
+    with (
+        cron_jobs.use_cron_store(tmp_path),
+        patch("cron.scheduler._clawk_home", tmp_path),
+        patch("cron.scheduler_delivery._resolve_origin", return_value=None),
+        patch("clawk_cli.env_loader.load_clawk_dotenv"),
+        patch("clawk_cli.env_loader.reset_secret_source_cache"),
+        patch("tools.mcp_tool_discovery.discover_mcp_tools", return_value=[]),
+        patch(
+            "clawk_cli.runtime_provider.resolve_runtime_provider",
+            return_value={
+                "api_key": "test-key",
+                "base_url": "https://example.invalid/v1",
+                "provider": "openrouter",
+                "api_mode": "chat_completions",
+            },
+        ),
+        patch("cron.delivery_queue.enqueue", side_effect=fake_deliver),
+        patch("run_agent.AIAgent") as mock_agent_cls,
+    ):
         mock_agent = MagicMock()
         mock_agent.run_conversation.side_effect = RuntimeError(error)
         mock_agent_cls.return_value = mock_agent
@@ -101,7 +107,9 @@ def test_new_failure_creates_incident_and_is_new(monkeypatch, tmp_path):
     assert inc.count_incidents() == 1
 
 
-def test_incidents_list_newest_instant_first_across_dst_fall_back(monkeypatch, tmp_path):
+def test_incidents_list_newest_instant_first_across_dst_fall_back(
+    monkeypatch, tmp_path
+):
     """01:10-05:00 is 20 minutes after 01:50-04:00 but sorts first as text."""
     from datetime import datetime
     from zoneinfo import ZoneInfo
@@ -250,7 +258,9 @@ def test_missing_db_no_crash(monkeypatch, tmp_path):
 # ── Scheduler gating ───────────────────────────────────────────────────────
 
 
-def test_repeat_failure_alerts_once_then_reminds_after_cooldown(monkeypatch, tmp_path, cron_owner):
+def test_repeat_failure_alerts_once_then_reminds_after_cooldown(
+    monkeypatch, tmp_path, cron_owner
+):
     """Same job + same error: the first failing run delivers, the repeat is withheld (but still
     recorded as a run), one reminder goes out once ``cron.failure_repeat_alert_hours`` has
     elapsed, and a green run re-arms the signature so the same error alerts again."""
@@ -262,9 +272,13 @@ def test_repeat_failure_alerts_once_then_reminds_after_cooldown(monkeypatch, tmp
         cron_jobs.save_jobs([job])
         _tick_failing(job, tmp_path, deliveries, error="repeat boom", settle=True)
         _tick_failing(job, tmp_path, deliveries, error="repeat boom", settle=True)
-        assert len(deliveries) == 1, "an alerted signature must not re-ping on every run"
+        assert len(deliveries) == 1, (
+            "an alerted signature must not re-ping on every run"
+        )
         rows = inc.list_incidents()
-        assert len(rows) == 1 and rows[0]["state"] == "alerted" and rows[0]["alerted_at"]
+        assert (
+            len(rows) == 1 and rows[0]["state"] == "alerted" and rows[0]["alerted_at"]
+        )
         stored = next(j for j in cron_jobs.load_jobs() if j["id"] == job["id"])
         assert stored["last_status"] == "error", "the withheld run is still recorded"
 
@@ -283,7 +297,9 @@ def test_repeat_failure_alerts_once_then_reminds_after_cooldown(monkeypatch, tmp
         assert inc.count_incidents() == 1
 
 
-def test_ack_suppresses_alert_until_signature_changes(monkeypatch, tmp_path, cron_owner):
+def test_ack_suppresses_alert_until_signature_changes(
+    monkeypatch, tmp_path, cron_owner
+):
     inc = _point_db(monkeypatch, tmp_path)
     deliveries = []
     job = _job()
@@ -310,7 +326,9 @@ def test_ack_suppresses_alert_until_signature_changes(monkeypatch, tmp_path, cro
         assert inc.count_incidents() == 2
 
 
-def test_ack_holds_when_only_a_measured_duration_differs(monkeypatch, tmp_path, cron_owner):
+def test_ack_holds_when_only_a_measured_duration_differs(
+    monkeypatch, tmp_path, cron_owner
+):
     """The inactivity watchdog polls every few seconds, so the same stall reports a slightly
     different idle time each run. That is the same failure: the ack must keep it silent."""
     inc = _point_db(monkeypatch, tmp_path)
@@ -326,7 +344,9 @@ def test_ack_holds_when_only_a_measured_duration_differs(monkeypatch, tmp_path, 
 
         _tick_failing(job, tmp_path, deliveries, error=stall.format(604))
 
-        assert len(deliveries) == 1, "acked stall must not re-ping on a new idle reading"
+        assert len(deliveries) == 1, (
+            "acked stall must not re-ping on a new idle reading"
+        )
         assert [row["id"] for row in inc.list_incidents()] == [first["id"]]
 
 
@@ -351,8 +371,7 @@ def test_mark_incident_alerted_sets_state_never_resurrects(monkeypatch, tmp_path
 def test_best_effort_incident_store_failure_returns_false(monkeypatch, tmp_path):
     """An incident-store error must never break the cron delivery path."""
     _point_db(monkeypatch, tmp_path)
-    with patch("cron.incidents.upsert_incident",
-               side_effect=RuntimeError("db locked")):
+    with patch("cron.incidents.upsert_incident", side_effect=RuntimeError("db locked")):
         assert sched._upsert_incident_for_failure(_job(), "boom") == (False, None)
 
 
@@ -366,9 +385,7 @@ def test_cli_list_and_ack(monkeypatch, tmp_path, capsys):
     inc_id, _ = inc.upsert_incident("job-1", "provider timeout boom")
 
     # List.
-    list_args = argparse.Namespace(
-        incident_action="list", state=None, incident_id=None
-    )
+    list_args = argparse.Namespace(incident_action="list", state=None, incident_id=None)
     assert cron_incidents(list_args) == 0
     out = capsys.readouterr().out
     assert inc_id in out
@@ -383,9 +400,7 @@ def test_cli_list_and_ack(monkeypatch, tmp_path, capsys):
     assert "No cron failure incidents recorded." in out
 
     # Ack.
-    ack_args = argparse.Namespace(
-        incident_action="ack", state=None, incident_id=inc_id
-    )
+    ack_args = argparse.Namespace(incident_action="ack", state=None, incident_id=inc_id)
     assert cron_incidents(ack_args) == 0
     assert inc.get_incident(inc_id)["state"] == "closed"
     out = capsys.readouterr().out
@@ -401,6 +416,8 @@ def test_cli_list_and_ack(monkeypatch, tmp_path, capsys):
         incident_action="ack", state=None, incident_id=None
     )
     assert cron_incidents(missing_args) == 1
+
+
 def test_alerted_gate_honours_cooldown_opt_out_and_legacy_rows(monkeypatch, tmp_path):
     """Unit level: ``alerted`` withholds only inside the cooldown; ``0`` restores per-run
     alerts; a pre-migration row (state alerted, no ``alerted_at``) delivers rather than

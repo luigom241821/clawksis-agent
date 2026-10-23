@@ -13,6 +13,7 @@ prunes the baseline). Pure stdlib + repo imports, no network, deterministic.
     python scripts/ci/check_docs_drift.py            # exit 1 on new undocumented items
     python scripts/ci/check_docs_drift.py --update   # rewrite the baseline to current gaps
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,13 +28,17 @@ SLASH_PAGE = DOCS / "reference" / "slash-commands.md"
 BASELINE = Path(__file__).with_name("docs_drift_baseline.json")
 _FENCE = re.compile(r"```ya?ml[^\n]*\n(.*?)```", re.DOTALL)
 _DOTTED = re.compile(r"(?<![\w.])[A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)+")
-_PLACEHOLDER = re.compile(r"(?<![\w.])((?:[a-z_][\w-]*\.)+(?:<[\w-]+>|\*)(?:\.(?:[a-z_][\w-]*|<[\w-]+>|\*))*)")
+_PLACEHOLDER = re.compile(
+    r"(?<![\w.])((?:[a-z_][\w-]*\.)+(?:<[\w-]+>|\*)(?:\.(?:[a-z_][\w-]*|<[\w-]+>|\*))*)"
+)
 # Globs only count inside inline code (`auxiliary.*.provider`): bare `*` in prose is emphasis.
 _CODE_SPAN = re.compile(r"`([^`\n]+)`")
 
 
 def _docs_text() -> str:
-    return "\n".join(p.read_text(encoding="utf-8-sig") for p in sorted(DOCS.rglob("*.md*")))
+    return "\n".join(
+        p.read_text(encoding="utf-8-sig") for p in sorted(DOCS.rglob("*.md*"))
+    )
 
 
 def config_leaves() -> list[str]:
@@ -82,10 +87,14 @@ def _yaml_paths(text: str) -> set[str]:
 
     for m in _FENCE.finditer(text):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # ruamel's YAML 1.1 float notes on doc snippets
+            warnings.simplefilter(
+                "ignore"
+            )  # ruamel's YAML 1.1 float notes on doc snippets
             try:
                 doc = safe_load(m.group(1))
-            except YAMLError:  # a partial or templated snippet documents nothing reliably
+            except (
+                YAMLError
+            ):  # a partial or templated snippet documents nothing reliably
                 continue
         if isinstance(doc, dict):
             flat(doc, ())
@@ -101,7 +110,9 @@ def _placeholder_patterns(text: str) -> list[re.Pattern[str]]:
         tail = r"(?:\..+)?" if segs[-1] == "*" else ""
         if tail:
             segs = segs[:-1]
-        parts = [r"[^.]+" if re.fullmatch(r"<[\w-]+>|\*", s) else re.escape(s) for s in segs]
+        parts = [
+            r"[^.]+" if re.fullmatch(r"<[\w-]+>|\*", s) else re.escape(s) for s in segs
+        ]
         # `agent.*` in prose names a section, it doesn't document every key under it: a
         # trailing glob needs two segments ahead of it (`auxiliary.<task>.*`, `display.pet.*`).
         if len(parts) >= 2:
@@ -123,7 +134,9 @@ def _dotted_mentions(text: str) -> set[str]:
 def find_gaps() -> dict[str, list[str]]:
     text = _docs_text()
     mentions = _dotted_mentions(text) | _yaml_paths(text)
-    words = set(re.findall(r"(?<![\w.])[A-Za-z_][\w-]*(?![\w.])", text))  # top-level single-word keys
+    words = set(
+        re.findall(r"(?<![\w.])[A-Za-z_][\w-]*(?![\w.])", text)
+    )  # top-level single-word keys
     placeholders = _placeholder_patterns(text)
 
     def documented(dotted: str) -> bool:
@@ -134,8 +147,11 @@ def find_gaps() -> dict[str, list[str]]:
     slash = SLASH_PAGE.read_text(encoding="utf-8-sig")
     return {
         "config": [k for k in config_leaves() if not documented(k)],
-        "slash_commands": [c for c in slash_commands()
-                           if not re.search(r"`/" + re.escape(c) + r"(?![\w-])", slash)],
+        "slash_commands": [
+            c
+            for c in slash_commands()
+            if not re.search(r"`/" + re.escape(c) + r"(?![\w-])", slash)
+        ],
     }
 
 
@@ -145,7 +161,9 @@ def _load_baseline() -> dict[str, list[str]]:
     return json.loads(BASELINE.read_text(encoding="utf-8-sig"))
 
 
-def compare(gaps: dict[str, list[str]], baseline: dict[str, list[str]]) -> tuple[dict, dict]:
+def compare(
+    gaps: dict[str, list[str]], baseline: dict[str, list[str]]
+) -> tuple[dict, dict]:
     new = {k: sorted(set(v) - set(baseline.get(k, []))) for k, v in gaps.items()}
     stale = {k: sorted(set(baseline.get(k, [])) - set(v)) for k, v in gaps.items()}
     return new, stale
@@ -154,36 +172,54 @@ def compare(gaps: dict[str, list[str]], baseline: dict[str, list[str]]) -> tuple
 def failure_message(new: dict[str, list[str]]) -> str:
     lines = ["Undocumented user-facing surface (docs drift ratchet):"]
     if new["config"]:
-        lines.append("  config keys (mention the dotted path, or add a YAML example, in website/docs/ "
-                     "-- usually user-guide/configuration.md):")
+        lines.append(
+            "  config keys (mention the dotted path, or add a YAML example, in website/docs/ "
+            "-- usually user-guide/configuration.md):"
+        )
         lines += [f"    {k}" for k in new["config"]]
     if new["slash_commands"]:
-        lines.append("  slash commands (add a row to website/docs/reference/slash-commands.md):")
+        lines.append(
+            "  slash commands (add a row to website/docs/reference/slash-commands.md):"
+        )
         lines += [f"    /{c}" for c in new["slash_commands"]]
-    lines.append("Deliberately undocumented? `python scripts/ci/check_docs_drift.py --update` adds it to "
-                 "the baseline; reviewers see that in the diff.")
+    lines.append(
+        "Deliberately undocumented? `python scripts/ci/check_docs_drift.py --update` adds it to "
+        "the baseline; reviewers see that in the diff."
+    )
     return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Docs drift ratchet for config keys and slash commands.")
-    ap.add_argument("--update", action="store_true", help="rewrite the baseline to the current gaps")
+    ap = argparse.ArgumentParser(
+        description="Docs drift ratchet for config keys and slash commands."
+    )
+    ap.add_argument(
+        "--update", action="store_true", help="rewrite the baseline to the current gaps"
+    )
     args = ap.parse_args(argv)
     gaps = find_gaps()
     if args.update:
-        BASELINE.write_text(json.dumps(gaps, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-        print(f"baseline: {len(gaps['config'])} config keys, {len(gaps['slash_commands'])} slash commands")
+        BASELINE.write_text(
+            json.dumps(gaps, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(
+            f"baseline: {len(gaps['config'])} config keys, {len(gaps['slash_commands'])} slash commands"
+        )
         return 0
     new, stale = compare(gaps, _load_baseline())
     for kind, items in stale.items():
         if items:
-            print(f"note: {len(items)} baselined {kind} now documented or removed; "
-                  "`--update` shrinks the baseline")
+            print(
+                f"note: {len(items)} baselined {kind} now documented or removed; "
+                "`--update` shrinks the baseline"
+            )
     if any(new.values()):
         print(failure_message(new))
         return 1
-    print(f"docs drift: ok ({len(gaps['config'])} config keys, {len(gaps['slash_commands'])} "
-          "slash commands still baselined)")
+    print(
+        f"docs drift: ok ({len(gaps['config'])} config keys, {len(gaps['slash_commands'])} "
+        "slash commands still baselined)"
+    )
     return 0
 
 

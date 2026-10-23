@@ -1,4 +1,5 @@
 """Prepare or consume the standalone PM payload, without desktop products."""
+
 from __future__ import annotations
 
 import argparse
@@ -31,7 +32,9 @@ def prepare(source: Path, work: Path, cache: Path, out: Path, ref: str) -> Path:
             raise ValueError("native build output must not contain the source checkout")
     for left, right in ((work, cache), (out, cache), (work, out)):
         if left.is_relative_to(right) or right.is_relative_to(left):
-            raise ValueError("native work, cache and output must be separate directories")
+            raise ValueError(
+                "native work, cache and output must be separate directories"
+            )
     owner = work / ".native-preparation"
     if work.exists():
         if not owner.is_file() or owner.read_text(encoding="utf-8-sig") != str(source):
@@ -45,9 +48,19 @@ def prepare(source: Path, work: Path, cache: Path, out: Path, ref: str) -> Path:
         result = prepared_path(out)
         result.unlink(missing_ok=True)
         request = work / "request.json"
-        _write(request, {"source": str(source), "work": str(work), "cache": str(cache),
-                         "out": str(out), "ref": revision})
-        status = run_preparation(source, work, cache, request, worker=Path(__file__).resolve())
+        _write(
+            request,
+            {
+                "source": str(source),
+                "work": str(work),
+                "cache": str(cache),
+                "out": str(out),
+                "ref": revision,
+            },
+        )
+        status = run_preparation(
+            source, work, cache, request, worker=Path(__file__).resolve()
+        )
         if status:
             result.unlink(missing_ok=True)
             raise RuntimeError(f"native preparation failed (exit {status})")
@@ -61,11 +74,19 @@ def prepare_in_worker(request: dict) -> Path:
     from scripts.bundles.desktop_toolchain import prepare_tools
     from scripts.bundles.native import prepare_native
 
-    source, work, cache, out = (Path(request[name]) for name in ("source", "work", "cache", "out"))
+    source, work, cache, out = (
+        Path(request[name]) for name in ("source", "work", "cache", "out")
+    )
     require_source(source, request["ref"])
     _, _, env = prepare_tools(source, work, cache, os.environ)
-    return prepare_native(out=out, ref=request["ref"], source=source,
-                          cache=Path(env["UV_CACHE_DIR"]), tools=cache / "tools", env=env)
+    return prepare_native(
+        out=out,
+        ref=request["ref"],
+        source=source,
+        cache=Path(env["UV_CACHE_DIR"]),
+        tools=cache / "tools",
+        env=env,
+    )
 
 
 def main() -> int:
@@ -91,7 +112,17 @@ def main() -> int:
         if args.request:
             parser.error("--request is worker-only")
         if args.prepared:
-            if any((args.source, args.work, args.cache, args.out, args.ref, args.commit, args.prepare_only)):
+            if any(
+                (
+                    args.source,
+                    args.work,
+                    args.cache,
+                    args.out,
+                    args.ref,
+                    args.commit,
+                    args.prepare_only,
+                )
+            ):
                 parser.error("--prepared supplies the complete native build request")
             prepared = args.prepared.absolute()
         else:
@@ -99,12 +130,20 @@ def main() -> int:
                 parser.error("preparation requires --source, --work, --cache and --out")
             if args.commit:
                 from scripts.releases.commit_build import require_commit
+
                 require_commit(args.commit)
-            prepared = prepare(args.source, args.work, args.cache, args.out, args.commit or args.ref or "HEAD")
+            prepared = prepare(
+                args.source,
+                args.work,
+                args.cache,
+                args.out,
+                args.commit or args.ref or "HEAD",
+            )
             if args.prepare_only:
                 print(prepared)
                 return 0
         from scripts.bundles.native import finish_native
+
         return finish_native(prepared, {})
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"native build: {exc}\n")

@@ -4,6 +4,7 @@ These run without Docker: the shim's CLAWK_TINI_SHIM_TARGET /
 CLAWK_TINI_SHIM_WRAPPER hooks let us record the argv that would be
 handed to /init.
 """
+
 from __future__ import annotations
 
 import os
@@ -46,8 +47,6 @@ def _run_shim(
     )
 
 
-
-
 def test_strips_g_and_double_dash(recorder: tuple[Path, Path]) -> None:
     """Legacy `tini -g -- gateway run` must not forward `-g` to /init."""
     r = _run_shim(recorder, ["-g", "--", "gateway", "run"])
@@ -58,10 +57,6 @@ def test_strips_g_and_double_dash(recorder: tuple[Path, Path]) -> None:
     assert lines[1:] == ["gateway", "run"]
     assert "-g" not in lines
     assert "--" not in lines
-
-
-
-
 
 
 def test_does_not_double_wrap_existing_wrapper(

@@ -5,7 +5,6 @@ must set a non-retryable fatal error so the gateway does not queue it for
 background reconnection (#31049).
 """
 
-
 import pytest
 
 from gateway.config import PlatformConfig
@@ -26,4 +25,3 @@ class TestTelegramUnconfiguredNonRetryable:
         assert adapter.has_fatal_error is True
         assert adapter.fatal_error_retryable is False
         assert adapter.fatal_error_code == "missing_dependency"
-

@@ -97,7 +97,9 @@ def test_one_token_does_not_receive_another_tokens_catalog(per_org_catalog):
 
 def test_credential_value_does_not_appear_in_the_cache_key():
     """Guards against keying on the raw token."""
-    assert "sk-super-secret" not in models_pricing._pricing_auth_fingerprint("sk-super-secret")
+    assert "sk-super-secret" not in models_pricing._pricing_auth_fingerprint(
+        "sk-super-secret"
+    )
 
 
 def test_anonymous_and_authenticated_reads_are_separate(catalog):
@@ -163,18 +165,21 @@ class TestNousCatalogExpiry:
         from clawk_cli.models_pricing import _NOUS_CATALOG_TTL_SECONDS
 
         fetch_models_with_pricing(
-            api_key="sk-test", base_url=BASE,
+            api_key="sk-test",
+            base_url=BASE,
             cache_ttl_seconds=_NOUS_CATALOG_TTL_SECONDS,
         )
         assert len(catalog) == 1
 
         now = models_mod.time.monotonic()
         monkeypatch.setattr(
-            models_mod.time, "monotonic",
+            models_mod.time,
+            "monotonic",
             lambda: now + _NOUS_CATALOG_TTL_SECONDS + 1,
         )
         fetch_models_with_pricing(
-            api_key="sk-test", base_url=BASE,
+            api_key="sk-test",
+            base_url=BASE,
             cache_ttl_seconds=_NOUS_CATALOG_TTL_SECONDS,
         )
         assert len(catalog) == 2, "expired entry should be re-read"
@@ -200,12 +205,14 @@ class TestNousCatalogExpiry:
         from clawk_cli.models_pricing import _NOUS_CATALOG_TTL_SECONDS
 
         fetch_models_with_pricing(
-            api_key="sk-test", base_url=BASE,
+            api_key="sk-test",
+            base_url=BASE,
             cache_ttl_seconds=_NOUS_CATALOG_TTL_SECONDS,
         )
         now = models_mod.time.monotonic()
         monkeypatch.setattr(
-            models_mod.time, "monotonic",
+            models_mod.time,
+            "monotonic",
             lambda: now + _NOUS_CATALOG_TTL_SECONDS + 1,
         )
         assert peek_cached_pricing(BASE) == {}

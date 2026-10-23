@@ -35,14 +35,24 @@ def _ensure_discord_mock():
     discord_mod.DMChannel = type("DMChannel", (), {})
     discord_mod.Thread = type("Thread", (), {})
     discord_mod.ForumChannel = type("ForumChannel", (), {})
-    discord_mod.ui = SimpleNamespace(View=object, button=lambda *a, **k: (lambda fn: fn), Button=object)
-    discord_mod.ButtonStyle = SimpleNamespace(success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3)
-    discord_mod.Color = SimpleNamespace(orange=lambda: 1, green=lambda: 2, blue=lambda: 3, red=lambda: 4, purple=lambda: 5)
+    discord_mod.ui = SimpleNamespace(
+        View=object, button=lambda *a, **k: lambda fn: fn, Button=object
+    )
+    discord_mod.ButtonStyle = SimpleNamespace(
+        success=1, primary=2, secondary=2, danger=3, green=1, grey=2, blurple=2, red=3
+    )
+    discord_mod.Color = SimpleNamespace(
+        orange=lambda: 1,
+        green=lambda: 2,
+        blue=lambda: 3,
+        red=lambda: 4,
+        purple=lambda: 5,
+    )
     discord_mod.Interaction = object
     discord_mod.Embed = MagicMock
     discord_mod.app_commands = SimpleNamespace(
-        describe=lambda **kwargs: (lambda fn: fn),
-        choices=lambda **kwargs: (lambda fn: fn),
+        describe=lambda **kwargs: lambda fn: fn,
+        choices=lambda **kwargs: lambda fn: fn,
         Choice=lambda **kwargs: SimpleNamespace(**kwargs),
     )
 
@@ -98,9 +108,9 @@ def _make_attachment_without_read() -> SimpleNamespace:
 # _read_attachment_bytes
 # ---------------------------------------------------------------------------
 
+
 class TestReadAttachmentBytes:
     """Unit tests for the low-level att.read() wrapper."""
-
 
     @pytest.mark.asyncio
     async def test_returns_none_when_read_raises(self):
@@ -121,9 +131,8 @@ class TestReadAttachmentBytes:
 # _cache_discord_image
 # ---------------------------------------------------------------------------
 
+
 class TestCacheDiscordImage:
-
-
     @pytest.mark.asyncio
     async def test_falls_back_to_url_when_bytes_validator_rejects(self):
         """If att.read() returns garbage that cache_image_from_bytes rejects
@@ -132,14 +141,17 @@ class TestCacheDiscordImage:
         adapter = _make_adapter()
         att = _make_attachment_with_read(b"<html>forbidden</html>")
 
-        with patch(
-            "plugins.platforms.discord.adapter.cache_image_from_bytes_async",
-            new=AsyncMock(side_effect=ValueError("not a valid image")),
-        ), patch(
-            "plugins.platforms.discord.adapter.cache_image_from_url",
-            new_callable=AsyncMock,
-            return_value="/tmp/fallback.png",
-        ) as mock_url:
+        with (
+            patch(
+                "plugins.platforms.discord.adapter.cache_image_from_bytes_async",
+                new=AsyncMock(side_effect=ValueError("not a valid image")),
+            ),
+            patch(
+                "plugins.platforms.discord.adapter.cache_image_from_url",
+                new_callable=AsyncMock,
+                return_value="/tmp/fallback.png",
+            ) as mock_url,
+        ):
             result = await adapter._cache_discord_image(att, ".png")
 
         assert result == "/tmp/fallback.png"
@@ -150,19 +162,23 @@ class TestCacheDiscordImage:
 # _cache_discord_audio
 # ---------------------------------------------------------------------------
 
+
 class TestCacheDiscordAudio:
     @pytest.mark.asyncio
     async def test_prefers_att_read_over_url(self):
         adapter = _make_adapter()
         att = _make_attachment_with_read(_OGG_BYTES)
 
-        with patch(
-            "plugins.platforms.discord.adapter.cache_audio_from_bytes_async",
-            new=AsyncMock(return_value="/tmp/voice.ogg"),
-        ) as mock_bytes, patch(
-            "plugins.platforms.discord.adapter.cache_audio_from_url",
-            new_callable=AsyncMock,
-        ) as mock_url:
+        with (
+            patch(
+                "plugins.platforms.discord.adapter.cache_audio_from_bytes_async",
+                new=AsyncMock(return_value="/tmp/voice.ogg"),
+            ) as mock_bytes,
+            patch(
+                "plugins.platforms.discord.adapter.cache_audio_from_url",
+                new_callable=AsyncMock,
+            ) as mock_url,
+        ):
             result = await adapter._cache_discord_audio(att, ".ogg")
 
         assert result == "/tmp/voice.ogg"
@@ -174,8 +190,8 @@ class TestCacheDiscordAudio:
 # _cache_discord_document
 # ---------------------------------------------------------------------------
 
-class TestCacheDiscordDocument:
 
+class TestCacheDiscordDocument:
     @pytest.mark.asyncio
     async def test_fallback_blocked_by_ssrf_guard(self):
         """Document fallback path now honors is_safe_url — was missing before.
@@ -187,9 +203,12 @@ class TestCacheDiscordDocument:
         adapter = _make_adapter()
         att = _make_attachment_without_read()  # no .read → forces fallback
 
-        with patch(
-            "plugins.platforms.discord.adapter.is_safe_url", return_value=False
-        ) as mock_safe, patch("aiohttp.ClientSession") as mock_session:
+        with (
+            patch(
+                "plugins.platforms.discord.adapter.is_safe_url", return_value=False
+            ) as mock_safe,
+            patch("aiohttp.ClientSession") as mock_session,
+        ):
             with pytest.raises(ValueError, match="SSRF"):
                 await adapter._cache_discord_document(att, ".pdf")
 
@@ -201,6 +220,7 @@ class TestCacheDiscordDocument:
 # ---------------------------------------------------------------------------
 # Integration: end-to-end via _handle_message
 # ---------------------------------------------------------------------------
+
 
 class TestHandleMessageUsesAuthenticatedRead:
     """E2E: verify _handle_message routes image/audio downloads through
@@ -215,13 +235,16 @@ class TestHandleMessageUsesAuthenticatedRead:
         adapter._client = SimpleNamespace(user=SimpleNamespace(id=999))
         adapter.handle_message = AsyncMock()
 
-        with patch(
-            "plugins.platforms.discord.adapter.cache_image_from_bytes_async",
-            new=AsyncMock(return_value="/tmp/img_from_read.png"),
-        ), patch(
-            "plugins.platforms.discord.adapter.cache_image_from_url",
-            new_callable=AsyncMock,
-        ) as mock_url_download:
+        with (
+            patch(
+                "plugins.platforms.discord.adapter.cache_image_from_bytes_async",
+                new=AsyncMock(return_value="/tmp/img_from_read.png"),
+            ),
+            patch(
+                "plugins.platforms.discord.adapter.cache_image_from_url",
+                new_callable=AsyncMock,
+            ) as mock_url_download,
+        ):
             att = SimpleNamespace(
                 url="https://cdn.discordapp.com/attachments/fake/file.png",
                 filename="file.png",
@@ -243,7 +266,10 @@ class TestHandleMessageUsesAuthenticatedRead:
             )
             chan = _FakeDMChannel()
             msg = SimpleNamespace(
-                id=1, content="", attachments=[att], mentions=[],
+                id=1,
+                content="",
+                attachments=[att],
+                mentions=[],
                 reference=None,
                 created_at=datetime.now(UTC),
                 channel=chan,
@@ -255,5 +281,3 @@ class TestHandleMessageUsesAuthenticatedRead:
         event = adapter.handle_message.call_args[0][0]
         assert event.media_urls == ["/tmp/img_from_read.png"]
         assert event.media_types == ["image/png"]
-
-

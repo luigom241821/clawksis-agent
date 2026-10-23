@@ -136,7 +136,8 @@ class TestRescueOrphanedOverflow:
         # Drain order after this turn: slot (orphan-2), then overflow (new-msg)
         assert adapter._pending_messages[session_key].text == "orphan-2"
         overflow_texts = [
-            e.text for e in runner._session_state(session_key).conversation.queued_events
+            e.text
+            for e in runner._session_state(session_key).conversation.queued_events
         ]
         assert overflow_texts == ["new-msg"]
 

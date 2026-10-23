@@ -41,7 +41,9 @@ def _polluted_launch_env(monkeypatch, tmp_path):
     monkeypatch.setenv("TERMINAL_DOCKER_SHARED_CONTAINER_KEY", "alpha-shared")
     monkeypatch.setenv("TERMINAL_SSH_HOST", "10.10.0.103")
     monkeypatch.setattr("agent.secret_scope.build_profile_secret_scope", lambda _h: {})
-    monkeypatch.setattr("clawk_cli.env_loader.hydrate_profile_secret_sources", lambda _h: None)
+    monkeypatch.setattr(
+        "clawk_cli.env_loader.hydrate_profile_secret_sources", lambda _h: None
+    )
     import tools.terminal_tool as tt
 
     monkeypatch.setattr(tt, "_terminal_config_bridge_attempted", True)
@@ -79,7 +81,9 @@ def test_scoped_read_never_falls_through_to_process_env():
 @pytest.mark.parametrize(
     "config_yaml,dotenv",
     [
-        pytest.param("terminal:\n  backend: local\n  cwd: {cwd}\n", "", id="config-yaml"),
+        pytest.param(
+            "terminal:\n  backend: local\n  cwd: {cwd}\n", "", id="config-yaml"
+        ),
         pytest.param("", "TERMINAL_ENV=local\nTERMINAL_CWD={cwd}\n", id="dotenv-only"),
     ],
 )
@@ -100,8 +104,10 @@ def test_routed_turn_reads_every_terminal_consumer_from_profile(
     b_cwd = tmp_path / "b-work"
     b_cwd.mkdir()
     home = _profile(
-        tmp_path, "bee",
-        config_yaml.format(cwd=b_cwd), dotenv.format(cwd=b_cwd),
+        tmp_path,
+        "bee",
+        config_yaml.format(cwd=b_cwd),
+        dotenv.format(cwd=b_cwd),
     )
 
     with gw._profile_runtime_scope(home):
@@ -115,7 +121,8 @@ def test_routed_turn_reads_every_terminal_consumer_from_profile(
         assert tt._resolve_container_task_id(None) == f"home:{os.path.realpath(home)}"
         assert gbase._parse_docker_volume_mounts() == []
         assert not any(
-            "alpha-shared" in c for c in gbase._docker_sandbox_dir_candidates("agent:bee:x")
+            "alpha-shared" in c
+            for c in gbase._docker_sandbox_dir_candidates("agent:bee:x")
         )
         assert file_tools_paths._configured_terminal_cwd() == str(b_cwd)
         assert runtime_cwd.resolve_agent_cwd() == b_cwd
@@ -150,7 +157,11 @@ def test_persistent_docker_routed_profile_keeps_one_container(tmp_path):
     SAME container as its session-bound work, and never another profile's."""
     import gateway.run as gw
     import tools.terminal_tool as tt
-    from gateway.session_context import clear_session_vars, reset_session_vars, set_session_vars
+    from gateway.session_context import (
+        clear_session_vars,
+        reset_session_vars,
+        set_session_vars,
+    )
 
     docker = "terminal:\n  backend: docker\n  container_persistent: true\n"
     keys = {}

@@ -25,7 +25,9 @@ def _under(home):
     return set_clawk_home_override(str(home))
 
 
-def test_browser_exec_cache_key_differs_per_served_profile_and_is_legacy_when_unscoped(two_homes):
+def test_browser_exec_cache_key_differs_per_served_profile_and_is_legacy_when_unscoped(
+    two_homes,
+):
     import tools.browser_use_cli as bu
 
     a, b = two_homes
@@ -46,7 +48,9 @@ def test_browser_exec_cache_key_differs_per_served_profile_and_is_legacy_when_un
     assert key_a.startswith("bu-named-work") and key_b.startswith("bu-named-work")
 
 
-def test_computer_use_backend_not_shared_across_profiles_and_release_finds_it(two_homes, monkeypatch):
+def test_computer_use_backend_not_shared_across_profiles_and_release_finds_it(
+    two_homes, monkeypatch
+):
     import tools.computer_use.tool as cu
 
     a, b = two_homes
@@ -66,7 +70,11 @@ def test_computer_use_backend_not_shared_across_profiles_and_release_finds_it(tw
     monkeypatch.setattr(cu, "_new_backend", lambda mode: _Backend())
     monkeypatch.setattr(cu, "_cua_permission_mode", lambda sid: "standard")
     with cu._backend_lock:
-        cu._backends.clear(), cu._backend_call_locks.clear(), cu._backend_permission_modes.clear()
+        (
+            cu._backends.clear(),
+            cu._backend_call_locks.clear(),
+            cu._backend_permission_modes.clear(),
+        )
 
     tok = _under(a)
     try:
@@ -78,7 +86,9 @@ def test_computer_use_backend_not_shared_across_profiles_and_release_finds_it(tw
     try:
         backend_b = cu._get_backend("shared")
         assert backend_b is not backend_a
-        assert cu.release_computer_use_session("shared") is True  # releases B's, not A's
+        assert (
+            cu.release_computer_use_session("shared") is True
+        )  # releases B's, not A's
         assert backend_b.stopped and not backend_a.stopped
     finally:
         reset_clawk_home_override(tok)
@@ -88,4 +98,8 @@ def test_computer_use_backend_not_shared_across_profiles_and_release_finds_it(tw
     finally:
         reset_clawk_home_override(tok)
         with cu._backend_lock:
-            cu._backends.clear(), cu._backend_call_locks.clear(), cu._backend_permission_modes.clear()
+            (
+                cu._backends.clear(),
+                cu._backend_call_locks.clear(),
+                cu._backend_permission_modes.clear(),
+            )

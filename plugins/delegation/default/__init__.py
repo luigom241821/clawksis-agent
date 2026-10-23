@@ -29,7 +29,9 @@ class DefaultDelegationProvider(DelegationProvider):
     def summary(self) -> str:
         return "Every subagent uses delegation.model / delegation.provider, else the parent's model."
 
-    def route_task(self, task: Mapping[str, Any], config: Mapping[str, Any]) -> dict[str, Any]:
+    def route_task(
+        self, task: Mapping[str, Any], config: Mapping[str, Any]
+    ) -> dict[str, Any]:
         # The delegation section has no speed tier: an unknown key there never becomes one.
         return {k: v for k, v in config.items() if k != "service_tier"}
 

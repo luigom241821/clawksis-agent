@@ -12,6 +12,7 @@ returned once merged. Its reader still never runs ahead of what it returned on: 
 most one uncommitted burst (the next one waits for that commit, main's backpressure), and a
 command first waits until every earlier input of that reader has committed (``burst_gate``).
 """
+
 import asyncio
 from dataclasses import dataclass, field
 from functools import partial
@@ -36,8 +37,8 @@ class _Burst:
 
 def _kind(adapter, event):
     if event.message_type == MessageType.PHOTO and not event.internal:
-        return 'photo'
-    return 'text' if adapter._is_queue_text_debounce_candidate(event) else None
+        return "photo"
+    return "text" if adapter._is_queue_text_debounce_candidate(event) else None
 
 
 def _state(adapter, name):
@@ -45,12 +46,15 @@ def _state(adapter, name):
 
 
 def _serial(adapter):
-    return getattr(adapter, 'serial_receive_loop', False)
+    return getattr(adapter, "serial_receive_loop", False)
 
 
 def holds_busy_burst(adapter, session_key):
     """A burst is held or committing: later input for the route must queue behind it."""
-    return any(session_key in adapter.__dict__.get(name, ()) for name in ('_shared_bursts', '_shared_burst_commits'))
+    return any(
+        session_key in adapter.__dict__.get(name, ())
+        for name in ("_shared_bursts", "_shared_burst_commits")
+    )
 
 
 async def burst_gate(adapter, event, session_key):
@@ -63,14 +67,17 @@ async def burst_gate(adapter, event, session_key):
         return holds_busy_burst(adapter, session_key)
     if (cmd := event.get_command()) and _serial(adapter):
         from clawk_cli.commands import is_interrupt_then_dispatch
+
         if is_interrupt_then_dispatch(cmd):
             discard_busy_burst(adapter, session_key)
-        for key, burst in list(adapter.__dict__.get('_shared_bursts', {}).items()):
+        for key, burst in list(adapter.__dict__.get("_shared_bursts", {}).items()):
             _flush(adapter, key, burst)
-        if pending := list(adapter.__dict__.get('_shared_burst_commits', {}).values()):
+        if pending := list(adapter.__dict__.get("_shared_burst_commits", {}).values()):
             await asyncio.wait(pending)
-        if held := list(adapter.__dict__.get('_uncommitted_inputs', ())):
-            await asyncio.wait(held)  # a non-burst input released behind an earlier one, not durable yet
+        if held := list(adapter.__dict__.get("_uncommitted_inputs", ())):
+            await asyncio.wait(
+                held
+            )  # a non-burst input released behind an earlier one, not durable yet
     return False
 
 
@@ -79,26 +86,45 @@ async def dispatch_busy_burst(adapter, event, session_key):
     queue-mode TEXT+TEXT burst first."""
     from gateway.platforms.base import merge_pending_message_event
     from gateway.session_ingress import dispatch_shared_busy
-    kind, bursts = _kind(adapter, event), _state(adapter, '_shared_bursts')
+
+    kind, bursts = _kind(adapter, event), _state(adapter, "_shared_bursts")
     while (burst := bursts.get(session_key)) is not None:
-        if kind is not None and kind == _kind(adapter, burst.head) and adapter._can_merge_text_debounce_events(
-                burst.head, event):
-            merge_pending_message_event({session_key: burst.head}, session_key, event, merge_text=kind == 'text')
+        if (
+            kind is not None
+            and kind == _kind(adapter, burst.head)
+            and adapter._can_merge_text_debounce_events(burst.head, event)
+        ):
+            merge_pending_message_event(
+                {session_key: burst.head}, session_key, event, merge_text=kind == "text"
+            )
             burst.absorbed.append(event)
             burst.last_ts = time.monotonic()
             _arm(adapter, session_key, burst)
             return await _accepted(adapter, burst, event)
-        await asyncio.shield(_flush(adapter, session_key, burst))  # a different sender or kind: in order
-    previous = _state(adapter, '_shared_burst_commits').get(session_key)
-    if kind is not None and previous is not None and not previous.done() and _serial(adapter):
-        await asyncio.wait({previous})  # one uncommitted burst per chat: the reader waits, as on main
-        return await dispatch_busy_burst(adapter, event, session_key)  # a burst may have started meanwhile
+        await asyncio.shield(
+            _flush(adapter, session_key, burst)
+        )  # a different sender or kind: in order
+    previous = _state(adapter, "_shared_burst_commits").get(session_key)
+    if (
+        kind is not None
+        and previous is not None
+        and not previous.done()
+        and _serial(adapter)
+    ):
+        await asyncio.wait(
+            {previous}
+        )  # one uncommitted burst per chat: the reader waits, as on main
+        return await dispatch_busy_burst(
+            adapter, event, session_key
+        )  # a burst may have started meanwhile
     if kind is None:
         if previous is not None:
             await asyncio.wait({previous})
         return await dispatch_shared_busy(adapter, event, session_key)
     now = time.monotonic()
-    burst = bursts[session_key] = _Burst(event, asyncio.get_running_loop().create_future(), now, now)
+    burst = bursts[session_key] = _Burst(
+        event, asyncio.get_running_loop().create_future(), now, now
+    )
     _arm(adapter, session_key, burst)
     return await _accepted(adapter, burst, event)
 
@@ -119,32 +145,49 @@ def _track(adapter, task):
 def _arm(adapter, session_key, burst):
     if burst.timer is not None:
         burst.timer.cancel()
-    delay = max(0.0, min(burst.last_ts + adapter._busy_text_debounce_seconds,
-                         burst.first_ts + adapter._busy_text_hard_cap_seconds) - time.monotonic())
+    delay = max(
+        0.0,
+        min(
+            burst.last_ts + adapter._busy_text_debounce_seconds,
+            burst.first_ts + adapter._busy_text_hard_cap_seconds,
+        )
+        - time.monotonic(),
+    )
 
     async def fire():
         await asyncio.sleep(delay)
         await asyncio.shield(_flush(adapter, session_key, burst))
+
     burst.timer = _track(adapter, asyncio.create_task(fire()))
 
 
 def _flush(adapter, session_key, burst):
     """Start committing ``burst`` (once), after any earlier commit for the route."""
     if burst.commit is None:
-        bursts, tails = _state(adapter, '_shared_bursts'), _state(adapter, '_shared_burst_commits')
+        bursts, tails = (
+            _state(adapter, "_shared_bursts"),
+            _state(adapter, "_shared_burst_commits"),
+        )
         if bursts.get(session_key) is burst:
             del bursts[session_key]
         if burst.timer is not asyncio.current_task():
             burst.timer.cancel()
-        burst.commit = tails[session_key] = _track(adapter, asyncio.create_task(
-            _commit(adapter, session_key, burst, tails.get(session_key))))
-        burst.commit.add_done_callback(lambda task: tails.get(session_key) is task and tails.pop(session_key))
+        burst.commit = tails[session_key] = _track(
+            adapter,
+            asyncio.create_task(
+                _commit(adapter, session_key, burst, tails.get(session_key))
+            ),
+        )
+        burst.commit.add_done_callback(
+            lambda task: tails.get(session_key) is task and tails.pop(session_key)
+        )
         burst.commit.add_done_callback(partial(_settle, burst))
     return burst.commit
 
 
 async def _commit(adapter, session_key, burst, previous):
     from gateway.session_ingress import dispatch_shared_busy
+
     if previous is not None:
         await asyncio.wait({previous})
     try:
@@ -155,7 +198,9 @@ async def _commit(adapter, session_key, burst, previous):
         if not _serial(adapter):
             raise  # every absorbed caller sees it (``_settle``)
         # No caller waits on a serial reader's burst: log it as its receive loop would have.
-        logger.exception('[%s] Busy burst for %s was not queued', adapter.name, session_key)
+        logger.exception(
+            "[%s] Busy burst for %s was not queued", adapter.name, session_key
+        )
 
 
 def _settle(burst, task):
@@ -173,9 +218,13 @@ def _settle(burst, task):
 def _undurable(adapter):
     """Inputs the reader already returned on that are not committed yet: held bursts, burst commits
     and busy inputs released before their commit (``session_ingress._hold_until_committed``)."""
-    pending = [burst.done for burst in adapter.__dict__.get('_shared_bursts', {}).values()]
-    pending += [*adapter.__dict__.get('_shared_burst_commits', {}).values(),
-                *adapter.__dict__.get('_uncommitted_inputs', ())]
+    pending = [
+        burst.done for burst in adapter.__dict__.get("_shared_bursts", {}).values()
+    ]
+    pending += [
+        *adapter.__dict__.get("_shared_burst_commits", {}).values(),
+        *adapter.__dict__.get("_uncommitted_inputs", ()),
+    ]
     return [future for future in pending if not future.done()]
 
 
@@ -187,7 +236,7 @@ async def when_returned_inputs_durable(adapter, persist):
     already holds). ``persist`` carries the cursor as of this call; while that task waits, a newer
     call replaces it, and the task picks the newest in the same step that saw nothing pending, so
     an input that arrives during the write's I/O is never in it."""
-    if getattr(adapter, '_durable_persist', None) is not None:
+    if getattr(adapter, "_durable_persist", None) is not None:
         adapter._durable_persist = persist
         return
     if not _undurable(adapter):
@@ -200,14 +249,15 @@ async def when_returned_inputs_durable(adapter, persist):
             while pending := _undurable(adapter):
                 await asyncio.wait(pending)
         finally:
-            latest = adapter.__dict__.pop('_durable_persist', None)
+            latest = adapter.__dict__.pop("_durable_persist", None)
         await latest()
+
     _track(adapter, asyncio.create_task(later()))
 
 
 def discard_busy_burst(adapter, session_key):
     """``/stop`` / ``/new`` drop a held burst as main dropped its debounce buffer; nothing was ACKed."""
-    burst = adapter.__dict__.get('_shared_bursts', {}).pop(session_key, None)
+    burst = adapter.__dict__.get("_shared_bursts", {}).pop(session_key, None)
     if burst is not None:
         burst.timer.cancel()
         burst.done.done() or burst.done.set_result(None)

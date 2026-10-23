@@ -21,9 +21,15 @@ _SB = "class:status-bar"
 _DIM = "class:status-bar-dim"
 _STRONG = "class:status-bar-strong"
 _AGENT_COUNTERS = (
-    "session_input_tokens", "session_output_tokens", "session_cache_read_tokens",
-    "session_cache_write_tokens", "session_prompt_tokens", "session_completion_tokens",
-    "session_total_tokens", "session_api_calls")
+    "session_input_tokens",
+    "session_output_tokens",
+    "session_cache_read_tokens",
+    "session_cache_write_tokens",
+    "session_prompt_tokens",
+    "session_completion_tokens",
+    "session_total_tokens",
+    "session_api_calls",
+)
 
 
 def _threshold_style(value, ladder, fallback: str) -> str:
@@ -52,7 +58,9 @@ class CLIStatusBarMixin:
             return "class:status-bar-bad"
         return _threshold_style(percent_used, ((50, "warn"),), "good")
 
-    def _cache_hit_rate(self, snapshot: dict, precision: int = 1) -> tuple[float, str] | None:
+    def _cache_hit_rate(
+        self, snapshot: dict, precision: int = 1
+    ) -> tuple[float, str] | None:
         """Return (cache_pct, label) or None without cache data. Prefers the baseline-delta pct
         from ``_get_status_bar_snapshot`` (resets on model switch / compression, so it reflects
         the *current* cache regime); falls back to the session-lifetime ratio."""
@@ -86,6 +94,7 @@ class CLIStatusBarMixin:
             return ""
         try:
             from prompt_toolkit.key_binding.vi_state import InputMode
+
             app = getattr(self, "_app", None)
             if app is None:
                 return ""
@@ -102,11 +111,13 @@ class CLIStatusBarMixin:
         """``/battery`` toggles, ``/battery on|off`` sets, ``/battery status`` reports the
         setting plus a live reading. Persisted to ``display.battery``."""
         from cli import save_config_value
+
         parts = (cmd_original or "").split()
         arg = parts[1].strip().lower() if len(parts) > 1 else ""
 
         try:
             from agent.battery import format_battery, read_battery
+
             reading = read_battery(use_cache=False)
         except Exception:
             reading = None
@@ -114,14 +125,26 @@ class CLIStatusBarMixin:
         def _detail(no_battery: str) -> str:
             if reading is None:
                 return ""
-            return f" — {format_battery(reading)}" if reading.available else f" — {no_battery}"
+            return (
+                f" — {format_battery(reading)}"
+                if reading.available
+                else f" — {no_battery}"
+            )
 
         if arg in ("status", "show"):
-            state = t("cli.shared.label_on") if self._battery_visible else t("cli.shared.label_off")
+            state = (
+                t("cli.shared.label_on")
+                if self._battery_visible
+                else t("cli.shared.label_off")
+            )
             detail = _detail(t("cli.status_bar.battery_none"))
             if reading is not None and reading.available:
-                detail = t("cli.status_bar.battery_currently", reading=format_battery(reading))
-            self._console_print(f"  {t('cli.status_bar.battery_state', state=state, detail=detail)}")
+                detail = t(
+                    "cli.status_bar.battery_currently", reading=format_battery(reading)
+                )
+            self._console_print(
+                f"  {t('cli.status_bar.battery_state', state=state, detail=detail)}"
+            )
             return
 
         if arg in ("on", "true", "yes"):
@@ -154,7 +177,8 @@ class CLIStatusBarMixin:
 
     @staticmethod
     def _format_prompt_elapsed(
-        prompt_start_time: Optional[float], prompt_duration: float, live: bool = False) -> str:
+        prompt_start_time: Optional[float], prompt_duration: float, live: bool = False
+    ) -> str:
         """Per-prompt elapsed time. Always a string (``⏲ 0s`` on fresh start); seconds stay
         visible at every scale so it increments smoothly (``1m 59s → 2m → 2m 1s``). ⏱ while
         live, ⏲ frozen — width-1 glyphs (no variation selector) keep the bar aligned."""
@@ -169,13 +193,26 @@ class CLIStatusBarMixin:
         minutes, seconds = int(remaining // 60), int(remaining % 60)
         days, hours = int(days), int(hours)
         if days > 0:
-            time_str = t("cli.shared.duration_dhm", days=days, hours=hours, minutes=minutes)
+            time_str = t(
+                "cli.shared.duration_dhm", days=days, hours=hours, minutes=minutes
+            )
         elif hours > 0:
-            time_str = (t("cli.shared.duration_hms", hours=hours, minutes=minutes, seconds=seconds) if seconds
-                        else t("cli.shared.duration_hm", hours=hours, minutes=minutes))
+            time_str = (
+                t(
+                    "cli.shared.duration_hms",
+                    hours=hours,
+                    minutes=minutes,
+                    seconds=seconds,
+                )
+                if seconds
+                else t("cli.shared.duration_hm", hours=hours, minutes=minutes)
+            )
         elif minutes > 0:
-            time_str = (t("cli.shared.duration_ms", minutes=minutes, seconds=seconds) if seconds
-                        else t("cli.shared.duration_m", minutes=minutes))
+            time_str = (
+                t("cli.shared.duration_ms", minutes=minutes, seconds=seconds)
+                if seconds
+                else t("cli.shared.duration_m", minutes=minutes)
+            )
         else:
             time_str = t("cli.shared.duration_s", seconds=int(elapsed))
         return f"{'⏱' if live else '⏲'} {time_str}"
@@ -185,15 +222,19 @@ class CLIStatusBarMixin:
         """``✓ 42s`` since the last final response; empty while a turn is live or before the
         first turn completes."""
         from cli import format_duration_compact
+
         if turn_live or last_finished_at is None:
             return ""
         return f"✓ {format_duration_compact(max(0.0, time.time() - last_finished_at))}"
 
     def _get_status_bar_snapshot(self) -> dict[str, Any]:
         from cli import _reverse_alias_for_display, datetime, format_duration_compact
+
         agent = getattr(self, "agent", None)
         # Prefer the agent's model name — it updates on fallback; self.model never changes.
-        model_name = (getattr(agent, "model", None) or self.model or t("cli.shared.unknown"))
+        model_name = (
+            getattr(agent, "model", None) or self.model or t("cli.shared.unknown")
+        )
         # Friendly display: reverse-alias from config ``model_aliases:`` first (turns long
         # Palantir RIDs into the user's short name), else slash/length truncation.
         model_short = _reverse_alias_for_display(model_name)
@@ -201,6 +242,7 @@ class CLIStatusBarMixin:
             model_short = model_name.split("/")[-1] if "/" in model_name else model_name
             # Shared RID-prefix stripper so this and ModelSwitchResult can't drift.
             from clawk_cli.model_switch import format_model_for_display
+
             model_short = format_model_for_display(model_short)
         model_short = model_short.removesuffix(".gguf")
         if len(model_short) > 26:
@@ -208,16 +250,20 @@ class CLIStatusBarMixin:
 
         prompt_start = getattr(self, "_prompt_start_time", None)
         turn_live = prompt_start is not None
-        elapsed_seconds = max(0.0, (datetime.now() - self.session_start).total_seconds())
+        elapsed_seconds = max(
+            0.0, (datetime.now() - self.session_start).total_seconds()
+        )
         snapshot = {
             "model_name": model_name,
             "model_short": model_short,
             "duration": format_duration_compact(elapsed_seconds),
             "session_title": self._get_status_bar_session_title(),
             "prompt_elapsed": self._format_prompt_elapsed(
-                prompt_start, getattr(self, "_prompt_duration", 0.0), live=turn_live),
+                prompt_start, getattr(self, "_prompt_duration", 0.0), live=turn_live
+            ),
             "idle_since": self._format_idle_since(
-                getattr(self, "_last_turn_finished_at", None), turn_live=turn_live),
+                getattr(self, "_last_turn_finished_at", None), turn_live=turn_live
+            ),
             "context_tokens": 0,
             "context_length": None,
             "context_percent": None,
@@ -232,13 +278,15 @@ class CLIStatusBarMixin:
             "git_branch": "",
             "goal_active": False,
             "goal_turns_used": 0,
-            "goal_max_turns": 0}
+            "goal_max_turns": 0,
+        }
 
         try:
             from clawk_cli.focus_view import focus_statusbar_segment
 
             snapshot["focus_label"] = focus_statusbar_segment(
-                bool(getattr(self, "_focus_view_enabled", False)))
+                bool(getattr(self, "_focus_view_enabled", False))
+            )
         except Exception:
             pass
 
@@ -274,6 +322,7 @@ class CLIStatusBarMixin:
             pass
         try:
             from clawk_cli.gateway_tools import background_counts
+
             snapshot.update(background_counts())
         except Exception:
             pass
@@ -285,8 +334,12 @@ class CLIStatusBarMixin:
             if goal_mgr is not None and goal_mgr.is_active():
                 goal_state = goal_mgr.state
                 snapshot["goal_active"] = True
-                snapshot["goal_turns_used"] = int(getattr(goal_state, "turns_used", 0) or 0)
-                snapshot["goal_max_turns"] = int(getattr(goal_state, "max_turns", 0) or 0)
+                snapshot["goal_turns_used"] = int(
+                    getattr(goal_state, "turns_used", 0) or 0
+                )
+                snapshot["goal_max_turns"] = int(
+                    getattr(goal_state, "max_turns", 0) or 0
+                )
         except Exception:
             pass
 
@@ -302,7 +355,10 @@ class CLIStatusBarMixin:
             # next real API call; clamp so the bar never renders "-1/200K".
             context_tokens = max(0, getattr(compressor, "last_prompt_tokens", 0) or 0)
             from agent.context_breakdown import context_display_source
-            snapshot["context_estimated"] = context_display_source(compressor) != "provider_usage"
+
+            snapshot["context_estimated"] = (
+                context_display_source(compressor) != "provider_usage"
+            )
             # Display-only anchoring: on reasoning models a long tool loop replays the turn's
             # thinking on every request, so the LAST request's prompt_tokens can exceed the
             # durable transcript by hundreds of K and the bar sawtooths at the turn boundary.
@@ -315,11 +371,12 @@ class CLIStatusBarMixin:
                 _anchored = anchored_context_tokens(
                     _msgs if isinstance(_msgs, list) else [],
                     getattr(agent, "_turn_base_usage_anchor", None),
-                    charge_stale_thinking=False)
+                    charge_stale_thinking=False,
+                )
                 if _anchored is not None and _anchored > 0:
                     context_tokens = _anchored
                     anchor = agent._turn_base_usage_anchor
-                    delta = _msgs[int(anchor["base_count"]):]
+                    delta = _msgs[int(anchor["base_count"]) :]
                     if delta and delta[0].get("role") == "assistant":
                         delta = delta[1:]
                     snapshot["context_estimated"] = bool(delta)
@@ -331,8 +388,10 @@ class CLIStatusBarMixin:
             snapshot["context_tokens"] = context_tokens
             snapshot["context_length"] = context_length or None
             from agent.context_pin import is_context_pinned
+
             snapshot["context_pinned"] = is_context_pinned(
-                context_length, getattr(compressor, "_config_context_length", None))
+                context_length, getattr(compressor, "_config_context_length", None)
+            )
             snapshot["compressions"] = getattr(compressor, "compression_count", 0) or 0
             if context_length:
                 pct = round((context_tokens / context_length) * 100)
@@ -392,9 +451,17 @@ class CLIStatusBarMixin:
         except Exception:
             avg_lat = avg_vel = None
         snapshot["avg_latency"] = float(avg_lat) if avg_lat is not None else None
-        snapshot["avg_latency_label"] = t("cli.status_bar.latency_label", value=f"{avg_lat:.1f}") if avg_lat is not None else ""
+        snapshot["avg_latency_label"] = (
+            t("cli.status_bar.latency_label", value=f"{avg_lat:.1f}")
+            if avg_lat is not None
+            else ""
+        )
         snapshot["avg_velocity"] = float(avg_vel) if avg_vel is not None else None
-        snapshot["avg_velocity_label"] = t("cli.status_bar.velocity_label", value=f"{avg_vel:.0f}") if avg_vel is not None else ""
+        snapshot["avg_velocity_label"] = (
+            t("cli.status_bar.velocity_label", value=f"{avg_vel:.0f}")
+            if avg_vel is not None
+            else ""
+        )
         return snapshot
 
     def _get_status_bar_session_title(self) -> str:
@@ -404,7 +471,8 @@ class CLIStatusBarMixin:
         now = time.monotonic()
         checked_at = float(getattr(self, "_status_bar_title_checked_at", 0.0) or 0.0)
         cache_fresh = (
-            getattr(self, "_status_bar_title_session_id", None) == session_id and now - checked_at < 1.5
+            getattr(self, "_status_bar_title_session_id", None) == session_id
+            and now - checked_at < 1.5
         )
         if not pending and cache_fresh:
             return str(getattr(self, "_status_bar_title_cache", "") or "")
@@ -426,6 +494,7 @@ class CLIStatusBarMixin:
         from wrapping onto a second line and leaving duplicate rows."""
         try:
             from prompt_toolkit.utils import get_cwidth
+
             return get_cwidth(text or "")
         except Exception:
             return len(text or "")
@@ -458,7 +527,9 @@ class CLIStatusBarMixin:
             return None
         title_width = max(6, min(30, width // 3))
         badge = f" {cls._trim_status_bar_text(title, title_width - 2)} "
-        suffix_width = cls._status_bar_display_width(" ─") + cls._status_bar_display_width(badge)
+        suffix_width = cls._status_bar_display_width(
+            " ─"
+        ) + cls._status_bar_display_width(badge)
         return badge, max(0, width - suffix_width)
 
     @classmethod
@@ -506,6 +577,7 @@ class CLIStatusBarMixin:
         back to ``shutil``."""
         try:
             from prompt_toolkit.application import get_app
+
             return get_app().output.get_size().columns
         except Exception:
             return shutil.get_terminal_size(default).columns
@@ -539,14 +611,20 @@ class CLIStatusBarMixin:
 
     def _agent_spacer_height(self, width: Optional[int] = None) -> int:
         """Spacer height above the status bar while the agent runs."""
-        if not getattr(self, "_agent_running", False) or getattr(self, "_modern_layout", False):
+        if not getattr(self, "_agent_running", False) or getattr(
+            self, "_modern_layout", False
+        ):
             return 0
         return 0 if self._use_minimal_tui_chrome(width=width) else 1
 
     def _spinner_widget_height(self, width: Optional[int] = None) -> int:
         """Visible height of the spinner/status line above the status bar."""
         spinner_line = self._render_spinner_text()
-        if not spinner_line or self._use_minimal_tui_chrome(width=width) or getattr(self, "_modern_layout", False):
+        if (
+            not spinner_line
+            or self._use_minimal_tui_chrome(width=width)
+            or getattr(self, "_modern_layout", False)
+        ):
             return 0
         width = width or self._get_tui_terminal_width()
         if width and width > 10:
@@ -564,11 +642,18 @@ class CLIStatusBarMixin:
             elapsed = time.monotonic() - t0
             # Fixed-width timers (01m05s / " 5.2s") avoid status-line wrap jitter on repaint.
             if elapsed >= 60:
-                elapsed_str = t("cli.shared.duration_ms_compact",
-                                minutes=f"{int(elapsed // 60):02d}", seconds=f"{int(elapsed % 60):02d}")
+                elapsed_str = t(
+                    "cli.shared.duration_ms_compact",
+                    minutes=f"{int(elapsed // 60):02d}",
+                    seconds=f"{int(elapsed % 60):02d}",
+                )
             else:
                 elapsed_str = t("cli.shared.duration_s", seconds=f"{elapsed:5.1f}")
-            return f"  {txt}  ({elapsed_str} · {flow})" if flow else f"  {txt}  ({elapsed_str})"
+            return (
+                f"  {txt}  ({elapsed_str} · {flow})"
+                if flow
+                else f"  {txt}  ({elapsed_str})"
+            )
         return f"  {txt}  ({flow})" if flow else f"  {txt}"
 
     def _spinner_token_flow(self) -> str:
@@ -584,7 +669,8 @@ class CLIStatusBarMixin:
             from agent.turn_summary import format_token_flow
 
             produced = (getattr(agent, "session_output_tokens", 0) or 0) - (
-                getattr(self, "_turn_token_baseline", 0) or 0)
+                getattr(self, "_turn_token_baseline", 0) or 0
+            )
             return format_token_flow(produced)
         except Exception:
             return ""
@@ -599,7 +685,11 @@ class CLIStatusBarMixin:
         agent = getattr(self, "agent", None)
         # The interactive agent itself runs quiet unless --verbose, so in the classic layout this
         # line only shows under --verbose; the glyph layout closes every interactive turn with it.
-        if agent is not None and getattr(agent, "quiet_mode", False) and not getattr(self, "_modern_layout", False):
+        if (
+            agent is not None
+            and getattr(agent, "quiet_mode", False)
+            and not getattr(self, "_modern_layout", False)
+        ):
             return False
         return bool(getattr(self, "_interactive_turn", False))
 
@@ -616,8 +706,10 @@ class CLIStatusBarMixin:
             self._turn_summary_start = time.monotonic()
             agent = getattr(self, "agent", None)
             self._turn_token_baseline = (
-                getattr(agent, "session_output_tokens", 0) or 0
-            ) if agent is not None else 0
+                (getattr(agent, "session_output_tokens", 0) or 0)
+                if agent is not None
+                else 0
+            )
         except Exception:
             self._turn_summary_collector = None
 
@@ -634,14 +726,18 @@ class CLIStatusBarMixin:
     def _turn_summary_emit(self) -> None:
         """Print the post-turn accounting line, when enabled for this surface."""
         from cli import _DIM as _D, _RST, _cprint, logger
+
         collector = getattr(self, "_turn_summary_collector", None)
         if collector is None or not self._turn_summary_is_active():
             return
         try:
             started = getattr(self, "_turn_summary_start", 0.0) or 0.0
-            line = collector.render(max(0.0, time.monotonic() - started) if started else 0.0)
+            line = collector.render(
+                max(0.0, time.monotonic() - started) if started else 0.0
+            )
             if line and getattr(self, "_modern_layout", False):
                 from clawk_cli.cli_modern_layout import turn_footer
+
                 _cprint(turn_footer(line))
             elif line:
                 _cprint(f"  {_D}{line}{_RST}")
@@ -668,17 +764,24 @@ class CLIStatusBarMixin:
             from utils import is_truthy_value
 
             cfg = load_config()
-            display = cfg.get("display", {}) if isinstance(cfg.get("display"), dict) else {}
-            pet_cfg = display.get("pet", {}) if isinstance(display.get("pet"), dict) else {}
+            display = (
+                cfg.get("display", {}) if isinstance(cfg.get("display"), dict) else {}
+            )
+            pet_cfg = (
+                display.get("pet", {}) if isinstance(display.get("pet"), dict) else {}
+            )
             enabled = is_truthy_value(pet_cfg.get("enabled"), default=False)
             slug = str(pet_cfg.get("slug", "") or "")
-            scale = float(pet_cfg.get("scale", constants.DEFAULT_SCALE) or constants.DEFAULT_SCALE)
+            scale = float(
+                pet_cfg.get("scale", constants.DEFAULT_SCALE) or constants.DEFAULT_SCALE
+            )
             cols = constants.resolve_cols(scale, pet_cfg.get("unicode_cols", 0))
             configured_mode = str(pet_cfg.get("render_mode", "auto") or "auto").lower()
             # Placeholders only on kitty/Ghostty: WezTerm speaks kitty APC but not U+10EEEE
             # while detect_terminal_graphics() still says kitty, hence the narrower gate.
             use_kitty = (
-                configured_mode in ("", "auto", "kitty") and pet_render.supports_kitty_placeholders()
+                configured_mode in ("", "auto", "kitty")
+                and pet_render.supports_kitty_placeholders()
             )
             renderer_mode = "kitty" if use_kitty else "unicode"
 
@@ -697,9 +800,14 @@ class CLIStatusBarMixin:
                     or self._pet_slug != pet.slug
                     or self._pet_cols != cols
                     or self._pet_scale != scale
-                    or self._pet_renderer.mode != renderer_mode):
+                    or self._pet_renderer.mode != renderer_mode
+                ):
                     self._pet_renderer = pet_render.PetRenderer(
-                        str(pet.spritesheet), mode=renderer_mode, scale=scale, unicode_cols=cols)
+                        str(pet.spritesheet),
+                        mode=renderer_mode,
+                        scale=scale,
+                        unicode_cols=cols,
+                    )
                     self._pet_slug = pet.slug
                     self._pet_cols = cols
                     self._pet_scale = scale
@@ -755,7 +863,8 @@ class CLIStatusBarMixin:
             or self._clarify_state
             or self._sudo_state
             or self._secret_state
-            or getattr(self, "_slash_confirm_state", None))
+            or getattr(self, "_slash_confirm_state", None)
+        )
         return derive_pet_state(
             awaiting_input=awaiting_input,
             busy=getattr(self, "_agent_running", False),
@@ -772,7 +881,9 @@ class CLIStatusBarMixin:
             return []
         try:
             count = renderer.frame_count(state) or 1
-            grids = [renderer.cells(state, i, cols=self._pet_cols) for i in range(count)]
+            grids = [
+                renderer.cells(state, i, cols=self._pet_cols) for i in range(count)
+            ]
         except Exception:
             grids = []
         self._pet_frames_cache[state] = grids
@@ -796,7 +907,10 @@ class CLIStatusBarMixin:
         if payload is not None:
             payload = {**payload, "image_id": image_id}
             with self._pet_lock:
-                if self._pet_renderer is renderer and self._pet_kitty_image_id == image_id:
+                if (
+                    self._pet_renderer is renderer
+                    and self._pet_kitty_image_id == image_id
+                ):
                     self._pet_kitty_cache[state] = payload
         return payload
 
@@ -907,7 +1021,10 @@ class CLIStatusBarMixin:
                 continue
             with self._pet_lock:
                 self._pet_frame_idx += 1
-                kitty = self._pet_renderer is not None and self._pet_renderer.mode == "kitty"
+                kitty = (
+                    self._pet_renderer is not None
+                    and self._pet_renderer.mode == "kitty"
+                )
             if kitty:
                 self._pet_queue_kitty_frame()
             app = getattr(self, "_app", None)
@@ -929,7 +1046,9 @@ class CLIStatusBarMixin:
         if view is not None and view[1]:
             self._pet_queue_kitty_frame()
         self._pet_anim_running = True
-        self._pet_anim_thread = threading.Thread(target=self._pet_anim_loop, daemon=True)
+        self._pet_anim_thread = threading.Thread(
+            target=self._pet_anim_loop, daemon=True
+        )
         self._pet_anim_thread.start()
 
     def _pet_stop_anim(self) -> None:
@@ -956,7 +1075,10 @@ class CLIStatusBarMixin:
         prompt_toolkit binding is registered so the label matches the live binding."""
         try:
             from clawk_cli.voice import format_voice_record_key_for_status
-            self._voice_record_key_display_cache = format_voice_record_key_for_status(raw_key)
+
+            self._voice_record_key_display_cache = format_voice_record_key_for_status(
+                raw_key
+            )
         except Exception:
             self._voice_record_key_display_cache = "Ctrl+B"
 
@@ -967,16 +1089,37 @@ class CLIStatusBarMixin:
         label = self._voice_record_key_label()
         if self._voice_recording:
             if compact:
-                return [("class:voice-status-recording", f" {t('cli.status_bar.voice_rec')} ")]
-            return [("class:voice-status-recording", f" {t('cli.status_bar.voice_rec_stop_hint', shortcut=label)} ")]
+                return [
+                    (
+                        "class:voice-status-recording",
+                        f" {t('cli.status_bar.voice_rec')} ",
+                    )
+                ]
+            return [
+                (
+                    "class:voice-status-recording",
+                    f" {t('cli.status_bar.voice_rec_stop_hint', shortcut=label)} ",
+                )
+            ]
         if self._voice_processing:
-            return [("class:voice-status",
-                     f" {t('cli.status_bar.voice_stt')} " if compact else f" {t('cli.status_bar.voice_transcribing')} ")]
+            return [
+                (
+                    "class:voice-status",
+                    f" {t('cli.status_bar.voice_stt')} "
+                    if compact
+                    else f" {t('cli.status_bar.voice_transcribing')} ",
+                )
+            ]
         if compact:
             return [("class:voice-status", f" 🎤 {label} ")]
         tts = t("cli.status_bar.voice_tts_on") if self._voice_tts else ""
         cont = t("cli.status_bar.voice_continuous") if self._voice_continuous else ""
-        return [("class:voice-status", f" {t('cli.status_bar.voice_mode_hint', tts=tts, cont=cont, shortcut=label)} ")]
+        return [
+            (
+                "class:voice-status",
+                f" {t('cli.status_bar.voice_mode_hint', tts=tts, cont=cont, shortcut=label)} ",
+            )
+        ]
 
     # ── status bar rendering ──────────────────────────────────────────────────
 
@@ -988,7 +1131,11 @@ class CLIStatusBarMixin:
             return ""
         used = snapshot.get("goal_turns_used") or 0
         max_turns = snapshot.get("goal_max_turns") or 0
-        return t("cli.status_bar.goal_turns", used=used, max=max_turns) if max_turns else t("cli.status_bar.goal")
+        return (
+            t("cli.status_bar.goal_turns", used=used, max=max_turns)
+            if max_turns
+            else t("cli.status_bar.goal")
+        )
 
     def _get_status_bar_field_set(self) -> Optional[frozenset]:
         """Visible status-bar fields from ``display.status_bar.fields`` (module-level
@@ -1000,12 +1147,17 @@ class CLIStatusBarMixin:
         (opt-in only). Order is fixed; the config controls visibility only.
         """
         from cli import CLI_CONFIG
+
         if hasattr(self, "_status_bar_field_set_cache"):
             return self._status_bar_field_set_cache
         result = None
         try:
-            display = CLI_CONFIG.get("display") if isinstance(CLI_CONFIG, dict) else None
-            status_bar = (display or {}).get("status_bar") if isinstance(display, dict) else None
+            display = (
+                CLI_CONFIG.get("display") if isinstance(CLI_CONFIG, dict) else None
+            )
+            status_bar = (
+                (display or {}).get("status_bar") if isinstance(display, dict) else None
+            )
             fields = status_bar.get("fields") if isinstance(status_bar, dict) else None
             if isinstance(fields, list) and fields:
                 result = frozenset(str(f) for f in fields)
@@ -1015,11 +1167,13 @@ class CLIStatusBarMixin:
         return result
 
     def _status_bar_segments(
-        self, snapshot, width: int, field_set, yolo_active: bool, *, styled: bool) -> list:
+        self, snapshot, width: int, field_set, yolo_active: bool, *, styled: bool
+    ) -> list:
         """Ordered status-bar segments for one width tier (<52 / <76 / wide), each a list of
         ``(style, text)`` fragments. Shared by the plain-text and prompt_toolkit renderers so
         the two can never drift; ``styled`` selects the graphical context bar."""
         from cli import format_token_count_compact
+
         model_short = snapshot["model_short"]
         duration_label = snapshot["duration"]
         goal_segment = self._status_bar_goal_segment(snapshot)
@@ -1037,7 +1191,9 @@ class CLIStatusBarMixin:
         def add_count(name, key, glyph, style=_STRONG):
             count = snapshot.get(key, 0)
             if count:
-                add(name, style(count) if callable(style) else style, f"{glyph} {count}")
+                add(
+                    name, style(count) if callable(style) else style, f"{glyph} {count}"
+                )
 
         if _ok("model"):
             if styled:
@@ -1056,7 +1212,11 @@ class CLIStatusBarMixin:
                 if snapshot["context_length"]:
                     ctx_total = _format_context_length(snapshot["context_length"])
                     ctx_used = format_token_count_compact(snapshot["context_tokens"])
-                    pin = t("cli.status_bar.ctx_pinned") if snapshot.get("context_pinned") else ""
+                    pin = (
+                        t("cli.status_bar.ctx_pinned")
+                        if snapshot.get("context_pinned")
+                        else ""
+                    )
                     context_label = f"{mark}{ctx_used}/{ctx_total}{pin}"
                 else:
                     context_label = t("cli.status_bar.ctx_unknown")
@@ -1064,9 +1224,13 @@ class CLIStatusBarMixin:
             if _ok("context_pct"):
                 bar_style = self._status_bar_context_style(percent)
                 if wide and styled:
-                    segs.append([
-                        (bar_style, self._build_context_bar(percent)), (_DIM, " "), (bar_style, percent_label),
-                    ])
+                    segs.append(
+                        [
+                            (bar_style, self._build_context_bar(percent)),
+                            (_DIM, " "),
+                            (bar_style, percent_label),
+                        ]
+                    )
                 else:
                     segs.append([(bar_style, percent_label)])
             cache = self._cache_hit_rate(snapshot, precision=1 if wide else 0)
@@ -1074,11 +1238,15 @@ class CLIStatusBarMixin:
                 add("cache_hit", self._cache_hit_rate_style(cache[0]), cache[1])
             if wide:
                 for name, key, glyph in (
-                    ("latency", "avg_latency_label", "◷"), ("tps", "avg_velocity_label", "↑")):
+                    ("latency", "avg_latency_label", "◷"),
+                    ("tps", "avg_velocity_label", "↑"),
+                ):
                     label = snapshot.get(key) or ""
                     if label:
                         add(name, _DIM, f"{glyph} {label}")
-            add_count("compressions", "compressions", "🗜️", self._compression_count_style)
+            add_count(
+                "compressions", "compressions", "🗜️", self._compression_count_style
+            )
             add_count("bg_tasks", "active_background_tasks", "▶")
             add_count("bg_processes", "active_background_processes", "⚙")
             add_count("bg_subagents", "active_background_subagents", "⛓")
@@ -1117,13 +1285,18 @@ class CLIStatusBarMixin:
             show_title = field_set is None or "title" in field_set
             session_title = (snapshot.get("session_title") or "") if show_title else ""
             segs = self._status_bar_segments(
-                snapshot, width, field_set, self._is_session_yolo_active(), styled=False)
+                snapshot, width, field_set, self._is_session_yolo_active(), styled=False
+            )
             parts = ["".join(t for _, t in seg) for seg in segs] or [f"∇ {model_short}"]
             # Narrow bars always join the battery with │; wider tiers use the tier separator.
             if battery_label:
                 parts.insert(0, battery_label)
             if width < 52:
-                text = f"{parts[0]} │ " + " · ".join(parts[1:]) if battery_label else " · ".join(parts)
+                text = (
+                    f"{parts[0]} │ " + " · ".join(parts[1:])
+                    if battery_label
+                    else " · ".join(parts)
+                )
             else:
                 text = (" · " if width < 76 else " │ ").join(parts)
             return self._right_align_status_title(text, session_title, width)
@@ -1134,10 +1307,12 @@ class CLIStatusBarMixin:
         if (
             not self._status_bar_visible
             or getattr(self, "_model_picker_state", None)
-            or getattr(self, "_command_palette_state", None)):
+            or getattr(self, "_command_palette_state", None)
+        ):
             return []
         if getattr(self, "_modern_layout", False):
             from clawk_cli.cli_modern_layout import status_line_fragments
+
             return status_line_fragments(self)
         try:
             snapshot = self._get_status_bar_snapshot()
@@ -1149,9 +1324,12 @@ class CLIStatusBarMixin:
             def _ok(name: str) -> bool:
                 return field_set is None or name in field_set
 
-            session_title = (snapshot.get("session_title") or "") if _ok("title") else ""
+            session_title = (
+                (snapshot.get("session_title") or "") if _ok("title") else ""
+            )
             segs = self._status_bar_segments(
-                snapshot, width, field_set, self._is_session_yolo_active(), styled=True)
+                snapshot, width, field_set, self._is_session_yolo_active(), styled=True
+            )
             sep = " · " if width < 76 else " │ "
             frags: list = []
             for seg in segs or [[(_SB, " ∇ "), (_STRONG, snapshot["model_short"])]]:
@@ -1170,10 +1348,14 @@ class CLIStatusBarMixin:
             # Battery is the first element when enabled: prepend ahead of the ∇ marker.
             battery_label = snapshot.get("battery_label") or ""
             if battery_label and _ok("battery"):
-                battery_style = self._battery_status_style(snapshot.get("battery_category", "dim"))
+                battery_style = self._battery_status_style(
+                    snapshot.get("battery_category", "dim")
+                )
                 frags[0:0] = [(_SB, " "), (battery_style, battery_label), (_DIM, " │")]
 
-            frags = self._right_align_status_title_fragments(frags, session_title, width)
+            frags = self._right_align_status_title_fragments(
+                frags, session_title, width
+            )
             vim_label = self._vim_mode_label()
             if vim_label:
                 frags.extend([(_DIM, " │ "), (_STRONG, vim_label), (_SB, " ")])
@@ -1195,7 +1377,11 @@ class CLIStatusBarMixin:
         if secs < 90:
             return t("cli.shared.ago_seconds", seconds=secs)
         mins = secs // 60
-        return t("cli.shared.ago_minutes", minutes=mins) if mins < 60 else t("cli.shared.ago_hours", hours=mins // 60)
+        return (
+            t("cli.shared.ago_minutes", minutes=mins)
+            if mins < 60
+            else t("cli.shared.ago_hours", hours=mins // 60)
+        )
 
     def _render_stash_panel(self, stash_list: list, cursor: int, width: int) -> list:
         """prompt_toolkit fragments for the stash panel box. Every horizontal measurement uses
@@ -1205,7 +1391,11 @@ class CLIStatusBarMixin:
         W = max(12, min(width - 4, 80))
 
         n = len(stash_list)
-        hdr_key = "cli.status_bar.stash_header_one" if n == 1 else "cli.status_bar.stash_header_other"
+        hdr_key = (
+            "cli.status_bar.stash_header_one"
+            if n == 1
+            else "cli.status_bar.stash_header_other"
+        )
         hdr_prefix_str = f"╭─ {t(hdr_key, count=n)} "
         HDR_SUFFIX = " Ctrl+S ─╮"
         FTR_PREFIX = "╰"

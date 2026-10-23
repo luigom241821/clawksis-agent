@@ -19,7 +19,9 @@ def _no_real_gateway_service(monkeypatch):
     monkeypatch.setattr(gateway_mod, "_is_service_running", lambda: False)
 
 
-def test_run_backup_prunes_older_default_named_zips_but_not_others(tmp_path, monkeypatch):
+def test_run_backup_prunes_older_default_named_zips_but_not_others(
+    tmp_path, monkeypatch
+):
     """Hourly `clawk backup` callers accumulated 150+ zips; --keep bounds the default-named
     ones and leaves custom-named or foreign zips alone (#81317)."""
     from argparse import Namespace
@@ -71,6 +73,8 @@ def test_import_restores_the_session_store_with_its_message_uids(tmp_path, monke
 
     restored = SessionDB(db_path=clawk_home / "state.db")
     try:
-        assert [m["message_uid"] for m in restored.get_messages_as_conversation("s")] == uids
+        assert [
+            m["message_uid"] for m in restored.get_messages_as_conversation("s")
+        ] == uids
     finally:
         restored.close()

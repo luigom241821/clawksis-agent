@@ -307,7 +307,12 @@ async def test_telegram_ack_uses_an_emoji_telegram_actually_allows(outcome, expe
 async def test_free_form_reaction_platforms_keep_the_check_mark():
     """Slack/Discord/Matrix/Signal take arbitrary emoji — they must NOT be
     dragged down to Telegram's vocabulary."""
-    for platform in (Platform.SLACK, Platform.DISCORD, Platform.MATRIX, Platform.SIGNAL):
+    for platform in (
+        Platform.SLACK,
+        Platform.DISCORD,
+        Platform.MATRIX,
+        Platform.SIGNAL,
+    ):
         adapter, stub = _adapter()
         event = _reactable_event(platform=platform)
         await adapter.on_processing_complete(event, ProcessingOutcome.SUCCESS)
@@ -327,7 +332,12 @@ async def test_ack_platform_falls_back_through_the_real_wire_decode():
             {
                 "text": "hi",
                 "message_id": "m42",
-                "source": {"chat_id": "ch1", "chat_type": "channel", "user_id": "u1", **wire_platform},
+                "source": {
+                    "chat_id": "ch1",
+                    "chat_type": "channel",
+                    "user_id": "u1",
+                    **wire_platform,
+                },
             }
         )
         assert event.source.platform is Platform.RELAY, wire_platform
@@ -344,7 +354,11 @@ async def test_ack_platform_prefers_the_chat_lane_over_the_primary():
     adapter, stub = _adapter(platform="slack", label="Slack")
     adapter._platform_by_chat["ch1"] = "telegram"
     event = _event_from_wire(
-        {"text": "hi", "message_id": "m42", "source": {"chat_id": "ch1", "chat_type": "channel"}}
+        {
+            "text": "hi",
+            "message_id": "m42",
+            "source": {"chat_id": "ch1", "chat_type": "channel"},
+        }
     )
     await adapter.on_processing_complete(event, ProcessingOutcome.SUCCESS)
     assert [a["emoji"] for a in stub.sent if a["op"] == "react"] == ["👀", "👍"]
@@ -356,7 +370,11 @@ async def test_ack_on_a_genuinely_generic_relay_keeps_the_check_mark():
     inbound lane must not invent Telegram's vocabulary."""
     adapter, stub = _adapter(platform="relay", label="Relay")
     event = _event_from_wire(
-        {"text": "hi", "message_id": "m42", "source": {"chat_id": "ch1", "chat_type": "channel"}}
+        {
+            "text": "hi",
+            "message_id": "m42",
+            "source": {"chat_id": "ch1", "chat_type": "channel"},
+        }
     )
     await adapter.on_processing_complete(event, ProcessingOutcome.SUCCESS)
     assert [a["emoji"] for a in stub.sent if a["op"] == "react"] == ["👀", "✅"]

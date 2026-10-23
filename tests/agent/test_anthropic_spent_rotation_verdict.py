@@ -165,8 +165,6 @@ def test_registry_stays_bounded():
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_resolve_returns_none_when_the_rotation_could_not_commit(
     clawk_home, claude_credentials, monkeypatch
 ):
@@ -184,8 +182,6 @@ def test_resolve_returns_none_when_the_rotation_could_not_commit(
     )
 
 
-
-
 def test_auxiliary_refresh_reports_failure_for_a_lost_commit(
     clawk_home, claude_credentials, monkeypatch
 ):
@@ -198,7 +194,10 @@ def test_auxiliary_refresh_reports_failure_for_a_lost_commit(
     monkeypatch.setattr(AA, "refresh_anthropic_oauth_pure", _rotating_refresh)
     _break_durable_write(monkeypatch)
 
-    assert _refresh_provider_credentials("anthropic", failed_api_key=_STALE_ACCESS) is False
+    assert (
+        _refresh_provider_credentials("anthropic", failed_api_key=_STALE_ACCESS)
+        is False
+    )
 
 
 def test_independent_pool_credential_stays_eligible(
@@ -326,7 +325,13 @@ def test_second_process_adopts_the_terminal_verdict(
         env.pop(var, None)
 
     proc = subprocess.run(
-        [sys.executable, "-c", _SECOND_PROCESS_WITNESS, str(claude_credentials), str(tmp_path)],
+        [
+            sys.executable,
+            "-c",
+            _SECOND_PROCESS_WITNESS,
+            str(claude_credentials),
+            str(tmp_path),
+        ],
         capture_output=True,
         text=True,
         timeout=60,
@@ -353,9 +358,7 @@ def test_control_second_process_without_sidecar_still_resolves(
     credential resolves normally in this process — proving the sidecar gate
     only fires on a recorded verdict, not on every read.
     """
-    fresh = dict(
-        json.loads(claude_credentials.read_text(encoding="utf-8"))
-    )
+    fresh = dict(json.loads(claude_credentials.read_text(encoding="utf-8")))
     fresh["claudeAiOauth"]["expiresAt"] = int(time.time() * 1000) + 3_600_000
     claude_credentials.write_text(json.dumps(fresh), encoding="utf-8")
 

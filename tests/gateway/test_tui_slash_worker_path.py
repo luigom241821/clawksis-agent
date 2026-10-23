@@ -16,6 +16,7 @@ from pathlib import Path
 
 from tui_gateway import server as tui_server
 
+
 class TestPrependToolPaths:
     def test_prepends_managed_venv_and_user_bin(self, monkeypatch, tmp_path):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "hh"))
@@ -45,7 +46,9 @@ class TestPrependToolPaths:
         store_dir = str(tmp_path / "store" / "node" / "bin")
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "hh"))
         monkeypatch.setattr("pm.install._store_path_dirs", lambda: [store_dir])
-        result = tui_server._prepend_tool_paths({"PATH": os.pathsep.join(["/usr/bin", store_dir])})
+        result = tui_server._prepend_tool_paths(
+            {"PATH": os.pathsep.join(["/usr/bin", store_dir])}
+        )
 
         parts = result["PATH"].split(os.pathsep)
         assert parts[0] == store_dir

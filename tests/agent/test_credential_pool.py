@@ -24,21 +24,6 @@ def _jwt_with_claims(claims: dict) -> str:
     return f"{_part({'alg': 'none', 'typ': 'JWT'})}.{_part(claims)}.sig"
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def test_explicit_reset_timestamp_overrides_default_429_ttl(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     # Prevent auto-seeding from Codex CLI tokens on the host
@@ -75,8 +60,6 @@ def test_explicit_reset_timestamp_overrides_default_429_ttl(tmp_path, monkeypatc
     pool = load_pool("openai-codex")
     assert pool.has_available() is False
     assert pool.select() is None
-
-
 
 
 def test_billing_rotation_marks_all_entries_sharing_failed_key(tmp_path, monkeypatch):
@@ -152,7 +135,9 @@ def test_stale_credential_id_prefers_api_key_hint(tmp_path, monkeypatch):
     healthy key must not inherit the primary's 429.
     """
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
     _write_auth_store(
         tmp_path,
         {
@@ -198,7 +183,9 @@ def test_stale_credential_id_prefers_api_key_hint(tmp_path, monkeypatch):
         assert next_entry.runtime_api_key == "sk-ant-api-backup"
 
 
-def test_unmatched_api_key_hint_rotates_without_benching_innocent_key(tmp_path, monkeypatch):
+def test_unmatched_api_key_hint_rotates_without_benching_innocent_key(
+    tmp_path, monkeypatch
+):
     """An api_key_hint matching no entry must not quarantine a healthy key.
 
     Regression: when the hint was unmatched (key rotated away, or a wrapper
@@ -211,7 +198,9 @@ def test_unmatched_api_key_hint_rotates_without_benching_innocent_key(tmp_path, 
     # Keep the dev machine's live ~/.claude credentials from seeding a
     # claude_code singleton entry into this pool (same isolation as the
     # other anthropic pool tests in this file).
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
     _write_auth_store(
         tmp_path,
         {
@@ -386,8 +375,11 @@ def test_dead_credential_never_re_enters_rotation_after_ttl(tmp_path, monkeypatc
 
     # The DEAD entry is still marked dead on disk — not cleared by TTL.
     auth_payload = json.loads((tmp_path / "clawk" / "auth.json").read_text())
-    dead_entry = next(e for e in auth_payload["credential_pool"]["openai-codex"]
-                       if e["id"] == "cred-dead")
+    dead_entry = next(
+        e
+        for e in auth_payload["credential_pool"]["openai-codex"]
+        if e["id"] == "cred-dead"
+    )
     assert dead_entry["last_status"] == STATUS_DEAD
 
 
@@ -434,7 +426,10 @@ def test_429_rate_limit_still_uses_exhausted_not_dead(tmp_path, monkeypatch):
 
     next_entry = pool.mark_exhausted_and_rotate(
         status_code=429,
-        error_context={"reason": "rate_limit_exceeded", "message": "Rate limit exceeded"},
+        error_context={
+            "reason": "rate_limit_exceeded",
+            "message": "Rate limit exceeded",
+        },
     )
     assert next_entry is not None
     assert next_entry.id == "cred-2"
@@ -446,7 +441,9 @@ def test_429_rate_limit_still_uses_exhausted_not_dead(tmp_path, monkeypatch):
     assert persisted["last_error_code"] == 429
 
 
-def test_generic_401_without_terminal_reason_still_uses_exhausted(tmp_path, monkeypatch):
+def test_generic_401_without_terminal_reason_still_uses_exhausted(
+    tmp_path, monkeypatch
+):
     """A 401 with no specific code/reason should keep TTL semantics.
 
     Only specific terminal reasons (token_invalidated, token_revoked, etc.)
@@ -559,10 +556,6 @@ def test_dead_manual_entry_pruned_after_24h(tmp_path, monkeypatch):
     assert persisted[0]["id"] == "cred-ok"
 
 
-
-
-
-
 def test_load_pool_seeds_env_api_key(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-seeded")
@@ -576,7 +569,6 @@ def test_load_pool_seeds_env_api_key(tmp_path, monkeypatch):
     assert entry is not None
     assert entry.source == "env:OPENROUTER_API_KEY"
     assert entry.access_token == "sk-or-seeded"
-
 
 
 def test_load_pool_does_not_persist_env_seeded_secret_value(tmp_path, monkeypatch):
@@ -671,7 +663,9 @@ def test_credential_pool_never_selects_empty_borrowed_entry():
     assert pool.acquire_lease() is None
 
 
-def test_load_pool_persists_bitwarden_origin_metadata_without_secret(tmp_path, monkeypatch):
+def test_load_pool_persists_bitwarden_origin_metadata_without_secret(
+    tmp_path, monkeypatch
+):
     """Bitwarden-injected env vars retain source metadata but not raw values."""
     sentinel = "S3NTINEL_DO_NOT_PERSIST_BITWARDEN"
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
@@ -699,8 +693,9 @@ def test_load_pool_persists_bitwarden_origin_metadata_without_secret(tmp_path, m
     assert "access_token" not in persisted
 
 
-
-def test_load_pool_sanitizes_legacy_raw_borrowed_entry_when_value_unchanged(tmp_path, monkeypatch):
+def test_load_pool_sanitizes_legacy_raw_borrowed_entry_when_value_unchanged(
+    tmp_path, monkeypatch
+):
     """Existing raw env-seeded pool entries are rewritten even if the env value matches."""
     sentinel = "S3NTINEL_DO_NOT_PERSIST_LEGACY_RAW"
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
@@ -738,7 +733,6 @@ def test_load_pool_sanitizes_legacy_raw_borrowed_entry_when_value_unchanged(tmp_
     assert persisted["id"] == "legacy-env"
     assert "access_token" not in persisted
     assert persisted["secret_fingerprint"].startswith("sha256:")
-
 
 
 def test_pooled_credential_to_dict_strips_borrowed_secret_fields():
@@ -792,16 +786,18 @@ def test_pooled_credential_to_dict_strips_borrowed_secret_fields():
     assert payload["secret_fingerprint"].startswith("sha256:")
 
 
-
-@pytest.mark.parametrize("source", [
-    "age://openrouter/api-key",
-    "systemd",
-    "keyring",
-    "1password",
-    "pass",
-    "sops",
-    "future_secret_store:openrouter",
-])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "age://openrouter/api-key",
+        "systemd",
+        "keyring",
+        "1password",
+        "pass",
+        "sops",
+        "future_secret_store:openrouter",
+    ],
+)
 def test_borrowed_source_variants_strip_secret_fields(source):
     from agent.credential_pool import PooledCredential
 
@@ -827,11 +823,9 @@ def test_borrowed_source_variants_strip_secret_fields(source):
     assert payload["secret_fingerprint"].startswith("sha256:")
 
 
-
-
-
-
-def test_write_credential_pool_sanitizes_borrowed_payload_at_disk_boundary(tmp_path, monkeypatch):
+def test_write_credential_pool_sanitizes_borrowed_payload_at_disk_boundary(
+    tmp_path, monkeypatch
+):
     """Direct dictionary callers cannot bypass the borrowed-secret guard."""
     sentinel = "S3NTINEL_DO_NOT_PERSIST_DIRECT_WRITE"
     manual_secret = "MANUAL_SECRET_STAYS_PERSISTABLE"
@@ -839,27 +833,30 @@ def test_write_credential_pool_sanitizes_borrowed_payload_at_disk_boundary(tmp_p
 
     from clawk_cli.auth import write_credential_pool
 
-    write_credential_pool("openrouter", [
-        {
-            "id": "borrowed-1",
-            "label": "systemd-ref",
-            "auth_type": "api_key",
-            "priority": 0,
-            "source": "systemd://clawk/openrouter",
-            "access_token": sentinel,
-            "refresh_token": f"refresh-{sentinel}",
-            "agent_key": f"agent-{sentinel}",
-            "api_key": f"extra-{sentinel}",
-        },
-        {
-            "id": "manual-1",
-            "label": "manual",
-            "auth_type": "api_key",
-            "priority": 1,
-            "source": "manual",
-            "access_token": manual_secret,
-        },
-    ])
+    write_credential_pool(
+        "openrouter",
+        [
+            {
+                "id": "borrowed-1",
+                "label": "systemd-ref",
+                "auth_type": "api_key",
+                "priority": 0,
+                "source": "systemd://clawk/openrouter",
+                "access_token": sentinel,
+                "refresh_token": f"refresh-{sentinel}",
+                "agent_key": f"agent-{sentinel}",
+                "api_key": f"extra-{sentinel}",
+            },
+            {
+                "id": "manual-1",
+                "label": "manual",
+                "auth_type": "api_key",
+                "priority": 1,
+                "source": "manual",
+                "access_token": manual_secret,
+            },
+        ],
+    )
 
     auth_text = (tmp_path / "clawk" / "auth.json").read_text()
     assert sentinel not in auth_text
@@ -875,24 +872,28 @@ def test_write_credential_pool_sanitizes_borrowed_payload_at_disk_boundary(tmp_p
     assert manual["access_token"] == manual_secret
 
 
-
-def test_write_credential_pool_treats_unowned_oauth_source_as_borrowed(tmp_path, monkeypatch):
+def test_write_credential_pool_treats_unowned_oauth_source_as_borrowed(
+    tmp_path, monkeypatch
+):
     sentinel = "S3NTINEL_DO_NOT_PERSIST_UNOWNED_OAUTH"
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
 
     from clawk_cli.auth import write_credential_pool
 
-    write_credential_pool("openrouter", [
-        {
-            "id": "unowned-oauth",
-            "label": "unowned-oauth",
-            "auth_type": "oauth",
-            "priority": 0,
-            "source": "oauth",
-            "access_token": sentinel,
-            "refresh_token": f"refresh-{sentinel}",
-        }
-    ])
+    write_credential_pool(
+        "openrouter",
+        [
+            {
+                "id": "unowned-oauth",
+                "label": "unowned-oauth",
+                "auth_type": "oauth",
+                "priority": 0,
+                "source": "oauth",
+                "access_token": sentinel,
+                "refresh_token": f"refresh-{sentinel}",
+            }
+        ],
+    )
 
     auth_text = (tmp_path / "clawk" / "auth.json").read_text()
     assert sentinel not in auth_text
@@ -903,31 +904,36 @@ def test_write_credential_pool_treats_unowned_oauth_source_as_borrowed(tmp_path,
     assert persisted["secret_fingerprint"].startswith("sha256:")
 
 
-
-def test_write_credential_pool_preserves_known_provider_owned_oauth_state(tmp_path, monkeypatch):
+def test_write_credential_pool_preserves_known_provider_owned_oauth_state(
+    tmp_path, monkeypatch
+):
     sentinel = "PROVIDER_OWNED_DEVICE_CODE_STAYS_PERSISTABLE"
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
 
     from clawk_cli.auth import write_credential_pool
 
-    write_credential_pool("nous", [
-        {
-            "id": "nous-device",
-            "label": "device-code",
-            "auth_type": "oauth",
-            "priority": 0,
-            "source": "device_code",
-            "access_token": sentinel,
-            "refresh_token": f"refresh-{sentinel}",
-            "agent_key": f"agent-{sentinel}",
-        }
-    ])
+    write_credential_pool(
+        "nous",
+        [
+            {
+                "id": "nous-device",
+                "label": "device-code",
+                "auth_type": "oauth",
+                "priority": 0,
+                "source": "device_code",
+                "access_token": sentinel,
+                "refresh_token": f"refresh-{sentinel}",
+                "agent_key": f"agent-{sentinel}",
+            }
+        ],
+    )
 
-    persisted = json.loads((tmp_path / "clawk" / "auth.json").read_text())["credential_pool"]["nous"][0]
+    persisted = json.loads((tmp_path / "clawk" / "auth.json").read_text())[
+        "credential_pool"
+    ]["nous"][0]
     assert persisted["access_token"] == sentinel
     assert persisted["refresh_token"] == f"refresh-{sentinel}"
     assert persisted["agent_key"] == f"agent-{sentinel}"
-
 
 
 def test_load_pool_prefers_dotenv_over_stale_os_environ(tmp_path, monkeypatch):
@@ -945,13 +951,12 @@ def test_load_pool_prefers_dotenv_over_stale_os_environ(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-STALE-from-shell")
 
     # User edited ~/.clawksis/.env with the fresh key
-    (clawk_home / ".env").write_text(
-        "OPENROUTER_API_KEY=sk-or-FRESH-from-dotenv\n"
-    )
+    (clawk_home / ".env").write_text("OPENROUTER_API_KEY=sk-or-FRESH-from-dotenv\n")
 
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("openrouter")
     entry = pool.select()
 
@@ -980,6 +985,7 @@ def test_load_pool_falls_back_to_os_environ_when_dotenv_empty(tmp_path, monkeypa
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("openrouter")
     entry = pool.select()
 
@@ -987,20 +993,18 @@ def test_load_pool_falls_back_to_os_environ_when_dotenv_empty(tmp_path, monkeypa
     assert entry.access_token == "sk-or-from-runtime-env"
 
 
-
-
-
-
-
-
-def test_load_pool_mirrors_nous_invoke_jwt_agent_key_runtime_api_key(tmp_path, monkeypatch):
+def test_load_pool_mirrors_nous_invoke_jwt_agent_key_runtime_api_key(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     expires_at = datetime.fromtimestamp(time.time() + 3600, tz=UTC).isoformat()
-    token = _jwt_with_claims({
-        "sub": "test-user",
-        "scope": ["inference:invoke"],
-        "exp": int(time.time() + 3600),
-    })
+    token = _jwt_with_claims(
+        {
+            "sub": "test-user",
+            "scope": ["inference:invoke"],
+            "exp": int(time.time() + 3600),
+        }
+    )
     _write_auth_store(
         tmp_path,
         {
@@ -1062,18 +1066,6 @@ def test_nous_runtime_api_key_rejects_opaque_agent_key():
     assert entry.runtime_api_key == ""
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def test_load_pool_api_key_path_skips_oauth_autodiscovery(tmp_path, monkeypatch):
     """API-key auth path: autodiscovered OAuth creds must NOT be seeded.
 
@@ -1092,7 +1084,9 @@ def test_load_pool_api_key_path_skips_oauth_autodiscovery(tmp_path, monkeypatch)
     monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True)
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True
+    )
 
     pkce_called = {"n": 0}
     cc_called = {"n": 0}
@@ -1113,8 +1107,12 @@ def test_load_pool_api_key_path_skips_oauth_autodiscovery(tmp_path, monkeypatch)
             "expiresAt": int(time.time() * 1000) + 3_600_000,
         }
 
-    monkeypatch.setattr("agent.anthropic_credentials.read_clawk_oauth_credentials", _fake_pkce)
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", _fake_cc)
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_clawk_oauth_credentials", _fake_pkce
+    )
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", _fake_cc
+    )
 
     from agent.credential_pool import load_pool
 
@@ -1166,9 +1164,15 @@ def test_load_pool_api_key_path_prunes_stale_oauth_entries(tmp_path, monkeypatch
             },
         },
     )
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True)
-    monkeypatch.setattr("agent.anthropic_credentials.read_clawk_oauth_credentials", lambda: None)
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True
+    )
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_clawk_oauth_credentials", lambda: None
+    )
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
 
     from agent.credential_pool import load_pool
 
@@ -1193,7 +1197,9 @@ def test_load_pool_oauth_path_still_autodiscovers(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-explicit-oauth-token")
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True)
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured", lambda pid: True
+    )
 
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_clawk_oauth_credentials",
@@ -1280,10 +1286,6 @@ def test_least_used_strategy_selects_lowest_count(tmp_path, monkeypatch):
     assert entry.access_token == "sk-or-light"
 
 
-
-
-
-
 def test_custom_endpoint_pool_seeds_from_config(tmp_path, monkeypatch):
     """Verify seeding from custom_providers api_key in config.yaml."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
@@ -1292,15 +1294,20 @@ def test_custom_endpoint_pool_seeds_from_config(tmp_path, monkeypatch):
     # Write config.yaml with a custom_providers entry
     config_path = tmp_path / "clawk" / "config.yaml"
     import clawk_yaml as yaml
-    config_path.write_text(yaml.safe_dump({
-        "custom_providers": [
+
+    config_path.write_text(
+        yaml.safe_dump(
             {
-                "name": "Together.ai",
-                "base_url": "https://api.together.ai/v1",
-                "api_key": "sk-config-seeded",
+                "custom_providers": [
+                    {
+                        "name": "Together.ai",
+                        "base_url": "https://api.together.ai/v1",
+                        "api_key": "sk-config-seeded",
+                    }
+                ]
             }
-        ]
-    }))
+        )
+    )
 
     from agent.credential_pool import load_pool
 
@@ -1318,20 +1325,25 @@ def test_custom_endpoint_pool_seeds_from_model_config(tmp_path, monkeypatch):
     _write_auth_store(tmp_path, {"version": 1})
 
     import clawk_yaml as yaml
+
     config_path = tmp_path / "clawk" / "config.yaml"
-    config_path.write_text(yaml.safe_dump({
-        "custom_providers": [
+    config_path.write_text(
+        yaml.safe_dump(
             {
-                "name": "Together.ai",
-                "base_url": "https://api.together.ai/v1",
+                "custom_providers": [
+                    {
+                        "name": "Together.ai",
+                        "base_url": "https://api.together.ai/v1",
+                    }
+                ],
+                "model": {
+                    "provider": "custom",
+                    "base_url": "https://api.together.ai/v1",
+                    "api_key": "sk-model-key",
+                },
             }
-        ],
-        "model": {
-            "provider": "custom",
-            "base_url": "https://api.together.ai/v1",
-            "api_key": "sk-model-key",
-        },
-    }))
+        )
+    )
 
     from agent.credential_pool import load_pool
 
@@ -1343,23 +1355,12 @@ def test_custom_endpoint_pool_seeds_from_model_config(tmp_path, monkeypatch):
     assert len(model_entries) == 1
     assert model_entries[0].access_token == "sk-model-key"
 
-
-
-
-
-
-
-
     # "custom:empty" not included because it's empty
 
 
-
-
-
-
-
-
-def test_load_pool_does_not_seed_claude_code_when_anthropic_not_configured(tmp_path, monkeypatch):
+def test_load_pool_does_not_seed_claude_code_when_anthropic_not_configured(
+    tmp_path, monkeypatch
+):
     """Claude Code credentials must not be auto-seeded when the user never selected anthropic."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     _write_auth_store(tmp_path, {"version": 1, "credential_pool": {}})
@@ -1367,7 +1368,11 @@ def test_load_pool_does_not_seed_claude_code_when_anthropic_not_configured(tmp_p
     # Claude Code credentials exist on disk
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_claude_code_credentials",
-        lambda: {"accessToken": "sk-ant...oken", "refreshToken": "rt", "expiresAt": 9999999999999},
+        lambda: {
+            "accessToken": "sk-ant...oken",
+            "refreshToken": "rt",
+            "expiresAt": 9999999999999,
+        },
     )
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_clawk_oauth_credentials",
@@ -1380,6 +1385,7 @@ def test_load_pool_does_not_seed_claude_code_when_anthropic_not_configured(tmp_p
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("anthropic")
 
     # Should NOT have seeded the claude_code entry
@@ -1397,6 +1403,7 @@ def test_load_pool_seeds_copilot_via_gh_auth_token(tmp_path, monkeypatch):
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("copilot")
 
     assert pool.has_credentials()
@@ -1445,6 +1452,7 @@ def test_load_pool_skips_exchange_for_suppressed_copilot(tmp_path, monkeypatch):
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("copilot")
 
     assert not exchange_called
@@ -1488,6 +1496,7 @@ def test_load_pool_respects_env_var_copilot_suppression(tmp_path, monkeypatch):
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("copilot")
 
     assert not exchange_called
@@ -1520,16 +1529,20 @@ def test_load_pool_gh_cli_suppression_does_not_block_env_tokens(tmp_path, monkey
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("copilot")
 
     assert [e.source for e in pool.entries()] == ["env:GH_TOKEN"]
 
 
-def test_load_pool_skips_resolve_when_all_copilot_sources_suppressed(tmp_path, monkeypatch):
+def test_load_pool_skips_resolve_when_all_copilot_sources_suppressed(
+    tmp_path, monkeypatch
+):
     """With every copilot source suppressed, resolve_copilot_token (which
     shells out to ``gh auth token``) must not run at all."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     from clawk_cli.copilot_auth import COPILOT_ENV_VARS
+
     _write_auth_store(
         tmp_path,
         {
@@ -1542,51 +1555,74 @@ def test_load_pool_skips_resolve_when_all_copilot_sources_suppressed(tmp_path, m
     )
 
     def _boom():
-        raise AssertionError("resolve_copilot_token must not run when all sources are suppressed")
+        raise AssertionError(
+            "resolve_copilot_token must not run when all sources are suppressed"
+        )
 
     monkeypatch.setattr("clawk_cli.copilot_auth.resolve_copilot_token", _boom)
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("copilot")
 
     assert pool.entries() == []
 
 
-def test_load_pool_copilot_exchange_only_when_selected_and_warns_once(tmp_path, monkeypatch, caplog):
+def test_load_pool_copilot_exchange_only_when_selected_and_warns_once(
+    tmp_path, monkeypatch, caplog
+):
     """An ambient gh-CLI Copilot credential is seeded without the token exchange (and without the
     'degraded to RAW token' warning) until copilot is actually selected; once selected, the
     degradation is reported once per token, not on every pool load (#114740)."""
     import logging
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     _write_auth_store(tmp_path, {"version": 1, "credential_pool": {}})
 
     from agent.credential_pool import _reset_copilot_raw_degradation_warned, load_pool
+
     _reset_copilot_raw_degradation_warned()
-    monkeypatch.setattr("clawk_cli.copilot_auth.resolve_copilot_token", lambda: ("gho_raw_initial", "gh auth token"))
+    monkeypatch.setattr(
+        "clawk_cli.copilot_auth.resolve_copilot_token",
+        lambda: ("gho_raw_initial", "gh auth token"),
+    )
     exchanges = []
 
     def degraded_exchange(token):
         exchanges.append(token)
         return token, None  # exchange unavailable -> RAW token, no enterprise URL
 
-    monkeypatch.setattr("clawk_cli.copilot_auth.get_copilot_api_token", degraded_exchange)
+    monkeypatch.setattr(
+        "clawk_cli.copilot_auth.get_copilot_api_token", degraded_exchange
+    )
 
     def degradation_warnings():
-        return [r for r in caplog.records if "Copilot token exchange degraded to RAW token" in r.message]
+        return [
+            r
+            for r in caplog.records
+            if "Copilot token exchange degraded to RAW token" in r.message
+        ]
 
     with caplog.at_level(logging.WARNING, logger="agent.credential_pool"):
         # Main provider is deepseek; copilot is merely discovered via `gh auth token`.
-        (tmp_path / "clawk" / "config.yaml").write_text("model:\n  provider: deepseek\n  default: deepseek-chat\n", encoding="utf-8")
+        (tmp_path / "clawk" / "config.yaml").write_text(
+            "model:\n  provider: deepseek\n  default: deepseek-chat\n", encoding="utf-8"
+        )
         pool = load_pool("copilot")
         load_pool("copilot")
         assert exchanges == [] and degradation_warnings() == []
-        assert [e.access_token for e in pool.entries()] == ["gho_raw_initial"]  # credential still listed
+        assert [e.access_token for e in pool.entries()] == [
+            "gho_raw_initial"
+        ]  # credential still listed
 
         # The user selects copilot for one auxiliary task: the exchange runs, the degradation is
         # reported exactly once across repeated loads.
         (tmp_path / "clawk" / "config.yaml").write_text(
-            "model:\n  provider: deepseek\n  default: deepseek-chat\nauxiliary:\n  approval:\n    provider: copilot\n", encoding="utf-8")
+            "model:\n  provider: deepseek\n  default: deepseek-chat\nauxiliary:\n  approval:\n    provider: copilot\n",
+            encoding="utf-8",
+        )
         from clawk_cli import config as _cfg
+
         _cfg._LOAD_CONFIG_CACHE.clear()
         _cfg._RAW_CONFIG_CACHE.clear()  # same-second rewrite: the mtime signature may not change
         load_pool("copilot")
@@ -1594,7 +1630,10 @@ def test_load_pool_copilot_exchange_only_when_selected_and_warns_once(tmp_path, 
         assert len(exchanges) == 2 and len(degradation_warnings()) == 1
 
         # A different token is a different degradation: warned again, once.
-        monkeypatch.setattr("clawk_cli.copilot_auth.resolve_copilot_token", lambda: ("gho_raw_rotated", "gh auth token"))
+        monkeypatch.setattr(
+            "clawk_cli.copilot_auth.resolve_copilot_token",
+            lambda: ("gho_raw_rotated", "gh auth token"),
+        )
         load_pool("copilot")
         assert len(degradation_warnings()) == 2
 
@@ -1617,6 +1656,7 @@ def test_load_pool_seeds_qwen_oauth_via_cli_tokens(tmp_path, monkeypatch):
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("qwen-oauth")
 
     assert pool.has_credentials()
@@ -1636,18 +1676,25 @@ def test_load_pool_does_not_seed_qwen_oauth_when_no_token(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "clawk_cli.auth.resolve_qwen_runtime_credentials",
         lambda **kw: (_ for _ in ()).throw(
-            AuthError("Qwen CLI credentials not found.", provider="qwen-oauth", code="qwen_auth_missing")
+            AuthError(
+                "Qwen CLI credentials not found.",
+                provider="qwen-oauth",
+                code="qwen_auth_missing",
+            )
         ),
     )
 
     from agent.credential_pool import load_pool
+
     pool = load_pool("qwen-oauth")
 
     assert not pool.has_credentials()
     assert pool.entries() == []
 
 
-def test_nous_seed_from_singletons_preserves_obtained_at_timestamps(tmp_path, monkeypatch):
+def test_nous_seed_from_singletons_preserves_obtained_at_timestamps(
+    tmp_path, monkeypatch
+):
     """Regression test for #15099 secondary issue.
 
     When ``_seed_from_singletons`` materialises a device_code pool entry from
@@ -1692,7 +1739,9 @@ def test_nous_seed_from_singletons_preserves_obtained_at_timestamps(tmp_path, mo
     entries = pool.entries()
 
     device_entries = [e for e in entries if e.source == "device_code"]
-    assert len(device_entries) == 1, f"expected single device_code entry; got {len(device_entries)}"
+    assert len(device_entries) == 1, (
+        f"expected single device_code entry; got {len(device_entries)}"
+    )
     e = device_entries[0]
 
     # Direct dataclass fields — must survive the singleton → pool copy.
@@ -1715,23 +1764,10 @@ def test_nous_seed_from_singletons_preserves_obtained_at_timestamps(tmp_path, mo
     assert e.agent_key_reused is False
 
 
-
-
 # ── PR #10160 salvage: Nous OAuth cross-process sync tests ─────────────────
 
 
-
-
-
 # ── OpenAI Codex OAuth cross-process sync tests ────────────────────────────
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -1739,27 +1775,9 @@ def test_nous_seed_from_singletons_preserves_obtained_at_timestamps(tmp_path, mo
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
-
-
 # ---------------------------------------------------------------------------
 # Codex OAuth terminal error quarantine
 # ---------------------------------------------------------------------------
-
-
-
-
-
-
-
-
 
 
 def test_persist_preserves_concurrent_disk_only_entry(tmp_path, monkeypatch):
@@ -1768,8 +1786,12 @@ def test_persist_preserves_concurrent_disk_only_entry(tmp_path, monkeypatch):
     # Block external-credential autodiscovery: a real ~/.claude/.credentials.json
     # on a dev machine would seed an extra claude_code entry and break the
     # exact-id assertions below (passes on CI where no such file exists).
-    monkeypatch.setattr("agent.anthropic_credentials.read_clawk_oauth_credentials", lambda: None)
-    monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", lambda: None)
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_clawk_oauth_credentials", lambda: None
+    )
+    monkeypatch.setattr(
+        "agent.anthropic_credentials.read_claude_code_credentials", lambda: None
+    )
     _write_auth_store(
         tmp_path,
         {
@@ -1829,40 +1851,48 @@ def test_persist_preserves_concurrent_disk_only_entry(tmp_path, monkeypatch):
     assert persisted_a["last_status"] == "exhausted"
 
 
-
-
 # ---------------------------------------------------------------------------
 # _sync_anthropic_entry_from_credentials_file — parity fix tests
 # ---------------------------------------------------------------------------
 
-def _make_anthropic_claude_code_pool(tmp_path, monkeypatch, *, access_token, refresh_token, expires_at_ms=9_999_999_999_000):
+
+def _make_anthropic_claude_code_pool(
+    tmp_path,
+    monkeypatch,
+    *,
+    access_token,
+    refresh_token,
+    expires_at_ms=9_999_999_999_000,
+):
     """Helper: load an Anthropic pool seeded with a single claude_code entry."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "clawk"))
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     _write_auth_store(tmp_path, {"version": 1, "credential_pool": {}})
-    monkeypatch.setattr("clawk_cli.auth.is_provider_explicitly_configured", lambda pid: pid == "anthropic")
+    monkeypatch.setattr(
+        "clawk_cli.auth.is_provider_explicitly_configured",
+        lambda pid: pid == "anthropic",
+    )
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_clawk_oauth_credentials",
         lambda: None,
     )
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_claude_code_credentials",
-        lambda: {"accessToken": access_token, "refreshToken": refresh_token, "expiresAt": expires_at_ms},
+        lambda: {
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+            "expiresAt": expires_at_ms,
+        },
     )
     from agent.credential_pool import load_pool
+
     pool = load_pool("anthropic")
     entry = pool.select()
     assert entry is not None
     assert entry.source == "claude_code"
     return pool, entry
-
-
-
-
-
-
 
 
 def test_sync_anthropic_entry_clears_all_error_fields(tmp_path, monkeypatch):
@@ -1876,7 +1906,8 @@ def test_sync_anthropic_entry_clears_all_error_fields(tmp_path, monkeypatch):
     from agent.credential_pool import STATUS_EXHAUSTED
 
     pool, entry = _make_anthropic_claude_code_pool(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         access_token="stale-access",
         refresh_token="stale-refresh",
     )
@@ -1895,7 +1926,11 @@ def test_sync_anthropic_entry_clears_all_error_fields(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         "agent.anthropic_credentials.read_claude_code_credentials",
-        lambda: {"accessToken": "fresh-access", "refreshToken": "fresh-refresh", "expiresAt": 9_999_999_999_000},
+        lambda: {
+            "accessToken": "fresh-access",
+            "refreshToken": "fresh-refresh",
+            "expiresAt": 9_999_999_999_000,
+        },
     )
 
     synced = pool._sync_anthropic_entry_from_credentials_file(exhausted)
@@ -1920,14 +1955,26 @@ def _load_two_ok_pool(tmp_path, monkeypatch):
             "credential_pool": {
                 "anthropic": [
                     {
-                        "id": "cred-1", "label": "primary", "auth_type": "api_key",
-                        "priority": 0, "source": "manual", "access_token": "***",
-                        "last_status": "ok", "last_status_at": None, "last_error_code": None,
+                        "id": "cred-1",
+                        "label": "primary",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "***",
+                        "last_status": "ok",
+                        "last_status_at": None,
+                        "last_error_code": None,
                     },
                     {
-                        "id": "cred-2", "label": "secondary", "auth_type": "api_key",
-                        "priority": 1, "source": "manual", "access_token": "***",
-                        "last_status": "ok", "last_status_at": None, "last_error_code": None,
+                        "id": "cred-2",
+                        "label": "secondary",
+                        "auth_type": "api_key",
+                        "priority": 1,
+                        "source": "manual",
+                        "access_token": "***",
+                        "last_status": "ok",
+                        "last_status_at": None,
+                        "last_error_code": None,
                     },
                 ]
             },
@@ -1936,8 +1983,6 @@ def _load_two_ok_pool(tmp_path, monkeypatch):
     from agent.credential_pool import load_pool
 
     return load_pool("anthropic")
-
-
 
 
 class TestCredentialPoolQueryLocking:
@@ -1972,7 +2017,6 @@ class TestCredentialPoolQueryLocking:
         # current(), or it deadlocks on the non-reentrant lock (found when
         # rebasing this fix over the #69843 salvage which added the method).
         pool.try_refresh_matching()
-
 
 
 def _exhausted_billing_store(tmp_path, *, age_seconds: float):
@@ -2105,7 +2149,9 @@ def test_a_persist_without_declared_intent_still_cannot_erase_a_cooldown(
     assert entry["last_error_code"] == 402
 
 
-def test_live_pool_flush_does_not_resurrect_a_cooldown_reset_by_another_process(tmp_path, monkeypatch):
+def test_live_pool_flush_does_not_resurrect_a_cooldown_reset_by_another_process(
+    tmp_path, monkeypatch
+):
     """A running session's next ordinary flush must not undo ``clawk auth reset`` (#89415).
 
     The live pool still holds the entry as exhausted in memory; the CLI in another
@@ -2121,13 +2167,15 @@ def test_live_pool_flush_does_not_resurrect_a_cooldown_reset_by_another_process(
 
     from agent.credential_pool import load_pool
 
-    live = load_pool("deepseek")                      # process A: session already running
+    live = load_pool("deepseek")  # process A: session already running
     assert live.has_available() is False
-    assert load_pool("deepseek").reset_statuses() == 1  # process B: `clawk auth reset deepseek`
+    assert (
+        load_pool("deepseek").reset_statuses() == 1
+    )  # process B: `clawk auth reset deepseek`
 
-    live._persist()                                   # A's next ordinary flush
+    live._persist()  # A's next ordinary flush
     assert _disk_entry(tmp_path)["last_status"] is None
-    assert live.select() is not None                  # A honours the reset without a restart
+    assert live.select() is not None  # A honours the reset without a restart
     assert _disk_entry(tmp_path)["last_status"] != "exhausted"
 
 
@@ -2146,8 +2194,11 @@ def test_an_exhaustion_newer_than_the_reset_still_binds(tmp_path, monkeypatch):
     assert load_pool("deepseek").reset_statuses() == 1
     live = load_pool("deepseek")
     assert live.select() is not None
-    live.mark_exhausted_and_rotate(status_code=402, api_key_hint="sk-test",
-                                   error_context={"message": "Insufficient Balance"})
+    live.mark_exhausted_and_rotate(
+        status_code=402,
+        api_key_hint="sk-test",
+        error_context={"message": "Insufficient Balance"},
+    )
 
     live._persist()
     assert _disk_entry(tmp_path)["last_status"] == "exhausted"

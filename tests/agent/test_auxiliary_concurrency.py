@@ -25,8 +25,6 @@ def _clean_semaphore_cache():
 
 
 class TestGetTaskMaxConcurrency:
-
-
     def test_does_not_reuse_vision_cpu_limit_for_llm_calls(self):
         with patch(
             "agent.auxiliary_client._get_auxiliary_task_config",
@@ -67,9 +65,6 @@ class TestSemaphoreCache:
             "agent.auxiliary_client._get_auxiliary_task_config", return_value={}
         ):
             assert _acquire_sync_aux_semaphore("title_generation") is None
-
-
-
 
     def test_async_returns_none_with_no_running_loop(self):
         with patch(
@@ -139,7 +134,6 @@ class TestSyncCallEnforcesLimit:
 
         assert max_active <= limit, f"observed {max_active} > limit {limit}"
         assert client.chat.completions.create.call_count == n_callers
-
 
     def test_semaphore_released_on_exception(self):
         """Errors inside call_llm must release the semaphore so the next call proceeds."""
@@ -220,10 +214,9 @@ class TestSyncCallEnforcesLimit:
         assert not thread.is_alive()
         assert client.chat.completions.create.call_count == 2
         assert client.chat.completions.create.call_args_list[0].kwargs["stream"] is True
-        assert client.chat.completions.create.call_args_list[0].kwargs["stream_options"] == {
-            "include_usage": True
-        }
-
+        assert client.chat.completions.create.call_args_list[0].kwargs[
+            "stream_options"
+        ] == {"include_usage": True}
 
 
 class TestAsyncCallEnforcesLimit:
@@ -267,13 +260,15 @@ class TestAsyncCallEnforcesLimit:
                 return_value={"max_concurrency": limit},
             ),
         ):
-            await asyncio.gather(*[
-                async_call_llm(
-                    task="compression",
-                    messages=[{"role": "user", "content": "hi"}],
-                )
-                for _ in range(n_callers)
-            ])
+            await asyncio.gather(
+                *[
+                    async_call_llm(
+                        task="compression",
+                        messages=[{"role": "user", "content": "hi"}],
+                    )
+                    for _ in range(n_callers)
+                ]
+            )
 
         assert max_active <= limit, f"observed {max_active} > limit {limit}"
         assert client.chat.completions.create.await_count == n_callers

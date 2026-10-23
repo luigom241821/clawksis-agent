@@ -26,9 +26,13 @@ def corrupt_db(tmp_path):
         db.append_message(sid, "user", f"hello from {sid}")
 
     def _corrupt(conn):
-        conn.execute("UPDATE sessions SET started_at='not-a-timestamp', last_activity_at='not-a-timestamp' "
-                     "WHERE id='bad-text'")
-        conn.execute("UPDATE messages SET timestamp='not-a-timestamp' WHERE session_id='bad-text'")
+        conn.execute(
+            "UPDATE sessions SET started_at='not-a-timestamp', last_activity_at='not-a-timestamp' "
+            "WHERE id='bad-text'"
+        )
+        conn.execute(
+            "UPDATE messages SET timestamp='not-a-timestamp' WHERE session_id='bad-text'"
+        )
         conn.execute("UPDATE sessions SET started_at=8.4e252 WHERE id='bad-huge'")
         conn.execute("UPDATE messages SET timestamp=1e30 WHERE session_id='bad-huge'")
 
@@ -37,9 +41,14 @@ def corrupt_db(tmp_path):
     db.close()
 
 
-def test_list_export_and_insights_survive_corrupt_timestamp_rows(corrupt_db, capsys, caplog):
+def test_list_export_and_insights_survive_corrupt_timestamp_rows(
+    corrupt_db, capsys, caplog
+):
     with caplog.at_level(logging.WARNING, logger="clawk_cli.timefmt"):
-        _cmd_list(corrupt_db, argparse.Namespace(limit=20, source=None, all=False, workspace=None))
+        _cmd_list(
+            corrupt_db,
+            argparse.Namespace(limit=20, source=None, all=False, workspace=None),
+        )
         listing = capsys.readouterr().out
         exported = corrupt_db.export_all()
         records = list(iter_user_prompt_records(exported))
@@ -48,10 +57,15 @@ def test_list_export_and_insights_survive_corrupt_timestamp_rows(corrupt_db, cap
         report = InsightsEngine(corrupt_db).generate(days=365_000)
 
     # Every session is still present on every surface; the bad cells degrade, the good one renders.
-    assert all(sid in listing for sid in ("good", "bad-text", "bad-huge")) and "?" in listing
+    assert (
+        all(sid in listing for sid in ("good", "bad-text", "bad-huge"))
+        and "?" in listing
+    )
     assert {r["session_id"] for r in records} == {"good", "bad-text", "bad-huge"}
     assert "not-a-timestamp" not in html and html.count("N/A") >= 2
-    assert md_stamps.count("not-a-timestamp") == 1 and any(stamp.endswith("Z") for stamp in md_stamps)
+    assert md_stamps.count("not-a-timestamp") == 1 and any(
+        stamp.endswith("Z") for stamp in md_stamps
+    )
     assert report["overview"]["total_sessions"] == 3
     # The warning names the session so the corrupt row can be found.
     assert any("bad-huge" in rec.getMessage() for rec in caplog.records)
@@ -67,13 +81,22 @@ def test_last_active_skips_a_garbage_message_timestamp(tmp_path):
         for text in ("first", "second", "third"):
             db.append_message("recovered", "user", text)
         good = max(row["timestamp"] for row in db.get_messages("recovered"))
-        db._execute_write(lambda conn: conn.execute(
-            "UPDATE messages SET timestamp = 5.4905047707024164e+246 WHERE session_id = 'recovered' "
-            "AND id = (SELECT MIN(id) FROM messages WHERE session_id = 'recovered')"))
-        db._execute_write(lambda conn: conn.execute(
-            "UPDATE sessions SET last_activity_at = 'not-a-timestamp' WHERE id = 'recovered'"))
+        db._execute_write(
+            lambda conn: conn.execute(
+                "UPDATE messages SET timestamp = 5.4905047707024164e+246 WHERE session_id = 'recovered' "
+                "AND id = (SELECT MIN(id) FROM messages WHERE session_id = 'recovered')"
+            )
+        )
+        db._execute_write(
+            lambda conn: conn.execute(
+                "UPDATE sessions SET last_activity_at = 'not-a-timestamp' WHERE id = 'recovered'"
+            )
+        )
         rows = {r["id"]: r for r in db.list_sessions_rich(limit=10)}
-        tip_rows = {r["id"]: r for r in db.list_sessions_rich(limit=10, order_by_last_active=True)}
+        tip_rows = {
+            r["id"]: r
+            for r in db.list_sessions_rich(limit=10, order_by_last_active=True)
+        }
     finally:
         db.close()
     assert rows["recovered"]["last_active"] == good
@@ -83,13 +106,22 @@ def test_last_active_skips_a_garbage_message_timestamp(tmp_path):
 def test_last_active_never_falls_back_to_a_corrupt_started_at(corrupt_db):
     """With no in-window activity or message timestamp left, the ``started_at`` fallback must be filtered
     too, or the corrupt cell becomes ``last_active`` and pins the session to the top of MRU (#91536)."""
-    corrupt_db._execute_write(lambda conn: conn.execute(
-        "UPDATE sessions SET last_activity_at = NULL WHERE id = 'bad-huge'"))
-    listings = (corrupt_db.list_sessions_rich(limit=10), corrupt_db.list_sessions_rich(limit=10, order_by_last_active=True),
-                corrupt_db.search_sessions(limit=10))
+    corrupt_db._execute_write(
+        lambda conn: conn.execute(
+            "UPDATE sessions SET last_activity_at = NULL WHERE id = 'bad-huge'"
+        )
+    )
+    listings = (
+        corrupt_db.list_sessions_rich(limit=10),
+        corrupt_db.list_sessions_rich(limit=10, order_by_last_active=True),
+        corrupt_db.search_sessions(limit=10),
+    )
     for rows in listings:
         by_id = {r["id"]: r for r in rows}
-        assert by_id["bad-huge"]["last_active"] is None and by_id["bad-text"]["last_active"] is None
+        assert (
+            by_id["bad-huge"]["last_active"] is None
+            and by_id["bad-text"]["last_active"] is None
+        )
         assert by_id["good"]["last_active"] is not None
     for rows in listings[1:]:
         assert rows[0]["id"] == "good"
@@ -100,11 +132,15 @@ def test_writers_never_persist_an_out_of_window_timestamp(tmp_path):
     try:
         db.create_session("s", "cli")
         db.append_message("s", "user", "a", timestamp=8.4e252)
-        db.append_messages_batch("s", [{"role": "assistant", "content": "b", "timestamp": "not-a-timestamp"}])
+        db.append_messages_batch(
+            "s", [{"role": "assistant", "content": "b", "timestamp": "not-a-timestamp"}]
+        )
         stored = [row["timestamp"] for row in db.get_messages("s")]
     finally:
         db.close()
-    assert len(stored) == 2 and all(isinstance(ts, float) and 0 < ts < 4.2e9 for ts in stored)
+    assert len(stored) == 2 and all(
+        isinstance(ts, float) and 0 < ts < 4.2e9 for ts in stored
+    )
 
 
 def test_bulk_delete_and_prune_stay_below_sqlite_variable_limit(tmp_path):
@@ -114,17 +150,29 @@ def test_bulk_delete_and_prune_stay_below_sqlite_variable_limit(tmp_path):
         ids = [f"cron_job_{i}" for i in range(1200)]
 
         def seed(conn):
-            conn.executemany("INSERT INTO sessions (id, source, started_at, ended_at, message_count) "
-                             "VALUES (?, 'cron', ?, ?, 1)", [(sid, old, old) for sid in ids])
-            conn.executemany("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'x', ?)",
-                             [(sid, old) for sid in ids])
+            conn.executemany(
+                "INSERT INTO sessions (id, source, started_at, ended_at, message_count) "
+                "VALUES (?, 'cron', ?, ?, 1)",
+                [(sid, old, old) for sid in ids],
+            )
+            conn.executemany(
+                "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'x', ?)",
+                [(sid, old) for sid in ids],
+            )
 
         db._execute_write(seed)
-        db._conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999)  # the legacy ceiling, deterministic
+        db._conn.setlimit(
+            sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999
+        )  # the legacy ceiling, deterministic
         assert db.prune_sessions(older_than_days=14, source="cron") == 1200
         db._execute_write(seed)
         db._conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999)
         assert db.delete_sessions(ids) == 1200
-        assert db._read_one("SELECT COUNT(*) FROM messages WHERE session_id NOT IN (SELECT id FROM sessions)")[0] == 0
+        assert (
+            db._read_one(
+                "SELECT COUNT(*) FROM messages WHERE session_id NOT IN (SELECT id FROM sessions)"
+            )[0]
+            == 0
+        )
     finally:
         db.close()

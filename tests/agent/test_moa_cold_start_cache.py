@@ -44,6 +44,7 @@ def test_preset_resolution_is_cached_across_create_calls(monkeypatch, tmp_path):
 
     calls = {"n": 0}
     import clawk_cli.moa_config as moa_cfg_mod
+
     real_resolve = moa_cfg_mod.resolve_moa_preset
 
     def counting_resolve(config, name=None):
@@ -52,6 +53,7 @@ def test_preset_resolution_is_cached_across_create_calls(monkeypatch, tmp_path):
 
     monkeypatch.setattr(moa_cfg_mod, "resolve_moa_preset", counting_resolve)
     import clawk_cli.config as cfg_mod
+
     # The cache keys on the config FILE's st_mtime_ns — give the test a real
     # stat-able file (no config file -> stamp=None -> caching fails open).
     cfg_file = tmp_path / "config.yaml"
@@ -80,6 +82,7 @@ def test_preset_cache_invalidates_on_config_edit(monkeypatch, tmp_path):
 
     calls = {"n": 0}
     import clawk_cli.moa_config as moa_cfg_mod
+
     real_resolve = moa_cfg_mod.resolve_moa_preset
 
     def counting_resolve(config, name=None):
@@ -88,6 +91,7 @@ def test_preset_cache_invalidates_on_config_edit(monkeypatch, tmp_path):
 
     monkeypatch.setattr(moa_cfg_mod, "resolve_moa_preset", counting_resolve)
     import clawk_cli.config as cfg_mod
+
     cfg_file = tmp_path / "config.yaml"
     cfg_file.write_text("moa: {}\n")
     monkeypatch.setattr(cfg_mod, "get_config_path", lambda: cfg_file)
@@ -113,9 +117,8 @@ def test_no_config_file_fails_open(monkeypatch, tmp_path):
     moa._preset_cache.clear()
 
     import clawk_cli.config as cfg_mod
-    monkeypatch.setattr(
-        cfg_mod, "get_config_path", lambda: tmp_path / "missing.yaml"
-    )
+
+    monkeypatch.setattr(cfg_mod, "get_config_path", lambda: tmp_path / "missing.yaml")
     monkeypatch.setattr(cfg_mod, "load_config", lambda: _make_preset_config())
     monkeypatch.setattr(moa, "call_llm", lambda **k: _fake_response())
 
@@ -139,8 +142,10 @@ def test_slot_runtime_is_cached_across_create_calls(monkeypatch, tmp_path):
         return {"base_url": None, "api_key": None, "api_mode": None}
 
     import clawk_cli.runtime_provider as rt_mod
+
     monkeypatch.setattr(rt_mod, "resolve_runtime_provider", counting_resolve)
     import clawk_cli.config as cfg_mod
+
     cfg_file = tmp_path / "config.yaml"
     cfg_file.write_text("moa: {}\n")
     monkeypatch.setattr(cfg_mod, "get_config_path", lambda: cfg_file)
@@ -168,10 +173,14 @@ def test_slot_runtime_cache_expires_after_ttl(monkeypatch):
 
     def counting_resolve(*a, **k):
         calls["n"] += 1
-        return {"base_url": "http://x", "api_key": f"key-{calls['n']}",
-                "api_mode": None}
+        return {
+            "base_url": "http://x",
+            "api_key": f"key-{calls['n']}",
+            "api_mode": None,
+        }
 
     import clawk_cli.runtime_provider as rt_mod
+
     monkeypatch.setattr(rt_mod, "resolve_runtime_provider", counting_resolve)
 
     slot = {"provider": "openai", "model": "gpt-5"}
@@ -185,9 +194,7 @@ def test_slot_runtime_cache_expires_after_ttl(monkeypatch):
     # Age the entry past the TTL and confirm re-resolution.
     key = (clawk_home_key(), "openai", "gpt-5")
     stamped_at, cached = moa._runtime_cache[key]
-    moa._runtime_cache[key] = (
-        stamped_at - moa._RUNTIME_CACHE_TTL_SECONDS - 1, cached
-    )
+    moa._runtime_cache[key] = (stamped_at - moa._RUNTIME_CACHE_TTL_SECONDS - 1, cached)
     assert moa._slot_runtime(slot)["api_key"] == "key-2"
     assert calls["n"] == 2
 
@@ -208,6 +215,7 @@ def test_slot_runtime_resolution_error_is_not_cached(monkeypatch):
         return {"base_url": "http://ok", "api_key": None, "api_mode": None}
 
     import clawk_cli.runtime_provider as rt_mod
+
     monkeypatch.setattr(rt_mod, "resolve_runtime_provider", flaky_resolve)
 
     slot = {"provider": "openai", "model": "gpt-5"}
@@ -221,6 +229,7 @@ def test_slot_runtime_resolution_error_is_not_cached(monkeypatch):
 
 
 # ─── test harness helpers ──────────────────────────────────────────────
+
 
 def _fake_response():
     ns = types.SimpleNamespace()
@@ -236,14 +245,22 @@ def test_slot_runtime_cache_is_scoped_per_profile_home(monkeypatch, tmp_path):
 
     moa._runtime_cache.clear()
     a, b = tmp_path / "a", tmp_path / "b"
-    a.mkdir(); b.mkdir()
+    a.mkdir()
+    b.mkdir()
 
     import clawk_cli.runtime_provider as rt_mod
+
     monkeypatch.setattr(
-        rt_mod, "resolve_runtime_provider",
-        lambda **kw: {"provider": "openai", "model": "gpt-5",
-                      "api_key": f"key-{clawk_constants.get_clawk_home().name}",
-                      "base_url": "https://x", "api_mode": None})
+        rt_mod,
+        "resolve_runtime_provider",
+        lambda **kw: {
+            "provider": "openai",
+            "model": "gpt-5",
+            "api_key": f"key-{clawk_constants.get_clawk_home().name}",
+            "base_url": "https://x",
+            "api_mode": None,
+        },
+    )
 
     slot = {"provider": "openai", "model": "gpt-5"}
     tok = clawk_constants.set_clawk_home_override(str(a))

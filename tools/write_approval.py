@@ -41,13 +41,17 @@ _TRUTHY_STRINGS = frozenset({"on", "true", "yes", "1", "approve", "enabled"})
 
 # --- Config resolution ---
 
+
 def write_approval_enabled(subsystem: str) -> bool:
     """Read ``<subsystem>.write_approval``; any unset/invalid value means gate off."""
     if subsystem not in _SUBSYSTEMS:
         return False
     try:
         from clawk_cli.config import load_config, cfg_get
-        return _normalize_enabled(cfg_get(load_config(), subsystem, CONFIG_KEY, default=False))
+
+        return _normalize_enabled(
+            cfg_get(load_config(), subsystem, CONFIG_KEY, default=False)
+        )
     except Exception:
         return False
 
@@ -62,6 +66,7 @@ def _normalize_enabled(value: Any) -> bool:
 
 # --- Pending store (file-backed) ---
 
+
 def _pending_path(subsystem: str, pending_id: str) -> Path:
     return get_clawk_home() / "pending" / subsystem / f"{pending_id}.json"
 
@@ -71,21 +76,29 @@ def _pending_files(subsystem: str) -> list:
     return list(d.glob("*.json")) if d.exists() else []
 
 
-def stage_write(subsystem: str, payload: dict[str, Any], *, summary: str, origin: str) -> dict[str, Any]:
+def stage_write(
+    subsystem: str, payload: dict[str, Any], *, summary: str, origin: str
+) -> dict[str, Any]:
     """Persist a pending write and return its record (``id`` + metadata). ``payload`` is the exact
     kwargs to replay the write on approval; ``origin`` is ``foreground`` or ``background_review``.
     Best-effort: on disk failure it logs and still returns a record — the write is lost, which is
     the safe failure for an approval gate (nothing silently committed)."""
     pid = uuid.uuid4().hex[:8]
     record = {
-        "id": pid, "subsystem": subsystem, "action": payload.get("action", ""),
-        "summary": (summary or "").strip(), "origin": origin or "foreground",
-        "created_at": time.time(), "payload": payload,
+        "id": pid,
+        "subsystem": subsystem,
+        "action": payload.get("action", ""),
+        "summary": (summary or "").strip(),
+        "origin": origin or "foreground",
+        "created_at": time.time(),
+        "payload": payload,
     }
     try:
         atomic_json_write(_pending_path(subsystem, pid), record)
     except Exception as e:  # pragma: no cover - disk failure path
-        logger.error("Failed to stage pending %s write: %s", subsystem, e, exc_info=True)
+        logger.error(
+            "Failed to stage pending %s write: %s", subsystem, e, exc_info=True
+        )
     return record
 
 
@@ -140,16 +153,19 @@ def pending_count(subsystem: str) -> int:
 
 # --- Write origin ---
 
+
 def current_origin() -> str:
     """``foreground`` or ``background_review`` — reuses the skill-provenance ContextVar
     the background review fork sets; foreground turns leave it at the default."""
     with suppress(Exception):
         from tools.skill_provenance import get_current_write_origin
+
         return get_current_write_origin()
     return "foreground"
 
 
 # --- Gate decision ---
+
 
 @dataclass(slots=True, kw_only=True)
 class GateDecision:
@@ -169,21 +185,29 @@ def _slash_review_surface() -> bool:
     contexts — cron (``CLAWK_CRON_SESSION``), kanban (``CLAWK_KANBAN_TASK``) and the unattended
     programmatic platforms (api_server, webhook delivery) — have nobody at a prompt, so the staged
     hint must not name a command nobody can deliver (#98330); it names the pending dir instead."""
+
     def _env(name: str) -> str:
         try:
             from gateway.session_context import get_session_env
+
             return get_session_env(name, "") or ""
         except Exception:  # standalone/tests: process env is the fallback
             return os.environ.get(name, "") or ""
+
     if _env("CLAWK_KANBAN_TASK").strip():
         return False
     try:
         from utils import is_truthy_value
+
         if is_truthy_value(_env("CLAWK_CRON_SESSION")):
             return False
     except Exception:
         pass
-    platform = (_env("CLAWK_SESSION_PLATFORM") or os.environ.get("CLAWK_PLATFORM", "")).strip().lower()
+    platform = (
+        (_env("CLAWK_SESSION_PLATFORM") or os.environ.get("CLAWK_PLATFORM", ""))
+        .strip()
+        .lower()
+    )
     return platform not in {"webhook", "msgraph_webhook", "api_server"}
 
 
@@ -192,13 +216,22 @@ def _staged(subsystem: str) -> GateDecision:
     if _slash_review_surface():
         where = f"review with {command}"
     else:
-        where = (f"pending records live in {_pending_path(subsystem, '').parent} "
-                 f"(review from an interactive CLI session with {command})")
-    return GateDecision(stage=True, message=(f"Staged for approval ({subsystem}.write_approval is on). "
-                                             f"Not yet saved — {where}."))
+        where = (
+            f"pending records live in {_pending_path(subsystem, '').parent} "
+            f"(review from an interactive CLI session with {command})"
+        )
+    return GateDecision(
+        stage=True,
+        message=(
+            f"Staged for approval ({subsystem}.write_approval is on). "
+            f"Not yet saved — {where}."
+        ),
+    )
 
 
-def evaluate_gate(subsystem: str, *, inline_summary: str = "", inline_detail: str = "") -> GateDecision:
+def evaluate_gate(
+    subsystem: str, *, inline_summary: str = "", inline_detail: str = ""
+) -> GateDecision:
     """Decide what to do with a pending write: gate off → allow; gate on + skills (any origin) or
     background → stage; gate on + memory + foreground → inline prompt when an interactive channel
     exists, else stage. The gate only ever delays a write, never silently refuses it; ``blocked``
@@ -213,7 +246,9 @@ def evaluate_gate(subsystem: str, *, inline_summary: str = "", inline_detail: st
         return _staged(MEMORY)
     if granted:
         return GateDecision(allow=True)
-    return GateDecision(blocked=True, message="Memory write denied by user. The change was not saved.")
+    return GateDecision(
+        blocked=True, message="Memory write denied by user. The change was not saved."
+    )
 
 
 def _prompt_inline_memory_approval(summary: str, detail: str) -> Optional[bool]:
@@ -227,6 +262,7 @@ def _prompt_inline_memory_approval(summary: str, detail: str) -> Optional[bool]:
     but nobody answers it: stage at once instead of waiting the approval timeout. See #15216.
     """
     from tools.approval_context import _no_user_can_answer
+
     if _no_user_can_answer():
         return None
     try:
@@ -239,8 +275,16 @@ def _prompt_inline_memory_approval(summary: str, detail: str) -> Optional[bool]:
     header = summary.strip() or "Save to memory?"
     try:
         from tools.approval_prompt import callback_accepts
-        extra = {"title": "Save to memory?"} if callback_accepts(callback, "title") else {}
-        choice = callback(detail.strip() or header, f"Save to memory: {header}", allow_permanent=False, **extra)
+
+        extra = (
+            {"title": "Save to memory?"} if callback_accepts(callback, "title") else {}
+        )
+        choice = callback(
+            detail.strip() or header,
+            f"Save to memory: {header}",
+            allow_permanent=False,
+            **extra,
+        )
     except Exception as e:
         logger.error("Inline memory approval prompt failed: %s", e)
         return None
@@ -250,23 +294,39 @@ def _prompt_inline_memory_approval(summary: str, detail: str) -> Optional[bool]:
 
 # --- Skill-specific helpers (gist + diff for the review affordances) ---
 
-_GIST_TEMPLATES = {"write_file": "write {file_path} in '{name}'", "remove_file": "remove {file_path} from '{name}'",
-                   "delete": "delete skill '{name}'"}
+_GIST_TEMPLATES = {
+    "write_file": "write {file_path} in '{name}'",
+    "remove_file": "remove {file_path} from '{name}'",
+    "delete": "delete skill '{name}'",
+}
 
 
-def skill_gist(action: str, name: str, *, content: str = "", file_path: str = "",
-               old_string: str = "", new_string: str = "") -> str:
+def skill_gist(
+    action: str,
+    name: str,
+    *,
+    content: str = "",
+    file_path: str = "",
+    old_string: str = "",
+    new_string: str = "",
+) -> str:
     """One-line heuristic gist (no model call) for a pending skill write: create/edit use
     the frontmatter ``description:``; patch/write_file describe the size of the change."""
     if action in {"create", "edit"} and content:
         desc = _frontmatter_description(content)
-        size = f"{len(content) // 1024 + 1} KB" if len(content) >= 1024 else f"{len(content)} chars"
+        size = (
+            f"{len(content) // 1024 + 1} KB"
+            if len(content) >= 1024
+            else f"{len(content)} chars"
+        )
         return f"{'create' if action == 'create' else 'rewrite'} '{name}'{f' — {desc}' if desc else ''} ({size})"
     if action == "patch":
         removed = old_string.count("\n") + 1 if old_string else 0
         added = new_string.count("\n") + 1 if new_string else 0
         return f"patch '{name}' {file_path or 'SKILL.md'} (+{added}/-{removed} lines)"
-    return _GIST_TEMPLATES.get(action, "{action} '{name}'").format(action=action, name=name, file_path=file_path)
+    return _GIST_TEMPLATES.get(action, "{action} '{name}'").format(
+        action=action, name=name, file_path=file_path
+    )
 
 
 def _frontmatter_description(content: str) -> str:
@@ -286,7 +346,9 @@ def _find_skill_path(name: str) -> Optional[Path]:
     return found["path"] if found else None
 
 
-def _staged_base(name: str, target_label: str, staged: Optional[dict[str, dict[str, str]]]) -> str:
+def _staged_base(
+    name: str, target_label: str, staged: Optional[dict[str, dict[str, str]]]
+) -> str:
     """What an op diffs against: the content earlier ops of the same batch left in this file,
     else the on-disk copy (empty for a file that does not exist yet)."""
     files = (staged or {}).get(name)
@@ -318,11 +380,15 @@ def skill_pending_diff(
     if action == "create":
         return payload.get("content") or ""
     if action not in {"edit", "patch", "write_file"}:
-        return {"remove_file": f"remove file: {payload.get('file_path')} from skill '{name}'",
-                "delete": f"delete skill '{name}'"}.get(action, f"({action} on '{name}')")
+        return {
+            "remove_file": f"remove file: {payload.get('file_path')} from skill '{name}'",
+            "delete": f"delete skill '{name}'",
+        }.get(action, f"({action} on '{name}')")
 
     # patch/write_file target a file inside the skill; edit always targets SKILL.md.
-    target_label = "SKILL.md" if action == "edit" else (payload.get("file_path") or "SKILL.md")
+    target_label = (
+        "SKILL.md" if action == "edit" else (payload.get("file_path") or "SKILL.md")
+    )
     current = _staged_base(name, target_label, staged)
 
     if action == "patch":
@@ -333,19 +399,26 @@ def skill_pending_diff(
             # Fold through the same matcher approve will run, so the preview can't
             # fabricate a result the approve path would reject (repeated anchor without
             # replace_all, whitespace-only anchor, escape drift, old_string == new_string).
-            folded, patch_err = _fold_patch(current, old_s, new_s, payload.get("replace_all"))
+            folded, patch_err = _fold_patch(
+                current, old_s, new_s, payload.get("replace_all")
+            )
             if patch_err:
                 return f"(patch would fail: {patch_err})"
             new = folded
     else:
         new = payload.get("content" if action == "edit" else "file_content") or ""
-    diff = difflib.unified_diff(current.splitlines(keepends=True), new.splitlines(keepends=True),
-                                fromfile=f"a/{target_label}", tofile=f"b/{target_label}")
+    diff = difflib.unified_diff(
+        current.splitlines(keepends=True),
+        new.splitlines(keepends=True),
+        fromfile=f"a/{target_label}",
+        tofile=f"b/{target_label}",
+    )
     return "".join(diff) or "(no textual change)"
 
 
-def _fold_patch(base: str, old_string: str, new_string: str, replace_all: Any = False
-                ) -> tuple[str, Optional[str]]:
+def _fold_patch(
+    base: str, old_string: str, new_string: str, replace_all: Any = False
+) -> tuple[str, Optional[str]]:
     """Fold one patch op through ``fuzzy_find_and_replace`` — the SAME matcher the approve
     path runs (``_patch_skill`` / ``apply_skill_pending``) — so a previewed diff is exactly
     what an approval would commit, and a patch approval would reject (repeated anchor with
@@ -358,15 +431,18 @@ def _fold_patch(base: str, old_string: str, new_string: str, replace_all: Any = 
     without the tool chain (fuzzy_match is core-adjacent but guarded for safety anyway).
     """
     from tools.fuzzy_match import fuzzy_find_and_replace
+
     folded, match_count, _strategy, error = fuzzy_find_and_replace(
-        base, old_string, str(new_string), bool(replace_all))
+        base, old_string, str(new_string), bool(replace_all)
+    )
     if error or match_count == 0:
         return base, error or "Could not find a match for old_string in the file"
     return folded, None
 
 
-def _fold_staged(staged: dict[str, dict[str, str]], action: str, name: str,
-                 op: dict[str, Any]) -> None:
+def _fold_staged(
+    staged: dict[str, dict[str, str]], action: str, name: str, op: dict[str, Any]
+) -> None:
     """Record what one op leaves in the staged view the next op diffs against."""
     if not name:
         return
@@ -381,8 +457,12 @@ def _fold_staged(staged: dict[str, dict[str, str]], action: str, name: str,
         files[label] = op.get("file_content") or ""
     elif action == "patch":
         base = _staged_base(name, label, staged)
-        folded, patch_err = _fold_patch(base, op.get("old_string") or "",
-                                        op.get("new_string") or "", op.get("replace_all"))
+        folded, patch_err = _fold_patch(
+            base,
+            op.get("old_string") or "",
+            op.get("new_string") or "",
+            op.get("replace_all"),
+        )
         if patch_err is None:
             files[label] = folded
         # On error the staged label keeps its prior content: approve would abort the batch
@@ -403,10 +483,14 @@ def _batch_pending_diff(payload: dict[str, Any]) -> str:
     parts = []
     for i, op in enumerate(ops):
         op_action, op_name = op.get("action", ""), op.get("name") or ""
-        gist = skill_gist(op_action, op_name, content=op.get("content") or "",
-                          file_path=op.get("file_path") or "",
-                          old_string=op.get("old_string") or "",
-                          new_string=op.get("new_string") or "")
+        gist = skill_gist(
+            op_action,
+            op_name,
+            content=op.get("content") or "",
+            file_path=op.get("file_path") or "",
+            old_string=op.get("old_string") or "",
+            new_string=op.get("new_string") or "",
+        )
         diff = skill_pending_diff({"payload": {**op, "name": op_name}}, staged)
         parts.append(f"## op {i + 1}/{total}: {gist}\n\n{diff}")
         _fold_staged(staged, op_action, op_name, op)

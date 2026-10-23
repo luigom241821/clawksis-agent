@@ -113,11 +113,13 @@ class TestForumCap:
         forum_channel = SimpleNamespace(
             id=666,
             type=SimpleNamespace(value=15),
-            create_thread=AsyncMock(return_value=SimpleNamespace(
-                id=777,
-                thread=thread_channel,
-                message=SimpleNamespace(id=8000),
-            )),
+            create_thread=AsyncMock(
+                return_value=SimpleNamespace(
+                    id=777,
+                    thread=thread_channel,
+                    message=SimpleNamespace(id=8000),
+                )
+            ),
         )
 
         result = await adapter._send_to_forum(forum_channel, _huge_content())

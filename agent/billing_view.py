@@ -77,7 +77,11 @@ class CardInfo:
     @property
     def provenance(self) -> Optional[str]:
         """Human label for why this card was picked, or None (unknown rung / old server)."""
-        return _CARD_PROVENANCE_LABELS.get(self.resolved_via) if self.resolved_via is not None else None
+        return (
+            _CARD_PROVENANCE_LABELS.get(self.resolved_via)
+            if self.resolved_via is not None
+            else None
+        )
 
     @property
     def display(self) -> str:
@@ -137,7 +141,11 @@ class OrgRoleCapability:
     @property
     def can_change_plan(self) -> bool:
         """Server capability when supplied; otherwise the legacy role fallback."""
-        return self.can_change_plan_raw if self.can_change_plan_raw is not None else self.is_admin
+        return (
+            self.can_change_plan_raw
+            if self.can_change_plan_raw is not None
+            else self.is_admin
+        )
 
 
 @dataclass(frozen=True)
@@ -148,7 +156,9 @@ class BillingState(OrgRoleCapability):
     org_id: Optional[str] = None
     org_slug: Optional[str] = None
     org_name: Optional[str] = None
-    role: Optional[str] = None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    role: Optional[str] = (
+        None  # "OWNER" | "ADMIN" | "FINANCE_ADMIN" | "SECURITY_ADMIN" | "MEMBER"
+    )
     can_change_plan_raw: Optional[bool] = None
     balance_usd: Optional[Decimal] = None
     cli_billing_enabled: bool = False
@@ -177,7 +187,9 @@ def _parse_card(raw: dict) -> Optional[CardInfo]:
     brand, last4 = raw.get("brand"), raw.get("last4")
     if not (isinstance(brand, str) and isinstance(last4, str)):
         return None
-    return CardInfo(brand=brand, last4=last4, resolved_via=_optional_str(raw, "resolvedVia"))
+    return CardInfo(
+        brand=brand, last4=last4, resolved_via=_optional_str(raw, "resolvedVia")
+    )
 
 
 @_dict_parser
@@ -189,22 +201,37 @@ def _parse_payment_method(raw: dict) -> Optional[PaymentMethodInfo]:
     last4 = _optional_str(raw, "last4")
     # Settle the kind here (like _parse_card) so nothing downstream re-checks fields.
     if kind == "card" and brand and last4:
-        return PaymentMethodInfo(kind="card", brand=brand, last4=last4, wallet=_optional_str(raw, "wallet"), resolved_via=resolved_via)
+        return PaymentMethodInfo(
+            kind="card",
+            brand=brand,
+            last4=last4,
+            wallet=_optional_str(raw, "wallet"),
+            resolved_via=resolved_via,
+        )
     if kind == "link":
-        return PaymentMethodInfo(kind="link", email=_optional_str(raw, "email"), resolved_via=resolved_via)
+        return PaymentMethodInfo(
+            kind="link", email=_optional_str(raw, "email"), resolved_via=resolved_via
+        )
     return PaymentMethodInfo(kind="unknown", raw_kind=kind, resolved_via=resolved_via)
 
 
 @_dict_parser
 def _parse_monthly_cap(raw: dict) -> MonthlyCap:
-    return MonthlyCap(limit_usd=parse_money(raw.get("limitUsd")), spent_this_month_usd=parse_money(raw.get("spentThisMonthUsd")),
-                      is_default_ceiling=bool(raw.get("isDefaultCeiling")))
+    return MonthlyCap(
+        limit_usd=parse_money(raw.get("limitUsd")),
+        spent_this_month_usd=parse_money(raw.get("spentThisMonthUsd")),
+        is_default_ceiling=bool(raw.get("isDefaultCeiling")),
+    )
 
 
 @_dict_parser
 def _parse_auto_reload(raw: dict) -> AutoReload:
-    return AutoReload(enabled=bool(raw.get("enabled")), threshold_usd=parse_money(raw.get("thresholdUsd")),
-                      reload_to_usd=parse_money(raw.get("reloadToUsd")), card=_parse_auto_reload_card(raw.get("card")))
+    return AutoReload(
+        enabled=bool(raw.get("enabled")),
+        threshold_usd=parse_money(raw.get("thresholdUsd")),
+        reload_to_usd=parse_money(raw.get("reloadToUsd")),
+        card=_parse_auto_reload_card(raw.get("card")),
+    )
 
 
 @_dict_parser
@@ -213,21 +240,33 @@ def _parse_auto_reload_card(raw: dict) -> Optional[AutoReloadCard]:
         return None
     if kind != "distinct":
         return AutoReloadCard(kind=kind)
-    return AutoReloadCard(kind=kind, payment_method_id=_optional_str(raw, "paymentMethodId"),
-                          brand=_optional_str(raw, "brand"), last4=_optional_str(raw, "last4"))
+    return AutoReloadCard(
+        kind=kind,
+        payment_method_id=_optional_str(raw, "paymentMethodId"),
+        brand=_optional_str(raw, "brand"),
+        last4=_optional_str(raw, "last4"),
+    )
 
 
 def parse_org_fields(payload: dict[str, Any]) -> tuple[dict[str, Any], Optional[bool]]:
     """``(org dict or {}, canChangePlan if bool else None)`` — shared by both state parsers."""
     raw_org, ccp = payload.get("org"), payload.get("canChangePlan")
-    return (raw_org if isinstance(raw_org, dict) else {}), (ccp if isinstance(ccp, bool) else None)
+    return (raw_org if isinstance(raw_org, dict) else {}), (
+        ccp if isinstance(ccp, bool) else None
+    )
 
 
-def billing_state_from_payload(payload: dict[str, Any], *, portal_url: Optional[str] = None) -> BillingState:
+def billing_state_from_payload(
+    payload: dict[str, Any], *, portal_url: Optional[str] = None
+) -> BillingState:
     """Map a raw ``/api/billing/state`` JSON dict into :class:`BillingState`."""
     org, can_change_plan_raw = parse_org_fields(payload)
-    bounds: dict[str, Any] = payload.get("bounds") if isinstance(payload.get("bounds"), dict) else {}
-    presets = [p for p in map(parse_money, payload.get("chargePresets") or ()) if p is not None]
+    bounds: dict[str, Any] = (
+        payload.get("bounds") if isinstance(payload.get("bounds"), dict) else {}
+    )
+    presets = [
+        p for p in map(parse_money, payload.get("chargePresets") or ()) if p is not None
+    ]
     return BillingState(
         logged_in=True,
         org_id=org.get("id"),
@@ -244,7 +283,9 @@ def billing_state_from_payload(payload: dict[str, Any], *, portal_url: Optional[
         payment_method=_parse_payment_method(payload.get("paymentMethod")),
         monthly_cap=_parse_monthly_cap(payload.get("monthlyCap")),
         auto_reload=_parse_auto_reload(payload.get("autoReload")),
-        keep_going_on_credits=_parse_keep_going_on_credits(payload.get("keepGoingOnCredits")),
+        keep_going_on_credits=_parse_keep_going_on_credits(
+            payload.get("keepGoingOnCredits")
+        ),
         portal_url=portal_url,
     )
 
@@ -256,8 +297,14 @@ def _parse_keep_going_on_credits(raw: Any) -> Optional[bool]:
 
 
 def fetch_portal_state(
-    endpoint: str, label: str, *, failed: Callable[..., Any], parse: Callable[[dict, Optional[str]], Any],
-    portal_fallback: Callable[[str], str], timeout: float, log: logging.Logger,
+    endpoint: str,
+    label: str,
+    *,
+    failed: Callable[..., Any],
+    parse: Callable[[dict, Optional[str]], Any],
+    portal_fallback: Callable[[str], str],
+    timeout: float,
+    log: logging.Logger,
 ):
     """Shared fail-open fetch+parse for the billing/subscription overview builders.
 
@@ -295,9 +342,14 @@ def build_billing_state(*, timeout: float = 15.0) -> BillingState:
     if fixture is not None:
         return fixture
     return fetch_portal_state(
-        "get_billing_state", "billing", timeout=timeout, log=logger,
+        "get_billing_state",
+        "billing",
+        timeout=timeout,
+        log=logger,
         failed=lambda **kw: BillingState(logged_in=False, **kw),
-        parse=lambda payload, portal_url: billing_state_from_payload(payload, portal_url=portal_url),
+        parse=lambda payload, portal_url: billing_state_from_payload(
+            payload, portal_url=portal_url
+        ),
         portal_fallback=lambda base: f"{base.rstrip('/')}/billing?topup=open",
     )
 
@@ -305,8 +357,15 @@ def build_billing_state(*, timeout: float = 15.0) -> BillingState:
 # ── Dev fixtures (env-var driven, no live portal) ────────────────────────────
 
 _FIXTURE_ALIASES = {
-    "logged_out": "logged-out", "loggedout": "logged-out", "card_sub": "card-sub", "card_autoreload": "card-autoreload",
-    "autoreload": "card-autoreload", "not-admin": "notadmin", "member": "notadmin", "billing_off": "billing-off", "off": "billing-off",
+    "logged_out": "logged-out",
+    "loggedout": "logged-out",
+    "card_sub": "card-sub",
+    "card_autoreload": "card-autoreload",
+    "autoreload": "card-autoreload",
+    "not-admin": "notadmin",
+    "member": "notadmin",
+    "billing_off": "billing-off",
+    "off": "billing-off",
 }
 
 
@@ -325,21 +384,38 @@ def _dev_fixture_billing_state() -> Optional[BillingState]:
 
     # Prod portal host (matches subscription_view._DEV_FIXTURE_PORTAL) + the /topup deep-link suffix.
     common: dict[str, Any] = dict(
-        logged_in=True, org_id="org_acme", org_slug="acme", org_name="Acme Inc", role="OWNER",
-        balance_usd=Decimal("3.40"), cli_billing_enabled=True, min_usd=Decimal(5), max_usd=Decimal(500),
-        charge_presets=(Decimal(10), Decimal(25), Decimal(50)), portal_url="https://portal.nousresearch.com/billing?topup=open",
+        logged_in=True,
+        org_id="org_acme",
+        org_slug="acme",
+        org_name="Acme Inc",
+        role="OWNER",
+        balance_usd=Decimal("3.40"),
+        cli_billing_enabled=True,
+        min_usd=Decimal(5),
+        max_usd=Decimal(500),
+        charge_presets=(Decimal(10), Decimal(25), Decimal(50)),
+        portal_url="https://portal.nousresearch.com/billing?topup=open",
     )
     card = CardInfo(brand="Visa", last4="4242")
     overrides: dict[str, dict[str, Any]] = {
         "nocard": dict(card=None),
         "card": dict(card=card),
-        "card-sub": dict(card=CardInfo(brand="Visa", last4="4242", resolved_via="subPin")),
-        "card-autoreload": dict(card=card, auto_reload=AutoReload(enabled=True, threshold_usd=Decimal(5), reload_to_usd=Decimal(25))),
+        "card-sub": dict(
+            card=CardInfo(brand="Visa", last4="4242", resolved_via="subPin")
+        ),
+        "card-autoreload": dict(
+            card=card,
+            auto_reload=AutoReload(
+                enabled=True, threshold_usd=Decimal(5), reload_to_usd=Decimal(25)
+            ),
+        ),
         "notadmin": dict(card=card, role="MEMBER"),
         "billing-off": dict(card=None, cli_billing_enabled=False),
     }
     if name not in overrides:
-        return BillingState(logged_in=False, error=f"unknown CLAWK_DEV_BILLING_FIXTURE: {name}")
+        return BillingState(
+            logged_in=False, error=f"unknown CLAWK_DEV_BILLING_FIXTURE: {name}"
+        )
     return BillingState(**{**common, **overrides[name]})
 
 
@@ -356,7 +432,9 @@ class AmountValidation:
     error: Optional[str] = None
 
 
-def validate_charge_amount(raw: str, *, min_usd: Optional[Decimal], max_usd: Optional[Decimal]) -> AmountValidation:
+def validate_charge_amount(
+    raw: str, *, min_usd: Optional[Decimal], max_usd: Optional[Decimal]
+) -> AmountValidation:
     """Mirror the server's accept/reject (bounds + multipleOf 0.01) for instant UI feedback; server is authoritative."""
     amount = parse_money((raw or "").strip().lstrip("$").strip())
     if amount is None:

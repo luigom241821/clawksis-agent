@@ -35,24 +35,29 @@ import pytest
 
 from clawk_state import SessionDB
 
+
 @pytest.fixture
 def db(tmp_path: Path) -> SessionDB:
     d = SessionDB(tmp_path / "state.db")
     d.create_session("sess1", source="test")
     return d
 
+
 def _seed(db: SessionDB, n: int = 6) -> None:
     for i in range(n):
         role = "user" if i % 2 == 0 else "assistant"
         db.append_message("sess1", role=role, content=f"turn {i}")
+
 
 SUMMARY = [
     {"role": "user", "content": "[CONTEXT COMPACTION] summary of earlier turns"},
     {"role": "assistant", "content": "Continuing from the summary."},
 ]
 
+
 def _recall(db: SessionDB, query: str, include_inactive: bool = False):
     return db.search_messages(query, include_inactive=include_inactive)
+
 
 def _rows(db: SessionDB):
     """All rows of the fixture session with lifecycle flags via the public API.
@@ -63,13 +68,16 @@ def _rows(db: SessionDB):
     rows = db.get_messages("sess1", include_inactive=True)
     out = []
     for r in rows:
-        out.append({
-            "id": r.get("id"),
-            "active": r.get("active"),
-            "compacted": r.get("compacted"),
-            "content": r.get("content"),
-        })
+        out.append(
+            {
+                "id": r.get("id"),
+                "active": r.get("active"),
+                "compacted": r.get("compacted"),
+                "content": r.get("content"),
+            }
+        )
     return out
+
 
 class TestTailCountArchivesAsRewindSemantics:
     def test_tail_originals_hidden_from_recall(self, db: SessionDB) -> None:
@@ -77,8 +85,11 @@ class TestTailCountArchivesAsRewindSemantics:
         session_search alongside their live clones (#86366)."""
         _seed(db)
         # Compact keeping the last 2 messages verbatim in the new set.
-        compacted = [*SUMMARY, {"role": "user", "content": "turn 4"},
-                     {"role": "assistant", "content": "turn 5"}]
+        compacted = [
+            *SUMMARY,
+            {"role": "user", "content": "turn 4"},
+            {"role": "assistant", "content": "turn 5"},
+        ]
         count = db.archive_and_compact(
             "sess1", compacted, tail_count=len(compacted) - len(SUMMARY)
         )
@@ -101,10 +112,10 @@ class TestTailCountArchivesAsRewindSemantics:
         assert all(
             ">>>turn 5<<<" not in s or "[CONTEXT COMPACTION]" in s
             for s in recalled_snippets
-        ) or all("turn 5" not in s.lower() or "[context compaction]" in s.lower()
-                 for s in recalled_snippets), (
-            f"tail originals must not be recalled: {recalled_snippets}"
-        )
+        ) or all(
+            "turn 5" not in s.lower() or "[context compaction]" in s.lower()
+            for s in recalled_snippets
+        ), f"tail originals must not be recalled: {recalled_snippets}"
 
     def test_non_tail_originals_still_recalled_as_compacted(
         self, db: SessionDB
@@ -112,8 +123,11 @@ class TestTailCountArchivesAsRewindSemantics:
         """Summarized-away turns keep their discoverability — the fix must
         narrow only the tail originals."""
         _seed(db)
-        compacted = [*SUMMARY, {"role": "user", "content": "turn 4"},
-                     {"role": "assistant", "content": "turn 5"}]
+        compacted = [
+            *SUMMARY,
+            {"role": "user", "content": "turn 4"},
+            {"role": "assistant", "content": "turn 5"},
+        ]
         db.archive_and_compact(
             "sess1", compacted, tail_count=len(compacted) - len(SUMMARY)
         )
@@ -131,7 +145,9 @@ class TestTailCountArchivesAsRewindSemantics:
             f"{[h.get('snippet') for h in _recall(db, 'turn 1')]}"
         )
 
-    def test_explicit_carried_messages_leave_summarized_tool_results_discoverable(self, db: SessionDB) -> None:
+    def test_explicit_carried_messages_leave_summarized_tool_results_discoverable(
+        self, db: SessionDB
+    ) -> None:
         """A non-contiguous carried set must not classify a summarized tool block as rewind-only.
 
         Micro-compaction rewrites a prefix plus assistant/tool exchange plus suffix into
@@ -144,11 +160,13 @@ class TestTailCountArchivesAsRewindSemantics:
             "sess1",
             role="assistant",
             content="",
-            tool_calls=[{
-                "id": "call-1",
-                "type": "function",
-                "function": {"name": "read_file", "arguments": "{}"},
-            }],
+            tool_calls=[
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {"name": "read_file", "arguments": "{}"},
+                }
+            ],
         )
         db.append_message(
             "sess1",
@@ -161,7 +179,8 @@ class TestTailCountArchivesAsRewindSemantics:
         db.append_message("sess1", role="assistant", content="answer 1")
 
         carried = [
-            message for message in db.get_messages_as_conversation("sess1")
+            message
+            for message in db.get_messages_as_conversation("sess1")
             if message.get("content") in {"question 0", "question 1", "answer 1"}
         ]
         assert carried and all("_row_id" not in message for message in carried), (
@@ -172,7 +191,10 @@ class TestTailCountArchivesAsRewindSemantics:
             "sess1",
             [
                 {"role": "user", "content": "question 0"},
-                {"role": "assistant", "content": "[CONTEXT COMPACTION] summarized tool exchange"},
+                {
+                    "role": "assistant",
+                    "content": "[CONTEXT COMPACTION] summarized tool exchange",
+                },
                 {"role": "user", "content": "question 1"},
                 {"role": "assistant", "content": "answer 1"},
             ],
@@ -180,7 +202,9 @@ class TestTailCountArchivesAsRewindSemantics:
         )
 
         rows = _rows(db)
-        summarized_tool = [r for r in rows if r["content"] == "tool result that was summarized"]
+        summarized_tool = [
+            r for r in rows if r["content"] == "tool result that was summarized"
+        ]
         assert len(summarized_tool) == 1
         assert summarized_tool[0]["active"] == 0
         assert summarized_tool[0]["compacted"] == 1, (
@@ -188,8 +212,7 @@ class TestTailCountArchivesAsRewindSemantics:
         )
 
         carried_original = [
-            r for r in rows
-            if r["content"] == "question 1" and r["active"] == 0
+            r for r in rows if r["content"] == "question 1" and r["active"] == 0
         ]
         assert len(carried_original) == 1
         assert carried_original[0]["compacted"] == 0, (
@@ -211,8 +234,11 @@ class TestTailCountArchivesAsRewindSemantics:
         """get_messages (active=1) returns exactly the compacted set either
         way; the rewind-stamped originals never leak into live loads."""
         _seed(db)
-        compacted = [*SUMMARY, {"role": "user", "content": "turn 4"},
-                     {"role": "assistant", "content": "turn 5"}]
+        compacted = [
+            *SUMMARY,
+            {"role": "user", "content": "turn 4"},
+            {"role": "assistant", "content": "turn 5"},
+        ]
         db.archive_and_compact(
             "sess1", compacted, tail_count=len(compacted) - len(SUMMARY)
         )
@@ -228,8 +254,11 @@ class TestTailCountArchivesAsRewindSemantics:
     def test_message_count_reflects_active_set(self, db: SessionDB) -> None:
 
         _seed(db)
-        compacted = [*SUMMARY, {"role": "user", "content": "turn 4"},
-                     {"role": "assistant", "content": "turn 5"}]
+        compacted = [
+            *SUMMARY,
+            {"role": "user", "content": "turn 4"},
+            {"role": "assistant", "content": "turn 5"},
+        ]
         returned = db.archive_and_compact(
             "sess1", compacted, tail_count=len(compacted) - len(SUMMARY)
         )
@@ -247,8 +276,6 @@ class TestTailCountArchivesAsRewindSemantics:
             assert int(mc) == 4
 
 
-
-
 class TestCompressTagsCarriedTail:
     def test_compress_marks_carried_forward_tail_dicts(self):
         """compress() must tag its carried-forward tail dicts so the caller
@@ -258,25 +285,37 @@ class TestCompressTagsCarriedTail:
 
         from agent.context_compressor import _COMPACTION_TAIL_MARKER, ContextCompressor
 
-        with patch("agent.context_compressor.get_model_context_length", return_value=100_000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100_000
+        ):
             compressor = ContextCompressor(
-                model="test/model", protect_first_n=2, protect_last_n=2, quiet_mode=True,
+                model="test/model",
+                protect_first_n=2,
+                protect_last_n=2,
+                quiet_mode=True,
             )
             _ = compressor.context_length
 
         history = [
-            {"role": "user" if i % 2 == 0 else "assistant", "content": f"filler turn {i} " + "x" * 400}
+            {
+                "role": "user" if i % 2 == 0 else "assistant",
+                "content": f"filler turn {i} " + "x" * 400,
+            }
             for i in range(12)
         ]
-        with patch("agent.context_compressor.call_llm", side_effect=RuntimeError("no provider")):
+        with patch(
+            "agent.context_compressor.call_llm", side_effect=RuntimeError("no provider")
+        ):
             out = compressor.compress(list(history))
 
         assert len(out) < len(history)
-        tagged = [m for m in out if isinstance(m, dict) and m.get(_COMPACTION_TAIL_MARKER)]
+        tagged = [
+            m for m in out if isinstance(m, dict) and m.get(_COMPACTION_TAIL_MARKER)
+        ]
         assert tagged, "carried-forward tail rows were not tagged"
         # The tag marks exactly the verbatim tail: the trailing run of the output,
         # each row a copy of an original from the end of the history.
-        assert out[-len(tagged):] == tagged
-        originals = {m["content"] for m in history[-len(tagged):]}
+        assert out[-len(tagged) :] == tagged
+        originals = {m["content"] for m in history[-len(tagged) :]}
         assert {m["content"] for m in tagged} <= originals
         assert not any(m.get(_COMPACTION_TAIL_MARKER) for m in out[:2])

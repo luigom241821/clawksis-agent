@@ -24,33 +24,63 @@ def keeper_job(tmp_path, monkeypatch):
     root = tmp_path / "root"
     keeper_home = root / "profiles" / "keeper"
     keeper_home.mkdir(parents=True)
-    (root / "config.yaml").write_text(json.dumps({"gateway": {  # YAML is a JSON superset; the test env ships no pyyaml
-        "multiplex_profiles": True,
-        "profile_routes": [{"name": "ops", "platform": "telegram", "chat_id": "-1004306455751",
-                            "thread_id": "14", "profile": "keeper"}],
-    }}), encoding="utf-8")
+    (root / "config.yaml").write_text(
+        json.dumps(
+            {
+                "gateway": {  # YAML is a JSON superset; the test env ships no pyyaml
+                    "multiplex_profiles": True,
+                    "profile_routes": [
+                        {
+                            "name": "ops",
+                            "platform": "telegram",
+                            "chat_id": "-1004306455751",
+                            "thread_id": "14",
+                            "profile": "keeper",
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setenv("CLAWK_HOME", str(keeper_home))  # what `clawk -p keeper` sets
     from cron.jobs import create_job
-    return create_job(prompt="infra report", schedule="0 9 * * *", name="infra", deliver=ROUTED_TARGET)
+
+    return create_job(
+        prompt="infra report", schedule="0 9 * * *", name="infra", deliver=ROUTED_TARGET
+    )
 
 
 def _run(job_id, *, gateway_serves_profile):
     from tools.cronjob_tools import cronjob
-    with patch("clawk_cli.cron._builtin_gateway_liveness", return_value=gateway_serves_profile), \
-         patch("cron.scheduler.run_one_job", return_value=True) as m_run:
+
+    with (
+        patch(
+            "clawk_cli.cron._builtin_gateway_liveness",
+            return_value=gateway_serves_profile,
+        ),
+        patch("cron.scheduler.run_one_job", return_value=True) as m_run,
+    ):
         out = json.loads(cronjob(action="run", job_id=job_id))
     return out, m_run
 
 
-def test_routed_run_is_queued_for_the_gateway_that_serves_the_profile(keeper_job, monkeypatch):
+def test_routed_run_is_queued_for_the_gateway_that_serves_the_profile(
+    keeper_job, monkeypatch
+):
     from cron.jobs import get_job
+
     out, m_run = _run(keeper_job["id"], gateway_serves_profile=True)
 
     assert out["success"] is True
     m_run.assert_not_called()  # no agent turn in a process that cannot deliver its result
     stored = get_job(keeper_job["id"])
-    assert stored["next_run_at"] == stored["manual_run_at"]  # due on the gateway's next tick
-    assert stored.get("last_status") is None  # the manual run does not rewrite the job's status
+    assert (
+        stored["next_run_at"] == stored["manual_run_at"]
+    )  # due on the gateway's next tick
+    assert (
+        stored.get("last_status") is None
+    )  # the manual run does not rewrite the job's status
     assert _run_outcome(out["job"]) == "It will run on the next scheduler tick."
 
     # Control: a profile holding its own credential for the platform runs in-process as before.
@@ -60,10 +90,13 @@ def test_routed_run_is_queued_for_the_gateway_that_serves_the_profile(keeper_job
 
 
 @pytest.mark.parametrize("gateway_serves_profile", [False, None])
-def test_routed_run_without_a_serving_gateway_fails_before_the_turn(keeper_job, gateway_serves_profile):
+def test_routed_run_without_a_serving_gateway_fails_before_the_turn(
+    keeper_job, gateway_serves_profile
+):
     """False = no scheduler; None = the probe could not tell. Neither may queue a run that nothing
     would pick up."""
     from cron.jobs import get_job
+
     out, m_run = _run(keeper_job["id"], gateway_serves_profile=gateway_serves_profile)
 
     assert out["success"] is False

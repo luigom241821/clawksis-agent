@@ -28,7 +28,9 @@ class Inspection:
 
     @property
     def ok(self) -> bool:
-        return self.version.state.value != "error" and self.signer.state.value != "error"
+        return (
+            self.version.state.value != "error" and self.signer.state.value != "error"
+        )
 
 
 @dataclass(frozen=True)
@@ -47,9 +49,13 @@ class Resolver(Protocol):
 
     def locate(self, ctx: LookupContext | None = None) -> Resolution: ...
 
-    def inspect(self, res: Resolution, ctx: LookupContext | None = None) -> Inspection: ...
+    def inspect(
+        self, res: Resolution, ctx: LookupContext | None = None
+    ) -> Inspection: ...
 
 
 @runtime_checkable
 class Probeable(Resolver, Protocol):
-    def probe(self, res: Resolution, *, effort: Effort, deadline_s: float = 3.0) -> Probe: ...
+    def probe(
+        self, res: Resolution, *, effort: Effort, deadline_s: float = 3.0
+    ) -> Probe: ...

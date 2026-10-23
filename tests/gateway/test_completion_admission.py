@@ -1,4 +1,5 @@
 """Real adapter admission is the completion acknowledgement boundary."""
+
 import asyncio
 import logging
 import time
@@ -15,8 +16,14 @@ from tools import async_delegation as delegation
 
 
 def pending(key, name):
-    evt = {"type": "async_delegation", "session_key": key, "delegation_id": name,
-           "summary": name, "status": "completed", "dispatched_at": time.time()}
+    evt = {
+        "type": "async_delegation",
+        "session_key": key,
+        "delegation_id": name,
+        "summary": name,
+        "status": "completed",
+        "dispatched_at": time.time(),
+    }
     delegation._persist_dispatch(evt)
     delegation._persist_completion(evt, {"status": "completed", "summary": name})
     return evt
@@ -36,7 +43,9 @@ async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_pa
     runner = GatewayRunner(GatewayConfig())
     adapter = DiscordAdapter(PlatformConfig(enabled=True, typing_indicator=False))
     runner.adapters = {Platform.DISCORD: adapter}
-    source = SessionSource(platform=Platform.DISCORD, chat_type="dm", chat_id="42", user_id="42")
+    source = SessionSource(
+        platform=Platform.DISCORD, chat_type="dm", chat_id="42", user_id="42"
+    )
     key = build_session_key(source)
     events = [pending(key, f"admission-{i}") for i in range(2)]
     received = []
@@ -73,8 +82,13 @@ async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_pa
             row = delegation.get_durable_delegation(event["delegation_id"])
             assert (row["delivery_state"], row["delivery_attempts"]) == ("pending", 0)
         # An explicitly mismatched adapter key must fail closed too.
-        wrong = dict(events[0], session_key="agent:main:discord:dm:other",
-                     platform="discord", chat_type="dm", chat_id="42")
+        wrong = dict(
+            events[0],
+            session_key="agent:main:discord:dm:other",
+            platform="discord",
+            chat_type="dm",
+            chat_id="42",
+        )
         assert await runner._inject_watch_notification("wrong-route", wrong) is False
         runner._BUSY_QUEUE_MAX_PENDING = 4
         assert await runner._deliver_async_delegation_group(events) is True
@@ -82,9 +96,16 @@ async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_pa
         release.set()
         await drain(adapter)
         assert received[:2] == ["human-active", "human-pending"]
-        assert len(received) == 3 and all(event["summary"] in received[-1] for event in events)
+        assert len(received) == 3 and all(
+            event["summary"] in received[-1] for event in events
+        )
         for event in events:
-            assert delegation.get_durable_delegation(event["delegation_id"])["delivery_state"] == "delivered"
+            assert (
+                delegation.get_durable_delegation(event["delegation_id"])[
+                    "delivery_state"
+                ]
+                == "delivered"
+            )
         idle = pending(key, "idle-admitted")
         assert await runner._deliver_async_delegation_group([idle]) is True
         await drain(adapter)
@@ -96,7 +117,9 @@ async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_unavailable_raw_route_is_quiet_without_hiding_invalid_routes(tmp_path, caplog):
+async def test_unavailable_raw_route_is_quiet_without_hiding_invalid_routes(
+    tmp_path, caplog
+):
     runner = GatewayRunner(GatewayConfig())
     runner.adapters = {}
     evt = pending("opaque-client-session", "raw-admission")
@@ -106,10 +129,16 @@ async def test_unavailable_raw_route_is_quiet_without_hiding_invalid_routes(tmp_
     assert not caplog.records
     row = delegation.get_durable_delegation(evt["delegation_id"])
     assert (row["delivery_state"], row["delivery_attempts"]) == ("pending", 0)
-    assert await runner._inject_watch_notification("watch", {"type": "watch_match", "session_key": "agent:broken"}) is None
+    assert (
+        await runner._inject_watch_notification(
+            "watch", {"type": "watch_match", "session_key": "agent:broken"}
+        )
+        is None
+    )
     assert any("unresolvable" in record.message for record in caplog.records)
     # API recovery writes only the delivery row, never starts a model turn.
     from gateway.platforms.api_server import APIServerAdapter
+
     api = APIServerAdapter(PlatformConfig())
     db = SessionDB(tmp_path / "api.db")
     db.create_session(evt["session_key"], "api_server")

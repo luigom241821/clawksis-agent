@@ -48,9 +48,7 @@ def test_codex_sync_client_uses_happy_eyeballs_backend(no_proxy_env):
 
 
 def test_other_sync_clients_keep_httpcore_default_backend(no_proxy_env):
-    client = process_bootstrap.build_keepalive_http_client(
-        "https://api.openai.com/v1"
-    )
+    client = process_bootstrap.build_keepalive_http_client("https://api.openai.com/v1")
     try:
         assert all(
             isinstance(backend, httpcore.SyncBackend)
@@ -129,12 +127,8 @@ def test_connection_staggers_past_blackholed_ipv6(monkeypatch):
         ],
     )
     monkeypatch.setattr(clawk_bootstrap.socket, "socket", FakeSocket)
-    monkeypatch.setattr(
-        clawk_bootstrap.selectors, "DefaultSelector", FakeSelector
-    )
-    monkeypatch.setattr(
-        clawk_bootstrap.time, "monotonic", lambda: clock[0]
-    )
+    monkeypatch.setattr(clawk_bootstrap.selectors, "DefaultSelector", FakeSelector)
+    monkeypatch.setattr(clawk_bootstrap.time, "monotonic", lambda: clock[0])
 
     winner = clawk_bootstrap._happy_eyeballs_create_connection(
         ("chatgpt.com", 443),
@@ -240,9 +234,7 @@ def test_async_connect_races_past_blackholed_ipv6(monkeypatch):
 
         backend = AutoBackend()
         start = _time.monotonic()
-        stream = await backend.connect_tcp(
-            "codex-he-async.test", port, timeout=30.0
-        )
+        stream = await backend.connect_tcp("codex-he-async.test", port, timeout=30.0)
         elapsed = _time.monotonic() - start
         await stream.aclose()
         return elapsed

@@ -38,7 +38,13 @@ from typing import Callable
 
 import pytest
 
-from tests.e2e.core.parity import _drive_acp, _drive_cli, _drive_cron, _drive_gateway, _drive_rpc
+from tests.e2e.core.parity import (
+    _drive_acp,
+    _drive_cli,
+    _drive_cron,
+    _drive_gateway,
+    _drive_rpc,
+)
 from tests.e2e.core.parity._helpers import (
     FINAL_ANSWER,
     DriveResult,
@@ -60,7 +66,9 @@ from tests.e2e.core.parity._helpers import (
 # PIDs carrying this run's unique PARITY_TREE_TAG. Children run with a tmp
 # HOME/CLAWK_HOME (asserted in ParityHome.env), so no real state is reachable.
 pytestmark = [
-    pytest.mark.skipif(not sys.platform.startswith("linux"), reason="process-tree checks use /proc"),
+    pytest.mark.skipif(
+        not sys.platform.startswith("linux"), reason="process-tree checks use /proc"
+    ),
     pytest.mark.live_system_guard_bypass,
 ]
 
@@ -78,6 +86,7 @@ DRIVERS: dict[str, Driver] = {
     "acp (stdio)": _drive_acp.drive_acp,
     "cron (run-now)": _drive_cron.drive_cron,
 }
+
 
 @dataclass
 class Row:
@@ -108,12 +117,16 @@ def _run_row(entrypoint: str, root: Path) -> Row:
         cells["graceful_exit"] = result.graceful_exit
         pids = mcp_pids(ph)
         # Vacuity guard: the orphan check only means something if the tree existed.
-        cells["mcp_tree_spawned"] = bool(pids.get("server")) and bool(pids.get("grandchild"))
+        cells["mcp_tree_spawned"] = bool(pids.get("server")) and bool(
+            pids.get("grandchild")
+        )
         survivors = wait_no_orphans(ph, timeout=30.0)
         cells["zero_mcp_orphans"] = not survivors
         # Report-only: non-MCP descendants still alive (timing-dependent, e.g. a
         # picker-prewarm `gh auth token` orphaned by a fast host exit).
-        row.other_survivors = describe_pids(wait_no_orphans(ph, timeout=10.0, mcp_only=False))
+        row.other_survivors = describe_pids(
+            wait_no_orphans(ph, timeout=10.0, mcp_only=False)
+        )
         row.cells = cells
         stderr_tail = str(result.extra.get("stderr_tail", ""))
         log = result.extra.get("stderr_log")
@@ -144,19 +157,26 @@ def matrix(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Row]:
     Everything, including the orphan sweep, completes during setup, while the
     first test's live-guard bypass is in effect."""
     roots = {ep: tmp_path_factory.mktemp(f"parity{i}") for i, ep in enumerate(DRIVERS)}
-    with ThreadPoolExecutor(max_workers=len(DRIVERS), thread_name_prefix="parity") as pool:
+    with ThreadPoolExecutor(
+        max_workers=len(DRIVERS), thread_name_prefix="parity"
+    ) as pool:
         futures = {ep: pool.submit(_run_row, ep, roots[ep]) for ep in DRIVERS}
         rows = {ep: fut.result() for ep, fut in futures.items()}
     out = os.environ.get("PARITY_TABLE_OUT")
     if out:
         with open(out, "a", encoding="utf-8") as fh:
-            fh.writelines(json.dumps({**asdict(row), "detail": None}) + "\n" for row in rows.values())
+            fh.writelines(
+                json.dumps({**asdict(row), "detail": None}) + "\n"
+                for row in rows.values()
+            )
     return rows
 
 
 @pytest.mark.parametrize("entrypoint", list(DRIVERS))
 def test_entrypoint_parity(entrypoint: str, matrix: dict[str, Row]) -> None:
     row = matrix[entrypoint]
-    assert row.error is None, f"{entrypoint}: turn failed before the cells could be evaluated:\n{row.error}"
+    assert row.error is None, (
+        f"{entrypoint}: turn failed before the cells could be evaluated:\n{row.error}"
+    )
     failed = sorted(k for k, ok in row.cells.items() if not ok)
     assert not failed, f"{entrypoint}: parity cells red: {failed}\n{row.detail}"

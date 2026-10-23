@@ -8,6 +8,7 @@ the canonical picker writes the temporary primary route to config.yaml and then 
 
 The invariant under test: config.yaml ``model`` must equal the pre-picker primary afterwards.
 """
+
 import argparse
 import errno
 import json
@@ -25,22 +26,36 @@ import termios
 import time
 import fcntl
 
-PRIMARY = {"provider": "openrouter", "default": "primary/model-a",
-           "base_url": "https://openrouter.ai/api/v1", "api_mode": "chat_completions"}
+PRIMARY = {
+    "provider": "openrouter",
+    "default": "primary/model-a",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_mode": "chat_completions",
+}
 CONFIG = (
     "model:\n  provider: openrouter\n  default: primary/model-a\n"
     "  base_url: https://openrouter.ai/api/v1\n  api_mode: chat_completions\n"
     "custom_providers:\n  - name: LocalLab\n    base_url: http://127.0.0.1:9/v1\n"
     "    model: lab-model\n    discover_models: false\n    models:\n      - lab-model\n"
-    "memory:\n  provider: ''\n")
+    "memory:\n  provider: ''\n"
+)
 
 
 def _persisted_model(root: Path, env: dict) -> dict:
     """``config.yaml`` ``model`` section as the CLI itself reads it (owner module, same env)."""
     out = subprocess.run(
-        [sys.executable, "-c", "import json; from clawk_cli.config import load_config; "
-         "print(json.dumps(load_config().get('model')))"],
-        cwd=root, env=env, capture_output=True, text=True, check=True)
+        [
+            sys.executable,
+            "-c",
+            "import json; from clawk_cli.config import load_config; "
+            "print(json.dumps(load_config().get('model')))",
+        ],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
@@ -49,22 +64,40 @@ def run(root: Path, output: Path) -> dict:
         hh = Path(home) / ".clawksis"
         hh.mkdir()
         (hh / "config.yaml").write_text(CONFIG, encoding="utf-8")
-        (hh / ".env").write_text("OPENROUTER_API_KEY=local-not-used\n", encoding="utf-8")
+        (hh / ".env").write_text(
+            "OPENROUTER_API_KEY=local-not-used\n", encoding="utf-8"
+        )
         auth = hh / "auth.json"
-        auth.write_text(json.dumps({"version": 1, "providers": {}, "active_provider": "nous"}))
+        auth.write_text(
+            json.dumps({"version": 1, "providers": {}, "active_provider": "nous"})
+        )
         # A stub ``curses`` package forces every menu onto its numbered fallback so the PTY
         # exchange is line-oriented (the curses UI is not what is under test here).
         shim = Path(home) / "shim" / "curses"
         shim.mkdir(parents=True)
-        (shim / "__init__.py").write_text("raise ImportError('curses disabled for PTY harness')\n")
-        env = {"PATH": os.environ["PATH"], "HOME": home, "CLAWK_HOME": str(hh),
-               "PYTHONPATH": f"{shim.parent}{os.pathsep}{root}", "PYTHONUNBUFFERED": "1",
-               "TERM": "dumb", "LANG": "C.UTF-8"}
+        (shim / "__init__.py").write_text(
+            "raise ImportError('curses disabled for PTY harness')\n"
+        )
+        env = {
+            "PATH": os.environ["PATH"],
+            "HOME": home,
+            "CLAWK_HOME": str(hh),
+            "PYTHONPATH": f"{shim.parent}{os.pathsep}{root}",
+            "PYTHONUNBUFFERED": "1",
+            "TERM": "dumb",
+            "LANG": "C.UTF-8",
+        }
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 120, 0, 0))
-        proc = subprocess.Popen([sys.executable, "-m", "clawk_cli.main", "fallback", "add"],
-                                cwd=root, env=env, stdin=slave, stdout=slave, stderr=slave,
-                                start_new_session=True)
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "clawk_cli.main", "fallback", "add"],
+            cwd=root,
+            env=env,
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            start_new_session=True,
+        )
         os.close(slave)
         data = bytearray()
 
@@ -102,12 +135,18 @@ def run(root: Path, output: Path) -> dict:
             auth.chmod(0o600)
             model_after = _persisted_model(root, env)
             text = bytes(data).decode(errors="replace")
-            return {"exited": exited, "returncode": proc.returncode,
-                    "picker_error_surfaced": "PermissionError" in text,
-                    "model_after": model_after, "primary_restored": model_after == PRIMARY,
-                    "auth_active_provider": json.loads(auth.read_text()).get("active_provider"),
-                    "restore_note": "Could not fully restore" in text,
-                    "raw_path": str(output / "fallback-add-picker-error.pty")}
+            return {
+                "exited": exited,
+                "returncode": proc.returncode,
+                "picker_error_surfaced": "PermissionError" in text,
+                "model_after": model_after,
+                "primary_restored": model_after == PRIMARY,
+                "auth_active_provider": json.loads(auth.read_text()).get(
+                    "active_provider"
+                ),
+                "restore_note": "Could not fully restore" in text,
+                "raw_path": str(output / "fallback-add-picker-error.pty"),
+            }
         finally:
             output.mkdir(parents=True, exist_ok=True)
             (output / "fallback-add-picker-error.pty").write_bytes(data)

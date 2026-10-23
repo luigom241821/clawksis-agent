@@ -11,7 +11,9 @@ from providers.base import ProviderProfile
 
 
 def _profile(name: str) -> ProviderProfile:
-    return ProviderProfile(name=name, display_name=name, description="late plugin (direct API)")
+    return ProviderProfile(
+        name=name, display_name=name, description="late plugin (direct API)"
+    )
 
 
 def test_late_registered_provider_reaches_picker_catalog(monkeypatch):
@@ -19,17 +21,24 @@ def test_late_registered_provider_reaches_picker_catalog(monkeypatch):
     from clawk_cli.models import list_available_providers
 
     # this module is imported (the snapshot exists) before the registration below
-    monkeypatch.setattr(catalog, "CANONICAL_PROVIDERS", list(catalog.CANONICAL_PROVIDERS))
+    monkeypatch.setattr(
+        catalog, "CANONICAL_PROVIDERS", list(catalog.CANONICAL_PROVIDERS)
+    )
     monkeypatch.setattr(catalog, "_canonical_slugs", set(catalog._canonical_slugs))
     monkeypatch.setattr(catalog, "_PROVIDER_LABELS", dict(catalog._PROVIDER_LABELS))
-    monkeypatch.setattr("clawk_cli.models.CANONICAL_PROVIDERS", catalog.CANONICAL_PROVIDERS)
+    monkeypatch.setattr(
+        "clawk_cli.models.CANONICAL_PROVIDERS", catalog.CANONICAL_PROVIDERS
+    )
     monkeypatch.setattr("clawk_cli.models._PROVIDER_LABELS", catalog._PROVIDER_LABELS)
     slug = "zz-late-plugin-provider"
     assert slug not in {r["id"] for r in list_available_providers()}
 
     import providers as registry
+
     registry.list_providers()  # discovery done: a registration now is a post-discovery one
-    monkeypatch.setitem(registry._REGISTRY, slug, _profile(slug))  # keeps the registry scoped
+    monkeypatch.setitem(
+        registry._REGISTRY, slug, _profile(slug)
+    )  # keeps the registry scoped
     register_provider(_profile(slug))
 
     assert slug in {r["id"] for r in list_available_providers()}

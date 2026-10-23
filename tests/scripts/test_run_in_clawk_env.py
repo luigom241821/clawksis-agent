@@ -29,7 +29,11 @@ from pathlib import Path
 
 import pytest
 
-from pm.environments import ACTIVATION_INPUTS, activation_input_mtimes, record_activation_inputs
+from pm.environments import (
+    ACTIVATION_INPUTS,
+    activation_input_mtimes,
+    record_activation_inputs,
+)
 from tests.pm.activation_support import bash, posix
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -50,7 +54,9 @@ def _shim(path: Path) -> None:
     """Quote in posix form: a /bin/sh script treats backslashes in an unquoted
     word as escapes (same pattern as tests/pm/activation_support.py)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"#!/bin/sh\nexec '{posix(Path(sys.executable))}' \"$@\"\n", encoding="utf-8")
+    path.write_text(
+        f"#!/bin/sh\nexec '{posix(Path(sys.executable))}' \"$@\"\n", encoding="utf-8"
+    )
     path.chmod(0o755)
 
 
@@ -72,11 +78,13 @@ def checkout(tmp_path: Path) -> Path:
     _set_mtime(root / "state" / "facts.json", STAMP_TIME)
 
     _shim(root / "shim" / "python3")
-    _shim(root / ".venv" / "bin" / "python")  # the bootstrap interpreter that reads the pm env
+    _shim(
+        root / ".venv" / "bin" / "python"
+    )  # the bootstrap interpreter that reads the pm env
 
     (root / "setup-clawk.sh").write_text(
-        "echo SYNCED >&2\n"
-        f'test ! -e "{posix(root)}/fail"\n', encoding="utf-8",
+        f'echo SYNCED >&2\ntest ! -e "{posix(root)}/fail"\n',
+        encoding="utf-8",
     )
     (root / "pm" / "__init__.py").touch()
     (root / "pm" / "environments.py").write_text(
@@ -91,19 +99,32 @@ def checkout(tmp_path: Path) -> Path:
 
 def _record(root: Path, *, test_environment: bool = True) -> None:
     """What a successful ``pm install`` leaves behind."""
-    record_activation_inputs(root / "state" / "inputs", activation_input_mtimes(root), root,
-                             test_environment=test_environment)
+    record_activation_inputs(
+        root / "state" / "inputs",
+        activation_input_mtimes(root),
+        root,
+        test_environment=test_environment,
+    )
 
 
-def _run_in(root: Path, *command: str, sentinel: str | None = "{root}/state/facts.json"):
+def _run_in(
+    root: Path, *command: str, sentinel: str | None = "{root}/state/facts.json"
+):
     """Drive the runner as a caller would; the shim dir is on PATH like any tool dir."""
-    env = {**os.environ, "PATH": f"{posix(root / 'shim')}{os.pathsep}{os.environ.get('PATH', '')}"}
+    env = {
+        **os.environ,
+        "PATH": f"{posix(root / 'shim')}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
     env.pop("__CLAWK_ACTIVATED", None)
     if sentinel is not None:
         env["__CLAWK_ACTIVATED"] = sentinel.replace("{root}", posix(root))
     return subprocess.run(
         [bash(), posix(root / "scripts" / RUNNER.name), *command],
-        capture_output=True, text=True, cwd=posix(root), env=env, timeout=60,
+        capture_output=True,
+        text=True,
+        cwd=posix(root),
+        env=env,
+        timeout=60,
         check=False,
     )
 
@@ -144,7 +165,9 @@ def test_install_that_skipped_the_test_environment_is_stale(checkout: Path):
 
 @pytest.mark.parametrize("moved_to", [JUST_AFTER, EARLIER], ids=["newer", "older"])
 @pytest.mark.parametrize("input_name", ACTIVATION_INPUTS)
-def test_input_mtime_differing_from_its_stamp_resyncs(checkout: Path, input_name: str, moved_to: str):
+def test_input_mtime_differing_from_its_stamp_resyncs(
+    checkout: Path, input_name: str, moved_to: str
+):
     """A branch switch can move an input's mtime either way; both mean the
     recorded install was not verified against what is on disk now."""
     _record(checkout)
@@ -152,16 +175,29 @@ def test_input_mtime_differing_from_its_stamp_resyncs(checkout: Path, input_name
     assert _synced(checkout)
 
 
-@pytest.mark.parametrize("sentinel", [None, "{root}/gone", "1", "{root}/state/facts.json"],
-                         ids=["cold", "dangling", "legacy-1", "no-stamps"])
+@pytest.mark.parametrize(
+    "sentinel",
+    [None, "{root}/gone", "1", "{root}/state/facts.json"],
+    ids=["cold", "dangling", "legacy-1", "no-stamps"],
+)
 def test_unusable_sentinel_syncs(checkout: Path, sentinel: str | None):
     """Cold, dangling, or incomplete activation state must not read as current."""
     assert _synced(checkout, sentinel)
 
 
-def test_command_runs_in_the_environment_with_its_arguments_and_exit_status(checkout: Path):
-    run = _run_in(checkout, "bash", "-c", 'echo "$__CLAWK_ACTIVATED|$0|$1|$2"; exit 7', "zero", "b c", "d",
-                  sentinel=None)
+def test_command_runs_in_the_environment_with_its_arguments_and_exit_status(
+    checkout: Path,
+):
+    run = _run_in(
+        checkout,
+        "bash",
+        "-c",
+        'echo "$__CLAWK_ACTIVATED|$0|$1|$2"; exit 7',
+        "zero",
+        "b c",
+        "d",
+        sentinel=None,
+    )
     assert run.returncode == 7, run.stderr
     assert run.stdout.strip() == f"{posix(checkout)}/state/facts.json|zero|b c|d"
 

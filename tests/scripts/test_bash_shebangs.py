@@ -1,4 +1,5 @@
 """The repository shebang checker scans tracked scripts and embedded payloads."""
+
 from pathlib import Path
 import subprocess
 import sys
@@ -34,7 +35,9 @@ def test_checker_reports_and_clears_fixed_bash_paths(tmp_path):
     ]
     for name, text in files.items():
         (tmp_path / name).write_text(
-            text.replace(fixed, "#!/usr/bin/env bash").replace("#! /usr/bin/" + "bash", "#!/usr/bin/env bash"),
+            text.replace(fixed, "#!/usr/bin/env bash").replace(
+                "#! /usr/bin/" + "bash", "#!/usr/bin/env bash"
+            ),
             encoding="utf-8",
         )
     green = subprocess.run(command, capture_output=True, text=True, check=False)

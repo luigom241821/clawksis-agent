@@ -45,12 +45,6 @@ def test_normalize_moa_config_uses_default_named_preset():
     assert cfg["aggregator"] == DEFAULT_MOA_AGGREGATOR
 
 
-
-
-
-
-
-
 def test_exact_preset_matching_skips_disabled_presets():
     """A disabled preset must not match the implicit bare-name switch path.
 
@@ -67,10 +61,6 @@ def test_exact_preset_matching_skips_disabled_presets():
     }
     assert exact_moa_preset_name(config, "default") is None
     assert exact_moa_preset_name(config, "klo") is None
-
-
-
-
 
 
 def test_resolve_missing_moa_preset_has_actionable_error():
@@ -102,23 +92,15 @@ def test_missing_moa_preset_is_non_retryable():
     assert result.should_fallback is False
 
 
-
-
-
-
-
-
 def _preset(**extra):
     base = {
-        "reference_models": [{"provider": "openrouter", "model": "anthropic/claude-opus-4.8"}],
+        "reference_models": [
+            {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"}
+        ],
         "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
     }
     base.update(extra)
     return {"default_preset": "p", "presets": {"p": base}}
-
-
-
-
 
 
 # ── validate_moa_payload (write-boundary validation, #64156) ─────────────────
@@ -131,11 +113,11 @@ def _preset(**extra):
 
 def _valid_preset_payload():
     return {
-        "reference_models": [{"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"}],
+        "reference_models": [
+            {"provider": "openrouter", "model": "deepseek/deepseek-v4-pro"}
+        ],
         "aggregator": {"provider": "openrouter", "model": "anthropic/claude-opus-4.8"},
     }
-
-
 
 
 def test_validate_moa_payload_agrees_with_clean_slot():
@@ -150,7 +132,9 @@ def test_validate_moa_payload_agrees_with_clean_slot():
     cfg = normalize_moa_config(payload)
     # Slots survive with only the canonical enabled=True default added — no
     # provider/model swap, no defaults substitution.
-    assert cfg["presets"]["p"]["reference_models"] == _enabled_refs(payload["presets"]["p"]["reference_models"])
+    assert cfg["presets"]["p"]["reference_models"] == _enabled_refs(
+        payload["presets"]["p"]["reference_models"]
+    )
     assert cfg["presets"]["p"]["aggregator"] == payload["presets"]["p"]["aggregator"]
 
 
@@ -180,23 +164,7 @@ def test_billing_notice_silent_when_providers_match_or_main_unknown(cfg, capsys)
 # ── Per-slot max_tokens ────────────────────────────────────────────────────
 
 
-
-
-
-
 # --- fanout cadence normalization (every_n) ---
 
 
-
-
-
-
-
-
 # --- privacy_filter normalization ---
-
-
-
-
-
-

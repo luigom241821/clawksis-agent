@@ -8,8 +8,15 @@ from __future__ import annotations
 from pydantic import Field
 
 from .base import JsonValue, Params, Result, WireEnum
-from .common import (OpenModel, PendingApproval, ProfileParams, SessionLiveInfo, SessionParams, TranscriptMessage,
-                     Usage)
+from .common import (
+    OpenModel,
+    PendingApproval,
+    ProfileParams,
+    SessionLiveInfo,
+    SessionParams,
+    TranscriptMessage,
+    Usage,
+)
 from .connectors_operation import ConnectionRequestPayload
 from .registry import method
 
@@ -130,7 +137,9 @@ class SessionCreateParams(ProfileParams):
     model: str | None = None
     provider: str | None = None
     reasoning_effort: str | None = None
-    fast: bool | None = None  # presence is the contract: omitted inherits, true pins priority, false pins normal
+    fast: bool | None = (
+        None  # presence is the contract: omitted inherits, true pins priority, false pins normal
+    )
     service_tier: str | None = None
     close_on_disconnect: bool = False
     hidden: bool = False
@@ -149,8 +158,12 @@ class SessionCreateResult(Result):
     info: SessionLiveInfo
 
 
-method("session.create", params=SessionCreateParams, result=SessionCreateResult,
-       doc="Mint a live session (agent builds after the reply); a DB row appears on the first prompt unless seeded.")
+method(
+    "session.create",
+    params=SessionCreateParams,
+    result=SessionCreateResult,
+    doc="Mint a live session (agent builds after the reply); a DB row appears on the first prompt unless seeded.",
+)
 
 
 class SessionBranchStoredParams(ProfileParams):
@@ -172,10 +185,14 @@ class SessionBranchStoredResult(Result):
     info: SessionLiveInfo
 
 
-method("session.branch_stored", params=SessionBranchStoredParams, result=SessionBranchStoredResult,
-       doc="Whole-session branch of a stored parent: the owning backend reads and copies the transcript, "
-           "which never crosses the wire (a separate method so an older gateway fails loudly, not with an empty "
-           "branch).")
+method(
+    "session.branch_stored",
+    params=SessionBranchStoredParams,
+    result=SessionBranchStoredResult,
+    doc="Whole-session branch of a stored parent: the owning backend reads and copies the transcript, "
+    "which never crosses the wire (a separate method so an older gateway fails loudly, not with an empty "
+    "branch).",
+)
 
 
 # ── session.resume / activate ─────────────────────────────────────────────────────────────────
@@ -200,12 +217,18 @@ class SessionResumeResult(LiveSessionSnapshot):
     pass
 
 
-method("session.resume", params=SessionResumeParams, result=SessionResumeResult,
-       doc="Attach to a stored session: reuse it if live here, else lazy / deferred / cold / eager rebuild.")
+method(
+    "session.resume",
+    params=SessionResumeParams,
+    result=SessionResumeResult,
+    doc="Attach to a stored session: reuse it if live here, else lazy / deferred / cold / eager rebuild.",
+)
 
 
 class SessionActivateParams(SessionParams):
-    cols: int | None = None  # sent by the desktop; the handler keeps the session's current width
+    cols: int | None = (
+        None  # sent by the desktop; the handler keeps the session's current width
+    )
     omit_messages: bool = False
 
 
@@ -213,8 +236,12 @@ class SessionActivateResult(LiveSessionSnapshot):
     pass
 
 
-method("session.activate", params=SessionActivateParams, result=SessionActivateResult,
-       doc="Attach the frontend to a live session without closing the previously focused one.")
+method(
+    "session.activate",
+    params=SessionActivateParams,
+    result=SessionActivateResult,
+    doc="Attach the frontend to a live session without closing the previously focused one.",
+)
 
 
 # ── listing ───────────────────────────────────────────────────────────────────────────────────
@@ -247,8 +274,12 @@ class SessionListResult(Result):
     sessions: list[SessionListRow]
 
 
-method("session.list", params=SessionListParams, result=SessionListResult,
-       doc="Human-facing stored sessions, most recent first (sub-agent / kanban sources denied).")
+method(
+    "session.list",
+    params=SessionListParams,
+    result=SessionListResult,
+    doc="Human-facing stored sessions, most recent first (sub-agent / kanban sources denied).",
+)
 
 
 class SessionMostRecentParams(ProfileParams):
@@ -262,8 +293,12 @@ class SessionMostRecentResult(Result):
     source: str | None = None
 
 
-method("session.most_recent", params=SessionMostRecentParams, result=SessionMostRecentResult,
-       doc="Most recent human-facing session; errors fold into a null session_id.")
+method(
+    "session.most_recent",
+    params=SessionMostRecentParams,
+    result=SessionMostRecentResult,
+    doc="Most recent human-facing session; errors fold into a null session_id.",
+)
 
 
 class SessionActiveListParams(ProfileParams):
@@ -290,8 +325,12 @@ class SessionActiveListResult(Result):
     sessions: list[SessionActiveItem]
 
 
-method("session.active_list", params=SessionActiveListParams, result=SessionActiveListResult,
-       doc="Live sessions in this process, insertion order (not a DB browser).")
+method(
+    "session.active_list",
+    params=SessionActiveListParams,
+    result=SessionActiveListResult,
+    doc="Live sessions in this process, insertion order (not a DB browser).",
+)
 
 
 # ── stored-row mutation ───────────────────────────────────────────────────────────────────────
@@ -305,8 +344,12 @@ class SessionDeleteResult(Result):
     deleted: str
 
 
-method("session.delete", params=SessionDeleteParams, result=SessionDeleteResult,
-       doc="Delete a stored session + transcripts; refused while it is live here.")
+method(
+    "session.delete",
+    params=SessionDeleteParams,
+    result=SessionDeleteResult,
+    doc="Delete a stored session + transcripts; refused while it is live here.",
+)
 
 
 class SessionTitleParams(SessionParams):
@@ -319,8 +362,12 @@ class SessionTitleResult(Result):
     pending: bool | None = None  # True: no row yet, applied on the first turn
 
 
-method("session.title", params=SessionTitleParams, result=SessionTitleResult,
-       doc="Read or set a live session's title; a title set before the row exists is queued.")
+method(
+    "session.title",
+    params=SessionTitleParams,
+    result=SessionTitleResult,
+    doc="Read or set a live session's title; a title set before the row exists is queued.",
+)
 
 
 class SessionSetHiddenParams(Params):
@@ -336,8 +383,12 @@ class SessionSetHiddenResult(Result):
     session_key: str
 
 
-method("session.set_hidden", params=SessionSetHiddenParams, result=SessionSetHiddenResult,
-       doc="Set/clear hidden (out of the default list, still resumable by its owner) on a session + lineage.")
+method(
+    "session.set_hidden",
+    params=SessionSetHiddenParams,
+    result=SessionSetHiddenResult,
+    doc="Set/clear hidden (out of the default list, still resumable by its owner) on a session + lineage.",
+)
 
 
 class SessionArchiveParams(Params):
@@ -354,8 +405,12 @@ class SessionArchiveResult(Result):
     session_key: str
 
 
-method("session.archive", params=SessionArchiveParams, result=SessionArchiveResult,
-       doc="Set/clear archived (soft-hide, messages kept) on a session + lineage; Desktop PATCH parity.")
+method(
+    "session.archive",
+    params=SessionArchiveParams,
+    result=SessionArchiveResult,
+    doc="Set/clear archived (soft-hide, messages kept) on a session + lineage; Desktop PATCH parity.",
+)
 
 
 class SessionWorkspaceMoveParams(ProfileParams):
@@ -369,8 +424,12 @@ class SessionWorkspaceMoveResult(Result):
     git_repo_root: str | None = None
 
 
-method("session.workspace.move", params=SessionWorkspaceMoveParams, result=SessionWorkspaceMoveResult,
-       doc="Re-home a stored session's workspace; git identity is replaced and a live agent follows.")
+method(
+    "session.workspace.move",
+    params=SessionWorkspaceMoveParams,
+    result=SessionWorkspaceMoveResult,
+    doc="Re-home a stored session's workspace; git identity is replaced and a live agent follows.",
+)
 
 
 class SessionCwdSetParams(SessionParams):
@@ -381,8 +440,12 @@ class SessionCwdSetResult(SessionLiveInfo):
     """The refreshed ``session.info`` view (full agent view, or the lazy shape)."""
 
 
-method("session.cwd.set", params=SessionCwdSetParams, result=SessionCwdSetResult,
-       doc="Change a live, idle session's working directory.")
+method(
+    "session.cwd.set",
+    params=SessionCwdSetParams,
+    result=SessionCwdSetResult,
+    doc="Change a live, idle session's working directory.",
+)
 
 
 # ── live-session lifecycle ────────────────────────────────────────────────────────────────────
@@ -398,8 +461,12 @@ class SessionCloseResult(Result):
     messages: list[str] = Field(default_factory=list)
 
 
-method("session.close", params=SessionCloseParams, result=SessionCloseResult,
-       doc="Tear down a live session (its stored row stays resumable).")
+method(
+    "session.close",
+    params=SessionCloseParams,
+    result=SessionCloseResult,
+    doc="Tear down a live session (its stored row stays resumable).",
+)
 
 
 class SessionBranchParams(SessionParams):
@@ -420,8 +487,12 @@ class SessionBranchResult(Result):
     info: SessionLiveInfo
 
 
-method("session.branch", params=SessionBranchParams, result=SessionBranchResult,
-       doc="Fork a live session into a new stored child that shares the parent's history so far.")
+method(
+    "session.branch",
+    params=SessionBranchParams,
+    result=SessionBranchResult,
+    doc="Fork a live session into a new stored child that shares the parent's history so far.",
+)
 
 
 class SessionBranchWholeParams(SessionParams):
@@ -440,8 +511,12 @@ class SessionBranchWholeResult(Result):
     info: SessionLiveInfo
 
 
-method("session.branch_whole", params=SessionBranchWholeParams, result=SessionBranchWholeResult,
-       doc="session.branch of the whole history without echoing the copied transcript back.")
+method(
+    "session.branch_whole",
+    params=SessionBranchWholeParams,
+    result=SessionBranchWholeResult,
+    doc="session.branch of the whole history without echoing the copied transcript back.",
+)
 
 
 class UndoIntent(WireEnum):
@@ -458,8 +533,12 @@ class SessionUndoResult(Result):
     removed: int
 
 
-method("session.undo", params=SessionUndoParams, result=SessionUndoResult,
-       doc="Drop the last user turn (and everything after it) from an idle session.")
+method(
+    "session.undo",
+    params=SessionUndoParams,
+    result=SessionUndoResult,
+    doc="Drop the last user turn (and everything after it) from an idle session.",
+)
 
 
 class SessionSaveParams(SessionParams):
@@ -473,8 +552,12 @@ class SessionSaveResult(Result):
     model_config = Result.model_config | {"extra": "allow"}
 
 
-method("session.save", params=SessionSaveParams, result=SessionSaveResult,
-       doc="Export the transcript to ~/.clawksis/sessions/saved (classic /save).")
+method(
+    "session.save",
+    params=SessionSaveParams,
+    result=SessionSaveResult,
+    doc="Export the transcript to ~/.clawksis/sessions/saved (classic /save).",
+)
 
 
 class SessionStatusParams(SessionParams):
@@ -485,8 +568,12 @@ class SessionStatusResult(Result):
     output: str
 
 
-method("session.status", params=SessionStatusParams, result=SessionStatusResult,
-       doc="Rendered /status text for the session.")
+method(
+    "session.status",
+    params=SessionStatusParams,
+    result=SessionStatusResult,
+    doc="Rendered /status text for the session.",
+)
 
 
 class SessionHistoryParams(SessionParams):
@@ -498,8 +585,12 @@ class SessionHistoryResult(Result):
     messages: list[TranscriptMessage]
 
 
-method("session.history", params=SessionHistoryParams, result=SessionHistoryResult,
-       doc="The durable display transcript (ancestors included, row ids attached).")
+method(
+    "session.history",
+    params=SessionHistoryParams,
+    result=SessionHistoryResult,
+    doc="The durable display transcript (ancestors included, row ids attached).",
+)
 
 
 class SessionUsageParams(SessionParams):
@@ -511,8 +602,12 @@ class SessionUsageResult(Usage):
     credits_usage_window: bool | None = None
 
 
-method("session.usage", params=SessionUsageParams, result=SessionUsageResult,
-       doc="Token / context / cost counters for the session (+ Nous credit lines when available).")
+method(
+    "session.usage",
+    params=SessionUsageParams,
+    result=SessionUsageResult,
+    doc="Token / context / cost counters for the session (+ Nous credit lines when available).",
+)
 
 
 class SessionContextBreakdownParams(SessionParams):
@@ -552,8 +647,12 @@ class SessionContextBreakdownResult(Result):
     context_files: list[ContextFileSource] = []
 
 
-method("session.context_breakdown", params=SessionContextBreakdownParams, result=SessionContextBreakdownResult,
-       doc="Cursor-style split of the context window by category.")
+method(
+    "session.context_breakdown",
+    params=SessionContextBreakdownParams,
+    result=SessionContextBreakdownResult,
+    doc="Cursor-style split of the context window by category.",
+)
 
 
 # ── compression ───────────────────────────────────────────────────────────────────────────────
@@ -597,15 +696,21 @@ class SessionCompressResult(Result):
     model_config = Result.model_config | {"extra": "allow"}
 
 
-method("session.compress", params=SessionCompressParams, result=SessionCompressResult,
-       doc="Manual /compress of an idle session, optionally focused on a topic.")
+method(
+    "session.compress",
+    params=SessionCompressParams,
+    result=SessionCompressResult,
+    doc="Manual /compress of an idle session, optionally focused on a topic.",
+)
 
 
 # ── interrupt / steer / redirect ──────────────────────────────────────────────────────────────
 
 
 class SessionInterruptParams(SessionParams):
-    expected_hosted_task_id: str | None = None  # only interrupt if this hosted task is the running one
+    expected_hosted_task_id: str | None = (
+        None  # only interrupt if this hosted task is the running one
+    )
 
 
 class InterruptStatus(WireEnum):
@@ -619,8 +724,12 @@ class SessionInterruptResult(Result):
     turn_isolation: bool | None = None
 
 
-method("session.interrupt", params=SessionInterruptParams, result=SessionInterruptResult,
-       doc="Stop the running turn (and streaming TTS); retires the crash-recovery marker.")
+method(
+    "session.interrupt",
+    params=SessionInterruptParams,
+    result=SessionInterruptResult,
+    doc="Stop the running turn (and streaming TTS); retires the crash-recovery marker.",
+)
 
 
 class CorrectionStatus(WireEnum):
@@ -638,10 +747,18 @@ class SessionCorrectionResult(Result):
     text: str
 
 
-method("session.steer", params=SessionCorrectionParams, result=SessionCorrectionResult,
-       doc="Inject text into the next tool result without interrupting the turn.")
-method("session.redirect", params=SessionCorrectionParams, result=SessionCorrectionResult,
-       doc="Redirect the active turn (queued for the next turn while the agent is still building).")
+method(
+    "session.steer",
+    params=SessionCorrectionParams,
+    result=SessionCorrectionResult,
+    doc="Inject text into the next tool result without interrupting the turn.",
+)
+method(
+    "session.redirect",
+    params=SessionCorrectionParams,
+    result=SessionCorrectionResult,
+    doc="Redirect the active turn (queued for the next turn while the agent is still building).",
+)
 
 
 # ── spawn trees ───────────────────────────────────────────────────────────────────────────────
@@ -660,8 +777,12 @@ class SpawnTreeSaveResult(Result):
     session_id: str
 
 
-method("spawn_tree.save", params=SpawnTreeSaveParams, result=SpawnTreeSaveResult,
-       doc="Persist a finished delegation tree snapshot under the session's spawn-trees dir.")
+method(
+    "spawn_tree.save",
+    params=SpawnTreeSaveParams,
+    result=SpawnTreeSaveResult,
+    doc="Persist a finished delegation tree snapshot under the session's spawn-trees dir.",
+)
 
 
 class SpawnTreeListParams(ProfileParams):
@@ -685,8 +806,12 @@ class SpawnTreeListResult(Result):
     entries: list[SpawnTreeEntry]
 
 
-method("spawn_tree.list", params=SpawnTreeListParams, result=SpawnTreeListResult,
-       doc="Saved spawn-tree snapshots, newest first.")
+method(
+    "spawn_tree.list",
+    params=SpawnTreeListParams,
+    result=SpawnTreeListResult,
+    doc="Saved spawn-tree snapshots, newest first.",
+)
 
 
 class SpawnTreeLoadParams(ProfileParams):
@@ -704,8 +829,12 @@ class SpawnTreeLoadResult(Result):
     model_config = Result.model_config | {"extra": "allow"}
 
 
-method("spawn_tree.load", params=SpawnTreeLoadParams, result=SpawnTreeLoadResult,
-       doc="Read one saved spawn-tree snapshot (path must be under the spawn-trees root).")
+method(
+    "spawn_tree.load",
+    params=SpawnTreeLoadParams,
+    result=SpawnTreeLoadResult,
+    doc="Read one saved spawn-tree snapshot (path must be under the spawn-trees root).",
+)
 
 
 # ── terminal / event replay ───────────────────────────────────────────────────────────────────
@@ -719,8 +848,12 @@ class TerminalResizeResult(Result):
     cols: int
 
 
-method("terminal.resize", params=TerminalResizeParams, result=TerminalResizeResult,
-       doc="Record the client's column width for server-side rendering.")
+method(
+    "terminal.resize",
+    params=TerminalResizeParams,
+    result=TerminalResizeResult,
+    doc="Record the client's column width for server-side rendering.",
+)
 
 
 class SessionEventsSinceParams(SessionParams):
@@ -740,8 +873,12 @@ class SessionEventsSinceResult(Result):
     open_requests: list[OpenRequestEntry]
 
 
-method("session.events.since", params=SessionEventsSinceParams, result=SessionEventsSinceResult,
-       doc="Replay events after a seq watermark on WS reconnect; truncated means refetch state.")
+method(
+    "session.events.since",
+    params=SessionEventsSinceParams,
+    result=SessionEventsSinceResult,
+    doc="Replay events after a seq watermark on WS reconnect; truncated means refetch state.",
+)
 
 
 class SessionEventsStatsParams(ProfileParams):
@@ -759,8 +896,12 @@ class SessionEventsStatsResult(Result):
     max_bytes_process: int
 
 
-method("session.events.stats", params=SessionEventsStatsParams, result=SessionEventsStatsResult,
-       doc="Replay-buffer occupancy telemetry (ops/debug).")
+method(
+    "session.events.stats",
+    params=SessionEventsStatsParams,
+    result=SessionEventsStatsResult,
+    doc="Replay-buffer occupancy telemetry (ops/debug).",
+)
 
 
 # ── one-shot LLM ──────────────────────────────────────────────────────────────────────────────
@@ -783,6 +924,9 @@ class LlmOneshotResult(Result):
     text: str
 
 
-method("llm.oneshot", params=LlmOneshotParams, result=LlmOneshotResult,
-       doc="Stateless one-shot LLM completion (titles, ideas) on the session's or the task backend.")
-
+method(
+    "llm.oneshot",
+    params=LlmOneshotParams,
+    result=LlmOneshotResult,
+    doc="Stateless one-shot LLM completion (titles, ideas) on the session's or the task backend.",
+)

@@ -20,13 +20,18 @@ resolve_managed_tool_gateway = managed_tool_gateway.resolve_managed_tool_gateway
 
 
 def test_resolve_managed_tool_gateway_derives_vendor_origin_from_shared_domain():
-    with patch.dict(
-        os.environ,
-        {
-            "TOOL_GATEWAY_DOMAIN": "nousresearch.com",
-        },
-        clear=False,
-    ), patch.object(managed_tool_gateway, "managed_nous_tools_enabled", return_value=True):
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "TOOL_GATEWAY_DOMAIN": "nousresearch.com",
+            },
+            clear=False,
+        ),
+        patch.object(
+            managed_tool_gateway, "managed_nous_tools_enabled", return_value=True
+        ),
+    ):
         result = resolve_managed_tool_gateway(
             "firecrawl",
             token_reader=lambda: "nous-token",
@@ -39,13 +44,18 @@ def test_resolve_managed_tool_gateway_derives_vendor_origin_from_shared_domain()
 
 
 def test_resolve_managed_tool_gateway_uses_vendor_specific_override():
-    with patch.dict(
-        os.environ,
-        {
-            "BROWSER_USE_GATEWAY_URL": "http://browser-use-gateway.localhost:3009/",
-        },
-        clear=False,
-    ), patch.object(managed_tool_gateway, "managed_nous_tools_enabled", return_value=True):
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "BROWSER_USE_GATEWAY_URL": "http://browser-use-gateway.localhost:3009/",
+            },
+            clear=False,
+        ),
+        patch.object(
+            managed_tool_gateway, "managed_nous_tools_enabled", return_value=True
+        ),
+    ):
         result = resolve_managed_tool_gateway(
             "browser-use",
             token_reader=lambda: "nous-token",
@@ -56,13 +66,18 @@ def test_resolve_managed_tool_gateway_uses_vendor_specific_override():
 
 
 def test_resolve_managed_tool_gateway_is_inactive_without_nous_token():
-    with patch.dict(
-        os.environ,
-        {
-            "TOOL_GATEWAY_DOMAIN": "nousresearch.com",
-        },
-        clear=False,
-    ), patch.object(managed_tool_gateway, "managed_nous_tools_enabled", return_value=True):
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "TOOL_GATEWAY_DOMAIN": "nousresearch.com",
+            },
+            clear=False,
+        ),
+        patch.object(
+            managed_tool_gateway, "managed_nous_tools_enabled", return_value=True
+        ),
+    ):
         result = resolve_managed_tool_gateway(
             "firecrawl",
             token_reader=lambda: None,
@@ -72,8 +87,14 @@ def test_resolve_managed_tool_gateway_is_inactive_without_nous_token():
 
 
 def test_resolve_managed_tool_gateway_is_disabled_without_subscription():
-    with patch.dict(os.environ, {"TOOL_GATEWAY_DOMAIN": "nousresearch.com"}, clear=False), \
-         patch.object(managed_tool_gateway, "managed_nous_tools_enabled", return_value=False):
+    with (
+        patch.dict(
+            os.environ, {"TOOL_GATEWAY_DOMAIN": "nousresearch.com"}, clear=False
+        ),
+        patch.object(
+            managed_tool_gateway, "managed_nous_tools_enabled", return_value=False
+        ),
+    ):
         result = resolve_managed_tool_gateway(
             "firecrawl",
             token_reader=lambda: "nous-token",
@@ -86,15 +107,19 @@ def test_read_nous_access_token_refreshes_expiring_cached_token(tmp_path, monkey
     monkeypatch.delenv("TOOL_GATEWAY_USER_TOKEN", raising=False)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     expires_at = (datetime.now(UTC) + timedelta(seconds=30)).isoformat()
-    (tmp_path / "auth.json").write_text(json.dumps({
-        "providers": {
-            "nous": {
-                "access_token": "stale-token",
-                "refresh_token": "refresh-token",
-                "expires_at": expires_at,
+    (tmp_path / "auth.json").write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "nous": {
+                        "access_token": "stale-token",
+                        "refresh_token": "refresh-token",
+                        "expires_at": expires_at,
+                    }
+                }
             }
-        }
-    }))
+        )
+    )
     monkeypatch.setattr(
         "clawk_cli.auth.resolve_nous_access_token",
         lambda refresh_skew_seconds=120: "fresh-token",
@@ -103,19 +128,25 @@ def test_read_nous_access_token_refreshes_expiring_cached_token(tmp_path, monkey
     assert managed_tool_gateway.read_nous_access_token() == "fresh-token"
 
 
-def test_is_managed_tool_gateway_ready_skips_refresh_for_expired_cached_token(tmp_path, monkeypatch):
+def test_is_managed_tool_gateway_ready_skips_refresh_for_expired_cached_token(
+    tmp_path, monkeypatch
+):
     monkeypatch.delenv("TOOL_GATEWAY_USER_TOKEN", raising=False)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     expired_at = (datetime.now(UTC) - timedelta(seconds=30)).isoformat()
-    (tmp_path / "auth.json").write_text(json.dumps({
-        "providers": {
-            "nous": {
-                "access_token": "expired-token",
-                "refresh_token": "refresh-token",
-                "expires_at": expired_at,
+    (tmp_path / "auth.json").write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "nous": {
+                        "access_token": "expired-token",
+                        "refresh_token": "refresh-token",
+                        "expires_at": expired_at,
+                    }
+                }
             }
-        }
-    }))
+        )
+    )
     refresh_calls = []
 
     def _record_refresh(*, refresh_skew_seconds=120, **_kwargs):
@@ -127,11 +158,16 @@ def test_is_managed_tool_gateway_ready_skips_refresh_for_expired_cached_token(tm
         _record_refresh,
     )
 
-    with patch.dict(
-        os.environ,
-        {"TOOL_GATEWAY_DOMAIN": "nousresearch.com"},
-        clear=False,
-    ), patch.object(managed_tool_gateway, "managed_nous_tools_enabled", return_value=True):
+    with (
+        patch.dict(
+            os.environ,
+            {"TOOL_GATEWAY_DOMAIN": "nousresearch.com"},
+            clear=False,
+        ),
+        patch.object(
+            managed_tool_gateway, "managed_nous_tools_enabled", return_value=True
+        ),
+    ):
         assert is_managed_tool_gateway_ready("modal") is True
 
     assert refresh_calls == []
@@ -150,10 +186,13 @@ def test_connector_gateway_origin_pins_the_deployed_connectors_host():
             "https://connector-gateway.nousresearch.com"
         )
 
+
 def test_managed_gateway_origin_honors_the_harness_override():
     # TOOL_GATEWAY_URL pins the full media origin (the e2e harness sets it to a
     # loopback gateway), and the bearer gate must accept exactly that origin.
-    with patch.dict(os.environ, {"TOOL_GATEWAY_URL": "http://127.0.0.1:3009/"}, clear=False):
+    with patch.dict(
+        os.environ, {"TOOL_GATEWAY_URL": "http://127.0.0.1:3009/"}, clear=False
+    ):
         os.environ.pop("CONNECTOR_GATEWAY_URL", None)
         assert managed_gateway_auth.managed_gateway_origin() == "http://127.0.0.1:3009"
         assert managed_gateway_auth.is_managed_nous_gateway_url(
@@ -162,6 +201,7 @@ def test_managed_gateway_origin_honors_the_harness_override():
         assert not managed_gateway_auth.is_managed_nous_gateway_url(
             "https://tools.nousresearch.com/api/vendorx/generations"
         )
+
 
 def test_connector_gateway_origin_honors_its_own_override():
     # CONNECTOR_GATEWAY_URL is the connectors host's own key: it moves the
@@ -176,13 +216,16 @@ def test_connector_gateway_origin_honors_its_own_override():
         clear=False,
     ):
         os.environ.pop("TOOL_GATEWAY_URL", None)
-        assert managed_gateway_auth.connector_gateway_origin() == "http://127.0.0.1:3009"
+        assert (
+            managed_gateway_auth.connector_gateway_origin() == "http://127.0.0.1:3009"
+        )
         assert managed_gateway_auth.managed_gateway_origin() == (
             "https://tool-gateway.nousresearch.com"
         )
         assert managed_gateway_auth.is_managed_nous_gateway_url(
             "http://127.0.0.1:3009/v1/connectors/search"
         )
+
 
 def test_default_bearer_gate_accepts_both_deployed_hosts_only():
     # Exact (scheme, netloc) equality against each deployed origin. Both
@@ -210,17 +253,25 @@ def test_default_bearer_gate_accepts_both_deployed_hosts_only():
             assert not managed_gateway_auth.is_managed_nous_gateway_url(untrusted)
 
 
-def test_read_nous_provider_state_falls_back_to_global_root_for_share_auth_profiles(tmp_path, monkeypatch):
+def test_read_nous_provider_state_falls_back_to_global_root_for_share_auth_profiles(
+    tmp_path, monkeypatch
+):
     # A profile created with ``share_auth`` has no auth.json of its own; it signs in with the
     # root identity. The connector gate must see that identity, or manage_connections vanishes
     # from the profile's tool list while every other credential reader still works.
     root = tmp_path / ".clawk"
     profile = root / "profiles" / "work"
     profile.mkdir(parents=True)
-    (root / "auth.json").write_text(json.dumps({
-        "version": 1,
-        "providers": {"nous": {"auth_method": "anonymous", "access_token": "tok"}},
-    }))
+    (root / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "nous": {"auth_method": "anonymous", "access_token": "tok"}
+                },
+            }
+        )
+    )
     monkeypatch.setenv("CLAWK_HOME", str(profile))
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 

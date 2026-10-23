@@ -34,7 +34,10 @@ def _frontmatter_line(key: str, value: Any) -> str:
     if value is None or isinstance(value, bool):
         shown = {None: "null", True: "true", False: "false"}[value]
     else:
-        shown = json.dumps(value if isinstance(value, (int, float, list)) else str(value), ensure_ascii=False)
+        shown = json.dumps(
+            value if isinstance(value, (int, float, list)) else str(value),
+            ensure_ascii=False,
+        )
     return f"{key}: {shown}"
 
 
@@ -56,7 +59,11 @@ def _session_id(session: dict[str, Any]) -> str:
 
 def _segments(session: dict[str, Any]) -> list[dict[str, Any]]:
     segments = session.get("segments")
-    return [s for s in segments if isinstance(s, dict)] if isinstance(segments, list) and segments else [session]
+    return (
+        [s for s in segments if isinstance(s, dict)]
+        if isinstance(segments, list) and segments
+        else [session]
+    )
 
 
 def _message_count(session: dict[str, Any]) -> int:
@@ -74,7 +81,13 @@ def _render_messages(session: dict[str, Any]) -> str:
         for message in list(segment.get("messages") or []):
             parts.append(_message_heading(message) + "\n")
             content = message.get("content")
-            rendered = "" if content is None else content.rstrip() if isinstance(content, str) else _json_block(content)
+            rendered = (
+                ""
+                if content is None
+                else content.rstrip()
+                if isinstance(content, str)
+                else _json_block(content)
+            )
             if rendered:
                 parts.append(rendered + "\n")
             if tool_calls := message.get("tool_calls"):
@@ -83,7 +96,9 @@ def _render_messages(session: dict[str, Any]) -> str:
     return "\n".join(parts).rstrip() + "\n"
 
 
-def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at: float) -> str:
+def _export_body_without_hash(
+    session: dict[str, Any], *, fmt: str, exported_at: float
+) -> str:
     session_id = _session_id(session)
     exported_iso = _iso_timestamp(exported_at)
     message_count = _message_count(session)
@@ -91,8 +106,14 @@ def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at:
         ("session_id", session_id),
         ("title", session.get("title")),
         ("source", session.get("source")),
-        ("created_at", _iso_timestamp(session.get("started_at") or session.get("created_at"))),
-        ("updated_at", _iso_timestamp(session.get("last_active") or session.get("updated_at"))),
+        (
+            "created_at",
+            _iso_timestamp(session.get("started_at") or session.get("created_at")),
+        ),
+        (
+            "updated_at",
+            _iso_timestamp(session.get("last_active") or session.get("updated_at")),
+        ),
         ("ended_at", _iso_timestamp(session.get("ended_at"))),
         ("model", session.get("model")),
         ("provider", session.get("billing_provider") or session.get("provider")),
@@ -100,14 +121,25 @@ def _export_body_without_hash(session: dict[str, Any], *, fmt: str, exported_at:
         ("archived", bool(session.get("archived"))),
         ("message_count", message_count),
         ("tool_call_count", session.get("tool_call_count") or 0),
-        *([("lineage_session_ids", session["lineage_session_ids"])] if session.get("lineage_session_ids") else []),
-        ("format", fmt), ("exported_at", exported_iso), ("exporter", EXPORTER_VERSION),
+        *(
+            [("lineage_session_ids", session["lineage_session_ids"])]
+            if session.get("lineage_session_ids")
+            else []
+        ),
+        ("format", fmt),
+        ("exported_at", exported_iso),
+        ("exporter", EXPORTER_VERSION),
     ]
     parts = [
         "\n".join(["---", *(_frontmatter_line(k, v) for k, v in fields), "---", ""]),
-        f"# {session.get('title') or session_id}\n", f"Session ID: `{session_id}`\n",
+        f"# {session.get('title') or session_id}\n",
+        f"Session ID: `{session_id}`\n",
         *([f"Source: `{session.get('source')}`\n"] if session.get("source") else []),
-        *([f"Working directory: `{session.get('cwd')}`\n"] if session.get("cwd") else []),
+        *(
+            [f"Working directory: `{session.get('cwd')}`\n"]
+            if session.get("cwd")
+            else []
+        ),
         _render_messages(session),
         f"{_VERIFICATION_HEADING}\n",
         f"- Session id: `{session_id}`",
@@ -134,7 +166,9 @@ def render_session_markdown(
         return body.split(f"\n{_VERIFICATION_HEADING}\n", 1)[0].rstrip() + "\n"
     # The digest covers the body with the SHA line set to `pending`, which is what verify recomputes.
     digest_body = body.replace(f"`{_SHA_PLACEHOLDER}`", "`pending`")
-    return body.replace(_SHA_PLACEHOLDER, hashlib.sha256(digest_body.encode("utf-8")).hexdigest())
+    return body.replace(
+        _SHA_PLACEHOLDER, hashlib.sha256(digest_body.encode("utf-8")).hexdigest()
+    )
 
 
 def safe_session_filename(session: dict[str, Any], *, fmt: str = "md") -> str:
@@ -183,7 +217,14 @@ def redact_session_data(session: dict[str, Any]) -> dict[str, Any]:
             return {k: _clean(v) for k, v in value.items()}
         return value
 
-    return {**session, **{k: _clean(session[k]) for k in ("messages", "segments") if session.get(k) is not None}}
+    return {
+        **session,
+        **{
+            k: _clean(session[k])
+            for k in ("messages", "segments")
+            if session.get(k) is not None
+        },
+    }
 
 
 def _export_dir(output_dir: Path | str) -> Path:
@@ -193,7 +234,11 @@ def _export_dir(output_dir: Path | str) -> Path:
 
 
 def write_session_markdown(
-    session: dict[str, Any], output_dir: Path | str, *, fmt: str = "md", force: bool = False
+    session: dict[str, Any],
+    output_dir: Path | str,
+    *,
+    fmt: str = "md",
+    force: bool = False,
 ) -> Path:
     """Write a Markdown/QMD export file and return its path."""
     path = _export_dir(output_dir) / safe_session_filename(session, fmt=fmt)
@@ -203,10 +248,13 @@ def write_session_markdown(
     return path
 
 
-def append_manifest_entry(output_dir: Path | str, session: dict[str, Any], path: Path | str, *, fmt: str) -> Path:
+def append_manifest_entry(
+    output_dir: Path | str, session: dict[str, Any], path: Path | str, *, fmt: str
+) -> Path:
     entry = {
         "session_id": _session_id(session),
-        "lineage_session_ids": session.get("lineage_session_ids") or [_session_id(session)],
+        "lineage_session_ids": session.get("lineage_session_ids")
+        or [_session_id(session)],
         "path": str(Path(path)),
         "format": fmt,
         "message_count": _message_count(session),

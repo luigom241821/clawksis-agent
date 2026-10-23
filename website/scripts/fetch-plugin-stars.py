@@ -40,7 +40,9 @@ import clawk_yaml as yaml
 DEFAULT_CATALOG_DIR = REPO_ROOT / "plugin-catalog"
 DEFAULT_OUTPUT = REPO_ROOT / "website" / "static" / "api" / "plugin-stars.json"
 LIVE_URL = "https://samuelgradientai-sys.github.io/clawksis-agent/api/plugin-stars.json"
-_GITHUB_REPO_RE = re.compile(r"^https://github\.com/([^/\s]+)/([^/\s#?]+?)(?:\.git)?/?$")
+_GITHUB_REPO_RE = re.compile(
+    r"^https://github\.com/([^/\s]+)/([^/\s#?]+?)(?:\.git)?/?$"
+)
 
 
 def _log(msg: str) -> None:
@@ -62,14 +64,20 @@ def catalog_slugs(catalog_dir: Path) -> list[str]:
             raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         except (yaml.YAMLError, OSError):
             continue
-        slug = github_slug(str((raw or {}).get("repo") or "")) if isinstance(raw, dict) else None
+        slug = (
+            github_slug(str((raw or {}).get("repo") or ""))
+            if isinstance(raw, dict)
+            else None
+        )
         if slug:
             slugs.add(slug)
     return sorted(slugs)
 
 
 def _http_json(url: str, headers: dict[str, str], timeout: float = 15.0):
-    req = urllib.request.Request(url, headers={"User-Agent": "clawksis-agent-docs", **headers})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "clawksis-agent-docs", **headers}
+    )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -102,22 +110,31 @@ _BATCH = 100
 
 def _graphql(query: str, token: str) -> dict:
     req = urllib.request.Request(
-        _GRAPHQL_URL, data=json.dumps({"query": query}).encode("utf-8"), method="POST",
-        headers={"User-Agent": "clawksis-agent-docs", "Authorization": f"Bearer {token}",
-                 "Content-Type": "application/json"})
+        _GRAPHQL_URL,
+        data=json.dumps({"query": query}).encode("utf-8"),
+        method="POST",
+        headers={
+            "User-Agent": "clawksis-agent-docs",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+    )
     with urllib.request.urlopen(req, timeout=30.0) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
 def stars_query(slugs: list[str]) -> str:
     fields = "\n".join(
-        f'r{i}: repository(owner: {json.dumps(slug.split("/", 1)[0])}, name: {json.dumps(slug.split("/", 1)[1])})'
+        f"r{i}: repository(owner: {json.dumps(slug.split('/', 1)[0])}, name: {json.dumps(slug.split('/', 1)[1])})"
         " { stargazerCount }"
-        for i, slug in enumerate(slugs))
+        for i, slug in enumerate(slugs)
+    )
     return "query {\n" + fields + "\n}"
 
 
-def probe_stars(slugs: list[str], previous: dict[str, int], token: str | None) -> tuple[dict[str, int], bool]:
+def probe_stars(
+    slugs: list[str], previous: dict[str, int], token: str | None
+) -> tuple[dict[str, int], bool]:
     """GraphQL probe in ``_BATCH``-sized requests -> ``(stars, probed)``. On failure keep every previous
     count (never regress to 0) and report ``probed=False`` so the caller does not restamp
     ``fetched_at`` over counts that are days old (#118113)."""
@@ -129,7 +146,7 @@ def probe_stars(slugs: list[str], previous: dict[str, int], token: str | None) -
         return kept, False
     stars: dict[str, int] = {}
     for start in range(0, len(slugs), _BATCH):
-        batch = slugs[start:start + _BATCH]
+        batch = slugs[start : start + _BATCH]
         try:
             payload = _graphql(stars_query(batch), token)
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -137,7 +154,9 @@ def probe_stars(slugs: list[str], previous: dict[str, int], token: str | None) -
             return kept, False
         data = payload.get("data") or {}
         for err in payload.get("errors") or []:
-            _log(f"GraphQL: {err.get('message')}")  # e.g. a renamed/deleted repo; its previous count is kept
+            _log(
+                f"GraphQL: {err.get('message')}"
+            )  # e.g. a renamed/deleted repo; its previous count is kept
         for i, slug in enumerate(batch):
             node = data.get(f"r{i}")
             if isinstance(node, dict) and isinstance(node.get("stargazerCount"), int):
@@ -147,32 +166,59 @@ def probe_stars(slugs: list[str], previous: dict[str, int], token: str | None) -
     return stars, True
 
 
-def main(catalog_dir: Path = DEFAULT_CATALOG_DIR, output: Path = DEFAULT_OUTPUT,
-         probe: bool = False, live_url: str | None = LIVE_URL, token: str | None = None) -> int:
+def main(
+    catalog_dir: Path = DEFAULT_CATALOG_DIR,
+    output: Path = DEFAULT_OUTPUT,
+    probe: bool = False,
+    live_url: str | None = LIVE_URL,
+    token: str | None = None,
+) -> int:
     previous = load_previous(output, live_url)
     output.parent.mkdir(parents=True, exist_ok=True)
 
     if not probe:
-        output.write_text(json.dumps(previous or {"fetched_at": None, "stars": {}},
-                                     separators=(",", ":")), encoding="utf-8")
-        print(f"Reused plugin stars from {previous.get('fetched_at')} "
-              f"({len(previous.get('stars', {}))} repos, no GitHub calls)")
+        output.write_text(
+            json.dumps(
+                previous or {"fetched_at": None, "stars": {}}, separators=(",", ":")
+            ),
+            encoding="utf-8",
+        )
+        print(
+            f"Reused plugin stars from {previous.get('fetched_at')} "
+            f"({len(previous.get('stars', {}))} repos, no GitHub calls)"
+        )
         return 0
 
     slugs = catalog_slugs(catalog_dir)
-    prev_stars = {k: int(v) for k, v in (previous.get("stars") or {}).items() if isinstance(v, (int, float))}
-    stars, probed = probe_stars(slugs, prev_stars, token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"))
+    prev_stars = {
+        k: int(v)
+        for k, v in (previous.get("stars") or {}).items()
+        if isinstance(v, (int, float))
+    }
+    stars, probed = probe_stars(
+        slugs,
+        prev_stars,
+        token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN"),
+    )
     fetched_at = datetime.now(UTC).isoformat() if probed else previous.get("fetched_at")
-    output.write_text(json.dumps({"fetched_at": fetched_at, "stars": stars}, separators=(",", ":")),
-                      encoding="utf-8")
+    output.write_text(
+        json.dumps({"fetched_at": fetched_at, "stars": stars}, separators=(",", ":")),
+        encoding="utf-8",
+    )
     if not probed:
         # Visible in the run summary: the ranking page would otherwise claim today's date over stale counts.
         missing = len(slugs) - len(stars)
-        print(f"::warning::plugin star probe failed; reused {len(stars)} cached counts from {fetched_at}, "
-              f"{missing} of {len(slugs)} catalog repos have no star count")
-        print(f"Probe failed; wrote {len(stars)} cached star counts (as of {fetched_at}) to {output}")
+        print(
+            f"::warning::plugin star probe failed; reused {len(stars)} cached counts from {fetched_at}, "
+            f"{missing} of {len(slugs)} catalog repos have no star count"
+        )
+        print(
+            f"Probe failed; wrote {len(stars)} cached star counts (as of {fetched_at}) to {output}"
+        )
         return 0
-    print(f"Probed {len(slugs)} repos in {-(-len(slugs) // _BATCH)} GraphQL request(s), wrote {len(stars)} star counts to {output}")
+    print(
+        f"Probed {len(slugs)} repos in {-(-len(slugs) // _BATCH)} GraphQL request(s), wrote {len(stars)} star counts to {output}"
+    )
     return 0
 
 
@@ -180,9 +226,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog-dir", type=Path, default=DEFAULT_CATALOG_DIR)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument("--probe", action="store_true",
-                        help="call GitHub (batched GraphQL requests); only the scheduled skills-index run does this")
-    parser.add_argument("--no-live", action="store_true", help="do not consult the live site's cache")
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="call GitHub (batched GraphQL requests); only the scheduled skills-index run does this",
+    )
+    parser.add_argument(
+        "--no-live", action="store_true", help="do not consult the live site's cache"
+    )
     args = parser.parse_args()
-    sys.exit(main(catalog_dir=args.catalog_dir, output=args.output, probe=args.probe,
-                  live_url=None if args.no_live else LIVE_URL))
+    sys.exit(
+        main(
+            catalog_dir=args.catalog_dir,
+            output=args.output,
+            probe=args.probe,
+            live_url=None if args.no_live else LIVE_URL,
+        )
+    )

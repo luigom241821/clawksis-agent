@@ -7,7 +7,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.tool_executor import _ToolCallRef, _begin_tool_execution, _ensure_file_checkpoint
+from agent.tool_executor import (
+    _ToolCallRef,
+    _begin_tool_execution,
+    _ensure_file_checkpoint,
+)
 from agent.turn_explainers import TurnExplainersMixin
 from tools.checkpoint_manager import CheckpointManager
 from tools.terminal_tool import _active_environments, _env_lock
@@ -15,7 +19,9 @@ from tools.terminal_tool import _active_environments, _env_lock
 
 @pytest.fixture
 def manager(tmp_path, monkeypatch):
-    monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", tmp_path / "checkpoints")
+    monkeypatch.setattr(
+        "tools.checkpoint_manager.CHECKPOINT_BASE", tmp_path / "checkpoints"
+    )
     return CheckpointManager(enabled=True)
 
 
@@ -66,7 +72,9 @@ def test_relative_file_checkpoint_uses_task_workspace(tmp_path, monkeypatch):
     assert manager.list_checkpoints(str(process_cwd)) == []
 
 
-def test_container_backend_task_leaves_host_store_untouched(tmp_path, manager, container_task_id):
+def test_container_backend_task_leaves_host_store_untouched(
+    tmp_path, manager, container_task_id
+):
     """A container-backed task's paths are container paths: no host snapshot from the file or
     destructive-terminal hooks and no host ledger entry, even when an unrelated host tree shares
     the spelling. A local task on the same manager still gets its checkpoint (control)."""
@@ -75,16 +83,31 @@ def test_container_backend_task_leaves_host_store_untouched(tmp_path, manager, c
     host_file.write_text("host content\n", encoding="utf-8")
     path = str(host_file)
     agent = SimpleNamespace(
-        _checkpoint_mgr=manager, _turn_failed_file_mutations={}, _turn_file_mutation_paths=set(),
-        quiet_mode=True, tool_progress_callback=None, tool_start_callback=None, _touch_activity=lambda *_: None,
+        _checkpoint_mgr=manager,
+        _turn_failed_file_mutations={},
+        _turn_file_mutation_paths=set(),
+        quiet_mode=True,
+        tool_progress_callback=None,
+        tool_start_callback=None,
+        _touch_activity=lambda *_: None,
     )
 
     _ensure_file_checkpoint(agent, "write_file", {"path": path}, container_task_id)
-    ref = _ToolCallRef("terminal", {"command": f"rm -rf {host_file.parent}"}, container_task_id, "call-1", [])
+    ref = _ToolCallRef(
+        "terminal",
+        {"command": f"rm -rf {host_file.parent}"},
+        container_task_id,
+        "call-1",
+        [],
+    )
     _begin_tool_execution(agent, ref, None)
     TurnExplainersMixin._record_file_mutation_result(
-        agent, "write_file", {"path": path, "content": "x"},
-        json.dumps({"bytes_written": 1, "resolved_path": path}), False, task_id=container_task_id,
+        agent,
+        "write_file",
+        {"path": path, "content": "x"},
+        json.dumps({"bytes_written": 1, "resolved_path": path}),
+        False,
+        task_id=container_task_id,
     )
     assert manager.list_checkpoints(str(host_file.parent)) == []
     assert not (tmp_path / "checkpoints").exists()
@@ -94,7 +117,9 @@ def test_container_backend_task_leaves_host_store_untouched(tmp_path, manager, c
 
 
 @pytest.mark.asyncio
-async def test_container_session_refuses_host_rollback_on_every_surface(tmp_path, monkeypatch, manager, capsys):
+async def test_container_session_refuses_host_rollback_on_every_surface(
+    tmp_path, monkeypatch, manager, capsys
+):
     """A host checkpoint left by an earlier local session is never restored or diffed from a
     container-backed session: CLI /rollback + /diff session, gateway /rollback + /diff session,
     and the rollback.restore RPC all answer with the backend reason instead."""
@@ -109,11 +134,15 @@ async def test_container_session_refuses_host_rollback_on_every_surface(tmp_path
     host_dir.mkdir(parents=True)
     (host_dir / "a.txt").write_text("before\n", encoding="utf-8")
     manager.ensure_checkpoint(str(host_dir), "earlier local session")
-    monkeypatch.setenv("TERMINAL_ENV", "docker")  # the configured backend, as the product bridges it
+    monkeypatch.setenv(
+        "TERMINAL_ENV", "docker"
+    )  # the configured backend, as the product bridges it
     monkeypatch.setenv("TERMINAL_CWD", str(host_dir))
 
     def refuse(*_args, **_kwargs):
-        raise AssertionError("host checkpoint operation reached from a container-backed session")
+        raise AssertionError(
+            "host checkpoint operation reached from a container-backed session"
+        )
 
     monkeypatch.setattr(manager, "restore", refuse)
     monkeypatch.setattr(manager, "diff", refuse)
@@ -122,7 +151,8 @@ async def test_container_session_refuses_host_rollback_on_every_surface(tmp_path
     cli = SimpleNamespace(
         _checkpoint_manager=lambda _lines: manager,
         _resolve_checkpoint_ref=lambda ref, cps: cps[int(ref) - 1]["hash"],
-        _rollback_restore=refuse, _rollback_diff=refuse,
+        _rollback_restore=refuse,
+        _rollback_diff=refuse,
     )
     for command in ("/rollback 1 --all", "/rollback diff 1"):
         CLICommandsMixin._handle_rollback_command(cli, command)
@@ -132,27 +162,60 @@ async def test_container_session_refuses_host_rollback_on_every_surface(tmp_path
 
     runner = object.__new__(gateway_run.GatewayRunner)
     runner._checkpoint_manager = lambda source=None: manager
-    source = SessionSource(platform=Platform.TELEGRAM, user_id="u", chat_id="c", user_name="t", chat_type="dm")
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        user_id="u",
+        chat_id="c",
+        user_name="t",
+        chat_type="dm",
+    )
     for text in ("/rollback 1", "/rollback 1 --all"):
-        assert "docker" in await runner._handle_rollback_command(MessageEvent(text=text, source=source))
-    assert "docker" in await runner._handle_diff_command(MessageEvent(text="/diff session", source=source))
-    listing = await runner._handle_rollback_command(MessageEvent(text="/rollback", source=source))
-    assert "docker" in listing and "earlier local session" in listing  # listing stays visible
+        assert "docker" in await runner._handle_rollback_command(
+            MessageEvent(text=text, source=source)
+        )
+    assert "docker" in await runner._handle_diff_command(
+        MessageEvent(text="/diff session", source=source)
+    )
+    listing = await runner._handle_rollback_command(
+        MessageEvent(text="/rollback", source=source)
+    )
+    assert (
+        "docker" in listing and "earlier local session" in listing
+    )  # listing stays visible
 
     session = {
-        "agent": SimpleNamespace(_checkpoint_mgr=manager), "cwd": str(host_dir), "running": False,
-        "session_key": "container-key", "history": [], "history_lock": threading.Lock(), "history_version": 0,
+        "agent": SimpleNamespace(_checkpoint_mgr=manager),
+        "cwd": str(host_dir),
+        "running": False,
+        "session_key": "container-key",
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
     }
     monkeypatch.setitem(server._sessions, "container-sid", session)
     resp = server.handle_request(
-        {"id": "1", "method": "rollback.restore", "params": {"session_id": "container-sid", "hash": "1"}}
+        {
+            "id": "1",
+            "method": "rollback.restore",
+            "params": {"session_id": "container-sid", "hash": "1"},
+        }
     )
     assert resp["result"]["success"] is False and "docker" in resp["result"]["error"]
 
-    monkeypatch.setenv("TERMINAL_ENV", "local")  # control: a local session still dispatches
-    monkeypatch.setattr(manager, "restore", lambda *a, **k: {"success": True, "restored_to": "x", "reason": "r"})
+    monkeypatch.setenv(
+        "TERMINAL_ENV", "local"
+    )  # control: a local session still dispatches
+    monkeypatch.setattr(
+        manager,
+        "restore",
+        lambda *a, **k: {"success": True, "restored_to": "x", "reason": "r"},
+    )
     resp = server.handle_request(
-        {"id": "2", "method": "rollback.restore", "params": {"session_id": "container-sid", "hash": "1"}}
+        {
+            "id": "2",
+            "method": "rollback.restore",
+            "params": {"session_id": "container-sid", "hash": "1"},
+        }
     )
     assert resp["result"]["success"] is True
     assert (host_dir / "a.txt").read_text(encoding="utf-8") == "before\n"

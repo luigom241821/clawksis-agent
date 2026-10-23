@@ -18,6 +18,7 @@ This test asserts both cases:
 * When the stamp is absent, ``clawk dump`` must show ``(unknown)`` — a guard
   against the helper inventing a SHA from another source.
 """
+
 from __future__ import annotations
 
 import json
@@ -44,7 +45,9 @@ def _run_dump(image: str) -> str:
     """
     r = subprocess.run(
         ["docker", "run", "--rm", image, "dump"],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     assert r.returncode == 0, (
@@ -58,10 +61,17 @@ def _read_stamp_commit_from_image(image: str) -> str | None:
     """Return the stamp commit from the image, or None when absent/unusable."""
     r = subprocess.run(
         [
-            "docker", "run", "--rm", "--entrypoint", "cat", image,
+            "docker",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "cat",
+            image,
             "/opt/clawksis/install-stamp.json",
         ],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     if r.returncode != 0:
@@ -89,7 +99,9 @@ def test_dump_reports_stamp_commit_when_present(built_image: str) -> None:
     # Read the independent input: the canonical runner scrubs CI/GITHUB_SHA.
     source_stamp = Path(__file__).resolve().parents[2] / "install-stamp.json"
     if os.environ.get("CLAWK_TEST_IMAGE"):
-        assert source_stamp.is_file(), "prebuilt image requires its checkout build stamp"
+        assert source_stamp.is_file(), (
+            "prebuilt image requires its checkout build stamp"
+        )
     if source_stamp.is_file():
         expected = json.loads(source_stamp.read_text(encoding="utf-8-sig"))["commit"]
         assert re.fullmatch(r"[0-9a-f]{40}", expected), "invalid expected build commit"

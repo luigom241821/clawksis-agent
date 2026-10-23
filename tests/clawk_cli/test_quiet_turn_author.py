@@ -36,16 +36,23 @@ def _run(monkeypatch, env_value, run_conversation=None):
         recorded.append(kwargs)
         return {"final_response": "ok"}
 
-    agent = SimpleNamespace(run_conversation=run_conversation or record, session_id="s-1")
+    agent = SimpleNamespace(
+        run_conversation=run_conversation or record, session_id="s-1"
+    )
     with pytest.raises(SystemExit) as exc:
-        cli._run_quiet_single_query(SimpleNamespace(agent=agent, conversation_history=[], session_id="s-1"), "hello")
+        cli._run_quiet_single_query(
+            SimpleNamespace(agent=agent, conversation_history=[], session_id="s-1"),
+            "hello",
+        )
     assert exc.value.code == 0
     return recorded
 
 
 def test_quiet_one_shot_passes_turn_author_from_env(monkeypatch, capsys):
     recorded = _run(monkeypatch, json.dumps(AUTHOR))
-    assert recorded == [{"user_message": "hello", "conversation_history": [], "turn_author": AUTHOR}]
+    assert recorded == [
+        {"user_message": "hello", "conversation_history": [], "turn_author": AUTHOR}
+    ]
     assert capsys.readouterr().out.strip() == "ok"
 
 
@@ -62,7 +69,9 @@ def test_quiet_one_shot_consumes_the_variable_before_the_turn(monkeypatch):
     assert TURN_AUTHOR_ENV not in os.environ
 
 
-def test_quiet_one_shot_resumes_nested_notify_on_this_session_not_parent(monkeypatch, capsys):
+def test_quiet_one_shot_resumes_nested_notify_on_this_session_not_parent(
+    monkeypatch, capsys
+):
     """A nested Bot Mode completion keyed to B wakes B even when the parent env still names A.
 
     ``chat -Q`` used to inherit the dispatcher's CLAWK_SESSION_KEY and exit after the
@@ -79,14 +88,16 @@ def test_quiet_one_shot_resumes_nested_notify_on_this_session_not_parent(monkeyp
     def run_conversation(**kwargs):
         calls.append({"key": get_current_session_key(), "msg": kwargs["user_message"]})
         if len(calls) == 1:
-            process_registry.completion_queue.put({
-                "type": "completion",
-                "session_id": "proc-c",
-                "session_key": "session-B",
-                "command": "message_agent C",
-                "exit_code": 0,
-                "output": "marker-from-C",
-            })
+            process_registry.completion_queue.put(
+                {
+                    "type": "completion",
+                    "session_id": "proc-c",
+                    "session_key": "session-B",
+                    "command": "message_agent C",
+                    "exit_code": 0,
+                    "output": "marker-from-C",
+                }
+            )
             return {"final_response": "sent, finish your turn"}
         return {"final_response": "C said marker-from-C"}
 
@@ -94,7 +105,9 @@ def test_quiet_one_shot_resumes_nested_notify_on_this_session_not_parent(monkeyp
     try:
         with pytest.raises(SystemExit) as exc:
             cli._run_quiet_single_query(
-                SimpleNamespace(agent=agent, conversation_history=[], session_id="session-B"),
+                SimpleNamespace(
+                    agent=agent, conversation_history=[], session_id="session-B"
+                ),
                 "ask C",
             )
         assert exc.value.code == 0
@@ -124,7 +137,15 @@ def test_quiet_notify_loop_shares_one_linger_budget(monkeypatch):
 
     # Round 1 drains one text so a round 2 happens; the clock advances 300s across
     # the follow-up turn, so round 2 must wait only the remaining 300s.
-    rounds = [[({"type": "completion", "session_key": "session-B"}, "[IMPORTANT: reply from C]")], []]
+    rounds = [
+        [
+            (
+                {"type": "completion", "session_key": "session-B"},
+                "[IMPORTANT: reply from C]",
+            )
+        ],
+        [],
+    ]
 
     def fake_drain(*a, **k):
         return rounds.pop(0) if rounds else []
@@ -136,9 +157,13 @@ def test_quiet_notify_loop_shares_one_linger_budget(monkeypatch):
 
     calls = []
     result = qsq.continue_quiet_notify_completions(
-        "session-B", lambda text: calls.append(text) or {"final_response": text}, linger_budget=600.0,
+        "session-B",
+        lambda text: calls.append(text) or {"final_response": text},
+        linger_budget=600.0,
     )
-    assert waits == [600.0, 300.0], "round 2 must wait the remaining budget, not a fresh one"
+    assert waits == [600.0, 300.0], (
+        "round 2 must wait the remaining budget, not a fresh one"
+    )
     assert len(calls) == 1
     assert result == {"final_response": calls[0]}
 
@@ -156,14 +181,22 @@ def test_quiet_notify_loop_stops_after_timeout_with_drained_texts(monkeypatch):
 
     monkeypatch.setattr(pr.process_registry, "wait_for_pending_completions", fake_wait)
     monkeypatch.setattr(
-        pr.process_registry, "drain_notifications",
-        lambda *a, **k: [({"type": "completion", "session_key": "session-B"}, "[IMPORTANT: reply from C]")],
+        pr.process_registry,
+        "drain_notifications",
+        lambda *a, **k: [
+            (
+                {"type": "completion", "session_key": "session-B"},
+                "[IMPORTANT: reply from C]",
+            )
+        ],
     )
     monkeypatch.setattr(qsq.time, "monotonic", lambda: 100.0)
 
     calls = []
     result = qsq.continue_quiet_notify_completions(
-        "session-B", lambda text: calls.append(text) or {"final_response": text}, linger_budget=600.0,
+        "session-B",
+        lambda text: calls.append(text) or {"final_response": text},
+        linger_budget=600.0,
     )
     # One wait only: timed out -> drained text ran -> break (no second 600s wait).
     assert waits == [600.0]
@@ -176,16 +209,25 @@ def test_finalize_linger_skipped_after_quiet_notify_loop(monkeypatch):
     from tools import process_registry as pr
 
     waited = []
-    monkeypatch.setattr(pr.process_registry, "wait_for_pending_completions",
-                        lambda *a, **k: waited.append(1) or {"waited": [], "completed": [], "timed_out": []})
+    monkeypatch.setattr(
+        pr.process_registry,
+        "wait_for_pending_completions",
+        lambda *a, **k: (
+            waited.append(1) or {"waited": [], "completed": [], "timed_out": []}
+        ),
+    )
 
     cli = SimpleNamespace(_quiet_notify_linger_done=True)
-    cli._wait_for_oneshot_background_completions(cli) if hasattr(cli, "_wait_for_oneshot_background_completions") else None
+    cli._wait_for_oneshot_background_completions(cli) if hasattr(
+        cli, "_wait_for_oneshot_background_completions"
+    ) else None
     # The real entrypoint is the module function; call it through the CLI module.
     import cli as cli_mod
 
     cli_mod._wait_for_oneshot_background_completions(cli)
-    assert waited == [], "finalize must skip the re-wait when the quiet notify loop already ran"
+    assert waited == [], (
+        "finalize must skip the re-wait when the quiet notify loop already ran"
+    )
 
 
 def test_quiet_notify_loop_injects_owned_async_delegation_events(monkeypatch):
@@ -198,10 +240,18 @@ def test_quiet_notify_loop_injects_owned_async_delegation_events(monkeypatch):
     from clawk_cli import quiet_single_query as qsq
     from tools import process_registry as pr
 
-    monkeypatch.setattr(pr.process_registry, "wait_for_pending_completions",
-                        lambda *a, **k: {"waited": [], "completed": [], "timed_out": []})
+    monkeypatch.setattr(
+        pr.process_registry,
+        "wait_for_pending_completions",
+        lambda *a, **k: {"waited": [], "completed": [], "timed_out": []},
+    )
     # A real drain pops owned events; round 2 finds the queue empty and the loop returns.
-    events = [({"type": "async_delegation", "session_key": "session-B"}, "[IMPORTANT: delegated reply from C]")]
+    events = [
+        (
+            {"type": "async_delegation", "session_key": "session-B"},
+            "[IMPORTANT: delegated reply from C]",
+        )
+    ]
 
     def fake_drain(*a, **k):
         return [events.pop(0)] if events else []
@@ -210,7 +260,9 @@ def test_quiet_notify_loop_injects_owned_async_delegation_events(monkeypatch):
 
     seen = []
     result = qsq.continue_quiet_notify_completions(
-        "session-B", lambda text: seen.append(text) or {"final_response": text}, linger_budget=0.0,
+        "session-B",
+        lambda text: seen.append(text) or {"final_response": text},
+        linger_budget=0.0,
     )
     assert seen == ["[IMPORTANT: delegated reply from C]"]
     assert result == {"final_response": "[IMPORTANT: delegated reply from C]"}
@@ -218,15 +270,23 @@ def test_quiet_notify_loop_injects_owned_async_delegation_events(monkeypatch):
 
 def _quiet_drain(monkeypatch, events):
     from tools import process_registry as pr
-    monkeypatch.setattr(pr.process_registry, "wait_for_pending_completions",
-                        lambda *a, **k: {"waited": [], "completed": [], "timed_out": []})
+
+    monkeypatch.setattr(
+        pr.process_registry,
+        "wait_for_pending_completions",
+        lambda *a, **k: {"waited": [], "completed": [], "timed_out": []},
+    )
     queue = list(events)
-    monkeypatch.setattr(pr.process_registry, "drain_notifications",
-                        lambda *a, **k: [queue.pop(0)] if queue else [])
+    monkeypatch.setattr(
+        pr.process_registry,
+        "drain_notifications",
+        lambda *a, **k: [queue.pop(0)] if queue else [],
+    )
 
 
 def _quiet_policy(tmp_path, monkeypatch, setting):
     import json
+
     home = tmp_path / f"home-{setting}"
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -235,26 +295,52 @@ def _quiet_policy(tmp_path, monkeypatch, setting):
 
 
 @pytest.mark.parametrize("setting", (None, False, True))
-def test_quiet_diagnostic_only_wake_runs_but_reply_displaces_result_only_when_visible(tmp_path, monkeypatch, setting):
+def test_quiet_diagnostic_only_wake_runs_but_reply_displaces_result_only_when_visible(
+    tmp_path, monkeypatch, setting
+):
     """Grid sweep: -Q linger had no diagnostic admission rule. A wake made only of automatic early
     failure notices still runs (the agent may act on it) but under suppression its reply must not
     replace the requested one-shot answer; absent/false keep legacy displacement."""
     from clawk_cli import quiet_single_query as qsq
+
     _quiet_policy(tmp_path, monkeypatch, setting)
-    _quiet_drain(monkeypatch, [({"type": "completion", "task_failure_notice": True, "session_key": "s"},
-                                "[Background process failed early: exit 7]")])
+    _quiet_drain(
+        monkeypatch,
+        [
+            (
+                {"type": "completion", "task_failure_notice": True, "session_key": "s"},
+                "[Background process failed early: exit 7]",
+            )
+        ],
+    )
     seen = []
     result = qsq.continue_quiet_notify_completions(
-        "s", lambda text: seen.append(text) or {"final_response": "DIAG_REPLY"}, linger_budget=0.0)
+        "s",
+        lambda text: seen.append(text) or {"final_response": "DIAG_REPLY"},
+        linger_budget=0.0,
+    )
     assert seen == ["[Background process failed early: exit 7]"], "the wake always runs"
     assert result == (None if setting is True else {"final_response": "DIAG_REPLY"})
 
 
 def test_quiet_requested_completion_wake_never_muted(tmp_path, monkeypatch):
     from clawk_cli import quiet_single_query as qsq
+
     _quiet_policy(tmp_path, monkeypatch, True)
-    _quiet_drain(monkeypatch, [({"type": "completion", "session_key": "s"}, "[Background process finished: OK]"),
-                                ({"type": "completion", "task_failure_notice": True, "session_key": "s"}, "[failed early]")])
+    _quiet_drain(
+        monkeypatch,
+        [
+            (
+                {"type": "completion", "session_key": "s"},
+                "[Background process finished: OK]",
+            ),
+            (
+                {"type": "completion", "task_failure_notice": True, "session_key": "s"},
+                "[failed early]",
+            ),
+        ],
+    )
     result = qsq.continue_quiet_notify_completions(
-        "s", lambda text: {"final_response": "REQUESTED_REPLY"}, linger_budget=0.0)
+        "s", lambda text: {"final_response": "REQUESTED_REPLY"}, linger_budget=0.0
+    )
     assert result == {"final_response": "REQUESTED_REPLY"}

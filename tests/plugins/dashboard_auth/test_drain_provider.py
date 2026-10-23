@@ -6,6 +6,7 @@ Task 2.0b. Loads the bundled drain plugin module directly and exercises:
   * the register(ctx) entry point's env/config resolution, skip reasons, and
     token-route registration.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -56,7 +57,6 @@ class TestEntropyGate:
         # 60 chars, one distinct character → low distinct count + low entropy.
         assert drain.assess_secret_strength("a" * 60) is not None
 
-
     def test_custom_min_chars_enforced(self, drain):
         s = _strong_secret()  # 43 chars
         assert drain.assess_secret_strength(s, min_chars=999) is not None
@@ -70,7 +70,6 @@ class TestEntropyGate:
 class TestProvider:
     def test_protocol_compliance(self, drain):
         assert_protocol_compliance(drain.DrainSecretProvider)
-
 
     def test_is_non_interactive(self, drain):
         # Excluded from interactive surfaces via list_session_providers().
@@ -86,16 +85,13 @@ class TestProvider:
         assert principal.provider == "drain-secret"
         assert principal.scopes == ("drain",)
 
-
     def test_verify_token_rejects_empty(self, drain):
         p = drain.DrainSecretProvider(secret=_strong_secret())
         assert p.verify_token(token="") is None
 
-
     def test_construction_rejects_weak_secret(self, drain):
         with pytest.raises(ValueError):
             drain.DrainSecretProvider(secret="weak")
-
 
     def test_interactive_methods_raise(self, drain):
         p = drain.DrainSecretProvider(secret=_strong_secret())

@@ -97,9 +97,7 @@ class TestClampEffort:
         declared wire set."""
         import agent.reasoning_effort as mod
 
-        sets = [
-            getattr(mod, name) for name in dir(mod) if name.endswith("_EFFORTS")
-        ]
+        sets = [getattr(mod, name) for name in dir(mod) if name.endswith("_EFFORTS")]
         enabled_ladder = [l for l in EFFORT_LADDER if l != "none"]
         for supported in sets:
             prev_rank = -1

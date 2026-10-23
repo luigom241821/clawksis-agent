@@ -4,7 +4,9 @@ sessions that start before the migration runs, and on disk once the migration ru
 
 from tools import bot_mode_probe
 
-LEGACY = "# Me\n\nBe terse.\n\n## Messaging other agents\n\nold plugin text\n- `bot-a`\n"
+LEGACY = (
+    "# Me\n\nBe terse.\n\n## Messaging other agents\n\nold plugin text\n- `bot-a`\n"
+)
 
 
 def test_load_soul_md_drops_legacy_protocol_section(tmp_path, monkeypatch):
@@ -22,7 +24,9 @@ def test_load_soul_md_drops_legacy_protocol_section(tmp_path, monkeypatch):
     # Bot Chat itself keeps the live section: SOUL no longer suppresses the probe.
     bot_mode_probe._reset_cache_for_tests()
     (home / "profiles" / "bot").mkdir(parents=True)
-    (home / "profiles" / "bot" / "profile.yaml").write_text("ui_meta:\n  clawk-bots: {}\n", encoding="utf-8")
+    (home / "profiles" / "bot" / "profile.yaml").write_text(
+        "ui_meta:\n  clawk-bots: {}\n", encoding="utf-8"
+    )
     assert "`@bot`" in bot_mode_probe.get_bot_mode_protocol_section(home)
 
 
@@ -33,13 +37,21 @@ def test_migration_41_strips_every_profile_soul_once(tmp_path, monkeypatch):
     (home / "profiles" / "worker").mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     (home / "SOUL.md").write_text(LEGACY, encoding="utf-8")
-    (home / "profiles" / "worker" / "SOUL.md").write_text("# Worker\n\n## Messaging other agents\nx\n", encoding="utf-8")
+    (home / "profiles" / "worker" / "SOUL.md").write_text(
+        "# Worker\n\n## Messaging other agents\nx\n", encoding="utf-8"
+    )
 
     results = {"config_added": []}
     _migrate_to_41(results, quiet=True)
 
     assert (home / "SOUL.md").read_text(encoding="utf-8") == "# Me\n\nBe terse.\n"
-    assert (home / "profiles" / "worker" / "SOUL.md").read_text(encoding="utf-8") == "# Worker\n"
-    assert results["config_added"] and "default" in results["config_added"][0] and "worker" in results["config_added"][0]
+    assert (home / "profiles" / "worker" / "SOUL.md").read_text(
+        encoding="utf-8"
+    ) == "# Worker\n"
+    assert (
+        results["config_added"]
+        and "default" in results["config_added"][0]
+        and "worker" in results["config_added"][0]
+    )
     _migrate_to_41(results := {"config_added": []}, quiet=True)
     assert results["config_added"] == []  # idempotent: nothing left to strip

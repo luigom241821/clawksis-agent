@@ -86,7 +86,8 @@ def _first_sql_text(call: ast.Call) -> str | None:
         text = arg.value
     elif isinstance(arg, ast.JoinedStr):
         parts = [
-            v.value for v in arg.values
+            v.value
+            for v in arg.values
             if isinstance(v, ast.Constant) and isinstance(v.value, str)
         ]
         text = "".join(parts)
@@ -167,7 +168,9 @@ def _scan_locked_readers(
                 continue
             reads, writes, unknown = 0, 0, 0
             for inner in ast.walk(node):
-                if isinstance(inner, ast.Call) and _is_self_conn_execute(inner, aliases):
+                if isinstance(inner, ast.Call) and _is_self_conn_execute(
+                    inner, aliases
+                ):
                     word_full = _first_sql_text(inner)
                     word = word_full.split(None, 1)[0].upper() if word_full else None
                     if word is None:
@@ -180,7 +183,9 @@ def _scan_locked_readers(
                         # how 5 readers hid from the first version of this
                         # gate.
                         unknown += 1
-                    elif _PRAGMA_WRITE_RE.match(word_full or "") or _WRITE_RE.match(word):
+                    elif _PRAGMA_WRITE_RE.match(word_full or "") or _WRITE_RE.match(
+                        word
+                    ):
                         writes += 1
                     elif _READ_RE.match(word):
                         reads += 1
@@ -198,8 +203,16 @@ def _scan_locked_readers(
                         and (
                             "write" in f.attr
                             or "commit" in f.attr
-                            or f.attr.startswith(("set_", "record_", "insert_",
-                                                  "update_", "delete_", "clear_"))
+                            or f.attr.startswith(
+                                (
+                                    "set_",
+                                    "record_",
+                                    "insert_",
+                                    "update_",
+                                    "delete_",
+                                    "clear_",
+                                )
+                            )
                         )
                     ):
                         writes += 1
@@ -243,28 +256,30 @@ class TestNoPureReadersUnderWriterLock:
             "class SessionDB:\n"
             "    def innocent_writer(self):\n"
             "        with self._lock:\n"
-            "            self._conn.execute(\"UPDATE t SET x = 1\")\n"
+            '            self._conn.execute("UPDATE t SET x = 1")\n'
             "    def guilty_reader(self):\n"
             "        with self._lock:\n"
-            "            return self._conn.execute(\"SELECT 1\").fetchone()\n"
+            '            return self._conn.execute("SELECT 1").fetchone()\n'
             "    def guilty_alias_reader(self):\n"
             "        with self._lock:\n"
             "            conn = self._conn\n"
-            "            return conn.execute(\"SELECT 2\").fetchone()\n"
+            '            return conn.execute("SELECT 2").fetchone()\n'
             "    def guilty_variable_sql(self, query):\n"
             "        with self._lock:\n"
             "            return self._conn.execute(query).fetchall()\n"
             "    def innocent_variable_writer(self, query):\n"
             "        with self._lock:\n"
             "            self._conn.execute(query)\n"
-            "            self._conn.execute(\"UPDATE t SET x = 2\")\n"
+            '            self._conn.execute("UPDATE t SET x = 2")\n'
         )
         p = tmp_path / "fake_state.py"
         p.write_text(sabotage, encoding="utf-8")
         violations = _scan_locked_readers(p)
         flagged = {v.split(" ")[0] for v in violations}
         assert flagged == {
-            "guilty_reader", "guilty_alias_reader", "guilty_variable_sql"
+            "guilty_reader",
+            "guilty_alias_reader",
+            "guilty_variable_sql",
         }, violations
 
     def test_scan_all_state_sources_visits_every_mixin_file(self, tmp_path):
@@ -278,12 +293,10 @@ class TestNoPureReadersUnderWriterLock:
             "class FakeMixin:\n"
             "    def guilty_mixin_reader(self):\n"
             "        with self._lock:\n"
-            "            return self._conn.execute(\"SELECT 1\").fetchone()\n"
+            '            return self._conn.execute("SELECT 1").fetchone()\n'
         )
         p = tmp_path / "fake_mixin.py"
         p.write_text(mixin_sabotage, encoding="utf-8")
 
-        violations = [
-            f"{p.name}: {v}" for v in _scan_locked_readers(p, "FakeMixin")
-        ]
+        violations = [f"{p.name}: {v}" for v in _scan_locked_readers(p, "FakeMixin")]
         assert any("guilty_mixin_reader" in v for v in violations), violations

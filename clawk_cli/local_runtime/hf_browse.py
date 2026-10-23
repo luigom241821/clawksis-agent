@@ -47,10 +47,10 @@ def _get_json(url: str) -> object:
 
 @dataclass(frozen=True)
 class HFModelHit:
-    repo: str                   # e.g. "unsloth/Qwen3.8-27B-GGUF"
+    repo: str  # e.g. "unsloth/Qwen3.8-27B-GGUF"
     downloads: int
     likes: int
-    updated: str                # ISO date from HF
+    updated: str  # ISO date from HF
     gated: bool
 
 
@@ -58,10 +58,10 @@ class HFModelHit:
 class HFFileGroup:
     """One downloadable quant: a single GGUF or all parts of a split one."""
 
-    label: str                  # e.g. "Q4_K_M" or the file stem
-    paths: tuple[str, ...]      # repo-relative, split parts in order
+    label: str  # e.g. "Q4_K_M" or the file stem
+    paths: tuple[str, ...]  # repo-relative, split parts in order
     total_bytes: int
-    fit: str = "unknown"        # fits-gpu | needs-ram | too-big | unknown
+    fit: str = "unknown"  # fits-gpu | needs-ram | too-big | unknown
 
 
 _QUANT_RE = re.compile(r"(?:IQ|Q)\d[_A-Z0-9]*|F16|BF16|F32", re.IGNORECASE)
@@ -72,14 +72,20 @@ def search_models(query: str, limit: int = 20) -> list[HFModelHit]:
     """Full-text search over HF models that ship GGUF files, most downloaded first (the closest
     public signal to 'trending')."""
     q = urllib.parse.quote(query.strip())
-    url = (f"{_HF}/api/models?search={q}&filter=gguf&sort=downloads"
-           f"&direction=-1&limit={max(1, min(int(limit), 50))}")
-    return [HFModelHit(repo=str(m.get("id", "")),
-                       downloads=int(m.get("downloads") or 0),
-                       likes=int(m.get("likes") or 0),
-                       updated=str(m.get("lastModified") or ""),
-                       gated=bool(m.get("gated")))
-            for m in _get_json(url)]
+    url = (
+        f"{_HF}/api/models?search={q}&filter=gguf&sort=downloads"
+        f"&direction=-1&limit={max(1, min(int(limit), 50))}"
+    )
+    return [
+        HFModelHit(
+            repo=str(m.get("id", "")),
+            downloads=int(m.get("downloads") or 0),
+            likes=int(m.get("likes") or 0),
+            updated=str(m.get("lastModified") or ""),
+            gated=bool(m.get("gated")),
+        )
+        for m in _get_json(url)
+    ]
 
 
 def _quant_label(filename: str) -> str:
@@ -106,16 +112,25 @@ def repo_files(repo: str) -> list[HFFileGroup]:
         size = int(f.get("size") or 0)
         m = _SPLIT_RE.search(path)
         if m:
-            splits.setdefault(path[: m.start()], []).append((int(m.group(1)), path, size))
+            splits.setdefault(path[: m.start()], []).append(
+                (int(m.group(1)), path, size)
+            )
         else:
             singles.append((path, size))
 
-    groups = [HFFileGroup(label=_quant_label(path), paths=(path,), total_bytes=size)
-              for path, size in singles]
+    groups = [
+        HFFileGroup(label=_quant_label(path), paths=(path,), total_bytes=size)
+        for path, size in singles
+    ]
     for stem, parts in splits.items():
         parts.sort()
-        groups.append(HFFileGroup(label=_quant_label(stem), paths=tuple(p for _, p, _ in parts),
-                                  total_bytes=sum(s for _, _, s in parts)))
+        groups.append(
+            HFFileGroup(
+                label=_quant_label(stem),
+                paths=tuple(p for _, p, _ in parts),
+                total_bytes=sum(s for _, _, s in parts),
+            )
+        )
     groups.sort(key=lambda g: g.total_bytes, reverse=True)
     return groups
 

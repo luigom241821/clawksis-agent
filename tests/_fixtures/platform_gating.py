@@ -1,4 +1,5 @@
 """Host-OS gating for ``@pytest.mark.platforms(...)``, applied by the conftest collection hook."""
+
 import sys
 
 import pytest
@@ -59,7 +60,9 @@ def _platform_machine() -> str:
     import platform as _platform
 
     machine = (_platform.machine() or "").lower()
-    return {"amd64": "x86_64", "x86": "x86_64", "aarch64": "arm64"}.get(machine, machine)
+    return {"amd64": "x86_64", "x86": "x86_64", "aarch64": "arm64"}.get(
+        machine, machine
+    )
 
 
 def _host_matches_platforms(conditions, arch=None, arch_negate=False):
@@ -75,7 +78,11 @@ def _host_matches_platforms(conditions, arch=None, arch_negate=False):
     # An unknown spec is a collection error, never a skip: a typo like
     # platforms("linx") would otherwise drop the test on every host while
     # both lanes stay green — the exact failure the gate exists to catch.
-    unknown = [spec for spec in specs if spec.removeprefix("not ").strip() not in _PLATFORM_ALIASES]
+    unknown = [
+        spec
+        for spec in specs
+        if spec.removeprefix("not ").strip() not in _PLATFORM_ALIASES
+    ]
     if unknown:
         raise pytest.UsageError(
             f"platforms(): unknown spec(s) {', '.join(map(repr, unknown))} — valid: "
@@ -160,6 +167,5 @@ def _reject_contradictory_platform_marks(items):
         raise pytest.UsageError(
             "a test may carry at most one platforms() marker — combine the "
             'specs into one call (platforms("linux", arch="arm64") instead '
-            "of stacking two markers); these carry several:\n"
-            + "\n".join(offenders)
+            "of stacking two markers); these carry several:\n" + "\n".join(offenders)
         )

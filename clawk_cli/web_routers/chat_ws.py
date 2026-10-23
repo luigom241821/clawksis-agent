@@ -16,12 +16,19 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from agent.interrupt_scope import InterruptScope, bind_interrupt_scope
-from clawk_cli.active_sessions import ActiveSessionRegistryError, active_session_registry_snapshot
+from clawk_cli.active_sessions import (
+    ActiveSessionRegistryError,
+    active_session_registry_snapshot,
+)
 from clawk_cli.pty_session import RegistryFull
 from clawk_cli.web_deps import LateState, late
 from clawk_cli.web_routers.chat_ws_errors import chat_start_failure_message
 from clawk_cli.web_server_chat import (
-    _build_sidecar_url, _close_stalled_pty_input, _get_console_executor, _legacy_pump, _ws_auth_ok,
+    _build_sidecar_url,
+    _close_stalled_pty_input,
+    _get_console_executor,
+    _legacy_pump,
+    _ws_auth_ok,
     _ws_request_is_allowed,
 )
 
@@ -29,7 +36,9 @@ _log = logging.getLogger("clawk_cli.web_server")
 router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_active_session_file_for_channel = late("_active_session_file_for_channel", "clawk_cli.web_server_chat")
+_active_session_file_for_channel = late(
+    "_active_session_file_for_channel", "clawk_cli.web_server_chat"
+)
 _profile_scope = late("_profile_scope", "clawk_cli.web_server_profiles")
 _resolve_chat_argv_async = late("_resolve_chat_argv_async", "clawk_cli.web_server_chat")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
@@ -53,6 +62,7 @@ def _get_event_state(app: FastAPI):
 
 _VALID_CHANNEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 
+
 def _unlink_active_session_file(path: Optional[Path]) -> None:
     if path is None:
         return
@@ -62,12 +72,15 @@ def _unlink_active_session_file(path: Optional[Path]) -> None:
         pass
 
 
-def _discard_active_session_file(app: FastAPI, channel: Optional[str], path: Optional[Path]) -> None:
+def _discard_active_session_file(
+    app: FastAPI, channel: Optional[str], path: Optional[Path]
+) -> None:
     _unlink_active_session_file(path)
     if not channel or path is None:
         return
     try:
         from clawk_cli.web_server import _get_pty_active_session_files
+
         files = _get_pty_active_session_files(app)
         if files.get(channel) == path:
             files.pop(channel, None)
@@ -79,6 +92,7 @@ def _ws_auth_mode() -> str:
     """Short label for the active WS auth mode — logged on every connection."""
     from clawk_cli.web_server_chat import _LOOPBACK_HOSTS
     from clawk_cli.web_server import app
+
     if getattr(app.state, "auth_required", False):
         return "gated"
     bound_host = (getattr(app.state, "bound_host", "") or "").strip().lower()
@@ -97,7 +111,9 @@ async def _broadcast_event(app: Any, channel: str, payload: str) -> None:
             await sub.send_text(payload)
         except Exception:
             # Subscriber went away mid-send; /api/events' finally removes it.
-            _log.warning("broadcast send failed for subscriber on %s", channel, exc_info=True)
+            _log.warning(
+                "broadcast send failed for subscriber on %s", channel, exc_info=True
+            )
 
 
 def _channel_or_close_code(ws: WebSocket) -> Optional[str]:
@@ -140,7 +156,14 @@ async def _ws_gate(ws: WebSocket, kind: str) -> Optional[tuple[str, str, str]]:
     auth_reason, cred = _ws_auth_reason(ws)
     mode = _ws_auth_mode()
     if auth_reason is not None:
-        _log.warning("%s auth rejected reason=%s mode=%s cred=%s peer=%s", kind, auth_reason, mode, cred, peer)
+        _log.warning(
+            "%s auth rejected reason=%s mode=%s cred=%s peer=%s",
+            kind,
+            auth_reason,
+            mode,
+            cred,
+            peer,
+        )
         await ws.close(code=4401, reason=_ws_close_reason(f"auth: {auth_reason}"))
         return None
 
@@ -184,7 +207,12 @@ _CONSOLE_OUTPUT_LIMIT = 50000
 
 
 def _execute_console_line(
-    engine: Any, line: str, *, confirmed: bool, profile: Optional[str], scope: Optional[InterruptScope] = None,
+    engine: Any,
+    line: str,
+    *,
+    confirmed: bool,
+    profile: Optional[str],
+    scope: Optional[InterruptScope] = None,
 ) -> Any:
     # _profile_scope swaps process-global skill module paths; keep it inside
     # the worker thread and never hold it across awaits.
@@ -192,7 +220,9 @@ def _execute_console_line(
         return engine.execute(line, confirmed=confirmed)
 
 
-async def _unwind_console_worker(worker: Any, scope: InterruptScope, reason: str) -> None:
+async def _unwind_console_worker(
+    worker: Any, scope: InterruptScope, reason: str
+) -> None:
     """Stop the command's worker after cancel/timeout: asyncio can only drop the waiter, so interrupt
     any agent the command forked (closing its provider request) and wait for the thread to exit.
     A user cancel is attributed to the user; only the timeout is a host-issued stop (#112647)."""
@@ -206,12 +236,17 @@ async def _unwind_console_worker(worker: Any, scope: InterruptScope, reason: str
     done, _ = await asyncio.wait({exited}, timeout=_CONSOLE_UNWIND_TIMEOUT_SECONDS)
     if not done:
         exited.cancel()
-        _log.warning("console worker still running %ss after %s", _CONSOLE_UNWIND_TIMEOUT_SECONDS, reason)
+        _log.warning(
+            "console worker still running %ss after %s",
+            _CONSOLE_UNWIND_TIMEOUT_SECONDS,
+            reason,
+        )
 
 
 async def _wait_for_console_worker(worker: Any) -> Any:
     return await asyncio.wait_for(
-        asyncio.wrap_future(worker), timeout=_CONSOLE_COMMAND_TIMEOUT_SECONDS,
+        asyncio.wrap_future(worker),
+        timeout=_CONSOLE_COMMAND_TIMEOUT_SECONDS,
     )
 
 
@@ -229,8 +264,14 @@ class _ConsoleSender:
     async def prompt(self, **payload: Any) -> None:
         await self.send({**payload, "prompt": _CONSOLE_PROMPT})
 
-    async def error(self, message: str, *, id: Optional[int] = None, command: Optional[str] = None,
-                    prompt: Optional[str] = None) -> None:
+    async def error(
+        self,
+        message: str,
+        *,
+        id: Optional[int] = None,
+        command: Optional[str] = None,
+        prompt: Optional[str] = None,
+    ) -> None:
         # Key order matches the historical frames: type, id, message, command, prompt.
         frame: dict[str, Any] = {"type": "error"}
         if id is not None:
@@ -242,10 +283,27 @@ class _ConsoleSender:
             frame["prompt"] = prompt
         await self.send(frame)
 
-    async def complete(self, status: str, command: str, command_id: int, *, prompt: str = _CONSOLE_PROMPT) -> None:
-        await self.send({"type": "complete", "id": command_id, "status": status, "command": command, "prompt": prompt})
+    async def complete(
+        self,
+        status: str,
+        command: str,
+        command_id: int,
+        *,
+        prompt: str = _CONSOLE_PROMPT,
+    ) -> None:
+        await self.send(
+            {
+                "type": "complete",
+                "id": command_id,
+                "status": status,
+                "command": command,
+                "prompt": prompt,
+            }
+        )
 
-    async def error_then_complete(self, message: str, command: str, command_id: int, status: str) -> None:
+    async def error_then_complete(
+        self, message: str, command: str, command_id: int, status: str
+    ) -> None:
         await self.error(message, id=command_id, command=command)
         await self.complete(status, command, command_id)
 
@@ -254,16 +312,25 @@ class _ConsoleSender:
         status = result.status
         if status == "ok":
             if result.output:
-                await self.send({
-                    "type": "output", "id": command_id, "stream": "stdout",
-                    "data": result.output, "command": command,
-                })
+                await self.send(
+                    {
+                        "type": "output",
+                        "id": command_id,
+                        "stream": "stdout",
+                        "data": result.output,
+                        "command": command,
+                    }
+                )
             await self.complete("ok", command, command_id)
         elif status == "error":
-            await self.error_then_complete(result.output or "Command failed.", command, command_id, "error")
+            await self.error_then_complete(
+                result.output or "Command failed.", command, command_id, "error"
+            )
         elif status == "confirm_required":
             await self.prompt(
-                type="confirm_required", id=command_id, command=command,
+                type="confirm_required",
+                id=command_id,
+                command=command,
                 message=result.confirmation_message or f"Run `{command}`?",
             )
             await self.complete("confirm_required", command, command_id)
@@ -273,7 +340,11 @@ class _ConsoleSender:
         elif status == "exit":
             await self.complete("exit", command, command_id, prompt="")
         else:
-            await self.error(f"Unknown console result status: {status}", id=command_id, command=command)
+            await self.error(
+                f"Unknown console result status: {status}",
+                id=command_id,
+                command=command,
+            )
 
 
 def _console_json_payload(msg: Any) -> tuple[Optional[dict[str, Any]], Optional[str]]:
@@ -323,7 +394,13 @@ async def console_ws(ws: WebSocket) -> None:
         await ws.close(code=1011)
         return
 
-    _log.info("console accepted peer=%s mode=%s cred=%s profile=%s", peer, mode, cred, profile or "current")
+    _log.info(
+        "console accepted peer=%s mode=%s cred=%s profile=%s",
+        peer,
+        mode,
+        cred,
+        profile or "current",
+    )
     await out.prompt(type="ready", profile=profile or "current")
 
     active_task: asyncio.Task | None = None
@@ -334,7 +411,12 @@ async def console_ws(ws: WebSocket) -> None:
         nonlocal active_task, pending_confirmation, command_generation
         scope = InterruptScope()
         worker = _get_console_executor().submit(
-            _execute_console_line, engine, line, confirmed=confirmed, profile=profile, scope=scope,
+            _execute_console_line,
+            engine,
+            line,
+            confirmed=confirmed,
+            profile=profile,
+            scope=scope,
         )
         try:
             result = await _wait_for_console_worker(worker)
@@ -346,17 +428,24 @@ async def console_ws(ws: WebSocket) -> None:
             if command_id == command_generation:
                 pending_confirmation = None
                 await out.error_then_complete(
-                    "Command timed out. Clawksis Console returned to the prompt.", line, command_id, "timeout",
+                    "Command timed out. Clawksis Console returned to the prompt.",
+                    line,
+                    command_id,
+                    "timeout",
                 )
         except Exception as exc:
             if command_id == command_generation:
                 pending_confirmation = None
                 _log.exception("console command failed")
-                await out.error_then_complete(str(exc) or exc.__class__.__name__, line, command_id, "error")
+                await out.error_then_complete(
+                    str(exc) or exc.__class__.__name__, line, command_id, "error"
+                )
         else:
             if command_id != command_generation:
                 return
-            pending_confirmation = result.command if result.status == "confirm_required" else None
+            pending_confirmation = (
+                result.command if result.status == "confirm_required" else None
+            )
             await out.send_result(result, command_id=command_id)
             if result.status == "exit":
                 await ws.close(code=1000)
@@ -367,7 +456,9 @@ async def console_ws(ws: WebSocket) -> None:
     def start_command(line: str, *, confirmed: bool = False) -> None:
         nonlocal active_task, command_generation
         command_generation += 1
-        active_task = asyncio.create_task(run_command(line, confirmed=confirmed, command_id=command_generation))
+        active_task = asyncio.create_task(
+            run_command(line, confirmed=confirmed, command_id=command_generation)
+        )
 
     try:
         while True:
@@ -408,16 +499,25 @@ async def console_ws(ws: WebSocket) -> None:
                 continue
 
             if active_task and not active_task.done():
-                await out.prompt(type="error", message="A console command is already running.")
+                await out.prompt(
+                    type="error", message="A console command is already running."
+                )
                 continue
 
             if frame_type == "confirm":
-                command = str(payload.get("command") or pending_confirmation or "").strip()
+                command = str(
+                    payload.get("command") or pending_confirmation or ""
+                ).strip()
                 if not pending_confirmation:
-                    await out.prompt(type="error", message="No command is waiting for confirmation.")
+                    await out.prompt(
+                        type="error", message="No command is waiting for confirmation."
+                    )
                     continue
                 if command != pending_confirmation:
-                    await out.prompt(type="error", message="Confirmation does not match the pending command.")
+                    await out.prompt(
+                        type="error",
+                        message="Confirmation does not match the pending command.",
+                    )
                     continue
                 pending_confirmation = None
                 start_command(command, confirmed=True)
@@ -437,7 +537,9 @@ async def console_ws(ws: WebSocket) -> None:
                 start_command(line)
                 continue
 
-            await out.prompt(type="error", message=f"Unsupported console frame: {frame_type or '?'}")
+            await out.prompt(
+                type="error", message=f"Unsupported console frame: {frame_type or '?'}"
+            )
     except WebSocketDisconnect:
         pass
     finally:
@@ -457,7 +559,9 @@ async def _pty_fail(ws: WebSocket, exc: BaseException) -> None:
     await ws.close(code=1011)
 
 
-def _lease_holder_pid(session_id: Optional[str], *, registry_home: Optional[str] = None) -> Optional[int]:
+def _lease_holder_pid(
+    session_id: Optional[str], *, registry_home: Optional[str] = None
+) -> Optional[int]:
     """The live process holding ``session_id``'s single-writer lease, if any.
 
     A keep-alive PTY whose chat was never resumed from carries no resume target
@@ -472,7 +576,9 @@ def _lease_holder_pid(session_id: Optional[str], *, registry_home: Optional[str]
         return None
     try:
         for entry in active_session_registry_snapshot(registry_home=registry_home):
-            if entry.get("session_id") == session_id and isinstance(entry.get("pid"), int):
+            if entry.get("session_id") == session_id and isinstance(
+                entry.get("pid"), int
+            ):
                 return entry["pid"]
     except (ActiveSessionRegistryError, OSError, ValueError):
         return None
@@ -484,6 +590,7 @@ async def _pump_keepalive_input(ws: WebSocket, session: Any) -> None:
     session's bridge, consuming resize escapes locally. On child EOF the drain
     task closes the attached socket with 4410, which unparks ws.receive()."""
     from clawk_cli.web_server_chat import _RESIZE_RE
+
     while True:
         try:
             msg = await ws.receive()
@@ -508,7 +615,9 @@ async def _pump_keepalive_input(ws: WebSocket, session: Any) -> None:
 
 
 async def _pty_channel_marker_state(
-    ws: WebSocket, resume: Optional[str], force_fresh: bool,
+    ws: WebSocket,
+    resume: Optional[str],
+    force_fresh: bool,
 ) -> tuple[Optional[Path], bool, Optional[str]]:
     """(active_session_file, marker_preexisting, resume) for the /api/pty handler.
 
@@ -519,6 +628,7 @@ async def _pty_channel_marker_state(
     if not channel:
         return None, False, resume
     from clawk_cli.web_server import _get_pty_active_session_files
+
     marker_files = _get_pty_active_session_files(ws.app)
     marker_preexisting = channel in marker_files
 
@@ -537,8 +647,15 @@ async def _pty_channel_marker_state(
 
 @router.websocket("/api/pty")
 async def pty_ws(ws: WebSocket) -> None:
-    from clawk_cli.web_server_chat import PTY_REGISTRY, PtyBridge, PtyUnavailableError, _PTY_BRIDGE_AVAILABLE, _RESIZE_RE
+    from clawk_cli.web_server_chat import (
+        PTY_REGISTRY,
+        PtyBridge,
+        PtyUnavailableError,
+        _PTY_BRIDGE_AVAILABLE,
+        _RESIZE_RE,
+    )
     from pm.package import InstallError
+
     gate = await _ws_gate(ws, "pty")
     if gate is None:
         return
@@ -562,8 +679,15 @@ async def pty_ws(ws: WebSocket) -> None:
     profile = ws.query_params.get("profile") or None
     channel = _channel_or_close_code(ws)
     sidecar_url = _build_sidecar_url(channel) if channel else None
-    force_fresh = (ws.query_params.get("fresh") or "").strip().lower() in {"1", "true", "yes", "on"}
-    active_session_file, marker_preexisting, resume = await _pty_channel_marker_state(ws, resume, force_fresh)
+    force_fresh = (ws.query_params.get("fresh") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    active_session_file, marker_preexisting, resume = await _pty_channel_marker_state(
+        ws, resume, force_fresh
+    )
 
     if channel and not force_fresh and resume and resume != raw_resume:
         # The client only pins the viewport to the bottom when it asked
@@ -578,9 +702,12 @@ async def pty_ws(ws: WebSocket) -> None:
     # A picked workspace only applies to a FRESH chat; a resumed session keeps its own cwd.
     if not resume:
         from clawk_cli.web_routers.chat_workspaces import resolve_chat_cwd
+
         try:
             workspace_cwd = resolve_chat_cwd(ws.query_params.get("cwd"))
-        except HTTPException as exc:  # dead/relative path: fail closed, never the launch dir
+        except (
+            HTTPException
+        ) as exc:  # dead/relative path: fail closed, never the launch dir
             await _pty_fail(ws, exc)
             return
         if workspace_cwd:
@@ -643,8 +770,12 @@ async def pty_ws(ws: WebSocket) -> None:
     # Keep-alive path: the PTY outlives this socket; reattach by token.
     try:
         await PTY_REGISTRY.close_other_sessions(raw_attach_token, keep_key=attach_token)
-        holder_pid = _lease_holder_pid(registry_resume, registry_home=(env or {}).get("CLAWK_HOME"))
-        await PTY_REGISTRY.close_orphaned_sessions(registry_resume, keep_key=attach_token, holder_pid=holder_pid)
+        holder_pid = _lease_holder_pid(
+            registry_resume, registry_home=(env or {}).get("CLAWK_HOME")
+        )
+        await PTY_REGISTRY.close_orphaned_sessions(
+            registry_resume, keep_key=attach_token, holder_pid=holder_pid
+        )
         session, _created = await PTY_REGISTRY.attach_or_spawn(
             attach_token,
             spawn=_spawn,
@@ -660,8 +791,9 @@ async def pty_ws(ws: WebSocket) -> None:
         # This PTY now owns this marker for its entire keep-alive lifetime.
         if channel and active_session_file is not None:
             session.active_session_cleanup = (
-                lambda app=ws.app, ch=channel, path=active_session_file:
-                _discard_active_session_file(app, ch, path)
+                lambda app=ws.app, ch=channel, path=active_session_file: (
+                    _discard_active_session_file(app, ch, path)
+                )
             )
     elif not marker_preexisting:
         # A different channel attached to an already-existing PTY. The marker
@@ -718,14 +850,24 @@ async def gateway_ws(ws: WebSocket) -> None:
     if authority is not None and identity is None:
         # The upgrade gate above has already verified the legacy token. Do not
         # infer owner permissions from an identityless connection downstream.
-        identity = {'user_id': 'legacy-token-owner', 'provider': 'session-token',
-                    'profile_id': authority.profile_id, 'instance_id': authority.instance_id,
-                    'capabilities': ['session:create', 'session:read', 'session:submit',
-                                     'session:control', 'session:approve', 'session:respond']}
+        identity = {
+            "user_id": "legacy-token-owner",
+            "provider": "session-token",
+            "profile_id": authority.profile_id,
+            "instance_id": authority.instance_id,
+            "capabilities": [
+                "session:create",
+                "session:read",
+                "session:submit",
+                "session:control",
+                "session:approve",
+                "session:respond",
+            ],
+        }
     if identity is not None:
         # The dashboard gate authorizes the whole host (its REST routes take ``?profile=`` for
         # every profile), so its socket may select any served sibling too.
-        identity = {**identity, 'profile_scope': 'host'}
+        identity = {**identity, "profile_scope": "host"}
     await handle_ws(
         ws,
         auth_identity=identity,

@@ -73,8 +73,15 @@ def post_swap_command(handoff_path: Path, argv_tail: list[str]) -> list[str]:
     exactly as older releases expect. The takeover child this tree actually
     spawns (see :func:`continue_update_in_fresh_interpreter`) ignores the flag.
     """
-    return [str(post_swap_python()), "-m", "clawk_cli.main", "update", *argv_tail,
-            "--post-swap", str(handoff_path)]
+    return [
+        str(post_swap_python()),
+        "-m",
+        "clawk_cli.main",
+        "update",
+        *argv_tail,
+        "--post-swap",
+        str(handoff_path),
+    ]
 
 
 def post_swap_child_env() -> dict[str, str]:
@@ -88,7 +95,9 @@ def post_swap_child_env() -> dict[str, str]:
     return env
 
 
-def _takeover_request(payload: dict[str, Any], argv_tail: list[str] | None) -> dict[str, Any]:
+def _takeover_request(
+    payload: dict[str, Any], argv_tail: list[str] | None
+) -> dict[str, Any]:
     """Map a historical post-swap payload onto the takeover request schema.
 
     Payloads written before the takeover seam (e.g. release 0.21.3) name the
@@ -98,14 +107,18 @@ def _takeover_request(payload: dict[str, Any], argv_tail: list[str] | None) -> d
     checkout already swapped. New-schema payloads pass through unchanged.
     """
     request = dict(payload)
-    request.setdefault("desktop", bool(payload.get("had_desktop_app_before_update", False)))
+    request.setdefault(
+        "desktop", bool(payload.get("had_desktop_app_before_update", False))
+    )
     request.setdefault("windows_resume", payload.get("windows_gateway_resume"))
     request.setdefault("assume_yes", "--yes" in (argv_tail or []))
     request.setdefault("restart_update", False)
     return request
 
 
-def _continue_legacy_post_swap(handoff_path: str | Path, *, argv_tail: list[str]) -> int:
+def _continue_legacy_post_swap(
+    handoff_path: str | Path, *, argv_tail: list[str]
+) -> int:
     """Complete the command shape shipped before PM owned source updates.
 
     Those releases start the replacement checkout as ``clawk update <flags>
@@ -124,7 +137,9 @@ def _continue_legacy_post_swap(handoff_path: str | Path, *, argv_tail: list[str]
     return int(code)
 
 
-def continue_update_in_fresh_interpreter(payload: dict[str, Any], *, argv_tail: list[str] | None = None) -> int | None:
+def continue_update_in_fresh_interpreter(
+    payload: dict[str, Any], *, argv_tail: list[str] | None = None
+) -> int | None:
     """Run the post-swap tail in a child interpreter on the pulled code.
 
     The old caller's payload carries the same fields the completion request
@@ -140,7 +155,9 @@ def continue_update_in_fresh_interpreter(payload: dict[str, Any], *, argv_tail: 
     handoff_path = write_handoff(payload)
     request = _takeover_request(payload, argv_tail)
     cmd = post_swap_command(handoff_path, argv_tail or [])
-    print(f"→ Post-swap hand-off: completing the update in a fresh interpreter ({handoff_path})")
+    print(
+        f"→ Post-swap hand-off: completing the update in a fresh interpreter ({handoff_path})"
+    )
     sys.stdout.flush()
     sys.stderr.flush()
     try:

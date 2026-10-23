@@ -28,7 +28,11 @@ class RetirementFence:
         self._now = time.monotonic
 
     def _expire(self):
-        if self._token is not None and not self._committed and self._now() >= self._expires_at:
+        if (
+            self._token is not None
+            and not self._committed
+            and self._now() >= self._expires_at
+        ):
             self._token = None
 
     def acquire(self):
@@ -72,7 +76,9 @@ class RetirementFence:
         try:
             verdict = idle_proof()["idle"]
         except Exception:
-            logging.getLogger(__name__).warning("Retirement idle probe unavailable", exc_info=True)
+            logging.getLogger(__name__).warning(
+                "Retirement idle probe unavailable", exc_info=True
+            )
         finally:
             with self._lock:
                 self._preparing = False

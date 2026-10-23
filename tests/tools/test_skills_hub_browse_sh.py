@@ -54,7 +54,6 @@ class TestBrowseShSource(unittest.TestCase):
     def setUp(self):
         self.src = BrowseShSource()
 
-
     @patch.object(BrowseShSource, "_fetch_catalog", return_value=SAMPLE_CATALOG)
     def test_search_returns_results(self, _mock_catalog):
         results = self.src.search("airbnb", limit=10)
@@ -66,7 +65,6 @@ class TestBrowseShSource(unittest.TestCase):
         self.assertEqual(meta.trust_level, "community")
         self.assertEqual(meta.identifier, "browse-sh/airbnb.com/search-listings-ddgioa")
         self.assertIn("travel", meta.tags)
-
 
     @patch.object(BrowseShSource, "_fetch_catalog", return_value=SAMPLE_CATALOG)
     def test_inspect_returns_meta(self, _mock_catalog):

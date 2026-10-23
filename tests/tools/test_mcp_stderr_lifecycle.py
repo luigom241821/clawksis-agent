@@ -9,7 +9,11 @@ from clawk_constants import (
     set_clawk_home_override,
 )
 from clawk_cli.logs import _parse_line_timestamp
-from tools.mcp_tool_config import _StderrTee, _get_mcp_stderr_log, _write_stderr_log_header
+from tools.mcp_tool_config import (
+    _StderrTee,
+    _get_mcp_stderr_log,
+    _write_stderr_log_header,
+)
 from tools.mcp_tool_lifecycle import shutdown_mcp_servers
 
 
@@ -40,6 +44,7 @@ def test_scoped_shutdown_releases_log_and_preserves_other_profile(tmp_path):
     finally:
         for handle in handles:
             handle.close()
+
 
 def test_rename_profile_releases_cached_log_handle(tmp_path, monkeypatch):
     from clawk_cli import profiles
@@ -76,7 +81,12 @@ def test_every_mcp_log_line_carries_a_stamp_clawk_logs_since_reads(tmp_path):
         log = io.StringIO()
         tee = _StderrTee(log)
         # A line split across writes, a CRLF line and a last line with no newline.
-        for chunk in (b"first half ", b"second half\n", b"crlf line\r\n", b"no newline at exit"):
+        for chunk in (
+            b"first half ",
+            b"second half\n",
+            b"crlf line\r\n",
+            b"no newline at exit",
+        ):
             tee.sink.write(chunk)
         assert tee.close() == "first half second half\ncrlf line\r\nno newline at exit"
         banner = (tmp_path / "logs" / "mcp-stderr.log").read_text().strip()
@@ -84,7 +94,11 @@ def test_every_mcp_log_line_carries_a_stamp_clawk_logs_since_reads(tmp_path):
         reset_clawk_home_override(token)
         shutdown_mcp_servers(scope=clawk_home_key(tmp_path))
     lines = log.getvalue().splitlines()
-    assert [line[24:] for line in lines] == ["first half second half", "crlf line", "no newline at exit"]
+    assert [line[24:] for line in lines] == [
+        "first half second half",
+        "crlf line",
+        "no newline at exit",
+    ]
     for line in [banner, *lines]:
         assert _parse_line_timestamp(line) is not None, line
     assert banner.endswith("===== starting MCP server 'probe' =====")

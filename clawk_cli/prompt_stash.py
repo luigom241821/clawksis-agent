@@ -41,7 +41,12 @@ class StashEntry:
 
     def as_dict(self) -> dict:
         """Shape ``ClawksisCLI._render_stash_panel`` consumes."""
-        return {"text": self.text, "images": list(self.images), "stashed_at": self.stashed_at, "preview": self.preview}
+        return {
+            "text": self.text,
+            "images": list(self.images),
+            "stashed_at": self.stashed_at,
+            "preview": self.preview,
+        }
 
 
 class PromptStash:
@@ -84,10 +89,14 @@ class PromptStash:
         if not (text or "").strip() and not images:
             return False
 
-        entry = StashEntry(text=text or "", images=list(images or []), stashed_at=self._clock(),
-                           preview=build_preview(text or "") or "(images only)")
+        entry = StashEntry(
+            text=text or "",
+            images=list(images or []),
+            stashed_at=self._clock(),
+            preview=build_preview(text or "") or "(images only)",
+        )
         self._items.insert(0, entry)
-        del self._items[self._max_items:]  # drop the oldest past the cap
+        del self._items[self._max_items :]  # drop the oldest past the cap
         self.close_panel()  # a push invalidates any open browse session
         return True
 
@@ -172,7 +181,9 @@ def resolve_ctrl_s(
 
     # Something to park → park it (onto a stack, so an earlier draft is still reachable).
     if (buffer_text or "").strip() or images:
-        return (ACTION_STASHED if stash.stash(buffer_text, images) else ACTION_NOOP), None
+        return (
+            ACTION_STASHED if stash.stash(buffer_text, images) else ACTION_NOOP
+        ), None
 
     # Empty buffer → restore half of the gesture.
     count = len(stash)

@@ -37,14 +37,16 @@ def test_codex_catalog_never_offers_chatgpt_rejected_pro_slugs(monkeypatch, tmp_
 
     # Live discovery returning only template slugs fires every forward-compat
     # synthesis rule; none of what it adds may be -pro.
-    templates = list(dict.fromkeys(t for _, ts in _FORWARD_COMPAT_TEMPLATE_MODELS for t in ts))
+    templates = list(
+        dict.fromkeys(t for _, ts in _FORWARD_COMPAT_TEMPLATE_MODELS for t in ts)
+    )
     monkeypatch.setattr(
-        "clawk_cli.codex_models._fetch_models_from_api", lambda access_token, **_kw: templates
+        "clawk_cli.codex_models._fetch_models_from_api",
+        lambda access_token, **_kw: templates,
     )
     live = get_codex_model_ids(access_token="codex-access-token")
     assert {synthetic for synthetic, _ in _FORWARD_COMPAT_TEMPLATE_MODELS} <= set(live)
     assert _pro_slugs(live) == []
-
 
 
 def test_picker_synthesizes_900k_variants_for_verified_slugs():
@@ -81,23 +83,19 @@ def test_catalog_identity_stays_stable_for_rotation_but_changes_with_route(monke
     import agent.credential_pool as pool
 
     credentials = {"api_key": "first-token", "base_url": "https://first.example/codex/"}
-    monkeypatch.setattr(auth, "resolve_codex_runtime_credentials", lambda **_: dict(credentials))
+    monkeypatch.setattr(
+        auth, "resolve_codex_runtime_credentials", lambda **_: dict(credentials)
+    )
     monkeypatch.setattr(auth, "_codex_access_token_is_expiring", lambda *_: False)
-    monkeypatch.setattr(pool, "_codex_principal_identity", lambda _: ("account", "subject"))
+    monkeypatch.setattr(
+        pool, "_codex_principal_identity", lambda _: ("account", "subject")
+    )
     first = codex_models.codex_catalog_credential_identity()
     credentials["api_key"] = "rotated-token"
     credentials["base_url"] = "https://first.example/codex"
     assert codex_models.codex_catalog_credential_identity() == first
     credentials["base_url"] = "https://second.example/codex"
     assert codex_models.codex_catalog_credential_identity() != first
-
-
-
-
-
-
-
-
 
 
 def test_fetch_from_api_keeps_supported_in_api_false_models(monkeypatch):
@@ -117,7 +115,11 @@ def test_fetch_from_api_keeps_supported_in_api_false_models(monkeypatch):
             return {
                 "models": [
                     {"slug": "gpt-5.5", "priority": 0, "supported_in_api": True},
-                    {"slug": "gpt-5.3-codex-spark", "priority": 7, "supported_in_api": False},
+                    {
+                        "slug": "gpt-5.3-codex-spark",
+                        "priority": 7,
+                        "supported_in_api": False,
+                    },
                     {"slug": "gpt-5-internal", "priority": 99, "visibility": "hidden"},
                 ]
             }
@@ -142,21 +144,29 @@ def test_astra_requires_live_codex_account_discovery(monkeypatch, tmp_path):
 
     (tmp_path / "config.toml").write_text('model = "gpt-6-astra"\n', encoding="utf-8")
     (tmp_path / "models_cache.json").write_text(
-        json.dumps({"models": [
-            {"slug": "gpt-6-astra", "priority": 0},
-            {"slug": "openai/gpt-6-astra", "priority": 1},
-            {"slug": "gpt-6-astra-900k", "priority": 2},
-            {"slug": "openai/gpt-6-astra-900k", "priority": 3},
-        ]}),
+        json.dumps(
+            {
+                "models": [
+                    {"slug": "gpt-6-astra", "priority": 0},
+                    {"slug": "openai/gpt-6-astra", "priority": 1},
+                    {"slug": "gpt-6-astra-900k", "priority": 2},
+                    {"slug": "openai/gpt-6-astra-900k", "priority": 3},
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
-    monkeypatch.setattr(codex_models, "_fetch_models_from_api", lambda _token, **_kw: [])
+    monkeypatch.setattr(
+        codex_models, "_fetch_models_from_api", lambda _token, **_kw: []
+    )
 
     assert "gpt-6-astra" not in get_codex_model_ids(access_token="stale-token")
     assert "openai/gpt-6-astra" not in get_codex_model_ids(access_token="stale-token")
     assert "gpt-6-astra-900k" not in get_codex_model_ids(access_token="stale-token")
-    assert "openai/gpt-6-astra-900k" not in get_codex_model_ids(access_token="stale-token")
+    assert "openai/gpt-6-astra-900k" not in get_codex_model_ids(
+        access_token="stale-token"
+    )
 
     monkeypatch.setattr(
         codex_models,
@@ -167,11 +177,9 @@ def test_astra_requires_live_codex_account_discovery(monkeypatch, tmp_path):
     assert entitled[entitled.index("gpt-6-astra") + 1] == "gpt-6-astra-900k"
 
 
-
-
-
-
-def test_model_command_prompts_to_reuse_or_reauthenticate_codex_session(monkeypatch, capsys):
+def test_model_command_prompts_to_reuse_or_reauthenticate_codex_session(
+    monkeypatch, capsys
+):
     from clawk_cli.model_setup_flows import _model_flow_openai_codex
 
     captured = {"login_calls": 0}
@@ -250,7 +258,6 @@ class TestNormalizeModelForProvider:
         assert changed is False
         assert cli.model == "gpt-5.4"
 
-
     def test_opencode_zen_claude_sets_messages_mode(self):
         cli = _make_cli(model="opencode-zen/claude-sonnet-4-6")
         cli.api_mode = "chat_completions"
@@ -262,23 +269,31 @@ class TestNormalizeModelForProvider:
     def test_default_model_replaced(self):
         """No model configured (empty default) gets swapped for codex."""
         import cli as _cli_mod
+
         _clean_config = {
             "model": {
                 "default": "",
                 "base_url": "",
                 "provider": "auto",
             },
-            "display": {"compact": False, "tool_progress": "all", "resume_display": "full"},
+            "display": {
+                "compact": False,
+                "tool_progress": "all",
+                "resume_display": "full",
+            },
             "agent": {},
             "terminal": {"env_type": "local"},
         }
         # Don't pass model= so _model_is_default is True
         with (
             patch("cli.get_tool_definitions", return_value=[]),
-            patch.dict("os.environ", {"LLM_MODEL": "", "CLAWK_MAX_ITERATIONS": ""}, clear=False),
+            patch.dict(
+                "os.environ", {"LLM_MODEL": "", "CLAWK_MAX_ITERATIONS": ""}, clear=False
+            ),
             patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}),
         ):
             from cli import ClawksisCLI
+
             cli = ClawksisCLI()
 
         assert cli._model_is_default is True
@@ -304,9 +319,17 @@ def _gated_codex_catalog(seen_urls):
             self.version = parse_qs(urlparse(url).query)["client_version"][0]
 
         def json(self):
-            models = [{"slug": "gpt-5.6-sol", "visibility": "list", "context_window": 272000}]
+            models = [
+                {"slug": "gpt-5.6-sol", "visibility": "list", "context_window": 272000}
+            ]
             if self.version != "0.0.0":
-                models.append({"slug": "gpt-6-sol", "visibility": "list", "context_window": 272000})
+                models.append(
+                    {
+                        "slug": "gpt-6-sol",
+                        "visibility": "list",
+                        "context_window": 272000,
+                    }
+                )
             return {"models": models}
 
     def get(url, headers=None, timeout=None, verify=None):
@@ -328,17 +351,28 @@ def test_catalog_requests_ask_as_the_newest_client(monkeypatch):
 
     seen_urls = []
     get = _gated_codex_catalog(seen_urls)
-    monkeypatch.setitem(sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(get)}))
-    assert "gpt-6-sol" in codex_models._fetch_models_from_api(access_token=_codex_jwt("acct"))
+    monkeypatch.setitem(
+        sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(get)})
+    )
+    assert "gpt-6-sol" in codex_models._fetch_models_from_api(
+        access_token=_codex_jwt("acct")
+    )
     monkeypatch.setattr(model_metadata.model_metadata_http, "get", get)
     monkeypatch.setattr(model_metadata, "_codex_oauth_context_cache", {})
-    live, fresh = model_metadata._fetch_codex_oauth_context_lengths_with_source(_codex_jwt("acct"))
+    live, fresh = model_metadata._fetch_codex_oauth_context_lengths_with_source(
+        _codex_jwt("acct")
+    )
     assert fresh and "gpt-6-sol" in live
 
-    assert len(seen_urls) == 2  # one request per site: the newest-client answer was non-empty
+    assert (
+        len(seen_urls) == 2
+    )  # one request per site: the newest-client answer was non-empty
     for url in seen_urls:
         parsed = urlparse(url)
-        assert parsed.netloc == "chatgpt.com" and parsed.path == "/backend-api/codex/models"
+        assert (
+            parsed.netloc == "chatgpt.com"
+            and parsed.path == "/backend-api/codex/models"
+        )
         assert parse_qs(parsed.query)["client_version"] != ["0.0.0"]
 
 
@@ -355,7 +389,9 @@ def test_gateway_key_is_never_sent_to_the_direct_catalog(monkeypatch):
         calls["n"] += 1
         raise RuntimeError("a gateway key must not reach any catalog endpoint")
 
-    monkeypatch.setitem(sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(_count)}))
+    monkeypatch.setitem(
+        sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(_count)})
+    )
     assert codex_models._fetch_models_from_api(access_token=_GATEWAY_POOL_KEY) == []
     assert calls["n"] == 0
 
@@ -370,20 +406,32 @@ def test_picker_catalog_honours_the_custom_codex_base(monkeypatch):
 
     seen_urls = []
     get = _gated_codex_catalog(seen_urls)
-    monkeypatch.setitem(sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(get)}))
-    monkeypatch.setenv("CLAWK_CODEX_BASE_URL", "https://codex-gw.example/backend-api/codex")
+    monkeypatch.setitem(
+        sys.modules, "httpx", type("_FakeHttpx", (), {"get": staticmethod(get)})
+    )
+    monkeypatch.setenv(
+        "CLAWK_CODEX_BASE_URL", "https://codex-gw.example/backend-api/codex"
+    )
 
-    assert "gpt-6-sol" in codex_models._fetch_models_from_api(access_token=_codex_jwt("acct"))
+    assert "gpt-6-sol" in codex_models._fetch_models_from_api(
+        access_token=_codex_jwt("acct")
+    )
     assert seen_urls, "discovery must still run for a JWT credential"
     for url in seen_urls:
         parsed = urlparse(url)
-        assert parsed.netloc == "codex-gw.example" and parsed.path == "/backend-api/codex/models"
+        assert (
+            parsed.netloc == "codex-gw.example"
+            and parsed.path == "/backend-api/codex/models"
+        )
 
 
 def test_catalog_falls_back_to_the_ungated_sentinel_when_newest_client_is_rejected():
     """If the backend goes back to rejecting out-of-sequence versions (empty list or non-200), the
     ``0.0.0`` sentinel is tried next; a sentinel that is itself empty yields no entries."""
-    from agent.model_metadata import CODEX_UNGATED_CLIENT_VERSION, fetch_codex_catalog_entries
+    from agent.model_metadata import (
+        CODEX_UNGATED_CLIENT_VERSION,
+        fetch_codex_catalog_entries,
+    )
 
     class _Resp:
         def __init__(self, status, models):
@@ -393,7 +441,11 @@ def test_catalog_falls_back_to_the_ungated_sentinel_when_newest_client_is_reject
             return {"models": self._models}
 
     def rejecting(url):
-        return _Resp(200, [{"slug": "gpt-5.5"}]) if url.endswith(CODEX_UNGATED_CLIENT_VERSION) else _Resp(400, [])
+        return (
+            _Resp(200, [{"slug": "gpt-5.5"}])
+            if url.endswith(CODEX_UNGATED_CLIENT_VERSION)
+            else _Resp(400, [])
+        )
 
     entries, status = fetch_codex_catalog_entries(rejecting)
     assert [e["slug"] for e in entries] == ["gpt-5.5"] and status == 200

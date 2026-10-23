@@ -25,9 +25,13 @@ from telegram.error import BadRequest, NetworkError, TimedOut
 
 # Content exercising rich-only constructs: a heading, a real Markdown table,
 # and a task list. Pipes / brackets must survive untouched into the payload.
-RICH_CONTENT = "## Results\n\n| Case | Status |\n|---|---|\n| rich | ✅ |\n\n- [x] table renders"
+RICH_CONTENT = (
+    "## Results\n\n| Case | Status |\n|---|---|\n| rich | ✅ |\n\n- [x] table renders"
+)
 CJK_RICH_CONTENT = "## 持仓\n\n| 项目 | 状态 |\n|---|---|\n| 早盘 | 正常 |"
-ASTRAL_CJK_RICH_CONTENT = "## Rare Han\n\n| glyph | status |\n|---|---|\n| \U00030000 | ok |"
+ASTRAL_CJK_RICH_CONTENT = (
+    "## Rare Han\n\n| glyph | status |\n|---|---|\n| \U00030000 | ok |"
+)
 TABLE_ONLY_CONTENT = (
     "| Team | W | L | GB |\n"
     "|---|---|---|---|\n"
@@ -71,7 +75,9 @@ def _make_adapter(extra=None):
     bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot.send_chat_action = AsyncMock()  # keeps the post-send typing re-trigger quiet
     bot.send_message_draft = AsyncMock(return_value=True)  # legacy draft fallback
-    bot.edit_message_text = AsyncMock(return_value=MagicMock(message_id=1))  # legacy edit path
+    bot.edit_message_text = AsyncMock(
+        return_value=MagicMock(message_id=1)
+    )  # legacy edit path
     bot.delete_message = AsyncMock(return_value=True)
     adapter._bot = bot
     return adapter
@@ -209,7 +215,9 @@ async def test_permanent_rich_error_falls_back_to_legacy(exc):
 async def test_unknown_endpoint_error_falls_back_to_legacy():
     """A non-BadRequest 'Method not found' (old PTB/endpoint) degrades gracefully."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=RuntimeError("Method not found"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=RuntimeError("Method not found")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
 
@@ -222,7 +230,9 @@ async def test_capability_error_latches_rich_send_off():
     """Endpoint-missing errors latch rich off so later sends skip the
     doomed extra roundtrip entirely."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=RuntimeError("Method not found"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=RuntimeError("Method not found")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
     assert result.success is True
@@ -258,21 +268,27 @@ async def test_per_message_bad_request_does_not_latch_off():
     """A parser/limit BadRequest is per-message — rich must stay enabled
     for subsequent messages."""
     adapter = _make_adapter()
-    adapter._bot.do_api_request = AsyncMock(side_effect=BadRequest("can't parse rich message"))
+    adapter._bot.do_api_request = AsyncMock(
+        side_effect=BadRequest("can't parse rich message")
+    )
 
     result = await adapter.send("12345", RICH_CONTENT)
     assert result.success is True
     assert adapter._rich_send_disabled is False
 
     # Next message re-attempts rich.
-    adapter._bot.do_api_request = AsyncMock(return_value=SimpleNamespace(message_id=124))
+    adapter._bot.do_api_request = AsyncMock(
+        return_value=SimpleNamespace(message_id=124)
+    )
     result2 = await adapter.send("12345", RICH_CONTENT)
     assert result2.success is True
     adapter._bot.do_api_request.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exc", [TimedOut("timed out"), NetworkError("connection reset")])
+@pytest.mark.parametrize(
+    "exc", [TimedOut("timed out"), NetworkError("connection reset")]
+)
 async def test_transient_rich_error_does_not_legacy_resend(exc):
     """Transient transport errors must NOT trigger a legacy resend (duplicate risk)."""
     adapter = _make_adapter()
@@ -286,7 +302,9 @@ async def test_transient_rich_error_does_not_legacy_resend(exc):
 
 
 @pytest.mark.asyncio
-async def test_rich_transport_error_redacts_bot_token_even_when_redaction_disabled(monkeypatch):
+async def test_rich_transport_error_redacts_bot_token_even_when_redaction_disabled(
+    monkeypatch,
+):
     from agent import redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
@@ -308,7 +326,9 @@ async def test_rich_transport_error_redacts_bot_token_even_when_redaction_disabl
 
 
 @pytest.mark.asyncio
-async def test_legacy_send_error_redacts_bot_token_without_traceback(monkeypatch, caplog):
+async def test_legacy_send_error_redacts_bot_token_without_traceback(
+    monkeypatch, caplog
+):
     from agent import redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
@@ -336,17 +356,15 @@ async def test_legacy_send_error_redacts_bot_token_without_traceback(monkeypatch
 async def test_routing_direct_messages_topic_id_drops_message_thread_id():
     adapter = _make_adapter()
 
-    await adapter.send("-100123", RICH_CONTENT, metadata={"direct_messages_topic_id": "20189"})
+    await adapter.send(
+        "-100123", RICH_CONTENT, metadata={"direct_messages_topic_id": "20189"}
+    )
 
     api_kwargs = _rich_api_kwargs(adapter)
     assert api_kwargs["direct_messages_topic_id"] == 20189
     # _thread_kwargs_for_send pairs the topic id with message_thread_id=None;
     # the rich payload must drop the None key, not send a stray field.
     assert "message_thread_id" not in api_kwargs
-
-
-
-
 
 
 # ── Streaming drafts: sendRichMessageDraft ─────────────────────────────
@@ -384,16 +402,24 @@ def test_prefers_fresh_final_streaming_for_dm_topic_tables():
         "telegram_reply_to_message_id": "42",
     }
     assert adapter.prefers_fresh_final_streaming(RICH_CONTENT, topic_meta) is True
-    assert adapter.prefers_fresh_final_streaming("Just a sentence.", topic_meta) is False
-    assert adapter.prefers_fresh_final_streaming(
-        RICH_CONTENT, {"direct_messages_topic_id": "20189"}
-    ) is True
+    assert (
+        adapter.prefers_fresh_final_streaming("Just a sentence.", topic_meta) is False
+    )
+    assert (
+        adapter.prefers_fresh_final_streaming(
+            RICH_CONTENT, {"direct_messages_topic_id": "20189"}
+        )
+        is True
+    )
     # The documented telegram_-prefixed alias is honored through the same
     # canonical accessor the send path uses (gateway/delivery.py treats the
     # two keys as equivalent) — an alias-only lane must not flatten tables.
-    assert adapter.prefers_fresh_final_streaming(
-        RICH_CONTENT, {"telegram_direct_messages_topic_id": "20189"}
-    ) is True
+    assert (
+        adapter.prefers_fresh_final_streaming(
+            RICH_CONTENT, {"telegram_direct_messages_topic_id": "20189"}
+        )
+        is True
+    )
 
 
 @pytest.mark.asyncio
@@ -425,8 +451,6 @@ async def test_legacy_draft_stream_finalizes_with_persistent_rich_message():
 # lets the persistent final use sendRichMessage instead of relying on an
 # edit-in-place conversion from a plain message.
 # ----------------------------------------------------------------------
-
-
 
 
 @pytest.mark.asyncio
@@ -470,7 +494,9 @@ async def test_dm_table_stream_persists_through_send_rich_message():
     draft_kwargs = adapter._bot.send_message_draft.call_args.kwargs
     assert draft_kwargs["text"] == RICH_CONTENT
     assert "parse_mode" not in draft_kwargs
-    rich_endpoints = [call.args[0] for call in adapter._bot.do_api_request.await_args_list]
+    rich_endpoints = [
+        call.args[0] for call in adapter._bot.do_api_request.await_args_list
+    ]
     assert rich_endpoints == ["sendRichMessage"]
     adapter._bot.edit_message_text.assert_not_called()
     adapter._bot.send_message.assert_not_called()
@@ -502,7 +528,10 @@ async def test_send_draft_routes_dm_topic_thread_id_as_int():
     adapter = _make_adapter()
 
     result = await adapter.send_draft(
-        "12345", draft_id=7, content=TOPIC_TABLE, metadata=TOPIC_METADATA,
+        "12345",
+        draft_id=7,
+        content=TOPIC_TABLE,
+        metadata=TOPIC_METADATA,
     )
 
     assert result.success is True
@@ -540,7 +569,9 @@ async def test_dm_topic_table_stream_uses_send_rich_message():
     draft_kwargs = adapter._bot.send_message_draft.call_args.kwargs
     assert draft_kwargs["text"] == TOPIC_TABLE
     assert draft_kwargs["message_thread_id"] == 20189
-    rich_endpoints = [call.args[0] for call in adapter._bot.do_api_request.await_args_list]
+    rich_endpoints = [
+        call.args[0] for call in adapter._bot.do_api_request.await_args_list
+    ]
     # Invariant, not a frozen call list: the persistent final goes through
     # sendRichMessage, and no rich DRAFT frames fire (rich_drafts is off).
     assert "sendRichMessage" in rich_endpoints
@@ -560,7 +591,11 @@ async def test_dm_topic_table_survives_when_drafts_degrade_to_edit():
     )
 
     async def _api(endpoint, api_kwargs=None, **kwargs):
-        if endpoint == "editMessageText" and api_kwargs and "rich_message" in api_kwargs:
+        if (
+            endpoint == "editMessageText"
+            and api_kwargs
+            and "rich_message" in api_kwargs
+        ):
             raise BadRequest("can't parse rich message")
         if endpoint == "sendRichMessage":
             return SimpleNamespace(message_id=123)
@@ -588,7 +623,9 @@ async def test_dm_topic_table_survives_when_drafts_degrade_to_edit():
     consumer.finish()
     await task
 
-    rich_endpoints = [call.args[0] for call in adapter._bot.do_api_request.await_args_list]
+    rich_endpoints = [
+        call.args[0] for call in adapter._bot.do_api_request.await_args_list
+    ]
     assert "sendRichMessage" in rich_endpoints
     rich_kwargs = None
     for call in adapter._bot.do_api_request.await_args_list:
@@ -647,7 +684,10 @@ async def test_finalize_edit_uses_rich_for_table_content():
     adapter = _make_adapter()
 
     result = await adapter.edit_message(
-        "12345", "555", RICH_CONTENT, finalize=True,
+        "12345",
+        "555",
+        RICH_CONTENT,
+        finalize=True,
     )
 
     assert result.success is True
@@ -684,7 +724,11 @@ async def test_finalize_edit_dm_topic_omits_send_only_routing_fields():
     adapter._bot.do_api_request = AsyncMock(side_effect=_api)
 
     result = await adapter.edit_message(
-        "12345", "555", TOPIC_TABLE, finalize=True, metadata=TOPIC_METADATA,
+        "12345",
+        "555",
+        TOPIC_TABLE,
+        finalize=True,
+        metadata=TOPIC_METADATA,
     )
 
     assert result.success is True
@@ -701,7 +745,10 @@ async def test_finalize_edit_cjk_rich_content_can_be_opted_in():
     adapter = _make_adapter(extra={"allow_cjk_rich_messages": True})
 
     result = await adapter.edit_message(
-        "12345", "555", CJK_RICH_CONTENT, finalize=True,
+        "12345",
+        "555",
+        CJK_RICH_CONTENT,
+        finalize=True,
     )
 
     assert result.success is True
@@ -713,7 +760,9 @@ async def test_finalize_edit_cjk_rich_content_can_be_opted_in():
 
 
 @pytest.mark.asyncio
-async def test_legacy_edit_error_logs_redacted_bot_token_without_traceback(monkeypatch, caplog):
+async def test_legacy_edit_error_logs_redacted_bot_token_without_traceback(
+    monkeypatch, caplog
+):
     from agent import redact
 
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
@@ -727,7 +776,10 @@ async def test_legacy_edit_error_logs_redacted_bot_token_without_traceback(monke
 
     with caplog.at_level(logging.WARNING):
         result = await adapter.edit_message(
-            "12345", "555", "Just a normal answer.", finalize=True,
+            "12345",
+            "555",
+            "Just a normal answer.",
+            finalize=True,
         )
 
     assert result.success is False
@@ -745,7 +797,9 @@ async def test_legacy_edit_error_logs_redacted_bot_token_without_traceback(monke
 # --------------------------------------------------------------------------
 
 
-def _reply_message(reply_to_id, *, reply_text=None, reply_caption=None, quote_text=None):
+def _reply_message(
+    reply_to_id, *, reply_text=None, reply_caption=None, quote_text=None
+):
     """Build a mock inbound reply Message for _build_message_event."""
     replied = SimpleNamespace(
         message_id=int(reply_to_id),
@@ -757,8 +811,12 @@ def _reply_message(reply_to_id, *, reply_text=None, reply_caption=None, quote_te
         message_id=999,
         chat=SimpleNamespace(id=12345, type="private", title=None, full_name="U"),
         from_user=SimpleNamespace(
-            id=42, username="u", first_name="U", last_name=None,
-            full_name="U", is_bot=False,
+            id=42,
+            username="u",
+            first_name="U",
+            last_name=None,
+            full_name="U",
+            is_bot=False,
         ),
         text="what did this mean?",
         caption=None,
@@ -790,8 +848,12 @@ def _reply_message_with_rich_blocks(
         message_id=999,
         chat=SimpleNamespace(id=12345, type="private", title=None, full_name="U"),
         from_user=SimpleNamespace(
-            id=42, username="u", first_name="U", last_name=None,
-            full_name="U", is_bot=False,
+            id=42,
+            username="u",
+            first_name="U",
+            last_name=None,
+            full_name="U",
+            is_bot=False,
         ),
         text="what did this mean?",
         caption=None,
@@ -820,15 +882,21 @@ async def test_rich_reply_records_and_recovers_text(monkeypatch, tmp_path):
         return_value=SimpleNamespace(message_id=678)
     )
     send_result = await adapter._try_send_rich(
-        "12345", "Your morning briefing: CI is green.", None, None,
+        "12345",
+        "Your morning briefing: CI is green.",
+        None,
+        None,
     )
     assert send_result is not None and send_result.success is True
     assert send_result.message_id == "678"
-    assert rich_sent_store.lookup("12345", "678") == "Your morning briefing: CI is green."
+    assert (
+        rich_sent_store.lookup("12345", "678") == "Your morning briefing: CI is green."
+    )
 
     # Inbound reply carries NO text/caption (the rich-message blind spot).
     event = adapter._build_message_event(
-        _reply_message("678"), MessageType.TEXT,
+        _reply_message("678"),
+        MessageType.TEXT,
     )
     assert event.reply_to_message_id == "678"
     assert event.reply_to_text == "Your morning briefing: CI is green."

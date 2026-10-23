@@ -16,7 +16,9 @@ from tools.fuzzy_match import is_already_applied
 
 class TestIsAlreadyApplied:
     def test_identical_strings_present_in_content(self):
-        assert is_already_applied("x = compute_value(1)\n", "compute_value(1)", "compute_value(1)")
+        assert is_already_applied(
+            "x = compute_value(1)\n", "compute_value(1)", "compute_value(1)"
+        )
 
     def test_identical_strings_absent_from_content(self):
         assert not is_already_applied("y = 2\n", "compute_value(1)", "compute_value(1)")
@@ -30,7 +32,9 @@ class TestIsAlreadyApplied:
         assert not is_already_applied(content, "def old_name(x):", "def new_name(x):")
 
     def test_new_absent_not_applied(self):
-        assert not is_already_applied("def old_name(x):\n", "def old_name(x):", "def new_name(x):")
+        assert not is_already_applied(
+            "def old_name(x):\n", "def old_name(x):", "def new_name(x):"
+        )
 
     def test_trivial_new_string_never_matches(self):
         # A short target ("x = 1") appearing by coincidence must not mask a
@@ -50,6 +54,7 @@ def workdir(tmp_path, monkeypatch):
 
 def _patch_tool(**kwargs):
     from tools.file_tools import patch_tool
+
     return json.loads(patch_tool(**kwargs))
 
 
@@ -57,8 +62,12 @@ class TestPatchReplaceAlreadyApplied:
     def test_identical_old_new_present_is_success_noop(self, workdir):
         f = workdir / "a.py"
         f.write_text("value = compute_total(items)\n")
-        r = _patch_tool(path=str(f), old_string="value = compute_total(items)",
-                        new_string="value = compute_total(items)", task_id="t-applied")
+        r = _patch_tool(
+            path=str(f),
+            old_string="value = compute_total(items)",
+            new_string="value = compute_total(items)",
+            task_id="t-applied",
+        )
         assert r["success"] is True
         assert r.get("no_change") is True
         assert f.read_text() == "value = compute_total(items)\n"
@@ -68,25 +77,36 @@ class TestPatchReplaceAlreadyApplied:
         # chain to latch onto) while new_string is present verbatim.
         f = workdir / "b.py"
         f.write_text("import os\n\nRETRY_LIMIT_SECONDS = 30\n")
-        r = _patch_tool(path=str(f), old_string="TIMEOUT_WINDOW_MS = 9000",
-                        new_string="RETRY_LIMIT_SECONDS = 30", task_id="t-applied")
+        r = _patch_tool(
+            path=str(f),
+            old_string="TIMEOUT_WINDOW_MS = 9000",
+            new_string="RETRY_LIMIT_SECONDS = 30",
+            task_id="t-applied",
+        )
         assert r["success"] is True
         assert r.get("no_change") is True
 
     def test_genuine_no_match_still_errors(self, workdir):
         f = workdir / "c.py"
         f.write_text("something_else = 1\n")
-        r = _patch_tool(path=str(f), old_string="def missing_function():",
-                        new_string="def replacement_function():", task_id="t-applied")
+        r = _patch_tool(
+            path=str(f),
+            old_string="def missing_function():",
+            new_string="def replacement_function():",
+            task_id="t-applied",
+        )
         assert "error" in r
 
     def test_identical_but_absent_still_errors(self, workdir):
         f = workdir / "d.py"
         f.write_text("unrelated = True\n")
-        r = _patch_tool(path=str(f), old_string="def not_here_function():",
-                        new_string="def not_here_function():", task_id="t-applied")
+        r = _patch_tool(
+            path=str(f),
+            old_string="def not_here_function():",
+            new_string="def not_here_function():",
+            task_id="t-applied",
+        )
         assert "error" in r
-
 
 
 class TestV4AAlreadyApplied:
@@ -113,7 +133,7 @@ class TestV4AAlreadyApplied:
         r = _patch_tool(mode="patch", patch=patch_content, task_id="t-v4a")
         assert r["success"] is True, r
         text = f.read_text()
-        assert "return y + 2" in text            # live hunk applied
+        assert "return y + 2" in text  # live hunk applied
         assert "already_renamed_helper" in text  # no-op hunk left intact
 
     def test_fully_applied_patch_is_noop_success(self, workdir):

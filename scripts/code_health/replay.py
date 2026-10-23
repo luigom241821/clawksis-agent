@@ -50,8 +50,16 @@ def merged_prs(repo: Path, window: str, limit: int) -> list[dict]:
         args = ["gh", "api", "graphql", "-f", f"query={_QUERY}", "-f", f"q={query}"]
         if after:
             args += ["-f", f"after={after}"]
-        out = subprocess.run(args, cwd=repo, capture_output=True, text=True, encoding="utf-8", check=True,
-                             timeout=120, stdin=subprocess.DEVNULL).stdout
+        out = subprocess.run(
+            args,
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            timeout=120,
+            stdin=subprocess.DEVNULL,
+        ).stdout
         data = json.loads(out)["data"]["search"]
         prs += [n for n in data["nodes"] if n.get("mergeCommit")]
         if not data["pageInfo"]["hasNextPage"]:
@@ -67,7 +75,9 @@ def build_manifest(repo: Path, window: str, limit: int) -> list[dict]:
             base, head = pr_range(repo, pr)
         except RuntimeError as exc:
             base, head = "", f"error: {exc}"
-        rows.append({"number": pr["number"], "title": pr["title"], "base": base, "head": head})
+        rows.append(
+            {"number": pr["number"], "title": pr["title"], "base": base, "head": head}
+        )
     return rows
 
 
@@ -75,8 +85,15 @@ def pr_range(repo: Path, pr: dict) -> tuple[str, str]:
     """Base/head on main for a rebase-merged PR (its commits' subjects), else the merge parent."""
     head = pr["mergeCommit"]["oid"]
     subjects = {n["commit"]["messageHeadline"] for n in pr["commits"]["nodes"]}
-    log = gitio.git(repo, "log", "--first-parent", "--format=%H%x00%s", "-n",
-                    str(pr["commits"]["totalCount"] + 1), head).splitlines()
+    log = gitio.git(
+        repo,
+        "log",
+        "--first-parent",
+        "--format=%H%x00%s",
+        "-n",
+        str(pr["commits"]["totalCount"] + 1),
+        head,
+    ).splitlines()
     k = 0
     for line in log:
         _, subject = line.split("\0", 1)
@@ -103,8 +120,13 @@ def replay_one(repo: Path, measurer: Measurer, base: str, head: str) -> list[dic
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="code_health.replay")
     sample = parser.add_mutually_exclusive_group(required=True)
-    sample.add_argument("--merged", help="closed merge-date window, e.g. 2026-09-01..2026-09-30")
-    sample.add_argument("--manifest", help="manifest.json from an earlier run: replay exactly those ranges")
+    sample.add_argument(
+        "--merged", help="closed merge-date window, e.g. 2026-09-01..2026-09-30"
+    )
+    sample.add_argument(
+        "--manifest",
+        help="manifest.json from an earlier run: replay exactly those ranges",
+    )
     parser.add_argument("--limit", type=int, default=300)
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
@@ -115,7 +137,9 @@ def main(argv: list[str] | None = None) -> int:
         manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8-sig"))
     else:
         manifest = build_manifest(repo, args.merged, args.limit)
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    (out_dir / "manifest.json").write_text(
+        json.dumps(manifest, indent=1) + "\n", encoding="utf-8"
+    )
     measurer = Measurer(repo, resolve_ruff(repo), known_env=set())
     per_rule: Counter[str] = Counter()
     prs_per_rule: Counter[str] = Counter()
@@ -139,10 +163,15 @@ def main(argv: list[str] | None = None) -> int:
             blocked += any(f["blocking"] for f in findings)
     for rule, count in per_rule.most_common():
         print(f"{rule:<11} findings {count:>4}  PRs {prs_per_rule[rule]:>4}")
-    print(f"{blocked} of {len(manifest) - len(unmeasured)} measured PRs had at least one blocking finding")
+    print(
+        f"{blocked} of {len(manifest) - len(unmeasured)} measured PRs had at least one blocking finding"
+    )
     if unmeasured:
-        print(f"{len(unmeasured)} of {len(manifest)} PRs could not be measured: "
-              + ", ".join(f"#{n}" for n in unmeasured) + f" (errors in {out_dir / 'replay.jsonl'})")
+        print(
+            f"{len(unmeasured)} of {len(manifest)} PRs could not be measured: "
+            + ", ".join(f"#{n}" for n in unmeasured)
+            + f" (errors in {out_dir / 'replay.jsonl'})"
+        )
         return 1
     return 0
 

@@ -100,6 +100,7 @@ def test_watcher_tolerates_marker_path_resolution_errors(tmp_path, monkeypatch, 
     from gateway import status as status_mod
 
     call_count = [0]
+
     def explode():
         call_count[0] += 1
         # First call (the one outside the loop, at thread start) is fine —
@@ -185,7 +186,9 @@ def test_watcher_does_not_fire_for_foreign_pid_marker(tmp_path, monkeypatch):
     assert marker.exists()
 
 
-def test_planned_stop_marker_targets_self_probe_is_non_destructive(tmp_path, monkeypatch):
+def test_planned_stop_marker_targets_self_probe_is_non_destructive(
+    tmp_path, monkeypatch
+):
     """The probe returns True for a self-marker WITHOUT unlinking it.
 
     The shutdown handler performs the authoritative consume on its own
@@ -201,7 +204,9 @@ def test_planned_stop_marker_targets_self_probe_is_non_destructive(tmp_path, mon
     assert status_mod.planned_stop_marker_targets_self() is True
 
 
-def test_cli_sigterm_after_watcher_consumed_the_marker_stays_planned(tmp_path, monkeypatch):
+def test_cli_sigterm_after_watcher_consumed_the_marker_stays_planned(
+    tmp_path, monkeypatch
+):
     """`clawk gateway stop` writes the marker, THEN signals. When the watcher fires in between and
     consumes the marker, the trailing SIGTERM must not read as an external kill (exit 1 → a
     Restart=on-failure supervisor revives the gateway the operator stopped). A bare SIGTERM with no
@@ -219,7 +224,9 @@ def test_cli_sigterm_after_watcher_consumed_the_marker_stays_planned(tmp_path, m
     monkeypatch.setattr(run_mod.asyncio, "create_task", lambda coro: coro.close())
 
     def _handler():
-        runner = SimpleNamespace(_signal_initiated_shutdown=False, stop=lambda: asyncio.sleep(0))
+        runner = SimpleNamespace(
+            _signal_initiated_shutdown=False, stop=lambda: asyncio.sleep(0)
+        )
         flag = [False]
         return run_mod._start_gateway_make_shutdown_signal_handler(runner, flag), flag
 

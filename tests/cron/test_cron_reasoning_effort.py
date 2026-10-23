@@ -39,7 +39,6 @@ def _create(**kw):
 
 
 class TestJobStoreReasoningEffort:
-
     @pytest.mark.parametrize(
         "level",
         ["none", "xhigh"],
@@ -50,7 +49,9 @@ class TestJobStoreReasoningEffort:
         # And it round-trips through the store.
         assert load_jobs()[0]["reasoning_effort"] == level
 
-    @pytest.mark.parametrize("raw,expected", [("HIGH", "high"), ("  high ", "high"), ("None", "none")])
+    @pytest.mark.parametrize(
+        "raw,expected", [("HIGH", "high"), ("  high ", "high"), ("None", "none")]
+    )
     def test_spelling_normalized_lowercase_stripped(self, tmp_cron_dir, raw, expected):
         job = _create(reasoning_effort=raw)
         assert job["reasoning_effort"] == expected
@@ -100,14 +101,18 @@ class TestSchedulerJobReasoningPrecedence:
         from cron.scheduler import _resolve_job_reasoning_config
 
         job = {"reasoning_effort": "high"}
-        result = _resolve_job_reasoning_config(job, self.CFG, "anthropic/claude-opus-4.5")
+        result = _resolve_job_reasoning_config(
+            job, self.CFG, "anthropic/claude-opus-4.5"
+        )
         assert result == {"enabled": True, "effort": "high"}
 
     def test_job_none_disables_thinking_never_reenabled_by_config(self):
         from cron.scheduler import _resolve_job_reasoning_config
 
         job = {"reasoning_effort": "none"}
-        result = _resolve_job_reasoning_config(job, self.CFG, "anthropic/claude-opus-4.5")
+        result = _resolve_job_reasoning_config(
+            job, self.CFG, "anthropic/claude-opus-4.5"
+        )
         assert result == {"enabled": False}
 
     def test_absent_field_byte_identical_to_config_resolution(self):
@@ -117,7 +122,12 @@ class TestSchedulerJobReasoningPrecedence:
         for model in ("anthropic/claude-opus-4.5", "gpt-5", ""):
             expected = resolve_reasoning_config(self.CFG, model)
             assert _resolve_job_reasoning_config({}, self.CFG, model) == expected
-            assert _resolve_job_reasoning_config({"reasoning_effort": None}, self.CFG, model) == expected
+            assert (
+                _resolve_job_reasoning_config(
+                    {"reasoning_effort": None}, self.CFG, model
+                )
+                == expected
+            )
 
     def test_garbage_in_store_warns_and_falls_back(self, caplog):
         """A hand-edited jobs.json with an invalid level must not kill the
@@ -175,7 +185,6 @@ class TestCronjobToolReasoningEffort:
         import tools.cronjob_tools as mod
 
         return mod.registry._tools["cronjob_manage"].handler
-
 
     def test_tool_dispatch_drops_reasoning_effort_arg(self, tmp_cron_dir):
         """Even if a model hallucinates the argument, dispatch ignores it:

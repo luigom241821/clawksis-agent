@@ -6,6 +6,7 @@ The interactive_setup wizard lazy-imports its CLI helpers from
 source modules. Covers the home-channel clear-on-blank behavior added in
 PR #58421 and extended in the follow-up.
 """
+
 import clawk_cli.config as config_mod
 import clawk_cli.cli_output as cli_output_mod
 from tools import discord_tool
@@ -20,11 +21,21 @@ def _offline(_token):
     raise OSError("offline")
 
 
-def _patch_setup_io(monkeypatch, prompts, saved, removed, existing, infos=None, yes=False, check=_offline,
-                    writes=None):
+def _patch_setup_io(
+    monkeypatch,
+    prompts,
+    saved,
+    removed,
+    existing,
+    infos=None,
+    yes=False,
+    check=_offline,
+    writes=None,
+):
     prompt_iter = iter(prompts)
     monkeypatch.setattr(onboarding, "check_bot_token", check)
     monkeypatch.setattr(config_mod, "get_env_value", lambda key: existing.get(key, ""))
+
     def _save(key, value):
         if writes is not None:
             writes.append((key, value))
@@ -77,7 +88,9 @@ class TestDiscordTokenCheckedWithDiscord:
     """The wizard asks Discord about the pasted token: a rejected token is never written, and an
     accepted one yields the invite link and adds the bot's owner to whoever is already allowed."""
 
-    def test_rejected_token_never_written_and_owner_added_to_allowlist(self, monkeypatch, tmp_path):
+    def test_rejected_token_never_written_and_owner_added_to_allowlist(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         standin = DiscordStandin().start()
         try:
@@ -85,24 +98,44 @@ class TestDiscordTokenCheckedWithDiscord:
             saved, removed, infos, errors, writes = {}, [], [], [], []
             # A rejected token, then the real one pasted with rich-text curly quotes around it.
             prompts = ["not.the.token", f"\u201c{TOKEN}\u201d", "", ""]
-            _patch_setup_io(monkeypatch, prompts, saved, removed, existing={"DISCORD_ALLOWED_USERS": "999"},
-                            infos=infos, yes=True, check=_real_check, writes=writes)
-            monkeypatch.setattr(cli_output_mod, "print_error", lambda *a, **_kw: errors.append(" ".join(map(str, a))))
+            _patch_setup_io(
+                monkeypatch,
+                prompts,
+                saved,
+                removed,
+                existing={"DISCORD_ALLOWED_USERS": "999"},
+                infos=infos,
+                yes=True,
+                check=_real_check,
+                writes=writes,
+            )
+            monkeypatch.setattr(
+                cli_output_mod,
+                "print_error",
+                lambda *a, **_kw: errors.append(" ".join(map(str, a))),
+            )
             interactive_setup()
         finally:
             standin.stop()
         assert any("rejected" in e for e in errors)
         assert [v for k, v in writes if k == "DISCORD_BOT_TOKEN"] == [TOKEN]
-        assert saved["DISCORD_ALLOWED_USERS"] == "999,1"  # existing entry kept, stand-in owner added
+        assert (
+            saved["DISCORD_ALLOWED_USERS"] == "999,1"
+        )  # existing entry kept, stand-in owner added
         invite = next(line.strip() for line in infos if "oauth2/authorize" in line)
-        assert f"client_id={APP_ID}" in invite and f"permissions={onboarding.INVITE_PERMISSIONS}" in invite
+        assert (
+            f"client_id={APP_ID}" in invite
+            and f"permissions={onboarding.INVITE_PERMISSIONS}" in invite
+        )
 
 
 class TestDiscordTokenShapeGuard:
     """A numeric application ID pasted as the bot token is rejected with guidance
     (port of openclaw/openclaw#140531)."""
 
-    def test_numeric_app_id_reprompts_then_accepts_real_token(self, monkeypatch, tmp_path):
+    def test_numeric_app_id_reprompts_then_accepts_real_token(
+        self, monkeypatch, tmp_path
+    ):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         saved, removed, errors = {}, [], []
         real_token = "fake-bot-token." + "part2.part3"
@@ -113,7 +146,11 @@ class TestDiscordTokenShapeGuard:
             removed,
             existing={},
         )
-        monkeypatch.setattr(cli_output_mod, "print_error", lambda *a, **_kw: errors.append(" ".join(map(str, a))))
+        monkeypatch.setattr(
+            cli_output_mod,
+            "print_error",
+            lambda *a, **_kw: errors.append(" ".join(map(str, a))),
+        )
         interactive_setup()
         assert saved.get("DISCORD_BOT_TOKEN") == real_token
         assert any("application ID" in e for e in errors)
@@ -122,7 +159,11 @@ class TestDiscordTokenShapeGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         saved, removed, errors = {}, [], []
         _patch_setup_io(monkeypatch, _PROMPTS_BLANK, saved, removed, existing={})
-        monkeypatch.setattr(cli_output_mod, "print_error", lambda *a, **_kw: errors.append(" ".join(map(str, a))))
+        monkeypatch.setattr(
+            cli_output_mod,
+            "print_error",
+            lambda *a, **_kw: errors.append(" ".join(map(str, a))),
+        )
         interactive_setup()
         assert saved.get("DISCORD_BOT_TOKEN") == _PROMPTS_BLANK[0]
         assert errors == []

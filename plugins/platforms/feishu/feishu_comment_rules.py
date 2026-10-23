@@ -25,11 +25,20 @@ def _rules_file() -> Path:
     """Active profile's rules file at call time: the patched ``RULES_FILE`` when a test changed
     it, else live profile-scoped CLAWK_HOME — the multiplexed gateway serves every profile from
     one process, so the import-time constant would apply the launch profile's rules everywhere."""
-    return RULES_FILE if RULES_FILE != _RULES_FILE_AT_IMPORT else get_clawk_home() / "feishu_comment_rules.json"
+    return (
+        RULES_FILE
+        if RULES_FILE != _RULES_FILE_AT_IMPORT
+        else get_clawk_home() / "feishu_comment_rules.json"
+    )
 
 
 def _pairing_file() -> Path:
-    return PAIRING_FILE if PAIRING_FILE != _PAIRING_FILE_AT_IMPORT else get_clawk_home() / "feishu_comment_pairing.json"
+    return (
+        PAIRING_FILE
+        if PAIRING_FILE != _PAIRING_FILE_AT_IMPORT
+        else get_clawk_home() / "feishu_comment_pairing.json"
+    )
+
 
 _VALID_POLICIES = ("allowlist", "pairing")
 
@@ -37,6 +46,7 @@ _VALID_POLICIES = ("allowlist", "pairing")
 @dataclass(frozen=True)
 class CommentDocumentRule:
     """Per-document rule.  ``None`` means 'inherit from lower tier'."""
+
     enabled: Optional[bool] = None
     policy: Optional[str] = None
     allow_from: Optional[frozenset] = None
@@ -45,6 +55,7 @@ class CommentDocumentRule:
 @dataclass(frozen=True)
 class CommentsConfig:
     """Top-level comment access config."""
+
     enabled: bool = True
     policy: str = "pairing"
     allow_from: frozenset = field(default_factory=frozenset)
@@ -54,6 +65,7 @@ class CommentsConfig:
 @dataclass(frozen=True)
 class ResolvedCommentRule:
     """Fully resolved rule after field-by-field fallback."""
+
     enabled: bool
     policy: str
     allow_from: frozenset
@@ -99,7 +111,11 @@ _pairing_cache = _MtimeCache(_pairing_file)
 
 def _parse_frozenset(raw: Any) -> Optional[frozenset]:
     """Parse a list of strings into a frozenset; None if absent or not a list."""
-    return frozenset(str(u).strip() for u in raw if str(u).strip()) if isinstance(raw, (list, tuple)) else None
+    return (
+        frozenset(str(u).strip() for u in raw if str(u).strip())
+        if isinstance(raw, (list, tuple))
+        else None
+    )
 
 
 def _parse_policy(raw: Any, default: Optional[str]) -> Optional[str]:
@@ -110,7 +126,11 @@ def _parse_policy(raw: Any, default: Optional[str]) -> Optional[str]:
 
 def _parse_document_rule(raw: dict) -> CommentDocumentRule:
     enabled = raw.get("enabled")
-    return CommentDocumentRule(enabled=None if enabled is None else bool(enabled), policy=_parse_policy(raw.get("policy"), None), allow_from=_parse_frozenset(raw.get("allow_from")))
+    return CommentDocumentRule(
+        enabled=None if enabled is None else bool(enabled),
+        policy=_parse_policy(raw.get("policy"), None),
+        allow_from=_parse_frozenset(raw.get("allow_from")),
+    )
 
 
 def load_config() -> CommentsConfig:
@@ -119,10 +139,16 @@ def load_config() -> CommentsConfig:
     if not raw:
         return CommentsConfig()
     raw_docs = raw.get("documents", {})
-    documents = {str(key): _parse_document_rule(rule_raw) for key, rule_raw in (raw_docs.items() if isinstance(raw_docs, dict) else ()) if isinstance(rule_raw, dict)}
+    documents = {
+        str(key): _parse_document_rule(rule_raw)
+        for key, rule_raw in (raw_docs.items() if isinstance(raw_docs, dict) else ())
+        if isinstance(rule_raw, dict)
+    }
     return CommentsConfig(
-        enabled=raw.get("enabled", True), policy=_parse_policy(raw.get("policy", "pairing"), "pairing"),
-        allow_from=_parse_frozenset(raw.get("allow_from")) or frozenset(), documents=documents,
+        enabled=raw.get("enabled", True),
+        policy=_parse_policy(raw.get("policy", "pairing"), "pairing"),
+        allow_from=_parse_frozenset(raw.get("allow_from")) or frozenset(),
+        documents=documents,
     )
 
 
@@ -131,7 +157,9 @@ def has_wiki_keys(cfg: CommentsConfig) -> bool:
     return any(k.startswith("wiki:") for k in cfg.documents)
 
 
-def resolve_rule(cfg: CommentsConfig, file_type: str, file_token: str, wiki_token: str = "") -> ResolvedCommentRule:
+def resolve_rule(
+    cfg: CommentsConfig, file_type: str, file_token: str, wiki_token: str = ""
+) -> ResolvedCommentRule:
     """Resolve effective rule: exact doc → wiki key → wildcard → top-level → defaults."""
     exact_key = f"{file_type}:{file_token}"
     exact = cfg.documents.get(exact_key)
@@ -139,26 +167,50 @@ def resolve_rule(cfg: CommentsConfig, file_type: str, file_token: str, wiki_toke
         exact_key = f"wiki:{wiki_token}"
         exact = cfg.documents.get(exact_key)
     layers = [(exact, f"exact:{exact_key}"), (cfg.documents.get("*"), "wildcard")]
-    def _pick(field_name: str):  # first non-None document-layer value wins; otherwise the top-level value (even if None)
-        return next(((getattr(layer, field_name), src) for layer, src in layers if layer is not None and getattr(layer, field_name) is not None), (getattr(cfg, field_name), "top"))
+
+    def _pick(
+        field_name: str,
+    ):  # first non-None document-layer value wins; otherwise the top-level value (even if None)
+        return next(
+            (
+                (getattr(layer, field_name), src)
+                for layer, src in layers
+                if layer is not None and getattr(layer, field_name) is not None
+            ),
+            (getattr(cfg, field_name), "top"),
+        )
+
     enabled, en_src = _pick("enabled")
     policy, pol_src = _pick("policy")
     # match_source = highest-priority tier that contributed enabled or policy
     priority_order = {"exact": 0, "wildcard": 1, "top": 2}
-    best_src = min([en_src, pol_src], key=lambda s: priority_order.get(s.split(":")[0], 3))
-    return ResolvedCommentRule(enabled=enabled, policy=policy, allow_from=_pick("allow_from")[0], match_source=best_src)
+    best_src = min(
+        [en_src, pol_src], key=lambda s: priority_order.get(s.split(":")[0], 3)
+    )
+    return ResolvedCommentRule(
+        enabled=enabled,
+        policy=policy,
+        allow_from=_pick("allow_from")[0],
+        match_source=best_src,
+    )
 
 
 def _load_pairing_approved() -> set:
     """Return set of approved user open_ids (mtime-cached)."""
     approved = _pairing_cache.load().get("approved", {})
-    return set(approved.keys()) if isinstance(approved, dict) else ({str(u) for u in approved if u} if isinstance(approved, list) else set())
+    return (
+        set(approved.keys())
+        if isinstance(approved, dict)
+        else ({str(u) for u in approved if u} if isinstance(approved, list) else set())
+    )
 
 
 def _save_pairing(data: dict) -> None:
     pairing_file = _pairing_file()
     pairing_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(pairing_file.with_suffix(".tmp"), "w", encoding="utf-8") as f:  # windows-footgun: ok (write/append mode, not a read)
+    with open(
+        pairing_file.with_suffix(".tmp"), "w", encoding="utf-8"
+    ) as f:  # windows-footgun: ok (write/append mode, not a read)
         json.dump(data, f, indent=2, ensure_ascii=False)
     pairing_file.with_suffix(".tmp").replace(pairing_file)
     _pairing_cache.invalidate()  # same-second rewrite can keep the mtime; force the next load to re-read
@@ -167,7 +219,9 @@ def _save_pairing(data: dict) -> None:
 def _mutate_pairing(user_open_id: str, add: bool) -> bool:
     """Add/remove *user_open_id* in the approved dict; True when the store actually changed."""
     data = _pairing_cache.load()
-    approved = data.get("approved", {}) if isinstance(data.get("approved"), dict) else {}
+    approved = (
+        data.get("approved", {}) if isinstance(data.get("approved"), dict) else {}
+    )
     if (user_open_id in approved) == add:
         return False
     if add:
@@ -197,7 +251,9 @@ def pairing_list() -> dict[str, Any]:
 
 def is_user_allowed(rule: ResolvedCommentRule, user_open_id: str) -> bool:
     """Check if user passes the resolved rule's policy gate."""
-    return user_open_id in rule.allow_from or (rule.policy == "pairing" and user_open_id in _load_pairing_approved())
+    return user_open_id in rule.allow_from or (
+        rule.policy == "pairing" and user_open_id in _load_pairing_approved()
+    )
 
 
 def _fmt_allow(allow_from) -> str:
@@ -207,11 +263,26 @@ def _fmt_allow(allow_from) -> str:
 def _print_status() -> None:
     cfg = load_config()
     rules_file, pairing_file = _rules_file(), _pairing_file()
-    print(f"Rules file: {rules_file}\n  exists: {rules_file.exists()}\nPairing file: {pairing_file}\n  exists: {pairing_file.exists()}\n")
-    print(f"Top-level:\n  enabled:    {cfg.enabled}\n  policy:     {cfg.policy}\n  allow_from: {_fmt_allow(cfg.allow_from)}\n")
-    print(f"Document rules ({len(cfg.documents)}):" if cfg.documents else "Document rules: (none)")
+    print(
+        f"Rules file: {rules_file}\n  exists: {rules_file.exists()}\nPairing file: {pairing_file}\n  exists: {pairing_file.exists()}\n"
+    )
+    print(
+        f"Top-level:\n  enabled:    {cfg.enabled}\n  policy:     {cfg.policy}\n  allow_from: {_fmt_allow(cfg.allow_from)}\n"
+    )
+    print(
+        f"Document rules ({len(cfg.documents)}):"
+        if cfg.documents
+        else "Document rules: (none)"
+    )
     for key, rule in sorted(cfg.documents.items()):
-        fields = (("enabled", rule.enabled), ("policy", rule.policy), ("allow_from", sorted(rule.allow_from) if rule.allow_from is not None else None))
+        fields = (
+            ("enabled", rule.enabled),
+            ("policy", rule.policy),
+            (
+                "allow_from",
+                sorted(rule.allow_from) if rule.allow_from is not None else None,
+            ),
+        )
         parts = [f"{name}={value}" for name, value in fields if value is not None]
         print(f"  [{key}] {', '.join(parts) if parts else '(empty — inherits all)'}")
     print()
@@ -227,11 +298,18 @@ def _do_check(doc_key: str, user_open_id: str) -> None:
         return print(f"Error: doc_key must be 'fileType:fileToken', got '{doc_key}'")
     rule = resolve_rule(load_config(), parts[0], parts[1])
     allowed = is_user_allowed(rule, user_open_id)
-    print(f"Document:     {doc_key}\nUser:         {user_open_id}\nResolved rule:\n  enabled:      {rule.enabled}\n  policy:       {rule.policy}")
-    print(f"  allow_from:   {_fmt_allow(rule.allow_from)}\n  match_source: {rule.match_source}\nResult:       {'ALLOWED' if allowed else 'DENIED'}")
+    print(
+        f"Document:     {doc_key}\nUser:         {user_open_id}\nResolved rule:\n  enabled:      {rule.enabled}\n  policy:       {rule.policy}"
+    )
+    print(
+        f"  allow_from:   {_fmt_allow(rule.allow_from)}\n  match_source: {rule.match_source}\nResult:       {'ALLOWED' if allowed else 'DENIED'}"
+    )
 
 
-_PAIRING_OPS = {"add": (pairing_add, "Added: {}", "Already approved: {}"), "remove": (pairing_remove, "Removed: {}", "Not in approved list: {}")}
+_PAIRING_OPS = {
+    "add": (pairing_add, "Added: {}", "Already approved: {}"),
+    "remove": (pairing_remove, "Removed: {}", "Not in approved list: {}"),
+}
 
 
 def _pairing_cmd(args: list) -> int:
@@ -239,19 +317,35 @@ def _pairing_cmd(args: list) -> int:
     sub = args[1] if len(args) > 1 else None
     if sub == "list":
         approved = pairing_list()
-        print(*(f"  {uid}  approved_at={meta.get('approved_at', '?')}" for uid, meta in sorted(approved.items())) if approved else ("(no approved users)",), sep="\n")
+        print(
+            *(
+                f"  {uid}  approved_at={meta.get('approved_at', '?')}"
+                for uid, meta in sorted(approved.items())
+            )
+            if approved
+            else ("(no approved users)",),
+            sep="\n",
+        )
         return 0
     if sub in _PAIRING_OPS and len(args) >= 3:
         fn, ok_msg, noop_msg = _PAIRING_OPS[sub]
         print((ok_msg if fn(args[2]) else noop_msg).format(args[2]))
         return 0
-    print("Usage: pairing <add|remove|list> [args]" if sub is None else f"Usage: pairing {sub} <user_open_id>" if sub in _PAIRING_OPS else f"Unknown pairing subcommand: {sub}")
+    print(
+        "Usage: pairing <add|remove|list> [args]"
+        if sub is None
+        else f"Usage: pairing {sub} <user_open_id>"
+        if sub in _PAIRING_OPS
+        else f"Unknown pairing subcommand: {sub}"
+    )
     return 1
 
 
 def _main() -> int:
     try:
-        __import__("clawk_cli.env_loader", fromlist=["load_clawk_dotenv"]).load_clawk_dotenv()
+        __import__(
+            "clawk_cli.env_loader", fromlist=["load_clawk_dotenv"]
+        ).load_clawk_dotenv()
     except Exception:
         pass
     usage = f"""Usage: python -m gateway.platforms.feishu_comment_rules <command> [args]

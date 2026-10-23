@@ -6,6 +6,7 @@ publication pass strips both fenced blocks while the release is still a draft.
 The helpers live here so the entrypoint and the publish step can import them
 without a cycle.
 """
+
 from __future__ import annotations
 
 WARNING_OPEN = "<!-- clawk-release:draft-warning -->"
@@ -24,8 +25,13 @@ _WARNING = """> [!CAUTION]
 
 def draft_body(*, version: str, attempt_ref: str, notes: str) -> str:
     """The draft body: fenced warning block, generated notes, fenced warning block."""
-    block = "\n".join([WARNING_OPEN, _WARNING.format(version=version, attempt_ref=attempt_ref),
-                       WARNING_CLOSE])
+    block = "\n".join(
+        [
+            WARNING_OPEN,
+            _WARNING.format(version=version, attempt_ref=attempt_ref),
+            WARNING_CLOSE,
+        ]
+    )
     return "\n".join([block, notes, block])
 
 

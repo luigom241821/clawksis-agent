@@ -12,6 +12,7 @@ own plugin host (``test_plugin_secondary_profile_host``), so bundled plugins (ka
 the in-process sockets a secondary grant still opens. Driven through the real app on the
 multiplexed daemon stand-in of the consent-gate tests.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +33,7 @@ from tests.clawk_cli import test_plugin_api_consent_gate as consent_gate
 daemon = consent_gate.daemon  # the multiplexed daemon stand-in fixture
 _plugins = consent_gate._plugins
 
-_PROBE_API = '''
+_PROBE_API = """
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket
@@ -61,7 +62,7 @@ async def events(ws: WebSocket):
         if await ws.receive_text() == "bye":
             break
     await ws.close()
-'''
+"""
 
 NAME = "scope-probe"
 EVENTS = f"/api/plugins/{NAME}/events"
@@ -77,14 +78,19 @@ def _bundled_root(tmp_path, monkeypatch):
 def _setup(daemon, *, beta_disabled=False):
     dashboard = plugins_mod.get_bundled_plugins_dir() / NAME / "dashboard"
     dashboard.mkdir(parents=True)
-    (dashboard / "manifest.json").write_text(json.dumps({"name": NAME, "api": "plugin_api.py"}))
+    (dashboard / "manifest.json").write_text(
+        json.dumps({"name": NAME, "api": "plugin_api.py"})
+    )
     (dashboard / "plugin_api.py").write_text(_PROBE_API)
     (dashboard / "index.js").write_text("export {}\n")
     (daemon.launch / ".env").write_text("PLG_WS_SENTINEL=launch-sentinel\n")
     (daemon.beta / ".env").write_text("PLG_WS_SENTINEL=beta-sentinel\n")
     _plugins(daemon.launch)
     _beta(daemon, disabled=beta_disabled)
-    assert daemon.client.get(f"/api/plugins/{NAME}/ping", headers=daemon.owner).status_code == 200  # mounts it
+    assert (
+        daemon.client.get(f"/api/plugins/{NAME}/ping", headers=daemon.owner).status_code
+        == 200
+    )  # mounts it
     return dashboard / "ENTERED"
 
 
@@ -110,7 +116,9 @@ def _refused(client, path, grant):
     fails the test."""
     with ExitStack() as stack:
         try:
-            ws = stack.enter_context(client.websocket_connect(path, headers=_headers(grant)))
+            ws = stack.enter_context(
+                client.websocket_connect(path, headers=_headers(grant))
+            )
         except WebSocketDisconnect as refusal:
             assert refusal.code == WS_1008_POLICY_VIOLATION
             return True
@@ -130,7 +138,9 @@ def test_secondary_grant_needs_its_own_profiles_consent(daemon, selector):
 
     assert _refused(daemon.client, EVENTS + selector, _grant(daemon.beta))
     assert not entered.exists()
-    assert not _refused(daemon.client, EVENTS, _grant(daemon.launch))  # the launch profile's own socket opens
+    assert not _refused(
+        daemon.client, EVENTS, _grant(daemon.launch)
+    )  # the launch profile's own socket opens
 
 
 def test_runtime_disable_refuses_new_grant_sockets_in_that_profile_only(daemon):
@@ -142,7 +152,9 @@ def test_runtime_disable_refuses_new_grant_sockets_in_that_profile_only(daemon):
     assert not _refused(daemon.client, EVENTS, _grant(daemon.launch))
 
     _beta(daemon)
-    _plugins(daemon.launch, disabled=[NAME])  # PLG-3: the launch profile's lists no longer gate beta
+    _plugins(
+        daemon.launch, disabled=[NAME]
+    )  # PLG-3: the launch profile's lists no longer gate beta
     assert not _refused(daemon.client, EVENTS, _grant(daemon.beta))
     assert _refused(daemon.client, EVENTS, _grant(daemon.launch))
 
@@ -166,11 +178,21 @@ def test_grant_is_redeemed_once(daemon, monkeypatch):
 @pytest.mark.parametrize("selector", SELECTORS)
 def test_handler_resolves_home_and_secrets_in_the_grants_profile(daemon, selector):
     _setup(daemon)
-    with daemon.client.websocket_connect(EVENTS + selector, headers=_headers(_grant(daemon.beta))) as ws:
-        assert ws.receive_json() == {"home": str(daemon.beta), "secret": "beta-sentinel"}
+    with daemon.client.websocket_connect(
+        EVENTS + selector, headers=_headers(_grant(daemon.beta))
+    ) as ws:
+        assert ws.receive_json() == {
+            "home": str(daemon.beta),
+            "secret": "beta-sentinel",
+        }
         ws.send_text("bye")
-    with daemon.client.websocket_connect(EVENTS, headers=_headers(_grant(daemon.launch))) as ws:
-        assert ws.receive_json() == {"home": str(daemon.launch), "secret": "launch-sentinel"}
+    with daemon.client.websocket_connect(
+        EVENTS, headers=_headers(_grant(daemon.launch))
+    ) as ws:
+        assert ws.receive_json() == {
+            "home": str(daemon.launch),
+            "secret": "launch-sentinel",
+        }
         ws.send_text("bye")
 
 
@@ -180,7 +202,9 @@ def test_concurrent_sockets_keep_their_own_profiles(daemon):
     _setup(daemon)
 
     async def app(scope, receive, send):
-        if scope["type"] == "lifespan":  # one shared loop for both sockets, without app startup
+        if (
+            scope["type"] == "lifespan"
+        ):  # one shared loop for both sockets, without app startup
             for done in ("lifespan.startup.complete", "lifespan.shutdown.complete"):
                 await receive()
                 await send({"type": done})
@@ -190,10 +214,14 @@ def test_concurrent_sockets_keep_their_own_profiles(daemon):
 
     beta = {"home": str(daemon.beta), "secret": "beta-sentinel"}
     launch = {"home": str(daemon.launch), "secret": "launch-sentinel"}
-    with TestClient(app) as client, \
-            client.websocket_connect(EVENTS, headers=_headers(_grant(daemon.beta))) as a:
+    with (
+        TestClient(app) as client,
+        client.websocket_connect(EVENTS, headers=_headers(_grant(daemon.beta))) as a,
+    ):
         assert a.receive_json() == beta
-        with client.websocket_connect(EVENTS, headers=_headers(_grant(daemon.launch))) as b:
+        with client.websocket_connect(
+            EVENTS, headers=_headers(_grant(daemon.launch))
+        ) as b:
             assert b.receive_json() == launch
             for ws, expected in ((a, beta), (b, launch), (a, beta)):
                 ws.send_text("again")
@@ -207,6 +235,7 @@ def test_concurrent_sockets_keep_their_own_profiles(daemon):
 def _ambient():
     from agent.secret_scope import get_secret
     from clawk_constants import get_clawk_home
+
     return str(get_clawk_home()), get_secret("PLG_WS_SENTINEL")
 
 
@@ -229,15 +258,23 @@ def test_grant_scope_is_restored_when_the_connection_ends_abnormally(daemon, end
     async def send(message):
         raise AssertionError(f"an admitted socket was answered by the gate: {message}")
 
-    scope = {"type": "websocket", "path": EVENTS, "raw_path": EVENTS.encode(), "root_path": "",
-             "query_string": b"", "app": web_server.app,
-             "headers": [(b"x-clawk-gateway-ticket", _grant(daemon.beta).encode())],
-             "clawk.gateway_socket_peer": ("127.0.0.1", 50000)}
+    scope = {
+        "type": "websocket",
+        "path": EVENTS,
+        "raw_path": EVENTS.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "app": web_server.app,
+        "headers": [(b"x-clawk-gateway-ticket", _grant(daemon.beta).encode())],
+        "clawk.gateway_socket_peer": ("127.0.0.1", 50000),
+    }
 
     async def connection():
         with _config_profile_scope(None):  # the launch profile's ambient scope
             before = _ambient()
-            with pytest.raises(RuntimeError if ending == "raises" else asyncio.CancelledError):
+            with pytest.raises(
+                RuntimeError if ending == "raises" else asyncio.CancelledError
+            ):
                 await PluginApiWebSocketGate(handler)(scope, receive, send)
             return before, _ambient()
 

@@ -2,6 +2,7 @@
 config/.env-derived value to profile B. Real temp homes, real config.yaml/.env, real modules;
 only HTTP transports are stubbed.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,11 @@ from pathlib import Path
 import pytest
 import clawk_yaml as yaml
 
-from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+from agent.secret_scope import (
+    build_profile_secret_scope,
+    reset_secret_scope,
+    set_secret_scope,
+)
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 
@@ -38,7 +43,9 @@ class _scoped:
 @pytest.fixture
 def two_homes(tmp_path, monkeypatch):
     a = _make_home(tmp_path / "A", {}, "CAMOFOX_URL=http://camofox-a:9377\n")
-    b = _make_home(tmp_path / "A" / "profiles" / "B", {}, "CAMOFOX_URL=http://camofox-b:9377\n")
+    b = _make_home(
+        tmp_path / "A" / "profiles" / "B", {}, "CAMOFOX_URL=http://camofox-b:9377\n"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(a))
     monkeypatch.delenv("CAMOFOX_URL", raising=False)
     return a, b
@@ -73,14 +80,33 @@ def test_home_keyed_caches_serve_each_profile_its_own_config(tmp_path, monkeypat
     config or per-home files: aux-vision routing, learned image cost table, aux
     semaphore, MCP lock."""
     main = {"model": {"provider": "openai", "model": "gpt-4o"}}
-    a = _make_home(tmp_path / "A", {**main,
-                                    "auxiliary": {"vision": {"provider": "auto"}, "summary": {"max_concurrency": 2}}})
-    b = _make_home(tmp_path / "A" / "profiles" / "B", {**main,
-                                                       "auxiliary": {"vision": {"provider": "openai", "model": "gpt-4o-mini"},
-                                                                     "summary": {"max_concurrency": 7}}})
+    a = _make_home(
+        tmp_path / "A",
+        {
+            **main,
+            "auxiliary": {
+                "vision": {"provider": "auto"},
+                "summary": {"max_concurrency": 2},
+            },
+        },
+    )
+    b = _make_home(
+        tmp_path / "A" / "profiles" / "B",
+        {
+            **main,
+            "auxiliary": {
+                "vision": {"provider": "openai", "model": "gpt-4o-mini"},
+                "summary": {"max_concurrency": 7},
+            },
+        },
+    )
     monkeypatch.setenv("CLAWK_HOME", str(a))
-    (a / "cache" / "image_token_costs.json").write_text(json.dumps({"m@gw.example": 1000}), encoding="utf-8")
-    (b / "cache" / "image_token_costs.json").write_text(json.dumps({"m@gw.example": 3000}), encoding="utf-8")
+    (a / "cache" / "image_token_costs.json").write_text(
+        json.dumps({"m@gw.example": 1000}), encoding="utf-8"
+    )
+    (b / "cache" / "image_token_costs.json").write_text(
+        json.dumps({"m@gw.example": 3000}), encoding="utf-8"
+    )
 
     import agent.auxiliary_client as ac
     import agent.image_token_cost as itc
@@ -90,7 +116,9 @@ def test_home_keyed_caches_serve_each_profile_its_own_config(tmp_path, monkeypat
     ac._reset_aux_semaphores()
 
     with _scoped(a):
-        assert cu._should_route_through_aux_vision() is False  # no explicit aux vision: native path
+        assert (
+            cu._should_route_through_aux_vision() is False
+        )  # no explicit aux vision: native path
         assert itc.learned_image_token_cost("m", "http://gw.example/v1") == 1000
         sem_a = ac._acquire_sync_aux_semaphore("summary")
         sem_a.acquire()
@@ -98,7 +126,9 @@ def test_home_keyed_caches_serve_each_profile_its_own_config(tmp_path, monkeypat
         lock_a = cookie._fh.name
         cookie.release()
     with _scoped(b):
-        assert cu._should_route_through_aux_vision() is True  # B named a dedicated vision model
+        assert (
+            cu._should_route_through_aux_vision() is True
+        )  # B named a dedicated vision model
         assert itc.learned_image_token_cost("m", "http://gw.example/v1") == 3000
         sem_b = ac._acquire_sync_aux_semaphore("summary")
         cookie = mcp_tool_loop._try_acquire_mcp_discovery_lock()
@@ -126,13 +156,22 @@ def test_endpoint_model_catalog_memo_is_keyed_by_credential(two_homes, monkeypat
     @contextmanager
     def stream(url, headers=None, **kwargs):
         who = headers.get("Authorization", "").rsplit("-", 1)[-1]
-        yield httpx.Response(200, request=httpx.Request("GET", url),
-                             json={"data": [{"id": f"model-for-{who}", "context_length": 1}]})
+        yield httpx.Response(
+            200,
+            request=httpx.Request("GET", url),
+            json={"data": [{"id": f"model-for-{who}", "context_length": 1}]},
+        )
 
     monkeypatch.setattr(mm.model_metadata_http, "stream", stream)
     with _scoped(a):
-        assert set(mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-A")) == {"model-for-A"}
+        assert set(
+            mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-A")
+        ) == {"model-for-A"}
     with _scoped(b):
-        assert set(mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-B")) == {"model-for-B"}
+        assert set(
+            mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-B")
+        ) == {"model-for-B"}
     with _scoped(a):
-        assert set(mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-A")) == {"model-for-A"}
+        assert set(
+            mm.fetch_endpoint_model_metadata("http://gw.example/v1", api_key="key-A")
+        ) == {"model-for-A"}

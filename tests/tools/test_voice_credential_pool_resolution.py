@@ -28,9 +28,15 @@ def _fake_pool(key: str = "", *, has: bool = True):
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     for var in (
-        "GROQ_API_KEY", "MISTRAL_API_KEY", "ELEVENLABS_API_KEY",
-        "DEEPINFRA_API_KEY", "MINIMAX_API_KEY", "GEMINI_API_KEY",
-        "GOOGLE_API_KEY", "XAI_API_KEY", "OPENAI_API_KEY",
+        "GROQ_API_KEY",
+        "MISTRAL_API_KEY",
+        "ELEVENLABS_API_KEY",
+        "DEEPINFRA_API_KEY",
+        "MINIMAX_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "XAI_API_KEY",
+        "OPENAI_API_KEY",
         "VOICE_TOOLS_OPENAI_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
@@ -77,7 +83,6 @@ class TestPoolFallback:
             )
         assert provider_id in pool_key_seen
 
-
     def test_pool_read_failure_never_raises(self):
         with patch(
             "agent.credential_pool.load_pool", side_effect=Exception("disk error")
@@ -95,16 +100,13 @@ class TestEnvPrecedence:
             return_value=_fake_pool("pool-key"),
         ) as lp:
             assert (
-                resolve_provider_secret("ELEVENLABS_API_KEY", "elevenlabs")
-                == "env-key"
+                resolve_provider_secret("ELEVENLABS_API_KEY", "elevenlabs") == "env-key"
             )
         lp.assert_not_called()
 
     def test_env_getter_is_consulted(self):
         """Callers can pass their module-level get_env_value wrapper."""
-        with patch(
-            "agent.credential_pool.load_pool", return_value=_fake_pool("")
-        ):
+        with patch("agent.credential_pool.load_pool", return_value=_fake_pool("")):
             assert (
                 resolve_provider_secret(
                     "GROQ_API_KEY",
@@ -182,7 +184,6 @@ class TestToolWiring:
 
         with patch("agent.credential_pool.load_pool", side_effect=fake_load_pool):
             assert tt._resolve_provider_key("GROQ_API_KEY", "groq") == "stt-pool-key"
-
 
     def test_openai_audio_key_falls_back_to_pool(self):
         from tools.tool_backend_helpers import resolve_openai_audio_api_key

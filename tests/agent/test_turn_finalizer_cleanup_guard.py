@@ -140,8 +140,6 @@ def _run(
     )
 
 
-
-
 @pytest.mark.parametrize(
     "step", ["save_trajectory", "cleanup_task_resources", "persist_session"]
 )
@@ -152,11 +150,7 @@ def test_single_cleanup_step_raises_does_not_skip_others(step):
     assert result["final_response"] == "PARTIAL SUMMARY FROM MODEL"
     # Exactly the failing step is recorded; the others ran without error.
     assert result["cleanup_errors"] == [
-        next(
-            e
-            for e in result["cleanup_errors"]
-            if e.startswith(step)
-        )
+        next(e for e in result["cleanup_errors"] if e.startswith(step))
     ]
     assert len(result["cleanup_errors"]) == 1
 
@@ -185,9 +179,7 @@ def test_clean_turn_has_no_cleanup_errors_key():
         (False, ["transform_llm_output", "post_llm_call", "on_session_end"]),
     ],
 )
-def test_persist_disabled_turn_skips_session_end_hook(
-    persist_disabled, expected_calls
-):
+def test_persist_disabled_turn_skips_session_end_hook(persist_disabled, expected_calls):
     agent = _StubAgent(raise_in=())
     agent._persist_disabled = persist_disabled
     calls = []
@@ -205,5 +197,3 @@ def test_persist_disabled_turn_skips_session_end_hook(
         )
 
     assert ("on_session_end" in calls) == ("on_session_end" in expected_calls)
-
-

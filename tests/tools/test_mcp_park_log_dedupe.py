@@ -25,7 +25,8 @@ def _fast_time(monkeypatch, tmp_path):
     from tools import mcp_tool
 
     (tmp_path / "config.yaml").write_text(
-        "mcp_servers:\n  blender:\n    command: x\n", encoding="utf-8")
+        "mcp_servers:\n  blender:\n    command: x\n", encoding="utf-8"
+    )
     monkeypatch.setattr(mcp_tool, "_PARKED_RETRY_INTERVAL", 0)
     real_sleep = asyncio.sleep
 
@@ -153,4 +154,8 @@ def test_park_for_a_different_reason_warns_again(caplog):
         task._log_park("MCP server '%s' parked: %s", "t", "OAuthError: token revoked")
         task._log_park("MCP server '%s' parked: %s", "t", "OAuthError: token revoked")
     assert [r.levelno for r in caplog.records] == [
-        logging.WARNING, logging.DEBUG, logging.WARNING, logging.DEBUG]
+        logging.WARNING,
+        logging.DEBUG,
+        logging.WARNING,
+        logging.DEBUG,
+    ]

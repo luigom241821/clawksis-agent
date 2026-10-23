@@ -30,7 +30,11 @@ _UNKNOWN_KEY = "unknown"
 
 def _short(text: str, limit: int | None = _SUMMARY_LIMIT) -> str:
     first = (text or "").strip().splitlines()[0] if (text or "").strip() else ""
-    return first if limit is None or len(first) <= limit else first[: limit - 1].rstrip() + "…"
+    return (
+        first
+        if limit is None or len(first) <= limit
+        else first[: limit - 1].rstrip() + "…"
+    )
 
 
 def refusal_text(error: BaseException | str) -> str:
@@ -43,14 +47,21 @@ def refusal_text(error: BaseException | str) -> str:
     reads exactly as before."""
     data = getattr(error, "data", None)
     data = data if isinstance(data, dict) else {}
-    field, detail = str(data.get("field") or "").strip(), str(data.get("detail") or "").strip()
+    field, detail = (
+        str(data.get("field") or "").strip(),
+        str(data.get("detail") or "").strip(),
+    )
     if not field and not detail:
         return str(error)
     return f"{error} ({field or 'unnamed field'}{': ' + detail if detail else ''})"
 
 
 def chat_error_response(
-    error: Exception | str, *, provider: str = "", model: str = "", failure_reason: str | None = None,
+    error: Exception | str,
+    *,
+    provider: str = "",
+    model: str = "",
+    failure_reason: str | None = None,
 ) -> str:
     """Two-line panel text: plain sentence with the fix command, then ``Details: <raw>``.
 
@@ -70,13 +81,17 @@ def chat_error_response(
         from agent.error_classifier import classify_api_error
 
         exc = error if isinstance(error, Exception) else Exception(str(error))
-        reason = classify_api_error(exc, provider=provider or "", model=model or "").reason.value
+        reason = classify_api_error(
+            exc, provider=provider or "", model=model or ""
+        ).reason.value
     lead = t(
         f"cli.error.{_REASON_KEYS.get(reason, _UNKNOWN_KEY)}",
         provider=provider or t("cli.error.the_provider"),
         model=model or t("cli.error.the_current_model"),
     )
-    return t("cli.error.with_details", lead=lead, details=_short(refusal_text(error), 300))
+    return t(
+        "cli.error.with_details", lead=lead, details=_short(refusal_text(error), 300)
+    )
 
 
 def agent_init_failure_message(error: BaseException) -> str:
@@ -88,4 +103,7 @@ def agent_init_failure_message(error: BaseException) -> str:
     from clawk_cli.gateway_client import GatewayUnavailableError
 
     limit = None if isinstance(error, GatewayUnavailableError) else _SUMMARY_LIMIT
-    return t("cli.error.agent_init_failed", error=_short(refusal_text(error), limit) or type(error).__name__)
+    return t(
+        "cli.error.agent_init_failed",
+        error=_short(refusal_text(error), limit) or type(error).__name__,
+    )

@@ -39,11 +39,23 @@ METRIC_FIX = {
 }
 
 PY_EXCLUDE = ("website/*", "*/node_modules/*", "node_modules/*")
-TS_EXCLUDE = PY_EXCLUDE + ("*.d.ts", "*/dist/*", "*/build/*", "*/generated/*", "*.generated.ts")
+TS_EXCLUDE = PY_EXCLUDE + (
+    "*.d.ts",
+    "*/dist/*",
+    "*/build/*",
+    "*/generated/*",
+    "*.generated.ts",
+)
 TESTS = ("tests/*", "*/tests/*", "tests-js/*", "*/conftest.py")
 # One-shot processes that serve a single profile (CI/release scripts, skill scripts run as a
 # child with a scoped env, installers): the profile-scope rules don't apply to them.
-SINGLE_PROFILE = TESTS + ("scripts/*", "skills/*", "optional-skills/*", "evals/*", "setup.py")
+SINGLE_PROFILE = TESTS + (
+    "scripts/*",
+    "skills/*",
+    "optional-skills/*",
+    "evals/*",
+    "setup.py",
+)
 
 
 @dataclass(frozen=True)
@@ -65,89 +77,214 @@ WARN_UNTIL_REPLAYED = False
 
 RULES: tuple[Rule, ...] = (
     # Swallowed exceptions: the top statically-catchable bug cause in the fix sample.
-    Rule("S110", "try/except/pass", "log it or narrow the except; a silent pass hides the"
-         " failure the next bug report is about", "ruff"),
+    Rule(
+        "S110",
+        "try/except/pass",
+        "log it or narrow the except; a silent pass hides the"
+        " failure the next bug report is about",
+        "ruff",
+    ),
     # ruff (pinned, --ignore-noqa) passes a handler that re-raises or logs the traceback; a
     # message-only log such as `logger.warning("...: %s", e)` still counts as swallowed.
-    Rule("BLE001", "blind `except Exception`", "catch the exceptions this code can actually"
-         " raise; a deliberate catch-all boundary must re-raise or log the traceback"
-         " (`logger.exception(...)` or `exc_info=True`; `logger.warning(..., e)` is not enough)."
-         " `# noqa` is ignored here: waive with `# health: allow BLE001 -- <why>`", "ruff"),
-    Rule("E722", "bare `except:`", "catch a named exception (bare except also swallows"
-         " KeyboardInterrupt/SystemExit)", "ruff"),
+    Rule(
+        "BLE001",
+        "blind `except Exception`",
+        "catch the exceptions this code can actually"
+        " raise; a deliberate catch-all boundary must re-raise or log the traceback"
+        " (`logger.exception(...)` or `exc_info=True`; `logger.warning(..., e)` is not enough)."
+        " `# noqa` is ignored here: waive with `# health: allow BLE001 -- <why>`",
+        "ruff",
+    ),
+    Rule(
+        "E722",
+        "bare `except:`",
+        "catch a named exception (bare except also swallows"
+        " KeyboardInterrupt/SystemExit)",
+        "ruff",
+    ),
     # Correctness basics.
     # tui_gateway method modules get the server's names injected (`bind_module(globals(), ...)`).
-    Rule("F821", "undefined name", "import or define it", "ruff", exclude=("tui_gateway/*",)),
-    Rule("F823", "local used before assignment", "assign before use or declare global",
-         "ruff", exclude=()),
-    Rule("F811", "redefinition of unused name", "remove the shadowed definition", "ruff",
-         exclude=()),
+    Rule(
+        "F821",
+        "undefined name",
+        "import or define it",
+        "ruff",
+        exclude=("tui_gateway/*",),
+    ),
+    Rule(
+        "F823",
+        "local used before assignment",
+        "assign before use or declare global",
+        "ruff",
+        exclude=(),
+    ),
+    Rule(
+        "F811",
+        "redefinition of unused name",
+        "remove the shadowed definition",
+        "ruff",
+        exclude=(),
+    ),
     Rule("F841", "unused local variable", "delete it or use it", "ruff", exclude=()),
-    Rule("RUF006", "dangling asyncio task", "keep a reference to the task (it can be garbage"
-         " collected mid-run) and handle its exception", "ruff"),
+    Rule(
+        "RUF006",
+        "dangling asyncio task",
+        "keep a reference to the task (it can be garbage"
+        " collected mid-run) and handle its exception",
+        "ruff",
+    ),
     # Hangs.
-    Rule("ASYNC230", "blocking open() in async def", "`await asyncio.to_thread(...)`", "ruff"),
-    Rule("ASYNC240", "blocking path call in async def", "`await asyncio.to_thread(...)`",
-         "ruff"),
+    Rule(
+        "ASYNC230",
+        "blocking open() in async def",
+        "`await asyncio.to_thread(...)`",
+        "ruff",
+    ),
+    Rule(
+        "ASYNC240",
+        "blocking path call in async def",
+        "`await asyncio.to_thread(...)`",
+        "ruff",
+    ),
     Rule("S113", "HTTP request without timeout", "pass `timeout=`", "ruff"),
-    Rule("HX006", "subprocess/urlopen without timeout", "pass `timeout=`; an asyncio"
-         " `proc.communicate()` goes inside `asyncio.wait_for(..., timeout=...)` (a child or"
-         " socket that never answers hangs forever); after `proc.kill()` reap with `proc.wait()`,"
-         " never a bare `communicate()` (it blocks while a grandchild holds the pipe)", "ast"),
-    Rule("HX007", "sync config I/O inside async def", "`await asyncio.to_thread(load_config)`"
-         " or read it before entering the event loop", "ast"),
-    Rule("HX008", "asyncio.get_event_loop()", "`asyncio.get_running_loop()` inside a"
-         " coroutine; `asyncio.run()` at an entry point", "ast"),
-    Rule("HX009", "isinstance(r, Exception) on gather results", "check `BaseException`:"
-         " `gather(return_exceptions=True)` also returns CancelledError", "ast"),
+    Rule(
+        "HX006",
+        "subprocess/urlopen without timeout",
+        "pass `timeout=`; an asyncio"
+        " `proc.communicate()` goes inside `asyncio.wait_for(..., timeout=...)` (a child or"
+        " socket that never answers hangs forever); after `proc.kill()` reap with `proc.wait()`,"
+        " never a bare `communicate()` (it blocks while a grandchild holds the pipe)",
+        "ast",
+    ),
+    Rule(
+        "HX007",
+        "sync config I/O inside async def",
+        "`await asyncio.to_thread(load_config)`"
+        " or read it before entering the event loop",
+        "ast",
+    ),
+    Rule(
+        "HX008",
+        "asyncio.get_event_loop()",
+        "`asyncio.get_running_loop()` inside a"
+        " coroutine; `asyncio.run()` at an entry point",
+        "ast",
+    ),
+    Rule(
+        "HX009",
+        "isinstance(r, Exception) on gather results",
+        "check `BaseException`:"
+        " `gather(return_exceptions=True)` also returns CancelledError",
+        "ast",
+    ),
     # Profile scope (one process serves many profiles).
-    Rule("HX001", "hardcoded Clawksis home", "`get_clawk_home()` for paths,"
-         " `display_clawk_home()` for user-facing text (`clawk_constants`); a path that"
-         " deliberately lives under the user's home, not the profile (e.g. the profiles root),"
-         " takes `# health: allow HX001 -- <why>`", "ast",
-         blocking=WARN_UNTIL_REPLAYED,
-         exclude=SINGLE_PROFILE + ("clawk_constants.py",)),
-    Rule("HX002", "new CLAWK_* environment variable", "behavioural settings go in"
-         " config.yaml, secrets through the secret scope; `.env` is for credentials only",
-         "ast", exclude=SINGLE_PROFILE),
-    Rule("HX004", "UnscopedSecretError falls back to os.getenv", "bind the owning profile's"
-         " secret scope at the spawn site; never read the launch profile's environment",
-         "ast", exclude=SINGLE_PROFILE),
-    Rule("HX005", "home/config/env captured at import time", "resolve it at call time"
-         " (`get_clawk_home()`, `load_config()`) or key the slot by `clawk_home_key()`;"
-         " module constants hold the launch profile's value", "ast",
-         exclude=SINGLE_PROFILE),
-    Rule("HX012", "raw threading.Thread", "`spawn_context_thread(...)` so the thread keeps"
-         " the caller's profile scope (ContextVars do not cross a bare Thread)", "ast",
-         blocking=WARN_UNTIL_REPLAYED,
-         exclude=SINGLE_PROFILE),
-    Rule("PS-P05", "child env built from os.environ", "`served_profile_child_env()`; the"
-         " child otherwise inherits the launch profile's home and secrets", "regex",
-         exclude=SINGLE_PROFILE, blocking=WARN_UNTIL_REPLAYED, pattern_id="P05"),
-    Rule("PS-P06", "raw platform credential getenv", "read it through the profile's secret"
-         " scope (`get_secret`)", "regex", exclude=SINGLE_PROFILE,
-         blocking=WARN_UNTIL_REPLAYED, pattern_id="P06"),
+    Rule(
+        "HX001",
+        "hardcoded Clawksis home",
+        "`get_clawk_home()` for paths,"
+        " `display_clawk_home()` for user-facing text (`clawk_constants`); a path that"
+        " deliberately lives under the user's home, not the profile (e.g. the profiles root),"
+        " takes `# health: allow HX001 -- <why>`",
+        "ast",
+        blocking=WARN_UNTIL_REPLAYED,
+        exclude=SINGLE_PROFILE + ("clawk_constants.py",),
+    ),
+    Rule(
+        "HX002",
+        "new CLAWK_* environment variable",
+        "behavioural settings go in"
+        " config.yaml, secrets through the secret scope; `.env` is for credentials only",
+        "ast",
+        exclude=SINGLE_PROFILE,
+    ),
+    Rule(
+        "HX004",
+        "UnscopedSecretError falls back to os.getenv",
+        "bind the owning profile's"
+        " secret scope at the spawn site; never read the launch profile's environment",
+        "ast",
+        exclude=SINGLE_PROFILE,
+    ),
+    Rule(
+        "HX005",
+        "home/config/env captured at import time",
+        "resolve it at call time"
+        " (`get_clawk_home()`, `load_config()`) or key the slot by `clawk_home_key()`;"
+        " module constants hold the launch profile's value",
+        "ast",
+        exclude=SINGLE_PROFILE,
+    ),
+    Rule(
+        "HX012",
+        "raw threading.Thread",
+        "`spawn_context_thread(...)` so the thread keeps"
+        " the caller's profile scope (ContextVars do not cross a bare Thread)",
+        "ast",
+        blocking=WARN_UNTIL_REPLAYED,
+        exclude=SINGLE_PROFILE,
+    ),
+    Rule(
+        "PS-P05",
+        "child env built from os.environ",
+        "`served_profile_child_env()`; the"
+        " child otherwise inherits the launch profile's home and secrets",
+        "regex",
+        exclude=SINGLE_PROFILE,
+        blocking=WARN_UNTIL_REPLAYED,
+        pattern_id="P05",
+    ),
+    Rule(
+        "PS-P06",
+        "raw platform credential getenv",
+        "read it through the profile's secret scope (`get_secret`)",
+        "regex",
+        exclude=SINGLE_PROFILE,
+        blocking=WARN_UNTIL_REPLAYED,
+        pattern_id="P06",
+    ),
     # Process identity.
-    Rule("HX003", "process identity from argv substrings", "use"
-         " `gateway.status.looks_like_gateway_command_line` /"
-         " `clawk_cli.update_cmd._clawk_holder_subcommand` and match full cmdlines", "ast",
-         blocking=WARN_UNTIL_REPLAYED),
+    Rule(
+        "HX003",
+        "process identity from argv substrings",
+        "use"
+        " `gateway.status.looks_like_gateway_command_line` /"
+        " `clawk_cli.update_cmd._clawk_holder_subcommand` and match full cmdlines",
+        "ast",
+        blocking=WARN_UNTIL_REPLAYED,
+    ),
     # Config truthiness.
-    Rule("HX010", "bool() of a config/env string", "`bool(\"false\")` is True. Is it set?"
-         " `os.getenv(\"X\") is not None` (or `!= \"\"` to treat empty as unset). A boolean"
-         " flag? `is_truthy_value(...)`, which is False for any non-flag string such as a key",
-         "ast", blocking=WARN_UNTIL_REPLAYED),
+    Rule(
+        "HX010",
+        "bool() of a config/env string",
+        '`bool("false")` is True. Is it set?'
+        ' `os.getenv("X") is not None` (or `!= ""` to treat empty as unset). A boolean'
+        " flag? `is_truthy_value(...)`, which is False for any non-flag string such as a key",
+        "ast",
+        blocking=WARN_UNTIL_REPLAYED,
+    ),
     # Structure.
-    Rule("HX011", "if/elif ladder on one name", "use a dict/table -> handler (`_SLASH_DISPATCH`"
-         " is the shape)", "ast", exclude=()),
+    Rule(
+        "HX011",
+        "if/elif ladder on one name",
+        "use a dict/table -> handler (`_SLASH_DISPATCH` is the shape)",
+        "ast",
+        exclude=(),
+    ),
     # Tests: a fixed delay is a race against the runner's load (the usual flake).
-    Rule("HX013", "wall-clock sleep in a test", "wait for the condition, not the clock: an"
-         " Event the code under test sets (`threading.Event` / `asyncio.Event`, `.wait(timeout=)`),"
-         " or poll with `tests.waiting.wait_until(predicate, timeout=...)` (`async_wait_until` in a"
-         " coroutine; a poll loop's interval under a deadline or a `range(n)` bound passes); a stand-in that must hang"
-         " blocks on an Event the test sets at teardown."
-         " `sleep(0)` to yield is fine. A delay that IS the behaviour under test takes"
-         " `# health: allow HX013 -- <why>`", "ast", include=TESTS, exclude=()),
+    Rule(
+        "HX013",
+        "wall-clock sleep in a test",
+        "wait for the condition, not the clock: an"
+        " Event the code under test sets (`threading.Event` / `asyncio.Event`, `.wait(timeout=)`),"
+        " or poll with `tests.waiting.wait_until(predicate, timeout=...)` (`async_wait_until` in a"
+        " coroutine; a poll loop's interval under a deadline or a `range(n)` bound passes); a stand-in that must hang"
+        " blocks on an Event the test sets at teardown."
+        " `sleep(0)` to yield is fine. A delay that IS the behaviour under test takes"
+        " `# health: allow HX013 -- <why>`",
+        "ast",
+        include=TESTS,
+        exclude=(),
+    ),
 )
 
 RULES_BY_ID = {rule.id: rule for rule in RULES}

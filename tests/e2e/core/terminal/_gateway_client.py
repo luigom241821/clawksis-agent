@@ -41,7 +41,13 @@ class RpcError(AssertionError):
         super().__init__(f"{method} -> {self.code}: {self.message}")
 
 
-def poll_until(fn: Callable[[], Any], *, timeout: float, interval: float = 0.05, what: str = "condition") -> Any:
+def poll_until(
+    fn: Callable[[], Any],
+    *,
+    timeout: float,
+    interval: float = 0.05,
+    what: str = "condition",
+) -> Any:
     """Return the first truthy ``fn()`` before ``timeout``; AssertionError naming ``what`` otherwise."""
     deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
@@ -55,8 +61,10 @@ def poll_until(fn: Callable[[], Any], *, timeout: float, interval: float = 0.05,
         except Exception as exc:
             last_exc = exc
         if time.monotonic() >= deadline:
-            raise AssertionError(f"timed out after {timeout:.0f}s waiting for {what}"
-                                 + (f" (last error: {last_exc!r})" if last_exc else ""))
+            raise AssertionError(
+                f"timed out after {timeout:.0f}s waiting for {what}"
+                + (f" (last error: {last_exc!r})" if last_exc else "")
+            )
         time.sleep(interval)
 
 
@@ -64,19 +72,30 @@ def _operator_home() -> str:
     """The account's real home (passwd), immune to a test-time HOME override."""
     try:
         import pwd
+
         return pwd.getpwuid(os.getuid()).pw_dir
     except (ImportError, KeyError):  # pragma: no cover - non-POSIX
         return os.path.expanduser("~")
 
 
-def _minimal_env(home: Path, clawk_home: Path, token: str, extra: dict[str, str] | None) -> dict[str, str]:
+def _minimal_env(
+    home: Path, clawk_home: Path, token: str, extra: dict[str, str] | None
+) -> dict[str, str]:
     """A clean child env: nothing Clawksis-, provider- or credential-shaped leaks in from the test runner."""
-    env = {k: os.environ[k] for k in ("PATH", "LANG", "LC_ALL", "TERM", "SYSTEMROOT") if k in os.environ}
+    env = {
+        k: os.environ[k]
+        for k in ("PATH", "LANG", "LC_ALL", "TERM", "SYSTEMROOT")
+        if k in os.environ
+    }
     tmpdir = home.parent / "tmp"
     tmpdir.mkdir(parents=True, exist_ok=True)
     env.update(
-        HOME=str(home), CLAWK_HOME=str(clawk_home), PYTHONPATH=str(REPO_ROOT),
-        TMPDIR=str(tmpdir), CLAWK_DASHBOARD_SESSION_TOKEN=token, PYTHONUNBUFFERED="1",
+        HOME=str(home),
+        CLAWK_HOME=str(clawk_home),
+        PYTHONPATH=str(REPO_ROOT),
+        TMPDIR=str(tmpdir),
+        CLAWK_DASHBOARD_SESSION_TOKEN=token,
+        PYTHONUNBUFFERED="1",
         NO_COLOR="1",
         # The child's HOME *is* the sandbox, so its "real" root (expanduser('~')/.clawk) is the tmp
         # home and the pytest-ancestry live-DB guard would refuse every open. The guard exists to keep
@@ -90,8 +109,15 @@ def _minimal_env(home: Path, clawk_home: Path, token: str, extra: dict[str, str]
 class Backend:
     """One real ``clawk serve`` process wired to a :class:`FakeLLMServer`."""
 
-    def __init__(self, root: Path, responder, *, extra_config: str = "", env: dict[str, str] | None = None,
-                 aux=None) -> None:
+    def __init__(
+        self,
+        root: Path,
+        responder,
+        *,
+        extra_config: str = "",
+        env: dict[str, str] | None = None,
+        aux=None,
+    ) -> None:
         self.root = root
         self.home = root / "home"
         self.clawk_home = self.home / ".clawksis"
@@ -105,28 +131,54 @@ class Backend:
 
     def start(self, *, timeout: float = 90.0) -> Backend:
         operator_root = (Path(_operator_home()) / ".clawk").resolve()
-        assert operator_root not in (self.clawk_home.resolve(), *self.clawk_home.resolve().parents), (
-            f"sandbox {self.clawk_home} sits inside the operator's Clawksis home {operator_root}")
+        assert operator_root not in (
+            self.clawk_home.resolve(),
+            *self.clawk_home.resolve().parents,
+        ), (
+            f"sandbox {self.clawk_home} sits inside the operator's Clawksis home {operator_root}"
+        )
         self.llm.start()
-        write_clawk_home(self.clawk_home, self.llm.base_url, extra_config=self.extra_config)
+        write_clawk_home(
+            self.clawk_home, self.llm.base_url, extra_config=self.extra_config
+        )
         self._stdout = open(self.root / "serve.stdout.log", "wb")
         self._stderr = open(self.root / "serve.stderr.log", "wb")
         # Own process group: stop() signals exactly the tree this fixture spawned, never a pattern match.
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "clawk_cli.main", "serve", "--host", "127.0.0.1", "--port", "0"],
-            cwd=str(self.root), env=_minimal_env(self.home, self.clawk_home, self.token, self.extra_env),
-            stdin=subprocess.DEVNULL, stdout=self._stdout, stderr=self._stderr, start_new_session=True)
+            [
+                sys.executable,
+                "-m",
+                "clawk_cli.main",
+                "serve",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "0",
+            ],
+            cwd=str(self.root),
+            env=_minimal_env(self.home, self.clawk_home, self.token, self.extra_env),
+            stdin=subprocess.DEVNULL,
+            stdout=self._stdout,
+            stderr=self._stderr,
+            start_new_session=True,
+        )
 
         proc = self.proc
 
         def ready() -> int | None:
             if proc.poll() is not None:
-                raise AssertionError(f"clawk serve exited {proc.returncode} before ready:\n{self.logs()}")
-            match = READY_RE.search((self.root / "serve.stdout.log").read_text(errors="replace"))
+                raise AssertionError(
+                    f"clawk serve exited {proc.returncode} before ready:\n{self.logs()}"
+                )
+            match = READY_RE.search(
+                (self.root / "serve.stdout.log").read_text(errors="replace")
+            )
             return int(match.group(1)) if match else None
 
         try:
-            self.port = poll_until(ready, timeout=timeout, interval=0.1, what="CLAWK_BACKEND_READY")
+            self.port = poll_until(
+                ready, timeout=timeout, interval=0.1, what="CLAWK_BACKEND_READY"
+            )
         except BaseException:
             self.stop()
             raise
@@ -143,8 +195,11 @@ class Backend:
 
     def logs(self, tail: int = 60) -> str:
         parts = []
-        for path in (self.root / "serve.stdout.log", self.root / "serve.stderr.log",
-                     self.clawk_home / "logs" / "errors.log"):
+        for path in (
+            self.root / "serve.stdout.log",
+            self.root / "serve.stderr.log",
+            self.clawk_home / "logs" / "errors.log",
+        ):
             name = path.name
             if path.exists():
                 lines = path.read_text(errors="replace").splitlines()[-tail:]
@@ -198,10 +253,16 @@ class WSClient:
         self._next_id = 0
         self.closed = False
         self.dropped = False
-        self._ws = ws_connect(url, max_size=None, ping_interval=None, open_timeout=30, close_timeout=2)
-        self._thread = threading.Thread(target=self._read_loop, name=f"ws-{name}", daemon=True)
+        self._ws = ws_connect(
+            url, max_size=None, ping_interval=None, open_timeout=30, close_timeout=2
+        )
+        self._thread = threading.Thread(
+            target=self._read_loop, name=f"ws-{name}", daemon=True
+        )
         self._thread.start()
-        self.wait_for(lambda f: etype(f) == "gateway.ready", timeout=60, what="gateway.ready")
+        self.wait_for(
+            lambda f: etype(f) == "gateway.ready", timeout=60, what="gateway.ready"
+        )
         if answers_requests:
             self.call("client.capabilities", server_requests=True)
 
@@ -234,7 +295,14 @@ class WSClient:
         with self._cond:
             return list(self.frames)
 
-    def wait_for(self, pred: Callable[[dict], bool], *, timeout: float, start: int = 0, what: str = "frame") -> dict:
+    def wait_for(
+        self,
+        pred: Callable[[dict], bool],
+        *,
+        timeout: float,
+        start: int = 0,
+        what: str = "frame",
+    ) -> dict:
         deadline = time.monotonic() + timeout
         with self._cond:
             idx = start
@@ -245,10 +313,14 @@ class WSClient:
                     if pred(frame):
                         return frame
                 if self.closed:
-                    raise AssertionError(f"{self.name}: socket closed while waiting for {what}")
+                    raise AssertionError(
+                        f"{self.name}: socket closed while waiting for {what}"
+                    )
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise AssertionError(f"{self.name}: timed out after {timeout:.0f}s waiting for {what}")
+                    raise AssertionError(
+                        f"{self.name}: timed out after {timeout:.0f}s waiting for {what}"
+                    )
                 self._cond.wait(min(remaining, 0.5))
 
     def send(self, frame: dict) -> None:
@@ -260,8 +332,12 @@ class WSClient:
         rid = self._next_id
         start = len(self.snapshot())
         self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
-        return self.wait_for(lambda f: f.get("id") == rid and "method" not in f, timeout=timeout,
-                             start=start, what=f"{method} reply")
+        return self.wait_for(
+            lambda f: f.get("id") == rid and "method" not in f,
+            timeout=timeout,
+            start=start,
+            what=f"{method} reply",
+        )
 
     def call(self, method: str, *, timeout: float = 60.0, **params: Any) -> dict:
         frame = self.request(method, params, timeout=timeout)
@@ -274,13 +350,22 @@ class WSClient:
         self.send({"jsonrpc": "2.0", "id": request_id, "result": result})
 
     def events(self, sid: str | None = None, etype: str | None = None) -> list[dict]:
-        return [f for f in self.snapshot() if f.get("method") == "event"
-                and (sid is None or f["params"].get("session_id") == sid)
-                and (etype is None or f["params"].get("type") == etype)]
+        return [
+            f
+            for f in self.snapshot()
+            if f.get("method") == "event"
+            and (sid is None or f["params"].get("session_id") == sid)
+            and (etype is None or f["params"].get("type") == etype)
+        ]
 
     def server_requests(self, method: str | None = None) -> list[dict]:
-        return [f for f in self.snapshot() if isinstance(f.get("id"), str) and f.get("method") not in (None, "event")
-                and (method is None or f.get("method") == method)]
+        return [
+            f
+            for f in self.snapshot()
+            if isinstance(f.get("id"), str)
+            and f.get("method") not in (None, "event")
+            and (method is None or f.get("method") == method)
+        ]
 
     def drop(self) -> None:
         """Abrupt network loss: no close frame, the backend learns from the dead TCP stream."""
@@ -305,4 +390,8 @@ class WSClient:
 
 def etype(frame: dict) -> str:
     """The event ``type`` of a notification frame ('' for replies and server→client requests)."""
-    return str((frame.get("params") or {}).get("type") or "") if frame.get("method") == "event" else ""
+    return (
+        str((frame.get("params") or {}).get("type") or "")
+        if frame.get("method") == "event"
+        else ""
+    )

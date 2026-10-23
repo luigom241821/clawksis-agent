@@ -13,6 +13,7 @@ from clawk_platform.host import runtime as host_runtime
 # is_wsl() in clawk_constants
 # =============================================================================
 
+
 class TestIsWsl:
     """Test the shared is_wsl() utility."""
 
@@ -32,9 +33,11 @@ class TestIsWsl:
         with patch("builtins.open", side_effect=FileNotFoundError):
             assert clawk_constants.is_wsl() is False
 
+
 # =============================================================================
 # supports_systemd_services() WSL integration
 # =============================================================================
+
 
 class TestSupportsSystemdServicesWSL:
     """Test that supports_systemd_services() handles WSL correctly."""
@@ -47,9 +50,7 @@ class TestSupportsSystemdServicesWSL:
         ``is_linux()``, so off Linux this asserted nothing about systemd.
         """
         monkeypatch.setattr(gateway, "is_termux", lambda: False)
-        monkeypatch.setattr(
-            gateway.shutil, "which", lambda _name: "/usr/bin/systemctl"
-        )
+        monkeypatch.setattr(gateway.shutil, "which", lambda _name: "/usr/bin/systemctl")
         monkeypatch.setattr(gateway, "is_wsl", lambda: True)
         monkeypatch.setattr(gateway, "_wsl_systemd_operational", lambda: True)
         assert gateway.supports_systemd_services() is True
@@ -64,9 +65,11 @@ class TestSupportsSystemdServicesWSL:
         monkeypatch.setattr(gateway, "is_termux", lambda: True)
         assert gateway.supports_systemd_services() is False
 
+
 # =============================================================================
 # WSL messaging in gateway commands
 # =============================================================================
+
 
 class TestGatewayCommandWSLMessages:
     """Test that WSL users see appropriate guidance."""
@@ -87,7 +90,9 @@ class TestGatewayCommandWSLMessages:
         monkeypatch.setattr(gateway, "is_managed", lambda: False)
 
         args = SimpleNamespace(
-            gateway_command="install", force=False, system=False,
+            gateway_command="install",
+            force=False,
+            system=False,
             run_as_user=None,
         )
         with pytest.raises(SystemExit) as exc_info:

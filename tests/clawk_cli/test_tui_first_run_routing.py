@@ -34,14 +34,24 @@ def _run_chat(monkeypatch, argv, *, provider_configured):
     def classic_main(**_k):
         calls.append("classic")
 
-    monkeypatch.setattr(main_mod, "_has_any_provider_configured", lambda: provider_configured)
-    monkeypatch.setattr(main_mod, "_first_run_setup_guard", lambda _args: calls.append("guard"))
-    monkeypatch.setattr(consent, "offer_consent_before_chat", lambda _args: calls.append("offer"))
+    monkeypatch.setattr(
+        main_mod, "_has_any_provider_configured", lambda: provider_configured
+    )
+    monkeypatch.setattr(
+        main_mod, "_first_run_setup_guard", lambda _args: calls.append("guard")
+    )
+    monkeypatch.setattr(
+        consent, "offer_consent_before_chat", lambda _args: calls.append("offer")
+    )
     monkeypatch.setattr(main_mod, "_launch_tui", launch_tui)
     monkeypatch.setattr(main_mod, "_pin_kanban_board_env", lambda: None)
     monkeypatch.setattr(main_mod, "_start_chat_background_prefetch", lambda: None)
-    monkeypatch.setattr(main_mod, "_confirm_startup_expensive_model_override", lambda _args: None)
-    monkeypatch.setattr(main_mod, "_sync_bundled_skills_for_startup", lambda: None, raising=False)
+    monkeypatch.setattr(
+        main_mod, "_confirm_startup_expensive_model_override", lambda _args: None
+    )
+    monkeypatch.setattr(
+        main_mod, "_sync_bundled_skills_for_startup", lambda: None, raising=False
+    )
     fake_cli = types.ModuleType("cli")
     fake_cli.main = classic_main
     monkeypatch.setitem(sys.modules, "cli", fake_cli)
@@ -49,8 +59,12 @@ def _run_chat(monkeypatch, argv, *, provider_configured):
 
     # The classic CLI rides the gateway client: it must still front the guard and never reach
     # a session (no gateway, no admission) when no provider is configured.
-    monkeypatch.setattr(gateway_chat, "run_gateway_chat", lambda *_a, **_k: calls.append("gateway"))
-    monkeypatch.setattr(gateway_chat, "_register_terminal_process", lambda: None, raising=False)
+    monkeypatch.setattr(
+        gateway_chat, "run_gateway_chat", lambda *_a, **_k: calls.append("gateway")
+    )
+    monkeypatch.setattr(
+        gateway_chat, "_register_terminal_process", lambda: None, raising=False
+    )
     try:
         main_mod.cmd_chat(args)
     except _Launched:
@@ -67,8 +81,12 @@ def _no_tui_env(monkeypatch):
 
 
 def test_blank_install_tui_skips_classic_guard_and_offer(monkeypatch):
-    assert _run_chat(monkeypatch, ["chat", "--tui"], provider_configured=False) == ["tui"]
+    assert _run_chat(monkeypatch, ["chat", "--tui"], provider_configured=False) == [
+        "tui"
+    ]
 
 
 def test_blank_install_classic_cli_still_gets_the_guard(monkeypatch):
-    assert _run_chat(monkeypatch, ["chat", "--cli"], provider_configured=False) == ["guard"]
+    assert _run_chat(monkeypatch, ["chat", "--cli"], provider_configured=False) == [
+        "guard"
+    ]

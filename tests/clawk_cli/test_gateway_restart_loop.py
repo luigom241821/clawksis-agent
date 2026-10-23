@@ -12,7 +12,9 @@ from argparse import Namespace
 
 import pytest
 
-from cron.lifecycle_guard import contains_gateway_lifecycle_command as _contains_gateway_lifecycle_command
+from cron.lifecycle_guard import (
+    contains_gateway_lifecycle_command as _contains_gateway_lifecycle_command,
+)
 from clawk_cli.cron import cron_command
 
 
@@ -20,88 +22,99 @@ from clawk_cli.cron import cron_command
 # Defense 2: _contains_gateway_lifecycle_command pattern tests
 # ---------------------------------------------------------------------------
 
+
 class TestGatewayLifecyclePattern:
     """Verify the regex catches gateway lifecycle commands."""
 
-    @pytest.mark.parametrize("text", [
-        # Branch E (#113667): the supervised gateway IS the interpreter image, so a killer aimed at
-        # `python*` carries no clawk/gateway token yet takes it down — on every platform.
-        "taskkill /F /IM python.exe",
-        "taskkill /F /IM python.exe 2>/dev/null | head -2; echo done",
-        'taskkill /F /FI "IMAGENAME eq python.exe"',
-        "taskkill.exe /T /IM pythonw.exe",
-        'task"kill" /I"M" "python.exe" /F',
-        'subprocess.run(["taskkill", "/IM", "python.exe", "/F"])',
-        "Stop-Process -Name python -Force",
-        "Stop-Process -ProcessName python3.12",
-        "Get-Process python | Stop-Process -Force",
-        "pkill python",
-        "pkill -9 python3",
-        "pkill -f python",
-        'pkill -f "python -m clawk_cli.main"',
-        "pkill -f clawk_cli",
-        "killall -9 python3.12",
-        "sudo pkill -9 python3",
-        "pgrep python | xargs kill -9",
-        "kill $(pidof python3)",
-        # Windows spellings of the clawk-gateway forms (salvaged from #94379).
-        "clawk.exe gateway restart",
-        "clawk.cmd gateway stop",
-        r'"C:\Program Files\clawk.exe" gateway restart',
-        "taskkill /F /IM clawk-gateway.exe",
-        "Stop-Process -Name clawk-gateway -Force",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Branch E (#113667): the supervised gateway IS the interpreter image, so a killer aimed at
+            # `python*` carries no clawk/gateway token yet takes it down — on every platform.
+            "taskkill /F /IM python.exe",
+            "taskkill /F /IM python.exe 2>/dev/null | head -2; echo done",
+            'taskkill /F /FI "IMAGENAME eq python.exe"',
+            "taskkill.exe /T /IM pythonw.exe",
+            'task"kill" /I"M" "python.exe" /F',
+            'subprocess.run(["taskkill", "/IM", "python.exe", "/F"])',
+            "Stop-Process -Name python -Force",
+            "Stop-Process -ProcessName python3.12",
+            "Get-Process python | Stop-Process -Force",
+            "pkill python",
+            "pkill -9 python3",
+            "pkill -f python",
+            'pkill -f "python -m clawk_cli.main"',
+            "pkill -f clawk_cli",
+            "killall -9 python3.12",
+            "sudo pkill -9 python3",
+            "pgrep python | xargs kill -9",
+            "kill $(pidof python3)",
+            # Windows spellings of the clawk-gateway forms (salvaged from #94379).
+            "clawk.exe gateway restart",
+            "clawk.cmd gateway stop",
+            r'"C:\Program Files\clawk.exe" gateway restart',
+            "taskkill /F /IM clawk-gateway.exe",
+            "Stop-Process -Name clawk-gateway -Force",
+        ],
+    )
     def test_interpreter_and_windows_kill_forms_are_blocked(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        # Other images stay killable (evals/browser_use/orchestrate.py uses the first one).
-        "taskkill /F /IM agent-browser.exe /T",
-        "taskkill /F /IM notepad.exe",
-        "Stop-Process -Name chrome",
-        "killall node",
-        # The ownership-scoped route the rejection points to: explicit PID / proc id.
-        "taskkill /F /PID 46544",
-        "kill -9 46544",
-        "Stop-Process -Id 46544",
-        # Option VALUES are not targets; a `-f` pattern naming a specific script is not the gateway.
-        "pkill -u alice chrome",
-        "pkill -t pts/1 vim",
-        "pkill -f 'python mt_add_paused.py --go'",
-        # Unrelated scripts that merely contain "clawk" cannot match the gateway cmdline.
-        "pkill -f 'clawk-polis/run.sh'",
-        "pkill -f my_clawk_bot.py",
-        "pgrep python",
-        "clawk.exe gateway start",
-        "my-clawk.exe gateway restart",
-        "python -m pytest tests/ -k kill",
-        "skill python",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Other images stay killable (evals/browser_use/orchestrate.py uses the first one).
+            "taskkill /F /IM agent-browser.exe /T",
+            "taskkill /F /IM notepad.exe",
+            "Stop-Process -Name chrome",
+            "killall node",
+            # The ownership-scoped route the rejection points to: explicit PID / proc id.
+            "taskkill /F /PID 46544",
+            "kill -9 46544",
+            "Stop-Process -Id 46544",
+            # Option VALUES are not targets; a `-f` pattern naming a specific script is not the gateway.
+            "pkill -u alice chrome",
+            "pkill -t pts/1 vim",
+            "pkill -f 'python mt_add_paused.py --go'",
+            # Unrelated scripts that merely contain "clawk" cannot match the gateway cmdline.
+            "pkill -f 'clawk-polis/run.sh'",
+            "pkill -f my_clawk_bot.py",
+            "pgrep python",
+            "clawk.exe gateway start",
+            "my-clawk.exe gateway restart",
+            "python -m pytest tests/ -k kill",
+            "skill python",
+        ],
+    )
     def test_kill_forms_that_do_not_reach_the_gateway_are_allowed(self, text):
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
-    @pytest.mark.parametrize("text", [
-        # #62891: a blocked direct restart/kill laundered through a NEW
-        # launchd keepalive job wrapping a helper script, instead of a
-        # direct kickstart/unload/stop/restart on the existing service.
-        "launchctl submit -l ai.clawk.gateway-hard-restart-no-photon-notice -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh",
-        "launchctl submit -l clawk-gateway-restart-helper -- /bin/sh helper.sh",
-        # bootstrap loads an arbitrary plist — same laundering shape.
-        "launchctl bootstrap gui/501 ~/Library/LaunchAgents/ai.clawk.gateway.restart-once.plist",
-        "launchctl bootout gui/501/ai.clawk.gateway",
-        # The exact reported shape: split across shell line-continuations
-        # (`\` immediately followed by a newline). `[^\n]*` alone can't span
-        # that, so the verb and the gateway-label token land on different
-        # physical lines unless continuations are normalized first.
-        (
-            "launchctl submit \\\n"
-            "  -l ai.clawk.gateway-hard-restart-no-photon-notice \\\n"
-            "  -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh"
-        ),
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # #62891: a blocked direct restart/kill laundered through a NEW
+            # launchd keepalive job wrapping a helper script, instead of a
+            # direct kickstart/unload/stop/restart on the existing service.
+            "launchctl submit -l ai.clawk.gateway-hard-restart-no-photon-notice -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh",
+            "launchctl submit -l clawk-gateway-restart-helper -- /bin/sh helper.sh",
+            # bootstrap loads an arbitrary plist — same laundering shape.
+            "launchctl bootstrap gui/501 ~/Library/LaunchAgents/ai.clawk.gateway.restart-once.plist",
+            "launchctl bootout gui/501/ai.clawk.gateway",
+            # The exact reported shape: split across shell line-continuations
+            # (`\` immediately followed by a newline). `[^\n]*` alone can't span
+            # that, so the verb and the gateway-label token land on different
+            # physical lines unless continuations are normalized first.
+            (
+                "launchctl submit \\\n"
+                "  -l ai.clawk.gateway-hard-restart-no-photon-notice \\\n"
+                "  -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh"
+            ),
+        ],
+    )
     def test_launchctl_submit_bootstrap_commands(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
-
 
     def test_label_defined_before_verb_is_caught(self):
         """2026-08-02 incident reproduction: the label comes from a shell
@@ -125,31 +138,35 @@ class TestGatewayLifecyclePattern:
         # continuation. Two genuinely separate lines of a longer prompt
         # (no trailing backslash) must not be bridged into a false match.
         text = (
-            "this restarts the payment gateway\n"
-            "unrelated clawk note on the next line"
+            "this restarts the payment gateway\nunrelated clawk note on the next line"
         )
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
-    @pytest.mark.parametrize("text", [
-        # #80269: the shell resolves quote-splicing and backslash-escaping
-        # into a single literal word BEFORE the command runs, so
-        # `launchctl kick"start" ... ai.clawk.gateway` executes exactly as
-        # the blocked `kickstart` form. Raw-text matching sees the quote (or
-        # backslash) wedged between the verb's halves and misses it, leaving
-        # the bypassable approval layer as the only cover.
-        'launchctl kick"start" -k gui/501/ai.clawk.gateway',
-        "launchctl kick'start' -k gui/501/ai.clawk.gateway",
-        "launchctl kick\\start -k gui/501/ai.clawk.gateway",
-        'launchctl "kickstart" -k gui/501/ai.clawk.gateway',
-        # Splices on the newer/legacy unload spellings this PR added.
-        'launchctl boot"out" gui/501/ai.clawk.gateway',
-        "launchctl dis\\able gui/501/ai.clawk.gateway",
-        # The gateway identifier itself can be spliced just as easily.
-        'launchctl bootout gui/501/ai.clawk."gateway"',
-        # Same class on the systemctl and clawk-CLI branches.
-        'systemctl re"start" clawk-gateway',
-        'clawk gateway re"start"',
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # #80269: the shell resolves quote-splicing and backslash-escaping
+            # into a single literal word BEFORE the command runs, so
+            # `launchctl kick"start" ... ai.clawk.gateway` executes exactly as
+            # the blocked `kickstart` form. Raw-text matching sees the quote (or
+            # backslash) wedged between the verb's halves and misses it, leaving
+            # the bypassable approval layer as the only cover.
+            'launchctl kick"start" -k gui/501/ai.clawk.gateway',
+            "launchctl kick'start' -k gui/501/ai.clawk.gateway",
+            "launchctl kick\\start -k gui/501/ai.clawk.gateway",
+            'launchctl "kickstart" -k gui/501/ai.clawk.gateway',
+            # Splices on the newer/legacy unload spellings this PR added.
+            'launchctl boot"out" gui/501/ai.clawk.gateway',
+            "launchctl dis\\able gui/501/ai.clawk.gateway",
+            # The gateway identifier itself can be spliced just as easily.
+            'launchctl bootout gui/501/ai.clawk."gateway"',
+            # Same class on the systemctl and clawk-CLI branches.
+            'systemctl re"start" clawk-gateway',
+            'clawk gateway re"start"',
+        ],
+    )
     def test_shell_token_spliced_lifecycle_verbs(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
@@ -165,86 +182,98 @@ class TestGatewayLifecyclePattern:
             contains_gateway_lifecycle_command_or_referenced_script,
         )
 
-        command = 'sh -c \'launchctl kick"start" -k gui/501/ai.clawk.gateway\''
+        command = "sh -c 'launchctl kick\"start\" -k gui/501/ai.clawk.gateway'"
         assert contains_gateway_lifecycle_command_or_referenced_script(command)
 
-    @pytest.mark.parametrize("text", [
-        # The tokenizing pass must not widen the blast radius: prose and
-        # non-gateway services stay allowed even though tokenization now
-        # strips their quotes too.
-        'echo "restart the payment gateway"',
-        'launchctl kick"start" -k gui/501/ai.clawk.update-checker',
-        'systemctl re"start" clawk-meta.service',
-        "Summarize how the API gateway handles a restart after rate limiting",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # The tokenizing pass must not widen the blast radius: prose and
+            # non-gateway services stay allowed even though tokenization now
+            # strips their quotes too.
+            'echo "restart the payment gateway"',
+            'launchctl kick"start" -k gui/501/ai.clawk.update-checker',
+            'systemctl re"start" clawk-meta.service',
+            "Summarize how the API gateway handles a restart after rate limiting",
+        ],
+    )
     def test_tokenizing_pass_does_not_overmatch(self, text):
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
-
-    @pytest.mark.parametrize("text", [
-        "restart the server application",
-        "clawk cron list",
-        "clawk update",
-        "clawk config set model claude",
-        "echo 'just a normal cron job'",
-        "run the backup script",
-        "gateway is running fine",
-        # `clawk gateway start` is benign — starting a gateway from inside a
-        # gateway is a no-op / "already running", and a legit cron job may
-        # start a sibling profile's gateway. Only restart/stop/kill are the
-        # foot-gun (#30719 lists only those).
-        "clawk gateway start",
-        "clawk gateway start --all",
-        # Tightened launchctl/systemctl branches: ops on NON-gateway clawk
-        # services must not be falsely blocked (the old `.*clawk` matched any
-        # clawk token).
-        "launchctl unload ai.clawk.update-checker.plist",
-        "launchctl restart ai.clawk.daemon",
-        # `submit` on an unrelated launchd label must not match the text
-        # pattern (a cron PROMPT is prose fed to an LLM). The execution-aware
-        # `contains_launchctl_submit_command` handles neutral-label submits
-        # at the terminal/cron-script chokepoints instead.
-        "launchctl submit -l com.example.backup -- /bin/sh backup.sh",
-        "systemctl restart clawk-meta.service",
-        "systemctl restart clawk-cron-helper",
-        # Regression (#30728 follow-up): legit prompts that merely mention an
-        # unrelated gateway + a restart must NOT be blocked. The cron prompt is
-        # fed to an LLM, not a shell, so substring detection on English text is
-        # a high-FP no-op — only concrete command shapes trigger the block.
-        "Summarize the API gateway logs and report any restart events from last night",
-        "Check if the payment gateway needs a restart after the deploy",
-        "Monitor the gateway and tell me if a restart is recommended",
-        "research how the OpenAI API gateway handles restart after rate limiting",
-        "compare AWS API Gateway vs Cloudflare on restart latency",
-        # #92372 Branch A: no trailing boundary meant ordinary prose matched —
-        # "restarted" carries the "restart" prefix and the old pattern ended
-        # exactly there. \b after the verb group fixes it.
-        "echo after the clawk gateway restarted cleanly",
-        "the clawk gateway stopped responding, please investigate",
-        # #92372 Branch D: `p?kill` without a leading \b matched the "kill"
-        # tail of "skill".
-        "clawk skill view gateway-notes && echo clawk gateway docs",
-        # #77173/#77536: a file path with embedded spaces containing the
-        # lifecycle words must not match — `clawk` is a path component
-        # there, not a command.
-        "cat '/docs/clawk gateway restart-notes.md'",
-        "less /home/user/notes/clawk gateway restart runbook.txt",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "restart the server application",
+            "clawk cron list",
+            "clawk update",
+            "clawk config set model claude",
+            "echo 'just a normal cron job'",
+            "run the backup script",
+            "gateway is running fine",
+            # `clawk gateway start` is benign — starting a gateway from inside a
+            # gateway is a no-op / "already running", and a legit cron job may
+            # start a sibling profile's gateway. Only restart/stop/kill are the
+            # foot-gun (#30719 lists only those).
+            "clawk gateway start",
+            "clawk gateway start --all",
+            # Tightened launchctl/systemctl branches: ops on NON-gateway clawk
+            # services must not be falsely blocked (the old `.*clawk` matched any
+            # clawk token).
+            "launchctl unload ai.clawk.update-checker.plist",
+            "launchctl restart ai.clawk.daemon",
+            # `submit` on an unrelated launchd label must not match the text
+            # pattern (a cron PROMPT is prose fed to an LLM). The execution-aware
+            # `contains_launchctl_submit_command` handles neutral-label submits
+            # at the terminal/cron-script chokepoints instead.
+            "launchctl submit -l com.example.backup -- /bin/sh backup.sh",
+            "systemctl restart clawk-meta.service",
+            "systemctl restart clawk-cron-helper",
+            # Regression (#30728 follow-up): legit prompts that merely mention an
+            # unrelated gateway + a restart must NOT be blocked. The cron prompt is
+            # fed to an LLM, not a shell, so substring detection on English text is
+            # a high-FP no-op — only concrete command shapes trigger the block.
+            "Summarize the API gateway logs and report any restart events from last night",
+            "Check if the payment gateway needs a restart after the deploy",
+            "Monitor the gateway and tell me if a restart is recommended",
+            "research how the OpenAI API gateway handles restart after rate limiting",
+            "compare AWS API Gateway vs Cloudflare on restart latency",
+            # #92372 Branch A: no trailing boundary meant ordinary prose matched —
+            # "restarted" carries the "restart" prefix and the old pattern ended
+            # exactly there. \b after the verb group fixes it.
+            "echo after the clawk gateway restarted cleanly",
+            "the clawk gateway stopped responding, please investigate",
+            # #92372 Branch D: `p?kill` without a leading \b matched the "kill"
+            # tail of "skill".
+            "clawk skill view gateway-notes && echo clawk gateway docs",
+            # #77173/#77536: a file path with embedded spaces containing the
+            # lifecycle words must not match — `clawk` is a path component
+            # there, not a command.
+            "cat '/docs/clawk gateway restart-notes.md'",
+            "less /home/user/notes/clawk gateway restart runbook.txt",
+        ],
+    )
     def test_safe_commands(self, text):
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
-    @pytest.mark.parametrize("text", [
-        # Trailing-boundary fix must not weaken real commands.
-        "clawk gateway restart",
-        "clawk gateway restart; echo done",
-        "clawk gateway stop && echo stopped",
-        # #77173 command-position anchor must not weaken separator/subshell
-        # forms either.
-        "true;clawk gateway restart",
-        "true && clawk gateway stop",
-        "echo $(clawk gateway restart)",
-        "echo `clawk gateway restart`",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Trailing-boundary fix must not weaken real commands.
+            "clawk gateway restart",
+            "clawk gateway restart; echo done",
+            "clawk gateway stop && echo stopped",
+            # #77173 command-position anchor must not weaken separator/subshell
+            # forms either.
+            "true;clawk gateway restart",
+            "true && clawk gateway stop",
+            "echo $(clawk gateway restart)",
+            "echo `clawk gateway restart`",
+        ],
+    )
     def test_boundary_fix_still_blocks_real_commands(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
@@ -252,13 +281,10 @@ class TestGatewayLifecyclePattern:
         # #92372: a newline inside a quoted string is data, not a command
         # separator. A quoted data-file path on its own physical line inside
         # a multiline construct must not be promoted to command position.
-        text = (
-            'FILES=(\n'
-            '  "/tmp/notes about procedures.txt"\n'
-            ')\n'
-            'echo "${FILES[@]}"'
+        text = 'FILES=(\n  "/tmp/notes about procedures.txt"\n)\necho "${FILES[@]}"'
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
         )
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
 
     def test_unbalanced_quotes_still_scanned_not_waved_through(self):
         # Fail-closed contract: when the logical line cannot tokenize
@@ -268,23 +294,31 @@ class TestGatewayLifecyclePattern:
         text = 'echo "unbalanced\nclawk gateway restart'
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        # #68289: execute_code payloads carry the argv as a Python list —
-        # brackets/commas separate the words the OS will exec.
-        'import subprocess\nsubprocess.run(["launchctl", "bootout", "gui/501/ai.clawk.gateway"])',
-        'subprocess.run(["clawk", "gateway", "restart"])',
-        'os.system("launchctl kickstart -k gui/501/ai.clawk.gateway")',
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # #68289: execute_code payloads carry the argv as a Python list —
+            # brackets/commas separate the words the OS will exec.
+            'import subprocess\nsubprocess.run(["launchctl", "bootout", "gui/501/ai.clawk.gateway"])',
+            'subprocess.run(["clawk", "gateway", "restart"])',
+            'os.system("launchctl kickstart -k gui/501/ai.clawk.gateway")',
+        ],
+    )
     def test_python_argv_list_forms_blocked(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        # Argv-punctuation stripping must not create prose false positives.
-        'print("checking gateway restart docs")',
-        'data = ["clawk", "notes"]  # unrelated list',
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Argv-punctuation stripping must not create prose false positives.
+            'print("checking gateway restart docs")',
+            'data = ["clawk", "notes"]  # unrelated list',
+        ],
+    )
     def test_python_argv_stripping_stays_narrow(self, text):
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
     def test_inert_heredoc_body_prose_not_blocked(self):
         # #88336: a quoted-delimiter heredoc feeding a data sink is inert
@@ -294,14 +328,19 @@ class TestGatewayLifecyclePattern:
             "If the box is wedged, a human can run: clawk gateway restart\n"
             "EOF"
         )
-        assert not _contains_gateway_lifecycle_command(text), f"Should NOT match: {text!r}"
+        assert not _contains_gateway_lifecycle_command(text), (
+            f"Should NOT match: {text!r}"
+        )
 
-    @pytest.mark.parametrize("text", [
-        # Executable heredoc (shell consumer) must stay blocked.
-        "bash <<EOF\nclawk gateway restart\nEOF",
-        # Unquoted delimiter = expansion-capable = fail open to scanning.
-        "cat > /tmp/x <<EOF\nclawk gateway restart\nEOF",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Executable heredoc (shell consumer) must stay blocked.
+            "bash <<EOF\nclawk gateway restart\nEOF",
+            # Unquoted delimiter = expansion-capable = fail open to scanning.
+            "cat > /tmp/x <<EOF\nclawk gateway restart\nEOF",
+        ],
+    )
     def test_non_inert_heredocs_still_scanned(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should match: {text!r}"
 
@@ -320,42 +359,50 @@ class TestProfileFlagGatewayLifecycle:
         monkeypatch.setenv("CLAWK_PROFILE", "zeus")
         monkeypatch.delenv("CLAWK_PROFILE_NAME", raising=False)
 
-    @pytest.mark.parametrize("text", [
-        "clawk -p zeus gateway stop",
-        "clawk -p zeus gateway restart",
-        "clawk --profile zeus gateway restart",
-        "clawk --profile zeus gateway stop",
-        "clawk --profile=zeus gateway restart",
-        # Global flags before/after the selector must not hide the shape.
-        "clawk -v -p zeus gateway restart",
-        "clawk -p zeus -v gateway restart",
-        "clawk --debug --profile zeus gateway stop",
-        # Shell quoting of the profile id is equivalent to the bare name.
-        "clawk -p 'zeus' gateway restart",
-        "clawk --profile \"zeus\" gateway stop",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "clawk -p zeus gateway stop",
+            "clawk -p zeus gateway restart",
+            "clawk --profile zeus gateway restart",
+            "clawk --profile zeus gateway stop",
+            "clawk --profile=zeus gateway restart",
+            # Global flags before/after the selector must not hide the shape.
+            "clawk -v -p zeus gateway restart",
+            "clawk -p zeus -v gateway restart",
+            "clawk --debug --profile zeus gateway stop",
+            # Shell quoting of the profile id is equivalent to the bare name.
+            "clawk -p 'zeus' gateway restart",
+            'clawk --profile "zeus" gateway stop',
+        ],
+    )
     def test_self_target_blocked(self, text):
         assert _contains_gateway_lifecycle_command(text), f"Should block: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        "clawk -p venus gateway stop",
-        "clawk -p venus gateway restart",
-        "clawk --profile venus gateway restart",
-        "clawk --profile=venus gateway stop",
-        "clawk -p venus -v gateway restart",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "clawk -p venus gateway stop",
+            "clawk -p venus gateway restart",
+            "clawk --profile venus gateway restart",
+            "clawk --profile=venus gateway stop",
+            "clawk -p venus -v gateway restart",
+        ],
+    )
     def test_sibling_allowed(self, text):
         assert not _contains_gateway_lifecycle_command(text), f"Should allow: {text!r}"
 
-    @pytest.mark.parametrize("text", [
-        "clawk -p zeus gateway start",
-        "clawk -p zeus gateway start --all",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "clawk -p zeus gateway start",
+            "clawk -p zeus gateway start --all",
+        ],
+    )
     def test_start_still_allowed(self, text):
         # `start` is intentionally excluded from the guard, with or without
         # the profile flag (#30719 rationale).
         assert not _contains_gateway_lifecycle_command(text), f"Should allow: {text!r}"
-
 
     def test_clawk_home_derived_profile(self, monkeypatch):
         # Without CLAWK_PROFILE the guard falls back to the CLAWK_HOME-
@@ -409,7 +456,6 @@ class TestCronCreateLifecycleBlock:
         out = capsys.readouterr().out
         assert "Blocked" in out
 
-
     def test_block_script_with_lifecycle_command(self, tmp_path, capsys, monkeypatch):
         # A no_agent job whose script IS the job (the issue's real abuse path:
         # restart_clawk_gateway_once.sh). The script must live under
@@ -417,7 +463,9 @@ class TestCronCreateLifecycleBlock:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         scripts_dir = tmp_path / ".clawk" / "scripts"
         scripts_dir.mkdir(parents=True)
-        (scripts_dir / "restart.sh").write_text("#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8")
+        (scripts_dir / "restart.sh").write_text(
+            "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
+        )
         args = Namespace(
             cron_command="create",
             schedule="1h",
@@ -438,21 +486,22 @@ class TestCronCreateLifecycleBlock:
         assert "Blocked" in out
 
 
-
-
 # ---------------------------------------------------------------------------
 # Defense 1: gateway stop/restart refuse inside gateway
 # ---------------------------------------------------------------------------
+
 
 class TestGatewaySelfTargetingGuard:
     """Verify destructive gateway commands refuse inside the gateway."""
 
     def test_stop_refuses_inside_gateway(self, monkeypatch):
         from tools import process_registry
+
         monkeypatch.setattr(
             process_registry, "_is_supervised_gateway_process", lambda: True
         )
         from clawk_cli.gateway import gateway_command
+
         args = Namespace(gateway_command="stop", all=False, system=False)
         with pytest.raises(SystemExit) as exc_info:
             gateway_command(args)
@@ -460,6 +509,7 @@ class TestGatewaySelfTargetingGuard:
 
     def test_uninstall_refuses_inside_gateway(self, monkeypatch):
         from tools import process_registry
+
         monkeypatch.setattr(
             process_registry, "_is_supervised_gateway_process", lambda: True
         )
@@ -469,7 +519,6 @@ class TestGatewaySelfTargetingGuard:
         with pytest.raises(SystemExit) as exc_info:
             gateway_command(args)
         assert exc_info.value.code == 1
-
 
     def test_stop_allows_outside_gateway(self, monkeypatch):
         # With the gateway marker unset, the self-targeting guard must NOT
@@ -496,6 +545,7 @@ class TestGatewaySelfTargetingGuard:
 # Defense 3: terminal_tool hard-blocks gateway lifecycle commands inside gateway
 # ---------------------------------------------------------------------------
 
+
 class TestTerminalToolGatewayLifecycleGuard:
     """terminal_tool must refuse gateway lifecycle commands when _CLAWK_GATEWAY=1.
 
@@ -508,42 +558,55 @@ class TestTerminalToolGatewayLifecycleGuard:
     def _make_fake_env(self):
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):  # pragma: no cover
                 raise AssertionError("execute must not be reached")
+
         return _FakeEnv()
 
     def _minimal_config(self):
-        return {"env_type": "local", "cwd": "/tmp", "timeout": 60, "lifetime_seconds": 3600}
+        return {
+            "env_type": "local",
+            "cwd": "/tmp",
+            "timeout": 60,
+            "lifetime_seconds": 3600,
+        }
 
     def _patch_env(self, monkeypatch, fake_env, *, inside_gateway: bool):
         import tools.terminal_tool as tt
         from tools import process_registry
+
         eid = "default"
         monkeypatch.setattr(tt, "_active_environments", {eid: fake_env})
         monkeypatch.setattr(tt, "_last_activity", {eid: 0.0})
         monkeypatch.setattr(tt, "_task_env_overrides", {})
         monkeypatch.setattr(tt, "_get_env_config", self._minimal_config)
         monkeypatch.setattr(
-            process_registry, "_is_supervised_gateway_process",
+            process_registry,
+            "_is_supervised_gateway_process",
             lambda: inside_gateway,
         )
 
-    @pytest.mark.parametrize("cmd", [
-        "systemctl restart clawk-gateway",
-        "systemctl --user restart clawk-gateway",
-        "systemctl stop clawk-gateway.service",
-        "clawk gateway restart",
-        "clawk gateway uninstall",
-        "launchctl kickstart gui/501/ai.clawk.gateway",
-        "launchctl bootout gui/501/ai.clawk.gateway",
-        # #62891 exact reported shape and its bootstrap sibling.
-        "launchctl submit -l ai.clawk.gateway-hard-restart-no-photon-notice -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh",
-        "launchctl submit -l com.foo -- /path/gateway",
-        "launchctl bootstrap gui/501 ~/Library/LaunchAgents/ai.clawk.gateway.restart-once.plist",
-        "pkill -f clawk.*gateway",
-    ])
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "systemctl restart clawk-gateway",
+            "systemctl --user restart clawk-gateway",
+            "systemctl stop clawk-gateway.service",
+            "clawk gateway restart",
+            "clawk gateway uninstall",
+            "launchctl kickstart gui/501/ai.clawk.gateway",
+            "launchctl bootout gui/501/ai.clawk.gateway",
+            # #62891 exact reported shape and its bootstrap sibling.
+            "launchctl submit -l ai.clawk.gateway-hard-restart-no-photon-notice -- /bin/sh ~/.clawksis/scripts/hard_restart_gateway_no_photon_notice.sh",
+            "launchctl submit -l com.foo -- /path/gateway",
+            "launchctl bootstrap gui/501 ~/Library/LaunchAgents/ai.clawk.gateway.restart-once.plist",
+            "pkill -f clawk.*gateway",
+        ],
+    )
     def test_blocks_lifecycle_commands_inside_gateway(self, monkeypatch, cmd):
         import tools.terminal_tool as tt
+
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
         result = json.loads(tt.terminal_tool(command=cmd))
@@ -553,11 +616,12 @@ class TestTerminalToolGatewayLifecycleGuard:
 
     def test_force_true_cannot_bypass_block(self, monkeypatch):
         import tools.terminal_tool as tt
+
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
-        result = json.loads(tt.terminal_tool(
-            command="systemctl restart clawk-gateway", force=True
-        ))
+        result = json.loads(
+            tt.terminal_tool(command="systemctl restart clawk-gateway", force=True)
+        )
 
         assert result["exit_code"] == 1
         assert "Blocked" in result["error"]
@@ -568,7 +632,9 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         script = tmp_path / "delayed-ops.sh"
-        script.write_text("#!/usr/bin/env bash\nsleep 45\nclawk gateway restart\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nsleep 45\nclawk gateway restart\n", encoding="utf-8"
+        )
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
         result = json.loads(tt.terminal_tool(command=f"/bin/bash {script}"))
@@ -576,10 +642,7 @@ class TestTerminalToolGatewayLifecycleGuard:
         assert result["exit_code"] == 1
         assert "referenced script" in result["error"]
 
-
-    def test_oversized_root_skips_launchctl_prescan_and_fails_closed(
-        self, monkeypatch
-    ):
+    def test_oversized_root_skips_launchctl_prescan_and_fails_closed(self, monkeypatch):
         """#78398: an over-budget root must never reach shlex — not even via
         the launchctl pre-scan that runs before the full guard."""
         from cron import lifecycle_guard
@@ -604,14 +667,17 @@ class TestTerminalToolGatewayLifecycleGuard:
         assert "command or referenced script" in result["error"]
         assert "KeepAlive" not in result["error"]
 
-    @pytest.mark.parametrize("command", [
-        # Neutral, non-clawk label: label-independent detection is the point
-        # (#62891 second reproduction used `ai.clawk.svc-reload-tmp`).
-        "launchctl submit -l com.foo -- /path/gateway",
-        "launchctl submit -l ai.clawk.svc-reload-tmp -- /bin/sh /tmp/h-svc-reload.sh",
-        # bootstrap variant: loads an arbitrary plist as a persistent job.
-        "launchctl bootstrap gui/501 /tmp/com.foo.plist",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # Neutral, non-clawk label: label-independent detection is the point
+            # (#62891 second reproduction used `ai.clawk.svc-reload-tmp`).
+            "launchctl submit -l com.foo -- /path/gateway",
+            "launchctl submit -l ai.clawk.svc-reload-tmp -- /bin/sh /tmp/h-svc-reload.sh",
+            # bootstrap variant: loads an arbitrary plist as a persistent job.
+            "launchctl bootstrap gui/501 /tmp/com.foo.plist",
+        ],
+    )
     def test_blocks_neutral_label_submit_and_bootstrap(self, monkeypatch, command):
         import tools.terminal_tool as tt
 
@@ -622,10 +688,13 @@ class TestTerminalToolGatewayLifecycleGuard:
         assert result["exit_code"] == 1
         assert "KeepAlive" in result["error"]
 
-    @pytest.mark.parametrize("command", [
-        "launchctl submit -l com.foo -- /path/gateway",
-        "launchctl bootstrap gui/501 /tmp/com.foo.plist",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "launchctl submit -l com.foo -- /path/gateway",
+            "launchctl bootstrap gui/501 /tmp/com.foo.plist",
+        ],
+    )
     def test_submit_and_bootstrap_allowed_outside_gateway(self, monkeypatch, command):
         """The label-independent block applies only inside the gateway process."""
         import tools.terminal_tool as tt
@@ -649,9 +718,7 @@ class TestTerminalToolGatewayLifecycleGuard:
         assert result["exit_code"] == 0
         assert calls == [command]
 
-    def test_cli_agent_session_not_blocked_by_inherited_env(
-        self, monkeypatch
-    ):
+    def test_cli_agent_session_not_blocked_by_inherited_env(self, monkeypatch):
         """#92560: CLI/TUI agent sessions inherit _CLAWK_GATEWAY=1 from the
         gateway but are NOT the gateway supervisor.  The env gate must not
         fire for them — only for the actual gateway process (PID-file owner).
@@ -702,11 +769,14 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         script = tmp_path / "relative.sh"
-        script.write_text("#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
+        )
 
         class _FakeEnv:
             env = {}
             cwd = str(tmp_path)
+
             def execute(self, command, **kwargs):  # pragma: no cover
                 raise AssertionError("execute must not be reached")
 
@@ -733,9 +803,9 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
-        result = json.loads(tt.terminal_tool(
-            command="launchctl sub\"\"mit -l ai.clawk.loop -- /bin/true"
-        ))
+        result = json.loads(
+            tt.terminal_tool(command='launchctl sub""mit -l ai.clawk.loop -- /bin/true')
+        )
 
         assert result["exit_code"] == 1
         assert "KeepAlive" in result["error"]
@@ -744,12 +814,12 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         script = tmp_path / "options.sh"
-        script.write_text("#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
+        )
         self._patch_env(monkeypatch, self._make_fake_env(), inside_gateway=True)
 
-        result = json.loads(tt.terminal_tool(
-            command=f"/bin/bash -O extglob {script}"
-        ))
+        result = json.loads(tt.terminal_tool(command=f"/bin/bash -O extglob {script}"))
 
         assert result["exit_code"] == 1
 
@@ -757,19 +827,23 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         script = tmp_path / "nested.sh"
-        script.write_text("#!/usr/bin/env bash\nlaunchctl submit -l ai.clawk.loop -- /bin/true\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nlaunchctl submit -l ai.clawk.loop -- /bin/true\n",
+            encoding="utf-8",
+        )
 
         class _FakeEnv:
             env = {}
             cwd = str(tmp_path)
+
             def execute(self, command, **kwargs):  # pragma: no cover
                 raise AssertionError("execute must not be reached")
 
         self._patch_env(monkeypatch, _FakeEnv(), inside_gateway=True)
 
-        result = json.loads(tt.terminal_tool(
-            command="/bin/bash -c '/bin/bash nested.sh'"
-        ))
+        result = json.loads(
+            tt.terminal_tool(command="/bin/bash -c '/bin/bash nested.sh'")
+        )
 
         assert result["exit_code"] == 1
 
@@ -777,13 +851,16 @@ class TestTerminalToolGatewayLifecycleGuard:
         import tools.terminal_tool as tt
 
         inner = tmp_path / "inner.sh"
-        inner.write_text("#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8")
+        inner.write_text(
+            "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
+        )
         outer = tmp_path / "outer.sh"
         outer.write_text("#!/usr/bin/env bash\n/bin/bash inner.sh\n", encoding="utf-8")
 
         class _FakeEnv:
             env = {}
             cwd = str(tmp_path)
+
             def execute(self, command, **kwargs):  # pragma: no cover
                 raise AssertionError("execute must not be reached")
 
@@ -811,6 +888,7 @@ class TestTerminalToolGatewayLifecycleGuard:
 
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 return {"output": "launchctl submit is persistent", "returncode": 0}
@@ -831,10 +909,13 @@ class TestTerminalToolGatewayLifecycleGuard:
 
         calls = []
         script = tmp_path / "health-check.sh"
-        script.write_text("#!/usr/bin/env bash\nprintf 'healthy\\n'\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nprintf 'healthy\\n'\n", encoding="utf-8"
+        )
 
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 return {"output": "healthy", "returncode": 0}
@@ -858,12 +939,15 @@ class TestTerminalToolGatewayLifecycleGuard:
 
         class _FakeEnv:
             env = {}
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 return {"output": "Active: running", "returncode": 0}
 
         self._patch_env(monkeypatch, _FakeEnv(), inside_gateway=True)
-        monkeypatch.setattr(tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True})
+        monkeypatch.setattr(
+            tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True}
+        )
 
         result = json.loads(tt.terminal_tool(command="systemctl status nginx"))
 
@@ -875,9 +959,9 @@ class TestTerminalToolGatewayLifecycleGuard:
 # cron.lifecycle_guard module — the shared checker create_job/CLI/terminal use
 # ---------------------------------------------------------------------------
 
+
 class TestLifecycleGuardModule:
     """Direct tests for cron.lifecycle_guard.check_gateway_lifecycle."""
-
 
     def test_nul_padded_script_is_still_scanned(self, tmp_path):
         """A NUL byte in a *text* script must not disable the scan.
@@ -890,14 +974,13 @@ class TestLifecycleGuardModule:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         script = tmp_path / "padded.sh"
         script.write_bytes(b"#!/usr/bin/env bash\n# pad\x00\nclawk gateway restart\n")
         assert (
             contains_gateway_lifecycle_command_or_referenced_script(f"bash {script}")
             is True
         )
-
-
 
     def test_nul_padded_script_without_shebang_is_scanned(self, tmp_path):
         """Same bypass without a shebang — bash still runs it, so still scan.
@@ -908,6 +991,7 @@ class TestLifecycleGuardModule:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         script = tmp_path / "padded_noshebang.sh"
         script.write_bytes(b"# ok\n# pad\x00\nclawk gateway restart\n")
         assert (
@@ -915,12 +999,12 @@ class TestLifecycleGuardModule:
             is True
         )
 
-
     def test_macho_binary_is_not_scanned_as_script(self, tmp_path):
         """Same for Mach-O, including the universal/fat signature (macOS)."""
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         for name, magic in (
             ("macho64", b"\xcf\xfa\xed\xfe"),
             ("machofat", b"\xca\xfe\xba\xbe"),
@@ -943,59 +1027,80 @@ class TestLifecycleGuardModule:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         script = tmp_path / "huge.sh"
-        script.write_bytes(b"#!/usr/bin/env bash\n# \x00" + b"x" * (1024 * 1024 + 64) + b"\n")
+        script.write_bytes(
+            b"#!/usr/bin/env bash\n# \x00" + b"x" * (1024 * 1024 + 64) + b"\n"
+        )
         assert (
             contains_gateway_lifecycle_command_or_referenced_script(f"bash {script}")
             is True
         )
 
-
     def test_prompt_with_command_raises(self):
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("please run clawk gateway restart", None)
 
-
     def test_script_with_command_raises(self, tmp_path, monkeypatch):
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "restart.sh"
-        script.write_text("#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8")
+        script.write_text(
+            "#!/usr/bin/env bash\nclawk gateway restart\n", encoding="utf-8"
+        )
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("clean prompt", str(script))
 
+    @pytest.mark.parametrize(
+        "line",
+        [
+            # #62891: neutral labels defeat any label-anchored regex, so cron
+            # scripts get the same label-independent submit/bootstrap block.
+            "launchctl submit -l com.foo -- /path/gateway",
+            "launchctl bootstrap gui/501 /tmp/com.foo.plist",
+        ],
+    )
+    def test_script_with_neutral_label_submit_or_bootstrap_raises(self, tmp_path, line):
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
 
-    @pytest.mark.parametrize("line", [
-        # #62891: neutral labels defeat any label-anchored regex, so cron
-        # scripts get the same label-independent submit/bootstrap block.
-        "launchctl submit -l com.foo -- /path/gateway",
-        "launchctl bootstrap gui/501 /tmp/com.foo.plist",
-    ])
-    def test_script_with_neutral_label_submit_or_bootstrap_raises(
-        self, tmp_path, line
-    ):
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
         script = tmp_path / "persistent.sh"
         script.write_text(f"#!/usr/bin/env bash\n{line}\n", encoding="utf-8")
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("clean prompt", str(script))
 
-
     def test_binary_script_does_not_silently_bypass(self, tmp_path):
         """Non-UTF-8 bytes used to be swallowed by UnicodeDecodeError; now we
         decode with errors='replace' so the scan always sees the command."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "weird.bin"
         script.write_bytes(b"\xfeclawk gateway restart\xff")
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("", str(script))
 
-
     def test_relative_script_resolved_under_scripts_dir(self, tmp_path, monkeypatch):
         """A bare/relative script name resolves under CLAWK_HOME/scripts (the
         same place the scheduler runs it from) — otherwise the guard would read
         a nonexistent relative path and scan prompt-only content."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         scripts_dir = tmp_path / ".clawk" / "scripts"
         scripts_dir.mkdir(parents=True)
@@ -1018,6 +1123,7 @@ class TestLifecycleGuardModule:
         runs.
         """
         from cron.lifecycle_guard import check_gateway_lifecycle
+
         script = tmp_path / "digest.py"
         script.write_text(
             "from pathlib import Path\n"
@@ -1026,20 +1132,21 @@ class TestLifecycleGuardModule:
         )
         check_gateway_lifecycle("clean prompt", str(script))
 
-    def test_python_script_with_literal_lifecycle_command_still_blocked(
-        self, tmp_path
-    ):
+    def test_python_script_with_literal_lifecycle_command_still_blocked(self, tmp_path):
         """#77131: skipping the shell walk for .py must NOT weaken the guard —
         a literal lifecycle command embedded in a .py script is still caught
         by the direct regex scan."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "evil.py"
-        script.write_text('import os\nos.system("clawk gateway restart")\n', encoding="utf-8")
+        script.write_text(
+            'import os\nos.system("clawk gateway restart")\n', encoding="utf-8"
+        )
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("clean prompt", str(script))
-
-
-
 
     def test_remote_read_fallback_binary_does_not_crash_guard(self):
         """#77703: in the gateway the referenced-script walk carries a
@@ -1053,6 +1160,7 @@ class TestLifecycleGuardModule:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         # Simulates the pre-fix _read_script_in_env handing back an ELF's
         # decoded bytes (NUL preserved through errors="replace"). The newline
         # puts a NUL-bearing absolute path in command position, exactly how the
@@ -1071,10 +1179,16 @@ class TestLifecycleGuardModule:
     def test_shell_script_reference_walk_still_works(self, tmp_path):
         """The referenced-script walk still applies to real shell scripts:
         a .sh script that itself invokes a lifecycle command is caught."""
-        from cron.lifecycle_guard import GatewayLifecycleBlocked, check_gateway_lifecycle
+        from cron.lifecycle_guard import (
+            GatewayLifecycleBlocked,
+            check_gateway_lifecycle,
+        )
+
         script = tmp_path / "wrapper.sh"
         script.write_text("#!/usr/bin/env bash\n./deploy.sh\n", encoding="utf-8")
-        (tmp_path / "deploy.sh").write_text("#!/usr/bin/env bash\nclawk gateway stop\n", encoding="utf-8")
+        (tmp_path / "deploy.sh").write_text(
+            "#!/usr/bin/env bash\nclawk gateway stop\n", encoding="utf-8"
+        )
         with pytest.raises(GatewayLifecycleBlocked):
             check_gateway_lifecycle("daily ops", str(script))
 
@@ -1116,9 +1230,12 @@ class TestLifecycleGuardModule:
 
         monkeypatch.setattr(lifecycle_guard.os, "open", reject_cloud_open)
 
-        assert lifecycle_guard.contains_gateway_lifecycle_command_or_referenced_script(
-            str(launcher)
-        ) is True
+        assert (
+            lifecycle_guard.contains_gateway_lifecycle_command_or_referenced_script(
+                str(launcher)
+            )
+            is True
+        )
 
     def test_third_party_cloudstorage_path_fails_closed_without_opening(
         self, tmp_path, monkeypatch
@@ -1130,11 +1247,7 @@ class TestLifecycleGuardModule:
         from cron import lifecycle_guard
 
         cloud_dir = (
-            tmp_path
-            / "Library"
-            / "CloudStorage"
-            / "Dropbox-Personal"
-            / "scripts"
+            tmp_path / "Library" / "CloudStorage" / "Dropbox-Personal" / "scripts"
         )
         cloud_dir.mkdir(parents=True)
         script = cloud_dir / "helper.sh"
@@ -1149,10 +1262,12 @@ class TestLifecycleGuardModule:
 
         monkeypatch.setattr(lifecycle_guard.os, "open", reject_cloud_open)
 
-        assert lifecycle_guard.contains_gateway_lifecycle_command_or_referenced_script(
-            str(script)
-        ) is True
-
+        assert (
+            lifecycle_guard.contains_gateway_lifecycle_command_or_referenced_script(
+                str(script)
+            )
+            is True
+        )
 
     def test_cron_script_scan_blocks_cloud_script_without_opening(
         self, tmp_path, monkeypatch
@@ -1194,7 +1309,6 @@ class TestLifecycleGuardModule:
         assert "lifecycle command" not in message
 
     # -- Whole-class regression tests (tilllt's T1-T4 on PR #79454) --------
-
 
     def test_tilde_nul_candidate_does_not_crash_cron_script_resolution(self):
         """T2: the same ``expanduser`` crash via the cron ``script`` path
@@ -1280,13 +1394,17 @@ class TestLifecycleGuardModule:
 
         monkeypatch.setattr(lg, "_contains_unsafe_gateway_action", _boom)
         # Direct scan still blocks a literal lifecycle command...
-        assert lg.contains_gateway_lifecycle_command_or_referenced_script(
-            "clawk gateway restart"
-        ) is True
+        assert (
+            lg.contains_gateway_lifecycle_command_or_referenced_script(
+                "clawk gateway restart"
+            )
+            is True
+        )
         # ...and a benign command fails open instead of crashing.
-        assert lg.contains_gateway_lifecycle_command_or_referenced_script(
-            "echo hello"
-        ) is False
+        assert (
+            lg.contains_gateway_lifecycle_command_or_referenced_script("echo hello")
+            is False
+        )
 
     def test_cron_guard_total_when_home_unresolvable(self, monkeypatch):
         """`get_clawk_home()` falls back to Path.home(), which raises
@@ -1317,6 +1435,7 @@ class TestLifecycleGuardModule:
 # Defense 2 (chokepoint): cron.jobs.create_job blocks the AGENT model-tool path
 # ---------------------------------------------------------------------------
 
+
 class TestDotSourceIsScannedLikeSource:
     """`.` and `source` are the same POSIX builtin and must scan alike.
 
@@ -1332,9 +1451,7 @@ class TestDotSourceIsScannedLikeSource:
             contains_gateway_lifecycle_command_or_referenced_script,
         )
 
-        return contains_gateway_lifecycle_command_or_referenced_script(
-            command, cwd=cwd
-        )
+        return contains_gateway_lifecycle_command_or_referenced_script(command, cwd=cwd)
 
     @pytest.fixture
     def helper(self, tmp_path):
@@ -1356,16 +1473,19 @@ class TestDotSourceIsScannedLikeSource:
     def test_dot_source_nested_in_shell_c_is_blocked(self, tmp_path, helper):
         assert self._scan(f"sh -c '. {helper}'", cwd=str(tmp_path)) is True
 
-    @pytest.mark.parametrize("command", [
-        # `.` as a plain path argument is not a source and must stay allowed —
-        # this is the #77131 false-positive class the guard already carries
-        # scar tissue for.
-        "find . -name '*.py'",
-        "git add .",
-        "cd . && make",
-        "tar -czf out.tgz .",
-        "cp -r . /tmp/backup",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # `.` as a plain path argument is not a source and must stay allowed —
+            # this is the #77131 false-positive class the guard already carries
+            # scar tissue for.
+            "find . -name '*.py'",
+            "git add .",
+            "cd . && make",
+            "tar -czf out.tgz .",
+            "cp -r . /tmp/backup",
+        ],
+    )
     def test_dot_as_an_argument_is_not_treated_as_a_source(self, tmp_path, command):
         assert self._scan(command, cwd=str(tmp_path)) is False
 
@@ -1388,9 +1508,7 @@ class TestTransparentWrapperPrefixes:
             contains_gateway_lifecycle_command_or_referenced_script,
         )
 
-        return contains_gateway_lifecycle_command_or_referenced_script(
-            command, cwd=cwd
-        )
+        return contains_gateway_lifecycle_command_or_referenced_script(command, cwd=cwd)
 
     @pytest.fixture
     def helper(self, tmp_path):
@@ -1398,11 +1516,27 @@ class TestTransparentWrapperPrefixes:
         script.write_text("#!/bin/sh\nclawk gateway restart\n", encoding="utf-8")
         return script
 
-    @pytest.mark.parametrize("prefix", [
-        "sudo", "doas", "env", "nohup", "setsid", "nice", "eatmydata",
-        "exec", "command", "stdbuf -o0", "nice -n 5", "sudo -u deploy",
-        "env FOO=bar", "timeout 60", "timeout -k 5 60", "sudo --",
-    ])
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            "sudo",
+            "doas",
+            "env",
+            "nohup",
+            "setsid",
+            "nice",
+            "eatmydata",
+            "exec",
+            "command",
+            "stdbuf -o0",
+            "nice -n 5",
+            "sudo -u deploy",
+            "env FOO=bar",
+            "timeout 60",
+            "timeout -k 5 60",
+            "sudo --",
+        ],
+    )
     def test_wrapped_script_reference_is_scanned(self, tmp_path, helper, prefix):
         assert self._scan(f"{prefix} bash {helper}", cwd=str(tmp_path)) is True
 
@@ -1412,79 +1546,93 @@ class TestTransparentWrapperPrefixes:
 
     @pytest.mark.parametrize("prefix", ["sudo", "env", "nohup"])
     def test_wrapped_shell_c_payload_is_scanned(self, tmp_path, helper, prefix):
-        assert self._scan(
-            f"{prefix} sh -c 'bash {helper}'", cwd=str(tmp_path)
-        ) is True
+        assert self._scan(f"{prefix} sh -c 'bash {helper}'", cwd=str(tmp_path)) is True
 
     @pytest.mark.parametrize("prefix", ["sudo", "env", "nohup", "setsid"])
     def test_wrapped_launchctl_submit_is_blocked(self, prefix):
         from cron.lifecycle_guard import contains_launchctl_submit_command
 
-        assert contains_launchctl_submit_command(
-            f"{prefix} launchctl submit -l com.example.helper -- /usr/bin/true"
-        ) is True
+        assert (
+            contains_launchctl_submit_command(
+                f"{prefix} launchctl submit -l com.example.helper -- /usr/bin/true"
+            )
+            is True
+        )
 
-    @pytest.mark.parametrize("prefix", [
-        # Privilege and namespace wrappers, including the option forms whose
-        # operand is a VALUE rather than the command.
-        "pkexec", "pkexec --user root",
-        "runuser -u root --", "setpriv --reuid=0 --",
-        "systemd-run --scope", "systemd-run -p X=1",
-        "nsenter --target 1 --mount", "nsenter -t 1 -m",
-        "unshare -r", "sudo pkexec",
-    ])
+    @pytest.mark.parametrize(
+        "prefix",
+        [
+            # Privilege and namespace wrappers, including the option forms whose
+            # operand is a VALUE rather than the command.
+            "pkexec",
+            "pkexec --user root",
+            "runuser -u root --",
+            "setpriv --reuid=0 --",
+            "systemd-run --scope",
+            "systemd-run -p X=1",
+            "nsenter --target 1 --mount",
+            "nsenter -t 1 -m",
+            "unshare -r",
+            "sudo pkexec",
+        ],
+    )
     def test_privilege_and_namespace_wrappers_are_scanned(
         self, tmp_path, helper, prefix
     ):
         assert self._scan(f"{prefix} bash {helper}", cwd=str(tmp_path)) is True
 
-    @pytest.mark.parametrize("command", [
-        # An option carrying a COMMAND STRING is shell source, not an opaque
-        # value: skipping it would hide whatever it runs.
-        "env -S 'bash {path}'",
-        "env --split-string='bash {path}'",
-        "su -c 'bash {path}'",
-        "su root -c 'bash {path}'",
-        "runuser -u root -c 'bash {path}'",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # An option carrying a COMMAND STRING is shell source, not an opaque
+            # value: skipping it would hide whatever it runs.
+            "env -S 'bash {path}'",
+            "env --split-string='bash {path}'",
+            "su -c 'bash {path}'",
+            "su root -c 'bash {path}'",
+            "runuser -u root -c 'bash {path}'",
+        ],
+    )
     def test_command_string_options_are_rescanned(self, tmp_path, helper, command):
         assert self._scan(command.format(path=helper), cwd=str(tmp_path)) is True
 
-    @pytest.mark.parametrize("command", [
-        # The same wrappers around ordinary work must not start blocking.
-        "pkexec systemctl status nginx",
-        "su -c 'ls -la'",
-        "unshare -r whoami",
-        "systemd-run --scope make -j4",
-        "nsenter -t 1 -m ps aux",
-        "setpriv --reuid=0 -- id",
-        "runuser -u nobody -- whoami",
-        "env -S 'echo hi'",
-    ])
-    def test_privilege_wrappers_around_benign_work_are_allowed(
-        self, tmp_path, command
-    ):
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # The same wrappers around ordinary work must not start blocking.
+            "pkexec systemctl status nginx",
+            "su -c 'ls -la'",
+            "unshare -r whoami",
+            "systemd-run --scope make -j4",
+            "nsenter -t 1 -m ps aux",
+            "setpriv --reuid=0 -- id",
+            "runuser -u nobody -- whoami",
+            "env -S 'echo hi'",
+        ],
+    )
+    def test_privilege_wrappers_around_benign_work_are_allowed(self, tmp_path, command):
         assert self._scan(command, cwd=str(tmp_path)) is False
 
-    @pytest.mark.parametrize("command", [
-        # Wrappers around ordinary work must stay allowed — peeling must not
-        # invent a script reference where there is none.
-        "sudo apt-get update",
-        "env FOO=bar python3 script.py",
-        "timeout 60 curl https://example.com",
-        "nohup python3 -m http.server &",
-        "sudo -u postgres psql -c 'SELECT 1'",
-        "nice -n 10 make -j4",
-        "env",
-        "sudo",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # Wrappers around ordinary work must stay allowed — peeling must not
+            # invent a script reference where there is none.
+            "sudo apt-get update",
+            "env FOO=bar python3 script.py",
+            "timeout 60 curl https://example.com",
+            "nohup python3 -m http.server &",
+            "sudo -u postgres psql -c 'SELECT 1'",
+            "nice -n 10 make -j4",
+            "env",
+            "sudo",
+        ],
+    )
     def test_wrapped_benign_commands_are_allowed(self, tmp_path, command):
         assert self._scan(command, cwd=str(tmp_path)) is False
 
     @pytest.mark.parametrize("name", ["timeout", "env", "nice", "command"])
-    def test_local_script_named_like_a_wrapper_is_still_scanned(
-        self, tmp_path, name
-    ):
+    def test_local_script_named_like_a_wrapper_is_still_scanned(self, tmp_path, name):
         """`./timeout` is a script in the cwd, not the coreutils wrapper.
         Peeling is additive precisely so it cannot swallow the reference the
         un-peeled read finds."""
@@ -1513,33 +1661,38 @@ class TestRelativePathDoesNotDisableDataExemption:
 
         return contains_gateway_lifecycle_command_or_referenced_script(command)
 
-    @pytest.mark.parametrize("command", [
-        "grep -r 'systemctl restart clawk-gateway' .",
-        "grep -rn 'clawk gateway restart' ./logs",
-        "rg 'clawk gateway restart' ../archive",
-        "grep -c 'systemctl stop clawk-gateway' ./var/log/syslog",
-        "sqlite3 ./stats.db \"SELECT restart_reason FROM clawk_gateway_restarts\"",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "grep -r 'systemctl restart clawk-gateway' .",
+            "grep -rn 'clawk gateway restart' ./logs",
+            "rg 'clawk gateway restart' ../archive",
+            "grep -c 'systemctl stop clawk-gateway' ./var/log/syslog",
+            'sqlite3 ./stats.db "SELECT restart_reason FROM clawk_gateway_restarts"',
+        ],
+    )
     def test_relative_path_operands_keep_the_exemption(self, command):
         assert self._scan(command) is False
 
-    @pytest.mark.parametrize("command", [
-        # Narrowing the dot test must not open an execution route: every
-        # escape hatch still fires with a relative-path operand present.
-        'sqlite3 ./db ".shell clawk gateway restart"',
-        'sqlite3 ./db ".system systemctl restart clawk-gateway"',
-        'psql ./x -c "\\! systemctl restart clawk-gateway"',
-        "grep -r 'clawk gateway restart' . | sh",
-        "grep -r 'clawk gateway restart' ./logs | bash",
-        "grep -r 'clawk gateway restart' . | sudo sh",
-        "grep -r 'x' . ; clawk gateway restart",
-        "grep -r 'x' . && systemctl restart clawk-gateway",
-        'grep -r "$(clawk gateway restart)" .',
-        "rg 'x' ./logs | xargs systemctl restart clawk-gateway",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # Narrowing the dot test must not open an execution route: every
+            # escape hatch still fires with a relative-path operand present.
+            'sqlite3 ./db ".shell clawk gateway restart"',
+            'sqlite3 ./db ".system systemctl restart clawk-gateway"',
+            'psql ./x -c "\\! systemctl restart clawk-gateway"',
+            "grep -r 'clawk gateway restart' . | sh",
+            "grep -r 'clawk gateway restart' ./logs | bash",
+            "grep -r 'clawk gateway restart' . | sudo sh",
+            "grep -r 'x' . ; clawk gateway restart",
+            "grep -r 'x' . && systemctl restart clawk-gateway",
+            'grep -r "$(clawk gateway restart)" .',
+            "rg 'x' ./logs | xargs systemctl restart clawk-gateway",
+        ],
+    )
     def test_relative_path_does_not_open_an_execution_route(self, command):
         assert self._scan(command) is True
-
 
 
 class TestCreateJobBlocksLifecycleCommands:
@@ -1556,13 +1709,17 @@ class TestCreateJobBlocksLifecycleCommands:
     def test_create_job_blocks_prompt_command(self):
         from cron.jobs import create_job
         from cron.lifecycle_guard import GatewayLifecycleBlocked
+
         with pytest.raises(GatewayLifecycleBlocked):
             create_job(prompt="then run clawk gateway restart", schedule="30m")
 
     def test_create_job_allows_benign_prompt(self):
         from cron.jobs import create_job
-        job = create_job(prompt="summarize the API gateway logs and note restart events",
-                         schedule="30m")
+
+        job = create_job(
+            prompt="summarize the API gateway logs and note restart events",
+            schedule="30m",
+        )
         assert job["id"]
 
     def test_cronjob_tool_surfaces_block_as_error(self, tmp_path, monkeypatch):
@@ -1571,10 +1728,14 @@ class TestCreateJobBlocksLifecycleCommands:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         (tmp_path / ".clawk").mkdir(parents=True)
         from tools.cronjob_tools import cronjob
-        result = json.loads(cronjob(
-            action="create", schedule="0 9 * * *",
-            prompt="please run clawk gateway restart nightly",
-        ))
+
+        result = json.loads(
+            cronjob(
+                action="create",
+                schedule="0 9 * * *",
+                prompt="please run clawk gateway restart nightly",
+            )
+        )
         assert result.get("success") is False
         assert "#30719" in result.get("error", "")
 
@@ -1582,6 +1743,7 @@ class TestCreateJobBlocksLifecycleCommands:
 # ---------------------------------------------------------------------------
 # Defense 3: auto-resume restart-loop breaker
 # ---------------------------------------------------------------------------
+
 
 class TestRestartLoopGuard:
     """gateway.restart_loop_guard trips after >= max_restarts
@@ -1593,10 +1755,12 @@ class TestRestartLoopGuard:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         (tmp_path / ".clawk").mkdir(parents=True)
         import gateway.restart_loop_guard as rlg
+
         rlg.clear()
 
     def test_clear_resets(self):
         import gateway.restart_loop_guard as rlg
+
         rlg.check_and_record(3, 60, now=1000.0)
         rlg.check_and_record(3, 60, now=1001.0)
         rlg.clear()
@@ -1607,6 +1771,7 @@ class TestRestartLoopGuard:
         old absolute-window prune dropped the previous boot on every boot and
         the counter never left 1.  Chaining on the inter-boot gap sees it."""
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 60, now=1000.0) is False
         assert rlg.check_and_record(3, 60, now=1150.0) is False
         assert rlg.check_and_record(3, 60, now=1300.0) is True
@@ -1615,6 +1780,7 @@ class TestRestartLoopGuard:
         """The state file must keep the whole chain — the reported symptom was
         a restart_loop.json holding a single timestamp after 15 crashes."""
         import gateway.restart_loop_guard as rlg
+
         rlg.record_restart_interrupted_boot(60, now=1000.0)
         rlg.record_restart_interrupted_boot(60, now=1150.0)
         boots = rlg.record_restart_interrupted_boot(60, now=1300.0)
@@ -1624,6 +1790,7 @@ class TestRestartLoopGuard:
         """A boot after real quiet starts a fresh chain, so occasional
         operator restarts never accumulate into a trip."""
         import gateway.restart_loop_guard as rlg
+
         rlg.check_and_record(3, 60, now=1000.0)
         rlg.check_and_record(3, 60, now=1150.0)
         # 1h later: unrelated restart, chain reset to a single boot.
@@ -1632,6 +1799,7 @@ class TestRestartLoopGuard:
     def test_fast_respawn_loop_still_trips(self):
         """#30719 regression: the original ~10s loop must keep tripping."""
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 60, now=1000.0) is False
         assert rlg.check_and_record(3, 60, now=1010.0) is False
         assert rlg.check_and_record(3, 60, now=1020.0) is True
@@ -1640,6 +1808,7 @@ class TestRestartLoopGuard:
         """An operator can narrow the chain gap back down; a cycle slower than
         the configured gap then stops chaining."""
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 60, now=1000.0, max_gap_seconds=100) is False
         assert rlg.check_and_record(3, 60, now=1150.0, max_gap_seconds=100) is False
         assert rlg.check_and_record(3, 60, now=1300.0, max_gap_seconds=100) is False
@@ -1648,14 +1817,17 @@ class TestRestartLoopGuard:
         """A window wider than the gap default still governs, so raising
         window_seconds never makes the breaker less sensitive."""
         import gateway.restart_loop_guard as rlg
+
         assert rlg.check_and_record(3, 900, now=1000.0, max_gap_seconds=100) is False
         assert rlg.check_and_record(3, 900, now=1400.0, max_gap_seconds=100) is False
         assert rlg.check_and_record(3, 900, now=1800.0, max_gap_seconds=100) is True
 
     def test_disabled_breaker_never_trips(self):
         import gateway.restart_loop_guard as rlg
+
         for ts in (1000.0, 1150.0, 1300.0, 1450.0):
             assert rlg.check_and_record(0, 60, now=ts) is False
+
 
 class TestTerminalToolGatewayLifecycleGuardRemote:
     """Remote-backend and two-session cwd regression coverage."""
@@ -1663,13 +1835,24 @@ class TestTerminalToolGatewayLifecycleGuardRemote:
     def _patch_env(self, monkeypatch, fake_env, *, inside_gateway: bool):
         import tools.terminal_tool as tt
         from tools import process_registry
+
         eid = "default"
         monkeypatch.setattr(tt, "_active_environments", {eid: fake_env})
         monkeypatch.setattr(tt, "_last_activity", {eid: 0.0})
         monkeypatch.setattr(tt, "_task_env_overrides", {})
-        monkeypatch.setattr(tt, "_get_env_config", lambda: {"env_type": "local", "cwd": "/tmp", "timeout": 60, "lifetime_seconds": 3600})
         monkeypatch.setattr(
-            process_registry, "_is_supervised_gateway_process",
+            tt,
+            "_get_env_config",
+            lambda: {
+                "env_type": "local",
+                "cwd": "/tmp",
+                "timeout": 60,
+                "lifetime_seconds": 3600,
+            },
+        )
+        monkeypatch.setattr(
+            process_registry,
+            "_is_supervised_gateway_process",
             lambda: inside_gateway,
         )
 
@@ -1684,10 +1867,14 @@ class TestTerminalToolGatewayLifecycleGuardRemote:
         class _RemoteEnv:
             env = {}
             cwd = str(tmp_path)
+
             def execute(self, command, **kwargs):
                 calls.append(command)
                 if "head -c" in command and "/remote/workspace/remote.sh" in command:
-                    return {"output": "#!/usr/bin/env bash\nclawk gateway restart\n", "returncode": 0}
+                    return {
+                        "output": "#!/usr/bin/env bash\nclawk gateway restart\n",
+                        "returncode": 0,
+                    }
                 return {"output": "", "returncode": 0}
 
         fake_env = _RemoteEnv()
@@ -1699,7 +1886,6 @@ class TestTerminalToolGatewayLifecycleGuardRemote:
         assert result["exit_code"] == 1
         assert "referenced script" in result["error"]
         assert any("head -c" in c for c in calls)
-
 
     def test_unscannable_executed_script_names_the_reason(self, monkeypatch, tmp_path):
         """A script the command EXECUTES that the guard cannot scan (here a live SQLite database)
@@ -1714,6 +1900,7 @@ class TestTerminalToolGatewayLifecycleGuardRemote:
         class _LocalEnv:
             env = {}
             cwd = str(tmp_path)
+
             def execute(self, command, **kwargs):
                 return {"output": "", "returncode": 1}
 
@@ -1738,43 +1925,50 @@ class TestLifecycleGuardDataArgumentExemption:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         return contains_gateway_lifecycle_command_or_referenced_script(
             command, **kwargs
         )
 
-    @pytest.mark.parametrize("command", [
-        # Exact live false-positive shapes: SQL string literals carrying the
-        # full lifecycle command as text.
-        'sqlite3 db "SELECT msg FROM log WHERE msg LIKE '
-        "'%systemctl restart clawk-gateway%'\"",
-        'psql -c "SELECT * FROM events WHERE cmd = '
-        "'systemctl stop clawk-gateway'\"",
-        # grep/rg pattern arguments hunting for the lifecycle string.
-        "grep -c 'systemctl restart clawk-gateway' /var/log/syslog",
-        "rg 'clawk gateway restart' /home/user/.clawksis/logs/",
-        "journalctl -u clawk-gateway --grep 'systemctl restart clawk-gateway'",
-        # SQL with stop/restart column/value words but no command shape.
-        'sqlite3 stats.db "SELECT stop_time, restart_reason FROM '
-        'clawk_gateway_restarts"',
-        "psql -c \"SELECT count(*) FROM events WHERE action IN "
-        "('stop','restart') AND service LIKE '%gateway%'\"",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # Exact live false-positive shapes: SQL string literals carrying the
+            # full lifecycle command as text.
+            'sqlite3 db "SELECT msg FROM log WHERE msg LIKE '
+            "'%systemctl restart clawk-gateway%'\"",
+            'psql -c "SELECT * FROM events WHERE cmd = '
+            "'systemctl stop clawk-gateway'\"",
+            # grep/rg pattern arguments hunting for the lifecycle string.
+            "grep -c 'systemctl restart clawk-gateway' /var/log/syslog",
+            "rg 'clawk gateway restart' /home/user/.clawksis/logs/",
+            "journalctl -u clawk-gateway --grep 'systemctl restart clawk-gateway'",
+            # SQL with stop/restart column/value words but no command shape.
+            'sqlite3 stats.db "SELECT stop_time, restart_reason FROM '
+            'clawk_gateway_restarts"',
+            'psql -c "SELECT count(*) FROM events WHERE action IN '
+            "('stop','restart') AND service LIKE '%gateway%'\"",
+        ],
+    )
     def test_data_argument_lifecycle_text_not_blocked(self, command):
         assert self._scan(command) is False
 
-    @pytest.mark.parametrize("command", [
-        # Execution smuggled through or around a data sink must still block.
-        'sqlite3 db ".shell clawk gateway restart"',
-        'psql -c "\\! systemctl restart clawk-gateway"',
-        "grep 'systemctl restart clawk-gateway' cmds.txt | sh",
-        "grep gateway f | xargs systemctl restart clawk-gateway",
-        'grep "$(systemctl restart clawk-gateway)" f',
-        "grep 'restart' log; systemctl restart clawk-gateway",
-        'sqlite3 db "SELECT 1"; clawk gateway stop',
-        # Plain lifecycle commands are unaffected by the exemption.
-        "clawk gateway restart",
-        "sudo systemctl stop clawk-gateway",
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            # Execution smuggled through or around a data sink must still block.
+            'sqlite3 db ".shell clawk gateway restart"',
+            'psql -c "\\! systemctl restart clawk-gateway"',
+            "grep 'systemctl restart clawk-gateway' cmds.txt | sh",
+            "grep gateway f | xargs systemctl restart clawk-gateway",
+            'grep "$(systemctl restart clawk-gateway)" f',
+            "grep 'restart' log; systemctl restart clawk-gateway",
+            'sqlite3 db "SELECT 1"; clawk gateway stop',
+            # Plain lifecycle commands are unaffected by the exemption.
+            "clawk gateway restart",
+            "sudo systemctl stop clawk-gateway",
+        ],
+    )
     def test_command_position_lifecycle_still_blocked(self, command):
         assert self._scan(command) is True
 
@@ -1787,6 +1981,7 @@ class TestLifecycleGuardDataArgumentExemption:
         (e.g. inside a subprocess.run list literal) stays blocked because
         the masker cannot prove it is data."""
         from cron.lifecycle_guard import check_gateway_lifecycle
+
         script = tmp_path / "report.py"
         script.write_text("print('nightly report')\n", encoding="utf-8")
         prompt = (
@@ -1805,6 +2000,7 @@ class TestLifecycleGuardNeverRaises:
         from cron.lifecycle_guard import (
             contains_gateway_lifecycle_command_or_referenced_script,
         )
+
         return contains_gateway_lifecycle_command_or_referenced_script(
             command, **kwargs
         )
@@ -1817,12 +2013,15 @@ class TestLifecycleGuardNeverRaises:
         binary.write_bytes(b"\x7fELF\x02\x01\x01" + bytes(64) + b"\x90" * 256)
         assert self._scan(f"{binary} -m json.tool /tmp/x.json") is False
 
-    @pytest.mark.parametrize("command", [
-        "run /tmp/foo\x00bar/baz.sh",
-        "bash ./run\x00me.sh",
-        "bash /nonexistent/deeply/missing.sh",
-        "bash /" + "a" * 4096 + ".sh",  # ENAMETOOLONG
-    ])
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "run /tmp/foo\x00bar/baz.sh",
+            "bash ./run\x00me.sh",
+            "bash /nonexistent/deeply/missing.sh",
+            "bash /" + "a" * 4096 + ".sh",  # ENAMETOOLONG
+        ],
+    )
     def test_adversarial_paths_never_raise(self, command):
         assert self._scan(command, cwd="/tmp") is False
 
@@ -1845,7 +2044,6 @@ class TestLifecycleGuardNeverRaises:
         )
         assert self._scan(f"source {zshrc}") is False
 
-
     def test_directory_and_dev_null_fail_closed_not_crash(self, tmp_path):
         # Directories are not scripts (#86753). Devices stay fail-closed
         # where the OS actually exposes them (POSIX /dev/null).
@@ -1858,6 +2056,7 @@ class TestLifecycleGuardNeverRaises:
         """Executable magic (ELF/PE/Mach-O) short-circuits the read: the
         guard must not treat compiled binaries as scripts at all."""
         from cron.lifecycle_guard import _read_referenced_script
+
         for name, magic in [
             ("elf", b"\x7fELF"),
             ("pe", b"MZ"),
@@ -1878,9 +2077,15 @@ class TestLifecycleGuardNeverRaises:
             GatewayLifecycleBlocked,
             check_gateway_lifecycle,
         )
+
         binary = tmp_path / "prog"
         binary.write_bytes(b"\x7fELF" + bytes(128))
-        for value in ("nul\x00byte.sh", str(binary), "/nonexistent/x.sh", str(tmp_path)):
+        for value in (
+            "nul\x00byte.sh",
+            str(binary),
+            "/nonexistent/x.sh",
+            str(tmp_path),
+        ):
             check_gateway_lifecycle("clean prompt", value)  # must not raise
         if os.name != "nt":
             with pytest.raises(GatewayLifecycleBlocked):

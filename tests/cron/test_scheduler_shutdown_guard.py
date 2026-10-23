@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-class TestInterpreterShuttingDownHelper:
 
+class TestInterpreterShuttingDownHelper:
     def test_matches_shutdown_error_text_as_fallback(self):
         """The concurrent.futures module-global flag can be set a hair before
         ``sys.is_finalizing()`` flips — matching the error text catches that
@@ -35,6 +35,7 @@ class TestInterpreterShuttingDownHelper:
         exc = RuntimeError("some other problem")
         with patch("sys.is_finalizing", return_value=False):
             assert _interpreter_shutting_down(exc) is False
+
 
 class TestStandaloneDeliverySkipsDuringShutdown:
     def _telegram_cfg(self):
@@ -60,9 +61,13 @@ class TestStandaloneDeliverySkipsDuringShutdown:
             "origin": {"platform": "telegram", "chat_id": "123"},
         }
         send_mock = AsyncMock(return_value={"success": True})
-        with patch("gateway.config.load_gateway_config", return_value=self._telegram_cfg()), \
-             patch("tools.send_message_tool._send_to_platform", new=send_mock), \
-             patch("sys.is_finalizing", return_value=True):
+        with (
+            patch(
+                "gateway.config.load_gateway_config", return_value=self._telegram_cfg()
+            ),
+            patch("tools.send_message_tool._send_to_platform", new=send_mock),
+            patch("sys.is_finalizing", return_value=True),
+        ):
             result = _deliver_result(job, "daily report body")
 
         send_mock.assert_not_called()

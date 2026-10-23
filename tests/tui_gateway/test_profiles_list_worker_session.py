@@ -21,6 +21,7 @@ import pytest
 
 import tui_gateway.server as srv
 
+
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     h = tmp_path / ".clawk"
@@ -28,10 +29,12 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(h))
     return h
 
+
 def _db(profile_dir):
     from clawk_state import SessionDB
 
     return SessionDB(db_path=profile_dir / "state.db")
+
 
 def _add_session(db, sid, *, source="cli", title="", ts, text):
     db.create_session(sid, source)
@@ -39,18 +42,35 @@ def _add_session(db, sid, *, source="cli", title="", ts, text):
     with db._lock:
         db._conn.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, sid))
 
+
 def _profiles(params):
     envelope = srv._methods["profiles.list"](1, params)
     return envelope["result"]["profiles"]
 
+
 def _row(profiles, name):
     return next(p for p in profiles if p["name"] == name)
+
 
 def test_worker_session_reports_newest_worker_and_keeps_last_session_clean(home):
     db = _db(home)
     _add_session(db, "chat1", source="cli", title="Chat", ts=1000, text="hello")
-    _add_session(db, "work-old", source="kanban", title="Task 4", ts=2000, text="work kanban task 4")
-    _add_session(db, "work-new", source="kanban", title="Task 9", ts=3000, text="work kanban task 9")
+    _add_session(
+        db,
+        "work-old",
+        source="kanban",
+        title="Task 4",
+        ts=2000,
+        text="work kanban task 4",
+    )
+    _add_session(
+        db,
+        "work-new",
+        source="kanban",
+        title="Task 9",
+        ts=3000,
+        text="work kanban task 9",
+    )
     db.close()
 
     row = _row(_profiles({}), "default")
@@ -63,6 +83,7 @@ def test_worker_session_reports_newest_worker_and_keeps_last_session_clean(home)
     # The conversation preview still never surfaces worker rows.
     assert row["last_session"]["id"] == "chat1"
 
+
 def test_worker_session_none_without_workers(home):
     db = _db(home)
     _add_session(db, "chat1", source="cli", title="Chat", ts=1000, text="hello")
@@ -72,9 +93,12 @@ def test_worker_session_none_without_workers(home):
     assert row["worker_session"] is None
     assert row["last_session"]["id"] == "chat1"
 
+
 def test_worker_session_tool_source_counts(home):
     db = _db(home)
-    _add_session(db, "sub1", source="tool", title="Subagent", ts=5000, text="delegated run")
+    _add_session(
+        db, "sub1", source="tool", title="Subagent", ts=5000, text="delegated run"
+    )
     db.close()
 
     row = _row(_profiles({}), "default")

@@ -73,6 +73,7 @@ try:
 except ImportError:
     pass
 
+
 # Root single-file modules (``run_agent``, ``clawk_state``, ``toolsets``...)
 # are invisible to ``packages.find``: that finder sees only directories with an
 # ``__init__.py``. The wheel build needs them on ``py_modules``, so derive the
@@ -90,9 +91,7 @@ def _root_py_modules():
     except OSError:
         return []
     return sorted(
-        name[:-3]
-        for name in names
-        if name.endswith(".py") and name != "setup.py"
+        name[:-3] for name in names if name.endswith(".py") and name != "setup.py"
     )
 
 

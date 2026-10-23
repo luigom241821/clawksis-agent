@@ -30,7 +30,12 @@ class TestTelegramModelPicker:
         result = await adapter.send_model_picker(
             chat_id="12345",
             providers=[
-                {"slug": "provider_one", "name": "Provider One", "total_models": 1, "is_current": True}
+                {
+                    "slug": "provider_one",
+                    "name": "Provider One",
+                    "total_models": 1,
+                    "is_current": True,
+                }
             ],
             current_model="model_1",
             current_provider="provider_one",
@@ -48,7 +53,14 @@ class TestTelegramModelPicker:
     async def test_back_button_escapes_dynamic_provider_label(self):
         adapter = _make_adapter()
         adapter._model_picker_state["12345"] = {
-            "providers": [{"slug": "provider_one", "name": "Provider One", "total_models": 1, "is_current": True}],
+            "providers": [
+                {
+                    "slug": "provider_one",
+                    "name": "Provider One",
+                    "total_models": 1,
+                    "is_current": True,
+                }
+            ],
             "current_model": "model_1",
             "current_provider": "provider_one",
             "session_key": "s",
@@ -80,7 +92,9 @@ def _gateway_wired_adapter():
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig()
-    runner.config.platforms = {Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})}
+    runner.config.platforms = {
+        Platform.TELEGRAM: PlatformConfig(enabled=True, extra={})
+    }
     runner.pairing_store = PairingStore(profile="default")
     runner.pairing_stores = {"default": runner.pairing_store}
     runner._primary_profile_name = "default"
@@ -92,13 +106,21 @@ def _gateway_wired_adapter():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tapper_id, switches", [("222", False), ("111", True)])
-async def test_group_model_picker_switch_follows_callback_allowlist(monkeypatch, tapper_id, switches):
+async def test_group_model_picker_switch_follows_callback_allowlist(
+    monkeypatch, tapper_id, switches
+):
     """Only an allowlisted tapper can switch the model from a group /model picker."""
-    for key in ("GATEWAY_ALLOW_ALL_USERS", "GATEWAY_ALLOWED_USERS", "TELEGRAM_ALLOW_ALL_USERS",
-                "TELEGRAM_GROUP_ALLOWED_USERS", "TELEGRAM_GROUP_ALLOWED_CHATS"):
+    for key in (
+        "GATEWAY_ALLOW_ALL_USERS",
+        "GATEWAY_ALLOWED_USERS",
+        "TELEGRAM_ALLOW_ALL_USERS",
+        "TELEGRAM_GROUP_ALLOWED_USERS",
+        "TELEGRAM_GROUP_ALLOWED_CHATS",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "111")
     import clawk_cli.model_selection_guards as guards
+
     monkeypatch.setattr(guards, "combined_selection_warning", lambda *a, **k: None)
 
     adapter = _gateway_wired_adapter()
@@ -116,16 +138,18 @@ async def test_group_model_picker_switch_follows_callback_allowlist(monkeypatch,
     query = SimpleNamespace(
         data="mm:0",
         message=SimpleNamespace(
-            chat_id=-100777, chat=SimpleNamespace(type="supergroup"), message_thread_id=None
+            chat_id=-100777,
+            chat=SimpleNamespace(type="supergroup"),
+            message_thread_id=None,
         ),
         from_user=SimpleNamespace(id=int(tapper_id), first_name="Tapper"),
         answer=AsyncMock(),
         edit_message_text=AsyncMock(),
     )
 
-    await adapter._handle_callback_query(SimpleNamespace(callback_query=query), MagicMock())
+    await adapter._handle_callback_query(
+        SimpleNamespace(callback_query=query), MagicMock()
+    )
 
     assert on_model_selected.await_count == (1 if switches else 0)
     assert ("-100777" in adapter._model_picker_state) is not switches
-
-

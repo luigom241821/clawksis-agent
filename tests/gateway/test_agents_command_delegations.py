@@ -59,8 +59,13 @@ async def test_agents_command_marks_stalling_delegation(monkeypatch):
         return {}
 
     res = ad.dispatch_async_delegation(
-        goal="wedged child", context=None, toolsets=None, role="leaf",
-        model="m", session_key="agent:main:test:dm:1", max_async_children=1,
+        goal="wedged child",
+        context=None,
+        toolsets=None,
+        role="leaf",
+        model="m",
+        session_key="agent:main:test:dm:1",
+        max_async_children=1,
         runner=blocked_runner,
         interrupt_fn=stalling.set,
         progress_fn=lambda: ((0, None), False),
@@ -78,5 +83,3 @@ async def test_agents_command_marks_stalling_delegation(monkeypatch):
     assert res["delegation_id"] in out
     assert "stalling" in out
     assert "no progress" in out
-
-

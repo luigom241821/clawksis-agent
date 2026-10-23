@@ -61,7 +61,9 @@ class _RecordingAdapter:
         self.sends: list[dict] = []
 
     async def send(self, chat_id: str, content: str, reply_to=None, metadata=None):
-        self.sends.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        self.sends.append(
+            {"chat_id": chat_id, "content": content, "metadata": metadata}
+        )
 
         class _R:
             success = True
@@ -130,7 +132,10 @@ async def test_goal_verdict_continue_enqueues_continuation(clawk_home):
     mgr = GoalManager(session_entry.session_id)
     mgr.set("polish the docs")
 
-    with patch("clawk_cli.goals.judge_goal", return_value=("continue", "still needs work", False, None, False)):
+    with patch(
+        "clawk_cli.goals.judge_goal",
+        return_value=("continue", "still needs work", False, None, False),
+    ):
         await runner._post_turn_goal_continuation(
             session_entry=session_entry,
             source=src,
@@ -142,7 +147,9 @@ async def test_goal_verdict_continue_enqueues_continuation(clawk_home):
     assert len(adapter.sends) == 1
     assert "Continuing toward goal" in adapter.sends[0]["content"]
     # Continuation prompt enqueued for next turn
-    assert adapter._pending_messages, "continuation prompt must be enqueued in pending_messages"
+    assert adapter._pending_messages, (
+        "continuation prompt must be enqueued in pending_messages"
+    )
 
 
 @pytest.mark.asyncio
@@ -158,7 +165,10 @@ async def test_goal_verdict_budget_exhausted_sends_pause(clawk_home):
     state.turns_used = 2
     save_goal(session_entry.session_id, state)
 
-    with patch("clawk_cli.goals.judge_goal", return_value=("continue", "keep going", False, None, False)):
+    with patch(
+        "clawk_cli.goals.judge_goal",
+        return_value=("continue", "keep going", False, None, False),
+    ):
         await runner._post_turn_goal_continuation(
             session_entry=session_entry,
             source=src,
@@ -172,5 +182,3 @@ async def test_goal_verdict_budget_exhausted_sends_pause(clawk_home):
     assert "turns used" in content.lower()
     # No continuation enqueued when budget is exhausted
     assert not adapter._pending_messages
-
-

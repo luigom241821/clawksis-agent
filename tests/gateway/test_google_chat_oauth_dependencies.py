@@ -37,7 +37,9 @@ def test_installer_repairs_stale_transitives_through_pm(monkeypatch, capsys):
     states = iter([["google-auth==2.55.1", "httplib2==0.32.0", "pyasn1==0.6.4"], []])
     monkeypatch.setattr(oauth, "_missing_required_packages", lambda: next(states))
     calls = []
-    monkeypatch.setattr(pm, "sync_venv", lambda extras, **kwargs: calls.append((extras, kwargs)))
+    monkeypatch.setattr(
+        pm, "sync_venv", lambda extras, **kwargs: calls.append((extras, kwargs))
+    )
 
     assert oauth.install_deps() is True
     assert calls == [(["google", "google-chat"], {"explicit": True})]
@@ -69,7 +71,10 @@ def test_ensure_deps_requests_every_extra_before_reporting_a_restart(monkeypatch
 
     def installs_then_needs_restart(extra):
         requested.append(extra)
-        raise pm.InstallError("venv", f"{extra} installed; restart Clawksis to activate the new dependency environment")
+        raise pm.InstallError(
+            "venv",
+            f"{extra} installed; restart Clawksis to activate the new dependency environment",
+        )
 
     monkeypatch.setattr(pm, "ensure_import", installs_then_needs_restart)
     with pytest.raises(pm.InstallError, match="google installed"):

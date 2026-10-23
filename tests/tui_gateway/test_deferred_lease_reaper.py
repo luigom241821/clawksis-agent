@@ -21,7 +21,12 @@ from tui_gateway import server
 
 def _lease(tmp_path: Path, key: str = "stored-session") -> ActiveSessionLease:
     lease, err = try_acquire_active_session(
-        session_id=key, surface="desktop", config={}, registry_home=tmp_path, track_liveness=True)
+        session_id=key,
+        surface="desktop",
+        config={},
+        registry_home=tmp_path,
+        track_liveness=True,
+    )
     assert err is None
     assert lease is not None
     return lease
@@ -56,7 +61,10 @@ def test_fresh_deferred_lease_is_kept(tmp_path):
     assert str(lease.lease_id) in server._deferred_active_session_leases
 
     # cleanup: settle normally
-    session = {"history_lock": threading.Lock(), "_deferred_active_session_lease": lease}
+    session = {
+        "history_lock": threading.Lock(),
+        "_deferred_active_session_lease": lease,
+    }
     server._release_deferred_active_session_lease(session)
     assert lease.released is True
 
@@ -64,7 +72,10 @@ def test_fresh_deferred_lease_is_kept(tmp_path):
 def test_settlement_clears_the_age_entry(tmp_path):
     lease = _lease(tmp_path)
     _defer(lease, age_seconds=0)
-    session = {"history_lock": threading.Lock(), "_deferred_active_session_lease": lease}
+    session = {
+        "history_lock": threading.Lock(),
+        "_deferred_active_session_lease": lease,
+    }
 
     server._release_deferred_active_session_lease(session)
 

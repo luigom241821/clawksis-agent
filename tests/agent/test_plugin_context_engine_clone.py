@@ -41,8 +41,10 @@ class _LockedEngine(_Engine):
 
 
 def _select(engine):
-    with (patch("plugins.context_engine.load_context_engine", return_value=None),
-          patch("clawk_cli.plugins.get_plugin_context_engine", return_value=engine)):
+    with (
+        patch("plugins.context_engine.load_context_engine", return_value=None),
+        patch("clawk_cli.plugins.get_plugin_context_engine", return_value=engine),
+    ):
         return _select_context_engine({"context": {"engine": engine.name}})
 
 

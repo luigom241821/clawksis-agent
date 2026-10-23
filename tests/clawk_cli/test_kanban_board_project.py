@@ -27,10 +27,16 @@ def fresh_home(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    for var in ("CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT", "CLAWK_KANBAN_HOME", "CLAWK_KANBAN_BOARD"):
+    for var in (
+        "CLAWK_KANBAN_DB",
+        "CLAWK_KANBAN_WORKSPACES_ROOT",
+        "CLAWK_KANBAN_HOME",
+        "CLAWK_KANBAN_BOARD",
+    ):
         monkeypatch.delenv(var, raising=False)
     try:
         import clawk_constants
+
         clawk_constants._cached_default_clawk_root = None  # type: ignore[attr-defined]
     except Exception:
         pass
@@ -76,13 +82,19 @@ def test_create_task_explicit_project_beats_board(fresh_home, tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
     with pdb.connect_closing() as pconn:
-        board_proj = pdb.create_project(pconn, name="BoardProj", primary_path=str(tmp_path / "a"))
-        task_proj = pdb.create_project(pconn, name="TaskProj", primary_path=str(tmp_path / "b"))
+        board_proj = pdb.create_project(
+            pconn, name="BoardProj", primary_path=str(tmp_path / "a")
+        )
+        task_proj = pdb.create_project(
+            pconn, name="TaskProj", primary_path=str(tmp_path / "b")
+        )
 
     kb.create_board("scoped2", name="Scoped2", project_id=board_proj)
     conn = kbc.connect(board="scoped2")
     try:
-        tid = kb.create_task(conn, title="explicit", board="scoped2", project_id=task_proj)
+        tid = kb.create_task(
+            conn, title="explicit", board="scoped2", project_id=task_proj
+        )
         assert kb.get_task(conn, tid).project_id == task_proj
     finally:
         conn.close()
@@ -100,10 +112,19 @@ def test_create_task_explicit_scratch_beats_board(fresh_home, tmp_path):
     kb.create_board("scoped3", name="Scoped3", project_id=proj_id)
     conn = kbc.connect(board="scoped3")
     try:
-        scratch = kb.get_task(conn, kb.create_task(
-            conn, title="explicit scratch", board="scoped3", workspace_kind="scratch"))
+        scratch = kb.get_task(
+            conn,
+            kb.create_task(
+                conn,
+                title="explicit scratch",
+                board="scoped3",
+                workspace_kind="scratch",
+            ),
+        )
         assert (scratch.workspace_kind, scratch.project_id) == ("scratch", None)
-        default = kb.get_task(conn, kb.create_task(conn, title="default", board="scoped3"))
+        default = kb.get_task(
+            conn, kb.create_task(conn, title="default", board="scoped3")
+        )
         assert (default.workspace_kind, default.project_id) == ("worktree", proj_id)
     finally:
         conn.close()

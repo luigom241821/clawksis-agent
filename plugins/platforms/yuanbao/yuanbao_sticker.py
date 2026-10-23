@@ -81,8 +81,13 @@ _STICKERS: list[tuple[str, str, str]] = [
 
 STICKER_MAP: dict[str, dict] = {
     name: {
-        "sticker_id": sid, "package_id": "1003", "name": name, "description": desc,
-        "width": 128, "height": 128, "formats": "png",
+        "sticker_id": sid,
+        "package_id": "1003",
+        "name": name,
+        "description": desc,
+        "width": 128,
+        "height": 128,
+        "formats": "png",
     }
     for name, sid, desc in _STICKERS
 }
@@ -107,7 +112,15 @@ def get_sticker_by_name(name: str) -> Optional[dict]:
 
 def get_random_sticker(category: str | None = None) -> dict:
     """随机贴纸；指定 category 时优先在 description/name 含该词的贴纸中选取。"""
-    candidates = [s for s in STICKER_MAP.values() if category in s["description"] or category in s["name"]] if category else []
+    candidates = (
+        [
+            s
+            for s in STICKER_MAP.values()
+            if category in s["description"] or category in s["name"]
+        ]
+        if category
+        else []
+    )
     return random.choice(candidates or list(STICKER_MAP.values()))
 
 
@@ -132,13 +145,17 @@ def _compact_text(raw: str) -> str:
 
 
 def _multiset_char_hit_ratio(needle: str, haystack: str) -> float:
-    return sum((Counter(needle) & Counter(haystack)).values()) / len(needle) if needle else 0.0
+    return (
+        sum((Counter(needle) & Counter(haystack)).values()) / len(needle)
+        if needle
+        else 0.0
+    )
 
 
 def _bigram_jaccard(a: str, b: str) -> float:
     if len(a) < 2 or len(b) < 2:
         return 0.0
-    A, B = ({x[i:i + 2] for i in range(len(x) - 1)} for x in (a, b))
+    A, B = ({x[i : i + 2] for i in range(len(x) - 1)} for x in (a, b))
     return len(A & B) / len(A | B)
 
 
@@ -185,18 +202,41 @@ def search_stickers(query: str, limit: int = 10) -> list[dict]:
     scored: list[tuple[float, dict]] = []
     for sticker in STICKER_MAP.values():
         sid_norm = _normalize_text(sticker["sticker_id"].strip())
-        id_s = 100.0 if sid_norm == q_norm else 84.0 if sid_norm and q_norm in sid_norm else 0.0
-        scored.append((max(_score_field(sticker["name"], query), _score_field(sticker["description"], query) * 0.88, id_s), sticker))
+        id_s = (
+            100.0
+            if sid_norm == q_norm
+            else 84.0
+            if sid_norm and q_norm in sid_norm
+            else 0.0
+        )
+        scored.append(
+            (
+                max(
+                    _score_field(sticker["name"], query),
+                    _score_field(sticker["description"], query) * 0.88,
+                    id_s,
+                ),
+                sticker,
+            )
+        )
     scored.sort(key=lambda x: x[0], reverse=True)
     top = scored[0][0] if scored else 0
     if top <= 0:
         return [s for _, s in scored[:safe_limit]]
-    floor = 18.0 if top >= 22 else max(10.0, top * 0.5) if top >= 12 else max(6.0, top * 0.35)
+    floor = (
+        18.0
+        if top >= 22
+        else max(10.0, top * 0.5)
+        if top >= 12
+        else max(6.0, top * 0.35)
+    )
     filtered = [pair for pair in scored if pair[0] >= floor]
     return [s for _, s in (filtered or scored)[:safe_limit]]
 
 
-def build_face_msg_body(face_index: int, face_type: int = 1, data: Optional[str] = None) -> list:
+def build_face_msg_body(
+    face_index: int, face_type: int = 1, data: Optional[str] = None
+) -> list:
     """TIMFaceElem 消息体。Yuanbao 约定 index 固定 0（服务端通过 data 字段识别表情）；face_index > 0 视为旧版 QQ
     表情 ID。face_type 为兼容旧接口保留，不影响 wire format。data 为 None 时仅传 index。"""
     msg_content: dict = {"index": face_index}
@@ -209,10 +249,14 @@ def build_sticker_msg_body(sticker: dict) -> list:
     """从 STICKER_MAP 的 sticker dict 构造 TIMFaceElem 消息体（data 字段与原始 JS 插件一致）。"""
     data_payload = json.dumps(
         {
-            "sticker_id": sticker["sticker_id"], "package_id": sticker["package_id"],
-            "width": sticker.get("width", 128), "height": sticker.get("height", 128),
-            "formats": sticker.get("formats", "png"), "name": sticker["name"],
+            "sticker_id": sticker["sticker_id"],
+            "package_id": sticker["package_id"],
+            "width": sticker.get("width", 128),
+            "height": sticker.get("height", 128),
+            "formats": sticker.get("formats", "png"),
+            "name": sticker["name"],
         },
-        ensure_ascii=False, separators=(",", ":"),
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
     return build_face_msg_body(face_index=0, data=data_payload)

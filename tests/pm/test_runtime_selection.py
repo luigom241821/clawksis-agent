@@ -1,4 +1,5 @@
 """Install-scoped dependency selection is readable before third-party imports."""
+
 import json
 from pathlib import Path
 
@@ -20,9 +21,16 @@ def test_install_runtime_selection_is_scoped_and_read_only(tmp_path, monkeypatch
     generation = state / "environments" / "candidate" / "venv"
     generation.mkdir(parents=True)
     (generation / "pyvenv.cfg").write_text("home = test\n")
-    (state / "facts.json").write_text(json.dumps({
-        "schema": 1, "packages": {"venv": {"environment": str(generation), "stamp": "verified"}},
-    }))
+    (state / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {
+                    "venv": {"environment": str(generation), "stamp": "verified"}
+                },
+            }
+        )
+    )
     assert runtime_paths.selected_venv(first) == generation
     assert runtime_paths.selected_venv(second) == second / ".venv"
     monkeypatch.setenv("CLAWK_HOME", str(home / "profiles" / "work"))
@@ -41,30 +49,44 @@ def test_boot_uses_one_selected_dependency_tree_in_fresh_process(tmp_path, monke
     monkeypatch.setenv("CLAWK_HOME", str(home))
     state = runtime_paths.install_state_dir(root)
     selected = state / "environments" / "new" / "venv"
+
     def site_of(venv):
-        return venv / ("Lib/site-packages" if os.name == "nt" else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")
+        return venv / (
+            "Lib/site-packages"
+            if os.name == "nt"
+            else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+
     for venv, version in [(base, "old"), (selected, "new")]:
         site = site_of(venv)
         site.mkdir(parents=True)
         (venv / "pyvenv.cfg").write_text("home = test")
         (site / "probe_package.py").write_text(f"version = {version!r}")
     (site_of(base) / "base_only.py").write_text("version = 'must-not-leak'")
-    (state / "facts.json").write_text(json.dumps({"schema": 1, "packages": {
-        "venv": {"environment": str(selected)}
-    }}))
+    (state / "facts.json").write_text(
+        json.dumps({"schema": 1, "packages": {"venv": {"environment": str(selected)}}})
+    )
     code = (
         "import sys; from pathlib import Path; from pm.environments import activate_dependencies; "
         "sys.path.insert(0, sys.argv[2]); activate_dependencies(Path(sys.argv[1])); "
         "import probe_package, importlib.util; print(probe_package.version); "
         "print(importlib.util.find_spec('base_only') is None)"
     )
-    process = subprocess.run([sys.executable, "-c", code, str(root), str(site_of(base))],
-                             env=dict(os.environ), text=True, capture_output=True, timeout=30, check=False)
+    process = subprocess.run(
+        [sys.executable, "-c", code, str(root), str(site_of(base))],
+        env=dict(os.environ),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
     assert process.returncode == 0, process.stderr
     assert process.stdout.splitlines() == ["new", "True"]
 
 
-def test_boot_puts_the_checkout_launcher_ahead_of_the_venvs_own_console_script(tmp_path, monkeypatch):
+def test_boot_puts_the_checkout_launcher_ahead_of_the_venvs_own_console_script(
+    tmp_path, monkeypatch
+):
     """#124627: the venv's `clawk` console script is an editable install bound to the
     build-time source snapshot. A child resolving `clawk` off PATH must reach the
     checkout's own launcher, never that stale copy."""
@@ -78,8 +100,14 @@ def test_boot_puts_the_checkout_launcher_ahead_of_the_venvs_own_console_script(t
     monkeypatch.setenv("CLAWK_HOME", str(home))
     state = runtime_paths.install_state_dir(root)
     selected = state / "environments" / "new" / "venv"
+
     def site_of(venv):
-        return venv / ("Lib/site-packages" if os.name == "nt" else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")
+        return venv / (
+            "Lib/site-packages"
+            if os.name == "nt"
+            else f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+        )
+
     site_of(selected).mkdir(parents=True)
     (selected / "pyvenv.cfg").write_text("home = test")
     venv_bin = runtime_paths.venv_bin_dir(selected)
@@ -87,23 +115,39 @@ def test_boot_puts_the_checkout_launcher_ahead_of_the_venvs_own_console_script(t
     checkout_bin = root / ".clawk" / "bin"
     checkout_bin.mkdir(parents=True)
     state.mkdir(parents=True, exist_ok=True)
-    (state / "facts.json").write_text(json.dumps({"schema": 1, "packages": {
-        "venv": {"environment": str(selected)}
-    }}))
+    (state / "facts.json").write_text(
+        json.dumps({"schema": 1, "packages": {"venv": {"environment": str(selected)}}})
+    )
     code = (
         "import os, sys; from pathlib import Path; from pm.environments import activate_dependencies; "
         "activate_dependencies(Path(sys.argv[1])); print(os.environ.get('PATH', ''))"
     )
-    process = subprocess.run([sys.executable, "-c", code, str(root)],
-                             env=dict(os.environ), text=True, capture_output=True, timeout=30, check=False)
+    process = subprocess.run(
+        [sys.executable, "-c", code, str(root)],
+        env=dict(os.environ),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
     assert process.returncode == 0, process.stderr
     entries = process.stdout.strip().split(os.pathsep)
     assert entries.index(str(checkout_bin)) < entries.index(str(venv_bin))
 
 
-@pytest.mark.parametrize("command,allowed", [(["pm", "install", "--help"], True), (["pm", "doctor"], True),
-    (["-p", "default", "pm", "repair"], True), (["chat"], False), (["chat", "pm", "install"], False)])
-def test_broken_environment_keeps_explicit_repair_entry_reachable(tmp_path, monkeypatch, command, allowed):
+@pytest.mark.parametrize(
+    "command,allowed",
+    [
+        (["pm", "install", "--help"], True),
+        (["pm", "doctor"], True),
+        (["-p", "default", "pm", "repair"], True),
+        (["chat"], False),
+        (["chat", "pm", "install"], False),
+    ],
+)
+def test_broken_environment_keeps_explicit_repair_entry_reachable(
+    tmp_path, monkeypatch, command, allowed
+):
     import os
     import subprocess
     import sys
@@ -113,10 +157,18 @@ def test_broken_environment_keeps_explicit_repair_entry_reachable(tmp_path, monk
     repo = Path(__file__).resolve().parents[2]
     record = runtime_facts_path(repo)
     record.parent.mkdir(parents=True)
-    record.write_text(json.dumps({"packages": {"venv": {"environment": str(tmp_path / "missing")}}}))
+    record.write_text(
+        json.dumps({"packages": {"venv": {"environment": str(tmp_path / "missing")}}})
+    )
     code = "import sys; sys.argv = ['clawk', *sys.argv[1:]]; import clawk_bootstrap; print('bootstrap-ready')"
-    result = subprocess.run([sys.executable, "-c", code, *command], env=dict(os.environ),
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-c", code, *command],
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert (result.returncode == 0) is allowed, result.stderr
     if not allowed:
         assert "clawk pm repair" in result.stderr
@@ -137,19 +189,40 @@ def test_manual_repair_bypasses_damaged_generation_activation(tmp_path, monkeypa
     (environment / "pyvenv.cfg").write_text("home = test", encoding="utf-8")
     (generation / ".lease-managed").touch()
     (generation / ".leases").write_text("not a directory", encoding="utf-8")
-    runtime_facts_path(repo).write_text(json.dumps({"schema": 1, "packages": {"venv": {
-        "environment": str(environment), "extras": [], "stamp": "old",
-    }}}), encoding="utf-8")
+    runtime_facts_path(repo).write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {
+                    "venv": {
+                        "environment": str(environment),
+                        "extras": [],
+                        "stamp": "old",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     env = {**os.environ, "PYTHONPATH": str(repo)}
-    result = subprocess.run([sys.executable, "-S", "-m", "clawk_cli.main", "pm", "repair", "--help"],
-                            cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [sys.executable, "-S", "-m", "clawk_cli.main", "pm", "repair", "--help"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     assert "clawk pm repair" in result.stdout
 
 
 @pytest.mark.parametrize("interpreter", ["store", "venv"])
 @pytest.mark.parametrize("with_state", [True, False])
-def test_boot_never_activates_the_pre_pm_venv(tmp_path, monkeypatch, interpreter, with_state):
+def test_boot_never_activates_the_pre_pm_venv(
+    tmp_path, monkeypatch, interpreter, with_state
+):
     """Nothing committed must not mean "load the in-tree venv": it was built for another
     interpreter, so PM's store Python lost every compiled module from it after an update."""
     import os
@@ -172,7 +245,11 @@ def test_boot_never_activates_the_pre_pm_venv(tmp_path, monkeypatch, interpreter
         runtime_paths.install_state_dir(root).mkdir(parents=True)
     python = base_python
     if interpreter == "venv":
-        subprocess.run([base_python, "-m", "venv", "--without-pip", str(tmp_path / "dev")], check=True, timeout=60)
+        subprocess.run(
+            [base_python, "-m", "venv", "--without-pip", str(tmp_path / "dev")],
+            check=True,
+            timeout=60,
+        )
         python = str(runtime_paths.venv_python(tmp_path / "dev"))
     repo = Path(__file__).resolve().parents[2]
     code = (
@@ -182,17 +259,27 @@ def test_boot_never_activates_the_pre_pm_venv(tmp_path, monkeypatch, interpreter
         "except RuntimeError as exc:\n    print('refused:', exc); raise SystemExit(0)\n"
         "print('legacy importable:', importlib.util.find_spec('legacy_only') is not None)"
     )
-    result = subprocess.run([python, "-I", "-c", code, str(repo), str(root)], env=dict(os.environ),
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [python, "-I", "-c", code, str(repo), str(root)],
+        env=dict(os.environ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
-    expected = ("refused: no dependency environment is committed" if interpreter == "store"
-                else "legacy importable: False")
+    expected = (
+        "refused: no dependency environment is committed"
+        if interpreter == "store"
+        else "legacy importable: False"
+    )
     assert result.stdout.strip().startswith(expected), result.stdout
 
 
 @pytest.mark.parametrize("data", [[], {"packages": []}, {"packages": {"venv": []}}])
 def test_malformed_selection_has_actionable_error(tmp_path, monkeypatch, data):
     from pm import environments as runtime_paths
+
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
     record = runtime_paths.runtime_facts_path(tmp_path / "repo")
     record.parent.mkdir(parents=True)
@@ -202,7 +289,9 @@ def test_malformed_selection_has_actionable_error(tmp_path, monkeypatch, data):
 
 
 @pytest.mark.parametrize("bad_path", ["outside", "missing"])
-def test_invalid_selected_environment_never_silently_falls_back(tmp_path, monkeypatch, bad_path):
+def test_invalid_selected_environment_never_silently_falls_back(
+    tmp_path, monkeypatch, bad_path
+):
     from pm import environments as runtime_paths
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
@@ -210,12 +299,21 @@ def test_invalid_selected_environment_never_silently_falls_back(tmp_path, monkey
     (root / "venv").mkdir(parents=True)
     state = runtime_paths.install_state_dir(root)
     state.mkdir(parents=True)
-    candidate = tmp_path / "outside" if bad_path == "outside" else state / "environments" / "missing"
+    candidate = (
+        tmp_path / "outside"
+        if bad_path == "outside"
+        else state / "environments" / "missing"
+    )
     if bad_path == "outside":
         candidate.mkdir()
         (candidate / "pyvenv.cfg").write_text("home = test\n")
-    (state / "facts.json").write_text(json.dumps({
-        "schema": 1, "packages": {"venv": {"environment": str(candidate)}},
-    }))
+    (state / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {"venv": {"environment": str(candidate)}},
+            }
+        )
+    )
     with pytest.raises(RuntimeError, match="environment"):
         runtime_paths.selected_venv(root)

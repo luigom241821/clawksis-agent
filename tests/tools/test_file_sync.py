@@ -10,7 +10,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.environments.file_sync import FileSyncManager, _FORCE_SYNC_ENV, iter_sync_files
+from tools.environments.file_sync import (
+    FileSyncManager,
+    _FORCE_SYNC_ENV,
+    iter_sync_files,
+)
 
 
 @pytest.fixture
@@ -55,7 +59,9 @@ class TestMtimeSkip:
         mgr.sync(force=True)
         assert upload.call_count == 0, "unchanged files should not be re-uploaded"
 
-    def test_same_size_in_place_rewrite_on_a_coarse_clock_is_re_uploaded(self, tmp_path, monkeypatch):
+    def test_same_size_in_place_rewrite_on_a_coarse_clock_is_re_uploaded(
+        self, tmp_path, monkeypatch
+    ):
         """A filesystem whose timestamps did not tick between the sync and a rewrite (coarse mtime
         AND ctime): a same-size in-place rewrite keeps every stat field, so a key recorded while its
         mtime was that fresh must be confirmed by content before it is trusted."""
@@ -70,14 +76,22 @@ class TestMtimeSkip:
 
         def frozen_clock_stat(path, *args, **kwargs):
             st = real_stat(path, *args, **kwargs)
-            return SimpleNamespace(st_mtime_ns=frozen_ns, st_ctime_ns=frozen_ns, st_size=st.st_size,
-                                   st_ino=st.st_ino, st_mode=st.st_mode, st_mtime=frozen_ns / 1e9)
+            return SimpleNamespace(
+                st_mtime_ns=frozen_ns,
+                st_ctime_ns=frozen_ns,
+                st_size=st.st_size,
+                st_ino=st.st_ino,
+                st_mode=st.st_mode,
+                st_mtime=frozen_ns / 1e9,
+            )
 
         monkeypatch.setattr(pathlib.Path, "stat", frozen_clock_stat)
         uploaded = []
 
         def bulk_upload(files):
-            uploaded.extend(Path(staged).read_text(encoding="utf-8") for staged, _remote in files)
+            uploaded.extend(
+                Path(staged).read_text(encoding="utf-8") for staged, _remote in files
+            )
 
         mgr = FileSyncManager(
             get_files_fn=lambda: [(str(token), "/root/.clawksis/token.json")],
@@ -86,7 +100,9 @@ class TestMtimeSkip:
             bulk_upload_fn=bulk_upload,
         )
         mgr.sync(force=True)
-        mgr.sync(force=True)  # unchanged bytes: confirmed by content, not uploaded again
+        mgr.sync(
+            force=True
+        )  # unchanged bytes: confirmed by content, not uploaded again
 
         token.write_text('{"access":"BBBB"}', encoding="utf-8")
         mgr.sync(force=True)
@@ -104,7 +120,9 @@ class TestMtimeSkip:
         uploaded = []
 
         def bulk_upload(files):
-            uploaded.extend(Path(staged).read_text(encoding="utf-8") for staged, _remote in files)
+            uploaded.extend(
+                Path(staged).read_text(encoding="utf-8") for staged, _remote in files
+            )
 
         mgr = FileSyncManager(
             get_files_fn=lambda: [(str(token), "/root/.clawksis/token.json")],
@@ -121,7 +139,6 @@ class TestMtimeSkip:
         mgr.sync(force=True)
 
         assert uploaded == ['{"access":"AAAA"}', '{"access":"BBBB"}']
-
 
     def test_new_file_detected(self, tmp_files, tmp_path):
         upload = MagicMock()
@@ -164,7 +181,6 @@ class TestDeletion:
         delete.assert_called_once()
         deleted_paths = delete.call_args[0][0]
         assert any("cred_b.json" in p for p in deleted_paths)
-
 
 
 class TestTransactionalRollback:
@@ -211,7 +227,9 @@ class TestTransactionalRollback:
         mgr.sync(force=True)
         good_delete.assert_called_once()
 
-    def test_a_file_vanishing_mid_plan_is_retried_not_raised(self, tmp_files, monkeypatch):
+    def test_a_file_vanishing_mid_plan_is_retried_not_raised(
+        self, tmp_files, monkeypatch
+    ):
         """sync() runs before every terminal command: a file removed between its stat and the
         content check (a credential being rotated) must fail the cycle quietly, not the command."""
         import tools.environments.file_sync as file_sync_mod
@@ -232,7 +250,9 @@ class TestTransactionalRollback:
         monkeypatch.setattr(file_sync_mod, "_sha256_file", real_sha)
         upload.reset_mock()
         mgr.sync(force=True)
-        assert upload.call_count == 0, "the retry confirms the unchanged bytes instead of re-uploading"
+        assert upload.call_count == 0, (
+            "the retry confirms the unchanged bytes instead of re-uploading"
+        )
 
 
 class TestRateLimiting:
@@ -252,7 +272,6 @@ class TestRateLimiting:
         # Without force, should skip due to rate limit
         mgr.sync()
         assert upload.call_count == 0
-
 
     def test_env_var_forces_sync(self, tmp_files, tmp_path):
         upload = MagicMock()
@@ -313,7 +332,6 @@ class TestRateLimiting:
 
 
 class TestEdgeCases:
-
     def test_file_disappears_between_list_and_upload(self, tmp_path):
         """File listed by get_files but deleted before _file_mtime_key reads it."""
         f = tmp_path / "ephemeral.txt"
@@ -389,7 +407,9 @@ class TestConcurrency:
 
 class TestSyncBackSecurity:
     @pytest.mark.platforms("linux")
-    def test_sync_back_does_not_overwrite_uploaded_credential_files(self, tmp_path, monkeypatch):
+    def test_sync_back_does_not_overwrite_uploaded_credential_files(
+        self, tmp_path, monkeypatch
+    ):
         credential = tmp_path / "token.json"
         credential.write_text("host-token", encoding="utf-8")
         skill = tmp_path / "skill.py"
@@ -444,8 +464,6 @@ class TestSyncBackSecurity:
 
 class TestBulkUpload:
     """Tests for the optional bulk_upload_fn callback."""
-
-
 
     def test_bulk_upload_rollback_on_failure(self, tmp_files):
         """Bulk upload failure rolls back synced state so next sync retries."""

@@ -13,11 +13,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-
 @pytest.fixture(autouse=True)
 def _clear_probe_cache():
     """Module-level caches must not leak between tests."""
     from agent import model_metadata
+
     model_metadata._LOCAL_CTX_PROBE_CACHE.clear()
     model_metadata._endpoint_probe_path_cache.clear()
     yield
@@ -44,7 +44,6 @@ def _client_mock(resp):
 
 
 class TestOllamaApiShowCaching:
-
     def test_failure_never_memoized(self):
         """A down server must be re-probed on the next call (startup race)."""
         from agent.model_metadata import _query_ollama_api_show
@@ -57,8 +56,6 @@ class TestOllamaApiShowCaching:
             assert _query_ollama_api_show("llama3", "http://127.0.0.1:11434") is None
 
         assert client.post.call_count == 2  # None was NOT cached
-
-
 
 
 class TestDetectLocalServerTypeCache:
@@ -83,7 +80,6 @@ class TestDetectLocalServerTypeCache:
         client.get.side_effect = _get
         return client
 
-
     def test_ttl_expiry_allows_server_swap_redetection(self):
         """Stopping Ollama and starting LM Studio on the same port must be
         re-detected once the TTL lapses — the cache is bounded, not
@@ -99,12 +95,14 @@ class TestDetectLocalServerTypeCache:
         # Age the entry past the TTL, then swap the backend behind the URL.
         ((key, (val, _ts)),) = list(model_metadata._endpoint_probe_path_cache.items())
         model_metadata._endpoint_probe_path_cache[key] = (
-            val, _time.monotonic() - model_metadata._ENDPOINT_PROBE_TTL_SECONDS - 1,
+            val,
+            _time.monotonic() - model_metadata._ENDPOINT_PROBE_TTL_SECONDS - 1,
         )
         # Age the disk L2 entry too. Its TTL (300s) is much shorter than the
         # in-proc TTL (1h), so in real time-flow it always expires first —
         # this test compresses both expiries into one instant.
         import json as _json
+
         _disk = model_metadata._local_probe_disk_cache_path()
         if _disk.exists():
             _data = _json.loads(_disk.read_text(encoding="utf-8"))
@@ -125,7 +123,8 @@ class TestDetectLocalServerTypeCache:
         def _get(url, *a, **k):
             if url.endswith("/api/v1/models"):
                 return lmstudio_resp
-            miss = MagicMock(); miss.status_code = 404
+            miss = MagicMock()
+            miss.status_code = 404
             return miss
 
         swap_client.get.side_effect = _get
@@ -167,11 +166,21 @@ class TestLocalhostIPv4SiblingSites:
         mm._endpoint_model_metadata_cache_time.clear()
         responses, requests = metadata_transport
         models = [{"id": "llama-3-8b", "owned_by": "llamacpp"}] if llamacpp else []
-        responses.extend([
-            httpx.Response(200, json={"data": models}),
-            httpx.Response(200, json={"default_generation_settings": {"n_ctx": 32768}, "model_alias": "llama-3-8b"}),
-        ])
-        result = mm.fetch_endpoint_model_metadata("http://localhost:8000/v1", force_refresh=True)
+        responses.extend(
+            [
+                httpx.Response(200, json={"data": models}),
+                httpx.Response(
+                    200,
+                    json={
+                        "default_generation_settings": {"n_ctx": 32768},
+                        "model_alias": "llama-3-8b",
+                    },
+                ),
+            ]
+        )
+        result = mm.fetch_endpoint_model_metadata(
+            "http://localhost:8000/v1", force_refresh=True
+        )
         assert len(requests) == (2 if llamacpp else 1)
         assert all(request.url.host == "127.0.0.1" for request in requests)
         if llamacpp:
@@ -184,19 +193,22 @@ class TestContextCacheKeyNormalization:
         from agent import model_metadata
 
         monkeypatch.setattr(
-            model_metadata, "_get_context_cache_path",
+            model_metadata,
+            "_get_context_cache_path",
             lambda: tmp_path / "context_lengths.yaml",
         )
 
         model_metadata.save_context_length("m1", "http://host/v1/", 200_000)
         # Both slash variants resolve to the same row.
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1") == 200_000
-        assert model_metadata.get_cached_context_length("m1", "http://host/v1/") == 200_000
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1") == 200_000
+        )
+        assert (
+            model_metadata.get_cached_context_length("m1", "http://host/v1/") == 200_000
+        )
 
         cache = model_metadata._load_context_cache()
         assert list(cache.keys()) == ["m1@http://host/v1"]
-
-
 
     def test_invalidate_clears_both_key_shapes(self, tmp_path, monkeypatch):
         import clawk_yaml as yaml
@@ -204,10 +216,16 @@ class TestContextCacheKeyNormalization:
 
         path = tmp_path / "context_lengths.yaml"
         monkeypatch.setattr(model_metadata, "_get_context_cache_path", lambda: path)
-        path.write_text(yaml.safe_dump({"context_lengths": {
-            "m1@http://host/v1": 128_000,
-            "m1@http://host/v1/": 64_000,
-        }}))
+        path.write_text(
+            yaml.safe_dump(
+                {
+                    "context_lengths": {
+                        "m1@http://host/v1": 128_000,
+                        "m1@http://host/v1/": 64_000,
+                    }
+                }
+            )
+        )
 
         model_metadata._invalidate_cached_context_length("m1", "http://host/v1/")
         cache = model_metadata._load_context_cache()
@@ -247,7 +265,6 @@ class TestDetectServerTypeNegativeCaching:
         assert after_first > 0
         assert client.get.call_count == after_first
 
-
     def test_negative_verdict_expires_quickly(self):
         """The short failure TTL keeps a transient failure recoverable."""
         import time as _time
@@ -268,5 +285,3 @@ class TestDetectServerTypeNegativeCaching:
             assert detect_local_server_type("http://remote3:8080/v1") is None
 
         assert client.get.call_count == 2 * after_first  # waterfall re-ran after expiry
-
-

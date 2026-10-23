@@ -1,4 +1,5 @@
 """Shared-session routing and backpressure, exercised through real OS pipes."""
+
 import asyncio
 import json
 import os
@@ -95,6 +96,7 @@ class PipeClient:
 class _SocketWS:
     """ASGI-ws stand-in: send goes to the socketpair (or never completes when client is None);
     close records its code."""
+
     def __init__(self, client=None):
         self.client, self.close_codes = client, []
 
@@ -109,6 +111,7 @@ class _SocketWS:
 
 class SocketClient(WSTransport):
     """Real WSTransport with its ASGI send backed by a kernel socketpair."""
+
     def __init__(self, stack, *, reading=True):
         self.reader, self.writer = socket.socketpair()
         self.writer.setblocking(False)
@@ -139,10 +142,15 @@ class SocketClient(WSTransport):
     def _cleanup(self):
         async def cancel_sends():
             self.close()
-            tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+            tasks = [
+                task
+                for task in asyncio.all_tasks()
+                if task is not asyncio.current_task()
+            ]
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+
         asyncio.run_coroutine_threadsafe(cancel_sends(), self._loop).result(timeout=5)
         self.writer.close()
         if self.read_thread:
@@ -155,13 +163,22 @@ class SocketClient(WSTransport):
 
 
 def _session(transport):
-    return dict(transport=transport, agent=None, session_key="fanout-invariant",
-                history=[], history_lock=threading.Lock(), history_version=0,
-                running=False, attached_images=[])
+    return dict(
+        transport=transport,
+        agent=None,
+        session_key="fanout-invariant",
+        history=[],
+        history_lock=threading.Lock(),
+        history_version=0,
+        running=False,
+        attached_images=[],
+    )
 
 
 @pytest.mark.parametrize("attachment", ["direct", "flattened"])
-def test_membership_preserves_terminal_delivery_and_revokes_departed_peers(monkeypatch, attachment):
+def test_membership_preserves_terminal_delivery_and_revokes_departed_peers(
+    monkeypatch, attachment
+):
     with ExitStack() as stack:
         a, b, stranger = [PipeClient(stack) for _ in range(3)]
         session = _session(a)
@@ -177,36 +194,59 @@ def test_membership_preserves_terminal_delivery_and_revokes_departed_peers(monke
         for client, allowed in ((a, True), (b, True), (stranger, False)):
             token = server.bind_transport(client)
             try:
-                assert (server._current_session_steer_authority("fanout-invariant")[0] is client) == allowed
+                assert (
+                    server._current_session_steer_authority("fanout-invariant")[0]
+                    is client
+                ) == allowed
             finally:
                 server.reset_transport(token)
         # RPC replies stay on their request transport, never the subscriber set.
         token = server.bind_transport(a)
         try:
-            assert server.write_json({"jsonrpc": "2.0", "id": "private", "result": "owner only"})
+            assert server.write_json(
+                {"jsonrpc": "2.0", "id": "private", "result": "owner only"}
+            )
         finally:
             server.reset_transport(token)
         assert a.receive()["id"] == "private"
         assert b.frames.empty()
         from gateway import browser_control_broker as broker_module
+
         monkeypatch.setattr(broker_module, "browser_control_enabled", lambda: True)
         for client in (a, b, stranger):
             client.auth_identity = {"user_id": "fanout-owner", "provider": "fixture"}
         session["profile"] = "default"
 
         def controller(client, action, **params):
-            return server.dispatch({"jsonrpc": "2.0", "id": 1,
-                                    "method": "browser.controller." + action,
-                                    "params": {"session_id": "fanout-invariant", **params}}, client)
+            return server.dispatch(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "browser.controller." + action,
+                    "params": {"session_id": "fanout-invariant", **params},
+                },
+                client,
+            )
 
-        registered = controller(a, "register", controller_id="invariant",
-                                browser_profile_id="fixture", capabilities=["controller.noop"],
-                                protocol_version=broker_module.BROWSER_CONTROL_PROTOCOL_VERSION)
+        registered = controller(
+            a,
+            "register",
+            controller_id="invariant",
+            browser_profile_id="fixture",
+            capabilities=["controller.noop"],
+            protocol_version=broker_module.BROWSER_CONTROL_PROTOCOL_VERSION,
+        )
         assert "result" in registered, registered
         try:
             assert controller(a, "heartbeat")["result"] == {"ok": True}
-            assert controller(b, "heartbeat")["error"]["message"] == "controller is not owned by this transport"
-            assert controller(stranger, "heartbeat")["error"]["message"] == "session is not owned by this transport"
+            assert (
+                controller(b, "heartbeat")["error"]["message"]
+                == "controller is not owned by this transport"
+            )
+            assert (
+                controller(stranger, "heartbeat")["error"]["message"]
+                == "session is not owned by this transport"
+            )
         finally:
             controller(a, "detach")
         session["viewers"] = {b: object(), stranger: object()}
@@ -233,7 +273,9 @@ def test_membership_preserves_terminal_delivery_and_revokes_departed_peers(monke
 @pytest.mark.parametrize("client_type", [PipeClient, SocketClient])
 @pytest.mark.parametrize("slow_first", [True, False])
 @pytest.mark.parametrize("on_loop", [True, False])
-def test_backpressure_never_blocks_later_frames_or_other_subscribers(slow_first, on_loop, client_type, monkeypatch):
+def test_backpressure_never_blocks_later_frames_or_other_subscribers(
+    slow_first, on_loop, client_type, monkeypatch
+):
     monkeypatch.setattr("tui_gateway.ws._WS_WRITE_TIMEOUT_S", 0.01)
     monkeypatch.setattr("tui_gateway.ws._TOKEN_COALESCE_S", 0)
     with ExitStack() as stack:
@@ -264,13 +306,18 @@ def test_backpressure_never_blocks_later_frames_or_other_subscribers(slow_first,
         async def loop_emit():
             emit()
 
-        worker = threading.Thread(target=(lambda: asyncio.run(loop_emit())) if on_loop else emit, daemon=True)
+        worker = threading.Thread(
+            target=(lambda: asyncio.run(loop_emit())) if on_loop else emit, daemon=True
+        )
         worker.start()
         try:
             assert returned.wait(3), "slow subscriber blocked the emitting turn"
             assert not errors
             assert [healthy.receive()["params"]["type"] for _ in range(3)] == [
-                "message.start", "message.delta", "message.complete"]
+                "message.start",
+                "message.delta",
+                "message.complete",
+            ]
             # Exhaust only the slow peer's bounded backlog; pace the healthy
             # reader by receipts so scheduler latency cannot make it overflow.
             for n in range(FanoutTransport._MAX_PENDING_FRAMES + 64):
@@ -311,7 +358,9 @@ def test_overflow_closes_only_the_slow_peer_and_healthy_keeps_streaming():
         deadline = time.monotonic() + 2.0
         while not stalled_ws.close_codes and time.monotonic() < deadline:
             time.sleep(0.001)
-        assert stalled_ws.close_codes == [1011]  # the overflow itself aborted the socket
+        assert stalled_ws.close_codes == [
+            1011
+        ]  # the overflow itself aborted the socket
         slow.abort()  # a second overflow signal must not schedule a second socket close
         time.sleep(0.05)
         assert stalled_ws.close_codes == [1011]

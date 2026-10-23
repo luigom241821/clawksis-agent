@@ -3,6 +3,7 @@
 Operations own source, destination and publication. Bootstrap may inject its
 staged toolchain directly without recursing through the worker it is building.
 """
+
 from __future__ import annotations
 
 import codecs
@@ -56,9 +57,11 @@ _BUILD_MARKERS = ("the build backend returned an error",)
 # and hints the version was filtered, so that case needs both lines.
 _UNDATED_PIN = "has no publish time"
 _UNDATED_FILE = ("is missing an upload date", "was filtered by `exclude-newer")
-UNDATED_INDEX_HINT = ("the package index did not report upload times, which locking Clawksis's "
-                      "dependencies needs for its 3-day release-age check. Use https://pypi.org/simple "
-                      "or a mirror that serves upload times (pip.conf index-url / UV_INDEX_URL), then retry.")
+UNDATED_INDEX_HINT = (
+    "the package index did not report upload times, which locking Clawksis's "
+    "dependencies needs for its 3-day release-age check. Use https://pypi.org/simple "
+    "or a mirror that serves upload times (pip.conf index-url / UV_INDEX_URL), then retry."
+)
 
 # uv's own English diagnostic. A localized Windows tail (os error 1224) rides
 # along, but the marker that means "packages may be installed, only the
@@ -122,10 +125,13 @@ def _project_name(source: Path) -> str:
         import tomllib
     except ModuleNotFoundError:
         import re
+
         table = re.search(r"(?ms)^\[project\]\s*$(.*?)(?=^\[)", text + "\n[")
         match = table and re.search(r'(?m)^name\s*=\s*"([^"]+)"', table.group(1))
         if not match:
-            raise InstallError("venv", f"{source / 'pyproject.toml'} has no [project].name")
+            raise InstallError(
+                "venv", f"{source / 'pyproject.toml'} has no [project].name"
+            )
         return match.group(1)
     return tomllib.loads(text)["project"]["name"]
 
@@ -175,14 +181,31 @@ def _read_pipe(fd: int) -> bytes:
     return os.read(fd, size)
 
 
-def _run_streaming(command: list[str], *, cwd: Path, env: dict[str, str],
-                   timeout: int, output: TextSink) -> subprocess.CompletedProcess:
+def _run_streaming(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout: int,
+    output: TextSink,
+) -> subprocess.CompletedProcess:
     """Keep CI progress live, a bounded diagnostic tail, and a wall-clock timeout."""
     deadline = time.monotonic() + timeout
-    proc = subprocess.Popen(command, cwd=native(cwd), env=env, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace", bufsize=0)
+    proc = subprocess.Popen(
+        command,
+        cwd=native(cwd),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=0,
+    )
     pipe = proc.stdout
-    assert isinstance(pipe, io.TextIOWrapper)  # Popen was given stdout=PIPE and text=True.
+    assert isinstance(
+        pipe, io.TextIOWrapper
+    )  # Popen was given stdout=PIPE and text=True.
     tail = ""
     conflict = ""
     try:
@@ -191,7 +214,8 @@ def _run_streaming(command: list[str], *, cwd: Path, env: dict[str, str],
         if sys.platform != "win32":
             os.set_blocking(pipe.fileno(), False)
         decoder = io.IncrementalNewlineDecoder(
-            codecs.getincrementaldecoder(pipe.encoding)(errors="replace"), translate=True,
+            codecs.getincrementaldecoder(pipe.encoding)(errors="replace"),
+            translate=True,
         )
         while True:
             remaining = deadline - time.monotonic()
@@ -200,7 +224,7 @@ def _run_streaming(command: list[str], *, cwd: Path, env: dict[str, str],
             try:
                 data = _read_pipe(pipe.fileno())
             except BlockingIOError:
-                time.sleep(min(.05, remaining))
+                time.sleep(min(0.05, remaining))
                 continue
             text = decoder.decode(data, final=not data)
             if text:
@@ -208,7 +232,14 @@ def _run_streaming(command: list[str], *, cwd: Path, env: dict[str, str],
                 # evicts it. Scan across read boundaries, never retain the full log.
                 if not conflict:
                     lowered = (tail + text).lower()
-                    conflict = next((marker for marker in _STREAM_TAIL_MARKERS if marker in lowered), "")
+                    conflict = next(
+                        (
+                            marker
+                            for marker in _STREAM_TAIL_MARKERS
+                            if marker in lowered
+                        ),
+                        "",
+                    )
                 tail = (tail + text)[-2000:]
                 output.write(text)
                 output.flush()
@@ -226,7 +257,7 @@ def _run_streaming(command: list[str], *, cwd: Path, env: dict[str, str],
     finally:
         pipe.close()
     if conflict and conflict not in tail.lower():
-        tail = conflict + "\n" + tail[-(2000 - len(conflict) - 1):]
+        tail = conflict + "\n" + tail[-(2000 - len(conflict) - 1) :]
     return subprocess.CompletedProcess(command, code, "", tail)
 
 
@@ -239,18 +270,29 @@ def _base_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
     from pm.index_config import bridged_index_settings, is_forwarded
 
     source = os.environ if env is None else env
-    base = {key: value for key, value in source.items()
-            if not key.startswith("PYTHON") and key != "VIRTUAL_ENV"
-            and (not key.startswith("UV_") or is_forwarded(key))}
+    base = {
+        key: value
+        for key, value in source.items()
+        if not key.startswith("PYTHON")
+        and key != "VIRTUAL_ENV"
+        and (not key.startswith("UV_") or is_forwarded(key))
+    }
     if env is None:
         base.update(bridged_index_settings(os.environ))
     return base
 
 
-def managed_environment(destination: Path, *, python: Path | None = None,
-                        cache: Path | None = None, env: Mapping[str, str] | None = None,
-                        offline: bool = False, explicit: bool = False,
-                        output: TextIO | None = None, realize: bool = True) -> PythonEnvironment:
+def managed_environment(
+    destination: Path,
+    *,
+    python: Path | None = None,
+    cache: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    offline: bool = False,
+    explicit: bool = False,
+    output: TextIO | None = None,
+    realize: bool = True,
+) -> PythonEnvironment:
     from pm._uv import _toolchain
     from pm.packages import uv_cache_dir
 
@@ -265,14 +307,20 @@ def managed_environment(destination: Path, *, python: Path | None = None,
         # clang; only the archiver needs a default, and only for our interpreter.
         build_env.setdefault("AR", "/usr/bin/ar")
     return PythonEnvironment(
-        uv=uv, python=python,
-        destination=destination.absolute(), cache=uv_cache_dir() if cache is None else cache.absolute(),
-        env=build_env, offline=offline, output=output,
+        uv=uv,
+        python=python,
+        destination=destination.absolute(),
+        cache=uv_cache_dir() if cache is None else cache.absolute(),
+        env=build_env,
+        offline=offline,
+        output=output,
     )
 
 
 @contextmanager
-def _fresh_build(environment: PythonEnvironment, *, sealed: bool, lock: Path | None = None) -> Iterator[None]:
+def _fresh_build(
+    environment: PythonEnvironment, *, sealed: bool, lock: Path | None = None
+) -> Iterator[None]:
     """Own only the output claimed by this build, including failed validation."""
     out = environment.destination
     # A concurrent creator wins intact: never enter cleanup before mkdir succeeds.
@@ -305,7 +353,9 @@ class PythonEnvironment:
 
         return venv_python(self.destination)
 
-    def _run(self, args: list[str], *, cwd: Path, timeout: int) -> subprocess.CompletedProcess:
+    def _run(
+        self, args: list[str], *, cwd: Path, timeout: int
+    ) -> subprocess.CompletedProcess:
         # Explicit index credentials survive, but cannot redirect the project,
         # interpreter or cache selected by the operation.
         env = _base_environment(self.env)
@@ -320,11 +370,17 @@ class PythonEnvironment:
             # — corporate networks need them to reach the pinned URLs at all.
             from pm.index_config import is_index_redirect
 
-            env = {key: value for key, value in env.items() if not is_index_redirect(key)}
+            env = {
+                key: value for key, value in env.items() if not is_index_redirect(key)
+            }
         # uv is a child: it gets the ordinary spelling of store paths (pm.filesystem.native),
         # or the venv it writes would record the extended-length one in pyvenv.cfg.
-        env.update(UV_PYTHON=native(self.python), UV_PROJECT_ENVIRONMENT=native(self.destination),
-                   UV_CACHE_DIR=native(self.cache), UV_PYTHON_DOWNLOADS="never")
+        env.update(
+            UV_PYTHON=native(self.python),
+            UV_PROJECT_ENVIRONMENT=native(self.destination),
+            UV_CACHE_DIR=native(self.cache),
+            UV_PYTHON_DOWNLOADS="never",
+        )
         with tempfile.TemporaryDirectory(prefix="pm-uv-config-") as config:
             env.update(XDG_CONFIG_HOME=config, XDG_CONFIG_DIRS=config)
             command = [native(self.uv), *map(native, args)]
@@ -340,40 +396,68 @@ class PythonEnvironment:
                     # build frontend, so only the backend's own lines reach the user.
                     command.append("--verbose")
                     env.setdefault("RUST_LOG", "uv_build_frontend=debug")
-                    return _run_streaming(command, cwd=cwd, env=env, timeout=timeout, output=self.output)
+                    return _run_streaming(
+                        command, cwd=cwd, env=env, timeout=timeout, output=self.output
+                    )
                 if self.output is not None:
                     # uv prints backend output on failure anyway; interactive users see
                     # one live status line and the captured tail only if it fails.
-                    tail = LiveTail(_UV_LABELS.get(tuple(args[:2]), _UV_LABELS.get(args[0])),
-                                    self.output, indent="  ")
+                    tail = LiveTail(
+                        _UV_LABELS.get(tuple(args[:2]), _UV_LABELS.get(args[0])),
+                        self.output,
+                        indent="  ",
+                    )
                     try:
-                        result = _run_streaming(command, cwd=cwd, env=env, timeout=timeout, output=tail)
+                        result = _run_streaming(
+                            command, cwd=cwd, env=env, timeout=timeout, output=tail
+                        )
                     except BaseException:
                         tail.close(False)
                         raise
-                    if "--compile-bytecode" in args and _is_bytecode_compile_failure(result):
+                    if "--compile-bytecode" in args and _is_bytecode_compile_failure(
+                        result
+                    ):
                         # Caller retries without the flag. A failure banner here
                         # would report a recovered install as failed.
                         tail.discard()
                     else:
                         tail.close(result.returncode == 0)
                     return result
-                return subprocess.run(command, cwd=native(cwd), env=env, capture_output=True,
-                                      text=True, encoding="utf-8", errors="replace", timeout=timeout, check=False)
+                return subprocess.run(
+                    command,
+                    cwd=native(cwd),
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=timeout,
+                    check=False,
+                )
             except subprocess.TimeoutExpired as exc:
                 from pm.index_config import TIMEOUT_HINT
 
                 # A silent stall against an unreachable index is the #95608 shape;
                 # name the mirror knobs instead of surfacing a raw TimeoutExpired.
-                raise InstallError("venv", f"uv {args[0]} timed out after {timeout}s", TIMEOUT_HINT) from exc
+                raise InstallError(
+                    "venv", f"uv {args[0]} timed out after {timeout}s", TIMEOUT_HINT
+                ) from exc
 
     def create(self) -> None:
         """Create at the final destination; callers must not move a live venv."""
         self.destination.parent.mkdir(parents=True, exist_ok=True)
         result = self._run(
-            ["venv", "--relocatable", "--no-project", "--no-config",
-             "--python", str(self.python), str(self.destination)],
-            cwd=self.destination.parent, timeout=120,
+            [
+                "venv",
+                "--relocatable",
+                "--no-project",
+                "--no-config",
+                "--python",
+                str(self.python),
+                str(self.destination),
+            ],
+            cwd=self.destination.parent,
+            timeout=120,
         )
         if result.returncode:
             raise InstallError("venv", f"uv venv failed: {result.stderr[-600:]}")
@@ -384,18 +468,32 @@ class PythonEnvironment:
             command.append("--upgrade")
         result = self._run(command, cwd=source, timeout=timeout)
         if result.returncode:
-            raise classify_uv_failure("lock", result.returncode, result.stderr or result.stdout)
+            raise classify_uv_failure(
+                "lock", result.returncode, result.stderr or result.stdout
+            )
 
     def check_lock(self, source: Path) -> None:
-        result = self._run(["lock", "--check", "--python", str(self.python)],
-                           cwd=source, timeout=1800)
+        result = self._run(
+            ["lock", "--check", "--python", str(self.python)], cwd=source, timeout=1800
+        )
         if result.returncode:
-            raise classify_uv_failure("lock", result.returncode, result.stderr or result.stdout)
+            raise classify_uv_failure(
+                "lock", result.returncode, result.stderr or result.stdout
+            )
 
-    def sync(self, source: Path, *, extras: Sequence[str] = (), groups: Sequence[str] = (),
-             timeout: int = 1800, frozen: bool = True, all_extras: bool = False,
-             no_install_project: bool = False, locked: bool = False,
-             no_default_groups: bool = False) -> None:
+    def sync(
+        self,
+        source: Path,
+        *,
+        extras: Sequence[str] = (),
+        groups: Sequence[str] = (),
+        timeout: int = 1800,
+        frozen: bool = True,
+        all_extras: bool = False,
+        no_install_project: bool = False,
+        locked: bool = False,
+        no_default_groups: bool = False,
+    ) -> None:
         """Install the root and every member; resolve only in a writable workspace.
 
         ``frozen=False`` is reserved for the caller-owned generated workspace,
@@ -406,8 +504,14 @@ class PythonEnvironment:
         # Locking members alone is insufficient: plain sync only installs root deps.
         # uv writes no __pycache__ (pip does): without --compile-bytecode the first import
         # of every module in the foreground of a user request compiles it (#100461).
-        command = ["sync", "--locked" if locked else "--frozen", "--all-packages",
-                   "--python", str(self.python), "--compile-bytecode"]
+        command = [
+            "sync",
+            "--locked" if locked else "--frozen",
+            "--all-packages",
+            "--python",
+            str(self.python),
+            "--compile-bytecode",
+        ]
         if no_default_groups:
             command.append("--no-default-groups")
         if all_extras:
@@ -420,7 +524,11 @@ class PythonEnvironment:
             # --all-packages has no single selected project in uv, so
             # --no-install-project alone does not exclude the root. Name it
             # explicitly without dropping member dependencies or installations.
-            command += ["--no-install-project", "--no-install-package", _project_name(source)]
+            command += [
+                "--no-install-project",
+                "--no-install-package",
+                _project_name(source),
+            ]
         for extra in sorted(set(extras)):
             command += ["--extra", extra]
         for group in sorted(set(groups)):
@@ -438,38 +546,82 @@ class PythonEnvironment:
             fallback = [arg for arg in command if arg != "--compile-bytecode"]
             result = self._run(fallback, cwd=source, timeout=timeout)
         if result.returncode:
-            raise classify_uv_failure("sync", result.returncode, result.stderr or result.stdout)
+            raise classify_uv_failure(
+                "sync", result.returncode, result.stderr or result.stdout
+            )
 
-    def export_requirements(self, source: Path, out: Path, *, extras: Sequence[str] = (),
-                            timeout: int = 1800) -> None:
-        command = ["export", "--frozen", "--python", str(self.python), "--no-default-groups",
-                   "--no-emit-project", "--no-hashes", "--no-annotate", "--no-header",
-                   "--format", "requirements-txt", "--output-file", str(out)]
+    def export_requirements(
+        self,
+        source: Path,
+        out: Path,
+        *,
+        extras: Sequence[str] = (),
+        timeout: int = 1800,
+    ) -> None:
+        command = [
+            "export",
+            "--frozen",
+            "--python",
+            str(self.python),
+            "--no-default-groups",
+            "--no-emit-project",
+            "--no-hashes",
+            "--no-annotate",
+            "--no-header",
+            "--format",
+            "requirements-txt",
+            "--output-file",
+            str(out),
+        ]
         for extra in sorted(set(extras)):
             command += ["--extra", extra]
         result = self._run(command, cwd=source, timeout=timeout)
         if result.returncode:
-            raise classify_uv_failure("export", result.returncode, result.stderr or result.stdout)
+            raise classify_uv_failure(
+                "export", result.returncode, result.stderr or result.stdout
+            )
 
-    def install_requirements(self, requirements: Sequence[str], *, wheelhouse: Path | None = None,
-                             lock: Path | None = None) -> None:
+    def install_requirements(
+        self,
+        requirements: Sequence[str],
+        *,
+        wheelhouse: Path | None = None,
+        lock: Path | None = None,
+    ) -> None:
         if not requirements:
             return
         # A file avoids command-line length limits and shell/marker quoting.
         with tempfile.TemporaryDirectory(prefix="pm-requirements-") as temporary:
             requirements_file = Path(temporary) / "requirements.txt"
-            requirements_file.write_text("\n".join(requirements) + "\n", encoding="utf-8")
-            self._install_requirements_file(requirements_file, wheelhouse=wheelhouse, lock=lock)
+            requirements_file.write_text(
+                "\n".join(requirements) + "\n", encoding="utf-8"
+            )
+            self._install_requirements_file(
+                requirements_file, wheelhouse=wheelhouse, lock=lock
+            )
 
-    def _install_requirements_file(self, requirements: Path, *, wheelhouse: Path | None = None,
-                                   lock: Path | None = None, timeout: int = 1800) -> None:
+    def _install_requirements_file(
+        self,
+        requirements: Path,
+        *,
+        wheelhouse: Path | None = None,
+        lock: Path | None = None,
+        timeout: int = 1800,
+    ) -> None:
         """Install *requirements*; *lock* is the uv.lock they were exported from.
 
         `uv pip install` re-resolves the export, so the lock's manifest overrides
         must come back as `--overrides` or the graph the lock resolved is rejected.
         """
-        command = ["pip", "install", "--no-config", "--python", str(self.executable),
-                   "--requirements", str(requirements)]
+        command = [
+            "pip",
+            "install",
+            "--no-config",
+            "--python",
+            str(self.executable),
+            "--requirements",
+            str(requirements),
+        ]
         if lock is not None:
             from pm.pip_check import override_requirements
 
@@ -479,18 +631,31 @@ class PythonEnvironment:
                 overrides_file.write_text("\n".join(overrides) + "\n", encoding="utf-8")
                 command += ["--overrides", str(overrides_file)]
         if wheelhouse is not None:
-            command += ["--no-index", "--only-binary", ":all:",
-                        "--find-links", str(wheelhouse.absolute())]
+            command += [
+                "--no-index",
+                "--only-binary",
+                ":all:",
+                "--find-links",
+                str(wheelhouse.absolute()),
+            ]
         result = self._run(command, cwd=requirements.parent, timeout=timeout)
         if result.returncode:
-            raise classify_uv_failure("pip", result.returncode, result.stderr or result.stdout)
+            raise classify_uv_failure(
+                "pip", result.returncode, result.stderr or result.stdout
+            )
 
-    def install_wheelhouse(self, source: Path, wheelhouse: Path, *, timeout: int = 1800) -> None:
+    def install_wheelhouse(
+        self, source: Path, wheelhouse: Path, *, timeout: int = 1800
+    ) -> None:
         """Install rebuilt wheels whose hashes the bundle manifest owns, not uv.lock."""
         requirements = source / "requirements.txt"
         self.export_requirements(source, requirements, timeout=timeout)
-        self._install_requirements_file(requirements, wheelhouse=wheelhouse, lock=source / "uv.lock",
-                                        timeout=timeout)
+        self._install_requirements_file(
+            requirements,
+            wheelhouse=wheelhouse,
+            lock=source / "uv.lock",
+            timeout=timeout,
+        )
         self.check(source / "uv.lock")
 
     def prune_cache(self, *, ci: bool = False) -> None:
@@ -510,14 +675,30 @@ class PythonEnvironment:
         """
         result = replace(self, output=None)._run(
             # Forced colour (FORCE_COLOR/CLICOLOR_FORCE) would wrap the report in ANSI pm.pip_check cannot read.
-            ["pip", "check", "--no-config", "--color", "never", "--python", str(self.executable)],
-            cwd=self.destination.parent, timeout=60,
+            [
+                "pip",
+                "check",
+                "--no-config",
+                "--color",
+                "never",
+                "--python",
+                str(self.executable),
+            ],
+            cwd=self.destination.parent,
+            timeout=60,
         )
         if not result.returncode:
             return
         from pm.pip_check import unexpected_incompatibilities
-        unexpected = unexpected_incompatibilities(f"{result.stdout or ''}\n{result.stderr or ''}", lock)
+
+        unexpected = unexpected_incompatibilities(
+            f"{result.stdout or ''}\n{result.stderr or ''}", lock
+        )
         if unexpected is None:
-            raise InstallError("venv", f"dependency validation failed: {result.stderr[-600:]}")
+            raise InstallError(
+                "venv", f"dependency validation failed: {result.stderr[-600:]}"
+            )
         if unexpected:
-            raise InstallError("venv", "dependency validation failed: " + "\n".join(unexpected)[-600:])
+            raise InstallError(
+                "venv", "dependency validation failed: " + "\n".join(unexpected)[-600:]
+            )

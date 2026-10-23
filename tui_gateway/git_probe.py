@@ -35,7 +35,9 @@ def run_git(cwd: str, *args: str) -> str:
 
 
 def branch(cwd: str) -> str:
-    return run_git(cwd, "branch", "--show-current") or run_git(cwd, "rev-parse", "--short", "HEAD")
+    return run_git(cwd, "branch", "--show-current") or run_git(
+        cwd, "rev-parse", "--short", "HEAD"
+    )
 
 
 class _RootCache:
@@ -95,7 +97,11 @@ def invalidate() -> None:
 
 def repo_root(cwd: str) -> str:
     """Top-level git repo root for ``cwd`` (``""`` when not a repo)."""
-    return _cache.resolve(cwd, lambda: run_git(cwd, "rev-parse", "--show-toplevel")) if cwd else ""
+    return (
+        _cache.resolve(cwd, lambda: run_git(cwd, "rev-parse", "--show-toplevel"))
+        if cwd
+        else ""
+    )
 
 
 def common_repo_root(cwd: str) -> str:
@@ -125,7 +131,10 @@ def resolve(cwd: str) -> dict | None:
     worktree_root = repo_root(cwd)
     if not worktree_root:
         return None
-    return {"repo_root": common_repo_root(cwd) or worktree_root, "worktree_root": worktree_root}
+    return {
+        "repo_root": common_repo_root(cwd) or worktree_root,
+        "worktree_root": worktree_root,
+    }
 
 
 def warm_roots(cwds: Iterable[str], max_workers: int = _WARM_WORKERS) -> None:

@@ -68,6 +68,7 @@ def _pack_yaml(**overrides) -> str:
 # Parse / validate
 # ---------------------------------------------------------------------------
 
+
 def test_parse_pack_happy_path():
     pack = parse_pack(_pack_yaml())
     assert pack.name == "voice-pack"
@@ -107,9 +108,7 @@ def test_parse_pack_rejects_non_sha_refs_naming_the_entry(bad_ref):
 
 
 def test_parse_pack_normalizes_ref_to_lowercase():
-    text = yaml.safe_dump(
-        {"name": "p", "plugins": [{"repo": "o/r", "ref": "A" * 40}]}
-    )
+    text = yaml.safe_dump({"name": "p", "plugins": [{"repo": "o/r", "ref": "A" * 40}]})
     assert parse_pack(text).plugins[0].ref == "a" * 40
 
 
@@ -145,30 +144,49 @@ def test_config_seed_rejects_capability_and_trust_gate_keys():
         assert "reserved" in str(exc.value)
 
 
-@pytest.mark.parametrize("seed, fragment", [
-    ({"settings": {"api_key": "LEAK"}}, "secret-shaped key 'settings.api_key'"),
-    ({"security": {"granted_capabilities": ["tools"]}}, "reserved key 'security.granted_capabilities'"),
-    ({"profiles": [{"allow_tool_override": True}]}, "reserved key 'profiles.allow_tool_override'"),
-])
+@pytest.mark.parametrize(
+    "seed, fragment",
+    [
+        ({"settings": {"api_key": "LEAK"}}, "secret-shaped key 'settings.api_key'"),
+        (
+            {"security": {"granted_capabilities": ["tools"]}},
+            "reserved key 'security.granted_capabilities'",
+        ),
+        (
+            {"profiles": [{"allow_tool_override": True}]},
+            "reserved key 'profiles.allow_tool_override'",
+        ),
+    ],
+)
 def test_config_seed_rejects_forbidden_keys_at_any_depth(seed, fragment):
     """Nesting a secret/consent key under another mapping (or a list) is the same contract
     violation as setting it at the top level (#85050)."""
     with pytest.raises(PackError) as exc:
         validate_config_seed("p", seed)
     assert fragment in str(exc.value)
-    assert validate_config_seed("p", {"settings": {"voice": "nova", "tags": ["a"]}}) == {
-        "settings": {"voice": "nova", "tags": ["a"]}}
+    assert validate_config_seed(
+        "p", {"settings": {"voice": "nova", "tags": ["a"]}}
+    ) == {"settings": {"voice": "nova", "tags": ["a"]}}
 
 
 def test_sanitized_entry_config_strips_forbidden_keys_at_any_depth():
-    fake_cfg = {"plugins": {"entries": {"tts": {
-        "smtp": {"host": "mail.example", "password": "hunter2"},
-        "rules": [{"name": "r1", "auth_token": "t"}],
-        "voice": "nova",
-    }}}}
+    fake_cfg = {
+        "plugins": {
+            "entries": {
+                "tts": {
+                    "smtp": {"host": "mail.example", "password": "hunter2"},
+                    "rules": [{"name": "r1", "auth_token": "t"}],
+                    "voice": "nova",
+                }
+            }
+        }
+    }
     with mock.patch("clawk_cli.config.load_config", return_value=fake_cfg):
         assert real_sanitized_entry_config("tts") == {
-            "smtp": {"host": "mail.example"}, "rules": [{"name": "r1"}], "voice": "nova"}
+            "smtp": {"host": "mail.example"},
+            "rules": [{"name": "r1"}],
+            "voice": "nova",
+        }
 
 
 def test_parse_pack_validates_config_section():
@@ -201,11 +219,18 @@ def test_load_pack_missing_file_errors():
 # Resolution (bare catalog names) — catalog mocked, no network
 # ---------------------------------------------------------------------------
 
+
 def _fake_catalog_entry(name):
     from clawk_cli.plugin_catalog import CatalogCapabilities, PluginCatalogEntry
+
     return PluginCatalogEntry(
-        name=name, repo="https://github.com/idx-owner/idx-repo", sha=SHA_B, description="d", maintainer="idx-owner",
-        capabilities=CatalogCapabilities(provides_tools=["tools"]))
+        name=name,
+        repo="https://github.com/idx-owner/idx-repo",
+        sha=SHA_B,
+        description="d",
+        maintainer="idx-owner",
+        capabilities=CatalogCapabilities(provides_tools=["tools"]),
+    )
 
 
 def test_resolve_pack_plugins_uses_catalog_for_bare_names():
@@ -225,13 +250,9 @@ def test_resolve_pack_plugins_uses_catalog_for_bare_names():
 
 def test_resolve_pack_plugins_carries_catalog_miss_as_error():
     pack = parse_pack(
-        yaml.safe_dump(
-            {"name": "p", "plugins": [{"name": "ghost", "ref": SHA_A}]}
-        )
+        yaml.safe_dump({"name": "p", "plugins": [{"name": "ghost", "ref": SHA_A}]})
     )
-    with mock.patch(
-        "clawk_cli.plugin_catalog.load_catalog_live", return_value=[]
-    ):
+    with mock.patch("clawk_cli.plugin_catalog.load_catalog_live", return_value=[]):
         resolved = resolve_pack_plugins(pack)
     assert resolved[0].identifier is None
     assert "not found" in resolved[0].resolve_error
@@ -240,6 +261,7 @@ def test_resolve_pack_plugins_carries_catalog_miss_as_error():
 # ---------------------------------------------------------------------------
 # Install fan-out — installer mocked
 # ---------------------------------------------------------------------------
+
 
 def _resolved(pack):
     return [
@@ -379,8 +401,9 @@ def test_pack_install_exits_nonzero_on_partial_failure(tmp_path, monkeypatch):
     patches = _fanout_patches(installer)
     monkeypatch.setattr("sys.stdin", mock.MagicMock(isatty=lambda: True))
     monkeypatch.setattr("sys.stdout", mock.MagicMock(isatty=lambda: True))
-    with mock.patch.multiple("clawk_cli.plugins_cmd", **patches), mock.patch(
-        "rich.console.Console", return_value=fake_console
+    with (
+        mock.patch.multiple("clawk_cli.plugins_cmd", **patches),
+        mock.patch("rich.console.Console", return_value=fake_console),
     ):
         with pytest.raises(SystemExit) as exc:
             cmd_pack_install(str(pack_file))
@@ -394,12 +417,14 @@ def test_pack_install_refuses_noninteractive_sessions(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin", mock.MagicMock(isatty=lambda: False))
     monkeypatch.setattr("sys.stdout", mock.MagicMock(isatty=lambda: False))
     installer = mock.MagicMock()
-    with mock.patch(
-        "rich.console.Console", return_value=fake_console
-    ), mock.patch(
-        "clawk_cli.plugin_packs.resolve_pack_plugins",
-        side_effect=lambda pack: _resolved(pack),
-    ), mock.patch("clawk_cli.plugins_cmd._install_plugin_core", installer):
+    with (
+        mock.patch("rich.console.Console", return_value=fake_console),
+        mock.patch(
+            "clawk_cli.plugin_packs.resolve_pack_plugins",
+            side_effect=lambda pack: _resolved(pack),
+        ),
+        mock.patch("clawk_cli.plugins_cmd._install_plugin_core", installer),
+    ):
         with pytest.raises(SystemExit) as exc:
             cmd_pack_install(str(pack_file))
     assert exc.value.code == 1
@@ -414,12 +439,14 @@ def test_pack_install_aborts_cleanly_on_decline(tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin", mock.MagicMock(isatty=lambda: True))
     monkeypatch.setattr("sys.stdout", mock.MagicMock(isatty=lambda: True))
     installer = mock.MagicMock()
-    with mock.patch(
-        "rich.console.Console", return_value=fake_console
-    ), mock.patch(
-        "clawk_cli.plugin_packs.resolve_pack_plugins",
-        side_effect=lambda pack: _resolved(pack),
-    ), mock.patch("clawk_cli.plugins_cmd._install_plugin_core", installer):
+    with (
+        mock.patch("rich.console.Console", return_value=fake_console),
+        mock.patch(
+            "clawk_cli.plugin_packs.resolve_pack_plugins",
+            side_effect=lambda pack: _resolved(pack),
+        ),
+        mock.patch("clawk_cli.plugins_cmd._install_plugin_core", installer),
+    ):
         with pytest.raises(SystemExit):
             cmd_pack_install(str(pack_file))
     installer.assert_not_called()
@@ -428,6 +455,7 @@ def test_pack_install_aborts_cleanly_on_decline(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Export round-trip
 # ---------------------------------------------------------------------------
+
 
 def _seed_install_state(home, monkeypatch, *, metadata, config=None, plugins=()):
     plugins_dir = home / "plugins"
@@ -446,8 +474,10 @@ def _seed_install_state(home, monkeypatch, *, metadata, config=None, plugins=())
         "clawk_cli.plugins_cmd._get_enabled_set",
         lambda: set((cfg.get("plugins") or {}).get("enabled") or []),
     )
-    monkeypatch.setattr("clawk_cli.plugin_packs._sanitized_entry_config",
-                        lambda pid: ((cfg.get("plugins") or {}).get("entries") or {}).get(pid, {}))
+    monkeypatch.setattr(
+        "clawk_cli.plugin_packs._sanitized_entry_config",
+        lambda pid: ((cfg.get("plugins") or {}).get("entries") or {}).get(pid, {}),
+    )
 
 
 def test_export_round_trips_through_parse(tmp_path, monkeypatch):
@@ -470,7 +500,10 @@ def test_export_round_trips_through_parse(tmp_path, monkeypatch):
         }
     }
     _seed_install_state(
-        tmp_path, monkeypatch, metadata=metadata, config=config,
+        tmp_path,
+        monkeypatch,
+        metadata=metadata,
+        config=config,
         plugins=("tts", "relay"),
     )
 
@@ -486,9 +519,7 @@ def test_export_round_trips_through_parse(tmp_path, monkeypatch):
 
 
 def test_export_warns_on_local_only_plugins(tmp_path, monkeypatch):
-    _seed_install_state(
-        tmp_path, monkeypatch, metadata={}, plugins=("local-hack",)
-    )
+    _seed_install_state(tmp_path, monkeypatch, metadata={}, plugins=("local-hack",))
     text, warnings = export_pack()
     assert any("local-hack" in w for w in warnings)
     assert "# WARNING" in text and "local-hack" in text
@@ -505,9 +536,7 @@ def test_export_strips_secret_and_capability_config_keys(tmp_path, monkeypatch):
             "source": "https://github.com/owner/tts.git",
         }
     }
-    _seed_install_state(
-        tmp_path, monkeypatch, metadata=metadata, plugins=("tts",)
-    )
+    _seed_install_state(tmp_path, monkeypatch, metadata=metadata, plugins=("tts",))
     # Use the real sanitizer against a fake loaded config.
     monkeypatch.setattr(
         "clawk_cli.plugin_packs._sanitized_entry_config",
@@ -536,14 +565,23 @@ def test_export_strips_secret_and_capability_config_keys(tmp_path, monkeypatch):
 
 def test_export_enabled_only_filters(tmp_path, monkeypatch):
     metadata = {
-        "on": {"pinned": True, "revision": SHA_A,
-               "source": "https://github.com/o/on.git"},
-        "off": {"pinned": True, "revision": SHA_B,
-                "source": "https://github.com/o/off.git"},
+        "on": {
+            "pinned": True,
+            "revision": SHA_A,
+            "source": "https://github.com/o/on.git",
+        },
+        "off": {
+            "pinned": True,
+            "revision": SHA_B,
+            "source": "https://github.com/o/off.git",
+        },
     }
     config = {"plugins": {"enabled": ["on"]}}
     _seed_install_state(
-        tmp_path, monkeypatch, metadata=metadata, config=config,
+        tmp_path,
+        monkeypatch,
+        metadata=metadata,
+        config=config,
         plugins=("on", "off"),
     )
     text, _ = export_pack(enabled_only=True)

@@ -24,22 +24,61 @@ class _Agent:
         self._persist_user_message_idx = None
 
 
-@pytest.mark.parametrize("user_message, messages, expected_idx", [
-    # a repeated prompt resolves to the LAST verbatim row, never the historical copy
-    ("same question", [
-        {"role": "user", "content": "same question"}, {"role": "assistant", "content": "old answer"},
-        {"role": "user", "content": "same question"}, {"role": "assistant", "content": "new answer"},
-    ], 2),
-    # multimodal content matches by structural equality
-    ([{"type": "text", "text": "look"}, {"type": "image_url", "image_url": {"url": "data:x"}}],
-     [{"role": "user", "content": [{"type": "text", "text": "look"}, {"type": "image_url", "image_url": {"url": "data:x"}}]},
-      {"role": "assistant", "content": "ok"}], 0),
-    # a row the repair rewrote (merge-into-tail) is not a proven boundary: export nothing
-    ("same question", [{"role": "user", "content": "summary\n\nsame question"}, {"role": "assistant", "content": "answer"}], None),
-    # no current row at all: export nothing, persist override untouched
-    ("another question", [{"role": "user", "content": "same question"}, {"role": "assistant", "content": "old answer"}], None),
-])
-def test_boundary_is_exported_only_for_the_verbatim_current_row(user_message, messages, expected_idx):
+@pytest.mark.parametrize(
+    "user_message, messages, expected_idx",
+    [
+        # a repeated prompt resolves to the LAST verbatim row, never the historical copy
+        (
+            "same question",
+            [
+                {"role": "user", "content": "same question"},
+                {"role": "assistant", "content": "old answer"},
+                {"role": "user", "content": "same question"},
+                {"role": "assistant", "content": "new answer"},
+            ],
+            2,
+        ),
+        # multimodal content matches by structural equality
+        (
+            [
+                {"type": "text", "text": "look"},
+                {"type": "image_url", "image_url": {"url": "data:x"}},
+            ],
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "look"},
+                        {"type": "image_url", "image_url": {"url": "data:x"}},
+                    ],
+                },
+                {"role": "assistant", "content": "ok"},
+            ],
+            0,
+        ),
+        # a row the repair rewrote (merge-into-tail) is not a proven boundary: export nothing
+        (
+            "same question",
+            [
+                {"role": "user", "content": "summary\n\nsame question"},
+                {"role": "assistant", "content": "answer"},
+            ],
+            None,
+        ),
+        # no current row at all: export nothing, persist override untouched
+        (
+            "another question",
+            [
+                {"role": "user", "content": "same question"},
+                {"role": "assistant", "content": "old answer"},
+            ],
+            None,
+        ),
+    ],
+)
+def test_boundary_is_exported_only_for_the_verbatim_current_row(
+    user_message, messages, expected_idx
+):
     agent = _Agent()
     result = export_current_turn_boundary(agent, {"messages": messages}, user_message)
     if expected_idx is None:
@@ -55,8 +94,13 @@ def test_preflight_timeout_envelope_exports_nothing():
     """The preflight-timeout result carries the prior history without this turn's row (#7100);
     a repeated prompt must not be resolved to its historical copy."""
     agent = _Agent()
-    result = {"messages": [{"role": "user", "content": "continue"}, {"role": "assistant", "content": "old"}],
-              "turn_exit_reason": "context_compression_timeout"}
+    result = {
+        "messages": [
+            {"role": "user", "content": "continue"},
+            {"role": "assistant", "content": "old"},
+        ],
+        "turn_exit_reason": "context_compression_timeout",
+    }
     out = export_current_turn_boundary(agent, result, "continue")
     assert "current_turn_user_idx" not in out and "turn_id" not in out
 
@@ -91,7 +135,13 @@ def _stub(content, finish_reason="stop"):
     return SimpleNamespace(
         id="chatcmpl-test",
         model="test/model",
-        choices=[SimpleNamespace(index=0, message=_mock_assistant_msg(content=content), finish_reason=finish_reason)],
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=_mock_assistant_msg(content=content),
+                finish_reason=finish_reason,
+            )
+        ],
         usage=None,
     )
 
@@ -107,7 +157,9 @@ def test_run_conversation_exports_the_pair_on_a_success_envelope(loop_agent):
         patch.object(loop_agent, "_save_trajectory"),
         patch.object(loop_agent, "_cleanup_task_resources"),
     ):
-        result = loop_agent.run_conversation("same question", conversation_history=history)
+        result = loop_agent.run_conversation(
+            "same question", conversation_history=history
+        )
 
     assert result["completed"] is True
     idx = result["current_turn_user_idx"]

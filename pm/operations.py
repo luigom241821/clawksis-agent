@@ -3,6 +3,7 @@
 Callers describe a dependency graph and its lifetime, never a uv command.
 Only the private environment engine knows how to obtain or invoke uv.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
@@ -22,16 +23,27 @@ def _require_install_allowed(explicit: bool) -> None:
     from pm.install import _refuse_lazy, lazy_installs_allowed
 
     if not explicit and not lazy_installs_allowed():
-        raise _refuse_lazy("venv", "Python dependency operation requires an explicit request")
+        raise _refuse_lazy(
+            "venv", "Python dependency operation requires an explicit request"
+        )
 
 
 def build_environment(
-    *, source: Path, out: Path, python: Path | None = None,
-    cache: Path | None = None, env: Mapping[str, str] | None = None,
-    extras: Sequence[str] = (), groups: Sequence[str] = (),
-    all_extras: bool = False, no_install_project: bool = False,
-    frozen: bool = True, sealed: bool = False, offline: bool = False,
-    explicit: bool = False, timeout: int = 1800,
+    *,
+    source: Path,
+    out: Path,
+    python: Path | None = None,
+    cache: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    extras: Sequence[str] = (),
+    groups: Sequence[str] = (),
+    all_extras: bool = False,
+    no_install_project: bool = False,
+    frozen: bool = True,
+    sealed: bool = False,
+    offline: bool = False,
+    explicit: bool = False,
+    timeout: int = 1800,
 ) -> Path:
     """Build and validate a fresh destination; never overwrite an existing tree.
 
@@ -46,7 +58,9 @@ def build_environment(
     if not (source / "pyproject.toml").is_file():
         raise InstallError("venv", f"project manifest is missing: {source}")
     if frozen and not (source / "uv.lock").is_file():
-        raise InstallError("venv", f"frozen build requires a lock: {source / 'uv.lock'}")
+        raise InstallError(
+            "venv", f"frozen build requires a lock: {source / 'uv.lock'}"
+        )
     if out.exists() or out.is_symlink():
         raise FileExistsError(f"environment destination already exists: {out}")
     _require_install_allowed(explicit)
@@ -55,20 +69,36 @@ def build_environment(
     if env is None:
         env = source_build_environment(source)
     environment = managed_environment(
-        out, python=Path(python) if python is not None else None,
-        cache=Path(cache) if cache is not None else None, env=env,
-        offline=offline, explicit=explicit, output=sys.stderr,
+        out,
+        python=Path(python) if python is not None else None,
+        cache=Path(cache) if cache is not None else None,
+        env=env,
+        offline=offline,
+        explicit=explicit,
+        output=sys.stderr,
     )
     with _fresh_build(environment, sealed=sealed, lock=source / "uv.lock"):
-        environment.sync(source, extras=extras, groups=groups, all_extras=all_extras,
-                         no_install_project=no_install_project, frozen=frozen, timeout=timeout)
+        environment.sync(
+            source,
+            extras=extras,
+            groups=groups,
+            all_extras=all_extras,
+            no_install_project=no_install_project,
+            frozen=frozen,
+            timeout=timeout,
+        )
     return environment.executable
 
 
 def lock_project(
-    source: Path, *, upgrade: bool = False, python: Path | None = None,
-    env: Mapping[str, str] | None = None, cache: Path | None = None,
-    offline: bool = False, explicit: bool = False,
+    source: Path,
+    *,
+    upgrade: bool = False,
+    python: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    cache: Path | None = None,
+    offline: bool = False,
+    explicit: bool = False,
 ) -> None:
     """Refresh the project's resolution without creating or selecting a venv."""
     from pm.environment import managed_environment
@@ -78,16 +108,25 @@ def lock_project(
         raise InstallError("venv", f"project manifest is missing: {source}")
     _require_install_allowed(explicit)
     environment = managed_environment(
-        source / ".venv", python=Path(python) if python is not None else None,
-        cache=Path(cache) if cache is not None else None, env=env,
-        offline=offline, explicit=explicit, output=sys.stderr,
+        source / ".venv",
+        python=Path(python) if python is not None else None,
+        cache=Path(cache) if cache is not None else None,
+        env=env,
+        offline=offline,
+        explicit=explicit,
+        output=sys.stderr,
     )
     environment.lock(source, upgrade=upgrade)
 
 
 def stage_manager_runtime(
-    *, python: Path, destination: Path, project: Path | None = None,
-    offline: bool = False, wheelhouse: Path | None = None, cache: Path | None = None,
+    *,
+    python: Path,
+    destination: Path,
+    project: Path | None = None,
+    offline: bool = False,
+    wheelhouse: Path | None = None,
+    cache: Path | None = None,
 ) -> Path:
     """Stage PM's independent dependency graph using its private toolchain."""
     from pm._uv import _toolchain
@@ -100,14 +139,22 @@ def stage_manager_runtime(
     # the TLS dependencies in the very runtime we are constructing.
     tools = _toolchain(realize=False)
     if tools is None:
-        raise InstallError("pm-runtime", "stage pinned tools before building the manager runtime")
+        raise InstallError(
+            "pm-runtime", "stage pinned tools before building the manager runtime"
+        )
     destination.mkdir(parents=True)
     try:
-        executable = stage_runtime(tools[0], python, destination,
-                                   project=Path(project) if project is not None else None,
-                                   offline=offline, wheelhouse=Path(wheelhouse) if wheelhouse is not None else None,
-                                   cache=Path(cache) if cache is not None else None)
+        executable = stage_runtime(
+            tools[0],
+            python,
+            destination,
+            project=Path(project) if project is not None else None,
+            offline=offline,
+            wheelhouse=Path(wheelhouse) if wheelhouse is not None else None,
+            cache=Path(cache) if cache is not None else None,
+        )
         from pm.lock import _write
+
         _write(destination / "pm-runtime.json", {})
         return executable
     except BaseException:
@@ -121,6 +168,7 @@ def _environment_root(name: str, root: Path | None) -> Path:
     if root is not None:
         return Path(root).absolute()
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "environments" / name
 
 
@@ -136,9 +184,14 @@ def _selection(root: Path) -> dict:
     except FileNotFoundError:
         return {}
     except (OSError, ValueError) as exc:
-        raise InstallError("venv", f"cannot read environment selection: {root}") from exc
-    if (not isinstance(record, dict) or not isinstance(record.get("generation"), str)
-            or not re.fullmatch(r"gen-[0-9a-f]{32}", record["generation"])):
+        raise InstallError(
+            "venv", f"cannot read environment selection: {root}"
+        ) from exc
+    if (
+        not isinstance(record, dict)
+        or not isinstance(record.get("generation"), str)
+        or not re.fullmatch(r"gen-[0-9a-f]{32}", record["generation"])
+    ):
         raise InstallError("venv", f"invalid environment selection: {root}")
     return record
 
@@ -153,7 +206,9 @@ def environment_python(name: str, *, root: Path | None = None) -> Path | None:
     if not environment.resolve().is_relative_to(root.resolve()):
         raise InstallError(name, "selected environment escapes its root")
     python = _python(environment)
-    return python if python.is_file() and (environment / "pyvenv.cfg").is_file() else None
+    return (
+        python if python.is_file() and (environment / "pyvenv.cfg").is_file() else None
+    )
 
 
 def _tool(python: Path, executable: str) -> Path | None:
@@ -161,8 +216,14 @@ def _tool(python: Path, executable: str) -> Path | None:
         raise ValueError("tool executable must be a filename, not a path")
     directory = python.parent
     suffixes = (".exe", ".cmd", "") if os.name == "nt" else ("",)
-    return next((directory / (executable + suffix) for suffix in suffixes
-                 if (directory / (executable + suffix)).is_file()), None)
+    return next(
+        (
+            directory / (executable + suffix)
+            for suffix in suffixes
+            if (directory / (executable + suffix)).is_file()
+        ),
+        None,
+    )
 
 
 def python_tool(name: str, executable: str, *, root: Path | None = None) -> Path | None:
@@ -175,7 +236,9 @@ def _requirements(requirements: Sequence[str]) -> list[str]:
     from packaging.requirements import InvalidRequirement, Requirement
 
     if isinstance(requirements, str) or not requirements:
-        raise ValueError("an isolated environment needs a nonempty sequence of requirements")
+        raise ValueError(
+            "an isolated environment needs a nonempty sequence of requirements"
+        )
     try:
         return sorted({str(Requirement(requirement)) for requirement in requirements})
     except (InvalidRequirement, TypeError) as exc:
@@ -183,8 +246,12 @@ def _requirements(requirements: Sequence[str]) -> list[str]:
 
 
 def ensure_environment(
-    name: str, requirements: Sequence[str], *, root: Path | None = None,
-    explicit: bool = False, timeout: int = 1800,
+    name: str,
+    requirements: Sequence[str],
+    *,
+    root: Path | None = None,
+    explicit: bool = False,
+    timeout: int = 1800,
     executable: str | None = None,
 ) -> Path:
     """Make an isolated dependency set current, then atomically select it.
@@ -200,24 +267,44 @@ def ensure_environment(
         (generation / "pyproject.toml").write_text(
             '[project]\nname = "clawk-side-environment"\nversion = "0"\n'
             'requires-python = ">=3.11"\ndependencies = '
-            + json.dumps(requirements) + '\n[tool.uv]\npackage = false\n', encoding="utf-8",
+            + json.dumps(requirements)
+            + "\n[tool.uv]\npackage = false\n",
+            encoding="utf-8",
         )
         previous = _selection(root)
         if previous:
             seed = root / previous["generation"] / "uv.lock"
             if seed.is_file():
                 shutil.copyfile(seed, generation / "uv.lock")
-        return build_environment(source=generation, out=generation / "venv", python=base_python,
-                                 frozen=False, explicit=explicit, timeout=timeout)
+        return build_environment(
+            source=generation,
+            out=generation / "venv",
+            python=base_python,
+            frozen=False,
+            explicit=explicit,
+            timeout=timeout,
+        )
 
-    return _ensure_generation(name, root, {"requirements": requirements}, build,
-                              record={"requirements": requirements}, explicit=explicit,
-                              executable=executable)
+    return _ensure_generation(
+        name,
+        root,
+        {"requirements": requirements},
+        build,
+        record={"requirements": requirements},
+        explicit=explicit,
+        executable=executable,
+    )
 
 
 def ensure_project_environment(
-    name: str, project: Path, *, extras: Sequence[str] = (), groups: Sequence[str] = (),
-    root: Path | None = None, explicit: bool = False, timeout: int = 1800,
+    name: str,
+    project: Path,
+    *,
+    extras: Sequence[str] = (),
+    groups: Sequence[str] = (),
+    root: Path | None = None,
+    explicit: bool = False,
+    timeout: int = 1800,
 ) -> Path:
     """Make an isolated environment of a project's LOCKED dependencies current.
 
@@ -232,21 +319,45 @@ def ensure_project_environment(
     manifests = {}
     for manifest in ("pyproject.toml", "uv.lock"):
         try:
-            manifests[manifest] = hashlib.sha256((project / manifest).read_bytes()).hexdigest()
+            manifests[manifest] = hashlib.sha256(
+                (project / manifest).read_bytes()
+            ).hexdigest()
         except FileNotFoundError as exc:
-            raise InstallError("venv", f"locked project environment needs {project / manifest}") from exc
+            raise InstallError(
+                "venv", f"locked project environment needs {project / manifest}"
+            ) from exc
 
     def build(generation: Path, base_python: Path) -> Path:
-        return build_environment(source=project, out=generation / "venv", python=base_python,
-                                 extras=extras, groups=groups, no_install_project=True,
-                                 frozen=True, explicit=explicit, timeout=timeout)
+        return build_environment(
+            source=project,
+            out=generation / "venv",
+            python=base_python,
+            extras=extras,
+            groups=groups,
+            no_install_project=True,
+            frozen=True,
+            explicit=explicit,
+            timeout=timeout,
+        )
 
-    return _ensure_generation(name, root, {"manifests": manifests, "extras": extras, "groups": groups},
-                              build, record={"extras": extras, "groups": groups}, explicit=explicit)
+    return _ensure_generation(
+        name,
+        root,
+        {"manifests": manifests, "extras": extras, "groups": groups},
+        build,
+        record={"extras": extras, "groups": groups},
+        explicit=explicit,
+    )
 
 
 def _ensure_generation(
-    name: str, root: Path, inputs: dict, build: Callable[[Path, Path], Path], *, record: dict, explicit: bool,
+    name: str,
+    root: Path,
+    inputs: dict,
+    build: Callable[[Path, Path], Path],
+    *,
+    record: dict,
+    explicit: bool,
     executable: str | None = None,
 ) -> Path:
     """Select the generation whose inputs match, building one only when none does.
@@ -263,8 +374,12 @@ def _ensure_generation(
 
     lock = Lockfile(paths.lockfile_path())
     target = current_target()
-    inputs = {**inputs, "python": lock.version("python"), "target": target,
-              "artifacts": [item["sha256"] for item in lock.artifacts("python", target)]}
+    inputs = {
+        **inputs,
+        "python": lock.version("python"),
+        "target": target,
+        "artifacts": [item["sha256"] for item in lock.artifacts("python", target)],
+    }
 
     def selected_python() -> Path | None:
         tools = _toolchain(realize=False)
@@ -274,16 +389,22 @@ def _ensure_generation(
         # The same pinned artifact can live in different stores. A venv's
         # pyvenv.cfg keeps the original interpreter path, not just its version.
         # The store spells its root extended-length on Windows; the identity must not.
-        return hashlib.sha256(json.dumps({**inputs, "interpreter": native(base_python)},
-                                         sort_keys=True).encode()).hexdigest()
+        return hashlib.sha256(
+            json.dumps(
+                {**inputs, "interpreter": native(base_python)}, sort_keys=True
+            ).encode()
+        ).hexdigest()
 
     def current(base_python: Path | None) -> Path | None:
         if base_python is None:
             return None
         selected = _selection(root)
         python = environment_python(name, root=root)
-        if (selected.get("inputs") == identity(base_python) and python is not None
-                and (executable is None or _tool(python, executable) is not None)):
+        if (
+            selected.get("inputs") == identity(base_python)
+            and python is not None
+            and (executable is None or _tool(python, executable) is not None)
+        ):
             return python
         return None
 
@@ -309,11 +430,20 @@ def _ensure_generation(
         try:
             python = build(generation, base_python)
             if executable is not None and _tool(python, executable) is None:
-                raise InstallError(name, f"installed requirements do not provide {executable!r}")
+                raise InstallError(
+                    name, f"installed requirements do not provide {executable!r}"
+                )
             from pm.environments import flush_before_selecting
+
             flush_before_selecting()
-            _write(root / "active.json", {"generation": generation.name,
-                                           "inputs": identity(base_python), **record})
+            _write(
+                root / "active.json",
+                {
+                    "generation": generation.name,
+                    "inputs": identity(base_python),
+                    **record,
+                },
+            )
         except BaseException:
             shutil.rmtree(generation, ignore_errors=True)
             raise
@@ -321,11 +451,22 @@ def _ensure_generation(
 
 
 def ensure_python_tool(
-    name: str, requirements: Sequence[str], executable: str, *,
-    root: Path | None = None, explicit: bool = False, timeout: int = 1800,
+    name: str,
+    requirements: Sequence[str],
+    executable: str,
+    *,
+    root: Path | None = None,
+    explicit: bool = False,
+    timeout: int = 1800,
 ) -> Path:
-    python = ensure_environment(name, requirements, root=root, explicit=explicit,
-                                timeout=timeout, executable=executable)
+    python = ensure_environment(
+        name,
+        requirements,
+        root=root,
+        explicit=explicit,
+        timeout=timeout,
+        executable=executable,
+    )
     tool = _tool(python, executable)
     assert tool is not None  # Validated under the publication lock above.
     return tool

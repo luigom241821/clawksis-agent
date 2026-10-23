@@ -10,6 +10,7 @@ These tests cover the routing decision layer — session_key selection,
 sidecar detection, last-active-session tracking, and the config toggle.
 The downstream session creation is covered by test_browser_cloud_fallback.py.
 """
+
 from unittest.mock import Mock
 
 import pytest
@@ -29,8 +30,12 @@ def _reset_routing_state(monkeypatch):
     monkeypatch.setattr(browser_tool, "_cloud_provider_resolved", False)
     monkeypatch.setattr(browser_tool, "_auto_local_for_private_urls_resolved", False)
     monkeypatch.setattr(browser_tool, "_cached_auto_local_for_private_urls", True)
-    monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
-    monkeypatch.setattr("tools.browser_tool_lifecycle._update_session_activity", lambda t: None)
+    monkeypatch.setattr(
+        "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+    )
+    monkeypatch.setattr(
+        "tools.browser_tool_lifecycle._update_session_activity", lambda t: None
+    )
     # Default: no CDP override, no Camofox
     monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: None)
     monkeypatch.setattr(browser_tool, "_is_camofox_mode", lambda: False)
@@ -51,12 +56,12 @@ class TestNavigationSessionKey:
         key = browser_tool._navigation_session_key("default", "http://localhost:3000/")
         assert key == "default::local"
 
-
     def test_rfc1918_lan_routes_to_local_sidecar(self, monkeypatch):
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: Mock())
-        key = browser_tool._navigation_session_key("default", "http://192.168.1.50:8000/")
+        key = browser_tool._navigation_session_key(
+            "default", "http://192.168.1.50:8000/"
+        )
         assert key == "default::local"
-
 
     def test_none_task_id_defaults(self, monkeypatch):
         """``None`` task_id resolves to 'default'."""
@@ -66,8 +71,6 @@ class TestNavigationSessionKey:
 
 
 class TestSessionKeyHelpers:
-
-
     def test_last_session_key_drops_mismatched_owner_metadata(self, monkeypatch):
         """Explicit ownership metadata prevents retargeting to another task's session."""
         last_active = {"default": "other-task::local"}
@@ -100,7 +103,9 @@ class TestHybridRoutingSessionCreation:
             "cdp_url": "wss://fake.browserbase.com/ws",
         }
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: provider)
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda t: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda t: None
+        )
 
         session = bt_session._get_session_info("default::local")
 
@@ -120,7 +125,9 @@ class TestHybridRoutingSessionCreation:
             "cdp_url": "wss://real.browserbase.com/ws",
         }
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: provider)
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda t: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda t: None
+        )
         monkeypatch.setattr("tools.browser_tool_cdp._resolve_cdp_override", lambda u: u)
 
         session = bt_session._get_session_info("default")
@@ -141,7 +148,9 @@ class TestCleanupHybridSessions:
         def _fake_cleanup_one(key):
             reaped.append(key)
 
-        monkeypatch.setattr(bt_lifecycle, "_cleanup_single_browser_session", _fake_cleanup_one)
+        monkeypatch.setattr(
+            bt_lifecycle, "_cleanup_single_browser_session", _fake_cleanup_one
+        )
         monkeypatch.setattr(
             browser_tool,
             "_active_sessions",
@@ -160,7 +169,6 @@ class TestCleanupHybridSessions:
         # last-active pointer dropped
         assert "default" not in browser_tool._last_active_session_key
 
-
     def test_cleanup_sidecar_directly_keeps_primary(self, monkeypatch):
         """Calling cleanup with a ``::local`` key reaps only the sidecar."""
         reaped = []
@@ -168,7 +176,9 @@ class TestCleanupHybridSessions:
         def _fake_cleanup_one(key):
             reaped.append(key)
 
-        monkeypatch.setattr(bt_lifecycle, "_cleanup_single_browser_session", _fake_cleanup_one)
+        monkeypatch.setattr(
+            bt_lifecycle, "_cleanup_single_browser_session", _fake_cleanup_one
+        )
         monkeypatch.setattr(
             browser_tool,
             "_active_sessions",

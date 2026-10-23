@@ -51,8 +51,6 @@ def test_non_retryable_reasons_stop(reason):
     assert bfr.retry_action(reason) == bfr.RETRY_NONE
 
 
-
-
 # ── delivery surfaces never run their own retry loop ─────────────────────────
 #
 # Retired: the relay handler and local runner used to re-run a `clawk -p ...`
@@ -65,7 +63,9 @@ def test_non_retryable_reasons_stop(reason):
 def home(tmp_path, monkeypatch):
     h = tmp_path / ".clawk"
     (h / "profiles" / "ops").mkdir(parents=True)
-    (h / "profiles" / "ops" / "config.yaml").touch()  # identity marker: bare dirs are not profiles
+    (
+        h / "profiles" / "ops" / "config.yaml"
+    ).touch()  # identity marker: bare dirs are not profiles
     monkeypatch.setenv("CLAWK_HOME", str(h))
     return h
 
@@ -85,7 +85,11 @@ def test_relay_deliver_refuses_with_typed_reason_and_never_spawns(home, monkeypa
     assert "error" in out
     assert out["error"]["data"]["reason"] == "runtime_unavailable"
     assert "authority" in out["error"]["message"]
-    spawned = [argv for argv in calls if argv and argv[0].rsplit("/", 1)[-1] in ("clawk", "clawk.exe")]
+    spawned = [
+        argv
+        for argv in calls
+        if argv and argv[0].rsplit("/", 1)[-1] in ("clawk", "clawk.exe")
+    ]
     assert spawned == [], "no CLI turn may be started by the relay bridge"
 
 
@@ -94,9 +98,14 @@ def test_run_delivery_never_retries_a_local_turn(monkeypatch, tmp_path, capsys):
 
     dm = tmp_path / "dm.txt"
     dm.write_text("hello")
-    monkeypatch.setattr(bot_mode_dm.subprocess, "run",
-                        lambda argv, **k: pytest.fail("local runner must not execute inference"))
-    rc = bot_mode_dm._run_delivery(["clawk", "-p", "ops", "chat"], str(dm), stdin_file=False)
+    monkeypatch.setattr(
+        bot_mode_dm.subprocess,
+        "run",
+        lambda argv, **k: pytest.fail("local runner must not execute inference"),
+    )
+    rc = bot_mode_dm._run_delivery(
+        ["clawk", "-p", "ops", "chat"], str(dm), stdin_file=False
+    )
     assert rc == 1
     assert json.loads(capsys.readouterr().out)["reason"] == "runtime_unavailable"
     assert dm.read_text() == "hello", "payload is retained for the sender's evidence"
@@ -121,12 +130,21 @@ class _WithReason(RuntimeError):
         (RuntimeError("Error code: 401 - invalid api key"), "provider_auth_or_access"),
         (RuntimeError("something nobody has a rule for"), "unknown"),
         (_WithReason("CERTIFICATE_VERIFY_FAILED", "ssl handshake failed"), "unknown"),
-        (_WithReason("provider_quota_limit", "quota exhausted"), "provider_quota_limit"),
+        (
+            _WithReason("provider_quota_limit", "quota exhausted"),
+            "provider_quota_limit",
+        ),
     ],
-    ids=["classifiable-failure", "unclassifiable-failure", "reason-outside-the-vocabulary",
-         "reason-inside-the-vocabulary"],
+    ids=[
+        "classifiable-failure",
+        "unclassifiable-failure",
+        "reason-outside-the-vocabulary",
+        "reason-inside-the-vocabulary",
+    ],
 )
-def test_delivery_main_reports_every_failure_as_typed_json(tmp_path, monkeypatch, capsys, failure, reason):
+def test_delivery_main_reports_every_failure_as_typed_json(
+    tmp_path, monkeypatch, capsys, failure, reason
+):
     """The local lane's runner stdout IS the sender's completion notification. A failure other
     than target_busy used to reach the sender as stderr prose with no reason, so it could not
     tell an auth failure from a transient one; it now rides the same vocabulary as the relay."""
@@ -140,7 +158,9 @@ def test_delivery_main_reports_every_failure_as_typed_json(tmp_path, monkeypatch
 
     monkeypatch.setattr(bot_mode_dm, "_run_delivery", _raise)
 
-    rc = bot_mode_dm._delivery_main(["--run-delivery", "query-file", str(dm), "clawk", "-p", "ops", "chat"])
+    rc = bot_mode_dm._delivery_main(
+        ["--run-delivery", "query-file", str(dm), "clawk", "-p", "ops", "chat"]
+    )
 
     assert rc == 1
     payload = json.loads(capsys.readouterr().out.strip())

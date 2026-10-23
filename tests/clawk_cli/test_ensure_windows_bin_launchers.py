@@ -69,9 +69,7 @@ def _make_store(tmp_path, monkeypatch, *, version="3.11.15+x20260807"):
         json.dumps(
             {
                 "schema": 1,
-                "packages": {
-                    "python": {"entry": entry.name, "version": version}
-                },
+                "packages": {"python": {"entry": entry.name, "version": version}},
             }
         ),
         encoding="utf-8",
@@ -135,9 +133,7 @@ def test_store_python_launcher_boot_the_store_not_the_venv(tmp_path, monkeypatch
         _assert_boot_is_store_not_venv(staged[0], root, store)
 
 
-def test_legacy_venv_trampoline_is_replaced_by_store_launcher(
-    tmp_path, monkeypatch
-):
+def test_legacy_venv_trampoline_is_replaced_by_store_launcher(tmp_path, monkeypatch):
     """Pre-pm installs carry copied venv console-script trampolines — they
     boot through venv\\Scripts\\python.exe and must be replaced."""
     home, root = _make_managed(tmp_path, monkeypatch)
@@ -155,7 +151,11 @@ def test_legacy_venv_trampoline_is_replaced_by_store_launcher(
     assert set(Path(p).stem for p in map(Path, restored)) == set(_WINDOWS_BIN_LAUNCHERS)
     for name in _WINDOWS_BIN_LAUNCHERS:
         exe = bin_dir / f"{name}.exe"
-        launcher = exe if exe.exists() and b"legacy trampoline" not in exe.read_bytes() else bin_dir / f"{name}.cmd"
+        launcher = (
+            exe
+            if exe.exists() and b"legacy trampoline" not in exe.read_bytes()
+            else bin_dir / f"{name}.cmd"
+        )
         _assert_boot_is_store_not_venv(launcher, root, store)
 
 
@@ -193,7 +193,11 @@ def test_healthy_canonical_layout_with_placeholder_cmds_gets_upgraded(
 
     for name in _WINDOWS_BIN_LAUNCHERS:
         exe = bin_dir / f"{name}.exe"
-        launcher = exe if exe.exists() and b"legacy trampoline" not in exe.read_bytes() else bin_dir / f"{name}.cmd"
+        launcher = (
+            exe
+            if exe.exists() and b"legacy trampoline" not in exe.read_bytes()
+            else bin_dir / f"{name}.cmd"
+        )
         _assert_boot_is_store_not_venv(launcher, root, store)
 
 
@@ -265,7 +269,9 @@ def test_no_staging_litter_left_behind(managed_install):
     ensure_windows_bin_launchers(root, windows=True, user_path_entries=[])
 
     leftovers = [
-        p.name for p in (home / "bin").iterdir() if ".stage." in p.name or ".heal." in p.name
+        p.name
+        for p in (home / "bin").iterdir()
+        if ".stage." in p.name or ".heal." in p.name
     ]
     assert leftovers == []
 
@@ -368,10 +374,14 @@ def test_migration_refuses_empty_store_without_changing_path(tmp_path, monkeypat
     assert state["writes"] == 0
 
 
-def test_migration_leaves_path_when_new_consoles_use_another_home(managed_install, tmp_path, monkeypatch):
+def test_migration_leaves_path_when_new_consoles_use_another_home(
+    managed_install, tmp_path, monkeypatch
+):
     """A sandbox's managed clone stages its own launchers but never edits the User PATH."""
     home, root = managed_install
-    monkeypatch.setattr(_launchers, "new_console_clawk_root", lambda: tmp_path / "real-home")
+    monkeypatch.setattr(
+        _launchers, "new_console_clawk_root", lambda: tmp_path / "real-home"
+    )
     state, read, write = _fake_registry([str(root / "bin"), r"C:\Windows\system32"])
 
     ok = migrate_windows_bin_path(
@@ -384,7 +394,9 @@ def test_migration_leaves_path_when_new_consoles_use_another_home(managed_instal
         assert _launcher_files(home / "bin", name)
 
 
-def test_migration_fails_closed_when_the_console_check_raises(managed_install, monkeypatch):
+def test_migration_fails_closed_when_the_console_check_raises(
+    managed_install, monkeypatch
+):
     """The migration promises never to raise, so a failing console check leaves the PATH alone."""
     _home, root = managed_install
 
@@ -394,7 +406,9 @@ def test_migration_fails_closed_when_the_console_check_raises(managed_install, m
     monkeypatch.setattr(_launchers, "new_console_clawk_root", broken)
     state, read, write = _fake_registry([str(root / "bin")])
 
-    assert not migrate_windows_bin_path(root, windows=True, read_user_path=read, write_user_path=write)
+    assert not migrate_windows_bin_path(
+        root, windows=True, read_user_path=read, write_user_path=write
+    )
     assert state["writes"] == 0
 
 
@@ -420,10 +434,9 @@ def test_migration_noop_on_posix(managed_install):
 
 
 def test_normalize_windows_path_equivalences():
-    assert (
-        _normalize_windows_path(r"C:\Users\Me\AppData\Local\clawk\bin")
-        == _normalize_windows_path("c:/users/me/appdata/local/CLAWKSIS/BIN/")
-    )
+    assert _normalize_windows_path(
+        r"C:\Users\Me\AppData\Local\clawk\bin"
+    ) == _normalize_windows_path("c:/users/me/appdata/local/CLAWKSIS/BIN/")
 
 
 def test_repo_gitignores_the_legacy_bin_dir():
@@ -463,7 +476,8 @@ def test_repo_gitignores_the_legacy_bin_dir():
 
     result = subprocess.run(
         [git, "-C", str(repo_root), "check-ignore", "-q", "bin/clawk.exe"],
-        capture_output=True, env=env,
+        capture_output=True,
+        env=env,
         check=False,
     )
     assert result.returncode == 0, (

@@ -45,7 +45,8 @@ def test_plugin_engine_gets_context_length_on_init():
     cfg = {"context": {"engine": "stub"}, "agent": {}}
 
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("plugins.context_engine.load_context_engine", return_value=engine),
         patch("agent.model_metadata.get_model_context_length", return_value=204_800),
         patch("model_tools.get_tool_definitions", return_value=[]),
@@ -78,11 +79,14 @@ def test_active_context_engine_tools_survive_explicit_platform_toolsets():
 
     from clawk_cli.tools_config import _get_platform_tools
 
-    enabled_toolsets = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
+    enabled_toolsets = _get_platform_tools(
+        cfg, "cli", include_default_mcp_servers=False
+    )
     assert "context_engine" in enabled_toolsets
 
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("plugins.context_engine.load_context_engine", return_value=engine),
         patch("agent.model_metadata.get_model_context_length", return_value=204_800),
         patch("model_tools.get_tool_definitions", return_value=[]),
@@ -102,8 +106,7 @@ def test_active_context_engine_tools_survive_explicit_platform_toolsets():
 
     assert "stub_recover" in getattr(agent, "valid_tool_names", set())
     assert "stub_recover" in {
-        tool.get("function", {}).get("name")
-        for tool in getattr(agent, "tools", [])
+        tool.get("function", {}).get("name") for tool in getattr(agent, "tools", [])
     }
 
 
@@ -134,7 +137,8 @@ def test_codex_gpt55_autoraise_suppressed_for_plugin_engine():
     }
 
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("plugins.context_engine.load_context_engine", return_value=engine),
         patch("agent.model_metadata.get_model_context_length", return_value=272_000),
         patch("model_tools.get_tool_definitions", return_value=[]),
@@ -160,8 +164,11 @@ def test_codex_gpt55_autoraise_still_applies_to_builtin_compressor():
     }
 
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
-        patch("agent.context_compressor.get_model_context_length", return_value=272_000),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch(
+            "agent.context_compressor.get_model_context_length", return_value=272_000
+        ),
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
@@ -170,7 +177,11 @@ def test_codex_gpt55_autoraise_still_applies_to_builtin_compressor():
 
         agent = AIAgent(**_codex_agent_kwargs())
 
-    assert agent._compression_threshold_autoraised == {"model": "gpt-5.5", "from": 0.50, "to": 0.85}
+    assert agent._compression_threshold_autoraised == {
+        "model": "gpt-5.5",
+        "from": 0.50,
+        "to": 0.85,
+    }
     assert agent.context_compressor.threshold_percent == 0.85
     # Gateway parity: the notice is stashed for replay on turn 1.
     assert agent._compression_warning

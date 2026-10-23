@@ -31,8 +31,13 @@ _lease_listener_installed = threading.Event()
 def _display_snapshot() -> dict:
     from clawk_constants import clawk_home_key
     from tools.bot_desktop import lease as _bd_lease, runtime as _bd_runtime
+
     st = _bd_runtime.status()
-    return {**st.as_dict(), "lease": _bd_lease.public_view(_bd_lease.get()), "profile_key": clawk_home_key()}
+    return {
+        **st.as_dict(),
+        "lease": _bd_lease.public_view(_bd_lease.get()),
+        "profile_key": clawk_home_key(),
+    }
 
 
 def _install_lease_listener() -> None:
@@ -42,7 +47,11 @@ def _install_lease_listener() -> None:
     from tools.bot_desktop import lease as _bd_lease
 
     def _on_change(profile_key: str, lease) -> None:
-        _broadcast_global_event("display.lease", {"profile_key": profile_key, "lease": _bd_lease.public_view(lease)})
+        _broadcast_global_event(
+            "display.lease",
+            {"profile_key": profile_key, "lease": _bd_lease.public_view(lease)},
+        )
+
     _bd_lease.on_change(_on_change)
     _lease_listener_installed.set()  # only once the subscription exists, or a failed import would silence every client
 
@@ -66,10 +75,12 @@ def _(rid, params: dict) -> dict:
     already be the human's session, so it is dropped rather than shipped to every client."""
     try:
         from tools.bot_desktop import lease as _bd_lease
+
         before = _bd_lease.get()
         if before.holder == _bd_lease.HUMAN:
             return _ok(rid, {"data_url": None, "suppressed": "human_has_control"})
         from tools.bot_desktop.thumbnail import thumbnail_data_url
+
         data_url = thumbnail_data_url()
         if _bd_lease.get().epoch != before.epoch:
             return _ok(rid, {"data_url": None, "suppressed": "human_has_control"})
@@ -83,6 +94,7 @@ def _(rid, params: dict) -> dict:
 def _(rid, params: dict) -> dict:
     _install_lease_listener()
     from tools.bot_desktop import runtime as _bd_runtime
+
     try:
         _bd_runtime.start()
         return _ok(rid, _display_snapshot())
@@ -96,12 +108,17 @@ def _(rid, params: dict) -> dict:
     """Stopping kills the screen under whoever is on it, so it obeys the same rule as a bare
     display.lease.release: refused while a human holds unless the caller says ``force``."""
     from tools.bot_desktop import lease as _bd_lease, runtime as _bd_runtime
+
     force = bool(params.get("force"))
     # Refusal and release are ONE lease transition: a takeover landing between a separate human_holds()
     # check and the release would be acknowledged to the human and then silently revoked here.
     if _bd_lease.release(unless_human=not force).holder == _bd_lease.HUMAN:
-        return _err(rid, _DISPLAY_ERR, "a human holds this screen; pass force: true to stop it anyway",
-                    data={"code": "viewer_mismatch"})
+        return _err(
+            rid,
+            _DISPLAY_ERR,
+            "a human holds this screen; pass force: true to stop it anyway",
+            data={"code": "viewer_mismatch"},
+        )
     try:
         stopped = _bd_runtime.stop()
         return _ok(rid, {**_display_snapshot(), "stopped": stopped})
@@ -111,7 +128,9 @@ def _(rid, params: dict) -> dict:
 
 # viewer ids minted per connection (keyed by the transport that asked), so a reconnecting pane can
 # keep its identity — and its lease — while nobody can claim an id minted for another connection.
-_minted_viewer_ids: weakref.WeakKeyDictionary[object, set[str]] = weakref.WeakKeyDictionary()
+_minted_viewer_ids: weakref.WeakKeyDictionary[object, set[str]] = (
+    weakref.WeakKeyDictionary()
+)
 # Transports that cannot be weakly referenced (stdio, slotted, or none bound at all) are one
 # connection per process — the TUI's own pipe — so their minted ids share one process-wide set.
 _unweakable_minted_ids: set[str] = set()
@@ -128,6 +147,7 @@ def _mint_viewer_id(requested: str) -> str:
     """Server-minted viewer identity. ``requested`` is honoured only when THIS connection minted it
     earlier; anything else (including a holder id read off display.status) gets a fresh id."""
     import secrets
+
     mine = _minted_for_this_connection()
     if requested in mine:
         return requested
@@ -142,8 +162,12 @@ def _foreign_viewer_id(rid, viewer_id: str):
     minting only shapes the honest path and a made-up id still evicts or releases the human."""
     if viewer_id in _minted_for_this_connection():
         return None
-    return _err(rid, _DISPLAY_ERR, "viewer_id was not minted for this connection; call display.observe first",
-                data={"code": "viewer_mismatch"})
+    return _err(
+        rid,
+        _DISPLAY_ERR,
+        "viewer_id was not minted for this connection; call display.observe first",
+        data={"code": "viewer_mismatch"},
+    )
 
 
 @method("display.observe")
@@ -155,15 +179,33 @@ def _(rid, params: dict) -> dict:
     from clawk_constants import get_clawk_home
     from clawk_cli.dashboard_auth.ws_tickets import mint_ticket
     from tools.bot_desktop import runtime as _bd_runtime
+
     try:
         # The bridge dials either the host RFB socket or the sandbox relay; neither exists before start.
-        if _bd_runtime.rfb_socket_path() is None and not _bd_runtime.sandbox_screen_running():
-            return _err(rid, _DISPLAY_ERR, "this profile's Bot Desktop is not running; call display.start first")
+        if (
+            _bd_runtime.rfb_socket_path() is None
+            and not _bd_runtime.sandbox_screen_running()
+        ):
+            return _err(
+                rid,
+                _DISPLAY_ERR,
+                "this profile's Bot Desktop is not running; call display.start first",
+            )
         viewer_id = _mint_viewer_id(str(params.get("viewer_id") or "").strip())
-        ticket = mint_ticket(user_id=f"display:{viewer_id}", provider="bot-desktop",
-                             extra={"clawk_home": str(get_clawk_home()), "viewer_id": viewer_id})
-        return _ok(rid, {"ticket": ticket, "path": "/api/display/ws", "viewer_id": viewer_id,
-                         **_display_snapshot()})
+        ticket = mint_ticket(
+            user_id=f"display:{viewer_id}",
+            provider="bot-desktop",
+            extra={"clawk_home": str(get_clawk_home()), "viewer_id": viewer_id},
+        )
+        return _ok(
+            rid,
+            {
+                "ticket": ticket,
+                "path": "/api/display/ws",
+                "viewer_id": viewer_id,
+                **_display_snapshot(),
+            },
+        )
     except Exception as e:
         return _err(rid, _DISPLAY_ERR, str(e))
 
@@ -175,9 +217,12 @@ def _(rid, params: dict) -> dict:
     image (the container is recreated on the next terminal call), false pins the current one. Both
     end the offer. Refused when nothing is pending, so a stale pane cannot rewrite the config."""
     from clawk_cli.sandbox_image_switch import decide, pending
+
     sw = pending()
     if sw is None:
-        return _err(rid, _DISPLAY_ERR, "no sandbox image switch is pending for this profile")
+        return _err(
+            rid, _DISPLAY_ERR, "no sandbox image switch is pending for this profile"
+        )
     image = decide(sw, approve=bool(params.get("approve", True)))
     return _ok(rid, {"docker_image": image, **_display_snapshot()})
 
@@ -189,52 +234,83 @@ def _(rid, params: dict) -> dict:
     ``display.install.done``. Refused while one is already running for this profile."""
     from clawk_constants import clawk_home_key
     from tools.bot_desktop import install as _bd_install, runtime as _bd_runtime
+
     if not _bd_runtime.is_supported_host():
         return _err(rid, _DISPLAY_ERR, "Bot Desktop runs on Linux gateway hosts only")
     if _bd_runtime.in_sandbox():
-        return _err(rid, _DISPLAY_ERR, "this profile's screen lives inside the terminal backend's sandbox; give that "
-                                       "sandbox an image with the desktop stack (nousresearch/hermes-sandbox:desktop) "
-                                       "instead of installing on the gateway host")
+        return _err(
+            rid,
+            _DISPLAY_ERR,
+            "this profile's screen lives inside the terminal backend's sandbox; give that "
+            "sandbox an image with the desktop stack (nousresearch/hermes-sandbox:desktop) "
+            "instead of installing on the gateway host",
+        )
     if _bd_runtime.install_command() is None:
-        return _err(rid, _DISPLAY_ERR, "no supported package manager (apt-get, dnf, pacman) on this host")
+        return _err(
+            rid,
+            _DISPLAY_ERR,
+            "no supported package manager (apt-get, dnf, pacman) on this host",
+        )
     profile_key = clawk_home_key()
 
     def _ask_password() -> str:
         # App-level card, no session: it reaches the connection that clicked Install through the
         # transport copy_context() carries below. A client-supplied session_id could route the
         # masked password card into another window's chat, so none is accepted.
-        return _ask("display.install.sudo", "", {"profile_key": profile_key}, timeout=300)
+        return _ask(
+            "display.install.sudo", "", {"profile_key": profile_key}, timeout=300
+        )
 
     def _line(text: str) -> None:
-        _broadcast_global_event("display.install.log", {"profile_key": profile_key, "line": text})
+        _broadcast_global_event(
+            "display.install.log", {"profile_key": profile_key, "line": text}
+        )
 
     # The worker thread inherits NO context: the caller's transport (so the sudo card reaches the
     # CLIENT that clicked Install) and the profile scope `_profile_scoped` installed (so status, lock
     # and events all speak for the requested profile) are carried across with copy_context().
     import contextvars
+
     ctx = contextvars.copy_context()
 
     def _run() -> None:
         try:
-            code = _bd_install.install_packages(ask_password=_ask_password, on_line=_line, claimed=True)
+            code = _bd_install.install_packages(
+                ask_password=_ask_password, on_line=_line, claimed=True
+            )
         except Exception as e:
             _line(f"install failed: {e}")
             code = 1
-        _broadcast_global_event("display.install.done", {"profile_key": profile_key, "code": code,
-                                                         "status": _display_snapshot()})
+        _broadcast_global_event(
+            "display.install.done",
+            {"profile_key": profile_key, "code": code, "status": _display_snapshot()},
+        )
 
     try:
         _bd_install.claim()  # atomic: two fast clicks cannot both start a package manager
     except _bd_install.InstallBusy as e:
         return _err(rid, _DISPLAY_ERR, str(e))
-    threading.Thread(target=ctx.run, args=(_run,), name=f"bot-desktop-install:{profile_key}", daemon=True).start()
-    return _ok(rid, {"started": True, "command": _bd_runtime.install_command(), "profile_key": profile_key})
+    threading.Thread(
+        target=ctx.run,
+        args=(_run,),
+        name=f"bot-desktop-install:{profile_key}",
+        daemon=True,
+    ).start()
+    return _ok(
+        rid,
+        {
+            "started": True,
+            "command": _bd_runtime.install_command(),
+            "profile_key": profile_key,
+        },
+    )
 
 
 @method("display.lease.acquire")
 @_profile_scoped
 def _(rid, params: dict) -> dict:
     from tools.bot_desktop import lease as _bd_lease
+
     viewer_id = str(params.get("viewer_id") or "").strip()
     if not viewer_id:
         return _err(rid, _DISPLAY_ERR, "viewer_id required")
@@ -248,16 +324,27 @@ def _(rid, params: dict) -> dict:
 @_profile_scoped
 def _(rid, params: dict) -> dict:
     from tools.bot_desktop import lease as _bd_lease
+
     viewer_id = str(params.get("viewer_id") or "").strip() or None
     # lease.release(None) skips the holder check; a client that lost its viewer id must not be able to
     # yank control from whoever holds it unless it says so explicitly (force).
-    if viewer_id is not None and not params.get("force") and (refused := _foreign_viewer_id(rid, viewer_id)) is not None:
+    if (
+        viewer_id is not None
+        and not params.get("force")
+        and (refused := _foreign_viewer_id(rid, viewer_id)) is not None
+    ):
         return refused
     # Same atomicity as display.stop: the "is a human holding?" decision happens inside the transition.
-    lease = _bd_lease.release(viewer_id, unless_human=viewer_id is None and not params.get("force"))
+    lease = _bd_lease.release(
+        viewer_id, unless_human=viewer_id is None and not params.get("force")
+    )
     if viewer_id is None and lease.holder == _bd_lease.HUMAN:
-        return _err(rid, _DISPLAY_ERR, "viewer_id required to release another viewer's lease (or pass force: true)",
-                    data={"code": "viewer_mismatch"})
+        return _err(
+            rid,
+            _DISPLAY_ERR,
+            "viewer_id required to release another viewer's lease (or pass force: true)",
+            data={"code": "viewer_mismatch"},
+        )
     return _ok(rid, {"lease": _bd_lease.public_view(lease)})
 
 

@@ -23,17 +23,13 @@ def test_searching_for_sudo_does_not_trigger_rewrite(monkeypatch):
     assert sudo_stdin is None
 
 
-
-
-
-
-
-
 def test_actual_sudo_command_uses_configured_password(monkeypatch):
     monkeypatch.setenv("SUDO_PASSWORD", "testpass")
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
 
-    transformed, sudo_stdin = terminal_tool_sudo._transform_sudo_command("sudo apt install -y ripgrep")
+    transformed, sudo_stdin = terminal_tool_sudo._transform_sudo_command(
+        "sudo apt install -y ripgrep"
+    )
 
     assert transformed == "sudo -S -p '' apt install -y ripgrep"
     assert sudo_stdin == "testpass\n"
@@ -44,7 +40,9 @@ def test_explicit_empty_sudo_password_tries_empty_without_prompt(monkeypatch):
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
 
     def _fail_prompt(*_args, **_kwargs):
-        raise AssertionError("interactive sudo prompt should not run for explicit empty password")
+        raise AssertionError(
+            "interactive sudo prompt should not run for explicit empty password"
+        )
 
     monkeypatch.setattr(terminal_tool_sudo, "_prompt_for_sudo_password", _fail_prompt)
 
@@ -63,8 +61,9 @@ def test_headless_sudo_never_runs_backend_nopasswd_probe(monkeypatch):
     def _fail_probe():
         raise AssertionError("headless sudo must not probe the backend")
 
-    assert terminal_tool_sudo._transform_sudo_command("sudo true", sudo_nopasswd_check=_fail_probe) == (
-        "sudo true", None)
+    assert terminal_tool_sudo._transform_sudo_command(
+        "sudo true", sudo_nopasswd_check=_fail_probe
+    ) == ("sudo true", None)
 
 
 def test_validate_workdir_blocks_shell_metacharacters_in_windows_paths():
@@ -74,9 +73,12 @@ def test_validate_workdir_blocks_shell_metacharacters_in_windows_paths():
 
 
 def test_validate_workdir_allows_unicode_filesystem_paths():
-    assert terminal_tool._validate_workdir(
-        "/Users/alice/Documents/Obs_Clawksis_Data/项目-projects/客户拜访"
-    ) is None
+    assert (
+        terminal_tool._validate_workdir(
+            "/Users/alice/Documents/Obs_Clawksis_Data/项目-projects/客户拜访"
+        )
+        is None
+    )
     assert terminal_tool._validate_workdir("/tmp/テスト") is None
     assert terminal_tool._validate_workdir("/home/jürgen/über projekt") is None
 
@@ -95,9 +97,20 @@ def test_validate_workdir_still_blocks_metachars_in_unicode_paths():
 
 def test_literal_sudo_executables_receive_password_stdin(monkeypatch):
     monkeypatch.setenv("SUDO_PASSWORD", "testpass")
-    for prefix in ("", "VAR='a b' ", "env ", "'/usr/bin/env' -i -u UNUSED X=1 ",
-                   "env --unset=UNUSED --chdir /tmp -- X=1 ", "env -uUNUSED -C/tmp "):
-        for executable in ("sudo", "/usr/bin/sudo", "'/opt/my tools/sudo'", '"/usr/bin/sudo"'):
+    for prefix in (
+        "",
+        "VAR='a b' ",
+        "env ",
+        "'/usr/bin/env' -i -u UNUSED X=1 ",
+        "env --unset=UNUSED --chdir /tmp -- X=1 ",
+        "env -uUNUSED -C/tmp ",
+    ):
+        for executable in (
+            "sudo",
+            "/usr/bin/sudo",
+            "'/opt/my tools/sudo'",
+            '"/usr/bin/sudo"',
+        ):
             command = prefix + executable + " -u root true"
             rewritten, stdin = terminal_tool_sudo._transform_sudo_command(command)
             assert rewritten == prefix + executable + " -S -p '' -u root true"
@@ -107,13 +120,29 @@ def test_literal_sudo_executables_receive_password_stdin(monkeypatch):
 def test_sudo_rewrite_preserves_env_operands_and_prose(monkeypatch):
     monkeypatch.setenv("SUDO_PASSWORD", "testpass")
     commands = (
-        "echo '/usr/bin/sudo true'", "env echo sudo true", "env -u sudo echo ok",
-        "env --chdir sudo echo ok", "env --unset=sudo echo ok", "env -- sudo=1 echo ok",
-        ">/tmp/sudo echo ok", "env 2>/tmp/sudo echo ok", "env > /tmp/sudo echo ok",
-        "/tmp/{a,b}/sudo true", "env X=1 -u UNUSED sudo", "env - -u UNUSED sudo", "env echo /usr/bin/sudo", "/tmp/*/sudo true",
-        "env -S 'sudo true'", "env --unknown sudo true", "env --help sudo",
-        "bash -c 'sudo true'", "echo ok # prose; /usr/bin/sudo true",
-        '"/usr/bin/sudo', "env -u sudo", "env X=sudo", '"X=1" /usr/bin/sudo true',
+        "echo '/usr/bin/sudo true'",
+        "env echo sudo true",
+        "env -u sudo echo ok",
+        "env --chdir sudo echo ok",
+        "env --unset=sudo echo ok",
+        "env -- sudo=1 echo ok",
+        ">/tmp/sudo echo ok",
+        "env 2>/tmp/sudo echo ok",
+        "env > /tmp/sudo echo ok",
+        "/tmp/{a,b}/sudo true",
+        "env X=1 -u UNUSED sudo",
+        "env - -u UNUSED sudo",
+        "env echo /usr/bin/sudo",
+        "/tmp/*/sudo true",
+        "env -S 'sudo true'",
+        "env --unknown sudo true",
+        "env --help sudo",
+        "bash -c 'sudo true'",
+        "echo ok # prose; /usr/bin/sudo true",
+        '"/usr/bin/sudo',
+        "env -u sudo",
+        "env X=sudo",
+        '"X=1" /usr/bin/sudo true',
     )
     for command in commands:
         assert terminal_tool_sudo._transform_sudo_command(command) == (command, None)

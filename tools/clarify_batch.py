@@ -7,6 +7,7 @@ Main's TUI sidecar (``tui_gateway/server_requests.py``) and the session owner
 itself and they drifted. Both call :func:`settle_batch`, so the model is told the same thing on every
 surface.
 """
+
 from __future__ import annotations
 
 OUTCOMES = ("submitted", "timed_out", "cancelled")
@@ -23,9 +24,15 @@ def settle_batch(locked: dict, frame_result=None, *, ended: str | None = None) -
       Esc / Desktop Skip send ``{}``; an error frame gives ``None``) is a cancel-all: locks kept, ``cancelled``.
     """
     if ended is not None:
-        return {"answers": dict(locked), "outcome": ended if ended in OUTCOMES else "cancelled"}
+        return {
+            "answers": dict(locked),
+            "outcome": ended if ended in OUTCOMES else "cancelled",
+        }
     if isinstance(frame_result, dict) and isinstance(frame_result.get("answers"), dict):
         outcome = frame_result.get("outcome")
-        return {**frame_result, "answers": {**locked, **frame_result["answers"]},
-                "outcome": outcome if outcome in OUTCOMES else "submitted"}
+        return {
+            **frame_result,
+            "answers": {**locked, **frame_result["answers"]},
+            "outcome": outcome if outcome in OUTCOMES else "submitted",
+        }
     return {"answers": dict(locked), "outcome": "cancelled"}

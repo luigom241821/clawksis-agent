@@ -7,6 +7,7 @@ list on every read-only surface: the browse probe hit ``no such table`` and answ
 have caught it up. These tests build the real pre-merge shape from the pre-#106742 SCHEMA_SQL
 (trimmed to what that release declared) and browse it through the real read-only path.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -19,9 +20,17 @@ from clawk_cli.web_server_sessions import _open_session_db_at_path
 from clawk_state import SessionDB
 from clawk_state_common import SCHEMA_VERSION
 
-_ADDED_TABLES = ("runtime_epoch", "session_admissions", "worker_executions", "worker_receipts")
-_ADDED_COLUMNS = (("sessions", "runtime_revision"), ("sessions", "runtime_generation"),
-                  ("async_delegations", "owner_execution_id"))
+_ADDED_TABLES = (
+    "runtime_epoch",
+    "session_admissions",
+    "worker_executions",
+    "worker_receipts",
+)
+_ADDED_COLUMNS = (
+    ("sessions", "runtime_revision"),
+    ("sessions", "runtime_generation"),
+    ("async_delegations", "owner_execution_id"),
+)
 
 
 def _pre_merge_store(path, *, version=31):
@@ -44,7 +53,10 @@ def _pre_merge_store(path, *, version=31):
 
 def _tables(path):
     with closing(sqlite3.connect(path)) as conn:
-        return {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        return {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
 
 
 def _profile_home(tmp_path, name="scribe"):
@@ -59,7 +71,9 @@ def test_unowned_lagging_store_browses_after_one_reconcile(tmp_path):
 
     db = _open_session_db_at_path(path, read_only=True)
     try:
-        assert [row["id"] for row in db.list_sessions_rich(limit=10, compact_rows=True)] == ["kept"]
+        assert [
+            row["id"] for row in db.list_sessions_rich(limit=10, compact_rows=True)
+        ] == ["kept"]
         assert [m["content"] for m in db.get_messages("kept")] == ["history survives"]
     finally:
         db.close()
@@ -103,7 +117,9 @@ def test_corrupt_store_still_returns_503(tmp_path):
         if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
-    with open(path, "r+b") as fh:  # sqlite_master (page 1 b-tree) overwritten past the header
+    with open(
+        path, "r+b"
+    ) as fh:  # sqlite_master (page 1 b-tree) overwritten past the header
         fh.seek(100)
         fh.write(b"\xde\xad\xbe\xef" * ((page_size - 100) // 4))
     before = path.read_bytes()
@@ -135,18 +151,26 @@ def test_version_bump_migration_is_additive_and_idempotent(tmp_path):
 
     for _ in range(2):
         with SessionDB(db_path=path) as db:
-            assert db._conn.execute("SELECT version FROM schema_version").fetchone()[0] == SCHEMA_VERSION
+            assert (
+                db._conn.execute("SELECT version FROM schema_version").fetchone()[0]
+                == SCHEMA_VERSION
+            )
             assert db._conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 1
     assert set(_ADDED_TABLES) <= _tables(path)
     with closing(sqlite3.connect(path)) as conn:
         for table, column in _ADDED_COLUMNS:
-            assert column in {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            assert column in {
+                row[1] for row in conn.execute(f"PRAGMA table_info({table})")
+            }
 
     # A browse-reconciled store (still stamped 31) also upgrades cleanly on the owner's open.
     other = _pre_merge_store(tmp_path / "other.db")
     _open_session_db_at_path(other, read_only=True).close()
     with SessionDB(db_path=other) as db:
-        assert db._conn.execute("SELECT version FROM schema_version").fetchone()[0] == SCHEMA_VERSION
+        assert (
+            db._conn.execute("SELECT version FROM schema_version").fetchone()[0]
+            == SCHEMA_VERSION
+        )
 
 
 def test_messages_route_for_lagging_profile(monkeypatch, tmp_path):
@@ -211,13 +235,16 @@ def _session_columns(path):
 
 def _owned(home):
     from gateway.runtime_ownership import ProfileOwnership
+
     owner = ProfileOwnership()  # what a running gateway holds on its profile
     owner.reserve([home])
     return owner
 
 
 @pytest.mark.parametrize("missing_column", ["archived", "pinned", "last_activity_at"])
-def test_session_list_reconciles_once_only_when_unowned(own_store_client, missing_column):
+def test_session_list_reconciles_once_only_when_unowned(
+    own_store_client, missing_column
+):
     client, path = own_store_client
     _drop_session_column(path, missing_column)
 
@@ -291,7 +318,9 @@ def test_corrupt_non_root_page_plus_drift_is_not_written(tmp_path):
     path = _lagging_store_with_history(_profile_home(tmp_path))
     with closing(sqlite3.connect(path)) as conn:
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
-        root = conn.execute("SELECT rootpage FROM sqlite_master WHERE name='messages'").fetchone()[0]
+        root = conn.execute(
+            "SELECT rootpage FROM sqlite_master WHERE name='messages'"
+        ).fetchone()[0]
         pages = conn.execute("PRAGMA page_count").fetchone()[0]
     victim = max(root + 5, pages // 2)  # a messages leaf, never page 1 / sqlite_master
     with open(path, "r+b") as fh:
@@ -335,7 +364,7 @@ def test_concurrent_browses_without_a_gateway_all_succeed(tmp_path):
     assert "last_read_at" in _session_columns(path)
 
 
-_PROC_BROWSE = r'''
+_PROC_BROWSE = r"""
 import sys, time
 from pathlib import Path
 from fastapi import HTTPException
@@ -348,7 +377,7 @@ try:
     print("RESULT 200")
 except HTTPException as exc:
     print("RESULT", exc.status_code, exc.detail)
-'''
+"""
 
 
 @pytest.mark.platforms("linux", "macos")
@@ -360,14 +389,24 @@ def test_concurrent_browses_from_processes_all_succeed(tmp_path):
 
     path = _lagging_store_with_history(_profile_home(tmp_path), rows=50)
     go = time.time() + 2.0
-    procs = [subprocess.Popen([sys.executable, "-c", _PROC_BROWSE, str(path), str(go)], env=os.environ,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) for _ in range(5)]
+    procs = [
+        subprocess.Popen(
+            [sys.executable, "-c", _PROC_BROWSE, str(path), str(go)],
+            env=os.environ,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        for _ in range(5)
+    ]
     out = [p.communicate(timeout=60)[0] for p in procs]
-    results = [line for o in out for line in o.splitlines() if line.startswith("RESULT")]
+    results = [
+        line for o in out for line in o.splitlines() if line.startswith("RESULT")
+    ]
     assert results == ["RESULT 200"] * 5, out
 
 
-_PURPOSE_HOLDER = r'''
+_PURPOSE_HOLDER = r"""
 import sys, time
 from pathlib import Path
 from gateway.runtime_ownership import ProfileOwnership
@@ -376,15 +415,20 @@ owner = ProfileOwnership()
 owner.reserve([Path(sys.argv[1])], purpose=purpose)
 print("held", flush=True)
 time.sleep(float(sys.argv[2]))
-'''
+"""
 
 
 def _hold(home, seconds, purpose=""):
     import os
     import subprocess
     import sys
-    proc = subprocess.Popen([sys.executable, "-c", _PURPOSE_HOLDER, str(home), str(seconds), purpose],
-                            env=os.environ, stdout=subprocess.PIPE, text=True)
+
+    proc = subprocess.Popen(
+        [sys.executable, "-c", _PURPOSE_HOLDER, str(home), str(seconds), purpose],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     assert proc.stdout.readline().strip() == "held"
     return proc
 
@@ -451,7 +495,7 @@ def test_gateway_boot_reserve_waits_out_a_browse_reconcile(tmp_path):
 # ── Independent review round 2 ──
 
 
-_RAW_FLOCK_HOLDER = r'''
+_RAW_FLOCK_HOLDER = r"""
 import fcntl, os, sys, time
 from pathlib import Path
 home = Path(sys.argv[1]); home.mkdir(parents=True, exist_ok=True)
@@ -460,7 +504,7 @@ fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 fh.seek(0); fh.truncate(); fh.flush()  # flock held, record not yet published (reserve()'s window)
 print("held", flush=True)
 time.sleep(float(sys.argv[2]))
-'''
+"""
 
 
 @pytest.mark.platforms("linux", "macos")
@@ -476,8 +520,12 @@ def test_gateway_boot_waits_while_the_holder_has_not_published_its_record(tmp_pa
     from gateway.runtime_ownership import OwnershipConflict, ProfileOwnership
 
     home = _profile_home(tmp_path)
-    holder = subprocess.Popen([sys.executable, "-c", _RAW_FLOCK_HOLDER, str(home), "1.0"],
-                              env=os.environ, stdout=subprocess.PIPE, text=True)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _RAW_FLOCK_HOLDER, str(home), "1.0"],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     assert holder.stdout.readline().strip() == "held"
     booting = ProfileOwnership()
     try:
@@ -492,8 +540,12 @@ def test_gateway_boot_waits_while_the_holder_has_not_published_its_record(tmp_pa
         holder.wait()
 
     # Still bounded: an unpublished holder that never lets go is refused once the wait expires.
-    holder = subprocess.Popen([sys.executable, "-c", _RAW_FLOCK_HOLDER, str(home), "30"],
-                              env=os.environ, stdout=subprocess.PIPE, text=True)
+    holder = subprocess.Popen(
+        [sys.executable, "-c", _RAW_FLOCK_HOLDER, str(home), "30"],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     assert holder.stdout.readline().strip() == "held"
     contender = ProfileOwnership()
     try:
@@ -563,7 +615,9 @@ except HTTPException as exc:
 
 @pytest.mark.platforms("linux", "macos")
 @pytest.mark.parametrize("phase", ["ddl"])
-def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(tmp_path, phase):
+def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(
+    tmp_path, phase
+):
     """R2-2: the busy timeout bounds lock contention, not SQL execution. A slow DDL must be
     interrupted at the browse budget (rolled back, retryable 503), and gateway boot's wait must
     outlast that budget, so a slow browse never turns into a startup refusal. (The integrity scan
@@ -583,13 +637,22 @@ def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=400)
     before = _file_state(path)
-    browse = subprocess.Popen([sys.executable, "-c", _SLOW_BROWSE, str(path), phase], env=os.environ,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    browse = subprocess.Popen(
+        [sys.executable, "-c", _SLOW_BROWSE, str(path), phase],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
     assert browse.stdout.readline().strip() == "started"
-    assert browse.stdout.readline().strip() == "slowed", "the slow phase never ran under the lock"
+    assert browse.stdout.readline().strip() == "slowed", (
+        "the slow phase never ran under the lock"
+    )
     booting = ProfileOwnership()
     try:
-        bootstrap._reserve_waiting_out_browse_reconcile(booting, [home])  # default wait: must not raise
+        bootstrap._reserve_waiting_out_browse_reconcile(
+            booting, [home]
+        )  # default wait: must not raise
         assert booting.owns(home)
     finally:
         booting.close()
@@ -600,7 +663,10 @@ def test_slow_browse_reconcile_gives_up_inside_its_budget_and_boot_waits_it_out(
     assert float(elapsed) < budget_s + 2, out
     detail = " ".join(detail)
     assert "nothing was changed" in detail
-    assert "`clawk -p scribe sessions repair`" in detail and "gateway" not in detail.lower()
+    assert (
+        "`clawk -p scribe sessions repair`" in detail
+        and "gateway" not in detail.lower()
+    )
     assert _file_state(path) == before
     assert "last_read_at" not in _session_columns(path)
 
@@ -614,11 +680,21 @@ def test_equal_cardinality_corrupt_index_plus_drift_is_not_written(tmp_path):
         conn.execute("CREATE INDEX probe_other_index ON probe_other(v)")
         conn.execute("INSERT INTO probe_other(v) VALUES ('wrong-source')")
         conn.commit()
-        target = conn.execute("SELECT rootpage FROM sqlite_master WHERE name='idx_sessions_source'").fetchone()[0]
-        other = conn.execute("SELECT rootpage FROM sqlite_master WHERE name='probe_other_index'").fetchone()[0]
+        target = conn.execute(
+            "SELECT rootpage FROM sqlite_master WHERE name='idx_sessions_source'"
+        ).fetchone()[0]
+        other = conn.execute(
+            "SELECT rootpage FROM sqlite_master WHERE name='probe_other_index'"
+        ).fetchone()[0]
         conn.execute("PRAGMA writable_schema=ON")
-        conn.execute("UPDATE sqlite_master SET rootpage=? WHERE name='idx_sessions_source'", (other,))
-        conn.execute("UPDATE sqlite_master SET rootpage=? WHERE name='probe_other_index'", (target,))
+        conn.execute(
+            "UPDATE sqlite_master SET rootpage=? WHERE name='idx_sessions_source'",
+            (other,),
+        )
+        conn.execute(
+            "UPDATE sqlite_master SET rootpage=? WHERE name='probe_other_index'",
+            (target,),
+        )
         conn.execute("PRAGMA writable_schema=OFF")
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -641,7 +717,9 @@ def test_failed_column_reconcile_rolls_back_every_addition(tmp_path):
     committing the other columns it could add (no partial upgrade without a backup)."""
     path = _lagging_store_with_history(_profile_home(tmp_path), rows=10)
     with closing(sqlite3.connect(path)) as conn:
-        conn.execute("INSERT INTO system_prompts(hash, prompt) VALUES ('abc', 'retained prompt')")
+        conn.execute(
+            "INSERT INTO system_prompts(hash, prompt) VALUES ('abc', 'retained prompt')"
+        )
         conn.execute("ALTER TABLE system_prompts DROP COLUMN prompt")
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -671,7 +749,9 @@ def test_integrity_scan_runs_before_the_lock_is_taken(tmp_path, monkeypatch):
     lock_free_during_scan = []
 
     def spy(p, budget):
-        other = ProfileOwnership()  # its own open file description: conflicts with any holder
+        other = (
+            ProfileOwnership()
+        )  # its own open file description: conflicts with any holder
         try:
             other.reserve([home])
             lock_free_during_scan.append(True)
@@ -737,10 +817,17 @@ def test_gateway_boot_never_waits_on_a_slow_integrity_scan(tmp_path):
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=50)
     before = _file_state(path)
-    browse = subprocess.Popen([sys.executable, "-c", _SLOW_SCAN_BROWSE, str(path), "4"], env=os.environ,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    browse = subprocess.Popen(
+        [sys.executable, "-c", _SLOW_SCAN_BROWSE, str(path), "4"],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
     assert browse.stdout.readline().strip() == "started"
-    time.sleep(1.5)  # health: allow HX013 -- the child scan is a fixed 4 s stand-in; boot must land mid-scan
+    time.sleep(
+        1.5
+    )  # health: allow HX013 -- the child scan is a fixed 4 s stand-in; boot must land mid-scan
     booting = ProfileOwnership()
     try:
         started = time.monotonic()
@@ -770,15 +857,20 @@ class _SlowProgress:
         import time
 
         def slow():
-            time.sleep(0.01)  # health: allow HX013 -- the slowed VM IS the behaviour under test (cold disk)
+            time.sleep(
+                0.01
+            )  # health: allow HX013 -- the slowed VM IS the behaviour under test (cold disk)
             return handler() if handler is not None else 0
+
         return self._conn.set_progress_handler(slow, 5)
 
     def close(self):
         return self._conn.close()
 
 
-def test_slow_integrity_scan_is_bounded_and_not_repeated_on_every_poll(tmp_path, monkeypatch):
+def test_slow_integrity_scan_is_bounded_and_not_repeated_on_every_poll(
+    tmp_path, monkeypatch
+):
     """alt-glitch C1: the pre-lock scan still has a deadline (retryable 503, nothing written), and a
     sidebar polling the same unchanged store does not rescan the whole file on every request."""
     import clawk_cli.sqlite_safe_read as ssr
@@ -787,12 +879,21 @@ def test_slow_integrity_scan_is_bounded_and_not_repeated_on_every_poll(tmp_path,
     path = _lagging_store_with_history(_profile_home(tmp_path), rows=400)
     before = _file_state(path)
     original = ssr.connect_tracked
-    monkeypatch.setattr(ssr, "connect_tracked", lambda p, *a, **kw: (
-        _SlowProgress(original(p, *a, **kw)) if "mode=ro" in str(p) else original(p, *a, **kw)))
+    monkeypatch.setattr(
+        ssr,
+        "connect_tracked",
+        lambda p, *a, **kw: (
+            _SlowProgress(original(p, *a, **kw))
+            if "mode=ro" in str(p)
+            else original(p, *a, **kw)
+        ),
+    )
     monkeypatch.setattr(reconcile, "BROWSE_INTEGRITY_BUDGET_S", 0.3)
     scans = []
     real_scan = reconcile._integrity_problem
-    monkeypatch.setattr(reconcile, "_integrity_problem", lambda p, b: scans.append(1) or real_scan(p, b))
+    monkeypatch.setattr(
+        reconcile, "_integrity_problem", lambda p, b: scans.append(1) or real_scan(p, b)
+    )
     for _ in range(3):
         with pytest.raises(HTTPException) as caught:
             _open_session_db_at_path(path, read_only=True)
@@ -849,9 +950,15 @@ def test_boot_refuses_at_once_when_another_home_has_a_real_owner(tmp_path):
     try:
         started = time.monotonic()
         with pytest.raises(OwnershipConflict):
-            _reserve_waiting_out_browse_reconcile(booting, [free_home, owned_home, browsed_home], wait_s=10)
-        assert time.monotonic() - started < 2, "refusal waited for an unrelated browse holder"
-        assert booting.homes == [] or not any(booting.owns(h) for h in (free_home, owned_home, browsed_home))
+            _reserve_waiting_out_browse_reconcile(
+                booting, [free_home, owned_home, browsed_home], wait_s=10
+            )
+        assert time.monotonic() - started < 2, (
+            "refusal waited for an unrelated browse holder"
+        )
+        assert booting.homes == [] or not any(
+            booting.owns(h) for h in (free_home, owned_home, browsed_home)
+        )
     finally:
         booting.close()
         for proc in (gateway, browse):
@@ -859,25 +966,41 @@ def test_boot_refuses_at_once_when_another_home_has_a_real_owner(tmp_path):
             proc.wait()
 
 
-def test_budget_refusal_on_unowned_store_names_repair_not_a_gateway(tmp_path, monkeypatch):
+def test_budget_refusal_on_unowned_store_names_repair_not_a_gateway(
+    tmp_path, monkeypatch
+):
     """Round-2 decision: the 3 s browse budget stays. When it runs out on a store no gateway owns,
     the 503 must be actionable: name `clawk -p NAME sessions repair` (no time limit), say the
     history is untouched, and never tell a user with no gateway to restart one."""
     import clawk_cli.sqlite_safe_read as ssr
     import clawk_state_reconcile as reconcile
 
-    assert reconcile.BROWSE_INTEGRITY_BUDGET_S == reconcile.BROWSE_RECONCILE_BUDGET_S == 3.0
+    assert (
+        reconcile.BROWSE_INTEGRITY_BUDGET_S
+        == reconcile.BROWSE_RECONCILE_BUDGET_S
+        == 3.0
+    )
     path = _lagging_store_with_history(_profile_home(tmp_path), rows=400)
     before = _file_state(path)
     original = ssr.connect_tracked
-    monkeypatch.setattr(ssr, "connect_tracked", lambda p, *a, **kw: (
-        _SlowProgress(original(p, *a, **kw)) if "mode=ro" in str(p) else original(p, *a, **kw)))
+    monkeypatch.setattr(
+        ssr,
+        "connect_tracked",
+        lambda p, *a, **kw: (
+            _SlowProgress(original(p, *a, **kw))
+            if "mode=ro" in str(p)
+            else original(p, *a, **kw)
+        ),
+    )
     monkeypatch.setattr(reconcile, "BROWSE_INTEGRITY_BUDGET_S", 0.3)
     with pytest.raises(HTTPException) as caught:
         _open_session_db_at_path(path, read_only=True)
     assert caught.value.status_code == 503
     detail = caught.value.detail
-    assert "Run `clawk -p scribe sessions repair` to bring it up to date (it has no time limit)" in detail
+    assert (
+        "Run `clawk -p scribe sessions repair` to bring it up to date (it has no time limit)"
+        in detail
+    )
     assert "Your history is untouched" in detail
     assert "gateway" not in detail.lower()
     assert _file_state(path) == before
@@ -887,6 +1010,7 @@ def test_budget_refusal_on_unowned_store_names_repair_not_a_gateway(tmp_path, mo
     monkeypatch.setattr(ssr, "connect_tracked", original)
     from clawk_state_reconcile import repair_declarative_schema
     import clawk_state_repair
+
     monkeypatch.setattr(clawk_state_repair, "_live_writer_holds_db", lambda _p: False)
     report = repair_declarative_schema(path, backup=False)
     assert report["repaired"], report
@@ -895,13 +1019,13 @@ def test_budget_refusal_on_unowned_store_names_repair_not_a_gateway(tmp_path, mo
     assert "last_read_at" in _session_columns(path)
 
 
-_LEGACY_GATEWAY = r'''
+_LEGACY_GATEWAY = r"""
 import sqlite3, sys, time
 conn = sqlite3.connect(sys.argv[1])  # what a pre-v0.22.1 multiplexer does: no per-profile gateway.lock
 conn.execute("SELECT count(*) FROM sessions").fetchone()
 print("holding", flush=True)
 time.sleep(60)
-'''
+"""
 
 
 @pytest.mark.platforms("linux")
@@ -917,11 +1041,19 @@ def test_legacy_gateway_holding_the_store_without_a_lock_is_not_written(tmp_path
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=10)
     before = _file_state(path)
-    legacy = subprocess.Popen(["clawk", "-c", _LEGACY_GATEWAY, str(path), "gateway", "run"],
-                              executable=sys.executable, env=os.environ, stdout=subprocess.PIPE, text=True)
+    legacy = subprocess.Popen(
+        ["clawk", "-c", _LEGACY_GATEWAY, str(path), "gateway", "run"],
+        executable=sys.executable,
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert legacy.stdout.readline().strip() == "holding"
-        assert not (home / "gateway.lock").exists() or not (home / "gateway.lock").read_text()
+        assert (
+            not (home / "gateway.lock").exists()
+            or not (home / "gateway.lock").read_text()
+        )
         with pytest.raises(HTTPException) as caught:
             _open_session_db_at_path(path, read_only=True)
     finally:
@@ -934,7 +1066,7 @@ def test_legacy_gateway_holding_the_store_without_a_lock_is_not_written(tmp_path
     assert "last_read_at" not in _session_columns(path)
 
 
-_MULTIPLEXER_LOCK = r'''
+_MULTIPLEXER_LOCK = r"""
 import fcntl, json, os, sys, time
 fh = open(sys.argv[1], "a+")
 fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -942,7 +1074,7 @@ fh.seek(0); fh.truncate()
 json.dump({"pid": os.getpid(), "kind": "clawk-gateway", "clawk_home": sys.argv[2]}, fh); fh.flush()
 print("held", flush=True)
 time.sleep(60)
-'''
+"""
 
 
 @pytest.mark.platforms("linux", "macos")
@@ -957,8 +1089,18 @@ def test_owned_refusal_names_the_owning_multiplexers_restart(tmp_path):
 
     home = _profile_home(tmp_path)
     path = _lagging_store_with_history(home, rows=10)
-    host = subprocess.Popen([sys.executable, "-c", _MULTIPLEXER_LOCK, str(home / "gateway.lock"), str(tmp_path)],
-                            env=os.environ, stdout=subprocess.PIPE, text=True)
+    host = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            _MULTIPLEXER_LOCK,
+            str(home / "gateway.lock"),
+            str(tmp_path),
+        ],
+        env=os.environ,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
     try:
         assert host.stdout.readline().strip() == "held"
         with pytest.raises(HTTPException) as caught:

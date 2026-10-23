@@ -28,9 +28,7 @@ class TestConnectionsToolsetMigration:
 
     @staticmethod
     def _write_config(tmp_path, config):
-        (tmp_path / "config.yaml").write_text(
-            yaml.safe_dump(config), encoding="utf-8"
-        )
+        (tmp_path / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
 
     @staticmethod
     def _read_config(tmp_path):
@@ -48,7 +46,15 @@ class TestConnectionsToolsetMigration:
                 "_config_version": 44,
                 "platform_toolsets": platforms,
                 "known_builtin_toolsets": {
-                    "cli": ["browser", "file", "memory", "skills", "terminal", "todo", "web"]
+                    "cli": [
+                        "browser",
+                        "file",
+                        "memory",
+                        "skills",
+                        "terminal",
+                        "todo",
+                        "web",
+                    ]
                 },
             },
         )
@@ -60,7 +66,9 @@ class TestConnectionsToolsetMigration:
         assert "connections" in raw["platform_toolsets"]["telegram"]
         # The offer is recorded so a later uncheck is a recorded decline, not another migration.
         assert "connections" in raw["known_builtin_toolsets"]["cli"]
-        added = [entry for entry in results["config_added"] if "connections" in entry.lower()]
+        added = [
+            entry for entry in results["config_added"] if "connections" in entry.lower()
+        ]
         assert len(added) == 1, results["config_added"]
 
     @pytest.mark.parametrize(
@@ -101,7 +109,11 @@ class TestConnectionsToolsetMigration:
         assert raw["platform_toolsets"] == platform_toolsets
         assert results["config_added"] == []
 
-    @pytest.mark.parametrize("disabled", [["browser", "connections", "web"], '["connections"]'], ids=["list", "json-string"])
+    @pytest.mark.parametrize(
+        "disabled",
+        [["browser", "connections", "web"], '["connections"]'],
+        ids=["list", "json-string"],
+    )
     def test_global_disable_is_not_overridden_or_claimed(self, tmp_path, disabled):
         """Blank Slate and `clawk tools --disable` write agent.disabled_toolsets, which the resolver
         subtracts last; appending to the platform list would print an enable that never takes effect."""

@@ -22,7 +22,9 @@ def review_worker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> str:
     monkeypatch.delenv("CLAWK_DELEGATED_CHILD_CONTEXT", raising=False)
     # kanban_request_review now rejects reviewers that are not installed profiles (#106163).
     (home / "profiles" / "reviewer").mkdir(parents=True)
-    (home / "profiles" / "reviewer" / "config.yaml").write_text("{}\n")  # identity marker
+    (home / "profiles" / "reviewer" / "config.yaml").write_text(
+        "{}\n"
+    )  # identity marker
     kb._INITIALIZED_PATHS.clear()
     kb.init_db()
     with kbc.connect() as conn:
@@ -42,11 +44,13 @@ def test_review_tools_redact_handoff_and_route_changes(
 
     secret = "ghp_" + "A" * 40
     requested = json.loads(
-        tools._handle_request_review({
-            "summary": f"Ready; temporary token was {secret}",
-            "metadata": {"token": secret, "tests_run": 7},
-            "reviewer": "reviewer",
-        })
+        tools._handle_request_review(
+            {
+                "summary": f"Ready; temporary token was {secret}",
+                "metadata": {"token": secret, "tests_run": 7},
+                "reviewer": "reviewer",
+            }
+        )
     )
     assert requested["ok"] is True
 
@@ -66,9 +70,11 @@ def test_review_tools_redact_handoff_and_route_changes(
     monkeypatch.setenv("CLAWK_KANBAN_RUN_ID", str(review.current_run_id))
     change_secret = "sk-" + "B" * 32
     changed = json.loads(
-        tools._handle_request_changes({
-            "reason": f"Add a boundary assertion; leaked={change_secret}",
-        })
+        tools._handle_request_changes(
+            {
+                "reason": f"Add a boundary assertion; leaked={change_secret}",
+            }
+        )
     )
     assert changed["ok"] is True
     assert changed["implementer"] == "builder"
@@ -113,8 +119,6 @@ def test_review_tools_are_gated_and_visible_to_kanban_workers(
 
     assert "kanban_request_changes" in EXPOSED_TOOLS
     assert "kanban_request_changes" in resolve_toolset("kanban")
-
-
 
 
 def test_review_cli_round_trip_preserves_handoff(
@@ -185,7 +189,8 @@ def test_domain_and_cli_review_handoffs_redact_before_persistence(
         )
         run = kb.latest_run(conn, direct_id)
         event = [
-            item for item in kb.list_events(conn, direct_id)
+            item
+            for item in kb.list_events(conn, direct_id)
             if item.kind == "review_requested"
         ][-1]
         assert run is not None
@@ -203,7 +208,8 @@ def test_domain_and_cli_review_handoffs_redact_before_persistence(
         ) == (True, "builder")
         run = kb.latest_run(conn, direct_id)
         event = [
-            item for item in kb.list_events(conn, direct_id)
+            item
+            for item in kb.list_events(conn, direct_id)
             if item.kind == "changes_requested"
         ][-1]
         assert run is not None
@@ -213,22 +219,21 @@ def test_domain_and_cli_review_handoffs_redact_before_persistence(
         cli_id = kb.create_task(conn, title="CLI redaction", assignee="builder")
     cli_output = kc.run_slash(
         f'request-review {cli_id} --summary "cli {secret}" '
-        f"--metadata '{{\"token\":\"{secret}\"}}'"
+        f'--metadata \'{{"token":"{secret}"}}\''
     )
     assert "Requested review" in cli_output
     assert secret not in cli_output
     with kbc.connect() as conn:
         run = kb.latest_run(conn, cli_id)
         event = [
-            item for item in kb.list_events(conn, cli_id)
+            item
+            for item in kb.list_events(conn, cli_id)
             if item.kind == "review_requested"
         ][-1]
         assert run is not None
         assert secret not in str(run.summary)
         assert secret not in json.dumps(run.metadata)
         assert secret not in json.dumps(event.payload)
-
-
 
 
 def test_cli_reopen_review_is_transition_first_and_redacts_reason(

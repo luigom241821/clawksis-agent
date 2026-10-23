@@ -11,7 +11,6 @@ from utils import atomic_json_write
 class TestAtomicJsonWrite:
     """Core atomic write behavior."""
 
-
     def test_cleans_up_temp_file_on_baseexception(self, tmp_path):
         class SimulatedAbort(BaseException):
             pass
@@ -27,7 +26,6 @@ class TestAtomicJsonWrite:
         tmp_files = [f for f in tmp_path.iterdir() if ".tmp" in f.name]
         assert len(tmp_files) == 0
         assert json.loads(target.read_text(encoding="utf-8")) == original
-
 
     def test_concurrent_writes_dont_corrupt(self, tmp_path):
         """Multiple rapid writes should each produce valid JSON."""

@@ -7,6 +7,7 @@ carries the usage-window headers, so this compares them with the snapshot and, o
 disagree, refreshes both caches once in the background. No extra call on an ordinary turn, and
 nothing at all for a reply that is not from Nous.
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ _RETRY_AFTER_S = 120.0
 
 def _profile_key() -> str:
     from clawk_constants import clawk_home_key
+
     return clawk_home_key()
 
 
@@ -35,6 +37,7 @@ def _snapshot_full_ids(snapshot: Any) -> Optional[frozenset[str]]:
     """Ids of the full allowances in the cached snapshot; None when it has no window plan."""
     window = getattr(snapshot, "usage_window", None)
     from agent.credits_tracker import _window_seed_fields
+
     if _window_seed_fields(window) is None:
         return None
     return frozenset(g.id for g in (getattr(window, "gauges", None) or ()) if g.full)
@@ -45,7 +48,11 @@ def plan_snapshot_is_stale(state: Any, snapshot: Any) -> bool:
     window headers but a non-window snapshot (upgrade), the reverse (downgrade or cancel), or a
     different set of full allowances (a limit filled or reset). No snapshot yet: nothing to fix (the
     session-start seed is fetching it)."""
-    if state is None or snapshot is None or getattr(snapshot, "source", None) == "error":
+    if (
+        state is None
+        or snapshot is None
+        or getattr(snapshot, "source", None) == "error"
+    ):
         return False
     on_window = bool(getattr(state, "is_usage_window", False))
     full_ids = _snapshot_full_ids(snapshot)
@@ -59,15 +66,24 @@ def plan_snapshot_is_stale(state: Any, snapshot: Any) -> bool:
 def _refresh(plan_changed: bool, key: str) -> None:
     try:
         from clawk_cli.nous_account import get_nous_portal_account_info
-        if getattr(get_nous_portal_account_info(force_fresh=True), "source", None) == "error":
-            _last_attempt.pop(key, None)  # a failed fetch (reported, not raised) is no attempt either
+
+        if (
+            getattr(get_nous_portal_account_info(force_fresh=True), "source", None)
+            == "error"
+        ):
+            _last_attempt.pop(
+                key, None
+            )  # a failed fetch (reported, not raised) is no attempt either
         if plan_changed:
             # The per-model levels (Large / Free tags) come with the catalog; refetch so they move with the plan.
             from clawk_cli.models_pricing import get_pricing_for_provider
+
             get_pricing_for_provider("nous", force_refresh=True)
     except Exception:
         logger.debug("plan sync ▸ refresh failed (fail-open)", exc_info=True)
-        _last_attempt.pop(key, None)  # a transient portal error must not block the next re-sync
+        _last_attempt.pop(
+            key, None
+        )  # a transient portal error must not block the next re-sync
     finally:
         with _lock:
             _inflight.discard(key)
@@ -83,28 +99,40 @@ def sync_plan_snapshot(state: Any) -> bool:
             # Non-window reply: only a cached window snapshot (a downgrade / cancel) can be stale. Peek the
             # raw cache first so every other account pays no auth-state read per reply.
             from clawk_cli import nous_account
+
             cached = nous_account._account_info_cache
             if cached is None or _snapshot_full_ids(cached[2]) is None:
                 _last_attempt.pop(key, None)
                 return False
         from clawk_cli.nous_account import cached_nous_portal_account_info
+
         snapshot = cached_nous_portal_account_info(any_age=True)
         if not plan_snapshot_is_stale(state, snapshot):
-            _last_attempt.pop(key, None)  # in step again: the next mismatch gets its own refresh
+            _last_attempt.pop(
+                key, None
+            )  # in step again: the next mismatch gets its own refresh
             return False
         on_window = bool(getattr(state, "is_usage_window", False))
-        seen = (on_window, frozenset(g.id for g in getattr(state, "gauges", ()) if g.full))
+        seen = (
+            on_window,
+            frozenset(g.id for g in getattr(state, "gauges", ()) if g.full),
+        )
         plan_changed = on_window != (_snapshot_full_ids(snapshot) is not None)
         now = time.monotonic()
         with _lock:
             last = _last_attempt.get(key)
-            if key in _inflight or (last is not None and last[0] == seen and now - last[1] < _RETRY_AFTER_S):
+            if key in _inflight or (
+                last is not None and last[0] == seen and now - last[1] < _RETRY_AFTER_S
+            ):
                 return False
             _inflight.add(key)
             _last_attempt[key] = (seen, now)
         # Under this profile's contextvars (its Clawksis home and auth store), as the credits seed thread does.
         from agent.memory_provider import spawn_context_thread
-        spawn_context_thread(_refresh, args=(plan_changed, key), name="nous-plan-sync").start()
+
+        spawn_context_thread(
+            _refresh, args=(plan_changed, key), name="nous-plan-sync"
+        ).start()
         return True
     except Exception:
         logger.debug("plan sync ▸ check failed (fail-open)", exc_info=True)

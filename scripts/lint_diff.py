@@ -88,7 +88,9 @@ def _key(d: dict) -> tuple[str, str, str]:
     return (d["path"], d["rule"], d["message"])
 
 
-def _diff(base: list[dict], head: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+def _diff(
+    base: list[dict], head: list[dict]
+) -> tuple[list[dict], list[dict], list[dict]]:
     base_map = {_key(d): d for d in base}
     head_map = {_key(d): d for d in head}
     base_keys = set(base_map)
@@ -150,14 +152,11 @@ def _tool_report(
             "treating all head diagnostics as new._\n"
         )
     lines.append(
-        f"**Total:** {len(head)} on HEAD, {len(base)} on base "
-        f"({emoji} {delta_str})\n"
+        f"**Total:** {len(head)} on HEAD, {len(base)} on base ({emoji} {delta_str})\n"
     )
     lines.append(_section("🆕 New issues", new))
     lines.append(_section("✅ Fixed issues", fixed))
-    lines.append(
-        f"**Unchanged:** {len(unchanged)} pre-existing issues carried over.\n"
-    )
+    lines.append(f"**Unchanged:** {len(unchanged)} pre-existing issues carried over.\n")
     return "\n".join(lines)
 
 

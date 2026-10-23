@@ -35,7 +35,9 @@ from typing import Callable
 Identity = tuple[int, int]  # (pid, kernel start time in clock ticks)
 Finder = Callable[[], dict[Identity, str]]
 
-REAP_TIMEOUT = 30.0  # the gateway's shutdown diagnostic self-terminates within ``timeout 5``
+REAP_TIMEOUT = (
+    30.0  # the gateway's shutdown diagnostic self-terminates within ``timeout 5``
+)
 _PR_SET_CHILD_SUBREAPER = 36
 _adopters = 0
 
@@ -65,7 +67,12 @@ def release_orphans() -> None:
 def stat(pid: int) -> list[str] | None:
     """``/proc/<pid>/stat`` fields after ``comm`` (state is index 0, ppid 1, sid 3, start 19)."""
     try:
-        return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace").rsplit(")", 1)[1].split()
+        return (
+            Path(f"/proc/{pid}/stat")
+            .read_text(encoding="utf-8", errors="replace")
+            .rsplit(")", 1)[1]
+            .split()
+        )
     except (OSError, IndexError):
         return None
 
@@ -78,7 +85,13 @@ def start_time(pid: int) -> int | None:
 
 def cmdline(pid: int) -> str:
     try:
-        return Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()
+        return (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode(errors="replace")
+            .strip()
+        )
     except OSError:
         return "?"
 
@@ -87,7 +100,11 @@ def all_stats() -> dict[int, list[str]]:
     """Every live, non-zombie process."""
     out = {}
     for entry in os.listdir("/proc"):
-        if entry.isdigit() and (fields := stat(int(entry))) is not None and fields[0] not in ("Z", "X"):
+        if (
+            entry.isdigit()
+            and (fields := stat(int(entry))) is not None
+            and fields[0] not in ("Z", "X")
+        ):
             out[int(entry)] = fields
     return out
 
@@ -109,6 +126,7 @@ def with_home(home: Path) -> Finder:
             if (started := start_time(pid)) is not None:
                 found[(pid, started)] = cmdline(pid)
         return found
+
     return find
 
 
@@ -130,7 +148,9 @@ def kill_identified(idents: dict[Identity, str]) -> list[str]:
         if start_time(pid) != started:
             continue
         try:
-            os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — Linux-only suite, never reached on Windows
+            os.kill(
+                pid, signal.SIGKILL
+            )  # windows-footgun: ok — Linux-only suite, never reached on Windows
         except ProcessLookupError:
             continue
         killed.append(f"{pid}: {cmd[:160]}")
@@ -146,7 +166,11 @@ def reap(*finders: Finder, timeout: float = REAP_TIMEOUT) -> list[str]:
         for find in finders:
             seen.update(find())
         _collect_zombies(seen)
-        live = {ident: cmd for ident, cmd in seen.items() if start_time(ident[0]) == ident[1]}
+        live = {
+            ident: cmd
+            for ident, cmd in seen.items()
+            if start_time(ident[0]) == ident[1]
+        }
         if not live:
             return []
         if time.monotonic() >= deadline:
@@ -154,7 +178,9 @@ def reap(*finders: Finder, timeout: float = REAP_TIMEOUT) -> list[str]:
         time.sleep(0.1)
     killed = kill_identified(live)
     settle = time.monotonic() + 10
-    while time.monotonic() < settle and any(start_time(pid) == started for pid, started in live):
+    while time.monotonic() < settle and any(
+        start_time(pid) == started for pid, started in live
+    ):
         _collect_zombies(live)
         time.sleep(0.05)
     _collect_zombies(live)

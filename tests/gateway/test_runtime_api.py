@@ -17,11 +17,17 @@ async def test_http_lifespan_does_not_start_or_stop_runtime_services(monkeypatch
 
     calls = []
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
-    for name in ("_warm_gateway_module", "_eager_reconcile_own_session_db",
-                 "_start_desktop_cron_ticker", "_terminate_desktop_managed_gateway"):
+    for name in (
+        "_warm_gateway_module",
+        "_eager_reconcile_own_session_db",
+        "_start_desktop_cron_ticker",
+        "_terminate_desktop_managed_gateway",
+    ):
         monkeypatch.setattr(web, name, lambda *a, _name=name, **k: calls.append(_name))
     for name in ("start_hosted_room_service", "stop_hosted_room_service"):
-        monkeypatch.setattr(methods_groups, name, lambda *a, _name=name, **k: calls.append(_name))
+        monkeypatch.setattr(
+            methods_groups, name, lambda *a, _name=name, **k: calls.append(_name)
+        )
     # A real gateway owns these services; HTTP must not acquire or release them.
     monkeypatch.setattr(web.app.state, "gateway_runner", object(), raising=False)
     async with web.app.router.lifespan_context(web.app):
@@ -31,8 +37,10 @@ async def test_http_lifespan_does_not_start_or_stop_runtime_services(monkeypatch
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('shared', [False, True])
-async def test_owner_serves_existing_routes_and_ws_without_signal_ownership(monkeypatch, tmp_path, shared):
+@pytest.mark.parametrize("shared", [False, True])
+async def test_owner_serves_existing_routes_and_ws_without_signal_ownership(
+    monkeypatch, tmp_path, shared
+):
     from gateway.run_api import start_gateway_api, stop_gateway_api
     from clawk_cli import web_server as web
 
@@ -46,9 +54,16 @@ async def test_owner_serves_existing_routes_and_ws_without_signal_ownership(monk
         from gateway.config import Platform
         from gateway.session import SessionSource
         from gateway.session_authority import initialize_session_authority
-        authority = await initialize_session_authority(runner, profile_id='fixture', instance_id='api-owner')
-        ref = authority.register(SessionSource(platform=Platform.TELEGRAM, chat_id='api-test', user_id='fixture'))
-        request.update(method='session.resume', params={'session_id': ref.session_id})
+
+        authority = await initialize_session_authority(
+            runner, profile_id="fixture", instance_id="api-owner"
+        )
+        ref = authority.register(
+            SessionSource(
+                platform=Platform.TELEGRAM, chat_id="api-test", user_id="fixture"
+            )
+        )
+        request.update(method="session.resume", params={"session_id": ref.session_id})
     before = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     handle = await start_gateway_api(runner)
     try:
@@ -59,9 +74,15 @@ async def test_owner_serves_existing_routes_and_ws_without_signal_ownership(monk
         auth = {"Authorization": f"Bearer {web._SESSION_TOKEN}"}
         async with httpx.AsyncClient(base_url=handle.api_origin) as client:
             assert (await client.get("/api/config/raw")).status_code == 401
-            assert (await client.get("/api/config/raw", headers=auth)).status_code == 200
+            assert (
+                await client.get("/api/config/raw", headers=auth)
+            ).status_code == 200
             assert (await client.post("/api/ws-ticket")).status_code in (401, 403)
-            assert (await client.get("/api/config/raw", headers={**auth, "Host": "attacker.invalid"})).status_code == 400
+            assert (
+                await client.get(
+                    "/api/config/raw", headers={**auth, "Host": "attacker.invalid"}
+                )
+            ).status_code == 400
         url = handle.api_origin.replace("http:", "ws:") + "/api/ws"
         with pytest.raises(InvalidStatus) as rejected:
             async with connect(url):
@@ -75,8 +96,8 @@ async def test_owner_serves_existing_routes_and_ws_without_signal_ownership(monk
                     break
             assert "result" in reply, reply
             if shared:
-                assert reply['result'].get('authority_epoch') == authority.epoch, reply
-                assert reply['result']['session_id'] == ref.session_id
+                assert reply["result"].get("authority_epoch") == authority.epoch, reply
+                assert reply["result"]["session_id"] == ref.session_id
                 assert len(authority.sessions[ref.session_id].subscribers) == 1
         with pytest.raises(RuntimeError, match="already"):
             await start_gateway_api(runner)

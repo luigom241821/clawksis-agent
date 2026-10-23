@@ -31,7 +31,9 @@ from urllib.parse import urlsplit, urlunsplit
 # env, which is that profile's own value.
 from agent.secret_scope import is_multiplex_active as _is_multiplex_active
 from gateway.platforms._shared import (
-    apply_yaml_bridge as _apply_yaml_bridge, get_scoped_secret as _shared_scoped_secret, profile_scoped as _profile_scoped,
+    apply_yaml_bridge as _apply_yaml_bridge,
+    get_scoped_secret as _shared_scoped_secret,
+    profile_scoped as _profile_scoped,
     seed_extra_from_env as _seed_extra_from_env,
 )
 from gateway.platforms._shared import send_error
@@ -63,7 +65,10 @@ def _scoped_platform_setting(env_name, extra, key):
 logger = logging.getLogger(__name__)
 
 from gateway.platforms.base import (
-    BasePlatformAdapter, CachedMedia, SendResult, cache_media_bytes_async,
+    BasePlatformAdapter,
+    CachedMedia,
+    SendResult,
+    cache_media_bytes_async,
 )
 from gateway.platforms.helpers import cancel_task
 from gateway.platforms.event import MessageEvent, MessageType
@@ -79,7 +84,9 @@ _CHAT_KIND = 9  # ``messages get`` also returns housekeeping kinds, never dispat
 # ACP harness documents this set (``buzz-acp --kinds 9,46010,40007,45001, 45002,45003``); the stream kinds
 # (46010/40007/45002) are left out until their dispatch semantics are confirmed.
 _DISPATCH_KINDS = frozenset({_CHAT_KIND, 45001, 45003})
-_UNRESOLVED_MENTION_ERROR_RE = re.compile(r"mention '@(?P<name>[^']+)' does not match a current channel member")
+_UNRESOLVED_MENTION_ERROR_RE = re.compile(
+    r"mention '@(?P<name>[^']+)' does not match a current channel member"
+)
 _BUZZ_PRESENTATION_MENTION_SEPARATOR = "\u200b"
 _HEX64_RE = re.compile(r"[0-9a-f]{64}")
 
@@ -91,8 +98,12 @@ def _escape_unresolved_presentation_mention(content: str, error: str) -> Optiona
     name = match.group("name") if match else ""
     if not name:
         return None
-    token = re.compile(rf"(?<!\S)@{re.escape(name)}(?=$|[^A-Za-z0-9._-])", re.IGNORECASE)
-    escaped, count = token.subn(lambda m: "@" + _BUZZ_PRESENTATION_MENTION_SEPARATOR + m.group(0)[1:], content)
+    token = re.compile(
+        rf"(?<!\S)@{re.escape(name)}(?=$|[^A-Za-z0-9._-])", re.IGNORECASE
+    )
+    escaped, count = token.subn(
+        lambda m: "@" + _BUZZ_PRESENTATION_MENTION_SEPARATOR + m.group(0)[1:], content
+    )
     return escaped if count else None
 
 
@@ -118,9 +129,11 @@ def _safe_attachment_filename(value: str) -> str:
     if name in {"", ".", ".."}:
         return "attachment.bin"
     suffix = Path(name).suffix if len(Path(name).suffix.encode("utf-8")) <= 20 else ""
-    stem = name[:-len(suffix)] if suffix else name
+    stem = name[: -len(suffix)] if suffix else name
     byte_budget = _MAX_ATTACHMENT_FILENAME_BYTES - len(suffix.encode("utf-8"))
-    safe_stem = stem.encode("utf-8")[:byte_budget].decode("utf-8", errors="ignore").rstrip(" .")
+    safe_stem = (
+        stem.encode("utf-8")[:byte_budget].decode("utf-8", errors="ignore").rstrip(" .")
+    )
     return f"{safe_stem or 'attachment'}{suffix}"
 
 
@@ -139,6 +152,7 @@ def _attachment_origin(value: str) -> Optional[tuple[str, int]]:
         return None
     return host, port
 
+
 # WebSocket transport (NIP-42 authenticated Nostr subscription).
 _WS_AUTH_TIMEOUT = 20.0
 # Last-resort read bound: an unsurfaced relay-side close (CLOSE_WAIT) would leave us "connected" with inbound stopped.
@@ -154,10 +168,13 @@ _DEFAULT_CREDENTIALS_DIR = Path("~/.config/buzz").expanduser()
 # Buzz-hosted media is private to the community: same-relay URLs must be authenticated + localised for vision.
 _MEDIA_URL_PATTERN = r"https?://[^\s<>\[\]()]+/media/[0-9a-f]{64}(?:\.[a-z0-9]{1,10})?(?:\?[^\s<>\[\]()]*)?"
 _MARKDOWN_MEDIA_RE = re.compile(
-    rf"!\[(?P<alt>[^\]]*)\]\(\s*(?P<url>{_MEDIA_URL_PATTERN})(?:\s+[\"'][^\"']*[\"'])?\s*\)", re.IGNORECASE
+    rf"!\[(?P<alt>[^\]]*)\]\(\s*(?P<url>{_MEDIA_URL_PATTERN})(?:\s+[\"'][^\"']*[\"'])?\s*\)",
+    re.IGNORECASE,
 )
 _BARE_MEDIA_RE = re.compile(_MEDIA_URL_PATTERN, re.IGNORECASE)
-_MEDIA_PATH_RE = re.compile(r"^/media/(?P<sha>[0-9a-f]{64})(?P<ext>\.[a-z0-9]{1,10})?/?$", re.IGNORECASE)
+_MEDIA_PATH_RE = re.compile(
+    r"^/media/(?P<sha>[0-9a-f]{64})(?P<ext>\.[a-z0-9]{1,10})?/?$", re.IGNORECASE
+)
 
 
 def _consume_ws_read_task(task: asyncio.Task) -> None:
@@ -180,13 +197,18 @@ def _is_relay_media_url(url: str, relay_url: str) -> bool:
     """Return whether *url* is a Buzz media object on the configured relay."""
     candidate, relay = urlsplit(url), urlsplit(relay_url)
     return bool(
-        candidate.scheme in ("http", "https") and candidate.hostname and relay.hostname
+        candidate.scheme in ("http", "https")
+        and candidate.hostname
+        and relay.hostname
         and candidate.hostname.lower() == relay.hostname.lower()
-        and _effective_port(candidate) == _effective_port(relay) and _MEDIA_PATH_RE.fullmatch(candidate.path)
+        and _effective_port(candidate) == _effective_port(relay)
+        and _MEDIA_PATH_RE.fullmatch(candidate.path)
     )
 
 
-def _find_relay_media_refs(text: str, relay_url: str) -> tuple[list[str], list[tuple[int, int, str]]]:
+def _find_relay_media_refs(
+    text: str, relay_url: str
+) -> tuple[list[str], list[tuple[int, int, str]]]:
     """Find same-relay media URLs and their safe text replacements."""
     urls: list[str] = []
     replacements: list[tuple[int, int, str]] = []
@@ -200,7 +222,10 @@ def _find_relay_media_refs(text: str, relay_url: str) -> tuple[list[str], list[t
         if url not in urls:
             urls.append(url)
     for match in _BARE_MEDIA_RE.finditer(text):
-        if any(start <= match.start() and match.end() <= end for start, end in markdown_spans):
+        if any(
+            start <= match.start() and match.end() <= end
+            for start, end in markdown_spans
+        ):
             continue
         url = match.group(0)
         if not _is_relay_media_url(url, relay_url):
@@ -220,14 +245,20 @@ def _replace_media_refs(text: str, replacements: list[tuple[int, int, str]]) -> 
 def _load_sibling(name: str):
     """Import a sibling module loader-agnostically (the test loader imports this file as a bare module)."""
     import importlib
+
     try:
-        return importlib.import_module(f".{name}", __package__) if __package__ else _load_sibling_file(name)
+        return (
+            importlib.import_module(f".{name}", __package__)
+            if __package__
+            else _load_sibling_file(name)
+        )
     except ImportError:
         return _load_sibling_file(name)
 
 
 def _load_sibling_file(name: str):
     import importlib.util
+
     path = Path(__file__).with_name(f"{name}.py")
     spec = importlib.util.spec_from_file_location(f"plugin_adapter_buzz_{name}", path)
     assert spec is not None and spec.loader is not None
@@ -240,7 +271,11 @@ _nostr_auth = _load_sibling("nostr_auth")
 
 # bech32 (BIP-173) npub <-> hex so mention detection and allow-lists accept either form.
 from gateway.authz_mixin import (
-    _BECH32_CHARSET, _bech32_hrp_expand, _bech32_polymod, _convertbits, _npub_to_hex as npub_to_hex,
+    _BECH32_CHARSET,
+    _bech32_hrp_expand,
+    _bech32_polymod,
+    _convertbits,
+    _npub_to_hex as npub_to_hex,
 )
 
 
@@ -252,7 +287,9 @@ def hex_to_npub(pubkey_hex: str) -> Optional[str]:
         return None
     if len(raw) != 32 or (data := _convertbits(raw, 8, 5)) is None:
         return None
-    polymod = _bech32_polymod(_bech32_hrp_expand("npub") + data + [0, 0, 0, 0, 0, 0]) ^ 1
+    polymod = (
+        _bech32_polymod(_bech32_hrp_expand("npub") + data + [0, 0, 0, 0, 0, 0]) ^ 1
+    )
     checksum = [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
     return "npub1" + "".join(_BECH32_CHARSET[d] for d in data + checksum)
 
@@ -263,7 +300,11 @@ def _split_csv(raw):
 
 def _pubkey_set(raw) -> set:
     """Normalize a csv string / list of hex pubkeys or npubs to a set of hex pubkeys."""
-    return {n for entry in _split_csv(raw) if isinstance(entry, str) and (n := _normalize_user_ref(entry))}
+    return {
+        n
+        for entry in _split_csv(raw)
+        if isinstance(entry, str) and (n := _normalize_user_ref(entry))
+    }
 
 
 def _setting_or(env_name: str, extra: dict, key: str, default):
@@ -275,7 +316,11 @@ def _setting_or(env_name: str, extra: dict, key: str, default):
 def _ttl_get(cache: dict, key, ttl: float):
     """Value of a ``(monotonic_ts, value)`` cache entry if younger than *ttl*, else None."""
     cached = cache.get(key)
-    return cached[1] if cached is not None and (time.monotonic() - cached[0]) < ttl else None
+    return (
+        cached[1]
+        if cached is not None and (time.monotonic() - cached[0]) < ttl
+        else None
+    )
 
 
 def _add_pubkey(bucket: list[str], raw) -> None:
@@ -297,16 +342,32 @@ def _normalize_user_ref(ref: str) -> Optional[str]:
 
 # ── buzz-cli invocation helpers ──────────────────────────────────────────────
 
+
 def _reply_to_mode(config, extra: dict) -> str:
     """Reply mode ("first"/"all" thread, "off" posts flat); env overrides config, ``reply_in_thread: false`` = "off"."""
-    mode_env = _get_scoped_secret("BUZZ_REPLY_TO_MODE") if _profile_scoped() else os.getenv("BUZZ_REPLY_TO_MODE")
-    mode = str(mode_env or getattr(config, "reply_to_mode", "first") or "first").strip().lower()
+    mode_env = (
+        _get_scoped_secret("BUZZ_REPLY_TO_MODE")
+        if _profile_scoped()
+        else os.getenv("BUZZ_REPLY_TO_MODE")
+    )
+    mode = (
+        str(mode_env or getattr(config, "reply_to_mode", "first") or "first")
+        .strip()
+        .lower()
+    )
     rit = _setting_or("BUZZ_REPLY_IN_THREAD", extra, "reply_in_thread", None)
-    return "off" if rit is not None and str(rit).strip().lower() in ("false", "0", "no", "off") else mode
+    return (
+        "off"
+        if rit is not None and str(rit).strip().lower() in ("false", "0", "no", "off")
+        else mode
+    )
 
 
 def _configured_relay(extra: dict) -> str:
-    return (_scoped_platform_setting("BUZZ_RELAY_URL", extra, "relay_url") or extra.get("relay_url", "")).strip()
+    return (
+        _scoped_platform_setting("BUZZ_RELAY_URL", extra, "relay_url")
+        or extra.get("relay_url", "")
+    ).strip()
 
 
 def _configured_home_channel(extra: dict) -> str:
@@ -316,7 +377,9 @@ def _configured_home_channel(extra: dict) -> str:
 
 def _configured_cli_path(extra: dict) -> str:
     raw = _scoped_platform_setting("BUZZ_CLI_PATH", extra, "cli_path")
-    return _resolve_cli_path(str(raw or "").strip() or str(extra.get("cli_path", "") or ""))
+    return _resolve_cli_path(
+        str(raw or "").strip() or str(extra.get("cli_path", "") or "")
+    )
 
 
 def _configured_credentials_file(extra: Optional[dict]) -> str:
@@ -382,41 +445,71 @@ def _resolve_auth_tag(extra: Optional[dict] = None) -> str:
     """Resolve and validate the optional NIP-OA owner-attestation tag."""
     raw: Any = str(_get_scoped_secret("BUZZ_AUTH_TAG", "") or "").strip()
     if not raw:
-        if str(_get_scoped_secret("BUZZ_PRIVATE_KEY", "") or "").strip() and not _configured_credentials_file(extra):
+        if str(
+            _get_scoped_secret("BUZZ_PRIVATE_KEY", "") or ""
+        ).strip() and not _configured_credentials_file(extra):
             return ""
         if "auth_tag" not in (data := _resolve_credentials_data(extra)):
             return ""
         raw = data["auth_tag"]
-    return json.dumps(_nostr_auth.parse_auth_tag(raw, "Buzz auth tag"), separators=(",", ":"))
+    return json.dumps(
+        _nostr_auth.parse_auth_tag(raw, "Buzz auth tag"), separators=(",", ":")
+    )
 
 
 async def _exec_buzz(
-    cli_path: str, args: list[str], *, relay_url: str, private_key: str, auth_tag: str = "",
-    input_text: Optional[str] = None, timeout: float = _CLI_TIMEOUT,
+    cli_path: str,
+    args: list[str],
+    *,
+    relay_url: str,
+    private_key: str,
+    auth_tag: str = "",
+    input_text: Optional[str] = None,
+    timeout: float = _CLI_TIMEOUT,
 ) -> tuple[int, str, str]:
     """Run the buzz CLI (argv, never a shell) -> ``(rc, stdout, stderr)``. Key travels via env only."""
     from tools.environments.local import clawk_subprocess_env
-    env = clawk_subprocess_env()  # a third-party CLI: its own key only, never Clawksis' credentials
-    env["HOME"] = env["CLAWK_REAL_HOME"]  # its own config and credentials file live under the user's HOME
+
+    env = (
+        clawk_subprocess_env()
+    )  # a third-party CLI: its own key only, never Clawksis' credentials
+    env["HOME"] = env[
+        "CLAWK_REAL_HOME"
+    ]  # its own config and credentials file live under the user's HOME
     env["BUZZ_RELAY_URL"] = relay_url
     env["BUZZ_PRIVATE_KEY"] = private_key
     env.pop("BUZZ_AUTH_TAG", None)
     if auth_tag:
         env["BUZZ_AUTH_TAG"] = auth_tag
     proc = await asyncio.create_subprocess_exec(
-        cli_path, *args, stdin=asyncio.subprocess.PIPE if input_text is not None else asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env,
+        cli_path,
+        *args,
+        stdin=asyncio.subprocess.PIPE
+        if input_text is not None
+        else asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     try:
         stdin_bytes = input_text.encode("utf-8") if input_text is not None else None
-        stdout, stderr = await asyncio.wait_for(proc.communicate(stdin_bytes), timeout=timeout)
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(stdin_bytes), timeout=timeout
+        )
     except TimeoutError:
         proc.kill()
         await proc.wait()
-        detail = {"error": "timeout", "message": f"buzz {args[0] if args else ''} timed out after {timeout}s"}
+        detail = {
+            "error": "timeout",
+            "message": f"buzz {args[0] if args else ''} timed out after {timeout}s",
+        }
         return 124, "", json.dumps(detail)
     rc = proc.returncode if proc.returncode is not None else 4
-    return rc, stdout.decode("utf-8", errors="replace"), stderr.decode("utf-8", errors="replace")
+    return (
+        rc,
+        stdout.decode("utf-8", errors="replace"),
+        stderr.decode("utf-8", errors="replace"),
+    )
 
 
 _MAX_CLI_MESSAGE_CHARS = 900
@@ -426,19 +519,33 @@ def _bounded_cli_message(message: str, redact_path: Optional[Path] = None) -> st
     """Keep untrusted CLI detail useful without exposing unbounded output."""
     if redact_path is not None:
         message = message.replace(str(redact_path), redact_path.name)
-    return message if len(message) <= _MAX_CLI_MESSAGE_CHARS else f"{message[: _MAX_CLI_MESSAGE_CHARS - 3]}..."
+    return (
+        message
+        if len(message) <= _MAX_CLI_MESSAGE_CHARS
+        else f"{message[: _MAX_CLI_MESSAGE_CHARS - 3]}..."
+    )
 
 
-def _cli_error_message(stderr: str, returncode: int, *, redact_path: Optional[Path] = None) -> str:
+def _cli_error_message(
+    stderr: str, returncode: int, *, redact_path: Optional[Path] = None
+) -> str:
     """Extract a bounded human-readable message from the CLI error contract."""
     text = (stderr or "").strip()
     data = _json_or(text, None)
     if isinstance(data, dict):
         detail, category = data.get("message"), data.get("error")
         if isinstance(detail, str) and detail.strip():
-            label = category.strip() if isinstance(category, str) and category.strip() else "error"
-            return _bounded_cli_message(f"{label}: {detail.strip()} (exit {returncode})", redact_path)
-    return _bounded_cli_message(text or f"buzz CLI failed with exit code {returncode}", redact_path)
+            label = (
+                category.strip()
+                if isinstance(category, str) and category.strip()
+                else "error"
+            )
+            return _bounded_cli_message(
+                f"{label}: {detail.strip()} (exit {returncode})", redact_path
+            )
+    return _bounded_cli_message(
+        text or f"buzz CLI failed with exit code {returncode}", redact_path
+    )
 
 
 def _parse_send_receipt(stdout: str) -> tuple[Optional[str], Optional[str]]:
@@ -452,7 +559,11 @@ def _parse_send_receipt(stdout: str) -> tuple[Optional[str], Optional[str]]:
             detail = "message was not accepted"
         return None, _bounded_cli_message(detail.strip())
     event_id = data.get("event_id")
-    if data.get("accepted") is not True or not isinstance(event_id, str) or not event_id.strip():
+    if (
+        data.get("accepted") is not True
+        or not isinstance(event_id, str)
+        or not event_id.strip()
+    ):
         return None, "invalid CLI response"
     return event_id.strip(), None
 
@@ -468,7 +579,11 @@ def _json_or(text: str, default):
 def _parse_json_list(stdout: str) -> list[dict]:
     """Parse CLI stdout expected to be a JSON array of objects."""
     data = _json_or(stdout, [])
-    return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+    return (
+        [item for item in data if isinstance(item, dict)]
+        if isinstance(data, list)
+        else []
+    )
 
 
 def _e_tags(event: dict):
@@ -499,19 +614,34 @@ def _p_tagged(event: dict, pubkey: str) -> bool:
     """True when the event carries a ``p`` tag equal to *pubkey* (case-insensitive)."""
     tags = event.get("tags")
     return isinstance(tags, list) and any(
-        isinstance(tag, (list, tuple)) and len(tag) > 1 and tag[0] == "p" and str(tag[1]).lower() == pubkey for tag in tags)
+        isinstance(tag, (list, tuple))
+        and len(tag) > 1
+        and tag[0] == "p"
+        and str(tag[1]).lower() == pubkey
+        for tag in tags
+    )
 
 
 # Cap stored parent content snippets (gateway reply injection also clips).
 _EVENT_META_CONTENT_CAP = 500
-_MEDIA_KIND_PRIORITY = (("image", MessageType.PHOTO), ("audio", MessageType.AUDIO), ("video", MessageType.VIDEO))
-_ATTACHMENT_KIND_TYPES = {"image": MessageType.PHOTO, "video": MessageType.VIDEO, "audio": MessageType.AUDIO, "document": MessageType.DOCUMENT}
+_MEDIA_KIND_PRIORITY = (
+    ("image", MessageType.PHOTO),
+    ("audio", MessageType.AUDIO),
+    ("video", MessageType.VIDEO),
+)
+_ATTACHMENT_KIND_TYPES = {
+    "image": MessageType.PHOTO,
+    "video": MessageType.VIDEO,
+    "audio": MessageType.AUDIO,
+    "document": MessageType.DOCUMENT,
+}
 
 
 class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
     """Buzz adapter (WebSocket push with poll fallback) for the BasePlatformAdapter interface."""
 
     serial_receive_loop = True  # WS listener and poll sweep both await each event batch before reading the next
+
     def __init__(self, config, **kwargs):
         super().__init__(config=config, platform=Platform("buzz"))
         extra = getattr(config, "extra", {}) or {}
@@ -527,25 +657,45 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         self.cli_path = _configured_cli_path(extra)
         # Channels to watch: env csv > extra list/csv; empty = all joined channels
         raw_channels = _split_csv(_setting_or("BUZZ_CHANNELS", extra, "channels", []))
-        self.channels: list[str] = [c.strip() for c in raw_channels if isinstance(c, str) and c.strip()]
+        self.channels: list[str] = [
+            c.strip() for c in raw_channels if isinstance(c, str) and c.strip()
+        ]
         self.home_channel = _configured_home_channel(extra)
         _pi_raw = _scoped_platform_setting("BUZZ_POLL_INTERVAL", extra, "poll_interval")
         try:
-            self.poll_interval = max(_MIN_POLL_INTERVAL, float(_pi_raw or extra.get("poll_interval", _DEFAULT_POLL_INTERVAL)))
+            self.poll_interval = max(
+                _MIN_POLL_INTERVAL,
+                float(_pi_raw or extra.get("poll_interval", _DEFAULT_POLL_INTERVAL)),
+            )
         except (TypeError, ValueError):
             self.poll_interval = max(_MIN_POLL_INTERVAL, _DEFAULT_POLL_INTERVAL)
         # Channel messages must @mention the agent unless disabled; DMs always dispatch.
         _rm_cfg = _setting_or("BUZZ_REQUIRE_MENTION", extra, "require_mention", True)
-        self.require_mention = str(_rm_cfg).strip().lower() not in ("false", "0", "no", "off")
+        self.require_mention = str(_rm_cfg).strip().lower() not in (
+            "false",
+            "0",
+            "no",
+            "off",
+        )
         self._reply_to_mode: str = _reply_to_mode(config, extra)
         # Inbound transport: "auto" (WebSocket with poll fallback), "websocket" (required), "poll".
         _transport_raw = _scoped_platform_setting("BUZZ_TRANSPORT", extra, "transport")
-        _transport = (_transport_raw or str(extra.get("transport", "auto") or "auto")).strip().lower()
-        self.transport = _transport if _transport in ("auto", "websocket", "poll") else "auto"
+        _transport = (
+            (_transport_raw or str(extra.get("transport", "auto") or "auto"))
+            .strip()
+            .lower()
+        )
+        self.transport = (
+            _transport if _transport in ("auto", "websocket", "poll") else "auto"
+        )
         # Entries may be hex or npub (normalized to hex). Reaction-only identities get a 👀 on explicit tags but
         # never dispatch; allowed_users wins on overlap.
-        self._allowed_pubkeys: set = _pubkey_set(_setting_or("BUZZ_ALLOWED_USERS", extra, "allowed_users", []))
-        self._reaction_only_pubkeys: set = _pubkey_set(_setting_or("BUZZ_REACTION_ONLY_USERS", extra, "reaction_only_users", []))
+        self._allowed_pubkeys: set = _pubkey_set(
+            _setting_or("BUZZ_ALLOWED_USERS", extra, "allowed_users", [])
+        )
+        self._reaction_only_pubkeys: set = _pubkey_set(
+            _setting_or("BUZZ_REACTION_ONLY_USERS", extra, "reaction_only_users", [])
+        )
         # Secret — resolved lazily (never at import time, never logged); connect() re-resolves.
         self._private_key = self._auth_tag = ""
         # Identity — filled in by connect() from ``buzz users get``
@@ -567,12 +717,16 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         self._restored_cursors: dict[str, dict] = {}
         # Orders off-loop cursor writes: each snapshot is taken under it, so an older one never lands last.
         self._cursor_write_lock = asyncio.Lock()
-        self._cursor_snapshots = self._cursor_written = 0  # cursor write generations taken / landed
+        self._cursor_snapshots = self._cursor_written = (
+            0  # cursor write generations taken / landed
+        )
         self._channel_names: dict[str, str] = {}
         # channel_id -> raw ``channels list`` entry; drives DM-vs-channel classification.
         self._channel_meta: dict[str, dict] = {}
         self._user_names: dict[str, str] = {}
-        self._member_cache: dict[str, tuple[float, list[str]]] = {}  # (monotonic, pubkeys)
+        self._member_cache: dict[
+            str, tuple[float, list[str]]
+        ] = {}  # (monotonic, pubkeys)
         self._profile_name_cache: dict[str, tuple[float, str]] = {}
         # inbound event_id -> thread root (None when top-level), so send() joins the user's thread instead of nesting.
         self._thread_roots: OrderedDict[str, Optional[str]] = OrderedDict()
@@ -593,12 +747,20 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
 
     # ── buzz-cli plumbing ─────────────────────────────────────────────────
 
-    async def _run_cli(self, args: list[str], *, input_text: Optional[str] = None) -> tuple[int, str, str]:
+    async def _run_cli(
+        self, args: list[str], *, input_text: Optional[str] = None
+    ) -> tuple[int, str, str]:
         if not self._private_key:
             self._private_key = _resolve_private_key(self._extra)
             self._auth_tag = _resolve_auth_tag(self._extra)
-        return await _exec_buzz(self.cli_path, args, relay_url=self.relay_url, private_key=self._private_key,
-                                auth_tag=self._auth_tag, input_text=input_text)
+        return await _exec_buzz(
+            self.cli_path,
+            args,
+            relay_url=self.relay_url,
+            private_key=self._private_key,
+            auth_tag=self._auth_tag,
+            input_text=input_text,
+        )
 
     async def _cli_json(self, args: list[str], default):
         """``_run_cli`` -> parsed stdout on rc 0, else *default*."""
@@ -607,7 +769,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
 
     # ── Connection lifecycle ──────────────────────────────────────────────
 
-    def _connect_failed(self, code: str, detail: str, log: str, *log_args, retryable: bool = False) -> bool:
+    def _connect_failed(
+        self, code: str, detail: str, log: str, *log_args, retryable: bool = False
+    ) -> bool:
         """Log and record a fatal connect() error; always returns False."""
         logger.error(log, *log_args)
         self._set_fatal_error(code, detail, retryable=retryable)
@@ -616,47 +780,73 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Verify relay credentials, seed high-water marks, start polling."""
         if not self.relay_url:
-            return self._connect_failed("config_missing", "BUZZ_RELAY_URL must be set", "Buzz: relay URL must be configured")
+            return self._connect_failed(
+                "config_missing",
+                "BUZZ_RELAY_URL must be set",
+                "Buzz: relay URL must be configured",
+            )
         if not self.cli_path:
             return self._connect_failed(
-                "cli_missing", "buzz CLI binary not found", "Buzz: buzz CLI binary not found (set BUZZ_CLI_PATH or put 'buzz' on PATH)"
+                "cli_missing",
+                "buzz CLI binary not found",
+                "Buzz: buzz CLI binary not found (set BUZZ_CLI_PATH or put 'buzz' on PATH)",
             )
         try:
             self._private_key = _resolve_private_key(self._extra)
             self._auth_tag = _resolve_auth_tag(self._extra)
         except ValueError as exc:
-            return self._connect_failed("config_invalid", str(exc), "Buzz: invalid owner-auth configuration — %s", exc)
+            return self._connect_failed(
+                "config_invalid",
+                str(exc),
+                "Buzz: invalid owner-auth configuration — %s",
+                exc,
+            )
         if not self._private_key:
             return self._connect_failed(
-                "config_missing", "BUZZ_PRIVATE_KEY must be set", "Buzz: no private key (set BUZZ_PRIVATE_KEY or a credentials file)"
+                "config_missing",
+                "BUZZ_PRIVATE_KEY must be set",
+                "Buzz: no private key (set BUZZ_PRIVATE_KEY or a credentials file)",
             )
         # Own identity: pubkey drives self-echo suppression, display name drives mention gating.
         code, out, err = await self._run_cli(["users", "get"])
         if code != 0:
             message = _cli_error_message(err, code)
             return self._connect_failed(
-                "connect_failed", message, "Buzz: failed to fetch own profile from %s — %s",
-                self.relay_url, message, retryable=code == 2,
+                "connect_failed",
+                message,
+                "Buzz: failed to fetch own profile from %s — %s",
+                self.relay_url,
+                message,
+                retryable=code == 2,
             )
         profiles = _parse_json_list(out)
         if not profiles or not profiles[0].get("pubkey"):
             return self._connect_failed(
-                "connect_failed", "buzz users get returned no profile",
-                "Buzz: 'users get' returned no profile — is the key a member of this community?", retryable=True,
+                "connect_failed",
+                "buzz users get returned no profile",
+                "Buzz: 'users get' returned no profile — is the key a member of this community?",
+                retryable=True,
             )
         self._self_pubkey = str(profiles[0]["pubkey"]).lower()
         self._display_name = str(profiles[0].get("display_name") or "").strip()
         self._self_npub = hex_to_npub(self._self_pubkey) or ""
         # Two profiles must not drive the same identity on one relay (duplicate replies, split de-dupe state).
         if not self._acquire_platform_lock(
-                "buzz", f"{self.relay_url}:{self._self_pubkey}", f"Buzz identity {self._self_pubkey[:8]}… on {self.relay_url}"):
+            "buzz",
+            f"{self.relay_url}:{self._self_pubkey}",
+            f"Buzz identity {self._self_pubkey[:8]}… on {self.relay_url}",
+        ):
             return False
         # Map channel ids to names and pick the watch set.
         code, out, err = await self._run_cli(["channels", "list"])
         if code != 0:
             message = _cli_error_message(err, code)
             return self._connect_failed(
-                "connect_failed", message, "Buzz: failed to list channels — %s", message, retryable=code == 2
+                "connect_failed",
+                message,
+                "Buzz: failed to list channels — %s",
+                message,
+                retryable=code == 2,
             )
         self._channel_names = {}
         for ch in _parse_json_list(out):
@@ -666,7 +856,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         watch = self.channels or list(self._channel_names)
         if not watch:
             return self._connect_failed(
-                "config_missing", "no Buzz channels to watch", "Buzz: no channels to watch (configure BUZZ_CHANNELS or join a channel)"
+                "config_missing",
+                "no Buzz channels to watch",
+                "Buzz: no channels to watch (configure BUZZ_CHANNELS or join a channel)",
             )
         # Seed high-water marks so a (re)start never replays history — except where a restored cursor lets
         # events that landed while down still dispatch.
@@ -675,7 +867,10 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         self._load_cursors()
         for channel_id in watch:
             if channel_id in self._restricted_channels:
-                logger.debug("Buzz: skipping restricted channel %s (relay rejected subscription)", channel_id)
+                logger.debug(
+                    "Buzz: skipping restricted channel %s (relay rejected subscription)",
+                    channel_id,
+                )
                 continue
             await self._seed_channel(channel_id, chat_type="group")
         await self._discover_dms(seed=True)
@@ -687,7 +882,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 transport_used = "websocket"
             elif self.transport == "websocket":
                 self._set_fatal_error(
-                    "ws_auth_failed", "Buzz WebSocket transport did not authenticate (transport=websocket)", retryable=True
+                    "ws_auth_failed",
+                    "Buzz WebSocket transport did not authenticate (transport=websocket)",
+                    retryable=True,
                 )
                 await self.disconnect()
                 return False
@@ -696,8 +893,13 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         self._mark_connected()
         logger.info(
             "Buzz: connected to %s as %s, watching %d channel(s) via %s%s",
-            self.relay_url, self._display_name or self._self_npub[:16], len(self._channel_state),
-            transport_used, "" if transport_used == "websocket" else f", poll interval {self.poll_interval:.1f}s",
+            self.relay_url,
+            self._display_name or self._self_npub[:16],
+            len(self._channel_state),
+            transport_used,
+            ""
+            if transport_used == "websocket"
+            else f", poll interval {self.poll_interval:.1f}s",
         )
         self._wire_plugin_handlers(None)
         return True
@@ -723,13 +925,17 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if (cached := _ttl_get(cache, str(chat_id), _MEMBER_CACHE_TTL)) is not None:
             return list(cached)
         pks: list[str] = []
-        for row in await self._cli_json(["channels", "members", "--channel", str(chat_id)], []):
+        for row in await self._cli_json(
+            ["channels", "members", "--channel", str(chat_id)], []
+        ):
             _add_pubkey(pks, row.get("pubkey") if isinstance(row, dict) else row)
         if pks:
             cache[str(chat_id)] = (time.monotonic(), list(pks))
             return pks
         candidates: list[str] = []
-        for msg in await self._cli_json(["messages", "get", "--channel", str(chat_id), "--limit", "50"], []):
+        for msg in await self._cli_json(
+            ["messages", "get", "--channel", str(chat_id), "--limit", "50"], []
+        ):
             _add_pubkey(candidates, msg.get("pubkey"))
             for t in msg.get("tags") or []:
                 if isinstance(t, list) and len(t) > 1 and t[0] == "p":
@@ -776,7 +982,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         found: list[str] = []
         text = content
         for key in sorted(by_name, key=len, reverse=True):
-            pattern = re.compile(r"(?<![\w@])@" + re.escape(display[key]) + r"(?!\w)", re.IGNORECASE)
+            pattern = re.compile(
+                r"(?<![\w@])@" + re.escape(display[key]) + r"(?!\w)", re.IGNORECASE
+            )
             if pattern.search(text):
                 pks = by_name[key]
                 if len(pks) == 1 and pks[0] not in found:
@@ -786,7 +994,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 text = pattern.sub("\x00", text)
         return found
 
-    async def _run_message_send(self, args: list[str], content: str, mention_pubkeys: Optional[list[str]] = None):
+    async def _run_message_send(
+        self, args: list[str], content: str, mention_pubkeys: Optional[list[str]] = None
+    ):
         """Send with bounded recovery (each rung once): explicit ``--mention``s; on "not channel members" retry
         without; escape an unresolvable ``@token`` and retry; finally ``--mention <self>`` (downgrades @names to text).
 
@@ -811,38 +1021,70 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 return code, out, err
         escaped = _escape_unresolved_presentation_mention(content, err)
         if escaped is not None:
-            logger.info("Buzz: retrying message after unresolved presentation-mention preflight")
+            logger.info(
+                "Buzz: retrying message after unresolved presentation-mention preflight"
+            )
             code, out, err = await self._run_cli(args, input_text=escaped)
             if code == 0:
                 return code, out, err
-        if "does not match a current channel member" in (err or "") and getattr(self, "_self_pubkey", None):
-            code, out, err = await self._run_cli(args + ["--mention", self._self_pubkey], input_text=content)
+        if "does not match a current channel member" in (err or "") and getattr(
+            self, "_self_pubkey", None
+        ):
+            code, out, err = await self._run_cli(
+                args + ["--mention", self._self_pubkey], input_text=content
+            )
         return code, out, err
 
-    async def send(self, chat_id: str, content: str, reply_to: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> SendResult:
+    async def send(
+        self,
+        chat_id: str,
+        content: str,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> SendResult:
         if not content:
             return SendResult(success=False, error="Empty message")
         # Anchor: metadata.thread_id, then metadata.reply_to_message_id (stream/progress sends), then reply_to.
         meta = metadata or {}
         args = ["messages", "send", "--channel", str(chat_id), "--content", "-"]
-        args += self._reply_args(meta.get("thread_id") or meta.get("reply_to_message_id") or reply_to)
+        args += self._reply_args(
+            meta.get("thread_id") or meta.get("reply_to_message_id") or reply_to
+        )
         mention_pubkeys = await self._mention_pubkeys_for(chat_id, content)
         code, out, err = await self._run_message_send(args, content, mention_pubkeys)
         result = self._send_result(chat_id, code, out, err)
         if result.success:
             # Record event_meta so a thread reply to this send matches even if the echo never arrives.
-            self._remember_event_meta(str(chat_id), result.message_id, self._self_pubkey, content)
+            self._remember_event_meta(
+                str(chat_id), result.message_id, self._self_pubkey, content
+            )
         return result
 
     def _reply_args(self, anchor: Optional[str]) -> list[str]:
         """``--reply-to`` CLI args for *anchor*, honoring ``reply_to_mode``."""
         reply_target = self._resolve_reply_anchor(anchor)
-        return ["--reply-to", str(reply_target)] if reply_target and self._reply_to_mode != "off" else []
+        return (
+            ["--reply-to", str(reply_target)]
+            if reply_target and self._reply_to_mode != "off"
+            else []
+        )
 
-    def _send_result(self, chat_id: str, code: int, out: str, err: str, *, redact_path: Optional[Path] = None) -> SendResult:
+    def _send_result(
+        self,
+        chat_id: str,
+        code: int,
+        out: str,
+        err: str,
+        *,
+        redact_path: Optional[Path] = None,
+    ) -> SendResult:
         """``messages send`` result -> SendResult; marks the verified id seen (echo suppression belt-and-braces)."""
         if code != 0:
-            return SendResult(success=False, error=_cli_error_message(err, code, redact_path=redact_path), retryable=code == 2)
+            return SendResult(
+                success=False,
+                error=_cli_error_message(err, code, redact_path=redact_path),
+                retryable=code == 2,
+            )
         event_id, receipt_error = _parse_send_receipt(out)
         if receipt_error:
             return SendResult(success=False, error=receipt_error)
@@ -861,12 +1103,21 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if not self.cli_path or not emoji or not message_id:
             return False
         # The event id IS the dispatched message_id; channel is not a parameter here.
-        code, _out, err = await self._run_cli(["reactions", "add", "--event", str(message_id), "--emoji", emoji])
+        code, _out, err = await self._run_cli(
+            ["reactions", "add", "--event", str(message_id), "--emoji", emoji]
+        )
         if code != 0:
-            logger.debug("Buzz: reaction add failed for message %s in %s — %s", message_id[:12], chat_id, _cli_error_message(err, code))
+            logger.debug(
+                "Buzz: reaction add failed for message %s in %s — %s",
+                message_id[:12],
+                chat_id,
+                _cli_error_message(err, code),
+            )
         return code == 0
 
-    async def edit_message(self, chat_id: str, message_id: str, content: str, *, finalize: bool = False) -> SendResult:
+    async def edit_message(
+        self, chat_id: str, message_id: str, content: str, *, finalize: bool = False
+    ) -> SendResult:
         """Edit a sent message (streamed replies). The CLI reports a NEW event id but the stream consumer
         keeps addressing the original, so return the given id, never the CLI's."""
         if not message_id:
@@ -878,18 +1129,26 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         args = ["messages", "edit", "--event", str(message_id), f"--content={content}"]
         code, out, err = await self._run_cli(args)
         if code != 0:
-            return SendResult(success=False, error=_cli_error_message(err, code), retryable=code == 2)
+            return SendResult(
+                success=False, error=_cli_error_message(err, code), retryable=code == 2
+            )
         data = _json_or(out, {})
         if data.get("event_id"):
             # The edit is itself a relay event that echoes back on our subscription.
             self._mark_seen(str(chat_id), str(data["event_id"]))
-        return SendResult(success=bool(data.get("accepted", True)), message_id=str(message_id), raw_response=data)
+        return SendResult(
+            success=bool(data.get("accepted", True)),
+            message_id=str(message_id),
+            raw_response=data,
+        )
 
     async def delete_message(self, chat_id: str, message_id: str) -> bool:
         """Delete a sent message (stream consumer's fresh-final cleanup path)."""
         if not message_id:
             return False
-        code, out, _err = await self._run_cli(["messages", "delete", "--event", str(message_id)])
+        code, out, _err = await self._run_cli(
+            ["messages", "delete", "--event", str(message_id)]
+        )
         if code != 0:
             return False
         try:
@@ -901,19 +1160,41 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         return bool(data.get("accepted", True))
 
     async def send_image(
-        self, chat_id: str, image_url: str, caption: Optional[str] = None, reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None) -> SendResult:
+        self,
+        chat_id: str,
+        image_url: str,
+        caption: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> SendResult:
         """Send an image: local files upload via --file, URLs go as a link."""
-        local = Path(image_url).expanduser() if not image_url.startswith(("http://", "https://")) else None
+        local = (
+            Path(image_url).expanduser()
+            if not image_url.startswith(("http://", "https://"))
+            else None
+        )
         if local is not None and local.is_file():
-            return await self._send_file_attachment(chat_id, local, caption=caption, reply_to=reply_to, metadata=metadata, probe=False)
+            return await self._send_file_attachment(
+                chat_id,
+                local,
+                caption=caption,
+                reply_to=reply_to,
+                metadata=metadata,
+                probe=False,
+            )
         # Markdown renders in Buzz, so a URL arrives as a clickable image link.
         text = f"{caption}\n{image_url}" if caption else image_url
         return await self.send(chat_id, text, reply_to=reply_to, metadata=metadata)
 
     async def _send_file_attachment(
-        self, chat_id: str, file_path: Path, *, caption: Optional[str] = None, reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None, probe: bool = True,
+        self,
+        chat_id: str,
+        file_path: Path,
+        *,
+        caption: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        probe: bool = True,
     ) -> SendResult:
         """Upload a local file as a native attachment; ``probe=False`` when the caller already verified it (a re-probe could race).
 
@@ -923,40 +1204,106 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if probe and not local.is_file():
             # Never leak host filesystem paths into chat-visible errors.
             return SendResult(success=False, error="Media file not found")
-        args = ["messages", "send", "--channel", str(chat_id), "--file", str(local), "--content", "-"]
+        args = [
+            "messages",
+            "send",
+            "--channel",
+            str(chat_id),
+            "--file",
+            str(local),
+            "--content",
+            "-",
+        ]
         args += self._reply_args((metadata or {}).get("thread_id") or reply_to)
         code, out, err = await self._run_message_send(args, caption or "")
         return self._send_result(chat_id, code, out, err, redact_path=local)
 
     async def send_image_file(
-        self, chat_id: str, image_path: str, caption: Optional[str] = None, reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None, **kwargs) -> SendResult:
+        self,
+        chat_id: str,
+        image_path: str,
+        caption: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        **kwargs,
+    ) -> SendResult:
         """Upload a local image via ``--file``; missing paths keep the Base fallback so host paths never reach chat.
 
         See #74999.
         """
         local = Path(image_path).expanduser()
         if local.is_file():
-            return await self._send_file_attachment(chat_id, local, caption=caption, reply_to=reply_to, metadata=metadata, probe=False)
-        return await super().send_image_file(chat_id=chat_id, image_path=image_path, caption=caption, reply_to=reply_to, metadata=metadata, **kwargs)
+            return await self._send_file_attachment(
+                chat_id,
+                local,
+                caption=caption,
+                reply_to=reply_to,
+                metadata=metadata,
+                probe=False,
+            )
+        return await super().send_image_file(
+            chat_id=chat_id,
+            image_path=image_path,
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+            **kwargs,
+        )
 
     async def send_document(
-        self, chat_id: str, file_path: str, caption: Optional[str] = None, file_name: Optional[str] = None,
-        reply_to: Optional[str] = None, metadata: Optional[dict[str, Any]] = None, **kwargs) -> SendResult:
+        self,
+        chat_id: str,
+        file_path: str,
+        caption: Optional[str] = None,
+        file_name: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        **kwargs,
+    ) -> SendResult:
         """Upload a local document through Buzz's native ``--file`` path."""
-        return await self._send_file_attachment(chat_id, Path(file_path), caption=caption, reply_to=reply_to, metadata=metadata)
+        return await self._send_file_attachment(
+            chat_id,
+            Path(file_path),
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+        )
 
     async def send_video(
-        self, chat_id: str, video_path: str, caption: Optional[str] = None, reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None, **kwargs) -> SendResult:
+        self,
+        chat_id: str,
+        video_path: str,
+        caption: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        **kwargs,
+    ) -> SendResult:
         """Upload a local video through Buzz's native ``--file`` path."""
-        return await self._send_file_attachment(chat_id, Path(video_path), caption=caption, reply_to=reply_to, metadata=metadata)
+        return await self._send_file_attachment(
+            chat_id,
+            Path(video_path),
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+        )
 
     async def send_voice(
-        self, chat_id: str, audio_path: str, caption: Optional[str] = None, reply_to: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None, **kwargs) -> SendResult:
+        self,
+        chat_id: str,
+        audio_path: str,
+        caption: Optional[str] = None,
+        reply_to: Optional[str] = None,
+        metadata: Optional[dict[str, Any]] = None,
+        **kwargs,
+    ) -> SendResult:
         """Upload a local audio file through Buzz's native ``--file`` path."""
-        return await self._send_file_attachment(chat_id, Path(audio_path), caption=caption, reply_to=reply_to, metadata=metadata)
+        return await self._send_file_attachment(
+            chat_id,
+            Path(audio_path),
+            caption=caption,
+            reply_to=reply_to,
+            metadata=metadata,
+        )
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         chat_id = str(chat_id)
@@ -965,7 +1312,11 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             data = await self._cli_json(["channels", "get", "--channel", chat_id], {})
             if isinstance(data, dict) and data.get("name"):
                 name = self._channel_names[chat_id] = str(data["name"])
-        return {"name": name or chat_id, "type": state["chat_type"] if state else "group", "chat_id": chat_id}
+        return {
+            "name": name or chat_id,
+            "type": state["chat_type"] if state else "group",
+            "chat_id": chat_id,
+        }
 
     # ── Inbound: WebSocket transport (NIP-42) — same _handle_event() as the poll loop ──────
 
@@ -984,9 +1335,12 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         """Start the WS loop; True when it authenticates within the timeout."""
         try:
             import websockets
+
             self._websocket_url()
         except Exception as e:
-            logger.info("Buzz: WebSocket transport unavailable (%s); falling back to polling", e)
+            logger.info(
+                "Buzz: WebSocket transport unavailable (%s); falling back to polling", e
+            )
             return False
         self._ws_ready = asyncio.Event()
         self._membership_since = int(time.time())
@@ -1002,7 +1356,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
 
     async def _authenticate_websocket(self, websocket) -> None:
         """NIP-42: await the AUTH challenge, answer with a signed kind-22242 event (+ optional NIP-OA tag), await OK."""
-        message = json.loads(await asyncio.wait_for(websocket.recv(), timeout=_WS_AUTH_TIMEOUT))
+        message = json.loads(
+            await asyncio.wait_for(websocket.recv(), timeout=_WS_AUTH_TIMEOUT)
+        )
         if not isinstance(message, list) or len(message) < 2 or message[0] != "AUTH":
             raise ConnectionError("Buzz relay did not send a NIP-42 AUTH challenge")
         # BUZZ_AUTH_TAG is per-identity: a scoped profile without one fails closed to "" rather than borrowing
@@ -1019,24 +1375,41 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 auth_tag = _resolve_auth_tag(getattr(self, "_extra", None))
             except ValueError:
                 auth_tag = ""
-        event = _nostr_auth.build_auth_event(private_key=self._private_key, challenge=str(message[1]), relay_url=self._websocket_url(), auth_tag_json=auth_tag)
+        event = _nostr_auth.build_auth_event(
+            private_key=self._private_key,
+            challenge=str(message[1]),
+            relay_url=self._websocket_url(),
+            auth_tag_json=auth_tag,
+        )
         await websocket.send(json.dumps(["AUTH", event], separators=(",", ":")))
         while True:
-            response = json.loads(await asyncio.wait_for(websocket.recv(), timeout=_WS_AUTH_TIMEOUT))
+            response = json.loads(
+                await asyncio.wait_for(websocket.recv(), timeout=_WS_AUTH_TIMEOUT)
+            )
             if not isinstance(response, list) or not response:
                 continue
-            if response[0] == "OK" and len(response) >= 4 and response[1] == event["id"]:
+            if (
+                response[0] == "OK"
+                and len(response) >= 4
+                and response[1] == event["id"]
+            ):
                 if response[2] is True:
                     return
                 raise ConnectionError(f"Buzz WebSocket AUTH rejected: {response[3]}")
             if response[0] in ("NOTICE", "CLOSED"):
-                raise ConnectionError(f"Buzz WebSocket AUTH failed: {response[-1] if len(response) > 1 else 'authentication failed'}")
+                raise ConnectionError(
+                    f"Buzz WebSocket AUTH failed: {response[-1] if len(response) > 1 else 'authentication failed'}"
+                )
 
     @staticmethod
     async def _send_req(websocket, subscription_id: str, request_filter: dict) -> None:
-        await websocket.send(json.dumps(["REQ", subscription_id, request_filter], separators=(",", ":")))
+        await websocket.send(
+            json.dumps(["REQ", subscription_id, request_filter], separators=(",", ":"))
+        )
 
-    async def _send_channel_subscription(self, websocket, subscription_id: str, channel_id: str) -> None:
+    async def _send_channel_subscription(
+        self, websocket, subscription_id: str, channel_id: str
+    ) -> None:
         state = self._channel_state.get(channel_id) or {}
         last_ts = int(state.get("last_ts") or 0)
         # A conversation adopted mid-run with no high-water mark is fresh: its history IS the conversation,
@@ -1061,14 +1434,22 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             if channel_id in self._restricted_channels:
                 continue
             subscriptions[f"clawk-buzz-{index}"] = channel_id
-            await self._send_channel_subscription(websocket, f"clawk-buzz-{index}", channel_id)
+            await self._send_channel_subscription(
+                websocket, f"clawk-buzz-{index}", channel_id
+            )
         if self._self_pubkey:
-            membership = {"kinds": [_WS_MEMBERSHIP_KIND], "#p": [self._self_pubkey], "since": max(self._membership_since - 1, 0)}
+            membership = {
+                "kinds": [_WS_MEMBERSHIP_KIND],
+                "#p": [self._self_pubkey],
+                "since": max(self._membership_since - 1, 0),
+            }
             await self._send_req(websocket, _WS_MEMBERSHIP_SUB_ID, membership)
             subscriptions[_WS_MEMBERSHIP_SUB_ID] = None
         return subscriptions
 
-    async def _rediscover_and_subscribe(self, websocket, subscriptions: dict[str, Optional[str]]) -> None:
+    async def _rediscover_and_subscribe(
+        self, websocket, subscriptions: dict[str, Optional[str]]
+    ) -> None:
         """Rediscover conversations and subscribe to any adopted since (fresh DMs dispatch from their start)."""
         before = set(self._channel_state)
         await self._discover_dms(seed=False)
@@ -1077,10 +1458,14 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 continue
             subscription_id = f"clawk-buzz-dm-{len(subscriptions)}"
             subscriptions[subscription_id] = channel_id
-            await self._send_channel_subscription(websocket, subscription_id, channel_id)
+            await self._send_channel_subscription(
+                websocket, subscription_id, channel_id
+            )
             logger.info("Buzz: subscribed to new conversation %s", channel_id)
 
-    async def _ws_discovery_loop(self, websocket, subscriptions: dict[str, Optional[str]]) -> None:
+    async def _ws_discovery_loop(
+        self, websocket, subscriptions: dict[str, Optional[str]]
+    ) -> None:
         """Periodic discovery on the poll cadence: relays don't guarantee a kind-44100 event for every new
         conversation. Failures retry next tick, except a closed socket: that is the same dead connection the
         read loop may still be parked on, so it propagates and tears the connection down (#112049).
@@ -1106,15 +1491,22 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
     async def _websocket_loop(self) -> None:
         """Persistent authenticated subscription with bounded reconnect backoff; `since` filters resume on reconnect."""
         import websockets
+
         backoff = 1.0
         reconnecting = False
         while True:
             try:
-                async with websockets.connect(
-                    self._websocket_url(), open_timeout=_WS_AUTH_TIMEOUT, close_timeout=5,
-                    ping_interval=20, ping_timeout=20, max_size=_WS_MAX_MESSAGE_BYTES,
-                    happy_eyeballs_delay=0.25,  # race IPv6/IPv4 in loop.create_connection (#114265)
-                ) as websocket:
+                async with (
+                    websockets.connect(
+                        self._websocket_url(),
+                        open_timeout=_WS_AUTH_TIMEOUT,
+                        close_timeout=5,
+                        ping_interval=20,
+                        ping_timeout=20,
+                        max_size=_WS_MAX_MESSAGE_BYTES,
+                        happy_eyeballs_delay=0.25,  # race IPv6/IPv4 in loop.create_connection (#114265)
+                    ) as websocket
+                ):
                     await self._authenticate_websocket(websocket)
                     subscriptions = await self._subscribe_websocket(websocket)
                     if self._ws_ready is not None:
@@ -1127,11 +1519,17 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                     # Whichever side notices the dead socket first ends the connection: the read loop's idle
                     # bound, or a discovery send() raising ConnectionClosed while the read is still parked.
                     tasks = {
-                        asyncio.create_task(self._ws_read_loop(websocket, subscriptions)),
-                        asyncio.create_task(self._ws_discovery_loop(websocket, subscriptions)),
+                        asyncio.create_task(
+                            self._ws_read_loop(websocket, subscriptions)
+                        ),
+                        asyncio.create_task(
+                            self._ws_discovery_loop(websocket, subscriptions)
+                        ),
                     }
                     try:
-                        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                        done, _ = await asyncio.wait(
+                            tasks, return_when=asyncio.FIRST_COMPLETED
+                        )
                         for finished in done:
                             finished.result()
                     finally:
@@ -1145,18 +1543,24 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 if not reconnecting:
                     reconnecting = True
                     self._mark_degraded()
-                logger.warning("Buzz: WebSocket disconnected; retrying in %.1fs: %s", backoff, e)
+                logger.warning(
+                    "Buzz: WebSocket disconnected; retrying in %.1fs: %s", backoff, e
+                )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
 
-    async def _ws_read_loop(self, websocket, subscriptions: dict[str, Optional[str]]) -> None:
+    async def _ws_read_loop(
+        self, websocket, subscriptions: dict[str, Optional[str]]
+    ) -> None:
         """Read frames until the relay closes; a close or an idle read raises ConnectionError to reconnect."""
         frame_iter = websocket.__aiter__()
         while True:
             read_task = asyncio.ensure_future(frame_iter.__anext__())
             try:
                 done, _ = await asyncio.wait(
-                    {read_task}, timeout=_WS_READ_IDLE_TIMEOUT, return_when=asyncio.FIRST_COMPLETED
+                    {read_task},
+                    timeout=_WS_READ_IDLE_TIMEOUT,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
                 if not done:
                     # wait_for() cancels and then waits for its awaitable to acknowledge the cancellation.
@@ -1182,7 +1586,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             if isinstance(message, list) and message:
                 await self._handle_ws_message(websocket, subscriptions, message)
 
-    async def _handle_ws_message(self, websocket, subscriptions: dict[str, Optional[str]], message: list) -> None:
+    async def _handle_ws_message(
+        self, websocket, subscriptions: dict[str, Optional[str]], message: list
+    ) -> None:
         """Route one parsed relay frame (EVENT / CLOSED / NOTICE)."""
         if message[0] == "EVENT" and len(message) >= 3:
             subscription_id, event = str(message[1]), message[2]
@@ -1190,7 +1596,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 return
             if subscription_id == _WS_MEMBERSHIP_SUB_ID:
                 # A membership event p-tagged to us: rediscover and subscribe to new conversations.
-                self._membership_since = max(self._membership_since, int(event.get("created_at") or 0))
+                self._membership_since = max(
+                    self._membership_since, int(event.get("created_at") or 0)
+                )
                 await self._rediscover_and_subscribe(websocket, subscriptions)
                 return
             channel_id = subscriptions.get(subscription_id)
@@ -1202,10 +1610,17 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             sub_id = str(message[1]) if len(message) > 1 else ""
             closed_channel = subscriptions.get(sub_id)
             # A membership rejection is permanent — drop the channel instead of reconnect-looping.
-            rejected = any(m in str(detail).lower() for m in ("restricted", "not a channel member", "auth-required"))
+            rejected = any(
+                m in str(detail).lower()
+                for m in ("restricted", "not a channel member", "auth-required")
+            )
             if not (rejected and closed_channel):
                 raise ConnectionError(str(detail))
-            logger.warning("Buzz: relay permanently rejected channel %s (%s) — removing from watch list", closed_channel, detail)
+            logger.warning(
+                "Buzz: relay permanently rejected channel %s (%s) — removing from watch list",
+                closed_channel,
+                detail,
+            )
             self._restricted_channels.add(closed_channel)
             del subscriptions[sub_id]
             self._channel_state.pop(closed_channel, None)
@@ -1230,7 +1645,12 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 logger.warning("Buzz: poll sweep failed", exc_info=True)
 
     def _new_channel_state(self, chat_type: str) -> dict:
-        return {"chat_type": chat_type, "last_ts": 0, "seen": OrderedDict(), "event_meta": OrderedDict()}
+        return {
+            "chat_type": chat_type,
+            "last_ts": 0,
+            "seen": OrderedDict(),
+            "event_meta": OrderedDict(),
+        }
 
     def _restore_channel_state(self, channel_id: str, chat_type: str) -> bool:
         """Install a persisted cursor (True when one existed): seeding would mark downtime arrivals as seen.
@@ -1253,9 +1673,15 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if self._restore_channel_state(channel_id, chat_type):
             return
         state = self._channel_state[channel_id] = self._new_channel_state(chat_type)
-        code, out, err = await self._run_cli(["messages", "get", "--channel", channel_id, "--limit", str(_FETCH_LIMIT)])
+        code, out, err = await self._run_cli(
+            ["messages", "get", "--channel", channel_id, "--limit", str(_FETCH_LIMIT)]
+        )
         if code != 0:
-            logger.warning("Buzz: could not seed channel %s — %s", channel_id, _cli_error_message(err, code))
+            logger.warning(
+                "Buzz: could not seed channel %s — %s",
+                channel_id,
+                _cli_error_message(err, code),
+            )
             # "now" so a transiently unreadable channel never replays its history later.
             state["last_ts"] = int(time.time())
             return
@@ -1280,7 +1706,11 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         code, out, _err = await self._run_cli(["dms", "list"])
         for dm in _parse_json_list(out) if code == 0 else []:
             dm_id = str(dm.get("dm_id") or "")
-            if dm_id and dm_id not in self._channel_state and dm_id not in self._restricted_channels:
+            if (
+                dm_id
+                and dm_id not in self._channel_state
+                and dm_id not in self._restricted_channels
+            ):
                 await self._adopt_conversation(dm_id, seed)
                 self._channel_names.setdefault(dm_id, "DM")
         code, out, _err = await self._run_cli(["channels", "list"])
@@ -1307,7 +1737,11 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 # dispatching without a gateway restart. Unlike a fresh DM its history predates us, so it is
                 # always seeded from its newest events — only messages sent after adoption dispatch.
                 await self._seed_channel(ch_id, chat_type="group")
-                logger.info("Buzz: adopted newly joined channel %s (%s)", ch_id, self._channel_names.get(ch_id, ch_id))
+                logger.info(
+                    "Buzz: adopted newly joined channel %s (%s)",
+                    ch_id,
+                    self._channel_names.get(ch_id, ch_id),
+                )
 
     async def _adopt_conversation(self, channel_id: str, seed: bool) -> None:
         """Start watching a DM conversation: seed at startup, else restore or start fresh."""
@@ -1320,24 +1754,40 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         state = self._channel_state.get(channel_id)
         if state is None:
             return
-        args = ["messages", "get", "--channel", channel_id, "--limit", str(_FETCH_LIMIT)]
+        args = [
+            "messages",
+            "get",
+            "--channel",
+            channel_id,
+            "--limit",
+            str(_FETCH_LIMIT),
+        ]
         if state["last_ts"]:
             # Nostr `since` is inclusive: same-second events re-fetch and de-dupe by id.
             args += ["--since", str(state["last_ts"])]
         code, out, err = await self._run_cli(args)
         if code != 0:
-            logger.debug("Buzz: poll of channel %s failed — %s", channel_id, _cli_error_message(err, code))
+            logger.debug(
+                "Buzz: poll of channel %s failed — %s",
+                channel_id,
+                _cli_error_message(err, code),
+            )
             return
         await self._handle_events(channel_id, state, _parse_json_list(out))
 
-    async def _handle_events(self, channel_id: str, state: dict, events: list[dict]) -> None:
+    async def _handle_events(
+        self, channel_id: str, state: dict, events: list[dict]
+    ) -> None:
         """Handle a batch, trim, and persist only when the cursor moved (idle channels don't rewrite the file)."""
         before = self._cursor_mark(state)
         for event in events:
             await self._handle_event(channel_id, state, event)
         self._trim_seen(state)
-        if self._cursor_mark(state) != before:  # never past a busy input held uncommitted (serial reader)
+        if (
+            self._cursor_mark(state) != before
+        ):  # never past a busy input held uncommitted (serial reader)
             from gateway.session_ingress_burst import when_returned_inputs_durable
+
             await when_returned_inputs_durable(self, self._cursor_writer())
 
     @staticmethod
@@ -1355,7 +1805,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 rejected += 1
                 continue
             fields: dict[str, str] = {}
-            for key, separator, value in (f.partition(" ") for f in tag[1:] if isinstance(f, str)):
+            for key, separator, value in (
+                f.partition(" ") for f in tag[1:] if isinstance(f, str)
+            ):
                 if separator and key not in fields:
                     fields[key] = value.strip()
             url, digest = fields.get("url", ""), fields.get("x", "").lower()
@@ -1368,15 +1820,27 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                 rejected += 1
                 continue
             if (
-                parsed.scheme != "https" or not parsed_hostname or parsed.username or parsed.password or parsed.fragment
-                or not _HEX64_RE.fullmatch(digest) or not 0 < size <= _MAX_INBOUND_ATTACHMENT_BYTES
+                parsed.scheme != "https"
+                or not parsed_hostname
+                or parsed.username
+                or parsed.password
+                or parsed.fragment
+                or not _HEX64_RE.fullmatch(digest)
+                or not 0 < size <= _MAX_INBOUND_ATTACHMENT_BYTES
                 or total_declared_bytes + size > _MAX_INBOUND_ATTACHMENT_BYTES
             ):
                 rejected += 1
                 continue
             total_declared_bytes += size
-            attachments.append({"url": url, "sha256": digest, "size": size,
-                                "filename": _safe_attachment_filename(fields.get("filename", "")), "mime_type": fields.get("m", "")[:255]})
+            attachments.append(
+                {
+                    "url": url,
+                    "sha256": digest,
+                    "size": size,
+                    "filename": _safe_attachment_filename(fields.get("filename", "")),
+                    "mime_type": fields.get("m", "")[:255],
+                }
+            )
         return attachments, rejected
 
     @staticmethod
@@ -1394,22 +1858,41 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         url = metadata["url"]
         try:
             parsed_url = urlsplit(url)
-            origin = ((parsed_url.hostname or "").lower().rstrip("."), parsed_url.port or 443)
+            origin = (
+                (parsed_url.hostname or "").lower().rstrip("."),
+                parsed_url.port or 443,
+            )
         except ValueError:
             parsed_url, origin = None, ("", 0)
-        if parsed_url is None or parsed_url.scheme != "https" or origin not in self._attachment_origins:
-            logger.warning("Buzz: refusing attachment from untrusted origin %s:%s", origin[0] or "<missing>", origin[1])
+        if (
+            parsed_url is None
+            or parsed_url.scheme != "https"
+            or origin not in self._attachment_origins
+        ):
+            logger.warning(
+                "Buzz: refusing attachment from untrusted origin %s:%s",
+                origin[0] or "<missing>",
+                origin[1],
+            )
             return None
         import httpx
+
         try:
             timeout = httpx.Timeout(_ATTACHMENT_DOWNLOAD_TIMEOUT)
             async with (
                 asyncio.timeout(_ATTACHMENT_DOWNLOAD_TIMEOUT),
-                httpx.AsyncClient(follow_redirects=False, timeout=timeout, headers={"Accept-Encoding": "identity"}) as client,
+                httpx.AsyncClient(
+                    follow_redirects=False,
+                    timeout=timeout,
+                    headers={"Accept-Encoding": "identity"},
+                ) as client,
                 client.stream("GET", url) as response,
             ):
                 if response.status_code != 200:
-                    logger.warning("Buzz: attachment download returned HTTP %s", response.status_code)
+                    logger.warning(
+                        "Buzz: attachment download returned HTTP %s",
+                        response.status_code,
+                    )
                     return None
                 if content_length := response.headers.get("content-length"):
                     try:
@@ -1417,7 +1900,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
                     except ValueError:
                         return None
                     if declared_response_size != metadata["size"]:
-                        logger.warning("Buzz: attachment Content-Length does not match imeta size")
+                        logger.warning(
+                            "Buzz: attachment Content-Length does not match imeta size"
+                        )
                         return None
                 data = bytearray()
                 async for chunk in response.aiter_bytes():
@@ -1428,18 +1913,31 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         except (TimeoutError, httpx.HTTPError, OSError, ValueError) as exc:
             logger.warning("Buzz: attachment download failed: %s", exc)
             return None
-        for bad, what in ((len(data) != metadata["size"], "size"), (hashlib.sha256(data).hexdigest() != metadata["sha256"], "SHA-256")):
+        for bad, what in (
+            (len(data) != metadata["size"], "size"),
+            (hashlib.sha256(data).hexdigest() != metadata["sha256"], "SHA-256"),
+        ):
             if bad:
                 logger.warning("Buzz: attachment %s does not match imeta", what)
                 return None
         try:
-            return await cache_media_bytes_async(bytes(data), filename=metadata["filename"], mime_type=metadata["mime_type"])
+            return await cache_media_bytes_async(
+                bytes(data),
+                filename=metadata["filename"],
+                mime_type=metadata["mime_type"],
+            )
         except (OSError, ValueError) as exc:
             logger.warning("Buzz: attachment cache write failed: %s", exc)
             return None
 
-    async def _cache_inbound_attachments(self, metadata_items: list[dict]) -> list[CachedMedia]:
-        return [a for m in metadata_items if (a := await self._download_attachment(m)) is not None]
+    async def _cache_inbound_attachments(
+        self, metadata_items: list[dict]
+    ) -> list[CachedMedia]:
+        return [
+            a
+            for m in metadata_items
+            if (a := await self._download_attachment(m)) is not None
+        ]
 
     async def _handle_event(self, channel_id: str, state: dict, event: dict) -> None:
         """De-dupe, filter, and dispatch a single ``messages get`` event."""
@@ -1454,7 +1952,11 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         pubkey = str(event.get("pubkey") or "").lower()
         content = event.get("content")
         attachment_metadata, rejected_attachments = self._parse_imeta_attachments(event)
-        if not pubkey or not isinstance(content, str) or not (content.strip() or attachment_metadata or rejected_attachments):
+        if (
+            not pubkey
+            or not isinstance(content, str)
+            or not (content.strip() or attachment_metadata or rejected_attachments)
+        ):
             return
         # Cache before any early return so self-echo and concurrent-author traffic can still be reply parents.
         self._remember_event(state, event)
@@ -1465,17 +1967,32 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         self._maybe_latch_dm(channel_id, state, event)
         is_dm = state["chat_type"] == "dm"
         reply_parent_id = _event_reply_parent_id(event)
-        reply_meta = self._lookup_event_meta(state, reply_parent_id) if reply_parent_id else None
-        reply_to_is_own = bool(reply_meta is not None and reply_meta[0] == self._self_pubkey)
+        reply_meta = (
+            self._lookup_event_meta(state, reply_parent_id) if reply_parent_id else None
+        )
+        reply_to_is_own = bool(
+            reply_meta is not None and reply_meta[0] == self._self_pubkey
+        )
         # Channels dispatch only when addressed (@mention or p-tag) or replying to us (Signal/WhatsApp parity),
         # unless require_mention is off. DMs always dispatch.
-        if not is_dm and self.require_mention and not self._is_addressed(event) and not reply_to_is_own:
+        if (
+            not is_dm
+            and self.require_mention
+            and not self._is_addressed(event)
+            and not reply_to_is_own
+        ):
             return
         # Adapter-level allow-list (gateway also applies it centrally); empty = no filter.
         if self._allowed_pubkeys and pubkey not in self._allowed_pubkeys:
-            if pubkey in self._reaction_only_pubkeys and _p_tagged(event, self._self_pubkey) and self._is_mentioned(content):
+            if (
+                pubkey in self._reaction_only_pubkeys
+                and _p_tagged(event, self._self_pubkey)
+                and self._is_mentioned(content)
+            ):
                 await self.send_reaction(channel_id, event_id, "👀")
-            logger.debug("Buzz: ignoring message from unauthorized pubkey %s…", pubkey[:8])
+            logger.debug(
+                "Buzz: ignoring message from unauthorized pubkey %s…", pubkey[:8]
+            )
             return
         # Strip a leading @mention (DMs often open with one too) so "@Chip /whoami" is recognized as a command.
         dispatch_text = self._strip_mention(content)
@@ -1485,8 +2002,15 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         # Attachment fetch spends credentials: only the gateway's explicit ``True`` permits it (else fail closed).
         # The message still dispatches so GatewayRunner can apply denial/pairing.
         chat_type = "dm" if is_dm else "group"
-        fetch_allowed = bool(attachment_metadata) and self._is_sender_authorized(pubkey, chat_type, channel_id) is True
-        attachments = await self._cache_inbound_attachments(attachment_metadata) if fetch_allowed else []
+        fetch_allowed = (
+            bool(attachment_metadata)
+            and self._is_sender_authorized(pubkey, chat_type, channel_id) is True
+        )
+        attachments = (
+            await self._cache_inbound_attachments(attachment_metadata)
+            if fetch_allowed
+            else []
+        )
         if rejected_attachments:
             dispatch_text = f"{dispatch_text}\n{self._attachment_rejection_note(rejected_attachments)}".strip()
         if fetch_allowed and (failed := len(attachment_metadata) - len(attachments)):
@@ -1495,14 +2019,28 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if attachments:
             # Mixed kinds use document semantics so an audio member is not mistaken for a voice note (STT).
             kinds = {attachment.kind for attachment in attachments}
-            message_type = _ATTACHMENT_KIND_TYPES.get(next(iter(kinds)), MessageType.DOCUMENT) if len(kinds) == 1 else MessageType.DOCUMENT
+            message_type = (
+                _ATTACHMENT_KIND_TYPES.get(next(iter(kinds)), MessageType.DOCUMENT)
+                if len(kinds) == 1
+                else MessageType.DOCUMENT
+            )
         await self._dispatch_message(
-            text=dispatch_text, chat_id=channel_id, chat_type=chat_type, user_id=pubkey,
-            user_name=await self._resolve_user_name(pubkey), message_id=event_id,
-            created_at=created_at, thread_id=thread_id, reply_to_message_id=reply_parent_id,
-            reply_to_text=reply_meta[1] if reply_meta else None, reply_to_author_id=reply_meta[0] if reply_meta else None,
-            reply_to_is_own_message=reply_to_is_own, media_urls=[attachment.path for attachment in attachments],
-            media_types=[attachment.media_type for attachment in attachments], message_type=message_type, raw_message=event,
+            text=dispatch_text,
+            chat_id=channel_id,
+            chat_type=chat_type,
+            user_id=pubkey,
+            user_name=await self._resolve_user_name(pubkey),
+            message_id=event_id,
+            created_at=created_at,
+            thread_id=thread_id,
+            reply_to_message_id=reply_parent_id,
+            reply_to_text=reply_meta[1] if reply_meta else None,
+            reply_to_author_id=reply_meta[0] if reply_meta else None,
+            reply_to_is_own_message=reply_to_is_own,
+            media_urls=[attachment.path for attachment in attachments],
+            media_types=[attachment.media_type for attachment in attachments],
+            message_type=message_type,
+            raw_message=event,
         )
 
     # ── DM classification: DMs leak in via ``channels list`` as "group"; a real channel's p-tag is only addressing ──
@@ -1518,7 +2056,10 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         meta = self._channel_meta.get(channel_id)
         if meta is None:
             return False
-        return str(meta.get("name") or "").strip() == "DM" and not str(meta.get("description") or "").strip()
+        return (
+            str(meta.get("name") or "").strip() == "DM"
+            and not str(meta.get("description") or "").strip()
+        )
 
     def _p_tagged_to_self(self, event: dict) -> bool:
         """True when the signed event addresses this identity by pubkey."""
@@ -1529,18 +2070,28 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         pubkey = str(event.get("pubkey") or "").lower()
         content = event.get("content")
         return bool(
-            self._self_pubkey and self._may_reclassify_as_dm(channel_id) and int(event.get("kind") or 0) == _CHAT_KIND
-            and pubkey and pubkey != self._self_pubkey and self._p_tagged_to_self(event)
-            and isinstance(content, str) and not self._is_mentioned(content)
+            self._self_pubkey
+            and self._may_reclassify_as_dm(channel_id)
+            and int(event.get("kind") or 0) == _CHAT_KIND
+            and pubkey
+            and pubkey != self._self_pubkey
+            and self._p_tagged_to_self(event)
+            and isinstance(content, str)
+            and not self._is_mentioned(content)
         )
 
     def _maybe_latch_dm(self, channel_id: str, state: dict, event: dict) -> None:
         """Latch a group conversation to "dm" once a direct message is seen; it sticks."""
-        if state["chat_type"] == "dm" or not self._is_direct_message_event(channel_id, event):
+        if state["chat_type"] == "dm" or not self._is_direct_message_event(
+            channel_id, event
+        ):
             return
         state["chat_type"] = "dm"
         self._channel_names.setdefault(channel_id, "DM")
-        logger.info("Buzz: conversation %s reclassified as DM (message p-tagged to self)", channel_id)
+        logger.info(
+            "Buzz: conversation %s reclassified as DM (message p-tagged to self)",
+            channel_id,
+        )
 
     def _is_mentioned(self, content: str) -> bool:
         """True when text explicitly addresses this agent (npub, hex, or @name)."""
@@ -1549,15 +2100,22 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if self._self_pubkey and _HEX64_RE.fullmatch(self._self_pubkey):
             patterns.append(rf"(?<![0-9a-f]){re.escape(self._self_pubkey)}(?![0-9a-f])")
         if self._self_npub:
-            patterns.append(rf"(?<![a-z0-9]){re.escape(self._self_npub.lower())}(?![a-z0-9])")
+            patterns.append(
+                rf"(?<![a-z0-9]){re.escape(self._self_npub.lower())}(?![a-z0-9])"
+            )
         if self._display_name:
-            patterns.append(rf"(?<![\w@])@{re.escape(self._display_name.lower())}" + r"(?=$|[\s,;.!?:)\]}])")
+            patterns.append(
+                rf"(?<![\w@])@{re.escape(self._display_name.lower())}"
+                + r"(?=$|[\s,;.!?:)\]}])"
+            )
         return any(re.search(p, lowered) for p in patterns)
 
     def _is_addressed(self, event: dict) -> bool:
         """True when a group event carries an explicit text or p-tag address."""
         content = event.get("content")
-        return isinstance(content, str) and (self._is_mentioned(content) or self._p_tagged_to_self(event))
+        return isinstance(content, str) and (
+            self._is_mentioned(content) or self._p_tagged_to_self(event)
+        )
 
     def _strip_mention(self, content: str) -> str:
         """Strip a LEADING @mention of this agent so ``is_command()`` sees "/whoami"; mid-sentence mentions stay."""
@@ -1565,14 +2123,22 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         # Display names require '@'; npub/hex identities are unambiguous without it.
         candidates = []
         if self._display_name:
-            candidates.append(rf"@{re.escape(self._display_name)}" + r"(?=$|[\s,;.!?:)\]}])")
+            candidates.append(
+                rf"@{re.escape(self._display_name)}" + r"(?=$|[\s,;.!?:)\]}])"
+            )
         if self._self_npub:
             candidates.append(rf"@?{re.escape(self._self_npub)}(?![a-z0-9])")
         if self._self_pubkey:
             candidates.append(rf"@?{re.escape(self._self_pubkey)}(?![0-9a-f])")
         if not candidates:
             return text
-        return re.sub(rf"^(?:{'|'.join(candidates)})[\s:,]*", "", text, count=1, flags=re.IGNORECASE).strip()
+        return re.sub(
+            rf"^(?:{'|'.join(candidates)})[\s:,]*",
+            "",
+            text,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
 
     async def _resolve_user_name(self, pubkey: str) -> str:
         """Pubkey -> display name, cached (negatively too, so profile-less pubkeys don't re-query); npub prefix fallback."""
@@ -1640,16 +2206,26 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         event_id = str(event.get("id") or "")
         content = event.get("content")
         if event_id:
-            snippet = content[:_EVENT_META_CONTENT_CAP] if isinstance(content, str) else ""
-            self._store_event_meta(state, event_id, str(event.get("pubkey") or "").lower(), snippet)
+            snippet = (
+                content[:_EVENT_META_CONTENT_CAP] if isinstance(content, str) else ""
+            )
+            self._store_event_meta(
+                state, event_id, str(event.get("pubkey") or "").lower(), snippet
+            )
 
-    def _remember_event_meta(self, channel_id: str, event_id: str, pubkey: str, content: str) -> None:
+    def _remember_event_meta(
+        self, channel_id: str, event_id: str, pubkey: str, content: str
+    ) -> None:
         state = self._channel_state.get(channel_id)
         if state is not None:
-            self._remember_event(state, {"id": event_id, "pubkey": pubkey, "content": content or ""})
+            self._remember_event(
+                state, {"id": event_id, "pubkey": pubkey, "content": content or ""}
+            )
 
     @staticmethod
-    def _store_event_meta(state: dict, event_id: str, pubkey: str, snippet: str) -> None:
+    def _store_event_meta(
+        state: dict, event_id: str, pubkey: str, snippet: str
+    ) -> None:
         cache = state.setdefault("event_meta", OrderedDict())
         if not isinstance(cache, OrderedDict):
             cache = state["event_meta"] = OrderedDict(cache)
@@ -1659,14 +2235,22 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             cache.popitem(last=False)
 
     @staticmethod
-    def _lookup_event_meta(state: dict, event_id: Optional[str]) -> Optional[tuple[str, str]]:
+    def _lookup_event_meta(
+        state: dict, event_id: Optional[str]
+    ) -> Optional[tuple[str, str]]:
         entry = (state.get("event_meta") or {}).get(event_id) if event_id else None
         if not entry or not isinstance(entry, tuple) or len(entry) < 2:
             return None
         return str(entry[0] or ""), str(entry[1] or "")
 
     async def _localize_inbound_media(
-        self, text: str, message_id: str, *, user_id: str = "", chat_type: Optional[str] = None, chat_id: Optional[str] = None,
+        self,
+        text: str,
+        message_id: str,
+        *,
+        user_id: str = "",
+        chat_type: Optional[str] = None,
+        chat_id: Optional[str] = None,
     ) -> tuple[str, list[str], list[str], MessageType]:
         """Authenticate and cache same-relay media refs in *text* (failures skipped per object). Spends our
         credentials on a sender-chosen URL, so it runs only on the gateway's explicit ``True``."""
@@ -1674,33 +2258,60 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         if not urls:
             return text, [], [], MessageType.TEXT
         if self._is_sender_authorized(user_id, chat_type, chat_id) is not True:
-            logger.warning("Buzz: not localizing %d media reference(s) in message %s — sender %s… is not explicitly authorized",
-                           len(urls), message_id[:12], (user_id or "?")[:8])
+            logger.warning(
+                "Buzz: not localizing %d media reference(s) in message %s — sender %s… is not explicitly authorized",
+                len(urls),
+                message_id[:12],
+                (user_id or "?")[:8],
+            )
             return text, [], [], MessageType.TEXT
         cleaned_text = _replace_media_refs(text, replacements)
         media_urls: list[str] = []
         media_types: list[str] = []
         media_kinds: list[str] = []
-        from gateway.platforms.base import cache_media_bytes_async, validate_inbound_media_size
+        from gateway.platforms.base import (
+            cache_media_bytes_async,
+            validate_inbound_media_size,
+        )
+
         for url in urls:
             path_match = _MEDIA_PATH_RE.fullmatch(urlsplit(url).path)
             if path_match is None:
                 continue
             label = f"{path_match.group('sha')[:12]}{(path_match.group('ext') or '.bin').lower()}"
             try:
-                with tempfile.TemporaryDirectory(prefix="clawk-buzz-media-") as temp_dir:
+                with tempfile.TemporaryDirectory(
+                    prefix="clawk-buzz-media-"
+                ) as temp_dir:
                     download_path = Path(temp_dir) / f"buzz_{label}"
-                    code, _out, _err = await self._run_cli(["media", "get", "-o", str(download_path), url])
+                    code, _out, _err = await self._run_cli(
+                        ["media", "get", "-o", str(download_path), url]
+                    )
                     if code != 0 or not download_path.is_file():
-                        logger.warning("Buzz: failed to localize inbound media %s (exit %d)", label, code)
+                        logger.warning(
+                            "Buzz: failed to localize inbound media %s (exit %d)",
+                            label,
+                            code,
+                        )
                         continue
-                    validate_inbound_media_size(download_path.stat().st_size, media_type="Buzz media")
-                    mime_type = mimetypes.guess_type(download_path.name)[0] or "application/octet-stream"
+                    validate_inbound_media_size(
+                        download_path.stat().st_size, media_type="Buzz media"
+                    )
+                    mime_type = (
+                        mimetypes.guess_type(download_path.name)[0]
+                        or "application/octet-stream"
+                    )
                     # Up to the inbound media cap (128 MiB) — read off the loop too.
                     data = await asyncio.to_thread(download_path.read_bytes)
-                    cached = await cache_media_bytes_async(data, filename=download_path.name, mime_type=mime_type)
+                    cached = await cache_media_bytes_async(
+                        data, filename=download_path.name, mime_type=mime_type
+                    )
             except Exception as exc:
-                logger.warning("Buzz: failed to localize inbound media %s (%s)", label, type(exc).__name__)
+                logger.warning(
+                    "Buzz: failed to localize inbound media %s (%s)",
+                    label,
+                    type(exc).__name__,
+                )
                 continue
             if cached is None:
                 logger.warning("Buzz: rejected invalid inbound media %s", label)
@@ -1709,20 +2320,44 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             media_types.append(cached.media_type)
             media_kinds.append(cached.kind)
         if media_urls:
-            logger.info("Buzz: localized %d inbound media attachment(s) for message %s", len(media_urls), message_id[:12])
+            logger.info(
+                "Buzz: localized %d inbound media attachment(s) for message %s",
+                len(media_urls),
+                message_id[:12],
+            )
         # Priority order: image > audio > video > any other kind.
-        message_type = MessageType.TEXT if not media_kinds else next((mt for k, mt in _MEDIA_KIND_PRIORITY if k in media_kinds), MessageType.DOCUMENT)
+        message_type = (
+            MessageType.TEXT
+            if not media_kinds
+            else next(
+                (mt for k, mt in _MEDIA_KIND_PRIORITY if k in media_kinds),
+                MessageType.DOCUMENT,
+            )
+        )
         if not cleaned_text:
-            cleaned_text = "(attachment)" if media_urls else "(Buzz media attachment unavailable)"
+            cleaned_text = (
+                "(attachment)" if media_urls else "(Buzz media attachment unavailable)"
+            )
         return cleaned_text, media_urls, media_types, message_type
 
     async def _dispatch_message(
-        self, text: str, chat_id: str, chat_type: str, user_id: str, user_name: str,
-        message_id: str, created_at: int, thread_id: Optional[str] = None,
-        reply_to_message_id: Optional[str] = None, reply_to_text: Optional[str] = None,
-        reply_to_author_id: Optional[str] = None, reply_to_is_own_message: bool = False,
-        media_urls: Optional[list[str]] = None, media_types: Optional[list[str]] = None,
-        message_type: MessageType = MessageType.TEXT, raw_message: Any = None,
+        self,
+        text: str,
+        chat_id: str,
+        chat_type: str,
+        user_id: str,
+        user_name: str,
+        message_id: str,
+        created_at: int,
+        thread_id: Optional[str] = None,
+        reply_to_message_id: Optional[str] = None,
+        reply_to_text: Optional[str] = None,
+        reply_to_author_id: Optional[str] = None,
+        reply_to_is_own_message: bool = False,
+        media_urls: Optional[list[str]] = None,
+        media_types: Optional[list[str]] = None,
+        message_type: MessageType = MessageType.TEXT,
+        raw_message: Any = None,
     ) -> None:
         """Build a MessageEvent and hand it to the base class handler."""
         if not self._message_handler:
@@ -1730,7 +2365,9 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
         media_urls = list(media_urls or [])
         media_types = list(media_types or [])
         # Same-relay URL refs are localized in addition to the caller's imeta attachments (both explicit-True gated).
-        localized = await self._localize_inbound_media(text, message_id, user_id=user_id, chat_type=chat_type, chat_id=chat_id)
+        localized = await self._localize_inbound_media(
+            text, message_id, user_id=user_id, chat_type=chat_type, chat_id=chat_id
+        )
         text, localized_urls, localized_types, localized_type = localized
         for path, mime in zip(localized_urls, localized_types):
             if path not in media_urls:
@@ -1742,25 +2379,43 @@ class BuzzAdapter(BuzzCursorMixin, BasePlatformAdapter):
             # Mixed sources use document semantics so audio isn't routed to STT.
             message_type = MessageType.DOCUMENT
         source = self.build_source(
-            chat_id=chat_id, chat_name=self._channel_names.get(chat_id, chat_id), chat_type=chat_type,
-            user_id=user_id, user_name=user_name, thread_id=thread_id, message_id=message_id,
+            chat_id=chat_id,
+            chat_name=self._channel_names.get(chat_id, chat_id),
+            chat_type=chat_type,
+            user_id=user_id,
+            user_name=user_name,
+            thread_id=thread_id,
+            message_id=message_id,
         )
         event = MessageEvent(
-            text=text, message_type=message_type, source=source, raw_message=raw_message, message_id=message_id,
-            media_urls=list(media_urls), media_types=list(media_types), media_text_inlined=[False] * len(media_urls),
-            timestamp=datetime.fromtimestamp(created_at) if created_at else datetime.now(),
-            reply_to_message_id=reply_to_message_id, reply_to_text=reply_to_text,
-            reply_to_author_id=reply_to_author_id, reply_to_is_own_message=reply_to_is_own_message,
+            text=text,
+            message_type=message_type,
+            source=source,
+            raw_message=raw_message,
+            message_id=message_id,
+            media_urls=list(media_urls),
+            media_types=list(media_types),
+            media_text_inlined=[False] * len(media_urls),
+            timestamp=datetime.fromtimestamp(created_at)
+            if created_at
+            else datetime.now(),
+            reply_to_message_id=reply_to_message_id,
+            reply_to_text=reply_to_text,
+            reply_to_author_id=reply_to_author_id,
+            reply_to_is_own_message=reply_to_is_own_message,
         )
         await self.handle_message(event)
         # "Seen" reaction: signals the message was received and is being processed.
         try:
             await self.send_reaction(chat_id, message_id, "👀")
         except Exception:
-            logger.debug("Buzz: reaction failed for message %s", message_id[:12], exc_info=True)
+            logger.debug(
+                "Buzz: reaction failed for message %s", message_id[:12], exc_info=True
+            )
 
 
 # ── Plugin registration ──────────────────────────────────────────────────────
+
 
 def _profile_buzz_extra() -> dict:
     """``buzz.extra`` from the scoped profile's config.yaml for ``check_requirements``; failures yield {} (fail closed)."""
@@ -1770,6 +2425,7 @@ def _profile_buzz_extra() -> dict:
         from gateway.config_loader import platform_section
         from clawk_constants import get_clawk_home
         from clawk_cli.config import read_user_config_raw
+
         cfg = read_user_config_raw(Path(get_clawk_home()) / "config.yaml")
     except Exception:
         return {}
@@ -1791,7 +2447,9 @@ def check_requirements() -> bool:
         extra = _profile_buzz_extra()
         return bool(_configured_relay(extra) and _resolve_private_key(extra))
     # The gate runs before per-profile scopes install; the relay can be externally managed too.
-    return bool((_get_scoped_secret("BUZZ_RELAY_URL", "") or "").strip()) and bool(_resolve_private_key())
+    return bool((_get_scoped_secret("BUZZ_RELAY_URL", "") or "").strip()) and bool(
+        _resolve_private_key()
+    )
 
 
 def validate_config(config) -> bool:
@@ -1813,12 +2471,17 @@ def is_connected(config) -> bool:
 
 
 _YAML_BRIDGE = (  # (extra key, env var, kind) for apply_yaml_bridge
-    ("relay_url", "BUZZ_RELAY_URL", "str"), ("cli_path", "BUZZ_CLI_PATH", "str"),
-    ("home_channel", "BUZZ_HOME_CHANNEL", "str"), ("transport", "BUZZ_TRANSPORT", "str"),
+    ("relay_url", "BUZZ_RELAY_URL", "str"),
+    ("cli_path", "BUZZ_CLI_PATH", "str"),
+    ("home_channel", "BUZZ_HOME_CHANNEL", "str"),
+    ("transport", "BUZZ_TRANSPORT", "str"),
     ("poll_interval", "BUZZ_POLL_INTERVAL", "str"),
-    ("channels", "BUZZ_CHANNELS", "csv"), ("allowed_users", "BUZZ_ALLOWED_USERS", "csv"),
-    ("reaction_only_users", "BUZZ_REACTION_ONLY_USERS", "csv"), ("allow_all_users", "BUZZ_ALLOW_ALL_USERS", "lower"),
-    ("require_mention", "BUZZ_REQUIRE_MENTION", "lower"), ("reply_in_thread", "BUZZ_REPLY_IN_THREAD", "lower"),
+    ("channels", "BUZZ_CHANNELS", "csv"),
+    ("allowed_users", "BUZZ_ALLOWED_USERS", "csv"),
+    ("reaction_only_users", "BUZZ_REACTION_ONLY_USERS", "csv"),
+    ("allow_all_users", "BUZZ_ALLOW_ALL_USERS", "lower"),
+    ("require_mention", "BUZZ_REQUIRE_MENTION", "lower"),
+    ("reply_in_thread", "BUZZ_REPLY_IN_THREAD", "lower"),
     ("reply_to_mode", "BUZZ_REPLY_TO_MODE", "lower"),
 )
 
@@ -1841,17 +2504,31 @@ def _env_enablement() -> Optional[dict]:
     relay = str(_get_scoped_secret("BUZZ_RELAY_URL", "") or "").strip()
     if not relay or not _resolve_private_key():
         return None
-    seed = _seed_extra_from_env((
-        ("BUZZ_CHANNELS", "channels", lambda v: [c.strip() for c in v.split(",") if c.strip()]),
-        ("BUZZ_POLL_INTERVAL", "poll_interval", float), ("BUZZ_CLI_PATH", "cli_path", None),
-    ))
-    home = _seed_extra_from_env((), home_env="BUZZ_HOME_CHANNEL", home_default=(seed.get("channels") or [""])[0])
+    seed = _seed_extra_from_env(
+        (
+            (
+                "BUZZ_CHANNELS",
+                "channels",
+                lambda v: [c.strip() for c in v.split(",") if c.strip()],
+            ),
+            ("BUZZ_POLL_INTERVAL", "poll_interval", float),
+            ("BUZZ_CLI_PATH", "cli_path", None),
+        )
+    )
+    home = _seed_extra_from_env(
+        (), home_env="BUZZ_HOME_CHANNEL", home_default=(seed.get("channels") or [""])[0]
+    )
     return {"relay_url": relay, **seed, **home}
 
 
 async def _standalone_send(
-    pconfig, chat_id: str, message: str, *, thread_id: Optional[str] = None,
-    media_files: Optional[list[Any]] = None, force_document: bool = False,
+    pconfig,
+    chat_id: str,
+    message: str,
+    *,
+    thread_id: Optional[str] = None,
+    media_files: Optional[list[Any]] = None,
+    force_document: bool = False,
 ) -> dict[str, Any]:
     """One-shot send without a live adapter (out-of-process ``deliver=buzz`` cron)."""
     extra = getattr(pconfig, "extra", {}) or {}
@@ -1863,30 +2540,58 @@ async def _standalone_send(
         return send_error(f"Buzz standalone send: {exc}")
     cli_path = _configured_cli_path(extra)
     if not relay or not private_key:
-        return send_error("Buzz standalone send: BUZZ_RELAY_URL and BUZZ_PRIVATE_KEY must be configured")
+        return send_error(
+            "Buzz standalone send: BUZZ_RELAY_URL and BUZZ_PRIVATE_KEY must be configured"
+        )
     if not cli_path:
         return send_error("Buzz standalone send: buzz CLI binary not found")
     if not (target := (chat_id or "").strip() or _configured_home_channel(extra)):
-        return send_error("Buzz standalone send: no target channel (set BUZZ_HOME_CHANNEL)")
+        return send_error(
+            "Buzz standalone send: no target channel (set BUZZ_HOME_CHANNEL)"
+        )
     args = ["messages", "send", "--channel", target, "--content", "-"]
     # Same reply_to_mode / reply_in_thread gate as the live adapter.
     if thread_id and _reply_to_mode(pconfig, extra) != "off":
         args += ["--reply-to", str(thread_id)]
     for media in media_files or []:
-        args += ["--file", str(media[0] if isinstance(media, (list, tuple)) and media else media)]
+        args += [
+            "--file",
+            str(media[0] if isinstance(media, (list, tuple)) and media else media),
+        ]
     try:
-        code, out, err = await _exec_buzz(cli_path, args, relay_url=relay, private_key=private_key, auth_tag=auth_tag, input_text=message)
-        escaped = _escape_unresolved_presentation_mention(message, err) if code != 0 else None
+        code, out, err = await _exec_buzz(
+            cli_path,
+            args,
+            relay_url=relay,
+            private_key=private_key,
+            auth_tag=auth_tag,
+            input_text=message,
+        )
+        escaped = (
+            _escape_unresolved_presentation_mention(message, err) if code != 0 else None
+        )
         if escaped is not None:
-            logger.info("Buzz: retrying standalone message after unresolved presentation-mention preflight")
+            logger.info(
+                "Buzz: retrying standalone message after unresolved presentation-mention preflight"
+            )
             # Retry intentionally omits auth_tag (legacy behavior).
-            code, out, err = await _exec_buzz(cli_path, args, relay_url=relay, private_key=private_key, input_text=escaped)
+            code, out, err = await _exec_buzz(
+                cli_path,
+                args,
+                relay_url=relay,
+                private_key=private_key,
+                input_text=escaped,
+            )
     except asyncio.CancelledError:
         raise
     except OSError as e:
-        return send_error(f"Buzz standalone send failed to launch CLI: {_bounded_cli_message(str(e))}")
+        return send_error(
+            f"Buzz standalone send failed to launch CLI: {_bounded_cli_message(str(e))}"
+        )
     if code != 0:
-        return send_error(f"Buzz standalone send failed: {_cli_error_message(err, code)}")
+        return send_error(
+            f"Buzz standalone send failed: {_cli_error_message(err, code)}"
+        )
     event_id, receipt_error = _parse_send_receipt(out)
     if receipt_error:
         return send_error(f"Buzz standalone send failed: {receipt_error}")
@@ -1899,9 +2604,17 @@ async def _standalone_send(
 def interactive_setup() -> None:
     """Interactive ``clawk gateway setup`` flow (lazy CLI imports keep the plugin importable elsewhere)."""
     from clawk_cli.setup import (
-        prompt, prompt_yes_no, save_env_value, get_env_value, print_header, print_info, print_warning, print_success,
+        prompt,
+        prompt_yes_no,
+        save_env_value,
+        get_env_value,
+        print_header,
+        print_info,
+        print_warning,
+        print_success,
     )
     from clawk_cli.setup_platforms import declines_reconfigure
+
     def ask(label: str, env: str) -> str:
         return prompt(label, default=get_env_value(env) or "")
 
@@ -1909,23 +2622,40 @@ def interactive_setup() -> None:
     existing_relay = get_env_value("BUZZ_RELAY_URL")
     if declines_reconfigure("Buzz", "Reconfigure Buzz?", "BUZZ_RELAY_URL"):
         return
-    print_info("Connect Clawksis to a Buzz community (Block's Nostr-based human+agent platform).")
-    print_info("   Requires the buzz CLI binary and a Nostr key that is a community member.")
+    print_info(
+        "Connect Clawksis to a Buzz community (Block's Nostr-based human+agent platform)."
+    )
+    print_info(
+        "   Requires the buzz CLI binary and a Nostr key that is a community member."
+    )
     print()
-    relay = prompt("Relay URL (e.g. https://mycommunity.communities.buzz.xyz)", default=existing_relay or "")
+    relay = prompt(
+        "Relay URL (e.g. https://mycommunity.communities.buzz.xyz)",
+        default=existing_relay or "",
+    )
     if not relay:
         print_warning("Relay URL is required — skipping Buzz setup")
         return
     save_env_value("BUZZ_RELAY_URL", relay.strip())
-    key = prompt("Nostr private key (nsec or hex; leave blank to keep current)", password=True)
+    key = prompt(
+        "Nostr private key (nsec or hex; leave blank to keep current)", password=True
+    )
     if key:
         save_env_value("BUZZ_PRIVATE_KEY", key.strip())
     elif not _resolve_private_key():
-        print_warning("No private key configured — set BUZZ_PRIVATE_KEY before starting the gateway")
-    channels = ask("Channel UUIDs to watch (comma-separated, empty = all joined channels)", "BUZZ_CHANNELS")
+        print_warning(
+            "No private key configured — set BUZZ_PRIVATE_KEY before starting the gateway"
+        )
+    channels = ask(
+        "Channel UUIDs to watch (comma-separated, empty = all joined channels)",
+        "BUZZ_CHANNELS",
+    )
     if channels:
         save_env_value("BUZZ_CHANNELS", channels.replace(" ", ""))
-    home = ask("Home channel UUID for cron/notification delivery (optional)", "BUZZ_HOME_CHANNEL")
+    home = ask(
+        "Home channel UUID for cron/notification delivery (optional)",
+        "BUZZ_HOME_CHANNEL",
+    )
     if home:
         save_env_value("BUZZ_HOME_CHANNEL", home.strip())
     print()
@@ -1936,8 +2666,13 @@ def interactive_setup() -> None:
         print_warning("⚠️  Open access — anyone in the community can command the agent.")
     else:
         save_env_value("BUZZ_ALLOW_ALL_USERS", "false")
-        allowed = ask("Allowed users (comma-separated npubs or hex pubkeys, empty to deny everyone)", "BUZZ_ALLOWED_USERS")
-        save_env_value("BUZZ_ALLOWED_USERS", allowed.replace(" ", "") if allowed else "")
+        allowed = ask(
+            "Allowed users (comma-separated npubs or hex pubkeys, empty to deny everyone)",
+            "BUZZ_ALLOWED_USERS",
+        )
+        save_env_value(
+            "BUZZ_ALLOWED_USERS", allowed.replace(" ", "") if allowed else ""
+        )
     print()
     print_success("Buzz configuration saved to ~/.clawksis/.env")
     print_info("Restart the gateway for changes to take effect: clawk gateway restart")
@@ -1946,13 +2681,25 @@ def interactive_setup() -> None:
 def register(ctx):
     """Plugin entry point: called by the Clawksis plugin system."""
     ctx.register_platform(
-        **_load_sibling("send_targets").SEND_ENTRY_KWARGS,  # send_message target syntax + routing
-        name="buzz", label="Buzz", adapter_factory=lambda cfg: BuzzAdapter(cfg), check_fn=check_requirements,
-        validate_config=validate_config, is_connected=is_connected, required_env=["BUZZ_RELAY_URL", "BUZZ_PRIVATE_KEY"],
+        **_load_sibling(
+            "send_targets"
+        ).SEND_ENTRY_KWARGS,  # send_message target syntax + routing
+        name="buzz",
+        label="Buzz",
+        adapter_factory=lambda cfg: BuzzAdapter(cfg),
+        check_fn=check_requirements,
+        validate_config=validate_config,
+        is_connected=is_connected,
+        required_env=["BUZZ_RELAY_URL", "BUZZ_PRIVATE_KEY"],
         install_hint="Requires the buzz CLI binary (https://github.com/block/buzz) on PATH or at BUZZ_CLI_PATH",
-        setup_fn=interactive_setup, env_enablement_fn=_env_enablement, apply_yaml_config_fn=_apply_yaml_config,
-        cron_deliver_env_var="BUZZ_HOME_CHANNEL", standalone_sender_fn=_standalone_send,
-        allowed_users_env="BUZZ_ALLOWED_USERS", allow_all_env="BUZZ_ALLOW_ALL_USERS", emoji="🐝",
+        setup_fn=interactive_setup,
+        env_enablement_fn=_env_enablement,
+        apply_yaml_config_fn=_apply_yaml_config,
+        cron_deliver_env_var="BUZZ_HOME_CHANNEL",
+        standalone_sender_fn=_standalone_send,
+        allowed_users_env="BUZZ_ALLOWED_USERS",
+        allow_all_env="BUZZ_ALLOW_ALL_USERS",
+        emoji="🐝",
         pii_safe=False,  # identities are pubkeys, not phone numbers
         allow_update_command=True,
         platform_hint=(

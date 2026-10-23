@@ -16,10 +16,18 @@ from typing import Any, Optional
 # then reaches the user as content, so the translated forms are carried here
 # too. zh-Hans is the only non-English locale this project ships documentation
 # for, which is where the list stops.
-LIVE_GATEWAY_SILENT_MARKERS = frozenset({
-    "[SILENT]", "SILENT", "NO_REPLY", "NO REPLY",
-    "[静默]", "静默", "[沉默]", "沉默",
-})
+LIVE_GATEWAY_SILENT_MARKERS = frozenset(
+    {
+        "[SILENT]",
+        "SILENT",
+        "NO_REPLY",
+        "NO REPLY",
+        "[静默]",
+        "静默",
+        "[沉默]",
+        "沉默",
+    }
+)
 
 # Bracketed markers drive the autonomous lane's prefix rule ("[SILENT] nothing
 # new this tick"). Derived from the set above so a new marker cannot be added to
@@ -33,12 +41,18 @@ _BRACKETED_SILENCE_MARKERS = tuple(
 INTERNAL_NOTIFICATION_DISPLAY_KIND = "internal_notification"
 # Async-result cards the in-process TUI persisted: a producer's internal event naming one (with a
 # display_text) persists as that row kind instead of internal_notification.
-PRODUCER_NOTICE_DISPLAY_KINDS = frozenset({"process_complete", "async_delegation_complete"})
-MACHINERY_DISPLAY_KINDS = frozenset({INTERNAL_NOTIFICATION_DISPLAY_KIND, *PRODUCER_NOTICE_DISPLAY_KINDS})
+PRODUCER_NOTICE_DISPLAY_KINDS = frozenset(
+    {"process_complete", "async_delegation_complete"}
+)
+MACHINERY_DISPLAY_KINDS = frozenset(
+    {INTERNAL_NOTIFICATION_DISPLAY_KIND, *PRODUCER_NOTICE_DISPLAY_KINDS}
+)
 # What a gateway producer's card may name (a liveness tick names internal_notification for its CLI
 # receipt). Closed, and kept apart from the silence set above so a kind added there never becomes
 # nameable; never a client-chosen presentation such as ``hidden``.
-PRODUCER_CARD_KINDS = frozenset({INTERNAL_NOTIFICATION_DISPLAY_KIND, *PRODUCER_NOTICE_DISPLAY_KINDS})
+PRODUCER_CARD_KINDS = frozenset(
+    {INTERNAL_NOTIFICATION_DISPLAY_KIND, *PRODUCER_NOTICE_DISPLAY_KINDS}
+)
 
 # Longer than any marker could plausibly be, even with stray punctuation.
 _MARKER_LENGTH_CAP = 64
@@ -79,7 +93,10 @@ def is_intentional_silence_response(response: Any) -> bool:
     Prose that merely mentions ``NO_REPLY`` must be delivered normally. A blank
     response is not silence either — that is the empty-response failure path.
     """
-    return any(c in LIVE_GATEWAY_SILENT_MARKERS for c in _canonical_silence_candidates(response))
+    return any(
+        c in LIVE_GATEWAY_SILENT_MARKERS
+        for c in _canonical_silence_candidates(response)
+    )
 
 
 def is_autonomous_silence_response(response: Any) -> bool:
@@ -103,9 +120,15 @@ def is_autonomous_silence_response(response: Any) -> bool:
     )
 
 
-def is_intentional_silence_agent_result(agent_result: dict | None, response: Any) -> bool:
+def is_intentional_silence_agent_result(
+    agent_result: dict | None, response: Any
+) -> bool:
     """Silence markers suppress delivery only for successful agent turns."""
-    return isinstance(agent_result, dict) and not agent_result.get("failed") and is_intentional_silence_response(response)
+    return (
+        isinstance(agent_result, dict)
+        and not agent_result.get("failed")
+        and is_intentional_silence_response(response)
+    )
 
 
 def display_kind_for_event(event: Any) -> str | None:
@@ -116,12 +139,15 @@ def display_kind_for_event(event: Any) -> str | None:
     non-internal so authorization and the emergency stop still apply to it.
     """
     from gateway.session_display import admission_display
+
     if kind := admission_display(event).get("kind"):
         # A canonical admission committed hidden (Desktop widget intent): never a user bubble.
         return kind
     if getattr(event, "internal", False) and _producer_card(event):
         return event.metadata["display_kind"]
-    if getattr(event, "internal", False) or getattr(event, "_heartbeat_session_id", None):
+    if getattr(event, "internal", False) or getattr(
+        event, "_heartbeat_session_id", None
+    ):
         return INTERNAL_NOTIFICATION_DISPLAY_KIND
     return None
 
@@ -129,8 +155,12 @@ def display_kind_for_event(event: Any) -> str | None:
 def _producer_card(event: Any) -> dict:
     metadata = getattr(event, "metadata", None) or {}
     text = metadata.get("display_text")
-    if (getattr(event, "internal", False) and metadata.get("display_kind") in PRODUCER_NOTICE_DISPLAY_KINDS
-            and isinstance(text, str) and text.strip()):
+    if (
+        getattr(event, "internal", False)
+        and metadata.get("display_kind") in PRODUCER_NOTICE_DISPLAY_KINDS
+        and isinstance(text, str)
+        and text.strip()
+    ):
         return {"display_text": text}
     return {}
 
@@ -139,6 +169,7 @@ def display_metadata_for_event(event: Any) -> dict:
     """``{"display_text": ...}`` for an internal event whose producer named an async-result card, plus the
     ``title_preview`` (titler-only) a canonical admission committed for this exact event."""
     from gateway.session_display import admission_display
+
     preview = admission_display(event).get("title_preview")
     return {**_producer_card(event), **({"title_preview": preview} if preview else {})}
 

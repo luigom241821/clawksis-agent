@@ -27,7 +27,10 @@ def _followup_processing_hooks_apply(adapter, event: MessageEvent | None) -> boo
     if not (getattr(event, "message_id", None) or getattr(event, "raw_message", None)):
         return False
     start_hook = getattr(type(adapter), "on_processing_start", None)
-    return start_hook is not None and start_hook is not BasePlatformAdapter.on_processing_start
+    return (
+        start_hook is not None
+        and start_hook is not BasePlatformAdapter.on_processing_start
+    )
 
 
 def _followup_cancel_outcome(adapter) -> ProcessingOutcome:
@@ -45,12 +48,18 @@ def _followup_cancel_outcome(adapter) -> ProcessingOutcome:
     if current is None:
         return ProcessingOutcome.FAILURE
     try:
-        return ProcessingOutcome.CANCELLED if current in expected else ProcessingOutcome.FAILURE
+        return (
+            ProcessingOutcome.CANCELLED
+            if current in expected
+            else ProcessingOutcome.FAILURE
+        )
     except TypeError:
         return ProcessingOutcome.FAILURE
 
 
-async def _run_followup_processing_hook(adapter, event: MessageEvent | None, hook_name: str, *args) -> None:
+async def _run_followup_processing_hook(
+    adapter, event: MessageEvent | None, hook_name: str, *args
+) -> None:
     """Fire one lifecycle hook for a runner-drained follow-up; no-op per ``_followup_processing_hooks_apply``."""
     if not _followup_processing_hooks_apply(adapter, event):
         return

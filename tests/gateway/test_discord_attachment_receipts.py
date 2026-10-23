@@ -1,4 +1,5 @@
 """Media targets and receipts must describe the attachment, not a fallback notice."""
+
 from types import SimpleNamespace
 
 import pytest
@@ -26,7 +27,9 @@ class Client:
         raise RuntimeError("native voice transport unavailable")
 
     async def send(self, **kwargs):
-        files = kwargs.get("files", []) or ([kwargs["file"]] if kwargs.get("file") else [])
+        files = kwargs.get("files", []) or (
+            [kwargs["file"]] if kwargs.get("file") else []
+        )
         if self.fail and files:
             raise RuntimeError("upload rejected")
         self.uploads.extend(files)
@@ -34,13 +37,26 @@ class Client:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method", ["send_document", "send_image_file", "send_video", "send_voice", "send_multiple_images"])
-async def test_media_uses_metadata_target_without_losing_direct_channel(tmp_path, method):
+@pytest.mark.parametrize(
+    "method",
+    [
+        "send_document",
+        "send_image_file",
+        "send_video",
+        "send_voice",
+        "send_multiple_images",
+    ],
+)
+async def test_media_uses_metadata_target_without_losing_direct_channel(
+    tmp_path, method
+):
     adapter = DiscordAdapter(PlatformConfig())
     adapter._client = client = Client()
     path = tmp_path / "media.bin"
     path.write_bytes(b"attachment bytes")
-    media = [(path.as_uri(), "caption")] if method == "send_multiple_images" else str(path)
+    media = (
+        [(path.as_uri(), "caption")] if method == "send_multiple_images" else str(path)
+    )
     for chat_id, metadata in [("111", {"thread_id": "222"}), ("222", None)]:
         client.ids.clear()
         client.uploads.clear()
@@ -51,13 +67,17 @@ async def test_media_uses_metadata_target_without_losing_direct_channel(tmp_path
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("method", ["send_document", "send_image_file", "send_video", "send_voice"])
+@pytest.mark.parametrize(
+    "method", ["send_document", "send_image_file", "send_video", "send_voice"]
+)
 async def test_failed_upload_never_becomes_successful_text_notice(tmp_path, method):
     adapter = DiscordAdapter(PlatformConfig())
     adapter._client = client = Client(fail=True)
     path = tmp_path / "media.bin"
     path.write_bytes(b"attachment bytes")
-    result = await getattr(adapter, method)("111", str(path), metadata={"thread_id": "222"})
+    result = await getattr(adapter, method)(
+        "111", str(path), metadata={"thread_id": "222"}
+    )
     assert not result.success
     assert "upload rejected" in result.error
     assert not client.uploads

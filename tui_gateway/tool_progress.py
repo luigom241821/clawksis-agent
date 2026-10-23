@@ -23,10 +23,15 @@ _TUI_VERBOSE_TEXT_MAX_LINES = 16
 
 
 def _cap_tui_verbose_text(text: str) -> str:
-    if len(text) <= _TUI_VERBOSE_TEXT_MAX_CHARS and text.count("\n") < _TUI_VERBOSE_TEXT_MAX_LINES:
+    if (
+        len(text) <= _TUI_VERBOSE_TEXT_MAX_CHARS
+        and text.count("\n") < _TUI_VERBOSE_TEXT_MAX_LINES
+    ):
         return text
     # Start of the last MAX_LINES lines, then pull forward to the char budget (never mid-line).
-    line_start = len(text) - len("\n".join(text.split("\n")[-_TUI_VERBOSE_TEXT_MAX_LINES:]))
+    line_start = len(text) - len(
+        "\n".join(text.split("\n")[-_TUI_VERBOSE_TEXT_MAX_LINES:])
+    )
     start = max(line_start, len(text) - _TUI_VERBOSE_TEXT_MAX_CHARS)
     if start > line_start:
         next_break = text.find("\n", start)
@@ -35,13 +40,18 @@ def _cap_tui_verbose_text(text: str) -> str:
     tail = text[start:].lstrip()
     omitted_chars = max(0, len(text) - len(tail))
     omitted_lines = text[:start].count("\n")
-    omitted = f"{omitted_lines} lines / {omitted_chars} chars" if omitted_lines else f"{omitted_chars} chars"
+    omitted = (
+        f"{omitted_lines} lines / {omitted_chars} chars"
+        if omitted_lines
+        else f"{omitted_chars} chars"
+    )
     return f"[showing verbose tail; omitted {omitted}]\n{tail}"
 
 
 def _redact_tui_verbose_text(text: str) -> str:
     try:
         from agent.redact import redact_sensitive_text
+
         redacted = redact_sensitive_text(str(text), force=True)
     except Exception:
         return ""
@@ -58,12 +68,16 @@ def _verbose_text(render, fallback) -> str:
 
 
 def _tool_args_text(args: dict) -> str:
-    return _verbose_text(lambda: json.dumps(args or {}, indent=2, ensure_ascii=False, default=str), lambda: str(args or {}))
+    return _verbose_text(
+        lambda: json.dumps(args or {}, indent=2, ensure_ascii=False, default=str),
+        lambda: str(args or {}),
+    )
 
 
 def _tool_result_text(result: object) -> str:
     def render():
         from agent.tool_dispatch_helpers import _multimodal_text_summary
+
         return _multimodal_text_summary(result)
 
     return _verbose_text(render, lambda: str(result))
@@ -91,8 +105,18 @@ def _count_list(obj: object, *path: str) -> int | None:
 
 # tool name -> (count-from-result, verb, singular, plural) for the tool.complete summary line.
 _SUMMARY_COUNTERS = {
-    "web_search": (lambda d: _count_list(d, "data", "web"), "Did", "search", "searches"),
-    "web_extract": (lambda d: _count_list(d, "results") or _count_list(d, "data", "results"), "Extracted", "page", "pages"),
+    "web_search": (
+        lambda d: _count_list(d, "data", "web"),
+        "Did",
+        "search",
+        "searches",
+    ),
+    "web_extract": (
+        lambda d: _count_list(d, "results") or _count_list(d, "data", "results"),
+        "Extracted",
+        "page",
+        "pages",
+    ),
 }
 
 
@@ -110,7 +134,11 @@ def _tool_summary(name: str, result: str, duration_s: float | None) -> str | Non
         return f"{warning}{suffix}"
     entry = _SUMMARY_COUNTERS.get(name)
     n = entry[0](data) if entry else None
-    return f"{entry[1]} {n} {entry[2] if n == 1 else entry[3]}{suffix}" if n is not None else None
+    return (
+        f"{entry[1]} {n} {entry[2] if n == 1 else entry[3]}{suffix}"
+        if n is not None
+        else None
+    )
 
 
 def _normalize_todo_state(value: object) -> dict | None:
@@ -131,8 +159,12 @@ def _normalize_todo_state(value: object) -> dict | None:
 
 def _cache_todo_state(session: dict, state: dict | None) -> None:
     """Keep the newest snapshot on the session (revision-monotonic)."""
-    cached = _normalize_todo_state(session.get("todo_state")) if state is not None else None
-    if state is not None and (cached is None or state["revision"] >= cached["revision"]):
+    cached = (
+        _normalize_todo_state(session.get("todo_state")) if state is not None else None
+    )
+    if state is not None and (
+        cached is None or state["revision"] >= cached["revision"]
+    ):
         session["todo_state"] = state
 
 
@@ -140,7 +172,9 @@ def _session_todo_state(session: dict) -> dict | None:
     """Return the newest live/cached todo snapshot for a runtime session."""
     cached = _normalize_todo_state(session.get("todo_state"))
     live = None
-    snapshot = getattr(getattr(session.get("agent"), "_todo_store", None), "snapshot", None)
+    snapshot = getattr(
+        getattr(session.get("agent"), "_todo_store", None), "snapshot", None
+    )
     if callable(snapshot):
         try:
             live = _normalize_todo_state(snapshot())
@@ -164,6 +198,7 @@ def _attach_todo_state(payload: dict, session: dict) -> dict:
 def _todo_state_from_db(db, session_id: str) -> dict | None:
     """Cold-resume Todo snapshot without the REST page or model-history limits."""
     from tools.todo_tool import MAX_TODO_RESULT_CHARS
+
     getter = getattr(db, "get_latest_todo_result", None)
     if not callable(getter):
         return None
@@ -187,19 +222,29 @@ def _todo_state_from_history(history) -> dict | None:
         return None
     try:
         from tools.todo_tool import MAX_TODO_RESULT_CHARS, is_todo_tool_call
+
         todo_call_ids = {
             call.get("id")
-            for msg in history if isinstance(msg, dict)
+            for msg in history
+            if isinstance(msg, dict)
             for call in msg.get("tool_calls") or []
             if isinstance(call, dict) and call.get("id") and is_todo_tool_call(call)
         }
         if not todo_call_ids:
             return None
         for msg in reversed(history):
-            if not isinstance(msg, dict) or msg.get("role") != "tool" or msg.get("tool_call_id") not in todo_call_ids:
+            if (
+                not isinstance(msg, dict)
+                or msg.get("role") != "tool"
+                or msg.get("tool_call_id") not in todo_call_ids
+            ):
                 continue
             content = msg.get("content", "")
-            if not isinstance(content, str) or len(content) > MAX_TODO_RESULT_CHARS or '"todos"' not in content:
+            if (
+                not isinstance(content, str)
+                or len(content) > MAX_TODO_RESULT_CHARS
+                or '"todos"' not in content
+            ):
                 continue
             try:
                 return _normalize_todo_state(json.loads(content))
@@ -229,7 +274,11 @@ def _tool_result_needs_user(result: object) -> bool:
     # terminal reports a failed command as {output, exit_code: 1, error: null}:
     # a non-zero exit is a failure the user must see even without an error string.
     exit_code = data.get("exit_code")
-    return isinstance(exit_code, int) and exit_code != 0 and not isinstance(exit_code, bool)
+    return (
+        isinstance(exit_code, int)
+        and exit_code != 0
+        and not isinstance(exit_code, bool)
+    )
 
 
 def _tool_labels(name: str, args: dict) -> list[dict] | None:
@@ -246,15 +295,23 @@ def _connector_tool_lifecycle(name: str, args: dict) -> bool:
     if name != "tool_call" or not isinstance(args, dict):
         return False
     calls = args.get("calls") if isinstance(args.get("calls"), list) else [args]
-    return any(isinstance(call, dict) and (call.get("name") == "manage_connections"
-               or is_connector_name(call.get("name"))) for call in calls)
+    return any(
+        isinstance(call, dict)
+        and (
+            call.get("name") == "manage_connections"
+            or is_connector_name(call.get("name"))
+        )
+        for call in calls
+    )
 
 
 def _connector_lifecycle_is_stale(sid: str, name: str, args: dict) -> bool:
     if not _connector_tool_lifecycle(name, args):
         return False
     owner = _current_runtime_session_record.get()
-    return owner is not None and (_sessions.get(sid) is not owner or owner.get("_finalized", False))
+    return owner is not None and (
+        _sessions.get(sid) is not owner or owner.get("_finalized", False)
+    )
 
 
 def _emit_tool_lifecycle(event, sid, name, args, payload):
@@ -275,6 +332,7 @@ def _emit_tool_lifecycle(event, sid, name, args, payload):
     frame = _event_frame(event, sid, payload)
     _stamp_event(frame)
     from tui_gateway.hosted_room_member_activity import project_room_member_activity
+
     project_room_member_activity(frame, _sessions)
     transport.write(frame)
 
@@ -286,7 +344,12 @@ def _on_tool_start(sid: str, tool_call_id: str, name: str, args: dict):
     if session is not None:
         with contextlib.suppress(Exception):
             from agent.display import capture_local_edit_snapshot
-            task_id = session.get("session_key") or getattr(session.get("agent"), "session_id", None) or sid
+
+            task_id = (
+                session.get("session_key")
+                or getattr(session.get("agent"), "session_id", None)
+                or sid
+            )
             snapshot = capture_local_edit_snapshot(name, args, task_id=task_id)
             if snapshot is not None:
                 session.setdefault("edit_snapshots", {})[tool_call_id] = snapshot
@@ -294,9 +357,16 @@ def _on_tool_start(sid: str, tool_call_id: str, name: str, args: dict):
         # A preview prepared for an earlier call whose completion never fired (failed
         # flush) must not attach to a provider that reuses the same call id.
         session.setdefault("tool_result_metadata", {}).pop(tool_call_id, None)
-    if (_tool_progress_enabled(sid) or _tool_lifecycle_required_for_ui(name)
-            or _connector_tool_lifecycle(name, args)):
-        payload: dict[str, object] = {"tool_id": tool_call_id, "name": name, "context": _tool_ctx(name, args)}
+    if (
+        _tool_progress_enabled(sid)
+        or _tool_lifecycle_required_for_ui(name)
+        or _connector_tool_lifecycle(name, args)
+    ):
+        payload: dict[str, object] = {
+            "tool_id": tool_call_id,
+            "name": name,
+            "context": _tool_ctx(name, args),
+        }
         if (labels := _tool_labels(name, args)) is not None:
             payload["labels"] = labels
         # Full args (not just the 80-char `context` preview) so the desktop's expanded tool row is complete
@@ -308,19 +378,32 @@ def _on_tool_start(sid: str, tool_call_id: str, name: str, args: dict):
         _emit_tool_lifecycle("tool.start", sid, name, args, payload)
 
 
-def _prepare_tool_result_metadata(sid: str, tool_call_id: str, name: str, args: dict, result: str) -> dict:
+def _prepare_tool_result_metadata(
+    sid: str, tool_call_id: str, name: str, args: dict, result: str
+) -> dict:
     """Non-emitting preview preparation for the canonical tool-result append.
 
     Retain the exact preview for the post-flush event, including an empty preview
     for failed/no-op edits. A cold client reads the same sidecar from SQLite.
     """
     session = _sessions.get(sid)
-    snapshot = session.setdefault("edit_snapshots", {}).pop(tool_call_id, None) if session is not None else None
+    snapshot = (
+        session.setdefault("edit_snapshots", {}).pop(tool_call_id, None)
+        if session is not None
+        else None
+    )
     metadata = {}
     with contextlib.suppress(Exception):
         from agent.display import render_edit_diff_with_delta
+
         rendered: list[str] = []
-        if render_edit_diff_with_delta(name, result, function_args=args, snapshot=snapshot, print_fn=rendered.append):
+        if render_edit_diff_with_delta(
+            name,
+            result,
+            function_args=args,
+            snapshot=snapshot,
+            print_fn=rendered.append,
+        ):
             metadata["inline_diff"] = "\n".join(rendered)
     if session is not None:
         session.setdefault("tool_result_metadata", {})[tool_call_id] = metadata
@@ -329,7 +412,9 @@ def _prepare_tool_result_metadata(sid: str, tool_call_id: str, name: str, args: 
 
 def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result: str):
     session = _sessions.get(sid)
-    prepared = session.setdefault("tool_result_metadata", {}) if session is not None else {}
+    prepared = (
+        session.setdefault("tool_result_metadata", {}) if session is not None else {}
+    )
     # Consume the pre-flush preview even when this completion is dropped as stale.
     metadata = prepared.pop(tool_call_id, None)
     if _connector_lifecycle_is_stale(sid, name, args):
@@ -339,10 +424,16 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
         payload["labels"] = labels
     if metadata is None:
         # Native runtimes may emit lifecycle callbacks without the tool executor.
-        metadata = _prepare_tool_result_metadata(sid, tool_call_id, name, args, result).get("tool_result_metadata", {})
+        metadata = _prepare_tool_result_metadata(
+            sid, tool_call_id, name, args, result
+        ).get("tool_result_metadata", {})
         prepared.pop(tool_call_id, None)
     payload.update(metadata)
-    started_at = session.setdefault("tool_started_at", {}).pop(tool_call_id, None) if session is not None else None
+    started_at = (
+        session.setdefault("tool_started_at", {}).pop(tool_call_id, None)
+        if session is not None
+        else None
+    )
     duration_s = time.time() - started_at if started_at else None
     if duration_s is not None:
         payload["duration_s"] = duration_s
@@ -357,15 +448,25 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
         payload["result_text"] = result_text
     from tools.todo_tool import is_todo_tool_name
 
-    todo_state = _normalize_todo_state(payload.get("result")) if is_todo_tool_name(name) else None
+    todo_state = (
+        _normalize_todo_state(payload.get("result"))
+        if is_todo_tool_name(name)
+        else None
+    )
     if todo_state is not None:
         payload.update(todo_state)
         if session is not None:
             _cache_todo_state(session, todo_state)
     from agent.display import is_neutral_failure
-    if (_tool_progress_enabled(sid) or payload.get("inline_diff") or _tool_lifecycle_required_for_ui(name)
-            or is_todo_tool_name(name) or _connector_tool_lifecycle(name, args)
-            or (_tool_result_needs_user(result) and not is_neutral_failure(name, result))):
+
+    if (
+        _tool_progress_enabled(sid)
+        or payload.get("inline_diff")
+        or _tool_lifecycle_required_for_ui(name)
+        or is_todo_tool_name(name)
+        or _connector_tool_lifecycle(name, args)
+        or (_tool_result_needs_user(result) and not is_neutral_failure(name, result))
+    ):
         _emit_tool_lifecycle("tool.complete", sid, name, args, payload)
     # Task state is application data, not tool-progress chrome: a dedicated full-snapshot event lets
     # every client reconcile without parsing tool args.
@@ -381,10 +482,12 @@ def _on_tool_complete(sid: str, tool_call_id: str, name: str, args: dict, result
 # `tool.started` is dropped on purpose: _on_tool_start already emits the authoritative tool.start with
 # the stable id and args; an id-less duplicate row makes the desktop live view diverge from history.
 
+
 def _progress_tool_progress(sid, name, preview, kw):
     # Live MCP progress on a running tool row: tool chrome, so it follows display.tool_progress.
     if _tool_progress_enabled(sid):
         from agent.tool_progress_relay import tool_progress_payload
+
         _emit("tool.progress", sid, tool_progress_payload(name, preview, kw))
 
 
@@ -392,16 +495,27 @@ def _progress_output_risk(sid, name, preview, kw):
     # A risk badge on a tool row: tool chrome, so it follows display.tool_progress.
     metadata = kw.get("risk_metadata")
     if isinstance(metadata, dict) and _tool_progress_enabled(sid):
-        _emit("tool.output_risk", sid, {
-            "tool_id": str(kw.get("tool_call_id") or ""), "name": str(name), "risk": str(metadata.get("risk") or "low"),
-            "findings": [str(item) for item in metadata.get("findings", [])], "redacted": bool(metadata.get("redacted", False)),
-        })
+        _emit(
+            "tool.output_risk",
+            sid,
+            {
+                "tool_id": str(kw.get("tool_call_id") or ""),
+                "name": str(name),
+                "risk": str(metadata.get("risk") or "low"),
+                "findings": [str(item) for item in metadata.get("findings", [])],
+                "redacted": bool(metadata.get("redacted", False)),
+            },
+        )
 
 
 def _progress_reasoning(sid, name, preview, kw):
     if not _session_show_reasoning(sid):
         return
-    _emit("reasoning.available", sid, {"text": str(preview), **({"verbose": True} if _session_verbose(sid) else {})})
+    _emit(
+        "reasoning.available",
+        sid,
+        {"text": str(preview), **({"verbose": True} if _session_verbose(sid) else {})},
+    )
 
 
 def _progress_moa_reference(sid, name, preview, kw):
@@ -421,7 +535,15 @@ def _progress_moa_progress(sid, name, preview, kw):
     refs_done, refs_total = kw.get("moa_refs_done"), kw.get("moa_refs_total")
     if not _session_show_reasoning(sid) or refs_done is None or refs_total is None:
         return
-    _emit("moa.progress", sid, {"label": str(name or ""), "refs_done": int(refs_done), "refs_total": int(refs_total)})
+    _emit(
+        "moa.progress",
+        sid,
+        {
+            "label": str(name or ""),
+            "refs_done": int(refs_done),
+            "refs_total": int(refs_total),
+        },
+    )
 
 
 def _progress_moa_phase(sid, name, preview, kw):
@@ -458,18 +580,37 @@ def _int_or_skip(v):
 # are all optional: older emitters omit them and the TUI spawn tree falls back to flat rendering.
 # `tool_name`/`text` are fed from the positional name/preview; `output_tail` is a list of dicts.
 _SUBAGENT_FIELDS = (
-    ("subagent_id", bool, str), ("parent_id", bool, str), ("child_session_id", bool, str),
-    ("delegation_id", bool, str), ("depth", _not_none, int), ("model", bool, str), ("tool_count", _not_none, int),
-    ("toolsets", bool, _str_list), ("input_tokens", _not_none, _int_or_skip), ("output_tokens", _not_none, _int_or_skip),
-    ("reasoning_tokens", _not_none, _int_or_skip), ("api_calls", _not_none, _int_or_skip),
-    ("files_read", bool, _str_list), ("files_written", bool, _str_list), ("output_tail", bool, list),
-    ("tool_name", bool, str), ("text", bool, str), ("status", bool, str), ("summary", bool, str),
+    ("subagent_id", bool, str),
+    ("parent_id", bool, str),
+    ("child_session_id", bool, str),
+    ("delegation_id", bool, str),
+    ("depth", _not_none, int),
+    ("model", bool, str),
+    ("tool_count", _not_none, int),
+    ("toolsets", bool, _str_list),
+    ("input_tokens", _not_none, _int_or_skip),
+    ("output_tokens", _not_none, _int_or_skip),
+    ("reasoning_tokens", _not_none, _int_or_skip),
+    ("api_calls", _not_none, _int_or_skip),
+    ("files_read", bool, _str_list),
+    ("files_written", bool, _str_list),
+    ("output_tail", bool, list),
+    ("tool_name", bool, str),
+    ("text", bool, str),
+    ("status", bool, str),
+    ("summary", bool, str),
     ("duration_seconds", _not_none, float),
 )
 
 
-def _subagent_payload(event_type: str, name: str | None, preview, kw: dict, *, show_reasoning: bool) -> dict:
-    payload = {"goal": str(kw.get("goal") or ""), "task_count": int(kw.get("task_count") or 1), "task_index": int(kw.get("task_index") or 0)}
+def _subagent_payload(
+    event_type: str, name: str | None, preview, kw: dict, *, show_reasoning: bool
+) -> dict:
+    payload = {
+        "goal": str(kw.get("goal") or ""),
+        "task_count": int(kw.get("task_count") or 1),
+        "task_index": int(kw.get("task_index") or 0),
+    }
     source = {**kw, "tool_name": name, "text": preview}
     for key, present, coerce in _SUBAGENT_FIELDS:
         if present(source.get(key)):
@@ -487,7 +628,9 @@ def _subagent_payload(event_type: str, name: str | None, preview, kw: dict, *, s
 
 
 def _progress_subagent(sid: str, name: str, preview, kw, event_type):
-    payload = _subagent_payload(event_type, name, preview, kw, show_reasoning=bool(_session_show_reasoning(sid)))
+    payload = _subagent_payload(
+        event_type, name, preview, kw, show_reasoning=bool(_session_show_reasoning(sid))
+    )
     # subagent.text is the child's per-token reply, relayed solely to feed a watch window's live mirror
     # (keyed off the child sid); on the parent it's hundreds of ignored frames, so skip it.
     if event_type != "subagent.text":
@@ -502,20 +645,31 @@ def _progress_subagent(sid: str, name: str, preview, kw, event_type):
 # event_type -> (handler, requires): `requires` names the arg that must be truthy for the row to be
 # emitted at all ("name" / "preview" / None).
 _PROGRESS_HANDLERS = {
-    "tool.output_risk": (_progress_output_risk, "name"), "tool.progress": (_progress_tool_progress, "name"),
+    "tool.output_risk": (_progress_output_risk, "name"),
+    "tool.progress": (_progress_tool_progress, "name"),
     "reasoning.available": (_progress_reasoning, "preview"),
     "moa.reference": (_progress_moa_reference, "name"),
     # Answer-only drops MoA content (references, progress/phase lines that land in the reasoning
     # disclosure or activity log) but keeps this: a bare state transition both clients use only
     # for the busy indicator. Same rule as subagent.thinking: frame kept, text dropped.
-    "moa.aggregating": (lambda sid, name, preview, kw: _emit("moa.aggregating", sid, {"aggregator": str(name or "")}), None),
-    "moa.progress": (_progress_moa_progress, None), "moa.phase": (_progress_moa_phase, None),
+    "moa.aggregating": (
+        lambda sid, name, preview, kw: _emit(
+            "moa.aggregating", sid, {"aggregator": str(name or "")}
+        ),
+        None,
+    ),
+    "moa.progress": (_progress_moa_progress, None),
+    "moa.phase": (_progress_moa_phase, None),
 }
 
 
 def _on_tool_progress(
-    sid: str, event_type: str, name: str | None = None, preview: str | None = None,
-    _args: dict | None = None, **_kwargs,
+    sid: str,
+    event_type: str,
+    name: str | None = None,
+    preview: str | None = None,
+    _args: dict | None = None,
+    **_kwargs,
 ):
     if event_type == "tool.started" and name:
         return
@@ -526,7 +680,9 @@ def _on_tool_progress(
     # No blanket tool_progress gate here: reasoning.available and moa.* are reasoning
     # content that follow display.show_reasoning in their own handlers.
     handler, requires = _PROGRESS_HANDLERS.get(event_type, (None, None))
-    if handler is not None and (requires is None or {"name": name, "preview": preview}[requires]):
+    if handler is not None and (
+        requires is None or {"name": name, "preview": preview}[requires]
+    ):
         handler(sid, name, preview, _kwargs)
 
 

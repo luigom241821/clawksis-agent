@@ -38,7 +38,9 @@ def test_parse_target_rejects_bad_profile():
 def test_base_url_bare_and_profile():
     peer = {"url": "http://spark.lan:8377/"}
     assert peer_cmd._base_url(peer, None) == "http://spark.lan:8377"
-    assert peer_cmd._base_url(peer, "researcher") == "http://spark.lan:8377/p/researcher"
+    assert (
+        peer_cmd._base_url(peer, "researcher") == "http://spark.lan:8377/p/researcher"
+    )
 
 
 # ── registry round-trip (isolated config) ────────────────────────────────────
@@ -57,7 +59,13 @@ def test_add_list_remove_roundtrip(monkeypatch, capsys):
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "k" * 20)
 
     rc = peer_cmd.cmd_peer(
-        SimpleNamespace(peer_action="add", name="spark", url="http://spark.lan:8377", key="", note="")
+        SimpleNamespace(
+            peer_action="add",
+            name="spark",
+            url="http://spark.lan:8377",
+            key="",
+            note="",
+        )
     )
     assert rc == 0
     assert store["spark"]["url"] == "http://spark.lan:8377"
@@ -75,16 +83,40 @@ def test_add_rejects_bad_name_and_url(monkeypatch):
     monkeypatch.setattr(peer_cmd, "_load_peers", dict)
     monkeypatch.setattr(peer_cmd, "_save_peers", lambda peers: None)
 
-    assert peer_cmd.cmd_peer(SimpleNamespace(peer_action="add", name="Bad Name!", url="http://x", key="", note="")) == 2
-    assert peer_cmd.cmd_peer(SimpleNamespace(peer_action="add", name="ok", url="ftp://x", key="", note="")) == 2
+    assert (
+        peer_cmd.cmd_peer(
+            SimpleNamespace(
+                peer_action="add", name="Bad Name!", url="http://x", key="", note=""
+            )
+        )
+        == 2
+    )
+    assert (
+        peer_cmd.cmd_peer(
+            SimpleNamespace(
+                peer_action="add", name="ok", url="ftp://x", key="", note=""
+            )
+        )
+        == 2
+    )
 
 
 def test_dm_unknown_peer_and_missing_key(monkeypatch):
     monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": "http://x"}})
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "")
 
-    assert peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="nope", message="hi", json=False)) == 1
-    assert peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="spark", message="hi", json=False)) == 1
+    assert (
+        peer_cmd.cmd_peer(
+            SimpleNamespace(peer_action="dm", target="nope", message="hi", json=False)
+        )
+        == 1
+    )
+    assert (
+        peer_cmd.cmd_peer(
+            SimpleNamespace(peer_action="dm", target="spark", message="hi", json=False)
+        )
+        == 1
+    )
 
 
 # ── live HTTP dm flow (real loopback server, fake peer gateway) ──────────────
@@ -122,13 +154,15 @@ class _FakePeer(BaseHTTPRequestHandler):
                 }
             )
         if self.path == "/v1/runs/run_1":
-            return self._json({
-                "object": "clawk.run",
-                "run_id": "run_1",
-                "status": "completed",
-                "session_id": "bc_existing",
-                "output": "async reply from the other machine",
-            })
+            return self._json(
+                {
+                    "object": "clawk.run",
+                    "run_id": "run_1",
+                    "status": "completed",
+                    "session_id": "bc_existing",
+                    "output": "async reply from the other machine",
+                }
+            )
         if self.path.startswith("/api/sessions"):
             data = [{"id": s, "title": "Bot Chat"} for s in type(self).sessions]
             return self._json({"object": "list", "data": data})
@@ -143,19 +177,27 @@ class _FakePeer(BaseHTTPRequestHandler):
             type(self).sessions.append("bc_1")
             # REAL api_server create shape: the row is wrapped under "session"
             # (verified live Aug 2026 — a flat fake hid a parser bug).
-            return self._json({"object": "clawk.session", "session": {"id": "bc_1", "title": body.get("title")}}, 201)
+            return self._json(
+                {
+                    "object": "clawk.session",
+                    "session": {"id": "bc_1", "title": body.get("title")},
+                },
+                201,
+            )
 
         if self.path.startswith("/api/sessions/") and self.path.endswith("/chat"):
             type(self).chats.append(body.get("message"))
             type(self).chat_bodies.append(body)
-            return self._json({
-                "object": "clawk.session.chat.completion",
-                "session_id": "bc_1",
-                "message": {
-                    "role": "assistant",
-                    "content": type(self).chat_reply_content,
-                },
-            })
+            return self._json(
+                {
+                    "object": "clawk.session.chat.completion",
+                    "session_id": "bc_1",
+                    "message": {
+                        "role": "assistant",
+                        "content": type(self).chat_reply_content,
+                    },
+                }
+            )
 
         if self.path == "/v1/runs":
             type(self).runs.append(body)
@@ -196,7 +238,9 @@ def fake_peer_server():
 
 
 def test_dm_creates_bot_chat_then_chats(monkeypatch, capsys, fake_peer_server):
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
     rc = peer_cmd.cmd_peer(
@@ -218,7 +262,9 @@ def test_dm_creates_bot_chat_then_chats(monkeypatch, capsys, fake_peer_server):
     assert all(a == "Bearer secret-key-123456" for a in _FakePeer.auth_seen)
 
 
-def test_dm_hides_a_bare_silence_marker_from_the_sending_agent(monkeypatch, capsys, fake_peer_server):
+def test_dm_hides_a_bare_silence_marker_from_the_sending_agent(
+    monkeypatch, capsys, fake_peer_server
+):
     """A successful bare NO_REPLY/[SILENT] marker is a delivery decision, not
     a message — same rule as the gateway's live Bot Chat completion, the
     Desktop bot_relay.deliver RPC and the one-shot local `clawk chat -Q`
@@ -226,7 +272,9 @@ def test_dm_hides_a_bare_silence_marker_from_the_sending_agent(monkeypatch, caps
     4th Bot Mode delivery door and, before this fix, printed the raw marker
     to the sending agent as if it were a real reply."""
     _FakePeer.chat_reply_content = "NO_REPLY"
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
     rc = peer_cmd.cmd_peer(
@@ -239,9 +287,13 @@ def test_dm_hides_a_bare_silence_marker_from_the_sending_agent(monkeypatch, caps
     assert "(no reply)" in out
 
 
-def test_dm_json_output_hides_a_bare_silence_marker_too(monkeypatch, capsys, fake_peer_server):
+def test_dm_json_output_hides_a_bare_silence_marker_too(
+    monkeypatch, capsys, fake_peer_server
+):
     _FakePeer.chat_reply_content = "[SILENT]"
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
     rc = peer_cmd.cmd_peer(
@@ -253,11 +305,15 @@ def test_dm_json_output_hides_a_bare_silence_marker_too(monkeypatch, capsys, fak
     assert payload["reply"] == ""
 
 
-def test_dm_delivers_prose_that_only_mentions_the_marker_normally(monkeypatch, capsys, fake_peer_server):
+def test_dm_delivers_prose_that_only_mentions_the_marker_normally(
+    monkeypatch, capsys, fake_peer_server
+):
     """Prose that merely mentions NO_REPLY must still be delivered — only an
     EXACT whole-response marker is silence."""
     _FakePeer.chat_reply_content = "The status is NO_REPLY needed right now, all clear."
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
     rc = peer_cmd.cmd_peer(
@@ -265,15 +321,21 @@ def test_dm_delivers_prose_that_only_mentions_the_marker_normally(monkeypatch, c
     )
 
     assert rc == 0
-    assert "The status is NO_REPLY needed right now, all clear." in capsys.readouterr().out
+    assert (
+        "The status is NO_REPLY needed right now, all clear." in capsys.readouterr().out
+    )
 
 
 def test_dm_reuses_existing_bot_chat(monkeypatch, capsys, fake_peer_server):
     _FakePeer.sessions = ["bc_existing"]
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": fake_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
-    rc = peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True))
+    rc = peer_cmd.cmd_peer(
+        SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True)
+    )
 
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
@@ -298,14 +360,22 @@ def _peer_spark(monkeypatch, url, author_env):
         monkeypatch.setenv(TURN_AUTHOR_ENV, json.dumps(author_env))
 
 
-@pytest.mark.parametrize("author_env, expected_body", [
-    ({**AUTHOR, "x": 1}, {"message": "ping", "author": AUTHOR}),
-    (None, {"message": "ping"}),
-], ids=["author from env", "no env"])
-def test_dm_body_carries_author_only_from_env(monkeypatch, fake_peer_server, author_env, expected_body):
+@pytest.mark.parametrize(
+    "author_env, expected_body",
+    [
+        ({**AUTHOR, "x": 1}, {"message": "ping", "author": AUTHOR}),
+        (None, {"message": "ping"}),
+    ],
+    ids=["author from env", "no env"],
+)
+def test_dm_body_carries_author_only_from_env(
+    monkeypatch, fake_peer_server, author_env, expected_body
+):
     _peer_spark(monkeypatch, fake_peer_server, author_env)
 
-    rc = peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True))
+    rc = peer_cmd.cmd_peer(
+        SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True)
+    )
 
     assert rc == 0
     assert _FakePeer.chat_bodies == [expected_body]
@@ -314,11 +384,20 @@ def test_dm_body_carries_author_only_from_env(monkeypatch, fake_peer_server, aut
 def test_run_body_carries_author_from_env(monkeypatch, capsys, fake_peer_server):
     _peer_spark(monkeypatch, fake_peer_server, AUTHOR)
 
-    rc = peer_cmd.cmd_peer(SimpleNamespace(
-        peer_action="run", target="spark", message="long task", idempotency_key="ticket-1", json=True))
+    rc = peer_cmd.cmd_peer(
+        SimpleNamespace(
+            peer_action="run",
+            target="spark",
+            message="long task",
+            idempotency_key="ticket-1",
+            json=True,
+        )
+    )
 
     assert rc == 0
-    assert _FakePeer.runs == [{"input": "long task", "session_id": "bc_existing", "author": AUTHOR}]
+    assert _FakePeer.runs == [
+        {"input": "long task", "session_id": "bc_existing", "author": AUTHOR}
+    ]
 
 
 # ── hidden canonical Bot Chat (issue #91583) ─────────────────────────────────
@@ -339,9 +418,17 @@ class _HiddenBotChatPeer(_FakePeer):
 
             query = parse_qs(urlparse(self.path).query)
             type(self).get_queries.append(query)
-            data = [{"id": s, "title": "Bot Chat", "hidden": False} for s in type(self).sessions]
-            if query.get("title", [""])[0] == "Bot Chat" and query.get("include_hidden", ["0"])[0] in ("1", "true"):
-                data += [{"id": s, "title": "Bot Chat", "hidden": True} for s in type(self).hidden_sessions]
+            data = [
+                {"id": s, "title": "Bot Chat", "hidden": False}
+                for s in type(self).sessions
+            ]
+            if query.get("title", [""])[0] == "Bot Chat" and query.get(
+                "include_hidden", ["0"]
+            )[0] in ("1", "true"):
+                data += [
+                    {"id": s, "title": "Bot Chat", "hidden": True}
+                    for s in type(self).hidden_sessions
+                ]
             return self._json({"object": "list", "data": data})
         return self._json({"error": {"message": "not found"}}, 404)
 
@@ -363,7 +450,12 @@ class _OldHiddenBotChatPeer(_FakePeer):
         self.rfile.read(length)
         if self.path == "/api/sessions":
             return self._json(
-                {"error": {"message": "Title already in use by session hidden_bc_1", "code": "invalid_title"}},
+                {
+                    "error": {
+                        "message": "Title already in use by session hidden_bc_1",
+                        "code": "invalid_title",
+                    }
+                },
                 400,
             )
         return self._json({"error": {"message": "not found"}}, 404)
@@ -410,13 +502,19 @@ def test_find_bot_chat_sends_hidden_aware_lookup(hidden_peer_server):
     assert query.get("include_hidden") == ["1"]
 
 
-def test_dm_resolves_hidden_bot_chat_without_duplicate_create(monkeypatch, capsys, hidden_peer_server):
+def test_dm_resolves_hidden_bot_chat_without_duplicate_create(
+    monkeypatch, capsys, hidden_peer_server
+):
     """Regression for issue #91583: hidden canonical Bot Chat must be reused,
     never re-created (the peer's UNIQUE(title) guard rejects the duplicate)."""
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": hidden_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": hidden_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
-    rc = peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True))
+    rc = peer_cmd.cmd_peer(
+        SimpleNamespace(peer_action="dm", target="spark", message="ping", json=True)
+    )
 
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
@@ -426,21 +524,25 @@ def test_dm_resolves_hidden_bot_chat_without_duplicate_create(monkeypatch, capsy
     assert _HiddenBotChatPeer.chats == ["ping"]
 
 
-def test_dm_older_peer_hidden_duplicate_gives_clear_error(monkeypatch, capsys, old_hidden_peer_server):
+def test_dm_older_peer_hidden_duplicate_gives_clear_error(
+    monkeypatch, capsys, old_hidden_peer_server
+):
     """Against an older peer that can't expose hidden sessions, the UNIQUE(title)
     rejection must surface a diagnosable error naming the hidden canonical chat."""
-    monkeypatch.setattr(peer_cmd, "_load_peers", lambda: {"spark": {"url": old_hidden_peer_server}})
+    monkeypatch.setattr(
+        peer_cmd, "_load_peers", lambda: {"spark": {"url": old_hidden_peer_server}}
+    )
     monkeypatch.setattr(peer_cmd, "_peer_secret", lambda name: "secret-key-123456")
 
-    rc = peer_cmd.cmd_peer(SimpleNamespace(peer_action="dm", target="spark", message="ping", json=False))
+    rc = peer_cmd.cmd_peer(
+        SimpleNamespace(peer_action="dm", target="spark", message="ping", json=False)
+    )
 
     assert rc == 1
     err = capsys.readouterr().err
     assert "hidden" in err
     assert "Bot Chat" in err
     assert "Title already in use" in err
-
-
 
 
 def test_run_starts_async_turn_with_canonical_session_and_idempotency(
@@ -575,7 +677,9 @@ def test_request_strips_bearer_key_across_redirect_origin():
         # The attacker origin answers with a well-formed (empty) listing, so
         # the redirect completes successfully — the request itself is not
         # the point of this test, only whether the Bearer key rode along.
-        result = peer_cmd._request(f"http://127.0.0.1:{peer.server_port}/api/sessions", "top-secret-peer-key")
+        result = peer_cmd._request(
+            f"http://127.0.0.1:{peer.server_port}/api/sessions", "top-secret-peer-key"
+        )
         assert result == {"object": "list", "data": []}
     finally:
         peer.shutdown()

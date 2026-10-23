@@ -13,7 +13,14 @@ import os
 from pathlib import Path
 from typing import Any, Optional
 
-from gateway.config import UNAUTHORIZED_DM_BEHAVIORS, Platform, PlatformConfig, _coerce_dict, _dict_slot, _normalize_choice
+from gateway.config import (
+    UNAUTHORIZED_DM_BEHAVIORS,
+    Platform,
+    PlatformConfig,
+    _coerce_dict,
+    _dict_slot,
+    _normalize_choice,
+)
 
 # Logger name parity with the origin module: records stay under "gateway.config".
 logger = logging.getLogger("gateway.config")
@@ -56,7 +63,9 @@ _BRIDGED_ALLOW_ALL_USERS = False
 
 def bridged_allow_all_users() -> Optional[str]:
     """``os.environ['GATEWAY_ALLOW_ALL_USERS']`` when it is the bridge's own write, else None."""
-    return os.environ.get("GATEWAY_ALLOW_ALL_USERS") if _BRIDGED_ALLOW_ALL_USERS else None
+    return (
+        os.environ.get("GATEWAY_ALLOW_ALL_USERS") if _BRIDGED_ALLOW_ALL_USERS else None
+    )
 
 
 def drop_bridged_env(env: dict) -> dict:
@@ -64,6 +73,7 @@ def drop_bridged_env(env: dict) -> dict:
     if bridged_allow_all_users() is not None:
         env.pop("GATEWAY_ALLOW_ALL_USERS", None)
     return env
+
 
 def _quick_commands_ok(value: Any) -> bool:
     if isinstance(value, dict):
@@ -87,7 +97,9 @@ def _presence(*keys: str) -> tuple:
 _TOPLEVEL_BRIDGE: tuple = (
     ("quick_commands", "quick_commands", "none", _quick_commands_ok, None),
     ("stt", "stt", "presence", lambda v: isinstance(v, dict), None),
-    *_presence("stt_echo_transcripts", "group_sessions_per_user", "thread_sessions_per_user"),
+    *_presence(
+        "stt_echo_transcripts", "group_sessions_per_user", "thread_sessions_per_user"
+    ),
     ("multiplex_profiles", "multiplex_profiles", "gwdata", None, None),
     *_presence("room_link_url"),
     ("profile_routes", "profile_routes", "none", lambda v: isinstance(v, list), None),
@@ -95,26 +107,47 @@ _TOPLEVEL_BRIDGE: tuple = (
     ("systemd_watchdog_seconds", "systemd_watchdog_seconds", "nested", None, None),
     ("streaming", "streaming", "dict", None, None),
     *_presence(
-        "reset_triggers", "always_log_local", "write_sessions_json", "loop_watchdog",
-        "loop_watchdog_probe_interval_s", "loop_watchdog_probe_timeout_s", "loop_watchdog_max_strikes",
+        "reset_triggers",
+        "always_log_local",
+        "write_sessions_json",
+        "loop_watchdog",
+        "loop_watchdog_probe_interval_s",
+        "loop_watchdog_probe_timeout_s",
+        "loop_watchdog_max_strikes",
         "filter_silence_narration",
     ),
-    ("unauthorized_dm_behavior", "unauthorized_dm_behavior", "presence", None, _dm_behavior_choice),
+    (
+        "unauthorized_dm_behavior",
+        "unauthorized_dm_behavior",
+        "presence",
+        None,
+        _dm_behavior_choice,
+    ),
     *_presence("unauthorized_dm_decline_message"),
 )
 
 
-def _bridge_lookup(yaml_cfg: dict, gateway_section: Any, gw_data: dict, key: str, mode: str) -> tuple:
+def _bridge_lookup(
+    yaml_cfg: dict, gateway_section: Any, gw_data: dict, key: str, mode: str
+) -> tuple:
     """Return ``(found, value)`` for *key* under the given fallback *mode*."""
     nested = isinstance(gateway_section, dict)
     if mode in ("presence", "gwdata"):
         if key in yaml_cfg:
             return True, yaml_cfg[key]
-        if nested and key in gateway_section and (mode == "presence" or key not in gw_data):
+        if (
+            nested
+            and key in gateway_section
+            and (mode == "presence" or key not in gw_data)
+        ):
             return True, gateway_section[key]
         return False, None
     if mode == "nested":
-        return (True, gateway_section[key]) if nested and key in gateway_section else (False, None)
+        return (
+            (True, gateway_section[key])
+            if nested and key in gateway_section
+            else (False, None)
+        )
     value = yaml_cfg.get(key)
     if mode == "none":
         if value is None and nested:
@@ -128,7 +161,9 @@ def _bridge_lookup(yaml_cfg: dict, gateway_section: Any, gw_data: dict, key: str
 
 def bridge_toplevel_keys(yaml_cfg: dict, gateway_section: Any, gw_data: dict) -> None:
     for yaml_key, gw_key, mode, accept, transform in _TOPLEVEL_BRIDGE:
-        found, value = _bridge_lookup(yaml_cfg, gateway_section, gw_data, yaml_key, mode)
+        found, value = _bridge_lookup(
+            yaml_cfg, gateway_section, gw_data, yaml_key, mode
+        )
         if not found or (accept is not None and not accept(value)):
             continue
         gw_data[gw_key] = transform(value) if transform else value
@@ -136,7 +171,10 @@ def bridge_toplevel_keys(yaml_cfg: dict, gateway_section: Any, gw_data: dict) ->
 
 # --- platform sections -----------------------------------------------------------
 
-def merge_platform_sections(yaml_cfg: dict, gateway_cfg: Any, gw_data: dict, *, also: frozenset = frozenset()) -> dict:
+
+def merge_platform_sections(
+    yaml_cfg: dict, gateway_cfg: Any, gw_data: dict, *, also: frozenset = frozenset()
+) -> dict:
     """Merge every place a platform block may live into ``gw_data["platforms"]`` and return it.
 
     Order (later wins on shared keys, ``extra`` deep-merged so gateway.json defaults survive):
@@ -168,8 +206,15 @@ def merge_platform_sections(yaml_cfg: dict, gateway_cfg: Any, gw_data: dict, *, 
     nested_gateway = gateway_cfg if isinstance(gateway_cfg, dict) else {}
     merge(nested_gateway.get("platforms"))
     merge(yaml_cfg.get("platforms"))
-    merge({k: v for k, v in nested_gateway.items()
-           if k != "platforms" and isinstance(v, dict) and (k in also or _is_platform_name(k))})
+    merge(
+        {
+            k: v
+            for k, v in nested_gateway.items()
+            if k != "platforms"
+            and isinstance(v, dict)
+            and (k in also or _is_platform_name(k))
+        }
+    )
     return platforms_data
 
 
@@ -188,7 +233,11 @@ def platform_section(yaml_cfg: dict, name: str, gateway_platforms: Any) -> tuple
     section = yaml_cfg.get(name)
     toplevel = isinstance(section, dict)
     if not toplevel:
-        nested = (src[name] for src in (gateway_platforms, yaml_cfg.get("platforms")) if isinstance(src, dict) and isinstance(src.get(name), dict))
+        nested = (
+            src[name]
+            for src in (gateway_platforms, yaml_cfg.get("platforms"))
+            if isinstance(src, dict) and isinstance(src.get(name), dict)
+        )
         section = next(nested, section)
     return section, toplevel
 
@@ -200,6 +249,7 @@ def _str_keyed(value: Any) -> Any:
 _TELEGRAM = frozenset({Platform.TELEGRAM})
 _DISCORD_SLACK = frozenset({Platform.DISCORD, Platform.SLACK})
 
+
 def _plain(*keys: str) -> tuple:
     """Keys copied verbatim into ``extra`` for every platform."""
     return tuple((k, None, None) for k in keys)
@@ -209,23 +259,42 @@ def _plain(*keys: str) -> tuple:
 # ``"dm"`` defers to the global unauthorized_dm_behavior.
 _SHARED_KEYS: tuple = (
     ("unauthorized_dm_behavior", None, "dm"),
-    ("notice_delivery", None, lambda v: _normalize_choice(v, {"public", "private"}, "public")),
-    *_plain("reply_prefix", "reply_in_thread", "cron_continuable_surface", "require_mention", "send_read_receipts"),
+    (
+        "notice_delivery",
+        None,
+        lambda v: _normalize_choice(v, {"public", "private"}, "public"),
+    ),
+    *_plain(
+        "reply_prefix",
+        "reply_in_thread",
+        "cron_continuable_surface",
+        "require_mention",
+        "send_read_receipts",
+    ),
     ("allowed_chats", _TELEGRAM, None),
     ("group_allowed_chats", _TELEGRAM, None),
     ("allowed_topics", _TELEGRAM, None),
     *_plain("free_response_channels", "mention_patterns", "exclusive_bot_mentions"),
     ("observe_unmentioned_group_messages", _TELEGRAM, None),
     *_plain(
-        "dm_policy", "allow_from", "allow_admin_from", "user_allowed_commands",
-        "group_policy", "group_allow_from", "group_allow_admin_from", "group_user_allowed_commands",
+        "dm_policy",
+        "allow_from",
+        "allow_admin_from",
+        "user_allowed_commands",
+        "group_policy",
+        "group_allow_from",
+        "group_allow_admin_from",
+        "group_user_allowed_commands",
     ),
     ("channel_skill_bindings", _DISCORD_SLACK, None),
     ("channel_prompts", None, _str_keyed),
     *_plain("gateway_restart_notification", "typing_indicator", "typing_status_text"),
 )
 
-def _bridged_keys(plat: Platform, platform_cfg: dict, gw_data: dict, *, root_block: bool = False) -> dict:
+
+def _bridged_keys(
+    plat: Platform, platform_cfg: dict, gw_data: dict, *, root_block: bool = False
+) -> dict:
     """Shared-key bridge; a ROOT-level ``<platform>:`` block (which ``merge_platform_sections``
     never copies into ``platforms_data``) also gets its adapter keys promoted into ``extra``, with
     the same typed-key exclusion and explicit-``extra`` precedence as ``PlatformConfig.from_dict``."""
@@ -238,9 +307,13 @@ def _bridged_keys(plat: Platform, platform_cfg: dict, gw_data: dict, *, root_blo
         if key not in platform_cfg or (only is not None and plat not in only):
             continue
         if transform == "dm":
-            bridged[key] = _dm_behavior_choice(platform_cfg[key], gw_data.get("unauthorized_dm_behavior", "pair"))
+            bridged[key] = _dm_behavior_choice(
+                platform_cfg[key], gw_data.get("unauthorized_dm_behavior", "pair")
+            )
         else:
-            bridged[key] = transform(platform_cfg[key]) if transform else platform_cfg[key]
+            bridged[key] = (
+                transform(platform_cfg[key]) if transform else platform_cfg[key]
+            )
     return bridged
 
 
@@ -267,7 +340,8 @@ def snapshot_authored_extra(platforms_data: dict) -> dict:
     {reply_to_mode: off}}`` must still resolve to ``all``). Copies, never creates slots."""
     return {
         name: dict(_coerce_dict(plat.get("extra")))
-        for name, plat in platforms_data.items() if isinstance(plat, dict)
+        for name, plat in platforms_data.items()
+        if isinstance(plat, dict)
     }
 
 
@@ -296,12 +370,22 @@ def _apply_managed_extra(authored: dict, managed: dict, platforms_data: dict) ->
         if managed_extra:
             destination = _dict_slot(_dict_slot(platforms_data, name), "extra")
             destination.update(_deep_merge(destination, managed_extra))
-            hook_pins[name] = {key: extra[key] for key in managed_extra
-                               if key not in PlatformConfig._TYPED_KEYS}
+            hook_pins[name] = {
+                key: extra[key]
+                for key in managed_extra
+                if key not in PlatformConfig._TYPED_KEYS
+            }
     return hook_pins
 
 
-def _authored_wins(extra: dict, block: dict, plat_name: str, *, toplevel: bool, warned: Optional[set] = None) -> dict:
+def _authored_wins(
+    extra: dict,
+    block: dict,
+    plat_name: str,
+    *,
+    toplevel: bool,
+    warned: Optional[set] = None,
+) -> dict:
     """Effective ``<plat>:`` block for YAML→extra/env bridging: *block* (top-level or
     nested) overlaid with the keys the user authored in ``platforms.<plat>.extra``.
 
@@ -312,7 +396,9 @@ def _authored_wins(extra: dict, block: dict, plat_name: str, *, toplevel: bool, 
     """
     if warned is None:
         warned = set()
-    where = f"the top-level '{plat_name}:' block" if toplevel else f"platforms.{plat_name}"
+    where = (
+        f"the top-level '{plat_name}:' block" if toplevel else f"platforms.{plat_name}"
+    )
 
     def overlay_onto(source: dict) -> dict:
         overlay = {k: extra[k] for k in source if k in extra}
@@ -321,7 +407,10 @@ def _authored_wins(extra: dict, block: dict, plat_name: str, *, toplevel: bool, 
                 warned.add((plat_name, key))
                 logger.warning(
                     "%s set in both %s and platforms.%s.extra; platforms.%s.extra took precedence",
-                    key, where, plat_name, plat_name,
+                    key,
+                    where,
+                    plat_name,
+                    plat_name,
                 )
         return {**source, **overlay}
 
@@ -332,14 +421,24 @@ def _authored_wins(extra: dict, block: dict, plat_name: str, *, toplevel: bool, 
         effective["extra"] = overlay_onto(block["extra"])
         # Hooks consume direct keys before global fallbacks. Expose the resolved
         # authored subdict values there too, without promoting typed platform fields.
-        effective.update({k: extra[k] for k in block["extra"]
-                          if k in extra and k not in PlatformConfig._TYPED_KEYS})
+        effective.update(
+            {
+                k: extra[k]
+                for k in block["extra"]
+                if k in extra and k not in PlatformConfig._TYPED_KEYS
+            }
+        )
     return effective
 
 
 def bridge_platform_shared_keys(
-    yaml_cfg: dict, gateway_platforms: Any, gw_data: dict, platforms_data: dict, targets: list,
-    warned: Optional[set] = None, authored: Optional[dict] = None,
+    yaml_cfg: dict,
+    gateway_platforms: Any,
+    gw_data: dict,
+    platforms_data: dict,
+    targets: list,
+    warned: Optional[set] = None,
+    authored: Optional[dict] = None,
 ) -> None:
     """Copy shared keys (allow_from, require_mention, …) from each platform's YAML section into ``extra``.
 
@@ -353,16 +452,25 @@ def bridge_platform_shared_keys(
     for plat in targets:
         if plat == Platform.LOCAL:
             continue
-        platform_cfg, cfg_toplevel = platform_section(yaml_cfg, plat.value, gateway_platforms)
+        platform_cfg, cfg_toplevel = platform_section(
+            yaml_cfg, plat.value, gateway_platforms
+        )
         if not isinstance(platform_cfg, dict):
             continue
         # An authored ``platforms.<plat>.extra`` key beats the same key in the (top-level or
         # nested) block, so the shared-key bridge works on the effective block.
         effective = _authored_wins(
-            authored.get(plat.value, {}), platform_cfg, plat.value, toplevel=cfg_toplevel, warned=warned)
+            authored.get(plat.value, {}),
+            platform_cfg,
+            plat.value,
+            toplevel=cfg_toplevel,
+            warned=warned,
+        )
         bridged = _bridged_keys(plat, effective, gw_data, root_block=cfg_toplevel)
         has_channel_overrides = "channel_overrides" in platform_cfg
-        if has_channel_overrides and isinstance(platform_cfg.get("channel_overrides"), dict):
+        if has_channel_overrides and isinstance(
+            platform_cfg.get("channel_overrides"), dict
+        ):
             plat_data = _dict_slot(platforms_data, plat.value)
             _dict_slot(plat_data, "extra")
             plat_data["channel_overrides"] = {
@@ -382,8 +490,13 @@ def bridge_platform_shared_keys(
 
 
 def apply_plugin_yaml_hooks(
-    yaml_cfg: dict, gateway_platforms: Any, platforms_data: dict, registry,
-    warned: Optional[set] = None, authored: Optional[dict] = None, managed_extra: Optional[dict] = None,
+    yaml_cfg: dict,
+    gateway_platforms: Any,
+    platforms_data: dict,
+    registry,
+    warned: Optional[set] = None,
+    authored: Optional[dict] = None,
+    managed_extra: Optional[dict] = None,
     entries: Optional[list] = None,
 ) -> None:
     """Plugin-owned YAML→env config bridges (``PlatformEntry.apply_yaml_config_fn``). Order: shared-key
@@ -400,14 +513,21 @@ def apply_plugin_yaml_hooks(
         # ``GatewayConfig.from_dict``.
         if entry.apply_yaml_config_fn is None:
             continue
-        platform_cfg, cfg_toplevel = platform_section(yaml_cfg, entry.name, gateway_platforms)
+        platform_cfg, cfg_toplevel = platform_section(
+            yaml_cfg, entry.name, gateway_platforms
+        )
         if not isinstance(platform_cfg, dict):
             continue
         # Overlay the authored extra BEFORE the hook so the block the hook sees — and
         # therefore the values it bridges to env — already carry the authored nested
         # value for keys present in both (adapter readers are env-first).
         effective = _authored_wins(
-            authored.get(entry.name, {}), platform_cfg, entry.name, toplevel=cfg_toplevel, warned=warned)
+            authored.get(entry.name, {}),
+            platform_cfg,
+            entry.name,
+            toplevel=cfg_toplevel,
+            warned=warned,
+        )
         # Restored managed pins must reach hooks before raw-YAML/global fallbacks
         # can seed a stale env value. Other authored-only keys keep existing behavior.
         effective.update((managed_extra or {}).get(entry.name, {}))
@@ -448,7 +568,9 @@ def bridge_core_env_settings(yaml_cfg: dict, platforms_data: dict) -> None:
     # Only a value this bridge wrote may be overwritten/cleared by a later load (config flipped to
     # false + reload); an operator's explicit env var still wins. Only a truthy grant is exported:
     # presence-based readers treat any non-empty value as "auth configured".
-    if not skip_env_bridge and (_BRIDGED_ALLOW_ALL_USERS or not os.getenv("GATEWAY_ALLOW_ALL_USERS")):
+    if not skip_env_bridge and (
+        _BRIDGED_ALLOW_ALL_USERS or not os.getenv("GATEWAY_ALLOW_ALL_USERS")
+    ):
         _BRIDGED_ALLOW_ALL_USERS = str(allow_all).lower() in {"true", "1", "yes"}
         if _BRIDGED_ALLOW_ALL_USERS:
             os.environ["GATEWAY_ALLOW_ALL_USERS"] = "true"
@@ -461,9 +583,13 @@ def bridge_core_env_settings(yaml_cfg: dict, platforms_data: dict) -> None:
         else:
             os.environ.pop("GATEWAY_ALLOW_ALL_USERS", None)
     tl_require_mention = yaml_cfg.get("require_mention")
-    if tl_require_mention is not None and "require_mention" not in (yaml_cfg.get("telegram") or {}):
+    if tl_require_mention is not None and "require_mention" not in (
+        yaml_cfg.get("telegram") or {}
+    ):
         tg_plat = platforms_data.setdefault(Platform.TELEGRAM.value, {})
-        tg_plat.setdefault("extra", {}).setdefault("require_mention", tl_require_mention)
+        tg_plat.setdefault("extra", {}).setdefault(
+            "require_mention", tl_require_mention
+        )
         # Also bridge to the TELEGRAM_REQUIRE_MENTION env var that the adapter reads at runtime. This used
         # to live in the telegram_cfg block in core; it stays in core because it keys off the TOP-LEVEL
         # require_mention (not a telegram: block), so the telegram plugin's apply_yaml_config_fn hook —
@@ -479,9 +605,13 @@ def bridge_core_env_settings(yaml_cfg: dict, platforms_data: dict) -> None:
     signal_cfg = yaml_cfg.get("signal", {})
     if isinstance(signal_cfg, dict) and "require_mention" in signal_cfg:
         sig_plat = platforms_data.setdefault(Platform.SIGNAL.value, {})
-        sig_plat.setdefault("extra", {}).setdefault("require_mention", signal_cfg["require_mention"])
+        sig_plat.setdefault("extra", {}).setdefault(
+            "require_mention", signal_cfg["require_mention"]
+        )
         if not skip_env_bridge and not os.getenv("SIGNAL_REQUIRE_MENTION"):
-            os.environ["SIGNAL_REQUIRE_MENTION"] = str(signal_cfg["require_mention"]).lower()
+            os.environ["SIGNAL_REQUIRE_MENTION"] = str(
+                signal_cfg["require_mention"]
+            ).lower()
 
 
 def read_yaml_layers(home: Path) -> dict:
@@ -514,6 +644,7 @@ def read_yaml_layers(home: Path) -> dict:
     # Managed scope: overlay administrator-pinned values (this loader bypasses
     # clawk_cli.config.load_config, so managed quick_commands / stt would otherwise be ignored).
     from clawk_cli import managed_scope
+
     return managed_scope.apply_managed_overlay(yaml_cfg)
 
 
@@ -525,11 +656,14 @@ def load_yaml_layer(home: Path, gw_data: dict) -> None:
 
     gateway_section = yaml_cfg.get("gateway")
     bridge_toplevel_keys(yaml_cfg, gateway_section, gw_data)
-    gateway_platforms = gateway_section.get("platforms") if isinstance(gateway_section, dict) else None
+    gateway_platforms = (
+        gateway_section.get("platforms") if isinstance(gateway_section, dict) else None
+    )
     platforms_data = merge_platform_sections(yaml_cfg, gateway_section, gw_data)
 
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent
         from gateway.platform_registry import platform_registry as registry
     except Exception as e:
@@ -541,17 +675,49 @@ def load_yaml_layer(home: Path, gw_data: dict) -> None:
     entries = None
     if registry is not None:
         from gateway.platform_activation import activation_predicate
-        entries = registry.configured_entries(activation_predicate(
-            yaml_cfg=yaml_cfg, platform_names=platforms_data, home=home, registry=registry))
-    targets = shared_loop_targets(registry, None if entries is None else [e for e in entries if e.source == "plugin"])
+
+        entries = registry.configured_entries(
+            activation_predicate(
+                yaml_cfg=yaml_cfg,
+                platform_names=platforms_data,
+                home=home,
+                registry=registry,
+            )
+        )
+    targets = shared_loop_targets(
+        registry,
+        None if entries is None else [e for e in entries if e.source == "plugin"],
+    )
     # "Authored" is config.yaml only: a scratch merge leaves out the legacy gateway.json extra
     # already in ``platforms_data``, which stays the base layer every config.yaml key overrides.
-    authored = snapshot_authored_extra(merge_platform_sections(yaml_cfg, gateway_section, {}))
+    authored = snapshot_authored_extra(
+        merge_platform_sections(yaml_cfg, gateway_section, {})
+    )
     from clawk_cli import managed_scope
-    managed_extra = _apply_managed_extra(authored, managed_scope.apply_managed_overlay({}), platforms_data)
-    warned: set = set()  # one warning per conflicting (platform, key) across both copy sites
+
+    managed_extra = _apply_managed_extra(
+        authored, managed_scope.apply_managed_overlay({}), platforms_data
+    )
+    warned: set = (
+        set()
+    )  # one warning per conflicting (platform, key) across both copy sites
     bridge_platform_shared_keys(
-        yaml_cfg, gateway_platforms, gw_data, platforms_data, targets, warned=warned, authored=authored)
-    apply_plugin_yaml_hooks(yaml_cfg, gateway_platforms, platforms_data, registry,
-                            warned=warned, authored=authored, managed_extra=managed_extra, entries=entries)
+        yaml_cfg,
+        gateway_platforms,
+        gw_data,
+        platforms_data,
+        targets,
+        warned=warned,
+        authored=authored,
+    )
+    apply_plugin_yaml_hooks(
+        yaml_cfg,
+        gateway_platforms,
+        platforms_data,
+        registry,
+        warned=warned,
+        authored=authored,
+        managed_extra=managed_extra,
+        entries=entries,
+    )
     bridge_core_env_settings(yaml_cfg, platforms_data)

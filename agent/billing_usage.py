@@ -42,6 +42,7 @@ def nous_logged_in() -> bool:
     """Cheap local auth-state check: a Nous access token is present. Fail-closed."""
     try:
         from clawk_cli.auth import get_provider_auth_state
+
         tok = (get_provider_auth_state("nous") or {}).get("access_token")
         return isinstance(tok, str) and bool(tok.strip())
     except Exception:
@@ -54,12 +55,14 @@ def fetch_nous_account(timeout: float):
     Shares the one bounded implementation so a stalled portal releases the
     /billing surface at ``timeout`` too (see ``_fetch_portal_account``)."""
     from agent.account_usage import _fetch_portal_account
+
     return _fetch_portal_account(timeout)
 
 
 def format_renews(value: Optional[str]) -> Optional[str]:
     """ISO date/timestamp -> ``Jul 24, 2026``; unparseable input is returned unchanged."""
     from datetime import datetime
+
     text = str(value or "").strip()
     if not text:
         return None
@@ -94,7 +97,11 @@ class UsageBar:
     @property
     def fill_fraction(self) -> float:
         """Fraction of the bar that should read as 'remaining' (filled)."""
-        return max(0.0, min(1.0, self.remaining_usd / self.total_usd)) if self.total_usd > 0 else 0.0
+        return (
+            max(0.0, min(1.0, self.remaining_usd / self.total_usd))
+            if self.total_usd > 0
+            else 0.0
+        )
 
 
 @dataclass(frozen=True)
@@ -127,6 +134,7 @@ def usage_model_from_account(account_info: Any) -> UsageModel:
         # /usage falls through to the percent-window renderer instead. A partial/empty block is not a
         # window plan (same completeness rule as the credits seed).
         from agent.credits_tracker import _window_seed_fields
+
         if _window_seed_fields(getattr(account_info, "usage_window", None)) is not None:
             return UsageModel(available=False)
         # Sub-structs are dataclasses or None; getattr(None, ..., None) is None, so no guards needed.
@@ -143,12 +151,18 @@ def usage_model_from_account(account_info: Any) -> UsageModel:
         has_topup = bool(topup_remaining and topup_remaining > 0)
         # Prefer the server's total; else sum the parts we have.
         parts = [v for v in (sub_remaining, topup_remaining) if v is not None]
-        total_spendable = total_usable if total_usable is not None else (sum(parts) if parts else None)
+        total_spendable = (
+            total_usable
+            if total_usable is not None
+            else (sum(parts) if parts else None)
+        )
         if paid is False:
             status = "depleted"
         elif not has_subscription and not has_topup:
             status = "free"  # no plan and no purchased balance -> free-models-only
-        elif total_spendable is not None and total_spendable < LOW_BALANCE_THRESHOLD_USD:
+        elif (
+            total_spendable is not None and total_spendable < LOW_BALANCE_THRESHOLD_USD
+        ):
             status = "low"
         else:
             status = "healthy"
@@ -156,16 +170,31 @@ def usage_model_from_account(account_info: Any) -> UsageModel:
         # clamped so a debt/over-cap balance reads fully spent, not negative.
         plan_bar = topup_bar = None
         if monthly is not None and monthly > 0 and sub_remaining is not None:
-            plan_bar = UsageBar(kind="plan", remaining_usd=max(0.0, min(monthly, sub_remaining)), total_usd=monthly,
-                                spent_usd=max(0.0, monthly - sub_remaining))
+            plan_bar = UsageBar(
+                kind="plan",
+                remaining_usd=max(0.0, min(monthly, sub_remaining)),
+                total_usd=monthly,
+                spent_usd=max(0.0, monthly - sub_remaining),
+            )
         # Top-up has no monthly cap, so the bar renders full = balance.
         if topup_remaining is not None and topup_remaining > 0:
-            topup_bar = UsageBar(kind="topup", remaining_usd=topup_remaining, total_usd=topup_remaining, spent_usd=0.0)
+            topup_bar = UsageBar(
+                kind="topup",
+                remaining_usd=topup_remaining,
+                total_usd=topup_remaining,
+                spent_usd=0.0,
+            )
         return UsageModel(
-            available=True, status=status, plan_name=plan_name, renews_at=renews_at,
-            renews_display=format_renews(renews_at), subscription_remaining_usd=sub_remaining,
-            topup_remaining_usd=topup_remaining, total_spendable_usd=total_spendable,
-            plan_bar=plan_bar, topup_bar=topup_bar,
+            available=True,
+            status=status,
+            plan_name=plan_name,
+            renews_at=renews_at,
+            renews_display=format_renews(renews_at),
+            subscription_remaining_usd=sub_remaining,
+            topup_remaining_usd=topup_remaining,
+            total_spendable_usd=total_spendable,
+            plan_bar=plan_bar,
+            topup_bar=topup_bar,
         )
     except Exception:
         logger.debug("usage ▸ model build failed (fail-open)", exc_info=True)
@@ -187,7 +216,9 @@ def build_usage_model(*, timeout: float = 10.0) -> UsageModel:
 
 
 def _plan_bar(remaining: float, spent: float) -> UsageBar:
-    return UsageBar(kind="plan", remaining_usd=remaining, total_usd=20.0, spent_usd=spent)
+    return UsageBar(
+        kind="plan", remaining_usd=remaining, total_usd=20.0, spent_usd=spent
+    )
 
 
 def _dev_fixture_usage_model() -> Optional[UsageModel]:
@@ -197,14 +228,38 @@ def _dev_fixture_usage_model() -> Optional[UsageModel]:
     plus = dict(available=True, plan_name="Plus", renews_at="2026-07-01")
     specs: dict[str, dict] = {
         "free": dict(available=True, status="free", plan_name=None),
-        "healthy": dict(**plus, status="healthy", subscription_remaining_usd=14.0, total_spendable_usd=14.0, plan_bar=_plan_bar(14.0, 6.0)),
-        "topup": dict(
-            **plus, status="healthy", subscription_remaining_usd=14.0, topup_remaining_usd=12.0,
-            total_spendable_usd=26.0, plan_bar=_plan_bar(14.0, 6.0),
-            topup_bar=UsageBar(kind="topup", remaining_usd=12.0, total_usd=12.0, spent_usd=0.0),
+        "healthy": dict(
+            **plus,
+            status="healthy",
+            subscription_remaining_usd=14.0,
+            total_spendable_usd=14.0,
+            plan_bar=_plan_bar(14.0, 6.0),
         ),
-        "low": dict(**plus, status="low", subscription_remaining_usd=3.4, total_spendable_usd=3.4, plan_bar=_plan_bar(3.4, 16.6)),
-        "depleted": dict(**plus, status="depleted", subscription_remaining_usd=0.0, total_spendable_usd=0.0, plan_bar=_plan_bar(0.0, 20.0)),
+        "topup": dict(
+            **plus,
+            status="healthy",
+            subscription_remaining_usd=14.0,
+            topup_remaining_usd=12.0,
+            total_spendable_usd=26.0,
+            plan_bar=_plan_bar(14.0, 6.0),
+            topup_bar=UsageBar(
+                kind="topup", remaining_usd=12.0, total_usd=12.0, spent_usd=0.0
+            ),
+        ),
+        "low": dict(
+            **plus,
+            status="low",
+            subscription_remaining_usd=3.4,
+            total_spendable_usd=3.4,
+            plan_bar=_plan_bar(3.4, 16.6),
+        ),
+        "depleted": dict(
+            **plus,
+            status="depleted",
+            subscription_remaining_usd=0.0,
+            total_spendable_usd=0.0,
+            plan_bar=_plan_bar(0.0, 20.0),
+        ),
     }
     spec = specs.get(name)
     return UsageModel(**spec) if spec else None

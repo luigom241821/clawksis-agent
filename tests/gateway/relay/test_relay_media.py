@@ -177,6 +177,7 @@ async def test_client_upload_rejects_oversize_and_missing(tmp_path: Path):
     empty.write_bytes(b"")
     assert await c.upload(str(empty)) is None
 
+
 @pytest.mark.asyncio
 async def test_download_sends_a_user_agent_on_every_request():
     """Discord's CDN 403s the default ``Python-urllib/x.y`` User-Agent.
@@ -224,7 +225,9 @@ async def test_download_sends_a_user_agent_on_every_request():
     for headers in seen:
         # urllib title-cases header keys on Request.
         ua = headers.get("User-agent") or headers.get("User-Agent")
-        assert ua, f"no User-Agent sent; urllib would default to Python-urllib (403s on Discord CDN): {headers}"
+        assert ua, (
+            f"no User-Agent sent; urllib would default to Python-urllib (403s on Discord CDN): {headers}"
+        )
         assert "python-urllib" not in ua.lower()
     # The re-host request must still carry its bearer (no regression).
     rehost_headers = seen[1]
@@ -237,7 +240,10 @@ def test_is_relay_media_url_distinguishes_rehost_from_public():
     c = RelayMediaClient("https://conn.example", "gw1", "sec")
     assert c.is_relay_media_url("https://conn.example/relay/media/aa11") is True
     assert c.is_relay_media_url("http://other.host:8080/relay/media/x") is True
-    assert c.is_relay_media_url("https://cdn.discordapp.com/attachments/1/2/v.ogg") is False
+    assert (
+        c.is_relay_media_url("https://cdn.discordapp.com/attachments/1/2/v.ogg")
+        is False
+    )
     assert c.is_relay_media_url("https://conn.example/relay/mediafile") is False
     assert c.is_relay_media_url("") is False
     assert c.is_relay_media_url(None) is False  # type: ignore[arg-type]

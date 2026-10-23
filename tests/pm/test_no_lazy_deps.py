@@ -70,28 +70,28 @@ def _track(root: Path, relpath: str, body: str) -> None:
     path = root / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8")
-    subprocess.run(
-        ["git", "add", relpath], cwd=root, check=True, capture_output=True
-    )
+    subprocess.run(["git", "add", relpath], cwd=root, check=True, capture_output=True)
 
 
-
-@pytest.mark.parametrize("relpath, body, code, site", [
-    ("app.py", "from tools.lazy_deps import install_specs\n", 1, "app.py:1"),
-    ("app.py", "from tools import lazy_deps\n", 1, "app.py:1"),
-    ("app.py", "from tools.lazy_deps.sub import x\n", 1, "app.py:1"),
-    ("app.py", "import tools.lazy_deps\n", 1, "app.py:1"),
-    ("app.py", "import tools.lazy_deps.submodule as s\n", 1, "app.py:1"),
-    ("app.py", "if True:\n    from tools.lazy_deps import ensure\n", 1, "app.py:2"),
-    ("tools/helper.py", "from . import lazy_deps\n", 1, "tools/helper.py:1"),
-    ("tools/helper.py", "from .lazy_deps import ensure\n", 1, "tools/helper.py:1"),
-    ("tools/sub/mod.py", "from .. import lazy_deps\n", 1, "tools/sub/mod.py:1"),
-    ("tools/__init__.py", "from . import lazy_deps\n", 1, "tools/__init__.py:1"),
-    ("pkg/other.py", "from . import lazy_deps\n", 0, ""),
-    ("app.py", '# tools.lazy_deps\n"""tools.lazy_deps.ensure"""\nx=1\n', 0, ""),
-    ("broken.py", "def f(:\n", 2, "broken.py"),
-    ("app.py", "x = 1\n", 0, ""),
-])
+@pytest.mark.parametrize(
+    "relpath, body, code, site",
+    [
+        ("app.py", "from tools.lazy_deps import install_specs\n", 1, "app.py:1"),
+        ("app.py", "from tools import lazy_deps\n", 1, "app.py:1"),
+        ("app.py", "from tools.lazy_deps.sub import x\n", 1, "app.py:1"),
+        ("app.py", "import tools.lazy_deps\n", 1, "app.py:1"),
+        ("app.py", "import tools.lazy_deps.submodule as s\n", 1, "app.py:1"),
+        ("app.py", "if True:\n    from tools.lazy_deps import ensure\n", 1, "app.py:2"),
+        ("tools/helper.py", "from . import lazy_deps\n", 1, "tools/helper.py:1"),
+        ("tools/helper.py", "from .lazy_deps import ensure\n", 1, "tools/helper.py:1"),
+        ("tools/sub/mod.py", "from .. import lazy_deps\n", 1, "tools/sub/mod.py:1"),
+        ("tools/__init__.py", "from . import lazy_deps\n", 1, "tools/__init__.py:1"),
+        ("pkg/other.py", "from . import lazy_deps\n", 0, ""),
+        ("app.py", '# tools.lazy_deps\n"""tools.lazy_deps.ensure"""\nx=1\n', 0, ""),
+        ("broken.py", "def f(:\n", 2, "broken.py"),
+        ("app.py", "x = 1\n", 0, ""),
+    ],
+)
 def test_checker_outcomes(fixture_repo, relpath, body, code, site):
     _track(fixture_repo, "tools/__init__.py", "")
     _track(fixture_repo, "pkg/__init__.py", "")
@@ -101,9 +101,6 @@ def test_checker_outcomes(fixture_repo, relpath, body, code, site):
     assert site in result.stdout + result.stderr
     if code == 0:
         assert result.stdout.strip() == ""
-
-
-
 
 
 def test_untracked_files_are_not_scanned(fixture_repo):
@@ -130,9 +127,7 @@ def test_repo_without_tracked_python_fails_the_check(tmp_path):
     for this repo a zero-candidate inventory means the scan is broken,
     not clean.
     """
-    subprocess.run(
-        ["git", "init", "-q"], cwd=tmp_path, check=True, capture_output=True
-    )
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, capture_output=True)
     (tmp_path / "README.md").write_text("hi\n", encoding="utf-8")
     subprocess.run(
         ["git", "add", "README.md"], cwd=tmp_path, check=True, capture_output=True
@@ -142,7 +137,6 @@ def test_repo_without_tracked_python_fails_the_check(tmp_path):
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert "inventory" in (result.stdout + result.stderr).lower()
-
 
 
 def test_deleted_tracked_files_are_not_live_source(fixture_repo):

@@ -26,7 +26,9 @@ def _primary_hex() -> str:
         from clawk_cli.skin_engine import get_active_skin
 
         skin = get_active_skin()
-        return skin.get_color("ui_primary", "") or skin.get_color("banner_title", "#8D70F0")
+        return skin.get_color("ui_primary", "") or skin.get_color(
+            "banner_title", "#8D70F0"
+        )
     except Exception:
         return "#8D70F0"
 
@@ -62,12 +64,18 @@ def _relative_luminance(rgb: tuple[int, int, int]) -> float:
     return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
 
-def _contrast_ratio(foreground: tuple[int, int, int], background: tuple[int, int, int]) -> float:
-    high, low = sorted((_relative_luminance(foreground), _relative_luminance(background)), reverse=True)
+def _contrast_ratio(
+    foreground: tuple[int, int, int], background: tuple[int, int, int]
+) -> float:
+    high, low = sorted(
+        (_relative_luminance(foreground), _relative_luminance(background)), reverse=True
+    )
     return (high + 0.05) / (low + 0.05)
 
 
-def _ensure_contrast(color: Optional[str], background: str, minimum: float) -> Optional[str]:
+def _ensure_contrast(
+    color: Optional[str], background: str, minimum: float
+) -> Optional[str]:
     """Lift a foreground toward the readable pole until it clears ``minimum``."""
     if not color:
         return None
@@ -87,7 +95,9 @@ def _ensure_contrast(color: Optional[str], background: str, minimum: float) -> O
 
 def _resolve_charted_signal(style: str, alpha: float) -> Optional[str]:
     """Keep age tinting without allowing explanatory labels to disappear."""
-    return _ensure_contrast(_resolve(style, alpha), _palette()["bg"], _CHARTED_SIGNAL_MIN_CONTRAST)
+    return _ensure_contrast(
+        _resolve(style, alpha), _palette()["bg"], _CHARTED_SIGNAL_MIN_CONTRAST
+    )
 
 
 def _row_to_text(row: list, color: bool):
@@ -141,7 +151,9 @@ def _frame_renderable(payload, *, cols, rows, reveal, color):
     for i, item in enumerate(legend):
         if i:
             legend_line.append("   ")
-        legend_line.append(item["glyph"] + " ", style=_resolve(item["style"], 1.0) if color else None)
+        legend_line.append(
+            item["glyph"] + " ", style=_resolve(item["style"], 1.0) if color else None
+        )
         legend_line.append(item["label"], style=st("grey62"))
     parts.append(legend_line)
 
@@ -150,7 +162,10 @@ def _frame_renderable(payload, *, cols, rows, reveal, color):
         for i, item in enumerate(categories):
             if i:
                 cat_line.append("  ")
-            cat_line.append(item["glyph"] + " ", style=_fade(item.get("color"), 1.0) if color else None)
+            cat_line.append(
+                item["glyph"] + " ",
+                style=_fade(item.get("color"), 1.0) if color else None,
+            )
             cat_line.append(item["label"], style=st("grey54"))
         parts.append(cat_line)
 
@@ -182,12 +197,16 @@ def _frame_renderable(payload, *, cols, rows, reveal, color):
             row = Text("  ")
             row.append(f"{item['key']} ", style=st("grey70"))
             signal_style = (
-                _resolve_charted_signal(item["style"], float(item.get("alpha", 1.0))) if color else None
+                _resolve_charted_signal(item["style"], float(item.get("alpha", 1.0)))
+                if color
+                else None
             )
             row.append(f"{item['glyph']} ", style=signal_style)
             row.append(str(item["label"]), style=signal_style)
             meta = str(item["meta"])
-            row.append(f"  {meta if len(meta) <= 32 else meta[:29] + '…'}", style=st("grey54"))
+            row.append(
+                f"  {meta if len(meta) <= 32 else meta[:29] + '…'}", style=st("grey54")
+            )
             parts.append(row)
 
     for line_text in summary:
@@ -212,13 +231,17 @@ def _cmd_show(args: argparse.Namespace) -> int:
     if getattr(args, "json", False):
         import json
 
-        Console(no_color=bool(getattr(args, "no_color", False))).print_json(json.dumps(_build_payload()))
+        Console(no_color=bool(getattr(args, "no_color", False))).print_json(
+            json.dumps(_build_payload())
+        )
         return 0
 
     payload = _build_payload()
     color = not bool(getattr(args, "no_color", False))
     cols, rows = _term_size(getattr(args, "width", None), getattr(args, "height", None))
-    console = _console(color=color, width=cols, force=bool(getattr(args, "force_color", False)))
+    console = _console(
+        color=color, width=cols, force=bool(getattr(args, "force_color", False))
+    )
 
     if not payload.get("nodes"):
         console.print(
@@ -227,9 +250,18 @@ def _cmd_show(args: argparse.Namespace) -> int:
         )
         return 0
     if getattr(args, "play", False):
-        return _play(console, payload, cols=cols, rows=rows, color=color, fps=getattr(args, "fps", 12))
+        return _play(
+            console,
+            payload,
+            cols=cols,
+            rows=rows,
+            color=color,
+            fps=getattr(args, "fps", 12),
+        )
     reveal = _clamp(float(getattr(args, "reveal", 1.0) or 1.0), 0.0, 1.0)
-    console.print(_frame_renderable(payload, cols=cols, rows=rows, reveal=reveal, color=color))
+    console.print(
+        _frame_renderable(payload, cols=cols, rows=rows, reveal=reveal, color=color)
+    )
     return 0
 
 
@@ -239,12 +271,22 @@ def _play(console, payload, *, cols, rows, color, fps: int) -> int:
     frames = 42
     delay = 1.0 / max(1, min(60, fps))
     try:
-        with Live(console=console, refresh_per_second=max(1, fps), screen=False) as live:
+        with Live(
+            console=console, refresh_per_second=max(1, fps), screen=False
+        ) as live:
             for i in range(frames):
                 reveal = i / (frames - 1)
-                live.update(_frame_renderable(payload, cols=cols, rows=rows, reveal=reveal, color=color))
+                live.update(
+                    _frame_renderable(
+                        payload, cols=cols, rows=rows, reveal=reveal, color=color
+                    )
+                )
                 time.sleep(delay)
-            live.update(_frame_renderable(payload, cols=cols, rows=rows, reveal=1.0, color=color))
+            live.update(
+                _frame_renderable(
+                    payload, cols=cols, rows=rows, reveal=1.0, color=color
+                )
+            )
     except KeyboardInterrupt:
         console.print("[grey54]interrupted[/grey54]")
         return 130
@@ -261,15 +303,22 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 def _cmd_list(args: argparse.Namespace) -> int:
     from agent.learning_graph_render import format_date
 
-    console = _console(color=not bool(getattr(args, "no_color", False)), force=bool(getattr(args, "force_color", False)))
-    nodes = sorted(_build_payload().get("nodes", []), key=lambda n: n.get("timestamp") or 0)
+    console = _console(
+        color=not bool(getattr(args, "no_color", False)),
+        force=bool(getattr(args, "force_color", False)),
+    )
+    nodes = sorted(
+        _build_payload().get("nodes", []), key=lambda n: n.get("timestamp") or 0
+    )
     if not nodes:
         console.print("[grey62]No learning yet.[/grey62]")
         return 0
     for node in nodes:
         glyph = "◆" if node.get("kind") == "memory" else "●"
         date = format_date(node.get("timestamp"))
-        console.print(f"[grey54]{node['id']}[/grey54]  {glyph} {node.get('label', '')}  [grey54]{date}[/grey54]")
+        console.print(
+            f"[grey54]{node['id']}[/grey54]  {glyph} {node.get('label', '')}  [grey54]{date}[/grey54]"
+        )
     return 0
 
 
@@ -292,7 +341,10 @@ def _cmd_delete(args: argparse.Namespace) -> int:
         return 1
     if not getattr(args, "yes", False):
         try:
-            if input(f"  Delete {detail['label']!r}? [y/N] ").strip().lower() not in ("y", "yes"):
+            if input(f"  Delete {detail['label']!r}? [y/N] ").strip().lower() not in (
+                "y",
+                "yes",
+            ):
                 print("  aborted")
                 return 1
         except (EOFError, KeyboardInterrupt):
@@ -309,7 +361,9 @@ def _cmd_edit(args: argparse.Namespace) -> int:
     detail = _lookup_node(args.node)
     if detail is None:
         return 1
-    edited = _open_in_editor(detail["content"], suffix=".md" if detail["kind"] == "skill" else ".txt")
+    edited = _open_in_editor(
+        detail["content"], suffix=".md" if detail["kind"] == "skill" else ".txt"
+    )
     if edited is None or edited.strip() == detail["content"].strip():
         print("  no changes")
         return 0
@@ -324,7 +378,9 @@ def _open_in_editor(initial: str, *, suffix: str) -> Optional[str]:
     import tempfile
 
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
-    with tempfile.NamedTemporaryFile("w", suffix=suffix, delete=False, encoding="utf-8") as fh:
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=suffix, delete=False, encoding="utf-8"
+    ) as fh:
         fh.write(initial)
         path = fh.name
     try:
@@ -343,17 +399,37 @@ def _open_in_editor(initial: str, *, suffix: str) -> Optional[str]:
 
 def register_cli(parent: argparse.ArgumentParser) -> None:
     parent.add_argument(
-        "--reveal", type=float, default=1.0, metavar="0..1",
+        "--reveal",
+        type=float,
+        default=1.0,
+        metavar="0..1",
         help="Render the timeline built up to this point (0=oldest, 1=now).",
     )
-    parent.add_argument("--play", action="store_true", help="Animate the build-up over time (Ctrl-C to stop).")
-    parent.add_argument("--fps", type=int, default=12, help="Animation frames per second for --play (default 12).")
-    parent.add_argument("--width", type=int, default=None, help="Override render width in columns.")
-    parent.add_argument("--height", type=int, default=None, help="Override render height in rows.")
+    parent.add_argument(
+        "--play",
+        action="store_true",
+        help="Animate the build-up over time (Ctrl-C to stop).",
+    )
+    parent.add_argument(
+        "--fps",
+        type=int,
+        default=12,
+        help="Animation frames per second for --play (default 12).",
+    )
+    parent.add_argument(
+        "--width", type=int, default=None, help="Override render width in columns."
+    )
+    parent.add_argument(
+        "--height", type=int, default=None, help="Override render height in rows."
+    )
     parent.add_argument("--no-color", action="store_true", help="Disable color output.")
     # Force ANSI even when stdout is captured — the interactive CLI re-renders it.
     parent.add_argument("--force-color", action="store_true", help=argparse.SUPPRESS)
-    parent.add_argument("--json", action="store_true", help="Print the raw graph payload as JSON and exit.")
+    parent.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the raw graph payload as JSON and exit.",
+    )
     parent.set_defaults(func=_cmd_show)
 
     sub = parent.add_subparsers(dest="journey_action")
@@ -363,13 +439,25 @@ def register_cli(parent: argparse.ArgumentParser) -> None:
     p_list.add_argument("--force-color", action="store_true", help=argparse.SUPPRESS)
     p_list.set_defaults(func=_cmd_list)
 
-    p_del = sub.add_parser("delete", help="Delete a learned skill (archived) or memory by node id.")
-    p_del.add_argument("node", help="Node id (skill name, or a memory id exactly as `journey list` prints it).")
-    p_del.add_argument("-y", "--yes", action="store_true", help="Skip the confirmation prompt.")
+    p_del = sub.add_parser(
+        "delete", help="Delete a learned skill (archived) or memory by node id."
+    )
+    p_del.add_argument(
+        "node",
+        help="Node id (skill name, or a memory id exactly as `journey list` prints it).",
+    )
+    p_del.add_argument(
+        "-y", "--yes", action="store_true", help="Skip the confirmation prompt."
+    )
     p_del.set_defaults(func=_cmd_delete)
 
-    p_edit = sub.add_parser("edit", help="Edit a learned skill or memory by node id in $EDITOR.")
-    p_edit.add_argument("node", help="Node id (skill name, or a memory id exactly as `journey list` prints it).")
+    p_edit = sub.add_parser(
+        "edit", help="Edit a learned skill or memory by node id in $EDITOR."
+    )
+    p_edit.add_argument(
+        "node",
+        help="Node id (skill name, or a memory id exactly as `journey list` prints it).",
+    )
     p_edit.set_defaults(func=_cmd_edit)
 
 

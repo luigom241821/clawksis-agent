@@ -12,34 +12,69 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent.local_prompt_progress import prompt_progress, prompt_progress_percent, with_prompt_progress
+from agent.local_prompt_progress import (
+    prompt_progress,
+    prompt_progress_percent,
+    with_prompt_progress,
+)
 
 
 def _delta(**fields):
-    base = dict(role="assistant", content=None, tool_calls=None, reasoning_content=None, reasoning=None, refusal=None)
+    base = dict(
+        role="assistant",
+        content=None,
+        tool_calls=None,
+        reasoning_content=None,
+        reasoning=None,
+        refusal=None,
+    )
     base.update(fields)
     return SimpleNamespace(**base)
 
 
 def _progress_chunk(processed, total=1000, cache=0):
     choice = SimpleNamespace(index=0, delta=_delta(), finish_reason=None)
-    return SimpleNamespace(choices=[choice], model=None, usage=None, id="c1",
-                           model_extra={"prompt_progress": {"total": total, "cache": cache,
-                                                            "processed": processed, "time_ms": 1}})
+    return SimpleNamespace(
+        choices=[choice],
+        model=None,
+        usage=None,
+        id="c1",
+        model_extra={
+            "prompt_progress": {
+                "total": total,
+                "cache": cache,
+                "processed": processed,
+                "time_ms": 1,
+            }
+        },
+    )
 
 
 def _text_chunk(content, finish_reason=None):
-    choice = SimpleNamespace(index=0, delta=_delta(content=content), finish_reason=finish_reason)
-    return SimpleNamespace(choices=[choice], model="qwen", usage=None, id="c1", model_extra={})
+    choice = SimpleNamespace(
+        index=0, delta=_delta(content=content), finish_reason=finish_reason
+    )
+    return SimpleNamespace(
+        choices=[choice], model="qwen", usage=None, id="c1", model_extra={}
+    )
 
 
 class TestPromptProgressHelpers:
     def test_progress_chunk_is_recognised(self):
-        assert prompt_progress(_progress_chunk(250)) == {"total": 1000, "cache": 0, "processed": 250, "time_ms": 1}
+        assert prompt_progress(_progress_chunk(250)) == {
+            "total": 1000,
+            "cache": 0,
+            "processed": 250,
+            "time_ms": 1,
+        }
 
     def test_wire_dict_chunk_is_recognised(self):
-        chunk = {"choices": [{"delta": {"role": "assistant", "content": None}, "finish_reason": None}],
-                 "prompt_progress": {"total": 10, "processed": 5}}
+        chunk = {
+            "choices": [
+                {"delta": {"role": "assistant", "content": None}, "finish_reason": None}
+            ],
+            "prompt_progress": {"total": 10, "processed": 5},
+        }
         assert prompt_progress(chunk) == {"total": 10, "processed": 5}
 
     def test_chunk_with_text_is_a_real_chunk(self):
@@ -70,8 +105,15 @@ class TestPromptProgressHelpers:
 def _local_agent(provider="llamacpp", base_url="http://127.0.0.1:18434/v1"):
     from run_agent import AIAgent
 
-    agent = AIAgent(api_key="k", base_url=base_url, provider=provider, model="qwen",
-                    quiet_mode=True, skip_context_files=True, skip_memory=True)
+    agent = AIAgent(
+        api_key="k",
+        base_url=base_url,
+        provider=provider,
+        model="qwen",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
     agent.api_mode = "chat_completions"
     agent._interrupt_requested = False
     return agent
@@ -80,9 +122,16 @@ def _local_agent(provider="llamacpp", base_url="http://127.0.0.1:18434/v1"):
 class TestMainStreamProgress:
     @patch("run_agent.AIAgent._create_request_openai_client")
     @patch("run_agent.AIAgent._close_request_openai_client")
-    def test_llamacpp_stream_asks_for_progress_and_skips_progress_chunks(self, _close, mock_create):
-        chunks = [_progress_chunk(0), _progress_chunk(500), _progress_chunk(1000),
-                  _text_chunk("Hello"), _text_chunk(" there", finish_reason="stop")]
+    def test_llamacpp_stream_asks_for_progress_and_skips_progress_chunks(
+        self, _close, mock_create
+    ):
+        chunks = [
+            _progress_chunk(0),
+            _progress_chunk(500),
+            _progress_chunk(1000),
+            _text_chunk("Hello"),
+            _text_chunk(" there", finish_reason="stop"),
+        ]
         client = MagicMock()
         client.chat.completions.create.return_value = iter(chunks)
         mock_create.return_value = client
@@ -90,7 +139,9 @@ class TestMainStreamProgress:
         deltas = []
         agent.stream_delta_callback = deltas.append
 
-        response = agent._interruptible_streaming_api_call({"model": "qwen", "messages": [{"role": "user", "content": "hi"}]})
+        response = agent._interruptible_streaming_api_call(
+            {"model": "qwen", "messages": [{"role": "user", "content": "hi"}]}
+        )
 
         sent = client.chat.completions.create.call_args.kwargs
         assert sent["extra_body"]["return_progress"] is True
@@ -101,11 +152,17 @@ class TestMainStreamProgress:
     @patch("run_agent.AIAgent._close_request_openai_client")
     def test_cloud_stream_does_not_ask_for_progress(self, _close, mock_create):
         client = MagicMock()
-        client.chat.completions.create.return_value = iter([_text_chunk("ok", finish_reason="stop")])
+        client.chat.completions.create.return_value = iter(
+            [_text_chunk("ok", finish_reason="stop")]
+        )
         mock_create.return_value = client
-        agent = _local_agent(provider="openrouter", base_url="https://openrouter.ai/api/v1")
+        agent = _local_agent(
+            provider="openrouter", base_url="https://openrouter.ai/api/v1"
+        )
 
-        agent._interruptible_streaming_api_call({"model": "qwen", "messages": [{"role": "user", "content": "hi"}]})
+        agent._interruptible_streaming_api_call(
+            {"model": "qwen", "messages": [{"role": "user", "content": "hi"}]}
+        )
 
         sent = client.chat.completions.create.call_args.kwargs
         assert "return_progress" not in (sent.get("extra_body") or {})
@@ -115,27 +172,51 @@ class TestNoNonStreamingFallbackForLlamacpp:
     def _call(self, agent):
         from agent.chat_completion_helpers import _StreamingCall
 
-        return SimpleNamespace(agent=agent, deltas_were_sent={"yes": False}, api_kwargs={"model": "qwen"},
-                               _stream_stale_timeout=900.0, result={"error": None, "response": None})
+        return SimpleNamespace(
+            agent=agent,
+            deltas_were_sent={"yes": False},
+            api_kwargs={"model": "qwen"},
+            _stream_stale_timeout=900.0,
+            result={"error": None, "response": None},
+        )
 
     def test_server_error_probe_skipped(self):
         from agent.chat_completion_helpers import _StreamingCall
 
-        agent = SimpleNamespace(_interrupt_requested=False, provider="llamacpp", base_url="http://127.0.0.1:18434/v1",
-                                api_mode="chat_completions", _stream_5xx_probe_ts=None)
+        agent = SimpleNamespace(
+            _interrupt_requested=False,
+            provider="llamacpp",
+            base_url="http://127.0.0.1:18434/v1",
+            api_mode="chat_completions",
+            _stream_5xx_probe_ts=None,
+        )
         err = RuntimeError("boom")
         err.status_code = 500
         with patch("agent.chat_completion_helpers.interruptible_api_call") as probe:
-            assert _StreamingCall._unmask_server_error_with_nonstreaming(self._call(agent), err) is False
+            assert (
+                _StreamingCall._unmask_server_error_with_nonstreaming(
+                    self._call(agent), err
+                )
+                is False
+            )
         probe.assert_not_called()
 
     def test_streaming_never_disabled(self):
         from agent.chat_completion_helpers import _StreamingCall
 
-        agent = SimpleNamespace(provider="llamacpp", base_url="http://127.0.0.1:18434/v1",
-                                api_mode="chat_completions", _disable_streaming=False)
-        with patch("agent.chat_completion_helpers._is_provider_stream_empty_frame_error", return_value=True):
-            _StreamingCall._maybe_disable_streaming(self._call(agent), RuntimeError("empty frame"))
+        agent = SimpleNamespace(
+            provider="llamacpp",
+            base_url="http://127.0.0.1:18434/v1",
+            api_mode="chat_completions",
+            _disable_streaming=False,
+        )
+        with patch(
+            "agent.chat_completion_helpers._is_provider_stream_empty_frame_error",
+            return_value=True,
+        ):
+            _StreamingCall._maybe_disable_streaming(
+                self._call(agent), RuntimeError("empty frame")
+            )
         assert agent._disable_streaming is False
 
 
@@ -145,10 +226,14 @@ class TestAuxProgress:
 
         client = SimpleNamespace(base_url="http://127.0.0.1:18434/v1")
         with patch.object(ac, "_is_managed_local_endpoint", return_value=True):
-            stream_kwargs, _model, _ceiling = ac._stream_request_plan({"model": "qwen", "messages": []}, client)
+            stream_kwargs, _model, _ceiling = ac._stream_request_plan(
+                {"model": "qwen", "messages": []}, client
+            )
         assert stream_kwargs["extra_body"]["return_progress"] is True
         with patch.object(ac, "_is_managed_local_endpoint", return_value=False):
-            stream_kwargs, _model, _ceiling = ac._stream_request_plan({"model": "qwen", "messages": []}, client)
+            stream_kwargs, _model, _ceiling = ac._stream_request_plan(
+                {"model": "qwen", "messages": []}, client
+            )
         assert "extra_body" not in stream_kwargs
 
     def test_progress_chunk_counts_as_forward_progress(self):
@@ -213,8 +298,14 @@ class TestPromptProgressNotice:
         mon.agent = MagicMock()
         mon.clients = SimpleNamespace(diag={"first_chunk_at": first_chunk_at})
         mon.prompt_progress = {"progress": {"total": 1000, "processed": 400}, "t": 50.0}
-        mon._mon = SimpleNamespace(last_load_poll=0.0, load_notice_shown=False, load_notice_misses=0,
-                                   wait_notice_started_ts=None, wait_notice=wn.WaitNoticeState(), last_heartbeat=0.0)
+        mon._mon = SimpleNamespace(
+            last_load_poll=0.0,
+            load_notice_shown=False,
+            load_notice_misses=0,
+            wait_notice_started_ts=None,
+            wait_notice=wn.WaitNoticeState(),
+            last_heartbeat=0.0,
+        )
         return mon
 
     def test_shows_percent_before_first_token(self):
@@ -237,11 +328,15 @@ class TestLocalStaleBreakerReset:
         from agent import chat_completion_local as h
 
         agent = SimpleNamespace(_consecutive_stale_streams=5)
-        with patch.object(h, "_streams_llamacpp", return_value=True), \
-                patch.object(h, "_local_server_answers", return_value=True):
+        with (
+            patch.object(h, "_streams_llamacpp", return_value=True),
+            patch.object(h, "_local_server_answers", return_value=True),
+        ):
             assert h.retry_recovered_local_server(agent) is True
         helpers._check_stale_giveup(agent)  # the next call goes through
-        helpers._bump_stale_streak(agent)  # ...and one more stale attempt shuts the breaker
+        helpers._bump_stale_streak(
+            agent
+        )  # ...and one more stale attempt shuts the breaker
         with pytest.raises(RuntimeError, match="unresponsive"):
             helpers._check_stale_giveup(agent)
 
@@ -249,8 +344,10 @@ class TestLocalStaleBreakerReset:
         from agent import chat_completion_local as h
 
         agent = SimpleNamespace(_consecutive_stale_streams=2)
-        with patch.object(h, "_streams_llamacpp", return_value=True), \
-                patch.object(h, "_local_server_answers", return_value=True) as health:
+        with (
+            patch.object(h, "_streams_llamacpp", return_value=True),
+            patch.object(h, "_local_server_answers", return_value=True) as health,
+        ):
             assert h.retry_recovered_local_server(agent) is False
             health.assert_not_called()
         assert agent._consecutive_stale_streams == 2
@@ -259,11 +356,15 @@ class TestLocalStaleBreakerReset:
         from agent import chat_completion_local as h
 
         agent = SimpleNamespace(_consecutive_stale_streams=5)
-        with patch.object(h, "_streams_llamacpp", return_value=True), \
-                patch.object(h, "_local_server_answers", return_value=False):
+        with (
+            patch.object(h, "_streams_llamacpp", return_value=True),
+            patch.object(h, "_local_server_answers", return_value=False),
+        ):
             assert h.retry_recovered_local_server(agent) is False
-        with patch.object(h, "_streams_llamacpp", return_value=False), \
-                patch.object(h, "_local_server_answers", return_value=True) as health:
+        with (
+            patch.object(h, "_streams_llamacpp", return_value=False),
+            patch.object(h, "_local_server_answers", return_value=True) as health,
+        ):
             assert h.retry_recovered_local_server(agent) is False
             health.assert_not_called()
         assert agent._consecutive_stale_streams == 5

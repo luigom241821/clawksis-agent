@@ -36,10 +36,12 @@ def _surviving_pre_update_serve_runtimes(plan) -> list[dict]:
             detail = getattr(runtime, "detail", None)
             detail = detail if isinstance(detail, dict) else {}
             planned[pid] = {
-                "pid": pid, "kind": str(getattr(runtime, "kind", "")),
+                "pid": pid,
+                "kind": str(getattr(runtime, "kind", "")),
                 "profile": str(getattr(runtime, "profile", "")),
                 "supervisor": str(getattr(runtime, "supervisor", "")),
-                "_create_time": _numeric(detail.get("create_time"))}
+                "_create_time": _numeric(detail.get("create_time")),
+            }
             if detail.get("systemd_unit"):
                 # The owning unit and scope name the exact restart command (#141021).
                 planned[pid]["systemd_unit"] = str(detail["systemd_unit"])
@@ -51,13 +53,17 @@ def _surviving_pre_update_serve_runtimes(plan) -> list[dict]:
         return []
     try:
         from clawk_cli.process_identity import ledger_entries
+
         live: dict[int, float | None] = {
             entry["pid"]: _numeric(entry.get("create_time"))
             for entry in ledger_entries()
-            if entry.get("purpose") in ("serve", "dashboard") and isinstance(entry.get("pid"), int)}
+            if entry.get("purpose") in ("serve", "dashboard")
+            and isinstance(entry.get("pid"), int)
+        }
     except Exception as exc:
         logger.debug("Serve/dashboard survivor probe failed: %s", exc)
         live = None
+
     def _still_live(pid, row) -> bool:
         if live is None:
             return True
@@ -67,13 +73,17 @@ def _surviving_pre_update_serve_runtimes(plan) -> list[dict]:
         # Same number, different process: the pre-update runtime is gone and something new
         # registered under its PID. Not a survivor.
         return not (
-            planned_created is not None and live_created is not None
-            and abs(float(live_created) - float(planned_created)) >= 2.0)
+            planned_created is not None
+            and live_created is not None
+            and abs(float(live_created) - float(planned_created)) >= 2.0
+        )
 
     # The operator-facing row drops the incarnation (a matching key only).
     survivors = [
         {k: v for k, v in row.items() if k != "_create_time"}
-        for pid, row in planned.items() if _still_live(pid, row)]
+        for pid, row in planned.items()
+        if _still_live(pid, row)
+    ]
     return sorted(survivors, key=lambda row: row["pid"])
 
 
@@ -111,22 +121,44 @@ def _run_fresh_recovery_process(
     if gateway_mode and sys.platform == "linux":
         systemd_run = shutil.which("systemd-run")
         if not systemd_run:
-            logger.warning("Cannot isolate fresh gateway recovery from the gateway cgroup")
+            logger.warning(
+                "Cannot isolate fresh gateway recovery from the gateway cgroup"
+            )
             return None
-        command = [systemd_run, "--user", "--scope", "--quiet", "--collect", "--", *command]
+        command = [
+            systemd_run,
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--",
+            *command,
+        ]
 
     kwargs = {
-        "input": json.dumps({
-            "profiles": profiles, "supervisors": candidates,
-            "serve_units": {"recover": recover_serve, "skip": _qualified_serve_skips(skip_units)}}),
-        "capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace",
+        "input": json.dumps(
+            {
+                "profiles": profiles,
+                "supervisors": candidates,
+                "serve_units": {
+                    "recover": recover_serve,
+                    "skip": _qualified_serve_skips(skip_units),
+                },
+            }
+        ),
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
         "env": env,
         # Gateway profiles run sequentially at up to 90s each, plus the serve pass's own
         # restart + settle budget — don't kill a recovery that was working.
-        "timeout": max(180, 30 + 90 * len(profiles) + (150 if recover_serve else 0))}
+        "timeout": max(180, 30 + 90 * len(profiles) + (150 if recover_serve else 0)),
+    }
     if sys.platform == "win32":
-        kwargs["creationflags"] = (
-            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0))
+        kwargs["creationflags"] = getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        ) | getattr(subprocess, "DETACHED_PROCESS", 0)
     else:
         kwargs["start_new_session"] = True
     try:
@@ -141,9 +173,17 @@ def _parse_serve_units(raw_serve, *, recover_serve: bool) -> dict[str, list]:
     serve recovery was requested (those units may still serve the pre-update generation)."""
     if (
         isinstance(raw_serve, dict)
-        and isinstance(raw_serve.get("verified"), list) and isinstance(raw_serve.get("failed"), list)
-        and all(isinstance(unit, str) for unit in (*raw_serve["verified"], *raw_serve["failed"]))):
-        return {"verified": sorted(raw_serve["verified"]), "failed": sorted(raw_serve["failed"])}
+        and isinstance(raw_serve.get("verified"), list)
+        and isinstance(raw_serve.get("failed"), list)
+        and all(
+            isinstance(unit, str)
+            for unit in (*raw_serve["verified"], *raw_serve["failed"])
+        )
+    ):
+        return {
+            "verified": sorted(raw_serve["verified"]),
+            "failed": sorted(raw_serve["failed"]),
+        }
     if recover_serve:
         logger.warning("Fresh recovery returned an invalid serve-unit result")
         return {"verified": [], "failed": ["<unreadable>"]}
@@ -151,8 +191,12 @@ def _parse_serve_units(raw_serve, *, recover_serve: bool) -> dict[str, list]:
 
 
 def _recover_gateway_restart_after_abort(
-    plan, *, gateway_mode: bool, skip_profiles: set[str] | None = None,
-    skip_units: set[str] | None = None) -> dict[str, list]:
+    plan,
+    *,
+    gateway_mode: bool,
+    skip_profiles: set[str] | None = None,
+    skip_units: set[str] | None = None,
+) -> dict[str, list]:
     """Retry supervised gateway restarts from a clean Python process. Only inventory-classified
     supervisor-owned profiles.
 
@@ -162,15 +206,24 @@ def _recover_gateway_restart_after_abort(
     of a stale one (review on #96235).
     """
     from clawk_cli.update_cmd import _gateway_recovery_partition
+
     candidates, skipped = _gateway_recovery_partition(plan, skip_profiles=skip_profiles)
     profiles = sorted(candidates)
     recover_serve = _serve_unit_recovery_available()
 
-    def _result(requested, verified, relaunch_attempted, failed, serve_units=None) -> dict[str, list]:
+    def _result(
+        requested, verified, relaunch_attempted, failed, serve_units=None
+    ) -> dict[str, list]:
         return {
-            "requested": requested, "verified": verified, "relaunch_attempted": relaunch_attempted,
-            "failed": failed, "skipped": skipped,
-            "serve_units": {"verified": [], "failed": []} if serve_units is None else serve_units}
+            "requested": requested,
+            "verified": verified,
+            "relaunch_attempted": relaunch_attempted,
+            "failed": failed,
+            "skipped": skipped,
+            "serve_units": {"verified": [], "failed": []}
+            if serve_units is None
+            else serve_units,
+        }
 
     if not profiles and not recover_serve:
         return _result([], [], [], [])
@@ -179,7 +232,12 @@ def _recover_gateway_restart_after_abort(
         return _result(profiles, [], [], profiles)
 
     result = _run_fresh_recovery_process(
-        profiles, candidates, gateway_mode=gateway_mode, recover_serve=recover_serve, skip_units=skip_units)
+        profiles,
+        candidates,
+        gateway_mode=gateway_mode,
+        recover_serve=recover_serve,
+        skip_units=skip_units,
+    )
     if result is None:
         return _all_failed()
     if result.returncode != 0:
@@ -203,11 +261,17 @@ def _recover_gateway_restart_after_abort(
     if (
         not all(isinstance(bucket, list) for bucket in buckets)
         or any(not isinstance(profile, str) for profile in reported)
-        or set(reported) != set(profiles) or len(reported) != len(set(reported))):
+        or set(reported) != set(profiles)
+        or len(reported) != len(set(reported))
+    ):
         logger.warning("Fresh gateway restart recovery returned incomplete profiles")
         return _all_failed()
 
-    verified, relaunch_attempted, failed = sorted(verified), sorted(relaunch_attempted), sorted(failed)
+    verified, relaunch_attempted, failed = (
+        sorted(verified),
+        sorted(relaunch_attempted),
+        sorted(failed),
+    )
     covered_map = recovery_result.get("covered")
     for owner, others in (covered_map if isinstance(covered_map, dict) else {}).items():
         if isinstance(owner, str) and isinstance(others, list) and others:
@@ -216,11 +280,24 @@ def _recover_gateway_restart_after_abort(
                 f"restarted once through {owner}; that restart is their outcome."
             )
     for names, text in (
-        (verified, "  ✓ Restarted supervised gateway(s) in a fresh process (systemd-verified active): "),
-        (relaunch_attempted, "  ⚠ Relaunch attempted in a fresh process but not"
-                             " supervisor-verified (check these gateways manually): "),
-        (serve_units["verified"], "  ✓ Restarted serve unit(s) in a fresh process (new main PID observed): "),
-        (serve_units["failed"], "  ⚠ Could not verify a replacement for serve unit(s): ")):
+        (
+            verified,
+            "  ✓ Restarted supervised gateway(s) in a fresh process (systemd-verified active): ",
+        ),
+        (
+            relaunch_attempted,
+            "  ⚠ Relaunch attempted in a fresh process but not"
+            " supervisor-verified (check these gateways manually): ",
+        ),
+        (
+            serve_units["verified"],
+            "  ✓ Restarted serve unit(s) in a fresh process (new main PID observed): ",
+        ),
+        (
+            serve_units["failed"],
+            "  ⚠ Could not verify a replacement for serve unit(s): ",
+        ),
+    ):
         if names:
             print(text + ", ".join(names))
     return _result(profiles, verified, relaunch_attempted, failed, serve_units)
@@ -234,23 +311,38 @@ def _warn_stale_serve_runtimes(rows) -> None:
         return
     print(
         "  ⚠ These serve/dashboard processes still run pre-update code"
-        " (they started before the checkout changed):")
+        " (they started before the checkout changed):"
+    )
     for row in rows:
         print(
             f"      pid {row.get('pid')} — {row.get('kind')}"
-            f" (profile {row.get('profile') or 'default'}, {row.get('supervisor') or 'unknown'})")
+            f" (profile {row.get('profile') or 'default'}, {row.get('supervisor') or 'unknown'})"
+        )
     unit_rows = [row for row in rows if row.get("supervisor") == "systemd"]
     if len(unit_rows) < len(rows):
-        print("    Ask their owner to relaunch `clawk serve` / `clawk dashboard`, or reconnect Desktop for an SSH backend.")
+        print(
+            "    Ask their owner to relaunch `clawk serve` / `clawk dashboard`, or reconnect Desktop for an SSH backend."
+        )
     # A unit-managed backend restarts through its own unit and scope — never "ask the owner to
     # relaunch", and never a hardcoded user-scope clawk-serve (#141021).
-    from clawk_cli.main_dashboard import _format_restart_commands, _systemd_restart_commands
+    from clawk_cli.main_dashboard import (
+        _format_restart_commands,
+        _systemd_restart_commands,
+    )
 
     for row in unit_rows:
-        commands = _systemd_restart_commands(row.get("systemd_unit") or "<unit>", row.get("systemd_scope"))
-        print(f"    pid {row.get('pid')} is managed by systemd: {_format_restart_commands(commands)}")
-    if sys.platform == "darwin" and any(row.get("supervisor") == "launchd" for row in rows):
-        print("    For launchd-managed backends: `launchctl kickstart -k gui/$UID/<label>`.")
+        commands = _systemd_restart_commands(
+            row.get("systemd_unit") or "<unit>", row.get("systemd_scope")
+        )
+        print(
+            f"    pid {row.get('pid')} is managed by systemd: {_format_restart_commands(commands)}"
+        )
+    if sys.platform == "darwin" and any(
+        row.get("supervisor") == "launchd" for row in rows
+    ):
+        print(
+            "    For launchd-managed backends: `launchctl kickstart -k gui/$UID/<label>`."
+        )
 
 
 def _owed_stale_serve_rows(rows) -> list[dict]:
@@ -262,11 +354,19 @@ def _owed_stale_serve_rows(rows) -> list[dict]:
     serve row no longer keeps that warning armed either.)"""
     from clawk_cli.update_inventory import CLIENT_OWNED_SERVE_SUPERVISORS
 
-    return [row for row in (rows or []) if row.get("supervisor") not in CLIENT_OWNED_SERVE_SUPERVISORS]
+    return [
+        row
+        for row in (rows or [])
+        if row.get("supervisor") not in CLIENT_OWNED_SERVE_SUPERVISORS
+    ]
 
 
 def _abort_recovery_is_complete(
-    *, planned_gateway_profiles, covered_gateway_profiles, recovery_result, stale_runtime_rows
+    *,
+    planned_gateway_profiles,
+    covered_gateway_profiles,
+    recovery_result,
+    stale_runtime_rows,
 ) -> bool:
     """May a fresh-process recovery clear the incomplete flag? Only when EVERY inventoried runtime
     family is accounted for. Empty ``planned_gateway_profiles`` is deliberately NOT completeness:
@@ -278,4 +378,5 @@ def _abort_recovery_is_complete(
         and set(planned_gateway_profiles) <= set(covered_gateway_profiles)
         and not (result.get("failed") or result.get("relaunch_attempted"))
         and not (result.get("serve_units") or {}).get("failed")
-        and not _owed_stale_serve_rows(stale_runtime_rows))
+        and not _owed_stale_serve_rows(stale_runtime_rows)
+    )

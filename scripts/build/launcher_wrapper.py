@@ -105,7 +105,9 @@ def configure(here, environ=None):
         # baked bytecode and re-pay the cold-compile stall this marker exists
         # to remove. Without the marker (old payloads), the user-level
         # redirect below keeps bytecode writes out of the sealed tree.
-        if not os.path.exists(os.path.join(os.path.dirname(repo_entry), ".clawk-baked-pycache")):
+        if not os.path.exists(
+            os.path.join(os.path.dirname(repo_entry), ".clawk-baked-pycache")
+        ):
             default = default_pycache_dir(environ)
             if default:
                 environ["PYTHONPYCACHEPREFIX"] = default

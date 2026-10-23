@@ -60,10 +60,6 @@ def test_should_use_direct_api_call_only_for_cron_openai_wire():
     assert should_use_direct_api_call(moa) is False
 
 
-
-
-
-
 def test_direct_api_call_interrupt_aborts_active_client_and_raises():
     """Cron's outer watchdog interrupts from another thread while inline."""
     agent = _make_agent()
@@ -102,5 +98,3 @@ def test_direct_api_call_interrupt_aborts_active_client_and_raises():
     assert not worker.is_alive()
     assert isinstance(result.get("exception"), InterruptedError)
     assert agent._active_request_abort is None
-
-

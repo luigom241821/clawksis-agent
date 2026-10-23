@@ -19,17 +19,32 @@ from clawk_cli.web_server_gateway import _display_system_platform
 from starlette.concurrency import run_in_threadpool
 from fastapi import HTTPException, Request
 from gateway.status import (
-    derive_gateway_busy, derive_gateway_drainable, normalize_updated_at, parse_active_agents,
-    profile_platforms_from_multiplexer, resolve_gateway_liveness,
+    derive_gateway_busy,
+    derive_gateway_drainable,
+    normalize_updated_at,
+    parse_active_agents,
+    profile_platforms_from_multiplexer,
+    resolve_gateway_liveness,
     retained_gateway_state,
-    runtime_status_heartbeat_age_s, runtime_status_is_stale)
+    runtime_status_heartbeat_age_s,
+    runtime_status_is_stale,
+)
 from gateway.status_served import local_liveness_pid
 from clawk_cli import __release_date__
 from clawk_cli.config import get_config_path, get_env_path
 from clawk_cli.version_info import get_version_info
 from clawk_constants import get_process_clawk_home, profile_name_for_home
-from clawk_cli.web_models import CuratorPause, LearningNodeRef, LearningNodeEdit, DebugShareRequest
-from clawk_cli.web_routers._common import config_scoped_to_thread, destructive_profile, scoped_to_thread
+from clawk_cli.web_models import (
+    CuratorPause,
+    LearningNodeRef,
+    LearningNodeEdit,
+    DebugShareRequest,
+)
+from clawk_cli.web_routers._common import (
+    config_scoped_to_thread,
+    destructive_profile,
+    scoped_to_thread,
+)
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -39,14 +54,22 @@ router = APIRouter()
 logs_router = APIRouter()
 
 # Late-bound so a test's monkeypatch on the owning module wins at call time.
-_collect_profile_gateway_topology_cached = late("_collect_profile_gateway_topology_cached", "clawk_cli.web_server_gateway")
+_collect_profile_gateway_topology_cached = late(
+    "_collect_profile_gateway_topology_cached", "clawk_cli.web_server_gateway"
+)
 _config_profile_scope = late("_config_profile_scope", "clawk_cli.web_server_profiles")
-_dashboard_local_update_managed_externally = late("_dashboard_local_update_managed_externally", "clawk_cli.web_server_files")
-_load_configured_gateway_platforms = late("_load_configured_gateway_platforms", "clawk_cli.web_server_gateway")
+_dashboard_local_update_managed_externally = late(
+    "_dashboard_local_update_managed_externally", "clawk_cli.web_server_files"
+)
+_load_configured_gateway_platforms = late(
+    "_load_configured_gateway_platforms", "clawk_cli.web_server_gateway"
+)
 _probe_gateway_health = late("_probe_gateway_health", "clawk_cli.web_server_gateway")
 _require_token = late("_require_token")
 _resolve_profile_dir = late("_resolve_profile_dir", "clawk_cli.web_server_profiles")
-_resolve_restart_drain_timeout = late("_resolve_restart_drain_timeout", "clawk_cli.web_server_lifecycle")
+_resolve_restart_drain_timeout = late(
+    "_resolve_restart_drain_timeout", "clawk_cli.web_server_lifecycle"
+)
 _spawn_clawk_action = late("_spawn_clawk_action", "clawk_cli.web_server_gateway")
 _ssh_runtime_intact = late("_ssh_runtime_intact")
 app = LateState("app")  # the FastAPI instance (app.state.*)
@@ -55,11 +78,15 @@ get_clawk_home = late("get_clawk_home", "clawk_cli.config")
 _profile_cli_args = late("_profile_cli_args", "clawk_cli.web_server_profiles")
 get_install_id = late("get_install_id")
 get_running_pid_cached = late("get_running_pid_cached", "gateway.status")
-get_runtime_status_running_pid = late("get_runtime_status_running_pid", "gateway.status")
+get_runtime_status_running_pid = late(
+    "get_runtime_status_running_pid", "gateway.status"
+)
 served_profile_runtime = late("served_profile_runtime", "gateway.status_served")
 load_config = late("load_config", "clawk_cli.config")
 read_runtime_status = late("read_runtime_status", "gateway.status")
-_open_session_db_for_profile = late("_open_session_db_for_profile", "clawk_cli.web_server_sessions")
+_open_session_db_for_profile = late(
+    "_open_session_db_for_profile", "clawk_cli.web_server_sessions"
+)
 
 
 _STATUS_ACTIVE_SESSIONS_TIMEOUT = 0.75
@@ -79,6 +106,7 @@ def _count_status_active_sessions() -> int:
     """Best-effort status garnish. Opens read-only (via the shared stale-schema heal) so
     /api/status never routinely writes to state.db while another Clawksis process uses it."""
     from clawk_state import _default_db_path
+
     # The heal helper bootstraps a missing store; this garnish must not — on a fresh install
     # /api/status polls would otherwise create state.db before the user's first session.
     if not Path(_default_db_path()).exists():
@@ -87,8 +115,12 @@ def _count_status_active_sessions() -> int:
     try:
         sessions = db.list_sessions_rich(limit=50, compact_rows=True)
         now = time.time()
-        return sum(1 for s in sessions if s.get("ended_at") is None
-                   and (now - s.get("last_active", s.get("started_at", 0))) < 300)
+        return sum(
+            1
+            for s in sessions
+            if s.get("ended_at") is None
+            and (now - s.get("last_active", s.get("started_at", 0))) < 300
+        )
     finally:
         db.close()
 
@@ -97,10 +129,13 @@ async def _status_active_sessions() -> int:
     try:
         return await asyncio.wait_for(
             run_in_threadpool(_count_status_active_sessions),
-            timeout=_STATUS_ACTIVE_SESSIONS_TIMEOUT)
+            timeout=_STATUS_ACTIVE_SESSIONS_TIMEOUT,
+        )
     except TimeoutError:
-        _log.debug("/api/status active session count exceeded %.2fs; returning 0",
-                   _STATUS_ACTIVE_SESSIONS_TIMEOUT)
+        _log.debug(
+            "/api/status active session count exceeded %.2fs; returning 0",
+            _STATUS_ACTIVE_SESSIONS_TIMEOUT,
+        )
     except Exception as exc:
         _log.debug("/api/status active session count unavailable: %s", exc)
     return 0
@@ -109,11 +144,16 @@ async def _status_active_sessions() -> int:
 @router.get("/api/ssh/ownership")
 async def get_ssh_ownership(request: Request):
     from clawk_cli.web_server import _SSH_OWNER_NONCE
+
     _require_token(request)
     if not _SSH_OWNER_NONCE:
         raise HTTPException(status_code=404, detail="SSH ownership is not active")
-    return {"ok": True, "sshOwnerNonce": _SSH_OWNER_NONCE, "protocolVersion": 1,
-            "runtimeIntact": _ssh_runtime_intact()}
+    return {
+        "ok": True,
+        "sshOwnerNonce": _SSH_OWNER_NONCE,
+        "protocolVersion": 1,
+        "runtimeIntact": _ssh_runtime_intact(),
+    }
 
 
 @router.get("/api/health")
@@ -125,9 +165,13 @@ async def get_health():
     its checkout, so a serve that outlived ``clawk update`` is never re-adopted.
     """
     info = get_version_info()
-    return {"ok": True, "version": info.base_version, "displayVersion": info.display_version,
-            "commit": info.commit,
-            "auth_required": bool(getattr(app.state, "auth_required", False))}
+    return {
+        "ok": True,
+        "version": info.base_version,
+        "displayVersion": info.display_version,
+        "commit": info.commit,
+        "auth_required": bool(getattr(app.state, "auth_required", False)),
+    }
 
 
 @router.get("/api/host/identity")
@@ -144,15 +188,20 @@ async def get_host_identity(request: Request):
     # ``role`` is the host ROLE this process published (gateway/host_rendezvous.ROLE_SERVE, or
     # ROLE_DESKTOP_SERVE for a Desktop-owned child), not the launch mode: `clawk serve` and
     # `clawk dashboard` are one host role that differ in SPA.
-    return {"ok": True, "protocolVersion": 1, "pid": os.getpid(),
-            "role": getattr(app.state, "host_role", None) or "serve",
-            "servesSpa": bool(getattr(app.state, "serves_spa", False))}
+    return {
+        "ok": True,
+        "protocolVersion": 1,
+        "pid": os.getpid(),
+        "role": getattr(app.state, "host_role", None) or "serve",
+        "servesSpa": bool(getattr(app.state, "serves_spa", False)),
+    }
 
 
 @router.get("/api/health/idle")
 async def get_health_idle(request: Request):
     """Token-gated diagnostic snapshot; never a retirement permit. None means cannot prove idle."""
     from clawk_cli.web_server_idle_proof import idle_proof
+
     _require_token(request)
     return {"ok": True, **idle_proof()}
 
@@ -166,8 +215,14 @@ async def post_health_retirement(request: Request):
         body = await request.json()
     except ValueError:
         raise HTTPException(status_code=400, detail="JSON body required")
-    if not isinstance(body, dict) or body.get("action") not in ("prepare", "commit", "cancel"):
-        raise HTTPException(status_code=400, detail="action must be prepare, commit, or cancel")
+    if not isinstance(body, dict) or body.get("action") not in (
+        "prepare",
+        "commit",
+        "cancel",
+    ):
+        raise HTTPException(
+            status_code=400, detail="action must be prepare, commit, or cancel"
+        )
     action = body["action"]
     if action == "prepare":
         return await run_in_threadpool(retirement.prepare)
@@ -180,7 +235,9 @@ async def post_health_retirement(request: Request):
 # Profile segment mirrors clawk_cli.profiles._PROFILE_ID_RE. Platform segment mirrors the
 # Platform enum's normalized values: built-in members plus plugin directory names
 # (lowercased), which allow hyphens as well as underscores (e.g. ``reviewer:foo-bar``).
-_PROFILE_PLATFORM_STATUS_KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}:[a-z0-9][a-z0-9_-]{0,63}$")
+_PROFILE_PLATFORM_STATUS_KEY_RE = re.compile(
+    r"^[a-z0-9][a-z0-9_-]{0,63}:[a-z0-9][a-z0-9_-]{0,63}$"
+)
 
 
 def _is_profile_platform_status_key(key: object) -> bool:
@@ -214,7 +271,9 @@ def _public_platform_entry(value: Any) -> Any:
     return {k: v for k, v in value.items() if k not in _PRIVATE_PLATFORM_ENTRY_KEYS}
 
 
-def _merge_profile_gateway_platforms(gateway_platforms: dict, profile_platforms: dict) -> dict:
+def _merge_profile_gateway_platforms(
+    gateway_platforms: dict, profile_platforms: dict
+) -> dict:
     """Merge independent per-profile gateway platform states: hosts running separate gateway
     services per profile (``gateway_mode == "multiple"``) persist each profile's platform
     failures in its own ``gateway_state.json``, invisible to the machine-level probe NAS
@@ -222,6 +281,7 @@ def _merge_profile_gateway_platforms(gateway_platforms: dict, profile_platforms:
     profile's own map is skipped (already present); existing keys are never overwritten."""
     try:
         from clawk_cli.profiles import get_active_profile_name
+
         active = get_active_profile_name()
     except Exception:
         active = "default"
@@ -257,32 +317,46 @@ def _bounded_health_probe():
         try:
             return future.result(timeout=_GATEWAY_HEALTH_ROUTE_TIMEOUT)
         except concurrent.futures.TimeoutError:
-            _log.warning("/api/status gateway health probe exceeded %.2fs; using local status",
-                         _GATEWAY_HEALTH_ROUTE_TIMEOUT)
+            _log.warning(
+                "/api/status gateway health probe exceeded %.2fs; using local status",
+                _GATEWAY_HEALTH_ROUTE_TIMEOUT,
+            )
             return False, None
         except Exception:
             return False, None
 
 
-def _project_gateway_platforms(gateway_platforms: dict, configured: set[str] | None,
-                               gateway_running: bool, gateway_state) -> dict:
+def _project_gateway_platforms(
+    gateway_platforms: dict,
+    configured: set[str] | None,
+    gateway_running: bool,
+    gateway_state,
+) -> dict:
     """Public projection of a runtime's platform map (see ``_status_platform_key_allowed``
     for the key rules). A cleanly stopped gateway's platform states are stale noise and are
     cleared so a dead process can't report "connected"; a startup_failed gateway's FATAL
     entries are the diagnosis (credential collisions, auth failures) that the single
     exit_reason string can't express, so they are kept — upstream writer-identity/freshness
     filtering already dropped other processes' entries."""
-    platforms = {key: _public_platform_entry(value) for key, value in gateway_platforms.items()
-                 if _status_platform_key_allowed(key, configured)}
+    platforms = {
+        key: _public_platform_entry(value)
+        for key, value in gateway_platforms.items()
+        if _status_platform_key_allowed(key, configured)
+    }
     if gateway_running:
         return platforms
     if gateway_state == "startup_failed":
-        return {key: value for key, value in platforms.items()
-                if isinstance(value, dict) and value.get("state") == "fatal"}
+        return {
+            key: value
+            for key, value in platforms.items()
+            if isinstance(value, dict) and value.get("state") == "fatal"
+        }
     return {}
 
 
-async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> dict[str, Any]:
+async def _resolve_gateway_status(
+    profile_dir: Optional[Path], health_url
+) -> dict[str, Any]:
     """Liveness + runtime-state readout (running/pid/state/platforms/exit_reason/updated_at
     plus the raw ``runtime`` document).
 
@@ -293,13 +367,21 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
     unchanged. The module-level probe references are handed to the resolver so the
     ``monkeypatch.setattr(gateway.status, "get_running_pid_cached", ...)`` seam still intercepts.
     """
-    local_runtime = (read_runtime_status(path=profile_dir / "gateway_state.json")
-                     if profile_dir else read_runtime_status())
-    liveness = await run_in_threadpool(lambda: resolve_gateway_liveness(
-        profile_dir=profile_dir, runtime=local_runtime,
-        health_probe=_bounded_health_probe if health_url else None,
-        pid_probe=get_running_pid_cached, runtime_reader=read_runtime_status,
-        runtime_pid_probe=get_runtime_status_running_pid))
+    local_runtime = (
+        read_runtime_status(path=profile_dir / "gateway_state.json")
+        if profile_dir
+        else read_runtime_status()
+    )
+    liveness = await run_in_threadpool(
+        lambda: resolve_gateway_liveness(
+            profile_dir=profile_dir,
+            runtime=local_runtime,
+            health_probe=_bounded_health_probe if health_url else None,
+            pid_probe=get_running_pid_cached,
+            runtime_reader=read_runtime_status,
+            runtime_pid_probe=get_runtime_status_running_pid,
+        )
+    )
     gateway_running = liveness.running
     remote_health_body: dict | None = liveness.health_body
 
@@ -311,7 +393,11 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
     # Prefer the detailed health endpoint response (has full state) when the local runtime
     # status file is absent or stale (cross-container).
     runtime = local_runtime
-    if runtime is None and remote_health_body and remote_health_body.get("gateway_state"):
+    if (
+        runtime is None
+        and remote_health_body
+        and remote_health_body.get("gateway_state")
+    ):
         runtime = remote_health_body
     # Unscoped, the profile is the process's own home (a pooled ``clawk --profile X serve``).
     own_home = profile_dir or get_process_clawk_home()
@@ -321,8 +407,12 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
         # Fold on the profile NAME, never ``profile_dir.name``: ``?profile=default`` resolves the
         # root itself, whose basename (``.clawk``) matched nothing and read as a named id (#123088).
         served_name = profile_name_for_home(own_home)
-        runtime = {**liveness.runtime,
-                   "platforms": profile_platforms_from_multiplexer(liveness.runtime, served_name or "")}
+        runtime = {
+            **liveness.runtime,
+            "platforms": profile_platforms_from_multiplexer(
+                liveness.runtime, served_name or ""
+            ),
+        }
     elif local_liveness_pid(liveness) is not None:
         # The PID rung answers before the multiplexer rung, and a served profile's gateway.lock is
         # held by the multiplexer itself, so the ladder returns without its record while the
@@ -330,9 +420,18 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
         # shared rule (also the messaging card's) picks the multiplexer record only when the lock
         # holder IS the multiplexer and the profile's own record proves no live gateway.
         try:
-            runtime = await run_in_threadpool(
-                served_profile_runtime, own_home, local_runtime, gateway_pid=local_liveness_pid(liveness)) or runtime
-        except Exception:  # health: allow BLE001 -- status route must never 500; traceback is logged
+            runtime = (
+                await run_in_threadpool(
+                    served_profile_runtime,
+                    own_home,
+                    local_runtime,
+                    gateway_pid=local_liveness_pid(liveness),
+                )
+                or runtime
+            )
+        except (
+            Exception
+        ):  # health: allow BLE001 -- status route must never 500; traceback is logged
             # A failed lookup keeps the profile's own record.
             _log.warning("/api/status multiplexer record lookup failed", exc_info=True)
 
@@ -352,14 +451,21 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
             # The health probe confirmed the gateway is alive, but the local runtime status
             # file may be stale (cross-container): override so the badge is correct.
             gateway_state = "running"
-        elif gateway_state in {"running", "degraded", "starting"} and runtime_status_is_stale(runtime):
+        elif gateway_state in {
+            "running",
+            "degraded",
+            "starting",
+        } and runtime_status_is_stale(runtime):
             # Alive PID, but housekeeping stopped re-stamping the heartbeat: the loop or the
             # housekeeping thread wedged while the file still says 'running' (#113372). Same arm
             # as ``clawk gateway status`` so the sidebar strip and the CLI agree.
             gateway_heartbeat_stale_s = runtime_status_heartbeat_age_s(runtime)
         gateway_platforms = _project_gateway_platforms(
-            runtime.get("platforms") or {}, configured, gateway_running, gateway_state)
-        gateway_exit_reason = None if gateway_state == "stopped" else runtime.get("exit_reason")
+            runtime.get("platforms") or {}, configured, gateway_running, gateway_state
+        )
+        gateway_exit_reason = (
+            None if gateway_state == "stopped" else runtime.get("exit_reason")
+        )
         # Contract: gateway_updated_at is RFC3339 string | null, never a number. ``runtime``
         # may be the local gateway_state.json (legacy gateways wrote epoch floats; hand
         # edits can inject anything) or a remote /health/detailed body — normalize both.
@@ -373,11 +479,18 @@ async def _resolve_gateway_status(profile_dir: Optional[Path], health_url) -> di
     # profile a restart would blip ("default, alpha, beta"); a standalone gateway's names none.
     shared_with = (runtime or {}).get("served_profiles") if gateway_running else None
     return {
-        "runtime": runtime, "gateway_running": gateway_running, "gateway_pid": liveness.pid,
-        "gateway_state": gateway_state, "gateway_platforms": gateway_platforms,
-        "gateway_exit_reason": gateway_exit_reason, "gateway_updated_at": gateway_updated_at,
+        "runtime": runtime,
+        "gateway_running": gateway_running,
+        "gateway_pid": liveness.pid,
+        "gateway_state": gateway_state,
+        "gateway_platforms": gateway_platforms,
+        "gateway_exit_reason": gateway_exit_reason,
+        "gateway_updated_at": gateway_updated_at,
         "gateway_heartbeat_stale_s": gateway_heartbeat_stale_s,
-        "gateway_shared_with": [str(p) for p in shared_with] if isinstance(shared_with, list) else None}
+        "gateway_shared_with": [str(p) for p in shared_with]
+        if isinstance(shared_with, list)
+        else None,
+    }
 
 
 def _auth_gate_status() -> dict[str, Any]:
@@ -392,7 +505,10 @@ def _auth_gate_status() -> dict[str, Any]:
     auth_flows: list[str] = []
     try:
         from clawk_cli.dashboard_auth import (
-            list_providers as _list_providers, list_session_providers as _list_session_providers)
+            list_providers as _list_providers,
+            list_session_providers as _list_session_providers,
+        )
+
         auth_providers = [p.name for p in _list_providers()]
         if auth_required:
             auth_flows.append("cookie")
@@ -401,8 +517,11 @@ def _auth_gate_status() -> dict[str, Any]:
     except Exception:
         # Module not importable yet (early startup) — leave as [].
         pass
-    return {"auth_required": auth_required, "auth_providers": auth_providers,
-            "auth_flows": auth_flows}
+    return {
+        "auth_required": auth_required,
+        "auth_providers": auth_providers,
+        "auth_flows": auth_flows,
+    }
 
 
 async def _component_health(gateway: dict[str, Any]) -> dict[str, Any]:
@@ -410,15 +529,24 @@ async def _component_health(gateway: dict[str, Any]) -> dict[str, Any]:
     messages, paths or other detail that could carry secrets). The storage probe reuses the
     gateway readiness state_db check (read-only, 1s-bounded) off-loop."""
     from clawk_cli.web_server import DASHBOARD_HEALTH
-    gateway_running, gateway_state = gateway["gateway_running"], gateway["gateway_state"]
+
+    gateway_running, gateway_state = (
+        gateway["gateway_running"],
+        gateway["gateway_state"],
+    )
     gateway_platforms = gateway["gateway_platforms"]
     components: dict[str, Any] = {
         "gateway": {
-            "status": "ok" if gateway_running and gateway_state in {"running", "draining"} else "degraded",
-            "state": gateway_state or ("running" if gateway_running else "stopped")},
-        "dashboard": DASHBOARD_HEALTH.snapshot()}
+            "status": "ok"
+            if gateway_running and gateway_state in {"running", "draining"}
+            else "degraded",
+            "state": gateway_state or ("running" if gateway_running else "stopped"),
+        },
+        "dashboard": DASHBOARD_HEALTH.snapshot(),
+    }
     try:
         from gateway.readiness import _probe_state_db
+
         storage_check = await run_in_threadpool(_probe_state_db, get_clawk_home())
         components["storage"] = {"status": storage_check.get("status", "degraded")}
         # The one reason enum consumers key off; same latch as readiness and the session lists.
@@ -428,12 +556,18 @@ async def _component_health(gateway: dict[str, Any]) -> dict[str, Any]:
         components["storage"] = {"status": "degraded"}
     # ``disabled`` entries are platforms the multiplexer deliberately does not run for a served profile
     # (shared ingress owned by the default) — informational, never a degraded verdict.
-    platform_states = [str(value.get("state") or value.get("status") or "").lower()
-                       for value in gateway_platforms.values() if isinstance(value, dict)]
+    platform_states = [
+        str(value.get("state") or value.get("status") or "").lower()
+        for value in gateway_platforms.values()
+        if isinstance(value, dict)
+    ]
     platform_states = [state for state in platform_states if state != "disabled"]
     connected = sum(1 for state in platform_states if state in _HEALTHY_PLATFORM_STATES)
-    components["platforms"] = {"status": "ok" if connected == len(platform_states) else "degraded",
-                               "configured": len(platform_states), "connected": connected}
+    components["platforms"] = {
+        "status": "ok" if connected == len(platform_states) else "degraded",
+        "configured": len(platform_states),
+        "connected": connected,
+    }
     return components
 
 
@@ -443,8 +577,10 @@ async def _advisory_pressure(status: dict[str, Any], home: Path) -> None:
     advisory, not a liveness verdict, and flipping ``overall`` on it would page NAS's
     availability sweep for a condition the valve is already handling. Read-only, never raise.
     """
-    for key, mod_name, fn_name in (("memory", "gateway.memory_status", "collect_memory_status"),
-                                   ("disk", "gateway.disk_status", "collect_disk_status")):
+    for key, mod_name, fn_name in (
+        ("memory", "gateway.memory_status", "collect_memory_status"),
+        ("disk", "gateway.disk_status", "collect_disk_status"),
+    ):
         try:
             collect = getattr(importlib.import_module(mod_name), fn_name)
             status[key] = await run_in_threadpool(collect, home)
@@ -454,6 +590,7 @@ async def _advisory_pressure(status: dict[str, Any], home: Path) -> None:
     try:
         from clawk_state import SessionDB as _SDB
         from clawk_constants import get_clawk_home as _ghh
+
         _db_path = _ghh() / "state.db"
         if _db_path.exists():
             _sdb = _SDB(db_path=_db_path, read_only=True)
@@ -477,6 +614,7 @@ async def get_status(profile: Optional[str] = None):
     process-global skills-module attributes a concurrent request would cross-restore.
     """
     from clawk_cli.web_server import _GATEWAY_HEALTH_URL
+
     status_scope = None
     requested_profile = (profile or "").strip()
     profile_dir: Optional[Path] = None
@@ -488,7 +626,10 @@ async def get_status(profile: Optional[str] = None):
     try:
         current_ver, latest_ver = check_config_version()
         gateway = await _resolve_gateway_status(profile_dir, _GATEWAY_HEALTH_URL)
-        gateway_running, gateway_state = gateway["gateway_running"], gateway["gateway_state"]
+        gateway_running, gateway_state = (
+            gateway["gateway_running"],
+            gateway["gateway_state"],
+        )
 
         # Topology (cached, TTL 10s) is fetched before the platform rollup so per-profile
         # gateway failures fold into the machine-level view (see
@@ -496,24 +637,30 @@ async def get_status(profile: Optional[str] = None):
         topology = await run_in_threadpool(_collect_profile_gateway_topology_cached)
         if not requested_profile:
             gateway["gateway_platforms"] = _merge_profile_gateway_platforms(
-                gateway["gateway_platforms"], topology.get("profile_platforms") or {})
+                gateway["gateway_platforms"], topology.get("profile_platforms") or {}
+            )
 
         active_sessions = await _status_active_sessions()
 
         # Busy/drainable (NAS lifecycle-safety gate) derive from the persisted in-flight turn
         # count + liveness via gateway.status. Liveness keys off gateway_running, NEVER
         # gateway_updated_at — a stale heartbeat is reported separately, not treated as death.
-        active_agents = parse_active_agents((gateway["runtime"] or {}).get("active_agents", 0))
+        active_agents = parse_active_agents(
+            (gateway["runtime"] or {}).get("active_agents", 0)
+        )
         # Off-loop: on a cold Windows install the first import of clawk_cli.gateway blocks
         # 15-30s (.pyc compilation + Defender), exceeding the desktop handshake's 15s timeout.
         restart_drain_timeout = await run_in_threadpool(_resolve_restart_drain_timeout)
         auth = _auth_gate_status()
 
         status = {
-            "version": get_version_info().base_version, "release_date": __release_date__,
-            "config_version": current_ver, "latest_config_version": latest_ver,
+            "version": get_version_info().base_version,
+            "release_date": __release_date__,
+            "config_version": current_ver,
+            "latest_config_version": latest_ver,
             "can_update_clawk": not _dashboard_local_update_managed_externally(),
-            "gateway_running": gateway_running, "gateway_state": gateway_state,
+            "gateway_running": gateway_running,
+            "gateway_state": gateway_state,
             "gateway_platforms": gateway["gateway_platforms"],
             "gateway_exit_reason": gateway["gateway_exit_reason"],
             "gateway_updated_at": gateway["gateway_updated_at"],
@@ -524,12 +671,17 @@ async def get_status(profile: Optional[str] = None):
             "gateway_shared_with": gateway["gateway_shared_with"],
             "active_agents": active_agents,
             "gateway_busy": derive_gateway_busy(
-                gateway_running=gateway_running, gateway_state=gateway_state,
-                active_agents=active_agents),
+                gateway_running=gateway_running,
+                gateway_state=gateway_state,
+                active_agents=active_agents,
+            ),
             "gateway_drainable": derive_gateway_drainable(
-                gateway_running=gateway_running, gateway_state=gateway_state),
-            "restart_drain_timeout": restart_drain_timeout, "active_sessions": active_sessions,
-            **auth}  # Clawksis (BYOK): no Nous bootstrap-session validity field.
+                gateway_running=gateway_running, gateway_state=gateway_state
+            ),
+            "restart_drain_timeout": restart_drain_timeout,
+            "active_sessions": active_sessions,
+            **auth,
+        }  # Clawksis (BYOK): no Nous bootstrap-session validity field.
 
         # Stable per-install identity (first call may touch disk). Omitted (not null) when
         # unpersistable so older-client behavior and the no-identity fallback stay identical.
@@ -539,13 +691,21 @@ async def get_status(profile: Optional[str] = None):
 
         # Advisory only. Expose no paths or process identities on this public probe.
         from clawk_cli.shared_profile_warning import shared_profile_warning
-        status["shared_profile_warning"] = bool(await run_in_threadpool(shared_profile_warning))
+
+        status["shared_profile_warning"] = bool(
+            await run_in_threadpool(shared_profile_warning)
+        )
 
         components = await _component_health(gateway)
         status["components"] = components
-        status["overall"] = ("ok" if all(item.get("status") == "ok" for item in components.values())
-                             else "degraded")
-        await _advisory_pressure(status, profile_dir if profile_dir else get_clawk_home())
+        status["overall"] = (
+            "ok"
+            if all(item.get("status") == "ok" for item in components.values())
+            else "degraded"
+        )
+        await _advisory_pressure(
+            status, profile_dir if profile_dir else get_clawk_home()
+        )
 
         # Profile NAMES and ``gateway_mode`` are low-sensitivity product surface (Clawksis Cloud
         # renders the profile list over a gated bind) so they survive the auth gate; the
@@ -553,16 +713,24 @@ async def get_status(profile: Optional[str] = None):
         status["profiles"] = topology["profiles"]
         status["parked_profiles"] = topology.get("parked_profiles", [])
         status["gateway_mode"] = topology["gateway_mode"]
-        status["multiplex_standalone_reason"] = topology.get("multiplex_standalone_reason")
+        status["multiplex_standalone_reason"] = topology.get(
+            "multiplex_standalone_reason"
+        )
 
         # Host paths, gateway PID, internal health URL and per-gateway ports are deployment
         # recon a liveness probe never needs, and on a gated bind *any* unauthenticated caller
         # reaches this endpoint — surface them only on a loopback / ``--insecure`` bind.
         if not auth["auth_required"]:
-            status.update({
-                "clawk_home": str(get_clawk_home()), "config_path": str(get_config_path()),
-                "env_path": str(get_env_path()), "gateway_pid": gateway["gateway_pid"],
-                "gateway_health_url": _GATEWAY_HEALTH_URL, "gateways": topology["gateways"]})
+            status.update(
+                {
+                    "clawk_home": str(get_clawk_home()),
+                    "config_path": str(get_config_path()),
+                    "env_path": str(get_env_path()),
+                    "gateway_pid": gateway["gateway_pid"],
+                    "gateway_health_url": _GATEWAY_HEALTH_URL,
+                    "gateways": topology["gateways"],
+                }
+            )
 
         return status
     finally:
@@ -578,16 +746,27 @@ async def get_system_stats():
 
     info: dict[str, Any] = {
         **_display_system_platform(
-            system=_platform.system(), release=_platform.release(), version=_platform.version(),
-            platform_label=_platform.platform()),
-        "arch": _platform.machine(), "hostname": _platform.node(),
+            system=_platform.system(),
+            release=_platform.release(),
+            version=_platform.version(),
+            platform_label=_platform.platform(),
+        ),
+        "arch": _platform.machine(),
+        "hostname": _platform.node(),
         "python_version": _platform.python_version(),
         "python_impl": _platform.python_implementation(),
-        "clawk_version": get_version_info().base_version, "cpu_count": os.cpu_count()}
+        "clawk_version": get_version_info().base_version,
+        "cpu_count": os.cpu_count(),
+    }
 
     def _disk():
         du = psutil.disk_usage(str(get_clawk_home()))
-        info["disk"] = {"total": du.total, "used": du.used, "free": du.free, "percent": du.percent}
+        info["disk"] = {
+            "total": du.total,
+            "used": du.used,
+            "free": du.free,
+            "percent": du.percent,
+        }
 
     def _cpu():
         info["cpu_percent"] = psutil.cpu_percent(interval=0.1)
@@ -600,16 +779,24 @@ async def get_system_stats():
 
     def _process():
         proc = psutil.Process()
-        info["process"] = {"pid": proc.pid, "rss": proc.memory_info().rss,
-                           "create_time": int(proc.create_time()),
-                           "num_threads": proc.num_threads()}
+        info["process"] = {
+            "pid": proc.pid,
+            "rss": proc.memory_info().rss,
+            "create_time": int(proc.create_time()),
+            "num_threads": proc.num_threads(),
+        }
 
     # psutil enriches the picture when present; every probe below is optional.
     try:
         import psutil  # type: ignore
+
         vm = psutil.virtual_memory()
-        info["memory"] = {"total": vm.total, "available": vm.available, "used": vm.used,
-                          "percent": vm.percent}
+        info["memory"] = {
+            "total": vm.total,
+            "available": vm.available,
+            "used": vm.used,
+            "percent": vm.percent,
+        }
         for fill in (_disk, _cpu, _uptime, _process):
             try:
                 fill()
@@ -644,8 +831,11 @@ async def get_curator_status(profile: Optional[str] = None):
             "paused": _safe_call(curator, "is_paused", False),
             "interval_hours": _safe_call(curator, "get_interval_hours", None),
             "last_run_at": state.get("last_run_at"),
-            **{key: _safe_call(curator, f"get_{key}", None)
-               for key in ("min_idle_hours", "stale_after_days", "archive_after_days")}}
+            **{
+                key: _safe_call(curator, f"get_{key}", None)
+                for key in ("min_idle_hours", "stale_after_days", "archive_after_days")
+            },
+        }
 
     return await config_scoped_to_thread(profile, _run)
 
@@ -653,13 +843,18 @@ async def get_curator_status(profile: Optional[str] = None):
 @router.put("/api/curator/paused")
 async def set_curator_paused(body: CuratorPause, profile: Optional[str] = None):
     from agent import curator
+
     # ``_state_file()`` is ``get_clawk_home()/skills/.curator_state`` resolved at call
     # time, so the request's home override is what decides which profile pauses.
-    await config_scoped_to_thread(profile, lambda: curator.set_paused(bool(body.paused)))
+    await config_scoped_to_thread(
+        profile, lambda: curator.set_paused(bool(body.paused))
+    )
     return {"ok": True, "paused": bool(body.paused)}
 
 
-def _spawn_action(argv: list, name: str, prefix: str, profile: Optional[str] = None) -> dict:
+def _spawn_action(
+    argv: list, name: str, prefix: str, profile: Optional[str] = None
+) -> dict:
     """Spawn a background ``clawk -p <profile> <argv>`` action; a spawn failure is
     ``500 "<prefix>: <exc>"``."""
     try:
@@ -674,15 +869,21 @@ async def run_curator(profile: Optional[str] = None):
     """Trigger a curator review now (backgrounded; tail via action status). The curator
     archives and rewrites skills, so an unnamed target is refused while this backend
     serves several profiles."""
-    return _spawn_action(["curator", "run"], "curator-run", "Failed to run curator",
-                         destructive_profile(profile, "POST /api/curator/run"))
+    return _spawn_action(
+        ["curator", "run"],
+        "curator-run",
+        "Failed to run curator",
+        destructive_profile(profile, "POST /api/curator/run"),
+    )
 
 
 @router.get("/api/learning/graph")
 async def get_learning_graph(profile: Optional[str] = None):
     """Learning graph for the desktop panel: profile-scoped learned skills + memory chunks."""
+
     def _run():
         from agent.learning_graph import build_learning_graph
+
         return build_learning_graph()
 
     try:
@@ -709,6 +910,7 @@ async def _learning_mutation(profile: Optional[str], fn, status: int, fallback: 
 async def get_learning_node(id: str, profile: Optional[str] = None):
     """Current content of a journey node (skill SKILL.md or memory chunk), for an edit prefill."""
     from agent.learning_mutations import node_detail
+
     return await _learning_mutation(profile, lambda: node_detail(id), 404, "not found")
 
 
@@ -719,16 +921,23 @@ async def delete_learning_node(body: LearningNodeRef, profile: Optional[str] = N
     ``?profile=`` is honoured too: a shared-backend Desktop scopes this call by query only, and
     ignoring it archived the same-named skill of the launch profile instead."""
     from agent.learning_mutations import delete_node
+
     return await _learning_mutation(
-        body.profile or profile, lambda: delete_node(body.id), 400, "delete failed")
+        body.profile or profile, lambda: delete_node(body.id), 400, "delete failed"
+    )
 
 
 @router.put("/api/learning/node")
 async def update_learning_node(body: LearningNodeEdit, profile: Optional[str] = None):
     """Rewrite a journey node's content (SKILL.md or memory chunk); profile as for DELETE."""
     from agent.learning_mutations import edit_node
+
     return await _learning_mutation(
-        body.profile or profile, lambda: edit_node(body.id, body.content), 400, "edit failed")
+        body.profile or profile,
+        lambda: edit_node(body.id, body.content),
+        400,
+        "edit failed",
+    )
 
 
 # Portal — Nous Portal auth + Tool Gateway routing status (read-only).
@@ -754,6 +963,7 @@ def _get_portal_status_sync():
     auth: dict[str, Any] = {}
     try:
         from clawk_cli.auth import get_nous_auth_status_local
+
         # Refresh-free snapshot so polling never performs an OAuth refresh.
         auth = get_nous_auth_status_local() or {}
     except Exception:
@@ -762,23 +972,29 @@ def _get_portal_status_sync():
     features = []
     try:
         from clawk_cli.nous_subscription import get_nous_subscription_features
+
         feats = get_nous_subscription_features(cfg)
         if feats is not None:
-            features = [{"label": getattr(feat, "label", ""), "state": _feature_state(feat)}
-                        for feat in feats.items()]
+            features = [
+                {"label": getattr(feat, "label", ""), "state": _feature_state(feat)}
+                for feat in feats.items()
+            ]
     except Exception:
         _log.exception("portal features failed")
 
     model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
     return {
-        "logged_in": bool(auth.get("logged_in")), "portal_url": auth.get("portal_base_url"),
+        "logged_in": bool(auth.get("logged_in")),
+        "portal_url": auth.get("portal_base_url"),
         "inference_url": auth.get("inference_base_url"),
         "provider": str((model_cfg or {}).get("provider") or ""),
         # Free tier: a token exists, so logged_in stays true for callers that only ask "is there a
         # credential"; surfaces that render an account must branch on free_tier first.
-        "free_tier": bool(auth.get("free_tier")), "account_tier": auth.get("account_tier"),
+        "free_tier": bool(auth.get("free_tier")),
+        "account_tier": auth.get("account_tier"),
         "subscription_url": "https://portal.nousresearch.com/manage-subscription",
-        "features": features}
+        "features": features,
+    }
 
 
 # Diagnostics: text-output actions spawned in the background, tailed via /api/actions/<name>.
@@ -800,17 +1016,23 @@ async def run_config_migrate(profile: Optional[str] = None):
 
 
 @router.post("/api/ops/debug-share")
-async def run_debug_share_endpoint(body: DebugShareRequest | None = None,
-                                   profile: Optional[str] = None):
+async def run_debug_share_endpoint(
+    body: DebugShareRequest | None = None, profile: Optional[str] = None
+):
     """Upload a redacted debug report + full logs and return the paste URLs. Synchronous,
     unlike the other diagnostics actions: the point is the shareable URLs, returned as a
     structured payload the dashboard renders as copyable links."""
     from clawk_cli.debug import build_debug_share
     from clawk_cli.debug_redaction import redact_debug_support_text
+
     req = body or DebugShareRequest()
     try:
-        result = await config_scoped_to_thread(profile, lambda: build_debug_share(
-            log_lines=max(1, min(int(req.lines), 5000)), redact=bool(req.redact)))
+        result = await config_scoped_to_thread(
+            profile,
+            lambda: build_debug_share(
+                log_lines=max(1, min(int(req.lines), 5000)), redact=bool(req.redact)
+            ),
+        )
     except HTTPException:
         raise  # an unknown ?profile= is the scope's 404, not a failed share
     except RuntimeError as exc:
@@ -822,16 +1044,26 @@ async def run_debug_share_endpoint(body: DebugShareRequest | None = None,
         error = redact_debug_support_text(exc)
         raise HTTPException(status_code=500, detail=f"Failed: {error}")
 
-    return {"ok": True, "urls": result.urls, "failures": result.failures,
-            "redacted": result.redacted, "auto_delete_seconds": result.auto_delete_seconds}
+    return {
+        "ok": True,
+        "urls": result.urls,
+        "failures": result.failures,
+        "redacted": result.redacted,
+        "auto_delete_seconds": result.auto_delete_seconds,
+    }
 
 
 @logs_router.get("/api/logs")
 async def get_logs(
-    file: str = "agent", lines: int = 100, level: Optional[str] = None,
-    component: Optional[str] = None, search: Optional[str] = None,
-    profile: Optional[str] = None):
+    file: str = "agent",
+    lines: int = 100,
+    level: Optional[str] = None,
+    component: Optional[str] = None,
+    search: Optional[str] = None,
+    profile: Optional[str] = None,
+):
     from clawk_cli.logs import _read_tail, LOG_FILES
+
     log_name = LOG_FILES.get(file)
     if not log_name:
         raise HTTPException(status_code=400, detail=f"Unknown log file: {file}")
@@ -851,18 +1083,27 @@ async def get_logs(
     if component and component.lower() != "all":
         comp_prefixes = COMPONENT_PREFIXES.get(component)
         if comp_prefixes is None:
-            raise HTTPException(status_code=400, detail=f"Unknown component: {component}. "
-                                f"Available: {', '.join(sorted(COMPONENT_PREFIXES))}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown component: {component}. "
+                f"Available: {', '.join(sorted(COMPONENT_PREFIXES))}",
+            )
+
     def _load_logs():
         result = _read_tail(
-            log_path, min(lines, 500) if not search else 2000,
+            log_path,
+            min(lines, 500) if not search else 2000,
             has_filters=bool(min_level or comp_prefixes or search),
-            min_level=min_level, component_prefixes=comp_prefixes)
+            min_level=min_level,
+            component_prefixes=comp_prefixes,
+        )
         # _read_tail doesn't support free-text search, so post-filter (case-insensitive
         # substring) here and trim to the requested line count afterward.
         if search:
             needle = search.lower()
-            result = [line for line in result if needle in line.lower()][-min(lines, 500):]
+            result = [line for line in result if needle in line.lower()][
+                -min(lines, 500) :
+            ]
         return result
 
     result = await asyncio.to_thread(_load_logs)

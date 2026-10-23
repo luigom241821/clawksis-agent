@@ -6,6 +6,7 @@ prune`` reads its preview from a read-only view and sends the selected filters t
 (``session.prune``), which deletes through the same ``retire_prunable`` path housekeeping uses.
 With no gateway, prune stays the local command it always was (holder scan, ``--force``).
 """
+
 from __future__ import annotations
 
 #: A cron-heavy store prunes tens of thousands of rows in one transaction; the owner shields the
@@ -17,6 +18,7 @@ def live_owner():
     """The ready gateway endpoint serving this home, else None. Discovery only: never starts one."""
     from clawk_cli.gateway_runtime import discover_gateway_endpoint
     from clawk_constants import get_clawk_home
+
     found = discover_gateway_endpoint(get_clawk_home().resolve())
     return found.endpoint if found.state == "ready" else None
 
@@ -28,11 +30,16 @@ def owner_prune(endpoint, **params) -> dict:
 
     async def _run():
         async with connect_gateway(endpoint) as client:
-            return await client.rpc("session.prune", _timeout=PRUNE_RPC_TIMEOUT, **params)
+            return await client.rpc(
+                "session.prune", _timeout=PRUNE_RPC_TIMEOUT, **params
+            )
+
     return asyncio.run(_run())
 
 
 def report_owner_failure(exc) -> int:
-    print(f"Error: the gateway did not complete the prune ({exc}). Run `clawk sessions prune --dry-run` "
-          "with the same filters to see what is left.")
+    print(
+        f"Error: the gateway did not complete the prune ({exc}). Run `clawk sessions prune --dry-run` "
+        "with the same filters to see what is left."
+    )
     return 1

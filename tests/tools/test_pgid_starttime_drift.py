@@ -19,12 +19,17 @@ from types import SimpleNamespace
 
 import pytest
 
-pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX-only process-group teardown")
+pytestmark = pytest.mark.skipif(
+    os.name == "nt", reason="POSIX-only process-group teardown"
+)
 
-RECORDED = 178864182760  # spawn-time baseline (start ticks / psutil centiseconds — same scale)
+RECORDED = (
+    178864182760  # spawn-time baseline (start ticks / psutil centiseconds — same scale)
+)
 
 
 # --- Local terminal teardown ------------------------------------------------
+
 
 def _fake_proc():
     """A live wrapper whose spawn-time PGID/start-time baselines were captured."""
@@ -58,7 +63,9 @@ def killpg_calls(monkeypatch):
 def test_local_group_kill_survives_start_time_drift(monkeypatch, killpg_calls):
     """~1 s drift between the recorded baseline and the later read must NOT make the
     guard refuse to kill a live, legitimately-owned process group."""
-    monkeypatch.setattr("gateway.status.get_process_start_time", lambda pid: RECORDED + 100)
+    monkeypatch.setattr(
+        "gateway.status.get_process_start_time", lambda pid: RECORDED + 100
+    )
     from tools.environments.local import _kill_process_group_posix
 
     _kill_process_group_posix(_fake_proc())
@@ -69,7 +76,9 @@ def test_local_group_kill_survives_start_time_drift(monkeypatch, killpg_calls):
 def test_local_guard_still_refuses_recycled_pgid(monkeypatch, killpg_calls):
     """A start time far outside the drift tolerance means the PID/PGID was recycled:
     never signal the stale number (#43044)."""
-    monkeypatch.setattr("gateway.status.get_process_start_time", lambda pid: RECORDED + 500000)
+    monkeypatch.setattr(
+        "gateway.status.get_process_start_time", lambda pid: RECORDED + 500000
+    )
     from tools.environments.local import _kill_process_group_posix
 
     _kill_process_group_posix(_fake_proc())
@@ -77,7 +86,9 @@ def test_local_guard_still_refuses_recycled_pgid(monkeypatch, killpg_calls):
     assert killpg_calls == []
 
 
-def test_local_guard_unreadable_start_time_live_leader_is_best_effort(monkeypatch, killpg_calls):
+def test_local_guard_unreadable_start_time_live_leader_is_best_effort(
+    monkeypatch, killpg_calls
+):
     """An unreadable current start time for a still-live leader keeps the legacy
     best-effort kill, and so does a gone leader: POSIX never reuses a PGID while a
     group member lives, so its reparented grandchildren must still be reached."""
@@ -94,10 +105,17 @@ def test_local_guard_unreadable_start_time_live_leader_is_best_effort(monkeypatc
 
 # --- stdio MCP orphan reaper ------------------------------------------------
 
+
 def _reset_mcp_ledgers():
     from tools.mcp_tool_lifecycle import (
-        _orphan_stdio_pid_servers, _orphan_stdio_pids, _stdio_pgids, _stdio_pids, _stdio_starttimes)
+        _orphan_stdio_pid_servers,
+        _orphan_stdio_pids,
+        _stdio_pgids,
+        _stdio_pids,
+        _stdio_starttimes,
+    )
     from tools.mcp_tool import _lock
+
     with _lock:
         _stdio_pids.clear()
         _orphan_stdio_pids.clear()
@@ -107,8 +125,13 @@ def _reset_mcp_ledgers():
 
 
 def _stage_orphan(fake_pid: int):
-    from tools.mcp_tool_lifecycle import _orphan_stdio_pids, _stdio_pgids, _stdio_starttimes
+    from tools.mcp_tool_lifecycle import (
+        _orphan_stdio_pids,
+        _stdio_pgids,
+        _stdio_starttimes,
+    )
     from tools.mcp_tool import _lock
+
     _reset_mcp_ledgers()
     with _lock:
         _orphan_stdio_pids.add(fake_pid)
@@ -125,11 +148,16 @@ def test_mcp_orphan_reaper_survives_start_time_drift(monkeypatch):
     fake_pid = 484848
     _stage_orphan(fake_pid)
     killpg_calls = []
-    monkeypatch.setattr("tools.mcp_tool_lifecycle._leader_start_time",
-                        lambda pid: RECORDED + 100)
-    monkeypatch.setattr("tools.mcp_tool_lifecycle.os.killpg",
-                        lambda pgid, sig: killpg_calls.append((pgid, sig)))
-    monkeypatch.setattr("gateway.status._pid_exists", lambda pid: False)  # no SIGKILL pass
+    monkeypatch.setattr(
+        "tools.mcp_tool_lifecycle._leader_start_time", lambda pid: RECORDED + 100
+    )
+    monkeypatch.setattr(
+        "tools.mcp_tool_lifecycle.os.killpg",
+        lambda pgid, sig: killpg_calls.append((pgid, sig)),
+    )
+    monkeypatch.setattr(
+        "gateway.status._pid_exists", lambda pid: False
+    )  # no SIGKILL pass
     monkeypatch.setattr("tools.mcp_tool_lifecycle.time.sleep", lambda *_: None)
 
     _kill_orphaned_mcp_children()
@@ -146,8 +174,10 @@ def test_mcp_orphan_reaper_unreadable_live_leader_is_best_effort(monkeypatch):
     _stage_orphan(fake_pid)
     killpg_calls = []
     monkeypatch.setattr("tools.mcp_tool_lifecycle._leader_start_time", lambda pid: None)
-    monkeypatch.setattr("tools.mcp_tool_lifecycle.os.killpg",
-                        lambda pgid, sig: killpg_calls.append((pgid, sig)))
+    monkeypatch.setattr(
+        "tools.mcp_tool_lifecycle.os.killpg",
+        lambda pgid, sig: killpg_calls.append((pgid, sig)),
+    )
     monkeypatch.setattr("gateway.status._pid_exists", lambda pid: True)
     monkeypatch.setattr("tools.mcp_tool_lifecycle.time.sleep", lambda *_: None)
 
@@ -163,13 +193,18 @@ def test_mcp_orphan_reaper_still_refuses_recycled_pid(monkeypatch):
     fake_pid = 505050
     _stage_orphan(fake_pid)
     killpg_calls = []
-    monkeypatch.setattr("tools.mcp_tool_lifecycle._leader_start_time",
-                        lambda pid: RECORDED + 500000)
-    monkeypatch.setattr("tools.mcp_tool_lifecycle.os.killpg",
-                        lambda pgid, sig: killpg_calls.append((pgid, sig)))
+    monkeypatch.setattr(
+        "tools.mcp_tool_lifecycle._leader_start_time", lambda pid: RECORDED + 500000
+    )
+    monkeypatch.setattr(
+        "tools.mcp_tool_lifecycle.os.killpg",
+        lambda pgid, sig: killpg_calls.append((pgid, sig)),
+    )
     monkeypatch.setattr("gateway.status._pid_exists", lambda pid: False)
     monkeypatch.setattr("tools.mcp_tool_lifecycle.time.sleep", lambda *_: None)
 
     _kill_orphaned_mcp_children()
 
-    assert [call for call in killpg_calls if call[1] != 0] == []  # signal 0 is the liveness probe
+    assert [
+        call for call in killpg_calls if call[1] != 0
+    ] == []  # signal 0 is the liveness probe

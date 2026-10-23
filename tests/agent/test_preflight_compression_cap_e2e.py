@@ -57,13 +57,10 @@ def _stop_response():
 def _make_agent(monkeypatch, tmp_path: Path, *, max_attempts) -> AIAgent:
     from clawk_cli import config as config_mod
 
-    monkeypatch.setattr(
-        config_mod, "load_config", lambda: _config(max_attempts)
-    )
+    monkeypatch.setattr(config_mod, "load_config", lambda: _config(max_attempts))
 
     monkeypatch.setattr(
         config_mod, "load_config_readonly", lambda: _config(max_attempts)
-
     )
     db = SessionDB(db_path=tmp_path / "state.db")
     with (
@@ -148,5 +145,3 @@ def test_preflight_runs_fourth_compaction_pass_at_cap_six(monkeypatch, tmp_path)
         f"got {len(compress_calls)} passes"
     )
     assert len(compress_calls) == 6
-
-

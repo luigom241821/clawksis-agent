@@ -1,4 +1,5 @@
 """Classic CLI snapshot restore: hand off the profile offline, then rejoin its authority."""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -13,8 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 def restore_snapshot_command(cli, parts):
-    from clawk_cli.backup import list_quick_snapshots, quick_snapshot_dir, restore_quick_snapshot
+    from clawk_cli.backup import (
+        list_quick_snapshots,
+        quick_snapshot_dir,
+        restore_quick_snapshot,
+    )
     from clawk_cli.gateway_tools_notify import gateway_store
+
     if len(parts) < 3:
         print(f"  {_t('snapshot.usage_restore')}")
         snaps = list_quick_snapshots(limit=1)
@@ -47,9 +53,15 @@ def restore_snapshot_command(cli, parts):
                     local_db.close()
                     cli._session_db = None
             restored = restore_quick_snapshot(snap_id)
-    except (GatewayClientError, OSError, ValueError) as exc:  # ValueError: a corrupt manifest.json
+    except (
+        GatewayClientError,
+        OSError,
+        ValueError,
+    ) as exc:  # ValueError: a corrupt manifest.json
         logger.warning("Snapshot restore failed: %s", exc, exc_info=True)
-        return _pr(f"  {_t('snapshot.restore_incomplete', snapshot_id=snap_id)}", f"  {exc}")
+        return _pr(
+            f"  {_t('snapshot.restore_incomplete', snapshot_id=snap_id)}", f"  {exc}"
+        )
     if restored:
         print(f"  {_t('snapshot.restored', snapshot_id=snap_id)}")
         if not gateway:
@@ -65,6 +77,7 @@ def _pause_owner(home, control_home, identity):
     from gateway.control_socket import pause_gateway_for_update, request_unserve_profile
     from clawk_cli.data_cleanup_holders import pause_acked
     from clawk_cli.profiles import parked_marker_path
+
     satellite = control_home != home
     ours = False
     if satellite:
@@ -79,17 +92,25 @@ def _pause_owner(home, control_home, identity):
         try:
             ack = request_unserve_profile(control_home, home.name)
             accepted = ack_confirmed(ack, "unserved", home.name) or (
-                isinstance(ack, dict) and ack.get("pending") and not ack.get("error"))
+                isinstance(ack, dict) and ack.get("pending") and not ack.get("error")
+            )
         finally:
             if ours and not accepted:
                 marker.unlink(missing_ok=True)
     else:
-        accepted = pause_acked(pause_gateway_for_update(control_home, timeout=8), identity)
+        accepted = pause_acked(
+            pause_gateway_for_update(control_home, timeout=8), identity
+        )
     if not accepted:
         # Stopping the host gateway would take down every profile it multiplexes.
-        retry = (f"Park the profile with `clawk -p {home.name} gateway stop` and retry."
-                 if satellite else "Stop the gateway and retry.")
-        raise GatewayClientError(f"Gateway refused the snapshot maintenance handoff; nothing was restored. {retry}")
+        retry = (
+            f"Park the profile with `clawk -p {home.name} gateway stop` and retry."
+            if satellite
+            else "Stop the gateway and retry."
+        )
+        raise GatewayClientError(
+            f"Gateway refused the snapshot maintenance handoff; nothing was restored. {retry}"
+        )
     return ours
 
 
@@ -103,10 +124,13 @@ def _restore_gateway_snapshot(cli, store, snap_id):
     from clawk_cli.profiles_remove import wait_profile_unowned
     from clawk_constants import get_clawk_home
     from clawk_state_registry import close_all_under
+
     home = get_clawk_home().resolve()
     observed = discover_gateway_endpoint(home)
     if observed.state != "ready" or observed.endpoint is None:
-        raise GatewayClientError("Local gateway is not ready for snapshot maintenance. Reconnect and retry.")
+        raise GatewayClientError(
+            "Local gateway is not ready for snapshot maintenance. Reconnect and retry."
+        )
     control_home = control_home_for(home, observed.endpoint).resolve()
     identity = None
     if control_home == home:
@@ -123,17 +147,23 @@ def _restore_gateway_snapshot(cli, store, snap_id):
     try:
         unserved = _pause_owner(home, control_home, identity)
         if not wait_profile_unowned(home):
-            raise GatewayClientError("Gateway still owns the profile; nothing was restored. "
-                                     "Wait for its running work to stop and retry.")
+            raise GatewayClientError(
+                "Gateway still owns the profile; nothing was restored. "
+                "Wait for its running work to stop and retry."
+            )
         return restore_quick_snapshot(snap_id)
     finally:
         if unserved:
-            parked_marker_path(home).unlink(missing_ok=True)  # serve-profile refuses a parked profile
+            parked_marker_path(home).unlink(
+                missing_ok=True
+            )  # serve-profile refuses a parked profile
             ack = request_serve_profile_hot(control_home, home.name)
             if not ack_confirmed(ack, "served", home.name):
                 logger.warning("Profile re-serve after snapshot restore: %s", ack)
-                print(f"  Profile '{home.name}' is not served again yet: {ack_failure(ack)}. "
-                      "The host retries on its next rescan (within 30s).")
+                print(
+                    f"  Profile '{home.name}' is not served again yet: {ack_failure(ack)}. "
+                    "The host retries on its next rescan (within 30s)."
+                )
         store.snapshots.clear()
         store.current = None
         # The restore's own result or error decides the reply; a failed rejoin must not replace it.
@@ -143,30 +173,48 @@ def _restore_gateway_snapshot(cli, store, snap_id):
             store.connection.launch_api_key = drained.launch_api_key
             _rejoin_cli(cli, store)
         except Exception as exc:
-            logger.warning("Rejoin after snapshot restore failed: %s", exc, exc_info=True)
-            print(f"  Reconnecting to the gateway failed: {exc}. Run /new or restart the CLI.")
+            logger.warning(
+                "Rejoin after snapshot restore failed: %s", exc, exc_info=True
+            )
+            print(
+                f"  Reconnecting to the gateway failed: {exc}. Run /new or restart the CLI."
+            )
 
 
 def _rejoin_cli(cli, store):
-    from clawk_cli.cli_init_mixin import _ROUTE_FLAGS, _gateway_launch, lease_handed_over
+    from clawk_cli.cli_init_mixin import (
+        _ROUTE_FLAGS,
+        _gateway_launch,
+        lease_handed_over,
+    )
     from clawk_cli.gateway_tools import bind_session
+
     # Same-id restores still replace the connection and invalidate the cached proxies.
     cli.agent = None
     for attr in ("_goal_manager", "_loop_manager", "_heartbeat_manager"):
         setattr(cli, attr, None)
     # A snapshot older than the gateway's import of a legacy row makes this attach import it again.
-    with lease_handed_over(cli, getattr(cli, "_active_session_lease", None) is not None):
+    with lease_handed_over(
+        cli, getattr(cli, "_active_session_lease", None) is not None
+    ):
         try:
             snapshot = store.attach(cli.session_id)
         except GatewayClientError as exc:
             if str(exc) != "not_found":
                 raise
             # The snapshot predates this session: only the owner may mint its replacement.
-            launch = {key: value for key, value in _gateway_launch(cli).items() if key not in _ROUTE_FLAGS}
+            launch = {
+                key: value
+                for key, value in _gateway_launch(cli).items()
+                if key not in _ROUTE_FLAGS
+            }
             store.create(launch, record_cwd=False)
             snapshot = store.current
         cli.session_id = snapshot["stored_session_id"]
-        cli.conversation_history = [{key: value for key, value in message.items() if key != "row_id"}
-                                    for message in snapshot.get("messages") or [] if not message.get("archived")]
+        cli.conversation_history = [
+            {key: value for key, value in message.items() if key != "row_id"}
+            for message in snapshot.get("messages") or []
+            if not message.get("archived")
+        ]
         bind_session(cli, store.connection)
     getattr(cli, "_write_terminal_breadcrumb", lambda: None)()

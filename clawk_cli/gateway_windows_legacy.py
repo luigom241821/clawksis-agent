@@ -46,7 +46,9 @@ def legacy_launcher_artifacts() -> list[tuple[str, str, Path | str]]:
         (startup / f"{bare}.cmd", "legacy pre-suffix Windows login item"),
     ):
         try:
-            if _targets_this_home(path.read_text(encoding="utf-8-sig", errors="replace")):
+            if _targets_this_home(
+                path.read_text(encoding="utf-8-sig", errors="replace")
+            ):
                 found.append(("file", label, path))
         except OSError:
             continue
@@ -68,8 +70,12 @@ def warn_legacy_launchers() -> bool:
     for _kind, label, target in artifacts:
         print(f"⚠ {label} still installed: {target}")
     if artifacts:
-        print("  These predate per-profile launcher names and also start the gateway at logon.")
-        print("  Remove them with: clawk gateway uninstall   (then: clawk gateway install)")
+        print(
+            "  These predate per-profile launcher names and also start the gateway at logon."
+        )
+        print(
+            "  Remove them with: clawk gateway uninstall   (then: clawk gateway install)"
+        )
     return bool(artifacts)
 
 
@@ -89,7 +95,11 @@ def remove_legacy_launchers() -> None:
         if code == 0:
             print(f"✓ Removed {label} {str(target)!r}")
         elif w._is_access_denied(err.strip()):
-            print(f"⚠ {label} {str(target)!r} needs an elevated shell to remove; run as administrator:")
+            print(
+                f"⚠ {label} {str(target)!r} needs an elevated shell to remove; run as administrator:"
+            )
             print(f"    schtasks /Delete /F /TN {target}")
         else:
-            print(f"⚠ schtasks /Delete {str(target)!r} returned code {code}: {err.strip()}")
+            print(
+                f"⚠ schtasks /Delete {str(target)!r} returned code {code}: {err.strip()}"
+            )

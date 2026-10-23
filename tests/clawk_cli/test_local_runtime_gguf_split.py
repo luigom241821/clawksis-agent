@@ -36,8 +36,11 @@ def _write_gguf(path, metadata: dict, tensors: list[tuple[str, int]]) -> None:
     out = b"GGUF" + struct.pack("<IQQ", 3, len(tensors), len(metadata))
     for key, value in metadata.items():
         out += _gguf_str(key)
-        out += (struct.pack("<I", 8) + _gguf_str(value) if isinstance(value, str)
-                else struct.pack("<II", 4, value))
+        out += (
+            struct.pack("<I", 8) + _gguf_str(value)
+            if isinstance(value, str)
+            else struct.pack("<II", 4, value)
+        )
     for name, elems in tensors:
         out += _gguf_str(name) + struct.pack("<IQIQ", 1, elems, 0, 0)
     path.write_bytes(out)
@@ -76,11 +79,15 @@ def _split(tmp_path, stem: str, parts: list[dict], total: int | None = None):
 def test_split_weights_are_the_sum_across_shards(tmp_path):
     """The reported bug exactly: part 1 is a metadata stub (``n_tensors = 0``), the weights are in
     the later parts, so a reader that stops at part 1 prices the model at nothing."""
-    parts = _split(tmp_path, "qwen-flash", [
-        {"tensors": []},                                             # metadata stub, 0 tensors
-        {"tensors": [("blk.0.attn_q.weight", 32 << 20)]},             # 128 MiB
-        {"tensors": [("blk.1.attn_q.weight", 64 << 20)]},             # 256 MiB
-    ])
+    parts = _split(
+        tmp_path,
+        "qwen-flash",
+        [
+            {"tensors": []},  # metadata stub, 0 tensors
+            {"tensors": [("blk.0.attn_q.weight", 32 << 20)]},  # 128 MiB
+            {"tensors": [("blk.1.attn_q.weight", 64 << 20)]},  # 256 MiB
+        ],
+    )
 
     header = read_gguf_header(parts[0])
 
@@ -109,10 +116,14 @@ def test_embedding_table_outside_part_one_is_still_priced(tmp_path):
     """``embd_table_bytes`` prices the host-side duplicate of a fully offloaded embedding table.
     When that tensor sits outside part 1 the duplicate was priced at 0, understating the load by
     however large the table is."""
-    parts = _split(tmp_path, "embd-split", [
-        {"tensors": []},
-        {"tensors": [("token_embd.weight", 8 << 20)]},
-    ])
+    parts = _split(
+        tmp_path,
+        "embd-split",
+        [
+            {"tensors": []},
+            {"tensors": [("token_embd.weight", 8 << 20)]},
+        ],
+    )
 
     header = read_gguf_header(parts[0])
 
@@ -127,16 +138,25 @@ def test_ffn_blocks_spread_across_shards_still_place_spill(tmp_path):
     hybrid = dict(ARCH, **{"llama.full_attention_interval": 4})
     tensors = [("token_embd.weight", 64)]
     for i in range(12):
-        tensors += [(f"blk.{i}.attn_norm.weight", 16), (f"blk.{i}.ffn_norm.weight", 16),
-                    (f"blk.{i}.ffn_up.weight", 256), (f"blk.{i}.ffn_down.weight", 240)]
-    parts = _split(tmp_path, "hybrid-split", [
-        {"metadata": hybrid, "tensors": tensors[:1]},
-        {"tensors": tensors[1:37]},   # blocks 0-8 (4 tensors each)
-        {"tensors": tensors[37:]},    # blocks 9-11
-    ], total=3)
+        tensors += [
+            (f"blk.{i}.attn_norm.weight", 16),
+            (f"blk.{i}.ffn_norm.weight", 16),
+            (f"blk.{i}.ffn_up.weight", 256),
+            (f"blk.{i}.ffn_down.weight", 240),
+        ]
+    parts = _split(
+        tmp_path,
+        "hybrid-split",
+        [
+            {"metadata": hybrid, "tensors": tensors[:1]},
+            {"tensors": tensors[1:37]},  # blocks 0-8 (4 tensors each)
+            {"tensors": tensors[37:]},  # blocks 9-11
+        ],
+        total=3,
+    )
 
     profile = profile_from_gguf(read_gguf_header(parts[0]))
-    per_block = (16 + 256 + 240) * 4   # f32; attn_norm is not an FFN tensor
+    per_block = (16 + 256 + 240) * 4  # f32; attn_norm is not an FFN tensor
     assert profile.ffn_block_bytes == {i: per_block for i in range(12)}
 
     # Enough spill for two recurrent blocks' FFNs, so the placement is a choice, not "everything".
@@ -149,16 +169,22 @@ def test_ffn_blocks_spread_across_shards_still_place_spill(tmp_path):
 def test_unreadable_shard_does_not_price_the_split_away(tmp_path):
     """A part that is corrupt or truncated is skipped, not fatal: a half-arrived split prices at
     what is on disk. Refusing it to serve is ``staged_in(require_complete=True)``'s job."""
-    parts = _split(tmp_path, "half-downloaded", [
-        {"tensors": [("blk.0.attn_q.weight", 16 << 20)]},
-        {"tensors": [("blk.1.attn_q.weight", 16 << 20)]},
-        {"tensors": [("blk.2.attn_q.weight", 16 << 20)]},
-    ])
-    parts[1].write_bytes(b"GGUF\x03\x00")   # header cut mid-stream
+    parts = _split(
+        tmp_path,
+        "half-downloaded",
+        [
+            {"tensors": [("blk.0.attn_q.weight", 16 << 20)]},
+            {"tensors": [("blk.1.attn_q.weight", 16 << 20)]},
+            {"tensors": [("blk.2.attn_q.weight", 16 << 20)]},
+        ],
+    )
+    parts[1].write_bytes(b"GGUF\x03\x00")  # header cut mid-stream
 
     header = read_gguf_header(parts[0])
 
-    assert header.tensor_bytes == 2 * (64 << 20)   # parts 1 and 3; the truncated one dropped
+    assert header.tensor_bytes == 2 * (
+        64 << 20
+    )  # parts 1 and 3; the truncated one dropped
 
 
 def test_residency_cap_prices_a_split_against_the_card(tmp_path, monkeypatch):
@@ -173,13 +199,19 @@ def test_residency_cap_prices_a_split_against_the_card(tmp_path, monkeypatch):
     mdir.mkdir()
     # A 48 GiB split laid out the reported way: part 1 a metadata stub, the weights in part 2.
     _write_gguf(mdir / "giant-00001-of-00002.gguf", ARCH, [])
-    _write_gguf(mdir / "giant-00002-of-00002.gguf", _split_keys(1, 2),
-                [("blk.0.attn_q.weight", 48 * GIB // 4)])
+    _write_gguf(
+        mdir / "giant-00002-of-00002.gguf",
+        _split_keys(1, 2),
+        [("blk.0.attn_q.weight", 48 * GIB // 4)],
+    )
     # A 10 GB single-shard neighbour: a small second resident must stay possible.
     _write_gguf(mdir / "utility.gguf", ARCH, [("blk.0.attn_q.weight", 10 * GIB // 4)])
 
-    budget = HardwareBudget(usable_vram_bytes=64 * GIB, total_device_bytes=64 * GIB,
-                            ram_available_bytes=64 * GIB)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 * GIB,
+        total_device_bytes=64 * GIB,
+        ram_available_bytes=64 * GIB,
+    )
 
     assert presets.admitted_residency_count(mdir, budget, 4) == 1
 
@@ -192,13 +224,20 @@ def test_a_truncated_header_skips_the_model_instead_of_raising(tmp_path, monkeyp
     from clawk_cli.local_runtime.estimator import HardwareBudget
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-    parts = _split(tmp_path, "cut-head", [
-        {"tensors": []},
-        {"tensors": [("blk.0.attn_q.weight", 16 << 20)]},
-    ])
+    parts = _split(
+        tmp_path,
+        "cut-head",
+        [
+            {"tensors": []},
+            {"tensors": [("blk.0.attn_q.weight", 16 << 20)]},
+        ],
+    )
     parts[0].write_bytes(b"GGUF\x03\x00")
-    budget = HardwareBudget(usable_vram_bytes=64 * GIB, total_device_bytes=64 * GIB,
-                            ram_available_bytes=64 * GIB)
+    budget = HardwareBudget(
+        usable_vram_bytes=64 * GIB,
+        total_device_bytes=64 * GIB,
+        ram_available_bytes=64 * GIB,
+    )
 
     with pytest.raises(ValueError):
         read_gguf_header(parts[0])

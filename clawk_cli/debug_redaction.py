@@ -127,8 +127,11 @@ _SUPPORT_BEARER_RE = re.compile(
     re.IGNORECASE,
 )
 
+
 def _decoded_compact_name(value: object) -> str:
-    return "".join(ch for ch in _canonical_url_param_name(str(value or "")) if ch.isalnum())
+    return "".join(
+        ch for ch in _canonical_url_param_name(str(value or "")) if ch.isalnum()
+    )
 
 
 def _redact_url_params(text: str) -> str:
@@ -147,7 +150,9 @@ def _redact_url_params(text: str) -> str:
     # Running until stable handles a raw URL nested inside another query value
     # without recursive parsing. The pass cap keeps malformed input bounded.
     for _ in range(4):
-        redacted = _ENCODED_URL_PARAM_RE.sub(_encoded_sub, _RAW_URL_PARAM_RE.sub(_raw_sub, text))
+        redacted = _ENCODED_URL_PARAM_RE.sub(
+            _encoded_sub, _RAW_URL_PARAM_RE.sub(_raw_sub, text)
+        )
         if redacted == text:
             break
         text = redacted
@@ -156,10 +161,14 @@ def _redact_url_params(text: str) -> str:
 
 def _redact_headers_and_argv(text: str) -> str:
     text = _QUOTED_HEADER_RE.sub(
-        lambda match: f"{match.group('prefix')}{match.group('quote')}{_REDACTED}{match.group('quote')}",
+        lambda match: (
+            f"{match.group('prefix')}{match.group('quote')}{_REDACTED}{match.group('quote')}"
+        ),
         text,
     )
-    text = _BARE_HEADER_RE.sub(lambda match: f"{match.group('prefix')}{_REDACTED}", text)
+    text = _BARE_HEADER_RE.sub(
+        lambda match: f"{match.group('prefix')}{_REDACTED}", text
+    )
     text = _HEADER_ARGV_RE.sub(
         lambda match: (
             f"{match.group('head_quote')}--header{match.group('head_quote')}, "
@@ -181,11 +190,15 @@ def _redact_headers_and_argv(text: str) -> str:
         text,
     )
     text = _ARG_EQUALS_RE.sub(
-        lambda match: f"{match.group('flag')}{match.group('sep')}{match.group('quote')}{_REDACTED}{match.group('quote')}",
+        lambda match: (
+            f"{match.group('flag')}{match.group('sep')}{match.group('quote')}{_REDACTED}{match.group('quote')}"
+        ),
         text,
     )
     text = _ARG_OPERAND_RE.sub(
-        lambda match: f"{match.group('flag')}{match.group('sep')}{match.group('quote')}{_REDACTED}{match.group('quote')}",
+        lambda match: (
+            f"{match.group('flag')}{match.group('sep')}{match.group('quote')}{_REDACTED}{match.group('quote')}"
+        ),
         text,
     )
     text = _PLAIN_HEADER_ARG_RE.sub(

@@ -1,4 +1,5 @@
 """Tests for approval boundary handling in WeCom native streaming."""
+
 import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
@@ -9,11 +10,16 @@ from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 def mock_adapter():
     """Create a mock WeCom adapter with native streaming support."""
     from gateway.platforms.base import BasePlatformAdapter
-    MockAdapter = type("MockAdapter", (BasePlatformAdapter,), {
-        "MAX_MESSAGE_LENGTH": 4096,
-        "SUPPORTS_MESSAGE_EDITING": False,
-        "SUPPORTS_NATIVE_STREAMING": True,
-    })
+
+    MockAdapter = type(
+        "MockAdapter",
+        (BasePlatformAdapter,),
+        {
+            "MAX_MESSAGE_LENGTH": 4096,
+            "SUPPORTS_MESSAGE_EDITING": False,
+            "SUPPORTS_NATIVE_STREAMING": True,
+        },
+    )
     MockAdapter.__abstractmethods__ = frozenset()
     adapter = MockAdapter.__new__(MockAdapter)
     adapter._typing_paused = set()
@@ -27,13 +33,17 @@ def mock_adapter():
 def consumer_config():
     """Create a minimal consumer config."""
     return StreamConsumerConfig(
-        chat_type="dm", cursor="",
-        edit_interval=0.01, buffer_threshold=5,
+        chat_type="dm",
+        cursor="",
+        edit_interval=0.01,
+        buffer_threshold=5,
     )
 
 
 @pytest.mark.asyncio
-async def test_approval_boundary_finalizes_and_disables_native(mock_adapter, consumer_config):
+async def test_approval_boundary_finalizes_and_disables_native(
+    mock_adapter, consumer_config
+):
     """Approval boundary must finalize the current stream (creating a stable
     message for pre-approval content) and disable native streaming so
     post-approval output goes through reliable send()."""
@@ -63,7 +73,8 @@ async def test_approval_boundary_finalizes_and_disables_native(mock_adapter, con
 
     # Stream must be finalized (stable message created)
     finalize_calls = [
-        call for call in mock_adapter.send_stream_frame.call_args_list
+        call
+        for call in mock_adapter.send_stream_frame.call_args_list
         if call.kwargs.get("finalize") is True
     ]
     assert len(finalize_calls) == 1, "Must finalize the stream"
@@ -86,7 +97,9 @@ async def test_approval_boundary_finalizes_and_disables_native(mock_adapter, con
 
 
 @pytest.mark.asyncio
-async def test_approval_boundary_uses_placeholder_when_no_accumulated(mock_adapter, consumer_config):
+async def test_approval_boundary_uses_placeholder_when_no_accumulated(
+    mock_adapter, consumer_config
+):
     """When there's no accumulated text, finalize with a visible placeholder."""
     consumer = GatewayStreamConsumer(
         adapter=mock_adapter,
@@ -110,7 +123,8 @@ async def test_approval_boundary_uses_placeholder_when_no_accumulated(mock_adapt
     assert result is True
 
     finalize_calls = [
-        call for call in mock_adapter.send_stream_frame.call_args_list
+        call
+        for call in mock_adapter.send_stream_frame.call_args_list
         if call.kwargs.get("finalize") is True
     ]
     assert len(finalize_calls) == 1
@@ -127,7 +141,9 @@ async def test_approval_boundary_uses_placeholder_when_no_accumulated(mock_adapt
 
 
 @pytest.mark.asyncio
-async def test_boundary_uses_custom_placeholder_when_no_accumulated(mock_adapter, consumer_config):
+async def test_boundary_uses_custom_placeholder_when_no_accumulated(
+    mock_adapter, consumer_config
+):
     """A clarify boundary passes its own placeholder; the empty-content
     finalize must use it instead of the approval wording so the finalized
     bubble doesn't read 'waiting for approval' for a decision question."""
@@ -153,7 +169,8 @@ async def test_boundary_uses_custom_placeholder_when_no_accumulated(mock_adapter
     assert result is True
 
     finalize_calls = [
-        call for call in mock_adapter.send_stream_frame.call_args_list
+        call
+        for call in mock_adapter.send_stream_frame.call_args_list
         if call.kwargs.get("finalize") is True
     ]
     assert len(finalize_calls) == 1
@@ -173,10 +190,10 @@ async def test_boundary_uses_custom_placeholder_when_no_accumulated(mock_adapter
         pass
 
 
-
-
 @pytest.mark.asyncio
-async def test_approval_boundary_post_approval_one_shot_send(mock_adapter, consumer_config):
+async def test_approval_boundary_post_approval_one_shot_send(
+    mock_adapter, consumer_config
+):
     """After approval boundary, post-approval content must:
     1. Set buffer_only=True (no mid-stream flushes)
     2. Accumulate all deltas without sending
@@ -213,16 +230,13 @@ async def test_approval_boundary_post_approval_one_shot_send(mock_adapter, consu
     await asyncio.sleep(0.1)
 
     # Before finish(): no send() or stream frame calls
-    assert mock_adapter.send.call_count == 0, (
-        "buffer_only: no send before finish()"
-    )
+    assert mock_adapter.send.call_count == 0, "buffer_only: no send before finish()"
     stream_calls = [
-        call for call in mock_adapter.send_stream_frame.call_args_list
+        call
+        for call in mock_adapter.send_stream_frame.call_args_list
         if not call.kwargs.get("finalize")
     ]
-    assert len(stream_calls) == 0, (
-        "Post-approval must NOT use native streaming"
-    )
+    assert len(stream_calls) == 0, "Post-approval must NOT use native streaming"
 
     # Now finish — should deliver via send()
     consumer.finish()
@@ -232,7 +246,11 @@ async def test_approval_boundary_post_approval_one_shot_send(mock_adapter, consu
     send_calls = mock_adapter.send.call_args_list
     assert len(send_calls) >= 1, "finish() must deliver via send()"
     # The delivered text should contain our post-approval content
-    delivered = send_calls[-1].args[1] if len(send_calls[-1].args) > 1 else send_calls[-1].kwargs.get("content", "")
+    delivered = (
+        send_calls[-1].args[1]
+        if len(send_calls[-1].args) > 1
+        else send_calls[-1].kwargs.get("content", "")
+    )
     assert "Post-approval result" in delivered
 
     consumer_task.cancel()
@@ -243,7 +261,9 @@ async def test_approval_boundary_post_approval_one_shot_send(mock_adapter, consu
 
 
 @pytest.mark.asyncio
-async def test_approval_boundary_stream_not_opened_at_boundary_time(mock_adapter, consumer_config):
+async def test_approval_boundary_stream_not_opened_at_boundary_time(
+    mock_adapter, consumer_config
+):
     """When native streaming is active but _native_stream_opened is still False
     at the time boundary processes (e.g., seed succeeded but stream was closed by
     a prior error before boundary arrives), no finalize is sent."""
@@ -287,7 +307,9 @@ async def test_approval_boundary_stream_not_opened_at_boundary_time(mock_adapter
 
 
 @pytest.mark.asyncio
-async def test_approval_boundary_finalize_fails_fallback_send_succeeds(mock_adapter, consumer_config):
+async def test_approval_boundary_finalize_fails_fallback_send_succeeds(
+    mock_adapter, consumer_config
+):
     """When stream finalize fails but fallback send() succeeds, boundary is True."""
     consumer = GatewayStreamConsumer(
         adapter=mock_adapter,
@@ -303,7 +325,9 @@ async def test_approval_boundary_finalize_fails_fallback_send_succeeds(mock_adap
     # Finalize fails (returns False)
     mock_adapter.send_stream_frame = AsyncMock(return_value=False)
     # Fallback send succeeds
-    mock_adapter.send = AsyncMock(return_value=MagicMock(success=True, message_id="msg"))
+    mock_adapter.send = AsyncMock(
+        return_value=MagicMock(success=True, message_id="msg")
+    )
 
     boundary_result = consumer.close_for_approval_prompt()
     if isinstance(boundary_result, tuple):
@@ -327,7 +351,9 @@ async def test_approval_boundary_finalize_fails_fallback_send_succeeds(mock_adap
 
 
 @pytest.mark.asyncio
-async def test_approval_boundary_finalize_and_fallback_both_fail(mock_adapter, consumer_config):
+async def test_approval_boundary_finalize_and_fallback_both_fail(
+    mock_adapter, consumer_config
+):
     """When both stream finalize and fallback send() fail, boundary is False."""
     consumer = GatewayStreamConsumer(
         adapter=mock_adapter,
@@ -343,7 +369,9 @@ async def test_approval_boundary_finalize_and_fallback_both_fail(mock_adapter, c
     # Finalize fails (raises)
     mock_adapter.send_stream_frame = AsyncMock(side_effect=RuntimeError("stream dead"))
     # Fallback send also fails
-    mock_adapter.send = AsyncMock(return_value=MagicMock(success=False, error="timeout"))
+    mock_adapter.send = AsyncMock(
+        return_value=MagicMock(success=False, error="timeout")
+    )
 
     boundary_result = consumer.close_for_approval_prompt()
     if isinstance(boundary_result, tuple):
@@ -354,7 +382,9 @@ async def test_approval_boundary_finalize_and_fallback_both_fail(mock_adapter, c
     consumer_task = asyncio.create_task(consumer.run())
     result = await asyncio.wait_for(boundary_future, timeout=1.0)
 
-    assert result is False, "Both finalize and fallback failed → boundary should be False"
+    assert result is False, (
+        "Both finalize and fallback failed → boundary should be False"
+    )
 
     consumer.finish()
     await asyncio.sleep(0.05)

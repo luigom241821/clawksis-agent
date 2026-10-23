@@ -29,9 +29,15 @@ def test_list_leaves_live_reader_as_completion_owner():
         started_at=time.time(),
         notify_on_complete=True,
     )
-    session.process = cast(Any, SimpleNamespace(
-        poll=lambda: 0, stdout=None, stderr=None, stdin=None,
-    ))
+    session.process = cast(
+        Any,
+        SimpleNamespace(
+            poll=lambda: 0,
+            stdout=None,
+            stderr=None,
+            stdin=None,
+        ),
+    )
     session._reader_selectable = True
     session._reader_thread = cast(Any, SimpleNamespace(is_alive=lambda: True))
     registry._running[session.id] = session
@@ -47,7 +53,8 @@ def test_list_leaves_live_reader_as_completion_owner():
     registry._move_to_finished(session)
     event = registry.completion_queue.get_nowait()
     assert (event["owner_task_id"], event["output"]) == (
-        "owner-owner", "owner-output",
+        "owner-owner",
+        "owner-output",
     )
 
 
@@ -63,14 +70,18 @@ def test_poll_during_the_readers_final_drain_keeps_the_whole_output(tmp_path):
     registry = module.ProcessRegistry()
     stalled, release = threading.Event(), threading.Event()
 
-    def slow_sink(_session, _chunk):  # a live-output consumer that falls behind for a moment
+    def slow_sink(
+        _session, _chunk
+    ):  # a live-output consumer that falls behind for a moment
         if not stalled.is_set():
             stalled.set()
             release.wait(10)
 
     registry.on_output = slow_sink
     burst = "import sys; sys.stdout.write('x' * 99 + '\\n'); sys.stdout.write(('y' * 99 + '\\n') * 100 + 'FINAL\\n')"
-    session = registry.spawn_local(f"{shlex.quote(sys.executable)} -c {shlex.quote(burst)}", cwd=str(tmp_path))
+    session = registry.spawn_local(
+        f"{shlex.quote(sys.executable)} -c {shlex.quote(burst)}", cwd=str(tmp_path)
+    )
     session.notify_on_complete = True
     try:
         assert stalled.wait(10)
@@ -79,7 +90,9 @@ def test_poll_during_the_readers_final_drain_keeps_the_whole_output(tmp_path):
         polled = registry.poll(session.id)
         assert session._completion_event.wait(10)
         assert polled["status"] == "exited"
-        assert polled["output_preview"].rstrip().endswith("FINAL"), polled["output_preview"][-80:]
+        assert polled["output_preview"].rstrip().endswith("FINAL"), polled[
+            "output_preview"
+        ][-80:]
         event = registry.completion_queue.get(timeout=2)
         assert event["output"].rstrip().endswith("FINAL"), event["output"][-80:]
     finally:
@@ -95,7 +108,10 @@ def test_list_reconciles_real_exit_without_consuming_owned_result(tmp_path):
         [sys.executable, str(Path(__file__).resolve()), "probe", str(tmp_path)],
         cwd=Path(__file__).resolve().parents[2],
         env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[2])},
-        stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -105,7 +121,9 @@ def _probe(root):
     import tools.process_registry as module
 
     assert ctypes.CDLL(None).prctl(36, 1, 0, 0, 0) == 0  # PR_SET_CHILD_SUBREAPER
-    module._SYSTEMD_SCOPE_AVAILABLE = False  # Own the test process tree, not a host service.
+    module._SYSTEMD_SCOPE_AVAILABLE = (
+        False  # Own the test process tree, not a host service.
+    )
     registry = module.ProcessRegistry()
     sessions = []
     command = f"exec {shlex.quote(sys.executable)} {shlex.quote(__file__)}"
@@ -113,14 +131,19 @@ def _probe(root):
         for name in ("owner", "sibling"):
             session = registry.spawn_local(
                 f"{command} child {shlex.quote(str(root / name))}",
-                cwd=str(root), task_id=name + "-task", owner_task_id=name + "-owner",
+                cwd=str(root),
+                task_id=name + "-task",
+                owner_task_id=name + "-owner",
                 session_key=name + "-session",
             )
             sessions.append(session)
             session.notify_on_complete = True
         owner, sibling = sessions
         deadline = time.monotonic() + 5
-        while not all(name + "-output" in s.output_buffer for name, s in zip(("owner", "sibling"), sessions)):
+        while not all(
+            name + "-output" in s.output_buffer
+            for name, s in zip(("owner", "sibling"), sessions)
+        ):
             assert time.monotonic() < deadline, "writers did not become ready"
             time.sleep(0.01)
         assert all(s.process.poll() is None for s in sessions)
@@ -130,31 +153,54 @@ def _probe(root):
         started = time.monotonic()
         listed = registry.list_sessions(session_key="owner-session")
         elapsed = time.monotonic() - started
-        print(json.dumps({"direct_child": owner.process.returncode, "listed": listed,
-                          "elapsed": elapsed, "reader_alive": owner._reader_thread.is_alive()}), flush=True)
+        print(
+            json.dumps(
+                {
+                    "direct_child": owner.process.returncode,
+                    "listed": listed,
+                    "elapsed": elapsed,
+                    "reader_alive": owner._reader_thread.is_alive(),
+                }
+            ),
+            flush=True,
+        )
         assert elapsed < 2, "list waited for the descendant's pipe lifetime"
         assert [entry["session_id"] for entry in listed] == [owner.id]
         assert listed[0]["status"] == "exited"
         assert listed[0]["exit_code"] == 0
         event = registry.completion_queue.get(timeout=2)
-        assert (event["session_id"], event["session_key"], event["task_id"], event["owner_task_id"]) == (
-            owner.id, "owner-session", "owner-task", "owner-owner")
+        assert (
+            event["session_id"],
+            event["session_key"],
+            event["task_id"],
+            event["owner_task_id"],
+        ) == (owner.id, "owner-session", "owner-task", "owner-owner")
         assert event["exit_code"] == 0 and "owner-output" in event["output"]
         assert registry.unread_completions_owned_by("owner-owner") == [owner]
         assert registry.unread_completions_owned_by("sibling-owner") == []
         for _ in range(3):
-            assert registry.list_sessions(session_key="owner-session")[0]["status"] == "exited"
+            assert (
+                registry.list_sessions(session_key="owner-session")[0]["status"]
+                == "exited"
+            )
             foreign = registry.list_sessions(session_key="sibling-session")
-            assert [(row["session_id"], row["status"]) for row in foreign] == [(sibling.id, "running")]
+            assert [(row["session_id"], row["status"]) for row in foreign] == [
+                (sibling.id, "running")
+            ]
         assert sibling.process.poll() is None
         (root / "owner-stop").touch()
         owner._reader_thread.join(timeout=5)
         assert not owner._reader_thread.is_alive()
-        assert registry.completion_queue.empty(), "reader and list emitted duplicate completions"
+        assert registry.completion_queue.empty(), (
+            "reader and list emitted duplicate completions"
+        )
         assert not registry.is_completion_consumed(owner.id)
         assert "owner-output" in registry.read_log(owner.id)["output"]
         assert registry.is_completion_consumed(owner.id)
-        print("PASS: list-only exit; one exact-owner event; running sibling isolated; unread output retained", flush=True)
+        print(
+            "PASS: list-only exit; one exact-owner event; running sibling isolated; unread output retained",
+            flush=True,
+        )
     finally:
         for name in ("owner", "sibling"):
             (root / (name + "-stop")).touch()
@@ -176,7 +222,8 @@ def _probe(root):
 
 def _child(gate):
     subprocess.Popen(
-        [sys.executable, __file__, "writer", str(gate)], stdin=subprocess.DEVNULL,
+        [sys.executable, __file__, "writer", str(gate)],
+        stdin=subprocess.DEVNULL,
     )
     deadline = time.monotonic() + 15
     while not Path(str(gate) + "-exit").exists() and time.monotonic() < deadline:
@@ -191,4 +238,6 @@ def _writer(gate):
 
 
 if __name__ == "__main__":
-    {"probe": _probe, "child": _child, "writer": _writer}[sys.argv[1]](Path(sys.argv[2]))
+    {"probe": _probe, "child": _child, "writer": _writer}[sys.argv[1]](
+        Path(sys.argv[2])
+    )

@@ -22,7 +22,9 @@ CONNECTOR_FILE_MAX_BYTES = 20 * 1024 * 1024
 # The gateway's six-state account status (contract `CONNECTOR_CONNECTION_STATUSES`; the vendor's
 # INITIALIZING and INITIATED both arrive as `pending`). Present only once the session binds an
 # account; a value outside this set is a contract break and fails validation.
-ConnectionStatus = Literal["pending", "active", "failed", "expired", "revoked", "inactive"]
+ConnectionStatus = Literal[
+    "pending", "active", "failed", "expired", "revoked", "inactive"
+]
 # Where the vendor's done page sends the browser after consent; the dev desktop registers clawk-dev://.
 ConnectorReturnTarget = Literal["clawk-desktop", "clawk-desktop-dev", "portal"]
 # Who asked for a connect, so the gateway can attribute each minted link. The gateway sets
@@ -73,7 +75,6 @@ def execute_error_family(code: str, family: Optional[str] = None) -> Optional[st
 
 
 class _Wire(BaseModel):
-
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
 
@@ -260,9 +261,13 @@ class ConnectorListItem(_Wire):
     connector: str
     enabled: bool = True
     connected: bool = False
-    connection_status: Optional[ConnectionStatus] = Field(default=None, alias="connectionStatus")
+    connection_status: Optional[ConnectionStatus] = Field(
+        default=None, alias="connectionStatus"
+    )
     status_reason: Optional[str] = Field(default=None, alias="statusReason")
-    gateway_disabled_tools: list[str] = Field(default_factory=list, alias="disabledTools")
+    gateway_disabled_tools: list[str] = Field(
+        default_factory=list, alias="disabledTools"
+    )
 
 
 class ConnectorListResponse(_Wire):

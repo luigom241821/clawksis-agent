@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 def destination_key(runtime: dict[str, Any]) -> tuple[str, str]:
     """``(route, model)`` identity of an aggregator destination: the base_url when the slot
     resolved one (two providers can share a model id), else the provider slug."""
-    route = str(runtime.get("base_url") or runtime.get("provider") or "").strip().rstrip("/")
+    route = (
+        str(runtime.get("base_url") or runtime.get("provider") or "")
+        .strip()
+        .rstrip("/")
+    )
     return route, str(runtime.get("model") or "").strip()
 
 
@@ -40,8 +44,14 @@ def merge_same_role_messages(messages: list[dict[str, Any]]) -> list[dict[str, A
     for message in messages:
         prev = merged[-1] if merged else None
         content: Any = _UNMERGEABLE
-        if prev is not None and prev.get("role") == "user" and message.get("role") == "user":
-            content = _merge_user_content(prev.get("content", ""), message.get("content", ""))
+        if (
+            prev is not None
+            and prev.get("role") == "user"
+            and message.get("role") == "user"
+        ):
+            content = _merge_user_content(
+                prev.get("content", ""), message.get("content", "")
+            )
         if content is _UNMERGEABLE:
             merged.append(message)
             continue
@@ -56,9 +66,13 @@ def is_role_alternation_rejection(exc: Exception, runtime: dict[str, Any]) -> bo
 
     try:
         classified = classify_api_error(
-            exc, provider=str(runtime.get("provider") or ""), model=str(runtime.get("model") or ""),
+            exc,
+            provider=str(runtime.get("provider") or ""),
+            model=str(runtime.get("model") or ""),
             base_url=str(runtime.get("base_url") or ""),
         )
-    except Exception:  # pragma: no cover - classification must never mask the original error
+    except (
+        Exception
+    ):  # pragma: no cover - classification must never mask the original error
         return False
     return classified.reason is FailoverReason.role_alternation

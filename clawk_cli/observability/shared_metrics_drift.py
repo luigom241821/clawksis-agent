@@ -18,17 +18,23 @@ from .shared_metrics_contract import (
 )
 
 
-def counter_dimensions_shape_is_known(metric_name: str, dimensions: dict[str, Any]) -> bool:
+def counter_dimensions_shape_is_known(
+    metric_name: str, dimensions: dict[str, Any]
+) -> bool:
     """Whether the row's field set matches a current or legacy contract shape (values aside).
 
     A row that fails this is structurally unknown — that is tamper evidence, not drift, and
     packaging keeps failing closed on it (see test_package_builder_rejects_tampered_dimensions).
     """
     fields = frozenset(dimensions)
-    return fields == _METRIC_FIELDS.get(metric_name) or fields in _LEGACY_METRIC_FIELDS.get(metric_name, ())
+    return fields == _METRIC_FIELDS.get(
+        metric_name
+    ) or fields in _LEGACY_METRIC_FIELDS.get(metric_name, ())
 
 
-def conform_counter_dimensions(metric_name: str, dimensions: dict[str, Any]) -> dict[str, Any] | None:
+def conform_counter_dimensions(
+    metric_name: str, dimensions: dict[str, Any]
+) -> dict[str, Any] | None:
     """Re-bucket out-of-contract enum values into the field's closed fallback, else ``None``.
 
     Catalog-backed enums are repo data: a value that was a catalog entry when the row was
@@ -56,7 +62,10 @@ def conform_counter_dimensions(metric_name: str, dimensions: dict[str, Any]) -> 
         allowed = contract[field]
         if value in allowed:
             continue
-        fallback = next((bucket for bucket in ("custom", "other", "unknown") if bucket in allowed), None)
+        fallback = next(
+            (bucket for bucket in ("custom", "other", "unknown") if bucket in allowed),
+            None,
+        )
         if fallback is None:
             return None
         conformed[field] = fallback

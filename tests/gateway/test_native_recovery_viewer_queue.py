@@ -53,7 +53,9 @@ def _native_row(db, epoch, sid, route):
 
 
 @pytest.mark.asyncio
-async def test_submit_persists_viewer_provenance_and_restart_accepts_it(monkeypatch, tmp_path):
+async def test_submit_persists_viewer_provenance_and_restart_accepts_it(
+    monkeypatch, tmp_path
+):
     sid = "native-session"
     route = "telegram:default:chat"
     source = _source()
@@ -64,13 +66,15 @@ async def test_submit_persists_viewer_provenance_and_restart_accepts_it(monkeypa
         _native_row(db, epoch, sid, route)
 
         authority = SessionAuthority(
-            _runner(), profile_id="default", instance_id="first", db=db, epoch=epoch)
+            _runner(), profile_id="default", instance_id="first", db=db, epoch=epoch
+        )
         authority.sessions[sid] = LiveSession(source, route)
         authority._publish_pending = lambda ref: None
         authority._schedule = lambda ref: None
 
         actor = Principal(
-            "authenticated-viewer", "default", frozenset({"session:submit"}), "viewer")
+            "authenticated-viewer", "default", frozenset({"session:submit"}), "viewer"
+        )
         await authority.submit(
             actor,
             Submission(
@@ -89,14 +93,18 @@ async def test_submit_persists_viewer_provenance_and_restart_accepts_it(monkeypa
             "principal_id": "authenticated-viewer",
         }
 
-        async def check_native_route(runner, payload, target, available_source, adapter):
+        async def check_native_route(
+            runner, payload, target, available_source, adapter
+        ):
             return source, route
 
         monkeypatch.setattr(
-            "gateway.session_envelope.check_native_route", check_native_route)
+            "gateway.session_envelope.check_native_route", check_native_route
+        )
 
         recovered = SessionAuthority(
-            _runner(), profile_id="default", instance_id="restart", db=db, epoch=epoch)
+            _runner(), profile_id="default", instance_id="restart", db=db, epoch=epoch
+        )
         scheduled = []
         recovered._schedule = lambda ref: scheduled.append(ref.session_id)
 

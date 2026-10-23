@@ -8,14 +8,11 @@ from clawk_cli.session_listing import (
 )
 
 
-
-
-
-
 class TestQuerySessionListingSearch:
     @pytest.fixture
     def db(self, tmp_path):
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("sess_an94", "telegram", user_id="1", chat_id="2")
         db.set_session_title("sess_an94", "AN-94 Prestige Barrel Build #2")
@@ -28,16 +25,16 @@ class TestQuerySessionListingSearch:
     def _ids(self, db, **kw):
         return [r["id"] for r in query_session_listing(db, **kw)]
 
-
-
     def test_source_scoping(self, db):
         assert self._ids(db, source="telegram", search_query="winton") == []
-        assert self._ids(db, source="whatsapp", search_query="winton") == ["sess_winton"]
-
+        assert self._ids(db, source="whatsapp", search_query="winton") == [
+            "sess_winton"
+        ]
 
     def test_search_matches_compression_root_title(self, tmp_path):
         """Searching an old (compressed-away) title surfaces the live tip."""
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=tmp_path / "chain.db")
         db.create_session("root_1", "telegram", user_id="1", chat_id="2")
         db.set_session_title("root_1", "Old Chat")
@@ -57,7 +54,9 @@ class TestQuerySessionListingSearch:
         assert self._ids(db, source="telegram") == ["sess_an94"]
 
     def test_current_session_is_hidden_by_default(self, db):
-        rows = query_session_listing(db, source="telegram", current_session_id="sess_an94")
+        rows = query_session_listing(
+            db, source="telegram", current_session_id="sess_an94"
+        )
         assert [r["id"] for r in rows] == []
 
     def test_current_session_can_be_listed_with_marker(self, db):
@@ -73,12 +72,9 @@ class TestQuerySessionListingSearch:
 
 
 class TestFormatGatewaySessionListing:
-
-
     def test_notice_on_empty_listing(self):
         listing = format_gateway_session_listing([], notice="_scoped_")
         assert "_scoped_" in listing
-
 
 
 class TestQuerySessionListingLaneScope:
@@ -89,24 +85,35 @@ class TestQuerySessionListingLaneScope:
         db = SessionDB(db_path=tmp_path / "state.db")
         lane_key = "agent:main:telegram:dm:lane"
         db.create_session(
-            "lane_current", "telegram", session_key=lane_key,
-            user_id="lane-user", chat_id="lane",
+            "lane_current",
+            "telegram",
+            session_key=lane_key,
+            user_id="lane-user",
+            chat_id="lane",
         )
         db.set_session_title("lane_current", "Current lane")
         db.create_session(
-            "lane_named", "telegram", session_key=lane_key,
-            user_id="lane-user", chat_id="lane",
+            "lane_named",
+            "telegram",
+            session_key=lane_key,
+            user_id="lane-user",
+            chat_id="lane",
         )
         db.set_session_title("lane_named", "Needle lane")
         db.create_session(
-            "lane_unnamed", "telegram", session_key=lane_key,
-            user_id="lane-user", chat_id="lane",
+            "lane_unnamed",
+            "telegram",
+            session_key=lane_key,
+            user_id="lane-user",
+            chat_id="lane",
         )
         for i in range(60):
             db.create_session(
-                f"foreign_{i}", "telegram",
+                f"foreign_{i}",
+                "telegram",
                 session_key=f"agent:main:telegram:dm:foreign-{i}",
-                user_id=f"foreign-user-{i}", chat_id=f"foreign-{i}",
+                user_id=f"foreign-user-{i}",
+                chat_id=f"foreign-{i}",
             )
             db.set_session_title(f"foreign_{i}", f"Needle foreign {i}")
         yield db, lane_key
@@ -144,7 +151,9 @@ class TestQuerySessionListingLaneScope:
         )
 
         assert {row["id"] for row in full_rows} == {
-            "lane_current", "lane_named", "lane_unnamed",
+            "lane_current",
+            "lane_named",
+            "lane_unnamed",
         }
         assert [row["id"] for row in search_rows] == ["lane_named"]
 

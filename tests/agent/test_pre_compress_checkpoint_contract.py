@@ -79,8 +79,6 @@ class _FailingLegacyProvider(_BaseStubProvider):
         raise RuntimeError("legacy best-effort failure")
 
 
-
-
 def test_v1_providers_receive_raw_messages_and_v2_receive_evidence():
     """The historical (v1) contract is untouched: raw message list.
 
@@ -157,15 +155,21 @@ def test_manager_advertises_checkpoint_capability_only_with_capable_provider():
     # probed on two separate managers.
     legacy_manager = MemoryManager()
     legacy_manager.add_provider(_BaseStubProvider("legacy"))
-    assert legacy_manager.supports_pre_compress_checkpoint(
-        PRE_COMPRESS_CHECKPOINT_API_VERSION
-    ) is False
+    assert (
+        legacy_manager.supports_pre_compress_checkpoint(
+            PRE_COMPRESS_CHECKPOINT_API_VERSION
+        )
+        is False
+    )
 
     durable_manager = MemoryManager()
     durable_manager.add_provider(_CheckpointProvider("durable"))
-    assert durable_manager.supports_pre_compress_checkpoint(
-        PRE_COMPRESS_CHECKPOINT_API_VERSION
-    ) is True
+    assert (
+        durable_manager.supports_pre_compress_checkpoint(
+            PRE_COMPRESS_CHECKPOINT_API_VERSION
+        )
+        is True
+    )
 
 
 def test_manager_require_checkpoint_raises_without_capable_provider():
@@ -317,9 +321,7 @@ def test_compressed_summary_marker_survives_restart_via_resume_history(tmp_path)
     db = SessionDB(tmp_path / "state.db")
     db.create_session("s1", source="cli")
     db.append_message("s1", "user", "durable user evidence")
-    db.append_message(
-        "s1", "assistant", "derivative summary", _compressed_summary=True
-    )
+    db.append_message("s1", "assistant", "derivative summary", _compressed_summary=True)
 
     reopened = SessionDB(tmp_path / "state.db")
     model_history, _display = reopened.get_resume_conversations("s1")
@@ -337,7 +339,9 @@ def test_live_replay_preserves_summary_boundary_without_changing_display(tmp_pat
     db_path = tmp_path / "state.db"
     db = SessionDB(db_path)
     db.create_session("summary-replay", source="telegram")
-    db.append_message("summary-replay", "user", "Derivative context", _compressed_summary=True)
+    db.append_message(
+        "summary-replay", "user", "Derivative context", _compressed_summary=True
+    )
     db.append_message("summary-replay", "user", "Original request")
     db.append_message("summary-replay", "assistant", "Original answer")
     db.create_session("plain-replay", source="telegram")
@@ -346,15 +350,21 @@ def test_live_replay_preserves_summary_boundary_without_changing_display(tmp_pat
 
     reopened = SessionDB(db_path)
     display_before = reopened.get_messages_as_conversation("summary-replay")
-    replay = reopened.get_messages_as_conversation("summary-replay", repair_alternation=True)
+    replay = reopened.get_messages_as_conversation(
+        "summary-replay", repair_alternation=True
+    )
     assert [m["content"] for m in replay] == [
-        "Derivative context", "Original request", "Original answer"
+        "Derivative context",
+        "Original request",
+        "Original answer",
     ]
     assert replay[0].get("_compressed_summary") is True
     assert all("_compressed_summary" not in m for m in replay[1:])
     assert reopened.get_messages_as_conversation("summary-replay") == display_before
     assert all("_compressed_summary" not in m for m in display_before)
-    plain = reopened.get_messages_as_conversation("plain-replay", repair_alternation=True)
+    plain = reopened.get_messages_as_conversation(
+        "plain-replay", repair_alternation=True
+    )
     assert [m["content"] for m in plain] == ["First request\n\nSecond request"]
     assert all("_compressed_summary" not in m for m in plain)
 
@@ -377,9 +387,7 @@ def test_compressed_summary_column_is_added_to_legacy_databases(tmp_path):
     conn = sqlite3.connect(db_path)
     conn.execute("ALTER TABLE messages DROP COLUMN _compressed_summary")
     conn.commit()
-    legacy_cols = {
-        row[1] for row in conn.execute("PRAGMA table_info(messages)")
-    }
+    legacy_cols = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
     conn.close()
     assert "_compressed_summary" not in legacy_cols
 
@@ -416,12 +424,9 @@ def test_native_responses_compaction_is_suppressed_when_checkpoint_required():
             context_compressor=None,
         )
 
-    assert native_compaction_context_management(
-        agent(False), is_codex_backend=True
-    )
+    assert native_compaction_context_management(agent(False), is_codex_backend=True)
     assert (
-        native_compaction_context_management(agent(True), is_codex_backend=True)
-        is None
+        native_compaction_context_management(agent(True), is_codex_backend=True) is None
     )
 
 
@@ -540,14 +545,16 @@ def test_turn_finalizer_never_micro_compacts_while_checkpoint_gate_armed(
     assert _run(checkpoint_required=False) == 1
 
 
-
-
 def _warn_text(caplog) -> str:
-    return "\n".join(r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+    return "\n".join(
+        r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+    )
 
 
 def _armed_agent(manager):
-    return SimpleNamespace(compression_checkpoint_required=True, _memory_manager=manager)
+    return SimpleNamespace(
+        compression_checkpoint_required=True, _memory_manager=manager
+    )
 
 
 def _legacy_manager():
@@ -561,7 +568,9 @@ def _legacy_manager():
     [(_legacy_manager(), "holographic"), (None, "no active provider")],
     ids=["v1-provider", "no-manager"],
 )
-def test_startup_warns_when_checkpoint_required_cannot_pass(caplog, manager, expected_label):
+def test_startup_warns_when_checkpoint_required_cannot_pass(
+    caplog, manager, expected_label
+):
     """Regression for #106870: the fail-closed gate is right, but with the flag armed and
     no checkpoint-capable provider every compression will block, and that is knowable at
     init. The warning must name the config key, the active provider and the way out."""
@@ -577,7 +586,9 @@ def test_startup_warns_when_checkpoint_required_cannot_pass(caplog, manager, exp
 def test_startup_is_silent_when_gate_off_or_provider_capable(caplog):
     capable = MemoryManager()
     capable.add_provider(_CheckpointProvider("archiver"))
-    off = SimpleNamespace(compression_checkpoint_required=False, _memory_manager=_legacy_manager())
+    off = SimpleNamespace(
+        compression_checkpoint_required=False, _memory_manager=_legacy_manager()
+    )
 
     with caplog.at_level(logging.WARNING, logger="agent.conversation_compression"):
         _warn_checkpoint_required_without_capable_provider(_armed_agent(capable))
@@ -590,7 +601,9 @@ def test_capability_refusal_names_the_config_key_to_change():
     """The compress-time block must point at the flag that armed it, not only the missing API."""
     with pytest.raises(CompressionCheckpointUnavailable) as excinfo:
         _pre_compress_memory_context(
-            SimpleNamespace(_memory_manager=_legacy_manager()), [{"role": "user", "content": "evidence"}], True
+            SimpleNamespace(_memory_manager=_legacy_manager()),
+            [{"role": "user", "content": "evidence"}],
+            True,
         )
 
     msg = str(excinfo.value)
@@ -606,9 +619,13 @@ def test_persistence_isolated_fork_skips_the_checkpoint_gate_but_durable_agents_
     then re-enables compression; failing closed there aborted every fork compaction.
     """
     messages = [{"role": "user", "content": "evidence"}]
-    fork = SimpleNamespace(_persist_disabled=True, _session_db=None, _memory_manager=None)
+    fork = SimpleNamespace(
+        _persist_disabled=True, _session_db=None, _memory_manager=None
+    )
     assert _pre_compress_memory_context(fork, messages, True) == ""
 
-    durable = SimpleNamespace(_persist_disabled=False, _session_db=None, _memory_manager=None)
+    durable = SimpleNamespace(
+        _persist_disabled=False, _session_db=None, _memory_manager=None
+    )
     with pytest.raises(CompressionCheckpointUnavailable):
         _pre_compress_memory_context(durable, messages, True)

@@ -8,6 +8,7 @@ model selection with a broken token instead of offering re-auth.
 
 from clawk_cli.config import save_env_value
 
+
 class TestStaleOAuthTokenDetection:
     """Bug 3: stale OAuth token must trigger needs_auth=True in _model_flow_anthropic."""
 
@@ -28,14 +29,14 @@ class TestStaleOAuthTokenDetection:
             "agent.anthropic_credentials.read_claude_code_credentials",
             lambda: {
                 "accessToken": "expired-cc-token",
-                "refreshToken": "",          # No refresh — can't recover
-                "expiresAt": 0,               # Already expired
+                "refreshToken": "",  # No refresh — can't recover
+                "expiresAt": 0,  # Already expired
                 "source": "claude_code_credentials_file",
             },
         )
         monkeypatch.setattr(
             "agent.anthropic_credentials.is_claude_code_token_valid",
-            lambda creds: False,             # Explicitly expired
+            lambda creds: False,  # Explicitly expired
         )
         monkeypatch.setattr(
             "agent.anthropic_credentials._is_oauth_token",
@@ -49,9 +50,12 @@ class TestStaleOAuthTokenDetection:
 
         # Simulate user types "3" (Cancel) when prompted for re-auth
         monkeypatch.setattr("builtins.input", lambda _: "3")
-        monkeypatch.setattr("clawk_cli.secret_prompt.masked_secret_prompt", lambda _: "")
+        monkeypatch.setattr(
+            "clawk_cli.secret_prompt.masked_secret_prompt", lambda _: ""
+        )
 
         from clawk_cli.model_setup_flows import _model_flow_anthropic
+
         cfg = {}
 
         _model_flow_anthropic(cfg)

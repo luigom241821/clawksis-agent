@@ -9,17 +9,27 @@ class TestTokenValidation:
 
     def test_classic_pat_rejected(self):
         from clawk_cli.copilot_auth import validate_copilot_token
+
         valid, _msg = validate_copilot_token("ghp_abcdefghijklmnop1234")
         assert valid is False
 
-    @pytest.mark.parametrize("token", ["gho_abcdefghijklmnop1234", "github_pat_abcdefghijklmnop1234", "ghu_abcdefghijklmnop1234"])
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "gho_abcdefghijklmnop1234",
+            "github_pat_abcdefghijklmnop1234",
+            "ghu_abcdefghijklmnop1234",
+        ],
+    )
     def test_supported_token_families_accepted(self, token):
         from clawk_cli.copilot_auth import validate_copilot_token
+
         assert validate_copilot_token(token) == (True, "OK")
 
     def test_arbitrary_string_rejected(self):
         """A non-GitHub value in GITHUB_TOKEN must fail validation instead of reaching the API (#12650)."""
         from clawk_cli.copilot_auth import validate_copilot_token
+
         valid, _msg = validate_copilot_token("not_a_github_token")
         assert valid is False
 
@@ -27,9 +37,9 @@ class TestTokenValidation:
 class TestResolveToken:
     """Token resolution with env var priority."""
 
-
     def test_gh_token_second_priority(self, monkeypatch):
         from clawk_cli.copilot_auth import resolve_copilot_token
+
         monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
         monkeypatch.setenv("GH_TOKEN", "gho_gh_second")
         monkeypatch.setenv("GITHUB_TOKEN", "gho_github_third")
@@ -37,13 +47,15 @@ class TestResolveToken:
         assert token == "gho_gh_second"
         assert source == "GH_TOKEN"
 
-
     def test_gh_cli_classic_pat_raises(self, monkeypatch):
         from clawk_cli.copilot_auth import resolve_copilot_token
+
         monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-        with patch("clawk_cli.copilot_auth._try_gh_cli_token", return_value="ghp_classic"):
+        with patch(
+            "clawk_cli.copilot_auth._try_gh_cli_token", return_value="ghp_classic"
+        ):
             with pytest.raises(ValueError):
                 resolve_copilot_token()
 
@@ -57,6 +69,7 @@ class TestResolveToken:
         Only fall back to the CLI when NO Copilot env var is set at all.
         """
         from clawk_cli.copilot_auth import resolve_copilot_token
+
         monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_classic_pat_nope")
@@ -69,6 +82,7 @@ class TestResolveToken:
     def test_all_env_vars_invalid_skips_gh_cli_fallback(self, monkeypatch):
         """All three env vars set to classic PATs → no gh CLI call."""
         from clawk_cli.copilot_auth import resolve_copilot_token
+
         monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_one")
         monkeypatch.setenv("GH_TOKEN", "ghp_two")
         monkeypatch.setenv("GITHUB_TOKEN", "ghp_three")
@@ -90,25 +104,31 @@ class TestGhCliTokenCache:
 
     def _reset(self):
         from clawk_cli.copilot_auth import _invalidate_gh_cli_token_cache
+
         _invalidate_gh_cli_token_cache()
 
     def test_miss_is_cached_and_probe_runs_once(self):
         from clawk_cli import copilot_auth
+
         self._reset()
-        with patch.object(copilot_auth, "_probe_gh_cli_token", return_value=None) as probe:
+        with patch.object(
+            copilot_auth, "_probe_gh_cli_token", return_value=None
+        ) as probe:
             assert copilot_auth._try_gh_cli_token() is None
             assert copilot_auth._try_gh_cli_token() is None
             assert copilot_auth._try_gh_cli_token() is None
         assert probe.call_count == 1
         self._reset()
 
-
     def test_ttl_expiry_reprobes(self, monkeypatch):
         from clawk_cli import copilot_auth
+
         self._reset()
         clock = {"now": 1000.0}
         monkeypatch.setattr(copilot_auth.time, "monotonic", lambda: clock["now"])
-        with patch.object(copilot_auth, "_probe_gh_cli_token", return_value=None) as probe:
+        with patch.object(
+            copilot_auth, "_probe_gh_cli_token", return_value=None
+        ) as probe:
             copilot_auth._try_gh_cli_token()
             clock["now"] += copilot_auth._GH_CLI_TOKEN_CACHE_TTL_SECONDS + 1
             copilot_auth._try_gh_cli_token()
@@ -121,14 +141,15 @@ class TestRequestHeaders:
 
     def test_default_headers_include_openai_intent(self):
         from clawk_cli.copilot_auth import copilot_request_headers
+
         headers = copilot_request_headers()
         assert headers["Openai-Intent"] == "conversation-edits"
         assert headers["User-Agent"] == "ClawksisAgent/1.0"
         assert "Editor-Version" in headers
 
-
     def test_no_vision_header_by_default(self):
         from clawk_cli.copilot_auth import copilot_request_headers
+
         headers = copilot_request_headers()
         assert "Copilot-Vision-Request" not in headers
 
@@ -136,10 +157,10 @@ class TestRequestHeaders:
 class TestCopilotDefaultHeaders:
     """The models.py copilot_default_headers uses copilot_auth."""
 
-
     def test_param_passthrough_both_values(self):
         """is_agent_turn param correctly maps to x-initiator for both True and False."""
         from clawk_cli.models import copilot_default_headers
+
         for is_agent, expected in [(True, "agent"), (False, "user")]:
             headers = copilot_default_headers(is_agent_turn=is_agent)
             assert headers["x-initiator"] == expected, (
@@ -153,8 +174,8 @@ class TestEnvVarOrder:
 
     def test_copilot_env_vars_include_copilot_github_token(self):
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         copilot = PROVIDER_REGISTRY["copilot"]
         assert "COPILOT_GITHUB_TOKEN" in copilot.api_key_env_vars
         # COPILOT_GITHUB_TOKEN should be first
         assert copilot.api_key_env_vars[0] == "COPILOT_GITHUB_TOKEN"
-

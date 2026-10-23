@@ -8,6 +8,7 @@ passes its /healthz readiness check, deletes it on stop/failed-start, and
 ``_standalone_send`` falls back to it when PHOTON_SIDECAR_TOKEN is unset.
 No Node, no ports, no network.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -37,7 +38,9 @@ def _make_adapter(monkeypatch: pytest.MonkeyPatch) -> PhotonAdapter:
     monkeypatch.setenv("PHOTON_PROJECT_ID", "test-project-id")
     monkeypatch.setenv("PHOTON_PROJECT_SECRET", "test-project-secret")
     # Stand-in for PM's node; the user's PATH node is never picked up.
-    monkeypatch.setattr(photon_adapter, "find_node_executable", lambda _name: "/pm/node")
+    monkeypatch.setattr(
+        photon_adapter, "find_node_executable", lambda _name: "/pm/node"
+    )
     monkeypatch.delenv("PHOTON_SIDECAR_TOKEN", raising=False)
     cfg = PlatformConfig(enabled=True, token="", extra={})
     return PhotonAdapter(cfg)
@@ -138,9 +141,7 @@ def _patch_spawn(
         "run",
         lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})(),
     )
-    monkeypatch.setattr(
-        photon_adapter.subprocess, "Popen", lambda *a, **k: _FakeProc()
-    )
+    monkeypatch.setattr(photon_adapter.subprocess, "Popen", lambda *a, **k: _FakeProc())
 
     async def _no_supervise(self: PhotonAdapter, proc: Any) -> None:
         return None
@@ -231,5 +232,3 @@ async def test_standalone_send_consumes_record_when_env_missing(
     url, _body, headers = _SendClient.calls[0]
     assert ":9111/" in url
     assert headers["X-Clawksis-Sidecar-Token"] == "record-token"
-
-

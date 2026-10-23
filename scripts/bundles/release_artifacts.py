@@ -1,4 +1,5 @@
 """Record, stage and promote the exact native release artifacts."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,11 @@ from pathlib import Path, PureWindowsPath
 from typing import Iterable
 
 from scripts.releases import lanes as lane_set
-from scripts.releases.stable import read_admitted_candidate, accepted_smoke_results, validate_candidates
+from scripts.releases.stable import (
+    read_admitted_candidate,
+    accepted_smoke_results,
+    validate_candidates,
+)
 
 
 def sha256_file(file: Path) -> str:
@@ -24,21 +29,39 @@ def sha256_file(file: Path) -> str:
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
-def stamp_matches(stamp: dict, tag: str, commit: str, *, channel_request: dict | None = None) -> None:
+def stamp_matches(
+    stamp: dict, tag: str, commit: str, *, channel_request: dict | None = None
+) -> None:
     if channel_request is not None and channel_request.get("receiverCandidate"):
-        if (stamp.get("channelBuild") is not None or stamp.get("source") != "build"
-                or stamp.get("receiverProtocol") != 1 or stamp.get("displayVersion") != channel_request["version"]
-                or stamp.get("commit") != commit or stamp.get("tag") != channel_request["releaseTag"]
-                or stamp.get("baseVersion") != channel_request["sourceVersion"]):
-            raise ValueError("Receiver candidate must use ordinary stable update ownership")
+        if (
+            stamp.get("channelBuild") is not None
+            or stamp.get("source") != "build"
+            or stamp.get("receiverProtocol") != 1
+            or stamp.get("displayVersion") != channel_request["version"]
+            or stamp.get("commit") != commit
+            or stamp.get("tag") != channel_request["releaseTag"]
+            or stamp.get("baseVersion") != channel_request["sourceVersion"]
+        ):
+            raise ValueError(
+                "Receiver candidate must use ordinary stable update ownership"
+            )
         return
     if channel_request is not None:
-        if (stamp.get("source") != "channel-build" or stamp.get("channelBuild") != channel_request
-                or stamp.get("commit") != channel_request["commit"] or stamp.get("tag")):
-            raise ValueError("Built package provenance does not match the channel request")
+        if (
+            stamp.get("source") != "channel-build"
+            or stamp.get("channelBuild") != channel_request
+            or stamp.get("commit") != channel_request["commit"]
+            or stamp.get("tag")
+        ):
+            raise ValueError(
+                "Built package provenance does not match the channel request"
+            )
         return
-    if (stamp.get("commit") != commit or stamp.get("tag") != tag
-            or stamp.get("baseVersion") != tag.removeprefix("v")):
+    if (
+        stamp.get("commit") != commit
+        or stamp.get("tag") != tag
+        or stamp.get("baseVersion") != tag.removeprefix("v")
+    ):
         raise ValueError("Built package provenance does not match the release")
 
 
@@ -49,38 +72,71 @@ def single(items):
     return items[0]
 
 
-def desktop_application(manifest: ET.Element, channel_request: dict | None) -> ET.Element:
+def desktop_application(
+    manifest: ET.Element, channel_request: dict | None
+) -> ET.Element:
     # CLI aliases are separate hidden Applications, not extra desktop entries.
     applications = manifest.findall("{*}Applications/{*}Application")
-    visible = [app for app in applications if (
-        (visual := app.find("{*}VisualElements")) is None or visual.get("AppListEntry") != "none")]
+    visible = [
+        app
+        for app in applications
+        if (
+            (visual := app.find("{*}VisualElements")) is None
+            or visual.get("AppListEntry") != "none"
+        )
+    ]
     application = single(visible)
     if channel_request is not None:
         expected = channel_request["identity"]["appNamePascal"]
-        if application.get("Id") != expected or sum(app.get("Id") == expected for app in applications) != 1:
+        if (
+            application.get("Id") != expected
+            or sum(app.get("Id") == expected for app in applications) != 1
+        ):
             raise ValueError("Desktop application ID differs from channel request")
     return application
 
 
-def record(platform: str, arch: str, root: Path, tag: str, commit: str, out: Path,
-           *, channel_request: dict | None = None) -> None:
+def record(
+    platform: str,
+    arch: str,
+    root: Path,
+    tag: str,
+    commit: str,
+    out: Path,
+    *,
+    channel_request: dict | None = None,
+) -> None:
     """Read identities from the built packages, never from the workflow matrix."""
     row: dict = {"platform": platform, "arch": arch, "tag": tag, "commit": commit}
     if platform == "windows":
-        package = single(p for p in root.glob(f"*-win-{arch}.msix") if not p.name.startswith("Store-"))
-        if channel_request is None and not package.name.endswith(f"-{tag[1:]}-win-{arch}.msix"):
+        package = single(
+            p
+            for p in root.glob(f"*-win-{arch}.msix")
+            if not p.name.startswith("Store-")
+        )
+        if channel_request is None and not package.name.endswith(
+            f"-{tag[1:]}-win-{arch}.msix"
+        ):
             raise ValueError("Windows artifact filename differs from release tag")
         with zipfile.ZipFile(package) as archive:
             manifest = ET.fromstring(archive.read("AppxManifest.xml"))
             identity = manifest.find("{*}Identity")
             application = desktop_application(manifest, channel_request)
-            stamp_name = single(n for n in archive.namelist() if n.replace("\\", "/").endswith("/resources/install-stamp.json"))
+            stamp_name = single(
+                n
+                for n in archive.namelist()
+                if n.replace("\\", "/").endswith("/resources/install-stamp.json")
+            )
             stamp = json.loads(archive.read(stamp_name))
             stamp_matches(stamp, tag, commit, channel_request=channel_request)
         if identity.attrib["ProcessorArchitecture"].lower() != arch:
             raise ValueError("MSIX architecture differs from release target")
-        row.update(identity=identity.attrib["Name"], publisher=identity.attrib["Publisher"],
-                   applicationId=application.attrib["Id"], version=identity.attrib["Version"])
+        row.update(
+            identity=identity.attrib["Name"],
+            publisher=identity.attrib["Publisher"],
+            applicationId=application.attrib["Id"],
+            version=identity.attrib["Version"],
+        )
         version_sidecar = root / f"version-info-{arch}.json"
         if version_sidecar.is_file():
             row["executableVersion"] = json.loads(
@@ -91,11 +147,18 @@ def record(platform: str, arch: str, root: Path, tag: str, commit: str, out: Pat
             executable_name = PureWindowsPath(application.attrib["Executable"]).name
             executable = single(root.glob(f"*-unpacked/{executable_name}"))
             # -Command joins trailing argv into the script text, so $args stays empty.
-            row["executableVersion"] = subprocess.check_output([
-                "powershell", "-NoProfile", "-Command",
-                "(Get-Item -LiteralPath $env:RECORD_EXECUTABLE).VersionInfo.ProductVersion",
-            ], env={**os.environ, "RECORD_EXECUTABLE": str(executable)},
-                text=True, encoding="utf-8", stdin=subprocess.DEVNULL).strip()
+            row["executableVersion"] = subprocess.check_output(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    "(Get-Item -LiteralPath $env:RECORD_EXECUTABLE).VersionInfo.ProductVersion",
+                ],
+                env={**os.environ, "RECORD_EXECUTABLE": str(executable)},
+                text=True,
+                encoding="utf-8",
+                stdin=subprocess.DEVNULL,
+            ).strip()
         if stamp.get("receiverProtocol") == 1:
             row["receiverProtocol"] = 1
     elif platform == "macos":
@@ -105,24 +168,63 @@ def record(platform: str, arch: str, root: Path, tag: str, commit: str, out: Pat
             raise ValueError("macOS artifact filename differs from requested version")
         app = single(root.glob("mac*/*.app"))
         subprocess.run(["codesign", "--verify", "--strict", str(app)], check=True)
-        signature = subprocess.run(["codesign", "-dv", "--verbose=4", str(app)], check=True, capture_output=True, text=True, encoding="utf-8")
-        team = re.search(r"^TeamIdentifier=([A-Z0-9]{10})$", signature.stderr, re.MULTILINE)
+        signature = subprocess.run(
+            ["codesign", "-dv", "--verbose=4", str(app)],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        team = re.search(
+            r"^TeamIdentifier=([A-Z0-9]{10})$", signature.stderr, re.MULTILINE
+        )
         if not team:
             raise ValueError("Signed app has no Developer ID team")
         with zipfile.ZipFile(package) as archive:
-            info = plistlib.loads(archive.read(single(n for n in archive.namelist() if re.fullmatch(r"[^/]+\.app/Contents/Info.plist", n))))
-            stamp = json.loads(archive.read(single(n for n in archive.namelist() if re.fullmatch(r"[^/]+\.app/Contents/Resources/install-stamp.json", n))))
+            info = plistlib.loads(
+                archive.read(
+                    single(
+                        n
+                        for n in archive.namelist()
+                        if re.fullmatch(r"[^/]+\.app/Contents/Info.plist", n)
+                    )
+                )
+            )
+            stamp = json.loads(
+                archive.read(
+                    single(
+                        n
+                        for n in archive.namelist()
+                        if re.fullmatch(
+                            r"[^/]+\.app/Contents/Resources/install-stamp.json", n
+                        )
+                    )
+                )
+            )
         stamp_matches(stamp, tag, commit, channel_request=channel_request)
         if stamp.get("receiverProtocol") == 1:
             row["receiverProtocol"] = 1
-        row.update(identity=info["CFBundleIdentifier"], teamId=team.group(1), version=info["CFBundleShortVersionString"], filename=package.name)
+        row.update(
+            identity=info["CFBundleIdentifier"],
+            teamId=team.group(1),
+            version=info["CFBundleShortVersionString"],
+            filename=package.name,
+        )
         if row["version"] != version:
             raise ValueError("App version differs from requested version")
     elif platform == "termux":
         package = single((root / "deb").glob("*.deb"))
-        fields = subprocess.check_output(["dpkg-deb", "--field", str(package), "Package", "Version", "Architecture"], text=True, encoding="utf-8")
+        fields = subprocess.check_output(
+            ["dpkg-deb", "--field", str(package), "Package", "Version", "Architecture"],
+            text=True,
+            encoding="utf-8",
+        )
         parsed = dict(line.split(": ", 1) for line in fields.splitlines())
-        row.update(identity=parsed["Package"], version=parsed["Version"], filename=package.relative_to(root).as_posix())
+        row.update(
+            identity=parsed["Package"],
+            version=parsed["Version"],
+            filename=package.relative_to(root).as_posix(),
+        )
         if parsed["Version"] != f"{tag[1:]}-1":
             raise ValueError("Termux artifact version differs from release tag")
         if parsed["Architecture"] != "aarch64":
@@ -130,15 +232,26 @@ def record(platform: str, arch: str, root: Path, tag: str, commit: str, out: Pat
         with tempfile.TemporaryDirectory() as temp:
             subprocess.run(["dpkg-deb", "--extract", str(package), temp], check=True)
             stamps = list(Path(temp).rglob("install-stamp.json"))
-            if not any((data := json.loads(p.read_text(encoding="utf-8-sig"))).get("commit") == commit and data.get("tag") == tag for p in stamps):
+            if not any(
+                (data := json.loads(p.read_text(encoding="utf-8-sig"))).get("commit")
+                == commit
+                and data.get("tag") == tag
+                for p in stamps
+            ):
                 raise ValueError("Termux package has no matching provenance")
     else:
         raise ValueError("Unknown platform")
     if channel_request is not None:
-        expected = channel_request["identity"]["msixAppIdWithOrg" if platform == "windows" else "appId"]
-        version = channel_request["windowsVersion" if platform == "windows" else "version"]
+        expected = channel_request["identity"][
+            "msixAppIdWithOrg" if platform == "windows" else "appId"
+        ]
+        version = channel_request[
+            "windowsVersion" if platform == "windows" else "version"
+        ]
         if row["identity"] != expected or row["version"] != version:
-            raise ValueError("Native package identity/version differs from channel request")
+            raise ValueError(
+                "Native package identity/version differs from channel request"
+            )
         row["request"] = channel_request
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(row, sort_keys=True, indent=2) + "\n", encoding="utf-8")
@@ -153,20 +266,45 @@ def validate_windows_bundle(bundle: Path, windows: list[dict]) -> None:
     with zipfile.ZipFile(bundle) as archive:
         manifest = ET.fromstring(archive.read("AppxMetadata/AppxBundleManifest.xml"))
     identity = manifest.find("{*}Identity")
-    if identity is None or any(identity.get(attr) != windows[0][field] for attr, field in
-                               (("Name", "identity"), ("Publisher", "publisher"), ("Version", "version"))):
+    if identity is None or any(
+        identity.get(attr) != windows[0][field]
+        for attr, field in (
+            ("Name", "identity"),
+            ("Publisher", "publisher"),
+            ("Version", "version"),
+        )
+    ):
         raise ValueError("Universal bundle identity does not match its packages")
-    if sorted(p.get("Architecture", "") for p in manifest.findall("{*}Packages/{*}Package")
-              if p.get("Type") == "application") != ["arm64", "x64"]:
+    if sorted(
+        p.get("Architecture", "")
+        for p in manifest.findall("{*}Packages/{*}Package")
+        if p.get("Type") == "application"
+    ) != ["arm64", "x64"]:
         raise ValueError("Universal bundle must cover both architectures")
 
 
-ALL_HANDOFFS = ("win32-x64", "win32-arm64", "darwin-x64", "darwin-arm64", "termux", "windows-universal")
+ALL_HANDOFFS = (
+    "win32-x64",
+    "win32-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "termux",
+    "windows-universal",
+)
 
 
-def assemble(root: Path, tag: str, commit: str, public_base: str, out: Path,
-             *, smoke_results: dict, release_epoch: int, archive: str,
-             lanes: Iterable[str]) -> dict:
+def assemble(
+    root: Path,
+    tag: str,
+    commit: str,
+    public_base: str,
+    out: Path,
+    *,
+    smoke_results: dict,
+    release_epoch: int,
+    archive: str,
+    lanes: Iterable[str],
+) -> dict:
     """Bind the native metadata to files already staged by their build jobs.
 
     `tag` stays the plain payload identity; `archive` is the attempt ref the
@@ -207,14 +345,32 @@ def assemble(root: Path, tag: str, commit: str, public_base: str, out: Path,
             rows.append(json.loads(file.read_text(encoding="utf-8-sig")))
     universal_name = None
     if "windows" in lanes:
-        universal_name = single(name for name in by_name if name.endswith(".msixbundle") and not name.startswith("Store-"))
-    elif any(name.endswith(".msixbundle") and not name.startswith("Store-") for name in by_name):
-        raise ValueError("Candidate carries a signed Windows bundle the claim did not build")
-    stores = [name for name in by_name if name.endswith(".msixbundle") and name.startswith("Store-")]
+        universal_name = single(
+            name
+            for name in by_name
+            if name.endswith(".msixbundle") and not name.startswith("Store-")
+        )
+    elif any(
+        name.endswith(".msixbundle") and not name.startswith("Store-")
+        for name in by_name
+    ):
+        raise ValueError(
+            "Candidate carries a signed Windows bundle the claim did not build"
+        )
+    stores = [
+        name
+        for name in by_name
+        if name.endswith(".msixbundle") and name.startswith("Store-")
+    ]
     if len(stores) != ("windows-store" in lanes):
-        raise ValueError("Candidate Store bundle differs from the claim's windows-store lane")
-    files = [{**row, "url": f"{public_base.rstrip('/')}/{staging_key_for(archive, name)}"}
-             for name, row in sorted(by_name.items()) if not name.startswith("metadata-")]
+        raise ValueError(
+            "Candidate Store bundle differs from the claim's windows-store lane"
+        )
+    files = [
+        {**row, "url": f"{public_base.rstrip('/')}/{staging_key_for(archive, name)}"}
+        for name, row in sorted(by_name.items())
+        if not name.startswith("metadata-")
+    ]
     by_name = {item["path"]: item for item in files}
     packages = []
     for row in rows:
@@ -223,11 +379,29 @@ def assemble(root: Path, tag: str, commit: str, public_base: str, out: Path,
             raise ValueError("Built package provenance does not match the release")
         filename = universal_name if row["platform"] == "windows" else row["filename"]
         item = by_name[filename]
-        packages.append({k: v for k, v in {**row, "artifact": {"url": item["url"], "sha256": item["sha256"]}}.items() if k != "filename"})
-    result = {"schema": 2, "tag": tag, "commit": commit, "releaseEpoch": release_epoch,
-              "archive": archive,
-              "packages": packages, "files": files, "smoke_results": smoke_results}
-    validate_candidates(result, tag, commit, public_base, release_epoch, archive=archive)
+        packages.append(
+            {
+                k: v
+                for k, v in {
+                    **row,
+                    "artifact": {"url": item["url"], "sha256": item["sha256"]},
+                }.items()
+                if k != "filename"
+            }
+        )
+    result = {
+        "schema": 2,
+        "tag": tag,
+        "commit": commit,
+        "releaseEpoch": release_epoch,
+        "archive": archive,
+        "packages": packages,
+        "files": files,
+        "smoke_results": smoke_results,
+    }
+    validate_candidates(
+        result, tag, commit, public_base, release_epoch, archive=archive
+    )
     present = {f"{row['platform']}/{row['arch']}" for row in packages}
     if present != set(lane_set.TARGET_LANE) - absent:
         raise ValueError("Candidate package rows differ from the built handoffs")
@@ -240,29 +414,64 @@ def assemble(root: Path, tag: str, commit: str, public_base: str, out: Path,
 PACKAGE_SUFFIXES = (".dmg", ".zip", ".blockmap", ".msix", ".msixbundle", ".deb")
 
 
-def materialize(manifest: dict, root: Path, *, public_base: str, store_only: bool = False,
-                metadata_only: bool = False) -> None:
-    validate_candidates(manifest, manifest["tag"], manifest["commit"], public_base,
-                        archive=manifest["archive"])
+def materialize(
+    manifest: dict,
+    root: Path,
+    *,
+    public_base: str,
+    store_only: bool = False,
+    metadata_only: bool = False,
+) -> None:
+    validate_candidates(
+        manifest,
+        manifest["tag"],
+        manifest["commit"],
+        public_base,
+        archive=manifest["archive"],
+    )
     files = manifest.get("files", [])
     if not files or len({item["path"] for item in files}) != len(files):
         raise ValueError("Missing or duplicate candidate file receipts")
     by_url = {item["url"]: item["sha256"] for item in files}
-    if any(by_url.get(row["artifact"]["url"]) != row["artifact"]["sha256"] for row in manifest["packages"]):
+    if any(
+        by_url.get(row["artifact"]["url"]) != row["artifact"]["sha256"]
+        for row in manifest["packages"]
+    ):
         raise ValueError("Package receipts differ from candidate file receipts")
-    selected = [item for item in files if item["path"].startswith("Store-") and item["path"].endswith(".msixbundle")] if store_only else files
+    selected = (
+        [
+            item
+            for item in files
+            if item["path"].startswith("Store-")
+            and item["path"].endswith(".msixbundle")
+        ]
+        if store_only
+        else files
+    )
     if metadata_only:
-        selected = [item for item in selected if not item["path"].endswith(PACKAGE_SUFFIXES)]
+        selected = [
+            item for item in selected if not item["path"].endswith(PACKAGE_SUFFIXES)
+        ]
     if store_only and len(selected) != 1:
         raise ValueError("Expected one Store candidate")
     from scripts.releases.progress import log
 
     total = sum(item.get("size", 0) for item in selected)
-    log(f"Materializing {len(selected)} candidate files ({total / 1e9:.1f} GB) into {root}")
+    log(
+        f"Materializing {len(selected)} candidate files ({total / 1e9:.1f} GB) into {root}"
+    )
     for number, item in enumerate(selected, start=1):
-        log(f"  [{number}/{len(selected)}] {item['path']} ({item.get('size', 0) / 1e6:.0f} MB)")
+        log(
+            f"  [{number}/{len(selected)}] {item['path']} ({item.get('size', 0) / 1e6:.0f} MB)"
+        )
         relative = Path(item["path"])
-        if relative.is_absolute() or ".." in relative.parts or any(c in item["path"] for c in "\\:%?#") or item["path"].startswith("/") or "//" in item["path"]:
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or any(c in item["path"] for c in "\\:%?#")
+            or item["path"].startswith("/")
+            or "//" in item["path"]
+        ):
             raise ValueError("Invalid artifact path")
         expected = f"{public_base.rstrip('/')}/releases/tag/{manifest['archive']}/{relative.as_posix()}"
         if item["url"] != expected or not re.fullmatch(r"[a-f0-9]{64}", item["sha256"]):
@@ -270,7 +479,10 @@ def materialize(manifest: dict, root: Path, *, public_base: str, store_only: boo
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         digest = hashlib.sha256()
-        with urllib.request.urlopen(item["url"], timeout=600) as response, target.open("wb") as file:
+        with (
+            urllib.request.urlopen(item["url"], timeout=600) as response,
+            target.open("wb") as file,
+        ):
             if not response.geturl().startswith("https://"):
                 raise ValueError("Artifact redirected outside HTTPS")
             while chunk := response.read(1024 * 1024):
@@ -293,20 +505,45 @@ def publish(manifest: dict, root: Path, public_base: str) -> None:
     for file in (root / "apt").rglob("*"):
         rel = file.relative_to(root / "apt").as_posix()
         if file.is_file() and (rel.startswith("pool/") or "/by-hash/" in rel):
-            put(tag=manifest["tag"], key=f"releases/termux/stable/{rel}", file=file, key_is_full=True, immutable=True)
+            put(
+                tag=manifest["tag"],
+                key=f"releases/termux/stable/{rel}",
+                file=file,
+                key_is_full=True,
+                immutable=True,
+            )
 
 
-def write_appinstaller(out: Path, *, identity: str, publisher: str, version: str,
-                       self_uri: str, artifact_uri: str, update_policy: str = "automatic") -> None:
+def write_appinstaller(
+    out: Path,
+    *,
+    identity: str,
+    publisher: str,
+    version: str,
+    self_uri: str,
+    artifact_uri: str,
+    update_policy: str = "automatic",
+) -> None:
     """Serialize verified package facts; callers own channel/acceptance policy."""
     if not all((identity, publisher, version, self_uri, artifact_uri)):
-        raise ValueError("Explicit identity, publisher, version, self URI and artifact URI are required")
+        raise ValueError(
+            "Explicit identity, publisher, version, self URI and artifact URI are required"
+        )
     ns = "http://schemas.microsoft.com/appx/appinstaller/2017/2"
     ET.register_namespace("", ns)
-    descriptor = ET.Element(f"{{{ns}}}AppInstaller", {"Uri": self_uri, "Version": version})
-    ET.SubElement(descriptor, f"{{{ns}}}MainBundle", {
-        "Name": identity, "Publisher": publisher, "Version": version, "Uri": artifact_uri,
-    })
+    descriptor = ET.Element(
+        f"{{{ns}}}AppInstaller", {"Uri": self_uri, "Version": version}
+    )
+    ET.SubElement(
+        descriptor,
+        f"{{{ns}}}MainBundle",
+        {
+            "Name": identity,
+            "Publisher": publisher,
+            "Version": version,
+            "Uri": artifact_uri,
+        },
+    )
     if update_policy not in ("automatic", "pinned"):
         raise ValueError("Unknown App Installer update policy")
     if update_policy == "automatic":
@@ -316,32 +553,64 @@ def write_appinstaller(out: Path, *, identity: str, publisher: str, version: str
     ET.ElementTree(descriptor).write(out, encoding="utf-8", xml_declaration=True)
 
 
-def publish_canary_appinstaller(root: Path, *, tag: str, variant: str, bundle: Path,
-                               identity: str, publisher: str, version: str, public_base: str) -> None:
+def publish_canary_appinstaller(
+    root: Path,
+    *,
+    tag: str,
+    variant: str,
+    bundle: Path,
+    identity: str,
+    publisher: str,
+    version: str,
+    public_base: str,
+) -> None:
     """Native SDK work is complete; verify its identity before writing a feed."""
     from scripts.releases.r2 import put
     from clawk_cli.update_channel import is_canary_tag
 
     if not is_canary_tag(tag):
-        raise ValueError("Only canary feeds publish directly; stable requires accepted candidates")
+        raise ValueError(
+            "Only canary feeds publish directly; stable requires accepted candidates"
+        )
     if variant not in ("bundled", "light"):
         raise ValueError("Store and commit builds have no App Installer feed")
     if not public_base:
         raise ValueError("Public feed base URL is required")
     with zipfile.ZipFile(bundle) as archive:
-        native = ET.fromstring(archive.read("AppxMetadata/AppxBundleManifest.xml")).find("{*}Identity")
-    for attr, expected in (("Name", identity), ("Publisher", publisher), ("Version", version)):
+        native = ET.fromstring(
+            archive.read("AppxMetadata/AppxBundleManifest.xml")
+        ).find("{*}Identity")
+    for attr, expected in (
+        ("Name", identity),
+        ("Publisher", publisher),
+        ("Version", version),
+    ):
         if native is None or native.get(attr) != expected:
-            raise ValueError(f"Universal bundle {attr} does not match its expected identity")
+            raise ValueError(
+                f"Universal bundle {attr} does not match its expected identity"
+            )
     directory = f"releases/win32/{'light/' if variant == 'light' else ''}canary"
     base = public_base.rstrip("/")
     descriptor = root / "canary.appinstaller"
-    write_appinstaller(descriptor, identity=identity, publisher=publisher, version=version,
-                       self_uri=f"{base}/{directory}/{descriptor.name}",
-                       artifact_uri=f"{base}/{directory}/{bundle.name}")
+    write_appinstaller(
+        descriptor,
+        identity=identity,
+        publisher=publisher,
+        version=version,
+        self_uri=f"{base}/{directory}/{descriptor.name}",
+        artifact_uri=f"{base}/{directory}/{bundle.name}",
+    )
     # A failed upload or HEAD verification leaves the previous pointer intact.
-    put(tag=tag, key=f"{directory}/{bundle.name}", file=bundle, key_is_full=True, immutable=True)
-    put(tag=tag, key=f"{directory}/{descriptor.name}", file=descriptor, key_is_full=True)
+    put(
+        tag=tag,
+        key=f"{directory}/{bundle.name}",
+        file=bundle,
+        key_is_full=True,
+        immutable=True,
+    )
+    put(
+        tag=tag, key=f"{directory}/{descriptor.name}", file=descriptor, key_is_full=True
+    )
 
 
 def promote(manifest: dict, root: Path, public_base: str) -> None:
@@ -353,10 +622,22 @@ def promote(manifest: dict, root: Path, public_base: str) -> None:
     windows = next(r for r in manifest["packages"] if r["platform"] == "windows")
     uri = f"{public_base.rstrip('/')}/releases/win32/stable/stable.appinstaller"
     appinstaller = root / "stable.appinstaller"
-    write_appinstaller(appinstaller, identity=windows["identity"], publisher=windows["publisher"],
-                       version=windows["version"], self_uri=uri, artifact_uri=windows["artifact"]["url"])
+    write_appinstaller(
+        appinstaller,
+        identity=windows["identity"],
+        publisher=windows["publisher"],
+        version=windows["version"],
+        self_uri=uri,
+        artifact_uri=windows["artifact"]["url"],
+    )
     apt = root / "apt"
-    indexes = sorted(p for p in apt.rglob("*") if p.is_file() and not p.relative_to(apt).as_posix().startswith("pool/") and "/by-hash/" not in p.relative_to(apt).as_posix())
+    indexes = sorted(
+        p
+        for p in apt.rglob("*")
+        if p.is_file()
+        and not p.relative_to(apt).as_posix().startswith("pool/")
+        and "/by-hash/" not in p.relative_to(apt).as_posix()
+    )
     indexes.sort(key=lambda p: p.name == "InRelease")
     # Termux is opt-in: a release that did not build it leaves the APT channel
     # on the previous Termux release, and ships no indexes to publish.
@@ -368,13 +649,28 @@ def promote(manifest: dict, root: Path, public_base: str) -> None:
     # Every package and index must exist before the first channel write.
     # The merged feed points at the attempt archive; the version stays plain.
     # macOS Intel is opt-in: without it the feed carries the arm64 leg alone.
-    arches = tuple(arch for arch in ("arm64", "x64")
-                   if any(row["platform"] == "macos" and row["arch"] == arch for row in manifest["packages"]))
-    finalize(tag=manifest["tag"], dir=root, archive=manifest["archive"], arches=arches, verify_bytes=False)
+    arches = tuple(
+        arch
+        for arch in ("arm64", "x64")
+        if any(
+            row["platform"] == "macos" and row["arch"] == arch
+            for row in manifest["packages"]
+        )
+    )
+    finalize(
+        tag=manifest["tag"],
+        dir=root,
+        archive=manifest["archive"],
+        arches=arches,
+        verify_bytes=False,
+    )
+
     def publish_pointer(key, file):
         put(tag=manifest["tag"], key=key, file=file, key_is_full=True)
         digest = hashlib.sha256()
-        with urllib.request.urlopen(f"{public_base.rstrip('/')}/{key}", timeout=60) as response:
+        with urllib.request.urlopen(
+            f"{public_base.rstrip('/')}/{key}", timeout=60
+        ) as response:
             while chunk := response.read(1024 * 1024):
                 digest.update(chunk)
         if digest.hexdigest() != sha256_file(file):
@@ -382,24 +678,46 @@ def promote(manifest: dict, root: Path, public_base: str) -> None:
 
     publish_pointer("releases/win32/stable/stable.appinstaller", appinstaller)
     for file in indexes:
-        publish_pointer(f"releases/termux/stable/{file.relative_to(apt).as_posix()}", file)
+        publish_pointer(
+            f"releases/termux/stable/{file.relative_to(apt).as_posix()}", file
+        )
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["record", "publish", "promote", "materialize", "appinstaller", "publish-appinstaller"])
+    parser.add_argument(
+        "command",
+        choices=[
+            "record",
+            "publish",
+            "promote",
+            "materialize",
+            "appinstaller",
+            "publish-appinstaller",
+        ],
+    )
     parser.add_argument("--platform", choices=["windows", "macos", "termux"])
     parser.add_argument("--arch")
     parser.add_argument("--channel-request", type=Path)
-    parser.add_argument("--update-policy", choices=["automatic", "pinned"], default="automatic")
+    parser.add_argument(
+        "--update-policy", choices=["automatic", "pinned"], default="automatic"
+    )
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG"))
-    parser.add_argument("--archive", default=os.environ.get("CLAWK_ARCHIVE_TAG"),
-                        help="Attempt ref the release archive is keyed under when the payload tag is plain vX.Y.Z")
+    parser.add_argument(
+        "--archive",
+        default=os.environ.get("CLAWK_ARCHIVE_TAG"),
+        help="Attempt ref the release archive is keyed under when the payload tag is plain vX.Y.Z",
+    )
     # A stable run dispatches from the default branch, so GITHUB_SHA is not the admitted claim commit.
-    parser.add_argument("--commit", default=os.environ.get("RELEASE_COMMIT") or os.environ.get("GITHUB_SHA"))
-    parser.add_argument("--public-base", default=os.environ.get("CLOUDFLARE_R2_PUBLIC_URL"))
+    parser.add_argument(
+        "--commit",
+        default=os.environ.get("RELEASE_COMMIT") or os.environ.get("GITHUB_SHA"),
+    )
+    parser.add_argument(
+        "--public-base", default=os.environ.get("CLOUDFLARE_R2_PUBLIC_URL")
+    )
     parser.add_argument("--store-only", action="store_true")
     for name in ("identity", "publisher", "version", "self-uri", "artifact-uri"):
         parser.add_argument(f"--{name}")
@@ -409,30 +727,66 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "publish-appinstaller":
         if not args.bundle:
             parser.error("publish-appinstaller requires --bundle")
-        publish_canary_appinstaller(args.root, tag=args.tag, variant=args.variant, bundle=args.bundle,
-                                   identity=args.identity, publisher=args.publisher, version=args.version,
-                                   public_base=args.public_base)
+        publish_canary_appinstaller(
+            args.root,
+            tag=args.tag,
+            variant=args.variant,
+            bundle=args.bundle,
+            identity=args.identity,
+            publisher=args.publisher,
+            version=args.version,
+            public_base=args.public_base,
+        )
         return
     if args.command == "appinstaller":
         if not args.out:
             parser.error("appinstaller requires --out")
-        write_appinstaller(args.out, identity=args.identity, publisher=args.publisher,
-                           version=args.version, self_uri=args.self_uri, artifact_uri=args.artifact_uri,
-                           update_policy=args.update_policy)
+        write_appinstaller(
+            args.out,
+            identity=args.identity,
+            publisher=args.publisher,
+            version=args.version,
+            self_uri=args.self_uri,
+            artifact_uri=args.artifact_uri,
+            update_policy=args.update_policy,
+        )
         return
     if args.command == "record":
-        request = json.loads(args.channel_request.read_text(encoding="utf-8-sig")) if args.channel_request else None
-        record(args.platform, args.arch, args.root, args.tag, args.commit, args.out, channel_request=request)
+        request = (
+            json.loads(args.channel_request.read_text(encoding="utf-8-sig"))
+            if args.channel_request
+            else None
+        )
+        record(
+            args.platform,
+            args.arch,
+            args.root,
+            args.tag,
+            args.commit,
+            args.out,
+            channel_request=request,
+        )
     else:
         if not args.archive:
             parser.error(f"{args.command} requires the admitted --archive ref")
-        manifest = read_admitted_candidate(args.tag, args.commit, args.public_base,
-                                          os.environ.get("CANDIDATE_MANIFEST_SHA256", ""),
-                                          archive=args.archive)
+        manifest = read_admitted_candidate(
+            args.tag,
+            args.commit,
+            args.public_base,
+            os.environ.get("CANDIDATE_MANIFEST_SHA256", ""),
+            archive=args.archive,
+        )
         if args.command == "materialize":
-            materialize(manifest, args.root, public_base=args.public_base, store_only=args.store_only)
+            materialize(
+                manifest,
+                args.root,
+                public_base=args.public_base,
+                store_only=args.store_only,
+            )
         else:
-            {"publish": publish, "promote": promote}[args.command](manifest, args.root, args.public_base)
+            {"publish": publish, "promote": promote}[args.command](
+                manifest, args.root, args.public_base
+            )
 
 
 if __name__ == "__main__":

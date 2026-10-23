@@ -31,24 +31,60 @@ def main():
             for start in range(0, prompt_count, 100):
                 batch = []
                 for turn in range(start, start + 100):
-                    batch.append({"role": "user", "content": f"Investigate generated task {turn}", "timestamp": turn + 1})
+                    batch.append(
+                        {
+                            "role": "user",
+                            "content": f"Investigate generated task {turn}",
+                            "timestamp": turn + 1,
+                        }
+                    )
                     for tool in range(4):
                         call_id = f"call-{turn}-{tool}"
-                        batch.append({"role": "assistant", "content": "", "tool_calls": [{
-                            "id": call_id, "type": "function", "function": {
-                                "name": "terminal", "arguments": json.dumps({"command": "x" * 4096})}}]})
-                        batch.append({"role": "tool", "tool_call_id": call_id,
-                                      "content": "generated tool output\n" * 800})
-                    batch.append({"role": "assistant", "content": f"Finished task {turn}"})
+                        batch.append(
+                            {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": call_id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": "terminal",
+                                            "arguments": json.dumps(
+                                                {"command": "x" * 4096}
+                                            ),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        batch.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": "generated tool output\n" * 800,
+                            }
+                        )
+                    batch.append(
+                        {"role": "assistant", "content": f"Finished task {turn}"}
+                    )
                 db.append_messages_batch(sid, batch)
         app = FastAPI()
         app.include_router(manage_router)
         with TestClient(app) as client:
+
             def full_messages():
                 total_bytes = count = requests = 0
                 for offset in range(0, prompt_count * rows_per_turn + 1, 500):
-                    response = client.get(f"/api/sessions/{sid}/messages", params={
-                        "limit": 500, "offset": offset, "order": "oldest", "include_compacted": True})
+                    response = client.get(
+                        f"/api/sessions/{sid}/messages",
+                        params={
+                            "limit": 500,
+                            "offset": offset,
+                            "order": "oldest",
+                            "include_compacted": True,
+                        },
+                    )
                     response.raise_for_status()
                     page = response.json()["messages"]
                     total_bytes += len(response.content)
@@ -64,7 +100,10 @@ def main():
                 cursor = 0
                 seen = set()
                 while True:
-                    response = client.get(f"/api/sessions/{sid}/timeline", params={"limit": 500, "after_row_id": cursor})
+                    response = client.get(
+                        f"/api/sessions/{sid}/timeline",
+                        params={"limit": 500, "after_row_id": cursor},
+                    )
                     response.raise_for_status()
                     page = response.json()
                     total_bytes += len(response.content)
@@ -79,19 +118,36 @@ def main():
 
             samples = {"full_messages": [], "timeline": []}
             for _ in range(3):
-                for name, procedure in (("full_messages", full_messages), ("timeline", timeline)):
+                for name, procedure in (
+                    ("full_messages", full_messages),
+                    ("timeline", timeline),
+                ):
                     started = time.perf_counter()
                     result = procedure()
                     result["elapsed_ms"] = (time.perf_counter() - started) * 1000
                     samples[name].append(result)
             receipt = {
-                "fixture": {"prompts": prompt_count, "message_rows": prompt_count * rows_per_turn,
-                            "tool_results": prompt_count * 4},
-                **{name: {**runs[-1], "elapsed_ms": statistics.median(r["elapsed_ms"] for r in runs),
-                          "samples_ms": [r["elapsed_ms"] for r in runs]} for name, runs in samples.items()},
+                "fixture": {
+                    "prompts": prompt_count,
+                    "message_rows": prompt_count * rows_per_turn,
+                    "tool_results": prompt_count * 4,
+                },
+                **{
+                    name: {
+                        **runs[-1],
+                        "elapsed_ms": statistics.median(r["elapsed_ms"] for r in runs),
+                        "samples_ms": [r["elapsed_ms"] for r in runs],
+                    }
+                    for name, runs in samples.items()
+                },
             }
-            receipt["payload_reduction_percent"] = 100 * (1 - receipt["timeline"]["bytes"] / receipt["full_messages"]["bytes"])
-            receipt["speedup"] = receipt["full_messages"]["elapsed_ms"] / receipt["timeline"]["elapsed_ms"]
+            receipt["payload_reduction_percent"] = 100 * (
+                1 - receipt["timeline"]["bytes"] / receipt["full_messages"]["bytes"]
+            )
+            receipt["speedup"] = (
+                receipt["full_messages"]["elapsed_ms"]
+                / receipt["timeline"]["elapsed_ms"]
+            )
             print(json.dumps(receipt, indent=2))
 
 

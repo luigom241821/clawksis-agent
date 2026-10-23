@@ -1,4 +1,5 @@
 """Phase 4: lifecycle guard + per-profile observability."""
+
 import pytest
 
 from gateway.config import GatewayConfig
@@ -10,6 +11,7 @@ class TestServedProfilesStatus:
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         from gateway import status
+
         importlib.reload(status)
         try:
             status.write_runtime_status(
@@ -29,8 +31,11 @@ def test_cron_profile_homes_serve_every_live_profile(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     for name in ("worker", "guest", "gone"):
         (default_home / "profiles" / name).mkdir(parents=True)
-        (default_home / "profiles" / name / "config.yaml").write_text("{}\n")  # identity marker
+        (default_home / "profiles" / name / "config.yaml").write_text(
+            "{}\n"
+        )  # identity marker
     from clawk_constants import mark_named_profile_deleted
+
     mark_named_profile_deleted(default_home / "profiles" / "gone")
 
     import gateway.run as gateway_run
@@ -47,7 +52,9 @@ def test_cron_tick_homes_include_active_named_host(tmp_path, monkeypatch):
     default_home = tmp_path / ".clawk"
     for name in ("host", "worker"):
         (default_home / "profiles" / name).mkdir(parents=True)
-        (default_home / "profiles" / name / "config.yaml").write_text("{}\n")  # identity marker
+        (default_home / "profiles" / name / "config.yaml").write_text(
+            "{}\n"
+        )  # identity marker
     monkeypatch.setenv("CLAWK_HOME", str(default_home / "profiles" / "host"))
 
     import gateway.run as gateway_run
@@ -66,14 +73,11 @@ def test_cron_tick_homes_include_active_named_host(tmp_path, monkeypatch):
 class TestNamedProfileMultiplexerGuard:
     """_guard_named_profile_under_multiplexer is inert unless all conditions hold."""
 
-
-
     def test_inert_when_no_default_gateway_running(self, monkeypatch, tmp_path):
         from clawk_cli import gateway as gw
+
         monkeypatch.setattr(gw, "_profile_suffix", lambda: "coder")
-        monkeypatch.setattr(
-            "clawk_constants.get_default_clawk_root", lambda: tmp_path
-        )
+        monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: tmp_path)
         # No gateway.pid in tmp_path => no running default gateway => no raise.
         gw._guard_named_profile_under_multiplexer(force=False)
 
@@ -83,17 +87,25 @@ class TestNamedProfileMultiplexerGuard:
         from gateway import status
 
         monkeypatch.setattr(gw, "_profile_suffix", lambda: "coder")
-        monkeypatch.setattr(
-            "clawk_constants.get_default_clawk_root", lambda: tmp_path
-        )
+        monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: tmp_path)
         import json
         import os
+
         # Liveness is a verified identity (live PID + gateway command line + home), so this pytest
         # process stands in for the gateway by wearing a gateway command line.
         (tmp_path / "gateway.pid").write_text(str(os.getpid()), encoding="utf-8")
-        (tmp_path / "gateway_state.json").write_text(json.dumps(
-            {"pid": os.getpid(), "clawk_home": str(tmp_path), "gateway_state": "running"}))
-        monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: "clawk gateway run")
+        (tmp_path / "gateway_state.json").write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "clawk_home": str(tmp_path),
+                    "gateway_state": "running",
+                }
+            )
+        )
+        monkeypatch.setattr(
+            status, "_read_process_cmdline", lambda pid: "clawk gateway run"
+        )
 
     def test_unset_allowlist_preserves_historical_guard(self, monkeypatch, tmp_path):
         self._fake_running_default_gateway(monkeypatch, tmp_path)
@@ -118,16 +130,26 @@ class TestNamedProfileMultiplexerGuard:
         )
         import json
         import os
-        (tmp_path / "gateway_state.json").write_text(json.dumps({
-            "pid": os.getpid(), "clawk_home": str(tmp_path), "gateway_state": "running",
-            "served_profiles": ["default", "worker"]}))
+
+        (tmp_path / "gateway_state.json").write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "clawk_home": str(tmp_path),
+                    "gateway_state": "running",
+                    "served_profiles": ["default", "worker"],
+                }
+            )
+        )
 
         from clawk_cli import gateway as gw
 
         gw._guard_named_profile_under_multiplexer(force=False)
         assert gw.named_profile_served_by_running_multiplexer("worker") is True
 
-    def test_non_multiplexing_default_gateway_lets_named_profile_run(self, monkeypatch, tmp_path):
+    def test_non_multiplexing_default_gateway_lets_named_profile_run(
+        self, monkeypatch, tmp_path
+    ):
         self._fake_running_default_gateway(monkeypatch, tmp_path)
         (tmp_path / "config.yaml").write_text(
             "gateway:\n  multiplex_profiles: false\n",
@@ -138,7 +160,9 @@ class TestNamedProfileMultiplexerGuard:
 
         gw._guard_named_profile_under_multiplexer(force=False)
 
-    def test_named_profile_served_probe_matches_the_start_guard(self, monkeypatch, tmp_path):
+    def test_named_profile_served_probe_matches_the_start_guard(
+        self, monkeypatch, tmp_path
+    ):
         self._fake_running_default_gateway(monkeypatch, tmp_path)
         (tmp_path / "config.yaml").write_text(
             "gateway:\n  multiplex_profiles: true\n",
@@ -151,5 +175,3 @@ class TestNamedProfileMultiplexerGuard:
 
         monkeypatch.setattr(gw, "_profile_suffix", lambda: "")
         assert gw.named_profile_served_by_running_multiplexer() is False
-
-

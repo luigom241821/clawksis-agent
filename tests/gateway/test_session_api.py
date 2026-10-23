@@ -47,10 +47,14 @@ def _create_session_app(adapter: APIServerAdapter) -> web.Application:
     app.router.add_get("/api/sessions/{session_id}", adapter._handle_get_session)
     app.router.add_patch("/api/sessions/{session_id}", adapter._handle_patch_session)
     app.router.add_delete("/api/sessions/{session_id}", adapter._handle_delete_session)
-    app.router.add_get("/api/sessions/{session_id}/messages", adapter._handle_session_messages)
+    app.router.add_get(
+        "/api/sessions/{session_id}/messages", adapter._handle_session_messages
+    )
     app.router.add_post("/api/sessions/{session_id}/fork", adapter._handle_fork_session)
     app.router.add_post("/api/sessions/{session_id}/chat", adapter._handle_session_chat)
-    app.router.add_post("/api/sessions/{session_id}/chat/stream", adapter._handle_session_chat_stream)
+    app.router.add_post(
+        "/api/sessions/{session_id}/chat/stream", adapter._handle_session_chat_stream
+    )
     return app
 
 
@@ -147,7 +151,9 @@ async def test_session_messages_default_to_latest_bounded_page(adapter, session_
 
 
 @pytest.mark.asyncio
-async def test_forked_session_stays_listable_and_parent_survives_failed_fork(adapter, session_db):
+async def test_forked_session_stays_listable_and_parent_survives_failed_fork(
+    adapter, session_db
+):
     """A fork is created before the parent is ended (#11030) and carries the explicit branch
     marker, so it still shows in the default listing (the timestamp fallback no longer holds)."""
     session_db.create_session("parent", "api_server")
@@ -160,14 +166,18 @@ async def test_forked_session_stays_listable_and_parent_survives_failed_fork(ada
         assert {"parent", "child"} <= ids, ids
 
         session_db.create_session("solo", "api_server")
-        with patch.object(session_db, "create_session", side_effect=RuntimeError("boom")):
+        with patch.object(
+            session_db, "create_session", side_effect=RuntimeError("boom")
+        ):
             resp = await cli.post("/api/sessions/solo/fork", json={"id": "never"})
         assert resp.status >= 500
     assert session_db.get_session("solo")["end_reason"] is None
 
 
 @pytest.mark.asyncio
-async def test_list_sessions_resurrects_bot_chat_off_the_event_loop(adapter, session_db, monkeypatch):
+async def test_list_sessions_resurrects_bot_chat_off_the_event_loop(
+    adapter, session_db, monkeypatch
+):
     """Canonical Bot Chat recovery must not run SQLite work in the HTTP loop."""
     session_id = session_db.create_session("archived-bot-chat", "gateway_botmode")
     assert session_db.set_session_title(session_id, "Bot Chat")
@@ -197,16 +207,23 @@ async def test_list_sessions_resurrects_bot_chat_off_the_event_loop(adapter, ses
 
     assert response.status == 200
     assert [session["id"] for session in payload["data"]] == [session_id]
-    assert set(call_threads) == {"get_session_by_title", "unarchive_recoverable_session"}
+    assert set(call_threads) == {
+        "get_session_by_title",
+        "unarchive_recoverable_session",
+    }
     assert all(thread_id != loop_thread for thread_id in call_threads.values())
     assert not session_db.get_session(session_id)["archived"]
 
 
 @pytest.mark.asyncio
-async def test_session_model_lock_persists_off_the_event_loop(adapter, session_db, monkeypatch):
+async def test_session_model_lock_persists_off_the_event_loop(
+    adapter, session_db, monkeypatch
+):
     """POST /api/sessions/{id}/model writes the lock row through a worker thread: the same
     contended-write class as the Bot Chat resurrection, on a sibling handler."""
-    session_id = session_db.create_session("lock-off-loop", "api_server", model="gpt-5.5")
+    session_id = session_db.create_session(
+        "lock-off-loop", "api_server", model="gpt-5.5"
+    )
     loop_thread = threading.get_ident()
     seen = []
     real = session_db.update_session_runtime_lock
@@ -222,7 +239,12 @@ async def test_session_model_lock_persists_off_the_event_loop(adapter, session_d
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
                 f"/api/sessions/{session_id}/model",
-                json={"provider": "nous", "model": "x-ai/grok-4.5", "require_model_lock": True})
+                json={
+                    "provider": "nous",
+                    "model": "x-ai/grok-4.5",
+                    "require_model_lock": True,
+                },
+            )
             assert resp.status == 200, await resp.text()
     assert seen and all(tid != loop_thread for tid in seen)
     assert session_db.get_session(session_id)["model"] == "x-ai/grok-4.5"
@@ -270,7 +292,9 @@ async def test_fork_session_writes_branched_from_marker(adapter, session_db):
 
     app = _create_session_app(adapter)
     async with TestClient(TestServer(app)) as cli:
-        resp = await cli.post(f"/api/sessions/{source_id}/fork", json={"id": "fork-child"})
+        resp = await cli.post(
+            f"/api/sessions/{source_id}/fork", json={"id": "fork-child"}
+        )
         assert resp.status == 201
         payload = await resp.json()
 
@@ -282,6 +306,7 @@ async def test_fork_session_writes_branched_from_marker(adapter, session_db):
     if isinstance(cfg, str):
         cfg = json.loads(cfg)
     assert cfg["_branched_from"] == source_id
+
 
 @pytest.mark.asyncio
 async def test_run_agent_binds_api_session_context_for_tool_env(adapter, monkeypatch):
@@ -351,7 +376,9 @@ async def test_run_agent_registers_active_run_id_for_steering(adapter, monkeypat
             return True
 
         def run_conversation(self, user_message, conversation_history, task_id):
-            observed["registered"] = adapter._active_run_agents.get("run_steer_test") is self
+            observed["registered"] = (
+                adapter._active_run_agents.get("run_steer_test") is self
+            )
             observed["task_id"] = task_id
             return {"final_response": "ok"}
 
@@ -420,21 +447,26 @@ async def test_session_chat_stream_disconnect_keeps_control_refs_until_executor_
     def _create_agent(**kwargs):
         return FakeAgent(kwargs["stream_delta_callback"])
 
-    with patch.object(
-        adapter,
-        "_get_existing_session_or_404",
-        return_value=({"id": session_id}, None),
-    ), patch.object(
-        adapter,
-        "_read_json_body",
-        return_value=({"message": "stream please"}, None),
-    ), patch.object(
-        adapter,
-        "_create_agent",
-        side_effect=_create_agent,
-    ), patch(
-        "gateway.platforms.api_server.web.StreamResponse",
-        return_value=DisconnectingStreamResponse(),
+    with (
+        patch.object(
+            adapter,
+            "_get_existing_session_or_404",
+            return_value=({"id": session_id}, None),
+        ),
+        patch.object(
+            adapter,
+            "_read_json_body",
+            return_value=({"message": "stream please"}, None),
+        ),
+        patch.object(
+            adapter,
+            "_create_agent",
+            side_effect=_create_agent,
+        ),
+        patch(
+            "gateway.platforms.api_server.web.StreamResponse",
+            return_value=DisconnectingStreamResponse(),
+        ),
     ):
         handler_task = asyncio.create_task(adapter._handle_session_chat_stream(request))
 
@@ -466,7 +498,9 @@ async def test_session_chat_stream_disconnect_keeps_control_refs_until_executor_
 
 
 @pytest.mark.asyncio
-async def test_session_chat_stream_classifies_failed_tool_completions(adapter, session_db):
+async def test_session_chat_stream_classifies_failed_tool_completions(
+    adapter, session_db
+):
     session_id = session_db.create_session("tool-status-stream", "api_server")
 
     async def fake_run(**kwargs):
@@ -487,15 +521,23 @@ async def test_session_chat_stream_classifies_failed_tool_completions(adapter, s
             body = await resp.text()
 
     blocks = body.split("\n\n")
-    assert any("event: tool.completed" in b and '"tool_name": "read_file"' in b for b in blocks)
-    assert any("event: tool.failed" in b and '"tool_name": "terminal"' in b for b in blocks)
-    assert any("event: tool.failed" in b and '"tool_name": "web_search"' in b for b in blocks)
+    assert any(
+        "event: tool.completed" in b and '"tool_name": "read_file"' in b for b in blocks
+    )
+    assert any(
+        "event: tool.failed" in b and '"tool_name": "terminal"' in b for b in blocks
+    )
+    assert any(
+        "event: tool.failed" in b and '"tool_name": "web_search"' in b for b in blocks
+    )
     assert body.count("event: tool.completed") == 1
     assert body.count("event: tool.failed") == 2
 
 
 @pytest.mark.asyncio
-async def test_session_chat_stream_run_completed_carries_turn_transcript(adapter, session_db):
+async def test_session_chat_stream_run_completed_carries_turn_transcript(
+    adapter, session_db
+):
     """run.completed must include the full interleaved turn transcript so a
     client that lost intermediate (pre-tool-call) assistant text from the live
     delta stream can reconcile without a separate /messages fetch. Refs #34703.
@@ -524,7 +566,12 @@ async def test_session_chat_stream_run_completed_carries_turn_transcript(adapter
                         }
                     ],
                 },
-                {"role": "tool", "content": "results", "tool_call_id": "call_1", "tool_name": "web_search"},
+                {
+                    "role": "tool",
+                    "content": "results",
+                    "tool_call_id": "call_1",
+                    "tool_name": "web_search",
+                },
                 {"role": "assistant", "content": "Here is the summary."},
             ],
         }
@@ -546,7 +593,7 @@ async def test_session_chat_stream_run_completed_carries_turn_transcript(adapter
         if "event: run.completed" in block:
             for line in block.splitlines():
                 if line.startswith("data: "):
-                    run_completed_payload = _json.loads(line[len("data: "):])
+                    run_completed_payload = _json.loads(line[len("data: ") :])
             break
     assert run_completed_payload is not None, body
     messages = run_completed_payload.get("messages")
@@ -563,7 +610,9 @@ async def test_session_chat_stream_run_completed_carries_turn_transcript(adapter
 
 
 @pytest.mark.asyncio
-async def test_session_chat_stream_reports_interrupted_turn_as_not_completed(adapter, session_db):
+async def test_session_chat_stream_reports_interrupted_turn_as_not_completed(
+    adapter, session_db
+):
     """The SSE terminal payload is derived from the result, never hard-coded: an interrupted
     turn streams ``completed: false`` / ``interrupted: true`` and ends with ``run.cancelled``,
     and the run status matches (#111770)."""
@@ -572,13 +621,19 @@ async def test_session_chat_stream_reports_interrupted_turn_as_not_completed(ada
     session_id = session_db.create_session("interrupted-session", "api_server")
 
     async def fake_run(**_kwargs):
-        return {"final_response": "Operation interrupted.", "interrupted": True, "completed": False,
-                "session_id": session_id}, {"total_tokens": 1}
+        return {
+            "final_response": "Operation interrupted.",
+            "interrupted": True,
+            "completed": False,
+            "session_id": session_id,
+        }, {"total_tokens": 1}
 
     app = _create_session_app(adapter)
     with patch.object(adapter, "_run_agent", side_effect=fake_run):
         async with TestClient(TestServer(app)) as cli:
-            resp = await cli.post(f"/api/sessions/{session_id}/chat/stream", json={"message": "hello"})
+            resp = await cli.post(
+                f"/api/sessions/{session_id}/chat/stream", json={"message": "hello"}
+            )
             body = await resp.text()
 
     payloads = {}
@@ -610,13 +665,24 @@ async def test_session_chat_resolves_stored_model_route_alias(session_db, monkey
     adapter = APIServerAdapter(
         PlatformConfig(
             enabled=True,
-            extra={"model_routes": {"alias": {"model": "route/model", "provider": "openrouter"}}},
+            extra={
+                "model_routes": {
+                    "alias": {"model": "route/model", "provider": "openrouter"}
+                }
+            },
         )
     )
     adapter._session_db = session_db
-    session_id = session_db.create_session("route-pinned-session", "api_server", model="alias")
+    session_id = session_db.create_session(
+        "route-pinned-session", "api_server", model="alias"
+    )
 
-    mock_run = AsyncMock(return_value=({"final_response": "ok", "session_id": session_id}, {"total_tokens": 1}))
+    mock_run = AsyncMock(
+        return_value=(
+            {"final_response": "ok", "session_id": session_id},
+            {"total_tokens": 1},
+        )
+    )
     app = _create_session_app(adapter)
     with patch.object(adapter, "_run_agent", mock_run):
         async with TestClient(TestServer(app)) as cli:
@@ -645,7 +711,12 @@ async def test_session_chat_treats_pre_existing_poisoned_row_as_no_model(session
         "poisoned-session", "api_server", model=adapter._model_name
     )
 
-    mock_run = AsyncMock(return_value=({"final_response": "ok", "session_id": session_id}, {"total_tokens": 1}))
+    mock_run = AsyncMock(
+        return_value=(
+            {"final_response": "ok", "session_id": session_id},
+            {"total_tokens": 1},
+        )
+    )
     app = _create_session_app(adapter)
     with patch.object(adapter, "_run_agent", mock_run):
         async with TestClient(TestServer(app)) as cli:
@@ -660,7 +731,9 @@ async def test_session_chat_treats_pre_existing_poisoned_row_as_no_model(session
 
 
 @pytest.mark.asyncio
-async def test_session_chat_stream_treats_pre_existing_poisoned_row_as_no_model(session_db):
+async def test_session_chat_stream_treats_pre_existing_poisoned_row_as_no_model(
+    session_db,
+):
     """Streaming twin of the above: the SSE chat path must apply the same
     guard against a pre-existing poisoned session row."""
     adapter = APIServerAdapter(PlatformConfig(enabled=True))
@@ -690,7 +763,9 @@ async def test_session_chat_stream_treats_pre_existing_poisoned_row_as_no_model(
 
 
 def _register_session_model_route(app, adapter):
-    app.router.add_post("/api/sessions/{session_id}/model", adapter._handle_session_model_lock)
+    app.router.add_post(
+        "/api/sessions/{session_id}/model", adapter._handle_session_model_lock
+    )
 
 
 def _patch_api_server_runtime(monkeypatch):
@@ -727,7 +802,9 @@ def _patch_api_server_runtime(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_create_session_respects_browser_source_and_model_lock(adapter, session_db):
+async def test_create_session_respects_browser_source_and_model_lock(
+    adapter, session_db
+):
     # The requested title is held by an ended empty visible ghost, which must yield (#81888);
     # a live holder must still reject the create without leaving a half-made row.
     session_db.create_session("ghost", "desktop")
@@ -762,6 +839,7 @@ async def test_create_session_respects_browser_source_and_model_lock(adapter, se
     assert row["source"] == "clawk_browser"
     assert row["model"] == "x-ai/grok-4.5"
     import json as _json
+
     model_config = row.get("model_config")
     if isinstance(model_config, str):
         model_config = _json.loads(model_config)
@@ -883,10 +961,13 @@ async def test_session_model_lock_endpoint_then_chat_stream_reuses_persisted_loc
 
     app = _create_session_app(adapter)
     _register_session_model_route(app, adapter)
-    with patch.object(adapter, "_resolve_route", return_value=None), patch.object(
-        adapter,
-        "_run_agent",
-        side_effect=fake_run,
+    with (
+        patch.object(adapter, "_resolve_route", return_value=None),
+        patch.object(
+            adapter,
+            "_run_agent",
+            side_effect=fake_run,
+        ),
     ):
         async with TestClient(TestServer(app)) as cli:
             lock_resp = await cli.post(
@@ -914,7 +995,9 @@ async def test_session_model_lock_endpoint_then_chat_stream_reuses_persisted_loc
 
 
 @pytest.mark.asyncio
-async def test_run_agent_reports_actual_agent_runtime_not_requested_metadata(adapter, monkeypatch):
+async def test_run_agent_reports_actual_agent_runtime_not_requested_metadata(
+    adapter, monkeypatch
+):
     class FakeAgent:
         session_prompt_tokens = 0
         session_completion_tokens = 0
@@ -958,7 +1041,9 @@ async def test_run_agent_reports_actual_agent_runtime_not_requested_metadata(ada
 
 
 @pytest.mark.asyncio
-async def test_confirmed_runtime_lock_rejects_actual_runtime_mismatch(adapter, monkeypatch):
+async def test_confirmed_runtime_lock_rejects_actual_runtime_mismatch(
+    adapter, monkeypatch
+):
     class FakeAgent:
         session_prompt_tokens = 0
         session_completion_tokens = 0
@@ -1060,7 +1145,9 @@ def test_confirmed_runtime_lock_disables_global_fallback_model(adapter, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_unconfirmed_request_does_not_replace_confirmed_session_lock(adapter, session_db):
+async def test_unconfirmed_request_does_not_replace_confirmed_session_lock(
+    adapter, session_db
+):
     session_id = session_db.create_session("one-off-override", "api_server")
     session_db.update_session_runtime_lock(
         session_id,
@@ -1074,16 +1161,22 @@ async def test_unconfirmed_request_does_not_replace_confirmed_session_lock(adapt
             {
                 "final_response": "ok",
                 "session_id": session_id,
-                "runtime": {"provider": "openrouter", "model": "anthropic/claude-sonnet"},
+                "runtime": {
+                    "provider": "openrouter",
+                    "model": "anthropic/claude-sonnet",
+                },
             },
             {"total_tokens": 1},
         )
     )
     app = _create_session_app(adapter)
-    with patch.object(adapter, "_resolve_route", return_value=None), patch.object(
-        adapter,
-        "_run_agent",
-        mock_run,
+    with (
+        patch.object(adapter, "_resolve_route", return_value=None),
+        patch.object(
+            adapter,
+            "_run_agent",
+            mock_run,
+        ),
     ):
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
@@ -1108,11 +1201,16 @@ async def test_unconfirmed_request_does_not_replace_confirmed_session_lock(adapt
 
 
 @pytest.mark.asyncio
-async def test_require_model_lock_hard_fails_when_global_default_would_be_used(adapter, session_db, monkeypatch):
+async def test_require_model_lock_hard_fails_when_global_default_would_be_used(
+    adapter, session_db, monkeypatch
+):
     session_id = session_db.create_session("lock-fail-session", "api_server")
     monkeypatch.setattr(adapter, "_model_name", "gpt-5.5")
     app = _create_session_app(adapter)
-    with patch.object(adapter, "_resolve_route", return_value=None), patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
+    with (
+        patch.object(adapter, "_resolve_route", return_value=None),
+        patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run,
+    ):
         async with TestClient(TestServer(app)) as cli:
             # empty model + require_model_lock must not silently fall through
             resp = await cli.post(
@@ -1126,25 +1224,50 @@ async def test_require_model_lock_hard_fails_when_global_default_would_be_used(a
             )
             assert resp.status in (400, 409), await resp.text()
             body = await resp.json()
-            assert body["error"]["code"] in {"model_lock_unavailable", "invalid_model_lock", "missing_model"}
+            assert body["error"]["code"] in {
+                "model_lock_unavailable",
+                "invalid_model_lock",
+                "missing_model",
+            }
     mock_run.assert_not_called()
 
 
-_CHAT_REPLY = ({"final_response": "ok"}, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
+_CHAT_REPLY = (
+    {"final_response": "ok"},
+    {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
+)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("body, expected", [
-    ({"message": "hello", "author": {"id": " bot:dixie ", "name": "dixie", "is_bot": 1, "role": "admin"}},
-     {"id": "bot:dixie", "name": "dixie", "is_bot": True}),
-    ({"message": "hello"}, None),
-    ({"message": "hello", "author": None}, None),
-], ids=["author", "no author", "null author"])
-async def test_session_chat_passes_normalized_author_to_run_agent(adapter, session_db, body, expected):
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (
+            {
+                "message": "hello",
+                "author": {
+                    "id": " bot:dixie ",
+                    "name": "dixie",
+                    "is_bot": 1,
+                    "role": "admin",
+                },
+            },
+            {"id": "bot:dixie", "name": "dixie", "is_bot": True},
+        ),
+        ({"message": "hello"}, None),
+        ({"message": "hello", "author": None}, None),
+    ],
+    ids=["author", "no author", "null author"],
+)
+async def test_session_chat_passes_normalized_author_to_run_agent(
+    adapter, session_db, body, expected
+):
     """A body ``author`` reaches ``_run_agent`` normalized with unknown keys dropped; absent or null is None."""
     session_id = session_db.create_session("author-session", "api_server")
     app = _create_session_app(adapter)
-    with patch.object(adapter, "_run_agent", AsyncMock(return_value=_CHAT_REPLY)) as mock_run:
+    with patch.object(
+        adapter, "_run_agent", AsyncMock(return_value=_CHAT_REPLY)
+    ) as mock_run:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(f"/api/sessions/{session_id}/chat", json=body)
             assert resp.status == 200, await resp.text()
@@ -1154,13 +1277,17 @@ async def test_session_chat_passes_normalized_author_to_run_agent(adapter, sessi
 @pytest.mark.asyncio
 @pytest.mark.parametrize("suffix", ["/chat", "/chat/stream"])
 @pytest.mark.parametrize("author", ["dixie"])
-async def test_session_chat_rejects_non_object_author(adapter, session_db, suffix, author):
+async def test_session_chat_rejects_non_object_author(
+    adapter, session_db, suffix, author
+):
     session_id = session_db.create_session("bad-author-session", "api_server")
     app = _create_session_app(adapter)
     with patch.object(adapter, "_run_agent", new_callable=AsyncMock) as mock_run:
         async with TestClient(TestServer(app)) as cli:
             resp = await cli.post(
-                f"/api/sessions/{session_id}{suffix}", json={"message": "hello", "author": author})
+                f"/api/sessions/{session_id}{suffix}",
+                json={"message": "hello", "author": author},
+            )
             assert resp.status == 400, await resp.text()
             body = await resp.json()
     assert body["error"]["code"] == "invalid_author"
@@ -1168,7 +1295,9 @@ async def test_session_chat_rejects_non_object_author(adapter, session_db, suffi
 
 
 @pytest.mark.asyncio
-async def test_run_agent_forwards_author_to_run_conversation_only_when_set(adapter, monkeypatch):
+async def test_run_agent_forwards_author_to_run_conversation_only_when_set(
+    adapter, monkeypatch
+):
     """``turn_author`` reaches ``run_conversation`` when set; a human turn keeps today's call shape."""
     calls = []
 
@@ -1178,15 +1307,23 @@ async def test_run_agent_forwards_author_to_run_conversation_only_when_set(adapt
         session_total_tokens = 0
         session_id = "author-run"
 
-        def run_conversation(self, user_message, conversation_history, task_id, **kwargs):
+        def run_conversation(
+            self, user_message, conversation_history, task_id, **kwargs
+        ):
             calls.append(kwargs)
             return {"final_response": "ok", "session_id": self.session_id}
 
     monkeypatch.setattr(adapter, "_create_agent", lambda **kwargs: FakeAgent())
     author = {"id": "bot:dixie", "name": "dixie", "is_bot": True}
     await adapter._run_agent(
-        user_message="hello", conversation_history=[], session_id="author-run", turn_author=author)
-    await adapter._run_agent(user_message="hello", conversation_history=[], session_id="author-run")
+        user_message="hello",
+        conversation_history=[],
+        session_id="author-run",
+        turn_author=author,
+    )
+    await adapter._run_agent(
+        user_message="hello", conversation_history=[], session_id="author-run"
+    )
 
     assert calls == [{"turn_author": author}, {}]
 
@@ -1280,7 +1417,10 @@ async def test_session_stream_records_reply_text_for_post_disconnect_recovery(
             run_started.set()
             self._stream_delta_callback("partial ")
             allow_finish.wait(timeout=5)
-            return {"final_response": "the answer worth keeping", "session_id": session_id}
+            return {
+                "final_response": "the answer worth keeping",
+                "session_id": session_id,
+            }
 
     class DisconnectingStreamResponse:
         async def prepare(self, request):
@@ -1296,15 +1436,26 @@ async def test_session_stream_records_reply_text_for_post_disconnect_recovery(
     request.headers = {}
     request.match_info = {"session_id": session_id}
 
-    with patch.object(
-        adapter, "_get_existing_session_or_404", return_value=({"id": session_id}, None)
-    ), patch.object(
-        adapter, "_read_json_body", return_value=({"message": "stream please"}, None)
-    ), patch.object(
-        adapter, "_create_agent", side_effect=lambda **kw: FakeAgent(kw["stream_delta_callback"])
-    ), patch(
-        "gateway.platforms.api_server.web.StreamResponse",
-        return_value=DisconnectingStreamResponse(),
+    with (
+        patch.object(
+            adapter,
+            "_get_existing_session_or_404",
+            return_value=({"id": session_id}, None),
+        ),
+        patch.object(
+            adapter,
+            "_read_json_body",
+            return_value=({"message": "stream please"}, None),
+        ),
+        patch.object(
+            adapter,
+            "_create_agent",
+            side_effect=lambda **kw: FakeAgent(kw["stream_delta_callback"]),
+        ),
+        patch(
+            "gateway.platforms.api_server.web.StreamResponse",
+            return_value=DisconnectingStreamResponse(),
+        ),
     ):
         handler_task = asyncio.create_task(adapter._handle_session_chat_stream(request))
 
@@ -1333,7 +1484,9 @@ async def test_session_stream_records_reply_text_for_post_disconnect_recovery(
 
 
 @pytest.mark.asyncio
-async def test_worker_events_reach_the_session_stream_before_its_terminal_frames(adapter, session_db, monkeypatch):
+async def test_worker_events_reach_the_session_stream_before_its_terminal_frames(
+    adapter, session_db, monkeypatch
+):
     """A commentary the agent's worker thread hands to the loop before returning is delivered
     before ``assistant.completed``/``done``, however late the loop applies that hand-off (it is
     not ordered against the worker's own completion; CI saw it land after ``None`` and vanish)."""
@@ -1345,9 +1498,13 @@ async def test_worker_events_reach_the_session_stream_before_its_terminal_frames
     def late_queue_hops(callback, *args, **kwargs):
         # Only the hops that feed the session event queue arrive late; executor completions do not.
         target = getattr(callback, "__self__", None)
-        if isinstance(target, asyncio.Queue) or getattr(callback, "__name__", "") == "_apply":
+        if (
+            isinstance(target, asyncio.Queue)
+            or getattr(callback, "__name__", "") == "_apply"
+        ):
             return real_threadsafe(loop.call_later, 0.2, callback, *args)
         return real_threadsafe(callback, *args, **kwargs)
+
     monkeypatch.setattr(loop, "call_soon_threadsafe", late_queue_hops)
 
     def fake_create_agent(**kwargs):
@@ -1360,19 +1517,30 @@ async def test_worker_events_reach_the_session_stream_before_its_terminal_frames
             def run_conversation(self, **_kw):
                 interim("Checking the docs first.", already_streamed=False)
                 return {"final_response": "Done.", "messages": [], "api_calls": 1}
+
         return FakeAgent()
 
     app = _create_session_app(adapter)
     with patch.object(adapter, "_create_agent", side_effect=fake_create_agent):
         async with TestClient(TestServer(app)) as cli:
-            body = await (await cli.post(f"/api/sessions/{session_id}/chat/stream", json={"message": "go"})).text()
+            body = await (
+                await cli.post(
+                    f"/api/sessions/{session_id}/chat/stream", json={"message": "go"}
+                )
+            ).text()
     names = [ln[7:] for ln in body.splitlines() if ln.startswith("event: ")]
     assert "assistant.commentary" in names, names
-    assert names.index("assistant.commentary") < names.index("assistant.completed") < names.index("done"), names
+    assert (
+        names.index("assistant.commentary")
+        < names.index("assistant.completed")
+        < names.index("done")
+    ), names
 
 
 @pytest.mark.asyncio
-async def test_interim_commentary_reaches_session_sse_and_responses_stream(adapter, session_db, monkeypatch):
+async def test_interim_commentary_reaches_session_sse_and_responses_stream(
+    adapter, session_db, monkeypatch
+):
     """Codex commentary / mid-turn assistant text is a typed ``assistant.commentary`` event on the
     session SSE endpoint and a ``phase: commentary`` message item on /v1/responses, never part of
     the final answer; ``display.interim_assistant_messages: false`` installs no callback (#67580)."""
@@ -1397,9 +1565,17 @@ async def test_interim_commentary_reaches_session_sse_and_responses_stream(adapt
     app.router.add_post("/v1/responses", adapter._handle_responses)
     with patch.object(adapter, "_create_agent", side_effect=fake_create_agent):
         async with TestClient(TestServer(app)) as cli:
-            sse = await (await cli.post(f"/api/sessions/{session_id}/chat/stream", json={"message": "go"})).text()
-            responses = await (await cli.post(
-                "/v1/responses", json={"model": "clawksis-agent", "input": "go", "stream": True})).text()
+            sse = await (
+                await cli.post(
+                    f"/api/sessions/{session_id}/chat/stream", json={"message": "go"}
+                )
+            ).text()
+            responses = await (
+                await cli.post(
+                    "/v1/responses",
+                    json={"model": "clawksis-agent", "input": "go", "stream": True},
+                )
+            ).text()
 
     def _events(body):
         out = []
@@ -1413,17 +1589,29 @@ async def test_interim_commentary_reaches_session_sse_and_responses_stream(adapt
 
     sse_events = _events(sse)
     commentary = [d for n, d in sse_events if n == "assistant.commentary"]
-    assert [(d["text"], d["already_streamed"]) for d in commentary] == [("Checking the docs first.", False)]
-    assert next(d for n, d in sse_events if n == "assistant.completed")["content"] == "Done."
+    assert [(d["text"], d["already_streamed"]) for d in commentary] == [
+        ("Checking the docs first.", False)
+    ]
+    assert (
+        next(d for n, d in sse_events if n == "assistant.completed")["content"]
+        == "Done."
+    )
 
-    done_items = [d["item"] for n, d in _events(responses) if n == "response.output_item.done"]
-    assert [(i.get("phase"), i["content"][0]["text"]) for i in done_items if i["type"] == "message"] == [
-        ("commentary", "Checking the docs first."), (None, "Done.")]
+    done_items = [
+        d["item"] for n, d in _events(responses) if n == "response.output_item.done"
+    ]
+    assert [
+        (i.get("phase"), i["content"][0]["text"])
+        for i in done_items
+        if i["type"] == "message"
+    ] == [("commentary", "Checking the docs first."), (None, "Done.")]
 
     # Display gate: the callback is dropped before it reaches AIAgent, like the gateway/TUI.
     _patch_api_server_runtime(monkeypatch)
     monkeypatch.setattr(
-        "gateway.run._load_gateway_config", lambda: {"display": {"interim_assistant_messages": False}})
+        "gateway.run._load_gateway_config",
+        lambda: {"display": {"interim_assistant_messages": False}},
+    )
     captured = {}
 
     class CapturingAgent:
@@ -1433,5 +1621,7 @@ async def test_interim_commentary_reaches_session_sse_and_responses_stream(adapt
             captured.update(kwargs)
 
     monkeypatch.setattr("run_agent.AIAgent", CapturingAgent)
-    adapter._create_agent(session_id="gated", interim_assistant_callback=lambda *_a, **_k: None)
+    adapter._create_agent(
+        session_id="gated", interim_assistant_callback=lambda *_a, **_k: None
+    )
     assert captured["interim_assistant_callback"] is None

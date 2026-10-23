@@ -16,6 +16,7 @@ guards.
 
 from tools.approval import detect_dangerous_command
 
+
 class TestChownRecursiveLongOptionAbbreviation:
     """chown --recur* abbreviations targeting root must be caught.
 
@@ -34,6 +35,7 @@ class TestChownRecursiveLongOptionAbbreviation:
         """--recur* chown to a non-root user must not be flagged."""
         dangerous, _, _ = detect_dangerous_command("chown --recur nobody /opt/app")
         assert dangerous is False
+
 
 class TestGitPushForceLongOptionAbbreviation:
     """git push --forc* abbreviations must be caught.

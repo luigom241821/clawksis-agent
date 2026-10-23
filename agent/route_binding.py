@@ -15,30 +15,49 @@ from utils import base_url_host_matches
 logger = logging.getLogger(__name__)
 
 
-def bind_route_entry(agent: Any, entry: dict[str, Any], provider: str, model: str) -> Optional[tuple[str, str]]:
+def bind_route_entry(
+    agent: Any, entry: dict[str, Any], provider: str, model: str
+) -> Optional[tuple[str, str]]:
     """Swap ``agent`` onto ``entry`` (a fallback-chain-shaped dict). Returns ``(old_model,
     old_provider)``, or None when the provider has no usable client. Sets ``_fallback_activated``
     so the next turn's ``restore_primary_runtime`` reverts it; raises on a failed swap."""
     from agent.auxiliary_client import resolve_provider_client
     from agent.chat_completion_helpers import (
-        _fallback_api_mode_hint, _fallback_api_mode_resolved, _rebind_fallback_credential_pool,
-        _reresolve_fallback_reasoning_config, _rescope_fallback_extra_body, _update_fallback_context_compressor,
+        _fallback_api_mode_hint,
+        _fallback_api_mode_resolved,
+        _rebind_fallback_credential_pool,
+        _reresolve_fallback_reasoning_config,
+        _rescope_fallback_extra_body,
+        _update_fallback_context_compressor,
     )
     from clawk_cli.fallback_config import resolve_entry_api_key
+
     # Pass the entry's base_url/api_key so custom endpoints (Ollama Cloud) resolve instead
     # of falling through to OpenRouter defaults.
     base_url_hint = (entry.get("base_url") or "").strip() or None
     api_key_hint = resolve_entry_api_key(entry)
-    api_mode_explicit, api_mode = _fallback_api_mode_hint(entry, provider, base_url_hint)
+    api_mode_explicit, api_mode = _fallback_api_mode_hint(
+        entry, provider, base_url_hint
+    )
     # Ollama Cloud: OLLAMA_API_KEY from env when the entry has no key. Host match, not
     # substring — GHSA-76xc-57q6-vm5m.
-    if base_url_hint and base_url_host_matches(base_url_hint, "ollama.com") and not api_key_hint:
+    if (
+        base_url_hint
+        and base_url_host_matches(base_url_hint, "ollama.com")
+        and not api_key_hint
+    ):
         from agent.secret_scope import get_secret
+
         api_key_hint = get_secret("OLLAMA_API_KEY") or None
     # raw_codex=True: the main agent needs direct responses.stream() access for Codex providers.
     client, _resolved_model = resolve_provider_client(
-        provider, model=model, raw_codex=True, explicit_base_url=base_url_hint, explicit_api_key=api_key_hint,
-        api_mode=api_mode)
+        provider,
+        model=model,
+        raw_codex=True,
+        explicit_base_url=base_url_hint,
+        explicit_api_key=api_key_hint,
+        api_mode=api_mode,
+    )
     if client is None:
         return None
     if provider == "moa":
@@ -49,11 +68,18 @@ def bind_route_entry(agent: Any, entry: dict[str, Any], provider: str, model: st
     else:
         try:
             from clawk_cli.model_normalize import normalize_model_for_provider
+
             model = normalize_model_for_provider(model, provider)
         except Exception as norm_err:  # health: allow BLE001 -- moved verbatim from try_activate_fallback; a bad catalog entry keeps the raw id
-            logger.warning("Could not normalize fallback model %r for provider %r: %s", model, provider, norm_err)
+            logger.warning(
+                "Could not normalize fallback model %r for provider %r: %s",
+                model,
+                provider,
+                norm_err,
+            )
         base_url = str(client.base_url)
         from clawk_cli.providers import is_actual_route
+
         if is_actual_route(provider, base_url):
             api_mode = "chat_completions"
         elif not api_mode_explicit and api_mode == "chat_completions":
@@ -70,22 +96,29 @@ def bind_route_entry(agent: Any, entry: dict[str, Any], provider: str, model: st
     if hasattr(agent, "_transport_cache"):
         agent._transport_cache.clear()
     from agent.turn_recovery_codex import reset_codex_reasoning_replay
+
     reset_codex_reasoning_replay(agent)
     agent._fallback_activated = True
 
     _rebind_fallback_credential_pool(agent, provider, model)
     if provider == "moa":
         from agent.moa_loop import bind_moa_runtime
+
         bind_moa_runtime(agent, model)
     else:
         from agent.client_lifecycle import _swap_fallback_clients
+
         _swap_fallback_clients(agent, client, provider, model, base_url, api_mode)
 
     from agent.agent_runtime_helpers import sync_credential_pool_entry_id
+
     sync_credential_pool_entry_id(agent)
 
-    agent._use_prompt_caching, agent._use_native_cache_layout = agent._anthropic_prompt_cache_policy(
-        provider=provider, base_url=base_url, api_mode=api_mode, model=model)
+    agent._use_prompt_caching, agent._use_native_cache_layout = (
+        agent._anthropic_prompt_cache_policy(
+            provider=provider, base_url=base_url, api_mode=api_mode, model=model
+        )
+    )
     agent._ensure_lmstudio_runtime_loaded()  # LM Studio: preload before probing context length
     _update_fallback_context_compressor(agent)
     _reresolve_fallback_reasoning_config(agent)
@@ -98,10 +131,14 @@ def reinstall_runtime_snapshot(agent: Any, rt: dict[str, Any]) -> None:
     identity, client, caching flags, compressor, reasoning and prompt identity. Credential pool
     and fallback bookkeeping are the caller's. Raises on failure."""
     from agent.agent_runtime_helpers import (
-        _apply_primary_runtime_fields, _rebuild_primary_client, _restore_runtime_capabilities,
+        _apply_primary_runtime_fields,
+        _rebuild_primary_client,
+        _restore_runtime_capabilities,
     )
+
     _apply_primary_runtime_fields(agent, rt)
     from agent.turn_recovery_codex import reset_codex_reasoning_replay
+
     reset_codex_reasoning_replay(agent)
     _restore_runtime_capabilities(agent, rt)
     agent._use_prompt_caching = rt["use_prompt_caching"]
@@ -116,20 +153,28 @@ def reinstall_runtime_snapshot(agent: Any, rt: dict[str, Any]) -> None:
         agent._use_native_cache_layout = False
     _rebuild_primary_client(agent, rt, reason="restore_primary")
     agent.context_compressor.update_model(
-        model=rt["compressor_model"], context_length=rt["compressor_context_length"],
-        base_url=rt["compressor_base_url"], api_key=rt["compressor_api_key"],
-        provider=rt["compressor_provider"], api_mode=rt.get("compressor_api_mode", ""),
+        model=rt["compressor_model"],
+        context_length=rt["compressor_context_length"],
+        base_url=rt["compressor_base_url"],
+        api_key=rt["compressor_api_key"],
+        provider=rt["compressor_provider"],
+        api_mode=rt.get("compressor_api_mode", ""),
     )
     # Same rule as fallback activation: refresh an existing verdict only; never-probed sessions stay lazy.
     if getattr(agent, "_compression_feasibility_checked", False) is True:
         from agent.conversation_compression import revalidate_compression_feasibility
+
         revalidate_compression_feasibility(agent)
     # Older snapshots have no reasoning_config; keep the current value.
     saved_reasoning = rt.get("reasoning_config")
     if saved_reasoning is not None:
         agent.reasoning_config = dict(saved_reasoning)
     # Reset the stale-call circuit breaker: its streak measured the route being left.
-    from agent.chat_completion_helpers import _reset_stale_streak, rewrite_prompt_model_identity
+    from agent.chat_completion_helpers import (
+        _reset_stale_streak,
+        rewrite_prompt_model_identity,
+    )
+
     _reset_stale_streak(agent)
     # Undo the identity rewrite so the prompt is byte-identical to the stored copy again
     # (prefix cache match).
@@ -137,14 +182,27 @@ def reinstall_runtime_snapshot(agent: Any, rt: dict[str, Any]) -> None:
 
 
 def reinstall_primary_runtime(
-    agent: Any, rt: dict[str, Any], primary_provider: str, primary_model: str, matches_primary,
-    load_primary_pool, prefetched_pool=None, prefetched: bool = False,
+    agent: Any,
+    rt: dict[str, Any],
+    primary_provider: str,
+    primary_model: str,
+    matches_primary,
+    load_primary_pool,
+    prefetched_pool=None,
+    prefetched: bool = False,
 ) -> None:
     """Put ``agent`` back on its ``_primary_runtime`` snapshot ``rt`` and clear the fallback state."""
     from agent.agent_runtime_helpers import _rebind_primary_credential_pool
+
     reinstall_runtime_snapshot(agent, rt)
     _rebind_primary_credential_pool(
-        agent, primary_provider, primary_model, matches_primary, load_primary_pool, prefetched_pool, prefetched
+        agent,
+        primary_provider,
+        primary_model,
+        matches_primary,
+        load_primary_pool,
+        prefetched_pool,
+        prefetched,
     )
     agent._fallback_activated = False
     agent._fallback_index = 0

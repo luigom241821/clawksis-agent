@@ -60,14 +60,16 @@ def _make_adapter(dm_topics_config=None, group_topics_config=None):
 @pytest.mark.asyncio
 async def test_setup_dm_topics_creates_when_no_thread_id():
     """Topics without thread_id should be created via API."""
-    adapter = _make_adapter([
-        {
-            "chat_id": 222,
-            "topics": [
-                {"name": "NewTopic", "icon_color": 7322096},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        [
+            {
+                "chat_id": 222,
+                "topics": [
+                    {"name": "NewTopic", "icon_color": 7322096},
+                ],
+            }
+        ]
+    )
     adapter._bot = AsyncMock()
     mock_topic = SimpleNamespace(message_thread_id=999)
     adapter._bot.create_forum_topic.return_value = mock_topic
@@ -79,7 +81,9 @@ async def test_setup_dm_topics_creates_when_no_thread_id():
 
     # Should have been created
     adapter._bot.create_forum_topic.assert_called_once_with(
-        chat_id=222, name="NewTopic", icon_color=7322096,
+        chat_id=222,
+        name="NewTopic",
+        icon_color=7322096,
     )
     # Should be in cache
     assert adapter._dm_topics["222:NewTopic"] == 999
@@ -90,15 +94,17 @@ async def test_setup_dm_topics_creates_when_no_thread_id():
 @pytest.mark.asyncio
 async def test_setup_dm_topics_mixed_persisted_and_new():
     """Mix of persisted and new topics should work correctly."""
-    adapter = _make_adapter([
-        {
-            "chat_id": 333,
-            "topics": [
-                {"name": "Existing", "thread_id": 50},
-                {"name": "New", "icon_color": 123},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        [
+            {
+                "chat_id": 333,
+                "topics": [
+                    {"name": "Existing", "thread_id": 50},
+                    {"name": "New", "icon_color": 123},
+                ],
+            }
+        ]
+    )
     adapter._bot = AsyncMock()
     mock_topic = SimpleNamespace(message_thread_id=777)
     adapter._bot.create_forum_topic.return_value = mock_topic
@@ -129,16 +135,14 @@ async def test_create_dm_topic_handles_duplicate_error():
     assert result is None
 
 
-
-
-
-
 @pytest.mark.asyncio
 async def test_ensure_dm_topic_creates_on_demand_and_persists():
     """Named delivery targets should create missing private DM topics on demand."""
     adapter = _make_adapter()
     adapter._bot = AsyncMock()
-    adapter._bot.create_forum_topic.return_value = SimpleNamespace(message_thread_id=444)
+    adapter._bot.create_forum_topic.return_value = SimpleNamespace(
+        message_thread_id=444
+    )
     adapter._persist_dm_topic_thread_id = MagicMock()
 
     result = await adapter.ensure_dm_topic("111", "On Demand")
@@ -189,8 +193,10 @@ def test_persist_dm_topic_thread_id_writes_config(tmp_path):
 
     adapter = _make_adapter()
 
-    with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+    ):
         adapter._persist_dm_topic_thread_id(111, "General", 999)
 
     with open(config_file) as f:
@@ -235,9 +241,11 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
     def fail_dump(*args, **kwargs):
         raise RuntimeError("boom")
 
-    with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}), \
-         patch("ruamel.yaml.YAML.dump", side_effect=fail_dump):
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+        patch("ruamel.yaml.YAML.dump", side_effect=fail_dump),
+    ):
         adapter._persist_dm_topic_thread_id(111, "General", 999)
 
     assert config_file.read_text(encoding="utf-8") == original_text
@@ -248,14 +256,16 @@ def test_persist_dm_topic_thread_id_preserves_config_on_write_failure(tmp_path):
 
 def test_get_dm_topic_info_finds_cached_topic():
     """Should return topic config when thread_id is in cache."""
-    adapter = _make_adapter([
-        {
-            "chat_id": 111,
-            "topics": [
-                {"name": "General", "skill": "my-skill"},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        [
+            {
+                "chat_id": 111,
+                "topics": [
+                    {"name": "General", "skill": "my-skill"},
+                ],
+            }
+        ]
+    )
     adapter._dm_topics["111:General"] = 100
 
     result = adapter._get_dm_topic_info("111", "100")
@@ -270,9 +280,7 @@ def test_get_dm_topic_info_hot_reloads_from_config(tmp_path):
     import clawk_yaml as yaml
 
     # Start with empty topics
-    adapter = _make_adapter([
-        {"chat_id": 111, "topics": []}
-    ])
+    adapter = _make_adapter([{"chat_id": 111, "topics": []}])
 
     # Write config with a new topic + thread_id
     config_data = {
@@ -296,8 +304,10 @@ def test_get_dm_topic_info_hot_reloads_from_config(tmp_path):
     with open(config_file, "w") as f:
         yaml.safe_dump(config_data, f)
 
-    with patch.object(Path, "home", return_value=tmp_path), \
-         patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}):
+    with (
+        patch.object(Path, "home", return_value=tmp_path),
+        patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path / ".clawk")}),
+    ):
         result = adapter._get_dm_topic_info("111", "555")
 
     assert result is not None
@@ -322,9 +332,17 @@ def test_cache_dm_topic_from_message_no_overwrite():
 # ── _build_message_event: auto_skill binding ──
 
 
-def _make_mock_message(chat_id=111, chat_type="private", text="hello", thread_id=None,
-                       user_id=42, user_name="Test User", forum_topic_created=None,
-                       is_topic_message=None, is_forum=None):
+def _make_mock_message(
+    chat_id=111,
+    chat_type="private",
+    text="hello",
+    thread_id=None,
+    user_id=42,
+    user_name="Test User",
+    forum_topic_created=None,
+    is_topic_message=None,
+    is_forum=None,
+):
     """Create a mock Telegram Message for _build_message_event tests."""
     chat = SimpleNamespace(
         id=chat_id,
@@ -363,14 +381,20 @@ def test_build_message_event_sets_auto_skill():
     """When topic has a skill binding, auto_skill should be set on the event."""
     from gateway.platforms.event import MessageType
 
-    adapter = _make_adapter([
-        {
-            "chat_id": 111,
-            "topics": [
-                {"name": "My Project", "skill": "accessibility-auditor", "thread_id": 100},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        [
+            {
+                "chat_id": 111,
+                "topics": [
+                    {
+                        "name": "My Project",
+                        "skill": "accessibility-auditor",
+                        "thread_id": 100,
+                    },
+                ],
+            }
+        ]
+    )
     adapter._dm_topics["111:My Project"] = 100
 
     msg = _make_mock_message(chat_id=111, thread_id=100, text="check this page")
@@ -385,14 +409,16 @@ def test_build_message_event_no_auto_skill_without_binding():
     """Topics without skill binding should have auto_skill=None."""
     from gateway.platforms.event import MessageType
 
-    adapter = _make_adapter([
-        {
-            "chat_id": 111,
-            "topics": [
-                {"name": "General", "thread_id": 200},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        [
+            {
+                "chat_id": 111,
+                "topics": [
+                    {"name": "General", "thread_id": 200},
+                ],
+            }
+        ]
+    )
     adapter._dm_topics["111:General"] = 200
 
     msg = _make_mock_message(chat_id=111, thread_id=200)
@@ -415,15 +441,21 @@ def test_group_topic_skill_binding():
     """Group topic with skill config should set auto_skill on the event."""
     from gateway.platforms.event import MessageType
 
-    adapter = _make_adapter(group_topics_config=[
-        {
-            "chat_id": -1001234567890,
-            "topics": [
-                {"name": "Engineering", "thread_id": 5, "skill": "software-development"},
-                {"name": "Sales", "thread_id": 12, "skill": "sales-framework"},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        group_topics_config=[
+            {
+                "chat_id": -1001234567890,
+                "topics": [
+                    {
+                        "name": "Engineering",
+                        "thread_id": 5,
+                        "skill": "software-development",
+                    },
+                    {"name": "Sales", "thread_id": 12, "skill": "sales-framework"},
+                ],
+            }
+        ]
+    )
 
     msg = _make_mock_message(
         chat_id=-1001234567890,
@@ -443,15 +475,21 @@ def test_group_topic_skill_binding_second_topic():
     """A different thread_id in the same group should resolve its own skill."""
     from gateway.platforms.event import MessageType
 
-    adapter = _make_adapter(group_topics_config=[
-        {
-            "chat_id": -1001234567890,
-            "topics": [
-                {"name": "Engineering", "thread_id": 5, "skill": "software-development"},
-                {"name": "Sales", "thread_id": 12, "skill": "sales-framework"},
-            ],
-        }
-    ])
+    adapter = _make_adapter(
+        group_topics_config=[
+            {
+                "chat_id": -1001234567890,
+                "topics": [
+                    {
+                        "name": "Engineering",
+                        "thread_id": 5,
+                        "skill": "software-development",
+                    },
+                    {"name": "Sales", "thread_id": 12, "skill": "sales-framework"},
+                ],
+            }
+        ]
+    )
 
     msg = _make_mock_message(
         chat_id=-1001234567890,
@@ -468,5 +506,3 @@ def test_group_topic_skill_binding_second_topic():
 
 
 # ── _build_message_event: from_user=None fallback in DMs ──
-
-

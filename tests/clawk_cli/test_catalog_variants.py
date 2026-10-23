@@ -17,9 +17,11 @@ GIB = 1 << 30
 
 
 def budget(vram_gib: float, ram_gib: float = 64) -> HardwareBudget:
-    return HardwareBudget(usable_vram_bytes=int(vram_gib * GIB),
-                          total_device_bytes=int(vram_gib * GIB),
-                          ram_available_bytes=int(ram_gib * GIB))
+    return HardwareBudget(
+        usable_vram_bytes=int(vram_gib * GIB),
+        total_device_bytes=int(vram_gib * GIB),
+        ram_available_bytes=int(ram_gib * GIB),
+    )
 
 
 # Builds below 4-bit that the model's maker trained for, and ships as the only build. A
@@ -39,10 +41,12 @@ def test_every_entry_ships_exactly_one_q4_build():
     surface as unbadged rows in the pane."""
     for entry in CATALOG:
         assert len(entry.variants) == 1, (
-            f"{entry.id}: {len(entry.variants)} variants — expected exactly one")
+            f"{entry.id}: {len(entry.variants)} variants — expected exactly one"
+        )
         build = entry.variants[0]
-        assert entry.id in _MAKER_COMPRESSED or build.quant.startswith(("UD-Q4", "Q4", "UD-IQ4", "IQ4")), (
-            f"{entry.id}: ships {build.quant}, not a Q4-class build")
+        assert entry.id in _MAKER_COMPRESSED or build.quant.startswith(
+            ("UD-Q4", "Q4", "UD-IQ4", "IQ4")
+        ), f"{entry.id}: ships {build.quant}, not a Q4-class build"
         for asset in entry.download_files(build):
             assert asset.size_bytes > 0, f"{entry.id}: no size on {asset.path}"
 
@@ -116,12 +120,11 @@ def test_selection_accounts_for_kv_not_just_weights():
     exactly_weights = HardwareBudget(
         usable_vram_bytes=build.size_bytes + (100 << 20),
         total_device_bytes=build.size_bytes + (100 << 20),
-        ram_available_bytes=64 * GIB)
+        ram_available_bytes=64 * GIB,
+    )
     choice = select_variant(entry, exactly_weights)
     assert choice is not None
     assert not choice.zero_spill, "KV cost ignored — weights alone can't zero-spill"
-
-
 
 
 def test_target_never_degrades_below_floor_choice():
@@ -152,17 +155,24 @@ def test_catalog_and_preset_agree_on_identical_model_facts(tmp_path, monkeypatch
 
     from clawk_cli.local_runtime import bootstrap, catalog, presets
     from clawk_cli.local_runtime.context_policy import (
-        RUNTIME_OVERHEAD_BYTES, posture_profile, ub_logits_bytes)
+        RUNTIME_OVERHEAD_BYTES,
+        posture_profile,
+        ub_logits_bytes,
+    )
     from clawk_cli.local_runtime.estimator import ctx_bytes
     from clawk_cli.web_routers.local_models import _catalog_row
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr("clawk_cli.web_routers.local_models._engine_too_old", lambda tag: False)
+    monkeypatch.setattr(
+        "clawk_cli.web_routers.local_models._engine_too_old", lambda tag: False
+    )
     for entry in catalog.CATALOG:
         variant = entry.variants[0]
         profile = entry.profile(variant)
         path = tmp_path / f"{variant.model_id}.gguf"
-        monkeypatch.setattr(presets, "read_gguf_header", lambda p: SimpleNamespace(sampling_defaults={}))
+        monkeypatch.setattr(
+            presets, "read_gguf_header", lambda p: SimpleNamespace(sampling_defaults={})
+        )
         monkeypatch.setattr(presets, "profile_from_gguf", lambda h: profile)
         # The catalog prices the whole download; the preset prices what is on disk. Agreement is
         # the contract once every companion the download fetches has arrived.
@@ -173,8 +183,9 @@ def test_catalog_and_preset_agree_on_identical_model_facts(tmp_path, monkeypatch
                 asset.touch()
         for vram in (16, 24, 32, 48):
             for uma in (False, True):
-                machine = HardwareBudget(int(vram * GIB * 0.8), vram * GIB,
-                                         0 if uma else 32 * GIB, uma)
+                machine = HardwareBudget(
+                    int(vram * GIB * 0.8), vram * GIB, 0 if uma else 32 * GIB, uma
+                )
                 row = _catalog_row(entry, machine, None, None, set())
                 preset = presets.preset_for_model(path, machine, set())
                 assert row["fits"] == (preset.refusal is None)
@@ -183,12 +194,23 @@ def test_catalog_and_preset_agree_on_identical_model_facts(tmp_path, monkeypatch
                 assert row["start_window"] == preset.window
                 assert row["spilled"] == preset.spilled
                 mtp = entry.mtp_capable
-                overhead = (RUNTIME_OVERHEAD_BYTES + entry.companion_bytes
-                            + ub_logits_bytes(profile.n_vocab, mtp_capable=mtp,
-                                              mtp_prefill=preset.keys.get("ubatch-size") == "2048" and mtp))
-                posture = posture_profile(profile, mtp_capable=mtp,
-                                          mtp_prefill=preset.keys.get("ubatch-size") == "2048" and mtp)
-                need = profile.weights_bytes + ctx_bytes(posture, preset.window) + overhead
+                overhead = (
+                    RUNTIME_OVERHEAD_BYTES
+                    + entry.companion_bytes
+                    + ub_logits_bytes(
+                        profile.n_vocab,
+                        mtp_capable=mtp,
+                        mtp_prefill=preset.keys.get("ubatch-size") == "2048" and mtp,
+                    )
+                )
+                posture = posture_profile(
+                    profile,
+                    mtp_capable=mtp,
+                    mtp_prefill=preset.keys.get("ubatch-size") == "2048" and mtp,
+                )
+                need = (
+                    profile.weights_bytes + ctx_bytes(posture, preset.window) + overhead
+                )
                 assert preset.spilled == (need > machine.usable_vram_bytes)
                 assert need <= machine.usable_vram_bytes + machine.ram_available_bytes
 
@@ -208,9 +230,12 @@ def test_hybrid_long_context_stays_cheap():
     # per-token KV), not about any particular catalog entry.
     n_layers = len(hybrid_profile.layers)
     dense_profile = ModelProfile(
-        name="synthetic-dense", weights_bytes=hybrid_profile.weights_bytes,
-        embd_table_bytes=0, n_ctx_train=hybrid.n_ctx_train,
-        layers=[(LayerKind.FULL, hybrid.per_layer_f16)] * n_layers)
+        name="synthetic-dense",
+        weights_bytes=hybrid_profile.weights_bytes,
+        embd_table_bytes=0,
+        n_ctx_train=hybrid.n_ctx_train,
+        layers=[(LayerKind.FULL, hybrid.per_layer_f16)] * n_layers,
+    )
     dense_kv = ctx_bytes(dense_profile, FLOOR)
     hybrid_kv = ctx_bytes(hybrid_profile, FLOOR)
     # The contract is structural: recurrent layers pay no per-token KV,
@@ -221,4 +246,5 @@ def test_hybrid_long_context_stays_cheap():
     assert hybrid_kv < dense_kv, "hybrid must be cheaper than dense"
     assert abs(hybrid_kv - expected) / expected < 0.25, (
         f"hybrid KV ({hybrid_kv:,}) should track its full-attention share "
-        f"(expected ~{expected:,.0f})")
+        f"(expected ~{expected:,.0f})"
+    )

@@ -1,4 +1,5 @@
 """Windows installs whose git is PM's: install.ps1 stages it, PM's facts must record it."""
+
 import os
 
 import pm
@@ -23,7 +24,9 @@ def windows(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("git_on_path", ["none", "installer-staged"])
-def test_pm_git_is_acquired_and_recorded_when_windows_has_no_git_of_its_own(windows, monkeypatch, git_on_path):
+def test_pm_git_is_acquired_and_recorded_when_windows_has_no_git_of_its_own(
+    windows, monkeypatch, git_on_path
+):
     root, staged_git = windows
     calls = []
     store_path = r"C:\store\git-2.53.0+3-win32-x64\cmd;C:\store\git-2.53.0+3-win32-x64\usr\bin;C:\Windows\System32"
@@ -43,7 +46,9 @@ def test_pm_git_is_acquired_and_recorded_when_windows_has_no_git_of_its_own(wind
 
 
 @pytest.mark.parametrize("install", ["own-git", "git-less-zip"])
-def test_own_git_and_git_less_zip_installs_are_left_alone(windows, monkeypatch, install):
+def test_own_git_and_git_less_zip_installs_are_left_alone(
+    windows, monkeypatch, install
+):
     root, _ = windows
     own_git = str(root / "Git" / "cmd" / "git.exe") if install == "own-git" else None
     if install == "git-less-zip":

@@ -26,11 +26,13 @@ from plugins.platforms.feishu.feishu_comment_rules import (
 
 class TestCommentDocumentRuleParsing(unittest.TestCase):
     def test_parse_full_rule(self):
-        rule = _parse_document_rule({
-            "enabled": False,
-            "policy": "allowlist",
-            "allow_from": ["ou_a", "ou_b"],
-        })
+        rule = _parse_document_rule(
+            {
+                "enabled": False,
+                "policy": "allowlist",
+                "allow_from": ["ou_a", "ou_b"],
+            }
+        )
         self.assertFalse(rule.enabled)
         self.assertEqual(rule.policy, "allowlist")
         self.assertEqual(rule.allow_from, frozenset(["ou_a", "ou_b"]))
@@ -70,10 +72,12 @@ class TestResolveRule(unittest.TestCase):
 
 class TestHasWikiKeys(unittest.TestCase):
     def test_no_wiki_keys(self):
-        cfg = CommentsConfig(documents={
-            "docx:abc": CommentDocumentRule(policy="allowlist"),
-            "*": CommentDocumentRule(policy="pairing"),
-        })
+        cfg = CommentsConfig(
+            documents={
+                "docx:abc": CommentDocumentRule(policy="allowlist"),
+                "*": CommentDocumentRule(policy="pairing"),
+            }
+        )
         self.assertFalse(has_wiki_keys(cfg))
 
 
@@ -81,7 +85,6 @@ class TestIsUserAllowed(unittest.TestCase):
     def test_allowlist_allows_listed(self):
         rule = ResolvedCommentRule(True, "allowlist", frozenset(["ou_a"]), "top")
         self.assertTrue(is_user_allowed(rule, "ou_a"))
-
 
     def test_pairing_checks_store(self):
         rule = ResolvedCommentRule(True, "pairing", frozenset(), "top")
@@ -114,8 +117,13 @@ class TestLoadConfig(unittest.TestCase):
             json.dump(raw, f)
             path = Path(f.name)
         try:
-            with patch("plugins.platforms.feishu.feishu_comment_rules.RULES_FILE", path):
-                with patch("plugins.platforms.feishu.feishu_comment_rules._rules_cache", _MtimeCache(path)):
+            with patch(
+                "plugins.platforms.feishu.feishu_comment_rules.RULES_FILE", path
+            ):
+                with patch(
+                    "plugins.platforms.feishu.feishu_comment_rules._rules_cache",
+                    _MtimeCache(path),
+                ):
                     cfg = load_config()
             self.assertTrue(cfg.enabled)
             self.assertEqual(cfg.policy, "allowlist")
@@ -133,7 +141,10 @@ class TestPairingStore(unittest.TestCase):
         self._pairing_file = Path(self._tmpdir) / "pairing.json"
         with open(self._pairing_file, "w") as f:
             json.dump({"approved": {}}, f)
-        self._patcher_file = patch("plugins.platforms.feishu.feishu_comment_rules.PAIRING_FILE", self._pairing_file)
+        self._patcher_file = patch(
+            "plugins.platforms.feishu.feishu_comment_rules.PAIRING_FILE",
+            self._pairing_file,
+        )
         self._patcher_cache = patch(
             "plugins.platforms.feishu.feishu_comment_rules._pairing_cache",
             _MtimeCache(self._pairing_file),
@@ -173,10 +184,14 @@ class TestRulesFollowActiveProfile(unittest.TestCase):
             prof_a, prof_b = Path(tmp) / "A", Path(tmp) / "B"
             for home, enabled in ((prof_a, True), (prof_b, False)):
                 home.mkdir()
-                (home / "feishu_comment_rules.json").write_text(json.dumps({"enabled": enabled}))
+                (home / "feishu_comment_rules.json").write_text(
+                    json.dumps({"enabled": enabled})
+                )
             self.assertTrue(under(prof_a, fcr.load_config).enabled)  # warm A's slot
             self.assertFalse(under(prof_b, fcr.load_config).enabled)
-            self.assertTrue(under(prof_a, fcr.load_config).enabled)  # A's slot survives B
+            self.assertTrue(
+                under(prof_a, fcr.load_config).enabled
+            )  # A's slot survives B
             self.assertTrue(under(prof_b, lambda: fcr.pairing_add("ou_b")))
             self.assertTrue((prof_b / "feishu_comment_pairing.json").exists())
             self.assertFalse((prof_a / "feishu_comment_pairing.json").exists())

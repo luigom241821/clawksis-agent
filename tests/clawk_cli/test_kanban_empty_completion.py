@@ -33,12 +33,17 @@ def test_complete_without_evidence_raises(conn):
     tid = _ready_task(conn)
     with pytest.raises(kb.EmptyCompletionError):
         kb.complete_task(conn, tid)
-    row = conn.execute("SELECT status, result FROM tasks WHERE id = ?", (tid,)).fetchone()
+    row = conn.execute(
+        "SELECT status, result FROM tasks WHERE id = ?", (tid,)
+    ).fetchone()
     assert row["status"] == "running"
     assert not row["result"]
-    kinds = [r["kind"] for r in conn.execute(
-        "SELECT kind FROM task_events WHERE task_id = ? ORDER BY id", (tid,)
-    ).fetchall()]
+    kinds = [
+        r["kind"]
+        for r in conn.execute(
+            "SELECT kind FROM task_events WHERE task_id = ? ORDER BY id", (tid,)
+        ).fetchall()
+    ]
     assert "completion_blocked_empty_result" in kinds
     assert "completed" not in kinds
 
@@ -47,7 +52,12 @@ def test_whitespace_result_raises(conn):
     tid = _ready_task(conn)
     with pytest.raises(kb.EmptyCompletionError):
         kb.complete_task(conn, tid, result="   ")
-    assert conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()["status"] == "running"
+    assert (
+        conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()[
+            "status"
+        ]
+        == "running"
+    )
 
 
 def test_whitespace_stored_result_does_not_count(conn):
@@ -57,7 +67,12 @@ def test_whitespace_stored_result_does_not_count(conn):
     with pytest.raises(kb.EmptyCompletionError):
         kb.complete_task(conn, tid)
     assert kb.complete_task(conn, tid, result="shipped the gate") is True
-    assert conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()["status"] == "done"
+    assert (
+        conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()[
+            "status"
+        ]
+        == "done"
+    )
 
 
 def test_review_approval_exempt(conn):
@@ -74,4 +89,9 @@ def test_reject_then_succeed(conn):
     with pytest.raises(kb.EmptyCompletionError):
         kb.complete_task(conn, tid, summary="   ")
     assert kb.complete_task(conn, tid, summary="fixed empty complete") is True
-    assert conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()["status"] == "done"
+    assert (
+        conn.execute("SELECT status FROM tasks WHERE id = ?", (tid,)).fetchone()[
+            "status"
+        ]
+        == "done"
+    )

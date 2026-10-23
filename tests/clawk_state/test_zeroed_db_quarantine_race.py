@@ -18,8 +18,10 @@ def test_preflight_cannot_observe_db_mid_quarantine(tmp_path, monkeypatch):
     db = tmp_path / "state.db"
     db.write_bytes(bytes(4096))  # zeroed 4 KB file
 
-    late_reached = threading.Event()   # worker 1 hit its preflight check OR the quarantine lock
-    quarantined = threading.Event()    # worker 0 finished moving the zeroed file aside
+    late_reached = (
+        threading.Event()
+    )  # worker 1 hit its preflight check OR the quarantine lock
+    quarantined = threading.Event()  # worker 0 finished moving the zeroed file aside
     real_access = os.access
     real_lock = hs.quarantine_cross_process_lock
     real_quarantine = hs.quarantine_invalid_state_db

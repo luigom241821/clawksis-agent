@@ -64,10 +64,18 @@ class ProjectIdParams(ProfileParams):
     id: str
 
 
-method("projects.list", params=ProfileParams, result=ProjectsPayload,
-       doc="Every project of the profile (archived included) plus which one is active.")
-method("projects.get", params=ProjectIdParams, result=ProjectResult,
-       doc="One stored project with its folders.")
+method(
+    "projects.list",
+    params=ProfileParams,
+    result=ProjectsPayload,
+    doc="Every project of the profile (archived included) plus which one is active.",
+)
+method(
+    "projects.get",
+    params=ProjectIdParams,
+    result=ProjectResult,
+    doc="One stored project with its folders.",
+)
 
 
 class ProjectsCreateParams(ProfileParams):
@@ -84,8 +92,12 @@ class ProjectsCreateParams(ProfileParams):
     use: bool = False
 
 
-method("projects.create", params=ProjectsCreateParams, result=OptionalProjectResult,
-       doc="Create a project from a name + folders; duplicate primary paths are refused (5063).")
+method(
+    "projects.create",
+    params=ProjectsCreateParams,
+    result=OptionalProjectResult,
+    doc="Create a project from a name + folders; duplicate primary paths are refused (5063).",
+)
 
 
 class ProjectsUpdateParams(ProjectIdParams):
@@ -98,8 +110,12 @@ class ProjectsUpdateParams(ProjectIdParams):
     board_slug: str | None = None
 
 
-method("projects.update", params=ProjectsUpdateParams, result=ProjectResult,
-       doc="Patch a project's display fields; answers the refreshed project.")
+method(
+    "projects.update",
+    params=ProjectsUpdateParams,
+    result=ProjectResult,
+    doc="Patch a project's display fields; answers the refreshed project.",
+)
 
 
 class ProjectsAddFolderParams(ProjectIdParams):
@@ -108,28 +124,48 @@ class ProjectsAddFolderParams(ProjectIdParams):
     is_primary: bool = False
 
 
-method("projects.add_folder", params=ProjectsAddFolderParams, result=ProjectResult,
-       doc="Attach a folder to a project (optionally as its primary path).")
+method(
+    "projects.add_folder",
+    params=ProjectsAddFolderParams,
+    result=ProjectResult,
+    doc="Attach a folder to a project (optionally as its primary path).",
+)
 
 
 class ProjectFolderParams(ProjectIdParams):
     path: str
 
 
-method("projects.remove_folder", params=ProjectFolderParams, result=ProjectResult,
-       doc="Detach a folder from a project.")
-method("projects.set_primary", params=ProjectFolderParams, result=ProjectResult,
-       doc="Make one attached folder the project's primary path.")
+method(
+    "projects.remove_folder",
+    params=ProjectFolderParams,
+    result=ProjectResult,
+    doc="Detach a folder from a project.",
+)
+method(
+    "projects.set_primary",
+    params=ProjectFolderParams,
+    result=ProjectResult,
+    doc="Make one attached folder the project's primary path.",
+)
 
 
 class ProjectsArchiveParams(ProjectIdParams):
     restore: bool = False
 
 
-method("projects.archive", params=ProjectsArchiveParams, result=ProjectsPayload,
-       doc="Archive (or with ``restore`` un-archive) a project; answers the full listing.")
-method("projects.delete", params=ProjectIdParams, result=ProjectsPayload,
-       doc="Delete a project and its folders; answers the full listing.")
+method(
+    "projects.archive",
+    params=ProjectsArchiveParams,
+    result=ProjectsPayload,
+    doc="Archive (or with ``restore`` un-archive) a project; answers the full listing.",
+)
+method(
+    "projects.delete",
+    params=ProjectIdParams,
+    result=ProjectsPayload,
+    doc="Delete a project and its folders; answers the full listing.",
+)
 
 
 class ProjectsSetActiveParams(ProfileParams):
@@ -142,8 +178,12 @@ class ActiveIdResult(Result):
     active_id: str | None = None
 
 
-method("projects.set_active", params=ProjectsSetActiveParams, result=ActiveIdResult,
-       doc="Switch (or clear) the active project for the profile.")
+method(
+    "projects.set_active",
+    params=ProjectsSetActiveParams,
+    result=ActiveIdResult,
+    doc="Switch (or clear) the active project for the profile.",
+)
 
 
 class ProjectsForCwdParams(ProfileParams):
@@ -158,8 +198,12 @@ class ProjectsForCwdResult(Result):
     branch: str = ""
 
 
-method("projects.for_cwd", params=ProjectsForCwdParams, result=ProjectsForCwdResult,
-       doc="Which project (if any) owns a directory, plus the resolved cwd and its git branch.")
+method(
+    "projects.for_cwd",
+    params=ProjectsForCwdParams,
+    result=ProjectsForCwdResult,
+    doc="Which project (if any) owns a directory, plus the resolved cwd and its git branch.",
+)
 
 
 # ── projects: repo discovery ──────────────────────────────────────────────────────────────────
@@ -204,8 +248,12 @@ class ProjectsDiscoverReposResult(Result):
     discovery_policy: RepoDiscoveryPolicy | None = None
 
 
-method("projects.discover_repos", params=ProjectsDiscoverReposParams, result=ProjectsDiscoverReposResult,
-       doc="Repos for the desktop overview: scanned-from-disk (cached) ∪ session-derived.")
+method(
+    "projects.discover_repos",
+    params=ProjectsDiscoverReposParams,
+    result=ProjectsDiscoverReposResult,
+    doc="Repos for the desktop overview: scanned-from-disk (cached) ∪ session-derived.",
+)
 
 
 class RecordRepoItem(Params):
@@ -224,8 +272,12 @@ class ProjectsRecordReposResult(ProjectsDiscoverReposResult):
     accepted: bool
 
 
-method("projects.record_repos", params=ProjectsRecordReposParams, result=ProjectsRecordReposResult,
-       doc="Persist repo roots found by the client's (desktop-side) scan; return the merged list.")
+method(
+    "projects.record_repos",
+    params=ProjectsRecordReposParams,
+    result=ProjectsRecordReposResult,
+    doc="Persist repo roots found by the client's (desktop-side) scan; return the merged list.",
+)
 
 
 # ── projects: sidebar tree ────────────────────────────────────────────────────────────────────
@@ -291,8 +343,12 @@ class ProjectsTreeResult(Result):
     scoped_session_ids: list[str] = Field(default_factory=list)
 
 
-method("projects.tree", params=ProjectsTreeParams, result=ProjectsTreeResult,
-       doc="Project → repo → lane overview with counts and a few preview sessions per project.")
+method(
+    "projects.tree",
+    params=ProjectsTreeParams,
+    result=ProjectsTreeResult,
+    doc="Project → repo → lane overview with counts and a few preview sessions per project.",
+)
 
 
 class ProjectsProjectSessionsParams(ProfileParams):
@@ -304,8 +360,12 @@ class ProjectsProjectSessionsResult(Result):
     project: ProjectTreeNode | None = None
 
 
-method("projects.project_sessions", params=ProjectsProjectSessionsParams, result=ProjectsProjectSessionsResult,
-       doc="Fully hydrated lanes for one project, from the same grouping as projects.tree.")
+method(
+    "projects.project_sessions",
+    params=ProjectsProjectSessionsParams,
+    result=ProjectsProjectSessionsResult,
+    doc="Fully hydrated lanes for one project, from the same grouping as projects.tree.",
+)
 
 
 # ── pet: active mascot ────────────────────────────────────────────────────────────────────────
@@ -338,8 +398,12 @@ class PetInfoResult(OpenModel):
     stateRows: list[str] | None = None
 
 
-method("pet.info", params=PetInfoParams, result=PetInfoResult,
-       doc="Active pet for sprite renderers: spritesheet (base64) + frame geometry + state-row taxonomy.")
+method(
+    "pet.info",
+    params=PetInfoParams,
+    result=PetInfoResult,
+    doc="Active pet for sprite renderers: spritesheet (base64) + frame geometry + state-row taxonomy.",
+)
 
 
 class PetInfoMetaResult(Result):
@@ -350,8 +414,12 @@ class PetInfoMetaResult(Result):
     spritesheetRevision: str | None = None
 
 
-method("pet.info.meta", params=ProfileParams, result=PetInfoMetaResult,
-       doc="Cheap active-pet metadata used to avoid full payload refreshes.")
+method(
+    "pet.info.meta",
+    params=ProfileParams,
+    result=PetInfoMetaResult,
+    doc="Cheap active-pet metadata used to avoid full payload refreshes.",
+)
 
 
 class PetCellsParams(ProfileParams):
@@ -381,8 +449,12 @@ class PetCellsResult(Result):
     placeholder: list[str] | None = None
 
 
-method("pet.cells", params=PetCellsParams, result=PetCellsResult,
-       doc="Half-block cell frames (or a kitty placement) for one pet state.")
+method(
+    "pet.cells",
+    params=PetCellsParams,
+    result=PetCellsResult,
+    doc="Half-block cell frames (or a kitty placement) for one pet state.",
+)
 
 
 # ── pet: gallery / picker ─────────────────────────────────────────────────────────────────────
@@ -407,8 +479,12 @@ class PetGalleryResult(Result):
     pets: list[PetGalleryEntry] = Field(default_factory=list)
 
 
-method("pet.gallery", params=PetGalleryParams, result=PetGalleryResult,
-       doc="Petdex gallery + local install state (installed-only offline); localOnly skips the remote manifest.")
+method(
+    "pet.gallery",
+    params=PetGalleryParams,
+    result=PetGalleryResult,
+    doc="Petdex gallery + local install state (installed-only offline); localOnly skips the remote manifest.",
+)
 
 
 class PetSlugParams(ProfileParams):
@@ -421,18 +497,30 @@ class PetSlugResult(Result):
     displayName: str | None = None
 
 
-method("pet.select", params=PetSlugParams, result=PetSlugResult,
-       doc="Adopt a pet: install (if needed) + activate; writes display.pet.* to config.")
-method("pet.remove", params=PetSlugParams, result=PetSlugResult,
-       doc="Uninstall a pet (delete its directory); if it was active, turn the display off.")
+method(
+    "pet.select",
+    params=PetSlugParams,
+    result=PetSlugResult,
+    doc="Adopt a pet: install (if needed) + activate; writes display.pet.* to config.",
+)
+method(
+    "pet.remove",
+    params=PetSlugParams,
+    result=PetSlugResult,
+    doc="Uninstall a pet (delete its directory); if it was active, turn the display off.",
+)
 
 
 class PetRenameParams(PetSlugParams):
     name: str
 
 
-method("pet.rename", params=PetRenameParams, result=PetSlugResult,
-       doc="Rename a pet's display name + realign its slug/dir; follows the active slug in config.")
+method(
+    "pet.rename",
+    params=PetRenameParams,
+    result=PetSlugResult,
+    doc="Rename a pet's display name + realign its slug/dir; follows the active slug in config.",
+)
 
 
 class PetExportResult(Result):
@@ -441,8 +529,12 @@ class PetExportResult(Result):
     zipBase64: str
 
 
-method("pet.export", params=PetSlugParams, result=PetExportResult,
-       doc="Export an installed pet as a re-importable .zip.")
+method(
+    "pet.export",
+    params=PetSlugParams,
+    result=PetExportResult,
+    doc="Export an installed pet as a re-importable .zip.",
+)
 
 
 class PetThumbParams(PetSlugParams):
@@ -457,11 +549,19 @@ class PetThumbResult(Result):
     dataUri: str | None = None
 
 
-method("pet.thumb", params=PetThumbParams, result=PetThumbResult,
-       doc="Idle-frame PNG data URI for the picker (desktop CSP breaks CDN <img>).")
+method(
+    "pet.thumb",
+    params=PetThumbParams,
+    result=PetThumbResult,
+    doc="Idle-frame PNG data URI for the picker (desktop CSP breaks CDN <img>).",
+)
 
-method("pet.disable", params=ProfileParams, result=OkResult,
-       doc="Turn the pet display off from the desktop picker.")
+method(
+    "pet.disable",
+    params=ProfileParams,
+    result=OkResult,
+    doc="Turn the pet display off from the desktop picker.",
+)
 
 
 class PetScaleParams(ProfileParams):
@@ -473,5 +573,9 @@ class PetScaleResult(Result):
     scale: float
 
 
-method("pet.scale", params=PetScaleParams, result=PetScaleResult,
-       doc="Persist display.pet.scale (clamped to engine bounds) from the desktop slider.")
+method(
+    "pet.scale",
+    params=PetScaleParams,
+    result=PetScaleResult,
+    doc="Persist display.pet.scale (clamped to engine bounds) from the desktop slider.",
+)

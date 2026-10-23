@@ -29,7 +29,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO))
 
-TOOL_FILLER = "y" * 3000  # longer than the FTS tool-content prefix, so the projection is exercised
+TOOL_FILLER = (
+    "y" * 3000
+)  # longer than the FTS tool-content prefix, so the projection is exercised
 _stop_requested = False
 
 
@@ -44,8 +46,12 @@ class Out:
     a SIGKILL of this process (only a kernel crash could lose it)."""
 
     def __init__(self, workdir: Path, name: str):
-        self.journal_fd = os.open(workdir / f"{name}.journal", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-        self.report_fd = os.open(workdir / f"{name}.report", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        self.journal_fd = os.open(
+            workdir / f"{name}.journal", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
+        )
+        self.report_fd = os.open(
+            workdir / f"{name}.report", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
+        )
 
     def journal(self, line: str) -> None:
         os.write(self.journal_fd, (line + "\n").encode())
@@ -82,8 +88,13 @@ def _patient(a: dict, out: Out, op: str, fn, *, deadline: float = 90.0):
         except sqlite3.OperationalError as exc:
             # By result code, not text: SQLITE_BUSY also surfaces as "vtable constructor failed:
             # messages_fts" when the FTS5 table's config read hits the lock during an open.
-            busy = getattr(exc, "sqlite_errorcode", None) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED) or any(
-                m in str(exc).lower() for m in ("database is locked", "database is busy"))
+            busy = getattr(exc, "sqlite_errorcode", None) in (
+                sqlite3.SQLITE_BUSY,
+                sqlite3.SQLITE_LOCKED,
+            ) or any(
+                m in str(exc).lower()
+                for m in ("database is locked", "database is busy")
+            )
             if not (busy and a.get("busy_ok")) or time.monotonic() > end:
                 raise
             out.report(event="busy", op=op, error=repr(exc))
@@ -118,7 +129,9 @@ def role_writer(a: dict, out: Out) -> int:
     for sid in a["sessions"]:
         if db.get_session(sid) is None:
             db.create_session(sid, a.get("source", "cli"))
-    out.report(event="ready", wal=bool(getattr(db, "_wal_active", False)), fds=_fd_count())
+    out.report(
+        event="ready", wal=bool(getattr(db, "_wal_active", False)), fds=_fd_count()
+    )
     i = 0
     max_appends = int(a.get("max_appends", 10**9))
     try:
@@ -128,8 +141,12 @@ def role_writer(a: dict, out: Out) -> int:
             if a.get("batch_every") and i % a["batch_every"] == 0:
                 msgs = [
                     {"role": "user", "content": f"{tok}u please run it"},
-                    {"role": "tool", "content": f"{tok}t {TOOL_FILLER}", "tool_name": "terminal",
-                     "tool_call_id": f"c{i}"},
+                    {
+                        "role": "tool",
+                        "content": f"{tok}t {TOOL_FILLER}",
+                        "tool_name": "terminal",
+                        "tool_call_id": f"c{i}",
+                    },
                 ]
                 out.journal(f"I {tok}u {sid} 1")
                 out.journal(f"I {tok}t {sid} 1")
@@ -146,14 +163,20 @@ def role_writer(a: dict, out: Out) -> int:
                 _stray_close(db_path)
             if a.get("pace"):
                 time.sleep(a["pace"])
-    except BaseException as exc:  # a refused/failed append is exactly what the suite exists to catch
-        out.report(event="error", error=repr(exc), tb=traceback.format_exc()[-3000:], appends=i)
+    except (
+        BaseException
+    ) as exc:  # a refused/failed append is exactly what the suite exists to catch
+        out.report(
+            event="error", error=repr(exc), tb=traceback.format_exc()[-3000:], appends=i
+        )
         return 2
     out.report(event="stats", appends=i, fds=_fd_count())
     try:
         db.close()
     except BaseException as exc:
-        out.report(event="error", error=f"close: {exc!r}", tb=traceback.format_exc()[-3000:])
+        out.report(
+            event="error", error=f"close: {exc!r}", tb=traceback.format_exc()[-3000:]
+        )
         return 2
     out.report(event="closed", appends=i)
     return 0
@@ -166,7 +189,9 @@ def role_reader(a: dict, out: Out) -> int:
 
     db_path, stop_file = Path(a["db"]), Path(a["stop"])
     db = _patient(a, out, "open", lambda: SessionDB(db_path=db_path))
-    out.report(event="ready", wal=bool(getattr(db, "_wal_active", False)), fds=_fd_count())
+    out.report(
+        event="ready", wal=bool(getattr(db, "_wal_active", False)), fds=_fd_count()
+    )
     seen: dict[str, int] = {}
     passes = 0
 
@@ -175,7 +200,10 @@ def role_reader(a: dict, out: Out) -> int:
             sid = row["id"]
             n = db.message_count(sid)
             if n < seen.get(sid, 0):
-                out.report(event="error", error=f"count went down for {sid}: {seen[sid]} -> {n}")
+                out.report(
+                    event="error",
+                    error=f"count went down for {sid}: {seen[sid]} -> {n}",
+                )
             seen[sid] = max(n, seen.get(sid, 0))
 
     try:
@@ -183,7 +211,12 @@ def role_reader(a: dict, out: Out) -> int:
             _patient(a, out, "read", _pass)
             passes += 1
             if passes % 5 == 0:
-                out.report(event="stats", passes=passes, fds=_fd_count(), total=sum(seen.values()))
+                out.report(
+                    event="stats",
+                    passes=passes,
+                    fds=_fd_count(),
+                    total=sum(seen.values()),
+                )
             time.sleep(a.get("pace", 0.05))
     except BaseException as exc:
         out.report(event="error", error=repr(exc), tb=traceback.format_exc()[-3000:])
@@ -226,8 +259,13 @@ def role_churn(a: dict, out: Out) -> int:
     except BaseException as exc:
         out.report(event="error", error=repr(exc), tb=traceback.format_exc()[-3000:])
         return 2
-    out.report(event="stats", start_fds=start_fds, warm_fds=fds_after_warmup, end_fds=_fd_count(),
-               iterations=a["iterations"])
+    out.report(
+        event="stats",
+        start_fds=start_fds,
+        warm_fds=fds_after_warmup,
+        end_fds=_fd_count(),
+        iterations=a["iterations"],
+    )
     return 0
 
 
@@ -243,6 +281,7 @@ def role_opener(a: dict, out: Out) -> int:
             finally:
                 conn.close()
         from clawk_state import SessionDB
+
         db = SessionDB(db_path=db_path)
         try:
             return db.message_count()
@@ -299,8 +338,12 @@ def role_repair(a: dict, out: Out) -> int:
     except BaseException as exc:
         out.report(event="error", error=repr(exc), tb=traceback.format_exc()[-3000:])
         return 2
-    out.report(event="stats", before=before, after=after,
-               result={k: (str(v) if v is not None else None) for k, v in result.items()})
+    out.report(
+        event="stats",
+        before=before,
+        after=after,
+        result={k: (str(v) if v is not None else None) for k, v in result.items()},
+    )
     return 0
 
 
@@ -318,11 +361,25 @@ def role_agent(a: dict, out: Out) -> int:
 
     stop_file = Path(a["stop"])
     db = SessionDB(db_path=Path(a["db"]))
-    agent = AIAgent(base_url=a["base_url"], api_key="sk-fake-e2e", model="fake-model", quiet_mode=True,
-                    session_db=db, session_id=a["session_id"], skip_context_files=True, skip_memory=True)
-    history = db.get_messages_as_conversation(a["session_id"]) if a.get("resume") else None
-    out.report(event="ready", micro=bool(getattr(agent.context_compressor, "_micro_compact_enabled", False)),
-               resumed=len(history or []), wal=bool(getattr(db, "_wal_active", False)))
+    agent = AIAgent(
+        base_url=a["base_url"],
+        api_key="sk-fake-e2e",
+        model="fake-model",
+        quiet_mode=True,
+        session_db=db,
+        session_id=a["session_id"],
+        skip_context_files=True,
+        skip_memory=True,
+    )
+    history = (
+        db.get_messages_as_conversation(a["session_id"]) if a.get("resume") else None
+    )
+    out.report(
+        event="ready",
+        micro=bool(getattr(agent.context_compressor, "_micro_compact_enabled", False)),
+        resumed=len(history or []),
+        wal=bool(getattr(db, "_wal_active", False)),
+    )
     bases: list[str] = []
     try:
         for i in range(int(a["turns"])):
@@ -330,19 +387,28 @@ def role_agent(a: dict, out: Out) -> int:
                 break
             base = f"TA{a['tag']}{os.getpid()}N{i}"  # TA: agent turns; TK: plain writer rows
             out.journal(f"I {base} {a['session_id']} 3")
-            result = agent.run_conversation(f"{base}Q question {i} " + "filler " * 120,
-                                            conversation_history=history)
+            result = agent.run_conversation(
+                f"{base}Q question {i} " + "filler " * 120, conversation_history=history
+            )
             history = result["messages"]
             if not any(base + "A" in str(m.get("content") or "") for m in history):
-                raise AssertionError(f"turn {i} ended without its answer: {result.get('final_response')!r}")
+                raise AssertionError(
+                    f"turn {i} ended without its answer: {result.get('final_response')!r}"
+                )
             out.journal(f"A {base}")
             bases.append(base)
             if a.get("compress_at") is not None and i == int(a["compress_at"]):
                 keep = int(a.get("keep", 2))
-                res = compress_now(agent, history, parse_compress_args(f"here {keep}"),
-                                   skip_without_window=True)
+                res = compress_now(
+                    agent,
+                    history,
+                    parse_compress_args(f"here {keep}"),
+                    skip_without_window=True,
+                )
                 if res.status != "compressed":
-                    raise AssertionError(f"/compress here {keep} did not compress: {res.status}")
+                    raise AssertionError(
+                        f"/compress here {keep} did not compress: {res.status}"
+                    )
                 history = res.after_messages
                 out.journal("C " + " ".join(bases[-keep:]))
     except BaseException as exc:
@@ -367,9 +433,14 @@ def role_cli(a: dict, out: Out) -> int:
 
 
 ROLES = {
-    "agent": role_agent, "cli": role_cli,
-    "writer": role_writer, "reader": role_reader, "churn": role_churn, "opener": role_opener,
-    "fts": role_fts, "repair": role_repair,
+    "agent": role_agent,
+    "cli": role_cli,
+    "writer": role_writer,
+    "reader": role_reader,
+    "churn": role_churn,
+    "opener": role_opener,
+    "fts": role_fts,
+    "repair": role_repair,
 }
 
 

@@ -11,12 +11,12 @@ Two halves:
    gateway is running — that gateway ticks it with live adapters, and racing it
    on the tick lock lets the adapter-less desktop ticker deliver standalone.
 """
+
 import asyncio
 import threading
 from unittest.mock import patch
 
 import pytest
-
 
 
 def test_standalone_fallback_pool_keeps_profile_scope(tmp_path, monkeypatch):
@@ -33,7 +33,9 @@ def test_standalone_fallback_pool_keeps_profile_scope(tmp_path, monkeypatch):
     sec_home = tmp_path / "profiles" / "ops"
     for home in (default_home, sec_home):
         (home / "cron").mkdir(parents=True)
-        (home / "config.yaml").write_text("platforms:\n  telegram:\n    enabled: true\n")
+        (home / "config.yaml").write_text(
+            "platforms:\n  telegram:\n    enabled: true\n"
+        )
     monkeypatch.setenv("CLAWK_HOME", str(default_home))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "DEFAULT-TOKEN")
     set_multiplex_active(True)
@@ -45,7 +47,12 @@ def test_standalone_fallback_pool_keeps_profile_scope(tmp_path, monkeypatch):
         seen["token"] = get_secret("TELEGRAM_BOT_TOKEN", None)
         return {"success": True, "message_id": "1"}
 
-    job = {"id": "j1", "name": "probe", "deliver": "telegram:12345", "schedule": {"kind": "cron"}}
+    job = {
+        "id": "j1",
+        "name": "probe",
+        "deliver": "telegram:12345",
+        "schedule": {"kind": "cron"},
+    }
 
     async def _inside_running_loop():
         # Emulate the multiplex ticker's per-profile scope on the caller.
@@ -108,11 +115,15 @@ def test_multiplex_ticker_profile_gate_skips_rejected_profile(tmp_path):
 
 
 @pytest.mark.parametrize("profile_count", [1, 2])
-def test_desktop_ticker_gates_on_profile_gateway_running(tmp_path, monkeypatch, profile_count):
+def test_desktop_ticker_gates_on_profile_gateway_running(
+    tmp_path, monkeypatch, profile_count
+):
     """Desktop yields to each live gateway, including a single-profile install."""
     from clawk_cli import web_server
 
-    homes = [("default", tmp_path / "default"), ("ops", tmp_path / "ops")][:profile_count]
+    homes = [("default", tmp_path / "default"), ("ops", tmp_path / "ops")][
+        :profile_count
+    ]
     running = {homes[-1][1]}
     monkeypatch.setattr(
         "clawk_cli.profiles.profiles_to_serve", lambda multiplex=False: list(homes)
@@ -120,7 +131,9 @@ def test_desktop_ticker_gates_on_profile_gateway_running(tmp_path, monkeypatch, 
     monkeypatch.setattr(
         "clawk_cli.profiles._check_gateway_running", lambda home: home in running
     )
-    monkeypatch.setattr("clawk_cli.profiles._served_by_running_multiplexer", lambda name: False)
+    monkeypatch.setattr(
+        "clawk_cli.profiles._served_by_running_multiplexer", lambda name: False
+    )
     captured = {}
 
     class _Provider:
@@ -131,7 +144,9 @@ def test_desktop_ticker_gates_on_profile_gateway_running(tmp_path, monkeypatch, 
 
     from cron import scheduler_provider as sp
 
-    monkeypatch.setattr(web_server, "resolve_cron_scheduler", lambda: _Provider(), raising=False)
+    monkeypatch.setattr(
+        web_server, "resolve_cron_scheduler", lambda: _Provider(), raising=False
+    )
     monkeypatch.setattr(sp, "resolve_cron_scheduler", lambda: _Provider())
     monkeypatch.setattr(sp, "InProcessCronScheduler", _Provider)
     monkeypatch.setattr("clawk_logging.enable_profile_log_routing", lambda homes: None)
@@ -156,7 +171,9 @@ def test_desktop_ticker_gates_on_profile_gateway_running(tmp_path, monkeypatch, 
     assert not any(gate(name, home) for name, home in homes)
 
 
-def test_a_routed_profile_fire_runs_under_multiplex_semantics_for_exactly_its_scope(tmp_path, monkeypatch):
+def test_a_routed_profile_fire_runs_under_multiplex_semantics_for_exactly_its_scope(
+    tmp_path, monkeypatch
+):
     """The desktop ticker fires a SIBLING profile's job from a process that is not a multiplexer.
     The tick only MARKS the fire as routed; multiplex semantics switch on where run_one_job
     installs the profile's secret scope and off with it — so the routed .env stays out of the
@@ -172,13 +189,19 @@ def test_a_routed_profile_fire_runs_under_multiplex_semantics_for_exactly_its_sc
     launch, routed = tmp_path / "launch", tmp_path / "launch" / "profiles" / "ops"
     for home in (launch, routed):
         (home / "cron").mkdir(parents=True)
-    (launch / ".env").write_text("XAI_API_KEY=launch-key\nDISCORD_BOT_TOKEN=launch-bot\n", encoding="utf-8")
-    (routed / ".env").write_text("XAI_API_KEY=routed-key\nROUTED_ONLY=routed-only\n", encoding="utf-8")
+    (launch / ".env").write_text(
+        "XAI_API_KEY=launch-key\nDISCORD_BOT_TOKEN=launch-bot\n", encoding="utf-8"
+    )
+    (routed / ".env").write_text(
+        "XAI_API_KEY=routed-key\nROUTED_ONLY=routed-only\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setenv("XAI_API_KEY", "launch-key")
     monkeypatch.setenv("DISCORD_BOT_TOKEN", "launch-bot")
     monkeypatch.delenv("ROUTED_ONLY", raising=False)
-    secret_scope.set_multiplex_active(False)  # the desktop backend never sets the process flag
+    secret_scope.set_multiplex_active(
+        False
+    )  # the desktop backend never sets the process flag
     environ_before = dict(os.environ)
 
     with _profile_cron_scope(routed):
@@ -191,12 +214,18 @@ def test_a_routed_profile_fire_runs_under_multiplex_semantics_for_exactly_its_sc
         try:
             assert secret_scope.is_multiplex_active() is True
             # The job's per-run dotenv reload, exactly as cron/scheduler does it: hydrate-only.
-            assert load_clawk_dotenv(clawk_home=routed, load_external_secrets=False) == []
+            assert (
+                load_clawk_dotenv(clawk_home=routed, load_external_secrets=False) == []
+            )
             assert secret_scope.get_secret("XAI_API_KEY") == "routed-key"
-            assert secret_scope.get_secret("DISCORD_BOT_TOKEN") is None  # never the launch bot
+            assert (
+                secret_scope.get_secret("DISCORD_BOT_TOKEN") is None
+            )  # never the launch bot
         finally:
             scheduler._reset_fire_secret_scope(tokens)
-        assert secret_scope.is_multiplex_active() is False  # off with the scope, not later
+        assert (
+            secret_scope.is_multiplex_active() is False
+        )  # off with the scope, not later
 
     assert routed_profile_fire() is False
     assert dict(os.environ) == environ_before
@@ -206,11 +235,16 @@ def test_a_routed_profile_fire_runs_under_multiplex_semantics_for_exactly_its_sc
     ("routed_env_line", "expected"),
     [
         ("", "managed-key"),  # managed-only credential: resolvable, not absent
-        ("ORG_API_KEY=user-key\n", "managed-key"),  # managed-vs-user collision: policy wins
+        (
+            "ORG_API_KEY=user-key\n",
+            "managed-key",
+        ),  # managed-vs-user collision: policy wins
     ],
     ids=["managed-only", "managed-beats-user"],
 )
-def test_routed_fire_scope_carries_managed_env_authority(tmp_path, monkeypatch, routed_env_line, expected):
+def test_routed_fire_scope_carries_managed_env_authority(
+    tmp_path, monkeypatch, routed_env_line, expected
+):
     """Under multiplex semantics get_secret never falls back to os.environ, so the routed fire's
     scope itself must carry the administrator-managed .env with the precedence _apply_managed_env
     gives it in the launch process: a managed-only key is present and a managed value beats the
@@ -228,7 +262,9 @@ def test_routed_fire_scope_carries_managed_env_authority(tmp_path, monkeypatch, 
     (managed / ".env").write_text("ORG_API_KEY=managed-key\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
-    monkeypatch.setenv("ORG_API_KEY", "managed-key")  # what _apply_managed_env left in the launch env
+    monkeypatch.setenv(
+        "ORG_API_KEY", "managed-key"
+    )  # what _apply_managed_env left in the launch env
     managed_scope.invalidate_managed_cache()
     secret_scope.set_multiplex_active(False)
 
@@ -241,7 +277,9 @@ def test_routed_fire_scope_carries_managed_env_authority(tmp_path, monkeypatch, 
             scheduler._reset_fire_secret_scope(tokens)
 
 
-def test_dashboard_run_now_isolates_a_sibling_profile_fire_like_the_ticker(tmp_path, monkeypatch):
+def test_dashboard_run_now_isolates_a_sibling_profile_fire_like_the_ticker(
+    tmp_path, monkeypatch
+):
     """The dashboard's manual Run now binds the sibling profile through ``_cron_store_scope``, not the
     ticker's ``_profile_cron_scope`` (#126982 review). Routed-fire detection follows the fire's HOME,
     so this entry point gets the same isolation: the routed ``.env`` reaches the job but never the
@@ -273,18 +311,29 @@ def test_dashboard_run_now_isolates_a_sibling_profile_fire_like_the_ticker(tmp_p
     monkeypatch.setattr(profiles, "_get_default_clawk_home", lambda: launch)
     monkeypatch.setattr(profiles, "_get_profiles_root", lambda: launch / "profiles")
     monkeypatch.setattr(scheduler, "_clawk_home", None)
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", lambda: InProcessCronScheduler())
-    secret_scope.set_multiplex_active(False)  # the desktop backend never sets the process flag
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler",
+        lambda: InProcessCronScheduler(),
+    )
+    secret_scope.set_multiplex_active(
+        False
+    )  # the desktop backend never sets the process flag
 
     def _job_for(home, name):
         (home / "scripts" / f"{name}.sh").write_text(
             "#!/usr/bin/env bash\n"
             f'echo "${{ROUTED_ONLY_SECRET:-<unset>}}|${{LAUNCH_ONLY_SECRET:-<unset>}}" > "{probe / name}"\n',
-            encoding="utf-8")
+            encoding="utf-8",
+        )
         token = set_clawk_home_override(str(home))
         try:
-            return create_job(prompt=None, schedule="every 1h", script=f"{name}.sh",
-                              no_agent=True, deliver="local")["id"]
+            return create_job(
+                prompt=None,
+                schedule="every 1h",
+                script=f"{name}.sh",
+                no_agent=True,
+                deliver="local",
+            )["id"]
         finally:
             reset_clawk_home_override(token)
 

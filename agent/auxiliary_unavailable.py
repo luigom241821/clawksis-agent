@@ -42,12 +42,21 @@ def _quarantined_nous_error(exc: BaseException) -> BaseException:
     with contextlib.suppress(Exception):
         marker = _terminal_quarantine_marker(get_provider_auth_state("nous") or {})
         if marker and marker.get("message"):
-            return AuthError(_sentence(marker["message"]), provider="nous", code=marker.get("code"),
-                             relogin_required=True)
+            return AuthError(
+                _sentence(marker["message"]),
+                provider="nous",
+                code=marker.get("code"),
+                relogin_required=True,
+            )
     if isinstance(exc, AuthError):
-        return AuthError(_sentence(exc), provider=exc.provider, code=exc.code,
-                         relogin_required=exc.relogin_required, retry_after=exc.retry_after,
-                         retryable=exc.retryable)
+        return AuthError(
+            _sentence(exc),
+            provider=exc.provider,
+            code=exc.code,
+            relogin_required=exc.relogin_required,
+            retry_after=exc.retry_after,
+            retryable=exc.retryable,
+        )
     return exc
 
 
@@ -70,24 +79,37 @@ def pool_cooldown_message(provider_id: str) -> Optional[str]:
 
     entries = []
     with contextlib.suppress(Exception):
-        entries = [PooledCredential.from_dict(provider_id, e)
-                   for e in read_credential_pool(provider_id) if isinstance(e, dict)]
+        entries = [
+            PooledCredential.from_dict(provider_id, e)
+            for e in read_credential_pool(provider_id)
+            if isinstance(e, dict)
+        ]
     live = [e for e in entries if e.last_status != STATUS_DEAD]
     if not live:
         return None
     now = time.time()
-    resets = [until for e in live
-              for until in (_exhausted_until(e, sole_credential=len(live) == 1),)
-              if until is not None and until > now]
+    resets = [
+        until
+        for e in live
+        for until in (_exhausted_until(e, sole_credential=len(live) == 1),)
+        if until is not None and until > now
+    ]
     if len(resets) != len(live):
         return None
-    when = safe_strftime(datetime.fromtimestamp(min(resets)).astimezone(), "%Y-%m-%d %H:%M %Z")
-    which = ("its only credential is" if len(live) == 1
-             else f"all {len(live)} credentials are")
-    return (f"Provider '{provider_id}' is set in config.yaml but {which} cooling down after a "
-            f"rate limit / quota error (429); the next one resets at {when}. Wait for the reset, "
-            f"add another credential with `clawk auth add {provider_id}`, or switch to a "
-            "different provider with `clawk model`.")
+    when = safe_strftime(
+        datetime.fromtimestamp(min(resets)).astimezone(), "%Y-%m-%d %H:%M %Z"
+    )
+    which = (
+        "its only credential is"
+        if len(live) == 1
+        else f"all {len(live)} credentials are"
+    )
+    return (
+        f"Provider '{provider_id}' is set in config.yaml but {which} cooling down after a "
+        f"rate limit / quota error (429); the next one resets at {when}. Wait for the reset, "
+        f"add another credential with `clawk auth add {provider_id}`, or switch to a "
+        "different provider with `clawk model`."
+    )
 
 
 class ProviderCredentialsExhaustedError(RuntimeError):
@@ -143,14 +165,18 @@ def pool_billing_message(
         else:
             from clawk_cli.auth import read_credential_pool
 
-            entries = [PooledCredential.from_dict(provider_id, e)
-                       for e in read_credential_pool(provider_id) if isinstance(e, dict)]
+            entries = [
+                PooledCredential.from_dict(provider_id, e)
+                for e in read_credential_pool(provider_id)
+                if isinstance(e, dict)
+            ]
     live = [e for e in entries if getattr(e, "last_status", None) != STATUS_DEAD]
     if not live:
         return None
     now = time.time()
     benched = [
-        e for e in live
+        e
+        for e in live
         if getattr(e, "last_status", None) == STATUS_EXHAUSTED
         and (_exhausted_until(e, sole_credential=len(live) == 1) or 0) > now
     ]
@@ -158,7 +184,8 @@ def pool_billing_message(
         # A credential is still usable (or merely cooling down on one model): not our case.
         return None
     billing = [
-        e for e in benched
+        e
+        for e in benched
         if getattr(e, "last_error_code", None) == 402
         or getattr(e, "failure_reason", None) == FAILURE_REASON_BILLING
     ]
@@ -167,7 +194,11 @@ def pool_billing_message(
     pick = billing[0]
     code = getattr(pick, "last_error_code", None)
     detail = str(getattr(pick, "last_error_message", None) or "").strip()
-    which = "its only credential is" if len(live) == 1 else f"all {len(live)} credentials are"
+    which = (
+        "its only credential is"
+        if len(live) == 1
+        else f"all {len(live)} credentials are"
+    )
     scope = f" for model '{model}'" if model else ""
     code_text = f" (last error {code}{': ' + detail if detail else ''})" if code else ""
     return (
@@ -191,8 +222,10 @@ class ProviderNotConfiguredError(RuntimeError):
 def _env_file_remedy(env_var: str) -> str:
     # Fork: point at the .env file, not a shell variable — the gateway/cron run as background
     # services that never see an interactive shell's `export`.
-    return (f"Add {env_var} to the .env file under your Clawksis home (a shell `export` is not "
-            f"visible to background services like the gateway)")
+    return (
+        f"Add {env_var} to the .env file under your Clawksis home (a shell `export` is not "
+        f"visible to background services like the gateway)"
+    )
 
 
 def missing_provider_credentials_message(provider_id: str) -> str:
@@ -210,23 +243,32 @@ def missing_provider_credentials_message(provider_id: str) -> str:
     pconfig = None
     with contextlib.suppress(Exception):
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         pconfig = PROVIDER_REGISTRY.get(provider_id)
     env_vars = tuple(getattr(pconfig, "api_key_env_vars", None) or ())
     problem, remedy = "no API key was found", ""
     from clawk_cli.local_runtime.endpoint import LLAMACPP_ALIASES
+
     if provider_id in LLAMACPP_ALIASES:
-        problem, remedy = "no local llama.cpp server is running", "Start it in Settings → Providers → Local models"
+        problem, remedy = (
+            "no local llama.cpp server is running",
+            "Start it in Settings → Providers → Local models",
+        )
     elif env_vars:
         remedy = _env_file_remedy(env_vars[0])
     elif pconfig is None:
         remedy = _env_file_remedy(f"{provider_id.upper().replace('-', '_')}_API_KEY")
     elif str(pconfig.auth_type).startswith("oauth"):
-        problem, remedy = "no credentials were found", f"Run `clawk auth add {provider_id}` to sign in"
+        problem, remedy = (
+            "no credentials were found",
+            f"Run `clawk auth add {provider_id}` to sign in",
+        )
     else:
         problem = "no credentials were found"
     switch = "switch to a different provider with `clawk model`."
-    return (f"Provider '{provider_id}' is set in config.yaml but {problem}. "
-            + (f"{remedy}, or {switch}" if remedy else switch.capitalize()))
+    return f"Provider '{provider_id}' is set in config.yaml but {problem}. " + (
+        f"{remedy}, or {switch}" if remedy else switch.capitalize()
+    )
 
 
 def _nous_credential_present(exc: BaseException) -> bool:

@@ -28,9 +28,13 @@ def _make_runner():
     return runner
 
 
-def _patch_resolution(monkeypatch, *, model_from_config: str, provider: str = "openrouter"):
+def _patch_resolution(
+    monkeypatch, *, model_from_config: str, provider: str = "openrouter"
+):
     """Stub gateway model + runtime resolution to a known state."""
-    monkeypatch.setattr(gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config)
+    monkeypatch.setattr(
+        gateway_run, "_resolve_gateway_model", lambda cfg=None: model_from_config
+    )
     monkeypatch.setattr(
         gateway_run,
         "_resolve_runtime_agent_kwargs",
@@ -49,10 +53,14 @@ def test_empty_model_recovers_session_last_good(monkeypatch):
 
     # Turn 1: config has the model — cache it.
     _patch_resolution(monkeypatch, model_from_config="deepseek/deepseek-v4-flash")
-    runner._resolve_session_agent_runtime(session_key=sk, user_config={"model": {"default": "x"}})
+    runner._resolve_session_agent_runtime(
+        session_key=sk, user_config={"model": {"default": "x"}}
+    )
 
     # Turn 2: simulate the transient empty config read (the #35314 race).
     _patch_resolution(monkeypatch, model_from_config="", provider="")
     model, _ = runner._resolve_session_agent_runtime(session_key=sk, user_config={})
 
-    assert model == "deepseek/deepseek-v4-flash", "recovery turn must reuse last-known-good, not build model=''"
+    assert model == "deepseek/deepseek-v4-flash", (
+        "recovery turn must reuse last-known-good, not build model=''"
+    )

@@ -30,18 +30,32 @@ class TestResolveActiveContextLengthProviderAware:
 
         captured = {}
 
-        def fake_get_ctx(model_id, base_url="", api_key="", config_context_length=None, provider=""):
+        def fake_get_ctx(
+            model_id, base_url="", api_key="", config_context_length=None, provider=""
+        ):
             captured.update(
-                model=model_id, base_url=base_url, api_key=api_key,
-                config_ctx=config_context_length, provider=provider,
+                model=model_id,
+                base_url=base_url,
+                api_key=api_key,
+                config_ctx=config_context_length,
+                provider=provider,
             )
             return 272_000
 
-        with patch("clawk_cli.config.load_config", return_value=_model_cfg()), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value={"base_url": "https://chatgpt.com/backend-api/codex",
-                                 "api_key": "tok-live"}) as mock_rt, \
-             patch("agent.model_metadata.get_model_context_length", side_effect=fake_get_ctx):
+        with (
+            patch("clawk_cli.config.load_config", return_value=_model_cfg()),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "base_url": "https://chatgpt.com/backend-api/codex",
+                    "api_key": "tok-live",
+                },
+            ) as mock_rt,
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=fake_get_ctx,
+            ),
+        ):
             ctx = model_tools._resolve_active_context_length()
 
         assert ctx == 272_000
@@ -60,15 +74,28 @@ class TestResolveActiveContextLengthProviderAware:
 
         captured = {}
 
-        def fake_get_ctx(model_id, base_url="", api_key="", config_context_length=None, provider=""):
+        def fake_get_ctx(
+            model_id, base_url="", api_key="", config_context_length=None, provider=""
+        ):
             captured.update(base_url=base_url, api_key=api_key, provider=provider)
             return 272_000
 
-        with patch("clawk_cli.config.load_config",
-                   return_value=_model_cfg(base_url="https://chatgpt.com/backend-api/codex")), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   side_effect=RuntimeError("no credentials")), \
-             patch("agent.model_metadata.get_model_context_length", side_effect=fake_get_ctx):
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value=_model_cfg(
+                    base_url="https://chatgpt.com/backend-api/codex"
+                ),
+            ),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                side_effect=RuntimeError("no credentials"),
+            ),
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=fake_get_ctx,
+            ),
+        ):
             ctx = model_tools._resolve_active_context_length()
 
         assert ctx == 272_000
@@ -83,14 +110,23 @@ class TestResolveActiveContextLengthProviderAware:
 
         captured = {}
 
-        def fake_get_ctx(model_id, base_url="", api_key="", config_context_length=None, provider=""):
+        def fake_get_ctx(
+            model_id, base_url="", api_key="", config_context_length=None, provider=""
+        ):
             captured.update(base_url=base_url, provider=provider)
             return 200_000
 
-        with patch("clawk_cli.config.load_config",
-                   return_value={"model": {"model": "some-model"}}), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider") as mock_rt, \
-             patch("agent.model_metadata.get_model_context_length", side_effect=fake_get_ctx):
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={"model": {"model": "some-model"}},
+            ),
+            patch("clawk_cli.runtime_provider.resolve_runtime_provider") as mock_rt,
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=fake_get_ctx,
+            ),
+        ):
             ctx = model_tools._resolve_active_context_length()
 
         assert ctx == 200_000
@@ -103,16 +139,29 @@ class TestResolveActiveContextLengthProviderAware:
 
         captured = {}
 
-        def fake_get_ctx(model_id, base_url="", api_key="", config_context_length=None, provider=""):
+        def fake_get_ctx(
+            model_id, base_url="", api_key="", config_context_length=None, provider=""
+        ):
             captured["config_ctx"] = config_context_length
             return config_context_length or 0
 
-        with patch("clawk_cli.config.load_config",
-                   return_value=_model_cfg(context_length=150_000)), \
-             patch("clawk_cli.runtime_provider.resolve_runtime_provider",
-                   return_value={"base_url": "https://chatgpt.com/backend-api/codex",
-                                 "api_key": "tok"}), \
-             patch("agent.model_metadata.get_model_context_length", side_effect=fake_get_ctx):
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value=_model_cfg(context_length=150_000),
+            ),
+            patch(
+                "clawk_cli.runtime_provider.resolve_runtime_provider",
+                return_value={
+                    "base_url": "https://chatgpt.com/backend-api/codex",
+                    "api_key": "tok",
+                },
+            ),
+            patch(
+                "agent.model_metadata.get_model_context_length",
+                side_effect=fake_get_ctx,
+            ),
+        ):
             ctx = model_tools._resolve_active_context_length()
 
         assert ctx == 150_000

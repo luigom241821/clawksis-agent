@@ -123,7 +123,9 @@ def public_key_hex(private_key: str) -> str:
     return point[0].to_bytes(32, "big").hex()
 
 
-def schnorr_sign(message: bytes, private_key: str, *, auxiliary_randomness: Optional[bytes] = None) -> bytes:
+def schnorr_sign(
+    message: bytes, private_key: str, *, auxiliary_randomness: Optional[bytes] = None
+) -> bytes:
     if len(message) != 32:
         raise ValueError("BIP-340 signs a 32-byte message")
     secret = decode_private_key(private_key)
@@ -132,11 +134,22 @@ def schnorr_sign(message: bytes, private_key: str, *, auxiliary_randomness: Opti
         raise ValueError("invalid private key")
     public_x = public_point[0].to_bytes(32, "big")
     adjusted_secret = secret if public_point[1] % 2 == 0 else CURVE_ORDER - secret
-    aux = auxiliary_randomness if auxiliary_randomness is not None else secrets.token_bytes(32)
+    aux = (
+        auxiliary_randomness
+        if auxiliary_randomness is not None
+        else secrets.token_bytes(32)
+    )
     if len(aux) != 32:
         raise ValueError("auxiliary randomness must be 32 bytes")
-    masked = (adjusted_secret ^ int.from_bytes(_tagged_hash("BIP0340/aux", aux), "big")).to_bytes(32, "big")
-    nonce = int.from_bytes(_tagged_hash("BIP0340/nonce", masked + public_x + message), "big") % CURVE_ORDER
+    masked = (
+        adjusted_secret ^ int.from_bytes(_tagged_hash("BIP0340/aux", aux), "big")
+    ).to_bytes(32, "big")
+    nonce = (
+        int.from_bytes(
+            _tagged_hash("BIP0340/nonce", masked + public_x + message), "big"
+        )
+        % CURVE_ORDER
+    )
     if nonce == 0:
         raise RuntimeError("BIP-340 produced a zero nonce")
     nonce_point = _point_multiply(nonce)
@@ -144,8 +157,15 @@ def schnorr_sign(message: bytes, private_key: str, *, auxiliary_randomness: Opti
         raise RuntimeError("BIP-340 produced an invalid nonce point")
     nonce_x = nonce_point[0].to_bytes(32, "big")
     adjusted_nonce = nonce if nonce_point[1] % 2 == 0 else CURVE_ORDER - nonce
-    challenge = int.from_bytes(_tagged_hash("BIP0340/challenge", nonce_x + public_x + message), "big") % CURVE_ORDER
-    return nonce_x + ((adjusted_nonce + challenge * adjusted_secret) % CURVE_ORDER).to_bytes(32, "big")
+    challenge = (
+        int.from_bytes(
+            _tagged_hash("BIP0340/challenge", nonce_x + public_x + message), "big"
+        )
+        % CURVE_ORDER
+    )
+    return nonce_x + (
+        (adjusted_nonce + challenge * adjusted_secret) % CURVE_ORDER
+    ).to_bytes(32, "big")
 
 
 def parse_auth_tag(raw: Any, label: str) -> list[str]:
@@ -155,23 +175,44 @@ def parse_auth_tag(raw: Any, label: str) -> list[str]:
             raw = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise ValueError(f"{label} is not valid JSON") from exc
-    if not isinstance(raw, list) or len(raw) != 4 or raw[0] != "auth" or not all(isinstance(p, str) for p in raw):
+    if (
+        not isinstance(raw, list)
+        or len(raw) != 4
+        or raw[0] != "auth"
+        or not all(isinstance(p, str) for p in raw)
+    ):
         raise ValueError(f"{label} must be a four-string auth tag")
     return raw
 
 
 def build_auth_event(
-    *, private_key: str, challenge: str, relay_url: str, auth_tag_json: str = "",
-    created_at: Optional[int] = None, auxiliary_randomness: Optional[bytes] = None,
+    *,
+    private_key: str,
+    challenge: str,
+    relay_url: str,
+    auth_tag_json: str = "",
+    created_at: Optional[int] = None,
+    auxiliary_randomness: Optional[bytes] = None,
 ) -> dict[str, Any]:
     tags: list[list[str]] = [["relay", relay_url], ["challenge", challenge]]
     if auth_tag_json.strip():
         tags.append(parse_auth_tag(auth_tag_json, "BUZZ_AUTH_TAG"))
     pubkey = public_key_hex(private_key)
     timestamp = int(time.time()) if created_at is None else int(created_at)
-    serialized = json.dumps([0, pubkey, timestamp, 22242, tags, ""], separators=(",", ":"), ensure_ascii=False).encode()
+    serialized = json.dumps(
+        [0, pubkey, timestamp, 22242, tags, ""],
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
     event_id = hashlib.sha256(serialized).digest()
     return {
-        "id": event_id.hex(), "pubkey": pubkey, "created_at": timestamp, "kind": 22242, "tags": tags, "content": "",
-        "sig": schnorr_sign(event_id, private_key, auxiliary_randomness=auxiliary_randomness).hex(),
+        "id": event_id.hex(),
+        "pubkey": pubkey,
+        "created_at": timestamp,
+        "kind": 22242,
+        "tags": tags,
+        "content": "",
+        "sig": schnorr_sign(
+            event_id, private_key, auxiliary_randomness=auxiliary_randomness
+        ).hex(),
     }

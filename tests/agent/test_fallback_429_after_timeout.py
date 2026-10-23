@@ -28,6 +28,7 @@ from unittest.mock import MagicMock, patch
 
 from run_agent import AIAgent
 
+
 def _make_tool_defs():
     return [
         {
@@ -39,6 +40,7 @@ def _make_tool_defs():
             },
         }
     ]
+
 
 def _make_agent_with_fallback(fb_chain):
     """Build a minimal AIAgent with the given fallback chain configured."""
@@ -60,13 +62,16 @@ def _make_agent_with_fallback(fb_chain):
         agent.client = MagicMock()
         return agent
 
+
 def _mock_response(content: str):
     msg = SimpleNamespace(content=content, tool_calls=None)
     choice = SimpleNamespace(message=msg, finish_reason="stop")
     return SimpleNamespace(choices=[choice], model="fallback/model", usage=None)
 
+
 class ReadTimeout(Exception):
     pass
+
 
 class RateLimitError(Exception):
     status_code = 429
@@ -76,7 +81,9 @@ class RateLimitError(Exception):
         self.response = SimpleNamespace(headers={})
         self.body = {"error": {"message": "rate limit exceeded"}}
 
+
 # Regression: post-recovery reset of fallback-chain state
+
 
 class TestFallbackChainResetOnTransportRecovery:
     """The bug surfaced when a stale ``_fallback_index`` survived the
@@ -154,5 +161,6 @@ class TestFallbackChainResetOnTransportRecovery:
         mock_resolve.assert_called_once()
         assert agent._fallback_activated is True
         assert agent.model == "glm-4.7"
+
 
 # Defensive: pure-timeout cycle without 429 still works

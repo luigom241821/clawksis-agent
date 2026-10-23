@@ -52,7 +52,9 @@ class TestCustomOpencodeFamilyRuntime:
         assert r["api_mode"] == "codex_responses"
         assert r["base_url"].rstrip("/").endswith("/zen/go/v1")
 
-    def test_family_provider_routes_minimax_to_messages_and_strips_v1(self, _bridge_env):
+    def test_family_provider_routes_minimax_to_messages_and_strips_v1(
+        self, _bridge_env
+    ):
         _bridge_env("opencode-go-bridge")
         r = _resolve("opencode-go-bridge", "minimax-m2.7")
         assert r["api_mode"] == "anthropic_messages"

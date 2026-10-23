@@ -82,8 +82,6 @@ def test_acquire_lease_reselects_after_deferred_refresh():
     assert pool._active_leases.get("e1") == 1, "the lease must be recorded"
 
 
-
-
 def test_acquire_lease_still_none_when_refresh_does_not_help():
     """If the refresh leaves nothing available, None is still the answer —
     the retry must not loop or invent a credential."""

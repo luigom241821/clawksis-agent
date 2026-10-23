@@ -7,7 +7,6 @@ errors now stop the reconnect. The Matrix sync-loop counterpart lives in
 tests/gateway/test_matrix.py::TestMatrixSyncLoop.
 """
 
-
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 

@@ -37,14 +37,17 @@ def _isolated_cache(tmp_path, monkeypatch):
 def _ok_response(n=10):
     return {
         "success": True,
-        "data": {"web": [
-            {"title": f"t{i}", "url": f"https://e.com/{i}", "description": "d"}
-            for i in range(n)
-        ]},
+        "data": {
+            "web": [
+                {"title": f"t{i}", "url": f"https://e.com/{i}", "description": "d"}
+                for i in range(n)
+            ]
+        },
     }
 
 
 # ── bucketing / normalization ────────────────────────────────────────────
+
 
 def test_bucket_limit_rounds_up():
     assert bucket_limit(1) == 10
@@ -68,6 +71,7 @@ def test_slice_search_response_trims_to_requested_limit():
 
 # ── search memo ──────────────────────────────────────────────────────────
 
+
 def test_search_memo_hit_within_ttl():
     memo = SearchMemo()
     memo.store("firecrawl", "weather in vegas", 5, _ok_response())
@@ -78,9 +82,9 @@ def test_search_memo_hit_within_ttl():
 def test_search_memo_miss_across_providers_and_buckets():
     memo = SearchMemo()
     memo.store("firecrawl", "q", 5, _ok_response())
-    assert memo.lookup("keenable", "q", 5) is None        # different provider
-    assert memo.lookup("firecrawl", "q", 15) is None      # different bucket
-    assert memo.lookup("firecrawl", "other", 5) is None   # different query
+    assert memo.lookup("keenable", "q", 5) is None  # different provider
+    assert memo.lookup("firecrawl", "q", 15) is None  # different bucket
+    assert memo.lookup("firecrawl", "other", 5) is None  # different query
 
 
 def test_search_memo_expires_after_ttl(monkeypatch):
@@ -129,8 +133,8 @@ def test_single_flight_coalesces_concurrent_identical_queries():
             with memo.flight_lock("p", "q", 5):
                 resp = memo.lookup("p", "q", 5)
                 if resp is None:
-                    calls.append(1)          # the "paid" request
-                    time.sleep(0.05)          # widen the race window
+                    calls.append(1)  # the "paid" request
+                    time.sleep(0.05)  # widen the race window
                     resp = _ok_response()
                     memo.store("p", "q", 5, resp)
         results.append(resp)
@@ -146,6 +150,7 @@ def test_single_flight_coalesces_concurrent_identical_queries():
 
 
 # ── extract cache ────────────────────────────────────────────────────────
+
 
 def test_extract_cache_roundtrip(_isolated_cache):
     extract_cache_put("https://example.com/a", "hello world", title="T")
@@ -191,23 +196,27 @@ def test_extract_cache_provider_participates_in_key(_isolated_cache):
 
 def test_extract_cache_oversized_page_not_indexed(_isolated_cache):
     from tools import web_tools_truncate as wt
+
     big = "x" * (wt.MAX_STORED_TEXT_CHARS + 1)
     extract_cache_put("https://big.com", big)
     assert extract_cache_get("https://big.com") is None
 
 
-@pytest.mark.parametrize("url", [
-    "http://localhost:3000/app",
-    "http://localhost:5173",             # vite dev server
-    "http://127.0.0.1:8080/preview",
-    "http://[::1]:3000/",
-    "http://192.168.1.44/dashboard",
-    "http://10.0.0.5:8000/api/docs",
-    "http://172.16.0.9/",
-    "http://myapp.local/",
-    "http://devbox/page",                # single-label LAN name
-    "http://preview.localhost/artifact",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:3000/app",
+        "http://localhost:5173",  # vite dev server
+        "http://127.0.0.1:8080/preview",
+        "http://[::1]:3000/",
+        "http://192.168.1.44/dashboard",
+        "http://10.0.0.5:8000/api/docs",
+        "http://172.16.0.9/",
+        "http://myapp.local/",
+        "http://devbox/page",  # single-label LAN name
+        "http://preview.localhost/artifact",
+    ],
+)
 def test_extract_cache_never_caches_local_dev_urls(url, _isolated_cache):
     """Local/private URLs are dev servers and chat-GUI artifact previews —
     they change on every save, so freshness beats dedup. Neither put nor
@@ -216,10 +225,13 @@ def test_extract_cache_never_caches_local_dev_urls(url, _isolated_cache):
     assert extract_cache_get(url) is None
 
 
-@pytest.mark.parametrize("url", [
-    "https://example.com/page",
-    "https://docs.python.org/3/",
-])
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/page",
+        "https://docs.python.org/3/",
+    ],
+)
 def test_extract_cache_public_urls_still_cache(url, _isolated_cache):
     extract_cache_put(url, "public content")
     hit = extract_cache_get(url)
@@ -231,19 +243,19 @@ class TestCacheExemptHosts:
     user is actively developing — always fetched live."""
 
     def _config(self, monkeypatch, hosts):
-        monkeypatch.setattr(
-            wrc, "_web_config", lambda: {"cache_exempt_hosts": hosts}
-        )
+        monkeypatch.setattr(wrc, "_web_config", lambda: {"cache_exempt_hosts": hosts})
 
-    @pytest.mark.parametrize("pattern,url", [
-        ("mysite.vercel.app", "https://mysite.vercel.app/page"),
-        ("MYSITE.VERCEL.APP", "https://mysite.vercel.app/page"),   # case
-        ("*.ngrok-free.app", "https://abc123.ngrok-free.app/"),
-        ("mysite.dev", "https://preview.mysite.dev/build/7"),      # suffix
-        ("mysite.dev", "https://mysite.dev/"),                     # exact
-    ])
-    def test_exempt_host_never_cached(self, monkeypatch, _isolated_cache,
-                                      pattern, url):
+    @pytest.mark.parametrize(
+        "pattern,url",
+        [
+            ("mysite.vercel.app", "https://mysite.vercel.app/page"),
+            ("MYSITE.VERCEL.APP", "https://mysite.vercel.app/page"),  # case
+            ("*.ngrok-free.app", "https://abc123.ngrok-free.app/"),
+            ("mysite.dev", "https://preview.mysite.dev/build/7"),  # suffix
+            ("mysite.dev", "https://mysite.dev/"),  # exact
+        ],
+    )
+    def test_exempt_host_never_cached(self, monkeypatch, _isolated_cache, pattern, url):
         self._config(monkeypatch, [pattern])
         extract_cache_put(url, "stale staging build")
         assert extract_cache_get(url) is None
@@ -253,22 +265,19 @@ class TestCacheExemptHosts:
         extract_cache_put("https://docs.python.org/3/", "cached fine")
         assert extract_cache_get("https://docs.python.org/3/") is not None
 
-    def test_suffix_cannot_match_lookalike_domain(self, monkeypatch,
-                                                  _isolated_cache):
+    def test_suffix_cannot_match_lookalike_domain(self, monkeypatch, _isolated_cache):
         """'mysite.dev' must not exempt 'evilmysite.dev' — suffix matching
         is label-boundary aware."""
         self._config(monkeypatch, ["mysite.dev"])
         extract_cache_put("https://evilmysite.dev/x", "content")
         assert extract_cache_get("https://evilmysite.dev/x") is not None
 
-    def test_garbage_config_fails_open_to_caching(self, monkeypatch,
-                                                  _isolated_cache):
+    def test_garbage_config_fails_open_to_caching(self, monkeypatch, _isolated_cache):
         self._config(monkeypatch, "not-a-list")
         extract_cache_put("https://example.com/a", "content")
         assert extract_cache_get("https://example.com/a") is not None
 
-    def test_exemption_applies_at_get_time_too(self, monkeypatch,
-                                               _isolated_cache):
+    def test_exemption_applies_at_get_time_too(self, monkeypatch, _isolated_cache):
         """Adding an exemption mid-TTL takes effect immediately: an entry
         cached before the config change must not be served after it."""
         extract_cache_put("https://mysite.vercel.app/p", "old build")
@@ -331,8 +340,8 @@ def test_index_eviction_keeps_newest(monkeypatch, _isolated_cache):
 
 def test_ttl_clamping(monkeypatch):
     monkeypatch.setattr(wrc, "_web_config", lambda: {"cache_ttl_minutes": 0})
-    assert wrc.ttl_seconds() == 60.0          # floor 1 minute
+    assert wrc.ttl_seconds() == 60.0  # floor 1 minute
     monkeypatch.setattr(wrc, "_web_config", lambda: {"cache_ttl_minutes": 99999})
-    assert wrc.ttl_seconds() == 1440 * 60.0   # ceiling 24h
+    assert wrc.ttl_seconds() == 1440 * 60.0  # ceiling 24h
     monkeypatch.setattr(wrc, "_web_config", lambda: {"cache_ttl_minutes": "bogus"})
-    assert wrc.ttl_seconds() == 20 * 60.0     # default on garbage
+    assert wrc.ttl_seconds() == 20 * 60.0  # default on garbage

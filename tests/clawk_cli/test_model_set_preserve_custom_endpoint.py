@@ -45,7 +45,9 @@ def _write_cli_config(home):
 def _model_cfg(home):
     import clawk_yaml as yaml
 
-    return (yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}).get("model", {})
+    return (
+        yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
+    ).get("model", {})
 
 
 def test_same_endpoint_model_set_preserves_bare_custom_block(isolated_home):
@@ -54,7 +56,8 @@ def test_same_endpoint_model_set_preserves_bare_custom_block(isolated_home):
     _write_cli_config(isolated_home)
     # Dashboard re-save of the same endpoint (base_url sent along).
     _apply_model_assignment_sync(
-        "main", "custom", "gemma4:latest", "", "http://10.0.0.155:11434/v1", "")
+        "main", "custom", "gemma4:latest", "", "http://10.0.0.155:11434/v1", ""
+    )
     model = _model_cfg(isolated_home)
     assert model.get("default") == "gemma4:latest"
     assert model.get("provider") == "custom"
@@ -73,9 +76,13 @@ def test_new_endpoint_model_set_still_registers_named_provider(isolated_home):
 
     _write_cli_config(isolated_home)
     _apply_model_assignment_sync(
-        "main", "custom", "other-model", "", "http://192.168.1.50:11434/v1", "")
+        "main", "custom", "other-model", "", "http://192.168.1.50:11434/v1", ""
+    )
 
-    cfg = yaml.safe_load((isolated_home / "config.yaml").read_text(encoding="utf-8")) or {}
+    cfg = (
+        yaml.safe_load((isolated_home / "config.yaml").read_text(encoding="utf-8"))
+        or {}
+    )
     entries = [e for e in (cfg.get("custom_providers") or []) if isinstance(e, dict)]
     assert any(e.get("base_url") == "http://192.168.1.50:11434/v1" for e in entries)
     # The model block now points at the new endpoint, not the old one.

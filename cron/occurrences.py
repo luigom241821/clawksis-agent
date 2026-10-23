@@ -1,5 +1,6 @@
 """Exact scheduled identities, independent of mutable jobs.json dispatch stamps, plus the
 profile-local stale-schedule catch-up counter marker."""
+
 from datetime import datetime, timedelta, timezone, UTC
 import logging
 
@@ -28,30 +29,42 @@ def completed_occurrence(job, instant):
     if instant is None:
         return False
     # A skewed early fire (see claim_job_for_fire) legitimately completes just before its slot.
-    earliest_real = datetime.fromisoformat(instant) - timedelta(seconds=FIRE_CLAIM_SKEW_SECONDS)
+    earliest_real = datetime.fromisoformat(instant) - timedelta(
+        seconds=FIRE_CLAIM_SKEW_SECONDS
+    )
     try:
         with _transaction() as conn:
             rows = conn.execute(
                 "SELECT id, finished_at, claimed_at FROM executions "
                 "WHERE job_id=? AND scheduled_instant=? "
-                "AND status='completed'", (str(job['id']), instant)
+                "AND status='completed'",
+                (str(job["id"]), instant),
             ).fetchall()
         for row in rows:
             completed_at = scheduled_instant(row["finished_at"] or row["claimed_at"])
             # Legacy or malformed timestamps remain proof; only positively identified poison
             # rows — completions recorded before their claimed occurrence — are ignored.
-            if completed_at is None or datetime.fromisoformat(completed_at) >= earliest_real:
+            if (
+                completed_at is None
+                or datetime.fromisoformat(completed_at) >= earliest_real
+            ):
                 # Both dedup gates (due scan and fire claim) consume the slot on True without a
                 # run or a ledger row, so this line is the only trace the skip leaves (#111414).
                 logger.warning(
                     "Job '%s' (%s): scheduled occurrence %s was already completed by execution "
                     "%s (finished %s); skipping the due slot without a new run",
-                    job.get("name", job.get("id")), job.get("id"), instant, row["id"],
-                    row["finished_at"] or row["claimed_at"])
+                    job.get("name", job.get("id")),
+                    job.get("id"),
+                    instant,
+                    row["id"],
+                    row["finished_at"] or row["claimed_at"],
+                )
                 return True
         return False
     except Exception:
-        logger.warning("Cannot check completed occurrence for job %s", job['id'], exc_info=True)
+        logger.warning(
+            "Cannot check completed occurrence for job %s", job["id"], exc_info=True
+        )
         return False
 
 
@@ -67,6 +80,7 @@ def completed_occurrence(job, instant):
 # schedule drops it. A slot still pending once its owner is provably gone (or its lease has
 # expired) was never claimed, so it is restored ONCE as the due instant and then flows through
 # the ordinary late / fast-forward / ``cron.catch_up_missed`` policy — never N replays.
+
 
 def pending_slot_stamp(next_run, now):
     """Store value for a recurring occurrence about to be handed to the dispatcher."""
@@ -90,7 +104,10 @@ def unclaimed_pending_slot(job, now):
     if not isinstance(pending, dict):
         return None
     slot = pending.get("scheduled_at")
-    if job.get("schedule", {}).get("kind") not in {"cron", "interval"} or not isinstance(slot, str):
+    if job.get("schedule", {}).get("kind") not in {
+        "cron",
+        "interval",
+    } or not isinstance(slot, str):
         return None
     try:
         datetime.fromisoformat(slot)
@@ -98,7 +115,9 @@ def unclaimed_pending_slot(job, now):
         return None
     if _job_running_in_this_process(str(job.get("id", ""))):
         return None
-    if pending.get("by") != _machine_id() and _claim_is_live(pending, now, FIRE_CLAIM_TTL_SECONDS):
+    if pending.get("by") != _machine_id() and _claim_is_live(
+        pending, now, FIRE_CLAIM_TTL_SECONDS
+    ):
         return None
     return slot
 
@@ -118,4 +137,6 @@ def record_catch_up_occurrence() -> None:
     """Increment the profile-local stale-schedule catch-up counter, best effort."""
     from cron.jobs import _write_marker
 
-    _write_marker("catch_up_occurrences", str(get_catch_up_occurrence_count() + 1), ".count_")
+    _write_marker(
+        "catch_up_occurrences", str(get_catch_up_occurrence_count() + 1), ".count_"
+    )

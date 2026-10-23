@@ -83,10 +83,6 @@ def _empty_ctx(provider="orig", model="orig-model", base_url="orig-url"):
     )
 
 
-
-
-
-
 # ─── build_models_payload ──────────────────────────────────────────────
 
 
@@ -112,9 +108,15 @@ def _nous_row(model: str = "openai/gpt-5.5") -> dict:
 
 def test_build_models_payload_returns_expected_shape():
     rows = [
-        {"slug": "openrouter", "name": "OpenRouter", "models": ["m1"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "built-in"},
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx(provider="openrouter", model="m1", base_url="")
     raw_config = {
@@ -142,9 +144,15 @@ def test_build_models_payload_hides_moa_without_raw_preset():
     """Strict opt-in (#63353): no ``moa`` row when the raw config has no enabled preset —
     the DEFAULT_CONFIG ``default`` preset everyone gets via ``load_config()`` is not a user choice."""
     rows = [
-        {"slug": "openrouter", "name": "OpenRouter", "models": ["m1"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "built-in"},
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx(provider="openrouter", model="m1", base_url="")
     # load_config() still returns the synthesized DEFAULT_CONFIG moa preset.
@@ -158,21 +166,21 @@ def test_build_models_payload_hides_moa_without_raw_preset():
     assert [r["slug"] for r in payload["providers"]] == ["openrouter"]
 
 
-
-
-
-
-
-
 def test_include_unconfigured_appends_canonical_skeletons():
     """include_unconfigured=True adds CANONICAL_PROVIDERS rows that
     list_authenticated_providers didn't emit. Skeleton rows have empty
     models and source='canonical'. MoA is a virtual routing mode, not a
     canonical provider, so it is excluded — see issue #63353."""
     rows = [
-        {"slug": "openrouter", "name": "OpenRouter", "models": ["m1"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "built-in"},
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx(provider="openrouter")
     with _list_auth_returning(rows):
@@ -189,32 +197,67 @@ def test_include_unconfigured_appends_canonical_skeletons():
         assert entry.slug in seen_slugs, f"missing {entry.slug}"
     assert "solstice" not in seen_slugs
     # Skeletons have empty models and source='canonical'.
-    skeletons = [r for r in payload["providers"]
-                 if r.get("source") == "canonical"]
+    skeletons = [r for r in payload["providers"] if r.get("source") == "canonical"]
     assert all(r["models"] == [] for r in skeletons)
     assert all(r["total_models"] == 0 for r in skeletons)
 
 
 def test_explicit_only_filters_ambient_credentials_but_keeps_current_and_custom_rows():
     rows = [
-        {"slug": "openai-codex", "name": "OpenAI Codex", "models": ["gpt-5.4"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "clawk"},
-        {"slug": "gemini", "name": "Gemini", "models": ["gemini-2.5-pro"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "built-in"},
-        {"slug": "copilot", "name": "Copilot", "models": ["gpt-5.4"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "clawk"},
-        {"slug": "nous", "name": "Nous", "models": ["anthropic/claude-sonnet-5"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "clawk"},
-        {"slug": "custom:lab", "name": "Lab", "models": ["lab-1"],
-         "total_models": 1, "is_current": False, "is_user_defined": True,
-         "source": "user-config"},
-        {"slug": "moa", "name": "MoA", "models": ["default"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "virtual"},
+        {
+            "slug": "openai-codex",
+            "name": "OpenAI Codex",
+            "models": ["gpt-5.4"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
+        {
+            "slug": "gemini",
+            "name": "Gemini",
+            "models": ["gemini-2.5-pro"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
+        {
+            "slug": "copilot",
+            "name": "Copilot",
+            "models": ["gpt-5.4"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
+        {
+            "slug": "nous",
+            "name": "Nous",
+            "models": ["anthropic/claude-sonnet-5"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
+        {
+            "slug": "custom:lab",
+            "name": "Lab",
+            "models": ["lab-1"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": True,
+            "source": "user-config",
+        },
+        {
+            "slug": "moa",
+            "name": "MoA",
+            "models": ["default"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "virtual",
+        },
     ]
     ctx = _empty_ctx(provider="openai-codex", model="gpt-5.4")
     with (
@@ -244,12 +287,24 @@ def test_explicit_only_keeps_anthropic_row_with_oauth_credentials():
     building the row. The desktop explicit-only filter must keep it.
     """
     rows = [
-        {"slug": "anthropic", "name": "Anthropic", "models": ["claude-sonnet-5"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "clawk"},
-        {"slug": "copilot", "name": "Copilot", "models": ["gpt-5.4"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "clawk"},
+        {
+            "slug": "anthropic",
+            "name": "Anthropic",
+            "models": ["claude-sonnet-5"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
+        {
+            "slug": "copilot",
+            "name": "Copilot",
+            "models": ["gpt-5.4"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
     ]
     ctx = _empty_ctx(provider="opencode-go", model="glm-5.3")
     with (
@@ -270,17 +325,21 @@ def test_explicit_only_keeps_anthropic_row_with_oauth_credentials():
     assert "anthropic" in slugs, (
         "Anthropic OAuth login must survive the explicit-only filter"
     )
-    assert "copilot" not in slugs, (
-        "ambient credential discovery must stay filtered"
-    )
+    assert "copilot" not in slugs, "ambient credential discovery must stay filtered"
 
 
 def test_explicit_only_drops_anthropic_row_without_oauth_credentials():
     """No OAuth token and no explicit config -> Anthropic stays hidden."""
     rows = [
-        {"slug": "anthropic", "name": "Anthropic", "models": ["claude-sonnet-5"],
-         "total_models": 1, "is_current": False, "is_user_defined": False,
-         "source": "clawk"},
+        {
+            "slug": "anthropic",
+            "name": "Anthropic",
+            "models": ["claude-sonnet-5"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": False,
+            "source": "clawk",
+        },
     ]
     ctx = _empty_ctx(provider="opencode-go", model="glm-5.3")
     with (
@@ -320,9 +379,7 @@ def test_anthropic_oauth_presence_accepts_pool_only_oauth_entry():
         ),
         patch(
             "clawk_cli.auth.read_credential_pool",
-            return_value=[
-                {"auth_type": "oauth", "access_token": "sk-ant-oat01-pool"}
-            ],
+            return_value=[{"auth_type": "oauth", "access_token": "sk-ant-oat01-pool"}],
         ),
     ):
         assert _anthropic_oauth_credentials_present() is True
@@ -340,13 +397,10 @@ def test_anthropic_oauth_presence_accepts_pool_only_oauth_entry():
         ),
         patch(
             "clawk_cli.auth.read_credential_pool",
-            return_value=[
-                {"auth_type": "api_key", "access_token": "sk-ant-api03-key"}
-            ],
+            return_value=[{"auth_type": "api_key", "access_token": "sk-ant-api03-key"}],
         ),
     ):
         assert _anthropic_oauth_credentials_present() is False
-
 
 
 # ─── picker_hints ──────────────────────────────────────────────────────
@@ -354,9 +408,15 @@ def test_anthropic_oauth_presence_accepts_pool_only_oauth_entry():
 
 def test_picker_hints_marks_authed_rows_authenticated():
     rows = [
-        {"slug": "openrouter", "name": "OpenRouter", "models": ["m1"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "built-in"},
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
@@ -371,12 +431,12 @@ def test_picker_hints_api_key_warning_format():
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
         payload = build_models_payload(
-            ctx, include_unconfigured=True, picker_hints=True,
+            ctx,
+            include_unconfigured=True,
+            picker_hints=True,
         )
     # anthropic uses api_key + ANTHROPIC_API_KEY.
-    anthropic = next(
-        r for r in payload["providers"] if r["slug"] == "anthropic"
-    )
+    anthropic = next(r for r in payload["providers"] if r["slug"] == "anthropic")
     assert "ANTHROPIC_API_KEY" in anthropic["warning"]
 
 
@@ -395,14 +455,26 @@ def test_canonical_order_uses_slug_not_is_user_defined_flag():
     canonical_slug = CANONICAL_PROVIDERS[2].slug  # any canonical
     rows = [
         # A truly-custom row (correct: is_user_defined=True)
-        {"slug": "custom:Ollama", "name": "Ollama", "models": [],
-         "total_models": 0, "is_current": False, "is_user_defined": True,
-         "source": "user-config"},
+        {
+            "slug": "custom:Ollama",
+            "name": "Ollama",
+            "models": [],
+            "total_models": 0,
+            "is_current": False,
+            "is_user_defined": True,
+            "source": "user-config",
+        },
         # A canonical row that the substrate flagged as user-defined
         # because the user configured it via providers: dict.
-        {"slug": canonical_slug, "name": "x", "models": ["m1"],
-         "total_models": 1, "is_current": False, "is_user_defined": True,
-         "source": "built-in"},
+        {
+            "slug": canonical_slug,
+            "name": "x",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": False,
+            "is_user_defined": True,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
@@ -428,9 +500,15 @@ def test_canonical_order_with_unconfigured_preserves_full_universe():
     from clawk_cli.models import CANONICAL_PROVIDERS
 
     rows = [
-        {"slug": "custom:Ollama", "name": "Ollama", "models": [],
-         "total_models": 0, "is_current": False, "is_user_defined": True,
-         "source": "user-config"},
+        {
+            "slug": "custom:Ollama",
+            "name": "Ollama",
+            "models": [],
+            "total_models": 0,
+            "is_current": False,
+            "is_user_defined": True,
+            "source": "user-config",
+        },
     ]
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
@@ -447,6 +525,7 @@ def test_canonical_order_with_unconfigured_preserves_full_universe():
     # so it is excluded from the unconfigured skeleton set, and so is an
     # unlisted pre-release provider.
     from clawk_cli.models_catalog_static import listed_canonical_providers
+
     visible_canonical_count = sum(
         1 for e in listed_canonical_providers() if e.slug != "moa"
     )
@@ -467,7 +546,9 @@ def test_end_to_end_with_real_context_no_credentials_leak(monkeypatch):
     with patch("clawk_cli.config.load_config", return_value=cfg):
         ctx = load_picker_context()
     payload = build_models_payload(
-        ctx, include_unconfigured=True, picker_hints=True,
+        ctx,
+        include_unconfigured=True,
+        picker_hints=True,
     )
     import json as _json
 
@@ -480,17 +561,31 @@ def test_payload_shape_compatible_with_modelpickerdialog_frontend():
     Verify every authenticated/skeleton row exposes those keys.
     """
     rows = [
-        {"slug": "openrouter", "name": "OpenRouter", "models": ["m1"],
-         "total_models": 1, "is_current": True, "is_user_defined": False,
-         "source": "built-in"},
+        {
+            "slug": "openrouter",
+            "name": "OpenRouter",
+            "models": ["m1"],
+            "total_models": 1,
+            "is_current": True,
+            "is_user_defined": False,
+            "source": "built-in",
+        },
     ]
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
         payload = build_models_payload(
-            ctx, include_unconfigured=True, picker_hints=True,
+            ctx,
+            include_unconfigured=True,
+            picker_hints=True,
         )
-    required_keys = {"name", "slug", "models", "total_models", "is_current",
-                     "authenticated"}
+    required_keys = {
+        "name",
+        "slug",
+        "models",
+        "total_models",
+        "is_current",
+        "authenticated",
+    }
     for row in payload["providers"]:
         missing = required_keys - row.keys()
         assert not missing, f"row {row['slug']} missing keys: {missing}"
@@ -560,15 +655,21 @@ def test_aggregator_dedup_removes_overlapping_models():
     aggregator rows so the picker doesn't show them under the wrong
     provider.  (#45954)"""
     rows = [
-        _user_provider_row("litellm-proxy", [
-            "nvidia/nim/minimax-m3",
-            "nvidia/nim/kimi-k2.6",
-        ]),
-        _aggregator_row("openrouter", [
-            "minimax/minimax-m3",
-            "nvidia/nim/minimax-m3",  # overlaps with litellm-proxy
-            "anthropic/claude-sonnet-4.6",
-        ]),
+        _user_provider_row(
+            "litellm-proxy",
+            [
+                "nvidia/nim/minimax-m3",
+                "nvidia/nim/kimi-k2.6",
+            ],
+        ),
+        _aggregator_row(
+            "openrouter",
+            [
+                "minimax/minimax-m3",
+                "nvidia/nim/minimax-m3",  # overlaps with litellm-proxy
+                "anthropic/claude-sonnet-4.6",
+            ],
+        ),
     ]
     ctx = _empty_ctx()
     with _list_auth_returning(rows):
@@ -587,8 +688,6 @@ def test_aggregator_dedup_removes_overlapping_models():
     assert or_row["total_models"] == 2
 
 
-
-
 def test_flat_namespace_reseller_keeps_first_party_models_overlapping_user_proxy():
     """opencode-go / opencode-zen are flagged ``is_aggregator=True`` (their
     flat ``/v1/models`` returns bare IDs the model-switch resolver searches),
@@ -601,13 +700,26 @@ def test_flat_namespace_reseller_keeps_first_party_models_overlapping_user_proxy
     custom provider.
     """
     rows = [
-        _user_provider_row("custom:my-proxy", [
-            "minimax-m3", "minimax-m2.7", "glm-5", "deepseek-v4-flash",
-        ]),
-        _aggregator_row("opencode-go", [
-            "kimi-k2.6", "minimax-m3", "minimax-m2.7", "glm-5",
-            "deepseek-v4-flash", "qwen3.7-max",
-        ]),
+        _user_provider_row(
+            "custom:my-proxy",
+            [
+                "minimax-m3",
+                "minimax-m2.7",
+                "glm-5",
+                "deepseek-v4-flash",
+            ],
+        ),
+        _aggregator_row(
+            "opencode-go",
+            [
+                "kimi-k2.6",
+                "minimax-m3",
+                "minimax-m2.7",
+                "glm-5",
+                "deepseek-v4-flash",
+                "qwen3.7-max",
+            ],
+        ),
         _aggregator_row("openrouter", ["minimax-m3", "anthropic/claude-sonnet-4.6"]),
     ]
     ctx = _empty_ctx()
@@ -619,16 +731,18 @@ def test_flat_namespace_reseller_keeps_first_party_models_overlapping_user_proxy
 
     # The reseller keeps ALL of its first-party models — nothing stripped.
     assert go_row["models"] == [
-        "kimi-k2.6", "minimax-m3", "minimax-m2.7", "glm-5",
-        "deepseek-v4-flash", "qwen3.7-max",
+        "kimi-k2.6",
+        "minimax-m3",
+        "minimax-m2.7",
+        "glm-5",
+        "deepseek-v4-flash",
+        "qwen3.7-max",
     ]
     assert go_row["total_models"] == 6
 
     # A TRUE routing aggregator is still deduped against the user's models.
     assert "minimax-m3" not in or_row["models"]
     assert "anthropic/claude-sonnet-4.6" in or_row["models"]
-
-
 
 
 def test_build_models_payload_no_max_models_returns_full_list():
@@ -662,8 +776,6 @@ def test_build_models_payload_no_max_models_returns_full_list():
 # ─── refresh flag (cache-bust) ─────────────────────────────────────────
 
 
-
-
 def test_list_authenticated_providers_refresh_busts_cache():
     """refresh=True clears the provider-model disk cache exactly once;
     refresh=False leaves it untouched (so normal picker opens stay snappy)."""
@@ -676,7 +788,9 @@ def test_list_authenticated_providers_refresh_busts_cache():
         assert clear.call_count == 1
 
 
-def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(tmp_path, monkeypatch):
+def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(
+    tmp_path, monkeypatch
+):
     """Custom-provider metadata stays constant-read as its model count grows (#119048).
 
     ``get_model_capabilities`` and ``get_model_info`` deliberately stay real:
@@ -690,10 +804,7 @@ def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(tmp_pa
     home = tmp_path / "clawk"
     home.mkdir()
     (home / "config.yaml").write_text(
-        "providers:\n"
-        "  lab:\n"
-        "    catalog_provider: openrouter\n"
-        "model_overrides: {}\n",
+        "providers:\n  lab:\n    catalog_provider: openrouter\nmodel_overrides: {}\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -701,9 +812,14 @@ def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(tmp_pa
     config_module._RAW_CONFIG_CACHE.clear()
 
     models = [
-        "openai/model-a", "anthropic/model-b", "openai/model-c",
-        "anthropic/model-d", "openai/model-e", "anthropic/model-f",
-        "openai/model-g", "anthropic/model-h",
+        "openai/model-a",
+        "anthropic/model-b",
+        "openai/model-c",
+        "anthropic/model-d",
+        "openai/model-e",
+        "anthropic/model-f",
+        "openai/model-g",
+        "anthropic/model-h",
     ]
     registry = {
         "openrouter": {
@@ -740,15 +856,17 @@ def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(tmp_pa
     assert snapshot_result == baseline
 
     def _rows(model_ids):
-        return [{
-            "slug": "custom:lab",
-            "name": "Lab",
-            "models": model_ids,
-            "total_models": len(model_ids),
-            "is_current": False,
-            "is_user_defined": True,
-            "source": "user-config",
-        }]
+        return [
+            {
+                "slug": "custom:lab",
+                "name": "Lab",
+                "models": model_ids,
+                "total_models": len(model_ids),
+                "is_current": False,
+                "is_user_defined": True,
+                "source": "user-config",
+            }
+        ]
 
     def _build_and_count(model_ids):
         cfg_get_calls = 0
@@ -767,19 +885,26 @@ def test_picker_metadata_uses_one_config_read_for_real_models_dev_lookups(tmp_pa
             patch("clawk_cli.inventory._reasoning_catalog_reader", return_value=None),
             patch.object(models_dev, "_cfg_get", side_effect=counted_cfg_get),
             patch.object(
-                config_module, "load_config_readonly",
+                config_module,
+                "load_config_readonly",
                 wraps=config_module.load_config_readonly,
             ) as readonly_load,
             patch.object(
-                config_module, "_load_config_impl", wraps=config_module._load_config_impl,
+                config_module,
+                "_load_config_impl",
+                wraps=config_module._load_config_impl,
             ) as config_impl,
         ):
             payload = build_models_payload(
-                _empty_ctx(), capabilities=True, featured=True,
+                _empty_ctx(),
+                capabilities=True,
+                featured=True,
             )
         return payload, cfg_get_calls, readonly_load.call_count, config_impl.call_count
 
-    small_payload, small_cfg_get, small_reads, small_impls = _build_and_count(models[:3])
+    small_payload, small_cfg_get, small_reads, small_impls = _build_and_count(
+        models[:3]
+    )
     large_payload, large_cfg_get, large_reads, large_impls = _build_and_count(models)
 
     # Snapshot threading leaves _cfg_get's cheap dict traversals proportional
@@ -813,8 +938,13 @@ def test_apply_limits_skips_window_plan_rows():
         {"slug": "nous", "models": ["a/b"], "plan_usage": {"kind": "usage_window"}},
         {"slug": "example", "models": ["a/b"]},
     ]
-    with patch("clawk_cli.auth.read_credential_pool", return_value={"nous": [{}], "example": [{}]}), \
-            patch("agent.credential_pool.load_pool", return_value=_Pool()):
+    with (
+        patch(
+            "clawk_cli.auth.read_credential_pool",
+            return_value={"nous": [{}], "example": [{}]},
+        ),
+        patch("agent.credential_pool.load_pool", return_value=_Pool()),
+    ):
         inventory._apply_limits(rows)
     assert "limit" not in rows[0]
     assert rows[1]["limit"]["scope"] == "account"

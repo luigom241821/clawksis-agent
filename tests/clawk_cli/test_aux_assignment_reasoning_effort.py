@@ -19,21 +19,46 @@ def saved(monkeypatch):
 
 
 def test_reasoning_effort_field_semantics_omitted_null_and_level(saved):
-    cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "m1", "reasoning_effort": "low"}}}
+    cfg = {
+        "auxiliary": {
+            "vision": {
+                "provider": "openrouter",
+                "model": "m1",
+                "reasoning_effort": "low",
+            }
+        }
+    }
 
     # A plain provider/model re-assignment leaves an existing override alone.
     _apply_aux_assignment_sync(cfg, "openrouter", "m2", "vision", "", "")
-    assert cfg["auxiliary"]["vision"] == {"provider": "openrouter", "model": "m2", "reasoning_effort": "low"}
+    assert cfg["auxiliary"]["vision"] == {
+        "provider": "openrouter",
+        "model": "m2",
+        "reasoning_effort": "low",
+    }
 
     # A level sets it (canonicalised) and the response echoes it; a disable is stored as the explicit "none".
-    out = _apply_aux_assignment_sync(cfg, "openrouter", "m2", "vision", "", "", reasoning_effort="HIGH")
-    assert cfg["auxiliary"]["vision"]["reasoning_effort"] == "high" and out["reasoning_effort"] == "high"
-    _apply_aux_assignment_sync(cfg, "openrouter", "m2", "vision", "", "", reasoning_effort="disabled")
+    out = _apply_aux_assignment_sync(
+        cfg, "openrouter", "m2", "vision", "", "", reasoning_effort="HIGH"
+    )
+    assert (
+        cfg["auxiliary"]["vision"]["reasoning_effort"] == "high"
+        and out["reasoning_effort"] == "high"
+    )
+    _apply_aux_assignment_sync(
+        cfg, "openrouter", "m2", "vision", "", "", reasoning_effort="disabled"
+    )
     assert cfg["auxiliary"]["vision"]["reasoning_effort"] == "none"
 
     # Explicit null clears only this task's key; siblings and the pick survive.
-    cfg["auxiliary"]["compression"] = {"provider": "openrouter", "model": "m3", "reasoning_effort": "max"}
-    _apply_aux_assignment_sync(cfg, "openrouter", "m2", "vision", "", "", reasoning_effort=None)
+    cfg["auxiliary"]["compression"] = {
+        "provider": "openrouter",
+        "model": "m3",
+        "reasoning_effort": "max",
+    }
+    _apply_aux_assignment_sync(
+        cfg, "openrouter", "m2", "vision", "", "", reasoning_effort=None
+    )
     assert "reasoning_effort" not in cfg["auxiliary"]["vision"]
     assert cfg["auxiliary"]["vision"]["model"] == "m2"
     assert cfg["auxiliary"]["compression"]["reasoning_effort"] == "max"
@@ -43,10 +68,14 @@ def test_reasoning_effort_field_semantics_omitted_null_and_level(saved):
 def test_unknown_level_is_rejected_and_reset_clears_overrides(saved):
     cfg = {"auxiliary": {"vision": {"provider": "openrouter", "model": "m1"}}}
     with pytest.raises(HTTPException) as exc:
-        _apply_aux_assignment_sync(cfg, "openrouter", "m1", "vision", "", "", reasoning_effort="turbo")
+        _apply_aux_assignment_sync(
+            cfg, "openrouter", "m1", "vision", "", "", reasoning_effort="turbo"
+        )
     assert exc.value.status_code == 400 and "reasoning_effort" in exc.value.detail
     assert "reasoning_effort" not in cfg["auxiliary"]["vision"]
 
     cfg["auxiliary"]["vision"]["reasoning_effort"] = "high"
-    _apply_aux_assignment_sync(cfg, "", "", "__reset__", "", "", reasoning_effort=_UNSET)
+    _apply_aux_assignment_sync(
+        cfg, "", "", "__reset__", "", "", reasoning_effort=_UNSET
+    )
     assert all("reasoning_effort" not in slot for slot in cfg["auxiliary"].values())

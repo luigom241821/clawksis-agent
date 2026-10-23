@@ -41,7 +41,9 @@ from run_agent import AIAgent
 @pytest.fixture(autouse=True)
 def _disable_background_titles(monkeypatch):
     # Persistence assertions must not race a title worker writing to pytest capture.
-    monkeypatch.setattr("agent.title_generator.maybe_auto_title", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "agent.title_generator.maybe_auto_title", lambda *args, **kwargs: None
+    )
 
 
 def _make_tool_defs(*names: str) -> list:
@@ -371,7 +373,9 @@ def test_execute_tool_calls_sequential_flushes_each_tool_result_before_next_disp
         agent._execute_tool_calls_sequential(assistant_message, messages, "task-1")
 
     # The mock proves we exercised the REAL sequential dispatch surface.
-    assert disp.call_count == 2, "sequential path did not dispatch via handle_function_call"
+    assert disp.call_count == 2, (
+        "sequential path did not dispatch via handle_function_call"
+    )
 
     # Both tool results landed, in order.
     assert [m["role"] for m in messages] == ["tool", "tool"]
@@ -503,7 +507,9 @@ def test_tool_result_is_durable_before_ui_completion_on_abnormal_exit(
 
 
 @pytest.mark.parametrize("executor_mode", ["sequential", "concurrent"])
-def test_connector_data_use_rides_the_tool_message_and_survives_a_reload(tmp_path, executor_mode):
+def test_connector_data_use_rides_the_tool_message_and_survives_a_reload(
+    tmp_path, executor_mode
+):
     """A requirement recorded during dispatch lands on the tool message as metadata (content untouched)
     and comes back from the session DB on resume."""
     from tools.connectors.data_use import record_data_use
@@ -511,9 +517,20 @@ def test_connector_data_use_rides_the_tool_message_and_survives_a_reload(tmp_pat
     agent = _make_agent()
     db_path = tmp_path / "state.db"
     db = _attach_real_session_db(agent, db_path, "data-use")
-    messages = [{"role": "user", "content": "read my mail"},
-                {"role": "assistant", "content": "", "tool_calls": [
-                    {"id": "mail-call", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}]}]
+    messages = [
+        {"role": "user", "content": "read my mail"},
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "mail-call",
+                    "type": "function",
+                    "function": {"name": "web_search", "arguments": "{}"},
+                }
+            ],
+        },
+    ]
     agent._flush_messages_to_session_db(messages)
 
     def _dispatch(name, args, task_id, **kwargs):
@@ -521,18 +538,33 @@ def test_connector_data_use_rides_the_tool_message_and_survives_a_reload(tmp_pat
         return '{"results": [{"response": "inbox"}]}'
 
     try:
-        with (patch("model_tools.handle_function_call", side_effect=_dispatch),
-              patch("agent.tool_executor.maybe_persist_tool_result", side_effect=lambda **kw: kw["content"])):
+        with (
+            patch("model_tools.handle_function_call", side_effect=_dispatch),
+            patch(
+                "agent.tool_executor.maybe_persist_tool_result",
+                side_effect=lambda **kw: kw["content"],
+            ),
+        ):
             getattr(agent, f"_execute_tool_calls_{executor_mode}")(
-                SimpleNamespace(content="", tool_calls=[_mock_tool_call(call_id="mail-call")]), messages, "task-1")
+                SimpleNamespace(
+                    content="", tool_calls=[_mock_tool_call(call_id="mail-call")]
+                ),
+                messages,
+                "task-1",
+            )
     finally:
         db.close()
 
-    plain = make_tool_result_message("web_search", '{"results": [{"response": "inbox"}]}', "mail-call")
+    plain = make_tool_result_message(
+        "web_search", '{"results": [{"response": "inbox"}]}', "mail-call"
+    )
     assert messages[-1]["content"] == plain["content"]
     assert messages[-1]["data_use"] == ["no_training"]
     durable = _durable_messages(db_path, "data-use")[-1]
-    assert (durable["content"], durable["data_use"]) == (messages[-1]["content"], ["no_training"])
+    assert (durable["content"], durable["data_use"]) == (
+        messages[-1]["content"],
+        ["no_training"],
+    )
 
 
 @pytest.mark.parametrize("executor_mode", ["sequential", "concurrent"])
@@ -583,7 +615,9 @@ def test_segmented_batch_stops_before_later_segment_after_persist_failure():
 
     with (
         patch.object(agent, "_invoke_tool", return_value="first result") as invoke,
-        patch("model_tools.handle_function_call", return_value="second result") as dispatch,
+        patch(
+            "model_tools.handle_function_call", return_value="second result"
+        ) as dispatch,
         patch(
             "agent.tool_executor.maybe_persist_tool_result",
             side_effect=lambda **kwargs: kwargs["content"],
@@ -618,7 +652,9 @@ def test_execute_tool_calls_concurrent_flushes_each_tool_result_in_order():
 
     invoked_ids: list = []
 
-    def _fake_invoke(function_name, function_args, effective_task_id, tool_call_id, **kwargs):
+    def _fake_invoke(
+        function_name, function_args, effective_task_id, tool_call_id, **kwargs
+    ):
         invoked_ids.append(tool_call_id)
         return f"result-{tool_call_id}"
 
@@ -629,7 +665,9 @@ def test_execute_tool_calls_concurrent_flushes_each_tool_result_in_order():
 
     def _record_flush(flush_messages, conversation_history=None):
         flushed_tool_ids.append(flush_messages[-1]["tool_call_id"])
-        flush_lengths.append(len([m for m in flush_messages if m.get("role") == "tool"]))
+        flush_lengths.append(
+            len([m for m in flush_messages if m.get("role") == "tool"])
+        )
 
     agent._flush_messages_to_session_db = MagicMock(side_effect=_record_flush)
 
@@ -678,8 +716,11 @@ def test_empty_final_response_updates_already_flushed_blank_assistant_row(tmp_pa
             "role": "assistant",
             "content": "",
             "tool_calls": [
-                {"id": "t1", "type": "function",
-                 "function": {"name": "terminal", "arguments": "{}"}}
+                {
+                    "id": "t1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": "{}"},
+                }
             ],
         },
         {"role": "tool", "tool_call_id": "t1", "name": "terminal", "content": "ok"},
@@ -711,10 +752,14 @@ def test_empty_final_response_updates_already_flushed_blank_assistant_row(tmp_pa
     assert assistants[-1]["content"] == "Already streamed to the user."
     assert len(assistants) == 2
     assert assistants[0].get("tool_calls")
-    assert sum(
-        1 for m in assistants
-        if not (m.get("content") or "").strip() and not m.get("tool_calls")
-    ) == 0
+    assert (
+        sum(
+            1
+            for m in assistants
+            if not (m.get("content") or "").strip() and not m.get("tool_calls")
+        )
+        == 0
+    )
 
 
 def test_flush_stale_row_id_from_other_session_still_inserts(tmp_path):
@@ -796,14 +841,34 @@ def test_flush_sanitized_active_user_and_tool_rows_do_not_append_duplicates(tmp_
     db = _attach_real_session_db(agent, tmp_path / "state.db", session_id)
     messages = [
         # Int message_id: SQLite TEXT affinity stores it as "12345", so the digest must hash stored rows.
-        {"role": "user", "message_id": 12345, "content": [
-            {"type": "text", "text": "hi \ud800 there " + "x" * 4000},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
-        ]},
-        {"role": "assistant", "content": "ok", "tool_calls": [
-            {"id": "c1", "type": "function", "function": {"name": "terminal", "arguments": '{"q": "x \ud800"}'}},
-        ]},
-        {"role": "tool", "tool_call_id": "c1", "name": "terminal", "content": "r \ud800"},
+        {
+            "role": "user",
+            "message_id": 12345,
+            "content": [
+                {"type": "text", "text": "hi \ud800 there " + "x" * 4000},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,AAAA"},
+                },
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": "ok",
+            "tool_calls": [
+                {
+                    "id": "c1",
+                    "type": "function",
+                    "function": {"name": "terminal", "arguments": '{"q": "x \ud800"}'},
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "c1",
+            "name": "terminal",
+            "content": "r \ud800",
+        },
     ]
     estimate_before = estimate_messages_tokens_rough(messages)
     agent._flush_messages_to_session_db(messages)
@@ -813,17 +878,21 @@ def test_flush_sanitized_active_user_and_tool_rows_do_not_append_duplicates(tmp_
     # Another writer replaces the tool row after our flush; our live dict still carries the old version.
     other = sqlite3.connect(tmp_path / "state.db")
     with other:
-        other.execute("UPDATE messages SET content = ? WHERE id = ?", ("winner", durable_ids[2]))
+        other.execute(
+            "UPDATE messages SET content = ? WHERE id = ?", ("winner", durable_ids[2])
+        )
     other.close()
     # A same-process metadata write (reaction) changes the user row's digest but not its content.
-    assert db.set_message_reaction(session_id, durable_ids[0], "\U0001F44D")
+    assert db.set_message_reaction(session_id, durable_ids[0], "\U0001f44d")
     # ...followed by a real in-place live edit: the row is still ours, so the edit must win and be persisted.
     messages[0]["content"][0]["text"] += " EDITED"
     # A resumed / cloned dict carries ``_row_id`` without a digest (legacy path) over a filled assistant row.
     messages[1].pop("_db_row_snapshot")
 
     assert _sanitize_messages_surrogates(messages) is True
-    assert not any(message.get("_db_persisted") for message in (messages[0], messages[2]))
+    assert not any(
+        message.get("_db_persisted") for message in (messages[0], messages[2])
+    )
     agent._db_flush_scan_prefix = None
 
     assert agent._flush_messages_to_session_db(messages) is True
@@ -834,7 +903,9 @@ def test_flush_sanitized_active_user_and_tool_rows_do_not_append_duplicates(tmp_
     assert rows[0]["content"].startswith("hi \ufffd there")
     assert " EDITED" in rows[0]["content"]
     assert messages[0]["content"][0]["text"].endswith(" EDITED")
-    assert messages[0]["message_id"] == 12345 and "platform_message_id" not in messages[0]
+    assert (
+        messages[0]["message_id"] == 12345 and "platform_message_id" not in messages[0]
+    )
     # Neither our own rewrite nor a metadata-only change copies the lossy durable projection back: the live
     # image part survives while the reaction metadata is synced.
     assert messages[0]["content"][1]["type"] == "image_url"
@@ -889,8 +960,15 @@ def test_flush_sanitized_archived_user_and_tool_rows_do_not_append_duplicates(tm
     assert agent._flush_messages_to_session_db(messages) is True
 
     all_rows = db.get_messages(session_id, include_inactive=True)
-    for role, expected_content in (("user", "prompt \ufffd tail"), ("tool", "result \ufffd tail")):
-        matching = [row for row in all_rows if row.get("role") == role and row.get("content") == expected_content]
+    for role, expected_content in (
+        ("user", "prompt \ufffd tail"),
+        ("tool", "result \ufffd tail"),
+    ):
+        matching = [
+            row
+            for row in all_rows
+            if row.get("role") == role and row.get("content") == expected_content
+        ]
         assert len(matching) == 1
         assert matching[0]["id"] == durable_ids[role]
         assert matching[0]["timestamp"] == durable_timestamps[role]
@@ -953,19 +1031,17 @@ def test_flush_archived_same_session_row_id_fills_active_clone(tmp_path):
     reloaded = _durable_messages(db_path, session_id)
     active_assistants = [m for m in reloaded if m.get("role") == "assistant"]
     assert active_assistants, "compaction clone should keep an active assistant"
-    assert any(
-        (m.get("content") or "").strip() == recovered for m in active_assistants
-    )
-    assert not any(
-        not (m.get("content") or "").strip() for m in active_assistants
-    )
+    assert any((m.get("content") or "").strip() == recovered for m in active_assistants)
+    assert not any(not (m.get("content") or "").strip() for m in active_assistants)
     inactive = db.get_messages(session_id, include_inactive=True)
     archived = next(m for m in inactive if m.get("id") == stale_id)
     assert archived.get("active") in (0, False)
     assert messages[-1].get("_row_id") != stale_id
 
 
-def test_flush_atomic_mixed_repair_and_append_rollback_on_failure(tmp_path, monkeypatch):
+def test_flush_atomic_mixed_repair_and_append_rollback_on_failure(
+    tmp_path, monkeypatch
+):
     """Mixed rewrite + append must be atomic: failure rolls back repair and stamps no markers.
 
     If a turn contains both a blank assistant repair and a subsequent new message,
@@ -990,7 +1066,12 @@ def test_flush_atomic_mixed_repair_and_append_rollback_on_failure(tmp_path, monk
     # Now modify assistant message in memory and add a new message to the batch
     messages[-1]["content"] = "Recovered stream answer"
     messages[-1].pop("_db_persisted", None)
-    new_tool_msg = {"role": "tool", "tool_call_id": "t1", "name": "terminal", "content": "ok"}
+    new_tool_msg = {
+        "role": "tool",
+        "tool_call_id": "t1",
+        "name": "terminal",
+        "content": "ok",
+    }
     messages.append(new_tool_msg)
 
     # Force a failure inside the batch write transaction on the second message
@@ -1005,7 +1086,10 @@ def test_flush_atomic_mixed_repair_and_append_rollback_on_failure(tmp_path, monk
     monkeypatch.setattr(SessionDB, "_insert_message_rows", _failing_insert)
 
     success = agent._flush_messages_to_session_db(messages)
-    assert success is False or getattr(agent, "_incremental_persistence_failed", False) is True
+    assert (
+        success is False
+        or getattr(agent, "_incremental_persistence_failed", False) is True
+    )
 
     # Check that in-memory markers were NOT stamped
     assert messages[-1].get("_db_persisted") is not True
@@ -1057,4 +1141,3 @@ def test_flush_concurrent_nonblank_winner_adopts_canonical_content(tmp_path):
     assert messages[-1]["content"] == "Canonical winner answer from sibling"
     assert messages[-1]["_db_persisted"] is True
     assert messages[-1]["_row_id"] == row_id
-

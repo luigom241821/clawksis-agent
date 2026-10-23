@@ -76,6 +76,7 @@ class CLITerminalMixin:
     def _mark_terminal_io_broken(self, reason: str = "") -> None:
         """Stop UI paints after the PTY/stdout becomes unusable (#81521)."""
         from cli import logger
+
         if getattr(self, "_terminal_io_broken", False):
             return
         self._terminal_io_broken = True
@@ -85,7 +86,8 @@ class CLITerminalMixin:
             pass
         logger.warning(
             "Terminal I/O broken%s — freezing UI paints to avoid redraw storm (#81521)",
-            f" ({reason})" if reason else "")
+            f" ({reason})" if reason else "",
+        )
 
     def _app_invalidate(self, app, where: str, *, swallow: bool) -> None:
         """``app.invalidate()``: EIO freezes paints, other OSErrors re-raise, and any
@@ -110,14 +112,20 @@ class CLITerminalMixin:
         throttled or resize-gated entry paint is silently dropped, so the prompt never
         renders and times out unseen (#41098).
         """
-        if getattr(self, "_terminal_io_broken", False) or getattr(self, "_resize_recovery_pending", False):
+        if getattr(self, "_terminal_io_broken", False) or getattr(
+            self, "_resize_recovery_pending", False
+        ):
             return
         now = time.monotonic()
         # None sentinel, not 0.0 — monotonic's epoch is arbitrary (boot on Linux), so on
         # a fresh VM ``now`` can be < min_interval and a 0.0 sentinel would swallow the
         # first repaint (same class as _schedule_focus_regain_redraw below).
         last = getattr(self, "_last_invalidate", None)
-        if hasattr(self, "_app") and self._app and (last is None or now - last >= min_interval):
+        if (
+            hasattr(self, "_app")
+            and self._app
+            and (last is None or now - last >= min_interval)
+        ):
             self._last_invalidate = now
             self._app_invalidate(self._app, "invalidate", swallow=False)
 
@@ -148,12 +156,15 @@ class CLITerminalMixin:
         and the next incremental redraw stacks on old content (ghost status bars).
         """
         from cli import _replay_output_history
+
         if getattr(self, "_terminal_io_broken", False):
             return
         app = getattr(self, "_app", None)
         if not app:
             return
-        fit = self._clear_prompt_toolkit_screen(app, rebuild_scrollback=self._redraw_rebuilds_scrollback())
+        fit = self._clear_prompt_toolkit_screen(
+            app, rebuild_scrollback=self._redraw_rebuilds_scrollback()
+        )
         if getattr(self, "_terminal_io_broken", False):
             return
         # A viewport refill paints at once, before prompt_toolkit's next erase; after CSI 3J
@@ -189,9 +200,15 @@ class CLITerminalMixin:
         followed by the bounded output-history replay.
         """
         from cli import CLI_CONFIG
-        display_config = CLI_CONFIG.get("display") if isinstance(CLI_CONFIG, dict) else {}
-        raw = (display_config.get("cli_rebuild_scrollback_on_redraw", False)
-               if isinstance(display_config, dict) else False)
+
+        display_config = (
+            CLI_CONFIG.get("display") if isinstance(CLI_CONFIG, dict) else {}
+        )
+        raw = (
+            display_config.get("cli_rebuild_scrollback_on_redraw", False)
+            if isinstance(display_config, dict)
+            else False
+        )
         if isinstance(raw, str):
             return raw.strip().lower() in {"1", "true", "yes", "on", "always"}
         return bool(raw)
@@ -208,12 +225,15 @@ class CLITerminalMixin:
             return
         try:
             from clawk_cli.curses_ui import flush_stdin
+
             flush_stdin()
         except Exception:
             pass
         self._force_full_redraw()
 
-    def _clear_prompt_toolkit_screen(self, app, *, rebuild_scrollback: bool = False, keep_above: bool = False):
+    def _clear_prompt_toolkit_screen(
+        self, app, *, rebuild_scrollback: bool = False, keep_above: bool = False
+    ):
         """Clear the terminal and reset prompt_toolkit renderer state.
 
         Returns the ``fit`` for the replay that follows (``_transcript_room`` plus where to
@@ -229,6 +249,7 @@ class CLITerminalMixin:
         A clear that fails replays nothing: the history is already on screen or in scrollback.
         """
         from cli import _terminal_reflows
+
         if getattr(self, "_terminal_io_broken", False):
             return _NO_REPLAY
         try:
@@ -247,7 +268,9 @@ class CLITerminalMixin:
                 room += _take_suspect_rows()
                 # Only where rows stay in place: the erase below counts up from the cursor.
                 keep_above = keep_above and _terminal_reflows() is False
-                history_rows = _output_history_rows(room, columns, painted) if keep_above else None
+                history_rows = (
+                    _output_history_rows(room, columns, painted) if keep_above else None
+                )
                 if keep_above and history_rows is not None:
                     # Rows stay where prompt_toolkit's cursor has them: its oldest row is
                     # ``history_rows`` above the chrome's top — row ``room`` once that is known.
@@ -255,7 +278,12 @@ class CLITerminalMixin:
                     out.cursor_up(renderer._cursor_pos.y + history_rows)
                     out.erase_down()
                     known = painted and _chrome_floor() is not None
-                    fit = (room, columns, painted, room - history_rows if known else None)
+                    fit = (
+                        room,
+                        columns,
+                        painted,
+                        room - history_rows if known else None,
+                    )
                 else:
                     for row in range(1, size.rows + 1):  # CUP rows count from 1
                         out.cursor_goto(row, 0)
@@ -287,14 +315,21 @@ class CLITerminalMixin:
         bottom row once a refill left its top at a known row).
         """
         from cli import _terminal_reflows
+
         renderer = app.renderer
         size = renderer.output.get_size()
         screen = renderer._last_screen
         if screen is None:
-            drawn = app.layout.container.preferred_height(size.columns, size.rows).preferred
+            drawn = app.layout.container.preferred_height(
+                size.columns, size.rows
+            ).preferred
         else:
             drawn = screen.height
-        rows = max(0, size.rows - max(renderer._min_available_height, drawn, _chrome_floor() or 0))
+        rows = max(
+            0,
+            size.rows
+            - max(renderer._min_available_height, drawn, _chrome_floor() or 0),
+        )
         return rows, size.columns, _terminal_reflows() is not True
 
     @staticmethod
@@ -305,8 +340,18 @@ class CLITerminalMixin:
         if screen is None:
             return []
         has_style = renderer._style_string_has_style
-        return [1 + max((x for x, ch in screen.data_buffer[y].items() if ch.char != " " or has_style[ch.style]),
-                        default=0) for y in range(screen.height)]
+        return [
+            1
+            + max(
+                (
+                    x
+                    for x, ch in screen.data_buffer[y].items()
+                    if ch.char != " " or has_style[ch.style]
+                ),
+                default=0,
+            )
+            for y in range(screen.height)
+        ]
 
     def _note_chrome_paint(self, app, full: bool) -> None:
         """Remember when each row of the chrome prompt_toolkit just drew was written, and how
@@ -347,14 +392,29 @@ class CLITerminalMixin:
         screen, cursor = renderer._last_screen, renderer._cursor_pos
         if screen is None or columns <= 0:
             return
-        paints = getattr(self, "_chrome_paints", []) if getattr(self, "_chrome_paints_screen", None) is screen else []
-        cutoff = (getattr(self, "_resize_seen_at", None) or time.monotonic()) - _RESIZE_PAINT_MARGIN
+        paints = (
+            getattr(self, "_chrome_paints", [])
+            if getattr(self, "_chrome_paints_screen", None) is screen
+            else []
+        )
+        cutoff = (
+            getattr(self, "_resize_seen_at", None) or time.monotonic()
+        ) - _RESIZE_PAINT_MARGIN
         rows = cursor.x // columns
         for y in range(cursor.y):
             history = paints[y] if y < len(paints) else []
-            settled = [i for i, (at, _width, suspect) in enumerate(history) if at < cutoff and not suspect]
-            if settled:  # re-wrapped as it was then, or as a later, narrower paint reached it
-                rows += -(-min(width for _at, width, _suspect in history[settled[-1]:]) // columns)
+            settled = [
+                i
+                for i, (at, _width, suspect) in enumerate(history)
+                if at < cutoff and not suspect
+            ]
+            if (
+                settled
+            ):  # re-wrapped as it was then, or as a later, narrower paint reached it
+                rows += -(
+                    -min(width for _at, width, _suspect in history[settled[-1] :])
+                    // columns
+                )
             else:
                 rows += 1
         renderer._cursor_pos = cursor._replace(y=rows)
@@ -389,22 +449,36 @@ class CLITerminalMixin:
         try:
             # A debounced composer resize can arrive after the alternate screen opens.
             # Its erase/replay belongs to the suspended composer, not the monitor.
-            if getattr(getattr(self, '_subagent_monitor', None), 'opening', False):
+            if getattr(getattr(self, "_subagent_monitor", None), "opening", False):
                 return
             from cli import _replay_output_history, _terminal_reflows
+
             self._status_bar_suppressed_after_resize = True
             try:
                 new_width = self._get_tui_terminal_width()
             except Exception:
                 new_width = None
             prev_width = getattr(self, "_last_resize_width", None)
-            narrowest = min(filter(None, (new_width, getattr(self, "_resize_narrowest", None))), default=None)
+            narrowest = min(
+                filter(None, (new_width, getattr(self, "_resize_narrowest", None))),
+                default=None,
+            )
             self._resize_narrowest = None
-            width_changed = new_width is not None and prev_width is not None and new_width != prev_width
-            narrowed = narrowest is not None and prev_width is not None and narrowest < prev_width
+            width_changed = (
+                new_width is not None
+                and prev_width is not None
+                and new_width != prev_width
+            )
+            narrowed = (
+                narrowest is not None
+                and prev_width is not None
+                and narrowest < prev_width
+            )
             reflows = _terminal_reflows()
             if width_changed and self._redraw_rebuilds_scrollback():
-                _replay_output_history(self._clear_prompt_toolkit_screen(app, rebuild_scrollback=True))
+                _replay_output_history(
+                    self._clear_prompt_toolkit_screen(app, rebuild_scrollback=True)
+                )
             elif reflows and width_changed and new_width < prev_width:
                 self._aim_erase_at_reflowed_chrome(app, new_width)
             elif not reflows and narrowed:
@@ -447,19 +521,26 @@ class CLITerminalMixin:
         the bar only once it stops.
         """
         try:
+
             def _clear():
                 self._status_bar_suppressed_after_resize = False
                 try:
                     app.invalidate()
                 except Exception:
                     pass
+
             self._restart_debounce_timer(
-                "_status_bar_unsuppress_timer", delay, lambda _t: _run_on_app_loop(app, _clear))
+                "_status_bar_unsuppress_timer",
+                delay,
+                lambda _t: _run_on_app_loop(app, _clear),
+            )
         except Exception:
             # Fail open: never leave the bar stuck hidden.
             self._status_bar_suppressed_after_resize = False
 
-    def _schedule_resize_recovery(self, app, original_on_resize, delay: float = 0.3) -> None:
+    def _schedule_resize_recovery(
+        self, app, original_on_resize, delay: float = 0.3
+    ) -> None:
         """Debounce resize redraws so footer chrome is not stamped into scrollback.
 
         The delay outwaits tmux, which re-wraps a pane on every resize but signals it at most
@@ -483,16 +564,25 @@ class CLITerminalMixin:
             def _timer_fired(timer_ref):
                 def _run_recovery():
                     with lock:
-                        if getattr(self, "_resize_recovery_timer", None) is not timer_ref:
+                        if (
+                            getattr(self, "_resize_recovery_timer", None)
+                            is not timer_ref
+                        ):
                             return  # superseded by a newer resize
                         self._resize_recovery_timer = None
                         self._resize_recovery_pending = False
                     self._recover_after_resize(app, original_on_resize)
+
                 _run_on_app_loop(app, _run_recovery)
+
             with lock:
                 now = time.monotonic()
                 pending = getattr(self, "_resize_recovery_pending", False)
-                if pending or width is None or width != getattr(self, "_last_resize_width", None):
+                if (
+                    pending
+                    or width is None
+                    or width != getattr(self, "_last_resize_width", None)
+                ):
                     if not pending:
                         self._resize_recovery_pending = True
                         self._resize_seen_at = now
@@ -502,14 +592,20 @@ class CLITerminalMixin:
                             self._resize_hold_since = now
                         self._resize_narrowest = None
                         _hold_paints()
-                    if isinstance(width, int) and width > 0:  # truncated rows at the narrowest
-                        self._resize_narrowest = min(width, getattr(self, "_resize_narrowest", None) or width)
+                    if (
+                        isinstance(width, int) and width > 0
+                    ):  # truncated rows at the narrowest
+                        self._resize_narrowest = min(
+                            width, getattr(self, "_resize_narrowest", None) or width
+                        )
                     if now - self._resize_hold_since >= _RESIZE_HOLD_MAX:
                         # Shortly after a width change, not on a timer: between two of a drag,
                         # once the terminal (a multiplexer re-wrapping its rows) has settled;
                         # one landing mid-recovery would move rows under its erase and replay.
                         delay = _RESIZE_SETTLE
-                self._restart_debounce_timer("_resize_recovery_timer", delay, _timer_fired)
+                self._restart_debounce_timer(
+                    "_resize_recovery_timer", delay, _timer_fired
+                )
         except Exception:
             self._resize_recovery_pending = False
             self._recover_after_resize(app, original_on_resize)
@@ -523,8 +619,10 @@ class CLITerminalMixin:
         width change. ``app.output`` is what the running resize handler measures.
         """
         width = None
-        for probe in (lambda: app.output.get_size().columns,
-                      lambda: shutil.get_terminal_size((80, 24)).columns):
+        for probe in (
+            lambda: app.output.get_size().columns,
+            lambda: shutil.get_terminal_size((80, 24)).columns,
+        ):
             try:
                 width = probe()
             except Exception:
@@ -544,12 +642,18 @@ class CLITerminalMixin:
             if render_as_done or not self._output_waits_for_resize(app):
                 renderer = app.renderer
                 floor = _chrome_floor()
-                if floor:  # what CPR would tell prompt_toolkit: the rows down to the bottom
-                    renderer._min_available_height = max(renderer._min_available_height, floor)
+                if (
+                    floor
+                ):  # what CPR would tell prompt_toolkit: the rows down to the bottom
+                    renderer._min_available_height = max(
+                        renderer._min_available_height, floor
+                    )
                 before = renderer._last_screen, renderer._last_size
                 original_redraw(render_as_done=render_as_done)
                 # prompt_toolkit repaints every row when it has no previous paint or a new size
-                self._note_chrome_paint(app, before[0] is None or renderer._last_size != before[1])
+                self._note_chrome_paint(
+                    app, before[0] is None or renderer._last_size != before[1]
+                )
 
         app._redraw = _redraw_unless_resizing
         _set_paint_gate(app, lambda: self._output_waits_for_resize(app))
@@ -575,6 +679,7 @@ class CLITerminalMixin:
         """Save a clipboard image to ~/.clawksis/images/ and attach it; True if attached."""
         from cli import datetime
         from clawk_cli.clipboard import save_clipboard_image
+
         self._image_counter += 1
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         img_path = get_clawk_home() / "images" / f"clip_{ts}_{self._image_counter}.png"
@@ -601,8 +706,16 @@ class CLITerminalMixin:
     def _recover_terminal_input_modes(self, *, reason: str) -> None:
         """Best-effort reset when leaked mouse reports indicate mode drift."""
         from cli import (
-            CLI_CONFIG, _DIM, _RST, _TERMINAL_INPUT_MODE_RESET_SEQ,
-            _cli_multiline_shortcuts_enabled, _cprint, _enable_extended_enter_keys, logger)
+            CLI_CONFIG,
+            _DIM,
+            _RST,
+            _TERMINAL_INPUT_MODE_RESET_SEQ,
+            _cli_multiline_shortcuts_enabled,
+            _cprint,
+            _enable_extended_enter_keys,
+            logger,
+        )
+
         now = time.monotonic()
         # Rate-limit to avoid thrashing if a terminal floods reports. None = never
         # (monotonic epoch is arbitrary, see _invalidate).
@@ -637,6 +750,7 @@ class CLITerminalMixin:
         (approval/sudo prompts touch the tty), and on Windows (no termios).
         """
         from cli import _DIM, _RST, _cprint, _heal_cooked_mode_drift, logger
+
         if os.name == "nt":
             return
         app = getattr(self, "_app", None)
@@ -645,7 +759,9 @@ class CLITerminalMixin:
         if getattr(app, "_running_in_terminal", False):
             return
         now = time.monotonic()
-        last = self._last_termios_drift_check  # None = never (monotonic epoch is arbitrary)
+        last = (
+            self._last_termios_drift_check
+        )  # None = never (monotonic epoch is arbitrary)
         if last is not None and now - last < 1.0:
             return
         self._last_termios_drift_check = now
@@ -658,7 +774,8 @@ class CLITerminalMixin:
         if _heal_cooked_mode_drift(fd):
             logger.warning(
                 "Healed cooked-mode termios drift on stdin — a "
-                "run_in_terminal cooked→raw restore was lost.")
+                "run_in_terminal cooked→raw restore was lost."
+            )
             try:
                 self._invalidate()  # so the prompt is visibly alive again
             except Exception:

@@ -3,6 +3,7 @@
 ``chat_name`` keys the pinned prompt, and the title lane renames a new auto-thread between turns 1
 and 2. Any other rename still re-renders, including a later restore of Clawksis's title.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,12 @@ OPENING, TITLE = "what broke?", "Database outage"
 
 class _Thread:
     def __init__(self, parent: SimpleNamespace) -> None:
-        self.id, self.name, self.parent, self.parent_id = 800, OPENING, parent, parent.id
+        self.id, self.name, self.parent, self.parent_id = (
+            800,
+            OPENING,
+            parent,
+            parent.id,
+        )
         self.guild, self.owner_id, self.archived = parent.guild, 42, False
 
     async def edit(self, *, name: str, reason: str | None = None) -> None:
@@ -42,36 +48,58 @@ def conversation(monkeypatch: pytest.MonkeyPatch) -> Conversation:
     monkeypatch.setattr(discord_platform, "DISCORD_AVAILABLE", True)
     monkeypatch.setenv("DISCORD_REQUIRE_MENTION", "false")
     monkeypatch.setenv("DISCORD_AUTO_THREAD", "true")
-    parent = SimpleNamespace(id=700, name="ops", topic=None, guild=SimpleNamespace(id=1, name="Clawksis Server"))
+    parent = SimpleNamespace(
+        id=700,
+        name="ops",
+        topic=None,
+        guild=SimpleNamespace(id=1, name="Clawksis Server"),
+    )
     thread = _Thread(parent)
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="fake"))
-    adapter._client = SimpleNamespace(user=SimpleNamespace(id=999), get_channel=lambda _id: thread)
+    adapter._client = SimpleNamespace(
+        user=SimpleNamespace(id=999), get_channel=lambda _id: thread
+    )
     adapter._text_batch_delay_seconds = 0
     adapter._discord_history_backfill = lambda: False
     adapter._auto_create_thread = AsyncMock(return_value=thread)
     adapter.handle_message = AsyncMock()
     runner = object.__new__(gateway_run.GatewayRunner)
-    config = GatewayConfig(platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")})
+    config = GatewayConfig(
+        platforms={Platform.DISCORD: PlatformConfig(enabled=True, token="x")}
+    )
 
     async def turn(channel: object, message_id: int) -> str:
-        await adapter._handle_message(SimpleNamespace(
-            id=message_id, content=OPENING, mentions=[], attachments=[], reference=None,
-            created_at=datetime.now(UTC), channel=channel,
-            author=SimpleNamespace(id=42, display_name="Alice", name="alice")))
+        await adapter._handle_message(
+            SimpleNamespace(
+                id=message_id,
+                content=OPENING,
+                mentions=[],
+                attachments=[],
+                reference=None,
+                created_at=datetime.now(UTC),
+                channel=channel,
+                author=SimpleNamespace(id=42, display_name="Alice", name="alice"),
+            )
+        )
         source = adapter.handle_message.await_args.args[0].source
-        return runner._pinned_session_context_prompt(build_session_context(source, config), False, "k")
+        return runner._pinned_session_context_prompt(
+            build_session_context(source, config), False, "k"
+        )
 
     return adapter, parent, thread, turn
 
 
 async def _raw_rename(adapter: DiscordAdapter, name: str) -> None:
-    await adapter._on_platform_raw_thread_update(SimpleNamespace(thread_id=800, data={"name": name}))
+    await adapter._on_platform_raw_thread_update(
+        SimpleNamespace(thread_id=800, data={"name": name})
+    )
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("moderator_name", ["Renamed by a moderator", OPENING])
 async def test_clawk_title_keeps_the_pin_and_a_moderator_rename_does_not(
-    conversation: Conversation, moderator_name: str,
+    conversation: Conversation,
+    moderator_name: str,
 ) -> None:
     adapter, parent, thread, turn = conversation
     first = await turn(parent, 100)
@@ -90,7 +118,9 @@ async def test_clawk_title_keeps_the_pin_and_a_moderator_rename_does_not(
 
 
 @pytest.mark.asyncio
-async def test_a_moderator_round_trip_during_the_edit_retires_the_record(conversation: Conversation) -> None:
+async def test_a_moderator_round_trip_during_the_edit_retires_the_record(
+    conversation: Conversation,
+) -> None:
     adapter, parent, thread, turn = conversation
     await turn(parent, 100)
 
@@ -107,7 +137,9 @@ async def test_a_moderator_round_trip_during_the_edit_retires_the_record(convers
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cancel", [False, True], ids=["failed", "cancelled"])
-async def test_an_unfinished_edit_drops_its_record(conversation: Conversation, cancel: bool) -> None:
+async def test_an_unfinished_edit_drops_its_record(
+    conversation: Conversation, cancel: bool
+) -> None:
     adapter, parent, thread, turn = conversation
     await turn(parent, 100)
     started, finish = asyncio.Event(), asyncio.Event()
@@ -118,7 +150,9 @@ async def test_an_unfinished_edit_drops_its_record(conversation: Conversation, c
         raise RuntimeError("REST edit failed")
 
     thread.edit = edit
-    attempt = asyncio.create_task(adapter.rename_thread("800", TITLE, only_if_current_name=OPENING))
+    attempt = asyncio.create_task(
+        adapter.rename_thread("800", TITLE, only_if_current_name=OPENING)
+    )
     await started.wait()
     if cancel:
         attempt.cancel()

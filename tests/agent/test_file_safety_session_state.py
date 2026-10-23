@@ -45,10 +45,6 @@ def test_session_state_paths_are_write_denied(fake_homes, relative):
     assert is_write_denied(str(target)) is True
 
 
-
-
-
-
 def test_write_file_tool_preserves_existing_session_snapshot(fake_homes):
     import tools.file_tools as ft
 

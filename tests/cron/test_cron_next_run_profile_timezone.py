@@ -13,6 +13,7 @@ early (#97905; single-profile sibling report #88220).
 The invariant pinned here: ``next_run_at`` written during a foreign-process
 tick carries the JOB-OWNING profile's configured UTC offset.
 """
+
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -30,18 +31,14 @@ def _fresh_tz_cache(monkeypatch):
     clawk_time.reset_cache()
 
 
-def test_foreign_process_tick_persists_owning_profile_offset(
-    tmp_path, monkeypatch
-):
+def test_foreign_process_tick_persists_owning_profile_offset(tmp_path, monkeypatch):
     """next_run_at persisted during a multiplex tick uses the ticked
     profile's timezone, not the backend process's."""
     backend_home = tmp_path / "backend"  # desktop backend's own profile: UTC
     profile_a = tmp_path / "north-caribbean"  # job-owning profile: Eastern
     backend_home.mkdir()
     profile_a.mkdir()
-    (backend_home / "config.yaml").write_text(
-        "timezone: UTC\n", encoding="utf-8"
-    )
+    (backend_home / "config.yaml").write_text("timezone: UTC\n", encoding="utf-8")
     (profile_a / "config.yaml").write_text(
         "timezone: America/New_York\n", encoding="utf-8"
     )
@@ -49,9 +46,7 @@ def test_foreign_process_tick_persists_owning_profile_offset(
     monkeypatch.setenv("CLAWK_HOME", str(backend_home))
 
     # Backend process resolves its own timezone first (process startup).
-    assert clawk_time.now().utcoffset() == datetime.now(
-        ZoneInfo("UTC")
-    ).utcoffset()
+    assert clawk_time.now().utcoffset() == datetime.now(ZoneInfo("UTC")).utcoffset()
 
     from clawk_constants import (
         reset_clawk_home_override,

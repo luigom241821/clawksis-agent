@@ -17,11 +17,13 @@ from unittest.mock import MagicMock, patch
 # Effort level parsing
 # ---------------------------------------------------------------------------
 
+
 class TestParseReasoningConfig(unittest.TestCase):
     """Verify _parse_reasoning_config handles all effort levels."""
 
     def _parse(self, effort):
         from cli import _parse_reasoning_config
+
         return _parse_reasoning_config(effort)
 
     def test_none_disables(self):
@@ -35,15 +37,14 @@ class TestParseReasoningConfig(unittest.TestCase):
             self.assertTrue(result.get("enabled"))
             self.assertEqual(result["effort"], level)
 
-
     def test_unknown_returns_none(self):
         self.assertIsNone(self._parse("turbo"))
-
 
 
 # ---------------------------------------------------------------------------
 # /reasoning command handler (combined effort + display)
 # ---------------------------------------------------------------------------
+
 
 class TestHandleReasoningCommand(unittest.TestCase):
     """Test the combined _handle_reasoning_command method."""
@@ -57,16 +58,6 @@ class TestHandleReasoningCommand(unittest.TestCase):
         )
         return stub
 
-
-
-
-
-
-
-
-
-
-
     def test_effort_defaults_to_session_only(self):
         """Plain /reasoning <level> is session-scoped — no config write."""
         from clawk_cli.cli_commands_mixin import CLICommandsMixin
@@ -78,8 +69,6 @@ class TestHandleReasoningCommand(unittest.TestCase):
         save_config.assert_not_called()
         self.assertEqual(stub.reasoning_config, {"enabled": True, "effort": "high"})
         self.assertIsNone(stub.agent)
-
-
 
     def test_new_session_clears_session_reasoning_override(self):
         """/new and /clear must not carry a session-only effort override forward."""
@@ -100,7 +89,9 @@ class TestHandleReasoningCommand(unittest.TestCase):
             _notify_session_boundary=MagicMock(),
         )
 
-        with patch.dict(CLI_CONFIG.setdefault("agent", {}), {"reasoning_effort": "medium"}):
+        with patch.dict(
+            CLI_CONFIG.setdefault("agent", {}), {"reasoning_effort": "medium"}
+        ):
             ClawksisCLI.new_session(stub, silent=True)
 
         self.assertEqual(stub.reasoning_config, {"enabled": True, "effort": "medium"})
@@ -145,14 +136,21 @@ class TestHandleReasoningCommand(unittest.TestCase):
             base_url="https://openrouter.ai/api/v1",
             api_mode="chat_completions",
         )
-        with patch.dict(
-            CLI_CONFIG.setdefault("agent", {}),
-            {"reasoning_effort": "medium", "service_tier": "normal"},
-        ), patch.dict(
-            CLI_CONFIG,
-            {"model": {"default": "config-default-model", "provider": "openrouter"}},
-        ), patch(
-            "clawk_cli.model_switch.switch_model", return_value=fake_result
+        with (
+            patch.dict(
+                CLI_CONFIG.setdefault("agent", {}),
+                {"reasoning_effort": "medium", "service_tier": "normal"},
+            ),
+            patch.dict(
+                CLI_CONFIG,
+                {
+                    "model": {
+                        "default": "config-default-model",
+                        "provider": "openrouter",
+                    }
+                },
+            ),
+            patch("clawk_cli.model_switch.switch_model", return_value=fake_result),
         ):
             ClawksisCLI.new_session(stub, silent=True)
 
@@ -170,12 +168,9 @@ class TestHandleReasoningCommand(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Reasoning display collapse
 # ---------------------------------------------------------------------------
-
 
 
 # ---------------------------------------------------------------------------
@@ -183,8 +178,7 @@ class TestHandleReasoningCommand(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-
-        # No exception = pass
+# No exception = pass
 
 
 class TestReasoningPreviewBuffering(unittest.TestCase):
@@ -233,10 +227,10 @@ class TestReasoningPreviewBuffering(unittest.TestCase):
         self.assertIn("[thinking] see how this plays out", rendered)
 
 
-
-
 class TestReasoningDisplayModeSelection(unittest.TestCase):
-    def _make_cli(self, *, show_reasoning=False, streaming_enabled=False, verbose=False):
+    def _make_cli(
+        self, *, show_reasoning=False, streaming_enabled=False, verbose=False
+    ):
         from cli import ClawksisCLI
 
         cli = ClawksisCLI.__new__(ClawksisCLI)
@@ -248,7 +242,9 @@ class TestReasoningDisplayModeSelection(unittest.TestCase):
         return cli
 
     def test_show_reasoning_non_streaming_uses_final_box_only(self):
-        cli = self._make_cli(show_reasoning=True, streaming_enabled=False, verbose=False)
+        cli = self._make_cli(
+            show_reasoning=True, streaming_enabled=False, verbose=False
+        )
 
         self.assertIsNone(cli._current_reasoning_callback())
 
@@ -260,7 +256,9 @@ class TestReasoningDisplayModeSelection(unittest.TestCase):
         self.assertEqual(callback("x"), ("stream", "x"))
 
     def test_verbose_without_show_reasoning_uses_preview_callback(self):
-        cli = self._make_cli(show_reasoning=False, streaming_enabled=False, verbose=True)
+        cli = self._make_cli(
+            show_reasoning=False, streaming_enabled=False, verbose=True
+        )
 
         callback = cli._current_reasoning_callback()
         self.assertIsNotNone(callback)
@@ -271,11 +269,13 @@ class TestReasoningDisplayModeSelection(unittest.TestCase):
 # Real provider format extraction
 # ---------------------------------------------------------------------------
 
+
 class TestExtractReasoningFormats(unittest.TestCase):
     """Test _extract_reasoning with real provider response formats."""
 
     def _get_extractor(self):
         from run_agent import AIAgent
+
         return AIAgent._extract_reasoning
 
     def test_openrouter_reasoning_details(self):
@@ -308,16 +308,23 @@ class TestExtractReasoningFormats(unittest.TestCase):
         self.assertIn("async/await", result)
 
 
-
 # ---------------------------------------------------------------------------
 # Inline <think> block extraction fallback
 # ---------------------------------------------------------------------------
+
 
 class TestInlineThinkBlockExtraction(unittest.TestCase):
     """Test _build_assistant_message extracts inline <think> blocks as reasoning
     when no structured API-level reasoning fields are present."""
 
-    def _build_msg(self, content, reasoning=None, reasoning_content=None, reasoning_details=None, tool_calls=None):
+    def _build_msg(
+        self,
+        content,
+        reasoning=None,
+        reasoning_content=None,
+        reasoning_details=None,
+        tool_calls=None,
+    ):
         """Create a mock API response message."""
         msg = SimpleNamespace(content=content, tool_calls=tool_calls)
         if reasoning is not None:
@@ -331,6 +338,7 @@ class TestInlineThinkBlockExtraction(unittest.TestCase):
     def _make_agent(self):
         """Create a minimal agent with _build_assistant_message."""
         from run_agent import AIAgent
+
         agent = MagicMock(spec=AIAgent)
         agent._build_assistant_message = AIAgent._build_assistant_message.__get__(agent)
         agent._extract_reasoning = AIAgent._extract_reasoning.__get__(agent)
@@ -342,11 +350,11 @@ class TestInlineThinkBlockExtraction(unittest.TestCase):
 
     def test_single_think_block_extracted(self):
         agent = self._make_agent()
-        api_msg = self._build_msg("<think>Let me calculate 2+2=4.</think>The answer is 4.")
+        api_msg = self._build_msg(
+            "<think>Let me calculate 2+2=4.</think>The answer is 4."
+        )
         result = agent._build_assistant_message(api_msg, "stop")
         self.assertEqual(result["reasoning"], "Let me calculate 2+2=4.")
-
-
 
     def test_structured_reasoning_takes_priority(self):
         """When structured API reasoning exists, inline think blocks should NOT override."""
@@ -357,8 +365,6 @@ class TestInlineThinkBlockExtraction(unittest.TestCase):
         )
         result = agent._build_assistant_message(api_msg, "stop")
         self.assertEqual(result["reasoning"], "Structured reasoning from API.")
-
-
 
     def test_callback_fires_for_inline_think(self):
         """Reasoning callback should fire when reasoning is extracted from inline think blocks."""
@@ -376,19 +382,15 @@ class TestInlineThinkBlockExtraction(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # End-to-end pipeline
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Duplicate reasoning box prevention (Bug fix: 3 boxes for 1 reasoning)
 # ---------------------------------------------------------------------------
+
 
 class TestReasoningDeltasFiredFlag(unittest.TestCase):
     """_build_assistant_message should not re-fire reasoning_callback when
@@ -396,15 +398,13 @@ class TestReasoningDeltasFiredFlag(unittest.TestCase):
 
     def _make_agent(self):
         from run_agent import AIAgent
+
         agent = AIAgent.__new__(AIAgent)
         agent.reasoning_callback = None
         agent.stream_delta_callback = None
         agent._stream_callback = None
         agent.verbose_logging = False
         return agent
-
-
-
 
     def test_build_assistant_message_fires_callback_without_streaming(self):
         """When no streaming is active, callback always fires for structured
@@ -433,6 +433,7 @@ class TestReasoningShownThisTurnFlag(unittest.TestCase):
 
     def _make_cli(self):
         from cli import ClawksisCLI
+
         cli = ClawksisCLI.__new__(ClawksisCLI)
         cli.show_reasoning = True
         cli.streaming_enabled = True
@@ -455,8 +456,6 @@ class TestReasoningShownThisTurnFlag(unittest.TestCase):
         self.assertFalse(cli._reasoning_shown_this_turn)
         cli._stream_reasoning_delta("Thinking about it...")
         self.assertTrue(cli._reasoning_shown_this_turn)
-
-
 
 
 if __name__ == "__main__":

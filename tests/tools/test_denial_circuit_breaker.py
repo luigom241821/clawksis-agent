@@ -41,11 +41,13 @@ def breaker_session(monkeypatch):
     monkeypatch.setattr(approval_smart, "_smart_approve", lambda _c, _d: "deny")
     monkeypatch.setattr(A, "_get_denial_breaker_threshold", lambda: 3)
     monkeypatch.setattr(
-        A, "detect_dangerous_command",
+        A,
+        "detect_dangerous_command",
         lambda command: (True, "breaker-test-danger", f"risk:{command}"),
     )
     monkeypatch.setattr(
-        approval_detection, "detect_dangerous_command",
+        approval_detection,
+        "detect_dangerous_command",
         lambda command: (True, "breaker-test-danger", f"risk:{command}"),
     )
 
@@ -71,12 +73,14 @@ def breaker_session(monkeypatch):
 
 def _register_resolver(session_key: str, result):
     """Notify callback resolving the newest queued approval with *result*."""
+
     def cb(_approval_data):
         with A._lock:
             entries = A._gateway_queues.get(session_key, [])
             if entries:
                 entries[-1].result = result
                 entries[-1].event.set()
+
     with A._lock:
         A._gateway_notify_cbs[session_key] = cb
 
@@ -92,6 +96,7 @@ def _denied_execute_code(code="print('x')"):
 # ---------------------------------------------------------------------------
 # (a) Two denials -> normal message; third -> breaker text present
 # ---------------------------------------------------------------------------
+
 
 def test_breaker_trips_on_third_consecutive_denial(breaker_session):
     _register_resolver(breaker_session, "deny")
@@ -111,6 +116,7 @@ def test_breaker_trips_on_third_consecutive_denial(breaker_session):
 # ---------------------------------------------------------------------------
 # (b) An approval resets the tally
 # ---------------------------------------------------------------------------
+
 
 def test_approval_resets_tally(breaker_session, monkeypatch):
     _register_resolver(breaker_session, "deny")
@@ -164,6 +170,7 @@ def test_human_approval_resets_tally(breaker_session):
 # Headless hard-deny path (no cli/gateway/ask override) also increments
 # ---------------------------------------------------------------------------
 
+
 def test_headless_smart_deny_increments_and_trips(monkeypatch):
     monkeypatch.delenv("CLAWK_GATEWAY_SESSION", raising=False)
     monkeypatch.delenv("CLAWK_INTERACTIVE", raising=False)
@@ -175,26 +182,27 @@ def test_headless_smart_deny_increments_and_trips(monkeypatch):
     monkeypatch.setattr(A, "_get_denial_breaker_threshold", lambda: 3)
     monkeypatch.setattr(A, "_is_interactive_cli", lambda: True)
     monkeypatch.setattr(
-        A, "detect_dangerous_command",
+        A,
+        "detect_dangerous_command",
         lambda command: (True, "headless-breaker-danger", f"risk:{command}"),
     )
     monkeypatch.setattr(
-        approval_detection, "detect_dangerous_command",
+        approval_detection,
+        "detect_dangerous_command",
         lambda command: (True, "headless-breaker-danger", f"risk:{command}"),
     )
     # CLI-interactive path: the owner denies via the prompt callback.
-    monkeypatch.setattr(A, "prompt_dangerous_approval",
-                        lambda *args, **kwargs: "deny")
-    monkeypatch.setattr(approval_prompt, "prompt_dangerous_approval",
-                        lambda *args, **kwargs: "deny")
+    monkeypatch.setattr(A, "prompt_dangerous_approval", lambda *args, **kwargs: "deny")
+    monkeypatch.setattr(
+        approval_prompt, "prompt_dangerous_approval", lambda *args, **kwargs: "deny"
+    )
 
     session_key = "headless-breaker-session"
     token = approval_context.set_current_session_key(session_key)
     A._reset_denials(session_key)
     with A._lock:
         A._permanent_approved.discard("headless-breaker-danger")
-        A._session_approved.get(session_key, set()).discard(
-            "headless-breaker-danger")
+        A._session_approved.get(session_key, set()).discard("headless-breaker-danger")
     try:
         first = A.check_all_command_guards("dangerous h1", "local")
         second = A.check_all_command_guards("dangerous h2", "local")
@@ -211,6 +219,7 @@ def test_headless_smart_deny_increments_and_trips(monkeypatch):
 # Eviction cap: the tally dict never grows past _DENIAL_TALLY_MAX_SESSIONS
 # ---------------------------------------------------------------------------
 
+
 def test_tally_evicts_oldest_sessions():
     with A._lock:
         saved = dict(A._denial_tally)
@@ -223,8 +232,7 @@ def test_tally_evicts_oldest_sessions():
             # Oldest entries were evicted, newest survive.
             assert "evict-session-0" not in A._denial_tally
             assert (
-                f"evict-session-{A._DENIAL_TALLY_MAX_SESSIONS + 9}"
-                in A._denial_tally
+                f"evict-session-{A._DENIAL_TALLY_MAX_SESSIONS + 9}" in A._denial_tally
             )
     finally:
         with A._lock:

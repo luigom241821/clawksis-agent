@@ -51,6 +51,7 @@ def _fake_psutil(procs: dict[int, float]):
 # Spawn tags
 # ---------------------------------------------------------------------------
 
+
 def test_spawn_tag_roundtrip():
     with patch.dict(sys.modules, {"psutil": _fake_psutil({999: 1234.5})}):
         with patch.object(pi.os, "getpid", return_value=999):
@@ -68,13 +69,13 @@ def test_spawn_tag_roundtrip():
     [
         None,
         "",
-        "v0:abc:serve:1:2.0",          # wrong version
-        "v1:abc:serve:notanint:2.0",   # bad pid
-        "v1:abc:serve:-4:2.0",         # non-positive pid
-        "v1::serve:10:2.0",            # empty install
-        "v1:abc::10:2.0",              # empty purpose
-        "v1:abc:serve:10",             # wrong arity
-        "v1:abc:serve:10:zzz",         # bad create
+        "v0:abc:serve:1:2.0",  # wrong version
+        "v1:abc:serve:notanint:2.0",  # bad pid
+        "v1:abc:serve:-4:2.0",  # non-positive pid
+        "v1::serve:10:2.0",  # empty install
+        "v1:abc::10:2.0",  # empty purpose
+        "v1:abc:serve:10",  # wrong arity
+        "v1:abc:serve:10:zzz",  # bad create
     ],
 )
 def test_parse_spawn_tag_rejects_malformed(raw):
@@ -105,7 +106,10 @@ def test_install_id_stable_and_path_scoped():
 # Ledger
 # ---------------------------------------------------------------------------
 
-def _entry(pid, create, purpose="serve", install=None, spawner_pid=None, spawner_create=None):
+
+def _entry(
+    pid, create, purpose="serve", install=None, spawner_pid=None, spawner_create=None
+):
     return {
         "pid": pid,
         "create_time": create,
@@ -121,11 +125,15 @@ def _entry(pid, create, purpose="serve", install=None, spawner_pid=None, spawner
 def test_register_self_writes_and_prunes_dead(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     # Pre-existing: pid 300 dead, pid 400 alive.
-    ledger.write_text(json.dumps([_entry(300, 1.0), _entry(400, 2.0)]), encoding="utf-8")
+    ledger.write_text(
+        json.dumps([_entry(300, 1.0), _entry(400, 2.0)]), encoding="utf-8"
+    )
     fake = _fake_psutil({400: 2.0, 999: 50.0})
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "_ledger_path", return_value=ledger), \
-         patch.object(pi.os, "getpid", return_value=999):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+        patch.object(pi.os, "getpid", return_value=999),
+    ):
         assert pi.register_self("serve", project_root=Path("/x/install")) is True
     entries = json.loads(ledger.read_text(encoding="utf-8"))
     pids = {e["pid"] for e in entries}
@@ -138,13 +146,21 @@ def test_register_self_writes_and_prunes_dead(tmp_path):
 def test_register_self_survives_non_utf8_argv(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     fake = _fake_psutil({999: 50.0})
-    bad_argv = ["clawk", "serve", os.fsdecode(b"/tmp/project-\xff")]  # surrogate-escaped path
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "_ledger_path", return_value=ledger), \
-         patch.object(pi.os, "getpid", return_value=999), \
-         patch.object(sys, "argv", bad_argv):
+    bad_argv = [
+        "clawk",
+        "serve",
+        os.fsdecode(b"/tmp/project-\xff"),
+    ]  # surrogate-escaped path
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+        patch.object(pi.os, "getpid", return_value=999),
+        patch.object(sys, "argv", bad_argv),
+    ):
         assert pi.register_self("serve", project_root=Path("/x/install")) is True
-    me = next(e for e in json.loads(ledger.read_text(encoding="utf-8")) if e["pid"] == 999)
+    me = next(
+        e for e in json.loads(ledger.read_text(encoding="utf-8")) if e["pid"] == 999
+    )
     assert me["argv"] == " ".join(bad_argv)
 
 
@@ -152,11 +168,15 @@ def test_register_self_survives_non_utf8_argv(tmp_path):
 def test_register_self_writes_ledger_with_0600(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     fake = _fake_psutil({999: 50.0})
-    old_umask = os.umask(0o022)  # permissive umask: the mode must come from the writer, not the env
+    old_umask = os.umask(
+        0o022
+    )  # permissive umask: the mode must come from the writer, not the env
     try:
-        with patch.dict(sys.modules, {"psutil": fake}), \
-             patch.object(pi, "_ledger_path", return_value=ledger), \
-             patch.object(pi.os, "getpid", return_value=999):
+        with (
+            patch.dict(sys.modules, {"psutil": fake}),
+            patch.object(pi, "_ledger_path", return_value=ledger),
+            patch.object(pi.os, "getpid", return_value=999),
+        ):
             assert pi.register_self("serve", project_root=Path("/x/install")) is True
     finally:
         os.umask(old_umask)
@@ -168,10 +188,12 @@ def test_register_self_inherits_spawn_tag_lineage(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     fake = _fake_psutil({999: 50.0})
     env = {pi.SPAWN_ENV_VAR: "v1:-:serve:777:123.000"}
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.dict(pi.os.environ, env, clear=False), \
-         patch.object(pi, "_ledger_path", return_value=ledger), \
-         patch.object(pi.os, "getpid", return_value=999):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.dict(pi.os.environ, env, clear=False),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+        patch.object(pi.os, "getpid", return_value=999),
+    ):
         pi.register_self("serve", project_root=Path("/x/install"))
     me = json.loads(ledger.read_text(encoding="utf-8"))[0]
     assert me["spawner_pid"] == 777
@@ -186,11 +208,13 @@ def test_register_self_falls_back_to_desktop_parent_env(tmp_path):
         "CLAWK_PARENT_PID": "888",
         "CLAWK_PARENT_START_MARKER": "winms:1755689000123",
     }
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.dict(pi.os.environ, env, clear=False), \
-         patch.object(pi.os.environ, "get", pi.os.environ.get), \
-         patch.object(pi, "_ledger_path", return_value=ledger), \
-         patch.object(pi.os, "getpid", return_value=999):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.dict(pi.os.environ, env, clear=False),
+        patch.object(pi.os.environ, "get", pi.os.environ.get),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+        patch.object(pi.os, "getpid", return_value=999),
+    ):
         pi.os.environ.pop(pi.SPAWN_ENV_VAR, None)
         pi.register_self("serve", project_root=Path("/x/install"))
     me = json.loads(ledger.read_text(encoding="utf-8"))[0]
@@ -203,9 +227,11 @@ def test_corrupt_ledger_quarantined_not_rewritten_blind(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     ledger.write_text("{ not json", encoding="utf-8")
     fake = _fake_psutil({999: 50.0})
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "_ledger_path", return_value=ledger), \
-         patch.object(pi.os, "getpid", return_value=999):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+        patch.object(pi.os, "getpid", return_value=999),
+    ):
         assert pi.register_self("serve", project_root=Path("/x/install")) is True
     parked = tmp_path / "spawn-ledger.json.corrupt"
     assert parked.exists()
@@ -217,15 +243,17 @@ def test_corrupt_ledger_quarantined_not_rewritten_blind(tmp_path):
 def test_ledger_entries_filters_dead_reused_and_foreign(tmp_path):
     ledger = tmp_path / "spawn-ledger.json"
     entries = [
-        _entry(100, 10.0),                                  # alive, matches
-        _entry(200, 20.0),                                  # pid reused (create mismatch)
-        _entry(300, 30.0),                                  # dead
-        _entry(400, 40.0, install="ffffffffffff"),          # other install
+        _entry(100, 10.0),  # alive, matches
+        _entry(200, 20.0),  # pid reused (create mismatch)
+        _entry(300, 30.0),  # dead
+        _entry(400, 40.0, install="ffffffffffff"),  # other install
     ]
     ledger.write_text(json.dumps(entries), encoding="utf-8")
     fake = _fake_psutil({100: 10.0, 200: 9999.0, 400: 40.0})
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "_ledger_path", return_value=ledger):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "_ledger_path", return_value=ledger),
+    ):
         live = pi.ledger_entries(project_root=Path("/x/install"))
     assert [e["pid"] for e in live] == [100]
 
@@ -245,7 +273,10 @@ def test_ledger_entries_excludes_a_killed_but_unreaped_process(tmp_path):
             assert time.monotonic() < deadline, "child never became a zombie"
             time.sleep(0.05)
         ledger = tmp_path / "spawn-ledger.json"
-        ledger.write_text(json.dumps([_entry(child.pid, created, purpose="dashboard")]), encoding="utf-8")
+        ledger.write_text(
+            json.dumps([_entry(child.pid, created, purpose="dashboard")]),
+            encoding="utf-8",
+        )
         with patch.object(pi, "_ledger_path", return_value=ledger):
             assert pi.ledger_entries(project_root=Path("/x/install")) == []
     finally:
@@ -256,10 +287,19 @@ def test_ledger_entries_excludes_a_killed_but_unreaped_process(tmp_path):
 def test_spawner_is_dead_tristate():
     fake = _fake_psutil({500: 5.0})
     with patch.dict(sys.modules, {"psutil": fake}):
-        assert pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=500, spawner_create=5.0)) is False
-        assert pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=600, spawner_create=6.0)) is True
+        assert (
+            pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=500, spawner_create=5.0))
+            is False
+        )
+        assert (
+            pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=600, spawner_create=6.0))
+            is True
+        )
         # PID reuse: recorded spawner create differs from live process → dead.
-        assert pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=500, spawner_create=999.0)) is True
+        assert (
+            pi.spawner_is_dead(_entry(1, 1.0, spawner_pid=500, spawner_create=999.0))
+            is True
+        )
         assert pi.spawner_is_dead(_entry(1, 1.0)) is None
 
 
@@ -267,25 +307,33 @@ def test_spawner_is_dead_tristate():
 # Updater rung: _ledger_reapable_backend_pids
 # ---------------------------------------------------------------------------
 
+
 def _holders(*pids):
-    return [(p, "python.exe", f"python.exe -m clawk_cli.main --profile p{p} serve") for p in pids]
+    return [
+        (p, "python.exe", f"python.exe -m clawk_cli.main --profile p{p} serve")
+        for p in pids
+    ]
 
 
 def test_updater_reaps_ledger_proven_orphans():
     from clawk_cli import update_cmd_windows
 
     entries = [
-        _entry(200, 2.0, spawner_pid=700, spawner_create=7.0),   # spawner dead → reap
-        _entry(201, 2.1, spawner_pid=500, spawner_create=5.0),   # spawner alive → keep
-        _entry(202, 2.2, purpose="chat", spawner_pid=700, spawner_create=7.0),  # not reapable purpose
+        _entry(200, 2.0, spawner_pid=700, spawner_create=7.0),  # spawner dead → reap
+        _entry(201, 2.1, spawner_pid=500, spawner_create=5.0),  # spawner alive → keep
+        _entry(
+            202, 2.2, purpose="chat", spawner_pid=700, spawner_create=7.0
+        ),  # not reapable purpose
     ]
     fake = _fake_psutil({500: 5.0})
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "ledger_entries", return_value=entries), \
-         patch.object(pi, "spawner_is_dead", wraps=pi.spawner_is_dead):
-        assert update_cmd_windows._ledger_reapable_backend_pids(_holders(200, 201, 202, 203)) == [200]
-
-
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "ledger_entries", return_value=entries),
+        patch.object(pi, "spawner_is_dead", wraps=pi.spawner_is_dead),
+    ):
+        assert update_cmd_windows._ledger_reapable_backend_pids(
+            _holders(200, 201, 202, 203)
+        ) == [200]
 
 
 def test_updater_ledger_rung_never_raises():
@@ -301,29 +349,44 @@ def test_desktop_ssh_backend_spawn_shape_is_desktop_owned(monkeypatch):
     shape made the SSH child claim ROLE_SERVE on the remote host (the #119824 shape there)."""
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
     monkeypatch.delenv("CLAWK_DASHBOARD_SESSION_TOKEN", raising=False)
-    ssh_argv = ["serve", "--isolated", "--host", "127.0.0.1", "--port", "0",
-                "--ssh-session-token-file", "/home/u/.clawksis/desktop-ssh/abc.token"]
+    ssh_argv = [
+        "serve",
+        "--isolated",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "0",
+        "--ssh-session-token-file",
+        "/home/u/.clawksis/desktop-ssh/abc.token",
+    ]
 
     assert pi.is_desktop_owned_backend(ssh_argv) is True
     monkeypatch.setattr(sys, "argv", ["clawk", *ssh_argv])
     assert pi.is_desktop_owned_backend() is True
     # The bare inherited flag (a Desktop terminal pane running `clawk serve`) is still not ownership.
-    assert pi.is_desktop_owned_backend(["serve", "--host", "127.0.0.1", "--port", "0"]) is False
+    assert (
+        pi.is_desktop_owned_backend(["serve", "--host", "127.0.0.1", "--port", "0"])
+        is False
+    )
 
 
 # ---------------------------------------------------------------------------
 # Host-reclaim rung: reap_orphaned_backend_owner (#121964)
 # ---------------------------------------------------------------------------
 
+
 def _reap(entry_pid=555, create=55.0, procs=None, kill_fn=None, **entry_kw):
     """Run the reclaim predicate with a faked psutil world; returns (result, kills)."""
     entry = _entry(entry_pid, create, **entry_kw)
     kills = []
     fake = _fake_psutil({} if procs is None else procs)
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "ledger_entries", return_value=[entry]):
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(pi, "ledger_entries", return_value=[entry]),
+    ):
         result = pi.reap_orphaned_backend_owner(
-            entry_pid, create, kill_fn=(kills.append if kill_fn is None else kill_fn))
+            entry_pid, create, kill_fn=(kills.append if kill_fn is None else kill_fn)
+        )
     return result, kills
 
 
@@ -334,7 +397,9 @@ def test_reclaim_reaps_dead_spawner_owner():
 
 
 def test_reclaim_spares_live_spawner_owner():
-    result, kills = _reap(spawner_pid=500, spawner_create=5.0, procs={555: 55.0, 500: 5.0})
+    result, kills = _reap(
+        spawner_pid=500, spawner_create=5.0, procs={555: 55.0, 500: 5.0}
+    )
     assert result is None
     assert kills == []
 
@@ -353,17 +418,26 @@ def test_reclaim_spares_unprovable_spawner():
         return proc
 
     fake = types.SimpleNamespace(Process=_process, NoSuchProcess=_FakeNoSuchProcess)
-    with patch.dict(sys.modules, {"psutil": fake}), \
-         patch.object(pi, "ledger_entries",
-                      return_value=[_entry(555, 55.0, spawner_pid=500, spawner_create=5.0)]):
-        assert pi.reap_orphaned_backend_owner(555, 55.0, kill_fn=lambda pid: None) is None
+    with (
+        patch.dict(sys.modules, {"psutil": fake}),
+        patch.object(
+            pi,
+            "ledger_entries",
+            return_value=[_entry(555, 55.0, spawner_pid=500, spawner_create=5.0)],
+        ),
+    ):
+        assert (
+            pi.reap_orphaned_backend_owner(555, 55.0, kill_fn=lambda pid: None) is None
+        )
 
 
 def test_reclaim_reaps_null_spawner_orphan_to_init():
     from clawk_cli import dashboard_procs
 
-    with patch.object(dashboard_procs, "_process_ppid", return_value=1), \
-         patch.object(dashboard_procs, "_lock_owned_serve_pids", return_value=set()):
+    with (
+        patch.object(dashboard_procs, "_process_ppid", return_value=1),
+        patch.object(dashboard_procs, "_lock_owned_serve_pids", return_value=set()),
+    ):
         # Ancient orphan: create_time far past vs real clock → past the lock-write grace.
         result, kills = _reap(procs={555: 1000.0}, create=1000.0)
     assert result == 555
@@ -383,16 +457,19 @@ def test_reclaim_spares_lock_claimed_orphan():
     """A valid backend.lock.json claims the PID: another session owns it, never kill."""
     from clawk_cli import dashboard_procs
 
-    with patch.object(dashboard_procs, "_process_ppid", return_value=1), \
-         patch.object(dashboard_procs, "_lock_owned_serve_pids", return_value={555}):
+    with (
+        patch.object(dashboard_procs, "_process_ppid", return_value=1),
+        patch.object(dashboard_procs, "_lock_owned_serve_pids", return_value={555}),
+    ):
         result, kills = _reap(procs={555: 1000.0}, create=1000.0)
     assert result is None
     assert kills == []
 
 
 def test_reclaim_spares_interactive_purposes_and_self():
-    result, kills = _reap(purpose="chat", spawner_pid=700, spawner_create=7.0,
-                          procs={555: 55.0})
+    result, kills = _reap(
+        purpose="chat", spawner_pid=700, spawner_create=7.0, procs={555: 55.0}
+    )
     assert (result, kills) == (None, [])
     with patch.object(pi.os, "getpid", return_value=555):
         result, kills = _reap(spawner_pid=700, spawner_create=7.0, procs={555: 55.0})
@@ -400,8 +477,14 @@ def test_reclaim_spares_interactive_purposes_and_self():
 
 
 def test_reclaim_ignores_unknown_pid_and_never_raises():
-    with patch.dict(sys.modules, {"psutil": _fake_psutil({555: 55.0})}), \
-         patch.object(pi, "ledger_entries", return_value=[_entry(555, 55.0)]):
-        assert pi.reap_orphaned_backend_owner(999, 9.0, kill_fn=lambda pid: None) is None
+    with (
+        patch.dict(sys.modules, {"psutil": _fake_psutil({555: 55.0})}),
+        patch.object(pi, "ledger_entries", return_value=[_entry(555, 55.0)]),
+    ):
+        assert (
+            pi.reap_orphaned_backend_owner(999, 9.0, kill_fn=lambda pid: None) is None
+        )
     with patch.object(pi, "ledger_entries", side_effect=RuntimeError("boom")):
-        assert pi.reap_orphaned_backend_owner(555, 55.0, kill_fn=lambda pid: None) is None
+        assert (
+            pi.reap_orphaned_backend_owner(555, 55.0, kill_fn=lambda pid: None) is None
+        )

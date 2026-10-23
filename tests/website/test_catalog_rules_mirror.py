@@ -9,7 +9,9 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-_BLOCK = re.compile(r"<!-- admission-rules:start[^>]*-->(.*?)<!-- admission-rules:end -->", re.DOTALL)
+_BLOCK = re.compile(
+    r"<!-- admission-rules:start[^>]*-->(.*?)<!-- admission-rules:end -->", re.DOTALL
+)
 
 
 def _rules(path: Path) -> str:
@@ -20,7 +22,14 @@ def _rules(path: Path) -> str:
 
 def test_docs_page_mirrors_readme_admission_rules():
     readme = _rules(ROOT / "plugin-catalog" / "README.md")
-    docs = _rules(ROOT / "website" / "docs" / "developer-guide" / "plugins" / "catalog-submission.md")
+    docs = _rules(
+        ROOT
+        / "website"
+        / "docs"
+        / "developer-guide"
+        / "plugins"
+        / "catalog-submission.md"
+    )
     assert re.search(r"\b1\. \*\*", readme)
     assert docs == readme, (
         "website/docs/developer-guide/plugins/catalog-submission.md must carry the exact rule block "

@@ -43,13 +43,23 @@ def _install_command_stubs(monkeypatch, tmp_path, process):
     """Common _run_browser_command environment with a fake daemon layer."""
     monkeypatch.setattr(bt_install, "_find_agent_browser", lambda: "agent-browser")
     monkeypatch.setattr("tools.browser_tool_install._chromium_installed", lambda: True)
-    monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
-    monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None)
-    monkeypatch.setattr("tools.browser_tool_cdp._stop_cdp_supervisor", lambda _tid: None)
+    monkeypatch.setattr(
+        "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+    )
+    monkeypatch.setattr(
+        "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None
+    )
+    monkeypatch.setattr(
+        "tools.browser_tool_cdp._stop_cdp_supervisor", lambda _tid: None
+    )
     monkeypatch.setattr(bt, "_socket_safe_tmpdir", lambda: str(tmp_path))
-    monkeypatch.setattr("tools.browser_tool_lifecycle._write_owner_pid", lambda *_args: None)
+    monkeypatch.setattr(
+        "tools.browser_tool_lifecycle._write_owner_pid", lambda *_args: None
+    )
     monkeypatch.setattr(bt, "_build_browser_env", dict)
-    monkeypatch.setattr("tools.browser_tool_install._merge_browser_path", lambda value: value)
+    monkeypatch.setattr(
+        "tools.browser_tool_install._merge_browser_path", lambda value: value
+    )
     monkeypatch.setattr("tools.browser_tool_cloud._get_browser_engine", lambda: "auto")
     monkeypatch.setattr("tools.browser_tool_cloud._is_headed_mode", lambda: False)
     monkeypatch.setattr(subprocess, "Popen", lambda *_a, **_k: process)
@@ -70,12 +80,24 @@ class TestTimeoutMarksSuspect:
         _install_command_stubs(monkeypatch, tmp_path, process)
 
         # Daemon alive + responsive → recycle-at-next-use branch, no kill.
-        monkeypatch.setattr("tools.browser_tool_session._read_browser_daemon_pid", lambda *_a: 4321)
-        monkeypatch.setattr("tools.browser_tool_lifecycle._pid_exists", lambda _pid: True)
-        monkeypatch.setattr("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", lambda *_a: True)
-        monkeypatch.setattr("tools.browser_tool_session._browser_daemon_responsive", lambda *_a, **_k: True)
+        monkeypatch.setattr(
+            "tools.browser_tool_session._read_browser_daemon_pid", lambda *_a: 4321
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._pid_exists", lambda _pid: True
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+            lambda *_a: True,
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_session._browser_daemon_responsive",
+            lambda *_a, **_k: True,
+        )
         kills = []
-        monkeypatch.setattr("agent.deadline.kill_process_tree", lambda pid, **_k: kills.append(pid))
+        monkeypatch.setattr(
+            "agent.deadline.kill_process_tree", lambda pid, **_k: kills.append(pid)
+        )
 
         marks = []
         original_mark = bt._BrowserSessionBackend.mark_suspect
@@ -105,10 +127,14 @@ class TestNextUseRecycles:
         bt._active_sessions[TASK] = stale
         bt._suspect_browser_sessions[TASK] = "browser command timed out"
 
-        monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+        )
         monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None
+        )
 
         cleanups = []
 
@@ -118,9 +144,13 @@ class TestNextUseRecycles:
                 bt._active_sessions.pop(task_id, None)
                 bt._session_last_activity.pop(task_id, None)
 
-        monkeypatch.setattr(bt_lifecycle, "_cleanup_single_browser_session", fake_cleanup)
+        monkeypatch.setattr(
+            bt_lifecycle, "_cleanup_single_browser_session", fake_cleanup
+        )
         fresh = {"session_name": "fresh-session"}
-        monkeypatch.setattr("tools.browser_tool_session._create_local_session", lambda _tid: dict(fresh))
+        monkeypatch.setattr(
+            "tools.browser_tool_session._create_local_session", lambda _tid: dict(fresh)
+        )
 
         session = bt_session._get_session_info(TASK)
 
@@ -167,7 +197,8 @@ class TestSuccessfulCallNeverRecycles:
 
         recycle_calls = []
         monkeypatch.setattr(
-            bt_lifecycle, "_cleanup_single_browser_session",
+            bt_lifecycle,
+            "_cleanup_single_browser_session",
             lambda t: recycle_calls.append(t),
         )
         discard_calls = []
@@ -176,7 +207,9 @@ class TestSuccessfulCallNeverRecycles:
             lambda *a: discard_calls.append(a),
         )
         kills = []
-        monkeypatch.setattr("agent.deadline.kill_process_tree", lambda pid, **_k: kills.append(pid))
+        monkeypatch.setattr(
+            "agent.deadline.kill_process_tree", lambda pid, **_k: kills.append(pid)
+        )
 
         result = bt_session._run_browser_command(TASK, "click", ["@e1"], timeout=5)
 
@@ -208,9 +241,17 @@ class TestWedgedDaemonTreeKill:
         _install_command_stubs(monkeypatch, tmp_path, process)
 
         # Wedged: daemon PID exists but the control socket is unresponsive.
-        monkeypatch.setattr("tools.browser_tool_lifecycle._pid_exists", lambda _pid: True)
-        monkeypatch.setattr("tools.browser_tool_lifecycle._verify_reapable_browser_daemon", lambda *_a: True)
-        monkeypatch.setattr("tools.browser_tool_session._browser_daemon_responsive", lambda *_a, **_k: False)
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._pid_exists", lambda _pid: True
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._verify_reapable_browser_daemon",
+            lambda *_a: True,
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_session._browser_daemon_responsive",
+            lambda *_a, **_k: False,
+        )
 
         kills = []
         monkeypatch.setattr(
@@ -239,7 +280,9 @@ class TestWedgedDaemonTreeKill:
             "agent.deadline.kill_process_tree",
             lambda pid, **_k: kills.append(pid) or True,
         )
-        monkeypatch.setattr("tools.browser_tool_cdp._stop_cdp_supervisor", lambda _tid: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_cdp._stop_cdp_supervisor", lambda _tid: None
+        )
 
         bt_session._handle_browser_command_timeout(TASK, session_info, socket_dir)
 
@@ -255,12 +298,17 @@ class TestFreshSessionClearsStaleFlag:
         """Wedged path evicts + flags; the fresh session must not inherit it."""
         bt._suspect_browser_sessions[TASK] = "stale reason"
 
-        monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
+        monkeypatch.setattr(
+            "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+        )
         monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None)
         monkeypatch.setattr(
-            "tools.browser_tool_session._create_local_session", lambda _tid: {"session_name": "fresh"}
+            "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda _tid: None
+        )
+        monkeypatch.setattr(
+            "tools.browser_tool_session._create_local_session",
+            lambda _tid: {"session_name": "fresh"},
         )
 
         session = bt_session._get_session_info(TASK)
@@ -293,30 +341,57 @@ class TestBackendLevelFailureRecycles:
         monkeypatch.setattr(subprocess, "Popen", FakePopen)
         monkeypatch.setattr("tools.browser_tool_cdp._get_cdp_override", lambda: "")
         monkeypatch.setattr(bt_cloud, "_get_cloud_provider", lambda: None)
-        monkeypatch.setattr("tools.browser_tool_real_profile._real_profile_cdp", lambda: (None, None))
+        monkeypatch.setattr(
+            "tools.browser_tool_real_profile._real_profile_cdp", lambda: (None, None)
+        )
         monkeypatch.setattr("agent.deadline.kill_process_tree", lambda pid, **_k: None)
         return spawns
 
-    def test_exit_101_evicts_poisoned_session_and_retries_once_on_a_fresh_one(self, monkeypatch, tmp_path):
-        stale = {"session_name": "stale-session", "bb_session_id": None, "cdp_url": None, "features": {"local": True}}
+    def test_exit_101_evicts_poisoned_session_and_retries_once_on_a_fresh_one(
+        self, monkeypatch, tmp_path
+    ):
+        stale = {
+            "session_name": "stale-session",
+            "bb_session_id": None,
+            "cdp_url": None,
+            "features": {"local": True},
+        }
         bt._active_sessions[TASK] = stale
-        ok = json.dumps({"success": True, "data": {"cdpUrl": "ws://127.0.0.1:1/x"}}).encode()
+        ok = json.dumps(
+            {"success": True, "data": {"cdpUrl": "ws://127.0.0.1:1/x"}}
+        ).encode()
         spawns = self._popen_sequence(monkeypatch, tmp_path, [(101, b""), (0, ok)])
 
         result = bt_session._run_browser_command(TASK, "get", ["cdp-url"], timeout=5)
 
-        assert result["success"] is True and result["data"]["cdpUrl"] == "ws://127.0.0.1:1/x"
+        assert (
+            result["success"] is True
+            and result["data"]["cdpUrl"] == "ws://127.0.0.1:1/x"
+        )
         assert len(spawns) == 2
         assert "stale-session" in spawns[0] and "stale-session" not in spawns[1]
         fresh = bt._active_sessions[TASK]
-        assert fresh is not stale and fresh["session_name"] == spawns[1][spawns[1].index("--session") + 1]
-        assert bt._suspect_browser_sessions == {}  # flag consumed; fresh record is healthy
+        assert (
+            fresh is not stale
+            and fresh["session_name"] == spawns[1][spawns[1].index("--session") + 1]
+        )
+        assert (
+            bt._suspect_browser_sessions == {}
+        )  # flag consumed; fresh record is healthy
 
-    def test_parsed_page_level_error_is_returned_without_recycling(self, monkeypatch, tmp_path):
-        session_info = {"session_name": "healthy-session", "bb_session_id": None, "cdp_url": None,
-                        "features": {"local": True}}
+    def test_parsed_page_level_error_is_returned_without_recycling(
+        self, monkeypatch, tmp_path
+    ):
+        session_info = {
+            "session_name": "healthy-session",
+            "bb_session_id": None,
+            "cdp_url": None,
+            "features": {"local": True},
+        }
         bt._active_sessions[TASK] = session_info
-        page_error = json.dumps({"success": False, "error": "Element @e9 not found"}).encode()
+        page_error = json.dumps(
+            {"success": False, "error": "Element @e9 not found"}
+        ).encode()
         spawns = self._popen_sequence(monkeypatch, tmp_path, [(0, page_error)])
 
         result = bt_session._run_browser_command(TASK, "click", ["@e9"], timeout=5)

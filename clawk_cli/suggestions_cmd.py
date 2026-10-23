@@ -14,13 +14,17 @@ logger = logging.getLogger(__name__)
 
 def _fmt_pending(pending: list) -> str:
     if not pending:
-        return ("No suggested automations right now.\n"
-                "Try `/suggestions catalog` to see the curated starter set, or "
-                "install a blueprint skill to get one.")
+        return (
+            "No suggested automations right now.\n"
+            "Try `/suggestions catalog` to see the curated starter set, or "
+            "install a blueprint skill to get one."
+        )
     lines = ["Suggested automations — `/suggestions accept N` or `dismiss N`:\n"]
     for i, s in enumerate(pending, 1):
         sched = (s.get("job_spec", {}) or {}).get("schedule", "?")
-        lines.append(f"  {i}. {s.get('title', '(untitled)')}  [{sched}]  ({s.get('source', '?')})")
+        lines.append(
+            f"  {i}. {s.get('title', '(untitled)')}  [{sched}]  ({s.get('source', '?')})"
+        )
         desc = s.get("description", "").strip()
         if desc:
             lines.append(f"     {desc}")
@@ -33,6 +37,7 @@ def _resolve_origin() -> Optional[dict[str, Any]]:
     accepting chat; None lets create_job use the home channel."""
     try:
         from tools.cronjob_job_args import _origin_from_env
+
         return _origin_from_env()
     except Exception:
         pass
@@ -43,16 +48,22 @@ def _accept(store, rest: str, origin, surface: str) -> str:
     if not rest:
         return "Usage: /suggestions accept <number|id>"
     from cron.scheduler import CronSchedulerRegistrationError
+
     try:
         job = store.accept_suggestion(rest, origin=origin)
     except CronSchedulerRegistrationError as e:
         return e.user_message()
     if job is None:
         return f"No pending suggestion matches '{rest}'. Run /suggestions to list them."
-    sched = job.get("schedule_display") or (job.get("job_spec", {}) or {}).get("schedule", "")
+    sched = job.get("schedule_display") or (job.get("job_spec", {}) or {}).get(
+        "schedule", ""
+    )
     name = job.get("name", "automation")
-    manage = ("Manage it with /cron." if surface == "cli"
-              else "Ask me to list, pause, or remove it any time.")
+    manage = (
+        "Manage it with /cron."
+        if surface == "cli"
+        else "Ask me to list, pause, or remove it any time."
+    )
     return f"Scheduled '{name}'" + (f" ({sched})" if sched else "") + f". {manage}"
 
 
@@ -67,13 +78,16 @@ def _dismiss(store, rest: str, origin, surface: str) -> str:
 def _catalog(store, rest: str, origin, surface: str) -> str:
     try:
         from cron.suggestion_catalog import seed_catalog_suggestions
+
         created = seed_catalog_suggestions()
     except Exception as e:
         logger.debug("catalog seed failed: %s", e)
         return "Couldn't load the catalog."
     if not created:
-        return ("No new catalog automations to add (already offered, dismissed, "
-                "or your suggestion list is full). Run /suggestions to see pending.")
+        return (
+            "No new catalog automations to add (already offered, dismissed, "
+            "or your suggestion list is full). Run /suggestions to see pending."
+        )
     added = ", ".join(c.get("title", "?") for c in created)
     return f"Added {len(created)} suggestion(s): {added}.\nRun /suggestions to review."
 
@@ -84,9 +98,15 @@ def _clear(store, rest: str, origin, surface: str) -> str:
 
 _SUBCOMMANDS = {
     "": lambda store, rest, origin, surface: _fmt_pending(store.list_pending()),
-    "accept": _accept, "add": _accept, "schedule": _accept,
-    "dismiss": _dismiss, "no": _dismiss, "reject": _dismiss,
-    "catalog": _catalog, "clear": _clear}
+    "accept": _accept,
+    "add": _accept,
+    "schedule": _accept,
+    "dismiss": _dismiss,
+    "no": _dismiss,
+    "reject": _dismiss,
+    "catalog": _catalog,
+    "clear": _clear,
+}
 
 _USAGE = (
     "Usage:\n"
@@ -94,11 +114,13 @@ _USAGE = (
     "  /suggestions accept N     schedule suggestion N\n"
     "  /suggestions dismiss N    dismiss suggestion N\n"
     "  /suggestions catalog      add curated starter automations\n"
-    "  /suggestions clear        housekeeping")
+    "  /suggestions clear        housekeeping"
+)
 
 
 def handle_suggestions_command(
-    args: str, *, origin: Optional[dict[str, Any]] = None, surface: str = "cli") -> str:
+    args: str, *, origin: Optional[dict[str, Any]] = None, surface: str = "cli"
+) -> str:
     """Dispatch a ``/suggestions`` invocation (``args`` = text after the command word); returns
     text to show the user. ``origin`` defaults to the session environment's chat."""
     if origin is None:

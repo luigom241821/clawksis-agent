@@ -18,12 +18,18 @@ UPGRADE_TIMED_OUT = "That sign-in link has expired. Start again whenever you're 
 UPGRADE_NOT_COMPLETED = "Sign-in didn't finish. Try again whenever you're ready."
 # The account service was busy or unreachable mid sign-in (an ``anon_*`` code from
 # ``anon_auth.classify_mint_exception``): nothing was saved, so the copy reassures before the way forward.
-UPGRADE_SERVICE_BUSY = ("Signing in couldn't finish because the Nous service is busy. "
-                        "Try again in {wait}. Your session is still here in the meantime.")
-UPGRADE_SERVICE_UNREACHABLE = ("The Nous service couldn't be reached to finish signing you in. "
-                               "Check your internet connection and try again. Your session is still here.")
+UPGRADE_SERVICE_BUSY = (
+    "Signing in couldn't finish because the Nous service is busy. "
+    "Try again in {wait}. Your session is still here in the meantime."
+)
+UPGRADE_SERVICE_UNREACHABLE = (
+    "The Nous service couldn't be reached to finish signing you in. "
+    "Check your internet connection and try again. Your session is still here."
+)
 
-UPGRADE_NO_DEFAULT_TERMINAL = "No default model is set yet; run `clawk model` to pick one."
+UPGRADE_NO_DEFAULT_TERMINAL = (
+    "No default model is set yet; run `clawk model` to pick one."
+)
 UPGRADE_NO_DEFAULT_CHAT = "No default model is set yet; run /model to pick one."
 UPGRADE_WAITING = "Waiting for sign-in..."
 UPGRADE_WAITING_UP_TO = "Waiting for sign-in, up to {minutes}."
@@ -31,19 +37,24 @@ UPGRADE_CANCELLED = "\nSign-in cancelled."
 LOGIN_COMMAND = "/login"
 LOGIN_STARTING = "Starting sign-in..."
 LOGIN_DM_ONLY = "Sign in from a direct message with Clawksis."
-LOGIN_BUSY_ELSEWHERE = "Another sign-in is already running on this Clawksis. Try again in a few minutes."
+LOGIN_BUSY_ELSEWHERE = (
+    "Another sign-in is already running on this Clawksis. Try again in a few minutes."
+)
 LOGIN_NOT_ALLOWED = "Only an operator of this Clawksis can sign it in."
 # The card form (a surface with its own sign-in button) and the chat form (names /login).
 FREE_TIER_RATE_LIMIT_CARD = (
     "You've used up the allowance for chatting without signing in. It refreshes in {reset}. "
-    "Sign in for a bigger allowance, it's free.")
+    "Sign in for a bigger allowance, it's free."
+)
 FREE_TIER_RATE_LIMIT_CHAT = FREE_TIER_RATE_LIMIT_CARD + " To sign in: /login."
 
 
 def format_wait_line(expires_in: int) -> str:
     """The honest "up to N minutes" line; N = ceil(expires_in / 60), singular at 1."""
     n = max(1, math.ceil(max(0, int(expires_in)) / 60))
-    return UPGRADE_WAITING_UP_TO.format(minutes=f"{n} minute" if n == 1 else f"{n} minutes")
+    return UPGRADE_WAITING_UP_TO.format(
+        minutes=f"{n} minute" if n == 1 else f"{n} minutes"
+    )
 
 
 # --- Sign-in states -----------------------------------------------------------------------------
@@ -59,8 +70,8 @@ class SignInState:
     """One step of a sign-in. Every state carries its own user copy; renderers never map."""
 
     kind: ClassVar[str] = ""
-    terminal: ClassVar[bool] = True     # False only for Code and Waiting
-    ok: ClassVar[bool] = False          # exit-code 0 / "this ended well"
+    terminal: ClassVar[bool] = True  # False only for Code and Waiting
+    ok: ClassVar[bool] = False  # exit-code 0 / "this ended well"
     precondition: ClassVar[bool] = False  # True only for AlreadySignedIn
 
     @property
@@ -120,9 +131,14 @@ class Completed(SignInState):
     ok: ClassVar[bool] = True
 
     def _lines(self, no_default: str) -> str:
-        lines = [f"Signed in as {self.email}." if self.email else "Signed in.", *self.handoff]
+        lines = [
+            f"Signed in as {self.email}." if self.email else "Signed in.",
+            *self.handoff,
+        ]
         if self.model_changed:
-            lines.append(f"Default model is now {self.model}." if self.model else no_default)
+            lines.append(
+                f"Default model is now {self.model}." if self.model else no_default
+            )
         return "\n".join(lines)
 
     @property
@@ -171,15 +187,22 @@ class Failed(SignInState):
     @property
     def retryable(self) -> bool:
         from clawk_cli import anon_auth as _core
-        return bool(self.reason.startswith("anon_") and self.reason not in _core.ANON_TERMINAL_CODES)
+
+        return bool(
+            self.reason.startswith("anon_")
+            and self.reason not in _core.ANON_TERMINAL_CODES
+        )
 
     @property
     def copy(self) -> str:
         from clawk_cli import anon_auth as _core
+
         if self.reason in _core.ANON_UNREACHABLE_CODES:
             return UPGRADE_SERVICE_UNREACHABLE
         if self.reason in (_core.ANON_RATE_LIMITED, _core.ANON_GATE_PAUSED):
-            return UPGRADE_SERVICE_BUSY.format(wait=_core.friendly_wait(self.retry_after or 60))
+            return UPGRADE_SERVICE_BUSY.format(
+                wait=_core.friendly_wait(self.retry_after or 60)
+            )
         if self.reason in _core.ANON_FAILURE_COPY:
             return _core.anon_failure_copy(self.reason, retry_after=self.retry_after)
         return UPGRADE_NOT_COMPLETED
@@ -188,7 +211,9 @@ class Failed(SignInState):
     def copy_terminal(self) -> str:
         if self.reason and self.copy != UPGRADE_NOT_COMPLETED:
             return self.copy
-        return f"Sign-in failed: {self.detail}" if self.detail else UPGRADE_NOT_COMPLETED
+        return (
+            f"Sign-in failed: {self.detail}" if self.detail else UPGRADE_NOT_COMPLETED
+        )
 
 
 @dataclass(frozen=True)
@@ -207,45 +232,61 @@ def _failed_from_exception(exc: BaseException) -> Failed:
     ``AuthError`` carries, or the wire's shape for a transport error. The raw detail never reaches a
     chat; ``copy_terminal`` may show it when nothing better is known."""
     from clawk_cli import anon_auth as _core
+
     err = _core.classify_mint_exception(exc)
     reason = str(err.code or "")
     if reason == _core.ANON_SERVER_ERROR and not isinstance(exc, _core.AuthError):
         # An unnamed local failure (a bad CA bundle, a lock timeout): keep the generic copy and its
         # terminal detail rather than blaming the service.
         return Failed(reason="", detail=str(exc))
-    return Failed(reason=reason, detail=str(exc), retry_after=float(err.retry_after or 0.0))
+    return Failed(
+        reason=reason, detail=str(exc), retry_after=float(err.retry_after or 0.0)
+    )
 
 
-def _default_persist_guard(is_cancelled: Callable[[], bool]) -> Callable[[], ContextManager[bool]]:
+def _default_persist_guard(
+    is_cancelled: Callable[[], bool],
+) -> Callable[[], ContextManager[bool]]:
     """The persist guard used when a surface brings none: proceed unless the attempt was stopped."""
+
     @contextlib.contextmanager
     def _guard():
         yield not is_cancelled()
+
     return _guard
 
 
 def _account_email(account_state: dict[str, Any], fallback: Optional[str]) -> str:
     """The signed-in account's email, read from its own access token."""
     from clawk_cli.auth_constants import _decode_jwt_claims
+
     email = _decode_jwt_claims(account_state.get("access_token")).get("email")
     return str(email or fallback or "").strip()
 
 
 def _handoff_lines(results: list[dict[str, Any]]) -> tuple[str, ...]:
     from clawk_cli.guest_handoff import result_lines
+
     return tuple(line for view in results for line in result_lines(view))
 
 
-def _handoff_status(results: list[dict[str, Any]], replaced: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+def _handoff_status(
+    results: list[dict[str, Any]], replaced: Optional[dict[str, Any]]
+) -> Optional[dict[str, Any]]:
     """The handoff a completed sign-in reports (``guest_handoff.wire_status`` form): the latest record its
     own run attempted, else the replaced free tier's saved record (another process held the claim, or
     the run's budget ran out first), else None when it replaced no free tier. Read under the scope."""
     from clawk_cli import anon_auth as _core
     from clawk_cli.guest_handoff import record_status, wire_status
+
     if results:
         return wire_status(results[-1])
     anon_token = replaced.get("anon_token") if _core.is_guest_state(replaced) else None
-    status = record_status(anon_token) if isinstance(anon_token, str) and anon_token else None
+    status = (
+        record_status(anon_token)
+        if isinstance(anon_token, str) and anon_token
+        else None
+    )
     return wire_status(status) if status else None
 
 
@@ -256,7 +297,9 @@ def run_sign_in(
     replace_account: bool = False,
     persist_guard: Optional[Callable[[], ContextManager[bool]]] = None,
     scope: Optional[Callable[[], ContextManager[Any]]] = None,
-    client_factory: Optional[Callable[[float, Any], ContextManager[httpx.Client]]] = None,
+    client_factory: Optional[
+        Callable[[float, Any], ContextManager[httpx.Client]]
+    ] = None,
 ) -> Iterator[SignInState]:
     """Sign in with a Nous account: the plain device-code login. Yields :class:`SignInState`s.
 
@@ -314,19 +357,33 @@ def run_sign_in(
             expires_in = int(device["expires_in"])
             interval = int(device.get("interval") or 5)
             deadline = time.monotonic() + max(1, expires_in)
-            yield Code(link=str(device["verification_uri_complete"]), code=str(device["user_code"]),
-                       expires_in=expires_in, interval=interval)
+            yield Code(
+                link=str(device["verification_uri_complete"]),
+                code=str(device["user_code"]),
+                expires_in=expires_in,
+                interval=interval,
+            )
             if is_cancelled():
                 yield Cancelled()
                 return
             yield Waiting()
             token_data = _core._poll_for_token(
-                client=client, portal_base_url=portal, client_id=client_id,
-                device_code=str(device["device_code"]), expires_in=max(1, int(deadline - time.monotonic())),
-                poll_interval=interval, cancelled=is_cancelled)
+                client=client,
+                portal_base_url=portal,
+                client_id=client_id,
+                device_code=str(device["device_code"]),
+                expires_in=max(1, int(deadline - time.monotonic())),
+                poll_interval=interval,
+                cancelled=is_cancelled,
+            )
         account_state = _core._account_state_from_token(
-            token_data, portal_base_url=portal, client_id=client_id, scope=scope_str,
-            verify=verify, timeout_seconds=timeout_seconds)
+            token_data,
+            portal_base_url=portal,
+            client_id=client_id,
+            scope=scope_str,
+            verify=verify,
+            timeout_seconds=timeout_seconds,
+        )
     except DeviceFlowCancelled:
         yield Cancelled()
         return
@@ -338,7 +395,11 @@ def run_sign_in(
         return
     except Exception as exc:
         # The token endpoint's own ``expired_token`` answer is the same timeout as running out the clock.
-        yield TimedOut(detail=str(exc)) if is_device_code_expired(exc) else _failed_from_exception(exc)
+        yield (
+            TimedOut(detail=str(exc))
+            if is_device_code_expired(exc)
+            else _failed_from_exception(exc)
+        )
         return
 
     guard = persist_guard or _default_persist_guard(is_cancelled)
@@ -358,7 +419,7 @@ def run_sign_in(
         # must not escape next(gen).
         yield Failed(reason="", detail=str(exc))
         return
-    if not may_persist:                  # yielded outside the scope, never across it
+    if not may_persist:  # yielded outside the scope, never across it
         yield Cancelled()
         return
 
@@ -367,4 +428,5 @@ def run_sign_in(
         model=str(settled.get("model") or ""),
         model_changed=bool(settled.get("changed")),
         handoff=_handoff_lines(handoff.results),
-        handoff_status=handoff_status)
+        handoff_status=handoff_status,
+    )

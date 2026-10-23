@@ -12,8 +12,13 @@ from typing import Any, Optional
 
 
 def held_archive_watermark(
-    session_db: Any, session_id: str, watermark: Optional[int], messages: list, verbatim_tail: Optional[list] = None,
-    *, stale_raises: bool = False,
+    session_db: Any,
+    session_id: str,
+    watermark: Optional[int],
+    messages: list,
+    verbatim_tail: Optional[list] = None,
+    *,
+    stale_raises: bool = False,
 ) -> Optional[int]:
     """The in-place archive watermark, capped at the newest durable row the compressor was handed.
 
@@ -69,12 +74,18 @@ def held_archive_watermark(
         # suppress the version check for the durable prefix this caller does hold exactly.
         rewritten_of = getattr(session_db, "rewritten_held_row_ids", None)
         if callable(rewritten_of):
-            rewritten = rewritten_of(session_id, [
-                m for m in messages
-                if isinstance(m, dict) and _exact_id(m, False) is not None])
+            rewritten = rewritten_of(
+                session_id,
+                [
+                    m
+                    for m in messages
+                    if isinstance(m, dict) and _exact_id(m, False) is not None
+                ],
+            )
             if rewritten:
                 raise StaleHeldHistory(
-                    f"held row {min(rewritten)} of session {session_id} was rewritten in place")
+                    f"held row {min(rewritten)} of session {session_id} was rewritten in place"
+                )
     if not ids or ids[-1] is None:
         return watermark
     newest_held = max(held)
@@ -84,6 +95,8 @@ def held_archive_watermark(
         return watermark
     if session_db.get_message_role(session_id, newest_held) is None:
         if stale_raises:
-            raise StaleHeldHistory(f"held row {newest_held} of session {session_id} is no longer active")
+            raise StaleHeldHistory(
+                f"held row {newest_held} of session {session_id} is no longer active"
+            )
         return watermark
     return min(newest_held, watermark)

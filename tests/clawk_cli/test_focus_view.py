@@ -40,10 +40,6 @@ class TestToggleStateMachine:
     def test_bare_toggles_from_off_to_on(self):
         assert resolve_focus_arg("", False) == ("set", True)
 
-
-
-
-
     @pytest.mark.parametrize("word", ["status", "show", "?", "STATUS"])
     def test_status_words_never_mutate(self, word):
         action, target = resolve_focus_arg(word, True)
@@ -55,20 +51,17 @@ class TestToggleStateMachine:
         assert resolve_focus_arg(word, False) == ("usage", None)
 
 
-
 # =========================================================================
 # Suppression respects the existing /verbose modes
 # =========================================================================
 
 
 class TestComposesWithVerboseModes:
-
     def test_new_mode_skips_consecutive_repeats_like_the_renderer(self):
         assert would_display_tool_line("new", "terminal", "terminal") is False
         assert would_display_tool_line("new", "read_file", "terminal") is True
         # "all" always counts, even repeats.
         assert would_display_tool_line("all", "terminal", "terminal") is True
-
 
 
 # =========================================================================
@@ -80,10 +73,6 @@ class TestHiddenCountFormatter:
     def test_zero_and_negative_produce_no_line(self):
         assert format_hidden_line(0) is None
         assert format_hidden_line(-3) is None
-
-
-
-
 
 
 class _FocusHost(CLICommandsMixin):
@@ -105,9 +94,6 @@ class TestHiddenCounterAccumulation:
             host._note_focus_hidden_line(name)
         assert host._focus_hidden_lines == 3
 
-
-
-
     def test_recovery_line_is_emitted_then_counter_resets(self):
         host = _FocusHost(enabled=True, saved="all")
         for name in ("terminal", "read_file"):
@@ -123,8 +109,6 @@ class TestHiddenCounterAccumulation:
         assert host._focus_last_counted_tool is None
 
 
-
-
 # =========================================================================
 # CLI command handler — stash / restore / persistence
 # =========================================================================
@@ -133,18 +117,16 @@ class TestHiddenCounterAccumulation:
 class TestFocusCommandHandler:
     def test_on_stashes_the_verbose_mode_and_snaps_to_off(self):
         host = _FocusHost(enabled=False, saved=None, tool_progress="verbose")
-        with patch("cli.save_config_value", return_value=True) as saver, \
-             patch("cli._cprint"):
+        with (
+            patch("cli.save_config_value", return_value=True) as saver,
+            patch("cli._cprint"),
+        ):
             host._handle_focus_command("/focus on")
 
         assert host._focus_view_enabled is True
         assert host.tool_progress_mode == "off"
         assert host._focus_saved_tool_progress == "verbose"
         saver.assert_called_once_with(FOCUS_CONFIG_KEY, True)
-
-
-
-
 
     def test_idempotent_on_does_not_reclobber_the_stash(self):
         host = _FocusHost(enabled=True, saved="verbose", tool_progress="off")
@@ -164,8 +146,6 @@ class TestFocusCommandHandler:
         assert host.agent.tool_progress_mode == "off"
 
 
-
-
 # =========================================================================
 # Status-bar segment composition
 # =========================================================================
@@ -175,7 +155,6 @@ class TestStatusBarSegment:
     def test_segment_present_only_when_enabled(self):
         assert focus_statusbar_segment(True) == FOCUS_STATUSBAR_LABEL
         assert focus_statusbar_segment(False) == ""
-
 
     @pytest.mark.parametrize("width", [40, 60, 120])
     def test_text_renderer_includes_the_badge_at_every_width_tier(self, width):
@@ -203,13 +182,15 @@ class TestStatusBarSegment:
             "idle_since": "",
         }
 
-        with patch.object(ClawksisCLI, "_get_status_bar_snapshot", return_value=snapshot), \
-             patch.object(ClawksisCLI, "_is_session_yolo_active", return_value=False):
+        with (
+            patch.object(
+                ClawksisCLI, "_get_status_bar_snapshot", return_value=snapshot
+            ),
+            patch.object(ClawksisCLI, "_is_session_yolo_active", return_value=False),
+        ):
             text = ClawksisCLI._build_status_bar_text(host, width=width)
 
         assert "focus" in text
-
-
 
 
 # =========================================================================
@@ -320,7 +301,6 @@ class TestModelFacingMessagesUnchanged:
         assert [m["role"] for m in focus_on].count("tool") == 3
         assert json.loads(focus_on[-1]["content"]) == {"ok": "gamma"}
 
-
     def test_toggling_focus_does_not_touch_conversation_history(self):
         host = _FocusHost(enabled=False, saved=None, tool_progress="all")
         history = [
@@ -345,7 +325,6 @@ class TestModelFacingMessagesUnchanged:
 
 
 class TestCommandRegistration:
-
     def test_verbose_cycle_releases_focus_view(self):
         # /verbose is the explicit tool-progress control; cycling it must clear
         # the focus badge so the indicator can never contradict the display.

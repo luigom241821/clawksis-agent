@@ -25,8 +25,12 @@ def sanitize_task_id_for_path(task_id: str) -> str:
         return "default"
 
     cleaned = _SANDBOX_DIR_UNSAFE_RE.sub("_", value)
-    if (cleaned == value and len(value) <= _SANDBOX_DIR_MAX_LEN
-            and value not in {".", ".."} and not value.endswith((".", " "))):
+    if (
+        cleaned == value
+        and len(value) <= _SANDBOX_DIR_MAX_LEN
+        and value not in {".", ".."}
+        and not value.endswith((".", " "))
+    ):
         return value
 
     digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:_SANDBOX_DIR_HASH_LEN]

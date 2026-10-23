@@ -78,7 +78,9 @@ class _ReplacementDeliveryAdapter(BasePlatformAdapter):
 
 
 @pytest.mark.asyncio
-async def test_runner_queues_retryable_runtime_fatal_for_reconnection(monkeypatch, tmp_path):
+async def test_runner_queues_retryable_runtime_fatal_for_reconnection(
+    monkeypatch, tmp_path
+):
     """Retryable runtime fatal errors queue the platform for reconnection
     AND keep the gateway alive — the background reconnect watcher recovers
     the platform when the underlying issue clears.  (Previously this
@@ -86,9 +88,7 @@ async def test_runner_queues_retryable_runtime_fatal_for_reconnection(monkeypatc
     transient failures into infinite restart loops.)
     """
     config = GatewayConfig(
-        platforms={
-            Platform.WHATSAPP: PlatformConfig(enabled=True, token="token")
-        },
+        platforms={Platform.WHATSAPP: PlatformConfig(enabled=True, token="token")},
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
@@ -241,8 +241,6 @@ async def test_fatal_handler_outer_timeout_still_queues_platform(monkeypatch, tm
         await asyncio.wait({operation}, timeout=0.2)
 
 
-
-
 @pytest.mark.asyncio
 async def test_stay_alive_policy_keeps_gateway_up_on_stranded_retryable_fatal(tmp_path):
     """on_all_adapters_down='stay_alive' (the desktop launcher's mode): a retryable fatal
@@ -250,10 +248,14 @@ async def test_stay_alive_policy_keeps_gateway_up_on_stranded_retryable_fatal(tm
     will revive the process, so exiting only severs the UI's websockets and drops in-flight
     assistant messages (#118080). The platform has no config entry here, so the reconnection
     queue cannot take it and the stranded check is reached with empty _failed_platforms."""
-    config = GatewayConfig(sessions_dir=tmp_path / "sessions", on_all_adapters_down="stay_alive")
+    config = GatewayConfig(
+        sessions_dir=tmp_path / "sessions", on_all_adapters_down="stay_alive"
+    )
     runner = GatewayRunner(config)
     adapter = _RuntimeRetryableAdapter()
-    adapter._set_fatal_error("email_imap_fetch_failed", "IMAP read timeout", retryable=True)
+    adapter._set_fatal_error(
+        "email_imap_fetch_failed", "IMAP read timeout", retryable=True
+    )
     runner.adapters = {Platform.WHATSAPP: adapter}
     runner.delivery_router.adapters = runner.adapters
     runner.stop = AsyncMock()
@@ -265,14 +267,18 @@ async def test_stay_alive_policy_keeps_gateway_up_on_stranded_retryable_fatal(tm
 
 
 @pytest.mark.asyncio
-async def test_default_exit_policy_keeps_service_restart_verdict_on_stranded_retryable_fatal(tmp_path):
+async def test_default_exit_policy_keeps_service_restart_verdict_on_stranded_retryable_fatal(
+    tmp_path,
+):
     """Without the stay_alive policy (service-managed deployments), the stranded retryable
     fatal still exits with the failure verdict so the service manager restarts the gateway
     — the pre-#118080 contract is unchanged."""
     config = GatewayConfig(sessions_dir=tmp_path / "sessions")
     runner = GatewayRunner(config)
     adapter = _RuntimeRetryableAdapter()
-    adapter._set_fatal_error("email_imap_fetch_failed", "IMAP read timeout", retryable=True)
+    adapter._set_fatal_error(
+        "email_imap_fetch_failed", "IMAP read timeout", retryable=True
+    )
     runner.adapters = {Platform.WHATSAPP: adapter}
     runner.delivery_router.adapters = runner.adapters
     runner.stop = AsyncMock()

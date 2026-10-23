@@ -1,4 +1,5 @@
 """Tests for Mattermost platform adapter."""
+
 import json
 import os
 import time
@@ -15,15 +16,17 @@ from gateway.run import (
 
 class TestMattermostProgressThreadRouting:
     def test_top_level_mattermost_progress_uses_event_message_id(self):
-        assert _resolve_progress_thread_id(
-            Platform.MATTERMOST,
-            source_thread_id=None,
-            event_message_id="top_post_123",
-        ) == "top_post_123"
+        assert (
+            _resolve_progress_thread_id(
+                Platform.MATTERMOST,
+                source_thread_id=None,
+                event_message_id="top_post_123",
+            )
+            == "top_post_123"
+        )
 
 
 class TestMattermostDisplayHygiene:
-
     def test_mattermost_platform_opt_in_can_enable_interim_assistant_messages(self):
         """Mattermost can still opt into commentary explicitly per platform."""
         user_config = {
@@ -35,37 +38,41 @@ class TestMattermostDisplayHygiene:
             }
         }
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "mattermost",
-            "interim_assistant_messages",
-            default=True,
-            platform=Platform.MATTERMOST,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
-
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "mattermost",
+                "interim_assistant_messages",
+                default=True,
+                platform=Platform.MATTERMOST,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
     def test_global_thinking_progress_still_applies_to_other_platforms(self):
         """The Mattermost guard must not silently neuter Telegram/other chats."""
         user_config = {"display": {"thinking_progress": True}}
 
-        assert _resolve_gateway_display_bool(
-            user_config,
-            "telegram",
-            "thinking_progress",
-            default=False,
-            platform=Platform.TELEGRAM,
-            require_platform_override_for={Platform.MATTERMOST},
-        ) is True
+        assert (
+            _resolve_gateway_display_bool(
+                user_config,
+                "telegram",
+                "thinking_progress",
+                default=False,
+                platform=Platform.TELEGRAM,
+                require_platform_override_for={Platform.MATTERMOST},
+            )
+            is True
+        )
 
 
 # ---------------------------------------------------------------------------
 # Platform & Config
 # ---------------------------------------------------------------------------
 
+
 class TestMattermostConfigLoading:
-
-
     def test_mattermost_home_channel(self, monkeypatch):
         monkeypatch.setenv("MATTERMOST_TOKEN", "mm-tok-abc123")
         monkeypatch.setenv("MATTERMOST_URL", "https://mm.example.com")
@@ -73,6 +80,7 @@ class TestMattermostConfigLoading:
         monkeypatch.setenv("MATTERMOST_HOME_CHANNEL_NAME", "General")
 
         from gateway.config import GatewayConfig, _apply_env_overrides
+
         config = GatewayConfig()
         _apply_env_overrides(config)
 
@@ -86,9 +94,11 @@ class TestMattermostConfigLoading:
 # Adapter format / truncate
 # ---------------------------------------------------------------------------
 
+
 def _make_adapter():
     """Create a MattermostAdapter with mocked config."""
     from plugins.platforms.mattermost.adapter import MattermostAdapter
+
     config = PlatformConfig(
         enabled=True,
         token="test-token",
@@ -107,7 +117,6 @@ class TestMattermostFormatMessage:
         result = self.adapter.format_message("![cat](https://img.example.com/cat.png)")
         assert result == "https://img.example.com/cat.png"
 
-
     def test_regular_markdown_preserved(self):
         """Regular markdown (bold, italic, code) should be kept as-is."""
         content = "**bold** and *italic* and `code`"
@@ -117,7 +126,6 @@ class TestMattermostFormatMessage:
 class TestMattermostTruncateMessage:
     def setup_method(self):
         self.adapter = _make_adapter()
-
 
     def test_long_message_splits(self):
         msg = "a " * 2500  # 5000 chars
@@ -130,6 +138,7 @@ class TestMattermostTruncateMessage:
 # ---------------------------------------------------------------------------
 # Send
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostSend:
     def setup_method(self):
@@ -160,7 +169,6 @@ class TestMattermostSend:
         payload = call_args[1]["json"]
         assert payload["channel_id"] == "channel_1"
         assert payload["message"] == "Hello!"
-
 
     @pytest.mark.asyncio
     async def test_send_with_thread_reply(self):
@@ -194,14 +202,17 @@ class TestMattermostSend:
         payload = self.adapter._session.post.call_args[1]["json"]
         assert payload["root_id"] == "root_post"
 
-
     @pytest.mark.asyncio
     async def test_progress_send_with_invalid_thread_root_never_falls_back_flat(self):
         """Tool/status/progress bubbles must stay quiet when the thread is broken."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._last_post_status = 400
-        self.adapter._last_post_error = "api.context.invalid_param.app_error: invalid root_id"
+        self.adapter._last_post_error = (
+            "api.context.invalid_param.app_error: invalid root_id"
+        )
         self.adapter._api_post = AsyncMock(return_value={})
 
         result = await self.adapter.send(
@@ -216,12 +227,18 @@ class TestMattermostSend:
         assert payload["root_id"] == "bad_root"
 
     @pytest.mark.asyncio
-    async def test_notify_send_with_invalid_thread_root_falls_back_flat_with_warning(self):
+    async def test_notify_send_with_invalid_thread_root_falls_back_flat_with_warning(
+        self,
+    ):
         """Notify-worthy replies may fall back flat so the answer is not lost."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._last_post_status = 400
-        self.adapter._last_post_error = "api.context.invalid_param.app_error: invalid root_id"
+        self.adapter._last_post_error = (
+            "api.context.invalid_param.app_error: invalid root_id"
+        )
         self.adapter._api_post = AsyncMock(side_effect=[{}, {"id": "flat_final"}])
 
         result = await self.adapter.send(
@@ -242,12 +259,15 @@ class TestMattermostSend:
         assert "Mattermost thread delivery failed" in flat_payload["message"]
         assert "Final answer body" in flat_payload["message"]
 
-
     @pytest.mark.asyncio
-    async def test_progress_send_with_broken_thread_and_no_recorded_error_stays_quiet(self):
+    async def test_progress_send_with_broken_thread_and_no_recorded_error_stays_quiet(
+        self,
+    ):
         """Same rule when no post error was recorded: still no flat fallback."""
         self.adapter._reply_mode = "thread"
-        self.adapter._api_get = AsyncMock(return_value={"id": "bad_root", "root_id": ""})
+        self.adapter._api_get = AsyncMock(
+            return_value={"id": "bad_root", "root_id": ""}
+        )
         self.adapter._api_post = AsyncMock(return_value={})
 
         result = await self.adapter.send(
@@ -265,6 +285,7 @@ class TestMattermostSend:
 # ---------------------------------------------------------------------------
 # WebSocket event parsing
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostWebSocketParsing:
     def setup_method(self):
@@ -299,7 +320,6 @@ class TestMattermostWebSocketParsing:
         assert msg_event.text == "Hello from Matrix!"
         assert msg_event.message_id == "post_abc"
 
-
     @pytest.mark.asyncio
     async def test_ignore_system_posts(self):
         """Posts with a 'type' field (system messages) should be ignored."""
@@ -320,7 +340,6 @@ class TestMattermostWebSocketParsing:
 
         await self.adapter._handle_ws_event(event)
         assert not self.adapter.handle_message.called
-
 
     @pytest.mark.asyncio
     async def test_leading_space_slash_command_is_command(self):
@@ -351,6 +370,7 @@ class TestMattermostWebSocketParsing:
 # ---------------------------------------------------------------------------
 # Mention behavior (require_mention + free_response_channels)
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostMentionBehavior:
     def setup_method(self):
@@ -384,19 +404,23 @@ class TestMattermostMentionBehavior:
             await self.adapter._handle_ws_event(self._make_event("hello"))
             assert not self.adapter.handle_message.called
 
-
     @pytest.mark.asyncio
     async def test_free_response_channel_responds_without_mention(self):
         """Messages in free-response channels don't need @mention."""
-        with patch.dict(os.environ, {"MATTERMOST_FREE_RESPONSE_CHANNELS": "chan_456,chan_789"}):
+        with patch.dict(
+            os.environ, {"MATTERMOST_FREE_RESPONSE_CHANNELS": "chan_456,chan_789"}
+        ):
             os.environ.pop("MATTERMOST_REQUIRE_MENTION", None)
-            await self.adapter._handle_ws_event(self._make_event("hello", channel_id="chan_456"))
+            await self.adapter._handle_ws_event(
+                self._make_event("hello", channel_id="chan_456")
+            )
             assert self.adapter.handle_message.called
 
 
 # ---------------------------------------------------------------------------
 # File upload (send_image)
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostFileUpload:
     def setup_method(self):
@@ -418,9 +442,9 @@ class TestMattermostFileUpload:
         # Mock the upload (POST to /files)
         mock_upload_resp = AsyncMock()
         mock_upload_resp.status = 200
-        mock_upload_resp.json = AsyncMock(return_value={
-            "file_infos": [{"id": "file_abc123"}]
-        })
+        mock_upload_resp.json = AsyncMock(
+            return_value={"file_infos": [{"id": "file_abc123"}]}
+        )
         mock_upload_resp.text = AsyncMock(return_value="")
         mock_upload_resp.__aenter__ = AsyncMock(return_value=mock_upload_resp)
         mock_upload_resp.__aexit__ = AsyncMock(return_value=False)
@@ -440,7 +464,9 @@ class TestMattermostFileUpload:
 
         def post_side_effect(*args, **kwargs):
             nonlocal post_call_count
-            resp = original_post_returns[min(post_call_count, len(original_post_returns) - 1)]
+            resp = original_post_returns[
+                min(post_call_count, len(original_post_returns) - 1)
+            ]
             post_call_count += 1
             return resp
 
@@ -458,13 +484,13 @@ class TestMattermostFileUpload:
 # Dedup cache
 # ---------------------------------------------------------------------------
 
+
 class TestMattermostDedup:
     def setup_method(self):
         self.adapter = _make_adapter()
         self.adapter._bot_user_id = "bot_user_id"
         # Mock handle_message to capture calls without processing
         self.adapter.handle_message = AsyncMock()
-
 
     def test_prune_seen_clears_expired(self):
         """Dedup cache should remove entries older than TTL on overflow."""
@@ -489,13 +515,14 @@ class TestMattermostDedup:
 # Requirements check
 # ---------------------------------------------------------------------------
 
+
 class TestMattermostRequirements:
     def test_check_requirements_with_token_and_url(self, monkeypatch):
         monkeypatch.setenv("MATTERMOST_TOKEN", "test-token")
         monkeypatch.setenv("MATTERMOST_URL", "https://mm.example.com")
         from plugins.platforms.mattermost.adapter import check_mattermost_requirements
-        assert check_mattermost_requirements() is True
 
+        assert check_mattermost_requirements() is True
 
     def test_validate_config_accepts_platform_values(self, monkeypatch):
         monkeypatch.delenv("MATTERMOST_TOKEN", raising=False)
@@ -513,6 +540,7 @@ class TestMattermostRequirements:
 # ---------------------------------------------------------------------------
 # Media type propagation (MIME types, not bare strings)
 # ---------------------------------------------------------------------------
+
 
 class TestMattermostMediaTypes:
     """Verify that media_types contains actual MIME types (e.g. 'image/png')
@@ -555,7 +583,10 @@ class TestMattermostMediaTypes:
         self.adapter._session = MagicMock()
         self.adapter._session.get = MagicMock(return_value=mock_resp)
 
-        with patch("gateway.platforms.base.cache_image_from_bytes", return_value="/tmp/photo.png"):
+        with patch(
+            "gateway.platforms.base.cache_image_from_bytes",
+            return_value="/tmp/photo.png",
+        ):
             await self.adapter._handle_ws_event(self._make_event(["file1"]))
 
         msg = self.adapter.handle_message.call_args[0][0]
@@ -611,6 +642,7 @@ async def test_mattermost_top_level_channel_post_is_thread_root():
 # mention-gating/channel-allowlist decisions driven by the default
 # profile's settings. Mirrors the LINE/DingTalk/IRC fix for #98738.
 
+
 @pytest.fixture
 def multiplex_scope():
     """Install multiplex + a secondary-profile secret scope; restore after."""
@@ -643,11 +675,8 @@ def default_profile_env(monkeypatch):
 
 
 class TestMultiplexProfileScope:
-
     @pytest.mark.asyncio
-    async def test_ws_event_gating_uses_scoped_settings_not_default(
-        self, monkeypatch
-    ):
+    async def test_ws_event_gating_uses_scoped_settings_not_default(self, monkeypatch):
         """A secondary profile's own require_mention/free_response_channels/
         allowed_channels (installed via the scope) must gate its messages --
         not the default profile's bridged settings."""
@@ -702,10 +731,11 @@ class TestMultiplexProfileScope:
         multiplex_scope()
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MATTERMOST_REQUIRE_MENTION", None)
-            seeded = _apply_yaml_config({}, {"require_mention": False, "allowed_channels": ["c1"]})
+            seeded = _apply_yaml_config(
+                {}, {"require_mention": False, "allowed_channels": ["c1"]}
+            )
             assert seeded == {"require_mention": False, "allowed_channels": ["c1"]}
             # Under a secondary profile's scope the env bridge must be
             # skipped -- writing here would leak into every other profile's
             # os.environ.
             assert "MATTERMOST_REQUIRE_MENTION" not in os.environ
-

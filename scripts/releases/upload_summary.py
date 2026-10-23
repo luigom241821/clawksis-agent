@@ -4,6 +4,7 @@ The record is a log. A missing summary file or a public-URL failure must not
 fail an upload that already landed. The process exit writes the table, so a
 step that uploads and then exits still reports its objects.
 """
+
 from __future__ import annotations
 
 import atexit

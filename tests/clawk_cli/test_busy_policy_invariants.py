@@ -13,6 +13,7 @@ from clawk_cli.commands import (
     is_interrupt_then_dispatch,
 )
 
+
 def test_bypass_set_is_derived_from_registry():
     expected = frozenset(
         cmd.name for cmd in COMMAND_REGISTRY if cmd.busy_policy != "reject"
@@ -30,5 +31,3 @@ def test_interrupt_then_dispatch_class():
     assert not is_interrupt_then_dispatch("status")
     assert not is_interrupt_then_dispatch(None)
     assert not is_interrupt_then_dispatch("not-a-command")
-
-

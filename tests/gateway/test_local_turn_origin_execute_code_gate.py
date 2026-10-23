@@ -6,6 +6,7 @@ session keeps the whole-script gate: a script's ``shutil``/``subprocess`` calls 
 ``terminal()`` prompt. The turns run through the real FIFO drain (``execute_admission``); the handler
 checks the gate the way the turn's agent thread does.
 """
+
 import asyncio
 
 import pytest
@@ -14,7 +15,9 @@ from tests.waiting import async_wait_until
 
 
 @pytest.mark.asyncio
-async def test_only_the_viewers_own_turn_skips_the_whole_script_gate(tmp_path, monkeypatch):
+async def test_only_the_viewers_own_turn_skips_the_whole_script_gate(
+    tmp_path, monkeypatch
+):
     from gateway.config import GatewayConfig
     from gateway.run import GatewayRunner
     from gateway.session_authority import initialize_session_authority
@@ -36,7 +39,9 @@ async def test_only_the_viewers_own_turn_skips_the_whole_script_gate(tmp_path, m
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / "sessions"))
     db = SessionDB(tmp_path / "state.db")
     runner.session_store._db = runner._session_db = db
-    authority = await initialize_session_authority(runner, profile_id="default", instance_id="owner", db=db)
+    authority = await initialize_session_authority(
+        runner, profile_id="default", instance_id="owner", db=db
+    )
     gates = {}
 
     def gate_in_turn_thread(live):
@@ -50,12 +55,16 @@ async def test_only_the_viewers_own_turn_skips_the_whole_script_gate(tmp_path, m
                 entry.result = "deny"
                 entry.event.set()
 
-        vars_tokens = set_session_vars(platform="local", session_key=live.route, session_id=live.route)
+        vars_tokens = set_session_vars(
+            platform="local", session_key=live.route, session_id=live.route
+        )
         key_token = approval_context.set_current_session_key(live.route)
         policy_token = _ACTIVE_POLICY.set(policy_for_source(runner, live.source))
         A.register_gateway_notify(live.route, nobody_approves)
         try:
-            return A.check_execute_code_guard("import shutil\nshutil.rmtree('victim')", "local")["approved"], prompts
+            return A.check_execute_code_guard(
+                "import shutil\nshutil.rmtree('victim')", "local"
+            )["approved"], prompts
         finally:
             A.unregister_gateway_notify(live.route)
             _ACTIVE_POLICY.reset(policy_token)
@@ -66,48 +75,107 @@ async def test_only_the_viewers_own_turn_skips_the_whole_script_gate(tmp_path, m
                 A._pending.pop(live.route, None)
 
     async def answer(event):
-        gates[event.text] = await asyncio.to_thread(gate_in_turn_thread, authority.sessions[ref.session_id])
+        gates[event.text] = await asyncio.to_thread(
+            gate_in_turn_thread, authority.sessions[ref.session_id]
+        )
         return "ok"
 
     monkeypatch.setattr(runner, "_handle_message", answer)
     try:
-        viewer = Principal("test-owner", "default", frozenset(
-            {"session:create", "session:submit", "session:read", "session:approve"}), "viewer")
-        ref = create_local_session(authority, viewer, dict(request_id="cli", source="cli", model="fixture",
-                                                          toolsets=[]))
+        viewer = Principal(
+            "test-owner",
+            "default",
+            frozenset(
+                {"session:create", "session:submit", "session:read", "session:approve"}
+            ),
+            "viewer",
+        )
+        ref = create_local_session(
+            authority,
+            viewer,
+            dict(request_id="cli", source="cli", model="fixture", toolsets=[]),
+        )
         live = authority.sessions[ref.session_id]
         subscription = (await authority.attach(viewer, ref)).subscription_id
         entry = runner.session_store.lookup_by_session_key(live.route)
         adapter = runner._adapter_for_source(live.source)
 
-        await authority.submit(viewer, Submission("typed", ref, {"text": "typed by the viewer"}, "queue"))
-        await async_wait_until(lambda: "typed by the viewer" in gates, timeout=10, what="the viewer's turn")
-        assert await runner._admit_plugin_injection(
-            adapter, live.source, session_key=live.route, session_id=entry.session_id,
-            content="plugin injection", plugin_id="desk") is True
-        await async_wait_until(lambda: "plugin injection" in gates, timeout=10, what="the injected turn")
-        assert await admit_route_wake(runner, adapter, live.source, "loop tick", "loop-tick") is True
-        await async_wait_until(lambda: "loop tick" in gates, timeout=10, what="the /loop tick")
+        await authority.submit(
+            viewer, Submission("typed", ref, {"text": "typed by the viewer"}, "queue")
+        )
+        await async_wait_until(
+            lambda: "typed by the viewer" in gates, timeout=10, what="the viewer's turn"
+        )
+        assert (
+            await runner._admit_plugin_injection(
+                adapter,
+                live.source,
+                session_key=live.route,
+                session_id=entry.session_id,
+                content="plugin injection",
+                plugin_id="desk",
+            )
+            is True
+        )
+        await async_wait_until(
+            lambda: "plugin injection" in gates, timeout=10, what="the injected turn"
+        )
+        assert (
+            await admit_route_wake(
+                runner, adapter, live.source, "loop tick", "loop-tick"
+            )
+            is True
+        )
+        await async_wait_until(
+            lambda: "loop tick" in gates, timeout=10, what="the /loop tick"
+        )
         # The viewer detaches: its queued turn still runs, with nobody attached who can answer.
         await authority.detach(viewer, subscription)
-        await authority.submit(viewer, Submission("queued", ref, {"text": "typed, then detached"}, "queue"))
-        await async_wait_until(lambda: "typed, then detached" in gates, timeout=10, what="the detached turn")
+        await authority.submit(
+            viewer, Submission("queued", ref, {"text": "typed, then detached"}, "queue")
+        )
+        await async_wait_until(
+            lambda: "typed, then detached" in gates,
+            timeout=10,
+            what="the detached turn",
+        )
     finally:
         db.close()
 
-    assert gates == {"typed by the viewer": (True, []),
-                     "plugin injection": (False, ["execute_code"]),
-                     "loop tick": (False, ["execute_code"]),
-                     "typed, then detached": (False, ["execute_code"])}
+    assert gates == {
+        "typed by the viewer": (True, []),
+        "plugin injection": (False, ["execute_code"]),
+        "loop tick": (False, ["execute_code"]),
+        "typed, then detached": (False, ["execute_code"]),
+    }
 
 
-@pytest.mark.parametrize("request_id,payload,viewer", [
-    ("typed", {"text": "hi", "cli_turn_v1": {"api_text": "[voice] hi"}, "finite": True}, True),
-    ("typed", {"text": "hi", "local_operator_v1": {"principal_id": "op"}}, True),
-    ('["plugin","desk","route","x"]', {"text": "hi", "local_automation_v1": {"identity": "x"}}, False),
-    ('hosted:[{"task":1},0]', {"text": "room task"}, False),
-    ("native", {"text": "hi", "native_text_v1": {"source": {}}}, False),
-], ids=["cli-submit", "operator-submit", "automation", "hosted-room-task", "messaging"])
+@pytest.mark.parametrize(
+    "request_id,payload,viewer",
+    [
+        (
+            "typed",
+            {"text": "hi", "cli_turn_v1": {"api_text": "[voice] hi"}, "finite": True},
+            True,
+        ),
+        ("typed", {"text": "hi", "local_operator_v1": {"principal_id": "op"}}, True),
+        (
+            '["plugin","desk","route","x"]',
+            {"text": "hi", "local_automation_v1": {"identity": "x"}},
+            False,
+        ),
+        ('hosted:[{"task":1},0]', {"text": "room task"}, False),
+        ("native", {"text": "hi", "native_text_v1": {"source": {}}}, False),
+    ],
+    ids=[
+        "cli-submit",
+        "operator-submit",
+        "automation",
+        "hosted-room-task",
+        "messaging",
+    ],
+)
 def test_viewer_input_is_only_a_session_submit_row(request_id, payload, viewer):
     from gateway.session_operator import is_viewer_input
+
     assert is_viewer_input({"request_id": request_id, "payload": payload}) is viewer

@@ -1,16 +1,27 @@
 """Initial profile files, written on the staging tree before publication."""
+
 import contextlib
 from pathlib import Path
 from typing import Optional
 
 
-def finish_profile_layout(profile_dir: Path, *, no_skills: bool, clone_all: bool,
-                           description: Optional[str], soul: Optional[str] = None) -> None:
+def finish_profile_layout(
+    profile_dir: Path,
+    *,
+    no_skills: bool,
+    clone_all: bool,
+    description: Optional[str],
+    soul: Optional[str] = None,
+) -> None:
     """Seed files a fresh profile owns from day one; runs on the staging tree before publish."""
     from clawk_cli.profiles import (
-        _seed_file_if_missing, _PLACEHOLDER_ENV, NO_BUNDLED_SKILLS_MARKER,
-        _migrate_profile_config_if_outdated, write_profile_meta,
+        _seed_file_if_missing,
+        _PLACEHOLDER_ENV,
+        NO_BUNDLED_SKILLS_MARKER,
+        _migrate_profile_config_if_outdated,
+        write_profile_meta,
     )
+
     if soul is not None:
         (profile_dir / "SOUL.md").write_text(soul, encoding="utf-8")
 
@@ -21,8 +32,11 @@ def finish_profile_layout(profile_dir: Path, *, no_skills: bool, clone_all: bool
     _seed_file_if_missing(profile_dir / ".env", _PLACEHOLDER_ENV, 0o600)
 
     # Default SOUL.md to customize immediately (skipped when a clone already provided one).
-    with contextlib.suppress(Exception):  # best-effort — don't fail profile creation over this
+    with contextlib.suppress(
+        Exception
+    ):  # best-effort — don't fail profile creation over this
         from clawk_cli.default_soul import DEFAULT_SOUL_MD
+
         _seed_file_if_missing(profile_dir / "SOUL.md", DEFAULT_SOUL_MD)
 
     # Opt-out marker read by seed_profile_skills() and `clawk update`'s all-profile sync
@@ -42,5 +56,9 @@ def finish_profile_layout(profile_dir: Path, *, no_skills: bool, clone_all: bool
 
     # Description last, so a partial-create failure doesn't strand a description file.
     if description and description.strip():
-        with contextlib.suppress(Exception):  # non-fatal — `clawk profile describe` works later
-            write_profile_meta(profile_dir, description=description.strip(), description_auto=False)
+        with contextlib.suppress(
+            Exception
+        ):  # non-fatal — `clawk profile describe` works later
+            write_profile_meta(
+                profile_dir, description=description.strip(), description_auto=False
+            )

@@ -42,7 +42,9 @@ def open_db(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Resolved at call time: fd-leak tests patch ``sqlite3.connect`` through the caller's module.
-    conn = sqlite3.connect(path, timeout=busy_timeout_ms / 1000, check_same_thread=check_same_thread)
+    conn = sqlite3.connect(
+        path, timeout=busy_timeout_ms / 1000, check_same_thread=check_same_thread
+    )
     try:
         conn.row_factory = row_factory
         conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
@@ -52,7 +54,10 @@ def open_db(
                     apply_wal_with_fallback(conn, db_label=db_label)
                     break
                 except sqlite3.OperationalError as exc:
-                    if str(exc).lower() != "database is locked" or attempt + 1 == wal_lock_retries:
+                    if (
+                        str(exc).lower() != "database is locked"
+                        or attempt + 1 == wal_lock_retries
+                    ):
                         raise
                     time.sleep(0.01 * (2**attempt))
         if foreign_keys:
@@ -68,7 +73,9 @@ def open_db(
 
 
 @contextlib.contextmanager
-def transaction(conn: sqlite3.Connection, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
+def transaction(
+    conn: sqlite3.Connection, *, immediate: bool = False
+) -> Iterator[sqlite3.Connection]:
     """Commit on success, roll back on error, and ALWAYS close ``conn`` (see the module docstring)."""
     try:
         if immediate:
@@ -79,7 +86,9 @@ def transaction(conn: sqlite3.Connection, *, immediate: bool = False) -> Iterato
         conn.close()
 
 
-def add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> bool:
+def add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, ddl: str
+) -> bool:
     """``ALTER TABLE <table> ADD COLUMN <ddl>``, idempotent across races: True when this call added
     it, False on the ``duplicate column name`` a concurrent migrator caused.
 

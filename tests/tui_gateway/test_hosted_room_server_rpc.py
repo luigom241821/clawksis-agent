@@ -29,12 +29,26 @@ def _server():
     methods = {
         "session.list": method(
             "session.list",
-            {"result": {"sessions": [{"id": "stored", "resolved_id": "tip", "title": "Group: room"}]}},
+            {
+                "result": {
+                    "sessions": [
+                        {"id": "stored", "resolved_id": "tip", "title": "Group: room"}
+                    ]
+                }
+            },
         ),
-        "session.create": method("session.create", {"result": {"session_id": "runtime"}}),
-        "session.resume": method("session.resume", {"result": {"session_id": "runtime"}}),
-        "session.history": method("session.history", {"result": {"messages": [{"role": "assistant"}]}}),
-        "session.interrupt": method("session.interrupt", {"result": {"interrupted": True}}),
+        "session.create": method(
+            "session.create", {"result": {"session_id": "runtime"}}
+        ),
+        "session.resume": method(
+            "session.resume", {"result": {"session_id": "runtime"}}
+        ),
+        "session.history": method(
+            "session.history", {"result": {"messages": [{"role": "assistant"}]}}
+        ),
+        "session.interrupt": method(
+            "session.interrupt", {"result": {"interrupted": True}}
+        ),
         "approval.respond": method("approval.respond", {"result": {"resolved": 1}}),
         "prompt.submit": method("prompt.submit", {"result": {"status": "streaming"}}),
     }
@@ -53,8 +67,16 @@ def test_routes_exact_hidden_session_and_internal_task_proof():
     task = TaskIdentity("room", "task", "thread", "turn")
     callback = lambda _receipt: None
 
-    assert rpc.resolve_exact(profile="ops", title="Group: room", source="bot_room")["session_id"] == "tip"
-    assert rpc.create(profile="ops", title="Group: room", source="bot_room")["session_id"] == "runtime"
+    assert (
+        rpc.resolve_exact(profile="ops", title="Group: room", source="bot_room")[
+            "session_id"
+        ]
+        == "tip"
+    )
+    assert (
+        rpc.create(profile="ops", title="Group: room", source="bot_room")["session_id"]
+        == "runtime"
+    )
     rpc.submit(
         profile="ops",
         session_id="runtime",
@@ -113,11 +135,15 @@ def test_info_and_interrupt_are_exact_task_scoped():
 
 def test_local_approval_snapshot_and_response_use_exact_request():
     server, calls = _server()
-    server._pending_approval_request_payload = lambda session_key: {
-        "request_id": "approval-1",
-        "command": "pytest -q tests/focused",
-        "choices": ["once", "deny"],
-    } if session_key == "stored-session" else None
+    server._pending_approval_request_payload = lambda session_key: (
+        {
+            "request_id": "approval-1",
+            "command": "pytest -q tests/focused",
+            "choices": ["once", "deny"],
+        }
+        if session_key == "stored-session"
+        else None
+    )
     server._sessions["runtime"] = {
         "history_lock": threading.Lock(),
         "running": True,

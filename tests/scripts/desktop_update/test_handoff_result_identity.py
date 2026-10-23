@@ -1,4 +1,5 @@
 """Real PowerShell producer/heartbeat/result contract (portable, not native UI proof)."""
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,9 @@ POWERSHELL = shutil.which("powershell") or shutil.which("pwsh")
 
 @pytest.mark.platforms("any")
 @pytest.mark.parametrize("run_id", ["", "receipt-test.bridge-2"])
-def test_powershell_result_keeps_identity_after_actual_heartbeat(tmp_path: Path, run_id: str) -> None:
+def test_powershell_result_keeps_identity_after_actual_heartbeat(
+    tmp_path: Path, run_id: str
+) -> None:
     if not POWERSHELL:
         pytest.skip("PowerShell is not installed")
     home = tmp_path / "home"
@@ -24,7 +27,8 @@ def test_powershell_result_keeps_identity_after_actual_heartbeat(tmp_path: Path,
     install = tmp_path / "checkout"
     (install / "pm").mkdir(parents=True)
     harness = tmp_path / "receipt.ps1"
-    harness.write_text(r'''
+    harness.write_text(
+        r"""
 param([string]$HandoffPath, [string]$Install, [string]$Run)
 $started = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - 10
 $env:CLAWK_UPDATE_STARTED_AT = [string]$started
@@ -46,17 +50,38 @@ $breakpoint = Set-PSBreakpoint -Command Write-Result -Action {
 }
 & $HandoffPath @invoke
 Remove-PSBreakpoint $breakpoint
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     result = subprocess.run(
-        [POWERSHELL, "-NoProfile", "-NonInteractive", "-File", str(harness),
-         "-HandoffPath", str(ROOT / "scripts/desktop-update/windows.ps1"),
-         "-Install", str(install), "-Run", run_id],
-        env={**os.environ, "HOME": str(home), "CLAWK_HOME": str(home),
-             "TEMP": str(tmp_path), "TMP": str(tmp_path)},
-        capture_output=True, text=True, timeout=60,
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-NonInteractive",
+            "-File",
+            str(harness),
+            "-HandoffPath",
+            str(ROOT / "scripts/desktop-update/windows.ps1"),
+            "-Install",
+            str(install),
+            "-Run",
+            run_id,
+        ],
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "CLAWK_HOME": str(home),
+            "TEMP": str(tmp_path),
+            "TMP": str(tmp_path),
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
-    receipt = json.loads((home / ".clawk-update-result.json").read_text(encoding="utf-8"))
+    receipt = json.loads(
+        (home / ".clawk-update-result.json").read_text(encoding="utf-8")
+    )
     assert receipt["ok"] is False, (receipt, result.stdout, result.stderr)
     # Native Windows reaches the missing-launcher refusal. PowerShell on POSIX
     # cannot call the Win32 console APIs, but its real finally writer still runs.
@@ -70,4 +95,6 @@ Remove-PSBreakpoint $breakpoint
     assert f"run:{receipt['run_id']}" in lines
     if run_id:
         assert receipt["run_id"] == run_id
-    assert not (home / ".clawk-update-in-progress").exists(), "normal release still runs"
+    assert not (home / ".clawk-update-in-progress").exists(), (
+        "normal release still runs"
+    )

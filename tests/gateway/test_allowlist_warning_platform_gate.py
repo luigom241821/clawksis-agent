@@ -14,24 +14,45 @@ _WARNING = "No env user allowlists configured"
 def _runner(platforms, tmp_path):
     # The policy check reads only ``self.config``; skip the full runner construction.
     runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms=platforms, sessions_dir=tmp_path / "sessions")
+    runner.config = GatewayConfig(
+        platforms=platforms, sessions_dir=tmp_path / "sessions"
+    )
     return runner
 
 
 @pytest.mark.parametrize(
     ("platforms", "expect_warning"),
     [
-        ({Platform.API_SERVER: PlatformConfig(enabled=True, extra={"key": "k" * 40})}, False),
-        ({Platform.API_SERVER: PlatformConfig(enabled=True), Platform.TELEGRAM: PlatformConfig(enabled=True)}, True),
+        (
+            {
+                Platform.API_SERVER: PlatformConfig(
+                    enabled=True, extra={"key": "k" * 40}
+                )
+            },
+            False,
+        ),
+        (
+            {
+                Platform.API_SERVER: PlatformConfig(enabled=True),
+                Platform.TELEGRAM: PlatformConfig(enabled=True),
+            },
+            True,
+        ),
         ({Platform.TELEGRAM: PlatformConfig(enabled=False)}, False),
     ],
     ids=["api_server_only", "api_server_plus_telegram", "telegram_disabled"],
 )
 def test_allowlist_warning_requires_an_enabled_messaging_platform(
-    monkeypatch, tmp_path, caplog, platforms, expect_warning,
+    monkeypatch,
+    tmp_path,
+    caplog,
+    platforms,
+    expect_warning,
 ):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    for var in list(GatewayRunner._BUILTIN_ALLOWED_USERS_VARS) + list(GatewayRunner._BUILTIN_ALLOW_ALL_VARS):
+    for var in list(GatewayRunner._BUILTIN_ALLOWED_USERS_VARS) + list(
+        GatewayRunner._BUILTIN_ALLOW_ALL_VARS
+    ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.delenv("GATEWAY_ALLOW_ALL_USERS", raising=False)
     runner = _runner(platforms, tmp_path)

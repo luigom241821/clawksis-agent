@@ -10,27 +10,47 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+
 def _fake_rows():
     return [
         {
-            "name": "agent-skill", "provenance": "agent", "state": "active",
-            "use_count": 2, "view_count": 1, "patch_count": 0,
-            "activity_count": 3, "last_activity_at": "2026-05-01T10:00:00+00:00",
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": True,
+            "name": "agent-skill",
+            "provenance": "agent",
+            "state": "active",
+            "use_count": 2,
+            "view_count": 1,
+            "patch_count": 0,
+            "activity_count": 3,
+            "last_activity_at": "2026-05-01T10:00:00+00:00",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": True,
         },
         {
-            "name": "bundled-skill", "provenance": "bundled", "state": "active",
-            "use_count": 9, "view_count": 4, "patch_count": 0,
-            "activity_count": 13, "last_activity_at": "2026-05-10T10:00:00+00:00",
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": True,
+            "name": "bundled-skill",
+            "provenance": "bundled",
+            "state": "active",
+            "use_count": 9,
+            "view_count": 4,
+            "patch_count": 0,
+            "activity_count": 13,
+            "last_activity_at": "2026-05-10T10:00:00+00:00",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": True,
         },
         {
-            "name": "hub-skill", "provenance": "hub", "state": "active",
-            "use_count": 0, "view_count": 0, "patch_count": 0,
-            "activity_count": 0, "last_activity_at": None,
-            "created_at": "2026-01-01T00:00:00+00:00", "_persisted": False,
+            "name": "hub-skill",
+            "provenance": "hub",
+            "state": "active",
+            "use_count": 0,
+            "view_count": 0,
+            "patch_count": 0,
+            "activity_count": 0,
+            "last_activity_at": None,
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "_persisted": False,
         },
     ]
+
 
 def test_usage_lists_all_provenances(monkeypatch, capsys):
     import clawk_cli.curator as curator_cli
@@ -45,6 +65,7 @@ def test_usage_lists_all_provenances(monkeypatch, capsys):
     assert "agent-skill" in out
     assert "bundled-skill" in out
     assert "hub-skill" in out
+
 
 def test_usage_empty(monkeypatch, capsys):
     import clawk_cli.curator as curator_cli

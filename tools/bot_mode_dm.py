@@ -54,13 +54,16 @@ _LIVE_WAIT_SECONDS = 300
 _LIVE_WAIT_MAX_SECONDS = 30 * 60
 
 # '<peer>/<agent>' — peer names are lowercase (``clawk peer`` normalizes them).
-_PEER_TARGET_RE = re.compile(r"^([a-z0-9][a-z0-9_-]{0,63})/([a-zA-Z0-9][a-zA-Z0-9_-]{0,63})$")
+_PEER_TARGET_RE = re.compile(
+    r"^([a-z0-9][a-z0-9_-]{0,63})/([a-zA-Z0-9][a-zA-Z0-9_-]{0,63})$"
+)
 # Same shape as ``tools.bot_relay._HANDLE_RE`` (kept local: see import note above).
 _LOCAL_TARGET_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
 
 def _default_home() -> str:
     from clawk_constants import get_process_clawk_home
+
     return str(get_process_clawk_home())
 
 
@@ -80,8 +83,8 @@ def message_agent_tool_schema() -> dict:
                 "delivery process, not a delivery receipt). It does NOT return their reply and you must "
                 "not wait or poll for one — send it, finish your turn, and that process's "
                 "completion notification wakes you with the outcome: their reply, or the "
-                "delivery failure — unless the ack returns reply_delivery=\"poll\", in which case "
-                "follow its process(action=\"wait\") instruction before ending the turn. COMPOSE the message yourself: write what YOU want to say to "
+                'delivery failure — unless the ack returns reply_delivery="poll", in which case '
+                'follow its process(action="wait") instruction before ending the turn. COMPOSE the message yourself: write what YOU want to say to '
                 "that agent (lead with the point; include the concrete ask or result). "
                 "Never paste the user's words verbatim — paraphrase the actionable "
                 "substance, and keep private 1:1 chat content private. Message one "
@@ -131,7 +134,9 @@ def message_agent_authorized(agent: Any) -> bool:
 
         # Managed-install check, NOT section non-emptiness: a SOUL.md carrying the
         # legacy protocol text gets an empty section but must still get the tool.
-        return _session_title(agent) == BOT_CHAT_TITLE and is_bot_mode_managed(_agent_home(agent))
+        return _session_title(agent) == BOT_CHAT_TITLE and is_bot_mode_managed(
+            _agent_home(agent)
+        )
     except Exception:  # pragma: no cover — must never break a turn
         logger.debug("message_agent_authorized failed", exc_info=True)
         return False
@@ -146,7 +151,8 @@ def ensure_message_agent_tool(agent: Any) -> bool:
             return False
         tools = getattr(agent, "tools", None)
         present = bool(tools) and any(
-            isinstance(t, dict) and t.get("function", {}).get("name") == MESSAGE_AGENT_TOOL_NAME
+            isinstance(t, dict)
+            and t.get("function", {}).get("name") == MESSAGE_AGENT_TOOL_NAME
             for t in tools
         )
         if not present:
@@ -167,7 +173,9 @@ def ensure_message_agent_tool(agent: Any) -> bool:
         return False
 
 
-def _resolve_local_name(target: str, roster: list[str], root: Path | None = None) -> Optional[str]:
+def _resolve_local_name(
+    target: str, roster: list[str], root: Path | None = None
+) -> Optional[str]:
     """Map a target to a local profile FOLDER id: 'clawk' → 'default'; an exact folder id
     (case-insensitive); else — when ``root`` is given — a friendly name or its Desktop @-slug
     (profile.yaml ``display_name`` / Bot Mode title: 'Scribe', '@scribe', 'Dr. Foo' → 'foo').
@@ -183,14 +191,21 @@ def _resolve_local_name(target: str, roster: list[str], root: Path | None = None
     from tools.bot_mode_probe import alias_forms, local_alias_map
 
     aliases = local_alias_map(root)
-    hits = set().union(*(aliases.get(form, set()) for form in alias_forms(want) | {want}))
+    hits = set().union(
+        *(aliases.get(form, set()) for form in alias_forms(want) | {want})
+    )
     return next(iter(hits)) if len(hits) == 1 else None
 
 
-def _err(message: str, *, roster: list[str] | None = None, peers: list[str] | None = None) -> str:
+def _err(
+    message: str, *, roster: list[str] | None = None, peers: list[str] | None = None
+) -> str:
     from tools.bot_failure_reasons import classify_agent_error
 
-    payload: dict[str, Any] = {"error": message, "reason": classify_agent_error(message)}
+    payload: dict[str, Any] = {
+        "error": message,
+        "reason": classify_agent_error(message),
+    }
     if roster is not None:
         payload["teammates"] = roster
     if peers is not None:
@@ -198,26 +213,42 @@ def _err(message: str, *, roster: list[str] | None = None, peers: list[str] | No
     return json.dumps(payload)
 
 
-def message_agent_tool(target: str = "", message: str = "", task_id: Optional[str] = None, agent: Any = None) -> str:
+def message_agent_tool(
+    target: str = "",
+    message: str = "",
+    task_id: Optional[str] = None,
+    agent: Any = None,
+) -> str:
     """Deliver ``message`` to ``target``'s Bot Chat. Returns a JSON ack/error.
     ``agent`` is the calling AIAgent — used for the Bot Chat gate and sender identity."""
     home = _agent_home(agent)
     try:
         from tools.bot_mode_probe import (
-            BOT_CHAT_TITLE, _display_name, _handle, _clawk_root, _peers, _profile_name as _self_profile_name,
-            _roster, is_bot_mode_managed,
+            BOT_CHAT_TITLE,
+            _display_name,
+            _handle,
+            _clawk_root,
+            _peers,
+            _profile_name as _self_profile_name,
+            _roster,
+            is_bot_mode_managed,
         )
         from tools.bot_relay import _clawk_cli
 
         if _session_title(agent) != BOT_CHAT_TITLE:
-            return _err("message_agent is only available in a Bot Mode 'Bot Chat' session. "
-                        "This session is not one; do not retry.")
+            return _err(
+                "message_agent is only available in a Bot Mode 'Bot Chat' session. "
+                "This session is not one; do not retry."
+            )
         if not is_bot_mode_managed(home):
-            return _err("This install is not Bot-Mode-managed (no bot roster); "
-                        "message_agent is unavailable. Do not retry.")
+            return _err(
+                "This install is not Bot-Mode-managed (no bot roster); "
+                "message_agent is unavailable. Do not retry."
+            )
     except Exception as exc:  # pragma: no cover — defensive
         return _err(f"Bot Mode gate check failed: {exc}")
     from clawk_cli.observability.shared_metrics_signals import record_feature_used
+
     record_feature_used("bot_mode", clawk_home=home)
 
     root, me = _clawk_root(Path(home)), _self_profile_name(Path(home))
@@ -233,14 +264,19 @@ def message_agent_tool(target: str = "", message: str = "", task_id: Optional[st
     if not body:
         return _err("message is required — compose what you want to say to that agent.")
     if len(body) > MESSAGE_MAX_CHARS:
-        return _err(f"message too long ({len(body)} chars > {MESSAGE_MAX_CHARS}). "
-                    "Send the essentials; share large content as a file path instead.")
+        return _err(
+            f"message too long ({len(body)} chars > {MESSAGE_MAX_CHARS}). "
+            "Send the essentials; share large content as a file path instead."
+        )
 
     raw_target = str(target or "").strip().lstrip("@")
     if not raw_target:
         return _roster_err("target is required.")
     # Sender signature: the friendly name when the bot has one (#89720); the @handle stays the routing alias.
-    content = f"Message from 🤖 {_display_name(me, roster_homes.get(me, Path(home)))} (@{_handle(me)}): " + body
+    content = (
+        f"Message from 🤖 {_display_name(me, roster_homes.get(me, Path(home)))} (@{_handle(me)}): "
+        + body
+    )
     delivery = dict(task_id=task_id, agent=agent)
     # Attribution for the recipient's memory hooks; the text prefix above stays the human-facing signature.
     author = {"id": f"bot:{me}", "name": _handle(me), "is_bot": True}
@@ -248,12 +284,15 @@ def message_agent_tool(target: str = "", message: str = "", task_id: Optional[st
     # Peer target: '<peer>/<agent>' or a bare registered peer name.
     peer_match = _PEER_TARGET_RE.match(raw_target)
     if peer_match or raw_target.lower() in peers:
-        peer_name, peer_profile = peer_match.groups() if peer_match else (raw_target.lower(), None)
+        peer_name, peer_profile = (
+            peer_match.groups() if peer_match else (raw_target.lower(), None)
+        )
         if peer_name not in peers:
             return _roster_err(f"No registered peer named '{peer_name}'.")
         dm_target = f"{peer_name}/{peer_profile}" if peer_profile else peer_name
         # A peer dm crosses installs: qualify the id with this host so the peer's own '<me>' stays distinct.
         from agent.turn_author import bot_author_id, local_origin
+
         peer_author = {**author, "id": bot_author_id(me, local_origin())}
         # Pin the registry-owning profile: `clawk peer` resolves bot_peers via the profile-scoped
         # load_config(), while the roster above reads the machine-root config — the CLI must run
@@ -263,9 +302,14 @@ def message_agent_tool(target: str = "", message: str = "", task_id: Optional[st
         # under the wrong interpreter (#108628). _clawk_cli pins the entrypoint beside
         # this interpreter; _delivery_lock/_local_delivery_home match argv[0] by basename,
         # so the absolute path stays compatible.
-        return _start_delivery([_clawk_cli(), "-p", _self_profile_name(root), "peer", "dm", dm_target], content,
-                               f"@{peer_profile or peer_name} on peer '{peer_name}'", stdin_file=True,
-                               author=peer_author, **delivery)
+        return _start_delivery(
+            [_clawk_cli(), "-p", _self_profile_name(root), "peer", "dm", dm_target],
+            content,
+            f"@{peer_profile or peer_name} on peer '{peer_name}'",
+            stdin_file=True,
+            author=peer_author,
+            **delivery,
+        )
 
     # A connection-qualified target ('clawk@mini') names a relay row outright; it is the form the relay itself
     # hands out for a colliding row, and stamps on replies. Resolved locally first, a local bot whose friendly
@@ -288,17 +332,33 @@ def message_agent_tool(target: str = "", message: str = "", task_id: Optional[st
             return relayed
         if resolved == me:
             return _err("You can't message yourself. Pick a teammate from the roster.")
-        return _roster_err(f"No teammate named '{raw_target}' on this install, on a connected "
-                           "machine, or on a registered peer. Pick a name from the roster "
-                           "(roles are listed in your system prompt).")
+        return _roster_err(
+            f"No teammate named '{raw_target}' on this install, on a connected "
+            "machine, or on a registered peer. Pick a name from the roster "
+            "(roles are listed in your system prompt)."
+        )
     # Local teammates are admitted through the profile authority; the argv only names the
     # profile for the runner's lock/home lookups and is never executed.
-    return _start_delivery([_clawk_cli(), "-p", resolved], content, f"@{_handle(resolved)}",
-                           stdin_file=False, profile_home=roster_homes[resolved], author=author, **delivery)
+    return _start_delivery(
+        [_clawk_cli(), "-p", resolved],
+        content,
+        f"@{_handle(resolved)}",
+        stdin_file=False,
+        profile_home=roster_homes[resolved],
+        author=author,
+        **delivery,
+    )
 
 
-def _try_relay_delivery(root: Path, raw_target: str, content: str, me: str, *,
-                        task_id: Optional[str], agent: Any) -> Optional[str]:
+def _try_relay_delivery(
+    root: Path,
+    raw_target: str,
+    content: str,
+    me: str,
+    *,
+    task_id: Optional[str],
+    agent: Any,
+) -> Optional[str]:
     """Cross-connection delivery via the Desktop relay; None when the target doesn't
     resolve against the relay roster. The envelope is queued on disk for the Desktop
     to drain; a background waiter is spawned immediately so the relayed reply wakes
@@ -306,8 +366,13 @@ def _try_relay_delivery(root: Path, raw_target: str, content: str, me: str, *,
     try:
         from tools.bot_mode_probe import _handle, local_taken_forms
         from tools.bot_relay import (
-            EnvelopeRefusedError, _target_aliases, enqueue_envelope, read_remote_roster, remote_target_forms,
-            resolve_remote_target, waiter_command,
+            EnvelopeRefusedError,
+            _target_aliases,
+            enqueue_envelope,
+            read_remote_roster,
+            remote_target_forms,
+            resolve_remote_target,
+            waiter_command,
         )
 
         roster = read_remote_roster(root)
@@ -316,18 +381,37 @@ def _try_relay_delivery(root: Path, raw_target: str, content: str, me: str, *,
             return None
         if match == "ambiguous":
             want = raw_target.strip().lstrip("@").partition("@")[0].lower()
-            forms = ", ".join(form for r, form in zip(roster, remote_target_forms(roster, local_taken_forms(root)))
-                              if want in _target_aliases(r))
-            return _err(f"'{raw_target}' exists on several connected machines — disambiguate with one of: {forms}.")
+            forms = ", ".join(
+                form
+                for r, form in zip(
+                    roster, remote_target_forms(roster, local_taken_forms(root))
+                )
+                if want in _target_aliases(r)
+            )
+            return _err(
+                f"'{raw_target}' exists on several connected machines — disambiguate with one of: {forms}."
+            )
         try:
-            envelope = enqueue_envelope(root, target=match, message=content, sender_profile=me, sender_handle=_handle(me))
+            envelope = enqueue_envelope(
+                root,
+                target=match,
+                message=content,
+                sender_profile=me,
+                sender_handle=_handle(me),
+            )
         except EnvelopeRefusedError as exc:
             # Fail fast: target definitively offline — nothing was queued.
             # Structured refusal so the agent can distinguish it from a resolution error ('runtime_offline'
             # per the #93091 reason enum).
             return json.dumps({"error": str(exc), "reason": exc.reason})
         label = f"@{match['handle']} on {match['connection_label'] or match['connection_id']}"
-        raw = _spawn_delivery(waiter_command(root, envelope), label, delivery_id=envelope["id"], task_id=task_id, agent=agent)
+        raw = _spawn_delivery(
+            waiter_command(root, envelope),
+            label,
+            delivery_id=envelope["id"],
+            task_id=task_id,
+            agent=agent,
+        )
         waiter_error = json.loads(raw).get("error")
         if not waiter_error:
             return raw
@@ -335,11 +419,18 @@ def _try_relay_delivery(root: Path, raw_target: str, content: str, me: str, *,
         # failed to start loses only the reply wake-up. Reporting a hard failure here makes the
         # sender resend and deliver the message twice. Same shape as the live-owner branch of
         # _start_delivery: queued + notification_error.
-        return json.dumps({
-            "status": "queued", "delivery_id": envelope["id"], "to": label, "notification_error": waiter_error,
-            "detail": (f"Message queued for {label}; the relay delivers it on its own, but the reply "
-                       "waiter did not start, so the reply will NOT wake you. Do NOT resend."),
-        })
+        return json.dumps(
+            {
+                "status": "queued",
+                "delivery_id": envelope["id"],
+                "to": label,
+                "notification_error": waiter_error,
+                "detail": (
+                    f"Message queued for {label}; the relay delivers it on its own, but the reply "
+                    "waiter did not start, so the reply will NOT wake you. Do NOT resend."
+                ),
+            }
+        )
     except Exception:
         logger.debug("relay delivery attempt failed", exc_info=True)
         return None
@@ -348,7 +439,9 @@ def _try_relay_delivery(root: Path, raw_target: str, content: str, me: str, *,
 def _dm_dir() -> Path:
     uid_getter = getattr(os, "getuid", None)
     uid = uid_getter() if callable(uid_getter) else None
-    path = Path(tempfile.gettempdir()) / (f"{_DM_DIR_NAME}-{uid}" if uid is not None else _DM_DIR_NAME)
+    path = Path(tempfile.gettempdir()) / (
+        f"{_DM_DIR_NAME}-{uid}" if uid is not None else _DM_DIR_NAME
+    )
     path.mkdir(mode=0o700, exist_ok=True)
     # Shared POSIX temp roots need a per-user directory. Fail closed if an
     # attacker pre-created the expected path or replaced it with a symlink.
@@ -362,7 +455,9 @@ def _dm_dir() -> Path:
     return path
 
 
-def cleanup_bot_dm_cache(max_age_hours: float = _DM_STALE_SECONDS / 3600, *, now: float | None = None) -> int:
+def cleanup_bot_dm_cache(
+    max_age_hours: float = _DM_STALE_SECONDS / 3600, *, now: float | None = None
+) -> int:
     """Delete orphaned DM payload files older than *max_age_hours*; returns count.
     Same contract as the other ``cleanup_*_cache`` helpers (hourly gateway housekeeping);
     legacy temp-root locations from versions predating the dedicated directory are swept too."""
@@ -414,7 +509,12 @@ def _delivery_lock(argv: list[str], *, stdin_file: bool):
     # (service contexts lack PATH) and carries .exe on Windows; split on both separators.
     # Split on both separators so the shape matches regardless of which platform built the argv. See #93590.
     cli = (argv[0] if argv else "").rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
-    if stdin_file or len(argv) < 3 or cli not in ("clawk", "clawk.exe") or argv[1] != "-p":
+    if (
+        stdin_file
+        or len(argv) < 3
+        or cli not in ("clawk", "clawk.exe")
+        or argv[1] != "-p"
+    ):
         return contextlib.nullcontext()
     from tools.bot_mode_probe import _clawk_root
     from tools.bot_relay import acquire_turn_lock
@@ -454,12 +554,18 @@ class LiveTargetHeldError(LiveTargetUnavailableError):
     @property
     def reason(self) -> str:
         from tools.bot_failure_reasons import HELD_NOT_SENT
+
         return HELD_NOT_SENT
 
 
 def _unavailable_payload(dm_file: str, exc: LiveTargetUnavailableError) -> str:
-    return json.dumps({"reason": exc.reason, "delivery_id": _dm_delivery_id(dm_file),
-                       "error": f"{exc} — the message was NOT sent; it is safe to resend {exc.resend}."})
+    return json.dumps(
+        {
+            "reason": exc.reason,
+            "delivery_id": _dm_delivery_id(dm_file),
+            "error": f"{exc} — the message was NOT sent; it is safe to resend {exc.resend}.",
+        }
+    )
 
 
 def _settled_no_send(dm_file: str, exc: LiveTargetUnavailableError) -> str:
@@ -480,13 +586,24 @@ def _held_disposition(record: dict | None) -> bool:
     """The owner's terminal not-sent receipt for a delivery refused while another writer held the
     chat (``gateway/session_bot.py:_not_sent_record``)."""
     from tools.bot_failure_reasons import HELD_NOT_SENT
-    return bool(record) and record.get("refused") is True and record.get("reason") == HELD_NOT_SENT
+
+    return (
+        bool(record)
+        and record.get("refused") is True
+        and record.get("reason") == HELD_NOT_SENT
+    )
 
 
-def _admit_live_dm(profile_home: Path | None, dm_file: str, author: Optional[dict] = None) -> dict | None:
+def _admit_live_dm(
+    profile_home: Path | None, dm_file: str, author: Optional[dict] = None
+) -> dict | None:
     """Pin intent before admission; retries may inspect, never change transport."""
-    from tools.bot_live_delivery import (PreDialError, deliver_to_live_owner, find_canonical_live_owner,
-                                         read_delivery_result)
+    from tools.bot_live_delivery import (
+        PreDialError,
+        deliver_to_live_owner,
+        find_canonical_live_owner,
+        read_delivery_result,
+    )
     from utils import fsync_directory
 
     intent: dict[str, Any]
@@ -500,12 +617,17 @@ def _admit_live_dm(profile_home: Path | None, dm_file: str, author: Optional[dic
             owner = find_canonical_live_owner(profile_home)
         except Exception as exc:
             # Discovery runs before the intent exists and never admits: definite, not ambiguous.
-            raise LiveTargetUnavailableError(f"canonical Bot Chat target is unavailable ({exc})") from exc
+            raise LiveTargetUnavailableError(
+                f"canonical Bot Chat target is unavailable ({exc})"
+            ) from exc
         if owner is None:
             raise LiveTargetUnavailableError("canonical Bot Chat target is unavailable")
-        intent = dict(owner=owner, message=Path(dm_file).read_text(encoding="utf-8-sig"),
-                      delivery_id=_dm_delivery_id(dm_file),
-                      **({"author": author} if author else {}))
+        intent = dict(
+            owner=owner,
+            message=Path(dm_file).read_text(encoding="utf-8-sig"),
+            delivery_id=_dm_delivery_id(dm_file),
+            **({"author": author} if author else {}),
+        )
         try:
             fd = os.open(intent_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError:
@@ -526,35 +648,55 @@ def _admit_live_dm(profile_home: Path | None, dm_file: str, author: Optional[dic
 
         identity = dict(delivery_id=intent["delivery_id"], author=intent.get("author"))
         try:
-            record = deliver_to_live_owner(home, intent["owner"], intent["message"], **identity)
+            record = deliver_to_live_owner(
+                home, intent["owner"], intent["message"], **identity
+            )
         except GatewayRPCError as exc:
             if str(exc) != HELD_NOT_SENT or exc.data.get("admitted") is not False:
                 raise
             # Nothing was admitted while that refusal held the owner's lock, but a same-id attempt
             # may have admitted since: only the owner's settle decides, under that same lock.
-            record = settle_held_delivery(home, intent["owner"], intent["message"], **identity)
+            record = settle_held_delivery(
+                home, intent["owner"], intent["message"], **identity
+            )
         except PreDialError as exc:
             if not pinned_now:
                 raise  # an earlier attempt under this intent may have admitted: outcome unknown
             # This call pinned the intent and its first dial died before the RPC went out: nothing
             # was admitted anywhere, so it is a definite no-send the sender may retry (#139303).
             _unlink_dm_file(_live_intent_file(dm_file))
-            raise LiveTargetUnavailableError(f"live authority dial failed before admission ({exc})") from exc
+            raise LiveTargetUnavailableError(
+                f"live authority dial failed before admission ({exc})"
+            ) from exc
     if _held_disposition(record):
         # The callers remove the intent and payload (``_settled_no_send``).
         raise LiveTargetHeldError("Bot Chat is held by another session writer")
     return record
 
 
-def _wait_live_dm(home: str, delivery_id: str, *, dm_file: str | os.PathLike | None = None) -> int:
+def _wait_live_dm(
+    home: str, delivery_id: str, *, dm_file: str | os.PathLike | None = None
+) -> int:
     from tools.bot_failure_reasons import RUNTIME_OFFLINE
-    from tools.bot_live_delivery import await_delivery, cancel_queued_delivery, owner_holds_delivery
+    from tools.bot_live_delivery import (
+        await_delivery,
+        cancel_queued_delivery,
+        owner_holds_delivery,
+    )
 
     deadline = time.monotonic() + _LIVE_WAIT_MAX_SECONDS
     missed = 0
     while True:
-        record = await_delivery(home, delivery_id, max(0.0, min(_LIVE_WAIT_SECONDS, deadline - time.monotonic())))
-        if record is None or record["status"] not in ("queued", "claimed") or time.monotonic() >= deadline:
+        record = await_delivery(
+            home,
+            delivery_id,
+            max(0.0, min(_LIVE_WAIT_SECONDS, deadline - time.monotonic())),
+        )
+        if (
+            record is None
+            or record["status"] not in ("queued", "claimed")
+            or time.monotonic() >= deadline
+        ):
             break
         try:
             held = owner_holds_delivery(home, record)
@@ -568,8 +710,11 @@ def _wait_live_dm(home: str, delivery_id: str, *, dm_file: str | os.PathLike | N
             # Under the same mailbox lock as claim, either cancellation wins or
             # the claim wins and we must keep waiting for its outcome.
             record = cancel_queued_delivery(
-                home, delivery_id, error="Live Bot Chat owner is no longer available",
-                reason=RUNTIME_OFFLINE)
+                home,
+                delivery_id,
+                error="Live Bot Chat owner is no longer available",
+                reason=RUNTIME_OFFLINE,
+            )
             if record is None or record["status"] != "claimed":
                 break
             missed = 0
@@ -580,10 +725,16 @@ def _wait_live_dm(home: str, delivery_id: str, *, dm_file: str | os.PathLike | N
         if missed > 1:
             break
     status = record["status"] if record else "ambiguous"
-    payload = {key: record[key] for key in ("reply", "error", "reason") if record and record.get(key)}
+    payload = {
+        key: record[key]
+        for key in ("reply", "error", "reason")
+        if record and record.get(key)
+    }
     payload.update(status=status, delivery_id=delivery_id)
     if status in ("queued", "claimed", "ambiguous"):
-        payload["detail"] = "Delivery remains pending or its outcome is unknown. Do not resend; receipt is retained."
+        payload["detail"] = (
+            "Delivery remains pending or its outcome is unknown. Do not resend; receipt is retained."
+        )
     elif status == "settled" and dm_file is not None:
         # The intent carries the message plaintext so a retry can replay the SAME delivery id;
         # once the owner settled it nothing retries, so it goes along with the dm file (same
@@ -605,9 +756,14 @@ def _local_delivery_home(argv: list[str]) -> Path | None:
 
 def _live_outcome_unknown(dm_file: str, cause: object) -> str:
     """The runner's stdout when a live admission may have happened but its outcome is unknown."""
-    return json.dumps({"status": "ambiguous", "delivery_id": _dm_delivery_id(dm_file),
-                       "error": f"Live admission outcome unknown: {cause}. Do not resend.",
-                       "evidence_file": dm_file})
+    return json.dumps(
+        {
+            "status": "ambiguous",
+            "delivery_id": _dm_delivery_id(dm_file),
+            "error": f"Live admission outcome unknown: {cause}. Do not resend.",
+            "evidence_file": dm_file,
+        }
+    )
 
 
 def _runner_argv(args: list[str]) -> tuple[Optional[str], str, str, list[str]] | None:
@@ -626,8 +782,14 @@ def _runner_argv(args: list[str]) -> tuple[Optional[str], str, str, list[str]] |
     return author, rest[0], rest[1], rest[2:]
 
 
-def _run_delivery(argv: list[str], dm_file: str, *, stdin_file: bool,
-                  profile_home: Path | None = None, author: Optional[dict] = None) -> int:
+def _run_delivery(
+    argv: list[str],
+    dm_file: str,
+    *,
+    stdin_file: bool,
+    profile_home: Path | None = None,
+    author: Optional[dict] = None,
+) -> int:
     """Admit local DMs only through the profile authority; retain uncertain intent.
 
     The optional peer stdin transport remains an explicit remote route, never a
@@ -640,7 +802,9 @@ def _run_delivery(argv: list[str], dm_file: str, *, stdin_file: bool,
             try:
                 record = _admit_live_dm(home, dm_file, author)
             except LiveTargetHeldError as exc:
-                print(_settled_no_send(dm_file, exc))  # the owner settled the id: drop the payload too
+                print(
+                    _settled_no_send(dm_file, exc)
+                )  # the owner settled the id: drop the payload too
                 return 1
             except LiveTargetUnavailableError as exc:
                 print(_unavailable_payload(dm_file, exc))
@@ -649,9 +813,18 @@ def _run_delivery(argv: list[str], dm_file: str, *, stdin_file: bool,
                 print(_live_outcome_unknown(dm_file, exc))
                 return 1
             if record is not None:
-                return _wait_live_dm(record["profile_home"], record["delivery_id"], dm_file=dm_file)
+                return _wait_live_dm(
+                    record["profile_home"], record["delivery_id"], dm_file=dm_file
+                )
     if not stdin_file:
-        print(json.dumps({"reason": "runtime_unavailable", "error": "No canonical Bot Chat authority; payload retained."}))
+        print(
+            json.dumps(
+                {
+                    "reason": "runtime_unavailable",
+                    "error": "No canonical Bot Chat authority; payload retained.",
+                }
+            )
+        )
         return 1
     try:
         from tools.bot_relay import delivery_env
@@ -662,17 +835,30 @@ def _run_delivery(argv: list[str], dm_file: str, *, stdin_file: bool,
             # after subprocess.run returns, not merely after stdin reaches EOF.
             with open(dm_file, "r", encoding="utf-8-sig") as stream:
                 # Passing the file descriptor as stdin bypasses the BOM-aware decoder.
-                return subprocess.run(argv, input=stream.read().encode("utf-8"), check=False, env=env).returncode
+                return subprocess.run(
+                    argv, input=stream.read().encode("utf-8"), check=False, env=env
+                ).returncode
     finally:
         _unlink_dm_file(dm_file)
 
 
-def _delivery_command(argv: list[str], dm_file: str, *, stdin_file: bool,
-                      profile_home: Path | None = None, author: Optional[dict] = None) -> str:
+def _delivery_command(
+    argv: list[str],
+    dm_file: str,
+    *,
+    stdin_file: bool,
+    profile_home: Path | None = None,
+    author: Optional[dict] = None,
+) -> str:
     """Build an argv-safe command for the cleanup-owning background runner:
     ``--run-delivery [--author <json>] <mode> <dm_file> [--profile-home <path>] <argv...>``."""
-    runner_argv = [sys.executable, str(Path(__file__).resolve()), "--run-delivery",
-                   "stdin" if stdin_file else "query-file", dm_file]
+    runner_argv = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--run-delivery",
+        "stdin" if stdin_file else "query-file",
+        dm_file,
+    ]
     if profile_home is not None:
         runner_argv.extend(["--profile-home", str(Path(profile_home).resolve())])
     runner_argv.extend(argv)
@@ -686,9 +872,17 @@ def _delivery_command(argv: list[str], dm_file: str, *, stdin_file: bool,
     return shlex.join(runner_argv)
 
 
-def _start_delivery(argv: list[str], content: str, label: str, *, stdin_file: bool,
-                    task_id: Optional[str], agent: Any, profile_home: Path | None = None,
-                    author: Optional[dict] = None) -> str:
+def _start_delivery(
+    argv: list[str],
+    content: str,
+    label: str,
+    *,
+    stdin_file: bool,
+    task_id: Optional[str],
+    agent: Any,
+    profile_home: Path | None = None,
+    author: Optional[dict] = None,
+) -> str:
     """Create a DM file and transfer its cleanup ownership to the runner."""
     dm_file = _write_dm_file(content)
     if profile_home is not None:
@@ -697,34 +891,70 @@ def _start_delivery(argv: list[str], content: str, label: str, *, stdin_file: bo
         except LiveTargetUnavailableError as exc:
             return _settled_no_send(dm_file, exc)
         except Exception as exc:
-            return json.dumps({"status": "ambiguous", "delivery_id": _dm_delivery_id(dm_file),
-                "error": f"Live delivery admission could not be confirmed: {exc}. Do not resend.",
-                "evidence_file": dm_file})
+            return json.dumps(
+                {
+                    "status": "ambiguous",
+                    "delivery_id": _dm_delivery_id(dm_file),
+                    "error": f"Live delivery admission could not be confirmed: {exc}. Do not resend.",
+                    "evidence_file": dm_file,
+                }
+            )
         if record is not None:
-            command = _delivery_command(argv, dm_file, stdin_file=False, profile_home=profile_home, author=author)
-            notification = json.loads(_spawn_delivery(command, label, task_id=task_id, agent=agent))
-            result = dict(status=record["status"], delivery_id=record["delivery_id"], to=label,
-                          detail="Durably queued for the live Bot Chat owner. Do NOT wait or resend; finish your turn.")
+            command = _delivery_command(
+                argv,
+                dm_file,
+                stdin_file=False,
+                profile_home=profile_home,
+                author=author,
+            )
+            notification = json.loads(
+                _spawn_delivery(command, label, task_id=task_id, agent=agent)
+            )
+            result = dict(
+                status=record["status"],
+                delivery_id=record["delivery_id"],
+                to=label,
+                detail="Durably queued for the live Bot Chat owner. Do NOT wait or resend; finish your turn.",
+            )
             if notification.get("error"):
                 result["notification_error"] = notification["error"]
             elif notification.get("process_id"):
                 result["process_id"] = notification["process_id"]
-                result["reply_delivery"] = notification.get("reply_delivery", "notification")
+                result["reply_delivery"] = notification.get(
+                    "reply_delivery", "notification"
+                )
                 if result["reply_delivery"] == "poll":
                     # Same runner, same stdout-borne reply (#101142): a non-push sender must get
                     # the poll instruction here too, not 'finish your turn'.
-                    result["detail"] = f"Durably queued for the live Bot Chat owner. Do NOT resend. {notification['detail']}"
+                    result["detail"] = (
+                        f"Durably queued for the live Bot Chat owner. Do NOT resend. {notification['detail']}"
+                    )
             return json.dumps(result)
     try:
-        command = _delivery_command(argv, dm_file, stdin_file=stdin_file, profile_home=profile_home, author=author)
+        command = _delivery_command(
+            argv,
+            dm_file,
+            stdin_file=stdin_file,
+            profile_home=profile_home,
+            author=author,
+        )
     except BaseException:
         _unlink_dm_file(dm_file)
         raise
-    return _spawn_delivery(command, label, dm_file=dm_file, task_id=task_id, agent=agent)
+    return _spawn_delivery(
+        command, label, dm_file=dm_file, task_id=task_id, agent=agent
+    )
 
 
-def _spawn_delivery(command: str, label: str, *, dm_file: Optional[str] = None, delivery_id: Optional[str] = None,
-                    task_id: Optional[str], agent: Any) -> str:
+def _spawn_delivery(
+    command: str,
+    label: str,
+    *,
+    dm_file: Optional[str] = None,
+    delivery_id: Optional[str] = None,
+    task_id: Optional[str],
+    agent: Any,
+) -> str:
     """Launch the cleanup-owning runner and transfer file ownership on ack. ``dm_file``
     is None for relay deliveries (the waiter watches a reply file; envelope artifacts
     are owned/swept by ``tools/bot_relay.py``), which pass the envelope id as ``delivery_id``
@@ -734,9 +964,15 @@ def _spawn_delivery(command: str, label: str, *, dm_file: Optional[str] = None, 
     try:
         from tools.terminal_tool import terminal_tool
 
-        raw = terminal_tool(command, background=True, notify_on_complete=True, task_id=task_id,
-                            workdir=str(Path(__file__).resolve().parent.parent), _host_local=True,
-                            _completion_output_chars=REPLY_COMPLETION_CHARS)
+        raw = terminal_tool(
+            command,
+            background=True,
+            notify_on_complete=True,
+            task_id=task_id,
+            workdir=str(Path(__file__).resolve().parent.parent),
+            _host_local=True,
+            _completion_output_chars=REPLY_COMPLETION_CHARS,
+        )
         try:
             parsed = json.loads(raw)
         except (ValueError, TypeError):
@@ -747,9 +983,16 @@ def _spawn_delivery(command: str, label: str, *, dm_file: Optional[str] = None, 
         if parsed.get("status") == "pending_approval":
             # terminal_tool's approval gate answers with an EMPTY error and no session_id: the runner
             # never launched because nobody in this turn could approve its command.
-            return _err(f"Delivery to {label} failed to start: its command needs terminal approval that nobody "
-                        "in this turn can grant" + (", so nothing was sent. Approve it (or add it to "
-                                                    "command_allowlist) and send again." if dm_file else "."))
+            return _err(
+                f"Delivery to {label} failed to start: its command needs terminal approval that nobody "
+                "in this turn can grant"
+                + (
+                    ", so nothing was sent. Approve it (or add it to "
+                    "command_allowlist) and send again."
+                    if dm_file
+                    else "."
+                )
+            )
         if not proc_id:
             return _err(f"Delivery to {label} failed to start: no process id returned")
         # From here the background runner owns the file (removed after the consumer finishes).
@@ -758,30 +1001,41 @@ def _spawn_delivery(command: str, label: str, *, dm_file: Optional[str] = None, 
             # terminal_tool refused the completion promise: this session (api_server, one-shot
             # runner) cannot receive an async completion, so the recipient's reply would never
             # be injected here (#101142). Say so and name the return path the surface supports.
-            detail = (f"Message handed to a background delivery process for {label}, but THIS session "
-                      "cannot receive completion notifications, so the reply will NOT arrive on its own. "
-                      f"Before ending your turn, retrieve the outcome with process(action='wait', "
-                      f"session_id='{proc_id}') — its output is the reply (relay it, attributed to that "
-                      "agent) or the delivery failure (report it; the message was NOT delivered); "
-                      "if wait returns status=timeout, call wait again until the process exits.")
+            detail = (
+                f"Message handed to a background delivery process for {label}, but THIS session "
+                "cannot receive completion notifications, so the reply will NOT arrive on its own. "
+                f"Before ending your turn, retrieve the outcome with process(action='wait', "
+                f"session_id='{proc_id}') — its output is the reply (relay it, attributed to that "
+                "agent) or the delivery failure (report it; the message was NOT delivered); "
+                "if wait returns status=timeout, call wait again until the process exits."
+            )
             if _persist_reply_when_done(proc_id, agent):
-                detail += (" Its outcome is also saved into this session's transcript as a delivery row "
-                           "when the process exits, so it survives even if the turn ends first.")
+                detail += (
+                    " Its outcome is also saved into this session's transcript as a delivery row "
+                    "when the process exits, so it survives even if the turn ends first."
+                )
         else:
-            detail = (f"Message queued for {label}: this acknowledges the hand-off to a "
-                      "background delivery process, not a delivery receipt — do NOT wait or poll. "
-                      "Finish your turn now; that process's completion notification carries the "
-                      "delivery outcome — the reply (relay it then, attributed to that agent) or "
-                      "the delivery failure (report it; the message was NOT delivered).")
-        return json.dumps({
-            "status": "queued",
-            "delivery_id": delivery_id or (_dm_delivery_id(dm_file) if dm_file else ""),
-            "to": label,
-            "reply_delivery": "poll" if parsed.get("notify_on_complete") is False else "notification",
-            "detail": detail,
-            "process_id": proc_id,
-            "queued_at": int(time.time()),
-        })
+            detail = (
+                f"Message queued for {label}: this acknowledges the hand-off to a "
+                "background delivery process, not a delivery receipt — do NOT wait or poll. "
+                "Finish your turn now; that process's completion notification carries the "
+                "delivery outcome — the reply (relay it then, attributed to that agent) or "
+                "the delivery failure (report it; the message was NOT delivered)."
+            )
+        return json.dumps(
+            {
+                "status": "queued",
+                "delivery_id": delivery_id
+                or (_dm_delivery_id(dm_file) if dm_file else ""),
+                "to": label,
+                "reply_delivery": "poll"
+                if parsed.get("notify_on_complete") is False
+                else "notification",
+                "detail": detail,
+                "process_id": proc_id,
+                "queued_at": int(time.time()),
+            }
+        )
     except Exception as exc:
         logger.error("message_agent delivery spawn failed: %s", exc, exc_info=True)
         return _err(f"Delivery to {label} could not be started: {exc}")
@@ -800,29 +1054,53 @@ def _persist_reply_when_done(proc_id: str, agent: Any) -> bool:
     armed) when the sender has no session transcript or the process is not tracked here."""
     from tools.process_registry import process_registry
 
-    db, session_id = getattr(agent, "_session_db", None), getattr(agent, "session_id", None)
+    db, session_id = (
+        getattr(agent, "_session_db", None),
+        getattr(agent, "session_id", None),
+    )
     proc = process_registry.get(proc_id)
-    if proc is None or not session_id or not callable(getattr(db, "append_message", None)):
+    if (
+        proc is None
+        or not session_id
+        or not callable(getattr(db, "append_message", None))
+    ):
         return False
 
     def _run() -> None:
         from tools.process_registry_notifications import (
-            format_process_notification, process_completion_display_text,
+            format_process_notification,
+            process_completion_display_text,
         )
 
         proc._completion_event.wait()
         if process_registry.is_completion_consumed(proc_id):
             return
-        evt = {"type": "completion", "session_id": proc_id, **process_registry._exit_snapshot(proc, "exited")}
+        evt = {
+            "type": "completion",
+            "session_id": proc_id,
+            **process_registry._exit_snapshot(proc, "exited"),
+        }
         try:
-            db.append_message(session_id, "user", content=format_process_notification(evt),
-                              display_kind="process_complete",
-                              display_metadata={"display_text": process_completion_display_text([evt])})
+            db.append_message(
+                session_id,
+                "user",
+                content=format_process_notification(evt),
+                display_kind="process_complete",
+                display_metadata={
+                    "display_text": process_completion_display_text([evt])
+                },
+            )
         except Exception as exc:
-            logger.warning("message_agent: could not persist the reply of %s into session %s: %s",
-                           proc_id, session_id, exc)
+            logger.warning(
+                "message_agent: could not persist the reply of %s into session %s: %s",
+                proc_id,
+                session_id,
+                exc,
+            )
 
-    threading.Thread(target=_run, name=f"message-agent-reply-{proc_id}", daemon=True).start()
+    threading.Thread(
+        target=_run, name=f"message-agent-reply-{proc_id}", daemon=True
+    ).start()
     return True
 
 
@@ -851,8 +1129,10 @@ def _wait_reply_main(reply_path: str, label: str, budget_seconds: str) -> int:
             return 0
         # 250ms cadence: stat is cheap and a longer sleep is pure dead air.
         time.sleep(0.25)
-    print(f"No reply from {label} within {budget_seconds}s. The message may still be delivered when "
-          "the Desktop reconnects; do not resend blindly.")
+    print(
+        f"No reply from {label} within {budget_seconds}s. The message may still be delivered when "
+        "the Desktop reconnects; do not resend blindly."
+    )
     return 1
 
 
@@ -876,7 +1156,13 @@ def _delivery_main(args: list[str]) -> int:
         profile_home = None
         if len(argv) >= 2 and argv[0] == "--profile-home":
             profile_home, argv = Path(argv[1]), argv[2:]
-        return _run_delivery(argv, dm_file, stdin_file=mode == "stdin", profile_home=profile_home, author=author)
+        return _run_delivery(
+            argv,
+            dm_file,
+            stdin_file=mode == "stdin",
+            profile_home=profile_home,
+            author=author,
+        )
     except Exception as exc:
         # Every refusal ships a typed reason on stdout so the completion notification carries it
         # back to the sender (#93091): 'target_busy' from the queue's bounded wait, otherwise the
@@ -904,7 +1190,10 @@ def _session_title(agent: Any) -> str:
     if title:
         return title
     with contextlib.suppress(Exception):
-        sdb, sid = getattr(agent, "_session_db", None), getattr(agent, "session_id", None)
+        sdb, sid = (
+            getattr(agent, "_session_db", None),
+            getattr(agent, "session_id", None),
+        )
         if sdb and sid:
             return str(sdb.get_session_title(sid) or "").strip()
     return ""
@@ -925,10 +1214,17 @@ if __name__ == "__main__":  # pragma: no cover - exercised as a background proce
             # told not to resend; a bare repair hint would read as "NOT delivered". Without an
             # intent nothing was handed over, so the plain failure is the truth. A relaunched
             # child (Windows) already printed its own outcome.
-            booted = getattr(exc, "relaunched", False) or (isinstance(exc, SystemExit) and not exc.code)
+            booted = getattr(exc, "relaunched", False) or (
+                isinstance(exc, SystemExit) and not exc.code
+            )
             parsed = _runner_argv(sys.argv[1:])
             if not booted and parsed and os.path.exists(_live_intent_file(parsed[2])):
-                print(_live_outcome_unknown(parsed[2], "the delivery runner could not activate "
-                                                       "Clawksis dependencies (see stderr)"))
+                print(
+                    _live_outcome_unknown(
+                        parsed[2],
+                        "the delivery runner could not activate "
+                        "Clawksis dependencies (see stderr)",
+                    )
+                )
             raise
     raise SystemExit(_delivery_main(sys.argv[1:]))

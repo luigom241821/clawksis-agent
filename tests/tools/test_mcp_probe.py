@@ -11,6 +11,7 @@ import pytest
 def _reset_mcp_state():
     """Ensure clean MCP module state before/after each test."""
     import tools.mcp_tool as mcp
+
     old_loop = mcp._mcp_loop
     old_thread = mcp._mcp_thread
     old_servers = dict(mcp._servers)
@@ -27,9 +28,9 @@ class TestProbeMcpServerTools:
     def test_returns_empty_when_mcp_not_available(self):
         with patch("tools.mcp_tool._MCP_AVAILABLE", False):
             from tools.mcp_tool_discovery import probe_mcp_server_tools
+
             result = probe_mcp_server_tools()
         assert result == {}
-
 
     def test_failed_server_omitted_from_results(self):
         """Servers that fail to connect are silently skipped."""
@@ -47,15 +48,19 @@ class TestProbeMcpServerTools:
                 raise ConnectionError("Server not found")
             return mock_server
 
-        with patch("tools.mcp_tool._MCP_AVAILABLE", True), \
-             patch("tools.mcp_tool_config._load_mcp_config", return_value=config), \
-             patch("tools.mcp_tool_discovery._connect_server", side_effect=fake_connect), \
-             patch("tools.mcp_tool_loop._ensure_mcp_loop"), \
-             patch("tools.mcp_tool_loop._run_on_mcp_loop") as mock_run, \
-             patch("tools.mcp_tool_loop._stop_mcp_loop"):
+        with (
+            patch("tools.mcp_tool._MCP_AVAILABLE", True),
+            patch("tools.mcp_tool_config._load_mcp_config", return_value=config),
+            patch("tools.mcp_tool_discovery._connect_server", side_effect=fake_connect),
+            patch("tools.mcp_tool_loop._ensure_mcp_loop"),
+            patch("tools.mcp_tool_loop._run_on_mcp_loop") as mock_run,
+            patch("tools.mcp_tool_loop._stop_mcp_loop"),
+        ):
 
             def run_coro(coro_or_factory, timeout=120):
-                coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
+                coro = (
+                    coro_or_factory() if callable(coro_or_factory) else coro_or_factory
+                )
                 loop = asyncio.new_event_loop()
                 try:
                     return loop.run_until_complete(coro)
@@ -65,11 +70,11 @@ class TestProbeMcpServerTools:
             mock_run.side_effect = run_coro
 
             from tools.mcp_tool_discovery import probe_mcp_server_tools
+
             result = probe_mcp_server_tools()
 
         assert "github" in result
         assert "broken" not in result
-
 
     def test_skips_disabled_servers(self):
         """Disabled servers are not probed."""
@@ -88,15 +93,19 @@ class TestProbeMcpServerTools:
             connect_calls.append(name)
             return mock_server
 
-        with patch("tools.mcp_tool._MCP_AVAILABLE", True), \
-             patch("tools.mcp_tool_config._load_mcp_config", return_value=config), \
-             patch("tools.mcp_tool_discovery._connect_server", side_effect=fake_connect), \
-             patch("tools.mcp_tool_loop._ensure_mcp_loop"), \
-             patch("tools.mcp_tool_loop._run_on_mcp_loop") as mock_run, \
-             patch("tools.mcp_tool_loop._stop_mcp_loop"):
+        with (
+            patch("tools.mcp_tool._MCP_AVAILABLE", True),
+            patch("tools.mcp_tool_config._load_mcp_config", return_value=config),
+            patch("tools.mcp_tool_discovery._connect_server", side_effect=fake_connect),
+            patch("tools.mcp_tool_loop._ensure_mcp_loop"),
+            patch("tools.mcp_tool_loop._run_on_mcp_loop") as mock_run,
+            patch("tools.mcp_tool_loop._stop_mcp_loop"),
+        ):
 
             def run_coro(coro_or_factory, timeout=120):
-                coro = coro_or_factory() if callable(coro_or_factory) else coro_or_factory
+                coro = (
+                    coro_or_factory() if callable(coro_or_factory) else coro_or_factory
+                )
                 loop = asyncio.new_event_loop()
                 try:
                     return loop.run_until_complete(coro)
@@ -106,6 +115,7 @@ class TestProbeMcpServerTools:
             mock_run.side_effect = run_coro
 
             from tools.mcp_tool_discovery import probe_mcp_server_tools
+
             result = probe_mcp_server_tools()
 
         assert "github" in result

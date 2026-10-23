@@ -11,6 +11,7 @@ Covers two residual bypasses addressed in the PR:
    plugin was in ``plugins.disabled``.  The updated ``serve_plugin_asset``
    now applies the disabled check to bundled plugins too.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,12 +22,14 @@ import pytest
 
 from clawk_cli import web_server
 
+
 @pytest.fixture(autouse=True)
 def _reset_plugin_cache():
     """Bust the plugin cache before and after each test."""
     web_server._dashboard_plugins_cache = None
     yield
     web_server._dashboard_plugins_cache = None
+
 
 @pytest.fixture
 def test_client(monkeypatch, tmp_path):
@@ -46,9 +49,11 @@ def test_client(monkeypatch, tmp_path):
     client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
     return client
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_bundled_plugin(tmp_path, name="bundledx"):
     """Create a minimal bundled plugin with a JS asset."""
@@ -57,16 +62,22 @@ def _make_bundled_plugin(tmp_path, name="bundledx"):
     dist_dir = dashboard_dir / "dist"
     dist_dir.mkdir()
     (dist_dir / "index.js").write_text("console.log('bundled');")
-    (dashboard_dir / "manifest.json").write_text(json.dumps({
-        "name": name,
-        "label": name.title(),
-        "entry": "dist/index.js",
-    }))
+    (dashboard_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "label": name.title(),
+                "entry": "dist/index.js",
+            }
+        )
+    )
     return dashboard_dir
+
 
 # ---------------------------------------------------------------------------
 # Test 1: Runtime-disabled user plugin API routes return 404
 # ---------------------------------------------------------------------------
+
 
 class TestPluginApiRuntimeGate:
     """After a user plugin is disabled at runtime, its mounted API routes
@@ -98,8 +109,15 @@ class TestPluginApiRuntimeGate:
 
         call_next = AsyncMock(return_value=JSONResponse({"ok": True}))
 
-        with patch.object(web_server, "_get_dashboard_plugins", return_value=[fake_plugin]), \
-             patch("clawk_cli.web_server_dashboard._plugin_enable_sets_here", return_value=({"hot"}, {"hot"})):
+        with (
+            patch.object(
+                web_server, "_get_dashboard_plugins", return_value=[fake_plugin]
+            ),
+            patch(
+                "clawk_cli.web_server_dashboard._plugin_enable_sets_here",
+                return_value=({"hot"}, {"hot"}),
+            ),
+        ):
             response = await web_server._plugin_api_runtime_gate(request, call_next)
 
         assert response.status_code == 404
@@ -148,8 +166,13 @@ class TestPluginApiRuntimeGate:
 
         call_next = AsyncMock(return_value=JSONResponse({"ok": True}))
 
-        with patch.object(web_server, "_get_dashboard_plugins", return_value=[]), \
-             patch("clawk_cli.web_server_dashboard._plugin_enable_sets_here", return_value=(set(), set())):
+        with (
+            patch.object(web_server, "_get_dashboard_plugins", return_value=[]),
+            patch(
+                "clawk_cli.web_server_dashboard._plugin_enable_sets_here",
+                return_value=(set(), set()),
+            ),
+        ):
             response = await web_server._plugin_api_runtime_gate(request, call_next)
 
         assert response.status_code == 404
@@ -168,7 +191,12 @@ class TestPluginApiRuntimeGate:
             "path": "/api/plugins/hot/probe",
             "query_string": b"",
             "headers": [],
-            "state": {"native_http_principal": {"profile_id": "default", "purpose": "native-http"}},
+            "state": {
+                "native_http_principal": {
+                    "profile_id": "default",
+                    "purpose": "native-http",
+                }
+            },
             # Local Desktop: loopback mode, no gated auth.
             "app": SimpleNamespace(state=SimpleNamespace(auth_required=False)),
         }
@@ -176,22 +204,35 @@ class TestPluginApiRuntimeGate:
 
         call_next = AsyncMock(return_value=JSONResponse({"ok": True}))
 
-        with patch.object(web_server, "_get_dashboard_plugins", return_value=[{"name": "hot", "source": "user"}]), \
-             patch("clawk_cli.web_server_dashboard._plugin_enable_sets_here", return_value=({"hot"}, {"hot"})):
+        with (
+            patch.object(
+                web_server,
+                "_get_dashboard_plugins",
+                return_value=[{"name": "hot", "source": "user"}],
+            ),
+            patch(
+                "clawk_cli.web_server_dashboard._plugin_enable_sets_here",
+                return_value=({"hot"}, {"hot"}),
+            ),
+        ):
             response = await web_server._plugin_api_runtime_gate(request, call_next)
 
         assert response.status_code == 404
         call_next.assert_not_called()
 
+
 # ---------------------------------------------------------------------------
 # Test 2: Disabled bundled plugin assets return 404
 # ---------------------------------------------------------------------------
+
 
 class TestBundledPluginAssetGate:
     """Bundled plugins in ``plugins.disabled`` must have their static
     assets blocked — not just hidden from the listing endpoint."""
 
-    def test_bundled_asset_returns_404_when_disabled(self, test_client, tmp_path, monkeypatch):
+    def test_bundled_asset_returns_404_when_disabled(
+        self, test_client, tmp_path, monkeypatch
+    ):
         """A disabled bundled plugin's JS asset must return 404."""
         plugin_dir = _make_bundled_plugin(tmp_path, "bundledx")
 
@@ -203,16 +244,24 @@ class TestBundledPluginAssetGate:
             "_dir": str(plugin_dir),
         }
 
-        with patch.object(web_server, "_get_dashboard_plugins", return_value=[fake_plugin]):
+        with patch.object(
+            web_server, "_get_dashboard_plugins", return_value=[fake_plugin]
+        ):
             # Sanity: asset is served when not disabled.
-            with patch("clawk_cli.web_server_dashboard._plugin_enable_sets_here", return_value=(set(), set())):
+            with patch(
+                "clawk_cli.web_server_dashboard._plugin_enable_sets_here",
+                return_value=(set(), set()),
+            ):
                 resp = test_client.get("/dashboard-plugins/bundledx/dist/index.js")
                 assert resp.status_code == 200, (
                     "Sanity: bundled plugin asset should be served when not disabled"
                 )
 
             # Disable it.
-            with patch("clawk_cli.web_server_dashboard._plugin_enable_sets_here", return_value=(set(), {"bundledx"})):
+            with patch(
+                "clawk_cli.web_server_dashboard._plugin_enable_sets_here",
+                return_value=(set(), {"bundledx"}),
+            ):
                 resp = test_client.get("/dashboard-plugins/bundledx/dist/index.js")
                 assert resp.status_code == 404, (
                     "Disabled bundled plugin asset must return 404"

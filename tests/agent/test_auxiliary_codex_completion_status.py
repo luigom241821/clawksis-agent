@@ -10,7 +10,10 @@ from agent.context_compressor import ContextCompressor
 
 def _message(text, *, phase: str | None = "final_answer", status="completed"):
     return SimpleNamespace(
-        type="message", role="assistant", phase=phase, status=status,
+        type="message",
+        role="assistant",
+        phase=phase,
+        status=status,
         content=[SimpleNamespace(type="output_text", text=text)],
     )
 
@@ -21,7 +24,9 @@ def _adapter_response(final, *, streamed, base_url=""):
             for item in final.output or []:
                 yield SimpleNamespace(type="response.output_item.done", item=item)
             if getattr(final, "output_text", None):
-                yield SimpleNamespace(type="response.output_text.delta", delta=final.output_text)
+                yield SimpleNamespace(
+                    type="response.output_text.delta", delta=final.output_text
+                )
             yield SimpleNamespace(type=f"response.{final.status}", response=final)
 
         def close(self):
@@ -33,14 +38,17 @@ def _adapter_response(final, *, streamed, base_url=""):
             return FakeStream() if streamed else final
 
     return _CodexCompletionsAdapter(
-        SimpleNamespace(base_url=base_url, responses=FakeResponses()), "aux-model",
+        SimpleNamespace(base_url=base_url, responses=FakeResponses()),
+        "aux-model",
     ).create(messages=[{"role": "user", "content": "Summarize the task."}])
 
 
 def test_compressor_rejects_actual_adapter_partial_summary(monkeypatch):
     partial = SimpleNamespace(
-        status="incomplete", output=[_message("PARTIAL_CHECKPOINT")],
-        incomplete_details={"reason": "max_output_tokens"}, error=None,
+        status="incomplete",
+        output=[_message("PARTIAL_CHECKPOINT")],
+        incomplete_details={"reason": "max_output_tokens"},
+        error=None,
         usage=SimpleNamespace(input_tokens=11, output_tokens=3, total_tokens=14),
     )
     calls = []
@@ -50,13 +58,22 @@ def test_compressor_rejects_actual_adapter_partial_summary(monkeypatch):
         return _adapter_response(partial, streamed=True)
 
     monkeypatch.setattr("agent.context_compressor.call_llm", fake_call_llm)
-    monkeypatch.setattr("agent.context_compressor.get_model_context_length", lambda *a, **k: 100000)
+    monkeypatch.setattr(
+        "agent.context_compressor.get_model_context_length", lambda *a, **k: 100000
+    )
     compressor = ContextCompressor(
-        model="main-model", quiet_mode=True, tail_mode="legacy", protect_first_n=2, protect_last_n=2,
+        model="main-model",
+        quiet_mode=True,
+        tail_mode="legacy",
+        protect_first_n=2,
+        protect_last_n=2,
         abort_on_summary_failure=False,
     )
     messages = [
-        {"role": "user" if i % 2 == 0 else "assistant", "content": f"task {i} " + "x" * 50}
+        {
+            "role": "user" if i % 2 == 0 else "assistant",
+            "content": f"task {i} " + "x" * 50,
+        }
         for i in range(12)
     ]
     original = [dict(message) for message in messages]
@@ -70,14 +87,25 @@ def test_compressor_rejects_actual_adapter_partial_summary(monkeypatch):
 
 
 _TOOL_CALL = SimpleNamespace(
-    type="function_call", status="completed", call_id="call_1", name="inspect", arguments='{"path":"x"}',
+    type="function_call",
+    status="completed",
+    call_id="call_1",
+    name="inspect",
+    arguments='{"path":"x"}',
 )
 _LEAK_LIKE_ANSWER = 'Summary of work.\nRunning the tests next.\n{"cmd": "pytest -q"}'
 _PARTIAL_TOOL_CALL = SimpleNamespace(
-    type="function_call", status="in_progress", call_id="call_2", name="inspect", arguments='{"pa',
+    type="function_call",
+    status="in_progress",
+    call_id="call_2",
+    name="inspect",
+    arguments='{"pa',
 )
 _CODEX_REASONING_ONLY = SimpleNamespace(
-    type="reasoning", id="rs_test", encrypted_content=None, summary=[SimpleNamespace(text="still thinking")],
+    type="reasoning",
+    id="rs_test",
+    encrypted_content=None,
+    summary=[SimpleNamespace(text="still thinking")],
 )
 
 
@@ -85,46 +113,169 @@ _CODEX_REASONING_ONLY = SimpleNamespace(
 @pytest.mark.parametrize(
     "base_url, status, output, reason, expected_content, expected_finish",
     [
-        pytest.param("", "completed", [_message("FINAL")], None, "FINAL", "stop", id="final-answer"),
-        pytest.param("", "completed", [_message("COMMENTARY", phase="commentary")], None, None, "length", id="commentary-only"),
-        pytest.param("", "completed", [_TOOL_CALL], None, None, "tool_calls", id="tool-call"),
-        pytest.param("", "completed", [{"type": "message", "role": "assistant", "status": "completed",
-                                        "content": [{"type": "output_text", "text": "DICT"}]}], None, "DICT", "stop",
-                     id="dict-items"),
-        pytest.param("", "completed", [_message(_LEAK_LIKE_ANSWER, phase=None)], None, _LEAK_LIKE_ANSWER, "stop",
-                     id="tool-call-like-answer"),
-        pytest.param("", "completed", [_message(_LEAK_LIKE_ANSWER, phase=None), _PARTIAL_TOOL_CALL], None,
-                     _LEAK_LIKE_ANSWER, "length", id="tool-call-like-partial-item"),
+        pytest.param(
+            "",
+            "completed",
+            [_message("FINAL")],
+            None,
+            "FINAL",
+            "stop",
+            id="final-answer",
+        ),
+        pytest.param(
+            "",
+            "completed",
+            [_message("COMMENTARY", phase="commentary")],
+            None,
+            None,
+            "length",
+            id="commentary-only",
+        ),
+        pytest.param(
+            "", "completed", [_TOOL_CALL], None, None, "tool_calls", id="tool-call"
+        ),
+        pytest.param(
+            "",
+            "completed",
+            [
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [{"type": "output_text", "text": "DICT"}],
+                }
+            ],
+            None,
+            "DICT",
+            "stop",
+            id="dict-items",
+        ),
+        pytest.param(
+            "",
+            "completed",
+            [_message(_LEAK_LIKE_ANSWER, phase=None)],
+            None,
+            _LEAK_LIKE_ANSWER,
+            "stop",
+            id="tool-call-like-answer",
+        ),
+        pytest.param(
+            "",
+            "completed",
+            [_message(_LEAK_LIKE_ANSWER, phase=None), _PARTIAL_TOOL_CALL],
+            None,
+            _LEAK_LIKE_ANSWER,
+            "length",
+            id="tool-call-like-partial-item",
+        ),
         # A str ``output`` is delivered only via output_text (empty output list), as streamed Codex answers can be.
-        pytest.param("", "completed", _LEAK_LIKE_ANSWER, None, _LEAK_LIKE_ANSWER, "stop", id="tool-call-like-output-text"),
+        pytest.param(
+            "",
+            "completed",
+            _LEAK_LIKE_ANSWER,
+            None,
+            _LEAK_LIKE_ANSWER,
+            "stop",
+            id="tool-call-like-output-text",
+        ),
         # (items, text): output_text beside a commentary item is narration, never the rescued answer.
-        pytest.param("", "completed", ([_message("", phase="commentary")], _LEAK_LIKE_ANSWER), None, None, "length",
-                     id="tool-call-like-output-text-beside-commentary"),
-        pytest.param("", "incomplete", [_message("PARTIAL")], "max_output_tokens", "PARTIAL", "length", id="token-cap"),
-        pytest.param("", "incomplete", [_TOOL_CALL], "max_output_tokens", None, "tool_calls", id="token-cap-after-tool-call"),
+        pytest.param(
+            "",
+            "completed",
+            ([_message("", phase="commentary")], _LEAK_LIKE_ANSWER),
+            None,
+            None,
+            "length",
+            id="tool-call-like-output-text-beside-commentary",
+        ),
+        pytest.param(
+            "",
+            "incomplete",
+            [_message("PARTIAL")],
+            "max_output_tokens",
+            "PARTIAL",
+            "length",
+            id="token-cap",
+        ),
+        pytest.param(
+            "",
+            "incomplete",
+            [_TOOL_CALL],
+            "max_output_tokens",
+            None,
+            "tool_calls",
+            id="token-cap-after-tool-call",
+        ),
         # Compressor only rejects "length": a content-filtered partial must not be committed as a summary.
-        pytest.param("", "incomplete", [_message("CF")], "content_filter", "CF", "length", id="content-filter"),
+        pytest.param(
+            "",
+            "incomplete",
+            [_message("CF")],
+            "content_filter",
+            "CF",
+            "length",
+            id="content-filter",
+        ),
         # Commentary + unphased text is incomplete whether or not the unphased text looks like a tool call.
-        pytest.param("", "completed", [_message("NOTE", phase="commentary"), _message(_LEAK_LIKE_ANSWER, phase=None)],
-                     None, _LEAK_LIKE_ANSWER, "length", id="tool-call-like-beside-commentary"),
+        pytest.param(
+            "",
+            "completed",
+            [
+                _message("NOTE", phase="commentary"),
+                _message(_LEAK_LIKE_ANSWER, phase=None),
+            ],
+            None,
+            _LEAK_LIKE_ANSWER,
+            "length",
+            id="tool-call-like-beside-commentary",
+        ),
         # Route-sensitive normalization: the issuer comes from the request's route classification.
-        pytest.param("https://chatgpt.com/backend-api/codex", "completed", [_CODEX_REASONING_ONLY], None, None, "length",
-                     id="codex-reasoning-only"),
+        pytest.param(
+            "https://chatgpt.com/backend-api/codex",
+            "completed",
+            [_CODEX_REASONING_ONLY],
+            None,
+            None,
+            "length",
+            id="codex-reasoning-only",
+        ),
     ],
 )
 def test_actual_adapter_preserves_completion_contract(
-    streamed, base_url, status, output, reason, expected_content, expected_finish,
+    streamed,
+    base_url,
+    status,
+    output,
+    reason,
+    expected_content,
+    expected_finish,
 ):
-    items, output_text = output if isinstance(output, tuple) else ([], output) if isinstance(output, str) else (output, "")
+    items, output_text = (
+        output
+        if isinstance(output, tuple)
+        else ([], output)
+        if isinstance(output, str)
+        else (output, "")
+    )
     final = SimpleNamespace(
-        status=status, output=items, output_text=output_text,
-        incomplete_details={"reason": reason} if reason else None, error=None,
+        status=status,
+        output=items,
+        output_text=output_text,
+        incomplete_details={"reason": reason} if reason else None,
+        error=None,
         usage={"input_tokens": 11, "output_tokens": 3, "total_tokens": 14},
     )
 
     choice = _adapter_response(final, streamed=streamed, base_url=base_url).choices[0]
 
-    assert (choice.message.content, choice.finish_reason) == (expected_content, expected_finish)
+    assert (choice.message.content, choice.finish_reason) == (
+        expected_content,
+        expected_finish,
+    )
     if expected_finish == "tool_calls":
-        call, = choice.message.tool_calls
-        assert (call.id, call.function.name, call.function.arguments) == ("call_1", "inspect", '{"path":"x"}')
+        (call,) = choice.message.tool_calls
+        assert (call.id, call.function.name, call.function.arguments) == (
+            "call_1",
+            "inspect",
+            '{"path":"x"}',
+        )

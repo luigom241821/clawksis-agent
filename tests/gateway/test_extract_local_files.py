@@ -19,6 +19,7 @@ from gateway.platforms.base import BasePlatformAdapter
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract(content: str, existing_files: set[str] | None = None):
     """
     Run extract_local_files with os.path.isfile mocked to return True
@@ -37,8 +38,10 @@ def _extract(content: str, existing_files: set[str] | None = None):
             return "/home/user" + p[1:]
         return p
 
-    with patch("os.path.isfile", side_effect=fake_isfile), \
-         patch("os.path.expanduser", side_effect=fake_expanduser):
+    with (
+        patch("os.path.isfile", side_effect=fake_isfile),
+        patch("os.path.expanduser", side_effect=fake_expanduser),
+    ):
         return BasePlatformAdapter.extract_local_files(content)
 
 
@@ -46,10 +49,12 @@ def _extract(content: str, existing_files: set[str] | None = None):
 # Basic detection
 # ---------------------------------------------------------------------------
 
-class TestBasicDetection:
 
+class TestBasicDetection:
     def test_absolute_path_image(self):
-        paths, cleaned = _extract("Here is the screenshot /root/screenshots/game.png enjoy")
+        paths, cleaned = _extract(
+            "Here is the screenshot /root/screenshots/game.png enjoy"
+        )
         assert paths == ["/root/screenshots/game.png"]
         assert "/root/screenshots/game.png" not in cleaned
         assert "Here is the screenshot" in cleaned
@@ -81,7 +86,6 @@ class TestBasicDetection:
             assert len(paths) == 1, f"Failed for {ext}"
             assert paths[0] == f"/tmp/report{ext}"
 
-
     def test_path_at_line_start(self):
         paths, _ = _extract("/var/data/image.png")
         assert paths == ["/var/data/image.png"]
@@ -91,8 +95,8 @@ class TestBasicDetection:
 # Non-existent files are skipped
 # ---------------------------------------------------------------------------
 
-class TestIsfileGuard:
 
+class TestIsfileGuard:
     def test_nonexistent_path_skipped(self):
         """Paths that don't exist on disk are not extracted."""
         paths, cleaned = _extract(
@@ -107,11 +111,13 @@ class TestIsfileGuard:
 # URL false-positive prevention
 # ---------------------------------------------------------------------------
 
-class TestURLRejection:
 
+class TestURLRejection:
     def test_https_url_not_matched(self):
         """Paths embedded in HTTP URLs must not be extracted."""
-        paths, cleaned = _extract("Visit https://example.com/images/photo.png for details")
+        paths, cleaned = _extract(
+            "Visit https://example.com/images/photo.png for details"
+        )
         # The regex lookbehind should prevent matching the URL's path segment
         # Even if it did match, isfile would be False for /images/photo.png
         # (we mock isfile to True-for-all here, so the lookbehind is the guard)
@@ -123,8 +129,8 @@ class TestURLRejection:
 # Code block exclusion
 # ---------------------------------------------------------------------------
 
-class TestCodeBlockExclusion:
 
+class TestCodeBlockExclusion:
     def test_fenced_code_block_skipped(self):
         text = "Here's how:\n```python\nimg = open('/tmp/image.png')\n```\nDone."
         paths, cleaned = _extract(text)
@@ -142,8 +148,8 @@ class TestCodeBlockExclusion:
 # Deduplication
 # ---------------------------------------------------------------------------
 
-class TestDeduplication:
 
+class TestDeduplication:
     def test_duplicate_paths_deduplicated(self):
         text = "See /tmp/img.png and also /tmp/img.png again"
         paths, _ = _extract(text)
@@ -154,8 +160,8 @@ class TestDeduplication:
 # Text cleanup
 # ---------------------------------------------------------------------------
 
-class TestTextCleanup:
 
+class TestTextCleanup:
     def test_path_removed_from_text(self):
         _paths, cleaned = _extract("Before /tmp/x.png after")
         assert "Before" in cleaned
@@ -172,13 +178,12 @@ class TestTextCleanup:
 # Edge cases
 # ---------------------------------------------------------------------------
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     def test_empty_string(self):
         paths, cleaned = _extract("")
         assert paths == []
         assert cleaned == ""
-
 
     @pytest.mark.parametrize(
         "content,expected",
@@ -210,7 +215,6 @@ class TestEdgeCases:
         Unix sibling ``foo/bar.png``)."""
         paths, _ = _extract("File at foo\\bar.png here")
         assert paths == []
-
 
     def test_path_followed_by_punctuation(self):
         """Path followed by comma, period, paren should still match."""

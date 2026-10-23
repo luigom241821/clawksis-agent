@@ -1,4 +1,5 @@
 """Under a named profile the updater (root store) and pm (profile store) still see each other's receipts."""
+
 from __future__ import annotations
 
 import json
@@ -43,12 +44,28 @@ def test_named_profile_sees_update_and_pm_receipts_in_both_directions(tmp_path):
     profile.mkdir(parents=True)
     script = tmp_path / "probe.py"
     script.write_text(_PROBE, encoding="utf-8")
-    env = {key: value for key, value in os.environ.items() if not key.startswith(("CLAWK_", "PYTEST_"))}
-    env.update(HOME=str(home), USERPROFILE=str(home), CLAWK_HOME=str(profile),
-               CLAWK_RUNTIME_DIR=str(tmp_path / "tools"), PYTHONDONTWRITEBYTECODE="1",
-               PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, sys.path)]))
-    done = subprocess.run([sys.executable, str(script), str(ROOT), str(profile)], env=env, cwd=tmp_path,
-                          text=True, capture_output=True, timeout=60, check=False)
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("CLAWK_", "PYTEST_"))
+    }
+    env.update(
+        HOME=str(home),
+        USERPROFILE=str(home),
+        CLAWK_HOME=str(profile),
+        CLAWK_RUNTIME_DIR=str(tmp_path / "tools"),
+        PYTHONDONTWRITEBYTECODE="1",
+        PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, sys.path)]),
+    )
+    done = subprocess.run(
+        [sys.executable, str(script), str(ROOT), str(profile)],
+        env=env,
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
     assert done.returncode == 0, done.stdout + done.stderr
     result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
 
@@ -56,4 +73,6 @@ def test_named_profile_sees_update_and_pm_receipts_in_both_directions(tmp_path):
     assert any(result["update_id"] in name for name in result["root_archives"])
     assert result["pm_sees_update"] == result["update_id"]  # `clawk -p foo pm status`
     assert result["updater_sees_pm"] == "sync"  # read_latest_receipt() consumers
-    assert result["old_archive"] == "old"  # receipts written to the profile store before the move
+    assert (
+        result["old_archive"] == "old"
+    )  # receipts written to the profile store before the move

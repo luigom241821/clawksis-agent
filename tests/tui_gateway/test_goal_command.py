@@ -218,8 +218,6 @@ def test_successful_goal_turn_accepts_only_valid_completion_outcomes(
 # ── command.dispatch /goal ────────────────────────────────────────────
 
 
-
-
 def _exhaust_budget(session_key: str, goal_text: str = "finish the benchmark"):
     """Set a 1-turn goal and drive it to budget-exhaustion auto-pause."""
     from clawk_cli.goals import GoalManager
@@ -236,9 +234,7 @@ def _exhaust_budget(session_key: str, goal_text: str = "finish the benchmark"):
     return mgr
 
 
-def test_goal_resume_after_budget_exhaustion_dispatches_continuation(
-    server, session
-):
+def test_goal_resume_after_budget_exhaustion_dispatches_continuation(server, session):
     """#75362: /goal resume must restart work, not just flip state.
 
     The pre-fix handler returned a display-only `exec` payload, so the
@@ -284,8 +280,6 @@ def test_slash_exec_routes_goal_to_command_dispatch(server, session):
     assert r["result"]["type"] == "exec"
 
 
-
-
 def test_iteration_limit_fallback_is_judged_and_can_continue(
     server, turn_env, monkeypatch
 ):
@@ -297,15 +291,17 @@ def test_iteration_limit_fallback_is_judged_and_can_continue(
     continuation = mgr.next_continuation_prompt()
     seen_prompts = []
     judged = []
-    results = iter([
-        _max_iterations_fallback(),
-        {
-            "final_response": "finished normally",
-            "completed": True,
-            "failed": False,
-            "turn_exit_reason": "text_response(finish_reason=stop)",
-        },
-    ])
+    results = iter(
+        [
+            _max_iterations_fallback(),
+            {
+                "final_response": "finished normally",
+                "completed": True,
+                "failed": False,
+                "turn_exit_reason": "text_response(finish_reason=stop)",
+            },
+        ]
+    )
 
     def run_conversation(message, **_kwargs):
         seen_prompts.append(message)
@@ -527,27 +523,34 @@ def test_new_goal_does_not_inherit_previous_goal_recovery_attempt(server):
 
 # ── command.dispatch /moa ────────────────────────────────────────────
 
+
 def _write_moa_config(home, text):
     cfg_path = home / "config.yaml"
     cfg_path.write_text(text)
 
 
-
-
 @pytest.mark.parametrize("method", ["command.dispatch", "slash.exec"])
 def test_goal_draft_uses_session_profile_without_blocking_rpc_reader(
-    server, session, monkeypatch, tmp_path, method,
+    server,
+    session,
+    monkeypatch,
+    tmp_path,
+    method,
 ):
     from clawk_cli import goals
     from clawk_constants import get_clawk_home
     import clawk_state
 
     # Restore call-time profile resolution; conftest pins this constant to one DB.
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     sid, key, record = session
     secondary = tmp_path / "secondary"
     secondary.mkdir()
-    (secondary / "config.yaml").write_text("goals:\n  max_turns: 37\n", encoding="utf-8")
+    (secondary / "config.yaml").write_text(
+        "goals:\n  max_turns: 37\n", encoding="utf-8"
+    )
     record["profile_home"] = str(secondary)
     started, release, returned, replied = (threading.Event() for _ in range(4))
     observed, frames = [], []
@@ -579,7 +582,9 @@ def test_goal_draft_uses_session_profile_without_blocking_rpc_reader(
     try:
         assert started.wait(5)
         assert returned.wait(2), "draft blocked the transport reader"
-        ping = server.dispatch({"id": "ping", "method": "ping", "params": {}}, transport)
+        ping = server.dispatch(
+            {"id": "ping", "method": "ping", "params": {}}, transport
+        )
         assert ping["id"] == "ping" and "result" in ping
     finally:
         release.set()

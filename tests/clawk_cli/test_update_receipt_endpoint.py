@@ -63,8 +63,9 @@ def _write_receipt(tmp_path: Path, monkeypatch, *, outcome="success") -> dict:
 
 
 class TestUpdateReceiptEndpoint:
-
-    def test_receipt_endpoint_returns_full_receipt_and_summary(self, client, tmp_path, monkeypatch):
+    def test_receipt_endpoint_returns_full_receipt_and_summary(
+        self, client, tmp_path, monkeypatch
+    ):
         receipt = _write_receipt(tmp_path, monkeypatch)
 
         resp = client.get("/api/clawk/update/receipt")
@@ -91,13 +92,16 @@ class TestUpdateReceiptEndpoint:
 
 
 class TestUpdateStatusReadsReceipt:
-
     def _clear_registries(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(_web_server_gateway, "_ACTION_LOG_DIR", tmp_path / "actions")
+        monkeypatch.setattr(
+            _web_server_gateway, "_ACTION_LOG_DIR", tmp_path / "actions"
+        )
         (tmp_path / "actions").mkdir(exist_ok=True)
         # The dashboard's own log names the action it spawned; the receipt must name the same one.
         (tmp_path / "actions" / "clawk-update.log").write_text(
-            f"=== clawk-update started 2026-08-23 07:00:00 {_ACTION_ID} ===\n", encoding="utf-8")
+            f"=== clawk-update started 2026-08-23 07:00:00 {_ACTION_ID} ===\n",
+            encoding="utf-8",
+        )
         monkeypatch.setattr(_web_server_gateway, "_ACTION_PROCS", {})
         monkeypatch.setattr(_web_server_gateway, "_ACTION_RESULTS", {})
         monkeypatch.setattr(_web_server_gateway, "_ACTION_COMMANDS", {})
@@ -113,7 +117,9 @@ class TestUpdateStatusReadsReceipt:
         data = resp.json()
         assert data["receipt"]["outcome"] == "success"
 
-    def test_finished_receipt_is_the_outcome_when_marker_and_memory_gone(self, client, tmp_path, monkeypatch):
+    def test_finished_receipt_is_the_outcome_when_marker_and_memory_gone(
+        self, client, tmp_path, monkeypatch
+    ):
         """Dashboard restarted (registries lost) AND update.log has no
         completion marker (rotated): the receipt alone reports success."""
         _write_receipt(tmp_path, monkeypatch, outcome="success")

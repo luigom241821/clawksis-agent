@@ -1,4 +1,5 @@
 """Launch-time dependency selection survives a change after launcher minting."""
+
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,9 @@ from pm.environments import install_state_dir, site_packages
 
 
 @pytest.mark.platforms("windows")
-def test_minted_launcher_reads_current_selection_and_editable_members(tmp_path, monkeypatch):
+def test_minted_launcher_reads_current_selection_and_editable_members(
+    tmp_path, monkeypatch
+):
     from pm import environments as runtime_paths
     from clawk_cli import runtime_state
     import clawk_constants
@@ -25,10 +28,18 @@ def test_minted_launcher_reads_current_selection_and_editable_members(tmp_path, 
     pm_package.mkdir()
     (pm_package / "__init__.py").write_text("")
     # Real selection code, with a fixture entry point rather than a live CLI.
-    (pm_package / "environments.py").write_bytes(Path(runtime_paths.__file__).read_bytes())
-    (pm_package / "filesystem.py").write_bytes((Path(runtime_paths.__file__).parent / "filesystem.py").read_bytes())
-    (package / "runtime_state.py").write_bytes(Path(runtime_state.__file__).read_bytes())
-    (root / "clawk_constants.py").write_bytes(Path(clawk_constants.__file__).read_bytes())
+    (pm_package / "environments.py").write_bytes(
+        Path(runtime_paths.__file__).read_bytes()
+    )
+    (pm_package / "filesystem.py").write_bytes(
+        (Path(runtime_paths.__file__).parent / "filesystem.py").read_bytes()
+    )
+    (package / "runtime_state.py").write_bytes(
+        Path(runtime_state.__file__).read_bytes()
+    )
+    (root / "clawk_constants.py").write_bytes(
+        Path(clawk_constants.__file__).read_bytes()
+    )
     (root / "clawk_bootstrap.py").write_text(
         "from pathlib import Path\nfrom pm.environments import activate_dependencies\n"
         "activate_dependencies(Path(__file__).resolve().parent)\n"
@@ -56,10 +67,20 @@ def test_minted_launcher_reads_current_selection_and_editable_members(tmp_path, 
     editable.mkdir()
     (editable / "editable_probe.py").write_text("VALUE = 'editable'\n")
     (site / "member.pth").write_text(str(editable) + "\n")
-    (state / "facts.json").write_text(json.dumps({"packages": {"venv": {"environment": str(selected)}}}))
+    (state / "facts.json").write_text(
+        json.dumps({"packages": {"venv": {"environment": str(selected)}}})
+    )
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
     env.pop("PYTHONHOME", None)
-    result = subprocess.run([str(launcher)], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [str(launcher)],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == "selected editable"

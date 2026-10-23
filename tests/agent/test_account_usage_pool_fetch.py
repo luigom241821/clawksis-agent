@@ -25,8 +25,10 @@ def _b64(part: dict) -> str:
 
 
 def _codex_jwt(account_id: str, sub: str) -> str:
-    return (f"{_b64({'alg': 'none'})}."
-            f"{_b64({'sub': sub, 'https://api.openai.com/auth': {'chatgpt_account_id': account_id}})}.sig")
+    return (
+        f"{_b64({'alg': 'none'})}."
+        f"{_b64({'sub': sub, 'https://api.openai.com/auth': {'chatgpt_account_id': account_id}})}.sig"
+    )
 
 
 class _LoopbackUsageServer:
@@ -41,8 +43,17 @@ class _LoopbackUsageServer:
         class _Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 with handler.lock:
-                    handler.requests.append({"path": self.path, "token": self.headers.get("Authorization", "")})
-                token = (self.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+                    handler.requests.append(
+                        {
+                            "path": self.path,
+                            "token": self.headers.get("Authorization", ""),
+                        }
+                    )
+                token = (
+                    (self.headers.get("Authorization") or "")
+                    .removeprefix("Bearer ")
+                    .strip()
+                )
                 status, payload = handler.responses.get(token, (200, {}))
                 body = json.dumps(payload).encode()
                 self.send_response(status)
@@ -71,10 +82,16 @@ def _usage_payload(session_used: float = 20.0, weekly_used: float = 5.0) -> dict
     return {
         "plan_type": "pro",
         "rate_limit": {
-            "primary_window": {"used_percent": session_used, "reset_at": int((now + timedelta(hours=1)).timestamp()),
-                               "limit_window_seconds": 18000},
-            "secondary_window": {"used_percent": weekly_used, "reset_at": int((now + timedelta(days=3)).timestamp()),
-                                 "limit_window_seconds": 604800},
+            "primary_window": {
+                "used_percent": session_used,
+                "reset_at": int((now + timedelta(hours=1)).timestamp()),
+                "limit_window_seconds": 18000,
+            },
+            "secondary_window": {
+                "used_percent": weekly_used,
+                "reset_at": int((now + timedelta(days=3)).timestamp()),
+                "limit_window_seconds": 604800,
+            },
         },
         "credits": {"has_credits": False},
     }
@@ -88,21 +105,38 @@ def test_read_only_fetch_routes_to_entries_own_host_and_parses(monkeypatch, tmp_
     from clawk_cli import auth as auth_mod
 
     rotations: list = []
-    monkeypatch.setattr(auth_mod, "resolve_codex_runtime_credentials",
-                        lambda **kw: rotations.append(kw) or (_ for _ in ()).throw(AssertionError(
-                            "read-only per-credential fetch must never consult the singleton resolver")))
+    monkeypatch.setattr(
+        auth_mod,
+        "resolve_codex_runtime_credentials",
+        lambda **kw: (
+            rotations.append(kw)
+            or (_ for _ in ()).throw(
+                AssertionError(
+                    "read-only per-credential fetch must never consult the singleton resolver"
+                )
+            )
+        ),
+    )
     token = _codex_jwt("acct-9", "user-9")
     with _LoopbackUsageServer() as server:
         server.responses[token] = (200, _usage_payload(session_used=44.0))
         snapshot = fetch_account_usage(
-            "openai-codex", base_url=server.url, api_key=token, read_only=True, identity_id="codex:acct-9:user-9")
+            "openai-codex",
+            base_url=server.url,
+            api_key=token,
+            read_only=True,
+            identity_id="codex:acct-9:user-9",
+        )
 
     assert snapshot is not None
     assert [(w.label, w.used_percent, w.scope) for w in snapshot.windows] == [
-        ("Session", 44.0, "account"), ("Weekly", 5.0, "account")]
+        ("Session", 44.0, "account"),
+        ("Weekly", 5.0, "account"),
+    ]
     assert snapshot.identity == "codex:acct-9:user-9"
-    assert server.requests[0]["path"].endswith("/wham/usage"), \
+    assert server.requests[0]["path"].endswith("/wham/usage"), (
         "a /backend-api base routes to the ChatGPT wham usage path"
+    )
     assert server.requests[0]["token"] == f"Bearer {token}"
 
 
@@ -115,14 +149,21 @@ def test_read_only_401_raises_and_never_retries_with_rotation(monkeypatch, tmp_p
     from clawk_cli import auth as auth_mod
 
     def _forbidden_refresh(**kw):
-        raise AssertionError("read-only path must not force-refresh (would rotate a pool credential)")
+        raise AssertionError(
+            "read-only path must not force-refresh (would rotate a pool credential)"
+        )
 
     token = _codex_jwt("acct-1", "user-1")
     with _LoopbackUsageServer() as server:
         server.responses[token] = (401, {"error": "unauthorized"})
-        monkeypatch.setattr(account_usage, "_resolve_codex_usage_credentials",
-                            lambda base_url, api_key, **kw: (api_key, base_url, None))
-        monkeypatch.setattr(auth_mod, "resolve_codex_runtime_credentials", _forbidden_refresh)
+        monkeypatch.setattr(
+            account_usage,
+            "_resolve_codex_usage_credentials",
+            lambda base_url, api_key, **kw: (api_key, base_url, None),
+        )
+        monkeypatch.setattr(
+            auth_mod, "resolve_codex_runtime_credentials", _forbidden_refresh
+        )
         # The fetcher under test imports _resolve_codex_usage_credentials at module level, so the
         # 401 path must NOT re-enter it with force_refresh: patch it to blow up on force_refresh.
         original = account_usage._resolve_codex_usage_credentials
@@ -132,37 +173,60 @@ def test_read_only_401_raises_and_never_retries_with_rotation(monkeypatch, tmp_p
                 raise AssertionError("read-only path must not force-refresh")
             return original(base_url, api_key)
 
-        monkeypatch.setattr(account_usage, "_resolve_codex_usage_credentials", no_force_refresh)
+        monkeypatch.setattr(
+            account_usage, "_resolve_codex_usage_credentials", no_force_refresh
+        )
         snapshot = fetch_account_usage(
-            "openai-codex", base_url=server.url, api_key=token, read_only=True)
+            "openai-codex", base_url=server.url, api_key=token, read_only=True
+        )
 
-    assert snapshot is None, "401 → no snapshot (account renders unknown), no repair attempted"
-    assert len(server.requests) == 1, "exactly one request — no retry on the read-only path"
+    assert snapshot is None, (
+        "401 → no snapshot (account renders unknown), no repair attempted"
+    )
+    assert len(server.requests) == 1, (
+        "exactly one request — no retry on the read-only path"
+    )
 
 
-def test_anthropic_fetch_honors_explicit_api_key_and_marks_model_scoped_windows(monkeypatch):
+def test_anthropic_fetch_honors_explicit_api_key_and_marks_model_scoped_windows(
+    monkeypatch,
+):
     """An explicit Anthropic api_key must not be shadowed by the ambient OAuth singleton, and the
     Opus/Sonnet weekly windows parse as ``model`` scope (they can never imply the account is out)."""
     called: dict = {}
 
     def fake_get_json(url, headers, *, timeout):
         called["url"], called["headers"] = url, headers
-        return {"five_hour": {"utilization": 0.3, "resets_at": "2026-10-05T12:00:00Z"},
-                "seven_day": {"utilization": 0.2, "resets_at": "2026-10-08T12:00:00Z"},
-                "seven_day_opus": {"utilization": 1.0, "resets_at": "2026-10-09T12:00:00Z"},
-                "seven_day_sonnet": {"utilization": 0.4, "resets_at": "2026-10-09T12:00:00Z"}}
+        return {
+            "five_hour": {"utilization": 0.3, "resets_at": "2026-10-05T12:00:00Z"},
+            "seven_day": {"utilization": 0.2, "resets_at": "2026-10-08T12:00:00Z"},
+            "seven_day_opus": {"utilization": 1.0, "resets_at": "2026-10-09T12:00:00Z"},
+            "seven_day_sonnet": {
+                "utilization": 0.4,
+                "resets_at": "2026-10-09T12:00:00Z",
+            },
+        }
 
     monkeypatch.setattr(account_usage, "_get_json", fake_get_json)
-    monkeypatch.setattr(account_usage, "resolve_anthropic_token",
-                        lambda **kw: (_ for _ in ()).throw(AssertionError("ambient token must not be consulted")))
+    monkeypatch.setattr(
+        account_usage,
+        "resolve_anthropic_token",
+        lambda **kw: (_ for _ in ()).throw(
+            AssertionError("ambient token must not be consulted")
+        ),
+    )
 
     snapshot = fetch_account_usage("anthropic", api_key="sk-ant-oat-explicit-token")
 
     assert snapshot is not None
     assert called["headers"]["Authorization"] == "Bearer sk-ant-oat-explicit-token"
     scopes = {w.label: w.scope for w in snapshot.windows}
-    assert scopes == {"Current session": "account", "Current week": "account",
-                      "Opus week": "model", "Sonnet week": "model"}
+    assert scopes == {
+        "Current session": "account",
+        "Current week": "account",
+        "Opus week": "model",
+        "Sonnet week": "model",
+    }
     percents = {w.label: w.used_percent for w in snapshot.windows}
     assert percents["Opus week"] == 100.0 and percents["Current session"] == 30.0
 
@@ -177,10 +241,16 @@ def test_read_only_fetch_remembered_under_identity_slot(monkeypatch, tmp_path):
     token = _codex_jwt("acct-7", "user-7")
     with _LoopbackUsageServer() as server:
         server.responses[token] = (200, _usage_payload(session_used=66.0))
-        fetch_account_usage("openai-codex", base_url=server.url, api_key=token,
-                            read_only=True, identity_id="codex:acct-7:user-7")
+        fetch_account_usage(
+            "openai-codex",
+            base_url=server.url,
+            api_key=token,
+            read_only=True,
+            identity_id="codex:acct-7:user-7",
+        )
 
     snapshot = cached_account_usage("openai-codex", identity_id="codex:acct-7:user-7")
     assert snapshot is not None and snapshot.windows[0].used_percent == 66.0
-    assert cached_account_usage("openai-codex") is None, \
+    assert cached_account_usage("openai-codex") is None, (
         "a per-credential snapshot must never pose as the provider-wide gauge"
+    )

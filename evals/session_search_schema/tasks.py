@@ -3,6 +3,7 @@
 Every oracle is a pure function of the model's final answer string — no LLM
 judging. Tasks map 1:1 to the sessions seeded by fixtures.py.
 """
+
 from __future__ import annotations
 
 import re
@@ -49,10 +50,21 @@ TASKS = {
     "t6_browse": (
         "What have I been working on in my recent sessions? Just give me a "
         "quick rundown.",
-        lambda a: sum(
-            k in a.lower()
-            for k in ("fan", "tax", "aquarium", "beehive", "apiary", "504", "checkout")
-        ) >= 3,
+        lambda a: (
+            sum(
+                k in a.lower()
+                for k in (
+                    "fan",
+                    "tax",
+                    "aquarium",
+                    "beehive",
+                    "apiary",
+                    "504",
+                    "checkout",
+                )
+            )
+            >= 3
+        ),
         "browse shape",
     ),
 }

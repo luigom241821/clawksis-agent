@@ -159,12 +159,18 @@ class TestTerminalToolReadsTheFlag:
         monkeypatch.setattr(tt, "_active_environments", {"default": env})
         monkeypatch.setattr(tt, "_last_activity", {})
         monkeypatch.setattr(
-            tt, "_get_env_config",
-            lambda: {"env_type": "local", "cwd": env.cwd, "timeout": 60,
-                     "lifetime_seconds": 3600},
+            tt,
+            "_get_env_config",
+            lambda: {
+                "env_type": "local",
+                "cwd": env.cwd,
+                "timeout": 60,
+                "lifetime_seconds": 3600,
+            },
         )
         monkeypatch.setattr(
-            tt, "_check_all_guards",
+            tt,
+            "_check_all_guards",
             lambda command, env_type, **kwargs: {"approved": True},
         )
         return json.loads(
@@ -200,7 +206,9 @@ class TestTerminalToolReadsTheFlag:
         assert "cwd" not in result or result.get("cwd") is None
 
     @pytest.mark.platforms("linux")
-    def test_completed_command_still_records_and_echoes(self, env, tmp_path, monkeypatch):
+    def test_completed_command_still_records_and_echoes(
+        self, env, tmp_path, monkeypatch
+    ):
         """The gate must not break the observed path: cd still round-trips."""
         target = tmp_path / "target"
         target.mkdir()

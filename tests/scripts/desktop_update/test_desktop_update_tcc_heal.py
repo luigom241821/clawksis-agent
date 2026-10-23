@@ -34,17 +34,15 @@ POSIX_SH = REPO_ROOT / "scripts" / "desktop-update" / "posix.sh"
 GOOD_STUB = "#!/usr/bin/env bash\n# bootable interpreter stub\nexit 0\n"
 BAD_STUB = (
     "#!/usr/bin/env bash\n"
-    "echo \"Fatal Python error: init_fs_encoding: failed to get the Python "
-    "codec of the filesystem encoding\" >&2\n"
+    'echo "Fatal Python error: init_fs_encoding: failed to get the Python '
+    'codec of the filesystem encoding" >&2\n'
     "echo \"ModuleNotFoundError: No module named 'encodings'\" >&2\n"
     "exit 1\n"
 )
 # Boots only when invoked via a path whose basename is exactly `python`:
 # used to force the post-heal verification probe to fail (rollback path).
 PICKY_STUB = (
-    "#!/usr/bin/env bash\n"
-    "[ \"$(basename \"$0\")\" = \"python\" ] && exit 0\n"
-    "exit 1\n"
+    '#!/usr/bin/env bash\n[ "$(basename "$0")" = "python" ] && exit 0\nexit 1\n'
 )
 
 requires_bash = pytest.mark.skipif(
@@ -57,9 +55,15 @@ def _write_exe(path: Path, content: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def make_venv(tmp_path: Path, *, python: str | None, python3: str | None,
-              marker: str | None, store_python: str | None = GOOD_STUB,
-              alias_symlinks: bool = False) -> Path:
+def make_venv(
+    tmp_path: Path,
+    *,
+    python: str | None,
+    python3: str | None,
+    marker: str | None,
+    store_python: str | None = GOOD_STUB,
+    alias_symlinks: bool = False,
+) -> Path:
     """Build a synthetic install root with a venv/bin tree.
 
     ``python``/``python3`` are stub bodies (None = absent). ``marker`` is the
@@ -92,10 +96,19 @@ def make_venv(tmp_path: Path, *, python: str | None, python3: str | None,
 
 def run_selftest(root: Path) -> str:
     proc = subprocess.run(
-        ["/bin/bash", str(POSIX_SH), "--self-test-tcc-heal", "--no-ui",
-         "--install-root", str(root)],
-        capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=60,
+        [
+            "/bin/bash",
+            str(POSIX_SH),
+            "--self-test-tcc-heal",
+            "--no-ui",
+            "--install-root",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
         check=False,
     )
     assert proc.returncode == 0, proc.stderr
@@ -106,8 +119,7 @@ def run_selftest(root: Path) -> str:
 class TestAnchorHeal:
     def test_healthy_venv_untouched(self, tmp_path):
         """A bootable python3 short-circuits the heal — nothing is examined."""
-        root = make_venv(tmp_path, python=GOOD_STUB, python3=GOOD_STUB,
-                         marker="STORE")
+        root = make_venv(tmp_path, python=GOOD_STUB, python3=GOOD_STUB, marker="STORE")
         before = (root / "venv/bin/python3").read_text(encoding="utf-8")
         out = run_selftest(root)
         assert "state=healthy" in out
@@ -121,8 +133,7 @@ class TestAnchorHeal:
         alias symlink onto the copy is the crash shape) and KEEP the marker so
         ensure_tcc_anchor recognises the layout as active (no ping-pong).
         """
-        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB,
-                         marker="STORE")
+        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB, marker="STORE")
         out = run_selftest(root)
         assert "state=healed-aliases" in out
         bin_dir = root / "venv/bin"
@@ -137,8 +148,7 @@ class TestAnchorHeal:
     def test_full_brick_restored_to_symlinks(self, tmp_path):
         """Anchored copy AND aliases dead, marker source alive: restore the
         pre-anchor symlink layout and drop the marker."""
-        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB,
-                         marker="STORE")
+        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB, marker="STORE")
         out = run_selftest(root)
         assert "state=healed-symlinks" in out
         bin_dir = root / "venv/bin"
@@ -154,8 +164,13 @@ class TestAnchorHeal:
 
     def test_missing_source_fails_closed(self, tmp_path):
         """Vanished uv store (the #95759 comment class): touch nothing."""
-        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB,
-                         marker="STORE", store_python=None)
+        root = make_venv(
+            tmp_path,
+            python=BAD_STUB,
+            python3=BAD_STUB,
+            marker="STORE",
+            store_python=None,
+        )
         out = run_selftest(root)
         assert "state=source-missing" in out
         bin_dir = root / "venv/bin"
@@ -163,15 +178,15 @@ class TestAnchorHeal:
         assert (bin_dir / ".tcc-anchor-source").exists()
 
     def test_no_marker_is_not_ours_to_heal(self, tmp_path):
-        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB,
-                         marker=None)
+        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB, marker=None)
         out = run_selftest(root)
         assert "state=no-marker" in out
         assert (root / "venv/bin/python").read_text(encoding="utf-8") == BAD_STUB
 
     def test_marker_inside_venv_is_unsafe(self, tmp_path):
-        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB,
-                         marker="PLACEHOLDER")
+        root = make_venv(
+            tmp_path, python=BAD_STUB, python3=BAD_STUB, marker="PLACEHOLDER"
+        )
         bin_dir = root / "venv/bin"
         inside = bin_dir / "recorded-python"
         _write_exe(inside, GOOD_STUB)
@@ -181,16 +196,16 @@ class TestAnchorHeal:
         assert (bin_dir / "python").read_text(encoding="utf-8") == BAD_STUB
 
     def test_relative_marker_is_invalid(self, tmp_path):
-        root = make_venv(tmp_path, python=BAD_STUB, python3=BAD_STUB,
-                         marker="../python")
+        root = make_venv(
+            tmp_path, python=BAD_STUB, python3=BAD_STUB, marker="../python"
+        )
         out = run_selftest(root)
         assert "state=invalid-marker" in out
 
     def test_failed_verification_rolls_back(self, tmp_path):
         """If python3 still refuses to boot after the repair, every replaced
         file is restored and no staging/backup litter remains."""
-        root = make_venv(tmp_path, python=PICKY_STUB, python3=BAD_STUB,
-                         marker="STORE")
+        root = make_venv(tmp_path, python=PICKY_STUB, python3=BAD_STUB, marker="STORE")
         out = run_selftest(root)
         assert "state=failed" in out
         bin_dir = root / "venv/bin"
@@ -205,15 +220,13 @@ class TestUpdateInvokeFallback:
     def test_dead_alias_no_marker_falls_back_to_module_invocation(self, tmp_path):
         """No marker to heal from, but the venv python itself boots (the
         launchd-gateway shape): drive the update as python -m clawk_cli.main."""
-        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB,
-                         marker=None)
+        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB, marker=None)
         out = run_selftest(root)
         assert "state=no-marker" in out
         assert out.endswith("/venv/bin/python -m clawk_cli.main")
 
     def test_healthy_venv_keeps_clawk_entrypoint(self, tmp_path):
-        root = make_venv(tmp_path, python=GOOD_STUB, python3=GOOD_STUB,
-                         marker=None)
+        root = make_venv(tmp_path, python=GOOD_STUB, python3=GOOD_STUB, marker=None)
         out = run_selftest(root)
         assert out.endswith("/venv/bin/clawk")
 
@@ -232,16 +245,27 @@ class TestHandoffSurvivesBrickAB:
         return clawk
 
     def test_bricked_entrypoint_fails_before_and_boots_after_heal(self, tmp_path):
-        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB,
-                         marker="STORE")
+        root = make_venv(tmp_path, python=GOOD_STUB, python3=BAD_STUB, marker="STORE")
         clawk = self._make_clawk(root)
         # BEFORE the heal: the entrypoint dies exactly like the field logs.
-        before = subprocess.run([str(clawk)], capture_output=True,
-                                text=True, encoding="utf-8", errors="replace", check=False)
+        before = subprocess.run(
+            [str(clawk)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         assert before.returncode == 1
         assert "No module named 'encodings'" in before.stderr
         # Heal (real posix.sh function), then the same entrypoint boots.
         assert "state=healed-aliases" in run_selftest(root)
-        after = subprocess.run([str(clawk)], capture_output=True,
-                               text=True, encoding="utf-8", errors="replace", check=False)
+        after = subprocess.run(
+            [str(clawk)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
         assert after.returncode == 0

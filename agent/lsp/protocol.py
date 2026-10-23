@@ -5,6 +5,7 @@ body is a JSON-RPC 2.0 request, response, or notification.  Just the framer
 plus envelope helpers, so :class:`agent.lsp.client.LSPClient` can focus on
 protocol semantics.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,7 +52,9 @@ async def _read_headers(reader: asyncio.StreamReader) -> Optional[dict]:
             # EOF before any header started is a clean close; mid-block is bad framing.
             if not e.partial and not headers:
                 return None
-            raise LSPProtocolError(f"unexpected EOF while reading LSP headers (partial={e.partial!r})") from e
+            raise LSPProtocolError(
+                f"unexpected EOF while reading LSP headers (partial={e.partial!r})"
+            ) from e
         # Cap against a server streaming headers without ever emitting CRLF-CRLF.
         header_bytes += len(line)
         if header_bytes > _MAX_HEADER_BYTES:
@@ -89,7 +92,9 @@ async def read_message(reader: asyncio.StreamReader) -> Optional[dict]:
     try:
         body = await reader.readexactly(n)
     except asyncio.IncompleteReadError as e:
-        raise LSPProtocolError(f"truncated LSP body: expected {n} bytes, got {len(e.partial)}") from e
+        raise LSPProtocolError(
+            f"truncated LSP body: expected {n} bytes, got {len(e.partial)}"
+        ) from e
     try:
         return json.loads(body.decode("utf-8"))
     except json.JSONDecodeError as e:
@@ -100,12 +105,21 @@ async def read_message(reader: asyncio.StreamReader) -> Optional[dict]:
 
 def make_notification(method: str, params: Any) -> dict:
     """Build a JSON-RPC 2.0 notification envelope (no ``id``)."""
-    return {"jsonrpc": "2.0", "method": method, **({} if params is None else {"params": params})}
+    return {
+        "jsonrpc": "2.0",
+        "method": method,
+        **({} if params is None else {"params": params}),
+    }
 
 
 def make_request(req_id: int, method: str, params: Any) -> dict:
     """Build a JSON-RPC 2.0 request envelope."""
-    return {"jsonrpc": "2.0", "id": req_id, "method": method, **({} if params is None else {"params": params})}
+    return {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "method": method,
+        **({} if params is None else {"params": params}),
+    }
 
 
 def make_response(req_id: Any, result: Any) -> dict:
@@ -127,7 +141,11 @@ def classify_message(msg: dict) -> tuple[str, Any]:
     if "id" in msg:
         if "method" in msg:
             return "request", msg["id"]
-        return ("response", msg["id"]) if ("result" in msg or "error" in msg) else ("invalid", None)
+        return (
+            ("response", msg["id"])
+            if ("result" in msg or "error" in msg)
+            else ("invalid", None)
+        )
     return ("notification", msg["method"]) if "method" in msg else ("invalid", None)
 
 

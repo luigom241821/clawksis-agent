@@ -44,7 +44,9 @@ class TuiGatewayProcess:
         self.events: list[dict[str, Any]] = []
         self.malformed: list[bytes] = []
         self._write_lock = threading.Lock()
-        self._reader = threading.Thread(target=self._read_loop, name="tui-rpc-reader", daemon=True)
+        self._reader = threading.Thread(
+            target=self._read_loop, name="tui-rpc-reader", daemon=True
+        )
         self._reader.start()
 
     # ── wire ───────────────────────────────────────────────────────────────
@@ -70,7 +72,9 @@ class TuiGatewayProcess:
 
     def send(self, method: str, params: dict[str, Any] | None = None) -> int:
         rid = next(self._ids)
-        line = json.dumps({"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}})
+        line = json.dumps(
+            {"jsonrpc": "2.0", "id": rid, "method": method, "params": params or {}}
+        )
         assert self.proc.stdin is not None
         with self._write_lock:
             self.proc.stdin.write(line.encode() + b"\n")
@@ -83,19 +87,31 @@ class TuiGatewayProcess:
             while rid not in self._responses:
                 left = deadline - time.monotonic()
                 if left <= 0:
-                    raise RpcError(f"no response to rpc id={rid} within {timeout}s{self.tail()}")
+                    raise RpcError(
+                        f"no response to rpc id={rid} within {timeout}s{self.tail()}"
+                    )
                 if self.proc.poll() is not None and not self._reader.is_alive():
-                    raise RpcError(f"gateway exited rc={self.proc.returncode} before rpc id={rid}{self.tail()}")
+                    raise RpcError(
+                        f"gateway exited rc={self.proc.returncode} before rpc id={rid}{self.tail()}"
+                    )
                 self._lock.wait(min(left, 0.5))
             return self._responses.pop(rid)
 
-    def call(self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 60.0) -> dict[str, Any]:
+    def call(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        *,
+        timeout: float = 60.0,
+    ) -> dict[str, Any]:
         frame = self.wait_response(self.send(method, params), timeout)
         if "error" in frame:
             raise RpcError(f"{method} -> {frame['error']}")
         return frame["result"]
 
-    def timed_call(self, method: str, params: dict[str, Any] | None = None, *, timeout: float) -> float:
+    def timed_call(
+        self, method: str, params: dict[str, Any] | None = None, *, timeout: float
+    ) -> float:
         t0 = time.monotonic()
         frame = self.wait_response(self.send(method, params), timeout)
         if "error" in frame:
@@ -108,7 +124,11 @@ class TuiGatewayProcess:
             return len(self.events)
 
     def wait_event(
-        self, pred: Callable[[dict[str, Any]], bool], *, timeout: float, start: int = 0,
+        self,
+        pred: Callable[[dict[str, Any]], bool],
+        *,
+        timeout: float,
+        start: int = 0,
     ) -> dict[str, Any] | None:
         """First event at index >= ``start`` matching ``pred``; None at the deadline."""
         deadline = time.monotonic() + timeout
@@ -121,7 +141,9 @@ class TuiGatewayProcess:
                     if pred(ev):
                         return ev
                 left = deadline - time.monotonic()
-                if left <= 0 or (self.proc.poll() is not None and not self._reader.is_alive()):
+                if left <= 0 or (
+                    self.proc.poll() is not None and not self._reader.is_alive()
+                ):
                     return None
                 self._lock.wait(min(left, 0.5))
 
@@ -165,7 +187,9 @@ class TuiGatewayProcess:
         # whole dump from its header when the gateway died on a signal.
         rc = self.proc.poll()
         start = raw.rfind(b"Fatal Python error") if rc is not None and rc < 0 else -1
-        data = (raw[start:start + 256_000] if start >= 0 else raw[-n:]).decode(errors="replace")
+        data = (raw[start : start + 256_000] if start >= 0 else raw[-n:]).decode(
+            errors="replace"
+        )
         return f"\n--- gateway stderr tail ---\n{data}" if data else ""
 
 
@@ -173,14 +197,22 @@ class Heartbeat:
     """Issue cheap existing RPCs (round-robin) every ``interval`` s on their own thread and
     record each round-trip latency — the dispatcher must keep answering while a turn is wedged."""
 
-    def __init__(self, gw: TuiGatewayProcess, calls: list[tuple[str, dict[str, Any]]], *,
-                 interval: float = 0.15, per_call_timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        gw: TuiGatewayProcess,
+        calls: list[tuple[str, dict[str, Any]]],
+        *,
+        interval: float = 0.15,
+        per_call_timeout: float = 30.0,
+    ) -> None:
         self.gw, self.calls = gw, calls
         self.interval, self.per_call_timeout = interval, per_call_timeout
         self.latencies: list[float] = []
         self.failures: list[str] = []
         self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, name="tui-heartbeat", daemon=True)
+        self._thread = threading.Thread(
+            target=self._run, name="tui-heartbeat", daemon=True
+        )
 
     def _run(self) -> None:
         n = 0
@@ -189,7 +221,9 @@ class Heartbeat:
             n += 1
             self._inflight_since = time.monotonic()
             try:
-                self.latencies.append(self.gw.timed_call(method, params, timeout=self.per_call_timeout))
+                self.latencies.append(
+                    self.gw.timed_call(method, params, timeout=self.per_call_timeout)
+                )
             except Exception as exc:  # recorded and asserted by the test
                 self.failures.append(repr(exc)[:300])
                 if len(self.failures) > 3:
@@ -227,7 +261,9 @@ _SYSTEM_PATH = ("/usr/local/bin", "/usr/bin", "/bin")
 def env_for_gateway(base_env: dict[str, str], work: Path) -> dict[str, str]:
     env = dict(base_env)
     env["TERMINAL_ENV"] = "local"
-    env["CLAWK_YOLO_MODE"] = "1"  # the terminal tool must never wait on an approval prompt
+    env["CLAWK_YOLO_MODE"] = (
+        "1"  # the terminal tool must never wait on an approval prompt
+    )
     # The child's HOME *is* the tmp root, so the live-DB guard (pytest ancestry) would
     # take our tmp state.db for "production"; the documented child opt-out is safe here.
     env["CLAWK_STATE_DB_GUARD_BYPASS"] = "1"
@@ -237,6 +273,11 @@ def env_for_gateway(base_env: dict[str, str], work: Path) -> dict[str, str]:
     env["TMPDIR"] = str(tmp)  # tool snapshots/spill files stay inside the scenario root
     env["TERMINAL_CWD"] = str(work)
     env["PATH"] = os.pathsep.join((str(Path(python_exe()).parent), *_SYSTEM_PATH))
-    for key in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "SSH_AUTH_SOCK"):
+    for key in (
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "SSH_AUTH_SOCK",
+    ):
         env.pop(key, None)
     return env

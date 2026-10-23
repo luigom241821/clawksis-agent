@@ -1,4 +1,5 @@
 """Stdlib-only recovery and lifetime protection for dependency generations."""
+
 from __future__ import annotations
 
 import atexit
@@ -15,6 +16,7 @@ import time
 import uuid
 
 from pm.environments import dependency_home_root, install_state_dir, runtime_facts_path
+
 # Private aliases: this module calls them through its globals (tests patch ``_atomic_bytes``
 # here) and updaters shipped before PM import them by these names mid-swap
 # (tests/compat/old_updater_surface.json). New code imports the pm.filesystem names.
@@ -34,10 +36,13 @@ LOG = logging.getLogger(__name__)
 # same rule boot_bootstrap._RecordLock states for home maintenance.
 INSTALL_LOCK_TIMEOUT_SECONDS = 10.0
 
+
 # A lease file younger than this is never a prune candidate: its creator may still sit between
 # ``O_CREAT|O_EXCL`` and ``flock`` (two syscalls; the window is microseconds, the margin generous).
 @contextmanager
-def runtime_lock(project: Path, *, timeout: float | None = INSTALL_LOCK_TIMEOUT_SECONDS):
+def runtime_lock(
+    project: Path, *, timeout: float | None = INSTALL_LOCK_TIMEOUT_SECONDS
+):
     """Hold the per-install dependency lock; yields True when held, False when the wait expired.
 
     Callers decide what a lost race means: readers skip the work the lock guards and carry on
@@ -51,7 +56,9 @@ def runtime_lock(project: Path, *, timeout: float | None = INSTALL_LOCK_TIMEOUT_
         if not _lock(fd, wait=True, timeout=timeout):
             LOG.warning(
                 "dependency lock still held after %ss; continuing without it (%s)",
-                timeout, state / ".install.lock")
+                timeout,
+                state / ".install.lock",
+            )
             yield False
             return
         yield True
@@ -62,22 +69,37 @@ def runtime_lock(project: Path, *, timeout: float | None = INSTALL_LOCK_TIMEOUT_
 def _recover_plugin_publication(project: Path, row: dict, journal: Path) -> None:
     from clawk_cli.fs_utils import rmtree_force
 
-    target, backup, metadata = (Path(row[key]) for key in ("target", "backup", "metadata"))
+    target, backup, metadata = (
+        Path(row[key]) for key in ("target", "backup", "metadata")
+    )
     home = dependency_home_root().resolve()
-    if (not target.resolve().is_relative_to(home) or target.parent.name != "plugins"
-            or backup.parent != target.parent or not backup.name.startswith(".previous-")
-            or metadata != target.parent / ".install-metadata.json"):
+    if (
+        not target.resolve().is_relative_to(home)
+        or target.parent.name != "plugins"
+        or backup.parent != target.parent
+        or not backup.name.startswith(".previous-")
+        or metadata != target.parent / ".install-metadata.json"
+    ):
         raise ValueError("plugin publication paths escape their home")
-    committed = row.get("committed") or _digest(runtime_facts_path(project)) != row["facts_before"]
+    committed = (
+        row.get("committed")
+        or _digest(runtime_facts_path(project)) != row["facts_before"]
+    )
     if committed:
         if backup.exists():
             rmtree_force(backup)
     else:
-        old = base64.b64decode(row["metadata_before"], validate=True) if row["metadata_before"] is not None else None
+        old = (
+            base64.b64decode(row["metadata_before"], validate=True)
+            if row["metadata_before"] is not None
+            else None
+        )
         current = _bytes(metadata)
         new = base64.b64decode(row["metadata_after"], validate=True)
         if current not in (old, new):
-            raise ValueError("plugin metadata changed after publication; preserve it for manual recovery")
+            raise ValueError(
+                "plugin metadata changed after publication; preserve it for manual recovery"
+            )
         if backup.exists():
             if target.exists():
                 rmtree_force(target)
@@ -107,15 +129,30 @@ def recover_publication(project: Path) -> None:
         configs = []
         for entry in entries:
             config = Path(entry["config"])
-            if config.name != "config.yaml" or not config.resolve().is_relative_to(dependency_home_root().resolve()):
+            if config.name != "config.yaml" or not config.resolve().is_relative_to(
+                dependency_home_root().resolve()
+            ):
                 raise ValueError("config path is outside Clawksis state")
-            previous = base64.b64decode(entry["previous"], validate=True) if entry["previous"] is not None else None
+            previous = (
+                base64.b64decode(entry["previous"], validate=True)
+                if entry["previous"] is not None
+                else None
+            )
             configs.append((config, previous, entry.get("config_after")))
-        if not row.get("committed") and _digest(runtime_facts_path(project)) == row["facts_before"]:
+        if (
+            not row.get("committed")
+            and _digest(runtime_facts_path(project)) == row["facts_before"]
+        ):
             for config, previous, after in configs:
-                prior = hashlib.sha256(previous).hexdigest() if previous is not None else None
+                prior = (
+                    hashlib.sha256(previous).hexdigest()
+                    if previous is not None
+                    else None
+                )
                 if _digest(config) not in (prior, after):
-                    raise ValueError("config changed after publication began; preserve it for manual recovery")
+                    raise ValueError(
+                        "config changed after publication began; preserve it for manual recovery"
+                    )
             # No selection was published. Roll back before any plugin is loaded.
             for config, previous, _after in configs:
                 if previous is None:
@@ -124,7 +161,9 @@ def recover_publication(project: Path) -> None:
                     _atomic_bytes(config, previous)
         journal.unlink()
     except (ValueError, KeyError, TypeError, OSError) as exc:
-        raise RuntimeError(f"cannot recover dependency publication: {journal}: {exc}") from exc
+        raise RuntimeError(
+            f"cannot recover dependency publication: {journal}: {exc}"
+        ) from exc
 
 
 def finish_publication(project: Path) -> None:
@@ -149,7 +188,9 @@ def lease_generation(environment: Path) -> Callable[[], None]:
 def lease_directory(generation: Path) -> Callable[[], None]:
     """Pin a lease-managed generation directory for this process's lifetime."""
     if not (generation / ".lease-managed").is_file():
-        return lambda: None  # Generations produced before leases stay conservatively retained.
+        return lambda: (
+            None
+        )  # Generations produced before leases stay conservatively retained.
     leases = generation / ".leases"
     leases.mkdir(exist_ok=True)
     _prune_unlocked_leases(leases)
@@ -184,6 +225,7 @@ def lease_directory(generation: Path) -> Callable[[], None]:
 def collect_generations(project: Path, *, min_age_seconds: float = 86400) -> list[Path]:
     """Remove unselected lease-managed generations after their readers exit."""
     from pm.environments import selected_venv
+
     removed = []
     root = install_state_dir(project)
     if not root.exists():
@@ -197,10 +239,17 @@ def collect_generations(project: Path, *, min_age_seconds: float = 86400) -> lis
         if not generations.is_dir():
             return removed
         for generation in generations.iterdir():
-            if generation.is_symlink() or not generation.is_dir() or generation.resolve() == selected:
+            if (
+                generation.is_symlink()
+                or not generation.is_dir()
+                or generation.resolve() == selected
+            ):
                 continue
             marker = generation / ".lease-managed"
-            if not marker.is_file() or time.time() - marker.stat().st_mtime < min_age_seconds:
+            if (
+                not marker.is_file()
+                or time.time() - marker.stat().st_mtime < min_age_seconds
+            ):
                 continue
             if not leases_held(generation):
                 shutil.rmtree(generation)

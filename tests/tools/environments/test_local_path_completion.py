@@ -16,7 +16,9 @@ from tools.environments.local import _append_missing_sane_path_entries, _make_ru
 pytestmark = pytest.mark.platforms("posix")  # POSIX PATH completion only
 
 
-def test_existing_user_local_bin_appended_after_inherited_entries(monkeypatch, tmp_path):
+def test_existing_user_local_bin_appended_after_inherited_entries(
+    monkeypatch, tmp_path
+):
     local_bin = tmp_path / ".local" / "bin"
     local_bin.mkdir(parents=True)
     monkeypatch.setenv("HOME", str(tmp_path))

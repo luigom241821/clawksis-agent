@@ -58,7 +58,6 @@ class TestWarnIfCredentialFileBroadlyReadable:
         assert caplog.text == ""
 
 
-
 class TestGoogleChatReadPathWarns:
     def test_load_user_credentials_warns_on_broad_perms(
         self, tmp_path, monkeypatch, caplog

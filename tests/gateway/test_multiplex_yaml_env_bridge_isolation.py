@@ -5,6 +5,7 @@ every ``apply_yaml_config_fn`` hook and ``bridge_core_env_settings`` used to wri
 (first-writer-wins), so the first secondary's mention/allowlist policy became the DEFAULT profile's
 (#80099, #72348). The values must instead reach that profile's ``PlatformConfig.extra``.
 """
+
 from __future__ import annotations
 
 import os
@@ -47,18 +48,36 @@ signal:
 """
 
 _BRIDGED_ENV = (
-    "TELEGRAM_REQUIRE_MENTION", "TELEGRAM_MENTION_PATTERNS", "TELEGRAM_REACTIONS",
-    "MATRIX_REQUIRE_MENTION", "MATRIX_ALLOWED_USERS", "MATRIX_SESSION_SCOPE",
-    "WHATSAPP_DM_POLICY", "WHATSAPP_ALLOWED_USERS", "FEISHU_ALLOW_BOTS",
-    "SLACK_ALLOW_BOTS", "SLACK_IGNORED_CHANNELS", "DINGTALK_ALLOWED_USERS",
-    "DISCORD_AUTO_THREAD", "DISCORD_REACTIONS", "SIGNAL_REQUIRE_MENTION", "GATEWAY_ALLOW_ALL_USERS",
+    "TELEGRAM_REQUIRE_MENTION",
+    "TELEGRAM_MENTION_PATTERNS",
+    "TELEGRAM_REACTIONS",
+    "MATRIX_REQUIRE_MENTION",
+    "MATRIX_ALLOWED_USERS",
+    "MATRIX_SESSION_SCOPE",
+    "WHATSAPP_DM_POLICY",
+    "WHATSAPP_ALLOWED_USERS",
+    "FEISHU_ALLOW_BOTS",
+    "SLACK_ALLOW_BOTS",
+    "SLACK_IGNORED_CHANNELS",
+    "DINGTALK_ALLOWED_USERS",
+    "DISCORD_AUTO_THREAD",
+    "DISCORD_REACTIONS",
+    "SIGNAL_REQUIRE_MENTION",
+    "GATEWAY_ALLOW_ALL_USERS",
 )
 
 _EXPECTED_EXTRA = (
-    ("telegram", "mention_patterns"), ("telegram", "reactions"), ("matrix", "session_scope"),
-    ("matrix", "allowed_users"), ("whatsapp", "dm_policy"), ("feishu", "allow_bots"),
-    ("slack", "allow_bots"), ("slack", "ignored_channels"), ("dingtalk", "allowed_users"),
-    ("discord", "auto_thread"), ("signal", "require_mention"),
+    ("telegram", "mention_patterns"),
+    ("telegram", "reactions"),
+    ("matrix", "session_scope"),
+    ("matrix", "allowed_users"),
+    ("whatsapp", "dm_policy"),
+    ("feishu", "allow_bots"),
+    ("slack", "allow_bots"),
+    ("slack", "ignored_channels"),
+    ("dingtalk", "allowed_users"),
+    ("discord", "auto_thread"),
+    ("signal", "require_mention"),
 )
 
 
@@ -93,10 +112,13 @@ def test_secondary_profile_yaml_reaches_its_extra_not_the_process_env(secondary_
     poisoned = {name: os.environ[name] for name in _BRIDGED_ENV if name in os.environ}
     assert poisoned == {}, f"secondary profile wrote into process env: {poisoned}"
     missing = [
-        f"{plat}.{key}" for plat, key in _EXPECTED_EXTRA
+        f"{plat}.{key}"
+        for plat, key in _EXPECTED_EXTRA
         if key not in ((cfg.platforms.get(Platform(plat)) or _Empty()).extra or {})
     ]
-    assert missing == [], f"secondary profile's own YAML not seeded into extra: {missing}"
+    assert missing == [], (
+        f"secondary profile's own YAML not seeded into extra: {missing}"
+    )
 
 
 class _Empty:

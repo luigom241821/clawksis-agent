@@ -21,8 +21,11 @@ async def test_artifact_store_constructed_once_off_loop_under_concurrency():
     built = []
 
     def slow_build(profile_key):
-        built.append((profile_key, threading.current_thread() is threading.main_thread()))
+        built.append(
+            (profile_key, threading.current_thread() is threading.main_thread())
+        )
         import time
+
         time.sleep(0.05)
         store = object()
         adapter._browser_control_artifacts[profile_key] = store
@@ -30,9 +33,13 @@ async def test_artifact_store_constructed_once_off_loop_under_concurrency():
 
     adapter._artifact_store_for = slow_build
 
-    stores = await asyncio.gather(*(adapter._artifact_store_for_async("p") for _ in range(5)))
+    stores = await asyncio.gather(
+        *(adapter._artifact_store_for_async("p") for _ in range(5))
+    )
 
-    assert len(built) == 1, "racing first requests must not each build a store (receipts would be stranded)"
+    assert len(built) == 1, (
+        "racing first requests must not each build a store (receipts would be stranded)"
+    )
     assert built[0] == ("p", False), "construction must hop off the loop thread"
     assert len({id(s) for s in stores}) == 1
     # cache hit: no lock, no thread hop

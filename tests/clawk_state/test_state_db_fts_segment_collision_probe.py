@@ -5,6 +5,7 @@ committed append fail with ``IntegrityError: constraint failed`` while ``PRAGMA 
 the FTS5 ``integrity-check`` command and ``MATCH`` all report healthy. The write probe must
 report it (and the repair must heal it) without any mocked detector.
 """
+
 import sqlite3
 import time
 import uuid
@@ -23,7 +24,9 @@ def _build_db_with_trigram(db_path: Path) -> str:
         pytest.skip("trigram tokenizer unavailable in this SQLite build")
     sid = db.create_session(session_id=str(uuid.uuid4()), source="cli")
     for i in range(60):
-        db.append_message(sid, role="user", content=f"quick brown fox {i} lorem ipsum dolor {i * 7}")
+        db.append_message(
+            sid, role="user", content=f"quick brown fox {i} lorem ipsum dolor {i * 7}"
+        )
     db.close()
     return sid
 
@@ -33,15 +36,20 @@ def _plant_stale_trigram_segment(db_path: Path) -> None:
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     used = {r[0] for r in conn.execute("SELECT segid FROM messages_fts_trigram_idx")}
     stale = next(s for s in range(1, 1 << 20) if s not in used)
-    conn.execute("INSERT INTO messages_fts_trigram_idx(segid, term, pgno) VALUES (?, X'', 2)", (stale,))
+    conn.execute(
+        "INSERT INTO messages_fts_trigram_idx(segid, term, pgno) VALUES (?, X'', 2)",
+        (stale,),
+    )
     conn.close()
 
 
 def _real_append_fails(db_path: Path, sid: str) -> bool:
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     try:
-        conn.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-                     (sid, "user", "zebra yak xylophone wombat", time.time()))
+        conn.execute(
+            "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (sid, "user", "zebra yak xylophone wombat", time.time()),
+        )
         return False
     except sqlite3.IntegrityError:
         return True
@@ -54,13 +62,20 @@ def test_write_probe_reports_segment_collision_that_integrity_check_misses(tmp_p
     sid = _build_db_with_trigram(db_path)
     _plant_stale_trigram_segment(db_path)
 
-    assert sqlite3.connect(str(db_path)).execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+    assert sqlite3.connect(str(db_path)).execute(
+        "PRAGMA integrity_check"
+    ).fetchall() == [("ok",)]
     assert _real_append_fails(db_path, sid), "fixture must break real appends"
 
     reason = _db_opens_cleanly(db_path)
     assert reason is not None and "constraint failed" in reason
     # The probe rolls back: it must not have added rows or moved the FTS state.
-    assert sqlite3.connect(str(db_path)).execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
+    assert (
+        sqlite3.connect(str(db_path))
+        .execute("SELECT COUNT(*) FROM sessions")
+        .fetchone()[0]
+        == 1
+    )
 
 
 def test_repair_heals_segment_collision_and_restores_appends(tmp_path):
@@ -73,4 +88,9 @@ def test_repair_heals_segment_collision_and_restores_appends(tmp_path):
     assert _db_opens_cleanly(db_path) is None
     assert not _real_append_fails(db_path, sid)
     with SessionDB(db_path=db_path) as db:
-        assert db._conn.execute("SELECT COUNT(*) FROM messages WHERE session_id = ?", (sid,)).fetchone()[0] == 61
+        assert (
+            db._conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id = ?", (sid,)
+            ).fetchone()[0]
+            == 61
+        )

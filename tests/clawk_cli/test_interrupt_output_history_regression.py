@@ -61,7 +61,6 @@ class TestRecoverTerminalPreservesHistory:
             "_recover_terminal_after_interrupt must NOT clear _OUTPUT_HISTORY"
         )
 
-
     def test_normal_scrollback_survives_interrupt_cycle(self, monkeypatch):
         """Multiple lines of scrollback survive a full interrupt → recovery cycle."""
         cli_mod._configure_output_history(True, 50)
@@ -75,9 +74,7 @@ class TestRecoverTerminalPreservesHistory:
             cli._recover_terminal_after_interrupt()
 
         assert len(cli_mod._OUTPUT_HISTORY) == 5
-        assert list(cli_mod._OUTPUT_HISTORY) == [
-            f"visible line {i}" for i in range(5)
-        ]
+        assert list(cli_mod._OUTPUT_HISTORY) == [f"visible line {i}" for i in range(5)]
 
 
 # ── Marker suppression: _suspend_output_history blocks recording ────
@@ -145,11 +142,7 @@ class TestInterruptMarkerNotRecorded:
 # ── _show_interrupt_marker flag logic ──────────────────────────────
 
 
-
-
 # ── End-to-end: _show_interrupt_marker → _cprint flow ──────────────
-
-
 
 
 # ── _replay does not replay the marker (E2E) ───────────────────────

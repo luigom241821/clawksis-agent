@@ -33,11 +33,12 @@ def _make_agent() -> AIAgent:
     )
 
 
-
-
 class _FakeHeaders:
-    def __init__(self, d): self._d = {k.lower(): v for k, v in d.items()}
-    def get(self, k, default=None): return self._d.get(k.lower(), default)
+    def __init__(self, d):
+        self._d = {k.lower(): v for k, v in d.items()}
+
+    def get(self, k, default=None):
+        return self._d.get(k.lower(), default)
 
 
 class _FakeResponse:
@@ -49,14 +50,16 @@ class _FakeResponse:
 def test_stream_diag_capture_response_collects_known_headers():
     agent = _make_agent()
     diag = AIAgent._stream_diag_init()
-    resp = _FakeResponse({
-        "cf-ray": "8f1a2b3c4d5e6f7g-LAX",
-        "x-openrouter-provider": "Anthropic",
-        "x-openrouter-id": "gen-abc123",
-        "x-request-id": "req-xyz",
-        "server": "cloudflare",
-        "irrelevant-header": "ignored",
-    })
+    resp = _FakeResponse(
+        {
+            "cf-ray": "8f1a2b3c4d5e6f7g-LAX",
+            "x-openrouter-provider": "Anthropic",
+            "x-openrouter-id": "gen-abc123",
+            "x-request-id": "req-xyz",
+            "server": "cloudflare",
+            "irrelevant-header": "ignored",
+        }
+    )
     agent._stream_diag_capture_response(diag, resp)
     assert diag["http_status"] == 200
     assert diag["headers"]["cf-ray"] == "8f1a2b3c4d5e6f7g-LAX"
@@ -65,8 +68,6 @@ def test_stream_diag_capture_response_collects_known_headers():
     assert diag["headers"]["server"] == "cloudflare"
     # Headers not in _STREAM_DIAG_HEADERS must not be captured (PII surface).
     assert "irrelevant-header" not in diag["headers"]
-
-
 
 
 def test_flatten_exception_chain_walks_cause():
@@ -95,14 +96,6 @@ def test_flatten_exception_chain_caps_depth():
     assert chain.count("<-") <= 3
 
 
-
-
-
-
-
-
-
-
 def test_quiet_mode_does_not_clobber_runagent_logger_level():
     """Regression guard for the parent fix — must persist across this PR."""
     _ = _make_agent()
@@ -126,6 +119,8 @@ def test_retry_after_drop_reports_the_attempt_that_dropped():
         _cancel_current_stream_attempt=lambda reason: None,
         last_chunk_time={"t": 0.0},
     )
-    _StreamingCall._retry_after_drop(fake, ConnectionError("drop"), 0, 2, mid_tool_call=False, reason="t")
+    _StreamingCall._retry_after_drop(
+        fake, ConnectionError("drop"), 0, 2, mid_tool_call=False, reason="t"
+    )
     assert agent._emit_stream_drop.call_args.kwargs["attempt"] == 1
     assert agent._emit_stream_drop.call_args.kwargs["max_attempts"] == 3

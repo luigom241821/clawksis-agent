@@ -2,6 +2,7 @@
 
 Reuse upstream authority-only value shapes; these overrides do not widen METHODS.
 """
+
 from typing import Literal
 
 from pydantic import RootModel
@@ -10,7 +11,12 @@ from .base import JsonValue, Params, Result
 from .common import ProfileParams, TranscriptMessage
 from .connectors_operation import ConnectionRequestPayload
 from .sessions import TodoState
-from .canonical import AdmissionStatus, CanonicalSessionRef, PromptResponseResult, SessionInventoryFields
+from .canonical import (
+    AdmissionStatus,
+    CanonicalSessionRef,
+    PromptResponseResult,
+    SessionInventoryFields,
+)
 from .registry import canonical_method
 
 
@@ -20,7 +26,7 @@ class CanonicalSessionParams(ProfileParams):
 
 class CanonicalCreateParams(ProfileParams):
     request_id: str | None = None
-    source: Literal['cli', 'tui', 'gui', 'acp', 'tool', 'oneshot'] = 'cli'
+    source: Literal["cli", "tui", "gui", "acp", "tool", "oneshot"] = "cli"
     cwd: str | None = None
     # The sessions-row ``cwd`` when it differs from the execution ``cwd`` (the classic CLI records
     # main's stamp: the launch dir, ``""`` = none); ``cwd`` stays where the tools run.
@@ -56,11 +62,11 @@ class CanonicalCreateParams(ProfileParams):
 
 
 class CanonicalResumeParams(ProfileParams):
-    session_id: str = ''
+    session_id: str = ""
     title: str | None = None
     # Bare `-c` / `--resume latest`: the owner resolves the most recent session of this surface
     # family (``workspace`` = the caller's git root / cwd, tried first).
-    latest: Literal['cli', 'tui'] | None = None
+    latest: Literal["cli", "tui"] | None = None
     workspace: str | None = None
     source: str | None = None
     editor: dict[str, JsonValue] | None = None
@@ -80,7 +86,7 @@ class CanonicalSessionHandle(Result):
     authority_epoch: int
     revision: int
     execution_generation: int
-    execution_state: Literal['idle', 'running', 'waiting', 'unknown', 'terminal']
+    execution_state: Literal["idle", "running", "waiting", "unknown", "terminal"]
 
 
 class CanonicalPendingAdmission(AdmissionStatus):
@@ -88,7 +94,7 @@ class CanonicalPendingAdmission(AdmissionStatus):
     text: str
     # The queued-row verbs the owner serves for this row: ``steer`` (``prompt.steer_queued``) and
     # ``replace`` (``prompt.replace_queued``). Absent from an owner that predates them.
-    controls: list[Literal['steer', 'replace']] | None = None
+    controls: list[Literal["steer", "replace"]] | None = None
     # A queued admission in transfer to the running turn (``prompt.steer_queued``): listed ``started``
     # until that turn settles it, but it returns to ``queued`` if its text never reached the turn, so a
     # client keeps it at its queued rank. Absent from an owner that predates it.
@@ -96,7 +102,7 @@ class CanonicalPendingAdmission(AdmissionStatus):
 
 
 class CanonicalPendingPrompt(Result):
-    kind: Literal['approval', 'clarify']
+    kind: Literal["approval", "clarify"]
     prompt_id: str
     execution_generation: int
     choices: list[str]
@@ -110,14 +116,14 @@ class CanonicalPendingPrompt(Result):
 
 
 class CanonicalSnapshotInfo(SessionInventoryFields):
-    desktop_protocol: Literal['clawk-gateway-v1']
+    desktop_protocol: Literal["clawk-gateway-v1"]
     source: str | None = None
     model: str | None = None
     lazy: bool | None = None
     profile_id: str | None = None
     profile_name: str | None = None
     cwd: str | None = None
-    edit_approval_policy: Literal['ask', 'workspace_session', 'session'] | None = None
+    edit_approval_policy: Literal["ask", "workspace_session", "session"] | None = None
     launch_request: dict[str, JsonValue] | None = None
     reasoning_effort: str | None = None
     reasoning_effort_wire: str | None = None
@@ -158,7 +164,7 @@ class CanonicalSnapshot(Result):
 
 
 class CanonicalListParams(ProfileParams):
-    scope: Literal['live', 'stored'] = 'live'
+    scope: Literal["live", "stored"] = "live"
     limit: int = 200
     title: str | None = None
     include_hidden: bool = False
@@ -179,7 +185,7 @@ class CanonicalSessionListRow(Result):
 
 class CanonicalListResult(Result):
     sessions: list[CanonicalSessionListRow]
-    scope: Literal['stored', 'live']
+    scope: Literal["stored", "live"]
 
 
 class CanonicalAttachment(Params):
@@ -217,7 +223,7 @@ class CanonicalSubmitParams(CanonicalSessionParams):
     # Desktop composer presentation, committed per admission (``display_v1``): a hidden widget
     # intent persists ``display_kind=hidden`` (never a user bubble); a large paste's preview is
     # titler input only, never model input.
-    display_kind: Literal['hidden'] | None = None
+    display_kind: Literal["hidden"] | None = None
     title_preview: str | None = None
     # Classic CLI per-turn inputs, committed per admission (``cli_turn_v1``): who wrote the turn
     # (memory attribution only), the model-facing text when it differs from the persisted ``text``
@@ -254,7 +260,7 @@ class CanonicalReplaceQueuedParams(CanonicalSessionParams):
     submission_id: str
     text: str
     attachments: list[CanonicalAttachment] | None = None
-    display_kind: Literal['hidden'] | None = None
+    display_kind: Literal["hidden"] | None = None
     title_preview: str | None = None
 
 
@@ -267,7 +273,7 @@ class CanonicalCorrectionParams(CanonicalControlParams):
 
 
 class CanonicalCorrectionAck(Result):
-    status: Literal['queued', 'redirected', 'rejected']
+    status: Literal["queued", "redirected", "rejected"]
     text: str
     execution_generation: int
     authority_epoch: int
@@ -317,29 +323,37 @@ class CanonicalEventsResult(Result):
 
 
 for _name, _params, _result in (
-    ('session.create', CanonicalCreateParams, CanonicalSnapshot),
-    ('session.resume', CanonicalResumeParams, CanonicalSnapshot),
-    ('session.list', CanonicalListParams, CanonicalListResult),
-    ('session.interrupt', CanonicalControlParams, CanonicalSessionHandle),
-    ('session.steer', CanonicalCorrectionParams, CanonicalCorrectionResult),
-    ('session.redirect', CanonicalCorrectionParams, CanonicalCorrectionResult),
-    ('session.events.since', CanonicalEventsParams, CanonicalEventsResult),
-    ('prompt.submit', CanonicalSubmitParams, CanonicalSubmitResult),
-    ('approval.respond', CanonicalApprovalParams, PromptResponseResult),
+    ("session.create", CanonicalCreateParams, CanonicalSnapshot),
+    ("session.resume", CanonicalResumeParams, CanonicalSnapshot),
+    ("session.list", CanonicalListParams, CanonicalListResult),
+    ("session.interrupt", CanonicalControlParams, CanonicalSessionHandle),
+    ("session.steer", CanonicalCorrectionParams, CanonicalCorrectionResult),
+    ("session.redirect", CanonicalCorrectionParams, CanonicalCorrectionResult),
+    ("session.events.since", CanonicalEventsParams, CanonicalEventsResult),
+    ("prompt.submit", CanonicalSubmitParams, CanonicalSubmitResult),
+    ("approval.respond", CanonicalApprovalParams, PromptResponseResult),
 ):
     canonical_method(_name, params=_params, result=_result)
 
-canonical_method('prompt.steer_queued', params=CanonicalSteerQueuedParams, result=AdmissionStatus,
-                 doc="Hand a still-queued admission's text to the running turn's agent as a steer. "
-                     "The admission reads 'started' with that turn (pending snapshots mark it "
-                     "'steering') and never runs on its own; it settles terminal 'steered' when the "
-                     "turn completes with its text, else 'interrupted' (its completion frame says "
-                     "'cancelled', as an interrupted turn's does); a text the turn never consumed "
-                     "goes back to its queue place. "
-                     "Refusals: admission_started, session_idle, steer_unavailable (no agent to take "
-                     "it: the admission stays queued), unsupported_control, not_found.")
-canonical_method('prompt.replace_queued', params=CanonicalReplaceQueuedParams, result=AdmissionStatus,
-                 doc="Cancel a still-queued admission and admit the edited prompt as a new admission "
-                     "at the back of the FIFO, in one write bound to the replaced admission. "
-                     "Refusals: admission_started, admission_conflict (the submission_id replaced "
-                     "another admission), queue_full, unsupported_control, not_found.")
+canonical_method(
+    "prompt.steer_queued",
+    params=CanonicalSteerQueuedParams,
+    result=AdmissionStatus,
+    doc="Hand a still-queued admission's text to the running turn's agent as a steer. "
+    "The admission reads 'started' with that turn (pending snapshots mark it "
+    "'steering') and never runs on its own; it settles terminal 'steered' when the "
+    "turn completes with its text, else 'interrupted' (its completion frame says "
+    "'cancelled', as an interrupted turn's does); a text the turn never consumed "
+    "goes back to its queue place. "
+    "Refusals: admission_started, session_idle, steer_unavailable (no agent to take "
+    "it: the admission stays queued), unsupported_control, not_found.",
+)
+canonical_method(
+    "prompt.replace_queued",
+    params=CanonicalReplaceQueuedParams,
+    result=AdmissionStatus,
+    doc="Cancel a still-queued admission and admit the edited prompt as a new admission "
+    "at the back of the FIFO, in one write bound to the replaced admission. "
+    "Refusals: admission_started, admission_conflict (the submission_id replaced "
+    "another admission), queue_full, unsupported_control, not_found.",
+)

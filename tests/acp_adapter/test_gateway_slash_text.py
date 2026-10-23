@@ -1,4 +1,5 @@
 """Only registered Clawksis commands are slash commands; other text starting with '/' is a prompt."""
+
 import asyncio
 from unittest.mock import AsyncMock
 
@@ -10,7 +11,10 @@ from clawk_cli.gateway_client import GatewayClientError
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("text", ["/etc/hosts is wrong", "/tmp/build.log shows the failure", "/notacommand please"])
+@pytest.mark.parametrize(
+    "text",
+    ["/etc/hosts is wrong", "/tmp/build.log shows the failure", "/notacommand please"],
+)
 async def test_path_and_unknown_slash_text_is_submitted_as_the_prompt(text):
     agent = GatewayACPAgent()
     agent._gateway = AsyncMock()
@@ -18,8 +22,14 @@ async def test_path_and_unknown_slash_text_is_submitted_as_the_prompt(text):
 
     async def rpc(method, **params):
         assert method == "prompt.submit"
-        await agent._project({"session_id": "s", "type": "message.complete", "admission_id": "a",
-                              "payload": {"outcome": "completed", "text": "ok"}})
+        await agent._project(
+            {
+                "session_id": "s",
+                "type": "message.complete",
+                "admission_id": "a",
+                "payload": {"outcome": "completed", "text": "ok"},
+            }
+        )
         return {"admission_id": "a"}
 
     agent._gateway.rpc.side_effect = rpc
@@ -33,6 +43,7 @@ async def test_registered_command_the_owner_refuses_is_a_named_reply_not_a_faile
     # A Clawksis command is never forwarded as prompt text: the owner's slash.exec answers or
     # refuses it, and the refusal is the command's reply (#134889 ACP-17).
     from clawk_cli.gateway_client import GatewayRPCError
+
     agent = GatewayACPAgent()
     agent._gateway, agent._conn = AsyncMock(), AsyncMock()
     agent._snapshots["s"] = {}

@@ -22,7 +22,9 @@ from cron.executions import _clawk_now, _transaction, recover_interrupted_execut
 
 @pytest.fixture(autouse=True)
 def _ledger(monkeypatch, tmp_path):
-    monkeypatch.setattr(executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
     # The owner is alive for every row in this module; the bound alone decides.
     monkeypatch.setattr(executions_mod, "_owner_is_live", lambda pid, started_at: True)
 
@@ -42,7 +44,9 @@ def _seed_running(job_id: str, *, age_seconds: float, pid: int = 99999) -> str:
 
 def _status(eid: str) -> str:
     with _transaction() as conn:
-        return conn.execute("SELECT status FROM executions WHERE id=?", (eid,)).fetchone()["status"]
+        return conn.execute(
+            "SELECT status FROM executions WHERE id=?", (eid,)
+        ).fetchone()["status"]
 
 
 def test_live_owner_stale_claim_gets_recovered(monkeypatch):
@@ -116,7 +120,10 @@ def test_progress_stamped_during_the_sweep_keeps_the_run(monkeypatch):
         # while this sweep is probing its liveness.
         worker = sqlite3.connect(executions_mod.EXECUTIONS_FILE)
         with worker:
-            worker.execute("UPDATE executions SET progress_at=? WHERE id=?", (_clawk_now().isoformat(), eid))
+            worker.execute(
+                "UPDATE executions SET progress_at=? WHERE id=?",
+                (_clawk_now().isoformat(), eid),
+            )
         worker.close()
         return True
 

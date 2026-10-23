@@ -139,8 +139,12 @@ POST_SWAP_HELPER_MODULES = (
 # Historical module-object calls that need explicit review, not a guessed
 # receiver type. Keep the witness so regeneration cannot discard the contract.
 REVIEWED_DYNAMIC_LOADS = (
-    ("clawk_cli._subprocess_compat", "run", "2ecca1e7d3e7",
-     "clawk_cli/managed_uv.py:_install_uv_windows"),
+    (
+        "clawk_cli._subprocess_compat",
+        "run",
+        "2ecca1e7d3e7",
+        "clawk_cli/managed_uv.py:_install_uv_windows",
+    ),
 )
 
 # Only OUR packages matter: a third-party import is pinned by the
@@ -207,8 +211,11 @@ class Analysis:
 
 
 def _function_definitions(tree: ast.AST) -> list[_AnyFunc]:
-    return [node for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
 
 
 def _called_names(node: ast.AST) -> set[str]:
@@ -262,14 +269,29 @@ def _suppresses(expr: ast.expr, caught_by: set[str]) -> bool:
     if not isinstance(expr, ast.Call):
         return False
     func = expr.func
-    name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+    name = (
+        func.id
+        if isinstance(func, ast.Name)
+        else func.attr
+        if isinstance(func, ast.Attribute)
+        else None
+    )
     return name == "suppress" and any(
-        (arg.id if isinstance(arg, ast.Name) else arg.attr if isinstance(arg, ast.Attribute) else None) in caught_by
+        (
+            arg.id
+            if isinstance(arg, ast.Name)
+            else arg.attr
+            if isinstance(arg, ast.Attribute)
+            else None
+        )
+        in caught_by
         for arg in expr.args
     )
 
 
-def _guarded_spans(func: _AnyFunc, failure: str = "ImportError") -> list[tuple[int, int]]:
+def _guarded_spans(
+    func: _AnyFunc, failure: str = "ImportError"
+) -> list[tuple[int, int]]:
     """Try bodies whose first matching handler swallows this load failure.
 
     AttributeError cannot guard an import, and ModuleNotFoundError cannot
@@ -283,20 +305,41 @@ def _guarded_spans(func: _AnyFunc, failure: str = "ImportError") -> list[tuple[i
     for node in ast.walk(func):
         # ``with contextlib.suppress(Exception):`` swallows the failure exactly like a
         # non-raising ``except`` arm does.
-        if isinstance(node, ast.With) and node.body and any(_suppresses(item.context_expr, caught_by) for item in node.items):
-            spans.append((node.body[0].lineno, max(stmt.end_lineno or stmt.lineno for stmt in node.body)))
+        if (
+            isinstance(node, ast.With)
+            and node.body
+            and any(_suppresses(item.context_expr, caught_by) for item in node.items)
+        ):
+            spans.append(
+                (
+                    node.body[0].lineno,
+                    max(stmt.end_lineno or stmt.lineno for stmt in node.body),
+                )
+            )
             continue
         if not isinstance(node, ast.Try):
             continue
         for handler in node.handlers:
-            types = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+            types = (
+                handler.type.elts
+                if isinstance(handler.type, ast.Tuple)
+                else [handler.type]
+            )
             matches = handler.type is None or any(
                 isinstance(t, ast.Name) and t.id in caught_by for t in types
             )
             if not matches:
                 continue
-            if not any(isinstance(n, ast.Raise) for n in ast.walk(handler)) and node.body:
-                spans.append((node.body[0].lineno, max(stmt.end_lineno or stmt.lineno for stmt in node.body)))
+            if (
+                not any(isinstance(n, ast.Raise) for n in ast.walk(handler))
+                and node.body
+            ):
+                spans.append(
+                    (
+                        node.body[0].lineno,
+                        max(stmt.end_lineno or stmt.lineno for stmt in node.body),
+                    )
+                )
             break
     return spans
 
@@ -318,12 +361,16 @@ def _requirements_in(
         line = getattr(node, "lineno", None)
         if line is None:
             return False
-        failure = "AttributeError" if kind == "getattr" else "ImportError" if symbol else "ModuleNotFoundError"
+        failure = (
+            "AttributeError"
+            if kind == "getattr"
+            else "ImportError"
+            if symbol
+            else "ModuleNotFoundError"
+        )
         return any(first <= line <= last for first, last in guarded_spans[failure])
 
-    def add(
-        module: str, symbol: str | None, kind: str, node: ast.AST
-    ) -> None:
+    def add(module: str, symbol: str | None, kind: str, node: ast.AST) -> None:
         if _first_party(module):
             reqs.append(
                 Requirement(
@@ -436,9 +483,7 @@ def _resolve_sys_modules_locals(func: _AnyFunc) -> dict[str, str]:
     return bound
 
 
-def _getattr_on_bound_locals(
-    func: _AnyFunc, source_file: str
-) -> list[Requirement]:
+def _getattr_on_bound_locals(func: _AnyFunc, source_file: str) -> list[Requirement]:
     """``m = sys.modules.get("x")`` … ``getattr(m, "y")`` → x.y required."""
     bound = _resolve_sys_modules_locals(func)
     if not bound:
@@ -458,8 +503,15 @@ def _getattr_on_bound_locals(
             if _first_party(module):
                 out.append(
                     Requirement(
-                        module, attr.value, "getattr", func.name, source_file,
-                        guarded=any(first <= node.lineno <= last for first, last in _guarded_spans(func, "AttributeError")),
+                        module,
+                        attr.value,
+                        "getattr",
+                        func.name,
+                        source_file,
+                        guarded=any(
+                            first <= node.lineno <= last
+                            for first, last in _guarded_spans(func, "AttributeError")
+                        ),
                     )
                 )
     return out
@@ -494,7 +546,9 @@ def _parse_variants(source: str, context: str) -> tuple[list[ast.Module], bool]:
                 arms.append("")
             elif line.startswith(">>>>>>> "):
                 if arms is None or len(arms) < 2 or len(variants) * len(arms) > 64:
-                    raise AuditError(f"Malformed or excessive conflict variants in {context}") from original
+                    raise AuditError(
+                        f"Malformed or excessive conflict variants in {context}"
+                    ) from original
                 variants = [prefix + arm for prefix in variants for arm in arms]
                 arms = None
             elif arms is not None:
@@ -506,7 +560,9 @@ def _parse_variants(source: str, context: str) -> tuple[list[ast.Module], bool]:
         try:
             return [ast.parse(v, filename=context) for v in variants], True
         except (SyntaxError, ValueError) as exc:
-            raise AuditError(f"Cannot parse all conflict arms of {context}: {exc}") from exc
+            raise AuditError(
+                f"Cannot parse all conflict arms of {context}: {exc}"
+            ) from exc
 
 
 def _import_module(node: ast.ImportFrom, source_file: str) -> str:
@@ -515,8 +571,10 @@ def _import_module(node: ast.ImportFrom, source_file: str) -> str:
     package = source_file.removesuffix(".py").split("/")[:-1]
     if node.level > len(package):
         raise AuditError(f"{source_file}:{node.lineno}: invalid relative import")
-    return ".".join(package[:len(package) - node.level + 1] +
-                    ([node.module] if node.module else []))
+    return ".".join(
+        package[: len(package) - node.level + 1]
+        + ([node.module] if node.module else [])
+    )
 
 
 @dataclass
@@ -562,7 +620,9 @@ def _prepare_tree(tree: ast.Module, source_file: str) -> ModuleFacts:
     for func in _function_definitions(tree):
         name = func.name
         nodes = list(ast.walk(func))
-        parents = {child: parent for parent in nodes for child in ast.iter_child_nodes(parent)}
+        parents = {
+            child: parent for parent in nodes for child in ast.iter_child_nodes(parent)
+        }
         references = []
         returned_names = set()
         factory_attributes = set()
@@ -591,7 +651,12 @@ def _prepare_tree(tree: ast.Module, source_file: str) -> ModuleFacts:
         facts = FunctionFacts(
             _called_names(func),
             [n for n in nodes if isinstance(n, (ast.Import, ast.ImportFrom))],
-            references, returned_names, factory_attributes, reqs, unresolved, error,
+            references,
+            returned_names,
+            factory_attributes,
+            reqs,
+            unresolved,
+            error,
         )
         if name in functions:
             # Without receiver types, every same-named definition is possible.
@@ -606,7 +671,9 @@ def _prepare_tree(tree: ast.Module, source_file: str) -> ModuleFacts:
             previous.error = previous.error or facts.error
         else:
             functions[name] = facts
-    return ModuleFacts(functions, imports, [n for n in tree.body if isinstance(n, ast.ImportFrom)])
+    return ModuleFacts(
+        functions, imports, [n for n in tree.body if isinstance(n, ast.ImportFrom)]
+    )
 
 
 def _prepare_version(source: str, source_file: str) -> VersionFacts:
@@ -615,7 +682,9 @@ def _prepare_version(source: str, source_file: str) -> VersionFacts:
 
 
 def _imported_dependencies(
-    facts: ModuleFacts, reachable: set[str], source_file: str,
+    facts: ModuleFacts,
+    reachable: set[str],
+    source_file: str,
 ) -> dict[str, set[str]]:
     """Resolve bindings over the selected functions, not unrelated commands.
 
@@ -623,17 +692,24 @@ def _imported_dependencies(
     module factories while their expensive AST walks are cached once.
     """
     funcs = {name: facts.functions[name] for name in sorted(reachable)}
-    imports = [*facts.imports, *(node for func in funcs.values() for node in func.imports)]
+    imports = [
+        *facts.imports,
+        *(node for func in funcs.values() for node in func.imports),
+    ]
     bindings: dict[str, set[tuple[str, str]]] = {}
     for node in imports:
         if isinstance(node, ast.ImportFrom):
             module = _import_module(node, source_file)
             for alias in node.names:
-                bindings.setdefault(alias.asname or alias.name, set()).add((module, alias.name))
+                bindings.setdefault(alias.asname or alias.name, set()).add(
+                    (module, alias.name)
+                )
         else:
             for alias in node.names:
                 name = alias.asname or alias.name.split(".")[0]
-                bindings.setdefault(name, set()).add((alias.name if alias.asname else name, "*"))
+                bindings.setdefault(name, set()).add(
+                    (alias.name if alias.asname else name, "*")
+                )
 
     factories: dict[str, set[str]] = {}
     for name, func in funcs.items():
@@ -664,7 +740,9 @@ def _imported_dependencies(
     return dependencies
 
 
-def _analyse_facts(facts: ModuleFacts, source_file: str, seeds: set[str] | None) -> Analysis:
+def _analyse_facts(
+    facts: ModuleFacts, source_file: str, seeds: set[str] | None
+) -> Analysis:
     result = Analysis(path=source_file)
     functions = facts.functions
     if seeds is None:
@@ -695,7 +773,9 @@ def _analyse_facts(facts: ModuleFacts, source_file: str, seeds: set[str] | None)
     return result
 
 
-def _analyse_version(facts: VersionFacts, source_file: str, seeds: set[str] | None) -> Analysis:
+def _analyse_version(
+    facts: VersionFacts, source_file: str, seeds: set[str] | None
+) -> Analysis:
     result = Analysis(path=source_file)
     for variant in facts.variants:
         part = _analyse_facts(variant, source_file, seeds)
@@ -712,7 +792,10 @@ def _analyse_version(facts: VersionFacts, source_file: str, seeds: set[str] | No
 
 
 def analyse(
-    source: str, source_file: str, *, entrypoints: bool,
+    source: str,
+    source_file: str,
+    *,
+    entrypoints: bool,
     seeds: set[str] | None = None,
 ) -> Analysis:
     """Analyze selected imports without executing the source. Fail closed."""
@@ -727,8 +810,11 @@ def analyse(
 def _git(*args: str, input: bytes | None = None) -> bytes:
     try:
         return subprocess.run(
-            ["git", "--no-replace-objects", *args], cwd=REPO_ROOT,
-            input=input, capture_output=True, check=True,
+            ["git", "--no-replace-objects", *args],
+            cwd=REPO_ROOT,
+            input=input,
+            capture_output=True,
+            check=True,
         ).stdout
     except subprocess.CalledProcessError as exc:
         raise AuditError(exc.stderr.decode("utf-8", "replace").strip()) from exc
@@ -767,7 +853,8 @@ def _has_entrypoint(source: bytes, context: str) -> bool:
     return any(
         isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and node.name in UPDATE_ENTRYPOINTS
-        for tree in trees for node in tree.body
+        for tree in trees
+        for node in tree.body
     )
 
 
@@ -787,8 +874,12 @@ def _entrypoint_paths(index: HistoryIndex) -> set[str]:
     candidates = 0
     for start in range(0, len(blobs), 64):
         if start % 4096 == 0:
-            print(f"[audit] entrypoint discovery: {start}/{len(blobs)} distinct blobs", file=sys.stderr, flush=True)
-        for blob, source in _batch_blobs(blobs[start:start + 64]).items():
+            print(
+                f"[audit] entrypoint discovery: {start}/{len(blobs)} distinct blobs",
+                file=sys.stderr,
+                flush=True,
+            )
+        for blob, source in _batch_blobs(blobs[start : start + 64]).items():
             context = f"{', '.join(sorted(locations[blob]))} [blob {blob}]"
             if any(name.encode() in source for name in UPDATE_ENTRYPOINTS):
                 candidates += 1
@@ -819,8 +910,18 @@ def _history_index(ref: str) -> HistoryIndex:
     depend on Git detecting an entrypoint move by its similarity threshold.
     """
     output = _git(
-        "log", "--full-history", "-m", "--root", "--find-renames",
-        "--format=%H", "--raw", "--no-abbrev", "-z", ref, "--", "*.py",
+        "log",
+        "--full-history",
+        "-m",
+        "--root",
+        "--find-renames",
+        "--format=%H",
+        "--raw",
+        "--no-abbrev",
+        "-z",
+        ref,
+        "--",
+        "*.py",
     )
     index = HistoryIndex()
     records = iter(output.split(b"\0"))
@@ -865,15 +966,17 @@ def _batch_blobs(refs: list[str]) -> dict[str, bytes]:
             raise AuditError(f"Cannot read historical blob {ref}: {header!r}")
         size = int(header[2])
         pos = newline + 1
-        if len(out) <= pos + size or out[pos + size:pos + size + 1] != b"\n":
+        if len(out) <= pos + size or out[pos + size : pos + size + 1] != b"\n":
             raise AuditError(f"Truncated historical blob {ref}")
-        contents[ref] = out[pos:pos + size]
+        contents[ref] = out[pos : pos + size]
         pos += size + 1
     return contents
 
 
 def _batch_read_blobs(refs: list[str]) -> dict[str, str]:
-    return {ref: _decode_source(source, ref) for ref, source in _batch_blobs(refs).items()}
+    return {
+        ref: _decode_source(source, ref) for ref, source in _batch_blobs(refs).items()
+    }
 
 
 @dataclass
@@ -898,7 +1001,9 @@ def _module_paths(module: str, paths: dict) -> list[str]:
     return [p for p in (f"{stem}.py", f"{stem}/__init__.py") if p in paths]
 
 
-def _audit_versions(index: HistoryIndex, entrypaths: set[str], read_sources, *, progress: bool = False) -> Surface:
+def _audit_versions(
+    index: HistoryIndex, entrypaths: set[str], read_sources, *, progress: bool = False
+) -> Surface:
     """Fixed point over historical static imports and rename edges.
 
     Demand is monotonic: an additional caller can only add functions. The
@@ -925,10 +1030,14 @@ def _audit_versions(index: HistoryIndex, entrypaths: set[str], read_sources, *, 
 
     for path in sorted(entrypaths | set(UPDATE_MODULE_CANDIDATES)):
         enqueue(path, set(UPDATE_ENTRYPOINTS))
-    for path in sorted(set(POST_SWAP_HELPER_MODULES) | {
-        p for p in index.versions
-        if p.startswith("clawk_cli/update_cmd_") and p.endswith(".py")
-    }):
+    for path in sorted(
+        set(POST_SWAP_HELPER_MODULES)
+        | {
+            p
+            for p in index.versions
+            if p.startswith("clawk_cli/update_cmd_") and p.endswith(".py")
+        }
+    ):
         enqueue(path, None)
 
     memo: dict[tuple[str, str], Analysis] = {}
@@ -946,11 +1055,14 @@ def _audit_versions(index: HistoryIndex, entrypaths: set[str], read_sources, *, 
                 f"[audit] {path}: {len(blobs)} versions; "
                 f"{len(seeds) if seeds is not None else 'all'} function seeds; "
                 f"{len(pending)} paths queued; {analysis_passes} analyses so far",
-                file=sys.stderr, flush=True,
+                file=sys.stderr,
+                flush=True,
             )
         for start in range(0, len(blobs), 64):
-            batch = blobs[start:start + 64]
-            sources = read_sources(path, [blob for blob in batch if (path, blob) not in prepared])
+            batch = blobs[start : start + 64]
+            sources = read_sources(
+                path, [blob for blob in batch if (path, blob) not in prepared]
+            )
             for blob in batch:
                 try:
                     if (path, blob) not in prepared:
@@ -958,7 +1070,9 @@ def _audit_versions(index: HistoryIndex, entrypaths: set[str], read_sources, *, 
                     analysis = _analyse_version(prepared[path, blob], path, seeds)
                 except AuditError as exc:
                     witnesses = ", ".join(sorted(index.versions[path][blob])[:3])
-                    raise AuditError(f"{exc} [blob {blob}; commits {witnesses}]") from exc
+                    raise AuditError(
+                        f"{exc} [blob {blob}; commits {witnesses}]"
+                    ) from exc
                 memo[path, blob] = analysis
                 analysis_passes += 1
                 for module, symbols in analysis.dependencies.items():
@@ -995,8 +1109,12 @@ def _audit_versions(index: HistoryIndex, entrypaths: set[str], read_sources, *, 
     surface.stats = {
         "files_analyzed": sorted(demand),
         "entrypoint_paths": sorted(entrypaths & demand.keys()),
-        "files_with_reachable_functions": sorted({p for (p, _), a in memo.items() if a.reachable}),
-        "commits_with_audited_changes": len({c for p, b in memo for c in index.versions[p][b]}),
+        "files_with_reachable_functions": sorted(
+            {p for (p, _), a in memo.items() if a.reachable}
+        ),
+        "commits_with_audited_changes": len(
+            {c for p, b in memo for c in index.versions[p][b]}
+        ),
         "revisions_read": sum(len(index.versions[p][b]) for p, b in memo),
         "distinct_file_versions": len(memo),
         "analysis_passes": analysis_passes,
@@ -1009,9 +1127,15 @@ def audit_history(ref: str = "origin/main") -> Surface:
     """Audit the full DAG at ref; freezes must pass the pre-PM cutoff."""
     ref = _full_history_ref(ref)  # pin once; a concurrent fetch cannot mix DAGs
     index = _history_index(ref)
-    print(f"[audit] indexed {len(index.versions)} historical Python paths", file=sys.stderr, flush=True)
+    print(
+        f"[audit] indexed {len(index.versions)} historical Python paths",
+        file=sys.stderr,
+        flush=True,
+    )
     surface = _audit_versions(
-        index, _entrypoint_paths(index), lambda path, blobs: _batch_read_blobs(blobs),
+        index,
+        _entrypoint_paths(index),
+        lambda path, blobs: _batch_read_blobs(blobs),
         progress=True,
     )
     if not surface.stats["entrypoint_paths"]:
@@ -1025,21 +1149,25 @@ def audit_history(ref: str = "origin/main") -> Surface:
         surface.kinds.setdefault(key, set()).add("reviewed-module-call")
         surface.sites.setdefault(key, set()).add(site)
         surface.guarded_only.discard(key)
-    surface.stats.update({
-        "mode": "history",
-        "discovery": index.discovery_stats,
-        "coverage": "All reachable commits inventoried; distinct selected path/blob versions analyzed. Commit evidence lists version witnesses, not every unchanged descendant.",
-        "history_ref": ref,
-        "complete_history": True,
-        "commits": int(_git("rev-list", "--count", ref)),
-        "roots": sorted(_git("rev-list", "--max-parents=0", ref).decode().split()),
-    })
+    surface.stats.update(
+        {
+            "mode": "history",
+            "discovery": index.discovery_stats,
+            "coverage": "All reachable commits inventoried; distinct selected path/blob versions analyzed. Commit evidence lists version witnesses, not every unchanged descendant.",
+            "history_ref": ref,
+            "complete_history": True,
+            "commits": int(_git("rev-list", "--count", ref)),
+            "roots": sorted(_git("rev-list", "--max-parents=0", ref).decode().split()),
+        }
+    )
     return surface
 
 
 def audit_tree() -> Surface:
     """Diagnostic only: current-tree loads do not extend the historical contract."""
-    names = _git("ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.py")
+    names = _git(
+        "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.py"
+    )
     paths = {p.decode() for p in names.split(b"\0") if p}
     index = HistoryIndex()
     entrypaths = set()
@@ -1118,7 +1246,8 @@ def resolve_in_tree(module: str, symbol: str | None, root: Path) -> tuple[bool, 
     # ``_EXPORTS = {"pm.install": ("ensure", ...)}`` table; resolve through it.
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(
-                isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets):
+            isinstance(t, ast.Name) and t.id == "_EXPORTS" for t in node.targets
+        ):
             try:
                 exports = ast.literal_eval(node.value)
             except ValueError:
@@ -1136,8 +1265,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Exit nonzero when this tree is missing something an old "
-        "updater needs.",
+        help="Exit nonzero when this tree is missing something an old updater needs.",
     )
     parser.add_argument(
         "--explain", metavar="MODULE", help="Show every requirement on MODULE."
@@ -1188,11 +1316,11 @@ def main(argv: list[str] | None = None) -> int:
                 for (m, s) in surface.required
                 if (m, s) not in surface.guarded_only
             ),
-            "guarded_only": sorted(
-                f"{m}::{s}" for (m, s) in surface.guarded_only
-            ),
+            "guarded_only": sorted(f"{m}::{s}" for (m, s) in surface.guarded_only),
         }
-        Path(ns.freeze).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        Path(ns.freeze).write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
         if surface.parse_recoveries:
             print("Historical parse recoveries (all arms audited; recorded in JSON):")
             for recovery in sorted(surface.parse_recoveries):

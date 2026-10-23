@@ -19,6 +19,7 @@ The counter now round-trips the durable session-state channel exactly like
   threshold still clears the counter (update_from_response), and that clear
   is durable too.
 """
+
 from pathlib import Path
 from unittest.mock import patch
 
@@ -71,7 +72,6 @@ class TestCounterRoundTripsBindSessionState:
             "tripped anti-thrash guard instead of re-compacting"
         )
 
-
     def test_rebind_to_other_session_does_not_leak_counter(self, tmp_path):
         """The counter is per-session: switching sessions must not carry it."""
         db = _db(tmp_path)
@@ -84,7 +84,6 @@ class TestCounterRoundTripsBindSessionState:
 
         cc.bind_session_state(db, "cold")
         assert cc._ineffective_compression_count == 0
-
 
 
 class TestResetSemanticsPreserved:

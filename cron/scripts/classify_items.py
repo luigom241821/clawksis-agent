@@ -61,7 +61,9 @@ def _build_prompt(items: list[dict[str, Any]], criteria: str) -> str:
         # Compact view of the salient fields; the whole object when none are present.
         view = {k: item[k] for k in _VIEW_KEYS if k in item} or item
         lines.append(f"[{i}] {json.dumps(view, ensure_ascii=False)[:1200]}")
-    lines.append("\nReturn the JSON array of scores now (one object per item, same order).")
+    lines.append(
+        "\nReturn the JSON array of scores now (one object per item, same order)."
+    )
     return "\n".join(lines)
 
 
@@ -100,7 +102,12 @@ def _parse_scores(content: str, n_items: int) -> dict[int, dict[str, Any]]:
 def _render_text(surfaced: list) -> str:
     blocks = []
     for i, item, s in surfaced:
-        title = item.get("title") or item.get("subject") or item.get("summary") or _item_id(item, i)
+        title = (
+            item.get("title")
+            or item.get("subject")
+            or item.get("summary")
+            or _item_id(item, i)
+        )
         block = f"## [{s.get('score')}/10] {title}"
         if url := item.get("url") or item.get("link") or "":
             block += f"\n{url}"
@@ -111,11 +118,29 @@ def _render_text(surfaced: list) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Classify items by urgency; emit only urgent ones.")
-    parser.add_argument("--criteria", required=True, help="Plain-language importance criteria.")
-    parser.add_argument("--threshold", type=int, default=7, help="Minimum score (0-10) to surface. Default 7.")
-    parser.add_argument("--input-file", default=None, help="Read items JSON from this file instead of stdin.")
-    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format for surfaced items.")
+    parser = argparse.ArgumentParser(
+        description="Classify items by urgency; emit only urgent ones."
+    )
+    parser.add_argument(
+        "--criteria", required=True, help="Plain-language importance criteria."
+    )
+    parser.add_argument(
+        "--threshold",
+        type=int,
+        default=7,
+        help="Minimum score (0-10) to surface. Default 7.",
+    )
+    parser.add_argument(
+        "--input-file",
+        default=None,
+        help="Read items JSON from this file instead of stdin.",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format for surfaced items.",
+    )
     args = parser.parse_args()
 
     items = _load_items(args.input_file)
@@ -132,7 +157,9 @@ def main() -> int:
     prompt = _build_prompt(items, args.criteria)
     try:
         resp = call_llm(
-            task="monitor", messages=[{"role": "user", "content": prompt}], max_tokens=1024,
+            task="monitor",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1024,
             temperature=0,
         )
         content = resp.choices[0].message.content
@@ -157,8 +184,10 @@ def main() -> int:
     if args.format == "json":
         out = [
             {
-                "id": _item_id(item, i), "score": s.get("score"),
-                "reason": s.get("reason", ""), "item": item,
+                "id": _item_id(item, i),
+                "score": s.get("score"),
+                "reason": s.get("reason", ""),
+                "item": item,
             }
             for (i, item, s) in surfaced
         ]

@@ -16,6 +16,7 @@ def _open_session_db():
     """Open the SessionDB for the profile owning this turn, or ``None``."""
     try:
         from clawk_state_registry import acquire
+
         return acquire()
     except Exception:
         return None
@@ -25,9 +26,13 @@ def react_to_message_tool(emoji: str, message_row_id=None, messages_back=None) -
     """Attach (or with an empty ``emoji`` retract) the agent's reaction."""
     emoji = (emoji or "").strip()
     # Routing keys identify a channel; message rows belong to the live durable session.
-    session_key = get_session_env("CLAWK_SESSION_ID", "") or get_session_env("CLAWK_SESSION_KEY", "")
+    session_key = get_session_env("CLAWK_SESSION_ID", "") or get_session_env(
+        "CLAWK_SESSION_KEY", ""
+    )
     if not session_key:
-        return tool_error("No active session — reactions need a persisted conversation.")
+        return tool_error(
+            "No active session — reactions need a persisted conversation."
+        )
     db = _open_session_db()
     if db is None:
         return tool_error("Session storage is unavailable.")
@@ -39,11 +44,17 @@ def react_to_message_tool(emoji: str, message_row_id=None, messages_back=None) -
             back = max(0, int(messages_back or 0))
             row_id = db.latest_message_row_id(session_key, role="user", offset=back)
             if row_id is None:
-                return tool_error(f"No user message found {back} back." if back else "No user message to react to yet.")
+                return tool_error(
+                    f"No user message found {back} back."
+                    if back
+                    else "No user message to react to yet."
+                )
         else:
             target_role = db.get_message_role(session_key, int(row_id)) or "user"
         try:
-            reactions = db.set_message_reaction(session_key, int(row_id), emoji or None, author="agent")
+            reactions = db.set_message_reaction(
+                session_key, int(row_id), emoji or None, author="agent"
+            )
         except Exception as exc:
             return tool_error(f"Failed to set the reaction: {exc}")
         if reactions is None:
@@ -51,11 +62,18 @@ def react_to_message_tool(emoji: str, message_row_id=None, messages_back=None) -
         # Paint it live; a missing bridge (non-desktop) is not an error — the reaction is
         # persisted. `role` lets the renderer match a live message without a durable row id.
         with contextlib.suppress(Exception):
-            desktop_ui.emit("message.reaction", {"row_id": int(row_id), "reactions": reactions, "role": target_role})
-        return json.dumps({"success": True, "row_id": int(row_id), "reactions": reactions}, ensure_ascii=False)
+            desktop_ui.emit(
+                "message.reaction",
+                {"row_id": int(row_id), "reactions": reactions, "role": target_role},
+            )
+        return json.dumps(
+            {"success": True, "row_id": int(row_id), "reactions": reactions},
+            ensure_ascii=False,
+        )
     finally:
         with contextlib.suppress(Exception):
             from clawk_state_registry import release_or_close
+
             release_or_close(db)
 
 
@@ -111,9 +129,14 @@ REACT_TO_MESSAGE_SCHEMA = {
 
 
 registry.register(
-    name="react_to_message", toolset="desktop_ui", schema=REACT_TO_MESSAGE_SCHEMA,
+    name="react_to_message",
+    toolset="desktop_ui",
+    schema=REACT_TO_MESSAGE_SCHEMA,
     handler=lambda args, **kw: react_to_message_tool(
-        emoji=args.get("emoji", ""), message_row_id=args.get("message_row_id"),
-        messages_back=args.get("messages_back")),
-    check_fn=check_react_requirements, emoji="💛",
+        emoji=args.get("emoji", ""),
+        message_row_id=args.get("message_row_id"),
+        messages_back=args.get("messages_back"),
+    ),
+    check_fn=check_react_requirements,
+    emoji="💛",
 )

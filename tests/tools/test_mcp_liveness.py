@@ -10,44 +10,83 @@ import pytest
 from clawk_platform import declaration
 from tools.mcp_liveness import parse_liveness
 
+
 def _decl(tmp_path, *, min_version=None):
     executable = tmp_path / "example-app"
     executable.write_text("fixture", encoding="utf-8")
     raw = {sys.platform: {"presence": "executable", "location": str(executable)}}
     requires = {"app": True}
     if min_version is not None:
-        raw[sys.platform]["version"] = {"kind": "plist" if sys.platform == "darwin" else "none"}
+        raw[sys.platform]["version"] = {
+            "kind": "plist" if sys.platform == "darwin" else "none"
+        }
         requires["min_version"] = min_version
     return declaration.parse_declaration("Example App", raw, requires, where="test")
+
 
 def test_parse_liveness_contract():
     assert parse_liveness({"kind": "static"}).kind == "static"
     assert parse_liveness({"kind": "interactive_session"}).kind == "interactive_session"
-    live = parse_liveness({
-        "kind": "server_json",
-        "path": "/tmp/example.json",
-        "fields": {"url": "endpoint", "token": "secret", "pid": "process"},
-    })
+    live = parse_liveness(
+        {
+            "kind": "server_json",
+            "path": "/tmp/example.json",
+            "fields": {"url": "endpoint", "token": "secret", "pid": "process"},
+        }
+    )
     assert (live.kind, live.path, live.url_field, live.token_field, live.pid_field) == (
-        "server_json", "/tmp/example.json", "endpoint", "secret", "process"
+        "server_json",
+        "/tmp/example.json",
+        "endpoint",
+        "secret",
+        "process",
     )
     with pytest.raises(ValueError):
         parse_liveness({"kind": "unknown"})
     defaulted = parse_liveness({"kind": "server_json", "path": "/tmp/example.json"})
-    assert (defaulted.url_field, defaulted.token_field, defaulted.pid_field) == ("http", "token", "pid")
-    partial = parse_liveness({"kind": "server_json", "path": "/tmp/example.json", "fields": {"url": "endpoint"}})
-    assert (partial.url_field, partial.token_field, partial.pid_field) == ("endpoint", "token", "pid")
+    assert (defaulted.url_field, defaulted.token_field, defaulted.pid_field) == (
+        "http",
+        "token",
+        "pid",
+    )
+    partial = parse_liveness(
+        {
+            "kind": "server_json",
+            "path": "/tmp/example.json",
+            "fields": {"url": "endpoint"},
+        }
+    )
+    assert (partial.url_field, partial.token_field, partial.pid_field) == (
+        "endpoint",
+        "token",
+        "pid",
+    )
     with pytest.raises(ValueError):
-        parse_liveness({"kind": "server_json", "path": "/tmp/example.json", "fields": {"port": "p"}})
+        parse_liveness(
+            {
+                "kind": "server_json",
+                "path": "/tmp/example.json",
+                "fields": {"port": "p"},
+            }
+        )
+
 
 def test_invalid_registered_liveness_degrades_to_static(monkeypatch):
     from clawk_cli import agent_plugins
     from tools.mcp_liveness import liveness_for
 
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {"kind": "server_json"}, raising=False)
+    monkeypatch.setattr(
+        agent_plugins,
+        "liveness_for",
+        lambda name: {"kind": "server_json"},
+        raising=False,
+    )
     assert liveness_for("example-server").kind == "static"
 
-def test_live_endpoint_reloads_file_and_registers_token_before_use(tmp_path, monkeypatch, caplog):
+
+def test_live_endpoint_reloads_file_and_registers_token_before_use(
+    tmp_path, monkeypatch, caplog
+):
     from clawk_cli import agent_plugins
     from agent import redact
     from tools.mcp_tool_transport import _live_endpoint
@@ -65,33 +104,69 @@ def test_live_endpoint_reloads_file_and_registers_token_before_use(tmp_path, mon
     monkeypatch.setattr(redact, "register_vault_redaction_value", calls.append)
     caplog.set_level(logging.DEBUG)
     try:
-        runtime.write_text(json.dumps({"http": "http://127.0.0.1:1111", "token": "first-secret", "pid": os.getpid()}))
+        runtime.write_text(
+            json.dumps(
+                {
+                    "http": "http://127.0.0.1:1111",
+                    "token": "first-secret",
+                    "pid": os.getpid(),
+                }
+            )
+        )
         first = _live_endpoint("example-server")
-        runtime.write_text(json.dumps({"http": "http://127.0.0.1:2222", "token": "second-secret", "pid": os.getpid()}))
+        runtime.write_text(
+            json.dumps(
+                {
+                    "http": "http://127.0.0.1:2222",
+                    "token": "second-secret",
+                    "pid": os.getpid(),
+                }
+            )
+        )
         second = _live_endpoint("example-server")
     finally:
         declaration.unregister("example-server")
-    assert first == ("http://127.0.0.1:1111/mcp", {"Authorization": "Bearer first-secret"})
-    assert second == ("http://127.0.0.1:2222/mcp", {"Authorization": "Bearer second-secret"})
+    assert first == (
+        "http://127.0.0.1:1111/mcp",
+        {"Authorization": "Bearer first-secret"},
+    )
+    assert second == (
+        "http://127.0.0.1:2222/mcp",
+        {"Authorization": "Bearer second-secret"},
+    )
     assert calls == ["first-secret", "second-secret"]
-    assert all(secret not in record.getMessage() for record in caplog.records for secret in calls)
+    assert all(
+        secret not in record.getMessage()
+        for record in caplog.records
+        for secret in calls
+    )
 
-def test_runtime_file_without_token_connects_without_authorization(tmp_path, monkeypatch):
+
+def test_runtime_file_without_token_connects_without_authorization(
+    tmp_path, monkeypatch
+):
     from clawk_cli import agent_plugins
     from agent import redact
     from tools.mcp_tool_transport import _live_endpoint
 
     runtime = tmp_path / "server.json"
     declaration.register("example-server", _decl(tmp_path))
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {
-        "kind": "server_json",
-        "path": str(runtime),
-        "fields": {"url": "http", "token": "token", "pid": "pid"},
-    }, raising=False)
+    monkeypatch.setattr(
+        agent_plugins,
+        "liveness_for",
+        lambda name: {
+            "kind": "server_json",
+            "path": str(runtime),
+            "fields": {"url": "http", "token": "token", "pid": "pid"},
+        },
+        raising=False,
+    )
     calls = []
     monkeypatch.setattr(redact, "register_vault_redaction_value", calls.append)
     try:
-        runtime.write_text(json.dumps({"http": "http://127.0.0.1:3333", "pid": os.getpid()}))
+        runtime.write_text(
+            json.dumps({"http": "http://127.0.0.1:3333", "pid": os.getpid()})
+        )
         result = _live_endpoint("example-server")
     finally:
         declaration.unregister("example-server")
@@ -101,22 +176,29 @@ def test_runtime_file_without_token_connects_without_authorization(tmp_path, mon
     assert "Authorization" not in headers
     assert calls == []
 
+
 def test_missing_runtime_file_never_falls_back(tmp_path, monkeypatch):
     from clawk_cli import agent_plugins
     from tools.mcp_tool_transport import LiveEndpointUnavailable, _live_endpoint
 
     decl = _decl(tmp_path)
     declaration.register("example-server", decl)
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {
-        "kind": "server_json",
-        "path": str(tmp_path / "missing.json"),
-        "fields": {"url": "http", "token": "token", "pid": "pid"},
-    }, raising=False)
+    monkeypatch.setattr(
+        agent_plugins,
+        "liveness_for",
+        lambda name: {
+            "kind": "server_json",
+            "path": str(tmp_path / "missing.json"),
+            "fields": {"url": "http", "token": "token", "pid": "pid"},
+        },
+        raising=False,
+    )
     try:
         with pytest.raises(LiveEndpointUnavailable):
             _live_endpoint("example-server")
     finally:
         declaration.unregister("example-server")
+
 
 def test_hydrated_error_shape_for_registered_declaration(tmp_path, monkeypatch):
     from clawk_cli import agent_plugins
@@ -124,8 +206,12 @@ def test_hydrated_error_shape_for_registered_declaration(tmp_path, monkeypatch):
 
     decl = _decl(tmp_path)
     declaration.register("example-server", decl)
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False)
-    monkeypatch.setattr(mcp_tool_discovery, "_get_connected_server_for_call", lambda name: None)
+    monkeypatch.setattr(
+        agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False
+    )
+    monkeypatch.setattr(
+        mcp_tool_discovery, "_get_connected_server_for_call", lambda name: None
+    )
     monkeypatch.setattr(mcp_tool, "_bump_server_error", lambda name, **kwargs: None)
     try:
         server, error = mcp_tool_handlers._acquire_call_server("example-server", 0)
@@ -141,20 +227,31 @@ def test_hydrated_error_shape_for_registered_declaration(tmp_path, monkeypatch):
     assert payload["user_action"]
     assert payload["retry"] == "after_user_action"
 
-def test_connected_interactive_session_server_is_offerable_from_a_service_session(tmp_path, monkeypatch):
+
+def test_connected_interactive_session_server_is_offerable_from_a_service_session(
+    tmp_path, monkeypatch
+):
     from clawk_cli import agent_plugins
     from clawk_platform.host import facts
     from tools import mcp_tool_handlers
 
     declaration.register("example-server", _decl(tmp_path))
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {"kind": "interactive_session"}, raising=False)
+    monkeypatch.setattr(
+        agent_plugins,
+        "liveness_for",
+        lambda name: {"kind": "interactive_session"},
+        raising=False,
+    )
     monkeypatch.setattr(facts, "interactive_session", lambda: False)
     try:
         assert mcp_tool_handlers._declared_app_offerable("example-server") is True
     finally:
         declaration.unregister("example-server")
 
-def test_running_app_with_live_endpoint_reports_the_missing_connection(tmp_path, monkeypatch):
+
+def test_running_app_with_live_endpoint_reports_the_missing_connection(
+    tmp_path, monkeypatch
+):
     """The #119975 report: the app runs and its endpoint answers, only Clawksis' MCP connection
     is missing. That must read as a missing connection with a reconnect action — not as
     \"<slug> is not running. Start <slug>\" for an app that IS running."""
@@ -170,15 +267,25 @@ def test_running_app_with_live_endpoint_reports_the_missing_connection(tmp_path,
             return object()
 
         def probe(self, _resolution, effort=None):
-            return type("Probe", (), {
-                "running": type("Value", (), {"value": True})(),
-                "endpoint": type("Endpoint", (), {"state": CheckState.PRESENT})(),
-            })()
+            return type(
+                "Probe",
+                (),
+                {
+                    "running": type("Value", (), {"value": True})(),
+                    "endpoint": type("Endpoint", (), {"state": CheckState.PRESENT})(),
+                },
+            )()
 
     monkeypatch.setattr(mcp_liveness, "AppResolver", _RunningApp)
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {
-        "kind": "server_json", "path": str(tmp_path / "runtime.json"),
-    }, raising=False)
+    monkeypatch.setattr(
+        agent_plugins,
+        "liveness_for",
+        lambda name: {
+            "kind": "server_json",
+            "path": str(tmp_path / "runtime.json"),
+        },
+        raising=False,
+    )
     decl = _decl(tmp_path)
     declaration.register("example-server", decl)
     try:
@@ -193,13 +300,16 @@ def test_running_app_with_live_endpoint_reports_the_missing_connection(tmp_path,
     assert "is not running" not in sentence
     assert current.user_action.startswith("Reconnect")
 
+
 def test_static_liveness_cannot_claim_the_app_is_not_running(tmp_path, monkeypatch):
     """Static/unknown liveness kinds have no app probe, so their honest state is the missing
     connection — not a verdict that an app they cannot see is stopped (#119975)."""
     from clawk_cli import agent_plugins
     from tools import mcp_liveness
 
-    monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False)
+    monkeypatch.setattr(
+        agent_plugins, "liveness_for", lambda name: {"kind": "static"}, raising=False
+    )
     decl = _decl(tmp_path)
     declaration.register("example-server", decl)
     try:
@@ -213,6 +323,7 @@ def test_static_liveness_cannot_claim_the_app_is_not_running(tmp_path, monkeypat
     assert "MCP connection is missing" in sentence
     assert "is not running" not in sentence
 
+
 def test_gpu_requirement_hides_a_connected_server_and_says_which_gpu(monkeypatch):
     """A connected server whose `requires.gpu` the host misses is not offered, and its status is a
     state the Plugins tab can carry, with a sentence that names the GPU instead of "Install <app>"."""
@@ -223,7 +334,9 @@ def test_gpu_requirement_hides_a_connected_server_and_says_which_gpu(monkeypatch
 
     monkeypatch.setattr(facts, "gpu_class", lambda: "intel")
     monkeypatch.setattr(agent_plugins, "liveness_for", lambda name: None, raising=False)
-    decl = declaration.parse_declaration("RTX Tool", None, {"gpu": "nvidia"}, where="test")
+    decl = declaration.parse_declaration(
+        "RTX Tool", None, {"gpu": "nvidia"}, where="test"
+    )
     declaration.register("example-server", decl)
     try:
         offerable = mcp_tool_handlers._declared_app_offerable("example-server")
@@ -244,7 +357,9 @@ def test_describe_prefers_the_plugin_title_over_the_server_slug(tmp_path):
     from tools import mcp_liveness
 
     decl = _decl(tmp_path)
-    sentence = mcp_liveness.describe(decl, None, "clawk_not_connected", display_name="Example Tools")
+    sentence = mcp_liveness.describe(
+        decl, None, "clawk_not_connected", display_name="Example Tools"
+    )
     assert sentence.startswith("Example Tools")
     assert "Example App" not in sentence
     assert "MCP connection is missing" in sentence

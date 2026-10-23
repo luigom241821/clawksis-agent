@@ -24,9 +24,15 @@ def _schema_for_local_validation(node: Any) -> Any:
     if not isinstance(node, dict):
         return node
     # Literal keywords hold instance data, not schemas: copy byte-for-byte.
-    normalized = {key: (copy.deepcopy(value) if key in _SCHEMA_LITERAL_KEYS
-                        else _schema_for_local_validation(value))
-                  for key, value in node.items() if key != "nullable"}
+    normalized = {
+        key: (
+            copy.deepcopy(value)
+            if key in _SCHEMA_LITERAL_KEYS
+            else _schema_for_local_validation(value)
+        )
+        for key, value in node.items()
+        if key != "nullable"
+    }
     if node.get("nullable") is not True:
         return normalized
     schema_type = normalized.get("type")
@@ -50,8 +56,10 @@ def _schema_has_external_ref(node: Any) -> bool:
         return False
     ref = node.get("$ref")
     return (isinstance(ref, str) and not ref.startswith("#")) or any(
-        _schema_has_external_ref(value) for key, value in node.items()
-        if key not in _SCHEMA_LITERAL_KEYS)
+        _schema_has_external_ref(value)
+        for key, value in node.items()
+        if key not in _SCHEMA_LITERAL_KEYS
+    )
 
 
 def _validation_path(error: Any) -> str:
@@ -65,10 +73,16 @@ def _validation_path(error: Any) -> str:
     return path
 
 
-def _validation_error(message: str, *, path: str, constraint: str, parameters: Any) -> str:
+def _validation_error(
+    message: str, *, path: str, constraint: str, parameters: Any
+) -> str:
     return tool_error(
-        message, path=path, constraint=constraint, parameters=parameters,
-        hint="Retry tool_call with 'arguments' matching the parameters schema above.")
+        message,
+        path=path,
+        constraint=constraint,
+        parameters=parameters,
+        hint="Retry tool_call with 'arguments' matching the parameters schema above.",
+    )
 
 
 def validate_deferred_call_args(name: str, args: dict[str, Any]) -> Optional[str]:
@@ -84,6 +98,7 @@ def validate_deferred_call_args(name: str, args: dict[str, Any]) -> Optional[str
     """
     try:
         from tools.registry import registry as _registry
+
         schema = _registry.get_schema(name)
         if not isinstance(schema, dict):
             return None
@@ -92,34 +107,50 @@ def validate_deferred_call_args(name: str, args: dict[str, Any]) -> Optional[str
         if not isinstance(params, dict):
             return None
         required = params.get("required")
-        missing = ([r for r in required if isinstance(r, str) and r not in args]
-                   if isinstance(required, list) else [])
+        missing = (
+            [r for r in required if isinstance(r, str) and r not in args]
+            if isinstance(required, list)
+            else []
+        )
         if missing:
             return _validation_error(
                 f"tool_call to '{name}' is missing required argument(s): "
                 f"{', '.join(missing)}. The tool was NOT invoked.",
-                path="arguments", constraint="required", parameters=params)
+                path="arguments",
+                constraint="required",
+                parameters=params,
+            )
         validation_schema = _schema_for_local_validation(params)
         if _schema_has_external_ref(validation_schema):
-            logger.debug("Skipping local deferred-argument validation for %s: external $ref", name)
+            logger.debug(
+                "Skipping local deferred-argument validation for %s: external $ref",
+                name,
+            )
             return None
         # Validate the repaired shape dispatch will see; copy because coerce_tool_args may
         # normalize in place (dispatch re-coerces canonically).
         try:
             from model_tools import coerce_tool_args
+
             candidate_args = coerce_tool_args(name, dict(args))
         except Exception:
-            logger.debug("Deferred-argument coercion failed for %s", name, exc_info=True)
+            logger.debug(
+                "Deferred-argument coercion failed for %s", name, exc_info=True
+            )
             candidate_args = dict(args)
         try:
             from jsonschema.exceptions import best_match
             from jsonschema.validators import validator_for
         except ImportError:
-            logger.debug("jsonschema unavailable; keeping required-only validation for %s", name)
+            logger.debug(
+                "jsonschema unavailable; keeping required-only validation for %s", name
+            )
             return None
         validator_cls = validator_for(validation_schema)
         validator_cls.check_schema(validation_schema)
-        validation_error = best_match(validator_cls(validation_schema).iter_errors(candidate_args))
+        validation_error = best_match(
+            validator_cls(validation_schema).iter_errors(candidate_args)
+        )
         if validation_error is None:
             return None
         path = _validation_path(validation_error)
@@ -130,13 +161,18 @@ def validate_deferred_call_args(name: str, args: dict[str, Any]) -> Optional[str
         return _validation_error(
             f"tool_call to '{name}' failed argument validation at {path} "
             f"({constraint}): {detail}. The tool was NOT invoked.",
-            path=path, constraint=constraint, parameters=params)
+            path=path,
+            constraint=constraint,
+            parameters=params,
+        )
     except Exception:  # pragma: no cover — never block dispatch on validator bugs
         logger.debug("validate_deferred_call_args failed for %s", name, exc_info=True)
         return None
 
 
-def normalize_tool_call_entries(args: dict[str, Any]) -> tuple[list[dict[str, Any]], Optional[str]]:
+def normalize_tool_call_entries(
+    args: dict[str, Any],
+) -> tuple[list[dict[str, Any]], Optional[str]]:
     """Normalize ``tool_call`` arguments into a ``calls[]`` list of entries.
 
     Accepts the advertised batch shape ``{"calls": [{"name", "arguments"}, ...]}``
@@ -166,7 +202,10 @@ def normalize_tool_call_entries(args: dict[str, Any]) -> tuple[list[dict[str, An
     entries: list[dict[str, Any]] = []
     for position, raw in enumerate(raw_calls):
         if not isinstance(raw, dict):
-            return [], f"tool_call calls[{position}] must be an object with 'name' and 'arguments'"
+            return (
+                [],
+                f"tool_call calls[{position}] must be an object with 'name' and 'arguments'",
+            )
         name = str(raw.get("name") or "").strip()
         if not name:
             return [], f"tool_call calls[{position}] requires a 'name'"
@@ -183,7 +222,10 @@ def normalize_tool_call_entries(args: dict[str, Any]) -> tuple[list[dict[str, An
             try:
                 raw_args = json.loads(raw_args)
             except json.JSONDecodeError as e:
-                return [], f"tool_call calls[{position}].arguments is not valid JSON: {e}"
+                return (
+                    [],
+                    f"tool_call calls[{position}].arguments is not valid JSON: {e}",
+                )
         if not isinstance(raw_args, dict):
             return [], f"tool_call calls[{position}].arguments must be an object"
         entries.append({"name": name, "arguments": raw_args})
@@ -198,12 +240,19 @@ def local_batch_error(entries: list[dict[str, Any]]) -> str:
     shape with the caller's OWN first entry: small models re-send an identical batch
     when told only the constraint, and the echoed payload is what gets them unstuck."""
     first = entries[0]
-    args = json.dumps(first.get("arguments", {}), ensure_ascii=False, separators=(",", ":"))
+    args = json.dumps(
+        first.get("arguments", {}), ensure_ascii=False, separators=(",", ":")
+    )
     if len(args) > _ECHO_ARGS_MAX_CHARS:
         args = "{...}"  # keep the correction readable; the model still has its own arguments
-    retry = '{{"calls":[{{"name":{},"arguments":{}}}]}}'.format(json.dumps(first["name"], ensure_ascii=False), args)
-    remaining = (f" then issue the remaining {len(entries) - 1} call(s) as separate tool_call invocations"
-                 if len(entries) > 1 else "")
+    retry = '{{"calls":[{{"name":{},"arguments":{}}}]}}'.format(
+        json.dumps(first["name"], ensure_ascii=False), args
+    )
+    remaining = (
+        f" then issue the remaining {len(entries) - 1} call(s) as separate tool_call invocations"
+        if len(entries) > 1
+        else ""
+    )
     return (
         f"tool_call takes exactly one entry for local tools; you sent {len(entries)}. "
         f"Retry with only: {retry}{remaining}. Only connectors__ names may be batched together."
@@ -216,24 +265,34 @@ def unavailable_in_session_reason(name: str) -> str:
     Deferral is a property of the tool, availability one of the session: a deferred tool the
     session does not carry (``defer: [delegate_task]`` in a worker) is no more findable through
     ``tool_search`` than a stripped core tool is callable directly."""
-    return (f"'{name}' is not available in this execution context. "
-            "Don't retry it — state the assumption and proceed with the work.")
+    return (
+        f"'{name}' is not available in this execution context. "
+        "Don't retry it — state the assumption and proceed with the work."
+    )
 
 
-def session_unavailable_error(name: str, session_tool_names: Optional[Iterable[str]]) -> Optional[str]:
+def session_unavailable_error(
+    name: str, session_tool_names: Optional[Iterable[str]]
+) -> Optional[str]:
     """The unavailability message when a core tool is missing from the session's own tool list,
     whether or not ``defer:`` moved it behind the bridge; None without session context, when
     the session carries it, or for MCP/plugin/unregistered names (an absent one may be a stale
     catalog that ``tool_search`` can still refresh). A missing GUI surface keeps its own reason."""
     if session_tool_names is None or name in set(session_tool_names):
         return None
-    from tools.tool_search import _core_tool_names, out_of_scope_reason  # late: imports this module
+    from tools.tool_search import (
+        _core_tool_names,
+        out_of_scope_reason,
+    )  # late: imports this module
+
     if name not in _core_tool_names() or _registry_entry(name) is None:
         return None
     return out_of_scope_reason(name) or unavailable_in_session_reason(name)
 
 
-def not_deferrable_error(name: str, session_tool_names: Optional[Iterable[str]] = None) -> str:
+def not_deferrable_error(
+    name: str, session_tool_names: Optional[Iterable[str]] = None
+) -> str:
     """Rejection for a ``tool_call`` naming something that is not a deferred tool.
     Two different mistakes reach here and need opposite corrections: a directly-listed
     tool (call it without the bridge) vs. an unknown name — typically a deferred MCP tool
@@ -247,19 +306,32 @@ def not_deferrable_error(name: str, session_tool_names: Optional[Iterable[str]] 
     instead. Stays None for callers with no session context; deliberately never consults the
     global blocklist, because a top-level session legitimately has these tools.
     """
-    from tools.tool_search import _core_tool_names  # late: tool_search imports this module
+    from tools.tool_search import (
+        _core_tool_names,
+    )  # late: tool_search imports this module
+
     if name in _core_tool_names() or _registry_entry(name) is not None:
         if session_tool_names is not None and name not in set(session_tool_names):
             return unavailable_in_session_reason(name)
-        return (f"'{name}' is a directly-listed tool, not a deferred one. "
-                "Call it directly instead of via tool_call.")
+        return (
+            f"'{name}' is a directly-listed tool, not a deferred one. "
+            "Call it directly instead of via tool_call."
+        )
     suffix = f"__{name}"
     try:
         from tools.registry import registry
-        candidates = sorted(n for n in registry.get_all_tool_names() if n.endswith(suffix))
+
+        candidates = sorted(
+            n for n in registry.get_all_tool_names() if n.endswith(suffix)
+        )
     except Exception:
         candidates = []
-    hint = (f" Did you mean {', '.join(repr(c) for c in candidates)}?" if candidates
-            else " Use tool_search to find the exact name.")
-    return (f"'{name}' is not a known tool name. Deferred tools must be invoked through tool_call "
-            f"by the exact name tool_search returns (e.g. mcp__<server>__{{tool}}).{hint}")
+    hint = (
+        f" Did you mean {', '.join(repr(c) for c in candidates)}?"
+        if candidates
+        else " Use tool_search to find the exact name."
+    )
+    return (
+        f"'{name}' is not a known tool name. Deferred tools must be invoked through tool_call "
+        f"by the exact name tool_search returns (e.g. mcp__<server>__{{tool}}).{hint}"
+    )

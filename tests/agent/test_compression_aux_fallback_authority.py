@@ -36,10 +36,12 @@ def _config():
 
 def _response(content: str, finish_reason: str = "stop"):
     return SimpleNamespace(
-        choices=[SimpleNamespace(
-            message=SimpleNamespace(content=content),
-            finish_reason=finish_reason,
-        )]
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=content),
+                finish_reason=finish_reason,
+            )
+        ]
     )
 
 
@@ -73,8 +75,14 @@ def test_authoritative_task_strips_only_destination_fields():
 
     # Every destination-shaping field from the failed route is removed.
     for field in (
-        "provider", "model", "base_url", "api_key", "api_mode",
-        "key_env", "api_key_env", "reasoning_effort",
+        "provider",
+        "model",
+        "base_url",
+        "api_key",
+        "api_mode",
+        "key_env",
+        "api_key_env",
+        "reasoning_effort",
     ):
         assert field not in effective
 
@@ -82,7 +90,9 @@ def test_authoritative_task_strips_only_destination_fields():
 
 
 def test_truncated_aux_summary_retries_on_complete_main_route():
-    with patch("agent.context_compressor.get_model_context_length", return_value=100_000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100_000
+    ):
         compressor = ContextCompressor(
             model="main-model",
             provider="openrouter",
@@ -134,19 +144,35 @@ def test_main_retry_is_not_fast_lane_certified_by_the_failed_aux_reasoning():
 
     from agent.auxiliary_client import call_llm
 
-    config = {"auxiliary": {"compression": {"provider": "openrouter", "model": "main-model",
-                                            "base_url": "https://aux.invalid/v1", "reasoning_effort": "none"}}}
+    config = {
+        "auxiliary": {
+            "compression": {
+                "provider": "openrouter",
+                "model": "main-model",
+                "base_url": "https://aux.invalid/v1",
+                "reasoning_effort": "none",
+            }
+        }
+    }
     client = MagicMock()
     client.base_url = "https://openrouter.ai/api/v1"
     response = _response("ok")
     client.chat.completions.create.return_value = response
     with (
         patch("clawk_cli.config.load_config_readonly", return_value=config),
-        patch("agent.auxiliary_client._get_cached_client", return_value=(client, "main-model")),
+        patch(
+            "agent.auxiliary_client._get_cached_client",
+            return_value=(client, "main-model"),
+        ),
         patch("agent.auxiliary_client._validate_llm_response", return_value=response),
     ):
-        call_llm(task=authoritative_auxiliary_task("compression"), provider="openrouter", model="main-model",
-                 api_key="main-key", messages=_messages())
+        call_llm(
+            task=authoritative_auxiliary_task("compression"),
+            provider="openrouter",
+            model="main-model",
+            api_key="main-key",
+            messages=_messages(),
+        )
 
     request = client.chat.completions.create.call_args.kwargs
     assert "reasoning_effort" not in request

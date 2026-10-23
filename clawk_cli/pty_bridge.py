@@ -22,6 +22,7 @@ from typing import Optional, Sequence
 
 try:
     import ptyprocess  # type: ignore
+
     _PTY_AVAILABLE = not sys.platform.startswith("win")
 except ImportError:  # pragma: no cover - dev env without ptyprocess
     ptyprocess = None  # type: ignore
@@ -78,12 +79,16 @@ def _helper_shutdown_grace() -> float:
     gateway = env_float("CLAWK_TUI_GATEWAY_SHUTDOWN_GRACE_S", 1.0)
     if not math.isfinite(gateway) or gateway <= 0:
         gateway = 1.0
-    return min(max(_HELPER_SHUTDOWN_GRACE_S, gateway + 0.5), _MAX_HELPER_SHUTDOWN_GRACE_S)
+    return min(
+        max(_HELPER_SHUTDOWN_GRACE_S, gateway + 0.5), _MAX_HELPER_SHUTDOWN_GRACE_S
+    )
 
 
 def _process_group_exists(pgid: int) -> bool:
     try:
-        os.killpg(pgid, 0)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+        os.killpg(
+            pgid, 0
+        )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
     except OSError:
         return False
     return True
@@ -116,7 +121,9 @@ class PtyBridge:
         # Recorded at spawn: once the leader is reaped getpgid() can no longer find its group,
         # but the helpers it started still belong to it.
         try:
-            self._pgid: Optional[int] = os.getpgid(proc.pid)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+            self._pgid: Optional[int] = os.getpgid(
+                proc.pid
+            )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
         except OSError:
             self._pgid = None
         os.set_blocking(self._fd, False)
@@ -133,20 +140,35 @@ class PtyBridge:
 
     @classmethod
     def spawn(
-        cls, argv: Sequence[str], *, cwd: Optional[str] = None, env: Optional[dict] = None, cols: int = 80, rows: int = 24
+        cls,
+        argv: Sequence[str],
+        *,
+        cwd: Optional[str] = None,
+        env: Optional[dict] = None,
+        cols: int = 80,
+        rows: int = 24,
     ) -> PtyBridge:
         """Spawn ``argv`` behind a new PTY and return a bridge."""
         if not _PTY_AVAILABLE:
             if sys.platform.startswith("win"):
-                raise PtyUnavailableError("Pseudo-terminals are unavailable on this platform. "
-                                          "Clawksis supports Windows only via WSL.")
-            raise PtyUnavailableError("The `ptyprocess` package is missing. "  # only other way _PTY_AVAILABLE is False
-                                      "Run clawk pm repair, then restart Clawksis.")
+                raise PtyUnavailableError(
+                    "Pseudo-terminals are unavailable on this platform. "
+                    "Clawksis supports Windows only via WSL."
+                )
+            raise PtyUnavailableError(
+                "The `ptyprocess` package is missing. "  # only other way _PTY_AVAILABLE is False
+                "Run clawk pm repair, then restart Clawksis."
+            )
         # env=None: callers own env policy (process_registry already sanitizes), so inherit via the
         # factory with exact preservation. Backfill TERM when missing/blank — CI often lacks it and
         # probes like `tput cols` then fail before winsize reads; explicit overrides are kept.
         from tools.environments.local import build_subprocess_env
-        spawn_env = build_subprocess_env(scrub_secrets=False, inherit_profile_home=False) if env is None else env.copy()
+
+        spawn_env = (
+            build_subprocess_env(scrub_secrets=False, inherit_profile_home=False)
+            if env is None
+            else env.copy()
+        )
         if not spawn_env.get("TERM"):
             spawn_env["TERM"] = "xterm-256color"
         # Tell the child TUI it is hosted by the dashboard's xterm.js. Ink uses this to skip the
@@ -154,10 +176,14 @@ class PtyBridge:
         # (xterm.js never drops frames, so under the dashboard that repaint was a visible flash on
         # every OS app-switch).
         spawn_env[PTY_HOST_ENV] = PTY_HOST_DASHBOARD
-        proc = ptyprocess.PtyProcess.spawn(list(argv), cwd=cwd, env=spawn_env, dimensions=(rows, cols))  # type: ignore[union-attr]
+        proc = ptyprocess.PtyProcess.spawn(
+            list(argv), cwd=cwd, env=spawn_env, dimensions=(rows, cols)
+        )  # type: ignore[union-attr]
         try:
             return cls(proc)
-        except OSError:  # no safe readiness wait for the master (fd_wait): don't leak the child
+        except (
+            OSError
+        ):  # no safe readiness wait for the master (fd_wait): don't leak the child
             proc.close(force=True)
             raise
 
@@ -270,7 +296,13 @@ class PtyBridge:
         if self._closed:
             return
         # struct winsize: rows, cols, xpixel, ypixel (all unsigned short)
-        winsize = struct.pack("HHHH", _clamp_dimension(rows, _MAX_ROWS), _clamp_dimension(cols, _MAX_COLS), 0, 0)
+        winsize = struct.pack(
+            "HHHH",
+            _clamp_dimension(rows, _MAX_ROWS),
+            _clamp_dimension(cols, _MAX_COLS),
+            0,
+            0,
+        )
         try:
             fcntl.ioctl(self._fd, termios.TIOCSWINSZ, winsize)
         except OSError:
@@ -281,11 +313,17 @@ class PtyBridge:
         # exit (and a SIGHUP save outlasts the grace) until someone drains the master. The drain
         # task no longer consumes the output, so read and drop while waiting.
         try:
-            if self._waiter is not None and self._waiter.wait(timeout) and os.read(self._fd, 65536):
+            if (
+                self._waiter is not None
+                and self._waiter.wait(timeout)
+                and os.read(self._fd, 65536)
+            ):
                 return
         except (OSError, ValueError):
             pass
-        time.sleep(timeout)  # nothing read, EOF (b"") or EIO: don't spin on a readable dead fd
+        time.sleep(
+            timeout
+        )  # nothing read, EOF (b"") or EIO: don't spin on a readable dead fd
 
     def _wait_for_group_exit(self, pgid: int, timeout: float) -> None:
         deadline = time.monotonic() + timeout
@@ -317,19 +355,27 @@ class PtyBridge:
                 try:
                     import psutil  # type: ignore
 
-                    non_leader_descendants = psutil.Process(self._proc.pid).children(recursive=True)
+                    non_leader_descendants = psutil.Process(self._proc.pid).children(
+                        recursive=True
+                    )
                 except Exception:
                     non_leader_descendants = []
             pgid = None
 
         # Signal the whole process group, not just the PTY leader: the dashboard TUI starts helper
         # children (e.g. the Python slash worker) and killing only the leader strands them.
-        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGKILL):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+        for sig in (
+            signal.SIGHUP,
+            signal.SIGTERM,
+            signal.SIGKILL,
+        ):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
             if not self._proc.isalive():
                 break
             try:
                 if pgid is not None:
-                    os.killpg(pgid, sig)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+                    os.killpg(
+                        pgid, sig
+                    )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
                 else:
                     self._proc.kill(sig)
             except Exception:
@@ -347,15 +393,23 @@ class PtyBridge:
         # then hits that group). The reaper closes a dead session within one tick, so the window is short.
         if pgid is not None:
             grace = _helper_shutdown_grace()
-            sweep = (signal.SIGKILL,) if leader_was_alive else (signal.SIGHUP, signal.SIGKILL)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+            sweep = (
+                (signal.SIGKILL,)
+                if leader_was_alive
+                else (signal.SIGHUP, signal.SIGKILL)
+            )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
             if leader_was_alive:
                 self._wait_for_group_exit(pgid, grace)
             for sig in sweep:
                 try:
-                    os.killpg(pgid, sig)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+                    os.killpg(
+                        pgid, sig
+                    )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
                 except OSError:
                     break  # ESRCH: the group is empty
-                self._wait_for_group_exit(pgid, grace if sig == signal.SIGHUP else 0.5)  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+                self._wait_for_group_exit(
+                    pgid, grace if sig == signal.SIGHUP else 0.5
+                )  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
         elif non_leader_descendants:
             # The shared-group branch: the helpers-outlive-leader sweep above cannot run
             # (no killpg is safe), so end the snapshotted descendants individually. The main
@@ -364,18 +418,28 @@ class PtyBridge:
             # saving state on SIGHUP still finishes, and one that ignores SIGHUP cannot
             # outlive the close (mirrors the group sweep's leader-dead cadence, #76759).
             grace = _helper_shutdown_grace()
-            for sig in (signal.SIGHUP, signal.SIGKILL):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+            for sig in (
+                signal.SIGHUP,
+                signal.SIGKILL,
+            ):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
                 for child in non_leader_descendants:
                     try:
-                        if sig == signal.SIGHUP:  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+                        if (
+                            sig == signal.SIGHUP
+                        ):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
                             child.send_signal(sig)
                         else:
                             child.kill()
                     except Exception:
                         pass  # already gone; psutil raises NoSuchProcess/Zombie
-                if sig == signal.SIGHUP:  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
+                if (
+                    sig == signal.SIGHUP
+                ):  # windows-footgun: ok — POSIX-only module (imports fcntl/termios/ptyprocess at top)
                     deadline = time.monotonic() + grace
-                    while any(_psutil_alive(c) for c in non_leader_descendants) and time.monotonic() < deadline:
+                    while (
+                        any(_psutil_alive(c) for c in non_leader_descendants)
+                        and time.monotonic() < deadline
+                    ):
                         self._discard_output(0.02)
 
         try:

@@ -11,12 +11,12 @@ import pytest
 from agent import coding_context as cc
 
 
-
-
 def _git_init(path):
     env = {
-        "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
         "HOME": str(path),
     }
     # Commit a source file so the fixture is a real *code* workspace: a bare git
@@ -33,32 +33,40 @@ def _git_init(path):
         ["add", "-A"],
         ["commit", "-q", "-m", "init commit"],
     ):
-        subprocess.run([shutil.which("git"), "-C", str(path), *args], check=True, env=env)
+        subprocess.run(
+            [shutil.which("git"), "-C", str(path), *args], check=True, env=env
+        )
 
 
 # ── resolver ──────────────────────────────────────────────────────────────
 
+
 class TestIsCodingContext:
-
-
-
     def test_auto_bare_git_repo_without_code_stays_general(self, tmp_path):
         # A git repo of only prose (notes/writing/research — a big non-coding use
         # case) is NOT a code workspace: .git alone must not flip the posture.
         cfg = {"agent": {"coding_context": "auto"}}
         env = {
-            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t", "HOME": str(tmp_path),
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+            "HOME": str(tmp_path),
         }
         (tmp_path / "notes.md").write_text("# my novel\n")
-        for args in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "notes"]):
-            subprocess.run([shutil.which("git"), "-C", str(tmp_path), *args], check=True, env=env)
+        for args in (
+            ["init", "-q", "-b", "main"],
+            ["add", "-A"],
+            ["commit", "-q", "-m", "notes"],
+        ):
+            subprocess.run(
+                [shutil.which("git"), "-C", str(tmp_path), *args], check=True, env=env
+            )
 
         assert cc.is_coding_context(platform="cli", cwd=tmp_path, config=cfg) is False
         # …but adding a manifest or source file makes it a code workspace.
         (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
         assert cc.is_coding_context(platform="cli", cwd=tmp_path, config=cfg) is True
-
 
     def test_default_mode_is_auto(self, tmp_path):
         # Unknown/missing value normalizes to auto.
@@ -67,6 +75,7 @@ class TestIsCodingContext:
 
 
 # ── toolset substitution ────────────────────────────────────────────────────
+
 
 class TestCodingSelection:
     def test_selects_coding_under_focus(self, tmp_path):
@@ -87,11 +96,8 @@ class TestCodingSelection:
         assert cc.is_coding_context(platform="cli", cwd=tmp_path, config=cfg) is True
 
 
-
-
-
-
 # ── git/workspace probe ─────────────────────────────────────────────────────
+
 
 class TestWorkspaceBlock:
     def test_empty_outside_repo(self, tmp_path):
@@ -116,11 +122,8 @@ class TestWorkspaceBlock:
 
 # ── project facts (verify-loop detection) ───────────────────────────────────
 
+
 class TestProjectFacts:
-
-
-
-
     def test_worktree_detected_without_primary_path(self, tmp_path):
         # A linked worktree should be detected, but the output must NOT contain
         # the absolute path to the primary tree — exposing that path causes the
@@ -130,11 +133,25 @@ class TestProjectFacts:
         _git_init(main_tree)
         worktree = tmp_path / "worktree"
         subprocess.run(
-            ["git", "-C", str(main_tree), "worktree", "add", "-b", "wt-branch", str(worktree)],
+            [
+                "git",
+                "-C",
+                str(main_tree),
+                "worktree",
+                "add",
+                "-b",
+                "wt-branch",
+                str(worktree),
+            ],
             check=True,
-            env={"PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path),
-                 "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": str(tmp_path),
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@t",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@t",
+            },
         )
         block = cc.build_coding_workspace_block(worktree)
         assert "Worktree: linked" in block
@@ -143,8 +160,6 @@ class TestProjectFacts:
         assert str(main_tree) not in block
         # The worktree root IS the reported root.
         assert f"Root: {worktree.resolve()}" in block or "Root:" in block
-
-
 
     def test_detect_project_facts_structured(self, tmp_path):
         (tmp_path / "package.json").write_text(
@@ -167,14 +182,18 @@ class TestProjectFacts:
         (tmp_path / "pnpm-lock.yaml").write_text("")
         facts = cc.project_facts_for(tmp_path)
         assert facts is not None
-        verify_line = cc.build_coding_workspace_block(tmp_path).split("Verify:")[1].splitlines()[0]
+        verify_line = (
+            cc.build_coding_workspace_block(tmp_path)
+            .split("Verify:")[1]
+            .splitlines()[0]
+        )
         assert facts["verifyCommands"]
         for cmd in facts["verifyCommands"]:
             assert cmd in verify_line
 
 
-
 # ── $HOME dotfiles guard ────────────────────────────────────────────────────
+
 
 class TestHomeDotfilesGuard:
     def test_dotfiles_repo_at_home_is_not_coding(self, tmp_path, monkeypatch):
@@ -189,8 +208,9 @@ class TestHomeDotfilesGuard:
         docs.mkdir()
         assert cc.is_coding_context(platform="cli", cwd=docs, config=cfg) is False
 
-
-    def test_real_project_under_dotfiles_home_still_detects(self, tmp_path, monkeypatch):
+    def test_real_project_under_dotfiles_home_still_detects(
+        self, tmp_path, monkeypatch
+    ):
         home = tmp_path / "home"
         home.mkdir()
         _git_init(home)
@@ -202,8 +222,8 @@ class TestHomeDotfilesGuard:
         assert cc.is_coding_context(platform="cli", cwd=proj, config=cfg) is True
 
 
-
 # ── prompt assembly integration ─────────────────────────────────────────────
+
 
 class TestStatusParsing:
     def test_parse_status_counts_and_branch(self):
@@ -228,6 +248,7 @@ class TestStatusParsing:
 
 # ── RuntimeMode seam ────────────────────────────────────────────────────────
 
+
 class TestRuntimeMode:
     def test_resolves_coding_in_repo(self, tmp_path):
         _git_init(tmp_path)
@@ -249,23 +270,25 @@ class TestRuntimeMode:
         _git_init(tmp_path)
         home = tmp_path / "home"
         home.mkdir()
-        (home / "config.yaml").write_text(json.dumps({"agent": {"coding_context": "auto"}}))
+        (home / "config.yaml").write_text(
+            json.dumps({"agent": {"coding_context": "auto"}})
+        )
         monkeypatch.setenv("CLAWK_HOME", str(home))
-        mode = cc.resolve_runtime_mode(platform="cli", cwd=tmp_path, config={"agent": {"coding_context": "focus"}})
+        mode = cc.resolve_runtime_mode(
+            platform="cli", cwd=tmp_path, config={"agent": {"coding_context": "focus"}}
+        )
         assert mode.toolset_selection() == [cc.CODING_TOOLSET]
-
-
-
-
 
     def test_no_instructions_block_when_unset(self, tmp_path):
         _git_init(tmp_path)
-        mode = cc.resolve_runtime_mode(platform="cli", cwd=tmp_path, config={"agent": {"coding_context": "on"}})
+        mode = cc.resolve_runtime_mode(
+            platform="cli", cwd=tmp_path, config={"agent": {"coding_context": "on"}}
+        )
         assert not any("Operator instructions" in b for b in mode.system_blocks())
 
 
-
 # ── edit-format steering (per-model harness tuning) ──────────────────────────
+
 
 class TestEditFormatSteering:
     def test_family_detection(self):
@@ -276,8 +299,12 @@ class TestEditFormatSteering:
         # Gemini + open-weight coding models (RL'd on str_replace-style
         # editors) steer to replace, not neutral.
         for m in (
-            "google/gemini-3-pro", "deepseek-v3.2", "qwen3-coder",
-            "moonshot/kimi-k2", "zai/glm-4.6", "nousresearch/hermes-4-405b",
+            "google/gemini-3-pro",
+            "deepseek-v3.2",
+            "qwen3-coder",
+            "moonshot/kimi-k2",
+            "zai/glm-4.6",
+            "nousresearch/hermes-4-405b",
         ):
             assert cc._model_family(m) == "replace"
         # Unknown family and no model both fall through to neutral wording.
@@ -286,17 +313,10 @@ class TestEditFormatSteering:
         assert cc._model_family("") is None
 
 
-
-
-
-
-
 # ── profile registry ────────────────────────────────────────────────────────
 
+
 class TestProfiles:
-
-
-
     def test_skill_demotion_gated_on_focus(self, tmp_path):
         # Names-only demotion is opt-in via focus mode — the default (auto)
         # and forced (on) postures leave the skill index untouched. Under
@@ -310,7 +330,8 @@ class TestProfiles:
             assert mode.is_coding is True
             assert mode.compact_skill_categories() == frozenset()
         focus = cc.resolve_runtime_mode(
-            platform="cli", cwd=tmp_path,
+            platform="cli",
+            cwd=tmp_path,
             config={"agent": {"coding_context": "focus"}},
         )
         assert focus.is_coding is True
@@ -325,8 +346,11 @@ class TestProfiles:
 
 # ── detection signals ───────────────────────────────────────────────────────
 
+
 class TestDetection:
-    @pytest.mark.parametrize("marker", ["pyproject.toml", "package.json", "go.mod", "AGENTS.md"])
+    @pytest.mark.parametrize(
+        "marker", ["pyproject.toml", "package.json", "go.mod", "AGENTS.md"]
+    )
     def test_project_manifest_triggers_without_git(self, tmp_path, marker):
         (tmp_path / marker).write_text("x")
         cfg = {"agent": {"coding_context": "auto"}}

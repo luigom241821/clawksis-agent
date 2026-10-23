@@ -18,6 +18,7 @@ PR #69112 hardened the shared dispatch path in `gateway/run.py` against a
 cancelled *caller*. These tests cover the Photon-specific self-cancellation one
 layer down, which that PR's scope could not reach.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -59,8 +60,14 @@ class TestFatalNotifyIsDetached:
         monkeypatch.setattr(adapter, "_stop_sidecar", lambda: _noop())
 
         async def degraded(_path: str, _payload: dict[str, Any]) -> dict[str, Any]:
-            return {"stream": {"ok": False, "state": "degraded", "degradedForMs": 4000,
-                               "lastIssue": "stream persistently failing"}}
+            return {
+                "stream": {
+                    "ok": False,
+                    "state": "degraded",
+                    "degradedForMs": 4000,
+                    "lastIssue": "stream persistently failing",
+                }
+            }
 
         monkeypatch.setattr(adapter, "_sidecar_call", degraded)
 
@@ -125,8 +132,6 @@ class TestFatalNotifyIsDetached:
             await adapter._notify_fatal_error_logged()
 
         assert any(r.levelname == "WARNING" for r in caplog.records)
-
-
 
 
 async def _noop() -> None:

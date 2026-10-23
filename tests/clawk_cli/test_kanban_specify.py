@@ -62,21 +62,21 @@ def _patch_aux_client(content: str, *, model: str = "test-model"):
 # ---------------------------------------------------------------------------
 
 
-
-
-
 # ---------------------------------------------------------------------------
 # specify_task (module-level entry point)
 # ---------------------------------------------------------------------------
+
 
 def test_specify_task_happy_path(kanban_home):
     with kbc.connect() as conn:
         tid = kb.create_task(conn, title="rough", triage=True)
 
-    content = jsonlib.dumps({
-        "title": "Refined rough",
-        "body": "**Goal**\nA concrete goal.",
-    })
+    content = jsonlib.dumps(
+        {
+            "title": "Refined rough",
+            "body": "**Goal**\nA concrete goal.",
+        }
+    )
     p, _ = _patch_aux_client(content)
     with p:
         outcome = spec.specify_task(tid, author="ace")
@@ -93,13 +93,10 @@ def test_specify_task_happy_path(kanban_home):
     assert "**Goal**" in (task.body or "")
 
 
-
-
-
-
 # ---------------------------------------------------------------------------
 # CLI wiring — argparse + _cmd_specify
 # ---------------------------------------------------------------------------
+
 
 def _run_cli(*argv: str) -> int:
     """Invoke the `clawk kanban …` argparse surface directly."""
@@ -110,13 +107,14 @@ def _run_cli(*argv: str) -> int:
     return kanban_cli.kanban_command(ns)
 
 
-
-
 def test_cli_specify_tenant_filter(kanban_home, capsys):
     with kbc.connect() as conn:
         outside = kb.create_task(conn, title="outside", triage=True)
         inside = kb.create_task(
-            conn, title="inside", triage=True, tenant="proj-a",
+            conn,
+            title="inside",
+            triage=True,
+            tenant="proj-a",
         )
 
     content = jsonlib.dumps({"title": "spec", "body": "body"})
@@ -125,9 +123,7 @@ def test_cli_specify_tenant_filter(kanban_home, capsys):
         rc = _run_cli("specify", "--all", "--tenant", "proj-a", "--json")
     assert rc == 0
     lines = [
-        jsonlib.loads(l)
-        for l in capsys.readouterr().out.strip().splitlines()
-        if l
+        jsonlib.loads(l) for l in capsys.readouterr().out.strip().splitlines() if l
     ]
     ids = {row["task_id"] for row in lines}
     assert ids == {inside}
@@ -137,5 +133,3 @@ def test_cli_specify_tenant_filter(kanban_home, capsys):
         assert kb.get_task(conn, outside).status == "triage"
         # The inside task was promoted.
         assert kb.get_task(conn, inside).status in {"todo", "ready"}
-
-

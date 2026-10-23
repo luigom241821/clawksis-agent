@@ -11,11 +11,17 @@ from plugins.platforms.telegram.adapter import TelegramAdapter
 @pytest.fixture(autouse=True)
 def _no_auto_discovery(monkeypatch):
     """Disable DoH auto-discovery so connect() uses the plain builder chain."""
+
     async def _noop():
         return []
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.discover_fallback_ips", _noop)
+
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.discover_fallback_ips", _noop
+    )
     # Mock HTTPXRequest so the builder chain doesn't fail
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.HTTPXRequest", lambda **kwargs: MagicMock())
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.HTTPXRequest", lambda **kwargs: MagicMock()
+    )
 
 
 async def _cancel_heartbeat(adapter):
@@ -85,7 +91,10 @@ async def test_polling_conflict_retries_before_fatal(monkeypatch):
     builder.get_updates_request.return_value = builder
     builder.concurrent_updates.return_value = builder
     builder.build.return_value = app
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.Application", SimpleNamespace(builder=MagicMock(return_value=builder)))
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.Application",
+        SimpleNamespace(builder=MagicMock(return_value=builder)),
+    )
 
     # Speed up retries for testing
     monkeypatch.setattr("asyncio.sleep", AsyncMock())
@@ -99,7 +108,9 @@ async def test_polling_conflict_retries_before_fatal(monkeypatch):
     conflict = type("Conflict", (Exception,), {})
 
     # First conflict: should retry, NOT be fatal
-    captured["error_callback"](conflict("Conflict: terminated by other getUpdates request"))
+    captured["error_callback"](
+        conflict("Conflict: terminated by other getUpdates request")
+    )
     await adapter._polling_error_task
 
     assert adapter.has_fatal_error is False, "First conflict should not be fatal"
@@ -242,7 +253,10 @@ async def test_polling_conflict_becomes_fatal_after_retries(monkeypatch):
     builder.get_updates_request.return_value = builder
     builder.concurrent_updates.return_value = builder
     builder.build.return_value = app
-    monkeypatch.setattr("plugins.platforms.telegram.adapter.Application", SimpleNamespace(builder=MagicMock(return_value=builder)))
+    monkeypatch.setattr(
+        "plugins.platforms.telegram.adapter.Application",
+        SimpleNamespace(builder=MagicMock(return_value=builder)),
+    )
 
     # Speed up retries for testing
     monkeypatch.setattr("asyncio.sleep", AsyncMock())

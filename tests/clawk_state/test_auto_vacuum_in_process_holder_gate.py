@@ -35,8 +35,11 @@ def _auto_maintenance(db):
     # retention_days=0 makes the ended row prunable; the freelist floor is disabled so only a
     # holder can stop the VACUUM.
     return db.maybe_auto_prune_and_vacuum(
-        retention_days=0, min_interval_hours=0, min_vacuum_interval_days=0,
-        min_vacuum_freelist_ratio=-1.0)
+        retention_days=0,
+        min_interval_hours=0,
+        min_vacuum_interval_days=0,
+        min_vacuum_freelist_ratio=-1.0,
+    )
 
 
 def _make_prunable(db, session_id):
@@ -53,7 +56,7 @@ def test_auto_vacuum_skips_while_a_live_sibling_holds_the_same_store(tmp_path):
     _seed(db_path)
 
     live_sibling = registry.acquire(db_path)  # e.g. the gateway's own handle
-    maintainer = SessionDB(db_path=db_path)   # a second handle running housekeeping
+    maintainer = SessionDB(db_path=db_path)  # a second handle running housekeeping
     try:
         _make_prunable(maintainer, "old2")
         result = _auto_maintenance(maintainer)
@@ -93,8 +96,12 @@ def test_auto_vacuum_is_not_starved_by_a_retired_write_fenced_generation(tmp_pat
         replacement.replace(db_path)
         current = registry.acquire(db_path)
         try:
-            assert current is not parked, "inode replacement did not mint a new generation"
-            for round_index in range(3):  # consecutive rounds, fresh prunable rows each time
+            assert current is not parked, (
+                "inode replacement did not mint a new generation"
+            )
+            for round_index in range(
+                3
+            ):  # consecutive rounds, fresh prunable rows each time
                 _make_prunable(current, f"old-{round_index}")
                 result = _auto_maintenance(current)
                 assert result["pruned"] >= 1, (round_index, result)

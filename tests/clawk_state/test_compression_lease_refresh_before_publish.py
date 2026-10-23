@@ -4,6 +4,7 @@ When the lease refresher stopped due to transient DB failures, the final
 pre-publication refresh inside the same transaction gives one last chance
 to extend the lease before the expiry check.
 """
+
 import sqlite3
 import threading
 import time
@@ -29,7 +30,6 @@ def _seed_lock(conn, session_id, holder, expired=False):
 
 
 class TestLeaseRefreshBeforePublish:
-
     def test_refresher_stopped_final_refresh_succeeds(self, tmp_path):
         db = _setup_db(tmp_path)
         db.create_session("parent-1", source="test")
@@ -151,6 +151,7 @@ class TestLeaseRefreshBeforePublish:
 
         def intercepted_execute_write(self, fn, patience_s=None):
             original_fn = fn
+
             def wrapper(conn):
                 result = original_fn(conn)
                 lock = conn.execute(
@@ -160,6 +161,7 @@ class TestLeaseRefreshBeforePublish:
                 assert lock is not None
                 assert lock[0] > time.time()
                 return result
+
             return real_execute_write(self, wrapper, patience_s)
 
         with patch.object(SessionDB, "_execute_write", intercepted_execute_write):

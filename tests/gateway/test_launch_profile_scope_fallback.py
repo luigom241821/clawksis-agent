@@ -10,6 +10,7 @@ secondary context had left there.
 :data:`UNRESOLVED_PROFILE_HOME` sentinel instead, and binds nothing: handing it the launch
 profile's scope would serve a secondary's inbound message with the LAUNCH profile's credentials.
 """
+
 from types import SimpleNamespace
 
 import pytest
@@ -43,8 +44,12 @@ def test_scope_or_null_binds_launch_profile_when_no_routed_home(multiplexing_hos
 
 
 @pytest.mark.asyncio
-async def test_async_scope_or_null_binds_launch_profile_when_no_routed_home(multiplexing_host):
-    async with GatewayAdapterLifecycleMixin._async_scope_or_null(lambda home: None, None):
+async def test_async_scope_or_null_binds_launch_profile_when_no_routed_home(
+    multiplexing_host,
+):
+    async with GatewayAdapterLifecycleMixin._async_scope_or_null(
+        lambda home: None, None
+    ):
         assert get_secret(POISON) == "launch-dotenv"
 
 
@@ -71,7 +76,8 @@ class _Runner(GatewayAdapterLifecycleMixin):
 
 @pytest.mark.asyncio
 async def test_named_secondary_with_unresolvable_home_cannot_read_the_launch_secret(
-        multiplexing_host, monkeypatch):
+    multiplexing_host, monkeypatch
+):
     """The invariant: a profile never borrows another profile's credential value.
 
     Base resolved the missing home to ``None`` and the handler ran under the LAUNCH profile's
@@ -88,12 +94,19 @@ async def test_named_secondary_with_unresolvable_home_cannot_read_the_launch_sec
     handler = _Runner(seen)._make_profile_message_handler("b")
     await handler(SimpleNamespace(source=None))
 
-    assert seen == ["<fail-closed>"], f"secondary's handler resolved a credential to {seen}"
+    assert seen == ["<fail-closed>"], (
+        f"secondary's handler resolved a credential to {seen}"
+    )
 
 
 def test_unresolvable_home_is_a_sentinel_not_none(multiplexing_host, monkeypatch):
     """Overloading ``None`` is what made the fallback silent; keep the two answers distinct."""
     from clawk_cli import profiles as profiles_mod
 
-    monkeypatch.setattr(profiles_mod, "get_profile_dir", lambda _n: (_ for _ in ()).throw(OSError()))
-    assert GatewayAdapterLifecycleMixin._routed_profile_home("b") is UNRESOLVED_PROFILE_HOME
+    monkeypatch.setattr(
+        profiles_mod, "get_profile_dir", lambda _n: (_ for _ in ()).throw(OSError())
+    )
+    assert (
+        GatewayAdapterLifecycleMixin._routed_profile_home("b")
+        is UNRESOLVED_PROFILE_HOME
+    )

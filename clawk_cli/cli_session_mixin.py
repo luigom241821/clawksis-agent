@@ -28,8 +28,10 @@ def _user_turn_indices(history: list) -> list[int]:
     from agent.session_persistence import _is_ephemeral_scaffolding
 
     return [
-        i for i, m in enumerate(history)
-        if not _is_ephemeral_scaffolding(m) and user_originated_turn_view(m) is not None]
+        i
+        for i, m in enumerate(history)
+        if not _is_ephemeral_scaffolding(m) and user_originated_turn_view(m) is not None
+    ]
 
 
 def _timestamp_or(value, default):
@@ -65,6 +67,7 @@ def _reset_model_to_config_default(cli, silent: bool) -> None:
     Best-effort — an unreachable default must never block /new. Module-level helper (like
     ``_apply_new_session_title``): tests drive ``new_session`` unbound on a SimpleNamespace."""
     from cli import CLI_CONFIG, _cprint, _split_model_config_default, logger
+
     _model_config = CLI_CONFIG.get("model", {})
     if isinstance(_model_config, dict):
         _raw_default = _model_config.get("default") or _model_config.get("model") or ""
@@ -84,16 +87,21 @@ def _reset_model_to_config_default(cli, silent: bool) -> None:
             current_base_url=cli.base_url or "",
             current_api_key=cli.api_key or "",
             is_global=False,
-            explicit_provider=_config_provider or "")
+            explicit_provider=_config_provider or "",
+        )
         if not r.success:
             return
         # A gateway /new already opened the next session on the profile's default (``session.create``
         # without a model); the stand-in still points at the ended session, which a switch would rewrite.
         if cli.agent and not getattr(cli, "_gateway_session_open", False):
             cli.agent.switch_model(
-                new_model=r.new_model, new_provider=r.target_provider, api_key=r.api_key,
-                base_url=r.base_url, api_mode=r.api_mode,
-                capabilities=getattr(r, "runtime_capabilities", None))
+                new_model=r.new_model,
+                new_provider=r.target_provider,
+                api_key=r.api_key,
+                base_url=r.base_url,
+                api_mode=r.api_mode,
+                capabilities=getattr(r, "runtime_capabilities", None),
+            )
         cli.model = r.new_model
         cli.provider = r.target_provider
         cli.requested_provider = r.target_provider
@@ -115,6 +123,7 @@ def _apply_new_session_title(cli, title: str) -> Optional[str]:
     """Sanitize + persist a /new title; returns the stored title or None (untitled)."""
     from cli import _cprint
     from clawk_state import SessionDB
+
     try:
         sanitized = SessionDB.sanitize_title(title)
     except ValueError as e:
@@ -137,7 +146,11 @@ def _apply_new_session_title(cli, title: str) -> Optional[str]:
 
 def _print_save_refusal(error) -> None:
     """A gateway's ``/save`` refusal: ``not_found`` (no stored conversation yet) is main's nothing-to-save."""
-    print(t("cli.session.save_nothing") if str(error) == "not_found" else t("cli.session.save_failed", error=error))
+    print(
+        t("cli.session.save_nothing")
+        if str(error) == "not_found"
+        else t("cli.session.save_failed", error=error)
+    )
 
 
 def _export_on_gateway(connection, session_id, fmt, filename, redact):
@@ -148,11 +161,19 @@ def _export_on_gateway(connection, session_id, fmt, filename, redact):
     without ``session.export`` was handed to ``_save_on_older_gateway`` (which may save on the
     gateway host and prints its own outcome)."""
     from clawk_cli.gateway_client import GatewayClientError, GatewayRPCError
+
     try:
-        content = (connection.call("session.export", session_id=session_id, format=fmt,
-                                   redact=redact) or {}).get("content")
+        content = (
+            connection.call(
+                "session.export", session_id=session_id, format=fmt, redact=redact
+            )
+            or {}
+        ).get("content")
     except GatewayClientError as e:
-        if not (isinstance(e, GatewayRPCError) and (e.code == -32601 or str(e) == "unknown_method")):
+        if not (
+            isinstance(e, GatewayRPCError)
+            and (e.code == -32601 or str(e) == "unknown_method")
+        ):
             _print_save_refusal(e)
             return None
         _save_on_older_gateway(connection, session_id, fmt, filename, redact)
@@ -167,23 +188,32 @@ def _save_on_older_gateway(connection, session_id, fmt, filename, redact):
     """An owner without ``session.export``: its ``session.save`` writes default-named, unredacted
     JSON on the gateway host, so only a plain ``/save json`` may use it (as Desktop does)."""
     from clawk_cli.gateway_client import GatewayClientError
+
     if redact or fmt != "json" or filename:
-        print("(._.) This gateway predates this CLI: only a plain /save json works until it restarts "
-              "(it saves on the gateway host).")
+        print(
+            "(._.) This gateway predates this CLI: only a plain /save json works until it restarts "
+            "(it saves on the gateway host)."
+        )
         return
     try:
-        saved = (connection.call("session.save", session_id=session_id) or {}).get("file")
+        saved = (connection.call("session.save", session_id=session_id) or {}).get(
+            "file"
+        )
     except GatewayClientError as e:
         _print_save_refusal(e)
         return
-    print(f"(^_^)v Conversation saved on the gateway host: {saved}" if saved
-          else t("cli.session.save_failed", error="the gateway returned no file"))
+    print(
+        f"(^_^)v Conversation saved on the gateway host: {saved}"
+        if saved
+        else t("cli.session.save_failed", error="the gateway returned no file")
+    )
 
 
 def _write_save(session_id, fmt, filename, render):
     """Write a ``/save`` export on this machine: ``filename`` as typed (relative to the cwd), else
     ``sessions/saved/clawk_conversation_<ts>.<fmt>`` under this CLI's home."""
     from cli import datetime
+
     saved_dir = get_clawk_home() / "sessions" / "saved"
     try:
         saved_dir.mkdir(parents=True, exist_ok=True)
@@ -202,7 +232,11 @@ def _write_save(session_id, fmt, filename, render):
         content = render()
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
-        label = {"json": "JSON", "md": t("cli.session.format_markdown"), "html": "HTML"}[fmt]
+        label = {
+            "json": "JSON",
+            "md": t("cli.session.format_markdown"),
+            "html": "HTML",
+        }[fmt]
         print(t("cli.session.save_ok", path=path, label=label))
         if session_id:
             print(f"       {t('cli.session.save_resume_hint', session_id=session_id)}")
@@ -247,7 +281,10 @@ class CLISessionMixin:
         """Re-arm the session row's persisted /yolo on every resume path (``tools.approval_yolo``)."""
         from clawk_state import SessionDB
         from tools.approval_yolo import restore_session_yolo
-        if restore_session_yolo(self.session_id or "default", SessionDB.session_yolo_enabled(session_meta)):
+
+        if restore_session_yolo(
+            self.session_id or "default", SessionDB.session_yolo_enabled(session_meta)
+        ):
             _dim_notice(self, t("cli.session.yolo_restored"), quiet)
 
     def _render_resume_history_panel_lines(self, panel) -> list[str]:
@@ -257,8 +294,12 @@ class CLISessionMixin:
 
         buf = StringIO()
         console = Console(
-            file=buf, force_terminal=True, color_system="truecolor", highlight=False,
-            width=shutil.get_terminal_size((80, 24)).columns)
+            file=buf,
+            force_terminal=True,
+            color_system="truecolor",
+            highlight=False,
+            width=shutil.get_terminal_size((80, 24)).columns,
+        )
         with _suspend_output_history():
             console.print(panel)
         return buf.getvalue().rstrip("\n").splitlines()
@@ -278,17 +319,29 @@ class CLISessionMixin:
         """Show compact startup status line."""
         from cli import get_tool_definitions
         from clawk_cli.gateway_tools_notify import gateway_store
-        store = gateway_store(self)  # a gateway session's tools are the gateway's: never enumerated here
+
+        store = gateway_store(
+            self
+        )  # a gateway session's tools are the gateway's: never enumerated here
         inventory = store.banner_inventory() if store is not None else None
         # Avoid pulling the full tool registry into the bare Termux prompt path.
-        if os.environ.get("CLAWK_DEFER_AGENT_STARTUP") == "1" or (store is not None and inventory is None):
+        if os.environ.get("CLAWK_DEFER_AGENT_STARTUP") == "1" or (
+            store is not None and inventory is None
+        ):
             tool_status = t("cli.session.status_tools_deferred")
         elif inventory is not None:
-            tool_status = t("cli.session.status_tools_count", count=len(inventory["tools"] or []))
+            tool_status = t(
+                "cli.session.status_tools_count", count=len(inventory["tools"] or [])
+            )
         else:
-            tools = get_tool_definitions(enabled_toolsets=self.enabled_toolsets,
-                                         disabled_toolsets=self.disabled_toolsets, quiet_mode=True)
-            tool_status = t("cli.session.status_tools_count", count=len(tools) if tools else 0)
+            tools = get_tool_definitions(
+                enabled_toolsets=self.enabled_toolsets,
+                disabled_toolsets=self.disabled_toolsets,
+                quiet_mode=True,
+            )
+            tool_status = t(
+                "cli.session.status_tools_count", count=len(tools) if tools else 0
+            )
 
         model_short = self.model.split("/")[-1] if "/" in self.model else self.model
         if len(model_short) > 30:
@@ -296,6 +349,7 @@ class CLISessionMixin:
         api_indicator = "[green bold]●[/]" if self.api_key else "[red bold]●[/]"
         try:
             from clawk_cli.skin_engine import get_active_skin
+
             skin = get_active_skin()
             separator_color = skin.get_color("banner_dim", "#4A3496")
             accent_color = skin.get_color("ui_accent", "#6C4FD6")
@@ -311,11 +365,13 @@ class CLISessionMixin:
             provider_info += f"{sep}[dim]{_escape(t('cli.session.status_auth', source=self._provider_source))}[/]"
         self._console_print(
             f"  {api_indicator} [{accent_color}]{model_short}[/]{sep}"
-            f"[bold {label_color}]{tool_status}[/]{toolsets_info}{provider_info}")
+            f"[bold {label_color}]{tool_status}[/]{toolsets_info}{provider_info}"
+        )
 
     def _show_session_status(self):
         """Show gateway-style status for the current CLI session."""
         from clawk_cli.status_report import build_status_fields, status_lines
+
         session_meta = {}
         if self._session_db:
             with contextlib.suppress(Exception):
@@ -323,13 +379,19 @@ class CLISessionMixin:
 
         agent = getattr(self, "agent", None)
         fields = build_status_fields(
-            self.session_id, agent, session_meta,
-            model=getattr(self, "model", None), provider=getattr(self, "provider", None),
-            created_fallback=self.session_start, agent_running=bool(getattr(self, "_agent_running", False)),
+            self.session_id,
+            agent,
+            session_meta,
+            model=getattr(self, "model", None),
+            provider=getattr(self, "provider", None),
+            created_fallback=self.session_start,
+            agent_running=bool(getattr(self, "_agent_running", False)),
         )
 
         reasoning_label = None
-        rc = getattr(agent, "reasoning_config", None) or getattr(self, "reasoning_config", None)
+        rc = getattr(agent, "reasoning_config", None) or getattr(
+            self, "reasoning_config", None
+        )
         if isinstance(rc, dict):
             if rc.get("enabled") is False:
                 reasoning_label = t("cli.shared.label_off")
@@ -344,8 +406,11 @@ class CLISessionMixin:
         try:
             from tools.approval import is_approval_bypass_active_for_session
             from tools.approval_context import _get_approval_mode
+
             approval_label = _get_approval_mode()
-            if is_approval_bypass_active_for_session(getattr(self, "session_key", "") or ""):
+            if is_approval_bypass_active_for_session(
+                getattr(self, "session_key", "") or ""
+            ):
                 approval_label += t("cli.session.yolo_bypass_suffix")
         except Exception:
             pass
@@ -359,20 +424,35 @@ class CLISessionMixin:
             if ctx_max:
                 left = ""
                 if isinstance(ctx_pct, (int, float)):
-                    left = t("cli.session.ctx_left_prefix", percent=max(0, 100 - int(ctx_pct)))
-                ctx_label = t("cli.session.ctx_tokens_used", left=left, used=f"{snap.get('context_tokens') or 0:,}",
-                              max=f"{ctx_max:,}")
+                    left = t(
+                        "cli.session.ctx_left_prefix",
+                        percent=max(0, 100 - int(ctx_pct)),
+                    )
+                ctx_label = t(
+                    "cli.session.ctx_tokens_used",
+                    left=left,
+                    used=f"{snap.get('context_tokens') or 0:,}",
+                    max=f"{ctx_max:,}",
+                )
         except Exception:
             ctx_label = None
 
-        lines = [t("cli.session.status_title"), "", *status_lines(fields, "session_id", "path", "title", "model")]
-        optional = ((t("cli.session.label_reasoning"), reasoning_label),
-                    (t("cli.session.label_approvals"), approval_label),
-                    (t("cli.session.label_context"), ctx_label))
+        lines = [
+            t("cli.session.status_title"),
+            "",
+            *status_lines(fields, "session_id", "path", "title", "model"),
+        ]
+        optional = (
+            (t("cli.session.label_reasoning"), reasoning_label),
+            (t("cli.session.label_approvals"), approval_label),
+            (t("cli.session.label_context"), ctx_label),
+        )
         for label, value in optional:
             if value:
                 lines.append(t("cli.shared.label_value", label=label, value=value))
-        lines.extend(status_lines(fields, "created", "last_activity", "tokens", "agent_running"))
+        lines.extend(
+            status_lines(fields, "created", "last_activity", "tokens", "agent_running")
+        )
         self._console_print("\n".join(lines), highlight=False, markup=False)
 
     def _list_recent_sessions(self, limit: int = 10) -> list[dict[str, Any]]:
@@ -384,18 +464,26 @@ class CLISessionMixin:
             from clawk_state_sessions import INTERNAL_LISTING_SOURCES
 
             return query_session_listing(
-                self._session_db, source="cli", current_session_id=self.session_id,
-                include_all_sources=False, include_unnamed=True, limit=limit,
-                exclude_sources=list(INTERNAL_LISTING_SOURCES))
+                self._session_db,
+                source="cli",
+                current_session_id=self.session_id,
+                include_all_sources=False,
+                include_unnamed=True,
+                limit=limit,
+                exclude_sources=list(INTERNAL_LISTING_SOURCES),
+            )
         except Exception:
             return []
 
-    def _show_recent_sessions(self, *, reason: str = "history", limit: int = 10) -> bool:
+    def _show_recent_sessions(
+        self, *, reason: str = "history", limit: int = 10
+    ) -> bool:
         """Render recent sessions inline from the active chat TUI.
 
         Returns True when something was shown, False if no session list was available.
         """
         from cli import _cli_visible_print
+
         sessions = self._list_recent_sessions(limit=limit)
         if not sessions:
             return False
@@ -410,13 +498,18 @@ class CLISessionMixin:
         _cli_visible_print()
         _cli_visible_print(
             f"  {'#':<3} {t('cli.session.column_title'):<32} {t('cli.session.column_preview'):<40} "
-            f"{t('cli.session.column_last_active'):<13} {t('cli.session.column_id')}")
+            f"{t('cli.session.column_last_active'):<13} {t('cli.session.column_id')}"
+        )
         _cli_visible_print(f"  {'─' * 3} {'─' * 32} {'─' * 40} {'─' * 13} {'─' * 24}")
         for idx, session in enumerate(sessions, start=1):
             title = session.get("title") or "—"
             preview = (session.get("preview") or "")[:38]
-            last_active = _relative_time(session.get("last_active"), session_id=session.get("id"))
-            _cli_visible_print(f"  {idx:<3} {title:<32} {preview:<40} {last_active:<13} {session['id']}")
+            last_active = _relative_time(
+                session.get("last_active"), session_id=session.get("id")
+            )
+            _cli_visible_print(
+                f"  {idx:<3} {title:<32} {preview:<40} {last_active:<13} {session['id']}"
+            )
         _cli_visible_print()
         _cli_visible_print(f"  {t('cli.session.resume_usage')}")
         _cli_visible_print(f"  {t('cli.session.resume_example')}")
@@ -426,6 +519,7 @@ class CLISessionMixin:
     def show_history(self):
         """Display conversation history."""
         from cli import _cli_visible_print
+
         if not self.conversation_history:
             if not self._show_recent_sessions(reason="history"):
                 _cli_visible_print(t("cli.session.history_empty"))
@@ -444,7 +538,11 @@ class CLISessionMixin:
                 return ""
             try:
                 stamp = _timestamp_or(ts, None)
-                return f"  [{stamp.strftime(getattr(self, 'timestamp_format', '%H:%M'))}]" if stamp else ""
+                return (
+                    f"  [{stamp.strftime(getattr(self, 'timestamp_format', '%H:%M'))}]"
+                    if stamp
+                    else ""
+                )
             except (ValueError, OSError, TypeError):
                 return ""
 
@@ -452,13 +550,22 @@ class CLISessionMixin:
             nonlocal hidden_tool_messages
             if not hidden_tool_messages:
                 return
-            key = "cli.session.history_tools_hidden_one" if hidden_tool_messages == 1 else "cli.session.history_tools_hidden_other"
+            key = (
+                "cli.session.history_tools_hidden_one"
+                if hidden_tool_messages == 1
+                else "cli.session.history_tools_hidden_other"
+            )
             _cli_visible_print(f"\n  {t('cli.session.history_tools_header')}")
             _cli_visible_print(f"    {t(key, count=hidden_tool_messages)}")
             hidden_tool_messages = 0
 
         rule = "+" + "-" * 50 + "+"
-        for line in ("", rule, "|" + t("cli.session.history_title").center(50) + "|", rule):
+        for line in (
+            "",
+            rule,
+            "|" + t("cli.session.history_title").center(50) + "|",
+            rule,
+        ):
             _cli_visible_print(line)
 
         for msg in self.conversation_history:
@@ -476,18 +583,25 @@ class CLISessionMixin:
             preview = content_text[:preview_limit]
             suffix = "..." if len(content_text) > preview_limit else ""
             if role == "user":
-                _cli_visible_print(f"\n  {t('cli.session.history_you_header', index=visible_index)}{_ts_suffix(msg)}")
+                _cli_visible_print(
+                    f"\n  {t('cli.session.history_you_header', index=visible_index)}{_ts_suffix(msg)}"
+                )
                 _cli_visible_print(f"    {preview}{suffix}")
                 continue
 
             _cli_visible_print(
-                f"\n  {t('cli.session.history_assistant_header', agent_name='Clawksis', index=visible_index)}{_ts_suffix(msg)}")
+                f"\n  {t('cli.session.history_assistant_header', agent_name='Clawksis', index=visible_index)}{_ts_suffix(msg)}"
+            )
             n_calls = len(msg.get("tool_calls") or [])
             if not content_text:
                 suffix = ""
                 preview = t("cli.session.history_no_text")
                 if n_calls:
-                    key = "cli.session.history_tool_calls_one" if n_calls == 1 else "cli.session.history_tool_calls_other"
+                    key = (
+                        "cli.session.history_tool_calls_one"
+                        if n_calls == 1
+                        else "cli.session.history_tool_calls_other"
+                    )
                     preview = t(key, count=n_calls)
             _cli_visible_print(f"    {preview}{suffix}")
 
@@ -503,10 +617,14 @@ class CLISessionMixin:
             context = {
                 "session_id": self.agent.session_id if self.agent else None,
                 "platform": getattr(self, "platform", None) or "cli",
-                "reason": "new_session" if event_type == "on_session_reset" else "session_boundary"}
+                "reason": "new_session"
+                if event_type == "on_session_reset"
+                else "session_boundary",
+            }
             if event_type == "on_session_finalize":
                 from cli import _cli_visible_print
                 from clawk_cli.lifecycle import session_end_messages
+
                 for message in session_end_messages(finalize_session(**context)):
                     _cli_visible_print(message)
             else:
@@ -517,6 +635,7 @@ class CLISessionMixin:
         /clear) so it doesn't clutter ``/resume``. ``SessionDB.delete_session_if_empty`` only
         removes rows with no messages, no title and no children (gemini-cli#27770 port)."""
         from cli import logger
+
         if not self._session_db or not session_id:
             return False
         # In-memory transcript is authoritative: a real conversation whose DB flush failed
@@ -525,14 +644,17 @@ class CLISessionMixin:
             return False
         try:
             from clawk_constants import get_clawk_home as _ghh
+
             return self._session_db.delete_session_if_empty(
-                session_id, sessions_dir=_ghh() / "sessions")
+                session_id, sessions_dir=_ghh() / "sessions"
+            )
         except Exception:
             logger.debug("Could not prune empty session %s", session_id, exc_info=True)
             return False
 
     def _launch_session_boundary_memory_flush(
-        self, history_snapshot: list, *, session_id: Optional[str] = None) -> Optional[list]:
+        self, history_snapshot: list, *, session_id: Optional[str] = None
+    ) -> Optional[list]:
         """Stage old-session memory extraction so /new stays responsive.
 
         The context-engine ``on_session_end`` is delivered synchronously here: cheap (no LLM)
@@ -545,6 +667,7 @@ class CLISessionMixin:
         Returns the snapshot to queue, or ``None`` when there is nothing to extract.
         """
         from cli import logger
+
         agent = getattr(self, "agent", None)
         if not agent or not history_snapshot:
             return None
@@ -553,7 +676,10 @@ class CLISessionMixin:
             try:
                 engine.on_session_end(session_id or "", history_snapshot)
             except Exception:
-                logger.debug("Context engine on_session_end failed at /new boundary", exc_info=True)
+                logger.debug(
+                    "Context engine on_session_end failed at /new boundary",
+                    exc_info=True,
+                )
         # No memory manager → new_session() falls back to the inline switch path.
         if getattr(agent, "_memory_manager", None) is None:
             return None
@@ -562,9 +688,13 @@ class CLISessionMixin:
     def new_session(self, silent=False, title=None):
         """Start a fresh session with a new session ID and cleared agent state."""
         from cli import (
-            CLI_CONFIG, _parse_service_tier_config,
-            _sync_process_session_id, datetime)
+            CLI_CONFIG,
+            _parse_service_tier_config,
+            _sync_process_session_id,
+            datetime,
+        )
         from clawk_cli.cli_model_switch_mixin import _resolve_cli_reasoning
+
         old_session_id = self.session_id
         _boundary_snapshot = None
         if self.agent:
@@ -572,9 +702,13 @@ class CLISessionMixin:
                 # Context-engine boundary now; provider extraction is queued below (after
                 # rotation) so /new never blocks on the LLM-bound call.
                 _boundary_snapshot = self._launch_session_boundary_memory_flush(
-                    list(self.conversation_history), session_id=old_session_id)
+                    list(self.conversation_history), session_id=old_session_id
+                )
             from clawk_cli.cli_shutdown import _gateway_owns_session_end
-            if not _gateway_owns_session_end(self.agent):  # the gateway finalizes at end_session below
+
+            if not _gateway_owns_session_end(
+                self.agent
+            ):  # the gateway finalizes at end_session below
                 self._notify_session_boundary("on_session_finalize")
 
         if self._session_db and old_session_id:
@@ -589,14 +723,18 @@ class CLISessionMixin:
                     # See #47202.
                     # See #47202.
                     self.agent._flush_messages_to_session_db(
-                        self.conversation_history, conversation_history=self.conversation_history)
+                        self.conversation_history,
+                        conversation_history=self.conversation_history,
+                    )
             with contextlib.suppress(Exception):
                 self._session_db.end_session(old_session_id, "new_session")
             self._discard_session_if_empty(old_session_id)
 
         self.session_start = datetime.now()
         # The gateway's new session; getattr: tests drive new_session unbound (main's mint then).
-        self.session_id = getattr(self, "_new_session_id", lambda now: new_session_id(now))(self.session_start)
+        self.session_id = getattr(
+            self, "_new_session_id", lambda now: new_session_id(now)
+        )(self.session_start)
         # getattr: tests drive new_session unbound against a SimpleNamespace stand-in.
         getattr(self, "_write_terminal_breadcrumb", lambda: None)()
         self.conversation_history = []
@@ -608,7 +746,9 @@ class CLISessionMixin:
         # Re-derive model/provider and service tier from config.yaml so a session-only switch never leaks
         # into the next session (#48055, #23131).
         self._pending_one_turn_model_restore = None
-        self.service_tier = _parse_service_tier_config(CLI_CONFIG["agent"].get("service_tier", ""))
+        self.service_tier = _parse_service_tier_config(
+            CLI_CONFIG["agent"].get("service_tier", "")
+        )
         _reset_model_to_config_default(self, silent)
         # After the model reset: the effort belongs to the model the fresh session lands on (a /reasoning
         # session override is dropped, the default model's per-model override is kept).
@@ -625,6 +765,7 @@ class CLISessionMixin:
             if hasattr(self.agent, "_todo_store"):
                 with contextlib.suppress(Exception):
                     from tools.todo_tool import TodoStore
+
                     self.agent._todo_store = TodoStore()
             if hasattr(self.agent, "_invalidate_system_prompt"):
                 self.agent._invalidate_system_prompt()
@@ -637,8 +778,10 @@ class CLISessionMixin:
                         source=os.environ.get("CLAWK_SESSION_SOURCE", "cli"),
                         model=self.model,
                         model_config={
-                            "max_iterations": self.max_turns, "reasoning_config": self.reasoning_config,
-                        })
+                            "max_iterations": self.max_turns,
+                            "reasoning_config": self.reasoning_config,
+                        },
+                    )
                     self.agent._session_db_created = True
                 if title:
                     title = _apply_new_session_title(self, title)
@@ -650,14 +793,23 @@ class CLISessionMixin:
             with contextlib.suppress(Exception):
                 if _mm is not None and _boundary_snapshot:
                     _mm.commit_session_boundary_async(
-                        _boundary_snapshot, new_session_id=self.session_id,
-                        parent_session_id=old_session_id or "", reason="new_session")
+                        _boundary_snapshot,
+                        new_session_id=self.session_id,
+                        parent_session_id=old_session_id or "",
+                        reason="new_session",
+                    )
                 elif _mm is not None:
                     _mm.on_session_switch(
-                        self.session_id, parent_session_id=old_session_id or "",
-                        reset=True, reason="new_session")
+                        self.session_id,
+                        parent_session_id=old_session_id or "",
+                        reset=True,
+                        reason="new_session",
+                    )
             from clawk_cli.cli_shutdown import _gateway_owns_session_end
-            if not _gateway_owns_session_end(self.agent):  # the gateway resets when end_session closes it
+
+            if not _gateway_owns_session_end(
+                self.agent
+            ):  # the gateway resets when end_session closes it
                 self._notify_session_boundary("on_session_reset")
 
         if not silent:
@@ -677,6 +829,7 @@ class CLISessionMixin:
         See #34584.
         """
         from cli import _cprint
+
         pending = self._pending_resume_sessions
         if not pending:
             return False
@@ -702,7 +855,11 @@ class CLISessionMixin:
         redaction pass before writing.
         """
         from clawk_cli.session_export import (
-            SAVE_USAGE, load_save_snapshot, normalize_save_format, render_session_for_save)
+            SAVE_USAGE,
+            load_save_snapshot,
+            normalize_save_format,
+            render_session_for_save,
+        )
 
         parts = cmd.split()[1:]
         redact = bool(parts) and parts[-1].lower() in ("redact", "--redact")
@@ -719,12 +876,19 @@ class CLISessionMixin:
             return
         filename = parts[1] if len(parts) > 1 else None
         from clawk_cli.gateway_tools_notify import gateway_store
+
         store = gateway_store(self)
-        if store is not None:  # the gateway owns the session: it renders its stored row, this machine writes it
-            if not self.conversation_history:  # as Ink: nothing said yet, nothing exported
+        if (
+            store is not None
+        ):  # the gateway owns the session: it renders its stored row, this machine writes it
+            if (
+                not self.conversation_history
+            ):  # as Ink: nothing said yet, nothing exported
                 print(t("cli.session.save_nothing"))
                 return
-            content = _export_on_gateway(store.connection, self.session_id, fmt, filename, redact)
+            content = _export_on_gateway(
+                store.connection, self.session_id, fmt, filename, redact
+            )
             if content is not None:
                 _write_save(self.session_id, fmt, filename, lambda: content)
             return
@@ -736,6 +900,7 @@ class CLISessionMixin:
         _sid = getattr(self, "session_id", None)
         if _db and _sid:
             from clawk_state import SessionExportTooLargeError
+
             try:
                 session_data = load_save_snapshot(_db, _sid, fmt)
             except SessionExportTooLargeError as e:
@@ -748,15 +913,25 @@ class CLISessionMixin:
                 print(t("cli.session.save_nothing"))
                 return
             session_data = {
-                "id": self.session_id, "model": self.model,
-                "started_at": self.session_start.timestamp(), "messages": self.conversation_history}
+                "id": self.session_id,
+                "model": self.model,
+                "started_at": self.session_start.timestamp(),
+                "messages": self.conversation_history,
+            }
         if redact:
             from clawk_cli.session_export_md import redact_session_data
 
             session_data = redact_session_data(session_data)
-        _write_save(self.session_id, fmt, filename, lambda: render_session_for_save(session_data, fmt))
+        _write_save(
+            self.session_id,
+            fmt,
+            filename,
+            lambda: render_session_for_save(session_data, fmt),
+        )
 
-    def _publish_truncated_history(self, truncated: list, *, invalidate_prompt: bool) -> None:
+    def _publish_truncated_history(
+        self, truncated: list, *, invalidate_prompt: bool
+    ) -> None:
         """Install a rewound history and mirror it onto the agent (flush index reset so the
         next turn re-flushes from the truncated head)."""
         self.conversation_history = truncated
@@ -782,7 +957,9 @@ class CLISessionMixin:
             return None
 
         from agent.context_compressor import (
-            history_before_user_originated_turn, retryable_user_text)
+            history_before_user_originated_turn,
+            retryable_user_text,
+        )
         from agent.memory_context import sanitize_context
 
         warm_history = list(self.conversation_history)
@@ -797,7 +974,8 @@ class CLISessionMixin:
         # by /retry, so fail closed before archiving anything.
         try:
             truncated, live_view = history_before_user_originated_turn(
-                warm_history, user_indices[-1])
+                warm_history, user_indices[-1]
+            )
             live_content = live_view.get("content")
             if isinstance(live_content, str):
                 live_content = sanitize_context(live_content).strip()
@@ -811,13 +989,22 @@ class CLISessionMixin:
         if self._session_db is not None and self.session_id:
             try:
                 truncated = self._session_db.rewind_user_turn(
-                    self.session_id, -1, warm_history=warm_history, require_retryable=True).prefix
+                    self.session_id,
+                    -1,
+                    warm_history=warm_history,
+                    require_retryable=True,
+                ).prefix
             except Exception as exc:
                 print(t("cli.session.retry_rewind_failed", error=exc))
                 return None
 
         self._publish_truncated_history(truncated, invalidate_prompt=False)
-        print(t("cli.session.retrying", preview=f"{last_message[:60]}{'...' if len(last_message) > 60 else ''}"))
+        print(
+            t(
+                "cli.session.retrying",
+                preview=f"{last_message[:60]}{'...' if len(last_message) > 60 else ''}",
+            )
+        )
         return last_message
 
     def undo_last(self, n: int = 1, prefill: bool = True):
@@ -831,6 +1018,7 @@ class CLISessionMixin:
         nothing changed).
         """
         from cli import logger
+
         if not self.conversation_history:
             print(t("cli.session.undo_no_messages"))
             return
@@ -848,14 +1036,17 @@ class CLISessionMixin:
         target_ordinal = len(user_indices) - turns_undone
         cut_idx = user_indices[target_ordinal]
         removed_count = len(warm_history) - cut_idx
-        truncated, live_view = history_before_user_originated_turn(warm_history, cut_idx)
+        truncated, live_view = history_before_user_originated_turn(
+            warm_history, cut_idx
+        )
         removed_text = self._undo_content_to_text(live_view.get("content"))
 
         rewound_rows = 0
         if self._session_db is not None and self.session_id:
             try:
                 outcome = self._session_db.rewind_user_turn(
-                    self.session_id, target_ordinal, warm_history=warm_history)
+                    self.session_id, target_ordinal, warm_history=warm_history
+                )
                 truncated = outcome.prefix
                 # Canonical editable prefill: the raw carrier holds the reference-summary wrapper.
                 removed_text = outcome.live_text or removed_text
@@ -872,12 +1063,26 @@ class CLISessionMixin:
         # See #21910, #6672.
         if _mm is not None and self.session_id:
             with contextlib.suppress(Exception):
-                _mm.on_session_switch(self.session_id, parent_session_id="", reset=False, rewound=True)
+                _mm.on_session_switch(
+                    self.session_id, parent_session_id="", reset=False, rewound=True
+                )
 
-        key = "cli.session.undo_ok_one" if turns_undone == 1 else "cli.session.undo_ok_other"
-        print(t(key, count=turns_undone, messages=rewound_rows or removed_count,
-                backup=f"{removed_text[:60]}{'...' if len(removed_text) > 60 else ''}"))
-        print(f"  {t('cli.session.undo_remaining', count=len(self.conversation_history))}")
+        key = (
+            "cli.session.undo_ok_one"
+            if turns_undone == 1
+            else "cli.session.undo_ok_other"
+        )
+        print(
+            t(
+                key,
+                count=turns_undone,
+                messages=rewound_rows or removed_count,
+                backup=f"{removed_text[:60]}{'...' if len(removed_text) > 60 else ''}",
+            )
+        )
+        print(
+            f"  {t('cli.session.undo_remaining', count=len(self.conversation_history))}"
+        )
         # Editable, not auto-sent (Claude-Code-style).
         if prefill and removed_text:
             self._prefill_input_buffer(removed_text)
@@ -890,7 +1095,9 @@ class CLISessionMixin:
             return content
         if isinstance(content, list):
             parts = [
-                p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
             ]
             return "\n".join(t for t in parts if t)
         return ""
@@ -938,10 +1145,17 @@ class CLISessionMixin:
             return
 
         from tools.approval_yolo import toggle_session_yolo
+
         session_key = self.session_id or "default"
-        db = getattr(self, "_session_db", None)  # getattr: tests call this unbound against a stand-in
+        db = getattr(
+            self, "_session_db", None
+        )  # getattr: tests call this unbound against a stand-in
         # The row is created lazily on the first turn; until then with_session_yolo records the toggle.
-        persist = (lambda on: db.set_session_yolo(session_key, on)) if db and session_key != "default" else None
+        persist = (
+            (lambda on: db.set_session_yolo(session_key, on))
+            if db and session_key != "default"
+            else None
+        )
         if toggle_session_yolo(session_key, persist=persist):
             state = f"{_Colors.BOLD}{_Colors.GREEN}{t('cli.shared.label_on_upper')}{_Colors.RESET}"
             _cprint(f"  {t('cli.session.yolo_on', state=state)}")
@@ -960,9 +1174,16 @@ class CLISessionMixin:
         No ``compression_enabled`` gate: that flag disables *automatic* compaction only, and
         the context-overflow error path directs users here when it is off.
         """
-        from agent.conversation_compression import finalize_context_engine_compression_notification
+        from agent.conversation_compression import (
+            finalize_context_engine_compression_notification,
+        )
         from agent.conversation_compression_manual import (
-            AGGRESSIVE_UNSUPPORTED, MIN_MESSAGES, compress_now, parse_compress_args, render_compress_result)
+            AGGRESSIVE_UNSUPPORTED,
+            MIN_MESSAGES,
+            compress_now,
+            parse_compress_args,
+            render_compress_result,
+        )
 
         if len(self.conversation_history or ()) < MIN_MESSAGES:
             print(t("cli.session.compress_too_short", min=MIN_MESSAGES))
@@ -977,7 +1198,9 @@ class CLISessionMixin:
             if not request.preview:
                 return
         if request.preview:
-            for line in render_compress_result(compress_now(self.agent, self.conversation_history, request)):
+            for line in render_compress_result(
+                compress_now(self.agent, self.conversation_history, request)
+            ):
                 print(f"🗜️  {line}")
             return
 
@@ -985,13 +1208,29 @@ class CLISessionMixin:
         with self._busy_command(t("cli.session.compress_busy"), blocks_input=False):
             try:
                 if request.partial:
-                    print(t("cli.session.compress_summarizing", count=original_count, keep_last=request.keep_last))
+                    print(
+                        t(
+                            "cli.session.compress_summarizing",
+                            count=original_count,
+                            keep_last=request.keep_last,
+                        )
+                    )
                 elif request.focus_topic:
-                    print(t("cli.session.compress_focus", count=original_count, focus=request.focus_topic))
+                    print(
+                        t(
+                            "cli.session.compress_focus",
+                            count=original_count,
+                            focus=request.focus_topic,
+                        )
+                    )
                 else:
                     print(t("cli.session.compress_plain", count=original_count))
-                result = compress_now(self.agent, self.conversation_history, request,
-                                      task_id=self.session_id or "default")
+                result = compress_now(
+                    self.agent,
+                    self.conversation_history,
+                    request,
+                    task_id=self.session_id or "default",
+                )
                 if result.status != "compressed":
                     for line in render_compress_result(result):
                         print(f"  {line}")
@@ -1003,15 +1242,24 @@ class CLISessionMixin:
                 agent_sid = getattr(self.agent, "session_id", None)
                 if agent_sid and agent_sid != self.session_id:
                     from tools.approval_yolo import transfer_session_yolo
+
                     transfer_session_yolo(self.session_id, agent_sid)
                     self.session_id = self.agent.session_id
                     self._write_terminal_breadcrumb()
                     self._pending_title = None
                     # Persist the new handoff from offset 0 so resume can recover it after exit.
-                    self.agent._flush_messages_to_session_db(self.conversation_history, None)
-                finalize_context_engine_compression_notification(self.agent, committed=True)
+                    self.agent._flush_messages_to_session_db(
+                        self.conversation_history, None
+                    )
+                finalize_context_engine_compression_notification(
+                    self.agent, committed=True
+                )
                 summary = result.summary
-                if summary.get("aborted") or summary.get("fallback_used") or summary.get("refused_would_grow"):
+                if (
+                    summary.get("aborted")
+                    or summary.get("fallback_used")
+                    or summary.get("refused_would_grow")
+                ):
                     icon = "⚠️"
                 else:
                     icon = "🗜️" if summary["noop"] else "✅"
@@ -1020,18 +1268,26 @@ class CLISessionMixin:
                 if summary["note"]:
                     print(f"     {summary['note']}")
             except Exception as e:
-                finalize_context_engine_compression_notification(self.agent, committed=False)
+                finalize_context_engine_compression_notification(
+                    self.agent, committed=False
+                )
                 from clawk_cli.cli_chat_error_copy import refusal_text
+
                 print(f"  {t('cli.session.compress_failed', error=refusal_text(e))}")
 
-    def _persist_prompt_summary(self, icon: str, label: str, detail: str, outcome: str) -> None:
+    def _persist_prompt_summary(
+        self, icon: str, label: str, detail: str, outcome: str
+    ) -> None:
         """Print a one-line scrollback summary of a resolved modal prompt (approval/clarify
         panels vanish on repaint); gated by ``display.persist_prompts``."""
         from cli import CLI_CONFIG, _DIM, _RST, _cprint
+
         if not CLI_CONFIG.get("display", {}).get("persist_prompts", True):
             return
         detail, outcome = (_squash(s) for s in (detail, outcome))
-        _cprint(f"\n{_DIM}{t('cli.session.persist_prompt_summary', icon=icon, label=label, detail=detail, outcome=outcome)}{_RST}")
+        _cprint(
+            f"\n{_DIM}{t('cli.session.persist_prompt_summary', icon=icon, label=label, detail=detail, outcome=outcome)}{_RST}"
+        )
 
     def _clear_terminal_on_exit(self):
         """Clear screen + scrollback (``ESC[3J ESC[2J ESC[H``) so nothing is stranded above
@@ -1075,6 +1331,7 @@ class CLISessionMixin:
         — a terminal close/SIGHUP can unwind the app while the agent thread still holds the
         current turn only in memory."""
         from cli import logger
+
         agent = getattr(self, "agent", None)
         if not agent or not hasattr(agent, "_persist_session"):
             return
@@ -1092,7 +1349,8 @@ class CLISessionMixin:
             if not isinstance(messages, list):
                 return
             if isinstance(pending_cli_message, dict) and not any(
-                m is pending_cli_message for m in messages):
+                m is pending_cli_message for m in messages
+            ):
                 # The UI accepted a new input but the worker still exposes its prior snapshot.
                 messages = [*messages, pending_cli_message]
             if not messages:
@@ -1106,10 +1364,14 @@ class CLISessionMixin:
             if (
                 isinstance(conversation_history, list)
                 and conversation_history
-                and conversation_history[-1] is pending_cli_message):
+                and conversation_history[-1] is pending_cli_message
+            ):
                 # Accepted but not yet durable: exclude it from the resumed-history baseline.
                 conversation_history = conversation_history[:-1]
-            elif not isinstance(conversation_history, list) or conversation_history is messages:
+            elif (
+                not isinstance(conversation_history, list)
+                or conversation_history is messages
+            ):
                 conversation_history = None
 
             # A first-turn close can precede the cached prompt; build it so the durable
@@ -1120,7 +1382,9 @@ class CLISessionMixin:
 
                     _restore_or_build_system_prompt(agent, None, conversation_history)
                 except Exception:
-                    logger.debug("Could not build system prompt during CLI close", exc_info=True)
+                    logger.debug(
+                        "Could not build system prompt during CLI close", exc_info=True
+                    )
                     return
             if getattr(agent, "_cached_system_prompt", None) is None:
                 return
@@ -1157,6 +1421,7 @@ class CLISessionMixin:
         the summary. See #38252, #53009.
         """
         from cli import datetime
+
         if clear_screen:
             # Clear the screen + scrollback before printing the summary so the live bottom chrome (status
             # bar, input box, separator rules) and the rest of the session transcript don't get stranded
@@ -1168,6 +1433,7 @@ class CLISessionMixin:
             self._clear_terminal_on_exit()
         print()
         import cli as _cli_module
+
         # Plugin on_session_finalize messages from _run_cleanup: printed after the clear so they survive.
         for message in _cli_module._session_end_messages:
             print(message)
@@ -1176,23 +1442,38 @@ class CLISessionMixin:
         if not msg_count:
             try:
                 from clawk_cli.skin_engine import get_active_goodbye
+
                 goodbye = get_active_goodbye(t("cli.session.goodbye"))
             except Exception:
                 goodbye = t("cli.session.goodbye")
             print(goodbye)
             return
 
-        user_msgs = len([m for m in self.conversation_history if m.get("role") == "user"])
-        tool_calls = len([
-            m for m in self.conversation_history if m.get("role") == "tool" or m.get("tool_calls")])
+        user_msgs = len(
+            [m for m in self.conversation_history if m.get("role") == "user"]
+        )
+        tool_calls = len(
+            [
+                m
+                for m in self.conversation_history
+                if m.get("role") == "tool" or m.get("tool_calls")
+            ]
+        )
         elapsed = datetime.now() - self.session_start
         hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         duration_str = t("cli.shared.duration_s", seconds=seconds)
         if hours > 0:
-            duration_str = t("cli.shared.duration_hm_rest", hours=hours, minutes=minutes, rest=duration_str)
+            duration_str = t(
+                "cli.shared.duration_hm_rest",
+                hours=hours,
+                minutes=minutes,
+                rest=duration_str,
+            )
         elif minutes > 0:
-            duration_str = t("cli.shared.duration_m_rest", minutes=minutes, rest=duration_str)
+            duration_str = t(
+                "cli.shared.duration_m_rest", minutes=minutes, rest=duration_str
+            )
 
         session_title = None
         if self._session_db:
@@ -1204,16 +1485,26 @@ class CLISessionMixin:
         # the hint ("default"/"custom" use the standard CLAWK_HOME).
         try:
             from clawk_cli.profiles import get_active_profile_name
+
             _active_profile = get_active_profile_name()
         except Exception:
             _active_profile = "default"
-        profile_flag = "" if _active_profile in ("default", "custom") else f" -p {_active_profile}"
+        profile_flag = (
+            "" if _active_profile in ("default", "custom") else f" -p {_active_profile}"
+        )
         print(f"  clawk --resume {self.session_id}{profile_flag}")
         if session_title:
-            print(f"  clawk -c \"{session_title}\"{profile_flag}")
+            print(f'  clawk -c "{session_title}"{profile_flag}')
         print()
         print(t("cli.session.exit_label_session", session_id=self.session_id))
         if session_title:
             print(t("cli.session.exit_label_title", title=session_title))
         print(t("cli.session.exit_label_duration", duration=duration_str))
-        print(t("cli.session.exit_label_messages", count=msg_count, user=user_msgs, tool_calls=tool_calls))
+        print(
+            t(
+                "cli.session.exit_label_messages",
+                count=msg_count,
+                user=user_msgs,
+                tool_calls=tool_calls,
+            )
+        )

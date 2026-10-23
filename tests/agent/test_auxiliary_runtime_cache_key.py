@@ -5,7 +5,6 @@
 #56889, which isolates callers that pass different explicit ``model=`` values.
 """
 
-
 import pytest
 
 import agent.auxiliary_client as aux
@@ -31,8 +30,6 @@ def _runtime(model: str, *, provider: str = "custom:llama-swap") -> dict:
     }
 
 
-
-
 def test_implicit_runtime_cache_key_covers_full_connection_and_auth_surface():
     """Provider/endpoint/credential/wire/auth changes all isolate auto clients."""
     base = _runtime("same-model")
@@ -55,10 +52,6 @@ def test_implicit_runtime_cache_key_covers_full_connection_and_auth_surface():
     assert len(set(keys)) == len(keys)
 
 
-
-
-
-
 def test_runtime_context_token_restores_previous_value_after_turn():
     """Turn-scoped runtime binding must not leak into later work in the same context."""
     token = aux.set_runtime_main(**_runtime("turn-model"))
@@ -67,22 +60,6 @@ def test_runtime_context_token_restores_previous_value_after_turn():
     aux.reset_runtime_main(token)
 
     assert aux._normalize_main_runtime(None) == {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_unhashable_callable_runtime_api_keys_are_safe_secret_free_discriminators():
@@ -100,10 +77,14 @@ def test_unhashable_callable_runtime_api_keys_are_safe_secret_free_discriminator
     second_provider = TokenProvider("second-super-secret-token")
 
     first = aux._client_cache_key(
-        "auto", async_mode=False, main_runtime={**_runtime("same"), "api_key": first_provider}
+        "auto",
+        async_mode=False,
+        main_runtime={**_runtime("same"), "api_key": first_provider},
     )
     second = aux._client_cache_key(
-        "auto", async_mode=False, main_runtime={**_runtime("same"), "api_key": second_provider}
+        "auto",
+        async_mode=False,
+        main_runtime={**_runtime("same"), "api_key": second_provider},
     )
 
     hash(first)
@@ -137,20 +118,23 @@ def test_string_api_keys_are_not_retained_in_cache_key_repr():
     assert second_secret not in rendered
 
 
-
-
 def test_client_cache_key_is_scoped_per_profile_home(tmp_path):
     """Callers that omit api_key (pool / Nous auth.json paths) must not share a client across
     multiplex profiles: the per-turn CLAWK_HOME override has to participate in the key."""
     import clawk_constants
 
     a, b = tmp_path / "a", tmp_path / "b"
-    a.mkdir(); b.mkdir()
+    a.mkdir()
+    b.mkdir()
     keys = []
     for home in (a, b):
         tok = clawk_constants.set_clawk_home_override(str(home))
         try:
-            keys.append(aux._client_cache_key("nous", async_mode=False, base_url="https://inf.example", model="m"))
+            keys.append(
+                aux._client_cache_key(
+                    "nous", async_mode=False, base_url="https://inf.example", model="m"
+                )
+            )
         finally:
             clawk_constants.reset_clawk_home_override(tok)
     assert keys[0] != keys[1]

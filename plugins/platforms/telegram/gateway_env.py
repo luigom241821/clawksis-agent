@@ -6,7 +6,9 @@ from gateway.platform_env import EnvCred, csv_list, getenv, home_step, reply_mod
 
 def _fallback_ips(config: GatewayConfig) -> None:
     if ips := getenv("TELEGRAM_FALLBACK_IPS"):
-        config.platforms.setdefault(Platform.TELEGRAM, PlatformConfig()).extra["fallback_ips"] = csv_list(ips)
+        config.platforms.setdefault(Platform.TELEGRAM, PlatformConfig()).extra[
+            "fallback_ips"
+        ] = csv_list(ips)
 
 
 ENV_ENABLE_CREDENTIALS = ("TELEGRAM_BOT_TOKEN",)

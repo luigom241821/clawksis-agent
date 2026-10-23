@@ -42,13 +42,19 @@ SKIP_SUBSTRINGS = (
     "cursor.com",
 )
 ID_NOREPLY_RE = re.compile(r"\d+\+.+@users\.noreply\.github\.com$")
-BARE_NOREPLY_RE = re.compile(r"^([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})@users\.noreply\.github\.com$")
+BARE_NOREPLY_RE = re.compile(
+    r"^([A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38})@users\.noreply\.github\.com$"
+)
 
 
 def run(*args: str, check: bool = True) -> str:
     result = subprocess.run(
-        list(args), capture_output=True, text=True, encoding="utf-8",
-        errors="replace", cwd=str(REPO_ROOT),
+        list(args),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=str(REPO_ROOT),
         check=False,
     )
     if check and result.returncode != 0:
@@ -102,8 +108,11 @@ def resolve_login(email: str) -> tuple[str, str] | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fix", action="store_true",
-                        help="auto-create contributors/emails/ mapping files")
+    parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="auto-create contributors/emails/ mapping files",
+    )
     args = parser.parse_args()
 
     unmapped = [e for e in new_emails() if not is_mapped(e)]
@@ -113,7 +122,9 @@ def main() -> int:
 
     failed = []
     for email in unmapped:
-        author = run("git", "log", f"--author={email}", "--format=%an", "-1", check=False)
+        author = run(
+            "git", "log", f"--author={email}", "--format=%an", "-1", check=False
+        )
         if not args.fix:
             print(f"⚠️  unmapped: {email} ({author})")
             continue
@@ -123,8 +134,10 @@ def main() -> int:
             run("python3", "scripts/add_contributor.py", email, login)
             print(f"✔ mapped {email} -> {login}  [{how}]")
             if BARE_NOREPLY_RE.match(email):
-                print(f"  ⚠ local part is user-controlled — confirm @{login} really is "
-                      f"the contributor (git name: {author!r}) before pushing.")
+                print(
+                    f"  ⚠ local part is user-controlled — confirm @{login} really is "
+                    f"the contributor (git name: {author!r}) before pushing."
+                )
         else:
             failed.append((email, author))
 
@@ -137,7 +150,9 @@ def main() -> int:
     if failed:
         print("\nCould not auto-resolve; map manually:")
         for email, author in failed:
-            print(f"    python3 scripts/add_contributor.py {email} <github-username>  # {author}")
+            print(
+                f"    python3 scripts/add_contributor.py {email} <github-username>  # {author}"
+            )
         return 1
 
     print("\nDone — remember to `git add contributors && git commit`.")

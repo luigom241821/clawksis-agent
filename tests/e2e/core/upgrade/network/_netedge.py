@@ -50,9 +50,24 @@ def netns_usable() -> bool:
     probe = "import socket; s = socket.socket(); s.bind(('127.0.0.1', 0)); s.listen(); print('ok')"
     try:
         r = subprocess.run(
-            [shutil.which("bwrap") or "bwrap", "--dev-bind", "/", "/", "--unshare-net", "--unshare-pid",
-             "--proc", "/proc", "--die-with-parent", sys.executable, "-I", "-c", probe],
-            capture_output=True, text=True, timeout=30,
+            [
+                shutil.which("bwrap") or "bwrap",
+                "--dev-bind",
+                "/",
+                "/",
+                "--unshare-net",
+                "--unshare-pid",
+                "--proc",
+                "/proc",
+                "--die-with-parent",
+                sys.executable,
+                "-I",
+                "-c",
+                probe,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -70,6 +85,7 @@ def netns_required_reason() -> str | None:
 # Certificates: one test root, a leaf per routed host.
 # ---------------------------------------------------------------------------
 
+
 class TestCA:
     """A throwaway root CA (the "corporate TLS-inspection root") and leaves signed by it."""
 
@@ -81,21 +97,53 @@ class TestCA:
         from cryptography.hazmat.primitives.asymmetric import ec
         from cryptography.x509.oid import NameOID
 
-        self._x509, self._hashes, self._ser, self._ec, self._oid = x509, hashes, serialization, ec, NameOID
+        self._x509, self._hashes, self._ser, self._ec, self._oid = (
+            x509,
+            hashes,
+            serialization,
+            ec,
+            NameOID,
+        )
         self.dir = directory
         directory.mkdir(parents=True, exist_ok=True)
         self._key = ec.generate_private_key(ec.SECP256R1())
-        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Clawksis E2E TLS Inspection Root")])
+        name = x509.Name(
+            [
+                x509.NameAttribute(
+                    NameOID.COMMON_NAME, "Clawksis E2E TLS Inspection Root"
+                )
+            ]
+        )
         now = datetime.datetime.now(datetime.UTC)
         self._cert = (
-            x509.CertificateBuilder().subject_name(name).issuer_name(name)
-            .public_key(self._key.public_key()).serial_number(x509.random_serial_number())
-            .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=30))
-            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-            .add_extension(x509.KeyUsage(digital_signature=True, key_cert_sign=True, crl_sign=True,
-                                         content_commitment=False, key_encipherment=False, data_encipherment=False,
-                                         key_agreement=False, encipher_only=False, decipher_only=False), critical=True)
-            .add_extension(x509.SubjectKeyIdentifier.from_public_key(self._key.public_key()), critical=False)
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(self._key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=30))
+            .add_extension(
+                x509.BasicConstraints(ca=True, path_length=None), critical=True
+            )
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(
+                x509.SubjectKeyIdentifier.from_public_key(self._key.public_key()),
+                critical=False,
+            )
             .sign(self._key, hashes.SHA256())
         )
         self.pem = self._cert.public_bytes(serialization.Encoding.PEM)
@@ -111,7 +159,9 @@ class TestCA:
         certs = Path("/etc/ssl/certs")
         if dest.exists():
             shutil.rmtree(dest)
-        shutil.copytree(certs, dest, symlinks=True) if certs.is_dir() else dest.mkdir(parents=True)
+        shutil.copytree(certs, dest, symlinks=True) if certs.is_dir() else dest.mkdir(
+            parents=True
+        )
         bundle = dest / "ca-certificates.crt"
         system = SYSTEM_CA_BUNDLE.read_bytes() if SYSTEM_CA_BUNDLE.is_file() else b""
         if bundle.is_symlink():
@@ -120,8 +170,12 @@ class TestCA:
         (dest / "clawk-e2e-root.pem").write_bytes(self.pem)
         openssl = shutil.which("openssl")
         if openssl:
-            digest = subprocess.run([openssl, "x509", "-hash", "-noout", "-in", str(self.cert_file)],
-                                    capture_output=True, text=True, check=True).stdout.strip()
+            digest = subprocess.run(
+                [openssl, "x509", "-hash", "-noout", "-in", str(self.cert_file)],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
             link = dest / f"{digest}.0"
             if not link.exists():
                 link.symlink_to("clawk-e2e-root.pem")
@@ -135,7 +189,13 @@ class TestCA:
             return ctx
 
     def _leaf_context(self, host: str) -> ssl.SSLContext:
-        x509, hashes, ser, ec, oid = self._x509, self._hashes, self._ser, self._ec, self._oid
+        x509, hashes, ser, ec, oid = (
+            self._x509,
+            self._hashes,
+            self._ser,
+            self._ec,
+            self._oid,
+        )
         key = ec.generate_private_key(ec.SECP256R1())
         now = datetime.datetime.now(datetime.UTC)
         try:
@@ -145,19 +205,35 @@ class TestCA:
         cert = (
             x509.CertificateBuilder()
             .subject_name(x509.Name([x509.NameAttribute(oid.COMMON_NAME, host)]))
-            .issuer_name(self._cert.subject).public_key(key.public_key())
+            .issuer_name(self._cert.subject)
+            .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(now - datetime.timedelta(days=1)).not_valid_after(now + datetime.timedelta(days=7))
+            .not_valid_before(now - datetime.timedelta(days=1))
+            .not_valid_after(now + datetime.timedelta(days=7))
             .add_extension(x509.SubjectAlternativeName([san]), critical=False)
-            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-            .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(self._key.public_key()), critical=False)
+            .add_extension(
+                x509.BasicConstraints(ca=False, path_length=None), critical=True
+            )
+            .add_extension(
+                x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),
+                critical=False,
+            )
+            .add_extension(
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                    self._key.public_key()
+                ),
+                critical=False,
+            )
             .sign(self._key, hashes.SHA256())
         )
         stem = self.dir / f"leaf-{host.replace(':', '_')}"
         cert_path, key_path = stem.with_suffix(".crt"), stem.with_suffix(".key")
         cert_path.write_bytes(cert.public_bytes(ser.Encoding.PEM) + self.pem)
-        key_path.write_bytes(key.private_bytes(ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()))
+        key_path.write_bytes(
+            key.private_bytes(
+                ser.Encoding.PEM, ser.PrivateFormat.PKCS8, ser.NoEncryption()
+            )
+        )
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(str(cert_path), str(key_path))
         ctx.set_alpn_protocols(["http/1.1"])
@@ -167,6 +243,7 @@ class TestCA:
 # ---------------------------------------------------------------------------
 # Apps: (request) -> Response. A request is what the site saw after TLS termination.
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Request:
@@ -202,9 +279,12 @@ class Hit:
         return f"{text}  [{self.note}]" if self.note else text
 
 
-def static_app(routes: Mapping[str, bytes | Callable[[Request], Response]], *,
-               faults: dict[str, list[Response]] | None = None,
-               always: dict[str, Response] | None = None) -> App:
+def static_app(
+    routes: Mapping[str, bytes | Callable[[Request], Response]],
+    *,
+    faults: dict[str, list[Response]] | None = None,
+    always: dict[str, Response] | None = None,
+) -> App:
     """Exact-path routes (anything else 404s); a key ending in ``*`` matches every path with that
     prefix (``{"*": body}`` is a catch-all), checked after the exact routes. ``faults[path]`` is a queue of responses served
     before the real one, one per request (e.g. ``[Response(503, headers={"Retry-After": "1"})]``);
@@ -218,12 +298,25 @@ def static_app(routes: Mapping[str, bytes | Callable[[Request], Response]], *,
             return always[path]
         with lock:
             queue = queues.get(path) or next(
-                (q for k, q in queues.items() if k.endswith("*") and path.startswith(k[:-1]) and q), None)
+                (
+                    q
+                    for k, q in queues.items()
+                    if k.endswith("*") and path.startswith(k[:-1]) and q
+                ),
+                None,
+            )
             if queue:
                 return queue.pop(0)
         route = routes.get(path)
         if route is None:
-            route = next((r for k, r in routes.items() if k.endswith("*") and path.startswith(k[:-1])), None)
+            route = next(
+                (
+                    r
+                    for k, r in routes.items()
+                    if k.endswith("*") and path.startswith(k[:-1])
+                ),
+                None,
+            )
         if route is None:
             return Response(404, b"not found\n")
         if callable(route):
@@ -249,15 +342,28 @@ def git_app(project_root: Path, *, faults: list[Response] | None = None) -> App:
         body = req.body
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "GIT_PROJECT_ROOT": str(project_root), "GIT_HTTP_EXPORT_ALL": "1",
-            "PATH_INFO": path, "QUERY_STRING": query, "REQUEST_METHOD": req.method,
-            "CONTENT_TYPE": req.headers.get("content-type", ""), "CONTENT_LENGTH": str(len(body)),
-            "GIT_PROTOCOL": req.headers.get("git-protocol", ""), "REMOTE_ADDR": "127.0.0.1",
-            "GIT_CONFIG_NOSYSTEM": "1", "HOME": str(project_root),
+            "GIT_PROJECT_ROOT": str(project_root),
+            "GIT_HTTP_EXPORT_ALL": "1",
+            "PATH_INFO": path,
+            "QUERY_STRING": query,
+            "REQUEST_METHOD": req.method,
+            "CONTENT_TYPE": req.headers.get("content-type", ""),
+            "CONTENT_LENGTH": str(len(body)),
+            "GIT_PROTOCOL": req.headers.get("git-protocol", ""),
+            "REMOTE_ADDR": "127.0.0.1",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "HOME": str(project_root),
         }
         if req.headers.get("content-encoding", "").lower() == "gzip":
             body = gzip.decompress(body)
-        cp = subprocess.run([git, "http-backend"], input=body, env=env, capture_output=True, timeout=300, check=False)
+        cp = subprocess.run(
+            [git, "http-backend"],
+            input=body,
+            env=env,
+            capture_output=True,
+            timeout=300,
+            check=False,
+        )
         head, _, payload = cp.stdout.partition(b"\r\n\r\n")
         if not _:
             head, _, payload = cp.stdout.partition(b"\n\n")
@@ -276,7 +382,10 @@ def git_app(project_root: Path, *, faults: list[Response] | None = None) -> App:
             # clone of the developer checkout) lacks an object: the checkout is a blob-filtered
             # partial clone. CI checkouts are full clones; locally, fetch the missing objects.
             status = 500 if status == 200 else status
-            note = f"git http-backend rc={cp.returncode}: " + cp.stderr.decode("utf-8", "replace").strip()[-400:]
+            note = (
+                f"git http-backend rc={cp.returncode}: "
+                + cp.stderr.decode("utf-8", "replace").strip()[-400:]
+            )
         return Response(status, payload, headers, note)
 
     return app
@@ -285,6 +394,7 @@ def git_app(project_root: Path, *, faults: list[Response] | None = None) -> App:
 # ---------------------------------------------------------------------------
 # Serving an app on a socket (TLS-terminated tunnel or plain HTTP).
 # ---------------------------------------------------------------------------
+
 
 class _SiteHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -311,15 +421,24 @@ class _SiteHandler(http.server.BaseHTTPRequestHandler):
 
     def _dispatch(self) -> None:
         path = self.path
-        if path.startswith(("http://", "https://")):  # absolute-form through a plain proxy
+        if path.startswith(
+            ("http://", "https://")
+        ):  # absolute-form through a plain proxy
             path = "/" + path.split("://", 1)[1].partition("/")[2]
-        req = Request(self.site_host, self.command, path,
-                      {k.lower(): v for k, v in self.headers.items()}, self._read_body())
+        req = Request(
+            self.site_host,
+            self.command,
+            path,
+            {k.lower(): v for k, v in self.headers.items()},
+            self._read_body(),
+        )
         try:
             resp = self.app(req)
         except Exception as exc:  # a broken fake must be visible, not a hang
             resp = Response(500, f"fake site error: {exc!r}\n".encode())
-        self.hits.append(Hit(self.site_host, "request", self.command, path, resp.status, resp.note))
+        self.hits.append(
+            Hit(self.site_host, "request", self.command, path, resp.status, resp.note)
+        )
         self.send_response(resp.status)
         for k, v in resp.headers.items():
             if k.lower() not in ("content-length", "transfer-encoding", "connection"):
@@ -340,7 +459,11 @@ class _SiteHandler(http.server.BaseHTTPRequestHandler):
 
 
 def _serve_app(sock: socket.socket, addr, host: str, app: App, hits: list[Hit]) -> None:
-    handler = type("SiteHandler", (_SiteHandler,), {"app": staticmethod(app), "site_host": host, "hits": hits})
+    handler = type(
+        "SiteHandler",
+        (_SiteHandler,),
+        {"app": staticmethod(app), "site_host": host, "hits": hits},
+    )
     try:
         handler(sock, addr, None)  # type: ignore[arg-type]
     except (OSError, ssl.SSLError):
@@ -375,8 +498,14 @@ class HttpSite:
 class EdgeProxy:
     """HTTP(S) forward proxy with TLS inspection for routed hosts; refuses (and logs) the rest."""
 
-    def __init__(self, ca: TestCA, routes: dict[str, App] | None = None, *,
-                 eof_hosts: Iterable[str] = (), auth: tuple[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        ca: TestCA,
+        routes: dict[str, App] | None = None,
+        *,
+        eof_hosts: Iterable[str] = (),
+        auth: tuple[str, str] | None = None,
+    ) -> None:
         self.ca = ca
         self.routes: dict[str, App] = dict(routes or {})
         self.eof_hosts = set(eof_hosts)
@@ -420,7 +549,10 @@ class EdgeProxy:
     def _authorized(self, headers: dict[str, str]) -> bool:
         if self.auth is None:
             return True
-        want = "Basic " + base64.b64encode(f"{self.auth[0]}:{self.auth[1]}".encode()).decode()
+        want = (
+            "Basic "
+            + base64.b64encode(f"{self.auth[0]}:{self.auth[1]}".encode()).decode()
+        )
         return headers.get("proxy-authorization", "") == want
 
     def _handle(self, sock: socket.socket, addr) -> None:
@@ -444,8 +576,10 @@ class EdgeProxy:
                 host = target.split("://", 1)[-1].split("/", 1)[0].rsplit(":", 1)[0]
             if not self._authorized(headers):
                 self.hits.append(Hit(host, "auth-required", method, target, 407))
-                sock.sendall(b"HTTP/1.1 407 Proxy Authentication Required\r\n"
-                             b"Proxy-Authenticate: Basic realm=\"corp\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                sock.sendall(
+                    b"HTTP/1.1 407 Proxy Authentication Required\r\n"
+                    b'Proxy-Authenticate: Basic realm="corp"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+                )
                 return
             if host in self.eof_hosts:
                 self.hits.append(Hit(host, "eof", method, target, 0))
@@ -455,13 +589,17 @@ class EdgeProxy:
             app = self.routes.get(host)
             if app is None:
                 self.hits.append(Hit(host, "refused", method, target, 403))
-                sock.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                sock.sendall(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
                 return
             if method != "CONNECT":
                 # Every fake site is HTTPS; a plain-HTTP request through the proxy is a product
                 # talking cleartext to a host that should be TLS. Refuse it visibly.
                 self.hits.append(Hit(host, "refused", method, target, 403))
-                sock.sendall(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                sock.sendall(
+                    b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                )
                 return
             sock.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
             try:
@@ -484,6 +622,7 @@ class EdgeProxy:
 # ---------------------------------------------------------------------------
 # Bridge: host TCP services -> the sandbox's private loopback, same port numbers.
 # ---------------------------------------------------------------------------
+
 
 class Bridge:
     """Expose host ``127.0.0.1:<port>`` services inside the sandbox namespace at the same port."""
@@ -510,7 +649,9 @@ class Bridge:
                 client, _ = server.accept()
             except OSError:
                 return
-            threading.Thread(target=self._relay, args=(client, port), daemon=True).start()
+            threading.Thread(
+                target=self._relay, args=(client, port), daemon=True
+            ).start()
 
     @staticmethod
     def _relay(client: socket.socket, port: int) -> None:
@@ -525,7 +666,15 @@ class Bridge:
     def wrap(self, argv: list[str]) -> list[str]:
         """``argv`` preceded by the in-namespace relay (exits with argv's status)."""
         spec = ",".join(str(p) for p in self.ports)
-        return [sys.executable, "-I", str(_BRIDGE_SCRIPT), str(self.dir), spec, "--", *argv]
+        return [
+            sys.executable,
+            "-I",
+            str(_BRIDGE_SCRIPT),
+            str(self.dir),
+            spec,
+            "--",
+            *argv,
+        ]
 
     def close(self) -> None:
         self._stop.set()
@@ -567,16 +716,23 @@ def _pipe_pair(a: socket.socket, b: socket.socket) -> None:
             pass
 
 
-def proxy_env(proxy_url: str, *, no_proxy: str = "127.0.0.1,localhost,::1") -> dict[str, str]:
+def proxy_env(
+    proxy_url: str, *, no_proxy: str = "127.0.0.1,localhost,::1"
+) -> dict[str, str]:
     """Every spelling of the proxy variables that curl, git, uv, npm, node and Python read."""
     return {
-        "HTTPS_PROXY": proxy_url, "https_proxy": proxy_url,
-        "HTTP_PROXY": proxy_url, "http_proxy": proxy_url,
-        "NO_PROXY": no_proxy, "no_proxy": no_proxy,
+        "HTTPS_PROXY": proxy_url,
+        "https_proxy": proxy_url,
+        "HTTP_PROXY": proxy_url,
+        "http_proxy": proxy_url,
+        "NO_PROXY": no_proxy,
+        "no_proxy": no_proxy,
     }
 
 
-def wait_port_free(port: int, timeout: float = 5.0) -> None:  # pragma: no cover - diagnostics helper
+def wait_port_free(
+    port: int, timeout: float = 5.0
+) -> None:  # pragma: no cover - diagnostics helper
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         with socket.socket() as s:

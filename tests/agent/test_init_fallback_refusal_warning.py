@@ -54,7 +54,13 @@ class _Pool:
         # Explicit non-OpenRouter primary: provider-specific missing-credentials error.
         ("anthropic", _LADDER, True, "no API key was found", _LADDER_REASONS),
         # #119533: a burned primary pool with no ladder at all must still be named.
-        ("openrouter", [], False, "No LLM provider configured", ("credential pool exhausted",)),
+        (
+            "openrouter",
+            [],
+            False,
+            "No LLM provider configured",
+            ("credential pool exhausted",),
+        ),
     ],
 )
 def test_fully_refusing_ladder_warns_with_each_reason(

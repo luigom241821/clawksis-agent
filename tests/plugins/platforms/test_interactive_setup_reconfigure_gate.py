@@ -34,8 +34,12 @@ _WIZARDS = [
 ]
 
 
-@pytest.mark.parametrize("module_name, env_var", _WIZARDS, ids=[m.split(".")[-2] for m, _ in _WIZARDS])
-def test_declining_reconfigure_goes_through_shared_gate(monkeypatch, tmp_path, module_name, env_var):
+@pytest.mark.parametrize(
+    "module_name, env_var", _WIZARDS, ids=[m.split(".")[-2] for m, _ in _WIZARDS]
+)
+def test_declining_reconfigure_goes_through_shared_gate(
+    monkeypatch, tmp_path, module_name, env_var
+):
     import clawk_cli.cli_output as cli_output_mod
     import clawk_cli.config as config_mod
     import clawk_cli.setup as setup_mod
@@ -51,10 +55,14 @@ def test_declining_reconfigure_goes_through_shared_gate(monkeypatch, tmp_path, m
         return real_gate(label, question, *env_vars)
 
     def _no_save(*_a, **_kw):
-        raise AssertionError("wizard persisted env after the user declined to reconfigure")
+        raise AssertionError(
+            "wizard persisted env after the user declined to reconfigure"
+        )
 
     def _no_prompt(*_a, **_kw):
-        raise AssertionError("wizard fell through to its own prompts after the user declined")
+        raise AssertionError(
+            "wizard fell through to its own prompts after the user declined"
+        )
 
     # Wizards import the gate lazily from setup_platforms; the gate reads prompt_yes_no through
     # clawk_cli.setup. Everything else a wizard could do after declining must not happen.
@@ -68,4 +76,6 @@ def test_declining_reconfigure_goes_through_shared_gate(monkeypatch, tmp_path, m
 
     importlib.import_module(module_name).interactive_setup()
 
-    assert gated and env_var in gated[0], f"{module_name}: gate not routed through declines_reconfigure: {gated}"
+    assert gated and env_var in gated[0], (
+        f"{module_name}: gate not routed through declines_reconfigure: {gated}"
+    )

@@ -60,7 +60,9 @@ def _three_presets() -> dict:
                 "enabled": True,
             },
             "doomed": {
-                "reference_models": [{"provider": "openai-codex", "model": "gpt-5.6-luna"}],
+                "reference_models": [
+                    {"provider": "openai-codex", "model": "gpt-5.6-luna"}
+                ],
                 "aggregator": {"provider": "anthropic", "model": "claude-opus-5"},
                 "enabled": True,
             },
@@ -93,7 +95,9 @@ def test_omitted_preset_is_deleted_from_disk(tmp_path, monkeypatch):
     assert set(presets) == {"keep_a", "keep_b"}
 
 
-def test_deletion_survives_autosave_restart_and_backup_with_sparse_yaml(tmp_path, monkeypatch):
+def test_deletion_survives_autosave_restart_and_backup_with_sparse_yaml(
+    tmp_path, monkeypatch
+):
     """The real HTTP save keeps user YAML intact and never revives omitted names."""
     from starlette.testclient import TestClient
 
@@ -106,12 +110,14 @@ def test_deletion_survives_autosave_restart_and_backup_with_sparse_yaml(tmp_path
     _seed(tmp_path, monkeypatch, moa)
     config_path = tmp_path / "config.yaml"
     untouched = (
-        '# Operator rationale\n'
-        'operator_settings:\n'
-        '  keep: null  # explicit null, not an omitted key\n'
+        "# Operator rationale\n"
+        "operator_settings:\n"
+        "  keep: null  # explicit null, not an omitted key\n"
         '  label: "off"\n\n'
     )
-    config_path.write_text(untouched + config_path.read_text(encoding="utf-8"), encoding="utf-8")
+    config_path.write_text(
+        untouched + config_path.read_text(encoding="utf-8"), encoding="utf-8"
+    )
     # Backup filenames have second precision. Model a later edit explicitly so
     # this checks MoA fallback merging, not the upstream same-second collision
     # (which can leave ANY config setting's backup stale).
@@ -125,10 +131,15 @@ def test_deletion_survives_autosave_restart_and_backup_with_sparse_yaml(tmp_path
     client = TestClient(app)
     client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
     survivors = {"keep_a", "keep_b"}
-    response = client.put("/api/model/moa", json={
-        "default_preset": "keep_a",
-        "presets": {name: _preset("gpt-5.8").model_dump() for name in sorted(survivors)},
-    })
+    response = client.put(
+        "/api/model/moa",
+        json={
+            "default_preset": "keep_a",
+            "presets": {
+                name: _preset("gpt-5.8").model_dump() for name in sorted(survivors)
+            },
+        },
+    )
     assert response.status_code == 200, response.text
     assert set(read_raw_config()["moa"]["presets"]) == survivors
     effective = client.get("/api/config")
@@ -167,20 +178,27 @@ def test_deletion_survives_autosave_restart_and_backup_with_sparse_yaml(tmp_path
             [sys.executable, "-B", "-c", probe],
             cwd=Path(__file__).resolve().parents[2],
             env={**os.environ, "CLAWK_HOME": str(tmp_path)},
-            capture_output=True, text=True, check=True, timeout=30,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
         )
         assert json.loads(result.stdout.splitlines()[-1]) == sorted(survivors)
         if broken:
             assert set(load_config()["moa"]["presets"]) == survivors
 
 
-def test_deletion_preserves_undeclared_moa_keys_and_other_sections(tmp_path, monkeypatch):
+def test_deletion_preserves_undeclared_moa_keys_and_other_sections(
+    tmp_path, monkeypatch
+):
     """Authoritative presets must not cost us #58819 (save_traces) or #89184 (siblings)."""
     home = tmp_path / ".clawk"
     home.mkdir()
     moa = _three_presets()
     moa.update(save_traces=True, trace_dir="/custom/traces")
-    chain = [{"provider": "custom", "model": "glm-5.08", "base_url": "http://gw:8080/v1"}]
+    chain = [
+        {"provider": "custom", "model": "glm-5.08", "base_url": "http://gw:8080/v1"}
+    ]
     _seed(home, monkeypatch, moa, fallback_providers=chain)
 
     set_moa_models(
@@ -195,11 +213,15 @@ def test_deletion_preserves_undeclared_moa_keys_and_other_sections(tmp_path, mon
     assert "doomed" not in on_disk["moa"]["presets"]
     assert on_disk["moa"]["save_traces"] is True, "save_traces dropped (#58819)"
     assert on_disk["moa"]["trace_dir"] == "/custom/traces", "trace_dir dropped (#58819)"
-    assert on_disk["fallback_providers"] == chain, "MoA save clobbered fallback_providers (#89184)"
+    assert on_disk["fallback_providers"] == chain, (
+        "MoA save clobbered fallback_providers (#89184)"
+    )
 
 
 @pytest.mark.parametrize("legacy", [False, True], ids=["named", "legacy-flat"])
-def test_moa_save_preserves_a_concurrent_partial_config_write(tmp_path, monkeypatch, legacy):
+def test_moa_save_preserves_a_concurrent_partial_config_write(
+    tmp_path, monkeypatch, legacy
+):
     """A writer outside the dashboard lock must not lose its update to a stale MoA read."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -216,7 +238,9 @@ def test_moa_save_preserves_a_concurrent_partial_config_write(tmp_path, monkeypa
         raw = real_read(*args, **kwargs)
         if not read_complete.is_set():
             read_complete.set()
-            assert resume_read.wait(30), "concurrent writer never reached the config lock"
+            assert resume_read.wait(30), (
+                "concurrent writer never reached the config lock"
+            )
         return raw
 
     def write_other_setting():
@@ -236,13 +260,18 @@ def test_moa_save_preserves_a_concurrent_partial_config_write(tmp_path, monkeypa
     monkeypatch.setattr(config_mod, "require_readable_config_before_write", gated_read)
     payload = (
         _preset("gpt-5.8").model_dump()
-        if legacy else
-        {"default_preset": "keep_a", "presets": {"keep_a": _preset("gpt-5.8").model_dump()}}
+        if legacy
+        else {
+            "default_preset": "keep_a",
+            "presets": {"keep_a": _preset("gpt-5.8").model_dump()},
+        }
     )
     client = TestClient(app)
     with ThreadPoolExecutor(max_workers=2) as pool:
         moa_save = pool.submit(
-            client.put, "/api/model/moa", json=payload,
+            client.put,
+            "/api/model/moa",
+            json=payload,
             headers={_SESSION_HEADER_NAME: _SESSION_TOKEN},
         )
         other_save = pool.submit(write_other_setting)
@@ -254,12 +283,18 @@ def test_moa_save_preserves_a_concurrent_partial_config_write(tmp_path, monkeypa
     assert response.status_code == 200, response.text
     saved = _on_disk(tmp_path)
     assert saved["display"]["skin"] == "mono"
-    assert set(saved["moa"]["presets"]) == ({"keep_a", "doomed", "keep_b"} if legacy else {"keep_a"})
-    assert saved["moa"]["presets"]["keep_a"]["reference_models"][0]["model"] == "gpt-5.8"
+    assert set(saved["moa"]["presets"]) == (
+        {"keep_a", "doomed", "keep_b"} if legacy else {"keep_a"}
+    )
+    assert (
+        saved["moa"]["presets"]["keep_a"]["reference_models"][0]["model"] == "gpt-5.8"
+    )
 
 
 @pytest.mark.parametrize("legacy", [False, True], ids=["named", "legacy-flat"])
-def test_moa_save_refuses_transient_read_failure_without_losing_config(tmp_path, monkeypatch, legacy):
+def test_moa_save_refuses_transient_read_failure_without_losing_config(
+    tmp_path, monkeypatch, legacy
+):
     """A recovered second read must not turn the first read's fallback into a full write."""
     from starlette.testclient import TestClient
 
@@ -281,8 +316,11 @@ def test_moa_save_refuses_transient_read_failure_without_losing_config(tmp_path,
     monkeypatch.setattr(config_mod, "fast_safe_load", fail_once)
     payload = (
         _preset("gpt-5.8").model_dump()
-        if legacy else
-        {"default_preset": "keep_a", "presets": {"keep_a": _preset("gpt-5.8").model_dump()}}
+        if legacy
+        else {
+            "default_preset": "keep_a",
+            "presets": {"keep_a": _preset("gpt-5.8").model_dump()},
+        }
     )
     client = TestClient(app)
     headers = {_SESSION_HEADER_NAME: _SESSION_TOKEN}
@@ -295,8 +333,12 @@ def test_moa_save_refuses_transient_read_failure_without_losing_config(tmp_path,
     assert retry.status_code == 200, retry.text
     saved = _on_disk(tmp_path)
     assert saved["operator_settings"] == {"keep": None}
-    assert set(saved["moa"]["presets"]) == ({"keep_a", "doomed", "keep_b"} if legacy else {"keep_a"})
-    assert saved["moa"]["presets"]["keep_a"]["reference_models"][0]["model"] == "gpt-5.8"
+    assert set(saved["moa"]["presets"]) == (
+        {"keep_a", "doomed", "keep_b"} if legacy else {"keep_a"}
+    )
+    assert (
+        saved["moa"]["presets"]["keep_a"]["reference_models"][0]["model"] == "gpt-5.8"
+    )
 
 
 def test_adding_a_preset_still_works(tmp_path, monkeypatch):
@@ -335,7 +377,9 @@ def test_named_map_does_not_receive_schema_default_on_load(tmp_path, monkeypatch
     assert set(loaded["moa"]["presets"]) == {"keep_a", "doomed", "keep_b"}
 
 
-def test_named_map_stays_authoritative_in_a_fresh_process_and_backup_fallback(tmp_path, monkeypatch):
+def test_named_map_stays_authoritative_in_a_fresh_process_and_backup_fallback(
+    tmp_path, monkeypatch
+):
     """A restart and last-known-good fallback must not reinsert the schema ``default``."""
     home = tmp_path / ".clawk"
     home.mkdir()
@@ -378,7 +422,9 @@ def test_missing_moa_map_still_receives_schema_defaults(tmp_path, monkeypatch):
     assert actual == expected
 
 
-def test_deletion_preserves_privacy_filter_and_retained_preset_metadata(tmp_path, monkeypatch):
+def test_deletion_preserves_privacy_filter_and_retained_preset_metadata(
+    tmp_path, monkeypatch
+):
     """A MoA edit must not reset an undeclared privacy policy or metadata."""
     home = tmp_path / ".clawk"
     home.mkdir()
@@ -387,7 +433,10 @@ def test_deletion_preserves_privacy_filter_and_retained_preset_metadata(tmp_path
         privacy_filter="full",
         save_traces=True,
         trace_dir="/custom/traces",
-        presets={**moa["presets"], "keep_a": {**moa["presets"]["keep_a"], "operator_note": "retain me"}},
+        presets={
+            **moa["presets"],
+            "keep_a": {**moa["presets"]["keep_a"], "operator_note": "retain me"},
+        },
     )
     _seed(home, monkeypatch, moa)
 
@@ -407,7 +456,9 @@ def test_deletion_preserves_privacy_filter_and_retained_preset_metadata(tmp_path
     assert on_disk["presets"]["keep_a"]["operator_note"] == "retain me"
 
 
-@pytest.mark.parametrize("include_presets", [False, True], ids=["missing-presets", "empty-presets"])
+@pytest.mark.parametrize(
+    "include_presets", [False, True], ids=["missing-presets", "empty-presets"]
+)
 def test_legacy_flat_update_preserves_named_presets_and_valid_default(
     tmp_path, monkeypatch, include_presets
 ):
@@ -439,18 +490,24 @@ def test_legacy_flat_update_preserves_named_presets_and_valid_default(
         {"provider": "openai-codex", "model": "gpt-5.8", "enabled": True}
     ]
     assert moa["presets"]["keep_a"]["aggregator"] == {
-        "provider": "anthropic", "model": "claude-opus-5"
+        "provider": "anthropic",
+        "model": "claude-opus-5",
     }
     # Legacy flat fields represent the saved default preset. Runtime resolution uses
     # default_preset when no preset name is explicitly requested; active_preset is metadata.
     from clawk_cli.moa_config import resolve_moa_preset
 
-    assert resolve_moa_preset(moa)["reference_models"] == moa["presets"]["keep_a"]["reference_models"]
+    assert (
+        resolve_moa_preset(moa)["reference_models"]
+        == moa["presets"]["keep_a"]["reference_models"]
+    )
     assert moa["presets"]["keep_b"] == seeded["presets"]["keep_b"]
     assert moa["presets"]["doomed"] == seeded["presets"]["doomed"]
 
 
-def test_legacy_flat_update_with_named_default_and_empty_map_does_not_fail(tmp_path, monkeypatch):
+def test_legacy_flat_update_with_named_default_and_empty_map_does_not_fail(
+    tmp_path, monkeypatch
+):
     """A legacy flat payload's default_preset field cannot rename its synthesized map."""
     home = tmp_path / ".clawk"
     home.mkdir()

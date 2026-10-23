@@ -1,4 +1,5 @@
 """Gateway turn prepare phases; inherited by GatewayTurnMixin."""
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +21,9 @@ from gateway.media_repair import repair_explicit_computer_use_media_paths
 from gateway.platforms.base import BasePlatformAdapter
 from gateway.platforms.event import MessageEvent
 from gateway.session import (
-    SessionSource, _session_key_namespace, build_channel_continuity_note,
+    SessionSource,
+    _session_key_namespace,
+    build_channel_continuity_note,
     build_session_context,
 )
 from gateway.session_transcript import TranscriptReadError
@@ -48,19 +51,28 @@ def _resolve_policy_agent_runtime(runner, policy, *, fallback=True) -> tuple[str
     from gateway.session_policy import route_launch_key
     from gateway.session_worker_construct import route_runtime
     from gateway.session_authorities import active_authority
+
     authority = active_authority(runner)
     # A follow_profile_config session's route is the profile's current one, model and endpoint from one read.
     frozen, model = policy.effective(authority)
-    provider = (frozen.get('model') or {}).get('provider')
-    runtime, fallback_entry = route_runtime(policy, frozen, model, route_launch_key(authority, policy, frozen),
-                                            fallback=fallback)
+    provider = (frozen.get("model") or {}).get("provider")
+    runtime, fallback_entry = route_runtime(
+        policy,
+        frozen,
+        model,
+        route_launch_key(authority, policy, frozen),
+        fallback=fallback,
+    )
     if fallback_entry is not None:
         from clawk_cli.fallback_config import pre_agent_fallback_notice
+
         runner._pre_agent_fallback_notice = pre_agent_fallback_notice(
-            provider or '', model or '',
-            runtime.get('provider') or fallback_entry.get('provider') or 'unknown',
-            fallback_entry.get('model') or 'default')
-        return fallback_entry['model'], _runtime_agent_kwargs(runtime)
+            provider or "",
+            model or "",
+            runtime.get("provider") or fallback_entry.get("provider") or "unknown",
+            fallback_entry.get("model") or "default",
+        )
+        return fallback_entry["model"], _runtime_agent_kwargs(runtime)
     return model, _runtime_agent_kwargs(runtime)
 
 
@@ -72,14 +84,15 @@ def _recover_or_remember_model(runner, skey, model):
         _lr_state = runner._peek_session_state(skey) if skey else None
         _lr_star = runner._peek_session_state("*")
         _recovered = (
-            (_lr_state.conversation.last_resolved_model if _lr_state else "")
-            or (_lr_star.conversation.last_resolved_model if _lr_star else "")
-        )
+            _lr_state.conversation.last_resolved_model if _lr_state else ""
+        ) or (_lr_star.conversation.last_resolved_model if _lr_star else "")
         if _recovered:
             logger.warning(
                 "Empty model resolved for session=%s — recovering "
                 "last-known-good model %s (config read likely returned "
-                "empty; see #35314)", skey or "", _recovered,
+                "empty; see #35314)",
+                skey or "",
+                _recovered,
             )
             model = _recovered
     else:
@@ -92,8 +105,12 @@ def _recover_or_remember_model(runner, skey, model):
 
 class GatewayTurnPrepareMixin:
     def _resolve_session_agent_runtime(
-        self, *, source: Optional[SessionSource] = None, session_key: Optional[str] = None,
-        user_config: Optional[dict] = None, fallback: bool = True,
+        self,
+        *,
+        source: Optional[SessionSource] = None,
+        session_key: Optional[str] = None,
+        user_config: Optional[dict] = None,
+        fallback: bool = True,
     ) -> tuple[str, dict]:
         """Resolve model/runtime for a session.
 
@@ -101,10 +118,14 @@ class GatewayTurnPrepareMixin:
         (``_resolve_gateway_model(user_config)`` and default provider resolution). ``fallback=False``
         keeps a launch-policy session on its own route (see ``_resolve_policy_agent_runtime``)."""
         from gateway.run import (
-            _credential_pool_for_provider, _get_channel_override, _resolve_gateway_model,
-            _resolve_runtime_agent_kwargs, _resolve_runtime_agent_kwargs_for_provider,
+            _credential_pool_for_provider,
+            _get_channel_override,
+            _resolve_gateway_model,
+            _resolve_runtime_agent_kwargs,
+            _resolve_runtime_agent_kwargs_for_provider,
         )
         from gateway.session_policy import policy_for_source
+
         # Every exit path starts clean: a stale notice must never attach to another session's next
         # turn (#74349). Set again below only when THIS resolution fell back.
         self._pre_agent_fallback_notice = None
@@ -116,52 +137,79 @@ class GatewayTurnPrepareMixin:
         if skey:
             self._rehydrate_session_model_override(skey)
         _override_state = self._peek_session_state(skey) if skey else None
-        override = _override_state.conversation.model_override if _override_state else None
+        override = (
+            _override_state.conversation.model_override if _override_state else None
+        )
         if override:
             override_model = override.get("model", model)
             override_runtime = {
-                k: override.get(k) for k in (
-                    "provider", "requested_provider", "api_key", "base_url", "api_mode",
-                    "max_tokens", "credential_pool", "request_overrides", "capabilities",
+                k: override.get(k)
+                for k in (
+                    "provider",
+                    "requested_provider",
+                    "api_key",
+                    "base_url",
+                    "api_mode",
+                    "max_tokens",
+                    "credential_pool",
+                    "request_overrides",
+                    "capabilities",
                 )
             }
-            override_runtime["capabilities"] = dict(override_runtime["capabilities"] or {})
+            override_runtime["capabilities"] = dict(
+                override_runtime["capabilities"] or {}
+            )
             if override_runtime.get("api_key"):
                 if override_runtime.get("credential_pool") is None:
-                    override_runtime["credential_pool"] = _credential_pool_for_provider(override.get("provider"))
+                    override_runtime["credential_pool"] = _credential_pool_for_provider(
+                        override.get("provider")
+                    )
                 logger.debug(
                     "Session model override (fast): session=%s config_model=%s -> override_model=%s provider=%s",
-                    skey or "", model, override_model, override_runtime.get("provider"),
+                    skey or "",
+                    model,
+                    override_model,
+                    override_runtime.get("provider"),
                 )
                 return override_model, override_runtime
             # No api_key on the override (credentials failed to re-resolve at rehydrate): resolve them
             # for the override's own provider below, never layer it over the default provider's runtime.
             logger.debug(
                 "Session model override (no api_key, fallback): session=%s config_model=%s override_model=%s",
-                skey or "", model, override_model,
+                skey or "",
+                model,
+                override_model,
             )
         elif logger.isEnabledFor(logging.DEBUG):
             # The override_keys scan walks every session; only pay for it when DEBUG is on.
             logger.debug(
                 "No session model override: session=%s config_model=%s override_keys=%s",
-                skey or "", model,
+                skey or "",
+                model,
                 [
-                    _key for _key, _st in list(self._sessions_map().items())
+                    _key
+                    for _key, _st in list(self._sessions_map().items())
                     if _st.conversation.model_override is not None
-                ][:5] or "[]",
+                ][:5]
+                or "[]",
             )
 
         runtime_kwargs, unavailable_override = None, None
         if override and override.get("provider"):
             try:
                 runtime_kwargs = _resolve_runtime_agent_kwargs_for_provider(
-                    override["provider"], target_model=override.get("model") or None)
+                    override["provider"], target_model=override.get("model") or None
+                )
             except Exception as exc:
                 # Layering the override on the default runtime sent its model to the default provider's
                 # endpoint (openai-codex on the Nous URL). Run this turn on the whole default route and say
                 # so; the persisted override is kept, so the next turn retries it.
-                logger.warning("Session /model override provider %s unavailable: %s", override["provider"], exc,
-                               exc_info=True)
+                logger.warning(
+                    "Session /model override provider %s unavailable: %s",
+                    override["provider"],
+                    exc,
+                    exc_info=True,
+                )
                 unavailable_override, override = override, None
         if runtime_kwargs is None:
             runtime_kwargs = _resolve_runtime_agent_kwargs()
@@ -170,57 +218,91 @@ class GatewayTurnPrepareMixin:
         self._pre_agent_fallback_notice = runtime_kwargs.pop("_fallback_notice", None)
         runtime_model = runtime_kwargs.pop("model", None)
         if runtime_model:
-            logger.info("Runtime provider supplied explicit model override: %s -> %s", model, runtime_model)
+            logger.info(
+                "Runtime provider supplied explicit model override: %s -> %s",
+                model,
+                runtime_model,
+            )
             model = runtime_model
         if unavailable_override and not self._pre_agent_fallback_notice:
             from clawk_cli.fallback_config import pre_agent_fallback_notice
+
             self._pre_agent_fallback_notice = pre_agent_fallback_notice(
-                unavailable_override["provider"], unavailable_override.get("model"), runtime_kwargs.get("provider"), model)
+                unavailable_override["provider"],
+                unavailable_override.get("model"),
+                runtime_kwargs.get("provider"),
+                model,
+            )
 
         cfg = getattr(self, "config", None)  # getattr: bare object.__new__ test runners
         if cfg and source is not None:
             ch = _get_channel_override(
-                cfg, source.platform, str(source.chat_id) if source.chat_id else "",
-                thread_id=str(source.thread_id) if getattr(source, "thread_id", None) else None,
-                parent_id=str(source.parent_chat_id) if getattr(source, "parent_chat_id", None) else None,
+                cfg,
+                source.platform,
+                str(source.chat_id) if source.chat_id else "",
+                thread_id=str(source.thread_id)
+                if getattr(source, "thread_id", None)
+                else None,
+                parent_id=str(source.parent_chat_id)
+                if getattr(source, "parent_chat_id", None)
+                else None,
             )
             if ch:
                 if ch.model:
                     model = ch.model
                 if ch.provider:
-                    runtime_kwargs = _resolve_runtime_agent_kwargs_for_provider(ch.provider, target_model=model or None)
+                    runtime_kwargs = _resolve_runtime_agent_kwargs_for_provider(
+                        ch.provider, target_model=model or None
+                    )
                     ch_runtime_model = runtime_kwargs.pop("model", None)
                     # Adopt the provider's bundled model only when the override named none.
                     if ch_runtime_model and not ch.model:
                         model = ch_runtime_model
 
         if override and skey:
-            model, runtime_kwargs = self._apply_session_model_override(skey, model, runtime_kwargs)
+            model, runtime_kwargs = self._apply_session_model_override(
+                skey, model, runtime_kwargs
+            )
 
         # Provider resolved but no model.default (`clawk auth add` without `clawk model`): use the
         # provider's first catalog model.
         if not model and runtime_kwargs.get("provider"):
             with suppress(Exception):
                 from clawk_cli.models import get_default_model_for_provider
+
                 model = get_default_model_for_provider(runtime_kwargs["provider"])
                 if model:
                     logger.info(
-                        "No model configured — defaulting to %s for provider %s", model, runtime_kwargs["provider"],
+                        "No model configured — defaulting to %s for provider %s",
+                        model,
+                        runtime_kwargs["provider"],
                     )
 
         return _recover_or_remember_model(self, skey, model), runtime_kwargs
 
-    def _resolve_turn_agent_config(self, user_message: str, model: str, runtime_kwargs: dict) -> dict:
+    def _resolve_turn_agent_config(
+        self, user_message: str, model: str, runtime_kwargs: dict
+    ) -> dict:
         """Effective model/runtime config for one turn. With `/fast` priority on, fast-mode
         ``request_overrides`` are deep-merged OVER the per-provider ones so both reach the model."""
         from gateway.run import _deep_merge_request_overrides
         from agent.fast_mode import STATIC_TIERS
         from clawk_cli.models import resolve_fast_mode_overrides
+
         # Tests bind this method onto bare namespaces, so no class-level tables here.
         runtime = {
-            k: runtime_kwargs.get(k) for k in (
-                "api_key", "base_url", "provider", "requested_provider", "api_mode", "command", "args",
-                "credential_pool", "max_tokens", "capabilities",
+            k: runtime_kwargs.get(k)
+            for k in (
+                "api_key",
+                "base_url",
+                "provider",
+                "requested_provider",
+                "api_mode",
+                "command",
+                "args",
+                "credential_pool",
+                "max_tokens",
+                "capabilities",
             )
         }
         runtime["args"] = list(runtime["args"] or [])
@@ -230,8 +312,13 @@ class GatewayTurnPrepareMixin:
             "model": model,
             "runtime": runtime,
             "signature": (
-                model, runtime["provider"], runtime["requested_provider"], runtime["base_url"],
-                runtime["api_mode"], runtime["command"], tuple(runtime["args"]),
+                model,
+                runtime["provider"],
+                runtime["requested_provider"],
+                runtime["base_url"],
+                runtime["api_mode"],
+                runtime["command"],
+                tuple(runtime["args"]),
             ),
         }
         tier = getattr(self, "_service_tier", None)
@@ -241,12 +328,17 @@ class GatewayTurnPrepareMixin:
             return route
         try:
             overrides = resolve_fast_mode_overrides(
-                route["model"], provider=runtime["provider"], base_url=runtime["base_url"], tier=tier,
+                route["model"],
+                provider=runtime["provider"],
+                base_url=runtime["base_url"],
+                tier=tier,
             )
         except Exception:
             overrides = None
         # Fast-mode keys (service_tier / speed) are top-level and don't collide with extra_body.
-        route["request_overrides"] = _deep_merge_request_overrides(base_request_overrides, overrides or {})
+        route["request_overrides"] = _deep_merge_request_overrides(
+            base_request_overrides, overrides or {}
+        )
         return route
 
     def _sync_session_model_from_agent(self, session_id: str, agent: Any) -> None:
@@ -258,7 +350,9 @@ class GatewayTurnPrepareMixin:
         model = getattr(agent, "model", None)
         if not model:
             return
-        runtime = {k: getattr(agent, k, None) for k in ("provider", "base_url", "api_mode")}
+        runtime = {
+            k: getattr(agent, k, None) for k in ("provider", "base_url", "api_mode")
+        }
         runtime["fallback_active"] = bool(getattr(agent, "_fallback_activated", False))
         runtime = {k: v for k, v in runtime.items() if v not in (None, "")}
         try:
@@ -279,7 +373,9 @@ class GatewayTurnPrepareMixin:
             if not isinstance(config, dict):
                 config = {}
             gateway_runtime = dict(config.get("gateway_runtime") or {})
-            if row.get("model") == model and all(gateway_runtime.get(k) == v for k, v in runtime.items()):
+            if row.get("model") == model and all(
+                gateway_runtime.get(k) == v for k, v in runtime.items()
+            ):
                 return
             config["gateway_runtime"] = runtime
             db.update_session_meta(session_id, json.dumps(config), model=model)
@@ -293,16 +389,24 @@ class GatewayTurnPrepareMixin:
         # Topic-mode DMs: rewrite a stale/foreign thread_id to the user's last-active topic so a
         # cross-topic Reply doesn't fragment the conversation.
         event_metadata = getattr(event, "metadata", None) or {}
-        expected_session_key = str(event_metadata.get("gateway_session_key") or "").strip()
+        expected_session_key = str(
+            event_metadata.get("gateway_session_key") or ""
+        ).strip()
         # Plain lobby recovery here even with ``dm_topic_auto_transfer`` on: the opt-in topic transfer
         # already ran at adapter ingress (``apply_root_dm_topic_transfer`` -> runner hook
         # ``_transfer_telegram_root_dm``), before session keying.
-        recovered = (await asyncio.to_thread(self._recover_telegram_lobby_thread_id, source)
-                     if not expected_session_key else None)
+        recovered = (
+            await asyncio.to_thread(self._recover_telegram_lobby_thread_id, source)
+            if not expected_session_key
+            else None
+        )
         if recovered is not None:
             logger.info(
                 "telegram topic recovery: chat=%s user=%s %r -> %s",
-                source.chat_id, source.user_id, source.thread_id, recovered,
+                source.chat_id,
+                source.user_id,
+                source.thread_id,
+                recovered,
             )
             source = dataclasses.replace(source, thread_id=recovered)
             with suppress(Exception):
@@ -313,72 +417,107 @@ class GatewayTurnPrepareMixin:
             if derived_session_key != expected_session_key:
                 logger.warning(
                     "Dropping internally routed event after route recovery: expected session=%s derived=%s",
-                    expected_session_key, derived_session_key,
+                    expected_session_key,
+                    derived_session_key,
                 )
                 return
 
         strict_session = bool(event_metadata.get("gateway_session_strict"))
         pinned_session_id = str(event_metadata.get("gateway_session_id") or "").strip()
         if strict_session:
-            session_entry = await self.async_session_store.lookup_by_session_key(expected_session_key)
-            if session_entry is None or not pinned_session_id or session_entry.session_id != pinned_session_id:
+            session_entry = await self.async_session_store.lookup_by_session_key(
+                expected_session_key
+            )
+            if (
+                session_entry is None
+                or not pinned_session_id
+                or session_entry.session_id != pinned_session_id
+            ):
                 logger.warning(
                     "Dropping internally routed event: expected session id=%s is no longer current for key=%s",
-                    pinned_session_id or "missing", expected_session_key or "missing",
+                    pinned_session_id or "missing",
+                    expected_session_key or "missing",
                 )
                 return
         else:
             # Internal wakes observe reset policy without counting as user activity, or periodic
             # notifications keep the routing key alive across every daily/idle boundary.
             session_entry = await self.async_session_store.get_or_create_session(
-                source, touch_activity=not bool(getattr(event, "internal", False)),
+                source,
+                touch_activity=not bool(getattr(event, "internal", False)),
             )
         session_key = session_entry.session_key
         claim = getattr(event, "_claimed_owner", None)
         if claim is not None:
             from gateway.session_authorities import active_authority
+
             authority, (owner, generation) = active_authority(self), claim
             # /new and /reset latch a Stop for the claimed generation before they move the route;
             # /resume, /branch and compression don't, so those turns run where the route points.
-            stopped = generation in (authority.pending_stops.get(owner), authority.delivered_stops.get(owner))
+            stopped = generation in (
+                authority.pending_stops.get(owner),
+                authority.delivered_stops.get(owner),
+            )
             if stopped and session_entry.session_id not in await asyncio.to_thread(
-                    authority.db.get_compression_chain, owner):  # preflight's continuation walk
+                authority.db.get_compression_chain, owner
+            ):  # preflight's continuation walk
                 # It settles interrupted, as that Stop would have, and never runs on the fresh one.
-                logger.warning("Dropping a stopped claimed turn: its route moved from %s to %s before it ran",
-                               owner, session_entry.session_id)
+                logger.warning(
+                    "Dropping a stopped claimed turn: its route moved from %s to %s before it ran",
+                    owner,
+                    session_entry.session_id,
+                )
                 from gateway.session_results import execution_result
+
                 captured = execution_result.get()
                 if captured is not None:
-                    captured['result'] = {'final_response': '', 'messages': [], 'interrupted': True}
+                    captured["result"] = {
+                        "final_response": "",
+                        "messages": [],
+                        "interrupted": True,
+                    }
                 return
         if not strict_session and pinned_session_id:
-            resolved_entry = await self._resolve_async_delegation_session(session_entry, pinned_session_id, event_metadata.get("gateway_proven_session_id") or "", event_metadata.get("gateway_completion_ids") or ())
+            resolved_entry = await self._resolve_async_delegation_session(
+                session_entry,
+                pinned_session_id,
+                event_metadata.get("gateway_proven_session_id") or "",
+                event_metadata.get("gateway_completion_ids") or (),
+            )
             if resolved_entry is None:
                 return
             session_entry = resolved_entry
         self._cache_session_source(session_key, source)
         if await asyncio.to_thread(self._is_telegram_topic_lane, source):
-            session_entry = await self._hmwa_heal_telegram_topic_binding(source, session_entry, session_key)
+            session_entry = await self._hmwa_heal_telegram_topic_binding(
+                source, session_entry, session_key
+            )
         from gateway.run_heartbeat_acceptance import resolve_heartbeat_owner
+
         if not await resolve_heartbeat_owner(self, event, session_entry):
             return
         return source, session_entry, session_key
 
-    async def _hmwa_heal_telegram_topic_binding(self, source, session_entry, session_key):
+    async def _hmwa_heal_telegram_topic_binding(
+        self, source, session_entry, session_key
+    ):
         """Follow the (chat_id, thread_id) topic binding — healed to its compression tip — or record
         a fresh one. Returns the (possibly switched) session entry."""
         binding = None
         try:
             if self._session_db:
                 binding = await self._session_db.get_telegram_topic_binding(
-                    chat_id=str(source.chat_id), thread_id=str(source.thread_id),
+                    chat_id=str(source.chat_id),
+                    thread_id=str(source.thread_id),
                     profile_name=self._telegram_topic_profile_name(source),
                 )
         except Exception:
             logger.debug("Failed to read Telegram topic binding", exc_info=True)
         if not binding:
             try:
-                await asyncio.to_thread(self._record_telegram_topic_binding, source, session_entry)
+                await asyncio.to_thread(
+                    self._record_telegram_topic_binding, source, session_entry
+                )
             except Exception:
                 logger.debug("Failed to record Telegram topic binding", exc_info=True)
             return session_entry
@@ -390,9 +529,15 @@ class GatewayTurnPrepareMixin:
         # safe. See #20470, #29712, #33414.
         if bound_session_id and self._session_db is not None:
             try:
-                canonical_session_id = await self._session_db.get_compression_tip(bound_session_id)
+                canonical_session_id = await self._session_db.get_compression_tip(
+                    bound_session_id
+                )
             except Exception:
-                logger.debug("compression-tip lookup failed for %s", bound_session_id, exc_info=True)
+                logger.debug(
+                    "compression-tip lookup failed for %s",
+                    bound_session_id,
+                    exc_info=True,
+                )
                 canonical_session_id = bound_session_id
             if canonical_session_id and canonical_session_id != bound_session_id:
                 bound_session_id = canonical_session_id
@@ -402,14 +547,19 @@ class GatewayTurnPrepareMixin:
             # awaits above are a window for /new or /resume to move the route; the CAS on the
             # snapshot id lets that win instead of being clobbered by a stale binding.
             switched = await self.async_session_store.switch_session(
-                session_key, bound_session_id, expected_session_id=session_entry.session_id,
+                session_key,
+                bound_session_id,
+                expected_session_id=session_entry.session_id,
             )
             if switched is not None:
                 session_entry = switched
         if bound_session_id and bound_session_id != stored_session_id:
             # The stored binding pointed at a parent: rewrite it to the canonical descendant.
             await asyncio.to_thread(
-                self._sync_telegram_topic_binding, source, session_entry, reason="compression-tip-walk",
+                self._sync_telegram_topic_binding,
+                source,
+                session_entry,
+                reason="compression-tip-walk",
             )
         return session_entry
 
@@ -431,25 +581,37 @@ class GatewayTurnPrepareMixin:
             session_entry.was_auto_reset = False
 
         _is_fresh_reset = getattr(session_entry, "is_fresh_reset", False)
-        _is_new_session = session_entry.created_at == session_entry.updated_at or _was_auto_reset or _is_fresh_reset
+        _is_new_session = (
+            session_entry.created_at == session_entry.updated_at
+            or _was_auto_reset
+            or _is_fresh_reset
+        )
         # Consume is_fresh_reset so it doesn't leak onto later messages in the same session.
         if _is_fresh_reset:
             # See #6508.
             session_entry.is_fresh_reset = False
         if _is_new_session:
-            await self.hooks.emit("session:start", {
-                "platform": source.platform.value if source.platform else "",
-                "user_id": source.user_id,
-                "session_id": session_entry.session_id,
-                "session_key": session_key,
-            })
+            await self.hooks.emit(
+                "session:start",
+                {
+                    "platform": source.platform.value if source.platform else "",
+                    "user_id": source.user_id,
+                    "session_id": session_entry.session_id,
+                    "session_key": session_key,
+                },
+            )
         return _was_auto_reset, _is_new_session
 
-    async def _hmwa_deliver_auto_reset_notice(self, session_entry, source, turn_sidecar_notes):
+    async def _hmwa_deliver_auto_reset_notice(
+        self, session_entry, source, turn_sidecar_notes
+    ):
         """Stage the auto-reset sidecar note for the agent and notify the user (policy-gated)."""
         from gateway.run import _AUTO_RESET_CONTEXT_NOTES
-        reset_reason = getattr(session_entry, 'auto_reset_reason', None) or 'suspended'
-        context_note = _AUTO_RESET_CONTEXT_NOTES.get(reset_reason, _AUTO_RESET_CONTEXT_NOTES["suspended"])
+
+        reset_reason = getattr(session_entry, "auto_reset_reason", None) or "suspended"
+        context_note = _AUTO_RESET_CONTEXT_NOTES.get(
+            reset_reason, _AUTO_RESET_CONTEXT_NOTES["suspended"]
+        )
         # Long-lived channels: point the agent at the prior same-channel session for session_search.
         try:
             # Returns None (appends nothing) for other platforms or when there's no prior activity to
@@ -467,10 +629,16 @@ class GatewayTurnPrepareMixin:
             if adapter:
                 notice = t("gateway.session.auto_reset_notice")
                 with suppress(Exception):
-                    session_info = await asyncio.to_thread(self._reset_notice_session_info, source)
+                    session_info = await asyncio.to_thread(
+                        self._reset_notice_session_info, source
+                    )
                     if session_info:
                         notice = f"{notice}\n\n{session_info}"
-                await adapter.send(source.chat_id, notice, metadata=self._thread_metadata_for_source(source))
+                await adapter.send(
+                    source.chat_id,
+                    notice,
+                    metadata=self._thread_metadata_for_source(source),
+                )
         except Exception as e:
             logger.debug("Auto-reset notification failed (non-fatal): %s", e)
 
@@ -482,6 +650,7 @@ class GatewayTurnPrepareMixin:
         _skill_names = [_auto] if isinstance(_auto, str) else list(_auto)
         try:
             from agent.skill_commands import _load_skill_payload, _build_skill_message
+
             _combined_parts: list[str] = []
             _loaded_names: list[str] = []
             for _sname in _skill_names:
@@ -491,7 +660,8 @@ class GatewayTurnPrepareMixin:
                     continue
                 _loaded_skill, _skill_dir, _display_name = _loaded
                 _part = _build_skill_message(
-                    _loaded_skill, _skill_dir,
+                    _loaded_skill,
+                    _skill_dir,
                     f'[IMPORTANT: The "{_display_name}" skill is auto-loaded. '
                     f"Follow its instructions for this session.]",
                 )
@@ -499,24 +669,37 @@ class GatewayTurnPrepareMixin:
                     _combined_parts.append(_part)
                     _loaded_names.append(_sname)
             if _combined_parts:
-                _combined_parts.append(event.text)  # user's original text after the payloads
+                _combined_parts.append(
+                    event.text
+                )  # user's original text after the payloads
                 event.text = "\n\n".join(_combined_parts)
-                logger.info("[Gateway] Auto-loaded skill(s) %s for session %s", _loaded_names, session_key)
+                logger.info(
+                    "[Gateway] Auto-loaded skill(s) %s for session %s",
+                    _loaded_names,
+                    session_key,
+                )
         except Exception as e:
-            logger.warning("[Gateway] Failed to auto-load skill(s) %s: %s", _skill_names, e)
+            logger.warning(
+                "[Gateway] Failed to auto-load skill(s) %s: %s", _skill_names, e
+            )
 
-    async def _hmwa_acquire_turn_lease(self, _quick_key, run_generation, session_entry, _session_env_tokens):
+    async def _hmwa_acquire_turn_lease(
+        self, _quick_key, run_generation, session_entry, _session_env_tokens
+    ):
         """Serialize [load history → run → flush] per resolved SESSION_ID so another routing key on
         the same session waits for the prior flush. Fail-closed on timeout (outer dispatch returns
         a resend notice). Released in _handle_message's finally, granted per (routing key, run
         generation) so a stale unwind can't release a newer turn's."""
         from gateway.run import _float_env
+
         _lease_registry = getattr(self, "_turn_leases", None)
         if _lease_registry is None:
             return
         try:
             _lease_token = await _lease_registry.acquire(
-                session_entry.session_id, owner_key=_quick_key, generation=run_generation,
+                session_entry.session_id,
+                owner_key=_quick_key,
+                generation=run_generation,
                 timeout=_float_env("CLAWK_TURN_LEASE_TIMEOUT", DEFAULT_LEASE_WAIT),
             )
         except TurnLeaseTimeoutError:
@@ -524,26 +707,47 @@ class GatewayTurnPrepareMixin:
             self._clear_session_env(_session_env_tokens)
             raise
         if _lease_token is not None:
-            self._session_state(_quick_key).turn.lease_tokens[run_generation] = _lease_token
+            self._session_state(_quick_key).turn.lease_tokens[run_generation] = (
+                _lease_token
+            )
 
-    async def _hmwa_first_contact_notes(self, source, history, turn_sidecar_notes, internal=False):
+    async def _hmwa_first_contact_notes(
+        self, source, history, turn_sidecar_notes, internal=False
+    ):
         """First-ever-message onboarding note + one-time 'no home channel' prompt (both only when
         the session has no history). Delivered on the user message (sidecar), NOT the ephemeral
         system prompt: present-on-turn-1/absent-on-turn-2 was a guaranteed prompt diff + rebuild."""
-        from gateway.run import _gateway_config_home, _home_target_env_var, _load_gateway_config
-        if history or internal:  # internal = plugin/system turn: no human made first contact
+        from gateway.run import (
+            _gateway_config_home,
+            _home_target_env_var,
+            _load_gateway_config,
+        )
+
+        if (
+            history or internal
+        ):  # internal = plugin/system turn: no human made first contact
             return
         # LOCAL sessions (one-shot, chat -q, ACP, TUI attach) are the classic in-process CLI's
         # surfaces: it never appended this note, and mark_seen would rewrite config.yaml under
         # an ordinary launch that promises to leave the profile's files untouched.
-        human_platform = bool(source.platform) and source.platform not in (Platform.LOCAL, Platform.WEBHOOK)
-        if human_platform and source.chat_type == "dm" and not await self.async_session_store.has_any_sessions():
+        human_platform = bool(source.platform) and source.platform not in (
+            Platform.LOCAL,
+            Platform.WEBHOOK,
+        )
+        if (
+            human_platform
+            and source.chat_type == "dm"
+            and not await self.async_session_store.has_any_sessions()
+        ):
             # Same branch logic as the TUI (profile-build offer once when "ask", else plain intro);
             # first_contact_turn_note already falls back to the plain intro on error.
             from agent.onboarding import first_contact_turn_note
+
             note = first_contact_turn_note(
-                _load_gateway_config(), _gateway_config_home() / "config.yaml",
-                session_history_empty=True, install_has_prior_sessions=False,
+                _load_gateway_config(),
+                _gateway_config_home() / "config.yaml",
+                session_history_empty=True,
+                install_has_prior_sessions=False,
             )
             if note:
                 turn_sidecar_notes.append(note)
@@ -559,12 +763,17 @@ class GatewayTurnPrepareMixin:
             # A secondary with no home channel must not borrow the default profile's from
             # os.environ; only an UNSCOPED single-profile read may fall back to the process env.
             from agent.secret_scope import UnscopedSecretError, get_secret
+
             try:
                 home_env = (get_secret(env_key) or "").strip()
             except UnscopedSecretError:
                 home_env = (os.getenv(env_key) or "").strip()
             except Exception:
-                logger.debug("Home-channel secret %s unreadable; treating it as unset", env_key, exc_info=True)
+                logger.debug(
+                    "Home-channel secret %s unreadable; treating it as unset",
+                    env_key,
+                    exc_info=True,
+                )
                 home_env = ""
         # Also honor in-memory / yaml home_channel on this platform.
         with suppress(Exception):
@@ -574,14 +783,26 @@ class GatewayTurnPrepareMixin:
         if not home_env:
             with suppress(Exception):
                 from gateway.config import load_gateway_config as _lgc
+
                 prof = (getattr(source, "profile", None) or "").strip()
-                if prof and prof != "default" and _lgc().get_home_channel(source.platform):
+                if (
+                    prof
+                    and prof != "default"
+                    and _lgc().get_home_channel(source.platform)
+                ):
                     home_env = "set"
         if not home_env:
             # Slack routes every command through the parent `/clawk`; bare `/sethome` would fail.
-            sethome_cmd = "/clawk sethome" if source.platform == Platform.SLACK else "/sethome"
+            sethome_cmd = (
+                "/clawk sethome" if source.platform == Platform.SLACK else "/sethome"
+            )
             await self._deliver_platform_notice(
-                source, t("gateway.notify.no_home_channel", platform=platform_name.title(), sethome_cmd=sethome_cmd),
+                source,
+                t(
+                    "gateway.notify.no_home_channel",
+                    platform=platform_name.title(),
+                    sethome_cmd=sethome_cmd,
+                ),
             )
 
     def _hmwa_apply_message_timestamp(self, event, message_text):
@@ -591,6 +812,7 @@ class GatewayTurnPrepareMixin:
         RENDER is gated behind gateway.message_timestamps.enabled (default OFF)."""
         from gateway.run import _load_gateway_config, _message_timestamps_enabled
         from gateway.run_inbound import strip_discord_triggering_note
+
         persist_user_message = None
         persist_user_timestamp = None
         try:
@@ -600,14 +822,25 @@ class GatewayTurnPrepareMixin:
                 render_user_content_with_timestamp as _render_msg_ts,
                 strip_leading_message_timestamps as _strip_msg_ts,
             )
+
             _evt_tz = _get_evt_tz()
             if message_text and isinstance(message_text, str):
-                _clean_message_text, _embedded_ts = _strip_msg_ts(message_text, tz=_evt_tz)
-                persist_user_message = strip_discord_triggering_note(event, _clean_message_text)
-                _event_epoch = _coerce_msg_ts(getattr(event, "timestamp", None), tz=_evt_tz)
-                persist_user_timestamp = _event_epoch if _event_epoch is not None else _embedded_ts
+                _clean_message_text, _embedded_ts = _strip_msg_ts(
+                    message_text, tz=_evt_tz
+                )
+                persist_user_message = strip_discord_triggering_note(
+                    event, _clean_message_text
+                )
+                _event_epoch = _coerce_msg_ts(
+                    getattr(event, "timestamp", None), tz=_evt_tz
+                )
+                persist_user_timestamp = (
+                    _event_epoch if _event_epoch is not None else _embedded_ts
+                )
                 if _message_timestamps_enabled(_load_gateway_config()):
-                    message_text = _render_msg_ts(_clean_message_text, persist_user_timestamp, tz=_evt_tz)
+                    message_text = _render_msg_ts(
+                        _clean_message_text, persist_user_timestamp, tz=_evt_tz
+                    )
                 else:
                     # Toggle off: the model sees the clean message; timestamp stored for later opt-in.
                     message_text = _clean_message_text
@@ -629,7 +862,9 @@ class GatewayTurnPrepareMixin:
         persistence_owner: Optional[str] = None
         title_user_message: Optional[str] = None
 
-    async def _hmwa_prepare_turn(self, event, source, session_entry, session_key, _quick_key, run_generation):
+    async def _hmwa_prepare_turn(
+        self, event, source, session_entry, session_key, _quick_key, run_generation
+    ):
         """Everything between session resolution and the agent run: session open, task-local env,
         context prompt, sidecar notes, turn lease, transcript load + hygiene, inbound text. Returns
         ``(_PreparedTurn, env_tokens)``; a ``str`` first element is a reply to send instead of
@@ -637,17 +872,25 @@ class GatewayTurnPrepareMixin:
         (inbound text rejected)."""
         from gateway.run import _load_gateway_config
         from tools.approval_yolo import restore_gateway_yolo
-        _was_auto_reset, _is_new_session = await self._hmwa_open_session(session_entry, session_key, source)
-        restore_gateway_yolo(session_key, session_entry.yolo)  # None: TurnRunner seeds the launch policy
+
+        _was_auto_reset, _is_new_session = await self._hmwa_open_session(
+            session_entry, session_key, source
+        )
+        restore_gateway_yolo(
+            session_key, session_entry.yolo
+        )  # None: TurnRunner seeds the launch policy
         context = build_session_context(source, self.config, session_entry)
         # Session context variables for tools (task-local, concurrency-safe)
         _session_env_tokens = self._set_session_env(context)
         # Self-injected turns (internal=True) persist with a DB-only display_kind: timeline notices, not user bubbles.
         from gateway.response_filters import display_kind_for_event
+
         persist_user_display_kind = display_kind_for_event(event)
         _redact_pii = False  # privacy.redact_pii, re-read per message
         with suppress(Exception):
-            _redact_pii = bool((_load_gateway_config().get("privacy") or {}).get("redact_pii", False))
+            _redact_pii = bool(
+                (_load_gateway_config().get("privacy") or {}).get("redact_pii", False)
+            )
 
         # The context prompt render is pinned per session, keyed by a hash of the renderer inputs, so
         # the system prompt cannot drift turn-over-turn; a miss (thread rename, /sethome) re-renders.
@@ -661,14 +904,21 @@ class GatewayTurnPrepareMixin:
         _reuse_pins = event.internal or getattr(event, "inherit_channel_pin", False)
         if source.platform != Platform.LOCAL and _reuse_pins and session_key:
             await self._rehydrate_prompt_pins(session_key, session_entry.session_id)
-        context_prompt = "" if source.platform == Platform.LOCAL else \
-            self._pinned_session_context_prompt(context, _redact_pii, session_key, internal=_reuse_pins)
+        context_prompt = (
+            ""
+            if source.platform == Platform.LOCAL
+            else self._pinned_session_context_prompt(
+                context, _redact_pii, session_key, internal=_reuse_pins
+            )
+        )
 
         # Per-turn notes ride the user message via the api_content sidecar, NOT context_prompt
         # (appending to the ephemeral system prompt forced a full agent rebuild).
         turn_sidecar_notes: list[str] = []
         if _was_auto_reset:
-            await self._hmwa_deliver_auto_reset_notice(session_entry, source, turn_sidecar_notes)
+            await self._hmwa_deliver_auto_reset_notice(
+                session_entry, source, turn_sidecar_notes
+            )
 
         # Keep human text separate from skills, sender metadata, and other model context.
         # With no text (e.g. voice-only), retain the existing enriched-message title fallback.
@@ -679,7 +929,9 @@ class GatewayTurnPrepareMixin:
         if _is_new_session and _auto:
             self._hmwa_auto_load_skills(event, _auto, _quick_key, session_key)
 
-        await self._hmwa_acquire_turn_lease(_quick_key, run_generation, session_entry, _session_env_tokens)
+        await self._hmwa_acquire_turn_lease(
+            _quick_key, run_generation, session_entry, _session_env_tokens
+        )
 
         # A turn becomes durable recovery work only after it owns the per-session lease; marking
         # earlier would falsely recover a message that never began processing.
@@ -688,16 +940,29 @@ class GatewayTurnPrepareMixin:
         # An unreadable store is not an empty conversation: stop before the agent invents continuity
         # from []. Restore task-local context here (before the broad cleanup finally).
         try:
-            history = await self.async_session_store.load_transcript(session_entry.session_id)
+            history = await self.async_session_store.load_transcript(
+                session_entry.session_id
+            )
             history = await self._hmwa_run_session_hygiene(
-                event, source, session_entry, session_key, history, _quick_key, run_generation,
+                event,
+                source,
+                session_entry,
+                session_key,
+                history,
+                _quick_key,
+                run_generation,
             )
         except TranscriptReadError:
             self._clear_session_env(_session_env_tokens)
             from gateway.session_results import record_unexecuted_failure
-            return record_unexecuted_failure(t("gateway.errors.history_unavailable")), _session_env_tokens
 
-        await self._hmwa_first_contact_notes(source, history, turn_sidecar_notes, internal=event.internal)
+            return record_unexecuted_failure(
+                t("gateway.errors.history_unavailable")
+            ), _session_env_tokens
+
+        await self._hmwa_first_contact_notes(
+            source, history, turn_sidecar_notes, internal=event.internal
+        )
 
         # Voice channel state rides the user message ONLY when changed (in the system prompt it
         # forced a rebuild + prompt-cache re-key per message).
@@ -707,7 +972,10 @@ class GatewayTurnPrepareMixin:
 
         # Auto-analyze user images so the model gets a description plus the local path.
         message_text = await self._prepare_profile_scoped_inbound_message_text(
-            event=event, source=source, history=history, session_key=session_key,
+            event=event,
+            source=source,
+            history=history,
+            session_key=session_key,
         )
         if message_text is None:
             # A refused local turn answers with its refusal (session_context_refs.turn_references).
@@ -724,16 +992,34 @@ class GatewayTurnPrepareMixin:
 
         # Bind this run generation to the adapter so deferred post-delivery callbacks are released
         # by the run that registered them.
-        self._bind_adapter_run_generation(self._delivery_adapter_for(source), session_key, run_generation)
+        self._bind_adapter_run_generation(
+            self._delivery_adapter_for(source), session_key, run_generation
+        )
         # Delivery IDs are only unique in their transport namespace. Keyless turns
         # need their own identity, even when another process writes to this session.
         import uuid
-        namespace = [source.platform.value, source.profile, source.scope_id,
-                     source.chat_id, source.thread_id, str(event.message_id)]
-        owner = (str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(namespace)))
-                 if event.message_id else str(uuid.uuid4()))
+
+        namespace = [
+            source.platform.value,
+            source.profile,
+            source.scope_id,
+            source.chat_id,
+            source.thread_id,
+            str(event.message_id),
+        ]
+        owner = (
+            str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(namespace)))
+            if event.message_id
+            else str(uuid.uuid4())
+        )
         return self._PreparedTurn(
-            history, context_prompt, message_text, persist_user_message, persist_user_timestamp,
-            persist_user_display_kind, session_entry.session_id, owner,
+            history,
+            context_prompt,
+            message_text,
+            persist_user_message,
+            persist_user_timestamp,
+            persist_user_display_kind,
+            session_entry.session_id,
+            owner,
             title_user_message=title_user_message,
         ), _session_env_tokens

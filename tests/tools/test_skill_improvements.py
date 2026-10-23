@@ -65,11 +65,14 @@ description: Whitespace test
 """
         _create_skill("ws-skill", skill)
         # Agent sends patch with no leading whitespace (common LLM behaviour)
-        result = _patch_skill("ws-skill", "def hello():\n    print(\"hi\")", "def hello():\n    print(\"hello world\")")
+        result = _patch_skill(
+            "ws-skill",
+            'def hello():\n    print("hi")',
+            'def hello():\n    print("hello world")',
+        )
         assert result["success"] is True
         content = (self.skills_dir / "ws-skill" / "SKILL.md").read_text()
         assert 'print("hello world")' in content
-
 
     def test_multiple_matches_blocked_without_replace_all(self):
         """Multiple fuzzy matches should return an error without replace_all."""
@@ -88,7 +91,6 @@ word word word
         assert result["success"] is False
         assert "match" in result["error"].lower()
 
-
     def test_skill_manage_patch_uses_fuzzy(self):
         """The dispatcher should route to the fuzzy-matching patch."""
         _create_skill("test-skill", SKILL_CONTENT)
@@ -101,7 +103,6 @@ word word word
         result = json.loads(raw)
         # Should succeed via line-trimmed or indentation-flexible matching
         assert result["success"] is True
-
 
     def test_create_rollback_removes_skill_when_scan_blocks(self, monkeypatch):
         """Blocked skill creation removes the newly created skill directory."""
@@ -178,7 +179,6 @@ word word word
 
         assert result["success"] is True
         assert stat.S_IMODE(skill_md.stat().st_mode) == mode
-
 
     @pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
     @pytest.mark.parametrize("mode", [0o600])
@@ -300,7 +300,9 @@ word word word
         assert reference.read_text(encoding="utf-8") == "original\n"
         assert stat.S_IMODE(reference.stat().st_mode) == 0o660
 
-    def test_new_supporting_file_rollback_removes_file_when_scan_blocks(self, monkeypatch):
+    def test_new_supporting_file_rollback_removes_file_when_scan_blocks(
+        self, monkeypatch
+    ):
         """Blocked supporting-file creates remove the newly written file."""
         _create_skill("rollback-skill", SKILL_CONTENT)
         reference = self.skills_dir / "rollback-skill" / "references/example.md"

@@ -16,8 +16,6 @@ import run_agent
 from agent.stream_single_writer import claim_stream_writer, stream_writer_is_current
 
 
-
-
 class _RaisingFenceAgent:
     """An agent whose fence methods exist but blow up when called."""
 
@@ -33,16 +31,8 @@ def _real_agent():
     return object.__new__(run_agent.AIAgent)
 
 
-
-
-
-
-
-
 def test_claim_swallows_fence_exceptions():
     assert claim_stream_writer(_RaisingFenceAgent()) == 0
-
-
 
 
 def test_real_agent_fence_still_supersedes_and_preserves_sole_writer():

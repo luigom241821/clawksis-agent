@@ -67,7 +67,11 @@ def pairing(tmp_path, monkeypatch):
     monkeypatch.setattr(messaging.threading, "Timer", Timer)
 
     def start(**kwargs):
-        return asyncio.run(messaging.start_whatsapp_onboarding(web_models.WhatsAppOnboardingStart(**kwargs)))
+        return asyncio.run(
+            messaging.start_whatsapp_onboarding(
+                web_models.WhatsAppOnboardingStart(**kwargs)
+            )
+        )
 
     def gateway_can_acquire():
         from clawk_cli._subprocess_compat import windows_hide_flags
@@ -75,12 +79,27 @@ def pairing(tmp_path, monkeypatch):
         output = tmp_path / "lock-probe.txt"
         code = "from gateway.status import acquire_scoped_lock; import sys; print(acquire_scoped_lock('whatsapp-session', sys.argv[1])[0])"
         with output.open("w", encoding="utf-8") as stream:
-            subprocess.run([sys.executable, "-c", code, str(session)], stdout=stream, stderr=subprocess.STDOUT,
-                           timeout=20, check=True, creationflags=windows_hide_flags())
+            subprocess.run(
+                [sys.executable, "-c", code, str(session)],
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                timeout=20,
+                check=True,
+                creationflags=windows_hide_flags(),
+            )
         return output.read_text(encoding="utf-8").strip() == "True"
 
-    yield SimpleNamespace(home=home, session=session, creds=creds, starts=starts, workers=workers, timers=timers,
-                          start=start, gateway_can_acquire=gateway_can_acquire, real_thread=real_thread)
+    yield SimpleNamespace(
+        home=home,
+        session=session,
+        creds=creds,
+        starts=starts,
+        workers=workers,
+        timers=timers,
+        start=start,
+        gateway_can_acquire=gateway_can_acquire,
+        real_thread=real_thread,
+    )
     from gateway.status_scoped_locks import release_scoped_lock
 
     for record in messaging._whatsapp_onboarding_sessions.values():
@@ -119,7 +138,10 @@ def test_unattended_setup_expires_and_releases_reservation(pairing):
     result = pairing.start(reset_session=True)
     assert pairing.gateway_can_acquire() is False
     pairing.timers[0].fire()
-    assert messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status == "expired"
+    assert (
+        messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status
+        == "expired"
+    )
     assert pairing.gateway_can_acquire() is True
 
 
@@ -132,7 +154,9 @@ def test_failed_process_start_releases_reservation(pairing, monkeypatch):
 
     monkeypatch.setattr(messaging, "_spawn_whatsapp_pairing_process", fail_spawn)
     messaging._run_whatsapp_pairing(*pairing.starts[0])
-    assert messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status == "error"
+    assert (
+        messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status == "error"
+    )
     assert pairing.gateway_can_acquire() is True
 
 
@@ -141,14 +165,18 @@ def test_recycled_pid_does_not_block_repair(pairing):
 
     started = get_process_start_time(os.getpid())
     assert started is not None
-    (pairing.session / "bridge.pid").write_text(f"{os.getpid()}\n{started - 1}\n19877", encoding="utf-8")
+    (pairing.session / "bridge.pid").write_text(
+        f"{os.getpid()}\n{started - 1}\n19877", encoding="utf-8"
+    )
     assert pairing.start(reset_session=True)["status"] == "starting"
 
 
 def test_matching_pid_fingerprint_refuses_repair(pairing):
     from gateway.status import get_process_start_time
 
-    (pairing.session / "bridge.pid").write_text(f"{os.getpid()}\n{get_process_start_time(os.getpid())}", encoding="utf-8")
+    (pairing.session / "bridge.pid").write_text(
+        f"{os.getpid()}\n{get_process_start_time(os.getpid())}", encoding="utf-8"
+    )
     with pytest.raises(HTTPException) as refused:
         pairing.start(reset_session=True)
     assert refused.value.status_code == 409
@@ -187,7 +215,9 @@ def test_reservation_covers_connected_event_and_credential_flush(pairing, monkey
         assert pairing.gateway_can_acquire() is False
 
     proc = _Bridge(events())
-    monkeypatch.setattr(messaging, "_spawn_whatsapp_pairing_process", lambda *args: proc)
+    monkeypatch.setattr(
+        messaging, "_spawn_whatsapp_pairing_process", lambda *args: proc
+    )
     messaging._run_whatsapp_pairing(*pairing.starts[0])
     assert record.status == "connected"
     assert record.session_reserved is False
@@ -207,13 +237,20 @@ def test_expiry_stops_active_writer_and_releases_reservation(pairing, monkeypatc
         yield '{"event":"connected"}'  # Late events cannot undo expiry.
 
     proc.stdout = events()
-    monkeypatch.setattr(messaging, "_spawn_whatsapp_pairing_process", lambda *args: proc)
+    monkeypatch.setattr(
+        messaging, "_spawn_whatsapp_pairing_process", lambda *args: proc
+    )
     messaging._run_whatsapp_pairing(*pairing.starts[0])
-    assert messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status == "expired"
+    assert (
+        messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status
+        == "expired"
+    )
     assert pairing.gateway_can_acquire() is True
 
 
-def test_expiry_during_spawn_keeps_reservation_until_late_process_stops(pairing, monkeypatch):
+def test_expiry_during_spawn_keeps_reservation_until_late_process_stops(
+    pairing, monkeypatch
+):
     result = pairing.start(reset_session=True)
     proc = _Bridge()
 
@@ -225,7 +262,10 @@ def test_expiry_during_spawn_keeps_reservation_until_late_process_stops(pairing,
     monkeypatch.setattr(messaging, "_spawn_whatsapp_pairing_process", spawn)
     messaging._run_whatsapp_pairing(*pairing.starts[0])
     assert proc.poll() is not None
-    assert messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status == "expired"
+    assert (
+        messaging._whatsapp_onboarding_sessions[result["pairing_id"]].status
+        == "expired"
+    )
     assert pairing.gateway_can_acquire() is True
 
 
@@ -250,7 +290,9 @@ def test_apply_waits_for_flush_before_restarting_gateway(pairing, monkeypatch):
     record.proc = cast(Popen, proc)
     monkeypatch.setattr(messaging.threading, "Thread", pairing.real_thread)
     monkeypatch.setattr(config, "save_env_value", lambda *args: None)
-    monkeypatch.setattr(web_server_messaging, "_write_platform_enabled", lambda *args: None)
+    monkeypatch.setattr(
+        web_server_messaging, "_write_platform_enabled", lambda *args: None
+    )
 
     def wait(timeout=None):
         assert pairing.gateway_can_acquire() is False
@@ -263,8 +305,14 @@ def test_apply_waits_for_flush_before_restarting_gateway(pairing, monkeypatch):
         return {"restart_started": True}
 
     monkeypatch.setattr(proc, "wait", wait)
-    monkeypatch.setattr(web_server_messaging, "_restart_gateway_after_whatsapp_onboarding", restart)
-    assert asyncio.run(messaging.apply_whatsapp_onboarding(result["pairing_id"], web_models.WhatsAppOnboardingApply()))["ok"]
+    monkeypatch.setattr(
+        web_server_messaging, "_restart_gateway_after_whatsapp_onboarding", restart
+    )
+    assert asyncio.run(
+        messaging.apply_whatsapp_onboarding(
+            result["pairing_id"], web_models.WhatsAppOnboardingApply()
+        )
+    )["ok"]
 
 
 def test_unverifiable_live_pid_stays_blocked(pairing, monkeypatch):
@@ -297,8 +345,12 @@ def test_repair_refuses_live_bridge_without_moving_credentials(pairing):
 
 def test_repair_refuses_pending_pairing(pairing):
     record = web_server_messaging._WhatsAppOnboardingSession(
-        proc=None, mode="bot", allowed_users="", session_path=str(pairing.session),
-        expires_at="2099-01-01T00:00:00Z", expires_at_ts=time.time() + 600,
+        proc=None,
+        mode="bot",
+        allowed_users="",
+        session_path=str(pairing.session),
+        expires_at="2099-01-01T00:00:00Z",
+        expires_at_ts=time.time() + 600,
         status="installing",
     )
     messaging._whatsapp_onboarding_sessions["pending"] = record
@@ -359,9 +411,19 @@ def test_apply_retains_flushing_bridge_for_reset_guard(pairing, monkeypatch):
     record = messaging._whatsapp_onboarding_sessions[result["pairing_id"]]
     record.proc = cast(Popen, SimpleNamespace(poll=lambda: None))
     monkeypatch.setattr(config, "save_env_value", lambda *args: None)
-    monkeypatch.setattr(web_server_messaging, "_write_platform_enabled", lambda *args: None)
-    monkeypatch.setattr(web_server_messaging, "_restart_gateway_after_whatsapp_onboarding", lambda profile=None: {"restart_started": True})
-    asyncio.run(messaging.apply_whatsapp_onboarding(result["pairing_id"], web_models.WhatsAppOnboardingApply()))
+    monkeypatch.setattr(
+        web_server_messaging, "_write_platform_enabled", lambda *args: None
+    )
+    monkeypatch.setattr(
+        web_server_messaging,
+        "_restart_gateway_after_whatsapp_onboarding",
+        lambda profile=None: {"restart_started": True},
+    )
+    asyncio.run(
+        messaging.apply_whatsapp_onboarding(
+            result["pairing_id"], web_models.WhatsAppOnboardingApply()
+        )
+    )
     assert messaging._whatsapp_onboarding_sessions[result["pairing_id"]] is record
     with pytest.raises(HTTPException) as refused:
         pairing.start(reset_session=True)
@@ -396,7 +458,9 @@ def test_repair_selected_profile_leaves_default_session_untouched(pairing, monke
     session = other / "platforms" / "whatsapp" / "session"
     session.mkdir(parents=True)
     (session / "creds.json").write_text('{"registered":true}', encoding="utf-8")
-    monkeypatch.setattr(web_server_profiles, "_resolve_profile_dir", lambda profile: other)
+    monkeypatch.setattr(
+        web_server_profiles, "_resolve_profile_dir", lambda profile: other
+    )
 
     result = pairing.start(profile="work", reset_session=True)
     assert result["status"] == "starting"
@@ -428,13 +492,20 @@ def test_query_profile_is_honored_for_repair(pairing, monkeypatch):
     session = other / "platforms" / "whatsapp" / "session"
     session.mkdir(parents=True)
     (session / "creds.json").write_text('{"registered":true}', encoding="utf-8")
-    monkeypatch.setattr(web_server_profiles, "_resolve_profile_dir", lambda profile: other)
+    monkeypatch.setattr(
+        web_server_profiles, "_resolve_profile_dir", lambda profile: other
+    )
     app = FastAPI()
     app.include_router(messaging.router)
 
     async def request():
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            return await client.post("/api/messaging/whatsapp/onboarding/start?profile=work", json={"reset_session": True})
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            return await client.post(
+                "/api/messaging/whatsapp/onboarding/start?profile=work",
+                json={"reset_session": True},
+            )
 
     response = asyncio.run(request())
     assert response.status_code == 200

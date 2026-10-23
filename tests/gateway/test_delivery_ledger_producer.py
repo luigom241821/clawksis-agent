@@ -151,16 +151,18 @@ class TestProducerHook:
             Platform.SLACK, profile="reviewer"
         )
 
-
     @pytest.mark.asyncio
     async def test_slow_ledger_record_does_not_block_event_loop(self):
         adapter = _Adapter()
         slow_record, event_loop_witness, blocked_event_loop = _blocking_probe()
 
-        with patch(
-            "gateway.delivery_ledger.record_obligation",
-            side_effect=slow_record,
-        ), patch("gateway.delivery_ledger.mark_attempting"):
+        with (
+            patch(
+                "gateway.delivery_ledger.record_obligation",
+                side_effect=slow_record,
+            ),
+            patch("gateway.delivery_ledger.mark_attempting"),
+        ):
             await asyncio.gather(_run(adapter, _event()), event_loop_witness())
 
         assert blocked_event_loop == []
@@ -171,11 +173,13 @@ class TestProducerHook:
         adapter = _Adapter()
         slow_delivered, event_loop_witness, blocked_event_loop = _blocking_probe()
 
-        with patch("gateway.delivery_ledger.record_obligation"), patch(
-            "gateway.delivery_ledger.mark_attempting"
-        ), patch(
-            "gateway.delivery_ledger.mark_delivered",
-            side_effect=slow_delivered,
+        with (
+            patch("gateway.delivery_ledger.record_obligation"),
+            patch("gateway.delivery_ledger.mark_attempting"),
+            patch(
+                "gateway.delivery_ledger.mark_delivered",
+                side_effect=slow_delivered,
+            ),
         ):
             await asyncio.gather(_run(adapter, _event()), event_loop_witness())
 

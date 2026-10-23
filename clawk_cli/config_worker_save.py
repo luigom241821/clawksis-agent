@@ -13,12 +13,19 @@ import copy
 from typing import Any
 
 
-def rebase_for_save(config: dict[str, Any], live_raw: dict[str, Any], merge_existing: bool) -> dict[str, Any]:
+def rebase_for_save(
+    config: dict[str, Any], live_raw: dict[str, Any], merge_existing: bool
+) -> dict[str, Any]:
     from clawk_cli import config as _config
 
     snapshot = _config._worker_config_snapshot()
     if snapshot is not None:
-        return _three_way(live_raw or {}, config, _config.load_config(), _frozen_for_deletion(snapshot))
+        return _three_way(
+            live_raw or {},
+            config,
+            _config.load_config(),
+            _frozen_for_deletion(snapshot),
+        )
     if merge_existing and live_raw:
         return _config._merge_partial_save(live_raw, config)
     return config
@@ -87,16 +94,28 @@ def _three_way(live: Any, desired: Any, base: Any, frozen: Any = _SAME_AS_BASE) 
             if key not in base:
                 merged[key] = copy.deepcopy(value)
             elif value != base[key]:
-                kind = dict if isinstance(base[key], dict) else list if isinstance(base[key], list) else None
+                kind = (
+                    dict
+                    if isinstance(base[key], dict)
+                    else list
+                    if isinstance(base[key], list)
+                    else None
+                )
                 current = live.get(key)
                 if kind is not None and not isinstance(current, kind):
                     if key in live or key in frozen_map:
                         continue  # concurrently deleted/replaced live branch: live wins
                     current = copy.deepcopy(base[key])  # default-only branch
-                merged[key] = _three_way(current, value, base[key], frozen_map.get(key, {}))
+                merged[key] = _three_way(
+                    current, value, base[key], frozen_map.get(key, {})
+                )
         return merged
     if isinstance(desired, list) and isinstance(base, list) and isinstance(live, list):
         removed = [item for item in base if item not in desired]
         kept = [item for item in live if item not in removed]
-        return kept + [copy.deepcopy(item) for item in desired if item not in base and item not in kept]
+        return kept + [
+            copy.deepcopy(item)
+            for item in desired
+            if item not in base and item not in kept
+        ]
     return copy.deepcopy(desired)

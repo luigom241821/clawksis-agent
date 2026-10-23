@@ -22,6 +22,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_swr_state():
     import clawk_cli.models as models_mod
+
     with models_mod._swr_refresh_lock:
         models_mod._swr_refresh_inflight.clear()
     yield
@@ -37,10 +38,12 @@ class TestProviderModelsSWR:
         import clawk_cli.models as mod
 
         cache = {"openrouter": self._cache_entry(["m1"], age_seconds=10)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "provider_model_ids") as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "provider_model_ids") as live,
+        ):
             out = mod.cached_provider_model_ids("openrouter")
         assert out == ["m1"]
         spawn.assert_not_called()
@@ -51,10 +54,12 @@ class TestProviderModelsSWR:
 
         # 2h old — beyond the 1h TTL, within the 7d stale-serve window.
         cache = {"openrouter": self._cache_entry(["m1", "m2"], age_seconds=7200)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "provider_model_ids") as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "provider_model_ids") as live,
+        ):
             out = mod.cached_provider_model_ids("openrouter")
         assert out == ["m1", "m2"]  # served stale, no blocking
         spawn.assert_called_once_with("openrouter")
@@ -65,11 +70,13 @@ class TestProviderModelsSWR:
 
         age = mod._PROVIDER_MODELS_STALE_SERVE_MAX + 60
         cache = {"openrouter": self._cache_entry(["ancient"], age_seconds=age)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "provider_model_ids", return_value=["fresh"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "provider_model_ids", return_value=["fresh"]) as live,
+        ):
             out = mod.cached_provider_model_ids("openrouter")
         assert out == ["fresh"]
         spawn.assert_not_called()
@@ -81,17 +88,21 @@ class TestProviderModelsSWR:
         # Stale entry with a DIFFERENT fingerprint (key rotated) must NOT be
         # served — it reflects the old credentials' catalog.
         cache = {"openrouter": self._cache_entry(["old-key-models"], 7200, fp="old")}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="new"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "provider_model_ids", return_value=["new-key-models"]):
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="new"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "provider_model_ids", return_value=["new-key-models"]),
+        ):
             out = mod.cached_provider_model_ids("openrouter")
         assert out == ["new-key-models"]
         spawn.assert_not_called()
 
     def test_codex_token_rotation_keeps_account_gated_models_for_same_principal(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         import clawk_cli.models as mod
 
@@ -113,17 +124,24 @@ class TestProviderModelsSWR:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         def write_auth(token, request_count, mtime_ns):
-            auth_path.write_text(json.dumps({
-                "version": 1,
-                "credential_pool": {
-                    "openai-codex": [{
-                        "id": "primary",
-                        "access_token": token,
-                        "refresh_token": "refresh",
-                        "request_count": request_count,
-                    }],
-                },
-            }), encoding="utf-8")
+            auth_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "credential_pool": {
+                            "openai-codex": [
+                                {
+                                    "id": "primary",
+                                    "access_token": token,
+                                    "refresh_token": "refresh",
+                                    "request_count": request_count,
+                                }
+                            ],
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
             os.utime(auth_path, ns=(mtime_ns, mtime_ns))
 
         def seed(models):
@@ -138,39 +156,56 @@ class TestProviderModelsSWR:
         # account-scoped catalog is still authoritative for the same principal.
         write_auth(jwt("account-a", "user-a", "rotated"), 12, 2_000_000_000)
         with patch.object(mod, "_spawn_swr_refresh") as spawn:
-            assert mod.cached_provider_model_ids("openai-codex", non_blocking=True) == astra_models
+            assert (
+                mod.cached_provider_model_ids("openai-codex", non_blocking=True)
+                == astra_models
+            )
         spawn.assert_not_called()
 
         # Either principal component changing means a different entitlement boundary.
         write_auth(jwt("account-a", "user-b", "new-member"), 0, 3_000_000_000)
         with patch.object(mod, "_spawn_swr_refresh") as spawn:
-            assert mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            assert (
+                mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            )
         spawn.assert_called_once_with("openai-codex")
 
         seed(astra_models)
         write_auth(jwt("account-b", "user-b", "new-account"), 0, 4_000_000_000)
         with patch.object(mod, "_spawn_swr_refresh") as spawn:
-            assert mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            assert (
+                mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            )
         spawn.assert_called_once_with("openai-codex")
 
         # An expired token only ever yields the static fallback (no Astra); the refresh to a live
         # token for the same principal must bust that row instead of serving it for the whole TTL.
-        write_auth(jwt("account-b", "user-b", "stale", exp=time.time() - 60), 0, 5_000_000_000)
+        write_auth(
+            jwt("account-b", "user-b", "stale", exp=time.time() - 60), 0, 5_000_000_000
+        )
         seed(["gpt-5.6-sol"])
-        write_auth(jwt("account-b", "user-b", "fresh", exp=time.time() + 3600), 0, 6_000_000_000)
+        write_auth(
+            jwt("account-b", "user-b", "fresh", exp=time.time() + 3600),
+            0,
+            6_000_000_000,
+        )
         with patch.object(mod, "_spawn_swr_refresh") as spawn:
-            assert mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            assert (
+                mod.cached_provider_model_ids("openai-codex", non_blocking=True) == []
+            )
         spawn.assert_called_once_with("openai-codex")
 
     def test_force_refresh_bypasses_swr(self):
         import clawk_cli.models as mod
 
         cache = {"openrouter": self._cache_entry(["m1"], age_seconds=7200)}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "_spawn_swr_refresh") as spawn, \
-             patch.object(mod, "provider_model_ids", return_value=["live"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(mod, "_spawn_swr_refresh") as spawn,
+            patch.object(mod, "provider_model_ids", return_value=["live"]) as live,
+        ):
             out = mod.cached_provider_model_ids("openrouter", force_refresh=True)
         assert out == ["live"]
         spawn.assert_not_called()
@@ -212,11 +247,13 @@ class TestProviderModelsSWR:
             def start(self):
                 captured["target"]()  # run synchronously
 
-        with patch.object(mod.threading, "Thread", InlineThread), \
-             patch.object(mod, "provider_model_ids", return_value=["fresh1", "fresh2"]), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_load_provider_models_cache", return_value={}), \
-             patch.object(mod, "_save_provider_models_cache", side_effect=fake_save):
+        with (
+            patch.object(mod.threading, "Thread", InlineThread),
+            patch.object(mod, "provider_model_ids", return_value=["fresh1", "fresh2"]),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_load_provider_models_cache", return_value={}),
+            patch.object(mod, "_save_provider_models_cache", side_effect=fake_save),
+        ):
             mod._spawn_swr_refresh("openrouter")
 
         assert saved["openrouter"]["models"] == ["fresh1", "fresh2"]
@@ -224,18 +261,34 @@ class TestProviderModelsSWR:
 
 
 class TestCatalogSWR:
-    def test_stale_disk_catalog_served_with_background_refresh(self, tmp_path, monkeypatch):
+    def test_stale_disk_catalog_served_with_background_refresh(
+        self, tmp_path, monkeypatch
+    ):
         import clawk_cli.model_catalog as mc
 
-        manifest = {"version": 1, "providers": {"nous": {"models": [{"id": "hermes-4"}]}}}
+        manifest = {
+            "version": 1,
+            "providers": {"nous": {"models": [{"id": "hermes-4"}]}},
+        }
         monkeypatch.setattr(mc, "_catalog_cache", None)
         monkeypatch.setattr(mc, "_catalog_cache_source_mtime", 0.0)
-        with patch.object(mc, "_load_catalog_config", return_value={
-                 "enabled": True, "ttl_hours": 1.0, "url": "https://example/cat.json",
-                 "providers": {}}), \
-             patch.object(mc, "_read_disk_cache", return_value=(manifest, time.time() - 7200)), \
-             patch.object(mc, "_spawn_catalog_swr_refresh") as spawn, \
-             patch.object(mc, "_fetch_manifest_with_fallback") as fetch:
+        with (
+            patch.object(
+                mc,
+                "_load_catalog_config",
+                return_value={
+                    "enabled": True,
+                    "ttl_hours": 1.0,
+                    "url": "https://example/cat.json",
+                    "providers": {},
+                },
+            ),
+            patch.object(
+                mc, "_read_disk_cache", return_value=(manifest, time.time() - 7200)
+            ),
+            patch.object(mc, "_spawn_catalog_swr_refresh") as spawn,
+            patch.object(mc, "_fetch_manifest_with_fallback") as fetch,
+        ):
             out = mc.get_catalog()
         assert out == manifest  # stale copy served without blocking
         spawn.assert_called_once()
@@ -247,13 +300,24 @@ class TestCatalogSWR:
         manifest = {"version": 1, "providers": {}}
         monkeypatch.setattr(mc, "_catalog_cache", None)
         monkeypatch.setattr(mc, "_catalog_cache_source_mtime", 0.0)
-        with patch.object(mc, "_load_catalog_config", return_value={
-                 "enabled": True, "ttl_hours": 1.0, "url": "https://example/cat.json",
-                 "providers": {}}), \
-             patch.object(mc, "_read_disk_cache", return_value=(None, 0.0)), \
-             patch.object(mc, "_spawn_catalog_swr_refresh") as spawn, \
-             patch.object(mc, "_write_disk_cache"), \
-             patch.object(mc, "_fetch_manifest_with_fallback", return_value=manifest) as fetch:
+        with (
+            patch.object(
+                mc,
+                "_load_catalog_config",
+                return_value={
+                    "enabled": True,
+                    "ttl_hours": 1.0,
+                    "url": "https://example/cat.json",
+                    "providers": {},
+                },
+            ),
+            patch.object(mc, "_read_disk_cache", return_value=(None, 0.0)),
+            patch.object(mc, "_spawn_catalog_swr_refresh") as spawn,
+            patch.object(mc, "_write_disk_cache"),
+            patch.object(
+                mc, "_fetch_manifest_with_fallback", return_value=manifest
+            ) as fetch,
+        ):
             out = mc.get_catalog()
         assert out == manifest
         fetch.assert_called_once()
@@ -270,10 +334,14 @@ class TestCorruptCacheRowDegradation:
         import clawk_cli.models as mod
 
         cache = {"openrouter": {"fp": "fp", "at": bad_at, "models": ["corrupt-row"]}}
-        with patch.object(mod, "_load_provider_models_cache", return_value=cache), \
-             patch.object(mod, "_credential_fingerprint", return_value="fp"), \
-             patch.object(mod, "_save_provider_models_cache"), \
-             patch.object(mod, "provider_model_ids", return_value=["live-model"]) as live:
+        with (
+            patch.object(mod, "_load_provider_models_cache", return_value=cache),
+            patch.object(mod, "_credential_fingerprint", return_value="fp"),
+            patch.object(mod, "_save_provider_models_cache"),
+            patch.object(
+                mod, "provider_model_ids", return_value=["live-model"]
+            ) as live,
+        ):
             out = mod.cached_provider_model_ids("openrouter")
         assert out == ["live-model"]
         live.assert_called_once()

@@ -7,12 +7,15 @@ import contextlib
 import logging
 from typing import Any
 
-logger = logging.getLogger("run_agent")  # origin module's logger name: log records / caplog filters unchanged
+logger = logging.getLogger(
+    "run_agent"
+)  # origin module's logger name: log records / caplog filters unchanged
 
 
 def _socket_is_dead(sock) -> bool:
     """Probe socket health with a non-blocking recv peek."""
     import socket as _socket
+
     try:
         sock.setblocking(False)
         return sock.recv(1, _socket.MSG_PEEK | _socket.MSG_DONTWAIT) == b""
@@ -28,6 +31,7 @@ def _socket_is_dead(sock) -> bool:
 def _count_dead_pool_sockets(client: Any) -> int:
     """Return the number of sockets in ``client``'s pool that have reached EOF (CLOSE-WAIT)."""
     from agent.agent_runtime_helpers import _iter_pool_sockets
+
     return sum(1 for sock in _iter_pool_sockets(client) if _socket_is_dead(sock))
 
 
@@ -66,7 +70,9 @@ def cleanup_dead_connections(agent) -> bool:
         except Exception:
             # Best-effort probe over private httpcore internals: one client's failure must not
             # skip the other's check or abort the turn.
-            logger.debug("Dead connection check error for %s client", label, exc_info=True)
+            logger.debug(
+                "Dead connection check error for %s client", label, exc_info=True
+            )
 
     if not dead_clients:
         return False
@@ -86,8 +92,12 @@ def cleanup_dead_connections(agent) -> bool:
             else:
                 # This hook clears the cache and chooses close() vs socket
                 # shutdown based on whether another worker owns the client.
-                agent._close_cached_request_openai_client(reason="dead_connection_cleanup")
+                agent._close_cached_request_openai_client(
+                    reason="dead_connection_cleanup"
+                )
         except Exception:
             # Cleaning one pool must not stop the other pool's cleanup.
-            logger.debug("Dead connection cleanup error for %s client", label, exc_info=True)
+            logger.debug(
+                "Dead connection cleanup error for %s client", label, exc_info=True
+            )
     return True

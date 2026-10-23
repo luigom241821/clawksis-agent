@@ -31,6 +31,7 @@ from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 # Defect A: stale preview recorded as delivered final
 # ---------------------------------------------------------------------------
 
+
 class _EditAdapter:
     """Adapter stub: every send/edit succeeds and remembers the last payload."""
 
@@ -101,6 +102,7 @@ async def test_finalize_edit_success_still_reconciles_true():
 # Defect B: idle-ended relay session terminally drops completions
 # ---------------------------------------------------------------------------
 
+
 class _SessionDB:
     def __init__(self, row):
         self._row = row
@@ -123,9 +125,7 @@ def _classify_runner(row):
 async def test_idle_ended_parent_classifies_deliver(end_reason):
     """Relay-plane norm: session ended on idle, chat still routable ->
     the completion must be deliverable, not terminally dropped."""
-    runner = _classify_runner(
-        {"ended_at": 1786288000.0, "end_reason": end_reason}
-    )
+    runner = _classify_runner({"ended_at": 1786288000.0, "end_reason": end_reason})
     verdict = await runner._classify_completion_target("sess-idle")
     assert verdict == "deliver", (
         f"end_reason={end_reason!r} must classify 'deliver' "
@@ -139,9 +139,7 @@ async def test_idle_ended_parent_classifies_deliver(end_reason):
 async def test_user_boundary_still_terminal(end_reason):
     """Explicit user boundaries remain terminal — /new means the user
     closed the thread of work on purpose."""
-    runner = _classify_runner(
-        {"ended_at": 1786288000.0, "end_reason": end_reason}
-    )
+    runner = _classify_runner({"ended_at": 1786288000.0, "end_reason": end_reason})
     verdict = await runner._classify_completion_target("sess-reset")
     assert verdict == "terminal"
 

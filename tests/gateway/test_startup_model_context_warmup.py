@@ -15,9 +15,15 @@ import gateway.run as gateway_run
 def _quiet_tool_side(monkeypatch, tool_count):
     import model_tools
 
-    monkeypatch.setattr(model_tools, "get_tool_definitions", lambda quiet_mode=False, **_kw: ["t"] * tool_count)
     monkeypatch.setattr(
-        "clawk_cli.config.load_config_readonly", lambda: {"agent": {"environment_probe": False}})
+        model_tools,
+        "get_tool_definitions",
+        lambda quiet_mode=False, **_kw: ["t"] * tool_count,
+    )
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config_readonly",
+        lambda: {"agent": {"environment_probe": False}},
+    )
 
 
 def test_model_context_warmup_primes_default_route(monkeypatch):
@@ -27,7 +33,12 @@ def test_model_context_warmup_primes_default_route(monkeypatch):
     def fake_resolve(model=None, route=None):
         resolved.append((model, route))
         return gateway_run._GatewayModelContext(
-            model="m", provider="p", base_url="", context_length=128000, context_source="detected")
+            model="m",
+            provider="p",
+            base_url="",
+            context_length=128000,
+            context_source="detected",
+        )
 
     monkeypatch.setattr(gateway_run, "_resolve_gateway_model_context", fake_resolve)
     _quiet_tool_side(monkeypatch, 3)

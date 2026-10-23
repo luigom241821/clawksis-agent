@@ -69,12 +69,16 @@ def _owed_path() -> Path:
     """The record a reader honours: this install's, else an older release's unkeyed one."""
     path = host_obligation_path()
     legacy = path.with_name(HOST_OBLIGATION_NAME)
-    return legacy if not os.path.exists(path) and os.path.exists(legacy) else path  # never raises
+    return (
+        legacy if not os.path.exists(path) and os.path.exists(legacy) else path
+    )  # never raises
 
 
 def _write_record(path: Path, record: dict) -> None:
     """``utils.atomic_json_write(path, record, mode=0o600)`` in stdlib only (see above)."""
-    replace_bytes(path, json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8"))
+    replace_bytes(
+        path, json.dumps(record, indent=2, ensure_ascii=False).encode("utf-8")
+    )
 
 
 def read_host_obligation() -> Optional[dict]:
@@ -110,7 +114,11 @@ def amend_host_obligation(**fields: Any) -> None:
 
 
 def write_host_obligation(
-    *, expected_sha: str = "", runtimes: Optional[list] = None, profile: str = "", owner: str = ""
+    *,
+    expected_sha: str = "",
+    runtimes: Optional[list] = None,
+    profile: str = "",
+    owner: str = "",
 ) -> bool:
     """Arm the host obligation. True when it was written. Never raises.
 
@@ -125,14 +133,25 @@ def write_host_obligation(
     path = host_obligation_path()
     try:
         with _record_mutex(path):
-            return _write_locked(path, expected_sha=expected_sha, runtimes=runtimes, profile=profile, owner=owner)
+            return _write_locked(
+                path,
+                expected_sha=expected_sha,
+                runtimes=runtimes,
+                profile=profile,
+                owner=owner,
+            )
     except OSError as exc:  # the mutex busy or unopenable: the caller falls back to the per-home marker
         logger.debug("Could not lock the host update-restart obligation: %s", exc)
         return False
 
 
 def arm_host_obligation(
-    marker: Path, *, expected_sha: str = "", runtimes: Optional[list] = None, profile: str = "", owner: str = ""
+    marker: Path,
+    *,
+    expected_sha: str = "",
+    runtimes: Optional[list] = None,
+    profile: str = "",
+    owner: str = "",
 ) -> bool:
     """Arm the host record, else ``marker`` (the arming profile's per-home breadcrumb). Never raises.
 
@@ -144,9 +163,13 @@ def arm_host_obligation(
     Otherwise the marker is still left for this profile, the gap is said out loud, and the result
     is False: the commit point refuses to move; a takeover, whose tree already moved, keeps the warning.
     """
-    if write_host_obligation(expected_sha=expected_sha, runtimes=runtimes, profile=profile, owner=owner):
+    if write_host_obligation(
+        expected_sha=expected_sha, runtimes=runtimes, profile=profile, owner=owner
+    ):
         return True
-    lines = [f"started={time.time()}", f"pid={os.getpid()}"] + ([f"expected_sha={expected_sha}"] if expected_sha else [])
+    lines = [f"started={time.time()}", f"pid={os.getpid()}"] + (
+        [f"expected_sha={expected_sha}"] if expected_sha else []
+    )
     if runtimes is not None:
         lines.append("inventory=" + json.dumps({"version": 1, "runtimes": runtimes}))
     hidden = ""
@@ -161,15 +184,24 @@ def arm_host_obligation(
         except OSError as exc:
             hidden = f" ({marker} may hide it from other profiles: the profile list is unreadable: {exc})"
     if not hidden:
-        logger.warning("Host update-restart obligation (%s) is unwritable; armed the per-home marker %s instead.",
-                       host_obligation_path(), marker)
+        logger.warning(
+            "Host update-restart obligation (%s) is unwritable; armed the per-home marker %s instead.",
+            host_obligation_path(),
+            marker,
+        )
         return True
-    logger.error("Could not arm the update-restart obligation in %s%s; an interrupted update will not warn.",
-                 host_obligation_path(), hidden)
+    logger.error(
+        "Could not arm the update-restart obligation in %s%s; an interrupted update will not warn.",
+        host_obligation_path(),
+        hidden,
+    )
     # ASCII: a historical updater's takeover may print through a legacy console code page.
-    print("  Warning: could not record the pending gateway-restart obligation where every profile sees it "
-          "(state dir not writable) - restart gateways with `clawk gateway restart` if this update is "
-          "interrupted.", file=sys.stderr)
+    print(
+        "  Warning: could not record the pending gateway-restart obligation where every profile sees it "
+        "(state dir not writable) - restart gateways with `clawk gateway restart` if this update is "
+        "interrupted.",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -180,17 +212,28 @@ def _named_profiles_exist() -> bool:
     "default only"; here any error listing the roster or reading an entry's identity raises instead.
     Same identity rule as ``clawk_constants.named_profile_is_live`` (stdlib only: see above).
     """
-    from clawk_constants import _PROFILE_IDENTITY_MARKERS, PROFILE_ID_RE, get_default_clawk_root, profile_tombstone_path
+    from clawk_constants import (
+        _PROFILE_IDENTITY_MARKERS,
+        PROFILE_ID_RE,
+        get_default_clawk_root,
+        profile_tombstone_path,
+    )
 
     try:
         entries = list((get_default_clawk_root() / "profiles").iterdir())
     except (FileNotFoundError, NotADirectoryError):
         return False
     for home in entries:
-        if home.name == "default" or not PROFILE_ID_RE.match(home.name) or not stat.S_ISDIR(_mode(home, os.stat)):
+        if (
+            home.name == "default"
+            or not PROFILE_ID_RE.match(home.name)
+            or not stat.S_ISDIR(_mode(home, os.stat))
+        ):
             continue
-        identity = any((mode := _mode(home / name, os.lstat)) and not stat.S_ISDIR(mode)
-                       for name in _PROFILE_IDENTITY_MARKERS)
+        identity = any(
+            (mode := _mode(home / name, os.lstat)) and not stat.S_ISDIR(mode)
+            for name in _PROFILE_IDENTITY_MARKERS
+        )
         if identity and not _mode(profile_tombstone_path(home), os.lstat):
             return True
     return False
@@ -204,14 +247,22 @@ def _mode(path: Path, probe: Callable[[Path], os.stat_result]) -> int:
         return 0
 
 
-def _write_locked(path: Path, *, expected_sha: str, runtimes: Optional[list], profile: str, owner: str) -> bool:
+def _write_locked(
+    path: Path, *, expected_sha: str, runtimes: Optional[list], profile: str, owner: str
+) -> bool:
     existing = _read_record(path)
     try:
         found = _baseline_for(owner, existing, path) if owner else None
-    except OSError as exc:  # unreadable is not absent: a guessed ``found`` would delete it later
+    except (
+        OSError
+    ) as exc:  # unreadable is not absent: a guessed ``found`` would delete it later
         logger.debug("Could not read the host update-restart obligation: %s", exc)
         return False
-    if existing is not None and expected_sha and existing.get("expected_sha") == expected_sha:
+    if (
+        existing is not None
+        and expected_sha
+        and existing.get("expected_sha") == expected_sha
+    ):
         # Same pull, second profile: the host owes ONE restart, so keep the standing record (and
         # any proof that the restart already happened) rather than resetting it. A later arm that
         # carries the owed inventory still upgrades it — an inventory-less record owes no set.
@@ -283,7 +334,9 @@ def _marker_mutex():
     if pulled is None:
         spec = importlib.util.spec_from_file_location(name, update_lock.__file__)
         pulled = importlib.util.module_from_spec(spec)
-        sys.modules[name] = pulled  # before exec: dataclasses resolve the module by name
+        sys.modules[name] = (
+            pulled  # before exec: dataclasses resolve the module by name
+        )
         spec.loader.exec_module(pulled)
     return pulled.marker_mutex
 
@@ -308,7 +361,9 @@ def _baseline_for(owner: str, existing: Optional[dict], path: Path) -> Optional[
     others = [o for o in owners if o != owner]
     if not others:
         return (existing or {}).get("found")
-    shared = json.dumps({**(existing or {}), "owners": others}, indent=2, ensure_ascii=False)
+    shared = json.dumps(
+        {**(existing or {}), "owners": others}, indent=2, ensure_ascii=False
+    )
     return base64.b64encode(shared.encode("utf-8")).decode("ascii")
 
 
@@ -347,7 +402,11 @@ def _release_locked(path: Path, owner: str) -> None:
         _write_record(path, {**record, "owners": remaining})
         return
     try:
-        found = base64.b64decode(record["found"], validate=True) if record.get("found") is not None else None
+        found = (
+            base64.b64decode(record["found"], validate=True)
+            if record.get("found") is not None
+            else None
+        )
     except (TypeError, ValueError):
         return  # a damaged ``found`` cannot be put back: the debt stays armed, never guessed away
     if found is None:
@@ -370,7 +429,9 @@ def replace_bytes(path: Path, data: bytes) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
-    if os.name != "nt":  # Windows opens no directory handle; NTFS journals the rename itself
+    if (
+        os.name != "nt"
+    ):  # Windows opens no directory handle; NTFS journals the rename itself
         directory = os.open(path.parent, os.O_RDONLY)
         try:
             os.fsync(directory)
@@ -413,8 +474,11 @@ def obligation_fields() -> Optional[dict[str, str]]:
 def mark_host_restart_completed(sha: str) -> None:
     """Record that the host process was restarted onto ``sha``. Never raises."""
     _update_record(
-        lambda record: record.update(restarted={"sha": sha or "", "pid": os.getpid(), "at": time.time()}),
-        "stamp restart completion on")
+        lambda record: record.update(
+            restarted={"sha": sha or "", "pid": os.getpid(), "at": time.time()}
+        ),
+        "stamp restart completion on",
+    )
 
 
 def _update_record(change: Callable[[dict], None], what: str) -> None:

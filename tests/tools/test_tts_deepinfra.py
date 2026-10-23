@@ -17,6 +17,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _isolation(monkeypatch):
     import clawk_cli.models as _models_mod
+
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_cache", {})
     monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
     yield
@@ -25,11 +26,14 @@ def _isolation(monkeypatch):
 def test_raises_when_no_model_resolvable(monkeypatch, tmp_path):
     """No-fallback contract: empty config + unreachable catalog → ValueError."""
     import urllib.request
+
     monkeypatch.setattr(
-        urllib.request, "urlopen",
+        urllib.request,
+        "urlopen",
         lambda *a, **kw: (_ for _ in ()).throw(Exception("offline")),
     )
     from tools.tts_tool import _generate_deepinfra_tts
+
     with pytest.raises(ValueError, match="No DeepInfra TTS model available"):
         _generate_deepinfra_tts("hi", str(tmp_path / "out.mp3"), {})
 
@@ -51,7 +55,9 @@ def test_unselected_cloud_credentials_do_not_expose_edge_tool(monkeypatch):
     from tools import tts_tool
 
     monkeypatch.setattr(tts_tool, "_load_tts_config", dict)
-    monkeypatch.setattr(tts_tool, "_import_edge_tts", MagicMock(side_effect=ImportError))
+    monkeypatch.setattr(
+        tts_tool, "_import_edge_tts", MagicMock(side_effect=ImportError)
+    )
     monkeypatch.setenv("OPENAI_API_KEY", "unselected-key")
 
     assert tts_tool.check_tts_requirements() is False

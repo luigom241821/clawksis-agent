@@ -18,7 +18,9 @@ LEGACY_KEY = "sk-legacy-custom-b-ai-pool-key"
 ENDPOINT = "https://api.b.ai/v1"
 
 
-def _write_keyed_provider_home(tmp_path, monkeypatch, *, pool_id="b-ai", extra_config=None):
+def _write_keyed_provider_home(
+    tmp_path, monkeypatch, *, pool_id="b-ai", extra_config=None
+):
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(clawk_home))
@@ -47,7 +49,9 @@ def _write_keyed_provider_home(tmp_path, monkeypatch, *, pool_id="b-ai", extra_c
                             "auth_type": "api_key",
                             "priority": 0,
                             "source": "manual",
-                            "access_token": POOL_KEY if pool_id == "b-ai" else LEGACY_KEY,
+                            "access_token": POOL_KEY
+                            if pool_id == "b-ai"
+                            else LEGACY_KEY,
                         }
                     ]
                 },
@@ -160,9 +164,7 @@ def test_prune_keeps_active_legacy_pool_for_keyed_provider(tmp_path, monkeypatch
         "https://api.b.ai/v1", provider_name="B.AI"
     )
 
-    after = json.loads(
-        (tmp_path / ".clawk" / "auth.json").read_text(encoding="utf-8")
-    )
+    after = json.loads((tmp_path / ".clawk" / "auth.json").read_text(encoding="utf-8"))
     kept = (after.get("credential_pool") or {}).get("custom:b.ai")
     pruned = (after.get("credential_pool") or {}).get("custom:old-endpoint")
 
@@ -225,10 +227,20 @@ def test_explicit_launch_key_wins_over_named_provider_pool(tmp_path, monkeypatch
     from clawk_cli.runtime_provider_custom import _resolve_named_custom_runtime
 
     frozen = rp.load_config()
-    for resolved in (rp.resolve_runtime_provider(requested="b-ai", explicit_api_key="sk-launch-explicit"),
-                     _resolve_named_custom_runtime(requested_provider="b-ai", explicit_api_key="sk-launch-explicit",
-                                                   config=frozen)):
-        assert (resolved["base_url"], resolved["api_key"]) == (ENDPOINT, "sk-launch-explicit")
+    for resolved in (
+        rp.resolve_runtime_provider(
+            requested="b-ai", explicit_api_key="sk-launch-explicit"
+        ),
+        _resolve_named_custom_runtime(
+            requested_provider="b-ai",
+            explicit_api_key="sk-launch-explicit",
+            config=frozen,
+        ),
+    ):
+        assert (resolved["base_url"], resolved["api_key"]) == (
+            ENDPOINT,
+            "sk-launch-explicit",
+        )
 
 
 def test_named_provider_pool_requires_matching_endpoint(tmp_path, monkeypatch):
@@ -239,8 +251,13 @@ def test_named_provider_pool_requires_matching_endpoint(tmp_path, monkeypatch):
     from agent.credential_pool import custom_provider_pool_key_candidates
     from clawk_cli import runtime_provider as rp
 
-    assert custom_provider_pool_key_candidates("https://elsewhere.example/v1", "b-ai") == []
+    assert (
+        custom_provider_pool_key_candidates("https://elsewhere.example/v1", "b-ai")
+        == []
+    )
     assert custom_provider_pool_key_candidates(ENDPOINT + "/", "b-ai")[0] == "b-ai"
-    resolved = rp.resolve_runtime_provider(requested="b-ai", explicit_base_url="https://elsewhere.example/v1")
+    resolved = rp.resolve_runtime_provider(
+        requested="b-ai", explicit_base_url="https://elsewhere.example/v1"
+    )
     assert resolved["base_url"] == "https://elsewhere.example/v1"
     assert resolved["api_key"] != POOL_KEY

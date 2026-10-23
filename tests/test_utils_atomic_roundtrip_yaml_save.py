@@ -24,7 +24,9 @@ class TestAtomicRoundtripYamlSave:
         atomic_roundtrip_yaml_save(config_path, {"model": {"default": "test-model"}})
 
         assert config_path.exists()
-        assert yaml.safe_load(config_path.read_text())["model"]["default"] == "test-model"
+        assert (
+            yaml.safe_load(config_path.read_text())["model"]["default"] == "test-model"
+        )
 
     def test_preserves_top_level_key_order(self, config_path):
         """Existing top-level keys keep their author-intended ordering."""
@@ -98,7 +100,7 @@ class TestAtomicRoundtripYamlSave:
         config_path.write_text(
             "agent:\n"
             "  personalities:\n"
-            "    catgirl: \"nya (=^･ω･^=) 你好\"\n"
+            '    catgirl: "nya (=^･ω･^=) 你好"\n'
             "display:\n"
             "  skin: default\n",
             encoding="utf-8",
@@ -132,12 +134,13 @@ class TestAtomicRoundtripYamlSave:
 
         atomic_roundtrip_yaml_save(config_path, {"policy": value})
 
-        assert yaml.safe_load(config_path.read_text(encoding="utf-8"))["policy"] == value
+        assert (
+            yaml.safe_load(config_path.read_text(encoding="utf-8"))["policy"] == value
+        )
 
     def test_appends_new_keys(self, config_path):
         config_path.write_text(
-            "model:\n"
-            "  default: test-model\n",
+            "model:\n  default: test-model\n",
             encoding="utf-8",
         )
 
@@ -161,9 +164,7 @@ class TestAtomicRoundtripYamlSave:
         """Mirrors the cfg.pop()-then-_save_cfg(cfg) pattern in tui_gateway:
         e.g. /prompt clear removes custom_prompt entirely."""
         config_path.write_text(
-            "model:\n"
-            "  default: test-model\n"
-            "custom_prompt: 'old prompt'\n",
+            "model:\n  default: test-model\ncustom_prompt: 'old prompt'\n",
             encoding="utf-8",
         )
 
@@ -180,8 +181,7 @@ class TestAtomicRoundtripYamlSave:
 
     def test_overwrites_scalar_value(self, config_path):
         config_path.write_text(
-            "display:\n"
-            "  personality: noir\n",
+            "display:\n  personality: noir\n",
             encoding="utf-8",
         )
 
@@ -197,9 +197,7 @@ class TestAtomicRoundtripYamlSave:
 
     def test_overwrites_list_wholesale(self, config_path):
         config_path.write_text(
-            "toolsets:\n"
-            "  - one\n"
-            "  - two\n",
+            "toolsets:\n  - one\n  - two\n",
             encoding="utf-8",
         )
 
@@ -216,10 +214,7 @@ class TestAtomicRoundtripYamlSave:
         Without this, writing display.personality would drop sibling display.skin.
         """
         config_path.write_text(
-            "display:\n"
-            "  skin: default\n"
-            "  personality: noir\n"
-            "  compact: false\n",
+            "display:\n  skin: default\n  personality: noir\n  compact: false\n",
             encoding="utf-8",
         )
 
@@ -263,7 +258,9 @@ class TestAtomicRoundtripYamlSave:
 
         with patch("builtins.open", side_effect=self._deny_config_reads(config_path)):
             with pytest.raises(RuntimeError, match="this change was not saved"):
-                atomic_roundtrip_yaml_save(config_path, {"model": {"default": "replacement"}})
+                atomic_roundtrip_yaml_save(
+                    config_path, {"model": {"default": "replacement"}}
+                )
 
         assert config_path.read_text(encoding="utf-8") == original
 

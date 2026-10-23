@@ -62,9 +62,6 @@ class TestResetTerminalInputModes(unittest.TestCase):
         # The focus-reporting disable is the specific leak the issue reports.
         self.assertIn("\x1b[?1004l", written)
 
-
-
-
     def test_swallows_stdout_errors(self):
         cli_mod = _import_cli()
 
@@ -79,7 +76,6 @@ class TestResetTerminalInputModes(unittest.TestCase):
         ):
             # Cleanup runs at process teardown — it must never raise.
             cli_mod._reset_terminal_input_modes_on_exit()
-
 
     def test_flag_cleared_after_reset(self):
         """Once the modes are disabled they are no longer active — the flag must
@@ -123,7 +119,10 @@ class TestRunCleanupWiring(unittest.TestCase):
                 patch.object(
                     cli_mod, "_cleanup_all_browsers", patches["_cleanup_all_browsers"]
                 ),
-                patch("tools.mcp_tool_lifecycle.shutdown_mcp_servers", lambda *a, **k: None),
+                patch(
+                    "tools.mcp_tool_lifecycle.shutdown_mcp_servers",
+                    lambda *a, **k: None,
+                ),
                 patch(
                     "agent.auxiliary_client.shutdown_cached_clients",
                     lambda *a, **k: None,
@@ -142,7 +141,6 @@ class TestRunCleanupWiring(unittest.TestCase):
                 return mock_reset
         finally:
             cli_mod._cleanup_done = original_done
-
 
     def test_reset_runs_even_when_a_cleanup_step_raises(self):
         """The reset is the first step, so a failing teardown step can't skip

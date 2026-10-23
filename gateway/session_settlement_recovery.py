@@ -1,31 +1,54 @@
 """Fence an unsettled claim in a live owner without inventing a terminal result."""
+
 import asyncio
 import logging
 import sqlite3
 
-from clawk_state_runtime import RuntimeStoreError, _admission, _epoch, settle_steer_transfers
+from clawk_state_runtime import (
+    RuntimeStoreError,
+    _admission,
+    _epoch,
+    settle_steer_transfers,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def _mark_unknown(authority, row):
-    transfers = _transfers(authority, authority.sessions.get(row['target_session_id']), row)
+    transfers = _transfers(
+        authority, authority.sessions.get(row["target_session_id"]), row
+    )
 
     def write(conn):
         _epoch(conn, authority.epoch)
-        current = _admission(conn, row['admission_id'])
-        if current['owner_epoch'] != authority.epoch or current['generation'] != row['generation']:
-            raise RuntimeStoreError('stale_generation')
-        if current['status'] in {'terminal', 'unknown'}:
-            return current['status']
-        if current['status'] != 'started':
-            raise RuntimeStoreError('stale_generation')
-        conn.execute("UPDATE session_admissions SET status='unknown' WHERE admission_id=?", (row['admission_id'],))
+        current = _admission(conn, row["admission_id"])
+        if (
+            current["owner_epoch"] != authority.epoch
+            or current["generation"] != row["generation"]
+        ):
+            raise RuntimeStoreError("stale_generation")
+        if current["status"] in {"terminal", "unknown"}:
+            return current["status"]
+        if current["status"] != "started":
+            raise RuntimeStoreError("stale_generation")
+        conn.execute(
+            "UPDATE session_admissions SET status='unknown' WHERE admission_id=?",
+            (row["admission_id"],),
+        )
         # A steer it carried is never replayed: interrupted if delivered, else queued again.
-        settle_steer_transfers(conn, epoch=authority.epoch, generation=row['generation'],
-                               transfers=transfers, outcome='unknown')
-        conn.execute('UPDATE sessions SET runtime_revision=runtime_revision+1 WHERE id=?', (row['target_session_id'],))
-        return 'unknown'
+        settle_steer_transfers(
+            conn,
+            epoch=authority.epoch,
+            generation=row["generation"],
+            transfers=transfers,
+            outcome="unknown",
+        )
+        conn.execute(
+            "UPDATE sessions SET runtime_revision=runtime_revision+1 WHERE id=?",
+            (row["target_session_id"],),
+        )
+        return "unknown"
+
     return authority.db._execute_write(write)
 
 
@@ -34,8 +57,9 @@ def _transfers(authority, live, row):
     if live is None:
         return None
     from gateway.session_queued_controls import steer_transfers
+
     with live.event_stream.lock:
-        return steer_transfers(authority, row['target_session_id'], row['generation'])
+        return steer_transfers(authority, row["target_session_id"], row["generation"])
 
 
 async def recover_failed_settlement(authority, row):
@@ -44,7 +68,10 @@ async def recover_failed_settlement(authority, row):
     while True:
         try:
             from gateway.session_runtime_workers import track_mutation
-            writer = track_mutation(authority, asyncio.to_thread(_mark_unknown, authority, row))
+
+            writer = track_mutation(
+                authority, asyncio.to_thread(_mark_unknown, authority, row)
+            )
             return await asyncio.shield(writer)
         except (OSError, sqlite3.Error):
             await asyncio.sleep(1)
@@ -54,50 +81,71 @@ def completion_payload(row, settled, response, captured):
     # ``status`` is the message.complete contract's TurnStatus: the Desktop
     # extends a Stopped bubble to the persisted partial only on 'interrupted'.
     complete = {
-        'text': response, 'content': response, 'admission_id': row['admission_id'],
-        'outcome': 'cancelled' if settled['outcome'] == 'interrupted' else settled['outcome'],
-        'status': {'completed': 'complete', 'interrupted': 'interrupted'}.get(
-            settled['outcome'], 'error')}
+        "text": response,
+        "content": response,
+        "admission_id": row["admission_id"],
+        "outcome": "cancelled"
+        if settled["outcome"] == "interrupted"
+        else settled["outcome"],
+        "status": {"completed": "complete", "interrupted": "interrupted"}.get(
+            settled["outcome"], "error"
+        ),
+    }
     # Only the agent's reuse site sets this (never inferred from equal text): the
     # final repeats a reply the viewer already painted, so it settles in place.
-    captured_result = (captured or {}).get('result') or {}
+    captured_result = (captured or {}).get("result") or {}
     # A gateway-owned refusal brings its own descriptor (``session_cron.execute``); every other failed
     # turn gets the one the TUI path builds from the same result, so the viewer shows the right card.
-    surface = captured_result.get('error_surface')
-    if not isinstance(surface, dict) and complete['status'] == 'error':
+    surface = captured_result.get("error_surface")
+    if not isinstance(surface, dict) and complete["status"] == "error":
         from agent.error_surface import build_error_surface_from_result
+
         surface = build_error_surface_from_result(
-            captured_result, provider=str(captured_result.get('provider') or ''),
-            model=str(captured_result.get('model') or ''))
+            captured_result,
+            provider=str(captured_result.get("provider") or ""),
+            model=str(captured_result.get("model") or ""),
+        )
     if isinstance(surface, dict):
-        complete['error_surface'] = surface
-    if response and captured_result.get('response_reused'):
-        complete['response_reused'] = True
-    if captured_result.get('local_viewer'):
-        if captured_result.get('response_previewed'):
-            complete['response_previewed'] = True
-        if captured_result.get('response_transformed'):
-            complete['response_transformed'] = True
-        if isinstance(captured_result.get('warning'), str) and captured_result['warning']:
-            complete['warning'] = captured_result['warning']
-        if isinstance(captured_result.get('billing_block'), dict):
-            complete['billing'] = captured_result['billing_block']
-        if isinstance(captured_result.get('failure_reason'), str) and captured_result['failure_reason']:
-            complete['failure_reason'] = captured_result['failure_reason']
-        if isinstance(captured_result.get('last_reasoning'), str) and captured_result['last_reasoning'].strip():
-            complete['reasoning'] = captured_result['last_reasoning'].strip()
+        complete["error_surface"] = surface
+    if response and captured_result.get("response_reused"):
+        complete["response_reused"] = True
+    if captured_result.get("local_viewer"):
+        if captured_result.get("response_previewed"):
+            complete["response_previewed"] = True
+        if captured_result.get("response_transformed"):
+            complete["response_transformed"] = True
+        if (
+            isinstance(captured_result.get("warning"), str)
+            and captured_result["warning"]
+        ):
+            complete["warning"] = captured_result["warning"]
+        if isinstance(captured_result.get("billing_block"), dict):
+            complete["billing"] = captured_result["billing_block"]
+        if (
+            isinstance(captured_result.get("failure_reason"), str)
+            and captured_result["failure_reason"]
+        ):
+            complete["failure_reason"] = captured_result["failure_reason"]
+        if (
+            isinstance(captured_result.get("last_reasoning"), str)
+            and captured_result["last_reasoning"].strip()
+        ):
+            complete["reasoning"] = captured_result["last_reasoning"].strip()
     # The committed row addresses of the turn: a viewer binds the streamed reply to
     # its stored row, so a transcript read racing this frame never paints it twice.
     # ``submission_id`` names whose turn it is: the sending viewer binds its optimistic
     # prompt (``user-<submission_id>``), which the queued admission ack could not name.
     # A local viewer's turn end recorded the session-cumulative stats (``session_usage.publish_usage``):
     # main's TUI read ``message.complete.usage`` for its status bar and ``/usage`` totals.
-    if isinstance((captured or {}).get('session_usage'), dict):
+    if isinstance((captured or {}).get("session_usage"), dict):
         from gateway.session_usage import tui_usage
-        complete['usage'] = tui_usage(captured['session_usage'])
-    if isinstance(captured_result.get('persisted_turn'), dict):
-        complete['persisted_turn'] = {**captured_result['persisted_turn'],
-                                      'submission_id': row['request_id']}
+
+        complete["usage"] = tui_usage(captured["session_usage"])
+    if isinstance(captured_result.get("persisted_turn"), dict):
+        complete["persisted_turn"] = {
+            **captured_result["persisted_turn"],
+            "submission_id": row["request_id"],
+        }
     return complete
 
 
@@ -107,20 +155,26 @@ def _publish_completion(authority, live, ref, row, settled, response, captured):
     try:
         live.controls.snapshot(ref.session_id, None)
     except Exception:
-        logger.exception('Terminal control cleanup failed for admission %s', row['admission_id'])
+        logger.exception(
+            "Terminal control cleanup failed for admission %s", row["admission_id"]
+        )
     complete = completion_payload(row, settled, response, captured)
-    notice = owner_stop_notice(captured, settled['outcome'], row)
-    if notice and not complete.get('warning'):
+    notice = owner_stop_notice(captured, settled["outcome"], row)
+    if notice and not complete.get("warning"):
         # ``warning`` is the slot every surface already renders on message.complete (Ink activity
         # line, Desktop toast), so a turn the owner's stop cut short says why (#134889 F1).
-        complete['warning'] = notice
+        complete["warning"] = notice
     live.event_stream.publish(ref.session_id, complete)
 
 
-RESTART_INTERRUPT_NOTICE = ('Gateway restarting: this turn was interrupted and will not be run again. '
-                            'Send your message again once Clawksis reconnects.')
-SHUTDOWN_INTERRUPT_NOTICE = ('Gateway shutting down: this turn was interrupted and will not be run again. '
-                             'Send your message again once Clawksis is back.')
+RESTART_INTERRUPT_NOTICE = (
+    "Gateway restarting: this turn was interrupted and will not be run again. "
+    "Send your message again once Clawksis reconnects."
+)
+SHUTDOWN_INTERRUPT_NOTICE = (
+    "Gateway shutting down: this turn was interrupted and will not be run again. "
+    "Send your message again once Clawksis is back."
+)
 
 
 def owner_stop_notice(captured, outcome, row=None):
@@ -132,14 +186,26 @@ def owner_stop_notice(captured, outcome, row=None):
     # The cause is the one the turn recorded when it was interrupted (stop() interrupts with these
     # reasons), never the runner's flags at publication: a user Stop whose settlement was delayed
     # until after shutdown began is still the user's Stop.
-    from gateway.run import _INTERRUPT_REASON_GATEWAY_RESTART, _INTERRUPT_REASON_GATEWAY_SHUTDOWN
-    cause = ((captured or {}).get('result') or {}).get('interrupt_message') if outcome == 'interrupted' else None
-    notice = {_INTERRUPT_REASON_GATEWAY_RESTART: RESTART_INTERRUPT_NOTICE,
-              _INTERRUPT_REASON_GATEWAY_SHUTDOWN: SHUTDOWN_INTERRUPT_NOTICE}.get(cause)
+    from gateway.run import (
+        _INTERRUPT_REASON_GATEWAY_RESTART,
+        _INTERRUPT_REASON_GATEWAY_SHUTDOWN,
+    )
+
+    cause = (
+        ((captured or {}).get("result") or {}).get("interrupt_message")
+        if outcome == "interrupted"
+        else None
+    )
+    notice = {
+        _INTERRUPT_REASON_GATEWAY_RESTART: RESTART_INTERRUPT_NOTICE,
+        _INTERRUPT_REASON_GATEWAY_SHUTDOWN: SHUTDOWN_INTERRUPT_NOTICE,
+    }.get(cause)
     if notice is not None and row is not None:
         from gateway.session_unattended_unknown import is_unattended
+
         if is_unattended(row):
             from agent.turn_failure_copy import AUTOMATION_INTERRUPTED_NOTICE
+
             return AUTOMATION_INTERRUPTED_NOTICE
     return notice
 
@@ -147,23 +213,33 @@ def owner_stop_notice(captured, outcome, row=None):
 def gateway_refusal_boundary(captured, outcome):
     """``(notice, display_metadata)`` for a failed turn the gateway itself refused with a renderable
     descriptor (``session_cron.execute``: the only producer of ``result.error_surface``), else None."""
-    value = (captured or {}).get('result') or {}
-    surface, error = value.get('error_surface'), value.get('error')
-    if outcome != 'failed' or not isinstance(surface, dict) or not isinstance(error, str) or not error:
+    value = (captured or {}).get("result") or {}
+    surface, error = value.get("error_surface"), value.get("error")
+    if (
+        outcome != "failed"
+        or not isinstance(surface, dict)
+        or not isinstance(error, str)
+        or not error
+    ):
         return None
-    return error, {'error': error, 'error_surface': dict(surface)}
+    return error, {"error": error, "error_surface": dict(surface)}
 
 
 def _release_media(authority, row):
     """Terminal media cleanup: its own write txn after publication, never under the stream lock."""
     try:
         from gateway.session_ingress_media import release_admission_media
-        release_admission_media(authority.db, row['admission_id'])
+
+        release_admission_media(authority.db, row["admission_id"])
     except Exception:
-        logger.exception('Terminal media cleanup failed for admission %s', row['admission_id'])
+        logger.exception(
+            "Terminal media cleanup failed for admission %s", row["admission_id"]
+        )
 
 
-def commit_and_publish(authority, live, ref, row, response, outcome, captured, settlement):
+def commit_and_publish(
+    authority, live, ref, row, response, outcome, captured, settlement
+):
     """Worker-thread settlement: redaction, encoding and the SQLite write never stall the owner loop.
 
     The write runs OUTSIDE ``event_stream.lock``: attach, replay, receipts and pending publication
@@ -175,21 +251,37 @@ def commit_and_publish(authority, live, ref, row, response, outcome, captured, s
     The caller publishes idle ``session.info`` on the loop afterwards (bot receipt wakeups are tasks).
     """
     from gateway.session_results import finish_result, prepare_result
+
     # Compaction, redaction and outcome flags are CPU-only.
     prepared = prepare_result(row, response, outcome, captured)
-    admission_id = row['admission_id']
+    admission_id = row["admission_id"]
     # ``live`` is the drain's own entry: a delete committing on the loop after this write may
     # already have dropped it from ``authority.sessions``.
     with live.event_stream.lock:
         live.settling[admission_id] = row
     transfers = _transfers(authority, live, row)
     try:
-        settlement['settled'], settlement['response'] = finish_result(
-            authority.db, epoch=authority.epoch, row=row, response=response, outcome=outcome,
-            result=captured, prepared=prepared, transfers=transfers)
+        settlement["settled"], settlement["response"] = finish_result(
+            authority.db,
+            epoch=authority.epoch,
+            row=row,
+            response=response,
+            outcome=outcome,
+            result=captured,
+            prepared=prepared,
+            transfers=transfers,
+        )
         with live.event_stream.lock:
             live.settling.pop(admission_id, None)
-            _publish_completion(authority, live, ref, row, settlement['settled'], settlement['response'], captured)
+            _publish_completion(
+                authority,
+                live,
+                ref,
+                row,
+                settlement["settled"],
+                settlement["response"],
+                captured,
+            )
     finally:
         with live.event_stream.lock:
             live.settling.pop(admission_id, None)
@@ -201,7 +293,9 @@ def commit_and_publish(authority, live, ref, row, response, outcome, captured, s
 _SETTLE_RETRY_DELAYS_S = (0.5, 2.0)
 
 
-async def settle_with_retry(authority, live, ref, row, response, outcome, captured, settlement):
+async def settle_with_retry(
+    authority, live, ref, row, response, outcome, captured, settlement
+):
     """Commit the captured result, retrying a transient storage failure a bounded number of times.
 
     One locked or full write must not turn a finished answer into an ``unknown`` turn whose result
@@ -209,15 +303,34 @@ async def settle_with_retry(authority, live, ref, row, response, outcome, captur
     read back by ``finish_result``, and a failure after the commit (``settled`` set) never retries.
     A fence refusal (``RuntimeStoreError``) is not transient and is raised at once."""
     from gateway.session_runtime_workers import track_mutation
+
     for delay in (*_SETTLE_RETRY_DELAYS_S, None):
         try:
-            return await asyncio.shield(track_mutation(authority, asyncio.to_thread(
-                commit_and_publish, authority, live, ref, row, response, outcome, captured, settlement)))
+            return await asyncio.shield(
+                track_mutation(
+                    authority,
+                    asyncio.to_thread(
+                        commit_and_publish,
+                        authority,
+                        live,
+                        ref,
+                        row,
+                        response,
+                        outcome,
+                        captured,
+                        settlement,
+                    ),
+                )
+            )
         except (OSError, sqlite3.Error) as exc:
-            if delay is None or 'settled' in settlement:
+            if delay is None or "settled" in settlement:
                 raise
-            logger.warning('Settlement of admission %s deferred by storage (%r); retrying in %.1fs',
-                           row['admission_id'], exc, delay)
+            logger.warning(
+                "Settlement of admission %s deferred by storage (%r); retrying in %.1fs",
+                row["admission_id"],
+                exc,
+                delay,
+            )
             await asyncio.sleep(delay)
 
 

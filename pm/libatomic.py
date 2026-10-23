@@ -83,7 +83,11 @@ def _command_plan(command: tuple[str, ...]) -> tuple[list[str] | None, str, str]
     sudo = shutil.which("sudo")
     if sudo:
         argv = [sudo, "-n", *command]
-        return argv, shlex.join(["sudo", "-n", *command]), shlex.join(["sudo", *command])
+        return (
+            argv,
+            shlex.join(["sudo", "-n", *command]),
+            shlex.join(["sudo", *command]),
+        )
     return None, "", f"as root: {shlex.join(command)}"
 
 
@@ -123,7 +127,10 @@ def install_before_lock() -> None:
     sudo = argv[0]
     if _run([sudo, "-n", "true"], timeout=10):
         return  # the non-interactive repair will succeed on its own
-    print("→ Node.js needs libatomic.so.1; sudo may ask for your password to install it", flush=True)
+    print(
+        "→ Node.js needs libatomic.so.1; sudo may ask for your password to install it",
+        flush=True,
+    )
     # Outside PM's lock: no timeout, so a slow prompt or mirror is never killed mid-dpkg.
     _install([sudo], command, stdin=None, timeout=None)
 
@@ -136,22 +143,32 @@ def _has_terminal() -> bool:
     return True
 
 
-def _run(argv: list[str], stdin: int | None = subprocess.DEVNULL, timeout: float | None = 300) -> bool:
+def _run(
+    argv: list[str], stdin: int | None = subprocess.DEVNULL, timeout: float | None = 300
+) -> bool:
     try:
-        return subprocess.run(argv, stdin=stdin, timeout=timeout, check=False).returncode == 0
+        return (
+            subprocess.run(argv, stdin=stdin, timeout=timeout, check=False).returncode
+            == 0
+        )
     except (OSError, subprocess.TimeoutExpired):
         return False
 
 
-def _install(prefix: list[str], command: tuple[str, ...], stdin: int | None = subprocess.DEVNULL,
-             timeout: float | None = 300) -> bool:
+def _install(
+    prefix: list[str],
+    command: tuple[str, ...],
+    stdin: int | None = subprocess.DEVNULL,
+    timeout: float | None = 300,
+) -> bool:
     if _run([*prefix, *command], stdin, timeout):
         return True
     if command[0] != "apt-get":
         return False
     # Minimal Debian/Ubuntu images ship empty package lists.
-    return (_run([*prefix, "apt-get", "update", "-qq"], stdin, timeout)
-            and _run([*prefix, *command], stdin, timeout))
+    return _run([*prefix, "apt-get", "update", "-qq"], stdin, timeout) and _run(
+        [*prefix, *command], stdin, timeout
+    )
 
 
 def try_install_libatomic() -> tuple[bool, str]:
@@ -179,5 +196,8 @@ def _attempt() -> tuple[bool, str]:
     if argv is None:
         return False, remedy
 
-    print(f"→ Node needs libatomic.so.1; trying non-interactive {attempt_display}", flush=True)
+    print(
+        f"→ Node needs libatomic.so.1; trying non-interactive {attempt_display}",
+        flush=True,
+    )
     return _install(argv[: len(argv) - len(command)], command), remedy

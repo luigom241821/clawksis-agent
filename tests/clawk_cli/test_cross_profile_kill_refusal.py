@@ -43,9 +43,7 @@ def _spawn_gateway_lookalike(bin_dir: Path, lock_path: Path) -> subprocess.Popen
         cmd = [str(script), "gateway", "run"]
     else:
         cmd = [sys.executable, str(script), "gateway", "run"]
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline and not lock_path.exists():
         if proc.poll() is not None:
@@ -87,12 +85,8 @@ class TestRecordedGatewayHomeConflicts:
     def test_expected_home_override(self, tmp_path):
         target = tmp_path / "profiles" / "tim"
         record = {"pid": 1, "clawk_home": str(tmp_path)}
-        assert (
-            recorded_gateway_home_conflicts(record, expected_home=target) is True
-        )
-        assert (
-            recorded_gateway_home_conflicts(record, expected_home=tmp_path) is False
-        )
+        assert recorded_gateway_home_conflicts(record, expected_home=target) is True
+        assert recorded_gateway_home_conflicts(record, expected_home=tmp_path) is False
 
 
 # The lookalike's argv ("<stub> gateway run") is what the guard's real-gateway spawn check matches;
@@ -117,9 +111,7 @@ class TestCrossProfileStopRefusal:
         tim_home.mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(tim_home))
 
-        proc = _spawn_gateway_lookalike(
-            tmp_path / "bin", tim_home / "gateway.lock"
-        )
+        proc = _spawn_gateway_lookalike(tmp_path / "bin", tim_home / "gateway.lock")
         try:
             record = _pid_record(proc, tmp_path / "bin" / "clawk", root_home)
             (tim_home / "gateway.pid").write_text(json.dumps(record))
@@ -138,17 +130,13 @@ class TestCrossProfileStopRefusal:
             proc.kill()
             proc.wait(timeout=10)
 
-    def test_stop_profile_gateway_still_stops_own_gateway(
-        self, tmp_path, monkeypatch
-    ):
+    def test_stop_profile_gateway_still_stops_own_gateway(self, tmp_path, monkeypatch):
         """Same-home records keep stopping normally (no false refusal)."""
         tim_home = tmp_path / "profiles" / "tim"
         tim_home.mkdir(parents=True)
         monkeypatch.setenv("CLAWK_HOME", str(tim_home))
 
-        proc = _spawn_gateway_lookalike(
-            tmp_path / "bin", tim_home / "gateway.lock"
-        )
+        proc = _spawn_gateway_lookalike(tmp_path / "bin", tim_home / "gateway.lock")
         try:
             record = _pid_record(proc, tmp_path / "bin" / "clawk", tim_home)
             (tim_home / "gateway.pid").write_text(json.dumps(record))
@@ -169,17 +157,13 @@ class TestCrossProfileStopRefusal:
 @pytest.mark.spawns_gateway_lookalike
 @pytest.mark.platforms("posix")  # POSIX flock harness
 class TestProfileDeleteStopRefusal:
-    def test_stop_gateway_process_refuses_other_profiles_pid(
-        self, tmp_path, capsys
-    ):
+    def test_stop_gateway_process_refuses_other_profiles_pid(self, tmp_path, capsys):
         """``profile delete`` must not kill a gateway owned by another home."""
         root_home = tmp_path / "root-home"
         tim_home = root_home / "profiles" / "tim"
         tim_home.mkdir(parents=True)
 
-        proc = _spawn_gateway_lookalike(
-            tmp_path / "bin", tim_home / "gateway.lock"
-        )
+        proc = _spawn_gateway_lookalike(tmp_path / "bin", tim_home / "gateway.lock")
         try:
             record = _pid_record(proc, tmp_path / "bin" / "clawk", root_home)
             (tim_home / "gateway.pid").write_text(json.dumps(record))
@@ -201,9 +185,7 @@ class TestProfileDeleteStopRefusal:
         tim_home = tmp_path / "profiles" / "tim"
         tim_home.mkdir(parents=True)
 
-        proc = _spawn_gateway_lookalike(
-            tmp_path / "bin", tim_home / "gateway.lock"
-        )
+        proc = _spawn_gateway_lookalike(tmp_path / "bin", tim_home / "gateway.lock")
         try:
             record = _pid_record(proc, tmp_path / "bin" / "clawk", tim_home)
             (tim_home / "gateway.pid").write_text(json.dumps(record))

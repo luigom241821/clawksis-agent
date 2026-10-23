@@ -41,9 +41,19 @@ def pairing_code_reply(platform_name: str, code: str, profile_arg: str = "") -> 
     """The DM a first-time sender receives: what happened, how long the code lives, what to do
     whether they are the owner or a guest, and that they must message again after approval."""
     hours = max(1, CODE_TTL_SECONDS // 3600)
-    validity = t("gateway.pairing.validity_hour" if hours == 1 else "gateway.pairing.validity_hours", hours=hours)
+    validity = t(
+        "gateway.pairing.validity_hour"
+        if hours == 1
+        else "gateway.pairing.validity_hours",
+        hours=hours,
+    )
     approve_cmd = f"clawk {profile_arg}pairing approve {platform_name} {code}"
-    return t("gateway.pairing.code_reply", code=code, validity=validity, approve_cmd=approve_cmd)
+    return t(
+        "gateway.pairing.code_reply",
+        code=code,
+        validity=validity,
+        approve_cmd=approve_cmd,
+    )
 
 
 def pairing_rate_limited_reply() -> str:
@@ -51,7 +61,11 @@ def pairing_rate_limited_reply() -> str:
 
 
 def unauthorized_owner_hint(
-    platform_name: str, user_id: str, user_name: str = "", *, clawk_home: str,
+    platform_name: str,
+    user_id: str,
+    user_name: str = "",
+    *,
+    clawk_home: str,
 ) -> str:
     """One-line hint for the owner (log + home channel): who was dropped and how to let them in.
     No pairing request is minted for an ignored sender (a configured allowlist means the owner chose
@@ -59,7 +73,9 @@ def unauthorized_owner_hint(
     pairing mode."""
     from gateway.session import neutralize_untrusted_inline_text
 
-    safe_name = neutralize_untrusted_inline_text(user_name or "", max_chars=_MAX_SENDER_NAME_CHARS)
+    safe_name = neutralize_untrusted_inline_text(
+        user_name or "", max_chars=_MAX_SENDER_NAME_CHARS
+    )
     # Mention and link sigils are stripped so a hostile display name cannot ping the channel or
     # smuggle a link; the ID next to it is the value the owner actually acts on.
     safe_name = "".join(ch for ch in safe_name if ch not in "@<>[]()`*_~#").strip()
@@ -67,9 +83,16 @@ def unauthorized_owner_hint(
     env_var = _allowlist_env_for_platform(platform_name)
     allowlist = (
         t("gateway.unauthorized.owner_hint_env", env_var=env_var, home=clawk_home)
-        if env_var else t("gateway.unauthorized.owner_hint_generic")
+        if env_var
+        else t("gateway.unauthorized.owner_hint_generic")
     )
-    return t("gateway.unauthorized.owner_notice", platform=platform_name, who=who, allowlist=allowlist, home=clawk_home)
+    return t(
+        "gateway.unauthorized.owner_notice",
+        platform=platform_name,
+        who=who,
+        allowlist=allowlist,
+        home=clawk_home,
+    )
 
 
 class UnauthorizedOwnerNotifier:
@@ -104,9 +127,14 @@ class UnauthorizedOwnerNotifier:
                 return
             # Automatic operator diagnostic on the home channel; same boundary as the state.db warning.
             from gateway.warning_notifications import present_notification
+
             await present_notification(
                 lambda: runner._send_home_channel_message(
-                    platform, home, transport, f"⚠️ {hint}", "unauthorized-sender notice failed for %s:%s: %s",
+                    platform,
+                    home,
+                    transport,
+                    f"⚠️ {hint}",
+                    "unauthorized-sender notice failed for %s:%s: %s",
                 ),
                 platform=platform,
             )

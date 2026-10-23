@@ -7,6 +7,7 @@ never leaks to another concurrently firing job or profile. Model output cannot r
 subprocesses do not share the interpreter. Delegated children read ``None`` — they are not the
 scheduled occurrence.
 """
+
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
@@ -20,27 +21,35 @@ class CronExecution:
     job_name: str
     execution_id: str
     source: str  # "builtin" (ticker), "direct" (manual run / dashboard Run now), provider name...
-    scheduled_instant: Optional[str]  # the occurrence fired; None for an off-schedule run
+    scheduled_instant: Optional[
+        str
+    ]  # the occurrence fired; None for an off-schedule run
     started_at: Optional[str]
     profile: str
 
 
-_CURRENT: ContextVar[Optional[CronExecution]] = ContextVar("clawk_cron_execution", default=None)
+_CURRENT: ContextVar[Optional[CronExecution]] = ContextVar(
+    "clawk_cron_execution", default=None
+)
 
 
-def enter_cron_execution(job: Mapping[str, Any], execution_id: str, record: Mapping[str, Any]) -> Token:
+def enter_cron_execution(
+    job: Mapping[str, Any], execution_id: str, record: Mapping[str, Any]
+) -> Token:
     """Bind this fire's identity from *record*, the ledger row of the running transition."""
     from clawk_cli.profiles import current_profile_name
 
-    return _CURRENT.set(CronExecution(
-        job_id=str(job["id"]),
-        job_name=str(job.get("name") or job["id"]),
-        execution_id=str(execution_id),
-        source=str(record.get("source") or ""),
-        scheduled_instant=record.get("scheduled_instant"),
-        started_at=record.get("started_at"),
-        profile=current_profile_name("default") or "default",
-    ))
+    return _CURRENT.set(
+        CronExecution(
+            job_id=str(job["id"]),
+            job_name=str(job.get("name") or job["id"]),
+            execution_id=str(execution_id),
+            source=str(record.get("source") or ""),
+            scheduled_instant=record.get("scheduled_instant"),
+            started_at=record.get("started_at"),
+            profile=current_profile_name("default") or "default",
+        )
+    )
 
 
 def exit_cron_execution(token: Optional[Token]) -> None:

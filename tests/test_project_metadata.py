@@ -3,6 +3,7 @@
 from pathlib import Path
 import tomllib
 
+
 def _load_optional_dependencies():
     pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
     with pyproject_path.open("rb") as handle:
@@ -27,22 +28,43 @@ def test_wake_dependencies_and_runtime_gate_agree_on_supported_targets():
         ("win32", "Windows", "ARM64", False),
     ]
     for system, platform_system, machine, supported in targets:
-        environment = {**default_environment(), "sys_platform": system,
-                       "platform_system": platform_system, "platform_machine": machine}
+        environment = {
+            **default_environment(),
+            "sys_platform": system,
+            "platform_system": platform_system,
+            "platform_machine": machine,
+        }
         for extra in ("wake", "wake-openwakeword"):
-            requirement = next(req for spec in optional[extra]
-                               if (req := Requirement(spec)).name == "pyopen-wakeword")
-            assert requirement.marker.evaluate(environment) is supported, (extra, system, machine)
+            requirement = next(
+                req
+                for spec in optional[extra]
+                if (req := Requirement(spec)).name == "pyopen-wakeword"
+            )
+            assert requirement.marker.evaluate(environment) is supported, (
+                extra,
+                system,
+                machine,
+            )
         assert Marker(gates["wake-openwakeword"]).evaluate(environment) is supported
-        selected = {req.name for spec in optional["wake"]
-                    if (req := Requirement(spec)).marker is None or req.marker.evaluate(environment)}
+        selected = {
+            req.name
+            for spec in optional["wake"]
+            if (req := Requirement(spec)).marker is None
+            or req.marker.evaluate(environment)
+        }
         assert {"sherpa-onnx", "pvporcupine", "sentencepiece", "pypinyin"} <= selected
-        sherpa_deps = {req.name for spec in optional["wake-sherpa"]
-                       if (req := Requirement(spec)).marker is None or req.marker.evaluate(environment)}
+        sherpa_deps = {
+            req.name
+            for spec in optional["wake-sherpa"]
+            if (req := Requirement(spec)).marker is None
+            or req.marker.evaluate(environment)
+        }
         assert {"sherpa-onnx", "sentencepiece", "pypinyin"} <= sherpa_deps
         for extra in ("wake-sherpa", "wake-porcupine"):
-            assert all(req.marker is None or req.marker.evaluate(environment)
-                       for req in map(Requirement, optional[extra]))
+            assert all(
+                req.marker is None or req.marker.evaluate(environment)
+                for req in map(Requirement, optional[extra])
+            )
             gate = gates.get(extra)
             assert gate is None or Marker(gate).evaluate(environment)
 
@@ -55,19 +77,30 @@ def test_direct_overrides_preserve_the_declared_exact_version():
     metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8-sig"))
     locked = tomllib.loads((root / "uv.lock").read_text(encoding="utf-8-sig"))
     # uv.lock records normalized names; pyproject keeps the declared spelling (Pillow).
-    direct = {canonicalize_name(req.name): req for spec in metadata["project"]["dependencies"]
-              if (req := Requirement(spec)).specifier}
+    direct = {
+        canonicalize_name(req.name): req
+        for spec in metadata["project"]["dependencies"]
+        if (req := Requirement(spec)).specifier
+    }
     for spec in metadata["tool"]["uv"].get("override-dependencies", []):
         override = Requirement(spec)
         name = canonicalize_name(override.name)
         requirement = direct.get(name)
-        if requirement is None or not any(s.operator == "==" for s in requirement.specifier):
+        if requirement is None or not any(
+            s.operator == "==" for s in requirement.specifier
+        ):
             continue
         assert override.specifier == requirement.specifier, (
             f"{override.name}: override {override.specifier} contradicts exact requirement {requirement.specifier}"
         )
-        versions = {row["version"] for row in locked["package"] if canonicalize_name(row["name"]) == name}
-        assert versions and all(version in requirement.specifier for version in versions)
+        versions = {
+            row["version"]
+            for row in locked["package"]
+            if canonicalize_name(row["name"]) == name
+        }
+        assert versions and all(
+            version in requirement.specifier for version in versions
+        )
 
 
 def test_matrix_extra_not_in_all():
@@ -83,13 +116,12 @@ def test_matrix_extra_not_in_all():
     """
     optional_dependencies = _load_optional_dependencies()
 
-    assert "matrix" in optional_dependencies, "[matrix] extra must still exist for `uv sync --extra matrix`"
+    assert "matrix" in optional_dependencies, (
+        "[matrix] extra must still exist for `uv sync --extra matrix`"
+    )
     # Must NOT appear in [all] in any form — neither unconditional nor
     # platform-gated. Lazy-install handles it.
-    matrix_in_all = [
-        dep for dep in optional_dependencies["all"]
-        if "matrix" in dep
-    ]
+    matrix_in_all = [dep for dep in optional_dependencies["all"] if "matrix" in dep]
     assert not matrix_in_all, (
         "matrix must not appear in [all] — it installs on first use via "
         f"pm.ensure_import('matrix'). Found: {matrix_in_all}"
@@ -111,24 +143,37 @@ def test_lazy_installable_extras_excluded_from_all():
     # list so the test stays a contract — adding a new opt-in backend
     # means updating this list AND verifying [all] doesn't contain it.
     lazy_covered_extras = {
-        "anthropic", "bedrock",
-        "exa", "firecrawl", "parallel-web",
+        "anthropic",
+        "bedrock",
+        "exa",
+        "firecrawl",
+        "parallel-web",
         "fal",
-        "edge-tts", "tts-premium",
+        "edge-tts",
+        "tts-premium",
         "voice",  # faster-whisper / sounddevice / numpy (composes stt-whisper + audio-io)
         "stt-whisper",
-        "modal", "daytona", "vercel",
-        "messaging", "slack", "matrix", "dingtalk", "feishu",
-        "telegram", "discord",
-        "wake", "wake-openwakeword", "wake-sherpa", "wake-porcupine",
+        "modal",
+        "daytona",
+        "vercel",
+        "messaging",
+        "slack",
+        "matrix",
+        "dingtalk",
+        "feishu",
+        "telegram",
+        "discord",
+        "wake",
+        "wake-openwakeword",
+        "wake-sherpa",
+        "wake-porcupine",
         "google-chat",
         "mistral",  # mistralai — Voxtral STT/TTS, lazy-installed (stt.mistral / tts.mistral)
     }
     all_extra_specs = optional_dependencies["all"]
     for extra in lazy_covered_extras:
         offending = [
-            spec for spec in all_extra_specs
-            if f"clawksis-agent[{extra}]" in spec
+            spec for spec in all_extra_specs if f"clawksis-agent[{extra}]" in spec
         ]
         assert not offending, (
             f"[{extra}] is in [all] but also in LAZY_DEPS. "
@@ -147,8 +192,6 @@ def _exact_pins(specs):
         package = package.split("[", 1)[0].lower().replace("_", "-")
         pins[package] = version
     return pins
-
-
 
 
 def test_extras_pin_each_package_at_one_version():
@@ -177,10 +220,6 @@ def test_extras_pin_each_package_at_one_version():
         "extras pin the same package at different versions — uv sync would "
         f"resolve whichever wins and silently downgrade the other: {drift}"
     )
-
-
-
-
 
 
 def test_dingtalk_extra_includes_qrcode_for_qr_auth():

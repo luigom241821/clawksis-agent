@@ -8,6 +8,7 @@ access posture for the ACTIVE profile (allowlist / open / pairing / deny_all),
 counting pairing grants, evaluated against the profile's own env/config/pairing
 store — never the dashboard process's environment.
 """
+
 import json
 import os
 from pathlib import Path
@@ -27,12 +28,22 @@ def _gateway_state(home: Path) -> None:
     (home / "gateway.pid").write_text(
         json.dumps({"pid": os.getpid(), "clawk_home": str(home)}), encoding="utf-8"
     )
-    (home / "gateway_state.json").write_text(json.dumps({
-        "pid": os.getpid(), "clawk_home": str(home), "gateway_state": "running",
-        "kind": "clawk-gateway", "start_time": start_time,
-        "updated_at": "2026-01-01T00:00:00+00:00",
-        "platforms": {"telegram": {"state": "connected", "writer_pid": os.getpid()}},
-    }), encoding="utf-8")
+    (home / "gateway_state.json").write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "clawk_home": str(home),
+                "gateway_state": "running",
+                "kind": "clawk-gateway",
+                "start_time": start_time,
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "platforms": {
+                    "telegram": {"state": "connected", "writer_pid": os.getpid()}
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 @pytest.fixture
@@ -57,13 +68,22 @@ def client(monkeypatch, _isolate_clawk_home):
         _gw_status, "_read_process_cmdline", lambda pid: cmdline["current"]
     )
     # The dashboard process's own env must never authorize anyone here.
-    for var in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS", "GATEWAY_ALLOWED_USERS",
-                "GATEWAY_ALLOW_ALL_USERS", "TELEGRAM_GROUP_ALLOWED_USERS",
-                "TELEGRAM_GROUP_ALLOWED_CHATS"):
+    for var in (
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_ALLOWED_USERS",
+        "GATEWAY_ALLOWED_USERS",
+        "GATEWAY_ALLOW_ALL_USERS",
+        "TELEGRAM_GROUP_ALLOWED_USERS",
+        "TELEGRAM_GROUP_ALLOWED_CHATS",
+    ):
         monkeypatch.delenv(var, raising=False)
 
-    (home / ".env").write_text(f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\n", encoding="utf-8")
-    (home / "config.yaml").write_text("platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8")
+    (home / ".env").write_text(
+        f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\n", encoding="utf-8"
+    )
+    (home / "config.yaml").write_text(
+        "platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8"
+    )
     _gateway_state(home)
     c = TestClient(app)
     c.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
@@ -136,8 +156,15 @@ def test_connected_deny_all_mentions_pending_pairing_requests(client):
         # A pending (unapproved) request is NOT a grant; the posture stays deny_all
         # and the message points the operator at the waiting request (fresh enough
         # to survive the store's TTL cleanup).
-        pending = {"r1": {"user_id": "42", "user_name": "operator", "created_at": _time.time(),
-                          "hash": "0" * 64, "salt": "00" * 16}}
+        pending = {
+            "r1": {
+                "user_id": "42",
+                "user_name": "operator",
+                "created_at": _time.time(),
+                "hash": "0" * 64,
+                "salt": "00" * 16,
+            }
+        }
         store._save_json(store._pending_path("telegram"), pending)
     try:
         payload = _test(client)
@@ -161,8 +188,12 @@ def test_profile_scoped_posture_ignores_root_env_and_reports_profile_grants(
     profiles_root = default_home / "profiles"
     worker_home = profiles_root / "worker"
     worker_home.mkdir(parents=True)
-    (worker_home / "config.yaml").write_text("platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8")
-    (worker_home / ".env").write_text(f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\n", encoding="utf-8")
+    (worker_home / "config.yaml").write_text(
+        "platforms:\n  telegram:\n    enabled: true\n", encoding="utf-8"
+    )
+    (worker_home / ".env").write_text(
+        f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\n", encoding="utf-8"
+    )
     _gateway_state(worker_home)
     monkeypatch.setattr(profiles_mod, "_get_default_clawk_home", lambda: default_home)
     monkeypatch.setattr(profiles_mod, "_get_profiles_root", lambda: profiles_root)
@@ -180,7 +211,8 @@ def test_profile_scoped_posture_ignores_root_env_and_reports_profile_grants(
 
     # The profile's own allowlist wins when present.
     (worker_home / ".env").write_text(
-        f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\nTELEGRAM_ALLOWED_USERS=7\n", encoding="utf-8"
+        f"TELEGRAM_BOT_TOKEN={_VALID_BOT_TOKEN}\nTELEGRAM_ALLOWED_USERS=7\n",
+        encoding="utf-8",
     )
     payload = _test(client, profile="worker")
     assert payload["auth_posture"] == "allowlist"

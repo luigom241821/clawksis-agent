@@ -53,8 +53,9 @@ def base64_sha512(data: bytes) -> str:
     return __import__("base64").b64encode(hashlib.sha512(data).digest()).decode("ascii")
 
 
-
-def test_real_prune_protects_live_macos_artifacts_and_fails_closed(r2_server, monkeypatch):
+def test_real_prune_protects_live_macos_artifacts_and_fails_closed(
+    r2_server, monkeypatch
+):
     legs, _bytes = _inputs("0.28.0+canary.20200101T000000Z")
     plan = merge_mac_feeds(legs, "v0.28.0+canary.20200101T000000Z")
     references = mac_feed_references(plan["text"])
@@ -70,7 +71,10 @@ def test_real_prune_protects_live_macos_artifacts_and_fails_closed(r2_server, mo
     # Fail closed: an unreadable manifest aborts the prune, nothing deleted.
     r2_server.store[stale] = (b"still protected until all feeds are readable", '"e"')
     before = set(r2_server.store)
-    r2_server.store["releases/darwin/canary/canary-mac.yml"] = (b"<html>503</html>", '"e"')
+    r2_server.store["releases/darwin/canary/canary-mac.yml"] = (
+        b"<html>503</html>",
+        '"e"',
+    )
     with pytest.raises(ValueError):
         r2.prune(keep_days=14, dry_run=False)
     assert set(r2_server.store) == before
@@ -84,14 +88,14 @@ def test_merges_native_legs_and_preserves_release_metadata():
     assert feed["releaseNotes"] == "two lines\nof release notes"
     assert plan["key"] == "releases/darwin/stable/stable-mac.yml"
     assert mac_feed_references(plan["text"]) == [
-        ref
-        for f in feed["files"]
-        for ref in (f["url"][1:], f"{f['url'][1:]}.blockmap")
+        ref for f in feed["files"] for ref in (f["url"][1:], f"{f['url'][1:]}.blockmap")
     ]
     assert r2.cache_control_for(plan["key"]) == "no-store"
     selection = _darwin_feed("canary", True)
     light_legs, _ = _inputs("0.29.0+canary.20260906T000000Z", light=True)
-    light_plan = merge_mac_feeds(light_legs, "v0.29.0+canary.20260906T000000Z", light=True)
+    light_plan = merge_mac_feeds(
+        light_legs, "v0.29.0+canary.20260906T000000Z", light=True
+    )
     assert light_plan["key"] == f"{selection['directory']}/{selection['fileName']}"
 
 
@@ -108,7 +112,9 @@ def test_rejects_broken_legs_instead_of_publishing(kind):
         if kind == "version":
             feed["version"] = "0.27.0"
         if kind == "variant":
-            feed["files"][0]["url"] = feed["files"][0]["url"].replace("ClawksisBundled", "ClawksisLight")
+            feed["files"][0]["url"] = feed["files"][0]["url"].replace(
+                "ClawksisBundled", "ClawksisLight"
+            )
         if kind == "hash":
             feed["files"][0]["sha512"] = "invalid"
         if kind == "legacy":
@@ -126,16 +132,19 @@ def test_semver_grammar_rejects_non_release_versions():
     # loudly on anything else instead of guessing an order.
     from scripts.releases.semver import compare, is_valid_version
 
-    assert is_valid_version("0.28.0") and is_valid_version("0.28.0+canary.20260904T101010Z")
+    assert is_valid_version("0.28.0") and is_valid_version(
+        "0.28.0+canary.20260904T101010Z"
+    )
     # Legacy CalVer (four-digit major) is not a release version anywhere.
     assert not is_valid_version("0.28") and not is_valid_version("2026.7.20")
     assert not is_valid_version("0.28.0-beta.1")
     assert compare("0.28.0", "0.27.9") == 1
     assert compare("0.28.0+canary.20260904T101010Z", "0.28.0") == 0
-    assert compare("0.28.0+canary.20260904T101010Z", "0.28.0+canary.20260904T101011Z") == 0
+    assert (
+        compare("0.28.0+canary.20260904T101010Z", "0.28.0+canary.20260904T101011Z") == 0
+    )
     with pytest.raises(ValueError):
         compare("nonsense", "0.28.0")
-
 
 
 def test_finalize_uses_the_real_signed_transport_and_publishes_last(r2_server):
@@ -176,13 +185,18 @@ def test_finalize_rejects_a_downgrade_over_the_live_feed(r2_server):
         # The live feed is already at 0.28.0.
         newer = merge_mac_feeds(_inputs()[0], "v0.28.0")
         r2_server.store["releases/darwin/stable/stable-mac.yml"] = (
-            newer["text"].encode(), '"live"')
+            newer["text"].encode(),
+            '"live"',
+        )
         with pytest.raises(ValueError, match="backward"):
             darwin.finalize(tag="v0.27.0", dir=dir_path)
     # The live pointer was not replaced.
-    assert parse_mac_feed(
-        r2_server.store["releases/darwin/stable/stable-mac.yml"][0].decode()
-    )["version"] == "0.28.0"
+    assert (
+        parse_mac_feed(
+            r2_server.store["releases/darwin/stable/stable-mac.yml"][0].decode()
+        )["version"]
+        == "0.28.0"
+    )
 
 
 def test_finalize_rejects_unknown_variant():
@@ -190,41 +204,53 @@ def test_finalize_rejects_unknown_variant():
         darwin.finalize(tag="v0.28.0", dir=".", variant="dark")
 
 
-@pytest.mark.parametrize('fault', ['identical', 'different', 'corrupt-artifact', 'stale-etag', 'readback', 'upgrade'])
+@pytest.mark.parametrize(
+    "fault",
+    ["identical", "different", "corrupt-artifact", "stale-etag", "readback", "upgrade"],
+)
 def test_finalize_live_feed_faults(tmp_path, r2_server, fault):
     legs, content = _inputs()
     for name, text in legs.items():
-        (tmp_path / name).write_text(text, encoding='utf-8')
+        (tmp_path / name).write_text(text, encoding="utf-8")
     r2_server.store.update({key: (value, '"e"') for key, value in content.items()})
-    key = 'releases/darwin/stable/stable-mac.yml'
-    live = merge_mac_feeds(_inputs('0.28.0' if fault in {'identical', 'different'} else '0.27.0')[0],
-                           'v0.28.0' if fault in {'identical', 'different'} else 'v0.27.0')['text']
-    if fault == 'different':
-        live = live.replace('two lines', 'other notes')
+    key = "releases/darwin/stable/stable-mac.yml"
+    live = merge_mac_feeds(
+        _inputs("0.28.0" if fault in {"identical", "different"} else "0.27.0")[0],
+        "v0.28.0" if fault in {"identical", "different"} else "v0.27.0",
+    )["text"]
+    if fault == "different":
+        live = live.replace("two lines", "other notes")
     r2_server.store[key] = (live.encode(), '"live"')
-    if fault == 'corrupt-artifact':
-        r2_server.store[next(iter(content))] = (b'corrupt', '"e"')
-    if fault == 'stale-etag':
+    if fault == "corrupt-artifact":
+        r2_server.store[next(iter(content))] = (b"corrupt", '"e"')
+    if fault == "stale-etag":
         r2_server.race_key = key
-    if fault == 'readback':
+    if fault == "readback":
         r2_server.corrupt_put = key
-    errors = {'different': (ValueError, 'different artifacts'),
-              'corrupt-artifact': (ValueError, 'checksum mismatch'),
-              'stale-etag': (r2.R2RequestError, '412'), 'readback': (ValueError, 'readback differs')}
+    errors = {
+        "different": (ValueError, "different artifacts"),
+        "corrupt-artifact": (ValueError, "checksum mismatch"),
+        "stale-etag": (r2.R2RequestError, "412"),
+        "readback": (ValueError, "readback differs"),
+    }
     if fault in errors:
         error, message = errors[fault]
         with pytest.raises(error, match=message):
-            darwin.finalize(tag='v0.28.0', dir=str(tmp_path))
+            darwin.finalize(tag="v0.28.0", dir=str(tmp_path))
     else:
-        darwin.finalize(tag='v0.28.0', dir=str(tmp_path))
-    puts = [headers for method, _, headers in r2_server.requests if method == 'PUT']
-    if fault in {'identical', 'different', 'corrupt-artifact'}:
+        darwin.finalize(tag="v0.28.0", dir=str(tmp_path))
+    puts = [headers for method, _, headers in r2_server.requests if method == "PUT"]
+    if fault in {"identical", "different", "corrupt-artifact"}:
         assert puts == [] and r2_server.store[key][0] == live.encode()
     else:
-        assert len(puts) == 1 and puts[0]['If-Match'] == '"live"'
-        if fault == 'stale-etag':
+        assert len(puts) == 1 and puts[0]["If-Match"] == '"live"'
+        if fault == "stale-etag":
             assert r2_server.store[key] == (live.encode(), '"raced"')
-        elif fault == 'upgrade':
-            assert parse_mac_feed(r2_server.store[key][0].decode())['version'] == '0.28.0'
-        elif fault == 'readback':
-            assert [method for method, path, _ in r2_server.requests if path.endswith(key)] == ['GET', 'PUT', 'HEAD', 'GET']
+        elif fault == "upgrade":
+            assert (
+                parse_mac_feed(r2_server.store[key][0].decode())["version"] == "0.28.0"
+            )
+        elif fault == "readback":
+            assert [
+                method for method, path, _ in r2_server.requests if path.endswith(key)
+            ] == ["GET", "PUT", "HEAD", "GET"]

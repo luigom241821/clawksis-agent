@@ -11,24 +11,73 @@ from typing import Any, Callable, Iterable, Optional
 from clawk_cli import kanban_db as kb
 from clawk_cli import kanban_workflow
 
-_STATUS_ICONS = {c.key: c.icon for c in kanban_workflow.DEFAULT_WORKFLOW} | {kanban_workflow.ARCHIVED: "—"}
+_STATUS_ICONS = {c.key: c.icon for c in kanban_workflow.DEFAULT_WORKFLOW} | {
+    kanban_workflow.ARCHIVED: "—"
+}
 
 _TASK_DICT_FIELDS = (
-    "id", "title", "body", "assignee", "status", "priority", "tenant",
-    "workspace_kind", "workspace_path", "branch_name", "project_id",
-    "created_by", "created_at", "started_at", "completed_at", "result",
-    "skills", "max_runtime_seconds", "max_retries", "model_override", "provider_override",
-    "session_id", "workflow_template_id", "current_step_key", "completion_contract", "last_failure_error",
+    "id",
+    "title",
+    "body",
+    "assignee",
+    "status",
+    "priority",
+    "tenant",
+    "workspace_kind",
+    "workspace_path",
+    "branch_name",
+    "project_id",
+    "created_by",
+    "created_at",
+    "started_at",
+    "completed_at",
+    "result",
+    "skills",
+    "max_runtime_seconds",
+    "max_retries",
+    "model_override",
+    "provider_override",
+    "session_id",
+    "workflow_template_id",
+    "current_step_key",
+    "completion_contract",
+    "last_failure_error",
 )
 _SHOW_RUN_FIELDS = (
-    "id", "profile", "step_key", "status", "outcome", "summary", "error",
-    "metadata", "worker_pid", "started_at", "ended_at",
+    "id",
+    "profile",
+    "step_key",
+    "status",
+    "outcome",
+    "summary",
+    "error",
+    "metadata",
+    "worker_pid",
+    "started_at",
+    "ended_at",
 )
 _RUNS_RUN_FIELDS = (
-    "id", "profile", "status", "outcome", "started_at", "ended_at",
-    "summary", "error", "metadata", "worker_pid", "step_key",
+    "id",
+    "profile",
+    "status",
+    "outcome",
+    "started_at",
+    "ended_at",
+    "summary",
+    "error",
+    "metadata",
+    "worker_pid",
+    "step_key",
 )
-_ATTACHMENT_FIELDS = ("id", "filename", "content_type", "size", "uploaded_by", "stored_path", "created_at")
+_ATTACHMENT_FIELDS = (
+    "id",
+    "filename",
+    "content_type",
+    "size",
+    "uploaded_by",
+    "stored_path",
+    "created_at",
+)
 
 
 def _fmt_ts(ts: Optional[int]) -> str:
@@ -56,8 +105,12 @@ def _err(msg: str, rc: int = 1) -> int:
     return rc
 
 
-def _bulk_apply(ids: Iterable[str], op: Callable[[str], Any],
-                ok_msg: Callable[[str], str], fail_msg: Callable[[str], str]) -> int:
+def _bulk_apply(
+    ids: Iterable[str],
+    op: Callable[[str], Any],
+    ok_msg: Callable[[str], str],
+    fail_msg: Callable[[str], str],
+) -> int:
     """Run ``op(tid) -> bool`` per id, print ok/fail lines, exit 1 if any failed."""
     failed = False
     for tid in ids:

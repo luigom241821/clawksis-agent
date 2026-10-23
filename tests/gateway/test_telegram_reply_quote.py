@@ -70,5 +70,3 @@ def test_native_partial_quote_used_as_reply_to_text():
 
     assert event.reply_to_text == "Item B: rotate keys"
     assert event.reply_to_message_id == "42"
-
-

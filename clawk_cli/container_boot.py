@@ -4,6 +4,7 @@ Wired into the image as /etc/cont-init.d/02-reconcile-profiles. Runs as root aft
 01-clawk-setup (the stage2 hook) has chowned the volume and seeded $CLAWK_HOME, but
 before s6-rc starts user services.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,7 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Sequence
 
-from clawk_cli.gateway_multiplex_s6 import AUTOSTART_STATES as _AUTOSTART_STATES, fold_named_slot_intent
+from clawk_cli.gateway_multiplex_s6 import (
+    AUTOSTART_STATES as _AUTOSTART_STATES,
+    fold_named_slot_intent,
+)
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +51,7 @@ ReconcileActionLabel = Literal["started", "registered", "skipped"]
 @dataclass(frozen=True)
 class ReconcileAction:
     """One profile's outcome from a single reconciliation pass."""
+
     profile: str
     prior_state: str | None
     action: ReconcileActionLabel
@@ -58,12 +63,21 @@ class ReconcileAction:
     folded_into_root: bool = False
 
 
-def _slot_action(profile: str, profile_dir: Path, prior_state: str | None, start: bool,
-                 *, folded_into_root: bool = False) -> ReconcileAction:
-    return ReconcileAction(profile=profile, prior_state=prior_state,
-                           action="started" if start else "registered",
-                           prior_exit=_read_prior_exit_label(profile_dir),
-                           folded_into_root=folded_into_root)
+def _slot_action(
+    profile: str,
+    profile_dir: Path,
+    prior_state: str | None,
+    start: bool,
+    *,
+    folded_into_root: bool = False,
+) -> ReconcileAction:
+    return ReconcileAction(
+        profile=profile,
+        prior_state=prior_state,
+        action="started" if start else "registered",
+        prior_exit=_read_prior_exit_label(profile_dir),
+        folded_into_root=folded_into_root,
+    )
 
 
 def _named_profile_dirs(clawk_home: Path) -> list[tuple[str, Path]]:
@@ -77,16 +91,22 @@ def _named_profile_dirs(clawk_home: Path) -> list[tuple[str, Path]]:
             continue
         # "default" is reserved for the root profile slot.
         if entry.name == "default":
-            log.warning("profiles/default/ exists — skipping to avoid colliding with the "
-                        "reserved root-profile s6 slot")
+            log.warning(
+                "profiles/default/ exists — skipping to avoid colliding with the "
+                "reserved root-profile s6 slot"
+            )
             continue
         found.append((entry.name, entry))
     return found
 
 
 def reconcile_profile_gateways(
-    *, clawk_home: Path, scandir: Path, dry_run: bool = False,
-    container_argv: Sequence[str] | None = None) -> list[ReconcileAction]:
+    *,
+    clawk_home: Path,
+    scandir: Path,
+    dry_run: bool = False,
+    container_argv: Sequence[str] | None = None,
+) -> list[ReconcileAction]:
     """Recreate s6 service registrations for every persistent profile.
 
     Always registers a ``gateway-default`` slot for the root profile (the implicit profile at
@@ -108,15 +128,20 @@ def reconcile_profile_gateways(
     # It used to be gated on `gateway.multiplex_profiles`, which made the UNSET default (on) boot
     # the slots anyway — the container shipped the opt-out topology by accident. The key is retired
     # as a topology switch (clawk_cli/gateway_multiplex_mode.py), so there is nothing to read.
-    named = [(name, entry, _read_desired_state(entry)) for name, entry in _named_profile_dirs(clawk_home)]
+    named = [
+        (name, entry, _read_desired_state(entry))
+        for name, entry in _named_profile_dirs(clawk_home)
+    ]
     # The exception is a `gateway.standalone` profile: the root multiplexer never serves it
     # (profiles_to_serve excludes it), so it boots its own slot from its own intent, beside the root.
     from clawk_cli.profiles import profile_is_standalone
+
     standalone = {name for name, entry, _prior in named if profile_is_standalone(entry)}
 
     # A legacy `gateway run` container with no state yet seeds `running` (pre-s6 behavior).
     legacy_default_state = _maybe_migrate_legacy_gateway_run_state(
-        clawk_home, container_argv=container_argv, dry_run=dry_run)
+        clawk_home, container_argv=container_argv, dry_run=dry_run
+    )
     default_prior_state = legacy_default_state or _read_desired_state(clawk_home)
     # The root slot INHERITS every named slot's autostart intent, because it is the one process
     # that serves them. Without this an image only ever driven as `clawk -p coder gateway start`
@@ -124,15 +149,24 @@ def reconcile_profile_gateways(
     # registered down unconditionally, and every action reported "registered" — a container that
     # looks healthy while nothing is listening.
     fold = fold_named_slot_intent(
-        default_prior_state, ((name, prior) for name, _dir, prior in named if name not in standalone))
+        default_prior_state,
+        ((name, prior) for name, _dir, prior in named if name not in standalone),
+    )
     folded, default_should_start = list(fold.folded), fold.root_should_start
     if folded and default_prior_state not in _AUTOSTART_STATES:
         log.warning("%s", boot_notice(folded))
     if not dry_run:
         _cleanup_stale_runtime_files(clawk_home)
         _register_service(scandir, "default", start=default_should_start)
-    actions.append(_slot_action("default", clawk_home, default_prior_state, default_should_start,
-                                folded_into_root=bool(folded)))
+    actions.append(
+        _slot_action(
+            "default",
+            clawk_home,
+            default_prior_state,
+            default_should_start,
+            folded_into_root=bool(folded),
+        )
+    )
 
     for name, entry, prior_state in named:
         # Registered down unless standalone: any other started named slot IS a second gateway on this host.
@@ -140,8 +174,11 @@ def reconcile_profile_gateways(
         if not dry_run:
             _cleanup_stale_runtime_files(entry)
             _register_service(scandir, name, start=should_start)
-        actions.append(_slot_action(name, entry, prior_state, should_start,
-                                    folded_into_root=name in folded))
+        actions.append(
+            _slot_action(
+                name, entry, prior_state, should_start, folded_into_root=name in folded
+            )
+        )
     if not dry_run:
         _write_reconcile_log(clawk_home, actions)
     return actions
@@ -149,13 +186,17 @@ def reconcile_profile_gateways(
 
 def boot_notice(folded: Sequence[str]) -> str:
     """One line naming the profiles whose autostart intent the root slot took over."""
-    return ("reconcile: profile gateway(s) " + ", ".join(sorted(folded)) +
-            " asked to autostart; one gateway per container serves every non-standalone profile, so the ROOT "
-            "slot (gateway-default) was started instead and multiplexes them.")
+    return (
+        "reconcile: profile gateway(s) "
+        + ", ".join(sorted(folded))
+        + " asked to autostart; one gateway per container serves every non-standalone profile, so the ROOT "
+        "slot (gateway-default) was started instead and multiplexes them."
+    )
 
 
 def _maybe_migrate_legacy_gateway_run_state(
-    clawk_home: Path, *, container_argv: Sequence[str] | None, dry_run: bool) -> str | None:
+    clawk_home: Path, *, container_argv: Sequence[str] | None, dry_run: bool
+) -> str | None:
     """Seed root gateway_state for pre-s6 `gateway run` containers (the tini image let users run
     the gateway as the container command; post-s6 it would register down and never start)."""
     state_file = clawk_home / "gateway_state.json"
@@ -163,17 +204,26 @@ def _maybe_migrate_legacy_gateway_run_state(
         return None
     if os.environ.get("CLAWK_GATEWAY_NO_SUPERVISE", "").lower() in ("1", "true", "yes"):
         return None
-    argv = tuple(container_argv) if container_argv is not None else _read_container_argv()
+    argv = (
+        tuple(container_argv) if container_argv is not None else _read_container_argv()
+    )
     if not _is_legacy_gateway_run_request(argv):
         return None
     if not dry_run:
         import time
-        state_file.write_text(json.dumps({
-            "gateway_state": "running",
-            "desired_state": "running",
-            "timestamp": int(time.time()),
-            "migrated_from": "legacy-container-cmd",
-        }) + "\n", encoding="utf-8")
+
+        state_file.write_text(
+            json.dumps(
+                {
+                    "gateway_state": "running",
+                    "desired_state": "running",
+                    "timestamp": int(time.time()),
+                    "migrated_from": "legacy-container-cmd",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     return "running"
 
 
@@ -185,6 +235,7 @@ def _cmdline_argv(cmdline: Path) -> tuple[str, ...]:
 def _read_container_argv() -> tuple[str, ...]:
     """Best-effort argv of the container's main program (the one holding ``main-wrapper.sh``):
     PID 1 first (s6 v2 ``/init``), then every ``/proc/*/cmdline`` (s6 v3 ``s6-svscan``)."""
+
     def _cmdlines():
         yield Path("/proc/1/cmdline")
         try:
@@ -211,14 +262,20 @@ def _strip_container_argv_prefix(argv: Sequence[str]) -> list[str]:
     owns — rather than peeling tokens positionally (which broke on the s6 v2→v3 bump).
     """
     args = list(argv)
-    wrapper_idx = next((i for i, a in enumerate(args) if a.endswith("main-wrapper.sh")), None)
+    wrapper_idx = next(
+        (i for i, a in enumerate(args) if a.endswith("main-wrapper.sh")), None
+    )
     if wrapper_idx is not None:
         args = args[wrapper_idx + 1 :]
-    elif args and Path(args[0]).name == "init":  # defensive: `init` with no wrapper token
+    elif (
+        args and Path(args[0]).name == "init"
+    ):  # defensive: `init` with no wrapper token
         args = args[1:]
     if args and args[0].endswith("entrypoint-dispatch.sh"):  # non-PID-1 dispatch shim
         args = args[1:]
-    if args and Path(args[0]).name == "clawk":  # the wrapper re-execs `clawk <subcommand>`
+    if (
+        args and Path(args[0]).name == "clawk"
+    ):  # the wrapper re-execs `clawk <subcommand>`
         args = args[1:]
     return args
 
@@ -265,6 +322,7 @@ def _read_prior_exit_label(profile_dir: Path) -> str:
     """Exception-free ``lifecycle_ledger.read_prior_exit_label`` — forensics never block boot."""
     try:
         from gateway.lifecycle_ledger import read_prior_exit_label
+
         return read_prior_exit_label(profile_dir)
     except Exception:
         return "unknown"
@@ -290,7 +348,10 @@ def _register_service(scandir: Path, profile: str, *, start: bool) -> None:
     import shutil
 
     from clawk_cli.service_manager import (
-        S6ServiceManager, _seed_supervise_skeleton, validate_profile_name)
+        S6ServiceManager,
+        _seed_supervise_skeleton,
+        validate_profile_name,
+    )
 
     validate_profile_name(profile)
     service_dir = scandir / f"gateway-{profile}"
@@ -304,11 +365,15 @@ def _register_service(scandir: Path, profile: str, *, start: bool) -> None:
         (tmp_dir / "type").write_text("longrun\n", encoding="utf-8")
         # Manager's own rendering keeps both registration paths consistent; per-profile env
         # comes from the profile's config.yaml, so extra_env is empty.
-        _write_exec(tmp_dir / "run", S6ServiceManager._render_run_script(profile, extra_env={}))
+        _write_exec(
+            tmp_dir / "run", S6ServiceManager._render_run_script(profile, extra_env={})
+        )
         _write_exec(tmp_dir / "finish", S6ServiceManager._render_finish_script())
         (tmp_dir / "log").mkdir()
         _write_exec(tmp_dir / "log" / "run", S6ServiceManager._render_log_run(profile))
-        if not start:  # `clawk -p <profile> gateway start` brings it up later (s6-svc -u)
+        if (
+            not start
+        ):  # `clawk -p <profile> gateway start` brings it up later (s6-svc -u)
             (tmp_dir / "down").touch()
         # Pre-create supervise/ with clawk ownership BEFORE publishing so s6-supervise inherits
         # it and runtime s6-svc calls as the clawk user won't EACCES.
@@ -336,6 +401,7 @@ def _write_reconcile_log(clawk_home: Path, actions: list[ReconcileAction]) -> No
     item O3).
     """
     import time
+
     log_dir = clawk_home / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "container-boot.log"
@@ -347,9 +413,11 @@ def _write_reconcile_log(clawk_home: Path, actions: list[ReconcileAction]) -> No
     ts = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     with log_path.open("a", encoding="utf-8") as f:
         for a in actions:
-            f.write(f"{ts} profile={a.profile} prior_state={a.prior_state} "
-                    f"action={a.action} prior_exit={a.prior_exit} "
-                    f"folded_into_root={a.folded_into_root}\n")
+            f.write(
+                f"{ts} profile={a.profile} prior_state={a.prior_state} "
+                f"action={a.action} prior_exit={a.prior_exit} "
+                f"folded_into_root={a.folded_into_root}\n"
+            )
 
 
 def main() -> int:
@@ -358,17 +426,23 @@ def main() -> int:
     # containers race to flock() the same s6-log files → "Resource busy" restart storm. Detected
     # from PID 1 argv, not an operator flag (a flag can be forgotten in a hand-written manifest).
     if _is_dashboard_container(_read_container_argv()):
-        print("reconcile: skipping (dashboard container — does not need per-profile gateways)")
+        print(
+            "reconcile: skipping (dashboard container — does not need per-profile gateways)"
+        )
         return 0
 
     clawk_home = Path(os.environ.get("CLAWK_HOME", "/opt/data"))
     scandir = Path(os.environ.get("S6_PROFILE_GATEWAY_SCANDIR", "/run/service"))
     actions = reconcile_profile_gateways(clawk_home=clawk_home, scandir=scandir)
-    folded = [a.profile for a in actions if a.profile != "default" and a.folded_into_root]
+    folded = [
+        a.profile for a in actions if a.profile != "default" and a.folded_into_root
+    ]
     if folded:
         print(boot_notice(folded))
     for a in actions:
-        print(f"reconcile: profile={a.profile} prior_state={a.prior_state} action={a.action}")
+        print(
+            f"reconcile: profile={a.profile} prior_state={a.prior_state} action={a.action}"
+        )
     return 0
 
 

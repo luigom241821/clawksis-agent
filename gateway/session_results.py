@@ -1,7 +1,13 @@
 """Exact execution results commit with settlement, before delivery/publication."""
+
 from contextvars import ContextVar
 
-from clawk_state_runtime import RuntimeStoreError, _admission, _epoch, settle_session_input
+from clawk_state_runtime import (
+    RuntimeStoreError,
+    _admission,
+    _epoch,
+    settle_session_input,
+)
 
 execution_result: ContextVar[dict | None] = ContextVar("execution_result", default=None)
 from clawk_state_terminal import RESULT_PREFIX as _RESULT_PREFIX, load_result
@@ -12,9 +18,14 @@ def record_unexecuted_failure(reply):
     unreadable): commit a failed result for the executing admission, so no surface settles it
     ``completed`` with the apology as the turn's output. Returns ``reply`` unchanged."""
     captured = execution_result.get()
-    if captured is not None and 'result' not in captured:
-        captured['result'] = {'final_response': '', 'messages': [], 'failed': True, 'completed': False,
-                              'error': str(reply or 'The admitted turn failed.')}
+    if captured is not None and "result" not in captured:
+        captured["result"] = {
+            "final_response": "",
+            "messages": [],
+            "failed": True,
+            "completed": False,
+            "error": str(reply or "The admitted turn failed."),
+        }
     return reply
 
 
@@ -22,7 +33,7 @@ def record_terminal_failure(result):
     """Retain an owner-side failure even if an abandoned executor returns while delivery unwinds."""
     captured = execution_result.get()
     if captured is not None:
-        captured['terminal_result'] = result
+        captured["terminal_result"] = result
     return result
 
 
@@ -32,6 +43,7 @@ def _redacted(value):
     prints the completion event, never this copy."""
     if isinstance(value, str):
         from agent.redact import redact_sensitive_text
+
         return redact_sensitive_text(value)
     if isinstance(value, dict):
         return {k: _redacted(v) for k, v in value.items()}
@@ -41,29 +53,43 @@ def _redacted(value):
 
 
 def retain_result(db, *, epoch, row, result):
-    return settle_session_input(db, epoch=epoch, admission_id=row['admission_id'],
-                                generation=row['generation'], outcome='completed', result=_redacted(result))
+    return settle_session_input(
+        db,
+        epoch=epoch,
+        admission_id=row["admission_id"],
+        generation=row["generation"],
+        outcome="completed",
+        result=_redacted(result),
+    )
 
 
 def prepare_result(row, response, outcome, result=None):
     """``(outcome, stored_result)``: the outcome the result's own flags imply and the compact,
     redacted copy settlement stores. Pure CPU work, safe off-loop and outside the stream lock."""
     if result is None:
-        result = {'result': {'final_response': response or '', 'messages': []}, 'usage': {}}
-    value = result['result']
-    if value.get('interrupted'):
-        outcome = 'interrupted'
-    elif value.get('failed') or value.get('error'):
-        outcome = 'failed'
-    if outcome in ('failed', 'interrupted'):
-        value['failed' if outcome == 'failed' else 'interrupted'] = True
-        value['completed'] = False
+        result = {
+            "result": {"final_response": response or "", "messages": []},
+            "usage": {},
+        }
+    value = result["result"]
+    if value.get("interrupted"):
+        outcome = "interrupted"
+    elif value.get("failed") or value.get("error"):
+        outcome = "failed"
+    if outcome in ("failed", "interrupted"):
+        value["failed" if outcome == "failed" else "interrupted"] = True
+        value["completed"] = False
     # Compact before redacting, so the walk covers this turn's output, not every earlier turn.
     from clawk_state_terminal import compact_result
-    return outcome, _redacted(compact_result(result, user_message=row['payload'].get('text')))
+
+    return outcome, _redacted(
+        compact_result(result, user_message=row["payload"].get("text"))
+    )
 
 
-def finish_result(db, *, epoch, row, response, outcome, result=None, prepared=None, transfers=None):
+def finish_result(
+    db, *, epoch, row, response, outcome, result=None, prepared=None, transfers=None
+):
     """Delivery failure cannot rewrite an already committed execution outcome.
 
     `result` is the exact structured result captured in-process; the managed
@@ -73,16 +99,21 @@ def finish_result(db, *, epoch, row, response, outcome, result=None, prepared=No
     """
     with db._read_ctx() as conn:
         _epoch(conn, epoch)
-        current = _admission(conn, row['admission_id'])
-        if current['owner_epoch'] != epoch or current['generation'] != row['generation']:
-            raise RuntimeStoreError('stale_generation')
-        if current['status'] == 'terminal':
-            saved = conn.execute('SELECT value FROM state_meta WHERE key=?',
-                                 (_RESULT_PREFIX + row['admission_id'],)).fetchone()
+        current = _admission(conn, row["admission_id"])
+        if (
+            current["owner_epoch"] != epoch
+            or current["generation"] != row["generation"]
+        ):
+            raise RuntimeStoreError("stale_generation")
+        if current["status"] == "terminal":
+            saved = conn.execute(
+                "SELECT value FROM state_meta WHERE key=?",
+                (_RESULT_PREFIX + row["admission_id"],),
+            ).fetchone()
             if saved is None:
-                raise RuntimeStoreError('storage_unavailable')
+                raise RuntimeStoreError("storage_unavailable")
             result = load_result(saved[0])
-            return dict(current), result['result'].get('final_response') or ''
+            return dict(current), result["result"].get("final_response") or ""
     outcome, stored = prepared or prepare_result(row, response, outcome, result)
     # A turn the owner's restart/stop interrupted: its reason commits as a Clawksis transcript notice
     # in this same write, so a viewer that reconnects after the restart reads why (#134889 GW-21);
@@ -91,29 +122,58 @@ def finish_result(db, *, epoch, row, response, outcome, result=None, prepared=No
     # A gateway-owned refusal (a message typed into a cron session) commits its explanation and
     # error card as the transcript's failed-turn boundary in this same write too: the admission
     # result is not history, so a reopened chat would otherwise show nothing about the refusal.
-    from gateway.session_settlement_recovery import gateway_refusal_boundary, owner_stop_notice
+    from gateway.session_settlement_recovery import (
+        gateway_refusal_boundary,
+        owner_stop_notice,
+    )
+
     notice, display_metadata = owner_stop_notice(result, outcome, row), None
-    if notice is None and (refusal := gateway_refusal_boundary(result, outcome)) is not None:
+    if (
+        notice is None
+        and (refusal := gateway_refusal_boundary(result, outcome)) is not None
+    ):
         notice, display_metadata = refusal
-    write = None if notice is None else (lambda conn, _current: close_discarded_turn(
-        db, conn, row, notice, replace_after=row.get('transcript_mark'), display_metadata=display_metadata))
-    settled = settle_session_input(db, epoch=epoch, admission_id=row['admission_id'],
-        generation=row['generation'], outcome=outcome, result=stored, _transfers=transfers,
-        _terminal_write=write)
+    write = (
+        None
+        if notice is None
+        else (
+            lambda conn, _current: close_discarded_turn(
+                db,
+                conn,
+                row,
+                notice,
+                replace_after=row.get("transcript_mark"),
+                display_metadata=display_metadata,
+            )
+        )
+    )
+    settled = settle_session_input(
+        db,
+        epoch=epoch,
+        admission_id=row["admission_id"],
+        generation=row["generation"],
+        outcome=outcome,
+        result=stored,
+        _transfers=transfers,
+        _terminal_write=write,
+    )
     return settled, response
 
 
 def admission_result(db, admission_id):
     with db._read_ctx() as conn:
         row = _admission(conn, admission_id)
-        if row['status'] != 'terminal':
+        if row["status"] != "terminal":
             return None
-        saved = conn.execute('SELECT value FROM state_meta WHERE key=?',
-                             (_RESULT_PREFIX + admission_id,)).fetchone()
+        saved = conn.execute(
+            "SELECT value FROM state_meta WHERE key=?", (_RESULT_PREFIX + admission_id,)
+        ).fetchone()
         return load_result(saved[0]) if saved else None
 
 
-def close_discarded_turn(db, conn, row, notice=None, *, replace_after=None, display_metadata=None):
+def close_discarded_turn(
+    db, conn, row, notice=None, *, replace_after=None, display_metadata=None
+):
     """Close a discarded ``unknown`` turn the way a failed turn is closed, on the resolution's
     own transaction (``resolve_unknown_session_input(_terminal_write=...)``).
 
@@ -140,23 +200,49 @@ def close_discarded_turn(db, conn, row, notice=None, *, replace_after=None, disp
     ``display_metadata`` (``{error, error_surface}``) rides the boundary so a reopened chat redraws
     the turn's error card from history (``agent.conversation_loop._failed_turn_display_metadata``)."""
     import time
-    from agent.turn_failure_copy import FAILED_TURN_DISPLAY_KIND, PARTIAL_FAILED_TURN_NOTICE
+    from agent.turn_failure_copy import (
+        FAILED_TURN_DISPLAY_KIND,
+        PARTIAL_FAILED_TURN_NOTICE,
+    )
     from clawk_state_local_lineage import local_physical_target
     from clawk_state_runtime import _canonical_chain
-    target = _canonical_chain(conn, local_physical_target(conn, row['target_session_id']))[-1]
-    tail = conn.execute("SELECT role, tool_calls, id, display_kind FROM messages WHERE session_id=? AND active=1 "
-                        "AND role NOT IN ('session_meta','system') ORDER BY id DESC LIMIT 1", (target,)).fetchone()
-    if (notice is not None and type(replace_after) is int and tail is not None and tail[0] == 'assistant'
-            and tail[3] == FAILED_TURN_DISPLAY_KIND and tail[2] > replace_after):
-        conn.execute("UPDATE messages SET content=?, display_metadata=? WHERE id=?",
-                     (notice, db._encode_display_metadata(display_metadata), tail[2]))
+
+    target = _canonical_chain(
+        conn, local_physical_target(conn, row["target_session_id"])
+    )[-1]
+    tail = conn.execute(
+        "SELECT role, tool_calls, id, display_kind FROM messages WHERE session_id=? AND active=1 "
+        "AND role NOT IN ('session_meta','system') ORDER BY id DESC LIMIT 1",
+        (target,),
+    ).fetchone()
+    if (
+        notice is not None
+        and type(replace_after) is int
+        and tail is not None
+        and tail[0] == "assistant"
+        and tail[3] == FAILED_TURN_DISPLAY_KIND
+        and tail[2] > replace_after
+    ):
+        conn.execute(
+            "UPDATE messages SET content=?, display_metadata=? WHERE id=?",
+            (notice, db._encode_display_metadata(display_metadata), tail[2]),
+        )
         return True
-    if notice is None and (tail is None or not (
-            tail[0] == 'user' or (tail[0] == 'assistant' and tail[1] not in (None, '', '[]')))):
+    if notice is None and (
+        tail is None
+        or not (
+            tail[0] == "user"
+            or (tail[0] == "assistant" and tail[1] not in (None, "", "[]"))
+        )
+    ):
         return False
-    boundary = {'role': 'assistant', 'content': notice or PARTIAL_FAILED_TURN_NOTICE, 'timestamp': time.time(),
-                'display_kind': FAILED_TURN_DISPLAY_KIND}
+    boundary = {
+        "role": "assistant",
+        "content": notice or PARTIAL_FAILED_TURN_NOTICE,
+        "timestamp": time.time(),
+        "display_kind": FAILED_TURN_DISPLAY_KIND,
+    }
     if display_metadata:
-        boundary['display_metadata'] = display_metadata
+        boundary["display_metadata"] = display_metadata
     db._append_messages_in_transaction(conn, target, [boundary])
     return True

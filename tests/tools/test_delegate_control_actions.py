@@ -66,15 +66,11 @@ def _register(sid: str, child, **extra) -> None:
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_grandchild_is_descendant():
     parent = _StubParent()
     mid = _StubChild(parent)
     grandchild = _StubChild(mid)
     assert _is_descendant_of(grandchild, parent) is True
-
-
 
 
 def test_missing_ref_is_not_descendant():
@@ -121,8 +117,6 @@ def test_list_shows_only_own_children():
         _unregister_subagent("sid-ctl-list-2")
 
 
-
-
 # ---------------------------------------------------------------------------
 # action='steer'
 # ---------------------------------------------------------------------------
@@ -154,10 +148,6 @@ def test_steer_foreign_child_is_refused():
         _unregister_subagent("sid-ctl-steer-2")
 
 
-
-
-
-
 def test_steer_closed_acceptance_is_refused():
     parent = _StubParent()
     child = _StubChild(parent)
@@ -183,12 +173,12 @@ def test_stop_interrupts_owned_child(monkeypatch):
     _register("sid-ctl-stop-1", child)
     interrupted = []
     monkeypatch.setattr(
-        dt, "request_hard_interrupt", lambda agent, reason: interrupted.append(agent) or True
+        dt,
+        "request_hard_interrupt",
+        lambda agent, reason: interrupted.append(agent) or True,
     )
     try:
-        out = json.loads(
-            _handle_control_action("stop", "sid-ctl-stop-1", None, parent)
-        )
+        out = json.loads(_handle_control_action("stop", "sid-ctl-stop-1", None, parent))
         assert out["status"] == "interrupt_requested"
         assert interrupted == [child]
     finally:
@@ -203,7 +193,9 @@ def test_stop_foreign_child_is_refused(monkeypatch):
     _register("sid-ctl-stop-2", foreign)
     interrupted = []
     monkeypatch.setattr(
-        dt, "request_hard_interrupt", lambda agent, reason: interrupted.append(agent) or True
+        dt,
+        "request_hard_interrupt",
+        lambda agent, reason: interrupted.append(agent) or True,
     )
     try:
         out = _handle_control_action("stop", "sid-ctl-stop-2", None, parent)
@@ -213,13 +205,9 @@ def test_stop_foreign_child_is_refused(monkeypatch):
         _unregister_subagent("sid-ctl-stop-2")
 
 
-
-
 # ---------------------------------------------------------------------------
 # delegate_task() entrypoint routing
 # ---------------------------------------------------------------------------
-
-
 
 
 def test_delegate_task_control_action_bypasses_spawn_pause():
@@ -237,8 +225,6 @@ def test_delegate_task_control_action_bypasses_spawn_pause():
 def test_delegate_task_unknown_action_is_an_error():
     out = delegate_task(action="pause", goal="g", parent_agent=_StubParent())
     assert "Unknown action" in out
-
-
 
 
 def test_delegate_task_requires_parent_agent_for_control():
@@ -284,9 +270,7 @@ def test_list_finds_child_after_parent_agent_rebuild():
     running child via the durable owner_agent_session_id spine."""
     old_parent = _StubParentWithSession("sess-durable-1")
     child = _StubChild(old_parent)
-    _register(
-        "sid-durable-list-1", child, owner_agent_session_id="sess-durable-1"
-    )
+    _register("sid-durable-list-1", child, owner_agent_session_id="sess-durable-1")
     # Simulate the CLI's `self.agent = None` + rebuild: a NEW object, same
     # durable conversation/session id. The weakref chain no longer reaches it.
     rebuilt_parent = _StubParentWithSession("sess-durable-1")
@@ -302,9 +286,7 @@ def test_list_finds_child_after_parent_agent_rebuild():
 def test_steer_resolves_after_parent_agent_rebuild():
     old_parent = _StubParentWithSession("sess-durable-2")
     child = _StubChild(old_parent)
-    _register(
-        "sid-durable-steer-1", child, owner_agent_session_id="sess-durable-2"
-    )
+    _register("sid-durable-steer-1", child, owner_agent_session_id="sess-durable-2")
     rebuilt_parent = _StubParentWithSession("sess-durable-2")
     try:
         out = json.loads(
@@ -323,9 +305,7 @@ def test_durable_ownership_does_not_leak_to_foreign_session():
     must still be refused — the durable spine widens recovery, not access."""
     owner = _StubParentWithSession("sess-durable-3")
     child = _StubChild(owner)
-    _register(
-        "sid-durable-foreign-1", child, owner_agent_session_id="sess-durable-3"
-    )
+    _register("sid-durable-foreign-1", child, owner_agent_session_id="sess-durable-3")
     intruder = _StubParentWithSession("sess-other-99")
     try:
         out = _handle_control_action(
@@ -344,14 +324,10 @@ def test_durable_ownership_resolves_compression_lineage():
     the rotated parent whose SessionDB lineage maps old -> new."""
     db = _StubSessionDB({"sess-old-tip": "sess-new-tip"})
     child = _StubChild()  # no identity chain at all
-    _register(
-        "sid-durable-lineage-1", child, owner_agent_session_id="sess-old-tip"
-    )
+    _register("sid-durable-lineage-1", child, owner_agent_session_id="sess-old-tip")
     rotated_parent = _StubParentWithSession("sess-new-tip", session_db=db)
     try:
-        out = json.loads(
-            _handle_control_action("list", None, None, rotated_parent)
-        )
+        out = json.loads(_handle_control_action("list", None, None, rotated_parent))
         assert out["count"] == 1
     finally:
         _unregister_subagent("sid-durable-lineage-1")
@@ -547,9 +523,7 @@ def test_surface_flag_true_restores_child_notification_delivery(monkeypatch):
     monkeypatch.setattr(
         _cfg,
         "read_raw_config",
-        lambda *a, **k: {
-            "delegation": {"surface_child_process_notifications": True}
-        },
+        lambda *a, **k: {"delegation": {"surface_child_process_notifications": True}},
     )
     reg = ProcessRegistry()
     reg.completion_queue.put(_child_completion_evt(task_id="sa-9-supp0003"))
@@ -624,7 +598,9 @@ def notification_child(tmp_path):
         gate.touch()
 
 
-def test_spawn_local_stamps_owner_task_id_and_event_carries_it(monkeypatch, notification_child):
+def test_spawn_local_stamps_owner_task_id_and_event_carries_it(
+    monkeypatch, notification_child
+):
     """spawn_local(owner_task_id=...) survives to the completion event, so a
     real subagent-spawned process (collapsed task_id) is suppressed on
     drain. Exercises the actual spawn -> _move_to_finished -> drain path."""
@@ -660,7 +636,8 @@ def test_spawn_local_without_owner_defaults_to_task_id(monkeypatch, notification
     reg = ProcessRegistry()
     command, gate = notification_child
     session = reg.spawn_local(
-        command=command, task_id="default",
+        command=command,
+        task_id="default",
     )
     session.notify_on_complete = True
     assert session.owner_task_id == "default"
@@ -684,9 +661,7 @@ def test_attribution_line_uses_owner_task_id(monkeypatch):
     monkeypatch.setattr(
         _cfg,
         "read_raw_config",
-        lambda *a, **k: {
-            "delegation": {"surface_child_process_notifications": True}
-        },
+        lambda *a, **k: {"delegation": {"surface_child_process_notifications": True}},
     )
     parent = _StubParentWithSession("sess-attr-owner")
     child = _StubChild(parent)
@@ -730,8 +705,6 @@ def test_completion_notification_trims_subagent_output_wall():
         _unregister_subagent("sa-2-attr0004")
 
 
-
-
 # ---------------------------------------------------------------------------
 # Guardrail: control actions never consume the spawn cap
 # ---------------------------------------------------------------------------
@@ -756,13 +729,9 @@ def test_control_action_not_blocked_at_spawn_cap():
     ctl2 = ToolCallGuardrailController(cfg)
     assert ctl2.before_call("delegate_task", {"goal": "a"}).action == "allow"
     assert (
-        ctl2.before_call(
-            "delegate_task", {"action": "stop", "subagent_id": "x"}
-        ).action
+        ctl2.before_call("delegate_task", {"action": "stop", "subagent_id": "x"}).action
         == "allow"
     )
-    assert (
-        ctl2.before_call("delegate_task", {"action": "list"}).action == "allow"
-    )
+    assert ctl2.before_call("delegate_task", {"action": "list"}).action == "allow"
     # And spawns remain blocked afterwards — the control call didn't reset it
     assert ctl2.before_call("delegate_task", {"goal": "c"}).action == "block"

@@ -19,8 +19,6 @@ class TestBasicExecution:
         assert "hello world" in output
 
 
-
-
 class TestPolling:
     def test_poll_returns_none_while_running(self):
         event = threading.Event()
@@ -37,7 +35,6 @@ class TestPolling:
         assert handle.poll() == 0
 
 
-
 class TestCancelFn:
     def test_cancel_fn_called_on_kill(self):
         called = threading.Event()
@@ -52,7 +49,6 @@ class TestCancelFn:
         handle = _ThreadedProcessHandle(exec_fn, cancel_fn=cancel)
         handle.kill()
         assert called.is_set()
-
 
     def test_cancel_fn_exception_swallowed(self):
         def cancel():
@@ -77,7 +73,6 @@ class TestStdoutPipe:
         lines = handle.stdout.readlines()
         assert len(lines) == 3
         assert lines[0] == "line1\n"
-
 
     def test_unicode_output(self):
         def exec_fn():

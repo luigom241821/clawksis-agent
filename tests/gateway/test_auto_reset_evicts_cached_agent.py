@@ -1,5 +1,6 @@
 """Auto-reset is a full conversation boundary: per-session caches must not
 survive it (#58403)."""
+
 from __future__ import annotations
 
 from gateway import run as gateway_run

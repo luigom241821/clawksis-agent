@@ -30,8 +30,10 @@ class FoldDecision:
     root_should_start: bool
 
 
-def fold_named_slot_intent(default_prior_state: Optional[str],
-                           named_states: Iterable[tuple[str, Optional[str]]]) -> FoldDecision:
+def fold_named_slot_intent(
+    default_prior_state: Optional[str],
+    named_states: Iterable[tuple[str, Optional[str]]],
+) -> FoldDecision:
     """The ONE rule for folding per-profile s6 slots into the root slot.
 
     A named slot is never booted from its own intent (a started named slot IS a second gateway on
@@ -39,13 +41,18 @@ def fold_named_slot_intent(default_prior_state: Optional[str],
     Without the fold an image only ever driven as ``clawk -p coder gateway start`` came up with
     ZERO gateways: no root state, every named slot registered down, every action "registered".
     """
-    folded = tuple(sorted(name for name, prior in named_states if prior in AUTOSTART_STATES))
-    return FoldDecision(folded=folded,
-                        root_should_start=default_prior_state in AUTOSTART_STATES or bool(folded))
+    folded = tuple(
+        sorted(name for name, prior in named_states if prior in AUTOSTART_STATES)
+    )
+    return FoldDecision(
+        folded=folded,
+        root_should_start=default_prior_state in AUTOSTART_STATES or bool(folded),
+    )
 
 
 def named_slot_name(profile: str) -> str:
     from clawk_cli.service_manager import S6_SERVICE_PREFIX
+
     return f"{S6_SERVICE_PREFIX}{profile}"
 
 
@@ -85,8 +92,16 @@ def park_named_slot(profile: str, manager=None) -> None:
 
 def _wait_down(service_dir: Path, timeout_ms: int = 15000) -> None:
     from clawk_cli.service_manager import _s6_run
+
     try:
-        _s6_run("s6-svwait", "-d", "-t", str(timeout_ms), str(service_dir), timeout=timeout_ms / 1000 + 5)
+        _s6_run(
+            "s6-svwait",
+            "-d",
+            "-t",
+            str(timeout_ms),
+            str(service_dir),
+            timeout=timeout_ms / 1000 + 5,
+        )
     except Exception:
         logger.debug("s6-svwait failed for %s", service_dir, exc_info=True)
 
@@ -105,4 +120,5 @@ def bring_root_slot_up(manager=None) -> str:
 
 def _manager():
     from clawk_cli.service_manager import S6ServiceManager
+
     return S6ServiceManager()

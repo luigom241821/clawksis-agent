@@ -142,10 +142,6 @@ def test_memory_context_is_strictly_redacted_before_summary_llm(monkeypatch):
     assert "client%2Dsecret=***" in prompt
 
 
-
-
-
-
 def test_whitespace_memory_context_is_not_injected():
     compressor = _make_compressor()
     turns = [
@@ -163,7 +159,3 @@ def test_whitespace_memory_context_is_not_injected():
 
     assert len(prompts) == 1
     assert "MEMORY PROVIDER CONTEXT" not in prompts[0]
-
-
-
-

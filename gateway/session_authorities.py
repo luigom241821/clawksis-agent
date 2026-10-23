@@ -9,6 +9,7 @@ authority for "the profile this code is acting for" is the one keyed by the acti
 A single-profile gateway is a map of one: the launch home's authority answers every lookup,
 scoped or not, exactly as before.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,7 +34,7 @@ class SessionAuthorities:
     def add(self, home, authority, name=None) -> None:
         key = clawk_home_key(home)
         if key in self._by_key:
-            raise RuntimeError(f'duplicate session authority for {home}')
+            raise RuntimeError(f"duplicate session authority for {home}")
         self._by_key[key] = authority
         self._names[key] = name
         if key != self.launch_key:
@@ -43,7 +44,7 @@ class SessionAuthorities:
         """Fill the slot reserved by ``add(home, None, name=...)`` once the authority exists."""
         key = clawk_home_key(home)
         if key not in self._by_key or self._by_key[key] is not None:
-            raise RuntimeError(f'no reserved session authority slot for {home}')
+            raise RuntimeError(f"no reserved session authority slot for {home}")
         self._by_key[key] = authority
 
     def remove(self, home):
@@ -51,7 +52,7 @@ class SessionAuthorities:
         The launch slot is never removed."""
         key = clawk_home_key(home)
         if key == self.launch_key:
-            raise RuntimeError('the launch session authority cannot be removed')
+            raise RuntimeError("the launch session authority cannot be removed")
         self._names.pop(key, None)
         return self._by_key.pop(key, None)
 
@@ -81,7 +82,7 @@ class SessionAuthorities:
     def require(self, home):
         authority = self.for_home(home)
         if authority is None:
-            raise RuntimeStoreError('profile_mismatch')
+            raise RuntimeStoreError("profile_mismatch")
         return authority
 
     def active(self):
@@ -101,10 +102,16 @@ class SessionAuthorities:
         """Authorities that accept work: not a reserved-but-unbuilt slot, not one retiring (a
         failed serve or an unserve whose turn outlived Stop keeps its slot but refuses admissions)."""
         # A snapshot: hosted-room coordinator threads read the served set while the loop hot-serves.
-        return [a for a in list(self._by_key.values()) if a is not None and not getattr(a, 'retiring', False)]
+        return [
+            a
+            for a in list(self._by_key.values())
+            if a is not None and not getattr(a, "retiring", False)
+        ]
 
     def served_profiles(self) -> list[dict]:
-        return [{'profile_id': a.profile_id, 'home': a.profile_id} for a in self.serving()]
+        return [
+            {"profile_id": a.profile_id, "home": a.profile_id} for a in self.serving()
+        ]
 
     def profile_ids(self) -> frozenset[str]:
         return frozenset(a.profile_id for a in self.serving())
@@ -115,6 +122,7 @@ class LocalBot:
     """One local bot this process serves: its profile ``name``, ``home`` and owning ``authority``.
     ``problem`` says why a client cannot address it by that name (None when it can); ``retiring``
     marks one being unserved, which still owns its rooms but takes no new work."""
+
     name: str
     home: Path
     authority: Any
@@ -130,24 +138,39 @@ def local_bots(runner) -> list[LocalBot]:
     name (a linked ``profiles/<name>`` resolves outside ``profiles/`` and reads as ``default``), is
     flagged rather than bound: a client routes, and the member transport names, a bot by name."""
     from collections import Counter
-    registry = getattr(runner, 'session_authorities', None)
+
+    registry = getattr(runner, "session_authorities", None)
     if registry is None:
-        authority = getattr(runner, 'session_authority', None)
-        pairs = [(served_profile_name(authority.profile_id), authority)] if authority is not None else []
+        authority = getattr(runner, "session_authority", None)
+        pairs = (
+            [(served_profile_name(authority.profile_id), authority)]
+            if authority is not None
+            else []
+        )
     else:
         # A snapshot: hosted-room coordinator threads read the served set while the loop hot-serves.
-        pairs = [(registry.profile_name(a) or served_profile_name(a.profile_id), a)
-                 for a in list(registry._by_key.values()) if a is not None]
+        pairs = [
+            (registry.profile_name(a) or served_profile_name(a.profile_id), a)
+            for a in list(registry._by_key.values())
+            if a is not None
+        ]
     counts = Counter(name for name, _ in pairs)
     bots = []
     for name, authority in pairs:
         problem = None
         if counts[name] > 1:
-            problem = 'two served homes answer to that name'
+            problem = "two served homes answer to that name"
         elif name != served_profile_name(authority.profile_id):
-            problem = 'a linked profile home is not supported yet'
-        bots.append(LocalBot(name, Path(authority.profile_id), authority, problem,
-                             bool(getattr(authority, 'retiring', False))))
+            problem = "a linked profile home is not supported yet"
+        bots.append(
+            LocalBot(
+                name,
+                Path(authority.profile_id),
+                authority,
+                problem,
+                bool(getattr(authority, "retiring", False)),
+            )
+        )
     return bots
 
 
@@ -157,15 +180,19 @@ def served_profile_name(home) -> str:
     Any other custom CLAWK_HOME is the process's own single profile and keeps the ``default``
     label the CLI reports for it (``clawk -p`` never targets such a home by name)."""
     from clawk_constants import profile_name_for_home
-    return profile_name_for_home(home) or 'default'
+
+    return profile_name_for_home(home) or "default"
 
 
 def authority_for_home(runner, home):
     """Explicit per-home lookup for callers that already know the routed home."""
-    registry = getattr(runner, 'session_authorities', None)
+    registry = getattr(runner, "session_authorities", None)
     if registry is None:
-        authority = getattr(runner, 'session_authority', None)
-        if authority is not None and Path(authority.db.db_path).resolve().parent == Path(home).resolve():
+        authority = getattr(runner, "session_authority", None)
+        if (
+            authority is not None
+            and Path(authority.db.db_path).resolve().parent == Path(home).resolve()
+        ):
             return authority
         return None
     return registry.for_home(home)
@@ -178,9 +205,9 @@ def authority_for_profile_id(runner, profile_id):
 def active_authority(runner):
     """Authority for the active runtime scope (see ``SessionAuthorities.active``); the single
     launch authority when the runner predates the registry (bare test runners)."""
-    registry = getattr(runner, 'session_authorities', None)
+    registry = getattr(runner, "session_authorities", None)
     if registry is None:
-        return getattr(runner, 'session_authority', None)
+        return getattr(runner, "session_authority", None)
     return registry.active()
 
 
@@ -192,18 +219,20 @@ def require_active_authority(runner, store=None):
     authority = active_authority(runner)
     if authority is None:
         from gateway.run_runtime import refuse_parked_scope
+
         refuse_parked_scope(runner)  # retryable while its profile is parked
     if authority is None or (store is not None and store() is not authority.db):
         from clawk_state_runtime import RuntimeStoreError
-        raise RuntimeStoreError('profile_mismatch')
+
+        raise RuntimeStoreError("profile_mismatch")
     return authority
 
 
 def all_authorities(runner):
-    registry = getattr(runner, 'session_authorities', None)
+    registry = getattr(runner, "session_authorities", None)
     if registry is not None:
         return list(registry)
-    authority = getattr(runner, 'session_authority', None)
+    authority = getattr(runner, "session_authority", None)
     return [authority] if authority is not None else []
 
 
@@ -211,18 +240,22 @@ def serving_authorities(runner):
     """The authorities that accept work (``SessionAuthorities.serving``: no reserved-but-unbuilt slot,
     none retiring): what startup recovery, service creation and cross-ledger reads cover. Shutdown
     keeps ``all_authorities``, so a retained authority's live writer is still settled."""
-    registry = getattr(runner, 'session_authorities', None)
+    registry = getattr(runner, "session_authorities", None)
     if registry is not None:
         return registry.serving()
-    authority = getattr(runner, 'session_authority', None)
-    return [authority] if authority is not None and not getattr(authority, 'retiring', False) else []
+    authority = getattr(runner, "session_authority", None)
+    return (
+        [authority]
+        if authority is not None and not getattr(authority, "retiring", False)
+        else []
+    )
 
 
 def require_serving(authority):
     """Refuse a verb reached through a stale connection to a retired authority: its ownership is
     released, and until a successor bumps the epoch its own epoch still passes the store fence."""
-    if getattr(authority, 'retired', False):
-        raise RuntimeStoreError('runtime_retired')
+    if getattr(authority, "retired", False):
+        raise RuntimeStoreError("runtime_retired")
 
 
 def admission_owner(authority, session_id):
@@ -230,6 +263,7 @@ def admission_owner(authority, session_id):
     local creation id a canonical reset forks under (a reset child is not a compression child, so
     ``logical_owner`` alone stops at the child and misses the conversation's admissions)."""
     from clawk_state_local import local_lineage_owner
+
     sid = authority.logical_owner(session_id)
     if not sid:
         return sid
@@ -242,15 +276,23 @@ def holds_admission(authority, session_id) -> bool:
     retained (retiring) store that cannot answer counts as holding one: startup auto-resume fails
     closed for that entry instead of stopping the boot or resuming a turn that FIFO may own."""
     try:
-        return bool(authority.db._read_one(
-            'SELECT 1 FROM session_admissions WHERE target_session_id IN (?,?) LIMIT 1',
-            (session_id, admission_owner(authority, session_id))))
+        return bool(
+            authority.db._read_one(
+                "SELECT 1 FROM session_admissions WHERE target_session_id IN (?,?) LIMIT 1",
+                (session_id, admission_owner(authority, session_id)),
+            )
+        )
     except Exception as exc:
-        if not getattr(authority, 'retiring', False):
+        if not getattr(authority, "retiring", False):
             raise
         import logging
-        logging.getLogger('gateway.run').warning("Skipping auto-resume of %s: retained store %s cannot answer: %s",
-                                                 session_id, getattr(authority, 'profile_id', '?'), exc)
+
+        logging.getLogger("gateway.run").warning(
+            "Skipping auto-resume of %s: retained store %s cannot answer: %s",
+            session_id,
+            getattr(authority, "profile_id", "?"),
+            exc,
+        )
         return True
 
 
@@ -269,12 +311,17 @@ def owner_scope(authority, *, hydrate_secrets=False):
     instead: unbound, every launch-profile session.create raised UnscopedSecretError (#141623).
     """
     from contextlib import nullcontext
-    runner = getattr(authority, 'runner', None)
-    if not getattr(getattr(runner, 'config', None), 'multiplex_profiles', False):
-        from tui_gateway.launch_profile_policy import launch_profile_scope_if_multiplexed
+
+    runner = getattr(authority, "runner", None)
+    if not getattr(getattr(runner, "config", None), "multiplex_profiles", False):
+        from tui_gateway.launch_profile_policy import (
+            launch_profile_scope_if_multiplexed,
+        )
+
         return launch_profile_scope_if_multiplexed()
     home = Path(str(authority.profile_id))
     if not home.is_absolute() or not home.is_dir():
         return nullcontext()
     from gateway.run import _profile_runtime_scope
+
     return _profile_runtime_scope(home, hydrate_secrets=hydrate_secrets)

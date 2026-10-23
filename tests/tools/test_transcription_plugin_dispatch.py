@@ -56,7 +56,11 @@ class _FakeProvider(TranscriptionProvider):
             raise self._raise_exc
         if self._result is not None:
             return self._result
-        return {"success": True, "transcript": "fake transcript", "provider": self._name}
+        return {
+            "success": True,
+            "transcript": "fake transcript",
+            "provider": self._name,
+        }
 
 
 @pytest.fixture(autouse=True)
@@ -79,8 +83,6 @@ def sample_audio_file(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-
-
 # ---------------------------------------------------------------------------
 # Unknown names
 # ---------------------------------------------------------------------------
@@ -92,7 +94,8 @@ class TestPluginDispatch:
         transcription_registry.register_provider(provider)
 
         result = transcription_tools._dispatch_to_plugin_provider(
-            "/tmp/audio.mp3", "openrouter",
+            "/tmp/audio.mp3",
+            "openrouter",
         )
         assert result is not None
         assert result["success"] is True
@@ -105,10 +108,10 @@ class TestPluginDispatch:
         """Unknown name + no plugin → return None so the caller surfaces
         the legacy 'No STT provider available' error."""
         result = transcription_tools._dispatch_to_plugin_provider(
-            "/tmp/audio.mp3", "unknown-stt",
+            "/tmp/audio.mp3",
+            "unknown-stt",
         )
         assert result is None
-
 
     def test_provider_field_stamped_if_missing(self):
         """If a plugin forgets to set ``provider`` in its result, the
@@ -120,7 +123,8 @@ class TestPluginDispatch:
         transcription_registry.register_provider(provider)
 
         result = transcription_tools._dispatch_to_plugin_provider(
-            "/tmp/audio.mp3", "openrouter",
+            "/tmp/audio.mp3",
+            "openrouter",
         )
         assert result is not None
         assert result["provider"] == "openrouter"
@@ -141,18 +145,23 @@ class TestTranscribeAudioE2E:
 
     def test_unknown_name_with_plugin_dispatches(self, sample_audio_file):
         from unittest.mock import patch
+
         provider = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(provider)
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "openrouter"}), \
-             patch("tools.transcription_tools.is_stt_enabled", return_value=True), \
-             patch("tools.transcription_tools._get_provider", return_value="openrouter"):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "openrouter"},
+            ),
+            patch("tools.transcription_tools.is_stt_enabled", return_value=True),
+            patch("tools.transcription_tools._get_provider", return_value="openrouter"),
+        ):
             result = transcription_tools.transcribe_audio(sample_audio_file)
 
         assert result["success"] is True
         assert result["transcript"] == "fake transcript"
         assert result["provider"] == "openrouter"
-
 
     def test_builtin_name_does_not_consult_plugin_registry(self, sample_audio_file):
         """Even if a plugin's name collides with a built-in (which the
@@ -160,15 +169,27 @@ class TestTranscribeAudioE2E:
         with provider='groq' goes through the legacy elif chain, never
         the plugin dispatcher."""
         from unittest.mock import patch
+
         # Register a plugin that WOULD respond to 'openrouter' — but
         # we're asking for 'groq', so it shouldn't be called.
         provider = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(provider)
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "groq"}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._transcribe_groq",
-                   return_value={"success": True, "transcript": "from groq", "provider": "groq"}) as mock_groq:
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "groq"},
+            ),
+            patch("tools.transcription_tools._get_provider", return_value="groq"),
+            patch(
+                "tools.transcription_tools._transcribe_groq",
+                return_value={
+                    "success": True,
+                    "transcript": "from groq",
+                    "provider": "groq",
+                },
+            ) as mock_groq,
+        ):
             result = transcription_tools.transcribe_audio(sample_audio_file)
 
         assert result["provider"] == "groq"
@@ -177,7 +198,9 @@ class TestTranscribeAudioE2E:
         # Plugin was never called
         assert provider.last_call is None
 
-    def test_unsplittable_oversized_plugin_file_never_reaches_the_plugin(self, tmp_path):
+    def test_unsplittable_oversized_plugin_file_never_reaches_the_plugin(
+        self, tmp_path
+    ):
         """Over the upload cap with no way to fit it (ffmpeg missing) -> refused, plugin untouched."""
         from unittest.mock import patch
 
@@ -186,13 +209,21 @@ class TestTranscribeAudioE2E:
         audio_path = tmp_path / "oversized.mp3"
         with audio_path.open("wb") as audio_file:
             from tools.transcription_common import MAX_FILE_SIZE
+
             audio_file.seek(MAX_FILE_SIZE)
             audio_file.write(b"\0")
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "openrouter"}), \
-             patch("tools.transcription_tools.is_stt_enabled", return_value=True), \
-             patch("tools.transcription_tools._get_provider", return_value="openrouter"), \
-             patch("tools.transcription_chunking._find_ffmpeg_binary", return_value=None):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "openrouter"},
+            ),
+            patch("tools.transcription_tools.is_stt_enabled", return_value=True),
+            patch("tools.transcription_tools._get_provider", return_value="openrouter"),
+            patch(
+                "tools.transcription_chunking._find_ffmpeg_binary", return_value=None
+            ),
+        ):
             result = transcription_tools.transcribe_audio(str(audio_path))
 
         assert result["success"] is False
@@ -220,7 +251,8 @@ class TestAvailabilityGate:
         transcription_registry.register_provider(provider)
 
         result = transcription_tools._dispatch_to_plugin_provider(
-            "/tmp/audio.mp3", "openrouter",
+            "/tmp/audio.mp3",
+            "openrouter",
         )
         assert result is not None, (
             "Unavailable plugin must return an envelope, not None — "
@@ -233,19 +265,24 @@ class TestAvailabilityGate:
         # Plugin's transcribe MUST NOT have been called
         assert provider.last_call is None
 
-
     def test_unavailable_plugin_at_transcribe_audio_level(self, sample_audio_file):
         """End-to-end: ``stt.provider: openrouter`` + plugin reports
         unavailable → ``transcribe_audio`` returns the unavailability
         envelope, NOT the generic "No STT provider available" message.
         """
         from unittest.mock import patch
+
         provider = _FakeProvider(name="openrouter", available=False)
         transcription_registry.register_provider(provider)
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "openrouter"}), \
-             patch("tools.transcription_tools.is_stt_enabled", return_value=True), \
-             patch("tools.transcription_tools._get_provider", return_value="openrouter"):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "openrouter"},
+            ),
+            patch("tools.transcription_tools.is_stt_enabled", return_value=True),
+            patch("tools.transcription_tools._get_provider", return_value="openrouter"),
+        ):
             result = transcription_tools.transcribe_audio(sample_audio_file)
 
         assert result["success"] is False
@@ -271,6 +308,7 @@ class TestLanguageForwardingFromConfig:
         """``stt.openrouter.language: ja`` reaches the plugin's
         transcribe() call as language='ja'."""
         from unittest.mock import patch
+
         provider = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(provider)
 
@@ -278,27 +316,35 @@ class TestLanguageForwardingFromConfig:
             "provider": "openrouter",
             "openrouter": {"language": "ja"},
         }
-        with patch("tools.transcription_tools._load_stt_config", return_value=stt_config), \
-             patch("tools.transcription_tools.is_stt_enabled", return_value=True), \
-             patch("tools.transcription_tools._get_provider", return_value="openrouter"):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config", return_value=stt_config
+            ),
+            patch("tools.transcription_tools.is_stt_enabled", return_value=True),
+            patch("tools.transcription_tools._get_provider", return_value="openrouter"),
+        ):
             transcription_tools.transcribe_audio(sample_audio_file)
 
         assert provider.last_call is not None
         assert provider.last_call["kwargs"]["language"] == "ja"
-
 
     def test_non_dict_provider_namespace_does_not_crash(self, sample_audio_file):
         """If someone accidentally writes ``stt.openrouter: "foo"`` (a
         string instead of a dict), we should not crash — treat as
         empty config."""
         from unittest.mock import patch
+
         provider = _FakeProvider(name="openrouter")
         transcription_registry.register_provider(provider)
 
         stt_config = {"provider": "openrouter", "openrouter": "garbage"}
-        with patch("tools.transcription_tools._load_stt_config", return_value=stt_config), \
-             patch("tools.transcription_tools.is_stt_enabled", return_value=True), \
-             patch("tools.transcription_tools._get_provider", return_value="openrouter"):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config", return_value=stt_config
+            ),
+            patch("tools.transcription_tools.is_stt_enabled", return_value=True),
+            patch("tools.transcription_tools._get_provider", return_value="openrouter"),
+        ):
             result = transcription_tools.transcribe_audio(sample_audio_file)
 
         # Should still dispatch successfully (config is just ignored)

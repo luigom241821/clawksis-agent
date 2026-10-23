@@ -5,6 +5,7 @@ A running Chrome on macOS/Linux lets ``Cookies`` back up but holds ``Login Data`
 in, so those three are skipped and the snapshot succeeds. When the cookie DB itself can't be
 read, the error names it and the reason, never a bare count (#111647).
 """
+
 import json
 import os
 import sqlite3
@@ -18,7 +19,9 @@ _LOCKED = ("Login Data", "Login Data For Account", "Web Data")
 
 def _fake_profile(root):
     (root / "Default" / "Network").mkdir(parents=True)
-    (root / "Local State").write_text(json.dumps({"profile": {"last_used": "Default"}}), encoding="utf-8")
+    (root / "Local State").write_text(
+        json.dumps({"profile": {"last_used": "Default"}}), encoding="utf-8"
+    )
     (root / "Default" / "Preferences").write_text("{}", encoding="utf-8")
     for name in ("Cookies", *_LOCKED):
         con = sqlite3.connect(root / "Default" / name)
@@ -28,7 +31,9 @@ def _fake_profile(root):
         con.close()
 
 
-def test_snapshot_succeeds_while_the_browser_locks_password_and_autofill_dbs(tmp_path, monkeypatch):
+def test_snapshot_succeeds_while_the_browser_locks_password_and_autofill_dbs(
+    tmp_path, monkeypatch
+):
     """Exclusive writers on the three login/autofill DBs (what a running Chrome holds) no longer
     fail the snapshot: the cookie DB lands, the locked ones are skipped quickly."""
     root = tmp_path / "real"
@@ -49,11 +54,22 @@ def test_snapshot_succeeds_while_the_browser_locks_password_and_autofill_dbs(tmp
     assert os.path.isfile(os.path.join(dst, "Default", "Cookies"))
 
 
-@pytest.mark.parametrize("reason, expect", [
-    (None, ("is running and holds the profile's Cookies with a write lock", "Fully quit chrome")),
-    ("file is not a database", ("Cookies: file is not a database", "Close chrome")),
-])
-def test_snapshot_error_names_databases_and_reason(tmp_path, monkeypatch, reason, expect):
+@pytest.mark.parametrize(
+    "reason, expect",
+    [
+        (
+            None,
+            (
+                "is running and holds the profile's Cookies with a write lock",
+                "Fully quit chrome",
+            ),
+        ),
+        ("file is not a database", ("Cookies: file is not a database", "Close chrome")),
+    ],
+)
+def test_snapshot_error_names_databases_and_reason(
+    tmp_path, monkeypatch, reason, expect
+):
     """An unreadable cookie DB fails the snapshot with the DB name plus the reason: the lock
     wording when the failure is the backup deadline, the SQLite error otherwise."""
     root = tmp_path / "real"

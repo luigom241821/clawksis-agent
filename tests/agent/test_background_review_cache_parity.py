@@ -37,6 +37,7 @@ def _make_agent_stub(agent_cls):
         "WebUI session context:\n- Pinned per-request gateway context"
     )
     import datetime as _dt
+
     agent.session_start = _dt.datetime(2026, 1, 1, 12, 0, 0)
     agent._MEMORY_REVIEW_PROMPT = "review memory"
     agent._SKILL_REVIEW_PROMPT = "review skills"
@@ -110,9 +111,7 @@ def _make_recorder_class(captured=None, record_on_run=()):
             if captured is not None:
                 for _name in record_on_run:
                     captured[_name] = getattr(self, _name)
-            raise RuntimeError(
-                "stop after recording — don't actually call the API"
-            )
+            raise RuntimeError("stop after recording — don't actually call the API")
 
         def shutdown_memory_provider(self):
             pass
@@ -140,8 +139,10 @@ def test_review_fork_inherits_parent_cached_system_prompt():
 
     _Recorder = _make_recorder_class()
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         # The production code assigns _cached_system_prompt AFTER __init__,
         # so wrap the recorder's __setattr__ to see that post-construction
         # write from _spawn_background_review.
@@ -186,8 +187,10 @@ def test_review_fork_inherits_parent_ephemeral_system_prompt():
         record_on_run=("_cached_system_prompt", "ephemeral_system_prompt"),
     )
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -218,8 +221,10 @@ def test_review_fork_inherits_prefill_and_provider_routing():
     captured = {}
     _Recorder = _make_recorder_class(captured)
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -232,9 +237,9 @@ def test_review_fork_inherits_prefill_and_provider_routing():
     # (_sanitize_messages_surrogates) mutates prefill dicts in place, so
     # aliased dicts would let the fork rewrite the parent's prefill bytes
     # — silently breaking the parent's own warm prefix.
-    assert (
-        init_kwargs["prefill_messages"][0] is not agent.prefill_messages[0]
-    ), "fork prefill aliases the parent's dicts (needs deepcopy)"
+    assert init_kwargs["prefill_messages"][0] is not agent.prefill_messages[0], (
+        "fork prefill aliases the parent's dicts (needs deepcopy)"
+    )
     assert init_kwargs.get("providers_allowed") == agent.providers_allowed
     assert init_kwargs.get("provider_sort") == agent.provider_sort
 
@@ -256,8 +261,10 @@ def test_review_fork_pins_session_start_and_session_id():
         captured, record_on_run=("session_start", "session_id")
     )
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -272,10 +279,6 @@ def test_review_fork_pins_session_start_and_session_id():
         "Review fork did not inherit parent's session_id — "
         "system-prompt rebuild paths would diverge."
     )
-
-
-
-
 
 
 def test_routed_review_fork_does_not_inherit_reasoning_config():
@@ -312,10 +315,11 @@ def test_routed_review_fork_does_not_inherit_reasoning_config():
         "routed": True,
     }
 
-    with patch.object(run_agent, "AIAgent", _Recorder), \
-         patch.object(bg_review, "_resolve_review_runtime",
-                      return_value=routed_runtime), \
-         patch("threading.Thread", _SyncThread):
+    with (
+        patch.object(run_agent, "AIAgent", _Recorder),
+        patch.object(bg_review, "_resolve_review_runtime", return_value=routed_runtime),
+        patch("threading.Thread", _SyncThread),
+    ):
         agent_stub._spawn_background_review(
             messages_snapshot=[],
             review_memory=True,
@@ -381,10 +385,18 @@ def test_review_fork_inherited_tools_survive_compaction_refresh():
         added = refresh_agent_mcp_tools(fork, content_aware=True)
         assert added == set()
         assert [t["function"]["name"] for t in fork.tools] == [
-            "terminal_command", "read_file", "memory", "fact_store", "fact_feedback"
+            "terminal_command",
+            "read_file",
+            "memory",
+            "fact_store",
+            "fact_feedback",
         ]
         assert fork.valid_tool_names == {
-            "terminal_command", "read_file", "memory", "fact_store", "fact_feedback"
+            "terminal_command",
+            "read_file",
+            "memory",
+            "fact_store",
+            "fact_feedback",
         }
 
 
@@ -441,7 +453,8 @@ def test_same_model_review_surfaces_ignored_reasoning_effort_once():
 
     with patch.object(run_agent, "AIAgent", _Recorder):
         _fork, _rt, routed = build_cache_parity_fork(
-            agent, {"reasoning_effort": "low"}, max_iterations=5)
+            agent, {"reasoning_effort": "low"}, max_iterations=5
+        )
         assert not routed
         assert len(warnings) == 1, f"expected exactly one notice, got {warnings!r}"
         assert "reasoning_effort" in warnings[0], warnings[0]
@@ -461,9 +474,17 @@ def test_review_effort_notice_only_for_same_model_review_forks():
 
     _Recorder = _make_recorder_class()
     routed_runtime = {
-        "provider": "openrouter", "model": "aux-cheap-model", "api_key": "test-key",
-        "base_url": None, "api_mode": None, "credential_pool": None, "request_overrides": {},
-        "max_tokens": None, "command": None, "args": [], "routed": True,
+        "provider": "openrouter",
+        "model": "aux-cheap-model",
+        "api_key": "test-key",
+        "base_url": None,
+        "api_mode": None,
+        "credential_pool": None,
+        "request_overrides": {},
+        "max_tokens": None,
+        "command": None,
+        "args": [],
+        "routed": True,
     }
 
     def _warns(task_cfg, **kwargs):
@@ -477,7 +498,9 @@ def test_review_effort_notice_only_for_same_model_review_forks():
     assert _warns({"reasoning_effort": ""}) == []
     assert _warns({}) == []
     assert _warns({"reasoning_effort": "low"}, write_origin="side_question") == []
-    with patch.object(bg_review, "_resolve_review_runtime", return_value=routed_runtime):
+    with patch.object(
+        bg_review, "_resolve_review_runtime", return_value=routed_runtime
+    ):
         assert _warns({"reasoning_effort": "low"}) == []
 
 
@@ -505,7 +528,9 @@ def test_same_model_fork_inherits_parent_cache_scope_gateway_key(tmp_path):
 
         with patch.object(run_agent, "AIAgent", _make_recorder_class()):
             fork, _rt, routed = build_cache_parity_fork(agent, max_iterations=5)
-            btw, _rt, _ = build_cache_parity_fork(agent, max_iterations=5, write_origin="side_question")
+            btw, _rt, _ = build_cache_parity_fork(
+                agent, max_iterations=5, write_origin="side_question"
+            )
 
         assert not routed
         # Only the review fork may derive its own xAI scope after compacting; /btw never does.
@@ -531,7 +556,10 @@ def test_same_model_fork_inherits_parent_cache_scope_rotated_lineage(tmp_path):
     and the Portal ``conversation=`` root (fork has no DB to walk the lineage)."""
     import run_agent
     from agent.background_review import build_cache_parity_fork
-    from agent.prompt_cache_scope import declared_conversation_scope, resolve_prompt_cache_scope
+    from agent.prompt_cache_scope import (
+        declared_conversation_scope,
+        resolve_prompt_cache_scope,
+    )
     from clawk_state import SessionDB
 
     db = SessionDB(db_path=tmp_path / "state.db")
@@ -551,7 +579,11 @@ def test_same_model_fork_inherits_parent_cache_scope_rotated_lineage(tmp_path):
         assert resolve_prompt_cache_scope(agent) == "root-sid"
         assert getattr(fork, "_inherited_cache_scope", None) == "root-sid"
         assert resolve_prompt_cache_scope(fork) == "root-sid"
-        assert declared_conversation_scope(fork) is declared_conversation_scope(agent) is None
+        assert (
+            declared_conversation_scope(fork)
+            is declared_conversation_scope(agent)
+            is None
+        )
         fork_root = run_agent.AIAgent._conversation_root_id(fork)
         assert fork_root == agent._conversation_root_id() == "root-sid"
     finally:
@@ -567,13 +599,20 @@ def test_routed_fork_does_not_inherit_cache_scope():
 
     agent = _make_agent_stub(run_agent.AIAgent)
     agent._gateway_session_key = "gw-key-1"
-    agent._prompt_cache_scope_memo = (("sess-123", True), "gwk_parentscope0000000000abc")
+    agent._prompt_cache_scope_memo = (
+        ("sess-123", True),
+        "gwk_parentscope0000000000abc",
+    )
 
     _RoutedRecorder = _make_recorder_class()
 
-    with patch.object(run_agent, "AIAgent", _RoutedRecorder), \
-         patch("agent.background_review._resolve_review_runtime",
-               lambda *a, **k: {"routed": True, "model": "other-model"}):
+    with (
+        patch.object(run_agent, "AIAgent", _RoutedRecorder),
+        patch(
+            "agent.background_review._resolve_review_runtime",
+            lambda *a, **k: {"routed": True, "model": "other-model"},
+        ),
+    ):
         fork, _rt, routed = build_cache_parity_fork(agent, max_iterations=5)
 
     assert routed

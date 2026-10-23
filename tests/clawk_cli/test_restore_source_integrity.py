@@ -18,13 +18,22 @@ def _database(path, count):
     with closing(sqlite3.connect(path)) as conn:
         conn.execute("CREATE TABLE sessions(id INTEGER PRIMARY KEY)")
         conn.execute("CREATE TABLE messages(id INTEGER PRIMARY KEY)")
-        conn.executemany("INSERT INTO sessions VALUES (?)", [(n,) for n in range(count)])
-        conn.executemany("INSERT INTO messages VALUES (?)", [(n,) for n in range(count)])
+        conn.executemany(
+            "INSERT INTO sessions VALUES (?)", [(n,) for n in range(count)]
+        )
+        conn.executemany(
+            "INSERT INTO messages VALUES (?)", [(n,) for n in range(count)]
+        )
         conn.commit()
 
 
 def _assert_no_decoy(tmp_path, home_name):
-    assert {p.name for p in tmp_path.iterdir()} <= {home_name, "native", "backup.zip", "clawk_test"}
+    assert {p.name for p in tmp_path.iterdir()} <= {
+        home_name,
+        "native",
+        "backup.zip",
+        "clawk_test",
+    }
 
 
 @pytest.fixture(params=HOME_NAMES)
@@ -40,7 +49,10 @@ def home(tmp_path, monkeypatch, request):
     (native / "config.yaml").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(backup, "_get_platform_default_clawk_home", lambda: native)
     from clawk_cli import gateway_setup_service
-    monkeypatch.setattr(gateway_setup_service, "ensure_gateway_service", lambda *args, **kwargs: False)
+
+    monkeypatch.setattr(
+        gateway_setup_service, "ensure_gateway_service", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr(gateway, "_is_service_running", lambda: False)
     return home
 

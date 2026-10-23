@@ -28,26 +28,33 @@ from tools import terminal_tool
 # _expand_tilde() unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestExpandTilde:
     """Verify the _expand_tilde() helper resolves ~ to the profile home."""
 
     @pytest.mark.platforms("linux")
     def test_tilde_expands_to_profile_home(self):
         """When get_subprocess_home returns a value, ~/path uses it."""
-        with patch("clawk_constants.get_subprocess_home", return_value="/opt/data/profiles/coder/home"):
+        with patch(
+            "clawk_constants.get_subprocess_home",
+            return_value="/opt/data/profiles/coder/home",
+        ):
             result = ft._expand_tilde("~/scratch/file.txt")
         assert result == "/opt/data/profiles/coder/home/scratch/file.txt"
 
-
     def test_empty_path_unchanged(self):
         """Empty string returns empty."""
-        with patch("clawk_constants.get_subprocess_home", return_value="/opt/data/profiles/coder/home"):
+        with patch(
+            "clawk_constants.get_subprocess_home",
+            return_value="/opt/data/profiles/coder/home",
+        ):
             assert ft._expand_tilde("") == ""
 
 
 # ---------------------------------------------------------------------------
 # Integration: _resolve_path_for_task uses profile home
 # ---------------------------------------------------------------------------
+
 
 class TestResolvePathUsesProfileHome:
     """Verify _resolve_path_for_task resolves ~ to the profile home."""
@@ -62,7 +69,9 @@ class TestResolvePathUsesProfileHome:
         monkeypatch.setenv("HOME", str(process_home))
         monkeypatch.setattr(terminal_tool, "_session_cwd", {})
 
-        with patch("clawk_constants.get_subprocess_home", return_value=str(profile_home)):
+        with patch(
+            "clawk_constants.get_subprocess_home", return_value=str(profile_home)
+        ):
             resolved = ft._resolve_path_for_task("~/test_file.txt", task_id="test")
 
         assert str(resolved).startswith(str(profile_home))
@@ -78,7 +87,9 @@ class TestResolvePathUsesProfileHome:
         monkeypatch.setenv("HOME", str(process_home))
         monkeypatch.setattr(terminal_tool, "_session_cwd", {})
 
-        with patch("clawk_constants.get_subprocess_home", return_value=str(profile_home)):
+        with patch(
+            "clawk_constants.get_subprocess_home", return_value=str(profile_home)
+        ):
             # _resolve_base_dir uses the workspace root from config; if it contains ~,
             # it should resolve to profile home
             resolved = ft._resolve_path_for_task("~/data/config.json", task_id="test")

@@ -5,6 +5,7 @@ and save every unticked row into ``plugins.disabled`` on any exit, so opening an
 Telegram and Slack on the next gateway restart. Drives the real ``cmd_toggle`` (text fallback) through
 real admission.
 """
+
 import pytest
 import clawk_yaml as yaml
 
@@ -22,8 +23,12 @@ def run_picker(plugin_world, monkeypatch):
     for leaf in ("telegram", "slack"):
         platform = world.core / "plugins" / "platforms" / leaf
         platform.mkdir(parents=True)
-        (platform / "plugin.yaml").write_text(f"name: {leaf}-platform\nkind: platform\n", encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.plugins.get_bundled_plugins_dir", lambda: world.core / "plugins")
+        (platform / "plugin.yaml").write_text(
+            f"name: {leaf}-platform\nkind: platform\n", encoding="utf-8"
+        )
+    monkeypatch.setattr(
+        "clawk_cli.plugins.get_bundled_plugins_dir", lambda: world.core / "plugins"
+    )
     monkeypatch.setattr(plugins_cmd, "_provider_categories", list)
     monkeypatch.setattr(plugins_cmd.sys.stdin, "isatty", lambda: True)
     monkeypatch.setitem(plugins_cmd.sys.modules, "curses", None)
@@ -41,14 +46,20 @@ def run_picker(plugin_world, monkeypatch):
 
 
 def test_open_and_exit_without_changes_writes_nothing(run_picker):
-    assert run_picker({"enabled": [], "disabled": []}) == {"enabled": [], "disabled": []}
+    assert run_picker({"enabled": [], "disabled": []}) == {
+        "enabled": [],
+        "disabled": [],
+    }
 
 
 def test_only_flipped_rows_are_written(run_picker):
     # Telegram is disabled under its canonical key AND its legacy manifest name; ticking it must clear
     # both. Slack is unticked. The enabled entry for a plugin the picker never shows must survive.
     plugins = run_picker(
-        {"enabled": ["some/unshown-plugin"], "disabled": ["platforms/telegram", "telegram-platform"]},
+        {
+            "enabled": ["some/unshown-plugin"],
+            "disabled": ["platforms/telegram", "telegram-platform"],
+        },
         toggle_keys=("platforms/telegram", "platforms/slack"),
     )
     assert plugins["disabled"] == ["platforms/slack"]

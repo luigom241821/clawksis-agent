@@ -18,7 +18,11 @@ from typing import Any
 _log = logging.getLogger(__name__)
 
 # Connection-teardown errors that mean "the peer hung up mid-write".
-_BENIGN_TEARDOWN_ERRORS = (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)
+_BENIGN_TEARDOWN_ERRORS = (
+    ConnectionResetError,
+    ConnectionAbortedError,
+    BrokenPipeError,
+)
 
 
 def _is_benign_teardown(context: dict[str, Any]) -> bool:
@@ -30,7 +34,9 @@ def _is_benign_teardown(context: dict[str, Any]) -> bool:
     if not isinstance(context.get("exception"), _BENIGN_TEARDOWN_ERRORS):
         return False
     marker = "_call_connection_lost"
-    return marker in repr(context.get("callback")) or marker in repr(context.get("handle"))
+    return marker in repr(context.get("callback")) or marker in repr(
+        context.get("handle")
+    )
 
 
 def install_loop_noise_filter(loop: asyncio.AbstractEventLoop) -> None:
@@ -45,7 +51,10 @@ def install_loop_noise_filter(loop: asyncio.AbstractEventLoop) -> None:
 
     def _handler(loop: asyncio.AbstractEventLoop, context: dict[str, Any]) -> None:
         if _is_benign_teardown(context):
-            _log.debug("ws peer hangup during teardown (suppressed): %s", context.get("exception"))
+            _log.debug(
+                "ws peer hangup during teardown (suppressed): %s",
+                context.get("exception"),
+            )
             return
         if previous is not None:
             previous(loop, context)
@@ -53,5 +62,7 @@ def install_loop_noise_filter(loop: asyncio.AbstractEventLoop) -> None:
             loop.default_exception_handler(context)
 
     loop.set_exception_handler(_handler)
-    with contextlib.suppress(AttributeError, TypeError):  # pragma: no cover - exotic loop impls
+    with contextlib.suppress(
+        AttributeError, TypeError
+    ):  # pragma: no cover - exotic loop impls
         loop._clawk_noise_filter_installed = True  # type: ignore[attr-defined]

@@ -5,10 +5,19 @@ import pytest
 
 def _clear_qq(monkeypatch):
     for key in (
-        "QQ_APP_ID", "QQ_CLIENT_SECRET", "QQ_ALLOWED_USERS", "QQ_GROUP_ALLOWED_USERS",
-        "QQ_ALLOW_ALL_USERS", "QQBOT_HOME_CHANNEL", "QQBOT_HOME_CHANNEL_NAME",
-        "QQBOT_HOME_CHANNEL_THREAD_ID", "QQ_HOME_CHANNEL", "QQ_HOME_CHANNEL_NAME",
-        "QQ_HOME_CHANNEL_THREAD_ID", "QQ_MARKDOWN_SUPPORT", "QQ_PORTAL_HOST",
+        "QQ_APP_ID",
+        "QQ_CLIENT_SECRET",
+        "QQ_ALLOWED_USERS",
+        "QQ_GROUP_ALLOWED_USERS",
+        "QQ_ALLOW_ALL_USERS",
+        "QQBOT_HOME_CHANNEL",
+        "QQBOT_HOME_CHANNEL_NAME",
+        "QQBOT_HOME_CHANNEL_THREAD_ID",
+        "QQ_HOME_CHANNEL",
+        "QQ_HOME_CHANNEL_NAME",
+        "QQ_HOME_CHANNEL_THREAD_ID",
+        "QQ_MARKDOWN_SUPPORT",
+        "QQ_PORTAL_HOST",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -29,11 +38,18 @@ def test_register_shape():
     register(_Ctx())
     entry = PlatformEntry(**captured)
     assert entry.name == "qqbot" and entry.label == "QQ Bot" and entry.emoji == "🐧"
-    assert entry.adapter_factory is QQAdapter and entry.check_fn is check_qq_requirements
+    assert (
+        entry.adapter_factory is QQAdapter and entry.check_fn is check_qq_requirements
+    )
     assert entry.required_env == ["QQ_APP_ID", "QQ_CLIENT_SECRET"]
-    assert entry.allowed_users_env == "QQ_ALLOWED_USERS" and entry.allow_all_env == "QQ_ALLOW_ALL_USERS"
+    assert (
+        entry.allowed_users_env == "QQ_ALLOWED_USERS"
+        and entry.allow_all_env == "QQ_ALLOW_ALL_USERS"
+    )
     assert entry.cron_deliver_env_var == "QQBOT_HOME_CHANNEL"
-    assert entry.setup_fn is setup_qqbot and entry.standalone_sender_fn is standalone_send
+    assert (
+        entry.setup_fn is setup_qqbot and entry.standalone_sender_fn is standalone_send
+    )
     # send_message never chunked QQ text before the move; the REST sender truncates itself.
     assert entry.max_message_length == 0
 
@@ -41,12 +57,18 @@ def test_register_shape():
 def test_is_connected_needs_both_credentials(monkeypatch):
     _clear_qq(monkeypatch)
     import clawk_cli.gateway as gateway_mod
+
     monkeypatch.setattr(gateway_mod, "get_env_value", lambda name: None)
     from gateway.config import PlatformConfig
     from plugins.platforms.qqbot.register import is_connected
 
     assert is_connected(PlatformConfig(enabled=True, extra={"app_id": "a"})) is False
-    assert is_connected(PlatformConfig(enabled=True, extra={"app_id": "a", "client_secret": "s"})) is True
+    assert (
+        is_connected(
+            PlatformConfig(enabled=True, extra={"app_id": "a", "client_secret": "s"})
+        )
+        is True
+    )
     env = {"QQ_APP_ID": "a", "QQ_CLIENT_SECRET": "s"}
     monkeypatch.setattr(gateway_mod, "get_env_value", env.get)
     assert is_connected(PlatformConfig(enabled=True)) is True
@@ -87,8 +109,12 @@ def test_qq_prefixed_home_env_still_resolves_for_cron(monkeypatch):
 
 def test_cron_deliver_qqbot_without_a_live_gateway():
     from clawk_cli.plugins import discover_plugins
+
     discover_plugins()
-    from cron.scheduler_delivery import _is_known_delivery_platform, _resolve_home_env_var
+    from cron.scheduler_delivery import (
+        _is_known_delivery_platform,
+        _resolve_home_env_var,
+    )
 
     assert _is_known_delivery_platform("qqbot") is True
     assert _resolve_home_env_var("qqbot") == "QQBOT_HOME_CHANNEL"
@@ -100,5 +126,7 @@ async def test_standalone_sender_reports_missing_credentials(monkeypatch):
     from gateway.config import PlatformConfig
     from plugins.platforms.qqbot.register import standalone_send
 
-    result = await standalone_send(PlatformConfig(enabled=True, extra={}), "chat-1", "hi")
+    result = await standalone_send(
+        PlatformConfig(enabled=True, extra={}), "chat-1", "hi"
+    )
     assert "QQ_APP_ID" in result["error"]

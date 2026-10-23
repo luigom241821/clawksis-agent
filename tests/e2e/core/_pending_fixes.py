@@ -37,8 +37,11 @@ def strict_acceptance(reason: str) -> bool:
 
 
 @contextlib.contextmanager
-def known_failure(pattern: str, reason: str,
-                  raises: type[BaseException] | tuple[type[BaseException], ...] = AssertionError) -> Iterator[None]:
+def known_failure(
+    pattern: str,
+    reason: str,
+    raises: type[BaseException] | tuple[type[BaseException], ...] = AssertionError,
+) -> Iterator[None]:
     """Run-time xfail for a live gap: an exception of type ``raises`` raised inside the block whose
     message matches ``pattern`` (``re.search``) XFAILs the cell; any other failure propagates, and a
     clean pass stays a pass. Wrap only the final assertions, after every wait has settled, so a lost
@@ -49,14 +52,19 @@ def known_failure(pattern: str, reason: str,
         if not re.search(pattern, str(exc)):
             raise
         if strict_acceptance(reason):
-            exc.add_note(f"{STRICT_ACCEPTANCE_ENV}={os.environ.get(STRICT_ACCEPTANCE_ENV, '').strip()}: "
-                         f"the known gap is not excused in this acceptance run ({reason})")
+            exc.add_note(
+                f"{STRICT_ACCEPTANCE_ENV}={os.environ.get(STRICT_ACCEPTANCE_ENV, '').strip()}: "
+                f"the known gap is not excused in this acceptance run ({reason})"
+            )
             raise
         pytest.xfail(f"{reason} [observed: {str(exc).splitlines()[0][:240]}]")
 
 
-def known_gate(known: Mapping[str, tuple[str, str]], key: str,
-               raises: type[BaseException] | tuple[type[BaseException], ...] = AssertionError) -> ContextManager[None]:
+def known_gate(
+    known: Mapping[str, tuple[str, str]],
+    key: str,
+    raises: type[BaseException] | tuple[type[BaseException], ...] = AssertionError,
+) -> ContextManager[None]:
     """:func:`known_failure` for a cell a file's ``KNOWN`` table (key -> ``(pattern, reason)``)
     names, a no-op for every other cell, so one wrapped block serves gated and plain cells."""
     entry = known.get(key)

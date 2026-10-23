@@ -25,7 +25,9 @@ COMPACTION_DATA_SCHEMA = {"name": "clawk.compaction", "version": "1"}
 _stalled = False
 
 
-def _turn_target(session_id: str) -> tuple[relay_runtime.RelayRuntime, relay_runtime.RelaySession, Any] | None:
+def _turn_target(
+    session_id: str,
+) -> tuple[relay_runtime.RelayRuntime, relay_runtime.RelaySession, Any] | None:
     turn = relay_runtime.active_turn(session_id)
     host = turn.lease.live_runtime() if turn is not None else None
     if host is None:
@@ -34,7 +36,9 @@ def _turn_target(session_id: str) -> tuple[relay_runtime.RelayRuntime, relay_run
     return host, session, turn.handle or session.handle
 
 
-def _session_target(session_id: str) -> tuple[relay_runtime.RelayRuntime, relay_runtime.RelaySession, Any] | None:
+def _session_target(
+    session_id: str,
+) -> tuple[relay_runtime.RelayRuntime, relay_runtime.RelaySession, Any] | None:
     host = relay_runtime.HOST_REGISTRY.for_profile(create=False)
     if not isinstance(host, relay_runtime.RelayRuntime):
         return None
@@ -45,7 +49,8 @@ def _session_target(session_id: str) -> tuple[relay_runtime.RelayRuntime, relay_
 
 
 def _resolve_target(
-    session_id: str, turn_session_id: str | None = None,
+    session_id: str,
+    turn_session_id: str | None = None,
 ) -> tuple[relay_runtime.RelayRuntime, relay_runtime.RelaySession, Any] | None:
     """``(host, session, parent handle)`` for ``session_id``: its live turn, then its session scope, then the
     live turn of ``turn_session_id``.
@@ -64,18 +69,28 @@ def _resolve_target(
     return target
 
 
-def compaction_target_available(session_id: str, *, turn_session_id: str | None = None) -> bool:
+def compaction_target_available(
+    session_id: str, *, turn_session_id: str | None = None
+) -> bool:
     """Whether a mark for this session has a live Relay scope to receive it."""
     return bool(session_id and _resolve_target(session_id, turn_session_id))
 
 
 def emit_compaction_mark(
-    session_id: str, name: str, data: dict[str, Any], *, turn_session_id: str | None = None,
+    session_id: str,
+    name: str,
+    data: dict[str, Any],
+    *,
+    turn_session_id: str | None = None,
 ) -> bool:
     """Emit one mark; returns False when no Relay scope owns ``session_id`` (see ``_resolve_target``)."""
     target = _resolve_target(session_id, turn_session_id) if session_id else None
     if target is None:
-        logger.debug("no live Relay session for %s; %s mark not recorded", session_id or "none", name)
+        logger.debug(
+            "no live Relay session for %s; %s mark not recorded",
+            session_id or "none",
+            name,
+        )
         return False
     global _stalled
     if _stalled:
@@ -83,8 +98,13 @@ def emit_compaction_mark(
     host, session, handle = target
     try:
         host.run_in_session(
-            session, host.relay.scope.event, name, handle=handle, data=data,
-            data_schema=dict(COMPACTION_DATA_SCHEMA), metadata=relay_runtime.runtime_metadata(host.runtime_id),
+            session,
+            host.relay.scope.event,
+            name,
+            handle=handle,
+            data=data,
+            data_schema=dict(COMPACTION_DATA_SCHEMA),
+            metadata=relay_runtime.runtime_metadata(host.runtime_id),
             timeout=relay_runtime.SCOPE_OP_TIMEOUT,
         )
     except TimeoutError:

@@ -55,8 +55,6 @@ def test_normalize_entry_drops_invalid_extra_headers():
         assert "extra_headers" not in normalized
 
 
-
-
 def test_get_custom_provider_extra_headers_matches_base_url():
     """Match by normalized base_url returns the entry's extra_headers."""
     providers = [
@@ -83,14 +81,21 @@ def test_get_custom_provider_extra_headers_no_match_returns_empty():
             "extra_headers": {"X-Secret": "s"},
         }
     ]
-    assert get_custom_provider_extra_headers(
-        "https://other.example.com/v1", custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_extra_headers(
+            "https://other.example.com/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )
     # prefix look-alike host must not match (no substring bypass)
-    assert get_custom_provider_extra_headers(
-        "https://llm.internal.example.com.attacker.test/v1",
-        custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_extra_headers(
+            "https://llm.internal.example.com.attacker.test/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )
 
 
 def test_get_custom_provider_extra_headers_preserves_extra_path_segment():
@@ -101,10 +106,13 @@ def test_get_custom_provider_extra_headers_preserves_extra_path_segment():
             "extra_headers": {"Authorization": "secret"},
         }
     ]
-    assert get_custom_provider_extra_headers(
-        "https://llm.internal.example.com/v1",
-        custom_providers=providers,
-    ) == {}
+    assert (
+        get_custom_provider_extra_headers(
+            "https://llm.internal.example.com/v1",
+            custom_providers=providers,
+        )
+        == {}
+    )
 
 
 def test_get_custom_provider_extra_headers_skips_alias_without_headers():
@@ -173,7 +181,7 @@ def test_apply_extra_headers_merges_onto_existing_defaults():
     )
     assert client_kwargs["default_headers"] == {
         "User-Agent": "override",  # provider-specific value wins
-        "X-Keep": "1",             # untouched defaults preserved
+        "X-Keep": "1",  # untouched defaults preserved
         "X-New": "2",
     }
 
@@ -213,8 +221,7 @@ def test_fetch_api_models_sends_extra_headers_to_models_probe(monkeypatch):
         captured["url"] = request.full_url
         captured["timeout"] = timeout
         captured["headers"] = {
-            key.lower(): value
-            for key, value in request.header_items()
+            key.lower(): value for key, value in request.header_items()
         }
         return FakeResponse()
 

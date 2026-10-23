@@ -53,9 +53,23 @@ def fake_install(tmp_path, monkeypatch):
     store.mkdir()
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(store))
     interpreter = Path(sys._base_executable).resolve()
-    (store / "facts.json").write_text(json.dumps({"schema": 1, "packages": {"python": {
-        "entry": str(interpreter.parent if os.name == "nt" else interpreter.parents[1]),
-    }}}), encoding="utf-8")
+    (store / "facts.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "packages": {
+                    "python": {
+                        "entry": str(
+                            interpreter.parent
+                            if os.name == "nt"
+                            else interpreter.parents[1]
+                        ),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return home, root
 
 
@@ -65,8 +79,11 @@ def test_windows_converges_on_the_installer_user_bin(create, monkeypatch, tmp_pa
     """Windows converges on the installer's convention ($CLAWK_HOME\\bin + User PATH); an update
     no longer skips as "installer-owned" and leaves a venv\\Scripts machine behind."""
     calls = []
-    monkeypatch.setattr(_launchers, "_expose_windows_user_bin",
-                        lambda root, *, create: calls.append(create) or {"ok": True, "written": []})
+    monkeypatch.setattr(
+        _launchers,
+        "_expose_windows_user_bin",
+        lambda root, *, create: calls.append(create) or {"ok": True, "written": []},
+    )
     monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(tmp_path))
     assert _launchers.expose_cli(create=create) == {"ok": True, "written": []}
     assert calls == [create]
@@ -79,15 +96,25 @@ def user_path_writes(monkeypatch):
     Launcher publication is stubbed: these tests cover only the registration
     decision, and publication has its own tests."""
     registered = []
-    monkeypatch.setattr(_launchers, "ensure_install_launchers",
-                        lambda root, out: [str(out / f"{name}.exe") for name in _launchers.WINDOWS_BIN_LAUNCHERS])
-    monkeypatch.setattr(_launchers, "_register_windows_user_path",
-                        lambda entry: registered.append(Path(entry)) or "added")
+    monkeypatch.setattr(
+        _launchers,
+        "ensure_install_launchers",
+        lambda root, out: [
+            str(out / f"{name}.exe") for name in _launchers.WINDOWS_BIN_LAUNCHERS
+        ],
+    )
+    monkeypatch.setattr(
+        _launchers,
+        "_register_windows_user_path",
+        lambda entry: registered.append(Path(entry)) or "added",
+    )
     return registered
 
 
 @pytest.mark.platforms("windows")
-def test_sandbox_home_keeps_its_launchers_off_the_user_path(user_path_writes, tmp_path, monkeypatch):
+def test_sandbox_home_keeps_its_launchers_off_the_user_path(
+    user_path_writes, tmp_path, monkeypatch
+):
     """A review sandbox's CLAWK_HOME publishes into its own bin and never reaches the User PATH.
 
     The console environment is not stubbed: Windows builds it from the user's
@@ -100,20 +127,28 @@ def test_sandbox_home_keeps_its_launchers_off_the_user_path(user_path_writes, tm
     result = _launchers._expose_windows_user_bin(tmp_path / "checkout", create=True)
 
     assert result["ok"] and result["skipped"]
-    assert result["written"] == [f"{name}.exe" for name in _launchers.WINDOWS_BIN_LAUNCHERS]
+    assert result["written"] == [
+        f"{name}.exe" for name in _launchers.WINDOWS_BIN_LAUNCHERS
+    ]
     assert user_path_writes == []
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("clawk_home", [None, ("clawk",), ("clawk", "profiles", "work")])
-def test_the_home_new_consoles_use_registers_its_bin(user_path_writes, clawk_home, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "clawk_home", [None, ("clawk",), ("clawk", "profiles", "work")]
+)
+def test_the_home_new_consoles_use_registers_its_bin(
+    user_path_writes, clawk_home, tmp_path, monkeypatch
+):
     local = tmp_path / "local"
     monkeypatch.setenv("LOCALAPPDATA", str(local))
     if clawk_home is None:
         monkeypatch.delenv("CLAWK_HOME", raising=False)
     else:
         monkeypatch.setenv("CLAWK_HOME", str(local.joinpath(*clawk_home)))
-    monkeypatch.setattr(_launchers, "_new_console_environment", lambda: {"LOCALAPPDATA": str(local)})
+    monkeypatch.setattr(
+        _launchers, "_new_console_environment", lambda: {"LOCALAPPDATA": str(local)}
+    )
 
     result = _launchers._expose_windows_user_bin(tmp_path / "checkout", create=True)
 
@@ -122,16 +157,24 @@ def test_the_home_new_consoles_use_registers_its_bin(user_path_writes, clawk_hom
 
 
 @pytest.mark.platforms("windows")
-@pytest.mark.parametrize("stored_home, override", [
-    ("%LOCALAPPDATA%\\clawk-data", "LOCALAPPDATA"),
-    ("~\\clawk-data", "USERPROFILE"),
-])
+@pytest.mark.parametrize(
+    "stored_home, override",
+    [
+        ("%LOCALAPPDATA%\\clawk-data", "LOCALAPPDATA"),
+        ("~\\clawk-data", "USERPROFILE"),
+    ],
+)
 def test_inherited_home_reference_expands_from_the_console_environment(
-        user_path_writes, stored_home, override, tmp_path, monkeypatch):
+    user_path_writes, stored_home, override, tmp_path, monkeypatch
+):
     """A sandbox that inherits a stored CLAWK_HOME such as %LOCALAPPDATA%\\x and overrides
     LOCALAPPDATA resolves a different root from a new console, so it must not match."""
     real = tmp_path / "real"
-    console = {"LOCALAPPDATA": str(real / "local"), "USERPROFILE": str(real / "user"), "CLAWK_HOME": stored_home}
+    console = {
+        "LOCALAPPDATA": str(real / "local"),
+        "USERPROFILE": str(real / "user"),
+        "CLAWK_HOME": stored_home,
+    }
     monkeypatch.setattr(_launchers, "_new_console_environment", lambda: dict(console))
     monkeypatch.setenv("LOCALAPPDATA", console["LOCALAPPDATA"])
     monkeypatch.setenv("USERPROFILE", console["USERPROFILE"])
@@ -145,12 +188,16 @@ def test_inherited_home_reference_expands_from_the_console_environment(
 
 
 @pytest.mark.platforms("windows")
-def test_unknown_console_environment_leaves_the_user_path(user_path_writes, tmp_path, monkeypatch):
+def test_unknown_console_environment_leaves_the_user_path(
+    user_path_writes, tmp_path, monkeypatch
+):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     monkeypatch.delenv("CLAWK_HOME", raising=False)
     monkeypatch.setattr(_launchers, "_new_console_environment", lambda: None)
 
-    assert _launchers._expose_windows_user_bin(tmp_path / "checkout", create=True)["skipped"]
+    assert _launchers._expose_windows_user_bin(tmp_path / "checkout", create=True)[
+        "skipped"
+    ]
     assert user_path_writes == []
 
 
@@ -175,10 +222,15 @@ def test_environment_block_reader_counts_utf16_units():
     """An emoji takes two UTF-16 units but one Python character; the variables after it must survive."""
     import ctypes
 
-    block = ctypes.create_unicode_buffer("A=1\0MOOD=\U0001F600\0CLAWK_HOME=C:\\h\0=C:=C:\\\0\0")
+    block = ctypes.create_unicode_buffer(
+        "A=1\0MOOD=\U0001f600\0CLAWK_HOME=C:\\h\0=C:=C:\\\0\0"
+    )
 
     assert _launchers._read_environment_block(ctypes.addressof(block)) == {
-        "A": "1", "MOOD": "\U0001F600", "CLAWK_HOME": "C:\\h"}
+        "A": "1",
+        "MOOD": "\U0001f600",
+        "CLAWK_HOME": "C:\\h",
+    }
 
 
 def test_registered_as_a_home_step():
@@ -188,15 +240,21 @@ def test_registered_as_a_home_step():
 class TestExposeCli:
     @posix_only
     @pytest.mark.parametrize("clawk", ["missing", "foreign"])
-    def test_repair_only_preserves_missing_and_foreign_commands(self, fake_install, monkeypatch, clawk):
+    def test_repair_only_preserves_missing_and_foreign_commands(
+        self, fake_install, monkeypatch, clawk
+    ):
         home, root = fake_install
-        monkeypatch.setattr("clawk_cli.config.load_config", lambda: pytest.fail("repair read config"))
+        monkeypatch.setattr(
+            "clawk_cli.config.load_config", lambda: pytest.fail("repair read config")
+        )
         wrapper_dir = home / ".local" / "bin"
         extra = home / "bin"
         assert _launchers.expose_cli(create=False) == {"ok": True, "written": []}
         assert not wrapper_dir.exists()
         assert not extra.exists()
-        assert {p.name for p in (root / ".clawk/bin").iterdir()} == set(_launchers.ENTRY_POINTS)
+        assert {p.name for p in (root / ".clawk/bin").iterdir()} == set(
+            _launchers.ENTRY_POINTS
+        )
 
         # An owned ACP entry must be repaired even without an owned clawk
         # sibling admitting this directory. Its old target is already gone.
@@ -213,9 +271,15 @@ class TestExposeCli:
         foreign_link = wrapper_dir / "clawk-acp"
         foreign_target = home / "other-install/clawk-acp"
         foreign_link.symlink_to(foreign_target)
-        before = {path: path.lstat().st_mtime_ns for path in (wrapper_dir, wrapper_dir / "clawk", foreign_link)}
+        before = {
+            path: path.lstat().st_mtime_ns
+            for path in (wrapper_dir, wrapper_dir / "clawk", foreign_link)
+        }
 
-        assert _launchers.expose_cli(create=False) == {"ok": True, "written": ["clawk-acp"]}
+        assert _launchers.expose_cli(create=False) == {
+            "ok": True,
+            "written": ["clawk-acp"],
+        }
         assert acp.is_file() and not acp.is_symlink() and os.access(acp, os.X_OK)
         assert not dangling.exists()
         assert not (extra / "clawksis-agent").exists()
@@ -241,8 +305,6 @@ class TestExposeCli:
             assert str(root) in body
             assert str(root / ".clawk" / "bin") in body
             assert os.access(wrapper, os.X_OK)
-
-
 
     @posix_only
     def test_leaves_another_installs_wrapper_alone(self, fake_install):
@@ -276,10 +338,13 @@ class TestExposeCli:
         result = _launchers.expose_cli()
         assert result == {"ok": True, "skipped": "no-store-python"}
 
-    @pytest.mark.parametrize("create", [
-        pytest.param(True, marks=pytest.mark.platforms("linux")),
-        pytest.param(False, marks=posix_only),
-    ])
+    @pytest.mark.parametrize(
+        "create",
+        [
+            pytest.param(True, marks=pytest.mark.platforms("linux")),
+            pytest.param(False, marks=posix_only),
+        ],
+    )
     def test_bundled_tree_skips_bundle_owns_launchers(
         self, fake_install, monkeypatch, tmp_path, create
     ):
@@ -293,7 +358,10 @@ class TestExposeCli:
             (payload / "bin" / name).write_text("\x7fELF fake shim\n", encoding="utf-8")
         monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(payload / "repo"))
         if not create:
-            monkeypatch.setattr("clawk_cli.config.load_config", lambda: pytest.fail("repair read config"))
+            monkeypatch.setattr(
+                "clawk_cli.config.load_config",
+                lambda: pytest.fail("repair read config"),
+            )
         result = _launchers.expose_cli(create=create)
         assert result == {"ok": True, "skipped": "bundle-owns-launchers"}
         assert not (fake_install[0] / ".local/bin").exists()
@@ -309,7 +377,9 @@ class TestExposeCli:
         (tmp_path / "tools" / "facts.json").unlink()
         parent = tmp_path / "clawk-home"
         (parent / "bin").mkdir(parents=True)
-        (parent / "bin" / "clawk").write_text("#!/bin/sh\n# installer launcher\n", encoding="utf-8")
+        (parent / "bin" / "clawk").write_text(
+            "#!/bin/sh\n# installer launcher\n", encoding="utf-8"
+        )
         checkout = parent / "clawksis-agent"
         checkout.mkdir()
         monkeypatch.setenv("CLAWK_INSTALL_ROOT", str(checkout))
@@ -330,7 +400,9 @@ class TestExposeCli:
         result = _launchers.expose_cli()
         assert "clawk" in result["written"]
         # The venv console script survives untouched…
-        assert console_script.read_text(encoding="utf-8-sig") == "# real console script\n"
+        assert (
+            console_script.read_text(encoding="utf-8-sig") == "# real console script\n"
+        )
         # …and the link-dir entry is now a real file, not a symlink.
         assert not (wrapper_dir / "clawk").is_symlink()
 
@@ -345,23 +417,45 @@ def test_direct_packaged_cli_exposes_shims_before_electron(tmp_path):
     payload = tmp_path / "Clawksis.app/Contents/Resources/agent-payload"
     repo = payload / "repo"
     _write_bundled_stamp(repo)
-    (repo / "install-stamp.json").write_text(json.dumps({
-        "payload": "bundled", "commit": "abcdef012345", "updateMechanism": "electron-updater",
-    }), encoding="utf-8")
+    (repo / "install-stamp.json").write_text(
+        json.dumps(
+            {
+                "payload": "bundled",
+                "commit": "abcdef012345",
+                "updateMechanism": "electron-updater",
+            }
+        ),
+        encoding="utf-8",
+    )
     bin_dir = payload / "bin"
     bin_dir.mkdir()
     code = f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parents[2])!r}); from clawk_cli.main import main; main()"
     for name in ("clawk", "clawksis-agent", "clawk-acp"):
         shim = bin_dir / name
-        shim.write_text(f'#!/bin/sh\nexec {shlex.join([sys.executable, "-I", "-c", code])} "$@"\n', encoding="utf-8")
+        shim.write_text(
+            f'#!/bin/sh\nexec {shlex.join([sys.executable, "-I", "-c", code])} "$@"\n',
+            encoding="utf-8",
+        )
         shim.chmod(0o755)
-    env = dict(os.environ, HOME=str(home), CLAWK_HOME=str(home / ".clawksis"),
-               CLAWK_INSTALL_ROOT=str(repo), CLAWK_RUNTIME_DIR=str(tmp_path / "tools"))
+    env = dict(
+        os.environ,
+        HOME=str(home),
+        CLAWK_HOME=str(home / ".clawksis"),
+        CLAWK_INSTALL_ROOT=str(repo),
+        CLAWK_RUNTIME_DIR=str(tmp_path / "tools"),
+    )
     # Execute the package CLI directly. No Electron process or linking helper runs.
     # `--help` reaches main()'s boot bootstrap (which owns expose_cli) before argparse
     # exits; `--version` is answered on the pre-import fast path and never gets there.
-    result = subprocess.run([str(bin_dir / "clawk"), "--help"], env=env,
-                            capture_output=True, text=True, timeout=30, encoding="utf-8", check=False)
+    result = subprocess.run(
+        [str(bin_dir / "clawk"), "--help"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        encoding="utf-8",
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     for name in ("clawk", "clawksis-agent", "clawk-acp"):
         assert (home / ".local/bin" / name).is_symlink()
@@ -379,7 +473,14 @@ class TestSymlinkSealedLaunchers:
         home = tmp_path / "home"
         home.mkdir()
         monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-        payload_bin = tmp_path / "Clawksis.app" / "Contents" / "Resources" / "agent-payload" / "bin"
+        payload_bin = (
+            tmp_path
+            / "Clawksis.app"
+            / "Contents"
+            / "Resources"
+            / "agent-payload"
+            / "bin"
+        )
         payload_bin.mkdir(parents=True)
         for name in ("clawk", "clawksis-agent", "clawk-acp"):
             (payload_bin / name).write_text("fake mach-o shim\n", encoding="utf-8")
@@ -418,12 +519,16 @@ class TestSymlinkSealedLaunchers:
         link_dir = home / ".local" / "bin"
         link_dir.mkdir(parents=True)
         # A real file (pipx-style launcher)…
-        (link_dir / "clawk").write_text("#!/bin/sh\n# pipx launcher\n", encoding="utf-8")
+        (link_dir / "clawk").write_text(
+            "#!/bin/sh\n# pipx launcher\n", encoding="utf-8"
+        )
         # …and a live symlink to a different tool.
         other = tmp_path / "other-tool"
         other.write_text("other\n", encoding="utf-8")
         (link_dir / "clawksis-agent").symlink_to(other)
         result = _launchers._symlink_sealed_launchers(payload_bin)
-        assert (link_dir / "clawk").read_text(encoding="utf-8-sig") == "#!/bin/sh\n# pipx launcher\n"
+        assert (link_dir / "clawk").read_text(
+            encoding="utf-8-sig"
+        ) == "#!/bin/sh\n# pipx launcher\n"
         assert os.readlink(link_dir / "clawksis-agent") == str(other)
         assert sorted(result["written"]) == ["clawk-acp"]

@@ -39,7 +39,9 @@ MANAGED_FAL_RATE_LIMIT_RETRY_CAP_SECONDS = 30.0
 FAL_QUEUE_POLL_SECONDS = 2.0
 
 
-def wait_fal_queue_result(handle: Any, *, interval: float = FAL_QUEUE_POLL_SECONDS) -> Any:
+def wait_fal_queue_result(
+    handle: Any, *, interval: float = FAL_QUEUE_POLL_SECONDS
+) -> Any:
     """``handle.get()`` without the SDK's 0.1 s status poll: drain ``iter_events`` at ``interval``,
     then ``get()`` sees Completed on its first status check and fetches the result."""
     for _ in handle.iter_events(with_logs=False, interval=interval):
@@ -67,6 +69,7 @@ def import_fal_client() -> Any:
         except Exception as exc:
             raise ImportError(str(exc))
     import fal_client  # type: ignore  # noqa: WPS433 — intentionally lazy
+
     return fal_client
 
 
@@ -105,8 +108,14 @@ def _managed_fal_billing_error(exc: BaseException, what: str) -> Optional[str]:
     if not isinstance(error, dict) or error.get("code") != "BILLING_ERROR":
         return None
     details = error.get("details") if isinstance(error.get("details"), dict) else {}
-    upstream = details.get("upstreamPayload") if isinstance(details.get("upstreamPayload"), dict) else {}
-    code = upstream.get("code") or details.get("chargeIntentErrorCode") or "billing_error"
+    upstream = (
+        details.get("upstreamPayload")
+        if isinstance(details.get("upstreamPayload"), dict)
+        else {}
+    )
+    code = (
+        upstream.get("code") or details.get("chargeIntentErrorCode") or "billing_error"
+    )
     detail = upstream.get("error") or "Nous Portal rejected the charge authorization"
     return (
         f"{error.get('message') or 'Charge authorization failed'} (BILLING_ERROR; {code}: {detail}). "
@@ -123,7 +132,11 @@ def _managed_fal_retry_after_seconds(exc: BaseException) -> Optional[float]:
     if response is None or _extract_http_status(exc) != 429:
         return None
     headers = getattr(response, "headers", None)
-    raw = headers.get("Retry-After") if headers is not None and hasattr(headers, "get") else None
+    raw = (
+        headers.get("Retry-After")
+        if headers is not None and hasattr(headers, "get")
+        else None
+    )
     if raw is None:
         try:
             error = response.json().get("error")
@@ -136,8 +149,14 @@ def _managed_fal_retry_after_seconds(exc: BaseException) -> Optional[float]:
         return None
 
 
-def _managed_fal_rate_limit_message(what: str, name: str, retry_after: Optional[float]) -> str:
-    hint = f"retry after {retry_after:g}s" if retry_after is not None else "no Retry-After given"
+def _managed_fal_rate_limit_message(
+    what: str, name: str, retry_after: Optional[float]
+) -> str:
+    hint = (
+        f"retry after {retry_after:g}s"
+        if retry_after is not None
+        else "no Retry-After given"
+    )
     return (
         f"Nous Subscription gateway rate-limited {what} '{name}' (HTTP 429; {hint}). "
         "The model is enabled — retry later instead of switching models or setting FAL_KEY."
@@ -145,7 +164,10 @@ def _managed_fal_rate_limit_message(what: str, name: str, retry_after: Optional[
 
 
 def submit_managed_fal_with_rate_limit_retry(
-    submit: Callable[[dict[str, str]], Any], *, what: str, name: str,
+    submit: Callable[[dict[str, str]], Any],
+    *,
+    what: str,
+    name: str,
 ):
     """Call ``submit(headers)`` with a fresh ``x-idempotency-key``; on a 429 whose Retry-After
     fits the cap, wait it out (interrupt-aware) and resubmit ONCE under a new key.
@@ -155,6 +177,7 @@ def submit_managed_fal_with_rate_limit_retry(
     which sends agents off to switch models. Every other exception propagates untouched.
     """
     from tools.interrupt import is_interrupted
+
     for attempt in (1, 2):
         try:
             return submit({"x-idempotency-key": str(uuid.uuid4())})
@@ -162,12 +185,20 @@ def submit_managed_fal_with_rate_limit_retry(
             if _extract_http_status(exc) != 429:
                 raise
             retry_after = _managed_fal_retry_after_seconds(exc)
-            if attempt == 2 or retry_after is None or retry_after > MANAGED_FAL_RATE_LIMIT_RETRY_CAP_SECONDS:
-                raise ValueError(_managed_fal_rate_limit_message(what, name, retry_after)) from exc
+            if (
+                attempt == 2
+                or retry_after is None
+                or retry_after > MANAGED_FAL_RATE_LIMIT_RETRY_CAP_SECONDS
+            ):
+                raise ValueError(
+                    _managed_fal_rate_limit_message(what, name, retry_after)
+                ) from exc
             deadline = time.monotonic() + retry_after
             while time.monotonic() < deadline:
                 if is_interrupted():
-                    raise ValueError(_managed_fal_rate_limit_message(what, name, retry_after)) from exc
+                    raise ValueError(
+                        _managed_fal_rate_limit_message(what, name, retry_after)
+                    ) from exc
                 time.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
 
 
@@ -182,25 +213,42 @@ class _ManagedFalSyncClient:
     its own ``fal_client`` reference so the caller decides which (possibly test-patched) module is used."""
 
     def __init__(self, fal_client: Any, *, key: str, queue_run_origin: str):
-        sync_client_class = _require(getattr(fal_client, "SyncClient", None), "fal_client.SyncClient")
-        client_module = _require(getattr(fal_client, "client", None), "fal_client.client")
+        sync_client_class = _require(
+            getattr(fal_client, "SyncClient", None), "fal_client.SyncClient"
+        )
+        client_module = _require(
+            getattr(fal_client, "client", None), "fal_client.client"
+        )
         self._queue_url_format = _normalize_fal_queue_url_format(queue_run_origin)
         self._sync_client = sync_client_class(key=key)
-        self._http_client = _require(getattr(self._sync_client, "_client", None), "fal_client.SyncClient._client")
+        self._http_client = _require(
+            getattr(self._sync_client, "_client", None), "fal_client.SyncClient._client"
+        )
         self._maybe_retry_request = getattr(client_module, "_maybe_retry_request", None)
         self._raise_for_status = getattr(client_module, "_raise_for_status", None)
         if self._maybe_retry_request is None or self._raise_for_status is None:
-            raise RuntimeError("fal_client.client request helpers are required for managed FAL gateway mode")
+            raise RuntimeError(
+                "fal_client.client request helpers are required for managed FAL gateway mode"
+            )
         self._request_handle_class = _require(
-            getattr(client_module, "SyncRequestHandle", None), "fal_client.client.SyncRequestHandle")
+            getattr(client_module, "SyncRequestHandle", None),
+            "fal_client.client.SyncRequestHandle",
+        )
         self._add_hint_header = getattr(client_module, "add_hint_header", None)
         self._add_priority_header = getattr(client_module, "add_priority_header", None)
         self._add_timeout_header = getattr(client_module, "add_timeout_header", None)
 
     def submit(
-        self, application: str, arguments: dict[str, Any], *, path: str = "",
-        hint: Optional[str] = None, webhook_url: Optional[str] = None, priority: Any = None,
-        headers: Optional[dict[str, str]] = None, start_timeout: Optional[int | float] = None,
+        self,
+        application: str,
+        arguments: dict[str, Any],
+        *,
+        path: str = "",
+        hint: Optional[str] = None,
+        webhook_url: Optional[str] = None,
+        priority: Any = None,
+        headers: Optional[dict[str, str]] = None,
+        start_timeout: Optional[int | float] = None,
     ):
         url = self._queue_url_format + application
         if path:
@@ -212,11 +260,15 @@ class _ManagedFalSyncClient:
             self._add_hint_header(hint, request_headers)
         if priority is not None:
             if self._add_priority_header is None:
-                raise RuntimeError("fal_client.client.add_priority_header is required for priority requests")
+                raise RuntimeError(
+                    "fal_client.client.add_priority_header is required for priority requests"
+                )
             self._add_priority_header(priority, request_headers)
         if start_timeout is not None:
             if self._add_timeout_header is None:
-                raise RuntimeError("fal_client.client.add_timeout_header is required for timeout requests")
+                raise RuntimeError(
+                    "fal_client.client.add_timeout_header is required for timeout requests"
+                )
             self._add_timeout_header(start_timeout, request_headers)
         request_kwargs = {
             "json": arguments,
@@ -235,9 +287,15 @@ class _ManagedFalSyncClient:
         if has_idempotency_key:
             response = self._http_client.request("POST", url, **request_kwargs)
         else:
-            response = self._maybe_retry_request(self._http_client, "POST", url, **request_kwargs)
+            response = self._maybe_retry_request(
+                self._http_client, "POST", url, **request_kwargs
+            )
         self._raise_for_status(response)
         data = response.json()
         return self._request_handle_class(
-            request_id=data["request_id"], response_url=data["response_url"],
-            status_url=data["status_url"], cancel_url=data["cancel_url"], client=self._http_client)
+            request_id=data["request_id"],
+            response_url=data["response_url"],
+            status_url=data["status_url"],
+            cancel_url=data["cancel_url"],
+            client=self._http_client,
+        )

@@ -86,7 +86,9 @@ def has_rate_limit_headers(lowered: Mapping[str, str]) -> bool:
     return any(k.startswith("x-ratelimit-") for k in lowered)
 
 
-def parse_rate_limit_headers(headers: Mapping[str, str], provider: str = "") -> Optional[RateLimitState]:
+def parse_rate_limit_headers(
+    headers: Mapping[str, str], provider: str = ""
+) -> Optional[RateLimitState]:
     """Parse x-ratelimit-* headers into a RateLimitState (None if none present)."""
     lowered = lower_headers(headers)
     if not has_rate_limit_headers(lowered):
@@ -141,7 +143,9 @@ def _bucket_line(label: str, bucket: RateLimitBucket, label_width: int = 14) -> 
     if bucket.limit <= 0:
         return f"  {label:<{label_width}}  (no data)"
     pct = bucket.usage_pct
-    used, limit, remaining = map(_fmt_count, (bucket.used, bucket.limit, bucket.remaining))
+    used, limit, remaining = map(
+        _fmt_count, (bucket.used, bucket.limit, bucket.remaining)
+    )
     reset = _fmt_seconds(bucket.remaining_seconds_now)
     return f"  {label:<{label_width}} {_bar(pct)} {pct:5.1f}%  {used}/{limit} used  ({remaining} left, resets in {reset})"
 
@@ -152,11 +156,21 @@ def format_rate_limit_display(state: RateLimitState) -> str:
         return "No rate limit data yet — make an API request first."
 
     age = state.age_seconds
-    freshness = "just now" if age < 5 else f"{int(age)}s ago" if age < 60 else f"{_fmt_seconds(age)} ago"
+    freshness = (
+        "just now"
+        if age < 5
+        else f"{int(age)}s ago"
+        if age < 60
+        else f"{_fmt_seconds(age)} ago"
+    )
 
     provider_label = state.provider.title() if state.provider else "Provider"
-    labeled = [("Requests/min", state.requests_min), ("Requests/hr", state.requests_hour),
-               ("Tokens/min", state.tokens_min), ("Tokens/hr", state.tokens_hour)]
+    labeled = [
+        ("Requests/min", state.requests_min),
+        ("Requests/hr", state.requests_hour),
+        ("Tokens/min", state.tokens_min),
+        ("Tokens/hr", state.tokens_hour),
+    ]
     lines = [f"{provider_label} Rate Limits (captured {freshness}):", ""]
     lines += [_bucket_line(label, bucket) for label, bucket in labeled[:2]]
     lines += [""] + [_bucket_line(label, bucket) for label, bucket in labeled[2:]]
@@ -184,6 +198,8 @@ def format_rate_limit_compact(state: RateLimitState) -> str:
         ("TPH", state.tokens_hour, _fmt_count, True),
     )
     return " | ".join(
-        f"{tag}: {fmt(b.remaining)}/{fmt(b.limit)}" + (f" (resets {_fmt_seconds(b.remaining_seconds_now)})" if reset else "")
-        for tag, b, fmt, reset in windows if b.limit > 0
+        f"{tag}: {fmt(b.remaining)}/{fmt(b.limit)}"
+        + (f" (resets {_fmt_seconds(b.remaining_seconds_now)})" if reset else "")
+        for tag, b, fmt, reset in windows
+        if b.limit > 0
     )

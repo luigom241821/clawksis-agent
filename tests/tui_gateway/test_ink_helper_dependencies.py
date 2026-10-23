@@ -35,18 +35,33 @@ def _commit_generation() -> None:
     selected = pm.environments.site_packages(venv)
     selected.mkdir(parents=True)
     (selected / "test_deps.pth").write_text(
-        "\n".join(p for p in sys.path if Path(p).name in ("site-packages", "dist-packages")) + "\n",
-        encoding="utf-8")
+        "\n".join(
+            p for p in sys.path if Path(p).name in ("site-packages", "dist-packages")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     pm.environments.runtime_facts_path(_ROOT).write_text(
-        json.dumps({"packages": {"venv": {"environment": str(venv)}}, "schema": 1}), encoding="utf-8")
+        json.dumps({"packages": {"venv": {"environment": str(venv)}}, "schema": 1}),
+        encoding="utf-8",
+    )
 
 
-def _ink_child(script: str, *args: str, scripts: Path = _SCRIPTS, **env: str) -> subprocess.CompletedProcess:
+def _ink_child(
+    script: str, *args: str, scripts: Path = _SCRIPTS, **env: str
+) -> subprocess.CompletedProcess:
     """Exactly what gatewayClient.ts runs: PYTHONPATH and CLAWK_PYTHON_SRC_ROOT name the Python root."""
     child_env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     child_env.update(PYTHONPATH=str(_ROOT), CLAWK_PYTHON_SRC_ROOT=str(_ROOT), **env)
-    return subprocess.run([sys.executable, "-S", str(scripts / script), *args], cwd=_ROOT,
-                          env=child_env, capture_output=True, text=True, timeout=60, check=False)
+    return subprocess.run(
+        [sys.executable, "-S", str(scripts / script), *args],
+        cwd=_ROOT,
+        env=child_env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
 
 
 def test_gateway_bootstrap_reaches_a_verdict_on_the_store_python():
@@ -62,7 +77,9 @@ def test_gateway_bootstrap_reaches_a_verdict_on_the_store_python():
     assert child.stderr.strip().splitlines()[0].startswith("gateway "), child.stderr
 
 
-def test_packaged_gateway_bootstrap_boots_the_root_it_is_given_or_names_why_it_cannot(tmp_path):
+def test_packaged_gateway_bootstrap_boots_the_root_it_is_given_or_names_why_it_cannot(
+    tmp_path,
+):
     """The TUI product ships the helper in its own dist/scripts/ (a separate Nix store path, #139208),
     where parents[2] is not the Python root: the helper must boot the generation of the root Ink
     passes, and an interpreter that still cannot load Clawksis is a named, terminal verdict the client
@@ -73,7 +90,9 @@ def test_packaged_gateway_bootstrap_boots_the_root_it_is_given_or_names_why_it_c
 
     bare = _ink_child("gateway_bootstrap.py", "--start", scripts=packaged)
     assert bare.returncode == 1
-    assert bare.stderr.splitlines()[0] == "gateway unavailable: bootstrap_dependencies", bare.stderr
+    assert (
+        bare.stderr.splitlines()[0] == "gateway unavailable: bootstrap_dependencies"
+    ), bare.stderr
 
     _commit_generation()
     booted = _ink_child("gateway_bootstrap.py", scripts=packaged)
@@ -85,11 +104,21 @@ def test_packaged_gateway_bootstrap_boots_the_root_it_is_given_or_names_why_it_c
 def _store_python_child(script: str, *args: str) -> subprocess.CompletedProcess:
     """The helper on PM's store Python: a non-venv interpreter living under the runtime dir."""
     child_env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    child_env.update(PYTHONPATH=str(_ROOT), CLAWK_PYTHON_SRC_ROOT=str(_ROOT),
-                     CLAWK_RUNTIME_DIR=str(Path(sys.base_prefix).resolve().parent))
+    child_env.update(
+        PYTHONPATH=str(_ROOT),
+        CLAWK_PYTHON_SRC_ROOT=str(_ROOT),
+        CLAWK_RUNTIME_DIR=str(Path(sys.base_prefix).resolve().parent),
+    )
     python = getattr(sys, "_base_executable", sys.executable)
-    return subprocess.run([python, "-S", str(_SCRIPTS / script), *args], cwd=_ROOT, env=child_env,
-                          capture_output=True, text=True, timeout=60, check=False)
+    return subprocess.run(
+        [python, "-S", str(_SCRIPTS / script), *args],
+        cwd=_ROOT,
+        env=child_env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
 
 
 def test_store_python_without_a_generation_names_the_remedy():
@@ -99,7 +128,9 @@ def test_store_python_without_a_generation_names_the_remedy():
     lines = bootstrap.stderr.strip().splitlines()
     assert bootstrap.returncode == 1
     assert lines[0] == "gateway unavailable: bootstrap_dependencies", bootstrap.stderr
-    assert lines[-1] == "gateway unavailable: run `clawk pm repair`, then restart the TUI", bootstrap.stderr
+    assert (
+        lines[-1] == "gateway unavailable: run `clawk pm repair`, then restart the TUI"
+    ), bootstrap.stderr
 
 
 def test_clipboard_helper_without_a_generation_answers_false(tmp_path):
@@ -117,7 +148,9 @@ def test_unreadable_install_state_is_retried_not_terminal():
     import pm.environments
 
     state = pm.environments.install_state_dir(_ROOT)
-    (state / ".install.lock").mkdir(parents=True)  # os.open(O_RDWR) on a directory: OSError
+    (state / ".install.lock").mkdir(
+        parents=True
+    )  # os.open(O_RDWR) on a directory: OSError
 
     child = _ink_child("gateway_bootstrap.py", "--start")
 
@@ -141,11 +174,18 @@ def test_clipboard_image_converts_wayland_jpeg_with_the_generations_pillow(tmp_p
     wl_paste = bin_dir / "wl-paste"
     wl_paste.write_text(
         '#!/bin/sh\n[ "$1" = --list-types ] && { echo image/jpeg; exit 0; }\n'
-        f'[ "$1" = --type ] && [ "$2" = image/jpeg ] && exec cat {jpeg}\nexit 1\n', encoding="utf-8")
+        f'[ "$1" = --type ] && [ "$2" = image/jpeg ] && exec cat {jpeg}\nexit 1\n',
+        encoding="utf-8",
+    )
     wl_paste.chmod(0o755)
     dest = tmp_path / "out" / "paste.png"
 
-    child = _ink_child("clipboard_image.py", str(dest), PATH=str(bin_dir), WAYLAND_DISPLAY="wayland-test")
+    child = _ink_child(
+        "clipboard_image.py",
+        str(dest),
+        PATH=str(bin_dir),
+        WAYLAND_DISPLAY="wayland-test",
+    )
 
     assert child.returncode == 0, child.stderr
     assert json.loads(child.stdout) is True

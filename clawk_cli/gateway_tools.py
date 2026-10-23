@@ -11,6 +11,7 @@ Polling: the dock ticks once a second. The view only asks the gateway while it h
 (a tool finished since the last poll, or a listed process is still running or recently
 exited); the status bar reads the cached count and never blocks a repaint on an RPC.
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,18 +68,26 @@ class GatewayProcessView:
         self.dirty = True
 
     def _interesting(self, now):
-        return any(not p.exited or (p.exited_at and now - p.exited_at <= _RETAIN_SECONDS) for p in self.rows)
+        return any(
+            not p.exited or (p.exited_at and now - p.exited_at <= _RETAIN_SECONDS)
+            for p in self.rows
+        )
 
     def refresh(self, *, force=False):
         now = time.time()
-        if not force and (now - self._polled < _POLL_SECONDS or not (self.dirty or self._interesting(now))):
+        if not force and (
+            now - self._polled < _POLL_SECONDS
+            or not (self.dirty or self._interesting(now))
+        ):
             return
         if not self._lock.acquire(blocking=False):
             return
         try:
             self._polled = now
             self.dirty = False
-            result = self.connection.call("process.list", session_id=self.session_id, timeout=5)
+            result = self.connection.call(
+                "process.list", session_id=self.session_id, timeout=5
+            )
             self.rows = [_Proc(row) for row in (result or {}).get("processes") or []]
         except (GatewayClientError, RuntimeError) as exc:
             logger.debug("process.list failed: %s", exc)
@@ -89,10 +98,17 @@ class GatewayProcessView:
     def list_sessions(self):
         self.refresh()
         now = time.time()
-        return [{"session_id": p.id, "command": p.command[:200],
-                 "status": "exited" if p.exited else "running", "exit_code": p.exit_code,
-                 "completion_reason": p.completion_reason if p.exited else None,
-                 "uptime_seconds": int(now - p.started_at) if p.started_at else 0} for p in self.rows]
+        return [
+            {
+                "session_id": p.id,
+                "command": p.command[:200],
+                "status": "exited" if p.exited else "running",
+                "exit_code": p.exit_code,
+                "completion_reason": p.completion_reason if p.exited else None,
+                "uptime_seconds": int(now - p.started_at) if p.started_at else 0,
+            }
+            for p in self.rows
+        ]
 
     def get(self, process_id):
         return next((p for p in self.rows if p.id == process_id), None)
@@ -103,7 +119,9 @@ class GatewayProcessView:
 
     def kill_process(self, process_id, **_kw):
         try:
-            result = self.connection.call("process.kill", session_id=self.session_id, process_id=process_id)
+            result = self.connection.call(
+                "process.kill", session_id=self.session_id, process_id=process_id
+            )
         except GatewayClientError as exc:
             return {"status": "error", "error": str(exc)}
         self.refresh(force=True)
@@ -129,7 +147,9 @@ class GatewayProcessView:
         """Running background subagents (the gateway's ``session.usage.active_subagents``)."""
         try:
             usage = self.connection.state(self.session_id).usage or {}
-        except Exception:  # health: allow BLE001 -- a missing usage cache reads as none running
+        except (
+            Exception
+        ):  # health: allow BLE001 -- a missing usage cache reads as none running
             return 0
         value = usage.get("active_subagents")
         return value if isinstance(value, int) else 0
@@ -146,12 +166,22 @@ class GatewayProcessView:
         while a turn runs (``busy``), children were listed last time, the gateway counts some, or
         an off-turn spawn asked to be watched."""
         now = time.time()
-        wanted = (busy or self.subagents or now < self._subagents_watch_until
-                  or self.active_delegations())
-        if wanted and now - self._subagents_polled >= _POLL_SECONDS and self._subagents_lock.acquire(blocking=False):
+        wanted = (
+            busy
+            or self.subagents
+            or now < self._subagents_watch_until
+            or self.active_delegations()
+        )
+        if (
+            wanted
+            and now - self._subagents_polled >= _POLL_SECONDS
+            and self._subagents_lock.acquire(blocking=False)
+        ):
             try:
                 self._subagents_polled = now
-                result = self.connection.call("subagent.list", session_id=self.session_id, timeout=5)
+                result = self.connection.call(
+                    "subagent.list", session_id=self.session_id, timeout=5
+                )
                 self.subagents = list((result or {}).get("subagents") or [])
                 self._subagents_seen = now
             except (GatewayClientError, RuntimeError) as exc:
@@ -171,10 +201,19 @@ class GatewayProcessView:
         if not fetch or (cached and now - cached[1] < _POLL_SECONDS):
             return cached[2] if cached else None
         try:
-            result = self.connection.call("subagent.tail", session_id=self.session_id,
-                                          subagent_id=subagent_id, timeout=5) or {}
+            result = (
+                self.connection.call(
+                    "subagent.tail",
+                    session_id=self.session_id,
+                    subagent_id=subagent_id,
+                    timeout=5,
+                )
+                or {}
+            )
             text = result.get("text") if result.get("available") else None
-            if text is not None:  # filter once here, not on every repaint of the detail view
+            if (
+                text is not None
+            ):  # filter once here, not on every repaint of the detail view
                 text = "".join(c for c in text if c.isprintable() or c in "\n\t")
         except (GatewayClientError, RuntimeError) as exc:
             logger.debug("subagent.tail failed: %s", exc)
@@ -190,18 +229,38 @@ class GatewayProcessView:
         status, note, failure = _CONTROL_OUTCOMES[action]
         try:
             if action == "steer":
-                result = self.connection.call("subagent.steer", session_id=self.session_id,
-                                              subagent_id=subagent_id, text=message, timeout=5) or {}
+                result = (
+                    self.connection.call(
+                        "subagent.steer",
+                        session_id=self.session_id,
+                        subagent_id=subagent_id,
+                        text=message,
+                        timeout=5,
+                    )
+                    or {}
+                )
                 ok = result.get("status") == "queued"
             else:
-                result = self.connection.call("subagent.interrupt", session_id=self.session_id,
-                                              subagent_id=subagent_id, timeout=5) or {}
+                result = (
+                    self.connection.call(
+                        "subagent.interrupt",
+                        session_id=self.session_id,
+                        subagent_id=subagent_id,
+                        timeout=5,
+                    )
+                    or {}
+                )
                 ok = bool(result.get("found"))
         except GatewayClientError as exc:
             return {"error": str(exc)}
         self._subagents_polled = 0.0  # the next tick re-reads the roster
         if ok:
-            return {"action": action, "subagent_id": subagent_id, "status": status, "note": note}
+            return {
+                "action": action,
+                "subagent_id": subagent_id,
+                "status": status,
+                "note": note,
+            }
         return {"error": failure.format(sid=subagent_id)}
 
 
@@ -215,6 +274,7 @@ class LocalSubagents:
 
     def subagent_rows(self, *, busy):
         from tools.delegate_tool_registry import _list_payload, list_active_subagents
+
         parent = getattr(self.cli, "agent", None)
         entries = _list_payload(parent)["subagents"] if parent is not None else []
         # The scoped control-plane snapshot supplies authority and transcript paths; the public
@@ -222,18 +282,29 @@ class LocalSubagents:
         live = {r["subagent_id"]: r for r in list_active_subagents()} if entries else {}
         for row in entries:
             record = live.get(row["subagent_id"], {})
-            row["started_at"], row["last_tool"] = record.get("started_at"), record.get("last_tool") or ""
-        self._paths = {row["subagent_id"]: row.get("live_transcript") for row in entries}
+            row["started_at"], row["last_tool"] = (
+                record.get("started_at"),
+                record.get("last_tool") or "",
+            )
+        self._paths = {
+            row["subagent_id"]: row.get("live_transcript") for row in entries
+        }
         return entries
 
     def subagent_tail(self, subagent_id, *, fetch=False):
         from clawk_cli.cli_subagent_monitor import read_tail
+
         return read_tail(self._paths.get(subagent_id))
 
     def subagent_control(self, action, subagent_id, message=None):
         import json
         from tools.delegate_tool_registry import _handle_control_action
-        return json.loads(_handle_control_action(action, subagent_id, message, getattr(self.cli, "agent", None)))
+
+        return json.loads(
+            _handle_control_action(
+                action, subagent_id, message, getattr(self.cli, "agent", None)
+            )
+        )
 
 
 class _OpenedSession:
@@ -251,7 +322,11 @@ class _OpenedSession:
 def bind(agent):
     """Called when the CLI's gateway-backed agent is built."""
     global _view
-    _view = GatewayProcessView(agent) if getattr(agent, "connection", None) is not None else None
+    _view = (
+        GatewayProcessView(agent)
+        if getattr(agent, "connection", None) is not None
+        else None
+    )
     return _view
 
 
@@ -279,6 +354,7 @@ def process_registry():
     if view is not None:
         return view
     from tools.process_registry import process_registry as local
+
     return local
 
 
@@ -286,11 +362,17 @@ def background_counts():
     """The status bar's ``⚙ N`` processes and running background subagents (cached, no RPC)."""
     view = process_view()
     if view is not None:
-        return {"active_background_processes": view.count_running(),
-                "active_background_subagents": view.active_delegations()}
+        return {
+            "active_background_processes": view.count_running(),
+            "active_background_subagents": view.active_delegations(),
+        }
     from tools.async_delegation import active_count
     from tools.process_registry import process_registry as local
-    return {"active_background_processes": local.count_running(), "active_background_subagents": active_count()}
+
+    return {
+        "active_background_processes": local.count_running(),
+        "active_background_subagents": active_count(),
+    }
 
 
 def session_tools():
@@ -305,8 +387,15 @@ def session_tools():
     for section in result.get("sections") or []:
         for row in section.get("tools") or []:
             toolset_of[row["name"]] = section.get("name")
-            tools.append({"type": "function", "function": {"name": row["name"],
-                                                           "description": row.get("description") or ""}})
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": row["name"],
+                        "description": row.get("description") or "",
+                    },
+                }
+            )
     return tools, toolset_of.get
 
 
@@ -317,7 +406,9 @@ def reload_gateway_skills():
     if view is None:
         return None
     try:
-        return (view.connection.call("skills.reload", session_id=view.session_id) or {}).get("result")
+        return (
+            view.connection.call("skills.reload", session_id=view.session_id) or {}
+        ).get("result")
     except GatewayClientError as exc:
         logger.debug("skills.reload failed: %s", exc)
         return None
@@ -328,8 +419,10 @@ def handle_skills_slash(cmd, console, cli=None):
     gateway's rescan so an install reaches the skill map the session's turns use, and ``cli``'s copy of
     the gateway's skill list is read again."""
     from clawk_cli.skills_hub import handle_skills_slash as local
+
     local(cmd, console)
     reload_gateway_skills()
     if cli is not None:
         from clawk_cli.gateway_plugin_commands import invalidate
+
         invalidate(cli)

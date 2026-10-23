@@ -11,6 +11,7 @@ Binding that scope must stay CHEAP: it happens inside a 5s total exit-flush budg
 the profile's external secret sources shells out to the operator's secret command (30s CLI budget)
 — persisting a transcript needs no external credential.
 """
+
 import threading
 import time
 
@@ -18,6 +19,7 @@ import pytest
 
 from clawk_constants import get_clawk_home
 from tui_gateway import server as tui_server
+
 
 class _Agent:
     def __init__(self, seen):
@@ -27,6 +29,7 @@ class _Agent:
     def _persist_session(self, _messages):
         self._seen.append(str(get_clawk_home()))
 
+
 @pytest.fixture
 def homes(tmp_path, monkeypatch):
     launch, served = tmp_path / "launch", tmp_path / "served"
@@ -35,10 +38,14 @@ def homes(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     return launch, served
 
+
 def _install_session(monkeypatch, session):
     monkeypatch.setattr(tui_server, "_sessions", {"sid": session}, raising=False)
     monkeypatch.setattr(tui_server, "_sessions_lock", threading.RLock(), raising=False)
-    monkeypatch.setattr(tui_server, "_INCREMENTAL_FLUSH_INTERVAL_S", 30.0, raising=False)
+    monkeypatch.setattr(
+        tui_server, "_INCREMENTAL_FLUSH_INTERVAL_S", 30.0, raising=False
+    )
+
 
 def test_incremental_flush_persists_into_the_sessions_own_home(homes, monkeypatch):
     launch, served = homes
@@ -46,8 +53,11 @@ def test_incremental_flush_persists_into_the_sessions_own_home(homes, monkeypatc
     _install_session(monkeypatch, {"agent": _Agent(seen), "profile_home": str(served)})
 
     assert tui_server._flush_dirty_sessions(now=1000.0) == 1
-    assert seen == [str(served)], f"transcript flushed into {seen} instead of the served home"
+    assert seen == [str(served)], (
+        f"transcript flushed into {seen} instead of the served home"
+    )
     assert str(launch) not in seen
+
 
 def test_exit_flush_never_waits_on_an_external_secret_source(homes, monkeypatch):
     """A slow ``op run`` / ``bws`` source must not cost the transcript the exit flush exists to save."""

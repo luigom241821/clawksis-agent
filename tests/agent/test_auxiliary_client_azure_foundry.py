@@ -34,6 +34,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_credential_cache():
     from agent.azure_identity_adapter import reset_credential_cache
+
     reset_credential_cache()
     yield
     reset_credential_cache()
@@ -53,7 +54,9 @@ def fake_azure_identity(monkeypatch):
     fake_module = SimpleNamespace(
         DefaultAzureCredential=lambda **kw: SimpleNamespace(
             kwargs=kw,
-            get_token=lambda scope: SimpleNamespace(token="fake", expires_on=9999999999),
+            get_token=lambda scope: SimpleNamespace(
+                token="fake", expires_on=9999999999
+            ),
         ),
         get_bearer_token_provider=lambda credential, scope: (
             last.__setitem__("scope", scope),
@@ -68,6 +71,7 @@ def fake_azure_identity(monkeypatch):
 @pytest.fixture
 def patch_load_config(monkeypatch):
     """Helper to set model_cfg seen by _try_azure_foundry."""
+
     def _apply(model_cfg):
         monkeypatch.setattr(
             "clawk_cli.config.load_config",
@@ -77,6 +81,7 @@ def patch_load_config(monkeypatch):
             "clawk_cli.config.load_config_readonly",
             lambda: {"model": model_cfg},
         )
+
     return _apply
 
 
@@ -86,38 +91,42 @@ def patch_load_config(monkeypatch):
 
 
 class TestAuxAzureFoundryApiKey:
-    def test_chat_completions_returns_plain_openai_client(self, monkeypatch, patch_load_config):
+    def test_chat_completions_returns_plain_openai_client(
+        self, monkeypatch, patch_load_config
+    ):
         from agent.auxiliary_client import _try_azure_foundry
         from openai import OpenAI as _OpenAI
 
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "sk-azure-static-key")
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "default": "gpt-4o",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "default": "gpt-4o",
+            }
+        )
         client, resolved = _try_azure_foundry(model="gpt-4o")
         assert client is not None
         assert resolved == "gpt-4o"
         assert isinstance(client, _OpenAI)
         assert client.api_key == "sk-azure-static-key"
 
-
     def test_no_key_returns_none(self, monkeypatch, patch_load_config):
         from agent.auxiliary_client import _try_azure_foundry
 
         monkeypatch.delenv("AZURE_FOUNDRY_API_KEY", raising=False)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "default": "gpt-4o",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "default": "gpt-4o",
+            }
+        )
         client, resolved = _try_azure_foundry(model="gpt-4o")
         assert client is None
         assert resolved is None
-
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +136,10 @@ class TestAuxAzureFoundryApiKey:
 
 class TestAuxAzureFoundryEntra:
     def test_callable_api_key_reaches_openai_constructor(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """The token provider callable must arrive at ``OpenAI(api_key=...)``
         intact — never stringified to ``"no-key-required"`` or to the
@@ -152,13 +164,15 @@ class TestAuxAzureFoundryEntra:
                 self.base_url = kwargs.get("base_url", "")
 
         monkeypatch.setattr(_aux, "OpenAI", _FakeOpenAI)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "auth_mode": "entra_id",
-            "default": "gpt-4o",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "auth_mode": "entra_id",
+                "default": "gpt-4o",
+            }
+        )
         client, resolved = _aux._try_azure_foundry(model="gpt-4o")
         assert client is not None
         assert resolved == "gpt-4o"
@@ -173,7 +187,10 @@ class TestAuxAzureFoundryEntra:
         assert received["base_url"] == "https://r.openai.azure.com/openai/v1"
 
     def test_codex_responses_with_entra_wraps_correctly(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """GPT-5.x deployment on Entra ID — auto-upgraded to
         codex_responses, wrapped in CodexAuxiliaryClient, callable
@@ -189,13 +206,15 @@ class TestAuxAzureFoundryEntra:
                 self.base_url = kwargs.get("base_url", "")
 
         monkeypatch.setattr(_aux, "OpenAI", _FakeOpenAI)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "auth_mode": "entra_id",
-            "default": "gpt-5.4-mini",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "auth_mode": "entra_id",
+                "default": "gpt-5.4-mini",
+            }
+        )
         client, resolved = _aux._try_azure_foundry(model="gpt-5.4-mini")
         assert resolved == "gpt-5.4-mini"
         assert isinstance(client, _aux.CodexAuxiliaryClient)
@@ -207,7 +226,10 @@ class TestAuxAzureFoundryEntra:
         assert received["api_key"]().startswith("jwt-for-")
 
     def test_entra_anthropic_messages_uses_bearer_hook(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """Entra ID + anthropic_messages: runtime returns a callable
         api_key; ``_maybe_wrap_anthropic`` → ``build_anthropic_client``
@@ -226,7 +248,9 @@ class TestAuxAzureFoundryEntra:
                 self.base_url = kwargs.get("base_url", "")
 
         class _FakeAnthropicSDK:
-            Omit = object  # the adapter omits the unused credential header via sdk.Omit()
+            Omit = (
+                object  # the adapter omits the unused credential header via sdk.Omit()
+            )
 
             class Anthropic:
                 def __init__(self, **kwargs):
@@ -235,13 +259,15 @@ class TestAuxAzureFoundryEntra:
         monkeypatch.setattr(_aux, "OpenAI", _FakeOpenAI)
         monkeypatch.setattr(_anthropic, "_get_anthropic_sdk", lambda: _FakeAnthropicSDK)
 
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.services.ai.azure.com/anthropic",
-            "api_mode": "anthropic_messages",
-            "auth_mode": "entra_id",
-            "default": "claude-sonnet-4-5",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.services.ai.azure.com/anthropic",
+                "api_mode": "anthropic_messages",
+                "auth_mode": "entra_id",
+                "default": "claude-sonnet-4-5",
+            }
+        )
         client, resolved = _aux._try_azure_foundry(model="claude-sonnet-4-5")
         assert client is not None
         assert resolved == "claude-sonnet-4-5"
@@ -267,7 +293,10 @@ class TestAuxAzureFoundryEntra:
 
 class TestResolveProviderClientAzureFoundry:
     def test_dispatches_to_azure_branch_not_generic_api_key_path(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """End-to-end: the public ``resolve_provider_client`` entry
         point must take the dedicated azure-foundry branch, NOT the
@@ -285,13 +314,15 @@ class TestResolveProviderClientAzureFoundry:
                 self.base_url = kwargs.get("base_url", "")
 
         monkeypatch.setattr(_aux, "OpenAI", _FakeOpenAI)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "auth_mode": "entra_id",
-            "default": "gpt-4o",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "auth_mode": "entra_id",
+                "default": "gpt-4o",
+            }
+        )
         client, resolved = _aux.resolve_provider_client("azure-foundry", "gpt-4o")
         assert client is not None
         assert resolved == "gpt-4o"
@@ -300,7 +331,10 @@ class TestResolveProviderClientAzureFoundry:
         assert callable(received["api_key"])
 
     def test_auto_route_forwards_main_runtime_entra_callable_intact(
-        self, monkeypatch, fake_azure_identity, patch_load_config,
+        self,
+        monkeypatch,
+        fake_azure_identity,
+        patch_load_config,
     ):
         """#72421: ``provider: auto`` aux tasks (title generation, compression, smart approval)
         re-resolve the main azure-foundry runtime with its api_key forwarded as
@@ -319,25 +353,35 @@ class TestResolveProviderClientAzureFoundry:
 
         monkeypatch.setattr(_aux, "OpenAI", _FakeOpenAI)
         monkeypatch.setattr(_aux, "_is_provider_unhealthy", lambda *a, **k: False)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            "auth_mode": "entra_id",
-            "default": "gpt-4o",
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                "auth_mode": "entra_id",
+                "default": "gpt-4o",
+            }
+        )
         main_token_provider = lambda: "main-session-jwt"
-        client, resolved, effective = _aux._resolve_auto_route(main_runtime={
-            "provider": "azure-foundry", "model": "gpt-4o", "api_mode": "chat_completions",
-            "base_url": "https://r.openai.azure.com/openai/v1", "api_key": main_token_provider,
-        })
+        client, resolved, effective = _aux._resolve_auto_route(
+            main_runtime={
+                "provider": "azure-foundry",
+                "model": "gpt-4o",
+                "api_mode": "chat_completions",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_key": main_token_provider,
+            }
+        )
         assert client is not None
         assert (resolved, effective) == ("gpt-4o", "azure-foundry")
         assert received["api_key"] is main_token_provider
         assert received["api_key"]() == "main-session-jwt"
 
     def test_warns_and_returns_none_on_failure(
-        self, monkeypatch, patch_load_config, caplog,
+        self,
+        monkeypatch,
+        patch_load_config,
+        caplog,
     ):
         """When azure-foundry is requested but cannot be resolved
         (e.g. no model + no key), we return (None, None) and log a
@@ -346,12 +390,14 @@ class TestResolveProviderClientAzureFoundry:
         from agent.auxiliary_client import resolve_provider_client
 
         monkeypatch.delenv("AZURE_FOUNDRY_API_KEY", raising=False)
-        patch_load_config({
-            "provider": "azure-foundry",
-            "base_url": "https://r.openai.azure.com/openai/v1",
-            "api_mode": "chat_completions",
-            # No default → resolver yields no model → bail
-        })
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.openai.azure.com/openai/v1",
+                "api_mode": "chat_completions",
+                # No default → resolver yields no model → bail
+            }
+        )
         with caplog.at_level(logging.WARNING, logger="agent.auxiliary_client"):
             client, resolved = resolve_provider_client("azure-foundry")
         assert client is None
@@ -370,18 +416,25 @@ class TestResolveProviderClientAzureFoundry:
 
 class TestAzureFoundryResponsesAlias:
     _AUX_VISION = {
-        "provider": "azure-foundry", "model": "gpt-5.4-nano",
-        "base_url": "https://r.services.ai.azure.com/openai/v1", "api_mode": "responses",
+        "provider": "azure-foundry",
+        "model": "gpt-5.4-nano",
+        "base_url": "https://r.services.ai.azure.com/openai/v1",
+        "api_mode": "responses",
     }
 
-    def test_task_level_responses_alias_routes_vision_through_responses_adapter(self, monkeypatch):
+    def test_task_level_responses_alias_routes_vision_through_responses_adapter(
+        self, monkeypatch
+    ):
         """``auxiliary.vision.api_mode: responses`` on an azure-foundry route used to yield a
         plain chat-completions client (401 from /chat/completions on a Responses-only
         deployment, #39750); the alias must reach the Codex/Responses adapter and keep the
         first-class provider identity."""
         from agent import auxiliary_client as _aux
 
-        cfg = {"model": {"provider": "openrouter", "default": "x"}, "auxiliary": {"vision": dict(self._AUX_VISION)}}
+        cfg = {
+            "model": {"provider": "openrouter", "default": "x"},
+            "auxiliary": {"vision": dict(self._AUX_VISION)},
+        }
         monkeypatch.setattr("clawk_cli.config.load_config_readonly", lambda: cfg)
         monkeypatch.setattr("clawk_cli.config.load_config", lambda: cfg)
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "k")
@@ -391,13 +444,22 @@ class TestAzureFoundryResponsesAlias:
         assert model == "gpt-5.4-nano"
         assert isinstance(client, _aux.CodexAuxiliaryClient)
 
-    def test_explicit_responses_alias_kwarg_wraps_in_codex_adapter(self, monkeypatch, patch_load_config):
+    def test_explicit_responses_alias_kwarg_wraps_in_codex_adapter(
+        self, monkeypatch, patch_load_config
+    ):
         """A caller-supplied ``api_mode="responses"`` is canonicalized at the resolver chokepoint."""
         from agent import auxiliary_client as _aux
 
-        patch_load_config({"provider": "azure-foundry", "base_url": "https://r.services.ai.azure.com/openai/v1"})
+        patch_load_config(
+            {
+                "provider": "azure-foundry",
+                "base_url": "https://r.services.ai.azure.com/openai/v1",
+            }
+        )
         monkeypatch.setenv("AZURE_FOUNDRY_API_KEY", "k")
 
-        client, model = _aux.resolve_provider_client("azure-foundry", "gpt-5.4-nano", api_mode="responses")
+        client, model = _aux.resolve_provider_client(
+            "azure-foundry", "gpt-5.4-nano", api_mode="responses"
+        )
         assert model == "gpt-5.4-nano"
         assert isinstance(client, _aux.CodexAuxiliaryClient)

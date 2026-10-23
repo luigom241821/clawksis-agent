@@ -3,6 +3,7 @@
 JSON-safe coercion, secret-key redaction, size caps, and the ``api_request_error`` hook dispatch.
 Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s MRO unchanged.
 """
+
 import json
 import os
 import time
@@ -12,7 +13,13 @@ from typing import Any, Dict, Optional
 
 from agent.usage_pricing import normalize_usage
 
-_SENSITIVE_HOOK_KEYS = {"api_key", "authorization", "proxy_authorization", "cookie", "set_cookie"}
+_SENSITIVE_HOOK_KEYS = {
+    "api_key",
+    "authorization",
+    "proxy_authorization",
+    "cookie",
+    "set_cookie",
+}
 
 
 def _model_dump(value: Any) -> Any:
@@ -32,7 +39,9 @@ def _model_dump(value: Any) -> Any:
 class ApiRequestHooksMixin:
     """Hook payload sanitising + ``api_request_error`` dispatch (see module docstring)."""
 
-    def _usage_summary_for_api_request_hook(self, response: Any) -> Optional[dict[str, Any]]:
+    def _usage_summary_for_api_request_hook(
+        self, response: Any
+    ) -> Optional[dict[str, Any]]:
         """Token buckets for ``post_api_request`` plugins (no raw ``response`` object)."""
         if response is None:
             return None
@@ -65,7 +74,12 @@ class ApiRequestHooksMixin:
 
     @classmethod
     def _hook_jsonable(
-        cls, value: Any, *, depth: int = 0, max_depth: int = 8, max_string: int = 8000,
+        cls,
+        value: Any,
+        *,
+        depth: int = 0,
+        max_depth: int = 8,
+        max_string: int = 8000,
         max_sequence: int = 200,
     ) -> Any:
         if depth > max_depth:
@@ -74,14 +88,20 @@ class ApiRequestHooksMixin:
             return value
         if isinstance(value, str):
             if len(value) > max_string:
-                return value[:max_string] + f"...[truncated {len(value) - max_string} chars]"
+                return (
+                    value[:max_string]
+                    + f"...[truncated {len(value) - max_string} chars]"
+                )
             return value
         if isinstance(value, (bytes, bytearray)):
             return f"<{len(value)} bytes>"
 
         def recurse(item):
             return cls._hook_jsonable(
-                item, depth=depth + 1, max_depth=max_depth, max_string=max_string,
+                item,
+                depth=depth + 1,
+                max_depth=max_depth,
+                max_string=max_string,
                 max_sequence=max_sequence,
             )
 
@@ -92,7 +112,11 @@ class ApiRequestHooksMixin:
                     out["_truncated_items"] = len(value) - max_sequence
                     break
                 str_key = str(key)
-                out[str_key] = "<redacted>" if cls._is_sensitive_hook_key(str_key) else recurse(item)
+                out[str_key] = (
+                    "<redacted>"
+                    if cls._is_sensitive_hook_key(str_key)
+                    else recurse(item)
+                )
             return out
         if isinstance(value, (list, tuple, set)):
             seq = list(value)
@@ -105,13 +129,16 @@ class ApiRequestHooksMixin:
                 return recurse(_model_dump(value))
         with suppress(Exception):
             from dataclasses import asdict, is_dataclass
+
             if is_dataclass(value):
                 return recurse(asdict(value))
         if isinstance(value, SimpleNamespace):
             return recurse(vars(value))
         if hasattr(value, "__dict__"):
             with suppress(Exception):
-                return recurse({k: v for k, v in vars(value).items() if not str(k).startswith("_")})
+                return recurse(
+                    {k: v for k, v in vars(value).items() if not str(k).startswith("_")}
+                )
         return str(value)[:max_string]
 
     @classmethod
@@ -128,10 +155,14 @@ class ApiRequestHooksMixin:
             if len(encoded) <= limit:
                 return payload
         return {
-            "_truncated": True, "original_type": type(value).__name__, "preview": encoded[:limit]
+            "_truncated": True,
+            "original_type": type(value).__name__,
+            "preview": encoded[:limit],
         }
 
-    def _api_request_payload_for_hook(self, api_kwargs: Optional[dict[str, Any]]) -> dict[str, Any]:
+    def _api_request_payload_for_hook(
+        self, api_kwargs: Optional[dict[str, Any]]
+    ) -> dict[str, Any]:
         body = {
             key: value
             for key, value in (api_kwargs or {}).items()
@@ -161,15 +192,26 @@ class ApiRequestHooksMixin:
         )
 
     def _invoke_api_request_error_hook(
-        self, *, task_id: str, turn_id: str, api_request_id: str, api_call_count: int,
-        api_start_time: float, api_kwargs: Optional[dict[str, Any]], error_type: str,
-        error_message: str, status_code: Optional[int] = None, retry_count: Optional[int] = None,
-        max_retries: Optional[int] = None, retryable: Optional[bool] = None,
+        self,
+        *,
+        task_id: str,
+        turn_id: str,
+        api_request_id: str,
+        api_call_count: int,
+        api_start_time: float,
+        api_kwargs: Optional[dict[str, Any]],
+        error_type: str,
+        error_message: str,
+        status_code: Optional[int] = None,
+        retry_count: Optional[int] = None,
+        max_retries: Optional[int] = None,
+        retryable: Optional[bool] = None,
         reason: Optional[str] = None,
     ) -> None:
         # Lazy module import (not from-import) so tests can replace lifecycle dispatch at this call site.
         with suppress(Exception):
             from clawk_cli import lifecycle as _lifecycle
+
             if not _lifecycle.has_hook("api_request_error"):
                 return
             ended_at = time.time()

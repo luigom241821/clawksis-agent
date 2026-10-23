@@ -18,16 +18,28 @@ def test_concurrent_cron_edits_survive_recovery(tmp_path, monkeypatch):
     import cron.jobs as cron_jobs
     from clawk_cli.backup import create_quick_snapshot
     import clawk_cli.backup_cron_prompts as bcp
+
     clawk_home = tmp_path / ".clawk"
     jobs_path = clawk_home / "cron" / "jobs.json"
     sched = {"kind": "interval", "minutes": 60, "display": "every 60m"}
 
     def job(job_id, prompt):
-        return {"id": job_id, "name": job_id.upper(), "prompt": prompt,
-                "schedule": sched, "enabled": True}
+        return {
+            "id": job_id,
+            "name": job_id.upper(),
+            "prompt": prompt,
+            "schedule": sched,
+            "enabled": True,
+        }
 
-    _seed_jobs(jobs_path, [job("a", "A real prompt."), job("b", "B real prompt."),
-                          job("c", "C real prompt.")])
+    _seed_jobs(
+        jobs_path,
+        [
+            job("a", "A real prompt."),
+            job("b", "B real prompt."),
+            job("c", "C real prompt."),
+        ],
+    )
     snap_id = create_quick_snapshot(label="pre-update", clawk_home=clawk_home, keep=5)
     assert snap_id
     _seed_jobs(jobs_path, [job("a", "A"), job("b", "B"), job("c", "C real prompt.")])
@@ -40,11 +52,14 @@ def test_concurrent_cron_edits_survive_recovery(tmp_path, monkeypatch):
         if Path(path) == jobs_path and not fired:
             fired.append(True)
             with cron_jobs.use_cron_store(clawk_home):
-                new_id = cron_jobs.create_job(prompt="New prompt.", schedule="every 1h",
-                                              name="new")["id"]
+                new_id = cron_jobs.create_job(
+                    prompt="New prompt.", schedule="every 1h", name="new"
+                )["id"]
                 fired.append(new_id)
                 assert cron_jobs.remove_job("c")
-                cron_jobs.update_job("a", {"schedule": cron_jobs.parse_schedule("every 2h")})
+                cron_jobs.update_job(
+                    "a", {"schedule": cron_jobs.parse_schedule("every 2h")}
+                )
                 cron_jobs.update_job("b", {"prompt": "User rewrote b."})
         return doc
 

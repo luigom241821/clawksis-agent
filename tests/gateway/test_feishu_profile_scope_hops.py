@@ -25,7 +25,11 @@ from agent.secret_scope import (
     set_multiplex_active,
     set_secret_scope,
 )
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 
 def _observe(routed_home: Path) -> tuple:
@@ -64,20 +68,48 @@ def test_drive_comment_agent_turn_runs_under_the_adapter_profile_scope(routed_sc
         seen["turn"] = _observe(routed_scope)
         return "NO_REPLY"
 
-    event = SimpleNamespace(event={
-        "comment_id": "c1", "reply_id": "", "is_mentioned": True, "timestamp": "1",
-        "notice_meta": {"file_token": "docx_t", "file_type": "docx", "notice_type": "add_reply",
-                        "from_user_id": {"open_id": "ou_user"}, "to_user_id": {"open_id": "ou_bot"}},
-    })
-    with patch.object(rules, "load_config", return_value=object()), \
-         patch.object(rules, "resolve_rule", return_value=rules.ResolvedCommentRule(True, "allowlist", frozenset(), "top")), \
-         patch.object(rules, "has_wiki_keys", return_value=False), \
-         patch.object(rules, "is_user_allowed", return_value=True), \
-         patch.object(fc, "query_document_meta", AsyncMock(return_value={"title": "T", "url": "u"})), \
-         patch.object(fc, "batch_query_comment", AsyncMock(return_value={"is_whole": False, "quote": ""})), \
-         patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")), \
-         patch.object(fc, "_run_comment_agent", _fake_agent):
-        asyncio.run(fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot"))
+    event = SimpleNamespace(
+        event={
+            "comment_id": "c1",
+            "reply_id": "",
+            "is_mentioned": True,
+            "timestamp": "1",
+            "notice_meta": {
+                "file_token": "docx_t",
+                "file_type": "docx",
+                "notice_type": "add_reply",
+                "from_user_id": {"open_id": "ou_user"},
+                "to_user_id": {"open_id": "ou_bot"},
+            },
+        }
+    )
+    with (
+        patch.object(rules, "load_config", return_value=object()),
+        patch.object(
+            rules,
+            "resolve_rule",
+            return_value=rules.ResolvedCommentRule(
+                True, "allowlist", frozenset(), "top"
+            ),
+        ),
+        patch.object(rules, "has_wiki_keys", return_value=False),
+        patch.object(rules, "is_user_allowed", return_value=True),
+        patch.object(
+            fc,
+            "query_document_meta",
+            AsyncMock(return_value={"title": "T", "url": "u"}),
+        ),
+        patch.object(
+            fc,
+            "batch_query_comment",
+            AsyncMock(return_value={"is_whole": False, "quote": ""}),
+        ),
+        patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")),
+        patch.object(fc, "_run_comment_agent", _fake_agent),
+    ):
+        asyncio.run(
+            fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot")
+        )
 
     assert seen["turn"] == ("routed", "routed-value")
 
@@ -109,30 +141,63 @@ def test_drive_comment_agent_turn_binds_the_unscoped_launch_profile(tmp_path):
         seen["turn"] = _observe(launch_home)
         return "NO_REPLY"
 
-    event = SimpleNamespace(event={
-        "comment_id": "c1", "reply_id": "", "is_mentioned": True, "timestamp": "1",
-        "notice_meta": {"file_token": "docx_t", "file_type": "docx", "notice_type": "add_reply",
-                        "from_user_id": {"open_id": "ou_user"}, "to_user_id": {"open_id": "ou_bot"}},
-    })
+    event = SimpleNamespace(
+        event={
+            "comment_id": "c1",
+            "reply_id": "",
+            "is_mentioned": True,
+            "timestamp": "1",
+            "notice_meta": {
+                "file_token": "docx_t",
+                "file_type": "docx",
+                "notice_type": "add_reply",
+                "from_user_id": {"open_id": "ou_user"},
+                "to_user_id": {"open_id": "ou_bot"},
+            },
+        }
+    )
     set_multiplex_active(True)
     try:
-        with patch("tui_gateway.launch_profile_policy.launch_profile_scope_if_multiplexed", _launch_scope), \
-             patch.object(rules, "load_config", return_value=object()), \
-             patch.object(rules, "resolve_rule", return_value=rules.ResolvedCommentRule(True, "allowlist", frozenset(), "top")), \
-             patch.object(rules, "has_wiki_keys", return_value=False), \
-             patch.object(rules, "is_user_allowed", return_value=True), \
-             patch.object(fc, "query_document_meta", AsyncMock(return_value={"title": "T", "url": "u"})), \
-             patch.object(fc, "batch_query_comment", AsyncMock(return_value={"is_whole": False, "quote": ""})), \
-             patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")), \
-             patch.object(fc, "_run_comment_agent", _fake_agent):
-            asyncio.run(fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot"))
+        with (
+            patch(
+                "tui_gateway.launch_profile_policy.launch_profile_scope_if_multiplexed",
+                _launch_scope,
+            ),
+            patch.object(rules, "load_config", return_value=object()),
+            patch.object(
+                rules,
+                "resolve_rule",
+                return_value=rules.ResolvedCommentRule(
+                    True, "allowlist", frozenset(), "top"
+                ),
+            ),
+            patch.object(rules, "has_wiki_keys", return_value=False),
+            patch.object(rules, "is_user_allowed", return_value=True),
+            patch.object(
+                fc,
+                "query_document_meta",
+                AsyncMock(return_value={"title": "T", "url": "u"}),
+            ),
+            patch.object(
+                fc,
+                "batch_query_comment",
+                AsyncMock(return_value={"is_whole": False, "quote": ""}),
+            ),
+            patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")),
+            patch.object(fc, "_run_comment_agent", _fake_agent),
+        ):
+            asyncio.run(
+                fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot")
+            )
     finally:
         set_multiplex_active(False)
 
     assert seen["turn"] == ("routed", "launch-value")
 
 
-def test_drive_comment_on_the_launch_adapter_reads_the_launch_env_through_the_real_scope(tmp_path, monkeypatch):
+def test_drive_comment_on_the_launch_adapter_reads_the_launch_env_through_the_real_scope(
+    tmp_path, monkeypatch
+):
     """#139232 end to end on the real seam (no patched scope factory): the launch profile's Feishu
     callback arrives with no contextvar scope while multiplexing is on. The comment turn must read
     the launch profile's own ``.env`` credential, not raise ``UnscopedSecretError``."""
@@ -149,29 +214,59 @@ def test_drive_comment_on_the_launch_adapter_reads_the_launch_env_through_the_re
         seen["turn"] = _observe(launch_home)
         return "NO_REPLY"
 
-    event = SimpleNamespace(event={
-        "comment_id": "c1", "reply_id": "", "is_mentioned": True, "timestamp": "1",
-        "notice_meta": {"file_token": "docx_t", "file_type": "docx", "notice_type": "add_reply",
-                        "from_user_id": {"open_id": "ou_user"}, "to_user_id": {"open_id": "ou_bot"}},
-    })
+    event = SimpleNamespace(
+        event={
+            "comment_id": "c1",
+            "reply_id": "",
+            "is_mentioned": True,
+            "timestamp": "1",
+            "notice_meta": {
+                "file_token": "docx_t",
+                "file_type": "docx",
+                "notice_type": "add_reply",
+                "from_user_id": {"open_id": "ou_user"},
+                "to_user_id": {"open_id": "ou_bot"},
+            },
+        }
+    )
     set_multiplex_active(True)
     try:
-        with patch.object(rules, "load_config", return_value=object()), \
-             patch.object(rules, "resolve_rule", return_value=rules.ResolvedCommentRule(True, "allowlist", frozenset(), "top")), \
-             patch.object(rules, "has_wiki_keys", return_value=False), \
-             patch.object(rules, "is_user_allowed", return_value=True), \
-             patch.object(fc, "query_document_meta", AsyncMock(return_value={"title": "T", "url": "u"})), \
-             patch.object(fc, "batch_query_comment", AsyncMock(return_value={"is_whole": False, "quote": ""})), \
-             patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")), \
-             patch.object(fc, "_run_comment_agent", _fake_agent):
-            asyncio.run(fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot"))
+        with (
+            patch.object(rules, "load_config", return_value=object()),
+            patch.object(
+                rules,
+                "resolve_rule",
+                return_value=rules.ResolvedCommentRule(
+                    True, "allowlist", frozenset(), "top"
+                ),
+            ),
+            patch.object(rules, "has_wiki_keys", return_value=False),
+            patch.object(rules, "is_user_allowed", return_value=True),
+            patch.object(
+                fc,
+                "query_document_meta",
+                AsyncMock(return_value={"title": "T", "url": "u"}),
+            ),
+            patch.object(
+                fc,
+                "batch_query_comment",
+                AsyncMock(return_value={"is_whole": False, "quote": ""}),
+            ),
+            patch.object(fc, "_local_comment_prompt", AsyncMock(return_value="prompt")),
+            patch.object(fc, "_run_comment_agent", _fake_agent),
+        ):
+            asyncio.run(
+                fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot")
+            )
     finally:
         set_multiplex_active(False)
 
     assert seen["turn"] == ("routed", "launch-env-value")
 
 
-def test_ws_client_thread_and_its_loop_callbacks_carry_the_adapter_profile_scope(routed_scope, monkeypatch):
+def test_ws_client_thread_and_its_loop_callbacks_carry_the_adapter_profile_scope(
+    routed_scope, monkeypatch
+):
     """Lark SDK callbacks run on the WS thread and re-enter the adapter loop through
     run_coroutine_threadsafe (which copies the caller's context): both must see the profile that
     connected the adapter, so media caching / markers / env reads before handle_message stay in it."""
@@ -185,7 +280,11 @@ def test_ws_client_thread_and_its_loop_callbacks_carry_the_adapter_profile_scope
     lark_ws.client = client_mod
     lark = types.ModuleType("lark_oapi")
     lark.ws = lark_ws
-    for name, mod in (("lark_oapi", lark), ("lark_oapi.ws", lark_ws), ("lark_oapi.ws.client", client_mod)):
+    for name, mod in (
+        ("lark_oapi", lark),
+        ("lark_oapi.ws", lark_ws),
+        ("lark_oapi.ws.client", client_mod),
+    ):
         monkeypatch.setitem(sys.modules, name, mod)
     monkeypatch.setattr(fa, "_WS_ISOLATION_INSTALLED", False)
     monkeypatch.setattr(fa, "FEISHU_WEBSOCKET_AVAILABLE", True)
@@ -205,14 +304,26 @@ def test_ws_client_thread_and_its_loop_callbacks_carry_the_adapter_profile_scope
 
             def start(self):  # the SDK-owned thread every lark callback fires on
                 seen["ws_thread"] = _observe(routed_scope)
-                seen["loop_callback"] = asyncio.run_coroutine_threadsafe(_on_loop(), adapter_loop).result(5)
+                seen["loop_callback"] = asyncio.run_coroutine_threadsafe(
+                    _on_loop(), adapter_loop
+                ).result(5)
 
         monkeypatch.setattr(fa, "FeishuWSClient", FakeWSClient)
         stub = SimpleNamespace(
-            _loop=adapter_loop, _app_id="cli_x", _app_secret="s", _domain_name="feishu", _event_handler=None,
-            _ws_thread_loop=None, _ws_reconnect_nonce=None, _ws_reconnect_interval=None,
-            _ws_ping_interval=None, _ws_ping_timeout=None, _ws_client=None, _ws_future=None,
-            _prepare_client=lambda: "feishu-domain", _hydrate_bot_identity=AsyncMock(),
+            _loop=adapter_loop,
+            _app_id="cli_x",
+            _app_secret="s",
+            _domain_name="feishu",
+            _event_handler=None,
+            _ws_thread_loop=None,
+            _ws_reconnect_nonce=None,
+            _ws_reconnect_interval=None,
+            _ws_ping_interval=None,
+            _ws_ping_timeout=None,
+            _ws_client=None,
+            _ws_future=None,
+            _prepare_client=lambda: "feishu-domain",
+            _hydrate_bot_identity=AsyncMock(),
         )
         # The WS thread runs on the adapter-owned pool, never the loop default executor.
         stub._get_sdk_executor = fa.FeishuAdapter._get_sdk_executor.__get__(stub)
@@ -221,10 +332,15 @@ def test_ws_client_thread_and_its_loop_callbacks_carry_the_adapter_profile_scope
         stub._sdk_executor.shutdown(wait=True)
 
     asyncio.run(scenario())
-    assert seen == {"ws_thread": ("routed", "routed-value"), "loop_callback": ("routed", "routed-value")}
+    assert seen == {
+        "ws_thread": ("routed", "routed-value"),
+        "loop_callback": ("routed", "routed-value"),
+    }
 
 
-def test_an_unscoped_comment_from_a_secondary_adapter_fails_closed(tmp_path, monkeypatch):
+def test_an_unscoped_comment_from_a_secondary_adapter_fails_closed(
+    tmp_path, monkeypatch
+):
     """Review on #140186: only the launch adapter's unscoped callback may borrow the launch scope.
     A secondary's callback that lost its context must not run its comment turn on the launch
     profile's credentials; it is refused before any rule, config or model read."""
@@ -235,17 +351,37 @@ def test_an_unscoped_comment_from_a_secondary_adapter_fails_closed(tmp_path, mon
     (launch_home / ".env").write_text("FEISHU_PROBE_TOKEN=launch-env-value\n")
     monkeypatch.setenv("CLAWK_HOME", str(launch_home))
     ran = []
-    event = SimpleNamespace(event={
-        "comment_id": "c1", "reply_id": "", "is_mentioned": True, "timestamp": "1",
-        "notice_meta": {"file_token": "docx_t", "file_type": "docx", "notice_type": "add_reply",
-                        "from_user_id": {"open_id": "ou_user"}, "to_user_id": {"open_id": "ou_bot"}},
-    })
+    event = SimpleNamespace(
+        event={
+            "comment_id": "c1",
+            "reply_id": "",
+            "is_mentioned": True,
+            "timestamp": "1",
+            "notice_meta": {
+                "file_token": "docx_t",
+                "file_type": "docx",
+                "notice_type": "add_reply",
+                "from_user_id": {"open_id": "ou_user"},
+                "to_user_id": {"open_id": "ou_bot"},
+            },
+        }
+    )
     set_multiplex_active(True)
     try:
-        with patch.object(fc, "_handle_drive_comment_event", AsyncMock(side_effect=lambda *a, **k: ran.append(_observe(launch_home)))):
-            asyncio.run(fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot", secondary=True))
+        with patch.object(
+            fc,
+            "_handle_drive_comment_event",
+            AsyncMock(side_effect=lambda *a, **k: ran.append(_observe(launch_home))),
+        ):
+            asyncio.run(
+                fc.handle_drive_comment_event(
+                    object(), event, self_open_id="ou_bot", secondary=True
+                )
+            )
             assert ran == []
-            asyncio.run(fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot"))
+            asyncio.run(
+                fc.handle_drive_comment_event(object(), event, self_open_id="ou_bot")
+            )
     finally:
         set_multiplex_active(False)
     assert ran == [("routed", "launch-env-value")]
@@ -260,6 +396,7 @@ def test_the_adapter_tells_the_comment_handler_whether_it_is_a_secondary(monkeyp
 
     async def _handler(client, data, *, self_open_id="", secondary=False):
         calls.append(secondary)
+
     monkeypatch.setattr(fc, "handle_drive_comment_event", _handler)
     adapter = object.__new__(fa.FeishuAdapter)
     adapter._client, adapter._bot_open_id = object(), "ou_bot"

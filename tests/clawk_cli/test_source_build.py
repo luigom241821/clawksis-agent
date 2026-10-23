@@ -4,6 +4,7 @@ Only PM's tool acquisition (and its installed-node record) is substituted with t
 workspace scripts stand in for the expensive UI compilers; subprocess failures,
 locked dependency selection, environment propagation and publication are real.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,8 +24,13 @@ from pm.package import Runner
 def use_host_node_as_pm_node(monkeypatch):
     """Freshness reads run only under PM's recorded Node; stand the host's node in for it."""
     node, real = Path(shutil.which("node")), pm.installed_package
-    monkeypatch.setattr(pm, "installed_package", lambda name, **kwargs: (
-        SimpleNamespace(binary=node) if name == "node" else real(name, **kwargs)))
+    monkeypatch.setattr(
+        pm,
+        "installed_package",
+        lambda name, **kwargs: (
+            SimpleNamespace(binary=node) if name == "node" else real(name, **kwargs)
+        ),
+    )
 
 
 def copy_freshness_scripts(root):
@@ -37,14 +43,25 @@ def copy_freshness_scripts(root):
 
 def stamp_product(root, product, out):
     script = (root / "scripts/build/freshness.mjs").as_uri()
-    subprocess.run([shutil.which("node"), "--input-type=module", "-e",
-                    f"import {{recordProduct, buildInputs}} from {json.dumps(script)};"
-                    "const [source, product, out] = process.argv.slice(1);"
-                    "recordProduct({source, product, out, inputs: buildInputs(source, product)});",
-                    str(root), product, str(out)], check=True)
+    subprocess.run(
+        [
+            shutil.which("node"),
+            "--input-type=module",
+            "-e",
+            f"import {{recordProduct, buildInputs}} from {json.dumps(script)};"
+            "const [source, product, out] = process.argv.slice(1);"
+            "recordProduct({source, product, out, inputs: buildInputs(source, product)});",
+            str(root),
+            product,
+            str(out),
+        ],
+        check=True,
+    )
 
 
-def test_source_build_uses_selected_python_for_isolated_icon_child(tmp_path, monkeypatch):
+def test_source_build_uses_selected_python_for_isolated_icon_child(
+    tmp_path, monkeypatch
+):
     from clawk_cli.source_build import source_build_env
     from pm import paths
     from pm.environments import site_packages, venv_python
@@ -52,32 +69,47 @@ def test_source_build_uses_selected_python_for_isolated_icon_child(tmp_path, mon
     root = tmp_path / "source"
     root.mkdir()
     venv = root / "venv"
-    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True)
+    subprocess.run(
+        [sys.executable, "-m", "venv", "--without-pip", str(venv)], check=True
+    )
     selected = site_packages(venv)
     (selected / "icon_dependency.py").write_text("ready = True\n", encoding="utf-8")
     monkeypatch.setattr(paths, "repo_root", lambda: root)
-    monkeypatch.setattr(pm, "ensure", lambda name, **kwargs: Runner(name, kwargs["base_env"]))
+    monkeypatch.setattr(
+        pm, "ensure", lambda name, **kwargs: Runner(name, kwargs["base_env"])
+    )
     monkeypatch.syspath_prepend(str(selected))
 
     env = source_build_env()
     assert env["CLAWK_PYTHON"] == str(venv_python(venv))
-    subprocess.run([env["CLAWK_PYTHON"], "-I", "-c",
-                    "import icon_dependency; assert icon_dependency.ready"], check=True)
+    subprocess.run(
+        [
+            env["CLAWK_PYTHON"],
+            "-I",
+            "-c",
+            "import icon_dependency; assert icon_dependency.ready",
+        ],
+        check=True,
+    )
 
 
 def test_automatic_build_preserves_pm_admission_intent(monkeypatch):
     from clawk_cli.source_build import source_build_env
 
     intent = []
+
     def acquire(name, *, base_env, explicit, verify=True):
         intent.append(explicit)
         return Runner(name, base_env)
+
     monkeypatch.setattr(pm, "ensure", acquire)
     source_build_env()
     assert intent == [False]
 
 
-def test_installed_npm_does_not_authorize_missing_workspace_dependencies(source_checkout, monkeypatch):
+def test_installed_npm_does_not_authorize_missing_workspace_dependencies(
+    source_checkout, monkeypatch
+):
     from clawk_cli.source_build import prepare_source_dependencies, source_build_env
 
     root, _ = source_checkout
@@ -112,26 +144,47 @@ def source_checkout(tmp_path, monkeypatch):
         acquired.append(name)
         assert name == "npm"
 
-        return Runner(name, {**(base_env or os.environ), "PATH": os.pathsep.join(
-            [str(Path(npm).parent), str(Path(node).parent), os.environ["PATH"]])})
+        return Runner(
+            name,
+            {
+                **(base_env or os.environ),
+                "PATH": os.pathsep.join(
+                    [str(Path(npm).parent), str(Path(node).parent), os.environ["PATH"]]
+                ),
+            },
+        )
 
     monkeypatch.setattr(pm, "ensure", acquire)
     use_host_node_as_pm_node(monkeypatch)
     root = tmp_path / "source with spaces"
     root.mkdir()
     workspaces = ["ui-tui", "web", "apps/desktop", "unrelated"]
-    manifest = {"name": "build-fixture", "private": True, "version": "1.0.0",
-                "workspaces": workspaces, "scripts": {"postinstall": "node log.mjs deps"}}
+    manifest = {
+        "name": "build-fixture",
+        "private": True,
+        "version": "1.0.0",
+        "workspaces": workspaces,
+        "scripts": {"postinstall": "node log.mjs deps"},
+    }
     (root / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
     for workspace in workspaces:
         directory = root / workspace
         directory.mkdir(parents=True)
-        (directory / "package.json").write_text(json.dumps({
-            "name": workspace.replace("/", "-"), "version": "1.0.0",
-            "scripts": {"build": "node ../../scripts/build/build-desktop.mjs",
-                        "builder": "node ../../scripts/build/package-desktop.mjs"}
-            if workspace == "apps/desktop" else {},
-        }), encoding="utf-8")
+        (directory / "package.json").write_text(
+            json.dumps(
+                {
+                    "name": workspace.replace("/", "-"),
+                    "version": "1.0.0",
+                    "scripts": {
+                        "build": "node ../../scripts/build/build-desktop.mjs",
+                        "builder": "node ../../scripts/build/package-desktop.mjs",
+                    }
+                    if workspace == "apps/desktop"
+                    else {},
+                }
+            ),
+            encoding="utf-8",
+        )
     (root / "log.mjs").write_text(
         "import { appendFileSync } from 'node:fs';\n"
         "appendFileSync('events.jsonl', JSON.stringify({step: process.argv[2], "
@@ -140,12 +193,28 @@ def source_checkout(tmp_path, monkeypatch):
         "npmrc: process.env.NPM_CONFIG_USERCONFIG}) + '\\n');\n",
         encoding="utf-8",
     )
-    subprocess.run([npm, "install", "--package-lock-only", "--ignore-scripts", "--offline",
-                    "--no-audit", "--no-fund"], cwd=root, check=True)
+    subprocess.run(
+        [
+            npm,
+            "install",
+            "--package-lock-only",
+            "--ignore-scripts",
+            "--offline",
+            "--no-audit",
+            "--no-fund",
+        ],
+        cwd=root,
+        check=True,
+    )
     scripts = root / "scripts" / "build"
     scripts.mkdir(parents=True)
     repository = Path(__file__).resolve().parents[2]
-    for name in ("node-deps.mjs", "electron-runtime.mjs", "freshness.mjs", "frontend-common.mjs"):
+    for name in (
+        "node-deps.mjs",
+        "electron-runtime.mjs",
+        "freshness.mjs",
+        "frontend-common.mjs",
+    ):
         shutil.copy2(repository / "scripts/build" / name, scripts / name)
     (root / ".gitignore").write_text("node_modules/\n**/dist/\n", encoding="utf-8")
     return root, acquired
@@ -205,7 +274,11 @@ def source_products(source_checkout):
 
 def _events(root):
     path = root / "events.jsonl"
-    return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+    return (
+        [json.loads(line) for line in path.read_text().splitlines()]
+        if path.exists()
+        else []
+    )
 
 
 @pytest.mark.platforms("posix")
@@ -246,6 +319,7 @@ def test_preparation_reuses_only_the_exact_completed_workspace_union(source_chec
 
     # Exercise PM rather than hiding a provisioning error behind system npm.
     from unittest.mock import patch
+
     with patch.object(pm, "ensure", side_effect=pm.InstallError("npm", "unavailable")):
         with pytest.raises(pm.InstallError, match="unavailable"):
             source_build_env()
@@ -254,7 +328,9 @@ def test_preparation_reuses_only_the_exact_completed_workspace_union(source_chec
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("desktop", [False, True])
-def test_update_builds_selected_products_after_one_union_preparation(source_products, desktop):
+def test_update_builds_selected_products_after_one_union_preparation(
+    source_products, desktop
+):
     from clawk_cli.source_build import build_update_products
     from clawk_cli.main_web_build import _web_ui_build_needed
 
@@ -298,7 +374,9 @@ def test_update_recompiles_only_products_whose_inputs_changed(source_products):
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("step", ["tui", "web", "desktop"])
-def test_update_failure_raises_without_retries_or_replacing_live_app(source_products, step):
+def test_update_failure_raises_without_retries_or_replacing_live_app(
+    source_products, step
+):
     from clawk_cli.source_build import ProductBuildError, build_update_products
 
     root, acquired = source_products
@@ -312,18 +390,29 @@ def test_update_failure_raises_without_retries_or_replacing_live_app(source_prod
     assert len(failure.value.failures) == 1
     assert isinstance(failure.value.failures[0][1], subprocess.CalledProcessError)
     # ... but it no longer skips the independent products after it (was order[:index + 1]).
-    assert [event["step"] for event in _events(root)] == ["deps", "tui", "web", "desktop"]
+    assert [event["step"] for event in _events(root)] == [
+        "deps",
+        "tui",
+        "web",
+        "desktop",
+    ]
     assert acquired == ["npm"]
     assert not list((root / "apps/desktop").glob(".staging-*"))
     if step == "desktop":
         # A failed desktop build never replaces the live app nor stamps it.
         assert app.read_text() == "previous app"
-        assert not (Path(os.environ["CLAWK_HOME"]) / "desktop-build-stamp.json").exists()
+        assert not (
+            Path(os.environ["CLAWK_HOME"]) / "desktop-build-stamp.json"
+        ).exists()
 
 
 @pytest.mark.platforms("linux")
-@pytest.mark.parametrize("failure", ["npm-unavailable", "desktop-after-long-feature-failure"])
-def test_unbuilt_desktop_is_named_on_one_whole_line(source_products, monkeypatch, capsys, failure):
+@pytest.mark.parametrize(
+    "failure", ["npm-unavailable", "desktop-after-long-feature-failure"]
+)
+def test_unbuilt_desktop_is_named_on_one_whole_line(
+    source_products, monkeypatch, capsys, failure
+):
     # The Desktop hand-off keys on this line: the receipt follow-up is truncated and leads with
     # whichever product failed first, and an npm acquisition failure used to escape un-named.
     import clawk_cli.main_install_repair as install_repair
@@ -334,31 +423,43 @@ def test_unbuilt_desktop_is_named_on_one_whole_line(source_products, monkeypatch
     def fail(error):
         def raiser(*_args, **_kwargs):
             raise error
+
         return raiser
 
     if failure == "npm-unavailable":
         monkeypatch.setattr(pm, "ensure", fail(pm.InstallError("npm", "unavailable")))
         expected = "Desktop app build owed: Node dependencies failed"
     else:
-        monkeypatch.setattr(install_repair, "_install_configured_features_missing_deps",
-                            fail(RuntimeError("pip install failed: " + "x" * 600)))
+        monkeypatch.setattr(
+            install_repair,
+            "_install_configured_features_missing_deps",
+            fail(RuntimeError("pip install failed: " + "x" * 600)),
+        )
         (root / "fail-desktop").touch()
         expected = "Desktop app build owed: desktop app build failed"
     with pytest.raises(ProductBuildError):
         build_update_products(root, desktop=True)
     lines = [line.strip() for line in capsys.readouterr().out.splitlines()]
-    assert [line for line in lines if line.startswith("Desktop app build owed:")] == [expected]
+    assert [line for line in lines if line.startswith("Desktop app build owed:")] == [
+        expected
+    ]
 
 
 @pytest.mark.platforms("linux")
-def test_desktop_dependency_failure_still_builds_the_tui_and_web_ui(source_products, capsys):
+def test_desktop_dependency_failure_still_builds_the_tui_and_web_ui(
+    source_products, capsys
+):
     # A host whose compiler rejects a Desktop-only native addon (node-pty on g++ 9) used to lose
     # every frontend with it: the union npm ci failed and nothing was built.
     from clawk_cli.source_build import ProductBuildError, build_update_products
 
     root, _ = source_products
     manifest = root / "apps/desktop/package.json"
-    manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "scripts": {"postinstall": "exit 1"}}))
+    manifest.write_text(
+        json.dumps(
+            {**json.loads(manifest.read_text()), "scripts": {"postinstall": "exit 1"}}
+        )
+    )
     with pytest.raises(ProductBuildError) as failure:
         build_update_products(root, desktop=True)
     assert [name for name, _ in failure.value.failures] == ["desktop dependencies"]
@@ -371,11 +472,17 @@ def test_desktop_dependency_failure_still_builds_the_tui_and_web_ui(source_produ
 
 @pytest.mark.platforms("linux")
 @pytest.mark.parametrize("desktop", [False, True])
-def test_module_cli_builds_the_requested_products(source_products, desktop, monkeypatch):
+def test_module_cli_builds_the_requested_products(
+    source_products, desktop, monkeypatch
+):
     import runpy
 
     root, acquired = source_products
-    monkeypatch.setattr(sys, "argv", ["source_build", "--source", str(root)] + (["--desktop"] if desktop else []))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["source_build", "--source", str(root)] + (["--desktop"] if desktop else []),
+    )
     # run_module exercises __main__ while substituting only tool acquisition.
     monkeypatch.delitem(sys.modules, "clawk_cli.source_build", raising=False)
     runpy.run_module("clawk_cli.source_build", run_name="__main__")
@@ -392,7 +499,15 @@ def test_packaged_desktop_is_reused_only_while_it_names_head(tmp_path, monkeypat
 
     root = tmp_path / "checkout"
     root.mkdir()
-    git = ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    git = [
+        "git",
+        "-C",
+        str(root),
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+    ]
     subprocess.run([*git[:3], "init", "-q"], check=True)
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "one"], check=True)
     desktop_dir = root / "apps/desktop"
@@ -401,17 +516,24 @@ def test_packaged_desktop_is_reused_only_while_it_names_head(tmp_path, monkeypat
     resources = main_desktop._packaged_resources_dir(desktop_dir)
     (resources / "app.asar.unpacked/dist").mkdir(parents=True)
     receipt_current = {"value": True}
-    monkeypatch.setattr(main_desktop, "_desktop_build_needed",
-                        lambda *_a, **_k: not receipt_current["value"])
+    monkeypatch.setattr(
+        main_desktop,
+        "_desktop_build_needed",
+        lambda *_a, **_k: not receipt_current["value"],
+    )
 
     def head():
-        return subprocess.run([*git[:3], "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        return subprocess.run(
+            [*git[:3], "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
 
     def reused():
         return main_desktop._packaged_desktop_current_for_head(desktop_dir, root)
 
     assert not reused()  # no baked stamp
-    (resources / "install-stamp.json").write_text(json.dumps({"commit": head()}), encoding="utf-8")
+    (resources / "install-stamp.json").write_text(
+        json.dumps({"commit": head()}), encoding="utf-8"
+    )
     assert reused()
     receipt_current["value"] = False
     assert not reused()

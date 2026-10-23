@@ -65,7 +65,9 @@ class TestListSessionsRichQueryBound:
         rows, statements = self._list_and_count_statements(chain_db, monkeypatch)
 
         assert len(rows) == self.N_CHAINS
-        assert statements, "trace captured nothing: the guard is no longer observing list_sessions_rich"
+        assert statements, (
+            "trace captured nothing: the guard is no longer observing list_sessions_rich"
+        )
         budget = 4 * self.N_CHAINS + 8
         assert len(statements) <= budget, (
             f"list_sessions_rich issued {len(statements)} statements for "

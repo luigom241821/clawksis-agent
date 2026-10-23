@@ -28,7 +28,9 @@ from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 
 SECRET = b"s" * 32
-EXECUTION_POLICY = execution_policy_mapping(target_profile="reviewer", config={"approvals": {"mode": "manual"}})
+EXECUTION_POLICY = execution_policy_mapping(
+    target_profile="reviewer", config={"approvals": {"mode": "manual"}}
+)
 
 
 def test_gateway_room_grant_secret_is_private_persistent_and_not_an_api_key(
@@ -73,13 +75,11 @@ def test_gateway_room_grant_secret_is_atomic_across_concurrent_workers(
     assert (home / ".room-link-grant-secret").stat().st_size == 32
 
 
-
-
 def test_room_link_protocol_fixture_matches_backend_contract():
     fixture = json.loads(
-        (Path(__file__).parents[1] / "fixtures" / "room_link_protocol_v2.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            Path(__file__).parents[1] / "fixtures" / "room_link_protocol_v2.json"
+        ).read_text(encoding="utf-8")
     )
 
     assert fixture["protocol_version"] == PROTOCOL_VERSION
@@ -103,12 +103,8 @@ def test_room_link_endpoint_reads_supported_config_with_env_override(
         "transport_security": "tls",
     }
 
-    monkeypatch.setenv(
-        "CLAWK_ROOM_LINK_URL", "https://override.example.test/clawk"
-    )
-    assert local_room_link_endpoint()["url"] == (
-        "https://override.example.test/clawk"
-    )
+    monkeypatch.setenv("CLAWK_ROOM_LINK_URL", "https://override.example.test/clawk")
+    assert local_room_link_endpoint()["url"] == ("https://override.example.test/clawk")
 
 
 def test_named_profile_inherits_gateway_room_link_endpoint(tmp_path, monkeypatch):
@@ -134,9 +130,7 @@ def test_named_profile_inherits_gateway_room_link_endpoint(tmp_path, monkeypatch
         reset_clawk_home_override(token)
 
 
-def test_named_profile_room_link_override_wins_over_gateway_root(
-    tmp_path, monkeypatch
-):
+def test_named_profile_room_link_override_wins_over_gateway_root(tmp_path, monkeypatch):
     root = tmp_path / "clawk"
     profile = root / "profiles" / "reviewer"
     profile.mkdir(parents=True)
@@ -187,7 +181,7 @@ def _dispatch(**overrides):
 
 def test_catalog_digest_is_canonical_and_tamper_evident():
     value = catalog_mapping(
-            target_profile="default",
+        target_profile="default",
         installation_id="install-peer",
         protocol_versions=(2,),
         link_modes=("direct", "pull"),
@@ -232,13 +226,9 @@ def test_room_grant_is_scoped_to_exact_room_home_target_and_profile():
     with pytest.raises(HostedRoomGrantError, match="scope"):
         verify_room_grant(SECRET, token, wrong_target, now=120)
     with pytest.raises(HostedRoomGrantError, match="scope"):
-        verify_room_grant(
-            SECRET, token, _dispatch(member_id="member-other"), now=120
-        )
+        verify_room_grant(SECRET, token, _dispatch(member_id="member-other"), now=120)
     with pytest.raises(HostedRoomGrantError, match="scope"):
-        verify_room_grant(
-            SECRET, token, _dispatch(authority_epoch=999), now=120
-        )
+        verify_room_grant(SECRET, token, _dispatch(authority_epoch=999), now=120)
 
 
 def test_room_grant_fails_closed_for_tamper_expiry_and_permission():
@@ -285,7 +275,9 @@ def test_local_catalog_is_honest_for_app_managed_process(monkeypatch):
     from gateway.hosted_room_peer import local_catalog_mapping
 
     monkeypatch.setenv("CLAWK_DESKTOP", "1")
-    catalog = local_catalog_mapping(target_profile="default", installation_id="install-desktop")
+    catalog = local_catalog_mapping(
+        target_profile="default", installation_id="install-desktop"
+    )
     assert catalog["persistent_process"] is False
     assert catalog["link_modes"] == ["direct"]
 
@@ -308,7 +300,9 @@ def test_self_advertised_endpoint_is_explicit_and_validated(
         monkeypatch.delenv("CLAWK_ROOM_LINK_URL", raising=False)
     else:
         monkeypatch.setenv("CLAWK_ROOM_LINK_URL", configured)
-    endpoint = local_catalog_mapping(target_profile="default", installation_id="install-peer")["endpoint"]
+    endpoint = local_catalog_mapping(
+        target_profile="default", installation_id="install-peer"
+    )["endpoint"]
     assert endpoint["available"] is available
     if reason is not None:
         assert endpoint == {"available": False, "reason": reason}

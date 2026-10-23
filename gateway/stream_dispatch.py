@@ -12,7 +12,13 @@ import logging
 from typing import Any, Callable, Optional
 
 from gateway.stream_events import (
-    Commentary, GatewayNotice, LongToolHint, MessageChunk, MessageStop, StreamEvent, ToolCallChunk,
+    Commentary,
+    GatewayNotice,
+    LongToolHint,
+    MessageChunk,
+    MessageStop,
+    StreamEvent,
+    ToolCallChunk,
 )
 
 logger = logging.getLogger("gateway.stream_events")
@@ -75,7 +81,9 @@ class GatewayEventDispatcher:
             return
         self._last_tool = event.tool_name
         line = self.adapter.format_tool_event(
-            event, mode=self.tool_mode, preview_max_len=self.preview_max_len,
+            event,
+            mode=self.tool_mode,
+            preview_max_len=self.preview_max_len,
         )
         if line:  # None/"" == adapter chose to eat this event
             self._enqueue_tool_line(line)

@@ -14,7 +14,11 @@ _CANCELLED = -1
 
 
 def _curses_select(
-    title: str, items: list[tuple[str, str]], default: int = 0, *, cancel_returns: int | None = None
+    title: str,
+    items: list[tuple[str, str]],
+    default: int = 0,
+    *,
+    cancel_returns: int | None = None,
 ) -> int:
     """Interactive single-select with arrow keys."""
     from clawk_cli.curses_ui import curses_radiolist
@@ -22,7 +26,9 @@ def _curses_select(
     if cancel_returns is None:
         cancel_returns = default
     display_items = [f"{label} - {desc}" if desc else label for label, desc in items]
-    result = curses_radiolist(title, display_items, selected=default, cancel_returns=cancel_returns)
+    result = curses_radiolist(
+        title, display_items, selected=default, cancel_returns=cancel_returns
+    )
     _clear_interactive_transition()
     return result
 
@@ -89,7 +95,9 @@ def prepare_memory_provider_dependencies(provider_name: str) -> tuple[dict, str 
     from pm.environments import running_from_selected_environment
     from pm.paths import repo_root
 
-    return meta, "installed" if running_from_selected_environment(repo_root()) else "restart_required"
+    return meta, "installed" if running_from_selected_environment(
+        repo_root()
+    ) else "restart_required"
 
 
 def _install_dependencies(provider_name: str) -> None:
@@ -108,7 +116,9 @@ def _install_dependencies(provider_name: str) -> None:
         install_cmd = dep.get("install", "")
         if check_cmd:
             try:
-                subprocess.run(shlex.split(check_cmd), check=True, capture_output=True, timeout=5)
+                subprocess.run(
+                    shlex.split(check_cmd), check=True, capture_output=True, timeout=5
+                )
             except Exception:
                 if install_cmd:
                     print(f"\n  ⚠ '{dep.get('name', '')}' not found. Install with:")
@@ -116,13 +126,16 @@ def _install_dependencies(provider_name: str) -> None:
 
 
 def _schema_of(provider) -> list:
-    return provider.get_config_schema() if hasattr(provider, "get_config_schema") else []
+    return (
+        provider.get_config_schema() if hasattr(provider, "get_config_schema") else []
+    )
 
 
 def _get_available_providers() -> list:
     """Discover memory providers from plugins/memory/ as ``(name, setup_hint, provider)`` tuples."""
     try:
         from plugins.memory import discover_memory_providers, load_memory_provider
+
         raw = discover_memory_providers()
     except Exception:
         raw = []
@@ -158,6 +171,7 @@ def _catalog_install_hint(provider_name: str):
     """The install command for a catalog memory provider that resolves nowhere, else None."""
     from plugins.memory import find_provider_dir
     from clawk_cli.memory_provider_migration import catalog_install_hint
+
     if not provider_name or find_provider_dir(provider_name) is not None:
         return None
     return catalog_install_hint(provider_name, category="memory")
@@ -183,7 +197,9 @@ def cmd_setup_provider(provider_name: str) -> None:
         print(f"\n  Memory provider '{provider_name}' not found.")
         install = _catalog_install_hint(provider_name)
         if install:
-            print(f"  It is a catalog plugin that is not installed. Install it with: {install}\n")
+            print(
+                f"  It is a catalog plugin that is not installed. Install it with: {install}\n"
+            )
         else:
             print("  Run 'clawk memory setup' to see available providers.\n")
         return
@@ -201,7 +217,9 @@ def cmd_setup_provider(provider_name: str) -> None:
     print("  Activation saved to config.yaml\n")
 
 
-def _prompt_schema_fields(name: str, schema: list, provider_config: dict, env_writes: dict) -> bool:
+def _prompt_schema_fields(
+    name: str, schema: list, provider_config: dict, env_writes: dict
+) -> bool:
     """Walk a provider's config schema, prompting per field. False when the user cancelled."""
     print(f"\n  Configuring {name}:\n")
     for field in schema:
@@ -221,14 +239,23 @@ def _prompt_schema_fields(name: str, schema: list, provider_config: dict, env_wr
         url = field.get("url")
 
         when = field.get("when")
-        if when and isinstance(when, dict) and not all(provider_config.get(k) == v for k, v in when.items()):
+        if (
+            when
+            and isinstance(when, dict)
+            and not all(provider_config.get(k) == v for k, v in when.items())
+        ):
             continue
 
         if choices and not is_secret:
             current = provider_config.get(key, default)
-            current_idx = choices.index(current) if current and current in choices else 0
+            current_idx = (
+                choices.index(current) if current and current in choices else 0
+            )
             sel = _curses_select(
-                f"  {desc}", [(c, "") for c in choices], default=current_idx, cancel_returns=_CANCELLED
+                f"  {desc}",
+                [(c, "") for c in choices],
+                default=current_idx,
+                cancel_returns=_CANCELLED,
             )
             if sel == _CANCELLED:
                 _print_cancelled_setup()
@@ -247,7 +274,9 @@ def _prompt_schema_fields(name: str, schema: list, provider_config: dict, env_wr
                 env_writes[env_var] = val
         else:
             effective_default = provider_config.get(key) or default
-            val = _prompt(desc, default=str(effective_default) if effective_default else None)
+            val = _prompt(
+                desc, default=str(effective_default) if effective_default else None
+            )
             if val:
                 provider_config[key] = val
                 if env_var and env_var not in env_writes:
@@ -268,7 +297,9 @@ def cmd_setup(args) -> None:
     items = [(name, f"— {desc}") for name, desc, _ in providers]
     items.append(("Built-in only", "— MEMORY.md / USER.md (default)"))
     builtin_idx = len(items) - 1
-    selected = _curses_select("Memory provider setup", items, default=builtin_idx, cancel_returns=_CANCELLED)
+    selected = _curses_select(
+        "Memory provider setup", items, default=builtin_idx, cancel_returns=_CANCELLED
+    )
     if selected == _CANCELLED:
         _print_cancelled_setup()
         return
@@ -319,7 +350,8 @@ def cmd_setup(args) -> None:
 
 
 def _write_env_vars(
-    env_writes: dict, clawk_home: str | os.PathLike[str] | None = None) -> None:
+    env_writes: dict, clawk_home: str | os.PathLike[str] | None = None
+) -> None:
     """Persist memory-provider env vars through the canonical ``.env`` writer.
 
     Delegates to ``clawk_cli.config.save_env_value`` so every key flows
@@ -374,13 +406,16 @@ def cmd_status(args) -> None:
     # check_fn gate when both stores are disabled.
     from clawk_cli.tools_config import _get_platform_tools
     from tools.memory_tool import check_memory_requirements
+
     cli_tools = _get_platform_tools(config, "cli", include_default_mcp_servers=False)
     memory_tool_enabled = ("memory" in cli_tools) and check_memory_requirements()
 
     print("\nMemory status\n" + "─" * 40)
     print("  Built-in (MEMORY.md / USER.md):")
     print(f"    Memory injection:   {_mark(mem_config.get('memory_enabled', True))}")
-    print(f"    User profile:       {_mark(mem_config.get('user_profile_enabled', True))}")
+    print(
+        f"    User profile:       {_mark(mem_config.get('user_profile_enabled', True))}"
+    )
     print(f"    Memory tool:        {_mark(memory_tool_enabled)}")
     print(f"  Provider:  {provider_name or '(none — built-in only)'}")
 
@@ -395,7 +430,11 @@ def cmd_status(args) -> None:
             try:
                 display_config = provider.get_status_config(provider_config)
             except Exception as e:
-                display_config = dict(provider_config) if isinstance(provider_config, dict) else provider_config
+                display_config = (
+                    dict(provider_config)
+                    if isinstance(provider_config, dict)
+                    else provider_config
+                )
                 if isinstance(display_config, dict):
                     display_config["status_config_error"] = str(e)
         if display_config:
@@ -421,7 +460,9 @@ def cmd_status(args) -> None:
                         if url and not is_set:
                             line += f"  → {url}"
                         print(line)
-                print("  Note: systemd/gateway services do not inherit ~/.clawksis/.env —")
+                print(
+                    "  Note: systemd/gateway services do not inherit ~/.clawksis/.env —"
+                )
                 print("        set any variables above in the service environment.")
         else:
             print("\n  Plugin:    NOT installed ✗")
@@ -429,7 +470,9 @@ def cmd_status(args) -> None:
             if install:
                 print(f"  Install it with: {install}")
             else:
-                print(f"  Install the '{provider_name}' memory plugin to ~/.clawksis/plugins/")
+                print(
+                    f"  Install the '{provider_name}' memory plugin to ~/.clawksis/plugins/"
+                )
 
     if providers:
         print("\n  Installed plugins:")

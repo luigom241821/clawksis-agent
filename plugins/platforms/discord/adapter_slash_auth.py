@@ -1,4 +1,5 @@
 """Slash-command authorization verdict for the Discord adapter: the on_message gates, side-effect free."""
+
 from __future__ import annotations
 
 from typing import Any, Callable, Optional, Tuple
@@ -21,19 +22,24 @@ class DiscordSlashAuthMixin:
     # fail closed unless allow-all; DISCORD_ALLOWED_CHANNELS alone authorizes per validated channel.
 
     def _evaluate_slash_authorization(
-        self, interaction: discord.Interaction,
+        self,
+        interaction: discord.Interaction,
     ) -> tuple[bool, Optional[str]]:
         """Evaluate slash authorization without responding; returns ``(allowed, reason)``.
         Shared with side-effect-free callers (``/skill`` autocomplete returns [] per keystroke).
         Fail closed on malformed payloads: with an allowlist, a missing channel id/user REJECTS.
         """
         chan_obj = getattr(interaction, "channel", None)
-        in_dm = isinstance(chan_obj, discord.DMChannel) if chan_obj is not None else False
+        in_dm = (
+            isinstance(chan_obj, discord.DMChannel) if chan_obj is not None else False
+        )
         channel_ids: set = set()
         channel_keys: set = set()
         # Channel scope mirrors on_message; DMs use on_message's DM lockdown path instead.
         if not in_dm:
-            chan_id_raw = getattr(interaction, "channel_id", None) or getattr(chan_obj, "id", None)
+            chan_id_raw = getattr(interaction, "channel_id", None) or getattr(
+                chan_obj, "id", None
+            )
             if chan_id_raw is not None:
                 channel_ids.add(str(chan_id_raw))
                 # Threads: also test the parent channel, as on_message does.
@@ -54,7 +60,8 @@ class DiscordSlashAuthMixin:
                     if not channel_ids:
                         # Channel policy configured but no resolvable channel id: fail closed.
                         return (
-                            False, "channel id missing with DISCORD_ALLOWED_CHANNELS configured",
+                            False,
+                            "channel id missing with DISCORD_ALLOWED_CHANNELS configured",
                         )
                     if not (channel_keys & allowed):
                         return (False, "channel not in DISCORD_ALLOWED_CHANNELS")
@@ -77,7 +84,10 @@ class DiscordSlashAuthMixin:
         # See #12136.
         interaction_guild = getattr(interaction, "guild", None)
         if not self._is_allowed_user(
-            user_id, author=user, guild=interaction_guild, is_dm=in_dm,
+            user_id,
+            author=user,
+            guild=interaction_guild,
+            is_dm=in_dm,
             channel_ids=channel_keys if not in_dm else None,
         ):
             return (False, "user not in DISCORD_ALLOWED_USERS / DISCORD_ALLOWED_ROLES")
@@ -88,5 +98,7 @@ class DiscordSlashAuthMixin:
         meaning (_discord_message_admission): a role allowlist exists and THIS actor passes the gate.
         Re-evaluated for the interaction instead of trusted from call order, so a builder can never
         stamp the grant on an actor the slash gate would refuse."""
-        return bool(getattr(self, "_allowed_role_ids", set())) and self._evaluate_slash_authorization(
-            interaction)[0]
+        return (
+            bool(getattr(self, "_allowed_role_ids", set()))
+            and self._evaluate_slash_authorization(interaction)[0]
+        )

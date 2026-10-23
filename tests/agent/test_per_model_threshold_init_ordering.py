@@ -59,7 +59,8 @@ def test_plugin_engine_gets_model_thresholds_before_initial_update_model():
     }
 
     with (
-        patch("clawk_cli.config.load_config", return_value=cfg), patch("clawk_cli.config.load_config_readonly", return_value=cfg),
+        patch("clawk_cli.config.load_config", return_value=cfg),
+        patch("clawk_cli.config.load_config_readonly", return_value=cfg),
         patch("plugins.context_engine.load_context_engine", return_value=engine),
         patch("agent.model_metadata.get_model_context_length", return_value=1_000_000),
         patch("model_tools.get_tool_definitions", return_value=[]),
@@ -85,10 +86,6 @@ def test_plugin_engine_gets_model_thresholds_before_initial_update_model():
     assert engine.threshold_tokens == int(1_000_000 * 0.25)
 
 
-
-
-
-
 class TestFloorInteractionOnModelSwitch:
     """The small-context floor stacks on per-model overrides at switch time."""
 
@@ -109,7 +106,6 @@ class TestFloorInteractionOnModelSwitch:
         cc.update_model(model="small-model", context_length=128_000)
         assert cc.threshold_percent == 0.75  # raise-only floor wins
         assert cc.threshold_tokens == int(128_000 * 0.75)
-
 
 
 class TestBaseEngineConfigSnapshot:

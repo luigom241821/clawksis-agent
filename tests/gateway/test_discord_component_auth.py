@@ -94,7 +94,9 @@ def test_component_check_explicit_allow_all_passes(monkeypatch, env_name, env_va
 
 
 @pytest.mark.parametrize("snapshot", [{"11111"}, {"*"}])
-@pytest.mark.parametrize(("verdict", "expected"), [(None, True), (True, True), (False, False)])
+@pytest.mark.parametrize(
+    ("verdict", "expected"), [(None, True), (True, True), (False, False)]
+)
 def test_snapshot_user_is_confirmed_with_the_live_check(snapshot, verdict, expected):
     # The user set is the adapter's connect-time snapshot; None means no live check is wired.
     seen = []
@@ -103,7 +105,10 @@ def test_snapshot_user_is_confirmed_with_the_live_check(snapshot, verdict, expec
         seen.append(interaction.user.id)
         return verdict
 
-    assert _component_check_auth(_interaction(11111), snapshot, set(), live_auth=live_auth) is expected
+    assert (
+        _component_check_auth(_interaction(11111), snapshot, set(), live_auth=live_auth)
+        is expected
+    )
     assert seen == [11111]
 
 
@@ -114,11 +119,17 @@ async def test_approval_buttons_follow_a_revoke_made_after_connect():
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
     adapter._allowed_user_ids = {"11111"}
     live = {"11111": True}
-    adapter.set_authorization_check(lambda user_id, chat_type=None, chat_id=None, **_: live.get(user_id, False))
+    adapter.set_authorization_check(
+        lambda user_id, chat_type=None, chat_id=None, **_: live.get(user_id, False)
+    )
     channel = SimpleNamespace(send=AsyncMock(return_value=SimpleNamespace(id=1)))
-    adapter._client = SimpleNamespace(get_channel=lambda _chat_id: channel, fetch_channel=AsyncMock())
+    adapter._client = SimpleNamespace(
+        get_channel=lambda _chat_id: channel, fetch_channel=AsyncMock()
+    )
 
-    result = await adapter.send_exec_approval(chat_id="555", command="make deploy", session_key="discord:555")
+    result = await adapter.send_exec_approval(
+        chat_id="555", command="make deploy", session_key="discord:555"
+    )
     assert result.success is True
     view = channel.send.call_args.kwargs["view"]
     assert view._check_auth(_interaction(11111)) is True
@@ -191,7 +202,9 @@ def test_clarify_choice_view_accepts_role_allowlist():
     "view_factory",
     [
         lambda: ExecApprovalView(session_key="s", allowed_user_ids=set()),
-        lambda: SlashConfirmView(session_key="s", confirm_id="c", allowed_user_ids=set()),
+        lambda: SlashConfirmView(
+            session_key="s", confirm_id="c", allowed_user_ids=set()
+        ),
         lambda: UpdatePromptView(session_key="s", allowed_user_ids=set()),
         lambda: ClarifyChoiceView(
             choices=["one"],
@@ -312,17 +325,12 @@ def test_exec_view_gate_on_no_admins_fails_closed(caplog):
     )
     with caplog.at_level(logging.WARNING):
         assert view._check_auth(_interaction(11111)) is False
-    assert any(
-        "require_admin_for_exec_approval" in r.message for r in caplog.records
-    )
+    assert any("require_admin_for_exec_approval" in r.message for r in caplog.records)
 
 
 def test_other_views_not_admin_gated():
     """Lower-stakes views never take the admin gate — they stay user-scope."""
     # SlashConfirmView/ModelPickerView/etc. construct without require_admin and
     # delegate straight to _component_check_auth.
-    sc = SlashConfirmView(
-        session_key="s", confirm_id="c", allowed_user_ids={"11111"}
-    )
+    sc = SlashConfirmView(session_key="s", confirm_id="c", allowed_user_ids={"11111"})
     assert sc._check_auth(_interaction(11111)) is True
-

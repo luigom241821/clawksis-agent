@@ -4,6 +4,7 @@ Real transcripts are supplied by path (never committed). This module loads
 them, estimates tokens the same way the harness scores them, and can generate
 a small synthetic transcript so CI smoke tests run without real data.
 """
+
 from __future__ import annotations
 
 import json
@@ -56,24 +57,38 @@ def synthetic_transcript(n_turns: int = 60, seed: int = 7) -> list[dict[str, Any
     rng = random.Random(seed)
     msgs: list[dict[str, Any]] = [
         {"role": "system", "content": "You are a test agent."},
-        {"role": "user", "content": "Work through the checklist and remember the codes."},
+        {
+            "role": "user",
+            "content": "Work through the checklist and remember the codes.",
+        },
     ]
     for i in range(n_turns):
         fact = ""
         if i % 10 == 0:
-            fact = f" The deploy code for region {i // 10} is Z{rng.randint(1000, 9999)}."
-        msgs.append({
-            "role": "assistant",
-            "content": f"Working on step {i}.{fact}",
-            "tool_calls": [{
-                "id": f"c{i}",
-                "function": {"name": "terminal", "arguments": json.dumps({"command": f"echo step {i}"})},
-            }],
-        })
-        msgs.append({
-            "role": "tool",
-            "tool_call_id": f"c{i}",
-            "content": ("step output " * 200) + f"result-{i}",
-        })
+            fact = (
+                f" The deploy code for region {i // 10} is Z{rng.randint(1000, 9999)}."
+            )
+        msgs.append(
+            {
+                "role": "assistant",
+                "content": f"Working on step {i}.{fact}",
+                "tool_calls": [
+                    {
+                        "id": f"c{i}",
+                        "function": {
+                            "name": "terminal",
+                            "arguments": json.dumps({"command": f"echo step {i}"}),
+                        },
+                    }
+                ],
+            }
+        )
+        msgs.append(
+            {
+                "role": "tool",
+                "tool_call_id": f"c{i}",
+                "content": ("step output " * 200) + f"result-{i}",
+            }
+        )
     msgs.append({"role": "assistant", "content": "Checklist complete."})
     return msgs

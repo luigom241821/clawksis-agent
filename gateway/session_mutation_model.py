@@ -1,4 +1,5 @@
 """Resolve explicit model changes using the existing source model switch pipeline."""
+
 import asyncio
 import json
 from dataclasses import asdict, replace
@@ -29,81 +30,131 @@ def _current_route(authority, live, old):
     """
     from gateway.session_policy import profile_read_scope
     from clawk_cli.auth import AuthError
+
     with profile_read_scope(old, authority):
         config = old.config(authority)
-        block = config.get('model') or {}
+        block = config.get("model") or {}
         try:
             model, runtime = authority.runner._resolve_session_agent_runtime(
-                source=live.source, session_key=live.route, fallback=False)
+                source=live.source, session_key=live.route, fallback=False
+            )
         except AuthError:
-            return config, _Route(block.get('provider') or '', old.current_model(authority) or '',
-                                  block.get('base_url') or '', '')
-    return config, _Route(block.get('provider') or runtime.get('provider') or '', model or '',
-                          runtime.get('base_url') or '', runtime.get('api_key') or '')
+            return config, _Route(
+                block.get("provider") or "",
+                old.current_model(authority) or "",
+                block.get("base_url") or "",
+                "",
+            )
+    return config, _Route(
+        block.get("provider") or runtime.get("provider") or "",
+        model or "",
+        runtime.get("base_url") or "",
+        runtime.get("api_key") or "",
+    )
 
 
 async def prepare_model(authority, live, payload, prepared):
-    from gateway.session_policy import restore_policy, bind_launch_key, bound_route_holds, route_launch_key
+    from gateway.session_policy import (
+        restore_policy,
+        bind_launch_key,
+        bound_route_holds,
+        route_launch_key,
+    )
     from gateway.session_policy_credentials import recover_config_secrets
     from clawk_cli.model_switch import apply_model_selection, switch_model
     from clawk_cli.config import get_compatible_custom_providers
-    old = restore_policy(prepared['snapshot']['receipt']['policy'])
+
+    old = restore_policy(prepared["snapshot"]["receipt"]["policy"])
     config, current = _current_route(authority, live, old)
     # A pick is an explicit user action: it resolves against the owning profile's CURRENT named
     # providers, as CLI/TUI ``/model`` do (#139740). A following session's ``config`` already is
     # the profile's current read; every other session keeps ``config`` for its own route below.
-    resolution = config if old.follows_profile else await asyncio.to_thread(
-        _provider_resolution_config, authority, config, old.ignore_user_config)
+    resolution = (
+        config
+        if old.follows_profile
+        else await asyncio.to_thread(
+            _provider_resolution_config, authority, config, old.ignore_user_config
+        )
+    )
 
     def switch(**kwargs):
         result = switch_model(**kwargs)
         return result, _alias_credential(authority, result)
-    result, alias_credential = await asyncio.to_thread(switch, raw_input=payload['model'],
-        current_provider=current.provider, current_model=current.model, current_base_url=current.base_url,
-        current_api_key=current.api_key, explicit_provider=payload.get('provider', ''),
-        is_global=False, user_providers=resolution.get('providers'),
-        custom_providers=get_compatible_custom_providers(resolution))
+
+    result, alias_credential = await asyncio.to_thread(
+        switch,
+        raw_input=payload["model"],
+        current_provider=current.provider,
+        current_model=current.model,
+        current_base_url=current.base_url,
+        current_api_key=current.api_key,
+        explicit_provider=payload.get("provider", ""),
+        is_global=False,
+        user_providers=resolution.get("providers"),
+        custom_providers=get_compatible_custom_providers(resolution),
+    )
     if not result.success:
-        raise RuntimeStoreError('model_resolution_failed')
-    refusal = await _selection_guard_refusal(authority, live, payload, prepared['snapshot'], current, result)
+        raise RuntimeStoreError("model_resolution_failed")
+    refusal = await _selection_guard_refusal(
+        authority, live, payload, prepared["snapshot"], current, result
+    )
     if refusal is not None:
         return refusal
     frozen = old.config()
     # The committed selection freezes the ONE picked endpoint (its key stays a private secret).
-    provider_secrets, retired, moved = ({}, (), {}) if old.follows_profile else _freeze_selected_provider(
-        resolution, frozen, result.target_provider)
+    provider_secrets, retired, moved = (
+        ({}, (), {})
+        if old.follows_profile
+        else _freeze_selected_provider(resolution, frozen, result.target_provider)
+    )
     if old.follows_profile:
         # A following session switches FROM the profile's current route: measured from its creation
         # endpoint, a pick on the current one read as a route change and dropped its key_env pointer.
-        followed = config.get('model') or {}
+        followed = config.get("model") or {}
         # An inline key (or an alias key's pointer) authenticates the route it was picked on: once the
         # followed route moved, the same-route cleanup below would keep it for the new endpoint.
-        held = bound_route_holds(frozen.get('model'), frozen, followed, config)
+        held = bound_route_holds(frozen.get("model"), frozen, followed, config)
         # Every other route-bound key follows the profile's current route.
-        kept = ('api_key', 'api', 'api_key_from') if held else ()
+        kept = ("api_key", "api", "api_key_from") if held else ()
         moved = tuple(k for k in ROUTE_BOUND_KEYS if k not in kept)
-        frozen['model'] = {k: v for k, v in (frozen.get('model') or {}).items() if k not in moved}
+        frozen["model"] = {
+            k: v for k, v in (frozen.get("model") or {}).items() if k not in moved
+        }
         # The profile's inline key and its private-secret pointer are not copied into the receipt:
         # its secrets stay at the profile's own path, never re-committed under this session.
-        frozen['model'].update({k: followed[k] for k in moved
-                                if k in followed and k not in ('api_key', 'api', 'api_key_from')})
+        frozen["model"].update(
+            {
+                k: followed[k]
+                for k in moved
+                if k in followed and k not in ("api_key", "api", "api_key_from")
+            }
+        )
     # The one selection shape config.yaml gets (#25106): api_mode follows the target, a context pin
     # and the endpoint-bound credential fields (inline key, key_env/api_key_env) drop on a route change.
     # Off-loop: the context-pin check can do cold-start disk I/O.
-    frozen['model'] = await asyncio.to_thread(apply_model_selection, frozen.get('model'), result)
-    if 'reasoning' in payload:
+    frozen["model"] = await asyncio.to_thread(
+        apply_model_selection, frozen.get("model"), result
+    )
+    if "reasoning" in payload:
         # The level picked with the model lands in the same commit (as prepare_reasoning writes it).
         from gateway.session_policy import pin_reasoning_effort
-        pin_reasoning_effort(frozen, payload['reasoning'], session=True)
+
+        pin_reasoning_effort(frozen, payload["reasoning"], session=True)
     if old.follows_profile:
         # A committed /model holds while the profile still targets what it targets now (main's
         # composer_override_profile); a later profile edit supersedes it.
         from pathlib import Path
         from gateway.run import _load_gateway_config
         from gateway.session_policy import present_sections, profile_target
+
         live = await asyncio.to_thread(
-            lambda: _load_gateway_config(Path(authority.db.db_path).resolve().parent / 'config.yaml'))
-        frozen['model']['selection_profile'] = list(profile_target(present_sections(live)))
+            lambda: _load_gateway_config(
+                Path(authority.db.db_path).resolve().parent / "config.yaml"
+            )
+        )
+        frozen["model"]["selection_profile"] = list(
+            profile_target(present_sections(live))
+        )
     # A direct alias's own credential is part of the selection (never ``result.api_key``, which the
     # switch resolved for its probe): its env pointer is committed and re-read every turn; a literal
     # key is a private config secret at the alias entry's own path (what a restarted owner re-reads)
@@ -111,25 +162,35 @@ async def prepare_model(authority, live, payload, prepared):
     key_env, source, alias_key = alias_credential
     key_env = key_env or _selected_provider_key_env(resolution, result.target_provider)
     if key_env:
-        frozen['model']['key_env'] = key_env
+        frozen["model"]["key_env"] = key_env
     if source:
-        frozen['model'].update(api_key=None, api_key_from=list(source))
-    elif 'api_key' not in frozen['model']:
-        frozen['model'].pop('api_key_from', None)
+        frozen["model"].update(api_key=None, api_key_from=list(source))
+    elif "api_key" not in frozen["model"]:
+        frozen["model"].pop("api_key_from", None)
     # Creation identity (request_json) remains immutable; runtime selection lives in the policy.
     policy = replace(old, model=result.new_model, config_json=json.dumps(frozen))
     secrets = recover_config_secrets(authority, old) if old.config_secret_ref else {}
     # The picked entry's private subtree is replaced whole: a key or header its current declaration
     # withdrew must not follow it to the new endpoint.
     # An unrelated entry the pick displaced carries its own secrets to its new index.
-    secrets = {moved.get(path[:2], path[:2]) + path[2:]: value for path, value in secrets.items()}
-    secrets = {path: value for path, value in secrets.items() if path[:2] not in retired}
+    secrets = {
+        moved.get(path[:2], path[:2]) + path[2:]: value
+        for path, value in secrets.items()
+    }
+    secrets = {
+        path: value for path, value in secrets.items() if path[:2] not in retired
+    }
     secrets.update(provider_secrets)
     # A cleared field's private value must not be re-hydrated into the new route by config().
-    secrets = {path: value for path, value in secrets.items()
-               if not (len(path) == 2 and path[0] == 'model' and path[1] not in frozen['model'])}
+    secrets = {
+        path: value
+        for path, value in secrets.items()
+        if not (
+            len(path) == 2 and path[0] == "model" and path[1] not in frozen["model"]
+        )
+    }
     if source:
-        secrets.pop(('model', 'api_key'), None)
+        secrets.pop(("model", "api_key"), None)
         secrets[source] = alias_key
     # Re-fingerprint frozen config references because policy identity includes model.
     # An explicit launch key belongs to the endpoint it authenticated, not to a provider name:
@@ -138,11 +199,18 @@ async def prepare_model(authority, live, payload, prepared):
     # whose base_url moved is another): the key survives only while it still authenticates the route
     # the session runs now and the pick stays on that route.
     key = route_launch_key(authority, old, config)
-    if key is None or not bound_route_holds(config.get('model'), config, frozen['model'], config):
+    if key is None or not bound_route_holds(
+        config.get("model"), config, frozen["model"], config
+    ):
         policy = replace(policy, credential_ref=None)
         key = None
-    policy = bind_launch_key(authority, prepared['snapshot']['receipt']['session_id'], policy, key,
-                             config_secrets=secrets)
+    policy = bind_launch_key(
+        authority,
+        prepared["snapshot"]["receipt"]["session_id"],
+        policy,
+        key,
+        config_secrets=secrets,
+    )
     return dict(prepared, policy=asdict(policy))
 
 
@@ -154,45 +222,72 @@ def _provider_resolution_config(authority, config, bypass=False):
     ``${VAR}`` refs expand against the profile's CURRENT ``.env``, not the daemon's start env."""
     from pathlib import Path
     from gateway.session_local import load_profile_config
+
     if bypass:
         return config
     current = load_profile_config(Path(authority.db.db_path).resolve().parent)
     if not isinstance(current, dict):
         return config
     resolved = dict(config)
-    frozen_providers, current_providers = config.get('providers'), current.get('providers')
+    frozen_providers, current_providers = (
+        config.get("providers"),
+        current.get("providers"),
+    )
     if isinstance(frozen_providers, dict) or isinstance(current_providers, dict):
-        current_providers = current_providers if isinstance(current_providers, dict) else {}
+        current_providers = (
+            current_providers if isinstance(current_providers, dict) else {}
+        )
         slugs = {_provider_key_slug(key) for key in current_providers}
         # A respelled key is the same provider: the profile's spelling replaces the frozen one.
-        resolved['providers'] = {**{key: entry for key, entry in (
-            frozen_providers if isinstance(frozen_providers, dict) else {}).items()
-            if _provider_key_slug(key) not in slugs}, **current_providers}
-    frozen_custom, current_custom = config.get('custom_providers'), current.get('custom_providers')
+        resolved["providers"] = {
+            **{
+                key: entry
+                for key, entry in (
+                    frozen_providers if isinstance(frozen_providers, dict) else {}
+                ).items()
+                if _provider_key_slug(key) not in slugs
+            },
+            **current_providers,
+        }
+    frozen_custom, current_custom = (
+        config.get("custom_providers"),
+        current.get("custom_providers"),
+    )
     if isinstance(frozen_custom, list) or isinstance(current_custom, list):
-        current_custom = list(current_custom) if isinstance(current_custom, list) else []
-        names = {_custom_provider_name(entry) for entry in current_custom if isinstance(entry, dict)}
+        current_custom = (
+            list(current_custom) if isinstance(current_custom, list) else []
+        )
+        names = {
+            _custom_provider_name(entry)
+            for entry in current_custom
+            if isinstance(entry, dict)
+        }
         # Current entries keep their profile positions (the path cold recovery re-reads).
-        resolved['custom_providers'] = current_custom + [
-            entry for entry in (frozen_custom if isinstance(frozen_custom, list) else [])
-            if not isinstance(entry, dict) or _custom_provider_name(entry) not in names]
-        resolved['_profile_custom_count'] = len(current_custom)
+        resolved["custom_providers"] = current_custom + [
+            entry
+            for entry in (frozen_custom if isinstance(frozen_custom, list) else [])
+            if not isinstance(entry, dict) or _custom_provider_name(entry) not in names
+        ]
+        resolved["_profile_custom_count"] = len(current_custom)
     return resolved
 
 
 def _custom_provider_name(entry):
     """The runtime's canonical identity: ``My Provider`` and ``my-provider`` are one provider."""
     from clawk_cli.providers import custom_provider_slug
-    return custom_provider_slug(str(entry.get('name') or ''), str(entry.get('provider_key') or ''))
+
+    return custom_provider_slug(
+        str(entry.get("name") or ""), str(entry.get("provider_key") or "")
+    )
 
 
 def _selected_provider_key_env(config, provider):
     """Return a selected ``providers.<slug>`` credential pointer, never its secret value."""
-    providers = config.get('providers')
+    providers = config.get("providers")
     entry = providers.get(provider) if isinstance(providers, dict) else None
     if not isinstance(entry, dict):
         return None
-    return str(entry.get('key_env') or entry.get('api_key_env') or '').strip() or None
+    return str(entry.get("key_env") or entry.get("api_key_env") or "").strip() or None
 
 
 def _freeze_selected_provider(config, frozen, provider):
@@ -208,6 +303,7 @@ def _freeze_selected_provider(config, frozen, provider):
     from copy import deepcopy
     from gateway.session_policy import _extract_config_secrets
     from clawk_cli.runtime_provider_custom import named_custom_provider_config_path
+
     path = named_custom_provider_config_path(provider, config)
     if path is None:
         return {}, (), {}
@@ -217,23 +313,39 @@ def _freeze_selected_provider(config, frozen, provider):
         return {}, (), {}
     copied = deepcopy(entries[index])
     retired, moved = {(section, index)}, {}
-    if section == 'providers':
+    if section == "providers":
         previous = frozen.get(section) if isinstance(frozen.get(section), dict) else {}
-        stale = {key for key in previous if _provider_key_slug(key) == _provider_key_slug(index)}
-        frozen[section] = {**{k: v for k, v in previous.items() if k not in stale}, index: copied}
+        stale = {
+            key
+            for key in previous
+            if _provider_key_slug(key) == _provider_key_slug(index)
+        }
+        frozen[section] = {
+            **{k: v for k, v in previous.items() if k not in stale},
+            index: copied,
+        }
         retired |= {(section, key) for key in stale}
     else:
         frozen_entries = list(frozen.get(section) or [])
         name = _custom_provider_name(copied)
-        same = [i for i, entry in enumerate(frozen_entries)
-                if isinstance(entry, dict) and _custom_provider_name(entry) == name]
-        if index >= config.get('_profile_custom_count', len(entries)):
+        same = [
+            i
+            for i, entry in enumerate(frozen_entries)
+            if isinstance(entry, dict) and _custom_provider_name(entry) == name
+        ]
+        if index >= config.get("_profile_custom_count", len(entries)):
             index = same[0]  # a frozen-only entry stays where it is
         frozen_entries += [{}] * (index + 1 - len(frozen_entries))
         displaced = frozen_entries[index]
-        if isinstance(displaced, dict) and displaced and _custom_provider_name(displaced) != name:
+        if (
+            isinstance(displaced, dict)
+            and displaced
+            and _custom_provider_name(displaced) != name
+        ):
             moved[(section, index)] = (section, len(frozen_entries))
-            frozen_entries.append(displaced)  # still resolvable by name, with its own secrets
+            frozen_entries.append(
+                displaced
+            )  # still resolvable by name, with its own secrets
         for i in same:
             frozen_entries[i] = {}
         frozen_entries[index] = copied
@@ -247,7 +359,8 @@ def _freeze_selected_provider(config, frozen, provider):
 def _provider_key_slug(key):
     """A ``providers:`` key's canonical identity: ``Review Prov`` and ``review-prov`` are one."""
     from clawk_cli.providers import custom_provider_slug
-    return custom_provider_slug('', str(key))
+
+    return custom_provider_slug("", str(key))
 
 
 def _alias_credential(authority, result):
@@ -258,36 +371,58 @@ def _alias_credential(authority, result):
     from pathlib import Path
     from gateway.run import _load_gateway_config
     from clawk_cli.config import _env_ref_var_name, read_user_config_raw
-    name = result.resolved_via_alias if result.success else ''
-    path = Path(authority.db.db_path).resolve().parent / 'config.yaml'
+
+    name = result.resolved_via_alias if result.success else ""
+    path = Path(authority.db.db_path).resolve().parent / "config.yaml"
     raw = read_user_config_raw(path) if name else {}
-    for section in (('model_aliases',), ('model', 'aliases')):
-        model = raw.get('model')  # `model: name` (a scalar) is valid config and declares no aliases
-        entries = raw.get(section[0]) if len(section) == 1 else (model.get('aliases') if isinstance(model, dict) else None)
-        for written, entry in (entries.items() if isinstance(entries, dict) else ()):
-            if not isinstance(entry, dict) or not entry.get('model') or str(written).strip().lower() != name:
+    for section in (("model_aliases",), ("model", "aliases")):
+        model = raw.get(
+            "model"
+        )  # `model: name` (a scalar) is valid config and declares no aliases
+        entries = (
+            raw.get(section[0])
+            if len(section) == 1
+            else (model.get("aliases") if isinstance(model, dict) else None)
+        )
+        for written, entry in entries.items() if isinstance(entries, dict) else ():
+            if (
+                not isinstance(entry, dict)
+                or not entry.get("model")
+                or str(written).strip().lower() != name
+            ):
                 continue
-            key = str(entry.get('api_key') or '').strip()
-            pointer = _env_ref_var_name(key[2:-1]) if key.startswith('${') and key.endswith('}') else None
+            key = str(entry.get("api_key") or "").strip()
+            pointer = (
+                _env_ref_var_name(key[2:-1])
+                if key.startswith("${") and key.endswith("}")
+                else None
+            )
             if pointer:
                 return pointer, None, None
             if not key:
-                return str(entry.get('key_env') or '').strip() or None, None, None
+                return str(entry.get("key_env") or "").strip() or None, None, None
             value = _load_gateway_config(path)
-            for part in (*section, written, 'api_key'):
+            for part in (*section, written, "api_key"):
                 value = value.get(part) if isinstance(value, dict) else None
             if not value:
-                raise RuntimeStoreError('model_resolution_failed')
-            return None, (*section, written, 'api_key'), value
+                raise RuntimeStoreError("model_resolution_failed")
+            return None, (*section, written, "api_key"), value
     return None, None, None
 
 
 def _persisted_selection_context(authority, snapshot, current):
     from agent.usage_anchor import persisted_anchor_tokens
     from clawk_cli.model_selection_guards import SelectionContext
-    target = snapshot.get('target') or snapshot['receipt']['session_id']
-    tokens = persisted_anchor_tokens(authority.db, target, authority.db.get_messages_as_conversation(target))
-    return SelectionContext(context_tokens=tokens, current_model=current.model or None) if tokens else None
+
+    target = snapshot.get("target") or snapshot["receipt"]["session_id"]
+    tokens = persisted_anchor_tokens(
+        authority.db, target, authority.db.get_messages_as_conversation(target)
+    )
+    return (
+        SelectionContext(context_tokens=tokens, current_model=current.model or None)
+        if tokens
+        else None
+    )
 
 
 async def _selection_guard_refusal(authority, live, payload, snapshot, current, result):
@@ -298,35 +433,65 @@ async def _selection_guard_refusal(authority, live, payload, snapshot, current, 
     token (target re-resolved elsewhere, another switch landed, a turn settled) gets a fresh
     refusal, never a silent apply."""
     import hashlib
-    from clawk_cli.model_selection_guards import combined_message, selection_context_for_agent, selection_warnings
+    from clawk_cli.model_selection_guards import (
+        combined_message,
+        selection_context_for_agent,
+        selection_warnings,
+    )
     from clawk_cli.route_identity import normalize_route_base_url
-    lookup = (getattr(authority.runner, '_resident_agent_for', None)
-              or getattr(authority.runner, '_cached_agent_for', None))
+
+    lookup = getattr(authority.runner, "_resident_agent_for", None) or getattr(
+        authority.runner, "_cached_agent_for", None
+    )
     agent = lookup(live.route) if live is not None and callable(lookup) else None
     context = selection_context_for_agent(agent)
     if context is None:
         # No resident agent (evicted by the previous switch, or an owner restart): the session's
         # persisted usage anchor still measures the context at stake, so the large-context guard
         # does not go quiet on exactly the switch that follows another one.
-        context = await asyncio.to_thread(_persisted_selection_context, authority, snapshot, current)
+        context = await asyncio.to_thread(
+            _persisted_selection_context, authority, snapshot, current
+        )
     # Off-loop: pricing lookups may hit models.dev on a cache miss.
     warnings = await asyncio.to_thread(
-        selection_warnings, result.new_model, provider=result.target_provider,
-        base_url=result.base_url or current.base_url, api_key=result.api_key or current.api_key,
-        model_info=result.model_info, selection_context=context)
+        selection_warnings,
+        result.new_model,
+        provider=result.target_provider,
+        base_url=result.base_url or current.base_url,
+        api_key=result.api_key or current.api_key,
+        model_info=result.model_info,
+        selection_context=context,
+    )
     if not warnings:
         return None
-    binding = {'target': [result.new_model, result.target_provider, normalize_route_base_url(result.base_url),
-                          result.api_mode or ''],
-               'current': [current.model, current.provider, normalize_route_base_url(current.base_url)],
-               'session': [snapshot['target'], snapshot['target_revision']],
-               'guards': sorted(w.kind for w in warnings)}
+    binding = {
+        "target": [
+            result.new_model,
+            result.target_provider,
+            normalize_route_base_url(result.base_url),
+            result.api_mode or "",
+        ],
+        "current": [
+            current.model,
+            current.provider,
+            normalize_route_base_url(current.base_url),
+        ],
+        "session": [snapshot["target"], snapshot["target_revision"]],
+        "guards": sorted(w.kind for w in warnings),
+    }
     token = hashlib.sha256(json.dumps(binding, sort_keys=True).encode()).hexdigest()
-    if payload.get('confirm') == token:
+    if payload.get("confirm") == token:
         return None
     # A fresh dict: the prepared snapshot carries the frozen policy and never leaves the owner. No
     # ``model`` key: a client that predates the exchange must not paint the target as applied.
-    return {'status': 'confirmation_required', 'confirm_required': True, 'confirm': token,
-            'target_model': result.new_model, 'target_provider': result.target_provider,
-            'confirm_message': combined_message(warnings),
-            'warnings': [{'kind': w.kind, 'title': w.title, 'message': w.message} for w in warnings]}
+    return {
+        "status": "confirmation_required",
+        "confirm_required": True,
+        "confirm": token,
+        "target_model": result.new_model,
+        "target_provider": result.target_provider,
+        "confirm_message": combined_message(warnings),
+        "warnings": [
+            {"kind": w.kind, "title": w.title, "message": w.message} for w in warnings
+        ],
+    }

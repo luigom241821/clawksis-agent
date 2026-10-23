@@ -3,6 +3,7 @@
 Covers issue #5211: opencode-go model names with dots (e.g. minimax-m2.7)
 must NOT be mangled to hyphens (minimax-m2-7).
 """
+
 import pytest
 
 from clawk_cli.model_normalize import (
@@ -13,16 +14,20 @@ from clawk_cli.model_normalize import (
 
 # ── Regression: issue #5211 ────────────────────────────────────────────
 
+
 class TestIssue5211OpenCodeGoDotPreservation:
     """OpenCode Go model names with dots must pass through unchanged."""
 
-    @pytest.mark.parametrize("model,expected", [
-        ("minimax-m2.7", "minimax-m2.7"),
-        ("minimax-m2.5", "minimax-m2.5"),
-        ("glm-4.5", "glm-4.5"),
-        ("kimi-k2.5", "kimi-k2.5"),
-        ("some-model-1.0.3", "some-model-1.0.3"),
-    ])
+    @pytest.mark.parametrize(
+        "model,expected",
+        [
+            ("minimax-m2.7", "minimax-m2.7"),
+            ("minimax-m2.5", "minimax-m2.5"),
+            ("glm-4.5", "glm-4.5"),
+            ("kimi-k2.5", "kimi-k2.5"),
+            ("some-model-1.0.3", "some-model-1.0.3"),
+        ],
+    )
     def test_opencode_go_preserves_dots(self, model, expected):
         result = normalize_model_for_provider(model, "opencode-go")
         assert result == expected, f"Expected {expected!r}, got {result!r}"
@@ -39,6 +44,7 @@ class TestIssue5211OpenCodeGoDotPreservation:
 
 # ── Copilot model-name normalization (issue #6879 regression) ──────────
 
+
 class TestCopilotModelNormalization:
     """Copilot requires bare dot-notation model IDs.
 
@@ -51,7 +57,9 @@ class TestCopilotModelNormalization:
 
     def test_openai_codex_still_strips_openai_prefix(self):
         """Regression: openai-codex must still strip the openai/ prefix."""
-        assert normalize_model_for_provider("openai/gpt-5.4", "openai-codex") == "gpt-5.4"
+        assert (
+            normalize_model_for_provider("openai/gpt-5.4", "openai-codex") == "gpt-5.4"
+        )
 
 
 # ── Aggregator providers (regression) ──────────────────────────────────
@@ -61,6 +69,7 @@ class TestCopilotModelNormalization:
 
 
 # ── DeepSeek V-series pass-through (bug: V4 models silently folded to V3) ──
+
 
 class TestDeepseekVSeriesPassThrough:
     """DeepSeek's V-series IDs (``deepseek-v4-pro``, ``deepseek-v4-flash``,
@@ -95,6 +104,7 @@ class TestDeepseekVSeriesPassThrough:
 
 # ── DeepSeek post-2026-07-24 alias remapping ───────────────────────────
 
+
 class TestDeepseekRetiredAliasesAndCustomSlugs:
     """Only the two retired aliases are rewritten; every other id is the user's and reaches the
     wire as typed (a shape allow-list swallowed the vendor's own ``deepseek-flash``, #107206)."""
@@ -105,18 +115,22 @@ class TestDeepseekRetiredAliasesAndCustomSlugs:
             == "deepseek-flash"
         )
 
-    @pytest.mark.parametrize("model", [
-        "deepseek-v4.1-flash",
-        "deepseek-v4-flash-0731",
-        "deepseek-r1",
-        "deepseek-next-preview",
-        "my-fine-tune",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "deepseek-v4.1-flash",
+            "deepseek-v4-flash-0731",
+            "deepseek-r1",
+            "deepseek-next-preview",
+            "my-fine-tune",
+        ],
+    )
     def test_unknown_ids_pass_through_untouched(self, model):
         assert _normalize_for_deepseek(model) == model
 
 
 # ── Regression: issue #78796 ───────────────────────────────────────────
+
 
 class TestIssue78796NvidiaPrefixRepair:
     """A bare NVIDIA model id must regain its ``vendor/`` prefix.
@@ -126,14 +140,17 @@ class TestIssue78796NvidiaPrefixRepair:
     that never names the model, so the failure reads like an outage.
     """
 
-    @pytest.mark.parametrize("model,expected", [
-        ("nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3-ultra-550b-a55b"),
-        ("nemotron-3-super-120b-a12b", "nvidia/nemotron-3-super-120b-a12b"),
-        (
-            "nemotron-3-nano-omni-30b-a3b-reasoning",
-            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        ),
-    ])
+    @pytest.mark.parametrize(
+        "model,expected",
+        [
+            ("nemotron-3-ultra-550b-a55b", "nvidia/nemotron-3-ultra-550b-a55b"),
+            ("nemotron-3-super-120b-a12b", "nvidia/nemotron-3-super-120b-a12b"),
+            (
+                "nemotron-3-nano-omni-30b-a3b-reasoning",
+                "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+            ),
+        ],
+    )
     def test_bare_nemotron_regains_prefix(self, model, expected):
         assert normalize_model_for_provider(model, "nvidia") == expected
 
@@ -142,17 +159,23 @@ class TestIssue78796NvidiaPrefixRepair:
         not a hardcoded ``nvidia/``."""
         assert normalize_model_for_provider("glm-5.2", "nvidia") == "z-ai/glm-5.2"
 
-    @pytest.mark.parametrize("model", [
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "z-ai/glm-5.2",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "nvidia/nemotron-3-ultra-550b-a55b",
+            "z-ai/glm-5.2",
+        ],
+    )
     def test_already_prefixed_is_untouched(self, model):
         assert normalize_model_for_provider(model, "nvidia") == model
 
-    @pytest.mark.parametrize("model", [
-        "my-local-nim-container",
-        "some-finetune-v2",
-    ])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "my-local-nim-container",
+            "some-finetune-v2",
+        ],
+    )
     def test_unknown_names_pass_through(self, model):
         """The same provider id fronts local NIM containers. An id absent from
         the catalogue is a lookup miss, not a guess — leave it alone."""
@@ -171,7 +194,9 @@ class TestColonProviderPrefixIsStrippedLikeSlash:
     reached the Codex wire with the prefix attached and got HTTP 400. A matching ``provider:`` prefix
     must normalize exactly like ``provider/``; a later colon (Ollama tags) is never a separator."""
 
-    def test_agent_init_strips_colon_prefix_before_the_wire(self, tmp_path, monkeypatch):
+    def test_agent_init_strips_colon_prefix_before_the_wire(
+        self, tmp_path, monkeypatch
+    ):
         """Production path: ``AIAgent(model="openai-codex:gpt-5.6-sol", provider="openai-codex")`` —
         the form that survives ``-m provider:model --provider X``, programmatic construction and
         gateway config — must leave ``agent.model`` without the prefix (agent/agent_init.py)."""
@@ -181,23 +206,40 @@ class TestColonProviderPrefixIsStrippedLikeSlash:
         from run_agent import AIAgent
 
         agent = AIAgent(
-            model="openai-codex:gpt-5.6-sol", provider="openai-codex", api_key="sk-dummy",
-            base_url="https://chatgpt.com/backend-api/codex", quiet_mode=True,
-            skip_context_files=True, skip_memory=True, platform="cli",
+            model="openai-codex:gpt-5.6-sol",
+            provider="openai-codex",
+            api_key="sk-dummy",
+            base_url="https://chatgpt.com/backend-api/codex",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="cli",
         )
         assert agent.model == "gpt-5.6-sol"
 
-    @pytest.mark.parametrize("model,provider,expected", [
-        ("openai:gpt-5.4", "openai-codex", "gpt-5.4"),
-        ("zai:glm-5.1", "zai", "glm-5.1"),
-        ("custom:qwen3:8b", "custom", "qwen3:8b"),
-    ])
+    @pytest.mark.parametrize(
+        "model,provider,expected",
+        [
+            ("openai:gpt-5.4", "openai-codex", "gpt-5.4"),
+            ("zai:glm-5.1", "zai", "glm-5.1"),
+            ("custom:qwen3:8b", "custom", "qwen3:8b"),
+        ],
+    )
     def test_matching_colon_prefix_stripped(self, model, provider, expected):
         assert normalize_model_for_provider(model, provider) == expected
 
-    @pytest.mark.parametrize("model,provider", [
-        ("qwen3:8b", "custom"),            # bare Ollama tag: first colon is not a provider prefix
-        ("anthropic:claude-x", "openai-codex"),  # non-matching prefix passes through untouched
-    ])
+    @pytest.mark.parametrize(
+        "model,provider",
+        [
+            (
+                "qwen3:8b",
+                "custom",
+            ),  # bare Ollama tag: first colon is not a provider prefix
+            (
+                "anthropic:claude-x",
+                "openai-codex",
+            ),  # non-matching prefix passes through untouched
+        ],
+    )
     def test_non_matching_colon_untouched(self, model, provider):
         assert normalize_model_for_provider(model, provider) == model

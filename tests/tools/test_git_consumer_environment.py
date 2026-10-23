@@ -1,4 +1,5 @@
 """Git consumers use the selected package environment without owning its layout."""
+
 import importlib
 import shutil
 import subprocess
@@ -20,7 +21,7 @@ def test_checkpoint_and_diff_follow_selected_git_environment(tmp_path, monkeypat
     import shlex
 
     wrapper.write_text(
-        '#!/bin/sh\n'
+        "#!/bin/sh\n"
         'test "$CLAWK_GIT_HELPER" = "selected" || exit 77\n'
         f'printf "%s\\n" selected >> {shlex.quote(str(observed))}\n'
         f'exec {shlex.quote(git)} "$@"\n',
@@ -35,9 +36,9 @@ def test_checkpoint_and_diff_follow_selected_git_environment(tmp_path, monkeypat
 
     def selected_git(name, *, base_env):
         assert name == "git"
-        return pm.Runner(name, {
-            **base_env, "PATH": str(selected), "CLAWK_GIT_HELPER": "selected"
-        })
+        return pm.Runner(
+            name, {**base_env, "PATH": str(selected), "CLAWK_GIT_HELPER": "selected"}
+        )
 
     monkeypatch.setattr(pm, "ensure", selected_git)
     monkeypatch.setenv("PATH", str(tmp_path / "missing-path"))
@@ -50,9 +51,13 @@ def test_checkpoint_and_diff_follow_selected_git_environment(tmp_path, monkeypat
     assert observed.read_text(encoding="utf-8").splitlines()
 
     # A changed PM selection must affect this same process, not a cached command.
-    monkeypatch.setattr(pm, "ensure", lambda name, *, base_env: pm.Runner(name, {
-        **base_env, "PATH": str(tmp_path / "missing-path")
-    }))
+    monkeypatch.setattr(
+        pm,
+        "ensure",
+        lambda name, *, base_env: pm.Runner(
+            name, {**base_env, "PATH": str(tmp_path / "missing-path")}
+        ),
+    )
     assert working_diff.collect_working_diff(str(repo))["success"] is False
     manager.new_turn()
     assert manager.ensure_checkpoint(str(repo)) is False
@@ -60,7 +65,9 @@ def test_checkpoint_and_diff_follow_selected_git_environment(tmp_path, monkeypat
 
 @pytest.mark.parametrize("consumer", ["checkpoint", "diff"])
 @pytest.mark.parametrize("failure", ["unsupported-target", "acquisition"])
-def test_git_consumers_fall_back_to_system_git(tmp_path, monkeypatch, consumer, failure):
+def test_git_consumers_fall_back_to_system_git(
+    tmp_path, monkeypatch, consumer, failure
+):
     git = shutil.which("git")
     assert git is not None
     repo = tmp_path / "repo"
@@ -78,7 +85,9 @@ def test_git_consumers_fall_back_to_system_git(tmp_path, monkeypatch, consumer, 
             raise RuntimeError("unsupported architecture")
         raise pm.InstallError("git", "managed Git unavailable")
 
-    boundary = "current_target" if failure == "unsupported-target" else "_installed_location"
+    boundary = (
+        "current_target" if failure == "unsupported-target" else "_installed_location"
+    )
     monkeypatch.setattr(resolver, boundary, unavailable)
     monkeypatch.setattr(checkpoint_manager, "CHECKPOINT_BASE", tmp_path / "checkpoints")
     if consumer == "checkpoint":

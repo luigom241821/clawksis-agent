@@ -1,4 +1,5 @@
 """Native PowerShell prerequisite selection without downloading build tools."""
+
 from pathlib import Path
 import json
 import os
@@ -23,9 +24,22 @@ def _powershell(script, *args, env=None):
         Path(env["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
     )
     return subprocess.run(
-        [shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(script), *map(str, args)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=180,
+        [
+            shell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+            *map(str, args),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=180,
         check=False,
     )
 
@@ -52,7 +66,8 @@ def test_entrypoint_exports_child_environment_and_only_github_deltas(tmp_path):
     entry.parent.mkdir(parents=True)
     shutil.copyfile(ENTRYPOINT, entry)
     # Replace only the installer boundary; the wrapper runs as a real child.
-    (entry.parent.parent / HELPER.name).write_text(r'''
+    (entry.parent.parent / HELPER.name).write_text(
+        r"""
 function Initialize-ClawksisArm64BuildTools {
     param([string]$StateRoot, [string]$OpenSSLRoot)
     if (-not $StateRoot -or -not $OpenSSLRoot) { throw 'missing build roots' }
@@ -68,17 +83,32 @@ function Initialize-ClawksisArm64BuildTools {
     $env:RUNNER_FIXTURE = 'must not be published'
     $env:NODE_OPTIONS = 'must not be published'
 }
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     env = dict(os.environ)
     # The runner job env may already carry the toolchain variables the fixture sets (a prior
     # workflow step exported them); the delta filter then rightly skips them. This test is about
     # the protocol, so start from a parent that does not have them.
-    for name in ("INCLUDE", "LIB", "WINDOWSSDKDIR", "OPENSSL_DIR", "OPENSSL_STATIC",
-                 "CC_AARCH64_PC_WINDOWS_MSVC", "GITHUB_FIXTURE", "RUNNER_FIXTURE", "NODE_OPTIONS"):
+    for name in (
+        "INCLUDE",
+        "LIB",
+        "WINDOWSSDKDIR",
+        "OPENSSL_DIR",
+        "OPENSSL_STATIC",
+        "CC_AARCH64_PC_WINDOWS_MSVC",
+        "GITHUB_FIXTURE",
+        "RUNNER_FIXTURE",
+        "NODE_OPTIONS",
+    ):
         for key in [k for k in env if k.upper() == name]:
             del env[key]
-    env.update(CARGO_HOME=str(tmp_path / "caller cargo"), RUSTUP_HOME=str(tmp_path / "caller rustup"),
-               RUSTUP_TOOLCHAIN="caller-toolchain", UNCHANGED_BUILD_SENTINEL="inherited")
+    env.update(
+        CARGO_HOME=str(tmp_path / "caller cargo"),
+        RUSTUP_HOME=str(tmp_path / "caller rustup"),
+        RUSTUP_TOOLCHAIN="caller-toolchain",
+        UNCHANGED_BUILD_SENTINEL="inherited",
+    )
     state = tmp_path / "state with spaces"
     openssl = tmp_path / "common openssl"
     result_file = tmp_path / "environment.json"
@@ -87,17 +117,39 @@ function Initialize-ClawksisArm64BuildTools {
     github_env.write_text("EARLIER_STEP<<end\nkeep\nend\n", encoding="utf-8")
     earlier_path = str(tmp_path / "earlier bin")
     github_path.write_text(earlier_path + "\n", encoding="utf-8")
-    result = _powershell(entry, "-StateRoot", state, "-OpenSSLRoot", openssl,
-                         "-EnvironmentFile", result_file, "-GithubEnv", github_env,
-                         "-GithubPath", github_path, env=env)
+    result = _powershell(
+        entry,
+        "-StateRoot",
+        state,
+        "-OpenSSLRoot",
+        openssl,
+        "-EnvironmentFile",
+        result_file,
+        "-GithubEnv",
+        github_env,
+        "-GithubPath",
+        github_path,
+        env=env,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
-    child = {key.upper(): value for key, value in json.loads(result_file.read_text(encoding="utf-8")).items()}
+    child = {
+        key.upper(): value
+        for key, value in json.loads(result_file.read_text(encoding="utf-8")).items()
+    }
     assert child["INCLUDE"] == "sdk include λ\nsecond line=with equals"
     assert child["RUSTUP_TOOLCHAIN"] == env["RUSTUP_TOOLCHAIN"]
     published = _github_environment(github_env)
     assert published["EARLIER_STEP"] == "keep"
-    for name in ("CARGO_HOME", "RUSTUP_HOME", "LIB", "INCLUDE", "WINDOWSSDKDIR",
-                 "OPENSSL_DIR", "OPENSSL_STATIC", "CC_AARCH64_PC_WINDOWS_MSVC"):
+    for name in (
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "LIB",
+        "INCLUDE",
+        "WINDOWSSDKDIR",
+        "OPENSSL_DIR",
+        "OPENSSL_STATIC",
+        "CC_AARCH64_PC_WINDOWS_MSVC",
+    ):
         assert published[name] == child[name]
     for name in ("CARGO_HOME", "RUSTUP_HOME", "UNCHANGED_BUILD_SENTINEL"):
         assert child[name] == env[name]
@@ -116,24 +168,43 @@ function Initialize-ClawksisArm64BuildTools {
 
     # Without GITHUB_PATH the complete PATH belongs in the env-file instead.
     env_only = tmp_path / "env-only"
-    result = _powershell(entry, "-StateRoot", state, "-OpenSSLRoot", openssl,
-                         "-GithubEnv", env_only, env=env)
+    result = _powershell(
+        entry,
+        "-StateRoot",
+        state,
+        "-OpenSSLRoot",
+        openssl,
+        "-GithubEnv",
+        env_only,
+        env=env,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     assert _github_environment(env_only)["PATH"] == child["PATH"]
 
     failed_file = tmp_path / "failed.json"
-    result = _powershell(entry, "-StateRoot", state, "-OpenSSLRoot", openssl,
-                         "-EnvironmentFile", failed_file, env={**env, "FAIL_BUILD_SETUP": "1"})
+    result = _powershell(
+        entry,
+        "-StateRoot",
+        state,
+        "-OpenSSLRoot",
+        openssl,
+        "-EnvironmentFile",
+        failed_file,
+        env={**env, "FAIL_BUILD_SETUP": "1"},
+    )
     assert result.returncode != 0
     assert "fixture installer failed" in result.stderr
     assert not failed_file.exists()
 
 
 @pytest.mark.parametrize("rust_homes", ["default", "explicit"])
-def test_initializer_preserves_rust_homes_and_shared_openssl_without_downloads(tmp_path, rust_homes):
+def test_initializer_preserves_rust_homes_and_shared_openssl_without_downloads(
+    tmp_path, rust_homes
+):
     """Real cmd.exe imports the SDK; the warm installer never acquires tools."""
     script = tmp_path / "initialize.ps1"
-    script.write_text(r'''
+    script.write_text(
+        r"""
 param([string]$Helper, [string]$Root, [string]$Homes)
 $ErrorActionPreference = 'Stop'
 . $Helper
@@ -241,7 +312,9 @@ try { Initialize-ClawksisArm64BuildTools -StateRoot $Root -OpenSSLRoot $openssl 
 }
 if (-not $failed) { throw 'Failed VS activation was accepted' }
 Write-Output 'PASS'
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     result = _powershell(script, HELPER, tmp_path, rust_homes)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS" in result.stdout
@@ -249,7 +322,8 @@ Write-Output 'PASS'
 
 def test_openssl_installs_once_and_rejects_damaged_shared_install(tmp_path):
     script = tmp_path / "check.ps1"
-    script.write_text(r'''
+    script.write_text(
+        r"""
 param([string]$Helper, [string]$Root)
 $ErrorActionPreference = 'Stop'
 . $Helper
@@ -279,7 +353,9 @@ try { Install-ClawksisArm64OpenSSL -Vcpkg 'fixture-vcpkg' -Root $Root } catch {
 }
 if (-not $rejected -or $calls -ne 2) { throw 'damaged install was accepted' }
 Write-Output 'PASS'
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     # Real PowerShell child: routed through _powershell like the rest of this
     # file. Its 180s budget exists because a real powershell.exe on a cold
     # CI runner can exceed 30s (330ff28d44); these inline copies kept the old
@@ -291,7 +367,8 @@ Write-Output 'PASS'
 
 def test_native_build_command_preserves_failures_and_spaces(tmp_path):
     script = tmp_path / "native.ps1"
-    script.write_text(r'''
+    script.write_text(
+        r"""
 param([string]$Helper, [string]$Root)
 $ErrorActionPreference = 'Stop'
 . $Helper
@@ -320,7 +397,9 @@ if ($resolved -ne (Join-Path $a 'git.exe')) { throw "resolved every git.exe: $re
 $executable = $resolved
 if ($executable -isnot [string] -or $executable.Contains(' ')) { throw "joined path leaked: $executable" }
 Write-Output 'PASS'
-''', encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
     # Same as above: the shared helper's cold-runner budget, not a stale 30s copy.
     result = _powershell(script, HELPER, tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr

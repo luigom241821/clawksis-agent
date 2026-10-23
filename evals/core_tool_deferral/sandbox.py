@@ -10,6 +10,7 @@ pins every terminal child's HOME to ``{CLAWK_HOME}/home``), points the worker's 
 there too so in-process ``~`` expansion follows, puts a file-backed ``crontab`` first on
 PATH, and drops the user-bus variables so ``systemctl --user`` cannot reach the real manager.
 """
+
 import os
 import stat
 

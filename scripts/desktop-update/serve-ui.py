@@ -32,7 +32,9 @@ def exit_with_owner():
     while True:
         time.sleep(2)
         try:
-            os.kill(owner_pid, 0)  # windows-footgun: ok — posix.sh-only helper (Windows has its own listener)
+            os.kill(
+                owner_pid, 0
+            )  # windows-footgun: ok — posix.sh-only helper (Windows has its own listener)
         except ProcessLookupError:
             os._exit(0)
         except OSError:

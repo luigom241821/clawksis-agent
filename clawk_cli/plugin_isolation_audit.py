@@ -30,21 +30,51 @@ VERDICT_IN_PROCESS = "in_process"
 VERDICT_PORTABLE = "portable"
 
 # Top-level packages that are Clawksis's own process state when imported by a plugin.
-CLAWK_PACKAGES: frozenset = frozenset({
-    "agent", "tools", "clawk_cli", "gateway", "cron", "providers", "plugins", "tui_gateway",
-    "acp_adapter", "run_agent", "cli", "model_tools", "toolsets", "clawk_state", "clawk_constants",
-    "clawk_logging", "clawk_time", "utils", "registration_lifecycle", "clawk_platform",
-})
+CLAWK_PACKAGES: frozenset = frozenset(
+    {
+        "agent",
+        "tools",
+        "clawk_cli",
+        "gateway",
+        "cron",
+        "providers",
+        "plugins",
+        "tui_gateway",
+        "acp_adapter",
+        "run_agent",
+        "cli",
+        "model_tools",
+        "toolsets",
+        "clawk_state",
+        "clawk_constants",
+        "clawk_logging",
+        "clawk_time",
+        "utils",
+        "registration_lifecycle",
+        "clawk_platform",
+    }
+)
 # ``<module>.<callable>`` that mutate a Clawksis-process registry when called from plugin code.
-_DIRECT_REGISTRY_CALLS: frozenset = frozenset({
-    ("tools.registry", "register"), ("tools.registry", "deregister"),
-    ("gateway.platform_registry", "register"), ("providers", "register_provider"),
-})
+_DIRECT_REGISTRY_CALLS: frozenset = frozenset(
+    {
+        ("tools.registry", "register"),
+        ("tools.registry", "deregister"),
+        ("gateway.platform_registry", "register"),
+        ("providers", "register_provider"),
+    }
+)
 _MANIFEST_KIND_REASONS: dict[str, str] = {
     "platform": "kind 'platform': gateway platform adapters run in the Clawksis process",
 }
-_STREAMING_MARKERS = ("StreamingResponse", "EventSourceResponse", ".websocket(", "WebSocket")
-_SKIP_DIRS = frozenset({"tests", "test", ".git", "__pycache__", "node_modules", ".venv", "venv", "docs"})
+_STREAMING_MARKERS = (
+    "StreamingResponse",
+    "EventSourceResponse",
+    ".websocket(",
+    "WebSocket",
+)
+_SKIP_DIRS = frozenset(
+    {"tests", "test", ".git", "__pycache__", "node_modules", ".venv", "venv", "docs"}
+)
 
 
 @dataclass
@@ -66,8 +96,13 @@ class IsolationReport:
         return "in-process only: " + "; ".join(self.reasons)
 
     def to_dict(self) -> dict[str, Any]:
-        return {"verdict": self.verdict, "host_ready": self.host_ready, "reasons": list(self.reasons),
-                "notes": list(self.notes), "ctx_methods": sorted(self.ctx_methods)}
+        return {
+            "verdict": self.verdict,
+            "host_ready": self.host_ready,
+            "reasons": list(self.reasons),
+            "notes": list(self.notes),
+            "ctx_methods": sorted(self.ctx_methods),
+        }
 
 
 def _python_files(plugin_dir: Path) -> list[Path]:
@@ -87,14 +122,23 @@ class _SourceVisitor(ast.NodeVisitor):
 
     def __init__(self, rel: str, *, model_provider: bool = False):
         from clawk_cli.plugin_isolation import (
-            HOST_DEGRADED_HOOKS, HOST_OBJECT_BASES, HOST_SKIPPED_CTX_METHODS, HOST_UNSUPPORTED_CTX_METHODS,
+            HOST_DEGRADED_HOOKS,
+            HOST_OBJECT_BASES,
+            HOST_SKIPPED_CTX_METHODS,
+            HOST_UNSUPPORTED_CTX_METHODS,
         )
-        self._unsupported, self._skipped = HOST_UNSUPPORTED_CTX_METHODS, HOST_SKIPPED_CTX_METHODS
+
+        self._unsupported, self._skipped = (
+            HOST_UNSUPPORTED_CTX_METHODS,
+            HOST_SKIPPED_CTX_METHODS,
+        )
         self._degraded, self._object_methods = HOST_DEGRADED_HOOKS, HOST_OBJECT_BASES
         self.rel = rel
         # A model-provider plugin's register_provider() call is its contract; the host captures it.
         self.model_provider = model_provider
-        self.aliases: dict[str, str] = {}  # local name -> clawk module path (or module.attr)
+        self.aliases: dict[
+            str, str
+        ] = {}  # local name -> clawk module path (or module.attr)
         self.reasons: list[str] = []
         self.notes: list[str] = []
         self.ctx_methods: set[str] = set()
@@ -106,7 +150,8 @@ class _SourceVisitor(ast.NodeVisitor):
         for alias in node.names:
             if self._clawk(alias.name):
                 self.aliases[alias.asname or alias.name.split(".")[0]] = (
-                    alias.name if alias.asname else alias.name.split(".")[0])
+                    alias.name if alias.asname else alias.name.split(".")[0]
+                )
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.level == 0 and node.module and self._clawk(node.module):
@@ -125,8 +170,10 @@ class _SourceVisitor(ast.NodeVisitor):
         if isinstance(target, ast.Attribute):
             owner = self._resolve(target.value)
             if owner:
-                self.reasons.append(f"{self.rel}:{line} patches {owner}.{target.attr} (a Clawksis module "
-                                    f"attribute; the host's copy is not the one Clawksis runs)")
+                self.reasons.append(
+                    f"{self.rel}:{line} patches {owner}.{target.attr} (a Clawksis module "
+                    f"attribute; the host's copy is not the one Clawksis runs)"
+                )
 
     def visit_Assign(self, node: ast.Assign) -> None:
         for target in node.targets:
@@ -142,19 +189,36 @@ class _SourceVisitor(ast.NodeVisitor):
         if isinstance(func, ast.Name) and func.id == "setattr" and node.args:
             owner = self._resolve(node.args[0])
             if owner:
-                self.reasons.append(f"{self.rel}:{node.lineno} setattr() on {owner} (patches a Clawksis module)")
+                self.reasons.append(
+                    f"{self.rel}:{node.lineno} setattr() on {owner} (patches a Clawksis module)"
+                )
         if isinstance(func, ast.Attribute):
             name = func.attr
             if name in self._unsupported:
-                self.reasons.append(f"{self.rel}:{node.lineno} ctx.{name}(): {self._unsupported[name]}")
+                self.reasons.append(
+                    f"{self.rel}:{node.lineno} ctx.{name}(): {self._unsupported[name]}"
+                )
             elif name in self._skipped:
-                self.notes.append(f"ctx.{name}() is skipped in the host ({self._skipped[name]})")
-            if name.startswith("register_") or name in {"subscribe", "dispatch_tool", "inject_message", "emit"}:
+                self.notes.append(
+                    f"ctx.{name}() is skipped in the host ({self._skipped[name]})"
+                )
+            if name.startswith("register_") or name in {
+                "subscribe",
+                "dispatch_tool",
+                "inject_message",
+                "emit",
+            }:
                 self.ctx_methods.add(name)
-            if name == "register_hook" and node.args and isinstance(node.args[0], ast.Constant) \
-                    and node.args[0].value in self._degraded:
+            if (
+                name == "register_hook"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value in self._degraded
+            ):
                 hook = node.args[0].value
-                self.notes.append(f"hook {hook} {self._degraded[hook]}; those fields are placeholders in the host")
+                self.notes.append(
+                    f"hook {hook} {self._degraded[hook]}; those fields are placeholders in the host"
+                )
             self._flag_registry_call(self._resolve(func), node.lineno)
         elif isinstance(func, ast.Name):
             self._flag_registry_call(self.aliases.get(func.id), node.lineno)
@@ -167,19 +231,29 @@ class _SourceVisitor(ast.NodeVisitor):
         if self.model_provider and (module, attr) == ("providers", "register_provider"):
             return
         if (module, attr) in _DIRECT_REGISTRY_CALLS or (
-                module.endswith("_registry") and attr in {"register", "register_provider"}):
-            self.reasons.append(f"{self.rel}:{line} calls {target}() directly instead of "
-                                f"through ctx (registers in the host, not in Clawksis)")
+            module.endswith("_registry") and attr in {"register", "register_provider"}
+        ):
+            self.reasons.append(
+                f"{self.rel}:{line} calls {target}() directly instead of "
+                f"through ctx (registers in the host, not in Clawksis)"
+            )
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        if self.model_provider and any(isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                                       and item.name == "create_client" for item in node.body):
-            self.reasons.append(f"{self.rel}:{node.lineno} {node.name}.create_client() returns a live SDK "
-                                f"client (model-provider profiles cross the host as data + methods)")
+        if self.model_provider and any(
+            isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and item.name == "create_client"
+            for item in node.body
+        ):
+            self.reasons.append(
+                f"{self.rel}:{node.lineno} {node.name}.create_client() returns a live SDK "
+                f"client (model-provider profiles cross the host as data + methods)"
+            )
         self.generic_visit(node)
 
 
-def audit_plugin_dir(plugin_dir: Path, manifest: Optional[Mapping[str, Any]] = None) -> IsolationReport:
+def audit_plugin_dir(
+    plugin_dir: Path, manifest: Optional[Mapping[str, Any]] = None
+) -> IsolationReport:
     """Classify one plugin directory without importing it."""
     plugin_dir = Path(plugin_dir)
     if manifest is None:
@@ -193,17 +267,27 @@ def audit_plugin_dir(plugin_dir: Path, manifest: Optional[Mapping[str, Any]] = N
     if kind in _MANIFEST_KIND_REASONS:
         reasons.append(_MANIFEST_KIND_REASONS[kind])
     dashboard = plugin_dir / "dashboard"
-    if (dashboard / "manifest.json").is_file() and '"api"' in (dashboard / "manifest.json").read_text(
-            encoding="utf-8", errors="replace"):
-        api_source = "".join(p.read_text(encoding="utf-8-sig", errors="replace") for p in dashboard.rglob("*.py"))
+    if (dashboard / "manifest.json").is_file() and '"api"' in (
+        dashboard / "manifest.json"
+    ).read_text(encoding="utf-8", errors="replace"):
+        api_source = "".join(
+            p.read_text(encoding="utf-8-sig", errors="replace")
+            for p in dashboard.rglob("*.py")
+        )
         if any(marker in api_source for marker in _STREAMING_MARKERS):
-            reasons.append("dashboard backend API streams (SSE/websocket); the host bridge buffers responses")
+            reasons.append(
+                "dashboard backend API streams (SSE/websocket); the host bridge buffers responses"
+            )
         else:
-            notes.append("dashboard backend API is served through the plugin host (buffered responses)")
+            notes.append(
+                "dashboard backend API is served through the plugin host (buffered responses)"
+            )
     for path in _python_files(plugin_dir):
         rel = str(path.relative_to(plugin_dir))
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8-sig", errors="replace"), filename=rel)
+            tree = ast.parse(
+                path.read_text(encoding="utf-8-sig", errors="replace"), filename=rel
+            )
         except SyntaxError as exc:
             notes.append(f"{rel}: not parseable ({exc.msg}); not audited")
             continue
@@ -226,6 +310,7 @@ def _read_manifest(plugin_dir: Path) -> dict[str, Any]:
         if path.is_file():
             try:
                 import clawk_yaml as yaml
+
                 data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
                 return data if isinstance(data, dict) else {}
             except Exception:

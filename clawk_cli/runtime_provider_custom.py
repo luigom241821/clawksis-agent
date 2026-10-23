@@ -12,7 +12,11 @@ import os
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from clawk_cli.providers import custom_provider_aliases, custom_provider_slug
-from agent.custom_entry_pool import custom_entry_for_endpoint, entry_declares_credential, entry_scoped_pool
+from agent.custom_entry_pool import (
+    custom_entry_for_endpoint,
+    entry_declares_credential,
+    entry_scoped_pool,
+)
 from agent.secret_scope import get_secret_str
 from utils import base_url_hostname
 
@@ -24,6 +28,7 @@ _LLAMACPP_ALIASES = ("llamacpp", "llama.cpp", "llama-cpp")
 def _rp():
     """Origin module, late-bound so test patches on ``clawk_cli.runtime_provider.*`` apply."""
     import clawk_cli.runtime_provider as origin
+
     return origin
 
 
@@ -53,9 +58,13 @@ def _key_env_secret(entry: dict[str, Any], label: str) -> str:
         return ""
     value = get_secret_str(key_env, "").strip()
     if not value:
-        logger.warning("%s: key_env %s is set but the variable is empty/unset — unless another credential "
-                       "is configured for it, the request carries the placeholder no-key-required and the "
-                       "endpoint will reject it", label, key_env)
+        logger.warning(
+            "%s: key_env %s is set but the variable is empty/unset — unless another credential "
+            "is configured for it, the request carries the placeholder no-key-required and the "
+            "endpoint will reject it",
+            label,
+            key_env,
+        )
     return value
 
 
@@ -80,10 +89,14 @@ def _filter_capabilities(value: Any) -> dict[str, bool]:
     """Return the string-keyed boolean capabilities accepted at runtime."""
     if not isinstance(value, dict):
         return {}
-    return {k: v for k, v in value.items() if isinstance(k, str) and isinstance(v, bool)}
+    return {
+        k: v for k, v in value.items() if isinstance(k, str) and isinstance(v, bool)
+    }
 
 
-def _lift_model_capabilities(entry: dict[str, Any], model: Optional[str], result: dict[str, Any]) -> None:
+def _lift_model_capabilities(
+    entry: dict[str, Any], model: Optional[str], result: dict[str, Any]
+) -> None:
     """Copy explicit boolean per-model capabilities into the runtime."""
     capabilities = _filter_capabilities(entry.get("capabilities"))
     models = entry.get("models")
@@ -94,7 +107,6 @@ def _lift_model_capabilities(entry: dict[str, Any], model: Optional[str], result
         result["capabilities"] = capabilities
 
 
-
 def _lift_extra_headers(entry: dict[str, Any], result: dict[str, Any]) -> None:
     """Copy a validated ``extra_headers`` dict. SECURITY: values carry credentials — never log."""
     extra_headers = _rp().normalize_extra_headers(entry.get("extra_headers"))
@@ -102,8 +114,14 @@ def _lift_extra_headers(entry: dict[str, Any], result: dict[str, Any]) -> None:
         result["extra_headers"] = extra_headers
 
 
-def _lift_common_custom_fields(entry: dict[str, Any], result: dict[str, Any], *, provider_key: str, key_env: str,
-                               api_mode: Optional[str]) -> None:
+def _lift_common_custom_fields(
+    entry: dict[str, Any],
+    result: dict[str, Any],
+    *,
+    provider_key: str,
+    key_env: str,
+    api_mode: Optional[str],
+) -> None:
     """Copy the optional fields shared by ``providers:`` and legacy ``custom_providers:`` entries."""
     if key_env:
         result["key_env"] = key_env
@@ -140,16 +158,22 @@ def _shadowed_by_builtin(requested_norm: str) -> bool:
 
 
 def _match_new_style_provider(
-    requested_norm: str, providers: dict[str, Any], *, resolve_credentials: bool = True,
+    requested_norm: str,
+    providers: dict[str, Any],
+    *,
+    resolve_credentials: bool = True,
 ) -> Optional[tuple[dict[str, Any], Any]]:
     """Scan ``providers:`` (new-style, keyed) for ``requested_norm``; ``(entry, config key)``."""
     from clawk_cli.config import is_provider_enabled
+
     rp = _rp()
     for ep_name, entry in providers.items():
         # ``providers.<name>.enabled: false`` entries stay in config but are invisible here.
         if not isinstance(entry, dict) or not is_provider_enabled(entry):
             continue
-        if requested_norm not in custom_provider_aliases(str(entry.get("name", "") or ep_name), str(ep_name)):
+        if requested_norm not in custom_provider_aliases(
+            str(entry.get("name", "") or ep_name), str(ep_name)
+        ):
             continue
         base_url = _entry_url(entry)
         if not base_url:
@@ -157,9 +181,17 @@ def _match_new_style_provider(
         # Resolve credentials only after identity and endpoint validation. Merely scanning an
         # unrelated entry must not read its profile-scoped secret.
         key_env = _clean(entry.get("key_env") or entry.get("api_key_env"))
-        api_key = get_secret_str(key_env, "").strip() if key_env and resolve_credentials else ""
-        result: dict[str, Any] = {"name": entry.get("name", ep_name), "base_url": base_url.strip(),
-                                  "api_key": api_key or _clean(entry.get("api_key", "")), "model": entry.get("default_model", "")}
+        api_key = (
+            get_secret_str(key_env, "").strip()
+            if key_env and resolve_credentials
+            else ""
+        )
+        result: dict[str, Any] = {
+            "name": entry.get("name", ep_name),
+            "base_url": base_url.strip(),
+            "api_key": api_key or _clean(entry.get("api_key", "")),
+            "model": entry.get("default_model", ""),
+        }
         # Command that PRINTS a short-lived credential; wrapped in a per-request token provider.
         key_cmd = _clean(entry.get("key_cmd", ""))
         if key_cmd:
@@ -167,50 +199,80 @@ def _match_new_style_provider(
         # v12 migration writes ``transport``; hand-edited configs may still use ``api_mode``.
         # Accept both or migrated configs silently downgrade to chat_completions.
         _lift_common_custom_fields(
-            entry, result, provider_key=_clean(ep_name), key_env=key_env,
-            api_mode=rp._parse_api_mode(entry.get("api_mode") or entry.get("transport")),
+            entry,
+            result,
+            provider_key=_clean(ep_name),
+            key_env=key_env,
+            api_mode=rp._parse_api_mode(
+                entry.get("api_mode") or entry.get("transport")
+            ),
         )
         return result, ep_name
     return None
 
 
-def _match_legacy_custom_provider(requested_norm: str, custom_providers) -> Optional[tuple[dict[str, Any], dict]]:
+def _match_legacy_custom_provider(
+    requested_norm: str, custom_providers
+) -> Optional[tuple[dict[str, Any], dict]]:
     """Scan the legacy ``custom_providers:`` list for ``requested_norm``; ``(result, matched entry)``."""
     for entry in custom_providers:
-        name, base_url = (entry.get("name"), entry.get("base_url")) if isinstance(entry, dict) else (None, None)
+        name, base_url = (
+            (entry.get("name"), entry.get("base_url"))
+            if isinstance(entry, dict)
+            else (None, None)
+        )
         if not isinstance(name, str) or not isinstance(base_url, str):
             continue
         provider_key = _clean(entry.get("provider_key", ""))
         if requested_norm not in custom_provider_aliases(name, provider_key):
             continue
-        result = {"name": name.strip(), "base_url": base_url.strip(), "api_key": _clean(entry.get("api_key", ""))}
+        result = {
+            "name": name.strip(),
+            "base_url": base_url.strip(),
+            "api_key": _clean(entry.get("api_key", "")),
+        }
         model_name = _clean(entry.get("model", ""))
         if model_name:
             result["model"] = model_name
-        _lift_common_custom_fields(entry, result, provider_key=provider_key, key_env=_clean(entry.get("key_env", "")),
-                                   api_mode=_rp()._parse_api_mode(entry.get("api_mode")))
+        _lift_common_custom_fields(
+            entry,
+            result,
+            provider_key=provider_key,
+            key_env=_clean(entry.get("key_env", "")),
+            api_mode=_rp()._parse_api_mode(entry.get("api_mode")),
+        )
         return result, entry
     return None
 
 
 def _get_named_custom_provider(
-    requested_provider: str, *, config: Optional[dict[str, Any]] = None,
+    requested_provider: str,
+    *,
+    config: Optional[dict[str, Any]] = None,
     resolve_credentials: bool = True,
 ) -> Optional[dict[str, Any]]:
     """Resolve a named endpoint. Creation-time config copying supplies its own config snapshot
     and skips credential reads; ordinary runtime callers keep their existing scoped resolution."""
-    found = _select_named_custom_provider(requested_provider, config=config, resolve_credentials=resolve_credentials)
+    found = _select_named_custom_provider(
+        requested_provider, config=config, resolve_credentials=resolve_credentials
+    )
     return found[0] if found else None
 
 
-def named_custom_provider_config_path(requested_provider: str, config: dict[str, Any]) -> Optional[tuple]:
+def named_custom_provider_config_path(
+    requested_provider: str, config: dict[str, Any]
+) -> Optional[tuple]:
     """The config path (``("providers", key)`` / ``("custom_providers", index)``) of the ONE entry
     the runtime routes *requested_provider* through, else None. Reads no credential."""
-    found = _select_named_custom_provider(requested_provider, config=config, resolve_credentials=False)
+    found = _select_named_custom_provider(
+        requested_provider, config=config, resolve_credentials=False
+    )
     return found[1] if found else None
 
 
-def custom_provider_config_path_for_url(base_url: Any, config: dict[str, Any]) -> Optional[tuple]:
+def custom_provider_config_path_for_url(
+    base_url: Any, config: dict[str, Any]
+) -> Optional[tuple]:
     """The config path of the entry a bare ``custom`` route at *base_url* takes its key from: the
     first compatible ``custom_providers`` / ``providers`` entry with that URL (trailing slash
     ignored), the same owner the credential pool seeds from. Reads no credential."""
@@ -218,50 +280,80 @@ def custom_provider_config_path_for_url(base_url: Any, config: dict[str, Any]) -
     if not url or isinstance(config.get("custom_providers"), dict):
         return None
     for entry in _rp().get_compatible_custom_providers(config) or ():
-        if isinstance(entry, dict) and str(entry.get("base_url") or "").strip().rstrip("/") == url:
+        if (
+            isinstance(entry, dict)
+            and str(entry.get("base_url") or "").strip().rstrip("/") == url
+        ):
             return _compatible_entry_path(config, entry)
     return None
 
 
 def _select_named_custom_provider(
-    requested_provider: str, *, config: Optional[dict[str, Any]], resolve_credentials: bool,
+    requested_provider: str,
+    *,
+    config: Optional[dict[str, Any]],
+    resolve_credentials: bool,
 ) -> Optional[tuple[dict[str, Any], Optional[tuple]]]:
     """``(resolved entry, its config path)`` for the first usable match: ``providers:`` first,
     then the legacy list view."""
     requested_norm = _normalize_custom_provider_name(requested_provider or "")
-    if not requested_norm or requested_norm == "auto" or _shadowed_by_builtin(requested_norm):
+    if (
+        not requested_norm
+        or requested_norm == "auto"
+        or _shadowed_by_builtin(requested_norm)
+    ):
         return None
     rp = _rp()
     if config is None:
         config = rp.load_config()
     providers = config.get("providers")
     found = (
-        _match_new_style_provider(requested_norm, providers, resolve_credentials=resolve_credentials)
-        if isinstance(providers, dict) else None
+        _match_new_style_provider(
+            requested_norm, providers, resolve_credentials=resolve_credentials
+        )
+        if isinstance(providers, dict)
+        else None
     )
     if found:
         return found[0], ("providers", found[1])
     if isinstance(config.get("custom_providers"), dict):
-        logger.warning("custom_providers in config.yaml is a dict, not a list. "
-                       "Each entry must be prefixed with '-' in YAML. "
-                       "Run 'clawk doctor' for details.")
+        logger.warning(
+            "custom_providers in config.yaml is a dict, not a list. "
+            "Each entry must be prefixed with '-' in YAML. "
+            "Run 'clawk doctor' for details."
+        )
         return None
     custom_providers = rp.get_compatible_custom_providers(config)
-    found = _match_legacy_custom_provider(requested_norm, custom_providers) if custom_providers else None
+    found = (
+        _match_legacy_custom_provider(requested_norm, custom_providers)
+        if custom_providers
+        else None
+    )
     return (found[0], _compatible_entry_path(config, found[1])) if found else None
 
 
-def _compatible_entry_path(config: dict[str, Any], entry: dict[str, Any]) -> Optional[tuple]:
+def _compatible_entry_path(
+    config: dict[str, Any], entry: dict[str, Any]
+) -> Optional[tuple]:
     """Where a ``get_compatible_custom_providers`` entry lives in *config*. The view keeps the first
     of identical legacy entries, so the first raw entry normalizing to it is its source."""
     from clawk_cli.config_providers import _normalize_custom_provider_entry
+
     providers = config.get("providers")
     key = entry.get("provider_key")
     if key and isinstance(providers, dict):
-        return next((("providers", k) for k in providers if str(k).strip() == key), None)
+        return next(
+            (("providers", k) for k in providers if str(k).strip() == key), None
+        )
     legacy = config.get("custom_providers")
-    return next((("custom_providers", i) for i, raw in enumerate(legacy if isinstance(legacy, list) else ())
-                 if _normalize_custom_provider_entry(raw) == entry), None)
+    return next(
+        (
+            ("custom_providers", i)
+            for i, raw in enumerate(legacy if isinstance(legacy, list) else ())
+            if _normalize_custom_provider_entry(raw) == entry
+        ),
+        None,
+    )
 
 
 def has_named_custom_provider(requested_provider: str) -> bool:
@@ -286,7 +378,12 @@ def codex_model_provider_id(requested_provider: str) -> Optional[str]:
         return None
     if not entry:
         return None
-    return custom_provider_slug(str(entry.get("name") or ""), str(entry.get("provider_key") or "")).split(":", 1)[1] or None
+    return (
+        custom_provider_slug(
+            str(entry.get("name") or ""), str(entry.get("provider_key") or "")
+        ).split(":", 1)[1]
+        or None
+    )
 
 
 # ── identity recovery (bare "custom" -> durable ``custom:<name>``) ─────────────────────────
@@ -323,7 +420,9 @@ def find_custom_provider_identity(base_url: str) -> Optional[str]:
     target = _normalize_base_url_for_match(base_url)
     if not target:
         return None
-    return _find_custom_identity(lambda entry: _normalize_base_url_for_match(_entry_url(entry)) == target)
+    return _find_custom_identity(
+        lambda entry: _normalize_base_url_for_match(_entry_url(entry)) == target
+    )
 
 
 def _model_id_matches(value: Any, target: str) -> bool:
@@ -339,21 +438,35 @@ def find_custom_provider_identity_by_model(model: str) -> Optional[str]:
         return None
 
     def _entry_serves_model(entry: dict[str, Any]) -> bool:
-        if any(_model_id_matches(entry.get(key), target) for key in ("model", "default_model")):
+        if any(
+            _model_id_matches(entry.get(key), target)
+            for key in ("model", "default_model")
+        ):
             return True
         models = entry.get("models")
         if isinstance(models, dict):
             return any(str(mid).strip().lower() == target for mid in models)
         if isinstance(models, list):
-            return any(_model_id_matches(item.get("id") or item.get("name") if isinstance(item, dict) else item, target)
-                       for item in models)
+            return any(
+                _model_id_matches(
+                    item.get("id") or item.get("name")
+                    if isinstance(item, dict)
+                    else item,
+                    target,
+                )
+                for item in models
+            )
         return False
 
     return _find_custom_identity(_entry_serves_model)
 
 
-def canonical_custom_identity(*, base_url: Optional[str] = None, config_provider: Optional[str] = None,
-                              model: Optional[str] = None) -> Optional[str]:
+def canonical_custom_identity(
+    *,
+    base_url: Optional[str] = None,
+    config_provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Optional[str]:
     """Recover the durable menu identity for a bare custom provider. Match a configured
     endpoint first, then the ownership-checked managed server, then a configured model or
     provider. Every session persistence/restore path shares this lookup."""
@@ -365,8 +478,11 @@ def canonical_custom_identity(*, base_url: Optional[str] = None, config_provider
         # The managed server has no custom-provider config entry. Recover its menu key
         # from the ownership-checked endpoint, never from a model name or a fixed port.
         from clawk_cli.local_runtime.endpoint import _state_endpoint
+
         endpoint = _state_endpoint()
-        if endpoint and _normalize_base_url_for_match(base_url) == _normalize_base_url_for_match(endpoint["base_url"]):
+        if endpoint and _normalize_base_url_for_match(
+            base_url
+        ) == _normalize_base_url_for_match(endpoint["base_url"]):
             return "llamacpp"
     identity = find_custom_provider_identity_by_model(model) if model else None
     if identity:
@@ -413,9 +529,17 @@ def is_routable_provider(provider: Optional[str]) -> bool:
         return False
     try:
         from clawk_cli.providers import resolve_provider_full
+
         rp = _rp()
         config = rp.load_config()
-        return resolve_provider_full(name, config.get("providers"), rp.get_compatible_custom_providers(config)) is not None
+        return (
+            resolve_provider_full(
+                name,
+                config.get("providers"),
+                rp.get_compatible_custom_providers(config),
+            )
+            is not None
+        )
     except Exception:
         return False
 
@@ -423,7 +547,9 @@ def is_routable_provider(provider: Optional[str]) -> bool:
 # ── runtime builders ───────────────────────────────────────────────────────────────────────
 
 
-def _owning_entry(rp, base_url: str, provider_name: Optional[str] = None) -> Optional[dict[str, Any]]:
+def _owning_entry(
+    rp, base_url: str, provider_name: Optional[str] = None
+) -> Optional[dict[str, Any]]:
     """The ``providers:`` entry that owns a custom endpoint, from the frozen route's config when the
     session froze one (a live edit then neither drops nor reassigns it)."""
     frozen = rp._FROZEN_RUNTIME_CONFIG.get()
@@ -449,14 +575,21 @@ def _entry_credential(rp, entry: dict[str, Any], name: str) -> Any:
     key_cmd = _clean(entry.get("key_cmd"))
     if key_cmd:
         from agent.command_token_source import build_command_token_provider
+
         if (token_provider := build_command_token_provider(key_cmd, name)) is not None:
             return token_provider
-    candidates = (_clean(entry.get("api_key")), _key_env_secret(entry, f"custom provider '{name}'"))
+    candidates = (
+        _clean(entry.get("api_key")),
+        _key_env_secret(entry, f"custom provider '{name}'"),
+    )
     return next((c for c in candidates if rp.has_usable_secret(c)), "")
 
 
 def _try_resolve_from_custom_pool(
-    base_url: str, provider_label: str, api_mode_override: Optional[str] = None, provider_name: Optional[str] = None,
+    base_url: str,
+    provider_label: str,
+    api_mode_override: Optional[str] = None,
+    provider_name: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Runtime dict from the first credential pool that owns this custom endpoint, else None. A pool
     the owning entry shares with a same-named built-in yields only the entry's rows (entry_scoped_pool)."""
@@ -465,21 +598,31 @@ def _try_resolve_from_custom_pool(
         # A frozen route's entry owns the pool, never the live one (a live URL edit would drop it).
         frozen = rp._FROZEN_RUNTIME_CONFIG.get()
         scope = {} if frozen is None else {"config": frozen}
-        raw_keys = list(rp.custom_provider_pool_key_candidates(base_url, provider_name, **scope))
+        raw_keys = list(
+            rp.custom_provider_pool_key_candidates(base_url, provider_name, **scope)
+        )
         owner = _owning_entry(rp, base_url, provider_name)
     except Exception:
         raw_keys, owner = [], None
     # Order-preserving dedupe of normalized keys.
-    candidates = list(dict.fromkeys(k for k in (str(key or "").strip().lower() for key in raw_keys) if k))
+    candidates = list(
+        dict.fromkeys(
+            k for k in (str(key or "").strip().lower() for key in raw_keys) if k
+        )
+    )
     for pool_key in candidates:
         try:
-            if (pool := entry_scoped_pool(rp.load_pool(pool_key), pool_key, owner)) is None:
+            if (
+                pool := entry_scoped_pool(rp.load_pool(pool_key), pool_key, owner)
+            ) is None:
                 continue
             entry = pool.select() if pool.has_credentials() else None
             pool_api_key = rp._pool_entry_api_key(entry) if entry is not None else ""
             if not pool_api_key:
                 continue
-            if not rp.has_usable_secret(pool_api_key) and rp._loopback_hostname(base_url_hostname(base_url)):
+            if not rp.has_usable_secret(pool_api_key) and rp._loopback_hostname(
+                base_url_hostname(base_url)
+            ):
                 # Legacy configs used short placeholder keys ('123', 'm') for local no-auth
                 # services; has_usable_secret's 4-char floor rejects them. Every other path
                 # substitutes "no-key-required" for a loopback endpoint — this was the one gap.
@@ -488,21 +631,33 @@ def _try_resolve_from_custom_pool(
                 # hundred lines below, and the "actual" provider's local-offline exemption further down) --
                 # this pool path was the one gap (issue #86864).
                 pool_api_key = "no-key-required"
-            return rp._runtime(provider_label, api_mode_override or rp._detect_api_mode_for_url(base_url) or "chat_completions",
-                               base_url, pool_api_key, source=f"pool:{pool_key}", credential_pool=pool)
+            return rp._runtime(
+                provider_label,
+                api_mode_override
+                or rp._detect_api_mode_for_url(base_url)
+                or "chat_completions",
+                base_url,
+                pool_api_key,
+                source=f"pool:{pool_key}",
+                credential_pool=pool,
+            )
         except Exception:
             continue
     return None
 
 
-def _custom_provider_request_overrides(custom_provider: dict[str, Any]) -> dict[str, Any]:
+def _custom_provider_request_overrides(
+    custom_provider: dict[str, Any],
+) -> dict[str, Any]:
     extra_body = custom_provider.get("extra_body")
     if not isinstance(extra_body, dict) or not extra_body:
         return {}
     return {"extra_body": dict(extra_body)}
 
 
-def _apply_custom_provider_extras(custom_provider: dict[str, Any], target_model: Optional[str], result: dict[str, Any]) -> None:
+def _apply_custom_provider_extras(
+    custom_provider: dict[str, Any], target_model: Optional[str], result: dict[str, Any]
+) -> None:
     """Copy model / capabilities / extra_headers / request_overrides onto a
     resolved custom runtime. An explicit ``target_model`` wins over the provider's configured
     default (auxiliary slots / background-review resolve a concrete model and must not fall back to
@@ -516,10 +671,15 @@ def _apply_custom_provider_extras(custom_provider: dict[str, Any], target_model:
         result["extra_headers"] = dict(custom_provider["extra_headers"])
     request_overrides = _custom_provider_request_overrides(custom_provider)
     if request_overrides:
-        result["request_overrides"] = {**(result.get("request_overrides") or {}), **request_overrides}
+        result["request_overrides"] = {
+            **(result.get("request_overrides") or {}),
+            **request_overrides,
+        }
 
 
-def _resolve_llamacpp_runtime(requested_provider: str, explicit_api_key: Optional[str]) -> dict[str, Any]:
+def _resolve_llamacpp_runtime(
+    requested_provider: str, explicit_api_key: Optional[str]
+) -> dict[str, Any]:
     """Managed llama.cpp runtime: the supervised (or detected external) server, or a typed error.
     No server => say so and stop; falling through to the generic custom path would surface "local
     server is off" as OpenRouter's baffling "401 Invalid API key". The switch's state picks the
@@ -527,30 +687,49 @@ def _resolve_llamacpp_runtime(requested_provider: str, explicit_api_key: Optiona
     rp = _rp()
     try:
         from clawk_cli.local_runtime.endpoint import resolve_llamacpp_endpoint
+
         endpoint = resolve_llamacpp_endpoint(config=rp.load_config())
     except Exception:
         endpoint = None
     if endpoint:
-        return rp._runtime("custom", "chat_completions", endpoint["base_url"],
-                           (explicit_api_key or "").strip() or endpoint["api_key"] or "no-key-required", source="local-runtime",
-                           requested_provider=requested_provider)
+        return rp._runtime(
+            "custom",
+            "chat_completions",
+            endpoint["base_url"],
+            (explicit_api_key or "").strip()
+            or endpoint["api_key"]
+            or "no-key-required",
+            source="local-runtime",
+            requested_provider=requested_provider,
+        )
     try:
         enabled = bool((rp.load_config().get("local_runtime") or {}).get("enabled"))
     except Exception:
         enabled = False
     if enabled:
-        raise ValueError("The local model server isn't running. It may still be "
-                         "starting — try again in a moment, or check Settings → "
-                         "Providers → Local models.")
-    raise ValueError("The local model server is turned off. Turn it back on in "
-                     "Settings → Providers → Local models, or switch to another "
-                     "model.")
+        raise ValueError(
+            "The local model server isn't running. It may still be "
+            "starting — try again in a moment, or check Settings → "
+            "Providers → Local models."
+        )
+    raise ValueError(
+        "The local model server is turned off. Turn it back on in "
+        "Settings → Providers → Local models, or switch to another "
+        "model."
+    )
 
 
-def _custom_runtime(rp, base_url: str, api_key: Any, api_mode: Optional[str], **extra: Any) -> dict[str, Any]:
+def _custom_runtime(
+    rp, base_url: str, api_key: Any, api_mode: Optional[str], **extra: Any
+) -> dict[str, Any]:
     """``custom`` runtime dict with URL-detected api_mode fallback and the no-auth placeholder."""
-    return rp._runtime("custom", api_mode or rp._detect_api_mode_for_url(base_url) or "chat_completions", base_url,
-                       api_key or "no-key-required", **extra)
+    return rp._runtime(
+        "custom",
+        api_mode or rp._detect_api_mode_for_url(base_url) or "chat_completions",
+        base_url,
+        api_key or "no-key-required",
+        **extra,
+    )
 
 
 # Aliases for direct REST APIs not modeled in PROVIDER_REGISTRY, so ``provider: openai`` (aux slots,
@@ -559,7 +738,9 @@ def _custom_runtime(rp, base_url: str, api_key: Any, api_mode: Optional[str], **
 _DIRECT_API_BASE_URLS: dict[str, str] = {"openai": "https://api.openai.com/v1"}
 
 
-def expand_direct_api_alias(provider: Optional[str], existing_base: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+def expand_direct_api_alias(
+    provider: Optional[str], existing_base: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
     """``provider: openai`` → custom + the user's OpenAI endpoint, api.openai.com/v1 only as the last resort.
 
     The ONE normalization both aux paths (``agent.auxiliary_client`` and ``resolve_runtime_provider``)
@@ -573,11 +754,14 @@ def expand_direct_api_alias(provider: Optional[str], existing_base: Optional[str
     target_base = _DIRECT_API_BASE_URLS.get(provider.strip().lower())
     if target_base is None or _rp()._get_named_custom_provider(provider) is not None:
         return provider, existing_base
-    return "custom", (existing_base or "").strip() or get_secret_str("OPENAI_BASE_URL", "").strip().rstrip("/") or target_base
+    return "custom", (existing_base or "").strip() or get_secret_str(
+        "OPENAI_BASE_URL", ""
+    ).strip().rstrip("/") or target_base
 
 
-def _resolve_direct_alias_runtime(requested_provider: str, explicit_api_key: Optional[str],
-                                  explicit_base_url: str) -> dict[str, Any]:
+def _resolve_direct_alias_runtime(
+    requested_provider: str, explicit_api_key: Optional[str], explicit_base_url: str
+) -> dict[str, Any]:
     """Bare ``custom`` + explicit base_url (e.g. a ``model_aliases:`` direct alias)."""
     rp = _rp()
     base_url = explicit_base_url.strip().rstrip("/")
@@ -585,7 +769,11 @@ def _resolve_direct_alias_runtime(requested_provider: str, explicit_api_key: Opt
     # custom_providers entry gets its api_key from the pool instead of env fallbacks. An explicit
     # launch key still wins over the pool (R2-M1).
     explicit_key = (explicit_api_key or "").strip()
-    pool_result = None if rp.has_usable_secret(explicit_key) else rp._try_resolve_from_custom_pool(base_url, "custom", None)
+    pool_result = (
+        None
+        if rp.has_usable_secret(explicit_key)
+        else rp._try_resolve_from_custom_pool(base_url, "custom", None)
+    )
     if pool_result:
         pool_result["source"] = "direct-alias"
         return pool_result
@@ -595,19 +783,32 @@ def _resolve_direct_alias_runtime(requested_provider: str, explicit_api_key: Opt
     # A ``providers:`` entry that owns the URL and declares a credential supplies it instead of
     # the host-gated env keys (on the entry's built-in's host those are another account's).
     declared, entry_key = _owning_entry_credential(rp, base_url)
-    candidates = [(explicit_api_key or "").strip(), _model_cfg_key_env_for(rp._get_model_config(), base_url),
-                  *([] if declared else rp._host_gated_env_key_candidates(base_url, ollama=True))]
+    candidates = [
+        (explicit_api_key or "").strip(),
+        _model_cfg_key_env_for(rp._get_model_config(), base_url),
+        *([] if declared else rp._host_gated_env_key_candidates(base_url, ollama=True)),
+    ]
     api_key = next((c for c in candidates if rp.has_usable_secret(c)), "") or entry_key
-    return _custom_runtime(rp, base_url, api_key, None, source="direct-alias", requested_provider=requested_provider)
+    return _custom_runtime(
+        rp,
+        base_url,
+        api_key,
+        None,
+        source="direct-alias",
+        requested_provider=requested_provider,
+    )
 
 
-def _opencode_family_for_custom(requested_provider: str, base_url: str) -> Optional[str]:
+def _opencode_family_for_custom(
+    requested_provider: str, base_url: str
+) -> Optional[str]:
     """OpenCode family by provider name, else by opencode.ai host (``/zen/go`` => opencode-go)."""
     # Custom providers in the OpenCode family (name extends opencode-go/zen, or base_url hosted on
     # opencode.ai) serve models behind different API surfaces per model — a static api_mode 503s for
     # /v1/responses-only models like grok-4.5 (#85589). Re-derive api_mode from the effective model and
     # normalize the /v1 suffix, exactly like the built-in opencode-zen/go paths do.
     from clawk_cli.models import opencode_provider_family
+
     family = opencode_provider_family(requested_provider)
     if family is not None:
         return family
@@ -619,9 +820,14 @@ def _opencode_family_for_custom(requested_provider: str, base_url: str) -> Optio
     return None
 
 
-def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: Optional[str] = None,
-                                  explicit_base_url: Optional[str] = None,
-                                  target_model: Optional[str] = None, config=None) -> Optional[dict[str, Any]]:
+def _resolve_named_custom_runtime(
+    *,
+    requested_provider: str,
+    explicit_api_key: Optional[str] = None,
+    explicit_base_url: Optional[str] = None,
+    target_model: Optional[str] = None,
+    config=None,
+) -> Optional[dict[str, Any]]:
     """Runtime for a llamacpp alias, a bare-custom direct alias, or a configured custom entry.
     Aliases resolving to "custom" (ollama, vllm, llamacpp, …) are treated like bare ``custom``. A
     llamacpp alias with no explicit base_url resolves to the managed server first; an explicit
@@ -638,16 +844,27 @@ def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: 
         custom_provider = rp._get_named_custom_provider(requested_provider)
         if not custom_provider:
             return _resolve_llamacpp_runtime(requested_provider, explicit_api_key)
-    if requested_norm and requested_norm != "custom" and rp._resolves_to_custom(requested_norm):
+    if (
+        requested_norm
+        and requested_norm != "custom"
+        and rp._resolves_to_custom(requested_norm)
+    ):
         requested_norm = "custom"
     if requested_norm == "custom" and explicit_base_url:
-        return _resolve_direct_alias_runtime(requested_provider, explicit_api_key, explicit_base_url)
+        return _resolve_direct_alias_runtime(
+            requested_provider, explicit_api_key, explicit_base_url
+        )
     if custom_provider is None:
-        custom_provider = (rp._get_named_custom_provider(requested_provider) if config is None
-                           else _get_named_custom_provider(requested_provider, config=config))
+        custom_provider = (
+            rp._get_named_custom_provider(requested_provider)
+            if config is None
+            else _get_named_custom_provider(requested_provider, config=config)
+        )
     if not custom_provider:
         return None
-    base_url = ((explicit_base_url or "").strip() or custom_provider.get("base_url", "")).rstrip("/")
+    base_url = (
+        (explicit_base_url or "").strip() or custom_provider.get("base_url", "")
+    ).rstrip("/")
     if not base_url:
         return None
     explicit_key = (explicit_api_key or "").strip()
@@ -656,9 +873,16 @@ def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: 
     # ``no-key-required`` placeholder to a host that wants one (C11 pool rows). An explicit launch
     # key is the operator's credential for this route and wins over the pool (R2-M1). An entry
     # that names its own credential never borrows a same-named built-in's env-seeded pool rows.
-    pool_result = None if rp.has_usable_secret(explicit_key) else rp._try_resolve_from_custom_pool(
-        base_url, "custom", custom_provider.get("api_mode"),
-        provider_name=custom_provider.get("provider_key") or custom_provider.get("name"),
+    pool_result = (
+        None
+        if rp.has_usable_secret(explicit_key)
+        else rp._try_resolve_from_custom_pool(
+            base_url,
+            "custom",
+            custom_provider.get("api_mode"),
+            provider_name=custom_provider.get("provider_key")
+            or custom_provider.get("name"),
+        )
     )
     if pool_result:
         # The pool doesn't know the custom_providers fields — propagate them here too.
@@ -668,22 +892,57 @@ def _resolve_named_custom_runtime(*, requested_provider: str, explicit_api_key: 
     # minted per request (short-lived bearers would go stale mid-session); both wire clients accept a
     # callable api_key (the Entra ID contract). A declared credential that resolves to nothing gets no
     # implicit host-gated env key: on the entry's built-in's host that is another account's key.
-    api_key: Any = explicit_key if rp.has_usable_secret(explicit_key) else (
-        _entry_credential(rp, custom_provider, str(custom_provider.get("name", requested_provider) or "custom"))
-        or next((c for c in ([] if entry_declares_credential(custom_provider)
-                             else rp._host_gated_env_key_candidates(base_url, ollama=False)) if rp.has_usable_secret(c)), ""))
-    result = _custom_runtime(rp, base_url, api_key, custom_provider.get("api_mode"),
-                             source=f"custom_provider:{custom_provider.get('name', requested_provider)}",
-                             requested_provider=requested_provider)
+    api_key: Any = (
+        explicit_key
+        if rp.has_usable_secret(explicit_key)
+        else (
+            _entry_credential(
+                rp,
+                custom_provider,
+                str(custom_provider.get("name", requested_provider) or "custom"),
+            )
+            or next(
+                (
+                    c
+                    for c in (
+                        []
+                        if entry_declares_credential(custom_provider)
+                        else rp._host_gated_env_key_candidates(base_url, ollama=False)
+                    )
+                    if rp.has_usable_secret(c)
+                ),
+                "",
+            )
+        )
+    )
+    result = _custom_runtime(
+        rp,
+        base_url,
+        api_key,
+        custom_provider.get("api_mode"),
+        source=f"custom_provider:{custom_provider.get('name', requested_provider)}",
+        requested_provider=requested_provider,
+    )
     _apply_custom_provider_extras(custom_provider, target_model, result)
     # OpenCode-family custom providers (opencode-go/zen names, or opencode.ai hosts) serve models
     # on different API surfaces — a static api_mode 503s for /v1/responses-only models. Re-derive
     # api_mode from the model and normalize /v1 like the built-in paths.
     family = _opencode_family_for_custom(requested_provider, base_url)
     if family is not None and not custom_provider.get("api_mode"):
-        from clawk_cli.models import normalize_opencode_base_url, opencode_model_api_mode
-        effective_model = str(target_model or custom_provider.get("model") or rp._get_model_config().get("default") or "").strip()
+        from clawk_cli.models import (
+            normalize_opencode_base_url,
+            opencode_model_api_mode,
+        )
+
+        effective_model = str(
+            target_model
+            or custom_provider.get("model")
+            or rp._get_model_config().get("default")
+            or ""
+        ).strip()
         if effective_model:
             result["api_mode"] = opencode_model_api_mode(family, effective_model)
-        result["base_url"] = normalize_opencode_base_url(family, result["api_mode"], result["base_url"])
+        result["base_url"] = normalize_opencode_base_url(
+            family, result["api_mode"], result["base_url"]
+        )
     return result

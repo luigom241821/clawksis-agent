@@ -46,10 +46,18 @@ _GATEWAY_POLICY_KEYS = ("GATEWAY_ALLOW_ALL_USERS", "GATEWAY_ALLOWED_USERS")
 # Prefixes a messaging adapter shares with a NON-channel capability. Their credentials belong to the
 # channel only while the source runs that adapter; the adapter's policy keys are channel-only always.
 _SHARED_WITH_TOOLS: dict[str, tuple[str, ...]] = {
-    "sms": ("TWILIO_",),           # telephony skill reads TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN
-    "email": ("EMAIL_",),          # mail-sending skills read EMAIL_ADDRESS / EMAIL_PASSWORD / EMAIL_SMTP_*
+    "sms": ("TWILIO_",),  # telephony skill reads TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN
+    "email": (
+        "EMAIL_",
+    ),  # mail-sending skills read EMAIL_ADDRESS / EMAIL_PASSWORD / EMAIL_SMTP_*
 }
-_POLICY_MARKERS = ("_ALLOWED_USERS", "_ALLOW_ALL_USERS", "_ALLOWED_CHATS", "_HOME_CHANNEL", "_HOME_ADDRESS")
+_POLICY_MARKERS = (
+    "_ALLOWED_USERS",
+    "_ALLOW_ALL_USERS",
+    "_ALLOWED_CHATS",
+    "_HOME_CHANNEL",
+    "_HOME_ADDRESS",
+)
 
 # Multiplexer-owner settings: a clone of the default that inherits them and is then started
 # standalone tries to be a second multiplexer for every profile on the host.
@@ -66,6 +74,7 @@ def _plugin_scope(source_dir: Optional[Path]):
         yield
         return
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
+
     token = set_clawk_home_override(str(source_dir))
     try:
         yield
@@ -82,8 +91,10 @@ def platform_env_prefixes(platform_id: str) -> tuple[str, ...]:
 def _registry_entries() -> list:
     with contextlib.suppress(Exception):
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent per profile scope
         from gateway.platform_registry import platform_registry
+
         return list(platform_registry.all_entries())
     return []
 
@@ -92,6 +103,7 @@ def _left_core_platforms() -> list:
     """Rows of platforms that left core for a catalog plugin (``clawk_cli.left_core_migration``).
     Their channel ownership comes from the row, so it holds while the plugin is absent."""
     from clawk_cli.left_core_migration import LEFT_CORE
+
     return [feature for feature in LEFT_CORE if feature.platform]
 
 
@@ -99,7 +111,13 @@ def _shared_with_tools(source_dir: Optional[Path] = None) -> dict[str, tuple[str
     """``_SHARED_WITH_TOOLS``, left-core platforms' prefixes, and every plugin platform's
     ``shared_env_prefixes`` in ``source_dir``'s scope."""
     shared = dict(_SHARED_WITH_TOOLS)
-    shared.update({f.platform: f.channel_env_prefixes for f in _left_core_platforms() if f.channel_env_prefixes})
+    shared.update(
+        {
+            f.platform: f.channel_env_prefixes
+            for f in _left_core_platforms()
+            if f.channel_env_prefixes
+        }
+    )
     with _plugin_scope(source_dir):
         for entry in _registry_entries():
             prefixes = tuple(getattr(entry, "shared_env_prefixes", ()) or ())
@@ -112,6 +130,7 @@ def platform_ids(source_dir: Optional[Path] = None) -> list[str]:
     """Every messaging platform id: built-in ``Platform`` members, platforms that left core, plus the
     plugin adapters registered in ``source_dir``'s scope (ambient scope when ``None``)."""
     from gateway.config import Platform
+
     ids = {m.value for m in Platform.__members__.values() if m.value != "local"}
     ids.update(feature.platform for feature in _left_core_platforms())
     with _plugin_scope(source_dir):
@@ -149,11 +168,16 @@ def config_env_table_keys(entries: Iterable = ()) -> dict[str, str]:
     only), so it stays cheap at import time; raises if the core table cannot be read."""
     from gateway import config_env
     from gateway.platform_env import EnvCred
+
     keys: dict[str, str] = {}
     for platform, names in config_env._ENV_ENABLE_CREDENTIALS.items():
         keys.update(dict.fromkeys(names, platform.value))
     for entry in entries:
-        keys.update(dict.fromkeys(getattr(entry, "env_enable_credentials", ()) or (), entry.name))
+        keys.update(
+            dict.fromkeys(
+                getattr(entry, "env_enable_credentials", ()) or (), entry.name
+            )
+        )
         for step in getattr(entry, "env_overrides", ()) or ():
             if isinstance(step, EnvCred):
                 keys.update(dict.fromkeys(_cred_row_envs(step), step.platform.value))
@@ -162,7 +186,9 @@ def config_env_table_keys(entries: Iterable = ()) -> dict[str, str]:
 
 def _env_override_steps(entries: Iterable) -> list:
     """Every step a registry entry declares in ``env_overrides``."""
-    return [step for entry in entries for step in getattr(entry, "env_overrides", ()) or ()]
+    return [
+        step for entry in entries for step in getattr(entry, "env_overrides", ()) or ()
+    ]
 
 
 def declared_channel_env_keys(source_dir: Optional[Path] = None) -> dict[str, str]:
@@ -175,7 +201,12 @@ def declared_channel_env_keys(source_dir: Optional[Path] = None) -> dict[str, st
     with _plugin_scope(source_dir):
         entries = _registry_entries()
         for entry in entries:
-            for name in (*entry.required_env, entry.allowed_users_env, entry.allow_all_env, entry.cron_deliver_env_var):
+            for name in (
+                *entry.required_env,
+                entry.allowed_users_env,
+                entry.allow_all_env,
+                entry.cron_deliver_env_var,
+            ):
                 if name:
                     keys[name] = entry.name
     with contextlib.suppress(Exception):
@@ -195,9 +226,18 @@ def _policy_env_keys(source_dir: Optional[Path] = None) -> set[str]:
     with _plugin_scope(source_dir):
         entries = _registry_entries()
         for entry in entries:
-            names.update(n for n in (entry.allowed_users_env, entry.allow_all_env, entry.cron_deliver_env_var) if n)
+            names.update(
+                n
+                for n in (
+                    entry.allowed_users_env,
+                    entry.allow_all_env,
+                    entry.cron_deliver_env_var,
+                )
+                if n
+            )
     with contextlib.suppress(Exception):
         from gateway.platform_env import EnvCred
+
         for step in _env_override_steps(entries):
             if isinstance(step, EnvCred) and step.home:
                 names.update({step.home, f"{step.home}_NAME", f"{step.home}_THREAD_ID"})
@@ -208,8 +248,16 @@ def _policy_env_keys(source_dir: Optional[Path] = None) -> set[str]:
 
 
 _CREDENTIAL_SUFFIXES = (
-    "_TOKEN", "_SECRET", "_KEY", "_PASSWORD", "_APP_ID", "_CLIENT_ID", "_BOT_ID", "_ACCOUNT_SID",
-    "_SERVICE_ACCOUNT_JSON", "_PROJECT_ID",
+    "_TOKEN",
+    "_SECRET",
+    "_KEY",
+    "_PASSWORD",
+    "_APP_ID",
+    "_CLIENT_ID",
+    "_BOT_ID",
+    "_ACCOUNT_SID",
+    "_SERVICE_ACCOUNT_JSON",
+    "_PROJECT_ID",
 )
 
 
@@ -227,6 +275,7 @@ def credential_env_keys() -> dict[str, str]:
     with contextlib.suppress(Exception):
         from gateway import config_env
         from gateway.platform_env import EnvCred
+
         for platform, names in config_env._ENV_ENABLE_CREDENTIALS.items():
             keys.update(dict.fromkeys(names, platform.value))
         for entry in entries:
@@ -242,12 +291,15 @@ def credential_env_keys() -> dict[str, str]:
     return {key: pid for key, pid in keys.items() if key.endswith(_CREDENTIAL_SUFFIXES)}
 
 
-def _env_values(env_path: Path, wanted: Optional[dict[str, str]] = None) -> dict[str, str]:
+def _env_values(
+    env_path: Path, wanted: Optional[dict[str, str]] = None
+) -> dict[str, str]:
     """Non-blank assignments in ``env_path`` (restricted to ``wanted`` keys when given)."""
     values: dict[str, str] = {}
     if not env_path.is_file():
         return values
     from dotenv import dotenv_values
+
     with contextlib.suppress(Exception):
         for key, value in (dotenv_values(env_path, encoding="utf-8-sig") or {}).items():
             if (wanted is None or key in wanted) and value and value.strip():
@@ -265,7 +317,9 @@ def _explicit_enabled(raw: dict, pid: str) -> Optional[bool]:
     return None
 
 
-def _shared_adapters_active(source_dir: Optional[Path], shared: dict[str, tuple[str, ...]]) -> set[str]:
+def _shared_adapters_active(
+    source_dir: Optional[Path], shared: dict[str, tuple[str, ...]]
+) -> set[str]:
     """Shared-prefix platforms the SOURCE runs as a channel: explicitly enabled in its config.yaml, or
     auto-enabled by a complete credential set in its ``.env`` and not explicitly disabled — the same
     gate ``gateway.platform_env.EnvCred`` applies at gateway start."""
@@ -274,12 +328,14 @@ def _shared_adapters_active(source_dir: Optional[Path], shared: dict[str, tuple[
     raw: dict = {}
     if (source_dir / "config.yaml").is_file():
         from clawk_cli.config import read_user_config_raw
+
         with contextlib.suppress(Exception):
             raw = read_user_config_raw(source_dir / "config.yaml") or {}
     env = _env_values(source_dir / ".env")
     creds_by_platform: dict[str, set[str]] = {}
     with contextlib.suppress(Exception):
         from gateway import config_env
+
         for platform, names in config_env._ENV_ENABLE_CREDENTIALS.items():
             creds_by_platform[platform.value] = set(names)
     with _plugin_scope(source_dir):
@@ -317,17 +373,31 @@ class ChannelKeyIndex:
         self.shared = _shared_with_tools(source_dir)
         self.shared_active = _shared_adapters_active(source_dir, self.shared)
         self._prefixes: list[tuple[str, str]] = sorted(
-            ((prefix, pid) for pid in self.platforms
-             for prefix in dict.fromkeys((*platform_env_prefixes(pid), *self.shared.get(pid, ())))),
-            key=lambda item: -len(item[0]),  # longest prefix wins: WECOM_CALLBACK_ before WECOM_
+            (
+                (prefix, pid)
+                for pid in self.platforms
+                for prefix in dict.fromkeys(
+                    (*platform_env_prefixes(pid), *self.shared.get(pid, ()))
+                )
+            ),
+            key=lambda item: (
+                -len(item[0])
+            ),  # longest prefix wins: WECOM_CALLBACK_ before WECOM_
         )
 
     def platform_for(self, key: str) -> Optional[str]:
-        pid = self.declared.get(key) or next((pid for prefix, pid in self._prefixes if key.startswith(prefix)), None)
+        pid = self.declared.get(key) or next(
+            (pid for prefix, pid in self._prefixes if key.startswith(prefix)), None
+        )
         if pid is None:
             return None
         shared = self.shared.get(pid)
-        if shared and key.startswith(shared) and pid not in self.shared_active and not self._is_policy(key):
+        if (
+            shared
+            and key.startswith(shared)
+            and pid not in self.shared_active
+            and not self._is_policy(key)
+        ):
             return None  # a tool credential the source never used as a bot: keep it
         return pid
 
@@ -340,7 +410,9 @@ def _env_key_of_line(line: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
-def strip_channel_env_file(env_path: Path, index: Optional[ChannelKeyIndex] = None) -> dict[str, list[str]]:
+def strip_channel_env_file(
+    env_path: Path, index: Optional[ChannelKeyIndex] = None
+) -> dict[str, list[str]]:
     """Drop every messaging-channel assignment from ``env_path`` in place; comments, blank lines and
     every other key survive verbatim. Returns ``{platform: [keys removed]}``."""
     if not env_path.is_file():
@@ -357,7 +429,10 @@ def strip_channel_env_file(env_path: Path, index: Optional[ChannelKeyIndex] = No
         else:
             removed.setdefault(platform, []).append(key)
     if removed:
-        env_path.write_text("\n".join(kept) + ("\n" if text.endswith("\n") or kept else ""), encoding="utf-8")
+        env_path.write_text(
+            "\n".join(kept) + ("\n" if text.endswith("\n") or kept else ""),
+            encoding="utf-8",
+        )
     return removed
 
 
@@ -384,11 +459,14 @@ def _channel_config_paths(raw: dict, platforms: Iterable[str]) -> list[tuple[str
     return paths
 
 
-def strip_channel_config(config_path: Path, index: Optional[ChannelKeyIndex] = None) -> list[str]:
+def strip_channel_config(
+    config_path: Path, index: Optional[ChannelKeyIndex] = None
+) -> list[str]:
     """Remove platform sections from a raw ``config.yaml`` in place. Returns the dotted paths removed."""
     if not config_path.is_file():
         return []
     from clawk_cli.config import atomic_config_replace, read_user_config_raw
+
     index = index or ChannelKeyIndex()
     raw = read_user_config_raw(config_path)
     paths = _channel_config_paths(raw, index.platforms)
@@ -405,7 +483,9 @@ def strip_channel_config(config_path: Path, index: Optional[ChannelKeyIndex] = N
     return [".".join(path) for path in paths]
 
 
-def channel_state_entries(root: Path, index: Optional[ChannelKeyIndex] = None) -> list[Path]:
+def channel_state_entries(
+    root: Path, index: Optional[ChannelKeyIndex] = None
+) -> list[Path]:
     """Root entries of a profile that hold per-bot runtime identity: pairing approvals and the
     WhatsApp device session (``platforms/`` + legacy dirs), the gateway's per-platform ledgers,
     channel directories and every ``<platform>_*`` file OR directory an adapter writes beside
@@ -413,27 +493,43 @@ def channel_state_entries(root: Path, index: Optional[ChannelKeyIndex] = None) -
     if not root.is_dir():
         return []
     index = index or ChannelKeyIndex()
-    fixed = {"platforms", "pairing", "whatsapp", "gateway", "channel_directory.json", "channel_aliases.json"}
+    fixed = {
+        "platforms",
+        "pairing",
+        "whatsapp",
+        "gateway",
+        "channel_directory.json",
+        "channel_aliases.json",
+    }
     prefixes = tuple(f"{pid}_" for pid in index.platforms)
-    return sorted(entry for entry in root.iterdir() if entry.name in fixed or entry.name.startswith(prefixes))
+    return sorted(
+        entry
+        for entry in root.iterdir()
+        if entry.name in fixed or entry.name.startswith(prefixes)
+    )
 
 
 def _remove_entry(entry: Path) -> None:
     """Remove a state entry without following symlinks (``rmtree`` refuses a symlinked dir and would
     otherwise leave the copied link in place; unlinking the link never touches the source)."""
     import shutil
+
     if entry.is_symlink() or not entry.is_dir():
         entry.unlink(missing_ok=True)
     else:
         shutil.rmtree(entry, ignore_errors=True)
 
 
-def strip_channel_settings(profile_dir: Path, *, include_state: bool, source_dir: Optional[Path] = None) -> dict[str, list[str]]:
+def strip_channel_settings(
+    profile_dir: Path, *, include_state: bool, source_dir: Optional[Path] = None
+) -> dict[str, list[str]]:
     """Strip channel credentials/identity from a freshly cloned profile, judged in ``source_dir``'s
     plugin scope. ``include_state`` also drops the runtime state ``--clone-all`` copied. Returns
     ``{platform|"config"|"state": [what]}``."""
     index = ChannelKeyIndex(source_dir)
-    stripped: dict[str, list[str]] = dict(strip_channel_env_file(profile_dir / ".env", index))
+    stripped: dict[str, list[str]] = dict(
+        strip_channel_env_file(profile_dir / ".env", index)
+    )
     config_paths = strip_channel_config(profile_dir / "config.yaml", index)
     if config_paths:
         stripped["config"] = config_paths
@@ -454,7 +550,9 @@ def channel_platforms_configured(profile_dir: Path) -> list[str]:
     found: set[str] = set()
     env_path = profile_dir / ".env"
     if env_path.is_file():
-        for line in env_path.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        for line in env_path.read_text(
+            encoding="utf-8-sig", errors="replace"
+        ).splitlines():
             key = _env_key_of_line(line)
             platform = index.platform_for(key) if key else None
             if platform and platform != GATEWAY_POLICY_ID:
@@ -462,6 +560,7 @@ def channel_platforms_configured(profile_dir: Path) -> list[str]:
     config_path = profile_dir / "config.yaml"
     if config_path.is_file():
         from clawk_cli.config import read_user_config_raw
+
         raw = read_user_config_raw(config_path)
         for path in _channel_config_paths(raw, index.platforms):
             node = raw
@@ -481,10 +580,14 @@ def clone_channels_refusal(source_dir: Path, source_label: str) -> Optional[str]
     through :func:`clawk_cli.profiles.create_profile`."""
     from clawk_cli.gateway_multiplex_served import recorded_served_profiles
     from clawk_cli.profiles import normalize_profile_name
+
     served = recorded_served_profiles()
-    if not served or len(served) < 2 or normalize_profile_name(source_label) not in {
-        normalize_profile_name(p) for p in served
-    }:
+    if (
+        not served
+        or len(served) < 2
+        or normalize_profile_name(source_label)
+        not in {normalize_profile_name(p) for p in served}
+    ):
         return None
     platforms = channel_platforms_configured(source_dir)
     if not platforms:
@@ -503,6 +606,7 @@ def _config_platform_tokens(config_path: Path) -> dict[str, str]:
     if not config_path.is_file():
         return tokens
     from clawk_cli.config import read_user_config_raw
+
     raw = read_user_config_raw(config_path)
     gateway: dict = raw["gateway"] if isinstance(raw.get("gateway"), dict) else {}
     for section in (raw.get("platforms"), gateway.get("platforms")):
@@ -526,11 +630,15 @@ def shared_channel_credentials(profile_dir: Path, source_dir: Path) -> list[str]
     shared = {wanted[key] for key in mine if theirs.get(key) == mine[key]}
     mine_cfg = _config_platform_tokens(profile_dir / "config.yaml")
     theirs_cfg = _config_platform_tokens(source_dir / "config.yaml")
-    shared.update(pid for pid, token in mine_cfg.items() if theirs_cfg.get(pid) == token)
+    shared.update(
+        pid for pid, token in mine_cfg.items() if theirs_cfg.get(pid) == token
+    )
     return sorted(shared)
 
 
-def shared_credential_warning(profile: str, platforms: list[str], source: str = "default") -> str:
+def shared_credential_warning(
+    profile: str, platforms: list[str], source: str = "default"
+) -> str:
     return (
         f"⚠ Profile '{profile}' shares its {', '.join(platforms)} credential with {source}: the bot can "
         f"only belong to one profile. Give '{profile}' its own bot (clawk -p {profile} setup, or the "
@@ -539,7 +647,9 @@ def shared_credential_warning(profile: str, platforms: list[str], source: str = 
     )
 
 
-def format_stripped_notice(profile: str, platforms: list[str], clone_flag: str = "--clone") -> list[str]:
+def format_stripped_notice(
+    profile: str, platforms: list[str], clone_flag: str = "--clone"
+) -> list[str]:
     """Lines printed after a channel-less clone so the user knows what was left behind and how to
     configure the new profile's own bots."""
     if not platforms:

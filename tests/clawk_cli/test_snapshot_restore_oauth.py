@@ -39,7 +39,12 @@ def test_quick_snapshot_restore_keeps_live_oauth_and_restores_static_auth(
         "credential_pool": {
             "openai-codex": [_oauth_row("openai-codex", "rotated")],
             "openrouter": [
-                {"id": "static", "auth_type": "api_key", "priority": 0, "api_key": "live-static"}
+                {
+                    "id": "static",
+                    "auth_type": "api_key",
+                    "priority": 0,
+                    "api_key": "live-static",
+                }
             ],
         },
     }
@@ -58,7 +63,12 @@ def test_quick_snapshot_restore_keeps_live_oauth_and_restores_static_auth(
         "credential_pool": {
             "openai-codex": [_oauth_row("openai-codex", "spent")],
             "openrouter": [
-                {"id": "static", "auth_type": "api_key", "priority": 0, "api_key": "snapshot-static"}
+                {
+                    "id": "static",
+                    "auth_type": "api_key",
+                    "priority": 0,
+                    "api_key": "snapshot-static",
+                }
             ],
         },
     }
@@ -71,9 +81,7 @@ def test_quick_snapshot_restore_keeps_live_oauth_and_restores_static_auth(
         encoding="utf-8",
     )
 
-    assert restore_quick_snapshot(
-        "20260928-before-rotation", clawk_home=home
-    ) is True
+    assert restore_quick_snapshot("20260928-before-rotation", clawk_home=home) is True
 
     restored = json.loads((home / "auth.json").read_text(encoding="utf-8"))
     codex = restored["credential_pool"]["openai-codex"][0]
@@ -87,7 +95,9 @@ def test_quick_snapshot_restore_keeps_live_oauth_and_restores_static_auth(
         assert (home / "auth.json").stat().st_mode & 0o777 == 0o600
 
 
-def test_auth_refusal_is_not_hidden_by_another_restored_file(tmp_path, monkeypatch, capsys):
+def test_auth_refusal_is_not_hidden_by_another_restored_file(
+    tmp_path, monkeypatch, capsys
+):
     """A partial restore must not report success after refusing the auth store (#127010)."""
     from clawk_cli.backup import restore_quick_snapshot
 
@@ -97,14 +107,20 @@ def test_auth_refusal_is_not_hidden_by_another_restored_file(tmp_path, monkeypat
     snap_dir.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(home))
     live_path = home / "auth.json"
-    live_path.write_text(json.dumps({"providers": {}, "sentinel": "live"}), encoding="utf-8")
+    live_path.write_text(
+        json.dumps({"providers": {}, "sentinel": "live"}), encoding="utf-8"
+    )
     before = live_path.read_bytes()
 
     (home / "config.yaml").write_text("model: live\n", encoding="utf-8")
     (snap_dir / "config.yaml").write_text("model: snapshot\n", encoding="utf-8")
     (snap_dir / "auth.json").write_text("{invalid-json", encoding="utf-8")
-    files = {name: (snap_dir / name).stat().st_size for name in ("auth.json", "config.yaml")}
-    (snap_dir / "manifest.json").write_text(json.dumps({"id": snap_id, "files": files}), encoding="utf-8")
+    files = {
+        name: (snap_dir / name).stat().st_size for name in ("auth.json", "config.yaml")
+    }
+    (snap_dir / "manifest.json").write_text(
+        json.dumps({"id": snap_id, "files": files}), encoding="utf-8"
+    )
 
     result = restore_quick_snapshot(snap_id, clawk_home=home)
 
@@ -118,7 +134,9 @@ def test_auth_refusal_is_not_hidden_by_another_restored_file(tmp_path, monkeypat
     from clawk_cli.cli_commands_mixin import CLICommandsMixin, _t
 
     capsys.readouterr()
-    CLICommandsMixin._snapshot_restore(SimpleNamespace(), ["/snapshot", "restore", snap_id])
+    CLICommandsMixin._snapshot_restore(
+        SimpleNamespace(), ["/snapshot", "restore", snap_id]
+    )
     out = capsys.readouterr().out
     assert out.strip() == _t("snapshot.restore_incomplete", snapshot_id=snap_id)
     assert live_path.read_bytes() == before

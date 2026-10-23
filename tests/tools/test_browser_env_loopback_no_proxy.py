@@ -10,7 +10,11 @@ for loopback URLs only.
 import pytest
 
 import tools.browser_tool as bt
-from agent.proxy_bypass import add_loopback_no_proxy, loopback_connect_kwargs, loopback_request_kwargs
+from agent.proxy_bypass import (
+    add_loopback_no_proxy,
+    loopback_connect_kwargs,
+    loopback_request_kwargs,
+)
 
 
 @pytest.fixture
@@ -18,8 +22,11 @@ def stub_sanitized_env(monkeypatch):
     """Replace the credential-scrub layer with a fixed dict so the test sees exactly what
     ``_build_browser_env`` adds on top."""
     from tools.environments import local
+
     holder = {}
-    monkeypatch.setattr(local, "clawk_subprocess_env", lambda inherit_credentials=False: dict(holder))
+    monkeypatch.setattr(
+        local, "clawk_subprocess_env", lambda inherit_credentials=False: dict(holder)
+    )
     return holder
 
 
@@ -39,15 +46,20 @@ def test_operator_no_proxy_wildcard_is_left_alone():
 NO_PROXIES = {"proxies": {"http": None, "https": None}}
 
 
-@pytest.mark.parametrize("url, expected, http_expected", [
-    ("ws://127.0.0.1:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
-    ("ws://localhost:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
-    ("ws://[::1]:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
-    ("http://127.0.0.2:9222", {"proxy": None}, NO_PROXIES),
-    ("http://[::ffff:127.0.0.1]:9222", {"proxy": None}, NO_PROXIES),
-    ("ws://localhost.evil.com:9222/devtools/browser/abc", {}, {}),
-    ("wss://connect.browserbase.com/cdp?apiKey=x", {}, {}),
-])
-def test_in_process_cdp_dial_disables_proxy_only_for_loopback(url, expected, http_expected):
+@pytest.mark.parametrize(
+    "url, expected, http_expected",
+    [
+        ("ws://127.0.0.1:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
+        ("ws://localhost:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
+        ("ws://[::1]:9222/devtools/browser/abc", {"proxy": None}, NO_PROXIES),
+        ("http://127.0.0.2:9222", {"proxy": None}, NO_PROXIES),
+        ("http://[::ffff:127.0.0.1]:9222", {"proxy": None}, NO_PROXIES),
+        ("ws://localhost.evil.com:9222/devtools/browser/abc", {}, {}),
+        ("wss://connect.browserbase.com/cdp?apiKey=x", {}, {}),
+    ],
+)
+def test_in_process_cdp_dial_disables_proxy_only_for_loopback(
+    url, expected, http_expected
+):
     assert loopback_connect_kwargs(url) == expected
     assert loopback_request_kwargs(url) == http_expected

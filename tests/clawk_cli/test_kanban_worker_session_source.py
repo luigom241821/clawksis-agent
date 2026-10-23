@@ -68,9 +68,13 @@ def test_kanban_rows_stay_out_of_the_session_list(db):
     db.create_session(session_id="chat", source="desktop")
     db.append_message(session_id="chat", role="user", content="hey")
     db.create_session(session_id="worker", source="kanban")
-    db.append_message(session_id="worker", role="user", content="work kanban task t_b21733fb")
+    db.append_message(
+        session_id="worker", role="user", content="work kanban task t_b21733fb"
+    )
 
-    listed = db.list_sessions_rich(exclude_sources=["cron", "kanban", "subagent", "tool"])
+    listed = db.list_sessions_rich(
+        exclude_sources=["cron", "kanban", "subagent", "tool"]
+    )
 
     assert [row["id"] for row in listed] == ["chat"]
 
@@ -82,13 +86,21 @@ def test_retag_reclaims_legacy_worker_rows(db, tmp_path):
     cursor, which would otherwise report the meta write's rowcount instead.
     """
     workspaces = tmp_path / "kanban" / "workspaces"
-    db.create_session(session_id="legacy", source="cli", cwd=str(workspaces / "t_b21733fb"))
-    db.create_session(session_id="legacy2", source="cli", cwd=str(workspaces / "t_c0ffee"))
-    db.create_session(session_id="mine", source="cli", cwd=str(tmp_path / "www" / "repo"))
+    db.create_session(
+        session_id="legacy", source="cli", cwd=str(workspaces / "t_b21733fb")
+    )
+    db.create_session(
+        session_id="legacy2", source="cli", cwd=str(workspaces / "t_c0ffee")
+    )
+    db.create_session(
+        session_id="mine", source="cli", cwd=str(tmp_path / "www" / "repo")
+    )
 
     assert db.retag_kanban_worker_sessions(str(workspaces)) == 2
 
-    sources = {row[0]: row[1] for row in db._conn.execute("SELECT id, source FROM sessions")}
+    sources = {
+        row[0]: row[1] for row in db._conn.execute("SELECT id, source FROM sessions")
+    }
     assert sources == {"legacy": "kanban", "legacy2": "kanban", "mine": "cli"}
 
 

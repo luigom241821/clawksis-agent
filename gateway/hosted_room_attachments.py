@@ -241,7 +241,11 @@ def _safe_manifest_entry(value: Any) -> dict[str, Any]:
             f"attachment manifest is missing fields: {', '.join(sorted(missing))}"
         )
     size = value["size"]
-    if isinstance(size, bool) or not isinstance(size, int) or not 0 < size <= MAX_ATTACHMENT_BYTES:
+    if (
+        isinstance(size, bool)
+        or not isinstance(size, int)
+        or not 0 < size <= MAX_ATTACHMENT_BYTES
+    ):
         raise AttachmentError("attachment size is outside the per-file limit")
     kind = _kind(value["kind"])
     mime = _mime(value["mime"])
@@ -341,7 +345,12 @@ class HostedRoomAttachmentStore:
             info = self.db_path.stat()
         except OSError:
             return None
-        return str(self.db_path.resolve()), str(self.root.resolve()), info.st_dev, info.st_ino
+        return (
+            str(self.db_path.resolve()),
+            str(self.root.resolve()),
+            info.st_dev,
+            info.st_ino,
+        )
 
     def _prepare_private_root(self) -> None:
         make_user_dir(self.root, parents=True, exist_ok=True, mode=0o700)
@@ -394,12 +403,19 @@ class HostedRoomAttachmentStore:
                    ADD COLUMN viewer_access INTEGER NOT NULL DEFAULT 0"""
             )
         if "catalog_name" not in columns:
-            conn.execute("ALTER TABLE hosted_room_attachments ADD COLUMN catalog_name TEXT")
-            reader = conn.execute("SELECT attachment_id, name FROM hosted_room_attachments")
+            conn.execute(
+                "ALTER TABLE hosted_room_attachments ADD COLUMN catalog_name TEXT"
+            )
+            reader = conn.execute(
+                "SELECT attachment_id, name FROM hosted_room_attachments"
+            )
             while rows := reader.fetchmany(512):
                 conn.executemany(
                     "UPDATE hosted_room_attachments SET catalog_name=? WHERE attachment_id=?",
-                    ((fold_catalog_text(str(row["name"])), row["attachment_id"]) for row in rows),
+                    (
+                        (fold_catalog_text(str(row["name"])), row["attachment_id"])
+                        for row in rows
+                    ),
                 )
         conn.execute(
             """CREATE INDEX IF NOT EXISTS idx_hosted_room_attachments_room_state
@@ -449,6 +465,7 @@ class HostedRoomAttachmentStore:
 
     def _write_blob(self, target: Path, data: bytes) -> None:
         from utils import atomic_write_bytes
+
         # ``.tmp-`` staging names are what the orphan sweep reclaims after a crash.
         atomic_write_bytes(target, data, tmp_prefix=".tmp-", mode=0o600, fsync_dir=True)
 
@@ -459,7 +476,9 @@ class HostedRoomAttachmentStore:
         try:
             descriptor = os.open(path, flags)
         except OSError as exc:
-            raise AttachmentIntegrityError("canonical attachment blob is unavailable") from exc
+            raise AttachmentIntegrityError(
+                "canonical attachment blob is unavailable"
+            ) from exc
         try:
             info = os.fstat(descriptor)
             if not stat.S_ISREG(info.st_mode) or info.st_size != size:
@@ -477,10 +496,14 @@ class HostedRoomAttachmentStore:
         finally:
             os.close(descriptor)
         if len(data) != size or hashlib.sha256(data).hexdigest() != sha256:
-            raise AttachmentIntegrityError("canonical attachment blob failed SHA-256 validation")
+            raise AttachmentIntegrityError(
+                "canonical attachment blob failed SHA-256 validation"
+            )
         return data
 
-    def _read_blob_range(self, *, blob_id: str, size: int, offset: int, length: int) -> bytes:
+    def _read_blob_range(
+        self, *, blob_id: str, size: int, offset: int, length: int
+    ) -> bytes:
         """One slice of the blob; the row's SHA-256 is the caller's whole-file digest and the
         receiver verifies the reassembled bytes against it, so no slice is hashed here."""
         descriptor = self._open_blob(blob_id=blob_id, size=size)
@@ -577,7 +600,11 @@ class HostedRoomAttachmentStore:
                 raise AttachmentQuotaError("room attachment quota exceeded")
             if int(room_totals["count"]) >= self.room_quota_count:
                 raise AttachmentQuotaError("room attachment count quota exceeded")
-            total_count = int(conn.execute("SELECT COUNT(*) FROM hosted_room_attachments").fetchone()[0])
+            total_count = int(
+                conn.execute("SELECT COUNT(*) FROM hosted_room_attachments").fetchone()[
+                    0
+                ]
+            )
             if total_count >= self.gateway_quota_count:
                 raise AttachmentQuotaError("gateway attachment count quota exceeded")
             if (
@@ -733,7 +760,9 @@ class HostedRoomAttachmentStore:
                     (entry["attachment_id"],),
                 ).fetchone()
                 if row is None or str(row["room_id"]) != room_id:
-                    raise AttachmentNotFoundError("attachment is not uploaded for this room")
+                    raise AttachmentNotFoundError(
+                        "attachment is not uploaded for this room"
+                    )
                 durable = {
                     "attachment_id": str(row["attachment_id"]),
                     "kind": str(row["kind"]),
@@ -749,7 +778,9 @@ class HostedRoomAttachmentStore:
                     raise AttachmentNotFoundError("attachment has expired")
                 state = str(row["state"])
                 if state == "disbanded":
-                    raise AttachmentNotFoundError("attachment belongs to a disbanded room")
+                    raise AttachmentNotFoundError(
+                        "attachment belongs to a disbanded room"
+                    )
                 if state == "committed" and (
                     str(row["event_id"] or "") != event_id
                     or str(row["recipient_member_ids_json"]) != recipients_json
@@ -873,13 +904,19 @@ class HostedRoomAttachmentStore:
             if recipient_member_id is not None
             else ""
         )
-        normalized_event = _identifier(event_id, label="event_id") if event_id is not None else None
+        normalized_event = (
+            _identifier(event_id, label="event_id") if event_id is not None else None
+        )
         now = float(self.clock())
         with self._transaction() as conn:
             row = self._read_committed_row(
-                conn, room_id=room_id, attachment_id=attachment_id,
+                conn,
+                room_id=room_id,
+                attachment_id=attachment_id,
                 recipient_member_id=recipient_member_id,
-                normalized_event=normalized_event, viewer=viewer, now=now,
+                normalized_event=normalized_event,
+                viewer=viewer,
+                now=now,
             )
             data = self._read_blob(
                 blob_id=str(row["blob_id"]),
@@ -900,13 +937,19 @@ class HostedRoomAttachmentStore:
         committed attachment this recipient may read for this event."""
         room_id = _identifier(room_id, label="room_id")
         attachment_id = _attachment_id(attachment_id)
-        recipient_member_id = _identifier(recipient_member_id, label="recipient_member_id")
+        recipient_member_id = _identifier(
+            recipient_member_id, label="recipient_member_id"
+        )
         normalized_event = _identifier(event_id, label="event_id")
         with self._transaction() as conn:
             row = self._read_committed_row(
-                conn, room_id=room_id, attachment_id=attachment_id,
+                conn,
+                room_id=room_id,
+                attachment_id=attachment_id,
                 recipient_member_id=recipient_member_id,
-                normalized_event=normalized_event, viewer=False, now=float(self.clock()),
+                normalized_event=normalized_event,
+                viewer=False,
+                now=float(self.clock()),
             )
             return self._metadata(row)
 
@@ -924,20 +967,35 @@ class HostedRoomAttachmentStore:
         SHA-256 and the receiver verifies the reassembled bytes against it."""
         room_id = _identifier(room_id, label="room_id")
         attachment_id = _attachment_id(attachment_id)
-        recipient_member_id = _identifier(recipient_member_id, label="recipient_member_id")
+        recipient_member_id = _identifier(
+            recipient_member_id, label="recipient_member_id"
+        )
         normalized_event = _identifier(event_id, label="event_id")
-        if type(offset) is not int or type(length) is not int or offset < 0 or length <= 0:
+        if (
+            type(offset) is not int
+            or type(length) is not int
+            or offset < 0
+            or length <= 0
+        ):
             raise AttachmentError("attachment range must be non-negative integers")
         with self._transaction() as conn:
             row = self._read_committed_row(
-                conn, room_id=room_id, attachment_id=attachment_id,
+                conn,
+                room_id=room_id,
+                attachment_id=attachment_id,
                 recipient_member_id=recipient_member_id,
-                normalized_event=normalized_event, viewer=False, now=float(self.clock()),
+                normalized_event=normalized_event,
+                viewer=False,
+                now=float(self.clock()),
             )
             if offset >= int(row["size"]):
                 raise AttachmentError("attachment range starts past the end")
             data = self._read_blob_range(
-                blob_id=str(row["blob_id"]), size=int(row["size"]), offset=offset, length=length)
+                blob_id=str(row["blob_id"]),
+                size=int(row["size"]),
+                offset=offset,
+                length=length,
+            )
             return AttachmentData(self._metadata(row), data)
 
     def reconcile_room_events(self) -> int:
@@ -1116,7 +1174,6 @@ class HostedRoomAttachmentStore:
             "physical_bytes": int(blob["bytes"]),
         }
 
-
     def read_viewer(
         self,
         *,
@@ -1131,13 +1188,22 @@ class HostedRoomAttachmentStore:
 
         room_id = _identifier(room_id, label="room_id")
         attachment_id = _attachment_id(attachment_id)
-        normalized_event = _identifier(event_id, label="event_id") if event_id is not None else None
+        normalized_event = (
+            _identifier(event_id, label="event_id") if event_id is not None else None
+        )
         recipient_member_id = (
             _identifier(recipient_member_id, label="recipient_member_id")
-            if recipient_member_id is not None else ""
+            if recipient_member_id is not None
+            else ""
         )
-        authority_gateway_id = _identifier(authority_gateway_id, label="authority_gateway_id")
-        if isinstance(authority_epoch, bool) or not isinstance(authority_epoch, int) or authority_epoch < 1:
+        authority_gateway_id = _identifier(
+            authority_gateway_id, label="authority_gateway_id"
+        )
+        if (
+            isinstance(authority_epoch, bool)
+            or not isinstance(authority_epoch, int)
+            or authority_epoch < 1
+        ):
             raise AttachmentError("authority_epoch must be a positive integer")
         scope = {
             "room_id": room_id,
@@ -1158,16 +1224,21 @@ class HostedRoomAttachmentStore:
 
         # No execution lock or SQLite snapshot spans filesystem/hash work.
         data = self._read_blob(
-            blob_id=str(row["blob_id"]), size=int(row["size"]), sha256=str(row["sha256"]),
+            blob_id=str(row["blob_id"]),
+            size=int(row["size"]),
+            sha256=str(row["sha256"]),
         )
         with self._transaction() as conn:
             conn.execute("BEGIN")
             self._require_viewer_room(conn, **scope)
-            current = self._read_committed_row(conn, **selection, now=float(self.clock()))
-            if current["blob_id"] != row["blob_id"] or self._metadata(current) != self._metadata(row):
+            current = self._read_committed_row(
+                conn, **selection, now=float(self.clock())
+            )
+            if current["blob_id"] != row["blob_id"] or self._metadata(
+                current
+            ) != self._metadata(row):
                 raise AttachmentNotFoundError("attachment changed during viewer read")
         return AttachmentData(self._metadata(current), data)
-
 
     @staticmethod
     def _require_viewer_room(
@@ -1195,11 +1266,15 @@ class HostedRoomAttachmentStore:
             raise AttachmentNotFoundError("Group Chat viewer authority changed")
         # Files-only sources need not install the optional safety/retirement schema.
         for table in ("hosted_room_quarantine", "hosted_room_disband_fences"):
-            if _table_exists(conn, table) and conn.execute(
-                f"SELECT 1 FROM {table} WHERE room_id=?", (room_id,),
-            ).fetchone() is not None:
+            if (
+                _table_exists(conn, table)
+                and conn.execute(
+                    f"SELECT 1 FROM {table} WHERE room_id=?",
+                    (room_id,),
+                ).fetchone()
+                is not None
+            ):
                 raise AttachmentNotFoundError("Group Chat is unavailable to viewers")
-
 
     @staticmethod
     def _read_committed_row(
@@ -1220,7 +1295,10 @@ class HostedRoomAttachmentStore:
             raise AttachmentNotFoundError("attachment is not committed for this room")
         if row["expires_at"] is not None and float(row["expires_at"]) <= now:
             raise AttachmentNotFoundError("attachment has expired")
-        if normalized_event is not None and str(row["event_id"] or "") != normalized_event:
+        if (
+            normalized_event is not None
+            and str(row["event_id"] or "") != normalized_event
+        ):
             raise AttachmentNotFoundError("attachment is not owned by this room event")
         if int(row["viewer_access"] or 0):
             # Room-visible files need a published owner even for member reads.
@@ -1243,9 +1321,7 @@ class HostedRoomAttachmentStore:
                 key: row[key]
                 for key in ("attachment_id", "kind", "name", "size", "mime")
             }
-            payload = (
-                json.loads(owner["payload_json"]) if owner is not None else None
-            )
+            payload = json.loads(owner["payload_json"]) if owner is not None else None
             published = (
                 payload.get("attachments") if isinstance(payload, Mapping) else None
             )
@@ -1262,8 +1338,6 @@ class HostedRoomAttachmentStore:
         elif recipient_member_id not in recipients:
             raise AttachmentNotFoundError("attachment is unavailable to this recipient")
         return row
-
-
 
 
 __all__ = [
@@ -1359,6 +1433,7 @@ def fold_catalog_text(value: str) -> str:
     if value.isascii():
         return value.lower()
     return "".join(
-        char for char in unicodedata.normalize("NFKD", value).casefold()
+        char
+        for char in unicodedata.normalize("NFKD", value).casefold()
         if not unicodedata.combining(char)
     )

@@ -37,23 +37,34 @@ _ARCHIVE_TS_SUFFIX_RE = re.compile(r"^(.+)-\d{14}$")
 _PACKAGE_RESTORE_ACTIONS = frozenset({"delete", "archive", "purge"})
 _VALID_ACTORS = {"curator", "agent", "user"}
 _DEFAULT_LEDGER_MAX_BYTES = 5 * 1024 * 1024  # skills.ledger_max_bytes default (5 MB)
-_BLOB_GC_GRACE_SECS = 3600  # blobs younger than this may belong to an in-flight capture: never GC them
+_BLOB_GC_GRACE_SECS = (
+    3600  # blobs younger than this may belong to an in-flight capture: never GC them
+)
 _NON_PACKAGE_TOPS = {".curator_backups", ".hub", ".archive", ".locks"}
 # Transient/regeneratable local artifacts that must never be swept into a
 # snapshot, no matter how deep they sit under the skill dir — a stray venv or
 # node_modules turns a multi-KB ledger capture into gigabytes of blobs (#107539).
 # agent.curator_backup applies the same set to the whole-tree tarball.
-TRANSIENT_DIRS = frozenset({
-    ".venv", "venv", "env", ".env",
-    "node_modules", "__pycache__",
-    ".pytest_cache", ".mypy_cache", ".ruff_cache",
-    ".git",
-})
+TRANSIENT_DIRS = frozenset(
+    {
+        ".venv",
+        "venv",
+        "env",
+        ".env",
+        "node_modules",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".git",
+    }
+)
 _SNAPSHOT_EXCLUDE_DIRS = TRANSIENT_DIRS
 
 # Explicit actor override: the CLI sets "user", the curator walk sets "curator".
 _actor_override: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "skill_ledger_actor", default=None)
+    "skill_ledger_actor", default=None
+)
 
 
 def set_ledger_actor(actor: Optional[str]) -> contextvars.Token:
@@ -72,6 +83,7 @@ def derive_actor() -> str:
         return override
     with suppress(Exception):
         from tools.skill_provenance import is_background_review
+
         if is_background_review():
             return "curator"
     return "agent"
@@ -96,6 +108,7 @@ def _ledger_lock():
     silently lost and ``gc_blobs`` then deletes its blobs. Same idiom as ``_skill_mutation_lock``:
     ``<skills>/.locks/ledger.lock``, thread-re-entrant, no-op where neither fcntl nor msvcrt exists."""
     from tools.skill_usage import skill_file_lock
+
     return skill_file_lock(_skills_dir() / ".locks" / "ledger.lock")
 
 
@@ -103,10 +116,19 @@ def _skills_cfg(key: str, default):
     """``skills.<key>`` from the read-only merged config (no deepcopy), or *default* when the
     read fails. Lazy import keeps this module importable without the CLI."""
     try:
-        from clawk_cli.config import cfg_get, load_config_readonly  # read-only hot path: no deepcopy
+        from clawk_cli.config import (
+            cfg_get,
+            load_config_readonly,
+        )  # read-only hot path: no deepcopy
+
         return cfg_get(load_config_readonly(), "skills", key, default=default)
     except Exception as e:  # pragma: no cover — best-effort config read
-        logger.debug("skill_ledger: config read failed (%s); skills.%s defaults to %r", e, key, default)
+        logger.debug(
+            "skill_ledger: config read failed (%s); skills.%s defaults to %r",
+            e,
+            key,
+            default,
+        )
         return default
 
 
@@ -124,7 +146,11 @@ def _max_ledger_bytes() -> int:
 def _rel_posix(path: Path | str, root: Path) -> Optional[str]:
     """POSIX path of ``path`` relative to ``root`` (both normalized), or None when outside."""
     try:
-        return Path(os.path.normpath(str(path))).relative_to(os.path.normpath(str(root))).as_posix()
+        return (
+            Path(os.path.normpath(str(path)))
+            .relative_to(os.path.normpath(str(root)))
+            .as_posix()
+        )
     except (ValueError, TypeError):
         return None
 
@@ -151,11 +177,17 @@ def read_blob(sha256: str) -> Optional[bytes]:
     if not sha256 or not all(c in "0123456789abcdef" for c in sha256):
         return None
     with suppress(OSError):
-        return (blobs_dir() / sha256).read_bytes() if (blobs_dir() / sha256).exists() else None
+        return (
+            (blobs_dir() / sha256).read_bytes()
+            if (blobs_dir() / sha256).exists()
+            else None
+        )
     return None
 
 
-def snapshot_paths(root: Optional[Path], *, complete_package: bool = False) -> list[dict[str, str]]:
+def snapshot_paths(
+    root: Optional[Path], *, complete_package: bool = False
+) -> list[dict[str, str]]:
     """{path, sha256} for every file under *root*, each stored as a blob; [] when root is
     None/missing. Transient local artifacts (venvs, node_modules, caches, .git) are
     excluded wherever they appear under *root*. Raises on I/O failure — callers decide
@@ -163,12 +195,24 @@ def snapshot_paths(root: Optional[Path], *, complete_package: bool = False) -> l
     ``complete_package`` unions in the newest curator tarball's files (disk hashes win)."""
     if root is None:
         return []
-    root = Path(root)  # gone from disk -> []; the complete_package fill may still recover it
-    files = ([root] if root.is_file()
-             else sorted(p for p in root.rglob("*") if p.is_file()
-                         and not any(part in _SNAPSHOT_EXCLUDE_DIRS
-                                     for part in p.relative_to(root).parts[:-1]))
-             if root.is_dir() else [])
+    root = Path(
+        root
+    )  # gone from disk -> []; the complete_package fill may still recover it
+    files = (
+        [root]
+        if root.is_file()
+        else sorted(
+            p
+            for p in root.rglob("*")
+            if p.is_file()
+            and not any(
+                part in _SNAPSHOT_EXCLUDE_DIRS
+                for part in p.relative_to(root).parts[:-1]
+            )
+        )
+        if root.is_dir()
+        else []
+    )
     out = [{"path": str(f), "sha256": _store_blob(f.read_bytes())} for f in files]
     return fill_snapshot_from_curator_backup(root, out) if complete_package else out
 
@@ -188,19 +232,27 @@ def _strip_archive_timestamp(name: str) -> str:
 
 
 def _skill_md_parents(items: Optional[list[dict[str, str]]]) -> list[Path]:
-    return [p.parent for p in (Path(str(i.get("path", ""))) for i in items or []) if p.name == "SKILL.md"]
+    return [
+        p.parent
+        for p in (Path(str(i.get("path", ""))) for i in items or [])
+        if p.name == "SKILL.md"
+    ]
 
 
 def package_prefixes(
-    root: Optional[Path] = None, skill: Optional[str] = None,
-    before: Optional[list[dict[str, str]]] = None) -> list[str]:
+    root: Optional[Path] = None,
+    skill: Optional[str] = None,
+    before: Optional[list[dict[str, str]]] = None,
+) -> list[str]:
     """Tar member prefixes of this skill's package: live location under ``skills/``,
     the package parent from the before-state SKILL.md path (rollback fills where
     *root* is gone), the bare skill name, and the name minus an archive suffix."""
     candidates = [_package_rel(Path(root)) if root is not None else None]
     candidates += [_package_rel(p) for p in _skill_md_parents(before)]
     candidates += [skill, _strip_archive_timestamp(skill) if skill else None]
-    return list(dict.fromkeys(p for p in ((c or "").strip("/") for c in candidates) if p))
+    return list(
+        dict.fromkeys(p for p in ((c or "").strip("/") for c in candidates) if p)
+    )
 
 
 def _read_package_files_from_latest_backup(prefixes: list[str]) -> dict[str, bytes]:
@@ -212,8 +264,12 @@ def _read_package_files_from_latest_backup(prefixes: list[str]) -> dict[str, byt
     except OSError:
         return {}
     candidates = [
-        child / "skills.tar.gz" for child in children
-        if child.is_dir() and _BACKUP_ID_RE.match(child.name) and (child / "skills.tar.gz").is_file()]
+        child / "skills.tar.gz"
+        for child in children
+        if child.is_dir()
+        and _BACKUP_ID_RE.match(child.name)
+        and (child / "skills.tar.gz").is_file()
+    ]
     if not candidates:
         return {}
     # Parent dirs sort lexicographically == chronologically for the id shape.
@@ -225,9 +281,13 @@ def _read_package_files_from_latest_backup(prefixes: list[str]) -> dict[str, byt
         with tarfile.open(archive, "r:gz") as tf:
             for member in tf.getmembers():
                 name = member.name.replace("\\", "/").lstrip("./")
-                if (not member.isfile() or not name or name.startswith("/")
-                        or ".." in Path(name).parts
-                        or (name not in exact and not name.startswith(prefixed))):
+                if (
+                    not member.isfile()
+                    or not name
+                    or name.startswith("/")
+                    or ".." in Path(name).parts
+                    or (name not in exact and not name.startswith(prefixed))
+                ):
                     continue
                 extracted = tf.extractfile(member)
                 if extracted is not None:
@@ -239,8 +299,11 @@ def _read_package_files_from_latest_backup(prefixes: list[str]) -> dict[str, byt
 
 
 def fill_snapshot_from_curator_backup(
-    root: Optional[Path], existing: Optional[list[dict[str, str]]] = None, *,
-    skill: Optional[str] = None) -> list[dict[str, str]]:
+    root: Optional[Path],
+    existing: Optional[list[dict[str, str]]] = None,
+    *,
+    skill: Optional[str] = None,
+) -> list[dict[str, str]]:
     """Union missing skill-package files from the newest curator snapshot. Completeness fill, not
     a gate: failures return *existing* unchanged, and only ABSENT paths are filled. Fill targets go
     where rollback must restore them: under *root* when known (for purge that is
@@ -260,8 +323,16 @@ def fill_snapshot_from_curator_backup(
         return out
     skills = _skills_dir()
     dest_root = Path(root) if root is not None else None
-    pkg_names = {dest_root.name, _strip_archive_timestamp(dest_root.name)} if dest_root else set()
-    have = {rel for rel in (_rel_posix(str(i.get("path", "")), skills) for i in out) if rel is not None}
+    pkg_names = (
+        {dest_root.name, _strip_archive_timestamp(dest_root.name)}
+        if dest_root
+        else set()
+    )
+    have = {
+        rel
+        for rel in (_rel_posix(str(i.get("path", "")), skills) for i in out)
+        if rel is not None
+    }
     for rel, data in extra.items():
         parts = rel.split("/")
         if dest_root is not None and parts and parts[0] in pkg_names:
@@ -283,7 +354,9 @@ def fill_snapshot_from_curator_backup(
     return out
 
 
-def _delta(before: list[dict[str, str]], after: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+def _delta(
+    before: list[dict[str, str]], after: list[dict[str, str]]
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Drop paths whose hash is identical on both sides. ``rollback_entry`` writes every *before*
     path and removes *after*-only paths, so unchanged files are dead weight there — and a full
     package manifest per edit made a 4,000-file skill cost 1.5 MB of ledger per patch (650 MB
@@ -291,14 +364,20 @@ def _delta(before: list[dict[str, str]], after: list[dict[str, str]]) -> tuple[l
     b_sha = {str(i.get("path")): i.get("sha256") for i in before}
     a_sha = {str(i.get("path")): i.get("sha256") for i in after}
     same = {p for p, s in b_sha.items() if a_sha.get(p) == s}
-    return ([i for i in before if str(i.get("path")) not in same],
-            [i for i in after if str(i.get("path")) not in same])
+    return (
+        [i for i in before if str(i.get("path")) not in same],
+        [i for i in after if str(i.get("path")) not in same],
+    )
 
 
 def append_entry(
-    action: str, skill: str, before: Optional[list[dict[str, str]]] = None,
-    after: Optional[list[dict[str, str]]] = None, actor: Optional[str] = None,
-    evidence: Optional[dict[str, Any]] = None) -> Optional[str]:
+    action: str,
+    skill: str,
+    before: Optional[list[dict[str, str]]] = None,
+    after: Optional[list[dict[str, str]]] = None,
+    actor: Optional[str] = None,
+    evidence: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
     """Append one entry -> id, or None when disabled / write failed (never raises)."""
     if not ledger_enabled():
         return None
@@ -307,10 +386,15 @@ def append_entry(
         if action != "pre-rollback":
             before, after = _delta(before or [], after or [])
         entry = {
-            "id": uuid.uuid4().hex[:12], "ts": datetime.now(UTC).isoformat(),
+            "id": uuid.uuid4().hex[:12],
+            "ts": datetime.now(UTC).isoformat(),
             "actor": actor if actor in _VALID_ACTORS else derive_actor(),
-            "action": action, "skill": skill, "evidence": evidence or {},
-            "before": before or [], "after": after or []}
+            "action": action,
+            "skill": skill,
+            "evidence": evidence or {},
+            "before": before or [],
+            "after": after or [],
+        }
         path = ledger_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with _ledger_lock():
@@ -319,7 +403,9 @@ def append_entry(
             _maintain_size()
         return entry["id"]
     except Exception as e:
-        logger.warning("skill_ledger: failed to append entry (%s) — mutation unaffected", e)
+        logger.warning(
+            "skill_ledger: failed to append entry (%s) — mutation unaffected", e
+        )
         return None
 
 
@@ -368,7 +454,6 @@ def _maintain_size() -> None:
         )
 
 
-
 def _rewrite_ledger(path: Path, lines: list[bytes], op: str) -> bytes:
     """Atomically replace the ledger at *path* with *lines* (one physical row each, no
     terminators): write ``<name>.<op>.tmp`` fully, then ``os.replace`` it over the ledger.
@@ -378,6 +463,7 @@ def _rewrite_ledger(path: Path, lines: list[bytes], op: str) -> bytes:
     tmp.write_bytes(data)
     os.replace(tmp, path)
     return data
+
 
 def _trim_oldest(max_bytes: int) -> int:
     """Rewrite the ledger without its oldest lines until it is at most *max_bytes*;
@@ -400,7 +486,9 @@ def _trim_oldest_locked(max_bytes: int) -> int:
         lines.pop()
     kept: list[bytes] = []
     size = 0
-    for line in reversed(lines):  # the first iteration always keeps lines[-1]: the newest entry
+    for line in reversed(
+        lines
+    ):  # the first iteration always keeps lines[-1]: the newest entry
         addition = len(line) + 1
         if kept and size + addition > max_bytes:
             break
@@ -439,13 +527,19 @@ def _compact_ledger_locked() -> tuple[int, int, int]:
             out.append(line)
             continue
         if isinstance(row, dict) and row.get("action") != "pre-rollback":
-            row["before"], row["after"] = _delta(row.get("before") or [], row.get("after") or [])
+            row["before"], row["after"] = _delta(
+                row.get("before") or [], row.get("after") or []
+            )
             line = json.dumps(row, ensure_ascii=False)
         out.append(line)
         kept += 1
     lines = [line.encode("utf-8") for line in out]
     if (b"\n".join(lines) + b"\n" if lines else b"") == raw:
-        return kept, len(raw), len(raw)  # already compact (append-time _delta): no rewrite to pay
+        return (
+            kept,
+            len(raw),
+            len(raw),
+        )  # already compact (append-time _delta): no rewrite to pay
     data = _rewrite_ledger(path, lines, "compact")
     return kept, len(raw), len(data)
 
@@ -467,7 +561,9 @@ def _gc_blobs_locked() -> tuple[int, int]:
         return 0, 0
     referenced: set = set()
     raw = _read_ledger("blob GC skipped")
-    if raw is None:  # an unavailable ledger is not evidence that its blobs are unreferenced
+    if (
+        raw is None
+    ):  # an unavailable ledger is not evidence that its blobs are unreferenced
         return 0, 0
     for line in raw.decode("utf-8").splitlines():
         if not line.strip():
@@ -487,7 +583,9 @@ def _gc_blobs_locked() -> tuple[int, int]:
         if blob.is_file() and blob.name not in referenced:
             try:
                 st = blob.stat()
-                if st.st_mtime > fresh_after:  # in-flight capture (incl. .tmp-*): row not appended yet
+                if (
+                    st.st_mtime > fresh_after
+                ):  # in-flight capture (incl. .tmp-*): row not appended yet
                     continue
                 size = st.st_size
                 blob.unlink()
@@ -499,9 +597,14 @@ def _gc_blobs_locked() -> tuple[int, int]:
 
 
 def record_mutation(
-    action: str, skill: str, before_root: Optional[Path] = None,
-    before: Optional[list[dict[str, str]]] = None, after_root: Optional[Path] = None,
-    actor: Optional[str] = None, evidence: Optional[dict[str, Any]] = None) -> Optional[str]:
+    action: str,
+    skill: str,
+    before_root: Optional[Path] = None,
+    before: Optional[list[dict[str, str]]] = None,
+    after_root: Optional[Path] = None,
+    actor: Optional[str] = None,
+    evidence: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
     """Mutation hook: after-state from *after_root* (before = pre-captured list or captured from
     *before_root*), then append. NEVER raises. delete/archive/purge capture a COMPLETE package
     (filled from the newest curator backup) so rollback never restores a shell."""
@@ -513,15 +616,26 @@ def record_mutation(
             before = snapshot_paths(before_root, complete_package=_complete)
         elif _complete:
             before = fill_snapshot_from_curator_backup(before_root, before, skill=skill)
-        return append_entry(action, skill, before=before, after=snapshot_paths(after_root),
-                            actor=actor, evidence=evidence)
+        return append_entry(
+            action,
+            skill,
+            before=before,
+            after=snapshot_paths(after_root),
+            actor=actor,
+            evidence=evidence,
+        )
     except Exception as e:
-        logger.warning("skill_ledger: record_mutation failed (%s) — mutation unaffected", e)
+        logger.warning(
+            "skill_ledger: record_mutation failed (%s) — mutation unaffected", e
+        )
         return None
 
 
 def capture_before(
-    root: Optional[Path], *, complete_package: bool = False, skill: Optional[str] = None,
+    root: Optional[Path],
+    *,
+    complete_package: bool = False,
+    skill: Optional[str] = None,
 ) -> Optional[list[dict[str, str]]]:
     """Best-effort pre-mutation capture; None on failure/disabled (pass straight to
     record_mutation). ``complete_package=True`` for delete/archive/purge."""
@@ -529,15 +643,25 @@ def capture_before(
         return None
     try:
         captured = snapshot_paths(root)
-        return fill_snapshot_from_curator_backup(root, captured, skill=skill) if complete_package else captured
+        return (
+            fill_snapshot_from_curator_backup(root, captured, skill=skill)
+            if complete_package
+            else captured
+        )
     except Exception as e:
-        logger.warning("skill_ledger: before-capture failed (%s) — mutation unaffected", e)
+        logger.warning(
+            "skill_ledger: before-capture failed (%s) — mutation unaffected", e
+        )
         return None
 
 
-def list_entries(skill: Optional[str] = None, limit: Optional[int] = None) -> list[dict[str, Any]]:
+def list_entries(
+    skill: Optional[str] = None, limit: Optional[int] = None
+) -> list[dict[str, Any]]:
     """Read the ledger, newest first. Malformed lines are skipped."""
-    raw = _read_ledger("listing empty", quiet_missing=True)  # missing/unreadable/undecodable == empty
+    raw = _read_ledger(
+        "listing empty", quiet_missing=True
+    )  # missing/unreadable/undecodable == empty
     if raw is None:
         return []
     rows: list[dict[str, Any]] = []
@@ -551,7 +675,11 @@ def list_entries(skill: Optional[str] = None, limit: Optional[int] = None) -> li
 
 
 def get_entry(entry_id: str) -> Optional[dict[str, Any]]:
-    return next((r for r in list_entries() if r.get("id") == entry_id), None) if entry_id else None
+    return (
+        next((r for r in list_entries() if r.get("id") == entry_id), None)
+        if entry_id
+        else None
+    )
 
 
 def _validate_entry_paths(entry: dict[str, Any]) -> Optional[str]:
@@ -585,29 +713,46 @@ def rollback_entry(entry_id: str) -> tuple[bool, str]:
     # only missing paths are added, and the filled set is re-validated.
     if entry.get("action") in _PACKAGE_RESTORE_ACTIONS:
         before = fill_snapshot_from_curator_backup(
-            next(iter(_skill_md_parents(before)), None), before,
-            skill=str(entry.get("skill") or "") or None)
-        if path_err := _validate_entry_paths({**entry, "before": before, "after": after}):
+            next(iter(_skill_md_parents(before)), None),
+            before,
+            skill=str(entry.get("skill") or "") or None,
+        )
+        if path_err := _validate_entry_paths(
+            {**entry, "before": before, "after": after}
+        ):
             return False, f"refusing rollback: {path_err}"
     # Pre-check every blob we need so we never fail mid-restore.
     for item in before:
         if read_blob(str(item.get("sha256", ""))) is None:
-            return False, (f"missing blob {item.get('sha256')} for {item.get('path')}; "
-                           "rollback aborted, nothing was changed")
+            return False, (
+                f"missing blob {item.get('sha256')} for {item.get('path')}; "
+                "rollback aborted, nothing was changed"
+            )
     # Safety entry: CURRENT state of every touched path, so the rollback itself is undoable.
     touched = {str(i["path"]) for i in before + after if i.get("path")}
     try:
-        safety_before = [{"path": p, "sha256": _store_blob(Path(p).read_bytes())}
-                         for p in sorted(touched) if Path(p).is_file()]
+        safety_before = [
+            {"path": p, "sha256": _store_blob(Path(p).read_bytes())}
+            for p in sorted(touched)
+            if Path(p).is_file()
+        ]
         safety_id = append_entry(
-            "pre-rollback", entry.get("skill", "?"), before=safety_before, after=safety_before,
-            evidence={"rollback_target": entry_id})
+            "pre-rollback",
+            entry.get("skill", "?"),
+            before=safety_before,
+            after=safety_before,
+            evidence={"rollback_target": entry_id},
+        )
     except Exception as e:
-        return False, (f"pre-rollback safety capture failed ({e}); rollback aborted and "
-                       "current skills were not changed")
+        return False, (
+            f"pre-rollback safety capture failed ({e}); rollback aborted and "
+            "current skills were not changed"
+        )
     if safety_id is None:
-        return False, ("pre-rollback safety capture failed (ledger disabled or "
-                       "unwritable); rollback aborted and current skills were not changed")
+        return False, (
+            "pre-rollback safety capture failed (ledger disabled or "
+            "unwritable); rollback aborted and current skills were not changed"
+        )
     # Restore: write every before-file, remove files the mutation created.
     before_paths = {str(i["path"]) for i in before}
     for item in before:
@@ -623,11 +768,22 @@ def rollback_entry(entry_id: str) -> tuple[bool, str]:
                     Path(p).unlink()
                     removed += 1
             except OSError as e:
-                logger.warning("skill_ledger: could not remove %s during rollback: %s", p, e)
+                logger.warning(
+                    "skill_ledger: could not remove %s during rollback: %s", p, e
+                )
     append_entry(
-        "rollback", entry.get("skill", "?"), before=safety_before, after=before,
-        evidence={"rollback_target": entry_id, "restored": restored, "removed": removed})
+        "rollback",
+        entry.get("skill", "?"),
+        before=safety_before,
+        after=before,
+        evidence={
+            "rollback_target": entry_id,
+            "restored": restored,
+            "removed": removed,
+        },
+    )
     return True, (
         f"rolled back entry {entry_id} ({entry.get('action')} on "
         f"'{entry.get('skill')}'): {restored} file(s) restored, {removed} removed. "
-        f"Safety entry {safety_id} captured the pre-rollback state.")
+        f"Safety entry {safety_id} captured the pre-rollback state."
+    )

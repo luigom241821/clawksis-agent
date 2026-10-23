@@ -69,7 +69,9 @@ def test_store_is_private_atomic_deduplicated_and_upload_idempotent(tmp_path):
     if os.name != "nt":
         assert store.root.stat().st_mode & 0o777 == 0o700
         assert store.blob_root.stat().st_mode & 0o777 == 0o700
-        blob = next(path for path in store.blob_root.iterdir() if path.name.startswith("blob_"))
+        blob = next(
+            path for path in store.blob_root.iterdir() if path.name.startswith("blob_")
+        )
         assert blob.stat().st_mode & 0o777 == 0o600
     assert not list(store.blob_root.glob(".tmp-*"))
 
@@ -86,10 +88,7 @@ def test_orphan_sweep_serializes_with_concurrent_canonical_blob_commit(
     original_iterdir = type(store.blob_root).iterdir
 
     def blocking_iterdir(path):
-        if (
-            path == store.blob_root
-            and threading.current_thread().name == "stale-sweep"
-        ):
+        if path == store.blob_root and threading.current_thread().name == "stale-sweep":
             entered_sweep.set()
             assert release_sweep.wait(5)
         return original_iterdir(path)
@@ -165,16 +164,22 @@ def test_failed_replay_rolls_back_only_attachments_transitioned_by_that_attempt(
     )
     assert transitioned == (new_upload["attachment_id"],)
 
-    assert store.abort_message_commit(
-        room_id="room-1",
-        event_id="event-1",
-        attachment_ids=transitioned,
-    ) == 1
-    assert store.read(
-        room_id="room-1",
-        attachment_id=committed["attachment_id"],
-        recipient_member_id="research",
-    ).data == PNG
+    assert (
+        store.abort_message_commit(
+            room_id="room-1",
+            event_id="event-1",
+            attachment_ids=transitioned,
+        )
+        == 1
+    )
+    assert (
+        store.read(
+            room_id="room-1",
+            attachment_id=committed["attachment_id"],
+            recipient_member_id="research",
+        ).data
+        == PNG
+    )
     conn = sqlite3.connect(db)
     states = dict(
         conn.execute(
@@ -231,17 +236,23 @@ def test_image_pdf_text_and_binary_round_trip_with_frozen_recipients(tmp_path):
     )
 
     assert committed == repeated == manifest
-    assert store.read(
-        room_id="room-1",
-        attachment_id=image["attachment_id"],
-        recipient_member_id="research",
-        event_id="event-1",
-    ).data == PNG
-    assert store.read(
-        room_id="room-1",
-        attachment_id=pdf["attachment_id"],
-        recipient_member_id="builder",
-    ).data == PDF
+    assert (
+        store.read(
+            room_id="room-1",
+            attachment_id=image["attachment_id"],
+            recipient_member_id="research",
+            event_id="event-1",
+        ).data
+        == PNG
+    )
+    assert (
+        store.read(
+            room_id="room-1",
+            attachment_id=pdf["attachment_id"],
+            recipient_member_id="builder",
+        ).data
+        == PDF
+    )
     with pytest.raises(AttachmentNotFoundError):
         store.read(
             room_id="room-1",
@@ -391,7 +402,9 @@ def test_integrity_check_rejects_tampering_and_symlink_replacement(tmp_path):
         manifest=_manifest(attachment),
         recipient_member_ids=("research",),
     )
-    blob = next(path for path in store.blob_root.iterdir() if path.name.startswith("blob_"))
+    blob = next(
+        path for path in store.blob_root.iterdir() if path.name.startswith("blob_")
+    )
     blob.write_bytes(PNG + b"tampered")
     with pytest.raises(AttachmentIntegrityError):
         store.read(
@@ -508,11 +521,14 @@ def test_restart_reconciles_event_commit_and_expires_abandoned_commit(tmp_path):
     now[0] += UNCOMMITTED_TTL_SECONDS + 1
     restarted = HostedRoomAttachmentStore(db, clock=lambda: now[0])
 
-    assert restarted.read(
-        room_id="room-1",
-        attachment_id=retained["attachment_id"],
-        recipient_member_id="research",
-    ).data == PNG
+    assert (
+        restarted.read(
+            room_id="room-1",
+            attachment_id=retained["attachment_id"],
+            recipient_member_id="research",
+        ).data
+        == PNG
+    )
     with pytest.raises(AttachmentNotFoundError):
         restarted.read(
             room_id="room-1",
@@ -530,15 +546,24 @@ def test_attachment_reads_take_no_write_lock_and_repeat_no_startup(tmp_path):
     db = tmp_path / "state.db"
     store = HostedRoomAttachmentStore(db)
     item = _put(store)
-    store.commit_message(room_id="room-1", event_id="event-1", manifest=_manifest(item),
-                         recipient_member_ids=("research",))
+    store.commit_message(
+        room_id="room-1",
+        event_id="event-1",
+        manifest=_manifest(item),
+        recipient_member_ids=("research",),
+    )
     writer = sqlite3.connect(db, isolation_level=None, timeout=0)
     writer.execute("BEGIN IMMEDIATE")
     try:
         started = time.monotonic()
         saved = HostedRoomAttachmentStore(db).read_range(
-            room_id="room-1", attachment_id=item["attachment_id"], event_id="event-1",
-            recipient_member_id="research", offset=0, length=4)
+            room_id="room-1",
+            attachment_id=item["attachment_id"],
+            event_id="event-1",
+            recipient_member_id="research",
+            offset=0,
+            length=4,
+        )
         assert saved.data == PNG[:4]
         assert time.monotonic() - started < 2
     finally:

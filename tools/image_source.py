@@ -6,6 +6,7 @@ Security (GHSA-gpxw-6wxv-w3qq): under a non-local backend vision is confined lik
 tools — host-read only inside a media cache (bind-mounted into the sandbox), anything else is
 exec-read *inside the sandbox*, so ``vision_analyze('/etc/passwd')`` never reads the host.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,9 +29,17 @@ class ImageResolutionError(Exception):
 
 
 class UnsupportedScheme(ImageResolutionError): ...
+
+
 class SourceUnsafe(ImageResolutionError): ...  # SSRF / path-allowlist
+
+
 class SourceTooLarge(ImageResolutionError): ...
+
+
 class SourceNotFound(ImageResolutionError): ...
+
+
 class NotAnImage(ImageResolutionError): ...
 
 
@@ -51,7 +60,8 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*://")
 
 
 async def resolve_image_source(
-    src: str, ctx: ResolveContext, *, permitted: tuple = ("image",)) -> ResolvedImage:
+    src: str, ctx: ResolveContext, *, permitted: tuple = ("image",)
+) -> ResolvedImage:
     if not isinstance(src, str) or not src.strip():
         raise SourceNotFound("image_url is required", src=str(src))
     s = src.strip()
@@ -67,10 +77,11 @@ async def resolve_image_source(
         raise UnsupportedScheme(
             "Unrecognized image source scheme. Use an http(s) URL, a local "
             "file path, a file:// URI, or a data: URL.",
-            src=s)
+            src=s,
+        )
     # Everything else is a filesystem path — including bare relative names like "pic.png"
     # (a path-shape gate here regressed them once).
-    candidate = s[len("file://"):] if s.lower().startswith("file://") else s
+    candidate = s[len("file://") :] if s.lower().startswith("file://") else s
     p = Path(os.path.expanduser(candidate))
     host_target = _permitted_host_read_target(p, ctx)
     if host_target is not None and host_target.is_file():
@@ -105,7 +116,9 @@ def _resolve_data_url(s: str) -> tuple[bytes, str]:
     header, _, payload = s.partition(",")
     if ";base64" not in header:
         raise NotAnImage("data: URL must be base64-encoded", src=s[:64])
-    declared = header[len("data:"):].split(";", 1)[0].strip() or "application/octet-stream"
+    declared = (
+        header[len("data:") :].split(";", 1)[0].strip() or "application/octet-stream"
+    )
     # Cheap pre-decode size gate on the encoded length (~4/3 expansion).
     if (len(payload) * 3) // 4 > _MAX_INGEST_BYTES:
         raise SourceTooLarge("data: URL exceeds size limit", src=s[:64])
@@ -121,6 +134,7 @@ def _http_block_reason(url: str) -> Optional[str]:
     ``_download_image`` re-checks per attempt and against the final redirect target (intentional)."""
     from tools.url_safety import is_safe_url
     from tools.website_policy import check_website_access
+
     if not is_safe_url(url):
         return "blocked: unsafe or private URL"
     if blocked := check_website_access(url):
@@ -131,6 +145,7 @@ def _http_block_reason(url: str) -> Optional[str]:
 async def _download_to_bytes(url: str) -> bytes:
     import tempfile
     from tools.vision_tools import _download_image
+
     with tempfile.NamedTemporaryFile(suffix=".img", delete=False) as tf:
         tmp = Path(tf.name)
     try:
@@ -147,6 +162,7 @@ def _is_local_terminal_backend() -> bool:
     """True when the terminal backend runs directly on the host (keys off ``TERMINAL_ENV``, read
     through the per-turn terminal scope so a routed multiplex profile sees ITS backend)."""
     from tools.terminal_scope import terminal_env
+
     return terminal_env("TERMINAL_ENV", "local").strip().lower() in ("local", "")
 
 
@@ -155,11 +171,17 @@ def _is_local_terminal_backend() -> bool:
 _MEDIA_CACHE_SUBDIRS = (
     "cache",  # cache/images, cache/vision, cache/video(s), cache/audio
     "images",  # desktop/clipboard/PDF uploads (tui_gateway)
-    "image_cache", "audio_cache", "video_cache", "temp_vision_images", "temp_video_files")
+    "image_cache",
+    "audio_cache",
+    "video_cache",
+    "temp_vision_images",
+    "temp_video_files",
+)
 
 
 def _media_cache_roots() -> list:
     from clawk_constants import get_clawk_home
+
     home = get_clawk_home()
     return [home / sub for sub in _MEDIA_CACHE_SUBDIRS]
 
@@ -176,6 +198,7 @@ def _permitted_host_read_target(p: Path, ctx: ResolveContext) -> Optional[Path]:
         except Exception:
             return p
     from tools.credential_files import from_agent_visible_cache_path
+
     try:
         real = Path(from_agent_visible_cache_path(str(p))).resolve()
     except Exception:
@@ -190,6 +213,7 @@ def _get_active_env(task_id: Optional[str]):
         return None
     try:
         from tools.terminal_tool_lifecycle import get_active_env
+
         return get_active_env(task_id)
     except Exception:
         return None
@@ -207,13 +231,15 @@ def _ensure_container_env(task_id: Optional[str]) -> None:
         return
     try:
         from tools.terminal_tool import ensure_task_env
+
         ensure_task_env(task_id)
     except Exception:
         pass
 
 
 async def _resolve_container_fallback(
-    p: Path, ctx: ResolveContext, src: str, permitted: tuple = ("image",)) -> ResolvedImage:
+    p: Path, ctx: ResolveContext, src: str, permitted: tuple = ("image",)
+) -> ResolvedImage:
     """Read the bytes inside the sandbox; fail-closed when no env exists (a non-cache host
     path under a sandbox must never leak via a host fallback).
 
@@ -225,6 +251,7 @@ async def _resolve_container_fallback(
     sandbox" on a file that is verifiably readable on the immediate retry. See #76566.
     """
     import shlex
+
     # Bring the sandbox up on demand: without this, the first vision_analyze of a session (before any
     # terminal command) has no active env to read from under a non-local backend (issue #62825).
     _ensure_container_env(ctx.task_id)
@@ -233,8 +260,11 @@ async def _resolve_container_fallback(
         raise SourceNotFound(
             f"'{p}' is not reachable inside the sandbox and no active sandbox "
             f"session is available to read it",
-            src=src, origin="container")
+            src=src,
+            origin="container",
+        )
     from tools.terminal_tool_config import translate_mounted_host_path
+
     translated = translate_mounted_host_path(
         str(p),
         getattr(env, "host_cwd", None) or "",
@@ -257,7 +287,11 @@ async def _resolve_container_fallback(
         diag = (last_res.get("output") or "").strip().splitlines()
         first = next((ln.strip() for ln in diag if ln.strip()), "")
         suffix = f" ({first[:200]})" if first else ""
-        raise SourceNotFound(f"could not read '{p}' inside the sandbox{suffix}", src=src, origin="container")
+        raise SourceNotFound(
+            f"could not read '{p}' inside the sandbox{suffix}",
+            src=src,
+            origin="container",
+        )
     try:
         data = base64.b64decode(last_res.get("output", ""), validate=True)
     except Exception as exc:
@@ -268,17 +302,26 @@ async def _resolve_container_fallback(
 
 
 def _finalize(
-    data: bytes, declared_mime: str, origin: str, src: str, permitted: tuple = ("image",)
+    data: bytes,
+    declared_mime: str,
+    origin: str,
+    src: str,
+    permitted: tuple = ("image",),
 ) -> ResolvedImage:
     """Chokepoint: 50MB ingest cap + type check. Images by magic bytes; video (opt-in) by
     extension + mp4 sniff — enough because every downstream consumer re-validates."""
     from tools.vision_tools_image_prep import _detect_image_mime_type_from_bytes
+
     if len(data) > _MAX_INGEST_BYTES:
         raise SourceTooLarge("media exceeds size limit", src=src, origin=origin)
     sniffed = _detect_image_mime_type_from_bytes(data)
     if sniffed is not None:
         if "image" not in permitted:
-            raise NotAnImage("source is an image, but this argument takes a video", src=src, origin=origin)
+            raise NotAnImage(
+                "source is an image, but this argument takes a video",
+                src=src,
+                origin=origin,
+            )
         return ResolvedImage(data=data, mime=sniffed, origin=origin)
     if "image" in permitted and b"<svg" in data[:4096].lower():
         # Pass SVG through — call sites rasterize it to PNG before embedding.
@@ -287,7 +330,9 @@ def _finalize(
         video_mime = _detect_video_mime(data, src)
         if video_mime is not None:
             return ResolvedImage(data=data, mime=video_mime, origin=origin)
-        raise NotAnImage("source is not a recognized video (mp4 expected)", src=src, origin=origin)
+        raise NotAnImage(
+            "source is not a recognized video (mp4 expected)", src=src, origin=origin
+        )
     raise NotAnImage("source is not a recognized image", src=src, origin=origin)
 
 
@@ -296,6 +341,7 @@ def _detect_video_mime(data: bytes, src: str) -> Optional[str]:
     offset 4 (covers extensionless data: URLs / query-string URLs)."""
     from urllib.parse import urlsplit
     from tools.vision_tools import _detect_video_mime_type
+
     path_part = urlsplit(src).path if _SCHEME_RE.match(src) else src
     by_extension = _detect_video_mime_type(Path(path_part))
     if by_extension is not None:
@@ -306,7 +352,8 @@ def _detect_video_mime(data: bytes, src: str) -> Optional[str]:
 
 
 async def resolve_local_source_to_data_url(
-    src: str, task_id: Optional[str], *, permitted: tuple = ("image",)) -> str:
+    src: str, task_id: Optional[str], *, permitted: tuple = ("image",)
+) -> str:
     """Convert a path-like media source into a ``data:`` URL via the resolver.
 
     Dispatch-layer chokepoint for generation tools so providers never read model-supplied paths
@@ -316,7 +363,9 @@ async def resolve_local_source_to_data_url(
     s = (src or "").strip()
     if not s or s.lower().startswith(("http://", "https://", "data:")):
         return src
-    resolved = await resolve_image_source(s, ResolveContext(task_id=task_id), permitted=permitted)
+    resolved = await resolve_image_source(
+        s, ResolveContext(task_id=task_id), permitted=permitted
+    )
     encoded = base64.b64encode(resolved.data).decode("ascii")
     mime = resolved.mime or "application/octet-stream"
     return f"data:{mime};base64,{encoded}"

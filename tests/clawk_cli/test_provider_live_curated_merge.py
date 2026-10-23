@@ -19,6 +19,7 @@ from clawk_cli.models import (
     provider_model_ids,
 )
 
+
 class TestGenericProviderLiveCuratedMerge:
     """provider_model_ids merges live + curated for generic api_key providers."""
 
@@ -62,7 +63,9 @@ class TestGenericProviderLiveCuratedMerge:
         live = ["a", "b"]
         # zai = curated-first
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
@@ -74,12 +77,16 @@ class TestGenericProviderLiveCuratedMerge:
 
         # opencode-zen = live-first
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
             ),
-            patch.dict("clawk_cli.models._PROVIDER_MODELS", {"opencode-zen": ["c", "b"]}),
+            patch.dict(
+                "clawk_cli.models._PROVIDER_MODELS", {"opencode-zen": ["c", "b"]}
+            ),
         ):
             zen_result = set(provider_model_ids("opencode-zen"))
         assert {"a", "b", "c"} <= zen_result
@@ -93,7 +100,9 @@ class TestGenericProviderLiveCuratedMerge:
         live = ["deepseek-v4-flash", "kimi-k3", "omen-alpha", "ox-alpha-free"]
 
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
@@ -111,10 +120,16 @@ class TestGenericProviderLiveCuratedMerge:
         (models_catalog_static.py still lists it first), or the picker keeps offering a model that
         now 401s (REVERT-PROOF: a stale floor re-adds it and this fails)."""
         assert "opencode-zen" in _LIVE_FIRST_PICKER_PROVIDERS
-        live = ["kimi-k3", "gpt-5.6-sol", "claude-opus-5"]  # current Zen relay (no x-preview-f-free)
+        live = [
+            "kimi-k3",
+            "gpt-5.6-sol",
+            "claude-opus-5",
+        ]  # current Zen relay (no x-preview-f-free)
 
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(live)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(live)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "k", "base_url": ""},
@@ -129,12 +144,17 @@ class TestGenericProviderLiveCuratedMerge:
         """#115496 without a key: no live fetch, so provider_model_ids serves the curated floor merged
         with models.dev — both still carry the retired x-preview-f-free. The final rows must not."""
         with (
-            patch("providers.get_provider_profile", return_value=self._make_profile(None)),
+            patch(
+                "providers.get_provider_profile", return_value=self._make_profile(None)
+            ),
             patch(
                 "clawk_cli.auth.resolve_api_key_provider_credentials",
                 return_value={"api_key": "", "base_url": ""},
             ),
-            patch("agent.models_dev.list_agentic_models", return_value=["x-preview-f-free", "kimi-k3"]),
+            patch(
+                "agent.models_dev.list_agentic_models",
+                return_value=["x-preview-f-free", "kimi-k3"],
+            ),
         ):
             result = provider_model_ids("opencode-zen")
 

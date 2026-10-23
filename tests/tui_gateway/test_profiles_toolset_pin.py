@@ -24,7 +24,9 @@ def test_toolset_pin_is_what_the_runtime_reads():
     resolved, pinned = _pin_and_resolve(cfg, ["web"])
     assert resolved == {"web"}, f"runtime resolved {sorted(resolved)} for a [web] pin"
     assert pinned == {"web"}
-    assert "enabled_toolsets" not in (cfg.get("tools") or {}), "writer must not leave the phantom key behind"
+    assert "enabled_toolsets" not in (cfg.get("tools") or {}), (
+        "writer must not leave the phantom key behind"
+    )
 
 
 @pytest.mark.parametrize("second", [["file", "terminal"], []])
@@ -45,4 +47,6 @@ def test_empty_pin_clears_the_pin_and_falls_back_to_the_platform_default():
     _save_toolset_pin(cfg, [], save_config=lambda _c: None)
     _toolsets, pinned = _describe_toolsets(cfg)
     assert pinned is None
-    assert set(_get_platform_tools(cfg, "cli", include_default_mcp_servers=False)) != {"web"}
+    assert set(_get_platform_tools(cfg, "cli", include_default_mcp_servers=False)) != {
+        "web"
+    }

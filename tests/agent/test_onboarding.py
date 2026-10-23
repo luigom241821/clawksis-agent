@@ -12,6 +12,7 @@ from agent.onboarding import (
     mark_seen,
 )
 
+
 class TestIsSeen:
     def test_empty_config_unseen(self):
         assert is_seen({}, BUSY_INPUT_FLAG) is False
@@ -24,14 +25,18 @@ class TestIsSeen:
         cfg = {"onboarding": {"seen": {BUSY_INPUT_FLAG: False}}}
         assert is_seen(cfg, BUSY_INPUT_FLAG) is False
 
-class TestMarkSeen:
 
+class TestMarkSeen:
     def test_preserves_other_config(self, tmp_path):
         cfg_path = tmp_path / "config.yaml"
-        cfg_path.write_text(yaml.safe_dump({
-            "model": {"default": "claude-sonnet-4.6"},
-            "display": {"skin": "default"},
-        }))
+        cfg_path.write_text(
+            yaml.safe_dump(
+                {
+                    "model": {"default": "claude-sonnet-4.6"},
+                    "display": {"skin": "default"},
+                }
+            )
+        )
 
         assert mark_seen(cfg_path, BUSY_INPUT_FLAG) is True
         loaded = yaml.safe_load(cfg_path.read_text())
@@ -51,6 +56,7 @@ class TestMarkSeen:
         second = cfg_path.read_text()
 
         assert yaml.safe_load(first) == yaml.safe_load(second)
+
 
 class TestRoundTrip:
     """After mark_seen, is_seen on the re-loaded config must return True."""
@@ -74,9 +80,11 @@ class TestRoundTrip:
         assert is_seen(loaded, BUSY_INPUT_FLAG) is True
         assert is_seen(loaded, TOOL_PROGRESS_FLAG) is True
 
+
 # ---------------------------------------------------------------------------
 # OpenClaw residue banner
 # ---------------------------------------------------------------------------
+
 
 class TestDetectOpenclawResidue:
     def test_returns_true_when_openclaw_dir_present(self, tmp_path):
@@ -88,8 +96,8 @@ class TestDetectOpenclawResidue:
         (tmp_path / ".openclaw").write_text("oops")
         assert detect_openclaw_residue(home=tmp_path) is False
 
-class TestProfileBuildMode:
 
+class TestProfileBuildMode:
     def test_non_mapping_config_safe(self):
         from agent.onboarding import profile_build_mode
 

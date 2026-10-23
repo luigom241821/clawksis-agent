@@ -21,7 +21,9 @@ def pm_driver(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "tools"))
     monkeypatch.delenv("CLAWK_CUA_DRIVER_CMD", raising=False)
     monkeypatch.setenv("CLAWK_DISABLE_LAZY_INSTALLS", "1")
-    monkeypatch.setattr(pm, "ensure", MagicMock(side_effect=AssertionError("status must not install")))
+    monkeypatch.setattr(
+        pm, "ensure", MagicMock(side_effect=AssertionError("status must not install"))
+    )
     package, target = pm.get_package("cua-driver"), pm.current_target()
     lock = pm.Lockfile(paths.lockfile_path())
     version = lock.version(package.name)
@@ -34,8 +36,13 @@ def pm_driver(tmp_path, monkeypatch):
     binary.write_bytes(Path(sys.executable).read_bytes())
     binary.chmod(0o755)
     pm.Facts(paths.facts_path()).record(
-        package.name, version, entry.name, package.env(entry, target), root,
-        target=target, artifacts=[a["sha256"] for a in lock.artifacts(package.name, target)],
+        package.name,
+        version,
+        entry.name,
+        package.env(entry, target),
+        root,
+        target=target,
+        artifacts=[a["sha256"] for a in lock.artifacts(package.name, target)],
         digest=tree_digest(entry),
     )
     return binary
@@ -53,15 +60,20 @@ def test_status_finds_pm_driver_when_path_omits_it(pm_driver, monkeypatch):
     outputs = {
         ("--version",): "cua-driver fixture",
         ("doctor", "--json"): json.dumps({"ok": True, "probes": [check]}),
-        ("permissions", "status", "--json"): json.dumps({
-            "accessibility": True, "screen_recording": True,
-            "screen_recording_capturable": True,
-        }),
+        ("permissions", "status", "--json"): json.dumps(
+            {
+                "accessibility": True,
+                "screen_recording": True,
+                "screen_recording_capturable": True,
+            }
+        ),
     }
 
     def run(binary, *args, timeout):
         assert binary == str(pm_driver)
-        return subprocess.CompletedProcess([binary, *args], 0, stdout=outputs[args], stderr="")
+        return subprocess.CompletedProcess(
+            [binary, *args], 0, stdout=outputs[args], stderr=""
+        )
 
     with patch.object(permissions, "_run", side_effect=run):
         status = permissions.computer_use_status()

@@ -14,16 +14,19 @@ from __future__ import annotations
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
     monkeypatch.delenv("CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", raising=False)
     monkeypatch.delenv("CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", raising=False)
+
 
 def test_env_override_rejects_garbage(monkeypatch):
     """Malformed env values fall back to defaults rather than raising."""
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_KEEPALIVE_EXPIRY", "not-a-number")
     monkeypatch.setenv("CLAWK_GATEWAY_HTTPX_MAX_KEEPALIVE", "-3")
     from gateway.platforms._http_client_limits import platform_httpx_limits
+
     limits = platform_httpx_limits()
     # Non-positive / non-numeric → fell back to defaults (not the override values)
     assert limits.keepalive_expiry is not None and limits.keepalive_expiry > 0
@@ -48,7 +51,9 @@ async def test_platform_http_client_is_ssrf_guarded_with_shared_limits():
         pool = client._transport._pool
         limits = platform_httpx_limits()
         assert (pool._max_keepalive_connections, pool._keepalive_expiry) == (
-            limits.max_keepalive_connections, limits.keepalive_expiry)
+            limits.max_keepalive_connections,
+            limits.keepalive_expiry,
+        )
         with pytest.raises(ValueError):
             await client.get("http://169.254.169.254/latest/meta-data/")
     finally:

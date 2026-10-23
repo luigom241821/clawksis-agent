@@ -14,7 +14,10 @@ import sys
 import pytest
 
 import agent.anthropic_adapter as adapter
-from agent.anthropic_adapter import _CLAUDE_CODE_VERSION_FALLBACK, _detect_claude_code_version
+from agent.anthropic_adapter import (
+    _CLAUDE_CODE_VERSION_FALLBACK,
+    _detect_claude_code_version,
+)
 
 
 def _install(directory, name: str) -> str:
@@ -31,7 +34,10 @@ def _cli_versions(monkeypatch, versions: dict[str, str]):
     def runner(cmd, *args, **kwargs):
         assert cmd[0] in versions, f"probed unexpected path: {cmd[0]}"
         return subprocess.CompletedProcess(
-            args=cmd, returncode=0, stdout=f"{versions[cmd[0]]} (Claude Code)", stderr=""
+            args=cmd,
+            returncode=0,
+            stdout=f"{versions[cmd[0]]} (Claude Code)",
+            stderr="",
         )
 
     monkeypatch.setattr(adapter.subprocess, "run", runner)

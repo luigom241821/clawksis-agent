@@ -17,19 +17,29 @@ import pytest
 
 from clawk_cli.main import cmd_dashboard
 
+
 def _ns(**kw):
     """Build an argparse.Namespace with dashboard defaults plus overrides."""
     defaults = dict(
-        port=9119, host="127.0.0.1", no_open=False, insecure=False,
-        stop=False, status=False,
+        port=9119,
+        host="127.0.0.1",
+        no_open=False,
+        insecure=False,
+        stop=False,
+        status=False,
     )
     defaults.update(kw)
     return argparse.Namespace(**defaults)
 
+
 class TestDashboardStatus:
     def test_status_no_processes(self, capsys):
-        with patch("clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=[]), \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch(
+                "clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=[]
+            ),
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(status=True))
         assert exc.value.code == 0
         out = capsys.readouterr().out
@@ -44,10 +54,15 @@ class TestDashboardStatus:
             (12346, "python -m clawk_cli.main dashboard --host 0.0.0.0 --port 9120"),
             (12347, "clawk serve --host 100.94.65.93 --port 9119"),
         ]
-        with patch("clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=processes), \
-             patch("gateway.status._pid_exists", return_value=True), \
-             patch("clawk_cli.main_dashboard._dashboard_listening", return_value=True), \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch(
+                "clawk_cli.dashboard_procs._scan_dashboard_processes",
+                return_value=processes,
+            ),
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("clawk_cli.main_dashboard._dashboard_listening", return_value=True),
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(status=True))
         # Status is informational — always exits 0.
         assert exc.value.code == 0
@@ -56,7 +71,9 @@ class TestDashboardStatus:
         assert "PID 12346" in out
         assert "PID 12347" in out and "[serve]" in out
 
-    def test_status_lists_os_assigned_port_serve_that_stop_targets(self, capsys, monkeypatch):
+    def test_status_lists_os_assigned_port_serve_that_stop_targets(
+        self, capsys, monkeypatch
+    ):
         """A ``--port 0`` serve (Desktop SSH backend) is listed on the port the ledger recorded,
         so ``--status`` shows every backend ``--stop`` would kill (#81564)."""
         import socket
@@ -69,10 +86,28 @@ class TestDashboardStatus:
             listener.bind(("127.0.0.1", 0))
             listener.listen()
             real_port = listener.getsockname()[1]
-            monkeypatch.setattr(dashboard_procs, "_iter_process_table", lambda: [
-                (pid, "/usr/local/bin/clawk serve --host 127.0.0.1 --port 0 --ssh-isolated")])
-            monkeypatch.setattr(process_identity, "ledger_entries", lambda: [
-                {"pid": pid, "purpose": "serve", "host": "127.0.0.1", "port": real_port}])
+            monkeypatch.setattr(
+                dashboard_procs,
+                "_iter_process_table",
+                lambda: [
+                    (
+                        pid,
+                        "/usr/local/bin/clawk serve --host 127.0.0.1 --port 0 --ssh-isolated",
+                    )
+                ],
+            )
+            monkeypatch.setattr(
+                process_identity,
+                "ledger_entries",
+                lambda: [
+                    {
+                        "pid": pid,
+                        "purpose": "serve",
+                        "host": "127.0.0.1",
+                        "port": real_port,
+                    }
+                ],
+            )
             monkeypatch.setattr("gateway.status._pid_exists", lambda p: p == pid)
 
             assert _find_stale_dashboard_pids() == [pid]
@@ -86,30 +121,45 @@ class TestDashboardStatus:
         process-table scan only.  We prove this by making fastapi import
         fail and confirming --status still succeeds."""
         orig_import = __import__
+
         def fake_import(name, *a, **kw):
             if name == "fastapi":
                 raise ImportError("fastapi missing")
             return orig_import(name, *a, **kw)
 
-        with patch("clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=[]), \
-             patch("builtins.__import__", side_effect=fake_import), \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch(
+                "clawk_cli.dashboard_procs._scan_dashboard_processes", return_value=[]
+            ),
+            patch("builtins.__import__", side_effect=fake_import),
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(status=True))
         assert exc.value.code == 0
 
-class TestDashboardStop:
 
+class TestDashboardStop:
     def test_stop_kills_and_exits_zero_when_all_killed(self, capsys):
         """Every matched pid was killed -> exit 0, even when a scan afterwards would find a
         process again: a launchd KeepAlive job respawns its backend on a fresh PID, and that
         respawn is not a failed stop (the kill path already warns about it)."""
         scans = iter([[12345, 12346], [12347]])
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   side_effect=lambda **_: next(scans)), \
-             patch("clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
-                   return_value={"matched": [12345, 12346], "killed": [12345, 12346],
-                                 "failed": [], "unrecovered": [12345, 12346]}) as mock_kill, \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch(
+                "clawk_cli.main._find_stale_dashboard_pids",
+                side_effect=lambda **_: next(scans),
+            ),
+            patch(
+                "clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
+                return_value={
+                    "matched": [12345, 12346],
+                    "killed": [12345, 12346],
+                    "failed": [],
+                    "unrecovered": [12345, 12346],
+                },
+            ) as mock_kill,
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(stop=True))
         mock_kill.assert_called_once()
         # --stop should pass a reason so the output doesn't say "running
@@ -120,22 +170,37 @@ class TestDashboardStop:
         assert "stop" in kwargs["reason"].lower()
         assert exc.value.code == 0
 
-    def test_stop_scopes_scan_and_kill_to_the_invoking_clawk_home(self, tmp_path, monkeypatch, capsys):
+    def test_stop_scopes_scan_and_kill_to_the_invoking_clawk_home(
+        self, tmp_path, monkeypatch, capsys
+    ):
         """``--stop`` targets only this profile's backends (#113978): both the pre-check and the
         kill run with ``scope_home`` = the invoking home, and an empty scan says so."""
         own_home = tmp_path / "profiles" / "work"
         monkeypatch.setenv("CLAWK_HOME", str(own_home))
-        with patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]) as scan, \
-             patch("clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
-                   return_value={"matched": [12345], "killed": [12345], "failed": [], "unrecovered": []}) as kill, \
-             pytest.raises(SystemExit):
+        with (
+            patch(
+                "clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]
+            ) as scan,
+            patch(
+                "clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
+                return_value={
+                    "matched": [12345],
+                    "killed": [12345],
+                    "failed": [],
+                    "unrecovered": [],
+                },
+            ) as kill,
+            pytest.raises(SystemExit),
+        ):
             cmd_dashboard(_ns(stop=True))
         assert scan.call_args.kwargs["scope_home"] == str(own_home)
         assert kill.call_args.kwargs["scope_home"] == str(own_home)
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[]), \
-             patch("clawk_cli.dashboard_procs._kill_stale_dashboard_processes") as kill, \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[]),
+            patch("clawk_cli.dashboard_procs._kill_stale_dashboard_processes") as kill,
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(stop=True))
         kill.assert_not_called()
         assert exc.value.code == 0
@@ -144,28 +209,39 @@ class TestDashboardStop:
     def test_stop_exits_nonzero_if_kill_leaves_survivors(self):
         """A pid the kill path could not stop (e.g. permission denied) -> exit 1 so
         scripts can detect that the stop didn't succeed."""
-        with patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]), \
-             patch("clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
-                   return_value={"matched": [12345], "killed": [],
-                                 "failed": [(12345, "Operation not permitted")], "unrecovered": []}), \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[12345]),
+            patch(
+                "clawk_cli.dashboard_procs._kill_stale_dashboard_processes",
+                return_value={
+                    "matched": [12345],
+                    "killed": [],
+                    "failed": [(12345, "Operation not permitted")],
+                    "unrecovered": [],
+                },
+            ),
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(stop=True))
         assert exc.value.code == 1
 
     def test_stop_does_not_try_to_import_fastapi(self):
         """Like --status, --stop must work without dashboard runtime deps."""
         orig_import = __import__
+
         def fake_import(name, *a, **kw):
             if name == "fastapi":
                 raise ImportError("fastapi missing")
             return orig_import(name, *a, **kw)
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[]), \
-             patch("builtins.__import__", side_effect=fake_import), \
-             pytest.raises(SystemExit) as exc:
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[]),
+            patch("builtins.__import__", side_effect=fake_import),
+            pytest.raises(SystemExit) as exc,
+        ):
             cmd_dashboard(_ns(stop=True))
         assert exc.value.code == 0
+
 
 class TestLifecycleFlagsTakePrecedence:
     """If both --stop and --status are set, --status wins (it's listed
@@ -178,6 +254,7 @@ class TestLifecycleFlagsTakePrecedence:
         """Covers the worst-case regression: if --stop ever stopped exiting
         early, the user would start the dashboard they just asked to stop."""
         called = {"start": False}
+
         def fake_start_server(**kw):
             called["start"] = True
 
@@ -185,9 +262,10 @@ class TestLifecycleFlagsTakePrecedence:
         fake_ws = MagicMock()
         fake_ws.start_server = fake_start_server
 
-        with patch("clawk_cli.main._find_stale_dashboard_pids",
-                   return_value=[]), \
-             patch.dict(sys.modules, {"clawk_cli.web_server": fake_ws}), \
-             pytest.raises(SystemExit):
+        with (
+            patch("clawk_cli.main._find_stale_dashboard_pids", return_value=[]),
+            patch.dict(sys.modules, {"clawk_cli.web_server": fake_ws}),
+            pytest.raises(SystemExit),
+        ):
             cmd_dashboard(_ns(stop=True))
         assert called["start"] is False

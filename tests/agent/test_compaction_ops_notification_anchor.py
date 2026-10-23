@@ -15,6 +15,7 @@ and assert the operational rows are invisible to the anchor/focus logic.
 
 from agent.context_compressor import ContextCompressor
 
+
 def _compressor() -> ContextCompressor:
     cc = ContextCompressor(
         model="test-model",
@@ -28,6 +29,7 @@ def _compressor() -> ContextCompressor:
     cc._generate_summary = lambda *a, **k: "Summary of earlier turns."
     return cc
 
+
 def _ops_notice(text: str) -> dict:
     """A Kanban/background completion wake, as persisted by the wake path."""
     return {
@@ -36,11 +38,14 @@ def _ops_notice(text: str) -> dict:
         "display_kind": "internal_notification",
     }
 
+
 def _human(text: str) -> dict:
     return {"role": "user", "content": text}
 
+
 def _assistant(text: str) -> dict:
     return {"role": "assistant", "content": text}
+
 
 def _transcript_with_n_ops(n: int, human_text: str = "Actually deploy the fix") -> list:
     """1,000 operational notifications with a single real human turn at the end."""
@@ -52,11 +57,13 @@ def _transcript_with_n_ops(n: int, human_text: str = "Actually deploy the fix") 
     msgs.append(_assistant("On it."))
     return msgs
 
+
 def test_ops_notice_is_not_actionable_user_turn():
     cc = _compressor()
     assert cc._is_actionable_user_turn(_ops_notice("✔ Kanban T-1 done")) is False
     # A real human turn still is.
     assert cc._is_actionable_user_turn(_human("deploy the fix")) is True
+
 
 def test_ops_notices_do_not_anchor_compaction_tail():
     cc = _compressor()
@@ -70,6 +77,7 @@ def test_ops_notices_do_not_anchor_compaction_tail():
         "not the user's real objective"
     )
     assert msgs[idx]["content"] == "Actually deploy the fix"
+
 
 def test_ops_notices_do_not_become_auto_focus_source():
     cc = _compressor()

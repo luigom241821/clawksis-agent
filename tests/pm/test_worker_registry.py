@@ -1,4 +1,5 @@
 """Registered package declarations survive a fresh, isolated interpreter."""
+
 from __future__ import annotations
 
 import hashlib
@@ -26,16 +27,18 @@ def restore_registry(monkeypatch):
     monkeypatch.setattr(registry, "_packages", dict(registry._packages))
 
 
-
 @pytest.mark.parametrize("operation", ["ensure", "stage_only"])
-def test_registered_package_installs_archive_in_real_worker(tmp_path, monkeypatch, worker_python, dl_server, operation):
+def test_registered_package_installs_archive_in_real_worker(
+    tmp_path, monkeypatch, worker_python, dl_server, operation
+):
     from pm import paths
 
     monkeypatch.setattr("pm.runtime.runtime_python", lambda **kwargs: worker_python)
     monkeypatch.setenv("CLAWK_RUNTIME_DIR", str(tmp_path / "store"))
     monkeypatch.setattr(paths, "lockfile_path", lambda: tmp_path / "lock.json")
     source = tmp_path / "package.py"
-    source.write_text(textwrap.dedent("""\
+    source.write_text(
+        textwrap.dedent("""\
         import os
         from pm import Package, register
 
@@ -48,7 +51,8 @@ def test_registered_package_installs_archive_in_real_worker(tmp_path, monkeypatc
 
             def verify(self, entry, target):
                 return '' if (entry / 'payload.txt').read_text() == 'plugin archive' else 'bad payload'
-        """))
+        """)
+    )
     module = _load_file(source, monkeypatch)
     pm.register(module.ArchivePackage)
     payload = b"plugin archive"
@@ -61,17 +65,30 @@ def test_registered_package_installs_archive_in_real_worker(tmp_path, monkeypatc
     RangeHandler.payloads["/plugin.tar.gz"] = data
     target = pm.current_target()
     lock = pm.Lockfile(paths.lockfile_path())
-    lock.set_pin("registry-worker-archive", "1", {target: {
-        "url": url(dl_server, "/plugin.tar.gz"), "sha256": hashlib.sha256(data).hexdigest(),
-    }})
+    lock.set_pin(
+        "registry-worker-archive",
+        "1",
+        {
+            target: {
+                "url": url(dl_server, "/plugin.tar.gz"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            }
+        },
+    )
     lock.save()
     engine = importlib.import_module("pm.install")
-    monkeypatch.setattr(engine, operation, lambda *a, **kw: pytest.fail("install ran in caller"))
+    monkeypatch.setattr(
+        engine, operation, lambda *a, **kw: pytest.fail("install ran in caller")
+    )
     if operation == "ensure":
         pm.ensure("registry-worker-archive", explicit=True)
-        entry = paths.store_root() / pm.Facts(paths.facts_path()).get("registry-worker-archive")["entry"]
+        entry = (
+            paths.store_root()
+            / pm.Facts(paths.facts_path()).get("registry-worker-archive")["entry"]
+        )
     else:
         from pm.client import stage_only
+
         entry = stage_only("registry-worker-archive", target)
     assert (entry / "payload.txt").read_bytes() == payload
     assert int((entry / "worker-pid").read_text()) != os.getpid()
@@ -92,14 +109,16 @@ def _child(definitions, code, *, setup=""):
         "import json, sys\n"
         f"sys.path.insert(0, {str(root)!r})\n"
         "from pm.registry import load_package_definitions, get_package\n"
-        "from pm.package import InstallError\n"
-        + setup + "\n"
+        "from pm.package import InstallError\n" + setup + "\n"
         "load_package_definitions(json.loads(sys.stdin.read()))\n"
         + textwrap.dedent(code)
     )
     return subprocess.run(
         [sys.executable, "-I", "-B", "-c", script],
-        input=json.dumps(definitions), capture_output=True, text=True, timeout=30,
+        input=json.dumps(definitions),
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
 
@@ -107,7 +126,9 @@ def _child(definitions, code, *, setup=""):
 @pytest.mark.parametrize("failure", ["dependency", "collision", "name", "not-class"])
 def test_definition_import_failures_are_package_errors(tmp_path, monkeypatch, failure):
     source = tmp_path / "package.py"
-    source.write_text("from pm import Package\nclass ExternalPackage(Package):\n    name = 'broken-worker-test'\n")
+    source.write_text(
+        "from pm import Package\nclass ExternalPackage(Package):\n    name = 'broken-worker-test'\n"
+    )
     module = _load_file(source, monkeypatch)
     pm.register(module.ExternalPackage)
     definitions = registry.package_definitions([module.ExternalPackage.name])
@@ -125,7 +146,9 @@ def test_definition_import_failures_are_package_errors(tmp_path, monkeypatch, fa
     elif failure == "collision":
         definitions[0]["module"] = "pm.package"
     elif failure == "name":
-        source.write_text("from pm import Package\nclass ExternalPackage(Package):\n    name = 'changed-name'\n")
+        source.write_text(
+            "from pm import Package\nclass ExternalPackage(Package):\n    name = 'changed-name'\n"
+        )
     else:
         source.write_text("ExternalPackage = object()\n")
     result = _child(definitions, "", setup=setup)
@@ -158,10 +181,13 @@ def test_non_importable_registration_fails_with_package_remedy(kind):
     assert registry.package_definitions(["node"]) == []
 
 
-def test_file_registered_package_runs_its_own_definition_in_child(tmp_path, monkeypatch):
+def test_file_registered_package_runs_its_own_definition_in_child(
+    tmp_path, monkeypatch
+):
     existing = registry.package_definitions()
     source = tmp_path / "package.py"
-    source.write_text(textwrap.dedent("""\
+    source.write_text(
+        textwrap.dedent("""\
         from pm import Package, InstallError, register
 
         class ExternalPackage(Package):
@@ -169,15 +195,19 @@ def test_file_registered_package_runs_its_own_definition_in_child(tmp_path, monk
 
             def fetch_url(self, version, target):
                 raise InstallError(self.name, "external definition reached", "plugin remedy")
-        """))
+        """)
+    )
     module = _load_file(source, monkeypatch)
     # Public registration also works without a decorator at import time.
     pm.register(module.ExternalPackage)
     definitions = registry.package_definitions()
     assert [item["name"] for item in definitions] == [
-        *[item["name"] for item in existing], module.ExternalPackage.name,
+        *[item["name"] for item in existing],
+        module.ExternalPackage.name,
     ]
-    result = _child(definitions, """\
+    result = _child(
+        definitions,
+        """\
         package = get_package('external-worker-test')
         try:
             package.fetch_url('1', 'linux-x64')
@@ -185,10 +215,13 @@ def test_file_registered_package_runs_its_own_definition_in_child(tmp_path, monk
             print(json.dumps([exc.package, exc.cause, exc.remedy]))
         else:
             raise AssertionError('custom package was not loaded')
-        """)
+        """,
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [
-        "external-worker-test", "external definition reached", "plugin remedy",
+        "external-worker-test",
+        "external definition reached",
+        "plugin remedy",
     ]
 
 
@@ -208,9 +241,14 @@ def test_namespaced_definition_keeps_relative_sibling_imports(tmp_path, monkeypa
     package.PREFIX = "namespaced-"
     monkeypatch.setitem(sys.modules, package.__name__, package)
     source = plugin / "packages.py"
-    source.write_text("from .sibling import NAME\nfrom . import PREFIX\nassert NAME.startswith(PREFIX)\nfrom pm import Package, register\n"
-                      "@register\nclass ExternalPackage(Package):\n    name = NAME\n")
+    source.write_text(
+        "from .sibling import NAME\nfrom . import PREFIX\nassert NAME.startswith(PREFIX)\nfrom pm import Package, register\n"
+        "@register\nclass ExternalPackage(Package):\n    name = NAME\n"
+    )
     module = _load_file(source, monkeypatch, "_pm_test_plugins.example.packages")
     definitions = registry.package_definitions([module.ExternalPackage.name])
-    result = _child(definitions, "assert get_package('namespaced-worker-test').name == 'namespaced-worker-test'")
+    result = _child(
+        definitions,
+        "assert get_package('namespaced-worker-test').name == 'namespaced-worker-test'",
+    )
     assert result.returncode == 0, result.stderr

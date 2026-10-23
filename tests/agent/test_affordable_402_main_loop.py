@@ -29,21 +29,38 @@ def _turn(script):
 
     home = Path(os.environ["CLAWK_HOME"])
     with FakeLLMServer(script) as srv:
-        write_clawk_home(home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW)
-        agent = AIAgent(provider="custom", base_url=srv.base_url, api_key="sk-fake", model="fake-model",
-                        session_id="affordable-402", quiet_mode=True, platform="cli", skip_memory=True,
-                        max_tokens=65536)
+        write_clawk_home(
+            home, srv.base_url, extra_config=OFFLINE_CONFIG + NO_BACKGROUND_REVIEW
+        )
+        agent = AIAgent(
+            provider="custom",
+            base_url=srv.base_url,
+            api_key="sk-fake",
+            model="fake-model",
+            session_id="affordable-402",
+            quiet_mode=True,
+            platform="cli",
+            skip_memory=True,
+            max_tokens=65536,
+        )
         try:
             result = agent.run_conversation("hi", conversation_history=[], task_id="t")
         finally:
             agent.close()
-        caps = [r.get("max_tokens") or r.get("max_completion_tokens") for r in srv.main_requests()]
+        caps = [
+            r.get("max_tokens") or r.get("max_completion_tokens")
+            for r in srv.main_requests()
+        ]
     return result, caps
 
 
-@pytest.mark.parametrize("repeat_402", [False, True], ids=["retry-answers", "second-402-is-billing"])
+@pytest.mark.parametrize(
+    "repeat_402", [False, True], ids=["retry-answers", "second-402-is-billing"]
+)
 def test_credit_limited_402_retries_once_with_the_affordable_cap(repeat_402):
-    script = [Error(402, _CREDIT_LIMITED_402)] * (2 if repeat_402 else 1) + [Text("answered")]
+    script = [Error(402, _CREDIT_LIMITED_402)] * (2 if repeat_402 else 1) + [
+        Text("answered")
+    ]
     result, caps = _turn(script)
 
     assert caps == [65536, 56272 - 64]
@@ -54,4 +71,6 @@ def test_credit_limited_402_retries_once_with_the_affordable_cap(repeat_402):
             result.get("final_response") or ""
         ), result
     else:
-        assert result.get("completed") and result.get("final_response") == "answered", result
+        assert result.get("completed") and result.get("final_response") == "answered", (
+            result
+        )

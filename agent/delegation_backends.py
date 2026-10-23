@@ -20,7 +20,12 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Optional
 
-from agent.delegation_registry import DEFAULT_BACKEND, _registry, backend_status, configured_backend
+from agent.delegation_registry import (
+    DEFAULT_BACKEND,
+    _registry,
+    backend_status,
+    configured_backend,
+)
 from agent.provider_registry import lower_key
 
 _session_backends: dict[str, str] = {}
@@ -42,12 +47,17 @@ def _info(name: str) -> BackendInfo:
     provider, reason = backend_status(name)
     if provider is None:
         return BackendInfo(name, name, "", False, reason)
-    return BackendInfo(name, provider.display_name, provider.summary, not reason, reason)
+    return BackendInfo(
+        name, provider.display_name, provider.summary, not reason, reason
+    )
 
 
 def list_backends() -> list[BackendInfo]:
     """``default`` first, then every registered backend (unavailable ones included, with their reason)."""
-    names = [DEFAULT_BACKEND, *sorted({p.name for p in _registry.list_providers()} - {DEFAULT_BACKEND})]
+    names = [
+        DEFAULT_BACKEND,
+        *sorted({p.name for p in _registry.list_providers()} - {DEFAULT_BACKEND}),
+    ]
     return [_info(name) for name in names]
 
 
@@ -61,7 +71,9 @@ def set_session_backend(session_key: str, name: Optional[str]) -> None:
     """Switch one session's backend; ``None``/blank clears the override. Raises ``ValueError`` (with the
     reason) for a backend that cannot run here, so a typo never leaves the session broken."""
     if not session_key:
-        raise ValueError("No session to switch: delegation backends are switched per session.")
+        raise ValueError(
+            "No session to switch: delegation backends are switched per session."
+        )
     if name is None or not name.strip():
         with _lock:
             _session_backends.pop(session_key, None)
@@ -80,8 +92,13 @@ def set_global_backend(name: str, *, session_key: str = "") -> None:
     on a package-manager-managed install (its config.yaml is not ours to write) and ``ValueError`` for a backend
     that cannot run."""
     from clawk_cli.config import (
-        atomic_config_write, format_managed_message, get_config_path, is_managed, read_user_config_raw,
+        atomic_config_write,
+        format_managed_message,
+        get_config_path,
+        is_managed,
+        read_user_config_raw,
     )
+
     if is_managed():
         raise PermissionError(format_managed_message("set delegation.backend"))
     key = lower_key(name)
@@ -101,10 +118,15 @@ def set_global_backend(name: str, *, session_key: str = "") -> None:
 
 def _current_session_key(parent_agent: Any) -> str:
     from gateway.session_context import get_session_env
-    return get_session_env("CLAWK_SESSION_KEY", "") or str(getattr(parent_agent, "session_id", "") or "")
+
+    return get_session_env("CLAWK_SESSION_KEY", "") or str(
+        getattr(parent_agent, "session_id", "") or ""
+    )
 
 
-def session_delegation_config(config: Mapping[str, Any], parent_agent: Any) -> Mapping[str, Any]:
+def session_delegation_config(
+    config: Mapping[str, Any], parent_agent: Any
+) -> Mapping[str, Any]:
     """``config`` (the ``delegation`` section) with the calling session's backend override applied."""
     override = get_session_backend(_current_session_key(parent_agent))
     if override is None or override == configured_backend(config):

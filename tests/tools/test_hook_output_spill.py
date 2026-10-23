@@ -21,7 +21,6 @@ class GetSpillConfigTests(unittest.TestCase):
         self.assertEqual(cfg["preview_tail"], hos.DEFAULT_PREVIEW_TAIL)
         self.assertIsNone(cfg["directory"])
 
-
     def test_load_config_exception_is_swallowed(self):
         with patch("clawk_cli.config.load_config", side_effect=RuntimeError("bad")):
             cfg = hos.get_spill_config()
@@ -35,6 +34,7 @@ class SpillIfOversizedTests(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def _cfg(self, **overrides):
@@ -56,7 +56,6 @@ class SpillIfOversizedTests(unittest.TestCase):
         small = "x" * 50
         self.assertEqual(hos.spill_if_oversized(small, config=self._cfg()), small)
 
-
     def test_default_directory_uses_clawk_home(self):
         """When no directory override, spill under CLAWK_HOME/hook_outputs."""
         test_home = tempfile.mkdtemp(prefix="clawk-home-")
@@ -71,6 +70,7 @@ class SpillIfOversizedTests(unittest.TestCase):
             self.assertTrue(existing, f"No spill dir found in {candidates}")
         finally:
             import shutil
+
             shutil.rmtree(test_home, ignore_errors=True)
 
 

@@ -36,14 +36,19 @@ class ResponseStore:
     request id, so a reuse is refused with ``admission_conflict`` and never re-executes.
     """
 
-    def __init__(self, max_size: int = MAX_STORED_RESPONSES, db_path: Optional[str] = None,
-                 max_identities: Optional[int] = None):
+    def __init__(
+        self,
+        max_size: int = MAX_STORED_RESPONSES,
+        db_path: Optional[str] = None,
+        max_identities: Optional[int] = None,
+    ):
         self._max_size = max_size
         self._max_identities = max_identities
         if db_path is None:
             db_path = ":memory:"
             with suppress(Exception):
                 from clawk_cli.config import get_clawk_home
+
                 db_path = str(get_clawk_home() / "response_store.db")
         self._db_path: Optional[str] = db_path if db_path != ":memory:" else None
         try:
@@ -53,30 +58,48 @@ class ResponseStore:
             self._db_path = None
         # Shared WAL-fallback so response_store.db degrades gracefully on NFS/SMB/FUSE homes.
         from clawk_state_wal import apply_wal_with_fallback
+
         apply_wal_with_fallback(self._conn, db_label="response_store.db")
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS responses ("
-            "response_id TEXT PRIMARY KEY, data TEXT NOT NULL, accessed_at REAL NOT NULL)")
+            "response_id TEXT PRIMARY KEY, data TEXT NOT NULL, accessed_at REAL NOT NULL)"
+        )
         self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS conversations (name TEXT PRIMARY KEY, response_id TEXT NOT NULL)")
+            "CREATE TABLE IF NOT EXISTS conversations (name TEXT PRIMARY KEY, response_id TEXT NOT NULL)"
+        )
         # Compact immutable request identity outlives the LRU response bodies.
         # Distinct canonical session targets must not turn a global retry key
         # into a last-writer-wins response cache entry.
         self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS response_keys (request_key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL)")
+            "CREATE TABLE IF NOT EXISTS response_keys (request_key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL)"
+        )
         self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS response_admissions (request_key TEXT PRIMARY KEY, admission_id TEXT NOT NULL)")
-        self._conn.execute('CREATE TABLE IF NOT EXISTS response_output_order '
-            '(request_key TEXT NOT NULL, item_id TEXT NOT NULL, output_index INTEGER NOT NULL, '
-            'PRIMARY KEY(request_key,item_id), UNIQUE(request_key,output_index))')
+            "CREATE TABLE IF NOT EXISTS response_admissions (request_key TEXT PRIMARY KEY, admission_id TEXT NOT NULL)"
+        )
+        self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS response_output_order "
+            "(request_key TEXT NOT NULL, item_id TEXT NOT NULL, output_index INTEGER NOT NULL, "
+            "PRIMARY KEY(request_key,item_id), UNIQUE(request_key,output_index))"
+        )
         from clawk_cli.sqlite_util import add_column_if_missing
-        add_column_if_missing(self._conn, 'response_keys', 'model_json', 'model_json TEXT')
-        add_column_if_missing(self._conn, 'response_keys', 'settled_at', 'settled_at REAL')
-        add_column_if_missing(self._conn, 'response_keys', 'response_id', 'response_id TEXT')
-        self._conn.execute('CREATE INDEX IF NOT EXISTS response_keys_settled ON response_keys(settled_at)')
-        self._conn.execute('CREATE INDEX IF NOT EXISTS response_keys_response ON response_keys(response_id)')
+
+        add_column_if_missing(
+            self._conn, "response_keys", "model_json", "model_json TEXT"
+        )
+        add_column_if_missing(
+            self._conn, "response_keys", "settled_at", "settled_at REAL"
+        )
+        add_column_if_missing(
+            self._conn, "response_keys", "response_id", "response_id TEXT"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS response_keys_settled ON response_keys(settled_at)"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS response_keys_response ON response_keys(response_id)"
+        )
         # Rows written before settlement was tracked: settled iff their replay record survives.
-        self._mark_settled('1', ())
+        self._mark_settled("1", ())
         self._settle_terminal_admissions()
         # The identity bound holds from open, not only from the next write (a lowered bound or a
         # store that crashed past it would otherwise keep every settled identity until then).
@@ -88,39 +111,60 @@ class ResponseStore:
         """Force owner-only permissions on the DB and SQLite sidecars."""
         if not self._db_path:
             return
-        for candidate in (Path(self._db_path), Path(f"{self._db_path}-wal"), Path(f"{self._db_path}-shm")):
+        for candidate in (
+            Path(self._db_path),
+            Path(f"{self._db_path}-wal"),
+            Path(f"{self._db_path}-shm"),
+        ):
             try:
                 if candidate.exists():
                     candidate.chmod(0o600)
             except OSError:
-                logger.debug("Failed to restrict response store permissions for %s", candidate, exc_info=True)
+                logger.debug(
+                    "Failed to restrict response store permissions for %s",
+                    candidate,
+                    exc_info=True,
+                )
 
     def get(self, response_id: str) -> Optional[dict[str, Any]]:
         """Retrieve a stored response by ID (updates access time for LRU)."""
         row = self._conn.execute(
-            "SELECT data FROM responses WHERE response_id = ?", (response_id,)).fetchone()
+            "SELECT data FROM responses WHERE response_id = ?", (response_id,)
+        ).fetchone()
         if row is None:
             return None
         self._conn.execute(
             "UPDATE responses SET accessed_at = ? WHERE response_id = ?",
-            (time.time(), response_id))
+            (time.time(), response_id),
+        )
         self._conn.commit()
         try:
             return json.loads(row[0])
         except (json.JSONDecodeError, TypeError):
-            logger.warning("Corrupted JSON in response store for id=%s, evicting entry", response_id)
-            self._conn.execute("DELETE FROM responses WHERE response_id = ?", (response_id,))
+            logger.warning(
+                "Corrupted JSON in response store for id=%s, evicting entry",
+                response_id,
+            )
+            self._conn.execute(
+                "DELETE FROM responses WHERE response_id = ?", (response_id,)
+            )
             self._conn.commit()
             return None
 
     def put(self, response_id: str, data: dict[str, Any]) -> None:
         """Store a response, evicting the oldest if at capacity."""
-        insert = 'INSERT OR IGNORE' if response_id.startswith('idem:') else 'INSERT OR REPLACE'
+        insert = (
+            "INSERT OR IGNORE"
+            if response_id.startswith("idem:")
+            else "INSERT OR REPLACE"
+        )
         self._conn.execute(
-            insert + " INTO responses (response_id, data, accessed_at) VALUES (?, ?, ?)",
-            (response_id, json.dumps(data, default=str), time.time()))
-        if response_id.startswith('idem:'):
-            self._mark_settled('request_key = ?', (response_id,))
+            insert
+            + " INTO responses (response_id, data, accessed_at) VALUES (?, ?, ?)",
+            (response_id, json.dumps(data, default=str), time.time()),
+        )
+        if response_id.startswith("idem:"):
+            self._mark_settled("request_key = ?", (response_id,))
         self._evict_and_commit()
 
     def _mark_settled(self, selector: str, params: tuple) -> None:
@@ -129,7 +173,9 @@ class ResponseStore:
             f"UPDATE response_keys SET settled_at=?, response_id=(SELECT {_RECORD}.id') FROM responses "
             "WHERE responses.response_id=request_key) WHERE settled_at IS NULL AND "
             f"{selector} AND EXISTS (SELECT 1 FROM responses WHERE responses.response_id=request_key "
-            f"AND {_RECORD}') IS NOT NULL)", (time.time(), *params))
+            f"AND {_RECORD}') IS NOT NULL)",
+            (time.time(), *params),
+        )
 
     def _settle_terminal_admissions(self, at: Optional[float] = None) -> None:
         """Settle an identity whose canonical admission already finished but left no replay
@@ -145,36 +191,57 @@ class ResponseStore:
         its identity, so its exact retry is unchanged."""
         if not self._db_path:
             return
-        pending = dict(self._conn.execute(
-            'SELECT a.admission_id, k.request_key FROM response_keys k JOIN response_admissions a '
-            'ON a.request_key=k.request_key WHERE k.settled_at IS NULL').fetchall())
-        state_db = Path(self._db_path).parent / 'state.db'
+        pending = dict(
+            self._conn.execute(
+                "SELECT a.admission_id, k.request_key FROM response_keys k JOIN response_admissions a "
+                "ON a.request_key=k.request_key WHERE k.settled_at IS NULL"
+            ).fetchall()
+        )
+        state_db = Path(self._db_path).parent / "state.db"
         if not pending or not state_db.is_file():
             return
         from clawk_state_holders import read_only_db_uri
         from clawk_state_terminal import ADMISSION_PREFIX
+
         terminal = []
         ids = list(pending)
         try:
-            with closing(sqlite3.connect(read_only_db_uri(state_db), uri=True)) as canon:
+            with closing(
+                sqlite3.connect(read_only_db_uri(state_db), uri=True)
+            ) as canon:
                 for start in range(0, len(ids), 500):
-                    chunk = ids[start:start + 500]
-                    marks = ','.join('?' * len(chunk))
-                    terminal += [row[0] for row in canon.execute(
-                        f"SELECT admission_id FROM session_admissions WHERE status='terminal' "
-                        f"AND admission_id IN ({marks})", chunk)]
-                    terminal += [row[0][len(ADMISSION_PREFIX):] for row in canon.execute(
-                        f'SELECT key FROM state_meta WHERE key IN ({marks})',
-                        [ADMISSION_PREFIX + admission_id for admission_id in chunk])]
+                    chunk = ids[start : start + 500]
+                    marks = ",".join("?" * len(chunk))
+                    terminal += [
+                        row[0]
+                        for row in canon.execute(
+                            f"SELECT admission_id FROM session_admissions WHERE status='terminal' "
+                            f"AND admission_id IN ({marks})",
+                            chunk,
+                        )
+                    ]
+                    terminal += [
+                        row[0][len(ADMISSION_PREFIX) :]
+                        for row in canon.execute(
+                            f"SELECT key FROM state_meta WHERE key IN ({marks})",
+                            [ADMISSION_PREFIX + admission_id for admission_id in chunk],
+                        )
+                    ]
         except sqlite3.Error:
             # Unreadable canonical store: nothing is proven terminal, so nothing is settled.
-            logger.debug('Responses identity settlement skipped: %s unreadable', state_db, exc_info=True)
+            logger.debug(
+                "Responses identity settlement skipped: %s unreadable",
+                state_db,
+                exc_info=True,
+            )
             return
         from gateway.platforms.api_server_response_identity import durable_response_id
+
         self._conn.executemany(
-            'UPDATE response_keys SET settled_at=COALESCE(?, created_at), response_id=COALESCE(response_id, ?) '
-            'WHERE request_key=? AND settled_at IS NULL',
-            [(at, durable_response_id(pending[a]), pending[a]) for a in set(terminal)])
+            "UPDATE response_keys SET settled_at=COALESCE(?, created_at), response_id=COALESCE(response_id, ?) "
+            "WHERE request_key=? AND settled_at IS NULL",
+            [(at, durable_response_id(pending[a]), pending[a]) for a in set(terminal)],
+        )
 
     def _identity_bound(self) -> int:
         return self._max_identities or IDENTITY_RETENTION_FACTOR * self._max_size
@@ -184,40 +251,67 @@ class ResponseStore:
 
         Runs inside the caller's open transaction; ``response_keys`` goes last so the selector
         sees the same rows for each table."""
-        keys = f'SELECT request_key FROM response_keys WHERE settled_at IS NOT NULL AND {selector}'
-        for table, column in (('response_output_order', 'request_key'),
-                              ('response_admissions', 'request_key'), ('responses', 'response_id')):
-            self._conn.execute(f'DELETE FROM {table} WHERE {column} IN ({keys})', params)
-        return self._conn.execute(f'DELETE FROM response_keys WHERE request_key IN ({keys})', params).rowcount
+        keys = f"SELECT request_key FROM response_keys WHERE settled_at IS NOT NULL AND {selector}"
+        for table, column in (
+            ("response_output_order", "request_key"),
+            ("response_admissions", "request_key"),
+            ("responses", "response_id"),
+        ):
+            self._conn.execute(
+                f"DELETE FROM {table} WHERE {column} IN ({keys})", params
+            )
+        return self._conn.execute(
+            f"DELETE FROM response_keys WHERE request_key IN ({keys})", params
+        ).rowcount
 
     def _evict_and_commit(self) -> None:
         count = self._conn.execute("SELECT COUNT(*) FROM responses").fetchone()[0]
         if count > self._max_size:
-            evict_ids = [row[0] for row in self._conn.execute(
-                "SELECT response_id FROM responses ORDER BY accessed_at ASC LIMIT ?",
-                (count - self._max_size,)).fetchall()]
+            evict_ids = [
+                row[0]
+                for row in self._conn.execute(
+                    "SELECT response_id FROM responses ORDER BY accessed_at ASC LIMIT ?",
+                    (count - self._max_size,),
+                ).fetchall()
+            ]
             if evict_ids:
                 placeholders = ",".join("?" for _ in evict_ids)
                 # Conversation mappings pointing at evicted responses go too.
-                self._conn.execute(f"DELETE FROM conversations WHERE response_id IN ({placeholders})", evict_ids)
-                self._conn.execute(f"DELETE FROM responses WHERE response_id IN ({placeholders})", evict_ids)
+                self._conn.execute(
+                    f"DELETE FROM conversations WHERE response_id IN ({placeholders})",
+                    evict_ids,
+                )
+                self._conn.execute(
+                    f"DELETE FROM responses WHERE response_id IN ({placeholders})",
+                    evict_ids,
+                )
         self._settle_terminal_admissions(time.time())
-        excess = self._conn.execute(
-            'SELECT COUNT(*) FROM response_keys WHERE settled_at IS NOT NULL').fetchone()[0] - self._identity_bound()
+        excess = (
+            self._conn.execute(
+                "SELECT COUNT(*) FROM response_keys WHERE settled_at IS NOT NULL"
+            ).fetchone()[0]
+            - self._identity_bound()
+        )
         if excess > 0:
-            self._forget_identities('1 ORDER BY settled_at, rowid LIMIT ?', (excess,))
+            self._forget_identities("1 ORDER BY settled_at, rowid LIMIT ?", (excess,))
             # A late observer of an already-retired key may have re-allocated derivative rows.
-            for table in ('response_output_order', 'response_admissions'):
-                self._conn.execute(f'DELETE FROM {table} WHERE request_key NOT IN (SELECT request_key FROM response_keys)')
+            for table in ("response_output_order", "response_admissions"):
+                self._conn.execute(
+                    f"DELETE FROM {table} WHERE request_key NOT IN (SELECT request_key FROM response_keys)"
+                )
         self._conn.commit()
 
     def bind_request_key(self, key: str, fingerprint: str, *, model=None) -> bool:
         """Reserve one immutable digest before any canonical admission can run."""
         with self._conn:
-            self._conn.execute('INSERT OR IGNORE INTO response_keys '
-                '(request_key,fingerprint,created_at,model_json) VALUES (?,?,?,?)',
-                (key, fingerprint, int(time.time()), json.dumps(model)))
-            row = self._conn.execute('SELECT fingerprint FROM response_keys WHERE request_key=?', (key,)).fetchone()
+            self._conn.execute(
+                "INSERT OR IGNORE INTO response_keys "
+                "(request_key,fingerprint,created_at,model_json) VALUES (?,?,?,?)",
+                (key, fingerprint, int(time.time()), json.dumps(model)),
+            )
+            row = self._conn.execute(
+                "SELECT fingerprint FROM response_keys WHERE request_key=?", (key,)
+            ).fetchone()
         return row[0] == fingerprint
 
     def request_model(self, key: str, fallback):
@@ -225,9 +319,13 @@ class ResponseStore:
         with self._conn:
             # Upgrade older compact bindings only on a cache miss; their existing cached
             # envelopes keep replaying byte-for-byte through the ordinary fast path.
-            self._conn.execute('UPDATE response_keys SET model_json=? WHERE request_key=? AND model_json IS NULL',
-                               (json.dumps(fallback), key))
-            row = self._conn.execute('SELECT model_json FROM response_keys WHERE request_key=?', (key,)).fetchone()
+            self._conn.execute(
+                "UPDATE response_keys SET model_json=? WHERE request_key=? AND model_json IS NULL",
+                (json.dumps(fallback), key),
+            )
+            row = self._conn.execute(
+                "SELECT model_json FROM response_keys WHERE request_key=?", (key,)
+            ).fetchone()
         return json.loads(row[0]) if row is not None else fallback
 
     def output_index(self, key: str, item_id: str) -> int:
@@ -237,58 +335,85 @@ class ResponseStore:
         reasoning text or cumulative conversation is copied into this identity table.
         """
         with self._conn:
-            self._conn.execute('INSERT OR IGNORE INTO response_output_order '
-                '(request_key,item_id,output_index) SELECT ?,?,COALESCE(MAX(output_index)+1,0) '
-                'FROM response_output_order WHERE request_key=?', (key, item_id, key))
-            row = self._conn.execute('SELECT output_index FROM response_output_order WHERE request_key=? AND item_id=?',
-                                     (key, item_id)).fetchone()
+            self._conn.execute(
+                "INSERT OR IGNORE INTO response_output_order "
+                "(request_key,item_id,output_index) SELECT ?,?,COALESCE(MAX(output_index)+1,0) "
+                "FROM response_output_order WHERE request_key=?",
+                (key, item_id, key),
+            )
+            row = self._conn.execute(
+                "SELECT output_index FROM response_output_order WHERE request_key=? AND item_id=?",
+                (key, item_id),
+            ).fetchone()
         return row[0]
 
     def order_output(self, key: str, items):
-        return sorted(items, key=lambda item: self.output_index(key, item['id']))
+        return sorted(items, key=lambda item: self.output_index(key, item["id"]))
 
     def request_created_at(self, key: str) -> Optional[int]:
-        row = self._conn.execute('SELECT created_at FROM response_keys WHERE request_key=?', (key,)).fetchone()
+        row = self._conn.execute(
+            "SELECT created_at FROM response_keys WHERE request_key=?", (key,)
+        ).fetchone()
         return row[0] if row else None
 
     def request_key_matches(self, key: str, fingerprint: str) -> bool:
-        row = self._conn.execute('SELECT fingerprint FROM response_keys WHERE request_key=?', (key,)).fetchone()
+        row = self._conn.execute(
+            "SELECT fingerprint FROM response_keys WHERE request_key=?", (key,)
+        ).fetchone()
         return row is None or row[0] == fingerprint
 
     def request_admission(self, key: str) -> Optional[str]:
-        row = self._conn.execute('SELECT admission_id FROM response_admissions WHERE request_key=?', (key,)).fetchone()
+        row = self._conn.execute(
+            "SELECT admission_id FROM response_admissions WHERE request_key=?", (key,)
+        ).fetchone()
         return row[0] if row else None
 
     def bind_request_admission(self, key: str, admission_id: str) -> None:
         from clawk_state_runtime import RuntimeStoreError
+
         with self._conn:
-            self._conn.execute('INSERT OR IGNORE INTO response_admissions VALUES (?,?)', (key, admission_id))
+            self._conn.execute(
+                "INSERT OR IGNORE INTO response_admissions VALUES (?,?)",
+                (key, admission_id),
+            )
             if self.request_admission(key) != admission_id:
-                raise RuntimeStoreError('admission_conflict')
+                raise RuntimeStoreError("admission_conflict")
 
     def forget_unadmitted_request(self, key: str) -> None:
         with self._conn:
-            self._conn.execute('DELETE FROM response_keys WHERE request_key=? AND NOT EXISTS '
-                '(SELECT 1 FROM response_admissions WHERE request_key=?)', (key, key))
+            self._conn.execute(
+                "DELETE FROM response_keys WHERE request_key=? AND NOT EXISTS "
+                "(SELECT 1 FROM response_admissions WHERE request_key=?)",
+                (key, key),
+            )
 
     def delete(self, response_id: str) -> bool:
         """Remove a response, conversation mappings to it and its settled Idempotency-Key
         identity (replay record included). True if anything was found and deleted."""
-        self._conn.execute("DELETE FROM conversations WHERE response_id = ?", (response_id,))
-        cursor = self._conn.execute("DELETE FROM responses WHERE response_id = ?", (response_id,))
+        self._conn.execute(
+            "DELETE FROM conversations WHERE response_id = ?", (response_id,)
+        )
+        cursor = self._conn.execute(
+            "DELETE FROM responses WHERE response_id = ?", (response_id,)
+        )
         self._settle_terminal_admissions(time.time())
-        forgotten = self._forget_identities('response_id = ?', (response_id,))
+        forgotten = self._forget_identities("response_id = ?", (response_id,))
         self._conn.commit()
         return cursor.rowcount > 0 or forgotten > 0
 
     def get_conversation(self, name: str) -> Optional[str]:
         """Get the latest response_id for a conversation name."""
-        row = self._conn.execute("SELECT response_id FROM conversations WHERE name = ?", (name,)).fetchone()
+        row = self._conn.execute(
+            "SELECT response_id FROM conversations WHERE name = ?", (name,)
+        ).fetchone()
         return row[0] if row else None
 
     def set_conversation(self, name: str, response_id: str) -> None:
         """Map a conversation name to its latest response_id."""
-        self._conn.execute("INSERT OR REPLACE INTO conversations (name, response_id) VALUES (?, ?)", (name, response_id))
+        self._conn.execute(
+            "INSERT OR REPLACE INTO conversations (name, response_id) VALUES (?, ?)",
+            (name, response_id),
+        )
         self._conn.commit()
 
     def close(self) -> None:

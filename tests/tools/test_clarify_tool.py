@@ -23,6 +23,7 @@ class TestClarifyToolBasics:
 
     def test_simple_question_with_callback(self):
         """Should return user response for simple question."""
+
         def mock_callback(questions):
             assert questions[0]["question"] == "What color?"
             assert questions[0]["choices"] is None
@@ -65,6 +66,7 @@ class TestClarifyToolCallbackHandling:
 
     def test_callback_exception_returns_error(self):
         """Should return error if callback raises exception."""
+
         def failing_callback(questions):
             raise RuntimeError("User cancelled")
 
@@ -74,6 +76,7 @@ class TestClarifyToolCallbackHandling:
 
     def test_user_response_stripped(self):
         """User response should be stripped of whitespace."""
+
         def mock_callback(questions):
             return _reply({"q0": "  response with spaces  \n"})
 
@@ -98,28 +101,40 @@ class TestClarifyToolMultiSelect:
 
     def test_multi_select_true_returns_list(self):
         """When multi_select=True, user_response should be a list of strings."""
+
         def mock_callback(questions):
             return _reply({"q0": ["red", "blue"]})
 
-        result = _ask(mock_callback, [{
-            "question": "Which colors?",
-            "choices": ["red", "blue", "green"],
-            "multi_select": True,
-        }])
+        result = _ask(
+            mock_callback,
+            [
+                {
+                    "question": "Which colors?",
+                    "choices": ["red", "blue", "green"],
+                    "multi_select": True,
+                }
+            ],
+        )
         response = result["responses"][0]
         assert response["user_response"] == ["red", "blue"]
         assert isinstance(response["user_response"], list)
 
     def test_multi_select_single_choice_still_list(self):
         """Even a single selection should be a list when multi_select=True."""
+
         def mock_callback(questions):
             return _reply({"q0": '["red"]'})
 
-        result = _ask(mock_callback, [{
-            "question": "Which color?",
-            "choices": ["red", "blue"],
-            "multi_select": True,
-        }])
+        result = _ask(
+            mock_callback,
+            [
+                {
+                    "question": "Which color?",
+                    "choices": ["red", "blue"],
+                    "multi_select": True,
+                }
+            ],
+        )
         response = result["responses"][0]
         assert response["user_response"] == ["red"]
         assert isinstance(response["user_response"], list)
@@ -146,6 +161,7 @@ class TestClarifyRecommendedLabel:
 
     def test_answer_strips_the_label(self):
         """Picking the recommended option returns the bare option text."""
+
         def cb(questions):
             return _reply({"q0": questions[0]["choices"][0]})
 
@@ -158,11 +174,16 @@ class TestClarifyRecommendedLabel:
         def cb(questions):
             return _reply({"q0": questions[0]["choices"][:2]})
 
-        result = _ask(cb, [{
-            "question": "Pick some",
-            "choices": ["Rebase", "Merge", "Squash"],
-            "multi_select": True,
-        }])
+        result = _ask(
+            cb,
+            [
+                {
+                    "question": "Pick some",
+                    "choices": ["Rebase", "Merge", "Squash"],
+                    "multi_select": True,
+                }
+            ],
+        )
         assert result["responses"][0]["user_response"] == ["Rebase", "Merge"]
 
     def test_single_choice_is_not_labelled(self):
@@ -203,6 +224,7 @@ class TestRegistryMultiSelectPassThrough:
 
     def test_handler_passes_multi_select(self):
         from tools.registry import registry
+
         entry = registry.get_entry("clarify")
         seen = {}
 
@@ -210,15 +232,26 @@ class TestRegistryMultiSelectPassThrough:
             seen["multi"] = questions[0]["multi_select"]
             return _reply({"q0": ["a", "b"]})
 
-        result = json.loads(entry.handler(
-            {"questions": [{"question": "Pick", "choices": ["a", "b"], "multi_select": True}]},
-            callback=cb,
-        ))
+        result = json.loads(
+            entry.handler(
+                {
+                    "questions": [
+                        {
+                            "question": "Pick",
+                            "choices": ["a", "b"],
+                            "multi_select": True,
+                        }
+                    ]
+                },
+                callback=cb,
+            )
+        )
         assert seen["multi"] is True
         assert result["responses"][0]["user_response"] == ["a", "b"]
 
     def test_handler_default_single_select(self):
         from tools.registry import registry
+
         entry = registry.get_entry("clarify")
         seen = {}
 
@@ -226,10 +259,12 @@ class TestRegistryMultiSelectPassThrough:
             seen["multi"] = questions[0]["multi_select"]
             return _reply({"q0": "a"})
 
-        result = json.loads(entry.handler(
-            {"questions": [{"question": "Pick", "choices": ["a", "b"]}]},
-            callback=cb,
-        ))
+        result = json.loads(
+            entry.handler(
+                {"questions": [{"question": "Pick", "choices": ["a", "b"]}]},
+                callback=cb,
+            )
+        )
         assert seen["multi"] is False
         assert result["responses"][0]["user_response"] == "a"
 
@@ -238,39 +273,57 @@ class TestClarifyBatchValidation:
     """Validation of the `questions` batch parameter (issue #18450)."""
 
     def test_batch_rejects_more_than_five(self):
-        result = _ask(lambda questions: _reply({}), [{"question": f"Q{i}?"} for i in range(6)])
+        result = _ask(
+            lambda questions: _reply({}), [{"question": f"Q{i}?"} for i in range(6)]
+        )
         assert "error" in result
 
     def test_batch_rejects_blank_question_text(self):
-        result = _ask(lambda questions: _reply({}), [{"question": "Real?"}, {"question": "   "}])
+        result = _ask(
+            lambda questions: _reply({}), [{"question": "Real?"}, {"question": "   "}]
+        )
         assert "error" in result
 
     def test_all_blank_choices_are_an_error_not_open_ended(self):
         """#73152: a choices list whose entries are all blank must not quietly become a free-text card."""
         asked = []
-        result = _ask(lambda questions: asked.append(questions) or _reply({}),
-                      [{"question": "Pick one?", "choices": ["", "   "]}])
+        result = _ask(
+            lambda questions: asked.append(questions) or _reply({}),
+            [{"question": "Pick one?", "choices": ["", "   "]}],
+        )
         assert "error" in result and "blank" in result["error"]
         assert asked == []
 
     def test_empty_choices_list_stays_open_ended(self):
         seen = {}
-        _ask(lambda questions: seen.setdefault("q", questions) and _reply({"q0": "free text"}),
-             [{"question": "Anything?", "choices": []}])
+        _ask(
+            lambda questions: (
+                seen.setdefault("q", questions) and _reply({"q0": "free text"})
+            ),
+            [{"question": "Anything?", "choices": []}],
+        )
         assert seen["q"][0]["choices"] is None
 
     def test_over_limit_choice_is_rejected_at_the_source(self):
         """#124127: a choice longer than a surface renders is refused, not silently dropped downstream."""
         from tools.clarify_tool import MAX_CHOICE_CHARS
+
         long_choice = "x" * (MAX_CHOICE_CHARS + 1)
-        result = _ask(lambda questions: _reply({}), [{"question": "Pick?", "choices": ["short", long_choice]}])
+        result = _ask(
+            lambda questions: _reply({}),
+            [{"question": "Pick?", "choices": ["short", long_choice]}],
+        )
         assert "error" in result and str(MAX_CHOICE_CHARS) in result["error"]
 
     def test_long_multi_line_choice_within_limit_is_kept(self):
         seen = {}
         choice = "Option A\n" + "detail " * 60
-        _ask(lambda questions: seen.setdefault("q", questions) and _reply({"q0": "Option A"}),
-             [{"question": "Pick?", "choices": [choice, "B"]}])
+        _ask(
+            lambda questions: (
+                seen.setdefault("q", questions) and _reply({"q0": "Option A"})
+            ),
+            [{"question": "Pick?", "choices": [choice, "B"]}],
+        )
         assert seen["q"][0]["choices_offered"][0] == choice.strip()
 
     def test_batch_rejects_non_list(self):
@@ -285,10 +338,13 @@ class TestClarifyBatchValidation:
             seen["questions"] = questions
             return _reply({"q0": "a", "q1": "Loose layout"})
 
-        _ask(cb, [
-            {"question": "Pick letter", "choices": ["a", "b", "c", "d", "e", "f"]},
-            {"question": "Pick layout", "choices": ["Loose layout", "Tight"]},
-        ])
+        _ask(
+            cb,
+            [
+                {"question": "Pick letter", "choices": ["a", "b", "c", "d", "e", "f"]},
+                {"question": "Pick layout", "choices": ["Loose layout", "Tight"]},
+            ],
+        )
         q0, q1 = seen["questions"]
         assert len(q0["choices"]) == MAX_CHOICES
         assert q0["choices"][0] == "a (Recommended)"
@@ -335,15 +391,21 @@ class TestClarifyBatchDispatch:
         def cb(questions):
             return _reply({"q0": '["red", "blue"]'})
 
-        result = _ask(cb, [{
-            "question": "Colors?",
-            "choices": ["red", "blue", "green"],
-            "multi_select": True,
-        }])
+        result = _ask(
+            cb,
+            [
+                {
+                    "question": "Colors?",
+                    "choices": ["red", "blue", "green"],
+                    "multi_select": True,
+                }
+            ],
+        )
         assert result["responses"][0]["user_response"] == ["red", "blue"]
 
     def test_batch_timed_out_keeps_partials(self):
         """Timeout keeps the locked answers and marks the rest unanswered."""
+
         def cb(questions):
             return _reply({"q0": "kept"}, outcome="timed_out", notice="no reply")
 
@@ -357,6 +419,7 @@ class TestClarifyBatchDispatch:
 
     def test_batch_skipped_is_not_unanswered(self):
         """A question locked empty is skipped; a missing one is unanswered."""
+
         def cb(questions):
             return _reply({"q0": None})
 
@@ -371,6 +434,7 @@ class TestRegistryBatchPassThrough:
 
     def test_handler_passes_questions(self):
         from tools.registry import registry
+
         entry = registry.get_entry("clarify")
         seen = {}
 
@@ -378,9 +442,11 @@ class TestRegistryBatchPassThrough:
             seen["questions"] = questions
             return _reply({"q0": "yes"})
 
-        result = json.loads(entry.handler(
-            {"questions": [{"question": "Go?"}]},
-            callback=cb,
-        ))
+        result = json.loads(
+            entry.handler(
+                {"questions": [{"question": "Go?"}]},
+                callback=cb,
+            )
+        )
         assert seen["questions"][0]["question"] == "Go?"
         assert result["responses"][0]["user_response"] == "yes"

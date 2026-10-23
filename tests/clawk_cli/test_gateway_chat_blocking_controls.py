@@ -41,21 +41,8 @@ async def test_oneshot_tracks_foreign_blocking_control_and_detaches(
 
         async def _after_receipt(self):
             await asyncio.sleep(0)
-            self.events.put_nowait({
-                "method": "event",
-                "params": {
-                    "type": "message.delta",
-                    "session_id": "stored",
-                    "admission_id": "neighbor",
-                    "payload": {"text": "neighbor output"},
-                },
-            })
-            self.events.put_nowait(_control_event(kind))
-
-        async def rpc(self, method, **params):
-            assert method == "prompt.submit"
-            if timing == "before_receipt":
-                self.events.put_nowait({
+            self.events.put_nowait(
+                {
                     "method": "event",
                     "params": {
                         "type": "message.delta",
@@ -63,7 +50,24 @@ async def test_oneshot_tracks_foreign_blocking_control_and_detaches(
                         "admission_id": "neighbor",
                         "payload": {"text": "neighbor output"},
                     },
-                })
+                }
+            )
+            self.events.put_nowait(_control_event(kind))
+
+        async def rpc(self, method, **params):
+            assert method == "prompt.submit"
+            if timing == "before_receipt":
+                self.events.put_nowait(
+                    {
+                        "method": "event",
+                        "params": {
+                            "type": "message.delta",
+                            "session_id": "stored",
+                            "admission_id": "neighbor",
+                            "payload": {"text": "neighbor output"},
+                        },
+                    }
+                )
                 self.events.put_nowait(_control_event(kind))
                 await asyncio.sleep(0)
             else:
@@ -88,8 +92,11 @@ async def test_oneshot_applies_foreign_control_settlement_before_receipt(kind):
         "prompt_id": "p1",
         "kind": control,
         "execution_generation": 7,
-        **({"command": "old command", "choices": ["yes", "no"]}
-           if control == "approval" else {"question": "old question"}),
+        **(
+            {"command": "old command", "choices": ["yes", "no"]}
+            if control == "approval"
+            else {"question": "old question"}
+        ),
     }
 
     class Peer:
@@ -97,18 +104,23 @@ async def test_oneshot_applies_foreign_control_settlement_before_receipt(kind):
 
         async def rpc(self, method, **params):
             if method == "prompt.receipt":
-                return {"status": "terminal", "result": {"completed": True, "final_response": "done"}}
+                return {
+                    "status": "terminal",
+                    "result": {"completed": True, "final_response": "done"},
+                }
             assert method == "prompt.submit"
             self.events.put_nowait(_control_event(kind))
-            self.events.put_nowait({
-                "method": "event",
-                "params": {
-                    "type": "message.complete",
-                    "session_id": "stored",
-                    "admission_id": "mine",
-                    "payload": {"text": "done", "outcome": "completed"},
-                },
-            })
+            self.events.put_nowait(
+                {
+                    "method": "event",
+                    "params": {
+                        "type": "message.complete",
+                        "session_id": "stored",
+                        "admission_id": "mine",
+                        "payload": {"text": "done", "outcome": "completed"},
+                    },
+                }
+            )
             await asyncio.sleep(0)
             return {"admission_id": "mine"}
 
@@ -130,11 +142,13 @@ async def test_finite_renderer_applies_foreign_settlement_after_receipt(kind):
         Peer(),
         {
             "stored_session_id": "stored",
-            "prompts": [{
-                "prompt_id": "p1",
-                "kind": control,
-                "execution_generation": 7,
-            }],
+            "prompts": [
+                {
+                    "prompt_id": "p1",
+                    "kind": control,
+                    "execution_generation": 7,
+                }
+            ],
         },
         quiet=True,
     )

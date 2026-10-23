@@ -14,14 +14,27 @@ import pytest
 
 from gateway.config import GatewayConfig, Platform, PlatformConfig
 from gateway.platforms.event import MessageEvent
-from plugins.platforms.yuanbao.adapter import DispatchMiddleware, InboundContext, YuanbaoAdapter
+from plugins.platforms.yuanbao.adapter import (
+    DispatchMiddleware,
+    InboundContext,
+    YuanbaoAdapter,
+)
 from gateway.profile_routing import parse_profile_routes
 
 
 def _yuanbao(owner):
-    adapter = YuanbaoAdapter(PlatformConfig(extra={
-        "app_id": "k", "app_secret": "s", "ws_url": "wss://x", "api_domain": "https://x",
-        "group_sessions_per_user": True, "thread_sessions_per_user": False}))
+    adapter = YuanbaoAdapter(
+        PlatformConfig(
+            extra={
+                "app_id": "k",
+                "app_secret": "s",
+                "ws_url": "wss://x",
+                "api_domain": "https://x",
+                "group_sessions_per_user": True,
+                "thread_sessions_per_user": False,
+            }
+        )
+    )
     adapter.set_owner_profile(owner)
     return adapter
 
@@ -44,7 +57,14 @@ def test_adapter_batch_key_equals_runner_session_key(owner):
     adapter = _yuanbao(owner)
     runner = _runner(adapter, owner)
     source = adapter.build_source(chat_id="grp-1", chat_type="group", user_id="u1")
-    ctx = InboundContext(adapter=adapter, chat_type="group", chat_id="grp-1", raw_text="hi", msg_id="m1", source=source)
+    ctx = InboundContext(
+        adapter=adapter,
+        chat_type="group",
+        chat_id="grp-1",
+        raw_text="hi",
+        msg_id="m1",
+        source=source,
+    )
     seen = []
 
     async def go():

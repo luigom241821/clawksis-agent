@@ -33,7 +33,10 @@ def _state(**flags):
 class TestWouldGrowRefusalFeedback:
     def test_refusal_reports_preserved_not_compressed(self):
         summary = summarize_manual_compression(
-            _msgs(8), _msgs(14), 22025, 22453,
+            _msgs(8),
+            _msgs(14),
+            22025,
+            22453,
             compression_state=_state(_last_compress_refused_would_grow=True),
         )
         assert summary["refused_would_grow"] is True
@@ -44,14 +47,21 @@ class TestWouldGrowRefusalFeedback:
 
     def test_normal_compression_unchanged(self):
         summary = summarize_manual_compression(
-            _msgs(10), _msgs(4), 30000, 12000, compression_state=_state(),
+            _msgs(10),
+            _msgs(4),
+            30000,
+            12000,
+            compression_state=_state(),
         )
         assert summary["refused_would_grow"] is False
         assert summary["headline"].startswith("Compressed: 10 → 4")
 
     def test_abort_still_wins_its_own_headline(self):
         summary = summarize_manual_compression(
-            _msgs(6), _msgs(6), 9000, 9000,
+            _msgs(6),
+            _msgs(6),
+            9000,
+            9000,
             compression_state=_state(_last_compress_aborted=True),
         )
         assert summary["aborted"] is True

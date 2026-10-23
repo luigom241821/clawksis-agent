@@ -76,9 +76,7 @@ def test_run_conversation_acquires_then_reloads_latest_tip(monkeypatch, signal):
     db = _DB()
     agent = _agent_with_db(db)
     status_events = []
-    agent.status_callback = lambda kind, text=None: status_events.append(
-        (kind, text)
-    )
+    agent.status_callback = lambda kind, text=None: status_events.append((kind, text))
 
     observed = {}
 
@@ -189,10 +187,18 @@ _LATEST = [{"role": "user", "content": "durable latest"}]
         # An unreadable row that reloads nothing keeps the caller's history, carried input included.
         ("raises", [], False),
     ],
-    ids=["absent-after-wait", "created-during-wait", "created-empty-during-wait", "unreadable-empty"],
+    ids=[
+        "absent-after-wait",
+        "created-during-wait",
+        "created-empty-during-wait",
+        "unreadable-empty",
+    ],
 )
 def test_waited_admission_uses_the_row_read_after_the_lease(
-    monkeypatch, row_after, reload_rows, expect_reload,
+    monkeypatch,
+    row_after,
+    reload_rows,
+    expect_reload,
 ):
     """After a contended wait, the row state read under the lease decides reload and row flag."""
     from agent.session_persistence import _PERSIST_AFTER_ADMISSION_INTERRUPT
@@ -223,7 +229,11 @@ def test_waited_admission_uses_the_row_read_after_the_lease(
         return {"final_response": "ok", "messages": history, "failed": False}
 
     monkeypatch.setattr("agent.conversation_loop.run_conversation", fake_run)
-    carried = {"role": "user", "content": "carried", _PERSIST_AFTER_ADMISSION_INTERRUPT: True}
+    carried = {
+        "role": "user",
+        "content": "carried",
+        _PERSIST_AFTER_ADMISSION_INTERRUPT: True,
+    }
     seed = [{"role": "user", "content": "caller history"}, carried]
     AIAgent.run_conversation(agent, "work", conversation_history=seed)
 
@@ -239,7 +249,11 @@ def test_first_turn_on_fresh_session_serializes_a_second_writer(tmp_path, monkey
     turn arriving meanwhile must wait for that turn and see its rows, not interleave."""
     path = tmp_path / "state.db"
     db_a, db_b = SessionDB(path), SessionDB(path)
-    a_in_turn, a_may_finish, a_finished = threading.Event(), threading.Event(), threading.Event()
+    a_in_turn, a_may_finish, a_finished = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
     observed = {}
 
     def fake_run(_agent, message, _system, history, *_args, **_kwargs):
@@ -267,6 +281,7 @@ def test_first_turn_on_fresh_session_serializes_a_second_writer(tmp_path, monkey
         def waiting(elapsed):
             b_waiting_or_done.set()
             on_wait(elapsed)
+
         return real_acquire(*args, on_wait=waiting, **kwargs)
 
     db_b.acquire_session_turn_lease = acquire_b
@@ -274,13 +289,18 @@ def test_first_turn_on_fresh_session_serializes_a_second_writer(tmp_path, monkey
     def run_b():
         try:
             AIAgent.run_conversation(
-                agent_b, "second",
-                conversation_history=db_b.get_messages_as_conversation("client-id"))
+                agent_b,
+                "second",
+                conversation_history=db_b.get_messages_as_conversation("client-id"),
+            )
         finally:
             b_waiting_or_done.set()
 
     thread_a = threading.Thread(
-        target=lambda: AIAgent.run_conversation(agent_a, "first", conversation_history=[]))
+        target=lambda: AIAgent.run_conversation(
+            agent_a, "first", conversation_history=[]
+        )
+    )
     thread_b = threading.Thread(target=run_b)
     try:
         thread_a.start()
@@ -304,9 +324,7 @@ def test_run_conversation_lease_timeout_returns_resend_notice(monkeypatch):
     db = _DB(acquire_result=False)
     agent = _agent_with_db(db)
     status_events = []
-    agent.status_callback = lambda kind, text=None: status_events.append(
-        (kind, text)
-    )
+    agent.status_callback = lambda kind, text=None: status_events.append((kind, text))
 
     def boom(*_args, **_kwargs):
         raise AssertionError("turn must not start without a lease")
@@ -714,9 +732,7 @@ def test_run_conversation_exposes_holder_for_fenced_flush(monkeypatch):
     db.acquire_session_turn_lease = acquire_with_wait
 
     def fake_run(_agent, _message, _system, history, *_args, **_kwargs):
-        captured["active"] = getattr(
-            _agent, "_active_session_turn_lease_holder", None
-        )
+        captured["active"] = getattr(_agent, "_active_session_turn_lease_holder", None)
         ok = _agent._flush_messages_to_session_db(
             [
                 {"role": "user", "content": "hi"},
@@ -770,8 +786,8 @@ def _flush_agent(db, session_id):
         _last_persistence_error_cause=None,
     )
     agent._ensure_db_session = lambda: None
-    agent._flush_messages_to_session_db = (
-        AIAgent._flush_messages_to_session_db.__get__(agent, AIAgent)
+    agent._flush_messages_to_session_db = AIAgent._flush_messages_to_session_db.__get__(
+        agent, AIAgent
     )
     agent._flush_messages_to_session_db_unlocked = (
         AIAgent._flush_messages_to_session_db_unlocked.__get__(agent, AIAgent)
@@ -787,9 +803,7 @@ def test_flush_messages_to_session_db_fences_stale_holder_on_live_db(tmp_path):
     first.create_session("shared", source="test")
     stale_holder = "pid=1:turn=stale"
     next_holder = "pid=2:turn=next"
-    assert first.try_acquire_session_turn_lease(
-        "shared", stale_holder, ttl_seconds=5
-    )
+    assert first.try_acquire_session_turn_lease("shared", stale_holder, ttl_seconds=5)
 
     agent = _flush_agent(first, "shared")
     agent._active_session_turn_lease_holder = stale_holder
@@ -798,9 +812,7 @@ def test_flush_messages_to_session_db_fences_stale_holder_on_live_db(tmp_path):
     assert [m["content"] for m in first.get_messages("shared")] == ["stale-owned"]
 
     first.release_session_turn_lease("shared", stale_holder)
-    assert second.try_acquire_session_turn_lease(
-        "shared", next_holder, ttl_seconds=5
-    )
+    assert second.try_acquire_session_turn_lease("shared", next_holder, ttl_seconds=5)
 
     late = [{"role": "assistant", "content": "late stale reply"}]
     assert agent._flush_messages_to_session_db(late, []) is False

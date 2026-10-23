@@ -20,9 +20,7 @@ def test_legacy_plugin_loads_and_ignores_additive_hook_and_manifest_fields(
     plugins_dir.mkdir(parents=True)
     shutil.copytree(LEGACY_PLUGIN, plugins_dir / "legacy-contract-fixture")
     (clawk_home / "config.yaml").write_text(
-        yaml.safe_dump(
-            {"plugins": {"enabled": ["legacy-contract-fixture"]}}
-        ),
+        yaml.safe_dump({"plugins": {"enabled": ["legacy-contract-fixture"]}}),
         encoding="utf-8",
     )
     empty_bundled = tmp_path / "bundled-plugins"

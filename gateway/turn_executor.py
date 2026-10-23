@@ -45,7 +45,9 @@ class _UnboundedThreadExecutor(concurrent.futures.Executor):
             if self._shutdown:
                 raise RuntimeError("cannot schedule new futures after shutdown")
             self._n += 1
-            t = threading.Thread(target=_run, name=f"{self._prefix}_{self._n}", daemon=True)
+            t = threading.Thread(
+                target=_run, name=f"{self._prefix}_{self._n}", daemon=True
+            )
             # Start BEFORE registering: at the OS thread limit start() raises, and an unstarted thread
             # left in _threads would make shutdown's join() raise and skip the quiesce decision.
             t.start()

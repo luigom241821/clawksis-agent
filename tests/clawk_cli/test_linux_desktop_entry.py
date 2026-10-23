@@ -48,9 +48,7 @@ def _stub_install(tmp_path, monkeypatch) -> None:
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir(exist_ok=True)
     clawk_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
 
@@ -70,9 +68,7 @@ def test_install_writes_entry_with_absolute_exec_and_icon(
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
     clawk_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
     # Keep the icon install out of the way: this test pins the
     # absolute-path FALLBACK (copy impossible / not attempted here).
@@ -105,9 +101,7 @@ def test_install_prefers_themed_icon_from_hicolor(tmp_path, xdg_home, monkeypatc
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
     clawk_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     entry = lde.install_desktop_entry(root)
@@ -131,9 +125,7 @@ def test_install_icon_copy_failure_falls_back_to_absolute(
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
     clawk_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     def _boom(src, dst):
@@ -189,13 +181,9 @@ def test_exec_prefixes_interpreter_for_env_shebang_python_script(
     root = _make_project(tmp_path)
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
-    clawk_bin.write_text(
-        "#!/usr/bin/env python3\nimport clawk_cli\n", encoding="utf-8"
-    )
+    clawk_bin.write_text("#!/usr/bin/env python3\nimport clawk_cli\n", encoding="utf-8")
     clawk_bin.chmod(0o755)
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     entry = lde.install_desktop_entry(root)
@@ -212,12 +200,11 @@ def test_exec_leaves_shell_wrapper_launchers_alone(tmp_path, xdg_home, monkeypat
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
     clawk_bin.write_text(
-        '#!/usr/bin/env bash\nexec /opt/clawksis/venv/bin/python "$@"\n', encoding="utf-8"
+        '#!/usr/bin/env bash\nexec /opt/clawksis/venv/bin/python "$@"\n',
+        encoding="utf-8",
     )
     clawk_bin.chmod(0o755)
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     entry = lde.install_desktop_entry(root)
@@ -236,9 +223,7 @@ def test_exec_leaves_venv_shebang_scripts_alone(tmp_path, xdg_home, monkeypatch)
     interpreter = os.path.abspath(sys.executable)
     clawk_bin.write_text(f"#!{interpreter}\nimport clawk_cli\n", encoding="utf-8")
     clawk_bin.chmod(0o755)
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     entry = lde.install_desktop_entry(root)
@@ -279,7 +264,9 @@ def test_exec_converges_from_repo_script_argv0_to_installed_wrapper(
     repo_script.chmod(0o755)
     wrapper = tmp_path / "installed" / "bin" / "clawk"
     wrapper.parent.mkdir(parents=True)
-    wrapper.write_text(f'#!/usr/bin/env bash\nexec {sys.executable} "$@"\n', encoding="utf-8")
+    wrapper.write_text(
+        f'#!/usr/bin/env bash\nexec {sys.executable} "$@"\n', encoding="utf-8"
+    )
     wrapper.chmod(0o755)
 
     # argv[0] = repo script; PATH lookup finds the installed wrapper.
@@ -421,7 +408,9 @@ def test_exec_uses_known_wrapper_when_path_lookup_misses(
     assert exec_line == f"{known_wrapper} desktop"
 
 
-def test_exec_never_persists_a_checkout_internal_path_hit(tmp_path, xdg_home, monkeypatch):
+def test_exec_never_persists_a_checkout_internal_path_hit(
+    tmp_path, xdg_home, monkeypatch
+):
     """A PATH hit inside THIS checkout is a launch-context artifact, like argv[0].
 
     The desktop-update hand-off hands the updater <checkout>/venv/bin at the
@@ -699,7 +688,9 @@ def test_installed_entry_carries_the_window_app_id(tmp_path, xdg_home, monkeypat
     assert values["Name"] == "Clawksis"  # the menu label is not part of the identity
 
 
-def test_install_keeps_the_legacy_entry_as_a_hidden_alias(tmp_path, xdg_home, monkeypatch):
+def test_install_keeps_the_legacy_entry_as_a_hidden_alias(
+    tmp_path, xdg_home, monkeypatch
+):
     """A pin resolves by the entry file name it was pinned against (#124492).
 
     Deleting ``clawk.desktop`` silently kills existing taskbar pins (GNOME drops
@@ -721,7 +712,9 @@ def test_install_keeps_the_legacy_entry_as_a_hidden_alias(tmp_path, xdg_home, mo
     entry = lde.install_desktop_entry(root)
 
     assert entry is not None and entry.is_file()
-    assert legacy.is_file(), "an existing pin resolves through this file — it must survive"
+    assert legacy.is_file(), (
+        "an existing pin resolves through this file — it must survive"
+    )
     alias = _parse(legacy.read_text(encoding="utf-8"))
     assert alias["NoDisplay"] == "true"  # no second Clawksis in the app grid
     assert alias["StartupWMClass"] == lde.APP_ID  # still groups with the window
@@ -736,14 +729,19 @@ def test_unchanged_entry_still_aliases_a_legacy_entry(tmp_path, xdg_home, monkey
     root = _make_project(tmp_path)
     assert lde.install_desktop_entry(root) is not None
     legacy = xdg_home / "applications" / lde.LEGACY_DESKTOP_ENTRY_NAME
-    legacy.write_text("[Desktop Entry]\nType=Application\nName=Clawksis\nExec=clawk desktop\n", encoding="utf-8")
+    legacy.write_text(
+        "[Desktop Entry]\nType=Application\nName=Clawksis\nExec=clawk desktop\n",
+        encoding="utf-8",
+    )
 
     lde.install_desktop_entry(root)
 
     assert _parse(legacy.read_text(encoding="utf-8"))["NoDisplay"] == "true"
 
 
-def test_install_keeps_foreign_files_at_the_legacy_path(tmp_path, xdg_home, monkeypatch):
+def test_install_keeps_foreign_files_at_the_legacy_path(
+    tmp_path, xdg_home, monkeypatch
+):
     """Only our own entry is converted to an alias; another app's file is not ours to rewrite."""
     _stub_install(tmp_path, monkeypatch)
     root = _make_project(tmp_path)
@@ -800,11 +798,17 @@ def test_app_id_matches_the_desktop_build_identity():
     repo = Path(__file__).resolve().parents[2]
     probe = "console.log(require('./apps/desktop/product-identity.cjs').appId)"
     result = subprocess.run(
-        [node, "-e", probe], cwd=repo, capture_output=True, text=True, timeout=60,
+        [node, "-e", probe],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     if result.returncode != 0:
-        pytest.skip(f"product-identity.cjs did not evaluate: {result.stderr.strip()[:200]}")
+        pytest.skip(
+            f"product-identity.cjs did not evaluate: {result.stderr.strip()[:200]}"
+        )
     assert result.stdout.strip() == lde.APP_ID
 
 
@@ -871,8 +875,6 @@ def _stub_tools(monkeypatch, available: set[str]) -> list[list[str]]:
     return ran
 
 
-
-
 def test_refresh_falls_back_to_kbuildsycoca5(monkeypatch, tmp_path):
     ran = _stub_tools(monkeypatch, {"kbuildsycoca5"})
 
@@ -909,8 +911,6 @@ def test_run_quiet_swallows_missing_binary(tmp_path):
     assert lde._run_quiet([str(tmp_path / "definitely-not-a-binary")]) is False
 
 
-
-
 @pytest.mark.skipif(
     sys.platform == "win32", reason="Symlinks require elevated privileges on Windows"
 )
@@ -944,8 +944,6 @@ def test_running_interpreter_resolves_plain_interpreter(monkeypatch):
     monkeypatch.setattr(lde.sys, "executable", "/usr/bin/python3")
     out = lde._running_interpreter()
     assert Path(out).is_absolute()
-
-
 
 
 def test_exec_falls_back_to_running_interpreter_when_probe_fails(
@@ -1219,9 +1217,7 @@ def test_install_icon_handles_truncated_png_header(tmp_path, xdg_home, monkeypat
     clawk_bin = tmp_path / "bin" / "clawk"
     clawk_bin.parent.mkdir()
     clawk_bin.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin)
-    )
+    monkeypatch.setattr("clawk_cli.relaunch.resolve_clawk_bin", lambda: str(clawk_bin))
     monkeypatch.setattr(lde, "refresh_desktop_databases", lambda _dir: [])
 
     entry = lde.install_desktop_entry(root)
@@ -1295,9 +1291,7 @@ def test_install_exact_48_png_uses_48x48_dir(tmp_path, xdg_home, monkeypatch):
     ).exists()
 
 
-def test_install_resizes_decodable_png_to_panel_sizes(
-    tmp_path, xdg_home, monkeypatch
-):
+def test_install_resizes_decodable_png_to_panel_sizes(tmp_path, xdg_home, monkeypatch):
     """A decodeable PNG is Lanczos-resized so the 24px slot is actually 24px."""
     from PIL import Image
 
@@ -1330,7 +1324,9 @@ def test_deferred_install_skips_heal_after_exit_without_reveal():
     is exactly the #111906 arming condition. The next terminal/updater or revealed launch heals."""
     calls: list[Path] = []
     deferred = lde.DeferredDesktopEntryInstall(
-        Path("/proj"), install=lambda root: calls.append(root) or Path("/entry"), settle_seconds=0
+        Path("/proj"),
+        install=lambda root: calls.append(root) or Path("/entry"),
+        settle_seconds=0,
     )
     deferred.start()
     time.sleep(0.05)
@@ -1358,7 +1354,9 @@ def _env_shaped_tree(tmp_path: Path, name: str = "managed-env") -> Path:
     (tree / "workspace" / "clawk_cli" / "main.py").write_text("", encoding="utf-8")
     _write_script(tree / "venv" / "bin" / "clawk", "#!/bin/sh\nexit 0\n")
     python_bin = tree / "venv" / "bin" / "python"
-    python_bin.write_bytes(b"\x7fELF fake")  # real interpreters are binaries, never scripts
+    python_bin.write_bytes(
+        b"\x7fELF fake"
+    )  # real interpreters are binaries, never scripts
     python_bin.chmod(0o755)
     return tree
 
@@ -1371,7 +1369,9 @@ def _full_tree(tmp_path: Path, name: str = "install") -> Path:
     (tree / "apps" / "desktop" / "package.json").write_text("{}", encoding="utf-8")
     _write_script(tree / "venv" / "bin" / "clawk", "#!/bin/sh\nexit 0\n")
     python_bin = tree / "venv" / "bin" / "python"
-    python_bin.write_bytes(b"\x7fELF fake")  # real interpreters are binaries, never scripts
+    python_bin.write_bytes(
+        b"\x7fELF fake"
+    )  # real interpreters are binaries, never scripts
     python_bin.chmod(0o755)
     return tree
 
@@ -1423,7 +1423,9 @@ def test_resolver_skips_incapable_primary_for_wrapper(tmp_path, xdg_home):
     assert resolution == str(wrapper)
 
 
-def test_install_skips_write_when_exec_provably_cannot_serve_desktop(tmp_path, xdg_home, monkeypatch):
+def test_install_skips_write_when_exec_provably_cannot_serve_desktop(
+    tmp_path, xdg_home, monkeypatch
+):
     """The fallback must not create a dead entry: no entry on disk stays that way."""
     root = _make_project(tmp_path)
     env_tree = _env_shaped_tree(tmp_path)
@@ -1439,7 +1441,9 @@ def test_install_skips_write_when_exec_provably_cannot_serve_desktop(tmp_path, x
     assert not lde.desktop_entry_path().exists()
 
 
-def test_install_leaves_existing_entry_untouched_when_exec_incapable(tmp_path, xdg_home, monkeypatch):
+def test_install_leaves_existing_entry_untouched_when_exec_incapable(
+    tmp_path, xdg_home, monkeypatch
+):
     """A provably dead Exec skips instead of churning an entry that is already on disk."""
     root = _make_project(tmp_path)
     env_tree = _env_shaped_tree(tmp_path)
@@ -1466,7 +1470,9 @@ def test_module_form_passes_the_gate(tmp_path):
     assert lde._persisted_exec_serves_desktop(module_form) is None
 
 
-def test_install_through_wrapper_when_primary_is_incapable(tmp_path, xdg_home, monkeypatch):
+def test_install_through_wrapper_when_primary_is_incapable(
+    tmp_path, xdg_home, monkeypatch
+):
     """End to end: the PATH-first env launcher is skipped and the wrapper's Exec is persisted."""
     root = _full_tree(tmp_path, "checkout")
     (root / "apps" / "desktop" / "assets" / "icon.png").write_bytes(b"\x89PNG fake")
@@ -1492,7 +1498,9 @@ def test_install_through_wrapper_when_primary_is_incapable(tmp_path, xdg_home, m
 # must carry --skip-build (start the packaged app in seconds) instead of the
 # build-then-launch default, whose source-hash freshness check reports
 # "stale" on any locally modified tree and pays a 60s+ rebuild per click.
-def test_exec_appends_skip_build_when_packaged_app_exists(tmp_path, xdg_home, monkeypatch):
+def test_exec_appends_skip_build_when_packaged_app_exists(
+    tmp_path, xdg_home, monkeypatch
+):
     root = _make_project(tmp_path)
     unpacked = root / "apps" / "desktop" / "release" / "linux-unpacked"
     unpacked.mkdir(parents=True)
@@ -1506,7 +1514,9 @@ def test_exec_appends_skip_build_when_packaged_app_exists(tmp_path, xdg_home, mo
     assert exec_line.endswith("desktop --skip-build")
 
 
-def test_exec_keeps_build_then_launch_when_no_packaged_app(tmp_path, xdg_home, monkeypatch):
+def test_exec_keeps_build_then_launch_when_no_packaged_app(
+    tmp_path, xdg_home, monkeypatch
+):
     # First install (nothing packaged yet): the click must still build and
     # launch — --skip-build would exit with "no packaged desktop app found".
     root = _make_project(tmp_path)

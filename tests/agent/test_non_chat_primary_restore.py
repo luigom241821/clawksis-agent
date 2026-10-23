@@ -12,8 +12,12 @@ def _make_agent():
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
-        patch("agent.context_compressor.get_model_context_length", return_value=200_000),
-        patch("agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()),
+        patch(
+            "agent.context_compressor.get_model_context_length", return_value=200_000
+        ),
+        patch(
+            "agent.anthropic_adapter.build_anthropic_client", return_value=MagicMock()
+        ),
     ):
         agent = AIAgent(
             api_key=_TEST_KEY,
@@ -35,7 +39,9 @@ def _restore_after_fallback(primary_model):
     fb_client = MagicMock()
     fb_client.api_key = "fallback-" + "key-1234"
     fb_client.base_url = "https://fallback.example.com/v1"
-    with patch("agent.auxiliary_client.resolve_provider_client", return_value=(fb_client, None)):
+    with patch(
+        "agent.auxiliary_client.resolve_provider_client", return_value=(fb_client, None)
+    ):
         assert agent._try_activate_fallback() is True
     emitted = []
     agent._emit_status = emitted.append
@@ -48,7 +54,11 @@ def test_restore_skips_a_primary_already_known_to_be_non_chat():
     agent, restored, emitted = _restore_after_fallback("wan2.7-image-pro")
 
     assert restored is False
-    assert (agent.provider, agent.model, agent._fallback_activated) == ("zai", "glm-5.2", True)
+    assert (agent.provider, agent.model, agent._fallback_activated) == (
+        "zai",
+        "glm-5.2",
+        True,
+    )
     assert not any("Primary model restored" in notice for notice in emitted)
 
     other, other_restored, _emitted = _restore_after_fallback("acme/text-to-image")

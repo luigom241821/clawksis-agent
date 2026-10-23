@@ -48,8 +48,16 @@ def _run_cli(args, timeout=60):
 def test_dashboard_tui_flag_is_accepted_not_rejected():
     """The exact argv an old desktop app sends must parse without argparse error."""
     result = _run_cli(
-        ["dashboard", "--no-open", "--tui", "--host", "127.0.0.1",
-         "--port", "39997", "--status"]
+        [
+            "dashboard",
+            "--no-open",
+            "--tui",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "39997",
+            "--status",
+        ]
     )
     combined = (result.stdout or "") + (result.stderr or "")
     # The pre-fix failure signature.
@@ -57,5 +65,3 @@ def test_dashboard_tui_flag_is_accepted_not_rejected():
     assert "--tui" not in (result.stderr or ""), result.stderr
     # argparse usage errors exit 2; the parse itself must not be that error.
     assert result.returncode != 2, combined
-
-

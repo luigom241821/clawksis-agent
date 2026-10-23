@@ -42,7 +42,6 @@ def _make_cli():
 class TestIndicatorDispatch(unittest.TestCase):
     """The command must route to its handler — not fall through to "Unknown"."""
 
-
     def test_indicator_is_not_unknown_command(self):
         cli_obj = _make_cli()
         with (
@@ -119,16 +118,13 @@ class TestHandleIndicatorCommand(unittest.TestCase):
 
 
 class TestIndicatorRegistry(unittest.TestCase):
-
     def test_indicator_subcommands_match_handler(self):
         from clawk_cli.commands import COMMAND_REGISTRY
         from clawk_constants import INDICATOR_STYLES
 
         indicator = next(c for c in COMMAND_REGISTRY if c.name == "indicator")
         # The registered styles are what the handler accepts — single source of truth.
-        self.assertEqual(
-            set(indicator.subcommands), set(INDICATOR_STYLES)
-        )
+        self.assertEqual(set(indicator.subcommands), set(INDICATOR_STYLES))
 
 
 if __name__ == "__main__":

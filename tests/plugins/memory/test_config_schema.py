@@ -8,10 +8,6 @@ def test_unknown_provider_is_none():
     assert get_provider_config_schema("builtin") is None
 
 
-
-
-
-
 def test_cache_keys_on_schema_path_not_name(monkeypatch, tmp_path):
     # User-installed plugins are per-profile; two profiles' plugins sharing a
     # name must not answer for each other.

@@ -30,17 +30,30 @@ def fleet(tmp_path, monkeypatch):
     for sub in ("profiles/coder", "profiles/ops"):
         (root / sub).mkdir(parents=True)
     (root / "config.yaml").write_text("model:\n  default: x\n", encoding="utf-8")
-    (root / ".env").write_text("TELEGRAM_BOT_TOKEN=111111:default-token\n", encoding="utf-8")
-    (root / "profiles/coder/.env").write_text("TELEGRAM_BOT_TOKEN=222222:coder-token\n", encoding="utf-8")
-    (root / "profiles/ops/.env").write_text("DISCORD_BOT_TOKEN=ops-discord-333333\n", encoding="utf-8")
+    (root / ".env").write_text(
+        "TELEGRAM_BOT_TOKEN=111111:default-token\n", encoding="utf-8"
+    )
+    (root / "profiles/coder/.env").write_text(
+        "TELEGRAM_BOT_TOKEN=222222:coder-token\n", encoding="utf-8"
+    )
+    (root / "profiles/ops/.env").write_text(
+        "DISCORD_BOT_TOKEN=ops-discord-333333\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(root))
     monkeypatch.delenv("GATEWAY_MULTIPLEX_PROFILES", raising=False)
-    for name in ("TELEGRAM_BOT_TOKEN", "DISCORD_BOT_TOKEN", "API_SERVER_KEY", "WEBHOOK_ENABLED"):
+    for name in (
+        "TELEGRAM_BOT_TOKEN",
+        "DISCORD_BOT_TOKEN",
+        "API_SERVER_KEY",
+        "WEBHOOK_ENABLED",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(clawk_constants, "_default_clawk_root_memo", None)
     services: dict[str, list] = {}
     pids: dict[str, int] = {}
-    monkeypatch.setattr(gm, "_installed_services", lambda home: services.get(_name(home), []))
+    monkeypatch.setattr(
+        gm, "_installed_services", lambda home: services.get(_name(home), [])
+    )
     monkeypatch.setattr(gm, "_live_gateway_pid", lambda home: pids.get(_name(home)))
     monkeypatch.setattr(gm, "_host_supports_migration", lambda: None)
     return root, services, pids
@@ -54,43 +67,64 @@ def test_default_config_is_on_but_the_loader_leaves_an_unset_flag_undecided():
     """DEFAULT_CONFIG says on; GatewayConfig keeps "unset" distinguishable from "chosen" so the boot
     guard can tell them apart (an explicit value must survive verbatim)."""
     assert GatewayConfig.from_dict({}).multiplex_profiles is None
-    assert not GatewayConfig.from_dict({}).multiplex_profiles  # readers treat undecided as off
-    assert GatewayConfig.from_dict({"gateway": {"multiplex_profiles": False}}).multiplex_profiles is False
-    assert GatewayConfig.from_dict({"multiplex_profiles": "true"}).multiplex_profiles is True
+    assert not GatewayConfig.from_dict(
+        {}
+    ).multiplex_profiles  # readers treat undecided as off
+    assert (
+        GatewayConfig.from_dict(
+            {"gateway": {"multiplex_profiles": False}}
+        ).multiplex_profiles
+        is False
+    )
+    assert (
+        GatewayConfig.from_dict({"multiplex_profiles": "true"}).multiplex_profiles
+        is True
+    )
 
 
-def test_unset_flag_multiplexes_a_quiet_fleet_and_stays_standalone_beside_a_live_secondary(fleet):
+def test_unset_flag_multiplexes_a_quiet_fleet_and_stays_standalone_beside_a_live_secondary(
+    fleet,
+):
     root, services, pids = fleet
     decision = mode.resolve_multiplex_mode(cfg := load_gateway_config())
     assert decision == mode.MultiplexDecision(True, "default", decision.reason)
     assert cfg.multiplex_profiles is True
 
-    pids["coder"] = 4101  # coder still runs its own gateway: a multiplexer would double-poll its bot
+    pids["coder"] = (
+        4101  # coder still runs its own gateway: a multiplexer would double-poll its bot
+    )
     decision = mode.resolve_multiplex_mode(cfg := load_gateway_config())
     assert not decision.enabled and decision.source == "guard"
     assert "'coder'" in decision.reason and gm.MIGRATE_COMMAND in decision.reason
     assert cfg.multiplex_profiles is False
     # The CLI side agrees: no live multiplexer record and no explicit opt-in means coder is NOT served.
     from clawk_cli.gateway import named_profile_served_by_running_multiplexer
+
     assert named_profile_served_by_running_multiplexer("coder") is False
     assert mode.default_gateway_multiplexes(root) is False
 
     pids.clear()
-    services["ops"] = [("systemd", False)]  # an installed unit counts the same as a live pid
+    services["ops"] = [
+        ("systemd", False)
+    ]  # an installed unit counts the same as a live pid
     assert mode.resolve_multiplex_mode(load_gateway_config()).source == "guard"
 
 
 def test_preflight_blocker_and_single_profile_keep_the_unset_default_standalone(fleet):
     root, _services, _pids = fleet
     # coder reuses the default's bot token -> the migration preflight's duplicate-credential blocker.
-    (root / "profiles/coder/.env").write_text("TELEGRAM_BOT_TOKEN=111111:default-token\n", encoding="utf-8")
+    (root / "profiles/coder/.env").write_text(
+        "TELEGRAM_BOT_TOKEN=111111:default-token\n", encoding="utf-8"
+    )
     decision = mode.resolve_multiplex_mode(load_gateway_config())
     assert decision.source == "guard" and "profile_routes" in decision.reason
 
     for sub in ("profiles/coder", "profiles/ops"):
         shutil.rmtree(root / sub)
     decision = mode.resolve_multiplex_mode(load_gateway_config())
-    assert decision == mode.MultiplexDecision(False, "guard", mode.SINGLE_PROFILE_REASON)
+    assert decision == mode.MultiplexDecision(
+        False, "guard", mode.SINGLE_PROFILE_REASON
+    )
 
 
 def test_standalone_named_profile_leaves_nothing_to_multiplex(fleet):
@@ -100,10 +134,14 @@ def test_standalone_named_profile_leaves_nothing_to_multiplex(fleet):
     shutil.rmtree(root / "profiles/ops")  # exactly one named profile remains
     (root / "profiles/coder/config.yaml").write_text("gateway:\n  standalone: true\n")
     decision = mode.resolve_multiplex_mode(load_gateway_config())
-    assert decision == mode.MultiplexDecision(False, "guard", mode.SINGLE_PROFILE_REASON)
+    assert decision == mode.MultiplexDecision(
+        False, "guard", mode.SINGLE_PROFILE_REASON
+    )
 
 
-@pytest.mark.parametrize("flag", ["", "  multiplex_profiles: true\n", "  multiplex_profiles: false\n"])
+@pytest.mark.parametrize(
+    "flag", ["", "  multiplex_profiles: true\n", "  multiplex_profiles: false\n"]
+)
 def test_standalone_launcher_never_multiplexes_other_profiles(fleet, flag):
     from gateway.run import _profile_runtime_scope
 
@@ -123,10 +161,14 @@ def test_standalone_launcher_never_multiplexes_other_profiles(fleet, flag):
             assert decision.enabled is True
 
 
-def test_explicit_true_is_never_second_guessed_and_explicit_false_is_retired(fleet, monkeypatch):
+def test_explicit_true_is_never_second_guessed_and_explicit_false_is_retired(
+    fleet, monkeypatch
+):
     root, _services, pids = fleet
     pids["coder"] = 4101
-    (root / "config.yaml").write_text("gateway:\n  multiplex_profiles: true\n", encoding="utf-8")
+    (root / "config.yaml").write_text(
+        "gateway:\n  multiplex_profiles: true\n", encoding="utf-8"
+    )
     cfg = load_gateway_config()
     assert mode.resolve_multiplex_mode(cfg) == mode.MultiplexDecision(True, "config")
     assert cfg.multiplex_profiles is True
@@ -147,7 +189,11 @@ def test_explicit_true_is_never_second_guessed_and_explicit_false_is_retired(fle
     pids["coder"] = 4101
     cfg = load_gateway_config()
     guarded = mode.resolve_multiplex_mode(cfg)
-    assert guarded.enabled is False and guarded.source == "guard" and "coder" in guarded.reason
+    assert (
+        guarded.enabled is False
+        and guarded.source == "guard"
+        and "coder" in guarded.reason
+    )
 
 
 def test_migration_plan_treats_the_unset_default_as_not_yet_multiplexed(fleet):
@@ -166,9 +212,19 @@ def test_live_record_outranks_the_raw_flag_for_other_processes(fleet, monkeypatc
     reading config; a gateway that stayed standalone recorded an empty served set."""
     root, _services, _pids = fleet
     from gateway import status
-    monkeypatch.setattr(status, "_read_process_cmdline", lambda pid: "clawk gateway run")
-    (root / "gateway.pid").write_text(json.dumps({"pid": os.getpid(), "clawk_home": str(root)}))
-    record = {"pid": os.getpid(), "clawk_home": str(root), "gateway_state": "running", "served_profiles": []}
+
+    monkeypatch.setattr(
+        status, "_read_process_cmdline", lambda pid: "clawk gateway run"
+    )
+    (root / "gateway.pid").write_text(
+        json.dumps({"pid": os.getpid(), "clawk_home": str(root)})
+    )
+    record = {
+        "pid": os.getpid(),
+        "clawk_home": str(root),
+        "gateway_state": "running",
+        "served_profiles": [],
+    }
     (root / "gateway_state.json").write_text(json.dumps(record))
     assert mode.default_gateway_multiplexes(root) is False
     record["served_profiles"] = ["default", "coder", "ops"]
@@ -176,17 +232,43 @@ def test_live_record_outranks_the_raw_flag_for_other_processes(fleet, monkeypatc
     assert mode.default_gateway_multiplexes(root) is True
 
 
-def test_guard_refusal_is_recorded_in_runtime_status_and_cleared_on_default(tmp_path, monkeypatch):
+def test_guard_refusal_is_recorded_in_runtime_status_and_cleared_on_default(
+    tmp_path, monkeypatch
+):
     """A guard refusal must be visible to `clawk gateway status`, not only in the boot log; a later
     boot that multiplexes clears it (a stale reason would misdescribe the live gateway)."""
     from gateway import status as gw_status
-    from clawk_cli.gateway_multiplex_mode import MultiplexDecision, record_multiplex_decision
-    monkeypatch.setattr(gw_status, "_get_runtime_status_path", lambda: tmp_path / "gateway_state.json")
-    monkeypatch.setattr(gw_status, "owns_gateway_runtime_lock", lambda: True)  # the serving gateway records
-    record_multiplex_decision(MultiplexDecision(False, "guard", "profile(s) 'coder' still run their own gateway"))
-    assert "coder" in gw_status.read_runtime_status(tmp_path / "gateway_state.json")["multiplex_standalone_reason"]
-    record_multiplex_decision(MultiplexDecision(True, "default", "unset; default applies"))
-    assert gw_status.read_runtime_status(tmp_path / "gateway_state.json")["multiplex_standalone_reason"] is None
+    from clawk_cli.gateway_multiplex_mode import (
+        MultiplexDecision,
+        record_multiplex_decision,
+    )
+
+    monkeypatch.setattr(
+        gw_status, "_get_runtime_status_path", lambda: tmp_path / "gateway_state.json"
+    )
+    monkeypatch.setattr(
+        gw_status, "owns_gateway_runtime_lock", lambda: True
+    )  # the serving gateway records
+    record_multiplex_decision(
+        MultiplexDecision(
+            False, "guard", "profile(s) 'coder' still run their own gateway"
+        )
+    )
+    assert (
+        "coder"
+        in gw_status.read_runtime_status(tmp_path / "gateway_state.json")[
+            "multiplex_standalone_reason"
+        ]
+    )
+    record_multiplex_decision(
+        MultiplexDecision(True, "default", "unset; default applies")
+    )
+    assert (
+        gw_status.read_runtime_status(tmp_path / "gateway_state.json")[
+            "multiplex_standalone_reason"
+        ]
+        is None
+    )
 
 
 @pytest.mark.spawns_gateway_lookalike  # a stub that records a decision and takes the lock; reaped below
@@ -204,7 +286,8 @@ def test_pre_lock_decision_never_publishes_a_rival_gateway_owner(tmp_path):
     home.mkdir()
     entry = tmp_path / "bin" / "clawk"  # the argv a gateway identity check accepts
     entry.parent.mkdir()
-    entry.write_text(textwrap.dedent("""
+    entry.write_text(
+        textwrap.dedent("""
         import os, sys
         from gateway import status
         from clawk_cli.gateway_multiplex_mode import MultiplexDecision, record_multiplex_decision
@@ -216,10 +299,21 @@ def test_pre_lock_decision_never_publishes_a_rival_gateway_owner(tmp_path):
         publish_pending_multiplex_decision()
         print("claimed", os.getpid(), flush=True)  # the lock owner (Popen.pid is the venv launcher on Windows)
         sys.stdin.readline()
-    """), encoding="utf-8")
-    env = {**os.environ, "CLAWK_HOME": str(home), "PYTHONPATH": str(Path(__file__).resolve().parents[2])}
-    child = subprocess.Popen([sys.executable, str(entry), "gateway", "run"], env=env, text=True,
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    """),
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "PYTHONPATH": str(Path(__file__).resolve().parents[2]),
+    }
+    child = subprocess.Popen(
+        [sys.executable, str(entry), "gateway", "run"],
+        env=env,
+        text=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+    )
     probe = textwrap.dedent("""
         import json
         from gateway import status
@@ -228,12 +322,23 @@ def test_pre_lock_decision_never_publishes_a_rival_gateway_owner(tmp_path):
     """)
 
     def rival() -> list:
-        out = subprocess.run([sys.executable, "-c", probe], env=env, text=True, capture_output=True, timeout=60, check=False)
+        out = subprocess.run(
+            [sys.executable, "-c", probe],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
         assert out.returncode == 0, out.stderr
         return json.loads(out.stdout)
+
     try:
         assert child.stdout.readline().strip() == "decided"
-        assert rival() == [None, None]  # nothing claims to own the home before the lock does
+        assert rival() == [
+            None,
+            None,
+        ]  # nothing claims to own the home before the lock does
         child.stdin.write("\n")
         child.stdin.flush()
         claimed, owner = child.stdout.readline().split()
@@ -244,7 +349,9 @@ def test_pre_lock_decision_never_publishes_a_rival_gateway_owner(tmp_path):
         child.wait(timeout=30)
 
 
-def test_recorded_standalone_warning_lines_suppressed_for_dead_or_stale_record(tmp_path, monkeypatch):
+def test_recorded_standalone_warning_lines_suppressed_for_dead_or_stale_record(
+    tmp_path, monkeypatch
+):
     """Dead or stale gateway_state.json must not emit standalone warnings (#120991)."""
     import gateway.status as gw_status
     from datetime import datetime, timezone
@@ -256,42 +363,64 @@ def test_recorded_standalone_warning_lines_suppressed_for_dead_or_stale_record(t
     monkeypatch.setattr(mode, "unserved_profiles", lambda: ["other_profile"])
 
     # 1. Stopped gateway
-    state_file.write_text(json.dumps({
-        "gateway_state": "stopped",
-        "pid": os.getpid(),
-        "updated_at": datetime.now(UTC).isoformat(),
-        "multiplex_standalone_reason": "orphan reason",
-    }), encoding="utf-8")
+    state_file.write_text(
+        json.dumps(
+            {
+                "gateway_state": "stopped",
+                "pid": os.getpid(),
+                "updated_at": datetime.now(UTC).isoformat(),
+                "multiplex_standalone_reason": "orphan reason",
+            }
+        ),
+        encoding="utf-8",
+    )
     assert mode.recorded_standalone_warning_lines() == []
 
     # 2. Dead PID
-    state_file.write_text(json.dumps({
-        "gateway_state": "running",
-        "pid": 999999999,
-        "updated_at": datetime.now(UTC).isoformat(),
-        "multiplex_standalone_reason": "orphan reason",
-    }), encoding="utf-8")
+    state_file.write_text(
+        json.dumps(
+            {
+                "gateway_state": "running",
+                "pid": 999999999,
+                "updated_at": datetime.now(UTC).isoformat(),
+                "multiplex_standalone_reason": "orphan reason",
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gw_status, "runtime_status_pid_is_live", lambda r: False)
     assert mode.recorded_standalone_warning_lines() == []
 
     # 3. Stale heartbeat but LIVE PID: a paused/wedged standalone gateway still warns (the
     # heartbeat is a health signal, not liveness).
-    state_file.write_text(json.dumps({
-        "gateway_state": "running",
-        "pid": os.getpid(),
-        "updated_at": "2020-01-01T00:00:00Z",
-        "multiplex_standalone_reason": "wedged reason",
-    }), encoding="utf-8")
+    state_file.write_text(
+        json.dumps(
+            {
+                "gateway_state": "running",
+                "pid": os.getpid(),
+                "updated_at": "2020-01-01T00:00:00Z",
+                "multiplex_standalone_reason": "wedged reason",
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gw_status, "runtime_status_pid_is_live", lambda r: True)
-    assert any("wedged reason" in line for line in mode.recorded_standalone_warning_lines())
+    assert any(
+        "wedged reason" in line for line in mode.recorded_standalone_warning_lines()
+    )
 
     # 4. Live and fresh record emits warning
-    state_file.write_text(json.dumps({
-        "gateway_state": "running",
-        "pid": os.getpid(),
-        "updated_at": datetime.now(UTC).isoformat(),
-        "multiplex_standalone_reason": "real standalone reason",
-    }), encoding="utf-8")
+    state_file.write_text(
+        json.dumps(
+            {
+                "gateway_state": "running",
+                "pid": os.getpid(),
+                "updated_at": datetime.now(UTC).isoformat(),
+                "multiplex_standalone_reason": "real standalone reason",
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(gw_status, "runtime_status_pid_is_live", lambda r: True)
     monkeypatch.setattr(gw_status, "runtime_status_is_stale", lambda r: False)
     lines = mode.recorded_standalone_warning_lines()

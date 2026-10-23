@@ -53,14 +53,12 @@ def _make_session(
 # =========================================================================
 
 
-
 # =========================================================================
 # Completion queue
 # =========================================================================
 
+
 class TestCompletionQueue:
-
-
     def test_move_to_finished_idempotent_no_duplicate(self, registry):
         """Calling _move_to_finished twice must NOT enqueue two notifications.
 
@@ -80,7 +78,6 @@ class TestCompletionQueue:
         assert registry.completion_queue.qsize() == 1
         completion = registry.completion_queue.get_nowait()
         assert completion["exit_code"] == -15  # from the first (kill) call
-
 
     def test_output_truncated_to_2000(self, registry):
         """Long output is truncated to last 2000 chars."""
@@ -124,7 +121,10 @@ class TestCompletionQueue:
         s.completion_output_chars = 6000
         s.exited, s.exit_code = True, 0
         registry._finished[s.id] = s
-        with patch.object(registry, "_reconcile_local_exit"), patch.object(registry, "_write_checkpoint"):
+        with (
+            patch.object(registry, "_reconcile_local_exit"),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             result = registry.wait(s.id, timeout=1)
         assert result["status"] == "exited"
         assert result["output"].startswith("Reply from @b:")
@@ -161,6 +161,7 @@ class TestCompletionQueue:
 # Checkpoint persistence
 # =========================================================================
 
+
 class TestCheckpointNotify:
     def test_checkpoint_includes_notify(self, registry, tmp_path):
         with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
@@ -175,12 +176,18 @@ class TestCheckpointNotify:
     def test_recover_defaults_false(self, registry, tmp_path):
         """Old checkpoint entries without the field default to False."""
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_live",
-            "command": "sleep 999",
-            "pid": os.getpid(),
-            "task_id": "t1",
-        }]))
+        checkpoint.write_text(
+            json.dumps(
+                [
+                    {
+                        "session_id": "proc_live",
+                        "command": "sleep 999",
+                        "pid": os.getpid(),
+                        "task_id": "t1",
+                    }
+                ]
+            )
+        )
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
@@ -192,14 +199,19 @@ class TestCheckpointNotify:
 # Terminal tool schema
 # =========================================================================
 
+
 class TestTerminalSchema:
-
-
     def test_cut_completion_says_so_and_points_at_the_log(self):
         """The rendered notice names the cut and the process log; a whole output renders as before."""
         from tools.process_registry_notifications import format_process_notification
-        base = {"type": "completion", "session_id": "proc_abc", "command": "clawk peer dm mini",
-                "exit_code": 0, "output": "Reply from mini:\ntail"}
+
+        base = {
+            "type": "completion",
+            "session_id": "proc_abc",
+            "command": "clawk peer dm mini",
+            "exit_code": 0,
+            "output": "Reply from mini:\ntail",
+        }
         cut = format_process_notification({**base, "output_cut": 3000})
         assert "3000" in cut and "proc_abc" in cut
         assert cut.endswith("Reply from mini:\ntail]")
@@ -211,10 +223,10 @@ class TestTerminalSchema:
 # =========================================================================
 
 
-
 # =========================================================================
 # Completion consumed suppression
 # =========================================================================
+
 
 class TestCompletionConsumed:
     """Test that wait/log consume completion notifications while poll stays read-only."""
@@ -239,7 +251,6 @@ class TestCompletionConsumed:
         # Now the completion is marked as consumed
         assert registry.is_completion_consumed("proc_wait")
 
-
     def test_poll_observed_does_not_suppress_gateway_watcher(self, registry):
         """The gateway/tui watcher gate (is_completion_consumed) must stay False
         after a read-only poll, so the autonomous delivery turn still fires
@@ -252,7 +263,6 @@ class TestCompletionConsumed:
         registry.poll("proc_gw")
         # The gateway watcher gate is untouched, so it still delivers.
         assert not registry.is_completion_consumed("proc_gw")
-
 
     def test_wait_and_log_still_skip_cli_drain(self, registry):
         """wait()/read_log() consume the output, so the CLI drain skips their
@@ -321,8 +331,14 @@ def _silent_bg_harness(monkeypatch, tmp_path):
 
     monkeypatch.setattr(terminal_tool_module, "_get_env_config", lambda: config)
     monkeypatch.setattr(terminal_tool_module, "_start_cleanup_thread", lambda: None)
-    monkeypatch.setattr(terminal_tool_module, "_check_all_guards", lambda *_args, **_kwargs: {"approved": True})
-    monkeypatch.setattr(process_registry_module.process_registry, "spawn_local", fake_spawn_local)
+    monkeypatch.setattr(
+        terminal_tool_module,
+        "_check_all_guards",
+        lambda *_args, **_kwargs: {"approved": True},
+    )
+    monkeypatch.setattr(
+        process_registry_module.process_registry, "spawn_local", fake_spawn_local
+    )
     monkeypatch.setitem(terminal_tool_module._active_environments, "default", dummy_env)
     monkeypatch.setitem(terminal_tool_module._last_activity, "default", 0.0)
     return terminal_tool_module
@@ -381,6 +397,7 @@ def test_foreground_command_does_not_emit_hint(monkeypatch, tmp_path):
     # exec method to short-circuit to a clean exit so the test doesn't
     # actually shell out.
     from types import SimpleNamespace
+
     dummy_env = SimpleNamespace(
         env={},
         execute=lambda *a, **kw: {"output": "done", "exit_code": 0, "error": None},

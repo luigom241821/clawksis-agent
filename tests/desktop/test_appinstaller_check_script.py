@@ -27,29 +27,51 @@ CLAWK_PYTHON = sys.executable
 REPO = Path(__file__).resolve().parents[2]
 MODULE = "clawk_cli.windows_appinstaller_update"
 
-@pytest.mark.parametrize("state,code,available", [
-    ("not-packaged", 0, False), ("AVAILABLE", 2, True), ("REQUIRED", 2, True),
-    ("NO_UPDATES", 0, False), ("UNKNOWN", 1, None), ("ERROR", 1, None),
-    ("no-source", 1, None), ("check-error", 1, None), ("identity-error", 1, None),
-    ("missing-projection", 1, None), ("missing-current", 1, None),
-])
+
+@pytest.mark.parametrize(
+    "state,code,available",
+    [
+        ("not-packaged", 0, False),
+        ("AVAILABLE", 2, True),
+        ("REQUIRED", 2, True),
+        ("NO_UPDATES", 0, False),
+        ("UNKNOWN", 1, None),
+        ("ERROR", 1, None),
+        ("no-source", 1, None),
+        ("check-error", 1, None),
+        ("identity-error", 1, None),
+        ("missing-projection", 1, None),
+        ("missing-current", 1, None),
+    ],
+)
 def test_projection_outcomes(monkeypatch, capsys, state, code, available):
     import enum
     import importlib
     from types import SimpleNamespace
 
     main = importlib.import_module(MODULE).main
-    availability = enum.IntEnum("Availability", "UNKNOWN NO_UPDATES AVAILABLE REQUIRED ERROR", start=0)
+    availability = enum.IntEnum(
+        "Availability", "UNKNOWN NO_UPDATES AVAILABLE REQUIRED ERROR", start=0
+    )
+
     class PackageInstance:
         def get_app_installer_info(self):
-            return None if state == "no-source" else SimpleNamespace(
-                uri=SimpleNamespace(absolute_uri="https://registered.example/updates.appinstaller"))
+            return (
+                None
+                if state == "no-source"
+                else SimpleNamespace(
+                    uri=SimpleNamespace(
+                        absolute_uri="https://registered.example/updates.appinstaller"
+                    )
+                )
+            )
 
         def check_update_availability_async(self):
             def get():
                 if state == "check-error":
                     raise RuntimeError("rpc boom")
                 return SimpleNamespace(availability=availability[state])
+
             return SimpleNamespace(get=get)
 
     class PackageMeta(type):
@@ -77,7 +99,9 @@ def test_projection_outcomes(monkeypatch, capsys, state, code, available):
         assert payload == {"available": False, "reason": "not-packaged"}
     elif state in ("AVAILABLE", "REQUIRED", "NO_UPDATES"):
         assert payload["availability"] == state
-        assert payload["source_uri"] == "https://registered.example/updates.appinstaller"
+        assert (
+            payload["source_uri"] == "https://registered.example/updates.appinstaller"
+        )
     else:
         assert payload["error"]
         if state == "no-source":
@@ -88,10 +112,17 @@ def test_projection_outcomes(monkeypatch, capsys, state, code, available):
 def test_script_import_failure_json_and_exit(tmp_path):
     # A real subprocess runs the entry the desktop spawns (python -P -m) and
     # imports the absent projection.
-    (tmp_path / "winrt.py").write_text("raise ImportError('fixture unavailable')", encoding="utf-8")
-    child = subprocess.run([CLAWK_PYTHON, "-P", "-m", MODULE], capture_output=True,
-                           text=True, timeout=30,
-                           env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])}, check=False)
+    (tmp_path / "winrt.py").write_text(
+        "raise ImportError('fixture unavailable')", encoding="utf-8"
+    )
+    child = subprocess.run(
+        [CLAWK_PYTHON, "-P", "-m", MODULE],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join([str(REPO), str(tmp_path)])},
+        check=False,
+    )
     assert child.returncode == 1, child.stderr
     payload = json.loads(child.stdout)
     assert payload["available"] is None
@@ -103,16 +134,23 @@ def test_installed_winrt_projects_checker_uri_and_async_types(tmp_path):
     # A dev process has no package identity, so exercise the types that the
     # packaged update call projects only after Package.current succeeds.
     probe = subprocess.run(
-        [CLAWK_PYTHON, "-I", "-c",
-         f"import sys; sys.path.insert(0, {str(REPO)!r}); "
-         f"from {MODULE} import _load_projection; "
-         "from winrt.windows.foundation import IAsyncOperation, Uri; "
-         "uri = Uri('https://example.invalid/updates.appinstaller'); "
-         "assert uri.absolute_uri == 'https://example.invalid/updates.appinstaller'; "
-         "assert callable(IAsyncOperation.get); "
-         "_load_projection(); "
-         "print('WINRT_CHECKER_TYPES_OK')"],
-        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+        [
+            CLAWK_PYTHON,
+            "-I",
+            "-c",
+            f"import sys; sys.path.insert(0, {str(REPO)!r}); "
+            f"from {MODULE} import _load_projection; "
+            "from winrt.windows.foundation import IAsyncOperation, Uri; "
+            "uri = Uri('https://example.invalid/updates.appinstaller'); "
+            "assert uri.absolute_uri == 'https://example.invalid/updates.appinstaller'; "
+            "assert callable(IAsyncOperation.get); "
+            "_load_projection(); "
+            "print('WINRT_CHECKER_TYPES_OK')",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=30,
         check=False,
     )
     assert probe.returncode == 0, probe.stderr

@@ -33,20 +33,32 @@ from clawk_cli.web_deps import late
 from clawk_cli.config import get_process_clawk_home
 from clawk_cli.profiles import ProfileIdentitySettlementPending
 from clawk_cli.web_server_config import (
-    _apply_main_model_assignment, _normalize_main_model_assignment, _validated_main_model_selection,
+    _apply_main_model_assignment,
+    _normalize_main_model_assignment,
+    _validated_main_model_selection,
 )
 from clawk_cli.web_server_gateway import _strip_session_list_rows
 from clawk_cli.web_routers._common import _CONFIG_MUTATION_LOCK
 from clawk_cli.web_server_profiles import (
-    _fallback_profile_dicts, _hub_action_name, _write_profile_mcp_servers,
+    _fallback_profile_dicts,
+    _hub_action_name,
+    _write_profile_mcp_servers,
 )
 from clawk_cli.web_server_sessions import _open_session_db_at_path
 from clawk_state_health import STORAGE_CORRUPT, note_storage_error, storage_state
 from starlette.concurrency import run_in_threadpool
 from clawk_cli.web_models import (
-    ProfileCreate, ProfileActiveUpdate, ProfileExport, ProfileImport, ProfileRename,
-    ProfileSoulUpdate, ProfileDescriptionUpdate, ProfileModelUpdate, ProfileDescribeAuto,
-    SessionPrScanBody)
+    ProfileCreate,
+    ProfileActiveUpdate,
+    ProfileExport,
+    ProfileImport,
+    ProfileRename,
+    ProfileSoulUpdate,
+    ProfileDescriptionUpdate,
+    ProfileModelUpdate,
+    ProfileDescribeAuto,
+    SessionPrScanBody,
+)
 from clawk_cli.web_server_profiles import _config_profile_scope, _clawk_home_scope
 
 # Same logger the handlers used before extraction (identical logger object).
@@ -65,8 +77,13 @@ def _warn_profile_read_error(profile: str, exc: Exception) -> None:
     if key in _profile_read_warned:
         return
     _profile_read_warned.add(key)
-    _log.warning("profile session read failed for %r (reported only in the response "
-                 "errors array): %s", profile, exc)
+    _log.warning(
+        "profile session read failed for %r (reported only in the response "
+        "errors array): %s",
+        profile,
+        exc,
+    )
+
 
 sessions_router = APIRouter()
 router = APIRouter()
@@ -84,9 +101,11 @@ _spawn_clawk_action = late("_spawn_clawk_action", "clawk_cli.web_server_gateway"
 def _profile_to_dict(info) -> dict[str, Any]:
     attr = functools.partial(getattr, info)
     return {
-        "name": attr("name", ""), "path": str(attr("path", "")),
+        "name": attr("name", ""),
+        "path": str(attr("path", "")),
         "is_default": bool(attr("is_default", False)),
-        "model": attr("model", None), "provider": attr("provider", None),
+        "model": attr("model", None),
+        "provider": attr("provider", None),
         "has_env": bool(attr("has_env", False)),
         "skill_count": int(attr("skill_count", 0) or 0),
         "gateway_running": bool(attr("gateway_running", False)),
@@ -97,7 +116,8 @@ def _profile_to_dict(info) -> dict[str, Any]:
         "distribution_name": attr("distribution_name", None),
         "distribution_version": attr("distribution_version", None),
         "distribution_source": attr("distribution_source", None),
-        "has_alias": attr("alias_path", None) is not None}
+        "has_alias": attr("alias_path", None) is not None,
+    }
 
 
 def _profile_setup_command(name: str) -> str:
@@ -113,6 +133,7 @@ def _scope_profile_name(path: Path) -> Optional[str]:
     profile name; launched from ``profiles/<name>`` the root is a *different* profile), the
     directory name for ``profiles/<name>``."""
     from clawk_constants import get_default_clawk_root
+
     resolved = path.resolve()
     if resolved == get_process_clawk_home().resolve():
         return None
@@ -121,8 +142,13 @@ def _scope_profile_name(path: Path) -> Optional[str]:
     return path.name
 
 
-def _write_profile_model(profile_dir: Path, provider: str, model: str, validate_in: Optional[Path] = None,
-                         base_url: str = "") -> None:
+def _write_profile_model(
+    profile_dir: Path,
+    provider: str,
+    model: str,
+    validate_in: Optional[Path] = None,
+    base_url: str = "",
+) -> None:
     """Write the main model assignment into ``profile_dir``'s config.yaml (CLAWK_HOME-scoped)
     through the same validated /model shape as ``POST /api/model/set``.
 
@@ -139,10 +165,16 @@ def _write_profile_model(profile_dir: Path, provider: str, model: str, validate_
     ``base_url`` is the endpoint a bare ``custom``/``local`` pick binds to (a fresh profile's config
     names none); other providers ignore it."""
     from clawk_cli.config import load_config, save_config
+
     with _config_profile_scope(_scope_profile_name(validate_in or profile_dir)):
         provider, model = _normalize_main_model_assignment(provider, model)
-        result = _validated_main_model_selection(load_config(), provider, model, base_url)
-    with _config_profile_scope(_scope_profile_name(profile_dir)), _CONFIG_MUTATION_LOCK:  # RMW span
+        result = _validated_main_model_selection(
+            load_config(), provider, model, base_url
+        )
+    with (
+        _config_profile_scope(_scope_profile_name(profile_dir)),
+        _CONFIG_MUTATION_LOCK,
+    ):  # RMW span
         cfg = load_config()
         cfg["model"] = _apply_main_model_assignment(cfg.get("model", {}), result)
         save_config(cfg)
@@ -155,11 +187,15 @@ def _disable_unselected_skills(profile_dir: Path, keep: list[str]) -> int:
     installed separately via subprocess and are active on install."""
     from clawk_cli.config import load_config
     from clawk_cli.skills_config import get_disabled_skills, save_disabled_skills
+
     keep_set = {s.strip() for s in keep if s and s.strip()}
     with _clawk_home_scope(profile_dir), _CONFIG_MUTATION_LOCK:  # RMW span
         skills_root = profile_dir / "skills"
-        installed = ([md.parent.name for md in skills_root.rglob("SKILL.md")]
-                     if skills_root.is_dir() else [])
+        installed = (
+            [md.parent.name for md in skills_root.rglob("SKILL.md")]
+            if skills_root.is_dir()
+            else []
+        )
         cfg = load_config()
         disabled = get_disabled_skills(cfg)
         newly = 0
@@ -171,14 +207,16 @@ def _disable_unselected_skills(profile_dir: Path, keep: list[str]) -> int:
             save_disabled_skills(cfg, disabled)
     return newly
 
+
 # Returned by the offloaded file readers below to mean "the file is not there", which a plain
 # ``None`` cannot express: ``desktop.json`` may legitimately hold the document ``null``.
 _MISSING = object()
 
 
 @contextlib.contextmanager
-def _profile_errors(log_msg: str, *args, not_found=(FileNotFoundError,),
-                    bad_request=(ValueError,)):
+def _profile_errors(
+    log_msg: str, *args, not_found=(FileNotFoundError,), bad_request=(ValueError,)
+):
     """Map clawk_cli.profiles exceptions to HTTP: ``not_found`` -> 404, ``bad_request`` -> 400
     (in that order), anything else is logged with ``log_msg`` -> 500. HTTPException passes, and so
     does ``ProfileIdentitySettlementPending`` — a typed partial success the calling endpoint (the
@@ -222,8 +260,13 @@ def _profile_targets(log_label: str) -> list[tuple[str, Path]]:
     config/meta and probes gateways per profile — every caller here is a polled sidebar
     fan-out that only needs name/path (#114041)."""
     from clawk_cli import profiles as profiles_mod
+
     try:
-        targets = list(profiles_mod.profiles_to_serve(multiplex=True, include_standalone=True, include_parked=True))
+        targets = list(
+            profiles_mod.profiles_to_serve(
+                multiplex=True, include_standalone=True, include_parked=True
+            )
+        )
     except Exception:
         _log.exception("%s: profile enumeration failed", log_label)
         targets = []
@@ -232,35 +275,48 @@ def _profile_targets(log_label: str) -> list[tuple[str, Path]]:
     return targets
 
 
-def _scoped_profile_targets(log_label: str, profile: Optional[str]) -> list[tuple[str, Path]]:
+def _scoped_profile_targets(
+    log_label: str, profile: Optional[str]
+) -> list[tuple[str, Path]]:
     """Every profile, or only ``profile``: a native grant may read just the profile it names,
     so the Desktop assembles the all-profiles view from one scoped read per profile."""
     scope = (profile or "all").strip() or "all"
     targets = _profile_targets(log_label)
-    return targets if scope == "all" else [(name, home) for name, home in targets if name == scope]
+    return (
+        targets
+        if scope == "all"
+        else [(name, home) for name, home in targets if name == scope]
+    )
 
 
-def _tag_rows(rows: list[dict[str, Any]], name: str, now: float) -> list[dict[str, Any]]:
+def _tag_rows(
+    rows: list[dict[str, Any]], name: str, now: float
+) -> list[dict[str, Any]]:
     """Stamp session rows with their owning profile and the 300s active heuristic; SQLite
     stores flags as 0/1 and the sidebar needs booleans."""
     for s in rows:
         s["profile"] = name
         s["is_default_profile"] = name == "default"
         s["is_active"] = (
-            s.get("ended_at") is None and (now - s.get("last_active", s.get("started_at", 0))) < 300
+            s.get("ended_at") is None
+            and (now - s.get("last_active", s.get("started_at", 0))) < 300
         )
         s["archived"] = bool(s.get("archived"))
         s["pinned"] = bool(s.get("pinned"))
     return rows
 
 
-def _pinned_window(rows: list[dict[str, Any]], offset: int, cap: int) -> list[dict[str, Any]]:
+def _pinned_window(
+    rows: list[dict[str, Any]], offset: int, cap: int
+) -> list[dict[str, Any]]:
     """``rows[offset:offset+cap]`` plus every pinned row past it: the per-profile queries
     back-fill pinned rows past their LIMIT, so truncating on recency alone would drop them."""
-    window = rows[offset:offset + cap]
+    window = rows[offset : offset + cap]
     if len(rows) > offset + cap:
         seen = {id(s) for s in window}
-        window.extend(s for s in rows[offset + cap:] if s.get("pinned") and id(s) not in seen)
+        window.extend(
+            s for s in rows[offset + cap :] if s.get("pinned") and id(s) not in seen
+        )
     return window
 
 
@@ -268,8 +324,9 @@ def _recency(s: dict[str, Any]) -> Any:
     return s.get("last_active") or s.get("started_at") or 0
 
 
-def _read_profile_db(name: str, home, errors: Optional[list[dict[str, str]]],
-                     fn: Callable[[Any], Any]) -> Any:
+def _read_profile_db(
+    name: str, home, errors: Optional[list[dict[str, str]]], fn: Callable[[Any], Any]
+) -> Any:
     """``fn(db)`` against the profile's read-only state.db; None when the file is missing,
     the open fails or ``fn`` raises (warned once, recorded in ``errors`` when given).
 
@@ -300,8 +357,11 @@ def _corrupt_profile_stores(targets) -> dict[str, str]:
     """``{profile: "corrupt"}`` for every scanned profile whose state.db this process has latched
     as structurally corrupt (``clawk_state_health``). Lets Desktop tell an empty or partial list
     from a damaged store, including when some reads still succeed (#72046)."""
-    return {name: STORAGE_CORRUPT for name, home in targets
-            if storage_state(Path(home) / "state.db") == STORAGE_CORRUPT}
+    return {
+        name: STORAGE_CORRUPT
+        for name, home in targets
+        if storage_state(Path(home) / "state.db") == STORAGE_CORRUPT
+    }
 
 
 # Sidebar scan cache TTL: short enough that the UI never shows meaningfully stale data, long
@@ -342,8 +402,9 @@ def _sidebar_profile_cache_put(key, value):
     with _SIDEBAR_PROFILE_CACHE_LOCK:
         # A changed DB/WAL obsoletes every older parameter variant for that profile; drop
         # them eagerly rather than waiting for LRU pressure.
-        for existing in [k for k in _SIDEBAR_PROFILE_CACHE
-                         if k[0] == db_path and k[1] != fingerprint]:
+        for existing in [
+            k for k in _SIDEBAR_PROFILE_CACHE if k[0] == db_path and k[1] != fingerprint
+        ]:
             _SIDEBAR_PROFILE_CACHE.pop(existing, None)
         _SIDEBAR_PROFILE_CACHE[key] = snapshot
         _SIDEBAR_PROFILE_CACHE.move_to_end(key)
@@ -364,7 +425,9 @@ def _slice_has_rows(slices: dict[str, Any]) -> bool:
     return any(slices.get(key) for key in ("recents", "cron", "messaging"))
 
 
-def _retryable_profile_errors(errors: list[dict[str, str]], scanned) -> list[dict[str, str]]:
+def _retryable_profile_errors(
+    errors: list[dict[str, str]], scanned
+) -> list[dict[str, str]]:
     """Scan failures Retry can re-attempt. A latched corrupt store has its own notice."""
     corrupt = set(_corrupt_profile_stores(scanned))
     return [dict(err) for err in errors if err.get("profile") not in corrupt]
@@ -372,13 +435,19 @@ def _retryable_profile_errors(errors: list[dict[str, str]], scanned) -> list[dic
 
 def _failed_load_slice(errors: list[dict[str, str]], **extra) -> dict[str, Any]:
     """Failed load: no ``sessions`` key. An empty list would read as data loss."""
-    return {"failed": True, "retry": True, "errors": [dict(err) for err in errors], **extra}
+    return {
+        "failed": True,
+        "retry": True,
+        "errors": [dict(err) for err in errors],
+        **extra,
+    }
 
 
 def _profiles_failed(errors: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
     return {
         err["profile"]: {"failed": True, "retry": True, "error": err.get("error", "")}
-        for err in errors if err.get("profile")
+        for err in errors
+        if err.get("profile")
     }
 
 
@@ -455,27 +524,46 @@ def get_profiles_sessions(
     # ``le=500`` caps the page size — this endpoint fans out across EVERY profile's state.db.
     # 500 (not 100) because desktop callers use limit=200 and the electron remote-merge
     # over-fetches ``limit + offset``.
-    limit: int = Query(20, ge=0, le=500), offset: int = Query(0, ge=0), min_messages: int = 0,
-    archived: str = "exclude", order: str = "recent", profile: str = "all",
-    source: str | None = None, sources: str | None = None, exclude_sources: str | None = None, full: bool = False):
+    limit: int = Query(20, ge=0, le=500),
+    offset: int = Query(0, ge=0),
+    min_messages: int = 0,
+    archived: str = "exclude",
+    order: str = "recent",
+    profile: str = "all",
+    source: str | None = None,
+    sources: str | None = None,
+    exclude_sources: str | None = None,
+    full: bool = False,
+):
     """Unified, read-only session list aggregated across ALL profiles: opens each profile's
     ``state.db`` directly (no dashboard backend per profile) and tags rows with their owning
     ``profile``. Rows omit ``system_prompt`` / ``model_config`` unless ``full=1`` — same
     projection as ``/api/sessions``."""
     if archived not in ("exclude", "only", "include"):
-        raise HTTPException(status_code=400, detail="archived must be one of: exclude, only, include")
+        raise HTTPException(
+            status_code=400, detail="archived must be one of: exclude, only, include"
+        )
     if order not in ("created", "recent"):
-        raise HTTPException(status_code=400, detail="order must be one of: created, recent")
+        raise HTTPException(
+            status_code=400, detail="order must be one of: created, recent"
+        )
 
-    targets = ([_cron_profile_home(profile)] if profile and profile != "all"
-               else _profile_targets("GET /api/profiles/sessions"))
+    targets = (
+        [_cron_profile_home(profile)]
+        if profile and profile != "all"
+        else _profile_targets("GET /api/profiles/sessions")
+    )
 
     # Source scoping (see /api/sessions): recents pass exclude_sources=cron, the cron-jobs
     # section source=cron — two independent lists so cron sessions can't starve recents.
     filters = dict(
-        source=source or None, sources=_csv_list(sources) or None,
-        exclude_sources=_csv_list(exclude_sources) or None, min_message_count=max(0, min_messages),
-        include_archived=archived == "include", archived_only=archived == "only")
+        source=source or None,
+        sources=_csv_list(sources) or None,
+        exclude_sources=_csv_list(exclude_sources) or None,
+        min_message_count=max(0, min_messages),
+        include_archived=archived == "include",
+        archived_only=archived == "only",
+    )
     # Over-fetch per profile so the merged+sorted window is correct for the requested page.
     # ``limit`` is already bounded to 500 by FastAPI; the offset is caller-controlled
     # pagination state, so include it instead of capping the source window at 500.
@@ -488,17 +576,31 @@ def get_profiles_sessions(
     errors: list[dict[str, str]] = []
     now = time.time()
     for name, home in targets:
+
         def _read(db, name=name, home=home):
             include_subagents, exclude = subagent_listing_scope(
-                home, source=filters["source"], sources=filters["sources"],
-                exclude_sources=filters["exclude_sources"])
-            scoped = {**filters, "exclude_sources": exclude, "include_subagents": include_subagents}
+                home,
+                source=filters["source"],
+                sources=filters["sources"],
+                exclude_sources=filters["exclude_sources"],
+            )
+            scoped = {
+                **filters,
+                "exclude_sources": exclude,
+                "include_subagents": include_subagents,
+            }
             rows = db.list_sessions_rich(
-                limit=per_profile, offset=0, order_by_last_active=order == "recent",
+                limit=per_profile,
+                offset=0,
+                order_by_last_active=order == "recent",
                 # Same SQL-level blob skip as /api/sessions.
-                compact_rows=not full, include_pinned=True, **scoped)
+                compact_rows=not full,
+                include_pinned=True,
+                **scoped,
+            )
             totals[name] = db.session_count(exclude_children=True, **scoped)
             merged.extend(_tag_rows(rows, name, now))
+
         _read_profile_db(name, home, errors, _read)
 
     sort_key = "last_active" if order == "recent" else "started_at"
@@ -513,16 +615,27 @@ def get_profiles_sessions(
         window = _pinned_window(merged, offset, limit)
     if not full:
         _strip_session_list_rows(window)
-    return {"sessions": window, "total": sum(totals.values()), "profile_totals": totals,
-            "limit": limit, "offset": offset, "errors": errors,
-            "storage": _corrupt_profile_stores(targets)}
+    return {
+        "sessions": window,
+        "total": sum(totals.values()),
+        "profile_totals": totals,
+        "limit": limit,
+        "offset": offset,
+        "errors": errors,
+        "storage": _corrupt_profile_stores(targets),
+    }
 
 
 @sessions_router.get("/api/profiles/sessions/sidebar")
 @_sidebar_singleflight_cache
 def get_profiles_sessions_sidebar(
-    recents_profile: str = "all", recents_limit: int = 20, recents_exclude: str | None = None,
-    cron_limit: int = 50, messaging_limit: int = 100, messaging_exclude: str | None = None):
+    recents_profile: str = "all",
+    recents_limit: int = 20,
+    recents_exclude: str | None = None,
+    cron_limit: int = 50,
+    messaging_limit: int = 100,
+    messaging_exclude: str | None = None,
+):
     """Batched sidebar session slices (recents / cron / messaging) — one profile-DB open per
     refresh instead of three ``/api/profiles/sessions`` calls. Same row projection and 300s
     active heuristic as the per-slice endpoint; all slices use ``min_messages=1`` /
@@ -538,12 +651,20 @@ def get_profiles_sessions_sidebar(
 
     recents_scope = (recents_profile or "all").strip() or "all"
     recents_exclude_list = [s for s in (recents_exclude or "").split(",") if s.strip()]
-    messaging_exclude_list = [s for s in (messaging_exclude or "").split(",") if s.strip()]
+    messaging_exclude_list = [
+        s for s in (messaging_exclude or "").split(",") if s.strip()
+    ]
     # (source, exclude) per slice; ``source=cron`` is the implicit cron taxonomy.
-    slice_scope = {"recents": (None, recents_exclude_list), "cron": ("cron", None),
-                   "messaging": (None, messaging_exclude_list)}
-    cap = {"recents": min(max(recents_limit, 1), 500), "cron": min(max(cron_limit, 1), 500),
-           "messaging": min(max(messaging_limit, 1), 500)}
+    slice_scope = {
+        "recents": (None, recents_exclude_list),
+        "cron": ("cron", None),
+        "messaging": (None, messaging_exclude_list),
+    }
+    cap = {
+        "recents": min(max(recents_limit, 1), 500),
+        "cron": min(max(cron_limit, 1), 500),
+        "messaging": min(max(messaging_limit, 1), 500),
+    }
     rows: dict[str, list[dict[str, Any]]] = {k: [] for k in slice_scope}
     recents_truncated: dict[str, bool] = {}
     profile_totals: dict[str, dict[str, float]] = {}
@@ -553,20 +674,34 @@ def get_profiles_sessions_sidebar(
     def _slice(db, key, recents_subagents=(False, None)):
         source, exclude = slice_scope[key]
         # Only recents takes subagent runs (sessions.show_subagents); cron/messaging keep shape.
-        include_subagents, exclude = recents_subagents if key == "recents" else (False, exclude)
+        include_subagents, exclude = (
+            recents_subagents if key == "recents" else (False, exclude)
+        )
         # include_pinned: a pinned conversation must reach the sidebar even when it has aged
         # past the window, or its Pinned row renders empty.
         return db.list_sessions_rich(
-            source=source, exclude_sources=exclude or None, limit=cap[key], offset=0,
-            min_message_count=1, include_archived=False, archived_only=False,
-            order_by_last_active=True, compact_rows=True, include_pinned=True,
-            include_subagents=include_subagents)
+            source=source,
+            exclude_sources=exclude or None,
+            limit=cap[key],
+            offset=0,
+            min_message_count=1,
+            include_archived=False,
+            archived_only=False,
+            order_by_last_active=True,
+            compact_rows=True,
+            include_pinned=True,
+            include_subagents=include_subagents,
+        )
 
     def _build_slices(db, cache_key, recents_subagents):
         # ``usage`` is aggregated in SQL rather than over the recents window: the window is a
         # page, and a total that shrank when you scrolled would be worse than no total at all.
-        slices = {"recents": _slice(db, "recents", recents_subagents), "usage": db.usage_totals(),
-                  "cron": _slice(db, "cron"), "messaging": _slice(db, "messaging")}
+        slices = {
+            "recents": _slice(db, "recents", recents_subagents),
+            "usage": db.usage_totals(),
+            "cron": _slice(db, "cron"),
+            "messaging": _slice(db, "messaging"),
+        }
         _sidebar_profile_cache_put(cache_key, slices)
         return slices
 
@@ -579,15 +714,27 @@ def get_profiles_sessions_sidebar(
         db_path = _profile_state_db(home)
         if not db_path.exists():
             continue
-        recents_subagents = subagent_listing_scope(home, exclude_sources=recents_exclude_list or None)
-        profile_cache_key = (str(db_path), _sidebar_db_fingerprint(db_path), cap["recents"],
-                             tuple(recents_exclude_list), cap["cron"], cap["messaging"],
-                             tuple(messaging_exclude_list), recents_subagents[0])
+        recents_subagents = subagent_listing_scope(
+            home, exclude_sources=recents_exclude_list or None
+        )
+        profile_cache_key = (
+            str(db_path),
+            _sidebar_db_fingerprint(db_path),
+            cap["recents"],
+            tuple(recents_exclude_list),
+            cap["cron"],
+            cap["messaging"],
+            tuple(messaging_exclude_list),
+            recents_subagents[0],
+        )
         slices = _sidebar_profile_cache_get(profile_cache_key)
         if slices is None:
             slices = _read_profile_db(
-                name, home, errors,
-                lambda db: _build_slices(db, profile_cache_key, recents_subagents))
+                name,
+                home,
+                errors,
+                lambda db: _build_slices(db, profile_cache_key, recents_subagents),
+            )
             if slices is None:
                 continue
         if _slice_has_rows(slices):
@@ -628,17 +775,28 @@ def get_profiles_sessions_sidebar(
         # Do not include ``sessions``: an empty list is a successful read.
         return {
             "recents": _failed_load_slice(
-                retryable, profiles_truncated={}, profiles_usage={}),
+                retryable, profiles_truncated={}, profiles_usage={}
+            ),
             "cron": _failed_load_slice(retryable),
             "messaging": _failed_load_slice(retryable, total=0),
-            "errors": errors, "storage": storage}
+            "errors": errors,
+            "storage": storage,
+        }
 
     body = {
-        "recents": {"sessions": _window("recents"), "profiles_truncated": recents_truncated,
-                    "profiles_usage": profile_totals},
+        "recents": {
+            "sessions": _window("recents"),
+            "profiles_truncated": recents_truncated,
+            "profiles_usage": profile_totals,
+        },
         "cron": {"sessions": _window("cron")},
-        "messaging": {"sessions": _window("messaging"), "total": len(rows["messaging"])},
-        "errors": errors, "storage": storage}
+        "messaging": {
+            "sessions": _window("messaging"),
+            "total": len(rows["messaging"]),
+        },
+        "errors": errors,
+        "storage": storage,
+    }
     # A sibling profile still listed does not make the failed profile's absence
     # a successful empty slice. Stamp that profile as a failed load with Retry.
     failed = _profiles_failed(retryable)
@@ -650,7 +808,9 @@ def get_profiles_sessions_sidebar(
     return body
 
 
-def _merge_by_id(into: dict[str, dict[str, Any]], entries: list[dict[str, Any]], child_key: str) -> None:
+def _merge_by_id(
+    into: dict[str, dict[str, Any]], entries: list[dict[str, Any]], child_key: str
+) -> None:
     """Fold ``entries`` into ``into`` by id, recursing through one child list (repos merge
     their lanes, lanes merge their sessions). Counts add up; everything else is
     first-writer, since the entries describe the same path either way."""
@@ -662,24 +822,34 @@ def _merge_by_id(into: dict[str, dict[str, Any]], entries: list[dict[str, Any]],
         if child_key == "sessions":
             existing["sessions"].extend(entry.get("sessions") or [])
         else:
-            children: dict[str, dict[str, Any]] = {c["id"]: c for c in existing.get(child_key) or []}
+            children: dict[str, dict[str, Any]] = {
+                c["id"]: c for c in existing.get(child_key) or []
+            }
             _merge_by_id(children, entry.get(child_key) or [], "sessions")
             existing[child_key] = list(children.values())
         if "sessionCount" in existing:
-            existing["sessionCount"] = (existing.get("sessionCount") or 0) + (entry.get("sessionCount") or 0)
+            existing["sessionCount"] = (existing.get("sessionCount") or 0) + (
+                entry.get("sessionCount") or 0
+            )
 
 
 def _merge_profile_tree(
-    merged: dict[str, dict[str, Any]], projects: list[dict[str, Any]], profile: str,
-    preview_limit: int) -> None:
+    merged: dict[str, dict[str, Any]],
+    projects: list[dict[str, Any]],
+    profile: str,
+    preview_limit: int,
+) -> None:
     """Fold one profile's projects into the shared tree, keyed by folder: the same checkout
     in two profiles is one group, as is ``__no_project__`` (else one "Home" per profile), and
     a declared project (``p_<hash>``) folds with another profile's auto entry for the same
     folder. Sessions carry the owning profile; a group header never claims a single owner."""
     for project in projects:
-        lane_sessions = (s for r in project.get("repos") or []
-                         for lane in r.get("groups") or []
-                         for s in lane.get("sessions") or [])
+        lane_sessions = (
+            s
+            for r in project.get("repos") or []
+            for lane in r.get("groups") or []
+            for s in lane.get("sessions") or []
+        )
         for session in [*lane_sessions, *(project.get("previewSessions") or [])]:
             session["profile"] = profile
             session["is_default_profile"] = profile == "default"
@@ -688,6 +858,7 @@ def _merge_profile_tree(
         # shape-derived — Windows paths case-fold on any host, separators unify, NFC —
         # so the cross-profile merge agrees by construction with the trees it merges.
         from tui_gateway.project_tree import _path_key
+
         key = _path_key(project.get("path") or project["id"])
         # A per-profile read is merged again by its caller, which cannot compute this key.
         project["mergeKey"] = key
@@ -702,20 +873,30 @@ def _merge_profile_tree(
             existing, project = project, existing
             merged[key] = existing
 
-        repos: dict[str, dict[str, Any]] = {r["id"]: r for r in existing.get("repos") or []}
+        repos: dict[str, dict[str, Any]] = {
+            r["id"]: r for r in existing.get("repos") or []
+        }
         _merge_by_id(repos, project.get("repos") or [], "groups")
         existing["repos"] = list(repos.values())
         for total_key in ("sessionCount", "totalTokens", "totalCostUsd"):
-            existing[total_key] = (existing.get(total_key) or 0) + (project.get(total_key) or 0)
-        existing["lastActive"] = max(existing.get("lastActive") or 0, project.get("lastActive") or 0)
-        previews = (existing.get("previewSessions") or []) + (project.get("previewSessions") or [])
+            existing[total_key] = (existing.get(total_key) or 0) + (
+                project.get(total_key) or 0
+            )
+        existing["lastActive"] = max(
+            existing.get("lastActive") or 0, project.get("lastActive") or 0
+        )
+        previews = (existing.get("previewSessions") or []) + (
+            project.get("previewSessions") or []
+        )
         previews.sort(key=_recency, reverse=True)
         existing["previewSessions"] = previews[:preview_limit]
 
 
 @sessions_router.get("/api/profiles/projects/tree")
 @_sidebar_singleflight_cache
-def get_profiles_projects_tree(preview_limit: int = 3, session_limit: int = 2000, profile: Optional[str] = None):
+def get_profiles_projects_tree(
+    preview_limit: int = 3, session_limit: int = 2000, profile: Optional[str] = None
+):
     """Project tree for every profile at once, for the all-profiles sidebar.
 
     ``projects.tree`` over JSON-RPC answers for the backend's own profile only; this runs the
@@ -729,24 +910,39 @@ def get_profiles_projects_tree(preview_limit: int = 3, session_limit: int = 2000
     the Desktop merges one such read per profile by each project's ``mergeKey``.
     """
     from tui_gateway import server as gateway_server
+
     merged: dict[str, dict[str, Any]] = {}
     scoped_session_ids: list[str] = []
     errors: list[dict[str, str]] = []
 
-    for name, home in _scoped_profile_targets("GET /api/profiles/projects/tree", profile):
+    for name, home in _scoped_profile_targets(
+        "GET /api/profiles/projects/tree", profile
+    ):
+
         def _read(db, name=name, home=home):
             with _clawk_home_scope(home):
                 tree, _active_id = gateway_server._build_project_tree(
-                    db, preview_limit=preview_limit, hydrate=False,
-                    session_limit=session_limit, include_discovered=False)
+                    db,
+                    preview_limit=preview_limit,
+                    hydrate=False,
+                    session_limit=session_limit,
+                    include_discovered=False,
+                )
                 _merge_profile_tree(merged, tree["projects"], name, preview_limit)
                 scoped_session_ids.extend(tree["scoped_session_ids"])
+
         _read_profile_db(name, home, errors, _read)
 
     # active_id is None: ownership is per profile, so no project is "the active one" here.
-    projects = sorted(merged.values(), key=lambda p: p.get("lastActive") or 0, reverse=True)
-    return {"projects": projects, "active_id": None, "scoped_session_ids": scoped_session_ids,
-            "errors": errors}
+    projects = sorted(
+        merged.values(), key=lambda p: p.get("lastActive") or 0, reverse=True
+    )
+    return {
+        "projects": projects,
+        "active_id": None,
+        "scoped_session_ids": scoped_session_ids,
+        "errors": errors,
+    }
 
 
 # `gh pr create` prints the PR url and nothing else, so a tool result whose whole output IS a
@@ -767,7 +963,9 @@ def _pr_url_from_tool_output(content: str) -> Optional[tuple[int, str]]:
 
 
 @sessions_router.post("/api/profiles/sessions/pull-requests")
-def post_profiles_sessions_pull_requests(body: SessionPrScanBody, profile: Optional[str] = None):
+def post_profiles_sessions_pull_requests(
+    body: SessionPrScanBody, profile: Optional[str] = None
+):
     """The PR each of these sessions opened, recovered from its own transcript: a session
     that starts in the main checkout and works in a worktree has no branch of its own, so
     its PR is invisible to the branch join — but ``gh pr create`` ran in the conversation
@@ -785,7 +983,9 @@ def post_profiles_sessions_pull_requests(body: SessionPrScanBody, profile: Optio
                 # Oldest-first, so a later `gh pr create` (the replacement PR) wins.
                 found[pr["session_id"]] = {"number": parsed[0], "url": parsed[1]}
 
-    for name, home in _scoped_profile_targets("POST /api/profiles/sessions/pull-requests", profile):
+    for name, home in _scoped_profile_targets(
+        "POST /api/profiles/sessions/pull-requests", profile
+    ):
         _read_profile_db(name, home, None, _read)
 
     # ``scanned``: every id looked at, so the caller can remember "nothing there".
@@ -795,12 +995,15 @@ def post_profiles_sessions_pull_requests(body: SessionPrScanBody, profile: Optio
 @functools.partial(coalesced_read, thread_runner=lambda func: run_in_threadpool(func))
 def _read_profiles():
     from clawk_cli import profiles as profiles_mod
+
     try:
         # Polled by the Desktop on every focus/roster tick: never walk skill trees in-request.
         profiles = profiles_mod.list_profiles(lazy_skill_count=True)
         return {"profiles": [_profile_to_dict(p) for p in profiles]}
     except Exception:
-        _log.exception("GET /api/profiles failed; falling back to profile directory scan")
+        _log.exception(
+            "GET /api/profiles failed; falling back to profile directory scan"
+        )
         return {"profiles": _fallback_profile_dicts(profiles_mod)}
 
 
@@ -812,6 +1015,7 @@ async def list_profiles_endpoint():
 @router.post("/api/profiles")
 async def create_profile_endpoint(body: ProfileCreate):
     from clawk_cli import profiles as profiles_mod
+
     explicit_source = (body.clone_from or "").strip()
     if explicit_source:
         # Clone config/skills/SOUL (or full state when clone_all) from the named source.
@@ -823,12 +1027,21 @@ async def create_profile_endpoint(body: ProfileCreate):
         clone = body.clone_from_default
         clone_from = "default" if clone else None
         clone_config = clone
-    with _profile_errors("POST /api/profiles failed", not_found=(),
-                         bad_request=(ValueError, FileExistsError, FileNotFoundError)):
+    with _profile_errors(
+        "POST /api/profiles failed",
+        not_found=(),
+        bad_request=(ValueError, FileExistsError, FileNotFoundError),
+    ):
         path = profiles_mod.create_profile(
-            name=body.name, clone_from=clone_from, clone_all=body.clone_all,
-            clone_config=clone_config, no_skills=body.no_skills, description=body.description,
-            clone_channels=body.clone_channels, **({"soul": body.soul} if body.soul is not None else {}))
+            name=body.name,
+            clone_from=clone_from,
+            clone_all=body.clone_all,
+            clone_config=clone_config,
+            no_skills=body.no_skills,
+            description=body.description,
+            clone_channels=body.clone_channels,
+            **({"soul": body.soul} if body.soul is not None else {}),
+        )
         # Match the CLI flow: fresh named profiles get the bundled skills (cloning already
         # copied the source's; no_skills wrote the opt-out marker so seeding no-ops) and a
         # ~/.local/bin wrapper when the alias is safe.
@@ -849,37 +1062,75 @@ async def create_profile_endpoint(body: ProfileCreate):
     def _set_model() -> bool:
         nonlocal model_error
         try:
-            _write_profile_model(path, provider, model, validate_in=get_process_clawk_home())
+            _write_profile_model(
+                path, provider, model, validate_in=get_process_clawk_home()
+            )
         except HTTPException as exc:
             model_error = str(exc.detail)
             return False
         return True
 
     model_set = bool(provider and model) and _best_effort(
-        "Setting model for new profile %s failed", body.name, fn=_set_model, default=False)
-    mcp_written = _best_effort(
-        "Writing MCP servers for new profile %s failed", body.name, default=0,
-        fn=lambda: _write_profile_mcp_servers(path, body.mcp_servers)) if body.mcp_servers else 0
+        "Setting model for new profile %s failed",
+        body.name,
+        fn=_set_model,
+        default=False,
+    )
+    mcp_written = (
+        _best_effort(
+            "Writing MCP servers for new profile %s failed",
+            body.name,
+            default=0,
+            fn=lambda: _write_profile_mcp_servers(path, body.mcp_servers),
+        )
+        if body.mcp_servers
+        else 0
+    )
     # "keep" has replace semantics; skipped when empty (legacy: keep the bundle).
-    skills_disabled = _best_effort(
-        "Applying skill selection for new profile %s failed", body.name, default=0,
-        fn=lambda: _disable_unselected_skills(path, body.keep_skills)) if body.keep_skills else 0
+    skills_disabled = (
+        _best_effort(
+            "Applying skill selection for new profile %s failed",
+            body.name,
+            default=0,
+            fn=lambda: _disable_unselected_skills(path, body.keep_skills),
+        )
+        if body.keep_skills
+        else 0
+    )
 
     # Hub installs spawn async, scoped via `-p <name>` (a fresh subprocess re-binds
     # skills_hub.SKILLS_DIR at import). PIDs go back for the UI to poll.
     def _spawn_install(ident: str):
-        return _spawn_clawk_action(["-p", body.name, "skills", "install", ident, "--yes"],
-                                    _hub_action_name("install", ident)).pid
+        return _spawn_clawk_action(
+            ["-p", body.name, "skills", "install", ident, "--yes"],
+            _hub_action_name("install", ident),
+        ).pid
 
     hub_installs: list[dict[str, Any]] = [
-        {"identifier": ident, "pid": _best_effort(
-            "Spawning hub-skill install %s for new profile %s failed", ident, body.name,
-            fn=lambda: _spawn_install(ident))}
-        for ident in ((i or "").strip() for i in body.hub_skills) if ident]
+        {
+            "identifier": ident,
+            "pid": _best_effort(
+                "Spawning hub-skill install %s for new profile %s failed",
+                ident,
+                body.name,
+                fn=lambda: _spawn_install(ident),
+            ),
+        }
+        for ident in ((i or "").strip() for i in body.hub_skills)
+        if ident
+    ]
 
-    return {"ok": True, "name": body.name, "path": str(path), "model_set": model_set, "model_error": model_error,
-            "mcp_written": mcp_written, "skills_disabled": skills_disabled,
-            "hub_installs": hub_installs, "soul_set": body.soul is not None}
+    return {
+        "ok": True,
+        "name": body.name,
+        "path": str(path),
+        "model_set": model_set,
+        "model_error": model_error,
+        "mcp_written": mcp_written,
+        "skills_disabled": skills_disabled,
+        "hub_installs": hub_installs,
+        "soul_set": body.soul is not None,
+    }
 
 
 @router.get("/api/profiles/active")
@@ -895,10 +1146,15 @@ async def get_active_profile_endpoint():
                 return fn() or "default"
             except Exception:
                 return on_error
+
         # A dashboard that cannot name its own home must not read as the machine
         # dashboard: "default" is exactly what lets the SPA adopt the sticky profile.
-        return {"active": _or_default(profiles_mod.get_active_profile),
-                "current": _or_default(profiles_mod.get_active_profile_name, on_error="custom")}
+        return {
+            "active": _or_default(profiles_mod.get_active_profile),
+            "current": _or_default(
+                profiles_mod.get_active_profile_name, on_error="custom"
+            ),
+        }
 
     return await run_in_threadpool(_run)
 
@@ -908,6 +1164,7 @@ async def set_active_profile_endpoint(body: ProfileActiveUpdate):
     """Set the sticky active profile (mirrors ``clawk profile use``); does not retarget the
     running dashboard, only subsequent CLI commands and gateways."""
     from clawk_cli import profiles as profiles_mod
+
     with _profile_errors("POST /api/profiles/active failed"):
         # Stats the target, creates the state directory, writes via temp file + replace.
         await run_in_threadpool(profiles_mod.set_active_profile, body.name)
@@ -922,17 +1179,31 @@ async def get_profile_setup_command(name: str):
 # (executable, flag): None = takes one quoted `sh -lc '…'` string after -e; "" = argv follows
 # the executable directly (kitty).
 _LINUX_TERMINALS = (
-    ("x-terminal-emulator", "-e"), ("gnome-terminal", "--"), ("konsole", "-e"),
-    ("xfce4-terminal", None), ("mate-terminal", None), ("lxterminal", None),
-    ("tilix", "-e"), ("alacritty", "-e"), ("kitty", ""), ("xterm", "-e"))
+    ("x-terminal-emulator", "-e"),
+    ("gnome-terminal", "--"),
+    ("konsole", "-e"),
+    ("xfce4-terminal", None),
+    ("mate-terminal", None),
+    ("lxterminal", None),
+    ("tilix", "-e"),
+    ("alacritty", "-e"),
+    ("kitty", ""),
+    ("xterm", "-e"),
+)
 
 
 def _linux_terminal_commands(command: str) -> list:
     sh = ["sh", "-lc", command]
     quoted = f"sh -lc '{command}'"
     return [
-        (exe, [exe, "-e", quoted] if flag is None else [exe, *([flag] if flag else []), *sh])
-        for exe, flag in _LINUX_TERMINALS]
+        (
+            exe,
+            [exe, "-e", quoted]
+            if flag is None
+            else [exe, *([flag] if flag else []), *sh],
+        )
+        for exe, flag in _LINUX_TERMINALS
+    ]
 
 
 @router.post("/api/profiles/{name}/open-terminal")
@@ -944,24 +1215,40 @@ async def open_profile_terminal_endpoint(name: str):
             subprocess.Popen(["cmd.exe", "/c", "start", "", command])  # noqa: ASYNC220 -- fire-and-forget spawn; Popen returns immediately and callers need the Popen object
         elif sys.platform == "darwin":
             escaped = command.replace("\\", "\\\\").replace('"', '\\"')
-            subprocess.Popen(["osascript", "-e",  # noqa: ASYNC220 -- fire-and-forget spawn; Popen returns immediately and callers need the Popen object
-                              f'tell application "Terminal"\nactivate\ndo script "{escaped}"\nend tell'])
+            subprocess.Popen(  # noqa: ASYNC220 -- fire-and-forget spawn; Popen returns immediately and callers need the Popen object
+                [
+                    "osascript",
+                    "-e",
+                    f'tell application "Terminal"\nactivate\ndo script "{escaped}"\nend tell',
+                ]
+            )
         else:
             for executable, popen_args in _linux_terminal_commands(command):
-                if await asyncio.to_thread(subprocess.call, ["which", executable], stdout=subprocess.DEVNULL,
-                                           stderr=subprocess.DEVNULL) == 0:
+                if (
+                    await asyncio.to_thread(
+                        subprocess.call,
+                        ["which", executable],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    == 0
+                ):
                     subprocess.Popen(popen_args)  # noqa: ASYNC220 -- fire-and-forget spawn; Popen returns immediately and callers need the Popen object
                     break
             else:
-                raise HTTPException(status_code=400, detail="No supported terminal emulator found")
+                raise HTTPException(
+                    status_code=400, detail="No supported terminal emulator found"
+                )
     return {"ok": True, "command": command}
 
 
 @router.patch("/api/profiles/{name}")
 async def rename_profile_endpoint(name: str, body: ProfileRename):
     from clawk_cli import profiles as profiles_mod
-    with _profile_errors("PATCH /api/profiles/%s failed", name,
-                         bad_request=(ValueError, FileExistsError)):
+
+    with _profile_errors(
+        "PATCH /api/profiles/%s failed", name, bad_request=(ValueError, FileExistsError)
+    ):
         # Stops a running gateway (10 s poll), renames the directory, rewrites the Honcho
         # host blocks and regenerates the wrapper script.
         path = await run_in_threadpool(profiles_mod.rename_profile, name, body.new_name)
@@ -972,8 +1259,17 @@ async def rename_profile_endpoint(name: str, body: ProfileRename):
     except ValueError:
         is_default = False
     if is_default:
-        return {"ok": True, "name": "default", "display_name": body.new_name.strip(), "path": str(path)}
-    return {"ok": True, "name": profiles_mod.normalize_profile_name(body.new_name), "path": str(path)}
+        return {
+            "ok": True,
+            "name": "default",
+            "display_name": body.new_name.strip(),
+            "path": str(path),
+        }
+    return {
+        "ok": True,
+        "name": profiles_mod.normalize_profile_name(body.new_name),
+        "path": str(path),
+    }
 
 
 @router.delete("/api/profiles/{name}")
@@ -986,20 +1282,27 @@ async def delete_profile_endpoint(name: str):
     the generic 500 made a dashboard client read a completed delete as a failure (its retry
     then 404'd)."""
     from clawk_cli import profiles as profiles_mod
+
     try:
         with _profile_errors("DELETE /api/profiles/%s failed", name):
             # Polls a running gateway's PID for up to 10 s, then rmtree()s the directory; on the
             # loop that parks every request past the desktop's 10 s WebSocket ready-probe.
             path = await run_in_threadpool(profiles_mod.delete_profile, name, yes=True)
     except ProfileIdentitySettlementPending as exc:
-        return {"ok": True, "path": str(exc.path), "identity_settled": False,
-                "settlement_pending": True, "retry_command": exc.retry_command}
+        return {
+            "ok": True,
+            "path": str(exc.path),
+            "identity_settled": False,
+            "settlement_pending": True,
+            "retry_command": exc.retry_command,
+        }
     return {"ok": True, "path": str(path)}
 
 
 @router.get("/api/profiles/{name}/soul")
 async def get_profile_soul(name: str):
     soul_path = _resolve_profile_dir(name) / "SOUL.md"
+
     def _run():
         # Probe and read in one hop (two round-trips would widen the check/read window).
         if not soul_path.exists():
@@ -1018,12 +1321,15 @@ async def update_profile_soul(name: str, body: ProfileSoulUpdate):
 
     def _run():
         from utils import atomic_write_text
+
         # Atomic: a bare write_text() truncates SOUL.md before the new body lands, and the
         # paired GET reports an unreadable file as "never set" — so an interrupted save would
         # make the editor's next Save persist an empty document. preserve_mode keeps an
         # existing file's mode/owner; create_mode=0o644 covers the first save (profiles
         # chmods only .env to 0600 and SOUL.md is not a secret).
-        atomic_write_text(soul_path, body.content, preserve_mode=True, create_mode=0o644)
+        atomic_write_text(
+            soul_path, body.content, preserve_mode=True, create_mode=0o644
+        )
 
     try:
         # Temp file + fsync + replace blocks for as long as the filesystem takes to commit.
@@ -1035,16 +1341,24 @@ async def update_profile_soul(name: str, body: ProfileSoulUpdate):
 
 
 @router.put("/api/profiles/{name}/description")
-async def update_profile_description_endpoint(name: str, body: ProfileDescriptionUpdate):
+async def update_profile_description_endpoint(
+    name: str, body: ProfileDescriptionUpdate
+):
     """Set or clear a profile's role description (kanban routing signal), stored as
     user-authored (``description_auto: false``) so the auto-describer won't overwrite it."""
     from clawk_cli import profiles as profiles_mod
+
     profile_dir = _resolve_profile_dir(name)
     text = (body.description or "").strip()
-    with _profile_errors("PUT /api/profiles/%s/description failed", name,
-                         not_found=(), bad_request=()):
+    with _profile_errors(
+        "PUT /api/profiles/%s/description failed", name, not_found=(), bad_request=()
+    ):
         await run_in_threadpool(
-            profiles_mod.write_profile_meta, profile_dir, description=text, description_auto=False)
+            profiles_mod.write_profile_meta,
+            profile_dir,
+            description=text,
+            description_auto=False,
+        )
     return {"ok": True, "description": text, "description_auto": False}
 
 
@@ -1057,8 +1371,9 @@ async def update_profile_model_endpoint(name: str, body: ProfileModelUpdate):
     model = (body.model or "").strip()
     if not provider or not model:
         raise HTTPException(status_code=400, detail="provider and model are required")
-    with _profile_errors("PUT /api/profiles/%s/model failed", name,
-                         not_found=(), bad_request=()):
+    with _profile_errors(
+        "PUT /api/profiles/%s/model failed", name, not_found=(), bad_request=()
+    ):
         await run_in_threadpool(_write_profile_model, profile_dir, provider, model)
     return {"ok": True, "provider": provider, "model": model}
 
@@ -1073,15 +1388,21 @@ async def describe_profile_auto_endpoint(name: str, body: ProfileDescribeAuto):
 
     def _run():
         from clawk_cli import profile_describer
+
         return profile_describer.describe_profile(name, overwrite=bool(body.overwrite))
 
-    with _profile_errors("POST /api/profiles/%s/describe-auto failed", name,
-                         not_found=(), bad_request=()):
+    with _profile_errors(
+        "POST /api/profiles/%s/describe-auto failed", name, not_found=(), bad_request=()
+    ):
         # A synchronous LLM round-trip with a 60 s ceiling; on the loop it stalls everything.
         outcome = await run_in_threadpool(_run)
     # description_auto mirrors ok: a failed sweep leaves any existing description untouched.
-    return {"ok": bool(outcome.ok), "reason": outcome.reason, "description": outcome.description,
-            "description_auto": bool(outcome.ok)}
+    return {
+        "ok": bool(outcome.ok),
+        "reason": outcome.reason,
+        "description": outcome.description,
+        "description_auto": bool(outcome.ok),
+    }
 
 
 # ── Export / Import ── wraps clawk_cli.profiles.export_profile / import_profile. Paths are
@@ -1097,6 +1418,7 @@ def _read_desktop_overlay(profile_dir: Path) -> Any:
 @router.post("/api/profiles/{name}/export")
 async def export_profile_endpoint(name: str, body: ProfileExport):
     from clawk_cli import profiles as profiles_mod
+
     output = (body.output or "").strip()
     if not output:
         try:
@@ -1104,41 +1426,62 @@ async def export_profile_endpoint(name: str, body: ProfileExport):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"Could not create export directory: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"Could not create export directory: {exc}"
+            )
 
     with _profile_errors("POST /api/profiles/%s/export failed", name):
         result = await run_in_threadpool(
-            profiles_mod.export_profile, name, output, extra_files=body.extra_files or None)
+            profiles_mod.export_profile,
+            name,
+            output,
+            extra_files=body.extra_files or None,
+        )
     return {"ok": True, "archive": str(result)}
 
 
 @router.post("/api/profiles/import")
 async def import_profile_endpoint(body: ProfileImport):
     from clawk_cli import profiles as profiles_mod
+
     archive = (body.archive or "").strip()
     if not archive:
         raise HTTPException(status_code=400, detail="archive path is required")
 
-    with _profile_errors("POST /api/profiles/import failed",
-                         bad_request=(ValueError, FileExistsError)):
+    with _profile_errors(
+        "POST /api/profiles/import failed", bad_request=(ValueError, FileExistsError)
+    ):
         profile_dir = await run_in_threadpool(
-            profiles_mod.import_profile, archive, name=(body.name or "").strip() or None)
+            profiles_mod.import_profile, archive, name=(body.name or "").strip() or None
+        )
 
     imported = profile_dir.name
 
     # Match the CLI import flow: create the wrapper alias when it's safe.
-    _best_effort("Creating wrapper for imported profile %s failed", imported,
-                 fn=lambda: (profiles_mod.check_alias_collision(imported)
-                             or profiles_mod.create_wrapper_script(imported)))
+    _best_effort(
+        "Creating wrapper for imported profile %s failed",
+        imported,
+        fn=lambda: (
+            profiles_mod.check_alias_collision(imported)
+            or profiles_mod.create_wrapper_script(imported)
+        ),
+    )
 
     # Bundled desktop appearance overlay, so the desktop needn't make another round-trip.
     desktop_overlay = None
     overlay_path = profile_dir / "desktop.json"
     if overlay_path.is_file():
         desktop_overlay = _best_effort(
-            "Reading desktop.json from imported profile %s failed", imported,
-            fn=lambda: _read_desktop_overlay(profile_dir))
-    return {"ok": True, "name": imported, "path": str(profile_dir), "desktop": desktop_overlay}
+            "Reading desktop.json from imported profile %s failed",
+            imported,
+            fn=lambda: _read_desktop_overlay(profile_dir),
+        )
+    return {
+        "ok": True,
+        "name": imported,
+        "path": str(profile_dir),
+        "desktop": desktop_overlay,
+    }
 
 
 @router.get("/api/profiles/{name}/desktop-overlay")

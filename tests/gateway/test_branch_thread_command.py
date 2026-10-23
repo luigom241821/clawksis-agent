@@ -54,8 +54,14 @@ def _runner(store, adapter):
 
 
 def _discord_channel_source():
-    return SessionSource(platform=Platform.DISCORD, chat_id="123", chat_type="group", user_id="u1",
-                         user_name="ann", scope_id="g9")
+    return SessionSource(
+        platform=Platform.DISCORD,
+        chat_id="123",
+        chat_type="group",
+        user_id="u1",
+        user_name="ann",
+        scope_id="g9",
+    )
 
 
 def _seed(store, source):
@@ -72,30 +78,52 @@ async def test_plain_branch_binds_new_thread_and_keeps_origin(store):
     adapter = _ThreadAdapter()
     runner = _runner(store, adapter)
 
-    reply = await runner._handle_branch_command(MessageEvent(text="/branch side quest", source=source))
+    reply = await runner._handle_branch_command(
+        MessageEvent(text="/branch side quest", source=source)
+    )
 
     assert adapter.calls == [("123", "side quest")]
     # The chat the command came from is still on the original session.
     assert store.get_or_create_session(source).session_id == parent.session_id
     # The new thread (Discord keys it on its own id) is on the clone, with the routing columns of
     # the THREAD, so a restart routes the next in-thread message to the branch.
-    thread_source = SessionSource(platform=Platform.DISCORD, chat_id="777000", chat_type="thread",
-                                  thread_id="777000", parent_chat_id="123", user_id="u1", scope_id="g9")
+    thread_source = SessionSource(
+        platform=Platform.DISCORD,
+        chat_id="777000",
+        chat_type="thread",
+        thread_id="777000",
+        parent_chat_id="123",
+        user_id="u1",
+        scope_id="g9",
+    )
     branch = store.get_or_create_session(thread_source)
     assert branch.session_id != parent.session_id
     row = store._db.get_session(branch.session_id)
-    assert (row["parent_session_id"], row["chat_id"], row["thread_id"], row["chat_type"]) == (
-        parent.session_id, "777000", "777000", "thread")
-    assert [m["content"] for m in store._db.get_messages(branch.session_id)] == ["hello", "world"]
+    assert (
+        row["parent_session_id"],
+        row["chat_id"],
+        row["thread_id"],
+        row["chat_type"],
+    ) == (parent.session_id, "777000", "777000", "thread")
+    assert [m["content"] for m in store._db.get_messages(branch.session_id)] == [
+        "hello",
+        "world",
+    ]
     assert "<#777000>" in reply and parent.session_id in reply
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("text, adapter", [
-    ("/branch --here side quest", _ThreadAdapter()),   # explicit opt-out
-    ("/branch side quest", _ThreadAdapter(fail=True)),  # platform could not open a thread
-    ("/branch side quest", None),                       # no adapter for the platform
-])
+@pytest.mark.parametrize(
+    "text, adapter",
+    [
+        ("/branch --here side quest", _ThreadAdapter()),  # explicit opt-out
+        (
+            "/branch side quest",
+            _ThreadAdapter(fail=True),
+        ),  # platform could not open a thread
+        ("/branch side quest", None),  # no adapter for the platform
+    ],
+)
 async def test_here_or_no_thread_branches_in_place(store, text, adapter):
     source = _discord_channel_source()
     parent = _seed(store, source)

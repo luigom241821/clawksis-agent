@@ -14,6 +14,7 @@ import pytest
 from tools import async_delegation as ad
 from tools.process_registry import process_registry
 
+
 @pytest.fixture(autouse=True)
 def _clean_state():
     ad._reset_for_tests()
@@ -27,7 +28,9 @@ def _clean_state():
     while not process_registry.completion_queue.empty():
         process_registry.completion_queue.get_nowait()
 
+
 SESSION_KEY = "agent:main:test:dm:1"
+
 
 def _make_agent():
     agent = MagicMock()
@@ -42,6 +45,7 @@ def _make_agent():
     ]
     return agent
 
+
 def _make_runner(agent):
     import threading
 
@@ -54,6 +58,7 @@ def _make_runner(agent):
     runner._session_key_for_source = lambda source: SESSION_KEY
     return runner
 
+
 class _Event:
     source = object()  # any non-None sentinel
 
@@ -63,6 +68,7 @@ class _Event:
     def get_command_args(self):
         return self._args
 
+
 @pytest.mark.asyncio
 async def test_review_command_dispatches_background_subagent(monkeypatch):
     import tools.delegate_tool as dt
@@ -71,8 +77,13 @@ async def test_review_command_dispatches_background_subagent(monkeypatch):
     fake_child = MagicMock()
     fake_child._delegate_role = "leaf"
     creds = {
-        "model": "m", "provider": None, "base_url": None, "api_key": None,
-        "api_mode": None, "command": None, "args": None,
+        "model": "m",
+        "provider": None,
+        "base_url": None,
+        "api_key": None,
+        "api_mode": None,
+        "command": None,
+        "args": None,
     }
     built = {}
 
@@ -83,10 +94,15 @@ async def test_review_command_dispatches_background_subagent(monkeypatch):
     monkeypatch.setattr(dt, "_build_child_agent", fake_build)
     monkeypatch.setattr(dt, "_resolve_delegation_credentials", lambda *a, **k: creds)
     monkeypatch.setattr(
-        dt, "_run_single_child",
+        dt,
+        "_run_single_child",
         lambda *a, **k: {
-            "task_index": 0, "status": "completed", "summary": "review done",
-            "api_calls": 1, "duration_seconds": 0.1, "model": "m",
+            "task_index": 0,
+            "status": "completed",
+            "summary": "review done",
+            "api_calls": 1,
+            "duration_seconds": 0.1,
+            "model": "m",
             "exit_reason": "completed",
         },
     )
@@ -114,6 +130,7 @@ async def test_review_command_dispatches_background_subagent(monkeypatch):
     assert evt["type"] == "async_delegation"
     assert evt["session_key"] == SESSION_KEY
     assert evt["results"][0]["summary"] == "review done"
+
 
 @pytest.mark.asyncio
 async def test_review_command_rejects_while_agent_running():

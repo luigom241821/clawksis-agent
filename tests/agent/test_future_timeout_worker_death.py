@@ -61,7 +61,9 @@ def test_compression_wait_returns_promptly_when_worker_dies():
     fence = CompressionCommitFence()
     fence.touch_progress()
     started = time.monotonic()
-    assert _await_worker_within_budget(raced, fence, idle=1.0, ceiling=2.0, wait_started=started) == (
+    assert _await_worker_within_budget(
+        raced, fence, idle=1.0, ceiling=2.0, wait_started=started
+    ) == (
         True,
         "summary",
     )
@@ -88,7 +90,9 @@ def test_in_flight_commit_surfaces_worker_timeout_instead_of_looping():
         future = _settled_dead_future(pool, TimeoutError("commit stream stalled"))
         started = time.monotonic()
         with pytest.raises(TimeoutError, match="commit stream stalled"):
-            _await_in_flight_commit(future, ceiling=1.0, wait_started=started, on_commit_overrun=None)
+            _await_in_flight_commit(
+                future, ceiling=1.0, wait_started=started, on_commit_overrun=None
+            )
         elapsed = time.monotonic() - started
 
     assert elapsed < 0.5, f"commit wait hung {elapsed:.2f}s on a dead worker"
@@ -99,13 +103,22 @@ def test_sequential_tool_poll_surfaces_worker_timeout_instead_of_looping():
     a worker that died with TimeoutError kept it spinning until the deadline. With a 2s deadline
     on base this returns ("timeout", None) after 2s — post-fix the worker's error propagates at
     once."""
-    agent = SimpleNamespace(_interrupt_requested=False, _touch_activity=lambda msg: None)
+    agent = SimpleNamespace(
+        _interrupt_requested=False, _touch_activity=lambda msg: None
+    )
     gate = SimpleNamespace(excluded_seconds=lambda: 0.0)
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         future = _settled_dead_future(pool, TimeoutError("tool stream stalled"))
         started = time.monotonic()
         with pytest.raises(TimeoutError, match="tool stream stalled"):
-            _poll_sequential_future(agent, future, "some_tool", deadline=started + 2.0, started=started, authorization_gate=gate)
+            _poll_sequential_future(
+                agent,
+                future,
+                "some_tool",
+                deadline=started + 2.0,
+                started=started,
+                authorization_gate=gate,
+            )
         elapsed = time.monotonic() - started
 
     assert elapsed < 0.5, f"sequential poll hung {elapsed:.2f}s on a dead worker"

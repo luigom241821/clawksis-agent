@@ -38,7 +38,9 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 pytestmark = [
     pytest.mark.platforms("linux"),
     pytest.mark.live_system_guard_bypass,
-    pytest.mark.skipif(H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())),
+    pytest.mark.skipif(
+        H.sandbox_required_reason() is not None, reason=str(H.sandbox_required_reason())
+    ),
     pytest.mark.skipif(shutil.which("git") is None, reason="git required"),
     pytest.mark.skipif(I.real_uv() is None, reason="uv required"),
 ]
@@ -51,8 +53,8 @@ FEDORA_SKEL = {
         "# Source global definitions\n"
         "if [ -f /etc/bashrc ]; then\n    . /etc/bashrc\nfi\n\n"
         "# User specific environment\n"
-        "if ! [[ \"$PATH\" =~ \"$HOME/.local/bin:$HOME/bin:\" ]]; then\n"
-        "    PATH=\"$HOME/.local/bin:$HOME/bin:$PATH\"\n"
+        'if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]; then\n'
+        '    PATH="$HOME/.local/bin:$HOME/bin:$PATH"\n'
         "fi\nexport PATH\n"
     ),
     ".bash_profile": (
@@ -64,8 +66,10 @@ FEDORA_SKEL = {
 }
 USER_NODE_VERSION = "v22.11.0"
 NPX_ENTRY = ".npm/_npx/0e2eab1c"
-ADDON_IN_NPX_CACHE = f"{NPX_ENTRY}/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-MINIMAL_MCP_SERVER = r'''
+ADDON_IN_NPX_CACHE = (
+    f"{NPX_ENTRY}/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+)
+MINIMAL_MCP_SERVER = r"""
 import json, sys
 for line in sys.stdin:
     line = line.strip()
@@ -85,7 +89,7 @@ for line in sys.stdin:
         result = {}
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": result}) + "\n")
     sys.stdout.flush()
-'''
+"""
 
 
 def _user_toolchain(root: Path) -> dict[str, Path]:
@@ -100,16 +104,26 @@ def _user_toolchain(root: Path) -> dict[str, Path]:
     server_py.write_text(MINIMAL_MCP_SERVER, encoding="utf-8")
     server_js = mcp_dir / "server.js"
     server_js.write_text(
-        "require('fs').writeFileSync(" + repr(str(marker)) + ", process.execPath + ' ' + process.version);\n"
-        "const addon = require('path').join(require('os').homedir(), " + repr(ADDON_IN_NPX_CACHE) + ");\n"
-        "console.error(\"Error: The module '\" + addon + \"'\\nwas compiled against a different Node.js version using\\n"
-        "NODE_MODULE_VERSION 127. This version of Node.js requires\\nNODE_MODULE_VERSION \" + process.versions.modules"
+        "require('fs').writeFileSync("
+        + repr(str(marker))
+        + ", process.execPath + ' ' + process.version);\n"
+        "const addon = require('path').join(require('os').homedir(), "
+        + repr(ADDON_IN_NPX_CACHE)
+        + ");\n"
+        'console.error("Error: The module \'" + addon + "\'\\nwas compiled against a different Node.js version using\\n'
+        'NODE_MODULE_VERSION 127. This version of Node.js requires\\nNODE_MODULE_VERSION " + process.versions.modules'
         " + \"\\n  code: 'ERR_DLOPEN_FAILED'\");\n"
-        "process.exit(1);\n", encoding="utf-8")
+        "process.exit(1);\n",
+        encoding="utf-8",
+    )
     python = shutil.which("python3") or sys.executable
     versions = {"node": USER_NODE_VERSION, "npm": "10.9.0", "npx": "10.9.0"}
     for name, ver in versions.items():
-        serve = f'  *server.js) exec "{python}" "{server_py}" ;;\n' if name == "node" else ""
+        serve = (
+            f'  *server.js) exec "{python}" "{server_py}" ;;\n'
+            if name == "node"
+            else ""
+        )
         p = sysbin / name
         p.write_text(
             "#!/bin/sh\n"
@@ -118,8 +132,10 @@ def _user_toolchain(root: Path) -> dict[str, Path]:
             f"  --version|-v) echo {ver}; exit 0 ;;\n"
             f"{serve}"
             "esac\n"
-            f'echo "user {name} {ver}: refusing to run \'$*\' (Clawksis must use its managed toolchain here)" >&2\n'
-            "exit 1\n", encoding="utf-8")
+            f"echo \"user {name} {ver}: refusing to run '$*' (Clawksis must use its managed toolchain here)\" >&2\n"
+            "exit 1\n",
+            encoding="utf-8",
+        )
         p.chmod(0o755)
     return {"bin": sysbin, "calls": calls, "server_js": server_js, "marker": marker}
 
@@ -143,16 +159,24 @@ def world(tmp_path_factory, provider):
     at = parts.index(str(sb.root / "wrap")) + 1
     sb.env["PATH"] = ":".join([*parts[:at], str(user["bin"]), *parts[at:]])
     first = I.run_installer(sb)
-    return {"sb": sb, "user": user, "install": first,
-            "rc_after_install": {n: (sb.home / n).read_text(encoding="utf-8") for n in FEDORA_SKEL}}
+    return {
+        "sb": sb,
+        "user": user,
+        "install": first,
+        "rc_after_install": {
+            n: (sb.home / n).read_text(encoding="utf-8") for n in FEDORA_SKEL
+        },
+    }
 
 
 def _local_bin_count(sb: I.Sandbox) -> tuple[int, str]:
     probe = X.login_shell(sb, 'printf "PATH=%s\\n" "$PATH"')
     assert probe.returncode == 0, H.describe(probe)
     line = next((ln for ln in probe.stdout.splitlines() if ln.startswith("PATH=")), "")
-    entries = line[len("PATH="):].split(":")
-    return sum(1 for e in entries if e.rstrip("/") == str(sb.home / ".local" / "bin")), line
+    entries = line[len("PATH=") :].split(":")
+    return sum(
+        1 for e in entries if e.rstrip("/") == str(sb.home / ".local" / "bin")
+    ), line
 
 
 def _calls(world) -> list[str]:
@@ -164,10 +188,21 @@ def test_user_node_first_on_path_does_not_shadow_the_managed_toolchain(world, pr
     sb, first = world["sb"], world["install"]
     # The shim log first: when the user's node is picked up the build usually dies on it, and the
     # log names that root cause where the exit code alone would not.
-    used = [c for c in _calls(world) if not re.fullmatch(r"(node|npm|npx) (--version|-v)", c)]
-    assert not used, ("the installer ran the user's node/npm for real work instead of the managed toolchain:\n"
-                      + "\n".join(used) + "\n" + I.describe(first))
-    assert first.returncode == 0, "install.sh failed with the user's own node first on PATH:\n" + I.describe(first)
+    used = [
+        c
+        for c in _calls(world)
+        if not re.fullmatch(r"(node|npm|npx) (--version|-v)", c)
+    ]
+    assert not used, (
+        "the installer ran the user's node/npm for real work instead of the managed toolchain:\n"
+        + "\n".join(used)
+        + "\n"
+        + I.describe(first)
+    )
+    assert first.returncode == 0, (
+        "install.sh failed with the user's own node first on PATH:\n"
+        + I.describe(first)
+    )
     X.ok(sb.cli("--version"))
     X.configure(sb, provider)
     X.turn(sb, provider, "turn with the user's node first on PATH")
@@ -177,41 +212,74 @@ def test_login_shell_has_local_bin_once_with_stock_fedora_startup_files(world):
     sb, first = world["sb"], world["install"]
     assert first.returncode == 0, I.describe(first)
     count, line = _local_bin_count(sb)
-    assert count >= 1, f"a new login shell does not have ~/.local/bin on PATH at all: {line}"
+    assert count >= 1, (
+        f"a new login shell does not have ~/.local/bin on PATH at all: {line}"
+    )
     rerun = I.run_installer(sb)
     assert rerun.returncode == 0, "re-running install.sh failed:\n" + I.describe(rerun)
     rc_after_rerun = {n: (sb.home / n).read_text(encoding="utf-8") for n in FEDORA_SKEL}
     count_rerun, line_rerun = _local_bin_count(sb)
     assert rc_after_rerun == world["rc_after_install"], (
         "re-running the installer edited the startup files again: "
-        f"{[n for n in FEDORA_SKEL if rc_after_rerun[n] != world['rc_after_install'][n]]}")
-    changed = [n for n, text in FEDORA_SKEL.items() if world["rc_after_install"][n] != text]
+        f"{[n for n in FEDORA_SKEL if rc_after_rerun[n] != world['rc_after_install'][n]]}"
+    )
+    changed = [
+        n for n, text in FEDORA_SKEL.items() if world["rc_after_install"][n] != text
+    ]
     assert count == 1 and count_rerun == 1, (
         f"~/.local/bin appears {count} times on a login shell's PATH after install ({count_rerun} after a re-run):\n"
-        f"{line_rerun}\n(startup files the installer changed: {changed})")
+        f"{line_rerun}\n(startup files the installer changed: {changed})"
+    )
 
 
-def test_mcp_server_runs_on_the_managed_node_and_an_abi_mismatch_names_the_rebuild(world, provider):
+def test_mcp_server_runs_on_the_managed_node_and_an_abi_mismatch_names_the_rebuild(
+    world, provider
+):
     sb, user = world["sb"], world["user"]
     assert world["install"].returncode == 0, I.describe(world["install"])
     X.configure(sb, provider)
     cfg = sb.clawk_home / "config.yaml"
-    cfg.write_text(cfg.read_text(encoding="utf-8")
-                   + f"mcp_servers:\n  usernode:\n    command: node\n    args: [\"{user['server_js']}\"]\n",
-                   encoding="utf-8")
+    cfg.write_text(
+        cfg.read_text(encoding="utf-8")
+        + f'mcp_servers:\n  usernode:\n    command: node\n    args: ["{user["server_js"]}"]\n',
+        encoding="utf-8",
+    )
     before = len(_calls(world))
     probe = sb.cli("mcp", "test", "usernode", timeout=180)
     out = " ".join(re.sub(r"\x1b\[[0-9;]*m", "", probe.stdout + probe.stderr).split())
-    ran_js = [c for c in _calls(world)[before:] if c.startswith("node ") and c.endswith("server.js")]
-    managed = user["marker"].read_text(encoding="utf-8").split()[0] if user["marker"].exists() else ""
+    ran_js = [
+        c
+        for c in _calls(world)[before:]
+        if c.startswith("node ") and c.endswith("server.js")
+    ]
+    managed = (
+        user["marker"].read_text(encoding="utf-8").split()[0]
+        if user["marker"].exists()
+        else ""
+    )
     assert I.TRACEBACK not in out, I.describe(probe)
-    assert not ran_js, f"the user's node ({USER_NODE_VERSION}) ran the MCP server instead of Clawksis's: {ran_js}"
+    assert not ran_js, (
+        f"the user's node ({USER_NODE_VERSION}) ran the MCP server instead of Clawksis's: {ran_js}"
+    )
     assert managed.startswith(str(sb.home / ".clawksis")), (
-        f"the MCP server did not run on Clawksis's managed node (ran on {managed!r}):\n" + I.describe(probe))
-    assert probe.returncode == 1, "`clawk mcp test` passed for a server that died at startup:\n" + I.describe(probe)
+        f"the MCP server did not run on Clawksis's managed node (ran on {managed!r}):\n"
+        + I.describe(probe)
+    )
+    assert probe.returncode == 1, (
+        "`clawk mcp test` passed for a server that died at startup:\n"
+        + I.describe(probe)
+    )
     # The failure reaches the user with the remedy: drop the npx entry, or rebuild with Clawksis's own npm
     # under Clawksis's own node (never "point the server at your node").
-    assert "NODE_MODULE_VERSION 127" in out and f"rm -rf {sb.home / NPX_ENTRY}" in out, (
-        "the ABI mismatch was not surfaced with the npx-cache remedy:\n" + I.describe(probe))
-    assert f"PATH={Path(managed).parent}:" in out and " rebuild better-sqlite3 --prefix " in out, (
-        "the rebuild command does not run Clawksis's npm under Clawksis's node:\n" + I.describe(probe))
+    assert (
+        "NODE_MODULE_VERSION 127" in out and f"rm -rf {sb.home / NPX_ENTRY}" in out
+    ), "the ABI mismatch was not surfaced with the npx-cache remedy:\n" + I.describe(
+        probe
+    )
+    assert (
+        f"PATH={Path(managed).parent}:" in out
+        and " rebuild better-sqlite3 --prefix " in out
+    ), (
+        "the rebuild command does not run Clawksis's npm under Clawksis's node:\n"
+        + I.describe(probe)
+    )

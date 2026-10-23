@@ -1,4 +1,5 @@
 """Feature inventory reads the selected dependency tree, not the builder."""
+
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,9 @@ def test_inventory_uses_the_target_and_requires_every_anchor(tmp_path, monkeypat
     target_root = tmp_path / "target"
     subprocess.run(
         [sys.executable, "-m", "venv", "--without-pip", str(target_root)],
-        capture_output=True, check=True, timeout=60,
+        capture_output=True,
+        check=True,
+        timeout=60,
     )
     target = target_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     dependencies = tmp_path / "dependencies"
@@ -53,7 +56,8 @@ def test_inventory_uses_the_target_and_requires_every_anchor(tmp_path, monkeypat
     repo = tmp_path / "source"
     repo.mkdir()
     (repo / "pyproject.toml").write_text(
-        "[project.optional-dependencies]\n" + "".join(f'"{name}"=[]\n' for name in mapping),
+        "[project.optional-dependencies]\n"
+        + "".join(f'"{name}"=[]\n' for name in mapping),
         encoding="utf-8",
     )
     monkeypatch.setattr(extras, "ANCHORS", mapping)
@@ -63,12 +67,21 @@ def test_inventory_uses_the_target_and_requires_every_anchor(tmp_path, monkeypat
     result = features.installed_extras(repo, dependencies, python_exe=target)
     assert result == ["complete", "editable"]
     assert Path(json.loads(witness.read_text(encoding="utf-8"))) == target
-    assert [Path(json.loads(line)) for line in launches.read_text(encoding="utf-8").splitlines()] == [target]
+    assert [
+        Path(json.loads(line))
+        for line in launches.read_text(encoding="utf-8").splitlines()
+    ] == [target]
     assert "inventory_anchor" not in sys.modules
     assert sys.path == before_path
     assert dict(os.environ) == before_env
 
     (site / "absent_part.py").write_text("", encoding="utf-8")
-    assert features.installed_extras(repo, dependencies, python_exe=target) == ["complete", "editable", "partial"]
+    assert features.installed_extras(repo, dependencies, python_exe=target) == [
+        "complete",
+        "editable",
+        "partial",
+    ]
     with pytest.raises(features.FeatureProbeError, match="feature inventory failed"):
-        features.installed_extras(repo, dependencies, python_exe=tmp_path / "missing-python")
+        features.installed_extras(
+            repo, dependencies, python_exe=tmp_path / "missing-python"
+        )

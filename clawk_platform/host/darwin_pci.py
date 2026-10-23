@@ -22,14 +22,22 @@ def _data_int(cf, ref: int | None) -> int | None:
         if cf.CFGetTypeID(ref) != cf.CFDataGetTypeID():
             return None
         size = cf.CFDataGetLength(ref)
-        return int.from_bytes(ctypes.string_at(cf.CFDataGetBytePtr(ref), size), "little") if size else None
+        return (
+            int.from_bytes(ctypes.string_at(cf.CFDataGetBytePtr(ref), size), "little")
+            if size
+            else None
+        )
     finally:
         cf.CFRelease(ref)
 
 
 def _bind(iokit, cf) -> None:
     cf.CFStringCreateWithCString.restype = ctypes.c_void_p
-    cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
+    cf.CFStringCreateWithCString.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_char_p,
+        ctypes.c_uint32,
+    ]
     cf.CFGetTypeID.restype = cf.CFDataGetTypeID.restype = ctypes.c_ulong
     cf.CFGetTypeID.argtypes = [ctypes.c_void_p]
     cf.CFDataGetLength.restype = ctypes.c_long
@@ -39,11 +47,20 @@ def _bind(iokit, cf) -> None:
     cf.CFRelease.argtypes = [ctypes.c_void_p]
     iokit.IOServiceMatching.restype = ctypes.c_void_p
     iokit.IOServiceMatching.argtypes = [ctypes.c_char_p]
-    iokit.IOServiceGetMatchingServices.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    iokit.IOServiceGetMatchingServices.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
     iokit.IOIteratorNext.restype = ctypes.c_uint32
     iokit.IOIteratorNext.argtypes = [ctypes.c_uint32]
     iokit.IORegistryEntryCreateCFProperty.restype = ctypes.c_void_p
-    iokit.IORegistryEntryCreateCFProperty.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32]
+    iokit.IORegistryEntryCreateCFProperty.argtypes = [
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
     iokit.IOObjectRelease.argtypes = [ctypes.c_uint32]
 
 
@@ -54,9 +71,17 @@ def display_vendor_ids() -> list[str] | None:
     _bind(iokit, cf)
     iterator = ctypes.c_uint32()
     # The matching dictionary is consumed by the call; port 0 is kIOMainPortDefault.
-    if iokit.IOServiceGetMatchingServices(0, iokit.IOServiceMatching(b"IOPCIDevice"), ctypes.byref(iterator)) != 0:
+    if (
+        iokit.IOServiceGetMatchingServices(
+            0, iokit.IOServiceMatching(b"IOPCIDevice"), ctypes.byref(iterator)
+        )
+        != 0
+    ):
         return None
-    keys = {name: cf.CFStringCreateWithCString(None, name.encode(), _UTF8) for name in ("class-code", "vendor-id")}
+    keys = {
+        name: cf.CFStringCreateWithCString(None, name.encode(), _UTF8)
+        for name in ("class-code", "vendor-id")
+    }
     vendors: list[str] = []
     try:
         for _ in range(_MAX_DEVICES):
@@ -64,12 +89,23 @@ def display_vendor_ids() -> list[str] | None:
             if not entry:
                 break
             try:
-                read = {name: _data_int(cf, iokit.IORegistryEntryCreateCFProperty(entry, key, None, 0))
-                        for name, key in keys.items()}
+                read = {
+                    name: _data_int(
+                        cf, iokit.IORegistryEntryCreateCFProperty(entry, key, None, 0)
+                    )
+                    for name, key in keys.items()
+                }
             finally:
                 iokit.IOObjectRelease(entry)
-            if read["class-code"] is not None and read["class-code"] >> 16 == _DISPLAY_CLASS:
-                vendors.append("" if read["vendor-id"] is None else f"{read['vendor-id'] & 0xFFFF:04x}")
+            if (
+                read["class-code"] is not None
+                and read["class-code"] >> 16 == _DISPLAY_CLASS
+            ):
+                vendors.append(
+                    ""
+                    if read["vendor-id"] is None
+                    else f"{read['vendor-id'] & 0xFFFF:04x}"
+                )
     finally:
         iokit.IOObjectRelease(iterator.value)
         for key in keys.values():

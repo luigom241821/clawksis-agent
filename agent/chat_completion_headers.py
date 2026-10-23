@@ -22,17 +22,29 @@ def _chat_completion_capturing_headers(agent, client, api_kwargs: dict):
     """
     # `is True`: a Mock agent's invented attribute is not a window plan.
     state = getattr(agent, "_credits_state", None)
-    if getattr(agent, "provider", "") != "nous" or getattr(state, "is_usage_window", False) is not True:
+    if (
+        getattr(agent, "provider", "") != "nous"
+        or getattr(state, "is_usage_window", False) is not True
+    ):
         return client.chat.completions.create(**api_kwargs)
-    raw_api = getattr(getattr(getattr(client, "chat", None), "completions", None), "with_raw_response", None)
+    raw_api = getattr(
+        getattr(getattr(client, "chat", None), "completions", None),
+        "with_raw_response",
+        None,
+    )
     if raw_api is None:
         return client.chat.completions.create(**api_kwargs)
     raw = raw_api.create(**api_kwargs)
     from agent.credits_tracker import response_is_usage_window
+
     if not response_is_usage_window(raw):
         return raw.parse()
-    for capture in (agent._capture_rate_limits, agent._capture_credits,
-                    agent._capture_nous_model_switch, agent._check_openrouter_cache_status):
+    for capture in (
+        agent._capture_rate_limits,
+        agent._capture_credits,
+        agent._capture_nous_model_switch,
+        agent._check_openrouter_cache_status,
+    ):
         try:
             capture(raw)
         except Exception:

@@ -83,7 +83,10 @@ def test_allowlisted_user_api_post_is_human():
     assert adapter._event_declares_bot_sender(_api_post()) is False
     # Same predicate everywhere: no other user, and no user-less app post, rides it.
     assert adapter._event_declares_bot_sender(_api_post(user="U_stranger")) is True
-    assert adapter._event_declares_bot_sender({"app_id": "A_frontend", "text": "hi"}) is True
+    assert (
+        adapter._event_declares_bot_sender({"app_id": "A_frontend", "text": "hi"})
+        is True
+    )
 
 
 def test_bot_markers_win_over_allowlist():

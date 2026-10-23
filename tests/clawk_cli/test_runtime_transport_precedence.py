@@ -50,6 +50,7 @@ class TestFallbackApiMode:
         holds without the network (a cold cache leaves ``ProviderDef.base_url`` empty)."""
         import dataclasses
         from clawk_cli import runtime_provider
+
         defaults = {
             "minimax": "https://api.minimax.io/anthropic/v1",
             "minimax-cn": "https://api.minimaxi.com/anthropic/v1",
@@ -71,30 +72,65 @@ class TestFallbackApiMode:
         monkeypatch.setattr(runtime_provider, "get_provider", seeded)
 
     @pytest.mark.usefixtures("catalog_defaults")
-    @pytest.mark.parametrize("provider, base_url", [
-        ("minimax", "http://127.0.0.1:8787/v1"),        # OpenAI-compatible relay in front of MiniMax
-        ("minimax-cn", "https://egress.corp.test/v1"),  # corporate egress gateway
-        ("minimax", "https://api.minimax.io/v1"),       # provider's own OpenAI-compatible path
-        ("minimax", "https://api.minimax.io/anthropic-compat/v1"),  # lookalike path, not /anthropic/
-    ])
-    def test_anthropic_transport_is_not_assumed_off_the_provider_endpoint(self, provider, base_url):
+    @pytest.mark.parametrize(
+        "provider, base_url",
+        [
+            (
+                "minimax",
+                "http://127.0.0.1:8787/v1",
+            ),  # OpenAI-compatible relay in front of MiniMax
+            ("minimax-cn", "https://egress.corp.test/v1"),  # corporate egress gateway
+            (
+                "minimax",
+                "https://api.minimax.io/v1",
+            ),  # provider's own OpenAI-compatible path
+            (
+                "minimax",
+                "https://api.minimax.io/anthropic-compat/v1",
+            ),  # lookalike path, not /anthropic/
+        ],
+    )
+    def test_anthropic_transport_is_not_assumed_off_the_provider_endpoint(
+        self, provider, base_url
+    ):
         # #76836: the declared anthropic_messages transport is a statement about the provider's
         # own /anthropic endpoint. Anywhere else the override speaks chat/completions; Messages-
         # shaped requests with x-api-key there 401 on every turn (or silently reroute to a fallback).
-        assert _fallback_api_mode(provider, base_url, "MiniMax-M3") == "chat_completions"
+        assert (
+            _fallback_api_mode(provider, base_url, "MiniMax-M3") == "chat_completions"
+        )
 
     @pytest.mark.usefixtures("catalog_defaults")
-    @pytest.mark.parametrize("provider, base_url", [
-        ("minimax", "https://api.minimax.io"),             # bare host, no /anthropic hint (#53054 kept)
-        ("minimax", "https://api.minimax.io/anthropic"),   # URL-detected native path
-        ("minimax-cn", "https://api.minimaxi.com/anthropic/v1"),
-        ("minimax", "https://api.minimax.io/anthropic/v1/messages"),  # under the default path
-        ("tencent-tokenplan", "https://api.lkeap.cloud.tencent.com/plan/anthropic/v2"),  # non-/anthropic default
-        ("minimax", ""),  # nothing to compare: keep the declared transport
-        ("anthropic", "http://127.0.0.1:4000/v1"),  # bare-host default: relays serve /v1/messages
-    ])
-    def test_anthropic_transport_holds_on_the_provider_endpoint(self, provider, base_url):
-        assert _fallback_api_mode(provider, base_url, "MiniMax-M3") == "anthropic_messages"
+    @pytest.mark.parametrize(
+        "provider, base_url",
+        [
+            (
+                "minimax",
+                "https://api.minimax.io",
+            ),  # bare host, no /anthropic hint (#53054 kept)
+            ("minimax", "https://api.minimax.io/anthropic"),  # URL-detected native path
+            ("minimax-cn", "https://api.minimaxi.com/anthropic/v1"),
+            (
+                "minimax",
+                "https://api.minimax.io/anthropic/v1/messages",
+            ),  # under the default path
+            (
+                "tencent-tokenplan",
+                "https://api.lkeap.cloud.tencent.com/plan/anthropic/v2",
+            ),  # non-/anthropic default
+            ("minimax", ""),  # nothing to compare: keep the declared transport
+            (
+                "anthropic",
+                "http://127.0.0.1:4000/v1",
+            ),  # bare-host default: relays serve /v1/messages
+        ],
+    )
+    def test_anthropic_transport_holds_on_the_provider_endpoint(
+        self, provider, base_url
+    ):
+        assert (
+            _fallback_api_mode(provider, base_url, "MiniMax-M3") == "anthropic_messages"
+        )
 
     def test_lookalike_host_is_not_treated_as_official(self):
         # The spoof host must not be detected AS OpenAI by the URL lane —
@@ -102,14 +138,21 @@ class TestFallbackApiMode:
         # detection must return None for it.
         from clawk_cli.runtime_provider import _detect_api_mode_for_url
 
-        assert _detect_api_mode_for_url("https://api.openai.com.attacker.test/v1") is None
+        assert (
+            _detect_api_mode_for_url("https://api.openai.com.attacker.test/v1") is None
+        )
 
     def test_openrouter_stays_chat_completions(self):
-        assert _fallback_api_mode("openrouter", "https://openrouter.ai/api/v1") == "chat_completions"
-
+        assert (
+            _fallback_api_mode("openrouter", "https://openrouter.ai/api/v1")
+            == "chat_completions"
+        )
 
     def test_unknown_provider_defaults_chat_completions(self):
-        assert _fallback_api_mode("some-unknown", "https://example.test/v1") == "chat_completions"
+        assert (
+            _fallback_api_mode("some-unknown", "https://example.test/v1")
+            == "chat_completions"
+        )
 
     def test_url_detection_wins_over_provider_declaration(self):
         # /anthropic suffix on any provider routes anthropic_messages —

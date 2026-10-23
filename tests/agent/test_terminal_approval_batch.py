@@ -17,31 +17,49 @@ from tools.thread_context import propagate_context_to_thread
 
 
 def _call(call_id, command):
-    return SimpleNamespace(id=call_id, type="function", function=SimpleNamespace(
-        name="terminal", arguments=json.dumps({"command": command})))
+    return SimpleNamespace(
+        id=call_id,
+        type="function",
+        function=SimpleNamespace(
+            name="terminal", arguments=json.dumps({"command": command})
+        ),
+    )
 
 
 def _agent():
     from tools.terminal_tool import TERMINAL_SCHEMA
     from tools.file_tools import READ_FILE_SCHEMA
+
     with (
-        patch("model_tools.get_tool_definitions", return_value=[
-            {"type": "function", "function": schema}
-            for schema in (TERMINAL_SCHEMA, READ_FILE_SCHEMA)
-        ]),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=[
+                {"type": "function", "function": schema}
+                for schema in (TERMINAL_SCHEMA, READ_FILE_SCHEMA)
+            ],
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
         patch("agent.model_metadata.fetch_model_metadata", return_value={}),
     ):
-        return AIAgent(api_key="test-key", base_url="https://openrouter.ai/api/v1",
-                       quiet_mode=True, skip_context_files=True, skip_memory=True, platform="desktop")
+        return AIAgent(
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+            platform="desktop",
+        )
 
 
 @pytest.mark.parametrize("read_count", [0, 2])
 @pytest.mark.parametrize("threaded_middleware", [False, True])
-def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path, monkeypatch, read_count, threaded_middleware):
+def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(
+    tmp_path, monkeypatch, read_count, threaded_middleware
+):
     from tools.terminal_scope import reset_terminal_scope, set_terminal_scope
     from tools.terminal_tool_lifecycle import cleanup_vm
+
     monkeypatch.delenv("CLAWK_DESKTOP", raising=False)
     monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
     monkeypatch.setenv("TERMINAL_ENV", "local")
@@ -55,17 +73,38 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
     published = queue.Queue()
     approval.register_gateway_notify(key, published.put)
     from tui_gateway import server
-    monkeypatch.setattr(server, "_sessions", {key: {
-        "session_key": key, "source": "desktop", "agent": agent, "cwd": str(tmp_path),
-    }})
+
+    monkeypatch.setattr(
+        server,
+        "_sessions",
+        {
+            key: {
+                "session_key": key,
+                "source": "desktop",
+                "agent": agent,
+                "cwd": str(tmp_path),
+            }
+        },
+    )
     tokens = server._set_session_context(key)
     calls = [_call("first", "original-first"), _call("second", "original-second")]
     if read_count:
         source = tmp_path / "input.txt"
         source.write_text("input")
-        calls[:0] = [SimpleNamespace(id=f"read-{i}", type="function", function=SimpleNamespace(
-            name="read_file", arguments=json.dumps({"path": str(source)}))) for i in range(read_count)]
-    commands = {"original-first": f"rm -rf absent-first; cd '{nested}'", "original-second": "rm -rf absent-second; pwd"}
+        calls[:0] = [
+            SimpleNamespace(
+                id=f"read-{i}",
+                type="function",
+                function=SimpleNamespace(
+                    name="read_file", arguments=json.dumps({"path": str(source)})
+                ),
+            )
+            for i in range(read_count)
+        ]
+    commands = {
+        "original-first": f"rm -rf absent-first; cd '{nested}'",
+        "original-second": "rm -rf absent-second; pwd",
+    }
     policy = []
     executed = []
     flushed = []
@@ -74,22 +113,28 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
     replay_errors = []
 
     if threaded_middleware:
+
         def middleware(name, args, execute, **kwargs):
             if name != "terminal":
                 return execute(args)
             results = []
+
             def dispatch():
                 results.append(execute(args))
                 try:
                     execute(args)
                 except RuntimeError as exc:
                     replay_errors.append(str(exc))
+
             # Middleware may move its continuation onto a fresh thread.
             thread = threading.Thread(target=dispatch, daemon=True)
             thread.start()
             thread.join(20)
             return results[0]
-        monkeypatch.setattr("clawk_cli.middleware.run_tool_execution_middleware", middleware)
+
+        monkeypatch.setattr(
+            "clawk_cli.middleware.run_tool_execution_middleware", middleware
+        )
 
     def pre_hook(name, args, **kwargs):
         if name != "terminal":
@@ -103,7 +148,9 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
         executed.append((call_id, args["command"], list(flushed)))
 
     agent.tool_start_callback = started
-    agent._flush_messages_to_session_db = lambda rows, **kw: flushed.append([r["tool_call_id"] for r in rows]) or True
+    agent._flush_messages_to_session_db = lambda rows, **kw: (
+        flushed.append([r["tool_call_id"] for r in rows]) or True
+    )
 
     def run():
         try:
@@ -111,10 +158,16 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
         except BaseException as exc:
             errors.append(exc)
 
-    with ExitStack() as scope, patch(
-        "clawk_cli.plugins._dispatch_pre_tool_call_hooks", side_effect=pre_hook
+    with (
+        ExitStack() as scope,
+        patch("clawk_cli.plugins._dispatch_pre_tool_call_hooks", side_effect=pre_hook),
     ):
-        scope.callback(reset_terminal_scope, set_terminal_scope({"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}))
+        scope.callback(
+            reset_terminal_scope,
+            set_terminal_scope(
+                {"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}
+            ),
+        )
         worker = threading.Thread(target=propagate_context_to_thread(run), daemon=True)
         worker.start()
         try:
@@ -125,16 +178,31 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
             assert executed == []
             assert approval.ack_gateway_approval(key, second["request_id"])
             assert executed == []
-            assert approval.resolve_gateway_approval(key, "once", request_id=second["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=second["request_id"]
+                )
+                == 1
+            )
             assert executed == []
-            assert approval.resolve_gateway_approval(key, "once", request_id=first["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=first["request_id"]
+                )
+                == 1
+            )
             worker.join(timeout=15)
             assert not worker.is_alive()
             assert errors == []
-            assert [item[:2] for item in executed] == [("first", commands["original-first"]), ("second", commands["original-second"])]
+            assert [item[:2] for item in executed] == [
+                ("first", commands["original-first"]),
+                ("second", commands["original-second"]),
+            ]
             assert len(replay_errors) == (2 if threaded_middleware else 0)
             assert executed[1][2][-1] == [c.id for c in calls[:-1]]
-            assert "first" not in {call_id for flush in executed[0][2] for call_id in flush}
+            assert "first" not in {
+                call_id for flush in executed[0][2] for call_id in flush
+            }
             assert [m["tool_call_id"] for m in messages] == [c.id for c in calls]
             assert str(nested) in json.loads(messages[-1]["content"])["output"]
             assert approval.list_gateway_approvals(key) == []
@@ -146,7 +214,9 @@ def test_desktop_publishes_final_commands_before_wait_and_runs_in_order(tmp_path
             clear_session_vars(tokens)
 
 
-def test_cancelled_preparation_drains_requests_without_reusing_once(tmp_path, monkeypatch):
+def test_cancelled_preparation_drains_requests_without_reusing_once(
+    tmp_path, monkeypatch
+):
     from tools.terminal_scope import reset_terminal_scope, set_terminal_scope
     from tools.terminal_tool_lifecycle import cleanup_vm
 
@@ -171,26 +241,51 @@ def test_cancelled_preparation_drains_requests_without_reusing_once(tmp_path, mo
 
     def run(target, batch_calls, rows):
         try:
-            target._execute_tool_calls(SimpleNamespace(tool_calls=batch_calls), rows, key)
+            target._execute_tool_calls(
+                SimpleNamespace(tool_calls=batch_calls), rows, key
+            )
         except BaseException as exc:
             errors.append(exc)
 
     approval.register_gateway_notify(key, notify)
     from tui_gateway import server
-    monkeypatch.setattr(server, "_sessions", {key: {
-        "session_key": key, "source": "desktop", "agent": agent, "cwd": str(tmp_path),
-    }})
+
+    monkeypatch.setattr(
+        server,
+        "_sessions",
+        {
+            key: {
+                "session_key": key,
+                "source": "desktop",
+                "agent": agent,
+                "cwd": str(tmp_path),
+            }
+        },
+    )
     tokens = server._set_session_context(key)
     with ExitStack() as scope:
-        scope.callback(reset_terminal_scope, set_terminal_scope({"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}))
-        worker = threading.Thread(target=propagate_context_to_thread(lambda: run(agent, calls, messages)), daemon=True)
+        scope.callback(
+            reset_terminal_scope,
+            set_terminal_scope(
+                {"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}
+            ),
+        )
+        worker = threading.Thread(
+            target=propagate_context_to_thread(lambda: run(agent, calls, messages)),
+            daemon=True,
+        )
         retry_worker = None
         retry_agent = None
         worker.start()
         try:
             requests = [published.get(timeout=10) for _ in calls]
             assert len({r["request_id"] for r in requests}) == len(calls)
-            assert approval.resolve_gateway_approval(key, "once", request_id=requests[1]["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=requests[1]["request_id"]
+                )
+                == 1
+            )
             agent.interrupt("cancel while publishing")
             worker.join(5)
             assert not worker.is_alive()
@@ -198,20 +293,34 @@ def test_cancelled_preparation_drains_requests_without_reusing_once(tmp_path, mo
             assert [row["tool_call_id"] for row in messages] == [c.id for c in calls]
             assert approval.list_gateway_approvals(key) == []
             assert not (tmp_path / "effect.txt").exists()
-            assert approval.resolve_gateway_approval(key, "once", request_id=requests[0]["request_id"]) == 0
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=requests[0]["request_id"]
+                )
+                == 0
+            )
             release_notify.set()
 
             # Same command AND call id in a later run still needs fresh consent.
             retry_agent = _agent()
             retry_agent._flush_messages_to_session_db = lambda *a, **kw: True
             retry_rows = []
-            retry_worker = threading.Thread(target=propagate_context_to_thread(
-                lambda: run(retry_agent, [_call("second", command)], retry_rows)), daemon=True)
+            retry_worker = threading.Thread(
+                target=propagate_context_to_thread(
+                    lambda: run(retry_agent, [_call("second", command)], retry_rows)
+                ),
+                daemon=True,
+            )
             retry_worker.start()
             request = published.get(timeout=10)
             assert request["request_id"] not in {r["request_id"] for r in requests}
             assert not (tmp_path / "effect.txt").exists()
-            assert approval.resolve_gateway_approval(key, "deny", request_id=request["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "deny", request_id=request["request_id"]
+                )
+                == 1
+            )
             retry_worker.join(5)
             assert not retry_worker.is_alive()
             assert errors == []
@@ -249,15 +358,27 @@ def test_failed_command_re_gates_later_prepared_approvals(tmp_path, monkeypatch)
     key = "regate-terminal-batch"
     # First command fails (exit 1); second would succeed if allowed to run.
     effect = tmp_path / "effect-later.txt"
-    commands = {"failing": "rm -rf absent-first; false",
-                "later": f"rm -rf absent-second; printf ran > '{effect}'"}
+    commands = {
+        "failing": "rm -rf absent-first; false",
+        "later": f"rm -rf absent-second; printf ran > '{effect}'",
+    }
     agent = _agent()
     published = queue.Queue()
     approval.register_gateway_notify(key, published.put)
     from tui_gateway import server
-    monkeypatch.setattr(server, "_sessions", {key: {
-        "session_key": key, "source": "desktop", "agent": agent, "cwd": str(tmp_path),
-    }})
+
+    monkeypatch.setattr(
+        server,
+        "_sessions",
+        {
+            key: {
+                "session_key": key,
+                "source": "desktop",
+                "agent": agent,
+                "cwd": str(tmp_path),
+            }
+        },
+    )
     tokens = server._set_session_context(key)
     calls = [_call(call_id, commands[call_id]) for call_id in ("failing", "later")]
     executed = []
@@ -277,17 +398,34 @@ def test_failed_command_re_gates_later_prepared_approvals(tmp_path, monkeypatch)
             errors.append(exc)
 
     with ExitStack() as scope:
-        scope.callback(reset_terminal_scope, set_terminal_scope({"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}))
+        scope.callback(
+            reset_terminal_scope,
+            set_terminal_scope(
+                {"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}
+            ),
+        )
         worker = threading.Thread(target=propagate_context_to_thread(run), daemon=True)
         worker.start()
         try:
             # Preparation collects BOTH approvals before any command runs.
             first_request = published.get(timeout=10)
             later_request = published.get(timeout=5)
-            assert {first_request["command"], later_request["command"]} == set(commands.values())
+            assert {first_request["command"], later_request["command"]} == set(
+                commands.values()
+            )
             assert executed == []
-            assert approval.resolve_gateway_approval(key, "once", request_id=later_request["request_id"]) == 1
-            assert approval.resolve_gateway_approval(key, "once", request_id=first_request["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=later_request["request_id"]
+                )
+                == 1
+            )
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=first_request["request_id"]
+                )
+                == 1
+            )
 
             # The failing command runs and its failure is published.
             worker_join_marker = time.monotonic()
@@ -302,12 +440,20 @@ def test_failed_command_re_gates_later_prepared_approvals(tmp_path, monkeypatch)
             assert regated["command"] == commands["later"]
             assert regated["request_id"] != later_request["request_id"]
             assert not effect.exists()
-            assert approval.resolve_gateway_approval(key, "once", request_id=regated["request_id"]) == 1
+            assert (
+                approval.resolve_gateway_approval(
+                    key, "once", request_id=regated["request_id"]
+                )
+                == 1
+            )
 
             worker.join(timeout=15)
             assert not worker.is_alive()
             assert errors == []
-            assert executed == [("failing", commands["failing"]), ("later", commands["later"])]
+            assert executed == [
+                ("failing", commands["failing"]),
+                ("later", commands["later"]),
+            ]
             assert [m["tool_call_id"] for m in messages] == [c.id for c in calls]
             results = {m["tool_call_id"]: json.loads(m["content"]) for m in messages}
             assert results["failing"]["exit_code"] == 1
@@ -336,12 +482,25 @@ def test_switching_yolo_off_mid_batch_re_gates_later_commands(tmp_path, monkeypa
     published = queue.Queue()
     approval.register_gateway_notify(key, published.put)
     from tui_gateway import server
-    monkeypatch.setattr(server, "_sessions", {key: {
-        "session_key": key, "source": "desktop", "agent": agent, "cwd": str(tmp_path)}})
+
+    monkeypatch.setattr(
+        server,
+        "_sessions",
+        {
+            key: {
+                "session_key": key,
+                "source": "desktop",
+                "agent": agent,
+                "cwd": str(tmp_path),
+            }
+        },
+    )
     tokens = server._set_session_context(key)
     calls = [_call(f"c{i}", f"rm -rf absent-{i}; touch ran-{i}") for i in range(3)]
     # The user switches YOLO off once the first command has run.
-    agent.tool_start_callback = lambda call_id, name, args: call_id == "c1" and approval.disable_session_yolo(key)
+    agent.tool_start_callback = lambda call_id, name, args: (
+        call_id == "c1" and approval.disable_session_yolo(key)
+    )
     messages, errors = [], []
     approval.enable_session_yolo(key)
 
@@ -352,13 +511,23 @@ def test_switching_yolo_off_mid_batch_re_gates_later_commands(tmp_path, monkeypa
             errors.append(exc)
 
     with ExitStack() as scope:
-        scope.callback(reset_terminal_scope, set_terminal_scope({"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}))
+        scope.callback(
+            reset_terminal_scope,
+            set_terminal_scope(
+                {"TERMINAL_ENV": "local", "TERMINAL_CWD": str(tmp_path)}
+            ),
+        )
         worker = threading.Thread(target=propagate_context_to_thread(run), daemon=True)
         worker.start()
         try:
             for _ in range(2):
                 request = published.get(timeout=15)
-                assert approval.resolve_gateway_approval(key, "deny", request_id=request["request_id"]) == 1
+                assert (
+                    approval.resolve_gateway_approval(
+                        key, "deny", request_id=request["request_id"]
+                    )
+                    == 1
+                )
             worker.join(timeout=15)
             assert not worker.is_alive() and errors == []
             assert sorted(p.name for p in tmp_path.glob("ran-*")) == ["ran-0"]

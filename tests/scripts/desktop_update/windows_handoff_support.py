@@ -1,4 +1,5 @@
 """Shared helpers for the real-process Windows hand-off protocol tests (not collected)."""
+
 from __future__ import annotations
 
 import os
@@ -12,11 +13,16 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
-SCRIPT = ROOT / 'scripts/desktop-update/windows.ps1'
-MARKER_PS1 = ROOT / 'scripts/desktop-update/marker.ps1'
-MARKER = '.clawk-update-in-progress'
-POWERSHELL = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'),
-                          'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+SCRIPT = ROOT / "scripts/desktop-update/windows.ps1"
+MARKER_PS1 = ROOT / "scripts/desktop-update/marker.ps1"
+MARKER = ".clawk-update-in-progress"
+POWERSHELL = os.path.join(
+    os.environ.get("SystemRoot", r"C:\Windows"),
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+)
 HOLD_CLI = """
 import os, sys, time
 from pathlib import Path
@@ -37,14 +43,21 @@ if __name__ == '__main__':
 
 
 def _ps(command: str, timeout: int = 60) -> str:
-    return subprocess.run([POWERSHELL, '-NoProfile', '-Command', command],
-                          capture_output=True, text=True, timeout=timeout, check=True).stdout.strip()
+    return subprocess.run(
+        [POWERSHELL, "-NoProfile", "-Command", command],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=True,
+    ).stdout.strip()
 
 
 def _creation_time(pid: int) -> str:
-    out = _ps(f"$c = (Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CreationDate; "
-              "[DateTimeOffset]::new($c.ToUniversalTime()).ToUnixTimeMilliseconds().ToString()")
-    return f'{int(out) / 1000:.3f}'
+    out = _ps(
+        f"$c = (Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CreationDate; "
+        "[DateTimeOffset]::new($c.ToUniversalTime()).ToUnixTimeMilliseconds().ToString()"
+    )
+    return f"{int(out) / 1000:.3f}"
 
 
 class _ProcessWatch:
@@ -56,54 +69,103 @@ class _ProcessWatch:
     def __init__(self, pid: int) -> None:
         import ctypes
         from ctypes import wintypes
-        self._k = ctypes.WinDLL('kernel32', use_last_error=True)
+
+        self._k = ctypes.WinDLL("kernel32", use_last_error=True)
         self._k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         self._k.OpenProcess.restype = wintypes.HANDLE
         self._k.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
         self._k.WaitForSingleObject.restype = wintypes.DWORD
         self._k.CloseHandle.argtypes = [wintypes.HANDLE]
-        self._handle = self._k.OpenProcess(0x00100000 | 0x1000, False, pid)   # SYNCHRONIZE | QUERY_LIMITED
-        assert self._handle, f'could not open pid {pid} (winerror={ctypes.get_last_error()})'
+        self._handle = self._k.OpenProcess(
+            0x00100000 | 0x1000, False, pid
+        )  # SYNCHRONIZE | QUERY_LIMITED
+        assert self._handle, (
+            f"could not open pid {pid} (winerror={ctypes.get_last_error()})"
+        )
 
     def exited_within(self, seconds: float) -> bool:
-        return self._k.WaitForSingleObject(self._handle, int(seconds * 1000)) == 0   # WAIT_OBJECT_0
+        return (
+            self._k.WaitForSingleObject(self._handle, int(seconds * 1000)) == 0
+        )  # WAIT_OBJECT_0
 
     def close(self) -> None:
         self._k.CloseHandle(self._handle)
 
 
 def _dead_pid() -> int:
-    proc = subprocess.Popen([sys.executable, '-c', 'pass'])
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
     proc.wait()
     return proc.pid
 
 
 def _env(home: Path, **extra: str) -> dict[str, str]:
-    return {**os.environ, 'CLAWK_HOME': str(home), 'CLAWK_RUNTIME_DIR': str(home / 'empty-store'), **extra}
+    return {
+        **os.environ,
+        "CLAWK_HOME": str(home),
+        "CLAWK_RUNTIME_DIR": str(home / "empty-store"),
+        **extra,
+    }
 
 
-def _script(home: Path, *args: str, install: Path | None = None, **env: str) -> subprocess.Popen:
+def _script(
+    home: Path, *args: str, install: Path | None = None, **env: str
+) -> subprocess.Popen:
     return subprocess.Popen(
-        [POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(SCRIPT),
-         '-InstallRoot', str(install or home / 'clawksis-agent'), '-NoUi', *args],
-        cwd=home, env=_env(home, **env), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(SCRIPT),
+            "-InstallRoot",
+            str(install or home / "clawksis-agent"),
+            "-NoUi",
+            *args,
+        ],
+        cwd=home,
+        env=_env(home, **env),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
 
 
 def _finish(proc: subprocess.Popen, timeout: int = 120) -> tuple[int, str]:
     try:
         out, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        subprocess.run(['taskkill', '/T', '/F', '/PID', str(proc.pid)], capture_output=True, check=False)
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+            capture_output=True,
+            check=False,
+        )
         out, _ = proc.communicate()
-        pytest.fail(f'hand-off did not finish within {timeout}s: {out}')
+        pytest.fail(f"hand-off did not finish within {timeout}s: {out}")
     return proc.returncode, out
 
 
 def _op(home: Path, *args: str) -> tuple[int, str, str]:
     proc = subprocess.run(
-        [POWERSHELL, '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(SCRIPT),
-         '-InstallRoot', str(home / 'clawksis-agent'), *args],
-        cwd=home, env=_env(home), capture_output=True, text=True, timeout=120, check=False)
+        [
+            POWERSHELL,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(SCRIPT),
+            "-InstallRoot",
+            str(home / "clawksis-agent"),
+            *args,
+        ],
+        cwd=home,
+        env=_env(home),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -111,20 +173,22 @@ def _log(home: Path) -> str:
     """The hand-off log so far. windows.ps1 appends with Add-Content, which holds the file without
     read sharing for the length of each write: a read landing in that window is a sharing
     violation (PermissionError), not a missing line, so it is retried."""
-    path = home / 'logs/desktop-update-handoff.log'
+    path = home / "logs/desktop-update-handoff.log"
     for _ in range(50):
         try:
-            return path.read_text(encoding='utf-8-sig') if path.exists() else ''
+            return path.read_text(encoding="utf-8-sig") if path.exists() else ""
         except PermissionError:
             time.sleep(0.1)
-    return path.read_text(encoding='utf-8-sig')
+    return path.read_text(encoding="utf-8-sig")
 
 
 def _custodian(home: Path, handoff: int) -> str:
     """The pid windows.ps1 names on line 1 before any update work starts: its custodian, which
     outlives the hand-off so an old Desktop never reads a dead owner ('' until it is named)."""
-    found = re.search(rf'names its custodian pid (\d+) \(hand-off pid {handoff}\)', _log(home))
-    return found.group(1) if found else ''
+    found = re.search(
+        rf"names its custodian pid (\d+) \(hand-off pid {handoff}\)", _log(home)
+    )
+    return found.group(1) if found else ""
 
 
 class _HeldLock:
@@ -135,10 +199,12 @@ class _HeldLock:
         deadline = time.monotonic() + 30
         while True:
             try:
-                self._f = open(home / (MARKER + '.lock'), 'a+b')   # windows-footgun: ok — binary mode
+                self._f = open(
+                    home / (MARKER + ".lock"), "a+b"
+                )  # windows-footgun: ok — binary mode
                 return
-            except PermissionError:   # the script holds it right now
-                assert time.monotonic() < deadline, 'never got the marker lock'
+            except PermissionError:  # the script holds it right now
+                assert time.monotonic() < deadline, "never got the marker lock"
                 time.sleep(0.02)
 
     def release(self) -> None:
@@ -148,6 +214,6 @@ class _HeldLock:
 def _wait_for_log(home: Path, needle: str, timeout: int = 90) -> str:
     deadline = time.monotonic() + timeout
     while needle not in _log(home):
-        assert time.monotonic() < deadline, f'{needle!r} never logged: {_log(home)}'
+        assert time.monotonic() < deadline, f"{needle!r} never logged: {_log(home)}"
         time.sleep(0.1)
     return _log(home)

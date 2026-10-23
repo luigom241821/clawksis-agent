@@ -15,7 +15,14 @@ from utils import atomic_json_write
 
 # Multiplexer / terminal-emulator identity env vars, checked in order when no real tty path is
 # available (e.g. stdin piped but stdout still a pty owned by a known terminal).
-_TERMINAL_ENV_VARS = ("ZELLIJ_PANE_ID", "TMUX_PANE", "KITTY_WINDOW_ID", "WEZTERM_PANE", "TERM_SESSION_ID", "WT_SESSION")
+_TERMINAL_ENV_VARS = (
+    "ZELLIJ_PANE_ID",
+    "TMUX_PANE",
+    "KITTY_WINDOW_ID",
+    "WEZTERM_PANE",
+    "TERM_SESSION_ID",
+    "WT_SESSION",
+)
 
 # Breadcrumbs older than this are pruned opportunistically on each write — a pane id from a tmux
 # server restarted last month means nothing today.
@@ -26,6 +33,7 @@ _SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]")
 
 def _breadcrumbs_dir() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "terminal-sessions"
 
 
@@ -66,7 +74,10 @@ def _prune_stale(directory: Path, now: float) -> None:
     try:
         for entry in directory.iterdir():
             try:
-                if entry.is_file() and now - entry.stat().st_mtime > _STALE_AFTER_SECONDS:
+                if (
+                    entry.is_file()
+                    and now - entry.stat().st_mtime > _STALE_AFTER_SECONDS
+                ):
                     entry.unlink()
             except OSError:
                 continue
@@ -85,6 +96,7 @@ def write_breadcrumb(session_id: str, cwd: Optional[str] = None) -> None:
             return
         directory = _breadcrumbs_dir()
         from clawk_constants import mkdir_under_clawk_home
+
         mkdir_under_clawk_home(directory)
         now = time.time()
         payload = {"session_id": session_id, "cwd": cwd or os.getcwd(), "ts": now}

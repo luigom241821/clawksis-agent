@@ -68,26 +68,31 @@ class TestFindBinary:
     def test_prefers_path(self, tmp_path, monkeypatch):
         exe = _exe(tmp_path / "bin" / "lightpanda")
         monkeypatch.setenv("PATH", str(tmp_path / "bin"))
-        monkeypatch.setattr("tools.browser_tool_install._merge_browser_path", lambda p: p)
+        monkeypatch.setattr(
+            "tools.browser_tool_install._merge_browser_path", lambda p: p
+        )
         assert lp.find_lightpanda_binary() == str(exe)
 
     @pytest.mark.platforms("posix")
     def test_falls_back_to_home_candidates(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PATH", str(tmp_path / "empty"))
-        monkeypatch.setattr("tools.browser_tool_install._merge_browser_path", lambda p: p)
+        monkeypatch.setattr(
+            "tools.browser_tool_install._merge_browser_path", lambda p: p
+        )
         exe = _exe(tmp_path / ".lightpanda" / "lightpanda")
         monkeypatch.setattr(lp, "_home_candidates", lambda: [exe])
         assert lp.find_lightpanda_binary() == str(exe)
 
     def test_none_when_absent(self, tmp_path, monkeypatch):
         monkeypatch.setenv("PATH", str(tmp_path / "empty"))
-        monkeypatch.setattr("tools.browser_tool_install._merge_browser_path", lambda p: p)
+        monkeypatch.setattr(
+            "tools.browser_tool_install._merge_browser_path", lambda p: p
+        )
         assert lp.find_lightpanda_binary() is None
 
     @pytest.mark.platforms("windows")
     def test_none_on_windows(self):
         assert lp.find_lightpanda_binary() is None
-
 
 
 class TestLaunch:
@@ -122,8 +127,14 @@ class TestLaunch:
         server, err, calls = self._launch(monkeypatch)
         assert err is None
         assert calls["argv"] == [
-            "/opt/lightpanda", "serve", "--host", "127.0.0.1", "--port", "43111",
-            "--http-cache-dir", str(_isolate / "http-cache"),
+            "/opt/lightpanda",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "43111",
+            "--http-cache-dir",
+            str(_isolate / "http-cache"),
         ]
         kw = calls["kwargs"]
         assert kw["stdin"] is subprocess.DEVNULL
@@ -150,7 +161,9 @@ class TestLaunch:
         assert first["argv"][first["argv"].index("--http-cache-dir") + 1] == cache
         assert second["argv"][second["argv"].index("--http-cache-dir") + 1] == cache
         assert Path(cache).is_dir()
-        assert not list(Path(cache).glob("*.json"))  # never confused with a session record
+        assert not list(
+            Path(cache).glob("*.json")
+        )  # never confused with a session record
 
     def test_no_http_cache_flag_on_old_binary(self, monkeypatch, _isolate):
         monkeypatch.setattr(lp, "_binary_supports_http_cache", lambda binary: False)
@@ -168,7 +181,8 @@ class TestLaunch:
         def fake_run(argv, **kwargs):
             runs.append(argv)
             return subprocess.CompletedProcess(
-                argv, returncode=0,
+                argv,
+                returncode=0,
                 stdout="--http-cache-dir <PATH>" if len(runs) == 1 else "",
             )
 
@@ -180,7 +194,9 @@ class TestLaunch:
         lp._binary_supports_http_cache.cache_clear()
 
         def fake_run_old(argv, **kwargs):
-            return subprocess.CompletedProcess(argv, returncode=0, stdout="no such flag")
+            return subprocess.CompletedProcess(
+                argv, returncode=0, stdout="no such flag"
+            )
 
         monkeypatch.setattr(lp.subprocess, "run", fake_run_old)
         assert lp._binary_supports_http_cache(str(exe)) is False
@@ -199,7 +215,9 @@ class TestLaunch:
 
     def test_early_exit_reports_stderr_tail(self, monkeypatch):
         server, err, _ = self._launch(
-            monkeypatch, proc=FakeProc(exit_code=1), ready=False,
+            monkeypatch,
+            proc=FakeProc(exit_code=1),
+            ready=False,
             stderr=b"info: starting\nFATAL app : unknown argument --bogus\n",
         )
         assert server is None
@@ -235,7 +253,9 @@ class TestLaunch:
 class TestStop:
     def _seed(self, _isolate, name="lp_test", alive=True):
         proc = FakeProc(pid=777, exit_code=None if alive else 0)
-        server = lp.LightpandaServer(name, 43111, proc, str(_isolate / f"{name}.log"), 111)
+        server = lp.LightpandaServer(
+            name, 43111, proc, str(_isolate / f"{name}.log"), 111
+        )
         lp._write_record(server)
         with lp._servers_lock:
             lp._servers[name] = server
@@ -246,7 +266,9 @@ class TestStop:
         killed = []
         with patch(
             "tools.process_registry.ProcessRegistry._terminate_host_pid",
-            side_effect=lambda pid, expected_start=None: killed.append((pid, expected_start)),
+            side_effect=lambda pid, expected_start=None: killed.append(
+                (pid, expected_start)
+            ),
         ):
             lp.stop_lightpanda("lp_test")
         assert killed == [(777, 111)]
@@ -265,7 +287,9 @@ class TestStop:
 
     def test_stop_dead_server_just_drops_record(self, _isolate):
         self._seed(_isolate, alive=False)
-        with patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with patch(
+            "tools.process_registry.ProcessRegistry._terminate_host_pid"
+        ) as kill:
             lp.stop_lightpanda("lp_test")
         kill.assert_not_called()
         assert not (_isolate / "lp_test.json").exists()
@@ -276,25 +300,38 @@ class TestStop:
     def test_stop_all(self, _isolate):
         self._seed(_isolate, "lp_a")
         self._seed(_isolate, "lp_b")
-        with patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with patch(
+            "tools.process_registry.ProcessRegistry._terminate_host_pid"
+        ) as kill:
             lp.stop_all_lightpanda()
         assert kill.call_count == 2
         assert lp.get_server("lp_a") is None and lp.get_server("lp_b") is None
 
 
 class TestReapOrphans:
-    def _record(self, _isolate, name, *, pid=999, owner_pid=1, port=43111, start_time=111):
+    def _record(
+        self, _isolate, name, *, pid=999, owner_pid=1, port=43111, start_time=111
+    ):
         (_isolate / f"{name}.json").write_text(
-            json.dumps({"pid": pid, "port": port, "owner_pid": owner_pid,
-                        "start_time": start_time, "started_at": 0}),
+            json.dumps(
+                {
+                    "pid": pid,
+                    "port": port,
+                    "owner_pid": owner_pid,
+                    "start_time": start_time,
+                    "started_at": 0,
+                }
+            ),
             encoding="utf-8",
         )
         return _isolate / f"{name}.json"
 
     def test_live_other_owner_is_skipped(self, _isolate):
         rec = self._record(_isolate, "lp_x", owner_pid=12345)
-        with patch("gateway.status._pid_exists", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with (
+            patch("gateway.status._pid_exists", return_value=True),
+            patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill,
+        ):
             assert lp.reap_orphaned_lightpanda() == 0
         kill.assert_not_called()
         assert rec.exists()
@@ -302,17 +339,23 @@ class TestReapOrphans:
     def test_own_tracked_session_is_skipped(self, _isolate):
         rec = self._record(_isolate, "lp_x", owner_pid=os.getpid())
         with lp._servers_lock:
-            lp._servers["lp_x"] = lp.LightpandaServer("lp_x", 43111, FakeProc(), "", 111)
-        with patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+            lp._servers["lp_x"] = lp.LightpandaServer(
+                "lp_x", 43111, FakeProc(), "", 111
+            )
+        with patch(
+            "tools.process_registry.ProcessRegistry._terminate_host_pid"
+        ) as kill:
             assert lp.reap_orphaned_lightpanda() == 0
         kill.assert_not_called()
         assert rec.exists()
 
     def test_dead_owner_verified_process_is_killed(self, _isolate):
         rec = self._record(_isolate, "lp_x", owner_pid=12345, pid=999)
-        with patch("gateway.status._pid_exists", return_value=False), \
-             patch.object(lp, "_is_lightpanda_process", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with (
+            patch("gateway.status._pid_exists", return_value=False),
+            patch.object(lp, "_is_lightpanda_process", return_value=True),
+            patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill,
+        ):
             assert lp.reap_orphaned_lightpanda() == 1
         kill.assert_called_once_with(999, expected_start=111)
         assert not rec.exists()
@@ -320,16 +363,20 @@ class TestReapOrphans:
     def test_own_untracked_session_is_reaped(self, _isolate):
         """Owner alive but lost its in-memory tracking: reap, don't leak."""
         self._record(_isolate, "lp_x", owner_pid=os.getpid(), pid=999)
-        with patch.object(lp, "_is_lightpanda_process", return_value=True), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with (
+            patch.object(lp, "_is_lightpanda_process", return_value=True),
+            patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill,
+        ):
             assert lp.reap_orphaned_lightpanda() == 1
         kill.assert_called_once()
 
     def test_unverified_pid_is_never_signalled(self, _isolate):
         rec = self._record(_isolate, "lp_x", owner_pid=12345, pid=999)
-        with patch("gateway.status._pid_exists", return_value=False), \
-             patch.object(lp, "_is_lightpanda_process", return_value=False), \
-             patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill:
+        with (
+            patch("gateway.status._pid_exists", return_value=False),
+            patch.object(lp, "_is_lightpanda_process", return_value=False),
+            patch("tools.process_registry.ProcessRegistry._terminate_host_pid") as kill,
+        ):
             assert lp.reap_orphaned_lightpanda() == 0
         kill.assert_not_called()
         assert not rec.exists()
@@ -353,12 +400,19 @@ class TestProcessIdentity:
             return self._cmdline
 
     def test_matches_name_port_and_start_time(self):
-        proc = self._P("lightpanda", ["/opt/lightpanda", "serve", "--host", "127.0.0.1", "--port", "43111"])
-        with patch("psutil.Process", return_value=proc), \
-             patch("gateway.status.get_process_start_time", return_value=111):
+        proc = self._P(
+            "lightpanda",
+            ["/opt/lightpanda", "serve", "--host", "127.0.0.1", "--port", "43111"],
+        )
+        with (
+            patch("psutil.Process", return_value=proc),
+            patch("gateway.status.get_process_start_time", return_value=111),
+        ):
             assert lp._is_lightpanda_process(999, 43111, 111) is True
-        with patch("psutil.Process", return_value=proc), \
-             patch("gateway.status.get_process_start_time", return_value=222):
+        with (
+            patch("psutil.Process", return_value=proc),
+            patch("gateway.status.get_process_start_time", return_value=222),
+        ):
             assert lp._is_lightpanda_process(999, 43111, 111) is False
 
     def test_rejects_other_process_on_recycled_pid(self):

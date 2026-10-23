@@ -12,16 +12,23 @@ def test_copilot_runtime_api_mode_still_uses_default_without_target(monkeypatch)
 
     monkeypatch.setattr(
         "clawk_cli.models.copilot_model_api_mode",
-        lambda model, api_key=None: "codex_responses" if str(model).startswith("gpt-5") else "chat_completions",
+        lambda model, api_key=None: (
+            "codex_responses" if str(model).startswith("gpt-5") else "chat_completions"
+        ),
     )
 
-    assert rp._copilot_runtime_api_mode(
-        {"provider": "copilot", "default": "gpt-5.5"},
-        "token",
-    ) == "codex_responses"
+    assert (
+        rp._copilot_runtime_api_mode(
+            {"provider": "copilot", "default": "gpt-5.5"},
+            "token",
+        )
+        == "codex_responses"
+    )
 
 
-@pytest.mark.parametrize("credential_source", ["pool", "explicit", "env", "clawk-auth-store"])
+@pytest.mark.parametrize(
+    "credential_source", ["pool", "explicit", "env", "clawk-auth-store"]
+)
 @pytest.mark.parametrize(
     ("configured_model", "target_model", "expected_mode"),
     [

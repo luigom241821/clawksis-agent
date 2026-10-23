@@ -37,12 +37,12 @@ class TestReadClaudeCodeCredentialsFromKeychain:
     Keychain is ever touched.
     """
 
-
-
     def test_returns_none_when_security_command_not_found(self):
         """OSError from missing security binary must be handled gracefully."""
-        with patch("agent.anthropic_adapter.subprocess.run",
-                   side_effect=OSError("security not found")):
+        with patch(
+            "agent.anthropic_adapter.subprocess.run",
+            side_effect=OSError("security not found"),
+        ):
             assert _read_claude_code_credentials_from_keychain() is None
 
     def test_returns_none_on_nonzero_exit_code(self):
@@ -50,11 +50,6 @@ class TestReadClaudeCodeCredentialsFromKeychain:
         with patch("agent.anthropic_adapter.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
             assert _read_claude_code_credentials_from_keychain() is None
-
-
-
-
-
 
 
 @pytest.mark.platforms("macos")
@@ -66,26 +61,32 @@ class TestReadClaudeCodeCredentialsPriority:
         # Set up JSON file with "older" token
         json_cred_file = tmp_path / ".claude" / ".credentials.json"
         json_cred_file.parent.mkdir(parents=True)
-        json_cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "json-token",
-                "refreshToken": "json-refresh",
-                "expiresAt": 9999999999999,
-            }
-        }))
+        json_cred_file.write_text(
+            json.dumps(
+                {
+                    "claudeAiOauth": {
+                        "accessToken": "json-token",
+                        "refreshToken": "json-refresh",
+                        "expiresAt": 9999999999999,
+                    }
+                }
+            )
+        )
         monkeypatch.setattr("agent.anthropic_credentials.Path.home", lambda: tmp_path)
 
         # Mock Keychain to return a "newer" token
         with patch("agent.anthropic_adapter.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
-                stdout=json.dumps({
-                    "claudeAiOauth": {
-                        "accessToken": "keychain-token",
-                        "refreshToken": "keychain-refresh",
-                        "expiresAt": 9999999999999,
+                stdout=json.dumps(
+                    {
+                        "claudeAiOauth": {
+                            "accessToken": "keychain-token",
+                            "refreshToken": "keychain-refresh",
+                            "expiresAt": 9999999999999,
+                        }
                     }
-                }),
+                ),
                 stderr="",
             )
             creds = read_claude_code_credentials()
@@ -99,13 +100,17 @@ class TestReadClaudeCodeCredentialsPriority:
         """When Keychain has no entry, JSON file is used as fallback."""
         json_cred_file = tmp_path / ".claude" / ".credentials.json"
         json_cred_file.parent.mkdir(parents=True)
-        json_cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": "json-fallback-token",
-                "refreshToken": "json-refresh",
-                "expiresAt": 9999999999999,
-            }
-        }))
+        json_cred_file.write_text(
+            json.dumps(
+                {
+                    "claudeAiOauth": {
+                        "accessToken": "json-fallback-token",
+                        "refreshToken": "json-refresh",
+                        "expiresAt": 9999999999999,
+                    }
+                }
+            )
+        )
         monkeypatch.setattr("agent.anthropic_credentials.Path.home", lambda: tmp_path)
 
         with patch("agent.anthropic_adapter.subprocess.run") as mock_run:
@@ -117,7 +122,9 @@ class TestReadClaudeCodeCredentialsPriority:
         assert creds["accessToken"] == "json-fallback-token"
         assert creds["source"] == "claude_code_credentials_file"
 
-    def test_returns_none_when_neither_keychain_nor_json_has_creds(self, tmp_path, monkeypatch):
+    def test_returns_none_when_neither_keychain_nor_json_has_creds(
+        self, tmp_path, monkeypatch
+    ):
         """No credentials anywhere — must return None cleanly."""
         monkeypatch.setattr("agent.anthropic_credentials.Path.home", lambda: tmp_path)
 
@@ -143,28 +150,38 @@ class TestReadClaudeCodeCredentialsDesync:
     # Past ms-epoch — comfortably expired (with the 60s buffer).
     _EXPIRED = 1
 
-    def _setup(self, tmp_path, monkeypatch, *, file_expires_at, file_token="json-token"):
+    def _setup(
+        self, tmp_path, monkeypatch, *, file_expires_at, file_token="json-token"
+    ):
         json_cred_file = tmp_path / ".claude" / ".credentials.json"
         json_cred_file.parent.mkdir(parents=True)
-        json_cred_file.write_text(json.dumps({
-            "claudeAiOauth": {
-                "accessToken": file_token,
-                "refreshToken": "json-refresh",
-                "expiresAt": file_expires_at,
-            }
-        }))
+        json_cred_file.write_text(
+            json.dumps(
+                {
+                    "claudeAiOauth": {
+                        "accessToken": file_token,
+                        "refreshToken": "json-refresh",
+                        "expiresAt": file_expires_at,
+                    }
+                }
+            )
+        )
         monkeypatch.setattr("agent.anthropic_credentials.Path.home", lambda: tmp_path)
 
-    def _keychain_payload(self, *, access_token, expires_at, refresh_token="kc-refresh"):
+    def _keychain_payload(
+        self, *, access_token, expires_at, refresh_token="kc-refresh"
+    ):
         return MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "claudeAiOauth": {
-                    "accessToken": access_token,
-                    "refreshToken": refresh_token,
-                    "expiresAt": expires_at,
+            stdout=json.dumps(
+                {
+                    "claudeAiOauth": {
+                        "accessToken": access_token,
+                        "refreshToken": refresh_token,
+                        "expiresAt": expires_at,
+                    }
                 }
-            }),
+            ),
             stderr="",
         )
 
@@ -175,10 +192,16 @@ class TestReadClaudeCodeCredentialsDesync:
         downstream validity checks then yielded None — surfacing the misleading
         ``No Anthropic credentials found`` error.)
         """
-        self._setup(tmp_path, monkeypatch, file_expires_at=self._FRESH, file_token="fresh-file-token")
+        self._setup(
+            tmp_path,
+            monkeypatch,
+            file_expires_at=self._FRESH,
+            file_token="fresh-file-token",
+        )
         with patch("agent.anthropic_adapter.subprocess.run") as mock_run:
             mock_run.return_value = self._keychain_payload(
-                access_token="stale-keychain-token", expires_at=self._EXPIRED,
+                access_token="stale-keychain-token",
+                expires_at=self._EXPIRED,
             )
             creds = read_claude_code_credentials()
 
@@ -186,17 +209,21 @@ class TestReadClaudeCodeCredentialsDesync:
         assert creds["accessToken"] == "fresh-file-token"
         assert creds["source"] == "claude_code_credentials_file"
 
-
-
     def test_both_expired_prefers_later_expiry(self, tmp_path, monkeypatch):
         """When both are expired, return the one with the later ``expiresAt``;
         its ``refresh_token`` is the most recently issued and most likely to
         succeed at the OAuth refresh endpoint.
         """
-        self._setup(tmp_path, monkeypatch, file_expires_at=self._EXPIRED + 5, file_token="newer-expired-file")
+        self._setup(
+            tmp_path,
+            monkeypatch,
+            file_expires_at=self._EXPIRED + 5,
+            file_token="newer-expired-file",
+        )
         with patch("agent.anthropic_adapter.subprocess.run") as mock_run:
             mock_run.return_value = self._keychain_payload(
-                access_token="older-expired-keychain", expires_at=self._EXPIRED,
+                access_token="older-expired-keychain",
+                expires_at=self._EXPIRED,
             )
             creds = read_claude_code_credentials()
 
@@ -212,7 +239,9 @@ class TestRefreshOAuthTokenAdoptsFreshCredential:
 
     _FRESH = 9_999_999_999_999
 
-    def test_adopts_already_refreshed_token_without_posting(self, tmp_path, monkeypatch):
+    def test_adopts_already_refreshed_token_without_posting(
+        self, tmp_path, monkeypatch
+    ):
         """When a live source already holds a valid token, return it and skip
         the network refresh entirely.
         """
@@ -243,7 +272,9 @@ class TestRefreshOAuthTokenAdoptsFreshCredential:
         result = _refresh_oauth_token({"refreshToken": "stale", "expiresAt": 1})
         assert result == "already-refreshed-token"
 
-    def test_falls_back_to_network_refresh_when_no_fresh_credential(self, tmp_path, monkeypatch):
+    def test_falls_back_to_network_refresh_when_no_fresh_credential(
+        self, tmp_path, monkeypatch
+    ):
         """When no live source has a valid token, fall back to refreshing
         ourselves using the freshest available refresh token.
         """
@@ -254,7 +285,11 @@ class TestRefreshOAuthTokenAdoptsFreshCredential:
         # Live read returns an expired credential carrying a refresh token.
         monkeypatch.setattr(
             "agent.anthropic_credentials.read_claude_code_credentials",
-            lambda: {"accessToken": "expired", "refreshToken": "live-refresh", "expiresAt": 1},
+            lambda: {
+                "accessToken": "expired",
+                "refreshToken": "live-refresh",
+                "expiresAt": 1,
+            },
         )
         captured = {}
 
@@ -274,12 +309,16 @@ class TestRefreshOAuthTokenAdoptsFreshCredential:
             lambda *a, **k: None,
         )
 
-        result = _refresh_oauth_token({"refreshToken": "caller-refresh", "expiresAt": 1})
+        result = _refresh_oauth_token(
+            {"refreshToken": "caller-refresh", "expiresAt": 1}
+        )
         assert result == "newly-minted"
         # Prefers the live source's refresh token over the caller's stale copy.
         assert captured["refresh_token"] == "live-refresh"
 
-    def test_concurrent_refreshes_use_one_shared_credentials_lock(self, tmp_path, monkeypatch):
+    def test_concurrent_refreshes_use_one_shared_credentials_lock(
+        self, tmp_path, monkeypatch
+    ):
         """Direct resolver refreshes must not spend one Claude token twice."""
         shared_credentials_path = tmp_path / ".claude" / ".credentials.json"
         monkeypatch.setattr(
@@ -321,9 +360,16 @@ class TestRefreshOAuthTokenAdoptsFreshCredential:
                     "expires_at_ms": self._FRESH,
                 }
 
-        monkeypatch.setattr("agent.anthropic_credentials.read_claude_code_credentials", read_credentials)
-        monkeypatch.setattr("agent.anthropic_credentials._write_claude_code_credentials", write_credentials)
-        monkeypatch.setattr("agent.anthropic_credentials.refresh_anthropic_oauth_pure", refresh)
+        monkeypatch.setattr(
+            "agent.anthropic_credentials.read_claude_code_credentials", read_credentials
+        )
+        monkeypatch.setattr(
+            "agent.anthropic_credentials._write_claude_code_credentials",
+            write_credentials,
+        )
+        monkeypatch.setattr(
+            "agent.anthropic_credentials.refresh_anthropic_oauth_pure", refresh
+        )
 
         results = {}
         errors = {}
@@ -362,23 +408,38 @@ class TestMergeKeychainCredentialPayload:
     def test_rotates_triple_and_keeps_every_sibling(self):
         existing = {
             "claudeAiOauth": {
-                "accessToken": "old-access", "refreshToken": "old-refresh", "expiresAt": 1,
-                "scopes": ["user:inference", "user:profile"], "subscriptionType": "max",
+                "accessToken": "old-access",
+                "refreshToken": "old-refresh",
+                "expiresAt": 1,
+                "scopes": ["user:inference", "user:profile"],
+                "subscriptionType": "max",
             },
             "rateLimitTier": "tier-1",
             # Claude Code keeps its MCP server OAuth tokens in the same item; a refresh that
             # dropped them would log the user out of every MCP server at once.
             "mcpOAuth": {f"srv{i}": {"accessToken": f"t{i}"} for i in range(24)},
         }
-        merged = _merge_keychain_credential_payload(existing, "new-access", "new-refresh", 42)
+        merged = _merge_keychain_credential_payload(
+            existing, "new-access", "new-refresh", 42
+        )
         oauth = merged["claudeAiOauth"]
-        assert (oauth["accessToken"], oauth["refreshToken"], oauth["expiresAt"]) == ("new-access", "new-refresh", 42)
+        assert (oauth["accessToken"], oauth["refreshToken"], oauth["expiresAt"]) == (
+            "new-access",
+            "new-refresh",
+            42,
+        )
         # Everything except the rotated triple is byte-identical to the input.
-        assert {k: v for k, v in oauth.items() if k not in ("accessToken", "refreshToken", "expiresAt")} == {
-            "scopes": ["user:inference", "user:profile"], "subscriptionType": "max"}
+        assert {
+            k: v
+            for k, v in oauth.items()
+            if k not in ("accessToken", "refreshToken", "expiresAt")
+        } == {"scopes": ["user:inference", "user:profile"], "subscriptionType": "max"}
         assert {k: v for k, v in merged.items() if k != "claudeAiOauth"} == {
-            k: v for k, v in existing.items() if k != "claudeAiOauth"}
-        assert existing["claudeAiOauth"]["refreshToken"] == "old-refresh"  # input not mutated
+            k: v for k, v in existing.items() if k != "claudeAiOauth"
+        }
+        assert (
+            existing["claudeAiOauth"]["refreshToken"] == "old-refresh"
+        )  # input not mutated
 
 
 class TestKeychainMirrorCommand:
@@ -386,14 +447,22 @@ class TestKeychainMirrorCommand:
     without running it."""
 
     def test_secret_travels_hex_encoded_on_stdin_under_the_items_own_account(self):
-        payload = {"claudeAiOauth": {"accessToken": "sk-ant-oat01-new", "refreshToken": 'r"q\\x'}, "mcpOAuth": {"a": 1}}
+        payload = {
+            "claudeAiOauth": {
+                "accessToken": "sk-ant-oat01-new",
+                "refreshToken": 'r"q\\x',
+            },
+            "mcpOAuth": {"a": 1},
+        }
         argv, line = _keychain_mirror_command("alice smith", payload)
 
         # ``security -i`` reads the command from stdin: nothing secret on argv.
         assert argv == ["security", "-i"]
         assert "sk-ant-oat01-new" not in line and "-w" not in line.split()
         # -U updates the item Claude Code reads (matched on account + service), never a second one.
-        assert line.startswith('add-generic-password -U -a "alice smith" -s "Claude Code-credentials" -X ')
+        assert line.startswith(
+            'add-generic-password -U -a "alice smith" -s "Claude Code-credentials" -X '
+        )
         hex_blob = line.split(" -X ", 1)[1].strip()
         assert json.loads(bytes.fromhex(hex_blob)) == payload
 
@@ -407,14 +476,25 @@ class TestFindClaudeCodeKeychainItem:
         "acct_line, expected_account",
         [
             ('    "acct"<blob>="bob"', "bob"),
-            ('    "acct"<blob>="my "user" name"', 'my "user" name'),  # embedded quote, printed raw
-            ('    "acct"<blob>=0x616C2269636520C3BC  "al\\"ice \\303\\274"', 'al"ice \u00fc'),  # non-ASCII → hex form
+            (
+                '    "acct"<blob>="my "user" name"',
+                'my "user" name',
+            ),  # embedded quote, printed raw
+            (
+                '    "acct"<blob>=0x616C2269636520C3BC  "al\\"ice \\303\\274"',
+                'al"ice \u00fc',
+            ),  # non-ASCII → hex form
         ],
     )
-    def test_reads_account_and_payload_in_both_output_encodings(self, monkeypatch, acct_line, expected_account):
+    def test_reads_account_and_payload_in_both_output_encodings(
+        self, monkeypatch, acct_line, expected_account
+    ):
         payload = {"claudeAiOauth": {"refreshToken": "r"}, "mcpOAuth": {"a": 1}}
-        fake = MagicMock(returncode=0, stdout=f'keychain: "/Users/x/Library/Keychains/login.keychain-db"\n{acct_line}\n',
-                         stderr=f"password: 0x{json.dumps(payload).encode().hex()}  \"...\"\n")
+        fake = MagicMock(
+            returncode=0,
+            stdout=f'keychain: "/Users/x/Library/Keychains/login.keychain-db"\n{acct_line}\n',
+            stderr=f'password: 0x{json.dumps(payload).encode().hex()}  "..."\n',
+        )
         monkeypatch.setattr(subprocess, "run", lambda argv, **k: fake)
 
         assert _find_claude_code_keychain_item() == (expected_account, payload)
@@ -427,11 +507,15 @@ class TestMirrorClaudeCodeCredentialsToKeychain:
     @pytest.mark.platforms("macos")
     def test_no_write_when_no_entry_exists(self, monkeypatch):
         """Never create a Keychain item the user has not."""
-        monkeypatch.setattr("agent.anthropic_credentials._find_claude_code_keychain_item", lambda: None)
+        monkeypatch.setattr(
+            "agent.anthropic_credentials._find_claude_code_keychain_item", lambda: None
+        )
         run = MagicMock(return_value=MagicMock(returncode=0))
         monkeypatch.setattr(subprocess, "run", run)
 
-        _mirror_claude_code_credentials_to_keychain("a", "b", 1, spent_refresh_token="old")
+        _mirror_claude_code_credentials_to_keychain(
+            "a", "b", 1, spent_refresh_token="old"
+        )
 
         run.assert_not_called()
 
@@ -440,15 +524,22 @@ class TestMirrorClaudeCodeCredentialsToKeychain:
         """A different pair in the Keychain is another login or a rotation Claude Code already made;
         overwriting it would be the bug in the other direction."""
         item = ("bob", {"claudeAiOauth": {"accessToken": "A0", "refreshToken": "R0"}})
-        monkeypatch.setattr("agent.anthropic_credentials._find_claude_code_keychain_item", lambda: item)
+        monkeypatch.setattr(
+            "agent.anthropic_credentials._find_claude_code_keychain_item", lambda: item
+        )
         run = MagicMock(return_value=MagicMock(returncode=0))
         monkeypatch.setattr(subprocess, "run", run)
 
-        _mirror_claude_code_credentials_to_keychain("A1", "R1", 1, spent_refresh_token="not-R0")
+        _mirror_claude_code_credentials_to_keychain(
+            "A1", "R1", 1, spent_refresh_token="not-R0"
+        )
         run.assert_not_called()
 
-        _mirror_claude_code_credentials_to_keychain("A1", "R1", 1, spent_refresh_token="R0")
+        _mirror_claude_code_credentials_to_keychain(
+            "A1", "R1", 1, spent_refresh_token="R0"
+        )
         (argv,), kwargs = run.call_args
         assert argv == ["security", "-i"]
-        assert json.loads(bytes.fromhex(kwargs["input"].split(" -X ", 1)[1].strip()))["claudeAiOauth"] == {
-            "accessToken": "A1", "refreshToken": "R1", "expiresAt": 1}
+        assert json.loads(bytes.fromhex(kwargs["input"].split(" -X ", 1)[1].strip()))[
+            "claudeAiOauth"
+        ] == {"accessToken": "A1", "refreshToken": "R1", "expiresAt": 1}

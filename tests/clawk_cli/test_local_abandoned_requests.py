@@ -36,10 +36,11 @@ MANAGED_URL = "http://127.0.0.1:18434/v1"
 def managed_state(tmp_path, monkeypatch):
     """A supervisor state file declaring the managed endpoint, cache reset."""
     state = tmp_path / "server.json"
-    state.write_text(json.dumps({"base_url": MANAGED_URL, "api_key": "k",
-                                 "pid": 4242}), encoding="utf-8")
-    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path",
-                        lambda: state)
+    state.write_text(
+        json.dumps({"base_url": MANAGED_URL, "api_key": "k", "pid": 4242}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path", lambda: state)
     monkeypatch.setattr(managed_local, "_managed_local_cache", (0.0, ""))
     return state
 
@@ -57,15 +58,21 @@ def test_managed_detection_matches_netloc_not_substring(managed_state):
 
 
 def test_no_state_file_means_no_managed_endpoint(tmp_path, monkeypatch):
-    monkeypatch.setattr("clawk_cli.local_runtime.supervisor.state_path",
-                        lambda: tmp_path / "absent.json")
+    monkeypatch.setattr(
+        "clawk_cli.local_runtime.supervisor.state_path",
+        lambda: tmp_path / "absent.json",
+    )
     monkeypatch.setattr(managed_local, "_managed_local_cache", (0.0, ""))
     assert aux._is_managed_local_endpoint(MANAGED_URL) is False
 
 
 def test_remote_providers_unaffected(managed_state):
-    assert aux._provider_requires_stream("nous",
-                                         "https://inference-api.nousresearch.com/v1/") is False
+    assert (
+        aux._provider_requires_stream(
+            "nous", "https://inference-api.nousresearch.com/v1/"
+        )
+        is False
+    )
 
 
 # ── 2. explicit caps reach the managed endpoint ──────────────
@@ -74,11 +81,19 @@ def test_remote_providers_unaffected(managed_state):
 def test_explicit_max_tokens_forwarded_to_managed_local(managed_state, monkeypatch):
     monkeypatch.setattr(aux, "_current_custom_base_url", lambda: MANAGED_URL)
     kwargs = aux._build_call_kwargs(
-        "custom", "Qwen-Local", [{"role": "user", "content": "hi"}],
-        max_tokens=64, timeout=30.0, task="title_generation")
-    assert kwargs.get("max_tokens") == 64 or kwargs.get("max_completion_tokens") == 64, (
+        "custom",
+        "Qwen-Local",
+        [{"role": "user", "content": "hi"}],
+        max_tokens=64,
+        timeout=30.0,
+        task="title_generation",
+    )
+    assert (
+        kwargs.get("max_tokens") == 64 or kwargs.get("max_completion_tokens") == 64
+    ), (
         "explicit caller cap dropped on the managed local endpoint — an "
-        "EOS-less generation then runs to the full context window")
+        "EOS-less generation then runs to the full context window"
+    )
 
 
 def test_no_default_cap_policy_unchanged_for_remote(monkeypatch):
@@ -87,8 +102,12 @@ def test_no_default_cap_policy_unchanged_for_remote(monkeypatch):
     # here: main forwards its caps deliberately (#41035, 402 affordability).
     monkeypatch.setattr(managed_local, "_managed_local_cache", (0.0, ""))
     kwargs = aux._build_call_kwargs(
-        "openai", "some/model", [{"role": "user", "content": "hi"}],
-        max_tokens=64, timeout=30.0)
+        "openai",
+        "some/model",
+        [{"role": "user", "content": "hi"}],
+        max_tokens=64,
+        timeout=30.0,
+    )
     assert "max_tokens" not in kwargs and "max_completion_tokens" not in kwargs
 
 
@@ -111,10 +130,6 @@ class _FakeChild:
         self.killed = True
 
 
-
-
-
-
 def test_reap_orphans_kills_only_our_parentless_binaries(tmp_path, monkeypatch):
     exe = tmp_path / "llama-server.exe"
     exe.write_text("")
@@ -125,8 +140,8 @@ def test_reap_orphans_kills_only_our_parentless_binaries(tmp_path, monkeypatch):
         return p
 
     procs = [
-        _info(300, str(exe), 9999),          # dead parent -> reap
-        _info(301, str(exe), 1),             # live parent -> keep
+        _info(300, str(exe), 9999),  # dead parent -> reap
+        _info(301, str(exe), 1),  # live parent -> keep
         _info(302, str(tmp_path / "other.exe"), 9999),  # foreign -> keep
     ]
     reaped = []

@@ -5,6 +5,7 @@ model-switch and skills notes) and managed workers (``--safe-mode`` / ``--ignore
 which never pass the inbound step) all expand here. A local session's refusal is the turn's reply:
 its adapter delivers through settlement, so a side ``send`` would never reach the viewer.
 """
+
 import logging
 import os
 from contextlib import suppress
@@ -19,20 +20,30 @@ async def expand_references(text, *, cwd, context_length, plugins=True):
     """``(text, refusal)``: the expanded text, or the refusal when the injection was refused. A failed
     expansion leaves the text as typed."""
     from agent.i18n import t
+
     try:
         from agent.context_references import preprocess_context_references_async
-        expand = partial(preprocess_context_references_async, cwd=cwd, context_length=context_length, allowed_root=cwd)
+
+        expand = partial(
+            preprocess_context_references_async,
+            cwd=cwd,
+            context_length=context_length,
+            allowed_root=cwd,
+        )
         result = await (expand(text) if plugins else expand(text, plugins=False))
     except Exception as exc:
         logger.warning("@ context reference expansion failed: %s", exc, exc_info=True)
         return text, None
     if result.blocked:
-        return text, "\n".join(result.warnings) or t("gateway.notify.context_injection_refused")
+        return text, "\n".join(result.warnings) or t(
+            "gateway.notify.context_injection_refused"
+        )
     return (result.message if result.expanded else text), None
 
 
 def _inbound_cwd(runner, source):
     from gateway.session_policy import policy_for_source
+
     try:
         from tools.terminal_scope import terminal_env
     except ImportError:
@@ -63,23 +74,30 @@ async def turn_references(runner, event, source, session_key, text):
     context, as a typed turn stores it: later turns still read the content. A refused local turn
     leaves its refusal on ``event`` for the prepare step to answer with."""
     from gateway.session_cli_turn import cli_turn, rebind_api_text
-    api_text = cli_turn(event.message_id).get('api_text')
+
+    api_text = cli_turn(event.message_id).get("api_text")
     target = text if api_text is None else api_text
     if "@" not in target:
         return text
     if source.platform == Platform.LOCAL:
-        expanded, refusal = await inbound_references(runner, source, session_key, target)
+        expanded, refusal = await inbound_references(
+            runner, source, session_key, target
+        )
         if refusal is not None:
             event._gateway_turn_refusal = refusal
             return None
-    elif (expanded := await runner._expand_inbound_context_references(source, session_key, target)) is None:
+    elif (
+        expanded := await runner._expand_inbound_context_references(
+            source, session_key, target
+        )
+    ) is None:
         return None
     if api_text is None:
         return expanded
     rebind_api_text(event.message_id, expanded)
     # The expansion appends its context after the message, so that tail belongs to the stored row too.
     head = api_text.lstrip()
-    tail = expanded[len(head):] if expanded.startswith(head) else ""
+    tail = expanded[len(head) :] if expanded.startswith(head) else ""
     return f"{text}{tail}".strip() if tail else text
 
 
@@ -88,28 +106,47 @@ async def managed_turn_text(authority, row, policy):
     workspace. Built-in kinds only for a bypass session, which loads no plugins; the context length
     is the frozen policy's, never the profile file a bypass session must not read. ``None`` text means
     the admitted text as committed."""
-    text = (row.get('payload') or {}).get('text')
+    text = (row.get("payload") or {}).get("text")
     if not isinstance(text, str) or "@" not in text:
         return None, None
     try:
         from agent.model_metadata import get_model_context_length_async
-        model_config = policy.config(authority).get('model') or {}
-        pinned = model_config.get('context_length') if isinstance(model_config, dict) else None
+
+        model_config = policy.config(authority).get("model") or {}
+        pinned = (
+            model_config.get("context_length")
+            if isinstance(model_config, dict)
+            else None
+        )
         with suppress(TypeError, ValueError):
             pinned = int(pinned) if pinned is not None else None
         context_length = await get_model_context_length_async(
-            policy.current_model(authority) or '', base_url=policy.base_url or '', api_key='',
-            provider=policy.provider or '', config_context_length=pinned if isinstance(pinned, int) else None)
+            policy.current_model(authority) or "",
+            base_url=policy.base_url or "",
+            api_key="",
+            provider=policy.provider or "",
+            config_context_length=pinned if isinstance(pinned, int) else None,
+        )
     except Exception as exc:
         logger.warning("@ context reference expansion failed: %s", exc, exc_info=True)
         return text, None
-    return await expand_references(text, cwd=policy.cwd, context_length=context_length,
-                                   plugins=not policy.ignore_user_config)
+    return await expand_references(
+        text,
+        cwd=policy.cwd,
+        context_length=context_length,
+        plugins=not policy.ignore_user_config,
+    )
 
 
 def refused_turn_result(row, refusal):
     """A turn that never ran because its references were refused: the refusal is its answer, and a
     finite (``chat -q`` / ``-z``) prompt fails with it, as ``execute_admission`` settles a notice."""
-    if row['payload'].get('finite') is True:
-        return {'final_response': '', 'messages': [], 'failed': True, 'completed': False, 'error': refusal}
-    return {'final_response': refusal, 'messages': []}
+    if row["payload"].get("finite") is True:
+        return {
+            "final_response": "",
+            "messages": [],
+            "failed": True,
+            "completed": False,
+            "error": refusal,
+        }
+    return {"final_response": refusal, "messages": []}

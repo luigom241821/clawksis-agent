@@ -28,7 +28,9 @@ logger = logging.getLogger("agent.conversation_loop")
 
 # Ephemeral retry scaffolding rows popped before the final answer becomes durable.
 _EPHEMERAL_SCAFFOLDING_FLAGS = (
-    "_thinking_prefill", "_empty_recovery_synthetic", "_empty_terminal_sentinel",
+    "_thinking_prefill",
+    "_empty_recovery_synthetic",
+    "_empty_terminal_sentinel",
     "_dropped_toolcall_nudge",
 )
 
@@ -54,12 +56,25 @@ class FinalResponseVerdict:
 
 
 def finish_text_response(
-    agent: Any, *, assistant_message: Any, response: Any, finish_reason: Any, messages: Any,
-    api_messages: Any, conversation_history: Any, api_call_count: Any, user_message: Any,
-    active_system_prompt: Any, final_response: Any, _turn_exit_reason: Any,
-    _preflight_compression_blocked: Any, codex_ack_continuations: Any,
-    truncated_response_parts: Any, length_continue_retries: Any,
-    _pending_verification_response: Any, _pending_verification_response_previewed: Any,
+    agent: Any,
+    *,
+    assistant_message: Any,
+    response: Any,
+    finish_reason: Any,
+    messages: Any,
+    api_messages: Any,
+    conversation_history: Any,
+    api_call_count: Any,
+    user_message: Any,
+    active_system_prompt: Any,
+    final_response: Any,
+    _turn_exit_reason: Any,
+    _preflight_compression_blocked: Any,
+    codex_ack_continuations: Any,
+    truncated_response_parts: Any,
+    length_continue_retries: Any,
+    _pending_verification_response: Any,
+    _pending_verification_response_previewed: Any,
     effective_task_id: Any,
 ) -> FinalResponseVerdict:
     """Finish (or defer) a text-only assistant response in the original guard order. Every
@@ -67,13 +82,19 @@ def finish_text_response(
     iteration-limit summarization; the final message is appended and flushed only after the
     stop gates accept it."""
     from agent.conversation_loop import (
-        _CODEX_ACK_CONTINUATION_NUDGE, _DEGENERATE_FINAL_NUDGE, _DROPPED_TOOLCALL_NUDGE_CONTENT,
-        _join_truncated_parts
+        _CODEX_ACK_CONTINUATION_NUDGE,
+        _DEGENERATE_FINAL_NUDGE,
+        _DROPPED_TOOLCALL_NUDGE_CONTENT,
+        _join_truncated_parts,
     )
 
-    def _verdict(action: str, result: Optional[dict[str, Any]] = None) -> FinalResponseVerdict:
+    def _verdict(
+        action: str, result: Optional[dict[str, Any]] = None
+    ) -> FinalResponseVerdict:
         return FinalResponseVerdict(
-            action=action, active_system_prompt=active_system_prompt, final_response=final_response,
+            action=action,
+            active_system_prompt=active_system_prompt,
+            final_response=final_response,
             _turn_exit_reason=_turn_exit_reason,
             _preflight_compression_blocked=_preflight_compression_blocked,
             codex_ack_continuations=codex_ack_continuations,
@@ -104,8 +125,12 @@ def finish_text_response(
         and not assistant_message.tool_calls
         and (_content is None or (isinstance(_content, str) and not _content.strip()))
         and not any(
-            isinstance(d, dict) and (
-                (d.get("type") in ("thinking", "redacted_thinking") and (d.get("signature") or d.get("data")))
+            isinstance(d, dict)
+            and (
+                (
+                    d.get("type") in ("thinking", "redacted_thinking")
+                    and (d.get("signature") or d.get("data"))
+                )
                 or str(d.get("type") or "").endswith(".native_assistant")
             )
             for d in getattr(assistant_message, "reasoning_details", None) or ()
@@ -119,8 +144,17 @@ def finish_text_response(
             logger.warning(
                 "Reasoning-only clean stop (%d chars) — returning the reasoning as the final "
                 "response (model=%s provider=%s api_calls=%d tool_turns=%d)",
-                len(_promoted), agent.model, agent.provider, api_call_count,
-                sum(1 for m in messages if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls")),
+                len(_promoted),
+                agent.model,
+                agent.provider,
+                api_call_count,
+                sum(
+                    1
+                    for m in messages
+                    if isinstance(m, dict)
+                    and m.get("role") == "assistant"
+                    and m.get("tool_calls")
+                ),
             )
     final_response = _promoted or assistant_message.content or ""
     # Unmute: _mute_post_response from a housekeeping tool turn must not silence
@@ -130,9 +164,16 @@ def finish_text_response(
     # Think-block-only / empty content: recovery path.
     if not agent._has_content_after_think_block(final_response):
         _ev = recover_empty_response(
-            agent, assistant_message, response, finish_reason, final_response=final_response,
-            messages=messages, api_messages=api_messages, conversation_history=conversation_history,
-            active_system_prompt=active_system_prompt, api_call_count=api_call_count,
+            agent,
+            assistant_message,
+            response,
+            finish_reason,
+            final_response=final_response,
+            messages=messages,
+            api_messages=api_messages,
+            conversation_history=conversation_history,
+            active_system_prompt=active_system_prompt,
+            api_call_count=api_call_count,
             turn_exit_reason=_turn_exit_reason,
             preflight_compression_blocked=_preflight_compression_blocked,
         )
@@ -165,8 +206,11 @@ def finish_text_response(
     # delivery channel (gateway status message / CLI print). NEVER appended to messages/api_messages:
     # conversation context and the cached prompt prefix stay byte-identical.
     from agent.agent_runtime_helpers import (
-        intent_ack_continuation_mode, looks_like_degenerate_final, promoted_reasoning_announces_action,
-        tool_results_this_turn, trailing_continue_intent,
+        intent_ack_continuation_mode,
+        looks_like_degenerate_final,
+        promoted_reasoning_announces_action,
+        tool_results_this_turn,
+        trailing_continue_intent,
     )
 
     _ack_mode = intent_ack_continuation_mode(agent)
@@ -207,7 +251,9 @@ def finish_text_response(
         and agent.valid_tool_names
         and codex_ack_continuations < 2
         and agent._looks_like_codex_intermediate_ack(
-            user_message=user_message, assistant_content=final_response, messages=messages,
+            user_message=user_message,
+            assistant_content=final_response,
+            messages=messages,
             require_workspace=(_ack_mode == "codex_only"),
         )
     ):
@@ -219,12 +265,16 @@ def finish_text_response(
             logger.info(
                 "Stall guard: turn ending on trailing continue-"
                 "intent with no tool calls — re-prompting to act "
-                "(%d/2)", codex_ack_continuations + 1,
+                "(%d/2)",
+                codex_ack_continuations + 1,
             )
         elif _continuation_kind == "degenerate":
             logger.warning(
                 "Degenerate final: %d-char fragment %r ended the turn after %d tool result(s) — "
-                "re-prompting (%d/2)", len(_stall_text), _stall_text[:40], _tool_rows,
+                "re-prompting (%d/2)",
+                len(_stall_text),
+                _stall_text[:40],
+                _tool_rows,
                 codex_ack_continuations + 1,
             )
         codex_ack_continuations += 1
@@ -235,13 +285,17 @@ def finish_text_response(
             interim_msg["api_content"] = final_response
         append_message(messages, interim_msg)
         agent._emit_interim_assistant_message(interim_msg)
-        append_message(messages, {
-            "role": "user",
-            "content": (
-                _DEGENERATE_FINAL_NUDGE if _continuation_kind == "degenerate"
-                else _CODEX_ACK_CONTINUATION_NUDGE
-            ),
-        })
+        append_message(
+            messages,
+            {
+                "role": "user",
+                "content": (
+                    _DEGENERATE_FINAL_NUDGE
+                    if _continuation_kind == "degenerate"
+                    else _CODEX_ACK_CONTINUATION_NUDGE
+                ),
+            },
+        )
         agent._session_messages = messages
         # An acknowledgment is non-final: its text must not suppress iteration-limit
         # summarization if the continuation exhausts budget.
@@ -251,7 +305,9 @@ def finish_text_response(
     codex_ack_continuations = 0
 
     if truncated_response_parts:
-        final_response = _join_truncated_parts([*truncated_response_parts, (final_response, False)])
+        final_response = _join_truncated_parts(
+            [*truncated_response_parts, (final_response, False)]
+        )
         truncated_response_parts = []
         length_continue_retries = 0
         # The continuation recovered, so the fragments stay in the transcript.
@@ -276,9 +332,14 @@ def finish_text_response(
         agent._vprint(f"{agent.log_prefix}{line}", force=True, diagnostic=True)
         agent._cleanup_task_resources(effective_task_id)
         agent._persist_session(messages, conversation_history)
-        return _verdict("return", stamp_failure(
-            partial_result(messages, api_call_count, user_response, error), "truncated", True,
-        ))
+        return _verdict(
+            "return",
+            stamp_failure(
+                partial_result(messages, api_call_count, user_response, error),
+                "truncated",
+                True,
+            ),
+        )
 
     final_msg = agent._build_assistant_message(assistant_message, finish_reason)
     if _promoted:
@@ -293,12 +354,16 @@ def finish_text_response(
         and not assistant_message.tool_calls
         and getattr(agent, "_dropped_toolcall_retries", 0) < 3
     ):
-        agent._dropped_toolcall_retries = getattr(agent, "_dropped_toolcall_retries", 0) + 1
+        agent._dropped_toolcall_retries = (
+            getattr(agent, "_dropped_toolcall_retries", 0) + 1
+        )
         logger.warning(
             "finish_reason=tool_calls with empty tool_calls array "
             "(narration only) — re-prompting to emit the call "
             "(retry %d/3, model=%s provider=%s)",
-            agent._dropped_toolcall_retries, agent.model, agent.provider,
+            agent._dropped_toolcall_retries,
+            agent.model,
+            agent.provider,
         )
         agent._emit_diagnostic_status(
             "↻ Model signaled a tool call but sent none — "
@@ -308,11 +373,14 @@ def finish_text_response(
         # and the finalization pop strips an unanswered tail pair.
         final_msg["_dropped_toolcall_nudge"] = True
         append_message(messages, final_msg)
-        append_message(messages, {
-            "role": "user",
-            "content": _DROPPED_TOOLCALL_NUDGE_CONTENT,
-            "_dropped_toolcall_nudge": True,
-        })
+        append_message(
+            messages,
+            {
+                "role": "user",
+                "content": _DROPPED_TOOLCALL_NUDGE_CONTENT,
+                "_dropped_toolcall_nudge": True,
+            },
+        )
         agent._session_messages = messages
         final_response = None
         return _verdict("continue")
@@ -330,13 +398,18 @@ def finish_text_response(
         messages.pop()
 
     _sg = apply_stop_gates(
-        agent, final_msg, final_response=final_response, messages=messages,
+        agent,
+        final_msg,
+        final_response=final_response,
+        messages=messages,
         conversation_history=conversation_history,
         pending_verification_response=_pending_verification_response,
         pending_verification_response_previewed=_pending_verification_response_previewed,
     )
     _pending_verification_response = _sg.pending_verification_response
-    _pending_verification_response_previewed = _sg.pending_verification_response_previewed
+    _pending_verification_response_previewed = (
+        _sg.pending_verification_response_previewed
+    )
     if _sg.continue_turn:
         final_response = None
         return _verdict("continue")
@@ -346,10 +419,14 @@ def finish_text_response(
     # the stored/replayed transcript (#44239). finalize_turn reads the recorded outcome; like
     # there, an interrupted turn keeps the raw text.
     from agent.turn_finalizer import apply_llm_output_transform
+
     _transformed = False
     if not getattr(agent, "_interrupt_requested", False):
         final_response, _transformed, _ = apply_llm_output_transform(
-            agent, final_response, turn_id=getattr(agent, "_current_turn_id", "") or "", logger=logger,
+            agent,
+            final_response,
+            turn_id=getattr(agent, "_current_turn_id", "") or "",
+            logger=logger,
         )
     if _transformed:
         if _promoted:
@@ -372,5 +449,7 @@ def finish_text_response(
 
     _turn_exit_reason = f"text_response(finish_reason={finish_reason})"
     if not agent.quiet_mode:
-        agent._safe_print(f"🎉 Conversation completed after {api_call_count} OpenAI-compatible API call(s)")
+        agent._safe_print(
+            f"🎉 Conversation completed after {api_call_count} OpenAI-compatible API call(s)"
+        )
     return _verdict("break")

@@ -6,8 +6,6 @@ from gateway.status_phrases import (
 )
 
 
-
-
 def test_status_phrase_does_not_leak_raw_preview_or_args():
     msg = choose_status_phrase(
         "status",
@@ -25,7 +23,9 @@ def test_status_phrase_path_can_load_relative_directory(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     phrase_dir = tmp_path / "phrase-catalog"
     phrase_dir.mkdir()
-    (phrase_dir / "01-status.yaml").write_text("status:\n  - relative dir status text\n", encoding="utf-8")
+    (phrase_dir / "01-status.yaml").write_text(
+        "status:\n  - relative dir status text\n", encoding="utf-8"
+    )
 
     catalog = resolve_status_phrase_catalog(
         {"display": {"status_phrases": {"path": "phrase-catalog"}}},
@@ -37,7 +37,14 @@ def test_status_phrase_path_can_load_relative_directory(tmp_path, monkeypatch):
 
 def test_choose_status_phrase_uses_custom_catalog_without_leaking_args():
     catalog = resolve_status_phrase_catalog(
-        {"display": {"status_phrases": {"mode": "replace", "status": ["custom safe status text"]}}},
+        {
+            "display": {
+                "status_phrases": {
+                    "mode": "replace",
+                    "status": ["custom safe status text"],
+                }
+            }
+        },
         "whatsapp",
     )
 

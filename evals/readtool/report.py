@@ -15,7 +15,14 @@ from statistics import mean
 
 RESULTS = Path(__file__).resolve().parent / "results"
 
-METRICS = ["score", "api_turns", "tool_calls", "read_file_calls", "total_tokens", "wall_s"]
+METRICS = [
+    "score",
+    "api_turns",
+    "tool_calls",
+    "read_file_calls",
+    "total_tokens",
+    "wall_s",
+]
 
 
 def load_label(label: str, model_filter: str | None) -> dict:
@@ -61,9 +68,7 @@ def main() -> int:
 
     for model in models:
         print(f"\n=== {model} ===")
-        task_ids = sorted(
-            {t for lbl in args.labels for t in sets[lbl].get(model, {})}
-        )
+        task_ids = sorted({t for lbl in args.labels for t in sets[lbl].get(model, {})})
         # Per-task score table
         header = f"{'task':<22}" + "".join(f"{lbl:>24}" for lbl in args.labels)
         print(header)
@@ -76,11 +81,16 @@ def main() -> int:
                 turns = vals.get("api_turns", [])
                 tok = vals.get("total_tokens", [])
                 cell = (
-                    f"{mean(sc):.2f} ({len(sc)}r) "
-                    f"t={mean(turns):.1f} " if turns else f"{mean(sc):.2f} ({len(sc)}r) t=? "
-                ) if sc else "—"
+                    (
+                        f"{mean(sc):.2f} ({len(sc)}r) t={mean(turns):.1f} "
+                        if turns
+                        else f"{mean(sc):.2f} ({len(sc)}r) t=? "
+                    )
+                    if sc
+                    else "—"
+                )
                 if sc and tok:
-                    cell += f"tk={mean(tok)/1000:.0f}k"
+                    cell += f"tk={mean(tok) / 1000:.0f}k"
                 row += f"{cell:>24}"
             print(row)
         # Aggregates

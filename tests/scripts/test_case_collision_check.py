@@ -63,17 +63,25 @@ def test_detects_case_colliding_paths(tmp_path):
     repo = _git_init(tmp_path)
     subprocess.run(
         [
-            "git", "update-index", "--add", "--cacheinfo",
+            "git",
+            "update-index",
+            "--add",
+            "--cacheinfo",
             f"100644,{_git_blob_sha(b'a')},Foo.txt",
         ],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
     subprocess.run(
         [
-            "git", "update-index", "--add", "--cacheinfo",
+            "git",
+            "update-index",
+            "--add",
+            "--cacheinfo",
             f"100644,{_git_blob_sha(b'b')},foo.txt",
         ],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
 
     result = _run_check(root=repo)
@@ -87,17 +95,25 @@ def test_detects_directory_case_collisions(tmp_path):
     repo = _git_init(tmp_path)
     subprocess.run(
         [
-            "git", "update-index", "--add", "--cacheinfo",
+            "git",
+            "update-index",
+            "--add",
+            "--cacheinfo",
             f"100644,{_git_blob_sha(b'a')},src/Helper.py",
         ],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
     subprocess.run(
         [
-            "git", "update-index", "--add", "--cacheinfo",
+            "git",
+            "update-index",
+            "--add",
+            "--cacheinfo",
             f"100644,{_git_blob_sha(b'b')},SRC/helper.py",
         ],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
 
     result = _run_check(root=repo)

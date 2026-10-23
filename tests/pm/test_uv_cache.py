@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 
-
 import pm.packages as pkgs
-
-
-
 
 
 def test_uv_cache_dir_seeds_from_payload(monkeypatch, tmp_path):
@@ -30,7 +26,9 @@ def test_uv_cache_dir_seeds_from_payload(monkeypatch, tmp_path):
     assert (machine / "wheels-v5" / "some.pkg").read_text(encoding="utf-8") == "x"
     # seeded marker written → second call doesn't re-copy
     assert (machine / ".seeded").is_file()
-    (payload / "uv-cache" / "wheels-v5" / "some.pkg").write_text("changed", encoding="utf-8")
+    (payload / "uv-cache" / "wheels-v5" / "some.pkg").write_text(
+        "changed", encoding="utf-8"
+    )
     pkgs.uv_cache_dir()
     assert (machine / "wheels-v5" / "some.pkg").read_text(encoding="utf-8") == "x"
 
@@ -50,7 +48,9 @@ def test_uv_cache_dir_cold_machine_no_payload(monkeypatch, tmp_path):
     assert (machine / ".seeded").is_file()
 
 
-def test_bundle_uses_shipped_environment_until_an_extension_is_committed(monkeypatch, tmp_path):
+def test_bundle_uses_shipped_environment_until_an_extension_is_committed(
+    monkeypatch, tmp_path
+):
     import json
     from pm import paths
 
@@ -61,8 +61,12 @@ def test_bundle_uses_shipped_environment_until_an_extension_is_committed(monkeyp
     core.mkdir(parents=True)
     shipped = payload / "venv"
     shipped.mkdir()
-    (payload / "manifest.json").write_text(json.dumps({"repo": "clawksis-agent", "venv": "venv"}))
+    (payload / "manifest.json").write_text(
+        json.dumps({"repo": "clawksis-agent", "venv": "venv"})
+    )
     monkeypatch.setattr(paths, "repo_root", lambda: core)
 
     assert pkgs.Venv().venv_dir() == shipped
-    assert not home.exists(), "selecting shipped dependencies must not copy or mutate them"
+    assert not home.exists(), (
+        "selecting shipped dependencies must not copy or mutate them"
+    )

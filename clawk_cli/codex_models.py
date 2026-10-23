@@ -32,7 +32,8 @@ DEFAULT_CODEX_MODELS: list[str] = [
     # not in the public API, so it stays out of the "openai" catalog in clawk_cli/models.py.
     # The backend reports ``supported_in_api: false`` for it; that flag describes API
     # availability, not Codex availability, so fetch/cache paths must not filter on it.
-    "gpt-5.3-codex-spark"]
+    "gpt-5.3-codex-spark",
+]
 
 # gpt-5.3-codex-spark is in research preview and is exposed *only* via the Codex CLI / OAuth backend
 # (chatgpt.com/backend-api/codex/models) for ChatGPT Pro subscribers. It is NOT available in the public
@@ -51,7 +52,8 @@ _FORWARD_COMPAT_TEMPLATE_MODELS: list[tuple[str, tuple[str, ...]]] = [
     ("gpt-5.5", ("gpt-5.4", "gpt-5.4-mini")),
     # Spark surfaces whenever a compatible template is present; the backend (not Clawksis)
     # gates real availability by ChatGPT Pro entitlement.
-    ("gpt-5.3-codex-spark", ("gpt-5.4", "gpt-5.5"))]
+    ("gpt-5.3-codex-spark", ("gpt-5.4", "gpt-5.5")),
+]
 
 
 def _dedupe(model_ids) -> list[str]:
@@ -65,7 +67,9 @@ def _add_forward_compat_models(model_ids: list[str]) -> list[str]:
     ordered = _dedupe(model_ids)
     seen = set(ordered)
     for synthetic_model, template_models in _FORWARD_COMPAT_TEMPLATE_MODELS:
-        if synthetic_model not in seen and any(template in seen for template in template_models):
+        if synthetic_model not in seen and any(
+            template in seen for template in template_models
+        ):
             ordered.append(synthetic_model)
             seen.add(synthetic_model)
     return ordered
@@ -78,7 +82,10 @@ def _add_context_variants(model_ids: list[str]) -> list[str]:
     The suffix is Clawksis-side only — stripped before the id hits the wire (agent/transports/codex.py,
     agent/auxiliary_client.py).
     """
-    from agent.model_metadata import CODEX_CONTEXT_VARIANT_SUFFIX, has_codex_context_variant
+    from agent.model_metadata import (
+        CODEX_CONTEXT_VARIANT_SUFFIX,
+        has_codex_context_variant,
+    )
 
     out: list[str] = []
     present = set(model_ids)
@@ -115,7 +122,10 @@ def codex_catalog_credential_identity() -> str:
     principal's key. Opaque non-JWT tokens
     fall back to the token itself (the caller hashes every part before anything is persisted).
     """
-    from clawk_cli.auth import _codex_access_token_is_expiring, resolve_codex_runtime_credentials
+    from clawk_cli.auth import (
+        _codex_access_token_is_expiring,
+        resolve_codex_runtime_credentials,
+    )
 
     try:
         creds = resolve_codex_runtime_credentials(read_only=True)
@@ -147,7 +157,10 @@ def _ranked_slugs(entries: object) -> list[str]:
         if not isinstance(slug, str) or not slug.strip():
             continue
         visibility = item.get("visibility")
-        if isinstance(visibility, str) and visibility.strip().lower() in {"hide", "hidden"}:
+        if isinstance(visibility, str) and visibility.strip().lower() in {
+            "hide",
+            "hidden",
+        }:
             continue
         priority = item.get("priority")
         rank = int(priority) if isinstance(priority, (int, float)) else 10_000
@@ -157,7 +170,9 @@ def _ranked_slugs(entries: object) -> list[str]:
     return _dedupe(slug for _, slug in sortable)
 
 
-def _fetch_models_from_api(access_token: str, base_url: Optional[str] = None) -> list[str]:
+def _fetch_models_from_api(
+    access_token: str, base_url: Optional[str] = None
+) -> list[str]:
     """Fetch available models from the Codex API. Returns visible models sorted by priority.
 
     ``base_url`` is the host the credential is routed to (resolved together with it); the
@@ -166,17 +181,26 @@ def _fetch_models_from_api(access_token: str, base_url: Optional[str] = None) ->
     try:
         from agent.model_metadata import _codex_catalog_probe_allowed
         from clawk_cli.auth_codex import _codex_base_url
+
         catalog_base = (base_url or "").strip().rstrip("/") or _codex_base_url()
         if not _codex_catalog_probe_allowed(access_token, catalog_base):
             return []
         import httpx
+
         # The per-account catalog needs ChatGPT-Account-ID (else ``{"models":[]}`` with HTTP 200
         # masquerades as "no models") and, for residency-enforced workspaces, the residency header.
         from agent.codex_headers import codex_account_headers
-        headers = {"Authorization": f"Bearer {access_token}", **codex_account_headers(access_token)}
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            **codex_account_headers(access_token),
+        }
         from agent.model_metadata import fetch_codex_catalog_entries
+
         entries, _status = fetch_codex_catalog_entries(
-            lambda url: httpx.get(url, headers=headers, timeout=10), base_url=catalog_base)
+            lambda url: httpx.get(url, headers=headers, timeout=10),
+            base_url=catalog_base,
+        )
     except Exception as exc:
         logger.debug("Failed to fetch Codex models from API: %s", exc)
         return []
@@ -191,6 +215,7 @@ def _read_default_model(codex_home: Path) -> Optional[str]:
     try:
         import tomllib
         import tomllib
+
         payload = tomllib.loads(config_path.read_text(encoding="utf-8-sig"))
     except Exception:
         return None
@@ -211,14 +236,18 @@ def _read_cache_models(codex_home: Path) -> list[str]:
     return _ranked_slugs(entries if isinstance(entries, list) else [])
 
 
-def get_codex_model_ids(access_token: Optional[str] = None, base_url: Optional[str] = None) -> list[str]:
+def get_codex_model_ids(
+    access_token: Optional[str] = None, base_url: Optional[str] = None
+) -> list[str]:
     """Available Codex model IDs: live API (if token) > config.toml default > local cache > defaults.
 
     Pass the ``base_url`` resolved together with ``access_token`` (runtime/pool route) so live
     discovery asks the credential's own host. Without a live answer the result is
     ``CuratedFallbackModels``: a cache placeholder that never replaces a verified catalog, since
     account-gated rows such as Astra are absent from the offline hints."""
-    codex_home = Path(os.getenv("CODEX_HOME", "").strip() or str(Path.home() / ".codex")).expanduser()
+    codex_home = Path(
+        os.getenv("CODEX_HOME", "").strip() or str(Path.home() / ".codex")
+    ).expanduser()
     if access_token:
         api_models = _fetch_models_from_api(access_token, base_url=base_url)
         if api_models:
@@ -227,6 +256,16 @@ def get_codex_model_ids(access_token: Optional[str] = None, base_url: Optional[s
     from clawk_cli.models_catalog_static import CuratedFallbackModels
 
     default_model = _read_default_model(codex_home)
-    return CuratedFallbackModels(_finalize_codex_models(_drop_undiscovered_astra(_dedupe([
-        *([default_model] if default_model else []), *_read_cache_models(codex_home),
-        *DEFAULT_CODEX_MODELS]))))
+    return CuratedFallbackModels(
+        _finalize_codex_models(
+            _drop_undiscovered_astra(
+                _dedupe(
+                    [
+                        *([default_model] if default_model else []),
+                        *_read_cache_models(codex_home),
+                        *DEFAULT_CODEX_MODELS,
+                    ]
+                )
+            )
+        )
+    )

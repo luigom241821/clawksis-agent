@@ -41,7 +41,8 @@ def _clean_approval_env(monkeypatch):
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
     monkeypatch.setattr(approval_module, "_YOLO_MODE_FROZEN", False)
     monkeypatch.setattr(
-        approval_context, "_get_approval_mode",
+        approval_context,
+        "_get_approval_mode",
         lambda: "manual",
     )
     approval_module._session_approved.clear()
@@ -205,9 +206,7 @@ class TestExecuteCodeGuardCliDenialBreakerParity:
             "(check_all_command_guards does not)"
         )
 
-    def test_timeout_message_carries_breaker_addendum_once_tripped(
-        self, monkeypatch
-    ):
+    def test_timeout_message_carries_breaker_addendum_once_tripped(self, monkeypatch):
         monkeypatch.setenv("CLAWK_EXEC_ASK", "1")
         session_key = approval_module.get_current_session_key()
         threshold = approval_module._get_denial_breaker_threshold()

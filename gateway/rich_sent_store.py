@@ -31,6 +31,7 @@ _LOCK = threading.Lock()
 
 def _store_path() -> str:
     from clawk_constants import get_clawk_home  # honors the active profile override
+
     return os.path.join(str(get_clawk_home()), "state", "rich_sent_index.json")
 
 
@@ -55,7 +56,9 @@ def _update(chat_id, message_id, fields: dict) -> None:
             entry = entry if isinstance(entry, dict) else {}
             data[key] = {**entry, **fields, "ts": int(time.time())}
             if len(data) > _MAX_ENTRIES:  # trim oldest by timestamp
-                for k, _ in sorted(data.items(), key=lambda kv: kv[1].get("ts", 0))[: len(data) - _MAX_ENTRIES]:
+                for k, _ in sorted(data.items(), key=lambda kv: kv[1].get("ts", 0))[
+                    : len(data) - _MAX_ENTRIES
+                ]:
                     data.pop(k, None)
             atomic_json_write(path, data, indent=None)  # see _LOCK
         except Exception:
@@ -73,7 +76,9 @@ def record_media(chat_id, message_id, media: list[tuple[str, str]]) -> None:
     """Persist local attachment ``(path, mime)`` pairs for ``(chat_id, message_id)``."""
     if not media or message_id is None or chat_id is None:
         return
-    _update(chat_id, message_id, {"m": [[str(p), str(mt or "")] for p, mt in media if p]})
+    _update(
+        chat_id, message_id, {"m": [[str(p), str(mt or "")] for p, mt in media if p]}
+    )
 
 
 async def record_async(chat_id, message_id, text: Optional[str]) -> None:

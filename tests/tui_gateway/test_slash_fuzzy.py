@@ -25,10 +25,6 @@ def test_normalize_slash_search_query():
     assert normalize_slash_search_query("plain") == "plain"
 
 
-
-
-
-
 def test_name_match_beats_description_match():
     # "recap" hits the description too, but the name tier must win.
     item = _item("/recap", "Turn session recaps on/off")

@@ -12,6 +12,7 @@ row, and the run right after its own bookkeeping (a drain can finish before the 
 ``mark_job_run`` lands). Every write is fenced on the execution id, so the call is
 idempotent and never rewrites a later run's status.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,11 +23,16 @@ logger = logging.getLogger(__name__)
 # Queue terminal status -> ledger delivery_outcome. ``unknown`` (owner died mid-send, never
 # retried) is surfaced as a failure: the user cannot be told the result arrived.
 _LEDGER_OUTCOME = {
-    "delivered": "delivered", "suppressed": "suppressed", "failed": "failed", "unknown": "failed",
+    "delivered": "delivered",
+    "suppressed": "suppressed",
+    "failed": "failed",
+    "unknown": "failed",
 }
 
 
-def _settle_job_record(job_id: str, execution_id: str, delivery_error: Optional[str]) -> bool:
+def _settle_job_record(
+    job_id: str, execution_id: str, delivery_error: Optional[str]
+) -> bool:
     """Stamp the outcome onto the job only while *execution_id* is still its current run:
     the ledger's latest attempt for the job AND the job's latest recorded completion."""
     from cron.executions import latest_execution
@@ -43,7 +49,10 @@ def _settle_job_record(job_id: str, execution_id: str, delivery_error: Optional[
         status = job.get("last_status")
         if status == "delivery_queued":
             status = "delivery_failed" if delivery_error else "ok"
-        if (status, delivery_error) == (job.get("last_status"), job.get("last_delivery_error")):
+        if (status, delivery_error) == (
+            job.get("last_status"),
+            job.get("last_delivery_error"),
+        ):
             return True
         job["last_status"] = status
         job["last_delivery_error"] = delivery_error
@@ -91,4 +100,6 @@ def settle_quietly(job_id: Optional[str], execution_id: Optional[str]) -> None:
     try:
         settle_queued_delivery(job_id, execution_id)
     except Exception:
-        logger.warning("Cron delivery %s: outcome write-back failed", execution_id, exc_info=True)
+        logger.warning(
+            "Cron delivery %s: outcome write-back failed", execution_id, exc_info=True
+        )

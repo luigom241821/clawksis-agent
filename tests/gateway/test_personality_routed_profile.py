@@ -20,7 +20,9 @@ def test_routed_profile_prompt_resolves_from_its_own_config(tmp_path, monkeypatc
     routed_home = tmp_path / "profiles" / "beta"
     default_home.mkdir()
     routed_home.mkdir(parents=True)
-    (default_home / "config.yaml").write_text("agent:\n  system_prompt: DEFAULT-PERSONA\n")
+    (default_home / "config.yaml").write_text(
+        "agent:\n  system_prompt: DEFAULT-PERSONA\n"
+    )
     (routed_home / "config.yaml").write_text(
         "agent:\n  system_prompt: BETA-PERSONA\n  personalities:\n    pirate: ARR\n"
     )
@@ -32,8 +34,14 @@ def test_routed_profile_prompt_resolves_from_its_own_config(tmp_path, monkeypatc
     runner.config = None
 
     with _profile_runtime_scope(routed_home):
-        assert runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c") == "BETA-PERSONA"
-    assert runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c") == "DEFAULT-PERSONA"
+        assert (
+            runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c")
+            == "BETA-PERSONA"
+        )
+    assert (
+        runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c")
+        == "DEFAULT-PERSONA"
+    )
 
     # /personality from the routed chat writes the routed profile and only it.
     from clawk_cli.personality import persist_personality
@@ -42,4 +50,7 @@ def test_routed_profile_prompt_resolves_from_its_own_config(tmp_path, monkeypatc
         assert persist_personality("pirate")
         assert runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c") == "ARR"
     assert "pirate" not in (default_home / "config.yaml").read_text()
-    assert runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c") == "DEFAULT-PERSONA"
+    assert (
+        runner._get_system_prompt_for_channel(Platform.TELEGRAM, "c")
+        == "DEFAULT-PERSONA"
+    )

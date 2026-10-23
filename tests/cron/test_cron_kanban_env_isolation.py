@@ -58,8 +58,8 @@ def worker_env(monkeypatch):
 # The predicate itself
 # ---------------------------------------------------------------------------
 
-class TestDispatcherOwnedPredicate:
 
+class TestDispatcherOwnedPredicate:
     def test_false_inside_non_dispatcher_context(self):
         from agent.delegation_context import (
             is_dispatcher_owned_worker_context,
@@ -142,6 +142,7 @@ class TestDispatcherOwnedPredicate:
 # The gates that consume it
 # ---------------------------------------------------------------------------
 
+
 class TestKanbanGatesRespectContext:
     def test_task_tools_hidden_from_cron_agent(self, worker_env):
         from agent.delegation_context import non_dispatcher_owned_context
@@ -167,7 +168,6 @@ class TestKanbanGatesRespectContext:
 
         with non_dispatcher_owned_context():
             assert kanban_tools._default_task_id("t_explicit") == "t_explicit"
-
 
     def test_kanban_env_verdict_is_not_memoized(self, worker_env):
         """`kanban` must bypass _ENV_DETECT_CACHE: caching it process-wide would
@@ -196,6 +196,7 @@ class TestKanbanGatesRespectContext:
 # run_job wiring
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.usefixtures("cron_owner")
 class TestRunJobKanbanIsolation:
     @staticmethod
@@ -214,8 +215,7 @@ class TestRunJobKanbanIsolation:
                     is_dispatcher_owned_worker_context()
                 )
                 observed["kanban_env_during_init"] = {
-                    k: v for k, v in os.environ.items()
-                    if k.startswith("CLAWK_KANBAN_")
+                    k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")
                 }
 
             def run_conversation(self, *_a, **_kw):
@@ -234,9 +234,11 @@ class TestRunJobKanbanIsolation:
         from clawk_cli import runtime_provider as _rtp
 
         monkeypatch.setattr(
-            _rtp, "resolve_runtime_provider",
+            _rtp,
+            "resolve_runtime_provider",
             lambda **_kw: {
-                "provider": "test", "api_key": "k",
+                "provider": "test",
+                "api_key": "k",
                 "base_url": "http://test.local",
                 "api_mode": "chat_completions",
             },
@@ -258,8 +260,12 @@ class TestRunJobKanbanIsolation:
     @staticmethod
     def _job(job_id="kanban-iso"):
         return {
-            "id": job_id, "name": "kanban-iso-job", "prompt": "hi", "model": "test-model",
-            "workdir": None, "schedule_display": "manual",
+            "id": job_id,
+            "name": "kanban-iso-job",
+            "prompt": "hi",
+            "model": "test-model",
+            "workdir": None,
+            "schedule_display": "manual",
         }
 
     def test_agent_runs_as_non_dispatcher(self, monkeypatch, worker_env):
@@ -278,9 +284,7 @@ class TestRunJobKanbanIsolation:
         the worker's claim heartbeat and the gateway watchers keep working."""
         import cron.scheduler as sched
 
-        before = {
-            k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")
-        }
+        before = {k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")}
         assert before, "fixture should have populated kanban env"
 
         observed: dict = {}
@@ -292,11 +296,8 @@ class TestRunJobKanbanIsolation:
         # Untouched DURING the job (the heartbeat thread reads it concurrently)...
         assert observed["kanban_env_during_init"] == before
         # ...and after.
-        after = {
-            k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")
-        }
+        after = {k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")}
         assert after == before
-
 
     def test_context_reset_even_when_job_raises(self, monkeypatch, worker_env):
         import cron.scheduler as sched
@@ -331,9 +332,7 @@ class TestRunJobKanbanIsolation:
         per-thread and cannot."""
         import cron.scheduler as sched
 
-        before = {
-            k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")
-        }
+        before = {k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")}
         observed: dict = {}
         self._install_stubs(monkeypatch, observed)
 
@@ -350,9 +349,7 @@ class TestRunJobKanbanIsolation:
             t.join(60)
 
         assert results == {"a": True, "b": True}
-        after = {
-            k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")
-        }
+        after = {k: v for k, v in os.environ.items() if k.startswith("CLAWK_KANBAN_")}
         assert after == before, "worker identity must survive concurrent cron jobs"
 
 
@@ -384,8 +381,10 @@ def test_dispatcher_grants_only_the_assigned_worker_scope(tmp_path, monkeypatch)
     )
     worker.chmod(0o700)
     # Observe the real spawn grant without launching an owner or inference.
-    monkeypatch.setattr("clawk_cli.kanban_db_dispatch._worker_argv",
-                        lambda *_args: [sys.executable, str(worker)])
+    monkeypatch.setattr(
+        "clawk_cli.kanban_db_dispatch._worker_argv",
+        lambda *_args: [sys.executable, str(worker)],
+    )
     # Building a new worker under an existing task must replace, not inherit, its scope.
     monkeypatch.setenv("CLAWK_KANBAN_TASK", "prior-task")
     # A dispatcher launched from an agent's shell carries the descendant fence itself; the worker it
@@ -393,7 +392,9 @@ def test_dispatcher_grants_only_the_assigned_worker_scope(tmp_path, monkeypatch)
     monkeypatch.setenv("CLAWK_DELEGATED_CHILD_CONTEXT", str(tmp_path))
     pid = _default_spawn(task, str(tmp_path), board="default")
     assert pid is not None
-    _, status = os.waitpid(pid, 0)  # windows-footgun: ok — Linux-only real dispatcher spawn
+    _, status = os.waitpid(
+        pid, 0
+    )  # windows-footgun: ok — Linux-only real dispatcher spawn
     assert os.waitstatus_to_exitcode(status) == 0
     result = json.loads(output.read_text())
     assert result["ok"] and result["beat"] is True, result

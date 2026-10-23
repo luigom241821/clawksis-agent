@@ -57,7 +57,12 @@ def begin_boot(stamp: Stamp = lambda: None) -> Callable[[Callable[[], Due]], Non
     return finish
 
 
-def read(compute: Callable[[], Due], *, stamp: Stamp = lambda: None, wait: float = BOOT_WAIT_SECONDS) -> Due:
+def read(
+    compute: Callable[[], Due],
+    *,
+    stamp: Stamp = lambda: None,
+    wait: float = BOOT_WAIT_SECONDS,
+) -> Due:
     """The cached answer; a boot computation in flight is waited for (bounded), and with nothing
     cached, or files moved since (*stamp*), *compute* answers live and is cached."""
     done = _boot_done
@@ -93,7 +98,9 @@ def _store(value: Due, generation: int, before: Hashable, after: Hashable) -> bo
     if before != after:  # a file moved mid-computation: the answer may predate it
         return False
     with _lock:
-        if generation != _generation:  # a writer that landed meanwhile wins over this computation
+        if (
+            generation != _generation
+        ):  # a writer that landed meanwhile wins over this computation
             return False
         _value, _value_stamp = dict(value), after
     return True

@@ -30,7 +30,7 @@ from clawk_cli import kanban_db_notify as kbn
 from clawk_constants import get_clawk_home
 from clawk_state import SessionDB
 
-SESSION = "20260918_033413_0665eb"      # the originating (Relay/web-UI) session id
+SESSION = "20260918_033413_0665eb"  # the originating (Relay/web-UI) session id
 WORKER_SESSION = "20260918_034333_945a5a"  # the dispatcher-spawned worker's own session
 
 
@@ -44,14 +44,21 @@ class RecordingApiServerAdapter:
         self.homes = []
         self.profiles = []
 
-    async def run_internal_session_turn(self, *, session_id, text, profile, notification_category="result"):
+    async def run_internal_session_turn(
+        self, *, session_id, text, profile, notification_category="result"
+    ):
         self.homes.append(str(get_clawk_home()))
         self.profiles.append(profile)
-        self.turns.append({"session_id": session_id, "text": text, "category": notification_category})
+        self.turns.append(
+            {"session_id": session_id, "text": text, "category": notification_category}
+        )
 
     async def send(self, chat_id, text, metadata=None):
         from gateway.platforms.base import SendResult
-        return SendResult(success=False, error="API server uses HTTP request/response, not send()")
+
+        return SendResult(
+            success=False, error="API server uses HTTP request/response, not send()"
+        )
 
 
 class _FakeResponse:
@@ -100,7 +107,9 @@ def served(tmp_path, monkeypatch):
     root = tmp_path / ".clawk"
     (root / "profiles" / "builder").mkdir(parents=True)
     (root / "profiles" / "atlas").mkdir(parents=True)
-    (root / "config.yaml").write_text("gateway:\n  multiplex_profiles: true\n", encoding="utf-8")
+    (root / "config.yaml").write_text(
+        "gateway:\n  multiplex_profiles: true\n", encoding="utf-8"
+    )
     (root / ".env").write_text("", encoding="utf-8")
     (root / "profiles" / "builder" / "config.yaml").write_text("{}\n", encoding="utf-8")
     # A route-only profile owns no API-server credential of its own.
@@ -109,7 +118,11 @@ def served(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "board.db"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
-    return SimpleNamespace(root=root, builder=root / "profiles" / "builder", atlas=root / "profiles" / "atlas")
+    return SimpleNamespace(
+        root=root,
+        builder=root / "profiles" / "builder",
+        atlas=root / "profiles" / "atlas",
+    )
 
 
 def _own_session(home: Path, session_id: str, profile_name: str) -> None:
@@ -131,24 +144,39 @@ def _make_runner(*, adapter=None, routes=None, builder_adapters=None):
     runner._kanban_sub_fail_counts = {}
     runner._kanban_dispatcher_lock_handle = object()
     runner.config = SimpleNamespace(
-        multiplex_profiles=True, profile_routes=parse_profile_routes(routes or []))
+        multiplex_profiles=True, profile_routes=parse_profile_routes(routes or [])
+    )
     return runner
 
 
 def _subscription(*, chat_id=SESSION, profile="builder"):
     """One completed card whose origin is the raw session id, as the Relay origin creates it."""
     with kbc.connect() as conn:
-        task = kb.create_task(conn, title="relay origin", assignee="builder", session_id=WORKER_SESSION)
-        kbn.add_notify_sub(conn, task_id=task, platform="api_server", chat_id=chat_id,
-                           chat_type="dm", notifier_profile=profile, delivery_mode="notify+wake")
+        task = kb.create_task(
+            conn, title="relay origin", assignee="builder", session_id=WORKER_SESSION
+        )
+        kbn.add_notify_sub(
+            conn,
+            task_id=task,
+            platform="api_server",
+            chat_id=chat_id,
+            chat_type="dm",
+            notifier_profile=profile,
+            delivery_mode="notify+wake",
+        )
         kb.complete_task(conn, task, summary="done once")
     return task
 
 
 def _unseen(task, chat_id=SESSION):
     with kbc.connect() as conn:
-        return kbn.unseen_events_for_sub(conn, task_id=task, platform="api_server", chat_id=chat_id,
-                                         kinds=["completed"])[1]
+        return kbn.unseen_events_for_sub(
+            conn,
+            task_id=task,
+            platform="api_server",
+            chat_id=chat_id,
+            kinds=["completed"],
+        )[1]
 
 
 async def _run_one_notifier_tick(monkeypatch, runner):
@@ -165,11 +193,20 @@ async def _run_one_notifier_tick(monkeypatch, runner):
 
 
 def _api_sub(chat_id=SESSION, profile="builder"):
-    return {"task_id": "t_owned", "platform": "api_server", "chat_id": chat_id, "chat_type": "dm",
-            "thread_id": "", "notifier_profile": profile, "delivery_metadata": None}
+    return {
+        "task_id": "t_owned",
+        "platform": "api_server",
+        "chat_id": chat_id,
+        "chat_type": "dm",
+        "thread_id": "",
+        "notifier_profile": profile,
+        "delivery_metadata": None,
+    }
 
 
-def test_served_profile_wake_runs_in_process_only_for_the_session_it_owns(served, monkeypatch):
+def test_served_profile_wake_runs_in_process_only_for_the_session_it_owns(
+    served, monkeypatch
+):
     """Owned session → in-process wake in the owner's scope; everything else fails closed; the
     default profile keeps its HTTP self-post."""
     import aiohttp
@@ -184,7 +221,9 @@ def test_served_profile_wake_runs_in_process_only_for_the_session_it_owns(served
 
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
 
-    assert [turn["session_id"] for turn in adapter.turns] == [SESSION]  # the origin, not the worker
+    assert [turn["session_id"] for turn in adapter.turns] == [
+        SESSION
+    ]  # the origin, not the worker
     assert task in adapter.turns[0]["text"] and "done once" in adapter.turns[0]["text"]
     # Under the OWNING profile's scope, told which profile the authorization proved.
     assert adapter.homes == [str(served.builder)]
@@ -197,16 +236,23 @@ def test_served_profile_wake_runs_in_process_only_for_the_session_it_owns(served
 
     # Ownership of the exact session — not the platform — is the only proof.
     resolve = lambda sub, profile="builder", **kw: _adapter_for_subscription(
-        _make_runner(**kw), Platform.API_SERVER, sub, profile)
-    assert resolve(_api_sub(chat_id="20260918_051500_deadbe")) is None           # unknown session
-    assert resolve(_api_sub(), profile="atlas") is None                          # not the owner
-    assert resolve(_api_sub(), profile="ghost") is None                          # unserved profile
+        _make_runner(**kw), Platform.API_SERVER, sub, profile
+    )
+    assert (
+        resolve(_api_sub(chat_id="20260918_051500_deadbe")) is None
+    )  # unknown session
+    assert resolve(_api_sub(), profile="atlas") is None  # not the owner
+    assert resolve(_api_sub(), profile="ghost") is None  # unserved profile
     # An adapter on ANOTHER platform is not a boundary for this one (#115460); an own api_server
     # adapter is — the primary never stands in for a credential the profile holds itself.
-    assert resolve(_api_sub(), builder_adapters={Platform.DISCORD: object()}) is not None
+    assert (
+        resolve(_api_sub(), builder_adapters={Platform.DISCORD: object()}) is not None
+    )
     own_api = object()
-    assert resolve(_api_sub(), builder_adapters={Platform.API_SERVER: own_api}) is own_api
-    _own_session(served.atlas, "stamped-elsewhere", "builder")                   # foreign store
+    assert (
+        resolve(_api_sub(), builder_adapters={Platform.API_SERVER: own_api}) is own_api
+    )
+    _own_session(served.atlas, "stamped-elsewhere", "builder")  # foreign store
     assert resolve(_api_sub(chat_id="stamped-elsewhere")) is None
     # A row in the served store stamped for another profile is not ownership either.
     _own_session(served.builder, "atlas-row", "atlas")
@@ -221,12 +267,16 @@ def test_served_profile_wake_runs_in_process_only_for_the_session_it_owns(served
     task = _subscription(chat_id="default-origin", profile="default")
     asyncio.run(_run_one_notifier_tick(monkeypatch, runner))
     assert default_adapter.turns == []
-    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == ["default-origin"]
+    assert [c["headers"]["X-Clawksis-Session-Id"] for c in _FakeHttpSession.calls] == [
+        "default-origin"
+    ]
     assert _FakeHttpSession.calls[0]["url"].endswith("/v1/chat/completions")
     assert _unseen(task, chat_id="default-origin") == []
 
 
-def test_internal_session_turn_targets_the_live_session_under_the_owner_profile(served, monkeypatch):
+def test_internal_session_turn_targets_the_live_session_under_the_owner_profile(
+    served, monkeypatch
+):
     """Adapter-level: the in-process turn binds the proven profile, adopts the compression tip,
     and never runs against a session the owner's store does not hold."""
     from gateway.platforms.api_server import APIServerAdapter, _api_request_profile
@@ -237,16 +287,24 @@ def test_internal_session_turn_targets_the_live_session_under_the_owner_profile(
         db.create_session(parent, source="webui", profile_name="builder")
         db.append_message(parent, "user", "old turn")
         db.end_session(parent, "compression")
-        db.create_session(tip, source="webui", profile_name="builder", parent_session_id=parent)
+        db.create_session(
+            tip, source="webui", profile_name="builder", parent_session_id=parent
+        )
         db.append_message(tip, "user", "live turn")
-        assert db.resolve_resume_session_id(parent) == tip, "fixture must produce a live tip"
+        assert db.resolve_resume_session_id(parent) == tip, (
+            "fixture must produce a live tip"
+        )
     finally:
         db.close()
 
     adapter = APIServerAdapter(PlatformConfig(enabled=True))
     # A model_routes alias for the virtual model must apply to the wake turn as it does to the
     # HTTP self-post's /v1/chat/completions turn.
-    aliased_route = {"provider": "custom", "model": "wake-model", "base_url": "http://r"}
+    aliased_route = {
+        "provider": "custom",
+        "model": "wake-model",
+        "base_url": "http://r",
+    }
     adapter._model_routes = {adapter._model_name: aliased_route}
     seen = {}
 
@@ -259,13 +317,21 @@ def test_internal_session_turn_targets_the_live_session_under_the_owner_profile(
     monkeypatch.setattr(adapter, "_run_agent", fake_run_agent)
 
     with _profile_runtime_scope(served.builder):
-        asyncio.run(adapter.run_internal_session_turn(session_id=parent, text="wake", profile="builder"))
+        asyncio.run(
+            adapter.run_internal_session_turn(
+                session_id=parent, text="wake", profile="builder"
+            )
+        )
 
-    assert seen["session_id"] == tip  # the live continuation, not the retired parent slice
+    assert (
+        seen["session_id"] == tip
+    )  # the live continuation, not the retired parent slice
     assert "live turn" in str(seen["conversation_history"])
     assert seen["user_message"] == "wake"
     assert seen["session_history_delivery"] == "1"
-    assert seen["route"] == aliased_route  # resolved like the HTTP wake path, not route=None
+    assert (
+        seen["route"] == aliased_route
+    )  # resolved like the HTTP wake path, not route=None
     assert seen["home"] == str(served.builder)
     assert seen["request_profile"] == "builder"
     assert _api_request_profile.get() is None  # binding restored, never leaked
@@ -273,8 +339,15 @@ def test_internal_session_turn_targets_the_live_session_under_the_owner_profile(
     seen.clear()
     with _profile_runtime_scope(served.builder):
         with pytest.raises(RuntimeError):  # not in the owner's store → caller rewinds
-            asyncio.run(adapter.run_internal_session_turn(session_id="not-a-session", text="wake",
-                                                          profile="builder"))
+            asyncio.run(
+                adapter.run_internal_session_turn(
+                    session_id="not-a-session", text="wake", profile="builder"
+                )
+            )
         with pytest.raises(ValueError):  # the proof is the caller's; never derived here
-            asyncio.run(adapter.run_internal_session_turn(session_id=tip, text="wake", profile=""))
+            asyncio.run(
+                adapter.run_internal_session_turn(
+                    session_id=tip, text="wake", profile=""
+                )
+            )
     assert seen == {}

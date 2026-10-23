@@ -79,17 +79,37 @@ _PROBE = textwrap.dedent("""
 def test_session_listener_serves_native_ws_before_importing_the_dashboard(tmp_path):
     home = tmp_path / ".clawk"
     home.mkdir()
-    env = {k: v for k, v in os.environ.items() if k in {"PATH", "LANG", "TZ", "CLAWK_RUNTIME_DIR", "TMPDIR"}}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k in {"PATH", "LANG", "TZ", "CLAWK_RUNTIME_DIR", "TMPDIR"}
+    }
     env.update(HOME=str(tmp_path), CLAWK_HOME=str(home), PYTHONPATH=str(REPO))
-    proc = subprocess.run([sys.executable, "-c", _PROBE, str(home)], cwd=str(REPO), env=env,
-                          capture_output=True, text=True, timeout=120, check=False)
-    lines = [ln for ln in (proc.stdout + proc.stderr).splitlines() if ln.startswith("RESULT ")]
+    proc = subprocess.run(
+        [sys.executable, "-c", _PROBE, str(home)],
+        cwd=str(REPO),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    lines = [
+        ln
+        for ln in (proc.stdout + proc.stderr).splitlines()
+        if ln.startswith("RESULT ")
+    ]
     assert proc.returncode == 0 and lines, proc.stderr[-3000:]
-    out = json.loads(lines[-1][len("RESULT "):])
+    out = json.loads(lines[-1][len("RESULT ") :])
     assert out["after_bind"] == [], f"listener start imported {out['after_bind']}"
     assert out["native"] == {"native": True, "dashboard_loaded": False}
     assert out["rebind"] == 403
     assert out["before_http"] is False
     # Dashboard routes still answer on the same origin, behind the same Host guard.
     assert out["status"] == 200 and out["rebind_http"] == 400
-    assert out["after_http"] and out["runner_bound"] and out["token_withheld"] and out["unbound"]
+    assert (
+        out["after_http"]
+        and out["runner_bound"]
+        and out["token_withheld"]
+        and out["unbound"]
+    )

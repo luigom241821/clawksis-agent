@@ -18,8 +18,11 @@ def prepare_chat_messages(client, kwargs: dict) -> dict:
 
     base_url = str(getattr(client, "base_url", "") or "")
     messages = ChatCompletionsTransport().convert_messages(
-        shape_wire_carriers(kwargs["messages"], model=kwargs.get("model"), base_url=base_url),
-        model=kwargs.get("model"), base_url=base_url,
+        shape_wire_carriers(
+            kwargs["messages"], model=kwargs.get("model"), base_url=base_url
+        ),
+        model=kwargs.get("model"),
+        base_url=base_url,
     )
     return {**kwargs, "messages": messages}
 

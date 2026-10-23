@@ -15,16 +15,21 @@ logger = logging.getLogger("clawk_cli.update_cmd")
 def _reload_config_modules() -> None:
     """Historical updater hook; migration now belongs to fresh completion Python."""
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
 def _run_config_check_fresh() -> tuple:
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
-def _run_migrate_config_fresh(*, interactive: bool = False, quiet: bool = False) -> dict:
+def _run_migrate_config_fresh(
+    *, interactive: bool = False, quiet: bool = False
+) -> dict:
     from clawk_cli._old_updater import stop_for_relaunch
+
     stop_for_relaunch(incomplete=True)
 
 
@@ -43,18 +48,25 @@ def _migrate_sibling_profile_configs() -> list[tuple[str, int, int]]:
     ``clawk update`` still migrates it.
     """
     from clawk_cli.config import check_config_version, migrate_config
+
     migrated: list[tuple[str, int, int]] = []
-    with _best_effort('Sibling profile enumeration failed: %s'):
+    with _best_effort("Sibling profile enumeration failed: %s"):
         from clawk_constants import (
-            get_process_clawk_home, reset_clawk_home_override, set_clawk_home_override)
+            get_process_clawk_home,
+            reset_clawk_home_override,
+            set_clawk_home_override,
+        )
         from clawk_cli.backup import _sibling_profile_homes
+
         active_home = Path(get_process_clawk_home())
         for name, profile_home in _sibling_profile_homes(active_home):
             if not (profile_home / "config.yaml").is_file():
                 continue  # profile never configured — nothing to migrate
             token = set_clawk_home_override(profile_home)
             try:
-                current_ver, latest_ver = check_config_version(raise_on_parse_error=True)
+                current_ver, latest_ver = check_config_version(
+                    raise_on_parse_error=True
+                )
                 if current_ver >= latest_ver:
                     continue
                 migrate_config(interactive=False, quiet=True)
@@ -73,21 +85,25 @@ def _restore_snapshot_safety_nets(pre_update_snapshot_id) -> None:
     emptied by migrations/the desktop scheduler and protected model settings (model.provider /
     model.default / moa:) rewritten by Desktop repair cycles — for the active profile (from
     *pre_update_snapshot_id*) and every sibling profile (against ITS OWN snapshot)."""
+
     def _cron_line(r):
         return (
             f"cron/jobs.json lost jobs during this update — restored {r['job_count']} job(s) "
-            f"from pre-update snapshot {r['snapshot_id']}.")
+            f"from pre-update snapshot {r['snapshot_id']}."
+        )
 
     def _prompt_line(r):
         return (
             f"cron/jobs.json had agent-job prompt(s) replaced by the job name during this "
             f"update — restored {r['prompts']} prompt(s) from pre-update snapshot "
-            f"{r['snapshot_id']}.")
+            f"{r['snapshot_id']}."
+        )
 
     def _cfg_line(r):
         return (
             f"config.yaml user model settings were rewritten during this update — restored "
-            f"{', '.join(r['keys'])} from pre-update snapshot {r['snapshot_id']}.")
+            f"{', '.join(r['keys'])} from pre-update snapshot {r['snapshot_id']}."
+        )
 
     with _best_effort("Cron jobs auto-restore check failed: %s"):
         # Safety net: config-version migrations have been observed to leave cron/jobs.json valid-but-empty,
@@ -95,6 +111,7 @@ def _restore_snapshot_safety_nets(pre_update_snapshot_id) -> None:
         # with its own small set, causing partial loss (issue #52144). If the live file now has fewer jobs
         # than the pre-update snapshot, restore it and warn loudly.
         from clawk_cli.backup import restore_cron_jobs_if_emptied
+
         cron_restore = restore_cron_jobs_if_emptied(pre_update_snapshot_id)
         if cron_restore:
             print()
@@ -104,42 +121,62 @@ def _restore_snapshot_safety_nets(pre_update_snapshot_id) -> None:
         # with the job NAME while the count stayed identical, so the count-based net above
         # passed it undetected (issue #82990). Restore only the degraded prompt fields.
         from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_if_degraded
+
         prompt_restore = restore_cron_prompt_fields_if_degraded(pre_update_snapshot_id)
         if prompt_restore:
             print()
             print(f"  ⚠️  {_prompt_line(prompt_restore)}")
     with _best_effort("Config model-settings auto-restore check failed: %s"):
         from clawk_cli.backup import restore_config_model_settings_if_rewritten
+
         cfg_restore = restore_config_model_settings_if_rewritten(pre_update_snapshot_id)
         if cfg_restore:
             print()
             print(f"  ⚠️  {_cfg_line(cfg_restore)}")
-    with _best_effort('Sibling cron auto-restore check failed: %s'):
+    with _best_effort("Sibling cron auto-restore check failed: %s"):
         from clawk_cli.backup import restore_cron_jobs_all_profiles
+
         for _restored in restore_cron_jobs_all_profiles(_LAST_SIBLING_SNAPSHOTS):
             print()
             print(f"  ⚠️  Profile '{_restored['profile']}': {_cron_line(_restored)}")
-    with _best_effort('Sibling cron prompt-field auto-restore check failed: %s'):
-        from clawk_cli.backup_cron_prompts import restore_cron_prompt_fields_all_profiles
-        for _prompt_restored in restore_cron_prompt_fields_all_profiles(_LAST_SIBLING_SNAPSHOTS):
+    with _best_effort("Sibling cron prompt-field auto-restore check failed: %s"):
+        from clawk_cli.backup_cron_prompts import (
+            restore_cron_prompt_fields_all_profiles,
+        )
+
+        for _prompt_restored in restore_cron_prompt_fields_all_profiles(
+            _LAST_SIBLING_SNAPSHOTS
+        ):
             print()
-            print(f"  ⚠️  Profile '{_prompt_restored['profile']}': {_prompt_line(_prompt_restored)}")
-    with _best_effort('Sibling config auto-restore check failed: %s'):
+            print(
+                f"  ⚠️  Profile '{_prompt_restored['profile']}': {_prompt_line(_prompt_restored)}"
+            )
+    with _best_effort("Sibling config auto-restore check failed: %s"):
         from clawk_cli.backup import restore_config_model_settings_all_profiles
-        for _cfg_restored in restore_config_model_settings_all_profiles(_LAST_SIBLING_SNAPSHOTS):
+
+        for _cfg_restored in restore_config_model_settings_all_profiles(
+            _LAST_SIBLING_SNAPSHOTS
+        ):
             print()
-            print(f"  ⚠️  Profile '{_cfg_restored['profile']}': {_cfg_line(_cfg_restored)}")
+            print(
+                f"  ⚠️  Profile '{_cfg_restored['profile']}': {_cfg_line(_cfg_restored)}"
+            )
 
 
 def _ask_configure_new_options(*, assume_yes: bool, gateway_mode: bool) -> str:
     """The yes/no answer for "configure new options now?": "y" under --yes, the messenger's reply in
     gateway mode, "auto" (safe migrations only) when non-interactive, else ``input()``."""
     from clawk_cli.update_cmd import _gateway_prompt
+
     if assume_yes:
         print("  ℹ --yes: auto-applying config migration (skipping API-key prompts).")
         return "y"
     if gateway_mode:
-        return _gateway_prompt("Would you like to configure new options now? [Y/n]", "n").strip().lower()
+        return (
+            _gateway_prompt("Would you like to configure new options now? [Y/n]", "n")
+            .strip()
+            .lower()
+        )
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         print("  ℹ Non-interactive session — applying safe config migrations.")
         return "auto"
@@ -151,12 +188,16 @@ def _ask_configure_new_options(*, assume_yes: bool, gateway_mode: bool) -> str:
         # Non-UTF-8 locales / embedded terminals can make input() raise this.
         print(
             "  ⚠ Could not read input (encoding issue). Skipping. "
-            "Run 'clawk config migrate' manually to configure.")
+            "Run 'clawk config migrate' manually to configure."
+        )
         return "n"
 
 
 def _check_and_apply_config_migration(
-    *, assume_yes: bool = False, gateway_mode: bool = False, pre_update_snapshot_id: str | None = None
+    *,
+    assume_yes: bool = False,
+    gateway_mode: bool = False,
+    pre_update_snapshot_id: str | None = None,
 ) -> None:
     """Check/apply config migrations. Runs on EVERY completion path
     (post-pull, venv-repair, Node-deps repair on ``commit_count == 0``) so an interrupted update
@@ -166,12 +207,15 @@ def _check_and_apply_config_migration(
     """
     from clawk_cli.update_cmd import _migrate_sibling_profile_configs
     from clawk_cli.config import check_config_version, migrate_config
+
     print()
     print("→ Checking configuration for new options...")
     from clawk_cli.config import get_missing_env_vars, get_missing_config_fields
+
     # A config-check failure must not break an otherwise-successful update.
     try:
         from clawk_cli.config import get_missing_env_vars, get_missing_config_fields
+
         # Log, point at the manual command, and return. See #91360.
         missing_env = get_missing_env_vars(required_only=True)
         missing_config = get_missing_config_fields()
@@ -209,7 +253,9 @@ def _check_and_apply_config_migration(
             # Not a silent success: raised after the sibling migration and snapshot safety nets
             # below (independent of the active write, and the snapshot id is only in hand now), so
             # the caller's owed-step guard records ``config_migration`` and keeps the tail pending.
-            owed_error = RuntimeError(f"config format v{current_ver} → v{latest_ver} was not written: {_mig_err}")
+            owed_error = RuntimeError(
+                f"config format v{current_ver} → v{latest_ver} was not written: {_mig_err}"
+            )
             owed_error.__cause__ = _mig_err
     elif needs_migration:
         print()
@@ -222,7 +268,9 @@ def _check_and_apply_config_migration(
             _print_items(missing_config, "New options", "key")
 
         print()
-        response = _ask_configure_new_options(assume_yes=assume_yes, gateway_mode=gateway_mode)
+        response = _ask_configure_new_options(
+            assume_yes=assume_yes, gateway_mode=gateway_mode
+        )
         if response in {"", "y", "yes", "auto"}:
             print()
             # Gateway/--yes/non-interactive can't prompt for API keys; still run the
@@ -242,9 +290,11 @@ def _check_and_apply_config_migration(
 
     # The migration above touched only the active profile; run the same NON-INTERACTIVE
     # migration per sibling home via the context-local CLAWK_HOME override (never os.environ).
-    with _best_effort('Sibling config migration failed: %s'):
+    with _best_effort("Sibling config migration failed: %s"):
         for _name, _from_ver, _to_ver in _migrate_sibling_profile_configs():
-            print(f"  ✓ Profile '{_name}': config format updated (v{_from_ver} → v{_to_ver})")
+            print(
+                f"  ✓ Profile '{_name}': config format updated (v{_from_ver} → v{_to_ver})"
+            )
 
     _restore_snapshot_safety_nets(pre_update_snapshot_id)
     if owed_error is not None:

@@ -66,18 +66,25 @@ def _adapter(extra=None, descriptor=None, transport=None):
 
 
 class TestDescriptorBit:
-
     def test_from_json_reads_flag(self):
         payload = dict(
-            contract_version=1, platform="slack", label="Slack",
-            max_message_length=4000, supports_draft_streaming=False,
-            supports_edit=True, supports_threads=True,
-            markdown_dialect="mrkdwn", len_unit="chars",
+            contract_version=1,
+            platform="slack",
+            label="Slack",
+            max_message_length=4000,
+            supports_draft_streaming=False,
+            supports_edit=True,
+            supports_threads=True,
+            markdown_dialect="mrkdwn",
+            len_unit="chars",
             supports_block_formatting=True,
         )
-        assert CapabilityDescriptor.from_json(
-            json.dumps(payload)
-        ).supports_block_formatting is True
+        assert (
+            CapabilityDescriptor.from_json(
+                json.dumps(payload)
+            ).supports_block_formatting
+            is True
+        )
 
 
 class TestFormatHintsStamping:
@@ -179,9 +186,7 @@ class TestFormatHintsStamping:
         assert (interim.get("metadata") or {}).get("format_hints") == {
             "markdown_blocks": True
         }
-        seal = getattr(a, "seal_draft", None) or getattr(
-            a, "send_draft_final", None
-        )
+        seal = getattr(a, "seal_draft", None) or getattr(a, "send_draft_final", None)
         if seal is not None:
             await seal("D01", 7, code)
         else:
@@ -222,8 +227,10 @@ class TestMultiPlatformResolution:
             descriptors_by_platform={
                 "slack": _descriptor(supports_block_formatting=slack_capable),
                 "discord": _descriptor(
-                    platform="discord", label="Discord",
-                    markdown_dialect="markdown", max_message_length=2000,
+                    platform="discord",
+                    label="Discord",
+                    markdown_dialect="markdown",
+                    max_message_length=2000,
                     supports_block_formatting=discord_capable,
                 ),
             },
@@ -257,8 +264,10 @@ class TestMultiPlatformResolution:
         a = _adapter(
             extra={"slack": {"rich_blocks": True}},
             descriptor=_descriptor(
-                platform="discord", label="Discord",
-                markdown_dialect="markdown", max_message_length=2000,
+                platform="discord",
+                label="Discord",
+                markdown_dialect="markdown",
+                max_message_length=2000,
             ),
             transport=transport,
         )

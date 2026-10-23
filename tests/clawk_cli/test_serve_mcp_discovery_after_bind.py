@@ -33,12 +33,23 @@ def test_desktop_serve_arms_mcp_discovery_only_after_ready_sentinel(monkeypatch)
         "start_background_mcp_discovery",
         lambda *, logger, thread_name: order.append("discovery:" + thread_name),
     )
-    monkeypatch.setattr(web_server, "_write_machine_sentinel_line", lambda line: order.append("sentinel"))
-    monkeypatch.setattr(web_server_lifecycle, "_write_machine_sentinel_line", lambda line: order.append("sentinel"))
+    monkeypatch.setattr(
+        web_server,
+        "_write_machine_sentinel_line",
+        lambda line: order.append("sentinel"),
+    )
+    monkeypatch.setattr(
+        web_server_lifecycle,
+        "_write_machine_sentinel_line",
+        lambda line: order.append("sentinel"),
+    )
     _stub_uvicorn_run(monkeypatch)
 
     web_server.start_server(
-        host="127.0.0.1", port=0, open_browser=False, headless=True,
+        host="127.0.0.1",
+        port=0,
+        open_browser=False,
+        headless=True,
         start_mcp_discovery_after_bind=True,
     )
     # A headless `serve` announces BOTH ready tokens — neutral first, legacy
@@ -58,7 +69,10 @@ def test_desktop_serve_arms_mcp_discovery_only_after_ready_sentinel(monkeypatch)
     order.clear()
     _reset_discovery_state(monkeypatch)
     web_server.start_server(host="127.0.0.1", port=0, open_browser=False, headless=True)
-    assert order == ["sentinel", "sentinel"] and mcp_startup._mcp_discovery_deferred is None
+    assert (
+        order == ["sentinel", "sentinel"]
+        and mcp_startup._mcp_discovery_deferred is None
+    )
 
 
 def test_deferred_discovery_fires_once_and_is_idempotent(monkeypatch):
@@ -71,7 +85,9 @@ def test_deferred_discovery_fires_once_and_is_idempotent(monkeypatch):
     )
     log = logging.getLogger("test")
     mcp_startup.defer_background_mcp_discovery(logger=log, thread_name="t", delay=60)
-    mcp_startup.defer_background_mcp_discovery(logger=log, thread_name="t", delay=60)  # second arm is a no-op
+    mcp_startup.defer_background_mcp_discovery(
+        logger=log, thread_name="t", delay=60
+    )  # second arm is a no-op
     first = mcp_startup._mcp_discovery_deferred
     mcp_startup.start_deferred_mcp_discovery_now()
     mcp_startup.start_deferred_mcp_discovery_now()
@@ -86,8 +102,16 @@ def _stub_dashboard_runtime(monkeypatch):
     monkeypatch.setattr(main_mod, "_sync_bundled_skills_quietly", lambda: None)
     monkeypatch.setitem(sys.modules, "fastapi", types.SimpleNamespace())
     monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace())
-    monkeypatch.setitem(sys.modules, "clawk_logging", types.SimpleNamespace(setup_logging=lambda **_k: None))
-    monkeypatch.setitem(sys.modules, "clawk_cli.plugins", types.SimpleNamespace(discover_plugins=lambda: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_logging",
+        types.SimpleNamespace(setup_logging=lambda **_k: None),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.plugins",
+        types.SimpleNamespace(discover_plugins=lambda: None),
+    )
     return main_mod
 
 
@@ -98,10 +122,14 @@ def test_standalone_dashboard_boot_arms_discovery_without_starting_it(monkeypatc
     main_mod = _stub_dashboard_runtime(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(
-        mcp_startup, "start_background_mcp_discovery", lambda *, logger, thread_name: calls.append(thread_name)
+        mcp_startup,
+        "start_background_mcp_discovery",
+        lambda *, logger, thread_name: calls.append(thread_name),
     )
 
-    after_bind = main_mod._dashboard_prepare_runtime(types.SimpleNamespace(skip_build=True), False)
+    after_bind = main_mod._dashboard_prepare_runtime(
+        types.SimpleNamespace(skip_build=True), False
+    )
 
     assert after_bind is False and calls == []
     # armed, not started: firing on demand runs it exactly once
@@ -117,10 +145,14 @@ def test_first_gateway_ws_client_starts_the_armed_discovery_once(monkeypatch):
     _reset_discovery_state(monkeypatch)
     calls: list[str] = []
     monkeypatch.setattr(
-        mcp_startup, "start_background_mcp_discovery", lambda *, logger, thread_name: calls.append(thread_name)
+        mcp_startup,
+        "start_background_mcp_discovery",
+        lambda *, logger, thread_name: calls.append(thread_name),
     )
     mcp_startup.defer_background_mcp_discovery(
-        logger=logging.getLogger("test"), thread_name="dashboard-mcp-discovery", delay=None
+        logger=logging.getLogger("test"),
+        thread_name="dashboard-mcp-discovery",
+        delay=None,
     )
     assert calls == []
 

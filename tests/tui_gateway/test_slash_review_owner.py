@@ -13,9 +13,14 @@ from tui_gateway.transport import StdioTransport
 
 def _live_session(agent):
     return {
-        "agent": agent, "session_key": "review-key", "history": [{"role": "user", "content": "hi"}],
-        "history_lock": threading.Lock(), "running": False, "transport": StdioTransport(lambda: None, threading.Lock()),
-        "cwd": "", "source": "desktop",
+        "agent": agent,
+        "session_key": "review-key",
+        "history": [{"role": "user", "content": "hi"}],
+        "history_lock": threading.Lock(),
+        "running": False,
+        "transport": StdioTransport(lambda: None, threading.Lock()),
+        "cwd": "",
+        "source": "desktop",
     }
 
 
@@ -27,6 +32,7 @@ def test_slash_review_dispatches_under_the_parent_session_identity(monkeypatch):
 
     def fake_start_review(agent, snapshot, prompt):
         from gateway.session_context import get_session_env
+
         seen["ui_session_id"] = get_session_env("CLAWK_UI_SESSION_ID", "")
         seen["authority"] = server._current_session_steer_authority(sid)
         return {"status": "dispatched", "delegation_id": "deleg_x"}
@@ -39,7 +45,10 @@ def test_slash_review_dispatches_under_the_parent_session_identity(monkeypatch):
         ):
             out = server._live_slash_command_output(sid, session, "review", "")
         from gateway.session_context import get_session_env
-        assert get_session_env("CLAWK_UI_SESSION_ID", "") == ""  # scope cleared after dispatch
+
+        assert (
+            get_session_env("CLAWK_UI_SESSION_ID", "") == ""
+        )  # scope cleared after dispatch
         assert server._current_runtime_session_record.get() is None
     finally:
         server.reset_transport(token)

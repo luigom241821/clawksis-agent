@@ -1,4 +1,5 @@
 """Resolve promoted source releases, never infer publication from a Git tag."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,7 +18,8 @@ _PUBLIC_BASE = "https://clawk-assets.nousresearch.com"
 OFFICIAL_REPOSITORY = "samuelgradientai-sys/clawksis-agent"
 _GITHUB_ORIGIN = re.compile(
     r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
-    r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$", re.IGNORECASE,
+    r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$",
+    re.IGNORECASE,
 )
 _SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -28,9 +30,15 @@ def source_repository(git_cmd=None, cwd=None) -> str:
         from clawk_cli.source_check import source_git_env
 
         result = subprocess.run(
-            [*git_cmd, "config", "--get", "remote.origin.url"], cwd=cwd,
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-            stdin=subprocess.DEVNULL, env=source_git_env(),
+            [*git_cmd, "config", "--get", "remote.origin.url"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            env=source_git_env(),
             check=False,
         )
         match = _GITHUB_ORIGIN.fullmatch(result.stdout.strip())
@@ -60,9 +68,15 @@ class SourceTarget:
     @property
     def label(self) -> str:
         if self.ahead:
-            return (f"{self.channel} v{self.version}; this checkout is newer and waits for the next release"
-                    " (`clawk update --set-channel main` follows every commit)")
-        return f"{self.channel} v{self.version} ({self.commit[:12]})" if self.commit else self.channel
+            return (
+                f"{self.channel} v{self.version}; this checkout is newer and waits for the next release"
+                " (`clawk update --set-channel main` follows every commit)"
+            )
+        return (
+            f"{self.channel} v{self.version} ({self.commit[:12]})"
+            if self.commit
+            else self.channel
+        )
 
 
 def _resolve_channel(name: str, repository: str):
@@ -78,8 +92,9 @@ def _resolve_channel(name: str, repository: str):
     return ChannelReader(_PUBLIC_BASE, repository=repository).resolve(name)
 
 
-def resolve_source_target(channel: str, git_cmd=None, cwd=None, *, repository=None,
-                          forward_only: bool = False) -> SourceTarget:
+def resolve_source_target(
+    channel: str, git_cmd=None, cwd=None, *, repository=None, forward_only: bool = False
+) -> SourceTarget:
     """Resolve a subscription: stable from GitHub releases, main from the git branch,
     preview channels (e.g. ``pm-preview``) through their R2 records.
 
@@ -106,9 +121,17 @@ def _probe(git_cmd, cwd, *args):
 
     try:
         return subprocess.run(
-            [*git_cmd, *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=10, stdin=subprocess.DEVNULL, env=source_git_env(),
-            check=False)
+            [*git_cmd, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            env=source_git_env(),
+            check=False,
+        )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("git %s did not answer: %s", " ".join(args), exc)
         return None
@@ -123,8 +146,16 @@ def _head_containing(git_cmd, cwd, commit: str, repository: str) -> str | None:
     from clawk_cli.source_check import _github_compare, source_git_env
 
     head = subprocess.run(
-        [*git_cmd, "rev-parse", "HEAD"], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=10, stdin=subprocess.DEVNULL, env=source_git_env(), check=False,
+        [*git_cmd, "rev-parse", "HEAD"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+        stdin=subprocess.DEVNULL,
+        env=source_git_env(),
+        check=False,
     ).stdout.strip()
     if not _SHA.fullmatch(head):
         return None
@@ -141,7 +172,9 @@ def _head_containing(git_cmd, cwd, commit: str, repository: str) -> str | None:
     return None if status in ("behind", "diverged") else head
 
 
-def _resolve_source_target(channel: str, git_cmd=None, cwd=None, *, repository=None) -> SourceTarget:
+def _resolve_source_target(
+    channel: str, git_cmd=None, cwd=None, *, repository=None
+) -> SourceTarget:
     from clawk_cli.release_channels import validate_name
 
     validate_name(channel)
@@ -160,7 +193,9 @@ def _resolve_source_target(channel: str, git_cmd=None, cwd=None, *, repository=N
     destination = validate_name(terminal["name"])
     if terminal["policy"] == "source-branch":
         if resolved.requested["state"] == "retired":
-            raise ValueError("Source retirement requires a published destination commit")
+            raise ValueError(
+                "Source retirement requires a published destination commit"
+            )
         delivery = terminal["delivery"]
         if delivery["kind"] != "source-branch":
             raise ValueError("Channel has no source-branch delivery")
@@ -174,8 +209,14 @@ def _resolve_source_target(channel: str, git_cmd=None, cwd=None, *, repository=N
         raise ValueError("Channel build has no exact source commit")
     if resolved.requested["state"] == "retired":
         _refuse_retirement_downgrade(request, terminal, git_cmd, cwd)
-    return SourceTarget(channel, destination, repository, commit=commit,
-                        version=request["sourceVersion"], build_id=request["buildId"])
+    return SourceTarget(
+        channel,
+        destination,
+        repository,
+        commit=commit,
+        version=request["sourceVersion"],
+        build_id=request["buildId"],
+    )
 
 
 def _describe_release_failure(failure: BaseException) -> str:
@@ -184,7 +225,9 @@ def _describe_release_failure(failure: BaseException) -> str:
         from clawk_cli.github_api import describe_github_failure
 
         # The request that failed, not the configuration: a rejected token retries anonymously.
-        return describe_github_failure(failure, authenticated=getattr(failure, "clawk_authenticated", False))
+        return describe_github_failure(
+            failure, authenticated=getattr(failure, "clawk_authenticated", False)
+        )
     return f"No published stable release could be verified: {failure}"
 
 
@@ -194,11 +237,19 @@ def _resolve_stable(repository: str, git_cmd=None, cwd=None) -> SourceTarget:
     No R2 record or pointer is consulted; publishing the release is the only promotion.
     """
     try:
-        tag, commit = _resolve_release("stable", git_cmd, cwd, repository=repository, pointer=False)
+        tag, commit = _resolve_release(
+            "stable", git_cmd, cwd, repository=repository, pointer=False
+        )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         logger.warning("Could not resolve the stable source release: %s", exc)
         raise ValueError(_describe_release_failure(exc)) from exc
-    return SourceTarget("stable", "stable", repository, commit=commit, version=str(tag).removeprefix("v"))
+    return SourceTarget(
+        "stable",
+        "stable",
+        repository,
+        commit=commit,
+        version=str(tag).removeprefix("v"),
+    )
 
 
 def _refuse_retirement_downgrade(request: dict, terminal: dict, git_cmd, cwd) -> None:
@@ -212,45 +263,80 @@ def _refuse_retirement_downgrade(request: dict, terminal: dict, git_cmd, cwd) ->
     if version_file.exists():
         with version_file.open("rb") as file:
             project = tomllib.load(file).get("project")
-        installed_version = project.get("version") if isinstance(project, dict) else None
-        if not isinstance(installed_version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", installed_version, re.ASCII):
-            raise ValueError("Source retirement cannot verify the installed source version")
-        if tuple(map(int, installed_version.split("."))) > tuple(map(int, request["sourceVersion"].split("."))):
-            raise ValueError("Source retirement would downgrade a newer source version; select the destination channel explicitly")
+        installed_version = (
+            project.get("version") if isinstance(project, dict) else None
+        )
+        if not isinstance(installed_version, str) or not re.fullmatch(
+            r"\d+\.\d+\.\d+", installed_version, re.ASCII
+        ):
+            raise ValueError(
+                "Source retirement cannot verify the installed source version"
+            )
+        if tuple(map(int, installed_version.split("."))) > tuple(
+            map(int, request["sourceVersion"].split("."))
+        ):
+            raise ValueError(
+                "Source retirement would downgrade a newer source version; select the destination channel explicitly"
+            )
     if git_cmd is not None:
         from clawk_cli.source_check import source_git_env
 
         result = subprocess.run(
-            [*git_cmd, "rev-list", "--ancestry-path", f"{request['commit']}..HEAD"], cwd=cwd,
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-            stdin=subprocess.DEVNULL, env=source_git_env(),
+            [*git_cmd, "rev-list", "--ancestry-path", f"{request['commit']}..HEAD"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+            env=source_git_env(),
             check=False,
         )
         # The target need not exist locally before the updater's fetch. When it
         # does, any descendants prove that this pinned build would roll us back.
         if result.returncode == 0 and result.stdout.strip():
-            raise ValueError("Source retirement would downgrade a newer source commit; select the destination channel explicitly")
+            raise ValueError(
+                "Source retirement would downgrade a newer source commit; select the destination channel explicitly"
+            )
         if terminal["head"]["sequence"] > request["sequence"]:
             # Shallow checkouts may lack the qualified commit, even when HEAD is
             # today's stable build. Read it with the protocol's full digest checks.
-            current_manifest = _resolve_channel(terminal["name"], request["repository"]).manifest
+            current_manifest = _resolve_channel(
+                terminal["name"], request["repository"]
+            ).manifest
             if current_manifest is None:
-                raise ValueError("Source retirement cannot verify the current destination build")
+                raise ValueError(
+                    "Source retirement cannot verify the current destination build"
+                )
             current = current_manifest["request"]
             installed = subprocess.run(
-                [*git_cmd, "rev-parse", "HEAD"], cwd=cwd, check=True,
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
-                stdin=subprocess.DEVNULL, env=source_git_env(),
+                [*git_cmd, "rev-parse", "HEAD"],
+                cwd=cwd,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
+                stdin=subprocess.DEVNULL,
+                env=source_git_env(),
             ).stdout.strip()
             if installed == current["commit"] and installed != request["commit"]:
-                raise ValueError("Source retirement would downgrade the newer destination build; select the destination channel explicitly")
+                raise ValueError(
+                    "Source retirement would downgrade the newer destination build; select the destination channel explicitly"
+                )
 
 
 def _read(url: str, *, missing_ok: bool = False) -> str | None:
-    request = urllib.request.Request(url, headers={
-        "User-Agent": "clawk-update", "Cache-Control": "no-cache",
-        "Accept": "application/json, text/html",
-    })
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "clawk-update",
+            "Cache-Control": "no-cache",
+            "Accept": "application/json, text/html",
+        },
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return response.read(2 * 1024 * 1024).decode("utf-8-sig")
@@ -274,15 +360,20 @@ class _BuildMetadata(HTMLParser):
 def _valid_tag(tag, channel: str) -> bool:
     if not isinstance(tag, str):
         return False
-    return bool(STABLE_TAG_RE.fullmatch(tag)) if channel == "stable" else (
-        tag == tag.strip() and is_canary_tag(tag)
+    return (
+        bool(STABLE_TAG_RE.fullmatch(tag))
+        if channel == "stable"
+        else (tag == tag.strip() and is_canary_tag(tag))
     )
 
 
 def _published(release, channel: str) -> bool:
-    return (isinstance(release, dict) and release.get("draft") is False
-            and release.get("prerelease") is (channel == "canary")
-            and _valid_tag(release.get("tag_name"), channel))
+    return (
+        isinstance(release, dict)
+        and release.get("draft") is False
+        and release.get("prerelease") is (channel == "canary")
+        and _valid_tag(release.get("tag_name"), channel)
+    )
 
 
 def _json(url: str):
@@ -320,11 +411,17 @@ def _release_pointer(channel: str) -> tuple[str | None, str | None]:
     # Stable's completion job writes this before publishing the GitHub draft.
     # Publication is checked separately, so that interval fails closed.
     if channel == "stable":
-        text = _read(f"{_PUBLIC_BASE}/releases/stable/release-candidates.json", missing_ok=True)
+        text = _read(
+            f"{_PUBLIC_BASE}/releases/stable/release-candidates.json", missing_ok=True
+        )
         if text is not None:
             data = json.loads(text)
-            if (not isinstance(data, dict) or not _valid_tag(data.get("tag"), channel)
-                    or not isinstance(data.get("commit"), str) or not _SHA.fullmatch(data["commit"])):
+            if (
+                not isinstance(data, dict)
+                or not _valid_tag(data.get("tag"), channel)
+                or not isinstance(data.get("commit"), str)
+                or not _SHA.fullmatch(data["commit"])
+            ):
                 raise ValueError("Invalid stable release pointer")
             return data["tag"], data["commit"]
     text = _read(f"{_PUBLIC_BASE}/releases/{channel}/index.html", missing_ok=True)
@@ -337,15 +434,19 @@ def _release_pointer(channel: str) -> tuple[str | None, str | None]:
     return page.tags[0], None
 
 
-def _resolve_release(channel: str, git_cmd=None, cwd=None, *, repository=None,
-                     pointer: bool = True) -> tuple[str, str]:
+def _resolve_release(
+    channel: str, git_cmd=None, cwd=None, *, repository=None, pointer: bool = True
+) -> tuple[str, str]:
     """``resolve_source_release`` that raises the failure instead of returning ``(None, None)``."""
     if channel not in ("stable", "canary"):
         raise ValueError(f"Not a release channel: {channel}")
     repository = repository or source_repository(git_cmd, cwd)
     base = f"https://api.github.com/repos/{repository}"
-    tag, pinned_sha = (_release_pointer(channel)
-                       if pointer and repository.lower() == OFFICIAL_REPOSITORY.lower() else (None, None))
+    tag, pinned_sha = (
+        _release_pointer(channel)
+        if pointer and repository.lower() == OFFICIAL_REPOSITORY.lower()
+        else (None, None)
+    )
     if tag is None:
         release = _published_fallback(channel, base)
         tag = release["tag_name"]
@@ -363,21 +464,33 @@ def _resolve_release(channel: str, git_cmd=None, cwd=None, *, repository=None,
         ref = f"refs/tags/{tag}"
         result = subprocess.run(
             [*git_cmd, "ls-remote", "--tags", "origin", ref, ref + "^{}"],
-            cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            check=True, timeout=60, stdin=subprocess.DEVNULL,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+            timeout=60,
+            stdin=subprocess.DEVNULL,
             env=source_git_env(),
         )
-        refs = dict((parts[1], parts[0]) for line in result.stdout.splitlines()
-                    if len(parts := line.split()) == 2)
+        refs = dict(
+            (parts[1], parts[0])
+            for line in result.stdout.splitlines()
+            if len(parts := line.split()) == 2
+        )
         if refs.get(ref + "^{}", refs.get(ref)) != sha:
-            raise ValueError(f"Origin tag {tag} does not match the published release commit")
+            raise ValueError(
+                f"Origin tag {tag} does not match the published release commit"
+            )
     if pinned_sha is not None and sha != pinned_sha:
         raise ValueError(f"Release {tag} no longer matches its published commit")
     return tag, sha
 
 
-def resolve_source_release(channel: str, git_cmd=None, cwd=None, *, repository=None,
-                           pointer: bool = True) -> tuple[str | None, str | None]:
+def resolve_source_release(
+    channel: str, git_cmd=None, cwd=None, *, repository=None, pointer: bool = True
+) -> tuple[str | None, str | None]:
     """Read published stable/canary release metadata (not channel discovery).
 
     The source updater's ``stable`` reads it with ``pointer=False``: GitHub's latest
@@ -388,7 +501,9 @@ def resolve_source_release(channel: str, git_cmd=None, cwd=None, *, repository=N
     resolve the same tag through GitHub's commit endpoint.
     """
     try:
-        return _resolve_release(channel, git_cmd, cwd, repository=repository, pointer=pointer)
+        return _resolve_release(
+            channel, git_cmd, cwd, repository=repository, pointer=pointer
+        )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         logger.warning("Could not resolve the %s source release: %s", channel, exc)
         return None, None

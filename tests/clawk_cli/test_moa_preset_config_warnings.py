@@ -3,7 +3,9 @@
 from clawk_cli import config as clawk_config
 
 
-def test_missing_config_fields_ignores_user_named_presets_but_checks_schema_options(monkeypatch):
+def test_missing_config_fields_ignores_user_named_presets_but_checks_schema_options(
+    monkeypatch,
+):
     """Custom preset names must not be compared against the built-in ``default`` name."""
     monkeypatch.setattr(
         clawk_config,

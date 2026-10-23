@@ -11,8 +11,12 @@ import re
 from typing import Any, Callable, Optional
 
 from agent.reasoning_effort import (
-    CODEX_ASTRA_EFFORTS, CODEX_LEGACY_EFFORTS,
-    XAI_GROK46_EFFORTS, XAI_LEGACY_EFFORTS, clamp_effort, is_astra_model,
+    CODEX_ASTRA_EFFORTS,
+    CODEX_LEGACY_EFFORTS,
+    XAI_GROK46_EFFORTS,
+    XAI_LEGACY_EFFORTS,
+    clamp_effort,
+    is_astra_model,
     # Same declared vocabulary + shared clamp as the main Codex transport (agent.reasoning_effort):
     # per-model — "max" availability varies; "minimal"/"ultra" clamp to a listed level.
     codex_supported_efforts,
@@ -52,7 +56,12 @@ def _bounded_prompt_cache_key(value: Any) -> Optional[str]:
     key = "" if value is None else str(value).strip()
     if not key:
         return None
-    return key if len(key) <= 64 else "pck_" + hashlib.sha256(key.encode("utf-8", errors="replace")).hexdigest()[:24]
+    return (
+        key
+        if len(key) <= 64
+        else "pck_"
+        + hashlib.sha256(key.encode("utf-8", errors="replace")).hexdigest()[:24]
+    )
 
 
 def _bound_prompt_cache_key_field(container: Any) -> None:
@@ -68,7 +77,11 @@ def _bound_prompt_cache_key_field(container: Any) -> None:
 def _merge_extra_headers(kwargs: dict[str, Any], **headers: str) -> None:
     """Merge ``headers`` into a str-coerced copy of ``kwargs['extra_headers']`` (SDK kwarg -> HTTP headers)."""
     existing = kwargs.get("extra_headers")
-    merged = {str(k): str(v) for k, v in existing.items() if k and v is not None} if isinstance(existing, dict) else {}
+    merged = (
+        {str(k): str(v) for k, v in existing.items() if k and v is not None}
+        if isinstance(existing, dict)
+        else {}
+    )
     merged.update(headers)
     kwargs["extra_headers"] = merged
 
@@ -103,7 +116,11 @@ _RESERVED_TOOL_ALIAS_PREFIX = "clawk_"
 # built a request; real requests carry request-local ``_last_wire_aliases``.
 _LEGACY_ALIAS_FALLBACK = {
     f"{_RESERVED_TOOL_ALIAS_PREFIX}{name}": name
-    for name in (*_OPENCODE_RESERVED_TOOL_NAMES, *_PERPLEXITY_RESERVED_TOOL_NAMES, *_XAI_RESERVED_TOOL_NAMES)
+    for name in (
+        *_OPENCODE_RESERVED_TOOL_NAMES,
+        *_PERPLEXITY_RESERVED_TOOL_NAMES,
+        *_XAI_RESERVED_TOOL_NAMES,
+    )
 }
 _LEGACY_ALIAS_FALLBACK[_XAI_CLIENT_WEB_SEARCH_ALIAS] = "web_search"
 
@@ -120,7 +137,10 @@ def _is_opencode_responses_backend(params: dict[str, Any]) -> bool:
     try:
         from utils import base_url_hostname
 
-        return base_url_hostname(str(params.get("base_url") or "")).lower() == "opencode.ai"
+        return (
+            base_url_hostname(str(params.get("base_url") or "")).lower()
+            == "opencode.ai"
+        )
     except Exception:
         return False
 
@@ -130,13 +150,17 @@ def _is_perplexity_responses_backend(params: dict[str, Any]) -> bool:
     try:
         from utils import base_url_hostname
 
-        return base_url_hostname(str(params.get("base_url") or "")).lower() == "api.perplexity.ai"
+        return (
+            base_url_hostname(str(params.get("base_url") or "")).lower()
+            == "api.perplexity.ai"
+        )
     except Exception:
         return False
 
 
 def _alias_reserved_tools(
-    response_tools: list[dict[str, Any]], reserved_names: tuple[str, ...],
+    response_tools: list[dict[str, Any]],
+    reserved_names: tuple[str, ...],
     name_of: Callable[[dict], Any] = lambda t: t.get("name"),
     rename: Callable[[dict, str], dict] = lambda t, alias: {**t, "name": alias},
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
@@ -147,7 +171,11 @@ def _alias_reserved_tools(
     """
     rewritten: list[dict[str, Any]] = []
     alias_map: dict[str, str] = {}
-    taken = {name_of(tool) for tool in response_tools if isinstance(tool, dict) and name_of(tool)}
+    taken = {
+        name_of(tool)
+        for tool in response_tools
+        if isinstance(tool, dict) and name_of(tool)
+    }
     for tool in response_tools:
         name = name_of(tool) if isinstance(tool, dict) else None
         if name not in reserved_names:
@@ -194,7 +222,10 @@ def _reserves_tool_search(params: dict[str, Any], is_xai_responses: bool) -> boo
     try:
         from utils import base_url_hostname
 
-        return base_url_hostname(str(params.get("base_url") or "")).lower() in _OPENAI_RESPONSES_HOSTS
+        return (
+            base_url_hostname(str(params.get("base_url") or "")).lower()
+            in _OPENAI_RESPONSES_HOSTS
+        )
     except Exception:
         return False
 
@@ -224,7 +255,10 @@ def _openai_prefers_native_web_search() -> bool:
 
 
 def _alias_wire_tools(
-    response_tools: Any, params: dict[str, Any], is_xai_responses: bool, is_codex_backend: bool = False,
+    response_tools: Any,
+    params: dict[str, Any],
+    is_xai_responses: bool,
+    is_codex_backend: bool = False,
 ) -> tuple[Any, dict[str, str]]:
     """Apply provider-reserved tool-name aliasing; returns ``(tools, {alias: original})`` for THIS request.
 
@@ -239,30 +273,49 @@ def _alias_wire_tools(
     def is_client_web_search(t: Any) -> bool:
         return isinstance(t, dict) and t.get("name") == "web_search"
 
-    if is_xai_responses and response_tools and any(is_client_web_search(t) for t in response_tools):
+    if (
+        is_xai_responses
+        and response_tools
+        and any(is_client_web_search(t) for t in response_tools)
+    ):
         if _xai_prefers_native_web_search():
-            response_tools = [t for t in response_tools if not is_client_web_search(t)] + [{"type": "web_search"}]
+            response_tools = [
+                t for t in response_tools if not is_client_web_search(t)
+            ] + [{"type": "web_search"}]
         else:
             response_tools = [
-                {**t, "name": _XAI_CLIENT_WEB_SEARCH_ALIAS} if is_client_web_search(t) else t for t in response_tools
+                {**t, "name": _XAI_CLIENT_WEB_SEARCH_ALIAS}
+                if is_client_web_search(t)
+                else t
+                for t in response_tools
             ]
             wire_aliases[_XAI_CLIENT_WEB_SEARCH_ALIAS] = "web_search"
     # OpenAI Codex: the Responses endpoint exposes the same server-executed ``web_search``,
     # and a client-side function of that name collides with it the same way. Unlike xAI there
     # is no alias fallback: when the user has not selected ``openai-native`` we leave the
     # client tool untouched, so an endpoint that cannot host the built-in never breaks.
-    if is_codex_backend and response_tools and any(is_client_web_search(t) for t in response_tools):
+    if (
+        is_codex_backend
+        and response_tools
+        and any(is_client_web_search(t) for t in response_tools)
+    ):
         if _openai_prefers_native_web_search():
-            response_tools = [t for t in response_tools if not is_client_web_search(t)] + [{"type": "web_search"}]
+            response_tools = [
+                t for t in response_tools if not is_client_web_search(t)
+            ] + [{"type": "web_search"}]
     # OpenCode Responses backends reserve web_search / search_files as function names (HTTP 400 "custom
     # function name 'X' is reserved", #85589). Alias them on the wire; normalize_response maps them back.
     if response_tools and _is_opencode_responses_backend(params):
-        response_tools, _oc_aliases = _alias_reserved_tools(response_tools, _OPENCODE_RESERVED_TOOL_NAMES)
+        response_tools, _oc_aliases = _alias_reserved_tools(
+            response_tools, _OPENCODE_RESERVED_TOOL_NAMES
+        )
         wire_aliases.update(_oc_aliases)
     # Perplexity's Agent API reserves the same names as server-side tools.
     # Keep Clawksis's client-side functions available under wire aliases.
     if response_tools and _is_perplexity_responses_backend(params):
-        response_tools, _pplx_aliases = _alias_reserved_tools(response_tools, _PERPLEXITY_RESERVED_TOOL_NAMES)
+        response_tools, _pplx_aliases = _alias_reserved_tools(
+            response_tools, _PERPLEXITY_RESERVED_TOOL_NAMES
+        )
         wire_aliases.update(_pplx_aliases)
     # xAI server-side web search vs Clawksis web providers. grok models on xAI's /v1/responses surface have a
     # *native*, server-executed web search. A client-side function literally named ``web_search`` collides
@@ -279,7 +332,9 @@ def _alias_wire_tools(
     # ``normalize_response`` applies only to aliases that were actually sent (never to a real tool that
     # merely shares an alias-shaped name).
     if response_tools and _reserves_tool_search(params, is_xai_responses):
-        response_tools, _xai_aliases = _alias_reserved_tools(response_tools, _XAI_RESERVED_TOOL_NAMES)
+        response_tools, _xai_aliases = _alias_reserved_tools(
+            response_tools, _XAI_RESERVED_TOOL_NAMES
+        )
         wire_aliases.update(_xai_aliases)
     return response_tools, wire_aliases
 
@@ -315,7 +370,9 @@ def _resolve_reasoning(model: str, params: dict[str, Any]) -> tuple[Any, bool]:
         from agent.model_metadata import is_grok_46_family
 
         # Grok 4.6 accepts xhigh; older Grok tops out at high.
-        supported = XAI_GROK46_EFFORTS if is_grok_46_family(model) else XAI_LEGACY_EFFORTS
+        supported = (
+            XAI_GROK46_EFFORTS if is_grok_46_family(model) else XAI_LEGACY_EFFORTS
+        )
     else:
         base_url = params.get("base_url")
         is_codex_backend = params.get("is_codex_backend") is True
@@ -324,9 +381,16 @@ def _resolve_reasoning(model: str, params: dict[str, Any]) -> tuple[Any, bool]:
         # for a ``custom:`` entry that merely points at api.openai.com.
         declared = None
         if not (is_codex_backend or _is_openai_api_origin(base_url)):
-            declared = _profile_declared_efforts(params.get("provider"), model, base_url)
-        supported = declared if declared is not None else _codex_efforts_for_route(
-            model, base_url, is_codex_backend=is_codex_backend)
+            declared = _profile_declared_efforts(
+                params.get("provider"), model, base_url
+            )
+        supported = (
+            declared
+            if declared is not None
+            else _codex_efforts_for_route(
+                model, base_url, is_codex_backend=is_codex_backend
+            )
+        )
         if not supported:
             return None, False
     if not reasoning_enabled:
@@ -337,16 +401,26 @@ def _resolve_reasoning(model: str, params: dict[str, Any]) -> tuple[Any, bool]:
             logger.warning(
                 "reasoning_effort: none cannot be sent for %s — its route accepts only %s, so the model's "
                 "default effort stays on (an omitted reasoning field does not disable it).",
-                model, ", ".join(str(level) for level in supported),
+                model,
+                ", ".join(str(level) for level in supported),
             )
         return ("none" if has_none else None), False
     return clamp_effort(reasoning_effort, supported), reasoning_enabled
 
 
 _EXTENDED_PROMPT_CACHE_MODELS = (
-    "gpt-5.5-pro", "gpt-5.5", "gpt-5.4", "gpt-5.2",
-    "gpt-5.1-codex-max", "gpt-5.1-codex-mini", "gpt-5.1-chat-latest", "gpt-5.1-codex", "gpt-5.1",
-    "gpt-5-codex", "gpt-5", "gpt-4.1",
+    "gpt-5.5-pro",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.2",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+    "gpt-5.1-chat-latest",
+    "gpt-5.1-codex",
+    "gpt-5.1",
+    "gpt-5-codex",
+    "gpt-5",
+    "gpt-4.1",
 )
 _EXTENDED_PROMPT_CACHE_MODEL_RE = re.compile(
     rf"(?:^|[./:])(?:{'|'.join(re.escape(name) for name in _EXTENDED_PROMPT_CACHE_MODELS)})"
@@ -354,7 +428,9 @@ _EXTENDED_PROMPT_CACHE_MODEL_RE = re.compile(
 )
 
 
-def _default_prompt_cache_retention_for_request(model: str, base_url: Any) -> Optional[str]:
+def _default_prompt_cache_retention_for_request(
+    model: str, base_url: Any
+) -> Optional[str]:
     """Return ``24h`` for supported hosts/models (Bedrock Mantle, Meta)."""
     from utils import base_url_hostname
 
@@ -368,7 +444,12 @@ def _default_prompt_cache_retention_for_request(model: str, base_url: Any) -> Op
     if hostname == "api.meta.ai":
         return "24h"
     parts = hostname.split(".")
-    is_bedrock_mantle = len(parts) == 4 and parts[0] == "bedrock-mantle" and bool(parts[1]) and parts[2:] == ["api", "aws"]
+    is_bedrock_mantle = (
+        len(parts) == 4
+        and parts[0] == "bedrock-mantle"
+        and bool(parts[1])
+        and parts[2:] == ["api", "aws"]
+    )
     if not is_bedrock_mantle:
         return None
     normalized = str(model or "").strip().lower().replace("_", "-")
@@ -387,7 +468,9 @@ def _is_official_openai_responses_route(model: Any, base_url: Any) -> bool:
     return is_astra_model(model) and _is_openai_api_origin(base_url)
 
 
-def _codex_efforts_for_route(model: Any, base_url: Any, *, is_codex_backend: bool = False) -> tuple[str, ...]:
+def _codex_efforts_for_route(
+    model: Any, base_url: Any, *, is_codex_backend: bool = False
+) -> tuple[str, ...]:
     """Effort vocabulary for a Responses route; ``()`` when the model takes no ``reasoning`` field at all.
 
     Keeps Astra's new vocabulary off unrelated Responses-compatible endpoints, and sends nothing for the
@@ -406,7 +489,9 @@ def _codex_efforts_for_route(model: Any, base_url: Any, *, is_codex_backend: boo
     return codex_supported_efforts(str(model or ""))
 
 
-def _sanitize_astra_request_kwargs(kwargs: dict[str, Any], model: Any, base_url: Any) -> None:
+def _sanitize_astra_request_kwargs(
+    kwargs: dict[str, Any], model: Any, base_url: Any
+) -> None:
     """Astra's official-API contract, applied AFTER ``request_overrides`` so an override can't put a
     rejected field back on the wire: ``reasoning.effort`` is ``low..max`` only (``none``/``minimal``
     400), sampling and logprob knobs are rejected, and cache lifetime is fixed server-side (the
@@ -417,15 +502,27 @@ def _sanitize_astra_request_kwargs(kwargs: dict[str, Any], model: Any, base_url:
     reasoning = kwargs.get("reasoning")
     if isinstance(reasoning, dict):
         requested = str(reasoning.get("effort") or "").strip().lower()
-        reasoning["effort"] = clamp_effort(requested, CODEX_ASTRA_EFFORTS) if requested else "low"
-    for key in ("temperature", "top_p", "top_logprobs", "logprobs", "prompt_cache_retention"):
+        reasoning["effort"] = (
+            clamp_effort(requested, CODEX_ASTRA_EFFORTS) if requested else "low"
+        )
+    for key in (
+        "temperature",
+        "top_p",
+        "top_logprobs",
+        "logprobs",
+        "prompt_cache_retention",
+    ):
         kwargs.pop(key, None)
     include = kwargs.get("include")
     if isinstance(include, list):
-        kwargs["include"] = [item for item in include if "logprob" not in str(item).lower()]
+        kwargs["include"] = [
+            item for item in include if "logprob" not in str(item).lower()
+        ]
 
 
-def _content_cache_key(instructions: str, tools: Optional[list[dict[str, Any]]], scope_id: str = "") -> Optional[str]:
+def _content_cache_key(
+    instructions: str, tools: Optional[list[dict[str, Any]]], scope_id: str = ""
+) -> Optional[str]:
     """``pck_<sha256[:24]>`` of (scope_id, instructions, name-sorted tools), or None if nothing static.
 
     Routing hint only; ``scope_id`` keeps unrelated sessions off one bucket.
@@ -441,15 +538,23 @@ def _content_cache_key(instructions: str, tools: Optional[list[dict[str, Any]]],
     tools_part = ""
     if tools:
         sorted_tools = sorted(
-            (t for t in tools if isinstance(t, dict)), key=lambda t: str(t.get("name") or t.get("type") or ""),
+            (t for t in tools if isinstance(t, dict)),
+            key=lambda t: str(t.get("name") or t.get("type") or ""),
         )
-        tools_part = json.dumps(sorted_tools, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        tools_part = json.dumps(
+            sorted_tools, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        )
     # \x00 separators so a boundary can't be forged by content containing the same bytes.
     content = f"{scope_id}\x00{instructions or ''}\x00{tools_part}"
-    return "pck_" + hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:24]
+    return (
+        "pck_"
+        + hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()[:24]
+    )
 
 
-def _profile_declared_efforts(provider: Any, model: Optional[str], base_url: Any = None) -> Optional[tuple]:
+def _profile_declared_efforts(
+    provider: Any, model: Optional[str], base_url: Any = None
+) -> Optional[tuple]:
     """Provider-profile-declared reasoning-effort vocabulary, or None (fail-open).
 
     Resolves by endpoint host first, then by provider name: a ``custom:<name>`` entry pointed
@@ -472,7 +577,11 @@ def _profile_declared_efforts(provider: Any, model: Optional[str], base_url: Any
                     declared = inferred_profile.supported_reasoning_efforts(model)
         if declared is None:
             profile = get_provider_profile(name) if name else None
-            declared = profile.supported_reasoning_efforts(model) if profile is not None else None
+            declared = (
+                profile.supported_reasoning_efforts(model)
+                if profile is not None
+                else None
+            )
     except Exception as exc:
         logger.debug("profile-declared efforts lookup failed: %s", exc)
         return None
@@ -485,7 +594,9 @@ def _is_azure_foundry_responses(params: dict[str, Any]) -> bool:
 
     if str(params.get("provider") or "").strip().lower() == "azure-foundry":
         return True
-    return base_url_host_matches(str(params.get("base_url") or ""), "services.ai.azure.com")
+    return base_url_host_matches(
+        str(params.get("base_url") or ""), "services.ai.azure.com"
+    )
 
 
 def _is_post_tool_replay(messages: Optional[list[dict[str, Any]]]) -> bool:
@@ -495,7 +606,10 @@ def _is_post_tool_replay(messages: Optional[list[dict[str, Any]]]) -> bool:
     replayed, so only the *trailing* messages are checked (a whole-history scan
     would make suppression sticky). Call ids resolve like ``_chat_messages_to_responses_input``.
     """
-    from agent.codex_responses_adapter import _canonical_call_id_from_fc, _split_responses_tool_id
+    from agent.codex_responses_adapter import (
+        _canonical_call_id_from_fc,
+        _split_responses_tool_id,
+    )
 
     def _pair_ids(raw: Any, explicit: Any = None) -> set:
         embedded_call_id, item_id = _split_responses_tool_id(raw)
@@ -539,7 +653,9 @@ def _is_azure_responses(params: dict[str, Any]) -> bool:
     if str(params.get("provider") or "").strip().lower() == "azure-foundry":
         return True
     base_url = str(params.get("base_url") or "")
-    return base_url_host_matches(base_url, "openai.azure.com") or base_url_host_matches(base_url, "services.ai.azure.com")
+    return base_url_host_matches(base_url, "openai.azure.com") or base_url_host_matches(
+        base_url, "services.ai.azure.com"
+    )
 
 
 def _newest_reasoning_only(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -550,10 +666,20 @@ def _newest_reasoning_only(messages: list[dict[str, Any]]) -> list[dict[str, Any
     out: list[dict[str, Any]] = []
     newest_kept = False
     for msg in reversed(messages):
-        items = msg.get("codex_reasoning_items") if isinstance(msg, dict) and msg.get("role") == "assistant" else None
-        if isinstance(items, list) and any(isinstance(i, dict) and i.get("type") != "compaction" for i in items):
+        items = (
+            msg.get("codex_reasoning_items")
+            if isinstance(msg, dict) and msg.get("role") == "assistant"
+            else None
+        )
+        if isinstance(items, list) and any(
+            isinstance(i, dict) and i.get("type") != "compaction" for i in items
+        ):
             if newest_kept:
-                checkpoints = [i for i in items if isinstance(i, dict) and i.get("type") == "compaction"]
+                checkpoints = [
+                    i
+                    for i in items
+                    if isinstance(i, dict) and i.get("type") == "compaction"
+                ]
                 msg = dict(msg, codex_reasoning_trimmed=True)
                 if checkpoints:
                     msg["codex_reasoning_items"] = checkpoints
@@ -576,7 +702,11 @@ def _native_compaction_active(context_management: Any) -> bool:
 
 def _coerce_timeout(timeout: Any) -> Optional[float]:
     """Finite positive number -> float; anything else (None, bool, str, inf) -> None."""
-    if isinstance(timeout, (int, float)) and not isinstance(timeout, bool) and 0 < float(timeout) < float("inf"):
+    if (
+        isinstance(timeout, (int, float))
+        and not isinstance(timeout, bool)
+        and 0 < float(timeout) < float("inf")
+    ):
         return float(timeout)
     return None
 
@@ -588,14 +718,22 @@ def _sends_all_turns(model: Any, params: dict[str, Any]) -> bool:
     from agent.codex_responses_adapter import openai_reasoning_family
 
     return (
-        params.get("is_codex_backend") is not True and _is_openai_api_origin(params.get("base_url"))
+        params.get("is_codex_backend") is not True
+        and _is_openai_api_origin(params.get("base_url"))
         and openai_reasoning_family(model) is not None
     )
 
 
 def _reasoning_fields(
-    model: str, params: dict[str, Any], *, effort: Any, enabled: bool, replay_encrypted_reasoning: bool,
-    is_xai_responses: bool, is_github_responses: bool, all_turns: bool = False,
+    model: str,
+    params: dict[str, Any],
+    *,
+    effort: Any,
+    enabled: bool,
+    replay_encrypted_reasoning: bool,
+    is_xai_responses: bool,
+    is_github_responses: bool,
+    all_turns: bool = False,
 ) -> dict[str, Any]:
     """``reasoning`` / ``include`` request fields for the endpoint family.
 
@@ -624,9 +762,16 @@ def _reasoning_fields(
                 # branch below already avoids. Verified against api.githubcopilot.com
                 # /responses: the summary is only emitted when summary="auto" is sent.
                 # See #46527.
-                fields["reasoning"] = {**params["github_reasoning_extra"], "summary": "auto"}
+                fields["reasoning"] = {
+                    **params["github_reasoning_extra"],
+                    "summary": "auto",
+                }
         else:
-            fields["reasoning"] = {"effort": effort, "summary": "auto", **({"context": "all_turns"} if all_turns else {})}
+            fields["reasoning"] = {
+                "effort": effort,
+                "summary": "auto",
+                **({"context": "all_turns"} if all_turns else {}),
+            }
             fields["include"] = include
     elif not is_github_responses and not is_xai_responses:
         fields["include"] = []
@@ -639,7 +784,12 @@ class ResponsesApiTransport(ProviderTransport):
     """Transport for api_mode='codex_responses'."""
 
     # Codex response.status -> OpenAI finish_reason (caller checks incomplete_details).
-    _STOP_REASON_MAP = {"completed": "stop", "incomplete": "length", "failed": "stop", "cancelled": "stop"}
+    _STOP_REASON_MAP = {
+        "completed": "stop",
+        "incomplete": "length",
+        "failed": "stop",
+        "cancelled": "stop",
+    }
 
     # Issuer kind of the most recent build_kwargs/convert_messages call (normalize_response fallback).
     _last_issuer_kind: Optional[str] = None
@@ -654,13 +804,18 @@ class ResponsesApiTransport(ProviderTransport):
         """400 naming ``reasoning.context``/``all_turns`` on a request that carried the opt-in: omit it for that
         model for the rest of the session. False otherwise, so it buys at most one retry per model."""
         text = str(error).lower()
-        if not self._last_sent_all_turns or getattr(error, "status_code", None) not in (400, None) or not (
-            "reasoning.context" in text or "all_turns" in text
+        if (
+            not self._last_sent_all_turns
+            or getattr(error, "status_code", None) not in (400, None)
+            or not ("reasoning.context" in text or "all_turns" in text)
         ):
             return False
         self._all_turns_rejected = self._all_turns_rejected | {self._last_issuer_model}
         self._last_sent_all_turns = False
-        logger.warning("reasoning.context rejected by %s; omitting it for this session", self._last_issuer_model)
+        logger.warning(
+            "reasoning.context rejected by %s; omitting it for this session",
+            self._last_issuer_model,
+        )
         return True
 
     def drop_unverified_replay(self, *message_lists: Any) -> int:
@@ -672,7 +827,11 @@ class ResponsesApiTransport(ProviderTransport):
         if self._last_issuer_kind is None or self._last_issuer_model is None:
             return 0
         removed = [
-            strip_unverified_reasoning_items(msgs, issuer_kind=self._last_issuer_kind, issuer_model=self._last_issuer_model)
+            strip_unverified_reasoning_items(
+                msgs,
+                issuer_kind=self._last_issuer_kind,
+                issuer_model=self._last_issuer_model,
+            )
             for msgs in message_lists
         ]
         return removed[0] if removed else 0
@@ -695,16 +854,24 @@ class ResponsesApiTransport(ProviderTransport):
 
     def convert_messages(self, messages: list[dict[str, Any]], **kwargs) -> Any:
         """Convert OpenAI chat messages to Responses API input items."""
-        from agent.codex_responses_adapter import _chat_messages_to_responses_input, _wire_model_identity
+        from agent.codex_responses_adapter import (
+            _chat_messages_to_responses_input,
+            _wire_model_identity,
+        )
 
         self._last_issuer_model = _wire_model_identity(kwargs.get("model"))
         return _chat_messages_to_responses_input(
-            messages, is_xai_responses=kwargs.get("is_xai_responses") is True,
+            messages,
+            is_xai_responses=kwargs.get("is_xai_responses") is True,
             is_github_responses=kwargs.get("is_github_responses") is True,
-            replay_encrypted_reasoning=bool(kwargs.get("replay_encrypted_reasoning", True)),
+            replay_encrypted_reasoning=bool(
+                kwargs.get("replay_encrypted_reasoning", True)
+            ),
             current_issuer_kind=self._resolve_issuer_kind(kwargs),
             current_issuer_model=self._last_issuer_model,
-            native_compaction_eligible=_native_compaction_active(kwargs.get("context_management")),
+            native_compaction_eligible=_native_compaction_active(
+                kwargs.get("context_management")
+            ),
         )
 
     def convert_tools(self, tools: Optional[list[dict[str, Any]]]) -> Any:
@@ -714,7 +881,11 @@ class ResponsesApiTransport(ProviderTransport):
         return _responses_tools(tools)
 
     def build_kwargs(
-        self, model: str, messages: list[dict[str, Any]], tools: Optional[list[dict[str, Any]]] = None, **params,
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]] = None,
+        **params,
     ) -> dict[str, Any]:
         """Build Responses API kwargs (calls convert_messages/convert_tools internally).
 
@@ -751,8 +922,11 @@ class ResponsesApiTransport(ProviderTransport):
         is_codex_backend = params.get("is_codex_backend") is True
         is_xai_responses = params.get("is_xai_responses") is True
         # Foundry 400s on encrypted-reasoning replay only in the post-tool follow-up turn.
-        replay_encrypted_reasoning = bool(params.get("replay_encrypted_reasoning", True)) and not (
-            _is_azure_foundry_responses(params) and _is_post_tool_replay(payload_messages)
+        replay_encrypted_reasoning = bool(
+            params.get("replay_encrypted_reasoning", True)
+        ) and not (
+            _is_azure_foundry_responses(params)
+            and _is_post_tool_replay(payload_messages)
         )
         # Own predicate: #101243 may narrow _is_azure_foundry_responses to the project gateway, and the
         # multi-item rejection happens on resource-level hosts too.
@@ -764,11 +938,17 @@ class ResponsesApiTransport(ProviderTransport):
 
         reasoning_effort, reasoning_enabled = _resolve_reasoning(model, params)
         response_tools, self._last_wire_aliases = _alias_wire_tools(
-            self.convert_tools(tools), params, is_xai_responses, is_codex_backend,
+            self.convert_tools(tools),
+            params,
+            is_xai_responses,
+            is_codex_backend,
         )
 
         # Lazy: provider plugins import this transport during model_metadata init.
-        from agent.model_metadata import strip_codex_context_variant_suffix as _strip_ctx_variant
+        from agent.model_metadata import (
+            strip_codex_context_variant_suffix as _strip_ctx_variant,
+        )
+
         request_overrides = params.get("request_overrides") or {}
         # An override may rewrite the wire model; provenance must be stamped with what actually goes out.
         wire_model = _strip_ctx_variant(request_overrides.get("model", model))
@@ -777,9 +957,14 @@ class ResponsesApiTransport(ProviderTransport):
             "model": wire_model,
             "instructions": instructions,
             "input": self.convert_messages(
-                payload_messages, is_xai_responses=is_xai_responses, is_github_responses=is_github_responses,
-                replay_encrypted_reasoning=replay_encrypted_reasoning, base_url=params.get("base_url"),
-                is_codex_backend=is_codex_backend, context_management=context_management, model=wire_model,
+                payload_messages,
+                is_xai_responses=is_xai_responses,
+                is_github_responses=is_github_responses,
+                replay_encrypted_reasoning=replay_encrypted_reasoning,
+                base_url=params.get("base_url"),
+                is_codex_backend=is_codex_backend,
+                context_management=context_management,
+                model=wire_model,
             ),
             "store": False,
         }
@@ -794,25 +979,40 @@ class ResponsesApiTransport(ProviderTransport):
         session_id = params.get("session_id")
         # Content-addressed (instructions + tools) within a logical scope that survives
         # compression rotation; session_id itself stays untouched for transcript isolation.
-        _cache_scope = _cache_scope_from_session_id(params.get("cache_scope_id") or session_id)
-        cache_key = _content_cache_key(instructions, response_tools, _cache_scope) or _cache_scope
+        _cache_scope = _cache_scope_from_session_id(
+            params.get("cache_scope_id") or session_id
+        )
+        cache_key = (
+            _content_cache_key(instructions, response_tools, _cache_scope)
+            or _cache_scope
+        )
         # xAI takes prompt_cache_key in extra_body (below); GitHub Models opts out entirely.
         if not is_github_responses and not is_xai_responses and cache_key:
             kwargs["prompt_cache_key"] = cache_key
 
-        cache_retention = _default_prompt_cache_retention_for_request(model, params.get("base_url"))
+        cache_retention = _default_prompt_cache_retention_for_request(
+            model, params.get("base_url")
+        )
         if cache_retention:
             kwargs.setdefault("prompt_cache_retention", cache_retention)
 
         self._last_sent_all_turns = (
-            reasoning_enabled and _sends_all_turns(wire_model, params) and wire_model not in self._all_turns_rejected
+            reasoning_enabled
+            and _sends_all_turns(wire_model, params)
+            and wire_model not in self._all_turns_rejected
         )
-        kwargs.update(_reasoning_fields(
-            model, params, effort=reasoning_effort, enabled=reasoning_enabled,
-            replay_encrypted_reasoning=replay_encrypted_reasoning,
-            is_xai_responses=is_xai_responses, is_github_responses=is_github_responses,
-            all_turns=self._last_sent_all_turns,
-        ))
+        kwargs.update(
+            _reasoning_fields(
+                model,
+                params,
+                effort=reasoning_effort,
+                enabled=reasoning_enabled,
+                replay_encrypted_reasoning=replay_encrypted_reasoning,
+                is_xai_responses=is_xai_responses,
+                is_github_responses=is_github_responses,
+                all_turns=self._last_sent_all_turns,
+            )
+        )
         # agent.text_verbosity -> top-level ``text.verbosity`` (#20203). Unset sends nothing;
         # xAI's /responses rejects unknown top-level fields, same as service_tier below.
         text_verbosity = params.get("text_verbosity")
@@ -846,7 +1046,9 @@ class ResponsesApiTransport(ProviderTransport):
         if is_xai_responses:
             from agent.model_metadata import is_grok_46_family
 
-            if not (is_grok_46_family(model) and kwargs.get("service_tier") == "priority"):
+            if not (
+                is_grok_46_family(model) and kwargs.get("service_tier") == "priority"
+            ):
                 kwargs.pop("service_tier", None)
 
         # Forward per-request timeout to the SDK (providers.<id>.request_timeout_seconds).
@@ -861,7 +1063,8 @@ class ResponsesApiTransport(ProviderTransport):
             # identity); ``x-client-request-id`` mirrors the body cache key so both agree.
             headers = {
                 "session_id": str(session_id) if session_id else None,
-                "x-client-request-id": kwargs.get("prompt_cache_key") or _bounded_prompt_cache_key(_cache_scope),
+                "x-client-request-id": kwargs.get("prompt_cache_key")
+                or _bounded_prompt_cache_key(_cache_scope),
             }
             headers = {k: v for k, v in headers.items() if v}
             if headers:
@@ -882,8 +1085,14 @@ class ResponsesApiTransport(ProviderTransport):
             # read it back here so an explicit override actually governs the field xAI reads, instead of
             # being silently outrun by the auto-derived cache_key (#78941).
             existing_extra_body = kwargs.get("extra_body")
-            kwargs["extra_body"] = dict(existing_extra_body) if isinstance(existing_extra_body, dict) else {}
-            kwargs["extra_body"].setdefault("prompt_cache_key", kwargs.get("prompt_cache_key", cache_key))
+            kwargs["extra_body"] = (
+                dict(existing_extra_body)
+                if isinstance(existing_extra_body, dict)
+                else {}
+            )
+            kwargs["extra_body"].setdefault(
+                "prompt_cache_key", kwargs.get("prompt_cache_key", cache_key)
+            )
 
         _bound_prompt_cache_key_field(kwargs.get("extra_body"))
         return kwargs
@@ -893,7 +1102,8 @@ class ResponsesApiTransport(ProviderTransport):
         from agent.codex_responses_adapter import _normalize_codex_response
 
         msg, finish_reason = _normalize_codex_response(
-            response, issuer_kind=kwargs.get("issuer_kind") or self._last_issuer_kind,
+            response,
+            issuer_kind=kwargs.get("issuer_kind") or self._last_issuer_kind,
             issuer_model=kwargs.get("issuer_model") or self._last_issuer_model,
         )
 
@@ -903,7 +1113,9 @@ class ResponsesApiTransport(ProviderTransport):
             alias_map = self._last_wire_aliases
             for tc in msg.tool_calls:
                 provider_data = {
-                    key: getattr(tc, key) for key in ("call_id", "response_item_id") if getattr(tc, key, None)
+                    key: getattr(tc, key)
+                    for key in ("call_id", "response_item_id")
+                    if getattr(tc, key, None)
                 }
                 has_fn = hasattr(tc, "function")
                 name = tc.function.name if has_fn else getattr(tc, "name", "")
@@ -912,19 +1124,30 @@ class ResponsesApiTransport(ProviderTransport):
                     name = _LEGACY_ALIAS_FALLBACK.get(name, name)
                 elif name in alias_map:
                     name = alias_map[name]
-                tool_calls.append(ToolCall(
-                    id=tc.id if hasattr(tc, "id") else (name or None), name=name,
-                    arguments=tc.function.arguments if has_fn else getattr(tc, "arguments", "{}"),
-                    provider_data=provider_data or None,
-                ))
+                tool_calls.append(
+                    ToolCall(
+                        id=tc.id if hasattr(tc, "id") else (name or None),
+                        name=name,
+                        arguments=tc.function.arguments
+                        if has_fn
+                        else getattr(tc, "arguments", "{}"),
+                        provider_data=provider_data or None,
+                    )
+                )
 
         provider_data = {
             key: getattr(msg, key, None)
-            for key in ("codex_reasoning_items", "codex_message_items", "reasoning_details")
+            for key in (
+                "codex_reasoning_items",
+                "codex_message_items",
+                "reasoning_details",
+            )
             if msg and getattr(msg, key, None)
         }
         return NormalizedResponse(
-            content=msg.content if msg else None, tool_calls=tool_calls, finish_reason=finish_reason or "stop",
+            content=msg.content if msg else None,
+            tool_calls=tool_calls,
+            finish_reason=finish_reason or "stop",
             reasoning=getattr(msg, "reasoning", None) if msg else None,
             usage=None,  # Codex usage is extracted separately in normalize_usage()
             provider_data=provider_data or None,
@@ -943,11 +1166,22 @@ class ResponsesApiTransport(ProviderTransport):
             return True
         status = str(getattr(response, "status", "") or "").strip().lower()
         details = getattr(response, "incomplete_details", None)
-        raw_reason = details.get("reason") if isinstance(details, dict) else getattr(details, "reason", "")
-        return status == "incomplete" and str(raw_reason or "").strip().lower() == "content_filter"
+        raw_reason = (
+            details.get("reason")
+            if isinstance(details, dict)
+            else getattr(details, "reason", "")
+        )
+        return (
+            status == "incomplete"
+            and str(raw_reason or "").strip().lower() == "content_filter"
+        )
 
     def preflight_kwargs(
-        self, api_kwargs: Any, *, allow_stream: bool = False, is_github_responses: bool = False,
+        self,
+        api_kwargs: Any,
+        *,
+        allow_stream: bool = False,
+        is_github_responses: bool = False,
         sanitize_harmony_tokens: bool = False,
     ) -> dict:
         """Validate and sanitize Codex API kwargs before the call.
@@ -957,7 +1191,9 @@ class ResponsesApiTransport(ProviderTransport):
         from agent.codex_responses_adapter import _preflight_codex_api_kwargs
 
         normalized = _preflight_codex_api_kwargs(
-            api_kwargs, allow_stream=allow_stream, is_github_responses=is_github_responses,
+            api_kwargs,
+            allow_stream=allow_stream,
+            is_github_responses=is_github_responses,
             sanitize_harmony_tokens=sanitize_harmony_tokens,
         )
         _bound_prompt_cache_key_field(normalized)

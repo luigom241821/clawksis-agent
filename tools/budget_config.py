@@ -32,6 +32,7 @@ def _configured_mcp_result_size() -> int:
     """
     try:
         from clawk_cli.config import load_config_readonly
+
         data = load_config_readonly()
         block = data.get("tool_budget") if isinstance(data, dict) else None
         raw = block.get("mcp_result_size_chars") if isinstance(block, dict) else None
@@ -69,7 +70,10 @@ class BudgetConfig:
         if tool_name.startswith(MCP_TOOL_PREFIX):
             return min(self.mcp_result_size, self.default_result_size)
         from tools.registry import registry
-        registry_value = registry.get_max_result_size(tool_name, default=self.default_result_size)
+
+        registry_value = registry.get_max_result_size(
+            tool_name, default=self.default_result_size
+        )
         if registry_value == float("inf"):
             return registry_value
         return min(registry_value, self.default_result_size)
@@ -107,8 +111,19 @@ def budget_for_context_window(context_length: int | None) -> BudgetConfig:
         return BudgetConfig(mcp_result_size=mcp_result_size)
     window_chars = context_length * _CHARS_PER_TOKEN
     return BudgetConfig(
-        default_result_size=max(_MIN_RESULT_SIZE_CHARS, min(int(window_chars * _PER_RESULT_WINDOW_FRACTION), DEFAULT_RESULT_SIZE_CHARS)),
-        turn_budget=max(_MIN_TURN_BUDGET_CHARS, min(int(window_chars * _PER_TURN_WINDOW_FRACTION), DEFAULT_TURN_BUDGET_CHARS)),
+        default_result_size=max(
+            _MIN_RESULT_SIZE_CHARS,
+            min(
+                int(window_chars * _PER_RESULT_WINDOW_FRACTION),
+                DEFAULT_RESULT_SIZE_CHARS,
+            ),
+        ),
+        turn_budget=max(
+            _MIN_TURN_BUDGET_CHARS,
+            min(
+                int(window_chars * _PER_TURN_WINDOW_FRACTION), DEFAULT_TURN_BUDGET_CHARS
+            ),
+        ),
         preview_size=DEFAULT_PREVIEW_SIZE_CHARS,
         mcp_result_size=mcp_result_size,
     )

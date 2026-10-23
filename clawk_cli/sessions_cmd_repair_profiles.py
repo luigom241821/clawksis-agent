@@ -3,6 +3,7 @@
 Runs pre-DB (``_PRE_DB_HANDLERS``): it opens every profile's store itself rather than the one
 ambient ``SessionDB()``. Report-only unless ``--apply``; ``--json`` for automation.
 """
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,11 @@ import sys
 from typing import Dict, List
 
 from clawk_cli.sessions_repair_profiles import (
-    Finding, default_snapshot, enumerate_stores, live_gateway_homes, scan_stores,
+    Finding,
+    default_snapshot,
+    enumerate_stores,
+    live_gateway_homes,
+    scan_stores,
 )
 
 _KIND_LABELS = {
@@ -57,9 +62,11 @@ def cmd_repair_profiles(args) -> int:
         live = live_gateway_homes(stores)
         if live:
             names = ", ".join(f"{profile} (pid {pid})" for profile, pid in live)
-            print(f"A gateway is running for: {names}. It holds the routing index in memory and would "
-                  "write it back over this repair. Stop it (`clawk gateway stop`), then re-run --apply.",
-                  file=sys.stderr)
+            print(
+                f"A gateway is running for: {names}. It holds the routing index in memory and would "
+                "write it back over this repair. Stop it (`clawk gateway stop`), then re-run --apply.",
+                file=sys.stderr,
+            )
             return 1
 
     plan, session = scan_stores(stores, legacy_main=legacy_main, read_only=not apply)
@@ -67,29 +74,49 @@ def cmd_repair_profiles(args) -> int:
         findings = plan.findings
         repairable = plan.repairable
         if as_json and not apply:
-            print(json.dumps({"stores": [s.profile for s in stores], "findings": [f.as_dict() for f in findings],
-                              "repairable": len(repairable)}, indent=2))
+            print(
+                json.dumps(
+                    {
+                        "stores": [s.profile for s in stores],
+                        "findings": [f.as_dict() for f in findings],
+                        "repairable": len(repairable),
+                    },
+                    indent=2,
+                )
+            )
             return 0
         if not as_json:
-            print(f"Scanned {len(stores)} profile store(s): {', '.join(s.profile for s in stores)}")
+            print(
+                f"Scanned {len(stores)} profile store(s): {', '.join(s.profile for s in stores)}"
+            )
             if not findings:
                 print("✓ No crossed-profile state found.")
                 return 0
             _print_report(findings)
         if not apply:
-            print(f"\n{len(repairable)} of {len(findings)} finding(s) can be repaired. "
-                  "Re-run with --apply to perform them.")
+            print(
+                f"\n{len(repairable)} of {len(findings)} finding(s) can be repaired. "
+                "Re-run with --apply to perform them."
+            )
             return 0
         if not repairable:
             if as_json:
-                print(json.dumps({"findings": [f.as_dict() for f in findings], "applied": {}}, indent=2))
+                print(
+                    json.dumps(
+                        {"findings": [f.as_dict() for f in findings], "applied": {}},
+                        indent=2,
+                    )
+                )
             else:
                 print("\nNothing to repair.")
             return 0
 
         if not getattr(args, "yes", False) and not as_json:
             from clawk_cli.sessions_cmd import _confirm_prompt
-            if not _confirm_prompt(f"\nApply {len(repairable)} repair(s)? A snapshot of every store is taken first. [y/N] "):
+
+            if not _confirm_prompt(
+                f"\nApply {len(repairable)} repair(s)? A snapshot of every store is taken first. [y/N] "
+            ):
                 print("Aborted — nothing was changed.")
                 return 0
         result = plan.apply(session, snapshot=default_snapshot)
@@ -97,11 +124,18 @@ def cmd_repair_profiles(args) -> int:
         session.close()
 
     if as_json:
-        print(json.dumps({"findings": [f.as_dict() for f in findings], "applied": result}, indent=2))
+        print(
+            json.dumps(
+                {"findings": [f.as_dict() for f in findings], "applied": result},
+                indent=2,
+            )
+        )
     else:
         for profile, snap in result["snapshots"].items():
             print(f"  snapshot [{profile}]: {snap or 'FAILED'}")
-        applied = ", ".join(f"{k}={v}" for k, v in sorted(result["totals"].items()) if v)
+        applied = ", ".join(
+            f"{k}={v}" for k, v in sorted(result["totals"].items()) if v
+        )
         print(f"\nApplied: {applied or 'nothing'}")
         for failure in result["failures"]:
             print(f"  ✗ {failure['kind']} {failure['subject']}: {failure['error']}")

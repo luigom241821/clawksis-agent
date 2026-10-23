@@ -31,6 +31,7 @@ _MAX_SAVE_URL_REDIRECTS = 5
 def cache_dir(kind: str) -> Path:
     """Return ``$CLAWK_HOME/cache/<kind>/``, creating parents as needed."""
     from clawk_constants import get_clawk_home
+
     path = get_clawk_home() / "cache" / kind
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -51,14 +52,27 @@ def save_bytes(kind: str, raw: bytes, *, prefix: str, extension: str) -> Path:
 
 def save_b64(kind: str, b64_data: str, *, prefix: str, extension: str) -> Path:
     """Decode base64 data into the cache and return the absolute path."""
-    return save_bytes(kind, base64.b64decode(b64_data), prefix=prefix, extension=extension)
+    return save_bytes(
+        kind, base64.b64decode(b64_data), prefix=prefix, extension=extension
+    )
 
 
 def save_url(
-    kind: str, url: str, *, prefix: str, timeout: float, max_bytes: int, chunk_size: int,
-    content_types: dict[str, str], url_extensions: tuple[str, ...], default_extension: str,
-    label: str, empty_error: str, headers: Optional[dict[str, str]] = None,
-    require_known_content_type: bool = False, trusted_origin: bool = False,
+    kind: str,
+    url: str,
+    *,
+    prefix: str,
+    timeout: float,
+    max_bytes: int,
+    chunk_size: int,
+    content_types: dict[str, str],
+    url_extensions: tuple[str, ...],
+    default_extension: str,
+    label: str,
+    empty_error: str,
+    headers: Optional[dict[str, str]] = None,
+    require_known_content_type: bool = False,
+    trusted_origin: bool = False,
 ) -> Path:
     """Stream-download *url* into the cache with a size cap.
 
@@ -82,31 +96,50 @@ def save_url(
     """
     import httpx
 
-    from tools.url_safety import create_ssrf_safe_client, is_always_blocked_url, is_safe_url
+    from tools.url_safety import (
+        create_ssrf_safe_client,
+        is_always_blocked_url,
+        is_safe_url,
+    )
 
     current_url, hop_headers, trusted_hop = url, headers, trusted_origin
     for _ in range(_MAX_SAVE_URL_REDIRECTS + 1):
         if trusted_hop:
             if is_always_blocked_url(current_url):
-                raise ValueError(f"{label} URL targets an always-blocked address: {current_url}")
+                raise ValueError(
+                    f"{label} URL targets an always-blocked address: {current_url}"
+                )
             client = httpx.Client(timeout=timeout, follow_redirects=False)
         else:
             if not is_safe_url(current_url):
-                raise ValueError(f"{label} URL failed the SSRF safety check: {current_url}")
+                raise ValueError(
+                    f"{label} URL failed the SSRF safety check: {current_url}"
+                )
             client = create_ssrf_safe_client(timeout=timeout, follow_redirects=False)
         with client:
             with client.stream("GET", current_url, headers=hop_headers) as response:
                 if response.status_code in _REDIRECT_STATUS_CODES:
                     location = response.headers.get("location")
                     if not location:
-                        raise ValueError(f"{label} download redirected without a Location: {current_url}")
-                    current_url, hop_headers, trusted_hop = urljoin(current_url, location), None, False
+                        raise ValueError(
+                            f"{label} download redirected without a Location: {current_url}"
+                        )
+                    current_url, hop_headers, trusted_hop = (
+                        urljoin(current_url, location),
+                        None,
+                        False,
+                    )
                     continue
                 if not response.is_success:
                     response.read()
                     response.raise_for_status()
 
-                content_type = (response.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+                content_type = (
+                    (response.headers.get("Content-Type") or "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
                 extension = content_types.get(content_type)
                 if require_known_content_type and extension is None:
                     raise ValueError(
@@ -115,7 +148,11 @@ def save_url(
                 if extension is None:
                     url_path = current_url.split("?", 1)[0].lower()
                     extension = next(
-                        ("jpg" if ext == "jpeg" else ext for ext in url_extensions if url_path.endswith(f".{ext}")),
+                        (
+                            "jpg" if ext == "jpeg" else ext
+                            for ext in url_extensions
+                            if url_path.endswith(f".{ext}")
+                        ),
                         default_extension,
                     )
                 path = cache_path(kind, prefix, extension)
@@ -138,7 +175,9 @@ def save_url(
                     raise ValueError(empty_error.format(url=url))
 
                 return path
-    raise ValueError(f"{label} download exceeded {_MAX_SAVE_URL_REDIRECTS} redirects: {url}")
+    raise ValueError(
+        f"{label} download exceeded {_MAX_SAVE_URL_REDIRECTS} redirects: {url}"
+    )
 
 
 def _unlink_quiet(path: Path) -> None:

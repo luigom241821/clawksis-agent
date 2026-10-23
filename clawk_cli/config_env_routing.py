@@ -24,13 +24,18 @@ from typing import Optional
 # Case-sensitive on purpose: a lowercase bare name (``my_flag``) stays a config.yaml top-level key.
 _ENV_SHAPE_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
+
 def is_registered_env_name(name: str) -> bool:
     """True when Clawksis itself enumerates ``name``: ``OPTIONAL_ENV_VARS`` / ``_EXTRA_ENV_KEYS``, or a
     self-configuring platform suffix so plugin adapters nobody listed (``IRC_HOME_CHANNEL``) count."""
     from clawk_cli.config import _EXTRA_ENV_KEYS, OPTIONAL_ENV_VARS
     from clawk_cli.setup_hidden_env import is_setup_hidden_env
 
-    return name in OPTIONAL_ENV_VARS or name in _EXTRA_ENV_KEYS or is_setup_hidden_env(name)
+    return (
+        name in OPTIONAL_ENV_VARS
+        or name in _EXTRA_ENV_KEYS
+        or is_setup_hidden_env(name)
+    )
 
 
 def is_env_setting_key(key: str) -> bool:
@@ -44,7 +49,11 @@ def is_env_setting_key(key: str) -> bool:
 def _drop_config_yaml_copies(key: str) -> bool:
     """Remove same-named top-level ``config.yaml`` copies (as typed and upper-cased) so the ``.env``
     value is the only one the gateway bridge and CLI readers can disagree about."""
-    from clawk_cli.config import _write_user_config, get_config_path, require_readable_config_before_write
+    from clawk_cli.config import (
+        _write_user_config,
+        get_config_path,
+        require_readable_config_before_write,
+    )
 
     config_path = get_config_path()
     user_config = require_readable_config_before_write(config_path)
@@ -82,6 +91,9 @@ def read_env_setting(key: str) -> Optional[str]:
     if value is None:
         value = read_raw_config_readonly().get(key)
         if value is not None:
-            print(f"  (note: {key} is a stale top-level config.yaml copy; `clawk config set {key} <value>` "
-                  f"moves it to .env, `clawk config unset {key}` removes it)", file=sys.stderr)
+            print(
+                f"  (note: {key} is a stale top-level config.yaml copy; `clawk config set {key} <value>` "
+                f"moves it to .env, `clawk config unset {key}` removes it)",
+                file=sys.stderr,
+            )
     return value

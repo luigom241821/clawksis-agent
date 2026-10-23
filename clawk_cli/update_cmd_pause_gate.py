@@ -29,16 +29,29 @@ def _checkout_move(token, *targets, paths=(), revert=False):
     step: dict = {}
     targets = sorted({t for t in targets if t})
     pause_id = (token or {}).get("pause_id")
-    root = _pause_record.install_root() if pause_id and (targets or paths or revert) else None
+    root = (
+        _pause_record.install_root()
+        if pause_id and (targets or paths or revert)
+        else None
+    )
     found = _pause_record.tree_state(root) if root else None
-    if found is None:  # nothing paused, nothing bound, or not a git checkout: no tree gate to bind
+    if (
+        found is None
+    ):  # nothing paused, nothing bound, or not a git checkout: no tree gate to bind
         yield step
         return
     paths = {*paths, *(found["dirty_at_pause"] or [] if revert else ())}
     baselines = token.setdefault("baselines", [])
     move_id = f"{pause_id}@{found['pre_sha']}"
-    baseline = next((b for b in baselines if b.get("pre_sha") == found["pre_sha"]
-                     and b.get("pause_id") in (pause_id, move_id)), None)
+    baseline = next(
+        (
+            b
+            for b in baselines
+            if b.get("pre_sha") == found["pre_sha"]
+            and b.get("pause_id") in (pause_id, move_id)
+        ),
+        None,
+    )
     if baseline is None:
         baseline = {"pause_id": move_id, **found}
         baselines.append(baseline)
@@ -57,16 +70,28 @@ def _moves_for(token):
     return lambda *targets, **bound: _checkout_move(token, *targets, **bound)
 
 
-def _settle_checkout_move(token: dict, baseline: dict, found: dict, root, step: dict) -> None:
+def _settle_checkout_move(
+    token: dict, baseline: dict, found: dict, root, step: dict
+) -> None:
     """Record what the returned step left. A moved HEAD gets its verdict now: git can move HEAD
     past a file it failed to write, and only now are the move's paths untouched by later steps
     (dependency syncs, stash restores). A step's own baseline is retired when the tree is whole."""
     now = _pause_record.tree_state(root)
     moved = now["pre_sha"] != found["pre_sha"]
-    torn = _pause_record.torn_by_move(root, found, now["dirty_at_pause"]) if moved else None
-    if moved and torn is not None:  # unknown stays unjudged: the gate judges it at resume time
+    torn = (
+        _pause_record.torn_by_move(root, found, now["dirty_at_pause"])
+        if moved
+        else None
+    )
+    if (
+        moved and torn is not None
+    ):  # unknown stays unjudged: the gate judges it at resume time
         baseline.setdefault("landed", {})[now["pre_sha"]] = torn
-    whole = torn == [] if moved else step.get("whole") or all(now[key] == found[key] for key in found)
+    whole = (
+        torn == []
+        if moved
+        else step.get("whole") or all(now[key] == found[key] for key in found)
+    )
     if baseline["pause_id"] != token["pause_id"] and whole:
         token["baselines"] = [b for b in token["baselines"] if b is not baseline]
     _pause_record.write({**token, "resume_needed": True})

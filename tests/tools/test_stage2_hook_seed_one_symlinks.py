@@ -1,4 +1,5 @@
 """Regression tests for symlink-safe Docker stage2 first-boot seeds."""
+
 from __future__ import annotations
 
 import re
@@ -57,7 +58,7 @@ def test_seed_one_refuses_symlinked_destinations(
         "set -e\n"
         f'CLAWK_HOME="{home}"\n'
         f'INSTALL_DIR="{install_dir}"\n'
-        "as_clawk() { \"$@\"; }\n"
+        'as_clawk() { "$@"; }\n'
         f"{_path_guard_functions(stage2_text)}\n"
         f"{_seed_one_function(stage2_text)}\n"
         'seed_one ".env" ".env.example"\n'
@@ -65,7 +66,9 @@ def test_seed_one_refuses_symlinked_destinations(
     script_path = tmp_path / "harness.sh"
     script_path.write_text(script)
 
-    proc = subprocess.run([bash, str(script_path)], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        [bash, str(script_path)], capture_output=True, text=True, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     assert not outside_env.exists()
     assert (home / ".env").is_symlink()
@@ -96,7 +99,7 @@ def test_seed_one_is_quiet_for_existing_symlinked_files(
         "set -e\n"
         f'CLAWK_HOME="{home}"\n'
         f'INSTALL_DIR="{install_dir}"\n'
-        "as_clawk() { \"$@\"; }\n"
+        'as_clawk() { "$@"; }\n'
         f"{_path_guard_functions(stage2_text)}\n"
         f"{_seed_one_function(stage2_text)}\n"
         'seed_one ".env" ".env.example"\n'
@@ -104,7 +107,9 @@ def test_seed_one_is_quiet_for_existing_symlinked_files(
     script_path = tmp_path / "harness.sh"
     script_path.write_text(script)
 
-    proc = subprocess.run([bash, str(script_path)], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        [bash, str(script_path)], capture_output=True, text=True, check=False
+    )
     assert proc.returncode == 0, proc.stderr
     assert outside_env.read_text() == "EXISTING=1\n"
     assert proc.stdout == ""

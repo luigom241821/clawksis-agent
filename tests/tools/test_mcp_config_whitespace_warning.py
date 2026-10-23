@@ -33,8 +33,10 @@ def test_clean_config_no_warnings(caplog):
 
 
 def test_trailing_newline_in_header_flagged(caplog):
-    config = {"url": "https://example.com/mcp",
-              "headers": {"Authorization": "Bearer abc123\n"}}
+    config = {
+        "url": "https://example.com/mcp",
+        "headers": {"Authorization": "Bearer abc123\n"},
+    }
     with caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
         flagged = _warn_hidden_whitespace("srv", config)
     assert flagged == ["headers.Authorization"]
@@ -42,8 +44,6 @@ def test_trailing_newline_in_header_flagged(caplog):
     assert any("srv" in m and "headers.Authorization" in m for m in messages)
     # The secret value itself must never appear in the log.
     assert not any("abc123" in m for m in messages)
-
-
 
 
 def test_whitespace_in_list_item_flagged_with_index():
@@ -74,8 +74,6 @@ def test_non_string_values_ignored():
     assert flagged == []
 
 
-
-
 def test_warning_deduped_per_process(caplog):
     config = {"url": "https://x.com "}
     with caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
@@ -88,8 +86,6 @@ def test_warning_deduped_per_process(caplog):
     assert len(warn_records) == 1
 
 
-
-
 def test_load_mcp_config_emits_warning(tmp_path, monkeypatch, caplog):
     """E2E through _load_mcp_config with a real config load path."""
     from unittest.mock import patch as mock_patch
@@ -100,9 +96,12 @@ def test_load_mcp_config_emits_warning(tmp_path, monkeypatch, caplog):
             "headers": {"Authorization": "Bearer tok\n"},
         }
     }
-    with mock_patch("clawk_cli.config.load_config",
-                    return_value={"mcp_servers": servers}), \
-         caplog.at_level(logging.WARNING, logger="tools.mcp_tool"):
+    with (
+        mock_patch(
+            "clawk_cli.config.load_config", return_value={"mcp_servers": servers}
+        ),
+        caplog.at_level(logging.WARNING, logger="tools.mcp_tool"),
+    ):
         result = _mcp_config._load_mcp_config()
 
     assert "pasted" in result

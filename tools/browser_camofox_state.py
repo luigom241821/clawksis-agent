@@ -23,5 +23,7 @@ def get_camofox_identity(task_id: Optional[str] = None) -> dict[str, str]:
     scoped to the logical browser task so new tabs in the same profile reuse it."""
     scope_root = str(get_camofox_state_dir())
     user_digest = uuid.uuid5(uuid.NAMESPACE_URL, f"camofox-user:{scope_root}").hex[:10]
-    session_digest = uuid.uuid5(uuid.NAMESPACE_URL, f"camofox-session:{scope_root}:{task_id or 'default'}").hex[:16]
+    session_digest = uuid.uuid5(
+        uuid.NAMESPACE_URL, f"camofox-session:{scope_root}:{task_id or 'default'}"
+    ).hex[:16]
     return {"user_id": f"clawk_{user_digest}", "session_key": f"task_{session_digest}"}

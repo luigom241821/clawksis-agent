@@ -33,14 +33,12 @@ class TestFailClosedSyntaxGate:
         assert "json" in res.error.lower()
         assert not target.exists(), "invalid JSON must NOT be written to disk"
 
-
     def test_valid_json_written_exactly(self, ops, tmp_path: Path):
         target = tmp_path / "config.json"
         content = json.dumps({"a": 1, "b": [1, 2, 3]})
         res = ops.write_file(str(target), content)
         assert res.error is None, res.error
         assert target.read_text() == content
-
 
     def test_invalid_python_is_NOT_hard_refused(self, ops, tmp_path: Path):
         """Deliberate scope decision: .py keeps the pre-existing NON-BLOCKING
@@ -57,7 +55,6 @@ class TestFailClosedSyntaxGate:
         assert res.lint is not None
         assert res.lint.get("status") == "error"
         assert "SyntaxError" in res.lint.get("output", "")
-
 
     def test_custom_tagged_yaml_is_valid_and_written(self, ops, tmp_path: Path):
         """Application-defined tags (CloudFormation !Sub/!Ref, Ansible !vault)

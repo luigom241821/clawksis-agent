@@ -31,14 +31,12 @@ class TestSameDeployment:
         assert not same_deployment(sibling, failed)
         assert not should_skip_candidate(sibling, failed, FailureScope.MODEL)
 
-
     def test_incident_62984_same_model_different_explicit_url_is_a_pool(self):
         """Several LM Studio endpoints serving one model = a pool, not dups."""
         a = _id("custom", "qwen-3", "http://box1:1234/v1")
         b = _id("custom", "qwen-3", "http://box2:1234/v1")
         assert not same_deployment(a, b)
         assert not should_skip_candidate(a, b, FailureScope.MODEL)
-
 
     def test_incident_22548_shim_aliases_same_url_same_model_are_same(self):
         """Two custom_providers aliases at one shim URL with one model."""
@@ -79,7 +77,6 @@ class TestSameCredentialSurface:
         a = _id("proxy-a", "m", "http://gw:9000/v1")
         b = _id("proxy-b", "m", "http://gw:9000/v1")
         assert not same_credential_surface(a, b)
-
 
 
 class TestSameEndpoint:

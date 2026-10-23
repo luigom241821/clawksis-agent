@@ -5,8 +5,9 @@ from tools import browser_tool_install as bt_install
 
 
 class FakeBroker:
-    def __init__(self, *, scope=None, selected=None, result=None, error=None,
-                 registered=True):
+    def __init__(
+        self, *, scope=None, selected=None, result=None, error=None, registered=True
+    ):
         self.scope = scope
         self.selected = selected
         self.result = result
@@ -314,7 +315,9 @@ def test_routed_handler_reads_server_bound_identity_from_session_context(monkeyp
     )
 
 
-def test_routeable_browser_tools_are_available_for_bound_extension_controller(monkeypatch):
+def test_routeable_browser_tools_are_available_for_bound_extension_controller(
+    monkeypatch,
+):
     """The extension route must not be stripped by legacy Browser Use checks."""
     from tools import browser_tool
 
@@ -345,7 +348,10 @@ def test_extension_availability_requires_exact_scope_and_capability(monkeypatch)
         browser_control_transport_family="local-api",
     )
     try:
-        assert browser_extension_router.extension_controller_available("browser_snapshot") is True
+        assert (
+            browser_extension_router.extension_controller_available("browser_snapshot")
+            is True
+        )
     finally:
         clear_session_vars(tokens)
 
@@ -397,9 +403,10 @@ def test_bound_controller_disappearing_after_schema_build_never_falls_back(monke
     )
     fallbacks = []
     try:
-        assert browser_extension_router.extension_controller_available(
-            "browser_snapshot"
-        ) is True
+        assert (
+            browser_extension_router.extension_controller_available("browser_snapshot")
+            is True
+        )
         assert broker.disconnect_owner("socket-fixture") == 1
         with pytest.raises(ControllerUnavailable, match="browser_snapshot"):
             routed_browser_handler(
@@ -414,7 +421,9 @@ def test_bound_controller_disappearing_after_schema_build_never_falls_back(monke
     assert fallbacks == []
 
 
-def test_routeable_browser_tools_preserve_legacy_gate_without_bound_identity(monkeypatch):
+def test_routeable_browser_tools_preserve_legacy_gate_without_bound_identity(
+    monkeypatch,
+):
     """A feature flag alone must not advertise tools outside a bound request."""
     from gateway import browser_control_broker
     from tools import browser_tool
@@ -449,7 +458,9 @@ def test_bound_identity_without_extension_control_keeps_cache_scope(monkeypatch)
     from gateway.session_context import clear_session_vars, set_session_vars
     from tools.registry import CHECK_FN_CACHE_BYPASS, check_fn_cache_scope
 
-    monkeypatch.setattr(browser_control_broker, "browser_control_enabled", lambda: False)
+    monkeypatch.setattr(
+        browser_control_broker, "browser_control_enabled", lambda: False
+    )
     tokens = set_session_vars(
         session_id="session-fixture",
         browser_control_principal="principal-fixture",
@@ -480,7 +491,9 @@ def test_registry_advertises_snapshot_through_extension_when_legacy_backend_is_d
         browser_control_transport_family="local-api",
     )
     try:
-        definitions = registry.get_definitions({"browser_snapshot", "browser_click"}, quiet=True)
+        definitions = registry.get_definitions(
+            {"browser_snapshot", "browser_click"}, quiet=True
+        )
     finally:
         clear_session_vars(tokens)
 

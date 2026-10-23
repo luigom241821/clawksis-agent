@@ -54,20 +54,28 @@ def main() -> int:
         if getattr(exc, "winerror", None) == _NO_PACKAGE_IDENTITY_HRESULT:
             print(json.dumps({"available": False, "reason": "not-packaged"}))
             return 0
-        print(json.dumps({"available": None, "error": f"package identity failed: {exc}"}))
+        print(
+            json.dumps({"available": None, "error": f"package identity failed: {exc}"})
+        )
         return 1
     except Exception as exc:
-        print(json.dumps({"available": None, "error": f"package identity failed: {exc}"}))
+        print(
+            json.dumps({"available": None, "error": f"package identity failed: {exc}"})
+        )
         return 1
 
     try:
         source = package.get_app_installer_info()
         if source is None:
-            print(json.dumps({
-                "available": None,
-                "reason": "no-app-installer-source",
-                "error": "No App Installer update source is registered. Install Clawksis through its .appinstaller file to enable updates.",
-            }))
+            print(
+                json.dumps(
+                    {
+                        "available": None,
+                        "reason": "no-app-installer-source",
+                        "error": "No App Installer update source is registered. Install Clawksis through its .appinstaller file to enable updates.",
+                    }
+                )
+            )
             return 1
         source_uri = source.uri.absolute_uri
         result = package.check_update_availability_async().get()
@@ -81,14 +89,37 @@ def main() -> int:
     # them as such would suppress a real update prompt — so they surface as
     # an unknown with the availability name as the extended error.
     if availability == PackageUpdateAvailability.NO_UPDATES:
-        print(json.dumps({"available": False, "availability": availability.name, "source_uri": source_uri}))
+        print(
+            json.dumps(
+                {
+                    "available": False,
+                    "availability": availability.name,
+                    "source_uri": source_uri,
+                }
+            )
+        )
         return 0
 
-    if availability in (PackageUpdateAvailability.AVAILABLE, PackageUpdateAvailability.REQUIRED):
-        print(json.dumps({"available": True, "availability": availability.name, "source_uri": source_uri}))
+    if availability in (
+        PackageUpdateAvailability.AVAILABLE,
+        PackageUpdateAvailability.REQUIRED,
+    ):
+        print(
+            json.dumps(
+                {
+                    "available": True,
+                    "availability": availability.name,
+                    "source_uri": source_uri,
+                }
+            )
+        )
         return 2
 
-    print(json.dumps({"available": None, "error": f"availability unknown: {availability.name}"}))
+    print(
+        json.dumps(
+            {"available": None, "error": f"availability unknown: {availability.name}"}
+        )
+    )
     return 1
 
 

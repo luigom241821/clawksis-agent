@@ -25,9 +25,7 @@ def test_cwd_claim_precedes_probe_and_generation_reaches_publish(monkeypatch):
         def publish_session_git_metadata(
             self, session_id, cwd, generation, branch, root
         ):
-            events.append(
-                ("publish", session_id, cwd, generation, branch, root)
-            )
+            events.append(("publish", session_id, cwd, generation, branch, root))
             return True
 
     monkeypatch.setattr(server, "_get_db", lambda: DB())
@@ -61,9 +59,7 @@ def test_cwd_claim_precedes_probe_and_generation_reaches_publish(monkeypatch):
 def test_missing_db_claim_never_starts_git_probe(monkeypatch):
     probed = []
     monkeypatch.setattr(server, "_get_db", lambda: None)
-    monkeypatch.setattr(
-        server.git_probe, "branch", lambda cwd: probed.append(cwd)
-    )
+    monkeypatch.setattr(server.git_probe, "branch", lambda cwd: probed.append(cwd))
 
     generation = server._persist_session_cwd_and_schedule_git_meta(
         {"session_key": "session"}, "/repo"
@@ -73,7 +69,9 @@ def test_missing_db_claim_never_starts_git_probe(monkeypatch):
     assert probed == []
 
 
-def test_persisted_row_missing_git_metadata_is_enriched_on_hydration(monkeypatch, tmp_path):
+def test_persisted_row_missing_git_metadata_is_enriched_on_hydration(
+    monkeypatch, tmp_path
+):
     """A row that already carries its cwd but no git metadata is healed on resume (#108784).
 
     The lazy-row path enriches on the first submit, so this covers the OTHER way a row reaches
@@ -96,7 +94,9 @@ def test_persisted_row_missing_git_metadata_is_enriched_on_hydration(monkeypatch
 
     monkeypatch.setattr(server, "_get_db", lambda: db)
     monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
-    monkeypatch.setattr(server.git_probe, "branch", lambda _cwd: "feature/session-metadata")
+    monkeypatch.setattr(
+        server.git_probe, "branch", lambda _cwd: "feature/session-metadata"
+    )
     monkeypatch.setattr(server.git_probe, "common_repo_root", lambda _cwd: str(repo))
     server._sessions[sid] = session
     try:

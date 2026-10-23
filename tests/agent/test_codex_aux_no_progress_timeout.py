@@ -52,10 +52,12 @@ def _consume(stream, *, model, on_event):
     for event in stream:
         on_event(event)
     return SimpleNamespace(
-        output=[SimpleNamespace(
-            type="message",
-            content=[SimpleNamespace(type="output_text", text="summary")],
-        )],
+        output=[
+            SimpleNamespace(
+                type="message",
+                content=[SimpleNamespace(type="output_text", text="summary")],
+            )
+        ],
         usage=None,
     )
 
@@ -74,7 +76,9 @@ class TestNoProgressFailFast:
         adapter = _make_adapter(_zombie())
         start = time.monotonic()
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3
+            ),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
             pytest.raises(TimeoutError, match="no-progress timeout"),
         ):
@@ -97,7 +101,9 @@ class TestNoProgressFailFast:
 
         adapter = _make_adapter(_slow_but_alive())
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.4),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.4
+            ),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
         ):
             response = adapter.create(
@@ -118,7 +124,9 @@ class TestNoProgressFailFast:
         adapter = _make_adapter(_stalls_after_two_tokens())
         start = time.monotonic()
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3
+            ),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
             pytest.raises(TimeoutError, match="stalled: no new output"),
         ):
@@ -139,9 +147,10 @@ class TestNoProgressFailFast:
 
         adapter = _make_adapter(_dripper())
         with (
-            patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 5.0),
-            patch("agent.auxiliary_client._aux_stream_total_ceiling",
-                  return_value=0.3),
+            patch(
+                "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 5.0
+            ),
+            patch("agent.auxiliary_client._aux_stream_total_ceiling", return_value=0.3),
             patch("agent.codex_runtime._consume_codex_event_stream", _consume),
             pytest.raises(TimeoutError, match="hard ceiling"),
         ):
@@ -171,9 +180,13 @@ class TestNoProgressFailFast:
         owner_result: dict = {}
         try:
             with (
-                patch("agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS", 0.3),
+                patch(
+                    "agent.auxiliary_client._AUX_STREAM_NO_PROGRESS_TIMEOUT_SECONDS",
+                    0.3,
+                ),
                 patch("agent.auxiliary_client._evict_cached_client_instance"),
             ):
+
                 def _run():
                     owner_result["tid"] = threading.get_ident()
                     try:
@@ -208,32 +221,46 @@ class TestCompressionRetryGate:
         primary_client.base_url = "https://chatgpt.com/backend-api/codex"
         if second_response is not None:
             primary_client.chat.completions.create.side_effect = [
-                primary_error, second_response,
+                primary_error,
+                second_response,
             ]
         else:
             primary_client.chat.completions.create.side_effect = primary_error
 
         fallback_client = MagicMock()
         fallback_client.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(
-                index=0,
-                message=SimpleNamespace(role="assistant", content="fallback"),
-                finish_reason="stop",
-            )],
-            model="fb", usage=None,
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=SimpleNamespace(role="assistant", content="fallback"),
+                    finish_reason="stop",
+                )
+            ],
+            model="fb",
+            usage=None,
         )
 
         with (
-            patch("agent.auxiliary_client._get_cached_client",
-                  return_value=(primary_client, "gpt-5.6-sol")),
-            patch("agent.auxiliary_client._resolve_task_provider_model",
-                  return_value=("auto", "gpt-5.6-sol", None, None, None)),
-            patch("agent.auxiliary_client._try_configured_fallback_chain",
-                  return_value=(None, None, "")),
-            patch("agent.auxiliary_client._try_main_fallback_chain",
-                  return_value=(None, None, "")),
-            patch("agent.auxiliary_client._try_payment_fallback",
-                  return_value=(fallback_client, "fb", "openrouter")) as mock_fb,
+            patch(
+                "agent.auxiliary_client._get_cached_client",
+                return_value=(primary_client, "gpt-5.6-sol"),
+            ),
+            patch(
+                "agent.auxiliary_client._resolve_task_provider_model",
+                return_value=("auto", "gpt-5.6-sol", None, None, None),
+            ),
+            patch(
+                "agent.auxiliary_client._try_configured_fallback_chain",
+                return_value=(None, None, ""),
+            ),
+            patch(
+                "agent.auxiliary_client._try_main_fallback_chain",
+                return_value=(None, None, ""),
+            ),
+            patch(
+                "agent.auxiliary_client._try_payment_fallback",
+                return_value=(fallback_client, "fb", "openrouter"),
+            ) as mock_fb,
             patch("agent.auxiliary_client._TRANSIENT_RETRY_BACKOFF_BASE", 0.0),
         ):
             result = call_llm(
@@ -248,12 +275,15 @@ class TestCompressionRetryGate:
             "60.0s (no-progress timeout, 60.2s elapsed)"
         )
         good = SimpleNamespace(
-            choices=[SimpleNamespace(
-                index=0,
-                message=SimpleNamespace(role="assistant", content="retried"),
-                finish_reason="stop",
-            )],
-            model="gpt-5.6-sol", usage=None,
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    message=SimpleNamespace(role="assistant", content="retried"),
+                    finish_reason="stop",
+                )
+            ],
+            model="gpt-5.6-sol",
+            usage=None,
         )
         result, primary, mock_fb = self._run_call_llm(err, second_response=good)
         assert result.choices[0].message.content == "retried"

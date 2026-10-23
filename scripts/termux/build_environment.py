@@ -1,4 +1,5 @@
 """Wire staged bionic inputs to PM without exposing its installer executable."""
+
 from __future__ import annotations
 
 import argparse
@@ -21,15 +22,25 @@ def prepare_tools(source: Path, root: Path) -> None:
         entry = store / name
         if entry.absolute() != (source / name).absolute():
             entry.symlink_to((source / name).resolve(), target_is_directory=True)
-    record_tools(root, lockfile_path(), "linux-arm64-bionic", {name: name for name in ("python", "uv")})
+    record_tools(
+        root,
+        lockfile_path(),
+        "linux-arm64-bionic",
+        {name: name for name in ("python", "uv")},
+    )
 
 
 def application(root: Path, requirements: Path, python: Path) -> None:
     from pm import build_requirements_environment
 
     build_requirements_environment(
-        requirements.read_text(encoding="utf-8-sig").splitlines(), out=root / "venv",
-        python=python, wheelhouse=root / "wheelhouse", offline=True, sealed=True, explicit=True,
+        requirements.read_text(encoding="utf-8-sig").splitlines(),
+        out=root / "venv",
+        python=python,
+        wheelhouse=root / "wheelhouse",
+        offline=True,
+        sealed=True,
+        explicit=True,
         lock=root / "app" / "uv.lock",
     )
 
@@ -40,14 +51,28 @@ def assemble(root: Path, requirements: Path, python: Path) -> None:
 
     prepare_tools(root / "tools", root)
     manager = stage_manager_runtime(
-        python=python, destination=root / "pm-runtime", project=root / "app/pm",
-        wheelhouse=root / "wheelhouse", offline=True,
+        python=python,
+        destination=root / "pm-runtime",
+        project=root / "app/pm",
+        wheelhouse=root / "wheelhouse",
+        offline=True,
     )
     # The staged manager is complete but not published. Execute the application
     # build in it before sealing removes its build-time executable links.
     subprocess.run(
-        [str(manager), "-I", "-B", str(Path(__file__).resolve()), "application",
-         "--root", str(root), "--requirements", str(requirements), "--python", str(python)],
+        [
+            str(manager),
+            "-I",
+            "-B",
+            str(Path(__file__).resolve()),
+            "application",
+            "--root",
+            str(root),
+            "--requirements",
+            str(requirements),
+            "--python",
+            str(python),
+        ],
         check=True,
     )
     seal_pm_runtime(root, python)

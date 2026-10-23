@@ -46,9 +46,6 @@ class TestTruncateMcpTextResult:
         assert result.startswith(head_marker)
         assert result.endswith(tail_marker)
 
-
-
-
     def test_hard_cap_sits_above_spillover_threshold(self):
         """The hard cap must stay far above the MCP spillover threshold so
         spillover, not lossy truncation, handles ordinary large results."""

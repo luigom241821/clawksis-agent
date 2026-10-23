@@ -19,7 +19,12 @@ def mentions_other_participants(adapter: "TelegramAdapter", message: "Message") 
         for entity in entities:
             entity_type = adapter._entity_type(entity)
             if entity_type == "mention":
-                handle = (adapter._entity_span(source_text, entity) or "").strip().lstrip("@").lower()
+                handle = (
+                    (adapter._entity_span(source_text, entity) or "")
+                    .strip()
+                    .lstrip("@")
+                    .lower()
+                )
                 if handle and handle != own:
                     return True
             elif entity_type == "text_mention":
@@ -29,16 +34,22 @@ def mentions_other_participants(adapter: "TelegramAdapter", message: "Message") 
     return False
 
 
-def group_trigger_text(adapter: "TelegramAdapter", message: "Message", text: Optional[str]) -> Optional[str]:
+def group_trigger_text(
+    adapter: "TelegramAdapter", message: "Message", text: Optional[str]
+) -> Optional[str]:
     """Strip our own handle only when we are the sole addressee. With other participants named,
     ``@research_bot , @ops_bot are you both listening?`` must not reach us as ``, @ops_bot …``."""
-    if adapter._is_group_chat(message) and mentions_other_participants(adapter, message):
+    if adapter._is_group_chat(message) and mentions_other_participants(
+        adapter, message
+    ):
         return text
     return adapter._clean_bot_trigger_text(text)
 
 
 def group_identity_prompt(
-    adapter: "TelegramAdapter", message: "Message", channel_prompt: Optional[str],
+    adapter: "TelegramAdapter",
+    message: "Message",
+    channel_prompt: Optional[str],
 ) -> Optional[str]:
     """Session-stable identity line so the model can read retained @mentions as itself or not."""
     if not adapter._is_group_chat(message) or not getattr(adapter, "_bot", None):

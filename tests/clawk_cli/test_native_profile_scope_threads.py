@@ -1,7 +1,12 @@
 """A secondary-profile native ticket's implicit scope must reach the audio worker thread."""
+
 import asyncio
 
-from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+from clawk_constants import (
+    get_clawk_home,
+    reset_clawk_home_override,
+    set_clawk_home_override,
+)
 
 
 def test_config_scoped_worker_keeps_the_request_home_override(tmp_path):

@@ -14,7 +14,16 @@ from dataclasses import dataclass
 from scripts.code_health.model import MODULE_SCOPE, FileMeasure, Unit
 
 _FUNCS = (ast.FunctionDef, ast.AsyncFunctionDef)
-_BLOCKS = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith, ast.Match)
+_BLOCKS = (
+    ast.If,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.Try,
+    ast.With,
+    ast.AsyncWith,
+    ast.Match,
+)
 _TRY_STAR = getattr(ast, "TryStar", None)
 if _TRY_STAR is not None:
     _BLOCKS = (*_BLOCKS, _TRY_STAR)
@@ -52,11 +61,21 @@ def nesting_depth(stmts: list[ast.stmt], depth: int = 0) -> int:
                 and isinstance(block[0], ast.If)
                 and block[0].col_offset == stmt.col_offset
             )
-            deepest = max(deepest, nesting_depth(block, depth if is_elif else depth + 1))
+            deepest = max(
+                deepest, nesting_depth(block, depth if is_elif else depth + 1)
+            )
     return deepest
 
 
-_SCOPES = (*_FUNCS, ast.Lambda, ast.ClassDef, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+_SCOPES = (
+    *_FUNCS,
+    ast.Lambda,
+    ast.ClassDef,
+    ast.ListComp,
+    ast.SetComp,
+    ast.DictComp,
+    ast.GeneratorExp,
+)
 
 
 def _own_scope(node: ast.AST):
@@ -98,9 +117,18 @@ def _self_references(node: ast.AST, name: str) -> list[ast.Name | ast.Attribute]
             if isinstance(child, _SCOPES):
                 if not _binds(child, name):
                     todo.append(child)
-            elif isinstance(child, ast.Name) and child.id == name and isinstance(child.ctx, ast.Load) or (isinstance(child, ast.Attribute) and child.attr == name
-                  and isinstance(child.ctx, ast.Load)
-                  and isinstance(child.value, ast.Name) and child.value.id in ("self", "cls")):
+            elif (
+                isinstance(child, ast.Name)
+                and child.id == name
+                and isinstance(child.ctx, ast.Load)
+                or (
+                    isinstance(child, ast.Attribute)
+                    and child.attr == name
+                    and isinstance(child.ctx, ast.Load)
+                    and isinstance(child.value, ast.Name)
+                    and child.value.id in ("self", "cls")
+                )
+            ):
                 refs.append(child)
     return refs
 
@@ -164,9 +192,14 @@ class _UnitCollector(ast.NodeVisitor):
         qual = self._qualname(node.name)
         # A class has no size metrics of its own, but it is a unit so that a renamed or moved
         # class keeps the violations in its body (decorators, attributes) one-to-one.
-        self.units[qual] = Unit(qualname=qual, line=node.lineno, metrics={},
-                                body_hash=body_hash(node), parent=self.funcs[-1] if self.funcs else None,
-                                end_line=node.end_lineno)
+        self.units[qual] = Unit(
+            qualname=qual,
+            line=node.lineno,
+            metrics={},
+            body_hash=body_hash(node),
+            parent=self.funcs[-1] if self.funcs else None,
+            end_line=node.end_lineno,
+        )
         self.spans.append(Span(_first_line(node), node.end_lineno or node.lineno, qual))
         self.stack.append(qual.rsplit(".", 1)[-1])
         self.generic_visit(node)
@@ -180,7 +213,10 @@ class _UnitCollector(ast.NodeVisitor):
         self.units[qual] = Unit(
             qualname=qual,
             line=node.lineno,
-            metrics={"FUNC_LINES": end - first + 1, "NESTING": nesting_depth(node.body)},
+            metrics={
+                "FUNC_LINES": end - first + 1,
+                "NESTING": nesting_depth(node.body),
+            },
             body_hash=body_hash(node),
             parent=self.funcs[-1] if self.funcs else None,
             end_line=end,

@@ -11,8 +11,6 @@ def _read_config(tmp_path) -> str:
     return (tmp_path / "config.yaml").read_text(encoding="utf-8")
 
 
-
-
 def test_save_config_preserves_unresolved_env_refs(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("MISSING_SECRET", raising=False)
@@ -57,9 +55,3 @@ def test_save_config_allows_intentional_secret_value_change(monkeypatch, tmp_pat
     saved = _read_config(tmp_path)
     assert "api_key: sk-new-secret" in saved
     assert "${TU_ZI_API_KEY}" not in saved
-
-
-
-
-
-

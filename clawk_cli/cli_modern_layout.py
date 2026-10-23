@@ -30,7 +30,10 @@ def is_modern(cli) -> bool:
 
 def layout_from_config(display: dict) -> bool:
     """True for the glyph layout (default); ``classic`` keeps the boxed transcript."""
-    return str((display or {}).get("cli_layout", "modern") or "modern").strip().lower() != "classic"
+    return (
+        str((display or {}).get("cli_layout", "modern") or "modern").strip().lower()
+        != "classic"
+    )
 
 
 def busy_input_mode_from_config(display: dict) -> str:
@@ -40,12 +43,13 @@ def busy_input_mode_from_config(display: dict) -> str:
 
 def _skin_hex(key: str, fallback: str) -> str:
     from clawk_cli.skin_engine import get_active_skin
+
     return get_active_skin().get_color(key, fallback) or fallback
 
 
 def _fg(hex_color: str, bold: bool = False) -> str:
     try:
-        r, g, b = (int(hex_color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        r, g, b = (int(hex_color.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
         return f"\x1b[{'1;' if bold else ''}38;2;{r};{g};{b}m"
     except (ValueError, IndexError):
         return _BOLD if bold else ""
@@ -54,13 +58,19 @@ def _fg(hex_color: str, bold: bool = False) -> str:
 def _brand_glyph() -> tuple[str, str]:
     """(glyph, name) from the skin's response label, e.g. ``" ∇ Clawksis "`` → ("∇", "Clawksis")."""
     from clawk_cli.skin_engine import get_active_skin
+
     label = get_active_skin().get_branding("response_label", " ∇ Clawksis ")
     parts = label.split(None, 1)
-    return (parts[0], parts[1].strip()) if len(parts) == 2 else ("∇", label.strip() or "Clawksis")
+    return (
+        (parts[0], parts[1].strip())
+        if len(parts) == 2
+        else ("∇", label.strip() or "Clawksis")
+    )
 
 
 def prompt_glyph() -> str:
     from clawk_cli.skin_engine import get_active_skin
+
     return get_active_skin().get_branding("prompt_symbol", "❯").strip() or "❯"
 
 
@@ -102,6 +112,7 @@ def _take_gap() -> str:
 def user_echo_markup(text: str, accent_hex: str, ts_suffix: str = "") -> str:
     """Rich markup for a submitted single-line user message: ``❯ text``."""
     from rich.markup import escape
+
     return f"[bold {accent_hex}]{escape(prompt_glyph())}[/] [bold]{escape(text)}[/]{ts_suffix}"
 
 
@@ -116,14 +127,16 @@ def _full_title(text: str) -> str:
     """The reasoning's first ``**bold**`` heading, else its first sentence, whitespace-collapsed."""
     text = (text or "").strip()
     match = re.search(r"\*\*(.+?)\*\*", text)
-    title = match.group(1) if match else re.split(r"(?<=[.!?])\s|\n", text, maxsplit=1)[0]
+    title = (
+        match.group(1) if match else re.split(r"(?<=[.!?])\s|\n", text, maxsplit=1)[0]
+    )
     return " ".join(title.split()).strip("*# ")
 
 
 def thought_title(text: str) -> str:
     """Short title for a reasoning block: its first ``**bold**`` heading, else its first sentence."""
     title = _full_title(text)
-    return title if len(title) <= _TITLE_MAX else title[:_TITLE_MAX - 1].rstrip() + "…"
+    return title if len(title) <= _TITLE_MAX else title[: _TITLE_MAX - 1].rstrip() + "…"
 
 
 def thought_line(seconds: float | None, text: str) -> str:
@@ -131,12 +144,18 @@ def thought_line(seconds: float | None, text: str) -> str:
     # The reasoning is printed above this line; a title that IS the whole reasoning would repeat it.
     whole = _full_title(text) == " ".join((text or "").split()).strip("*# ")
     title = "" if whole else thought_title(text)
-    took = t("cli.modern.thought_for", seconds=f"{max(seconds or 0.0, 0.0):.0f}") if seconds else t("cli.modern.thought")
+    took = (
+        t("cli.modern.thought_for", seconds=f"{max(seconds or 0.0, 0.0):.0f}")
+        if seconds
+        else t("cli.modern.thought")
+    )
     body = f"{took} · {title}" if title else took
     return f"\x1b[2;3m∴ {body}{_RST}"
 
 
-_REASONING_PREVIEW_LINES = 10  # classic's post-hoc reasoning box shows this many unless /reasoning full
+_REASONING_PREVIEW_LINES = (
+    10  # classic's post-hoc reasoning box shows this many unless /reasoning full
+)
 
 
 def reasoning_text_line(line: str) -> str:
@@ -148,33 +167,57 @@ def thought_rows(seconds: float | None, text: str, full: bool) -> list[str]:
     """A reasoning block printed after the fact (no live stream): dim bar, its text (first 10
     lines unless ``full``, as classic), then the ``∴ Thought for 3s`` summary."""
     lines = (text or "").strip().splitlines()
-    shown = lines if full or len(lines) <= _REASONING_PREVIEW_LINES else lines[:_REASONING_PREVIEW_LINES]
+    shown = (
+        lines
+        if full or len(lines) <= _REASONING_PREVIEW_LINES
+        else lines[:_REASONING_PREVIEW_LINES]
+    )
     rows = ["", separator(False), *(reasoning_text_line(line) for line in shown)]
     if len(shown) < len(lines):
-        rows.append(f"{_DIM}  {t('cli.chat.reasoning_more_lines', count=len(lines) - len(shown))}{_RST}")
+        rows.append(
+            f"{_DIM}  {t('cli.chat.reasoning_more_lines', count=len(lines) - len(shown))}{_RST}"
+        )
     return [*rows, thought_line(seconds, text), closing_separator(False)]
 
 
-def completed_tool_line(cli, function_name: str, args: dict | None, duration: float, result=None,
-                        is_error: bool = False) -> str:
+def completed_tool_line(
+    cli,
+    function_name: str,
+    args: dict | None,
+    duration: float,
+    result=None,
+    is_error: bool = False,
+) -> str:
     """The scrollback line for a finished tool call in the active layout."""
     if is_modern(cli):
         return _take_gap() + tool_row(function_name, args, duration, result, is_error)
     from agent.display import get_cute_tool_message
+
     return f"  {get_cute_tool_message(function_name, args, duration, result=result)}"
 
 
-def tool_row(function_name: str, args: dict | None, duration: float, result=None, is_error: bool = False) -> str:
+def tool_row(
+    function_name: str,
+    args: dict | None,
+    duration: float,
+    result=None,
+    is_error: bool = False,
+) -> str:
     """``📖 Read calc.py  0.2s`` / ``✗ $ pytest -q  0.4s [exit 1]`` — one row per completed call, led by
     the tool's emoji (the classic ``┊`` row's), or a red ``✗`` when that entry failed. A tool in
     ``NEUTRAL_FAILURE_TOOLS`` keeps its emoji and shows the reason dim."""
     from agent.display import get_tool_row_parts, is_neutral_failure
-    rows = get_tool_row_parts(function_name, args or {}, result, is_error=bool(is_error))
+
+    rows = get_tool_row_parts(
+        function_name, args or {}, result, is_error=bool(is_error)
+    )
     neutral = is_neutral_failure(function_name, result)
     out = []
     for index, (emoji, verb, detail, suffix) in enumerate(rows):
         verb = (verb or function_name).strip()
-        mark = f"{_RED}✗{_RST}" if suffix is not None and not neutral else (emoji or "●")
+        mark = (
+            f"{_RED}✗{_RST}" if suffix is not None and not neutral else (emoji or "●")
+        )
         line = f"{mark} {_BOLD}{verb[:1].upper()}{verb[1:]}{_RST}"
         if detail:
             line += f" {detail}"
@@ -221,6 +264,7 @@ def gutter_print(print_fn):
                 old, new = _display_path(match.group(1)), _display_path(match.group(2))
                 line = f"{_BOLD}{new if old == new else f'{old} → {new}'}{_RST}"
             print_fn(f"{_DIM}│{_RST} {line}" if plain else f"{_DIM}│{_RST}")
+
     return _print
 
 
@@ -232,17 +276,27 @@ def diff_printer(print_fn):
 def turn_footer(summary: str) -> str:
     """``─ 12.4s · read 3 files · edited 1 file +4 -0 · 7:02 AM`` closing each turn."""
     body = summary.lstrip("⋯ ").strip()
-    clock = datetime.now().strftime("%-I:%M %p") if os.name != "nt" else datetime.now().strftime("%I:%M %p")
-    return _take_gap() + (f"{_DIM}─ {body} · {clock}{_RST}" if body else f"{_DIM}─ {clock}{_RST}")
+    clock = (
+        datetime.now().strftime("%-I:%M %p")
+        if os.name != "nt"
+        else datetime.now().strftime("%I:%M %p")
+    )
+    return _take_gap() + (
+        f"{_DIM}─ {body} · {clock}{_RST}" if body else f"{_DIM}─ {clock}{_RST}"
+    )
 
 
 # ── live region (prompt_toolkit fragments, redrawn every frame) ─────────────────────────────
 
+
 def _cwd_label() -> str:
     cwd = os.getenv("TERMINAL_CWD") or os.getcwd()
     home = os.path.expanduser("~")
-    short = "~" + cwd[len(home):] if cwd == home or cwd.startswith(home + os.sep) else cwd
+    short = (
+        "~" + cwd[len(home) :] if cwd == home or cwd.startswith(home + os.sep) else cwd
+    )
     from clawk_cli.status_bar_git import current_git_branch
+
     branch = current_git_branch(cwd)
     return f"{short} ({branch})" if branch else short
 
@@ -252,7 +306,9 @@ def activity_text(cli) -> str:
     if getattr(cli, "_command_running", False):
         return str(getattr(cli, "_command_status", "") or "")
     text = str(getattr(cli, "_spinner_text", "") or "").strip()
-    return text or (t("cli.modern.working") if getattr(cli, "_agent_running", False) else "")
+    return text or (
+        t("cli.modern.working") if getattr(cli, "_agent_running", False) else ""
+    )
 
 
 def _turn_elapsed(cli) -> str:
@@ -260,6 +316,7 @@ def _turn_elapsed(cli) -> str:
     if started is None:
         return ""
     from cli import format_duration_compact
+
     return format_duration_compact(max(0.0, time.time() - float(started)))
 
 
@@ -285,7 +342,9 @@ def top_rule_fragments(cli) -> list:
     """``── ⠹ Running tests · 14s ─────────── calc helpers ─``: live status left, session title right."""
     width = max(10, cli._get_tui_terminal_width())
     rule, accent = rule_style(), f"fg:{_skin_hex('ui_accent', '#6C4FD6')} bold"
-    busy = getattr(cli, "_agent_running", False) or getattr(cli, "_command_running", False)
+    busy = getattr(cli, "_agent_running", False) or getattr(
+        cli, "_command_running", False
+    )
     left: list = []
     if busy:
         frame = _SPIN[int(time.monotonic() * 10) % len(_SPIN)]
@@ -296,7 +355,11 @@ def top_rule_fragments(cli) -> list:
                 left.append(("class:status-bar-dim bg:default", f" · {extra}"))
         left.append((rule, " "))
     title = cli._get_status_bar_session_title()
-    right = [(rule, " "), (f"fg:{_skin_hex('ui_label', '#6C4FD6')}", title), (rule, " ─")] if title else []
+    right = (
+        [(rule, " "), (f"fg:{_skin_hex('ui_label', '#6C4FD6')}", title), (rule, " ─")]
+        if title
+        else []
+    )
     used = sum(cli._status_bar_display_width(text) for _, text in left + right)
     if used >= width:
         right, used = [], sum(cli._status_bar_display_width(text) for _, text in left)
@@ -305,17 +368,33 @@ def top_rule_fragments(cli) -> list:
 
 def hint_pairs(cli) -> list[tuple[str, str]]:
     """Keys that do something right now, for the footer's right half."""
-    if any(getattr(cli, attr, None) for attr in (
-            "_approval_state", "_clarify_state", "_sudo_state", "_secret_state", "_connection_state",
-            "_slash_confirm_state", "_model_picker_state", "_command_palette_state")):
+    if any(
+        getattr(cli, attr, None)
+        for attr in (
+            "_approval_state",
+            "_clarify_state",
+            "_sudo_state",
+            "_secret_state",
+            "_connection_state",
+            "_slash_confirm_state",
+            "_model_picker_state",
+            "_command_palette_state",
+        )
+    ):
         return []
     if getattr(cli, "_agent_running", False):
-        enter = {"steer": "steer", "queue": "queue"}.get(getattr(cli, "busy_input_mode", ""), "interrupt")
+        enter = {"steer": "steer", "queue": "queue"}.get(
+            getattr(cli, "busy_input_mode", ""), "interrupt"
+        )
         pairs = [("enter", t(f"cli.modern.hint_{enter}"))]
         if enter != "queue":
             pairs.append(("tab", t("cli.modern.hint_queue")))
         return pairs + [("ctrl+c", t("cli.modern.hint_stop"))]
-    return [("/", t("cli.modern.hint_commands")), ("@", t("cli.modern.hint_files")), ("!", t("cli.modern.hint_shell"))]
+    return [
+        ("/", t("cli.modern.hint_commands")),
+        ("@", t("cli.modern.hint_files")),
+        ("!", t("cli.modern.hint_shell")),
+    ]
 
 
 def status_line_fragments(cli) -> list:
@@ -328,7 +407,9 @@ def _render_safely(render, cli) -> list:
     """Boundary for prompt_toolkit render callbacks: a bad frame degrades to a bare line."""
     try:
         return render(cli)
-    except Exception:  # health: allow BLE001 -- a render callback must never take down the app frame
+    except (
+        Exception
+    ):  # health: allow BLE001 -- a render callback must never take down the app frame
         logger.debug("%s failed", render.__name__, exc_info=True)
         return [("", f" {getattr(cli, 'model', '') or 'Clawksis'}")]
 
@@ -345,17 +426,29 @@ def _status_line_fragments(cli) -> list:
         return field_set is None or name in field_set
 
     left: list = []
-    for seg in cli._status_bar_segments(snapshot, width, field_set, cli._is_session_yolo_active(), styled=True):
+    for seg in cli._status_bar_segments(
+        snapshot, width, field_set, cli._is_session_yolo_active(), styled=True
+    ):
         if left:
             left.append((dim, " · "))
         left.extend(seg)
-    stash = cli._prompt_stash.indicator() if _on("stash") and hasattr(cli, "_prompt_stash") else ""
+    stash = (
+        cli._prompt_stash.indicator()
+        if _on("stash") and hasattr(cli, "_prompt_stash")
+        else ""
+    )
     if stash:  # a parked draft is never silently forgotten
         left += [(dim, " · "), (strong, stash)]
     battery = snapshot.get("battery_label") or ""  # only set while /battery is on
     if battery and _on("battery"):
-        left[0:0] = [("", " "), (cli._battery_status_style(snapshot.get("battery_category", "dim")), battery),
-                     (dim, " ·")]
+        left[0:0] = [
+            ("", " "),
+            (
+                cli._battery_status_style(snapshot.get("battery_category", "dim")),
+                battery,
+            ),
+            (dim, " ·"),
+        ]
     vim = cli._vim_mode_label()
     if vim:
         left += [(dim, " · "), (strong, vim)]
@@ -367,9 +460,11 @@ def _status_line_fragments(cli) -> list:
     used_left = sum(cli._status_bar_display_width(text) for _, text in left)
     used_right = sum(cli._status_bar_display_width(text) for _, text in right)
     room = width - used_left - used_right - 6
-    if field_set is None and room >= 12:  # cwd takes whatever the hints leave, trimmed from the left
+    if (
+        field_set is None and room >= 12
+    ):  # cwd takes whatever the hints leave, trimmed from the left
         cwd = _cwd_label()
-        cwd = cwd if len(cwd) <= room else "…" + cwd[-(room - 1):]
+        cwd = cwd if len(cwd) <= room else "…" + cwd[-(room - 1) :]
         left += [(dim, " · "), (dim, cwd)]
         used_left += 3 + cli._status_bar_display_width(cwd)
     if right and used_left + used_right + 2 > width:
@@ -383,19 +478,30 @@ def modern_input_rules(cli, kb):
     from prompt_toolkit.filters import Condition
     from prompt_toolkit.layout import FormattedTextControl, Window
 
-    top = Window(FormattedTextControl(lambda: _render_safely(top_rule_fragments, cli)),
-                 height=lambda: cli._tui_input_rule_height("top"), wrap_lines=False)
-    bottom = Window(char="─", height=lambda: cli._tui_input_rule_height("bottom"), style=rule_style)
+    top = Window(
+        FormattedTextControl(lambda: _render_safely(top_rule_fragments, cli)),
+        height=lambda: cli._tui_input_rule_height("top"),
+        wrap_lines=False,
+    )
+    bottom = Window(
+        char="─", height=lambda: cli._tui_input_rule_height("bottom"), style=rule_style
+    )
 
     def _can_queue() -> bool:
         from prompt_toolkit.application import get_app
         from cli import _looks_like_slash_command
         from clawk_cli.cli_subagent_monitor import modal_prompt_active
+
         buf = get_app().current_buffer
         text = buf.text.strip()
-        return bool(getattr(cli, "_agent_running", False) and text and buf.complete_state is None
-                    and not _looks_like_slash_command(text) and not text.startswith("!")
-                    and not modal_prompt_active(cli))
+        return bool(
+            getattr(cli, "_agent_running", False)
+            and text
+            and buf.complete_state is None
+            and not _looks_like_slash_command(text)
+            and not text.startswith("!")
+            and not modal_prompt_active(cli)
+        )
 
     @kb.add("tab", filter=Condition(_can_queue), eager=True)
     def _queue_while_busy(event):
@@ -403,7 +509,9 @@ def modern_input_rules(cli, kb):
         buf = event.app.current_buffer
         text, images = buf.text.strip(), list(cli._attached_images)
         cli._attached_images.clear()
-        cli._tui_enter_while_busy(text, images, (text, images) if images else text, mode="queue")
+        cli._tui_enter_while_busy(
+            text, images, (text, images) if images else text, mode="queue"
+        )
         cli._inline_pastes(buf)
         buf.reset(append_to_history=True)
         event.app.invalidate()

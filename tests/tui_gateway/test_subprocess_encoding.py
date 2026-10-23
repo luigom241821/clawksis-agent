@@ -20,6 +20,7 @@ import pytest
 
 from tui_gateway import server
 
+
 @pytest.fixture()
 def bad_bytes_cmd(tmp_path):
     """A shell command running a child that writes bytes invalid in UTF-8 (and in most
@@ -52,7 +53,9 @@ def test_quick_command_exec_survives_non_utf8_child_output(monkeypatch, bad_byte
     monkeypatch.setattr(
         server,
         "_load_cfg",
-        lambda: {"quick_commands": {"badbytes": {"type": "exec", "command": bad_bytes_cmd}}},
+        lambda: {
+            "quick_commands": {"badbytes": {"type": "exec", "command": bad_bytes_cmd}}
+        },
     )
 
     resp = server.handle_request(

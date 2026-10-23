@@ -23,7 +23,9 @@ from clawk_cli import approvals_test as at
 
 def _args(command, env_type="local", as_json=False):
     return argparse.Namespace(
-        command_words=list(command) if isinstance(command, (list, tuple)) else [command],
+        command_words=list(command)
+        if isinstance(command, (list, tuple))
+        else [command],
         env_type=env_type,
         json=as_json,
     )
@@ -32,15 +34,19 @@ def _args(command, env_type="local", as_json=False):
 @pytest.fixture
 def isolated_approvals(monkeypatch):
     """Isolate the evaluators from the dev machine's real config/state."""
-    monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"mode": "manual"})
+    monkeypatch.setattr(
+        approval_context, "_get_approval_config", lambda: {"mode": "manual"}
+    )
     monkeypatch.setattr(A, "_YOLO_MODE_FROZEN", False)
     monkeypatch.setattr(A, "is_current_session_yolo_enabled", lambda: False)
     monkeypatch.setattr(A, "load_permanent_allowlist", lambda: set())
     saved = set(A._permanent_approved)
     A._permanent_approved.clear()
+
     # The tester must NEVER prompt or persist — make any attempt explode.
     def _boom(*_a, **_kw):  # pragma: no cover - failure path
         raise AssertionError("read-only tester touched a prompt/persistence path")
+
     monkeypatch.setattr(A, "prompt_dangerous_approval", _boom)
     monkeypatch.setattr(approval_prompt, "prompt_dangerous_approval", _boom)
     monkeypatch.setattr(A, "save_permanent_allowlist", _boom)
@@ -71,19 +77,23 @@ class TestVerdicts:
         assert "ask-approval" in out
         assert "recursive delete" in out
 
-    def test_user_deny_rule_from_config_honored(self, isolated_approvals, capsys,
-                                                monkeypatch):
+    def test_user_deny_rule_from_config_honored(
+        self, isolated_approvals, capsys, monkeypatch
+    ):
         monkeypatch.setattr(
-            approval_context, "_get_approval_config",
-            lambda: {"mode": "manual", "deny": ["git push *"]})
+            approval_context,
+            "_get_approval_config",
+            lambda: {"mode": "manual", "deny": ["git push *"]},
+        )
         rc = at.approvals_test_command(_args(["git", "push", "origin", "main"]))
         out = capsys.readouterr().out
         assert rc == 3
         assert "user-deny" in out
         assert "git push *" in out
 
-    def test_container_env_type_skips_guards_like_runtime(self, isolated_approvals,
-                                                          capsys):
+    def test_container_env_type_skips_guards_like_runtime(
+        self, isolated_approvals, capsys
+    ):
         # Mirrors check_all_command_guards: isolated docker skips BEFORE the
         # hardline floor, so even a catastrophic command reports allow.
         rc = at.approvals_test_command(_args(["rm", "-rf", "/"], env_type="docker"))
@@ -92,9 +102,12 @@ class TestVerdicts:
         assert "allow" in out
         assert "container" in out or "isolated" in out
 
-    def test_mode_off_bypasses_dangerous_but_not_hardline(self, isolated_approvals,
-                                                          capsys, monkeypatch):
-        monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"mode": "off"})
+    def test_mode_off_bypasses_dangerous_but_not_hardline(
+        self, isolated_approvals, capsys, monkeypatch
+    ):
+        monkeypatch.setattr(
+            approval_context, "_get_approval_config", lambda: {"mode": "off"}
+        )
         rc = at.approvals_test_command(_args(["rm", "-rf", "~/project/build"]))
         out = capsys.readouterr().out
         assert rc == 0
@@ -106,8 +119,7 @@ class TestVerdicts:
 class TestNormalizationParity:
     """The tester must run the same de-obfuscation path as the runtime."""
 
-    def test_obfuscated_command_matches_plain_verdict(self, isolated_approvals,
-                                                      capsys):
+    def test_obfuscated_command_matches_plain_verdict(self, isolated_approvals, capsys):
         rc_plain = at.approvals_test_command(_args(["rm", "-rf", "/"]))
         out_plain = capsys.readouterr().out
         rc_obf = at.approvals_test_command(_args(["r\\m", "-rf", "/"]))
@@ -118,10 +130,10 @@ class TestNormalizationParity:
         # The trace must show the de-obfuscated form the runtime evaluated.
         assert "rm -rf /" in out_obf
 
-    def test_normalized_trace_shown_when_command_normalizes(self,
-                                                            isolated_approvals,
-                                                            capsys):
-        rc = at.approvals_test_command(_args(['git', 'st""atus']))
+    def test_normalized_trace_shown_when_command_normalizes(
+        self, isolated_approvals, capsys
+    ):
+        rc = at.approvals_test_command(_args(["git", 'st""atus']))
         out = capsys.readouterr().out
         assert rc == 0
         assert "git status" in out
@@ -135,8 +147,9 @@ class TestReadOnly:
         assert rc == 0
         assert not sentinel.exists()
 
-    def test_dangerous_command_never_prompts_or_persists(self, isolated_approvals,
-                                                         capsys):
+    def test_dangerous_command_never_prompts_or_persists(
+        self, isolated_approvals, capsys
+    ):
         # isolated_approvals wires prompt/persistence to AssertionError; a
         # dangerous command must complete without touching either.
         rc = at.approvals_test_command(_args(["rm", "-rf", "~/project/build"]))
@@ -161,6 +174,7 @@ class TestOutputAndWiring:
 
     def test_dispatcher_routes_test_subcommand(self, isolated_approvals, capsys):
         from clawk_cli.approvals_suggest import approvals_command
+
         args = _args(["ls"])
         args.approvals_command = "test"
         rc = approvals_command(args)
@@ -170,12 +184,14 @@ class TestOutputAndWiring:
 
     def test_parser_wires_test_subcommand(self, isolated_approvals, capsys):
         from clawk_cli.subcommands.approvals import build_approvals_parser
+
         parser = argparse.ArgumentParser()
         sub = parser.add_subparsers()
         sentinel = []
         build_approvals_parser(sub, cmd_approvals=lambda a: sentinel.append(a) or 0)
         args = parser.parse_args(
-            ["approvals", "test", "--env-type", "ssh", "--", "ls", "-la"])
+            ["approvals", "test", "--env-type", "ssh", "--", "ls", "-la"]
+        )
         assert args.approvals_command == "test"
         assert args.env_type == "ssh"
         # argparse REMAINDER keeps the leading "--"; the handler strips it.
@@ -188,8 +204,7 @@ class TestOutputAndWiring:
         args.func(args)
         assert sentinel
 
-    def test_leading_separator_stripped_from_command(self, isolated_approvals,
-                                                     capsys):
+    def test_leading_separator_stripped_from_command(self, isolated_approvals, capsys):
         rc = at.approvals_test_command(_args(["--", "ls", "-la"]))
         out = capsys.readouterr().out
         assert rc == 0

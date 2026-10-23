@@ -7,6 +7,7 @@ the write-skipping never loses a NEEDED write: changed values always
 land in state.db, and restart rebinding works even when the legacy
 sessions.json mirror lagged behind (or never existed).
 """
+
 from __future__ import annotations
 
 import json
@@ -59,9 +60,7 @@ class TestChangedValuesAlwaysPersist:
         assert durable["last_prompt_tokens"] == 54321
         store._db.close()
 
-    def test_healthy_path_bump_persists_updated_at_to_db(
-        self, tmp_path, monkeypatch
-    ):
+    def test_healthy_path_bump_persists_updated_at_to_db(self, tmp_path, monkeypatch):
         store = _make_store(tmp_path, monkeypatch)
         entry = store.get_or_create_session(_source())
         before = _routing_row(store, entry.session_key)["updated_at"]
@@ -76,9 +75,7 @@ class TestChangedValuesAlwaysPersist:
         assert after == again.updated_at.isoformat()
         store._db.close()
 
-    def test_fast_path_survives_restart_across_stores(
-        self, tmp_path, monkeypatch
-    ):
+    def test_fast_path_survives_restart_across_stores(self, tmp_path, monkeypatch):
         store = _make_store(tmp_path, monkeypatch)
         entry = store.get_or_create_session(_source())
         store.update_session(entry.session_key, last_prompt_tokens=777)
@@ -169,9 +166,7 @@ class TestFallbacks:
         data = json.loads(sessions_json.read_text(encoding="utf-8"))
         assert data[entry.session_key]["last_prompt_tokens"] == 99
 
-    def test_failed_upsert_falls_back_to_full_rewrite(
-        self, tmp_path, monkeypatch
-    ):
+    def test_failed_upsert_falls_back_to_full_rewrite(self, tmp_path, monkeypatch):
         store = _make_store(tmp_path, monkeypatch)
         entry = store.get_or_create_session(_source())
 
@@ -223,9 +218,7 @@ class TestPeerRecordConsistency:
         monkeypatch.setattr(store, "_save_entry", swap_then_save)
         store.update_session(entry.session_key, last_prompt_tokens=5)
 
-        assert recorded == [
-            (original_id, entry.session_key, entry.display_name)
-        ]
+        assert recorded == [(original_id, entry.session_key, entry.display_name)]
         store._db.close()
 
 
@@ -255,9 +248,7 @@ class TestGenerationOrdering:
         assert calls == []
         store._db.close()
 
-    def test_restart_rebind_after_skipped_idempotent_write(
-        self, tmp_path, monkeypatch
-    ):
+    def test_restart_rebind_after_skipped_idempotent_write(self, tmp_path, monkeypatch):
         """A skipped fast-path write never orphans the session on restart.
 
         The skip only fires when a newer FULL snapshot — which contains
@@ -379,9 +370,7 @@ class TestDelayedWriteOrdering:
         assert _routing_row(store, entry.session_key)["last_prompt_tokens"] == 2
         store._db.close()
 
-    def test_delayed_full_rewrite_folds_in_newer_fast_save(
-        self, tmp_path, monkeypatch
-    ):
+    def test_delayed_full_rewrite_folds_in_newer_fast_save(self, tmp_path, monkeypatch):
         """A full rewrite landing after a later-serialized fast save.
 
         The rewrite's snapshot predates the fast save, so replaying it
@@ -423,9 +412,7 @@ class TestDelayedWriteOrdering:
             upserts.append(session_key)
             real_saver(session_key, entry_json, **kwargs)
 
-        monkeypatch.setattr(
-            store._db, "save_gateway_routing_entry", counting_saver
-        )
+        monkeypatch.setattr(store._db, "save_gateway_routing_entry", counting_saver)
         gate = _GatedSaveLock(store._save_lock)
         store._save_lock = gate
         older = threading.Thread(

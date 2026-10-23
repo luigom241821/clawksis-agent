@@ -85,7 +85,9 @@ def test_deliver_wake_non_push_self_posts_raw_session_id(monkeypatch):
         runner, port = await _serve(handler)
         try:
             adapter = ApiServerLikeAdapter(host="0.0.0.0", port=port, key="sekrit")
-            await deliver_wake(adapter, text="task done — wake", session_id="raw-sid-42")
+            await deliver_wake(
+                adapter, text="task done — wake", session_id="raw-sid-42"
+            )
         finally:
             await runner.cleanup()
 
@@ -93,9 +95,7 @@ def test_deliver_wake_non_push_self_posts_raw_session_id(monkeypatch):
     assert seen["session_id"] == "raw-sid-42"
     assert seen["auth"] == "Bearer sekrit"
     assert seen["body"]["stream"] is False
-    assert seen["body"]["messages"] == [
-        {"role": "user", "content": "task done — wake"}
-    ]
+    assert seen["body"]["messages"] == [{"role": "user", "content": "task done — wake"}]
 
 
 def test_deliver_wake_retries_429_then_succeeds(monkeypatch):
@@ -138,8 +138,9 @@ def test_persist_delegation_delivery_appends_delivery_row(tmp_path):
     sid = "raw-hq-sid"
     db.create_session(sid, source="api_server")
     db.append_message(sid, "user", content="please confirm before writing")
-    db.append_message(sid, "assistant", content="awaiting confirmation",
-                      finish_reason="stop")
+    db.append_message(
+        sid, "assistant", content="awaiting confirmation", finish_reason="stop"
+    )
 
     class DbAdapter(ApiServerLikeAdapter):
         def _ensure_session_db(self):
@@ -151,10 +152,14 @@ def test_persist_delegation_delivery_appends_delivery_row(tmp_path):
         "results": [{"status": "completed"}, {"status": "failed"}],
         "total_duration_seconds": 12.5,
     }
-    asyncio.run(persist_delegation_delivery(
-        DbAdapter(), text="[ASYNC DELEGATION BATCH COMPLETE — deleg_x]",
-        session_id=sid, evt=evt,
-    ))
+    asyncio.run(
+        persist_delegation_delivery(
+            DbAdapter(),
+            text="[ASYNC DELEGATION BATCH COMPLETE — deleg_x]",
+            session_id=sid,
+            evt=evt,
+        )
+    )
 
     rows = db.get_messages(sid)
     assert len(rows) == 3
@@ -177,8 +182,10 @@ def test_persist_delegation_delivery_raises_without_db():
             return None
 
     with pytest.raises(RuntimeError, match="SessionDB unavailable"):
-        asyncio.run(persist_delegation_delivery(
-            NoDbAdapter(), text="x", session_id="sid",
-        ))
-
-
+        asyncio.run(
+            persist_delegation_delivery(
+                NoDbAdapter(),
+                text="x",
+                session_id="sid",
+            )
+        )

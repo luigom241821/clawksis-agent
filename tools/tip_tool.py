@@ -18,12 +18,17 @@ def tip_tool(text: str, selector: str, title: str = "", side: str = "") -> str:
     if not text:
         return tool_error("tip needs text — the one line the bubble says.")
     if not selector:
-        return tool_error("tip needs a selector to point at. Call tour(action='targets') to see "
-                          "what's on screen and prefer a target reporting stable: true.")
+        return tool_error(
+            "tip needs a selector to point at. Call tour(action='targets') to see "
+            "what's on screen and prefer a target reporting stable: true."
+        )
     if side and side not in SIDES:
         return tool_error(f"side must be one of: {', '.join(SIDES)}.")
-    payload = {"selector": selector, "text": text,
-               **{k: v for k, v in (("title", title), ("side", side)) if v}}
+    payload = {
+        "selector": selector,
+        "text": text,
+        **{k: v for k, v in (("title", title), ("side", side)) if v},
+    }
     try:
         ok = desktop_ui.emit("tip.show", payload)
     except Exception as exc:
@@ -75,7 +80,12 @@ def check_tips_enabled() -> bool:
 
 
 registry.register(
-    name="show_tip", toolset="desktop_ui", schema=TIP_SCHEMA, check_fn=check_tips_enabled,
+    name="show_tip",
+    toolset="desktop_ui",
+    schema=TIP_SCHEMA,
+    check_fn=check_tips_enabled,
     handler=lambda args, **kw: tip_tool(
-        **{k: args.get(k, "") for k in ("text", "selector", "title", "side")}),
-    emoji="💡")
+        **{k: args.get(k, "") for k in ("text", "selector", "title", "side")}
+    ),
+    emoji="💡",
+)

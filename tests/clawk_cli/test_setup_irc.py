@@ -20,7 +20,9 @@ def _register_irc_platform(**overrides):
         name="irc",
         label="IRC",
         adapter_factory=lambda cfg: None,
-        check_fn=lambda: bool(os.getenv("IRC_SERVER", "") and os.getenv("IRC_CHANNEL", "")),
+        check_fn=lambda: bool(
+            os.getenv("IRC_SERVER", "") and os.getenv("IRC_CHANNEL", "")
+        ),
         validate_config=None,
         required_env=["IRC_SERVER", "IRC_CHANNEL", "IRC_NICKNAME"],
         install_hint="No extra packages needed (stdlib only)",
@@ -74,7 +76,6 @@ class TestIRCFreshInstallDiscovery:
         finally:
             _unregister_irc_platform()
 
-
     def test_irc_status_configured_when_env_set(self, monkeypatch):
         """After the user sets IRC_SERVER and IRC_CHANNEL, status is 'configured'."""
         import clawk_cli.gateway as gateway_mod
@@ -117,7 +118,6 @@ class TestIRCInteractiveSetup:
         out = capsys.readouterr().out
         assert "IRC setup complete!" in out
 
-
     def test_configure_platform_fallback_when_no_setup_fn(self, monkeypatch, capsys):
         """A plugin with no setup_fn falls back to env-var instructions."""
         import clawk_cli.gateway as gateway_mod
@@ -139,7 +139,9 @@ class TestIRCInteractiveSetup:
 class TestIRCGatewaySetupFreshInstall:
     """Simulate the full `clawk setup gateway` experience with IRC present."""
 
-    def test_setup_gateway_shows_irc_in_platform_menu(self, monkeypatch, capsys, tmp_path):
+    def test_setup_gateway_shows_irc_in_platform_menu(
+        self, monkeypatch, capsys, tmp_path
+    ):
         """The gateway setup menu lists IRC among the available platforms."""
         import clawk_cli.gateway as gateway_mod
         from clawk_cli import setup as setup_mod
@@ -152,8 +154,9 @@ class TestIRCGatewaySetupFreshInstall:
 
             # Sanity-check: IRC must be visible to _all_platforms()
             platforms = gateway_mod._all_platforms()
-            assert any(p["key"] == "irc" for p in platforms), \
+            assert any(p["key"] == "irc" for p in platforms), (
                 f"IRC not in platforms: {[p['key'] for p in platforms]}"
+            )
 
             # Capture what prompt_checklist is asked to display
             checklist_calls = []
@@ -176,15 +179,18 @@ class TestIRCGatewaySetupFreshInstall:
                 (c for c in checklist_calls if "platform" in c["question"].lower()),
                 None,
             )
-            assert platform_prompt is not None, \
+            assert platform_prompt is not None, (
                 f"No platform prompt found in {checklist_calls}"
+            )
             choices_text = "\n".join(platform_prompt["choices"])
             assert "IRC" in choices_text
             assert "not configured" in choices_text.lower()
         finally:
             _unregister_irc_platform()
 
-    def test_setup_gateway_irc_counts_as_messaging_platform(self, monkeypatch, capsys, tmp_path):
+    def test_setup_gateway_irc_counts_as_messaging_platform(
+        self, monkeypatch, capsys, tmp_path
+    ):
         """When IRC is configured, setup_gateway counts it as a messaging platform."""
         import clawk_cli.gateway as gateway_mod
         from clawk_cli import setup as setup_mod

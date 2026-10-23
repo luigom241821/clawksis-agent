@@ -33,7 +33,9 @@ from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 # a measurement artifact, not a leak. Use a realistic limit instead.
 LIMIT = 2000
 HEAD = "head line\n" * 60
-TAIL = "".join(f"tail line {i:03d} filler filler filler filler filler\n" for i in range(240))
+TAIL = "".join(
+    f"tail line {i:03d} filler filler filler filler filler\n" for i in range(240)
+)
 
 
 def _make_plain_adapter():
@@ -81,7 +83,9 @@ def _wire(adapter, fail_first_send_of=None):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("boundary", ["none", "commentary", "segment_break", "tail_send_fails"])
+@pytest.mark.parametrize(
+    "boundary", ["none", "commentary", "segment_break", "tail_send_fails"]
+)
 async def test_every_tail_line_reaches_the_channel_exactly_once(boundary):
     """Live shape: a streamed head is already on screen when a long tail pushes the buffer far
     past the limit, so the seal leaves a leftover that STILL overflows. A commentary or tool
@@ -90,7 +94,9 @@ async def test_every_tail_line_reaches_the_channel_exactly_once(boundary):
     text must start a new message instead of being glued onto the pre-boundary preview."""
     adapter = _make_plain_adapter()
     sends, edits, failed = _wire(
-        adapter, fail_first_send_of="tail line 239" if boundary == "tail_send_fails" else None)
+        adapter,
+        fail_first_send_of="tail line 239" if boundary == "tail_send_fails" else None,
+    )
     config = StreamConsumerConfig(edit_interval=0.01, buffer_threshold=5, cursor="")
     consumer = GatewayStreamConsumer(adapter, "chat_plain", config)
     consumer.on_delta(HEAD)
@@ -112,15 +118,24 @@ async def test_every_tail_line_reaches_the_channel_exactly_once(boundary):
     if boundary == "tail_send_fails":
         assert failed, "the harness never failed the tail send"
     joined = "".join(c for c, _ in sends)
-    repeated = [f"tail line {i:03d}" for i in range(240) if joined.count(f"tail line {i:03d}") > 1]
+    repeated = [
+        f"tail line {i:03d}"
+        for i in range(240)
+        if joined.count(f"tail line {i:03d}") > 1
+    ]
     assert not repeated, (
         f"{len(repeated)} tail line(s) reached the channel more than once as NEW "
         f"messages (first: {repeated[:3]}) - that is the interleaved duplicate"
     )
     texts = [c for c, _ in sends] + edits
-    lost = [f"tail line {i:03d}" for i in range(240)
-            if not any(f"tail line {i:03d}" in t for t in texts)]
-    assert not lost, f"{len(lost)} tail line(s) never reached the channel (first: {lost[:3]})"
+    lost = [
+        f"tail line {i:03d}"
+        for i in range(240)
+        if not any(f"tail line {i:03d}" in t for t in texts)
+    ]
+    assert not lost, (
+        f"{len(lost)} tail line(s) never reached the channel (first: {lost[:3]})"
+    )
     if boundary == "commentary":
         assert any("COMMENTARY-MARKER" in t for t in texts), "commentary was dropped"
     if boundary != "none":

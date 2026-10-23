@@ -33,13 +33,16 @@ def _origin_json(source) -> Optional[str]:
 class SessionRecoveryMixin:
     """SessionStore durable-row recovery and the SQLite side of routing transitions."""
 
-    def _resolve_profile_for_key(self, source: Optional[SessionSource] = None) -> Optional[str]:
+    def _resolve_profile_for_key(
+        self, source: Optional[SessionSource] = None
+    ) -> Optional[str]:
         """Profile namespace for session keys: None when multiplexing is off (legacy
         ``agent:main``), else the pinned identity's runtime profile, ``source.profile`` or the
         active profile."""
         if not getattr(self.config, "multiplex_profiles", False):
             return None
         from gateway.session_identity import identity_of
+
         identity = identity_of(source)
         if identity is not None:
             return identity.session_key_profile
@@ -47,6 +50,7 @@ class SessionRecoveryMixin:
             return source.profile
         try:
             from clawk_cli.profiles import get_active_profile_name
+
             return get_active_profile_name() or "default"
         except Exception:
             return None
@@ -55,12 +59,14 @@ class SessionRecoveryMixin:
     def _profile_from_session_key(session_key: Optional[str]) -> Optional[str]:
         """Extract the profile namespace encoded in a gateway session key."""
         from clawk_state_keys import profile_from_session_key
+
         return profile_from_session_key(session_key)
 
     @staticmethod
     def _active_profile_name() -> str:
         try:
             from clawk_cli.profiles import get_active_profile_name
+
             return get_active_profile_name() or "default"
         except Exception:
             return "default"
@@ -88,21 +94,31 @@ class SessionRecoveryMixin:
             return requested_profile is None or recovered_profile == requested_profile
         return recovered_profile == self._active_profile_name()
 
-    def _generate_session_key(self, source: SessionSource, key_source: Optional[SessionSource] = None) -> str:
+    def _generate_session_key(
+        self, source: SessionSource, key_source: Optional[SessionSource] = None
+    ) -> str:
         """Session key for *source* (profile from *source*; key from *key_source* if given)."""
         from gateway.session import build_session_key
+
         return build_session_key(
             key_source if key_source is not None else source,
-            group_sessions_per_user=getattr(self.config, "group_sessions_per_user", True),
-            thread_sessions_per_user=getattr(self.config, "thread_sessions_per_user", False),
-            profile=self._resolve_profile_for_key(source))
+            group_sessions_per_user=getattr(
+                self.config, "group_sessions_per_user", True
+            ),
+            thread_sessions_per_user=getattr(
+                self.config, "thread_sessions_per_user", False
+            ),
+            profile=self._resolve_profile_for_key(source),
+        )
 
     def _legacy_slack_session_key(self, source: SessionSource) -> Optional[str]:
         """Pre-workspace Slack key for an explicitly scoped source. Deliberately Slack-only: an
         unscoped Slack session may be claimed by only one workspace (old key cannot tell teams)."""
         if source.platform != Platform.SLACK or not source.scope_id:
             return None
-        return self._generate_session_key(source, replace(source, scope_id=None, guild_id=None))
+        return self._generate_session_key(
+            source, replace(source, scope_id=None, guild_id=None)
+        )
 
     def _claim_legacy_slack_key(self, legacy_key: Optional[str]) -> bool:
         """Atomically reserve one ambiguous legacy Slack key for migration."""
@@ -122,7 +138,11 @@ class SessionRecoveryMixin:
         """Reject recovered rows whose origin belongs to another workspace: a workspace-scoped Slack
         lookup adopts a row only if its origin_json names the same scope_id; rows without a
         parseable origin are rejected (an unattributable transcript is exactly the ambiguity)."""
-        if source.platform != Platform.SLACK or source.chat_type == "dm" or not source.scope_id:
+        if (
+            source.platform != Platform.SLACK
+            or source.chat_type == "dm"
+            or not source.scope_id
+        ):
             return True
         try:
             origin = json.loads(recovered.get("origin_json") or "")
@@ -133,7 +153,12 @@ class SessionRecoveryMixin:
         return origin.get("scope_id", origin.get("guild_id")) == source.scope_id
 
     def _create_entry_from_recovered_row(
-        self, *, row: dict[str, Any], session_key: str, source: SessionSource, now: datetime,
+        self,
+        *,
+        row: dict[str, Any],
+        session_key: str,
+        source: SessionSource,
+        now: datetime,
     ) -> SessionEntry:
         from gateway.session import SessionEntry
 
@@ -147,49 +172,83 @@ class SessionRecoveryMixin:
         created_at = _ts(row.get("started_at"), datetime.fromtimestamp(0))
         # The finder already returns durable recency; no extra round-trip.
         last_activity = row.get("last_activity_at")
-        updated_at = _ts(last_activity, created_at) if last_activity is not None else created_at
+        updated_at = (
+            _ts(last_activity, created_at) if last_activity is not None else created_at
+        )
         had_activity = row.get("_has_messages")
         if had_activity is None:
-            had_activity = bool(row.get("message_count") or 0) or last_activity is not None
+            had_activity = (
+                bool(row.get("message_count") or 0) or last_activity is not None
+            )
         from gateway.session_identity import transport_profile_of
+
         return SessionEntry(
-            session_key=session_key, session_id=str(row["id"]), created_at=created_at,
-            updated_at=updated_at, origin=source, display_name=source.chat_name,
-            platform=source.platform, chat_type=source.chat_type,
-            reset_had_activity=bool(had_activity), transport_profile=transport_profile_of(source))
+            session_key=session_key,
+            session_id=str(row["id"]),
+            created_at=created_at,
+            updated_at=updated_at,
+            origin=source,
+            display_name=source.chat_name,
+            platform=source.platform,
+            chat_type=source.chat_type,
+            reset_had_activity=bool(had_activity),
+            transport_profile=transport_profile_of(source),
+        )
 
     def _find_gateway_session_row(
-        self, *, session_key: str, source: SessionSource, allow_peer_fallback: bool,
-        raise_on_lookup_error: bool = False) -> Optional[dict[str, Any]]:
+        self,
+        *,
+        session_key: str,
+        source: SessionSource,
+        allow_peer_fallback: bool,
+        raise_on_lookup_error: bool = False,
+    ) -> Optional[dict[str, Any]]:
         """Query one durable gateway session row. Scoped Slack lookups disable SessionDB's
         platform/chat/user fallback: that tuple has no workspace id and could revive another team's
         session; the caller performs one explicit exact lookup of the old unscoped key instead."""
         return self._peer_row(
-            self._db_for_key(session_key), source=source.platform.value, session_key=session_key,
+            self._db_for_key(session_key),
+            source=source.platform.value,
+            session_key=session_key,
             user_id=source.user_id,
             chat_id=source.chat_id if allow_peer_fallback else None,
             chat_type=source.chat_type if allow_peer_fallback else None,
-            thread_id=source.thread_id, raise_on_lookup_error=raise_on_lookup_error)
+            thread_id=source.thread_id,
+            raise_on_lookup_error=raise_on_lookup_error,
+        )
 
     @staticmethod
-    def _peer_row(db, *, source: str, session_key: str, raise_on_lookup_error: bool = False,
-                  **peer: Any) -> Optional[dict[str, Any]]:
+    def _peer_row(
+        db,
+        *,
+        source: str,
+        session_key: str,
+        raise_on_lookup_error: bool = False,
+        **peer: Any,
+    ) -> Optional[dict[str, Any]]:
         """``db.find_latest_gateway_session_for_peer`` guarded for a missing store, a SessionDB
         without the finder, and a failing lookup (debug-logged -> None unless *raise_on_lookup_error*).
         Extra keyword arguments (user_id/chat_id/chat_type/thread_id) pass through to the finder."""
-        finder = getattr(db, "find_latest_gateway_session_for_peer", None) if db else None
+        finder = (
+            getattr(db, "find_latest_gateway_session_for_peer", None) if db else None
+        )
         if not callable(finder):
             return None
         try:
             return finder(source=source, session_key=session_key, **peer)
         except Exception as exc:
-            logger.debug("Gateway session DB recovery failed for %s: %s", session_key, exc)
+            logger.debug(
+                "Gateway session DB recovery failed for %s: %s", session_key, exc
+            )
             if raise_on_lookup_error:
                 raise
             return None
 
     def resolve_session_id_for_key(
-        self, session_key: str, *, not_after: Optional[float] = None,
+        self,
+        session_key: str,
+        *,
+        not_after: Optional[float] = None,
     ) -> Optional[tuple[str, Any]]:
         """Resolve a gateway session key to ``(session_id, db)`` for shutdown-flush recovery.
 
@@ -225,26 +284,39 @@ class SessionRecoveryMixin:
         started_at = row.get("started_at")
         # ``ts`` is ``int(time.time())`` while ``started_at`` is a REAL, so compare whole seconds:
         # a row minted in the same second as the flush is still a valid origin.
-        if not_after is not None and started_at is not None and math.floor(float(started_at)) > int(not_after):
+        if (
+            not_after is not None
+            and started_at is not None
+            and math.floor(float(started_at)) > int(not_after)
+        ):
             return None
         return str(row["id"]), db
 
     def _recover_session_from_db(
-        self, *, session_key: str, source: SessionSource, now: datetime,
-        raise_on_lookup_error: bool = False) -> Optional[SessionEntry]:
+        self,
+        *,
+        session_key: str,
+        source: SessionSource,
+        now: datetime,
+        raise_on_lookup_error: bool = False,
+    ) -> Optional[SessionEntry]:
         """Rebuild a missing session-key mapping from a recoverable durable row."""
         entry, migrated_legacy = self._query_recoverable_row(
             # The legacy (pre-workspace) Slack key fallback happens INSIDE _query_recoverable_session
             # (#20583/#66398 design): it performs the exact-key legacy lookup, claims the key once per
             # process, and rewrites the peer row to the scoped key on success.
-            session_key=session_key, source=source, now=now,
-            raise_on_lookup_error=raise_on_lookup_error)
+            session_key=session_key,
+            source=source,
+            now=now,
+            raise_on_lookup_error=raise_on_lookup_error,
+        )
         if entry is None:
             return None
         self._reopen_session_row(session_key, entry.session_id)
         if migrated_legacy:
             self._record_gateway_session_peer(
-                entry.session_id, session_key, source, display_name=entry.display_name)
+                entry.session_id, session_key, source, display_name=entry.display_name
+            )
         return entry
 
     def _query_recoverable_session(self, *, session_key, source, now):
@@ -252,43 +324,63 @@ class SessionRecoveryMixin:
         caller assigns _entries[key] under lock. The row is NOT reopened here: the caller evaluates
         reset policy first (an agent_close/ws_orphan row may need promotion to a real reset)."""
         entry, migrated_legacy = self._query_recoverable_row(
-            session_key=session_key, source=source, now=now)
+            session_key=session_key, source=source, now=now
+        )
         if entry is not None and migrated_legacy:
             self._record_gateway_session_peer(
-                entry.session_id, session_key, source, display_name=entry.display_name)
+                entry.session_id, session_key, source, display_name=entry.display_name
+            )
         return entry
 
     def _query_recoverable_row(
-        self, *, session_key, source, now, raise_on_lookup_error=False,
+        self,
+        *,
+        session_key,
+        source,
+        now,
+        raise_on_lookup_error=False,
     ) -> tuple[Optional[SessionEntry], bool]:
         """Find and gate a recoverable row -> (entry or None, migrated_legacy). The legacy
         (pre-workspace) Slack key fallback lives here: exact-key lookup, claimed once per process;
         ``migrated_legacy`` tells the caller to rewrite the peer row to the scoped key."""
         legacy_key = self._legacy_slack_session_key(source)
         recovered = self._find_gateway_session_row(
-            session_key=session_key, source=source, allow_peer_fallback=legacy_key is None,
-            raise_on_lookup_error=raise_on_lookup_error)
+            session_key=session_key,
+            source=source,
+            allow_peer_fallback=legacy_key is None,
+            raise_on_lookup_error=raise_on_lookup_error,
+        )
         migrated_legacy = False
         if not recovered and legacy_key and self._claim_legacy_slack_key(legacy_key):
             recovered = self._find_gateway_session_row(
-                session_key=legacy_key, source=source, allow_peer_fallback=False,
-                raise_on_lookup_error=raise_on_lookup_error)
+                session_key=legacy_key,
+                source=source,
+                allow_peer_fallback=False,
+                raise_on_lookup_error=raise_on_lookup_error,
+            )
             migrated_legacy = bool(recovered)
         if not isinstance(recovered, dict):
             return None, False
         if not self._recovered_row_matches_source_scope(recovered, source):
             return None, False
         if not self._recovered_row_allowed_for_active_profile(
-            requested_session_key=session_key, recovered=recovered):
+            requested_session_key=session_key, recovered=recovered
+        ):
             logger.warning(
                 "Gateway session DB recovery ignored %s for %s because the row belongs to a "
-                "different profile", recovered.get("session_key"), session_key)
+                "different profile",
+                recovered.get("session_key"),
+                session_key,
+            )
             return None, False
         entry = self._create_entry_from_recovered_row(
-            row=recovered, session_key=session_key, source=source, now=now)
+            row=recovered, session_key=session_key, source=source, now=now
+        )
         return entry, migrated_legacy
 
-    def _promote_session_reset(self, session_key: str, session_id: str, reason: str, *, log) -> None:
+    def _promote_session_reset(
+        self, session_key: str, session_id: str, reason: str, *, log
+    ) -> None:
         """End *session_id* with *reason* via ``promote_to_session_reset`` (``end_session`` on old
         SessionDBs). Promote, not plain end: a row already ended with a recoverable accidental
         reason (agent_close / ws_orphan_reap) must be upgraded to the explicit boundary, or
@@ -308,7 +400,9 @@ class SessionRecoveryMixin:
         except Exception as exc:
             log(exc)
 
-    def _reopen_session_row(self, session_key: str, session_id: str, *, log_prefix: str = "") -> None:
+    def _reopen_session_row(
+        self, session_key: str, session_id: str, *, log_prefix: str = ""
+    ) -> None:
         """Best-effort ``reopen_session``; failures are debug-logged only."""
         try:
             self._db_for_key(session_key).reopen_session(session_id)
@@ -316,12 +410,19 @@ class SessionRecoveryMixin:
             if log_prefix:
                 logger.debug("%s: %s", log_prefix, exc)
             else:
-                logger.debug("Gateway session DB reopen failed for %s: %s", session_key, exc)
+                logger.debug(
+                    "Gateway session DB reopen failed for %s: %s", session_key, exc
+                )
 
     def _record_gateway_session_peer(
-        self, session_id: str, session_key: str, source: Optional[SessionSource],
-        display_name: Optional[str] = None, include_compression_ancestors: bool = False,
-        transport_profile: Optional[str] = None) -> None:
+        self,
+        session_id: str,
+        session_key: str,
+        source: Optional[SessionSource],
+        display_name: Optional[str] = None,
+        include_compression_ancestors: bool = False,
+        transport_profile: Optional[str] = None,
+    ) -> None:
         """Persist the routing peer for an existing gateway session row. ``transport_profile`` is the
         entry's persisted receiving-bot profile; when the caller has no entry it is read off the
         source's pinned identity (None = unknown, the column keeps whatever an earlier writer set)."""
@@ -334,24 +435,44 @@ class SessionRecoveryMixin:
         from gateway.session_api import api_storage_source
         from gateway.session_a2a import storage_source
         from gateway.session_identity import transport_profile_of
+
         peer = dict(
-            source=storage_source(db, source, session_id, api_storage_source(db, session_id, source.platform.value)), user_id=source.user_id, session_key=session_key,
-            chat_id=source.chat_id, chat_type=source.chat_type, thread_id=source.thread_id)
+            source=storage_source(
+                db,
+                source,
+                session_id,
+                api_storage_source(db, session_id, source.platform.value),
+            ),
+            user_id=source.user_id,
+            session_key=session_key,
+            chat_id=source.chat_id,
+            chat_type=source.chat_type,
+            thread_id=source.thread_id,
+        )
         try:
             recorder(
-                session_id, **peer, display_name=display_name or source.chat_name,
+                session_id,
+                **peer,
+                display_name=display_name or source.chat_name,
                 origin_json=_origin_json(source),
                 include_compression_ancestors=include_compression_ancestors,
-                transport_profile=transport_profile or transport_profile_of(source))
+                transport_profile=transport_profile or transport_profile_of(source),
+            )
         except TypeError:
             try:  # older SessionDB without display_name/origin_json kwargs
                 recorder(session_id, **peer)
             except Exception as exc:
-                logger.debug("Gateway session peer record failed for %s: %s", session_key, exc)
+                logger.debug(
+                    "Gateway session peer record failed for %s: %s", session_key, exc
+                )
         except Exception as exc:
-            logger.debug("Gateway session peer record failed for %s: %s", session_key, exc)
+            logger.debug(
+                "Gateway session peer record failed for %s: %s", session_key, exc
+            )
 
-    def _adopt_legacy_slack_entry(self, source: SessionSource, session_key: str) -> None:
+    def _adopt_legacy_slack_entry(
+        self, source: SessionSource, session_key: str
+    ) -> None:
         """One-time migration of pre-workspace-scope Slack keys: MOVE (not copy) the legacy entry so
         a second workspace with identical Slack ids cannot attach to the same transcript. Adopt when
         the legacy origin names the same workspace; a scope-less DM is claimed once by the first
@@ -379,12 +500,23 @@ class SessionRecoveryMixin:
         if migrated is not None:
             self._save_entries()
             self._record_gateway_session_peer(
-                migrated.session_id, session_key, source, display_name=migrated.display_name)
+                migrated.session_id,
+                session_key,
+                source,
+                display_name=migrated.display_name,
+            )
 
     def _finish_route_transition(
-        self, session_key: str, *, end_session_id: Optional[str], end_reason: str,
-        create_kwargs: Optional[dict[str, Any]], origin: Optional[SessionSource],
-        display_name: Optional[str], during: str = "") -> None:
+        self,
+        session_key: str,
+        *,
+        end_session_id: Optional[str],
+        end_reason: str,
+        create_kwargs: Optional[dict[str, Any]],
+        origin: Optional[SessionSource],
+        display_name: Optional[str],
+        during: str = "",
+    ) -> None:
         """SQLite side of a routing transition, outside ``_lock``: promote the predecessor row to an
         explicit reset boundary (with the specific reason so state.db is auditable, e.g.
         ``suspended`` vs plain ``session_reset``), then INSERT the new row + routing
@@ -395,29 +527,49 @@ class SessionRecoveryMixin:
             close_session_run(end_session_id)
         if self._db_for_key(session_key) and end_session_id:
             self._promote_session_reset(
-                session_key, end_session_id, end_reason,
+                session_key,
+                end_session_id,
+                end_reason,
                 log=lambda e: logger.warning(
                     "Failed to end predecessor session row %s for %s%s: %s — the old row remains "
                     "open and may win restart recovery until the next successful peer refresh",
-                    end_session_id, session_key, during, e),
+                    end_session_id,
+                    session_key,
+                    during,
+                    e,
+                ),
             )
         if self._db_for_key(session_key) and create_kwargs:
             self._create_session_row(
-                session_key, create_kwargs, origin, display_name,
+                session_key,
+                create_kwargs,
+                origin,
+                display_name,
                 log=lambda e: logger.warning(
                     "Failed to create session row %s for %s%s: %s — deferring to the "
                     "self-healing peer refresh on the next turn",
-                    create_kwargs.get("session_id"), session_key, during, e),
+                    create_kwargs.get("session_id"),
+                    session_key,
+                    during,
+                    e,
+                ),
             )
 
     @staticmethod
     def _session_create_kwargs(
-        *, session_id, session_key, origin, source_value, display_name, parent_session_id,
+        *,
+        session_id,
+        session_key,
+        origin,
+        source_value,
+        display_name,
+        parent_session_id,
     ) -> dict[str, Any]:
         """kwargs for ``SessionDB.create_session``. Identity (origin_json) and lineage
         (parent/_reset_from) land atomically in the INSERT so a crash right after cannot strand the
         row unroutable."""
         from gateway.session_identity import transport_profile_of
+
         return {
             "session_id": session_id,
             "source": source_value,
@@ -431,16 +583,24 @@ class SessionRecoveryMixin:
             "origin_json": _origin_json(origin),
             "display_name": display_name,
             "parent_session_id": parent_session_id,
-            "model_config": {"_reset_from": parent_session_id} if parent_session_id else None,
+            "model_config": {"_reset_from": parent_session_id}
+            if parent_session_id
+            else None,
         }
 
-    def _create_session_row(self, session_key, db_create_kwargs, origin, display_name, *, log) -> None:
+    def _create_session_row(
+        self, session_key, db_create_kwargs, origin, display_name, *, log
+    ) -> None:
         """INSERT a session row and record its routing peer; ``log(exc)`` on failure. A failed
         create is a routing hazard (visible warning), but the row is self-healed with full identity
         by the next per-turn peer refresh."""
         try:
             self._db_for_key(session_key).create_session(**db_create_kwargs)
             self._record_gateway_session_peer(
-                db_create_kwargs["session_id"], session_key, origin, display_name=display_name)
+                db_create_kwargs["session_id"],
+                session_key,
+                origin,
+                display_name=display_name,
+            )
         except Exception as e:
             log(e)

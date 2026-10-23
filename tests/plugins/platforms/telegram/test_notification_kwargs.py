@@ -8,14 +8,17 @@ import pytest
 from plugins.platforms.telegram.adapter import TelegramAdapter
 
 
-@pytest.mark.parametrize("mode,metadata,expected", [
-    ("important", None, {"disable_notification": True}),
-    ("important", {"thread_id": "t1"}, {"disable_notification": True}),
-    ("important", {"notify": True}, {}),
-    ("important", {"thread_id": "t1", "is_approval_prompt": True}, {}),
-    ("all", None, {}),
-    ("all", {"is_approval_prompt": True}, {}),
-])
+@pytest.mark.parametrize(
+    "mode,metadata,expected",
+    [
+        ("important", None, {"disable_notification": True}),
+        ("important", {"thread_id": "t1"}, {"disable_notification": True}),
+        ("important", {"notify": True}, {}),
+        ("important", {"thread_id": "t1", "is_approval_prompt": True}, {}),
+        ("all", None, {}),
+        ("all", {"is_approval_prompt": True}, {}),
+    ],
+)
 def test_notification_kwargs(mode, metadata, expected):
     adapter = object.__new__(TelegramAdapter)
     adapter._notifications_mode = mode
@@ -37,7 +40,18 @@ def test_clarify_text_fallback_pushes_in_important_mode():
     adapter._bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=1))
     adapter._notifications_mode = "important"
 
-    asyncio.run(text_fallback_coro(
-        adapter, chat_id="123", question="Which env?", choices=None, clarify_id="c1", session_key="s", metadata=None))
+    asyncio.run(
+        text_fallback_coro(
+            adapter,
+            chat_id="123",
+            question="Which env?",
+            choices=None,
+            clarify_id="c1",
+            session_key="s",
+            metadata=None,
+        )
+    )
 
-    assert adapter._bot.send_message.await_args.kwargs.get("disable_notification") is None
+    assert (
+        adapter._bot.send_message.await_args.kwargs.get("disable_notification") is None
+    )

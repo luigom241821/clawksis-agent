@@ -60,9 +60,7 @@ def multiplex_homes(tmp_path, monkeypatch):
     grant_home = root / "profiles" / "grant"
     grant_home.mkdir(parents=True)
     (root / "config.yaml").write_text(yaml.safe_dump(PRIMARY_YAML), encoding="utf-8")
-    monkeypatch.setattr(
-        "clawk_constants.get_default_clawk_root", lambda: root
-    )
+    monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
     token = set_clawk_home_override(str(grant_home))
     yield root, grant_home
     reset_clawk_home_override(token)
@@ -71,15 +69,19 @@ def multiplex_homes(tmp_path, monkeypatch):
 class TestRoutedSatellitePreflight:
     def test_routed_platform_passes_preflight(self, multiplex_homes):
         """telegram→grant route: a grant-profile telegram deliver passes."""
-        with patch("gateway.config.load_gateway_config",
-                   return_value=_gateway_config(set())):
-            assert _preflight_check_delivery(
-                {"deliver": "telegram:-1004306455751:14"}) is None
+        with patch(
+            "gateway.config.load_gateway_config", return_value=_gateway_config(set())
+        ):
+            assert (
+                _preflight_check_delivery({"deliver": "telegram:-1004306455751:14"})
+                is None
+            )
 
     def test_unrouted_platform_still_blocked(self, multiplex_homes):
         """The route rescues telegram only — discord stays blocked."""
-        with patch("gateway.config.load_gateway_config",
-                   return_value=_gateway_config(set())):
+        with patch(
+            "gateway.config.load_gateway_config", return_value=_gateway_config(set())
+        ):
             reason = _preflight_check_delivery({"deliver": "discord:12345"})
             assert reason is not None
             assert "discord" in reason
@@ -89,11 +91,10 @@ class TestRoutedSatellitePreflight:
         root = tmp_path / "root"
         other_home = root / "profiles" / "other"
         other_home.mkdir(parents=True)
-        (root / "config.yaml").write_text(yaml.safe_dump(PRIMARY_YAML),
-                                          encoding="utf-8")
-        monkeypatch.setattr(
-            "clawk_constants.get_default_clawk_root", lambda: root
+        (root / "config.yaml").write_text(
+            yaml.safe_dump(PRIMARY_YAML), encoding="utf-8"
         )
+        monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
         token = set_clawk_home_override(str(other_home))
         try:
             assert _delivery_platform_routed_from_primary_gateway("telegram") is False
@@ -114,15 +115,16 @@ class TestRoutedSatellitePreflight:
         root = tmp_path / "root"
         grant_home = root / "profiles" / "grant"
         grant_home.mkdir(parents=True)
-        monkeypatch.setattr(
-            "clawk_constants.get_default_clawk_root", lambda: root
-        )
+        monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
         token = set_clawk_home_override(str(grant_home))
         try:
-            with patch("gateway.config.load_gateway_config",
-                       return_value=_gateway_config(set())):
+            with patch(
+                "gateway.config.load_gateway_config",
+                return_value=_gateway_config(set()),
+            ):
                 reason = _preflight_check_delivery(
-                    {"deliver": "telegram:-1004306455751:14"})
+                    {"deliver": "telegram:-1004306455751:14"}
+                )
                 assert reason is not None
                 assert "telegram" in reason
         finally:
@@ -136,9 +138,7 @@ class TestRoutedSatellitePreflight:
         cfg = yaml.safe_load(yaml.safe_dump(PRIMARY_YAML))
         cfg["gateway"]["profile_routes"][0]["enabled"] = False
         (root / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
-        monkeypatch.setattr(
-            "clawk_constants.get_default_clawk_root", lambda: root
-        )
+        monkeypatch.setattr("clawk_constants.get_default_clawk_root", lambda: root)
         token = set_clawk_home_override(str(grant_home))
         try:
             assert _delivery_platform_routed_from_primary_gateway("telegram") is False

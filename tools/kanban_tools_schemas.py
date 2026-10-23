@@ -1,4 +1,5 @@
 """Tool schemas for tools.kanban_tools (model-facing; strings are byte-frozen)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,7 +32,9 @@ def _board_schema_prop() -> dict[str, str]:
     return _prop("string", _DESC_BOARD)
 
 
-def _schema(name: str, description: str, properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+def _schema(
+    name: str, description: str, properties: dict[str, Any], required: list[str]
+) -> dict[str, Any]:
     """Build a tool schema; every kanban tool takes an optional trailing ``board``."""
     return {
         "name": name,
@@ -82,8 +85,12 @@ KANBAN_LIST_SCHEMA = _schema(
             "description": "Optional task status filter.",
         },
         "tenant": _prop("string", "Optional tenant/project namespace filter."),
-        "include_archived": _prop("boolean", "Include archived tasks. Defaults to false."),
-        "limit": _prop("integer", "Optional maximum rows to return (default 50, max 200)."),
+        "include_archived": _prop(
+            "boolean", "Include archived tasks. Defaults to false."
+        ),
+        "limit": _prop(
+            "integer", "Optional maximum rows to return (default 50, max 200)."
+        ),
     },
     [],
 )
@@ -109,23 +116,32 @@ KANBAN_COMPLETE_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "summary": _prop("string", (
+        "summary": _prop(
+            "string",
+            (
                 "Human-readable handoff, 1-3 sentences. Appears in "
                 "Run History on the dashboard and in downstream "
                 "workers' context."
-        )),
-        "metadata": _prop("object", (
+            ),
+        ),
+        "metadata": _prop(
+            "object",
+            (
                 "Free-form dict of structured facts about this "
-                "attempt — {\"changed_files\": [...], \"tests_run\": 12, "
-                "\"findings\": [...]}. Surfaced to downstream "
+                'attempt — {"changed_files": [...], "tests_run": 12, '
+                '"findings": [...]}. Surfaced to downstream '
                 "workers alongside ``summary``."
-        )),
-        "result": _prop("string", (
+            ),
+        ),
+        "result": _prop(
+            "string",
+            (
                 "Short result log line (legacy field, maps to "
                 "task.result). Use ``summary`` instead when "
                 "possible; this exists for compatibility with "
                 "callers that still set --result on the CLI."
-        )),
+            ),
+        ),
         "created_cards": {
             "type": "array",
             "items": {"type": "string"},
@@ -149,8 +165,8 @@ KANBAN_COMPLETE_SCHEMA = _schema(
                 "Optional list of absolute paths to deliverable "
                 "files you produced during this run — generated "
                 "charts, PDFs, spreadsheets, images, archives. "
-                "Examples: [\"~/.clawksis/cache/scratch/q3-revenue.png\", "
-                "\"~/.clawksis/cache/scratch/report.pdf\"]. The gateway notifier "
+                'Examples: ["~/.clawksis/cache/scratch/q3-revenue.png", '
+                '"~/.clawksis/cache/scratch/report.pdf"]. The gateway notifier '
                 "uploads each path as a native attachment to the "
                 "subscribed chat (images embed inline, everything "
                 "else uploads as a file) so the deliverable "
@@ -183,11 +199,14 @@ KANBAN_BLOCK_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "reason": _prop("string", (
+        "reason": _prop(
+            "string",
+            (
                 "What you need answered or what stopped you, in one or "
                 "two sentences. Don't paste the whole conversation; the "
                 "human has the board and can ask follow-ups via comments."
-        )),
+            ),
+        ),
         "kind": {
             "type": "string",
             "enum": ["dependency", "needs_input", "capability", "transient"],
@@ -213,10 +232,13 @@ KANBAN_SCHEDULE_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "reason": _prop("string", (
-            "Optional reason or machine-readable wake-up marker recorded on "
-            "the completed run and scheduled event."
-        )),
+        "reason": _prop(
+            "string",
+            (
+                "Optional reason or machine-readable wake-up marker recorded on "
+                "the completed run and scheduled event."
+            ),
+        ),
     },
     [],
 )
@@ -236,15 +258,21 @@ KANBAN_REQUEST_REVIEW_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "summary": _prop("string", (
+        "summary": _prop(
+            "string",
+            (
                 "What was implemented and how it was verified, in one or "
                 "two sentences — shown to the reviewer. Don't paste "
                 "the whole diff; the reviewer has the board and the PR."
-        )),
-        "reviewer": _prop("string", (
+            ),
+        ),
+        "reviewer": _prop(
+            "string",
+            (
                 "Optional reviewer profile. When provided, the task is "
                 "reassigned to that profile before review dispatch."
-        )),
+            ),
+        ),
         "metadata": {
             "type": "object",
             "description": (
@@ -286,10 +314,13 @@ KANBAN_REQUEST_CHANGES_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "reason": _prop("string", (
+        "reason": _prop(
+            "string",
+            (
                 "Specific, actionable changes the implementer must make "
                 "before requesting another review."
-        )),
+            ),
+        ),
     },
     ["reason"],
 )
@@ -304,10 +335,13 @@ KANBAN_HEARTBEAT_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "note": _prop("string", (
+        "note": _prop(
+            "string",
+            (
                 "Optional short note describing current progress. "
                 "Shown in the event log."
-        )),
+            ),
+        ),
     },
     [],
 )
@@ -321,12 +355,15 @@ KANBAN_COMMENT_SCHEMA = _schema(
         "belong here — use your normal response instead."
     ),
     {
-        "task_id": _prop("string", (
+        "task_id": _prop(
+            "string",
+            (
                 "Task id. Required (may be your own task or "
                 "another's — comment threads are per-task). Outside a "
                 "dispatcher-spawned worker there is no default; use "
                 "kanban_list to discover ids."
-        )),
+            ),
+        ),
         "body": _prop("string", "Markdown-supported comment body."),
     },
     ["task_id", "body"],
@@ -344,10 +381,13 @@ KANBAN_ATTACH_SCHEMA = _schema(
     ),
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
-        "filename": _prop("string", (
+        "filename": _prop(
+            "string",
+            (
                 "File name to store it under (e.g. 'report.pdf'). "
                 "Directory components are stripped; only the leaf is kept."
-        )),
+            ),
+        ),
         "content_base64": {
             "type": "string",
             "description": "The file contents, base64-encoded. Max 25 MB decoded.",
@@ -368,14 +408,20 @@ KANBAN_ATTACH_URL_SCHEMA = _schema(
     {
         "task_id": _prop("string", _DESC_TASK_ID_DEFAULT),
         "url": _prop("string", "http(s) URL to fetch and store."),
-        "filename": _prop("string", (
+        "filename": _prop(
+            "string",
+            (
                 "Optional name to store it under. Defaults to the URL "
                 "path's leaf component."
-        )),
-        "content_type": _prop("string", (
+            ),
+        ),
+        "content_type": _prop(
+            "string",
+            (
                 "Optional MIME type override. Defaults to the "
                 "Content-Type the server returns."
-        )),
+            ),
+        ),
     },
     ["url"],
 )
@@ -404,17 +450,23 @@ KANBAN_CREATE_SCHEMA = _schema(
     ),
     {
         "title": _prop("string", "Short task title (required)."),
-        "assignee": _prop("string", (
+        "assignee": _prop(
+            "string",
+            (
                 "Profile name that should execute this task "
                 "(e.g. 'researcher-a', 'reviewer', 'writer'). "
                 "Required — tasks without an assignee are never "
                 "dispatched."
-        )),
-        "body": _prop("string", (
+            ),
+        ),
+        "body": _prop(
+            "string",
+            (
                 "Opening post: full spec, acceptance criteria, "
                 "links. The assigned worker reads this as part of "
                 "its context."
-        )),
+            ),
+        ),
         "parents": {
             "type": "array",
             "items": {"type": "string"},
@@ -426,14 +478,20 @@ KANBAN_CREATE_SCHEMA = _schema(
                 "synthesizer task."
             ),
         },
-        "tenant": _prop("string", (
+        "tenant": _prop(
+            "string",
+            (
                 "Optional namespace for multi-project isolation. "
                 "Defaults to CLAWK_TENANT env if set."
-        )),
-        "priority": _prop("integer", (
+            ),
+        ),
+        "priority": _prop(
+            "integer",
+            (
                 "Dispatcher tiebreaker. Higher = picked sooner "
                 "when multiple ready tasks share an assignee."
-        )),
+            ),
+        ),
         "workspace_kind": {
             "type": "string",
             "enum": ["scratch", "dir", "worktree"],
@@ -443,31 +501,46 @@ KANBAN_CREATE_SCHEMA = _schema(
                 "absolute workspace_path), 'worktree' (git worktree)."
             ),
         },
-        "workspace_path": _prop("string", (
+        "workspace_path": _prop(
+            "string",
+            (
                 "Absolute path for 'dir' or 'worktree' workspace. "
                 "Relative paths are rejected at dispatch."
-        )),
-        "project": _prop("string", (
+            ),
+        ),
+        "project": _prop(
+            "string",
+            (
                 "Optional project id or slug to link the task to. When "
                 "set, the task becomes a git worktree under the project's "
                 "primary repo with a deterministic branch (project slug + "
                 "task id), instead of a random branch."
-        )),
-        "triage": _prop("boolean", (
+            ),
+        ),
+        "triage": _prop(
+            "boolean",
+            (
                 "If true, task lands in 'triage' instead of 'todo' "
                 "— a specifier profile is expected to flesh out "
                 "the body before work starts."
-        )),
-        "idempotency_key": _prop("string", (
+            ),
+        ),
+        "idempotency_key": _prop(
+            "string",
+            (
                 "If a non-archived task with this key already "
                 "exists, return that task's id instead of creating "
                 "a duplicate. Useful for retry-safe automation."
-        )),
-        "max_runtime_seconds": _prop("integer", (
+            ),
+        ),
+        "max_runtime_seconds": _prop(
+            "integer",
+            (
                 "Per-task runtime cap. When exceeded, the "
                 "dispatcher SIGTERMs the worker and re-queues the "
                 "task with outcome='timed_out'."
-        )),
+            ),
+        ),
         "initial_status": {
             "type": "string",
             "enum": ["running", "blocked"],
@@ -491,7 +564,9 @@ KANBAN_CREATE_SCHEMA = _schema(
                 "assignee's profile."
             ),
         },
-        "goal_mode": _prop("boolean", (
+        "goal_mode": _prop(
+            "boolean",
+            (
                 "Run the dispatched worker in a goal loop. When true, "
                 "after each turn an auxiliary judge checks the worker's "
                 "response against this card's title/body; if the work "
@@ -501,31 +576,44 @@ KANBAN_CREATE_SCHEMA = _schema(
                 "blocks the task for human review). Use this for "
                 "open-ended cards where one shot rarely finishes the "
                 "work. Defaults to false (classic single-shot worker)."
-        )),
-        "completion_contract": _prop("string", (
-            "Declare at creation: local-only (default), OWNER/REPO for PR publication, or an exact GitHub PR URL. "
-            "PR tasks cannot complete until repository-required exact-head CI passes. On publication pass metadata.published_pr."
-        )),
-        "goal_max_turns": _prop("integer", (
+            ),
+        ),
+        "completion_contract": _prop(
+            "string",
+            (
+                "Declare at creation: local-only (default), OWNER/REPO for PR publication, or an exact GitHub PR URL. "
+                "PR tasks cannot complete until repository-required exact-head CI passes. On publication pass metadata.published_pr."
+            ),
+        ),
+        "goal_max_turns": _prop(
+            "integer",
+            (
                 "Turn budget for goal_mode workers. Caps how many "
                 "continuation turns the worker may take before the task "
                 "is blocked for review. Ignored unless goal_mode is "
                 "true. Defaults to the goal-engine default (20)."
-        )),
-        "model": _prop("string", (
+            ),
+        ),
+        "model": _prop(
+            "string",
+            (
                 "Pin the dispatched worker to this model instead of "
                 "the assignee profile's configured model. Use the "
                 "exact model name the target provider expects. Omit "
                 "to use the profile default."
-        )),
-        "provider": _prop("string", (
+            ),
+        ),
+        "provider": _prop(
+            "string",
+            (
                 "Provider the 'model' belongs to (e.g. 'openrouter', "
                 "'anthropic', 'nous'). Set this whenever the model "
                 "is not from the assignee profile's configured "
                 "provider — a model name alone is resolved against "
                 "the profile's provider and will fail if it belongs "
                 "to a different one. Requires 'model'."
-        )),
+            ),
+        ),
     },
     ["title", "assignee"],
 )
@@ -539,7 +627,9 @@ KANBAN_UNBLOCK_SCHEMA = _schema(
         "dispatcher-spawned task workers never see this tool."
     ),
     {
-        "task_id": _prop("string", "Blocked task id to move to ready or parent-gated todo."),
+        "task_id": _prop(
+            "string", "Blocked task id to move to ready or parent-gated todo."
+        ),
     },
     ["task_id"],
 )
@@ -555,7 +645,7 @@ KANBAN_LINK_SCHEMA = _schema(
     ),
     {
         "parent_id": {"type": "string", "description": "Parent task id."},
-        "child_id":  {"type": "string", "description": "Child task id."},
+        "child_id": {"type": "string", "description": "Child task id."},
     },
     ["parent_id", "child_id"],
 )

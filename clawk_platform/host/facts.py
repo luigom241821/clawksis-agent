@@ -16,9 +16,14 @@ from typing import NamedTuple
 from clawk_platform.host import darwin_pci
 
 _ARCH_NAMES = {
-    "amd64": "amd64", "x86_64": "amd64", "x64": "amd64",
-    "arm64": "arm64", "aarch64": "arm64",
-    "x86": "x86", "i386": "x86", "i686": "x86",
+    "amd64": "amd64",
+    "x86_64": "amd64",
+    "x64": "amd64",
+    "arm64": "arm64",
+    "aarch64": "arm64",
+    "x86": "x86",
+    "i386": "x86",
+    "i686": "x86",
 }
 IMAGE_FILE_MACHINE = {0x8664: "amd64", 0xAA64: "arm64", 0x014C: "x86"}
 # The interpreter's own build: on Windows, platform.machine() names the native machine even
@@ -62,11 +67,19 @@ def _wow64_native_machine() -> int | None:
     # ctypes otherwise truncates the HANDLE pseudo-handle to c_int.
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
     kernel32.GetCurrentProcess.argtypes = []
-    probe.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.USHORT), ctypes.POINTER(wintypes.USHORT)]
+    probe.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.USHORT),
+        ctypes.POINTER(wintypes.USHORT),
+    ]
     probe.restype = wintypes.BOOL
     process_machine = wintypes.USHORT(0)
     native_machine = wintypes.USHORT(0)
-    if not probe(kernel32.GetCurrentProcess(), ctypes.byref(process_machine), ctypes.byref(native_machine)):
+    if not probe(
+        kernel32.GetCurrentProcess(),
+        ctypes.byref(process_machine),
+        ctypes.byref(native_machine),
+    ):
         return None
     return native_machine.value or None
 
@@ -166,13 +179,26 @@ def cpu_model() -> str:
         return _winreg_str(_CPU_KEY, "ProcessorNameString")
     if sys.platform == "darwin":
         return _sysctl_str(b"machdep.cpu.brand_string")
-    return parse_cpuinfo(_read_text("/proc/cpuinfo"), device_tree_model=_read_text("/proc/device-tree/model", 512))
+    return parse_cpuinfo(
+        _read_text("/proc/cpuinfo"),
+        device_tree_model=_read_text("/proc/device-tree/model", 512),
+    )
 
 
 # ARM's MIDR implementer codes, as arm64 Linux prints them in ``CPU implementer``.
 _ARM_IMPLEMENTERS = {
-    0x41: "ARM", 0x42: "Broadcom", 0x43: "Cavium", 0x46: "Fujitsu", 0x48: "HiSilicon", 0x4E: "NVIDIA",
-    0x50: "Ampere", 0x51: "Qualcomm", 0x61: "Apple", 0x69: "Intel", 0x6D: "Microsoft", 0xC0: "Ampere",
+    0x41: "ARM",
+    0x42: "Broadcom",
+    0x43: "Cavium",
+    0x46: "Fujitsu",
+    0x48: "HiSilicon",
+    0x4E: "NVIDIA",
+    0x50: "Ampere",
+    0x51: "Qualcomm",
+    0x61: "Apple",
+    0x69: "Intel",
+    0x6D: "Microsoft",
+    0xC0: "Ampere",
 }
 
 
@@ -197,7 +223,9 @@ def cpu_vendor() -> str:
     if sys.platform == "win32":
         return _winreg_str(_CPU_KEY, "VendorIdentifier")
     if sys.platform == "darwin":
-        return "Apple" if native_arch() == "arm64" else _sysctl_str(b"machdep.cpu.vendor")
+        return (
+            "Apple" if native_arch() == "arm64" else _sysctl_str(b"machdep.cpu.vendor")
+        )
     return parse_cpuinfo_vendor(_read_text("/proc/cpuinfo"))
 
 
@@ -217,10 +245,14 @@ def _windows_ram_total() -> int | None:
 
     class MEMORYSTATUSEX(ctypes.Structure):
         _fields_ = [
-            ("dwLength", wintypes.DWORD), ("dwMemoryLoad", wintypes.DWORD),
-            ("ullTotalPhys", ctypes.c_uint64), ("ullAvailPhys", ctypes.c_uint64),
-            ("ullTotalPageFile", ctypes.c_uint64), ("ullAvailPageFile", ctypes.c_uint64),
-            ("ullTotalVirtual", ctypes.c_uint64), ("ullAvailVirtual", ctypes.c_uint64),
+            ("dwLength", wintypes.DWORD),
+            ("dwMemoryLoad", wintypes.DWORD),
+            ("ullTotalPhys", ctypes.c_uint64),
+            ("ullAvailPhys", ctypes.c_uint64),
+            ("ullTotalPageFile", ctypes.c_uint64),
+            ("ullAvailPageFile", ctypes.c_uint64),
+            ("ullTotalVirtual", ctypes.c_uint64),
+            ("ullAvailVirtual", ctypes.c_uint64),
             ("ullAvailExtendedVirtual", ctypes.c_uint64),
         ]
 
@@ -247,7 +279,9 @@ def ram_total_bytes() -> int | None:
 # PCI vendor ids; a discrete vendor wins over an integrated one on hybrid machines.
 _GPU_PCI_VENDORS = {"10de": "nvidia", "1002": "amd", "8086": "intel"}
 _GPU_PRIORITY = ("nvidia", "amd", "intel")
-_DISPLAY_CLASS_KEY = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+_DISPLAY_CLASS_KEY = (
+    r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+)
 _GPU_SCAN_LIMIT = 16
 
 
@@ -258,7 +292,9 @@ def classify_gpu_vendors(vendor_ids: list[str]) -> str:
     """
     if vendor_ids and not any(v.strip() for v in vendor_ids):
         return "unknown"
-    found = {_GPU_PCI_VENDORS.get(v.strip().lower().removeprefix("0x")) for v in vendor_ids}
+    found = {
+        _GPU_PCI_VENDORS.get(v.strip().lower().removeprefix("0x")) for v in vendor_ids
+    }
     return next((name for name in _GPU_PRIORITY if name in found), "none")
 
 
@@ -266,10 +302,12 @@ def _linux_gpu_vendor_ids() -> list[str] | None:
     """PCI vendor ids of DRM cards; ``None`` when sysfs exposes no DRM tree at all."""
     root = "/sys/class/drm"
     try:
-        entries = sorted(os.listdir(root))[:_GPU_SCAN_LIMIT * 4]
+        entries = sorted(os.listdir(root))[: _GPU_SCAN_LIMIT * 4]
     except OSError:
         return None
-    cards = [e for e in entries if e.startswith("card") and "-" not in e][:_GPU_SCAN_LIMIT]
+    cards = [e for e in entries if e.startswith("card") and "-" not in e][
+        :_GPU_SCAN_LIMIT
+    ]
     return [_read_text(f"{root}/{card}/device/vendor", 16).strip() for card in cards]
 
 
@@ -277,7 +315,9 @@ def _hex_after(text: str, tag: str) -> str:
     return text.split(tag, 1)[1][:4] if tag in text else ""
 
 
-def parse_windows_display_adapters(rows: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+def parse_windows_display_adapters(
+    rows: list[tuple[str, str, str]],
+) -> list[tuple[str, str, str]]:
     """``(vendor id, device id, description)`` per adapter from ``(subkey, MatchingDeviceId, DriverDesc)`` rows.
 
     Virtual adapters (no ``VEN_`` id, such as the remote-display driver) are skipped; an
@@ -287,7 +327,9 @@ def parse_windows_display_adapters(rows: list[tuple[str, str, str]]) -> list[tup
     for subkey, matching_id, description in rows:
         upper = matching_id.upper()
         if "VEN_" in upper:
-            adapters.append((_hex_after(upper, "VEN_"), _hex_after(upper, "DEV_"), description))
+            adapters.append(
+                (_hex_after(upper, "VEN_"), _hex_after(upper, "DEV_"), description)
+            )
         elif subkey.isdigit() and not matching_id:
             adapters.append(("", "", description))
     return adapters
@@ -306,7 +348,13 @@ def _windows_display_adapters() -> tuple[tuple[str, str, str], ...] | None:
                 except OSError:
                     break
                 path = f"{_DISPLAY_CLASS_KEY}\\{subkey}"
-                rows.append((subkey, _winreg_str(path, "MatchingDeviceId"), _winreg_str(path, "DriverDesc")))
+                rows.append(
+                    (
+                        subkey,
+                        _winreg_str(path, "MatchingDeviceId"),
+                        _winreg_str(path, "DriverDesc"),
+                    )
+                )
     except OSError:
         return None
     return tuple(parse_windows_display_adapters(rows))
@@ -330,8 +378,12 @@ def gpu_class() -> str:
             vendors = darwin_pci.display_vendor_ids()
         elif sys.platform == "win32":
             adapters = _windows_display_adapters()
-            vendors = None if adapters is None else [vendor for vendor, _, _ in adapters]
-        elif os.path.exists("/proc/driver/nvidia/version") or os.path.exists(_WSL_NVIDIA_CUDA):
+            vendors = (
+                None if adapters is None else [vendor for vendor, _, _ in adapters]
+            )
+        elif os.path.exists("/proc/driver/nvidia/version") or os.path.exists(
+            _WSL_NVIDIA_CUDA
+        ):
             return "nvidia"
         else:
             vendors = _linux_gpu_vendor_ids()
@@ -365,10 +417,15 @@ def _pci_id(device_hex: str) -> int | None:
         return None
 
 
-def nvidia_gpus_from_adapters(adapters: list[tuple[str, str, str]]) -> tuple[NvidiaGpu, ...]:
+def nvidia_gpus_from_adapters(
+    adapters: list[tuple[str, str, str]],
+) -> tuple[NvidiaGpu, ...]:
     """The NVIDIA entries of parsed Windows display adapters."""
-    return tuple(NvidiaGpu(description, _pci_id(device)) for vendor, device, description in adapters
-                 if vendor.lower() == "10de")
+    return tuple(
+        NvidiaGpu(description, _pci_id(device))
+        for vendor, device, description in adapters
+        if vendor.lower() == "10de"
+    )
 
 
 def _linux_nvidia_gpus() -> tuple[NvidiaGpu, ...]:
@@ -376,9 +433,19 @@ def _linux_nvidia_gpus() -> tuple[NvidiaGpu, ...]:
         buses = sorted(os.listdir(_NVIDIA_PROC_GPUS))[:_GPU_SCAN_LIMIT]
     except OSError:
         return ()
-    gpus = (NvidiaGpu(parse_nvidia_gpu_model(_read_text(f"{_NVIDIA_PROC_GPUS}/{bus}/information", 4096)),
-                      _pci_id(_read_text(f"{_SYS_PCI_DEVICES}/{bus}/device", 16).strip().removeprefix("0x")))
-            for bus in buses)
+    gpus = (
+        NvidiaGpu(
+            parse_nvidia_gpu_model(
+                _read_text(f"{_NVIDIA_PROC_GPUS}/{bus}/information", 4096)
+            ),
+            _pci_id(
+                _read_text(f"{_SYS_PCI_DEVICES}/{bus}/device", 16)
+                .strip()
+                .removeprefix("0x")
+            ),
+        )
+        for bus in buses
+    )
     return tuple(gpu for gpu in gpus if gpu.name)
 
 
@@ -401,7 +468,10 @@ def _windows_interactive_session() -> bool:
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     process_id = kernel32.GetCurrentProcessId()
     session_id = wintypes.DWORD()
-    if not kernel32.ProcessIdToSessionId(process_id, ctypes.byref(session_id)) or session_id.value == 0:
+    if (
+        not kernel32.ProcessIdToSessionId(process_id, ctypes.byref(session_id))
+        or session_id.value == 0
+    ):
         return False
     active_session = kernel32.WTSGetActiveConsoleSessionId()
     if active_session != 0xFFFFFFFF and active_session == session_id.value:
@@ -418,12 +488,25 @@ def interactive_session() -> bool:
             return False
     if sys.platform.startswith("linux"):
         session_id = _read_text("/proc/self/sessionid", 64).strip()
-        return bool(session_id and session_id != "4294967295" and os.path.isdir(f"/run/user/{os.getuid()}"))  # windows-footgun: ok — Linux branch
+        return bool(
+            session_id
+            and session_id != "4294967295"
+            and os.path.isdir(f"/run/user/{os.getuid()}")
+        )  # windows-footgun: ok — Linux branch
     return True
 
 
 def clear_caches() -> None:
     """Clear every cached host fact."""
-    for fact in (os_family, process_arch, native_arch, cpu_model, cpu_vendor, ram_total_bytes, gpu_class,
-                 nvidia_gpus, _windows_display_adapters):
+    for fact in (
+        os_family,
+        process_arch,
+        native_arch,
+        cpu_model,
+        cpu_vendor,
+        ram_total_bytes,
+        gpu_class,
+        nvidia_gpus,
+        _windows_display_adapters,
+    ):
         fact.cache_clear()

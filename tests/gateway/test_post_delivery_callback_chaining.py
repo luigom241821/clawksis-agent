@@ -11,6 +11,7 @@ callbacks — the outer invoker in ``_handle_message`` awaits awaitable
 callbacks, and a sync wrapper would silently drop coroutine results from
 async callbacks chained behind it.
 """
+
 import asyncio
 import inspect
 
@@ -101,4 +102,3 @@ class TestPostDeliveryCallbackAsyncChaining:
         cb = adapter.pop_post_delivery_callback("s")
         _invoke(cb)
         assert fired == ["sync", "async"]
-

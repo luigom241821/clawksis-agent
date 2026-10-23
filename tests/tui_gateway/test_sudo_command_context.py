@@ -29,7 +29,9 @@ def test_sudo_request_preserves_command_without_leaking_prompt_context(monkeypat
     monkeypatch.setattr(redact, "_REDACT_ENABLED", False)
 
     sid, session_key = "sudo-dialog", "sudo-conversation"
-    monkeypatch.setitem(server._sessions, sid, {"session_key": session_key, "source": "desktop"})
+    monkeypatch.setitem(
+        server._sessions, sid, {"session_key": session_key, "source": "desktop"}
+    )
     command = (
         "printf '%s\\n' '" + "full context Ω " * 1000 + "' &&\n"
         "sudo env API_TOKEN=ghp_" + "X" * 36 + " first-command | sort;\n"

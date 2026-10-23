@@ -28,7 +28,9 @@ class _MediaOutcomeAdapter(BasePlatformAdapter):
     the turn outcome via the production ``on_processing_complete`` hook."""
 
     def __init__(self, *, image_ok: bool = True):
-        super().__init__(PlatformConfig(enabled=True, token="fake-token"), Platform.SIGNAL)
+        super().__init__(
+            PlatformConfig(enabled=True, token="fake-token"), Platform.SIGNAL
+        )
         self._image_ok = image_ok
         self.outcomes: list = []
         self.images_sent: list = []
@@ -48,14 +50,17 @@ class _MediaOutcomeAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id: str):
         return {"id": chat_id}
 
-    async def send_image_file(self, chat_id, image_path, caption=None,
-                              reply_to=None, metadata=None, **kwargs) -> SendResult:
+    async def send_image_file(
+        self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kwargs
+    ) -> SendResult:
         self.images_sent.append(str(image_path))
         if self._image_ok:
             return SendResult(success=True, message_id="img-1")
         return SendResult(success=False, error="boom")
 
-    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
+    async def on_processing_complete(
+        self, event: MessageEvent, outcome: ProcessingOutcome
+    ) -> None:
         self.outcomes.append(outcome)
 
 

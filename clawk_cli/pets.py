@@ -36,13 +36,19 @@ def _cmd_list(args) -> int:
 
     query = (args.query or "").strip().lower()
     if query:
-        entries = [e for e in entries if query in e.slug.lower() or query in e.display_name.lower()]
+        entries = [
+            e
+            for e in entries
+            if query in e.slug.lower() or query in e.display_name.lower()
+        ]
 
     limit = args.limit or 0
     shown = entries[:limit] if limit > 0 else entries
     installed = {p.slug for p in store.installed_pets()}
 
-    print(f"petdex gallery — {len(entries)} pet(s){' matching ' + repr(query) if query else ''}:")
+    print(
+        f"petdex gallery — {len(entries)} pet(s){' matching ' + repr(query) if query else ''}:"
+    )
     for entry in shown:
         mark = "✓" if entry.slug in installed else " "
         print(f"  {mark} {entry.slug:<28} {entry.display_name}  ({entry.kind})")
@@ -67,7 +73,9 @@ def _cmd_install(args) -> int:
 
     if args.select or not _has_active_pet():
         _set_active(slug)
-        print(f"✓ {pet.display_name} is now the active pet (display.pet.slug={slug}, enabled)")
+        print(
+            f"✓ {pet.display_name} is now the active pet (display.pet.slug={slug}, enabled)"
+        )
     else:
         print(f"  Make it active with: clawk pets select {slug}")
     return 0
@@ -130,7 +138,13 @@ def _cmd_show(args) -> int:
     import time
 
     from agent.pet import store
-    from agent.pet.constants import DEFAULT_SCALE, LOOP_MS, STATE_ROWS, PetState, resolve_cols
+    from agent.pet.constants import (
+        DEFAULT_SCALE,
+        LOOP_MS,
+        STATE_ROWS,
+        PetState,
+        resolve_cols,
+    )
     from agent.pet.render import build_renderer
 
     cfg = _pet_config()
@@ -144,9 +158,13 @@ def _cmd_show(args) -> int:
     scale = float(args.scale or cfg.get("scale", DEFAULT_SCALE) or DEFAULT_SCALE)
     cols = resolve_cols(scale, cfg.get("unicode_cols", 0))
 
-    renderer = build_renderer(pet.spritesheet, configured_mode=mode_cfg, scale=scale, unicode_cols=cols)
+    renderer = build_renderer(
+        pet.spritesheet, configured_mode=mode_cfg, scale=scale, unicode_cols=cols
+    )
     if not renderer.available:
-        _err(f"✗ cannot render here (no TTY / graphics disabled). Effective mode: {renderer.mode}.")
+        _err(
+            f"✗ cannot render here (no TTY / graphics disabled). Effective mode: {renderer.mode}."
+        )
         return 1
 
     # Which states to play: one named state, or cycle the driveable rows.
@@ -159,12 +177,16 @@ def _cmd_show(args) -> int:
         states = [PetState.IDLE.value]
 
     is_unicode = renderer.mode == "unicode"
-    frame_delay = max(0.05, (LOOP_MS / 1000.0) / max(1, renderer.frame_count(states[0]) or 1))
+    frame_delay = max(
+        0.05, (LOOP_MS / 1000.0) / max(1, renderer.frame_count(states[0]) or 1)
+    )
 
     # Right-align against the terminal's right edge — half-blocks by indenting each row, graphics
     # protocols by padding the cursor (kitty/iTerm/sixel all render at the cursor).
     term_cols = shutil.get_terminal_size((80, 24)).columns
-    sprite_cols = cols if is_unicode else max(1, int(renderer.frame_w * renderer.scale) // 8)
+    sprite_cols = (
+        cols if is_unicode else max(1, int(renderer.frame_w * renderer.scale) // 8)
+    )
     indent = " " * max(0, term_cols - sprite_cols - 1)
 
     out = sys.stdout
@@ -180,9 +202,13 @@ def _cmd_show(args) -> int:
                     encoded = renderer.frame(state, i)
                     if is_unicode:
                         if indent:
-                            encoded = "\n".join(indent + ln for ln in encoded.split("\n"))
+                            encoded = "\n".join(
+                                indent + ln for ln in encoded.split("\n")
+                            )
                         if prev_lines:
-                            out.write(f"\x1b[{prev_lines}F")  # cursor up to redraw in place
+                            out.write(
+                                f"\x1b[{prev_lines}F"
+                            )  # cursor up to redraw in place
                         out.write(encoded)
                         out.write("\x1b[0m\n")
                         # Lines drawn = sprite rows + trailing newline; the next frame overwrites.
@@ -220,7 +246,9 @@ def _cmd_doctor(args) -> int:
 
     print("petdex doctor")
     print(f"  pets dir:        {store.pets_dir()}")
-    print(f"  installed:       {len(pets)} ({', '.join(p.slug for p in pets) or 'none'})")
+    print(
+        f"  installed:       {len(pets)} ({', '.join(p.slug for p in pets) or 'none'})"
+    )
     print(f"  display.pet.enabled:     {enabled}")
     print(f"  display.pet.slug:        {configured_slug or '(unset)'}")
     print(f"  active (resolved):       {active.slug if active else '(none)'}")
@@ -244,11 +272,16 @@ def _cmd_doctor(args) -> int:
         print("  ✗ Pillow not importable — sprite decoding will be unavailable")
         ok = False
 
-    print("  ✓ ready" if ok and enabled else "  (run the suggestions above to finish setup)")
+    print(
+        "  ✓ ready"
+        if ok and enabled
+        else "  (run the suggestions above to finish setup)"
+    )
     return 0
 
 
 # ── config helpers ────────────────────────────────────────────────────────
+
 
 def _pet_config() -> dict:
     from clawk_cli.config import load_config
@@ -278,7 +311,9 @@ def _update_pet_config(when_slug: str | None = None, **values) -> bool:
 
     cfg = load_config()
     pet = cfg.setdefault("display", {}).setdefault("pet", {})
-    if when_slug is not None and (not isinstance(pet, dict) or str(pet.get("slug", "") or "") != when_slug):
+    if when_slug is not None and (
+        not isinstance(pet, dict) or str(pet.get("slug", "") or "") != when_slug
+    ):
         return False
     pet.update(values)
     save_config(cfg)
@@ -322,7 +357,11 @@ def toggle_pet_display() -> tuple[bool, str | None, str | None]:
     if pet is None:
         installed = store.installed_pets()
         if not installed:
-            return False, None, "no pets installed — /pet list to browse, or /pet <slug> to adopt"
+            return (
+                False,
+                None,
+                "no pets installed — /pet list to browse, or /pet <slug> to adopt",
+            )
         pet = installed[0]
         _set_active(pet.slug)
     else:
@@ -383,34 +422,82 @@ def _interactive_pick(pets) -> str:
 
 # (name, help, handler, [((flags...), add_argument kwargs), ...]) — registration order is menu order.
 _SUBCOMMANDS = (
-    ("list", "Browse the petdex gallery", _cmd_list, (
-        (("query",), dict(nargs="?", default="", help="Filter by slug/name substring")),
-        (("--installed",), dict(action="store_true", help="Only show installed pets")),
-        (("--limit",), dict(type=int, default=40, help="Max rows (0 = all)")),
-    )),
-    ("install", "Install a pet from the gallery", _cmd_install, (
-        (("slug",), dict(help="Pet slug (e.g. boba)")),
-        (("--force",), dict(action="store_true", help="Re-download even if present")),
-        (("--select",), dict(action="store_true", help="Make it the active pet")),
-    )),
-    ("select", "Set the active pet (writes display.pet.*)", _cmd_select, (
-        (("slug",), dict(nargs="?", default="", help="Pet slug (omit for picker)")),
-    )),
-    ("show", "Animate the active pet in the terminal", _cmd_show, (
-        (("slug",), dict(nargs="?", default="", help="Pet slug (default: active)")),
-        (("--state",), dict(default="", help="Single state: idle/run/review/failed/wave/jump")),
-        (("--cycle",), dict(action="store_true", help="Cycle through all states")),
-        (("--once",), dict(action="store_true", help="Play once instead of looping")),
-        (("--mode",), dict(default=None, help="Override render mode (kitty/iterm/sixel/unicode/auto)")),
-        (("--scale",), dict(type=float, default=0, help="Override scale (0 = config)")),
-    )),
+    (
+        "list",
+        "Browse the petdex gallery",
+        _cmd_list,
+        (
+            (
+                ("query",),
+                dict(nargs="?", default="", help="Filter by slug/name substring"),
+            ),
+            (
+                ("--installed",),
+                dict(action="store_true", help="Only show installed pets"),
+            ),
+            (("--limit",), dict(type=int, default=40, help="Max rows (0 = all)")),
+        ),
+    ),
+    (
+        "install",
+        "Install a pet from the gallery",
+        _cmd_install,
+        (
+            (("slug",), dict(help="Pet slug (e.g. boba)")),
+            (
+                ("--force",),
+                dict(action="store_true", help="Re-download even if present"),
+            ),
+            (("--select",), dict(action="store_true", help="Make it the active pet")),
+        ),
+    ),
+    (
+        "select",
+        "Set the active pet (writes display.pet.*)",
+        _cmd_select,
+        ((("slug",), dict(nargs="?", default="", help="Pet slug (omit for picker)")),),
+    ),
+    (
+        "show",
+        "Animate the active pet in the terminal",
+        _cmd_show,
+        (
+            (("slug",), dict(nargs="?", default="", help="Pet slug (default: active)")),
+            (
+                ("--state",),
+                dict(default="", help="Single state: idle/run/review/failed/wave/jump"),
+            ),
+            (("--cycle",), dict(action="store_true", help="Cycle through all states")),
+            (
+                ("--once",),
+                dict(action="store_true", help="Play once instead of looping"),
+            ),
+            (
+                ("--mode",),
+                dict(
+                    default=None,
+                    help="Override render mode (kitty/iterm/sixel/unicode/auto)",
+                ),
+            ),
+            (
+                ("--scale",),
+                dict(type=float, default=0, help="Override scale (0 = config)"),
+            ),
+        ),
+    ),
     ("off", "Disable the pet display", _cmd_off, ()),
-    ("scale", "Resize the pet everywhere (display.pet.scale)", _cmd_scale, (
-        (("factor",), dict(help="Scale factor, e.g. 0.5 (clamped 0.1–3.0)")),
-    )),
-    ("remove", "Delete an installed pet", _cmd_remove, (
-        (("slug",), dict(help="Pet slug")),
-    )),
+    (
+        "scale",
+        "Resize the pet everywhere (display.pet.scale)",
+        _cmd_scale,
+        ((("factor",), dict(help="Scale factor, e.g. 0.5 (clamped 0.1–3.0)")),),
+    ),
+    (
+        "remove",
+        "Delete an installed pet",
+        _cmd_remove,
+        ((("slug",), dict(help="Pet slug")),),
+    ),
     ("doctor", "Check pet setup + terminal graphics support", _cmd_doctor, ()),
 )
 

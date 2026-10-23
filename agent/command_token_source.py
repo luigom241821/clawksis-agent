@@ -53,7 +53,13 @@ def _mint(command: str, label: str) -> tuple[str, Optional[float]]:
 
     try:
         completed = subprocess.run(
-            command, stdin=subprocess.DEVNULL, shell=True, capture_output=True, text=True, errors="replace", timeout=_MINT_TIMEOUT_SECONDS,
+            command,
+            stdin=subprocess.DEVNULL,
+            shell=True,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=_MINT_TIMEOUT_SECONDS,
             env=served_profile_child_env(inherit_credentials=True),
             check=False,
         )
@@ -62,7 +68,9 @@ def _mint(command: str, label: str) -> tuple[str, Optional[float]]:
             f"key_cmd for provider {label!r} timed out after {_MINT_TIMEOUT_SECONDS}s"
         ) from exc
     except OSError as exc:
-        raise CommandTokenError(f"key_cmd for provider {label!r} could not be executed: {exc}") from exc
+        raise CommandTokenError(
+            f"key_cmd for provider {label!r} could not be executed: {exc}"
+        ) from exc
 
     if completed.returncode != 0:
         # NEVER include stdout/stderr (may hold a token) or the command string (may embed
@@ -117,7 +125,9 @@ def _mint(command: str, label: str) -> tuple[str, Optional[float]]:
 class CommandTokenSource:
     """Callable returning a bearer token, cached until shortly before expiry."""
 
-    clawk_credential_source = KEY_CMD  # display label source; read without calling (agent.credential_source)
+    clawk_credential_source = (
+        KEY_CMD  # display label source; read without calling (agent.credential_source)
+    )
 
     def __init__(self, command: str, label: str = "custom") -> None:
         self._command = command
@@ -138,16 +148,21 @@ class CommandTokenSource:
             token, ttl = _mint(self._command, self._label)
             self._token = token
             self._expires_at = time.monotonic() + (
-                max(ttl - _TOKEN_REFRESH_LEEWAY_SECONDS, 5.0) if ttl else _NO_TTL_REFRESH_SECONDS
+                max(ttl - _TOKEN_REFRESH_LEEWAY_SECONDS, 5.0)
+                if ttl
+                else _NO_TTL_REFRESH_SECONDS
             )
             logger.debug(
                 "Minted key_cmd token for provider %s (ttl=%s)",
-                self._label, f"{int(ttl)}s" if ttl else "unknown",
+                self._label,
+                f"{int(ttl)}s" if ttl else "unknown",
             )
             return token
 
 
-def build_command_token_provider(key_cmd: str, provider_label: str = "custom") -> Optional[CommandTokenSource]:
+def build_command_token_provider(
+    key_cmd: str, provider_label: str = "custom"
+) -> Optional[CommandTokenSource]:
     """A per-request token provider for *key_cmd*, or ``None`` when unset."""
     command = str(key_cmd or "").strip()
     return CommandTokenSource(command, provider_label) if command else None

@@ -77,8 +77,7 @@ def _write_platform_plugin(
 
     # Sentinels let the tests prove what was and wasn't imported.
     (plugin_dir / "adapter.py").write_text(
-        "import _deferred_probe\n"
-        "_deferred_probe.adapter_imports += 1\n",
+        "import _deferred_probe\n_deferred_probe.adapter_imports += 1\n",
         encoding="utf-8",
     )
     init_body = [
@@ -112,7 +111,9 @@ def _write_platform_plugin(
         )
         init_body.append("    from .tools import register_tools")
         init_body.append("    register_tools(ctx)")
-    (plugin_dir / "__init__.py").write_text("\n".join(init_body) + "\n", encoding="utf-8")
+    (plugin_dir / "__init__.py").write_text(
+        "\n".join(init_body) + "\n", encoding="utf-8"
+    )
 
     return PluginManifest(
         name=f"{platform}-platform",
@@ -167,7 +168,6 @@ def clean_registry():
 class TestA2AClientToolsInCliProcess:
     """The issue's exact repro: a CLI/TUI process, no gateway startup."""
 
-
     def test_a2a_toolset_resolves_without_materializing_the_platform(self):
         from clawk_cli.plugins import PluginManager
         from toolsets import resolve_toolset
@@ -175,7 +175,9 @@ class TestA2AClientToolsInCliProcess:
         mgr = PluginManager()
         mgr.discover_and_load()
 
-        a2a = mgr._plugins.get("platforms/a2a")  # bundled platforms key by category path (#27548)
+        a2a = mgr._plugins.get(
+            "platforms/a2a"
+        )  # bundled platforms key by category path (#27548)
         assert a2a is not None, "bundled a2a platform plugin was not discovered"
 
         # The whole point of the deferral is preserved: the inbound adapter is
@@ -432,14 +434,18 @@ class TestDeferredPlatformToolPreregistration:
         # The bookkeeping entry must not outlive the failed load attempt.
         assert "probeplat-platform" not in mgr._predeclared_tools
 
-    def test_failed_load_is_rearmed_and_heals_on_next_lookup(self, tmp_path, probe, clean_registry, monkeypatch):
+    def test_failed_load_is_rearmed_and_heals_on_next_lookup(
+        self, tmp_path, probe, clean_registry, monkeypatch
+    ):
         """A platform whose first deferred load raises (e.g. a load-deadline overrun under startup I/O) is
         re-armed by the reconnect watcher's hook, so the next lookup imports it again and the platform
         registers, without a forced re-discovery (#126356)."""
         from gateway.platform_registry import platform_registry
         from clawk_cli.plugins import PluginManager
 
-        manifest = _write_platform_plugin(tmp_path, "probeplat", with_tools_module=False)
+        manifest = _write_platform_plugin(
+            tmp_path, "probeplat", with_tools_module=False
+        )
         (Path(manifest.path) / "__init__.py").write_text(
             "import _deferred_probe\n"
             "def register(ctx):\n"
@@ -452,29 +458,47 @@ class TestDeferredPlatformToolPreregistration:
         mgr = PluginManager()
         mgr._register_deferred_platform(manifest)
         assert platform_registry.get("probeplat") is None
-        assert platform_registry.get("probeplat") is None  # a failed load is never retried by a lookup
-        with monkeypatch.context() as m:  # a placeholder the user disabled is never imported by a re-arm
-            m.setattr("clawk_cli.plugins_discovery._get_disabled_plugins", lambda: {"probeplat-platform"})
+        assert (
+            platform_registry.get("probeplat") is None
+        )  # a failed load is never retried by a lookup
+        with (
+            monkeypatch.context() as m
+        ):  # a placeholder the user disabled is never imported by a re-arm
+            m.setattr(
+                "clawk_cli.plugins_discovery._get_disabled_plugins",
+                lambda: {"probeplat-platform"},
+            )
             mgr._gate_manifest(manifest, {"probeplat-platform"}, None)
             assert mgr.rearm_failed_platform("probeplat") is False
         with monkeypatch.context() as m:  # nor one built for another Clawksis version
-            m.setattr("clawk_cli.plugins_manifest.requires_clawk_error", lambda _manifest: "needs newer clawk")
+            m.setattr(
+                "clawk_cli.plugins_manifest.requires_clawk_error",
+                lambda _manifest: "needs newer clawk",
+            )
             assert mgr.rearm_failed_platform("probeplat") is False
 
         from clawk_cli import plugins_loader
+
         release = threading.Event()
-        hung = threading.Thread(target=release.wait, name=f"{plugins_loader._LOADER_THREAD_PREFIX}probeplat-platform",
-                                daemon=True)
+        hung = threading.Thread(
+            target=release.wait,
+            name=f"{plugins_loader._LOADER_THREAD_PREFIX}probeplat-platform",
+            daemon=True,
+        )
         hung.start()
         monkeypatch.setattr(plugins_loader, "_ABANDONED_LOADERS", [hung])
-        assert mgr.rearm_failed_platform("probeplat") is False  # its hung load is still running
+        assert (
+            mgr.rearm_failed_platform("probeplat") is False
+        )  # its hung load is still running
         release.set()
         hung.join()
         monkeypatch.setattr("clawk_cli.plugins_loader._ABANDONED_LOADERS", [])
         assert mgr.rearm_failed_platform("probeplat") is True
         assert platform_registry.get("probeplat") is not None
         assert probe.adapter_imports == 2
-        assert mgr.rearm_failed_platform("probeplat") is False  # loaded: nothing left to re-arm
+        assert (
+            mgr.rearm_failed_platform("probeplat") is False
+        )  # loaded: nothing left to re-arm
 
     def test_declared_tools_with_no_tools_module_warns(
         self, tmp_path, probe, clean_registry, caplog

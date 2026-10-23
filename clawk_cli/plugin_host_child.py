@@ -29,8 +29,16 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from clawk_cli.plugin_host_wire import (
-    Channel, Opaque, PROTOCOL_VERSION, PluginHostUnsupported, bind_serving_request, decode, describe_signature,
-    encode, is_async_callable, serving_request,
+    Channel,
+    Opaque,
+    PROTOCOL_VERSION,
+    PluginHostUnsupported,
+    bind_serving_request,
+    decode,
+    describe_signature,
+    encode,
+    is_async_callable,
+    serving_request,
 )
 
 logger = logging.getLogger("clawk_cli.plugin_host_child")
@@ -61,21 +69,29 @@ class RemoteFacade:
 
     def __init__(self, runtime: HostRuntime, plugin_key: str, name: str):
         self._runtime, self._plugin_key, self._name = runtime, plugin_key, name
-        self._methods: dict[str, bool] = {}  # method name -> is a coroutine function in Clawksis
+        self._methods: dict[
+            str, bool
+        ] = {}  # method name -> is a coroutine function in Clawksis
 
     def __getattr__(self, attr: str) -> Any:
         if attr.startswith("_"):
             raise AttributeError(attr)
         if attr not in self._methods:
-            value = self._runtime.facade_call(self._plugin_key, self._name, attr, _probe=True)
+            value = self._runtime.facade_call(
+                self._plugin_key, self._name, attr, _probe=True
+            )
             if not (isinstance(value, dict) and value.get("__method__")):
                 return value  # a plain attribute (``ctx.state.data_dir``): read fresh every time
             self._methods[attr] = bool(value.get("async"))
-        call = functools.partial(self._runtime.facade_call, self._plugin_key, self._name, attr)
+        call = functools.partial(
+            self._runtime.facade_call, self._plugin_key, self._name, attr
+        )
         if not self._methods[attr]:
             return call
 
-        async def remote(*args: Any, **kwargs: Any) -> Any:  # ``await ctx.llm.acomplete(...)``
+        async def remote(
+            *args: Any, **kwargs: Any
+        ) -> Any:  # ``await ctx.llm.acomplete(...)``
             return await asyncio.to_thread(call, *args, **kwargs)
 
         remote.__name__ = attr
@@ -98,20 +114,34 @@ class RemotePluginContext:
         if name.startswith("_"):
             raise AttributeError(name)
         from clawk_cli.plugin_isolation import (
-            HOST_REMOTE_FACADES, HOST_SKIPPED_CTX_METHODS, HOST_UNSUPPORTED_CTX_METHODS,
+            HOST_REMOTE_FACADES,
+            HOST_SKIPPED_CTX_METHODS,
+            HOST_UNSUPPORTED_CTX_METHODS,
         )
+
         if name in HOST_UNSUPPORTED_CTX_METHODS:
+
             def unsupported(*_args: Any, **_kwargs: Any) -> Any:
                 raise PluginHostUnsupported(
-                    f"ctx.{name}() cannot run in the plugin host: {HOST_UNSUPPORTED_CTX_METHODS[name]}")
+                    f"ctx.{name}() cannot run in the plugin host: {HOST_UNSUPPORTED_CTX_METHODS[name]}"
+                )
+
             return unsupported
         if name in HOST_SKIPPED_CTX_METHODS:
+
             def skipped(*_args: Any, **_kwargs: Any) -> None:
-                logger.warning("Plugin '%s': ctx.%s() is skipped in the plugin host (%s)",
-                               self.manifest.name, name, HOST_SKIPPED_CTX_METHODS[name])
+                logger.warning(
+                    "Plugin '%s': ctx.%s() is skipped in the plugin host (%s)",
+                    self.manifest.name,
+                    name,
+                    HOST_SKIPPED_CTX_METHODS[name],
+                )
+
             return skipped
         if name in HOST_REMOTE_FACADES:
-            return self._facades.setdefault(name, RemoteFacade(self._runtime, self._plugin_key, name))
+            return self._facades.setdefault(
+                name, RemoteFacade(self._runtime, self._plugin_key, name)
+            )
         if name not in self._methods:
             raise AttributeError(f"'PluginContext' object has no attribute {name!r}")
         return functools.partial(self._runtime.ctx_call, self._plugin_key, name)
@@ -140,9 +170,16 @@ class HostRuntime:
         self.instance_modules: dict[str, Any] = {}
         self.stopped = threading.Event()
         self.loop = asyncio.new_event_loop()
-        threading.Thread(target=self.loop.run_forever, name="plugin-host-loop", daemon=True).start()
-        self.channel = Channel(reader, writer, self.handle, name="plugin-host",
-                               on_close=lambda _reason: self.stopped.set())
+        threading.Thread(
+            target=self.loop.run_forever, name="plugin-host-loop", daemon=True
+        ).start()
+        self.channel = Channel(
+            reader,
+            writer,
+            self.handle,
+            name="plugin-host",
+            on_close=lambda _reason: self.stopped.set(),
+        )
 
     # -- references -----------------------------------------------------------------------------
     def _remember(self, plugin_key: str, value: Any) -> int:
@@ -152,14 +189,20 @@ class HostRuntime:
             self.owners[ref] = plugin_key
         return ref
 
-    def ref_for(self, plugin_key: str, value: Any, *, allow_objects: bool) -> Optional[dict]:
+    def ref_for(
+        self, plugin_key: str, value: Any, *, allow_objects: bool
+    ) -> Optional[dict]:
         if isinstance(value, type):
             return None
         if callable(value) and not (allow_objects and _is_provider_object(value)):
-            return {"__callable__": self._remember(plugin_key, value), "async": is_async_callable(value),
-                    "sig": describe_signature(value), "name": getattr(value, "__name__", "callback"),
-                    "qualname": getattr(value, "__qualname__", None),
-                    "module": getattr(value, "__module__", None)}
+            return {
+                "__callable__": self._remember(plugin_key, value),
+                "async": is_async_callable(value),
+                "sig": describe_signature(value),
+                "name": getattr(value, "__name__", "callback"),
+                "qualname": getattr(value, "__qualname__", None),
+                "module": getattr(value, "__module__", None),
+            }
         if allow_objects and _is_provider_object(value):
             return self._describe_object(plugin_key, value)
         return None
@@ -167,7 +210,11 @@ class HostRuntime:
     def _describe_object(self, plugin_key: str, obj: Any) -> dict:
         """Method table + attribute plan for a provider object; every method runs here, in the host."""
         methods: dict[str, Any] = {}
-        instance = sorted(k for k in vars(obj) if not k.startswith("_")) if hasattr(obj, "__dict__") else []
+        instance = (
+            sorted(k for k in vars(obj) if not k.startswith("_"))
+            if hasattr(obj, "__dict__")
+            else []
+        )
         live: list[str] = list(instance)
         for name in dir(obj):
             if name.startswith("_") or name in instance:
@@ -178,45 +225,92 @@ class HostRuntime:
                 continue
             value = getattr(obj, name, None)
             if callable(value):
-                methods[name] = {"async": is_async_callable(value), "sig": describe_signature(value)}
+                methods[name] = {
+                    "async": is_async_callable(value),
+                    "sig": describe_signature(value),
+                }
             else:
                 # Class-level defaults too: an engine that sets ``context_length`` only later in
                 # ``update_model()`` must not read as the base-class default forever in Clawksis.
                 live.append(name)
-        return {"__object__": self._remember(plugin_key, obj), "methods": methods, "live": live,
-                "type": type(obj).__name__}
+        return {
+            "__object__": self._remember(plugin_key, obj),
+            "methods": methods,
+            "live": live,
+            "type": type(obj).__name__,
+        }
 
     def resolve_from_parent(self, ref: dict) -> Any:
         if "__handle__" in ref:
-            return RemoteRegistration(self, int(ref["__handle__"]), str(ref.get("kind") or ""),
-                                      str(ref.get("key") or ""))
+            return RemoteRegistration(
+                self,
+                int(ref["__handle__"]),
+                str(ref.get("kind") or ""),
+                str(ref.get("key") or ""),
+            )
         return Opaque("callable" if "__callable__" in ref else "object")
 
     # -- outgoing ---------------------------------------------------------------------------------
-    def _send_call(self, method: str, plugin_key: str, payload: dict[str, Any], *, allow_objects: bool) -> Any:
+    def _send_call(
+        self,
+        method: str,
+        plugin_key: str,
+        payload: dict[str, Any],
+        *,
+        allow_objects: bool,
+    ) -> Any:
         refs = functools.partial(self.ref_for, plugin_key, allow_objects=allow_objects)
-        payload = {**payload, "plugin": plugin_key,
-                   "args": encode(list(payload.pop("args", ())), refs),
-                   "kwargs": encode(dict(payload.pop("kwargs", {})), refs)}
+        payload = {
+            **payload,
+            "plugin": plugin_key,
+            "args": encode(list(payload.pop("args", ())), refs),
+            "kwargs": encode(dict(payload.pop("kwargs", {})), refs),
+        }
         return decode(self.channel.call(method, payload), self.resolve_from_parent)
 
     def ctx_call(self, plugin_key: str, method: str, *args: Any, **kwargs: Any) -> Any:
         from clawk_cli.plugin_isolation import HOST_OBJECT_BASES
-        return self._send_call("ctx", plugin_key, {"method": method, "args": args, "kwargs": kwargs},
-                               allow_objects=method in HOST_OBJECT_BASES)
 
-    def facade_call(self, plugin_key: str, facade: str, method: str, *args: Any, _probe: bool = False,
-                    **kwargs: Any) -> Any:
-        return self._send_call("facade", plugin_key, {"facade": facade, "method": method, "probe": _probe,
-                                                      "args": args, "kwargs": kwargs}, allow_objects=False)
+        return self._send_call(
+            "ctx",
+            plugin_key,
+            {"method": method, "args": args, "kwargs": kwargs},
+            allow_objects=method in HOST_OBJECT_BASES,
+        )
+
+    def facade_call(
+        self,
+        plugin_key: str,
+        facade: str,
+        method: str,
+        *args: Any,
+        _probe: bool = False,
+        **kwargs: Any,
+    ) -> Any:
+        return self._send_call(
+            "facade",
+            plugin_key,
+            {
+                "facade": facade,
+                "method": method,
+                "probe": _probe,
+                "args": args,
+                "kwargs": kwargs,
+            },
+            allow_objects=False,
+        )
 
     def spawn(self, coro: Any, *, name: Optional[str] = None) -> Any:
         if not inspect.iscoroutine(coro):
             raise TypeError("spawn_task() requires a coroutine object")
-        return asyncio.run_coroutine_threadsafe(_on_behalf_of(coro, serving_request()), self.loop)
+        return asyncio.run_coroutine_threadsafe(
+            _on_behalf_of(coro, serving_request()), self.loop
+        )
 
     # -- incoming ---------------------------------------------------------------------------------
-    def handle(self, method: str, params: dict[str, Any], _origin: Optional[int]) -> Any:
+    def handle(
+        self, method: str, params: dict[str, Any], _origin: Optional[int]
+    ) -> Any:
         handler = _HANDLERS.get(method)
         if handler is None:
             raise ValueError(f"unknown plugin host request {method!r}")
@@ -226,26 +320,43 @@ class HostRuntime:
         """Await plugin coroutines on the host loop, still attributed to the request being served
         (their ``ctx`` calls then run in that caller's session, not a bare context)."""
         if inspect.isawaitable(result):
-            return asyncio.run_coroutine_threadsafe(_on_behalf_of(result, serving_request()), self.loop).result()
+            return asyncio.run_coroutine_threadsafe(
+                _on_behalf_of(result, serving_request()), self.loop
+            ).result()
         return result
 
     def _encode_result(self, plugin_key: str, value: Any) -> Any:
-        return encode(value, functools.partial(self.ref_for, plugin_key, allow_objects=False))
+        return encode(
+            value, functools.partial(self.ref_for, plugin_key, allow_objects=False)
+        )
 
     def _decode_args(self, params: dict[str, Any]):
-        return decode(params.get("args") or [], None), decode(params.get("kwargs") or {}, None)
+        return decode(params.get("args") or [], None), decode(
+            params.get("kwargs") or {}, None
+        )
 
     def op_hello(self, _params: dict[str, Any]) -> dict[str, Any]:
-        return {"protocol": PROTOCOL_VERSION, "pid": os.getpid(), "python": sys.version.split()[0]}
+        return {
+            "protocol": PROTOCOL_VERSION,
+            "pid": os.getpid(),
+            "python": sys.version.split()[0],
+        }
 
     def op_load(self, params: dict[str, Any]) -> dict[str, Any]:
         plugin_key = str(params["plugin_key"])
         target = _import_plugin(params)
-        register = target if callable(target) and not isinstance(target, types.ModuleType) \
+        register = (
+            target
+            if callable(target) and not isinstance(target, types.ModuleType)
             else getattr(target, "register", None)
+        )
         if not callable(register):
-            raise AttributeError(f"Plugin '{params.get('name')}' has no register() function")
-        module_name = getattr(target, "__name__", None) or getattr(register, "__module__", None)
+            raise AttributeError(
+                f"Plugin '{params.get('name')}' has no register() function"
+            )
+        module_name = getattr(target, "__name__", None) or getattr(
+            register, "__module__", None
+        )
         self.modules[plugin_key] = str(module_name or "")
         self._run(register(RemotePluginContext(self, plugin_key, params)))
         return {"module": module_name}
@@ -266,17 +377,30 @@ class HostRuntime:
         captured: list[Any] = []
         register = getattr(module, "register", None)
         if callable(register):
-            ctx = _CapturingContext(self, plugin_key, params, capture, base, captured,
-                                    forward=bool(params.get("forward")))
+            ctx = _CapturingContext(
+                self,
+                plugin_key,
+                params,
+                capture,
+                base,
+                captured,
+                forward=bool(params.get("forward")),
+            )
             try:
                 self._run(register(ctx))
             except Exception as exc:
                 if not captured:
-                    logger.debug("register() failed for %s: %s", params.get("name"), exc)
+                    logger.debug(
+                        "register() failed for %s: %s", params.get("name"), exc
+                    )
         if not captured:
             for attr in dir(module):
                 value = getattr(module, attr, None)
-                if isinstance(value, type) and issubclass(value, base) and value is not base:
+                if (
+                    isinstance(value, type)
+                    and issubclass(value, base)
+                    and value is not base
+                ):
                     try:
                         captured.append(value())
                         break
@@ -292,7 +416,11 @@ class HostRuntime:
         profiles = self.profiles.get(str(params["path"]))
         if profiles is None:
             profiles = self.profiles[str(params["path"])] = {
-                p.name: p for p in capture_profiles(str(params["path"]), str(params["module_name"]))}
+                p.name: p
+                for p in capture_profiles(
+                    str(params["path"]), str(params["module_name"])
+                )
+            }
         target = getattr(profiles[str(params["profile"])], str(params["attr"]))
         args, kwargs = self._decode_args(params)
         return encode(self._run(target(*args, **kwargs)))
@@ -303,6 +431,7 @@ class HostRuntime:
         app = self.asgi_apps.get(str(api_path))
         if app is None:
             from fastapi import FastAPI
+
             module_name = f"clawk_dashboard_plugin_{params['plugin']}"
             spec = importlib.util.spec_from_file_location(module_name, api_path)
             if spec is None or spec.loader is None:
@@ -320,14 +449,25 @@ class HostRuntime:
         async def request() -> dict[str, Any]:
             import httpx
             from clawk_cli.plugin_host_http_auth import with_hosted_admission
-            transport = httpx.ASGITransport(app=with_hosted_admission(app, params.get("authenticated")))
-            async with httpx.AsyncClient(transport=transport, base_url="http://plugin-host") as client:
+
+            transport = httpx.ASGITransport(
+                app=with_hosted_admission(app, params.get("authenticated"))
+            )
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://plugin-host"
+            ) as client:
                 response = await client.request(
-                    str(params["method"]), str(params["path"]), params=str(params.get("query") or ""),
+                    str(params["method"]),
+                    str(params["path"]),
+                    params=str(params.get("query") or ""),
                     headers=[tuple(h) for h in params.get("headers") or []],
-                    content=decode(params.get("body")) or b"")
-            return {"status": response.status_code, "headers": list(response.headers.multi_items()),
-                    "body": response.content}
+                    content=decode(params.get("body")) or b"",
+                )
+            return {
+                "status": response.status_code,
+                "headers": list(response.headers.multi_items()),
+                "body": response.content,
+            }
 
         return encode(self._run(request()))
 
@@ -337,7 +477,9 @@ class HostRuntime:
         if fn is None:
             raise LookupError(f"plugin host callable {ref} was released")
         args, kwargs = self._decode_args(params)
-        return self._encode_result(self.owners.get(ref, ""), self._run(fn(*args, **kwargs)))
+        return self._encode_result(
+            self.owners.get(ref, ""), self._run(fn(*args, **kwargs))
+        )
 
     def op_obj_invoke(self, params: dict[str, Any]) -> Any:
         ref = int(params["ref"])
@@ -348,7 +490,9 @@ class HostRuntime:
         if method.startswith("_"):
             raise AttributeError(method)
         args, kwargs = self._decode_args(params)
-        return self._encode_result(self.owners.get(ref, ""), self._run(getattr(obj, method)(*args, **kwargs)))
+        return self._encode_result(
+            self.owners.get(ref, ""), self._run(getattr(obj, method)(*args, **kwargs))
+        )
 
     def op_obj_getattr(self, params: dict[str, Any]) -> Any:
         obj = self.refs.get(int(params["ref"]))
@@ -357,7 +501,9 @@ class HostRuntime:
             raise LookupError(f"plugin host object {params['ref']} was released")
         if name.startswith("_") or not hasattr(obj, name):
             return {"__missing__": name}
-        return self._encode_result(self.owners.get(int(params["ref"]), ""), getattr(obj, name))
+        return self._encode_result(
+            self.owners.get(int(params["ref"]), ""), getattr(obj, name)
+        )
 
     def op_release(self, params: dict[str, Any]) -> None:
         """Drop objects whose Clawksis-side proxies were garbage-collected."""
@@ -369,7 +515,9 @@ class HostRuntime:
     def op_config_schema(self, params: dict[str, Any]) -> Any:
         """A memory provider's ``config_schema.py`` ``CONFIG_SCHEMA`` (user code: it runs here)."""
         path = Path(str(params["path"]))
-        spec = importlib.util.spec_from_file_location(f"_clawk_memory_config_schema.{path.parent.name}", path)
+        spec = importlib.util.spec_from_file_location(
+            f"_clawk_memory_config_schema.{path.parent.name}", path
+        )
         if spec is None or spec.loader is None:
             raise ImportError(f"cannot load {path}")
         module = importlib.util.module_from_spec(spec)
@@ -397,7 +545,11 @@ class HostRuntime:
                 self.owners.pop(ref, None)
         module_name = self.modules.pop(plugin_key, "")
         if module_name:
-            for name in [m for m in sys.modules if m == module_name or m.startswith(module_name + ".")]:
+            for name in [
+                m
+                for m in sys.modules
+                if m == module_name or m.startswith(module_name + ".")
+            ]:
                 sys.modules.pop(name, None)
         return {"errors": errors}
 
@@ -408,12 +560,18 @@ class HostRuntime:
 
 
 _HANDLERS: dict[str, Callable[[HostRuntime, dict[str, Any]], Any]] = {
-    "hello": HostRuntime.op_hello, "load": HostRuntime.op_load, "load_instance": HostRuntime.op_load_instance,
-    "asgi": HostRuntime.op_asgi, "profile_call": HostRuntime.op_profile_call,
+    "hello": HostRuntime.op_hello,
+    "load": HostRuntime.op_load,
+    "load_instance": HostRuntime.op_load_instance,
+    "asgi": HostRuntime.op_asgi,
+    "profile_call": HostRuntime.op_profile_call,
     "invoke": HostRuntime.op_invoke,
-    "obj_invoke": HostRuntime.op_obj_invoke, "obj_getattr": HostRuntime.op_obj_getattr,
-    "obj_setattr": HostRuntime.op_obj_setattr, "unload": HostRuntime.op_unload,
-    "release": HostRuntime.op_release, "config_schema": HostRuntime.op_config_schema,
+    "obj_invoke": HostRuntime.op_obj_invoke,
+    "obj_getattr": HostRuntime.op_obj_getattr,
+    "obj_setattr": HostRuntime.op_obj_setattr,
+    "unload": HostRuntime.op_unload,
+    "release": HostRuntime.op_release,
+    "config_schema": HostRuntime.op_config_schema,
     "shutdown": HostRuntime.op_shutdown,
 }
 
@@ -422,18 +580,36 @@ class _CapturingContext(RemotePluginContext):
     """``register(ctx)`` for a category plugin: the category's own registration is kept here; the rest
     forward to Clawksis when it bound a context (memory providers), else are no-ops."""
 
-    def __init__(self, runtime: HostRuntime, plugin_key: str, info: dict[str, Any], capture: str,
-                 base: type, captured: list[Any], *, forward: bool):
+    def __init__(
+        self,
+        runtime: HostRuntime,
+        plugin_key: str,
+        info: dict[str, Any],
+        capture: str,
+        base: type,
+        captured: list[Any],
+        *,
+        forward: bool,
+    ):
         super().__init__(runtime, plugin_key, info)
-        self._capture, self._base, self._captured, self._forward = capture, base, captured, forward
+        self._capture, self._base, self._captured, self._forward = (
+            capture,
+            base,
+            captured,
+            forward,
+        )
 
     def __getattr__(self, name: str) -> Any:
         if name == self._capture:
+
             def capture(obj: Any, *_args: Any, **_kwargs: Any) -> None:
                 if isinstance(obj, self._base) and not self._captured:
                     self._captured.append(obj)
+
             return capture
-        if not self._forward and (name.startswith("register_") or name in {"subscribe"}):
+        if not self._forward and (
+            name.startswith("register_") or name in {"subscribe"}
+        ):
             return lambda *_args, **_kwargs: None
         return super().__getattr__(name)
 
@@ -445,8 +621,19 @@ def _import_base(ref: str) -> type:
 
 def _is_provider_object(value: Any) -> bool:
     """A plugin-defined instance (provider/engine), as opposed to a function or bound method."""
-    return not isinstance(value, (types.FunctionType, types.MethodType, types.BuiltinFunctionType,
-                                  functools.partial, type)) and type(value).__module__ != "builtins"
+    return (
+        not isinstance(
+            value,
+            (
+                types.FunctionType,
+                types.MethodType,
+                types.BuiltinFunctionType,
+                functools.partial,
+                type,
+            ),
+        )
+        and type(value).__module__ != "builtins"
+    )
 
 
 async def _on_behalf_of(awaitable: Any, origin: Optional[int]) -> Any:
@@ -460,22 +647,27 @@ def _import_plugin(params: dict[str, Any]) -> Any:
         for ep in importlib.metadata.entry_points().select(group=_ENTRY_POINTS_GROUP):
             if ep.name == params.get("name"):
                 return ep.load()
-        raise ImportError(f"Entry point '{params.get('name')}' not found in group '{_ENTRY_POINTS_GROUP}'")
+        raise ImportError(
+            f"Entry point '{params.get('name')}' not found in group '{_ENTRY_POINTS_GROUP}'"
+        )
     plugin_dir = Path(str(params["path"]))
     init_file = plugin_dir / "__init__.py"
     if not init_file.exists():
         raise FileNotFoundError(f"No __init__.py in {plugin_dir}")
     module_name = str(params["module_name"])
     parts = module_name.split(".")[:-1]
-    for i in range(1, len(parts) + 1):  # synthetic parent packages (clawk_plugins, _clawk_user_memory)
+    for i in range(
+        1, len(parts) + 1
+    ):  # synthetic parent packages (clawk_plugins, _clawk_user_memory)
         parent = ".".join(parts[:i])
         if parent not in sys.modules:
             ns_pkg = types.ModuleType(parent)
             ns_pkg.__path__ = []  # type: ignore[attr-defined]
             ns_pkg.__package__ = parent
             sys.modules[parent] = ns_pkg
-    spec = importlib.util.spec_from_file_location(module_name, init_file,
-                                                  submodule_search_locations=[str(plugin_dir)])
+    spec = importlib.util.spec_from_file_location(
+        module_name, init_file, submodule_search_locations=[str(plugin_dir)]
+    )
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot create module spec for {init_file}")
     module = importlib.util.module_from_spec(spec)
@@ -485,7 +677,11 @@ def _import_plugin(params: dict[str, Any]) -> Any:
     try:
         spec.loader.exec_module(module)
     except BaseException:
-        for name in [m for m in sys.modules if m == module_name or m.startswith(module_name + ".")]:
+        for name in [
+            m
+            for m in sys.modules
+            if m == module_name or m.startswith(module_name + ".")
+        ]:
             sys.modules.pop(name, None)
         raise
     return module
@@ -508,32 +704,41 @@ def capture_profiles(path: str, module_name: str) -> list[Any]:
     """Import a model-provider plugin and return the profiles it passes to ``register_provider``."""
     import providers
     from providers.base import ProviderProfile
+
     providers.list_providers()  # bundled + known profiles register before the capture window
     captured: list[Any] = []
     original = providers.register_provider
     providers.register_provider = captured.append  # type: ignore[assignment]
     try:
-        _import_plugin({"path": path, "module_name": module_name, "name": Path(path).name})
+        _import_plugin(
+            {"path": path, "module_name": module_name, "name": Path(path).name}
+        )
     finally:
         providers.register_provider = original  # type: ignore[assignment]
     for profile in captured:
         if type(profile).create_client is not ProviderProfile.create_client:
             raise PluginHostUnsupported(
                 f"provider profile {getattr(profile, 'name', '?')!r} overrides create_client(), which returns "
-                "a live SDK client; it runs only in-process")
+                "a live SDK client; it runs only in-process"
+            )
     return captured
 
 
 def describe_profile(profile: Any) -> dict[str, Any]:
     """Profile data (instance fields) plus the methods and callable fields that must run here."""
     from providers.base import ProviderProfile
+
     fields: dict[str, Any] = {}
     calls: dict[str, Any] = {}
     for name, value in vars(profile).items():
         if name.startswith("_"):
             continue
         if callable(value):
-            calls[name] = {"async": is_async_callable(value), "sig": describe_signature(value), "field": True}
+            calls[name] = {
+                "async": is_async_callable(value),
+                "sig": describe_signature(value),
+                "field": True,
+            }
         else:
             fields[name] = encode(value)
     for name in dir(type(profile)):
@@ -542,22 +747,38 @@ def describe_profile(profile: Any) -> dict[str, Any]:
         attr = getattr(type(profile), name)
         if attr is getattr(ProviderProfile, name, object()):
             continue
-        if isinstance(inspect.getattr_static(profile, name), property) or not callable(attr):
+        if isinstance(inspect.getattr_static(profile, name), property) or not callable(
+            attr
+        ):
             fields[name] = encode(getattr(profile, name))
             continue
-        calls[name] = {"async": is_async_callable(attr), "sig": describe_signature(getattr(profile, name)),
-                       "field": False}
-    return {"name": profile.name, "type": type(profile).__name__, "fields": fields, "calls": calls}
+        calls[name] = {
+            "async": is_async_callable(attr),
+            "sig": describe_signature(getattr(profile, name)),
+            "field": False,
+        }
+    return {
+        "name": profile.name,
+        "type": type(profile).__name__,
+        "fields": fields,
+        "calls": calls,
+    }
 
 
 def extract_profiles_main(path: str, module_name: str) -> int:
     """``--extract-profiles``: one-shot, credential-free; prints the profiles as JSON on stdout."""
     import json
+
     reader, writer = _take_protocol_streams()
     del reader
     import clawk_bootstrap
+
     try:
-        payload = {"profiles": [describe_profile(p) for p in capture_profiles(path, module_name)]}
+        payload = {
+            "profiles": [
+                describe_profile(p) for p in capture_profiles(path, module_name)
+            ]
+        }
     except Exception as exc:
         payload = {"error": f"{type(exc).__name__}: {exc}"}
     writer.write(json.dumps(payload).encode("utf-8"))
@@ -568,8 +789,12 @@ def extract_profiles_main(path: str, module_name: str) -> int:
 def main() -> int:
     reader, writer = _take_protocol_streams()
     import clawk_bootstrap
-    logging.basicConfig(stream=sys.stderr, level=os.environ.get("CLAWK_PLUGIN_HOST_LOG_LEVEL", "WARNING"),
-                        format="%(levelname)s %(name)s: %(message)s")
+
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=os.environ.get("CLAWK_PLUGIN_HOST_LOG_LEVEL", "WARNING"),
+        format="%(levelname)s %(name)s: %(message)s",
+    )
     runtime = HostRuntime(reader, writer)
     runtime.channel.start()
     runtime.stopped.wait()
@@ -578,8 +803,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    code = (extract_profiles_main(sys.argv[2], sys.argv[3]) if sys.argv[1:2] == ["--extract-profiles"]
-            else main())
+    code = (
+        extract_profiles_main(sys.argv[2], sys.argv[3])
+        if sys.argv[1:2] == ["--extract-profiles"]
+        else main()
+    )
     sys.stderr.flush()
     # A plugin thread stuck in a handler must not keep the host alive once Clawksis has gone.
     os._exit(code)

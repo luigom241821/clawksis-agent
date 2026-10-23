@@ -62,9 +62,9 @@ def _err(code: int, stderr: str):
 def test_validate_references_filters_bad_names_and_refs():
     refs = {
         "OPENAI_API_KEY": "op://Private/OpenAI/api key",
-        "1BAD_NAME": "op://Private/x/y",          # bad env name
-        "HAS SPACE": "op://Private/x/y",          # bad env name
-        "NOT_A_REF": "https://example.com",        # not op://
+        "1BAD_NAME": "op://Private/x/y",  # bad env name
+        "HAS SPACE": "op://Private/x/y",  # bad env name
+        "NOT_A_REF": "https://example.com",  # not op://
         "WHITESPACE": "  op://Private/z/field  ",  # stripped + kept
     }
     valid, warnings = op._validate_references(refs)
@@ -108,15 +108,13 @@ def test_fetch_happy_path(monkeypatch, tmp_path):
     assert warnings == []
 
 
-
-
-
-
 def test_fetch_read_failure_becomes_warning(monkeypatch, tmp_path):
     fake_op = tmp_path / "op"
     fake_op.write_text("")
     monkeypatch.setattr(
-        op.subprocess, "run", lambda *a, **k: _err(1, "\x1b[31m[ERROR] not signed in\x1b[0m")
+        op.subprocess,
+        "run",
+        lambda *a, **k: _err(1, "\x1b[31m[ERROR] not signed in\x1b[0m"),
     )
 
     secrets, warnings = op.fetch_onepassword_secrets(
@@ -128,14 +126,6 @@ def test_fetch_read_failure_becomes_warning(monkeypatch, tmp_path):
     assert "\x1b" not in warnings[0]
     assert "[31m" not in warnings[0]
     assert "not signed in" in warnings[0]
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -156,16 +146,12 @@ def test_inprocess_cache_hit(monkeypatch, tmp_path):
     op._reset_cache_for_tests(tmp_path)
     for _ in range(2):
         op.fetch_onepassword_secrets(
-            references={"K": "op://V/I/F"}, cache_ttl_seconds=60,
-            binary=fake_op, home_path=tmp_path,
+            references={"K": "op://V/I/F"},
+            cache_ttl_seconds=60,
+            binary=fake_op,
+            home_path=tmp_path,
         )
     assert calls["n"] == 1  # second call served from L1 cache
-
-
-
-
-
-
 
 
 def test_connect_credential_change_invalidates_cache(monkeypatch, tmp_path):
@@ -184,21 +170,21 @@ def test_connect_credential_change_invalidates_cache(monkeypatch, tmp_path):
     monkeypatch.setenv("OP_CONNECT_HOST", "https://connect.example.com")
     monkeypatch.setenv("OP_CONNECT_TOKEN", "tokenA")
     op.fetch_onepassword_secrets(
-        references={"K": "op://V/I/F"}, cache_ttl_seconds=300,
-        binary=fake_op, home_path=tmp_path,
+        references={"K": "op://V/I/F"},
+        cache_ttl_seconds=300,
+        binary=fake_op,
+        home_path=tmp_path,
     )
     # Rotate the Connect token → new identity.
     monkeypatch.setenv("OP_CONNECT_TOKEN", "tokenB")
     op._CACHE.clear()
     op.fetch_onepassword_secrets(
-        references={"K": "op://V/I/F"}, cache_ttl_seconds=300,
-        binary=fake_op, home_path=tmp_path,
+        references={"K": "op://V/I/F"},
+        cache_ttl_seconds=300,
+        binary=fake_op,
+        home_path=tmp_path,
     )
     assert calls["n"] == 2  # cache key changed → refetch
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +199,6 @@ def test_find_op_pinned_path_not_on_path(tmp_path, monkeypatch):
     # PATH lookup must NOT be consulted when a binary_path is pinned.
     monkeypatch.setattr(op.shutil, "which", lambda name: "/usr/bin/op")
     assert op.find_op(str(pinned)) == pinned
-
-
 
 
 def test_op_child_env_forwards_config_directory(monkeypatch):
@@ -241,9 +225,7 @@ def test_apply_disabled_returns_empty():
 
 def test_apply_missing_binary_sets_error(monkeypatch):
     monkeypatch.setattr(op, "find_op", lambda binary_path="": None)
-    result = op.apply_onepassword_secrets(
-        enabled=True, env={"K": "op://V/I/F"}
-    )
+    result = op.apply_onepassword_secrets(enabled=True, env={"K": "op://V/I/F"})
     assert not result.ok
     assert "op CLI" in result.error
 
@@ -256,7 +238,9 @@ def test_apply_sets_env(monkeypatch, tmp_path):
     monkeypatch.delenv("MY_OP_KEY", raising=False)
 
     result = op.apply_onepassword_secrets(
-        enabled=True, env={"MY_OP_KEY": "op://V/I/F"}, cache_ttl_seconds=0,
+        enabled=True,
+        env={"MY_OP_KEY": "op://V/I/F"},
+        cache_ttl_seconds=0,
     )
     assert result.ok
     assert result.applied == ["MY_OP_KEY"]
@@ -277,8 +261,10 @@ def test_apply_skips_before_fetch_when_not_overriding(monkeypatch, tmp_path):
     monkeypatch.setattr(op.subprocess, "run", fake_run)
 
     result = op.apply_onepassword_secrets(
-        enabled=True, env={"MY_OP_KEY": "op://V/I/F"},
-        override_existing=False, cache_ttl_seconds=0,
+        enabled=True,
+        env={"MY_OP_KEY": "op://V/I/F"},
+        override_existing=False,
+        cache_ttl_seconds=0,
     )
     assert "MY_OP_KEY" in result.skipped
     assert os.environ["MY_OP_KEY"] == "from-env"
@@ -301,12 +287,9 @@ def test_apply_never_overrides_token_var(monkeypatch, tmp_path):
     result = op.apply_onepassword_secrets(
         enabled=True,
         env={"OP_SERVICE_ACCOUNT_TOKEN": "op://V/I/F"},
-        override_existing=True, cache_ttl_seconds=0,
+        override_existing=True,
+        cache_ttl_seconds=0,
     )
     assert "OP_SERVICE_ACCOUNT_TOKEN" in result.skipped
     assert os.environ["OP_SERVICE_ACCOUNT_TOKEN"] == "original"
     assert calls["n"] == 0
-
-
-
-

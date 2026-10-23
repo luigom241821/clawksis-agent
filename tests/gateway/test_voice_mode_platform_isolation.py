@@ -21,7 +21,6 @@ from gateway.run import GatewayRunner
 class TestVoiceKeyHelper:
     """Test the _voice_key helper method."""
 
-
     def test_voice_key_different_platforms_same_chat_id(self):
         """Same chat_id on different platforms yields different keys."""
         runner = _make_runner()
@@ -33,8 +32,6 @@ class TestVoiceKeyHelper:
         assert key_telegram == "telegram:123"
         assert key_slack == "slack:123"
         assert key_discord == "discord:123"
-
-
 
 
 class TestLegacyKeyMigration:
@@ -78,10 +75,10 @@ class TestSyncVoiceModeStateToAdapter:
 
         # Set up voice mode state with multiple platforms
         runner._voice_mode = {
-            "telegram:123": "off",      # Should sync
-            "telegram:456": "all",       # Should NOT sync (mode is not "off")
-            "slack:123": "off",          # Should NOT sync (different platform)
-            "discord:789": "off",        # Should NOT sync (different platform)
+            "telegram:123": "off",  # Should sync
+            "telegram:456": "all",  # Should NOT sync (mode is not "off")
+            "slack:123": "off",  # Should NOT sync (different platform)
+            "discord:789": "off",  # Should NOT sync (different platform)
         }
 
         # Create a mock Telegram adapter
@@ -135,8 +132,13 @@ class TestVoiceModeProfileIsolation:
         runner._profile_adapters = {"bot2": {Platform.DISCORD: bot2_ad}}
         # Inbound event from bot2's transport in channel 123 (same id the
         # default bot also sees).
-        src = SessionSource(platform=Platform.DISCORD, chat_id="123", user_id="u1",
-                            chat_type="channel", profile="bot2")
+        src = SessionSource(
+            platform=Platform.DISCORD,
+            chat_id="123",
+            user_id="u1",
+            chat_type="channel",
+            profile="bot2",
+        )
         src._transport_adapter_ref = lambda: bot2_ad
 
         await runner._handle_voice_command(
@@ -154,10 +156,13 @@ class TestVoiceModeProfileIsolation:
         assert bot2_ad.handle_message.call_args[0][0].source.profile == "bot2"
 
         # Timeout cleanup from bot2's channel disables bot2's auto-TTS only.
-        join = MessageEvent(text="/voice channel", message_type=MessageType.TEXT, source=src)
+        join = MessageEvent(
+            text="/voice channel", message_type=MessageType.TEXT, source=src
+        )
         join.raw_message = SimpleNamespace(guild_id=111, guild=None)
         bot2_ad.join_voice_channel = AsyncMock(return_value=True)
-        ch = MagicMock(); ch.name = "General"
+        ch = MagicMock()
+        ch.name = "General"
         bot2_ad.get_user_voice_channel = AsyncMock(return_value=ch)
         await runner._handle_voice_channel_join(join)
         bot2_ad._on_voice_disconnect("123")
@@ -168,10 +173,14 @@ class TestVoiceModeProfileIsolation:
     def test_sync_restores_only_the_owning_profiles_chats(self):
         runner = _make_runner()
         runner._voice_mode = {"discord:1": "all", "bot2:discord:2": "all"}
-        default_ad = MagicMock(); default_ad.platform = Platform.DISCORD
-        default_ad._owner_profile = None; default_ad._auto_tts_enabled_chats = set()
-        bot2_ad = MagicMock(); bot2_ad.platform = Platform.DISCORD
-        bot2_ad._owner_profile = "bot2"; bot2_ad._auto_tts_enabled_chats = set()
+        default_ad = MagicMock()
+        default_ad.platform = Platform.DISCORD
+        default_ad._owner_profile = None
+        default_ad._auto_tts_enabled_chats = set()
+        bot2_ad = MagicMock()
+        bot2_ad.platform = Platform.DISCORD
+        bot2_ad._owner_profile = "bot2"
+        bot2_ad._auto_tts_enabled_chats = set()
         runner._sync_voice_mode_state_to_adapter(default_ad)
         runner._sync_voice_mode_state_to_adapter(bot2_ad)
         assert default_ad._auto_tts_enabled_chats == {"1"}
@@ -181,6 +190,7 @@ class TestVoiceModeProfileIsolation:
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _make_runner() -> GatewayRunner:
     """Create a minimal GatewayRunner for testing."""

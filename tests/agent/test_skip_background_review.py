@@ -5,6 +5,7 @@ _spawn_background_review fork (~30K tokens / event), which is essential
 on cron sessions that have no human-in-the-loop value from skill/memory
 review forks.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -40,7 +41,9 @@ def _stub_agent_for_finalize(agent: AIAgent) -> None:
     agent._stream_callback = None
     agent._sync_external_memory_for_turn = MagicMock()
     agent._skill_nudge_interval = 10
-    agent._iters_since_skill = 20  # exceeds nudge interval → _should_review_skills = True
+    agent._iters_since_skill = (
+        20  # exceeds nudge interval → _should_review_skills = True
+    )
     agent.valid_tool_names = {"skill_manage"}
     agent.iteration_budget = MagicMock()
     agent.iteration_budget.remaining = 100
@@ -79,10 +82,6 @@ def _run_finalize(agent: AIAgent) -> None:
     )
 
 
-
-
-
-
 def test_finalize_turn_skips_review_when_flag_set() -> None:
     """finalize_turn must NOT call _spawn_background_review when skip_background_review=True.
 
@@ -103,9 +102,9 @@ def test_finalize_turn_fires_review_when_flag_unset() -> None:
     agent._spawn_background_review.assert_called_once()
 
 
-
-
-def test_persistence_failure_error_fallback_is_pinned_and_leaves_final_response_empty(monkeypatch, tmp_path) -> None:
+def test_persistence_failure_error_fallback_is_pinned_and_leaves_final_response_empty(
+    monkeypatch, tmp_path
+) -> None:
     """With no model text, result["error"] carries a profile-pinned `clawk doctor`, while the
     memory sync and the background-review gate still see the turn as having produced nothing."""
     from clawk_constants import profile_cli_selector
@@ -121,7 +120,9 @@ def test_persistence_failure_error_fallback_is_pinned_and_leaves_final_response_
     _stub_agent_for_finalize(agent)
     # Force the fallback: the explainer normally supplies the text, so an empty explainer is
     # the only way the hardcoded copy reaches the user.
-    monkeypatch.setattr(AIAgent, "_format_turn_completion_explanation", staticmethod(lambda *a, **k: ""))
+    monkeypatch.setattr(
+        AIAgent, "_format_turn_completion_explanation", staticmethod(lambda *a, **k: "")
+    )
     result = finalize_turn(
         agent,
         final_response="",

@@ -25,21 +25,16 @@ def _set_interactive_stdin(monkeypatch, *, is_tty: bool = True) -> None:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _isolate_config(tmp_path, monkeypatch):
     """Redirect all config I/O to a temp directory."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    monkeypatch.setattr(
-        "clawk_cli.config.get_clawk_home", lambda: tmp_path
-    )
+    monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: tmp_path)
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
-    monkeypatch.setattr(
-        "clawk_cli.config.get_config_path", lambda: config_path
-    )
-    monkeypatch.setattr(
-        "clawk_cli.config.get_env_path", lambda: env_path
-    )
+    monkeypatch.setattr("clawk_cli.config.get_config_path", lambda: config_path)
+    monkeypatch.setattr("clawk_cli.config.get_env_path", lambda: env_path)
     return tmp_path
 
 
@@ -81,21 +76,24 @@ class FakeTool:
 # Tests: cmd_mcp_list
 # ---------------------------------------------------------------------------
 
-class TestMcpList:
 
+class TestMcpList:
     def test_list_with_servers(self, tmp_path, capsys):
-        _seed_config(tmp_path, {
-            "ink": {
-                "url": "https://mcp.ml.ink/mcp",
-                "enabled": True,
-                "tools": {"include": ["create_service", "get_service"]},
+        _seed_config(
+            tmp_path,
+            {
+                "ink": {
+                    "url": "https://mcp.ml.ink/mcp",
+                    "enabled": True,
+                    "tools": {"include": ["create_service", "get_service"]},
+                },
+                "github": {
+                    "command": "npx",
+                    "args": ["@mcp/github"],
+                    "enabled": False,
+                },
             },
-            "github": {
-                "command": "npx",
-                "args": ["@mcp/github"],
-                "enabled": False,
-            },
-        })
+        )
         from clawk_cli.mcp_config import cmd_mcp_list
 
         cmd_mcp_list()
@@ -107,9 +105,12 @@ class TestMcpList:
 
     def test_list_enabled_default_true(self, tmp_path, capsys):
         """Server without explicit enabled key defaults to enabled."""
-        _seed_config(tmp_path, {
-            "myserver": {"url": "https://example.com/mcp"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "myserver": {"url": "https://example.com/mcp"},
+            },
+        )
         from clawk_cli.mcp_config import cmd_mcp_list
 
         cmd_mcp_list()
@@ -122,11 +123,15 @@ class TestMcpList:
 # Tests: cmd_mcp_remove
 # ---------------------------------------------------------------------------
 
+
 class TestMcpRemove:
     def test_remove_existing_server(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "myserver": {"url": "https://example.com/mcp"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "myserver": {"url": "https://example.com/mcp"},
+            },
+        )
         monkeypatch.setattr("builtins.input", lambda _: "y")
         from clawk_cli.mcp_config import cmd_mcp_remove
 
@@ -141,16 +146,16 @@ class TestMcpRemove:
         config = load_config()
         assert "myserver" not in config.get("mcp_servers", {})
 
-
     def test_remove_cleans_oauth_tokens(self, tmp_path, capsys, monkeypatch):
-        _seed_config(tmp_path, {
-            "oauth-srv": {"url": "https://example.com/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "oauth-srv": {"url": "https://example.com/mcp", "auth": "oauth"},
+            },
+        )
         monkeypatch.setattr("builtins.input", lambda _: "y")
         # Also patch get_clawk_home in the mcp_config module namespace
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config.get_clawk_home", lambda: tmp_path
-        )
+        monkeypatch.setattr("clawk_cli.mcp_config.get_clawk_home", lambda: tmp_path)
 
         # Create a fake token file
         token_dir = tmp_path / "mcp-tokens"
@@ -168,8 +173,8 @@ class TestMcpRemove:
 # Tests: cmd_mcp_add
 # ---------------------------------------------------------------------------
 
-class TestMcpAdd:
 
+class TestMcpAdd:
     def test_add_http_server_all_tools(self, tmp_path, capsys, monkeypatch):
         """Add an HTTP server, accept all tools."""
         fake_tools = [
@@ -180,9 +185,7 @@ class TestMcpAdd:
         def mock_probe(name, config, **kw):
             return [(t.name, t.description) for t in fake_tools]
 
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config._probe_single_server", mock_probe
-        )
+        monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", mock_probe)
         # No auth, accept all tools
         inputs = iter(["n", ""])  # no auth needed, enable all
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
@@ -201,7 +204,6 @@ class TestMcpAdd:
         assert "ink" in config.get("mcp_servers", {})
         assert config["mcp_servers"]["ink"]["url"] == "https://mcp.ml.ink/mcp"
 
-
     def test_add_stdio_server_with_env(self, tmp_path, capsys, monkeypatch):
         """Stdio servers can persist explicit environment variables."""
         fake_tools = [FakeTool("search", "Search repos")]
@@ -213,19 +215,19 @@ class TestMcpAdd:
             }
             return [(t.name, t.description) for t in fake_tools]
 
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config._probe_single_server", mock_probe
-        )
+        monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", mock_probe)
         monkeypatch.setattr("builtins.input", lambda _: "")
 
         from clawk_cli.mcp_config import cmd_mcp_add
 
-        cmd_mcp_add(_make_args(
-            name="github",
-            mcp_command="npx",
-            args=["@mcp/github"],
-            env=["MY_API_KEY=secret123", "DEBUG=true"],
-        ))
+        cmd_mcp_add(
+            _make_args(
+                name="github",
+                mcp_command="npx",
+                args=["@mcp/github"],
+                env=["MY_API_KEY=secret123", "DEBUG=true"],
+            )
+        )
         out = capsys.readouterr().out
         assert "Saved" in out
 
@@ -238,12 +240,17 @@ class TestMcpAdd:
             "DEBUG": "true",
         }
 
-
     def test_add_preset_fills_transport(self, tmp_path, capsys, monkeypatch):
         """A preset fills in command/args when no explicit transport given."""
         monkeypatch.setattr(
             "clawk_cli.mcp_config._MCP_PRESETS",
-            {"testmcp": {"command": "npx", "args": ["-y", "test-mcp-server"], "display_name": "Test MCP"}},
+            {
+                "testmcp": {
+                    "command": "npx",
+                    "args": ["-y", "test-mcp-server"],
+                    "display_name": "Test MCP",
+                }
+            },
         )
         fake_tools = [FakeTool("do_thing", "Does a thing")]
 
@@ -254,9 +261,7 @@ class TestMcpAdd:
             assert "env" not in config
             return [(t.name, t.description) for t in fake_tools]
 
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config._probe_single_server", mock_probe
-        )
+        monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", mock_probe)
         monkeypatch.setattr("builtins.input", lambda _: "")
 
         from clawk_cli.mcp_config import cmd_mcp_add
@@ -277,15 +282,18 @@ class TestMcpAdd:
 # Tests: cmd_mcp_test
 # ---------------------------------------------------------------------------
 
+
 class TestMcpTest:
-
-
-    def test_exit_codes_distinguish_failure_from_unknown_server(self, tmp_path, capsys, monkeypatch):
+    def test_exit_codes_distinguish_failure_from_unknown_server(
+        self, tmp_path, capsys, monkeypatch
+    ):
         """0 connected, 1 connection failed, 3 not in config — never argparse's 2, never a silent 0."""
         _seed_config(tmp_path, {"ink": {"url": "https://mcp.ml.ink/mcp"}})
         from clawk_cli.mcp_config import cmd_mcp_test
 
-        monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", lambda name, cfg, **kw: [])
+        monkeypatch.setattr(
+            "clawk_cli.mcp_config._probe_single_server", lambda name, cfg, **kw: []
+        )
         assert cmd_mcp_test(_make_args(name="ink")) == 0
 
         def failing_probe(name, cfg, **kw):
@@ -342,9 +350,9 @@ class TestMcpTest:
         monkeypatch.setattr(_mcp_loop, "_run_on_mcp_loop", fake_run_on_mcp_loop)
         monkeypatch.setattr(mcp_config.asyncio, "wait_for", fake_wait_for)
 
-        assert mcp_config._probe_single_server(
-            "supabase", {"connect_timeout": 300}
-        ) == []
+        assert (
+            mcp_config._probe_single_server("supabase", {"connect_timeout": 300}) == []
+        )
         assert captured["inner_timeout"] == 300.0
         assert captured["outer_timeout"] == 310.0
         assert captured["shutdown"] is True
@@ -354,16 +362,14 @@ class TestMcpTest:
 # Tests: env var interpolation
 # ---------------------------------------------------------------------------
 
+
 class TestEnvVarInterpolation:
-
-
     def test_interpolate_cursor_env_prefix(self, monkeypatch):
         """Cursor-style ${env:VAR} resolves the same secret as ${VAR}."""
         monkeypatch.setenv("MY_KEY", "secret123")
         from tools.mcp_tool_config import _interpolate_env_vars
 
         assert _interpolate_env_vars("Bearer ${env:MY_KEY}") == "Bearer secret123"
-
 
     def test_env_ref_name_strips_prefix(self):
         from tools.mcp_tool_common import _env_ref_name
@@ -400,9 +406,9 @@ class TestContextVarInterpolation:
         assert _mcp_config._interpolate_env_vars("${workspaceFolder}") == (
             "/srv/projects/myapp"
         )
-        assert _mcp_config._interpolate_env_vars(
-            "${workspaceFolderBasename}"
-        ) == "myapp"
+        assert (
+            _mcp_config._interpolate_env_vars("${workspaceFolderBasename}") == "myapp"
+        )
 
     def test_workspace_folder_falls_back_to_cwd(self, monkeypatch):
         import os
@@ -411,13 +417,14 @@ class TestContextVarInterpolation:
         from tools.mcp_tool_config import _workspace_folder
 
         monkeypatch.setattr(
-            file_tools_paths, "_authoritative_workspace_root", lambda task_id="default": None
+            file_tools_paths,
+            "_authoritative_workspace_root",
+            lambda task_id="default": None,
         )
         assert _workspace_folder() == os.getcwd()
 
     def test_mixed_string_with_env_and_context_vars(self, monkeypatch):
         import os
-
 
         monkeypatch.setenv("MY_TOKEN", "tok-1")
         monkeypatch.setattr(_mcp_config, "_workspace_folder", lambda: "/ws/app")
@@ -468,6 +475,7 @@ class TestContextVarInterpolation:
 # Tests: probe-path env resolution (#37792)
 # ---------------------------------------------------------------------------
 
+
 class TestProbeEnvResolution:
     """The probe path must resolve ``${ENV}`` before connecting, so the
     discovery probe behaves like runtime tool loading. Regression for #37792
@@ -478,10 +486,12 @@ class TestProbeEnvResolution:
         from clawk_cli.mcp_config import _resolve_mcp_server_config
 
         monkeypatch.setenv("MCP_N8N_API_KEY", "jwt-token-xyz")
-        resolved = _resolve_mcp_server_config({
-            "url": "http://localhost:5678/mcp-server/http",
-            "headers": {"Authorization": "Bearer ${MCP_N8N_API_KEY}"},
-        })
+        resolved = _resolve_mcp_server_config(
+            {
+                "url": "http://localhost:5678/mcp-server/http",
+                "headers": {"Authorization": "Bearer ${MCP_N8N_API_KEY}"},
+            }
+        )
         assert resolved["headers"]["Authorization"] == "Bearer jwt-token-xyz"
 
     def test_active_secret_scope_does_not_load_dotenv_into_process_env(
@@ -493,15 +503,16 @@ class TestProbeEnvResolution:
         monkeypatch.setenv("MCP_SHARED_API_KEY", "default-secret")
         token = set_secret_scope({"MCP_SHARED_API_KEY": "profile-secret"})
         try:
-            resolved = _resolve_mcp_server_config({
-                "headers": {"Authorization": "Bearer ${MCP_SHARED_API_KEY}"},
-            })
+            resolved = _resolve_mcp_server_config(
+                {
+                    "headers": {"Authorization": "Bearer ${MCP_SHARED_API_KEY}"},
+                }
+            )
         finally:
             reset_secret_scope(token)
 
         assert resolved["headers"]["Authorization"] == "Bearer profile-secret"
         assert os.environ["MCP_SHARED_API_KEY"] == "default-secret"
-
 
     def test_probe_resolves_before_connect(self, monkeypatch):
         """_probe_single_server must pass the RESOLVED config to _connect_server."""
@@ -527,10 +538,13 @@ class TestProbeEnvResolution:
 
         monkeypatch.setattr("tools.mcp_tool_discovery._connect_server", _fake_connect)
 
-        tools = mc._probe_single_server("n8n", {
-            "url": "http://localhost:5678/mcp-server/http",
-            "headers": {"Authorization": "Bearer ${MCP_N8N_API_KEY}"},
-        })
+        tools = mc._probe_single_server(
+            "n8n",
+            {
+                "url": "http://localhost:5678/mcp-server/http",
+                "headers": {"Authorization": "Bearer ${MCP_N8N_API_KEY}"},
+            },
+        )
 
         assert tools == [("do_thing", "a tool")]
         assert seen["config"]["headers"]["Authorization"] == "Bearer jwt-token-xyz"
@@ -558,7 +572,9 @@ class TestProbeEnvResolution:
         monkeypatch.setattr("tools.mcp_tool_discovery._connect_server", _fake_connect)
 
         mc._probe_single_server(
-            "travelermd", {"url": "https://mcp.traveler.md/mcp", "auth": "oauth"}, connect_timeout=315.0
+            "travelermd",
+            {"url": "https://mcp.traveler.md/mcp", "auth": "oauth"},
+            connect_timeout=315.0,
         )
 
         assert seen["config"]["connect_timeout"] == 315.0
@@ -640,7 +656,6 @@ class TestProbeCapabilityGating:
         assert "prompts" not in called
         assert "resources" in called
 
-
     def test_advertised_and_enabled_is_probed(self, monkeypatch):
         caps = self._Caps(prompts=object(), resources=object())
         called, _details = self._run_probe(monkeypatch, {"url": "http://x/mcp"}, caps)
@@ -680,6 +695,7 @@ class TestBearerAuthPersistence:
 # Tests: config helpers
 # ---------------------------------------------------------------------------
 
+
 class TestConfigHelpers:
     def test_save_and_load_mcp_server(self, tmp_path):
         from clawk_cli.mcp_config import _save_mcp_server, _get_mcp_servers
@@ -688,7 +704,6 @@ class TestConfigHelpers:
         servers = _get_mcp_servers()
         assert "mysvr" in servers
         assert servers["mysvr"]["url"] == "https://example.com/mcp"
-
 
     def test_env_key_for_server(self):
         from clawk_cli.mcp_config import _env_key_for_server
@@ -702,6 +717,7 @@ class TestConfigHelpers:
 # ---------------------------------------------------------------------------
 # Tests: dispatcher
 # ---------------------------------------------------------------------------
+
 
 class TestDispatcher:
     def test_no_action_shows_list(self, tmp_path, capsys):
@@ -722,26 +738,31 @@ class TestDispatcher:
 class TestMcpRemoveEvictsManager:
     def test_remove_evicts_in_memory_provider(self, tmp_path, capsys, monkeypatch):
         """After cmd_mcp_remove, the MCPOAuthManager no longer caches the provider."""
-        _seed_config(tmp_path, {
-            "oauth-srv": {"url": "https://example.com/mcp", "auth": "oauth"},
-        })
-        monkeypatch.setattr("builtins.input", lambda _: "y")
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config.get_clawk_home", lambda: tmp_path
+        _seed_config(
+            tmp_path,
+            {
+                "oauth-srv": {"url": "https://example.com/mcp", "auth": "oauth"},
+            },
         )
+        monkeypatch.setattr("builtins.input", lambda _: "y")
+        monkeypatch.setattr("clawk_cli.mcp_config.get_clawk_home", lambda: tmp_path)
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         _set_interactive_stdin(monkeypatch)
 
         from tools.mcp_oauth_manager import get_manager, reset_manager_for_tests
+
         reset_manager_for_tests()
 
         mgr = get_manager()
         mgr.get_or_build_provider(
-            "oauth-srv", "https://example.com/mcp", None,
+            "oauth-srv",
+            "https://example.com/mcp",
+            None,
         )
         assert mgr._key("oauth-srv") in mgr._entries
 
         from clawk_cli.mcp_config import cmd_mcp_remove
+
         cmd_mcp_remove(_make_args(name="oauth-srv"))
 
         assert mgr._key("oauth-srv") not in mgr._entries
@@ -751,10 +772,10 @@ class TestMcpLogin:
     def test_login_rejects_unknown_server(self, tmp_path, capsys):
         _seed_config(tmp_path, {})
         from clawk_cli.mcp_config import cmd_mcp_login
+
         cmd_mcp_login(_make_args(name="ghost"))
         out = capsys.readouterr().out
         assert "not found" in out
-
 
     def test_login_false_success_no_token(self, tmp_path, capsys, monkeypatch):
         """Probe lists tools without auth (Google Drive), but no token landed.
@@ -763,17 +784,21 @@ class TestMcpLogin:
         succeeds yet no OAuth token exists. Login must NOT claim success — it
         should warn and point the user at pre-registered client_id config.
         """
-        _seed_config(tmp_path, {
-            "googledrive": {
-                "url": "https://drivemcp.googleapis.com/mcp/v1",
-                "auth": "oauth",
+        _seed_config(
+            tmp_path,
+            {
+                "googledrive": {
+                    "url": "https://drivemcp.googleapis.com/mcp/v1",
+                    "auth": "oauth",
+                },
             },
-        })
+        )
         # Probe returns tools even though auth never completed.
         monkeypatch.setattr(
             "clawk_cli.mcp_config._probe_single_server",
             lambda name, cfg, connect_timeout=30: [
-                ("search_files", "d"), ("read_file_content", "d"),
+                ("search_files", "d"),
+                ("read_file_content", "d"),
             ],
         )
         # No token file is created → _oauth_tokens_present() returns False.
@@ -788,9 +813,12 @@ class TestMcpLogin:
 
     def test_login_genuine_success_with_token(self, tmp_path, capsys, monkeypatch):
         """Probe lists tools AND a token exists → report real success."""
-        _seed_config(tmp_path, {
-            "realserver": {"url": "https://mcp.example.com/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "realserver": {"url": "https://mcp.example.com/mcp", "auth": "oauth"},
+            },
+        )
         token_dir = tmp_path / "mcp-tokens"
 
         # cmd_mcp_login wipes tokens before probing, then the real OAuth flow
@@ -801,12 +829,12 @@ class TestMcpLogin:
         def mock_probe(name, cfg, connect_timeout=30):
             seen["connect_timeout"] = connect_timeout
             token_dir.mkdir(exist_ok=True)
-            (token_dir / "realserver.json").write_text('{"access_token": "x"}', encoding="utf-8")
+            (token_dir / "realserver.json").write_text(
+                '{"access_token": "x"}', encoding="utf-8"
+            )
             return [("a", "d"), ("b", "d"), ("c", "d")]
 
-        monkeypatch.setattr(
-            "clawk_cli.mcp_config._probe_single_server", mock_probe
-        )
+        monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", mock_probe)
 
         from clawk_cli.mcp_config import cmd_mcp_login
 
@@ -819,27 +847,40 @@ class TestMcpLogin:
         # OAuth round-trip — far longer than the 30s probe default.
         assert seen["connect_timeout"] >= 180
 
-    def test_login_clears_tokens_but_keeps_discovered_server_metadata(self, tmp_path, capsys, monkeypatch):
+    def test_login_clears_tokens_but_keeps_discovered_server_metadata(
+        self, tmp_path, capsys, monkeypatch
+    ):
         """Re-login wipes the stale grant and client registration but spares ``.meta.json``: when the
         authorization server's metadata document cannot be re-fetched (a WAF-fronted split-host
         server), the cached ``authorization_endpoint`` is what keeps the announced authorize URL off
         the SDK's ``{mcp-origin}/authorize`` guess (#115329)."""
-        _seed_config(tmp_path, {
-            "tv": {"url": "https://mcp.example.com/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "tv": {"url": "https://mcp.example.com/mcp", "auth": "oauth"},
+            },
+        )
         token_dir = tmp_path / "mcp-tokens"
         token_dir.mkdir()
-        (token_dir / "tv.json").write_text('{"access_token": "stale"}', encoding="utf-8")
-        (token_dir / "tv.client.json").write_text('{"client_id": "old"}', encoding="utf-8")
+        (token_dir / "tv.json").write_text(
+            '{"access_token": "stale"}', encoding="utf-8"
+        )
+        (token_dir / "tv.client.json").write_text(
+            '{"client_id": "old"}', encoding="utf-8"
+        )
         (token_dir / "tv.meta.json").write_text(
             '{"issuer": "https://www.example.com", "authorization_endpoint": "https://www.example.com/oauth/authorize",'
-            ' "token_endpoint": "https://www.example.com/oauth/token"}', encoding="utf-8")
+            ' "token_endpoint": "https://www.example.com/oauth/token"}',
+            encoding="utf-8",
+        )
         state_at_probe = {}
 
         def mock_probe(name, cfg, connect_timeout=30):
             state_at_probe.update({p.name: p.exists() for p in token_dir.glob("tv*")})
             state_at_probe["meta"] = (token_dir / "tv.meta.json").exists()
-            (token_dir / "tv.json").write_text('{"access_token": "fresh"}', encoding="utf-8")
+            (token_dir / "tv.json").write_text(
+                '{"access_token": "fresh"}', encoding="utf-8"
+            )
             return [("a", "d")]
 
         monkeypatch.setattr("clawk_cli.mcp_config._probe_single_server", mock_probe)
@@ -848,7 +889,10 @@ class TestMcpLogin:
         cmd_mcp_login(_make_args(name="tv"))
 
         assert state_at_probe["meta"] is True
-        assert state_at_probe.get("tv.json") is None and state_at_probe.get("tv.client.json") is None
+        assert (
+            state_at_probe.get("tv.json") is None
+            and state_at_probe.get("tv.client.json") is None
+        )
         assert "Authenticated — 1 tool(s) available" in capsys.readouterr().out
 
 
@@ -856,17 +900,21 @@ class TestMcpLogin:
 # Tests: cmd_mcp_reauth (GH#36767)
 # ---------------------------------------------------------------------------
 
+
 class TestMcpReauth:
     def test_reauth_all_visits_only_oauth_servers_in_order(
         self, tmp_path, capsys, monkeypatch
     ):
         """--all re-auths every oauth server (skipping non-oauth), serially."""
-        _seed_config(tmp_path, {
-            "gh": {"url": "https://gh.example.com/mcp", "auth": "oauth"},
-            "jira": {"url": "https://jira.example.com/mcp", "auth": "oauth"},
-            "localstdio": {"command": "foo"},  # no url / no oauth → skipped
-            "apikey": {"url": "https://k.example.com/mcp", "headers": {"x": "y"}},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "gh": {"url": "https://gh.example.com/mcp", "auth": "oauth"},
+                "jira": {"url": "https://jira.example.com/mcp", "auth": "oauth"},
+                "localstdio": {"command": "foo"},  # no url / no oauth → skipped
+                "apikey": {"url": "https://k.example.com/mcp", "headers": {"x": "y"}},
+            },
+        )
         visited = []
         monkeypatch.setattr(
             "clawk_cli.mcp_config._reauth_oauth_server",
@@ -882,10 +930,13 @@ class TestMcpReauth:
 
     def test_reauth_all_reports_partial_failures(self, tmp_path, capsys, monkeypatch):
         """A server that fails to re-auth is counted but doesn't abort the rest."""
-        _seed_config(tmp_path, {
-            "a": {"url": "https://a.example.com/mcp", "auth": "oauth"},
-            "b": {"url": "https://b.example.com/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "a": {"url": "https://a.example.com/mcp", "auth": "oauth"},
+                "b": {"url": "https://b.example.com/mcp", "auth": "oauth"},
+            },
+        )
         monkeypatch.setattr(
             "clawk_cli.mcp_config._reauth_oauth_server",
             lambda name, cfg: name == "a",  # only 'a' succeeds
@@ -897,11 +948,13 @@ class TestMcpReauth:
 
         assert "Re-authenticated 1/2 server(s)" in out
 
-
     def test_reauth_unknown_server(self, tmp_path, capsys):
-        _seed_config(tmp_path, {
-            "gh": {"url": "https://gh.example.com/mcp", "auth": "oauth"},
-        })
+        _seed_config(
+            tmp_path,
+            {
+                "gh": {"url": "https://gh.example.com/mcp", "auth": "oauth"},
+            },
+        )
         from clawk_cli.mcp_config import cmd_mcp_reauth
 
         cmd_mcp_reauth(_make_args(name="ghost", all=False))
@@ -915,5 +968,8 @@ def test_tool_filters_keeps_explicit_empty_include():
     from clawk_cli.mcp_config import _tool_filters
 
     assert _tool_filters({"tools": {"include": []}}) == ([], None)
-    assert _tool_filters({"tools": {"include": "bad", "exclude": ["x"]}}) == (None, ["x"])
+    assert _tool_filters({"tools": {"include": "bad", "exclude": ["x"]}}) == (
+        None,
+        ["x"],
+    )
     assert _tool_filters({}) == (None, None)

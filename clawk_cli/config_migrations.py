@@ -33,7 +33,8 @@ def support_floor_message() -> str:
         "and can no longer be auto-migrated. Back up "
         f"{display_clawk_home()}/config.yaml and run `clawk setup` to "
         f"regenerate, or manually set _config_version: {SUPPORT_FLOOR_VERSION} "
-        "after reviewing the changelog.")
+        "after reviewing the changelog."
+    )
 
 
 def _cfg():
@@ -62,7 +63,8 @@ def _commit(
     results: dict[str, Any],
     quiet: bool,
     added: Optional[str],
-    message: Optional[str]) -> None:
+    message: Optional[str],
+) -> None:
     """Persist *config*, record *added* under ``config_added`` and print *message* unless quiet."""
     _persist_migration(config)
     if added:
@@ -82,7 +84,8 @@ def _rewrite_key(
     added: str,
     message: str,
     extra_guard: Callable[[dict[str, Any]], bool] = lambda _m: True,
-    create_section: bool = False) -> None:
+    create_section: bool = False,
+) -> None:
     """Rewrite ``<section>.<key>`` to *new* (None = delete) when ``match(current)`` holds; a
     missing section is skipped unless *create_section*."""
     config = read_raw_config()
@@ -100,7 +103,9 @@ def _rewrite_key(
         _commit(config, results, quiet, added, message)
 
 
-def _rewrite_stale_default(*, old: Any, **kw: Any) -> Callable[[dict[str, Any], bool], None]:
+def _rewrite_stale_default(
+    *, old: Any, **kw: Any
+) -> Callable[[dict[str, Any], bool], None]:
     """Step rewriting a key only while it still equals the OLD default — never clobbers a value
     the user customized; unset keys inherit the new default at read time."""
     return functools.partial(_rewrite_key, match=lambda cur: cur == old, **kw)
@@ -112,7 +117,9 @@ def _lower_is(word: str) -> Callable[[Any], bool]:
 
 def _migrate_to_12(results: dict[str, Any], quiet: bool) -> None:
     # 11 → 12: custom_providers list → providers dict.
-    _custom_provider_entry_to_provider_config = _cfg()._custom_provider_entry_to_provider_config
+    _custom_provider_entry_to_provider_config = (
+        _cfg()._custom_provider_entry_to_provider_config
+    )
 
     config = read_raw_config()
     custom_list = config.get("custom_providers")
@@ -126,12 +133,19 @@ def _migrate_to_12(results: dict[str, Any], quiet: bool) -> None:
         old_name = entry.get("name", "")
         if not isinstance(old_name, str):  # hand-edited name: 5 must not crash .strip()
             old_name = ""
-        old_url = entry.get("base_url", "") or entry.get("url", "") or entry.get("api", "") or ""
+        old_url = (
+            entry.get("base_url", "")
+            or entry.get("url", "")
+            or entry.get("api", "")
+            or ""
+        )
         if not old_url:
             continue
 
         # kebab-case key from the display name; fall back to the URL hostname.
-        key = old_name.strip().lower().replace(" ", "-").replace("(", "").replace(")", "")
+        key = (
+            old_name.strip().lower().replace(" ", "-").replace("(", "").replace(")", "")
+        )
         key = re.sub(r"-{2,}", "-", key).strip("-")
         if not key:
             try:
@@ -163,7 +177,9 @@ def _migrate_to_12(results: dict[str, Any], quiet: bool) -> None:
         config.pop("custom_providers", None)
         _persist_migration(config)
         if not quiet:
-            print(f"  ✓ Migrated {migrated_count} custom provider(s) to providers: section")
+            print(
+                f"  ✓ Migrated {migrated_count} custom provider(s) to providers: section"
+            )
             for key in list(providers_dict.keys())[-migrated_count:]:
                 print(f"    → {key}: {providers_dict[key].get('api', '')}")
 
@@ -177,17 +193,36 @@ def _migrate_to_13(results: dict[str, Any], quiet: bool) -> None:
             if _c.get_env_value(dead_var):
                 _c.save_env_value(dead_var, "")
                 if not quiet:
-                    print(f"  ✓ Cleared {dead_var} from .env (no longer used — config.yaml is source of truth)")
+                    print(
+                        f"  ✓ Cleared {dead_var} from .env (no longer used — config.yaml is source of truth)"
+                    )
         except Exception:
             pass
 
 
-_LOCAL_WHISPER_MODELS = frozenset({
-    "tiny.en", "tiny", "base.en", "base", "small.en", "small",
-    "medium.en", "medium", "large-v1", "large-v2", "large-v3",
-    "large", "distil-large-v2", "distil-medium.en",
-    "distil-small.en", "distil-large-v3", "distil-large-v3.5",
-    "large-v3-turbo", "turbo"})
+_LOCAL_WHISPER_MODELS = frozenset(
+    {
+        "tiny.en",
+        "tiny",
+        "base.en",
+        "base",
+        "small.en",
+        "small",
+        "medium.en",
+        "medium",
+        "large-v1",
+        "large-v2",
+        "large-v3",
+        "large",
+        "distil-large-v2",
+        "distil-medium.en",
+        "distil-small.en",
+        "distil-large-v3",
+        "distil-large-v3.5",
+        "large-v3-turbo",
+        "turbo",
+    }
+)
 
 
 def _migrate_to_14(results: dict[str, Any], quiet: bool) -> None:
@@ -199,7 +234,9 @@ def _migrate_to_14(results: dict[str, Any], quiet: bool) -> None:
         return
     legacy_model = raw_stt["model"]
     provider = raw_stt.get("provider", "local")
-    if not isinstance(provider, str):  # a mapping/int provider has no valid target section
+    if not isinstance(
+        provider, str
+    ):  # a mapping/int provider has no valid target section
         provider = "local"
     config = read_raw_config()
     stt = config.get("stt", {})
@@ -209,7 +246,9 @@ def _migrate_to_14(results: dict[str, Any], quiet: bool) -> None:
         existing = raw_stt.get(section, {})
         if not isinstance(existing, dict) or "model" not in existing:
             target = stt.get(section)
-            if not isinstance(target, dict):  # stt.<section>: 5 — replace, don't index a scalar
+            if not isinstance(
+                target, dict
+            ):  # stt.<section>: 5 — replace, don't index a scalar
                 target = stt[section] = {}
             target["model"] = legacy_model
 
@@ -221,7 +260,12 @@ def _migrate_to_14(results: dict[str, Any], quiet: bool) -> None:
         _place(provider)
     config["stt"] = stt
     _commit(
-        config, results, quiet, None, "  ✓ Migrated legacy stt.model to provider-specific config")
+        config,
+        results,
+        quiet,
+        None,
+        "  ✓ Migrated legacy stt.model to provider-specific config",
+    )
 
 
 def _migrate_to_16(results: dict[str, Any], quiet: bool) -> None:
@@ -234,7 +278,9 @@ def _migrate_to_16(results: dict[str, Any], quiet: bool) -> None:
     platforms = _dict_at(display, "platforms")
     for plat, mode in old_overrides.items():
         target = platforms.get(plat)
-        if not isinstance(target, dict):  # platforms.<plat>: 5 — replace, don't index a scalar
+        if not isinstance(
+            target, dict
+        ):  # platforms.<plat>: 5 — replace, don't index a scalar
             target = platforms[plat] = {}
         if "tool_progress" not in target:
             target["tool_progress"] = mode
@@ -242,9 +288,12 @@ def _migrate_to_16(results: dict[str, Any], quiet: bool) -> None:
     config["display"] = display
     migrated = ", ".join(f"{p}={m}" for p, m in old_overrides.items())
     _commit(
-        config, results, quiet,
+        config,
+        results,
+        quiet,
         "display.platforms (migrated from tool_progress_overrides)",
-        f"  ✓ Migrated tool_progress_overrides → display.platforms: {migrated}")
+        f"  ✓ Migrated tool_progress_overrides → display.platforms: {migrated}",
+    )
 
 
 def _migrate_to_17(results: dict[str, Any], quiet: bool) -> None:
@@ -254,7 +303,9 @@ def _migrate_to_17(results: dict[str, Any], quiet: bool) -> None:
     comp = config.get("compression", {})
     if not isinstance(comp, dict):
         return
-    legacy = {k: comp.pop(f"summary_{k}", None) for k in ("model", "provider", "base_url")}
+    legacy = {
+        k: comp.pop(f"summary_{k}", None) for k in ("model", "provider", "base_url")
+    }
     migrated_keys = []
     for k, raw in legacy.items():
         val = str(raw).strip() if raw else ""
@@ -275,7 +326,9 @@ def _migrate_to_17(results: dict[str, Any], quiet: bool) -> None:
         message = (
             "  ✓ Migrated compression.summary_* → auxiliary.compression: "
             f"{', '.join(migrated_keys)}"
-            if migrated_keys else "  ✓ Removed unused compression.summary_* keys")
+            if migrated_keys
+            else "  ✓ Removed unused compression.summary_* keys"
+        )
         _commit(config, results, quiet, None, message)
 
 
@@ -315,18 +368,25 @@ def _migrate_to_21(results: dict[str, Any], quiet: bool) -> None:
     if "enabled" in plugins_cfg:
         return
     disabled = plugins_cfg.get("disabled", []) or []
-    grandfathered = _installed_user_plugins(set(disabled) if isinstance(disabled, list) else set())
+    grandfathered = _installed_user_plugins(
+        set(disabled) if isinstance(disabled, list) else set()
+    )
     plugins_cfg["enabled"] = grandfathered
     config["plugins"] = plugins_cfg
     message = (
         f"  ✓ Plugins now opt-in: grandfathered "
         f"{len(grandfathered)} existing plugin(s) into plugins.enabled"
-        if grandfathered else
-        "  ✓ Plugins now opt-in: no existing plugins to grandfather. "
-        "Use `clawk plugins enable <name>` to activate.")
+        if grandfathered
+        else "  ✓ Plugins now opt-in: no existing plugins to grandfather. "
+        "Use `clawk plugins enable <name>` to activate."
+    )
     _commit(
-        config, results, quiet,
-        f"plugins.enabled (opt-in allow-list, {len(grandfathered)} grandfathered)", message)
+        config,
+        results,
+        quiet,
+        f"plugins.enabled (opt-in allow-list, {len(grandfathered)} grandfathered)",
+        message,
+    )
 
 
 def _migrate_to_23(results: dict[str, Any], quiet: bool) -> None:
@@ -358,21 +418,26 @@ def _migrate_to_23(results: dict[str, Any], quiet: bool) -> None:
     raw_aux = _dict_at(config, "auxiliary")
     raw_aux_curator = _dict_at(raw_aux, "curator")
     added_aux = _seed_missing(
-        raw_aux_curator, DEFAULT_CONFIG.get("auxiliary", {}).get("curator", {}))
+        raw_aux_curator, DEFAULT_CONFIG.get("auxiliary", {}).get("curator", {})
+    )
     if added_aux:
         raw_aux["curator"] = raw_aux_curator
         config["auxiliary"] = raw_aux
 
     if added_curator or added_aux:
         _persist_migration(config)
-        for label, added in (("curator", added_curator), ("auxiliary.curator", added_aux)):
+        for label, added in (
+            ("curator", added_curator),
+            ("auxiliary.curator", added_aux),
+        ):
             if not added:
                 continue
             results["config_added"].append(f"{label} ({len(added)} default key(s))")
             if not quiet:
                 print(
                     f"  ✓ {'Curator' if label == 'curator' else label} settings now available "
-                    f"({', '.join(added)}) — edit via `clawk config set`")
+                    f"({', '.join(added)}) — edit via `clawk config set`"
+                )
 
 
 def _migrate_to_29(results: dict[str, Any], quiet: bool) -> None:
@@ -387,14 +452,20 @@ def _migrate_to_29(results: dict[str, Any], quiet: bool) -> None:
             continue
         old = sub.pop("write_mode")
         old_norm = old.strip().lower() if isinstance(old, str) else old
-        sub["write_approval"] = (old_norm == "approve")
+        sub["write_approval"] = old_norm == "approve"
         config[subsystem] = sub
         touched = True
         results["config_added"].append(
-            f"{subsystem}.write_mode → write_approval={sub['write_approval']}")
+            f"{subsystem}.write_mode → write_approval={sub['write_approval']}"
+        )
     if touched:
-        _commit(config, results, quiet, None,
-                "  ✓ Renamed write_mode → write_approval (boolean gate)")
+        _commit(
+            config,
+            results,
+            quiet,
+            None,
+            "  ✓ Renamed write_mode → write_approval (boolean gate)",
+        )
 
 
 # 29 → 30 (curator.consolidate defaults to false) is schema-default-only: deep-merge supplies it
@@ -422,13 +493,18 @@ def _migrate_to_33(results: dict[str, Any], quiet: bool) -> None:
             raw_deleg["max_concurrent_children"] = old_async_i
             results["config_added"].append(
                 f"delegation.max_concurrent_children={old_async_i} "
-                f"(folded from deprecated max_async_children)")
+                f"(folded from deprecated max_async_children)"
+            )
     config["delegation"] = raw_deleg
     _commit(
-        config, results, quiet, None,
+        config,
+        results,
+        quiet,
+        None,
         "  ✓ Removed deprecated delegation.max_async_children — "
         "delegation.max_concurrent_children now caps background "
-        "delegations too.")
+        "delegations too.",
+    )
 
 
 def _migrate_to_34(results: dict[str, Any], quiet: bool) -> None:
@@ -438,7 +514,11 @@ def _migrate_to_34(results: dict[str, Any], quiet: bool) -> None:
     # had turned off. Reset display.personality → "" and scrub agent.system_prompt ONLY when it
     # verbatim-equals a known personality's rendered text; any other text is user-owned.
     from clawk_cli.personality import (
-        available_personalities, normalize_personality_name, prompt_text, render_personality_prompt)
+        available_personalities,
+        normalize_personality_name,
+        prompt_text,
+        render_personality_prompt,
+    )
 
     config = read_raw_config()
     touched = False
@@ -458,7 +538,8 @@ def _migrate_to_34(results: dict[str, Any], quiet: bool) -> None:
         manual = prompt_text(raw_agent.get("system_prompt", ""))
         if manual:
             rendered = {
-                render_personality_prompt(defn) for defn in available_personalities(config).values()
+                render_personality_prompt(defn)
+                for defn in available_personalities(config).values()
             }
             if manual in rendered:
                 raw_agent["system_prompt"] = ""
@@ -476,12 +557,14 @@ def _migrate_to_34(results: dict[str, Any], quiet: bool) -> None:
             f"  ✓ Personality reset to none (was '{old_name}'). Personality "
             "state was previously saved inconsistently across surfaces and "
             "could re-enable a personality you had turned off. "
-            f"Run /personality {old_name} to turn it back on.")
+            f"Run /personality {old_name} to turn it back on."
+        )
     if scrubbed_text:
         print(
             "  ✓ Removed personality text from agent.system_prompt (written "
             "by an older /personality). That field is now reserved for "
-            "manual system prompts; personalities live in display.personality.")
+            "manual system prompts; personalities live in display.personality."
+        )
 
 
 def _migrate_to_38(results: dict[str, Any], quiet: bool) -> None:
@@ -504,7 +587,8 @@ def _migrate_to_38(results: dict[str, Any], quiet: bool) -> None:
     message = (
         "Removed legacy Relay plugin from plugins.enabled: "
         f"{', '.join(removed)}. Configure a standard user or system Relay plugins.toml, or use "
-        "CLAWK_NEMO_RELAY_PLUGINS_TOML for an explicit user-file override.")
+        "CLAWK_NEMO_RELAY_PLUGINS_TOML for an explicit user-file override."
+    )
     results["warnings"].append(message)
     if not quiet:
         print(f"  ⚠ {message}")
@@ -527,11 +611,14 @@ def _migrate_to_39(results: dict[str, Any], quiet: bool) -> None:
             config[section] = mapping
     if changed:
         _commit(
-            config, results, quiet,
+            config,
+            results,
+            quiet,
             "removed retired 'bfl' toolset from saved toolset lists",
             "  ✓ Removed the retired BFL FLUX 3 toolset from saved toolset "
             "lists — video generation now lives under `clawk tools` → "
-            "Video Generation (Nous Subscription or FAL).")
+            "Video Generation (Nous Subscription or FAL).",
+        )
 
 
 def _migrate_to_41(results: dict[str, Any], quiet: bool) -> None:
@@ -539,7 +626,12 @@ def _migrate_to_41(results: dict[str, Any], quiet: bool) -> None:
     # server injects the live Bot Mode section in Bot Chat sessions; the frozen SOUL copy taxed
     # every other session (~600 tok) and shadowed the live roster in Bot Chat itself.
     from clawk_constants import get_clawk_home
-    from tools.bot_mode_probe import _PROTOCOL_HEADING, _clawk_root, _roster, strip_legacy_protocol
+    from tools.bot_mode_probe import (
+        _PROTOCOL_HEADING,
+        _clawk_root,
+        _roster,
+        strip_legacy_protocol,
+    )
 
     cleaned: list[str] = []
     for name, profile_dir in _roster(_clawk_root(get_clawk_home())):
@@ -552,10 +644,14 @@ def _migrate_to_41(results: dict[str, Any], quiet: bool) -> None:
         except OSError:
             continue
     if cleaned:
-        results["config_added"].append(f"removed legacy Bot Mode section from SOUL.md ({', '.join(cleaned)})")
+        results["config_added"].append(
+            f"removed legacy Bot Mode section from SOUL.md ({', '.join(cleaned)})"
+        )
         if not quiet:
-            print(f"  ✓ Removed the plugin-era 'Messaging other agents' section from SOUL.md "
-                  f"({', '.join(cleaned)}) — Bot Chat sessions now get the live roster instead.")
+            print(
+                f"  ✓ Removed the plugin-era 'Messaging other agents' section from SOUL.md "
+                f"({', '.join(cleaned)}) — Bot Chat sessions now get the live roster instead."
+            )
 
 
 def _migrate_to_45(results: dict[str, Any], quiet: bool) -> None:
@@ -571,7 +667,9 @@ def _migrate_to_45(results: dict[str, Any], quiet: bool) -> None:
     saved = config.get("platform_toolsets")
     if not isinstance(saved, dict):
         return
-    if "connections" in parse_config_string_list(_dict_at(config, "agent").get("disabled_toolsets")):
+    if "connections" in parse_config_string_list(
+        _dict_at(config, "agent").get("disabled_toolsets")
+    ):
         return
     known = _dict_at(config, "known_builtin_toolsets")
     # Same predicate the resolver uses to pick its explicit branch: any configurable or plugin key.
@@ -599,10 +697,13 @@ def _migrate_to_45(results: dict[str, Any], quiet: bool) -> None:
         config["known_builtin_toolsets"] = known
     platforms = ", ".join(sorted(enabled_for))
     _commit(
-        config, results, quiet,
+        config,
+        results,
+        quiet,
         f"enabled the connections toolset for {platforms}",
         f"  ✓ Enabled the Connections toolset (Gmail, Linear, Notion, local MCP servers) for {platforms}. "
-        "Uncheck Connections in `clawk tools` to turn it off.")
+        "Uncheck Connections in `clawk tools` to turn it off.",
+    )
 
 
 def _migrate_to_46(results: dict[str, Any], quiet: bool) -> None:
@@ -617,8 +718,17 @@ def _migrate_to_46(results: dict[str, Any], quiet: bool) -> None:
     servers = config.get("mcp_servers")
     if not isinstance(servers, dict):
         return
-    legacy = {n: e for n, e in servers.items() if isinstance(e, dict) and "disabled" in e}
-    turned_off = sorted((n for n, e in legacy.items() if _parse_enabled_flag(e["disabled"], default=False)), key=str)
+    legacy = {
+        n: e for n, e in servers.items() if isinstance(e, dict) and "disabled" in e
+    }
+    turned_off = sorted(
+        (
+            n
+            for n, e in legacy.items()
+            if _parse_enabled_flag(e["disabled"], default=False)
+        ),
+        key=str,
+    )
     if not turned_off:
         return  # a falsy `disabled` is inert; the runtime never read it
     for name in turned_off:
@@ -626,9 +736,12 @@ def _migrate_to_46(results: dict[str, Any], quiet: bool) -> None:
         legacy[name]["enabled"] = False
     names = ", ".join(map(str, turned_off))
     _commit(
-        config, results, quiet,
+        config,
+        results,
+        quiet,
         f"mcp_servers: disabled → enabled: false ({names})",
-        f"  ✓ Turned off MCP servers the profile editor had marked disabled: {names}.")
+        f"  ✓ Turned off MCP servers the profile editor had marked disabled: {names}.",
+    )
 
 
 def _migrate_to_48(results: dict[str, Any], quiet: bool) -> None:
@@ -639,6 +752,7 @@ def _migrate_to_48(results: dict[str, Any], quiet: bool) -> None:
     # is a pin and a pin recreates a persisted Docker container without asking; unpinned, the
     # runtime keeps an existing sandbox and the CLI / Screen pane ask first. A pinned image stays.
     from clawk_cli.config_defaults import DEFAULT_SANDBOX_IMAGE, LEGACY_SANDBOX_IMAGES
+
     for legacy in LEGACY_SANDBOX_IMAGES:
         for key, old in (
             ("docker_image", legacy),
@@ -647,10 +761,13 @@ def _migrate_to_48(results: dict[str, Any], quiet: bool) -> None:
             ("singularity_image", f"docker://{legacy}"),
         ):
             _rewrite_stale_default(
-                section="terminal", key=key, old=old, new=None,
+                section="terminal",
+                key=key,
+                old=old,
+                new=None,
                 added=f"terminal.{key} unset (follows the default, {DEFAULT_SANDBOX_IMAGE})",
                 message=f"  ✓ terminal.{key}: was the old default; now follows the default sandbox image "
-                        f"({DEFAULT_SANDBOX_IMAGE})",
+                f"({DEFAULT_SANDBOX_IMAGE})",
             )(results, quiet)
 
 
@@ -662,6 +779,7 @@ def _migrate_to_48(results: dict[str, Any], quiet: bool) -> None:
 #: only added a schema default that runtime merging supplies without a write. When adding a step,
 #: decide whether it belongs in LEGACY_KEY_STEPS below (the only steps an unversioned file gets).
 
+
 def _migrate_to_49(results: dict[str, Any], quiet: bool) -> None:
     # 48 → 49: Vercel deprecated sandbox runtimes in favour of images; the default moves from the
     # `node24` runtime to `vercel/sandbox/universal:latest`. A saved runtime still equal to the old
@@ -670,20 +788,33 @@ def _migrate_to_49(results: dict[str, Any], quiet: bool) -> None:
     # the user chose (node22, python3.13) stays and keeps overriding the image, as before. Persisted
     # sandboxes are unaffected either way: a snapshot restore never sends a runtime or an image.
     from clawk_cli.config_defaults import DEFAULT_VERCEL_IMAGE, LEGACY_VERCEL_RUNTIME
+
     _rewrite_stale_default(
-        section="terminal", key="vercel_runtime", old=LEGACY_VERCEL_RUNTIME, new=None,
+        section="terminal",
+        key="vercel_runtime",
+        old=LEGACY_VERCEL_RUNTIME,
+        new=None,
         added=f"terminal.vercel_runtime unset (fresh sandboxes use terminal.vercel_image, {DEFAULT_VERCEL_IMAGE})",
         message=f"  ✓ terminal.vercel_runtime: was the old default; fresh sandboxes now use the managed image "
-                f"({DEFAULT_VERCEL_IMAGE})",
+        f"({DEFAULT_VERCEL_IMAGE})",
     )(results, quiet)
     _c = _cfg()
-    if (_c.get_env_value_prefer_dotenv("TERMINAL_VERCEL_RUNTIME") or "").strip() == LEGACY_VERCEL_RUNTIME:
+    if (
+        _c.get_env_value_prefer_dotenv("TERMINAL_VERCEL_RUNTIME") or ""
+    ).strip() == LEGACY_VERCEL_RUNTIME:
         _c.remove_env_value("TERMINAL_VERCEL_RUNTIME")
         if not quiet:
-            print("  ✓ Cleared TERMINAL_VERCEL_RUNTIME from .env (was the old default; the image is used instead)")
+            print(
+                "  ✓ Cleared TERMINAL_VERCEL_RUNTIME from .env (was the old default; the image is used instead)"
+            )
 
 
-_RETIRED_TIRITH_KEYS = ("tirith_enabled", "tirith_path", "tirith_timeout", "tirith_fail_open")
+_RETIRED_TIRITH_KEYS = (
+    "tirith_enabled",
+    "tirith_path",
+    "tirith_timeout",
+    "tirith_fail_open",
+)
 
 
 def _migrate_to_50(results: dict[str, Any], quiet: bool) -> None:
@@ -698,8 +829,13 @@ def _migrate_to_50(results: dict[str, Any], quiet: bool) -> None:
         return
     for key in present:
         del security[key]
-    _commit(config, results, quiet, "removed security.tirith_* (scanner no longer bundled)",
-            "  ✓ Removed security.tirith_* — the tirith scanner is no longer bundled with Clawksis.")
+    _commit(
+        config,
+        results,
+        quiet,
+        "removed security.tirith_* (scanner no longer bundled)",
+        "  ✓ Removed security.tirith_* — the tirith scanner is no longer bundled with Clawksis.",
+    )
 
 
 MIGRATIONS: tuple[tuple[int, Callable[[dict[str, Any], bool], None]], ...] = (
@@ -711,109 +847,195 @@ MIGRATIONS: tuple[tuple[int, Callable[[dict[str, Any], bool], None]], ...] = (
     (21, _migrate_to_21),
     (23, _migrate_to_23),
     # 24 → 25: model_catalog TTL 24h → 1h (only the OLD default 24).
-    (25, _rewrite_stale_default(
-        section="model_catalog", key="ttl_hours", old=24, new=1,
-        added="model_catalog.ttl_hours 24→1",
-        message="  ✓ Lowered model_catalog.ttl_hours to 1 (hourly picker refresh)")),
+    (
+        25,
+        _rewrite_stale_default(
+            section="model_catalog",
+            key="ttl_hours",
+            old=24,
+            new=1,
+            added="model_catalog.ttl_hours 24→1",
+            message="  ✓ Lowered model_catalog.ttl_hours to 1 (hourly picker refresh)",
+        ),
+    ),
     (29, _migrate_to_29),
     # 30 → 31: verify_on_stop OFF (one-time). The "auto" sentinel was more noise than signal.
     # Rewrite only when missing or still "auto" — an explicit user true/false is preserved.
-    (31, functools.partial(
-        _rewrite_key, section="agent", key="verify_on_stop", new=False, create_section=True,
-        match=lambda cur: cur is None or _lower_is("auto")(cur),
-        added="agent.verify_on_stop=false",
-        message=(
-            "  ✓ Turned off verify-on-stop (agent.verify_on_stop: false). "
-            "Set it to true to re-enable, or \"auto\" for the legacy "
-            "surface-aware behavior."))),
+    (
+        31,
+        functools.partial(
+            _rewrite_key,
+            section="agent",
+            key="verify_on_stop",
+            new=False,
+            create_section=True,
+            match=lambda cur: cur is None or _lower_is("auto")(cur),
+            added="agent.verify_on_stop=false",
+            message=(
+                "  ✓ Turned off verify-on-stop (agent.verify_on_stop: false). "
+                'Set it to true to re-enable, or "auto" for the legacy '
+                "surface-aware behavior."
+            ),
+        ),
+    ),
     # 31 → 32: flip the BAKED-IN literal true to OFF (one-time). v30 defaulted verify_on_stop to a
     # literal True and migrate_config persisted defaults, so installs that updated through v30 have
     # `verify_on_stop: true` written literally — never a user choice (no off-switch existed until
     # v31). A true set AFTER v32 is never touched.
-    (32, _rewrite_stale_default(
-        section="agent", key="verify_on_stop", old=True, new=False,
-        added="agent.verify_on_stop=false",
-        message=(
-            "  ✓ Turned off verify-on-stop (agent.verify_on_stop: false) — "
-            "the old default was written into your config as a literal "
-            "true. Set it to true again to re-enable, or \"auto\" for the "
-            "legacy surface-aware behavior."),
-        extra_guard=lambda raw: raw.get("verify_on_stop") is True)),
+    (
+        32,
+        _rewrite_stale_default(
+            section="agent",
+            key="verify_on_stop",
+            old=True,
+            new=False,
+            added="agent.verify_on_stop=false",
+            message=(
+                "  ✓ Turned off verify-on-stop (agent.verify_on_stop: false) — "
+                "the old default was written into your config as a literal "
+                'true. Set it to true again to re-enable, or "auto" for the '
+                "legacy surface-aware behavior."
+            ),
+            extra_guard=lambda raw: raw.get("verify_on_stop") is True,
+        ),
+    ),
     (33, _migrate_to_33),
     (34, _migrate_to_34),
     # 34 → 35: background_process_notifications 'all' (old implicit default, rarely chosen on
     # purpose) → 'concise'. Explicit result/error/off choices are preserved.
-    (35, functools.partial(
-        _rewrite_key, section="display", key="background_process_notifications",
-        match=_lower_is("all"), new="concise",
-        added="display.background_process_notifications=concise (was: all)",
-        message=(
-            "  ✓ Background process notifications switched from 'all' to "
-            "'concise' — completions now show a one-line status message "
-            "instead of the raw output dump. Set "
-            "display.background_process_notifications: all to restore "
-            "the old behavior."))),
+    (
+        35,
+        functools.partial(
+            _rewrite_key,
+            section="display",
+            key="background_process_notifications",
+            match=_lower_is("all"),
+            new="concise",
+            added="display.background_process_notifications=concise (was: all)",
+            message=(
+                "  ✓ Background process notifications switched from 'all' to "
+                "'concise' — completions now show a one-line status message "
+                "instead of the raw output dump. Set "
+                "display.background_process_notifications: all to restore "
+                "the old behavior."
+            ),
+        ),
+    ),
     # 35 → 36: subagent iteration cap 50 → 250 (50 truncated substantial delegated work).
-    (36, _rewrite_stale_default(
-        section="delegation", key="max_iterations", old=50, new=250,
-        added="delegation.max_iterations=250 (was: 50)",
-        message=(
-            "  ✓ Raised delegation.max_iterations from 50 to 250 — subagents "
-            "now get a larger per-child tool-call budget so delegated work "
-            "finishes instead of truncating. Set delegation.max_iterations "
-            "back to 50 to restore the old cap."))),
+    (
+        36,
+        _rewrite_stale_default(
+            section="delegation",
+            key="max_iterations",
+            old=50,
+            new=250,
+            added="delegation.max_iterations=250 (was: 50)",
+            message=(
+                "  ✓ Raised delegation.max_iterations from 50 to 250 — subagents "
+                "now get a larger per-child tool-call budget so delegated work "
+                "finishes instead of truncating. Set delegation.max_iterations "
+                "back to 50 to restore the old cap."
+            ),
+        ),
+    ),
     # 36 → 37: delegation concurrency 3 → 10 (stays at/below the high-cost warning threshold).
-    (37, _rewrite_stale_default(
-        section="delegation", key="max_concurrent_children", old=3, new=10,
-        added="delegation.max_concurrent_children=10 (was: 3)",
-        message=(
-            "  ✓ Raised delegation.max_concurrent_children from 3 to 10 — "
-            "independent delegated children now fan out wider in parallel. "
-            "Each child consumes API tokens independently; set "
-            "delegation.max_concurrent_children back to 3 to restore the old cap."))),
+    (
+        37,
+        _rewrite_stale_default(
+            section="delegation",
+            key="max_concurrent_children",
+            old=3,
+            new=10,
+            added="delegation.max_concurrent_children=10 (was: 3)",
+            message=(
+                "  ✓ Raised delegation.max_concurrent_children from 3 to 10 — "
+                "independent delegated children now fan out wider in parallel. "
+                "Each child consumes API tokens independently; set "
+                "delegation.max_concurrent_children back to 3 to restore the old cap."
+            ),
+        ),
+    ),
     (38, _migrate_to_38),
     (39, _migrate_to_39),
     # 39 → 40: model_catalog.ttl_hours → ttl_minutes (default 20). Only the OLD default
     # (ttl_hours: 1, written by v25) is dropped; any other explicit ttl_hours is still honoured.
-    (40, _rewrite_stale_default(
-        section="model_catalog", key="ttl_hours", old=1, new=None,
-        added="model_catalog.ttl_hours 1 → ttl_minutes 20 (default)",
-        message="  ✓ Model catalog now refreshes every 20 minutes (model_catalog.ttl_minutes)",
-        extra_guard=lambda raw: "ttl_minutes" not in raw)),
+    (
+        40,
+        _rewrite_stale_default(
+            section="model_catalog",
+            key="ttl_hours",
+            old=1,
+            new=None,
+            added="model_catalog.ttl_hours 1 → ttl_minutes 20 (default)",
+            message="  ✓ Model catalog now refreshes every 20 minutes (model_catalog.ttl_minutes)",
+            extra_guard=lambda raw: "ttl_minutes" not in raw,
+        ),
+    ),
     (41, _migrate_to_41),
     # 41 → 42: cron.model_drift_guard is gone. Unpinned jobs now run on their creation snapshot
     # instead of failing closed when the global model changes, so the toggle has nothing to gate.
-    (42, functools.partial(
-        _rewrite_key, section="cron", key="model_drift_guard", new=None,
-        match=lambda cur: cur is not None,
-        added="removed cron.model_drift_guard",
-        message=(
-            "  ✓ Removed cron.model_drift_guard — unpinned cron jobs now keep running on the "
-            "model/provider they were created under when the global default changes, instead "
-            "of being skipped. Pin a job or set cron.model to move it."))),
+    (
+        42,
+        functools.partial(
+            _rewrite_key,
+            section="cron",
+            key="model_drift_guard",
+            new=None,
+            match=lambda cur: cur is not None,
+            added="removed cron.model_drift_guard",
+            message=(
+                "  ✓ Removed cron.model_drift_guard — unpinned cron jobs now keep running on the "
+                "model/provider they were created under when the global default changes, instead "
+                "of being skipped. Pin a job or set cron.model to move it."
+            ),
+        ),
+    ),
     # 42 → 43: gateway.multiplex_profile_allowlist is gone. A multiplexing default gateway serves
     # every live profile under profiles/; a profile that must not be served is archived or deleted.
-    (43, functools.partial(
-        _rewrite_key, section="gateway", key="multiplex_profile_allowlist", new=None,
-        match=lambda _cur: True,
-        added="removed gateway.multiplex_profile_allowlist",
-        message=(
-            "  ✓ Removed gateway.multiplex_profile_allowlist — the multiplexing gateway now serves "
-            "every profile under profiles/. Delete or archive a profile you do not want served."),
-        extra_guard=lambda raw: "multiplex_profile_allowlist" in raw)),
+    (
+        43,
+        functools.partial(
+            _rewrite_key,
+            section="gateway",
+            key="multiplex_profile_allowlist",
+            new=None,
+            match=lambda _cur: True,
+            added="removed gateway.multiplex_profile_allowlist",
+            message=(
+                "  ✓ Removed gateway.multiplex_profile_allowlist — the multiplexing gateway now serves "
+                "every profile under profiles/. Delete or archive a profile you do not want served."
+            ),
+            extra_guard=lambda raw: "multiplex_profile_allowlist" in raw,
+        ),
+    ),
     # 43 → 44: curator prunes faster — stale 30→14 days, archive 90→30 days. A skill nobody has
     # touched in a month is prompt weight, not knowledge; archival is recoverable. Only the OLD
     # defaults are rewritten; an explicit user value is preserved.
-    (44, _rewrite_stale_default(
-        section="curator", key="stale_after_days", old=30, new=14,
-        added="curator.stale_after_days=14 (was: 30)",
-        message="  ✓ curator.stale_after_days 30→14 — unused skills are flagged stale after two weeks.")),
-    (44, _rewrite_stale_default(
-        section="curator", key="archive_after_days", old=90, new=30,
-        added="curator.archive_after_days=30 (was: 90)",
-        message=(
-            "  ✓ curator.archive_after_days 90→30 — skills unused for a month are archived to "
-            "skills/.archive/ (recoverable with `clawk curator restore`). Set it back to 90 to keep the old window."))),
+    (
+        44,
+        _rewrite_stale_default(
+            section="curator",
+            key="stale_after_days",
+            old=30,
+            new=14,
+            added="curator.stale_after_days=14 (was: 30)",
+            message="  ✓ curator.stale_after_days 30→14 — unused skills are flagged stale after two weeks.",
+        ),
+    ),
+    (
+        44,
+        _rewrite_stale_default(
+            section="curator",
+            key="archive_after_days",
+            old=90,
+            new=30,
+            added="curator.archive_after_days=30 (was: 90)",
+            message=(
+                "  ✓ curator.archive_after_days 90→30 — skills unused for a month are archived to "
+                "skills/.archive/ (recoverable with `clawk curator restore`). Set it back to 90 to keep the old window."
+            ),
+        ),
+    ),
     # 44 → 45: saved platform_toolsets lists predate the connections toolset (see _migrate_to_45).
     (45, _migrate_to_45),
     # 45 → 46: legacy editor `disabled: true` on MCP servers becomes `enabled: false` (see _migrate_to_46).
@@ -822,13 +1044,21 @@ MIGRATIONS: tuple[tuple[int, Callable[[dict[str, Any], bool], None]], ...] = (
     # 256000 default was copied into config.yaml by the template seeder and `doctor --fix`, where it
     # reads as a user choice and keeps capping 1M-window models at 256K. Drop only that exact value;
     # any other explicit cap, and an explicit null, are preserved.
-    (47, _rewrite_stale_default(
-        section="compression", key="threshold_tokens", old=256000, new=None,
-        added="removed compression.threshold_tokens: 256000 (the old default)",
-        message=(
-            "  ✓ Removed compression.threshold_tokens: 256000 — the old default. Compaction "
-            "follows compression.threshold (50% of the window) again. Set threshold_tokens "
-            "to a token count to cap it on purpose."))),
+    (
+        47,
+        _rewrite_stale_default(
+            section="compression",
+            key="threshold_tokens",
+            old=256000,
+            new=None,
+            added="removed compression.threshold_tokens: 256000 (the old default)",
+            message=(
+                "  ✓ Removed compression.threshold_tokens: 256000 — the old default. Compaction "
+                "follows compression.threshold (50% of the window) again. Set threshold_tokens "
+                "to a token count to cap it on purpose."
+            ),
+        ),
+    ),
     # 47 → 48: a saved old-default sandbox image is dropped so the file follows the new default (see _migrate_to_48).
     (48, _migrate_to_48),
     # 48 → 49: the seeded Vercel runtime pin is dropped so fresh sandboxes use the managed image (see _migrate_to_49).
@@ -838,15 +1068,23 @@ MIGRATIONS: tuple[tuple[int, Callable[[dict[str, Any], bool], None]], ...] = (
     # 50 → 51: cron.bot_chat_delivery_timeout_seconds is gone with the local `clawk chat`
     # fallback lane it bounded. Bot Chat deliveries are admitted to the running gateway and
     # settle on its durable receipt; there is no cron-side turn left to time out.
-    (51, functools.partial(
-        _rewrite_key, section="cron", key="bot_chat_delivery_timeout_seconds", new=None,
-        match=lambda _cur: True,
-        added="removed cron.bot_chat_delivery_timeout_seconds",
-        message=(
-            "  ✓ Removed cron.bot_chat_delivery_timeout_seconds — bot-chat deliveries are now "
-            "admitted to the target profile's running gateway and tracked by receipt, so cron no "
-            "longer runs (or times out) a Bot Chat turn of its own."),
-        extra_guard=lambda raw: "bot_chat_delivery_timeout_seconds" in raw)),
+    (
+        51,
+        functools.partial(
+            _rewrite_key,
+            section="cron",
+            key="bot_chat_delivery_timeout_seconds",
+            new=None,
+            match=lambda _cur: True,
+            added="removed cron.bot_chat_delivery_timeout_seconds",
+            message=(
+                "  ✓ Removed cron.bot_chat_delivery_timeout_seconds — bot-chat deliveries are now "
+                "admitted to the target profile's running gateway and tracked by receipt, so cron no "
+                "longer runs (or times out) a Bot Chat turn of its own."
+            ),
+            extra_guard=lambda raw: "bot_chat_delivery_timeout_seconds" in raw,
+        ),
+    ),
 )
 
 #: Steps triggered by a legacy key or identifier (a renamed or retired key, a removed plugin or
@@ -872,7 +1110,8 @@ STAMP_INDEPENDENT_STEPS = frozenset({46, 50})
 
 
 def run_migrations(
-    current_ver: int, results: dict[str, Any], quiet: bool, *, unversioned: bool = False) -> None:
+    current_ver: int, results: dict[str, Any], quiet: bool, *, unversioned: bool = False
+) -> None:
     """Apply every registered migration whose target version exceeds *current_ver* (plus
     :data:`STAMP_INDEPENDENT_STEPS`); a config with no ``_config_version`` (*unversioned*) gets
     only :data:`LEGACY_KEY_STEPS`.
@@ -888,7 +1127,9 @@ def run_migrations(
             except Exception as exc:
                 # A malformed nested value in one step must not abort the rest of the
                 # ladder (config loading itself fails otherwise). Loud, not silent.
-                warning = f"config migration to v{target_ver} failed and was skipped: {exc}"
+                warning = (
+                    f"config migration to v{target_ver} failed and was skipped: {exc}"
+                )
                 results.setdefault("warnings", []).append(warning)
                 # Quiet callers (profile creation, unattended update) discard ``results`` and
                 # migrate_config still stamps the latest version, so without a log line the

@@ -1,6 +1,5 @@
 """Tests for blocked-command recovery guidance (parser-limit + backgrounding)."""
 
-
 from tools.approval import _hardline_block_result
 from tools.approval_detection import _PARSER_LIMIT_DESCRIPTION
 from tools.terminal_tool import _foreground_background_guidance
@@ -16,9 +15,11 @@ class TestParserLimitRecovery:
         assert "RECOVERY" in r["message"]
         assert "blocked-scripts" in r["message"]
         import re as _re
+
         m = _re.search(r"saved to (\S+\.sh)", r["message"])
         assert m, r["message"]
         from pathlib import Path
+
         saved = Path(m.group(1))
         assert saved.exists()
         body = saved.read_text()
@@ -32,11 +33,11 @@ class TestParserLimitRecovery:
         assert "write_file" in r["message"]
         assert "bash /path/script.sh" in r["message"]
 
-
-
     def test_real_hardline_blocks_unchanged(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
-        r = _hardline_block_result("recursive delete of root filesystem", "rm -rf --no-preserve-root /")
+        r = _hardline_block_result(
+            "recursive delete of root filesystem", "rm -rf --no-preserve-root /"
+        )
         assert "RECOVERY" not in r["message"]
         assert "unconditional blocklist" in r["message"]
         # And nothing was saved for a genuine hardline block.
@@ -45,6 +46,7 @@ class TestParserLimitRecovery:
     def test_old_saved_payloads_cleaned(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
         import os
+
         d = tmp_path / ".clawk" / "cache" / "blocked-scripts"
         d.mkdir(parents=True)
         stale = d / "blocked-1-dead.sh"

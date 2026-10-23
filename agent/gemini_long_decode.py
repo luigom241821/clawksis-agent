@@ -21,24 +21,39 @@ _LONG_DECODE_BUDGETS = {"xhigh": 262_144, "max": 1_048_576, "ultra": 1_048_576}
 # Smallest per-request cap (unary; streamed hops get 65,536): hop counts derived from it are upper bounds.
 _HOP_TOKENS = 32_768
 _USAGE_COUNT_KEYS = (
-    "promptTokenCount", "cachedContentTokenCount", "candidatesTokenCount", "thoughtsTokenCount",
-    "toolUsePromptTokenCount", "totalTokenCount",
+    "promptTokenCount",
+    "cachedContentTokenCount",
+    "candidatesTokenCount",
+    "thoughtsTokenCount",
+    "toolUsePromptTokenCount",
+    "totalTokenCount",
 )
 
 
 def long_decode_max_output_tokens(model: str, reasoning_config: Any) -> Optional[int]:
     """Total output budget a Gemini 4 request gets for its reasoning effort, or None (per-request cap)."""
     name = (model or "").strip().lower().removeprefix("google/")
-    if not name.startswith("gemini-4") or not isinstance(reasoning_config, dict) or reasoning_config.get("enabled") is False:
+    if (
+        not name.startswith("gemini-4")
+        or not isinstance(reasoning_config, dict)
+        or reasoning_config.get("enabled") is False
+    ):
         return None
-    return _LONG_DECODE_BUDGETS.get(str(reasoning_config.get("effort") or "").strip().lower())
+    return _LONG_DECODE_BUDGETS.get(
+        str(reasoning_config.get("effort") or "").strip().lower()
+    )
 
 
 def long_decode_hops(max_output_tokens: Any) -> int:
     """Most hops a request with this total budget can take; 1 when it fits one request. The stale
     watchdog scales by it (one timer spans every unary hop) and the hop loops stop one past it, so a
     server that keeps answering CONTINUATION can't bill forever."""
-    budget = max_output_tokens if isinstance(max_output_tokens, int) and not isinstance(max_output_tokens, bool) else 0
+    budget = (
+        max_output_tokens
+        if isinstance(max_output_tokens, int)
+        and not isinstance(max_output_tokens, bool)
+        else 0
+    )
     return max(1, -(-budget // _HOP_TOKENS))
 
 
@@ -47,7 +62,11 @@ def long_decode_stale_multiplier(api_payload: Any) -> int:
     the hop count so a healthy multi-hop answer isn't killed and re-billed from hop 1. The run-budget
     cap still applies afterwards; streaming re-arms on every chunk and needs no scaling."""
     extra = api_payload.get("extra_body") if isinstance(api_payload, dict) else None
-    return long_decode_hops(extra.get("max_output_tokens")) if isinstance(extra, dict) else 1
+    return (
+        long_decode_hops(extra.get("max_output_tokens"))
+        if isinstance(extra, dict)
+        else 1
+    )
 
 
 def _candidate(payload: dict[str, Any]) -> dict[str, Any]:
@@ -60,28 +79,49 @@ def continuation_token(payload: dict[str, Any]) -> Optional[str]:
     """The token to resend with when this hop ended on CONTINUATION; None on any other finish."""
     cand = _candidate(payload)
     token = cand.get("continuationToken")
-    return token if str(cand.get("finishReason") or "").upper() == "CONTINUATION" and isinstance(token, str) and token else None
+    return (
+        token
+        if str(cand.get("finishReason") or "").upper() == "CONTINUATION"
+        and isinstance(token, str)
+        and token
+        else None
+    )
 
 
 def merge_hop_usage(hops: list[dict[str, Any]]) -> dict[str, Any]:
     """Sum every count across hops; ``initialPromptTokenCount`` (the google-genai name) is hop 1's prompt."""
-    merged = {key: sum(int(h.get(key) or 0) for h in hops) for key in _USAGE_COUNT_KEYS if any(key in h for h in hops)}
+    merged = {
+        key: sum(int(h.get(key) or 0) for h in hops)
+        for key in _USAGE_COUNT_KEYS
+        if any(key in h for h in hops)
+    }
     first = hops[0] if hops else {}
     merged["initialPromptTokenCount"] = int(first.get("promptTokenCount") or 0)
-    merged["initialCachedContentTokenCount"] = int(first.get("cachedContentTokenCount") or 0)
+    merged["initialCachedContentTokenCount"] = int(
+        first.get("cachedContentTokenCount") or 0
+    )
     return merged
 
 
 def merge_hop_responses(hops: list[dict[str, Any]]) -> dict[str, Any]:
     """One generateContent response whose model turn joins every hop's parts, ending as the last hop did."""
-    parts = [part for hop in hops for part in ((_candidate(hop).get("content") or {}).get("parts") or [])]
+    parts = [
+        part
+        for hop in hops
+        for part in ((_candidate(hop).get("content") or {}).get("parts") or [])
+    ]
     last = _candidate(hops[-1])
-    candidate = {**last, "content": {**(last.get("content") or {}), "role": "model", "parts": parts}}
+    candidate = {
+        **last,
+        "content": {**(last.get("content") or {}), "role": "model", "parts": parts},
+    }
     usage = merge_hop_usage([hop.get("usageMetadata") or {} for hop in hops])
     return {**hops[-1], "candidates": [candidate], "usageMetadata": usage}
 
 
-def split_stream_continuation(event: dict[str, Any], hop_usage: list[dict[str, Any]]) -> tuple[dict[str, Any], Optional[str]]:
+def split_stream_continuation(
+    event: dict[str, Any], hop_usage: list[dict[str, Any]]
+) -> tuple[dict[str, Any], Optional[str]]:
     """``(event to translate, token to resend with if the stream ends here)`` for one SSE event.
 
     A CONTINUATION finish is not the end: its finish reason and (per-stream cumulative) usage are
@@ -93,10 +133,21 @@ def split_stream_continuation(event: dict[str, Any], hop_usage: list[dict[str, A
     token = continuation_token(event)
     if token:
         hop_usage.append(event.get("usageMetadata") or {})
-        cand = {k: v for k, v in _candidate(event).items() if k not in ("finishReason", "continuationToken")}
-        return {k: v for k, v in event.items() if k != "usageMetadata"} | {"candidates": [cand]}, token
+        cand = {
+            k: v
+            for k, v in _candidate(event).items()
+            if k not in ("finishReason", "continuationToken")
+        }
+        return {k: v for k, v in event.items() if k != "usageMetadata"} | {
+            "candidates": [cand]
+        }, token
     cand = _candidate(event)
     if hop_usage and cand.get("finishReason"):
-        return {**event, "usageMetadata": merge_hop_usage([*hop_usage, event.get("usageMetadata") or {}])}, None
+        return {
+            **event,
+            "usageMetadata": merge_hop_usage(
+                [*hop_usage, event.get("usageMetadata") or {}]
+            ),
+        }, None
     checkpoint = None if cand.get("finishReason") else cand.get("continuationToken")
     return event, checkpoint if isinstance(checkpoint, str) and checkpoint else None

@@ -33,6 +33,7 @@ from agent.agent_init import (
 # The dict agent_init stashes when the Codex gpt-5.5 override fires.
 AUTORAISE = {"model": "gpt-5.5", "from": 0.50, "to": 0.85}
 
+
 def _config(*, show_notice: bool) -> dict:
     return {
         "compression": {
@@ -49,13 +50,18 @@ def _config(*, show_notice: bool) -> dict:
         "bedrock": {},
     }
 
+
 def _make_codex_agent(monkeypatch, tmp_path: Path, *, show_notice: bool):
     """Construct a real Codex gpt-5.5 agent under an isolated config."""
     from clawk_cli import config as config_mod
 
-    monkeypatch.setattr(config_mod, "load_config", lambda: _config(show_notice=show_notice))
+    monkeypatch.setattr(
+        config_mod, "load_config", lambda: _config(show_notice=show_notice)
+    )
 
-    monkeypatch.setattr(config_mod, "load_config_readonly", lambda: _config(show_notice=show_notice))
+    monkeypatch.setattr(
+        config_mod, "load_config_readonly", lambda: _config(show_notice=show_notice)
+    )
     db = SessionDB(db_path=tmp_path / "state.db")
     stdout = io.StringIO()
 
@@ -75,11 +81,14 @@ def _make_codex_agent(monkeypatch, tmp_path: Path, *, show_notice: bool):
 
     return agent, stdout.getvalue()
 
+
 def _threshold_ratio(agent: AIAgent) -> float:
     compressor = agent.context_compressor
     return round(compressor.threshold_tokens / compressor.context_length, 2)
 
+
 # ── config display gate ──────────────────────────────────────────────────────
+
 
 def test_codex_gpt55_autoraise_notice_deduped_across_agent_inits(monkeypatch, tmp_path):
     # Gateway spam scenario (#54432): the gateway rebuilds the agent per
@@ -94,11 +103,14 @@ def test_codex_gpt55_autoraise_notice_deduped_across_agent_inits(monkeypatch, tm
     assert "auto-compaction was raised" not in stdout2
     assert agent2._compression_warning is None
 
+
 # ── per-profile dedupe marker (#54432) ───────────────────────────────────────
+
 
 def test_marker_lives_under_clawk_home() -> None:
     marker = _codex_gpt55_autoraise_notice_marker()
     assert marker.parent == get_clawk_home()
+
 
 def test_changed_threshold_renotifies_once() -> None:
     _record_codex_gpt55_autoraise_notice(AUTORAISE)

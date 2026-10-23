@@ -9,6 +9,7 @@ fall back to os.environ, every terminal command in a dashboard/TUI/web session
 saw an empty CLAWK_SESSION_ID even though agent_init had set it via
 set_current_session_id().
 """
+
 import pytest
 
 from gateway.session_context import (

@@ -58,21 +58,37 @@ class TelegramTopicRoutingMixin:
         thread_id = getattr(message, "message_thread_id", None)
         sender = getattr(message, "from_user", None)
         sent_at = self._sent_at(message)
-        if thread_id is None or sent_at is None or sender is None or getattr(sender, "is_bot", False) is True:
+        if (
+            thread_id is None
+            or sent_at is None
+            or sender is None
+            or getattr(sender, "is_bot", False) is True
+        ):
             return
         if not self._is_user_authorized_from_message(message):
             return
         pending = self.__dict__.setdefault("_pending_created_topics", {})
         now = time.monotonic()
-        for key in [k for k, rec in pending.items() if now - rec[2] > self._NEW_TOPIC_RECORD_TTL_SECONDS]:
+        for key in [
+            k
+            for k, rec in pending.items()
+            if now - rec[2] > self._NEW_TOPIC_RECORD_TTL_SECONDS
+        ]:
             del pending[key]
         while len(pending) >= self._NEW_TOPIC_OPENER_MAX_PENDING:
             del pending[min(pending, key=lambda k: pending[k][2])]
         chat_id = self._chat_id_str(message)
         pending[(chat_id, self._creator_key(message))] = (str(thread_id), sent_at, now)
-        logger.debug("[%s] Recorded new Telegram topic %s (chat=%s)", self.name, thread_id, chat_id)
+        logger.debug(
+            "[%s] Recorded new Telegram topic %s (chat=%s)",
+            self.name,
+            thread_id,
+            chat_id,
+        )
 
-    def _adopt_created_topic_thread(self, message: Any, chat_type: str, thread_id: Optional[str]) -> Optional[str]:
+    def _adopt_created_topic_thread(
+        self, message: Any, chat_type: str, thread_id: Optional[str]
+    ) -> Optional[str]:
         """Thread id of the topic this sender just created, for its thread-less follow-up messages.
 
         A threaded message (the topic now routes normally) or a send gap longer than
@@ -91,12 +107,20 @@ class TelegramTopicRoutingMixin:
         if record is None or sent_at is None or sent_at < record[1]:
             return thread_id
         del pending[key]
-        if thread_id is not None or getattr(message, "message_thread_id", None) is not None:
+        if (
+            thread_id is not None
+            or getattr(message, "message_thread_id", None) is not None
+        ):
             return thread_id
         created_thread_id, last_sent_at, _recorded = record
         if sent_at - last_sent_at > self._NEW_TOPIC_FOLLOW_SECONDS:
             return thread_id
         pending[key] = (created_thread_id, sent_at, time.monotonic())
-        logger.info("[%s] Thread-less message %s adopted by new Telegram topic %s (chat=%s)",
-                    self.name, getattr(message, "message_id", "?"), created_thread_id, key[0])
+        logger.info(
+            "[%s] Thread-less message %s adopted by new Telegram topic %s (chat=%s)",
+            self.name,
+            getattr(message, "message_id", "?"),
+            created_thread_id,
+            key[0],
+        )
         return created_thread_id

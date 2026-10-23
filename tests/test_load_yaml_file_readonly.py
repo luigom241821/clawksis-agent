@@ -1,4 +1,5 @@
 """``load_yaml_file_readonly`` re-parses only when the file signature changes."""
+
 import os
 
 
@@ -34,7 +35,9 @@ def test_callers_do_not_mutate_the_shared_cached_object(tmp_path, monkeypatch):
         "terminal:\n  backend: local\n  cwd: auto\n  timeout: 5\n"
         "secrets:\n  onepassword: {enabled: false}\n"
     )
-    monkeypatch.setattr("clawk_cli.env_loader._process_clawk_home", lambda: tmp_path / "other")
+    monkeypatch.setattr(
+        "clawk_cli.env_loader._process_clawk_home", lambda: tmp_path / "other"
+    )
     cached = load_yaml_file_readonly(path)
     snapshot = copy.deepcopy(cached)
 

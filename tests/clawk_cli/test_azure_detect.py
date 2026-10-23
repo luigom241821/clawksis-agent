@@ -16,6 +16,7 @@ from clawk_cli import azure_detect
 # Helpers
 # ----------------------------------------------------------------------
 
+
 class _FakeHTTPResponse:
     """Minimal stand-in for urllib.request.urlopen's context manager."""
 
@@ -34,17 +35,21 @@ class _FakeHTTPResponse:
 
 
 def _openai_models_body(*ids: str) -> bytes:
-    return json.dumps({
-        "object": "list",
-        "data": [{"id": i, "object": "model"} for i in ids],
-    }).encode()
+    return json.dumps(
+        {
+            "object": "list",
+            "data": [{"id": i, "object": "model"} for i in ids],
+        }
+    ).encode()
 
 
 def _anthropic_error_body(msg: str = "model not found") -> bytes:
-    return json.dumps({
-        "type": "error",
-        "error": {"type": "invalid_request_error", "message": msg},
-    }).encode()
+    return json.dumps(
+        {
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": msg},
+        }
+    ).encode()
 
 
 # ----------------------------------------------------------------------
@@ -52,13 +57,9 @@ def _anthropic_error_body(msg: str = "model not found") -> bytes:
 # ----------------------------------------------------------------------
 
 
-
 # ----------------------------------------------------------------------
 # _extract_model_ids
 # ----------------------------------------------------------------------
-
-
-
 
 
 # ----------------------------------------------------------------------
@@ -66,16 +67,17 @@ def _anthropic_error_body(msg: str = "model not found") -> bytes:
 # ----------------------------------------------------------------------
 
 
-
 def test_detect_openai_models_probe_success():
     """/models probe returning a model list → chat_completions."""
+
     def _fake_get(url, api_key, timeout=6.0, **kwargs):
         assert "key-abc" == api_key
         return 200, json.loads(_openai_models_body("gpt-5.4", "claude-opus-4-6"))
 
     with patch.object(azure_detect, "_http_get_json", side_effect=_fake_get):
         result = azure_detect.detect(
-            "https://my.openai.azure.com/openai/v1", "key-abc",
+            "https://my.openai.azure.com/openai/v1",
+            "key-abc",
         )
     assert result.api_mode == "chat_completions"
     assert result.models_probe_ok is True
@@ -86,6 +88,7 @@ def test_detect_openai_models_probe_success():
 # ----------------------------------------------------------------------
 # _probe_openai_models URL list (Azure vs v1 api-version)
 # ----------------------------------------------------------------------
+
 
 def test_probe_openai_models_tries_multiple_api_versions():
     """First call (no api-version) fails, api-version fallback succeeds."""
@@ -99,7 +102,8 @@ def test_probe_openai_models_tries_multiple_api_versions():
 
     with patch.object(azure_detect, "_http_get_json", side_effect=_fake_get):
         ok, models = azure_detect._probe_openai_models(
-            "https://my.openai.azure.com/openai/v1", "k",
+            "https://my.openai.azure.com/openai/v1",
+            "k",
         )
     assert ok is True
     assert models == ["gpt-4.1"]
@@ -111,7 +115,6 @@ def test_probe_openai_models_tries_multiple_api_versions():
 # ----------------------------------------------------------------------
 # _http_get_json error handling
 # ----------------------------------------------------------------------
-
 
 
 @pytest.fixture
@@ -154,7 +157,8 @@ def test_http_get_json_bounds_success_body(probe_server):
     url, bodies = probe_server
     bodies["models"] = _openai_models_body("test-deployment")
     assert azure_detect._http_get_json(url + "/models", "synthetic-key") == (
-        200, json.loads(bodies["models"]),
+        200,
+        json.loads(bodies["models"]),
     )
     bodies["models"] += b" " * azure_detect._AZURE_DETECT_JSON_BODY_MAX_BYTES
     assert azure_detect._http_get_json(url + "/models", "synthetic-key") == (200, None)
@@ -172,4 +176,3 @@ def test_probe_anthropic_messages_bounds_error_body(probe_server):
 # ----------------------------------------------------------------------
 # lookup_context_length
 # ----------------------------------------------------------------------
-

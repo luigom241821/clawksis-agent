@@ -48,9 +48,7 @@ async def test_warmup_timeout_warning_runs_off_the_event_loop(monkeypatch):
             emit_returned_at.append(time.perf_counter())
 
     handler = _BlockingHandler()
-    base_logger = logging.getLogger(
-        f"clawk.test.startup_logger_offloop.{id(handler)}"
-    )
+    base_logger = logging.getLogger(f"clawk.test.startup_logger_offloop.{id(handler)}")
     base_logger.handlers = [handler]
     base_logger.setLevel(logging.WARNING)
     base_logger.propagate = False
@@ -68,9 +66,11 @@ async def test_warmup_timeout_warning_runs_off_the_event_loop(monkeypatch):
 
     try:
         await runner._wait_bounded_or_release(
-            {pending}, 0.05,
+            {pending},
+            0.05,
             "warmup still running after %.0fs; pending=%d",
-            "late-failure", level=logging.WARNING,
+            "late-failure",
+            level=logging.WARNING,
         )
     finally:
         await asyncio.gather(hb_task, return_exceptions=True)

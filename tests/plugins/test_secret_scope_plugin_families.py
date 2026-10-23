@@ -54,6 +54,7 @@ def multiplex_scope():
 # Family A — memory plugins
 # ---------------------------------------------------------------------------
 
+
 class TestMemoryFamily:
     def test_retaindb_scoped_key_wins(self, multiplex_scope, monkeypatch):
         monkeypatch.setenv("RETAINDB_API_KEY", "env-other-profile")
@@ -79,6 +80,7 @@ class TestMemoryFamily:
 # Family B — image_gen plugins
 # ---------------------------------------------------------------------------
 
+
 class TestImageGenFamily:
     def test_deepinfra_scoped_key_wins(self, multiplex_scope, monkeypatch):
         monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
@@ -102,6 +104,7 @@ class TestImageGenFamily:
 # ---------------------------------------------------------------------------
 # Family C — browser/web plugins
 # ---------------------------------------------------------------------------
+
 
 class TestBrowserFamily:
     def test_firecrawl_scoped_key_wins(self, multiplex_scope, monkeypatch):
@@ -128,6 +131,7 @@ class TestBrowserFamily:
 # ---------------------------------------------------------------------------
 # Family E — google_meet spawn-wrap
 # ---------------------------------------------------------------------------
+
 
 class TestGoogleMeetSpawn:
     def test_child_env_carries_scoped_openai_key(

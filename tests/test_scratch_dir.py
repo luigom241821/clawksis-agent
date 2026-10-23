@@ -26,7 +26,13 @@ def test_scratch_env_follows_home_and_respects_user_tmpdir(tmp_path):
     env = {"CLAWK_HOME": str(home_a)}
     assert apply_scratch_tmp_env(env) is True
     scratch_a = str(home_a / "cache" / "scratch")
-    assert env["TMPDIR"] == env["TMP"] == env["TEMP"] == env["CLAWK_SCRATCH_DIR"] == scratch_a
+    assert (
+        env["TMPDIR"]
+        == env["TMP"]
+        == env["TEMP"]
+        == env["CLAWK_SCRATCH_DIR"]
+        == scratch_a
+    )
     assert os.path.isdir(scratch_a)
 
     env["CLAWK_HOME"] = str(home_b)  # child served under another profile's home
@@ -35,20 +41,35 @@ def test_scratch_env_follows_home_and_respects_user_tmpdir(tmp_path):
 
     user_env = {"CLAWK_HOME": str(home_a), "TMPDIR": "/var/folders/zz"}
     assert apply_scratch_tmp_env(user_env) is False
-    assert user_env["TMPDIR"] == "/var/folders/zz" and "CLAWK_SCRATCH_DIR" not in user_env
+    assert (
+        user_env["TMPDIR"] == "/var/folders/zz" and "CLAWK_SCRATCH_DIR" not in user_env
+    )
     assert "TMP" not in user_env  # a partially user-set triple is left exactly as found
 
 
 def test_bootstrap_import_exports_scratch_to_process_and_children(tmp_path):
     """``import clawk_bootstrap`` alone makes ``tempfile`` (this process AND a child) land in scratch."""
-    env = {k: v for k, v in os.environ.items() if k not in ("TMPDIR", "TMP", "TEMP", "CLAWK_SCRATCH_DIR")}
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("TMPDIR", "TMP", "TEMP", "CLAWK_SCRATCH_DIR")
+    }
     env["CLAWK_HOME"] = str(tmp_path)
-    code = ("import tempfile, os, subprocess, sys; import clawk_bootstrap; "
-            "print(tempfile.gettempdir()); "
-            "print(subprocess.run([sys.executable, '-c', 'import tempfile;print(tempfile.gettempdir())'],"
-            " capture_output=True, text=True).stdout.strip())")
-    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, encoding="utf-8",
-                         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))), check=True)
+    code = (
+        "import tempfile, os, subprocess, sys; import clawk_bootstrap; "
+        "print(tempfile.gettempdir()); "
+        "print(subprocess.run([sys.executable, '-c', 'import tempfile;print(tempfile.gettempdir())'],"
+        " capture_output=True, text=True).stdout.strip())"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        check=True,
+    )
     expected = str(tmp_path / "cache" / "scratch")
     assert out.stdout.split() == [expected, expected]
 
@@ -112,8 +133,14 @@ class TestScratchDirPermissionPolicy:
         # scratch dir it exercises (`get_scratch_dir(home)` reads the marker there), and the real
         # home's own marker must not leak into callers that still resolve the effective home.
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
-        for var in ("CLAWK_HOME_MODE", "CLAWK_MANAGED", "CLAWK_CONTAINER",
-                    "CLAWK_SKIP_CHMOD", "CLAWK_UID", "CLAWK_GID"):
+        for var in (
+            "CLAWK_HOME_MODE",
+            "CLAWK_MANAGED",
+            "CLAWK_CONTAINER",
+            "CLAWK_SKIP_CHMOD",
+            "CLAWK_UID",
+            "CLAWK_GID",
+        ):
             monkeypatch.delenv(var, raising=False)
 
     def test_default_is_owner_only(self, tmp_path, monkeypatch):
@@ -121,7 +148,9 @@ class TestScratchDirPermissionPolicy:
         scratch = get_scratch_dir(tmp_path, prune=False)
         assert stat.S_IMODE(os.stat(scratch).st_mode) == 0o700
 
-    def test_explicit_home_mode_uses_native_chmod_semantics(self, tmp_path, monkeypatch):
+    def test_explicit_home_mode_uses_native_chmod_semantics(
+        self, tmp_path, monkeypatch
+    ):
         self._isolate_env(monkeypatch, tmp_path)
         probe = tmp_path / "mode-probe"
         probe.mkdir()
@@ -139,7 +168,9 @@ class TestScratchDirPermissionPolicy:
         scratch = get_scratch_dir(tmp_path, prune=False)
         assert stat.S_IMODE(os.stat(scratch).st_mode) == expected
 
-    def test_managed_marker_file_leaves_preexisting_mode_untouched(self, tmp_path, monkeypatch):
+    def test_managed_marker_file_leaves_preexisting_mode_untouched(
+        self, tmp_path, monkeypatch
+    ):
         home = tmp_path / "home"
         home.mkdir()
         self._isolate_env(monkeypatch, tmp_path)
@@ -175,7 +206,9 @@ class TestScratchDirPermissionPolicy:
         scratch = get_scratch_dir(home, prune=False)
         assert stat.S_IMODE(os.stat(scratch).st_mode) == expected
 
-    def test_effective_home_marker_does_not_govern_another_homes_scratch(self, tmp_path, monkeypatch):
+    def test_effective_home_marker_does_not_govern_another_homes_scratch(
+        self, tmp_path, monkeypatch
+    ):
         # The caller's home decides the policy. A boot caller (``export_scratch_tmp_env``) and
         # ``clawk doctor`` have already resolved theirs, so the marker lookup must not fall back
         # to ``get_clawk_home()``: for a sticky profile with CLAWK_HOME unset that lookup warns
@@ -188,9 +221,13 @@ class TestScratchDirPermissionPolicy:
         pre = other / "cache" / "scratch"
         pre.mkdir(parents=True)
         os.chmod(pre, 0o750)
-        assert stat.S_IMODE(os.stat(get_scratch_dir(other, prune=False)).st_mode) == 0o700
+        assert (
+            stat.S_IMODE(os.stat(get_scratch_dir(other, prune=False)).st_mode) == 0o700
+        )
 
-    def test_canonical_container_signal_without_env_override_keeps_operator_mode(self, tmp_path, monkeypatch):
+    def test_canonical_container_signal_without_env_override_keeps_operator_mode(
+        self, tmp_path, monkeypatch
+    ):
         # Podman/containerd/K8s runtimes often don't export CLAWK_CONTAINER; the canonical
         # _detect_container breadth (not the narrower legacy signal set) must skip the chmod.
         self._isolate_env(monkeypatch, tmp_path)
@@ -201,7 +238,9 @@ class TestScratchDirPermissionPolicy:
         scratch = get_scratch_dir(tmp_path, prune=False)
         assert stat.S_IMODE(os.stat(scratch).st_mode) == 0o750
 
-    def test_repeated_calls_do_not_strip_filesystem_supported_mode_bits(self, tmp_path, monkeypatch):
+    def test_repeated_calls_do_not_strip_filesystem_supported_mode_bits(
+        self, tmp_path, monkeypatch
+    ):
         self._isolate_env(monkeypatch, tmp_path)
         probe = tmp_path / "mode-probe"
         probe.mkdir()
@@ -212,18 +251,26 @@ class TestScratchDirPermissionPolicy:
         assert first == second
         assert stat.S_IMODE(os.stat(second).st_mode) == expected
 
-    def test_container_keeps_operator_mode_but_honors_explicit(self, tmp_path, monkeypatch):
+    def test_container_keeps_operator_mode_but_honors_explicit(
+        self, tmp_path, monkeypatch
+    ):
         self._isolate_env(monkeypatch, tmp_path)
         monkeypatch.setenv("CLAWK_CONTAINER", "1")
         pre = tmp_path / "cache" / "scratch"
         pre.mkdir(parents=True)
         os.chmod(pre, 0o750)
-        assert stat.S_IMODE(os.stat(get_scratch_dir(tmp_path, prune=False)).st_mode) == 0o750
+        assert (
+            stat.S_IMODE(os.stat(get_scratch_dir(tmp_path, prune=False)).st_mode)
+            == 0o750
+        )
         probe = tmp_path / "mode-probe"
         probe.mkdir()
         expected = self._native_mode_after_chmod(probe)
         monkeypatch.setenv("CLAWK_HOME_MODE", "2770")
-        assert stat.S_IMODE(os.stat(get_scratch_dir(tmp_path, prune=False)).st_mode) == expected
+        assert (
+            stat.S_IMODE(os.stat(get_scratch_dir(tmp_path, prune=False)).st_mode)
+            == expected
+        )
 
     def test_clawk_uid_gid_applied_to_scratch(self, tmp_path, monkeypatch):
         self._isolate_env(monkeypatch, tmp_path)
@@ -295,8 +342,11 @@ def test_prune_records_removals_and_kills_in_scratch_prune_log(tmp_path: Path) -
         (entry / "out.md").write_text("deliverable", encoding="utf-8")
         for path in (entry / "out.md", entry):
             os.utime(path, (ancient, ancient))
-    worker = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], cwd=str(gone),
-                              stdin=subprocess.DEVNULL)
+    worker = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"],
+        cwd=str(gone),
+        stdin=subprocess.DEVNULL,
+    )
     real_rmtree = shutil.rmtree
 
     def rmtree(path: str | os.PathLike[str], *args: object, **kwargs: object) -> None:
@@ -314,7 +364,10 @@ def test_prune_records_removals_and_kills_in_scratch_prune_log(tmp_path: Path) -
     log = (tmp_path / "logs" / "scratch-prune.log").read_text(encoding="utf-8-sig")
     assert f"removed {str(gone)!r} (" in log
     assert f"sent TERM pid={worker.pid} " in log
-    assert f"could not fully remove {str(stuck)!r}" in log and f"removed {str(stuck)!r}" not in log
+    assert (
+        f"could not fully remove {str(stuck)!r}" in log
+        and f"removed {str(stuck)!r}" not in log
+    )
 
 
 @pytest.mark.platforms("linux")  # macOS and Windows filesystems reject non-UTF-8 names
@@ -341,14 +394,19 @@ def test_prune_log_escapes_newline_in_name(tmp_path: Path) -> None:
     ancient = time.time() - 30 * 3600
     os.utime(entry, (ancient, ancient))
     assert prune_scratch_dir(scratch) == 1
-    lines = (tmp_path / "logs" / "scratch-prune.log").read_text(encoding="utf-8-sig").splitlines()
+    lines = (
+        (tmp_path / "logs" / "scratch-prune.log")
+        .read_text(encoding="utf-8-sig")
+        .splitlines()
+    )
     assert len(lines) == 1
     assert "old\\nscratch prune: removed fake-entry" in lines[0]
 
 
 @pytest.mark.platforms("posix")  # POSIX rename semantics
 def test_prune_log_keeps_record_when_another_prune_rotated_first(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Two prunes of one home can both reach rollover: the other one renames
     ``scratch-prune.log`` between this one's existence check and its rename. The rotation is
@@ -376,8 +434,10 @@ def test_prune_log_keeps_record_when_another_prune_rotated_first(
     monkeypatch.setattr(os, "rename", rename)
     assert prune_scratch_dir(scratch) == 1
     assert raced
-    records = "".join(p.read_text(encoding="utf-8-sig", errors="replace")
-                      for p in log.parent.glob("scratch-prune.log*"))
+    records = "".join(
+        p.read_text(encoding="utf-8-sig", errors="replace")
+        for p in log.parent.glob("scratch-prune.log*")
+    )
     assert f"removed {str(entry)!r} (" in records
 
 
@@ -387,10 +447,21 @@ def test_prune_releases_git_worktree_registration_of_idle_entry(tmp_path):
     import subprocess
 
     def git(*args, cwd):
-        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True,
-                       stdin=subprocess.DEVNULL, env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull,
-                                                     "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@x",
-                                                     "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@x"})
+        subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            env={
+                **os.environ,
+                "GIT_CONFIG_GLOBAL": os.devnull,
+                "GIT_AUTHOR_NAME": "t",
+                "GIT_AUTHOR_EMAIL": "t@x",
+                "GIT_COMMITTER_NAME": "t",
+                "GIT_COMMITTER_EMAIL": "t@x",
+            },
+        )
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -406,16 +477,25 @@ def test_prune_releases_git_worktree_registration_of_idle_entry(tmp_path):
     for dirpath, dirnames, filenames in os.walk(tree.parent):
         for name in dirnames + filenames:
             try:
-                os.utime(os.path.join(dirpath, name), (ancient, ancient), follow_symlinks=False)
+                os.utime(
+                    os.path.join(dirpath, name),
+                    (ancient, ancient),
+                    follow_symlinks=False,
+                )
             except NotImplementedError:
                 # Windows: os.utime has no follow_symlinks parameter.
                 os.utime(os.path.join(dirpath, name), (ancient, ancient))
     os.utime(tree.parent, (ancient, ancient))
     assert prune_scratch_dir(scratch) == 1
-    listing = subprocess.run(["git", "worktree", "list", "--porcelain"], cwd=repo, capture_output=True,
-                             text=True, stdin=subprocess.DEVNULL, check=True).stdout
+    listing = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=True,
+    ).stdout
     assert str(tree) not in listing and not tree.exists()
-
 
 
 def test_write_during_size_walk_is_rescued(tmp_path: Path) -> None:
@@ -441,9 +521,12 @@ def test_write_during_size_walk_is_rescued(tmp_path: Path) -> None:
 
     with patch("clawk_constants_scratch._tree_bytes", write_during_size_walk):
         assert prune_scratch_dir(scratch) == 0
-    assert payload.read_text(encoding="utf-8-sig") == "FRESH", "write during size walk was destroyed"
+    assert payload.read_text(encoding="utf-8-sig") == "FRESH", (
+        "write during size walk was destroyed"
+    )
     log = (tmp_path / "logs" / "scratch-prune.log").read_text(encoding="utf-8-sig")
     assert f"rescued {str(entry)!r} " in log, log
+
 
 def test_midprune_resumed_write_is_rescued(tmp_path: Path) -> None:
     """F1 on #132401, ported from 3f72fd9c8e (#132455): a writer whose cwd is outside
@@ -476,7 +559,9 @@ def test_midprune_resumed_write_is_rescued(tmp_path: Path) -> None:
     assert f"removed {str(entry)!r} (" not in log, log
 
 
-def test_midprune_nested_overwrite_is_rescued_by_descending_recheck(tmp_path: Path) -> None:
+def test_midprune_nested_overwrite_is_rescued_by_descending_recheck(
+    tmp_path: Path,
+) -> None:
     """Greptile P2 on #134173: the mid-prune re-validation must descend the whole
     subtree, and the original rescue test could not pin that — a fresh file created
     directly in ``entry`` also bumps the entry directory's own mtime, so a shallow
@@ -501,7 +586,9 @@ def test_midprune_nested_overwrite_is_rescued_by_descending_recheck(tmp_path: Pa
         payload.write_text("FRESH OVERWRITE, DEEP\n", encoding="utf-8")
         return 0
 
-    with patch("clawk_constants_scratch.reap_processes_rooted_in", overwrite_during_reap):
+    with patch(
+        "clawk_constants_scratch.reap_processes_rooted_in", overwrite_during_reap
+    ):
         assert prune_scratch_dir(scratch) == 0  # rescued — not counted as removed
     assert payload.read_text(encoding="utf-8-sig") == "FRESH OVERWRITE, DEEP\n", (
         "deep mid-prune overwrite was destroyed"
@@ -571,9 +658,11 @@ def test_postremoval_unreadable_entry_is_not_counted_as_removed(tmp_path: Path) 
             raise PermissionError("post-rmtree visibility denied")
         return real_lstat(path, *args, **kwargs)
 
-    with patch("clawk_constants_scratch.reap_processes_rooted_in", lambda *a, **k: 0), \
-         patch("clawk_constants_scratch.shutil.rmtree", rmtree_leaves_residue), \
-         patch("clawk_constants_scratch.os.lstat", lstat):
+    with (
+        patch("clawk_constants_scratch.reap_processes_rooted_in", lambda *a, **k: 0),
+        patch("clawk_constants_scratch.shutil.rmtree", rmtree_leaves_residue),
+        patch("clawk_constants_scratch.os.lstat", lstat),
+    ):
         assert prune_scratch_dir(scratch) == 0  # unknown, not removed
     assert entry.exists() and payload.read_text(encoding="utf-8-sig") == "still here"
     log = log_file.read_text(encoding="utf-8-sig")
@@ -584,7 +673,9 @@ def test_postremoval_unreadable_entry_is_not_counted_as_removed(tmp_path: Path) 
 
 @pytest.mark.platforms("posix")
 @pytest.mark.live_system_guard_bypass  # a red run must kill the orphan this test made (reparented to init)
-def test_prune_keeps_entry_a_registered_clawk_process_works_in_but_reaps_orphans(tmp_path, monkeypatch):
+def test_prune_keeps_entry_a_registered_clawk_process_works_in_but_reaps_orphans(
+    tmp_path, monkeypatch
+):
     """#132401 live-worker guard: a background process Clawksis itself started (tracked in the
     process registry's ``processes.json``) is never reaped, and the idle entry it works in is
     kept with an audit line. The orphaned grandchild of a registered shell that already exited
@@ -600,12 +691,24 @@ def test_prune_keeps_entry_a_registered_clawk_process_works_in_but_reaps_orphans
     pidfile = tmp_path / "orphan.pid"
     registry = ProcessRegistry()
     worker = registry.spawn_local(sleeper, cwd=str(owned_dir))
-    lane = registry.spawn_local(f"{sleeper} >/dev/null 2>&1 </dev/null & echo $! > {shlex.quote(str(pidfile))}",
-                                cwd=str(orphan_dir))
+    lane = registry.spawn_local(
+        f"{sleeper} >/dev/null 2>&1 </dev/null & echo $! > {shlex.quote(str(pidfile))}",
+        cwd=str(orphan_dir),
+    )
+
     def _lane_done():
         registry.poll(lane.id)
-        return lane.exited and pidfile.exists() and pidfile.read_text(encoding="utf-8-sig").strip()
-    orphan = int(wait_until(_lane_done, timeout=15, what="lane shell exits after forking its orphan"))
+        return (
+            lane.exited
+            and pidfile.exists()
+            and pidfile.read_text(encoding="utf-8-sig").strip()
+        )
+
+    orphan = int(
+        wait_until(
+            _lane_done, timeout=15, what="lane shell exits after forking its orphan"
+        )
+    )
     ancient = time.time() - 30 * 3600
     for path in (owned_dir, orphan_dir):
         os.utime(path, (ancient, ancient))
@@ -613,11 +716,13 @@ def test_prune_keeps_entry_a_registered_clawk_process_works_in_but_reaps_orphans
         assert prune_scratch_dir(scratch) == 1
         assert owned_dir.exists() and not orphan_dir.exists()
         assert worker.process.poll() is None, "registered Clawksis worker was reaped"
+
         def _orphan_gone():
             try:
                 return psutil.Process(orphan).status() == psutil.STATUS_ZOMBIE
             except psutil.NoSuchProcess:
                 return True
+
         wait_until(_orphan_gone, timeout=10, what="orphan reaped")
         log = (tmp_path / "logs" / "scratch-prune.log").read_text(encoding="utf-8-sig")
         assert f"kept {str(owned_dir)!r} — live Clawksis process pid=" in log, log
@@ -628,7 +733,9 @@ def test_prune_keeps_entry_a_registered_clawk_process_works_in_but_reaps_orphans
 
 
 @pytest.mark.platforms("posix")
-def test_prune_keeps_entry_the_pruning_sessions_own_lineage_works_in(tmp_path, monkeypatch):
+def test_prune_keeps_entry_the_pruning_sessions_own_lineage_works_in(
+    tmp_path, monkeypatch
+):
     """#132401 review: a live session inside an idle entry that launches another Clawksis
     command is the pruner's ancestor — never signalled, and its entry must not be deleted
     from under it either."""
@@ -644,7 +751,9 @@ def test_prune_keeps_entry_the_pruning_sessions_own_lineage_works_in(tmp_path, m
 
 @pytest.mark.platforms("posix")
 @pytest.mark.live_system_guard_bypass  # the helper outlives the spawner the test killed
-def test_prune_owner_lookup_survives_symlinked_scratch_and_drops_orphaned_mcp_helpers(tmp_path, monkeypatch):
+def test_prune_owner_lookup_survives_symlinked_scratch_and_drops_orphaned_mcp_helpers(
+    tmp_path, monkeypatch
+):
     """#132401 review: the owning home comes from the configured scratch path even when it is a
     symlink onto another disk, and an MCP helper whose recorded spawner died is an orphan again
     (reaped, entry removed) while a live background worker keeps its entry."""
@@ -664,32 +773,56 @@ def test_prune_owner_lookup_survives_symlinked_scratch_and_drops_orphaned_mcp_he
     helper_dir.mkdir()
     sleeper = [sys.executable, "-c", "import time; time.sleep(60)"]
     registry = ProcessRegistry()
-    worker = registry.spawn_local(" ".join(shlex.quote(a) for a in sleeper), cwd=str(owned_dir))
+    worker = registry.spawn_local(
+        " ".join(shlex.quote(a) for a in sleeper), cwd=str(owned_dir)
+    )
     helper = subprocess.Popen(sleeper, cwd=str(helper_dir), stdin=subprocess.DEVNULL)
     # A real spawner registers the helper the way the MCP client does, then dies.
     repo = str(Path(__file__).resolve().parents[1])
     spawner = subprocess.Popen(
-        [sys.executable, "-c",
-         f"import sys; sys.path.insert(0, {repo!r}); from clawk_cli.process_identity import register_child; "
-         f"assert register_child({helper.pid}, 'mcp-helper'); import time; time.sleep(60)"],
-        stdin=subprocess.DEVNULL, env={**os.environ, "CLAWK_HOME": str(home)})
-    wait_until(lambda: helper.pid in {e.get("pid") for e in process_identity.ledger_entries(all_installs=True)},
-               timeout=20, what="spawner registered the mcp-helper")
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, {repo!r}); from clawk_cli.process_identity import register_child; "
+            f"assert register_child({helper.pid}, 'mcp-helper'); import time; time.sleep(60)",
+        ],
+        stdin=subprocess.DEVNULL,
+        env={**os.environ, "CLAWK_HOME": str(home)},
+    )
+    wait_until(
+        lambda: (
+            helper.pid
+            in {
+                e.get("pid") for e in process_identity.ledger_entries(all_installs=True)
+            }
+        ),
+        timeout=20,
+        what="spawner registered the mcp-helper",
+    )
     spawner.kill()
     spawner.wait(timeout=10)
-    assert process_identity.spawner_is_dead(next(
-        e for e in process_identity.ledger_entries(all_installs=True) if e.get("pid") == helper.pid)) is True
+    assert (
+        process_identity.spawner_is_dead(
+            next(
+                e
+                for e in process_identity.ledger_entries(all_installs=True)
+                if e.get("pid") == helper.pid
+            )
+        )
+        is True
+    )
     ancient = time.time() - 30 * 3600
     for path in (owned_dir, helper_dir):
         os.utime(path, (ancient, ancient))
     try:
         assert prune_scratch_dir(scratch) == 1
         assert owned_dir.exists() and not helper_dir.exists()
-        assert worker.process.poll() is None, "registered worker under a symlinked scratch was reaped"
+        assert worker.process.poll() is None, (
+            "registered worker under a symlinked scratch was reaped"
+        )
         assert helper.wait(timeout=10) is not None, "orphaned mcp-helper was kept"
     finally:
         registry.kill_process(worker.id)
         if helper.poll() is None:
             helper.kill()
             helper.wait(timeout=10)
-

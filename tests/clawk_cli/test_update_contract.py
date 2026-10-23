@@ -24,14 +24,18 @@ from clawk_cli.update_contract import (
 
 def _valid_marker(tmp_path: Path) -> Path:
     marker = tmp_path / "image-provenance.json"
-    marker.write_text(json.dumps({
-        "schema": 1,
-        "deployment_kind": "image",
-        "manager": "docker",
-        "image": "nousresearch/clawksis-agent",
-        "version": "1.0.0",
-        "revision": "a" * 40,
-    }))
+    marker.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "deployment_kind": "image",
+                "manager": "docker",
+                "image": "nousresearch/clawksis-agent",
+                "version": "1.0.0",
+                "revision": "a" * 40,
+            }
+        )
+    )
     return marker
 
 
@@ -56,10 +60,24 @@ def test_reader_valid_marker(tmp_path):
     [
         ("not json {", "marker_unreadable"),
         (json.dumps([1, 2]), "marker_not_object"),
-        (json.dumps({"schema": True, "deployment_kind": "image", "manager": "docker"}), "unsupported_marker_schema"),
-        (json.dumps({"schema": 2, "deployment_kind": "image", "manager": "docker"}), "unsupported_marker_schema"),
-        (json.dumps({"schema": 1, "deployment_kind": "source", "manager": "docker"}), "invalid_deployment_kind"),
-        (json.dumps({"schema": 1, "deployment_kind": "image", "manager": "  "}), "missing_manager"),
+        (
+            json.dumps(
+                {"schema": True, "deployment_kind": "image", "manager": "docker"}
+            ),
+            "unsupported_marker_schema",
+        ),
+        (
+            json.dumps({"schema": 2, "deployment_kind": "image", "manager": "docker"}),
+            "unsupported_marker_schema",
+        ),
+        (
+            json.dumps({"schema": 1, "deployment_kind": "source", "manager": "docker"}),
+            "invalid_deployment_kind",
+        ),
+        (
+            json.dumps({"schema": 1, "deployment_kind": "image", "manager": "  "}),
+            "missing_manager",
+        ),
     ],
 )
 def test_reader_fails_closed_on_malformed(tmp_path, payload, reason_prefix):
@@ -93,9 +111,7 @@ def test_admission_marker_refuses_even_on_git_checkout(tmp_path, monkeypatch):
     import clawk_cli.image_provenance as ip
 
     monkeypatch.setattr(ip, "IMAGE_PROVENANCE_PATH", _valid_marker(tmp_path))
-    monkeypatch.setattr(
-        "clawk_cli.config.detect_install_method", lambda *a, **k: "git"
-    )
+    monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "git")
     refusal = evaluate_update_admission(tmp_path)
     assert refusal is not None
     assert refusal.code == "image-marker"
@@ -129,9 +145,7 @@ def test_admission_git_checkout_no_marker_is_admitted(tmp_path, monkeypatch):
     import clawk_cli.image_provenance as ip
 
     monkeypatch.setattr(ip, "IMAGE_PROVENANCE_PATH", tmp_path / "absent.json")
-    monkeypatch.setattr(
-        "clawk_cli.config.detect_install_method", lambda *a, **k: "git"
-    )
+    monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "git")
     assert evaluate_update_admission(tmp_path) is None
 
 
@@ -139,6 +153,7 @@ def test_admission_nix_refuses(tmp_path, monkeypatch):
     import clawk_cli.image_provenance as ip
 
     monkeypatch.setattr(ip, "IMAGE_PROVENANCE_PATH", tmp_path / "absent.json")
+
     def _detect(*a, **k):
         return "nix"
 
@@ -185,13 +200,13 @@ def _sealed_tree(tmp_path: Path, distribution: str) -> Path:
     """A sealed (no .git) tree stamped with ``distribution``."""
     root = tmp_path / "sealed"
     root.mkdir(parents=True, exist_ok=True)
-    (root / "install-stamp.json").write_text(
-        json.dumps({"distribution": distribution})
-    )
+    (root / "install-stamp.json").write_text(json.dumps({"distribution": distribution}))
     return root
 
 
-def test_admission_source_checkout_on_termux_host_refuses_with_apt_hint(tmp_path, monkeypatch):
+def test_admission_source_checkout_on_termux_host_refuses_with_apt_hint(
+    tmp_path, monkeypatch
+):
     """A git checkout is normally admitted, but not on a Termux host: the
     lock has no Android wheels, so a source sync would build sdists on the
     phone. The refusal must point at the APT package, never `clawk update`."""
@@ -207,7 +222,9 @@ def test_admission_source_checkout_on_termux_host_refuses_with_apt_hint(tmp_path
     assert refusal.update_command == "pkg install clawksis-agent"
     assert "clawk update" not in refusal.update_command
     monkeypatch.setenv("PREFIX", "/usr")
-    assert evaluate_update_admission(tmp_path) is None, "the same checkout off Termux stays updatable"
+    assert evaluate_update_admission(tmp_path) is None, (
+        "the same checkout off Termux stays updatable"
+    )
 
 
 def test_admission_apt_termux_refuses_with_pkg_upgrade(tmp_path, monkeypatch):
@@ -217,9 +234,7 @@ def test_admission_apt_termux_refuses_with_pkg_upgrade(tmp_path, monkeypatch):
     import clawk_cli.image_provenance as ip
 
     monkeypatch.setattr(ip, "IMAGE_PROVENANCE_PATH", tmp_path / "absent.json")
-    monkeypatch.setattr(
-        "clawk_cli.config.detect_install_method", lambda *a, **k: "git"
-    )
+    monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "git")
     root = _sealed_tree(tmp_path, "apt-termux")
     refusal = evaluate_update_admission(root)
     assert refusal is not None
@@ -237,9 +252,7 @@ def test_admission_apt_termux_command_comes_from_steward_table(tmp_path, monkeyp
     import clawk_cli.image_provenance as ip
 
     monkeypatch.setattr(ip, "IMAGE_PROVENANCE_PATH", tmp_path / "absent.json")
-    monkeypatch.setattr(
-        "clawk_cli.config.detect_install_method", lambda *a, **k: "git"
-    )
+    monkeypatch.setattr("clawk_cli.config.detect_install_method", lambda *a, **k: "git")
     # Prove the table is the source: a table edit flows into the refusal.
     monkeypatch.setitem(
         config_mod._UPDATE_COMMAND_BY_METHOD,

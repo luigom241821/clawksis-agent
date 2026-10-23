@@ -171,8 +171,7 @@ def restore_cron_prompt_fields_if_degraded(
         restored_ids = _restore_under_cron_lock(home, snap_prompts)
     except (OSError, RuntimeError) as exc:
         logger.error(
-            "Cron job prompts were degraded during update but auto-restore "
-            "failed: %s",
+            "Cron job prompts were degraded during update but auto-restore failed: %s",
             exc,
         )
         return None

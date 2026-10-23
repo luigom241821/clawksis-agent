@@ -1,4 +1,5 @@
 """`clawk plugins update` with no name: offer every plugin that has an update, never move one silently."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,7 +14,9 @@ def _parse(argv):
     from clawk_cli.subcommands.plugins import build_plugins_parser
 
     parser = argparse.ArgumentParser(prog="clawk")
-    build_plugins_parser(parser.add_subparsers(dest="command"), cmd_plugins=plugins_command)
+    build_plugins_parser(
+        parser.add_subparsers(dest="command"), cmd_plugins=plugins_command
+    )
     return parser.parse_args(["plugins", *argv])
 
 
@@ -23,27 +26,43 @@ def fleet(monkeypatch, tmp_path):
     from clawk_cli import plugins_cmd, plugins_cmd_update, plugins_updates
 
     rows = [
-        CheckResult("cat", "catalog", current="a" * 40, latest="b" * 40, update_available=True),
-        CheckResult("gitty", "git", current="c" * 40, latest="d" * 40, update_available=True),
+        CheckResult(
+            "cat", "catalog", current="a" * 40, latest="b" * 40, update_available=True
+        ),
+        CheckResult(
+            "gitty", "git", current="c" * 40, latest="d" * 40, update_available=True
+        ),
         CheckResult("pypkg", "pip", current="1.0", latest="1.1", update_available=True),
-        CheckResult("pinned", "git", current="e" * 40, update_available=False, reason="pinned @ eeee"),
+        CheckResult(
+            "pinned",
+            "git",
+            current="e" * 40,
+            update_available=False,
+            reason="pinned @ eeee",
+        ),
     ]
     calls = []
 
     def fake_update(name, target, console, *, interactive=True):
         calls.append((name, interactive))
         if name == "cat":
-            raise TimeoutError("catalog pin refused")  # not a typed refusal: the batch must still go on
+            raise TimeoutError(
+                "catalog pin refused"
+            )  # not a typed refusal: the batch must still go on
         return True
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(plugins_updates, "run_checks", lambda plugins_dir, **kw: rows)
-    monkeypatch.setattr(plugins_cmd, "_user_installed_plugin_dir", lambda name: tmp_path / name)
+    monkeypatch.setattr(
+        plugins_cmd, "_user_installed_plugin_dir", lambda name: tmp_path / name
+    )
     monkeypatch.setattr(plugins_cmd_update, "update_one", fake_update)
     return calls
 
 
-def test_no_terminal_refuses_without_yes_and_updates_only_movable_rows_with_it(fleet, monkeypatch, capsys):
+def test_no_terminal_refuses_without_yes_and_updates_only_movable_rows_with_it(
+    fleet, monkeypatch, capsys
+):
     from clawk_cli import plugins_cmd
 
     monkeypatch.setattr(plugins_cmd, "_is_tty", lambda: False)
@@ -69,6 +88,8 @@ def test_terminal_asks_once_and_cancel_moves_nothing(fleet, monkeypatch, capsys)
 
     monkeypatch.setattr(plugins_cmd, "_is_tty", lambda: True)
     prompts = []
-    monkeypatch.setattr("builtins.input", lambda prompt="": prompts.append(prompt) or "n")
+    monkeypatch.setattr(
+        "builtins.input", lambda prompt="": prompts.append(prompt) or "n"
+    )
     plugins_cmd.plugins_command(_parse(["update"]))
     assert prompts == ["\nUpdate all 2? [Y/n]: "] and fleet == []

@@ -52,8 +52,12 @@ class PromptReceiptResult(AdmissionStatus):
     usage: dict[str, JsonValue] | None = None
 
 
-canonical_method("prompt.receipt", params=PromptReceiptParams, result=PromptReceiptResult,
-                 doc="Current receipt of one admission the caller submitted (or controls).")
+canonical_method(
+    "prompt.receipt",
+    params=PromptReceiptParams,
+    result=PromptReceiptResult,
+    doc="Current receipt of one admission the caller submitted (or controls).",
+)
 
 
 class PromptCancelParams(Params):
@@ -61,8 +65,12 @@ class PromptCancelParams(Params):
     admission_id: str
 
 
-canonical_method("prompt.cancel", params=PromptCancelParams, result=AdmissionStatus,
-                 doc="Retire a still-queued admission; a started one is unaffected.")
+canonical_method(
+    "prompt.cancel",
+    params=PromptCancelParams,
+    result=AdmissionStatus,
+    doc="Retire a still-queued admission; a started one is unaffected.",
+)
 
 
 class PromptResolveUnknownParams(Params):
@@ -71,9 +79,13 @@ class PromptResolveUnknownParams(Params):
     execution_generation: int
 
 
-canonical_method("prompt.resolve_unknown", params=PromptResolveUnknownParams, result=AdmissionStatus,
-                 doc="Acknowledge a turn lost across an owner restart; the FIFO behind it resumes. "
-                     "Never requeues the lost input.")
+canonical_method(
+    "prompt.resolve_unknown",
+    params=PromptResolveUnknownParams,
+    result=AdmissionStatus,
+    doc="Acknowledge a turn lost across an owner restart; the FIFO behind it resumes. "
+    "Never requeues the lost input.",
+)
 
 
 # ── session ───────────────────────────────────────────────────────────────────────────────────
@@ -104,9 +116,13 @@ class SessionMutateResult(OpenModel):
     revision: int | None = None
 
 
-canonical_method("session.mutate", params=SessionMutateParams, result=SessionMutateResult,
-                 doc="Revision-fenced, retry-idempotent session edit (rename, archive, sidebar, branch, "
-                     "delete, rewind, reset, model, reasoning, workspace, edit_policy, compress, import).")
+canonical_method(
+    "session.mutate",
+    params=SessionMutateParams,
+    result=SessionMutateResult,
+    doc="Revision-fenced, retry-idempotent session edit (rename, archive, sidebar, branch, "
+    "delete, rewind, reset, model, reasoning, workspace, edit_policy, compress, import).",
+)
 
 
 class SessionPruneParams(Params):
@@ -123,9 +139,13 @@ class SessionPruneResult(Result):
     skipped: int | None = None
 
 
-canonical_method("session.prune", params=SessionPruneParams, result=SessionPruneResult,
-                 doc="Local operator only: the owner deletes the ended sessions `clawk sessions prune` "
-                     "selected, skipping busy sessions and retained reset owners.")
+canonical_method(
+    "session.prune",
+    params=SessionPruneParams,
+    result=SessionPruneResult,
+    doc="Local operator only: the owner deletes the ended sessions `clawk sessions prune` "
+    "selected, skipping busy sessions and retained reset owners.",
+)
 
 
 class CommandObserveParams(Params):
@@ -139,9 +159,13 @@ class CommandObserveResult(Result):
     queued: bool
 
 
-canonical_method("command.observe", params=CommandObserveParams, result=CommandObserveResult,
-                 doc="Fire-only: a recognized command the classic CLI or the TUI runs itself; the gateway fires "
-                     "`pre_command` for it in the session's profile after replying (`queued` false: not fired).")
+canonical_method(
+    "command.observe",
+    params=CommandObserveParams,
+    result=CommandObserveResult,
+    doc="Fire-only: a recognized command the classic CLI or the TUI runs itself; the gateway fires "
+    "`pre_command` for it in the session's profile after replying (`queued` false: not fired).",
+)
 
 
 class CanonicalSessionInfoParams(Params):
@@ -170,7 +194,9 @@ class SessionInventoryFields(Result):
     # Classic CLI surface (``source: cli``) only: main's startup lines under the banner (Rich markup).
     tool_availability_warnings: list[str] | None = None
     browser_backend_notice: str | None = None
-    unknown_toolsets: list[str] | None = None  # main's "Unknown toolsets" warning, judged by the gateway
+    unknown_toolsets: list[str] | None = (
+        None  # main's "Unknown toolsets" warning, judged by the gateway
+    )
 
 
 class CanonicalSessionInfo(SessionInventoryFields, OpenModel):
@@ -202,8 +228,12 @@ class CanonicalSessionInfo(SessionInventoryFields, OpenModel):
     config_warning: str | None = None
 
 
-canonical_method("session.info", params=CanonicalSessionInfoParams, result=CanonicalSessionInfo,
-                 doc="Frozen launch policy projection of one local session.")
+canonical_method(
+    "session.info",
+    params=CanonicalSessionInfoParams,
+    result=CanonicalSessionInfo,
+    doc="Frozen launch policy projection of one local session.",
+)
 
 
 class SessionStatsParams(Params):
@@ -240,8 +270,12 @@ class SessionStats(Result):
     plan_gauge: PlanGauge | None = None
 
 
-canonical_method("session.stats", params=SessionStatsParams, result=SessionStats,
-                 doc="The session.usage dict on demand: what main's classic CLI read off its agent.")
+canonical_method(
+    "session.stats",
+    params=SessionStatsParams,
+    result=SessionStats,
+    doc="The session.usage dict on demand: what main's classic CLI read off its agent.",
+)
 
 
 class RollbackSessionDiffParams(Params):
@@ -263,9 +297,13 @@ class RollbackSessionDiffResult(Result):
     error: str | None = None
 
 
-canonical_method("rollback.session_diff", params=RollbackSessionDiffParams, result=RollbackSessionDiffResult,
-                 doc="The classic CLI's /diff session: everything changed since the session's earliest "
-                     "retained checkpoint, as data for its terminal renderer.")
+canonical_method(
+    "rollback.session_diff",
+    params=RollbackSessionDiffParams,
+    result=RollbackSessionDiffResult,
+    doc="The classic CLI's /diff session: everything changed since the session's earliest "
+    "retained checkpoint, as data for its terminal renderer.",
+)
 
 
 class SessionExportParams(Params):
@@ -286,8 +324,12 @@ class SessionExportResult(Result):
     content: str
 
 
-canonical_method("session.export", params=SessionExportParams, result=SessionExportResult,
-                 doc="The /save transcript rendered for the client to write (the gateway writes nothing).")
+canonical_method(
+    "session.export",
+    params=SessionExportParams,
+    result=SessionExportResult,
+    doc="The /save transcript rendered for the client to write (the gateway writes nothing).",
+)
 
 
 class SessionAutomationParams(Params):
@@ -307,9 +349,13 @@ class SessionAutomationResult(Result):
     error: dict[str, str] | None = None
 
 
-canonical_method("session.automation", params=SessionAutomationParams, result=SessionAutomationResult,
-                 doc="The classic CLI's /goal, /subgoal, /loop, /heartbeat manager calls (state writes, the "
-                     "goal judge, quality gates), run by the owner on the session's row.")
+canonical_method(
+    "session.automation",
+    params=SessionAutomationParams,
+    result=SessionAutomationResult,
+    doc="The classic CLI's /goal, /subgoal, /loop, /heartbeat manager calls (state writes, the "
+    "goal judge, quality gates), run by the owner on the session's row.",
+)
 
 
 class SessionDetachParams(Params):
@@ -324,10 +370,14 @@ class SessionDetachResult(Result):
     detached: bool
 
 
-canonical_method("session.detach", params=SessionDetachParams, result=SessionDetachResult,
-                 doc="Drop this connection's subscription; a stale subscription id answers detached=false. "
-                     "end_reason (snake_case): the viewer is closing the conversation; the last viewer "
-                     "leaving an idle local session ends its row with that reason.")
+canonical_method(
+    "session.detach",
+    params=SessionDetachParams,
+    result=SessionDetachResult,
+    doc="Drop this connection's subscription; a stale subscription id answers detached=false. "
+    "end_reason (snake_case): the viewer is closing the conversation; the last viewer "
+    "leaving an idle local session ends its row with that reason.",
+)
 
 
 class RuntimeDescribeParams(Params):
@@ -349,8 +399,12 @@ class RuntimeDescribeResult(Result):
     skin: SkinPayload | None = None
 
 
-canonical_method("runtime.describe", params=RuntimeDescribeParams, result=RuntimeDescribeResult,
-                 doc="Owner identity and the canonical capabilities a client may rely on.")
+canonical_method(
+    "runtime.describe",
+    params=RuntimeDescribeParams,
+    result=RuntimeDescribeResult,
+    doc="Owner identity and the canonical capabilities a client may rely on.",
+)
 
 
 class ClarifyRespondParams(Params):
@@ -365,14 +419,22 @@ class PromptResponseResult(Result):
     prompt_id: str
 
 
-canonical_method("clarify.respond", params=ClarifyRespondParams, result=PromptResponseResult,
-                 doc="Generation-fenced answer to a pending clarify prompt (empty answer = skipped).")
+canonical_method(
+    "clarify.respond",
+    params=ClarifyRespondParams,
+    result=PromptResponseResult,
+    doc="Generation-fenced answer to a pending clarify prompt (empty answer = skipped).",
+)
 
 # The owner serves the sidecar's ``clarify.lock`` wire unchanged (``gateway/session_clarify_lock.py``):
 # declaring it here lets the dispatcher refuse a mistyped or unknown key before the handler runs.
-canonical_method("clarify.lock", params=ClarifyLockParams, result=ClarifyLockResult,
-                 doc="Lock one answer of the owner's batch clarify request (editable until every question is "
-                     "locked); only a viewer attached to that session with session:respond may lock.")
+canonical_method(
+    "clarify.lock",
+    params=ClarifyLockParams,
+    result=ClarifyLockResult,
+    doc="Lock one answer of the owner's batch clarify request (editable until every question is "
+    "locked); only a viewer attached to that session with session:respond may lock.",
+)
 
 
 # ── cron / kanban / a2a producers ─────────────────────────────────────────────────────────────
@@ -389,8 +451,12 @@ class CronSubmitResult(Result):
     admission_id: str
 
 
-canonical_method("cron.submit", params=CronRunParams, result=CronSubmitResult,
-                 doc="Admit one cron firing into the owning profile's durable FIFO.")
+canonical_method(
+    "cron.submit",
+    params=CronRunParams,
+    result=CronSubmitResult,
+    doc="Admit one cron firing into the owning profile's durable FIFO.",
+)
 
 
 class CronStatusResult(OpenModel):
@@ -403,8 +469,12 @@ class CronStatusResult(OpenModel):
     job: dict[str, JsonValue] | None = None
 
 
-canonical_method("cron.recover", params=CronRunParams, result=CronStatusResult,
-                 doc="Re-observe a firing after a scheduler restart (same request identity).")
+canonical_method(
+    "cron.recover",
+    params=CronRunParams,
+    result=CronStatusResult,
+    doc="Re-observe a firing after a scheduler restart (same request identity).",
+)
 
 
 class CronAdmissionParams(Params):
@@ -412,16 +482,24 @@ class CronAdmissionParams(Params):
     admission_id: str
 
 
-canonical_method("cron.status", params=CronAdmissionParams, result=CronStatusResult,
-                 doc="Status and, once terminal, the result of one cron admission.")
+canonical_method(
+    "cron.status",
+    params=CronAdmissionParams,
+    result=CronStatusResult,
+    doc="Status and, once terminal, the result of one cron admission.",
+)
 
 
 class CronCancelResult(Result):
     ok: bool
 
 
-canonical_method("cron.cancel", params=CronAdmissionParams, result=CronCancelResult,
-                 doc="Cancel a queued cron admission or latch cancellation on a started one.")
+canonical_method(
+    "cron.cancel",
+    params=CronAdmissionParams,
+    result=CronCancelResult,
+    doc="Cancel a queued cron admission or latch cancellation on a started one.",
+)
 
 
 class KanbanRunParams(Params):
@@ -437,8 +515,12 @@ class KanbanRunResult(Result):
     receipt: AdmissionStatus
 
 
-canonical_method("kanban.run", params=KanbanRunParams, result=KanbanRunResult,
-                 doc="Native-owner only: admit the dispatcher's current claim on a kanban task.")
+canonical_method(
+    "kanban.run",
+    params=KanbanRunParams,
+    result=KanbanRunResult,
+    doc="Native-owner only: admit the dispatcher's current claim on a kanban task.",
+)
 
 
 class A2aForwardParams(Params):
@@ -455,8 +537,12 @@ class A2aForwardResult(AdmissionStatus):
     result: JsonValue | None
 
 
-canonical_method("a2a.forward", params=A2aForwardParams, result=A2aForwardResult,
-                 doc="Forward one A2A input into the conversation its identity tuple names.")
+canonical_method(
+    "a2a.forward",
+    params=A2aForwardParams,
+    result=A2aForwardResult,
+    doc="Forward one A2A input into the conversation its identity tuple names.",
+)
 
 
 # ── managed workers ───────────────────────────────────────────────────────────────────────────
@@ -490,10 +576,18 @@ class WorkerExecution(OpenModel):
     last_sequence: int
 
 
-canonical_method("worker.register", params=WorkerRegisterParams, result=WorkerExecution,
-                 doc="Register a compute worker execution on an idle session.")
-canonical_method("worker.adopt", params=WorkerScopeParams, result=WorkerExecution,
-                 doc="Adopt a registered execution after verifying the live producer claim.")
+canonical_method(
+    "worker.register",
+    params=WorkerRegisterParams,
+    result=WorkerExecution,
+    doc="Register a compute worker execution on an idle session.",
+)
+canonical_method(
+    "worker.adopt",
+    params=WorkerScopeParams,
+    result=WorkerExecution,
+    doc="Adopt a registered execution after verifying the live producer claim.",
+)
 
 
 class WorkerPersistParams(WorkerScopeParams):
@@ -507,8 +601,12 @@ class WorkerPersistResult(OpenModel):
     """The operation's durable receipt (``message_id`` for an append, delegation results, …)."""
 
 
-canonical_method("worker.persist", params=WorkerPersistParams, result=WorkerPersistResult,
-                 doc="Sequence-fenced typed persistence write from an adopted worker.")
+canonical_method(
+    "worker.persist",
+    params=WorkerPersistParams,
+    result=WorkerPersistResult,
+    doc="Sequence-fenced typed persistence write from an adopted worker.",
+)
 
 
 # ── hosted rooms (canonical-only verbs) ───────────────────────────────────────────────────────
@@ -535,8 +633,12 @@ class RoomAttachment(OpenModel):
     event_id: str | None = None
 
 
-canonical_method("groups.attachment.upload", params=GroupsAttachmentUploadParams, result=RoomAttachment,
-                 doc="Store one attachment for a later groups.send manifest (idempotent per upload_id).")
+canonical_method(
+    "groups.attachment.upload",
+    params=GroupsAttachmentUploadParams,
+    result=RoomAttachment,
+    doc="Store one attachment for a later groups.send manifest (idempotent per upload_id).",
+)
 
 
 class GroupsAttachmentDownloadParams(RoomParams):
@@ -548,8 +650,12 @@ class RoomAttachmentBytes(RoomAttachment):
     data_base64: str
 
 
-canonical_method("groups.attachment.download", params=GroupsAttachmentDownloadParams,
-                 result=RoomAttachmentBytes, doc="Read one committed attachment for a live room viewer.")
+canonical_method(
+    "groups.attachment.download",
+    params=GroupsAttachmentDownloadParams,
+    result=RoomAttachmentBytes,
+    doc="Read one committed attachment for a live room viewer.",
+)
 
 
 class GroupsDiscardParams(RoomParams):
@@ -563,8 +669,12 @@ class GroupsDiscardResult(Result):
     task: RoomTaskReceipt
 
 
-canonical_method("groups.discard", params=GroupsDiscardParams, result=GroupsDiscardResult,
-                 doc="Discard one indeterminate room task after explicit user confirmation.")
+canonical_method(
+    "groups.discard",
+    params=GroupsDiscardParams,
+    result=GroupsDiscardResult,
+    doc="Discard one indeterminate room task after explicit user confirmation.",
+)
 
 
 # Shared-name overrides load after the authority-only value shapes above.

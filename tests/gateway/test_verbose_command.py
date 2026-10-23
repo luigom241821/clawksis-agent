@@ -11,7 +11,9 @@ from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(text="/verbose", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"):
+def _make_event(
+    text="/verbose", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
+):
     """Build a MessageEvent for testing."""
     source = SessionSource(
         platform=platform,
@@ -102,5 +104,3 @@ class TestVerboseCommand:
 
         assert "not enabled" in result.lower()
         assert "tool_progress_command" in result
-
-

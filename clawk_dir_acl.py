@@ -25,6 +25,7 @@ target across the UAC boundary. The path is lstat-checked first, and the pywin32
 either; the icacls fallback passes ``/L``. :func:`grant_tree_user_access` is the recursive form
 (the post-update repair), pruning every reparse point instead of descending into it.
 """
+
 from __future__ import annotations
 
 import functools
@@ -63,9 +64,14 @@ def is_reparse_point(path: str | Path) -> bool:
         st = os.lstat(path)
     except OSError:
         return True
-    if stat.S_ISLNK(st.st_mode) or getattr(st, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT:
+    if (
+        stat.S_ISLNK(st.st_mode)
+        or getattr(st, "st_file_attributes", 0) & FILE_ATTRIBUTE_REPARSE_POINT
+    ):
         return True
-    isjunction = getattr(os.path, "isjunction", None)  # 3.12+; st_file_attributes covers 3.11
+    isjunction = getattr(
+        os.path, "isjunction", None
+    )  # 3.12+; st_file_attributes covers 3.11
     return bool(isjunction and isjunction(path))
 
 
@@ -85,13 +91,25 @@ def process_elevation(pid: int | None = None) -> bool | None:
     kernel.GetCurrentProcess.restype = wintypes.HANDLE
     kernel.OpenProcess.restype = wintypes.HANDLE
     kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-    advapi.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
-    advapi.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
-                                           ctypes.POINTER(wintypes.DWORD)]
+    advapi.OpenProcessToken.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.HANDLE),
+    ]
+    advapi.GetTokenInformation.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
     own = pid is None
-    process = kernel.GetCurrentProcess() if own else kernel.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION,
-                                                                         False, pid)
+    process = (
+        kernel.GetCurrentProcess()
+        if own
+        else kernel.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    )
     if not process:
         return None
     token = wintypes.HANDLE()
@@ -99,8 +117,13 @@ def process_elevation(pid: int | None = None) -> bool | None:
         if not advapi.OpenProcessToken(process, _TOKEN_QUERY, ctypes.byref(token)):
             return None
         elevated, size = wintypes.DWORD(), wintypes.DWORD()
-        if not advapi.GetTokenInformation(token, _TOKEN_ELEVATION, ctypes.byref(elevated),
-                                          ctypes.sizeof(elevated), ctypes.byref(size)):
+        if not advapi.GetTokenInformation(
+            token,
+            _TOKEN_ELEVATION,
+            ctypes.byref(elevated),
+            ctypes.sizeof(elevated),
+            ctypes.byref(size),
+        ):
             return None
         return bool(elevated.value)
     finally:
@@ -132,41 +155,74 @@ def _grant_with_pywin32(path: Path, is_dir: bool, expected: str | None = None) -
     import win32file
     import win32security
 
-    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32security.TOKEN_QUERY)
+    token = win32security.OpenProcessToken(
+        win32api.GetCurrentProcess(), win32security.TOKEN_QUERY
+    )
     user_sid = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
     # Act on the handle, never the name: GetFileSecurity/SetFileSecurity resolve a junction or symlink
     # to its target, so a swap after the lstat check would still redirect the grant.
-    handle = win32file.CreateFile(str(path), _READ_CONTROL | _WRITE_DAC, _FILE_SHARE_ALL, None, _OPEN_EXISTING,
-                                  _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT, None)
+    handle = win32file.CreateFile(
+        str(path),
+        _READ_CONTROL | _WRITE_DAC,
+        _FILE_SHARE_ALL,
+        None,
+        _OPEN_EXISTING,
+        _FILE_FLAG_BACKUP_SEMANTICS | _FILE_FLAG_OPEN_REPARSE_POINT,
+        None,
+    )
     try:
         if expected is not None:
             # A parent swapped for a junction after the lstat checks resolves the name elsewhere.
             final = _strip_win32_prefix(win32file.GetFinalPathNameByHandle(handle, 0))
-            if os.path.normcase(final.rstrip("\\")) != os.path.normcase(expected.rstrip("\\")):
+            if os.path.normcase(final.rstrip("\\")) != os.path.normcase(
+                expected.rstrip("\\")
+            ):
                 raise ReparsePointRefused(f"{path} resolves to {final}, not {expected}")
         info = win32file.GetFileInformationByHandle(handle)
         attributes, links = info[0], info[7]
         if attributes & FILE_ATTRIBUTE_REPARSE_POINT:
-            raise ReparsePointRefused(f"{path} is a junction, symlink or other reparse point")
+            raise ReparsePointRefused(
+                f"{path} is a junction, symlink or other reparse point"
+            )
         if not attributes & FILE_ATTRIBUTE_DIRECTORY and links > 1:
-            raise ReparsePointRefused(f"{path} is a hard link ({links} names); its other names may be outside")
+            raise ReparsePointRefused(
+                f"{path} is a hard link ({links} names); its other names may be outside"
+            )
         is_dir = bool(attributes & FILE_ATTRIBUTE_DIRECTORY)
-        descriptor = win32security.GetKernelObjectSecurity(handle, win32security.DACL_SECURITY_INFORMATION)
+        descriptor = win32security.GetKernelObjectSecurity(
+            handle, win32security.DACL_SECURITY_INFORMATION
+        )
         dacl = descriptor.GetSecurityDescriptorDacl()
-        inherit = (win32security.OBJECT_INHERIT_ACE | win32security.CONTAINER_INHERIT_ACE) if is_dir else 0
+        inherit = (
+            (win32security.OBJECT_INHERIT_ACE | win32security.CONTAINER_INHERIT_ACE)
+            if is_dir
+            else 0
+        )
         if dacl is not None:
             for index in range(dacl.GetAceCount()):
                 (ace_type, flags, *_), mask, sid = dacl.GetAce(index)[:3]
-                if (ace_type == win32security.ACCESS_ALLOWED_ACE_TYPE and sid == user_sid
-                        and mask & ntsecuritycon.FILE_ALL_ACCESS == ntsecuritycon.FILE_ALL_ACCESS
-                        and flags & inherit == inherit and not flags & win32security.INHERIT_ONLY_ACE):
+                if (
+                    ace_type == win32security.ACCESS_ALLOWED_ACE_TYPE
+                    and sid == user_sid
+                    and mask & ntsecuritycon.FILE_ALL_ACCESS
+                    == ntsecuritycon.FILE_ALL_ACCESS
+                    and flags & inherit == inherit
+                    and not flags & win32security.INHERIT_ONLY_ACE
+                ):
                     return False  # already granted: never grow the DACL on repeat calls
         else:
             dacl = win32security.ACL()
-        dacl.AddAccessAllowedAceEx(win32security.ACL_REVISION_DS, inherit, ntsecuritycon.FILE_ALL_ACCESS, user_sid)
+        dacl.AddAccessAllowedAceEx(
+            win32security.ACL_REVISION_DS,
+            inherit,
+            ntsecuritycon.FILE_ALL_ACCESS,
+            user_sid,
+        )
         descriptor.SetSecurityDescriptorDacl(True, dacl, False)
         # The handle form of SetFileSecurity: same semantics (no propagation walk), no name resolution.
-        win32security.SetKernelObjectSecurity(handle, win32security.DACL_SECURITY_INFORMATION, descriptor)
+        win32security.SetKernelObjectSecurity(
+            handle, win32security.DACL_SECURITY_INFORMATION, descriptor
+        )
         return True
     finally:
         handle.Close()
@@ -174,24 +230,41 @@ def _grant_with_pywin32(path: Path, is_dir: bool, expected: str | None = None) -
 
 @functools.lru_cache(maxsize=1)
 def _whoami_sid() -> str:
-    whoami = subprocess.run(["whoami", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
-                            check=True, encoding="utf-8", errors="replace", timeout=30)
+    whoami = subprocess.run(
+        ["whoami", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
     sid = whoami.stdout.strip().rsplit(",", 1)[-1].strip().strip('"')
     if not sid.upper().startswith("S-1-"):
-        raise OSError(f"could not resolve the current user SID from whoami: {whoami.stdout!r}")
+        raise OSError(
+            f"could not resolve the current user SID from whoami: {whoami.stdout!r}"
+        )
     return sid
 
 
-def _grant_with_icacls(path: Path, is_dir: bool, expected: str | None = None,
-                       subtree_has_link: bool | None = None) -> None:
+def _grant_with_icacls(
+    path: Path,
+    is_dir: bool,
+    expected: str | None = None,
+    subtree_has_link: bool | None = None,
+) -> None:
     """*subtree_has_link*: the caller's own walk already answered it (None: walk here)."""
     if expected is None:
         # icacls opens by name, so nothing pins the object between the checks and the write. Inside
         # the home the components were lstat-checked against a known root; with no expected root
         # (off-home, or a path whose home provenance was lost) there is nothing to check: refuse.
-        raise ReparsePointRefused(f"{path} has no trusted root to check (icacls fallback, no pywin32)")
+        raise ReparsePointRefused(
+            f"{path} has no trusted root to check (icacls fallback, no pywin32)"
+        )
     if is_dir and subtree_has_link:
-        raise ReparsePointRefused(f"{path} holds a junction, symlink or hard link (icacls fallback)")
+        raise ReparsePointRefused(
+            f"{path} holds a junction, symlink or hard link (icacls fallback)"
+        )
     if is_dir and subtree_has_link is None:
         # icacls applies an inheritable ACE through SetNamedSecurityInfo, which also propagates it
         # down the existing subtree; refuse when that subtree holds a link it could descend into.
@@ -199,17 +272,26 @@ def _grant_with_icacls(path: Path, is_dir: bool, expected: str | None = None,
         # last yield, so checking inside the loop admitted a tree whose only link came last. A
         # hard-linked file is refused too: the inherited ACE lands on its other names outside.
         nested: list[Path] = []
-        linked = [entry for entry, entry_is_dir in iter_tree_without_reparse_points(path, nested)
-                  if not entry_is_dir and _hard_linked_file(entry)]
+        linked = [
+            entry
+            for entry, entry_is_dir in iter_tree_without_reparse_points(path, nested)
+            if not entry_is_dir and _hard_linked_file(entry)
+        ]
         if nested or linked:
-            raise ReparsePointRefused(f"{(nested + linked)[0]} under {path} is a junction, symlink or hard "
-                                      "link (icacls fallback)")
+            raise ReparsePointRefused(
+                f"{(nested + linked)[0]} under {path} is a junction, symlink or hard "
+                "link (icacls fallback)"
+            )
     ace = f"*{_whoami_sid()}:(OI)(CI)F" if is_dir else f"*{_whoami_sid()}:F"
     # /L: act on a symbolic link or junction itself, not its target (the lstat check already refused
     # one; this covers a swap between that check and icacls opening the path). Without pywin32 there
     # is no handle to pin, so *expected* cannot be re-checked here.
-    subprocess.run(["icacls", str(path), "/grant", ace, "/Q", "/L"], capture_output=True,
-                   check=True, timeout=60)
+    subprocess.run(
+        ["icacls", str(path), "/grant", ace, "/Q", "/L"],
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
 
 
 def _hard_linked_file(path: Path) -> bool:
@@ -220,8 +302,12 @@ def _hard_linked_file(path: Path) -> bool:
     return not stat.S_ISDIR(st.st_mode) and st.st_nlink > 1
 
 
-def _grant(path: Path, is_dir: bool = True, expected: str | None = None,
-           subtree_has_link: bool | None = None) -> bool:
+def _grant(
+    path: Path,
+    is_dir: bool = True,
+    expected: str | None = None,
+    subtree_has_link: bool | None = None,
+) -> bool:
     """Grant the token's user full control on *path* itself; raise :class:`ReparsePointRefused`
     for a reparse point or hard-linked file (or, with *expected*, a handle that resolves anywhere
     else) and anything else on failure.
@@ -229,7 +315,9 @@ def _grant(path: Path, is_dir: bool = True, expected: str | None = None,
     Returns True when the existing children are still owed: the pywin32 write does not propagate,
     while the icacls fallback (``SetNamedSecurityInfo``) does, and refuses a dir holding a link."""
     if is_reparse_point(path) or _hard_linked_file(path):
-        raise ReparsePointRefused(f"{path} is a junction, symlink, other reparse point or hard link")
+        raise ReparsePointRefused(
+            f"{path} is a junction, symlink, other reparse point or hard link"
+        )
     try:
         return _grant_with_pywin32(path, is_dir, expected) and is_dir
     except ImportError:
@@ -243,6 +331,7 @@ def _components_below_home(path: Path) -> list[Path]:
     and may legitimately be a link; an entry INSIDE it is what same-user code can swap."""
     try:
         from clawk_constants import get_clawk_home
+
         home = Path(os.path.abspath(get_clawk_home()))
         rel = Path(os.path.abspath(path)).relative_to(home)
     except (ImportError, ValueError, OSError):
@@ -257,13 +346,19 @@ def _expected_final(path: Path) -> str | None:
     if not components:
         return None
     home = components[0].parent
-    return os.path.join(os.path.realpath(home), *Path(os.path.abspath(path)).relative_to(home).parts)
+    return os.path.join(
+        os.path.realpath(home), *Path(os.path.abspath(path)).relative_to(home).parts
+    )
 
 
 def _warn_refused(path: Path, exc: BaseException) -> None:
-    log.warning("Not granting the current user access to %s while elevated (%s): an elevated grant "
-                "never follows a junction or link out of the Clawksis home. If this is your own link, "
-                "point CLAWK_HOME (or the link) at the real directory.", path, exc)
+    log.warning(
+        "Not granting the current user access to %s while elevated (%s): an elevated grant "
+        "never follows a junction or link out of the Clawksis home. If this is your own link, "
+        "point CLAWK_HOME (or the link) at the real directory.",
+        path,
+        exc,
+    )
 
 
 def _elevated(elevated: bool | None) -> bool:
@@ -272,7 +367,9 @@ def _elevated(elevated: bool | None) -> bool:
     return process_is_elevated() if elevated is None else elevated
 
 
-def grant_user_access(path: str | Path, *, elevated: bool | None = None, repair_children: bool = False) -> bool:
+def grant_user_access(
+    path: str | Path, *, elevated: bool | None = None, repair_children: bool = False
+) -> bool:
     """Give the token's user an inheriting full-control ACE on *path* when this process is elevated.
 
     True when a grant was attempted and did not fail; False off Windows, when not elevated, when
@@ -288,29 +385,46 @@ def grant_user_access(path: str | Path, *, elevated: bool | None = None, repair_
     try:
         for component in _components_below_home(target):
             if is_reparse_point(component):
-                raise ReparsePointRefused(f"{component} is a junction, symlink or other reparse point")
+                raise ReparsePointRefused(
+                    f"{component} is a junction, symlink or other reparse point"
+                )
         expected = _expected_final(target)
         children_owed = _grant(target, expected=expected)
     except ReparsePointRefused as exc:
         _warn_refused(target, exc)
         return False
     except Exception as exc:  # health: allow BLE001 -- pywintypes.error is not an OSError; never fail the mkdir
-        log.warning("Could not grant the current user access to %s created while elevated (%s); a "
-                    "non-elevated Clawksis may not be able to use it. To repair, from an elevated prompt run: "
-                    'icacls "%s" /reset /t', target, exc, target)
+        log.warning(
+            "Could not grant the current user access to %s created while elevated (%s); a "
+            "non-elevated Clawksis may not be able to use it. To repair, from an elevated prompt run: "
+            'icacls "%s" /reset /t',
+            target,
+            exc,
+            target,
+        )
         return False
     if repair_children and children_owed:
         real = expected or os.path.realpath(target)
         skipped: list[Path] = []
-        entries = [(p, d) for p, d in iter_tree_without_reparse_points(target, skipped) if p != target]
+        entries = [
+            (p, d)
+            for p, d in iter_tree_without_reparse_points(target, skipped)
+            if p != target
+        ]
         _, _, failed = _grant_entries(target, real, entries, skipped)
         if failed:
-            log.debug("Granting the existing entries under %s failed for %d, e.g. %s: %s",
-                      target, len(failed), *failed[0])
+            log.debug(
+                "Granting the existing entries under %s failed for %d, e.g. %s: %s",
+                target,
+                len(failed),
+                *failed[0],
+            )
     return True
 
 
-def iter_tree_without_reparse_points(root: str | Path, skipped: list[Path]) -> Iterator[tuple[Path, bool]]:
+def iter_tree_without_reparse_points(
+    root: str | Path, skipped: list[Path]
+) -> Iterator[tuple[Path, bool]]:
     """Yield ``(path, is_dir)`` for *root* and everything under it, never entering or yielding a
     junction, symlink or other reparse point (each one is appended to *skipped* instead).
 
@@ -338,8 +452,9 @@ def iter_tree_without_reparse_points(root: str | Path, skipped: list[Path]) -> I
                 yield child, False
 
 
-def grant_tree_user_access(root: str | Path, *, pin_root: bool = False,
-                           elevated: bool | None = None) -> tuple[int, list[Path], list[tuple[Path, str]]]:
+def grant_tree_user_access(
+    root: str | Path, *, pin_root: bool = False, elevated: bool | None = None
+) -> tuple[int, list[Path], list[tuple[Path, str]]]:
     """Recursive :func:`grant_user_access` (the elevated post-update repair): grant the token's user
     full control on *root* and every directory and file under it, inheriting on directories.
 
@@ -355,16 +470,25 @@ def grant_tree_user_access(root: str | Path, *, pin_root: bool = False,
     root = Path(os.path.realpath(root) if pin_root else os.path.abspath(root))
     skipped: list[Path] = []
     entries = list(iter_tree_without_reparse_points(root, skipped))
-    granted, skipped, failed = _grant_entries(root, os.path.realpath(root), entries, skipped)
+    granted, skipped, failed = _grant_entries(
+        root, os.path.realpath(root), entries, skipped
+    )
     if skipped:
-        log.warning("Elevated ACL repair skipped %d junction/symlink/hard-link entr%s under %s (never "
-                    "granted through): %s", len(skipped), "y" if len(skipped) == 1 else "ies", root,
-                    ", ".join(str(p) for p in skipped[:5]) + (" ..." if len(skipped) > 5 else ""))
+        log.warning(
+            "Elevated ACL repair skipped %d junction/symlink/hard-link entr%s under %s (never "
+            "granted through): %s",
+            len(skipped),
+            "y" if len(skipped) == 1 else "ies",
+            root,
+            ", ".join(str(p) for p in skipped[:5])
+            + (" ..." if len(skipped) > 5 else ""),
+        )
     return granted, skipped, failed
 
 
-def _grant_entries(root: Path, real_root: str, entries: list[tuple[Path, bool]],
-                   skipped: list[Path]) -> tuple[int, list[Path], list[tuple[Path, str]]]:
+def _grant_entries(
+    root: Path, real_root: str, entries: list[tuple[Path, bool]], skipped: list[Path]
+) -> tuple[int, list[Path], list[tuple[Path, str]]]:
     """Grant each walked entry on its own (the pywin32 write does not propagate). The ONE walk
     that produced *entries* and *skipped* also decides which dirs hold a link, so the icacls
     fallback never re-walks a subtree per directory (it refuses exactly those dirs, as before)."""
@@ -372,14 +496,20 @@ def _grant_entries(root: Path, real_root: str, entries: list[tuple[Path, bool]],
     linked.update(p for p, is_dir in entries if not is_dir and _hard_linked_file(p))
     holds_link: set[Path] = set()
     for bad in linked - {root}:
-        holds_link.update(parent for parent in bad.parents if parent == root or root in parent.parents)
+        holds_link.update(
+            parent for parent in bad.parents if parent == root or root in parent.parents
+        )
     if root in skipped:
         holds_link.add(root)
     granted, failed = 0, []
     for path, is_dir in entries:
         try:
-            _grant(path, is_dir, os.path.join(real_root, *path.relative_to(root).parts),
-                   subtree_has_link=is_dir and path in holds_link)
+            _grant(
+                path,
+                is_dir,
+                os.path.join(real_root, *path.relative_to(root).parts),
+                subtree_has_link=is_dir and path in holds_link,
+            )
         except ReparsePointRefused:
             skipped.append(path)
         except Exception as exc:  # health: allow BLE001 -- pywintypes.error is not an OSError; keep going like /C
@@ -404,8 +534,14 @@ def _identity(path: Path) -> tuple[Path, int, int] | None:
     return path, st.st_dev, st.st_ino
 
 
-def make_user_dir(path: str | Path, mode: int = 0o777, *, parents: bool = False, exist_ok: bool = False,
-                  elevated: bool | None = None) -> Path:
+def make_user_dir(
+    path: str | Path,
+    mode: int = 0o777,
+    *,
+    parents: bool = False,
+    exist_ok: bool = False,
+    elevated: bool | None = None,
+) -> Path:
     """``Path.mkdir`` (same arguments and defaults) that keeps an elevated Windows creation usable
     by the same user unelevated.
 
@@ -437,20 +573,27 @@ def make_user_dir(path: str | Path, mode: int = 0o777, *, parents: bool = False,
     return target
 
 
-def _grant_dirs(target: Path, to_grant: list[Path], fresh: set[Path] = frozenset()) -> None:
+def _grant_dirs(
+    target: Path, to_grant: list[Path], fresh: set[Path] = frozenset()
+) -> None:
     """Grant *to_grant*; a dir in *fresh* (this call created it) is always granted, an existing
     one once per verified object identity."""
     # A junction/symlink planted at (or swapped in for) the leaf, a created component, or any
     # existing ancestor inside the home: grant nothing, one warning (nothing past it is in the home).
     for component in dict.fromkeys([*_components_below_home(target), *to_grant]):
         if is_reparse_point(component):
-            _warn_refused(component, ReparsePointRefused("junction, symlink or other reparse point"))
+            _warn_refused(
+                component,
+                ReparsePointRefused("junction, symlink or other reparse point"),
+            )
             return
     for directory in to_grant:
         key = _identity(directory)
         if key is None or (directory not in fresh and key in _granted):
             continue
-        if grant_user_access(directory, elevated=True, repair_children=directory not in fresh):
+        if grant_user_access(
+            directory, elevated=True, repair_children=directory not in fresh
+        ):
             _granted.add(key)
 
 

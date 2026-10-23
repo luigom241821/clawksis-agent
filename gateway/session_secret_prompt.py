@@ -9,6 +9,7 @@ server→client request (``tui_gateway/contracts/server_requests.py``: ``SecretR
 ``ValueResult``) to the attached viewers, saves a non-empty answer in this profile's ``.env`` here,
 and returns main's callback result. The value travels only in the viewer's response frame.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -20,33 +21,56 @@ SECRET_TIMEOUT_S = 120  # main's CLI secret panel deadline (clawk_cli/callbacks.
 
 
 def _skipped(var_name, reason, message):
-    return {"success": True, "reason": reason, "stored_as": var_name, "validated": False,
-            "skipped": True, "message": message}
+    return {
+        "success": True,
+        "reason": reason,
+        "stored_as": var_name,
+        "validated": False,
+        "skipped": True,
+        "message": message,
+    }
 
 
 @contextlib.contextmanager
 def secret_prompt_scope(turn, agent):
     """Bind this turn's secret-capture callback (a ContextVar, so parallel tool workers inherit it)."""
     from gateway.run_turn_progress import local_viewer_turn
+
     if not local_viewer_turn(turn):
         yield
         return
     from tools.skills_tool import bind_turn_secret_capture
+
     authority, session_id, _generation = turn._approval_owner
 
     def callback(var_name, prompt, metadata=None):
         from gateway.session_server_requests import ask_viewer
+
         live = authority.sessions.get(session_id)
         if live is None:
             return _skipped(var_name, "cancelled", "Secret setup was skipped.")
-        params = {"env_var": var_name, "prompt": prompt, **({"metadata": metadata} if metadata else {})}
-        value = ask_viewer(live.event_stream, session_id, "secret", params, timeout=SECRET_TIMEOUT_S,
-                           cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)))
+        params = {
+            "env_var": var_name,
+            "prompt": prompt,
+            **({"metadata": metadata} if metadata else {}),
+        }
+        value = ask_viewer(
+            live.event_stream,
+            session_id,
+            "secret",
+            params,
+            timeout=SECRET_TIMEOUT_S,
+            cancelled=lambda: bool(getattr(agent, "_interrupt_requested", False)),
+        )
         if not value:
             return _skipped(var_name, "cancelled", "Secret setup was skipped.")
         from clawk_cli.config import save_env_value_secure
-        return {**save_env_value_secure(var_name, value), "skipped": False,
-                "message": "Secret stored securely. The secret value was not exposed to the model."}
+
+        return {
+            **save_env_value_secure(var_name, value),
+            "skipped": False,
+            "message": "Secret stored securely. The secret value was not exposed to the model.",
+        }
 
     with bind_turn_secret_capture(callback):
         yield

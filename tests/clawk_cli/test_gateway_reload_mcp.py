@@ -1,5 +1,6 @@
 """/reload-mcp on the shared gateway: the gateway reconciles its MCP servers and refreshes its
 agents (``reload.mcp``); the CLI never touches its GatewayAgent stand-in's tools."""
+
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -15,8 +16,16 @@ class _Client:
     async def rpc(self, method, *, _timeout=None, **params):
         self.calls.append((method, params))
         if method == "reload.mcp":
-            return {"status": "reloaded", "message": "MCP servers reconciled (no server changes)"}
-        return {"revision": 2, "execution_generation": 1, "messages": [], "info": {"tool_count": 20}}
+            return {
+                "status": "reloaded",
+                "message": "MCP servers reconciled (no server changes)",
+            }
+        return {
+            "revision": 2,
+            "execution_generation": 1,
+            "messages": [],
+            "info": {"tool_count": 20},
+        }
 
 
 def test_reload_mcp_runs_on_the_gateway(capsys):
@@ -25,6 +34,7 @@ def test_reload_mcp_runs_on_the_gateway(capsys):
     @asynccontextmanager
     async def connect():
         yield client
+
     conn = GatewayConnection(connect=connect)
     conn.start(5)
     cli = ClawksisCLI.__new__(ClawksisCLI)
@@ -34,6 +44,9 @@ def test_reload_mcp_runs_on_the_gateway(capsys):
         cli._reload_gateway_mcp(conn)
     finally:
         conn.close()
-    assert client.calls[0] == ("reload.mcp", {"session_id": "local-mcp", "confirm": True})
+    assert client.calls[0] == (
+        "reload.mcp",
+        {"session_id": "local-mcp", "confirm": True},
+    )
     out = capsys.readouterr().out
     assert "20 tool(s) available" in out and "MCP reload failed" not in out, out

@@ -21,8 +21,12 @@ def test_musl_userland_gets_a_satisfiable_native_musl_closure(monkeypatch, tmp_p
     # host's) says otherwise and must not win.
     fake_sh = tmp_path / "sh"
     fake_sh.write_bytes(b"\x7fELF" + b"\0" * 60 + b"/lib/ld-musl-x86_64.so.1\0")
-    monkeypatch.setattr(store, "_native_linux_uses_musl",
-                        lambda: store._elf_loader_is_musl(fake_sh), raising=False)
+    monkeypatch.setattr(
+        store,
+        "_native_linux_uses_musl",
+        lambda: store._elf_loader_is_musl(fake_sh),
+        raising=False,
+    )
     monkeypatch.setattr(store, "_native_machine", lambda: "x86_64")
     monkeypatch.setattr(store, "_is_bionic_libc", lambda: False)
 
@@ -35,6 +39,8 @@ def test_musl_userland_gets_a_satisfiable_native_musl_closure(monkeypatch, tmp_p
     for package in closure:
         assert package.missing_reason(target) is None, package.name
         if lock.version(package.name):
-            assert lock.artifacts(package.name, target), f"{package.name} has no {target} artifact"
+            assert lock.artifacts(package.name, target), (
+                f"{package.name} has no {target} artifact"
+            )
     for name in ("python", "uv", "node"):
         assert "musl" in lock.artifacts(name, target)[0]["url"], name

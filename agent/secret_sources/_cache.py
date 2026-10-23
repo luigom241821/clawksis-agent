@@ -65,7 +65,9 @@ def entry_from_payload(payload: object) -> Optional[CachedFetch]:
     secrets, fetched_at = payload.get("secrets"), payload.get("fetched_at")
     if not isinstance(secrets, dict) or not isinstance(fetched_at, (int, float)):
         return None
-    typed = {k: v for k, v in secrets.items() if isinstance(k, str) and isinstance(v, str)}
+    typed = {
+        k: v for k, v in secrets.items() if isinstance(k, str) and isinstance(v, str)
+    }
     return CachedFetch(secrets=typed, fetched_at=float(fetched_at))
 
 
@@ -104,7 +106,9 @@ class DiskCache(Generic[K]):
     def path(self, home_path: Optional[Path] = None) -> Path:
         return resolve_cache_home(home_path) / "cache" / self._basename
 
-    def read(self, key: K, ttl_seconds: float, home_path: Optional[Path] = None) -> Optional[CachedFetch]:
+    def read(
+        self, key: K, ttl_seconds: float, home_path: Optional[Path] = None
+    ) -> Optional[CachedFetch]:
         """Fresh cached entry for ``key``, or None (I/O error, mismatch, stale)."""
         if ttl_seconds <= 0:
             return None
@@ -113,16 +117,28 @@ class DiskCache(Generic[K]):
                 payload = json.load(f)
         except (OSError, json.JSONDecodeError):
             return None
-        if not isinstance(payload, dict) or payload.get("key") != self._key_serializer(key):
+        if not isinstance(payload, dict) or payload.get("key") != self._key_serializer(
+            key
+        ):
             return None
         entry = entry_from_payload(payload)
         return entry if entry is not None and entry.is_fresh(ttl_seconds) else None
 
-    def write(self, key: K, entry: CachedFetch, ttl_seconds: float, home_path: Optional[Path] = None) -> None:
+    def write(
+        self,
+        key: K,
+        entry: CachedFetch,
+        ttl_seconds: float,
+        home_path: Optional[Path] = None,
+    ) -> None:
         """Persist ``entry`` atomically at mode 0600; no-op when ``ttl_seconds <= 0`` or on I/O error."""
         if ttl_seconds <= 0:
             return
-        payload = {"key": self._key_serializer(key), "secrets": entry.secrets, "fetched_at": entry.fetched_at}
+        payload = {
+            "key": self._key_serializer(key),
+            "secrets": entry.secrets,
+            "fetched_at": entry.fetched_at,
+        }
         try:
             atomic_write_json(self.path(home_path), payload)
         except OSError:
@@ -147,8 +163,13 @@ class SecretCache(Generic[K]):
         self.memory: dict[K, CachedFetch] = {}
         self.disk: DiskCache[K] = DiskCache(basename, key_serializer=key_serializer)
 
-    def lookup(self, key: K, ttl_seconds: float, home_path: Optional[Path] = None,
-               read_disk: Optional[Callable[[], Optional[CachedFetch]]] = None) -> Optional[CachedFetch]:
+    def lookup(
+        self,
+        key: K,
+        ttl_seconds: float,
+        home_path: Optional[Path] = None,
+        read_disk: Optional[Callable[[], Optional[CachedFetch]]] = None,
+    ) -> Optional[CachedFetch]:
         """Fresh entry from L1, else from L2 (promoted into L1), else None.
 
         ``read_disk`` swaps in an alternative L2 reader (e.g. an encrypted file).
@@ -156,12 +177,20 @@ class SecretCache(Generic[K]):
         cached = self.memory.get(key)
         if cached and cached.is_fresh(ttl_seconds):
             return cached
-        disk_cached = read_disk() if read_disk else self.disk.read(key, ttl_seconds, home_path)
+        disk_cached = (
+            read_disk() if read_disk else self.disk.read(key, ttl_seconds, home_path)
+        )
         if disk_cached is not None:
             self.memory[key] = disk_cached
         return disk_cached
 
-    def store(self, key: K, entry: CachedFetch, ttl_seconds: float, home_path: Optional[Path] = None) -> None:
+    def store(
+        self,
+        key: K,
+        entry: CachedFetch,
+        ttl_seconds: float,
+        home_path: Optional[Path] = None,
+    ) -> None:
         self.memory[key] = entry
         self.disk.write(key, entry, ttl_seconds, home_path)
 

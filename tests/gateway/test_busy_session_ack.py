@@ -3,6 +3,7 @@
 Verifies that users get an immediate status response instead of total silence
 when the agent is working on a task. See PR fix for the @Lonely__MH report.
 """
+
 import time
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
@@ -35,6 +36,7 @@ from gateway.platforms.event import MessageEvent, MessageType
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_event(text="hello", chat_id="123", platform_val="telegram"):
     """Build a minimal MessageEvent."""
@@ -94,9 +96,9 @@ def _make_adapter(platform_val="telegram"):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestBusySessionAck:
     """User sends a message while agent is running — should get acknowledgment."""
-
 
     @pytest.mark.asyncio
     async def test_telegram_grace_followups_respect_queue_fifo(self, monkeypatch):
@@ -187,9 +189,10 @@ class TestBusySessionAck:
         # Verify agent interrupt was called
         agent.interrupt.assert_called_once_with("Are you working?")
 
-
     @pytest.mark.asyncio
-    async def test_steer_mode_calls_agent_steer_no_interrupt_no_queue(self, monkeypatch):
+    async def test_steer_mode_calls_agent_steer_no_interrupt_no_queue(
+        self, monkeypatch
+    ):
         """busy_input_mode='steer' injects via agent.steer() and skips queueing."""
         import gateway.run as _gr
 
@@ -238,7 +241,10 @@ class TestBusySessionAck:
         runner._busy_input_mode = "steer"
         runner._should_echo_stt_transcripts = MagicMock(return_value=False)
         runner._enrich_message_with_transcription = AsyncMock(
-            return_value=('"yönü teknik mimariye çevir"', ["yönü teknik mimariye çevir"])
+            return_value=(
+                '"yönü teknik mimariye çevir"',
+                ["yönü teknik mimariye çevir"],
+            )
         )
         adapter = _make_adapter()
 
@@ -267,7 +273,6 @@ class TestBusySessionAck:
         content = adapter._send_with_retry.call_args.kwargs["content"]
         assert "Steered" in content
         assert "Queued" not in content
-
 
     @pytest.mark.asyncio
     async def test_steer_mode_falls_back_to_queue_when_agent_rejects(self):
@@ -341,11 +346,17 @@ class TestBusySessionAck:
 
         def _evt(text):
             src = SessionSource(
-                platform=shared_platform, chat_id="123",
-                chat_type="dm", user_id="user1",
+                platform=shared_platform,
+                chat_id="123",
+                chat_type="dm",
+                user_id="user1",
             )
-            return MessageEvent(text=text, message_type=MessageType.TEXT,
-                                source=src, message_id=f"m-{text[:5]}")
+            return MessageEvent(
+                text=text,
+                message_type=MessageType.TEXT,
+                source=src,
+                message_id=f"m-{text[:5]}",
+            )
 
         first = _evt("first message")
         second = _evt("second message")
@@ -368,11 +379,10 @@ class TestBusySessionAck:
         overflow = runner._queued_events.get(sk, [])
         assert [e.text for e in overflow] == ["second message"]
 
-
-
     @pytest.mark.asyncio
     async def test_status_detail_omits_denominator_for_unbounded_max_iterations(
-        self, monkeypatch,
+        self,
+        monkeypatch,
     ):
         """#102806: a top-level session's real max_iterations is sys.maxsize
         (unlimited — see AIAgent's default). The busy-ack must not print that
@@ -436,9 +446,12 @@ class TestBusySessionOnboardingHint:
 
         agent = MagicMock()
         agent.get_activity_summary.return_value = {
-            "api_call_count": 3, "max_iterations": 60,
-            "current_tool": None, "last_activity_ts": time.time(),
-            "last_activity_desc": "api", "seconds_since_activity": 0.1,
+            "api_call_count": 3,
+            "max_iterations": 60,
+            "current_tool": None,
+            "last_activity_ts": time.time(),
+            "last_activity_desc": "api",
+            "seconds_since_activity": 0.1,
         }
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = time.time() - 5
@@ -450,6 +463,7 @@ class TestBusySessionOnboardingHint:
 
         # The flag is now persisted to tmp_path/config.yaml
         import clawk_yaml as yaml
+
         cfg = yaml.safe_load((tmp_path / "config.yaml").read_text())
         assert cfg["onboarding"]["seen"]["busy_input_prompt"] is True
 
@@ -470,12 +484,17 @@ class TestLongRunningNotificationOwnership:
         replacement_agent = MagicMock()
         runner._running_agents["sess"] = replacement_agent
 
-        assert runner._should_emit_long_running_notification(
-            "sess", original_agent, executor_task=None
-        ) is False
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", original_agent, executor_task=None
+            )
+            is False
+        )
 
     @pytest.mark.asyncio
-    async def test_restart_during_heartbeat_edit_sends_no_fallback_bubble(self, monkeypatch):
+    async def test_restart_during_heartbeat_edit_sends_no_fallback_bubble(
+        self, monkeypatch
+    ):
         """The guard is rechecked after the awaited edit: a restart that begins while the edit is
         in flight must not be followed by a fresh "Working" send when that edit fails (#10990)."""
         import asyncio
@@ -488,11 +507,15 @@ class TestLongRunningNotificationOwnership:
         runner._running_agents = {}
         runner._draining = runner._restart_requested = False
         adapter = MagicMock()
-        first_send = AsyncMock(return_value=SimpleNamespace(success=True, message_id="hb-1"))
+        first_send = AsyncMock(
+            return_value=SimpleNamespace(success=True, message_id="hb-1")
+        )
         adapter.send = first_send
 
         async def _edit_then_restart(*a, **k):
-            runner._restart_requested = True  # restart notice goes out while the edit is awaited
+            runner._restart_requested = (
+                True  # restart notice goes out while the edit is awaited
+            )
             return SimpleNamespace(success=False)
 
         adapter.edit_message = AsyncMock(side_effect=_edit_then_restart)
@@ -503,10 +526,14 @@ class TestLongRunningNotificationOwnership:
         disp = MagicMock()
         disp._display_surface_mode.return_value = "on"
         disp.resolve_display_setting.return_value = False
-        ctx = TurnContext(source=SimpleNamespace(chat_id="c", platform="telegram"), session_key="sess")
+        ctx = TurnContext(
+            source=SimpleNamespace(chat_id="c", platform="telegram"), session_key="sess"
+        )
         ctx.agent_holder[0] = agent
 
-        await asyncio.wait_for(runner._run_agent_notify_long_running(disp, ctx, [None]), 5)
+        await asyncio.wait_for(
+            runner._run_agent_notify_long_running(disp, ctx, [None]), 5
+        )
 
         assert first_send.await_count == 1  # the original heartbeat only
         adapter.edit_message.assert_awaited_once()
@@ -520,8 +547,16 @@ class TestLongRunningNotificationOwnership:
         runner._running_agents = {}
         agent = MagicMock()
         runner._running_agents["sess"] = agent
-        assert runner._should_emit_long_running_notification("sess", agent, executor_task=None) is True
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", agent, executor_task=None
+            )
+            is True
+        )
         setattr(runner, flag, True)
-        assert runner._should_emit_long_running_notification("sess", agent, executor_task=None) is False
-
-
+        assert (
+            runner._should_emit_long_running_notification(
+                "sess", agent, executor_task=None
+            )
+            is False
+        )

@@ -43,19 +43,25 @@ def test_set_hidden_resolves_stored_id_without_live_session(db):
     _seed(db, "stored-chat")
     assert srv._find_live_session_by_key("stored-chat") is None
 
-    envelope = _call("session.set_hidden", {"session_id": "stored-chat", "hidden": True})
+    envelope = _call(
+        "session.set_hidden", {"session_id": "stored-chat", "hidden": True}
+    )
     assert "error" not in envelope, envelope
     assert envelope["result"]["hidden"] is True
     assert db.get_session("stored-chat")["hidden"] == 1
 
     # And back — unhide through the same durable path.
-    envelope = _call("session.set_hidden", {"session_id": "stored-chat", "hidden": False})
+    envelope = _call(
+        "session.set_hidden", {"session_id": "stored-chat", "hidden": False}
+    )
     assert "error" not in envelope, envelope
     assert db.get_session("stored-chat")["hidden"] == 0
 
 
 def test_set_hidden_unknown_id_still_errors(db):
-    envelope = _call("session.set_hidden", {"session_id": "no-such-session", "hidden": True})
+    envelope = _call(
+        "session.set_hidden", {"session_id": "no-such-session", "hidden": True}
+    )
     assert envelope.get("error"), envelope
 
 
@@ -87,7 +93,9 @@ def test_session_list_hides_internal_sources(db, source):
     human picker; interactive rows stay (#112550)."""
     _seed(db, "plain-chat")
     db.create_session("internal-run", source=source)
-    db._conn.execute("UPDATE sessions SET message_count = 1 WHERE id = ?", ("internal-run",))
+    db._conn.execute(
+        "UPDATE sessions SET message_count = 1 WHERE id = ?", ("internal-run",)
+    )
     db._conn.commit()
 
     rows = _call("session.list", {})["result"]["sessions"]

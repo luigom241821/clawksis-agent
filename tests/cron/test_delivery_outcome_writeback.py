@@ -6,6 +6,7 @@ say what actually happened (main's inline ``ok``/``delivered`` and ``delivery_fa
 ``failed`` + error) — including when the drain wins the race against the run's own
 bookkeeping write.
 """
+
 import pytest
 
 from cron import executions, jobs, scheduler
@@ -14,7 +15,9 @@ from gateway.config import GatewayConfig, Platform, PlatformConfig
 
 @pytest.mark.parametrize("drain_timing", ["after_run", "before_bookkeeping"])
 @pytest.mark.parametrize("transport_ok", [True, False], ids=["sent", "refused"])
-def test_drained_delivery_outcome_is_written_back(tmp_path, monkeypatch, transport_ok, drain_timing):
+def test_drained_delivery_outcome_is_written_back(
+    tmp_path, monkeypatch, transport_ok, drain_timing
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     config = GatewayConfig()
     config.platforms[Platform.TELEGRAM] = PlatformConfig(enabled=True)
@@ -23,13 +26,19 @@ def test_drained_delivery_outcome_is_written_back(tmp_path, monkeypatch, transpo
 
     async def send(platform, pconfig, chat_id, text, **kwargs):
         sent.append(text)
-        return {"success": transport_ok, "message_id": "r",
-                "error": None if transport_ok else "transport refused"}
+        return {
+            "success": transport_ok,
+            "message_id": "r",
+            "error": None if transport_ok else "transport refused",
+        }
 
     monkeypatch.setattr("tools.send_message_tool._send_to_platform", send)
-    monkeypatch.setattr(scheduler, "run_job", lambda job, **kw: (True, "raw", "the result", None))
+    monkeypatch.setattr(
+        scheduler, "run_job", lambda job, **kw: (True, "raw", "the result", None)
+    )
     if drain_timing == "before_bookkeeping":
         from cron import delivery_queue
+
         real_enqueue = delivery_queue.enqueue
 
         def enqueue_then_drain(*args, **kwargs):

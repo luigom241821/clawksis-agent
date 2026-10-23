@@ -31,7 +31,9 @@ class FakeAgent:
         self.redirects.append(text)
         return True
 
-    def run_conversation(self, *, user_message, conversation_history, task_id, **kwargs):
+    def run_conversation(
+        self, *, user_message, conversation_history, task_id, **kwargs
+    ):
         self.runs.append(user_message)
         messages = list(conversation_history or [])
         messages.append({"role": "user", "content": user_message})
@@ -91,8 +93,13 @@ def test_acp_real_agent_gets_session_db_for_recall(monkeypatch):
             setattr(module, key, value)
         return module
 
-    monkeypatch.setitem(sys.modules, "run_agent", mod("run_agent", AIAgent=CapturingAgent))
-    monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"model": {"default": "m", "provider": "p"}})
+    monkeypatch.setitem(
+        sys.modules, "run_agent", mod("run_agent", AIAgent=CapturingAgent)
+    )
+    monkeypatch.setattr(
+        "clawk_cli.config.load_config",
+        lambda: {"model": {"default": "m", "provider": "p"}},
+    )
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.runtime_provider",
@@ -162,7 +169,10 @@ async def test_acp_compress_rejected_while_turn_running():
     sentinel_db = object()
     fake._session_db = sentinel_db
     fake._cached_system_prompt = "sys"
-    fake._compress_context = lambda *a, **k: ([{"role": "user", "content": "summary"}], "new-sys")
+    fake._compress_context = lambda *a, **k: (
+        [{"role": "user", "content": "summary"}],
+        "new-sys",
+    )
 
     response = await acp_agent.prompt(
         session_id=state.session_id,
@@ -192,7 +202,9 @@ async def test_acp_prompt_during_mutating_command_queues_then_runs():
             acp_agent.prompt(
                 session_id=st.session_id,
                 prompt=[TextContentBlock(type="text", text="follow-up")],
-            ), loop)
+            ),
+            loop,
+        )
         fut.result(timeout=10)
         return orig_reset(args, st)
 
@@ -210,12 +222,6 @@ async def test_acp_prompt_during_mutating_command_queues_then_runs():
         {"role": "assistant", "content": "ran: follow-up"},
     ]
     assert state.command_op is False
-
-
-
-
-
-
 
 
 @pytest.mark.asyncio
@@ -238,9 +244,3 @@ async def test_acp_cancel_publishes_hard_stop_while_holding_runtime_lock():
     assert observed["lock_held"] is True
     assert state.cancel_event.is_set()
     assert state.interrupted_prompt_text == "original request"
-
-
-
-
-
-

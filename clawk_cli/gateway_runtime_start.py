@@ -1,4 +1,5 @@
 """One detached-process primitive; callers must first prove owner/service absence."""
+
 from __future__ import annotations
 
 import os
@@ -6,7 +7,10 @@ from pathlib import Path
 import subprocess
 import sys
 
-from clawk_cli._subprocess_compat import windows_detach_popen_kwargs, _WINDOWS_GATEWAY_BREAKAWAY_ENV
+from clawk_cli._subprocess_compat import (
+    windows_detach_popen_kwargs,
+    _WINDOWS_GATEWAY_BREAKAWAY_ENV,
+)
 from clawk_cli.gateway_runtime_service import RuntimeStartError, remaining
 
 
@@ -16,24 +20,47 @@ from clawk_cli.gateway_runtime_service import RuntimeStartError, remaining
 # prefill file, provider request, project plugins) ride each session's ``client_env`` instead
 # (agent.session_client_env); an operator-started gateway keeps its own environment.
 DAEMON_STRIPPED_ENV = (
-    "CLAWK_PROFILE", "CLAWK_YOLO_MODE", "CLAWK_IGNORE_RULES", "CLAWK_SAFE_MODE",
-    "CLAWK_IGNORE_USER_CONFIG", "CLAWK_ACCEPT_HOOKS", "CLAWK_SESSION_SOURCE", "TERMINAL_CWD",
-    "CLAWK_KANBAN_TASK", "CLAWK_KANBAN_WORKSPACE", "CLAWK_KANBAN_BRANCH", "CLAWK_KANBAN_RUN_ID",
-    "CLAWK_KANBAN_CLAIM_LOCK", "CLAWK_KANBAN_CLAIM_TTL_SECONDS", "CLAWK_KANBAN_GOAL_MODE",
-    "CLAWK_KANBAN_GOAL_MAX_TURNS", "CLAWK_KANBAN_DB", "CLAWK_KANBAN_WORKSPACES_ROOT",
-    "CLAWK_KANBAN_BOARD", "CLAWK_TENANT", "CLAWK_SESSION_SOURCE_EXPLICIT", "CLAWK_TURN_AUTHOR",
+    "CLAWK_PROFILE",
+    "CLAWK_YOLO_MODE",
+    "CLAWK_IGNORE_RULES",
+    "CLAWK_SAFE_MODE",
+    "CLAWK_IGNORE_USER_CONFIG",
+    "CLAWK_ACCEPT_HOOKS",
+    "CLAWK_SESSION_SOURCE",
+    "TERMINAL_CWD",
+    "CLAWK_KANBAN_TASK",
+    "CLAWK_KANBAN_WORKSPACE",
+    "CLAWK_KANBAN_BRANCH",
+    "CLAWK_KANBAN_RUN_ID",
+    "CLAWK_KANBAN_CLAIM_LOCK",
+    "CLAWK_KANBAN_CLAIM_TTL_SECONDS",
+    "CLAWK_KANBAN_GOAL_MODE",
+    "CLAWK_KANBAN_GOAL_MAX_TURNS",
+    "CLAWK_KANBAN_DB",
+    "CLAWK_KANBAN_WORKSPACES_ROOT",
+    "CLAWK_KANBAN_BOARD",
+    "CLAWK_TENANT",
+    "CLAWK_SESSION_SOURCE_EXPLICIT",
+    "CLAWK_TURN_AUTHOR",
     # Human-presence/one-shot markers: inherited, every messaging/cron turn would read as attended or -q.
-    "CLAWK_INTERACTIVE", "CLAWK_GATEWAY_SESSION", "CLAWK_SINGLE_QUERY_SESSION",
-    "CLAWK_EPHEMERAL_SYSTEM_PROMPT", "CLAWK_PREFILL_MESSAGES_FILE", "CLAWK_INFERENCE_PROVIDER",
-    "CLAWK_ENABLE_PROJECT_PLUGINS", "CLAWK_TUI_CLIENT_ENV",
+    "CLAWK_INTERACTIVE",
+    "CLAWK_GATEWAY_SESSION",
+    "CLAWK_SINGLE_QUERY_SESSION",
+    "CLAWK_EPHEMERAL_SYSTEM_PROMPT",
+    "CLAWK_PREFILL_MESSAGES_FILE",
+    "CLAWK_INFERENCE_PROVIDER",
+    "CLAWK_ENABLE_PROJECT_PLUGINS",
+    "CLAWK_TUI_CLIENT_ENV",
     # A terminal's shell under a systemd service (gnome-terminal-server, a user unit) carries these; the
     # unmanaged daemon would then identify as "systemd" and maintenance would refuse it as supervised.
-    "INVOCATION_ID", "JOURNAL_STREAM",
+    "INVOCATION_ID",
+    "JOURNAL_STREAM",
 )
 
 
-def spawn_unmanaged_gateway(profile_home: Path, *, deadline: float, idle_exit: bool = False,
-                            force: bool = False) -> subprocess.Popen:
+def spawn_unmanaged_gateway(
+    profile_home: Path, *, deadline: float, idle_exit: bool = False, force: bool = False
+) -> subprocess.Popen:
     """Request a daemon, not readiness. Refuse Windows no-breakaway fallback.
 
     No --replace, persistence, login changes, elevation, shell, or inherited stdio.
@@ -49,24 +76,42 @@ def spawn_unmanaged_gateway(profile_home: Path, *, deadline: float, idle_exit: b
     # _apply_profile_override follows the sticky active_profile and boots the wrong
     # profile's daemon. A <root>/profiles/<name> home is already trusted as-is.
     selector = [] if home.parent.name == "profiles" else ["--profile", "default"]
-    command = [sys.executable, "-m", "clawk_cli.main", *selector, "gateway", "run", "--quiet",
-               *(["--idle-exit"] if idle_exit else []), *(["--force"] if force else [])]
+    command = [
+        sys.executable,
+        "-m",
+        "clawk_cli.main",
+        *selector,
+        "gateway",
+        "run",
+        "--quiet",
+        *(["--idle-exit"] if idle_exit else []),
+        *(["--force"] if force else []),
+    ]
     # The target profile's own secrets, never the launching client's: a `clawk -p work` client's
     # dotenv would otherwise become the default daemon's frozen launch env (host_gateway_child_env).
     from tools.environments.local import served_profile_child_env
-    env = served_profile_child_env(base=dict(os.environ), target_home=home, inherit_credentials=True)
+
+    env = served_profile_child_env(
+        base=dict(os.environ), target_home=home, inherit_credentials=True
+    )
     if sys.platform == "win32":
         from clawk_cli.gateway_windows import windowless_gateway_restart_spec
+
         command, _, overlay = windowless_gateway_restart_spec(command)
         if not overlay:
             raise RuntimeStartError("windows_interpreter_unavailable")
         env.update(overlay)
         env[_WINDOWS_GATEWAY_BREAKAWAY_ENV] = "1"
-    env.update(CLAWK_HOME=str(home), CLAWK_GATEWAY_DETACHED="1", PYTHONIOENCODING="utf-8")
+    env.update(
+        CLAWK_HOME=str(home), CLAWK_GATEWAY_DETACHED="1", PYTHONIOENCODING="utf-8"
+    )
     # Profile selection is the explicit home, not the invoking client's display
     # name. Launch-only approval/context/config flags ride the launching session's frozen
     # policy, not the shared daemon or every later session.
-    from gateway.session_context import _VAR_MAP  # the launching turn's session identity, too
+    from gateway.session_context import (
+        _VAR_MAP,
+    )  # the launching turn's session identity, too
+
     for key in (*DAEMON_STRIPPED_ENV, *_VAR_MAP):
         env.pop(key, None)
     remaining(deadline)
@@ -75,11 +120,22 @@ def spawn_unmanaged_gateway(profile_home: Path, *, deadline: float, idle_exit: b
     try:
         with (logs / "gateway-stdio.log").open("ab", buffering=0) as output:
             remaining(deadline)
-            return subprocess.Popen(command, cwd=root, env=env, close_fds=True,
-                                    stdin=subprocess.DEVNULL, stdout=output, stderr=output,
-                                    **windows_detach_popen_kwargs())
+            return subprocess.Popen(
+                command,
+                cwd=root,
+                env=env,
+                close_fds=True,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=output,
+                **windows_detach_popen_kwargs(),
+            )
     except OSError as exc:
-        reason = "windows_breakaway_unavailable" if sys.platform == "win32" else "spawn_failed"
+        reason = (
+            "windows_breakaway_unavailable"
+            if sys.platform == "win32"
+            else "spawn_failed"
+        )
         raise RuntimeStartError(reason) from exc
 
 
@@ -88,10 +144,15 @@ def start_detached_replacement(profile_home: Path, *, force: bool = False) -> in
     ``gateway ensure`` starts an absent one. In the foreground, the restarting client (Desktop's
     bounded, piped call) would itself become the long-lived gateway it only meant to restart."""
     import time
+
     try:
-        spawn_unmanaged_gateway(profile_home, deadline=time.monotonic() + 30, force=force)
+        spawn_unmanaged_gateway(
+            profile_home, deadline=time.monotonic() + 30, force=force
+        )
     except RuntimeStartError as exc:
-        print(f"✗ Could not start the gateway in the background: {exc}", file=sys.stderr)
+        print(
+            f"✗ Could not start the gateway in the background: {exc}", file=sys.stderr
+        )
         return 1
     print("✓ Started the gateway in the background")
     return 0
@@ -114,7 +175,9 @@ _TAIL_LINES = 15
 _TAIL_BYTES = 64 * 1024
 
 
-def startup_failure_report(profile_home: Path, offset: int, status: int, pid: int | None = None) -> str:
+def startup_failure_report(
+    profile_home: Path, offset: int, status: int, pid: int | None = None
+) -> str:
     """What a client prints when the gateway it started died before serving: the exit status, the
     redacted tail of THIS launch's stdio (the traceback lives there, written before logging is up and
     before the detached-stdio redactor is installed) and the command that shows the whole log."""
@@ -125,18 +188,33 @@ def startup_failure_report(profile_home: Path, offset: int, status: int, pid: in
             text = log.read().decode("utf-8", errors="replace")
     except OSError:
         text = ""
-    lines = [line.rstrip() for line in text.splitlines()
-             if line.strip() and not line.lstrip().startswith(_BANNER_PREFIXES)][-_TAIL_LINES:]
+    lines = [
+        line.rstrip()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith(_BANNER_PREFIXES)
+    ][-_TAIL_LINES:]
     if not lines:
         # A clean refusal (config/credential verdict, exit 78) is logged, not printed: the runtime
         # status file names it.
         from gateway.status import read_runtime_status
+
         status_file = read_runtime_status(profile_home / "gateway_state.json") or {}
-        if status_file.get("exit_reason") and pid is not None and status_file.get("pid") == pid:
+        if (
+            status_file.get("exit_reason")
+            and pid is not None
+            and status_file.get("pid") == pid
+        ):
             lines = [str(status_file["exit_reason"])[:2000]]
             path = profile_home / "logs" / "gateway.log"
     from agent.redact import redact_sensitive_text
-    tail = redact_sensitive_text("\n".join(lines), force=True, redact_url_credentials=True)
+
+    tail = redact_sensitive_text(
+        "\n".join(lines), force=True, redact_url_credentials=True
+    )
     see = f'type "{path}"' if sys.platform == "win32" else f"tail -n 200 '{path}'"
-    body = "\n".join("  " + line for line in tail.splitlines()) if tail else "  (it wrote no output)"
+    body = (
+        "\n".join("  " + line for line in tail.splitlines())
+        if tail
+        else "  (it wrote no output)"
+    )
     return f"the gateway exited with status {status} before it could serve:\n{body}\nFull log: {see}"

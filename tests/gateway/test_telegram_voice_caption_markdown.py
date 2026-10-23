@@ -7,6 +7,7 @@ caption to MarkdownV2 (when the formatted text fits the 1024-char caption
 cap) and falls back to the plain truncated caption when the Bot API rejects
 the entities or formatting overflows.
 """
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -35,9 +36,7 @@ async def test_voice_caption_falls_back_to_plain_on_entity_rejection(
     monkeypatch, tmp_path
 ):
     """A Bot API entity-parse rejection retries with the plain caption."""
-    monkeypatch.setattr(
-        telegram_mod, "_probe_voice_duration_seconds", lambda _p: 3
-    )
+    monkeypatch.setattr(telegram_mod, "_probe_voice_duration_seconds", lambda _p: 3)
     adapter = _make_adapter()
     adapter._bot.send_voice = AsyncMock(
         side_effect=[
@@ -55,5 +54,3 @@ async def test_voice_caption_falls_back_to_plain_on_entity_rejection(
     retry_kwargs = adapter._bot.send_voice.await_args_list[1].kwargs
     assert retry_kwargs["parse_mode"] is None
     assert retry_kwargs["caption"] == "*bold* reply"
-
-

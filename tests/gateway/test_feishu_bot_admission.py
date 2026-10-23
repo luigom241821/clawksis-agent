@@ -105,14 +105,23 @@ _ADMIT_CASES = [
     pytest.param(
         _admit_case(
             adapter={"bot_open_id": "ou_me", "allow_bots": "all"},
-            sender={"sender_type": "bot", "open_id": "ou_me", "user_id": "u_me", "union_id": "un_me"},
+            sender={
+                "sender_type": "bot",
+                "open_id": "ou_me",
+                "user_id": "u_me",
+                "union_id": "un_me",
+            },
             expected="self_echo",
         ),
         id="self_echo:mixed_ids",
     ),
     pytest.param(
         _admit_case(
-            adapter={"bot_open_id": "ou_self", "bot_user_id": "u_self", "allow_bots": "all"},
+            adapter={
+                "bot_open_id": "ou_self",
+                "bot_user_id": "u_self",
+                "allow_bots": "all",
+            },
             sender={"sender_type": "bot", "open_id": None, "user_id": "u_self"},
             expected="self_echo",
         ),
@@ -298,6 +307,7 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
     import asyncio
 
     import plugins.platforms.feishu.adapter as feishu_mod
+
     FeishuAdapter = feishu_mod.FeishuAdapter
 
     class _FakeBaseRequestBuilder:
@@ -325,8 +335,12 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
         SimpleNamespace(builder=lambda: _FakeBaseRequestBuilder()),
         raising=False,
     )
-    monkeypatch.setattr(feishu_mod, "HttpMethod", SimpleNamespace(GET="GET"), raising=False)
-    monkeypatch.setattr(feishu_mod, "AccessTokenType", SimpleNamespace(TENANT="TENANT"), raising=False)
+    monkeypatch.setattr(
+        feishu_mod, "HttpMethod", SimpleNamespace(GET="GET"), raising=False
+    )
+    monkeypatch.setattr(
+        feishu_mod, "AccessTokenType", SimpleNamespace(TENANT="TENANT"), raising=False
+    )
 
     adapter = object.__new__(FeishuAdapter)
     adapter._bot_open_id = ""
@@ -339,9 +353,11 @@ def test_hydrate_bot_identity_populates_self_ids_from_bot_v3_info(monkeypatch):
     def _fake_request(request):
         captured["uri"] = getattr(request, "uri", None)
         captured["http_method"] = getattr(request, "http_method", None)
-        return SimpleNamespace(raw=SimpleNamespace(
-            content=b'{"code":0,"bot":{"app_name":"Clawksis","open_id":"ou_hydrated"}}'
-        ))
+        return SimpleNamespace(
+            raw=SimpleNamespace(
+                content=b'{"code":0,"bot":{"app_name":"Clawksis","open_id":"ou_hydrated"}}'
+            )
+        )
 
     adapter._client = SimpleNamespace(request=_fake_request)
 
@@ -413,6 +429,7 @@ def _group_case(
 
 def _group_rule(policy: str, **kwargs):
     from plugins.platforms.feishu.adapter import FeishuGroupRule
+
     return FeishuGroupRule(policy=policy, **kwargs)
 
 
@@ -474,19 +491,27 @@ _GROUP_CASES = [
 # parametrize so we can use _group_rule() (FeishuGroupRule import).
 _GROUP_RULE_CASES = [
     pytest.param(
-        "disabled", "bot", False,
+        "disabled",
+        "bot",
+        False,
         id="bot:disabled_policy_blocks_even_with_bypass",
     ),
     pytest.param(
-        "disabled", "app", False,
+        "disabled",
+        "app",
+        False,
         id="app:disabled_policy_blocks_even_with_bypass",
     ),
     pytest.param(
-        "admin_only", "bot", False,
+        "admin_only",
+        "bot",
+        False,
         id="bot:admin_only_policy_blocks_non_admin",
     ),
     pytest.param(
-        "admin_only", "app", False,
+        "admin_only",
+        "app",
+        False,
         id="app:admin_only_policy_blocks_non_admin",
     ),
 ]
@@ -497,15 +522,16 @@ def test_allow_group_message_blacklist_is_human_scope_only(sender_type):
     # blacklist is parallel to allowlist (human-scope); admitted bots bypass
     # it. To block a specific bot, gate upstream via FEISHU_ALLOW_BOTS.
     adapter = make_adapter_skeleton()
-    adapter._group_rules = {
-        "oc_1": _group_rule("blacklist", blacklist={"ou_peer"})
-    }
+    adapter._group_rules = {"oc_1": _group_rule("blacklist", blacklist={"ou_peer"})}
     sender = make_sender(sender_type=sender_type, open_id="ou_peer")
-    assert adapter._allow_group_message(
-        sender_id=sender.sender_id,
-        chat_id="oc_1",
-        is_bot=True,
-    ) is True
+    assert (
+        adapter._allow_group_message(
+            sender_id=sender.sender_id,
+            chat_id="oc_1",
+            is_bot=True,
+        )
+        is True
+    )
 
 
 # --- Realistic payload smoke -----------------------------------------------
@@ -532,7 +558,9 @@ def test_admit_accepts_realistic_bot_at_bot_group_event():
     )
     sender = SimpleNamespace(
         sender_type="bot",
-        sender_id=SimpleNamespace(union_id="on_peerUnion", user_id="u_peer", open_id="ou_peer_bot"),
+        sender_id=SimpleNamespace(
+            union_id="on_peerUnion", user_id="u_peer", open_id="ou_peer_bot"
+        ),
         tenant_key="tenant_ab",
     )
 
@@ -571,7 +599,9 @@ def test_handle_message_event_data_forwards_sender_when_admitted():
 # --- Profile-scoped admission config (#86905) -------------------------------
 
 
-def test_dm_admission_config_resolves_from_profile_scope_under_multiplex(tmp_path, monkeypatch):
+def test_dm_admission_config_resolves_from_profile_scope_under_multiplex(
+    tmp_path, monkeypatch
+):
     """os.environ holds the DEFAULT profile's admission view; a secondary
     profile's .env must govern its own adapter — Feishu open_ids are
     app-scoped, so the default allow-list can never match the role app's
@@ -616,13 +646,26 @@ def test_dm_admission_config_resolves_from_profile_scope_under_multiplex(tmp_pat
     # _admit runs on the WS thread with no scope: the snapshot must carry.
     adapter = object.__new__(FeishuAdapter)
     adapter._apply_settings(settings)
-    assert adapter._admit(make_sender(open_id="ou_role_view"), make_message(chat_type="p2p")) is None
-    assert adapter._admit(make_sender(open_id="ou_default_view"), make_message(chat_type="p2p")) == "dm_policy_rejected"
+    assert (
+        adapter._admit(
+            make_sender(open_id="ou_role_view"), make_message(chat_type="p2p")
+        )
+        is None
+    )
+    assert (
+        adapter._admit(
+            make_sender(open_id="ou_default_view"), make_message(chat_type="p2p")
+        )
+        == "dm_policy_rejected"
+    )
 
     assert allow_all.allow_all_dm is True
     adapter = object.__new__(FeishuAdapter)
     adapter._apply_settings(allow_all)
-    assert adapter._admit(make_sender(open_id="ou_anyone"), make_message(chat_type="p2p")) is None
+    assert (
+        adapter._admit(make_sender(open_id="ou_anyone"), make_message(chat_type="p2p"))
+        is None
+    )
 
 
 def test_dm_admission_config_falls_back_to_os_environ_when_unscoped(monkeypatch):
@@ -639,4 +682,7 @@ def test_dm_admission_config_falls_back_to_os_environ_when_unscoped(monkeypatch)
     assert settings.allowed_group_users == frozenset({"ou_a", "ou_b"})
     adapter = object.__new__(FeishuAdapter)
     adapter._apply_settings(settings)
-    assert adapter._admit(make_sender(open_id="ou_anyone"), make_message(chat_type="p2p")) is None
+    assert (
+        adapter._admit(make_sender(open_id="ou_anyone"), make_message(chat_type="p2p"))
+        is None
+    )

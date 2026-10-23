@@ -18,7 +18,9 @@ from gateway.platforms.event import MessageEvent
 from gateway.session import SessionSource
 
 
-def _make_event(text="/reasoning", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"):
+def _make_event(
+    text="/reasoning", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"
+):
     source = SessionSource(
         platform=platform,
         user_id=user_id,
@@ -69,7 +71,9 @@ def _make_runner(adapter=None):
 
 class TestReasoningChoicePicker:
     @pytest.mark.asyncio
-    async def test_bare_reasoning_sends_picker_when_adapter_supports_it(self, tmp_path, monkeypatch):
+    async def test_bare_reasoning_sends_picker_when_adapter_supports_it(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
         adapter = _PickerAdapter()
         runner = _make_runner(adapter)
@@ -82,10 +86,12 @@ class TestReasoningChoicePicker:
         values = [c["value"] for c in call["choices"]]
         # Full canonical ladder + none + subcommands, in order
         from clawk_constants import VALID_REASONING_EFFORTS
-        assert values[0] == "none"
-        assert values[1:1 + len(VALID_REASONING_EFFORTS)] == list(VALID_REASONING_EFFORTS)
-        assert values[-3:] == ["reset", "show", "hide"]
 
+        assert values[0] == "none"
+        assert values[1 : 1 + len(VALID_REASONING_EFFORTS)] == list(
+            VALID_REASONING_EFFORTS
+        )
+        assert values[-3:] == ["reset", "show", "hide"]
 
     @pytest.mark.asyncio
     async def test_picker_selection_applies_same_as_typed(self, tmp_path, monkeypatch):
@@ -111,16 +117,21 @@ class TestFastChoicePicker:
     def _patch_fast_support(self, monkeypatch, tmp_path):
         monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
         monkeypatch.setattr(gateway_run, "_load_gateway_config", dict)
-        monkeypatch.setattr(gateway_run, "_resolve_gateway_model", lambda cfg=None: "gpt-5.6")
+        monkeypatch.setattr(
+            gateway_run, "_resolve_gateway_model", lambda cfg=None: "gpt-5.6"
+        )
         # ``/fast`` now resolves the effective session model through
         # ``_resolve_session_agent_runtime``; with no session override that path
         # calls runtime provider resolution, so stub it (no real credentials in CI).
         monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", dict)
         import clawk_cli.models as models_mod
+
         monkeypatch.setattr(models_mod, "model_supports_fast_mode", lambda m: True)
 
     @pytest.mark.asyncio
-    async def test_bare_fast_sends_picker_when_adapter_supports_it(self, tmp_path, monkeypatch):
+    async def test_bare_fast_sends_picker_when_adapter_supports_it(
+        self, tmp_path, monkeypatch
+    ):
         self._patch_fast_support(monkeypatch, tmp_path)
         adapter = _PickerAdapter()
         runner = _make_runner(adapter)
@@ -146,5 +157,3 @@ class TestFastChoicePicker:
         assert runner._service_tier == "priority"
         assert runner._session_service_tier_overrides
         assert not (tmp_path / "config.yaml").exists()
-
-

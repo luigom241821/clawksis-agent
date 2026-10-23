@@ -66,8 +66,17 @@ class Offender:
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                          errors="surrogateescape", stdin=subprocess.DEVNULL, timeout=300, check=False)
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        stdin=subprocess.DEVNULL,
+        timeout=300,
+        check=False,
+    )
     if check and proc.returncode != 0:
         raise GitError(f"git {' '.join(args)}: {proc.stderr.strip()}")
     return proc.stdout
@@ -76,7 +85,12 @@ def _git(repo: Path, *args: str, check: bool = True) -> str:
 def default_base(repo: Path, head: str | None) -> str:
     """Merge-base of the judged commit (HEAD for a tree or the working tree) with origin/main."""
     tip = "HEAD"
-    if head and _git(repo, "rev-parse", "--verify", "--quiet", f"{head}^{{commit}}", check=False).strip():
+    if (
+        head
+        and _git(
+            repo, "rev-parse", "--verify", "--quiet", f"{head}^{{commit}}", check=False
+        ).strip()
+    ):
         tip = head
     for ref in ("origin/main", "main"):
         out = _git(repo, "merge-base", tip, ref, check=False).strip()
@@ -125,7 +139,9 @@ def _binary_paths(repo: Path, base: str, head: str | None) -> set[str]:
 
 
 def _tree_blobs(repo: Path, rev: str) -> set[str]:
-    out = _git(repo, "ls-tree", "-r", "-z", "--full-tree", rev)  # "<mode> <type> <sha>\t<path>"
+    out = _git(
+        repo, "ls-tree", "-r", "-z", "--full-tree", rev
+    )  # "<mode> <type> <sha>\t<path>"
     return {entry.split("\t", 1)[0].split()[2] for entry in out.split("\0") if entry}
 
 
@@ -142,9 +158,16 @@ def _sniff_binary(path: Path) -> bool:
 def _sizes(repo: Path, blobs: list[str]) -> dict[str, int]:
     if not blobs:
         return {}
-    proc = subprocess.run(["git", "cat-file", "--batch-check=%(objectname) %(objectsize)"], cwd=repo,
-                          input="\n".join(blobs) + "\n", capture_output=True, text=True,
-                          encoding="utf-8", timeout=300, check=False)
+    proc = subprocess.run(
+        ["git", "cat-file", "--batch-check=%(objectname) %(objectsize)"],
+        cwd=repo,
+        input="\n".join(blobs) + "\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=300,
+        check=False,
+    )
     if proc.returncode != 0:
         raise GitError(f"git cat-file --batch-check: {proc.stderr.strip()}")
     sizes: dict[str, int] = {}
@@ -177,18 +200,33 @@ def read_allowlist(path: Path) -> set[str]:
 
 def allowlist_at(repo: Path, rev: str) -> set[str]:
     """The allowlist as revision ``rev`` holds it (empty when ``rev`` has none)."""
-    if not _git(repo, "rev-parse", "--verify", "--quiet", f"{rev}:{ALLOWLIST}", check=False).strip():
-        _git(repo, "rev-parse", "--verify", f"{rev}^{{tree}}")  # a bad revision is a usage error
+    if not _git(
+        repo, "rev-parse", "--verify", "--quiet", f"{rev}:{ALLOWLIST}", check=False
+    ).strip():
+        _git(
+            repo, "rev-parse", "--verify", f"{rev}^{{tree}}"
+        )  # a bad revision is a usage error
         return set()
     return parse_allowlist(_git(repo, "cat-file", "blob", f"{rev}:{ALLOWLIST}"))
 
 
-def find_offenders(repo: Path, base: str, head: str | None, limit: int = MAX_BYTES,
-                   allowlist: Collection[str] = frozenset()) -> list[Offender]:
+def find_offenders(
+    repo: Path,
+    base: str,
+    head: str | None,
+    limit: int = MAX_BYTES,
+    allowlist: Collection[str] = frozenset(),
+) -> list[Offender]:
     """Changed paths base -> head (None = working tree + untracked files) over ``limit``."""
-    args = ["diff", "--raw", "-z", "-M", "-C", "--no-abbrev", base] + ([head] if head else [])
+    args = ["diff", "--raw", "-z", "-M", "-C", "--no-abbrev", base] + (
+        [head] if head else []
+    )
     known = _tree_blobs(repo, base)
-    changes = [c for c in _parse_raw(_git(repo, *args)) if c.blob not in known and c.path not in allowlist]
+    changes = [
+        c
+        for c in _parse_raw(_git(repo, *args))
+        if c.blob not in known and c.path not in allowlist
+    ]
     binary = _binary_paths(repo, base, head)
     sizes = _sizes(repo, sorted({c.blob for c in changes if c.blob}))
     offenders: list[Offender] = []
@@ -197,17 +235,28 @@ def find_offenders(repo: Path, base: str, head: str | None, limit: int = MAX_BYT
             size = sizes.get(change.blob, 0)
         else:  # working-tree content git has not hashed (an unstaged edit)
             disk = repo / change.path
-            size = disk.stat().st_size if disk.is_file() and not disk.is_symlink() else 0
+            size = (
+                disk.stat().st_size if disk.is_file() and not disk.is_symlink() else 0
+            )
         is_binary = change.path in binary
         if size > limit and (is_binary or change.status == "A"):
-            offenders.append(Offender(change.path, size, "binary" if is_binary else "new file", change.status))
+            offenders.append(
+                Offender(
+                    change.path,
+                    size,
+                    "binary" if is_binary else "new file",
+                    change.status,
+                )
+            )
     if head is None:
         for rel in _untracked(repo):
             disk = repo / rel
             if rel in allowlist or not disk.is_file() or disk.is_symlink():
                 continue
             size = disk.stat().st_size
-            if size > limit and _hash_file(repo, rel) not in known:  # an untracked copy adds nothing
+            if (
+                size > limit and _hash_file(repo, rel) not in known
+            ):  # an untracked copy adds nothing
                 kind = "binary" if _sniff_binary(disk) else "new file"
                 offenders.append(Offender(rel, size, kind, "A"))
     return sorted(offenders, key=lambda o: (-o.size, o.path))
@@ -218,8 +267,10 @@ def _kib(size: int) -> str:
 
 
 def render(offenders: list[Offender], limit: int) -> list[str]:
-    lines = [f"::error file={o.path}::{o.path} is {_kib(o.size)} ({o.kind}); the limit is {_kib(limit)}"
-             for o in offenders]
+    lines = [
+        f"::error file={o.path}::{o.path} is {_kib(o.size)} ({o.kind}); the limit is {_kib(limit)}"
+        for o in offenders
+    ]
     lines += [
         "",
         f"{len(offenders)} file(s) over the {_kib(limit)} blob limit. Every blob a merge adds stays in",
@@ -237,24 +288,38 @@ def render(offenders: list[Offender], limit: int) -> list[str]:
 def summary_table(offenders: list[Offender], limit: int) -> str:
     if not offenders:
         return f"### Blob size\n\nNo added or modified file is over {_kib(limit)}.\n"
-    rows = "\n".join(f"| `{o.path}` | {o.kind} | {o.status} | {_kib(o.size)} |" for o in offenders)
-    return (f"### Blob size: {len(offenders)} file(s) over {_kib(limit)}\n\n"
-            f"| Path | Kind | Status | Size |\n|---|---|---|---|\n{rows}\n\n"
-            f"Compress the file, move it out of git, or add its exact path to `{ALLOWLIST}`.\n")
+    rows = "\n".join(
+        f"| `{o.path}` | {o.kind} | {o.status} | {_kib(o.size)} |" for o in offenders
+    )
+    return (
+        f"### Blob size: {len(offenders)} file(s) over {_kib(limit)}\n\n"
+        f"| Path | Kind | Status | Size |\n|---|---|---|---|\n{rows}\n\n"
+        f"Compress the file, move it out of git, or add its exact path to `{ALLOWLIST}`.\n"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
-    parser.add_argument("--base", help="base revision (default: merge-base with origin/main)")
-    parser.add_argument("--head", help="head revision or tree (default: the working tree)")
-    parser.add_argument("--limit", type=int, default=MAX_BYTES, help=f"bytes (default {MAX_BYTES})")
+    parser.add_argument(
+        "--base", help="base revision (default: merge-base with origin/main)"
+    )
+    parser.add_argument(
+        "--head", help="head revision or tree (default: the working tree)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=MAX_BYTES, help=f"bytes (default {MAX_BYTES})"
+    )
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     args = parser.parse_args(argv)
     repo = args.repo.resolve()
     try:
         base = args.base or default_base(repo, args.head)
         # The judged side's own exceptions: the revision's list, or the working tree's.
-        allowlist = allowlist_at(repo, args.head) if args.head else read_allowlist(repo / ALLOWLIST)
+        allowlist = (
+            allowlist_at(repo, args.head)
+            if args.head
+            else read_allowlist(repo / ALLOWLIST)
+        )
         offenders = find_offenders(repo, base, args.head, args.limit, allowlist)
     except GitError as exc:
         print(f"check_blob_size: {exc}", file=sys.stderr)

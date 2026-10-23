@@ -3,8 +3,6 @@
 from unittest.mock import patch
 
 
-
-
 class TestMinimaxM3StaleCacheGuard:
     """Pre-catalog builds resolved M3 via the generic 'minimax' catch-all
     (204,800) and persisted it before the 'minimax-m3' (1M) catalog entry
@@ -12,13 +10,11 @@ class TestMinimaxM3StaleCacheGuard:
     to 1M, while leaving correct M2.x entries (204,800) untouched.
     """
 
-
-
-
     def test_m2_cache_not_clobbered(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         import importlib
         import agent.model_metadata as mm
+
         importlib.reload(mm)
         base = "https://api.minimaxi.com/anthropic"
         # 204,800 is the CORRECT value for M2.x — guard must not touch it.
@@ -28,7 +24,6 @@ class TestMinimaxM3StaleCacheGuard:
                 slug, base_url=base, api_key="", provider="minimax-cn"
             )
             assert ctx == 204_800, f"{slug} should stay 204800, got {ctx}"
-
 
 
 class TestMinimaxThinkingSupport:
@@ -42,6 +37,7 @@ class TestMinimaxThinkingSupport:
 
     def test_minimax_m27_gets_manual_thinking(self):
         from agent.anthropic_adapter import build_anthropic_kwargs
+
         kwargs = build_anthropic_kwargs(
             model="MiniMax-M2.7",
             messages=[{"role": "user", "content": "hello"}],
@@ -54,10 +50,6 @@ class TestMinimaxThinkingSupport:
         assert "budget_tokens" in kwargs["thinking"]
         # MiniMax should NOT get adaptive thinking or output_config
         assert "output_config" not in kwargs
-
-
-
-
 
 
 class TestMinimaxBetaHeaders:
@@ -76,6 +68,7 @@ class TestMinimaxBetaHeaders:
     def _build_and_get_betas(self, api_key, base_url=None):
         """Build client, return the anthropic-beta header string."""
         from agent.anthropic_adapter import build_anthropic_client
+
         with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client(api_key, base_url=base_url)
             kwargs = mock_sdk.Anthropic.call_args[1]
@@ -91,22 +84,11 @@ class TestMinimaxBetaHeaders:
         assert self._TOOL_BETA not in betas
         assert self._THINKING_BETA in betas
 
-
     # -- MiniMax China ---------------------------------------------------
-
-
 
     # -- Non-MiniMax keeps full betas ------------------------------------
 
-
-
-
     # -- _common_betas_for_base_url unit tests ---------------------------
-
-
-
-
-
 
 
 class TestMinimaxApiMode:
@@ -120,13 +102,8 @@ class TestMinimaxApiMode:
 
     def test_minimax_returns_anthropic_messages(self):
         from clawk_cli.providers import determine_api_mode
+
         assert determine_api_mode("minimax") == "anthropic_messages"
-
-
-
-
-
-
 
 
 class TestMinimaxPreserveDots:
@@ -138,24 +115,19 @@ class TestMinimaxPreserveDots:
 
     def test_minimax_provider_preserves_dots(self):
         from types import SimpleNamespace
+
         agent = SimpleNamespace(provider="minimax", base_url="")
         from run_agent import AIAgent
+
         assert AIAgent._anthropic_preserve_dots(agent) is True
-
-
-
-
-
-
-
-
 
     def test_normalize_preserves_m25_free_dot(self):
         from agent.anthropic_message_convert import normalize_model_name
-        assert normalize_model_name("minimax-m2.5-free", preserve_dots=True) == "minimax-m2.5-free"
 
-
-
+        assert (
+            normalize_model_name("minimax-m2.5-free", preserve_dots=True)
+            == "minimax-m2.5-free"
+        )
 
 
 class TestMinimaxSwitchModelCredentialGuard:
@@ -173,6 +145,7 @@ class TestMinimaxSwitchModelCredentialGuard:
 
         with patch("run_agent.AIAgent.__init__", return_value=None):
             from run_agent import AIAgent
+
             agent = AIAgent.__new__(AIAgent)
             agent.provider = "anthropic"
             agent.model = "claude-sonnet-4"
@@ -187,10 +160,14 @@ class TestMinimaxSwitchModelCredentialGuard:
             agent._anthropic_client = MagicMock()
             agent._fallback_chain = []
 
-        with patch("agent.anthropic_adapter.build_anthropic_client") as mock_build, \
-             patch("agent.anthropic_credentials.resolve_anthropic_token", return_value="sk-ant-leaked") as mock_resolve, \
-             patch("agent.anthropic_credentials._is_oauth_token", return_value=False):
-
+        with (
+            patch("agent.anthropic_adapter.build_anthropic_client") as mock_build,
+            patch(
+                "agent.anthropic_credentials.resolve_anthropic_token",
+                return_value="sk-ant-leaked",
+            ) as mock_resolve,
+            patch("agent.anthropic_credentials._is_oauth_token", return_value=False),
+        ):
             agent.switch_model(
                 new_model="MiniMax-M2.7",
                 new_provider="minimax",

@@ -1,4 +1,5 @@
 """Real Linux venv/XDG I/O probe; help-launch is NOT a native UI proof."""
+
 import argparse
 import json
 import os
@@ -11,10 +12,22 @@ import venv
 
 
 def run(argv, env, cwd):
-    result = subprocess.run(argv, env=env, cwd=cwd, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, timeout=60, check=False)
-    return {"argv": argv, "returncode": result.returncode,
-            "stdout": result.stdout, "stderr": result.stderr}
+    result = subprocess.run(
+        argv,
+        env=env,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return {
+        "argv": argv,
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
 
 
 def main():
@@ -26,17 +39,24 @@ def main():
     repo = args.repo.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix="linux-launcher-", dir=args.output))
-    env = {"PATH": "/usr/bin:/bin", "HOME": str(root / "home"),
-           "CLAWK_HOME": str(root / "home/.clawk"),
-           "XDG_DATA_HOME": str(root / "xdg"), "LANG": "C.UTF-8",
-           "CLAWK_NONINTERACTIVE": "1"}
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(root / "home"),
+        "CLAWK_HOME": str(root / "home/.clawk"),
+        "XDG_DATA_HOME": str(root / "xdg"),
+        "LANG": "C.UTF-8",
+        "CLAWK_NONINTERACTIVE": "1",
+    }
     Path(env["CLAWK_HOME"]).mkdir(parents=True)
     venv_dir = root / "venv"
     venv.EnvBuilder(with_pip=False, symlinks=True).create(venv_dir)
     python = venv_dir / "bin/python"
     # Reuse dependencies read-only; put the tested checkout before its editable install.
     site = next(venv_dir.glob("lib/python*/site-packages"))
-    dependencies = Path(sys.prefix) / f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+    dependencies = (
+        Path(sys.prefix)
+        / f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
+    )
     (site / "probe.pth").write_text(str(repo) + "\n" + str(dependencies) + "\n")
     assert python.is_symlink() and python.resolve() != python
     install = (
@@ -46,15 +66,37 @@ def main():
         f"p=install_desktop_entry(Path({str(repo)!r})); "
         "print(json.dumps({'path':str(p),'text':p.read_text(),'python':sys.executable}))"
     )
-    rows: dict = {"source_sha": args.source_sha or subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
-            "root": str(root), "lexical_python": str(python), "base_python": str(python.resolve())}
-    rows["venv_import"] = run([str(python), "-I", "-c", "import ruamel.yaml,clawk_cli.main; print(ruamel.yaml.__version__)"], env, "/")
-    rows["base_import_negative"] = run([str(python.resolve()), "-I", "-c", "import ruamel.yaml,clawk_cli.main"], env, "/")
+    rows: dict = {
+        "source_sha": args.source_sha
+        or subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+        ).strip(),
+        "root": str(root),
+        "lexical_python": str(python),
+        "base_python": str(python.resolve()),
+    }
+    rows["venv_import"] = run(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "import ruamel.yaml,clawk_cli.main; print(ruamel.yaml.__version__)",
+        ],
+        env,
+        "/",
+    )
+    rows["base_import_negative"] = run(
+        [str(python.resolve()), "-I", "-c", "import ruamel.yaml,clawk_cli.main"],
+        env,
+        "/",
+    )
     rows["install"] = run([str(python), "-c", install], env, "/")
     assert rows["install"]["returncode"] == 0, rows["install"]
     installed = json.loads(rows["install"]["stdout"].splitlines()[-1])
     entry = Path(installed["path"])
-    exec_line = next(x[5:] for x in installed["text"].splitlines() if x.startswith("Exec="))
+    exec_line = next(
+        x[5:] for x in installed["text"].splitlines() if x.startswith("Exec=")
+    )
     argv = shlex.split(exec_line)
     assert str(python.resolve()) not in argv
     # Exercise the generated command's real CLI imports without invoking npm/build.
@@ -62,14 +104,18 @@ def main():
     original = entry.read_bytes()
     rows["second_install"] = run([str(python), "-c", install], env, "/")
     rows["stable_rewrite"] = entry.read_bytes() == original
-    custom = original.replace(b"Name=Clawksis\n", b"Name=Clawksis custom\n").replace(b"Terminal=false", b"Terminal=true")
+    custom = original.replace(b"Name=Clawksis\n", b"Name=Clawksis custom\n").replace(
+        b"Terminal=false", b"Terminal=true"
+    )
     entry.write_bytes(custom)
     config = Path(env["CLAWK_HOME"]) / "config.yaml"
     config.write_text("desktop:\n  manage_launcher_entry: false\n")
     rows["custom_install"] = run([str(python), "-c", install], env, "/")
     rows["custom_preserved"] = entry.read_bytes() == custom
     rows["generated_exec"] = exec_line
-    rows["fidelity"] = "real venv, native Linux XDG installer, real generated argv --help; NOT Electron window/menu-click proof"
+    rows["fidelity"] = (
+        "real venv, native Linux XDG installer, real generated argv --help; NOT Electron window/menu-click proof"
+    )
     (args.output / "probe.json").write_text(json.dumps(rows, indent=2))
     print(json.dumps(rows, indent=2))
     assert rows["venv_import"]["returncode"] == 0

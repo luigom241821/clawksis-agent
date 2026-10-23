@@ -18,8 +18,15 @@ MAX_TODO_RESULT_CHARS = 512_000
 _TRUNCATION_MARKER = "… [truncated]"
 # Persisted as ordinary message content; ContextCompressor keys on this stable header to
 # tell the synthetic post-compaction row from a real user message.
-TODO_INJECTION_HEADER = "[Your active task list was preserved across context compression]"
-_STATUS_MARKERS = {"completed": "[x]", "in_progress": "[>]", "pending": "[ ]", "cancelled": "[~]"}
+TODO_INJECTION_HEADER = (
+    "[Your active task list was preserved across context compression]"
+)
+_STATUS_MARKERS = {
+    "completed": "[x]",
+    "in_progress": "[>]",
+    "pending": "[ ]",
+    "cancelled": "[~]",
+}
 _ACTIVE_STATUSES = {"pending", "in_progress"}
 
 
@@ -33,9 +40,13 @@ class TodoStore:
 
     def _fresh_items(self, todos: list[dict[str, Any]]) -> list[dict[str, str]]:
         """Validate, dedupe and order a whole new list (replace / restore)."""
-        return self._normalize_order([self._validate(t) for t in self._dedupe_by_id(todos)])
+        return self._normalize_order(
+            [self._validate(t) for t in self._dedupe_by_id(todos)]
+        )
 
-    def write(self, todos: list[dict[str, Any]], merge: bool = False) -> list[dict[str, str]]:
+    def write(
+        self, todos: list[dict[str, Any]], merge: bool = False
+    ) -> list[dict[str, str]]:
         """Replace the list (default) or merge by id; returns the full list after writing.
         Raises ValueError (leaving the list untouched) if any item is invalid."""
         before = self.read()
@@ -47,7 +58,9 @@ class TodoStore:
         except ValueError:
             self._items = before  # rejected write must not leave a partial list behind
             raise
-        del self._items[MAX_TODO_ITEMS:]  # keep the priority head; replays can't grow unbounded
+        del self._items[
+            MAX_TODO_ITEMS:
+        ]  # keep the priority head; replays can't grow unbounded
         self._sanitize_parents(self._items)
         if self._items != before:
             self._revision += 1
@@ -90,7 +103,9 @@ class TodoStore:
         """Full state clients can reconcile atomically."""
         return {"todos": self.read(), "revision": self._revision}
 
-    def restore(self, todos: list[dict[str, Any]], *, revision: Any = 0) -> list[dict[str, str]]:
+    def restore(
+        self, todos: list[dict[str, Any]], *, revision: Any = 0
+    ) -> list[dict[str, str]]:
         """Restore a trusted snapshot without manufacturing a new revision."""
         self._items = self._fresh_items(todos)[:MAX_TODO_ITEMS]
         try:
@@ -119,8 +134,10 @@ class TodoStore:
             keep = item["status"] in _ACTIVE_STATUSES or has_active_kid
             if keep:
                 marker = _STATUS_MARKERS.get(item["status"], "[?]")
-                out.append(f"{'  ' * depth}- {marker} {item['id']}. "
-                           f"{item['content']} ({item['status']})")
+                out.append(
+                    f"{'  ' * depth}- {marker} {item['id']}. "
+                    f"{item['content']} ({item['status']})"
+                )
                 out.extend(kid_lines)
             return keep
 
@@ -134,7 +151,10 @@ class TodoStore:
     def _cap_content(content: str) -> str:
         """Truncate to MAX_TODO_CONTENT_CHARS keeping the head (the actionable part) + marker."""
         if len(content) > MAX_TODO_CONTENT_CHARS:
-            return content[:MAX_TODO_CONTENT_CHARS - len(_TRUNCATION_MARKER)] + _TRUNCATION_MARKER
+            return (
+                content[: MAX_TODO_CONTENT_CHARS - len(_TRUNCATION_MARKER)]
+                + _TRUNCATION_MARKER
+            )
         return content
 
     @staticmethod
@@ -150,9 +170,11 @@ class TodoStore:
                 "Each item must have a non-empty description."
             )
         status = str(item.get("status", "pending")).strip().lower()
-        result = {"id": item_id,
-                  "content": TodoStore._cap_content(content),
-                  "status": status if status in VALID_STATUSES else "pending"}
+        result = {
+            "id": item_id,
+            "content": TodoStore._cap_content(content),
+            "status": status if status in VALID_STATUSES else "pending",
+        }
         parent = str(item.get("parent") or "").strip()
         if parent and parent != item_id:
             result["parent"] = parent
@@ -178,8 +200,14 @@ class TodoStore:
     def _dedupe_by_id(todos: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Collapse duplicate ids, keeping the last occurrence in its position."""
         last_index: dict[str, int] = {}
-        for i, item in enumerate(todos):  # non-dicts get a synthetic key; _validate handles them
-            key = str(item.get("id", "")).strip() if isinstance(item, dict) else f"__invalid_{i}"
+        for i, item in enumerate(
+            todos
+        ):  # non-dicts get a synthetic key; _validate handles them
+            key = (
+                str(item.get("id", "")).strip()
+                if isinstance(item, dict)
+                else f"__invalid_{i}"
+            )
             last_index[key or "?"] = i
         return [todos[i] for i in sorted(last_index.values())]
 
@@ -198,8 +226,11 @@ class TodoStore:
         return normalized
 
 
-def todo_tool(todos: Optional[list[dict[str, Any]]] = None, merge: bool = False,
-              store: Optional[TodoStore] = None) -> str:
+def todo_tool(
+    todos: Optional[list[dict[str, Any]]] = None,
+    merge: bool = False,
+    store: Optional[TodoStore] = None,
+) -> str:
     """Write ``todos`` (replace, or ``merge`` by id) or read when None -> list + summary JSON."""
     if store is None:
         return tool_error("TodoStore not initialized")
@@ -215,8 +246,10 @@ def todo_tool(todos: Optional[list[dict[str, Any]]] = None, merge: bool = False,
     summary = {"total": len(items)}
     for status in ("pending", "in_progress", "completed", "cancelled"):
         summary[status] = sum(1 for i in items if i["status"] == status)
-    return json.dumps({"todos": items, "revision": store.snapshot()["revision"],
-                       "summary": summary}, ensure_ascii=False)
+    return json.dumps(
+        {"todos": items, "revision": store.snapshot()["revision"], "summary": summary},
+        ensure_ascii=False,
+    )
 
 
 def check_todo_requirements() -> bool:
@@ -250,24 +283,27 @@ TODO_SCHEMA = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": {
-                            "type": "string"
-                        },
+                        "id": {"type": "string"},
                         "content": {
                             "type": "string",
-                            "description": "Task description"
+                            "description": "Task description",
                         },
                         "status": {
                             "type": "string",
-                            "enum": ["pending", "in_progress", "completed", "cancelled"]
+                            "enum": [
+                                "pending",
+                                "in_progress",
+                                "completed",
+                                "cancelled",
+                            ],
                         },
                         "parent": {
                             "type": "string",
-                            "description": "Optional id of another item, making this a nested subtask. Omit for top-level."
-                        }
+                            "description": "Optional id of another item, making this a nested subtask. Omit for top-level.",
+                        },
                     },
-                    "required": ["id", "content", "status"]
-                }
+                    "required": ["id", "content", "status"],
+                },
             },
             "merge": {
                 "type": "boolean",
@@ -275,11 +311,11 @@ TODO_SCHEMA = {
                     "true: update existing items by id, add new ones. "
                     "false (default): replace the entire list with a fresh plan."
                 ),
-                "default": False
-            }
+                "default": False,
+            },
         },
-        "required": []
-    }
+        "required": [],
+    },
 }
 
 # Pre-rename names that replay as the Todo tool. model_tools._LEGACY_TOOL_ALIASES derives its todo
@@ -330,7 +366,12 @@ def is_todo_tool_call(tool_call: Any) -> bool:
 from tools.registry import registry, tool_error
 
 registry.register(
-    name="todo_list", toolset="todo", schema=TODO_SCHEMA, check_fn=check_todo_requirements,
+    name="todo_list",
+    toolset="todo",
+    schema=TODO_SCHEMA,
+    check_fn=check_todo_requirements,
     handler=lambda args, **kw: todo_tool(
-        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")),
-    emoji="📋")
+        todos=args.get("todos"), merge=args.get("merge", False), store=kw.get("store")
+    ),
+    emoji="📋",
+)

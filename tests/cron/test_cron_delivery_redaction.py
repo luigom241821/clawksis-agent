@@ -6,6 +6,7 @@ and spliced job name), bot-chat turn — must apply ``redact_sensitive_text(forc
 ``security.redact_secrets`` preference governs the user's own logs, not egress, and a raising
 redactor must replace the payload rather than let it through.
 """
+
 import importlib
 from contextlib import ExitStack
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -28,12 +29,20 @@ def _telegram_cfg():
 
 
 def _job(name: str = "daily-report") -> dict:
-    return {"id": "report-job", "name": name, "deliver": "origin",
-            "origin": {"platform": "telegram", "chat_id": "123"}}
+    return {
+        "id": "report-job",
+        "name": name,
+        "deliver": "origin",
+        "origin": {"platform": "telegram", "chat_id": "123"},
+    }
 
 
 def _flat(call) -> str:
-    return " ".join(str(a) for a in call.args) + " " + " ".join(str(v) for v in call.kwargs.values())
+    return (
+        " ".join(str(a) for a in call.args)
+        + " "
+        + " ".join(str(v) for v in call.kwargs.values())
+    )
 
 
 def _deliver_platform_and_mirror(job: dict, content: str) -> tuple[str, str]:
@@ -43,14 +52,20 @@ def _deliver_platform_and_mirror(job: dict, content: str) -> tuple[str, str]:
 
     send = AsyncMock(return_value={"success": True})
     sink = MagicMock(return_value=True)
-    with patch("gateway.config.load_gateway_config", return_value=_telegram_cfg()), \
-         patch("tools.send_message_tool._send_to_platform", new=send), \
-         patch("cron.scheduler_delivery._cron_mirror_delivery_enabled", return_value=True), \
-         patch("cron.scheduler_delivery._target_matches_origin", return_value=True), \
-         patch("gateway.mirror.mirror_to_session", new=sink), \
-         patch("sys.is_finalizing", return_value=False):
+    with (
+        patch("gateway.config.load_gateway_config", return_value=_telegram_cfg()),
+        patch("tools.send_message_tool._send_to_platform", new=send),
+        patch(
+            "cron.scheduler_delivery._cron_mirror_delivery_enabled", return_value=True
+        ),
+        patch("cron.scheduler_delivery._target_matches_origin", return_value=True),
+        patch("gateway.mirror.mirror_to_session", new=sink),
+        patch("sys.is_finalizing", return_value=False),
+    ):
         _deliver_result(job, content)
-    assert send.called and sink.called, "a sink did not run — assertions would be vacuous"
+    assert send.called and sink.called, (
+        "a sink did not run — assertions would be vacuous"
+    )
     return _flat(send.call_args), _flat(sink.call_args)
 
 
@@ -60,14 +75,23 @@ def _deliver_bot_chat(job: dict, content: str) -> str:
 
     captured = {}
 
-    def _fake_deliver(home, owner, message, *, delivery_id, notification_category="result"):
+    def _fake_deliver(
+        home, owner, message, *, delivery_id, notification_category="result"
+    ):
         captured["message"] = message
         return {"status": "settled", "message": message, "delivery_id": delivery_id}
 
     # The canonical lane admits the turn to the target profile's live Bot Chat owner; the
     # admission record is the outward seam (no local CLI child is ever spawned).
-    with patch("tools.bot_live_delivery.find_canonical_live_owner", return_value={"session_id": "bot"}), \
-            patch("tools.bot_live_delivery.deliver_to_live_owner", side_effect=_fake_deliver):
+    with (
+        patch(
+            "tools.bot_live_delivery.find_canonical_live_owner",
+            return_value={"session_id": "bot"},
+        ),
+        patch(
+            "tools.bot_live_delivery.deliver_to_live_owner", side_effect=_fake_deliver
+        ),
+    ):
         err = _deliver_to_bot_chat(dict(job, execution_id="r1"), content, "")
     assert err is None, err
     return captured["message"]
@@ -86,8 +110,12 @@ def test_every_outward_lane_masks_secret_in_payload_and_job_name(lane):
         sent, mirrored = _deliver_platform_and_mirror(job, content)
         out = sent if lane == "platform_send" else mirrored
         if lane == "session_mirror":
-            assert "[Cron delivery:" in out, "mirror prefix missing — assembly path not exercised"
-    assert "3 tasks done" in out, "payload mangled or empty — secret assertion would be vacuous"
+            assert "[Cron delivery:" in out, (
+                "mirror prefix missing — assembly path not exercised"
+            )
+    assert "3 tasks done" in out, (
+        "payload mangled or empty — secret assertion would be vacuous"
+    )
     assert FAKE_SECRET not in out, f"secret reached the {lane} lane"
 
 
@@ -101,15 +129,25 @@ def test_delivery_redaction_is_forced_and_fails_closed(mode, monkeypatch):
     send = AsyncMock(return_value={"success": True})
     try:
         with ExitStack() as stack:
-            stack.enter_context(patch("gateway.config.load_gateway_config", return_value=_telegram_cfg()))
-            stack.enter_context(patch("tools.send_message_tool._send_to_platform", new=send))
+            stack.enter_context(
+                patch(
+                    "gateway.config.load_gateway_config", return_value=_telegram_cfg()
+                )
+            )
+            stack.enter_context(
+                patch("tools.send_message_tool._send_to_platform", new=send)
+            )
             stack.enter_context(patch("sys.is_finalizing", return_value=False))
             if mode == "redact_secrets_off":
                 monkeypatch.setenv("CLAWK_REDACT_SECRETS", "false")
                 importlib.reload(agent.redact)
             else:
                 stack.enter_context(
-                    patch("agent.redact.redact_sensitive_text", side_effect=RuntimeError("boom")))
+                    patch(
+                        "agent.redact.redact_sensitive_text",
+                        side_effect=RuntimeError("boom"),
+                    )
+                )
             _deliver_result(_job(), f"Token was {FAKE_SECRET}")
     finally:
         monkeypatch.delenv("CLAWK_REDACT_SECRETS", raising=False)

@@ -14,7 +14,9 @@ def _create(monkeypatch, tmp_path):
     monkeypatch.setattr("clawk_cli.banner.prefetch_update_check", lambda: None)
     from tui_gateway import server
 
-    (tmp_path / "config.yaml").write_text("model:\n  default: claude-opus-5\n  provider: anthropic\n", encoding="utf-8")
+    (tmp_path / "config.yaml").write_text(
+        "model:\n  default: claude-opus-5\n  provider: anthropic\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(server, "_sessions", {})
     monkeypatch.setattr(server, "_load_cfg", dict)
@@ -24,15 +26,26 @@ def _create(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "_schedule_session_cap_enforcement", lambda: None)
     monkeypatch.setattr(server, "_register_session_cwd", lambda *a: None)
     monkeypatch.setattr(server, "_project_info_for_cwd", lambda *a: None)
-    return lambda params: (server._methods["session.create"]("r1", {"cols": 80, **params}), server._sessions)
+    return lambda params: (
+        server._methods["session.create"]("r1", {"cols": 80, **params}),
+        server._sessions,
+    )
 
 
-@pytest.mark.parametrize("params", [
-    {"model": "gpt-5.5", "provider": "anthropic"},
-    {"model": "gpt-5.5"},  # provider implied by the profile config
-    {"model": "deepseek/deepseek-v4-flash-0731", "provider": "openai-codex"},  # the incident pair
-])
-def test_session_create_rejects_incoherent_model_provider_pair_before_any_state(_create, params):
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"model": "gpt-5.5", "provider": "anthropic"},
+        {"model": "gpt-5.5"},  # provider implied by the profile config
+        {
+            "model": "deepseek/deepseek-v4-flash-0731",
+            "provider": "openai-codex",
+        },  # the incident pair
+    ],
+)
+def test_session_create_rejects_incoherent_model_provider_pair_before_any_state(
+    _create, params
+):
     response, sessions = _create(params)
 
     error = response["error"]
@@ -45,33 +58,61 @@ def test_session_create_rejects_incoherent_model_provider_pair_before_any_state(
     assert sessions == {}
 
 
-@pytest.mark.parametrize("params", [
-    {"model": "claude-opus-5", "provider": "anthropic"},  # coherent
-    {"model": "claude-opus-5-20261001", "provider": "anthropic"},  # same family, not (yet) listed
-    {"model": "gpt-5.5", "provider": "custom:local"},  # custom endpoint: Clawksis cannot know its models
-    {"model": "gpt-5.5", "provider": "openrouter"},  # aggregator
-])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"model": "claude-opus-5", "provider": "anthropic"},  # coherent
+        {
+            "model": "claude-opus-5-20261001",
+            "provider": "anthropic",
+        },  # same family, not (yet) listed
+        {
+            "model": "gpt-5.5",
+            "provider": "custom:local",
+        },  # custom endpoint: Clawksis cannot know its models
+        {"model": "gpt-5.5", "provider": "openrouter"},  # aggregator
+    ],
+)
 def test_session_create_keeps_coherent_unlisted_and_custom_pairs(_create, params):
     response, sessions = _create(params)
 
     assert "error" not in response, response
     session = sessions[response["result"]["session_id"]]
-    assert session["model_override"] == {"model": params["model"], "provider": params["provider"]}
+    assert session["model_override"] == {
+        "model": params["model"],
+        "provider": params["provider"],
+    }
 
 
-def test_session_create_logs_when_a_client_override_beats_the_profile_default(_create, caplog, monkeypatch):
+def test_session_create_logs_when_a_client_override_beats_the_profile_default(
+    _create, caplog, monkeypatch
+):
     """A composer pick silently decided every new chat's model; agent.log must name it (#107410)."""
     from tui_gateway import server
 
-    monkeypatch.setattr(server, "_session_default_route", lambda session: ("deepseek-v4-flash", ""))
+    monkeypatch.setattr(
+        server, "_session_default_route", lambda session: ("deepseek-v4-flash", "")
+    )
     with caplog.at_level(logging.INFO):
         response, _ = _create({"model": "gpt-5.5", "provider": "openrouter"})
-        pinned = [r.getMessage() for r in caplog.records if "client override" in r.getMessage()]
+        pinned = [
+            r.getMessage()
+            for r in caplog.records
+            if "client override" in r.getMessage()
+        ]
         caplog.clear()
         _create({})
-        unpinned = [r.getMessage() for r in caplog.records if "client override" in r.getMessage()]
+        unpinned = [
+            r.getMessage()
+            for r in caplog.records
+            if "client override" in r.getMessage()
+        ]
 
     assert len(pinned) == 1
     assert response["result"]["stored_session_id"] in pinned[0]
-    assert "gpt-5.5" in pinned[0] and "openrouter" in pinned[0] and "deepseek-v4-flash" in pinned[0]
+    assert (
+        "gpt-5.5" in pinned[0]
+        and "openrouter" in pinned[0]
+        and "deepseek-v4-flash" in pinned[0]
+    )
     assert unpinned == []

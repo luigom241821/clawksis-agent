@@ -96,7 +96,10 @@ def _pressured_compressor() -> MagicMock:
 @pytest.fixture()
 def agent():
     with (
-        patch("model_tools.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch(
+            "model_tools.get_tool_definitions",
+            return_value=_make_tool_defs("web_search"),
+        ),
         patch("model_tools.check_toolset_requirements", return_value={}),
         patch("agent.process_bootstrap.OpenAI"),
     ):
@@ -176,7 +179,6 @@ class TestPostToolCompressionAttemptCap:
             f"post-tool compression must stop at the per-turn cap ({cap}), "
             f"got {len(compress_calls)} compactions"
         )
-
 
     def test_post_tool_compression_shares_counter_with_pre_api_gate(self, agent):
         """Pre-API compactions consume the same per-turn budget.

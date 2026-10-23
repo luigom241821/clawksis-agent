@@ -4,6 +4,7 @@
 the one-file-per-email entries under ``contributors/emails/``; the directory
 wins on duplicates.
 """
+
 from __future__ import annotations
 
 import re

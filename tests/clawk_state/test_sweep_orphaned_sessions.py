@@ -207,16 +207,17 @@ class TestSweepOrphanedSessions:
 
     def test_automatic_source_scope_spares_pinned_session(self, db):
         stale = time.time() - 8 * 3600
-        _make_session(
-            db, "pinned", source="cli", started_at=stale, message_at=stale
-        )
+        _make_session(db, "pinned", source="cli", started_at=stale, message_at=stale)
         db.set_session_pinned("pinned", True)
 
-        assert db.sweep_orphaned_sessions(
-            max_idle_seconds=IDLE_S,
-            sources=("cli",),
-            exclude_pinned=True,
-        ) == []
+        assert (
+            db.sweep_orphaned_sessions(
+                max_idle_seconds=IDLE_S,
+                sources=("cli",),
+                exclude_pinned=True,
+            )
+            == []
+        )
         assert db.get_session("pinned")["ended_at"] is None
 
     def test_live_turn_lease_on_compression_lineage_spares_session(self, db):
@@ -231,9 +232,9 @@ class TestSweepOrphanedSessions:
             "tip", "external-turn", ttl_seconds=300
         )
 
-        assert db.sweep_orphaned_sessions(
-            max_idle_seconds=IDLE_S, sources=("cli",)
-        ) == []
+        assert (
+            db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S, sources=("cli",)) == []
+        )
         assert db.get_session("tip")["ended_at"] is None
 
     def test_active_compression_lock_spares_and_expiry_fences_owner(self, db):
@@ -245,9 +246,9 @@ class TestSweepOrphanedSessions:
             "compressing", "compressor", ttl_seconds=300
         )
 
-        assert db.sweep_orphaned_sessions(
-            max_idle_seconds=IDLE_S, sources=("cli",)
-        ) == []
+        assert (
+            db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S, sources=("cli",)) == []
+        )
 
         conn = db._conn
         assert conn is not None
@@ -265,9 +266,7 @@ class TestSweepOrphanedSessions:
 
     def test_expired_turn_lease_does_not_block_sweep(self, db):
         stale = time.time() - 8 * 3600
-        _make_session(
-            db, "expired", source="cli", started_at=stale, message_at=stale
-        )
+        _make_session(db, "expired", source="cli", started_at=stale, message_at=stale)
         assert db.try_acquire_session_turn_lease(
             "expired", "expired-turn", ttl_seconds=300
         )
@@ -302,9 +301,7 @@ class TestSweepOrphanedSessions:
             message_at=recent,
         )
         _set_last_activity(db, "recent-orphan", recent)
-        db.create_session(
-            "keyed", source="telegram", session_key="telegram:chat:1"
-        )
+        db.create_session("keyed", source="telegram", session_key="telegram:chat:1")
         _backdate_session(db, "keyed", stale)
         db.create_session("unkeyed-gateway", source="telegram")
         _backdate_session(db, "unkeyed-gateway", stale)
@@ -402,7 +399,9 @@ class TestSweepOrphanedSessions:
         self, db, monkeypatch
     ):
         stale = time.time() - 100 * 86400
-        _make_session(db, "concurrent", source="cli", started_at=stale, message_at=stale)
+        _make_session(
+            db, "concurrent", source="cli", started_at=stale, message_at=stale
+        )
         _set_last_activity(db, "concurrent", stale)
         peer = SessionDB(db.db_path)
         read_barrier = threading.Barrier(2)
@@ -536,9 +535,7 @@ class TestSweepOrphanedSessions:
     def test_returns_empty_on_empty_db(self, db):
         assert db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S) == []
 
-    def test_auto_prune_reports_closed_count_and_deletes_after_second_window(
-        self, db
-    ):
+    def test_auto_prune_reports_closed_count_and_deletes_after_second_window(self, db):
         """#54189 end-to-end: leaky producers (cron/kanban/subagent) never set
         ``ended_at``; pass 1 closes them (reported via ``closed``), pass 2 —
         after a further retention window — deletes them, and a messaging row
@@ -582,7 +579,9 @@ class TestSweepOrphanedSessions:
         ``_AUTO_PRUNE_STALE_OPEN_SOURCES`` these rows are immortal — never closed by
         the sweep above, and therefore never reached by ``prune_sessions`` either."""
         stale = time.time() - 200 * 86400
-        _make_session(db, "recovered-0", source="recovered", started_at=stale, message_at=stale)
+        _make_session(
+            db, "recovered-0", source="recovered", started_at=stale, message_at=stale
+        )
         _set_last_activity(db, "recovered-0", stale)
 
         first = db.maybe_auto_prune_and_vacuum(
@@ -601,7 +600,9 @@ class TestSweepOrphanedSessions:
         assert second["pruned"] == 1
         assert db.get_session("recovered-0") is None
 
-    def test_real_recovery_placeholders_age_out_but_fresh_one_stays_open(self, db, tmp_path):
+    def test_real_recovery_placeholders_age_out_but_fresh_one_stays_open(
+        self, db, tmp_path
+    ):
         """Through the real `_reconstruct_missing_sessions` path: a stale placeholder is closed
         then deleted; a fresh one is left open (source survives as 'recovered')."""
         import sqlite3
@@ -617,20 +618,31 @@ class TestSweepOrphanedSessions:
         raw.execute("PRAGMA foreign_keys=OFF")
         raw.execute("DELETE FROM sessions WHERE id IN ('lost-old', 'lost-fresh')")
         assert _reconstruct_missing_sessions(raw)["sessions_reconstructed"] == 2
-        raw.execute("UPDATE sessions SET started_at = ?, last_activity_at = ? WHERE id = 'lost-old'", (stale, stale))
-        raw.execute("UPDATE messages SET timestamp = ? WHERE session_id = 'lost-old'", (stale,))
+        raw.execute(
+            "UPDATE sessions SET started_at = ?, last_activity_at = ? WHERE id = 'lost-old'",
+            (stale, stale),
+        )
+        raw.execute(
+            "UPDATE messages SET timestamp = ? WHERE session_id = 'lost-old'", (stale,)
+        )
         raw.commit()
         raw.close()
 
         db = SessionDB(tmp_path / "state.db")
-        first = db.maybe_auto_prune_and_vacuum(retention_days=90, min_interval_hours=0, vacuum=False)
+        first = db.maybe_auto_prune_and_vacuum(
+            retention_days=90, min_interval_hours=0, vacuum=False
+        )
         assert first["closed"] == 1
         assert db.get_session("lost-old")["end_reason"] == "startup_orphan_reap"
         assert db.get_session("lost-fresh")["ended_at"] is None
 
-        db._conn.execute("UPDATE sessions SET ended_at = ended_at - 91 * 86400 WHERE id = 'lost-old'")
+        db._conn.execute(
+            "UPDATE sessions SET ended_at = ended_at - 91 * 86400 WHERE id = 'lost-old'"
+        )
         db._conn.commit()
-        second = db.maybe_auto_prune_and_vacuum(retention_days=90, min_interval_hours=0, vacuum=False)
+        second = db.maybe_auto_prune_and_vacuum(
+            retention_days=90, min_interval_hours=0, vacuum=False
+        )
         assert second["pruned"] == 1
         assert db.get_session("lost-old") is None
         assert db.get_session("lost-fresh")["source"] == "recovered"

@@ -46,12 +46,12 @@ def _version_is_newer(latest: str, current: str) -> Optional[bool]:
 @dataclass
 class CheckResult:
     name: str
-    klass: str                      # provenance class value ('git', ...)
+    klass: str  # provenance class value ('git', ...)
     current: Optional[str] = None
     latest: Optional[str] = None
-    update_available: Optional[bool] = None   # None = unknown/uncheckable
-    needs_fixing: Optional[str] = None        # mismatch reason when set
-    min_clawk: Optional[str] = None          # feed's version floor, if any
+    update_available: Optional[bool] = None  # None = unknown/uncheckable
+    needs_fixing: Optional[str] = None  # mismatch reason when set
+    min_clawk: Optional[str] = None  # feed's version floor, if any
     reason: str = ""
 
     def to_json(self) -> dict:
@@ -144,10 +144,18 @@ def check_provenanced(
     if catalog_name:
         from clawk_cli.plugin_catalog import find_removed, get_live_catalog_entry
 
-        result = CheckResult(name=prov.name, klass="catalog", current=row.get("revision"))
-        removed = None if row.get("allow_removed") is True else (
-            find_removed(str(catalog_name))
-            or find_removed(str(catalog.get("repo") or row.get("source", "")).split("#", 1)[0])
+        result = CheckResult(
+            name=prov.name, klass="catalog", current=row.get("revision")
+        )
+        removed = (
+            None
+            if row.get("allow_removed") is True
+            else (
+                find_removed(str(catalog_name))
+                or find_removed(
+                    str(catalog.get("repo") or row.get("source", "")).split("#", 1)[0]
+                )
+            )
         )
         if removed:
             result.reason = f"removed from catalog: {removed.reason}"
@@ -258,9 +266,7 @@ def parse_feed_yml(text: str) -> dict:
         git = artifacts.get("git")
         if git is not None and not isinstance(git, str):
             raise ValueError("feed artifacts.git must be a string")
-        out["artifacts"] = {
-            k: v for k, v in artifacts.items() if isinstance(v, str)
-        }
+        out["artifacts"] = {k: v for k, v in artifacts.items() if isinstance(v, str)}
     return out
 
 
@@ -278,9 +284,9 @@ def _owning_distribution(ep) -> Optional[str]:
 
 def check_pip_plugins(
     *,
-    installed_version: Callable[[str], str],   # dist name -> version
+    installed_version: Callable[[str], str],  # dist name -> version
     pypi_latest: Callable[[str], Optional[str]],  # dist name -> latest
-    entry_points: Optional[list] = None,       # injectable for tests
+    entry_points: Optional[list] = None,  # injectable for tests
 ) -> list[CheckResult]:
     """The pip world, stateless: entry-point dists vs PyPI. Nothing
     recorded, nothing to drift."""
@@ -338,7 +344,8 @@ def check_pip_plugins(
                 update_available=update_available,
                 reason=(
                     f"cannot compare PyPI version {latest!r} with installed {current!r}"
-                    if update_available is None else ""
+                    if update_available is None
+                    else ""
                 ),
             )
         )
@@ -370,7 +377,9 @@ def default_fetch(url: str) -> str:
     class HTTPSFeedRedirectHandler(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
-            if redirected is not None and not redirected.full_url.lower().startswith("https://"):
+            if redirected is not None and not redirected.full_url.lower().startswith(
+                "https://"
+            ):
                 fp.close()
                 raise ValueError("update_url redirect must use https://")
             return redirected
@@ -393,7 +402,9 @@ def default_ls_remote(source: str) -> str:
     proc = subprocess.run(
         [_resolve_git_executable() or "git", "ls-remote", source, "HEAD"],
         capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=30,
         check=False,
     )

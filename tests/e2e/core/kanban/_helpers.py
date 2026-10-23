@@ -28,7 +28,9 @@ FAST_ENV = {
 }
 
 
-def wait_until(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1) -> Any:
+def wait_until(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.1
+) -> Any:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         val = pred()
@@ -42,7 +44,9 @@ def pid_alive(pid: Optional[int]) -> bool:
     if not pid:
         return False
     try:
-        os.kill(int(pid), 0)  # windows-footgun: ok — Linux-gated (module skips off Linux)
+        os.kill(
+            int(pid), 0
+        )  # windows-footgun: ok — Linux-gated (module skips off Linux)
     except (ProcessLookupError, PermissionError):
         return False
     # A zombie child of ours still answers kill(0); /proc tells the truth.
@@ -79,49 +83,74 @@ class Board:
             "  check: false\n"
             # Workers run inside the profile's owner daemon; its embedded dispatcher would race
             # the explicit ticks these tests count. A test that wants it brings its own block.
-            + ("" if "kanban:" in self.extra_config else "kanban:\n  dispatch_in_gateway: false\n")
+            + (
+                ""
+                if "kanban:" in self.extra_config
+                else "kanban:\n  dispatch_in_gateway: false\n"
+            )
             + self.extra_config,
             encoding="utf-8",
         )
-        (self.clawk_home / ".env").write_text("OPENAI_API_KEY=sk-fake-e2e\n", encoding="utf-8")
+        (self.clawk_home / ".env").write_text(
+            "OPENAI_API_KEY=sk-fake-e2e\n", encoding="utf-8"
+        )
         # Workers run with cwd=<task workspace>; the wrapper pins THIS checkout on the path.
         self.clawk_bin = self.root / "clawk-bin"
         self.clawk_bin.write_text(
-            "#!/bin/sh\n"
-            f"PYTHONPATH={REPO} exec {PY} -m clawk_cli.main \"$@\"\n", encoding="utf-8")
+            f'#!/bin/sh\nPYTHONPATH={REPO} exec {PY} -m clawk_cli.main "$@"\n',
+            encoding="utf-8",
+        )
         self.clawk_bin.chmod(0o755)
 
     # env / processes -------------------------------------------------------
     def env(self) -> dict[str, str]:
-        env = {k: v for k, v in os.environ.items()
-               if not k.startswith("CLAWK_") and not k.endswith(("_API_KEY", "_TOKEN"))}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith("CLAWK_") and not k.endswith(("_API_KEY", "_TOKEN"))
+        }
         env.pop("PYTEST_CURRENT_TEST", None)
-        env.update({
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home),
-            "CLAWK_BIN": str(self.clawk_bin), "PYTHONPATH": str(REPO),
-            "NO_COLOR": "1", "TERM": "dumb",
-            # Children keep pytest's PYTEST_VERSION, which arms the live-DB guard against the scratch
-            # HOME's own state.db; the whole tree is under ``root`` (asserted below), so let workers
-            # open their real session store.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1",
-            **FAST_ENV, **self.env_extra,
-        })
+        env.update(
+            {
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "CLAWK_BIN": str(self.clawk_bin),
+                "PYTHONPATH": str(REPO),
+                "NO_COLOR": "1",
+                "TERM": "dumb",
+                # Children keep pytest's PYTEST_VERSION, which arms the live-DB guard against the scratch
+                # HOME's own state.db; the whole tree is under ``root`` (asserted below), so let workers
+                # open their real session store.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+                **FAST_ENV,
+                **self.env_extra,
+            }
+        )
         assert env["CLAWK_HOME"].startswith(str(self.root))
         return env
 
-    def cli(self, *args: str, timeout: float = 90.0, check: bool = True) -> subprocess.CompletedProcess:
+    def cli(
+        self, *args: str, timeout: float = 90.0, check: bool = True
+    ) -> subprocess.CompletedProcess:
         proc = subprocess.run(
-            [PY, "-m", "clawk_cli.main", "kanban", *args], cwd=str(self.root), env=self.env(),
-            capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL,
+            [PY, "-m", "clawk_cli.main", "kanban", *args],
+            cwd=str(self.root),
+            env=self.env(),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
             check=False,
         )
         if check and proc.returncode != 0:
-            raise AssertionError(f"kanban {' '.join(args)} rc={proc.returncode}\n{proc.stdout}\n{proc.stderr}")
+            raise AssertionError(
+                f"kanban {' '.join(args)} rc={proc.returncode}\n{proc.stdout}\n{proc.stderr}"
+            )
         return proc
 
     def cli_json(self, *args: str, **kw: Any) -> Any:
         out = self.cli(*args, "--json", **kw).stdout
-        return json.loads(out[out.index("{"):] if "{" in out else out)
+        return json.loads(out[out.index("{") :] if "{" in out else out)
 
     def create(self, title: str, *extra: str) -> str:
         return self.cli_json("create", title, "--assignee", "default", *extra)["id"]
@@ -137,7 +166,9 @@ class Board:
     def kill_workers(self) -> None:
         for pid in list(self.spawned_pids):
             try:
-                os.kill(pid, signal.SIGKILL)  # windows-footgun: ok — Linux-gated (module skips off Linux)
+                os.kill(
+                    pid, signal.SIGKILL
+                )  # windows-footgun: ok — Linux-gated (module skips off Linux)
             except (ProcessLookupError, PermissionError):
                 pass
 
@@ -166,7 +197,9 @@ class Board:
         return self._q("SELECT * FROM task_runs WHERE task_id = ? ORDER BY id", (tid,))
 
     def events(self, tid: str, kind: Optional[str] = None) -> list[dict]:
-        rows = self._q("SELECT * FROM task_events WHERE task_id = ? ORDER BY id", (tid,))
+        rows = self._q(
+            "SELECT * FROM task_events WHERE task_id = ? ORDER BY id", (tid,)
+        )
         for r in rows:
             try:
                 r["payload"] = json.loads(r.get("payload") or "null")
@@ -179,11 +212,16 @@ class Board:
         return hits[0].read_text(encoding="utf-8", errors="replace") if hits else ""
 
     def wait_worker_exit(self, tid: str, pid: int, timeout: float = 90.0) -> None:
-        wait_until(lambda: not pid_alive(pid), timeout,
-                   f"worker {pid} of {tid} to exit; log tail:\n{self.worker_log(tid)[-2000:]}")
+        wait_until(
+            lambda: not pid_alive(pid),
+            timeout,
+            f"worker {pid} of {tid} to exit; log tail:\n{self.worker_log(tid)[-2000:]}",
+        )
 
     def diag(self, tid: str) -> str:
-        return (f"task={json.dumps(self.task(tid), default=str)[:1500]}\n"
-                f"runs={json.dumps(self.runs(tid), default=str)[:2500]}\n"
-                f"events={[(e['kind'], e['payload']) for e in self.events(tid)][-15:]}\n"
-                f"log tail:\n{self.worker_log(tid)[-2500:]}")
+        return (
+            f"task={json.dumps(self.task(tid), default=str)[:1500]}\n"
+            f"runs={json.dumps(self.runs(tid), default=str)[:2500]}\n"
+            f"events={[(e['kind'], e['payload']) for e in self.events(tid)][-15:]}\n"
+            f"log tail:\n{self.worker_log(tid)[-2500:]}"
+        )

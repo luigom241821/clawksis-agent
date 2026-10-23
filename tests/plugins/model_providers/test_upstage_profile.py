@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+
 @pytest.fixture
 def upstage_profile():
     """Resolve the registered Upstage profile via the provider registry.
@@ -25,8 +26,8 @@ def upstage_profile():
     assert profile is not None, "upstage provider profile must be registered"
     return profile
 
-class TestUpstageProfile:
 
+class TestUpstageProfile:
     def test_fallback_models_are_agentic_pro_only(self, upstage_profile):
         # Only the agentic, tool-calling Solar Pro models belong in the offline
         # catalog — Mini is capable but not agentic, so it's never promoted as a
@@ -34,9 +35,10 @@ class TestUpstageProfile:
         # Behavior contract (not a frozen list): non-empty, no denied families.
         assert upstage_profile.fallback_models
         for denied in ("solar-mini", "syn-pro"):
-            assert not any(
-                denied in m for m in upstage_profile.fallback_models
-            ), f"non-agentic family {denied!r} must not be a fallback default"
+            assert not any(denied in m for m in upstage_profile.fallback_models), (
+                f"non-agentic family {denied!r} must not be a fallback default"
+            )
+
 
 class TestUpstageReasoning:
     """``build_api_kwargs_extras`` wires Solar's top-level ``reasoning_effort``.
@@ -72,7 +74,14 @@ class TestUpstageReasoning:
         assert top_level == {}
 
     @pytest.mark.parametrize(
-        "model", ["solar-pro3", "solar-pro", "solar-open2", "solar-mini4", "solar-mini4-preview"]
+        "model",
+        [
+            "solar-pro3",
+            "solar-pro",
+            "solar-open2",
+            "solar-mini4",
+            "solar-mini4-preview",
+        ],
     )
     def test_no_config_defaults_reasoning_on(self, upstage_profile, model):
         # Unset reasoning_config → default ON at medium (matches the /reasoning
@@ -81,7 +90,14 @@ class TestUpstageReasoning:
         assert top_level == {"reasoning_effort": "medium"}
 
     @pytest.mark.parametrize(
-        "model", ["solar-mini", "solar-mini-250422", "solar-mini-202610", "solar-mini@q4", "syn-pro"]
+        "model",
+        [
+            "solar-mini",
+            "solar-mini-250422",
+            "solar-mini-202610",
+            "solar-mini@q4",
+            "syn-pro",
+        ],
     )
     def test_deny_listed_models_never_send_reasoning(self, upstage_profile, model):
         # solar-mini / syn-pro ignore reasoning_effort, so never send it —

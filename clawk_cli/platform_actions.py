@@ -36,7 +36,9 @@ async def _telegram_add_reaction(adapter, chat_id, message_id, emoji):
     return _err("action_failed", "telegram set_message_reaction failed")
 
 
-async def _discord_add_reaction(adapter: Any, chat_id: str, message_id: str, emoji: str) -> dict[str, Any]:
+async def _discord_add_reaction(
+    adapter: Any, chat_id: str, message_id: str, emoji: str
+) -> dict[str, Any]:
     client = getattr(adapter, "_client", None)
     if client is None:
         return _err("adapter_disconnected", "discord client unavailable")
@@ -65,8 +67,14 @@ async def _discord_set_thread_title(adapter, chat_id, thread_id, title):
 
 
 _VERBS = {
-    "add_reaction": {"telegram": _telegram_add_reaction, "discord": _discord_add_reaction},
-    "set_thread_title": {"telegram": _telegram_set_thread_title, "discord": _discord_set_thread_title},
+    "add_reaction": {
+        "telegram": _telegram_add_reaction,
+        "discord": _discord_add_reaction,
+    },
+    "set_thread_title": {
+        "telegram": _telegram_set_thread_title,
+        "discord": _discord_set_thread_title,
+    },
 }
 
 
@@ -90,7 +98,11 @@ class PlatformActions:
             return plugin_capability_granted(self._plugin_id, CAPABILITY_ID)
         except Exception:
             # Ground rule: failure to read consent state = not granted.
-            logger.debug("platform_actions capability check failed for %s", self._plugin_id, exc_info=True)
+            logger.debug(
+                "platform_actions capability check failed for %s",
+                self._plugin_id,
+                exc_info=True,
+            )
             return False
 
     def _resolve_adapter(self, platform: str):
@@ -102,7 +114,9 @@ class PlatformActions:
         except Exception:
             runner = None
         if runner is None:
-            return None, _err("gateway_unavailable", "no gateway runner is active in this process")
+            return None, _err(
+                "gateway_unavailable", "no gateway runner is active in this process"
+            )
         try:
             from gateway.config import Platform
 
@@ -124,7 +138,8 @@ class PlatformActions:
                 # Fail closed: an unresolvable profile must not degrade to the default profile's bot.
                 logger.debug(
                     "platform_actions: profile resolution failed for %s",
-                    self._plugin_id, exc_info=True,
+                    self._plugin_id,
+                    exc_info=True,
                 )
                 return None, _err(
                     "adapter_not_registered",
@@ -135,13 +150,19 @@ class PlatformActions:
         else:
             adapter = getattr(runner, "adapters", {}).get(platform_enum)
         if adapter is None:
-            return None, _err("adapter_not_registered", f"no {platform_enum.value} adapter is registered")
+            return None, _err(
+                "adapter_not_registered",
+                f"no {platform_enum.value} adapter is registered",
+            )
         try:
             connected = bool(adapter.is_connected)
         except Exception:
             connected = False
         if not connected:
-            return None, _err("adapter_disconnected", f"the {platform_enum.value} adapter is not connected")
+            return None, _err(
+                "adapter_disconnected",
+                f"the {platform_enum.value} adapter is not connected",
+            )
         return adapter, None
 
     def _gate(self, platform: str, **required: Any):
@@ -155,17 +176,24 @@ class PlatformActions:
             )
         for name, value in required.items():
             if not isinstance(value, str) or not value.strip():
-                return None, _err("invalid_argument", f"{name} must be a non-empty string")
+                return None, _err(
+                    "invalid_argument", f"{name} must be a non-empty string"
+                )
         return self._resolve_adapter(platform)
 
-    async def _run(self, verb: str, platform: str, *args: str, **required: Any) -> dict[str, Any]:
+    async def _run(
+        self, verb: str, platform: str, *args: str, **required: Any
+    ) -> dict[str, Any]:
         """Gate, dispatch *verb* to the adapter's platform implementation, audit, return."""
         adapter, error = self._gate(platform, **required)
         if error is None and adapter is not None:
             try:
                 impl = _VERBS[verb].get(getattr(adapter.platform, "value", None))
                 if impl is None:
-                    result = _err("unsupported_platform_action", f"{verb} is not implemented for {platform}")
+                    result = _err(
+                        "unsupported_platform_action",
+                        f"{verb} is not implemented for {platform}",
+                    )
                 else:
                     result = await impl(adapter, *args)
             except Exception as exc:
@@ -177,18 +205,34 @@ class PlatformActions:
 
     # -- v1 verbs -----------------------------------------------------------
 
-    async def add_reaction(self, platform: str, chat_id: str, message_id: str, emoji: str) -> dict[str, Any]:
+    async def add_reaction(
+        self, platform: str, chat_id: str, message_id: str, emoji: str
+    ) -> dict[str, Any]:
         """Add/set an emoji reaction on a platform message."""
         return await self._run(
-            "add_reaction", platform, chat_id, message_id, emoji,
-            chat_id=chat_id, message_id=message_id, emoji=emoji,
+            "add_reaction",
+            platform,
+            chat_id,
+            message_id,
+            emoji,
+            chat_id=chat_id,
+            message_id=message_id,
+            emoji=emoji,
         )
 
-    async def set_thread_title(self, platform: str, chat_id: str, thread_id: str, title: str) -> dict[str, Any]:
+    async def set_thread_title(
+        self, platform: str, chat_id: str, thread_id: str, title: str
+    ) -> dict[str, Any]:
         """Rename a thread / forum topic."""
         return await self._run(
-            "set_thread_title", platform, chat_id, thread_id, title,
-            chat_id=chat_id, thread_id=thread_id, title=title,
+            "set_thread_title",
+            platform,
+            chat_id,
+            thread_id,
+            title,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            title=title,
         )
 
     def _audit(self, verb: str, platform: str, result: dict[str, Any]) -> None:

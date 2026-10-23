@@ -121,12 +121,12 @@ def test_behavioral_read_gets_expansion_and_overlay_while_writeback_stays_raw(
 
     # 3. Write-back: user values round-trip; no managed/expanded/default leak.
     saved = out["saved"]
-    assert "hello ${E2E_PROMPT_SUFFIX}" in saved     # template preserved
-    assert "hello world" not in saved                # no expansion persisted
-    assert "reasoning_effort: low" in saved          # user value preserved
-    assert "high" not in saved                       # managed value NOT persisted
-    assert "battery: true" in saved                  # the actual edit landed
-    assert "max_turns" not in saved                  # no DEFAULT_CONFIG pollution
+    assert "hello ${E2E_PROMPT_SUFFIX}" in saved  # template preserved
+    assert "hello world" not in saved  # no expansion persisted
+    assert "reasoning_effort: low" in saved  # user value preserved
+    assert "high" not in saved  # managed value NOT persisted
+    assert "battery: true" in saved  # the actual edit landed
+    assert "max_turns" not in saved  # no DEFAULT_CONFIG pollution
 
 
 def test_writeback_roundtrip_byte_identical_when_unchanged(tmp_path):

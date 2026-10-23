@@ -74,7 +74,6 @@ class TestToggleYoloIsSessionScoped:
     can run.
     """
 
-
     def test_toggle_yolo_disables_session_bypass_on_second_call(self):
         stand_in = _make_stand_in()
         with patch("cli._cprint"):
@@ -82,8 +81,6 @@ class TestToggleYoloIsSessionScoped:
             assert approval_module.is_session_yolo_enabled(SESSION_KEY) is True
             ClawksisCLI._toggle_yolo(stand_in)  # OFF
             assert approval_module.is_session_yolo_enabled(SESSION_KEY) is False
-
-
 
     def test_two_independent_sessions_are_isolated(self):
         """``/yolo`` toggled in one session must not bypass approvals in
@@ -165,15 +162,14 @@ class TestToggleYoloEndToEnd:
                 ClawksisCLI._toggle_yolo(stand_in)  # YOLO ON
 
             result = approval_module.check_all_command_guards(
-                "rm -rf /tmp/scratch-xyzzy", "local",
+                "rm -rf /tmp/scratch-xyzzy",
+                "local",
             )
             assert result["approved"] is True, (
                 f"YOLO toggle should auto-approve dangerous commands, got: {result}"
             )
         finally:
             approval_context.reset_current_session_key(token)
-
-
 
 
 class TestSessionRotationTransfersYolo:
@@ -195,8 +191,6 @@ class TestSessionRotationTransfersYolo:
         finally:
             approval_module.clear_session("old-id")
             approval_module.clear_session("new-id")
-
-
 
     def test_transfer_handles_empty_inputs_safely(self):
         # Both directions of empty input should be safe no-ops; nothing

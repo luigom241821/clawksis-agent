@@ -1,4 +1,5 @@
 """The green run commits the Store build held; publication tries to switch it to Immediate."""
+
 import json
 
 import pytest
@@ -25,11 +26,17 @@ class _Cli:
             uploaded = any(kind == "submit" for kind, _ in self.events)
             status = "PendingCommit" if uploaded else self.status
             # The CLI serializes .NET property names (rc.13-v0.21.7: '{"Id": ..., "ApplicationCategory": ...').
-            return json.dumps({
-                "Status": status, "TargetPublishMode": "Immediate" if uploaded else self.mode,
-                "NotesForCertification": json.dumps({"claimTag": self.claim_tag})
-                if self.claim_tag and not uploaded else "",
-                "FriendlyName": "Submission 2", "Listings": {}})
+            return json.dumps(
+                {
+                    "Status": status,
+                    "TargetPublishMode": "Immediate" if uploaded else self.mode,
+                    "NotesForCertification": json.dumps({"claimTag": self.claim_tag})
+                    if self.claim_tag and not uploaded
+                    else "",
+                    "FriendlyName": "Submission 2",
+                    "Listings": {},
+                }
+            )
         if argv[:3] == ["msstore", "submission", "delete"]:
             self.events.append(("delete-pending", name))
             return ""
@@ -59,15 +66,38 @@ def test_submit_commits_the_upload_held_so_certification_starts_before_the_gate(
     cli = _Cli()
     submit("verified/Store-1.2.3.msixbundle", product_id="9NTEST", run=cli)
     names = cli.names()
-    upload = names.index("msstore publish verified/Store-1.2.3.msixbundle --appId 9NTEST --noCommit")
-    update = next(i for i, n in enumerate(names) if n.startswith("msstore submission update 9NTEST "))
-    assert upload < update < names.index("msstore submission publish 9NTEST") == len(names) - 1
+    upload = names.index(
+        "msstore publish verified/Store-1.2.3.msixbundle --appId 9NTEST --noCommit"
+    )
+    update = next(
+        i
+        for i, n in enumerate(names)
+        if n.startswith("msstore submission update 9NTEST ")
+    )
+    assert (
+        upload
+        < update
+        < names.index("msstore submission publish 9NTEST")
+        == len(names) - 1
+    )
     # The CLI's own spelling is kept, so update does not get two publish-mode keys.
-    assert cli.updated["TargetPublishMode"] == "Manual" and "targetPublishMode" not in cli.updated
+    assert (
+        cli.updated["TargetPublishMode"] == "Manual"
+        and "targetPublishMode" not in cli.updated
+    )
 
 
-@pytest.mark.parametrize("status", ["PendingCommit", "CommitFailed", "CertificationFailed",
-                                    "PreProcessingFailed", "ReleaseFailed", "Canceled"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        "PendingCommit",
+        "CommitFailed",
+        "CertificationFailed",
+        "PreProcessingFailed",
+        "ReleaseFailed",
+        "Canceled",
+    ],
+)
 def test_submit_replaces_a_draft_or_failed_submission(status):
     from scripts.releases.store import submit
 
@@ -75,7 +105,9 @@ def test_submit_replaces_a_draft_or_failed_submission(status):
     submit("verified/Store-1.2.3.msixbundle", product_id="9NTEST", run=cli)
     names = cli.names()
     delete = names.index("msstore submission delete 9NTEST --no-confirm")
-    assert delete < next(i for i, n in enumerate(names) if n.startswith("msstore publish "))
+    assert delete < next(
+        i for i, n in enumerate(names) if n.startswith("msstore publish ")
+    )
 
 
 @pytest.mark.parametrize("status", ["Published", "None"])
@@ -87,7 +119,9 @@ def test_submit_leaves_a_settled_submission_alone(status):
     assert not any(name.startswith("msstore submission delete") for name in cli.names())
 
 
-@pytest.mark.parametrize("status", ["CommitStarted", "Certification", "Release", "Publishing"])
+@pytest.mark.parametrize(
+    "status", ["CommitStarted", "Certification", "Release", "Publishing"]
+)
 def test_submit_refuses_to_clobber_an_earlier_release_on_its_way_live(status):
     from scripts.releases.store import StoreError, submit
 
@@ -110,13 +144,19 @@ def test_submit_replaces_an_abandoned_claims_held_submission(status):
         checked.append(claim_tag)
         return claim_tag == prior_claim
 
-    submit("verified/Store-next.msixbundle", product_id="9NTEST", claim_tag=next_claim,
-           is_abandoned=is_abandoned, run=cli)
+    submit(
+        "verified/Store-next.msixbundle",
+        product_id="9NTEST",
+        claim_tag=next_claim,
+        is_abandoned=is_abandoned,
+        run=cli,
+    )
 
     names = cli.names()
     assert checked == [prior_claim]
     assert names.index("msstore submission delete 9NTEST --no-confirm") < names.index(
-        "msstore publish verified/Store-next.msixbundle --appId 9NTEST --noCommit")
+        "msstore publish verified/Store-next.msixbundle --appId 9NTEST --noCommit"
+    )
     assert names[-1] == "msstore submission publish 9NTEST"
     assert cli.updated["TargetPublishMode"] == "Manual"
     # Bind the new upload before committing so its own abandonment can be recovered.
@@ -124,23 +164,33 @@ def test_submit_replaces_an_abandoned_claims_held_submission(status):
     assert "notesForCertification" not in cli.updated
 
 
-@pytest.mark.parametrize("status,mode,owner,marked_claim", [
-    ("Release", "Manual", "rc.1-v0.21.5", None),
-    ("Release", "Manual", "rc.1-v0.21.5", "rc.9-v0.21.5"),
-    ("Release", "Manual", None, "rc.1-v0.21.5"),
-    ("Release", "Manual", "v0.21.5", "v0.21.5"),
-    ("Certification", "Immediate", "rc.1-v0.21.5", "rc.1-v0.21.5"),
-    ("Release", "SpecificDate", "rc.1-v0.21.5", "rc.1-v0.21.5"),
-    ("PendingPublication", "Manual", "rc.1-v0.21.5", "rc.1-v0.21.5"),
-    ("Publishing", "Manual", "rc.1-v0.21.5", "rc.1-v0.21.5"),
-])
-def test_abandoned_cleanup_does_not_clobber_an_unproven_or_live_owner(status, mode, owner, marked_claim):
+@pytest.mark.parametrize(
+    "status,mode,owner,marked_claim",
+    [
+        ("Release", "Manual", "rc.1-v0.21.5", None),
+        ("Release", "Manual", "rc.1-v0.21.5", "rc.9-v0.21.5"),
+        ("Release", "Manual", None, "rc.1-v0.21.5"),
+        ("Release", "Manual", "v0.21.5", "v0.21.5"),
+        ("Certification", "Immediate", "rc.1-v0.21.5", "rc.1-v0.21.5"),
+        ("Release", "SpecificDate", "rc.1-v0.21.5", "rc.1-v0.21.5"),
+        ("PendingPublication", "Manual", "rc.1-v0.21.5", "rc.1-v0.21.5"),
+        ("Publishing", "Manual", "rc.1-v0.21.5", "rc.1-v0.21.5"),
+    ],
+)
+def test_abandoned_cleanup_does_not_clobber_an_unproven_or_live_owner(
+    status, mode, owner, marked_claim
+):
     from scripts.releases.store import StoreError, submit
 
     cli = _Cli(status, mode=mode, claim_tag=owner)
     with pytest.raises(StoreError):
-        submit("verified/Store-next.msixbundle", product_id="9NTEST", claim_tag="rc.2-v0.21.5",
-               is_abandoned=lambda claim_tag: claim_tag == marked_claim, run=cli)
+        submit(
+            "verified/Store-next.msixbundle",
+            product_id="9NTEST",
+            claim_tag="rc.2-v0.21.5",
+            is_abandoned=lambda claim_tag: claim_tag == marked_claim,
+            run=cli,
+        )
     assert cli.names() == ["msstore submission get 9NTEST"]
 
 
@@ -150,8 +200,14 @@ STORE_FILE = "Store-ClawksisBundled-2026.6864.2132.0-win.msixbundle"
 class _Api:
     """Stands in for the Partner Center submission REST API, with state."""
 
-    def __init__(self, status="Release", files=(STORE_FILE,), pending="1152921504621243540",
-                 commit_status=200, refuse_committed=False):
+    def __init__(
+        self,
+        status="Release",
+        files=(STORE_FILE,),
+        pending="1152921504621243540",
+        commit_status=200,
+        refuse_committed=False,
+    ):
         self.requests = []
         self.status = status
         self.files = list(files)
@@ -177,9 +233,17 @@ class _Api:
                 app["pendingApplicationSubmission"] = {"id": self.pending}
             return {"status": 200, "body": app}
         if method == "GET" and url.endswith(submission):
-            return {"status": 200, "body": {
-                "id": self.pending, "status": self.status, "targetPublishMode": self.mode,
-                "applicationPackages": [{"fileName": f, "fileStatus": "Uploaded"} for f in self.files]}}
+            return {
+                "status": 200,
+                "body": {
+                    "id": self.pending,
+                    "status": self.status,
+                    "targetPublishMode": self.mode,
+                    "applicationPackages": [
+                        {"fileName": f, "fileStatus": "Uploaded"} for f in self.files
+                    ],
+                },
+            }
         if method == "GET" and url.endswith(f"{submission}/status"):
             return {"status": 200, "body": {"status": self.status}}
         if method == "PUT" and url.endswith(submission):
@@ -202,8 +266,14 @@ class _Api:
 def _release(api, store_file=STORE_FILE):
     from scripts.releases.store import release
 
-    return release(product_id="9NTEST", store_file=store_file, tenant_id="T", client_id="C",
-                   client_secret="S", run=api)
+    return release(
+        product_id="9NTEST",
+        store_file=store_file,
+        tenant_id="T",
+        client_id="C",
+        client_secret="S",
+        run=api,
+    )
 
 
 @pytest.mark.parametrize("status", ["Certification", "Release"])
@@ -217,7 +287,10 @@ def test_release_switches_this_releases_held_submission_to_immediate(status):
 
 @pytest.mark.parametrize("refusal", ["update", "commit"])
 def test_a_refused_switch_leaves_it_held_and_says_publish_now(capsys, refusal):
-    api = _Api(refuse_committed=refusal == "update", commit_status=409 if refusal == "commit" else 200)
+    api = _Api(
+        refuse_committed=refusal == "update",
+        commit_status=409 if refusal == "commit" else 200,
+    )
     assert _release(api) == "held"
     assert "Publish now" in capsys.readouterr().out
 
@@ -241,7 +314,9 @@ def test_a_live_submission_is_a_noop(status):
     assert _release(api) == "already-live" and api.writes() == []
 
 
-@pytest.mark.parametrize("status", ["CertificationFailed", "CommitFailed", "PublishFailed", "Canceled"])
+@pytest.mark.parametrize(
+    "status", ["CertificationFailed", "CommitFailed", "PublishFailed", "Canceled"]
+)
 def test_a_failed_submission_raises_and_says_to_resubmit(status):
     from scripts.releases.store import StoreError
 
@@ -293,8 +368,13 @@ def test_http_run_sends_the_request_headers(monkeypatch):
         return _Response()
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    _http_run({"method": "GET", "url": "https://example.test/x",
-               "headers": {"Authorization": "Bearer tok"}})
+    _http_run(
+        {
+            "method": "GET",
+            "url": "https://example.test/x",
+            "headers": {"Authorization": "Bearer tok"},
+        }
+    )
     assert sent["authorization"] == "Bearer tok"
 
 
@@ -314,7 +394,12 @@ def test_release_from_env_releases_the_manifests_store_bundle_with_the_configure
         "MS_STORE_CLIENT_ID": "CLIENT",
         "MS_STORE_CLIENT_SECRET": "SECRET",
     }
-    manifest = {"files": [{"path": "ClawksisBundled-0.22.0-win.msixbundle"}, {"path": STORE_FILE}]}
+    manifest = {
+        "files": [
+            {"path": "ClawksisBundled-0.22.0-win.msixbundle"},
+            {"path": STORE_FILE},
+        ]
+    }
     assert release_from_env(env, manifest, run=api) == "immediate"
     token = next(r for r in api.requests if r["url"].endswith("/token"))
     assert token["form"]["client_id"] == "CLIENT"

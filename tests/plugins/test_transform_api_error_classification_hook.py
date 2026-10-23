@@ -65,7 +65,8 @@ def test_no_hook_falls_through_to_builtin(monkeypatch):
 
 def test_plugin_classification_wins(monkeypatch):
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
+        plugins_mod,
+        "invoke_hook",
         lambda name, **kw: [
             {"reason": "model_not_found", "retryable": False, "should_fallback": True}
         ],
@@ -79,21 +80,25 @@ def test_plugin_classification_wins(monkeypatch):
     assert result.provider == "acmecloud"
     assert result.status_code is None
 
+
 # ── Invalid returns are ignored, first valid wins ───────────────────────
 
 
 def test_invalid_reason_falls_through_to_builtin(monkeypatch):
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
+        plugins_mod,
+        "invoke_hook",
         lambda name, **kw: [{"reason": "not_a_real_reason"}],
     )
 
     result = _classify_unclaimed_error()
     assert result.reason == FailoverReason.unknown
 
+
 def test_first_valid_result_wins(monkeypatch):
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
+        plugins_mod,
+        "invoke_hook",
         lambda name, **kw: [
             {"reason": "bogus"},
             {"reason": "billing"},
@@ -110,7 +115,8 @@ def test_skipped_valid_results_log_runtime_warning(monkeypatch, caplog):
     # must surface in logs, never be silently shadowed. Invalid results
     # (here "bogus") are not "skipped valid" and must not count.
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
+        plugins_mod,
+        "invoke_hook",
         lambda name, **kw: [
             {"reason": "bogus"},
             {"reason": "billing"},
@@ -127,7 +133,8 @@ def test_skipped_valid_results_log_runtime_warning(monkeypatch, caplog):
     # A lone winner is not a conflict: no warning.
     caplog.clear()
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
+        plugins_mod,
+        "invoke_hook",
         lambda name, **kw: [{"reason": "billing"}],
     )
     with caplog.at_level(logging.WARNING, logger=plugins_mod.logger.name):
@@ -149,14 +156,18 @@ def test_helper_exception_never_breaks_classification(monkeypatch):
 
 # ── Hook kwargs contract ────────────────────────────────────────────────
 
+
 def test_message_override_and_error_context_sanitized(monkeypatch):
     monkeypatch.setattr(
-        plugins_mod, "invoke_hook",
-        lambda name, **kw: [{
-            "reason": "model_not_found",
-            "message": "  custom guidance  ",
-            "error_context": {"upstream_provider": "AcmeCloud"},
-        }],
+        plugins_mod,
+        "invoke_hook",
+        lambda name, **kw: [
+            {
+                "reason": "model_not_found",
+                "message": "  custom guidance  ",
+                "error_context": {"upstream_provider": "AcmeCloud"},
+            }
+        ],
     )
 
     result = _classify_unclaimed_error()
@@ -188,6 +199,7 @@ def _load_synthetic_plugin(tmp_path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
 
 def test_synthetic_plugin_end_to_end(tmp_path, monkeypatch):
     """register() + real invoke_hook + classify_api_error, no mocks."""

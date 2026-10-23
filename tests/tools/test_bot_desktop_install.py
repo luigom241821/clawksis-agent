@@ -9,7 +9,9 @@ import pytest
 
 from tools.bot_desktop import install, runtime
 
-_REAL_INSTALL_COMMAND = runtime.install_command  # captured before the fixture pins a sudo line
+_REAL_INSTALL_COMMAND = (
+    runtime.install_command
+)  # captured before the fixture pins a sudo line
 
 
 @pytest.fixture(autouse=True)
@@ -17,13 +19,21 @@ def _isolated_host(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.setattr(install, "_sudo_nopasswd", lambda: False)
     monkeypatch.setattr(runtime, "is_supported_host", lambda: True)
-    monkeypatch.setattr(runtime, "install_command", lambda: "sudo apt-get install -y tigervnc-standalone-server")
+    monkeypatch.setattr(
+        runtime,
+        "install_command",
+        lambda: "sudo apt-get install -y tigervnc-standalone-server",
+    )
     yield
     install._running.clear()
 
 
 def test_empty_password_cancels_without_spawning(monkeypatch):
-    monkeypatch.setattr(install.subprocess, "Popen", lambda *a, **k: pytest.fail("package manager spawned"))
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
+        lambda *a, **k: pytest.fail("package manager spawned"),
+    )
     lines: list[str] = []
     code = install.install_packages(ask_password=lambda: "", on_line=lines.append)
     assert code == -1
@@ -40,7 +50,10 @@ def test_second_install_for_same_profile_is_refused(monkeypatch):
         return 0
 
     monkeypatch.setattr(install, "_run", slow_run)
-    worker = threading.Thread(target=install.install_packages, kwargs={"ask_password": lambda: "pw", "on_line": lambda _l: None})
+    worker = threading.Thread(
+        target=install.install_packages,
+        kwargs={"ask_password": lambda: "pw", "on_line": lambda _l: None},
+    )
     worker.start()
     assert entered.wait(5)
     with pytest.raises(install.InstallBusy):
@@ -78,22 +91,42 @@ def test_timeout_kills_the_package_managers_whole_process_group(monkeypatch):
     def popen(argv, **kw):
         if argv[:1] != fake:
             return real_popen(argv, **kw)
-        return real_popen(["bash", "-c", "sleep 30 >/dev/null 2>&1 & echo child $!; wait"], **kw)
+        return real_popen(
+            ["bash", "-c", "sleep 30 >/dev/null 2>&1 & echo child $!; wait"], **kw
+        )
 
     monkeypatch.setattr(install.subprocess, "Popen", popen)
     lines: list[str] = []
-    code = install._run("sudo apt-get install -y x", ask_password=lambda: "", on_line=lines.append, timeout_seconds=0.5)
+    code = install._run(
+        "sudo apt-get install -y x",
+        ask_password=lambda: "",
+        on_line=lines.append,
+        timeout_seconds=0.5,
+    )
     assert code != 0
     child = next(int(line.split()[1]) for line in lines if line.startswith("child "))
     from pathlib import Path
 
-    def gone() -> bool:  # /proc-based: a reparented orphan sits outside our subtree, where os.kill(pid, 0) is guarded
+    def gone() -> (
+        bool
+    ):  # /proc-based: a reparented orphan sits outside our subtree, where os.kill(pid, 0) is guarded
         try:
-            return "Z" in (Path(f"/proc/{child}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split() or ["Z"])[0]
+            return (
+                "Z"
+                in (
+                    Path(f"/proc/{child}/stat")
+                    .read_text(encoding="utf-8")
+                    .rsplit(")", 1)[1]
+                    .split()
+                    or ["Z"]
+                )[0]
+            )
         except OSError:
             return True
 
-    for _ in range(50):  # the child must die with the group, not linger reparented to init
+    for _ in range(
+        50
+    ):  # the child must die with the group, not linger reparented to init
         if gone():
             break
         time.sleep(0.1)
@@ -112,6 +145,7 @@ def test_passwordless_sudo_runs_the_install_without_asking_for_a_password(monkey
     class _Proc:
         """Stands in for the sudo child: the drain reads the pipe by fd, so stdout is a real pipe with
         the output already written and the write end closed (EOF)."""
+
         pid = 4242
         returncode = 0
         stdin = __import__("io").StringIO()
@@ -132,15 +166,19 @@ def test_passwordless_sudo_runs_the_install_without_asking_for_a_password(monkey
     monkeypatch.setattr(install.subprocess, "Popen", _Proc)
     monkeypatch.setattr(install.os, "killpg", lambda *a: None)
     lines: list[str] = []
-    code = install.install_packages(ask_password=lambda: pytest.fail("sudo password asked despite NOPASSWD"),
-                                    on_line=lines.append)
+    code = install.install_packages(
+        ask_password=lambda: pytest.fail("sudo password asked despite NOPASSWD"),
+        on_line=lines.append,
+    )
     assert code == 0
     assert spawned and spawned[0][:1] == ["sudo"] and "-S" not in spawned[0]
     assert "Done" in lines
 
 
 @pytest.mark.platforms("linux")
-def test_timeout_returns_and_frees_the_slot_even_when_a_descendant_survives(monkeypatch):
+def test_timeout_returns_and_frees_the_slot_even_when_a_descendant_survives(
+    monkeypatch,
+):
     """From an unprivileged Clawksis, killpg reaches the sudo leader but not a root-owned apt child; that
     child keeps the pipe's write end open, so draining stdout never sees EOF and the profile slot stays
     taken forever. The timeout must end the drain and release the slot regardless of what survived.
@@ -160,14 +198,21 @@ def test_timeout_returns_and_frees_the_slot_even_when_a_descendant_survives(monk
     monkeypatch.setattr(install.subprocess, "Popen", popen)
     lines: list[str] = []
     started = time.monotonic()
-    worker = threading.Thread(target=lambda: lines.append(
-        f"code {install.install_packages(ask_password=lambda: '', on_line=lines.append, timeout_seconds=0.5)}"))
+    worker = threading.Thread(
+        target=lambda: lines.append(
+            f"code {install.install_packages(ask_password=lambda: '', on_line=lines.append, timeout_seconds=0.5)}"
+        )
+    )
     worker.start()
     worker.join(3.0)
-    survivor = next((int(line.split()[1]) for line in lines if line.startswith("child ")), None)
+    survivor = next(
+        (int(line.split()[1]) for line in lines if line.startswith("child ")), None
+    )
     if survivor:
         subprocess.run(["kill", "-9", str(survivor)], check=False)
-    assert not worker.is_alive(), f"install_packages hung {time.monotonic() - started:.1f}s on a surviving descendant"
+    assert not worker.is_alive(), (
+        f"install_packages hung {time.monotonic() - started:.1f}s on a surviving descendant"
+    )
     assert any(line.startswith("code ") and line != "code 0" for line in lines), lines
     assert any("timed out" in line for line in lines), lines
     install.release(install.claim())  # slot is free again
@@ -190,21 +235,31 @@ def test_root_installs_without_sudo_and_without_asking(monkeypatch):
         return real_popen(["true"], **kw)
 
     monkeypatch.setattr(install.subprocess, "Popen", popen)
-    code = install.install_packages(ask_password=lambda: pytest.fail("root was asked for a sudo password"),
-                                    on_line=lambda _l: None)
+    code = install.install_packages(
+        ask_password=lambda: pytest.fail("root was asked for a sudo password"),
+        on_line=lambda _l: None,
+    )
     assert code == 0
     assert spawned and spawned[0][0] == "apt-get", spawned
 
 
-def test_no_sudo_binary_returns_the_host_command_instead_of_a_password_card(monkeypatch):
+def test_no_sudo_binary_returns_the_host_command_instead_of_a_password_card(
+    monkeypatch,
+):
     """Unprivileged with no sudo on the host (minimal containers): a password card would be a dead end,
     the user needs the exact command to run on the host instead."""
     monkeypatch.setattr(install.os, "geteuid", lambda: 1000)
     monkeypatch.setattr("shutil.which", lambda name, *a, **k: None)
-    monkeypatch.setattr(install.subprocess, "Popen", lambda *a, **k: pytest.fail("package manager spawned"))
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
+        lambda *a, **k: pytest.fail("package manager spawned"),
+    )
     lines: list[str] = []
-    code = install.install_packages(ask_password=lambda: pytest.fail("password card raised without sudo"),
-                                    on_line=lines.append)
+    code = install.install_packages(
+        ask_password=lambda: pytest.fail("password card raised without sudo"),
+        on_line=lines.append,
+    )
     assert code == install.NO_SUDO
     assert any("apt-get install" in line for line in lines), lines
 
@@ -223,17 +278,23 @@ def test_timeout_finishes_the_group_when_only_the_leader_dies_on_term(monkeypatc
     def popen(argv, **kw):
         if argv[:1] != ["sudo"]:
             return real_popen(argv, **kw)
-        return real_popen(["sh", "-c", "sh -c 'trap \"\" TERM; echo child $$; sleep 30' & wait"], **kw)
+        return real_popen(
+            ["sh", "-c", "sh -c 'trap \"\" TERM; echo child $$; sleep 30' & wait"], **kw
+        )
 
     monkeypatch.setattr(install.subprocess, "Popen", popen)
     lines: list[str] = []
-    install.install_packages(ask_password=lambda: "", on_line=lines.append, timeout_seconds=0.5)
+    install.install_packages(
+        ask_password=lambda: "", on_line=lines.append, timeout_seconds=0.5
+    )
     child = next(int(line.split()[1]) for line in lines if line.startswith("child "))
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline and _alive(child):
         time.sleep(0.05)
     try:
-        assert not _alive(child), "the TERM-ignoring descendant survived the timeout cleanup"
+        assert not _alive(child), (
+            "the TERM-ignoring descendant survived the timeout cleanup"
+        )
     finally:
         subprocess.run(["kill", "-9", str(child)], check=False)
 
@@ -252,11 +313,19 @@ def test_install_slot_is_held_across_processes(tmp_path):
 
     key = install.claim()
     try:
-        probe = subprocess.run([sys.executable, "-c",
-            "import fcntl,sys\nfh=open(sys.argv[1],'a+',encoding='utf-8')\n"
-            "try:\n    fcntl.flock(fh.fileno(), fcntl.LOCK_EX|fcntl.LOCK_NB); print('free')\n"
-            "except OSError:\n    print('held')", str(runtime.state_dir() / "install.lock")],
-            capture_output=True, text=True, check=False)
+        probe = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import fcntl,sys\nfh=open(sys.argv[1],'a+',encoding='utf-8')\n"
+                "try:\n    fcntl.flock(fh.fileno(), fcntl.LOCK_EX|fcntl.LOCK_NB); print('free')\n"
+                "except OSError:\n    print('held')",
+                str(runtime.state_dir() / "install.lock"),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         assert probe.stdout.strip() == "held", probe
     finally:
         install.release(key)

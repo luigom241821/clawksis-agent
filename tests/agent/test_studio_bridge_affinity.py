@@ -132,7 +132,6 @@ def _reply_scope(
 
 
 class TestStudioBridgeAffinity:
-
     def test_a_declared_conversation_holds_one_affinity_across_replies(self, db):
         """Consecutive replies keep one affinity though their ids differ."""
         key = _bridge_session_key()
@@ -161,7 +160,6 @@ class TestStudioBridgeAffinity:
         )
 
         assert len({reviewer, planner, other_room}) == 3
-
 
     def test_the_row_source_is_the_authority_not_the_platform(self, db):
         """Equal keys under different sources never share one scope.

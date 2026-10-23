@@ -225,10 +225,12 @@ def _build_gemini_contents(
         # Tool result message — emit a user-role turn with functionResponse
 
         if role == "tool" or role == "function":
-            contents.append({
-                "role": "user",
-                "parts": [_translate_tool_result_to_gemini(msg)],
-            })
+            contents.append(
+                {
+                    "role": "user",
+                    "parts": [_translate_tool_result_to_gemini(msg)],
+                }
+            )
 
             continue
 
@@ -614,7 +616,6 @@ def _map_gemini_finish_reason(reason: str) -> str:
 
 class _GeminiStreamChunk(SimpleNamespace):
     """Mimics an OpenAI ChatCompletionChunk with .choices[0].delta."""
-
 
 
 def _make_stream_chunk(

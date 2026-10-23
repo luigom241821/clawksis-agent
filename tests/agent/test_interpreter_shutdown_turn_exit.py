@@ -18,6 +18,7 @@ no print, no traceback, no retry.
 
 from types import SimpleNamespace
 
+
 def _text_response(text: str):
     return SimpleNamespace(
         choices=[
@@ -28,6 +29,7 @@ def _text_response(text: str):
         ],
         usage=None,
     )
+
 
 class _ShutdownThenTextCompletions:
     """First call raises the CPython shutdown error; later calls would succeed.
@@ -43,10 +45,9 @@ class _ShutdownThenTextCompletions:
     def create(self, **kwargs):
         self.calls += 1
         if self.calls == 1:
-            raise RuntimeError(
-                "cannot schedule new futures after interpreter shutdown"
-            )
+            raise RuntimeError("cannot schedule new futures after interpreter shutdown")
         return _text_response("should never be reached")
+
 
 class _AlwaysFailingCompletions:
     def __init__(self):
@@ -55,6 +56,7 @@ class _AlwaysFailingCompletions:
     def create(self, **kwargs):
         self.calls += 1
         raise Exception("API down")
+
 
 def _make_agent(monkeypatch, completions):
     from run_agent import AIAgent
@@ -74,6 +76,7 @@ def _make_agent(monkeypatch, completions):
     )
     agent._disable_streaming = True
     return agent
+
 
 def test_shutdown_error_exits_loop_without_retry(monkeypatch, capsys):
     completions = _ShutdownThenTextCompletions()
@@ -96,6 +99,7 @@ def test_shutdown_error_exits_loop_without_retry(monkeypatch, capsys):
     assert "❌" not in out.out
     assert "cannot schedule new futures" not in out.out
 
+
 def test_shutdown_variant_without_interpreter_word_also_exits(monkeypatch):
     """CPython's plain-ThreadPoolExecutor variant omits 'interpreter'."""
 
@@ -114,6 +118,7 @@ def test_shutdown_variant_without_interpreter_word_also_exits(monkeypatch):
 
     assert completions.calls == 1
     assert result["failed"] is True
+
 
 def test_suppress_status_output_gates_error_print_for_ordinary_api_errors(
     monkeypatch, capsys
@@ -139,6 +144,7 @@ def test_suppress_status_output_gates_error_print_for_ordinary_api_errors(
     out = capsys.readouterr()
     assert "❌" not in out.out
 
+
 def test_non_quiet_mode_still_prints_error(monkeypatch, capsys):
     completions = _AlwaysFailingCompletions()
     agent = _make_agent(monkeypatch, completions)
@@ -149,8 +155,8 @@ def test_non_quiet_mode_still_prints_error(monkeypatch, capsys):
     out = capsys.readouterr()
     assert "❌" in out.out
 
-class TestSharedPredicate:
 
+class TestSharedPredicate:
     def test_ignores_unrelated_errors(self):
         from tools.interpreter_shutdown import interpreter_shutting_down
 

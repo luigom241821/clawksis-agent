@@ -46,7 +46,9 @@ QUEUE_MAX_SIZE = 256
 _registered: set[tuple[str, str, str]] = set()
 _registered_lock = threading.Lock()
 
-_delivery_queue: queue.Queue[Optional[dict[str, Any]]] = queue.Queue(maxsize=QUEUE_MAX_SIZE)
+_delivery_queue: queue.Queue[Optional[dict[str, Any]]] = queue.Queue(
+    maxsize=QUEUE_MAX_SIZE
+)
 _worker_lock = threading.Lock()
 _worker: Optional[threading.Thread] = None
 
@@ -54,6 +56,7 @@ _worker: Optional[threading.Thread] = None
 @dataclass
 class WebhookTarget(_ToolMatcherMixin):
     """Parsed and validated representation of one ``hooks.outbound`` entry."""
+
     _MATCHER_KIND = "outbound webhook"
     url: str
     events: list[str]
@@ -78,6 +81,7 @@ def register_from_config(cfg: Optional[dict[str, Any]]) -> list[WebhookTarget]:
     if not isinstance(cfg, dict):
         return []
     from utils import env_var_enabled
+
     if env_var_enabled("CLAWK_SAFE_MODE"):
         logger.info("CLAWK_SAFE_MODE=1 — outbound webhook registration skipped")
         return []
@@ -85,6 +89,7 @@ def register_from_config(cfg: Optional[dict[str, Any]]) -> list[WebhookTarget]:
     if not targets:
         return []
     from clawk_cli.plugins import get_plugin_manager
+
     manager = get_plugin_manager()
     home_key = _home_key()
     registered: list[WebhookTarget] = []
@@ -95,12 +100,17 @@ def register_from_config(cfg: Optional[dict[str, Any]]) -> list[WebhookTarget]:
                 key = (home_key, event, target.url)
                 if key in _registered:
                     continue
-                manager._hooks.setdefault(event, []).append(_make_callback(event, target))
+                manager._hooks.setdefault(event, []).append(
+                    _make_callback(event, target)
+                )
                 _registered.add(key)
                 wired_any = True
                 logger.info(
                     "outbound webhook registered: %s -> %s (matcher=%s, timeout=%ds)",
-                    event, target.label, target.matcher, target.timeout,
+                    event,
+                    target.label,
+                    target.matcher,
+                    target.timeout,
                 )
             if wired_any:
                 registered.append(target)
@@ -116,9 +126,16 @@ def iter_configured_targets(cfg: Optional[dict[str, Any]]) -> list[WebhookTarget
     if raw is None:
         return []
     if not isinstance(raw, list):
-        logger.warning("hooks.outbound must be a list of webhook targets; got %s", type(raw).__name__)
+        logger.warning(
+            "hooks.outbound must be a list of webhook targets; got %s",
+            type(raw).__name__,
+        )
         return []
-    return [t for t in (_parse_single_target(i, entry) for i, entry in enumerate(raw)) if t is not None]
+    return [
+        t
+        for t in (_parse_single_target(i, entry) for i, entry in enumerate(raw))
+        if t is not None
+    ]
 
 
 def flush(timeout: float = 5.0) -> bool:
@@ -143,6 +160,7 @@ def re_register_config_hooks() -> None:
     so without this the force-reloaded profile's outbound webhooks go silently inert (#92682 review).
     """
     from clawk_cli.config import load_config
+
     _forget_home_registrations(_registered, _registered_lock)
     register_from_config(load_config())
 
@@ -166,7 +184,10 @@ def _parse_single_target(index: int, raw: Any) -> Optional[WebhookTarget]:
         logger.warning("hooks.outbound[%d]" + msg, index, *args)
 
     if not isinstance(raw, dict):
-        warn(" must be a mapping with 'url' and 'events' keys; got %s", type(raw).__name__)
+        warn(
+            " must be a mapping with 'url' and 'events' keys; got %s",
+            type(raw).__name__,
+        )
         return None
     url = raw.get("url")
     if not isinstance(url, str) or not url.strip():
@@ -177,7 +198,9 @@ def _parse_single_target(index: int, raw: Any) -> Optional[WebhookTarget]:
         warn(".url must be http(s); got %r — skipped", url)
         return None
     if url.lower().startswith("http://"):
-        warn(".url uses plain http:// — payloads (including tool inputs) travel unencrypted. Prefer https.")
+        warn(
+            ".url uses plain http:// — payloads (including tool inputs) travel unencrypted. Prefer https."
+        )
     events_raw = raw.get("events")
     valid_list = ", ".join(sorted(VALID_HOOKS))
     if not isinstance(events_raw, list) or not events_raw:
@@ -195,13 +218,20 @@ def _parse_single_target(index: int, raw: Any) -> Optional[WebhookTarget]:
         warn(".matcher must be a string regex; ignoring")
         matcher = None
     if matcher is not None and not any(e in _TOOL_SCOPED_EVENTS for e in events):
-        warn(".matcher=%r will be ignored — matcher is only honored for pre_tool_call / post_tool_call.", matcher)
+        warn(
+            ".matcher=%r will be ignored — matcher is only honored for pre_tool_call / post_tool_call.",
+            matcher,
+        )
         matcher = None
     timeout_raw = raw.get("timeout", DEFAULT_TIMEOUT_SECONDS)
     try:
         timeout = int(timeout_raw)
     except (TypeError, ValueError):
-        warn(".timeout must be an int (got %r); using default %ds", timeout_raw, DEFAULT_TIMEOUT_SECONDS)
+        warn(
+            ".timeout must be an int (got %r); using default %ds",
+            timeout_raw,
+            DEFAULT_TIMEOUT_SECONDS,
+        )
         timeout = DEFAULT_TIMEOUT_SECONDS
     name = raw.get("name")
     # ``secret_env`` (env var name, preferred) wins over inline ``secret``. Read through the profile
@@ -211,15 +241,23 @@ def _parse_single_target(index: int, raw: Any) -> Optional[WebhookTarget]:
     secret_env = raw.get("secret_env")
     if isinstance(secret_env, str) and secret_env.strip():
         from agent.secret_scope import get_secret
+
         secret = get_secret(secret_env.strip(), "") or None
         if secret is None:
-            warn(".secret_env=%r is not set in the environment — deliveries will be UNSIGNED", secret_env.strip())
+            warn(
+                ".secret_env=%r is not set in the environment — deliveries will be UNSIGNED",
+                secret_env.strip(),
+            )
     else:
         secret = raw.get("secret")
         secret = secret if isinstance(secret, str) and secret else None
     return WebhookTarget(
-        url=url, events=events, name=name.strip() if isinstance(name, str) else "", secret=secret,
-        matcher=matcher, timeout=max(1, min(timeout, MAX_TIMEOUT_SECONDS)),
+        url=url,
+        events=events,
+        name=name.strip() if isinstance(name, str) else "",
+        secret=secret,
+        matcher=matcher,
+        timeout=max(1, min(timeout, MAX_TIMEOUT_SECONDS)),
     )
 
 
@@ -231,13 +269,20 @@ def _make_callback(event: str, target: WebhookTarget):
 
         if safe_worker_enabled():
             return
-        if event in _TOOL_SCOPED_EVENTS and not target.matches_tool(kwargs.get("tool_name")):
+        if event in _TOOL_SCOPED_EVENTS and not target.matches_tool(
+            kwargs.get("tool_name")
+        ):
             return
         delivery_id = uuid.uuid4().hex
         try:
             body = _serialize_payload(event, kwargs, delivery_id)
         except Exception:  # a bad payload must not hurt the loop
-            logger.warning("outbound webhook payload serialization failed (event=%s target=%s)", event, target.label, exc_info=True)
+            logger.warning(
+                "outbound webhook payload serialization failed (event=%s target=%s)",
+                event,
+                target.label,
+                exc_info=True,
+            )
             return
         _enqueue(_build_delivery(event, target, body, delivery_id))
 
@@ -253,22 +298,39 @@ def _serialize_payload(event: str, kwargs: dict[str, Any], delivery_id: str) -> 
     # Profile resolved at fire time so a multiplexed gateway's receivers can tell which profile emitted.
     # See #92674.
     from clawk_cli.profiles import get_active_profile_name
+
     payload = {
-        "hook_event_name": event, "profile": get_active_profile_name(), **_payload_fields(kwargs),
-        "delivery_id": delivery_id, "timestamp": _utc_now_iso(),
+        "hook_event_name": event,
+        "profile": get_active_profile_name(),
+        **_payload_fields(kwargs),
+        "delivery_id": delivery_id,
+        "timestamp": _utc_now_iso(),
     }
     return json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
 
 
-def _build_delivery(event: str, target: WebhookTarget, body: bytes, delivery_id: str) -> dict[str, Any]:
+def _build_delivery(
+    event: str, target: WebhookTarget, body: bytes, delivery_id: str
+) -> dict[str, Any]:
     headers = {
-        "Content-Type": "application/json", "User-Agent": "Clawksis-Outbound-Webhook",
-        "X-Clawksis-Event": event, "X-Clawksis-Delivery": delivery_id,
+        "Content-Type": "application/json",
+        "User-Agent": "Clawksis-Outbound-Webhook",
+        "X-Clawksis-Event": event,
+        "X-Clawksis-Delivery": delivery_id,
     }
     if target.secret:
-        digest = hmac.new(target.secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        digest = hmac.new(
+            target.secret.encode("utf-8"), body, hashlib.sha256
+        ).hexdigest()
         headers["X-Clawksis-Signature-256"] = f"sha256={digest}"
-    return {"url": target.url, "label": target.label, "event": event, "body": body, "headers": headers, "timeout": target.timeout}
+    return {
+        "url": target.url,
+        "label": target.label,
+        "event": event,
+        "body": body,
+        "headers": headers,
+        "timeout": target.timeout,
+    }
 
 
 def _enqueue(delivery: dict[str, Any]) -> None:
@@ -276,7 +338,9 @@ def _enqueue(delivery: dict[str, Any]) -> None:
     if _worker is None or not _worker.is_alive():
         with _worker_lock:
             if _worker is None or not _worker.is_alive():
-                _worker = threading.Thread(target=_worker_loop, name="outbound-webhooks", daemon=True)
+                _worker = threading.Thread(
+                    target=_worker_loop, name="outbound-webhooks", daemon=True
+                )
                 _worker.start()
                 # Daemon worker: a short-lived process could exit right after enqueuing on_session_end.
                 # Drain at interpreter shutdown, bounded so a dead endpoint can only delay exit, never hang it.
@@ -286,7 +350,9 @@ def _enqueue(delivery: dict[str, Any]) -> None:
     except queue.Full:
         logger.warning(
             "outbound webhook queue full (%d pending) — dropping %s event for %s",
-            QUEUE_MAX_SIZE, delivery["event"], delivery["label"],
+            QUEUE_MAX_SIZE,
+            delivery["event"],
+            delivery["label"],
         )
 
 
@@ -298,7 +364,9 @@ def _worker_loop() -> None:
                 _deliver(delivery)
         except Exception:  # pragma: no cover — defensive
             label = delivery.get("label") if isinstance(delivery, dict) else "?"
-            logger.warning("outbound webhook delivery crashed (target=%s)", label, exc_info=True)
+            logger.warning(
+                "outbound webhook delivery crashed (target=%s)", label, exc_info=True
+            )
         finally:
             _delivery_queue.task_done()
 
@@ -319,12 +387,22 @@ def _deliver(delivery: dict[str, Any]) -> None:
     event, label = delivery["event"], delivery["label"]
     last_error = ""
     for attempt in range(1, MAX_DELIVERY_ATTEMPTS + 1):
-        req = urlrequest.Request(delivery["url"], data=delivery["body"], headers=delivery["headers"], method="POST")
+        req = urlrequest.Request(
+            delivery["url"],
+            data=delivery["body"],
+            headers=delivery["headers"],
+            method="POST",
+        )
         try:
             with _opener.open(req, timeout=delivery["timeout"]) as resp:
                 status = getattr(resp, "status", 200)
             if 200 <= status < 300:
-                logger.debug("outbound webhook delivered: %s -> %s (HTTP %d)", event, label, status)
+                logger.debug(
+                    "outbound webhook delivered: %s -> %s (HTTP %d)",
+                    event,
+                    label,
+                    status,
+                )
                 return
             last_error = f"HTTP {status}"
         except urlerror.HTTPError as exc:
@@ -332,11 +410,20 @@ def _deliver(delivery: dict[str, Any]) -> None:
             if 300 <= exc.code < 400:
                 logger.warning(
                     "outbound webhook target redirected (event=%s target=%s): %s -> %s — redirects are not "
-                    "followed; update the configured url", event, label, last_error, exc.headers.get("Location", "?"),
+                    "followed; update the configured url",
+                    event,
+                    label,
+                    last_error,
+                    exc.headers.get("Location", "?"),
                 )
                 return
             if 400 <= exc.code < 500:
-                logger.warning("outbound webhook rejected (event=%s target=%s): %s — not retrying", event, label, last_error)
+                logger.warning(
+                    "outbound webhook rejected (event=%s target=%s): %s — not retrying",
+                    event,
+                    label,
+                    last_error,
+                )
                 return
         except Exception as exc:
             last_error = str(exc) or type(exc).__name__
@@ -344,5 +431,8 @@ def _deliver(delivery: dict[str, Any]) -> None:
             time.sleep(RETRY_BACKOFF_SECONDS * attempt)
     logger.warning(
         "outbound webhook delivery failed after %d attempt(s) (event=%s target=%s): %s",
-        MAX_DELIVERY_ATTEMPTS, event, label, last_error,
+        MAX_DELIVERY_ATTEMPTS,
+        event,
+        label,
+        last_error,
     )

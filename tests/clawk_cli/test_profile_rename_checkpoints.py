@@ -33,10 +33,14 @@ def test_rename_preserves_profile_local_checkpoint_history(profile_env, tmp_path
     old_dir = create_profile("oldname", no_alias=True)
     workdir = old_dir / "project"
     workdir.mkdir()
-    outside = tmp_path / "outside-project"  # control: not under the profile dir, same store
+    outside = (
+        tmp_path / "outside-project"
+    )  # control: not under the profile dir, same store
     outside.mkdir()
     (outside / "keep.txt").write_text("v1\n", encoding="utf-8")
-    (workdir / "pyproject.toml").write_text("[project]\nname = 'rename-checkpoint'\n", encoding="utf-8")
+    (workdir / "pyproject.toml").write_text(
+        "[project]\nname = 'rename-checkpoint'\n", encoding="utf-8"
+    )
     tracked = workdir / "note.txt"
     tracked.write_text("before\n", encoding="utf-8")
 
@@ -52,8 +56,10 @@ def test_rename_preserves_profile_local_checkpoint_history(profile_env, tmp_path
     finally:
         reset_clawk_home_override(token)
 
-    with patch("clawk_cli.profiles.check_alias_collision", return_value="skip"), \
-         patch("clawk_cli.profiles._live_default_multiplexer", return_value=False):
+    with (
+        patch("clawk_cli.profiles.check_alias_collision", return_value="skip"),
+        patch("clawk_cli.profiles._live_default_multiplexer", return_value=False),
+    ):
         new_dir = rename_profile("oldname", "newname")
 
     new_workdir = new_dir / "project"
@@ -63,7 +69,9 @@ def test_rename_preserves_profile_local_checkpoint_history(profile_env, tmp_path
         manager = CheckpointManager(enabled=True, max_snapshots=5)
         checkpoints = manager.list_checkpoints(str(new_workdir))
         assert [entry["hash"] for entry in checkpoints] == [checkpoint_hash]
-        assert [entry["hash"] for entry in manager.list_checkpoints(str(outside))] == [outside_hash]
+        assert [entry["hash"] for entry in manager.list_checkpoints(str(outside))] == [
+            outside_hash
+        ]
 
         project_paths = {entry["workdir"] for entry in manager.list_all_checkpoints()}
         assert str(new_workdir.resolve()) in project_paths
@@ -90,19 +98,28 @@ def test_retry_after_partial_rekey_keeps_checkpoints_taken_under_new_name(profil
     old_dir = create_profile("oldname", no_alias=True)
     workdir = old_dir / "project"
     workdir.mkdir()
-    (workdir / "pyproject.toml").write_text("[project]\nname = 'retry'\n", encoding="utf-8")
+    (workdir / "pyproject.toml").write_text(
+        "[project]\nname = 'retry'\n", encoding="utf-8"
+    )
     note = workdir / "note.txt"
     note.write_text("v1\n", encoding="utf-8")
 
     token = set_clawk_home_override(old_dir)
     try:
-        assert CheckpointManager(enabled=True, max_snapshots=5).ensure_checkpoint(str(workdir), "c1") is True
+        assert (
+            CheckpointManager(enabled=True, max_snapshots=5).ensure_checkpoint(
+                str(workdir), "c1"
+            )
+            is True
+        )
     finally:
         reset_clawk_home_override(token)
 
-    with patch("clawk_cli.profiles.check_alias_collision", return_value="skip"), \
-         patch("clawk_cli.profiles._live_default_multiplexer", return_value=False), \
-         patch.object(maintenance, "_delete_ref", return_value=False):  # old ref survives: partial rekey
+    with (
+        patch("clawk_cli.profiles.check_alias_collision", return_value="skip"),
+        patch("clawk_cli.profiles._live_default_multiplexer", return_value=False),
+        patch.object(maintenance, "_delete_ref", return_value=False),
+    ):  # old ref survives: partial rekey
         new_dir = rename_profile("oldname", "newname")
 
     new_workdir = new_dir / "project"
@@ -121,8 +138,14 @@ def test_retry_after_partial_rekey_keeps_checkpoints_taken_under_new_name(profil
         assert migrate_profile_identity("oldname", "newname") is True
 
         manager = CheckpointManager(enabled=True, max_snapshots=5)
-        assert [entry["hash"] for entry in manager.list_checkpoints(str(new_workdir))] == before
-        assert cm._load_ledger(store, cm._project_hash(str(new_workdir))) == ledger_before
-        assert cm._list_project_refs(store, str(new_workdir)) == [cm._ref_name(cm._project_hash(str(new_workdir)))]
+        assert [
+            entry["hash"] for entry in manager.list_checkpoints(str(new_workdir))
+        ] == before
+        assert (
+            cm._load_ledger(store, cm._project_hash(str(new_workdir))) == ledger_before
+        )
+        assert cm._list_project_refs(store, str(new_workdir)) == [
+            cm._ref_name(cm._project_hash(str(new_workdir)))
+        ]
     finally:
         reset_clawk_home_override(token)

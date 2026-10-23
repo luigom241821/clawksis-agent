@@ -54,11 +54,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
-        requests.append({
-            "endpoint": self.server.kind,
-            "path": self.path,
-            "model": body.get("model"),
-        })
+        requests.append(
+            {
+                "endpoint": self.server.kind,
+                "path": self.path,
+                "model": body.get("model"),
+            }
+        )
         if self.server.kind == "cloud-simulator":
             status = self.server.failure_status
             data = {

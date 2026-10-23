@@ -29,13 +29,16 @@ def _npm_tarball(path, names):
 def test_staged_native_binary_is_executable(tmp_path, target):
     package = get_package("agent-browser")
     archive = tmp_path / "agent-browser.tgz"
-    _npm_tarball(archive, [
-        "package.json",
-        "bin/agent-browser.js",
-        "bin/agent-browser-linux-arm64",
-        "bin/agent-browser-linux-x64",
-        "bin/agent-browser-darwin-arm64",
-    ])
+    _npm_tarball(
+        archive,
+        [
+            "package.json",
+            "bin/agent-browser.js",
+            "bin/agent-browser-linux-arm64",
+            "bin/agent-browser-linux-x64",
+            "bin/agent-browser-darwin-arm64",
+        ],
+    )
     staged = tmp_path / "staged"
     package.unpack(archive, staged, target)
     package.stage(Store(tmp_path / "store"), staged, "fixture", target)
@@ -45,4 +48,5 @@ def test_staged_native_binary_is_executable(tmp_path, target):
     mode = binary.stat().st_mode
     assert mode & stat.S_IXUSR and mode & stat.S_IXGRP and mode & stat.S_IXOTH
     assert sorted(p.name for p in (staged / "bin").iterdir()) == sorted(
-        ["agent-browser.js", f"agent-browser-{target}"])
+        ["agent-browser.js", f"agent-browser-{target}"]
+    )

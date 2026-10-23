@@ -29,7 +29,9 @@ def _clear_provider_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def _write_aux_config(task="compression", provider="gemini", model_name="gemini-2.5-flash"):
+def _write_aux_config(
+    task="compression", provider="gemini", model_name="gemini-2.5-flash"
+):
     """Simulate the aux picker writing a task override to disk."""
     cfg = load_config()
     aux = cfg.setdefault("auxiliary", {})
@@ -39,7 +41,9 @@ def _write_aux_config(task="compression", provider="gemini", model_name="gemini-
     save_config(cfg)
 
 
-def test_setup_model_provider_preserves_auxiliary_choices_written_by_picker(tmp_path, monkeypatch):
+def test_setup_model_provider_preserves_auxiliary_choices_written_by_picker(
+    tmp_path, monkeypatch
+):
     """Aux choices made inside clawk setup must survive the wizard's final save."""
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
@@ -89,10 +93,10 @@ def test_setup_summary_local_browser_unavailable_without_chromium(
         lambda *a, **k: None,
     )
     monkeypatch.setattr("tools.browser_tool_install._chromium_installed", lambda: False)
-    monkeypatch.setattr("tools.browser_tool_lightpanda_fallback._using_lightpanda_engine", lambda: False)
     monkeypatch.setattr(
-        "agent.auxiliary_client.get_available_vision_backends", list
+        "tools.browser_tool_lightpanda_fallback._using_lightpanda_engine", lambda: False
     )
+    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", list)
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out

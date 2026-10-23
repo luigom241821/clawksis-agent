@@ -6,32 +6,32 @@ from clawk_cli import memory_setup
 from clawk_cli.memory_setup import _CANCELLED
 
 
-
-
-
-
-
-
 def test_cmd_setup_generic_choice_cancel_writes_nothing(tmp_path, monkeypatch):
     class ChoiceProvider:
         def __init__(self):
             self.save_config = MagicMock()
 
         def get_config_schema(self):
-            return [{
-                "key": "mode",
-                "description": "Mode",
-                "default": "one",
-                "choices": ["one", "two"],
-            }]
+            return [
+                {
+                    "key": "mode",
+                    "description": "Mode",
+                    "default": "one",
+                    "choices": ["one", "two"],
+                }
+            ]
 
     provider = ChoiceProvider()
     selections = iter([0, _CANCELLED])
     save_config = MagicMock()
     install_dependencies = MagicMock()
 
-    monkeypatch.setattr(memory_setup, "_get_available_providers", lambda: [("fake", "local", provider)])
-    monkeypatch.setattr(memory_setup, "_curses_select", lambda *args, **kwargs: next(selections))
+    monkeypatch.setattr(
+        memory_setup, "_get_available_providers", lambda: [("fake", "local", provider)]
+    )
+    monkeypatch.setattr(
+        memory_setup, "_curses_select", lambda *args, **kwargs: next(selections)
+    )
     monkeypatch.setattr(memory_setup, "_install_dependencies", install_dependencies)
     monkeypatch.setattr(memory_setup, "get_clawk_home", lambda: tmp_path)
     monkeypatch.setattr("clawk_cli.config.load_config", lambda: {"memory": {}})
@@ -58,10 +58,9 @@ def test_cmd_setup_generic_choice_cancel_writes_nothing(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-
-
-
-def test_install_dependencies_prepares_declared_extra_even_if_importable(tmp_path, monkeypatch):
+def test_install_dependencies_prepares_declared_extra_even_if_importable(
+    tmp_path, monkeypatch
+):
     """PM, not ambient importability, decides whether constraints are current."""
     import clawk_yaml as _yaml
 
@@ -70,9 +69,7 @@ def test_install_dependencies_prepares_declared_extra_even_if_importable(tmp_pat
     (plugin_dir / "plugin.yaml").write_text(
         _yaml.safe_dump({"extra": "mem0"}), encoding="utf-8"
     )
-    monkeypatch.setattr(
-        "plugins.memory.find_provider_dir", lambda name: plugin_dir
-    )
+    monkeypatch.setattr("plugins.memory.find_provider_dir", lambda name: plugin_dir)
 
     synced = []
 
@@ -80,8 +77,11 @@ def test_install_dependencies_prepares_declared_extra_even_if_importable(tmp_pat
 
     monkeypatch.setattr(pm, "available", lambda extra: True)
     monkeypatch.setattr(
-        pm, "sync_venv",
-        lambda extras=None, explicit=False: synced.append((list(extras or []), explicit)),
+        pm,
+        "sync_venv",
+        lambda extras=None, explicit=False: synced.append(
+            (list(extras or []), explicit)
+        ),
     )
 
     memory_setup._install_dependencies("mem0")

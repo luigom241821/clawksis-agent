@@ -19,7 +19,9 @@ from tui_gateway import server
 def _capture(monkeypatch):
     events = []
     monkeypatch.setattr(
-        server, "_emit", lambda event_type, sid, payload=None: events.append((event_type, sid, payload))
+        server,
+        "_emit",
+        lambda event_type, sid, payload=None: events.append((event_type, sid, payload)),
     )
     return events
 
@@ -33,7 +35,9 @@ def _session(monkeypatch, sid, *, show_reasoning, effort="high", tool_progress="
             "tool_progress_mode": tool_progress,
             "tool_started_at": {},
             "edit_snapshots": {},
-            "agent": SimpleNamespace(reasoning_config={"enabled": True, "effort": effort}),
+            "agent": SimpleNamespace(
+                reasoning_config={"enabled": True, "effort": effort}
+            ),
         },
     )
 
@@ -41,7 +45,13 @@ def _session(monkeypatch, sid, *, show_reasoning, effort="high", tool_progress="
 @pytest.mark.parametrize("tool_progress", ["all", "off"])
 def test_hidden_reasoning_does_not_emit_reasoning_deltas(monkeypatch, tool_progress):
     events = _capture(monkeypatch)
-    _session(monkeypatch, "hide-deltas", show_reasoning=False, effort="high", tool_progress=tool_progress)
+    _session(
+        monkeypatch,
+        "hide-deltas",
+        show_reasoning=False,
+        effort="high",
+        tool_progress=tool_progress,
+    )
 
     callbacks = server._agent_cbs("hide-deltas")
     callbacks["reasoning_callback"]("chain of thought from any provider")
@@ -66,11 +76,15 @@ def test_child_mirror_skips_reasoning_delta_when_hidden(monkeypatch):
     events = _capture(monkeypatch)
     _session(monkeypatch, "child-sid", show_reasoning=False)
     monkeypatch.setattr(
-        server, "_find_live_session_by_key", lambda key, _home: ("child-sid", {"agent": None, "show_reasoning": False})
+        server,
+        "_find_live_session_by_key",
+        lambda key, _home: ("child-sid", {"agent": None, "show_reasoning": False}),
     )
 
     server._mirror_subagent_to_child(
-        "subagent.thinking", {"child_session_id": "child-key", "text": "delegated thought"}, None
+        "subagent.thinking",
+        {"child_session_id": "child-key", "text": "delegated thought"},
+        None,
     )
 
     assert not any(event[0] == "reasoning.delta" for event in events)
@@ -80,22 +94,43 @@ def test_hidden_reasoning_drops_completed_reasoning_block(monkeypatch):
     events = _capture(monkeypatch)
     _session(monkeypatch, "hide-available", show_reasoning=False, effort="medium")
 
-    server._on_tool_progress("hide-available", "reasoning.available", "_thinking", "finished thought", None)
+    server._on_tool_progress(
+        "hide-available", "reasoning.available", "_thinking", "finished thought", None
+    )
 
     assert events == []
 
 
 def _emit_ordinary_and_essential_tools(sid):
     server._on_tool_start(sid, "tool-read", "read_file", {"path": "README.md"})
-    server._on_tool_complete(sid, "tool-read", "read_file", {"path": "README.md"}, "contents")
+    server._on_tool_complete(
+        sid, "tool-read", "read_file", {"path": "README.md"}, "contents"
+    )
     server._agent_cbs(sid)["tool_gen_callback"]("terminal")
 
     clarify_args = {"questions": [{"question": "Pick one", "choices": ["A", "B"]}]}
     server._on_tool_start(sid, "tool-clarify", "clarify", clarify_args)
     server._on_tool_complete(
-        sid, "tool-clarify", "clarify", clarify_args, json.dumps({"responses": [{"question": "Pick one", "status": "answered", "user_response": "A"}], "outcome": "submitted"})
+        sid,
+        "tool-clarify",
+        "clarify",
+        clarify_args,
+        json.dumps(
+            {
+                "responses": [
+                    {"question": "Pick one", "status": "answered", "user_response": "A"}
+                ],
+                "outcome": "submitted",
+            }
+        ),
     )
-    server._on_tool_complete(sid, "tool-fail", "terminal", {"command": "deploy"}, json.dumps({"error": "disk full"}))
+    server._on_tool_complete(
+        sid,
+        "tool-fail",
+        "terminal",
+        {"command": "deploy"},
+        json.dumps({"error": "disk full"}),
+    )
 
 
 def _lifecycle(events, tool_id):
@@ -131,12 +166,26 @@ def test_tool_progress_off_does_not_surface_a_refused_skill_write(monkeypatch):
     events = _capture(monkeypatch)
     _session(monkeypatch, "tools-off-skill", show_reasoning=True, tool_progress="off")
 
-    refused = json.dumps({"success": False, "error": "SKILL.md content is 100,193 characters (limit: 100,000)."})
-    server._on_tool_complete("tools-off-skill", "tool-skill", "skill_manage", {"operations": []}, refused)
+    refused = json.dumps(
+        {
+            "success": False,
+            "error": "SKILL.md content is 100,193 characters (limit: 100,000).",
+        }
+    )
+    server._on_tool_complete(
+        "tools-off-skill", "tool-skill", "skill_manage", {"operations": []}, refused
+    )
 
     assert _lifecycle(events, "tool-skill") == []
-    broken = json.dumps({"success": False, "error": "batch aborted, ROLLBACK FAILED for 'demo' (EACCES)"})
-    server._on_tool_complete("tools-off-skill", "tool-broken", "skill_manage", {"operations": []}, broken)
+    broken = json.dumps(
+        {
+            "success": False,
+            "error": "batch aborted, ROLLBACK FAILED for 'demo' (EACCES)",
+        }
+    )
+    server._on_tool_complete(
+        "tools-off-skill", "tool-broken", "skill_manage", {"operations": []}, broken
+    )
     assert _lifecycle(events, "tool-broken") == ["tool.complete"]
 
 
@@ -146,30 +195,65 @@ def test_subagent_tool_mirror_follows_tool_progress_not_reasoning(monkeypatch):
         ("child-tools-off", True, "off", []),
     ):
         events = _capture(monkeypatch)
-        _session(monkeypatch, sid, show_reasoning=show_reasoning, tool_progress=tool_progress)
+        _session(
+            monkeypatch, sid, show_reasoning=show_reasoning, tool_progress=tool_progress
+        )
         session = server._sessions[sid]
-        session["agent"] = None  # a watch window, not a full agent: the mirror only feeds those
-        monkeypatch.setattr(server, "_find_live_session_by_key", lambda key, _home, sid=sid, session=session: (sid, session))
+        session["agent"] = (
+            None  # a watch window, not a full agent: the mirror only feeds those
+        )
+        monkeypatch.setattr(
+            server,
+            "_find_live_session_by_key",
+            lambda key, _home, sid=sid, session=session: (sid, session),
+        )
 
         server._mirror_subagent_to_child(
-            "subagent.tool", {"child_session_id": f"key-{sid}", "tool_name": "read_file", "tool_preview": "x"}, None
+            "subagent.tool",
+            {
+                "child_session_id": f"key-{sid}",
+                "tool_name": "read_file",
+                "tool_preview": "x",
+            },
+            None,
         )
-        server._mirror_subagent_to_child("subagent.complete", {"child_session_id": f"key-{sid}"}, None)
+        server._mirror_subagent_to_child(
+            "subagent.complete", {"child_session_id": f"key-{sid}"}, None
+        )
 
-        assert [event[0] for event in events if event[0].startswith("tool.")] == expected, sid
+        assert [
+            event[0] for event in events if event[0].startswith("tool.")
+        ] == expected, sid
 
 
 def test_tool_progress_off_keeps_reasoning_blocks(monkeypatch):
     events = _capture(monkeypatch)
-    _session(monkeypatch, "tools-off-reasoning-on", show_reasoning=True, tool_progress="off")
+    _session(
+        monkeypatch, "tools-off-reasoning-on", show_reasoning=True, tool_progress="off"
+    )
 
-    server._on_tool_progress("tools-off-reasoning-on", "reasoning.available", "_thinking", "finished thought", None)
     server._on_tool_progress(
-        "tools-off-reasoning-on", "moa.reference", "reference-a", "other model's thoughts", None
+        "tools-off-reasoning-on",
+        "reasoning.available",
+        "_thinking",
+        "finished thought",
+        None,
     )
     server._on_tool_progress(
-        "tools-off-reasoning-on", "tool.output_risk", "terminal", None, None,
-        tool_call_id="t1", risk_metadata={"risk": "high", "findings": ["secret"]},
+        "tools-off-reasoning-on",
+        "moa.reference",
+        "reference-a",
+        "other model's thoughts",
+        None,
+    )
+    server._on_tool_progress(
+        "tools-off-reasoning-on",
+        "tool.output_risk",
+        "terminal",
+        None,
+        None,
+        tool_call_id="t1",
+        risk_metadata={"risk": "high", "findings": ["secret"]},
     )
 
     assert [event[0] for event in events] == ["reasoning.available", "moa.reference"]
@@ -179,7 +263,9 @@ def test_hidden_reasoning_drops_moa_reference_chrome(monkeypatch):
     events = _capture(monkeypatch)
     _session(monkeypatch, "hide-moa", show_reasoning=False, effort="high")
 
-    server._on_tool_progress("hide-moa", "moa.reference", "reference-a", "other model's thoughts", None)
+    server._on_tool_progress(
+        "hide-moa", "moa.reference", "reference-a", "other model's thoughts", None
+    )
 
     assert events == []
 
@@ -189,12 +275,25 @@ def test_hidden_reasoning_drops_moa_status_lines_but_keeps_aggregating(monkeypat
     _session(monkeypatch, "hide-moa-status", show_reasoning=False, effort="high")
 
     server._on_tool_progress(
-        "hide-moa-status", "moa.progress", "aggregator-a", None, None, moa_refs_done=1, moa_refs_total=3
+        "hide-moa-status",
+        "moa.progress",
+        "aggregator-a",
+        None,
+        None,
+        moa_refs_done=1,
+        moa_refs_total=3,
     )
     server._on_tool_progress(
-        "hide-moa-status", "moa.phase", "aggregator-a", None, None, moa_phase="aggregator"
+        "hide-moa-status",
+        "moa.phase",
+        "aggregator-a",
+        None,
+        None,
+        moa_phase="aggregator",
     )
-    server._on_tool_progress("hide-moa-status", "moa.aggregating", "aggregator-a", None, None)
+    server._on_tool_progress(
+        "hide-moa-status", "moa.aggregating", "aggregator-a", None, None
+    )
 
     # progress/phase write lines into the reasoning disclosure (Desktop) and the
     # activity log (TUI). aggregating is a bare busy-state transition, no content.
@@ -258,7 +357,9 @@ def test_tool_progress_off_keeps_card_tool_lifecycle(monkeypatch):
     }
     for tool_id, (name, args) in cases.items():
         server._on_tool_start("hide-cards", tool_id, name, args)
-        server._on_tool_complete("hide-cards", tool_id, name, args, json.dumps({"success": True}))
+        server._on_tool_complete(
+            "hide-cards", tool_id, name, args, json.dumps({"success": True})
+        )
 
     for tool_id in cases:
         lifecycle = [event[0] for event in events if event[2].get("tool_id") == tool_id]
@@ -275,7 +376,9 @@ def test_tool_progress_off_keeps_file_edit_lifecycle_pair(monkeypatch):
     events = _capture(monkeypatch)
     _session(monkeypatch, "hide-edit", show_reasoning=False, tool_progress="off")
 
-    def fake_edit_diff(tool_name, result, *, function_args=None, snapshot=None, print_fn=None):
+    def fake_edit_diff(
+        tool_name, result, *, function_args=None, snapshot=None, print_fn=None
+    ):
         if print_fn is not None:
             print_fn("— edited src/a.py —")
         return True
@@ -283,13 +386,18 @@ def test_tool_progress_off_keeps_file_edit_lifecycle_pair(monkeypatch):
     monkeypatch.setattr("agent.display.render_edit_diff_with_delta", fake_edit_diff)
 
     cases = {
-        "tool-edit": ("edit_file", {"path": "src/a.py", "old_string": "a", "new_string": "b"}),
+        "tool-edit": (
+            "edit_file",
+            {"path": "src/a.py", "old_string": "a", "new_string": "b"},
+        ),
         "tool-patch": ("patch", {"path": "src/a.py", "patches": []}),
         "tool-write": ("write_file", {"path": "src/a.py", "content": "b"}),
     }
     for tool_id, (name, args) in cases.items():
         server._on_tool_start("hide-edit", tool_id, name, args)
-        server._on_tool_complete("hide-edit", tool_id, name, args, json.dumps({"success": True}))
+        server._on_tool_complete(
+            "hide-edit", tool_id, name, args, json.dumps({"success": True})
+        )
 
     for tool_id in cases:
         lifecycle = [event[0] for event in events if event[2].get("tool_id") == tool_id]
@@ -302,7 +410,14 @@ def test_gateway_lifecycle_set_covers_desktop_card_tools():
     Every name the desktop classifies as a card needs its full lifecycle under
     answer-only, or its `tool.complete` arrives orphaned.
     """
-    ts_path = Path(__file__).resolve().parents[2] / "apps" / "desktop" / "src" / "lib" / "tool-render-class.ts"
+    ts_path = (
+        Path(__file__).resolve().parents[2]
+        / "apps"
+        / "desktop"
+        / "src"
+        / "lib"
+        / "tool-render-class.ts"
+    )
     source = ts_path.read_text(encoding="utf-8")
 
     def set_literal(var: str) -> set[str]:
@@ -356,12 +471,25 @@ def test_tool_progress_off_hides_successful_terminal_exit(monkeypatch):
 
 
 def test_tool_result_needs_user_treats_nonzero_exit_code_as_failure():
-    assert server._tool_result_needs_user(json.dumps({"output": "boom", "exit_code": 1, "error": None})) is True
-    assert server._tool_result_needs_user(json.dumps({"output": "ok", "exit_code": 0, "error": None})) is False
+    assert (
+        server._tool_result_needs_user(
+            json.dumps({"output": "boom", "exit_code": 1, "error": None})
+        )
+        is True
+    )
+    assert (
+        server._tool_result_needs_user(
+            json.dumps({"output": "ok", "exit_code": 0, "error": None})
+        )
+        is False
+    )
     # A boolean exit_code is not an exit status; True must not read as failure-by-1.
     assert server._tool_result_needs_user(json.dumps({"exit_code": True})) is False
     assert server._tool_result_needs_user(json.dumps({"exit_code": "1"})) is False
     assert server._tool_result_needs_user(json.dumps({"success": False})) is True
-    assert server._tool_result_needs_user(json.dumps({"ok": False, "output": "denied"})) is True
+    assert (
+        server._tool_result_needs_user(json.dumps({"ok": False, "output": "denied"}))
+        is True
+    )
     assert server._tool_result_needs_user(json.dumps({"error": "disk full"})) is True
     assert server._tool_result_needs_user("not json") is False

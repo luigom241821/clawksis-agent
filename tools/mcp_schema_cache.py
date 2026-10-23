@@ -21,6 +21,7 @@ _cache_lock = threading.Lock()
 
 def _cache_path() -> Path:
     from clawk_constants import get_clawk_home
+
     return get_clawk_home() / "cache" / _CACHE_FILENAME
 
 
@@ -33,7 +34,8 @@ def config_fingerprint(config: dict) -> str:
         "url": config.get("url"),
         "transport": config.get("transport"),
         "tools_include": sorted(tools_filter.get("include") or []),
-        "tools_exclude": sorted(tools_filter.get("exclude") or [])}
+        "tools_exclude": sorted(tools_filter.get("exclude") or []),
+    }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -52,6 +54,7 @@ def _load_all() -> dict[str, Any]:
 
 def _save_all(data: dict[str, Any]) -> None:
     from utils import atomic_json_write
+
     # 0o600: the cache file is trusted input on the lazy registration path, keep it user-only.
     atomic_json_write(_cache_path(), data, mode=0o600)
 
@@ -67,17 +70,30 @@ def get_cached_entry(server_name: str, fingerprint: str) -> Optional[dict]:
         return None
     ttl_ms = entry.get("ttl_ms")
     written_at = entry.get("written_at")
-    expired = (isinstance(ttl_ms, (int, float)) and isinstance(written_at, (int, float))
-               and (time.time() - written_at) * 1000.0 >= float(ttl_ms))
+    expired = (
+        isinstance(ttl_ms, (int, float))
+        and isinstance(written_at, (int, float))
+        and (time.time() - written_at) * 1000.0 >= float(ttl_ms)
+    )
     return None if expired else entry
 
 
-def write_cache_entry(server_name: str, fingerprint: str, *, tools: list[dict],
-                      utility_tools: Optional[list[dict]] = None, ttl_ms: Optional[float] = None,
-                      cache_scope: Optional[str] = None) -> None:
+def write_cache_entry(
+    server_name: str,
+    fingerprint: str,
+    *,
+    tools: list[dict],
+    utility_tools: Optional[list[dict]] = None,
+    ttl_ms: Optional[float] = None,
+    cache_scope: Optional[str] = None,
+) -> None:
     """Persist tool schemas after a successful live connect. ``ttl_ms`` / ``cache_scope`` are
     the server's ``tools/list`` SEP-2549 hints; ``written_at`` anchors TTL expiry."""
-    entry = {"fingerprint": fingerprint, "tools": tools, "utility_tools": utility_tools or []}
+    entry = {
+        "fingerprint": fingerprint,
+        "tools": tools,
+        "utility_tools": utility_tools or [],
+    }
     if isinstance(ttl_ms, (int, float)):
         entry["ttl_ms"] = ttl_ms
         entry["written_at"] = time.time()

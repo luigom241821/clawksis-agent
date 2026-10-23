@@ -182,13 +182,17 @@ def test_subdir_pin_records_source_identity_and_installs_requested_tree(
     }
 
 
-def test_clone_timeout_applies_to_every_network_step_of_a_pinned_install(monkeypatch, tmp_path):
+def test_clone_timeout_applies_to_every_network_step_of_a_pinned_install(
+    monkeypatch, tmp_path
+):
     from clawk_cli import plugins_cmd
 
     repo, old_sha, _new_sha = _plugin_repo(tmp_path)
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    (home / "config.yaml").write_text("plugins:\n  clone_timeout_seconds: 137\n", encoding="utf-8")
+    (home / "config.yaml").write_text(
+        "plugins:\n  clone_timeout_seconds: 137\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(home))
     run_git = plugins_cmd._run_plugin_git
     calls = []
@@ -231,18 +235,25 @@ def test_subdir_install_downloads_only_that_subdirectory(monkeypatch, tmp_path, 
     def inspect_clone(_manifest, tree):
         clone = tree.parents[1]
         seen["worktree"] = sorted(p.name for p in clone.iterdir() if p.name != ".git")
-        seen["missing"] = _git(clone, "rev-list", "--objects", "--missing=print", "HEAD")
+        seen["missing"] = _git(
+            clone, "rev-list", "--objects", "--missing=print", "HEAD"
+        )
 
     target, _manifest, _name = _install_plugin_core(
-        f"{repo.as_uri()}#integrations/clawk", force=False,
-        ref=sha if pinned else None, before_swap=inspect_clone)
+        f"{repo.as_uri()}#integrations/clawk",
+        force=False,
+        ref=sha if pinned else None,
+        before_swap=inspect_clone,
+    )
 
     assert (target / "plugin.yaml").is_file()
     assert seen["worktree"] == ["integrations"]
     assert f"?{unrelated_blob}" in seen["missing"].splitlines()
 
 
-def test_clone_timeout_uses_active_profile_and_bounds_invalid_values(monkeypatch, tmp_path):
+def test_clone_timeout_uses_active_profile_and_bounds_invalid_values(
+    monkeypatch, tmp_path
+):
     from clawk_cli.plugins_cmd import _clone_timeout_seconds
 
     home = tmp_path / "home"
@@ -259,7 +270,9 @@ def test_clone_timeout_uses_active_profile_and_bounds_invalid_values(monkeypatch
     other_config = other / "config.yaml"
     other_config.write_text("plugins:\n  clone_timeout_seconds: 0\n", encoding="utf-8")
     assert _clone_timeout_seconds() == 300
-    other_config.write_text("plugins:\n  clone_timeout_seconds: 7200\n", encoding="utf-8")
+    other_config.write_text(
+        "plugins:\n  clone_timeout_seconds: 7200\n", encoding="utf-8"
+    )
     assert _clone_timeout_seconds() == 3600
 
 
@@ -284,8 +297,12 @@ def test_force_reinstall_does_not_drift_pin_without_explicit_new_ref(
     assert _metadata(home)["demo"]["revision"] == new_sha
 
 
-@pytest.mark.parametrize("move", ["pinned-new-ref", "unpinned-reinstall", "other-source"])
-def test_force_reinstall_of_the_same_source_keeps_the_users_files(monkeypatch, tmp_path, move):
+@pytest.mark.parametrize(
+    "move", ["pinned-new-ref", "unpinned-reinstall", "other-source"]
+)
+def test_force_reinstall_of_the_same_source_keeps_the_users_files(
+    monkeypatch, tmp_path, move
+):
     """Moving a pin is documented as ``install --force --ref``; like ``update`` it replaces the plugin's
     code, not the user's state. Untracked/ignored files stay live, edits to tracked files go to
     plugins-backup, and nothing the new revision ships is overwritten by the old tree. Another
@@ -299,7 +316,8 @@ def test_force_reinstall_of_the_same_source_keeps_the_users_files(monkeypatch, t
     home = tmp_path / "home"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     target, _manifest, _name = _install_plugin_core(
-        repo.as_uri(), force=False, ref=old_sha if move == "pinned-new-ref" else None)
+        repo.as_uri(), force=False, ref=old_sha if move == "pinned-new-ref" else None
+    )
     (target / "data").mkdir()
     (target / "data" / "state.json").write_text('{"user": 1}', encoding="utf-8")
     (target / "settings.local.yaml").write_text("mode: mine\n", encoding="utf-8")
@@ -310,7 +328,8 @@ def test_force_reinstall_of_the_same_source_keeps_the_users_files(monkeypatch, t
         repo, _old, new_sha = _plugin_repo(tmp_path / "other")
 
     target, _manifest, _name = _install_plugin_core(
-        repo.as_uri(), force=True, ref=new_sha if move == "pinned-new-ref" else None)
+        repo.as_uri(), force=True, ref=new_sha if move == "pinned-new-ref" else None
+    )
 
     assert _git(target, "rev-parse", "HEAD") == new_sha
     kept = move != "other-source"
@@ -318,7 +337,9 @@ def test_force_reinstall_of_the_same_source_keeps_the_users_files(monkeypatch, t
     assert (target / "data" / "state.json").exists() is kept
     assert (target / "settings.local.yaml").exists() is kept
     backups = list((home / "plugins-backup").glob("demo-*"))
-    assert [(b / "marker.txt").read_text() for b in backups] == (["edited"] if kept else [])
+    assert [(b / "marker.txt").read_text() for b in backups] == (
+        ["edited"] if kept else []
+    )
     if kept:
         assert (target / "data" / "state.json").read_text() == '{"user": 1}'
         assert (target / "settings.local.yaml").read_text() == "mode: mine\n"
@@ -428,7 +449,9 @@ def test_checkout_mismatch_is_rejected(monkeypatch, tmp_path):
         _checkout_exact_revision(clone, "git", old_sha)
 
 
-def test_metadata_write_failure_rolls_back_new_install(monkeypatch, tmp_path, isolated_python):
+def test_metadata_write_failure_rolls_back_new_install(
+    monkeypatch, tmp_path, isolated_python
+):
     from clawk_cli.plugins_cmd import _install_plugin_core, PluginOperationError
     from pm import client
     from tests.pm._fixtures import worker_toolchain
@@ -438,14 +461,18 @@ def test_metadata_write_failure_rolls_back_new_install(monkeypatch, tmp_path, is
     monkeypatch.setenv("CLAWK_HOME", str(home))
     metadata = home / "plugins" / ".install-metadata.json"
     # The PM worker process publishes the plugin; fail its metadata write there.
-    worker_toolchain(client, monkeypatch, isolated_python,
+    worker_toolchain(
+        client,
+        monkeypatch,
+        isolated_python,
         "import pm.publication as publication\n"
         "original = publication.durable_write_bytes\n"
         "def fail_metadata(path, data):\n"
         f"    if Path(path) == Path({str(metadata)!r}):\n"
         "        raise OSError('disk full')\n"
         "    return original(path, data)\n"
-        "publication.durable_write_bytes = fail_metadata\n")
+        "publication.durable_write_bytes = fail_metadata\n",
+    )
 
     with pytest.raises(PluginOperationError, match="disk full"):
         _install_plugin_core(repo.as_uri(), force=False, ref=old_sha)
@@ -546,7 +573,10 @@ def test_checkout_that_lands_on_another_commit_is_still_rejected(monkeypatch, tm
         _checkout_exact_revision(clone, "git", tag_object_sha)
 
 
-@pytest.mark.parametrize("update_url", ["http://feed.example/f.yml", "file:///etc/feed.yml", "ftp://feed.example/f.yml"])
+@pytest.mark.parametrize(
+    "update_url",
+    ["http://feed.example/f.yml", "file:///etc/feed.yml", "ftp://feed.example/f.yml"],
+)
 def test_install_refuses_a_non_https_update_url(monkeypatch, tmp_path, update_url):
     """The saved update_url is fetched unattended by the gateway and picks which origin commit
     gets installed; anything a network peer can rewrite (http/ftp) or a local path must not
@@ -555,7 +585,9 @@ def test_install_refuses_a_non_https_update_url(monkeypatch, tmp_path, update_ur
 
     repo, _old, _new = _plugin_repo(tmp_path)
     (repo / "plugin.yaml").write_text(
-        yaml.safe_dump({"name": "demo", "version": "1.0.0", "update_url": update_url}), encoding="utf-8")
+        yaml.safe_dump({"name": "demo", "version": "1.0.0", "update_url": update_url}),
+        encoding="utf-8",
+    )
     _commit(repo, "feed", "feed")
     home = tmp_path / "home"
     monkeypatch.setenv("CLAWK_HOME", str(home))
@@ -572,8 +604,15 @@ def test_install_saves_an_https_update_url_tag(monkeypatch, tmp_path):
 
     repo, _old, _sha = _plugin_repo(tmp_path)
     (repo / "plugin.yaml").write_text(
-        yaml.safe_dump({"name": "demo", "version": "1.0.0", "update_url": " https://feed.example/f.yml "}),
-        encoding="utf-8")
+        yaml.safe_dump(
+            {
+                "name": "demo",
+                "version": "1.0.0",
+                "update_url": " https://feed.example/f.yml ",
+            }
+        ),
+        encoding="utf-8",
+    )
     _commit(repo, "feed", "feed")
     home = tmp_path / "home"
     monkeypatch.setenv("CLAWK_HOME", str(home))

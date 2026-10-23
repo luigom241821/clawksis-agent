@@ -1,4 +1,5 @@
 """Tests for the diagnostic reporter (formatting layer)."""
+
 from __future__ import annotations
 
 from agent.compression_marker import _COMPRESSION_MARKER_RE
@@ -21,24 +22,6 @@ def _diag(line=0, col=0, sev=1, code="E001", source="ls", msg="oops"):
         "source": source,
         "message": msg,
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_truncate_above_limit_appends_marker():
@@ -68,8 +51,6 @@ def test_format_diagnostic_escapes_html_in_message():
     assert "&lt;tool_call&gt;" in line
 
 
-
-
 def test_format_diagnostic_caps_message_length():
     """A long identifier must not push the message past MAX_MESSAGE_CHARS."""
     long_msg = "A" * 1000
@@ -89,8 +70,6 @@ def test_format_diagnostic_escapes_brackets_in_code_and_source():
     assert "</diagnostics>" not in line
     assert "&lt;script&gt;" in line
     assert "&lt;/diagnostics&gt;" in line
-
-
 
 
 def test_report_for_file_escapes_file_path_attribute():

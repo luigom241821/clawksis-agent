@@ -14,8 +14,11 @@ from gateway import lifecycle_ledger, shutdown_watchdog, status
 
 @pytest.mark.parametrize(
     "reader",
-    [status._get_process_clawk_home, lifecycle_ledger._process_clawk_home,
-     shutdown_watchdog._process_clawk_home],
+    [
+        status._get_process_clawk_home,
+        lifecycle_ledger._process_clawk_home,
+        shutdown_watchdog._process_clawk_home,
+    ],
     ids=["status", "lifecycle_ledger", "shutdown_watchdog"],
 )
 def test_process_home_readers_expand_literal_tilde(reader, tmp_path, monkeypatch):

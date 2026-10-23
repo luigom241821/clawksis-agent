@@ -1,4 +1,5 @@
 """Standalone relay routing must not bootstrap the gateway or reload secrets."""
+
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,9 @@ import pytest
 import clawk_yaml as yaml
 
 
-@pytest.mark.parametrize("case", ["native", "url-only", "disabled", "managed", "managed-only", "scoped"])
+@pytest.mark.parametrize(
+    "case", ["native", "url-only", "disabled", "managed", "managed-only", "scoped"]
+)
 def test_cold_fronted_platforms_is_read_only(tmp_path, case):
     home = tmp_path / "primary"
     home.mkdir()
@@ -24,22 +27,39 @@ def test_cold_fronted_platforms_is_read_only(tmp_path, case):
     if case not in {"native", "url-only", "managed-only"}:
         (home / "config.yaml").write_text(yaml.safe_dump(config))
     if case in {"managed", "managed-only"}:
-        (managed / "config.yaml").write_text("platforms:\n  relay:\n    enabled: false\n")
+        (managed / "config.yaml").write_text(
+            "platforms:\n  relay:\n    enabled: false\n"
+        )
     if case == "scoped":
-        (scoped / "config.yaml").write_text("platforms:\n  relay:\n    enabled: false\n")
+        (scoped / "config.yaml").write_text(
+            "platforms:\n  relay:\n    enabled: false\n"
+        )
     for root in (home, scoped):
         (root / ".env").write_text("GATEWAY_RELAY_SECRET=dotenv-only-test-secret\n")
     # Allowlist only: never inherit live credentials, profile selectors, or
     # pytest's imported modules. HOME and cwd are temporary as well as CLAWK_HOME.
-    env = {k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "WINDIR") if k in os.environ}
-    env.update({"HOME": str(tmp_path), "USERPROFILE": str(tmp_path),
-                "CLAWK_HOME": str(home), "CLAWK_MANAGED_DIR": str(managed),
-                "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
-                "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"})
+    env = {
+        k: os.environ[k] for k in ("PATH", "SYSTEMROOT", "WINDIR") if k in os.environ
+    }
+    env.update(
+        {
+            "HOME": str(tmp_path),
+            "USERPROFILE": str(tmp_path),
+            "CLAWK_HOME": str(home),
+            "CLAWK_MANAGED_DIR": str(managed),
+            "PYTHONPATH": str(Path(__file__).resolve().parents[3]),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONUTF8": "1",
+        }
+    )
     if case != "native":
-        env.update({"GATEWAY_RELAY_URL": "wss://connector.example/relay",
-                    "GATEWAY_RELAY_PLATFORMS": "slack",
-                    "GATEWAY_RELAY_SECRET": "inherited-test-secret"})
+        env.update(
+            {
+                "GATEWAY_RELAY_URL": "wss://connector.example/relay",
+                "GATEWAY_RELAY_PLATFORMS": "slack",
+                "GATEWAY_RELAY_SECRET": "inherited-test-secret",
+            }
+        )
     code = textwrap.dedent("""
         import json, os, sys
         from clawk_constants import set_clawk_home_override
@@ -56,9 +76,19 @@ def test_cold_fronted_platforms_is_read_only(tmp_path, case):
                           "bootstrapped": "gateway.run" in sys.modules,
                           "changed_env": changed}))
     """)
-    child = subprocess.run([sys.executable, "-c", code, case, str(scoped)],
-                           cwd=tmp_path, env=env, text=True, capture_output=True, timeout=45, check=False)
+    child = subprocess.run(
+        [sys.executable, "-c", code, case, str(scoped)],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=45,
+        check=False,
+    )
     assert child.returncode == 0, child.stderr
     observed = json.loads(child.stdout.splitlines()[-1])
-    assert observed == {"fronted": ["slack"] if case == "url-only" else [],
-                        "bootstrapped": False, "changed_env": {}}
+    assert observed == {
+        "fronted": ["slack"] if case == "url-only" else [],
+        "bootstrapped": False,
+        "changed_env": {},
+    }

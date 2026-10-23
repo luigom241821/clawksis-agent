@@ -1,4 +1,5 @@
 """Conservative recovery of the one router recorded by this managed runtime."""
+
 from __future__ import annotations
 
 import json
@@ -56,13 +57,22 @@ def recorded_process(state: dict):
         pid, created = state["pid"], state["create_time"]
         owner_pid, owner_created = state["owner_pid"], state["owner_create_time"]
         exe = state["executable"]
-        if (not _valid_pid(pid) or not _valid_birth(created)
-                or not _valid_pid(owner_pid) or not _valid_birth(owner_created)
-                or owner_created > created or not isinstance(exe, str) or not exe):
+        if (
+            not _valid_pid(pid)
+            or not _valid_birth(created)
+            or not _valid_pid(owner_pid)
+            or not _valid_birth(owner_created)
+            or owner_created > created
+            or not isinstance(exe, str)
+            or not exe
+        ):
             return None
         proc = psutil.Process(pid)
-        if (not proc.is_running() or not _same_birth(proc, state)
-                or Path(proc.exe()) != Path(exe)):
+        if (
+            not proc.is_running()
+            or not _same_birth(proc, state)
+            or Path(proc.exe()) != Path(exe)
+        ):
             return None
         # Windows retains the original parent PID; POSIX reparents orphans.
         if os.name == "nt" and proc.ppid() != owner_pid:
@@ -125,7 +135,12 @@ def legacy_recorded_process(state: dict):
         if proc.create_time() > state_path().stat().st_mtime:
             return None  # the PID was reused after this record was written
         url = urlsplit(state["base_url"])
-        if url.scheme != "http" or url.hostname != "127.0.0.1" or not url.port or not state["api_key"]:
+        if (
+            url.scheme != "http"
+            or url.hostname != "127.0.0.1"
+            or not url.port
+            or not state["api_key"]
+        ):
             return None
         argv = proc.cmdline()
 
@@ -135,12 +150,17 @@ def legacy_recorded_process(state: dict):
             index = argv.index(flag) + 1
             return argv[index] if index < len(argv) else None
 
-        if (value("--host") != "127.0.0.1" or value("--port") != str(url.port)
-                or value("--api-key") != state["api_key"]):
+        if (
+            value("--host") != "127.0.0.1"
+            or value("--port") != str(url.port)
+            or value("--api-key") != state["api_key"]
+        ):
             return None
         preset, directory = value("--models-preset"), value("--models-dir")
-        if not ((preset and Path(preset) == root / "presets.ini" and directory is None)
-                or (directory and Path(directory) == models_dir() and preset is None)):
+        if not (
+            (preset and Path(preset) == root / "presets.ini" and directory is None)
+            or (directory and Path(directory) == models_dir() and preset is None)
+        ):
             return None
         return proc
     except (KeyError, TypeError, ValueError, OSError, psutil.Error):

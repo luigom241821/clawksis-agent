@@ -57,9 +57,7 @@ def receipt_home(tmp_path, monkeypatch):
     """Hermetic CLAWK_HOME so receipts never touch the real profile."""
     home = tmp_path / ".clawk"
     home.mkdir()
-    monkeypatch.setattr(
-        "clawk_cli.config.get_clawk_home", lambda: home, raising=False
-    )
+    monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: home, raising=False)
     ur._current.set(None)
     yield home
     ur._current.set(None)
@@ -80,12 +78,23 @@ def _plan_with_runtimes(records):
 
 
 _THREE_RUNTIMES = [
-    RuntimeRecord(kind="gateway", profile="default", pid=101,
-                  supervisor="manual", restart_via="manual"),
-    RuntimeRecord(kind="gateway", profile="work", pid=102,
-                  supervisor="manual", restart_via="manual"),
-    RuntimeRecord(kind="serve", profile="ops", pid=103,
-                  supervisor="manual", restart_via="manual"),
+    RuntimeRecord(
+        kind="gateway",
+        profile="default",
+        pid=101,
+        supervisor="manual",
+        restart_via="manual",
+    ),
+    RuntimeRecord(
+        kind="gateway",
+        profile="work",
+        pid=102,
+        supervisor="manual",
+        restart_via="manual",
+    ),
+    RuntimeRecord(
+        kind="serve", profile="ops", pid=103, supervisor="manual", restart_via="manual"
+    ),
 ]
 
 
@@ -94,9 +103,7 @@ class TestReceiptAlwaysFinalized:
     leaves NO record the reader could mistake for success (#91283, #92780)."""
 
     @pytest.mark.parametrize("outcome", ["success", "failed", "refused"])
-    def test_finalize_writes_parseable_receipt_for_outcome(
-        self, receipt_home, outcome
-    ):
+    def test_finalize_writes_parseable_receipt_for_outcome(self, receipt_home, outcome):
         ur.begin_update_receipt()
         ur.record_step("git_pull", outcome == "success", "detail")
         path = ur.finalize_update_receipt(outcome)
@@ -134,9 +141,7 @@ class TestReceiptAlwaysFinalized:
         # ever returns a dict, it must not claim a completed success.
         assert latest is None or latest.get("outcome") != "success"
 
-    def test_boundary_safety_net_records_crash_as_not_success(
-        self, receipt_home
-    ):
+    def test_boundary_safety_net_records_crash_as_not_success(self, receipt_home):
         """When the command boundary DOES catch the unwind (#91283), a
         non-zero exit finalizes as failed — never success."""
         ur.begin_update_receipt()
@@ -160,9 +165,7 @@ class TestSuccessImpliesAccounting:
         if ur._current.get() is not None:
             ur._current.get().data["runtime_outcomes"] = outcomes
         # Exact outcome-selection expression from update_cmd.py ~8360.
-        path = ur.finalize_update_receipt(
-            "partial" if incomplete else "success"
-        )
+        path = ur.finalize_update_receipt("partial" if incomplete else "success")
         return outcomes, incomplete, path
 
     def test_n_minus_one_confirmations_refuses_success(self, receipt_home):
@@ -173,9 +176,9 @@ class TestSuccessImpliesAccounting:
         outcomes, incomplete, path = self._drive_decision(
             plan,
             restarted_services=[],
-            relaunched_profiles=["work"],   # 102 accounted
+            relaunched_profiles=["work"],  # 102 accounted
             externally_supervised_profiles=[],
-            killed_pids={101},              # 101 accounted; 103 missed
+            killed_pids={101},  # 101 accounted; 103 missed
             failed_units=[],
         )
         assert incomplete is True, (
@@ -189,9 +192,7 @@ class TestSuccessImpliesAccounting:
         assert payload["outcome"] != "success"
         assert payload["outcome"] == "partial"
 
-    def test_full_accounting_permits_success_with_evidence(
-        self, receipt_home
-    ):
+    def test_full_accounting_permits_success_with_evidence(self, receipt_home):
         """All planned runtimes accounted → success is allowed, and the
         receipt carries the plan + per-runtime outcomes as evidence."""
         ur.begin_update_receipt()
@@ -213,9 +214,7 @@ class TestSuccessImpliesAccounting:
         # and cover every planned runtime, none unaccounted.
         assert len(payload["plan"]["runtimes"]) == 3
         assert len(payload["runtime_outcomes"]) == 3
-        assert all(
-            o["outcome"] != "unaccounted" for o in payload["runtime_outcomes"]
-        )
+        assert all(o["outcome"] != "unaccounted" for o in payload["runtime_outcomes"])
 
     def test_failed_unit_also_refuses_success(self, receipt_home):
         """A runtime whose restart FAILED (not merely missed) must also
@@ -238,9 +237,7 @@ class TestRefusalIsNotFailure:
     """Invariant 3 — #91439: refusal (exit 2) and failure are distinct
     outcomes, and the reader reports which one happened."""
 
-    def test_refusal_receipt_distinguishable_from_failure(
-        self, receipt_home
-    ):
+    def test_refusal_receipt_distinguishable_from_failure(self, receipt_home):
         # Run 1: a real failure.
         ur.begin_update_receipt()
         ur.record_step("git_fetch", False, "remote unreachable")

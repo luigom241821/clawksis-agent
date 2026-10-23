@@ -28,6 +28,7 @@ from gateway.session import SessionEntry, SessionSource, SessionStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_entry(key: str, session_id: str, **kw) -> SessionEntry:
     now = datetime.now()
     return SessionEntry(
@@ -80,6 +81,7 @@ def _source() -> SessionSource:
 # _is_session_ended_in_db helper
 # ---------------------------------------------------------------------------
 
+
 class TestIsSessionEndedInDb:
     def test_ended_row_is_stale(self, tmp_path):
         db = _db_returning({"sid": {"end_reason": "agent_close", "id": "sid"}})
@@ -96,12 +98,14 @@ class TestIsSessionEndedInDb:
 # get_or_create_session — runtime self-heal
 # ---------------------------------------------------------------------------
 
-class TestRuntimeStaleGuard:
 
+class TestRuntimeStaleGuard:
     def test_stale_ws_orphan_reap_entry_recovered_preserving_session_id(self, tmp_path):
         """Stale ``ws_orphan_reap`` entry → recovery reopens the SAME session_id (#63207)."""
         source = _source()
-        db = _db_returning({"sid_stale": {"end_reason": "ws_orphan_reap", "id": "sid_stale"}})
+        db = _db_returning(
+            {"sid_stale": {"end_reason": "ws_orphan_reap", "id": "sid_stale"}}
+        )
         db.find_latest_gateway_session_for_peer.return_value = {
             "id": "sid_stale",
             "started_at": (datetime.now() - timedelta(hours=2)).timestamp(),
@@ -140,7 +144,6 @@ class TestRecoveredSessionActivity:
         assert result.updated_at == datetime.fromtimestamp(last_activity)
         assert result.reset_had_activity is True
 
-
     def test_recovery_resumes_unchanged(self, tmp_path):
         """Recoverable rows resume as before."""
         source = _source()
@@ -148,9 +151,7 @@ class TestRecoveredSessionActivity:
         db.find_latest_gateway_session_for_peer.return_value = {
             "id": "sid_recovered",
             "started_at": (datetime.now() - timedelta(days=30)).timestamp(),
-            "last_activity_at": (
-                datetime.now() - timedelta(days=30)
-            ).timestamp(),
+            "last_activity_at": (datetime.now() - timedelta(days=30)).timestamp(),
         }
         store = _make_store_with_db(tmp_path, db)  # default mode="none"
 

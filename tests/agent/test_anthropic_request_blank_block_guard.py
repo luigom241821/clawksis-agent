@@ -13,7 +13,11 @@ list, and the system-block path coerces blanks at extraction time (a blank block
 carrying a cache_control breakpoint cannot be dropped).
 Ref #69512 / #70909 (follow-up: request-level guard, not just per-message).
 """
-from agent.anthropic_message_convert import _EMPTY_TEXT_PLACEHOLDER, convert_messages_to_anthropic
+
+from agent.anthropic_message_convert import (
+    _EMPTY_TEXT_PLACEHOLDER,
+    convert_messages_to_anthropic,
+)
 
 
 def _all_text_blocks(messages):
@@ -38,10 +42,13 @@ def test_pre_shaped_blank_block_in_user_content_is_coerced():
     # Content arrives already as blocks with a blank text part — the per-message
     # user converter does not walk-and-coerce these, so the final guard must.
     messages = [
-        {"role": "user", "content": [
-            {"type": "text", "text": "   "},
-            {"type": "text", "text": "real question"},
-        ]},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "   "},
+                {"type": "text", "text": "real question"},
+            ],
+        },
     ]
     system, result = convert_messages_to_anthropic(messages)
     _assert_no_blank(system, result)
@@ -61,9 +68,12 @@ def test_blank_summary_style_user_message_is_coerced():
 
 def test_blank_system_block_is_coerced():
     messages = [
-        {"role": "system", "content": [
-            {"type": "text", "text": "  ", "cache_control": {"type": "ephemeral"}},
-        ]},
+        {
+            "role": "system",
+            "content": [
+                {"type": "text", "text": "  ", "cache_control": {"type": "ephemeral"}},
+            ],
+        },
         {"role": "user", "content": "hello"},
     ]
     system, result = convert_messages_to_anthropic(messages)
@@ -100,6 +110,10 @@ def test_real_text_is_left_untouched():
         if isinstance(c, str):
             texts.append(c)
         elif isinstance(c, list):
-            texts.extend(b.get("text", "") for b in c if isinstance(b, dict) and b.get("type") == "text")
+            texts.extend(
+                b.get("text", "")
+                for b in c
+                if isinstance(b, dict) and b.get("type") == "text"
+            )
     assert "what is 2+2?" in texts
     assert _EMPTY_TEXT_PLACEHOLDER not in texts

@@ -14,6 +14,7 @@ September 2026). Two wire shapes exist:
 
 Port of Kilo-Org/kilocode#12162, adapted to Clawksis' GeminiAPIError surface.
 """
+
 from __future__ import annotations
 
 import json
@@ -67,23 +68,21 @@ def _google_error_body(
 
 
 class TestIsStandardKeyAuthError:
-
-
     def test_oauth_message_requires_401(self):
         assert not is_standard_key_auth_error(400, GOOGLE_AUTH_MESSAGE)
         assert not is_standard_key_auth_error(403, GOOGLE_AUTH_MESSAGE)
         # The 400 path stays narrowed to API_KEY_INVALID: a generic 400 on an AIza-shaped key
         # (malformed payload, unknown model) must not claim the key TYPE was rejected.
         assert not is_standard_key_auth_error(
-            400, "Invalid JSON payload received. Unknown name \"x\".", "INVALID_ARGUMENT",
+            400,
+            'Invalid JSON payload received. Unknown name "x".',
+            "INVALID_ARGUMENT",
             api_key=_AIZA_STANDARD_KEY,
         )
-
 
     def test_empty_message_is_safe(self):
         assert not is_standard_key_auth_error(401, "")
         assert not is_standard_key_auth_error(401, None)  # type: ignore[arg-type]
-
 
     def test_400_api_key_invalid_with_aiza_key_is_standard_key(self):
         assert is_standard_key_auth_error(
@@ -92,7 +91,6 @@ class TestIsStandardKeyAuthError:
         assert is_standard_key_auth_error(
             400, API_KEY_INVALID_MESSAGE, api_key=_AIZA_STANDARD_KEY
         )
-
 
     def test_400_api_key_invalid_without_aiza_key_is_not_standard_key(self):
         assert not is_standard_key_auth_error(
@@ -114,10 +112,11 @@ class TestGeminiHttpErrorGuidance:
         assert "aistudio.google.com/api-keys" in text
         assert err.code == "gemini_unauthorized"
 
-
     def test_guidance_appended_on_400_api_key_invalid_for_aiza_key(self):
         body = _google_error_body(
-            400, API_KEY_INVALID_MESSAGE, status="INVALID_ARGUMENT",
+            400,
+            API_KEY_INVALID_MESSAGE,
+            status="INVALID_ARGUMENT",
             reason="API_KEY_INVALID",
         )
         err = gemini_http_error(_mock_response(400, body), api_key=_AIZA_STANDARD_KEY)
@@ -126,22 +125,20 @@ class TestGeminiHttpErrorGuidance:
         assert "aistudio.google.com/api-keys" in text
         assert err.code == "gemini_http_400"
 
-
     def test_400_api_key_invalid_for_auth_key_keeps_raw_message(self):
         body = _google_error_body(
-            400, API_KEY_INVALID_MESSAGE, status="INVALID_ARGUMENT",
+            400,
+            API_KEY_INVALID_MESSAGE,
+            status="INVALID_ARGUMENT",
             reason="API_KEY_INVALID",
         )
         err = gemini_http_error(_mock_response(400, body), api_key=_AQ_AUTH_KEY)
         assert GUIDANCE_MARKER not in str(err)
 
-
     def test_403_with_oauth_message_gets_no_guidance(self):
         body = _google_error_body(403, GOOGLE_AUTH_MESSAGE, status="PERMISSION_DENIED")
         err = gemini_http_error(_mock_response(403, body))
         assert GUIDANCE_MARKER not in str(err)
-
-
 
 
 class TestSummarizerPreservesGuidance:
@@ -163,7 +160,6 @@ class TestSummarizerPreservesGuidance:
         summary = AIAgent._summarize_api_error(err)
         assert GUIDANCE_MARKER in summary
         assert "aistudio.google.com/api-keys" in summary
-
 
     def test_free_tier_guidance_survives_summarizer(self):
         from run_agent import AIAgent

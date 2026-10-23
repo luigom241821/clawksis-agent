@@ -25,7 +25,11 @@ def test_update_prompt_key_is_the_canonical_session_key_per_profile():
     for profile in (None, "ops"):
         adapter = _adapter(profile)
         key = adapter._update_prompt_session_key(event, "U1")
-        source = SessionSource(platform=Platform.QQBOT, chat_id="U1", chat_type="c2c", profile=profile)
+        source = SessionSource(
+            platform=Platform.QQBOT, chat_id="U1", chat_type="c2c", profile=profile
+        )
         assert key == build_session_key(source, profile=profile)
         assert adapter._is_authorized_interaction_for_session(event, key)
-    assert _adapter()._update_prompt_session_key(event, "U1") == "agent:main:qqbot:c2c:U1"
+    assert (
+        _adapter()._update_prompt_session_key(event, "U1") == "agent:main:qqbot:c2c:U1"
+    )

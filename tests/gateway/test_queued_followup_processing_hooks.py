@@ -67,7 +67,9 @@ class _TwoTurnAgent:
     def __init__(self, **kwargs):
         self.tools = []
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **_kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **_kwargs
+    ):
         type(self).calls.append(message)
         return {
             "final_response": f"done-{len(type(self).calls)}",
@@ -82,7 +84,9 @@ class _RaisingSecondTurnAgent:
     def __init__(self, **kwargs):
         self.tools = []
 
-    def run_conversation(self, message, conversation_history=None, task_id=None, **_kwargs):
+    def run_conversation(
+        self, message, conversation_history=None, task_id=None, **_kwargs
+    ):
         type(self).calls.append(message)
         if len(type(self).calls) >= 2:
             raise RuntimeError("boom in the queued follow-up turn")
@@ -138,23 +142,40 @@ SESSION_KEY = "agent:main:telegram:dm:4242"
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("diagnostic_last", [False, True])
-async def test_queue_terminal_presentation_belongs_to_last_turn(monkeypatch, tmp_path, diagnostic_last):
+async def test_queue_terminal_presentation_belongs_to_last_turn(
+    monkeypatch, tmp_path, diagnostic_last
+):
     _TwoTurnAgent.calls = []
     _install_fake_agent(monkeypatch, tmp_path, _TwoTurnAgent)
-    (tmp_path / "config.yaml").write_text("display: {suppress_warning_notifications: true}")
+    (tmp_path / "config.yaml").write_text(
+        "display: {suppress_warning_notifications: true}"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     adapter = HookRecordingAdapter()
     runner = _make_runner(adapter)
     adapter._pending_messages[SESSION_KEY] = MessageEvent(
-        text="follow-up", source=_source(), internal=diagnostic_last,
-        metadata={"notification_category": "diagnostic"} if diagnostic_last else {}, message_id="queued")
-    result = await runner._run_agent(message="first", context_prompt="", history=[], source=_source(),
-        session_id="queue-policy", session_key=SESSION_KEY,
-        persist_user_display_metadata=None if diagnostic_last else {"notification_category": "diagnostic"})
+        text="follow-up",
+        source=_source(),
+        internal=diagnostic_last,
+        metadata={"notification_category": "diagnostic"} if diagnostic_last else {},
+        message_id="queued",
+    )
+    result = await runner._run_agent(
+        message="first",
+        context_prompt="",
+        history=[],
+        source=_source(),
+        session_id="queue-policy",
+        session_key=SESSION_KEY,
+        persist_user_display_metadata=None
+        if diagnostic_last
+        else {"notification_category": "diagnostic"},
+    )
     assert _TwoTurnAgent.calls == ["first", "follow-up"]
     assert result["final_response"] == "done-2"
     assert result["_notification_reply_muted"] is diagnostic_last
     from gateway.warning_notifications import diagnostic_wake_muted
+
     outer = MessageEvent(text="first", source=_source(), internal=not diagnostic_last)
     outer._notification_reply_muted = result["_notification_reply_muted"]
     assert diagnostic_wake_muted(outer) is diagnostic_last

@@ -13,6 +13,7 @@ from gateway.shutdown_watchdog import (
     start_loop_liveness_watchdog,
 )
 
+
 def test_loop_liveness_watchdog_stop_during_dump_disarms_hard_exit():
     loop = MagicMock(spec=asyncio.AbstractEventLoop)
     handle_ready = threading.Event()
@@ -50,19 +51,27 @@ def test_loop_liveness_death_leaves_its_stacks_in_the_dump_file(tmp_path, monkey
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     exit_codes, ref, handle_ready = [], {}, threading.Event()
 
-    def exit_and_stop(code: int) -> None:  # a patched exit returns, so stop the loop like a real one
+    def exit_and_stop(
+        code: int,
+    ) -> None:  # a patched exit returns, so stop the loop like a real one
         assert handle_ready.wait(timeout=2.0)
         exit_codes.append(code)
         ref["handle"].stop()
 
-    with patch("gateway.shutdown_watchdog._hard_exit", side_effect=exit_and_stop), \
-            patch("gateway.shutdown_watchdog._mark_exited_quietly"):
+    with (
+        patch("gateway.shutdown_watchdog._hard_exit", side_effect=exit_and_stop),
+        patch("gateway.shutdown_watchdog._mark_exited_quietly"),
+    ):
         ref["handle"] = handle = start_loop_liveness_watchdog(
-            MagicMock(spec=asyncio.AbstractEventLoop), probe_interval=0.01, probe_timeout=0.01,
-            max_strikes=1)
+            MagicMock(spec=asyncio.AbstractEventLoop),
+            probe_interval=0.01,
+            probe_timeout=0.01,
+            max_strikes=1,
+        )
         handle_ready.set()
         handle.join(timeout=5.0)
     from gateway.shutdown_watchdog import get_shutdown_watchdog_dump_path
+
     dump = get_shutdown_watchdog_dump_path(tmp_path).read_text(encoding="utf-8-sig")
     assert '"event": "loop_liveness_watchdog_fired"' in dump
     assert "most recent call first" in dump
@@ -118,6 +127,7 @@ def test_loop_liveness_watchdog_stop_during_final_miss_disarms_hard_exit():
     critical.assert_not_called()
     dump.assert_not_called()
 
+
 def test_loop_liveness_watchdog_stop_after_first_recheck_skips_final_actions():
     loop = MagicMock(spec=asyncio.AbstractEventLoop)
     probe_scheduled = threading.Event()
@@ -152,9 +162,7 @@ def test_loop_liveness_watchdog_stop_after_first_recheck_skips_final_actions():
             return original_is_set()
 
         handle._stop_event.is_set = stop_on_final_recheck
-        with patch(
-            "gateway.shutdown_watchdog.time.monotonic", side_effect=[0.0, 1.0]
-        ):
+        with patch("gateway.shutdown_watchdog.time.monotonic", side_effect=[0.0, 1.0]):
             release_probe.set()
             handle.join(timeout=1.0)
 
@@ -164,6 +172,7 @@ def test_loop_liveness_watchdog_stop_after_first_recheck_skips_final_actions():
     dump.assert_not_called()
     hard_exit.assert_not_called()
 
+
 def test_gateway_config_loop_watchdog_round_trip():
     """loop_watchdog is a config.yaml knob: default on, nested-gateway form honored."""
     from gateway.config import GatewayConfig
@@ -171,13 +180,12 @@ def test_gateway_config_loop_watchdog_round_trip():
     assert GatewayConfig.from_dict({}).loop_watchdog is True
     assert GatewayConfig.from_dict({"loop_watchdog": False}).loop_watchdog is False
     assert (
-        GatewayConfig.from_dict(
-            {"gateway": {"loop_watchdog": "off"}}
-        ).loop_watchdog
+        GatewayConfig.from_dict({"gateway": {"loop_watchdog": "off"}}).loop_watchdog
         is False
     )
     config = GatewayConfig.from_dict({"loop_watchdog": False})
     assert config.to_dict()["loop_watchdog"] is False
+
 
 def test_gateway_config_loop_watchdog_tuning_round_trip():
     """Watchdog tolerance knobs parse, serialize, and clamp malformed values."""
@@ -232,6 +240,7 @@ def test_gateway_config_loop_watchdog_tuning_round_trip():
     assert clamped.loop_watchdog_probe_timeout_s == 10.0
     assert clamped.loop_watchdog_max_strikes == 3
 
+
 def test_gateway_config_loop_watchdog_nonfinite_values_degrade():
     """NaN/Inf tuning values fall back to defaults instead of reaching the
     watchdog's Event.wait loop (or aborting config load via int(inf))."""
@@ -260,6 +269,7 @@ def test_gateway_config_loop_watchdog_nonfinite_values_degrade():
     assert big.loop_watchdog_probe_timeout_s == 10.0
     assert big.loop_watchdog_max_strikes == 3
 
+
 def test_load_gateway_config_bridges_loop_watchdog_keys(tmp_path, monkeypatch):
     """The real startup loader must honor gateway.loop_watchdog* from
     config.yaml — from_dict's nested fallback never sees the yaml gateway
@@ -281,6 +291,7 @@ def test_load_gateway_config_bridges_loop_watchdog_keys(tmp_path, monkeypatch):
     assert cfg.loop_watchdog_probe_interval_s == 45.0
     assert cfg.loop_watchdog_probe_timeout_s == 15.0
     assert cfg.loop_watchdog_max_strikes == 12
+
 
 def test_loop_liveness_watchdog_marks_runtime_degraded_before_restart():
     """The terminal watchdog observation must be visible before ``os._exit``."""
@@ -313,6 +324,7 @@ def test_loop_liveness_watchdog_marks_runtime_degraded_before_restart():
     assert record["exit_reason"] == "loop_liveness_watchdog"
     assert record["restart_requested"] is True
 
+
 def test_heartbeat_write_does_not_block_the_loop_it_monitors():
     """The heartbeat write must not freeze the loop the watchdog is watching.
 
@@ -343,9 +355,7 @@ def test_heartbeat_write_does_not_block_the_loop_it_monitors():
                 await asyncio.sleep(0.02)
                 ticks += 1
 
-        with patch(
-            "gateway.shutdown_watchdog.write_loop_heartbeat", slow_write
-        ):
+        with patch("gateway.shutdown_watchdog.write_loop_heartbeat", slow_write):
             # should_continue False -> exactly one write, then return.
             hb = asyncio.create_task(
                 loop_heartbeat_forever(interval_s=60.0, should_continue=lambda: False)
@@ -358,5 +368,5 @@ def test_heartbeat_write_does_not_block_the_loop_it_monitors():
     # Off-loop, the ticker gets roughly block_s / 0.02 ticks. Inline it gets at
     # most one, because the loop cannot run anything while fsync blocks it.
     assert ticks >= 5, (
-        f'the loop made only {ticks:d} tick(s) while the heartbeat was writing — the write is blocking the loop again'
+        f"the loop made only {ticks:d} tick(s) while the heartbeat was writing — the write is blocking the loop again"
     )

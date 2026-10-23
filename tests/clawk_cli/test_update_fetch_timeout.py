@@ -36,7 +36,9 @@ def test_local_git_stays_unbounded_and_check_true_raises(monkeypatch):
         assert "timeout" not in run.call_args.kwargs
 
         try:
-            update_cmd._git_run(["git"], ["fetch", "origin", "main"], network=True, check=True)
+            update_cmd._git_run(
+                ["git"], ["fetch", "origin", "main"], network=True, check=True
+            )
         except subprocess.CalledProcessError as exc:
             assert exc.returncode == 124
         else:

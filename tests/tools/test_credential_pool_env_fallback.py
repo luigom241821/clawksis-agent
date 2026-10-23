@@ -22,6 +22,7 @@ def _make_pconfig(provider_id="deepseek", env_vars=None):
     in PROVIDER_REGISTRY (needed for _seed_from_env's generic path).
     """
     from clawk_cli.auth import ProviderConfig
+
     return ProviderConfig(
         id=provider_id,
         name=provider_id.title(),
@@ -43,9 +44,14 @@ def isolated_clawk_home(tmp_path, monkeypatch):
 
     # Clear all known API key env vars so get_env_value falls through to .env
     for key in [
-        "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY",
-        "ZAI_API_KEY", "DEEPSEEK_API_KEY", "ANTHROPIC_TOKEN",
-        "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_BASE_URL",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+        "ZAI_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "OPENAI_BASE_URL",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -72,6 +78,7 @@ class TestCredentialPoolSeedsFromDotEnv:
         assert "DEEPSEEK_API_KEY" not in os.environ
 
         from agent.credential_pool import _seed_from_env
+
         entries = []
         changed, active_sources = _seed_from_env("deepseek", entries)
 
@@ -81,12 +88,14 @@ class TestCredentialPoolSeedsFromDotEnv:
             e.access_token == "sk-dotenv-only-12345"
             and e.source == "env:DEEPSEEK_API_KEY"
             for e in entries
-        ), f"Expected seeded entry with dotenv key, got: {[(e.source, e.access_token) for e in entries]}"
-
+        ), (
+            f"Expected seeded entry with dotenv key, got: {[(e.source, e.access_token) for e in entries]}"
+        )
 
     def test_empty_dotenv_no_entries(self, isolated_clawk_home):
         """No .env file, no env vars → no entries seeded (and no crash)."""
         from agent.credential_pool import _seed_from_env
+
         entries = []
         changed, active_sources = _seed_from_env("deepseek", entries)
         assert changed is False
@@ -103,6 +112,7 @@ class TestCredentialPoolSeedsFromDotEnv:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-env-stale-xyz")
 
         from agent.credential_pool import _seed_from_env
+
         entries = []
         changed, _ = _seed_from_env("deepseek", entries)
 
@@ -121,6 +131,7 @@ class TestAuthResolvesFromDotEnv:
         assert "DEEPSEEK_API_KEY" not in os.environ
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         key, source = _resolve_api_key_provider_secret(
             provider_id="deepseek",
             pconfig=_make_pconfig(),
@@ -141,6 +152,7 @@ class TestAuthResolvesFromDotEnv:
         monkeypatch.setenv("DEEPSEEK_API_KEY", "stale-shell-deepseek")
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         key, source = _resolve_api_key_provider_secret(
             provider_id="deepseek",
             pconfig=_make_pconfig(),
@@ -161,6 +173,7 @@ class TestAuthResolvesFromDotEnv:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "stale-shell-anthropic")
 
         from clawk_cli.auth import get_anthropic_key
+
         assert get_anthropic_key() == "dotenv-fresh-anthropic"
 
 
@@ -178,6 +191,7 @@ class TestAuthCredentialPoolFallback:
         mock_pool.peek.return_value = mock_entry
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=mock_pool):
             key, source = _resolve_api_key_provider_secret(
                 provider_id="deepseek",
@@ -192,6 +206,7 @@ class TestAuthCredentialPoolFallback:
         mock_pool.has_credentials.return_value = False
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=mock_pool):
             key, _source = _resolve_api_key_provider_secret(
                 provider_id="deepseek",
@@ -207,6 +222,7 @@ class TestAuthCredentialPoolFallback:
         mock_pool.has_credentials.return_value = True
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=mock_pool) as mp:
             key, source = _resolve_api_key_provider_secret(
                 provider_id="deepseek",
@@ -226,6 +242,7 @@ class TestAuthCredentialPoolFallback:
         mock_pool.has_credentials.return_value = True
 
         from clawk_cli.auth import _resolve_api_key_provider_secret
+
         with patch("agent.credential_pool.load_pool", return_value=mock_pool) as mp:
             key, source = _resolve_api_key_provider_secret(
                 provider_id="deepseek",
@@ -252,6 +269,7 @@ class TestAnthropicEnvAuthTypeClassification:
 
     def _seed(self, env_var, token):
         from agent.credential_pool import _seed_from_env
+
         entries = []
         _seed_from_env("anthropic", entries)
         # The seeded entry whose label is the env var we wrote.
@@ -262,7 +280,10 @@ class TestAnthropicEnvAuthTypeClassification:
     def test_oauth_token_classified_as_oauth(self, isolated_clawk_home):
         """sk-ant-oat- token from CLAUDE_CODE_OAUTH_TOKEN → AUTH_TYPE_OAUTH."""
         from agent.credential_pool import AUTH_TYPE_OAUTH
-        _write_env_file(isolated_clawk_home, CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat-fake-12345")
+
+        _write_env_file(
+            isolated_clawk_home, CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat-fake-12345"
+        )
         entry = self._seed("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat-fake-12345")
         assert entry.auth_type == AUTH_TYPE_OAUTH
 
@@ -272,13 +293,17 @@ class TestAnthropicEnvAuthTypeClassification:
         This is the bug the fix targets: previously this was tagged OAuth.
         """
         from agent.credential_pool import AUTH_TYPE_API_KEY
-        _write_env_file(isolated_clawk_home, ANTHROPIC_API_KEY="sk-ant-admin-fake-12345")
+
+        _write_env_file(
+            isolated_clawk_home, ANTHROPIC_API_KEY="sk-ant-admin-fake-12345"
+        )
         entry = self._seed("ANTHROPIC_API_KEY", "sk-ant-admin-fake-12345")
         assert entry.auth_type == AUTH_TYPE_API_KEY
 
     def test_standard_api_key_classified_as_api_key(self, isolated_clawk_home):
         """sk-ant-api- key → AUTH_TYPE_API_KEY (unchanged behaviour)."""
         from agent.credential_pool import AUTH_TYPE_API_KEY
+
         _write_env_file(isolated_clawk_home, ANTHROPIC_API_KEY="sk-ant-api-fake-12345")
         entry = self._seed("ANTHROPIC_API_KEY", "sk-ant-api-fake-12345")
         assert entry.auth_type == AUTH_TYPE_API_KEY

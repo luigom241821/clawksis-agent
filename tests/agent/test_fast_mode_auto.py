@@ -71,18 +71,36 @@ def test_bounded_fast_window_policy(monkeypatch):
     ):
         proxied = _agent(provider=provider, base_url=base_url)
         fast_mode.begin_turn(proxied, conversation_history=[])
-        assert "service_tier" not in fast_mode.effective_request_overrides(proxied), provider
-        assert resolve_fast_mode_overrides("gpt-5.4", provider=provider, base_url=base_url) is None
-    assert resolve_fast_mode_overrides(
-        "claude-opus-5", provider="bedrock", base_url="https://bedrock-runtime.us-east-1.amazonaws.com"
-    ) is None
+        assert "service_tier" not in fast_mode.effective_request_overrides(proxied), (
+            provider
+        )
+        assert (
+            resolve_fast_mode_overrides("gpt-5.4", provider=provider, base_url=base_url)
+            is None
+        )
+    assert (
+        resolve_fast_mode_overrides(
+            "claude-opus-5",
+            provider="bedrock",
+            base_url="https://bedrock-runtime.us-east-1.amazonaws.com",
+        )
+        is None
+    )
     # first-party routes (and the legacy model-only call) still resolve
-    assert resolve_fast_mode_overrides("gpt-5.4", provider="openai-codex", base_url="https://chatgpt.com/backend-api/codex")
-    assert resolve_fast_mode_overrides("grok-4.6", provider="xai", base_url="https://api.x.ai/v1")
+    assert resolve_fast_mode_overrides(
+        "gpt-5.4",
+        provider="openai-codex",
+        base_url="https://chatgpt.com/backend-api/codex",
+    )
+    assert resolve_fast_mode_overrides(
+        "grok-4.6", provider="xai", base_url="https://api.x.ai/v1"
+    )
     assert resolve_fast_mode_overrides("gpt-5.4") == {"service_tier": "priority"}
 
     # normal / static modes are untouched by the window logic
-    static = _agent(service_tier="priority", request_overrides={"service_tier": "priority"})
+    static = _agent(
+        service_tier="priority", request_overrides={"service_tier": "priority"}
+    )
     fast_mode.begin_turn(static, conversation_history=[])
     assert fast_mode.effective_request_overrides(static) == {"service_tier": "priority"}
     off = _agent(service_tier=None)
@@ -101,7 +119,13 @@ def test_fast_auto_and_cold_parse_and_slash_command(monkeypatch):
     from clawk_cli.config import DEFAULT_CONFIG
 
     # config parsing: CLI, gateway, TUI all accept auto/cold; default stays off
-    for raw, expected in (("auto", "auto"), ("COLD", "cold"), ("fast", "priority"), ("", None), ("bogus", None)):
+    for raw, expected in (
+        ("auto", "auto"),
+        ("COLD", "cold"),
+        ("fast", "priority"),
+        ("", None),
+        ("bogus", None),
+    ):
         assert cli_mod._parse_service_tier_config(raw) == expected
         monkeypatch.setattr(
             "gateway.run._load_gateway_config", lambda: {"agent": {"service_tier": raw}}
@@ -114,10 +138,19 @@ def test_fast_auto_and_cold_parse_and_slash_command(monkeypatch):
     fast_cmd = next(c for c in COMMAND_REGISTRY if c.name == "fast")
     assert {"auto", "cold"} <= set(fast_cmd.subcommands)
     printed = []
-    monkeypatch.setattr(cli_mod, "_cprint", lambda *a, **k: printed.append(" ".join(map(str, a))))
-    monkeypatch.setattr(cli_mod, "save_config_value", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no config write")))
+    monkeypatch.setattr(
+        cli_mod, "_cprint", lambda *a, **k: printed.append(" ".join(map(str, a)))
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "save_config_value",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no config write")),
+    )
     stub = SimpleNamespace(
-        service_tier=None, model="gpt-5.4", agent=object(), _fast_command_available=lambda: True
+        service_tier=None,
+        model="gpt-5.4",
+        agent=object(),
+        _fast_command_available=lambda: True,
     )
     cli_mod.ClawksisCLI._handle_fast_command(stub, "/fast auto")
     assert stub.service_tier == "auto"
@@ -129,48 +162,88 @@ def test_fast_auto_and_cold_parse_and_slash_command(monkeypatch):
 
     # auto/cold do NOT pin a static override into the turn route
     route_stub = SimpleNamespace(
-        model="gpt-5.4", api_key="k", base_url="https://api.openai.com/v1", provider="openai",
-        api_mode="chat_completions", acp_command=None, acp_args=[], _credential_pool=None,
+        model="gpt-5.4",
+        api_key="k",
+        base_url="https://api.openai.com/v1",
+        provider="openai",
+        api_mode="chat_completions",
+        acp_command=None,
+        acp_args=[],
+        _credential_pool=None,
         service_tier="auto",
     )
-    assert cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")["request_overrides"] is None
+    assert (
+        cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")[
+            "request_overrides"
+        ]
+        is None
+    )
     route_stub.service_tier = "priority"
-    assert cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")["request_overrides"] == {
-        "service_tier": "priority"
-    }
+    assert cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")[
+        "request_overrides"
+    ] == {"service_tier": "priority"}
     route_stub.base_url = "https://openrouter.ai/api/v1"
     route_stub.provider = "openrouter"
-    assert cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")["request_overrides"] is None
+    assert (
+        cli_mod.ClawksisCLI._resolve_turn_agent_config(route_stub, "hi")[
+            "request_overrides"
+        ]
+        is None
+    )
 
 
 class _FastRateLimitError(Exception):
     """A fast-mode 429 shaped like the live API's: documented limit headers, no retry-after."""
 
     def __init__(self, limit="0"):
-        super().__init__("This request would exceed your organization's rate limit of 0 fast mode input tokens per minute.")
+        super().__init__(
+            "This request would exceed your organization's rate limit of 0 fast mode input tokens per minute."
+        )
         self.status_code = 429
-        self.body = {"type": "error", "error": {"type": "rate_limit_error", "message": str(self)}}
-        self.response = SimpleNamespace(headers={
-            "anthropic-fast-input-tokens-limit": limit, "anthropic-fast-output-tokens-limit": limit,
-        })
+        self.body = {
+            "type": "error",
+            "error": {"type": "rate_limit_error", "message": str(self)},
+        }
+        self.response = SimpleNamespace(
+            headers={
+                "anthropic-fast-input-tokens-limit": limit,
+                "anthropic-fast-output-tokens-limit": limit,
+            }
+        )
 
 
 _FAST_KWARGS = {"model": "claude-opus-5", "extra_body": {"speed": "fast"}}
 
 
 def test_unprovisioned_detects_only_zero_limit_fast_429s():
-    assert fast_mode.fast_mode_unprovisioned(_FastRateLimitError("0"), _FAST_KWARGS) is True
+    assert (
+        fast_mode.fast_mode_unprovisioned(_FastRateLimitError("0"), _FAST_KWARGS)
+        is True
+    )
     # A real limit that ran out is transient: the retry-after path handles it.
-    assert fast_mode.fast_mode_unprovisioned(_FastRateLimitError("2000000"), _FAST_KWARGS) is False
+    assert (
+        fast_mode.fast_mode_unprovisioned(_FastRateLimitError("2000000"), _FAST_KWARGS)
+        is False
+    )
     # The request has to have asked for fast speed.
-    assert fast_mode.fast_mode_unprovisioned(_FastRateLimitError("0"), {"model": "claude-opus-5"}) is False
-    assert fast_mode.fast_mode_unprovisioned(RuntimeError("boom"), _FAST_KWARGS) is False
+    assert (
+        fast_mode.fast_mode_unprovisioned(
+            _FastRateLimitError("0"), {"model": "claude-opus-5"}
+        )
+        is False
+    )
+    assert (
+        fast_mode.fast_mode_unprovisioned(RuntimeError("boom"), _FAST_KWARGS) is False
+    )
 
 
 def test_unavailable_model_drops_speed_for_the_session_and_only_that_model():
     agent = _agent(
-        service_tier="priority", model="claude-opus-5", provider="anthropic",
-        api_mode="anthropic_messages", request_overrides={"speed": "fast"},
+        service_tier="priority",
+        model="claude-opus-5",
+        provider="anthropic",
+        api_mode="anthropic_messages",
+        request_overrides={"speed": "fast"},
     )
     assert fast_mode.effective_request_overrides(agent) == {"speed": "fast"}
     assert fast_mode.mark_fast_mode_unavailable(agent) is True
@@ -185,11 +258,19 @@ def test_recovery_retries_at_standard_speed_before_classification():
 
     printed = []
     agent = SimpleNamespace(
-        model="claude-opus-5", provider="anthropic", log_prefix="", _fast_mode_unavailable_models=set(),
+        model="claude-opus-5",
+        provider="anthropic",
+        log_prefix="",
+        _fast_mode_unavailable_models=set(),
         _vprint=lambda *a, **k: printed.append(" ".join(str(x) for x in a)),
     )
     retry, prompt = recover_before_classification(
-        agent, _FastRateLimitError("0"), messages=[], api_messages=[], api_kwargs=_FAST_KWARGS, active_system_prompt="sys",
+        agent,
+        _FastRateLimitError("0"),
+        messages=[],
+        api_messages=[],
+        api_kwargs=_FAST_KWARGS,
+        active_system_prompt="sys",
     )
     assert (retry, prompt) == (True, "sys")
     assert agent._fast_mode_unavailable_models == {"claude-opus-5"}

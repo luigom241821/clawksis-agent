@@ -1,7 +1,14 @@
 """Behavior contract for the `jobs` input parser (no workflow YAML is read)."""
+
 import pytest
 
-from scripts.releases.job_groups import ALL_JOBS, JOB_GROUPS, parse_jobs, phase_jobs, selects_all
+from scripts.releases.job_groups import (
+    ALL_JOBS,
+    JOB_GROUPS,
+    parse_jobs,
+    phase_jobs,
+    selects_all,
+)
 
 
 def test_the_default_selects_every_group():
@@ -16,8 +23,11 @@ def test_one_group_selects_only_itself():
     assert selected["termux"] is True
     assert all(value is False for group, value in selected.items() if group != "termux")
     selected = parse_jobs("darwin-arm64, win32-bundle")
-    assert selected == {**{group: False for group in JOB_GROUPS},
-                        "darwin-arm64": True, "win32-bundle": True}
+    assert selected == {
+        **{group: False for group in JOB_GROUPS},
+        "darwin-arm64": True,
+        "win32-bundle": True,
+    }
 
 
 def test_duplicates_unknown_names_and_empty_are_refused():
@@ -45,18 +55,30 @@ def test_selects_all_refuses_partial_selections():
 def test_phase_jobs_judge_only_the_selected_groups():
     every = {group: True for group in JOB_GROUPS}
     candidate = phase_jobs(every, "candidate")
-    assert candidate == ["validate", "build-darwin-arm64", "smoke-darwin-arm64",
-                         "build-darwin-x64", "smoke-darwin-x64",
-                         "build-win32-arm64", "smoke-win32-arm64",
-                         "build-win32-x64", "smoke-win32-x64",
-                         "assemble-win32-bundle", "termux-deb"]
+    assert candidate == [
+        "validate",
+        "build-darwin-arm64",
+        "smoke-darwin-arm64",
+        "build-darwin-x64",
+        "smoke-darwin-x64",
+        "build-win32-arm64",
+        "smoke-win32-arm64",
+        "build-win32-x64",
+        "smoke-win32-x64",
+        "assemble-win32-bundle",
+        "termux-deb",
+    ]
     termux_only = {**{group: False for group in JOB_GROUPS}, "termux": True}
     assert phase_jobs(termux_only, "candidate") == ["validate", "termux-deb"]
     # B4 moved candidate-manifest into stable-release.yml; the desktop phase
     # result judges only the group jobs themselves.
     assert "candidate-manifest" not in candidate
     partial = {**{group: False for group in JOB_GROUPS}, "darwin-arm64": True}
-    assert phase_jobs(partial, "candidate") == ["validate", "build-darwin-arm64", "smoke-darwin-arm64"]
+    assert phase_jobs(partial, "candidate") == [
+        "validate",
+        "build-darwin-arm64",
+        "smoke-darwin-arm64",
+    ]
     # A claim that skipped tests still judges every build, and no smoke.
     untested = phase_jobs(every, "candidate", skip_tests=True)
     assert untested == [job for job in candidate if not job.startswith("smoke-")]
@@ -72,22 +94,33 @@ def test_phase_jobs_judge_only_the_selected_groups():
 def test_windows_smokes_with_bundle_move_the_msix_smokes_to_the_bundle_call():
     """Stable's per-arch calls then only build, and its bundle call fails on either MSIX smoke."""
     none = {group: False for group in JOB_GROUPS}
-    per_arch = phase_jobs({**none, "win32-x64": True}, "candidate", windows_smokes_with_bundle=True)
+    per_arch = phase_jobs(
+        {**none, "win32-x64": True}, "candidate", windows_smokes_with_bundle=True
+    )
     assert per_arch == ["validate", "build-win32-x64"]
     bundle = {**none, "win32-bundle": True}
     assert phase_jobs(bundle, "candidate", windows_smokes_with_bundle=True) == [
-        "validate", "assemble-win32-bundle", "smoke-win32-arm64", "smoke-win32-x64"]
+        "validate",
+        "assemble-win32-bundle",
+        "smoke-win32-arm64",
+        "smoke-win32-x64",
+    ]
     # Without the signed lane, or with tests off, the bundle call smokes nothing.
     for skip in ({"skip_signed": True}, {"skip_tests": True}):
-        assert phase_jobs(bundle, "candidate", windows_smokes_with_bundle=True, **skip) == [
-            "validate", "assemble-win32-bundle"], skip
+        assert phase_jobs(
+            bundle, "candidate", windows_smokes_with_bundle=True, **skip
+        ) == ["validate", "assemble-win32-bundle"], skip
     # Callers that build everything in one call keep the smokes on the per-arch groups.
     assert phase_jobs(bundle, "candidate") == ["validate", "assemble-win32-bundle"]
 
 
-@pytest.mark.parametrize("jobs, expected", [(None, "true"), ("termux", "false"),
-                                            ("darwin-arm64,darwin-x64", "false")])
-def test_admission_emits_all_jobs_only_for_a_full_selection(monkeypatch, capsys, jobs, expected):
+@pytest.mark.parametrize(
+    "jobs, expected",
+    [(None, "true"), ("termux", "false"), ("darwin-arm64,darwin-x64", "false")],
+)
+def test_admission_emits_all_jobs_only_for_a_full_selection(
+    monkeypatch, capsys, jobs, expected
+):
     from scripts.releases import job_groups
 
     if jobs is None:

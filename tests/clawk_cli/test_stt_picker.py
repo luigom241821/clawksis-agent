@@ -21,11 +21,14 @@ from clawk_cli.tools_config import (
     apply_provider_selection,
 )
 
+
 def _stt_cat():
     return TOOL_CATEGORIES["stt"]
 
+
 def _stt_provider_named(name):
     return next(p for p in _stt_cat()["providers"] if p["name"] == name)
+
 
 class TestConfigWrites:
     def test_write_provider_config_sets_stt_provider(self):
@@ -38,14 +41,11 @@ class TestConfigWrites:
 
     def test_apply_provider_selection_stt(self):
         config = {}
-        with patch(
-            "clawk_cli.tools_config.get_nous_subscription_features"
-        ) as feats:
-            feats.return_value = MagicMock(
-                nous_auth_present=False, account_info=None
-            )
+        with patch("clawk_cli.tools_config.get_nous_subscription_features") as feats:
+            feats.return_value = MagicMock(nous_auth_present=False, account_info=None)
             apply_provider_selection("stt", "OpenAI", config)
         assert config["stt"]["provider"] == "openai"
+
 
 class TestActiveDetection:
     def test_active_matches_config(self):
@@ -56,16 +56,22 @@ class TestActiveDetection:
     def test_unset_provider_defaults_to_local(self):
         assert _is_provider_active(_stt_provider_named("Local Whisper"), {})
 
-class TestModelPicker:
 
+class TestModelPicker:
     def test_every_model_picker_lists_the_runtime_catalog(self):
         """Dashboard selects and Desktop suggestions offer exactly STT_MODEL_CATALOG per provider."""
         import re
 
         from clawk_cli.web_server_config import _SCHEMA_OVERRIDES
-        from tools.transcription_common import BUILTIN_STT_PROVIDERS, STT_MODEL_CONFIG_KEY
+        from tools.transcription_common import (
+            BUILTIN_STT_PROVIDERS,
+            STT_MODEL_CONFIG_KEY,
+        )
 
-        desktop = (Path(__file__).resolve().parents[2] / "apps/desktop/src/app/settings/constants.ts").read_text()
+        desktop = (
+            Path(__file__).resolve().parents[2]
+            / "apps/desktop/src/app/settings/constants.ts"
+        ).read_text()
         for provider, models in STT_MODEL_CATALOG.items():
             key = f"stt.{provider}.{STT_MODEL_CONFIG_KEY.get(provider, 'model')}"
             listed = re.search(rf"'{re.escape(key)}': \[([^\]]*)\]", desktop)
@@ -75,20 +81,20 @@ class TestModelPicker:
             same = set if provider == "local" else list
             assert same(_SCHEMA_OVERRIDES[key]["options"]) == same(models), key
             assert same(desktop_models) == same(models), key
-        assert set(_SCHEMA_OVERRIDES["stt.provider"]["options"]) == BUILTIN_STT_PROVIDERS - {"local_command"}
+        assert set(
+            _SCHEMA_OVERRIDES["stt.provider"]["options"]
+        ) == BUILTIN_STT_PROVIDERS - {"local_command"}
 
     def test_configure_stt_model_defaults_to_current(self):
         config = {"stt": {"openai": {"model": "gpt-transcribe"}}}
-        with patch(
-            "clawk_cli.tools_config._prompt_choice", return_value=0
-        ) as pc:
+        with patch("clawk_cli.tools_config._prompt_choice", return_value=0) as pc:
             _configure_stt_model("openai", config)
         # default index should point at the currently configured model
         args = pc.call_args[0]
         assert args[2] == STT_MODEL_CATALOG["openai"].index("gpt-transcribe")
 
-class TestConfigOnlyExclusion:
 
+class TestConfigOnlyExclusion:
     def test_stt_excluded_from_checklist_universe(self):
         assert "stt" not in _checklist_toolset_keys("cli")
         # sanity: tts (a real toolset) stays in

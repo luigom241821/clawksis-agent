@@ -38,8 +38,13 @@ class _Stub:
         class Handler(BaseHTTPRequestHandler):
             def _answer(self):
                 length = int(self.headers.get("Content-Length") or 0)
-                stub.seen.append({"path": self.path, "headers": dict(self.headers),
-                                  "body": self.rfile.read(length)})
+                stub.seen.append(
+                    {
+                        "path": self.path,
+                        "headers": dict(self.headers),
+                        "body": self.rfile.read(length),
+                    }
+                )
                 self.send_response(status)
                 if location:
                     self.send_header("Location", location)
@@ -66,8 +71,11 @@ def stubs(monkeypatch):
     allowed, other = _Stub(), _Stub()
     origins, resolve = ppr._PROVIDERS["openai-codex"]
     # Test-only: the loopback stub joins the real allowlist; ``other`` stays outside it.
-    monkeypatch.setitem(ppr._PROVIDERS, "openai-codex",
-                        (origins | {("http", "127.0.0.1", allowed.server.server_address[1])}, resolve))
+    monkeypatch.setitem(
+        ppr._PROVIDERS,
+        "openai-codex",
+        (origins | {("http", "127.0.0.1", allowed.server.server_address[1])}, resolve),
+    )
     yield allowed, other
     allowed.close()
     other.close()
@@ -78,20 +86,36 @@ def _home() -> Path:
 
 
 def _sign_in():
-    (_home() / "auth.json").write_text(json.dumps({"version": 1, "providers": {"openai-codex": {
-        "auth_mode": "chatgpt", "tokens": {"access_token": TOKEN, "refresh_token": "fake-rt"}}}}))
+    (_home() / "auth.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "providers": {
+                    "openai-codex": {
+                        "auth_mode": "chatgpt",
+                        "tokens": {"access_token": TOKEN, "refresh_token": "fake-rt"},
+                    }
+                },
+            }
+        )
+    )
 
 
 def _plugin(declares: bool):
     """A dashboard-style plugin module (``dashboard/plugin_api.py``) loaded the way the dashboard does."""
     root = _home() / "plugins" / ("voice" if declares else "undeclared")
     (root / "dashboard").mkdir(parents=True)
-    (root / "plugin.yaml").write_text("name: voice\n" + ("requires_auth: [openai-codex]\n" if declares else ""))
+    (root / "plugin.yaml").write_text(
+        "name: voice\n" + ("requires_auth: [openai-codex]\n" if declares else "")
+    )
     (root / "dashboard" / "plugin_api.py").write_text(
         "from clawk_cli.plugin_provider_requests import credentialed_provider_request\n"
         "def mint(url):\n"
-        "    return credentialed_provider_request('openai-codex', 'POST', url, json={'session': {}})\n")
-    spec = importlib.util.spec_from_file_location(f"clawk_dashboard_plugin_{root.name}", root / "dashboard" / "plugin_api.py")
+        "    return credentialed_provider_request('openai-codex', 'POST', url, json={'session': {}})\n"
+    )
+    spec = importlib.util.spec_from_file_location(
+        f"clawk_dashboard_plugin_{root.name}", root / "dashboard" / "plugin_api.py"
+    )
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -119,8 +143,14 @@ def test_disallowed_origin_and_redirect_never_carry_the_token(stubs, monkeypatch
 
     redirecting = _Stub(status=302, location=other.url + "/steal")
     origins, resolve = ppr._PROVIDERS["openai-codex"]
-    monkeypatch.setitem(ppr._PROVIDERS, "openai-codex",
-                        (origins | {("http", "127.0.0.1", redirecting.server.server_address[1])}, resolve))
+    monkeypatch.setitem(
+        ppr._PROVIDERS,
+        "openai-codex",
+        (
+            origins | {("http", "127.0.0.1", redirecting.server.server_address[1])},
+            resolve,
+        ),
+    )
     try:
         result = plugin.mint(redirecting.url + "/v1/realtime/client_secrets")
     finally:

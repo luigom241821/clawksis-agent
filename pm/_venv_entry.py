@@ -4,6 +4,7 @@ ARGS are what would follow the venv interpreter's own options: ``SCRIPT [ARG...]
 ``-c CODE [ARG...]`` or ``-m MODULE [ARG...]``. Built by ``pm.environments.venv_command``
 for sealed payloads, whose venv redirectors must not run (see there). Stdlib only.
 """
+
 import os
 import runpy
 import site
@@ -12,7 +13,9 @@ import types
 
 
 def _usage() -> None:
-    raise SystemExit("usage: _venv_entry.py SITE (SCRIPT | -c CODE | -m MODULE) [ARG...]")
+    raise SystemExit(
+        "usage: _venv_entry.py SITE (SCRIPT | -c CODE | -m MODULE) [ARG...]"
+    )
 
 
 def main() -> None:
@@ -21,12 +24,15 @@ def main() -> None:
     site_dir, args = sys.argv[1], sys.argv[2:]
     here = os.path.dirname(os.path.abspath(__file__))
     # Python put this file's directory first; it is PM's package dir, not the caller's.
-    sys.path[:] = [entry for entry in sys.path
-                   if not entry or os.path.abspath(entry) != here]
+    sys.path[:] = [
+        entry for entry in sys.path if not entry or os.path.abspath(entry) != here
+    ]
     # A venv's site-packages follows the stdlib; addsitedir also runs its .pth files
     # (pywin32's puts win32\lib on sys.path).
     site.addsitedir(site_dir)
-    safe_path = sys.flags.safe_path if hasattr(sys.flags, "safe_path") else sys.flags.isolated
+    safe_path = (
+        sys.flags.safe_path if hasattr(sys.flags, "safe_path") else sys.flags.isolated
+    )
     if args[0] == "-c":
         if len(args) < 2:
             _usage()

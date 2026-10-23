@@ -4,6 +4,7 @@ Uses a tiny in-process ``websockets`` server to simulate a CDP endpoint —
 gives real protocol coverage (connect, send, recv, close) without needing
 a real Chrome instance.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -116,6 +117,7 @@ class _CDPServer:
 
     def stop(self) -> None:
         if self._loop and self._server:
+
             def _close() -> None:
                 self._server.close()
 
@@ -137,9 +139,7 @@ def cdp_server(monkeypatch):
     """Start a CDP mock and route tool resolution to it."""
     server = _CDPServer()
     ws_url = server.start()
-    monkeypatch.setattr(
-        browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url
-    )
+    monkeypatch.setattr(browser_cdp_tool, "_resolve_cdp_endpoint", lambda: ws_url)
     try:
         yield server
     finally:
@@ -156,8 +156,6 @@ def test_missing_method_returns_error():
     assert "error" in result
     assert "method" in result["error"].lower()
     assert result.get("cdp_docs") == browser_cdp_tool.CDP_DOCS_URL
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +279,7 @@ def test_get_response_body_base64_discriminator_passes_through(cdp_server):
         lambda params, sid: {"body": body_b64, "base64Encoded": True},
     )
 
-    result = json.loads(
-        browser_cdp_tool.browser_cdp(method="Network.getResponseBody")
-    )
+    result = json.loads(browser_cdp_tool.browser_cdp(method="Network.getResponseBody"))
 
     assert result["success"] is True
     assert result["result"]["body"] == body_b64
@@ -298,9 +294,7 @@ def test_get_response_body_text_discriminator_still_redacts(cdp_server):
         lambda params, sid: {"body": f"leak {fake_key} here", "base64Encoded": False},
     )
 
-    result = json.loads(
-        browser_cdp_tool.browser_cdp(method="Network.getResponseBody")
-    )
+    result = json.loads(browser_cdp_tool.browser_cdp(method="Network.getResponseBody"))
 
     assert result["success"] is True
     assert "CDPSECRETBODY" not in json.dumps(result)
@@ -329,9 +323,7 @@ def test_fetch_get_response_body_base64_discriminator_passes_through(cdp_server)
         lambda params, sid: {"body": body_b64, "base64Encoded": True},
     )
 
-    result = json.loads(
-        browser_cdp_tool.browser_cdp(method="Fetch.getResponseBody")
-    )
+    result = json.loads(browser_cdp_tool.browser_cdp(method="Fetch.getResponseBody"))
 
     assert result["success"] is True
     assert result["result"]["body"] == body_b64
@@ -454,9 +446,10 @@ def test_runtime_evaluate_blocked_when_current_page_is_private(monkeypatch):
         lambda: "ws://127.0.0.1:9222/devtools/browser/mock",
     )
 
-
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
-    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda task_id: PRIVATE_URL)
+    monkeypatch.setattr(
+        bt_eval_policy, "_current_page_private_url", lambda task_id: PRIVATE_URL
+    )
 
     async def fake_call(*args, **kwargs):
         calls.append((args, kwargs))
@@ -483,9 +476,10 @@ def test_frame_id_route_blocked_when_current_page_is_private(monkeypatch):
     applied to the stateless path — same private-page boundary either way."""
     supervisor_calls = []
 
-
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
-    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda task_id: PRIVATE_URL)
+    monkeypatch.setattr(
+        bt_eval_policy, "_current_page_private_url", lambda task_id: PRIVATE_URL
+    )
 
     def fake_supervisor_route(**kwargs):
         supervisor_calls.append(kwargs)
@@ -515,9 +509,10 @@ def test_frame_id_route_allowed_when_page_is_not_private(monkeypatch):
     routing when the current page isn't private."""
     supervisor_calls = []
 
-
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
-    monkeypatch.setattr(bt_eval_policy, "_current_page_private_url", lambda task_id: None)
+    monkeypatch.setattr(
+        bt_eval_policy, "_current_page_private_url", lambda task_id: None
+    )
 
     def fake_supervisor_route(**kwargs):
         supervisor_calls.append(kwargs)
@@ -549,7 +544,6 @@ def test_page_navigate_to_private_url_blocked_before_cdp(monkeypatch):
         lambda: "ws://127.0.0.1:9222/devtools/browser/mock",
     )
 
-
     monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: True)
 
     async def fake_call(*args, **kwargs):
@@ -574,8 +568,9 @@ def test_page_navigate_to_private_url_blocked_before_cdp(monkeypatch):
 def test_private_guard_inactive_does_not_probe(monkeypatch, cdp_server):
     cdp_server.on("Runtime.evaluate", lambda params, sid: {"result": {"value": "ok"}})
 
-
-    monkeypatch.setattr(bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: False)
+    monkeypatch.setattr(
+        bt_eval_policy, "_eval_ssrf_guard_active", lambda task_id: False
+    )
 
     def fail_probe(task_id):
         raise AssertionError("_current_page_private_url must not be probed")
@@ -619,6 +614,8 @@ def test_check_fn_false_when_browser_requirements_fail(monkeypatch):
 
     monkeypatch.setattr(bt_install, "check_browser_requirements", lambda: False)
     monkeypatch.setattr(
-        bt_cdp, "_get_cdp_override_raw", lambda: "ws://localhost:9222/devtools/browser/x"
+        bt_cdp,
+        "_get_cdp_override_raw",
+        lambda: "ws://localhost:9222/devtools/browser/x",
     )
     assert browser_cdp_tool._browser_cdp_check() is False

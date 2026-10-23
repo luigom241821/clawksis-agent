@@ -76,7 +76,9 @@ def test_add_lands_in_named_profile_only(clawk_root):
 
     work_cfg = _read_yaml(root / "profiles" / "work" / "config.yaml")
     assert "weather" in work_cfg.get("mcp_servers", {})
-    assert work_cfg["mcp_servers"]["weather"]["url"] == "https://mcp.example.com/weather"
+    assert (
+        work_cfg["mcp_servers"]["weather"]["url"] == "https://mcp.example.com/weather"
+    )
 
     # The launch/default profile and the sibling profile stay untouched.
     default_cfg = _read_yaml(root / "config.yaml")
@@ -99,8 +101,14 @@ def test_list_reflects_the_scoped_profile(clawk_root):
         )
     )
 
-    work_names = [s["name"] for s in _result(_call("mcp.servers.list", {"profile": "work"}))["servers"]]
-    other_names = [s["name"] for s in _result(_call("mcp.servers.list", {"profile": "other"}))["servers"]]
+    work_names = [
+        s["name"]
+        for s in _result(_call("mcp.servers.list", {"profile": "work"}))["servers"]
+    ]
+    other_names = [
+        s["name"]
+        for s in _result(_call("mcp.servers.list", {"profile": "other"}))["servers"]
+    ]
 
     assert work_names == ["svc-a"]
     assert other_names == ["svc-b"]
@@ -252,9 +260,9 @@ def test_set_api_key_writes_env_and_header_to_right_profile(clawk_root):
     # The secret is in the work profile's .env — and NOT the default profile's.
     work_env = (root / "profiles" / "work" / ".env").read_text(encoding="utf-8")
     assert "MCP_GIZMO_API_KEY=sk-secret-123" in work_env
-    assert not (root / ".env").exists() or "sk-secret-123" not in (root / ".env").read_text(
-        encoding="utf-8"
-    )
+    assert not (root / ".env").exists() or "sk-secret-123" not in (
+        root / ".env"
+    ).read_text(encoding="utf-8")
 
     # config.yaml stores only the interpolation template, never the raw secret.
     work_cfg = _read_yaml(root / "profiles" / "work" / "config.yaml")
@@ -268,7 +276,11 @@ def test_set_api_key_stdio_references_env_block(clawk_root):
     _result(
         _call(
             "mcp.servers.add",
-            {"profile": "work", "name": "localtool", "config": {"command": "localtool-bin"}},
+            {
+                "profile": "work",
+                "name": "localtool",
+                "config": {"command": "localtool-bin"},
+            },
         )
     )
     resp = _result(
@@ -310,9 +322,13 @@ def test_remove_scoped_to_profile(clawk_root):
     resp = _result(_call("mcp.servers.remove", {"profile": "work", "name": "temp"}))
     assert resp["removed"] is True
 
-    assert "temp" not in _read_yaml(root / "profiles" / "work" / "config.yaml").get("mcp_servers", {})
+    assert "temp" not in _read_yaml(root / "profiles" / "work" / "config.yaml").get(
+        "mcp_servers", {}
+    )
     # The 'other' profile still has its server.
-    assert "temp" in _read_yaml(root / "profiles" / "other" / "config.yaml").get("mcp_servers", {})
+    assert "temp" in _read_yaml(root / "profiles" / "other" / "config.yaml").get(
+        "mcp_servers", {}
+    )
 
 
 def test_add_duplicate_and_missing_errors(clawk_root):
@@ -361,7 +377,9 @@ def _catalog_http_entry(*, auth: str | None = None):
 
 
 def _saved_server(root: Path, profile: str, name: str) -> dict:
-    path = root / "profiles" / profile / "config.yaml" if profile else root / "config.yaml"
+    path = (
+        root / "profiles" / profile / "config.yaml" if profile else root / "config.yaml"
+    )
     return (_read_yaml(path).get("mcp_servers") or {}).get(name) or {}
 
 
@@ -379,8 +397,13 @@ def test_add_catalog_id_in_profile_param_saves_manifest_in_that_profile(clawk_ro
     assert result["server"]["transport"] == "http"
     saved = _saved_server(clawk_root, "work", entry.name)
     assert saved["url"] == entry.transport.url
-    assert entry.name not in (_read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {})
-    other = _read_yaml(clawk_root / "profiles" / "other" / "config.yaml").get("mcp_servers") or {}
+    assert entry.name not in (
+        _read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {}
+    )
+    other = (
+        _read_yaml(clawk_root / "profiles" / "other" / "config.yaml").get("mcp_servers")
+        or {}
+    )
     assert entry.name not in other
 
 
@@ -409,7 +432,9 @@ def test_oauth_catalog_add_follows_routed_profile_not_payload(clawk_root):
     assert saved["url"] == entry.transport.url
     assert saved["auth"] == "oauth"
     assert entry.auth.type == "oauth"
-    assert entry.name not in (_read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {})
+    assert entry.name not in (
+        _read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {}
+    )
     assert not _saved_server(clawk_root, "other", entry.name)
 
 
@@ -444,7 +469,10 @@ def test_explicit_transport_wins_over_catalog_or_unknown_preset(clawk_root):
     assert saved_catalog["command"] == "explicit-bin"
     assert saved_catalog.get("url") != entry.transport.url
     assert unknown["server"]["url"] == "https://override.example/mcp"
-    assert _saved_server(clawk_root, "work", "kept-unknown")["url"] == "https://override.example/mcp"
+    assert (
+        _saved_server(clawk_root, "work", "kept-unknown")["url"]
+        == "https://override.example/mcp"
+    )
 
 
 def test_unknown_preset_returns_4063_and_writes_nothing(clawk_root):
@@ -455,7 +483,9 @@ def test_unknown_preset_returns_4063_and_writes_nothing(clawk_root):
 
     assert resp["error"]["code"] == 4063
     assert not _saved_server(clawk_root, "work", "unknown")
-    assert "unknown" not in (_read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {})
+    assert "unknown" not in (
+        _read_yaml(clawk_root / "config.yaml").get("mcp_servers") or {}
+    )
 
 
 def test_cli_preset_still_fills_transport_when_not_in_catalog(clawk_root):
@@ -496,7 +526,9 @@ def test_default_profile_add_when_profile_omitted(clawk_root):
     )
 
 
-def test_test_resolves_env_refs_from_requested_profile_secret_scope(clawk_root, monkeypatch):
+def test_test_resolves_env_refs_from_requested_profile_secret_scope(
+    clawk_root, monkeypatch
+):
     """``mcp.servers.test`` for a secondary must expand its ``${VAR}`` header from THAT profile's
     secret scope, not the launch process's ``os.environ`` (the default profile's value) — the
     Desktop MCP setup "Test connection" otherwise reports green against the wrong credential.
@@ -507,13 +539,17 @@ def test_test_resolves_env_refs_from_requested_profile_secret_scope(clawk_root, 
     (work / ".env").write_text("ALPHA_ONLY_TOKEN=work-token\n", encoding="utf-8")
     (work / "config.yaml").write_text(
         "mcp_servers:\n  srv:\n    url: http://x/mcp\n"
-        "    headers:\n      Authorization: Bearer ${ALPHA_ONLY_TOKEN}\n", encoding="utf-8")
+        "    headers:\n      Authorization: Bearer ${ALPHA_ONLY_TOKEN}\n",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("ALPHA_ONLY_TOKEN", "default-process-token")
 
     resolved = {}
 
     def fake_probe(name, config, connect_timeout=30, details=None):
-        resolved.update(mcp_config._resolve_mcp_server_config(config).get("headers", {}))
+        resolved.update(
+            mcp_config._resolve_mcp_server_config(config).get("headers", {})
+        )
         return [("tool-a", "desc")]
 
     monkeypatch.setattr(mcp_config, "_probe_single_server", fake_probe)

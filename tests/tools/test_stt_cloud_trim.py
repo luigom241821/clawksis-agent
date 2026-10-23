@@ -33,6 +33,7 @@ if "faster_whisper" not in sys.modules:
     faster_whisper_stub = types.ModuleType("faster_whisper")
     faster_whisper_stub.WhisperModel = MagicMock(name="WhisperModel")
     from importlib.machinery import ModuleSpec
+
     faster_whisper_stub.__spec__ = ModuleSpec("faster_whisper", loader=None)
     sys.modules["faster_whisper"] = faster_whisper_stub
 
@@ -53,6 +54,7 @@ _HAS_FFMPEG = bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe"))
 # ============================================================================
 # Helpers
 # ============================================================================
+
 
 def _write_wav(path: Path, segments) -> str:
     """Write a 16 kHz mono WAV from (kind, seconds) segments.
@@ -76,12 +78,13 @@ def _write_wav(path: Path, segments) -> str:
         wf.writeframes(bytes(frames))
     return str(path)
 
+
 # ============================================================================
 # Provider gating
 # ============================================================================
 
-class TestProviderGating:
 
+class TestProviderGating:
     def test_cloud_set_covers_every_remote_builtin(self):
         # Invariant: every built-in that is not local-ish uploads audio and
         # must get the trim. New built-ins are cloud unless proven otherwise.
@@ -89,12 +92,19 @@ class TestProviderGating:
 
     def test_local_provider_never_trims(self, tmp_path):
         wav = _write_wav(tmp_path / "a.wav", [("tone", 1)])
-        with patch("tools.transcription_tools._load_stt_config",
-                   return_value={"provider": "local", "enabled": True}), \
-             patch("tools.transcription_tools._trim_silence_for_cloud_stt") as trim, \
-             patch("tools.transcription_tools._transcribe_local",
-                   return_value={"success": True, "transcript": "ok"}):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "local", "enabled": True},
+            ),
+            patch("tools.transcription_tools._trim_silence_for_cloud_stt") as trim,
+            patch(
+                "tools.transcription_tools._transcribe_local",
+                return_value={"success": True, "transcript": "ok"},
+            ),
+        ):
             from tools.transcription_tools import _transcribe_prepared_audio
+
             result = _transcribe_prepared_audio(wav)
         assert result["success"] is True
         trim.assert_not_called()
@@ -110,13 +120,20 @@ class TestProviderGating:
             seen["path"] = file_path
             return {"success": True, "transcript": "hi", "provider": "groq"}
 
-        with patch("tools.transcription_tools._load_stt_config",
-                   return_value={"provider": "groq", "enabled": True}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._trim_silence_for_cloud_stt",
-                   return_value=trimmed), \
-             patch("tools.transcription_tools._transcribe_groq", side_effect=fake_groq):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "groq", "enabled": True},
+            ),
+            patch("tools.transcription_tools._get_provider", return_value="groq"),
+            patch(
+                "tools.transcription_tools._trim_silence_for_cloud_stt",
+                return_value=trimmed,
+            ),
+            patch("tools.transcription_tools._transcribe_groq", side_effect=fake_groq),
+        ):
             from tools.transcription_tools import _transcribe_prepared_audio
+
             result = _transcribe_prepared_audio(wav)
 
         assert result["success"] is True
@@ -132,13 +149,20 @@ class TestProviderGating:
             seen["path"] = file_path
             return {"success": True, "transcript": "hi", "provider": "groq"}
 
-        with patch("tools.transcription_tools._load_stt_config",
-                   return_value={"provider": "groq", "enabled": True}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._trim_silence_for_cloud_stt",
-                   return_value=None), \
-             patch("tools.transcription_tools._transcribe_groq", side_effect=fake_groq):
+        with (
+            patch(
+                "tools.transcription_tools._load_stt_config",
+                return_value={"provider": "groq", "enabled": True},
+            ),
+            patch("tools.transcription_tools._get_provider", return_value="groq"),
+            patch(
+                "tools.transcription_tools._trim_silence_for_cloud_stt",
+                return_value=None,
+            ),
+            patch("tools.transcription_tools._transcribe_groq", side_effect=fake_groq),
+        ):
             from tools.transcription_tools import _transcribe_prepared_audio
+
             result = _transcribe_prepared_audio(wav)
 
         assert result["success"] is True
@@ -151,17 +175,24 @@ class TestProviderGating:
             "enabled": True,
             "providers": {"mywhisper": {"type": "command", "command": "true"}},
         }
-        with patch("tools.transcription_tools._load_stt_config", return_value=cfg), \
-             patch("tools.transcription_tools._trim_silence_for_cloud_stt") as trim, \
-             patch("tools.transcription_tools._transcribe_command_stt",
-                   return_value={"success": True, "transcript": "ok"}):
+        with (
+            patch("tools.transcription_tools._load_stt_config", return_value=cfg),
+            patch("tools.transcription_tools._trim_silence_for_cloud_stt") as trim,
+            patch(
+                "tools.transcription_tools._transcribe_command_stt",
+                return_value={"success": True, "transcript": "ok"},
+            ),
+        ):
             from tools.transcription_tools import _transcribe_prepared_audio
+
             _transcribe_prepared_audio(wav)
         trim.assert_not_called()
+
 
 # ============================================================================
 # Settings resolution
 # ============================================================================
+
 
 class TestCloudTrimSettings:
     def test_defaults(self):
@@ -208,9 +239,11 @@ class TestCloudTrimSettings:
         assert enabled is True
         assert threshold == _CLOUD_TRIM_THRESHOLD_DB_DEFAULT
 
+
 # ============================================================================
 # Best-effort fallbacks (all must return None, never raise)
 # ============================================================================
+
 
 class TestTrimFallbacks:
     def test_disabled_returns_none(self, tmp_path):
@@ -224,8 +257,13 @@ class TestTrimFallbacks:
 
     def test_missing_ffprobe_returns_none(self, tmp_path):
         wav = _write_wav(tmp_path / "a.wav", [("tone", 1)])
-        with patch("tools.transcription_audio._find_ffmpeg_binary", return_value="/bin/ffmpeg"), \
-             patch("tools.transcription_audio._find_ffprobe_binary", return_value=None):
+        with (
+            patch(
+                "tools.transcription_audio._find_ffmpeg_binary",
+                return_value="/bin/ffmpeg",
+            ),
+            patch("tools.transcription_audio._find_ffprobe_binary", return_value=None),
+        ):
             assert _trim_silence_for_cloud_stt(wav, {}) is None
 
     def test_ffmpeg_failure_returns_none_and_cleans_up(self, tmp_path):
@@ -235,21 +273,35 @@ class TestTrimFallbacks:
         def probe(path):
             return 60.0  # past the short-clip gate so the encode is attempted
 
-        with patch("tools.transcription_audio._find_ffmpeg_binary", return_value="/bin/ffmpeg"), \
-             patch("tools.transcription_audio._probe_audio_duration", side_effect=probe), \
-             patch("tools.transcription_audio.subprocess.run",
-                   side_effect=sp.CalledProcessError(1, "ffmpeg")):
+        with (
+            patch(
+                "tools.transcription_audio._find_ffmpeg_binary",
+                return_value="/bin/ffmpeg",
+            ),
+            patch("tools.transcription_audio._probe_audio_duration", side_effect=probe),
+            patch(
+                "tools.transcription_audio.subprocess.run",
+                side_effect=sp.CalledProcessError(1, "ffmpeg"),
+            ),
+        ):
             assert _trim_silence_for_cloud_stt(wav, {}) is None
 
     def test_unprobeable_source_returns_none(self, tmp_path):
         wav = _write_wav(tmp_path / "a.wav", [("tone", 1)])
-        with patch("tools.transcription_audio._find_ffmpeg_binary", return_value="/bin/ffmpeg"), \
-             patch("tools.transcription_audio._probe_audio_duration", return_value=None):
+        with (
+            patch(
+                "tools.transcription_audio._find_ffmpeg_binary",
+                return_value="/bin/ffmpeg",
+            ),
+            patch("tools.transcription_audio._probe_audio_duration", return_value=None),
+        ):
             assert _trim_silence_for_cloud_stt(wav, {}) is None
+
 
 # ============================================================================
 # E2E with real ffmpeg
 # ============================================================================
+
 
 @pytest.mark.skipif(not _HAS_FFMPEG, reason="ffmpeg/ffprobe not installed")
 class TestTrimE2E:
@@ -261,6 +313,7 @@ class TestTrimE2E:
             [("tone", 2), ("silence", 6), ("tone", 2), ("silence", 4)],
         )
         from tools.transcription_audio import _probe_audio_duration
+
         trimmed = _trim_silence_for_cloud_stt(wav, {})
         assert trimmed is not None
         try:

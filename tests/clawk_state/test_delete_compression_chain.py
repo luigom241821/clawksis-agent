@@ -54,7 +54,9 @@ def test_deleting_tip_removes_whole_chain(tmp_path):
     db.close()
 
 
-def test_bulk_delete_removes_whole_chain_of_each_selected_root_and_nothing_else(tmp_path):
+def test_bulk_delete_removes_whole_chain_of_each_selected_root_and_nothing_else(
+    tmp_path,
+):
     """EXACTNESS (#57543 sweeper risk): two selected roots with their own chains —
     both chains vanish whole, and every other lineage / standalone row survives."""
     db = _seeded_db(tmp_path)
@@ -81,7 +83,11 @@ def test_bulk_delete_removes_whole_chain_of_each_selected_root_and_nothing_else(
     for kept in ("c_root", "c_tip", "solo1", "solo2"):
         assert db.get_session(kept) is not None, kept
     # chain C stays a single projected row; standalones still listed
-    assert {r["id"] for r in db.list_sessions_rich(limit=20)} == {"c_tip", "solo2", "solo1"}
+    assert {r["id"] for r in db.list_sessions_rich(limit=20)} == {
+        "c_tip",
+        "solo2",
+        "solo1",
+    }
     db.close()
 
 
@@ -109,12 +115,24 @@ def test_chain_delete_orphans_branches_and_cascades_delegates(tmp_path):
     (orphaned); a delegate subagent run is cascade-deleted."""
     db = _seeded_db(tmp_path)
     _make_chain(db)
-    db.create_session("branch", source="tui", parent_session_id="root",
-                      model_config={"_branched_from": "root"})
-    db.create_session("reset", source="tui", parent_session_id="mid",
-                      model_config={"_reset_from": "mid"})
-    db.create_session("delegate", source="tui", parent_session_id="tip",
-                      model_config={"_delegate_from": "tip"})
+    db.create_session(
+        "branch",
+        source="tui",
+        parent_session_id="root",
+        model_config={"_branched_from": "root"},
+    )
+    db.create_session(
+        "reset",
+        source="tui",
+        parent_session_id="mid",
+        model_config={"_reset_from": "mid"},
+    )
+    db.create_session(
+        "delegate",
+        source="tui",
+        parent_session_id="tip",
+        model_config={"_delegate_from": "tip"},
+    )
 
     assert db.delete_sessions(["tip"], include_compression_chain=True) == 1
     branch = db.get_session("branch")
@@ -176,8 +194,12 @@ def test_chain_transcript_files_cleaned(tmp_path):
     # Another session's artifacts must survive.
     (sessions_dir / "session_other.json").write_text("{}")
 
-    assert db.delete_sessions(["tip"], sessions_dir=sessions_dir,
-                              include_compression_chain=True) == 1
+    assert (
+        db.delete_sessions(
+            ["tip"], sessions_dir=sessions_dir, include_compression_chain=True
+        )
+        == 1
+    )
     assert not (sessions_dir / "root.jsonl").exists()
     assert not (sessions_dir / "tip.json").exists()
     assert (sessions_dir / "session_other.json").exists()
@@ -195,8 +217,15 @@ def test_chain_delete_skips_guarded_lineage(tmp_path):
     assert db.try_acquire_session_turn_lease("mid", holder, ttl_seconds=300.0) is True
 
     skipped: list[str] = []
-    assert db.delete_sessions(["tip"], exclude_active_write_guards=True,
-                              skipped_ids=skipped, include_compression_chain=True) == 0
+    assert (
+        db.delete_sessions(
+            ["tip"],
+            exclude_active_write_guards=True,
+            skipped_ids=skipped,
+            include_compression_chain=True,
+        )
+        == 0
+    )
     assert skipped == ["tip"]
     # whole chain survives
     for kept in ("root", "mid", "tip"):

@@ -8,6 +8,7 @@ interactive login it cannot perform. The device flow could not even start: the a
 authorization server reaches issuer validation as ``str(AnyHttpUrl)`` with a trailing "/", which the
 exact-string check rejects against Google's slash-less document issuer.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -20,15 +21,22 @@ pytest.importorskip("mcp.client.auth.oauth2")
 RESOURCE = "https://gmailmcp.example/mcp"
 PRM_PATH = "/.well-known/oauth-protected-resource"
 ASM_PATH = "/.well-known/oauth-authorization-server"
-GOOGLE = "https://accounts.google.com"  # advertised & document issuer, no trailing slash
+GOOGLE = (
+    "https://accounts.google.com"  # advertised & document issuer, no trailing slash
+)
 OTHER_AS = "https://as.example"
 
 
 def _asm_doc(issuer, **extra):
-    doc = {"issuer": issuer, "authorization_endpoint": f"{issuer}/o/oauth2/v2/auth",
-           "token_endpoint": f"{issuer}/token", "registration_endpoint": f"{issuer}/register",
-           "response_types_supported": ["code"], "code_challenge_methods_supported": ["S256"],
-           "grant_types_supported": ["authorization_code", "refresh_token"]}
+    doc = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/o/oauth2/v2/auth",
+        "token_endpoint": f"{issuer}/token",
+        "registration_endpoint": f"{issuer}/register",
+        "response_types_supported": ["code"],
+        "code_challenge_methods_supported": ["S256"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+    }
     doc.update(extra)
     return doc
 
@@ -39,28 +47,56 @@ def _standin(httpx, *, issuer, authorization_servers):
     def handler(request):
         url = str(request.url)
         path = urlsplit(url).path
-        j = lambda status, body, **h: httpx.Response(status, json=body, headers=h, request=request)
+        j = lambda status, body, **h: httpx.Response(
+            status, json=body, headers=h, request=request
+        )
         if url == RESOURCE:
             if request.headers.get("Authorization") == "Bearer AT-1":
                 return j(200, {"ok": True})
-            return j(401, {}, **{"WWW-Authenticate": f'Bearer resource_metadata="https://gmailmcp.example{PRM_PATH}"'})
+            return j(
+                401,
+                {},
+                **{
+                    "WWW-Authenticate": f'Bearer resource_metadata="https://gmailmcp.example{PRM_PATH}"'
+                },
+            )
         if url == f"https://gmailmcp.example{PRM_PATH}":
-            return j(200, {"resource": RESOURCE, "authorization_servers": authorization_servers})
+            return j(
+                200,
+                {"resource": RESOURCE, "authorization_servers": authorization_servers},
+            )
         base = urlsplit(issuer).scheme + "://" + urlsplit(issuer).netloc
         if url.startswith(base) and path == ASM_PATH:
             return j(200, _asm_doc(issuer))
         if url == f"{base}/register":
-            return j(201, {"client_id": "dcr-1", "redirect_uris": ["http://127.0.0.1:1/cb"],
-                           "token_endpoint_auth_method": "none", "grant_types": ["authorization_code", "refresh_token"],
-                           "response_types": ["code"]})
+            return j(
+                201,
+                {
+                    "client_id": "dcr-1",
+                    "redirect_uris": ["http://127.0.0.1:1/cb"],
+                    "token_endpoint_auth_method": "none",
+                    "grant_types": ["authorization_code", "refresh_token"],
+                    "response_types": ["code"],
+                },
+            )
         if url == f"{base}/token":
-            return j(200, {"access_token": "AT-1", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "RT-1"})
+            return j(
+                200,
+                {
+                    "access_token": "AT-1",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "refresh_token": "RT-1",
+                },
+            )
         return j(404, {})
 
     return handler
 
 
-async def _run_browser_flow(tmp_path, monkeypatch, *, issuer, authorization_servers, scope=None):
+async def _run_browser_flow(
+    tmp_path, monkeypatch, *, issuer, authorization_servers, scope=None
+):
     from mcp.shared.auth import OAuthClientMetadata
     from pydantic import AnyUrl
 
@@ -80,14 +116,25 @@ async def _run_browser_flow(tmp_path, monkeypatch, *, issuer, authorization_serv
     async def callback():
         return _authorization_code_result("code-1", seen["state"])
 
-    metadata = OAuthClientMetadata(redirect_uris=[AnyUrl("http://127.0.0.1:1/cb")], client_name="Clawksis")
+    metadata = OAuthClientMetadata(
+        redirect_uris=[AnyUrl("http://127.0.0.1:1/cb")], client_name="Clawksis"
+    )
     if scope is not None:
         metadata.scope = scope
     provider = _CLAWK_PROVIDER_CLS(
-        server_name="srv", server_url=RESOURCE, storage=ClawksisTokenStorage("srv"), client_metadata=metadata,
-        redirect_handler=redirect, callback_handler=callback)
-    async with httpx.AsyncClient(auth=provider, transport=httpx.MockTransport(_standin(
-            httpx, issuer=issuer, authorization_servers=authorization_servers))) as client:
+        server_name="srv",
+        server_url=RESOURCE,
+        storage=ClawksisTokenStorage("srv"),
+        client_metadata=metadata,
+        redirect_handler=redirect,
+        callback_handler=callback,
+    )
+    async with httpx.AsyncClient(
+        auth=provider,
+        transport=httpx.MockTransport(
+            _standin(httpx, issuer=issuer, authorization_servers=authorization_servers)
+        ),
+    ) as client:
         response = await client.get(RESOURCE)
     seen["provider"] = provider
     return response, seen
@@ -96,7 +143,12 @@ async def _run_browser_flow(tmp_path, monkeypatch, *, issuer, authorization_serv
 @pytest.mark.asyncio
 async def test_google_authorization_url_asks_for_offline_access(tmp_path, monkeypatch):
     response, seen = await _run_browser_flow(
-        tmp_path, monkeypatch, issuer=GOOGLE, authorization_servers=[GOOGLE], scope="email offline_access")
+        tmp_path,
+        monkeypatch,
+        issuer=GOOGLE,
+        authorization_servers=[GOOGLE],
+        scope="email offline_access",
+    )
 
     assert response.status_code == 200
     pairs = parse_qsl(urlsplit(seen["authorize_url"]).query)
@@ -113,15 +165,31 @@ async def test_google_authorization_url_asks_for_offline_access(tmp_path, monkey
     # Control: any other issuer keeps the SDK-built parameters untouched, and only the Google
     # authorization server itself (not a path or suffix lookalike) gets the parameters.
     response, seen = await _run_browser_flow(
-        tmp_path / "other", monkeypatch, issuer=OTHER_AS, authorization_servers=[OTHER_AS])
+        tmp_path / "other",
+        monkeypatch,
+        issuer=OTHER_AS,
+        authorization_servers=[OTHER_AS],
+    )
     assert response.status_code == 200
-    assert not any(key in ("access_type", "prompt") for key, _ in parse_qsl(urlsplit(seen["authorize_url"]).query))
+    assert not any(
+        key in ("access_type", "prompt")
+        for key, _ in parse_qsl(urlsplit(seen["authorize_url"]).query)
+    )
     from tools.mcp_oauth_provider import google_offline_access_params
 
     def ctx(issuer):
-        return SimpleNamespace(oauth_metadata=SimpleNamespace(issuer=issuer) if issuer is not None else None)
+        return SimpleNamespace(
+            oauth_metadata=SimpleNamespace(issuer=issuer)
+            if issuer is not None
+            else None
+        )
 
-    for lookalike in (None, OTHER_AS, "https://evil.example/accounts.google.com", "https://accounts.google.com.evil.example"):
+    for lookalike in (
+        None,
+        OTHER_AS,
+        "https://evil.example/accounts.google.com",
+        "https://accounts.google.com.evil.example",
+    ):
         assert google_offline_access_params(ctx(lookalike)) == {}, lookalike
     assert google_offline_access_params(ctx(GOOGLE)) == {"access_type": "offline"}
 
@@ -142,16 +210,29 @@ async def test_device_flow_normalizes_issuer_and_asks_google_for_offline_access(
     # Issuer check: the advertised host-only server arrives as ``str(AnyHttpUrl)`` with a trailing
     # "/"; both slash forms match Google's slash-less document issuer, a different issuer still fails.
     for document_issuer, advertised, accepted in (
-            (GOOGLE, f"{GOOGLE}/", True), (f"{GOOGLE}/", f"{GOOGLE}/", True), ("https://evil.example", f"{GOOGLE}/", False)):
+        (GOOGLE, f"{GOOGLE}/", True),
+        (f"{GOOGLE}/", f"{GOOGLE}/", True),
+        ("https://evil.example", f"{GOOGLE}/", False),
+    ):
+
         def handler(request, document_issuer=document_issuer):
-            doc = _asm_doc(document_issuer, device_authorization_endpoint=f"{GOOGLE}/device/code",
-                           grant_types_supported=["authorization_code", "refresh_token",
-                                                  "urn:ietf:params:oauth:grant-type:device_code"])
+            doc = _asm_doc(
+                document_issuer,
+                device_authorization_endpoint=f"{GOOGLE}/device/code",
+                grant_types_supported=[
+                    "authorization_code",
+                    "refresh_token",
+                    "urn:ietf:params:oauth:grant-type:device_code",
+                ],
+            )
             return httpx.Response(200, json=doc, request=request)
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             if accepted:
-                assert isinstance(await _device_metadata(client, RESOURCE, advertised), DeviceOAuthMetadata)
+                assert isinstance(
+                    await _device_metadata(client, RESOURCE, advertised),
+                    DeviceOAuthMetadata,
+                )
             else:
                 with pytest.raises(OAuthFlowError):
                     await _device_metadata(client, RESOURCE, advertised)
@@ -163,21 +244,51 @@ async def test_device_flow_normalizes_issuer_and_asks_google_for_offline_access(
         def device_handler(request, issuer=issuer):
             if urlsplit(str(request.url)).path == "/device/code":
                 body = request.content.decode() if request.content else ""
-                seen["device_form"] = dict(pair.split("=", 1) for pair in body.split("&")) if body else {}
-                return httpx.Response(200, json={
-                    "device_code": "DC-1", "user_code": "UC-1", "verification_uri": f"{issuer}/activate",
-                    "interval": 0.05, "expires_in": 60}, request=request)
-            return httpx.Response(200, json={"access_token": "AT-1", "token_type": "Bearer",
-                                             "expires_in": 3600}, request=request)
+                seen["device_form"] = (
+                    dict(pair.split("=", 1) for pair in body.split("&")) if body else {}
+                )
+                return httpx.Response(
+                    200,
+                    json={
+                        "device_code": "DC-1",
+                        "user_code": "UC-1",
+                        "verification_uri": f"{issuer}/activate",
+                        "interval": 0.05,
+                        "expires_in": 60,
+                    },
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "AT-1",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+                request=request,
+            )
 
         provider = _CLAWK_PROVIDER_CLS(
-            server_name="srv", server_url=RESOURCE, storage=ClawksisTokenStorage("srv"),
-            client_metadata=OAuthClientMetadata(redirect_uris=[AnyUrl("http://127.0.0.1:1/cb")], client_name="Clawksis"))
+            server_name="srv",
+            server_url=RESOURCE,
+            storage=ClawksisTokenStorage("srv"),
+            client_metadata=OAuthClientMetadata(
+                redirect_uris=[AnyUrl("http://127.0.0.1:1/cb")], client_name="Clawksis"
+            ),
+        )
         provider.context.oauth_metadata = DeviceOAuthMetadata.model_validate(
-            _asm_doc(issuer, device_authorization_endpoint=f"{issuer}/device/code"))
+            _asm_doc(issuer, device_authorization_endpoint=f"{issuer}/device/code")
+        )
         provider.context.client_info = OAuthClientInformationFull.model_validate(
-            {"client_id": "cid-1", "redirect_uris": ["http://127.0.0.1:1/cb"], "token_endpoint_auth_method": "none"})
-        async with httpx.AsyncClient(transport=httpx.MockTransport(device_handler)) as client:
+            {
+                "client_id": "cid-1",
+                "redirect_uris": ["http://127.0.0.1:1/cb"],
+                "token_endpoint_auth_method": "none",
+            }
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(device_handler)
+        ) as client:
             tokens = await _authorize(client, provider, {"timeout": 30})
         capsys.readouterr()
         assert tokens.access_token == "AT-1"

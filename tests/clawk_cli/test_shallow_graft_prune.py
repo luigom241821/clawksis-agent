@@ -20,7 +20,10 @@ from clawk_cli.gitlock import prune_stale_shallow_grafts
 
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", *args], cwd=str(repo), capture_output=True, text=True,
+        ["git", *args],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
         check=False,
     )
     assert result.returncode == 0, result.stderr
@@ -164,7 +167,10 @@ def test_prune_expires_fetch_reflogs_that_pin_dropped_grafts(tmp_path):
     head_sha = _git(clone, "rev-parse", "HEAD")
     tip_sha = _git(clone, "rev-parse", "origin/main")
     middle_sha = (set(_shallow_lines(clone)) - {head_sha, tip_sha}).pop()
-    assert middle_sha in _git(clone, "reflog", "show", "--format=%H", "origin/main").split()
+    assert (
+        middle_sha
+        in _git(clone, "reflog", "show", "--format=%H", "origin/main").split()
+    )
 
     removed = prune_stale_shallow_grafts(clone)
 
@@ -172,7 +178,10 @@ def test_prune_expires_fetch_reflogs_that_pin_dropped_grafts(tmp_path):
     assert set(_shallow_lines(clone)) == {head_sha, tip_sha}
     # The fetch reflog no longer pins the dropped graft, while HEAD's own
     # reflog survives untouched and every walk the fail-safe runs stays healthy.
-    assert middle_sha not in _git(clone, "reflog", "show", "--format=%H", "origin/main").split()
+    assert (
+        middle_sha
+        not in _git(clone, "reflog", "show", "--format=%H", "origin/main").split()
+    )
     assert _git(clone, "reflog", "show", "--format=%H", "HEAD").split()
     assert _git(clone, "rev-list", "--count", "HEAD") == "1"
     assert _git(clone, "rev-list", "--count", "origin/main") == "1"
@@ -185,7 +194,9 @@ def test_prune_still_rolls_back_when_user_reflogs_pin_the_graft(tmp_path):
     head_sha = _git(clone, "rev-parse", "HEAD")
     tip_sha = _git(clone, "rev-parse", "origin/main")
     middle_sha = (set(_shallow_lines(clone)) - {head_sha, tip_sha}).pop()
-    _git(clone, "checkout", "-q", middle_sha)  # a user checkout records it in HEAD's reflog
+    _git(
+        clone, "checkout", "-q", middle_sha
+    )  # a user checkout records it in HEAD's reflog
     _git(clone, "checkout", "-q", "main")
     head_reflog = _git(clone, "reflog", "show", "--format=%H", "HEAD").split()
     assert middle_sha in head_reflog

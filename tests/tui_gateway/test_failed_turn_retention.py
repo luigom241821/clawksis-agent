@@ -83,11 +83,15 @@ def turn_env(monkeypatch, tmp_path):
     """Neutralize the turn pipeline's environment-heavy side paths."""
     monkeypatch.setattr(server.threading, "Thread", _InlineThread)
     monkeypatch.setattr(server, "_wire_callbacks", lambda sid: None)
-    monkeypatch.setattr(server, "_sync_agent_model_with_config", lambda sid, session: None)
+    monkeypatch.setattr(
+        server, "_sync_agent_model_with_config", lambda sid, session: None
+    )
     monkeypatch.setattr(server, "_session_cwd", lambda session: str(tmp_path))
     monkeypatch.setattr(server, "_register_session_cwd", lambda session: None)
     monkeypatch.setattr(server, "_tts_stream_begin", lambda: None)
-    monkeypatch.setattr(server, "_sync_session_key_after_compress", lambda *a, **k: None)
+    monkeypatch.setattr(
+        server, "_sync_session_key_after_compress", lambda *a, **k: None
+    )
     monkeypatch.setattr(server, "_get_usage", lambda agent: {})
 
 
@@ -252,7 +256,9 @@ def test_completed_turn_still_clears_inflight(emits, turn_env):
 
 
 @pytest.mark.parametrize("streamed_prefix", [None, "", "Earlier commentary. "])
-def test_returned_partial_error_keeps_final_response_text(emits, turn_env, monkeypatch, streamed_prefix):
+def test_returned_partial_error_keeps_final_response_text(
+    emits, turn_env, monkeypatch, streamed_prefix
+):
     """A partial answer survives both the terminal frame and a reconnect that missed it."""
     text = "Hello! How can I help?"
     error = "Response remained truncated after 4 continuation attempts"
@@ -292,14 +298,28 @@ def test_returned_partial_error_keeps_final_response_text(emits, turn_env, monke
     assert resumed["inflight"]["streaming"] is False
 
 
-@pytest.mark.parametrize("result, status", [
-    ({"final_response": "answer", "error": "failure", "failed": True}, "error"),
-    ({"final_response": "", "error": "failure", "partial": True}, "error"),
-    ({"final_response": "  ", "error": "failure", "partial": True}, "error"),
-    ({"final_response": " failure \n", "error": "failure", "partial": True}, "error"),
-    ({"final_response": "answer", "partial": True}, "complete"),
-    ({"final_response": "answer", "error": "failure", "partial": True, "interrupted": True}, "interrupted"),
-])
+@pytest.mark.parametrize(
+    "result, status",
+    [
+        ({"final_response": "answer", "error": "failure", "failed": True}, "error"),
+        ({"final_response": "", "error": "failure", "partial": True}, "error"),
+        ({"final_response": "  ", "error": "failure", "partial": True}, "error"),
+        (
+            {"final_response": " failure \n", "error": "failure", "partial": True},
+            "error",
+        ),
+        ({"final_response": "answer", "partial": True}, "complete"),
+        (
+            {
+                "final_response": "answer",
+                "error": "failure",
+                "partial": True,
+                "interrupted": True,
+            },
+            "interrupted",
+        ),
+    ],
+)
 def test_only_partial_answers_on_failed_turns_set_flag(emits, turn_env, result, status):
     agent = types.SimpleNamespace(
         session_id="session-key",

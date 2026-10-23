@@ -16,7 +16,9 @@ from agent.context_compressor import ContextCompressor, SUMMARY_PREFIX
 def _compressor(**overrides):
     kwargs = dict(model="test/model", quiet_mode=True, tail_mode="legacy")
     kwargs.update(overrides)
-    with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+    with patch(
+        "agent.context_compressor.get_model_context_length", return_value=100000
+    ):
         return ContextCompressor(**kwargs)
 
 
@@ -29,10 +31,14 @@ def _turns():
 
 def test_empty_content_uses_reasoning_content():
     response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(
-            content="",
-            reasoning_content="kept reasoning summary",
-        ))]
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    reasoning_content="kept reasoning summary",
+                )
+            )
+        ]
     )
     with patch("agent.context_compressor.call_llm", return_value=response):
         out = _compressor()._generate_summary(_turns())
@@ -60,10 +66,14 @@ def test_whitespace_content_falls_back_for_dict_and_object():
 def test_oversized_reasoning_fallback_is_truncated():
     reasoning = "t" * 20_000
     response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(
-            content="",
-            reasoning_content=reasoning,
-        ))]
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    reasoning_content=reasoning,
+                )
+            )
+        ]
     )
     with patch("agent.context_compressor.call_llm", return_value=response):
         out = _compressor()._generate_summary(_turns())

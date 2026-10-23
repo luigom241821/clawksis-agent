@@ -22,8 +22,14 @@ from agent.process_bootstrap import build_keepalive_http_client
 @pytest.fixture
 def no_proxy_env(monkeypatch):
     for name in (
-        "HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
-        "https_proxy", "http_proxy", "all_proxy", "NO_PROXY", "no_proxy",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
     ):
         monkeypatch.delenv(name, raising=False)
     process_bootstrap.close_shared_transports()
@@ -102,7 +108,9 @@ def test_pool_survives_client_close(no_proxy_env, local_server):
     before = len(pool.connections)
     assert before >= 1
     a.close()
-    assert len(pool.connections) == before, "client close must not drain the shared pool"
+    assert len(pool.connections) == before, (
+        "client close must not drain the shared pool"
+    )
 
 
 def test_different_verify_or_proxy_get_different_transports(no_proxy_env, monkeypatch):
@@ -120,7 +128,8 @@ def test_different_verify_or_proxy_get_different_transports(no_proxy_env, monkey
     # Codex cloud gets the happy-eyeballs backend, so it can't share a pool.
     assert _inner(codex) is not _inner(default)
     assert isinstance(
-        _inner(codex)._pool._network_backend, process_bootstrap._HappyEyeballsSyncBackend
+        _inner(codex)._pool._network_backend,
+        process_bootstrap._HappyEyeballsSyncBackend,
     )
     for c in (default, insecure, with_ctx, with_ctx2, codex):
         c.close()
@@ -134,9 +143,9 @@ def test_different_verify_or_proxy_get_different_transports(no_proxy_env, monkey
     proxied.close()
 
 
-
-
-def test_force_close_only_touches_owning_clients_inflight_sockets(no_proxy_env, local_server):
+def test_force_close_only_touches_owning_clients_inflight_sockets(
+    no_proxy_env, local_server
+):
     """A stranger-thread abort on client A must not shut down client B's
     idle/in-flight connections that live on the same shared pool."""
     a = build_keepalive_http_client(local_server)

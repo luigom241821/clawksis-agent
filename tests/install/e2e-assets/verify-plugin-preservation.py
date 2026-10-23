@@ -106,8 +106,10 @@ def _fingerprint_tree(root: str, budget: list[int]) -> dict:
     target of a plugin-runtime symlink: the sidecar witness is owned outside
     the home, so its content must be hashed here, not just listed)."""
     out: dict[str, dict] = {}
+
     def _on_walk_error(exc: OSError) -> None:
         raise ScanError(f"unreadable under {root}: {exc}") from exc
+
     for dirpath, dirnames, filenames in os.walk(root, onerror=_on_walk_error):
         dirnames.sort()
         for name in sorted(dirnames) + sorted(filenames):
@@ -122,8 +124,11 @@ def _fingerprint_tree(root: str, budget: list[int]) -> dict:
                 out[rel] = {"kind": "dir"}
             elif os.path.isfile(abs_path):
                 st = os.lstat(abs_path)
-                out[rel] = {"kind": "file", "size": st.st_size,
-                            "sha256": _sha256_file(abs_path)}
+                out[rel] = {
+                    "kind": "file",
+                    "size": st.st_size,
+                    "sha256": _sha256_file(abs_path),
+                }
             else:
                 out[rel] = {"kind": "other"}
     return out
@@ -155,22 +160,27 @@ def snapshot_home(home: str, profiles_dir: str | None = None) -> dict:
     roots = plugin_roots(home, profiles_dir)
     entries: dict[str, dict] = {}
     for root_label in roots:
-        root = os.path.join(home, root_label[len("<home>/"):].replace("/", os.sep))
+        root = os.path.join(home, root_label[len("<home>/") :].replace("/", os.sep))
         # The root itself is an entry: if it is a symlink its identity and
         # target are recorded; if a plain dir it anchors empty-dir coverage.
-        entries[root_label[len("<home>/"):]] = _entry_record(root)
+        entries[root_label[len("<home>/") :]] = _entry_record(root)
         if _is_link(root):
             continue  # walking through it would double-record its target
+
         def _on_walk_error(exc: OSError) -> None:
             raise ScanError(f"unreadable under {root}: {exc}") from exc
-        for dirpath, dirnames, filenames in os.walk(root, followlinks=False,
-                                                    onerror=_on_walk_error):
+
+        for dirpath, dirnames, filenames in os.walk(
+            root, followlinks=False, onerror=_on_walk_error
+        ):
             dirnames.sort()
             for name in sorted(dirnames) + sorted(filenames):
                 abs_path = os.path.join(dirpath, name)
                 rel = os.path.relpath(abs_path, home).replace(os.sep, "/")
                 entries[rel] = _entry_record(abs_path)
-            dirnames[:] = [name for name in dirnames if not _is_link(os.path.join(dirpath, name))]
+            dirnames[:] = [
+                name for name in dirnames if not _is_link(os.path.join(dirpath, name))
+            ]
     return {
         "schema": SCHEMA_VERSION,
         "home": home,
@@ -217,14 +227,23 @@ def seed_fixtures(home: Path, external: Path) -> None:
     for path in (wrapper, profile, external):
         path.mkdir(parents=True)
     (wrapper / "mnemosyne-wrapper.json").write_text(
-        '{"wrapper":true,"marker":"mnemosyne-wrapper","owner":"e2e-preservation"}\n', encoding="utf-8")
-    (wrapper / "plugin.py").write_text('# directory wrapper fixture: no dependencies\n', encoding="utf-8")
-    (profile / "marker.json").write_text('{"plugin":"second-plugin"}\n', encoding="utf-8")
+        '{"wrapper":true,"marker":"mnemosyne-wrapper","owner":"e2e-preservation"}\n',
+        encoding="utf-8",
+    )
+    (wrapper / "plugin.py").write_text(
+        "# directory wrapper fixture: no dependencies\n", encoding="utf-8"
+    )
+    (profile / "marker.json").write_text(
+        '{"plugin":"second-plugin"}\n', encoding="utf-8"
+    )
     (profile / "data.bin").write_bytes(b"profile-plugin-bytes\n")
-    (external / "sidecar-witness.txt").write_text("external-sidecar-witness-v1\n", encoding="utf-8")
+    (external / "sidecar-witness.txt").write_text(
+        "external-sidecar-witness-v1\n", encoding="utf-8"
+    )
     (external / "engine.bin").write_bytes(b"\x00\x01\x02external-engine\n")
     if os.name == "nt":
         import _winapi
+
         _winapi.CreateJunction(str(external.resolve()), str(wrapper / "runtime"))
     else:
         (wrapper / "runtime").symlink_to(external.resolve(), target_is_directory=True)
@@ -234,15 +253,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="mode", required=True)
 
-    p_seed = sub.add_parser("seed", help="create fresh controlled fixtures in a disposable home")
+    p_seed = sub.add_parser(
+        "seed", help="create fresh controlled fixtures in a disposable home"
+    )
     p_seed.add_argument("--home", required=True)
     p_seed.add_argument("--external", required=True)
 
     p_snap = sub.add_parser("snapshot", help="record plugin-tree state to JSON")
     p_snap.add_argument("--home", required=True)
     p_snap.add_argument("--out", required=True)
-    p_snap.add_argument("--profiles-dir",
-                        help="override the profiles root (default <home>/profiles)")
+    p_snap.add_argument(
+        "--profiles-dir", help="override the profiles root (default <home>/profiles)"
+    )
 
     p_ver = sub.add_parser("verify", help="compare current state to a snapshot")
     p_ver.add_argument("--home", required=True)

@@ -46,17 +46,29 @@ class _HappyEyeballsSyncBackend:
     def _default_backend(self):
         if self._fallback is None:
             from httpcore import SyncBackend
+
             self._fallback = SyncBackend()
         return self._fallback
 
-    def connect_tcp(self, host: str, port: int, timeout: Optional[float] = None, local_address: Optional[str] = None,
-                    socket_options=None):
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: Optional[float] = None,
+        local_address: Optional[str] = None,
+        socket_options=None,
+    ):
         from httpcore import ConnectError, ConnectTimeout
         from httpcore._backends.sync import SyncStream
+
         source_address = None if local_address is None else (local_address, 0)
         try:
-            sock = _happy_eyeballs_create_connection((host, port), timeout, source_address=source_address,
-                                                     socket_options=socket_options or ())
+            sock = _happy_eyeballs_create_connection(
+                (host, port),
+                timeout,
+                source_address=source_address,
+                socket_options=socket_options or (),
+            )
         except TimeoutError as exc:
             raise ConnectTimeout(str(exc)) from exc
         except OSError as exc:
@@ -71,7 +83,10 @@ class _HappyEyeballsSyncBackend:
 
 
 def _uses_codex_cloud_transport(base_url: str) -> bool:
-    return base_url_hostname(base_url).lower() == "chatgpt.com" and "/backend-api/codex" in str(base_url).lower()
+    return (
+        base_url_hostname(base_url).lower() == "chatgpt.com"
+        and "/backend-api/codex" in str(base_url).lower()
+    )
 
 
 def _enable_happy_eyeballs(transport, skip_pool_types: tuple = ()) -> None:
@@ -82,7 +97,11 @@ def _enable_happy_eyeballs(transport, skip_pool_types: tuple = ()) -> None:
     serial backend. Pools of ``skip_pool_types`` (proxies) are left alone.
     """
     pool = getattr(transport, "_pool", None)
-    if pool is not None and hasattr(pool, "_network_backend") and not (skip_pool_types and isinstance(pool, skip_pool_types)):
+    if (
+        pool is not None
+        and hasattr(pool, "_network_backend")
+        and not (skip_pool_types and isinstance(pool, skip_pool_types))
+    ):
         pool._network_backend = _HappyEyeballsSyncBackend()
 
 
@@ -100,11 +119,21 @@ def enable_happy_eyeballs_on_client(client) -> None:
     """
     try:
         import httpcore
+
         proxy_pool_types = tuple(
-            t for t in (getattr(httpcore, "HTTPProxy", None), getattr(httpcore, "SOCKSProxy", None)) if t is not None)
+            t
+            for t in (
+                getattr(httpcore, "HTTPProxy", None),
+                getattr(httpcore, "SOCKSProxy", None),
+            )
+            if t is not None
+        )
     except Exception:
         return
-    for transport in (getattr(client, "_transport", None), *(getattr(client, "_mounts", None) or {}).values()):
+    for transport in (
+        getattr(client, "_transport", None),
+        *(getattr(client, "_mounts", None) or {}).values(),
+    ):
         _enable_happy_eyeballs(transport, proxy_pool_types)
 
 
@@ -216,7 +245,9 @@ def _shared_transport_cls():
 
         def handle_request(self, request: Any) -> Any:
             if self._closed:
-                raise RuntimeError("Cannot send a request, as the client has been closed.")
+                raise RuntimeError(
+                    "Cannot send a request, as the client has been closed."
+                )
             request.extensions[CLAWK_TRANSPORT_OWNER_EXT] = id(self)
             return self._inner.handle_request(request)
 
@@ -225,7 +256,9 @@ def _shared_transport_cls():
             # and the pool lives for the process (see ``close_shared_transports``).
             self._closed = True
 
-    _SharedTransportImpl.__name__ = _SharedTransportImpl.__qualname__ = "_SharedTransport"
+    _SharedTransportImpl.__name__ = _SharedTransportImpl.__qualname__ = (
+        "_SharedTransport"
+    )
     _SharedTransport = _SharedTransportImpl
     return _SharedTransport
 
@@ -240,7 +273,10 @@ def _shared_transport_key(base_url: str, verify: Any, proxy: Optional[str]) -> t
     elif isinstance(verify, str):
         verify_key = ("path", verify)
     else:
-        verify_key = ("id", id(verify))  # SSLContext / custom object: share by identity only
+        verify_key = (
+            "id",
+            id(verify),
+        )  # SSLContext / custom object: share by identity only
     return (verify_key, proxy, _uses_codex_cloud_transport(base_url))
 
 
@@ -267,7 +303,9 @@ def close_shared_transports() -> int:
     return len(transports)
 
 
-def build_keepalive_http_client(base_url: str = "", *, async_mode: bool = False, verify: Any = True) -> Optional[Any]:
+def build_keepalive_http_client(
+    base_url: str = "", *, async_mode: bool = False, verify: Any = True
+) -> Optional[Any]:
     """httpx client for OpenAI SDK calls with env-only proxy policy (None on failure).
 
     Explicit no-proxy mounts disable httpx's ``trust_env`` path so macOS system
@@ -287,14 +325,20 @@ def build_keepalive_http_client(base_url: str = "", *, async_mode: bool = False,
     """
     try:
         import httpx
+
         proxy = _get_proxy_for_base_url(base_url)
-        limits = httpx.Limits(max_keepalive_connections=20, max_connections=100, keepalive_expiry=20.0)
-        timeout = httpx.Timeout(connect=15.0, read=None, write=15.0, pool=10.0)  # read=None for SSE streaming
+        limits = httpx.Limits(
+            max_keepalive_connections=20, max_connections=100, keepalive_expiry=20.0
+        )
+        timeout = httpx.Timeout(
+            connect=15.0, read=None, write=15.0, pool=10.0
+        )  # read=None for SSE streaming
         transport_cls = httpx.AsyncHTTPTransport if async_mode else httpx.HTTPTransport
         client_cls = httpx.AsyncClient if async_mode else httpx.Client
         mounts = None
         # Official Codex backend only: zstd request bodies when the stdlib codec exists (None otherwise).
         from agent.codex_headers import codex_request_compression_hooks
+
         hooks = codex_request_compression_hooks(base_url, async_mode=async_mode)
         if hooks:
             client_cls = functools.partial(client_cls, event_hooks=hooks)
@@ -303,8 +347,14 @@ def build_keepalive_http_client(base_url: str = "", *, async_mode: bool = False,
             # One pool serves every agent in the process, so its ceiling must cover a whole
             # fan-out of concurrently streaming children. (Client-level ``limits`` never reach
             # mounted transports — they used to run on httpx defaults, keepalive_expiry=5s.)
-            direct_limits = limits if async_mode else httpx.Limits(
-                max_keepalive_connections=50, max_connections=1000, keepalive_expiry=20.0,
+            direct_limits = (
+                limits
+                if async_mode
+                else httpx.Limits(
+                    max_keepalive_connections=50,
+                    max_connections=1000,
+                    keepalive_expiry=20.0,
+                )
             )
 
             def _build_direct():
@@ -320,13 +370,26 @@ def build_keepalive_http_client(base_url: str = "", *, async_mode: bool = False,
                 key = _shared_transport_key(base_url, verify, proxy)
                 view_cls = _shared_transport_cls()
                 mounts = {
-                    f"{scheme}://": view_cls(_get_shared_transport((scheme, *key), _build_direct))
+                    f"{scheme}://": view_cls(
+                        _get_shared_transport((scheme, *key), _build_direct)
+                    )
                     for scheme in ("http", "https")
                 }
                 # Default transport = the https view; otherwise httpx builds a third, never-used
                 # direct transport (pool + SSL context) per client.
-                return client_cls(limits=limits, timeout=timeout, transport=mounts["https://"], mounts=mounts)
-        return client_cls(limits=limits, timeout=timeout, proxy=proxy, mounts=mounts or None, verify=verify)
+                return client_cls(
+                    limits=limits,
+                    timeout=timeout,
+                    transport=mounts["https://"],
+                    mounts=mounts,
+                )
+        return client_cls(
+            limits=limits,
+            timeout=timeout,
+            proxy=proxy,
+            mounts=mounts or None,
+            verify=verify,
+        )
     except Exception:
         return None
 
@@ -336,7 +399,9 @@ def _install_safe_stdio() -> None:
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
         # The routing proxy already absorbs these errors; wrapping it stacks a new proxy per build (#139687).
-        if stream is not None and not isinstance(stream, (_SafeWriter, _ThreadRoutingStream)):
+        if stream is not None and not isinstance(
+            stream, (_SafeWriter, _ThreadRoutingStream)
+        ):
             setattr(sys, stream_name, _SafeWriter(stream))
 
 

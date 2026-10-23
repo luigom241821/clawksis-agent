@@ -89,7 +89,9 @@ def test_resume_dispatches_and_clears(monkeypatch):
     assert len(calls) == 1
     assert calls[0][0] == "sid1"
     assert "haz X" in calls[0][1]  # original prompt in the resume note
-    assert calls[0][2] is True  # the dispatcher owns ``running`` (upstream turn contract)
+    assert (
+        calls[0][2] is True
+    )  # the dispatcher owns ``running`` (upstream turn contract)
 
 
 def test_resume_waits_for_failed_agent_build(monkeypatch):

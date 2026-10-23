@@ -70,8 +70,9 @@ def _ladder_applies(job: dict[str, Any]) -> bool:
     return is_recurring(job) and job.get("state") != "paused" and retry_enabled()
 
 
-def _ladder_instant(job: dict[str, Any], natural_next: Optional[datetime],
-                    now: datetime) -> Optional[datetime]:
+def _ladder_instant(
+    job: dict[str, Any], natural_next: Optional[datetime], now: datetime
+) -> Optional[datetime]:
     """The ladder instant ``plan_retry`` parks for this flagged failure, or None when it
     parks nothing: not recurring, paused, disabled, ladder exhausted, or the schedule's
     own *natural_next* fires at or before the rung. The single source of that decision
@@ -93,13 +94,21 @@ def will_retry(job: dict[str, Any]) -> bool:
     may hold the interim notice. Called before ``mark_job_run``."""
     repeat = job.get("repeat") or {}
     times = repeat.get("times")
-    counted = 0 if is_retry_run(job) else 1  # a ladder re-run does not count (``ladder_rung``)
-    if times is not None and times > 0 and int(repeat.get("completed") or 0) + counted >= times:
+    counted = (
+        0 if is_retry_run(job) else 1
+    )  # a ladder re-run does not count (``ladder_rung``)
+    if (
+        times is not None
+        and times > 0
+        and int(repeat.get("completed") or 0) + counted >= times
+    ):
         return False  # _advance_after_run completes the job; plan_retry never runs
     from cron.jobs import _parse_aware, compute_next_run
 
     now = _clawk_now()
-    natural_next = _parse_aware(compute_next_run(job.get("schedule") or {}, now.isoformat()))
+    natural_next = _parse_aware(
+        compute_next_run(job.get("schedule") or {}, now.isoformat())
+    )
     if natural_next is None:
         # The natural occurrence is uncomputable (e.g. croniter missing): _advance_after_run
         # leaves the record state=error — terminal — so plan_retry never runs either.
@@ -119,7 +128,9 @@ def is_retry_fire(job: dict[str, Any], next_run: str) -> bool:
     exception, as in ``cron.quota_hold.is_recovery_fire``.
     """
     state = job.get(STATE_KEY) or {}
-    return state.get("at") == next_run and state.get("expr") == (job.get("schedule") or {}).get("expr")
+    return state.get("at") == next_run and state.get("expr") == (
+        job.get("schedule") or {}
+    ).get("expr")
 
 
 def is_retry_run(job: dict[str, Any]) -> bool:
@@ -129,7 +140,10 @@ def is_retry_run(job: dict[str, Any]) -> bool:
     from cron.occurrences import scheduled_instant
 
     instant = job.get("_scheduled_instant")
-    return instant is not None and scheduled_instant((job.get(STATE_KEY) or {}).get("at")) == instant
+    return (
+        instant is not None
+        and scheduled_instant((job.get(STATE_KEY) or {}).get("at")) == instant
+    )
 
 
 def plan_retry(job: dict[str, Any]) -> bool:
@@ -149,18 +163,29 @@ def plan_retry(job: dict[str, Any]) -> bool:
             logger.warning(
                 "Job '%s': model unreachable after %d automatic re-runs — waiting for the "
                 "scheduled occurrence at %s",
-                job.get("name", job.get("id", "?")), attempt, job.get("next_run_at"))
+                job.get("name", job.get("id", "?")),
+                attempt,
+                job.get("next_run_at"),
+            )
         clear_state(job)
         return False
     delay = RETRY_DELAYS_SECONDS[attempt]
     retry_at = retry_dt.isoformat()
-    job[STATE_KEY] = {"attempt": attempt + 1, "at": retry_at, "expr": job["schedule"].get("expr")}
+    job[STATE_KEY] = {
+        "attempt": attempt + 1,
+        "at": retry_at,
+        "expr": job["schedule"].get("expr"),
+    }
     job["next_run_at"] = retry_at
     if job.get("state") != "paused":
         job["state"] = "scheduled"
     logger.info(
         "Job '%s': model unreachable with zero API calls — automatic re-run %d/%d in %ds "
         "(at %s)",
-        job.get("name", job.get("id", "?")), attempt + 1, len(RETRY_DELAYS_SECONDS),
-        delay, retry_at)
+        job.get("name", job.get("id", "?")),
+        attempt + 1,
+        len(RETRY_DELAYS_SECONDS),
+        delay,
+        retry_at,
+    )
     return True

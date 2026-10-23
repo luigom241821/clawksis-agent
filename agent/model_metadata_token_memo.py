@@ -19,7 +19,9 @@ def _long_string_ids(messages: Any) -> set[int]:
             stack.extend(value.values())
         elif type(value) is list or type(value) is tuple:
             stack.extend(value)
-        elif type(value) is str and len(value) > 64:  # short values ("assistant", tool names) are shared
+        elif (
+            type(value) is str and len(value) > 64
+        ):  # short values ("assistant", tool names) are shared
             ids.add(id(value))
     return ids
 
@@ -37,8 +39,11 @@ def forget_message_token_memo(messages: Any, *, keep: Any = None) -> int:
         owned -= _long_string_ids(keep)
     if not owned:
         return 0
-    stale = [key for key, (pins, _text, _images) in list(_MSG_TOKENS_CACHE.items())
-             if any(id(pin) in owned for pin in pins)]
+    stale = [
+        key
+        for key, (pins, _text, _images) in list(_MSG_TOKENS_CACHE.items())
+        if any(id(pin) in owned for pin in pins)
+    ]
     for key in stale:
         _MSG_TOKENS_CACHE.pop(key, None)
     return len(stale)

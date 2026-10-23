@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 from cli import ClawksisCLI
 
+
 def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514"):
     cli_obj = ClawksisCLI.__new__(ClawksisCLI)
     cli_obj.model = model
@@ -18,6 +19,7 @@ def _make_cli(model: str = "anthropic/claude-sonnet-4-20250514"):
     cli_obj.conversation_history = [{"role": "user", "content": "hi"}]
     cli_obj.agent = None
     return cli_obj
+
 
 def _attach_goal(cli_obj, *, active: bool, turns_used: int = 3, max_turns: int = 20):
     """Bind a fake GoalManager the way _get_goal_manager caches one."""
@@ -28,6 +30,7 @@ def _attach_goal(cli_obj, *, active: bool, turns_used: int = 3, max_turns: int =
         state=SimpleNamespace(turns_used=turns_used, max_turns=max_turns),
     )
     return cli_obj
+
 
 class TestStatusBarGoalSegment:
     def test_goal_segment_composition(self):

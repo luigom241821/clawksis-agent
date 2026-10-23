@@ -32,8 +32,6 @@ def _reset_registry():
 
 
 class TestRegisterProvider:
-
-
     def test_rejects_empty_name(self):
         class Empty(ImageGenProvider):
             @property
@@ -46,7 +44,6 @@ class TestRegisterProvider:
         with pytest.raises(ValueError):
             image_gen_registry.register_provider(Empty())
 
-
     def test_list_is_sorted(self):
         image_gen_registry.register_provider(_FakeProvider("zeta"))
         image_gen_registry.register_provider(_FakeProvider("alpha"))
@@ -55,8 +52,6 @@ class TestRegisterProvider:
 
 
 class TestGetActiveProvider:
-
-
     def test_explicit_config_wins(self, tmp_path, monkeypatch):
         import clawk_yaml as yaml
 
@@ -68,7 +63,6 @@ class TestGetActiveProvider:
         image_gen_registry.register_provider(_FakeProvider("openai"))
         active = image_gen_registry.get_active_provider()
         assert active is not None and active.name == "openai"
-
 
     def test_none_when_empty(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))

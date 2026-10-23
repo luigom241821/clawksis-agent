@@ -13,15 +13,24 @@ from pathlib import Path
 from typing import Any
 
 
-def _git(git_cmd: list[str], root: Path, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+def _git(
+    git_cmd: list[str], root: Path, args: list[str], **kwargs: Any
+) -> subprocess.CompletedProcess[str]:
     from clawk_cli._subprocess_compat import windows_hide_flags
+
     # Callers pass **_no_prompt_git_kwargs() which already carries creationflags;
     # OR the hide flag into the shared kwargs instead of passing the keyword twice.
     kwargs["creationflags"] = kwargs.get("creationflags", 0) | windows_hide_flags()
     from clawk_cli.update_custody import run_git
 
     return run_git(
-        git_cmd, args, cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace",
+        git_cmd,
+        args,
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         **kwargs,
     )
 
@@ -40,7 +49,11 @@ def clear_git_debris(root: Path) -> None:
     ``tmp_pack_*`` debris: unchecked it reached 6 GB and corrupted the pack dir (#93732).
     A partial clone also gets its commit-graph-off keys re-applied (#127711).
     """
-    from clawk_cli.gitlock import clear_stale_git_locks, clear_stale_tmp_packs, settle_partial_clone_maintenance
+    from clawk_cli.gitlock import (
+        clear_stale_git_locks,
+        clear_stale_tmp_packs,
+        settle_partial_clone_maintenance,
+    )
 
     for lock_path in clear_stale_git_locks(root):
         print(f"  (removed stale git lock: {lock_path})")
@@ -56,10 +69,14 @@ def report_pack_tidy(root: Path) -> None:
 
     tidy = tidy_partial_clone_packs(root)
     if tidy.erased or tidy.merged:
-        print(f"  (git cleanup: erased {tidy.erased} duplicate pack(s), {tidy.freed_bytes / 1e6:.0f} MB freed;"
-              f" merged {tidy.merged}; {tidy.packs_left} left)")
+        print(
+            f"  (git cleanup: erased {tidy.erased} duplicate pack(s), {tidy.freed_bytes / 1e6:.0f} MB freed;"
+            f" merged {tidy.merged}; {tidy.packs_left} left)"
+        )
     if tidy.out_of_time:
-        print(f"  (git cleanup stopped at its {TIDY_BUDGET_SECONDS}s limit; the next update continues it)")
+        print(
+            f"  (git cleanup stopped at its {TIDY_BUDGET_SECONDS}s limit; the next update continues it)"
+        )
 
 
 def _refuses(git_cmd: list[str], root: Path, target: str, repository: str) -> bool:
@@ -71,17 +88,27 @@ def _refuses(git_cmd: list[str], root: Path, target: str, repository: str) -> bo
 
     def git(*args: str) -> int:
         try:
-            return _git(git_cmd, root, list(args), env={**noninteractive_git_env(), **NO_LAZY_FETCH_ENV},
-                        timeout=20).returncode
+            return _git(
+                git_cmd,
+                root,
+                list(args),
+                env={**noninteractive_git_env(), **NO_LAZY_FETCH_ENV},
+                timeout=20,
+            ).returncode
         except (OSError, subprocess.SubprocessError):
             return -1
 
     def remote(sha: str):
-        return _github_predates_runtime(repository, sha, get_clawk_home() / "source-checks" / "release-runtime.json")
+        return _github_predates_runtime(
+            repository, sha, get_clawk_home() / "source-checks" / "release-runtime.json"
+        )
+
     return would_refuse(root, target, git=git, remote=remote)
 
 
-def channel_compare_branch(selected_channel: str, git_cmd: list[str], root: Path) -> str | None:
+def channel_compare_branch(
+    selected_channel: str, git_cmd: list[str], root: Path
+) -> str | None:
     """Report a release-pinned channel's verdict, or return the branch to compare against.
 
     ``None`` means the verdict is printed (the channel pins a commit); exits 1 when the channel
@@ -92,10 +119,14 @@ def channel_compare_branch(selected_channel: str, git_cmd: list[str], root: Path
     from clawk_cli.update_channel import channel_record, rides_default_channel
 
     print(f"→ Update channel: {selected_channel}")
-    record = channel_record(require_readable_config_before_write(get_config_path()), root)
+    record = channel_record(
+        require_readable_config_before_write(get_config_path()), root
+    )
     forward_only = rides_default_channel(record, selected_channel, root)
     try:
-        target = resolve_source_target(selected_channel, git_cmd, root, forward_only=forward_only)
+        target = resolve_source_target(
+            selected_channel, git_cmd, root, forward_only=forward_only
+        )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"✗ Could not resolve the {selected_channel} source channel: {exc}")
         sys.exit(1)
@@ -109,13 +140,24 @@ def channel_compare_branch(selected_channel: str, git_cmd: list[str], root: Path
         print(f"✓ Up to date with the latest release ({target.label}).")
     elif _refuses(git_cmd, root, target.commit, target.repository):
         # Before the rollback branch: a release this checkout contains is held too, not moved back to.
-        print(f"→ Holding at this build: {target.label} predates the gateway runtime your sessions use.")
-        print("  `clawk update` stays on this build; the next release that includes the runtime"
-              " installs normally (`clawk update --set-channel main` follows every commit).")
-    elif _git(git_cmd, root, ["merge-base", "--is-ancestor", target.commit, "HEAD"]).returncode == 0:
+        print(
+            f"→ Holding at this build: {target.label} predates the gateway runtime your sessions use."
+        )
+        print(
+            "  `clawk update` stays on this build; the next release that includes the runtime"
+            " installs normally (`clawk update --set-channel main` follows every commit)."
+        )
+    elif (
+        _git(
+            git_cmd, root, ["merge-base", "--is-ancestor", target.commit, "HEAD"]
+        ).returncode
+        == 0
+    ):
         print(f"→ This checkout is newer than the selected release: {target.label}.")
-        print("  `clawk update` moves it back to that release"
-              " (`clawk update --set-channel main` follows every commit).")
+        print(
+            "  `clawk update` moves it back to that release"
+            " (`clawk update --set-channel main` follows every commit)."
+        )
     else:
         print(f"→ Selected release available: {target.label}")
         print("  Run `clawk update` to install it.")
@@ -123,7 +165,10 @@ def channel_compare_branch(selected_channel: str, git_cmd: list[str], root: Path
 
 
 def is_shallow_repository(git_cmd: list[str], root: Path) -> bool:
-    return _git(git_cmd, root, ["rev-parse", "--is-shallow-repository"]).stdout.strip() == "true"
+    return (
+        _git(git_cmd, root, ["rev-parse", "--is-shallow-repository"]).stdout.strip()
+        == "true"
+    )
 
 
 def tracking_refspec(remote: str, branch: str) -> str:
@@ -136,14 +181,21 @@ def tracking_refspec(remote: str, branch: str) -> str:
     return f"+refs/heads/{branch}:refs/remotes/{remote}/{branch}"
 
 
-def _fetch(git_cmd: list[str], root: Path, depth_args: list[str], remote: str, branch: str):
+def _fetch(
+    git_cmd: list[str], root: Path, depth_args: list[str], remote: str, branch: str
+):
     print(f"→ Fetching from {remote}...")
     return _git(
-        git_cmd, root, ["fetch", *depth_args, remote, tracking_refspec(remote, branch)],
-        **_uc()._no_prompt_git_kwargs())
+        git_cmd,
+        root,
+        ["fetch", *depth_args, remote, tracking_refspec(remote, branch)],
+        **_uc()._no_prompt_git_kwargs(),
+    )
 
 
-def fetch_compare_branch(git_cmd: list[str], root: Path, branch: str, depth_args: list[str]):
+def fetch_compare_branch(
+    git_cmd: list[str], root: Path, branch: str, depth_args: list[str]
+):
     """Fetch only ``branch`` and return ``(fetch_result, compare_ref)``.
 
     A bare ``git fetch <remote>`` pulls every ref, and this repo has thousands of auto-generated
@@ -157,11 +209,15 @@ def fetch_compare_branch(git_cmd: list[str], root: Path, branch: str, depth_args
             if fetch_result.returncode == 0:
                 return fetch_result, f"upstream/{branch}"
     from clawk_cli.gitlock import fetch_with_partial_clone_recovery
+
     # Marking the unmarked packs clears the git 2.53+ partial-clone pack-objects crash (#124272).
     print("→ Fetching from origin...")
     return fetch_with_partial_clone_recovery(
         lambda gc, a: _git(gc, root, a, **_uc()._no_prompt_git_kwargs()),
-        git_cmd, ["fetch", *depth_args, "origin", tracking_refspec("origin", branch)], root), f"origin/{branch}"
+        git_cmd,
+        ["fetch", *depth_args, "origin", tracking_refspec("origin", branch)],
+        root,
+    ), f"origin/{branch}"
 
 
 def repair_shallow_grafts(root: Path) -> None:
@@ -170,7 +226,10 @@ def repair_shallow_grafts(root: Path) -> None:
     Git never removes old grafts; unpruned, the file keeps growing and merge-base / the
     orphan-divergence heuristic stop working (#105951).
     """
-    from clawk_cli.gitlock import prune_stale_shallow_grafts, repair_broken_shallow_boundaries
+    from clawk_cli.gitlock import (
+        prune_stale_shallow_grafts,
+        repair_broken_shallow_boundaries,
+    )
 
     repaired = repair_broken_shallow_boundaries(root)
     if repaired:
@@ -182,7 +241,12 @@ def repair_shallow_grafts(root: Path) -> None:
 
 def compare_ref_exists(git_cmd: list[str], root: Path, compare_branch: str) -> bool:
     # rev-list on a missing ref exits 128 and would surface a traceback; report it instead.
-    return _git(git_cmd, root, ["rev-parse", "--verify", "--quiet", compare_branch]).returncode == 0
+    return (
+        _git(
+            git_cmd, root, ["rev-parse", "--verify", "--quiet", compare_branch]
+        ).returncode
+        == 0
+    )
 
 
 def report_shallow_verdict(git_cmd: list[str], root: Path, compare_branch: str) -> None:
@@ -212,8 +276,12 @@ def report_shallow_verdict(git_cmd: list[str], root: Path, compare_branch: str) 
     print(f"  Run '{recommended_update_command()}' to install.")
 
 
-def report_rev_list_verdict(git_cmd: list[str], root: Path, compare_branch: str) -> None:
-    rev_result = _git(git_cmd, root, ["rev-list", f"HEAD..{compare_branch}", "--count"], check=True)
+def report_rev_list_verdict(
+    git_cmd: list[str], root: Path, compare_branch: str
+) -> None:
+    rev_result = _git(
+        git_cmd, root, ["rev-list", f"HEAD..{compare_branch}", "--count"], check=True
+    )
     behind = int(rev_result.stdout.strip())
     if behind == 0:
         print("✓ Already up to date.")
@@ -244,22 +312,38 @@ def select_apply_target(args, branch: str, request: dict, *, git_cmd, stop) -> t
         return f"origin/{branch}", None, False, None
     root = _uc()._m().PROJECT_ROOT
     selected = _uc()._update_run_channel(args)
-    original = deepcopy(channel_record(require_readable_config_before_write(
-        Path(request["home"]) / "config.yaml"), root))
+    original = deepcopy(
+        channel_record(
+            require_readable_config_before_write(Path(request["home"]) / "config.yaml"),
+            root,
+        )
+    )
     print(f"→ Update channel: {selected}")
     try:
         with retrying_reads():
-            target = resolve_source_target(selected, git_cmd, root,
-                                           forward_only=rides_default_channel(original, selected, root))
+            target = resolve_source_target(
+                selected,
+                git_cmd,
+                root,
+                forward_only=rides_default_channel(original, selected, root),
+            )
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        print(f"✗ Could not resolve the {selected} source channel: {exc}. No update was applied.")
+        print(
+            f"✗ Could not resolve the {selected} source channel: {exc}. No update was applied."
+        )
         stop()
         _record_stop("channel_unresolved")
         sys.exit(1)
     if target.retired:
         print(f"→ {selected} retired; source destination: {target.channel}")
-        if not getattr(args, "channel", None) and original.get("channel", "main") == selected:
-            request["channel_retirement"] = {"original": original, "destination": target.channel}
+        if (
+            not getattr(args, "channel", None)
+            and original.get("channel", "main") == selected
+        ):
+            request["channel_retirement"] = {
+                "original": original,
+                "destination": target.channel,
+            }
     if target.commit:
         print(f"→ {'Release' if target.ahead else 'Latest release'}: {target.label}")
         request["expected_sha"] = target.commit
@@ -269,7 +353,9 @@ def select_apply_target(args, branch: str, request: dict, *, git_cmd, stop) -> t
     return f"origin/{target.branch}", None, False, target.repository
 
 
-def hold_channel_release_behind_runtime(git_cmd, target_ref: str, channel: str) -> str | None:
+def hold_channel_release_behind_runtime(
+    git_cmd, target_ref: str, channel: str
+) -> str | None:
     """HEAD's sha when the channel's release predates the gateway runtime these stores use, else None.
 
     The channel picked the release, the user did not ask for that commit: moving there is the
@@ -277,14 +363,19 @@ def hold_channel_release_behind_runtime(git_cmd, target_ref: str, channel: str) 
     ``--branch`` never reaches here and keeps the refusal in ``update_cmd._refuse_before_commit_point``.
     """
     from clawk_cli.update_downgrade_guard import downgrade_refusal
+
     if downgrade_refusal(git_cmd, _uc()._m().PROJECT_ROOT, target_ref) is None:
         return None
     head = _uc()._capture_head_sha(git_cmd, _uc()._m().PROJECT_ROOT)
     if not head:
         return None  # HEAD unreadable: the caller's refusal still stops the move
     # "newer", not "ahead": the release may sit beside HEAD's line rather than behind it (#140729).
-    print(f"→ This build is newer than the {channel} release {target_ref[:12]}: that release predates the "
-          "gateway runtime your sessions use, so there is nothing to update to yet.")
-    print(f"  Clawksis stays on {head[:12]} until a newer {channel} release ships. "
-          "To follow every commit instead: `clawk update --set-channel main`.")
+    print(
+        f"→ This build is newer than the {channel} release {target_ref[:12]}: that release predates the "
+        "gateway runtime your sessions use, so there is nothing to update to yet."
+    )
+    print(
+        f"  Clawksis stays on {head[:12]} until a newer {channel} release ships. "
+        "To follow every commit instead: `clawk update --set-channel main`."
+    )
     return head

@@ -16,6 +16,7 @@ def _clear_caches():
     so that monkeypatched env vars / config take effect."""
     from tools.registry import invalidate_check_fn_cache
     from model_tools import _clear_tool_defs_cache
+
     invalidate_check_fn_cache()
     _clear_tool_defs_cache()
     yield
@@ -32,10 +33,15 @@ class TestTerminalRequirements:
         )
         assert terminal_tool_module.check_terminal_requirements() is True
 
-
-    def test_terminal_and_execute_code_tools_resolve_for_managed_modal(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
-        monkeypatch.setattr("tools.terminal_tool_backends.managed_nous_tools_enabled", lambda: True)
+    def test_terminal_and_execute_code_tools_resolve_for_managed_modal(
+        self, monkeypatch, tmp_path
+    ):
+        monkeypatch.setattr(
+            "tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True
+        )
+        monkeypatch.setattr(
+            "tools.terminal_tool_backends.managed_nous_tools_enabled", lambda: True
+        )
         monkeypatch.setenv("HOME", str(tmp_path))
         monkeypatch.setenv("USERPROFILE", str(tmp_path))
         monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
@@ -49,7 +55,9 @@ class TestTerminalRequirements:
             "tools.terminal_tool_backends.is_managed_tool_gateway_ready",
             lambda _vendor: True,
         )
-        tools = get_tool_definitions(enabled_toolsets=["terminal", "code_execution"], quiet_mode=True)
+        tools = get_tool_definitions(
+            enabled_toolsets=["terminal", "code_execution"], quiet_mode=True
+        )
         names = {tool["function"]["name"] for tool in tools}
 
         assert "terminal" in names
@@ -113,9 +121,9 @@ class TestCheckFnTransientFailureSuppression:
         # Different fn so last-good for `good` doesn't apply; bad has no success.
         assert reg._check_fn_cached(bad) is False
 
-
-
-    def test_core_tool_drop_after_success_warns_once_never_configured_stays_info(self, monkeypatch, caplog):
+    def test_core_tool_drop_after_success_warns_once_never_configured_stays_info(
+        self, monkeypatch, caplog
+    ):
         """A check_fn that drops a ``_CLAWK_CORE_TOOLS`` member it had previously admitted logs at
         WARNING naming the tool (#112649 atom 4): core tools are non-deferrable, so a dropped one
         leaves neither the schema nor the tool_search catalog and the model's "no such tool" is
@@ -138,18 +146,31 @@ class TestCheckFnTransientFailureSuppression:
 
         clock = {"now": 1000.0}
         monkeypatch.setattr(reg.time, "monotonic", lambda: clock["now"])
-        monkeypatch.setattr(toolsets, "_CLAWK_CORE_TOOLS",
-                            [*toolsets._CLAWK_CORE_TOOLS, "core_probe_tool", "never_probe_tool"])
-        for name, gate in (("core_probe_tool", core_gate), ("never_probe_tool", never_gate)):
-            reg.registry.register(name=name, toolset=name, schema={"name": name},
-                                  handler=lambda **kw: None, check_fn=gate)
+        monkeypatch.setattr(
+            toolsets,
+            "_CLAWK_CORE_TOOLS",
+            [*toolsets._CLAWK_CORE_TOOLS, "core_probe_tool", "never_probe_tool"],
+        )
+        for name, gate in (
+            ("core_probe_tool", core_gate),
+            ("never_probe_tool", never_gate),
+        ):
+            reg.registry.register(
+                name=name,
+                toolset=name,
+                schema={"name": name},
+                handler=lambda **kw: None,
+                check_fn=gate,
+            )
         reg.invalidate_check_fn_cache()
         try:
             with caplog.at_level(logging.INFO, logger="tools.registry"):
                 assert reg._check_fn_cached(core_gate) is True
                 assert reg._check_fn_cached(never_gate) is False
                 state["core"] = False
-                clock["now"] += reg._CHECK_FN_FAILURE_GRACE_SECONDS + reg._CHECK_FN_TTL_SECONDS + 1
+                clock["now"] += (
+                    reg._CHECK_FN_FAILURE_GRACE_SECONDS + reg._CHECK_FN_TTL_SECONDS + 1
+                )
                 assert reg._check_fn_cached(core_gate) is False
                 assert reg._check_fn_cached(never_gate) is False
                 clock["now"] += reg._CHECK_FN_TTL_SECONDS + 1
@@ -273,7 +294,9 @@ class TestCheckFnTransientFailureSuppression:
             return []
 
         set_multiplex_active(True)
-        monkeypatch.setattr(model_tools, "_compute_tool_definitions", compute_definitions)
+        monkeypatch.setattr(
+            model_tools, "_compute_tool_definitions", compute_definitions
+        )
         try:
             assert reg._check_fn_cached(probe) is True
             assert reg._check_fn_cached(probe) is False
@@ -323,9 +346,7 @@ class TestCheckFnTransientFailureSuppression:
         # file tools delegate to the same check via tools.check_file_requirements.
         import tools as tools_pkg
 
-        monkeypatch.setattr(
-            tools_pkg, "check_file_requirements", flaky_terminal_check
-        )
+        monkeypatch.setattr(tools_pkg, "check_file_requirements", flaky_terminal_check)
 
         t = {"now": 5000.0}
         monkeypatch.setattr(reg.time, "monotonic", lambda: t["now"])
@@ -335,19 +356,30 @@ class TestCheckFnTransientFailureSuppression:
         reg.invalidate_check_fn_cache()
         _clear_tool_defs_cache()
         # Parent build (probe ok) → records last-good.
-        parent = get_tool_definitions(enabled_toolsets=["terminal", "file"], quiet_mode=True)
+        parent = get_tool_definitions(
+            enabled_toolsets=["terminal", "file"], quiet_mode=True
+        )
         assert "read_file" in {x["function"]["name"] for x in parent}
 
         # Subagent build moments later: TTL expired, probe flakes False, but
         # within grace → file/terminal tools must still resolve.
         t["now"] += reg._CHECK_FN_TTL_SECONDS + 1
         _clear_tool_defs_cache()
-        child = get_tool_definitions(enabled_toolsets=["terminal", "file"], quiet_mode=True)
-        child_names = {x["function"]["name"] for x in child}
-        assert {"read_file", "write_file", "patch", "search_files", "terminal"}.issubset(
-            child_names
+        child = get_tool_definitions(
+            enabled_toolsets=["terminal", "file"], quiet_mode=True
         )
-    def test_terminal_and_execute_code_tools_resolve_for_vercel_sandbox(self, monkeypatch):
+        child_names = {x["function"]["name"] for x in child}
+        assert {
+            "read_file",
+            "write_file",
+            "patch",
+            "search_files",
+            "terminal",
+        }.issubset(child_names)
+
+    def test_terminal_and_execute_code_tools_resolve_for_vercel_sandbox(
+        self, monkeypatch
+    ):
         monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc-token")
         monkeypatch.setattr(
             terminal_tool_module,
@@ -359,13 +391,17 @@ class TestCheckFnTransientFailureSuppression:
             "find_spec",
             lambda _name: object(),
         )
-        tools = get_tool_definitions(enabled_toolsets=["terminal", "code_execution"], quiet_mode=True)
+        tools = get_tool_definitions(
+            enabled_toolsets=["terminal", "code_execution"], quiet_mode=True
+        )
         names = {tool["function"]["name"] for tool in tools}
 
         assert "terminal" in names
         assert "execute_code" in names
 
-    def test_terminal_and_execute_code_tools_hide_for_unsupported_vercel_runtime(self, monkeypatch):
+    def test_terminal_and_execute_code_tools_hide_for_unsupported_vercel_runtime(
+        self, monkeypatch
+    ):
         monkeypatch.setenv("VERCEL_OIDC_TOKEN", "oidc-token")
         monkeypatch.setattr(
             terminal_tool_module,
@@ -381,13 +417,17 @@ class TestCheckFnTransientFailureSuppression:
             "find_spec",
             lambda _name: object(),
         )
-        tools = get_tool_definitions(enabled_toolsets=["terminal", "code_execution"], quiet_mode=True)
+        tools = get_tool_definitions(
+            enabled_toolsets=["terminal", "code_execution"], quiet_mode=True
+        )
         names = {tool["function"]["name"] for tool in tools}
 
         assert "terminal" not in names
         assert "execute_code" not in names
 
-    def test_terminal_and_execute_code_tools_hide_for_vercel_without_auth(self, monkeypatch):
+    def test_terminal_and_execute_code_tools_hide_for_vercel_without_auth(
+        self, monkeypatch
+    ):
         monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
         monkeypatch.delenv("VERCEL_TOKEN", raising=False)
         monkeypatch.delenv("VERCEL_PROJECT_ID", raising=False)
@@ -406,7 +446,9 @@ class TestCheckFnTransientFailureSuppression:
             "find_spec",
             lambda _name: object(),
         )
-        tools = get_tool_definitions(enabled_toolsets=["terminal", "code_execution"], quiet_mode=True)
+        tools = get_tool_definitions(
+            enabled_toolsets=["terminal", "code_execution"], quiet_mode=True
+        )
         names = {tool["function"]["name"] for tool in tools}
 
         assert "terminal" not in names
@@ -420,8 +462,9 @@ class TestUnscopedSecretReadLogging:
     crashed check_fn (WARNING + traceback); an unscoped read reported while
     the scope was *resolved* is a genuinely lost scope and stays loud."""
 
-
-    def test_expected_fail_closed_probe_is_quiet_but_lost_scope_stays_loud(self, caplog):
+    def test_expected_fail_closed_probe_is_quiet_but_lost_scope_stays_loud(
+        self, caplog
+    ):
         """The verdict comes from the LIVE scope at the catch site (#110635): unscoped caller →
         expected boot-time miss (DEBUG, no traceback); scoped caller whose probe still hit the
         fail-closed path → a dropped scope inside the probe (WARNING + traceback)."""
@@ -430,7 +473,10 @@ class TestUnscopedSecretReadLogging:
 
         import tools.registry as reg
         from agent.secret_scope import (
-            get_secret, reset_secret_scope, set_multiplex_active, set_secret_scope,
+            get_secret,
+            reset_secret_scope,
+            set_multiplex_active,
+            set_secret_scope,
         )
 
         def probe():
@@ -460,7 +506,9 @@ class TestUnscopedSecretReadLogging:
         finally:
             set_multiplex_active(False)
 
-        assert boot and all(r.levelno == logging.DEBUG and r.exc_info is None for r in boot)
+        assert boot and all(
+            r.levelno == logging.DEBUG and r.exc_info is None for r in boot
+        )
         assert any(r.levelno >= logging.WARNING and r.exc_info for r in lost)
 
     def test_uncached_probe_at_boot_is_not_reported_as_a_lost_scope(self, caplog):
@@ -485,4 +533,6 @@ class TestUnscopedSecretReadLogging:
             set_multiplex_active(False)
             reg._NO_CACHE_CHECK_FNS.discard(probe)
         records = [r for r in caplog.records if r.name == "tools.registry"]
-        assert records and all(r.levelno == logging.DEBUG and r.exc_info is None for r in records)
+        assert records and all(
+            r.levelno == logging.DEBUG and r.exc_info is None for r in records
+        )

@@ -23,40 +23,61 @@ def test_exec_schtasks_decodes_ansi_output_under_utf8_mode(monkeypatch):
     reporter captured (GBK for 方舟)."""
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
     monkeypatch.setattr(gateway_windows.shutil, "which", lambda name: "schtasks.exe")
-    monkeypatch.setattr(gateway_windows.locale, "getpreferredencoding", lambda *a, **k: "utf-8")
-    monkeypatch.setattr(gateway_windows, "_windows_console_encodings", lambda: ["cp936"], raising=False)
+    monkeypatch.setattr(
+        gateway_windows.locale, "getpreferredencoding", lambda *a, **k: "utf-8"
+    )
+    monkeypatch.setattr(
+        gateway_windows, "_windows_console_encodings", lambda: ["cp936"], raising=False
+    )
     xml = r'<Arguments>//B //Nologo "C:\Users\方舟\AppData\Local\clawk\gateway-service\Clawksis_Gateway.vbs"</Arguments>'
 
     def fake_run(argv, **kwargs):
         # schtasks writes cp936 bytes; honour text/encoding like the real subprocess would.
         out, err = xml.encode("gbk"), "错误: 拒绝访问。".encode("gbk")
         if kwargs.get("text"):
-            enc, errors = kwargs.get("encoding") or "utf-8", kwargs.get("errors") or "strict"
+            enc, errors = (
+                kwargs.get("encoding") or "utf-8",
+                kwargs.get("errors") or "strict",
+            )
             out, err = out.decode(enc, errors), err.decode(enc, errors)
         return subprocess.CompletedProcess(argv, 0, stdout=out, stderr=err)
 
     monkeypatch.setattr(gateway_windows.subprocess, "run", fake_run)
 
-    code, out, err = gateway_windows._exec_schtasks(["/Query", "/TN", "Clawksis_Gateway", "/XML"])
+    code, out, err = gateway_windows._exec_schtasks(
+        ["/Query", "/TN", "Clawksis_Gateway", "/XML"]
+    )
 
     assert (code, out) == (0, xml)
-    assert gateway_windows._is_access_denied(err) and gateway_windows._should_fall_back(1, err)
+    assert gateway_windows._is_access_denied(err) and gateway_windows._should_fall_back(
+        1, err
+    )
 
 
 @pytest.mark.platforms("windows")
 def test_registered_task_launchers_reads_each_clawk_task_action(monkeypatch):
     """The install probe's view of the Scheduled Tasks: the launcher each ``Clawksis_Gateway*`` task
     starts, as the task XML this module writes names it, and a pre-``wscript`` task's ``.cmd``."""
-    launcher = r"C:\Users\Ann Lee\custom clawk\gateway-service\Clawksis_Gateway_work.vbs"
+    launcher = (
+        r"C:\Users\Ann Lee\custom clawk\gateway-service\Clawksis_Gateway_work.vbs"
+    )
     legacy = r"C:\Users\ann\h2\gateway-service\Clawksis_Gateway.cmd"
-    current = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway_work", Path(launcher), "PC\\ann")
-    older = current.replace("<Command>wscript.exe</Command>", f"<Command>{legacy}</Command>").replace(
-        f'//B //Nologo "{launcher}"', "")
-    listing = ('\r\n"\\Microsoft\\Windows\\Defrag\\ScheduledDefrag","N/A","Ready"\r\n'
-               '"\\Clawksis_Gateway_work","N/A","Ready"\r\n"\\Clawksis_Gateway","N/A","Running"\r\n')
+    current = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway_work", Path(launcher), "PC\\ann"
+    )
+    older = current.replace(
+        "<Command>wscript.exe</Command>", f"<Command>{legacy}</Command>"
+    ).replace(f'//B //Nologo "{launcher}"', "")
+    listing = (
+        '\r\n"\\Microsoft\\Windows\\Defrag\\ScheduledDefrag","N/A","Ready"\r\n'
+        '"\\Clawksis_Gateway_work","N/A","Ready"\r\n"\\Clawksis_Gateway","N/A","Running"\r\n'
+    )
     xml = {"Clawksis_Gateway_work": current, "Clawksis_Gateway": older}
-    monkeypatch.setattr(gateway_windows, "_exec_schtasks",
-                        lambda args, timeout=None: (0, listing if "/FO" in args else xml[args[2]], ""))
+    monkeypatch.setattr(
+        gateway_windows,
+        "_exec_schtasks",
+        lambda args, timeout=None: (0, listing if "/FO" in args else xml[args[2]], ""),
+    )
 
     assert gateway_windows.registered_task_launchers() == [launcher, legacy]
 
@@ -66,13 +87,16 @@ def test_exec_schtasks_round_trips_non_ascii_task_argument_live(monkeypatch):
     """Real schtasks.exe on a real task whose argument carries a non-ASCII (ANSI-representable)
     character, queried from a UTF-8-mode interpreter: the template/live comparison in
     `scheduled_task_drift` needs the exact characters back (#116193)."""
-    monkeypatch.setattr(gateway_windows.locale, "getpreferredencoding", lambda *a, **k: "utf-8")
+    monkeypatch.setattr(
+        gateway_windows.locale, "getpreferredencoding", lambda *a, **k: "utf-8"
+    )
     task = f"Clawksis_Test_{os.getpid()}"
     # schtasks stores /TR in the system ANSI code page, so the marker must be representable THERE:
     # ë is one byte in every Western ACP but is destroyed ("?") on cp936/932/949 hosts, and a CJK
     # literal fails the other way on cp1252 (#119845). Derive it from the live ACP; skip only when
     # no non-ASCII candidate survives, so the #116193 guard keeps its coverage on every locale.
     import ctypes
+
     acp = f"cp{ctypes.windll.kernel32.GetACP()}"
 
     def _encodable(text: str) -> bool:
@@ -81,19 +105,46 @@ def test_exec_schtasks_round_trips_non_ascii_task_argument_live(monkeypatch):
         except (UnicodeError, LookupError):
             return False
 
-    marker = next((c for c in ("Zo\u00eb", "\u65b9\u821f", "\u30c6\u30b9\u30c8", "\ud55c\uae00") if _encodable(c)), None)
+    marker = next(
+        (
+            c
+            for c in ("Zo\u00eb", "\u65b9\u821f", "\u30c6\u30b9\u30c8", "\ud55c\uae00")
+            if _encodable(c)
+        ),
+        None,
+    )
     if marker is None:
-        pytest.skip(f"no non-ASCII marker is representable in the host ANSI code page {acp}")
+        pytest.skip(
+            f"no non-ASCII marker is representable in the host ANSI code page {acp}"
+        )
     created = subprocess.run(
-        ["schtasks", "/Create", "/F", "/TN", task, "/SC", "ONLOGON", "/TR", f'wscript.exe //B "C:\\{marker}\\x.vbs"'],
-        capture_output=True, timeout=30,
+        [
+            "schtasks",
+            "/Create",
+            "/F",
+            "/TN",
+            task,
+            "/SC",
+            "ONLOGON",
+            "/TR",
+            f'wscript.exe //B "C:\\{marker}\\x.vbs"',
+        ],
+        capture_output=True,
+        timeout=30,
         check=False,
     )
     assert created.returncode == 0, created.stderr
     try:
-        code, out, _err = gateway_windows._exec_schtasks(["/Query", "/TN", task, "/XML"])
+        code, out, _err = gateway_windows._exec_schtasks(
+            ["/Query", "/TN", task, "/XML"]
+        )
     finally:
-        subprocess.run(["schtasks", "/Delete", "/F", "/TN", task], capture_output=True, timeout=30, check=False)
+        subprocess.run(
+            ["schtasks", "/Delete", "/F", "/TN", task],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
     assert code == 0
     assert marker in out, out
 
@@ -109,7 +160,9 @@ def test_localized_access_denied_uses_existing_fallback_paths():
 def test_schtasks_encoding_falls_back_to_utf8(monkeypatch):
     """A broken/empty locale must not leave us without a decoder (issue #38172)."""
 
-    monkeypatch.setattr(gateway_windows.locale, "getpreferredencoding", lambda *a, **k: "")
+    monkeypatch.setattr(
+        gateway_windows.locale, "getpreferredencoding", lambda *a, **k: ""
+    )
     assert gateway_windows._schtasks_encoding() == "utf-8"
 
     def _boom(*args, **kwargs):
@@ -119,10 +172,10 @@ def test_schtasks_encoding_falls_back_to_utf8(monkeypatch):
     assert gateway_windows._schtasks_encoding() == "utf-8"
 
 
-
-
 @pytest.mark.platforms("windows")
-def test_build_gateway_argv_keeps_venv_console_python_for_uv_venv(monkeypatch, tmp_path):
+def test_build_gateway_argv_keeps_venv_console_python_for_uv_venv(
+    monkeypatch, tmp_path
+):
     """No pythonw / base-interpreter detour: the venv console python.exe is
     launched hidden (CREATE_NO_WINDOW) so descendants inherit its hidden
     console instead of flashing their own (#54220/#56747).
@@ -268,19 +321,17 @@ class TestStableWindowsGatewayWorkingDir:
         home = tmp_path / ".clawk"
         home.mkdir()
         monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: home)
-        assert gateway_windows._stable_gateway_working_dir(tmp_path / "checkout") == str(home.resolve())
+        assert gateway_windows._stable_gateway_working_dir(
+            tmp_path / "checkout"
+        ) == str(home.resolve())
 
-    def test_stable_gateway_working_dir_falls_back_to_project_root(self, tmp_path, monkeypatch):
+    def test_stable_gateway_working_dir_falls_back_to_project_root(
+        self, tmp_path, monkeypatch
+    ):
         missing = tmp_path / "missing" / ".clawk"
         project = tmp_path / "checkout"
         monkeypatch.setattr("clawk_cli.config.get_clawk_home", lambda: missing)
         assert gateway_windows._stable_gateway_working_dir(project) == str(project)
-
-
-
-
-
-
 
 
 @pytest.mark.platforms("windows")
@@ -304,11 +355,17 @@ def test_elevated_gateway_command_uses_hidden_console_python(monkeypatch):
     class FakeWindll:
         shell32 = FakeShell32()
 
-    monkeypatch.setattr(gateway_windows, "_current_profile_cli_args", lambda: ["--profile", "alice"])
-    monkeypatch.setattr(gateway_windows.sys, "executable", r"C:\Clawksis\venv\Scripts\python.exe")
+    monkeypatch.setattr(
+        gateway_windows, "_current_profile_cli_args", lambda: ["--profile", "alice"]
+    )
+    monkeypatch.setattr(
+        gateway_windows.sys, "executable", r"C:\Clawksis\venv\Scripts\python.exe"
+    )
     monkeypatch.setattr(gateway_windows.ctypes, "windll", FakeWindll(), raising=False)
 
-    assert gateway_windows._launch_elevated_gateway_command("install", ["--start-now", "--elevated-handoff"])
+    assert gateway_windows._launch_elevated_gateway_command(
+        "install", ["--start-now", "--elevated-handoff"]
+    )
 
     assert len(calls) == 1
     _hwnd, verb, executable, params, cwd, show = calls[0]
@@ -343,7 +400,9 @@ def test_install_scheduled_task_recreates_instead_of_change(monkeypatch, tmp_pat
         raise AssertionError(f"unexpected schtasks args: {args}")
 
     monkeypatch.setattr(gateway_windows, "_exec_schtasks", fake_schtasks)
-    ok, _detail = gateway_windows._install_scheduled_task("Clawksis_Gateway_alice", script_path)
+    ok, _detail = gateway_windows._install_scheduled_task(
+        "Clawksis_Gateway_alice", script_path
+    )
 
     assert ok is True
     assert "/Change" not in [arg for call in calls for arg in call]
@@ -354,7 +413,10 @@ def test_install_scheduled_task_recreates_instead_of_change(monkeypatch, tmp_pat
     assert "<Delay>PT30S</Delay>" in xml_seen["text"]
     assert "<StartWhenAvailable>true</StartWhenAvailable>" in xml_seen["text"]
     assert "<StopOnIdleEnd>false</StopOnIdleEnd>" in xml_seen["text"]
-    assert "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" in xml_seen["text"]
+    assert (
+        "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>"
+        in xml_seen["text"]
+    )
     assert "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>" in xml_seen["text"]
     assert "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>" in xml_seen["text"]
     assert "<RestartOnFailure>" in xml_seen["text"]
@@ -387,7 +449,13 @@ def test_gateway_vbs_script_is_console_less(monkeypatch):
     assert "clawk_cli.main" in content
     assert "gateway run" in content
     assert ", 0, False" in content  # hidden window, detached/async
-    for var in ("CLAWK_HOME", "PYTHONIOENCODING", "CLAWK_GATEWAY_DETACHED", "VIRTUAL_ENV", "PYTHONPATH"):
+    for var in (
+        "CLAWK_HOME",
+        "PYTHONIOENCODING",
+        "CLAWK_GATEWAY_DETACHED",
+        "VIRTUAL_ENV",
+        "PYTHONPATH",
+    ):
         assert var in content
     assert "--profile" in content and "work" in content
     assert content.endswith("\r\n")
@@ -409,19 +477,30 @@ def test_atomic_write_leaves_no_staging_file_when_swap_fails(monkeypatch, tmp_pa
     assert sorted(p.name for p in startup.iterdir()) == []
 
 
-def test_uninstall_and_reinstall_sweep_stale_startup_staging_file(monkeypatch, tmp_path):
+def test_uninstall_and_reinstall_sweep_stale_startup_staging_file(
+    monkeypatch, tmp_path
+):
     """Debris from a pre-fix failed swap is removed by uninstall() and by an install() that takes the
     Scheduled Task path (which never rewrites the Startup folder itself)."""
     startup = tmp_path / "Startup"
     startup.mkdir()
-    entry, staging = startup / "Clawksis_Gateway_alice.vbs", startup / "Clawksis_Gateway_alice.tmp"
+    entry, staging = (
+        startup / "Clawksis_Gateway_alice.vbs",
+        startup / "Clawksis_Gateway_alice.tmp",
+    )
     script = tmp_path / "task" / "Clawksis_Gateway_alice.cmd"
 
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
-    monkeypatch.setattr(gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice")
+    monkeypatch.setattr(
+        gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice"
+    )
     monkeypatch.setattr(gateway_windows, "get_task_script_path", lambda: script)
     monkeypatch.setattr(gateway_windows, "get_startup_entry_path", lambda: entry)
-    monkeypatch.setattr(gateway_windows, "_legacy_startup_entry_path", lambda: startup / "Clawksis_Gateway_alice.cmd")
+    monkeypatch.setattr(
+        gateway_windows,
+        "_legacy_startup_entry_path",
+        lambda: startup / "Clawksis_Gateway_alice.cmd",
+    )
     monkeypatch.setattr(gateway_windows, "is_task_registered", lambda: False)
 
     staging.write_text("stale", encoding="utf-8")
@@ -429,10 +508,14 @@ def test_uninstall_and_reinstall_sweep_stale_startup_staging_file(monkeypatch, t
     assert not staging.exists()
 
     staging.write_text("stale", encoding="utf-8")
-    monkeypatch.setattr(gateway_windows, "_prompt_install_choices", lambda *a, **k: (False, True))
+    monkeypatch.setattr(
+        gateway_windows, "_prompt_install_choices", lambda *a, **k: (False, True)
+    )
     monkeypatch.setattr(gateway_windows, "_write_task_script", lambda: script)
     monkeypatch.setattr(gateway_windows, "_is_running_as_admin", lambda: True)
-    monkeypatch.setattr(gateway_windows, "_install_scheduled_task", lambda name, path: (True, "created"))
+    monkeypatch.setattr(
+        gateway_windows, "_install_scheduled_task", lambda name, path: (True, "created")
+    )
     monkeypatch.setattr(gateway_windows, "_print_next_steps", lambda: None)
     gateway_windows.install()
     assert not staging.exists()
@@ -443,24 +526,35 @@ def _startup_with_fallback_and_legacy_entries(monkeypatch, tmp_path):
     startup = tmp_path / "Startup"
     startup.mkdir(parents=True)
     script = tmp_path / "gateway-service" / "Clawksis_Gateway_alice.cmd"
-    vbs, cmd = startup / "Clawksis_Gateway_alice.vbs", startup / "Clawksis_Gateway_alice.cmd"
+    vbs, cmd = (
+        startup / "Clawksis_Gateway_alice.vbs",
+        startup / "Clawksis_Gateway_alice.cmd",
+    )
     vbs.write_text(gateway_windows._build_startup_launcher(script), encoding="utf-8")
     cmd.write_text("@echo off", encoding="utf-8")
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
-    monkeypatch.setattr(gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice")
+    monkeypatch.setattr(
+        gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice"
+    )
     monkeypatch.setattr(gateway_windows, "get_startup_entry_path", lambda: vbs)
     monkeypatch.setattr(gateway_windows, "_legacy_startup_entry_path", lambda: cmd)
     monkeypatch.setattr(gateway_windows, "_write_task_script", lambda: script)
     return startup, script
 
 
-def test_scheduled_task_install_removes_startup_entries_that_would_double_launch(monkeypatch, tmp_path, capsys):
+def test_scheduled_task_install_removes_startup_entries_that_would_double_launch(
+    monkeypatch, tmp_path, capsys
+):
     """#80569: a Scheduled Task install beside an earlier Startup fallback (or legacy .cmd) left both
     firing at logon. Installing the task converges to the task alone."""
     startup, _script = _startup_with_fallback_and_legacy_entries(monkeypatch, tmp_path)
-    monkeypatch.setattr(gateway_windows, "_prompt_install_choices", lambda *a, **k: (False, True))
+    monkeypatch.setattr(
+        gateway_windows, "_prompt_install_choices", lambda *a, **k: (False, True)
+    )
     monkeypatch.setattr(gateway_windows, "_is_running_as_admin", lambda: True)
-    monkeypatch.setattr(gateway_windows, "_install_scheduled_task", lambda name, path: (True, "created"))
+    monkeypatch.setattr(
+        gateway_windows, "_install_scheduled_task", lambda name, path: (True, "created")
+    )
     monkeypatch.setattr(gateway_windows, "_print_next_steps", lambda: None)
 
     gateway_windows.install()
@@ -475,7 +569,9 @@ def test_reconcile_leaves_one_autostart_mechanism(monkeypatch, tmp_path):
     nothing is redundant and exactly one mechanism remains."""
     startup, _script = _startup_with_fallback_and_legacy_entries(monkeypatch, tmp_path)
     registered = {"task": True}
-    monkeypatch.setattr(gateway_windows, "is_task_registered", lambda: registered["task"])
+    monkeypatch.setattr(
+        gateway_windows, "is_task_registered", lambda: registered["task"]
+    )
 
     assert len(gateway_windows.redundant_autostart_entries()) == 2
     done, warnings = gateway_windows.reconcile_autostart_launchers()
@@ -489,7 +585,9 @@ def test_reconcile_leaves_one_autostart_mechanism(monkeypatch, tmp_path):
     assert [p.suffix for p in gateway_windows.redundant_autostart_entries()] == [".cmd"]
     gateway_windows.reconcile_autostart_launchers()
     assert gateway_windows.redundant_autostart_entries() == []
-    assert [p.name for p in (tmp_path / "no-task" / "Startup").iterdir()] == ["Clawksis_Gateway_alice.vbs"]
+    assert [p.name for p in (tmp_path / "no-task" / "Startup").iterdir()] == [
+        "Clawksis_Gateway_alice.vbs"
+    ]
 
 
 def test_reconcile_warns_when_legacy_entry_cannot_be_removed(monkeypatch, tmp_path):
@@ -500,7 +598,7 @@ def test_reconcile_warns_when_legacy_entry_cannot_be_removed(monkeypatch, tmp_pa
     from clawk_cli.doctor_report import Finding
 
     startup, _script = _startup_with_fallback_and_legacy_entries(monkeypatch, tmp_path)
-    (startup / "Clawksis_Gateway_alice.vbs").unlink()   # legacy-only install
+    (startup / "Clawksis_Gateway_alice.vbs").unlink()  # legacy-only install
     monkeypatch.setattr(gateway_windows, "is_task_registered", lambda: False)
     real_unlink = Path.unlink
 
@@ -512,8 +610,15 @@ def test_reconcile_warns_when_legacy_entry_cannot_be_removed(monkeypatch, tmp_pa
     monkeypatch.setattr(Path, "unlink", locked_unlink)
 
     done, warnings = gateway_windows.reconcile_autostart_launchers()
-    assert done == [] and len(warnings) == 1 and "Clawksis_Gateway_alice.cmd" in warnings[0]
-    assert sorted(p.name for p in startup.iterdir()) == ["Clawksis_Gateway_alice.cmd", "Clawksis_Gateway_alice.vbs"]
+    assert (
+        done == []
+        and len(warnings) == 1
+        and "Clawksis_Gateway_alice.cmd" in warnings[0]
+    )
+    assert sorted(p.name for p in startup.iterdir()) == [
+        "Clawksis_Gateway_alice.cmd",
+        "Clawksis_Gateway_alice.vbs",
+    ]
     assert [p.suffix for p in gateway_windows.redundant_autostart_entries()] == [".cmd"]
 
     monkeypatch.setattr(sys, "platform", "win32")
@@ -522,7 +627,9 @@ def test_reconcile_warns_when_legacy_entry_cannot_be_removed(monkeypatch, tmp_pa
     assert f.fixed == 0 and len(f.manual_issues) == 1
 
 
-def test_status_names_and_uninstall_removes_pre_suffix_launchers(monkeypatch, tmp_path, capsys):
+def test_status_names_and_uninstall_removes_pre_suffix_launchers(
+    monkeypatch, tmp_path, capsys
+):
     """#116157: a Scheduled Task ``Clawksis_Gateway`` and a Startup ``Clawksis_Gateway.vbs`` left from before
     per-profile suffixes are invisible to every ``get_task_name()``-keyed operation. ``status`` must name
     them and ``uninstall`` must remove them (files unlinked, ``schtasks /Delete`` issued for the task)."""
@@ -530,12 +637,19 @@ def test_status_names_and_uninstall_removes_pre_suffix_launchers(monkeypatch, tm
     (home / "gateway-service").mkdir(parents=True)
     startup.mkdir()
     legacy_vbs = startup / "Clawksis_Gateway.vbs"
-    legacy_vbs.write_text(gateway_windows._build_startup_launcher(home / "gateway-service" / "Clawksis_Gateway.cmd"), encoding="utf-8")
+    legacy_vbs.write_text(
+        gateway_windows._build_startup_launcher(
+            home / "gateway-service" / "Clawksis_Gateway.cmd"
+        ),
+        encoding="utf-8",
+    )
     legacy_pair = home / "gateway-service" / "Clawksis_Gateway.cmd"
     legacy_pair.write_text("legacy", encoding="utf-8")
     schtasks_calls = []
     registered = {"Clawksis_Gateway"}
-    task_xml = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway", home / "gateway-service" / "Clawksis_Gateway.vbs", None)
+    task_xml = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway", home / "gateway-service" / "Clawksis_Gateway.vbs", None
+    )
 
     def fake_schtasks(args):
         schtasks_calls.append(args)
@@ -543,18 +657,38 @@ def test_status_names_and_uninstall_removes_pre_suffix_launchers(monkeypatch, tm
         if args[0] == "/Delete":
             registered.discard(name)
             return (0, "SUCCESS", "")
-        return (0, task_xml, "") if name in registered else (1, "", "ERROR: The system cannot find the file specified.")
+        return (
+            (0, task_xml, "")
+            if name in registered
+            else (1, "", "ERROR: The system cannot find the file specified.")
+        )
 
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
-    monkeypatch.setattr(gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice")
-    monkeypatch.setattr(gateway_windows, "get_task_script_path", lambda: home / "gateway-service" / "Clawksis_Gateway_alice.cmd")
-    monkeypatch.setattr(gateway_windows, "get_startup_entry_path", lambda: startup / "Clawksis_Gateway_alice.vbs")
-    monkeypatch.setattr(gateway_windows, "_legacy_startup_entry_path", lambda: startup / "Clawksis_Gateway_alice.cmd")
+    monkeypatch.setattr(
+        gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_alice"
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "get_task_script_path",
+        lambda: home / "gateway-service" / "Clawksis_Gateway_alice.cmd",
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "get_startup_entry_path",
+        lambda: startup / "Clawksis_Gateway_alice.vbs",
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "_legacy_startup_entry_path",
+        lambda: startup / "Clawksis_Gateway_alice.cmd",
+    )
     monkeypatch.setattr(gateway_windows, "_startup_dir", lambda: startup)
     monkeypatch.setattr(gateway_windows, "_clawk_home", lambda: home)
     monkeypatch.setattr(gateway_windows, "_exec_schtasks", fake_schtasks)
     monkeypatch.setattr(gateway_windows, "_gateway_pids", lambda *a, **k: [])
-    monkeypatch.setattr(gateway_windows, "_print_start_attestation_warning", lambda: None)
+    monkeypatch.setattr(
+        gateway_windows, "_print_start_attestation_warning", lambda: None
+    )
 
     gateway_windows.status()
     out = capsys.readouterr().out
@@ -571,17 +705,32 @@ def test_status_names_and_uninstall_removes_pre_suffix_launchers(monkeypatch, tm
     assert "legacy pre-suffix" not in capsys.readouterr().out
 
 
-def test_secondary_profile_leaves_default_profiles_bare_launchers_alone(monkeypatch, tmp_path, capsys):
+def test_secondary_profile_leaves_default_profiles_bare_launchers_alone(
+    monkeypatch, tmp_path, capsys
+):
     """The bare ``Clawksis_Gateway`` task and Startup entry are the LIVE identity of the default ``~/.clawksis``
     profile. From a secondary profile they are a sibling install, not this home's pre-suffix stray:
     ``uninstall`` / ``install --force`` must issue no ``schtasks /Delete`` and unlink nothing."""
-    startup, home, default_home = tmp_path / "Startup", tmp_path / "profiles" / "work", tmp_path / "default"
+    startup, home, default_home = (
+        tmp_path / "Startup",
+        tmp_path / "profiles" / "work",
+        tmp_path / "default",
+    )
     (home / "gateway-service").mkdir(parents=True)
     (default_home / "gateway-service").mkdir(parents=True)
     startup.mkdir()
     default_vbs = startup / "Clawksis_Gateway.vbs"
-    default_vbs.write_text(gateway_windows._build_startup_launcher(default_home / "gateway-service" / "Clawksis_Gateway.cmd"), encoding="utf-8")
-    task_xml = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway", default_home / "gateway-service" / "Clawksis_Gateway.vbs", None)
+    default_vbs.write_text(
+        gateway_windows._build_startup_launcher(
+            default_home / "gateway-service" / "Clawksis_Gateway.cmd"
+        ),
+        encoding="utf-8",
+    )
+    task_xml = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway",
+        default_home / "gateway-service" / "Clawksis_Gateway.vbs",
+        None,
+    )
     schtasks_calls = []
 
     def fake_schtasks(args):
@@ -591,22 +740,40 @@ def test_secondary_profile_leaves_default_profiles_bare_launchers_alone(monkeypa
         return (1, "", "ERROR: The system cannot find the file specified.")
 
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
-    monkeypatch.setattr(gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_work")
-    monkeypatch.setattr(gateway_windows, "get_task_script_path", lambda: home / "gateway-service" / "Clawksis_Gateway_work.cmd")
-    monkeypatch.setattr(gateway_windows, "get_startup_entry_path", lambda: startup / "Clawksis_Gateway_work.vbs")
-    monkeypatch.setattr(gateway_windows, "_legacy_startup_entry_path", lambda: startup / "Clawksis_Gateway_work.cmd")
+    monkeypatch.setattr(
+        gateway_windows, "get_task_name", lambda: "Clawksis_Gateway_work"
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "get_task_script_path",
+        lambda: home / "gateway-service" / "Clawksis_Gateway_work.cmd",
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "get_startup_entry_path",
+        lambda: startup / "Clawksis_Gateway_work.vbs",
+    )
+    monkeypatch.setattr(
+        gateway_windows,
+        "_legacy_startup_entry_path",
+        lambda: startup / "Clawksis_Gateway_work.cmd",
+    )
     monkeypatch.setattr(gateway_windows, "_startup_dir", lambda: startup)
     monkeypatch.setattr(gateway_windows, "_clawk_home", lambda: home)
     monkeypatch.setattr(gateway_windows, "_exec_schtasks", fake_schtasks)
     monkeypatch.setattr(gateway_windows, "_gateway_pids", lambda *a, **k: [])
-    monkeypatch.setattr(gateway_windows, "_print_start_attestation_warning", lambda: None)
+    monkeypatch.setattr(
+        gateway_windows, "_print_start_attestation_warning", lambda: None
+    )
 
     gateway_windows.status()
     assert "legacy pre-suffix" not in capsys.readouterr().out
     gateway_windows.uninstall()
     capsys.readouterr()
     assert default_vbs.exists()
-    assert not any(call[0] == "/Delete" and "Clawksis_Gateway" in call for call in schtasks_calls)
+    assert not any(
+        call[0] == "/Delete" and "Clawksis_Gateway" in call for call in schtasks_calls
+    )
 
 
 # Reporter's `Export-ScheduledTask` of a task registered before the hardened template (#113670).
@@ -636,8 +803,12 @@ def test_scheduled_task_drift_names_missing_hardening_leaves(monkeypatch):
     """A pre-hardening registration is reported leaf by leaf, and the report is what
     ``clawk gateway status`` prints together with the ``clawk gateway install`` repair hint."""
     launcher = Path(r"C:\Users\me\.clawk\gateway-service\Clawksis_Gateway.vbs")
-    template = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway", launcher, r"PC\me")
-    drift = gateway_windows.compare_scheduled_task_drift(_PRE_HARDENING_TASK_XML, template)
+    template = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway", launcher, r"PC\me"
+    )
+    drift = gateway_windows.compare_scheduled_task_drift(
+        _PRE_HARDENING_TASK_XML, template
+    )
     assert drift == [
         "missing: RestartOnFailure, LogonTrigger Delay",
         "launcher arguments differs",
@@ -645,12 +816,22 @@ def test_scheduled_task_drift_names_missing_hardening_leaves(monkeypatch):
     ]
 
     printed: list[str] = []
-    monkeypatch.setattr(gateway_windows, "_exec_schtasks", lambda args: (0, _PRE_HARDENING_TASK_XML if "/XML" in args else "", ""))
-    monkeypatch.setattr(gateway_windows, "get_task_script_path", lambda: launcher.with_suffix(".cmd"))
+    monkeypatch.setattr(
+        gateway_windows,
+        "_exec_schtasks",
+        lambda args: (0, _PRE_HARDENING_TASK_XML if "/XML" in args else "", ""),
+    )
+    monkeypatch.setattr(
+        gateway_windows, "get_task_script_path", lambda: launcher.with_suffix(".cmd")
+    )
     monkeypatch.setattr(gateway_windows, "_resolve_task_user", lambda: r"PC\me")
-    monkeypatch.setattr("builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a))))
+    monkeypatch.setattr(
+        "builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a)))
+    )
     gateway_windows._print_scheduled_task_drift("Clawksis_Gateway")
-    assert printed[0].startswith("⚠ Scheduled Task registration predates the current template (missing: RestartOnFailure")
+    assert printed[0].startswith(
+        "⚠ Scheduled Task registration predates the current template (missing: RestartOnFailure"
+    )
     assert "clawk gateway install" in printed[1]
 
 
@@ -658,15 +839,25 @@ def test_scheduled_task_drift_is_silent_when_aligned_or_unqueryable(monkeypatch)
     """The template compared to itself (with the SID-style <UserId> schtasks exports) is not drift, and
     a failed ``schtasks /Query /XML`` prints nothing — status must never nag a healthy install."""
     launcher = Path(r"C:\Users\me\.clawk\gateway-service\Clawksis_Gateway.vbs")
-    template = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway", launcher, r"PC\me")
-    exported = template.replace(r"<UserId>PC\me</UserId>", "<UserId>S-1-5-21-1-2-3-1001</UserId>")
+    template = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway", launcher, r"PC\me"
+    )
+    exported = template.replace(
+        r"<UserId>PC\me</UserId>", "<UserId>S-1-5-21-1-2-3-1001</UserId>"
+    )
     assert exported != template
     assert gateway_windows.compare_scheduled_task_drift(exported, template) == []
     assert gateway_windows.compare_scheduled_task_drift("not xml", template) == []
 
     printed: list[str] = []
-    monkeypatch.setattr(gateway_windows, "_exec_schtasks", lambda args: (1, "", "ERROR: The system cannot find the file specified."))
-    monkeypatch.setattr("builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a))))
+    monkeypatch.setattr(
+        gateway_windows,
+        "_exec_schtasks",
+        lambda args: (1, "", "ERROR: The system cannot find the file specified."),
+    )
+    monkeypatch.setattr(
+        "builtins.print", lambda *a, **k: printed.append(" ".join(map(str, a)))
+    )
     gateway_windows._print_scheduled_task_drift("Clawksis_Gateway")
     assert printed == []
 
@@ -677,7 +868,9 @@ def test_reconcile_scheduled_task_reregisters_only_on_drift(monkeypatch, tmp_pat
     logon ``Delay`` reach existing installs), while an aligned one is left alone."""
     script_path = tmp_path / "gateway.cmd"
     launcher = script_path.with_suffix(".vbs")
-    template = gateway_windows._build_scheduled_task_xml("Clawksis_Gateway", launcher, r"PC\me")
+    template = gateway_windows._build_scheduled_task_xml(
+        "Clawksis_Gateway", launcher, r"PC\me"
+    )
     calls: list[list[str]] = []
     registered = {"xml": _PRE_HARDENING_TASK_XML}
 
@@ -686,7 +879,9 @@ def test_reconcile_scheduled_task_reregisters_only_on_drift(monkeypatch, tmp_pat
         if "/XML" in args and "/Query" in args:
             return (0, registered["xml"], "")
         if "/Create" in args:
-            registered["xml"] = Path(args[args.index("/XML") + 1]).read_text(encoding="utf-16")
+            registered["xml"] = Path(args[args.index("/XML") + 1]).read_text(
+                encoding="utf-16"
+            )
         return (0, "", "")
 
     monkeypatch.setattr(gateway_windows, "_exec_schtasks", fake_schtasks)
@@ -696,9 +891,14 @@ def test_reconcile_scheduled_task_reregisters_only_on_drift(monkeypatch, tmp_pat
     monkeypatch.setattr("builtins.print", lambda *a, **k: None)
 
     assert gateway_windows.reconcile_scheduled_task("Clawksis_Gateway") is True
-    assert [c[0] for c in calls if c[0] in ("/Delete", "/Create")] == ["/Delete", "/Create"]
+    assert [c[0] for c in calls if c[0] in ("/Delete", "/Create")] == [
+        "/Delete",
+        "/Create",
+    ]
     assert "<RestartOnFailure>" in registered["xml"]
-    assert gateway_windows.compare_scheduled_task_drift(registered["xml"], template) == []
+    assert (
+        gateway_windows.compare_scheduled_task_drift(registered["xml"], template) == []
+    )
 
     calls.clear()
     assert gateway_windows.reconcile_scheduled_task("Clawksis_Gateway") is False
@@ -711,12 +911,18 @@ def _arrange_uninstalled_start(monkeypatch):
     monkeypatch.delenv("CLAWK_GATEWAY_INSTALL_START_ON_LOGIN", raising=False)
     monkeypatch.delenv("CLAWK_NONINTERACTIVE", raising=False)
     monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
-    monkeypatch.setattr(gateway_windows, "_print_start_attestation_warning", lambda: None)
+    monkeypatch.setattr(
+        gateway_windows, "_print_start_attestation_warning", lambda: None
+    )
     monkeypatch.setattr(gateway_windows, "_gateway_pids", list)
     monkeypatch.setattr(gateway_windows, "is_task_registered", lambda: False)
     monkeypatch.setattr(gateway_windows, "is_startup_entry_installed", lambda: False)
-    monkeypatch.setattr(gateway_windows, "install", lambda **kwargs: installs.append(kwargs))
-    monkeypatch.setattr(gateway_windows, "_spawn_detached", lambda: spawns.append(1) or 4242)
+    monkeypatch.setattr(
+        gateway_windows, "install", lambda **kwargs: installs.append(kwargs)
+    )
+    monkeypatch.setattr(
+        gateway_windows, "_spawn_detached", lambda: spawns.append(1) or 4242
+    )
     monkeypatch.setattr(gateway_windows, "_report_gateway_start", lambda via: None)
     monkeypatch.setattr(gateway_windows, "_stdin_console_mode_ok", lambda: True)
     monkeypatch.setattr(gateway_windows, "_stdout_isatty", lambda: True)
@@ -726,18 +932,32 @@ def _arrange_uninstalled_start(monkeypatch):
 def test_stdin_interactive_only_when_isatty_and_a_console_answers_get_console_mode():
     """Windows CRT isatty() is True for the NUL device (`clawk gateway start < NUL`, stdin=DEVNULL), so
     isatty alone must not open the prompt; off Windows (no console-mode fact) isatty decides (#113977)."""
-    assert gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=False) is False   # NUL
-    assert gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=True) is True     # console
-    assert gateway_windows._stdin_is_interactive(isatty=False, console_mode_ok=True) is False   # pipe
-    assert gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=None) is True     # POSIX tty
+    assert (
+        gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=False)
+        is False
+    )  # NUL
+    assert (
+        gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=True) is True
+    )  # console
+    assert (
+        gateway_windows._stdin_is_interactive(isatty=False, console_mode_ok=True)
+        is False
+    )  # pipe
+    assert (
+        gateway_windows._stdin_is_interactive(isatty=True, console_mode_ok=None) is True
+    )  # POSIX tty
 
 
-def test_start_with_nul_stdin_starts_the_gateway_but_never_installs_login_persistence(monkeypatch, capsys):
+def test_start_with_nul_stdin_starts_the_gateway_but_never_installs_login_persistence(
+    monkeypatch, capsys
+):
     """isatty says TTY, GetConsoleMode says no console: `< NUL` gets the same treatment as a pipe."""
     installs, spawns = _arrange_uninstalled_start(monkeypatch)
     monkeypatch.setattr(setup, "is_interactive_stdin", lambda: True)
     monkeypatch.setattr(gateway_windows, "_stdin_console_mode_ok", lambda: False)
-    monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: pytest.fail("no prompt on a NUL stdin"))
+    monkeypatch.setattr(
+        setup, "prompt_yes_no", lambda *a, **k: pytest.fail("no prompt on a NUL stdin")
+    )
 
     gateway_windows.start()
 
@@ -745,13 +965,19 @@ def test_start_with_nul_stdin_starts_the_gateway_but_never_installs_login_persis
     assert "clawk gateway install" in capsys.readouterr().out
 
 
-def test_start_with_captured_stdout_never_asks_even_on_a_console_stdin(monkeypatch, capsys):
+def test_start_with_captured_stdout_never_asks_even_on_a_console_stdin(
+    monkeypatch, capsys
+):
     """Pre-#122234 Desktop update hand-offs run the NEW `gateway start --all` with the hand-off
     console as stdin and stdout captured until exit. A question there is invisible and never answered."""
     installs, spawns = _arrange_uninstalled_start(monkeypatch)
     monkeypatch.setattr(setup, "is_interactive_stdin", lambda: True)
     monkeypatch.setattr(gateway_windows, "_stdout_isatty", lambda: False)
-    monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: pytest.fail("no prompt into captured stdout"))
+    monkeypatch.setattr(
+        setup,
+        "prompt_yes_no",
+        lambda *a, **k: pytest.fail("no prompt into captured stdout"),
+    )
 
     gateway_windows.start()
 
@@ -759,12 +985,16 @@ def test_start_with_captured_stdout_never_asks_even_on_a_console_stdin(monkeypat
     assert "clawk gateway install" in capsys.readouterr().out
 
 
-def test_start_without_tty_starts_the_gateway_but_never_installs_login_persistence(monkeypatch, capsys):
+def test_start_without_tty_starts_the_gateway_but_never_installs_login_persistence(
+    monkeypatch, capsys
+):
     """`clawk gateway start < /dev/null` must not answer the persistence question with a default Yes
     (#113977); it starts the gateway once and points at the explicit install command."""
     installs, spawns = _arrange_uninstalled_start(monkeypatch)
     monkeypatch.setattr(setup, "is_interactive_stdin", lambda: False)
-    monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: pytest.fail("no prompt without a TTY"))
+    monkeypatch.setattr(
+        setup, "prompt_yes_no", lambda *a, **k: pytest.fail("no prompt without a TTY")
+    )
 
     gateway_windows.start()
 
@@ -773,7 +1003,9 @@ def test_start_without_tty_starts_the_gateway_but_never_installs_login_persisten
     assert "clawk gateway install" in out and "did not complete" not in out
 
 
-def test_start_on_tty_hands_both_answers_to_install_and_honours_the_env_opt_out(monkeypatch):
+def test_start_on_tty_hands_both_answers_to_install_and_honours_the_env_opt_out(
+    monkeypatch,
+):
     """Yes → one install() carrying start_now+start_on_login (install spawns; start() must not spawn
     again). CLAWK_GATEWAY_INSTALL_START_ON_LOGIN=0 → no question, no install, a plain start."""
     installs, spawns = _arrange_uninstalled_start(monkeypatch)
@@ -781,25 +1013,20 @@ def test_start_on_tty_hands_both_answers_to_install_and_honours_the_env_opt_out(
     monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: True)
 
     gateway_windows.start()
-    assert installs == [{"force": False, "start_now": True, "start_on_login": True}] and spawns == []
+    assert (
+        installs == [{"force": False, "start_now": True, "start_on_login": True}]
+        and spawns == []
+    )
 
     installs.clear()
     monkeypatch.setenv("CLAWK_GATEWAY_INSTALL_START_ON_LOGIN", "0")
-    monkeypatch.setattr(setup, "prompt_yes_no", lambda *a, **k: pytest.fail("env override must skip the prompt"))
+    monkeypatch.setattr(
+        setup,
+        "prompt_yes_no",
+        lambda *a, **k: pytest.fail("env override must skip the prompt"),
+    )
     gateway_windows.start()
     assert installs == [] and spawns == [1]
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -814,14 +1041,6 @@ def test_start_on_tty_hands_both_answers_to_install_and_honours_the_env_opt_out(
 # ---------------------------------------------------------------------------
 
 
-
-
-
-
-
-
-
-
 def test_clawk_owns_windows_service_requires_name_or_binary_under_a_clawk_root():
     """Task Scheduler (``Schedule`` in svchost) above a task-launched gateway is never its supervisor;
     a service is Clawksis-owned only by a ``clawk*`` name or a binary under the install (#97208)."""
@@ -832,17 +1051,35 @@ def test_clawk_owns_windows_service_requires_name_or_binary_under_a_clawk_root()
     )
     owns = gateway_windows.clawk_owns_windows_service
 
-    assert not owns("Schedule", r"C:\Windows\system32\svchost.exe -k netsvcs -p -s Schedule", roots)
-    assert not owns("BITS", r"C:\Windows\System32\svchost.exe -k netsvcs -p -s BITS", roots)
-    assert not owns("Other", r"C:\Users\kaize\AppData\Local\clawk\clawksis-agent-fork\run.exe", roots)
+    assert not owns(
+        "Schedule", r"C:\Windows\system32\svchost.exe -k netsvcs -p -s Schedule", roots
+    )
+    assert not owns(
+        "BITS", r"C:\Windows\System32\svchost.exe -k netsvcs -p -s BITS", roots
+    )
+    assert not owns(
+        "Other",
+        r"C:\Users\kaize\AppData\Local\clawk\clawksis-agent-fork\run.exe",
+        roots,
+    )
 
     assert owns("ClawksisGateway", r"C:\nssm\nssm.exe", roots)
     assert owns("Clawksis_Gateway_derek", "", roots)
-    assert owns("gw", r'"C:\Users\KAIZE\AppData\Local\clawk\clawksis-agent\venv\Scripts\clawk.exe" gateway run', roots)
-    assert owns("gw", r"C:\Users\kaize\AppData\Local\clawk\gateway-service\Clawksis_Gateway.cmd", roots)
+    assert owns(
+        "gw",
+        r'"C:\Users\KAIZE\AppData\Local\clawk\clawksis-agent\venv\Scripts\clawk.exe" gateway run',
+        roots,
+    )
+    assert owns(
+        "gw",
+        r"C:\Users\kaize\AppData\Local\clawk\gateway-service\Clawksis_Gateway.cmd",
+        roots,
+    )
 
 
-def test_wizard_install_service_asks_once_and_never_starts_after_windows_install(monkeypatch):
+def test_wizard_install_service_asks_once_and_never_starts_after_windows_install(
+    monkeypatch,
+):
     """The wizard asks start-now/start-on-login once, forwards both answers, and returns
     without a second start: the Windows installer owns start and the elevated child
     starts itself, so a parent-side start would re-ask the install questions and re-offer
@@ -851,10 +1088,16 @@ def test_wizard_install_service_asks_once_and_never_starts_after_windows_install
     monkeypatch.setattr(gateway, "prompt_yes_no", lambda *a, **k: next(answers))
     monkeypatch.setattr(gateway, "is_wsl", lambda: False)
     installs, starts = [], []
-    monkeypatch.setattr(gateway, "_gw_windows", lambda: SimpleNamespace(
-        install=lambda **kw: installs.append(kw) or True,
-    ))
-    monkeypatch.setattr(gateway, "_setup_service_action", lambda *a, **k: starts.append((a, k)))
+    monkeypatch.setattr(
+        gateway,
+        "_gw_windows",
+        lambda: SimpleNamespace(
+            install=lambda **kw: installs.append(kw) or True,
+        ),
+    )
+    monkeypatch.setattr(
+        gateway, "_setup_service_action", lambda *a, **k: starts.append((a, k))
+    )
 
     gateway._wizard_install_service("windows")
 

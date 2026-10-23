@@ -66,7 +66,11 @@ def _prune_env_pool_entries(env_var: str) -> list[str]:
             entries = pool[provider]
             if not isinstance(entries, list):
                 continue
-            kept = [e for e in entries if not (isinstance(e, dict) and e.get("source") == source)]
+            kept = [
+                e
+                for e in entries
+                if not (isinstance(e, dict) and e.get("source") == source)
+            ]
             if len(kept) == len(entries):
                 continue
             pruned.append(provider)
@@ -88,7 +92,11 @@ def _scrub_config_yaml_mirrors(old_value: str, new_value: str | None) -> list[st
     """
     if not old_value:
         return []
-    from clawk_cli.config import atomic_config_replace, get_config_path, read_user_config_raw
+    from clawk_cli.config import (
+        atomic_config_replace,
+        get_config_path,
+        read_user_config_raw,
+    )
 
     config_path = get_config_path()
     if not config_path.exists():
@@ -102,7 +110,9 @@ def _scrub_config_yaml_mirrors(old_value: str, new_value: str | None) -> list[st
 
     touched: list[str] = []
 
-    def _fix(section: Any, key_path: str, fields: tuple[str, ...] = ("api_key", "api")) -> None:
+    def _fix(
+        section: Any, key_path: str, fields: tuple[str, ...] = ("api_key", "api")
+    ) -> None:
         # "api" is the legacy alias for model.api_key in older configs. In the keyed ``providers``
         # schema ``api`` means the base_url, not a credential, so that section passes
         # ``fields=("api_key",)``.
@@ -141,7 +151,8 @@ def _scrub_config_yaml_mirrors(old_value: str, new_value: str | None) -> list[st
 
 
 def purge_env_credential_references(
-    env_var: str, *, clear_models_cache: bool = True) -> dict[str, Any]:
+    env_var: str, *, clear_models_cache: bool = True
+) -> dict[str, Any]:
     """Remove non-.env references to an env-var credential.
 
     Prunes env-seeded pool entries and (optionally) the affected ``provider_models_cache.json`` rows
@@ -154,7 +165,9 @@ def purge_env_credential_references(
     # Make the removal sticky the same way `clawk auth remove` does: a lingering shell export (or
     # another live process's os.environ) would otherwise re-seed the pool entry on the next
     # load_pool(). The save path lifts the suppression on an explicit re-add.
-    _for_each_provider(providers, "clawk_cli.auth.suppress_credential_source", f"env:{env_var}")
+    _for_each_provider(
+        providers, "clawk_cli.auth.suppress_credential_source", f"env:{env_var}"
+    )
     if clear_models_cache and providers:
         # Best-effort — a cache failure must not block the credential removal itself.
         _for_each_provider(providers, "clawk_cli.models.clear_provider_models_cache")
@@ -191,7 +204,9 @@ def save_provider_env_credential(env_var: str, value: str) -> dict[str, Any]:
 
     # A prior removal may have suppressed this env source; a fresh save is an explicit re-add.
     providers = _providers_for_env_var(env_var)
-    _for_each_provider(providers, "clawk_cli.auth.unsuppress_credential_source", f"env:{env_var}")
+    _for_each_provider(
+        providers, "clawk_cli.auth.unsuppress_credential_source", f"env:{env_var}"
+    )
 
     # ``load_pool`` is idempotent and additive-only for env sources, so re-running is safe even when
     # the pool already had this entry. Best-effort: never masks the successful .env write above.
@@ -219,4 +234,5 @@ def remove_provider_env_credential(env_var: str) -> dict[str, Any]:
         "pool_pruned": refs["pool_pruned"],
         "providers": refs["providers"],
         "config_scrubbed": config_scrubbed,
-        "found": bool(removed_from_env or refs["pool_pruned"] or config_scrubbed)}
+        "found": bool(removed_from_env or refs["pool_pruned"] or config_scrubbed),
+    }

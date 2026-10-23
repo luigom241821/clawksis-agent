@@ -10,6 +10,7 @@ from argparse import Namespace
 
 import pytest
 
+
 def _args(**overrides) -> Namespace:
     values = {
         "command": "chat",
@@ -23,12 +24,14 @@ def _args(**overrides) -> Namespace:
     values.update(overrides)
     return Namespace(**values)
 
+
 @pytest.fixture(autouse=True)
 def _isolated_config_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     monkeypatch.delenv("CLAWK_IGNORE_USER_CONFIG", raising=False)
     yield
     os.environ.pop("CLAWK_IGNORE_USER_CONFIG", None)
+
 
 @pytest.mark.parametrize(
     "args",
@@ -58,6 +61,7 @@ def test_noninteractive_guard_rejects_malformed_yaml(args, tmp_path, caplog, cap
     assert len(backups) == 1
     assert backups[0].read_text(encoding="utf-8") == broken
 
+
 def test_prepare_rejects_bad_config_before_plugin_discovery(monkeypatch, tmp_path):
     from clawk_cli import main as main_mod
 
@@ -77,6 +81,7 @@ def test_prepare_rejects_bad_config_before_plugin_discovery(monkeypatch, tmp_pat
     assert exc_info.value.code == 2
     assert discovery_calls == []
 
+
 @pytest.mark.parametrize(
     "content", [None, "", "{}\n", "model:\n  default: local/test\n"]
 )
@@ -93,6 +98,7 @@ def test_noninteractive_guard_accepts_missing_empty_and_mapping_configs(
 
     assert args._noninteractive_config_validated is True
 
+
 def test_noninteractive_guard_rejects_non_mapping_yaml(tmp_path, capsys):
     from clawk_cli import main as main_mod
 
@@ -103,6 +109,7 @@ def test_noninteractive_guard_rejects_non_mapping_yaml(tmp_path, capsys):
 
     assert exc_info.value.code == 2
     assert capsys.readouterr().err.strip()
+
 
 @pytest.mark.parametrize(
     "args",
@@ -122,6 +129,7 @@ def test_explicit_config_bypasses_allow_noninteractive_recovery(args, tmp_path):
     assert args._noninteractive_config_validated is True
     assert list(tmp_path.rglob("config.yaml.corrupt.*")) == []
 
+
 def test_interactive_chat_keeps_existing_repair_behavior(tmp_path):
     from clawk_cli import main as main_mod
 
@@ -132,6 +140,7 @@ def test_interactive_chat_keeps_existing_repair_behavior(tmp_path):
 
     assert not hasattr(args, "_noninteractive_config_validated")
     assert list(tmp_path.rglob("config.yaml.corrupt.*")) == []
+
 
 @pytest.mark.parametrize(
     "args",
@@ -152,6 +161,7 @@ def test_queryless_chat_keeps_interactive_repair_behavior(args, tmp_path):
     assert not hasattr(args, "_noninteractive_config_validated")
     assert list(tmp_path.rglob("config.yaml.corrupt.*")) == []
 
+
 def test_env_only_config_bypass_allows_noninteractive_recovery(monkeypatch, tmp_path):
     from clawk_cli import main as main_mod
 
@@ -163,6 +173,7 @@ def test_env_only_config_bypass_allows_noninteractive_recovery(monkeypatch, tmp_
 
     assert args._noninteractive_config_validated is True
     assert list(tmp_path.rglob("config.yaml.corrupt.*")) == []
+
 
 def test_reused_args_can_retry_after_config_repair(tmp_path):
     from clawk_cli import main as main_mod

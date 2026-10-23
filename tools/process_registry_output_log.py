@@ -7,6 +7,7 @@ profile-scoped log instead and its shell records the exit status beside it (the 
 env-backend wrapper already uses), so whichever interpreter adopts the checkpoint entry next
 (the session's next worker, the owner at startup) tails the same file and collects the exit.
 """
+
 import codecs
 from contextlib import suppress
 import logging
@@ -32,11 +33,13 @@ def output_dir() -> Path:
 def worker_output_log(session_id: str) -> Optional[Path]:
     """The log a worker-spawned process writes to; None outside a registered worker."""
     from agent.runtime_session_store import is_worker_process
+
     if not is_worker_process():
         return None
     directory = output_dir()
     make_user_dir(directory, mode=0o700, parents=True, exist_ok=True)
     from tools.process_registry_results import RESULT_RETENTION_SECONDS
+
     # Only a recorded exit retires a log: a quiet process can run longer than the retention.
     cutoff = time.time() - RESULT_RETENTION_SECONDS
     for exited in directory.glob("proc_*.exit"):
@@ -50,12 +53,16 @@ def worker_output_log(session_id: str) -> Optional[Path]:
 def adoptable_log(path) -> str:
     """A checkpointed log path, only when it names this profile's output directory."""
     log = Path(str(path or ""))
-    return str(log) if path and log.parent == output_dir() and log.suffix == ".log" else ""
+    return (
+        str(log) if path and log.parent == output_dir() and log.suffix == ".log" else ""
+    )
 
 
 def open_output_log(log: Path) -> int:
     """Owner-only append descriptor for the child's stdout+stderr (the parent closes its copy)."""
-    return os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600)
+    return os.open(
+        log, os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0), 0o600
+    )
 
 
 def _exit_path(log) -> Path:
@@ -66,8 +73,9 @@ def record_exit_command(log: Path, command: str) -> str:
     """Prefix ``command`` so the shell writes its exit status beside the log: an interpreter
     that adopts the process after the spawner exited has no Popen to wait on."""
     import shlex
+
     target = shlex.quote(_exit_path(log).as_posix())
-    return f"__clawk_exit_file={target}; trap 'printf \"%s\\n\" \"$?\" > \"$__clawk_exit_file\"' EXIT\n{command}"
+    return f'__clawk_exit_file={target}; trap \'printf "%s\\n" "$?" > "$__clawk_exit_file"\' EXIT\n{command}'
 
 
 def recorded_exit_code(log) -> Optional[int]:
@@ -93,7 +101,9 @@ class ProcessOutputLogMixin:
 
         def ingest(text: str) -> None:
             nonlocal head_noise
-            if head_noise:  # ``bash -lic`` startup warnings, as the pipe reader strips them
+            if (
+                head_noise
+            ):  # ``bash -lic`` startup warnings, as the pipe reader strips them
                 text = self._clean_shell_noise(text)
                 head_noise = not text.strip()
             self._ingest_output(session, text)
@@ -103,7 +113,11 @@ class ProcessOutputLogMixin:
                 return False
             if proc is not None:
                 return proc.poll() is None
-            return self._detached_host_fate(session.pid, session.host_start_time) == "running"
+            return (
+                self._detached_host_fate(session.pid, session.host_start_time)
+                == "running"
+            )
+
         try:
             with open(session.output_log, "rb") as stream:
                 drained = 0
@@ -121,9 +135,13 @@ class ProcessOutputLogMixin:
                         break
                     time.sleep(_TAIL_SECONDS)
         except OSError as exc:
-            logger.warning("Process output log %s unreadable: %s", session.output_log, exc)
+            logger.warning(
+                "Process output log %s unreadable: %s", session.output_log, exc
+            )
         if proc is not None:
-            self._finish_reader(session, decoder, ingest, "Log", proc.wait, lambda: proc.returncode)
+            self._finish_reader(
+                session, decoder, ingest, "Log", proc.wait, lambda: proc.returncode
+            )
             return
         if tail := decoder.decode(b"", final=True):
             ingest(tail)

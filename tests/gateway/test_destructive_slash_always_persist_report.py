@@ -46,6 +46,7 @@ def _runner():
 
 async def _resolve(runner, choice, *, result="🧹 Conversation cleared."):
     """Drive the gate, then invoke the captured handler with *choice*."""
+
     async def _execute():
         return result
 

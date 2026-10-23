@@ -26,15 +26,28 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_idle_proof_is_true_only_when_every_ledger_is_provably_empty():
-    assert idle_proof(turn_probe=lambda: False, input_probe=lambda: 0) == {"idle": True, "reason": None}
+    assert idle_proof(turn_probe=lambda: False, input_probe=lambda: 0) == {
+        "idle": True,
+        "reason": None,
+    }
     assert idle_proof(turn_probe=lambda: True, input_probe=lambda: 0) == {
-        "idle": False, "reason": "turn_in_flight", "detail": None}
-    assert idle_proof(turn_probe=lambda: "session:abc", input_probe=lambda: 0)["detail"] == "session:abc"
+        "idle": False,
+        "reason": "turn_in_flight",
+        "detail": None,
+    }
+    assert (
+        idle_proof(turn_probe=lambda: "session:abc", input_probe=lambda: 0)["detail"]
+        == "session:abc"
+    )
     assert idle_proof(turn_probe=lambda: False, input_probe=lambda: 1) == {
-        "idle": False, "reason": "awaiting_human_input"}
+        "idle": False,
+        "reason": "awaiting_human_input",
+    }
     # Fail closed: an indeterminate probe is never reported as idle.
     assert idle_proof(turn_probe=lambda: None, input_probe=lambda: 0)["idle"] is None
-    assert idle_proof(turn_probe=lambda: False, input_probe=lambda: None)["idle"] is None
+    assert (
+        idle_proof(turn_probe=lambda: False, input_probe=lambda: None)["idle"] is None
+    )
 
 
 def test_idle_proof_reads_the_real_cron_and_human_input_ledgers():
@@ -50,10 +63,16 @@ def test_idle_proof_reads_the_real_cron_and_human_input_ledgers():
         scheduler._running_job_ids.add(scheduler._inflight_key("idle-proof-live-job"))
     try:
         # The busy verdict names the ledger and the job, so a backend that will not retire is diagnosable.
-        assert idle_proof() == {"idle": False, "reason": "turn_in_flight", "detail": "cron:idle-proof-live-job"}
+        assert idle_proof() == {
+            "idle": False,
+            "reason": "turn_in_flight",
+            "detail": "cron:idle-proof-live-job",
+        }
     finally:
         with scheduler._running_lock:
-            scheduler._running_job_ids.discard(scheduler._inflight_key("idle-proof-live-job"))
+            scheduler._running_job_ids.discard(
+                scheduler._inflight_key("idle-proof-live-job")
+            )
 
     from tools.approval_gateway_wait import _ApprovalEntry
 
@@ -127,18 +146,25 @@ def _spawn_desktop_child(tmp_path: Path, name: str, *, busy: bool) -> subprocess
         PYTHONUNBUFFERED="1",
     )
     hold = (
-        "import cron.scheduler as s\n"
-        "with s._running_lock:\n"
-        "    s._running_job_ids.add(s._inflight_key('live-idle-proof-job'))\n"
-    ) if busy else ""
+        (
+            "import cron.scheduler as s\n"
+            "with s._running_lock:\n"
+            "    s._running_job_ids.add(s._inflight_key('live-idle-proof-job'))\n"
+        )
+        if busy
+        else ""
+    )
     code = (
-        hold
-        + "from clawk_cli.web_server import start_server\n"
+        hold + "from clawk_cli.web_server import start_server\n"
         "start_server(host='127.0.0.1', port=0, open_browser=False, headless=True)\n"
     )
     return subprocess.Popen(
-        [sys.executable, "-c", code], cwd=str(REPO_ROOT), env=env,
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        [sys.executable, "-c", code],
+        cwd=str(REPO_ROOT),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
     )
 
 
@@ -174,8 +200,10 @@ def _probe_settled(port: int, settled, timeout: float = 20.0) -> tuple[int, dict
 
 
 def _probe(port: int, token: str | None = TOKEN) -> tuple[int, dict]:
-    req = urllib.request.Request(f"http://127.0.0.1:{port}/api/health/idle",
-                                 headers={"X-Clawksis-Session-Token": token} if token else {})
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/api/health/idle",
+        headers={"X-Clawksis-Session-Token": token} if token else {},
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status, json.loads(resp.read().decode())
@@ -183,7 +211,9 @@ def _probe(port: int, token: str | None = TOKEN) -> tuple[int, dict]:
         return exc.code, {}
 
 
-def _await_verdict(port: int, accept, timeout: float = 60.0) -> tuple[tuple[int, dict], list]:
+def _await_verdict(
+    port: int, accept, timeout: float = 60.0
+) -> tuple[tuple[int, dict], list]:
     """Probe until ``accept(verdict)`` or the deadline; returns the last verdict and every one seen."""
     deadline = time.monotonic() + timeout
     seen: list[tuple[int, dict]] = []
@@ -217,14 +247,32 @@ def test_live_pooled_children_prove_idle_or_busy_over_the_desktop_probe(tmp_path
         # start and holds retirement admission through the whole scan (``retirement_admission``),
         # which on a loaded runner outlasts the first probe. A resident is "provably idle" once that
         # startup work drains, so poll until the verdict settles instead of sampling once.
-        verdicts = {name: _probe_settled(port, lambda b: b.get("idle") is True)
-                    for name, port in ports.items() if name != "cron-busy"}
+        verdicts = {
+            name: _probe_settled(port, lambda b: b.get("idle") is True)
+            for name, port in ports.items()
+            if name != "cron-busy"
+        }
         verdicts["cron-busy"], busy_seen = _await_verdict(
-            ports["cron-busy"], lambda v: str(v[1].get("detail", "")).startswith("cron:"))
-        assert verdicts["resident-a"] == (200, {"ok": True, "idle": True, "reason": None}), verdicts
-        assert verdicts["resident-b"] == (200, {"ok": True, "idle": True, "reason": None}), verdicts
-        assert verdicts["cron-busy"] == (200, {
-            "ok": True, "idle": False, "reason": "turn_in_flight", "detail": "cron:live-idle-proof-job"}), verdicts
+            ports["cron-busy"],
+            lambda v: str(v[1].get("detail", "")).startswith("cron:"),
+        )
+        assert verdicts["resident-a"] == (
+            200,
+            {"ok": True, "idle": True, "reason": None},
+        ), verdicts
+        assert verdicts["resident-b"] == (
+            200,
+            {"ok": True, "idle": True, "reason": None},
+        ), verdicts
+        assert verdicts["cron-busy"] == (
+            200,
+            {
+                "ok": True,
+                "idle": False,
+                "reason": "turn_in_flight",
+                "detail": "cron:live-idle-proof-job",
+            },
+        ), verdicts
         # Whatever startup work shadowed the cron ledger, the busy child never once claimed idle.
         assert all(body.get("idle") is False for _status, body in busy_seen), busy_seen
 

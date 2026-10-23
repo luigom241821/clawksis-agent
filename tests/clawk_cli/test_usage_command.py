@@ -13,10 +13,16 @@ from agent.account_usage import AccountUsageSnapshot, AccountUsageWindow
 from clawk_cli import main as clawk_main
 
 _SNAPSHOT = AccountUsageSnapshot(
-    provider="openai-codex", source="usage_api", fetched_at=datetime(2026, 9, 19, 12, 0, tzinfo=UTC),
+    provider="openai-codex",
+    source="usage_api",
+    fetched_at=datetime(2026, 9, 19, 12, 0, tzinfo=UTC),
     plan="Plus",
     windows=(
-        AccountUsageWindow(label="Session", used_percent=37.0, reset_at=datetime(2026, 9, 19, 21, 0, tzinfo=UTC)),
+        AccountUsageWindow(
+            label="Session",
+            used_percent=37.0,
+            reset_at=datetime(2026, 9, 19, 21, 0, tzinfo=UTC),
+        ),
         AccountUsageWindow(label="Weekly", used_percent=12.5, reset_at=None),
     ),
     details=("You have 1 reset banked - use /usage reset to activate",),
@@ -24,9 +30,11 @@ _SNAPSHOT = AccountUsageSnapshot(
 
 
 def _run(argv, fetch):
-    with patch.object(clawk_main, "_plugin_cli_discovery_needed", return_value=False), \
-         patch("agent.account_usage.fetch_account_usage", fetch), \
-         patch.object(sys, "argv", ["clawk", *argv]):
+    with (
+        patch.object(clawk_main, "_plugin_cli_discovery_needed", return_value=False),
+        patch("agent.account_usage.fetch_account_usage", fetch),
+        patch.object(sys, "argv", ["clawk", *argv]),
+    ):
         try:
             clawk_main.main()
         except SystemExit as exc:
@@ -48,17 +56,36 @@ def test_clawk_usage_json_is_one_stable_document(capsys):
     assert doc["provider"] == "openai-codex" and doc["plan"] == "Plus"
     assert doc["fetched_at"] == "2026-09-19T12:00:00+00:00"
     assert doc["windows"] == [
-        {"label": "Session", "used_percent": 37.0, "resets_at": "2026-09-19T21:00:00+00:00", "detail": None},
+        {
+            "label": "Session",
+            "used_percent": 37.0,
+            "resets_at": "2026-09-19T21:00:00+00:00",
+            "detail": None,
+        },
         {"label": "Weekly", "used_percent": 12.5, "resets_at": None, "detail": None},
     ]
     assert doc["details"] == ["You have 1 reset banked - use /usage reset to activate"]
-    assert set(doc) == {"provider", "source", "title", "plan", "fetched_at", "windows", "details", "unavailable_reason"}
+    assert set(doc) == {
+        "provider",
+        "source",
+        "title",
+        "plan",
+        "fetched_at",
+        "windows",
+        "details",
+        "unavailable_reason",
+    }
 
 
 def test_clawk_usage_without_credential_exits_nonzero_with_one_stderr_line(capsys):
     # fetch_account_usage returns None when no credential resolves (or the fetch fails) — script-friendly failure.
-    assert _run(["usage", "--json", "--provider", "openai-codex"], lambda provider, **kw: None) == 1
+    assert (
+        _run(
+            ["usage", "--json", "--provider", "openai-codex"],
+            lambda provider, **kw: None,
+        )
+        == 1
+    )
     out, err = capsys.readouterr()
     assert out == ""
     assert err.count("\n") == 1 and "openai-codex" in err
-

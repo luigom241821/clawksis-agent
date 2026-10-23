@@ -20,8 +20,6 @@ class TestDiscordThreadPersistence:
         with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
             return DiscordAdapter(config=config)
 
-
-
     def test_threads_survive_restart(self, tmp_path):
         """Threads tracked by one adapter instance are visible to the next."""
         adapter1 = self._make_adapter(tmp_path)
@@ -32,5 +30,3 @@ class TestDiscordThreadPersistence:
         adapter2 = self._make_adapter(tmp_path)
         assert "aaa" in adapter2._threads
         assert "bbb" in adapter2._threads
-
-

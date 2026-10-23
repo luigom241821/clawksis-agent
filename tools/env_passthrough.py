@@ -53,11 +53,16 @@ def _is_clawk_provider_credential(name: str) -> bool:
     registerable. Fails closed when the blocklist cannot be imported."""
     try:
         from tools.environments.local_env_policy import (
-            _is_clawk_internal_secret, _is_provider_env_blocklisted)
+            _is_clawk_internal_secret,
+            _is_provider_env_blocklisted,
+        )
     except Exception as e:
         logger.warning(
             "env passthrough: provider credential blocklist import failed; "
-            "failing closed and refusing passthrough registration for %r: %s", name, e)
+            "failing closed and refusing passthrough registration for %r: %s",
+            name,
+            e,
+        )
         return True
     # Case-folded membership too: the remote-exec env builder resolves each
     # registered name via os.getenv(), which is case-insensitive on Windows, so
@@ -70,12 +75,15 @@ def register_env_passthrough(var_names: Iterable[str]) -> None:
     skill's ``required_environment_variables``). Clawksis-managed provider credentials
     are rejected (GHSA-rhgp-j443-p4rf) — such skills should use the main-process tools
     (web_search, web_extract, …); third-party keys pass normally."""
-    for name in _accepted((n.strip() for n in var_names), (
-        "env passthrough: refusing to register Clawksis provider "
-        "credential %r (blocked by _CLAWK_PROVIDER_ENV_BLOCKLIST). "
-        "Skills must not override the execute_code sandbox's "
-        "credential scrubbing; see GHSA-rhgp-j443-p4rf."
-    )):
+    for name in _accepted(
+        (n.strip() for n in var_names),
+        (
+            "env passthrough: refusing to register Clawksis provider "
+            "credential %r (blocked by _CLAWK_PROVIDER_ENV_BLOCKLIST). "
+            "Skills must not override the execute_code sandbox's "
+            "credential scrubbing; see GHSA-rhgp-j443-p4rf."
+        ),
+    ):
         _get_allowed().add(name)
         logger.debug("env passthrough: registered %s", name)
 
@@ -110,14 +118,19 @@ def _load_config_passthrough() -> frozenset[str]:
     try:
         passthrough = cfg_get(read_raw_config(), "terminal", "env_passthrough")
         items = passthrough if isinstance(passthrough, list) else ()
-        result.update(_accepted((i.strip() for i in items if isinstance(i, str)), (
-            "env passthrough: refusing to register Clawksis "
-            "provider credential %r from config.yaml (blocked "
-            "by _CLAWK_PROVIDER_ENV_BLOCKLIST). Operator "
-            "configuration must not override the execute_code "
-            "sandbox's credential scrubbing; see "
-            "GHSA-rhgp-j443-p4rf."
-        )))
+        result.update(
+            _accepted(
+                (i.strip() for i in items if isinstance(i, str)),
+                (
+                    "env passthrough: refusing to register Clawksis "
+                    "provider credential %r from config.yaml (blocked "
+                    "by _CLAWK_PROVIDER_ENV_BLOCKLIST). Operator "
+                    "configuration must not override the execute_code "
+                    "sandbox's credential scrubbing; see "
+                    "GHSA-rhgp-j443-p4rf."
+                ),
+            )
+        )
     except Exception as e:
         logger.debug("Could not read tools.env_passthrough from config: %s", e)
     _config_passthrough[home_key] = frozenset(result)
@@ -129,15 +142,19 @@ def is_env_passthrough(var_name: str) -> bool:
     Clawksis-managed credential NOW. Ownership changes after acceptance (a platform plugin
     registered later declares the name in its ``required_env`` or manifest), so the refusal applied at registration
     is re-applied here, where every child builder consumes the allowlist."""
-    return ((var_name in _get_allowed() or var_name in _load_config_passthrough())
-            and not _is_clawk_provider_credential(var_name))
+    return (
+        var_name in _get_allowed() or var_name in _load_config_passthrough()
+    ) and not _is_clawk_provider_credential(var_name)
 
 
 def get_all_passthrough() -> frozenset[str]:
     """Return the union of skill-registered and config-based passthrough vars, minus names
     that have become Clawksis-managed credentials since they were accepted."""
-    return frozenset(name for name in frozenset(_get_allowed()) | _load_config_passthrough()
-                     if not _is_clawk_provider_credential(name))
+    return frozenset(
+        name
+        for name in frozenset(_get_allowed()) | _load_config_passthrough()
+        if not _is_clawk_provider_credential(name)
+    )
 
 
 def resolve_passthrough_value(name: str, fallback: str | None = None) -> str | None:
@@ -148,7 +165,12 @@ def resolve_passthrough_value(name: str, fallback: str | None = None) -> str | N
     raises the fail-closed ``UnscopedSecretError``. Outside multiplexing an installed
     scope keeps overlay semantics and an unscoped caller keeps its fallback."""
     from agent.secret_scope import (
-        _is_global_env, current_secret_scope, get_secret, is_multiplex_active)
+        _is_global_env,
+        current_secret_scope,
+        get_secret,
+        is_multiplex_active,
+    )
+
     # Global terminal/runtime settings are not profile secrets; ``fallback`` is
     # already the caller's effective value (incl. an explicit per-call override).
     if _is_global_env(name) and fallback is not None:
@@ -168,6 +190,7 @@ def scoped_passthrough_additions(present: Iterable[str]) -> dict[str, str]:
     bound scope alone: never ``os.environ``, never another profile. Empty without a scope, so
     single-profile spawns are byte-identical."""
     from agent.secret_scope import _is_global_env, current_secret_scope
+
     scope = current_secret_scope()
     if not scope:
         return {}

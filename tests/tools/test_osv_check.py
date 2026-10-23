@@ -15,6 +15,7 @@ from tools.osv_check import (
     _parse_pypi_package,
 )
 
+
 class TestInferEcosystem:
     def test_npx(self):
         assert _infer_ecosystem("npx") == "npm"
@@ -50,6 +51,7 @@ class TestInferEcosystem:
         assert _infer_ecosystem("python") is None
         assert _infer_ecosystem("/bin/bash") is None
 
+
 class TestParseNpmPackage:
     def test_simple(self):
         assert _parse_npm_package("react") == ("react", None)
@@ -57,12 +59,14 @@ class TestParseNpmPackage:
     def test_latest_ignored(self):
         assert _parse_npm_package("react@latest") == ("react", None)
 
+
 class TestParsePypiPackage:
     def test_simple(self):
         assert _parse_pypi_package("requests") == ("requests", None)
 
     def test_extras_no_version(self):
         assert _parse_pypi_package("mcp[cli]") == ("mcp", None)
+
 
 class TestParsePackageFromArgs:
     def test_npm_skips_flags(self):
@@ -82,10 +86,12 @@ class TestParsePackageFromArgs:
         assert name == "react"
         assert ver == "18.3.1"
 
+
 class TestCheckPackageForMalware:
     @pytest.fixture(autouse=True)
     def _fresh_cache(self, tmp_path, monkeypatch):
         from tools import osv_check
+
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
         with osv_check._cache_lock:
             osv_check._cache.clear()
@@ -96,6 +102,7 @@ class TestCheckPackageForMalware:
             osv_check._cache.clear()
             osv_check._disk_cache_loaded = False
         (tmp_path / "cache" / "osv_check.json").unlink(missing_ok=True)
+
     def test_clean_package(self):
         """Clean package returns None (allow)."""
         mock_response = MagicMock()
@@ -103,23 +110,34 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
-            result = check_package_for_malware("npx", ["-y", "@modelcontextprotocol/server-filesystem"])
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ):
+            result = check_package_for_malware(
+                "npx", ["-y", "@modelcontextprotocol/server-filesystem"]
+            )
         assert result is None
 
     def test_malware_blocked(self):
         """Known malware package returns error string."""
         mock_response = MagicMock()
-        mock_response.read.return_value = json.dumps({
-            "vulns": [
-                {"id": "MAL-2023-7938", "summary": "Malicious code in evil-pkg"},
-                {"id": "CVE-2023-1234", "summary": "Regular vulnerability"},  # should be filtered
-            ]
-        }).encode()
+        mock_response.read.return_value = json.dumps(
+            {
+                "vulns": [
+                    {"id": "MAL-2023-7938", "summary": "Malicious code in evil-pkg"},
+                    {
+                        "id": "CVE-2023-1234",
+                        "summary": "Regular vulnerability",
+                    },  # should be filtered
+                ]
+            }
+        ).encode()
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ):
             result = check_package_for_malware("npx", ["evil-pkg"])
         assert result is not None
         assert "BLOCKED" in result
@@ -133,7 +151,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url:
             check_package_for_malware("uvx", ["mcp-server-fetch"])
             # Verify PyPI ecosystem was sent
             call_data = json.loads(mock_url.call_args[0][0].data)
@@ -151,7 +171,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url:
             for _ in range(50):
                 assert check_package_for_malware("uvx", ["mcp-server-fetch"]) is None
         assert mock_url.call_count == 1
@@ -165,7 +187,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url:
             first = check_package_for_malware("npx", ["evil-pkg"])
             second = check_package_for_malware("npx", ["evil-pkg"])
         assert first is not None and "BLOCKED" in first
@@ -200,7 +224,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url:
             check_package_for_malware("uvx", ["mcp-server-fetch"])
             # Force-expire the entry.
             with osv_check._cache_lock:
@@ -221,7 +247,9 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ):
             check_package_for_malware("uvx", ["mcp-server-persist"])
 
         cache_file = tmp_path / "cache" / "osv_check.json"
@@ -231,7 +259,9 @@ class TestCheckPackageForMalware:
             osv_check._cache.clear()
             osv_check._disk_cache_loaded = False
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url2:
+        with patch(
+            "tools.osv_check.urllib.request.urlopen", return_value=mock_response
+        ) as mock_url2:
             check_package_for_malware("uvx", ["mcp-server-persist"])
 
         assert mock_url2.call_count == 0, "disk cache must satisfy the second call"
@@ -244,15 +274,17 @@ class TestCheckPackageForMalware:
         cache_file = tmp_path / "cache" / "osv_check.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(
-            json.dumps({
-                "version": osv_check._DISK_CACHE_VERSION,
-                "entries": {
-                    "PyPI|mcp-server-retry|": {
-                        "expiry": time.time() + 3600,
-                        "result": None,
-                    }
-                },
-            }),
+            json.dumps(
+                {
+                    "version": osv_check._DISK_CACHE_VERSION,
+                    "entries": {
+                        "PyPI|mcp-server-retry|": {
+                            "expiry": time.time() + 3600,
+                            "result": None,
+                        }
+                    },
+                }
+            ),
             encoding="utf-8",
         )
 

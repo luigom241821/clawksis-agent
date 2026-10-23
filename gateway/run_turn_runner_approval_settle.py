@@ -15,13 +15,17 @@ import logging
 from typing import Any, Callable, Optional
 
 from agent.i18n import t
-from gateway.platforms.base_exec_approval import approval_timeout_seconds, format_approval_timed_out_notice
+from gateway.platforms.base_exec_approval import (
+    approval_timeout_seconds,
+    format_approval_timed_out_notice,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def register_timeout_notice(
-    runner, approval_data: dict, *, command: str, card_message_id: Optional[str]) -> None:
+    runner, approval_data: dict, *, command: str, card_message_id: Optional[str]
+) -> None:
     """Arm a settle hook that posts the timed-out notice for ``approval_data['request_id']``.
 
     ``runner`` is the ``TurnRunner`` (for ``_ctx`` and ``_schedule``); ``card_message_id`` is the
@@ -49,12 +53,15 @@ def register_timeout_notice(
             return
         runner._schedule(
             _post_timeout_notice(runner._ctx, command, card_message_id, timeout_s),
-            "Approval timeout notice scheduling error")
+            "Approval timeout notice scheduling error",
+        )
 
     register_gateway_settle(session_key, request_id, settle)
 
 
-async def _post_timeout_notice(ctx, command: str, card_message_id: Optional[str], timeout_s: int) -> None:
+async def _post_timeout_notice(
+    ctx, command: str, card_message_id: Optional[str], timeout_s: int
+) -> None:
     from gateway.run import _interim_metadata
 
     adapter = ctx._status_adapter
@@ -63,8 +70,15 @@ async def _post_timeout_notice(ctx, command: str, card_message_id: Optional[str]
     try:
         # Plain markdown, not the card's platform markup: ``edit_message`` re-formats it itself.
         if card_message_id and await _edit_card(
-                adapter, ctx._status_chat_id, card_message_id,
-                t("gateway.exec_approval.timed_out_card_body", notice=notice, command=command)):
+            adapter,
+            ctx._status_chat_id,
+            card_message_id,
+            t(
+                "gateway.exec_approval.timed_out_card_body",
+                notice=notice,
+                command=command,
+            ),
+        ):
             return
         await adapter.send(ctx._status_chat_id, notice, metadata=metadata)
     except Exception:
@@ -79,6 +93,9 @@ async def _edit_card(adapter, chat_id: str, message_id: str, content: str) -> bo
     try:
         result = await edit(chat_id, message_id, content)
     except Exception:
-        logger.debug("Approval card edit failed; sending the notice as a new message", exc_info=True)
+        logger.debug(
+            "Approval card edit failed; sending the notice as a new message",
+            exc_info=True,
+        )
         return False
     return bool(getattr(result, "success", False))

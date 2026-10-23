@@ -41,5 +41,3 @@ def test_build_apikey_providers_list_skips_dedicated_check_providers():
         f"Bedrock uses AWS SDK creds, not Bearer auth; generic loop must skip. "
         f"Got: {sorted(names)}"
     )
-
-

@@ -43,9 +43,7 @@ def test_tool_adapter_bypasses_relay_without_an_active_consumer(
     runtime = relay_runtime.get_runtime()
     assert runtime is not None
     runtime.release_managed_execution("test.relay_tools")
-    runtime.release_managed_execution(
-        relay_runtime.RELAY_PLUGINS_EXECUTION_CONSUMER
-    )
+    runtime.release_managed_execution(relay_runtime.RELAY_PLUGINS_EXECUTION_CONSUMER)
     args = {"command": "pwd"}
 
     monkeypatch.setattr(
@@ -65,8 +63,6 @@ def test_tool_adapter_bypasses_relay_without_an_active_consumer(
 
     assert result is args
     assert final_args is args
-
-
 
 
 def test_request_rewrite_reaches_authorized_callback_once(relay_turn):

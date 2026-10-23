@@ -14,11 +14,26 @@ from agent.auxiliary_client import _auth_refresh_provider_for_route
 
 @pytest.mark.parametrize(
     ("effective_provider", "expected"),
-    [("", "xai-oauth"), ("auto", "xai-oauth"), ("xai-oauth", "xai-oauth"), ("xai", "auto")],
+    [
+        ("", "xai-oauth"),
+        ("auto", "xai-oauth"),
+        ("xai-oauth", "xai-oauth"),
+        ("xai", "auto"),
+    ],
 )
-def test_auto_route_on_xai_host_refreshes_xai_oauth_unless_api_key_backend(effective_provider, expected):
-    assert _auth_refresh_provider_for_route("auto", "https://api.x.ai/v1", effective_provider) == expected
+def test_auto_route_on_xai_host_refreshes_xai_oauth_unless_api_key_backend(
+    effective_provider, expected
+):
+    assert (
+        _auth_refresh_provider_for_route(
+            "auto", "https://api.x.ai/v1", effective_provider
+        )
+        == expected
+    )
 
 
 def test_unknown_host_on_auto_route_stays_auto():
-    assert _auth_refresh_provider_for_route("auto", "https://unknown.example.com/v1") == "auto"
+    assert (
+        _auth_refresh_provider_for_route("auto", "https://unknown.example.com/v1")
+        == "auto"
+    )

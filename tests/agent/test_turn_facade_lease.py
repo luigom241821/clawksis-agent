@@ -1,4 +1,5 @@
 """Unit tests for agent.turn_facade_lease (admission + lease bracket)."""
+
 import sqlite3
 import threading
 import time
@@ -98,7 +99,10 @@ def test_admission_sets_holder_attrs_and_release_clears_them(monkeypatch):
     lease.join_threads()
     lease.clear_interrupt()
     lease.release()
-    assert db.events == [("acquire", "s1", lease.holder), ("release", "s1", lease.holder)]
+    assert db.events == [
+        ("acquire", "s1", lease.holder),
+        ("release", "s1", lease.holder),
+    ]
     assert agent._active_session_turn_lease_holder is None
     assert agent._active_session_turn_lease_ttl_seconds is None
 
@@ -114,7 +118,9 @@ def test_timeout_and_interrupt_early_results():
     assert admission.early_result["failure_retryable"] is True
     assert admission.early_result["messages"] == [{"role": "user", "content": "x"}]
 
-    agent = _agent(_Db(acquired=False), _interrupt_requested=True, _interrupt_message="stop")
+    agent = _agent(
+        _Db(acquired=False), _interrupt_requested=True, _interrupt_message="stop"
+    )
     agent.clear_interrupt = lambda: None
     admission = _admit(agent)
     assert admission.early_result["interrupted"] is True
@@ -131,7 +137,9 @@ def test_interrupt_before_any_wait_does_not_blame_another_process():
 
     class _HeldDb(_Db):
         def acquire_session_turn_lease(self, session_id, holder, **kwargs):
-            kwargs["on_wait"](0.5)  # another holder seen, then the user interrupted the wait
+            kwargs["on_wait"](
+                0.5
+            )  # another holder seen, then the user interrupted the wait
             return False
 
     agent = _agent(_HeldDb(), _interrupt_requested=True)
@@ -188,7 +196,9 @@ def test_lock_tolerance_never_outlives_the_committed_row_expiry(tmp_path, monkey
     from agent import turn_facade_lease
 
     clock = _MovingClock(1000.0)
-    fake_time = SimpleNamespace(time=clock.time, monotonic=time.monotonic, sleep=time.sleep)
+    fake_time = SimpleNamespace(
+        time=clock.time, monotonic=time.monotonic, sleep=time.sleep
+    )
     monkeypatch.setattr(turn_facade_lease, "time", fake_time)
     monkeypatch.setattr(clawk_state_compression, "time", fake_time)
 
@@ -197,8 +207,12 @@ def test_lock_tolerance_never_outlives_the_committed_row_expiry(tmp_path, monkey
     db.create_session("s1", source="test")
     assert db.try_acquire_session_turn_lease("s1", "h")
     events = []
-    agent = SimpleNamespace(session_id="s1", interrupt=lambda msg, **kw: events.append((clock.time(), msg)))
-    lease = DurableTurnLease(agent, db, "s1", "h", expires_at=db.session_turn_lease_expires_at("s1", "h"))
+    agent = SimpleNamespace(
+        session_id="s1", interrupt=lambda msg, **kw: events.append((clock.time(), msg))
+    )
+    lease = DurableTurnLease(
+        agent, db, "s1", "h", expires_at=db.session_turn_lease_expires_at("s1", "h")
+    )
     lease.turn_active = True
 
     def row_expiry() -> float:
@@ -233,7 +247,9 @@ def test_lock_tolerance_never_outlives_the_committed_row_expiry(tmp_path, monkey
     worker.join(10)
     assert not worker.is_alive()
     assert events == []
-    assert row_expiry() > admitted_expiry, "the delayed renewal must have renewed the row"
+    assert row_expiry() > admitted_expiry, (
+        "the delayed renewal must have renewed the row"
+    )
     assert lease._authority_deadline <= row_expiry()
 
     # Near expiry with the lock held throughout: the renewal must give up and interrupt while the

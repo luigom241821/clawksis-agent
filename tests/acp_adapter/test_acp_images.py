@@ -7,11 +7,14 @@ from acp.schema import (
 
 from acp_adapter.server import ClawksisACPAgent, _content_blocks_to_openai_user_content
 
+
 def test_acp_image_blocks_convert_to_openai_multimodal_content():
-    content = _content_blocks_to_openai_user_content([
-        TextContentBlock(type="text", text="What is in this image?"),
-        ImageContentBlock(type="image", data="aGVsbG8=", mimeType="image/png"),
-    ])
+    content = _content_blocks_to_openai_user_content(
+        [
+            TextContentBlock(type="text", text="What is in this image?"),
+            ImageContentBlock(type="image", data="aGVsbG8=", mimeType="image/png"),
+        ]
+    )
 
     assert content == [
         {"type": "text", "text": "What is in this image?"},
@@ -21,27 +24,33 @@ def test_acp_image_blocks_convert_to_openai_multimodal_content():
         },
     ]
 
+
 def test_text_only_acp_blocks_stay_string_for_legacy_prompt_path():
-    content = _content_blocks_to_openai_user_content([
-        TextContentBlock(type="text", text="/help"),
-    ])
+    content = _content_blocks_to_openai_user_content(
+        [
+            TextContentBlock(type="text", text="/help"),
+        ]
+    )
 
     assert content == "/help"
+
 
 def test_acp_resource_link_file_is_inlined_as_text(tmp_path):
     attached = tmp_path / "notes.md"
     attached.write_text("# Notes\n\nAttached file body", encoding="utf-8", newline="\n")
 
-    content = _content_blocks_to_openai_user_content([
-        TextContentBlock(type="text", text="Please read this file"),
-        ResourceContentBlock(
-            type="resource_link",
-            name="notes.md",
-            title="Project notes",
-            uri=attached.as_uri(),
-            mimeType="text/markdown",
-        ),
-    ])
+    content = _content_blocks_to_openai_user_content(
+        [
+            TextContentBlock(type="text", text="Please read this file"),
+            ResourceContentBlock(
+                type="resource_link",
+                name="notes.md",
+                title="Project notes",
+                uri=attached.as_uri(),
+                mimeType="text/markdown",
+            ),
+        ]
+    )
 
     assert content == (
         "Please read this file\n"
@@ -50,12 +59,15 @@ def test_acp_resource_link_file_is_inlined_as_text(tmp_path):
         "# Notes\n\nAttached file body"
     )
 
+
 @pytest.mark.platforms("windows")
 def test_native_drive_path_and_file_uri_refer_to_same_attachment(tmp_path):
     from acp_adapter.content import _path_from_file_uri
+
     path = tmp_path / "notes with spaces.md"
     path.write_text("body", encoding="utf-8")
     assert _path_from_file_uri(str(path)) == _path_from_file_uri(path.as_uri()) == path
+
 
 @pytest.mark.asyncio
 async def test_initialize_advertises_image_prompt_capability():

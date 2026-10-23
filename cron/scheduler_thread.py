@@ -19,8 +19,15 @@ logger = logging.getLogger(__name__)
 class SupervisedTickerThread:
     """``threading.Thread``-shaped handle whose ``restart_if_dead`` respawns a dead ticker."""
 
-    def __init__(self, target: Callable[..., Any], *, args: tuple = (), kwargs: Mapping[str, Any] | None = None,
-                 stop_event: threading.Event, name: str = "cron-scheduler") -> None:
+    def __init__(
+        self,
+        target: Callable[..., Any],
+        *,
+        args: tuple = (),
+        kwargs: Mapping[str, Any] | None = None,
+        stop_event: threading.Event,
+        name: str = "cron-scheduler",
+    ) -> None:
         self._target, self._args, self._kwargs = target, args, dict(kwargs or {})
         self._stop_event, self._name = stop_event, name
         # An external provider's start() (Chronos) arms remote one-shots and RETURNS by design;
@@ -57,7 +64,8 @@ class SupervisedTickerThread:
         logger.error(
             "Cron ticker thread %r died without a stop request; restarting (restart #%d). Scheduled jobs "
             "did not fire while it was down — check errors.log for the escaping exception.",
-            self._name, self.restarts,
+            self._name,
+            self.restarts,
         )
         self._thread = self._spawn()
         self._thread.start()

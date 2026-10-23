@@ -26,7 +26,11 @@ def test_chat_submits_at_references_unexpanded(tmp_path, monkeypatch):
     cli._last_turn_interrupted = False
     cli._ensure_runtime_credentials = lambda: True
     cli._resolve_turn_agent_config = lambda _message: {
-        "signature": "route", "model": cli.model, "runtime": None, "request_overrides": None}
+        "signature": "route",
+        "model": cli.model,
+        "runtime": None,
+        "request_overrides": None,
+    }
     cli._init_agent = lambda **_kwargs: True
     staged = []
 

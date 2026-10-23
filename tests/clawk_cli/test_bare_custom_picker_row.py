@@ -20,13 +20,19 @@ def test_bare_custom_row_survives_switching_away_from_it(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
         lambda: {
-            "model": {"default": "gpt-4o", "provider": "custom", "base_url": "https://www.ccsub.net/v1"}
+            "model": {
+                "default": "gpt-4o",
+                "provider": "custom",
+                "base_url": "https://www.ccsub.net/v1",
+            }
         },
     )
     # The config-sourced branch serves the warm cache / falls back to the
     # config default; keep the test hermetic — no live probe.
     monkeypatch.setattr("clawk_cli.models.fetch_api_models", lambda *_a, **_kw: [])
-    monkeypatch.setattr("clawk_cli.models.cached_fetch_api_models", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        "clawk_cli.models.cached_fetch_api_models", lambda *_a, **_kw: None
+    )
 
     providers = list_authenticated_providers(
         current_provider="xai",
@@ -38,10 +44,14 @@ def test_bare_custom_row_survives_switching_away_from_it(monkeypatch):
     )
 
     bare_custom = next((p for p in providers if p["slug"] == "custom"), None)
-    assert bare_custom is not None, "bare custom endpoint row vanished after switching provider"
+    assert bare_custom is not None, (
+        "bare custom endpoint row vanished after switching provider"
+    )
     assert bare_custom["name"] == "Custom endpoint"
     assert bare_custom["is_current"] is False
-    assert bare_custom["models"] == ["gpt-4o"], "config default model must seed the row when no probe runs"
+    assert bare_custom["models"] == ["gpt-4o"], (
+        "config default model must seed the row when no probe runs"
+    )
     assert bare_custom["api_url"] == "https://www.ccsub.net/v1"
     assert bare_custom["source"] == "model-config"
 
@@ -54,7 +64,11 @@ def test_bare_custom_row_config_fallback_defers_to_matching_named_entry(monkeypa
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
         lambda: {
-            "model": {"default": "gpt-4o", "provider": "custom", "base_url": "https://www.ccsub.net/v1"}
+            "model": {
+                "default": "gpt-4o",
+                "provider": "custom",
+                "base_url": "https://www.ccsub.net/v1",
+            }
         },
     )
 
@@ -63,7 +77,13 @@ def test_bare_custom_row_config_fallback_defers_to_matching_named_entry(monkeypa
         current_base_url="",
         current_model="grok-4",
         user_providers={},
-        custom_providers=[{"name": "my-endpoint", "base_url": "https://www.ccsub.net/v1", "model": "gpt-4o"}],
+        custom_providers=[
+            {
+                "name": "my-endpoint",
+                "base_url": "https://www.ccsub.net/v1",
+                "model": "gpt-4o",
+            }
+        ],
         probe_custom_providers=False,
     )
 

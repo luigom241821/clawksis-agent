@@ -50,8 +50,6 @@ def test_oracles_importable_and_self_free():
         assert isinstance(out, str) and out, platform
 
 
-
-
 def test_vector_files_shape(tmp_path):
     generate(tmp_path)
     for platform in PLATFORMS:
@@ -70,10 +68,6 @@ def test_vector_files_shape(tmp_path):
         assert len(ids) == len(doc["vectors"])
 
 
-
-
-
-
 def test_committed_vectors_match_regeneration(tmp_path):
     """The committed tests/conformance/vectors/ must reproduce from the
     current oracle — the same lockstep discipline as openapi.json (drift
@@ -84,7 +78,9 @@ def test_committed_vectors_match_regeneration(tmp_path):
     generate(tmp_path)
     for platform in PLATFORMS:
         fresh = json.loads((tmp_path / f"{platform}.json").read_text(encoding="utf-8"))
-        committed = json.loads((committed_dir / f"{platform}.json").read_text(encoding="utf-8"))
+        committed = json.loads(
+            (committed_dir / f"{platform}.json").read_text(encoding="utf-8")
+        )
         # Compare everything except the commit stamp (committed file may be
         # one commit behind HEAD in a dirty working tree).
         fresh["oracle"].pop("commit")

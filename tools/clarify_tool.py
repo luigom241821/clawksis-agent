@@ -64,23 +64,33 @@ def _normalize_questions(questions) -> tuple:
             return None, f"questions[{index}].question must be non-empty text."
         choices = item.get("choices")
         if choices is not None:
-            if not isinstance(choices, list) or not all(isinstance(c, str) for c in choices):
+            if not isinstance(choices, list) or not all(
+                isinstance(c, str) for c in choices
+            ):
                 return None, f"questions[{index}].choices must be a list of strings."
             for pos, choice in enumerate(choices):
                 if len(choice.strip()) > MAX_CHOICE_CHARS:
-                    return None, (f"questions[{index}].choices[{pos}] is {len(choice.strip())} characters; the limit is "
-                                  f"{MAX_CHOICE_CHARS}. Move detail into the question text and resend.")
+                    return None, (
+                        f"questions[{index}].choices[{pos}] is {len(choice.strip())} characters; the limit is "
+                        f"{MAX_CHOICE_CHARS}. Move detail into the question text and resend."
+                    )
             cleaned = [c.strip() for c in choices if c.strip()][:MAX_CHOICES]
             if choices and not cleaned:
                 # A card with no options strands the turn: say so instead of silently asking open-ended.
-                return None, (f"questions[{index}].choices has {len(choices)} entries but all are blank. "
-                              "Send real labels, or omit choices to ask open-ended.")
+                return None, (
+                    f"questions[{index}].choices has {len(choices)} entries but all are blank. "
+                    "Send real labels, or omit choices to ask open-ended."
+                )
             choices = cleaned or None
-        normalized.append({
-            "qid": f"q{index}", "question": text,
-            "choices": mark_recommended(list(choices)) if choices else None,
-            "choices_offered": list(choices) if choices else None,
-            "multi_select": bool(item.get("multi_select")) and bool(choices)})
+        normalized.append(
+            {
+                "qid": f"q{index}",
+                "question": text,
+                "choices": mark_recommended(list(choices)) if choices else None,
+                "choices_offered": list(choices) if choices else None,
+                "multi_select": bool(item.get("multi_select")) and bool(choices),
+            }
+        )
     return normalized, None
 
 
@@ -100,8 +110,14 @@ def _result(normalized: list[dict], reply: dict) -> str:
     responses = []
     for entry in normalized:
         status, value = _response_status(entry["qid"], answers, entry["multi_select"])
-        responses.append({"question": entry["question"], "choices_offered": entry["choices_offered"],
-                          "status": status, "user_response": value})
+        responses.append(
+            {
+                "question": entry["question"],
+                "choices_offered": entry["choices_offered"],
+                "status": status,
+                "user_response": value,
+            }
+        )
     result: dict[str, object] = {"responses": responses, "outcome": reply["outcome"]}
     if reply.get("notice"):
         result["notice"] = str(reply["notice"])
@@ -117,8 +133,11 @@ def clarify_tool(questions, callback: Optional[Callable] = None) -> str:
     if callback is None:
         return tool_error(_UNAVAILABLE)
     from tools.human_input_hooks import human_input_request
+
     # Observers see the questions only; the answers stay in the tool result.
-    with human_input_request("clarify", prompt="\n".join(q["question"] for q in normalized)) as human:
+    with human_input_request(
+        "clarify", prompt="\n".join(q["question"] for q in normalized)
+    ) as human:
         try:
             reply = callback(normalized)
             human.outcome = str(reply.get("outcome") or "")
@@ -175,7 +194,9 @@ CLARIFY_SCHEMA = {
                         "question": {"type": "string"},
                         "choices": {
                             "type": "array",
-                            "items": {"type": "string"},  # no maxLength: llama.cpp's grammar converter rejects >=2000 (#131278); the limit is enforced above
+                            "items": {
+                                "type": "string"
+                            },  # no maxLength: llama.cpp's grammar converter rejects >=2000 (#131278); the limit is enforced above
                             "maxItems": MAX_CHOICES,
                         },
                         "multi_select": {"type": "boolean"},
@@ -195,7 +216,9 @@ registry.register(
     name="clarify",
     toolset="clarify",
     schema=CLARIFY_SCHEMA,
-    handler=lambda args, **kw: clarify_tool(args.get("questions"), callback=kw.get("callback")),
+    handler=lambda args, **kw: clarify_tool(
+        args.get("questions"), callback=kw.get("callback")
+    ),
     check_fn=check_clarify_requirements,
     emoji="❓",
 )

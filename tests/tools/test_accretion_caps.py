@@ -27,8 +27,6 @@ class TestReadTrackerCaps:
         with rt._read_tracker_lock:
             rt._read_tracker.clear()
 
-
-
     def test_live_cap_applied_after_read_add(self, tmp_path, monkeypatch):
         """Live read_file path enforces caps."""
         from tools import file_tools as ft
@@ -63,6 +61,7 @@ class TestCompletionConsumedPrune:
         import time
 
         reg = ProcessRegistry()
+
         # Fake a finished session whose started_at is older than the TTL.
         class _FakeSess:
             def __init__(self, sid):
@@ -80,7 +79,6 @@ class TestCompletionConsumedPrune:
 
         assert "stale-1" not in reg._finished
         assert "stale-1" not in reg._completion_consumed
-
 
     def test_prune_clears_dangling_completion_entries(self):
         """Stale entries in _completion_consumed without a backing session

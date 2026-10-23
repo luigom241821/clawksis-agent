@@ -64,17 +64,14 @@ def _mk_session(
         kwargs["model_config"] = model_config
     db.create_session(session_id, source, **kwargs)
     for i in range(messages):
-        db.append_message(
-            session_id, "user" if i % 2 == 0 else "assistant", f"m{i}"
-        )
+        db.append_message(session_id, "user" if i % 2 == 0 else "assistant", f"m{i}")
     with db._lock:
         if keyed:
             # ``create_session`` on main does not carry presentation/origin
             # metadata into the INSERT — set it the way the gateway's
             # per-turn peer refresh does, so the donor row is realistic.
             db._conn.execute(
-                "UPDATE sessions SET origin_json = ?, display_name = ? "
-                "WHERE id = ?",
+                "UPDATE sessions SET origin_json = ?, display_name = ? WHERE id = ?",
                 (
                     '{"platform": "telegram", "chat_id": "6308981865"}',
                     "Teknium",
@@ -120,9 +117,7 @@ def _incident(db, *, parent_link=False):
         keyed=False,
         started_at=stale_last + 60,
         last_activity_at=now - 3600,
-        parent_session_id=(
-            "20260803_120103_37976afb" if parent_link else None
-        ),
+        parent_session_id=("20260803_120103_37976afb" if parent_link else None),
         messages=6,
     )
     return "20260803_120103_37976afb", "20260806_161836_04c1d6c6"
@@ -216,9 +211,7 @@ class TestDetection:
     def test_delegate_children_are_not_orphans(self, db):
         stale, orphan = _incident(db)
         with db._lock:
-            db._conn.execute(
-                "DELETE FROM messages WHERE session_id = ?", (orphan,)
-            )
+            db._conn.execute("DELETE FROM messages WHERE session_id = ?", (orphan,))
             db._conn.execute("DELETE FROM sessions WHERE id = ?", (orphan,))
             db._conn.commit()
         _mk_session(
@@ -304,9 +297,7 @@ class TestAdoption:
 
     def test_unkeyed_donor_is_refused(self, db):
         _, orphan = _incident(db)
-        _mk_session(
-            db, "no_key_donor", keyed=False, started_at=time.time() - 100
-        )
+        _mk_session(db, "no_key_donor", keyed=False, started_at=time.time() - 100)
         assert db.adopt_orphaned_gateway_session(orphan, "no_key_donor") is False
 
 
@@ -329,7 +320,9 @@ def test_donor_must_share_the_orphans_profile(tmp_path, monkeypatch):
     root = tmp_path / "clawk"
     root.mkdir()
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setattr(clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH)
+    monkeypatch.setattr(
+        clawk_state, "DEFAULT_DB_PATH", clawk_state._IMPORT_DEFAULT_DB_PATH
+    )
     store = SessionDB(db_path=root / "state.db")  # owner: default
     try:
         stale, orphan = _incident(store)  # both rows auto-stamped 'default'
@@ -344,7 +337,10 @@ def test_donor_must_share_the_orphans_profile(tmp_path, monkeypatch):
         assert record["adoptable"] is True and record["donor_id"] == stale
 
         with store._lock:  # same fence on the lineage path
-            store._conn.execute("UPDATE sessions SET parent_session_id = ? WHERE id = ?", (stale, orphan))
+            store._conn.execute(
+                "UPDATE sessions SET parent_session_id = ? WHERE id = ?",
+                (stale, orphan),
+            )
             store._conn.commit()
         _stamp_profile(store, stale, "bot2")
         record = store.find_orphaned_gateway_sessions()[0]

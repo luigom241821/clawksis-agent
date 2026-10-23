@@ -1,4 +1,5 @@
 """Fresh takeover bootstrap prepares actual dependencies before completion."""
+
 from __future__ import annotations
 
 import json
@@ -21,8 +22,18 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     root = tmp_path / "source with spaces"
     root.mkdir()
     for name in ("pm", "clawk_cli"):
-        shutil.copytree(source / name, root / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    for name in ("clawk_constants.py", "clawk_dir_acl.py", "clawk_yaml.py", "utils.py", "clawk_bootstrap.py"):
+        shutil.copytree(
+            source / name,
+            root / name,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+    for name in (
+        "clawk_constants.py",
+        "clawk_dir_acl.py",
+        "clawk_yaml.py",
+        "utils.py",
+        "clawk_bootstrap.py",
+    ):
         shutil.copy2(source / name, root / name)
     home, store, wheels = (tmp_path / name for name in ("home", "tools", "wheels"))
     for directory in (home, store, wheels):
@@ -31,17 +42,35 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     (root / "pyproject.toml").write_text(
         '[project]\nname="takeover-fixture"\nversion="1"\nrequires-python=">=3.14"\n'
         'dependencies=["takeover-dep==1.0"]\n[project.optional-dependencies]\nall=[]\nmatrix=[]\n'
-        '[tool.clawk.extras-platforms]\nmatrix="sys_platform == \'no-such-platform\'"\n'
-        '[tool.uv]\npackage=false\nno-index=true\n'
-        f'find-links=[{json.dumps(wheels.as_posix())}]\n', encoding="utf-8")
+        "[tool.clawk.extras-platforms]\nmatrix=\"sys_platform == 'no-such-platform'\"\n"
+        "[tool.uv]\npackage=false\nno-index=true\n"
+        f"find-links=[{json.dumps(wheels.as_posix())}]\n",
+        encoding="utf-8",
+    )
     (root / ".git").mkdir()
-    (root / "install-stamp.json").write_text('{"updateMechanism":"self"}', encoding="utf-8")
+    (root / "install-stamp.json").write_text(
+        '{"updateMechanism":"self"}', encoding="utf-8"
+    )
     uv = shutil.which("uv")
     assert uv
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("CLAWK_", "PYTHON", "UV_"))}
-    env.update(HOME=str(home), CLAWK_HOME=str(home), CLAWK_RUNTIME_DIR=str(store), UV_PYTHON_DOWNLOADS="never")
-    subprocess.run([uv, "lock", "--offline", "--python", sys.executable], cwd=root, env=env, check=True, capture_output=True)
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("CLAWK_", "PYTHON", "UV_"))
+    }
+    env.update(
+        HOME=str(home),
+        CLAWK_HOME=str(home),
+        CLAWK_RUNTIME_DIR=str(store),
+        UV_PYTHON_DOWNLOADS="never",
+    )
+    subprocess.run(
+        [uv, "lock", "--offline", "--python", sys.executable],
+        cwd=root,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
     # A main-era venv that carried a gated extra: the takeover interpreter
     # (-S, so no `packaging`) must still judge the gate and drop it.
     legacy_site = root / ".venv" / "lib" / "python3.11" / "site-packages"
@@ -52,7 +81,10 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     (root / "pm/lock.json").write_text('{"schema":1,"packages":{}}', encoding="utf-8")
     lock = Lockfile(root / "pm/lock.json")
     target = current_target()
-    for name, executable, rel in (("python", sys._base_executable, "bin/python3"), ("uv", uv, "uv")):
+    for name, executable, rel in (
+        ("python", sys._base_executable, "bin/python3"),
+        ("uv", uv, "uv"),
+    ):
         entry = store / name
         binary = entry / rel
         binary.parent.mkdir(parents=True, exist_ok=True)
@@ -60,8 +92,15 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
         if name == "uv":
             (entry / "uvx").symlink_to(Path(uv).resolve().with_name("uvx"))
         lock.set_pin(name, "fixture", {})
-        Facts(store / "facts.json").record(name, "fixture", name, {"PATH": [str(binary.parent)]}, store,
-                                          target=target, digest=tree_digest(entry))
+        Facts(store / "facts.json").record(
+            name,
+            "fixture",
+            name,
+            {"PATH": [str(binary.parent)]},
+            store,
+            target=target,
+            digest=tree_digest(entry),
+        )
     # The application lock also pins build-only suppliers. A CLI takeover must
     # not select them as runtime roots, even when they cannot run on this host.
     lock.set_pin("dmgbuild", "fixture", {})
@@ -76,19 +115,39 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
         "activate_dependencies(Path(request['root']))\nimport takeover_dep\n"
         "assert request['pm_receipt']['update_id']==request['update_id']\n"
         "Path(sys.argv[2]).write_text(json.dumps({'python':sys.executable,'dep':takeover_dep.__file__}))\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     context, result = tmp_path / "context.json", tmp_path / "result.json"
-    context.write_text(json.dumps({"root": str(root), "home": str(home)}), encoding="utf-8")
-    completed = subprocess.run([sys.executable, "-I", "-S", "-B", str(root / "clawk_cli/_update_takeover.py"), str(context), str(result)],
-                               env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    context.write_text(
+        json.dumps({"root": str(root), "home": str(home)}), encoding="utf-8"
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(root / "clawk_cli/_update_takeover.py"),
+            str(context),
+            str(result),
+        ],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     output = json.loads(result.read_text())
-    assert Path(output['python']).is_relative_to(store)
-    assert Path(output['dep']).is_relative_to(home / "installs")
+    assert Path(output["python"]).is_relative_to(store)
+    assert Path(output["dep"]).is_relative_to(home / "installs")
     assert (root / ".clawk/bin/clawk").is_file()
     assert not (root / "venv").exists()
     assert Facts(store / "facts.json").get("dmgbuild") is None
-    venv_fact = json.loads(next((home / "installs").glob("*/facts.json")).read_text())["packages"]["venv"]
+    venv_fact = json.loads(next((home / "installs").glob("*/facts.json")).read_text())[
+        "packages"
+    ]["venv"]
     assert "matrix" not in venv_fact["extras"]
 
     # Repair restores the recorded graph; a checkout update must also advance
@@ -96,7 +155,9 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     facts = next((home / "installs").glob("*/facts.json"))
     first_stamp = json.loads(facts.read_text())["packages"]["venv"]["stamp"]
     generations = facts.parent / "environments"
-    first_generations = {path.resolve() for path in generations.iterdir() if path.is_dir()}
+    first_generations = {
+        path.resolve() for path in generations.iterdir() if path.is_dir()
+    }
     assert first_generations
     for generation in first_generations:
         marker = generation / ".lease-managed"
@@ -105,20 +166,54 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     (facts.parent / ".repair-incomplete").write_text("{}", encoding="utf-8")
     with (root / "uv.lock").open("a", encoding="utf-8") as changed:
         changed.write("\n# changed source inputs\n")
-    repaired = subprocess.run([sys.executable, "-I", "-S", "-B", str(root / "clawk_cli/_update_takeover.py"), str(context), str(result)],
-                              env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    repaired = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(root / "clawk_cli/_update_takeover.py"),
+            str(context),
+            str(result),
+        ],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert repaired.returncode == 0, repaired.stdout + repaired.stderr
     assert json.loads(facts.read_text())["packages"]["venv"]["stamp"] != first_stamp
-    remaining_generations = {path.resolve() for path in generations.iterdir() if path.is_dir()}
+    remaining_generations = {
+        path.resolve() for path in generations.iterdir() if path.is_dir()
+    }
     assert first_generations.isdisjoint(remaining_generations)
     assert not (facts.parent / ".repair-incomplete").exists()
 
     # A child which dies before acknowledging receipt ownership must not
     # leave the parent reporting success from its pre-handoff receipt.
-    (root / "clawk_cli/update_finish.py").write_text("raise SystemExit(7)\n", encoding="utf-8")
+    (root / "clawk_cli/update_finish.py").write_text(
+        "raise SystemExit(7)\n", encoding="utf-8"
+    )
     result.unlink()
-    crashed = subprocess.run([sys.executable, "-I", "-S", "-B", str(root / "clawk_cli/_update_takeover.py"), str(context), str(result)],
-                             env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    crashed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(root / "clawk_cli/_update_takeover.py"),
+            str(context),
+            str(result),
+        ],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert crashed.returncode == 7
     assert json.loads(result.read_text())["receipt_handled"]
     crash_receipt = json.loads((home / "logs/update_receipts/latest.json").read_text())
@@ -130,8 +225,23 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     before = facts.read_bytes()
     (root / "uv.lock").write_text("not valid TOML [", encoding="utf-8")
     result.unlink()
-    failed = subprocess.run([sys.executable, "-I", "-S", "-B", str(root / "clawk_cli/_update_takeover.py"), str(context), str(result)],
-                            env=env, cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    failed = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(root / "clawk_cli/_update_takeover.py"),
+            str(context),
+            str(result),
+        ],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
     assert failed.returncode != 0
     assert facts.read_bytes() == before
     failure = json.loads(result.read_text())

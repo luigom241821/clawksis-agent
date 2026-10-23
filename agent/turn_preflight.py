@@ -15,14 +15,22 @@ from typing import Any, Dict, List, Optional
 
 from agent.context_engine import automatic_compaction_status_message
 from agent.conversation_compression import (
-    PRE_API_COMPRESSION_STATUS_TEMPLATE, _reset_read_dedup_caches, compression_blocked_transiently,
-    compression_skipped_due_to_lock, context_compression_timed_out,
-    conversation_history_after_compression, ensure_compression_feasibility_checked,
+    PRE_API_COMPRESSION_STATUS_TEMPLATE,
+    _reset_read_dedup_caches,
+    compression_blocked_transiently,
+    compression_skipped_due_to_lock,
+    context_compression_timed_out,
+    conversation_history_after_compression,
+    ensure_compression_feasibility_checked,
 )
 from agent.turn_context import _review_fork_first_request_pending
 from agent.turn_context_compaction import (
-    _apply_grown_window, _blocked_compress_reason, _clear_overflow_warn, _refund_api_call,
-    _reanchor, _reset_retry_state_after_compaction,
+    _apply_grown_window,
+    _blocked_compress_reason,
+    _clear_overflow_warn,
+    _refund_api_call,
+    _reanchor,
+    _reset_retry_state_after_compaction,
 )
 
 logger = logging.getLogger("agent.conversation_loop")
@@ -55,9 +63,18 @@ class PreflightGateVerdict:
 
 
 def run_preflight_compression(
-    agent: Any, v: PreflightGateVerdict, *, compressor: Any, request_pressure_tokens: int,
-    provider_overflow_preflight: bool, defer_preflight: Any, moa_prepared_request: Any,
-    system_message: Any, user_message: Any, max_compression_attempts: int, effective_task_id: Any,
+    agent: Any,
+    v: PreflightGateVerdict,
+    *,
+    compressor: Any,
+    request_pressure_tokens: int,
+    provider_overflow_preflight: bool,
+    defer_preflight: Any,
+    moa_prepared_request: Any,
+    system_message: Any,
+    user_message: Any,
+    max_compression_attempts: int,
+    effective_task_id: Any,
 ) -> PreflightGateVerdict:
     """Mirror of the turn-prologue guard chain (defer on noisy estimate → skip in failure
     cooldown → ``should_compress``), rebinding the loop locals on ``v`` and setting
@@ -67,18 +84,27 @@ def run_preflight_compression(
     blocker unarmed. A forced provider-overflow preflight that any gate blocks fails
     closed (llama.cpp may silently truncate)."""
     from agent.conversation_loop import (
-        _COMPRESSION_TIMEOUT_FINAL_RESPONSE, _HANDOFF_SKIP_FINAL_RESPONSE,
-        _compression_deferred_result, _maybe_grow_local_window, _provider_overflow_exhausted_result,
+        _COMPRESSION_TIMEOUT_FINAL_RESPONSE,
+        _HANDOFF_SKIP_FINAL_RESPONSE,
+        _compression_deferred_result,
+        _maybe_grow_local_window,
+        _provider_overflow_exhausted_result,
         _should_skip_model_call_for_reference_handoff,
     )
 
-    def _done(action: str, result: Optional[dict[str, Any]] = None) -> PreflightGateVerdict:
+    def _done(
+        action: str, result: Optional[dict[str, Any]] = None
+    ) -> PreflightGateVerdict:
         v.action, v.result = action, result
         return v
 
     def _exhausted_result() -> dict[str, Any]:
         return _provider_overflow_exhausted_result(
-            agent, v.messages, v.conversation_history, v.api_call_count, request_pressure_tokens,
+            agent,
+            v.messages,
+            v.conversation_history,
+            v.api_call_count,
+            request_pressure_tokens,
             max_compression_attempts,
         )
 
@@ -97,13 +123,17 @@ def run_preflight_compression(
         _eligible
         and not _review_fork_first_request_pending(agent)
         and (not v._preflight_compression_blocked or provider_overflow_preflight)
-        and (not defer_preflight(request_pressure_tokens) or provider_overflow_preflight)
+        and (
+            not defer_preflight(request_pressure_tokens) or provider_overflow_preflight
+        )
         and not _compression_cooldown
         and compressor.should_compress(request_pressure_tokens)
     ):
         # Managed local runtime: grow the context window before compressing (last
         # resort). Only for a llamacpp provider at the supervised base_url.
-        _grown_window = _maybe_grow_local_window(agent, compressor, request_pressure_tokens)
+        _grown_window = _maybe_grow_local_window(
+            agent, compressor, request_pressure_tokens
+        )
         if _grown_window:
             # Bigger window granted: recalibrate and skip compression this pass. Never
             # reached the provider — refund like the compression path does.
@@ -123,7 +153,9 @@ def run_preflight_compression(
             "(context=%s, attempt=%s/%s)",
             f"{request_pressure_tokens:,}",
             f"{_threshold:,}",
-            f"{_context_length:,}" if getattr(compressor, "context_length", 0) else "unknown",
+            f"{_context_length:,}"
+            if getattr(compressor, "context_length", 0)
+            else "unknown",
             v.compression_attempts,
             max_compression_attempts,
         )
@@ -145,8 +177,11 @@ def run_preflight_compression(
         v._last_preflight_pressure = request_pressure_tokens
         _pre_api_input = v.messages
         v.messages, v.active_system_prompt = agent._compress_context(
-            v.messages, system_message, approx_tokens=request_pressure_tokens,
-            task_id=effective_task_id, trigger="pre_api",
+            v.messages,
+            system_message,
+            approx_tokens=request_pressure_tokens,
+            task_id=effective_task_id,
+            trigger="pre_api",
         )
         if context_compression_timed_out(agent):
             # Progress-aware timeout: never reached the provider — refund the
@@ -158,7 +193,8 @@ def run_preflight_compression(
             v._turn_exit_reason = "context_compression_timeout"
             return _done("break")
         if v.messages is _pre_api_input and (
-            compression_skipped_due_to_lock(agent) or compression_blocked_transiently(agent)
+            compression_skipped_due_to_lock(agent)
+            or compression_blocked_transiently(agent)
         ):
             # Temporary DEFER (lock held / cooldown), not evidence about compressibility:
             # refund the attempt, leave the progress blocker unarmed and proceed.
@@ -193,27 +229,44 @@ def run_preflight_compression(
         # Provider proved the request cannot fit and the compressor is unavailable:
         # don't resend; let the next user turn retry after cooldown.
         agent._persist_session(v.messages, v.conversation_history)
-        return _done("return", _compression_deferred_result(
-            agent, v.messages, v.api_call_count, reason="transient_block"
-        ))
-    elif provider_overflow_preflight and v.compression_attempts >= max_compression_attempts:
+        return _done(
+            "return",
+            _compression_deferred_result(
+                agent, v.messages, v.api_call_count, reason="transient_block"
+            ),
+        )
+    elif (
+        provider_overflow_preflight
+        and v.compression_attempts >= max_compression_attempts
+    ):
         # All recovery passes consumed and still over threshold: fail closed —
         # llama.cpp may silently truncate an oversized retry.
         return _done("return", _exhausted_result())
-    elif _eligible and not defer_preflight(request_pressure_tokens) and _compression_cooldown:
+    elif (
+        _eligible
+        and not defer_preflight(request_pressure_tokens)
+        and _compression_cooldown
+    ):
         # Summary-LLM cooldown blocks compression: deduped warning only when over
         # threshold (should_compress_info reason is None below it).
         _block_reason = _blocked_compress_reason(compressor, request_pressure_tokens)
         if _block_reason:
             agent._warn_context_overflow_blocked(
-                _block_reason, request_pressure_tokens,
+                _block_reason,
+                request_pressure_tokens,
                 int(getattr(compressor, "threshold_tokens", 0) or 0),
             )
     elif not agent.compression_enabled and len(v.messages) > 1:
         # Uncompressed session guard: compression is disabled, so warn (deduped) when
         # the request exceeds the context window; the turn-context preflight re-arms.
-        _ctx_len = getattr(getattr(agent, "context_compressor", None), "context_length", None)
-        if isinstance(_ctx_len, int) and _ctx_len > 0 and request_pressure_tokens > _ctx_len:
+        _ctx_len = getattr(
+            getattr(agent, "context_compressor", None), "context_length", None
+        )
+        if (
+            isinstance(_ctx_len, int)
+            and _ctx_len > 0
+            and request_pressure_tokens > _ctx_len
+        ):
             _warn_fn = getattr(agent, "_warn_uncompressed_context_overflow", None)
             if callable(_warn_fn):
                 _warn_fn(request_pressure_tokens, _ctx_len)
@@ -242,10 +295,19 @@ class PostToolCompressionVerdict:
 
 
 def compress_after_tool_results(
-    agent: Any, *, messages: list[dict[str, Any]], system_message: Any, user_message: Any,
-    active_system_prompt: Any, conversation_history: Any, compression_attempts: int,
-    max_compression_attempts: int, effective_task_id: Any, final_response: Any,
-    turn_exit_reason: Any, current_turn_user_idx: int,
+    agent: Any,
+    *,
+    messages: list[dict[str, Any]],
+    system_message: Any,
+    user_message: Any,
+    active_system_prompt: Any,
+    conversation_history: Any,
+    compression_attempts: int,
+    max_compression_attempts: int,
+    effective_task_id: Any,
+    final_response: Any,
+    turn_exit_reason: Any,
+    current_turn_user_idx: int,
 ) -> PostToolCompressionVerdict:
     """Post-tool-call compression decision. Pressure comes from API-reported
     ``prompt_tokens`` (a tight lower bound; thinking models inflate completion tokens),
@@ -254,16 +316,21 @@ def compress_after_tool_results(
     deterministic tool-result-only prune, committed only when the engine returns a NEW
     list (never rebuild ``conversation_history`` for it)."""
     from agent.conversation_loop import (
-        _HANDOFF_SKIP_FINAL_RESPONSE, _midturn_request_pressure_tokens,
+        _HANDOFF_SKIP_FINAL_RESPONSE,
+        _midturn_request_pressure_tokens,
         _should_skip_model_call_for_reference_handoff,
     )
     from agent.model_metadata import estimate_request_tokens_rough
 
     def _verdict(end_turn: bool) -> PostToolCompressionVerdict:
         return PostToolCompressionVerdict(
-            end_turn=end_turn, messages=messages, active_system_prompt=active_system_prompt,
-            conversation_history=conversation_history, compression_attempts=compression_attempts,
-            final_response=final_response, turn_exit_reason=turn_exit_reason,
+            end_turn=end_turn,
+            messages=messages,
+            active_system_prompt=active_system_prompt,
+            conversation_history=conversation_history,
+            compression_attempts=compression_attempts,
+            final_response=final_response,
+            turn_exit_reason=turn_exit_reason,
             current_turn_user_idx=current_turn_user_idx,
         )
 
@@ -290,7 +357,9 @@ def compress_after_tool_results(
         _real_tokens = 0
     else:
         _real_tokens = _midturn_request_pressure_tokens(
-            agent, messages, active_system_prompt or "",
+            agent,
+            messages,
+            active_system_prompt or "",
             estimate_request_tokens_rough(messages, tools=agent.tools or None),
         )
 
@@ -313,7 +382,11 @@ def compress_after_tool_results(
         # Pass overhead-aware _real_tokens, not last_prompt_tokens (0 in the
         # no-usage fallback), so the overflow guard sees the true size.
         messages, active_system_prompt = agent._compress_context(
-            messages, system_message, approx_tokens=_real_tokens, task_id=effective_task_id, trigger="post_tool",
+            messages,
+            system_message,
+            approx_tokens=_real_tokens,
+            task_id=effective_task_id,
+            trigger="post_tool",
         )
         if messages is _post_tool_input and compression_skipped_due_to_lock(agent):
             # Lock-skip no-op is a temporary defer, not evidence about compressibility:
@@ -368,7 +441,9 @@ def compress_after_tool_results(
         )
         if _block_reason:
             agent._warn_context_overflow_blocked(
-                _block_reason, _real_tokens, int(getattr(_compressor, "threshold_tokens", 0) or 0)
+                _block_reason,
+                _real_tokens,
+                int(getattr(_compressor, "threshold_tokens", 0) or 0),
             )
         # Proactive tool-result prune (deterministic, no LLM, keeps tail): no-op unless
         # proactive_prune_tokens is exceeded; commits only past
@@ -378,7 +453,9 @@ def compress_after_tool_results(
             try:
                 _pruned_msgs, _pruned_n = _prune(messages, current_tokens=_real_tokens)
             except Exception:
-                logger.debug("proactive tool-result prune failed; skipping", exc_info=True)
+                logger.debug(
+                    "proactive tool-result prune failed; skipping", exc_info=True
+                )
                 _pruned_msgs, _pruned_n = messages, 0
             # Standard no-op caller contract: only commit when the engine returned a
             # NEW list object with a non-zero count. Do NOT rebuild
@@ -392,5 +469,7 @@ def compress_after_tool_results(
                 # A committed prune is a content-loss boundary like compaction: demoted skill_view /
                 # read_file bodies survive only as one-line markers, so the repeat-read dedup must
                 # stop answering "unchanged" for them or the reload the marker asks for is refused.
-                _reset_read_dedup_caches(effective_task_id, session_id=agent.session_id or "")
+                _reset_read_dedup_caches(
+                    effective_task_id, session_id=agent.session_id or ""
+                )
     return _verdict(False)

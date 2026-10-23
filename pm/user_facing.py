@@ -13,6 +13,7 @@ packaged ``node.exe``, and a venv's ``Scripts\\python.exe`` redirector exits 101
 starts the packaged Python. A copy of the same files outside the package starts without
 error, so there :func:`copies` swaps those dirs for PM's verified copies.
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,8 +34,13 @@ def applies() -> bool:
     return current_target().startswith("win32") and sealed()
 
 
-def writable_copy(name: str, *, realize: bool = True, explicit: bool = False,
-                  why: str = "a copy outside the package is required"):
+def writable_copy(
+    name: str,
+    *,
+    realize: bool = True,
+    explicit: bool = False,
+    why: str = "a copy outside the package is required",
+):
     """``(facts, store)`` of PM's verified copy of the installed *name* in the writable store.
 
     The first call copies the installed entry and checks its digest. It downloads nothing.
@@ -45,7 +51,13 @@ def writable_copy(name: str, *, realize: bool = True, explicit: bool = False,
     """
     from pm import paths
     from pm.filesystem import long_root
-    from pm.install import _install, _installed_location, _lockfile, _refuse_lazy, lazy_installs_allowed
+    from pm.install import (
+        _install,
+        _installed_location,
+        _lockfile,
+        _refuse_lazy,
+        lazy_installs_allowed,
+    )
     from pm.lock import Facts
     from pm.registry import get_package
     from pm.store import Store, current_target
@@ -58,7 +70,9 @@ def writable_copy(name: str, *, realize: bool = True, explicit: bool = False,
     writable = long_root(paths.writable_store_root())
     if location[1].root == writable:
         return location
-    copied = _installed_location(package, lockfile, target, verify=explicit, roots=(writable,))
+    copied = _installed_location(
+        package, lockfile, target, verify=explicit, roots=(writable,)
+    )
     if copied is not None or not realize:
         return copied
     if not explicit and not lazy_installs_allowed():
@@ -106,7 +120,9 @@ def copies(dirs: list[str]) -> list[str]:
         copied = _copy_dirs(name) if sealed else []
         if copied:
             swap.update((os.path.normcase(d), copied) for d in sealed)
-    return list(dict.fromkeys(c for d in dirs for c in swap.get(os.path.normcase(d), [d])))
+    return list(
+        dict.fromkeys(c for d in dirs for c in swap.get(os.path.normcase(d), [d]))
+    )
 
 
 def _python_stub_dir(directory: str) -> bool:
@@ -127,7 +143,13 @@ def _python_stub_dir(directory: str) -> bool:
 def _python_dirs() -> list[str]:
     from pm.install import env_for
 
-    return [d for d in env_for("python", base_env={"PATH": ""}).get("PATH", "").split(os.pathsep) if d]
+    return [
+        d
+        for d in env_for("python", base_env={"PATH": ""})
+        .get("PATH", "")
+        .split(os.pathsep)
+        if d
+    ]
 
 
 def user_facing_path(path: str) -> str:

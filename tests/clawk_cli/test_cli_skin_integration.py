@@ -30,8 +30,6 @@ def _make_cli_stub():
 
 
 class TestCliSkinPromptIntegration:
-
-
     def test_secret_prompt_fragments_preserve_secret_state(self):
         cli = _make_cli_stub()
         cli._secret_state = {"response_queue": object()}
@@ -40,7 +38,6 @@ class TestCliSkinPromptIntegration:
         frags = cli._get_tui_prompt_fragments()
         assert frags[0][0] == "class:sudo-prompt"
         assert get_active_skin().get_branding("prompt_symbol").strip() in frags[0][1]
-
 
     def test_narrow_terminals_compact_voice_recording_prompt_fragments(self):
         cli = _make_cli_stub()
@@ -53,8 +50,6 @@ class TestCliSkinPromptIntegration:
         assert frags[0][0] == "class:voice-recording"
         assert frags[0][1].startswith("●")
         assert "❯" not in frags[0][1]
-
-
 
     def test_build_tui_style_dict_uses_skin_overrides(self):
         cli = _make_cli_stub()
@@ -89,21 +84,25 @@ class TestCliSkinPromptIntegration:
 
 
 class TestCompactBannerSkinIntegration:
-
-
     def test_poseidon_compact_banner_uses_skin_colors(self):
         set_active_skin("poseidon")
         skin = get_active_skin()
 
-        with patch("cli.shutil.get_terminal_size", return_value=SimpleNamespace(columns=90)), \
-             patch.dict(_build_compact_banner.__globals__, {"format_banner_version_label": lambda: "Clawksis v0.1.0 (test)"}):
+        with (
+            patch(
+                "cli.shutil.get_terminal_size", return_value=SimpleNamespace(columns=90)
+            ),
+            patch.dict(
+                _build_compact_banner.__globals__,
+                {"format_banner_version_label": lambda: "Clawksis v0.1.0 (test)"},
+            ),
+        ):
             banner = _build_compact_banner()
 
         assert skin.get_branding("agent_name") in banner
         assert skin.get_color("banner_border") in banner
         assert skin.get_color("banner_title") in banner
         assert skin.get_color("banner_dim") in banner
-
 
 
 class TestAnsiRichTextHelper:

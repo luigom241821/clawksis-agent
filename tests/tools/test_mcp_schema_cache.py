@@ -86,8 +86,6 @@ class TestCacheFileLocation:
         assert (path.stat().st_mode & 0o777) == 0o600
 
 
-
-
 class TestWriteThroughPreservesSchema:
     """Regression: the write-through path must persist real tool parameters.
 
@@ -129,8 +127,14 @@ class TestWriteThroughPreservesSchema:
         # Registration records per-server state in module globals (lazy tool names, trust
         # levels, read-only hints...); isolate them so the probe server never leaks into
         # later tests such as ``discover_mcp_tools() == []`` assertions.
-        for attr in ("_lazy_server_tool_names", "_lazy_server_configs", "_lazy_server_fingerprints",
-                     "_mcp_tool_server_names", "_server_trust_levels", "_tool_read_only_hints"):
+        for attr in (
+            "_lazy_server_tool_names",
+            "_lazy_server_configs",
+            "_lazy_server_fingerprints",
+            "_mcp_tool_server_names",
+            "_server_trust_levels",
+            "_tool_read_only_hints",
+        ):
             monkeypatch.setattr(mt, attr, {})
         server = mt.MCPServerTask("probe_srv")
         server._tools = [
@@ -139,12 +143,14 @@ class TestWriteThroughPreservesSchema:
         server.session = MagicMock()
 
         with patch("tools.registry.registry", ToolRegistry()):
-            registered = _mcp_registration._register_server_tools("probe_srv", server, {})
+            registered = _mcp_registration._register_server_tools(
+                "probe_srv", server, {}
+            )
         assert registered, "tool was not registered; write-through never fired"
-        entry = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))["probe_srv"]
+        entry = json.loads((tmp_path / "cache.json").read_text(encoding="utf-8"))[
+            "probe_srv"
+        ]
         return entry
-
-
 
     def test_cache_round_trip_reaches_agent_schema(self, tmp_path, monkeypatch):
         """The whole point of the cache: a lazy server re-advertises params."""

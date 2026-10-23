@@ -39,6 +39,7 @@ LIVE_DB_SALVAGE_COMMAND = 'sqlite3 ~/.clawksis/state.db ".recover"'
 # The version gate itself
 # ---------------------------------------------------------------------------
 
+
 class TestWalResetVersionGate:
     @pytest.mark.parametrize(
         "version",
@@ -82,9 +83,11 @@ class TestWalResetVersionGate:
                 is_sqlite_wal_reset_vulnerable(version)
             ), f"salvage gate disagrees with the runtime gate at {version}"
 
+
 # ---------------------------------------------------------------------------
 # find_sqlite3_cli refuses unsafe shells and explains why
 # ---------------------------------------------------------------------------
+
 
 class TestFindSqlite3CliRefusal:
     def test_missing_binary_refusal(self, monkeypatch):
@@ -165,6 +168,7 @@ class TestFindSqlite3CliRefusal:
         )
         assert find_sqlite3_cli() == "/usr/bin/sqlite3"
 
+
 class TestParseSqlite3CliVersion:
     def test_parses_modern_output(self):
         class Probe:
@@ -184,12 +188,13 @@ class TestParseSqlite3CliVersion:
         ):
             assert _parse_sqlite3_cli_version("x") is None
 
+
 # ---------------------------------------------------------------------------
 # The operator-facing guidance never names the live DB
 # ---------------------------------------------------------------------------
 
-class TestGuidanceNeverNamesLiveDb:
 
+class TestGuidanceNeverNamesLiveDb:
     def test_run_agent_corrupt_explanation(self):
         from run_agent import AIAgent
 
@@ -205,17 +210,16 @@ class TestGuidanceNeverNamesLiveDb:
     def test_repair_budget_error_names_safe_lane(self, tmp_path: Path):
         import clawk_state_repair as clawk_state  # helper lives in the split-out repair module
 
-        message = clawk_state._persistent_repair_exhausted_error(
-            tmp_path / "state.db"
-        )
+        message = clawk_state._persistent_repair_exhausted_error(tmp_path / "state.db")
         assert "Manual recovery required" in message
         assert "sessions recover --source" in message
         assert "--inspect-only" in message
         assert "--output recovered-state.db" in message
         # The old shape embedded the live path straight into a raw sqlite3
         # command: `sqlite3 {db_path} ".recover"`.
-        assert ".recover\"`" not in message
+        assert '.recover"`' not in message
         assert "do NOT" in message
+
 
 # ---------------------------------------------------------------------------
 # The emitted command satisfies the real CLI contract
@@ -227,6 +231,7 @@ class TestGuidanceNeverNamesLiveDb:
 # shapes the banners emit through the real parser + cmd_sessions, so a
 # guidance string can never again pass a source-substring test while the
 # command it prints deterministically fails.
+
 
 class TestEmittedCommandsSatisfyCliContract:
     """Every `sessions recover` argv the guidance prints must be accepted
@@ -287,9 +292,7 @@ class TestEmittedCommandsSatisfyCliContract:
         finally:
             conn.close()
 
-        rc = sc.cmd_sessions(
-            self._namespace(source, inspect_only=True)
-        )
+        rc = sc.cmd_sessions(self._namespace(source, inspect_only=True))
         assert rc != 2, "--inspect-only shape must pass the contract gate"
 
     def test_output_stage_dispatches_past_gate(self, tmp_path):

@@ -65,10 +65,15 @@ def test_fold_hour_timers_measure_real_elapsed_time(dst_cron_store, monkeypatch)
 
     now = _instant(6, 2)  # 01:02 EST, fold=1
     claimed = _instant(5, 58)  # 01:58 EDT, fold=0: four real minutes earlier
-    assert jobs._claim_is_live({"at": claimed.isoformat(), "by": "peer-host:1"}, now, 300)
+    assert jobs._claim_is_live(
+        {"at": claimed.isoformat(), "by": "peer-host:1"}, now, 300
+    )
 
     monkeypatch.setattr(unreachable_retry, "_clawk_now", lambda: now)
     job = _job(_instant(9, 0))  # natural next run 04:00 EST, well past the ladder
     assert unreachable_retry.plan_retry(job) is True
     retry_at = datetime.fromisoformat(job["next_run_at"])
-    assert retry_at.timestamp() - now.timestamp() == unreachable_retry.RETRY_DELAYS_SECONDS[0]
+    assert (
+        retry_at.timestamp() - now.timestamp()
+        == unreachable_retry.RETRY_DELAYS_SECONDS[0]
+    )

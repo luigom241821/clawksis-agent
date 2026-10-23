@@ -58,6 +58,7 @@ def _agent_source(
         return row_source
     platform = getattr(agent, "platform", None)
     from agent.session_source import session_source_for
+
     return str(session_source_for(platform)).strip()
 
 
@@ -203,7 +204,9 @@ def _apply_fork_tag(agent: Any, scope: str) -> str:
     if getattr(getattr(agent, "context_compressor", None), "compression_count", 0) < 1:
         return scope
     if not is_slot_keyed_cache_route(
-        getattr(agent, "provider", ""), getattr(agent, "model", ""), getattr(agent, "base_url", ""),
+        getattr(agent, "provider", ""),
+        getattr(agent, "model", ""),
+        getattr(agent, "base_url", ""),
     ):
         return scope
     return f"{scope}{FORK_SCOPE_SEPARATOR}{tag}"

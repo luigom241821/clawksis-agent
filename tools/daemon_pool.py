@@ -33,6 +33,7 @@ class DaemonThreadPoolExecutor(ThreadPoolExecutor):
 
         def _run_with_context(*call_args, **call_kwargs):
             return ctx.run(fn, *call_args, **call_kwargs)
+
         return super().submit(_run_with_context, *args, **kwargs)
 
     def _adjust_thread_count(self) -> None:
@@ -43,9 +44,10 @@ class DaemonThreadPoolExecutor(ThreadPoolExecutor):
 
         def weakref_cb(_, q=self._work_queue):
             q.put(None)
+
         num_threads = len(self._threads)
         if num_threads < self._max_workers:
-            thread_name = f'{self._thread_name_prefix or self}_{num_threads:d}'
+            thread_name = f"{self._thread_name_prefix or self}_{num_threads:d}"
             executor_ref = weakref.ref(self, weakref_cb)
             if hasattr(self, "_create_worker_context"):
                 # Python 3.14 replaced _initializer/_initargs with a factory
@@ -63,7 +65,9 @@ class DaemonThreadPoolExecutor(ThreadPoolExecutor):
                     self._initargs,
                 )
             t = threading.Thread(
-                name=thread_name, target=_worker, daemon=True,
+                name=thread_name,
+                target=_worker,
+                daemon=True,
                 args=worker_args,
             )
             t.start()

@@ -32,7 +32,9 @@ class DesktopBuildLock:
 
         resolved = os.path.normcase(str(project_root.resolve(strict=False)))
         checkout_key = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:24]
-        self.path = get_default_clawk_root() / "locks" / f"desktop-build-{checkout_key}.lock"
+        self.path = (
+            get_default_clawk_root() / "locks" / f"desktop-build-{checkout_key}.lock"
+        )
         self.project_root = project_root
         self._handle: IO[str] | None = None
         self._checkout = None
@@ -64,25 +66,36 @@ class DesktopBuildLock:
 
         from clawk_cli import update_lock
 
-        held, wanted = update_lock._HELD, update_lock.checkout_lock_path(self.project_root)
+        held, wanted = (
+            update_lock._HELD,
+            update_lock.checkout_lock_path(self.project_root),
+        )
         if held is not None and held["path"] != str(wanted):
             # This process holds a checkout lock under another path. Another spelling of this
             # checkout's lock file (a symlinked install root) is this update's own custody: build
             # inside it, since a second acquire would wait on its own lock. Any other checkout's
             # lock proves nothing about this one (review Q2), and a process records one hold only.
             if not (wanted.exists() and os.path.samefile(held["path"], wanted)):
-                raise OSError(f"this process holds the update lock of another checkout ({held['path']}), "
-                              f"so it cannot also lock {self.project_root} for its build")
+                raise OSError(
+                    f"this process holds the update lock of another checkout ({held['path']}), "
+                    f"so it cannot also lock {self.project_root} for its build"
+                )
             return True
-        lock = update_lock.UpdateLock(install_root=self.project_root, checkout_first=False)
+        lock = update_lock.UpdateLock(
+            install_root=self.project_root, checkout_first=False
+        )
         announced = False
         while not lock.acquire_checkout(self.project_root):
             if lock.holder is not None and lock.holder.reason:
-                raise OSError(lock.holder.reason)  # never build unserialized; the caller says so
+                raise OSError(
+                    lock.holder.reason
+                )  # never build unserialized; the caller says so
             if not wait:
                 return False
             if not announced:
-                print("→ Waiting for a running Clawksis update to release this checkout...")
+                print(
+                    "→ Waiting for a running Clawksis update to release this checkout..."
+                )
                 announced = True
             time.sleep(1.0)
         self._checkout = lock
@@ -108,7 +121,9 @@ class DesktopBuildLock:
         # Blocking mode queues behind the holder; say so instead of appearing
         # to hang with no output (the update path would rather wait for the
         # in-flight build it depends on than fail the update).
-        print("→ Waiting for another Clawksis desktop dependency install or build to finish...")
+        print(
+            "→ Waiting for another Clawksis desktop dependency install or build to finish..."
+        )
         print(f"  Lock: {self.path}")
         from gateway.status import _release_file_lock
 

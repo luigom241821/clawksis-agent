@@ -23,7 +23,10 @@ from tests.fakes.fake_llm_provider import FakeLLMServer
 UPDATE_TIMEOUT = 1500
 # What `prepare_launch` prints when it decides the install is stale and re-runs the source-update
 # completion. A healthy install prints neither on a plain launch.
-COMPLETION_BANNERS = ("completing source-update dependencies", "finishing an interrupted source update")
+COMPLETION_BANNERS = (
+    "completing source-update dependencies",
+    "finishing an interrupted source update",
+)
 
 
 def reran_completion(cp: subprocess.CompletedProcess) -> bool:
@@ -56,51 +59,95 @@ def new_sandbox(root: Path, origin: Path) -> I.Sandbox:
 
 
 def ok(cp: subprocess.CompletedProcess) -> subprocess.CompletedProcess:
-    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
+    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(
+        cp
+    )
     return cp
 
 
 def configure(sb: I.Sandbox, provider: FakeLLMServer) -> None:
     """Point the install at the fake provider with a current-version config."""
-    ver = ok(sb.run([sb.python, "-c", "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])"]))
+    ver = ok(
+        sb.run(
+            [
+                sb.python,
+                "-c",
+                "from clawk_cli.config_defaults import DEFAULT_CONFIG as D; print(D['_config_version'])",
+            ]
+        )
+    )
     version = int(ver.stdout.strip().splitlines()[-1])
-    (sb.clawk_home / "config.yaml").write_text(I.provider_config(provider.base_url, version), encoding="utf-8")
-    (sb.clawk_home / ".env").write_text(f"OPENAI_API_KEY={I.FAKE_KEY}\n", encoding="utf-8")
+    (sb.clawk_home / "config.yaml").write_text(
+        I.provider_config(provider.base_url, version), encoding="utf-8"
+    )
+    (sb.clawk_home / ".env").write_text(
+        f"OPENAI_API_KEY={I.FAKE_KEY}\n", encoding="utf-8"
+    )
 
 
-def turn(sb: I.Sandbox, provider: FakeLLMServer, marker: str, *, env: dict | None = None) -> subprocess.CompletedProcess:
+def turn(
+    sb: I.Sandbox, provider: FakeLLMServer, marker: str, *, env: dict | None = None
+) -> subprocess.CompletedProcess:
     """One ``clawk -z`` turn that must reach the provider exactly once and print its reply."""
     n = len(provider.main_requests())
-    cp = H.run([sb.clawk, "-z", marker], env=env or sb.env, cwd=sb.root, writable=[sb.root], timeout=900)
-    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(cp)
-    assert provider.default_text in cp.stdout, "the reply never reached stdout:\n" + I.describe(cp)
+    cp = H.run(
+        [sb.clawk, "-z", marker],
+        env=env or sb.env,
+        cwd=sb.root,
+        writable=[sb.root],
+        timeout=900,
+    )
+    assert cp.returncode == 0 and I.TRACEBACK not in cp.stdout + cp.stderr, I.describe(
+        cp
+    )
+    assert provider.default_text in cp.stdout, (
+        "the reply never reached stdout:\n" + I.describe(cp)
+    )
     new = provider.main_requests()[n:]
     assert len(new) == 1 and marker in json.dumps(new[0]["messages"]), (
-        f"one-shot turn reached the provider {len(new)} times (want 1):\n" + I.describe(cp))
+        f"one-shot turn reached the provider {len(new)} times (want 1):\n"
+        + I.describe(cp)
+    )
     return cp
 
 
-def login_shell(sb: I.Sandbox, script: str, *, path: str = "/usr/local/bin:/usr/bin:/bin") -> subprocess.CompletedProcess:
+def login_shell(
+    sb: I.Sandbox, script: str, *, path: str = "/usr/local/bin:/usr/bin:/bin"
+) -> subprocess.CompletedProcess:
     """Run ``script`` in a new interactive login bash: PATH comes only from the rc files."""
     env = dict(sb.env, PATH=path)
     bash = shutil.which("bash")
     assert bash is not None, "bash required"
-    return H.run([bash, "-lic", script], env=env, cwd=sb.root, writable=[sb.root], timeout=120,
-                 ro_binds=H.LOGIN_SHELL_RO_BINDS)
+    return H.run(
+        [bash, "-lic", script],
+        env=env,
+        cwd=sb.root,
+        writable=[sb.root],
+        timeout=120,
+        ro_binds=H.LOGIN_SHELL_RO_BINDS,
+    )
 
 
 def interpreter_paths(sb: I.Sandbox, python: str | None = None) -> dict:
     """sys.path / PATH / sys.executable as the installed interpreter sees them."""
-    code = ("import json, os, sys; print(json.dumps({'sys_path': sys.path, 'path': os.environ.get('PATH', ''),"
-            " 'executable': sys.executable}))")
+    code = (
+        "import json, os, sys; print(json.dumps({'sys_path': sys.path, 'path': os.environ.get('PATH', ''),"
+        " 'executable': sys.executable}))"
+    )
     cp = ok(sb.run([python or sb.python, "-c", code]))
     return json.loads(cp.stdout.strip().splitlines()[-1])
 
 
 def missing_entries(entries: list[str]) -> list[str]:
     """Entries that name a location that does not exist (a mangled or half-quoted path)."""
-    return [e for e in entries
-            if e and not os.path.exists(e) and not e.endswith(".zip") and not e.endswith(".__path_hook__")]
+    return [
+        e
+        for e in entries
+        if e
+        and not os.path.exists(e)
+        and not e.endswith(".zip")
+        and not e.endswith(".__path_hook__")
+    ]
 
 
 class Gateway:
@@ -122,8 +169,13 @@ class Gateway:
         fh = open(self.log, "w", encoding="utf-8")
         self.proc = subprocess.Popen(
             H.sandbox_argv([self.sb.clawk, "gateway", "run"], writable=[self.sb.root]),
-            env=self.sb.env, cwd=str(self.sb.root), stdin=subprocess.DEVNULL, stdout=fh,
-            stderr=subprocess.STDOUT, start_new_session=True)
+            env=self.sb.env,
+            cwd=str(self.sb.root),
+            stdin=subprocess.DEVNULL,
+            stdout=fh,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
         fh.close()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -135,14 +187,20 @@ class Gateway:
             time.sleep(0.5)
         raise AssertionError(
             f"gateway did not reach gateway_state=running (rc={self.proc.poll()}, state={self.state()})\n"
-            + self.tail())
+            + self.tail()
+        )
 
     def tail(self, n: int = 6000) -> str:
         parts = []
-        for label, p in (("gateway stdout", self.log), ("agent.log", self.sb.clawk_home / "logs" / "agent.log"),
-                         ("errors.log", self.sb.clawk_home / "logs" / "errors.log")):
+        for label, p in (
+            ("gateway stdout", self.log),
+            ("agent.log", self.sb.clawk_home / "logs" / "agent.log"),
+            ("errors.log", self.sb.clawk_home / "logs" / "errors.log"),
+        ):
             try:
-                parts.append(f"--- {label} ---\n{p.read_text(encoding='utf-8', errors='replace')[-n:]}")
+                parts.append(
+                    f"--- {label} ---\n{p.read_text(encoding='utf-8', errors='replace')[-n:]}"
+                )
             except OSError:
                 parts.append(f"--- {label} --- (missing)")
         return "\n".join(parts)

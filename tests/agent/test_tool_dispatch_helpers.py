@@ -31,8 +31,6 @@ class TestUntrustedToolClassification:
     def test_named_high_risk_tools(self, name):
         assert _is_untrusted_tool(name)
 
-
-
     @pytest.mark.parametrize(
         "name",
         ["terminal", "read_file", "write_file", "patch", "memory", "skill_view"],
@@ -53,9 +51,7 @@ class TestUntrustedToolClassification:
 # =========================================================================
 
 
-SAMPLE_LONG_TEXT = (
-    "This is a sample document fetched from a web page. " * 4
-)
+SAMPLE_LONG_TEXT = "This is a sample document fetched from a web page. " * 4
 
 
 class TestUntrustedWrapping:
@@ -65,8 +61,6 @@ class TestUntrustedWrapping:
         assert result.startswith('<untrusted_tool_result source="web_extract">')
         assert result.endswith("</untrusted_tool_result>")
         assert SAMPLE_LONG_TEXT in result
-
-
 
     def test_short_multimodal_text_passes_through_unchanged(self):
         # Multimodal results (content lists with image_url parts): short
@@ -101,7 +95,6 @@ class TestUntrustedWrapping:
         assert long_text in result[0]["text"]
         assert result[1] is multimodal[1]  # image part untouched
 
-
     def test_embedded_closing_tag_cannot_break_out(self):
         # Attack: a poisoned page embeds the closing delimiter mid-content to
         # end the trust boundary early, so the trailing payload reads as a
@@ -121,17 +114,12 @@ class TestUntrustedWrapping:
         assert "exfiltrate secrets" in inner
 
 
-
-
-
-
 # =========================================================================
 # Integration via make_tool_result_message
 # =========================================================================
 
 
 class TestMakeToolResultMessage:
-
     def test_message_is_timestamped_when_result_is_created(self, monkeypatch):
         monkeypatch.setattr("agent.message_metadata.wall_time", lambda: 123.5)
 
@@ -151,15 +139,8 @@ class TestMakeToolResultMessage:
         assert msg["tool_name"] == "web_extract"
         assert msg["tool_call_id"] == "call_2"
         assert isinstance(msg["content"], str)
-        assert msg["content"].startswith(
-            '<untrusted_tool_result source="web_extract">'
-        )
+        assert msg["content"].startswith('<untrusted_tool_result source="web_extract">')
         assert SAMPLE_LONG_TEXT in msg["content"]
-
-
-
-
-
 
     def test_trusted_and_non_text_results_have_no_risk_metadata(self):
         trusted = make_tool_result_message(
@@ -182,7 +163,6 @@ class TestMakeToolResultMessage:
 
         assert SAMPLE_LONG_TEXT in msg["content"]
         assert "_tool_output_risk" not in msg
-
 
 
 class TestFileMutationTargets:
@@ -209,38 +189,49 @@ class TestUpstreamElisionDetection:
 
     def test_more_items_marker_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert _detect_upstream_elision(self._payload('"note": "... 13 more items"'))
 
     def test_has_more_true_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert _detect_upstream_elision(self._payload('"has_more": true'))
 
     def test_saved_to_sandbox_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert _detect_upstream_elision(
-            "y" * 1_100 + " Complete response was large. Full data saved to sandbox in /mnt/files/x.json"
+            "y" * 1_100
+            + " Complete response was large. Full data saved to sandbox in /mnt/files/x.json"
         )
 
     def test_data_preview_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert _detect_upstream_elision(self._payload('"data_preview": {}'))
 
     def test_has_more_false_not_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert not _detect_upstream_elision(self._payload('"has_more": false'))
 
     def test_plain_large_result_not_detected(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert not _detect_upstream_elision("z" * 5_000)
 
     def test_non_string_content_skipped(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         assert not _detect_upstream_elision(None)
         assert not _detect_upstream_elision({"has_more": True})
-        assert not _detect_upstream_elision([{"type": "text", "text": "... 5 more items"}])
+        assert not _detect_upstream_elision(
+            [{"type": "text", "text": "... 5 more items"}]
+        )
 
     def test_short_results_short_circuit(self):
         from agent.tool_dispatch_helpers import _detect_upstream_elision
+
         # Marker present but under the 1K scan floor -> skipped.
         assert not _detect_upstream_elision('"has_more": true')
 
@@ -249,6 +240,7 @@ class TestUpstreamElisionDetection:
             _ELISION_SCAN_MAX_CHARS,
             _detect_upstream_elision,
         )
+
         content = "a" * (_ELISION_SCAN_MAX_CHARS + 10) + '"has_more": true'
         assert not _detect_upstream_elision(content)
 
@@ -264,23 +256,30 @@ class TestElisionNoticeWiring:
             _UPSTREAM_ELISION_NOTICE,
             _maybe_append_elision_notice,
         )
+
         out = _maybe_append_elision_notice("mcp_composio_search", self._elided())
         assert out.endswith(_UPSTREAM_ELISION_NOTICE)
 
     def test_trusted_tool_never_annotated(self):
         from agent.tool_dispatch_helpers import _maybe_append_elision_notice
+
         content = self._elided()
         assert _maybe_append_elision_notice("terminal", content) is content
 
     def test_untrusted_without_markers_unchanged(self):
         from agent.tool_dispatch_helpers import _maybe_append_elision_notice
+
         content = "y" * 2_000
         assert _maybe_append_elision_notice("mcp_x", content) is content
 
     def test_notice_inside_untrusted_wrapper(self):
         """Order: detect on raw -> append notice -> wrap. The notice must sit
         INSIDE the untrusted block, and the message is built once (cache-safe)."""
-        from agent.tool_dispatch_helpers import _UPSTREAM_ELISION_NOTICE, make_tool_result_message
+        from agent.tool_dispatch_helpers import (
+            _UPSTREAM_ELISION_NOTICE,
+            make_tool_result_message,
+        )
+
         msg = make_tool_result_message("mcp_composio_search", self._elided(), "call_1")
         content = msg["content"]
         notice = _UPSTREAM_ELISION_NOTICE.strip()
@@ -293,10 +292,26 @@ class TestElisionNoticeWiring:
     def test_notice_reaches_an_image_bearing_mcp_result(self):
         """An MCP result that also carries a screenshot is a part list; its elided text still gets the notice,
         inside the wrapped text part, and the image part is untouched."""
-        from agent.tool_dispatch_helpers import _UPSTREAM_ELISION_NOTICE, make_tool_result_message
+        from agent.tool_dispatch_helpers import (
+            _UPSTREAM_ELISION_NOTICE,
+            make_tool_result_message,
+        )
+
         img = {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AAAA"}}
         msg = make_tool_result_message(
-            "mcp_srv_snap", [{"type": "text", "text": self._elided()}, {"type": "text", "text": "notes"}, img], "call_2")
+            "mcp_srv_snap",
+            [
+                {"type": "text", "text": self._elided()},
+                {"type": "text", "text": "notes"},
+                img,
+            ],
+            "call_2",
+        )
         text = msg["content"][0]["text"]
-        assert text.index(_UPSTREAM_ELISION_NOTICE.strip()) < text.index("</untrusted_tool_result>")
-        assert _UPSTREAM_ELISION_NOTICE.strip() not in msg["content"][1]["text"] and msg["content"][2] == img
+        assert text.index(_UPSTREAM_ELISION_NOTICE.strip()) < text.index(
+            "</untrusted_tool_result>"
+        )
+        assert (
+            _UPSTREAM_ELISION_NOTICE.strip() not in msg["content"][1]["text"]
+            and msg["content"][2] == img
+        )

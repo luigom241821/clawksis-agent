@@ -12,13 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from clawk_cli.steward import STEWARD_APT_TERMUX, STEWARD_DESKTOP, STEWARD_DOCKER, STEWARD_NIX
+from clawk_cli.steward import (
+    STEWARD_APT_TERMUX,
+    STEWARD_DESKTOP,
+    STEWARD_DOCKER,
+    STEWARD_NIX,
+)
 
 logger = logging.getLogger(__name__)
 
-COMMIT_BUILD_UPDATE_MESSAGE = (
-    "This build doesn't get updates. Ask the developer who gave it to you for a new build."
-)
+COMMIT_BUILD_UPDATE_MESSAGE = "This build doesn't get updates. Ask the developer who gave it to you for a new build."
 
 
 def is_commit_build(project_root: Path) -> bool:
@@ -31,14 +34,19 @@ def is_commit_build(project_root: Path) -> bool:
 class UpdateRefusal:
     """Why an in-place update is refused, and what to run instead."""
 
-    code: str              # image-marker | image-marker-invalid | docker | nix | apt | desktop-app | <steward>
-    message: str           # full user-facing text (multi-line ok)
-    update_command: str    # the one-line remediation command
+    code: str  # image-marker | image-marker-invalid | docker | nix | apt | desktop-app | <steward>
+    message: str  # full user-facing text (multi-line ok)
+    update_command: str  # the one-line remediation command
 
 
-def _refusal(code: str, method: str, message: Optional[Callable[[str], str]] = None) -> UpdateRefusal:
+def _refusal(
+    code: str, method: str, message: Optional[Callable[[str], str]] = None
+) -> UpdateRefusal:
     """Refusal for ``method``: ``message(command)`` if given, else docker's full message / the bare command."""
-    from clawk_cli.config import format_docker_update_message, recommended_update_command_for_method
+    from clawk_cli.config import (
+        format_docker_update_message,
+        recommended_update_command_for_method,
+    )
 
     command = recommended_update_command_for_method(method)
     if message is not None:
@@ -66,7 +74,9 @@ def _steward_refusal(steward: str) -> UpdateRefusal:
     if method == "docker":
         return _refusal(steward, method)
     if method is not None:
-        return _refusal(steward, method, lambda _command: steward_update_message(steward))
+        return _refusal(
+            steward, method, lambda _command: steward_update_message(steward)
+        )
     # desktop-app and future package managers have no CLI remediation: the
     # steward's own instructions are the remediation, and
     # recommended_update_command_for_method would falsely answer "clawk
@@ -76,7 +86,9 @@ def _steward_refusal(steward: str) -> UpdateRefusal:
         if steward == STEWARD_DESKTOP
         else f"update via {steward}"
     )
-    return UpdateRefusal(code=steward, message=steward_update_message(steward), update_command=command)
+    return UpdateRefusal(
+        code=steward, message=steward_update_message(steward), update_command=command
+    )
 
 
 def evaluate_update_admission(project_root: Path) -> Optional[UpdateRefusal]:
@@ -97,12 +109,16 @@ def evaluate_update_admission(project_root: Path) -> Optional[UpdateRefusal]:
             if not provenance.valid:
                 # Present but malformed: still image-managed — an integrity defect is never
                 # permission to mutate the image in place.
-                return _refusal("image-marker-invalid", "docker", lambda command: (
-                    "✗ This install is image-managed, but its provenance "
-                    f"marker is invalid ({provenance.error}).\n"
-                    "  In-place update is disabled. Update by pulling a "
-                    f"new image:\n    {command}"
-                ))
+                return _refusal(
+                    "image-marker-invalid",
+                    "docker",
+                    lambda command: (
+                        "✗ This install is image-managed, but its provenance "
+                        f"marker is invalid ({provenance.error}).\n"
+                        "  In-place update is disabled. Update by pulling a "
+                        f"new image:\n    {command}"
+                    ),
+                )
             return _refusal("image-marker", provenance.manager)
     except Exception as exc:
         logger.debug("Image provenance check failed (using heuristics): %s", exc)
@@ -120,7 +136,10 @@ def evaluate_update_admission(project_root: Path) -> Optional[UpdateRefusal]:
             from clawk_constants import is_termux
 
             if is_termux():
-                from clawk_cli.steward import SOURCE_ON_TERMUX_UPDATE_COMMAND, SOURCE_ON_TERMUX_UPDATE_MESSAGE
+                from clawk_cli.steward import (
+                    SOURCE_ON_TERMUX_UPDATE_COMMAND,
+                    SOURCE_ON_TERMUX_UPDATE_MESSAGE,
+                )
 
                 return UpdateRefusal(
                     code=STEWARD_APT_TERMUX,
@@ -153,11 +172,19 @@ def record_refusal_receipt(refusal: UpdateRefusal) -> None:
     place, use <command>") instead of a silent nothing. Best-effort; never raises.
     """
     try:
-        from clawk_cli.update_receipt import begin_update_receipt, finalize_update_receipt, record_step
+        from clawk_cli.update_receipt import (
+            begin_update_receipt,
+            finalize_update_receipt,
+            record_step,
+        )
 
         begin_update_receipt()
         detail = f"not updatable in place ({refusal.code})"
-        detail += f"; use: {refusal.update_command}" if refusal.update_command else f"; {refusal.message}"
+        detail += (
+            f"; use: {refusal.update_command}"
+            if refusal.update_command
+            else f"; {refusal.message}"
+        )
         record_step("admission", False, detail)
         finalize_update_receipt("refused", stop_reason=refusal.code)
     except Exception as exc:

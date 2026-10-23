@@ -36,7 +36,9 @@ def active_memory_provider(config: Optional[dict]) -> Optional[str]:
     return name
 
 
-def clone_memory_provider_config(source_dir: Path, profile_dir: Path, provider: Optional[str]) -> bool:
+def clone_memory_provider_config(
+    source_dir: Path, profile_dir: Path, provider: Optional[str]
+) -> bool:
     """Copy ``<provider>/`` and/or ``<provider>.json`` from *source_dir* into *profile_dir* when
     present. Files land owner-only like ``.env``: they can hold an API key. Returns True when
     anything was copied."""
@@ -66,6 +68,9 @@ def cloned_memory_provider(profile_dir: Path) -> Optional[str]:
     from clawk_cli.profiles import _load_yaml_dict
 
     provider = active_memory_provider(_load_yaml_dict(profile_dir / "config.yaml"))
-    if provider and ((profile_dir / provider).is_dir() or (profile_dir / f"{provider}.json").is_file()):
+    if provider and (
+        (profile_dir / provider).is_dir()
+        or (profile_dir / f"{provider}.json").is_file()
+    ):
         return provider
     return None

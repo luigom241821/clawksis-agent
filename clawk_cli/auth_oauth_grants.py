@@ -24,7 +24,9 @@ logger = logging.getLogger("clawk_cli.auth")
 # ``refresh_token_reused``.
 # Profiles must never receive a copy: ONE grant lives at the global root and named profiles read
 # it through the ``read_credential_pool`` root fallback.
-SINGLE_USE_REFRESH_POOL_PROVIDERS = frozenset({"anthropic", "openai-codex", "xai-oauth", "nous"})
+SINGLE_USE_REFRESH_POOL_PROVIDERS = frozenset(
+    {"anthropic", "openai-codex", "xai-oauth", "nous"}
+)
 
 # Singleton credential files holding the same single-use grants outside ``auth.json``. Copying one
 # into a profile re-seeds a forked pool row on the profile's next ``load_pool()``.
@@ -60,11 +62,13 @@ def _is_oauth_pool_payload(entry: Any) -> bool:
     return (
         str(entry.get("auth_type") or "").strip().lower() == "oauth"
         or bool(str(entry.get("refresh_token") or "").strip())
-        or str(entry.get("access_token") or "").startswith("sk-ant-oat"))
+        or str(entry.get("access_token") or "").startswith("sk-ant-oat")
+    )
 
 
 def merge_snapshot_auth_preserving_live_single_use_grants(
-    snapshot_store: dict[str, Any], live_store: dict[str, Any],
+    snapshot_store: dict[str, Any],
+    live_store: dict[str, Any],
 ) -> dict[str, Any]:
     """Restore historical auth state without reviving spent single-use OAuth generations.
 
@@ -182,13 +186,11 @@ def merge_snapshot_auth_preserving_live_single_use_grants(
             if isinstance(live_providers, dict)
             else None
         )
-        snapshot_has_refresh = (
-            isinstance(snapshot_block, dict)
-            and bool(_block_tokens(snapshot_block).get("refresh_token"))
+        snapshot_has_refresh = isinstance(snapshot_block, dict) and bool(
+            _block_tokens(snapshot_block).get("refresh_token")
         )
-        live_has_refresh = (
-            isinstance(live_block, dict)
-            and bool(_block_tokens(live_block).get("refresh_token"))
+        live_has_refresh = isinstance(live_block, dict) and bool(
+            _block_tokens(live_block).get("refresh_token")
         )
         if not snapshot_has_refresh and not live_has_refresh:
             continue
@@ -204,6 +206,7 @@ def merge_snapshot_auth_preserving_live_single_use_grants(
 
     return restored
 
+
 def _is_pkce_row(row: dict[str, Any]) -> bool:
     return str(row.get("source") or "").endswith("clawk_pkce")
 
@@ -218,6 +221,7 @@ def strip_cloned_single_use_oauth_grants(profile_dir: Path) -> dict[str, Any]:
     could not run — the caller logs the summary.
     """
     from clawk_cli.auth import _same_path, _save_auth_store
+
     stripped: dict[str, Any] = {"pool": [], "providers": [], "files": []}
     profile_dir = Path(profile_dir)
     for name in SINGLE_USE_OAUTH_SINGLETON_FILES:
@@ -227,7 +231,9 @@ def strip_cloned_single_use_oauth_grants(profile_dir: Path) -> dict[str, Any]:
                 target.unlink()
                 stripped["files"].append(name)
         except OSError:
-            logger.debug("Could not remove cloned %s from %s", name, profile_dir, exc_info=True)
+            logger.debug(
+                "Could not remove cloned %s from %s", name, profile_dir, exc_info=True
+            )
     auth_path = profile_dir / "auth.json"
     if not auth_path.is_file():
         return stripped
@@ -237,6 +243,7 @@ def strip_cloned_single_use_oauth_grants(profile_dir: Path) -> dict[str, Any]:
     # positively: same path, or samefile() says so; any error refuses.
     try:
         from clawk_constants import get_default_clawk_root
+
         root_auth_path = get_default_clawk_root() / "auth.json"
         if _same_path(auth_path, root_auth_path) or (
             root_auth_path.exists() and auth_path.samefile(root_auth_path)
@@ -255,8 +262,9 @@ def strip_cloned_single_use_oauth_grants(profile_dir: Path) -> dict[str, Any]:
     if isinstance(pool, dict):
         for provider_id in list(pool):
             entries = pool.get(provider_id)
-            if (provider_id not in SINGLE_USE_REFRESH_POOL_PROVIDERS
-                    or not isinstance(entries, list)):
+            if provider_id not in SINGLE_USE_REFRESH_POOL_PROVIDERS or not isinstance(
+                entries, list
+            ):
                 continue
             kept = [e for e in entries if not _is_forkable_pool_row(provider_id, e)]
             if len(kept) != len(entries):
@@ -283,12 +291,20 @@ def strip_cloned_single_use_oauth_grants(profile_dir: Path) -> dict[str, Any]:
         _save_auth_store(store, target_path=auth_path)
     except Exception:
         logger.debug(
-            "Failed to strip cloned single-use OAuth grants from %s", auth_path, exc_info=True)
+            "Failed to strip cloned single-use OAuth grants from %s",
+            auth_path,
+            exc_info=True,
+        )
     return stripped
 
 
 _OAUTH_TOKEN_FIELDS = (
-    "access_token", "refresh_token", "expires_at", "expires_at_ms", "last_refresh")
+    "access_token",
+    "refresh_token",
+    "expires_at",
+    "expires_at_ms",
+    "last_refresh",
+)
 
 _oauth_heal_notices: list[str] = []
 
@@ -360,7 +376,8 @@ def _persist_oauth_heal_clean_mark(provider_id: str, fingerprint: tuple) -> None
         if not isinstance(existing, dict):
             existing = {}
         marks = {
-            key: value for key, value in existing.items()
+            key: value
+            for key, value in existing.items()
             if isinstance(key, str) and isinstance(value, list)
         }
         new_mark = _json_shape(fingerprint)
@@ -368,12 +385,16 @@ def _persist_oauth_heal_clean_mark(provider_id: str, fingerprint: tuple) -> None
             return  # already recorded; skip the rewrite
         marks[provider_id] = new_mark
         from clawk_constants import mkdir_under_clawk_home
+
         mkdir_under_clawk_home(path.parent)
         # 0o600 like the MCP schema cache: this names credential-store paths.
         atomic_json_write(path, marks, mode=0o600)
     except Exception:
         logger.debug(
-            "%s: could not persist the forked-OAuth clean mark", provider_id, exc_info=True)
+            "%s: could not persist the forked-OAuth clean mark",
+            provider_id,
+            exc_info=True,
+        )
 
 
 def _mark_oauth_heal_clean(provider_id: str, fingerprint: tuple) -> None:
@@ -388,6 +409,7 @@ def consume_oauth_heal_notices() -> list[str]:
     ``clawk auth list`` / ``clawk auth status`` print them so the user sees the consolidation.
     """
     from clawk_cli.auth import _oauth_heal_notices
+
     notes = list(_oauth_heal_notices)
     _oauth_heal_notices.clear()
     return notes
@@ -400,6 +422,7 @@ def _oauth_identity(entry: dict[str, Any]) -> Optional[str]:
     Anthropic ``sk-ant-oat`` tokens carry none (None → lineage rests on id / token material).
     """
     from clawk_cli.auth import _nonempty_str
+
     if not isinstance(entry, dict):
         return None
     for token in (entry.get("access_token"), entry.get("id_token")):
@@ -421,6 +444,7 @@ def _oauth_freshness(entry: dict[str, Any]) -> float:
     the live copy; ``last_refresh`` and the JWT ``exp`` claim are fallbacks.
     """
     from agent.credential_pool import _parse_absolute_timestamp
+
     stamps = [entry.get(k) for k in ("expires_at_ms", "expires_at", "last_refresh")]
     best = max((ts for ts in map(_parse_absolute_timestamp, stamps) if ts), default=0.0)
     if best == 0.0:
@@ -430,13 +454,15 @@ def _oauth_freshness(entry: dict[str, Any]) -> float:
 
 
 def _find_root_counterpart(
-    profile_row: dict[str, Any], root_rows: list[dict[str, Any]]) -> Optional[int]:
+    profile_row: dict[str, Any], root_rows: list[dict[str, Any]]
+) -> Optional[int]:
     """Index of the root OAuth row that shares a grant lineage with *profile_row*.
 
     Only a copied row ID or shared token material establishes lineage. The same
     account/client can issue multiple independent grants; identity is not proof.
     """
     from clawk_cli.auth import _nonempty_str
+
     candidates = [i for i, r in enumerate(root_rows) if _is_oauth_pool_payload(r)]
     if not candidates:
         return None
@@ -454,9 +480,12 @@ def _find_root_counterpart(
     return None
 
 
-def _adopt_oauth_material(target: dict[str, Any], winner: dict[str, Any]) -> dict[str, Any]:
+def _adopt_oauth_material(
+    target: dict[str, Any], winner: dict[str, Any]
+) -> dict[str, Any]:
     """Return *target* carrying *winner*'s token pair, status markers cleared."""
     from clawk_cli.auth import _POOL_STATUS_FIELDS
+
     merged = dict(target)
     for key in _OAUTH_TOKEN_FIELDS:
         if winner.get(key) is not None:
@@ -478,7 +507,8 @@ def _singleton_as_row(path: Path) -> Optional[dict[str, Any]]:
     return {
         "access_token": data.get("accessToken"),
         "refresh_token": data.get("refreshToken"),
-        "expires_at_ms": data.get("expiresAt")}
+        "expires_at_ms": data.get("expiresAt"),
+    }
 
 
 def heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str, Any]]:
@@ -505,8 +535,11 @@ def heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str, 
 
 
 def _heal_forked_provider_block(
-    profile_store: dict[str, Any], root_store: dict[str, Any], provider_id: str,
-    lineage_proven: bool = False) -> Optional[bool]:
+    profile_store: dict[str, Any],
+    root_store: dict[str, Any],
+    provider_id: str,
+    lineage_proven: bool = False,
+) -> Optional[bool]:
     """Consolidate a forked ``providers.<id>`` device-code block into root.
 
     *lineage_proven* carries the pool-row verdict: a profile row that matched root by copied id
@@ -517,12 +550,19 @@ def _heal_forked_provider_block(
     Returns None when nothing matched, False when the profile copy was dropped (root already
     newest), True when the profile copy was fresher and was adopted into root.
     """
-    p_providers, r_providers = profile_store.get("providers"), root_store.get("providers")
+    p_providers, r_providers = (
+        profile_store.get("providers"),
+        root_store.get("providers"),
+    )
     if not (isinstance(p_providers, dict) and isinstance(r_providers, dict)):
         return None
     p_block, r_block = p_providers.get(provider_id), r_providers.get(provider_id)
-    if not (isinstance(p_block, dict) and _block_tokens(p_block).get("refresh_token")
-            and isinstance(r_block, dict) and r_block):
+    if not (
+        isinstance(p_block, dict)
+        and _block_tokens(p_block).get("refresh_token")
+        and isinstance(r_block, dict)
+        and r_block
+    ):
         return None
 
     def _flat(block: dict[str, Any]) -> dict[str, Any]:
@@ -562,20 +602,26 @@ def _pool_rows(store: dict[str, Any], provider_id: str) -> tuple[Any, list[Any]]
 
 
 def owned_profile_reads_root_state(
-        auth_store: dict[str, Any], provider_id: str, source_path: Optional[Path]) -> bool:
+    auth_store: dict[str, Any], provider_id: str, source_path: Optional[Path]
+) -> bool:
     """True when a profile that owns its own pool rows would seed ``providers.<id>`` from ROOT.
 
     Seeding that state re-copies root's single-use refresh token into the profile's pool, which
     is the fork #100339 forbids; the singleton seeders skip it."""
     from clawk_cli.auth import _global_auth_file_path, _same_path
+
     global_root = _global_auth_file_path()
     return bool(
-        source_path is not None and global_root is not None and _same_path(source_path, global_root)
-        and _pool_rows(auth_store, provider_id)[1])
+        source_path is not None
+        and global_root is not None
+        and _same_path(source_path, global_root)
+        and _pool_rows(auth_store, provider_id)[1]
+    )
 
 
 def _adopt_if_fresher(
-    target: dict[str, Any], candidate: dict[str, Any]) -> Optional[dict[str, Any]]:
+    target: dict[str, Any], candidate: dict[str, Any]
+) -> Optional[dict[str, Any]]:
     """*target* carrying *candidate*'s pair when the candidate rotated later, else None."""
     fresher = _oauth_freshness(candidate) > _oauth_freshness(target)
     return _adopt_oauth_material(target, candidate) if fresher else None
@@ -584,20 +630,30 @@ def _adopt_if_fresher(
 class _HealPass:
     """One heal pass over a profile store vs the root store for *provider_id*."""
 
-    def __init__(self, profile_store, root_store, provider_id, root_singleton: Optional[Path]):
+    def __init__(
+        self, profile_store, root_store, provider_id, root_singleton: Optional[Path]
+    ):
         self.profile_store, self.root_store = profile_store, root_store
         self.provider_id = provider_id
         self.summary: dict[str, Any] = {
-            "adopted": False, "stripped_ids": [], "files": [], "providers_block": False}
+            "adopted": False,
+            "stripped_ids": [],
+            "files": [],
+            "providers_block": False,
+        }
         self.profile_changed = self.root_changed = False
-        self.lineage_proven = False  # a profile pool row matched root by copied id / shared tokens
+        self.lineage_proven = (
+            False  # a profile pool row matched root by copied id / shared tokens
+        )
         self.p_pool, self.p_rows = _pool_rows(profile_store, provider_id)
         self.r_pool, self.r_rows = _pool_rows(root_store, provider_id)
         self.r_oauth = [r for r in self.r_rows if _is_oauth_pool_payload(r)]
         self.root_singleton = root_singleton
         self.root_singleton_row = (
             _singleton_as_row(root_singleton)
-            if root_singleton is not None and root_singleton.exists() else None)
+            if root_singleton is not None and root_singleton.exists()
+            else None
+        )
 
     def _adopt_root_row(self, idx: int, row: dict[str, Any]) -> None:
         merged = _adopt_if_fresher(self.r_rows[idx], row)
@@ -625,7 +681,11 @@ class _HealPass:
             # No root pool counterpart. Root's grant may live only in its .anthropic_oauth.json
             # (the ``clawk auth`` PKCE shape); a profile ``clawk_pkce`` row is its copy. Not
             # ``manual:clawk_pkce``: that is an ``auth add`` login the pool owns, never a copy.
-            elif row.get("source") == "clawk_pkce" and self.root_singleton_row is not None and not self.r_oauth:
+            elif (
+                row.get("source") == "clawk_pkce"
+                and self.root_singleton_row is not None
+                and not self.r_oauth
+            ):
                 self._adopt_root_singleton(row)
             else:
                 # Root holds no copy of this lineage (independent account, or root never had the
@@ -644,7 +704,8 @@ class _HealPass:
         if self.provider_id not in _DEVICE_CODE_BLOCK_PROVIDERS:
             return
         block_result = _heal_forked_provider_block(
-            self.profile_store, self.root_store, self.provider_id, self.lineage_proven)
+            self.profile_store, self.root_store, self.provider_id, self.lineage_proven
+        )
         if block_result is not None:
             self.profile_changed = self.summary["providers_block"] = True
             if block_result:
@@ -654,7 +715,10 @@ class _HealPass:
         if profile_singleton is None or not profile_singleton.exists():
             return
         from clawk_cli.auth import _is_same_auth_store
-        if self.root_singleton is not None and _is_same_auth_store(profile_singleton, self.root_singleton):
+
+        if self.root_singleton is not None and _is_same_auth_store(
+            profile_singleton, self.root_singleton
+        ):
             return  # an aliased singleton pair is one shared grant, not a fork: never self-compare/unlink
         # See #101356.
         p_single = _singleton_as_row(profile_singleton)
@@ -669,8 +733,13 @@ class _HealPass:
             # Root only has pool rows: fold the singleton's pair into the freshest-matching
             # root pkce row, if any.
             idx = next(
-                (i for i, r in enumerate(self.r_rows)
-                 if _is_oauth_pool_payload(r) and _is_pkce_row(r)), None)
+                (
+                    i
+                    for i, r in enumerate(self.r_rows)
+                    if _is_oauth_pool_payload(r) and _is_pkce_row(r)
+                ),
+                None,
+            )
             if idx is not None:
                 self._adopt_root_row(idx, p_single)
         try:
@@ -686,47 +755,76 @@ class _HealPass:
         resurrect the spent pair (and a stale row would be overwritten by a fresh file).
         """
         if not (
-            self.summary["adopted"] and self.root_singleton is not None
-            and self.root_singleton_row is not None):
+            self.summary["adopted"]
+            and self.root_singleton is not None
+            and self.root_singleton_row is not None
+        ):
             return
         pkce_idx = next(
-            (i for i, r in enumerate(self.r_rows)
-             if _is_oauth_pool_payload(r) and r.get("source") == "clawk_pkce"), None)
+            (
+                i
+                for i, r in enumerate(self.r_rows)
+                if _is_oauth_pool_payload(r) and r.get("source") == "clawk_pkce"
+            ),
+            None,
+        )
         if pkce_idx is None:
             return
         pkce_row = self.r_rows[pkce_idx]
         row_fresh = _oauth_freshness(pkce_row)
         single_fresh = _oauth_freshness(self.root_singleton_row)
         if row_fresh > single_fresh:
-            self.root_singleton_row = _adopt_oauth_material(self.root_singleton_row, pkce_row)
+            self.root_singleton_row = _adopt_oauth_material(
+                self.root_singleton_row, pkce_row
+            )
         elif single_fresh > row_fresh:
-            self.r_rows[pkce_idx] = _adopt_oauth_material(pkce_row, self.root_singleton_row)
+            self.r_rows[pkce_idx] = _adopt_oauth_material(
+                pkce_row, self.root_singleton_row
+            )
             self.root_changed = True
 
     @property
     def dirty(self) -> bool:
-        return bool(self.profile_changed or self.root_changed or self.summary["adopted"])
+        return bool(
+            self.profile_changed or self.root_changed or self.summary["adopted"]
+        )
 
     def notice(self, profile_name: str) -> str:
         summary = self.summary
-        log_bits = [bit for bit, present in (
-            (f"pool rows {summary['stripped_ids']}", summary["stripped_ids"]),
-            (f"providers.{self.provider_id} block", summary["providers_block"]),
-            (", ".join(summary["files"]), summary["files"])) if present]
+        log_bits = [
+            bit
+            for bit, present in (
+                (f"pool rows {summary['stripped_ids']}", summary["stripped_ids"]),
+                (f"providers.{self.provider_id} block", summary["providers_block"]),
+                (", ".join(summary["files"]), summary["files"]),
+            )
+            if present
+        ]
         verdict = (
             "profile copy was the live pair; root updated"
-            if summary["adopted"] else "root copy already newest; profile copy dropped")
+            if summary["adopted"]
+            else "root copy already newest; profile copy dropped"
+        )
         return (
             f"profile {profile_name}: consolidated forked {self.provider_id} OAuth grant "
             f"({'; '.join(log_bits) or 'no-op'}) into the root grant — {verdict}; "
-            f"this profile now borrows the root grant (#100339)")
+            f"this profile now borrows the root grant (#100339)"
+        )
 
 
 def _heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str, Any]]:
     from clawk_cli.auth import (
-        _auth_file_path, _auth_store_lock, _global_auth_file_path, _load_auth_store,
-        _is_same_auth_store, _oauth_heal_clean_marks, _oauth_heal_notices, _same_path,
-        _save_auth_store)
+        _auth_file_path,
+        _auth_store_lock,
+        _global_auth_file_path,
+        _load_auth_store,
+        _is_same_auth_store,
+        _oauth_heal_clean_marks,
+        _oauth_heal_notices,
+        _same_path,
+        _save_auth_store,
+    )
+
     root_path = _global_auth_file_path()
     if root_path is None:
         return None  # classic mode: nothing to consolidate into
@@ -734,13 +832,17 @@ def _heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str,
         # Same seat belt as the write-through paths: never touch the real user's
         # ~/.clawksis/auth.json from a test that forgot to isolate HOME.
         real_home_env = os.environ.get("HOME", "")
-        if real_home_env and _same_path(root_path, Path(real_home_env) / ".clawksis" / "auth.json"):
+        if real_home_env and _same_path(
+            root_path, Path(real_home_env) / ".clawksis" / "auth.json"
+        ):
             return None
     profile_path = _auth_file_path()
     profile_home = profile_path.parent
     is_anthropic = provider_id == "anthropic"
     profile_singleton = profile_home / ".anthropic_oauth.json" if is_anthropic else None
-    root_singleton = root_path.parent / ".anthropic_oauth.json" if is_anthropic else None
+    root_singleton = (
+        root_path.parent / ".anthropic_oauth.json" if is_anthropic else None
+    )
 
     # Hot-path short-circuit: load_pool() runs per model call. Once this profile's store was
     # verified clean for *provider_id*, skip the locked read-modify-write until one of the files
@@ -754,8 +856,12 @@ def _heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str,
     # a metadata-preserving rewrite (``rsync -t``, ``tar -p``, a restore) would otherwise leave
     # a stale mark looking current indefinitely rather than for one process.
     fingerprint = (
-        str(profile_path), _stat_sig(profile_path), _stat_sig(profile_singleton),
-        str(root_path), _stat_sig(root_path), _stat_sig(root_singleton),
+        str(profile_path),
+        _stat_sig(profile_path),
+        _stat_sig(profile_singleton),
+        str(root_path),
+        _stat_sig(root_path),
+        _stat_sig(root_singleton),
     )
     if _oauth_heal_clean_marks.get(provider_id) == fingerprint:
         return None
@@ -775,16 +881,25 @@ def _heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str,
         # Nothing to consolidate; the mtime mark keeps this off the per-call hot path.
         _mark_oauth_heal_clean(provider_id, fingerprint)
         # See #101356.
-        logger.debug("%s: forked-OAuth heal skipped, %s is the root store", provider_id, profile_path)
+        logger.debug(
+            "%s: forked-OAuth heal skipped, %s is the root store",
+            provider_id,
+            profile_path,
+        )
         return None
 
     # Lock order: active (profile) store first, then the root source store — the same order
     # ``_provider_state_transaction`` uses.
     with _auth_store_lock():
         profile_store = (
-            _load_auth_store(profile_path) if profile_path.exists() else {"providers": {}})
+            _load_auth_store(profile_path)
+            if profile_path.exists()
+            else {"providers": {}}
+        )
         with _auth_store_lock(target_path=root_path):
-            root_store = _load_auth_store(root_path) if root_path.exists() else {"providers": {}}
+            root_store = (
+                _load_auth_store(root_path) if root_path.exists() else {"providers": {}}
+            )
             run = _HealPass(profile_store, root_store, provider_id, root_singleton)
             run.heal_pool_rows()
             run.heal_provider_block()
@@ -801,11 +916,19 @@ def _heal_forked_single_use_oauth_grants(provider_id: str) -> Optional[dict[str,
                     root_store["credential_pool"] = {provider_id: run.r_rows}
                 _save_auth_store(root_store, target_path=root_path)
             singleton_row = run.root_singleton_row
-            if summary["adopted"] and root_singleton is not None and singleton_row is not None:
+            if (
+                summary["adopted"]
+                and root_singleton is not None
+                and singleton_row is not None
+            ):
                 from agent.anthropic_credentials import _write_clawk_oauth_credentials
+
                 _write_clawk_oauth_credentials(
-                    singleton_row.get("access_token") or "", singleton_row.get("refresh_token"),
-                    singleton_row.get("expires_at_ms"), target=root_singleton)
+                    singleton_row.get("access_token") or "",
+                    singleton_row.get("refresh_token"),
+                    singleton_row.get("expires_at_ms"),
+                    target=root_singleton,
+                )
             if run.profile_changed and profile_path.exists():
                 _save_auth_store(profile_store, target_path=profile_path)
     message = run.notice(profile_home.name)

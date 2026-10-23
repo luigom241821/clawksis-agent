@@ -65,11 +65,19 @@ def call(method: str, params: dict) -> dict:
 @pytest.mark.parametrize(
     ("method", "extra"),
     [
-        ("image.attach_bytes", {"content_base64": base64.b64encode(PNG_BYTES).decode(), "filename": "a.png"}),
+        (
+            "image.attach_bytes",
+            {
+                "content_base64": base64.b64encode(PNG_BYTES).decode(),
+                "filename": "a.png",
+            },
+        ),
         ("file.attach", {"name": "notes.txt"}),
     ],
 )
-def test_attach_completes_while_agent_is_still_building(session, tmp_path, method, extra):
+def test_attach_completes_while_agent_is_still_building(
+    session, tmp_path, method, extra
+):
     """The handler returns without waiting on ``agent_ready``."""
     sid, record = session
 
@@ -107,7 +115,9 @@ def test_attached_image_is_queued_for_the_next_turn(session):
 
 def test_attach_still_rejects_an_unknown_session(no_build):
     """Dropping the agent wait must not drop session validation."""
-    response = call("image.attach_bytes", {"session_id": "nope", "content_base64": "eA=="})
+    response = call(
+        "image.attach_bytes", {"session_id": "nope", "content_base64": "eA=="}
+    )
 
     assert response["error"]["code"] == 4001
 
@@ -129,7 +139,9 @@ def test_sess_building_does_not_wait_but_sess_does(session, monkeypatch):
     sid, _record = session
     waited: list[str] = []
 
-    monkeypatch.setattr(server, "_wait_agent", lambda s, rid: waited.append(rid) or None)
+    monkeypatch.setattr(
+        server, "_wait_agent", lambda s, rid: waited.append(rid) or None
+    )
 
     server._sess_building({"session_id": sid}, "rid-building")
     assert waited == []

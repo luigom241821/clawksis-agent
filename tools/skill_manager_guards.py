@@ -21,6 +21,7 @@ def _is_background_review() -> bool:
     """True inside the autonomous curator review fork; False on any lookup failure."""
     try:
         from tools.skill_provenance import is_background_review
+
         return bool(is_background_review())
     except Exception:
         return False
@@ -48,8 +49,9 @@ class _BackgroundReviewReadMarks:
             return path in self._paths
 
 
-_background_review_read_paths: _ctxvars.ContextVar[Optional[_BackgroundReviewReadMarks]] = (
-    _ctxvars.ContextVar("background_review_read_paths", default=None))
+_background_review_read_paths: _ctxvars.ContextVar[
+    Optional[_BackgroundReviewReadMarks]
+] = _ctxvars.ContextVar("background_review_read_paths", default=None)
 
 
 def mark_background_review_skill_read(path: Path) -> None:
@@ -76,6 +78,7 @@ def _reset_background_review_read_marks() -> None:
 def _resolved_roots(skill_path: Path):
     """``(resolved skill_path, [(root, resolved_root), ...])`` over every resolvable skills root."""
     from agent.skill_utils import get_all_skills_dirs
+
     try:
         resolved = skill_path.resolve()
     except OSError:
@@ -90,14 +93,19 @@ def _resolved_roots(skill_path: Path):
 def _containing_skills_root(skill_path: Path) -> Path:
     """Skills root (local or external_dirs) containing ``skill_path``; local dir if none match."""
     from tools import skill_manager_tool as _smt
+
     resolved, roots = _resolved_roots(skill_path)
-    return next((root for root, r in roots if resolved.is_relative_to(r)), _smt._skills_dir())
+    return next(
+        (root for root, r in roots if resolved.is_relative_to(r)), _smt._skills_dir()
+    )
 
 
 def _is_path_redirect(path: Path) -> bool:
     """Symlink or (Windows 3.12+) junction — either lets a poisoned tree redirect rmtree outside."""
     try:
-        return path.is_symlink() or (hasattr(path, "is_junction") and path.is_junction())
+        return path.is_symlink() or (
+            hasattr(path, "is_junction") and path.is_junction()
+        )
     except OSError:
         return False
 
@@ -114,8 +122,10 @@ def _validate_delete_target(skill_dir: Path) -> Optional[str]:
     recursively delete See #11227.
     """
     if _is_path_redirect(skill_dir):
-        return (f"Refusing to delete '{skill_dir}': the skill directory is a "
-                f"symlink/junction. Remove the link target manually if intended.")
+        return (
+            f"Refusing to delete '{skill_dir}': the skill directory is a "
+            f"symlink/junction. Remove the link target manually if intended."
+        )
     try:
         skill_dir.resolve()
     except OSError as exc:
@@ -123,8 +133,10 @@ def _validate_delete_target(skill_dir: Path) -> Optional[str]:
     resolved, roots = _resolved_roots(skill_dir)
     for _root, root in roots:
         if resolved == root:
-            return (f"Refusing to delete '{skill_dir}': resolves to the skills root "
-                    f"itself, which would remove every installed skill.")
+            return (
+                f"Refusing to delete '{skill_dir}': resolves to the skills root "
+                f"itself, which would remove every installed skill."
+            )
         if resolved.is_relative_to(root):
             return None
     return f"Refusing to delete '{skill_dir}': path does not resolve inside any known skills root."
@@ -134,6 +146,7 @@ def _is_pinned(name: str, what: str) -> Optional[bool]:
     """skill_usage pinned flag; None (logged at debug) when the record is unreadable."""
     try:
         from tools import skill_usage
+
         return bool(skill_usage.get_record(name).get("pinned"))
     except Exception:
         logger.debug("%s lookup failed for %s", what, name, exc_info=True)
@@ -146,22 +159,27 @@ def _pinned_guard(name: str) -> Optional[str]:
     references them). Best-effort: an unreadable sidecar lets the delete through."""
     try:
         from agent.skill_utils import ESSENTIAL_SKILLS
+
         if name in ESSENTIAL_SKILLS:
             return (
                 f"Skill '{name}' is essential to Clawksis (the agent's own "
                 f"operating manual referenced by the system prompt) and "
-                f"cannot be deleted. Patches and edits are still allowed.")
+                f"cannot be deleted. Patches and edits are still allowed."
+            )
     except Exception:
         logger.debug("essential-guard lookup failed for %s", name, exc_info=True)
     if _is_pinned(name, "pinned-guard"):
         return (
             f"Skill '{name}' is pinned and cannot be deleted by skill_manage. Ask the user to "
             f"run `clawk curator unpin {name}` if they want to delete it. Patches and edits "
-            f"are allowed on pinned skills; only deletion is blocked.")
+            f"are allowed on pinned skills; only deletion is blocked."
+        )
     return None
 
 
-def _background_review_delete_guard(name: str, skill_dir: Path) -> Optional[dict[str, Any]]:
+def _background_review_delete_guard(
+    name: str, skill_dir: Path
+) -> Optional[dict[str, Any]]:
     """Refuse autonomous deletes of anything but curator-owned sediment. Content writes are not
     gated by ownership: the review fork exists to improve every skill it learns from, and every
     write is ledgered and reversible, while an archive removes a skill the user relies on."""
@@ -172,21 +190,26 @@ def _background_review_delete_guard(name: str, skill_dir: Path) -> Optional[dict
         return _refusal(
             f"{refuse} pinned skill '{name}': pinned skills "
             f"are off-limits to autonomous maintenance. Ask the user to run `clawk curator "
-            f"unpin {name}` if they want it changed.")
+            f"unpin {name}` if they want it changed."
+        )
     try:
         from agent.skill_utils import is_external_skill_path
+
         if is_external_skill_path(skill_dir):
             return _refusal(
                 f"{refuse} skill '{name}': the skill lives in skills.external_dirs, which are "
-                f"externally owned and read-only to autonomous curation.")
+                f"externally owned and read-only to autonomous curation."
+            )
     except Exception:
         logger.debug("external skill guard lookup failed for %s", name, exc_info=True)
     try:
         from tools import skill_usage
+
         for predicate, label in (
             (skill_usage.is_protected_builtin, "protected built-in"),
             (skill_usage.is_hub_installed, "hub-installed"),
-            (skill_usage.is_bundled, "bundled")):
+            (skill_usage.is_bundled, "bundled"),
+        ):
             if predicate(name):
                 return _refusal(f"{refuse} {label} skill '{name}'.")
         # Not curator-managed (no `created_by: "agent"`) => user-owned, never archived
@@ -194,22 +217,28 @@ def _background_review_delete_guard(name: str, skill_dir: Path) -> Optional[dict
         # keying on presence let the guard's own bookkeeping flip the verdict (#67140).
         usage_rec = skill_usage.load_usage().get(name)
         if not skill_usage._is_curator_managed_record(usage_rec):
-            _detail = (f"created_by={usage_rec.get('created_by')!r}" if isinstance(usage_rec, dict)
-                       else "no usage record")
+            _detail = (
+                f"created_by={usage_rec.get('created_by')!r}"
+                if isinstance(usage_rec, dict)
+                else "no usage record"
+            )
             return _refusal(
                 f"{refuse} skill '{name}': the skill is not "
                 f"curator-managed ({_detail}). Only curator-managed skills may be archived "
-                f"autonomously. Run `clawk curator adopt {name}` to opt it in.")
+                f"autonomously. Run `clawk curator adopt {name}` to opt it in."
+            )
     except Exception:
         logger.warning("owned skill guard lookup failed for %s", name, exc_info=True)
         return _refusal(
             f"{refuse} skill '{name}': agent ownership could not "
-            f"be verified because the provenance record is unavailable or unreadable.")
+            f"be verified because the provenance record is unavailable or unreadable."
+        )
     return None
 
 
 def _background_review_read_before_write_guard(
-    name: str, target: Path, action: str, file_label: str) -> Optional[dict[str, Any]]:
+    name: str, target: Path, action: str, file_label: str
+) -> Optional[dict[str, Any]]:
     """Require review forks to load the exact target before mutating it."""
     if not _is_background_review() or _background_review_has_read(target):
         return None
@@ -218,19 +247,22 @@ def _background_review_read_before_write_guard(
         f"content has not been loaded in this review turn. Call skill_view(name) for SKILL.md, or "
         f"skill_view(name, file_path=...) for a supporting file, then retry the write using the "
         f"content just returned.",
-        _read_before_write_required=True)
+        _read_before_write_required=True,
+    )
 
 
 def _background_review_preflight(action: str, name: str) -> Optional[dict[str, Any]]:
     if action != "delete":
         return None
     from tools import skill_manager_tool as _smt
+
     existing = _smt._find_skill(name)
     return _background_review_delete_guard(name, existing["path"]) if existing else None
 
 
 def _curator_consolidation_delete_guard(
-    name: str, absorbed_into: Optional[str]) -> Optional[dict[str, Any]]:
+    name: str, absorbed_into: Optional[str]
+) -> Optional[dict[str, Any]]:
     """Fail closed on unverified deletes during the curator consolidation pass. The fork's only
     legitimate delete is a consolidation declared via ``absorbed_into=<umbrella>`` (existence
     validated in ``_delete_skill``); the deterministic inactivity prune never calls skill_manage,
@@ -241,7 +273,9 @@ def _curator_consolidation_delete_guard(
     with zero verified consolidations (``consolidated_this_run == 0``), leaving active automations pointing
     at names that no longer resolve. Refuse it; keep the skill active.
     """
-    if not _is_background_review() or (isinstance(absorbed_into, str) and absorbed_into.strip()):
+    if not _is_background_review() or (
+        isinstance(absorbed_into, str) and absorbed_into.strip()
+    ):
         return None
     return _refusal(
         f"Refusing background curator delete of skill '{name}': the consolidation pass may only "
@@ -249,4 +283,5 @@ def _curator_consolidation_delete_guard(
         f"umbrella must already exist) to record a verified consolidation. Pruning a skill with no "
         f"forwarding target is not permitted here — the deterministic inactivity prune handles "
         f"staleness archival separately. Keeping '{name}' active.",
-        _fail_closed=True)
+        _fail_closed=True,
+    )

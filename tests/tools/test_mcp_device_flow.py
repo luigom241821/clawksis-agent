@@ -1,4 +1,5 @@
 """RFC 8628 login invariants through the production CLI and local HTTP."""
+
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,18 @@ def test_device_login_registers_authorizes_and_persists(mode):
         assert not any(row["path"] == "/register" for row in result["wire"])
 
 
-@pytest.mark.parametrize("mode", ["denied", "expiry", "unsupported", "issuer", "resource", "malformed", "persistence"])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "denied",
+        "expiry",
+        "unsupported",
+        "issuer",
+        "resource",
+        "malformed",
+        "persistence",
+    ],
+)
 def test_device_login_failure_does_not_persist_or_disclose_credentials(mode):
     result = run_cli(Path(__file__).resolve().parents[2], mode)
     assert "unrecognized arguments" not in result["output"], result

@@ -11,6 +11,7 @@ uv never reads pip's configuration, so a pip-only mirror (``PIP_INDEX_URL`` or
 an index of its own. Stdlib only: the bootstrap runner imports this before any
 dependency exists.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -21,11 +22,21 @@ import sys
 
 # Explicit uv index / transport settings that survive into uv. UV_INDEX_<NAME>_
 # {USERNAME,PASSWORD} credentials match by prefix in is_forwarded().
-FORWARDED_UV_SETTINGS = frozenset({
-    "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX", "UV_NO_INDEX",
-    "UV_FIND_LINKS", "UV_INDEX_STRATEGY", "UV_KEYRING_PROVIDER",
-    "UV_NATIVE_TLS", "UV_INSECURE_HOST", "UV_HTTP_TIMEOUT",
-})
+FORWARDED_UV_SETTINGS = frozenset(
+    {
+        "UV_INDEX_URL",
+        "UV_EXTRA_INDEX_URL",
+        "UV_DEFAULT_INDEX",
+        "UV_INDEX",
+        "UV_NO_INDEX",
+        "UV_FIND_LINKS",
+        "UV_INDEX_STRATEGY",
+        "UV_KEYRING_PROVIDER",
+        "UV_NATIVE_TLS",
+        "UV_INSECURE_HOST",
+        "UV_HTTP_TIMEOUT",
+    }
+)
 
 _UV_INDEX_KNOBS = ("UV_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX")
 
@@ -35,9 +46,11 @@ _PIP_TO_UV = (
     ("PIP_TRUSTED_HOST", "UV_INSECURE_HOST"),
 )
 
-TIMEOUT_HINT = ("uv timed out. If your network needs a package mirror, set index-url in "
-                "pip.conf (bridged to uv automatically) or UV_INDEX_URL; raise UV_HTTP_TIMEOUT "
-                "for slow links.")
+TIMEOUT_HINT = (
+    "uv timed out. If your network needs a package mirror, set index-url in "
+    "pip.conf (bridged to uv automatically) or UV_INDEX_URL; raise UV_HTTP_TIMEOUT "
+    "for slow links."
+)
 
 
 def is_forwarded(key: str) -> bool:
@@ -51,10 +64,18 @@ def is_forwarded(key: str) -> bool:
 # Transport knobs (UV_NATIVE_TLS, UV_INSECURE_HOST, UV_HTTP_TIMEOUT) are NOT
 # index redirects — corporate networks need them to reach the pinned URLs at
 # all, so they survive no_config isolation.
-INDEX_REDIRECT_SETTINGS = frozenset({
-    "UV_INDEX_URL", "UV_EXTRA_INDEX_URL", "UV_DEFAULT_INDEX", "UV_INDEX", "UV_NO_INDEX",
-    "UV_FIND_LINKS", "UV_INDEX_STRATEGY", "UV_KEYRING_PROVIDER",
-})
+INDEX_REDIRECT_SETTINGS = frozenset(
+    {
+        "UV_INDEX_URL",
+        "UV_EXTRA_INDEX_URL",
+        "UV_DEFAULT_INDEX",
+        "UV_INDEX",
+        "UV_NO_INDEX",
+        "UV_FIND_LINKS",
+        "UV_INDEX_STRATEGY",
+        "UV_KEYRING_PROVIDER",
+    }
+)
 
 
 def is_index_redirect(key: str) -> bool:
@@ -75,20 +96,31 @@ def pip_config_candidates(env: Mapping[str, str]) -> list[Path]:
     home = Path.home()
     if sys.platform == "win32":
         name = "pip.ini"
-        global_files = [Path(env.get("ProgramData") or r"C:\ProgramData") / "pip" / name]
-        user_files = [home / "pip" / name,
-                      Path(env.get("APPDATA") or home / "AppData" / "Roaming") / "pip" / name]
+        global_files = [
+            Path(env.get("ProgramData") or r"C:\ProgramData") / "pip" / name
+        ]
+        user_files = [
+            home / "pip" / name,
+            Path(env.get("APPDATA") or home / "AppData" / "Roaming") / "pip" / name,
+        ]
     elif sys.platform == "darwin":
         name = "pip.conf"
         global_files = [Path("/Library/Application Support/pip") / name]
         app_support = home / "Library" / "Application Support" / "pip"
-        user_files = [home / ".pip" / name,
-                      (app_support if app_support.is_dir() else home / ".config" / "pip") / name]
+        user_files = [
+            home / ".pip" / name,
+            (app_support if app_support.is_dir() else home / ".config" / "pip") / name,
+        ]
     else:
         name = "pip.conf"
         xdg_dirs = (env.get("XDG_CONFIG_DIRS") or "/etc/xdg").split(os.pathsep)
-        global_files = [Path(d) / "pip" / name for d in xdg_dirs if d] + [Path("/etc") / name]
-        user_files = [home / ".pip" / name, Path(env.get("XDG_CONFIG_HOME") or home / ".config") / "pip" / name]
+        global_files = [Path(d) / "pip" / name for d in xdg_dirs if d] + [
+            Path("/etc") / name
+        ]
+        user_files = [
+            home / ".pip" / name,
+            Path(env.get("XDG_CONFIG_HOME") or home / ".config") / "pip" / name,
+        ]
     explicit_files = [Path(explicit)] if explicit else []
     if explicit_files and explicit_files[0].is_file():
         user_files = []
@@ -116,7 +148,9 @@ def npm_registry(env: Mapping[str, str]) -> str:
     lowered = {key.lower(): value for key, value in env.items()}
     value = (lowered.get("npm_config_registry") or "").strip()
     if not value:
-        npmrc = Path(lowered.get("npm_config_userconfig") or Path.home() / ".npmrc").expanduser()
+        npmrc = Path(
+            lowered.get("npm_config_userconfig") or Path.home() / ".npmrc"
+        ).expanduser()
         try:
             lines = npmrc.read_text(encoding="utf-8-sig").splitlines()
         except (OSError, UnicodeDecodeError):
@@ -125,14 +159,18 @@ def npm_registry(env: Mapping[str, str]) -> str:
             key, sep, candidate = line.partition("=")
             if sep and key.strip().lower() == "registry":
                 value = candidate.strip().strip("\"'")
-    return value.rstrip("/") + "/" if value.startswith(("https://", "http://")) else NPM_PUBLIC_REGISTRY
+    return (
+        value.rstrip("/") + "/"
+        if value.startswith(("https://", "http://"))
+        else NPM_PUBLIC_REGISTRY
+    )
 
 
 def npm_registry_url(url: str, env: Mapping[str, str]) -> str:
     """*url* on the configured npm registry; non-npm URLs are returned unchanged."""
     if not url.startswith(NPM_PUBLIC_REGISTRY):
         return url
-    return npm_registry(env) + url[len(NPM_PUBLIC_REGISTRY):]
+    return npm_registry(env) + url[len(NPM_PUBLIC_REGISTRY) :]
 
 
 def bridged_index_settings(ambient: Mapping[str, str]) -> dict[str, str]:
@@ -142,7 +180,9 @@ def bridged_index_settings(ambient: Mapping[str, str]) -> dict[str, str]:
     """
     settings = {key: value for key, value in ambient.items() if is_forwarded(key)}
     if not any(settings.get(key) for key in _UV_INDEX_KNOBS):
-        index_url = (ambient.get("PIP_INDEX_URL") or "").strip() or pip_conf_index_url(ambient)
+        index_url = (ambient.get("PIP_INDEX_URL") or "").strip() or pip_conf_index_url(
+            ambient
+        )
         if index_url:
             settings["UV_INDEX_URL"] = index_url
     for pip_key, uv_key in _PIP_TO_UV:

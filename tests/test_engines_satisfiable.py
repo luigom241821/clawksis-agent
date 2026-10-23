@@ -35,13 +35,16 @@ _STOCK_NPM_BY_NODE_MAJOR = {
     26: "11.17.0",
 }
 
+
 def _root_manifest() -> dict:
     return json.loads((REPO_ROOT / "package.json").read_text())
+
 
 def _pm_lock():
     from pm.lock import Lockfile
 
     return Lockfile(REPO_ROOT / "pm" / "lock.json")
+
 
 def _parse_major_minor_patch(version: str) -> tuple[int, int, int]:
     parts = version.split("-", 1)[0].split(".")
@@ -49,6 +52,7 @@ def _parse_major_minor_patch(version: str) -> tuple[int, int, int]:
     while len(nums) < 3:
         nums.append(0)
     return nums[0], nums[1], nums[2]
+
 
 def _satisfies_clause(version: str, clause: str) -> bool:
     """Evaluate one `>=x.y.z` / `<x.y.z` / `^x.y.z` comparator against *version*."""
@@ -77,6 +81,7 @@ def _satisfies_clause(version: str, clause: str) -> bool:
         return have > want
     return have == want
 
+
 def _satisfies_range(version: str, spec: str) -> bool:
     """Evaluate the `A || B` / space-joined-AND subset of semver we author."""
     for alternative in spec.split("||"):
@@ -84,6 +89,7 @@ def _satisfies_range(version: str, spec: str) -> bool:
         if clauses and all(_satisfies_clause(version, c) for c in clauses):
             return True
     return False
+
 
 class TestEnginesAreSatisfiable:
     def test_npm_floor_is_met_by_a_shipping_node(self):
@@ -128,6 +134,7 @@ class TestEnginesAreSatisfiable:
             f"{npm_range!r}. A fresh Clawksis-managed install cannot run npm ci."
         )
 
+
 class TestExcludedNpmBand:
     """npm 11.10–11.16 honor `min-release-age` but ignore `min-release-age-exclude`.
 
@@ -153,12 +160,14 @@ class TestExcludedNpmBand:
             ".npmrc correctly and should be usable."
         )
 
+
 class TestManifestMirrors:
     def test_lockfile_engines_match_the_manifest(self):
         """A stale lockfile mirror re-imposes the old floor on `npm ci`."""
         manifest = _root_manifest()["engines"]
         lock = json.loads((REPO_ROOT / "package-lock.json").read_text())
         assert lock["packages"][""]["engines"] == manifest
+
 
 def _normalize_range(spec: str) -> str:
     """Normalize the wilder styles real deps publish so our tiny evaluator
@@ -172,6 +181,7 @@ def _normalize_range(spec: str) -> str:
     # "6.x" / "10.*" -> "^6.0.0"-ish floor within the major; ">= 10.*" -> ">=10.0.0"
     spec = re.sub(r"(\d+)\.[x*](?:\.[x*])?", r"\1.0.0", spec)
     return spec
+
 
 class TestDeclaredFloorsClearTheLockedTree:
     """Every Node version our own gates accept must survive `npm ci`.
@@ -194,7 +204,7 @@ class TestDeclaredFloorsClearTheLockedTree:
             arm = arm.strip()
             for op in ("^", ">=", "="):
                 if arm.startswith(op):
-                    floors.append(arm[len(op):].strip())
+                    floors.append(arm[len(op) :].strip())
                     break
             else:
                 floors.append(arm)

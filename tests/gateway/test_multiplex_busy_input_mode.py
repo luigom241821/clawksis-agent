@@ -353,7 +353,9 @@ async def test_secondary_legacy_busy_text_mode_is_profile_specific(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_default_busy_mode_is_unchanged_by_secondary_profile(tmp_path, monkeypatch):
+async def test_default_busy_mode_is_unchanged_by_secondary_profile(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_GATEWAY_BUSY_ACK_ENABLED", "false")
     runner = _runner(default_mode="interrupt")
     await _load_profile_snapshot(runner, tmp_path / "research", "steer")
@@ -455,7 +457,10 @@ async def test_effective_mode_uses_startup_snapshot_without_rereading_config(
 @pytest.mark.parametrize("mode", ["steer", "interrupt"])
 @pytest.mark.parametrize("secondary_privacy", [True, False])
 async def test_primary_adapter_busy_origin_uses_routed_privacy(
-    tmp_path, monkeypatch, mode, secondary_privacy,
+    tmp_path,
+    monkeypatch,
+    mode,
+    secondary_privacy,
 ):
     """The primary busy callback bypasses the scoped normal-message handler."""
     from dataclasses import asdict
@@ -470,29 +475,46 @@ async def test_primary_adapter_busy_origin_uses_routed_privacy(
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr("gateway.run._clawk_home", home)
     monkeypatch.setenv("CLAWK_GATEWAY_BUSY_ACK_ENABLED", "false")
-    for directory, privacy in ((home, not secondary_privacy), (secondary, secondary_privacy)):
+    for directory, privacy in (
+        (home, not secondary_privacy),
+        (secondary, secondary_privacy),
+    ):
         (directory / "config.yaml").write_text(
-            f"privacy:\n  redact_pii: {str(privacy).lower()}\n", encoding="utf-8",
+            f"privacy:\n  redact_pii: {str(privacy).lower()}\n",
+            encoding="utf-8",
         )
     runner = _runner(default_mode=mode)
     runner.config.profile_routes = [
-        ProfileRoute(name="research-chat", platform="telegram", profile="research", chat_id="chat-1"),
+        ProfileRoute(
+            name="research-chat",
+            platform="telegram",
+            profile="research",
+            chat_id="chat-1",
+        ),
     ]
     adapter = _adapter()
     runner.adapters[Platform.TELEGRAM] = adapter
     runner._wire_adapter_handlers(adapter)
     adapter.gateway_runner = runner
     event = MessageEvent(
-        text="follow up", message_id="message-1",
+        text="follow up",
+        message_id="message-1",
         source=adapter.build_source(chat_id="chat-1", user_id="user-1"),
     )
     assert event.source.profile == "research"
     original = asdict(event.source)
     key = runner._session_key_for_source(event.source)
     agent = AIAgent(
-        api_key="offline-test", base_url="http://127.0.0.1:1/v1", provider="openai-compat",
-        model="test-model", enabled_toolsets=[], quiet_mode=True, skip_context_files=True,
-        skip_memory=True, save_trajectories=False, platform="cli",
+        api_key="offline-test",
+        base_url="http://127.0.0.1:1/v1",
+        provider="openai-compat",
+        model="test-model",
+        enabled_toolsets=[],
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+        save_trajectories=False,
+        platform="cli",
     )
     agent._executing_tools = mode == "interrupt"
     runner._session_state(key).turn.agent = agent
@@ -503,7 +525,12 @@ async def test_primary_adapter_busy_origin_uses_routed_privacy(
     apply_pending_steer_to_tool_results(agent, messages, 1)
     output = messages[-1]["content"]
     assert "follow up" in output
-    for value in (event.source.chat_id, event.source.user_id, event.message_id, "research"):
+    for value in (
+        event.source.chat_id,
+        event.source.user_id,
+        event.message_id,
+        "research",
+    ):
         assert (value not in output) is secondary_privacy
     assert asdict(event.source) == original
     assert get_clawk_home_override() == ambient
@@ -511,7 +538,9 @@ async def test_primary_adapter_busy_origin_uses_routed_privacy(
 
 
 @pytest.mark.asyncio
-async def test_secondary_busy_text_timing_follows_profile_config_not_process_env(tmp_path, monkeypatch):
+async def test_secondary_busy_text_timing_follows_profile_config_not_process_env(
+    tmp_path, monkeypatch
+):
     """Debounce / hard-cap are per-profile config (#116893): a launch-process env value must not
     reach a secondary profile's adapter, and each profile keeps its own numbers across A->B->A."""
     monkeypatch.setenv("CLAWK_GATEWAY_BUSY_TEXT_DEBOUNCE_SECONDS", "9.0")
@@ -523,7 +552,8 @@ async def test_secondary_busy_text_timing_follows_profile_config_not_process_env
         homes[name].mkdir()
         (homes[name] / "config.yaml").write_text(
             f"display:\n  busy_text_debounce_seconds: {debounce}\n  busy_text_hard_cap_seconds: {cap}\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
 
     seen = {}
     for name in ("alpha", "beta", "alpha"):
@@ -531,27 +561,44 @@ async def test_secondary_busy_text_timing_follows_profile_config_not_process_env
         adapter = _adapter()
         runner._profile_adapters[name][Platform.TELEGRAM] = adapter
         runner._configure_profile_adapter(adapter, name, Platform.TELEGRAM)
-        seen.setdefault(name, []).append((adapter._busy_text_debounce_seconds, adapter._busy_text_hard_cap_seconds))
+        seen.setdefault(name, []).append(
+            (adapter._busy_text_debounce_seconds, adapter._busy_text_hard_cap_seconds)
+        )
 
     assert seen["alpha"] == [(0.1, 0.5), (0.1, 0.5)]
     assert seen["beta"] == [(2.0, 4.0)]
     # A fresh adapter never carries the process-env value either.
     fresh = _adapter()
-    assert (fresh._busy_text_debounce_seconds, fresh._busy_text_hard_cap_seconds) == (0.35, 1.0)
+    assert (fresh._busy_text_debounce_seconds, fresh._busy_text_hard_cap_seconds) == (
+        0.35,
+        1.0,
+    )
 
 
 def test_busy_text_timing_rejects_non_numeric_config(caplog):
     """A typo in the timing keys warns and falls back instead of crashing or silently coercing."""
     import logging
+
     with caplog.at_level(logging.WARNING, logger="gateway.run_config_loaders"):
         timing = GatewayRunner._busy_text_timing_from_config(
-            {"display": {"busy_text_debounce_seconds": "fast", "busy_text_hard_cap_seconds": -3}})
+            {
+                "display": {
+                    "busy_text_debounce_seconds": "fast",
+                    "busy_text_hard_cap_seconds": -3,
+                }
+            }
+        )
     assert timing == (0.35, 1.0)
-    assert "busy_text_debounce_seconds" in caplog.text and "busy_text_hard_cap_seconds" in caplog.text
+    assert (
+        "busy_text_debounce_seconds" in caplog.text
+        and "busy_text_hard_cap_seconds" in caplog.text
+    )
 
 
 @pytest.mark.asyncio
-async def test_secondary_human_delay_follows_profile_config_not_process_env(tmp_path, monkeypatch):
+async def test_secondary_human_delay_follows_profile_config_not_process_env(
+    tmp_path, monkeypatch
+):
     """``human_delay`` pacing is per-profile config (#116895): the launch-process env must not reach
     any adapter, and each profile keeps its own range across A->B->A."""
     monkeypatch.setenv("CLAWK_HUMAN_DELAY_MODE", "custom")
@@ -560,8 +607,10 @@ async def test_secondary_human_delay_follows_profile_config_not_process_env(tmp_
     runner = _runner()
     runner._human_delay = None
     homes = {"alpha": tmp_path / "alpha", "beta": tmp_path / "beta"}
-    for name, body in {"alpha": "human_delay:\n  mode: custom\n  min_ms: 100\n  max_ms: 200\n",
-                       "beta": "human_delay:\n  mode: natural\n"}.items():
+    for name, body in {
+        "alpha": "human_delay:\n  mode: custom\n  min_ms: 100\n  max_ms: 200\n",
+        "beta": "human_delay:\n  mode: natural\n",
+    }.items():
         homes[name].mkdir()
         (homes[name] / "config.yaml").write_text(body, encoding="utf-8")
 

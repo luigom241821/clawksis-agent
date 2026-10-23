@@ -26,9 +26,10 @@ def cjk_so(tmp_path_factory):
     out = tmp_path_factory.mktemp("fts5cjk") / "libfts5_cjk.so"
     try:
         subprocess.run(
-            ["gcc", "-shared", "-fPIC", "-O2", f"-I{VENDOR}", str(SRC),
-             "-o", str(out)],
-            check=True, capture_output=True, text=True,
+            ["gcc", "-shared", "-fPIC", "-O2", f"-I{VENDOR}", str(SRC), "-o", str(out)],
+            check=True,
+            capture_output=True,
+            text=True,
         )
     except subprocess.CalledProcessError as e:
         pytest.skip(f"tokenizer build failed: {e.stderr[:200]}")
@@ -51,10 +52,16 @@ def db(cjk_so, tmp_path, monkeypatch):
     assert d._fts_cjk_loaded, "tokenizer must load on the writer connection"
     assert d._fts_cjk_available, "fresh DB must be born with the cjk index"
     d.create_session(session_id="s1", source="cli", model="m")
-    d.append_message("s1", role="user", content="웅기가 shared default 프로필을 요청했다")
-    d.append_message("s1", role="assistant", content="일본 MCP 후보 우선순위 정리했습니다")
+    d.append_message(
+        "s1", role="user", content="웅기가 shared default 프로필을 요청했다"
+    )
+    d.append_message(
+        "s1", role="assistant", content="일본 MCP 후보 우선순위 정리했습니다"
+    )
     d.append_message("s1", role="user", content="graphiti daemon looks healthy")
-    d.append_message("s1", role="tool", content="일본 tool output blob", tool_name="terminal")
+    d.append_message(
+        "s1", role="tool", content="일본 tool output blob", tool_name="terminal"
+    )
     yield d
     d.close()
 
@@ -72,20 +79,12 @@ def test_mixed_and_ascii_queries(db):
     assert db.search_messages("우선순위", limit=10)
 
 
-
-
 def test_lone_single_cjk_char_routes_like(db):
     # 1-char CJK terms keep LIKE substring semantics (bigram index only
     # holds unigrams for isolated chars). "가" appears inside 웅기가.
     assert db._describe_search_path("가") == "like_scan"
     rows = db.search_messages("가", limit=10)
     assert rows, "LIKE fallback must still find substring matches"
-
-
-
-
-
-
 
 
 def test_config_toggle_disables_cjk(cjk_so, tmp_path, monkeypatch):
@@ -103,10 +102,6 @@ def test_config_toggle_disables_cjk(cjk_so, tmp_path, monkeypatch):
         assert row is None
     finally:
         d.close()
-
-
-
-
 
 
 def test_existing_v23_db_gains_cjk_via_optimize(cjk_so, tmp_path, monkeypatch):
@@ -201,9 +196,7 @@ def test_legacy_v22_optimize_lands_on_cjk(cjk_so, tmp_path, monkeypatch):
         assert d.search_messages("일본", limit=10)
         assert d.search_messages("legacy english", limit=10)
         with d._lock:
-            idx = d._conn.execute(
-                "SELECT COUNT(*) FROM messages_fts_cjk"
-            ).fetchone()[0]
+            idx = d._conn.execute("SELECT COUNT(*) FROM messages_fts_cjk").fetchone()[0]
             non_tool = d._conn.execute(
                 "SELECT COUNT(*) FROM messages WHERE role <> 'tool'"
             ).fetchone()[0]
@@ -212,7 +205,9 @@ def test_legacy_v22_optimize_lands_on_cjk(cjk_so, tmp_path, monkeypatch):
         d.close()
 
 
-def test_optimize_demote_leaves_established_cjk_index_intact(cjk_so, tmp_path, monkeypatch):
+def test_optimize_demote_leaves_established_cjk_index_intact(
+    cjk_so, tmp_path, monkeypatch
+):
     """#103647: a legacy inline-FTS DB that ALSO carries an established (backfilled,
     trigger-live) messages_fts_cjk index must demote without touching the cjk family.
     The demote enumeration matches 'messages_fts_%', which sweeps the cjk vtable and
@@ -306,9 +301,7 @@ def test_pure_latin_embedded_in_cjk_recovered_via_cjk_index(db):
 
 def test_fresh_db_index_counts_exclude_tool_rows(db):
     with db._lock:
-        idx = db._conn.execute(
-            "SELECT COUNT(*) FROM messages_fts_cjk"
-        ).fetchone()[0]
+        idx = db._conn.execute("SELECT COUNT(*) FROM messages_fts_cjk").fetchone()[0]
         non_tool = db._conn.execute(
             "SELECT COUNT(*) FROM messages WHERE role <> 'tool'"
         ).fetchone()[0]
@@ -319,6 +312,5 @@ def test_integrity_after_lifecycle(db):
     db.append_message("s1", role="user", content="무결성 검사")
     with db._lock:
         db._conn.execute(
-            "INSERT INTO messages_fts_cjk(messages_fts_cjk) "
-            "VALUES('integrity-check')"
+            "INSERT INTO messages_fts_cjk(messages_fts_cjk) VALUES('integrity-check')"
         )

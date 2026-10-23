@@ -51,7 +51,9 @@ def _cd_line(cwd: str) -> str:
         snapshot_ready=False,
         cwd_marker="__CLAWK_CWD__",
     )
-    return next(line for line in script.splitlines() if line.startswith("builtin cd -- "))
+    return next(
+        line for line in script.splitlines() if line.startswith("builtin cd -- ")
+    )
 
 
 def _config(host_cwd):
@@ -109,7 +111,9 @@ class TestMountedHostSessionCwd:
     @pytest.mark.parametrize("host", [MNT, SRV])
     def test_live_env_write_remaps_mounted_host_dir(self, docker_session, host):
         env = docker_session(host)
-        tt.register_task_env_overrides("desktop-sess", {"cwd": host, "cwd_source": "session"})
+        tt.register_task_env_overrides(
+            "desktop-sess", {"cwd": host, "cwd_source": "session"}
+        )
         assert env.cwd == "/workspace"
         # Host surfaces still track the raw workspace; only the container cwd changes.
         assert tt.get_session_cwd("desktop-sess") == host

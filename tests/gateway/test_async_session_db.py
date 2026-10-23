@@ -53,6 +53,7 @@ class _SpyDB:
 # Facade behaviour
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_offloads_off_calling_thread():
     """A call must execute on a worker thread, not the caller's loop thread."""
@@ -73,6 +74,7 @@ async def test_offloads_off_calling_thread():
 # These pin that the defenses hold when driven concurrently through the facade.
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_concurrent_claim_handoff_single_winner(tmp_path):
     db = AsyncSessionDB(clawk_state.SessionDB(db_path=tmp_path / "state.db"))
@@ -83,5 +85,3 @@ async def test_concurrent_claim_handoff_single_winner(tmp_path):
     results = await asyncio.gather(*(db.claim_handoff(sid) for _ in range(20)))
 
     assert sum(results) == 1, f"exactly one claim must win, got {sum(results)}"
-
-

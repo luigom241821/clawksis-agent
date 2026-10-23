@@ -27,12 +27,18 @@ def _close_late_session_db_result(future: concurrent.futures.Future) -> None:
         db = future.result()
         if db is not None:
             from clawk_state_registry import release_or_close
+
             release_or_close(db)
 
 
 def defer_teardown_to_running_worker(
-    future: Optional[concurrent.futures.Future], session_db, agent, job_id: str, job_name: str,
-    cron_session_id: str, workdir: Optional[str] = None,
+    future: Optional[concurrent.futures.Future],
+    session_db,
+    agent,
+    job_id: str,
+    job_name: str,
+    cron_session_id: str,
+    workdir: Optional[str] = None,
 ) -> bool:
     """Return True when the worker is still running and its Future will finalize the session
     and tear the agent down on completion; False when the caller must do it now."""
@@ -43,8 +49,14 @@ def defer_teardown_to_running_worker(
     def _finish(_future) -> None:
         try:
             if session_db:
-                _finalize_cron_session(session_db, agent, job_id, job_name, cron_session_id,
-                                       workdir=workdir)
+                _finalize_cron_session(
+                    session_db,
+                    agent,
+                    job_id,
+                    job_name,
+                    cron_session_id,
+                    workdir=workdir,
+                )
         finally:
             _teardown_cron_agent(agent, job_id)
 

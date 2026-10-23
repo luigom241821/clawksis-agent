@@ -24,7 +24,9 @@ def multiplex_on():
 
 
 class TestYuanbaoAdapterAuthzScope:
-    def test_scoped_construction_reads_authz_from_scope_not_environ(self, multiplex_on, monkeypatch):
+    def test_scoped_construction_reads_authz_from_scope_not_environ(
+        self, multiplex_on, monkeypatch
+    ):
         monkeypatch.setenv("YUANBAO_DM_POLICY", "pairing")
         monkeypatch.setenv("YUANBAO_DM_ALLOW_FROM", "default-user")
         token = secret_scope.set_secret_scope(
@@ -37,7 +39,9 @@ class TestYuanbaoAdapterAuthzScope:
         assert adapter._access_policy._dm_policy == "allowlist"
         assert adapter._access_policy._allow_from == ["scoped-user"]
 
-    def test_scoped_miss_does_not_admit_default_profiles_allowlist(self, multiplex_on, monkeypatch):
+    def test_scoped_miss_does_not_admit_default_profiles_allowlist(
+        self, multiplex_on, monkeypatch
+    ):
         monkeypatch.setenv("YUANBAO_DM_POLICY", "allowlist")
         monkeypatch.setenv("YUANBAO_DM_ALLOW_FROM", "default-user")
         token = secret_scope.set_secret_scope({"SOMETHING_ELSE": "x"})
@@ -53,18 +57,30 @@ class TestYuanbaoAccessPolicyOpenDmOptIn:
     def test_scoped_allow_all_admits(self, multiplex_on, monkeypatch):
         monkeypatch.delenv("GATEWAY_ALLOW_ALL_USERS", raising=False)
         monkeypatch.delenv("YUANBAO_ALLOW_ALL_USERS", raising=False)
-        policy = AccessPolicy(dm_policy="open", dm_allow_from=[], group_policy="pairing", group_allow_from=[])
+        policy = AccessPolicy(
+            dm_policy="open",
+            dm_allow_from=[],
+            group_policy="pairing",
+            group_allow_from=[],
+        )
         token = secret_scope.set_secret_scope({"YUANBAO_ALLOW_ALL_USERS": "true"})
         try:
             assert policy._open_dm_opted_in() is True
         finally:
             secret_scope.reset_secret_scope(token)
 
-    def test_default_profiles_allow_all_does_not_leak_into_scoped_miss(self, multiplex_on, monkeypatch):
+    def test_default_profiles_allow_all_does_not_leak_into_scoped_miss(
+        self, multiplex_on, monkeypatch
+    ):
         """The default profile's env-only GATEWAY_ALLOW_ALL_USERS must not
         admit a secondary profile that never opted in."""
         monkeypatch.setenv("GATEWAY_ALLOW_ALL_USERS", "true")
-        policy = AccessPolicy(dm_policy="open", dm_allow_from=[], group_policy="pairing", group_allow_from=[])
+        policy = AccessPolicy(
+            dm_policy="open",
+            dm_allow_from=[],
+            group_policy="pairing",
+            group_allow_from=[],
+        )
         token = secret_scope.set_secret_scope({"SOMETHING_ELSE": "x"})
         try:
             assert policy._open_dm_opted_in() is False

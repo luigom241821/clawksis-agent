@@ -44,6 +44,8 @@ def _fresh_kernel_registry():
     shutdown_all_kernels()
     yield
     shutdown_all_kernels()
+
+
 import sys
 import threading
 import unittest
@@ -62,19 +64,33 @@ from tools.code_execution_tool import (
 from tools.registry import registry
 
 
-def _mock_handle_function_call(function_name, function_args, task_id=None, user_task=None):
+def _mock_handle_function_call(
+    function_name, function_args, task_id=None, user_task=None
+):
     """Mock dispatcher that returns canned responses for each tool."""
     if function_name == "terminal":
         cmd = function_args.get("command", "")
         return json.dumps({"output": f"mock output for: {cmd}", "exit_code": 0})
     if function_name == "web_search":
-        return json.dumps({"results": [{"url": "https://example.com", "title": "Example", "description": "A test result"}]})
+        return json.dumps(
+            {
+                "results": [
+                    {
+                        "url": "https://example.com",
+                        "title": "Example",
+                        "description": "A test result",
+                    }
+                ]
+            }
+        )
     if function_name == "read_file":
         return json.dumps({"content": "line 1\nline 2\nline 3\n", "total_lines": 3})
     if function_name == "write_file":
         return json.dumps({"status": "ok", "path": function_args.get("path", "")})
     if function_name == "search_files":
-        return json.dumps({"matches": [{"file": "test.py", "line": 1, "text": "match"}]})
+        return json.dumps(
+            {"matches": [{"file": "test.py", "line": 1, "text": "match"}]}
+        )
     if function_name == "patch":
         return json.dumps({"status": "ok", "replacements": 1})
     if function_name == "web_extract":
@@ -86,7 +102,6 @@ class TestSandboxRequirements(unittest.TestCase):
     def test_available_on_posix(self):
         if sys.platform != "win32":
             self.assertTrue(check_sandbox_requirements())
-
 
 
 class TestInterruptedOutput(unittest.TestCase):
@@ -106,18 +121,11 @@ class TestInterruptedOutput(unittest.TestCase):
         )
 
 
-
 class TestClawksisToolsGeneration(unittest.TestCase):
     def test_generates_all_allowed_tools(self):
         src = generate_clawk_tools_module(list(SANDBOX_ALLOWED_TOOLS))
         for tool in SANDBOX_ALLOWED_TOOLS:
             self.assertIn(f"def {tool}(", src)
-
-
-
-
-
-
 
 
 class TestExecuteCodeRemoteTempDir(unittest.TestCase):
@@ -140,11 +148,23 @@ class TestExecuteCodeRemoteTempDir(unittest.TestCase):
         env = FakeEnv()
         fake_thread = MagicMock()
 
-        with patch("tools.code_execution_tool._load_config", return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env", return_value=(env, "ssh")), \
-             patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock, \
-             patch("tools.code_execution_tool.threading.Thread", return_value=fake_thread):
-            result = json.loads(_execute_remote("print('hello')", "task-1", ["terminal"]))
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(env, "ssh"),
+            ),
+            patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock,
+            patch(
+                "tools.code_execution_tool.threading.Thread", return_value=fake_thread
+            ),
+        ):
+            result = json.loads(
+                _execute_remote("print('hello')", "task-1", ["terminal"])
+            )
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["exit_code"], 0)
@@ -153,25 +173,39 @@ class TestExecuteCodeRemoteTempDir(unittest.TestCase):
         # The session-kernel path runs first and fails open on this fake env
         # (no PID from nohup), so search for the per-call sandbox commands
         # rather than pinning positions.
-        mkdir_cmd = next(cmd for cmd, _, _ in env.commands
-                         if "mkdir -p" in cmd and "clawk_exec_" in cmd)
+        mkdir_cmd = next(
+            cmd
+            for cmd, _, _ in env.commands
+            if "mkdir -p" in cmd and "clawk_exec_" in cmd
+        )
         run_cmd = next(cmd for cmd, _, _ in env.commands if "python3 script.py" in cmd)
-        cleanup_cmd = next(cmd for cmd, _, _ in env.commands
-                           if "rm -rf" in cmd and "clawk_exec_" in cmd)
-        self.assertIn("mkdir -p /data/data/com.termux/files/usr/tmp/clawk_exec_", mkdir_cmd)
-        self.assertIn("rm -rf /data/data/com.termux/files/usr/tmp/clawk_exec_", cleanup_cmd)
+        cleanup_cmd = next(
+            cmd
+            for cmd, _, _ in env.commands
+            if "rm -rf" in cmd and "clawk_exec_" in cmd
+        )
+        self.assertIn(
+            "mkdir -p /data/data/com.termux/files/usr/tmp/clawk_exec_", mkdir_cmd
+        )
+        self.assertIn(
+            "rm -rf /data/data/com.termux/files/usr/tmp/clawk_exec_", cleanup_cmd
+        )
         self.assertNotIn("mkdir -p /tmp/clawk_exec_", mkdir_cmd)
         # Env vars travel in the shipped sandbox.env (sourced by the remote
         # shell), not on the command line.
         self.assertIn(". ./sandbox.env", run_cmd)
-        env_ship = next(c for c in ship_mock.call_args_list
-                        if c.args[1].endswith("sandbox.env"))
-        self.assertIn("CLAWK_RPC_DIR=/data/data/com.termux/files/usr/tmp/clawk_exec_",
-                      env_ship.args[2])
+        env_ship = next(
+            c for c in ship_mock.call_args_list if c.args[1].endswith("sandbox.env")
+        )
+        self.assertIn(
+            "CLAWK_RPC_DIR=/data/data/com.termux/files/usr/tmp/clawk_exec_",
+            env_ship.args[2],
+        )
 
     def test_timezone_shell_quoted_in_remote_execution(self):
         """CLAWK_TIMEZONE must be shell-quoted in the sourced sandbox.env file
         to prevent injection at source time."""
+
         class FakeEnv:
             def __init__(self):
                 self.commands = []
@@ -192,30 +226,46 @@ class TestExecuteCodeRemoteTempDir(unittest.TestCase):
 
         malicious_tz = "US/Eastern; echo PWNED"
 
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env",
-                   return_value=(env, "ssh")), \
-             patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock, \
-             patch("tools.code_execution_tool.threading.Thread",
-                   return_value=fake_thread), \
-             patch.dict(os.environ, {"CLAWK_TIMEZONE": malicious_tz}):
-            result = json.loads(_execute_remote("print('hello')", "task-1", ["terminal"]))
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(env, "ssh"),
+            ),
+            patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock,
+            patch(
+                "tools.code_execution_tool.threading.Thread", return_value=fake_thread
+            ),
+            patch.dict(os.environ, {"CLAWK_TIMEZONE": malicious_tz}),
+        ):
+            result = json.loads(
+                _execute_remote("print('hello')", "task-1", ["terminal"])
+            )
 
         self.assertEqual(result["status"], "success")
         run_cmd = next(cmd for cmd, _, _ in env.commands if "python3 script.py" in cmd)
         # TZ travels in the shipped sandbox.env (sourced by the remote shell),
         # never on the command line.
         self.assertNotIn("TZ=", run_cmd)
-        env_ship = next(c for c in ship_mock.call_args_list
-                        if c.args[1].endswith("sandbox.env"))
+        env_ship = next(
+            c for c in ship_mock.call_args_list if c.args[1].endswith("sandbox.env")
+        )
         env_content = env_ship.args[2]
         # The TZ value must be shell-quoted in the sourced env file — an
         # unescaped semicolon would inject a command at source time.
-        self.assertNotIn("TZ=US/Eastern; echo PWNED", env_content,
-                         "TZ value with shell metacharacters must not appear unquoted")
-        self.assertIn("TZ='US/Eastern; echo PWNED'", env_content,
-                      "TZ value must be wrapped in single quotes by shlex.quote()")
+        self.assertNotIn(
+            "TZ=US/Eastern; echo PWNED",
+            env_content,
+            "TZ value with shell metacharacters must not appear unquoted",
+        )
+        self.assertIn(
+            "TZ='US/Eastern; echo PWNED'",
+            env_content,
+            "TZ value must be wrapped in single quotes by shlex.quote()",
+        )
 
 
 class TestRemoteSharedHostLockdown(unittest.TestCase):
@@ -240,14 +290,23 @@ class TestRemoteSharedHostLockdown(unittest.TestCase):
                 return {"output": "", "returncode": 0}
 
         env = FakeEnv()
-        with patch("tools.code_execution_tool._load_config",
-                   return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env",
-                   return_value=(env, "ssh")), \
-             patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock, \
-             patch("tools.code_execution_tool.threading.Thread",
-                   return_value=MagicMock()):
-            result = json.loads(_execute_remote("print('hello')", "task-1", ["terminal"]))
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(env, "ssh"),
+            ),
+            patch("tools.code_execution_tool._ship_file_to_remote") as ship_mock,
+            patch(
+                "tools.code_execution_tool.threading.Thread", return_value=MagicMock()
+            ),
+        ):
+            result = json.loads(
+                _execute_remote("print('hello')", "task-1", ["terminal"])
+            )
 
         self.assertEqual(result["status"], "success")
         commands = [c for c, _, _ in env.commands]
@@ -256,15 +315,22 @@ class TestRemoteSharedHostLockdown(unittest.TestCase):
         # appear in any executed command.
         ships, tokens = {}, {}
         for env_name in ("kernel.env", "sandbox.env"):
-            env_ship = next((c for c in ship_mock.call_args_list
-                             if c.args[1].endswith(env_name)), None)
+            env_ship = next(
+                (c for c in ship_mock.call_args_list if c.args[1].endswith(env_name)),
+                None,
+            )
             self.assertIsNotNone(env_ship, f"{env_name} was not shipped")
-            token_line = next(l for l in env_ship.args[2].splitlines()
-                              if l.startswith("CLAWK_RPC_TOKEN="))
+            token_line = next(
+                l
+                for l in env_ship.args[2].splitlines()
+                if l.startswith("CLAWK_RPC_TOKEN=")
+            )
             token = token_line.split("=", 1)[1].strip("'\"")
             self.assertTrue(token)
-            self.assertFalse(any(token in c for c in commands),
-                             f"{env_name} token appeared in a remote command line")
+            self.assertFalse(
+                any(token in c for c in commands),
+                f"{env_name} token appeared in a remote command line",
+            )
             ships[env_name], tokens[env_name] = env_ship, token
         run_cmd = next(c for c in commands if "python3 script.py" in c)
         self.assertNotIn("CLAWK_RPC_TOKEN=", run_cmd)
@@ -275,22 +341,28 @@ class TestRemoteSharedHostLockdown(unittest.TestCase):
         import shutil
         import subprocess
         import tempfile
-        mkdir_cmd = next(c for c in commands
-                         if "mkdir -p" in c and "clawk_exec_" in c)
+
+        mkdir_cmd = next(c for c in commands if "mkdir -p" in c and "clawk_exec_" in c)
         env_ship, token = ships["sandbox.env"], tokens["sandbox.env"]
         sandbox = env_ship.args[1].rsplit("/", 1)[0]
         root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, root, True)
         local = root + sandbox
-        sh = lambda c: subprocess.run(["bash", "-c", c.replace(sandbox, local)],
-                                      capture_output=True, text=True, check=False)
+        sh = lambda c: subprocess.run(
+            ["bash", "-c", c.replace(sandbox, local)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         self.assertEqual(sh(mkdir_cmd).returncode, 0)
         for d in (local, f"{local}/rpc"):
             self.assertEqual(os.stat(d).st_mode & 0o777, 0o700, d)
         with open(f"{local}/sandbox.env", "w") as fh:
             fh.write(env_ship.args[2])
         with open(f"{local}/script.py", "w") as fh:
-            fh.write("import os, sys\nprint(os.environ['CLAWK_RPC_TOKEN'])\nsys.exit(7)\n")
+            fh.write(
+                "import os, sys\nprint(os.environ['CLAWK_RPC_TOKEN'])\nsys.exit(7)\n"
+            )
         # The env reaches the child, its exit code is the command's, and the
         # token never leaks into the outer shell (the backend's session
         # snapshot dump; issue #71296 class).
@@ -305,7 +377,9 @@ class TestExecuteCode(unittest.TestCase):
 
     def _run(self, code, enabled_tools=None):
         """Helper: run code with mocked handle_function_call."""
-        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+        with patch(
+            "model_tools.handle_function_call", side_effect=_mock_handle_function_call
+        ):
             result = execute_code(
                 code=code,
                 task_id="test-task",
@@ -332,7 +406,7 @@ class TestExecuteCode(unittest.TestCase):
 
     def test_repo_root_modules_are_importable(self):
         """Sandboxed scripts can import modules that live at the repo root."""
-        result = self._run('import clawk_constants; print(clawk_constants.__file__)')
+        result = self._run("import clawk_constants; print(clawk_constants.__file__)")
         self.assertEqual(result["status"], "success")
         self.assertIn("clawk_constants.py", result["output"])
 
@@ -348,7 +422,6 @@ print(result.get("output", ""))
         self.assertIn("mock output for: echo hello", result["output"])
         self.assertEqual(result["tool_calls_made"], 1)
 
-
     def test_concurrent_tool_calls_match_responses(self):
         """Regression for the UDS RPC race: multiple threads inside the
         sandbox calling terminal() concurrently must each receive their own
@@ -363,7 +436,7 @@ print(result.get("output", ""))
         The mock dispatcher sleeps briefly to guarantee the requests
         overlap on the socket.
         """
-        code = '''
+        code = """
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from clawk_tools import terminal
@@ -382,10 +455,11 @@ if mismatches:
     print(f"MISMATCH {len(mismatches)}/{N}: {mismatches[:3]}")
 else:
     print(f"OK {N}/{N}")
-'''
+"""
 
         def slow_mock(function_name, function_args, task_id=None, user_task=None):
             import time as _t
+
             if function_name == "terminal":
                 _t.sleep(0.05)  # ensure requests overlap on the socket
                 cmd = function_args.get("command", "")
@@ -404,9 +478,11 @@ else:
             )
         result = json.loads(raw)
         self.assertEqual(result["status"], "success", msg=result)
-        self.assertIn("OK 10/10", result["output"],
-                      msg=f"Concurrent tool calls mismatched: {result['output']!r}")
-
+        self.assertIn(
+            "OK 10/10",
+            result["output"],
+            msg=f"Concurrent tool calls mismatched: {result['output']!r}",
+        )
 
     def test_stderr_on_error(self):
         """Traceback from stderr is included in the response."""
@@ -418,8 +494,9 @@ raise RuntimeError("deliberate crash")
         result = self._run(code)
         self.assertEqual(result["status"], "error")
         self.assertIn("before error", result["output"])
-        self.assertIn("RuntimeError", result.get("error", "") + result.get("output", ""))
-
+        self.assertIn(
+            "RuntimeError", result.get("error", "") + result.get("output", "")
+        )
 
     def test_shell_quote_helper(self):
         """shell_quote properly escapes dangerous characters."""
@@ -436,7 +513,6 @@ assert escaped.startswith("'")
         result = self._run(code)
         self.assertEqual(result["status"], "success")
 
-
     def test_json_parse_helper_bom(self):
         """json_parse strips a leading UTF-8 BOM and tolerates control chars (#57870)."""
         code = """
@@ -450,7 +526,6 @@ print("bom:" + bom_result["body"])
         result = self._run(code)
         self.assertEqual(result["status"], "success")
         self.assertIn("bom:bom-ok", result["output"])
-
 
     def test_retry_helper_all_fail(self):
         """retry raises the last error when all attempts fail."""
@@ -481,7 +556,15 @@ class TestStubSchemaDrift(unittest.TestCase):
     # Parameters that are internal (injected by the handler, not user-facing)
     _INTERNAL_PARAMS = {"task_id", "user_task"}
     # Parameters intentionally blocked in the sandbox
-    _BLOCKED_TERMINAL_PARAMS = {"background", "pty", "notify", "notify_on_complete", "watch_patterns", "heartbeat", "persist_on_release"}
+    _BLOCKED_TERMINAL_PARAMS = {
+        "background",
+        "pty",
+        "notify",
+        "notify_on_complete",
+        "watch_patterns",
+        "heartbeat",
+        "persist_on_release",
+    }
 
     def test_stubs_cover_all_schema_params(self):
         """Every user-facing parameter in the real schema must appear in the
@@ -508,16 +591,16 @@ class TestStubSchemaDrift(unittest.TestCase):
 
             # Extract parameter names from the stub signature string
             # Match word before colon: "pattern: str, target: str = ..."
-            stub_params = set(re.findall(r'(\w+)\s*:', sig))
+            stub_params = set(re.findall(r"(\w+)\s*:", sig))
 
             missing = schema_params - stub_params
             self.assertEqual(
-                missing, set(),
+                missing,
+                set(),
                 f"Stub for '{tool_name}' is missing parameters that exist in "
                 f"the real schema: {missing}. Update _TOOL_STUBS in "
-                f"code_execution_tool.py to include them."
+                f"code_execution_tool.py to include them.",
             )
-
 
     def test_generated_module_accepts_all_params(self):
         """Executing the generated clawk_tools module: every stub accepts all of
@@ -527,13 +610,17 @@ class TestStubSchemaDrift(unittest.TestCase):
         import inspect
 
         for transport in ("uds", "file"):
-            src = generate_clawk_tools_module(list(SANDBOX_ALLOWED_TOOLS), transport=transport)
+            src = generate_clawk_tools_module(
+                list(SANDBOX_ALLOWED_TOOLS), transport=transport
+            )
             namespace = {"__name__": "clawk_tools"}
             exec(compile(src, "clawk_tools.py", "exec"), namespace)
             calls = []
             namespace["_call"] = lambda name, args: calls.append((name, args)) or "ok"
 
-            generated = {name for name in SANDBOX_ALLOWED_TOOLS if callable(namespace.get(name))}
+            generated = {
+                name for name in SANDBOX_ALLOWED_TOOLS if callable(namespace.get(name))
+            }
             self.assertEqual(generated, set(SANDBOX_ALLOWED_TOOLS), transport)
             for name in sorted(generated):
                 params = inspect.signature(namespace[name]).parameters
@@ -555,6 +642,7 @@ class TestStubSchemaDrift(unittest.TestCase):
 # build_execute_code_schema
 # ---------------------------------------------------------------------------
 
+
 class TestBuildExecuteCodeSchema(unittest.TestCase):
     """Tests for build_execute_code_schema — the dynamic schema generator."""
 
@@ -563,7 +651,6 @@ class TestBuildExecuteCodeSchema(unittest.TestCase):
         desc = schema["description"]
         for name, _ in _TOOL_DOC_LINES:
             self.assertIn(name, desc, f"Default schema should mention '{name}'")
-
 
     def test_subset_only_lists_enabled_tools(self):
         enabled = {"terminal", "read_file"}
@@ -575,7 +662,6 @@ class TestBuildExecuteCodeSchema(unittest.TestCase):
         self.assertNotIn("web_extract(", desc)
         self.assertNotIn("write_file(", desc)
 
-
     def test_none_defaults_to_all_tools(self):
         schema_none = build_execute_code_schema(None)
         schema_all = build_execute_code_schema(SANDBOX_ALLOWED_TOOLS)
@@ -585,6 +671,7 @@ class TestBuildExecuteCodeSchema(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Environment variable filtering (security critical)
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipIf(sys.platform == "win32", "UDS not available on Windows")
 class TestEnvVarFiltering(unittest.TestCase):
@@ -596,24 +683,28 @@ class TestEnvVarFiltering(unittest.TestCase):
 
     def _get_child_env(self, extra_env=None):
         """Run a script that dumps its environment and return the env dict."""
-        code = (
-            "import os, json\n"
-            "print(json.dumps(dict(os.environ)))\n"
-        )
+        code = "import os, json\nprint(json.dumps(dict(os.environ)))\n"
         env_backup = os.environ.copy()
         try:
             if extra_env:
                 os.environ.update(extra_env)
-            with patch("model_tools.handle_function_call", return_value='{}'), \
-                 patch("tools.code_execution_tool._load_config",
-                       return_value={"timeout": 10, "max_tool_calls": 50}):
+            with (
+                patch("model_tools.handle_function_call", return_value="{}"),
+                patch(
+                    "tools.code_execution_tool._load_config",
+                    return_value={"timeout": 10, "max_tool_calls": 50},
+                ),
+            ):
                 # reset=True: a session kernel's env is frozen at spawn, so
                 # env-building rules are only observable on a FRESH kernel —
                 # a reused one would (correctly) show the env from whenever
                 # it was first spawned, not this test's os.environ tweaks.
-                raw = execute_code(code, task_id="test-env",
-                                   enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
-                                   reset=True)
+                raw = execute_code(
+                    code,
+                    task_id="test-env",
+                    enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
+                    reset=True,
+                )
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -623,27 +714,28 @@ class TestEnvVarFiltering(unittest.TestCase):
         return json.loads(result["output"].strip())
 
     def test_api_keys_excluded(self):
-        child_env = self._get_child_env({
-            "OPENAI_API_KEY": "sk-secret123",
-            "ANTHROPIC_API_KEY": "sk-ant-secret",
-            "FIRECRAWL_API_KEY": "fc-secret",
-        })
+        child_env = self._get_child_env(
+            {
+                "OPENAI_API_KEY": "sk-secret123",
+                "ANTHROPIC_API_KEY": "sk-ant-secret",
+                "FIRECRAWL_API_KEY": "fc-secret",
+            }
+        )
         self.assertNotIn("OPENAI_API_KEY", child_env)
         self.assertNotIn("ANTHROPIC_API_KEY", child_env)
         self.assertNotIn("FIRECRAWL_API_KEY", child_env)
 
     def test_tokens_excluded(self):
-        child_env = self._get_child_env({
-            "GITHUB_TOKEN": "ghp_secret",
-            "MODAL_TOKEN_ID": "tok-123",
-            "MODAL_TOKEN_SECRET": "tok-sec",
-        })
+        child_env = self._get_child_env(
+            {
+                "GITHUB_TOKEN": "ghp_secret",
+                "MODAL_TOKEN_ID": "tok-123",
+                "MODAL_TOKEN_SECRET": "tok-sec",
+            }
+        )
         self.assertNotIn("GITHUB_TOKEN", child_env)
         self.assertNotIn("MODAL_TOKEN_ID", child_env)
         self.assertNotIn("MODAL_TOKEN_SECRET", child_env)
-
-
-
 
     def test_timezone_injected_when_set(self):
         env_backup = os.environ.copy()
@@ -661,20 +753,21 @@ class TestEnvVarFiltering(unittest.TestCase):
             os.environ.update(env_backup)
 
 
-
 # ---------------------------------------------------------------------------
 # execute_code edge cases
 # ---------------------------------------------------------------------------
 
-class TestExecuteCodeEdgeCases(unittest.TestCase):
 
+class TestExecuteCodeEdgeCases(unittest.TestCase):
     def test_command_argument_points_to_terminal(self):
-        result = json.loads(registry.dispatch(
-            "execute_code",
-            {"command": "git status"},
-            task_id="test",
-            enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
-        ))
+        result = json.loads(
+            registry.dispatch(
+                "execute_code",
+                {"command": "git status"},
+                task_id="test",
+                enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
+            )
+        )
         self.assertIn("error", result)
         self.assertIn("'command' parameter", result["error"])
         self.assertIn("terminal(command=...)", result["error"])
@@ -685,6 +778,7 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
         redirects to execute_code, instead of the opaque
         'Invalid command: expected string, got NoneType'."""
         from tools.terminal_tool import _handle_terminal
+
         result = json.loads(_handle_terminal({"code": "print(1)"}, task_id="test"))
         self.assertIn("error", result)
         self.assertIn("'code' parameter", result["error"])
@@ -695,11 +789,13 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
     def test_empty_code_explains_required_parameter(self):
         for code in ("", None):
             with self.subTest(code=code):
-                result = json.loads(registry.dispatch(
-                    "execute_code",
-                    {"code": code},
-                    task_id="test",
-                ))
+                result = json.loads(
+                    registry.dispatch(
+                        "execute_code",
+                        {"code": code},
+                        task_id="test",
+                    )
+                )
                 self.assertIn("error", result)
                 self.assertIn("non-empty 'code' parameter", result["error"])
                 self.assertIn("Python source", result["error"])
@@ -708,11 +804,13 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
     def test_non_string_code_redirects_instead_of_attributeerror(self):
         for code in (123, {"code": "print(1)"}, ["print(1)"]):
             with self.subTest(code=code):
-                result = json.loads(registry.dispatch(
-                    "execute_code",
-                    {"code": code},
-                    task_id="test",
-                ))
+                result = json.loads(
+                    registry.dispatch(
+                        "execute_code",
+                        {"code": code},
+                        task_id="test",
+                    )
+                )
                 self.assertIn("error", result)
                 self.assertIn(type(code).__name__, result["error"])
                 self.assertIn("Python source as a string", result["error"])
@@ -731,21 +829,21 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
             self.assertIn("error", result)
             self.assertIn("unavailable", result["error"].lower())
 
-
     @unittest.skipIf(sys.platform == "win32", "UDS not available on Windows")
     def test_nonoverlapping_tools_fallback(self):
         """When enabled_tools has no overlap with SANDBOX_ALLOWED_TOOLS,
         should fall back to all allowed tools."""
-        code = (
-            "from clawk_tools import terminal\n"
-            "print('fallback ok')\n"
-        )
-        with patch("model_tools.handle_function_call",
-                    return_value=json.dumps({"ok": True})):
-            result = json.loads(execute_code(
-                code, task_id="test-nonoverlap",
-                enabled_tools=["vision_analyze", "browser_snapshot"],
-            ))
+        code = "from clawk_tools import terminal\nprint('fallback ok')\n"
+        with patch(
+            "model_tools.handle_function_call", return_value=json.dumps({"ok": True})
+        ):
+            result = json.loads(
+                execute_code(
+                    code,
+                    task_id="test-nonoverlap",
+                    enabled_tools=["vision_analyze", "browser_snapshot"],
+                )
+            )
         self.assertEqual(result["status"], "success")
         self.assertIn("fallback ok", result["output"])
 
@@ -754,15 +852,17 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
 # _load_config
 # ---------------------------------------------------------------------------
 
+
 class TestLoadConfig(unittest.TestCase):
-
-
     def test_does_not_import_interactive_cli(self):
         from tools.code_execution_tool import _load_config
+
         mock_cli = MagicMock()
         mock_cli.CLI_CONFIG = {"code_execution": {"timeout": 999}}
-        with patch.dict("sys.modules", {"cli": mock_cli}), \
-             patch("clawk_cli.config.load_config_readonly", return_value={}):
+        with (
+            patch.dict("sys.modules", {"cli": mock_cli}),
+            patch("clawk_cli.config.load_config_readonly", return_value={}),
+        ):
             result = _load_config()
         self.assertEqual(result, {})
 
@@ -770,6 +870,7 @@ class TestLoadConfig(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Interrupt event
 # ---------------------------------------------------------------------------
+
 
 @unittest.skipIf(sys.platform == "win32", "UDS not available on Windows")
 class TestInterruptHandling(unittest.TestCase):
@@ -784,6 +885,7 @@ class TestInterruptHandling(unittest.TestCase):
 
         def set_interrupt_after_delay():
             import time as _t
+
             _t.sleep(1)
             set_interrupt(True, main_tid)
 
@@ -791,14 +893,23 @@ class TestInterruptHandling(unittest.TestCase):
         t.start()
 
         try:
-            with patch("model_tools.handle_function_call",
-                        return_value=json.dumps({"ok": True})), \
-                 patch("tools.code_execution_tool._load_config",
-                       return_value={"timeout": 30, "max_tool_calls": 50}):
-                result = json.loads(execute_code(
-                    code, task_id="test-interrupt",
-                    enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
-                ))
+            with (
+                patch(
+                    "model_tools.handle_function_call",
+                    return_value=json.dumps({"ok": True}),
+                ),
+                patch(
+                    "tools.code_execution_tool._load_config",
+                    return_value={"timeout": 30, "max_tool_calls": 50},
+                ),
+            ):
+                result = json.loads(
+                    execute_code(
+                        code,
+                        task_id="test-interrupt",
+                        enabled_tools=list(SANDBOX_ALLOWED_TOOLS),
+                    )
+                )
             self.assertEqual(result["status"], "interrupted")
             self.assertIn("interrupted", result["output"])
         finally:
@@ -810,7 +921,9 @@ class TestHeadTailTruncation(unittest.TestCase):
     """Tests for head+tail truncation of large stdout in execute_code."""
 
     def _run(self, code):
-        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+        with patch(
+            "model_tools.handle_function_call", side_effect=_mock_handle_function_call
+        ):
             result = execute_code(
                 code=code,
                 task_id="test-task",
@@ -825,9 +938,9 @@ class TestHeadTailTruncation(unittest.TestCase):
         self.assertIn("small output", result["output"])
         self.assertNotIn("TRUNCATED", result["output"])
 
-
     def test_remote_large_output_gets_truncation_metadata(self):
         """Remote backend output capping is explicit in the JSON result."""
+
         class FakeEnv:
             def __init__(self):
                 self.commands = []
@@ -840,23 +953,40 @@ class TestHeadTailTruncation(unittest.TestCase):
                 if "command -v python3" in command:
                     return {"output": "OK\n", "returncode": 0}
                 if "python3 script.py" in command:
-                    return {"output": "HEAD\n" + ("x" * 80_000) + "\nTAIL\n", "returncode": 0}
+                    return {
+                        "output": "HEAD\n" + ("x" * 80_000) + "\nTAIL\n",
+                        "returncode": 0,
+                    }
                 return {"output": "", "returncode": 0}
 
         fake_thread = MagicMock()
 
-        with patch("tools.code_execution_tool._load_config", return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env", return_value=(FakeEnv(), "ssh")), \
-             patch("tools.code_execution_tool._ship_file_to_remote"), \
-             patch("tools.code_execution_tool.threading.Thread", return_value=fake_thread):
-            result = json.loads(_execute_remote("print('large')", "task-1", ["terminal"]))
+        with (
+            patch(
+                "tools.code_execution_tool._load_config",
+                return_value={"timeout": 30, "max_tool_calls": 5},
+            ),
+            patch(
+                "tools.code_execution_tool._get_or_create_env",
+                return_value=(FakeEnv(), "ssh"),
+            ),
+            patch("tools.code_execution_tool._ship_file_to_remote"),
+            patch(
+                "tools.code_execution_tool.threading.Thread", return_value=fake_thread
+            ),
+        ):
+            result = json.loads(
+                _execute_remote("print('large')", "task-1", ["terminal"])
+            )
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["exit_code"], 0)
         self.assertTrue(result["stdout_truncated"])
         self.assertIn("HEAD", result["output"])
         self.assertIn("TAIL", result["output"])
-        self.assertGreater(result["stdout_bytes_total"], result["stdout_bytes_captured"])
+        self.assertGreater(
+            result["stdout_bytes_total"], result["stdout_bytes_captured"]
+        )
         self.assertGreater(result["stdout_bytes_omitted"], 0)
         # Spillover (#96997-adjacent): the warning now points at the saved
         # full-output file instead of advising a narrower re-run.
@@ -960,8 +1090,6 @@ class TestRpcTokenAuthorization(unittest.TestCase):
         )
         self.assertEqual(len(resp), 1)
         self.assertIn("Unauthorized", resp[0].get("error", ""))
-
-
 
 
 if __name__ == "__main__":

@@ -46,7 +46,9 @@ from agent.credential_pool import (
 )
 
 
-def _entry(*, id: str, access_token: str, refresh_token: str, source: str) -> PooledCredential:
+def _entry(
+    *, id: str, access_token: str, refresh_token: str, source: str
+) -> PooledCredential:
     return PooledCredential(
         provider="anthropic",
         id=id,
@@ -71,7 +73,14 @@ def _fake_pool_store(monkeypatch):
     """
     store: dict[str, list] = {}
 
-    def _write(provider, entries, *, removed_ids=None, status_cleared_ids=None, token_bases=None):
+    def _write(
+        provider,
+        entries,
+        *,
+        removed_ids=None,
+        status_cleared_ids=None,
+        token_bases=None,
+    ):
         store[provider] = list(entries)
 
     def _read(provider=None):
@@ -117,9 +126,9 @@ class _SingleUseTokenServer:
         }
 
 
-
-
-def test_concurrent_clawk_pkce_refresh_loses_credential_despite_valid_token_on_disk(monkeypatch):
+def test_concurrent_clawk_pkce_refresh_loses_credential_despite_valid_token_on_disk(
+    monkeypatch,
+):
     """Two 'Clawksis processes' race to refresh the same stale clawk_pkce
     refresh token. The winner gets a valid new pair. The loser -- despite a
     fresh, valid credential now existing -- has no recovery path and is
@@ -129,7 +138,9 @@ def test_concurrent_clawk_pkce_refresh_loses_credential_despite_valid_token_on_d
     server = _SingleUseTokenServer()
     monkeypatch.setattr(
         "agent.anthropic_credentials.refresh_anthropic_oauth_pure",
-        lambda refresh_token, use_json=False: server.refresh(refresh_token, use_json=use_json),
+        lambda refresh_token, use_json=False: server.refresh(
+            refresh_token, use_json=use_json
+        ),
     )
     # No Claude Code credential file in play for this scenario.
     monkeypatch.setattr(
@@ -169,7 +180,9 @@ def test_concurrent_clawk_pkce_refresh_loses_credential_despite_valid_token_on_d
     # Both calls (if two do happen) must only ever spend the one stale
     # token that was actually on disk -- never anything else.
     assert 1 <= len(server.calls) <= 2, f"unexpected call count: {server.calls!r}"
-    assert set(server.calls) == {"stale-rt"}, f"unexpected tokens posted: {server.calls!r}"
+    assert set(server.calls) == {"stale-rt"}, (
+        f"unexpected tokens posted: {server.calls!r}"
+    )
 
     winner_result = results["a"] or results["b"]
     loser_key = "b" if results["a"] else "a"
@@ -211,7 +224,9 @@ def test_concurrent_claude_code_refresh_recovers_via_credentials_file(monkeypatc
     server = _SingleUseTokenServer()
     monkeypatch.setattr(
         "agent.anthropic_credentials.refresh_anthropic_oauth_pure",
-        lambda refresh_token, use_json=False: server.refresh(refresh_token, use_json=use_json),
+        lambda refresh_token, use_json=False: server.refresh(
+            refresh_token, use_json=use_json
+        ),
     )
 
     winner_creds: dict = {}
@@ -221,7 +236,9 @@ def test_concurrent_claude_code_refresh_recovers_via_credentials_file(monkeypatc
         with write_lock:
             return dict(winner_creds) if winner_creds else None
 
-    def _fake_write_claude_code_credentials(access_token, refresh_token, expires_at_ms, **_kw):
+    def _fake_write_claude_code_credentials(
+        access_token, refresh_token, expires_at_ms, **_kw
+    ):
         with write_lock:
             winner_creds.update(
                 accessToken=access_token,

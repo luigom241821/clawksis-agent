@@ -40,10 +40,20 @@ _WRITER = textwrap.dedent("""
 
 
 def _seed(lock: HubLockFile, names: list[str]) -> None:
-    lock.save({"version": 1, "installed": {
-        name: {"source": "github", "identifier": f"o/r/{name}", "install_path": name, "files": ["SKILL.md"]}
-        for name in names
-    }})
+    lock.save(
+        {
+            "version": 1,
+            "installed": {
+                name: {
+                    "source": "github",
+                    "identifier": f"o/r/{name}",
+                    "install_path": name,
+                    "files": ["SKILL.md"],
+                }
+                for name in names
+            },
+        }
+    )
 
 
 def test_concurrent_processes_keep_every_install_and_tap(tmp_path):
@@ -52,8 +62,18 @@ def test_concurrent_processes_keep_every_install_and_tap(tmp_path):
     go = tmp_path / "go"
     writers = [
         subprocess.Popen(
-            [sys.executable, "-c", _WRITER, str(hub), tag, str(_WRITES_PER_PROCESS), str(go)],
-            cwd=_REPO_ROOT, stderr=subprocess.PIPE, text=True,
+            [
+                sys.executable,
+                "-c",
+                _WRITER,
+                str(hub),
+                tag,
+                str(_WRITES_PER_PROCESS),
+                str(go),
+            ],
+            cwd=_REPO_ROOT,
+            stderr=subprocess.PIPE,
+            text=True,
         )
         for tag in ("cli", "desktop")
     ]
@@ -62,9 +82,13 @@ def test_concurrent_processes_keep_every_install_and_tap(tmp_path):
         _, stderr = writer.communicate(timeout=120)
         assert writer.returncode == 0, stderr
 
-    expected = sorted(f"{tag}-{i}" for tag in ("cli", "desktop") for i in range(_WRITES_PER_PROCESS))
+    expected = sorted(
+        f"{tag}-{i}" for tag in ("cli", "desktop") for i in range(_WRITES_PER_PROCESS)
+    )
     assert sorted(HubLockFile(hub / "lock.json").load()["installed"]) == expected
-    assert sorted(t["repo"] for t in TapsManager(hub / "taps.json").load()) == [f"o/{name}" for name in expected]
+    assert sorted(t["repo"] for t in TapsManager(hub / "taps.json").load()) == [
+        f"o/{name}" for name in expected
+    ]
 
 
 def test_reader_mid_save_sees_complete_hub_state(tmp_path):
@@ -76,8 +100,14 @@ def test_reader_mid_save_sees_complete_hub_state(tmp_path):
     taps.save([{"repo": "o/one", "path": "skills/"}])
     seen = []
 
-    with observe_file_writes(lambda: seen.append((sorted(HubLockFile(lock_path).load()["installed"]),
-                                                  [t["repo"] for t in TapsManager(taps_path).load()]))):
+    with observe_file_writes(
+        lambda: seen.append(
+            (
+                sorted(HubLockFile(lock_path).load()["installed"]),
+                [t["repo"] for t in TapsManager(taps_path).load()],
+            )
+        )
+    ):
         lock.record_uninstall("beta")
         taps.add("o/two")
 

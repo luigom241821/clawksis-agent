@@ -53,14 +53,24 @@ def test_control_timeout_registers_one_shot_late_ack_handler():
     fired: list = []
 
     with pytest.raises(queue.Empty):
-        sup.control("sid", route_name="session.compress", payload={"command": "/compress"},
-                    wait=True, timeout=0.05, on_late_ack=fired.append)
+        sup.control(
+            "sid",
+            route_name="session.compress",
+            payload={"command": "/compress"},
+            wait=True,
+            timeout=0.05,
+            on_late_ack=fired.append,
+        )
 
     request_id = sent[0]["request_id"]
     assert request_id not in sup._pending_controls
     assert request_id in sup._late_control_handlers
 
-    late = {"type": "control.ack", "request_id": request_id, "result": {"status": "compressed"}}
+    late = {
+        "type": "control.ack",
+        "request_id": request_id,
+        "result": {"status": "compressed"},
+    }
     sup._handle_host_frame(late)
     assert fired == [late]
     # One-shot: a duplicate ack for the same request is ignored.
@@ -82,11 +92,20 @@ def test_late_control_error_and_bare_error_frames_fire_handler():
     fired: list = []
     for _ in range(2):
         with pytest.raises(queue.Empty):
-            sup.control("sid", route_name="session.compress", wait=True, timeout=0.01,
-                        on_late_ack=fired.append)
+            sup.control(
+                "sid",
+                route_name="session.compress",
+                wait=True,
+                timeout=0.01,
+                on_late_ack=fired.append,
+            )
     rid_a, rid_b = sent[0]["request_id"], sent[1]["request_id"]
-    sup._handle_host_frame({"type": "control.error", "request_id": rid_a, "message": "boom"})
-    sup._handle_host_frame({"type": "error", "request_id": rid_b, "message": "bad frame"})
+    sup._handle_host_frame(
+        {"type": "control.error", "request_id": rid_a, "message": "boom"}
+    )
+    sup._handle_host_frame(
+        {"type": "error", "request_id": rid_b, "message": "bad frame"}
+    )
     assert [f["request_id"] for f in fired] == [rid_a, rid_b]
 
 
@@ -111,8 +130,13 @@ def test_host_crash_fails_outstanding_late_ack_handlers():
     sup, sent = _supervisor()
     fired: list = []
     with pytest.raises(queue.Empty):
-        sup.control("sid", route_name="session.compress", wait=True, timeout=0.01,
-                    on_late_ack=fired.append)
+        sup.control(
+            "sid",
+            route_name="session.compress",
+            wait=True,
+            timeout=0.01,
+            on_late_ack=fired.append,
+        )
     sup._fail_pending_turns(reason="crash", message="compute host exited with code 1")
     assert len(fired) == 1
     assert fired[0]["type"] == "control.error"
@@ -128,10 +152,18 @@ def compute_host_gateway(monkeypatch):
     sup, sent = _supervisor()
     emitted: list = []
     monkeypatch.setattr(server, "_compute_host_supervisor", sup)
-    monkeypatch.setattr(server, "_emit", lambda event, sid, payload=None: emitted.append((event, sid, payload)))
+    monkeypatch.setattr(
+        server,
+        "_emit",
+        lambda event, sid, payload=None: emitted.append((event, sid, payload)),
+    )
     monkeypatch.setattr(server, "_session_uses_compute_host", lambda _s, cfg=None: True)
-    monkeypatch.setattr(server, "_compute_host_compress_wait_seconds", lambda cfg=None: 0.05)
-    monkeypatch.setattr(server, "_session_info", lambda _agent, _session=None: {"model": "mirrored"})
+    monkeypatch.setattr(
+        server, "_compute_host_compress_wait_seconds", lambda cfg=None: 0.05
+    )
+    monkeypatch.setattr(
+        server, "_session_info", lambda _agent, _session=None: {"model": "mirrored"}
+    )
     session = _session()
     server._sessions["sid"] = session
     try:
@@ -146,7 +178,11 @@ def _late_ack(request_id: str) -> dict:
         "sid": "sid",
         "request_id": request_id,
         "route_name": "session.compress",
-        "result": {"status": "compressed", "removed": 12, "summary": {"headline": "Compressed 14 → 2"}},
+        "result": {
+            "status": "compressed",
+            "removed": 12,
+            "summary": {"headline": "Compressed 14 → 2"},
+        },
         "session_key": "rotated-session-key",
         "history_version": 9,
         "message_count": 2,
@@ -157,7 +193,9 @@ def _late_ack(request_id: str) -> dict:
 def test_session_compress_reports_pending_and_adopts_late_ack(compute_host_gateway):
     sup, sent, emitted, session = compute_host_gateway
 
-    resp = server.handle_request({"id": "1", "method": "session.compress", "params": {"session_id": "sid"}})
+    resp = server.handle_request(
+        {"id": "1", "method": "session.compress", "params": {"session_id": "sid"}}
+    )
 
     assert "error" not in resp, resp
     assert resp["result"]["status"] == "pending"
@@ -176,16 +214,29 @@ def test_session_compress_reports_pending_and_adopts_late_ack(compute_host_gatew
     assert session["_metadata_mirror"]["model"] == "host-model"
     events = [(event, payload) for event, _sid, payload in emitted]
     assert ("session.info", {"model": "mirrored"}) in events
-    assert ("status.update", {"kind": "compacted", "text": "✓ Context compression complete"}) in events
+    assert (
+        "status.update",
+        {"kind": "compacted", "text": "✓ Context compression complete"},
+    ) in events
 
 
-def test_session_compress_late_control_error_surfaces_as_error_event(compute_host_gateway):
+def test_session_compress_late_control_error_surfaces_as_error_event(
+    compute_host_gateway,
+):
     sup, sent, emitted, session = compute_host_gateway
 
-    resp = server.handle_request({"id": "1", "method": "session.compress", "params": {"session_id": "sid"}})
+    resp = server.handle_request(
+        {"id": "1", "method": "session.compress", "params": {"session_id": "sid"}}
+    )
     assert resp["result"]["status"] == "pending"
 
-    sup._handle_host_frame({"type": "control.error", "request_id": sent[0]["request_id"], "message": "provider down"})
+    sup._handle_host_frame(
+        {
+            "type": "control.error",
+            "request_id": sent[0]["request_id"],
+            "message": "provider down",
+        }
+    )
 
     assert session["session_key"] == "old-session-key"
     assert ("error", "sid", {"message": "compression failed: provider down"}) in emitted
@@ -193,7 +244,9 @@ def test_session_compress_late_control_error_surfaces_as_error_event(compute_hos
 
 def test_session_compress_late_ack_ignored_after_session_closed(compute_host_gateway):
     sup, sent, emitted, session = compute_host_gateway
-    server.handle_request({"id": "1", "method": "session.compress", "params": {"session_id": "sid"}})
+    server.handle_request(
+        {"id": "1", "method": "session.compress", "params": {"session_id": "sid"}}
+    )
     server._sessions.pop("sid")
 
     sup._handle_host_frame(_late_ack(sent[0]["request_id"]))
@@ -206,14 +259,20 @@ def test_slash_compress_route_reports_pending_and_adopts_late_ack(compute_host_g
     sup, sent, emitted, session = compute_host_gateway
 
     resp = server.handle_request(
-        {"id": "1", "method": "slash.exec", "params": {"session_id": "sid", "command": "/compress"}}
+        {
+            "id": "1",
+            "method": "slash.exec",
+            "params": {"session_id": "sid", "command": "/compress"},
+        }
     )
 
     assert "error" not in resp, resp
     assert "compression still running in the background" in resp["result"]["output"]
     assert sent[0]["route_name"] == "slash.compress"
 
-    sup._handle_host_frame({**_late_ack(sent[0]["request_id"]), "route_name": "slash.compress"})
+    sup._handle_host_frame(
+        {**_late_ack(sent[0]["request_id"]), "route_name": "slash.compress"}
+    )
     assert session["session_key"] == "rotated-session-key"
     assert any(event == "session.info" for event, _sid, _p in emitted)
 
@@ -227,19 +286,36 @@ def test_compress_wait_budget_follows_config_ceiling(monkeypatch):
     # The aux compression request budget floors the idle window and, with it, the ceiling (#114594): the
     # RPC waiter must outlast a compaction the host is still allowed to run.
     monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 300.0)
-    assert server._compute_host_compress_wait_seconds(
-        {"compression": {"context_total_ceiling_seconds": 200}}
-    ) == 330.0
+    assert (
+        server._compute_host_compress_wait_seconds(
+            {"compression": {"context_total_ceiling_seconds": 200}}
+        )
+        == 330.0
+    )
     # Legacy clamps, judged with the aux floor pinned off.
     monkeypatch.setattr(aux, "_effective_aux_timeout", lambda task, timeout: 0.0)
     assert server._compute_host_compress_wait_seconds({"compression": {}}) == 630.0
-    assert server._compute_host_compress_wait_seconds(
-        {"compression": {"context_total_ceiling_seconds": 200}}
-    ) == 230.0
+    assert (
+        server._compute_host_compress_wait_seconds(
+            {"compression": {"context_total_ceiling_seconds": 200}}
+        )
+        == 230.0
+    )
     # Never below the historical 120s floor, never above the RPC-safe cap.
-    assert server._compute_host_compress_wait_seconds(
-        {"compression": {"context_total_ceiling_seconds": 10, "context_timeout_seconds": 0}}
-    ) == 120.0
-    assert server._compute_host_compress_wait_seconds(
-        {"compression": {"context_total_ceiling_seconds": 99999}}
-    ) == server._COMPUTE_HOST_COMPRESS_WAIT_CAP_SECS
+    assert (
+        server._compute_host_compress_wait_seconds(
+            {
+                "compression": {
+                    "context_total_ceiling_seconds": 10,
+                    "context_timeout_seconds": 0,
+                }
+            }
+        )
+        == 120.0
+    )
+    assert (
+        server._compute_host_compress_wait_seconds(
+            {"compression": {"context_total_ceiling_seconds": 99999}}
+        )
+        == server._COMPUTE_HOST_COMPRESS_WAIT_CAP_SECS
+    )

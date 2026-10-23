@@ -28,12 +28,17 @@ _NO_TOKEN_MESSAGE = (
     "Can't upload — no Hugging Face token is available. To set it up:\n"
     "\n"
     "1. Create a token with WRITE access at https://huggingface.co/settings/tokens\n"
-    "   (New token -> type \"Write\" -> copy it).\n"
+    '   (New token -> type "Write" -> copy it).\n'
     "2. Add it to your environment as HF_TOKEN (e.g. in ~/.clawksis/.env):\n"
     "     HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx\n"
     "3. Run /upload-trace again (or `clawk trace upload`)."
 )
-_TOKEN_ENV_VARS = ("HF_TOKEN", "HUGGINGFACE_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACE_TOKEN")
+_TOKEN_ENV_VARS = (
+    "HF_TOKEN",
+    "HUGGINGFACE_HUB_TOKEN",
+    "HUGGING_FACE_HUB_TOKEN",
+    "HUGGINGFACE_TOKEN",
+)
 
 
 class TraceRedactionError(RuntimeError):
@@ -41,6 +46,7 @@ class TraceRedactionError(RuntimeError):
 
 
 # --- Conversion: Clawksis OpenAI-format messages -> Claude Code JSONL ---
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
@@ -52,6 +58,7 @@ def _redact(text: Any, enabled: bool) -> Any:
         return text
     try:
         from agent.redact import redact_sensitive_text
+
         return redact_sensitive_text(text, force=True)
     except Exception as exc:
         logger.warning("Trace upload redaction failed; refusing upload", exc_info=True)
@@ -68,7 +75,10 @@ def _part_to_block(part: Any, redact: bool) -> dict[str, Any]:
     if part.get("type") == "text":
         return _text_block(part.get("text", ""), redact)
     if part.get("type") in ("image_url", "image"):
-        return {"type": "text", "text": "[image omitted]"}  # the viewer renders text turns; no base64
+        return {
+            "type": "text",
+            "text": "[image omitted]",
+        }  # the viewer renders text turns; no base64
     return _text_block(json.dumps(part), redact)
 
 
@@ -76,7 +86,15 @@ def _content_to_blocks(content: Any, redact: bool) -> list[dict[str, Any]]:
     """Normalize a message ``content`` field into Anthropic content blocks."""
     if isinstance(content, list):
         return [_part_to_block(part, redact) for part in content]
-    return [] if content is None else [_text_block(content if isinstance(content, str) else json.dumps(content), redact)]
+    return (
+        []
+        if content is None
+        else [
+            _text_block(
+                content if isinstance(content, str) else json.dumps(content), redact
+            )
+        ]
+    )
 
 
 def _parse_tool_args(raw_args: Any) -> dict[str, Any]:
@@ -100,10 +118,18 @@ def _tool_calls_to_blocks(tool_calls: Any, redact: bool) -> list[dict[str, Any]]
             try:
                 parsed = json.loads(_redact(json.dumps(parsed), redact))
             except (json.JSONDecodeError, ValueError):
-                logger.warning("Trace upload redacted tool arguments are not valid JSON; refusing upload")
+                logger.warning(
+                    "Trace upload redacted tool arguments are not valid JSON; refusing upload"
+                )
                 raise TraceRedactionError(_REDACTION_BLOCKED_MESSAGE)
-        blocks.append({"type": "tool_use", "id": tc.get("id") or f"toolu_{uuid.uuid4().hex[:16]}",
-                       "name": fn.get("name") or tc.get("name") or "tool", "input": parsed})
+        blocks.append(
+            {
+                "type": "tool_use",
+                "id": tc.get("id") or f"toolu_{uuid.uuid4().hex[:16]}",
+                "name": fn.get("name") or tc.get("name") or "tool",
+                "input": parsed,
+            }
+        )
     return blocks
 
 
@@ -112,37 +138,79 @@ def _git_branch(cwd: str) -> str:
         return ""
     try:
         import subprocess
-        r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=3, cwd=cwd,
-                           stdin=subprocess.DEVNULL, check=False)
+
+        r = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=3,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
     except Exception:
         return ""
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def _assistant_message(msg: dict[str, Any], model: str, redact: bool) -> dict[str, Any]:
-    blocks = _content_to_blocks(msg.get("content"), redact) + _tool_calls_to_blocks(msg.get("tool_calls"), redact)
-    return {"role": "assistant", "model": model or "unknown", "content": blocks or [{"type": "text", "text": ""}]}
+    blocks = _content_to_blocks(msg.get("content"), redact) + _tool_calls_to_blocks(
+        msg.get("tool_calls"), redact
+    )
+    return {
+        "role": "assistant",
+        "model": model or "unknown",
+        "content": blocks or [{"type": "text", "text": ""}],
+    }
 
 
-def _tool_result_message(msg: dict[str, Any], model: str, redact: bool) -> dict[str, Any]:
+def _tool_result_message(
+    msg: dict[str, Any], model: str, redact: bool
+) -> dict[str, Any]:
     content = msg.get("content")
-    return {"role": "user", "content": [{
-        "type": "tool_result", "tool_use_id": msg.get("tool_call_id") or msg.get("tool_name") or "tool",
-        "content": _redact(content if isinstance(content, str) else json.dumps(content), redact),
-    }]}
+    return {
+        "role": "user",
+        "content": [
+            {
+                "type": "tool_result",
+                "tool_use_id": msg.get("tool_call_id")
+                or msg.get("tool_name")
+                or "tool",
+                "content": _redact(
+                    content if isinstance(content, str) else json.dumps(content), redact
+                ),
+            }
+        ],
+    }
 
 
 def _user_message(msg: dict[str, Any], model: str, redact: bool) -> dict[str, Any]:
     content = msg.get("content")
-    return {"role": "user", "content": _redact(content, redact) if isinstance(content, str) else _content_to_blocks(content, redact)}
+    return {
+        "role": "user",
+        "content": _redact(content, redact)
+        if isinstance(content, str)
+        else _content_to_blocks(content, redact),
+    }
 
 
 # role -> (Claude Code line type, message builder). Unknown roles render as user.
-_ROLE_RENDERERS: dict[Any, tuple[str, Any]] = {"assistant": ("assistant", _assistant_message), "tool": ("user", _tool_result_message)}
+_ROLE_RENDERERS: dict[Any, tuple[str, Any]] = {
+    "assistant": ("assistant", _assistant_message),
+    "tool": ("user", _tool_result_message),
+}
 
 
-def build_trace_jsonl(messages: list[dict[str, Any]], *, session_id: str, model: str = "", cwd: str = "", redact: bool = True) -> str:
+def build_trace_jsonl(
+    messages: list[dict[str, Any]],
+    *,
+    session_id: str,
+    model: str = "",
+    cwd: str = "",
+    redact: bool = True,
+) -> str:
     """One JSONL line per non-system message: ``user``/``tool`` -> type user (tool results ride on user turns as
     ``tool_result`` keyed by ``tool_call_id``), ``assistant`` -> text + ``tool_use`` blocks; turns link via ``parentUuid``."""
     lines: list[str] = []
@@ -156,9 +224,17 @@ def build_trace_jsonl(messages: list[dict[str, Any]], *, session_id: str, model:
         turn_uuid = str(uuid.uuid4())
         line_type, render = _ROLE_RENDERERS.get(role, ("user", _user_message))
         entry = {  # key order is the wire order
-            "parentUuid": parent, "isSidechain": False, "userType": "external", "cwd": cwd or os.getcwd(),
-            "sessionId": session_id, "version": _CLAWK_VERSION, "gitBranch": git_branch, "uuid": turn_uuid,
-            "timestamp": base_ts, "type": line_type, "message": render(msg, model, redact),
+            "parentUuid": parent,
+            "isSidechain": False,
+            "userType": "external",
+            "cwd": cwd or os.getcwd(),
+            "sessionId": session_id,
+            "version": _CLAWK_VERSION,
+            "gitBranch": git_branch,
+            "uuid": turn_uuid,
+            "timestamp": base_ts,
+            "type": line_type,
+            "message": render(msg, model, redact),
         }
         lines.append(json.dumps(entry, ensure_ascii=False))
         parent = turn_uuid
@@ -167,10 +243,13 @@ def build_trace_jsonl(messages: list[dict[str, Any]], *, session_id: str, model:
 
 # --- Upload ---
 
+
 def _resolve_hf_token() -> Optional[str]:
     """Return the user's Hugging Face token from the usual env vars."""
-    return next((val for var in _TOKEN_ENV_VARS if (val := (os.getenv(var) or "").strip())), None)
-
+    return next(
+        (val for var in _TOKEN_ENV_VARS if (val := (os.getenv(var) or "").strip())),
+        None,
+    )
 
 
 def _do_upload(
@@ -187,6 +266,7 @@ def _do_upload(
     """
     try:
         import pm
+
         pm.ensure_import("trace-upload")
     except Exception:
         # lazy-install unavailable — fall through to the import, which
@@ -195,8 +275,10 @@ def _do_upload(
     try:
         from huggingface_hub import HfApi
     except ImportError:
-        return ("Hugging Face upload needs the `huggingface_hub` package. Run: "
-                f"{install_hint('trace-upload')}")
+        return (
+            "Hugging Face upload needs the `huggingface_hub` package. Run: "
+            f"{install_hint('trace-upload')}"
+        )
     api = HfApi(token=token)
     try:
         who = api.whoami()
@@ -208,25 +290,37 @@ def _do_upload(
         return "Could not resolve your Hugging Face username from the token."
     repo_id = f"{user}/{dataset_name}"
     try:
-        api.create_repo(repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True)
+        api.create_repo(
+            repo_id=repo_id, repo_type="dataset", private=private, exist_ok=True
+        )
     except Exception as e:
         logger.warning("HF create_repo failed for %s: %s", repo_id, e)
         return f"Could not create/access dataset {repo_id}: {e}"
     path_in_repo = f"sessions/{session_id}.jsonl"
     try:
-        api.upload_file(path_or_fileobj=jsonl.encode("utf-8"), path_in_repo=path_in_repo, repo_id=repo_id,
-                        repo_type="dataset", commit_message=f"add session trace {session_id}")
+        api.upload_file(
+            path_or_fileobj=jsonl.encode("utf-8"),
+            path_in_repo=path_in_repo,
+            repo_id=repo_id,
+            repo_type="dataset",
+            commit_message=f"add session trace {session_id}",
+        )
     except Exception as e:
         logger.warning("HF upload_file failed for %s: %s", repo_id, e)
         return f"Upload to Hugging Face failed: {e}"
-    return (f"Uploaded -> https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}\n"
-            f"View in the trace viewer: https://huggingface.co/datasets/{repo_id}")
+    return (
+        f"Uploaded -> https://huggingface.co/datasets/{repo_id}/blob/main/{path_in_repo}\n"
+        f"View in the trace viewer: https://huggingface.co/datasets/{repo_id}"
+    )
 
 
-def load_session_messages(session_id: str, db_path=None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def load_session_messages(
+    session_id: str, db_path=None
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """``(messages, meta)`` from SQLite; ``meta`` is ``{}`` when the session row is missing (a live, untitled
     session may still have messages)."""
     from clawk_state_registry import acquire, release_or_close
+
     db = acquire(db_path or None)
     try:
         resolved = db.resolve_session_id(session_id) or session_id
@@ -237,8 +331,15 @@ def load_session_messages(session_id: str, db_path=None) -> tuple[list[dict[str,
 
 
 def upload_session_trace(
-    session_id: str, *, model: str = "", cwd: str = "", redact: bool = True, private: bool = True,
-    dataset_name: str = DEFAULT_DATASET_NAME, db_path=None, token: Optional[str] = None,
+    session_id: str,
+    *,
+    model: str = "",
+    cwd: str = "",
+    redact: bool = True,
+    private: bool = True,
+    dataset_name: str = DEFAULT_DATASET_NAME,
+    db_path=None,
+    token: Optional[str] = None,
 ) -> str:
     """CLI/gateway entry point: load, convert, upload to ``{user}/clawk-traces``. Status string, never raises."""
     if not session_id:
@@ -254,9 +355,21 @@ def upload_session_trace(
     if not messages:
         return "No transcript to upload for this session yet."
     try:
-        jsonl = build_trace_jsonl(messages, session_id=session_id, model=model or meta.get("model") or "", cwd=cwd, redact=redact)
+        jsonl = build_trace_jsonl(
+            messages,
+            session_id=session_id,
+            model=model or meta.get("model") or "",
+            cwd=cwd,
+            redact=redact,
+        )
     except TraceRedactionError:
         return _REDACTION_BLOCKED_MESSAGE
     if not jsonl.strip():
         return "No transcript content to upload for this session."
-    return _do_upload(jsonl, token=token, session_id=session_id, dataset_name=dataset_name, private=private)
+    return _do_upload(
+        jsonl,
+        token=token,
+        session_id=session_id,
+        dataset_name=dataset_name,
+        private=private,
+    )

@@ -46,7 +46,9 @@ def test_workspaces_lists_projects_and_discovered_repos(client, tmp_path):
     repo_dir.mkdir()
     with pdb.connect_closing() as conn:
         pdb.create_project(conn, name="Demo", folders=[str(proj_dir)])
-        pdb.record_discovered_repos(conn, [(str(repo_dir), "scanned")], replace=True, policy_key="k")
+        pdb.record_discovered_repos(
+            conn, [(str(repo_dir), "scanned")], replace=True, policy_key="k"
+        )
 
     body = client.get("/api/chat/workspaces").json()
 
@@ -63,7 +65,10 @@ def test_resolve_chat_cwd_fails_closed_and_reaches_the_tui_env(monkeypatch, tmp_
     import clawk_cli.main_tui_launch as tui_launch
 
     monkeypatch.setattr(
-        tui_launch, "_make_tui_argv", lambda *_a, **_k: (["node", "fake-tui.js"], tmp_path))
+        tui_launch,
+        "_make_tui_argv",
+        lambda *_a, **_k: (["node", "fake-tui.js"], tmp_path),
+    )
     monkeypatch.setattr(tui_launch, "_apply_tui_python_env", lambda _env: None)
 
     assert chat_workspaces.resolve_chat_cwd("") is None

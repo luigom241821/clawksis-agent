@@ -1,5 +1,6 @@
 """Canonical delivery invariants: stable envelope IDs, authority-only admission,
 immutable receipts. The mailbox is receipt storage, never an execution queue."""
+
 import json
 import os
 from pathlib import Path
@@ -21,27 +22,45 @@ class _FakeAuthority:
         record = self.records.get(params["id"])
         if record is None:
             record = self.records[params["id"]] = dict(
-                status="queued", delivery_id=params["id"], profile_home=str(Path(home).resolve()),
-                session_id="local-bot", message=params["message"], admission_id="adm-" + params["id"][:6],
-                reply="", **({"author": params["author"]} if "author" in params else {}))
+                status="queued",
+                delivery_id=params["id"],
+                profile_home=str(Path(home).resolve()),
+                session_id="local-bot",
+                message=params["message"],
+                admission_id="adm-" + params["id"][:6],
+                reply="",
+                **({"author": params["author"]} if "author" in params else {}),
+            )
             with mailbox._locked(home) as root:
                 mailbox._write(root / f"{params['id']}.json", record)
-        elif (record["message"] != params["message"]
-              or record.get("author") != params.get("author")):
+        elif record["message"] != params["message"] or record.get(
+            "author"
+        ) != params.get("author"):
             raise ValueError("admission_conflict")
-        return {k: record[k] for k in ("status", "delivery_id", "profile_home", "session_id", "reply")}
+        return {
+            k: record[k]
+            for k in ("status", "delivery_id", "profile_home", "session_id", "reply")
+        }
 
 
 def _owner(home):
-    return dict(profile_home=str(Path(home).resolve()), session_id="local-bot",
-                lease_id="authority-1", live_session_id="local-bot")
+    return dict(
+        profile_home=str(Path(home).resolve()),
+        session_id="local-bot",
+        lease_id="authority-1",
+        live_session_id="local-bot",
+    )
 
 
-def test_same_envelope_id_admits_once_and_conflicts_on_changed_payload(tmp_path, monkeypatch):
+def test_same_envelope_id_admits_once_and_conflicts_on_changed_payload(
+    tmp_path, monkeypatch
+):
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
     delivery_id = "a" * 32
-    queued = mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "héllo 世界", delivery_id=delivery_id)
+    queued = mailbox.deliver_to_live_owner(
+        tmp_path, _owner(tmp_path), "héllo 世界", delivery_id=delivery_id
+    )
     assert queued["status"] == "queued" and queued["delivery_id"] == delivery_id
     # Receipts are written as plain UTF-8 and read back BOM-tolerantly (main 61dc26cd7d9).
     path = tmp_path / "runtime" / mailbox.DELIVERY_DIR_NAME / f"{delivery_id}.json"
@@ -49,11 +68,21 @@ def test_same_envelope_id_admits_once_and_conflicts_on_changed_payload(tmp_path,
     assert not raw.startswith(b"\xef\xbb\xbf")
     path.write_bytes(b"\xef\xbb\xbf" + raw)
     # Exact retry inspects the same admission; it never mints a second envelope.
-    assert mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "héllo 世界", delivery_id=delivery_id) == queued
-    assert [params["id"] for _home, params in authority.calls] == [delivery_id, delivery_id]
+    assert (
+        mailbox.deliver_to_live_owner(
+            tmp_path, _owner(tmp_path), "héllo 世界", delivery_id=delivery_id
+        )
+        == queued
+    )
+    assert [params["id"] for _home, params in authority.calls] == [
+        delivery_id,
+        delivery_id,
+    ]
     assert len(authority.records) == 1
     with pytest.raises(ValueError):
-        mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "different", delivery_id=delivery_id)
+        mailbox.deliver_to_live_owner(
+            tmp_path, _owner(tmp_path), "different", delivery_id=delivery_id
+        )
     # Reading the receipt resolves through the same admission, not a local guess.
     assert mailbox.read_delivery_result(tmp_path, delivery_id)["status"] == "queued"
     # The retired UI claim consumer never hands out work.
@@ -63,7 +92,9 @@ def test_same_envelope_id_admits_once_and_conflicts_on_changed_payload(tmp_path,
             assert path.stat().st_mode & 0o077 == 0
 
 
-def test_mailbox_lock_continues_when_directory_hardening_is_denied(tmp_path, monkeypatch, caplog):
+def test_mailbox_lock_continues_when_directory_hardening_is_denied(
+    tmp_path, monkeypatch, caplog
+):
     """An inherited Windows ACL may deny chmod without making the mailbox unusable."""
     real_chmod = Path.chmod
 
@@ -78,28 +109,56 @@ def test_mailbox_lock_continues_when_directory_hardening_is_denied(tmp_path, mon
     assert "could not harden mailbox directory" in caplog.text
 
 
-def test_cancel_queued_delivery_cancels_only_an_unadmitted_receipt(tmp_path, monkeypatch):
+def test_cancel_queued_delivery_cancels_only_an_unadmitted_receipt(
+    tmp_path, monkeypatch
+):
     """main's cancel fence on the owner seam: a legacy unadmitted queued receipt is cancelled
     once (idempotent); an authority admission is never cancelled from the mailbox."""
     key = "3" * 32
     with mailbox._locked(tmp_path) as root:
-        mailbox._write(root / f"{key}.json", dict(
-            delivery_id=key, id=key, status="queued", message="first", created_at=1, sequence=1,
-            owner=_owner(tmp_path), **_owner(tmp_path)))
-    cancelled = mailbox.cancel_queued_delivery(tmp_path, key, error="owner closed", reason="runtime_offline")
+        mailbox._write(
+            root / f"{key}.json",
+            dict(
+                delivery_id=key,
+                id=key,
+                status="queued",
+                message="first",
+                created_at=1,
+                sequence=1,
+                owner=_owner(tmp_path),
+                **_owner(tmp_path),
+            ),
+        )
+    cancelled = mailbox.cancel_queued_delivery(
+        tmp_path, key, error="owner closed", reason="runtime_offline"
+    )
     assert cancelled["status"] == "cancelled" and cancelled["error"] == "owner closed"
-    assert mailbox.cancel_queued_delivery(tmp_path, key, error="again", reason="runtime_offline") == cancelled
+    assert (
+        mailbox.cancel_queued_delivery(
+            tmp_path, key, error="again", reason="runtime_offline"
+        )
+        == cancelled
+    )
 
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
-    admitted = mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "second", delivery_id="4" * 32)
-    kept = mailbox.cancel_queued_delivery(tmp_path, admitted["delivery_id"], error="x", reason="runtime_offline")
+    admitted = mailbox.deliver_to_live_owner(
+        tmp_path, _owner(tmp_path), "second", delivery_id="4" * 32
+    )
+    kept = mailbox.cancel_queued_delivery(
+        tmp_path, admitted["delivery_id"], error="x", reason="runtime_offline"
+    )
     assert kept["status"] != "cancelled"
-    assert mailbox.read_delivery_result(tmp_path, admitted["delivery_id"])["status"] == "queued"
+    assert (
+        mailbox.read_delivery_result(tmp_path, admitted["delivery_id"])["status"]
+        == "queued"
+    )
 
 
 @pytest.mark.parametrize("intent_state", ["new", "existing", "raced"])
-def test_live_dm_bom_readers_preserve_pinned_intent(tmp_path, monkeypatch, intent_state):
+def test_live_dm_bom_readers_preserve_pinned_intent(
+    tmp_path, monkeypatch, intent_state
+):
     """Main 61dc26cd7d9 on the canonical door: a BOM-prefixed DM payload and a BOM-prefixed pinned
     intent read back intact, a pinned intent is never replaced by a rewritten payload, and a
     damaged intent retains its evidence instead of retrying a transport."""
@@ -120,7 +179,9 @@ def test_live_dm_bom_readers_preserve_pinned_intent(tmp_path, monkeypatch, inten
         payload.write_bytes("héllo 世界".encode("utf-8-sig"))
         intent_path = Path(str(payload) + ".live.json")
         author = {"id": "bot:coder", "name": "Renée", "is_bot": True}
-        intent = dict(owner=owner, message="pinned 世界", delivery_id="d" * 32, author=author)
+        intent = dict(
+            owner=owner, message="pinned 世界", delivery_id="d" * 32, author=author
+        )
         encoded = json.dumps(intent, ensure_ascii=False).encode("utf-8-sig")
         if intent_state == "existing":
             intent_path.write_bytes(encoded)
@@ -136,7 +197,9 @@ def test_live_dm_bom_readers_preserve_pinned_intent(tmp_path, monkeypatch, inten
         record = bot_mode_dm._admit_live_dm(tmp_path, str(payload), author)
         assert record is not None and record["status"] == "queued"
         admitted = authority.records[record["delivery_id"]]
-        assert admitted["message"] == ("héllo 世界" if intent_state == "new" else "pinned 世界")
+        assert admitted["message"] == (
+            "héllo 世界" if intent_state == "new" else "pinned 世界"
+        )
         assert admitted["author"] == author
         if intent_state == "new":
             assert not intent_path.read_bytes().startswith(b"\xef\xbb\xbf")
@@ -145,33 +208,48 @@ def test_live_dm_bom_readers_preserve_pinned_intent(tmp_path, monkeypatch, inten
         assert bot_mode_dm._admit_live_dm(None, str(payload)) == record
         assert len(authority.records) == 1
         intent_path.write_bytes(b"\xef\xbb\xbf{broken")
-        assert bot_mode_dm._run_delivery([], str(payload), stdin_file=False, profile_home=tmp_path) == 1
-        assert payload.exists()  # Ambiguous admission must retain its evidence, not retry a transport.
+        assert (
+            bot_mode_dm._run_delivery(
+                [], str(payload), stdin_file=False, profile_home=tmp_path
+            )
+            == 1
+        )
+        assert (
+            payload.exists()
+        )  # Ambiguous admission must retain its evidence, not retry a transport.
     finally:
         db.close()
 
 
-def test_owner_from_another_home_or_malformed_id_is_refused_before_admission(tmp_path, monkeypatch):
+def test_owner_from_another_home_or_malformed_id_is_refused_before_admission(
+    tmp_path, monkeypatch
+):
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
     foreign = dict(_owner(tmp_path), profile_home=str(tmp_path / "elsewhere"))
     with pytest.raises(ValueError, match="different profile home"):
         mailbox.deliver_to_live_owner(tmp_path, foreign, "hello", delivery_id="b" * 32)
     with pytest.raises(ValueError, match="delivery id"):
-        mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "hello", delivery_id="../evil")
+        mailbox.deliver_to_live_owner(
+            tmp_path, _owner(tmp_path), "hello", delivery_id="../evil"
+        )
     assert authority.calls == []
 
 
-def test_receipt_read_retains_the_immutable_author_without_replaying_admission(tmp_path, monkeypatch):
+def test_receipt_read_retains_the_immutable_author_without_replaying_admission(
+    tmp_path, monkeypatch
+):
     """The owner-published local projection keeps the author; polling never replays admission."""
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
     delivery_id = "d" * 32
     author = {"kind": "user", "id": "u-1", "display": "Ann"}
-    queued = mailbox.deliver_to_live_owner(tmp_path, _owner(tmp_path), "hello", delivery_id=delivery_id, author=author)
+    queued = mailbox.deliver_to_live_owner(
+        tmp_path, _owner(tmp_path), "hello", delivery_id=delivery_id, author=author
+    )
     polled = mailbox.read_delivery_result(tmp_path, delivery_id)
     assert all(polled[key] == value for key, value in queued.items())
-    assert polled['author'] == author
+    assert polled["author"] == author
     assert [params.get("author") for _home, params in authority.calls] == [author]
 
 
@@ -179,13 +257,26 @@ def test_receipt_read_retains_the_immutable_author_without_replaying_admission(t
 def test_terminal_receipt_is_immutable(tmp_path, terminal_status):
     delivery_id = "c" * 32
     with mailbox._locked(tmp_path) as root:
-        mailbox._write(root / f"{delivery_id}.json", dict(delivery_id=delivery_id, status="claimed",
-                                                          message="hello", created_at=1))
-    receipt = mailbox.complete_delivery(tmp_path, delivery_id, status=terminal_status, reply="answer")
+        mailbox._write(
+            root / f"{delivery_id}.json",
+            dict(
+                delivery_id=delivery_id, status="claimed", message="hello", created_at=1
+            ),
+        )
+    receipt = mailbox.complete_delivery(
+        tmp_path, delivery_id, status=terminal_status, reply="answer"
+    )
     assert mailbox.read_delivery_result(tmp_path, delivery_id) == receipt
-    assert mailbox.complete_delivery(tmp_path, delivery_id, status=terminal_status, reply="answer") == receipt
+    assert (
+        mailbox.complete_delivery(
+            tmp_path, delivery_id, status=terminal_status, reply="answer"
+        )
+        == receipt
+    )
     with pytest.raises(ValueError):
-        mailbox.complete_delivery(tmp_path, delivery_id, status=terminal_status, reply="rewrite")
+        mailbox.complete_delivery(
+            tmp_path, delivery_id, status=terminal_status, reply="rewrite"
+        )
     with pytest.raises(ValueError):
         mailbox.complete_delivery(tmp_path, "d" * 32, status="not-terminal")
 
@@ -193,17 +284,24 @@ def test_terminal_receipt_is_immutable(tmp_path, terminal_status):
 def _ready(instance_id):
     from types import SimpleNamespace
 
-    return lambda home, timeout: SimpleNamespace(state="ready", endpoint=SimpleNamespace(instance_id=instance_id))
+    return lambda home, timeout: SimpleNamespace(
+        state="ready", endpoint=SimpleNamespace(instance_id=instance_id)
+    )
 
 
-def test_canonical_owner_is_the_authority_and_follows_compression(tmp_path, monkeypatch):
+def test_canonical_owner_is_the_authority_and_follows_compression(
+    tmp_path, monkeypatch
+):
     from clawk_state import SessionDB
     import clawk_cli.gateway_runtime as runtime
 
     from types import SimpleNamespace
 
-    monkeypatch.setattr(runtime, "discover_gateway_endpoint",
-                        lambda home, timeout: SimpleNamespace(state="absent", endpoint=None))
+    monkeypatch.setattr(
+        runtime,
+        "discover_gateway_endpoint",
+        lambda home, timeout: SimpleNamespace(state="absent", endpoint=None),
+    )
     with pytest.raises(ValueError, match="authority"):
         mailbox.find_canonical_live_owner(tmp_path)
 
@@ -228,19 +326,39 @@ def test_canonical_owner_is_the_authority_and_follows_compression(tmp_path, monk
         db.close()
 
 
-def test_delivery_keeps_the_sender_and_refuses_a_different_one_under_the_same_id(tmp_path, monkeypatch):
+def test_delivery_keeps_the_sender_and_refuses_a_different_one_under_the_same_id(
+    tmp_path, monkeypatch
+):
     from tools import bot_live_delivery as mailbox
 
     authority = _FakeAuthority()
     monkeypatch.setattr(mailbox, "authority_delivery", authority)
-    owner = dict(profile_home=str(tmp_path.resolve()), session_id="chat", lease_id="lease", live_session_id="live")
+    owner = dict(
+        profile_home=str(tmp_path.resolve()),
+        session_id="chat",
+        lease_id="lease",
+        live_session_id="live",
+    )
     author = {"id": "bot:coder", "name": "coder", "is_bot": True}
-    queued = mailbox.deliver_to_live_owner(tmp_path, owner, "hello", delivery_id="b" * 32, author=author)
+    queued = mailbox.deliver_to_live_owner(
+        tmp_path, owner, "hello", delivery_id="b" * 32, author=author
+    )
     assert authority.calls[-1][1]["author"] == author
     assert authority.records["b" * 32]["author"] == author
-    assert mailbox.deliver_to_live_owner(tmp_path, owner, "hello", delivery_id="b" * 32, author=author) == queued
+    assert (
+        mailbox.deliver_to_live_owner(
+            tmp_path, owner, "hello", delivery_id="b" * 32, author=author
+        )
+        == queued
+    )
     with pytest.raises(ValueError):
-        mailbox.deliver_to_live_owner(tmp_path, owner, "hello", delivery_id="b" * 32, author={**author, "id": "bot:other"})
+        mailbox.deliver_to_live_owner(
+            tmp_path,
+            owner,
+            "hello",
+            delivery_id="b" * 32,
+            author={**author, "id": "bot:other"},
+        )
     mailbox.deliver_to_live_owner(tmp_path, owner, "no sender", delivery_id="c" * 32)
     assert "author" not in authority.calls[-1][1]
 
@@ -257,7 +375,9 @@ def test_non_dict_ticket_fails_exact_id_reads_closed(tmp_path):
     assert bad.read_text(encoding="utf-8") == '"oops"'
 
 
-def test_receipt_wait_polls_the_local_receipt_and_outlives_an_unreachable_owner(tmp_path, monkeypatch):
+def test_receipt_wait_polls_the_local_receipt_and_outlives_an_unreachable_owner(
+    tmp_path, monkeypatch
+):
     """A sender's wait reads the receipt file the owner republishes; it never dials the authority
     (one fresh websocket per 0.5 s tick for up to 30 min) and an owner restart mid-wait is just a
     longer pending stretch, not an exception that abandons the reply."""
@@ -272,8 +392,15 @@ def test_receipt_wait_polls_the_local_receipt_and_outlives_an_unreachable_owner(
     monkeypatch.setattr(mailbox, "authority_delivery", unreachable)
     monkeypatch.setattr(mailbox, "_POLL_SECONDS", 0.01)
     key = "f" * 32
-    admitted = dict(delivery_id=key, profile_home=str(tmp_path.resolve()), session_id="bot", principal_id="owner",
-                    message="hello", admission_id="adm-1", status="canonical")
+    admitted = dict(
+        delivery_id=key,
+        profile_home=str(tmp_path.resolve()),
+        session_id="bot",
+        principal_id="owner",
+        message="hello",
+        admission_id="adm-1",
+        status="canonical",
+    )
     with mailbox._locked(tmp_path) as root:
         mailbox._write(root / f"{key}.json", admitted)
     pending = mailbox.await_delivery(tmp_path, key, 0.05)
@@ -281,7 +408,10 @@ def test_receipt_wait_polls_the_local_receipt_and_outlives_an_unreachable_owner(
 
     def publish():
         with mailbox._locked(tmp_path) as root:
-            mailbox._write(root / f"{key}.json", dict(admitted, status="settled", reply="PONG"))
+            mailbox._write(
+                root / f"{key}.json", dict(admitted, status="settled", reply="PONG")
+            )
+
     threading.Timer(0.1, publish).start()
     settled = mailbox.await_delivery(tmp_path, key, 5)
     assert (settled["status"], settled["reply"]) == ("settled", "PONG")
@@ -289,7 +419,9 @@ def test_receipt_wait_polls_the_local_receipt_and_outlives_an_unreachable_owner(
 
 
 @pytest.mark.platforms("linux", "macos")
-def test_mailbox_lock_refuses_a_dir_another_uid_owns_when_chmod_is_denied(tmp_path, monkeypatch):
+def test_mailbox_lock_refuses_a_dir_another_uid_owns_when_chmod_is_denied(
+    tmp_path, monkeypatch
+):
     """On POSIX chmod fails only for a dir this uid doesn't own: that mailbox is refused, not used."""
     root = tmp_path / "runtime" / mailbox.DELIVERY_DIR_NAME
     root.mkdir(parents=True)
@@ -307,7 +439,9 @@ def test_mailbox_lock_refuses_a_dir_another_uid_owns_when_chmod_is_denied(tmp_pa
             pass
 
 
-def test_authority_delivery_dials_from_a_thread_with_a_running_loop(tmp_path, monkeypatch):
+def test_authority_delivery_dials_from_a_thread_with_a_running_loop(
+    tmp_path, monkeypatch
+):
     """A gateway-hosted message_agent call runs on a thread that already has a running loop;
     the authority request must still execute rather than die in asyncio.run() before dialing."""
     import asyncio
@@ -324,7 +458,9 @@ def test_authority_delivery_dials_from_a_thread_with_a_running_loop(tmp_path, mo
     monkeypatch.setattr(gateway_runtime, "discover_gateway_endpoint", discover)
 
     async def tool_call_on_loop():
-        return mailbox.authority_delivery(tmp_path, {"id": "0" * 64, "message": "probe"})
+        return mailbox.authority_delivery(
+            tmp_path, {"id": "0" * 64, "message": "probe"}
+        )
 
     with pytest.raises(mailbox.PreDialError, match="profile authority is not ready"):
         asyncio.run(tool_call_on_loop())
@@ -354,20 +490,32 @@ def test_pre_dial_failure_is_a_definite_no_send_not_ambiguous(tmp_path, monkeypa
     def refused(home, params):
         raise live.PreDialError("dial refused before the RPC went out")
 
-    monkeypatch.setattr(live, "find_canonical_live_owner", lambda home: _owner(tmp_path))
+    monkeypatch.setattr(
+        live, "find_canonical_live_owner", lambda home: _owner(tmp_path)
+    )
     monkeypatch.setattr(live, "authority_delivery", refused)
     dm_files = _spy_dm_files(bot_mode_dm, monkeypatch)
 
-    payload = json.loads(bot_mode_dm._start_delivery(
-        ["clawk", "-p", "researcher"], "hello", "@researcher",
-        stdin_file=False, task_id=None, agent=None, profile_home=tmp_path))
+    payload = json.loads(
+        bot_mode_dm._start_delivery(
+            ["clawk", "-p", "researcher"],
+            "hello",
+            "@researcher",
+            stdin_file=False,
+            task_id=None,
+            agent=None,
+            profile_home=tmp_path,
+        )
+    )
 
     assert payload["reason"] == "runtime_unavailable"
     assert "safe to resend" in payload["error"]
     assert "Do not resend" not in payload["error"]
     dm_file = Path(dm_files[0])
     assert not dm_file.exists()  # nothing was admitted: no evidence to retain
-    assert not Path(str(dm_file) + ".live.json").exists()  # the pinned intent can never settle
+    assert not Path(
+        str(dm_file) + ".live.json"
+    ).exists()  # the pinned intent can never settle
 
 
 def test_pre_dial_failure_on_a_retried_intent_stays_ambiguous(tmp_path, monkeypatch):
@@ -381,8 +529,16 @@ def test_pre_dial_failure_on_a_retried_intent_stays_ambiguous(tmp_path, monkeypa
 
     dm_file = bot_mode_dm._write_dm_file("hello")
     intent = Path(bot_mode_dm._live_intent_file(dm_file))
-    intent.write_text(json.dumps(dict(owner=_owner(tmp_path), message="hello",
-                                      delivery_id=bot_mode_dm._dm_delivery_id(dm_file))), encoding="utf-8")
+    intent.write_text(
+        json.dumps(
+            dict(
+                owner=_owner(tmp_path),
+                message="hello",
+                delivery_id=bot_mode_dm._dm_delivery_id(dm_file),
+            )
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(live, "authority_delivery", refused)
 
     with pytest.raises(live.PreDialError):

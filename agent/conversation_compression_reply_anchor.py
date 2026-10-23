@@ -15,8 +15,12 @@ from agent.model_metadata import estimate_messages_tokens_rough
 
 logger = logging.getLogger(__name__)
 
+
 def _ensure_compressed_keeps_last_assistant_reply(
-    original_messages: list, compressed: list, *, session_id: Optional[str] = None,
+    original_messages: list,
+    compressed: list,
+    *,
+    session_id: Optional[str] = None,
 ) -> Optional[dict]:
     """Keep the latest visible assistant reply live across compaction (#118900).
 
@@ -45,7 +49,9 @@ def _ensure_compressed_keeps_last_assistant_reply(
     that is not "the reply is already there" is logged here with its reason.
     """
     from agent.context_compressor import (
-        _DB_PERSISTED_MARKER, _fresh_compaction_message_copy, is_compaction_summary_message,
+        _DB_PERSISTED_MARKER,
+        _fresh_compaction_message_copy,
+        is_compaction_summary_message,
     )
     from agent.conversation_compression import _message_text
 
@@ -79,7 +85,9 @@ def _ensure_compressed_keeps_last_assistant_reply(
     # exist in the wild, and == would resolve to the older twin (#118900).
     reply_pos = next(i for i, m in enumerate(original_messages) if m is reply)
     index = _reply_insertion_index(
-        original_messages[reply_pos + 1:], compressed, reused_ids=_reused_tool_call_ids(original_messages),
+        original_messages[reply_pos + 1 :],
+        compressed,
+        reused_ids=_reused_tool_call_ids(original_messages),
     )
     if index is None:
         logger.warning(
@@ -126,7 +134,8 @@ def _ensure_compressed_keeps_last_assistant_reply(
     if rough_out < rough_in < rough_out + estimate_messages_tokens_rough([anchor]):
         logger.info(
             "Compression: not reinserting the just-delivered assistant reply; it would stop this "
-            "compaction from shrinking the transcript (session=%s).", session_id or "none",
+            "compaction from shrinking the transcript (session=%s).",
+            session_id or "none",
         )
         return None
     # Post-commit contract (#98450, mirrors _insert_real_user_anchor._place):
@@ -158,7 +167,9 @@ def _tool_call_ids(message: dict) -> frozenset:
     """Pairing ids of an assistant row's tool calls, keyed the way the pre-call sanitizer
     keys them (``call_id`` before ``id``, composite ``call|item`` split): Codex rows carry
     ``id=fc_…`` AND ``call_id=call_…`` and their results pair on the latter."""
-    return frozenset(filter(None, map(coalesce_tool_call_id, message.get("tool_calls") or ())))
+    return frozenset(
+        filter(None, map(coalesce_tool_call_id, message.get("tool_calls") or ()))
+    )
 
 
 def _tool_result_id(message: dict) -> str:
@@ -181,7 +192,9 @@ def _reused_tool_call_ids(messages: list) -> frozenset:
     return frozenset(call_id for call_id, count in seen.items() if count > 1)
 
 
-def _reply_insertion_index(followers: list, compressed: list, *, reused_ids: frozenset = frozenset()) -> Optional[int]:
+def _reply_insertion_index(
+    followers: list, compressed: list, *, reused_ids: frozenset = frozenset()
+) -> Optional[int]:
     """Chronologically correct slot for the dropped reply inside ``compressed``.
 
     ``followers`` are the ORIGINAL rows after the reply (the next user turn, its
@@ -208,12 +221,17 @@ def _reply_insertion_index(followers: list, compressed: list, *, reused_ids: fro
     from agent.conversation_compression import _is_real_user_message, _message_text
 
     def _row_ids(message: dict) -> frozenset:
-        return _tool_call_ids(message) | frozenset(filter(None, (_tool_result_id(message),)))
+        return _tool_call_ids(message) | frozenset(
+            filter(None, (_tool_result_id(message),))
+        )
 
     followers = [f for f in followers if isinstance(f, dict)]
     ambiguous = False
     for follower in followers:
-        follower_role, follower_text = follower.get("role"), _message_text(follower).strip()
+        follower_role, follower_text = (
+            follower.get("role"),
+            _message_text(follower).strip(),
+        )
         follower_call_ids = _tool_call_ids(follower)
         if _row_ids(follower) & reused_ids:
             ambiguous = ambiguous or any(
@@ -233,7 +251,9 @@ def _reply_insertion_index(followers: list, compressed: list, *, reused_ids: fro
                 if message_call_ids == follower_call_ids:
                     return pos
                 continue
-            if follower_role == "tool" and (_tool_result_id(follower) or _tool_result_id(message)):
+            if follower_role == "tool" and (
+                _tool_result_id(follower) or _tool_result_id(message)
+            ):
                 if _tool_result_id(message) == _tool_result_id(follower):
                     return pos
                 continue

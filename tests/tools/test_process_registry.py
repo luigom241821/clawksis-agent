@@ -94,9 +94,12 @@ def test_kill_started_since_preserves_preexisting_and_foreign_processes(registry
     registry.kill_process = fake_kill
 
     assert baseline == frozenset({"proc_old"})
-    assert registry.kill_started_since(
-        "session-a", baseline, source="gateway_turn_timeout"
-    ) == 1
+    assert (
+        registry.kill_started_since(
+            "session-a", baseline, source="gateway_turn_timeout"
+        )
+        == 1
+    )
     assert calls == [
         (
             "proc_new",
@@ -106,8 +109,6 @@ def test_kill_started_since_preserves_preexisting_and_foreign_processes(registry
             },
         )
     ]
-
-
 
 
 def _wait_until(predicate, timeout: float = 5.0, interval: float = 0.05) -> bool:
@@ -208,6 +209,7 @@ def test_submit_stdin_keeps_lf_for_windows_pipe(registry):
 # Get / Poll
 # =========================================================================
 
+
 class TestGetAndPoll:
     def test_poll_running(self, registry):
         s = _make_session(output="some output here")
@@ -277,7 +279,9 @@ def test_reader_loop_streams_incremental_chunks_from_read1(registry, monkeypatch
     moved = []
 
     monkeypatch.setattr(registry, "_check_watch_patterns", lambda _s, _c: None)
-    monkeypatch.setattr(registry, "_emit_output", lambda _s, chunk: emitted.append(chunk))
+    monkeypatch.setattr(
+        registry, "_emit_output", lambda _s, chunk: emitted.append(chunk)
+    )
     monkeypatch.setattr(registry, "_move_to_finished", lambda _s: moved.append(_s.id))
 
     registry._reader_loop(session)
@@ -289,7 +293,9 @@ def test_reader_loop_streams_incremental_chunks_from_read1(registry, monkeypatch
     assert moved == ["proc_reader_live"]
 
 
-def test_reader_waits_past_early_stdout_eof_before_publishing_completion(registry, monkeypatch):
+def test_reader_waits_past_early_stdout_eof_before_publishing_completion(
+    registry, monkeypatch
+):
     """Closing stdout is not process completion; the reader must still reap the child."""
 
     class _EarlyEofStdout:
@@ -396,7 +402,9 @@ def _run_reader(registry, monkeypatch, chunks, sid="proc_utf8"):
     return session
 
 
-def test_reader_loop_reassembles_multibyte_char_split_across_chunks(registry, monkeypatch):
+def test_reader_loop_reassembles_multibyte_char_split_across_chunks(
+    registry, monkeypatch
+):
     """A UTF-8 char split across two read1() chunks must not become U+FFFD.
 
     Before the incremental decoder, each chunk was decoded statelessly with
@@ -413,14 +421,17 @@ def test_reader_loop_strips_shell_noise_split_across_reads(registry, monkeypatch
     A reader that wakes between them (loaded CI) must still drop the second line: it leaked as the
     process's only "output", so the dock painted ``last: bash: no job control...`` instead of
     ``starting`` and probes waiting on any output woke before the real writer had printed."""
-    session = _run_reader(registry, monkeypatch, [
-        b"bash: cannot set terminal process group (7): Inappropriate ioctl for device\n",
-        b"bash: no job control in this shell\n",
-        b"real output\n",
-        b"bash: no job control in this shell\n",  # after real output it is the process's own text
-    ])
+    session = _run_reader(
+        registry,
+        monkeypatch,
+        [
+            b"bash: cannot set terminal process group (7): Inappropriate ioctl for device\n",
+            b"bash: no job control in this shell\n",
+            b"real output\n",
+            b"bash: no job control in this shell\n",  # after real output it is the process's own text
+        ],
+    )
     assert session.output_buffer == "real output\nbash: no job control in this shell\n"
-
 
 
 def test_reader_loop_flushes_truncated_multibyte_tail_at_eof(registry, monkeypatch):
@@ -435,7 +446,9 @@ def test_reader_loop_still_replaces_genuinely_invalid_bytes(registry, monkeypatc
     assert session.output_buffer == "ok\ufffddone\n"
 
 
-def test_pty_reader_loop_reassembles_multibyte_char_split_across_chunks(registry, monkeypatch):
+def test_pty_reader_loop_reassembles_multibyte_char_split_across_chunks(
+    registry, monkeypatch
+):
     """The PTY reader gets the same incremental-decode treatment."""
 
     class _FakePty:
@@ -469,6 +482,7 @@ def test_pty_reader_loop_reassembles_multibyte_char_split_across_chunks(registry
 # =========================================================================
 # Orphaned-pipe reconciliation (issue #17327)
 # =========================================================================
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only: uses setsid/fcntl")
 class TestOrphanedPipeReconciliation:
@@ -582,12 +596,15 @@ class TestOrphanedPipeReconciliation:
 
         assert result["status"] == "exited", result
         assert result["exit_code"] == 0
-        assert elapsed < 0.9  # must stay under the old 1s poll tick being regression-tested, f"wait() should wake on completion; took {elapsed:.3f}s"
+        assert (
+            elapsed < 0.9
+        )  # must stay under the old 1s poll tick being regression-tested, f"wait() should wake on completion; took {elapsed:.3f}s"
 
 
 # =========================================================================
 # Read log
 # =========================================================================
+
 
 class TestReadLog:
     def test_read_full_log(self, registry):
@@ -608,6 +625,7 @@ class TestReadLog:
 # =========================================================================
 # Stdin helpers
 # =========================================================================
+
 
 class TestStdinHelpers:
     def test_close_stdin_pipe_mode(self, registry):
@@ -665,6 +683,7 @@ class TestStdinHelpers:
 # List sessions
 # =========================================================================
 
+
 class TestListSessions:
     def test_filter_by_task_id(self, registry):
         s1 = _make_session(sid="proc_1", task_id="t1")
@@ -703,9 +722,11 @@ class TestListSessions:
         assert by_id["proc_forgotten"].get("session_scoped") is True
         assert "session_scoped" not in by_id["proc_own"]
 
+
 # =========================================================================
 # Active process queries
 # =========================================================================
+
 
 class TestActiveQueries:
     def test_has_active_processes(self, registry):
@@ -719,11 +740,16 @@ class TestActiveQueries:
         s = _make_session(started_at=time.time() - 90000)  # 25 hours ago
         s.session_key = "gw_session_1"
         registry._running[s.id] = s
-        assert registry.has_active_for_session("gw_session_1", max_active_age=86400) is False
+        assert (
+            registry.has_active_for_session("gw_session_1", max_active_age=86400)
+            is False
+        )
+
 
 # =========================================================================
 # Pruning
 # =========================================================================
+
 
 class TestPruning:
     def test_prune_expired_finished(self, registry):
@@ -812,7 +838,11 @@ class TestFinishedHandleRelease:
         """Output remains queryable after the pipes close — poll() reads the
         buffered output, never the (now-closed) pipe."""
         proc = subprocess.Popen(
-            [sys.executable, "-c", "print('hello-finish'); import time; time.sleep(0.2)"],
+            [
+                sys.executable,
+                "-c",
+                "print('hello-finish'); import time; time.sleep(0.2)",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
@@ -865,10 +895,10 @@ class TestFinishedHandleRelease:
         assert pty_closed["closed"], "pruned session must release its PTY handle"
 
 
-
 # =========================================================================
 # Spawn env sanitization
 # =========================================================================
+
 
 class TestSpawnEnvSanitization:
     def test_spawn_local_strips_blocked_vars_from_background_env(self, registry):
@@ -885,17 +915,23 @@ class TestSpawnEnvSanitization:
 
         fake_thread = MagicMock()
 
-        with patch.dict(os.environ, {
-            "PATH": "/usr/bin:/bin",
-            "HOME": "/home/user",
-            "USER": "tester",
-            "TELEGRAM_BOT_TOKEN": "bot-secret",
-            "FIRECRAWL_API_KEY": "fc-secret",
-        }, clear=True), \
-            patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-            patch("subprocess.Popen", side_effect=fake_popen), \
-            patch("threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "PATH": "/usr/bin:/bin",
+                    "HOME": "/home/user",
+                    "USER": "tester",
+                    "TELEGRAM_BOT_TOKEN": "bot-secret",
+                    "FIRECRAWL_API_KEY": "fc-secret",
+                },
+                clear=True,
+            ),
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch("threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             registry.spawn_local(
                 "echo hello",
                 cwd="/tmp",
@@ -925,9 +961,13 @@ class TestSpawnEnvSanitization:
         env = FakeEnv()
         fake_thread = MagicMock()
 
-        with patch("tools.process_registry.threading.Thread", return_value=fake_thread), \
-            patch.object(registry, "_write_checkpoint"):
-            with pytest.raises(RuntimeError, match="exited 2 without a PID: syntax error"):
+        with (
+            patch("tools.process_registry.threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
+            with pytest.raises(
+                RuntimeError, match="exited 2 without a PID: syntax error"
+            ):
                 registry.spawn_via_env(env, "echo hello")
 
         fake_thread.start.assert_not_called()
@@ -941,11 +981,13 @@ class TestSpawnEnvSanitization:
         class FakeEnv:
             def __init__(self):
                 self.commands = []
-                self._responses = iter([
-                    {"output": "6 0\nhello\n"},
-                    {"output": "1\n"},
-                    {"output": "0\n"},
-                ])
+                self._responses = iter(
+                    [
+                        {"output": "6 0\nhello\n"},
+                        {"output": "1\n"},
+                        {"output": "0\n"},
+                    ]
+                )
 
             def execute(self, command, **kwargs):
                 self.commands.append((command, kwargs))
@@ -953,8 +995,10 @@ class TestSpawnEnvSanitization:
 
         env = FakeEnv()
 
-        with patch("tools.process_registry.time.sleep", return_value=None), \
-            patch.object(registry, "_move_to_finished"):
+        with (
+            patch("tools.process_registry.time.sleep", return_value=None),
+            patch.object(registry, "_move_to_finished"),
+        ):
             registry._env_poller_loop(
                 session,
                 env,
@@ -991,14 +1035,14 @@ class TestEnvPollerIncrementalRead:
                 return next(self._responses)
 
         env = FakeEnv()
-        with patch("tools.process_registry.time.sleep", return_value=None), \
-            patch.object(registry, "_move_to_finished"):
+        with (
+            patch("tools.process_registry.time.sleep", return_value=None),
+            patch.object(registry, "_move_to_finished"),
+        ):
             registry._env_poller_loop(
                 session, env, "/tmp/bg.log", "/tmp/bg.pid", "/tmp/bg.exit"
             )
         return env.commands
-
-
 
     @pytest.mark.skipif(not shutil.which("sh"), reason="needs a POSIX sh")
     def test_read_command_holds_back_a_split_utf8_sequence(self, tmp_path):
@@ -1018,7 +1062,8 @@ class TestEnvPollerIncrementalRead:
             log.write_bytes(full[:n])
             out = subprocess.run(
                 ["sh", "-c", ProcessRegistry._log_delta_command(quoted, 0)],
-                capture_output=True, timeout=30,
+                capture_output=True,
+                timeout=30,
                 check=False,
             ).stdout
             header, _, delta = out.partition(b"\n")
@@ -1027,7 +1072,6 @@ class TestEnvPollerIncrementalRead:
             assert delta == full[:size]
             complete = full[:n].decode("utf-8", "ignore").encode() == full[:n]
             assert (n - size) == 0 if complete else 0 < (n - size) <= 3
-
 
     def test_delta_is_appended_not_replaced(self, registry):
         session = _make_session(sid="proc_append", output="already here ")
@@ -1051,9 +1095,9 @@ class TestEnvPollerIncrementalRead:
             session,
             [
                 {"output": "11 0\nfirst chunk"},
-                {"output": "0\n"},          # still running, poll again
+                {"output": "0\n"},  # still running, poll again
                 {"output": "17 11\n and more"},
-                {"output": "1\n"},          # gone now
+                {"output": "1\n"},  # gone now
                 {"output": "0\n"},
             ],
         )
@@ -1074,7 +1118,7 @@ class TestEnvPollerIncrementalRead:
             session,
             [
                 {"output": "11 0\nfirst chunk"},
-                {"output": "0\n"},          # still running, poll again
+                {"output": "0\n"},  # still running, poll again
                 {"output": "5 0\nfresh"},
                 {"output": "1\n"},
                 {"output": "0\n"},
@@ -1118,6 +1162,7 @@ class TestEnvPollerIncrementalRead:
 # Popen leak prevention
 # =========================================================================
 
+
 class TestPopenLeakOnSetupFailure:
     """Regression for issue #2749: subprocess orphaned when post-Popen setup raises."""
 
@@ -1136,16 +1181,21 @@ class TestPopenLeakOnSetupFailure:
         # The orphan path terminates through _terminate_host_pid, which
         # revalidates the recorded kernel start time before signalling, so a
         # MagicMock pid can never reach a real killpg/os.kill.
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", return_value=proc), \
-             patch("threading.Thread", side_effect=boom), \
-             patch.object(ProcessRegistry, "_terminate_host_pid") as terminate, \
-             patch.object(registry, "_write_checkpoint"):
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", return_value=proc),
+            patch("threading.Thread", side_effect=boom),
+            patch.object(ProcessRegistry, "_terminate_host_pid") as terminate,
+            patch.object(registry, "_write_checkpoint"),
+        ):
             with pytest.raises(RuntimeError, match="Thread creation failed"):
                 registry.spawn_local("echo hello", cwd="/tmp")
 
-        assert terminate.call_count == 1, "post-Popen setup failure must terminate the orphan"
+        assert terminate.call_count == 1, (
+            "post-Popen setup failure must terminate the orphan"
+        )
         assert terminate.call_args[0][0] == 9999
+
 
 # =========================================================================
 # Spawn rewrite regression (issue #68915)
@@ -1175,17 +1225,20 @@ class TestSpawnRewriteCompoundBackground:
         fake_thread = MagicMock()
         fake_thread.daemon = False
 
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch("subprocess.Popen", side_effect=fake_popen), \
-             patch("threading.Thread", return_value=fake_thread), \
-             patch.object(registry, "_write_checkpoint"):
-            registry.spawn_local("cd /app && node server.js &>/tmp/srv.log &", cwd="/tmp")
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch("threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
+            registry.spawn_local(
+                "cd /app && node server.js &>/tmp/srv.log &", cwd="/tmp"
+            )
 
         assert len(captured_cmd) == 1
         shell_cmd = captured_cmd[0]
         # The command passed to Popen should be the REWRITTEN version
         assert "&& { node server.js &>/tmp/srv.log & }" in shell_cmd[2]
-
 
     def test_pty_path_uses_rewritten_command(self, registry):
         """PTY spawn path must also use the rewritten command (issue #68915)."""
@@ -1198,21 +1251,25 @@ class TestSpawnRewriteCompoundBackground:
         fake_thread = MagicMock()
         fake_thread.daemon = False
 
-        with patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
-             patch.dict("sys.modules", {"ptyprocess": mock_pty_module}), \
-             patch("threading.Thread", return_value=fake_thread), \
-             patch.object(registry, "_write_checkpoint"):
+        with (
+            patch("tools.process_registry._find_shell", return_value="/bin/bash"),
+            patch.dict("sys.modules", {"ptyprocess": mock_pty_module}),
+            patch("threading.Thread", return_value=fake_thread),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_local(
                 "cd /app && node server.js &",
                 cwd="/tmp",
                 use_pty=True,
             )
 
-        assert mock_pty_module.PtyProcess.spawn.called, \
+        assert mock_pty_module.PtyProcess.spawn.called, (
             "PTY spawn should have been attempted"
+        )
         pty_args = mock_pty_module.PtyProcess.spawn.call_args[0][0]
-        assert "&& { node server.js & }" in pty_args[2], \
+        assert "&& { node server.js & }" in pty_args[2], (
             f"PTY path should use rewritten command, got: {pty_args[2]}"
+        )
         assert session.command == "cd /app && node server.js &"
 
 
@@ -1220,15 +1277,22 @@ class TestSpawnRewriteCompoundBackground:
 # Checkpoint
 # =========================================================================
 
+
 class TestCheckpoint:
     def test_recover_dead_pid(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        checkpoint.write_text(json.dumps([{
-            "session_id": "proc_dead",
-            "command": "sleep 999",
-            "pid": 999999999,  # almost certainly not running
-            "task_id": "t1",
-        }]))
+        checkpoint.write_text(
+            json.dumps(
+                [
+                    {
+                        "session_id": "proc_dead",
+                        "command": "sleep 999",
+                        "pid": 999999999,  # almost certainly not running
+                        "task_id": "t1",
+                    }
+                ]
+            )
+        )
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 0
@@ -1249,9 +1313,12 @@ class TestCheckpoint:
         monkeypatch.setattr(registry, "_host_pid_is_ours", lambda *_args: False)
         monkeypatch.setattr(registry, "_is_host_pid_alive", lambda *_args: False)
 
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint), patch(
-            "tools.process_registry._stop_systemd_unit", return_value=False
-        ) as stop_unit:
+        with (
+            patch("tools.process_registry.CHECKPOINT_PATH", checkpoint),
+            patch(
+                "tools.process_registry._stop_systemd_unit", return_value=False
+            ) as stop_unit,
+        ):
             assert registry.recover_from_checkpoint() == 0
 
         stop_unit.assert_called_once_with(entry["systemd_unit"])
@@ -1273,24 +1340,28 @@ class TestCheckpoint:
         monkeypatch.setattr(registry, "_host_pid_is_ours", lambda *_args: False)
         monkeypatch.setattr(registry, "_is_host_pid_alive", lambda *_args: False)
 
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint), patch(
-            "tools.process_registry._stop_systemd_unit", return_value=True
-        ) as stop_unit:
+        with (
+            patch("tools.process_registry.CHECKPOINT_PATH", checkpoint),
+            patch(
+                "tools.process_registry._stop_systemd_unit", return_value=True
+            ) as stop_unit,
+        ):
             assert registry.recover_from_checkpoint() == 0
 
         stop_unit.assert_called_once_with(entry["systemd_unit"])
         assert json.loads(checkpoint.read_text()) == []
 
-
     def test_recovery_skips_explicit_sandbox_backed_entries(self, registry, tmp_path):
         checkpoint = tmp_path / "procs.json"
-        original = [{
-            "session_id": "proc_remote",
-            "command": "sleep 999",
-            "pid": os.getpid(),
-            "task_id": "t1",
-            "pid_scope": "sandbox",
-        }]
+        original = [
+            {
+                "session_id": "proc_remote",
+                "command": "sleep 999",
+                "pid": os.getpid(),
+                "task_id": "t1",
+                "pid_scope": "sandbox",
+            }
+        ]
         checkpoint.write_text(json.dumps(original))
 
         with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
@@ -1321,9 +1392,11 @@ class TestCheckpoint:
             assert secret not in data[0]["command"]
             assert data[0]["command"] != command
 
+
 # =========================================================================
 # Kill process
 # =========================================================================
+
 
 class TestKillProcess:
     def test_kill_already_exited(self, registry):
@@ -1331,7 +1404,6 @@ class TestKillProcess:
         registry._finished[s.id] = s
         result = registry.kill_process(s.id)
         assert result["status"] == "already_exited"
-
 
     def test_kill_detached_session_uses_host_pid(self, registry):
         s = _make_session(sid="proc_detached", command="sleep 999")
@@ -1348,8 +1420,10 @@ class TestKillProcess:
         class FakeProcess:
             def __init__(self, pid):
                 self.pid = pid
+
             def children(self, recursive=False):
                 return []
+
             def terminate(self):
                 terminate_calls.append(("terminate", self.pid))
                 kill_state["alive"] = False
@@ -1364,10 +1438,20 @@ class TestKillProcess:
             # touches ``os.kill`` directly. Mock both seams.  Disable the
             # SIGKILL-escalation step (grace=0) so it doesn't call
             # ``psutil.wait_procs`` on the FakeProcess.
-            with patch("gateway.status._pid_exists", side_effect=lambda pid: kill_state["alive"]), \
-                 patch.object(ProcessRegistry, "_daemon_term_grace_seconds",
-                              staticmethod(lambda: 0.0)), \
-                 patch.object(_psutil, "Process", side_effect=lambda pid: FakeProcess(pid)):
+            with (
+                patch(
+                    "gateway.status._pid_exists",
+                    side_effect=lambda pid: kill_state["alive"],
+                ),
+                patch.object(
+                    ProcessRegistry,
+                    "_daemon_term_grace_seconds",
+                    staticmethod(lambda: 0.0),
+                ),
+                patch.object(
+                    _psutil, "Process", side_effect=lambda pid: FakeProcess(pid)
+                ),
+            ):
                 result = registry.kill_process(s.id)
 
             assert result["status"] == "killed"
@@ -1398,7 +1482,11 @@ class TestKillProcess:
 
         def record_save(session):
             saved.append(
-                (session.completion_reason, session.termination_source, session.exit_code)
+                (
+                    session.completion_reason,
+                    session.termination_source,
+                    session.exit_code,
+                )
             )
 
         try:
@@ -1432,9 +1520,11 @@ class TestKillProcess:
 # Tool handler
 # =========================================================================
 
+
 class TestProcessToolHandler:
     def test_unknown_action(self):
         from tools.process_registry import _handle_process
+
         result = json.loads(_handle_process({"action": "unknown_action"}))
         assert "error" in result
 
@@ -1484,29 +1574,35 @@ def test_drain_notifications_filters_async_delegation_by_session_key():
 
     try:
         # Put events for different sessions
-        process_registry.completion_queue.put({
-            "type": "async_delegation",
-            "delegation_id": "deleg_session_a",
-            "session_key": "telegram:dm:111:user_a",
-            "goal": "task A",
-            "status": "completed",
-            "summary": "done A",
-            "api_calls": 1,
-            "duration_seconds": 0.5,
-        })
-        process_registry.completion_queue.put({
-            "type": "async_delegation",
-            "delegation_id": "deleg_session_b",
-            "session_key": "telegram:dm:222:user_b",
-            "goal": "task B",
-            "status": "completed",
-            "summary": "done B",
-            "api_calls": 1,
-            "duration_seconds": 0.3,
-        })
+        process_registry.completion_queue.put(
+            {
+                "type": "async_delegation",
+                "delegation_id": "deleg_session_a",
+                "session_key": "telegram:dm:111:user_a",
+                "goal": "task A",
+                "status": "completed",
+                "summary": "done A",
+                "api_calls": 1,
+                "duration_seconds": 0.5,
+            }
+        )
+        process_registry.completion_queue.put(
+            {
+                "type": "async_delegation",
+                "delegation_id": "deleg_session_b",
+                "session_key": "telegram:dm:222:user_b",
+                "goal": "task B",
+                "status": "completed",
+                "summary": "done B",
+                "api_calls": 1,
+                "duration_seconds": 0.3,
+            }
+        )
 
         # Drain for session A — should only get deleg_session_a
-        results_a = process_registry.drain_notifications(session_key="telegram:dm:111:user_a")
+        results_a = process_registry.drain_notifications(
+            session_key="telegram:dm:111:user_a"
+        )
         assert len(results_a) == 1, (
             f"Expected 1 event for session A, got {len(results_a)}"
         )
@@ -1514,7 +1610,9 @@ def test_drain_notifications_filters_async_delegation_by_session_key():
         assert "done A" in results_a[0][1]
 
         # Session B's event should have been re-queued — drain for session B
-        results_b = process_registry.drain_notifications(session_key="telegram:dm:222:user_b")
+        results_b = process_registry.drain_notifications(
+            session_key="telegram:dm:222:user_b"
+        )
         assert len(results_b) == 1, (
             f"Expected 1 event for session B, got {len(results_b)}"
         )
@@ -1539,21 +1637,31 @@ def test_drain_notifications_owns_event_callback_beats_key_equality():
 
     try:
         # Pre-compression dispatch: event carries the OLD key.
-        process_registry.completion_queue.put({
-            "type": "async_delegation",
-            "delegation_id": "deleg_precompress",
-            "session_key": "old_parent_key",
-            "goal": "task", "status": "completed", "summary": "mine",
-            "api_calls": 1, "duration_seconds": 0.1,
-        })
+        process_registry.completion_queue.put(
+            {
+                "type": "async_delegation",
+                "delegation_id": "deleg_precompress",
+                "session_key": "old_parent_key",
+                "goal": "task",
+                "status": "completed",
+                "summary": "mine",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
+            }
+        )
         # Foreign event that plain key equality would also reject.
-        process_registry.completion_queue.put({
-            "type": "async_delegation",
-            "delegation_id": "deleg_foreign",
-            "session_key": "someone_else",
-            "goal": "task", "status": "completed", "summary": "not mine",
-            "api_calls": 1, "duration_seconds": 0.1,
-        })
+        process_registry.completion_queue.put(
+            {
+                "type": "async_delegation",
+                "delegation_id": "deleg_foreign",
+                "session_key": "someone_else",
+                "goal": "task",
+                "status": "completed",
+                "summary": "not mine",
+                "api_calls": 1,
+                "duration_seconds": 0.1,
+            }
+        )
 
         # Chain-aware ownership: this session's lineage includes old_parent_key.
         lineage = {"old_parent_key", "new_child_key"}
@@ -1612,6 +1720,7 @@ class TestTerminateHostPidWindows:
         assert "/T" in captured["args"], "Tree flag required to reach descendants"
         assert "/F" in captured["args"], "Force flag required for headless Chromium"
 
+
 class TestTerminateHostPidPosix:
     """POSIX branch gives a managed parent its shutdown window first."""
 
@@ -1642,8 +1751,9 @@ class TestTerminateHostPidPosix:
         monkeypatch.setattr(psutil, "Process", _FakeParent)
         # A zero grace keeps this ordering probe deterministic while retaining
         # the configured no-SIGKILL behavior.
-        monkeypatch.setattr(pr.ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 0.0))
+        monkeypatch.setattr(
+            pr.ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.0)
+        )
 
         pr.ProcessRegistry._terminate_host_pid(12345)
 
@@ -1651,9 +1761,13 @@ class TestTerminateHostPidPosix:
             "Parent must receive SIGTERM before any snapshot descendant"
         )
 
-    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX signal ordering; Windows uses taskkill")
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="POSIX signal ordering; Windows uses taskkill"
+    )
     @pytest.mark.live_system_guard_bypass
-    def test_posix_self_reaping_supervisor_child_is_never_signalled_by_registry(self, monkeypatch, tmp_path):
+    def test_posix_self_reaping_supervisor_child_is_never_signalled_by_registry(
+        self, monkeypatch, tmp_path
+    ):
         """A parent that tears down its own children on SIGTERM keeps that job.
 
         #111598: Chromium/Electron reap their zygotes during an async SIGTERM
@@ -1662,8 +1776,9 @@ class TestTerminateHostPidPosix:
         parent first and a child the parent reaps inside the grace window is
         never signalled by the registry, so the parent exits 0.
         """
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 2.0))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 2.0)
+        )
         log = tmp_path / "order.log"
         child_sh = tmp_path / "child.sh"
         parent_sh = tmp_path / "parent.sh"
@@ -1672,21 +1787,28 @@ class TestTerminateHostPidPosix:
         child_sh.write_text(
             "#!/usr/bin/env bash\n"
             f"trap 'echo child-TERM >> {log}; exit 0' TERM\n"
-            f"echo up >> {log}\nwhile :; do sleep 0.1; done\n")
+            f"echo up >> {log}\nwhile :; do sleep 0.1; done\n"
+        )
         parent_sh.write_text(
             "#!/usr/bin/env bash\n"
             f"bash {child_sh} & kid=$!\n"
             f"trap 'echo parent-TERM >> {log}; kill -KILL $kid; wait $kid; exit 0' TERM\n"
-            "while :; do sleep 0.1; done\n")
+            "while :; do sleep 0.1; done\n"
+        )
         parent = subprocess.Popen(["bash", str(parent_sh)], stdin=subprocess.DEVNULL)
         try:
-            assert _wait_until(lambda: log.exists() and "up" in log.read_text(), timeout=5.0)
+            assert _wait_until(
+                lambda: log.exists() and "up" in log.read_text(), timeout=5.0
+            )
             ProcessRegistry._terminate_host_pid(parent.pid)
             assert _wait_until(lambda: parent.poll() is not None, timeout=5.0)
             lines = log.read_text().split()
-            assert parent.returncode == 0, f"supervisor must exit cleanly, got {parent.returncode}"
+            assert parent.returncode == 0, (
+                f"supervisor must exit cleanly, got {parent.returncode}"
+            )
             assert "parent-TERM" in lines and "child-TERM" not in lines, (
-                f"registry must SIGTERM only the parent, which reaps its own child: {lines}")
+                f"registry must SIGTERM only the parent, which reaps its own child: {lines}"
+            )
         finally:
             if parent.poll() is None:
                 parent.kill()
@@ -1722,6 +1844,7 @@ class TestTerminateHostPidPosix:
 # kernel start time captured at spawn before any signal is sent.
 # =========================================================================
 
+
 class TestPidReuseGuard:
     def test_terminate_refuses_when_start_time_mismatches(self, registry):
         """A live PID whose start time changed (recycled) is NOT killed."""
@@ -1738,12 +1861,11 @@ class TestPidReuseGuard:
             proc.kill()
             proc.wait()
 
-
     def test_refresh_detached_marks_recycled_pid_exited(self, registry):
         """A detached session whose PID got recycled is moved to finished."""
         wrong_start = (ProcessRegistry._safe_host_start_time(os.getpid()) or 0) + 999
         s = _make_session(sid="proc_detached")
-        s.pid = os.getpid()          # alive, but...
+        s.pid = os.getpid()  # alive, but...
         s.pid_scope = "host"
         s.detached = True
         s.host_start_time = wrong_start  # ...identity no longer matches
@@ -1753,8 +1875,10 @@ class TestPidReuseGuard:
         assert s.id in registry._finished
 
 
-@pytest.mark.skipif(sys.platform == "win32",
-                    reason="POSIX SIGTERM→SIGKILL escalation; Windows uses taskkill /F")
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX SIGTERM→SIGKILL escalation; Windows uses taskkill /F",
+)
 class TestSigkillEscalation:
     """Bounded SIGTERM→SIGKILL escalation in _terminate_host_pid.
 
@@ -1777,7 +1901,8 @@ class TestSigkillEscalation:
     def _spawn_trap(self):
         proc = subprocess.Popen(
             [sys.executable, "-c", self._TRAP],
-            stdout=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE,
+            text=True,
         )
         # Wait until the handler is installed before returning.
         line = proc.stdout.readline()
@@ -1785,13 +1910,15 @@ class TestSigkillEscalation:
         return proc
 
     def test_sigterm_ignoring_daemon_is_sigkilled(self, monkeypatch):
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 0.3))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.3)
+        )
         proc = self._spawn_trap()
         try:
             ProcessRegistry._terminate_host_pid(proc.pid)
-            assert _wait_until(lambda: proc.poll() is not None, timeout=4.0), \
+            assert _wait_until(lambda: proc.poll() is not None, timeout=4.0), (
                 "SIGTERM-ignoring daemon should be SIGKILLed after grace"
+            )
         finally:
             if proc.poll() is None:
                 proc.kill()
@@ -1799,13 +1926,15 @@ class TestSigkillEscalation:
 
     def test_escalation_does_not_bypass_recycled_pid_guard(self, monkeypatch):
         """A start-time mismatch must still spare the PID — no SIGTERM, no SIGKILL."""
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 0.3))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 0.3)
+        )
         proc = self._spawn_trap()
         try:
             real_start = ProcessRegistry._safe_host_start_time(proc.pid)
             ProcessRegistry._terminate_host_pid(
-                proc.pid, expected_start=(real_start or 0) + 1)
+                proc.pid, expected_start=(real_start or 0) + 1
+            )
             assert not _wait_until(lambda: proc.poll() is not None, timeout=0.3)
             assert proc.poll() is None
         finally:
@@ -1815,8 +1944,12 @@ class TestSigkillEscalation:
     def test_grace_reader_floors_at_zero(self, monkeypatch):
         """A negative configured grace is clamped to 0 (no escalation)."""
         import clawk_cli.config as cfg_mod
-        monkeypatch.setattr(cfg_mod, "read_raw_config",
-                            lambda: {"terminal": {"daemon_term_grace_seconds": -5}})
+
+        monkeypatch.setattr(
+            cfg_mod,
+            "read_raw_config",
+            lambda: {"terminal": {"daemon_term_grace_seconds": -5}},
+        )
         assert ProcessRegistry._daemon_term_grace_seconds() == 0.0
 
     @pytest.mark.live_system_guard_bypass
@@ -1829,11 +1962,13 @@ class TestSigkillEscalation:
         sometimes a child). The escalation now re-probes every target directly.
         """
         import psutil
+
         # 2.0s grace (not 1.0): with three interpreters mid-startup on a
         # loaded runner, a 1s SIGTERM->partition window races child spawn and
         # is how a child PID escaped the live-system guard in CI.
-        monkeypatch.setattr(ProcessRegistry, "_daemon_term_grace_seconds",
-                            staticmethod(lambda: 2.0))
+        monkeypatch.setattr(
+            ProcessRegistry, "_daemon_term_grace_seconds", staticmethod(lambda: 2.0)
+        )
         # Parent spawns 2 children; all trap SIGTERM. Parent prints child pids
         # after the handler is installed.
         parent_src = (
@@ -1845,12 +1980,14 @@ class TestSigkillEscalation:
             "sys.stdout.write(' '.join(str(k.pid) for k in kids)+'\\n'); sys.stdout.flush();"
             "[time.sleep(0.2) for _ in iter(int,1)]"
         )
-        parent = subprocess.Popen([sys.executable, "-c", parent_src],
-                                  stdout=subprocess.PIPE, text=True)
+        parent = subprocess.Popen(
+            [sys.executable, "-c", parent_src], stdout=subprocess.PIPE, text=True
+        )
         # Bound the readline: if the parent wedges before printing, fail THIS
         # test with a clear message instead of letting the per-file timeout
         # SIGKILL the whole pytest process (opaque rc=124 in CI).
         import select as _select
+
         ready, _, _ = _select.select([parent.stdout], [], [], 20.0)
         assert ready, "parent process failed to print child pids within 20s"
         child_pids = [int(x) for x in parent.stdout.readline().split()]
@@ -1905,8 +2042,10 @@ class TestHandleProcessRedaction:
 
     def _setup(self, monkeypatch, command, output):
         import agent.redact as _r
+
         monkeypatch.setattr(_r, "_REDACT_ENABLED", True)
         from tools import process_registry as pr
+
         reg = ProcessRegistry()
         sess = _make_session(sid="proc_redact1", command=command)
         sess.output_buffer = output
@@ -1920,7 +2059,8 @@ class TestHandleProcessRedaction:
 
     def test_log_redacts_env_dump_opaque_token(self, monkeypatch):
         pr, sess = self._setup(
-            monkeypatch, "printenv",
+            monkeypatch,
+            "printenv",
             "MY_SERVICE_TOKEN=abc123randomopaquetokenvalue999\nHOME=/home/u",
         )
         out = json.loads(pr._handle_process({"action": "log", "session_id": sess.id}))
@@ -1929,7 +2069,8 @@ class TestHandleProcessRedaction:
 
     def test_poll_redacts_prefix_key(self, monkeypatch):
         pr, sess = self._setup(
-            monkeypatch, "python app.py",
+            monkeypatch,
+            "python app.py",
             "leaked OPENAI_API_KEY sk-proj-abc123def456ghi789jkl012 here",
         )
         out = json.loads(pr._handle_process({"action": "poll", "session_id": sess.id}))
@@ -1943,7 +2084,8 @@ class TestHandleProcessRedaction:
         secrets (unlike poll/log/wait/kill).
         """
         pr, _sess = self._setup(
-            monkeypatch, "curl -H 'Authorization: Bearer sk-abc123def456ghi789jkl012345'",
+            monkeypatch,
+            "curl -H 'Authorization: Bearer sk-abc123def456ghi789jkl012345'",
             "opaque token sk-proj-AAAABBBBCCCCDDDDEEEEFFFFGGGG output",
         )
         out = json.loads(pr._handle_process({"action": "list"}))
@@ -1955,8 +2097,10 @@ class TestHandleProcessRedaction:
 
     def test_disabled_passes_through(self, monkeypatch):
         import agent.redact as _r
+
         monkeypatch.setattr(_r, "_REDACT_ENABLED", False)
         from tools import process_registry as pr
+
         reg = ProcessRegistry()
         sess = _make_session(sid="proc_redact2", command="printenv")
         sess.output_buffer = "CUSTOM_TOKEN=zzzopaque1234567890abcdef"
@@ -1975,9 +2119,11 @@ class TestHandleProcessTransformHook:
 
     def _setup(self, monkeypatch, output, *, hook):
         import agent.redact as _r
+
         monkeypatch.setattr(_r, "_REDACT_ENABLED", True)
         monkeypatch.setattr("clawk_cli.lifecycle.invoke_hook", hook)
         from tools import process_registry as pr
+
         reg = ProcessRegistry()
         sess = _make_session(sid="proc_xform1", command="python app.py")
         sess.output_buffer = output
@@ -1991,12 +2137,27 @@ class TestHandleProcessTransformHook:
         seen = []
 
         def hook(hook_name, **kw):
-            seen.append((hook_name, kw.get("command"), kw.get("returncode"), kw.get("task_id")))
-            return ["REWRITTEN:" + kw["output"]] if hook_name == "transform_terminal_output" else []
+            seen.append(
+                (hook_name, kw.get("command"), kw.get("returncode"), kw.get("task_id"))
+            )
+            return (
+                ["REWRITTEN:" + kw["output"]]
+                if hook_name == "transform_terminal_output"
+                else []
+            )
 
         pr, sess = self._setup(monkeypatch, "raw line\n", hook=hook)
-        for action, key in (("poll", "output_preview"), ("log", "output"), ("wait", "output"), ("kill", "output")):
-            out = json.loads(pr._handle_process({"action": action, "session_id": sess.id}, task_id="task-bg"))
+        for action, key in (
+            ("poll", "output_preview"),
+            ("log", "output"),
+            ("wait", "output"),
+            ("kill", "output"),
+        ):
+            out = json.loads(
+                pr._handle_process(
+                    {"action": action, "session_id": sess.id}, task_id="task-bg"
+                )
+            )
             assert out[key].startswith("REWRITTEN:raw line"), (action, out)
         assert [s for s in seen if s[0] == "transform_terminal_output"]
         # The hook sees the command, the recorded exit code (None while running) and the process
@@ -2007,8 +2168,13 @@ class TestHandleProcessTransformHook:
     def test_hook_replacement_is_still_redacted(self, monkeypatch):
         secret = "sk-proj-abc123def456ghi789jkl012mno345"
         pr, sess = self._setup(
-            monkeypatch, "plain output",
-            hook=lambda hook_name, **kw: [f"OPENAI_API_KEY={secret}"] if hook_name == "transform_terminal_output" else [],
+            monkeypatch,
+            "plain output",
+            hook=lambda hook_name, **kw: (
+                [f"OPENAI_API_KEY={secret}"]
+                if hook_name == "transform_terminal_output"
+                else []
+            ),
         )
         out = json.loads(pr._handle_process({"action": "log", "session_id": sess.id}))
         assert secret not in out["output"]
@@ -2018,6 +2184,7 @@ class TestHandleProcessTransformHook:
 # =========================================================================
 # Reader loop: orphaned grandchild holding the stdout pipe (issue #68915)
 # =========================================================================
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only: select() on pipes")
 class TestReaderLoopOrphanedPipe:
@@ -2116,6 +2283,7 @@ class TestReaderLoopOrphanedPipe:
                 os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+
 
 # =========================================================================
 # systemd cgroup isolation for gateway-spawned local executors (#70716)
@@ -2224,7 +2392,9 @@ class TestSystemdCgroupIsolation:
         # The session must record the unit name so kill_process can stop it.
         assert session.systemd_unit == f"clawk-worker-{session.id}.scope"
 
-    def test_falls_back_when_systemd_run_unavailable(self, registry, monkeypatch, _gateway_identity):
+    def test_falls_back_when_systemd_run_unavailable(
+        self, registry, monkeypatch, _gateway_identity
+    ):
         """Under a supervisor but without systemd-run, fall back to the
         legacy ``start_new_session=True`` path (worker shares the gateway
         cgroup)."""
@@ -2307,7 +2477,9 @@ class TestSystemdCgroupIsolation:
             ):
                 session = registry.spawn_local("codex", cwd="/tmp", use_pty=True)
             assert pty_spawn.call_args.args[0] == [
-                "/bin/bash", "-lic", "set +m; codex",
+                "/bin/bash",
+                "-lic",
+                "set +m; codex",
             ]
         else:
             fake_popen, captured = self._fake_popen_capture()
@@ -2318,7 +2490,9 @@ class TestSystemdCgroupIsolation:
             ):
                 session = registry.spawn_local("echo hello", cwd="/tmp")
             assert captured["argv"] == [
-                "/bin/bash", "-lic", "set +m; echo hello",
+                "/bin/bash",
+                "-lic",
+                "set +m; echo hello",
             ]
             assert captured["start_new_session"] is True
 
@@ -2358,7 +2532,9 @@ class TestSystemdCgroupIsolation:
             ):
                 session = registry.spawn_local("codex", cwd="/tmp", use_pty=True)
             assert pty_spawn.call_args.args[0] == [
-                "/bin/bash", "-lic", "set +m; codex",
+                "/bin/bash",
+                "-lic",
+                "set +m; codex",
             ]
         else:
             fake_popen, captured = self._fake_popen_capture()
@@ -2369,7 +2545,9 @@ class TestSystemdCgroupIsolation:
             ):
                 session = registry.spawn_local("echo hello", cwd="/tmp")
             assert captured["argv"] == [
-                "/bin/bash", "-lic", "set +m; echo hello",
+                "/bin/bash",
+                "-lic",
+                "set +m; echo hello",
             ]
             assert captured["start_new_session"] is True
 
@@ -2397,11 +2575,15 @@ class TestSystemdCgroupIsolation:
         broken_reader = MagicMock()
         broken_reader.start.side_effect = RuntimeError("reader failed")
 
-        with patch("subprocess.Popen", return_value=fake_proc), \
-            patch("threading.Thread", return_value=broken_reader), \
-            patch("tools.process_registry._stop_systemd_unit", return_value=True) as stop_unit, \
-            patch("os.killpg") as killpg, \
-            patch.object(registry, "_write_checkpoint"):
+        with (
+            patch("subprocess.Popen", return_value=fake_proc),
+            patch("threading.Thread", return_value=broken_reader),
+            patch(
+                "tools.process_registry._stop_systemd_unit", return_value=True
+            ) as stop_unit,
+            patch("os.killpg") as killpg,
+            patch.object(registry, "_write_checkpoint"),
+        ):
             with pytest.raises(RuntimeError, match="reader failed"):
                 registry.spawn_local("echo hello", cwd="/tmp")
 
@@ -2411,7 +2593,9 @@ class TestSystemdCgroupIsolation:
         killpg.assert_not_called()
 
     @pytest.mark.platforms("linux")
-    def test_pty_spawn_is_wrapped_in_systemd_scope(self, registry, monkeypatch, _gateway_identity):
+    def test_pty_spawn_is_wrapped_in_systemd_scope(
+        self, registry, monkeypatch, _gateway_identity
+    ):
         """Interactive executors receive the same sibling-cgroup isolation."""
         from ptyprocess import PtyProcess
 
@@ -2429,9 +2613,11 @@ class TestSystemdCgroupIsolation:
         )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemd-run")
 
-        with patch.object(PtyProcess, "spawn", return_value=fake_pty) as pty_spawn, \
-            patch("threading.Thread", return_value=MagicMock()), \
-            patch.object(registry, "_write_checkpoint"):
+        with (
+            patch.object(PtyProcess, "spawn", return_value=fake_pty) as pty_spawn,
+            patch("threading.Thread", return_value=MagicMock()),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_local("codex", cwd="/tmp", use_pty=True)
 
         argv = pty_spawn.call_args.args[0]
@@ -2479,11 +2665,13 @@ class TestSystemdCgroupIsolation:
         )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemd-run")
 
-        with patch.object(PtyProcess, "spawn", side_effect=fail_pty), \
-            patch("subprocess.Popen", side_effect=fake_popen), \
-            patch("tools.process_registry._stop_systemd_unit", side_effect=fake_stop), \
-            patch("threading.Thread", return_value=MagicMock()), \
-            patch.object(registry, "_write_checkpoint"):
+        with (
+            patch.object(PtyProcess, "spawn", side_effect=fail_pty),
+            patch("subprocess.Popen", side_effect=fake_popen),
+            patch("tools.process_registry._stop_systemd_unit", side_effect=fake_stop),
+            patch("threading.Thread", return_value=MagicMock()),
+            patch.object(registry, "_write_checkpoint"),
+        ):
             session = registry.spawn_local("codex", cwd="/tmp", use_pty=True)
 
         assert [event[0] for event in events] == ["pty", "stop", "pipe"]
@@ -2516,13 +2704,17 @@ class TestSystemdCgroupIsolation:
         )
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemd-run")
 
-        with patch.object(
-            PtyProcess,
-            "spawn",
-            side_effect=RuntimeError("PTY wrapper failed after scope creation"),
-        ), patch("subprocess.Popen") as pipe_spawn, patch(
-            "tools.process_registry._stop_systemd_unit", return_value=False
-        ) as stop_unit:
+        with (
+            patch.object(
+                PtyProcess,
+                "spawn",
+                side_effect=RuntimeError("PTY wrapper failed after scope creation"),
+            ),
+            patch("subprocess.Popen") as pipe_spawn,
+            patch(
+                "tools.process_registry._stop_systemd_unit", return_value=False
+            ) as stop_unit,
+        ):
             with pytest.raises(RuntimeError, match="could not be reaped"):
                 registry.spawn_local("codex", cwd="/tmp", use_pty=True)
 
@@ -2542,9 +2734,7 @@ class TestSystemdCgroupIsolation:
 
         assert f"MemoryMax={123 * 1024 * 1024}" in argv
 
-    def test_worker_memory_limit_caps_oversized_local_guard_override(
-        self, monkeypatch
-    ):
+    def test_worker_memory_limit_caps_oversized_local_guard_override(self, monkeypatch):
         import tools.process_registry as pr
 
         monkeypatch.setenv("TERMINAL_LOCAL_MEMORY_MAX_MB", "999999")
@@ -2578,8 +2768,15 @@ class TestSystemdCgroupIsolation:
         stopped = []
         terminated = []
         monkeypatch.setattr(registry, "_host_pid_is_ours", lambda pid, start: False)
-        monkeypatch.setattr(registry, "_terminate_host_pid", lambda pid, start: terminated.append((pid, start)))
-        monkeypatch.setattr("tools.process_registry._stop_systemd_unit", lambda unit: stopped.append(unit) or True)
+        monkeypatch.setattr(
+            registry,
+            "_terminate_host_pid",
+            lambda pid, start: terminated.append((pid, start)),
+        )
+        monkeypatch.setattr(
+            "tools.process_registry._stop_systemd_unit",
+            lambda unit: stopped.append(unit) or True,
+        )
 
         with patch.object(registry, "_write_checkpoint"):
             result = registry.kill_process(session.id)
@@ -2619,12 +2816,18 @@ class TestSystemdCgroupIsolation:
         # rejected on scope units and cached as "unavailable" (#102486).
         probe_argv = probe_calls[0][0]
         assert not any(
-            value.startswith("OOMPolicy=") for value in probe_argv if isinstance(value, str)
+            value.startswith("OOMPolicy=")
+            for value in probe_argv
+            if isinstance(value, str)
         ), probe_argv
 
     @pytest.mark.platforms("linux")
-    @pytest.mark.parametrize("rejects_no_expand", [False, True], ids=["systemd>=254", "systemd<254"])
-    def test_scoped_command_is_not_expanded_by_systemd_run(self, monkeypatch, rejects_no_expand):
+    @pytest.mark.parametrize(
+        "rejects_no_expand", [False, True], ids=["systemd>=254", "systemd<254"]
+    )
+    def test_scoped_command_is_not_expanded_by_systemd_run(
+        self, monkeypatch, rejects_no_expand
+    ):
         """systemd >= 254 rewrites ``$$``/``${X}`` in a --scope command unless given
         ``--expand-environment=no``; older systemd-run rejects that option, and losing
         it there must not cost the scope (#132385)."""
@@ -2638,7 +2841,10 @@ class TestSystemdCgroupIsolation:
             probes.append(argv)
             if rejects_no_expand and "--expand-environment=no" in argv:
                 return subprocess.CompletedProcess(
-                    argv, 1, stderr=b"systemd-run: unrecognized option '--expand-environment=no'")
+                    argv,
+                    1,
+                    stderr=b"systemd-run: unrecognized option '--expand-environment=no'",
+                )
             return subprocess.CompletedProcess(argv, 0, stderr=b"")
 
         monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/systemd-run")
@@ -2647,7 +2853,7 @@ class TestSystemdCgroupIsolation:
         assert pr._systemd_run_user_scope_available() is True
         spawn = pr._build_systemd_scope_argv(["bash", "-c", "echo $$"], unit_suffix="t")
         assert ("--expand-environment=no" in spawn) is not rejects_no_expand
-        assert spawn[spawn.index("--") + 1:] == ["bash", "-c", "echo $$"]
+        assert spawn[spawn.index("--") + 1 :] == ["bash", "-c", "echo $$"]
         assert len(probes) == (2 if rejects_no_expand else 1)
 
     @pytest.mark.platforms("linux")
@@ -2726,7 +2932,9 @@ class TestSystemdCgroupIsolation:
         assert "DBUS_SESSION_BUS_ADDRESS" not in os.environ
 
     @pytest.mark.platforms("linux")
-    def test_scoped_spawn_lost_user_bus_honours_configured_runtime_dir(self, monkeypatch, request):
+    def test_scoped_spawn_lost_user_bus_honours_configured_runtime_dir(
+        self, monkeypatch, request
+    ):
         """The lost-bus check must derive from the env the worker was spawned with: when the bus
         lives under a configured ``XDG_RUNTIME_DIR`` (not ``/run/user/<uid>``), an unrelated wrapper
         exit is not a lost bus and must not flip the cached scope verdict to unscoped dispatch."""
@@ -2748,7 +2956,9 @@ class TestSystemdCgroupIsolation:
 
         request.addfinalizer(_cleanup)
 
-        monkeypatch.setattr(pr, "_default_user_runtime_dir", lambda: pr.Path("/nonexistent/run/user/0"))
+        monkeypatch.setattr(
+            pr, "_default_user_runtime_dir", lambda: pr.Path("/nonexistent/run/user/0")
+        )
         monkeypatch.setattr(pr, "_SYSTEMD_SCOPE_AVAILABLE", True)
         monkeypatch.setattr(pr, "_SYSTEMD_SCOPE_PROBED_AT", pr.time.monotonic())
         spawn_env = pr.systemd_user_bus_env({"XDG_RUNTIME_DIR": str(runtime_dir)})
@@ -2777,7 +2987,9 @@ class TestSystemdCgroupIsolation:
             # Simulate NixOS's missing executable, but run the selected replacement.
             payload = argv[argv.index("--") + 1 :]
             if payload[0] == "/bin/true":
-                return subprocess.CompletedProcess(payload, 127, stderr=b"No such file or directory")
+                return subprocess.CompletedProcess(
+                    payload, 127, stderr=b"No such file or directory"
+                )
             executed.append(payload)
             return real_run(payload, **kwargs)
 
@@ -2785,7 +2997,9 @@ class TestSystemdCgroupIsolation:
         monkeypatch.setattr("subprocess.run", systemd_run_on_nixos_shaped_root)
 
         assert pr._systemd_run_user_scope_available() is True
-        assert len(executed) == 1, "payload must really run (exit 0) on the host, not just be spelled right"
+        assert len(executed) == 1, (
+            "payload must really run (exit 0) on the host, not just be spelled right"
+        )
 
     @pytest.mark.platforms("linux")
     def test_systemd_scope_first_probe_is_serialized(self, monkeypatch):
@@ -2879,8 +3093,6 @@ class TestSystemdCgroupIsolation:
         assert pr._stop_systemd_unit("clawk-worker-gone.scope") is True
 
 
-
-
 class TestNotificationRedaction:
     """Background-process notification delivery (completion_queue) applies the
     same redaction as the explicit process tool — issue #43025 gap.
@@ -2894,6 +3106,7 @@ class TestNotificationRedaction:
     def test_completion_notification_redacts_secret(self, monkeypatch):
         """_move_to_finished completion notification redacts API keys."""
         import agent.redact as _r
+
         monkeypatch.setattr(_r, "_REDACT_ENABLED", True)
         from tools import process_registry as pr
 
@@ -2918,12 +3131,15 @@ class TestNotificationRedaction:
     def test_watch_match_notification_redacts_secret(self, monkeypatch):
         """_check_watch_patterns watch_match notification redacts secrets."""
         import agent.redact as _r
+
         monkeypatch.setattr(_r, "_REDACT_ENABLED", True)
         from tools import process_registry as pr
 
         reg = ProcessRegistry()
         sess = _make_session(sid="proc_notif2", command="python server.py")
-        sess.output_buffer = "Server started\nAPI_TOKEN=ghp_abc123def456\nListening on :8080"
+        sess.output_buffer = (
+            "Server started\nAPI_TOKEN=ghp_abc123def456\nListening on :8080"
+        )
         sess.watch_patterns = ["API_TOKEN"]
         sess._watch_disabled = False
         sess._watch_hits = 0
@@ -2952,7 +3168,6 @@ class TestNotificationRedaction:
 
 class TestGetByPrefix:
     """ProcessRegistry.get() resolves unique ID prefixes like git short hashes."""
-
 
     def test_unique_prefix_resolves(self, registry):
         s = _make_session(sid="proc_4dae56ca81f6")
@@ -3044,16 +3259,18 @@ def _format_async(evt) -> str:
 
 
 def test_model_not_found_notice_single_failure_once(monkeypatch):
-    evt = _make_delegation_batch_evt([
-        {
-            "task_index": 0,
-            "status": "failed",
-            "exit_reason": "error",
-            "goal": "Create bridge module",
-            "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
-            "summary": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
-        }
-    ])
+    evt = _make_delegation_batch_evt(
+        [
+            {
+                "task_index": 0,
+                "status": "failed",
+                "exit_reason": "error",
+                "goal": "Create bridge module",
+                "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
+                "summary": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
+            }
+        ]
+    )
     _patch_delegation_config(monkeypatch)
     text = _format_async(evt)
     assert text is not None
@@ -3064,23 +3281,25 @@ def test_model_not_found_notice_single_failure_once(monkeypatch):
 
 
 def test_model_not_found_notice_mixed_batch_named_model(monkeypatch):
-    evt = _make_delegation_batch_evt([
-        {
-            "task_index": 0,
-            "status": "failed",
-            "exit_reason": "error",
-            "goal": "A",
-            "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
-            "summary": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
-        },
-        {
-            "task_index": 1,
-            "status": "completed",
-            "goal": "B",
-            "summary": "ok",
-            "api_calls": 3,
-        },
-    ])
+    evt = _make_delegation_batch_evt(
+        [
+            {
+                "task_index": 0,
+                "status": "failed",
+                "exit_reason": "error",
+                "goal": "A",
+                "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
+                "summary": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
+            },
+            {
+                "task_index": 1,
+                "status": "completed",
+                "goal": "B",
+                "summary": "ok",
+                "api_calls": 3,
+            },
+        ]
+    )
     _patch_delegation_config(monkeypatch)
     text = _format_async(evt)
     assert text.count("SUBAGENT MODEL REJECTED") == 1
@@ -3088,34 +3307,38 @@ def test_model_not_found_notice_mixed_batch_named_model(monkeypatch):
 
 
 def test_model_not_found_notice_absent_for_non_model_errors(monkeypatch):
-    evt = _make_delegation_batch_evt([
-        {
-            "task_index": 0,
-            "status": "failed",
-            "goal": "A",
-            "error": "HTTP 429: rate limit exceeded",
-        },
-        {
-            "task_index": 1,
-            "status": "failed",
-            "goal": "B",
-            "error": "Connection timed out",
-        },
-    ])
+    evt = _make_delegation_batch_evt(
+        [
+            {
+                "task_index": 0,
+                "status": "failed",
+                "goal": "A",
+                "error": "HTTP 429: rate limit exceeded",
+            },
+            {
+                "task_index": 1,
+                "status": "failed",
+                "goal": "B",
+                "error": "Connection timed out",
+            },
+        ]
+    )
     _patch_delegation_config(monkeypatch)
     text = _format_async(evt)
     assert "SUBAGENT MODEL REJECTED" not in text
 
 
 def test_model_not_found_notice_absent_when_configured_model_not_named(monkeypatch):
-    evt = _make_delegation_batch_evt([
-        {
-            "task_index": 0,
-            "status": "failed",
-            "goal": "A",
-            "error": "HTTP 400: gpt-99 is not a valid model ID",
-        }
-    ])
+    evt = _make_delegation_batch_evt(
+        [
+            {
+                "task_index": 0,
+                "status": "failed",
+                "goal": "A",
+                "error": "HTTP 400: gpt-99 is not a valid model ID",
+            }
+        ]
+    )
     # Configured model is upstage/solar-pro-4; the rejection names gpt-99.
     _patch_delegation_config(monkeypatch)
     text = _format_async(evt)
@@ -3140,14 +3363,16 @@ def test_model_not_found_notice_single_dispatch(monkeypatch):
 
 
 def test_model_not_found_notice_absent_when_fallback_chain_configured(monkeypatch):
-    evt = _make_delegation_batch_evt([
-        {
-            "task_index": 0,
-            "status": "failed",
-            "goal": "A",
-            "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
-        }
-    ])
+    evt = _make_delegation_batch_evt(
+        [
+            {
+                "task_index": 0,
+                "status": "failed",
+                "goal": "A",
+                "error": "HTTP 400: upstage/solar-pro-4 is not a valid model ID",
+            }
+        ]
+    )
     _patch_delegation_config(
         monkeypatch,
         fallback_providers=[{"provider": "openrouter", "model": "upstage/solar-pro4"}],

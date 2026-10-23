@@ -44,14 +44,24 @@ _SEGMENT_SPLIT_RE = re.compile(r"\n|&&|\|\||[;|]")
 
 # Words whose argument tail is a *different* command (sudo rm ...) or an
 # environment assignment prefix (FOO=1 rm ...).
-_COMMAND_PREFIXES = frozenset({"sudo", "command", "nohup", "exec", "env", "nice", "time"})
+_COMMAND_PREFIXES = frozenset(
+    {"sudo", "command", "nohup", "exec", "env", "nice", "time"}
+)
 
 # Direct-deletion command names (basename, lowercase). `rm` covers POSIX and
 # git-bash; the Windows-native spellings cover cmd (`rd`, `del`, `rmdir /s`)
 # and PowerShell (`Remove-Item`, and its `ri`/`rm`/`del`/`erase` aliases).
-_DELETING_COMMANDS = frozenset({
-    "rm", "rmdir", "rd", "del", "erase", "remove-item", "ri",
-})
+_DELETING_COMMANDS = frozenset(
+    {
+        "rm",
+        "rmdir",
+        "rd",
+        "del",
+        "erase",
+        "remove-item",
+        "ri",
+    }
+)
 
 # `find <roots...> -delete` (or `-exec rm ...`) deletes its search roots.
 _FIND_DELETE_RE = re.compile(r"(?:^|\s)-(?:delete|exec\s+rm\b)", re.IGNORECASE)
@@ -98,7 +108,11 @@ def _normalize_path(raw: str) -> str:
 def _pyvenv_home(prefix: str) -> str:
     """The ``home =`` base-interpreter directory from ``<prefix>/pyvenv.cfg``."""
     try:
-        lines = (Path(prefix) / "pyvenv.cfg").read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        lines = (
+            (Path(prefix) / "pyvenv.cfg")
+            .read_text(encoding="utf-8-sig", errors="replace")
+            .splitlines()
+        )
     except Exception:
         return ""
     for line in lines:
@@ -121,26 +135,37 @@ def _protected_snapshot(executable: str, prefix: str) -> tuple[tuple[str, str], 
 
     exe = _normalize_path(executable)
     if exe:
-        entries.append((exe, "the Python interpreter this Clawksis runtime is running from"))
+        entries.append(
+            (exe, "the Python interpreter this Clawksis runtime is running from")
+        )
 
     venv = _normalize_path(prefix)
     if venv and venv != exe:
         entries.append((venv, "this Clawksis runtime's own virtualenv"))
 
-    base_dir = _normalize_path(_pyvenv_home(prefix)) or _normalize_path(getattr(sys, "_base_executable", "") or "")
+    base_dir = _normalize_path(_pyvenv_home(prefix)) or _normalize_path(
+        getattr(sys, "_base_executable", "") or ""
+    )
     if base_dir:
         entries.append((base_dir, "the base interpreter this Clawksis venv depends on"))
         m = _UV_INSTALL_DIR_RE.match(base_dir.replace("\\", "/"))
         if m:
             uv_root = _normalize_path(m.group("root"))
             if uv_root:
-                entries.append((uv_root, f"the uv-managed Python install this Clawksis venv depends on ({m.group('version')})"))
+                entries.append(
+                    (
+                        uv_root,
+                        f"the uv-managed Python install this Clawksis venv depends on ({m.group('version')})",
+                    )
+                )
 
     return tuple((path, desc) for path, desc in entries if path)
 
 
 def _protected() -> tuple[tuple[str, str], ...]:
-    return _protected_snapshot(getattr(sys, "executable", "") or "", getattr(sys, "prefix", "") or "")
+    return _protected_snapshot(
+        getattr(sys, "executable", "") or "", getattr(sys, "prefix", "") or ""
+    )
 
 
 def _overlaps(a: str, b: str) -> bool:
@@ -157,7 +182,9 @@ def split_entry(path: str) -> tuple[str, str]:
     checks degenerate to the link's target, while pathlib/rm still act on ``link``.
     A bare root (``/``, ``C:\\``) is kept as is."""
     drive, tail = os.path.splitdrive(path)
-    parent, leaf = os.path.split(drive + (tail.rstrip(os.sep + (os.altsep or "")) or tail[:1]))
+    parent, leaf = os.path.split(
+        drive + (tail.rstrip(os.sep + (os.altsep or "")) or tail[:1])
+    )
     if leaf == "." and parent:
         return split_entry(parent)
     return parent, leaf
@@ -196,7 +223,11 @@ def _strip_prefixes(words: list[str]) -> list[str]:
         if first in _COMMAND_PREFIXES:
             out = out[1:]
             continue
-        if "=" in first and not first.startswith(("-", "/")) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", first):
+        if (
+            "=" in first
+            and not first.startswith(("-", "/"))
+            and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", first)
+        ):
             out = out[1:]
             continue
         break
@@ -214,14 +245,17 @@ def _version_spec_matches(spec: str, version: str, uv_root_name: str) -> bool:
         return False
     if uv_root_name.lower().startswith(spec):
         return True
-    return spec == version or (version.startswith(spec) and version[len(spec):len(spec) + 1] == ".")
+    return spec == version or (
+        version.startswith(spec) and version[len(spec) : len(spec) + 1] == "."
+    )
 
 
 def _uv_uninstall_target(words: list[str]) -> Optional[str]:
     """Description when ``uv python uninstall`` would remove the running base."""
     protected = _protected()
     uv_entries = [
-        (root, desc) for root, desc in protected
+        (root, desc)
+        for root, desc in protected
         if desc.startswith("the uv-managed Python install")
     ]
     if not uv_entries:
@@ -232,7 +266,7 @@ def _uv_uninstall_target(words: list[str]) -> Optional[str]:
         uninstall_at = lowered.index("uninstall", python_at + 1)
     except ValueError:
         return None
-    specs = words[uninstall_at + 1:]
+    specs = words[uninstall_at + 1 :]
     for root, description in uv_entries:
         m = _UV_INSTALL_DIR_RE.match(root.replace("\\", "/"))
         version = m.group("version") if m else ""

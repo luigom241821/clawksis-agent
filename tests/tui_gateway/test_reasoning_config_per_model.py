@@ -79,4 +79,3 @@ class TestTUIPerModelReasoningConfig:
         tui_result = tui_server._load_reasoning_config()
         gw_result = gateway_run.GatewayRunner._load_reasoning_config()
         assert tui_result == gw_result
-

@@ -35,10 +35,12 @@ class _RPC:
 
     def submit(self, **kwargs):
         self.submits.append(kwargs["profile"])
-        kwargs["on_terminal"]({
-            "status": "settled",
-            "text": f"reply from {kwargs['profile']}",
-        })
+        kwargs["on_terminal"](
+            {
+                "status": "settled",
+                "text": f"reply from {kwargs['profile']}",
+            }
+        )
         return {"accepted": True}
 
     def history(self, **kwargs):

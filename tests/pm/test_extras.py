@@ -26,16 +26,22 @@ def test_ensure_import_raises_on_gated_off_extra(monkeypatch, synced):
     from packaging.markers import default_environment
 
     version = default_environment()["python_full_version"]
-    monkeypatch.setattr(extras, "_PLATFORM_GATES", {
-        "gated-extra": f"python_full_version < '{version}'",
-    })
+    monkeypatch.setattr(
+        extras,
+        "_PLATFORM_GATES",
+        {
+            "gated-extra": f"python_full_version < '{version}'",
+        },
+    )
     monkeypatch.setattr(extras, "available", lambda e: False)
     with pytest.raises(pm.InstallError, match="not supported on this platform"):
         extras.ensure_import("gated-extra")
     assert synced == []
 
 
-def test_sync_refuses_python_gated_extra_before_touching_environment(monkeypatch, tmp_path):
+def test_sync_refuses_python_gated_extra_before_touching_environment(
+    monkeypatch, tmp_path
+):
     import importlib
     from pathlib import Path
     from packaging.markers import default_environment
@@ -43,9 +49,13 @@ def test_sync_refuses_python_gated_extra_before_touching_environment(monkeypatch
     engine = importlib.import_module("pm.install")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     version = default_environment()["python_full_version"]
-    monkeypatch.setattr(extras, "_PLATFORM_GATES", {
-        "unavailable-engine": f"python_full_version < '{version}'",
-    })
+    monkeypatch.setattr(
+        extras,
+        "_PLATFORM_GATES",
+        {
+            "unavailable-engine": f"python_full_version < '{version}'",
+        },
+    )
     # Installed caller anchors cannot make a new managed graph compatible.
     monkeypatch.setitem(sys.modules, "unavailable_engine", SimpleNamespace())
     assert extras.extra_supported("unavailable-engine")
@@ -69,22 +79,39 @@ def test_declared_extra_gates_match_dependency_selection():
     metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     optional = metadata["project"]["optional-dependencies"]
     targets = [
-        ("linux", "Linux", "x86_64"), ("linux", "Linux", "aarch64"),
-        ("darwin", "Darwin", "x86_64"), ("darwin", "Darwin", "arm64"),
-        ("win32", "Windows", "AMD64"), ("win32", "Windows", "ARM64"),
+        ("linux", "Linux", "x86_64"),
+        ("linux", "Linux", "aarch64"),
+        ("darwin", "Darwin", "x86_64"),
+        ("darwin", "Darwin", "arm64"),
+        ("win32", "Windows", "AMD64"),
+        ("win32", "Windows", "ARM64"),
         ("android", "Android", "aarch64"),
     ]
     for system, platform_system, machine in targets:
         for python in ("3.12", "3.13", "3.14"):
-            environment = {**default_environment(), "sys_platform": system,
-                           "platform_system": platform_system, "platform_machine": machine,
-                           "python_version": python, "python_full_version": python + ".0"}
+            environment = {
+                **default_environment(),
+                "sys_platform": system,
+                "platform_system": platform_system,
+                "platform_machine": machine,
+                "python_version": python,
+                "python_full_version": python + ".0",
+            }
             for extra in metadata["tool"]["clawk"]["extras-platforms"]:
-                selected = any(req.marker is None or req.marker.evaluate(environment)
-                               for req in map(Requirement, optional[extra]))
-                assert extras.extra_supported(extra, environment=environment,
-                                              importable=lambda _: False) == selected, (
-                    extra, system, machine, python,
+                selected = any(
+                    req.marker is None or req.marker.evaluate(environment)
+                    for req in map(Requirement, optional[extra])
+                )
+                assert (
+                    extras.extra_supported(
+                        extra, environment=environment, importable=lambda _: False
+                    )
+                    == selected
+                ), (
+                    extra,
+                    system,
+                    machine,
+                    python,
                 )
 
 
@@ -99,16 +126,29 @@ def test_faster_whisper_targets_are_gated(monkeypatch):
     """
     monkeypatch.setattr(extras, "_PLATFORM_GATES", None)
     targets = {
-        "win32-arm64": {"sys_platform": "win32", "platform_system": "Windows",
-                        "platform_machine": "ARM64", "os_name": "nt"},
-        "darwin-x64": {"sys_platform": "darwin", "platform_system": "Darwin",
-                       "platform_machine": "x86_64", "os_name": "posix"},
-        "linux-x64": {"sys_platform": "linux", "platform_system": "Linux",
-                      "platform_machine": "x86_64", "os_name": "posix"},
+        "win32-arm64": {
+            "sys_platform": "win32",
+            "platform_system": "Windows",
+            "platform_machine": "ARM64",
+            "os_name": "nt",
+        },
+        "darwin-x64": {
+            "sys_platform": "darwin",
+            "platform_system": "Darwin",
+            "platform_machine": "x86_64",
+            "os_name": "posix",
+        },
+        "linux-x64": {
+            "sys_platform": "linux",
+            "platform_system": "Linux",
+            "platform_machine": "x86_64",
+            "os_name": "posix",
+        },
     }
     supported = {
-        target: extras.extra_supported("stt-whisper", environment=environment,
-                                       importable=lambda _: False)
+        target: extras.extra_supported(
+            "stt-whisper", environment=environment, importable=lambda _: False
+        )
         for target, environment in targets.items()
     }
     assert supported == {"win32-arm64": False, "darwin-x64": False, "linux-x64": True}
@@ -121,14 +161,16 @@ def synced(monkeypatch):
     return calls
 
 
-
 def test_available_missing_module():
     assert extras.available("no-such-extra-anywhere") is False
 
 
-@pytest.mark.parametrize(("extra", "module"), [
-    ("teams", "microsoft_teams.apps"),
-])
+@pytest.mark.parametrize(
+    ("extra", "module"),
+    [
+        ("teams", "microsoft_teams.apps"),
+    ],
+)
 def test_available_counts_sys_modules_fakes(monkeypatch, extra, module):
     monkeypatch.setitem(sys.modules, module, SimpleNamespace())
     assert extras.available(extra) is True
@@ -162,7 +204,9 @@ def test_ensure_import_syncs_when_missing(monkeypatch, synced, tmp_path):
     assert synced == [["fal"]]
 
 
-def test_ensure_import_respects_terminal_decline_without_installing(monkeypatch, synced):
+def test_ensure_import_respects_terminal_decline_without_installing(
+    monkeypatch, synced
+):
     import builtins
 
     monkeypatch.setattr(extras, "available", lambda _: False)
@@ -191,18 +235,22 @@ def test_ensure_import_propagates_install_error(monkeypatch):
 @pytest.mark.parametrize("failure", [None, "install", "import"])
 def test_ensure_and_bind_preserves_target_on_failure(monkeypatch, failure):
     monkeypatch.setattr(extras, "available", lambda _: failure != "install")
+
     def sync(*args):
         raise pm.InstallError("venv", "install refused")
+
     monkeypatch.setattr(client, "sync_venv", sync)
+
     def importer():
         if failure == "import":
             raise ImportError("still broken")
         return {"NAME": 42}
+
     target = {"existing": "kept"}
     assert extras.ensure_and_bind("fal", importer, target) is (failure is None)
-    assert target == ({"existing": "kept", "NAME": 42} if failure is None else {"existing": "kept"})
-
-
+    assert target == (
+        {"existing": "kept", "NAME": 42} if failure is None else {"existing": "kept"}
+    )
 
 
 def test_every_anchor_extra_exists_in_pyproject():
@@ -211,14 +259,20 @@ def test_every_anchor_extra_exists_in_pyproject():
     from pathlib import Path
 
     py = tomllib.loads(
-        (Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[2] / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
     )
     declared = set(py["project"]["optional-dependencies"])
     orphans = set(extras.ANCHORS) - declared
-    assert not orphans, f"ANCHORS names extras pyproject does not declare: {sorted(orphans)}"
+    assert not orphans, (
+        f"ANCHORS names extras pyproject does not declare: {sorted(orphans)}"
+    )
 
 
-def test_legacy_selection_carries_extras_the_main_era_venv_lazily_installed(monkeypatch, tmp_path):
+def test_legacy_selection_carries_extras_the_main_era_venv_lazily_installed(
+    monkeypatch, tmp_path
+):
     """Migrating a main-era venv must keep opt-in extras it already had (FAL
     image generation, a messaging SDK), or the first PM launch prompts to
     reinstall them. Umbrella and gated-off extras are never carried."""
@@ -238,7 +292,9 @@ def test_legacy_selection_carries_extras_the_main_era_venv_lazily_installed(monk
     assert {"fal", "telegram", "vertex", "exa"} <= set(selection)
     assert "messaging" not in selection
     assert "piper" not in selection
-    assert "hindsight" not in selection  # Catalog plugin owns this dependency, not a core extra.
+    assert (
+        "hindsight" not in selection
+    )  # Catalog plugin owns this dependency, not a core extra.
     assert extras.legacy_selection(tmp_path / "no-venv") == ["all"]
 
 
@@ -249,7 +305,14 @@ def test_runtime_marker_evaluation_answers_for_the_given_environment():
 
     helper = Path(extras.__file__).with_name("_marker_eval.py")
     env = '{"sys_platform": "linux"}'
-    out = [subprocess.run([sys.executable, str(helper), marker, env], capture_output=True,
-                          text=True, timeout=60, check=True).stdout.strip()
-           for marker in ("sys_platform == 'linux'", "sys_platform == 'win32'")]
+    out = [
+        subprocess.run(
+            [sys.executable, str(helper), marker, env],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        ).stdout.strip()
+        for marker in ("sys_platform == 'linux'", "sys_platform == 'win32'")
+    ]
     assert out == ["1", "0"]

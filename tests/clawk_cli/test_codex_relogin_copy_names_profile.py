@@ -28,10 +28,15 @@ def codex_profile_home(tmp_path, monkeypatch):
 def test_missing_and_reused_codex_credential_copy_names_the_profile(codex_profile_home):
     with pytest.raises(AuthError) as missing:
         _read_codex_tokens()
-    reused = _codex_refresh_failure_error(SimpleNamespace(
-        status_code=400,
-        json=lambda: {"error": "refresh_token_reused", "error_description": "already used"},
-    ))
+    reused = _codex_refresh_failure_error(
+        SimpleNamespace(
+            status_code=400,
+            json=lambda: {
+                "error": "refresh_token_reused",
+                "error_description": "already used",
+            },
+        )
+    )
     for err in (missing.value, reused):
         text = str(err)
         assert "`clawk -p codex auth add openai-codex --type oauth`" in text, text
@@ -39,8 +44,12 @@ def test_missing_and_reused_codex_credential_copy_names_the_profile(codex_profil
 
 
 def test_format_auth_error_relogin_suffix_names_the_profile(codex_profile_home):
-    err = AuthError("Codex token refresh failed: invalid_grant", provider="openai-codex",
-                    code="invalid_grant", relogin_required=True)
+    err = AuthError(
+        "Codex token refresh failed: invalid_grant",
+        provider="openai-codex",
+        code="invalid_grant",
+        relogin_required=True,
+    )
     rendered = format_auth_error(err)
     assert "`clawk -p codex model`" in rendered, rendered
     assert "`clawk model`" not in rendered, rendered

@@ -20,10 +20,6 @@ def _msgs():
 
 
 class TestNvidiaProfileWiring:
-
-
-
-
     def test_nvidia_tool_messages_drop_name_fields(self, transport):
         profile = get_provider_profile("nvidia")
         msgs = [
@@ -90,4 +86,3 @@ class TestDeepSeekProfileWiring:
         # DeepSeek has no default_max_tokens
         assert kwargs["model"] == "deepseek-chat"
         assert kwargs.get("max_tokens") is None or "max_tokens" not in kwargs
-

@@ -23,6 +23,7 @@ import plugins.video_gen.deepinfra as deepinfra_plugin
 def _isolation(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import clawk_cli.models as _models_mod
+
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_cache", {})
     monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
     yield
@@ -35,8 +36,9 @@ def test_availability_follows_api_key(monkeypatch):
     assert p.is_available() is False
 
 
-def _fake_openai_with_capture(captured: dict, *, status="succeeded",
-                               data=None, download=b"\x00\x00mp4bytes"):
+def _fake_openai_with_capture(
+    captured: dict, *, status="succeeded", data=None, download=b"\x00\x00mp4bytes"
+):
     """Build a fake ``openai`` module whose videos resource records the call.
 
     Defaults mirror the real DeepInfra job shape: status ``"succeeded"`` and a
@@ -93,24 +95,44 @@ def test_generate_uses_env_only_proxy_http_client(monkeypatch):
     httpx via ``getproxies()``, ExceptionsList dropped) must not be mounted for a custom endpoint
     (#64888), unlike a plain ``httpx.Client()`` under the same conditions (control)."""
     import httpx
-    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy",
-                "NO_PROXY", "no_proxy"):
+
+    for key in (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("DEEPINFRA_BASE_URL", "http://localhost:18081/v1")
     sys_proxy = {"http": "http://sysproxy:3128", "https": "http://sysproxy:3128"}
 
     def proxy_mounts(client):
-        return [m for m in client._mounts.values() if type(getattr(m, "_pool", None)).__name__ == "HTTPProxy"]
+        return [
+            m
+            for m in client._mounts.values()
+            if type(getattr(m, "_pool", None)).__name__ == "HTTPProxy"
+        ]
 
     captured: dict = {}
-    with patch("httpx._utils.getproxies", return_value=sys_proxy), \
-            patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-            _mock_url_download(captured):
+    with (
+        patch("httpx._utils.getproxies", return_value=sys_proxy),
+        patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}),
+        _mock_url_download(captured),
+    ):
         with httpx.Client() as control:
             assert len(proxy_mounts(control)) == 2
-        assert deepinfra_plugin.DeepInfraVideoGenProvider().generate(prompt="a cube", model="vendor/x")["success"]
+        assert deepinfra_plugin.DeepInfraVideoGenProvider().generate(
+            prompt="a cube", model="vendor/x"
+        )["success"]
     assert captured["base_url"] == "http://localhost:18081/v1"
-    assert isinstance(captured["http_client"], httpx.Client) and proxy_mounts(captured["http_client"]) == []
+    assert (
+        isinstance(captured["http_client"], httpx.Client)
+        and proxy_mounts(captured["http_client"]) == []
+    )
     captured["http_client"].close()
 
 
@@ -118,14 +140,21 @@ def test_generate_text_to_video_downloads_url_and_saves_locally():
     """t2v happy path: SDK called with DeepInfra base_url + key; status
     'succeeded' + data[].url → bytes downloaded and saved to a local file."""
     captured: dict = {}
-    with patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-            _mock_url_download(captured):
+    with (
+        patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}),
+        _mock_url_download(captured),
+    ):
         result = deepinfra_plugin.DeepInfraVideoGenProvider().generate(
-            prompt="a red cube rotating", model="vendor/test-vid", duration=5,
+            prompt="a red cube rotating",
+            model="vendor/test-vid",
+            duration=5,
         )
     assert result["success"] is True
     assert result["modality"] == "text"
-    assert result["video"].endswith(".mp4") and str(Path("cache") / "videos") in result["video"]
+    assert (
+        result["video"].endswith(".mp4")
+        and str(Path("cache") / "videos") in result["video"]
+    )
     assert captured["url"] == "https://cdn.example/out.mp4"
     assert "deepinfra" in captured["base_url"]
     assert captured["api_key"] == "test-key"
@@ -138,17 +167,30 @@ def test_generate_text_to_video_downloads_url_and_saves_locally():
 def test_credentials_follow_the_profile_secret_scope(monkeypatch):
     """On a multiplexed gateway os.environ is the launch profile's .env: the key and base URL come from the
     routed profile's scope, and a profile without a key is unavailable instead of borrowing the launch key."""
-    from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+    from agent.secret_scope import (
+        reset_secret_scope,
+        set_multiplex_active,
+        set_secret_scope,
+    )
 
     monkeypatch.setenv("DEEPINFRA_BASE_URL", "https://launch.example/v1")
     provider = deepinfra_plugin.DeepInfraVideoGenProvider()
     captured: dict = {}
     set_multiplex_active(True)
     try:
-        token = set_secret_scope({"DEEPINFRA_API_KEY": "profile-b-key", "DEEPINFRA_BASE_URL": "https://profile-b.example/v1"})
+        token = set_secret_scope(
+            {
+                "DEEPINFRA_API_KEY": "profile-b-key",
+                "DEEPINFRA_BASE_URL": "https://profile-b.example/v1",
+            }
+        )
         try:
-            with patch.dict("sys.modules", {"openai": _fake_openai_with_capture(captured)}), \
-                    _mock_url_download(captured):
+            with (
+                patch.dict(
+                    "sys.modules", {"openai": _fake_openai_with_capture(captured)}
+                ),
+                _mock_url_download(captured),
+            ):
                 assert provider.generate(prompt="a cube", model="vendor/x")["success"]
         finally:
             reset_secret_scope(token)

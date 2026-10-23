@@ -7,6 +7,7 @@ Build the real image and verify the actual runtime behavior:
 
 Root start (the default) is covered by test_main_invocation.py.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -17,9 +18,19 @@ def test_arbitrary_user_uid_rejected(
 ) -> None:
     """docker run --user 1000 must be rejected with actionable guidance."""
     r = subprocess.run(
-        ["docker", "run", "--rm", "--user", "1000:1000",
-         built_image, "echo", "should_not_reach"],
-        capture_output=True, text=True, timeout=60,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "1000:1000",
+            built_image,
+            "echo",
+            "should_not_reach",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert r.returncode != 0, (
@@ -35,8 +46,6 @@ def test_arbitrary_user_uid_rejected(
     )
 
 
-
-
 def test_user_pinned_to_clawk_uid_works(
     built_image: str,
 ) -> None:
@@ -45,9 +54,20 @@ def test_user_pinned_to_clawk_uid_works(
     This is the supported non-root start from #34648 / #34837.
     """
     r = subprocess.run(
-        ["docker", "run", "--rm", "--user", "10000:10000",
-         built_image, "sh", "-c", "echo OK"],
-        capture_output=True, text=True, timeout=60,
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            "10000:10000",
+            built_image,
+            "sh",
+            "-c",
+            "echo OK",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
         check=False,
     )
     assert r.returncode == 0, (

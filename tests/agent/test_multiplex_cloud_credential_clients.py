@@ -10,7 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+from agent.secret_scope import (
+    build_profile_secret_scope,
+    reset_secret_scope,
+    set_secret_scope,
+)
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 
@@ -20,14 +24,22 @@ def two_profiles(tmp_path, monkeypatch):
     b = a / "profiles" / "b"
     b.mkdir(parents=True)
     monkeypatch.setenv("CLAWK_HOME", str(a))
-    for var in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE",
-                "AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"):
+    for var in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+    ):
         monkeypatch.delenv(var, raising=False)
     for name, home in (("A", a), ("B", b)):
         (home / ".env").write_text(
             f"AWS_ACCESS_KEY_ID=AKIA{name * 16}\nAWS_SECRET_ACCESS_KEY=secret-{name}\n"
             f"AZURE_TENANT_ID=tenant-{name}\nAZURE_CLIENT_ID=client-{name}\nAZURE_CLIENT_SECRET=s-{name}\n",
-            encoding="utf-8")
+            encoding="utf-8",
+        )
     return a, b
 
 
@@ -51,12 +63,19 @@ def test_bedrock_clients_sign_with_the_routed_profiles_aws_keys(two_profiles):
         client_a = _under(a, lambda: ba._get_bedrock_runtime_client("us-east-1"))
         client_b = _under(b, lambda: ba._get_bedrock_runtime_client("us-east-1"))
         assert client_b is not client_a
-        keys = {c._request_signer._credentials.get_frozen_credentials().access_key for c in (client_a, client_b)}
+        keys = {
+            c._request_signer._credentials.get_frozen_credentials().access_key
+            for c in (client_a, client_b)
+        }
         assert keys == {"AKIA" + "A" * 16, "AKIA" + "B" * 16}
         # Per-profile slots stay hot; eviction under B leaves A's client alone.
-        assert _under(a, lambda: ba._get_bedrock_runtime_client("us-east-1")) is client_a
+        assert (
+            _under(a, lambda: ba._get_bedrock_runtime_client("us-east-1")) is client_a
+        )
         assert _under(b, lambda: ba.invalidate_runtime_client("us-east-1")) is True
-        assert _under(a, lambda: ba._get_bedrock_runtime_client("us-east-1")) is client_a
+        assert (
+            _under(a, lambda: ba._get_bedrock_runtime_client("us-east-1")) is client_a
+        )
     finally:
         ba.reset_client_cache()
 
@@ -80,11 +99,14 @@ def test_azure_entra_credential_is_built_from_the_routed_profiles_scope(two_prof
     try:
         cfg = az.EntraIdentityConfig()
         from unittest import mock
+
         with mock.patch.object(az, "_require_azure_identity", lambda: _FakeSDK()):
             cred_a = _under(a, lambda: az.build_credential(cfg))
             cred_b = _under(b, lambda: az.build_credential(cfg))
             assert cred_b is not cred_a
             assert seen == [("tenant-A", "client-A"), ("tenant-B", "client-B")]
-            assert _under(a, lambda: az.build_credential(cfg)) is cred_a  # cached per profile, not rebuilt
+            assert (
+                _under(a, lambda: az.build_credential(cfg)) is cred_a
+            )  # cached per profile, not rebuilt
     finally:
         az.reset_credential_cache()

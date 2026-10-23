@@ -27,11 +27,13 @@ import pytest
 
 import cli as cli_mod
 
+
 @pytest.fixture(autouse=True)
 def _reset_finalize_state(monkeypatch):
     monkeypatch.setattr(cli_mod, "_single_query_finalize_attempted_session_ids", set())
     monkeypatch.setattr(cli_mod, "_handed_off_session_ids", set())
     monkeypatch.setattr(cli_mod, "_cleanup_done", False, raising=False)
+
 
 def _make_agent(session_db, session_id="oneshot-88583"):
     """Real AIAgent bound to a real temp SessionDB (test_860_dedup pattern)."""
@@ -51,6 +53,7 @@ def _make_agent(session_db, session_id="oneshot-88583"):
     agent._ensure_db_session()
     return agent
 
+
 def _fake_cli(agent):
     return SimpleNamespace(
         agent=agent,
@@ -59,6 +62,7 @@ def _fake_cli(agent):
         _session_db=agent._session_db,
         _release_active_session=lambda: None,
     )
+
 
 class TestOneShotDurableFlush:
     """#88583: the one-shot exit path must retry persistence and finalize."""
@@ -81,7 +85,10 @@ class TestOneShotDurableFlush:
                 # The turn as run_conversation left it: in memory, un-stamped,
                 # never written (the in-loop flush failed transiently).
                 agent._session_messages = [
-                    {"role": "user", "content": "Message from 🤖 worker: hello, remember this"},
+                    {
+                        "role": "user",
+                        "content": "Message from 🤖 worker: hello, remember this",
+                    },
                     {"role": "assistant", "content": "ack — noted."},
                 ]
                 assert db.get_messages(agent.session_id) == []

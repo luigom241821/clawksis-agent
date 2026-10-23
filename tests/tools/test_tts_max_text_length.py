@@ -13,28 +13,20 @@ from tools.tts_tool_delivery import FALLBACK_MAX_TEXT_LENGTH
 
 
 class TestResolveMaxTextLength:
-
-
-
-
-
-
     def test_unknown_provider_falls_back(self):
-        assert _resolve_max_text_length("does-not-exist", {}) == FALLBACK_MAX_TEXT_LENGTH
+        assert (
+            _resolve_max_text_length("does-not-exist", {}) == FALLBACK_MAX_TEXT_LENGTH
+        )
 
     def test_empty_provider_falls_back(self):
         assert _resolve_max_text_length("", {}) == FALLBACK_MAX_TEXT_LENGTH
         assert _resolve_max_text_length(None, {}) == FALLBACK_MAX_TEXT_LENGTH
 
-
     # --- Overrides ---
-
 
     # --- ElevenLabs model-aware ---
 
-
     # --- Sanity: the table covers every provider listed in the schema ---
-
 
 
 class TestTextToSpeechToolChunking:
@@ -61,10 +53,12 @@ class TestTextToSpeechToolChunking:
 
         monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
         monkeypatch.setattr("tools.tts_tool_delivery._concat_audio_files", fake_combine)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "openai"})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config", lambda: {"provider": "openai"}
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -85,10 +79,12 @@ class TestTextToSpeechToolChunking:
             return out
 
         monkeypatch.setattr("tools.tts_tool._generate_xai_tts", fake_xai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "xai"})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config", lambda: {"provider": "xai"}
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -116,11 +112,13 @@ class TestTextToSpeechToolChunking:
 
         monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
         monkeypatch.setattr("tools.tts_tool_delivery._concat_audio_files", fake_combine)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
-                            lambda: {"provider": "openai",
-                                     "openai": {"max_text_length": 100}})
+        monkeypatch.setattr(
+            "tools.tts_tool._load_tts_config",
+            lambda: {"provider": "openai", "openai": {"max_text_length": 100}},
+        )
 
         from tools.tts_tool import text_to_speech_tool
+
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 

@@ -32,11 +32,16 @@ def _truncate_token(value: Optional[str], visible: int = 6) -> str:
     return s if len(s) <= visible else f"…{s[-visible:]}"
 
 
-def _token_status(source: str, source_label: str, creds: dict[str, Any]) -> dict[str, Any]:
+def _token_status(
+    source: str, source_label: str, creds: dict[str, Any]
+) -> dict[str, Any]:
     return {
-        "logged_in": True, "source": source, "source_label": source_label,
+        "logged_in": True,
+        "source": source,
+        "source_label": source_label,
         "token_preview": _truncate_token(creds.get("accessToken")),
-        "expires_at": creds.get("expiresAt"), "has_refresh_token": bool(creds.get("refreshToken")),
+        "expires_at": creds.get("expiresAt"),
+        "has_refresh_token": bool(creds.get("refreshToken")),
     }
 
 
@@ -48,27 +53,43 @@ def _anthropic_oauth_status() -> dict[str, Any]:
     ``claude-code`` entry, and counting it here would shadow a real ANTHROPIC_API_KEY.
     """
     try:
-        from agent.anthropic_credentials import read_clawk_oauth_credentials, _get_clawk_oauth_file
+        from agent.anthropic_credentials import (
+            read_clawk_oauth_credentials,
+            _get_clawk_oauth_file,
+        )
+
         clawk_creds = read_clawk_oauth_credentials()
     except Exception:
         clawk_creds = None
     if clawk_creds and clawk_creds.get("accessToken"):
-        return _token_status("clawk_pkce", f"Clawksis PKCE ({_get_clawk_oauth_file()})", clawk_creds)
+        return _token_status(
+            "clawk_pkce", f"Clawksis PKCE ({_get_clawk_oauth_file()})", clawk_creds
+        )
 
-    env_var_order: tuple = ("ANTHROPIC_API_KEY", "ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN")
+    env_var_order: tuple = (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_TOKEN",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+    )
     try:
         from clawk_cli.auth import PROVIDER_REGISTRY
+
         env_var_order = PROVIDER_REGISTRY["anthropic"].api_key_env_vars
     except (ImportError, KeyError):
         pass
     from clawk_cli.config import get_env_value
     from clawk_cli.env_loader import format_secret_source_suffix
+
     for var in env_var_order:
         value = get_env_value(var) or os.getenv(var)
         if value:
             return {
-                "logged_in": True, "source": "env_var", "source_label": f"{var}{format_secret_source_suffix(var)}",
-                "token_preview": _truncate_token(value), "expires_at": None, "has_refresh_token": False,
+                "logged_in": True,
+                "source": "env_var",
+                "source_label": f"{var}{format_secret_source_suffix(var)}",
+                "token_preview": _truncate_token(value),
+                "expires_at": None,
+                "has_refresh_token": False,
             }
     return dict(_LOGGED_OUT)
 
@@ -84,9 +105,12 @@ def _claude_code_only_status() -> dict[str, Any]:
             is_claude_code_token_valid,
             read_claude_code_credentials,
         )
+
         creds = read_claude_code_credentials()
         if creds and is_claude_code_token_valid(creds):
-            return _token_status("claude_code_cli", "~/.claude/.credentials.json", creds)
+            return _token_status(
+                "claude_code_cli", "~/.claude/.credentials.json", creds
+            )
     except Exception:
         pass
     return dict(_LOGGED_OUT)
@@ -98,6 +122,7 @@ def _copilot_acp_status() -> dict[str, Any]:
     state reads "managed by the Copilot CLI" — never signed out."""
     try:
         from clawk_cli.auth import get_external_process_provider_status
+
         status = get_external_process_provider_status("copilot-acp") or {}
     except Exception:
         status = {}
@@ -111,8 +136,13 @@ def _copilot_acp_status() -> dict[str, Any]:
     else:
         source_label = "GitHub Copilot CLI not found on PATH"
     return {
-        "logged_in": verified, "source": "copilot_cli", "source_label": source_label, "token_preview": None,
-        "expires_at": None, "has_refresh_token": False, "configured": configured,
+        "logged_in": verified,
+        "source": "copilot_cli",
+        "source_label": source_label,
+        "token_preview": None,
+        "expires_at": None,
+        "has_refresh_token": False,
+        "configured": configured,
     }
 
 
@@ -120,7 +150,11 @@ def _external_process_cli_command(provider_id: str, default: str) -> str:
     """Render an external-process provider's sign-in command with the CLI actually configured
     (``CLAWK_COPILOT_ACP_COMMAND`` / ``COPILOT_CLI_PATH``); others get ``default`` untouched."""
     try:
-        from clawk_cli.auth import PROVIDER_REGISTRY, get_external_process_provider_status
+        from clawk_cli.auth import (
+            PROVIDER_REGISTRY,
+            get_external_process_provider_status,
+        )
+
         pconfig = PROVIDER_REGISTRY.get(provider_id)
         if not pconfig or pconfig.auth_type != "external_process":
             return default
@@ -144,39 +178,83 @@ def _external_process_cli_command(provider_id: str, default: str) -> str:
 # Clawksis is BYOK: the Nous Portal card is NOT listed (see ``_DORMANT_OAUTH_PROVIDERS``).
 _OAUTH_PROVIDER_CATALOG: tuple[dict[str, Any], ...] = (
     # status_fn None → dispatched via auth.get_<provider>_auth_status.
-    {"id": "openai-codex", "name": "ChatGPT or Codex Subscription", "flow": "device_code",
-     "cli_command": "clawk auth add openai-codex", "docs_url": "https://platform.openai.com/docs",
-     "status_fn": None},
-    {"id": "qwen-oauth", "name": "Qwen (via Qwen CLI)", "flow": "external",
-     "cli_command": "clawk auth add qwen-oauth", "docs_url": "https://github.com/QwenLM/qwen-code",
-     "status_fn": None},
+    {
+        "id": "openai-codex",
+        "name": "ChatGPT or Codex Subscription",
+        "flow": "device_code",
+        "cli_command": "clawk auth add openai-codex",
+        "docs_url": "https://platform.openai.com/docs",
+        "status_fn": None,
+    },
+    {
+        "id": "qwen-oauth",
+        "name": "Qwen (via Qwen CLI)",
+        "flow": "external",
+        "cli_command": "clawk auth add qwen-oauth",
+        "docs_url": "https://github.com/QwenLM/qwen-code",
+        "status_fn": None,
+    },
     # Structurally device-code (verification URI + user code + token polling) with a PKCE
     # code-binding extension that doesn't change the operator UX.
-    {"id": "minimax-oauth", "name": "MiniMax (OAuth)", "flow": "device_code",
-     "cli_command": "clawk auth add minimax-oauth", "docs_url": "https://www.minimax.io", "status_fn": None},
+    {
+        "id": "minimax-oauth",
+        "name": "MiniMax (OAuth)",
+        "flow": "device_code",
+        "cli_command": "clawk auth add minimax-oauth",
+        "docs_url": "https://www.minimax.io",
+        "status_fn": None,
+    },
     # Device code works in remote shells/containers without a reachable 127.0.0.1 callback.
-    {"id": "xai-oauth", "name": "xAI Grok OAuth (SuperGrok / Premium+)", "flow": "device_code",
-     "cli_command": "clawk auth add xai-oauth",
-     "docs_url": "https://samuelgradientai-sys.github.io/clawksis-agent/guides/xai-grok-oauth", "status_fn": None},
+    {
+        "id": "xai-oauth",
+        "name": "xAI Grok OAuth (SuperGrok / Premium+)",
+        "flow": "device_code",
+        "cli_command": "clawk auth add xai-oauth",
+        "docs_url": "https://samuelgradientai-sys.github.io/clawksis-agent/guides/xai-grok-oauth",
+        "status_fn": None,
+    },
     # `copilot login` is the non-interactive subcommand; `copilot /login` is not valid
     # (slash-commands only exist inside an interactive session).
-    {"id": "copilot-acp", "name": "GitHub Copilot (ACP)", "flow": "external", "cli_command": "copilot login",
-     "docs_url": "https://docs.github.com/en/copilot", "status_fn": _copilot_acp_status},
+    {
+        "id": "copilot-acp",
+        "name": "GitHub Copilot (ACP)",
+        "flow": "external",
+        "cli_command": "copilot login",
+        "docs_url": "https://docs.github.com/en/copilot",
+        "status_fn": _copilot_acp_status,
+    },
     # Anthropic / Claude entries sit at the bottom. Deliberately flow == "external": an
     # in-dashboard Connect button would let a scriptable HTTP endpoint mint Claude Pro/Max
     # subscription tokens outside Anthropic's own client, against its OAuth usage policies.
     # Login works via the terminal (`clawk auth add anthropic`) or a plain API key.
-    {"id": "anthropic", "name": "Anthropic Account", "flow": "external", "cli_command": "clawk auth add anthropic",
-     "docs_url": "https://docs.claude.com/en/api/getting-started", "status_fn": _anthropic_oauth_status},
-    {"id": "claude-code", "name": "Anthropic OAuth: Required Extra Usage Credits to Use Subscription",
-     "flow": "external", "cli_command": "claude setup-token",
-     "docs_url": "https://docs.claude.com/en/docs/claude-code", "status_fn": _claude_code_only_status},
+    {
+        "id": "anthropic",
+        "name": "Anthropic Account",
+        "flow": "external",
+        "cli_command": "clawk auth add anthropic",
+        "docs_url": "https://docs.claude.com/en/api/getting-started",
+        "status_fn": _anthropic_oauth_status,
+    },
+    {
+        "id": "claude-code",
+        "name": "Anthropic OAuth: Required Extra Usage Credits to Use Subscription",
+        "flow": "external",
+        "cli_command": "claude setup-token",
+        "docs_url": "https://docs.claude.com/en/docs/claude-code",
+        "status_fn": _claude_code_only_status,
+    },
 )
 # Unlisted device-code providers whose start route stays wired for dormant code paths (the
 # opt-in ``nous.guest`` free-tier sign-in). Never shown in ``GET /api/providers/oauth``.
 _DORMANT_OAUTH_PROVIDERS: tuple[dict[str, Any], ...] = (
-    {"id": "nous", "name": "Nous Portal", "flow": "device_code", "cli_command": "clawk auth add nous",
-     "docs_url": "", "status_fn": None},
+    {
+        "id": "nous",
+        "name": "Nous Portal",
+        "flow": "device_code",
+        "cli_command": "clawk auth add nous",
+        "docs_url": "",
+        "status_fn": None,
+    },
 )
 _oauth_sessions: dict[str, dict[str, Any]] = {}
 _oauth_sessions_lock = threading.Lock()
@@ -193,6 +271,7 @@ def _oauth_poller(label: str):
     """Wrap a device-code poller body ``fn(session_id, sess)``: vanished session is a no-op,
     success marks ``approved``, any exception records ``error`` + ``error_message`` on the
     session instead of raising (the thread has no caller; the dashboard reads the status)."""
+
     def deco(fn):
         @functools.wraps(fn)
         def poller(session_id: str) -> None:
@@ -209,17 +288,33 @@ def _oauth_poller(label: str):
                     if not settled:
                         sess["status"] = "approved"
                 if settled:
-                    _log.info("oauth/device: %s login ended %s (session=%s)", label, sess["status"], session_id)
+                    _log.info(
+                        "oauth/device: %s login ended %s (session=%s)",
+                        label,
+                        sess["status"],
+                        session_id,
+                    )
                 else:
-                    _log.info("oauth/device: %s login completed (session=%s)", label, session_id)
+                    _log.info(
+                        "oauth/device: %s login completed (session=%s)",
+                        label,
+                        session_id,
+                    )
             except Exception as e:
-                from clawk_cli.observability.shared_metrics_setup import note_oauth_failure
-                _log.warning("%s device-code poll failed (session=%s): %s", label, session_id, e)
+                from clawk_cli.observability.shared_metrics_setup import (
+                    note_oauth_failure,
+                )
+
+                _log.warning(
+                    "%s device-code poll failed (session=%s): %s", label, session_id, e
+                )
                 note_oauth_failure(sess, e)
                 with _oauth_sessions_lock:
                     sess["status"] = "error"
                     sess["error_message"] = str(e)
+
         return poller
+
     return deco
 
 
@@ -232,7 +327,7 @@ def _record_sign_in_state(sess: dict[str, Any], state: Any) -> None:
     """
     kind = getattr(state, "kind", "")
     if kind in ("code", "waiting"):
-        return          # the start route already published the code
+        return  # the start route already published the code
     with _oauth_sessions_lock:
         if kind == "completed":
             sess["account_email"] = state.email or None
@@ -253,7 +348,9 @@ def _record_sign_in_state(sess: dict[str, Any], state: Any) -> None:
             return
         sess["status"] = "error"
         sess["reason"] = getattr(state, "reason", "") or kind or "error"
-        sess["error_message"] = state.copy    # the chat form: no raw exception reaches the UI
+        sess["error_message"] = (
+            state.copy
+        )  # the chat form: no raw exception reaches the UI
         # Whether a later attempt can succeed, and the wait the service named (seconds).
         sess["retryable"] = bool(getattr(state, "retryable", False))
         sess["retry_after"] = int(getattr(state, "retry_after", 0) or 0)
@@ -277,7 +374,7 @@ def _nous_sign_in_poller(session_id: str, sess: dict[str, Any]) -> None:
             _record_sign_in_state(sess, state)
     finally:
         with contextlib.suppress(Exception):
-            gen.close()     # unwinds the suspended HTTP client if we leave early
+            gen.close()  # unwinds the suspended HTTP client if we leave early
 
 
 @_oauth_poller("minimax")
@@ -288,21 +385,33 @@ def _minimax_poller(session_id: str, sess: dict[str, Any]) -> None:
     Region is fixed to "global" here; cn-region operators use the CLI's ``--region cn``."""
     from clawk_cli.web_server_profiles import _profile_scope
     from clawk_cli.auth import (
-        _minimax_poll_token, _minimax_resolve_token_expiry_unix, _minimax_save_auth_state,
-        MINIMAX_OAUTH_GLOBAL_INFERENCE, MINIMAX_OAUTH_SCOPE,
+        _minimax_poll_token,
+        _minimax_resolve_token_expiry_unix,
+        _minimax_save_auth_state,
+        MINIMAX_OAUTH_GLOBAL_INFERENCE,
+        MINIMAX_OAUTH_SCOPE,
     )
     import httpx
+
     portal_base_url, client_id = sess["portal_base_url"], sess["client_id"]
     with httpx.Client(
-        timeout=httpx.Timeout(15.0), headers={"Accept": "application/json"}, follow_redirects=True
+        timeout=httpx.Timeout(15.0),
+        headers={"Accept": "application/json"},
+        follow_redirects=True,
     ) as client:
         token_data = _minimax_poll_token(
-            client=client, portal_base_url=portal_base_url, client_id=client_id,
-            user_code=sess["user_code"], code_verifier=sess["code_verifier"],
-            expired_in=sess["expired_in_raw"], interval_ms=sess.get("interval_ms"),
+            client=client,
+            portal_base_url=portal_base_url,
+            client_id=client_id,
+            user_code=sess["user_code"],
+            code_verifier=sess["code_verifier"],
+            expired_in=sess["expired_in_raw"],
+            interval_ms=sess.get("interval_ms"),
         )
     now = datetime.now(UTC)
-    expires_at_ts = _minimax_resolve_token_expiry_unix(int(token_data["expired_in"]), now=now)
+    expires_at_ts = _minimax_resolve_token_expiry_unix(
+        int(token_data["expired_in"]), now=now
+    )
     auth_state = {
         "provider": "minimax-oauth",
         "region": sess.get("region", "global"),
@@ -334,15 +443,23 @@ def _xai_device_poller(session_id: str, sess: dict[str, Any]) -> None:
     from clawk_cli.web_server_profiles import _profile_scope
     import httpx
     from clawk_cli.auth import (
-        _save_xai_oauth_tokens, _xai_oauth_discovery, _xai_oauth_poll_device_token,
-        mark_provider_active_if_unset, unsuppress_credential_source,
+        _save_xai_oauth_tokens,
+        _xai_oauth_discovery,
+        _xai_oauth_poll_device_token,
+        mark_provider_active_if_unset,
+        unsuppress_credential_source,
     )
 
     discovery = _xai_oauth_discovery(20.0)
-    with httpx.Client(timeout=httpx.Timeout(20.0), headers={"Accept": "application/json"}) as client:
+    with httpx.Client(
+        timeout=httpx.Timeout(20.0), headers={"Accept": "application/json"}
+    ) as client:
         token_data = _xai_oauth_poll_device_token(
-            client, token_endpoint=discovery["token_endpoint"], device_code=sess["device_code"],
-            expires_in=max(60, int(sess["expires_at"] - time.time())), poll_interval=int(sess["interval"]),
+            client,
+            token_endpoint=discovery["token_endpoint"],
+            device_code=sess["device_code"],
+            expires_in=max(60, int(sess["expires_at"] - time.time())),
+            poll_interval=int(sess["interval"]),
         )
     tokens = {
         "access_token": str(token_data.get("access_token", "") or "").strip(),
@@ -358,7 +475,10 @@ def _xai_device_poller(session_id: str, sess: dict[str, Any]) -> None:
             return
         # set_active=False: persist without hijacking an existing active chat provider.
         _save_xai_oauth_tokens(
-            tokens, discovery=discovery, auth_mode="oauth_device_code", set_active=False,
+            tokens,
+            discovery=discovery,
+            auth_mode="oauth_device_code",
+            set_active=False,
             last_refresh=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
         # Mirror `clawk auth add xai-oauth`: first credential may become active; never overwrite.

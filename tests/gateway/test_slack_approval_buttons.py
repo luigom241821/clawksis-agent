@@ -81,6 +81,7 @@ def _attach_auth_runner(adapter, auth_fn=None):
 # send_exec_approval — Block Kit buttons
 # ===========================================================================
 
+
 class TestSlackExecApproval:
     """Test the send_exec_approval method sends Block Kit buttons."""
 
@@ -128,14 +129,18 @@ class TestSlackExecApproval:
         mock_client.chat_postMessage = AsyncMock(return_value={"ts": "1234.5678"})
 
         await adapter.send_exec_approval(
-            chat_id="C1", command="rm -rf /", session_key="s",
-            allow_permanent=False, smart_denied=True,
+            chat_id="C1",
+            command="rm -rf /",
+            session_key="s",
+            allow_permanent=False,
+            smart_denied=True,
         )
 
         kwargs = mock_client.chat_postMessage.call_args.kwargs
         elements = kwargs["blocks"][1]["elements"]
         assert [element["action_id"] for element in elements] == [
-            "clawk_approve_once", "clawk_deny",
+            "clawk_approve_once",
+            "clawk_deny",
         ]
         assert "one operation" in kwargs["blocks"][0]["text"]["text"].lower()
 
@@ -144,9 +149,9 @@ class TestSlackExecApproval:
 # _handle_approval_action — button click handler
 # ===========================================================================
 
+
 class TestSlackApprovalAction:
     """Test the approval button click handler."""
-
 
     @pytest.mark.asyncio
     async def test_truncates_inflated_original_text(self):
@@ -161,9 +166,15 @@ class TestSlackApprovalAction:
 
         ack = AsyncMock()
         body = {
-            "message": {"ts": "1.2", "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text": inflated_text}},
-            ]},
+            "message": {
+                "ts": "1.2",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": inflated_text},
+                    },
+                ],
+            },
             "channel": {"id": "C1"},
             "user": {"name": "alice", "id": "U_ALICE"},
         }
@@ -209,18 +220,26 @@ class TestSlackApprovalAction:
 class TestSlackInteractiveAuth:
     def test_delegates_to_gateway_runner_auth(self):
         adapter = _make_adapter()
-        runner = _attach_auth_runner(adapter, auth_fn=lambda source: source.user_id == "U_OK")
+        runner = _attach_auth_runner(
+            adapter, auth_fn=lambda source: source.user_id == "U_OK"
+        )
 
-        assert adapter._is_interactive_user_authorized(
-            "U_OK",
-            channel_id="C1",
-            user_name="operator",
-        ) is True
-        assert adapter._is_interactive_user_authorized(
-            "U_BAD",
-            channel_id="C1",
-            user_name="intruder",
-        ) is False
+        assert (
+            adapter._is_interactive_user_authorized(
+                "U_OK",
+                channel_id="C1",
+                user_name="operator",
+            )
+            is True
+        )
+        assert (
+            adapter._is_interactive_user_authorized(
+                "U_BAD",
+                channel_id="C1",
+                user_name="intruder",
+            )
+            is False
+        )
 
         assert len(runner.seen_sources) == 2
         assert runner.seen_sources[0].platform == Platform.SLACK
@@ -229,8 +248,6 @@ class TestSlackInteractiveAuth:
 
 
 class TestSlackSlashConfirmAction:
-
-
     @pytest.mark.asyncio
     async def test_truncates_inflated_original_text(self):
         """Interaction payload re-escapes HTML entities; text must be capped."""
@@ -243,9 +260,15 @@ class TestSlackSlashConfirmAction:
 
         ack = AsyncMock()
         body = {
-            "message": {"ts": "2222.3333", "blocks": [
-                {"type": "section", "text": {"type": "mrkdwn", "text": inflated_text}},
-            ]},
+            "message": {
+                "ts": "2222.3333",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": inflated_text},
+                    },
+                ],
+            },
             "channel": {"id": "C1"},
             "user": {"name": "owner", "id": "U_OWNER"},
         }
@@ -270,9 +293,9 @@ class TestSlackSlashConfirmAction:
 # _fetch_thread_context
 # ===========================================================================
 
+
 class TestSlackThreadContext:
     """Test thread context fetching."""
-
 
     @pytest.mark.asyncio
     async def test_includes_self_bot_replies_as_assistant_on_cold_start(self):
@@ -288,26 +311,28 @@ class TestSlackThreadContext:
         attributed to their display name."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [
-                {"ts": "1000.0", "user": "U1", "text": "Parent"},
-                # Self-bot reply -> kept on cold-start, prefixed [assistant]
-                {
-                    "ts": "1000.1",
-                    "bot_id": "B_SELF",
-                    "user": "U_BOT",
-                    "text": "Previous bot self-reply",
-                },
-                # Third-party bot child -> kept (useful context)
-                {
-                    "ts": "1000.15",
-                    "bot_id": "B_OTHER",
-                    "user": "U_OTHER_BOT",
-                    "text": "Deploy succeeded",
-                },
-                {"ts": "1000.2", "user": "U1", "text": "Current"},
-            ]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    {"ts": "1000.0", "user": "U1", "text": "Parent"},
+                    # Self-bot reply -> kept on cold-start, prefixed [assistant]
+                    {
+                        "ts": "1000.1",
+                        "bot_id": "B_SELF",
+                        "user": "U_BOT",
+                        "text": "Previous bot self-reply",
+                    },
+                    # Third-party bot child -> kept (useful context)
+                    {
+                        "ts": "1000.15",
+                        "bot_id": "B_OTHER",
+                        "user": "U_OTHER_BOT",
+                        "text": "Deploy succeeded",
+                    },
+                    {"ts": "1000.2", "user": "U1", "text": "Current"},
+                ]
+            }
+        )
         adapter._user_name_cache = {
             ("T1", "U1"): "Alice",
             ("T1", "U_OTHER_BOT"): "DeployBot",
@@ -325,7 +350,6 @@ class TestSlackThreadContext:
         # The [assistant] label must NOT leak to user messages
         assert "[assistant] Alice" not in context
 
-
     @pytest.mark.asyncio
     async def test_fetch_thread_context_extracts_block_kit_parent(self):
         """Bot-posted parents that put their content in ``blocks`` (Honeycomb,
@@ -336,40 +360,45 @@ class TestSlackThreadContext:
         text and actionable URLs so section text and button URLs survive."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [
-                # Bot-posted alert: title in `text`, URL only in `blocks`.
-                # Mirrors what Honeycomb, PagerDuty, etc. actually send.
-                {
-                    "ts": "1000.0",
-                    "bot_id": "B_ALERT",
-                    "subtype": "bot_message",
-                    "username": "alertbot",
-                    "text": "low_alerts (checkout)",
-                    "blocks": [
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "*Trigger fired:* low_alerts",
-                            },
-                        },
-                        {
-                            "type": "actions",
-                            "elements": [
-                                {
-                                    "type": "button",
-                                    "text": {"type": "plain_text", "text": "View graph"},
-                                    "url": "https://example.example/view/abc123",
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    # Bot-posted alert: title in `text`, URL only in `blocks`.
+                    # Mirrors what Honeycomb, PagerDuty, etc. actually send.
+                    {
+                        "ts": "1000.0",
+                        "bot_id": "B_ALERT",
+                        "subtype": "bot_message",
+                        "username": "alertbot",
+                        "text": "low_alerts (checkout)",
+                        "blocks": [
+                            {
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": "*Trigger fired:* low_alerts",
                                 },
-                            ],
-                        },
-                    ],
-                },
-                # User reply that triggered the fetch.
-                {"ts": "1000.1", "user": "U1", "text": "what's going on?"},
-            ]
-        })
+                            },
+                            {
+                                "type": "actions",
+                                "elements": [
+                                    {
+                                        "type": "button",
+                                        "text": {
+                                            "type": "plain_text",
+                                            "text": "View graph",
+                                        },
+                                        "url": "https://example.example/view/abc123",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                    # User reply that triggered the fetch.
+                    {"ts": "1000.1", "user": "U1", "text": "what's going on?"},
+                ]
+            }
+        )
         adapter._user_name_cache = {"U1": "Alice"}
 
         context = await adapter._fetch_thread_context(
@@ -386,31 +415,34 @@ class TestSlackThreadContext:
         # Marked as the thread parent.
         assert "[thread parent]" in context
 
-
     @pytest.mark.asyncio
-    async def test_fetch_thread_context_includes_self_bot_replies_with_assistant_label(self):
+    async def test_fetch_thread_context_includes_self_bot_replies_with_assistant_label(
+        self,
+    ):
         """Cold-start: parent (non-self bot) kept with [thread parent],
         self-bot child replies kept with [assistant] label, user replies
         kept unchanged. The cold-start path is the ONLY caller of this
         method; circular-context risk does not apply here (see #38861)."""
         adapter = _make_adapter()
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [
-                {"ts": "1000.0", "bot_id": "B_CRON", "text": "Cron summary"},
-                # Self-bot child reply -> kept with [assistant] label
-                {
-                    "ts": "1000.1",
-                    "bot_id": "B_SELF",
-                    "user": "U_BOT",  # matches adapter._bot_user_id
-                    "text": "Previous self reply",
-                },
-                # User reply -> kept
-                {"ts": "1000.2", "user": "U1", "text": "Follow-up question"},
-                # Current trigger (excluded by current_ts match)
-                {"ts": "1000.3", "user": "U1", "text": "Current"},
-            ]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    {"ts": "1000.0", "bot_id": "B_CRON", "text": "Cron summary"},
+                    # Self-bot child reply -> kept with [assistant] label
+                    {
+                        "ts": "1000.1",
+                        "bot_id": "B_SELF",
+                        "user": "U_BOT",  # matches adapter._bot_user_id
+                        "text": "Previous self reply",
+                    },
+                    # User reply -> kept
+                    {"ts": "1000.2", "user": "U1", "text": "Follow-up question"},
+                    # Current trigger (excluded by current_ts match)
+                    {"ts": "1000.3", "user": "U1", "text": "Current"},
+                ]
+            }
+        )
         adapter._user_name_cache = {("T1", "U1"): "Alice"}
 
         context = await adapter._fetch_thread_context(
@@ -437,29 +469,31 @@ class TestSlackThreadContext:
         adapter._channel_team["C2"] = "T2"
 
         mock_client = adapter._team_clients["T2"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [
-                {"ts": "2000.0", "user": "U2", "text": "Parent T2"},
-                # This has the *T1* bot's user id — from T2's perspective this
-                # is a third-party bot, so it must be kept.
-                {
-                    "ts": "2000.1",
-                    "bot_id": "B_FOREIGN",
-                    "user": "U_BOT_T1",
-                    "team": "T2",
-                    "text": "Cross-workspace bot reply",
-                },
-                # Self-bot for T2 — kept with the [assistant] label
-                {
-                    "ts": "2000.2",
-                    "bot_id": "B_SELF_T2",
-                    "user": "U_BOT_T2",
-                    "team": "T2",
-                    "text": "Own T2 bot reply",
-                },
-                {"ts": "2000.3", "user": "U2", "text": "Current"},
-            ]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    {"ts": "2000.0", "user": "U2", "text": "Parent T2"},
+                    # This has the *T1* bot's user id — from T2's perspective this
+                    # is a third-party bot, so it must be kept.
+                    {
+                        "ts": "2000.1",
+                        "bot_id": "B_FOREIGN",
+                        "user": "U_BOT_T1",
+                        "team": "T2",
+                        "text": "Cross-workspace bot reply",
+                    },
+                    # Self-bot for T2 — kept with the [assistant] label
+                    {
+                        "ts": "2000.2",
+                        "bot_id": "B_SELF_T2",
+                        "user": "U_BOT_T2",
+                        "team": "T2",
+                        "text": "Own T2 bot reply",
+                    },
+                    {"ts": "2000.3", "user": "U2", "text": "Current"},
+                ]
+            }
+        )
         adapter._user_name_cache = {("T2", "U2"): "Bob"}
 
         context = await adapter._fetch_thread_context(
@@ -508,7 +542,6 @@ class TestSessionKeyChatType:
     constructs the correct key for every channel type.
     """
 
-
     def test_dm_thread_not_found_with_group_type(self):
         """Without chat_type='dm', a DM session key would not match.
 
@@ -520,12 +553,16 @@ class TestSessionKeyChatType:
         adapter = _make_adapter()
         mock_store = MagicMock()
         session_key = "agent:main:slack:dm:D0DMCHANNEL:2000.0"
-        mock_store._entries = {session_key: SessionEntry.from_dict({
-            "session_key": session_key,
-            "session_id": "slack-dm-thread-session",
-            "created_at": "2024-01-01T00:00:00",
-            "updated_at": "2024-01-01T00:00:00",
-        })}
+        mock_store._entries = {
+            session_key: SessionEntry.from_dict(
+                {
+                    "session_key": session_key,
+                    "session_id": "slack-dm-thread-session",
+                    "created_at": "2024-01-01T00:00:00",
+                    "updated_at": "2024-01-01T00:00:00",
+                }
+            )
+        }
         mock_store._ensure_loaded = MagicMock()
         mock_store.config = MagicMock()
         mock_store.config.group_sessions_per_user = True
@@ -553,9 +590,9 @@ class TestSessionKeyChatType:
 # Thread engagement — bot-started threads & mentioned threads
 # ===========================================================================
 
+
 class TestThreadEngagement:
     """Test _bot_message_ts and _mentioned_threads tracking."""
-
 
     def test_mentioned_threads_cap_evicts_oldest_timestamps(self):
         """Mentioned-thread tracking evicts the oldest Slack timestamps first."""
@@ -584,6 +621,7 @@ class TestThreadEngagement:
 # _handle_slack_reaction — reaction_added forwarding
 # ===========================================================================
 
+
 class TestSlackReactionForwarding:
     """Reactions should flow through the same pipeline as typed messages,
     gated by the ``reaction_triggers`` opt-in (default: off)."""
@@ -604,14 +642,16 @@ class TestSlackReactionForwarding:
             forwarded.append(event)
 
         with patch.object(adapter, "_handle_slack_message", new=_capture):
-            await adapter._handle_slack_reaction({
-                "type": "reaction_added",
-                "user": "U1",
-                "reaction": "thumbsup",
-                "item": {"type": "message", "channel": "C1", "ts": "2000.0"},
-                "item_user": "U_BOT",
-                "event_ts": "3000.0",
-            })
+            await adapter._handle_slack_reaction(
+                {
+                    "type": "reaction_added",
+                    "user": "U1",
+                    "reaction": "thumbsup",
+                    "item": {"type": "message", "channel": "C1", "ts": "2000.0"},
+                    "item_user": "U_BOT",
+                    "event_ts": "3000.0",
+                }
+            )
 
         assert forwarded == []
 
@@ -626,25 +666,34 @@ class TestSlackReactionForwarding:
         mock_client = adapter._team_clients["T1"]
         # Reacted-to message is itself a reply inside a thread; its thread_ts
         # points at the thread parent.
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [
-                {"ts": "2000.0", "thread_ts": "1000.0", "user": "U_BOT", "text": "Proposal"}
-            ]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [
+                    {
+                        "ts": "2000.0",
+                        "thread_ts": "1000.0",
+                        "user": "U_BOT",
+                        "text": "Proposal",
+                    }
+                ]
+            }
+        )
         forwarded: list[dict] = []
 
         async def _capture(event):
             forwarded.append(event)
 
         with patch.object(adapter, "_handle_slack_message", new=_capture):
-            await adapter._handle_slack_reaction({
-                "type": "reaction_added",
-                "user": "U1",
-                "reaction": "thumbsup",
-                "item": {"type": "message", "channel": "C1", "ts": "2000.0"},
-                "item_user": "U_BOT",
-                "event_ts": "3000.0",
-            })
+            await adapter._handle_slack_reaction(
+                {
+                    "type": "reaction_added",
+                    "user": "U1",
+                    "reaction": "thumbsup",
+                    "item": {"type": "message", "channel": "C1", "ts": "2000.0"},
+                    "item_user": "U_BOT",
+                    "event_ts": "3000.0",
+                }
+            )
 
         assert len(forwarded) == 1
         synth = forwarded[0]
@@ -664,7 +713,6 @@ class TestSlackReactionForwarding:
         # Pre-authorized as addressed-to-the-bot (skips mention gate only).
         assert synth["_clawk_force_process"] is True
 
-
     @pytest.mark.asyncio
     async def test_target_channel_handoff_routes_top_level(self):
         """reaction_trigger_target=C_TRAIN routes the synthesized turn to the
@@ -673,23 +721,27 @@ class TestSlackReactionForwarding:
         self._enable_triggers(adapter, ["task"])
         adapter.config.extra["reaction_trigger_target"] = "C_TRAIN"
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [{"ts": "1000.0", "user": "U_OTHER", "text": "Handoff me"}]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [{"ts": "1000.0", "user": "U_OTHER", "text": "Handoff me"}]
+            }
+        )
         forwarded: list[dict] = []
 
         async def _capture(event):
             forwarded.append(event)
 
         with patch.object(adapter, "_handle_slack_message", new=_capture):
-            await adapter._handle_slack_reaction({
-                "type": "reaction_added",
-                "user": "U1",
-                "reaction": "task",
-                "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
-                "item_user": "U_OTHER",
-                "event_ts": "3000.0",
-            })
+            await adapter._handle_slack_reaction(
+                {
+                    "type": "reaction_added",
+                    "user": "U1",
+                    "reaction": "task",
+                    "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
+                    "item_user": "U_OTHER",
+                    "event_ts": "3000.0",
+                }
+            )
 
         assert len(forwarded) == 1
         synth = forwarded[0]
@@ -705,23 +757,27 @@ class TestSlackReactionForwarding:
         self._enable_triggers(adapter, ["task"])
         adapter.config.extra["reaction_trigger_target"] = "C_TRAIN:1719.0001"
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [{"ts": "1000.0", "user": "U_OTHER", "text": "Handoff me"}]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [{"ts": "1000.0", "user": "U_OTHER", "text": "Handoff me"}]
+            }
+        )
         forwarded: list[dict] = []
 
         async def _capture(event):
             forwarded.append(event)
 
         with patch.object(adapter, "_handle_slack_message", new=_capture):
-            await adapter._handle_slack_reaction({
-                "type": "reaction_added",
-                "user": "U1",
-                "reaction": "task",
-                "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
-                "item_user": "U_OTHER",
-                "event_ts": "3000.0",
-            })
+            await adapter._handle_slack_reaction(
+                {
+                    "type": "reaction_added",
+                    "user": "U1",
+                    "reaction": "task",
+                    "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
+                    "item_user": "U_OTHER",
+                    "event_ts": "3000.0",
+                }
+            )
 
         assert len(forwarded) == 1
         assert forwarded[0]["channel"] == "C_TRAIN"
@@ -745,14 +801,16 @@ class TestSlackReactionForwarding:
             forwarded.append(event)
 
         with patch.object(adapter, "_handle_slack_message", new=_capture):
-            await adapter._handle_slack_reaction({
-                "type": "reaction_added",
-                "user": "U1",
-                "reaction": "thumbsup",
-                "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
-                "item_user": "U_BOT",
-                "event_ts": "3000.0",
-            })
+            await adapter._handle_slack_reaction(
+                {
+                    "type": "reaction_added",
+                    "user": "U1",
+                    "reaction": "thumbsup",
+                    "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
+                    "item_user": "U_BOT",
+                    "event_ts": "3000.0",
+                }
+            )
             await adapter._handle_slack_reaction(
                 {
                     "type": "reaction_removed",
@@ -775,7 +833,6 @@ class TestSlackReactionForwarding:
         assert hook_events[0]["user_id"] == "U1"
         assert hook_events[0]["channel_id"] == "C1"
         assert hook_events[0]["message_ts"] == "1000.0"
-
 
     def test_trigger_config_parsing(self):
         """reaction_triggers accepts bool / list / string forms."""
@@ -805,9 +862,11 @@ class TestSlackReactionAuthorizationGate:
         adapter = _make_adapter()
         adapter.config.extra["reaction_triggers"] = True
         mock_client = adapter._team_clients["T1"]
-        mock_client.conversations_replies = AsyncMock(return_value={
-            "messages": [{"ts": "1000.0", "user": "U_BOT", "text": "Proposal"}]
-        })
+        mock_client.conversations_replies = AsyncMock(
+            return_value={
+                "messages": [{"ts": "1000.0", "user": "U_BOT", "text": "Proposal"}]
+            }
+        )
 
         class _Runner:
             def __init__(self):
@@ -825,14 +884,16 @@ class TestSlackReactionAuthorizationGate:
         adapter.set_message_handler(runner.handle)
         adapter.handle_message = AsyncMock()
 
-        await adapter._handle_slack_reaction({
-            "type": "reaction_added",
-            "user": "U_RANDO",
-            "reaction": "thumbsup",
-            "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
-            "item_user": "U_BOT",
-            "event_ts": "3000.0",
-        })
+        await adapter._handle_slack_reaction(
+            {
+                "type": "reaction_added",
+                "user": "U_RANDO",
+                "reaction": "thumbsup",
+                "item": {"type": "message", "channel": "C1", "ts": "1000.0"},
+                "item_user": "U_BOT",
+                "event_ts": "3000.0",
+            }
+        )
 
         # The auth gate saw the reactor's user id and rejected it before
         # any MessageEvent reached the gateway.

@@ -54,6 +54,7 @@ def _format_live_review_output(sid: str, session: Optional[dict], arg: str) -> s
     runtime_token = _current_runtime_session_record.set(session)
     try:
         from agent.review_engine import format_dispatch_note, start_review
+
         # slash.exec is off-turn (RPC pool). start_review → resolve_runtime_provider
         # reads CLAWK_CODEX_BASE_URL via get_secret; under multiplex that raises
         # UnscopedSecretError unless the same runtime scope a turn binds is here
@@ -135,21 +136,39 @@ def _usage_account_blocks(session: dict) -> list[str]:
     """Provider limits then Nous credits, as CLI/messaging /usage show them; neither needs an agent.
     Both read the session profile's credentials, unreadable outside its scope when multiplexed (#132422).
     Before the first turn the route is the session's composer pick, else the profile's provider."""
-    from agent.account_usage import fetch_account_usage, nous_credits_lines, render_account_usage_lines
+    from agent.account_usage import (
+        fetch_account_usage,
+        nous_credits_lines,
+        render_account_usage_lines,
+    )
+
     agent = session.get("agent")
     pick = session.get("model_override") or {}
     lines: list[str] = []
     with _session_profile_runtime_scope(session):
         with contextlib.suppress(Exception):
-            if provider := getattr(agent, "provider", None) or pick.get("provider") or _config_model_target()[1]:
-                lines += render_account_usage_lines(fetch_account_usage(
-                    provider, base_url=getattr(agent, "base_url", None), api_key=getattr(agent, "api_key", None)))
+            if (
+                provider := getattr(agent, "provider", None)
+                or pick.get("provider")
+                or _config_model_target()[1]
+            ):
+                lines += render_account_usage_lines(
+                    fetch_account_usage(
+                        provider,
+                        base_url=getattr(agent, "base_url", None),
+                        api_key=getattr(agent, "api_key", None),
+                    )
+                )
         with contextlib.suppress(Exception):
             # Window plans: the last reply's gauges lift the portal's lagging percents (``is True``: a
             # Mock agent's attribute is not a plan). Every other account: exactly main's call.
             state = getattr(agent, "_credits_state", None)
             window = getattr(state, "is_usage_window", False) is True
-            lines += nous_credits_lines(credits_state=state) if window else nous_credits_lines()
+            lines += (
+                nous_credits_lines(credits_state=state)
+                if window
+                else nous_credits_lines()
+            )
     return lines
 
 
@@ -172,18 +191,37 @@ def _format_live_usage_tokens(session: dict) -> str:
 
     def n(key: str) -> str:
         return f"{int(usage.get(key) or 0):,}"
+
     rows = [("Input tokens:", n("input")), ("Output tokens:", n("output"))]
     if int(usage.get("reasoning") or 0):
         rows.append(("Reasoning tokens:", n("reasoning")))
-    rows += [("Prompt tokens:", n("prompt")), ("Completion tokens:", n("completion")),
-             ("Total tokens:", n("total")), ("API calls:", n("calls"))]
+    rows += [
+        ("Prompt tokens:", n("prompt")),
+        ("Completion tokens:", n("completion")),
+        ("Total tokens:", n("total")),
+        ("API calls:", n("calls")),
+    ]
     if usage.get("context_max"):
         pct = int(usage.get("context_percent") or 0)
         mark = "~" if usage.get("context_estimated") else ""
-        rows.append(("Current context:", f"{mark}{n('context_used')} / {n('context_max')} ({mark}{pct}%)"))
+        rows.append(
+            (
+                "Current context:",
+                f"{mark}{n('context_used')} / {n('context_max')} ({mark}{pct}%)",
+            )
+        )
     rows += [("Messages:", f"{message_count:,}"), ("Compressions:", n("compressions"))]
-    model = usage.get("model") or _metadata_mirror(session).get("model") or getattr(agent, "model", "") or "(unknown)"
-    lines = ["Session Token Usage", "────────────────────────────────────────", f"Model: {model}"]
+    model = (
+        usage.get("model")
+        or _metadata_mirror(session).get("model")
+        or getattr(agent, "model", "")
+        or "(unknown)"
+    )
+    lines = [
+        "Session Token Usage",
+        "────────────────────────────────────────",
+        f"Model: {model}",
+    ]
     lines += [f"{label:<30}{value}" for label, value in rows]
     return "\n".join(lines)
 
@@ -196,7 +234,8 @@ def _live_session_messages(session: dict) -> Optional[list]:
         if db is not None and session.get("session_key"):
             with contextlib.suppress(Exception):
                 return db.get_messages_as_conversation(
-                    session["session_key"], include_ancestors=True, include_row_ids=True)
+                    session["session_key"], include_ancestors=True, include_row_ids=True
+                )
     return None
 
 
@@ -204,7 +243,10 @@ def _format_live_history_output(sid: str, session: dict, arg: str) -> str:
     with session["history_lock"]:
         history = list(session.get("history", []))
     db_history = _live_session_messages(session)
-    messages = _history_to_messages(history if db_history is None else db_history, profile_home=session.get("profile_home"))
+    messages = _history_to_messages(
+        history if db_history is None else db_history,
+        profile_home=session.get("profile_home"),
+    )
     if not messages:
         return "No conversation history yet."
     lines = ["Conversation History", "────────────────────────────────────────"]
@@ -219,13 +261,20 @@ def _format_live_history_output(sid: str, session: dict, arg: str) -> str:
 
 def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
     from collections import Counter
+
     try:
-        messages = _history_to_messages(_live_session_messages(session) or [], profile_home=session.get("profile_home"))
+        messages = _history_to_messages(
+            _live_session_messages(session) or [],
+            profile_home=session.get("profile_home"),
+        )
     except Exception:
         messages = []  # malformed db rows fall back to the live history below
     if not messages:
         with session["history_lock"]:
-            messages = _history_to_messages(list(session.get("history", [])), profile_home=session.get("profile_home"))
+            messages = _history_to_messages(
+                list(session.get("history", [])),
+                profile_home=session.get("profile_home"),
+            )
 
     breakdown_lines: list[str] = []
     if (agent := session.get("agent")) is not None:
@@ -237,18 +286,24 @@ def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
         try:
             # Bind the session context: on the RPC thread the session cwd is unset, so the
             # prompt build inside would key its workspace pin on the backend's cwd.
-            tokens = _set_session_context(session["session_key"], cwd=_session_cwd(session))
+            tokens = _set_session_context(
+                session["session_key"], cwd=_session_cwd(session)
+            )
             try:
                 from agent.context_breakdown import (
                     compute_context_details,
                     compute_session_context_breakdown,
-                    render_context_breakdown_lines)
+                    render_context_breakdown_lines,
+                )
+
                 payload = compute_session_context_breakdown(agent, live_messages)
                 details = None
                 if (arg or "").strip().lower() in {"all", "full", "details"}:
                     with contextlib.suppress(Exception):
                         details = compute_context_details(agent)
-                breakdown_lines = render_context_breakdown_lines(payload, details=details, grid=False)
+                breakdown_lines = render_context_breakdown_lines(
+                    payload, details=details, grid=False
+                )
             finally:
                 _clear_session_context(tokens)
         except Exception:
@@ -256,9 +311,18 @@ def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
 
     usage = _session_usage_snapshot(session)
     mirror = _metadata_mirror(session)
-    lines = [f"Conversation: {len(messages)} messages" if messages else "Conversation is empty (no messages yet)."]
+    lines = [
+        f"Conversation: {len(messages)} messages"
+        if messages
+        else "Conversation is empty (no messages yet)."
+    ]
     roles = Counter(str(msg.get("role") or "unknown") for msg in messages)
-    lines.append("  " + ", ".join(f"{r}: {roles.get(r, 0)}" for r in ("user", "assistant", "tool", "system")))
+    lines.append(
+        "  "
+        + ", ".join(
+            f"{r}: {roles.get(r, 0)}" for r in ("user", "assistant", "tool", "system")
+        )
+    )
     if model := mirror.get("model") or usage.get("model") or "":
         lines.append(f"Model: {model}")
     lines.append(f"Provider: {mirror.get('provider') or 'auto'}")
@@ -270,17 +334,24 @@ def _format_live_context_output(sid: str, session: dict, arg: str) -> str:
     context_max = int(usage.get("context_max") or 0)
     if context_used and context_max:
         lines.append(
-            f"Context usage: {mark}{context_used:,} / {context_max:,} tokens ({mark}{(context_used / context_max) * 100:.1f}%)")
+            f"Context usage: {mark}{context_used:,} / {context_max:,} tokens ({mark}{(context_used / context_max) * 100:.1f}%)"
+        )
     elif context_used:
         lines.append(f"Context usage: {mark}{context_used:,} tokens")
     if usage.get("compressions"):
         lines.append(f"Compressions: {int(usage.get('compressions') or 0):,}")
     if (agent := session.get("agent")) is not None:
-        from agent.context_file_sources import context_file_sources_for_agent, render_context_file_lines
+        from agent.context_file_sources import (
+            context_file_sources_for_agent,
+            render_context_file_lines,
+        )
+
         # RPC thread: bind the session cwd or the discovery walk keys on the backend's cwd, not the workspace.
         tokens = _set_session_context(session["session_key"], cwd=_session_cwd(session))
         try:
-            file_lines = render_context_file_lines(context_file_sources_for_agent(agent))
+            file_lines = render_context_file_lines(
+                context_file_sources_for_agent(agent)
+            )
         finally:
             _clear_session_context(tokens)
         if file_lines:
@@ -296,12 +367,15 @@ def _format_live_tools_output(sid: str, session: dict, arg: str) -> str:
     names = sorted({str(n) for g in groups.values() if isinstance(g, list) for n in g})
     if not names:
         return "No tools available."
-    return "Available tools ({}):\n{}".format(len(names), "\n".join(f"  {name}" for name in names))
+    return "Available tools ({}):\n{}".format(
+        len(names), "\n".join(f"  {name}" for name in names)
+    )
 
 
 def _format_live_help_output(sid: str, session: dict, arg: str) -> str:
     try:
         from clawk_cli.commands import COMMANDS_BY_CATEGORY
+
         lines = ["Available commands:", ""]
         for category, commands in COMMANDS_BY_CATEGORY.items():
             lines.append(f"{category}:")
@@ -330,23 +404,36 @@ def _format_live_status_output(sid: str, session: dict, arg: str) -> str:
 # name → (reply when there is no session, formatter(sid, session, arg) or a fixed reply).
 # A None no-session reply means the formatter handles a missing session itself.
 _LIVE_SLASH_OUTPUT = {
-    "compress": ("no active session for /compress",
-                 lambda sid, session, arg: _mirror_slash_side_effects(sid, session, f"/compress {arg}".strip())),
+    "compress": (
+        "no active session for /compress",
+        lambda sid, session, arg: _mirror_slash_side_effects(
+            sid, session, f"/compress {arg}".strip()
+        ),
+    ),
     "usage": (_NO_AGENT_USAGE, _format_live_usage_output),
     "review": (None, _format_live_review_output),
     "history": ("No conversation history yet.", _format_live_history_output),
     "refine": (None, _format_live_refine_output),
     "status": (None, _format_live_status_output),
-    "context": ("Conversation is empty (no messages yet).", _format_live_context_output),
+    "context": (
+        "Conversation is empty (no messages yet).",
+        _format_live_context_output,
+    ),
     "tools": ("No tools available.", _format_live_tools_output),
     "help": (None, _format_live_help_output),
     "clear": (None, "Screen clear is terminal-only; desktop/TUI chat left unchanged."),
-    "models": (None, "Use /model to view or switch the current model; desktop users can also open the model picker."),
+    "models": (
+        None,
+        "Use /model to view or switch the current model; desktop users can also open the model picker.",
+    ),
     "rename": (None, "Use /title <name> to rename this session."),
-    "effort": (None, "Use /reasoning <effort> to change reasoning effort.")}
+    "effort": (None, "Use /reasoning <effort> to change reasoning effort."),
+}
 
 
-def _live_slash_command_output(sid: str, session: Optional[dict], name: str, arg: str) -> Optional[str]:
+def _live_slash_command_output(
+    sid: str, session: Optional[dict], name: str, arg: str
+) -> Optional[str]:
     """Answer a slash command from the live session instead of the slash worker; None = not ours."""
     name = (name or "").lstrip("/").lower()
     arg = arg or ""
@@ -358,7 +445,9 @@ def _live_slash_command_output(sid: str, session: Optional[dict], name: str, arg
         and not _session_uses_compute_host(session)
     ):
         return _format_live_context_output(sid, session, arg)
-    if name in _ISOLATED_SESSION_READ_COMMANDS and not (session is not None and _session_uses_compute_host(session)):
+    if name in _ISOLATED_SESSION_READ_COMMANDS and not (
+        session is not None and _session_uses_compute_host(session)
+    ):
         return None
     entry = _LIVE_SLASH_OUTPUT.get(name)
     if entry is None:
@@ -377,25 +466,41 @@ def _live_slash_command_output(sid: str, session: Optional[dict], name: str, arg
 _MUTATES_WHILE_RUNNING = frozenset({"model", "personality", "compress"})
 
 
-def _compress_live_with_feedback(sid: str, session: dict, agent, arg: str, *, snapshot_kwargs: bool) -> str:
+def _compress_live_with_feedback(
+    sid: str, session: dict, agent, arg: str, *, snapshot_kwargs: bool
+) -> str:
     """Compress the live session; return the user-facing feedback text (shared by command.dispatch
     /compress and the slash mirror). ``snapshot_kwargs`` forwards the pre-read snapshot to
     ``_compress_session_history``; the raw arg goes through unparsed (the choke point parses
     ``here [N]`` / ``--keep N``). CompressionLockHeld is a clean no-op (skip note returned);
     other errors propagate to the caller, which finalizes the context-engine notification."""
-    from agent.conversation_compression import finalize_context_engine_compression_notification
+    from agent.conversation_compression import (
+        finalize_context_engine_compression_notification,
+    )
     from agent.conversation_compression_manual import (
-        AGGRESSIVE_UNSUPPORTED, compress_now, parse_compress_args, render_compress_result)
-    from agent.manual_compression_feedback import describe_compression_lock_skip, summarize_manual_compression
+        AGGRESSIVE_UNSUPPORTED,
+        compress_now,
+        parse_compress_args,
+        render_compress_result,
+    )
+    from agent.manual_compression_feedback import (
+        describe_compression_lock_skip,
+        summarize_manual_compression,
+    )
     from agent.model_metadata import estimate_request_tokens_rough
+
     request = parse_compress_args(arg)
     if request.aggressive:
         return AGGRESSIVE_UNSUPPORTED
-    if request.preview:  # report only — history, agent and session key untouched, so no busy claim
+    if (
+        request.preview
+    ):  # report only — history, agent and session key untouched, so no busy claim
         with session["history_lock"]:
             preview_messages = list(session.get("history", []))
         with _session_profile_runtime_scope(session):
-            return "\n".join(render_compress_result(compress_now(agent, preview_messages, request)))
+            return "\n".join(
+                render_compress_result(compress_now(agent, preview_messages, request))
+            )
     with _session_profile_runtime_scope(session), _manual_compress_turn(sid, session):
         with session["history_lock"]:
             before_messages = list(session.get("history", []))
@@ -404,9 +509,20 @@ def _compress_live_with_feedback(sid: str, session: dict, agent, arg: str, *, sn
         tools = getattr(agent, "tools", None) or None
 
         def estimate(messages, prompt, tool_defs) -> int:
-            return estimate_request_tokens_rough(messages, system_prompt=prompt, tools=tool_defs) if messages else 0
+            return (
+                estimate_request_tokens_rough(
+                    messages, system_prompt=prompt, tools=tool_defs
+                )
+                if messages
+                else 0
+            )
+
         before_tokens = estimate(before_messages, sys_prompt, tools)
-        snapshot = {"approx_tokens": before_tokens, "before_messages": before_messages, "history_version": history_version}
+        snapshot = {
+            "approx_tokens": before_tokens,
+            "before_messages": before_messages,
+            "history_version": history_version,
+        }
         try:
             if snapshot_kwargs:
                 _compress_session_history(session, arg.strip() or None, **snapshot)
@@ -421,13 +537,22 @@ def _compress_live_with_feedback(sid: str, session: dict, agent, arg: str, *, sn
         with session["history_lock"]:
             after_messages = list(session.get("history", []))
         after_tokens = estimate(
-            after_messages, getattr(agent, "_cached_system_prompt", "") or sys_prompt, getattr(agent, "tools", None) or tools)
+            after_messages,
+            getattr(agent, "_cached_system_prompt", "") or sys_prompt,
+            getattr(agent, "tools", None) or tools,
+        )
         _emit("session.info", sid, _session_info(agent, session))
         fb = summarize_manual_compression(
-            before_messages, after_messages, before_tokens, after_tokens,
-            compression_state=getattr(agent, "context_compressor", None))
+            before_messages,
+            after_messages,
+            before_tokens,
+            after_tokens,
+            compression_state=getattr(agent, "context_compressor", None),
+        )
         finalize_context_engine_compression_notification(agent, committed=True)
-        return "\n".join(filter(None, [fb["headline"], fb["token_line"], fb.get("note")]))
+        return "\n".join(
+            filter(None, [fb["headline"], fb["token_line"], fb.get("note")])
+        )
 
 
 def _mirror_approvals(sid, session, agent, arg) -> None:
@@ -438,13 +563,24 @@ def _mirror_approvals(sid, session, agent, arg) -> None:
 def _mirror_personality(sid, session, agent, arg) -> None:
     if arg and agent:
         pname, new_prompt = _validate_personality(arg, _load_cfg())
-        from clawk_cli.personality import persist_personality  # single owner: no surface drift
+        from clawk_cli.personality import (
+            persist_personality,
+        )  # single owner: no surface drift
+
         persist_personality(pname)
         _apply_personality_to_session(sid, session, new_prompt, pname)
 
 
-_FAST_TIERS = {"fast": "priority", "on": "priority", "normal": None, "off": None, "auto": "auto", "cold": "cold",
-               "ultrafast": "ultrafast", "ultra": "ultrafast"}
+_FAST_TIERS = {
+    "fast": "priority",
+    "on": "priority",
+    "normal": None,
+    "off": None,
+    "auto": "auto",
+    "cold": "cold",
+    "ultrafast": "ultrafast",
+    "ultra": "ultrafast",
+}
 
 
 def _mirror_fast(sid, session, agent, arg) -> None:
@@ -461,6 +597,7 @@ def _mirror_reload_mcp(sid, session, agent, arg) -> None:
 
 def _mirror_stop(sid, session, agent, arg) -> None:
     from tools.process_registry import process_registry
+
     # Deliberate user stop: an explicit source keeps it reaching
     # persist_on_release jobs (#41225).
     process_registry.kill_all(source="slash.stop")
@@ -472,6 +609,7 @@ def _mirror_autoprune(sid, session, agent, arg) -> str:
     ``status``, a typo or a failed save leave it up."""
     from pathlib import Path
     from clawk_cli.prune_advisor import answered
+
     home = session.get("profile_home")
     if arg and answered(Path(home) if home else None):
         _emit("notification.clear", sid, {"key": "sessions.auto_prune"})
@@ -480,16 +618,27 @@ def _mirror_autoprune(sid, session, agent, arg) -> str:
 
 _SLASH_MIRRORS = {
     "model": lambda sid, session, agent, arg: (
-        _apply_model_switch(sid, session, arg).get("warning", "") if arg and agent else ""),
-    "approvals": _mirror_approvals, "personality": _mirror_personality,
+        _apply_model_switch(sid, session, arg).get("warning", "")
+        if arg and agent
+        else ""
+    ),
+    "approvals": _mirror_approvals,
+    "personality": _mirror_personality,
     "compress": lambda sid, session, agent, arg: (
-        _compress_live_with_feedback(sid, session, agent, arg, snapshot_kwargs=False) if agent else ""),
+        _compress_live_with_feedback(sid, session, agent, arg, snapshot_kwargs=False)
+        if agent
+        else ""
+    ),
     "fast": _mirror_fast,
-    "reload-mcp": _mirror_reload_mcp, "stop": _mirror_stop,
-    "autoprune": _mirror_autoprune}
+    "reload-mcp": _mirror_reload_mcp,
+    "stop": _mirror_stop,
+    "autoprune": _mirror_autoprune,
+}
 
 
-def _compute_host_slash(sid: str, session: dict, name: str, command: str) -> tuple[str, str]:
+def _compute_host_slash(
+    sid: str, session: dict, name: str, command: str
+) -> tuple[str, str]:
     """Forward a mutating slash command to the session's compute host → ``(status, text)``:
     ``pending`` (compress still running after the wait), ``failed`` (transport error/timeout),
     ``rejected`` (host control.error), ``ok`` (host output; metadata mirror applied). Compress
@@ -498,19 +647,38 @@ def _compute_host_slash(sid: str, session: dict, name: str, command: str) -> tup
     is_compress = name == "compress"
 
     def _on_late_ack(late: dict, _sid=sid) -> None:
-        _adopt_late_compute_host_compress_ack(_sid, session, late, route_name=route_name)
+        _adopt_late_compute_host_compress_ack(
+            _sid, session, late, route_name=route_name
+        )
+
     try:
         ack = _send_compute_host_control(
-            sid, route_name=route_name, command=command, wait=True,
-            **({"timeout": _compute_host_compress_wait_seconds(), "on_late_ack": _on_late_ack} if is_compress else {}))
+            sid,
+            route_name=route_name,
+            command=command,
+            wait=True,
+            **(
+                {
+                    "timeout": _compute_host_compress_wait_seconds(),
+                    "on_late_ack": _on_late_ack,
+                }
+                if is_compress
+                else {}
+            ),
+        )
     except queue.Empty:
         if is_compress:
-            return "pending", "compression still running in the background; the transcript will refresh when it finishes"
+            return (
+                "pending",
+                "compression still running in the background; the transcript will refresh when it finishes",
+            )
         return "failed", f"compute-host {route_name} failed: timed out"
     except Exception as exc:
         return "failed", f"compute-host {route_name} failed: {exc}"
     if ack.get("type") in {"control.error", "error"}:
-        return "rejected", str(ack.get("message") or f"compute-host {route_name} failed")
+        return "rejected", str(
+            ack.get("message") or f"compute-host {route_name} failed"
+        )
     _apply_compute_host_metadata_mirror(session, ack)
     return "ok", str(ack.get("output") or "")
 
@@ -520,8 +688,14 @@ def _mirror_slash_side_effects(sid: str, session: dict, command: str) -> str:
     parts = command.lstrip("/").split(None, 1)
     if not parts:
         return ""
-    name, arg, agent = parts[0], (parts[1].strip() if len(parts) > 1 else ""), session.get("agent")
-    if name == "compact":  # /compact aliases /compress; the compute-host control forwards the raw alias
+    name, arg, agent = (
+        parts[0],
+        (parts[1].strip() if len(parts) > 1 else ""),
+        session.get("agent"),
+    )
+    if (
+        name == "compact"
+    ):  # /compact aliases /compress; the compute-host control forwards the raw alias
         name = "compress"
     if name in _MUTATES_WHILE_RUNNING:
         if _session_uses_compute_host(session):
@@ -535,11 +709,16 @@ def _mirror_slash_side_effects(sid: str, session: dict, command: str) -> str:
         # profile scope or /model's credential read raises UnscopedSecretError under multiplex (#122655).
         with _session_profile_runtime_scope(session):
             return mirror(sid, session, agent, arg) or ""
-    except CompressionBusy as e:  # a turn won the race after the unlocked running check above
+    except (
+        CompressionBusy
+    ) as e:  # a turn won the race after the unlocked running check above
         return str(e)
     except Exception as e:
         if name == "compress" and agent:
-            from agent.conversation_compression import finalize_context_engine_compression_notification
+            from agent.conversation_compression import (
+                finalize_context_engine_compression_notification,
+            )
+
             finalize_context_engine_compression_notification(agent, committed=False)
         return f"live session sync failed: {e}"
 

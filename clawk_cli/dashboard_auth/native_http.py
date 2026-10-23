@@ -4,6 +4,7 @@ This is not remote/exposure delegation. The daemon captures the actual socket
 peer before proxy middleware, and the private control channel is the credential
 issuer. A browser Origin (including an empty one) always disqualifies this path.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -12,7 +13,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from starlette.responses import JSONResponse
 
-HEADER = 'x-clawk-gateway-ticket'
+HEADER = "x-clawk-gateway-ticket"
 
 
 @contextmanager
@@ -26,12 +27,13 @@ def native_profile_scope(request):
     binds its home override too, so it never inherits a foreign override that happens to be
     ambient in the request context.
     """
-    grant = getattr(request.state, 'native_http_principal', None)
+    grant = getattr(request.state, "native_http_principal", None)
     if grant is None:
         yield
         return
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
-    home = Path(grant['profile_id'])
+
+    home = Path(grant["profile_id"])
     token = set_clawk_home_override(str(home))
     try:
         yield
@@ -42,68 +44,85 @@ def native_profile_scope(request):
 def _own_profile(value, profile_id, *, current=True):
     from clawk_cli.web_server_profiles import _resolve_profile_dir
 
-    if value is None or (isinstance(value, str) and current
-                         and (not value.strip() or value.strip().lower() == 'current')):
+    if value is None or (
+        isinstance(value, str)
+        and current
+        and (not value.strip() or value.strip().lower() == "current")
+    ):
         return
     if not isinstance(value, str):
-        raise PermissionError('profile_scope_mismatch')
+        raise PermissionError("profile_scope_mismatch")
     try:
         target = _resolve_profile_dir(value.strip()).resolve()
     except HTTPException:
-        raise PermissionError('profile_scope_mismatch') from None
+        raise PermissionError("profile_scope_mismatch") from None
     if target != Path(profile_id):
-        raise PermissionError('profile_scope_mismatch')
+        raise PermissionError("profile_scope_mismatch")
 
 
 async def _check_profile_scope(request, profile_id):
     # Existing handlers select body.profile OR query.profile. Check every value,
     # including repeated query keys, rather than normalizing away a disagreement.
-    path = request.url.path.rstrip('/')
-    current = not path.startswith(('/api/profiles/', '/api/cron/jobs', '/api/sessions',
-                                   '/api/fs/download', '/api/fs/read-data-url'))
-    for value in request.query_params.getlist('profile'):
+    path = request.url.path.rstrip("/")
+    current = not path.startswith(
+        (
+            "/api/profiles/",
+            "/api/cron/jobs",
+            "/api/sessions",
+            "/api/fs/download",
+            "/api/fs/read-data-url",
+        )
+    )
+    for value in request.query_params.getlist("profile"):
         _own_profile(value, profile_id, current=current)
-    content_type = request.headers.get('content-type', '').split(';', 1)[0].strip().lower()
-    if not content_type or content_type == 'application/json' or (
-            content_type.startswith('application/') and content_type.endswith('+json')):
+    content_type = (
+        request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    )
+    if (
+        not content_type
+        or content_type == "application/json"
+        or (content_type.startswith("application/") and content_type.endswith("+json"))
+    ):
         try:
             body = await request.json()
         except (ValueError, UnicodeError):
             body = None  # Route validation still owns malformed JSON.
-        if isinstance(body, dict) and 'profile' in body:
-            _own_profile(body['profile'], profile_id, current=current)
-    if path.startswith('/api/cron/jobs') and not request.query_params.get('profile'):
+        if isinstance(body, dict) and "profile" in body:
+            _own_profile(body["profile"], profile_id, current=current)
+    if path.startswith("/api/cron/jobs") and not request.query_params.get("profile"):
         # Job-id discovery and the default list scan other profiles. Require an
         # explicit, verified named profile instead of silently changing defaults.
-        raise PermissionError('profile_scope_mismatch')
-    if path == '/api/profiles':
+        raise PermissionError("profile_scope_mismatch")
+    if path == "/api/profiles":
         # GET is the existing discovery list, not authority to open their DBs.
-        if request.method != 'GET':
-            raise PermissionError('profile_scope_mismatch')
-    elif path.startswith('/api/profiles/'):
-        suffix = path.removeprefix('/api/profiles/')
+        if request.method != "GET":
+            raise PermissionError("profile_scope_mismatch")
+    elif path.startswith("/api/profiles/"):
+        suffix = path.removeprefix("/api/profiles/")
         collection = profile_collection_route(path, request.method)
         aggregate_selector = {
-            'sessions': 'profile', 'sessions/sidebar': 'recents_profile',
-            'projects/tree': 'profile', 'sessions/pull-requests': 'profile',
+            "sessions": "profile",
+            "sessions/sidebar": "recents_profile",
+            "projects/tree": "profile",
+            "sessions/pull-requests": "profile",
         }.get(collection)
         if aggregate_selector:
             values = request.query_params.getlist(aggregate_selector)
             if not values:
-                raise PermissionError('profile_scope_mismatch')
+                raise PermissionError("profile_scope_mismatch")
             for value in values:
                 # These routes interpret absent/all differently from /api/config.
                 _own_profile(value, profile_id, current=False)
-        elif collection == 'active' and request.method == 'GET':
+        elif collection == "active" and request.method == "GET":
             return  # Discovery of sticky defaults does not switch this daemon.
-        elif collection in {'active', 'import'}:
-            raise PermissionError('profile_scope_mismatch')
+        elif collection in {"active", "import"}:
+            raise PermissionError("profile_scope_mismatch")
         else:
-            _own_profile(suffix.split('/', 1)[0], profile_id, current=False)
-            if request.method in {'PATCH', 'DELETE'}:
+            _own_profile(suffix.split("/", 1)[0], profile_id, current=False)
+            if request.method in {"PATCH", "DELETE"}:
                 # Moving/deleting a home is a registry operation, not a profile REST write: it
                 # rides the dedicated ``native-profile-registry`` grant (_check_registry_scope).
-                raise PermissionError('profile_scope_mismatch')
+                raise PermissionError("profile_scope_mismatch")
 
 
 # ``/api/profiles/<suffix>`` collection routes, by method (clawk_cli/web_routers/profiles.py). Every
@@ -111,26 +130,31 @@ async def _check_profile_scope(request, profile_id):
 # ``active``/``import``/``sessions``/…: valid profile names (PROFILE_ID_RE, not reserved).
 # Desktop mirror: apps/desktop/electron/profile-routes.ts.
 PROFILE_COLLECTION_ROUTES = {
-    'active': frozenset({'GET', 'POST'}), 'import': frozenset({'POST'}),
-    'projects/tree': frozenset({'GET'}), 'sessions': frozenset({'GET'}),
-    'sessions/pull-requests': frozenset({'POST'}), 'sessions/sidebar': frozenset({'GET'}),
+    "active": frozenset({"GET", "POST"}),
+    "import": frozenset({"POST"}),
+    "projects/tree": frozenset({"GET"}),
+    "sessions": frozenset({"GET"}),
+    "sessions/pull-requests": frozenset({"POST"}),
+    "sessions/sidebar": frozenset({"GET"}),
 }
 
 
 def profile_collection_route(path, method):
     """The collection suffix ``method path`` serves, or None when the path names a profile."""
-    suffix = path.rstrip('/').removeprefix('/api/profiles/')
-    if suffix == path.rstrip('/'):
+    suffix = path.rstrip("/").removeprefix("/api/profiles/")
+    if suffix == path.rstrip("/"):
         return None
-    return suffix if method.upper() in PROFILE_COLLECTION_ROUTES.get(suffix, ()) else None
+    return (
+        suffix if method.upper() in PROFILE_COLLECTION_ROUTES.get(suffix, ()) else None
+    )
 
 
 def _registry_target(request):
     """The profile a ``PATCH``/``DELETE /api/profiles/<name>`` names, or None for any other route."""
-    if request.method not in {'PATCH', 'DELETE'}:
+    if request.method not in {"PATCH", "DELETE"}:
         return None
-    suffix = request.url.path.rstrip('/').removeprefix('/api/profiles/')
-    if suffix == request.url.path.rstrip('/') or not suffix or '/' in suffix:
+    suffix = request.url.path.rstrip("/").removeprefix("/api/profiles/")
+    if suffix == request.url.path.rstrip("/") or not suffix or "/" in suffix:
         return None
     return suffix
 
@@ -143,44 +167,56 @@ def _check_registry_scope(request, profile_id, launch_home):
     because it only sets a presentation ``display_name`` and never moves the directory.
     """
     target = _registry_target(request)
-    for value in request.query_params.getlist('profile'):
+    for value in request.query_params.getlist("profile"):
         _own_profile(value, profile_id, current=False)
     _own_profile(target, profile_id, current=False)
     if launch_home is None:
         # Fail closed: with no known launch home the guard below cannot tell it apart.
-        raise PermissionError('profile_scope_mismatch')
+        raise PermissionError("profile_scope_mismatch")
     from clawk_constants import get_default_clawk_root, clawk_home_key
+
     # Compared by clawk_home_key, as SessionAuthorities keys homes (symlinks, case, separators).
     launch = clawk_home_key(launch_home)
     if clawk_home_key(profile_id) == launch and not (
-            request.method == 'PATCH' and launch == clawk_home_key(get_default_clawk_root())):
-        raise PermissionError('profile_scope_mismatch')
+        request.method == "PATCH" and launch == clawk_home_key(get_default_clawk_root())
+    ):
+        raise PermissionError("profile_scope_mismatch")
 
 
 def _redeem_http_ticket(store, ticket, request):
     from gateway.runtime_bootstrap import _PURPOSE_CAPABILITIES
+
     try:
-        grant = store.redeem(ticket, profile_id=None, purpose='native-http')
+        grant = store.redeem(ticket, profile_id=None, purpose="native-http")
     except PermissionError:
         # Only these host-management operations accept a dedicated same-user grant.
         # Wrong-purpose redemption does not consume a ticket; ordinary profile grants
         # still reach _check_profile_scope and remain unable to create, move or delete profiles.
-        if request.method == 'POST' and request.url.path.rstrip('/') == '/api/profiles':
-            grant = store.redeem(ticket, profile_id=None, purpose='native-profile-create')
+        if request.method == "POST" and request.url.path.rstrip("/") == "/api/profiles":
+            grant = store.redeem(
+                ticket, profile_id=None, purpose="native-profile-create"
+            )
         elif _registry_target(request) is not None:
-            grant = store.redeem(ticket, profile_id=None, purpose='native-profile-registry')
+            grant = store.redeem(
+                ticket, profile_id=None, purpose="native-profile-registry"
+            )
         else:
             raise
     # The issuer's own purpose -> capability table, not a second copy of it.
-    if grant['capabilities'] != _PURPOSE_CAPABILITIES[grant['purpose']]:
-        raise PermissionError('invalid native grant')
+    if grant["capabilities"] != _PURPOSE_CAPABILITIES[grant["purpose"]]:
+        raise PermissionError("invalid native grant")
     return grant
 
 
 def _launch_home(runner):
     from gateway.session_authorities import all_authorities
-    registry = getattr(runner, 'session_authorities', None)
-    launch = registry.launch if registry is not None else (all_authorities(runner) or [None])[0]
+
+    registry = getattr(runner, "session_authorities", None)
+    launch = (
+        registry.launch
+        if registry is not None
+        else (all_authorities(runner) or [None])[0]
+    )
     return launch.profile_id if launch is not None else None
 
 
@@ -188,27 +224,42 @@ def _native_store(conn, tickets):
     """The runner's ticket store when *conn* may redeem a private grant here, else None."""
     from gateway.drain_control import restart_wait_read
     from gateway.session_authorities import all_authorities
-    runner = getattr(conn.app.state, 'gateway_runner', None)
-    descriptor = getattr(runner, 'session_runtime_descriptor', {})
+
+    runner = getattr(conn.app.state, "gateway_runner", None)
+    descriptor = getattr(runner, "session_runtime_descriptor", {})
     authorities = all_authorities(runner)
-    store = getattr(runner, 'session_ticket_store', None)
-    peer = conn.scope.get('clawk.gateway_socket_peer')
-    if (len(tickets) != 1 or 'origin' in conn.headers or not peer
-            or peer[0] not in {'127.0.0.1', '::1'}
-            or descriptor.get('state') != 'ready'
-            # A restart's after-turn wait still serves the reads that open a parked prompt (#139041).
-            # A websocket scope has no method, so a socket upgrade never matches that GET allowlist.
-            or (getattr(runner, '_draining', True)
-                and not restart_wait_read(runner, conn.scope.get('method'), conn.url.path))
-            or not authorities or store is None
-            or store.instance_id != descriptor.get('instance_id')
-            or any(a is not None and a.instance_id != store.instance_id for a in authorities)
-            # A profile being hot-served (just created: a reserved ``None`` slot, then an authority
-            # not yet published to the descriptor and ticket store) is not served yet. It cannot
-            # redeem a grant, and it must not refuse every already-served profile meanwhile.
-            or descriptor.get('served_profiles') != [
-                {'profile_id': a.profile_id, 'home': a.profile_id} for a in authorities
-                if a is not None and not getattr(a, 'retiring', False) and a.profile_id in store.profile_ids]):
+    store = getattr(runner, "session_ticket_store", None)
+    peer = conn.scope.get("clawk.gateway_socket_peer")
+    if (
+        len(tickets) != 1
+        or "origin" in conn.headers
+        or not peer
+        or peer[0] not in {"127.0.0.1", "::1"}
+        or descriptor.get("state") != "ready"
+        # A restart's after-turn wait still serves the reads that open a parked prompt (#139041).
+        # A websocket scope has no method, so a socket upgrade never matches that GET allowlist.
+        or (
+            getattr(runner, "_draining", True)
+            and not restart_wait_read(runner, conn.scope.get("method"), conn.url.path)
+        )
+        or not authorities
+        or store is None
+        or store.instance_id != descriptor.get("instance_id")
+        or any(
+            a is not None and a.instance_id != store.instance_id for a in authorities
+        )
+        # A profile being hot-served (just created: a reserved ``None`` slot, then an authority
+        # not yet published to the descriptor and ticket store) is not served yet. It cannot
+        # redeem a grant, and it must not refuse every already-served profile meanwhile.
+        or descriptor.get("served_profiles")
+        != [
+            {"profile_id": a.profile_id, "home": a.profile_id}
+            for a in authorities
+            if a is not None
+            and not getattr(a, "retiring", False)
+            and a.profile_id in store.profile_ids
+        ]
+    ):
         return None
     return runner, store
 
@@ -224,18 +275,25 @@ def redeem_native_ws(conn):
     before any route dependency or plugin code runs.
     """
     tickets = conn.headers.getlist(HEADER)
-    gate = _native_store(conn, tickets) if conn.url.path.startswith('/api/plugins/') else None
+    gate = (
+        _native_store(conn, tickets)
+        if conn.url.path.startswith("/api/plugins/")
+        else None
+    )
     if gate is None:
         return None
     runner, store = gate
     from gateway.session_authorities import authority_for_profile_id
+
     try:
-        grant = store.redeem(tickets[0], profile_id=None, purpose='native-http')
-        if (grant['capabilities'] != frozenset({'http:owner'})
-                or authority_for_profile_id(runner, grant['profile_id']) is None):
+        grant = store.redeem(tickets[0], profile_id=None, purpose="native-http")
+        if (
+            grant["capabilities"] != frozenset({"http:owner"})
+            or authority_for_profile_id(runner, grant["profile_id"]) is None
+        ):
             return None
-        for value in conn.query_params.getlist('profile'):
-            _own_profile(value, grant['profile_id'])
+        for value in conn.query_params.getlist("profile"):
+            _own_profile(value, grant["profile_id"])
     except PermissionError:
         return None
     return grant
@@ -247,9 +305,9 @@ def authenticate_native_ws(ws):
     Never redeems: the gate already did, once, and bound the grant's home and secret scope for
     the whole connection.
     """
-    if not ws.url.path.startswith('/api/plugins/'):
+    if not ws.url.path.startswith("/api/plugins/"):
         return None
-    return getattr(ws.state, 'native_http_principal', None)
+    return getattr(ws.state, "native_http_principal", None)
 
 
 async def authenticate_native_http(request):
@@ -258,23 +316,24 @@ async def authenticate_native_http(request):
     if not tickets:
         return None
     from gateway.session_authorities import authority_for_profile_id
+
     gate = _native_store(request, tickets)
     if gate is None:
-        return JSONResponse({'detail': 'Unauthorized'}, status_code=401)
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
     runner, store = gate
     try:
         # The ticket names the served profile it was minted for; that home's authority owns it.
         grant = _redeem_http_ticket(store, tickets[0], request)
-        if authority_for_profile_id(runner, grant['profile_id']) is None:
-            raise PermissionError('unserved native grant')
+        if authority_for_profile_id(runner, grant["profile_id"]) is None:
+            raise PermissionError("unserved native grant")
     except PermissionError:
-        return JSONResponse({'detail': 'Unauthorized'}, status_code=401)
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
     try:
-        if grant['purpose'] == 'native-profile-registry':
-            _check_registry_scope(request, grant['profile_id'], _launch_home(runner))
-        elif grant['purpose'] != 'native-profile-create':
-            await _check_profile_scope(request, grant['profile_id'])
+        if grant["purpose"] == "native-profile-registry":
+            _check_registry_scope(request, grant["profile_id"], _launch_home(runner))
+        elif grant["purpose"] != "native-profile-create":
+            await _check_profile_scope(request, grant["profile_id"])
     except PermissionError:
-        return JSONResponse({'detail': 'profile_scope_mismatch'}, status_code=403)
+        return JSONResponse({"detail": "profile_scope_mismatch"}, status_code=403)
     request.state.native_http_principal = grant
     return None

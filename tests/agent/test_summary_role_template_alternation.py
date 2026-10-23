@@ -121,8 +121,7 @@ class TestTemplateVisibleRoleHelper:
     def test_counted_roles_pass_through(self):
         assert _template_visible_role({"role": "user", "content": "q"}) == "user"
         assert (
-            _template_visible_role({"role": "assistant", "content": "a"})
-            == "assistant"
+            _template_visible_role({"role": "assistant", "content": "a"}) == "assistant"
         )
         assert _template_visible_role({"role": "system", "content": "s"}) == "system"
 
@@ -236,6 +235,6 @@ class TestForcedUserGuardsStillWin:
             out = c.compress(messages, current_tokens=90_000)
 
         for prev, cur in itertools.pairwise(out):
-            assert not (
-                prev.get("role") == "user" and cur.get("role") == "user"
-            ), "compression introduced literal consecutive user-role messages"
+            assert not (prev.get("role") == "user" and cur.get("role") == "user"), (
+                "compression introduced literal consecutive user-role messages"
+            )

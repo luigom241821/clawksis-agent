@@ -96,9 +96,15 @@ def _activate_root_inline(
     )
     if cur.rowcount != 1:
         return False
-    run_id = kb._synthesize_ended_run(conn, root_id, outcome="completed", summary=summary, metadata=metadata)
+    run_id = kb._synthesize_ended_run(
+        conn, root_id, outcome="completed", summary=summary, metadata=metadata
+    )
     kb._append_event(
-        conn, root_id, "completed", {"result_len": 0, "summary": summary[:400] or None}, run_id=run_id,
+        conn,
+        root_id,
+        "completed",
+        {"result_len": 0, "summary": summary[:400] or None},
+        run_id=run_id,
     )
     return True
 
@@ -125,11 +131,20 @@ def create_swarm(
     activated = False
     with kb.write_txn(conn):
         created = _create_swarm_uncommitted(
-            conn, goal=goal, workers=workers, verifier_assignee=verifier_assignee,
-            synthesizer_assignee=synthesizer_assignee, root_title=root_title,
-            verifier_title=verifier_title, synthesizer_title=synthesizer_title, tenant=tenant,
-            created_by=created_by, workspace_kind=workspace_kind, workspace_path=workspace_path,
-            priority=priority, idempotency_key=idempotency_key,
+            conn,
+            goal=goal,
+            workers=workers,
+            verifier_assignee=verifier_assignee,
+            synthesizer_assignee=synthesizer_assignee,
+            root_title=root_title,
+            verifier_title=verifier_title,
+            synthesizer_title=synthesizer_title,
+            tenant=tenant,
+            created_by=created_by,
+            workspace_kind=workspace_kind,
+            workspace_path=workspace_path,
+            priority=priority,
+            idempotency_key=idempotency_key,
         )
         root = kb.get_task(conn, created.root_id)
         if root is not None and root.status == "blocked":
@@ -163,10 +178,21 @@ def create_swarm(
 
 
 def _create_swarm_uncommitted(
-    conn: sqlite3.Connection, *, goal: str, workers: Iterable[SwarmWorkerSpec],
-    verifier_assignee: str, synthesizer_assignee: str, root_title: Optional[str],
-    verifier_title: str, synthesizer_title: str, tenant: Optional[str], created_by: str,
-    workspace_kind: Optional[str], workspace_path: Optional[str], priority: int, idempotency_key: Optional[str],
+    conn: sqlite3.Connection,
+    *,
+    goal: str,
+    workers: Iterable[SwarmWorkerSpec],
+    verifier_assignee: str,
+    synthesizer_assignee: str,
+    root_title: Optional[str],
+    verifier_title: str,
+    synthesizer_title: str,
+    tenant: Optional[str],
+    created_by: str,
+    workspace_kind: Optional[str],
+    workspace_path: Optional[str],
+    priority: int,
+    idempotency_key: Optional[str],
 ) -> SwarmCreated:
     """Create the swarm graph inside the caller's transaction: planning root
     (``blocked`` until the caller activates it), parallel workers, a verifier
@@ -182,15 +208,17 @@ def _create_swarm_uncommitted(
         _require_text(spec.title, f"workers[{i}].title")
 
     common = dict(
-        created_by=created_by, tenant=tenant,
-        workspace_kind=workspace_kind, workspace_path=workspace_path,
+        created_by=created_by,
+        tenant=tenant,
+        workspace_kind=workspace_kind,
+        workspace_path=workspace_path,
     )
     root = kb.create_task(
         conn,
         title=root_title or f"Swarm: {goal.splitlines()[0][:80]}",
         body="Kanban Swarm v1 planning/root card. This card is completed "
-             "immediately so parallel workers can start while it remains the "
-             f"shared blackboard and audit anchor.\n\nGoal:\n{goal}",
+        "immediately so parallel workers can start while it remains the "
+        f"shared blackboard and audit anchor.\n\nGoal:\n{goal}",
         assignee=created_by,
         priority=priority,
         idempotency_key=idempotency_key,
@@ -228,9 +256,8 @@ def _create_swarm_uncommitted(
         title=verifier_title,
         body=(
             "Review every worker handoff and blackboard update. Gate the swarm: "
-            "complete only with metadata {\"gate\": \"pass\"} when evidence is "
-            "sufficient; otherwise block with exact missing work."
-            + context_suffix
+            'complete only with metadata {"gate": "pass"} when evidence is '
+            "sufficient; otherwise block with exact missing work." + context_suffix
         ),
         assignee=verifier_assignee,
         parents=worker_ids,
@@ -243,8 +270,7 @@ def _create_swarm_uncommitted(
         title=synthesizer_title,
         body=(
             "Synthesize the verified worker outputs into the final deliverable. "
-            "Do not start until the verifier has passed the gate."
-            + context_suffix
+            "Do not start until the verifier has passed the gate." + context_suffix
         ),
         assignee=synthesizer_assignee,
         parents=[verifier],
@@ -254,17 +280,29 @@ def _create_swarm_uncommitted(
     )
 
     created = SwarmCreated(root, worker_ids, verifier, synthesizer)
-    post_blackboard_update(conn, root, author=created_by, key="topology", value=created.as_dict() | {"goal": goal})
+    post_blackboard_update(
+        conn,
+        root,
+        author=created_by,
+        key="topology",
+        value=created.as_dict() | {"goal": goal},
+    )
     return created
 
 
-def post_blackboard_update(conn: sqlite3.Connection, root_id: str, *, author: str, key: str, value: Any) -> int:
+def post_blackboard_update(
+    conn: sqlite3.Connection, root_id: str, *, author: str, key: str, value: Any
+) -> int:
     """Append one structured update to the swarm root blackboard."""
     _require_text(root_id, "root_id")
     author = _require_text(author, "author")
     key = _require_text(key, "key")
-    payload = json.dumps({"key": key, "value": value}, ensure_ascii=False, sort_keys=True)
-    return kb.add_comment(conn, root_id, author=author, body=BLACKBOARD_PREFIX + payload)
+    payload = json.dumps(
+        {"key": key, "value": value}, ensure_ascii=False, sort_keys=True
+    )
+    return kb.add_comment(
+        conn, root_id, author=author, body=BLACKBOARD_PREFIX + payload
+    )
 
 
 def latest_blackboard(conn: sqlite3.Connection, root_id: str) -> dict[str, Any]:
@@ -278,7 +316,7 @@ def latest_blackboard(conn: sqlite3.Connection, root_id: str) -> dict[str, Any]:
         if not body.startswith(BLACKBOARD_PREFIX):
             continue
         try:
-            payload = json.loads(body[len(BLACKBOARD_PREFIX):])
+            payload = json.loads(body[len(BLACKBOARD_PREFIX) :])
         except json.JSONDecodeError:
             continue
         key = payload.get("key")
@@ -296,5 +334,11 @@ def parse_worker_arg(raw: str) -> SwarmWorkerSpec:
     parts = [p.strip() for p in raw.split(":", 2)]
     if len(parts) < 2:
         raise ValueError("worker must be profile:title or profile:title:skill,skill")
-    skills = [s.strip() for s in parts[2].split(",") if s.strip()] if len(parts) == 3 and parts[2] else []
-    return SwarmWorkerSpec(profile=parts[0], title=parts[1], body=parts[1], skills=skills)
+    skills = (
+        [s.strip() for s in parts[2].split(",") if s.strip()]
+        if len(parts) == 3 and parts[2]
+        else []
+    )
+    return SwarmWorkerSpec(
+        profile=parts[0], title=parts[1], body=parts[1], skills=skills
+    )

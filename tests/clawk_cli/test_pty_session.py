@@ -17,7 +17,7 @@ def test_ringbuffer_keeps_everything_under_capacity():
 
 def test_ringbuffer_drops_oldest_over_capacity():
     rb = RingBuffer(4)
-    rb.append(b"abcdef")          # 6 bytes into a 4-byte buffer
+    rb.append(b"abcdef")  # 6 bytes into a 4-byte buffer
     assert rb.snapshot() == b"cdef"
     assert rb.truncated is True
 
@@ -26,7 +26,7 @@ class FakeBridge:
     """Implements the bridge contract PtySession depends on."""
 
     def __init__(self, chunks, *, write_result=True):
-        self._chunks = list(chunks)   # bytes; b"" = idle tick; None = EOF
+        self._chunks = list(chunks)  # bytes; b"" = idle tick; None = EOF
         self.written = bytearray()
         self.write_result = write_result
         self.closed = False
@@ -35,7 +35,7 @@ class FakeBridge:
 
     def read(self, timeout):
         if not self._chunks:
-            return b""                # idle
+            return b""  # idle
         return self._chunks.pop(0)
 
     async def write(self, data):
@@ -55,7 +55,7 @@ class FakeBridge:
 
 class FakeWS:
     def __init__(self):
-        self.sent = []               # list of ("bytes"|"text", payload)
+        self.sent = []  # list of ("bytes"|"text", payload)
         self.close_code = None
 
     async def send_bytes(self, data):
@@ -87,10 +87,11 @@ class FailingWS(FakeWS):
 @pytest.mark.asyncio
 async def test_attach_replays_buffer_then_streams_live():
     from clawk_cli.pty_session import PtySession
+
     bridge = FakeBridge([b"hello ", b"world", None])
     s = PtySession("k", bridge, buffer_cap=1024, read_timeout=0.01)
     await s.start()
-    await asyncio.sleep(0.05)                      # drain consumes "hello world"
+    await asyncio.sleep(0.05)  # drain consumes "hello world"
     ws = FakeWS()
     await s.attach(ws)
     replay = b"".join(p for kind, p in ws.sent if kind == "bytes")
@@ -103,7 +104,9 @@ async def test_failed_replay_detaches_session_so_reaper_reclaims_it():
     """A client dropping mid-replay must not pin the PTY as attached forever (#110849)."""
     from clawk_cli.pty_session import PtySessionRegistry
 
-    reg = PtySessionRegistry(ttl=0.0, max_sessions=2, buffer_cap=1024, read_timeout=0.01)
+    reg = PtySessionRegistry(
+        ttl=0.0, max_sessions=2, buffer_cap=1024, read_timeout=0.01
+    )
     bridge = FakeBridge([b""])
     s, _ = await reg.attach_or_spawn("k", spawn=lambda: bridge)
     s.buffer.append(b"replay")
@@ -264,6 +267,7 @@ async def test_superseded_failed_write_does_not_kill_replacement_session():
 @pytest.mark.asyncio
 async def test_detach_keeps_draining_into_buffer():
     from clawk_cli.pty_session import PtySession
+
     bridge = FakeBridge([b"one", b"", b"two"])
     s = PtySession("k", bridge, buffer_cap=1024, read_timeout=0.01)
     await s.start()
@@ -272,7 +276,7 @@ async def test_detach_keeps_draining_into_buffer():
     s.detach(ws)
     assert s.attached is False
     assert s.last_detached_at is not None
-    await asyncio.sleep(0.05)                      # "two" drains while detached
+    await asyncio.sleep(0.05)  # "two" drains while detached
     ws2 = FakeWS()
     await s.attach(ws2)
     replay = b"".join(p for kind, p in ws2.sent if kind == "bytes")
@@ -283,12 +287,13 @@ async def test_detach_keeps_draining_into_buffer():
 @pytest.mark.asyncio
 async def test_eof_marks_dead_and_closes_socket_4410():
     from clawk_cli.pty_session import PtySession
+
     bridge = FakeBridge([b"bye", None])
     s = PtySession("k", bridge, buffer_cap=1024, read_timeout=0.01)
     await s.start()
     ws = FakeWS()
     await s.attach(ws)
-    await asyncio.sleep(0.05)                      # drain hits None (EOF)
+    await asyncio.sleep(0.05)  # drain hits None (EOF)
     assert s.alive is False
     assert ws.close_code == 4410
     await s.close()
@@ -298,8 +303,9 @@ from clawk_cli.pty_session import PtySessionRegistry, RegistryFull
 
 
 def make_registry(ttl=1800.0, max_sessions=16):
-    return PtySessionRegistry(ttl=ttl, max_sessions=max_sessions,
-                              buffer_cap=1024, read_timeout=0.01)
+    return PtySessionRegistry(
+        ttl=ttl, max_sessions=max_sessions, buffer_cap=1024, read_timeout=0.01
+    )
 
 
 @pytest.mark.asyncio
@@ -310,7 +316,7 @@ async def test_same_key_reattaches_same_session():
     s2, created2 = await reg.attach_or_spawn("tok", spawn=lambda: FakeBridge([]))
     assert created1 is True and created2 is False
     assert s1 is s2
-    assert s2.bridge is b1                     # second spawn callable was NOT used
+    assert s2.bridge is b1  # second spawn callable was NOT used
     await reg.close_all()
 
 
@@ -319,7 +325,7 @@ async def test_new_key_at_capacity_raises_when_none_reapable():
     reg = make_registry(max_sessions=1)
     b = FakeBridge([b"", b""])
     s, _ = await reg.attach_or_spawn("a", spawn=lambda: b)
-    await s.attach(FakeWS())                    # attached → not reapable
+    await s.attach(FakeWS())  # attached → not reapable
     with pytest.raises(RegistryFull):
         await reg.attach_or_spawn("b", spawn=lambda: FakeBridge([]))
     await reg.close_all()
@@ -350,7 +356,7 @@ async def test_concurrent_attach_on_one_token_forks_one_pty():
         reg.attach_or_spawn("tok", spawn=spawn),
     )
 
-    assert len(spawned) == 1                    # one token, one PTY
+    assert len(spawned) == 1  # one token, one PTY
     assert (s1, created1) == (s2, True)
     assert created2 is False
     assert s1.bridge is spawned[0]
@@ -370,12 +376,13 @@ async def test_concurrent_attach_on_one_token_forks_one_pty():
 async def _two_idle_sessions_first_close_gated(reg):
     """Two detached (idle) sessions; k0's close() parks until ``release`` is set."""
     from clawk_cli.pty_session import PtySession
+
     bridges = []
     for i in range(2):
         bridge = FakeBridge([b""])
-        s = PtySession(f'k{i:d}', bridge, buffer_cap=1024, read_timeout=0.01)
+        s = PtySession(f"k{i:d}", bridge, buffer_cap=1024, read_timeout=0.01)
         await s.start()
-        s.detach(None)                        # unattached, last_detached_at set
+        s.detach(None)  # unattached, last_detached_at set
         reg._sessions[s.key] = s
         bridges.append(bridge)
 
@@ -400,13 +407,13 @@ async def test_concurrent_reap_idle_is_idempotent():
     reg = make_registry(ttl=60.0)
     bridges, entered, release = await _two_idle_sessions_first_close_gated(reg)
 
-    far_future = time.monotonic() + 10_000    # both idle past ttl → doomed
+    far_future = time.monotonic() + 10_000  # both idle past ttl → doomed
     first = asyncio.create_task(reg.reap_idle(now=far_future))
-    await entered.wait()                      # k0 popped; first reap parked in close()
-    await reg.reap_idle(now=far_future)       # second reap takes k1
+    await entered.wait()  # k0 popped; first reap parked in close()
+    await reg.reap_idle(now=far_future)  # second reap takes k1
 
     release.set()
-    await first                               # first reap reaches the taken k1
+    await first  # first reap reaches the taken k1
     assert not reg._sessions
     assert all(b.closed for b in bridges)
 
@@ -419,10 +426,10 @@ async def test_close_all_survives_key_popped_by_concurrent_reap():
     bridges, entered, release = await _two_idle_sessions_first_close_gated(reg)
 
     closer = asyncio.create_task(reg.close_all())
-    await entered.wait()                      # close_all popped k0, parked in close()
-    await reg.reap_idle(now=time.monotonic() + 10_000)   # pops k1 meanwhile
+    await entered.wait()  # close_all popped k0, parked in close()
+    await reg.reap_idle(now=time.monotonic() + 10_000)  # pops k1 meanwhile
     release.set()
-    await closer                              # k1 of the snapshot is already gone
+    await closer  # k1 of the snapshot is already gone
 
     assert not reg._sessions
     assert all(b.closed for b in bridges)
@@ -436,12 +443,12 @@ async def test_close_all_does_not_wait_on_one_slow_close_before_the_next():
     bridges, entered, release = await _two_idle_sessions_first_close_gated(reg)
 
     closer = asyncio.create_task(reg.close_all())
-    await entered.wait()                      # k0's close() is parked
+    await entered.wait()  # k0's close() is parked
     for _ in range(50):
         if bridges[1].closed:
             break
         await asyncio.sleep(0.01)
-    assert bridges[1].closed                  # k1 closed while k0 still waits
+    assert bridges[1].closed  # k1 closed while k0 still waits
     release.set()
     await closer
     assert all(b.closed for b in bridges)
@@ -454,11 +461,11 @@ async def test_close_all_waits_for_closes_already_running_in_the_background():
     reg = make_registry(ttl=60.0)
     bridges, entered, release = await _two_idle_sessions_first_close_gated(reg)
     reg._close_in_background(reg._sessions.pop("k0"))
-    await entered.wait()                      # k0 is closing outside the registry
+    await entered.wait()  # k0 is closing outside the registry
 
     closer = asyncio.create_task(reg.close_all())
     await asyncio.sleep(0.05)
-    assert not closer.done()                  # still waiting on k0
+    assert not closer.done()  # still waiting on k0
     release.set()
     await closer
     assert all(b.closed for b in bridges)
@@ -471,8 +478,12 @@ async def test_close_other_sessions_removes_old_profile_session():
     reg = make_registry()
     old_bridge = FakeBridge([b""])
     current_bridge = FakeBridge([b""])
-    old = PtySession("token\0alpha\0session-a", old_bridge, buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("token\0beta\0session-b", current_bridge, buffer_cap=1024, read_timeout=0.01)
+    old = PtySession(
+        "token\0alpha\0session-a", old_bridge, buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "token\0beta\0session-b", current_bridge, buffer_cap=1024, read_timeout=0.01
+    )
     await old.start()
     await current.start()
     # A sibling tab (same attach token, other profile) is still viewing the old PTY.
@@ -489,6 +500,8 @@ async def test_close_other_sessions_removes_old_profile_session():
     # The displaced viewer gets the documented supersede code rather than going silent.
     assert old_ws.close_code == WS_CLOSE_SUPERSEDED
     await reg.close_all()
+
+
 @pytest.mark.asyncio
 async def test_close_orphaned_sessions_closes_pty_stranded_by_token_rotation():
     from clawk_cli.pty_session import PtySession
@@ -496,11 +509,15 @@ async def test_close_orphaned_sessions_closes_pty_stranded_by_token_rotation():
     reg = make_registry()
     stranded_bridge = FakeBridge([b""])
     current_bridge = FakeBridge([b""])
-    stranded = PtySession("old-token\0\0session-a", stranded_bridge, buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("new-token\0\0session-a", current_bridge, buffer_cap=1024, read_timeout=0.01)
+    stranded = PtySession(
+        "old-token\0\0session-a", stranded_bridge, buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "new-token\0\0session-a", current_bridge, buffer_cap=1024, read_timeout=0.01
+    )
     await stranded.start()
     await current.start()
-    stranded.detach(None)                 # New chat rotated the token and walked away
+    stranded.detach(None)  # New chat rotated the token and walked away
     reg._sessions[stranded.key] = stranded
     reg._sessions[current.key] = current
 
@@ -519,8 +536,12 @@ async def test_close_orphaned_sessions_keeps_a_pty_someone_is_viewing():
     reg = make_registry()
     viewed_bridge = FakeBridge([b""])
     current_bridge = FakeBridge([b""])
-    viewed = PtySession("old-token\0\0session-a", viewed_bridge, buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("new-token\0\0session-a", current_bridge, buffer_cap=1024, read_timeout=0.01)
+    viewed = PtySession(
+        "old-token\0\0session-a", viewed_bridge, buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "new-token\0\0session-a", current_bridge, buffer_cap=1024, read_timeout=0.01
+    )
     await viewed.start()
     await current.start()
     assert await viewed.attach(FakeWS())  # a second tab is still watching that terminal
@@ -541,7 +562,9 @@ async def test_close_orphaned_sessions_without_resume_target_touches_nothing():
 
     reg = make_registry()
     other_bridge = FakeBridge([b""])
-    other = PtySession("old-token\0\0", other_bridge, buffer_cap=1024, read_timeout=0.01)
+    other = PtySession(
+        "old-token\0\0", other_bridge, buffer_cap=1024, read_timeout=0.01
+    )
     await other.start()
     other.detach(None)
     reg._sessions[other.key] = other
@@ -576,11 +599,18 @@ async def test_close_orphaned_sessions_leaves_the_same_session_id_in_another_pro
     reg = make_registry()
     other_bridge = FakeBridge([b""])
     current_bridge = FakeBridge([b""])
-    other = PtySession("old-token\0beta\0session-a", other_bridge, buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("new-token\0alpha\0session-a", current_bridge, buffer_cap=1024, read_timeout=0.01)
+    other = PtySession(
+        "old-token\0beta\0session-a", other_bridge, buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "new-token\0alpha\0session-a",
+        current_bridge,
+        buffer_cap=1024,
+        read_timeout=0.01,
+    )
     await other.start()
     await current.start()
-    other.detach(None)                    # beta's tab is mid-reconnect, not stranded
+    other.detach(None)  # beta's tab is mid-reconnect, not stranded
     reg._sessions[other.key] = other
     reg._sessions[current.key] = current
 
@@ -611,22 +641,32 @@ def process_tree(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_close_orphaned_sessions_finds_the_lease_holder_without_a_resume_key(process_tree):
+async def test_close_orphaned_sessions_finds_the_lease_holder_without_a_resume_key(
+    process_tree,
+):
     """The reported repro starts a *fresh* chat in the default profile, so chat A's key is
     the bare token — no profile, no resume segment. Only the process holding the session
     lease identifies it, and that process is the PTY leader's CHILD, not the leader."""
     from clawk_cli.pty_session import PtySession
 
     reg = make_registry()
-    fresh_a = PtySession("old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01)
-    unrelated = PtySession("other-token", PidBridge([b""], 5151), buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("new-token\0\0session-a", FakeBridge([b""]), buffer_cap=1024, read_timeout=0.01)
+    fresh_a = PtySession(
+        "old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01
+    )
+    unrelated = PtySession(
+        "other-token", PidBridge([b""], 5151), buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "new-token\0\0session-a", FakeBridge([b""]), buffer_cap=1024, read_timeout=0.01
+    )
     for session in (fresh_a, unrelated, current):
         await session.start()
         session.detach(None)
         reg._sessions[session.key] = session
 
-    await reg.close_orphaned_sessions("session-a", keep_key=current.key, holder_pid=4243)
+    await reg.close_orphaned_sessions(
+        "session-a", keep_key=current.key, holder_pid=4243
+    )
 
     assert fresh_a.bridge.closed and fresh_a.key not in reg._sessions
     # A detached terminal for a different session is somebody's reconnect
@@ -642,12 +682,16 @@ async def test_close_orphaned_sessions_leaves_a_holder_outside_every_pty(process
     from clawk_cli.pty_session import PtySession
 
     reg = make_registry()
-    detached = PtySession("old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01)
+    detached = PtySession(
+        "old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01
+    )
     await detached.start()
     detached.detach(None)
     reg._sessions[detached.key] = detached
 
-    await reg.close_orphaned_sessions("session-a", keep_key="new-token\0\0session-a", holder_pid=9000)
+    await reg.close_orphaned_sessions(
+        "session-a", keep_key="new-token\0\0session-a", holder_pid=9000
+    )
 
     assert not detached.bridge.closed and reg._sessions[detached.key] is detached
     await reg.close_all()
@@ -660,7 +704,11 @@ def test_hosts_pid_sees_the_lease_holding_grandchild_of_a_real_pty():
     from clawk_cli.pty_session import PtySession
 
     bridge = PtyBridge.spawn(
-        ["sh", "-c", "python3 -c 'import os,time;print(\"CHILD\",os.getpid(),flush=True);time.sleep(20)'; true"]
+        [
+            "sh",
+            "-c",
+            "python3 -c 'import os,time;print(\"CHILD\",os.getpid(),flush=True);time.sleep(20)'; true",
+        ]
     )
     try:
         out, deadline = b"", time.monotonic() + 10
@@ -690,24 +738,31 @@ async def test_reap_reaps_dead_process_even_when_attached():
     assert "tok" not in reg._sessions
     assert b.closed is True
 
-
     await reg.close_all()
 
 
 @pytest.mark.asyncio
-async def test_close_orphaned_sessions_leaves_a_lease_holding_pty_that_is_viewed(process_tree):
+async def test_close_orphaned_sessions_leaves_a_lease_holding_pty_that_is_viewed(
+    process_tree,
+):
     from clawk_cli.pty_session import PtySession
 
     reg = make_registry()
-    watched = PtySession("old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01)
-    current = PtySession("new-token\0\0session-a", FakeBridge([b""]), buffer_cap=1024, read_timeout=0.01)
+    watched = PtySession(
+        "old-token", PidBridge([b""], 4242), buffer_cap=1024, read_timeout=0.01
+    )
+    current = PtySession(
+        "new-token\0\0session-a", FakeBridge([b""]), buffer_cap=1024, read_timeout=0.01
+    )
     await watched.start()
     await current.start()
     assert await watched.attach(FakeWS())
     reg._sessions[watched.key] = watched
     reg._sessions[current.key] = current
 
-    await reg.close_orphaned_sessions("session-a", keep_key=current.key, holder_pid=4243)
+    await reg.close_orphaned_sessions(
+        "session-a", keep_key=current.key, holder_pid=4243
+    )
 
     assert not watched.bridge.closed and reg._sessions[watched.key] is watched
     await reg.close_all()
@@ -734,5 +789,3 @@ async def test_reap_keeps_live_attached_session():
     assert "tok" in reg._sessions
     assert b.closed is False
     await reg.close_all()
-
-

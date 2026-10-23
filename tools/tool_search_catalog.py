@@ -65,6 +65,7 @@ def _registry_entry(name: str) -> Any:
     failures must never fail a bridge call). Lazy import: tests patch the registry."""
     try:
         from tools.registry import registry
+
         return registry.get_entry(name)
     except Exception:
         return None
@@ -85,8 +86,12 @@ def _entry_search_text(td: dict[str, Any], source_label: str = "") -> str:
     name = fn.get("name", "")
     name = name.removeprefix("mcp__")
     name_words = re.sub(r"[_.:-]", " ", name)
-    extra = source_label if source_label and source_label not in name_words.split() else ""
-    param_names = " ".join(((fn.get("parameters") or {}).get("properties") or {}).keys())
+    extra = (
+        source_label if source_label and source_label not in name_words.split() else ""
+    )
+    param_names = " ".join(
+        ((fn.get("parameters") or {}).get("properties") or {}).keys()
+    )
     return f"{name_words} {extra} {fn.get('description', '') or ''} {param_names}"
 
 
@@ -109,15 +114,29 @@ def build_catalog(tool_defs: list[dict[str, Any]]) -> list[CatalogEntry]:
         source, source_name = _classify_source(name)
         # Index the human-facing label ("linear", not "mcp-linear").
         source_label = _listing_group_label(source_name) if source_name else ""
-        catalog.append(CatalogEntry(
-            name=name, description=fn.get("description", "") or "", schema=td, source=source,
-            source_name=source_name, _tokens=_tokenize(_entry_search_text(td, source_label))))
+        catalog.append(
+            CatalogEntry(
+                name=name,
+                description=fn.get("description", "") or "",
+                schema=td,
+                source=source,
+                source_name=source_name,
+                _tokens=_tokenize(_entry_search_text(td, source_label)),
+            )
+        )
     return catalog
 
 
-def _bm25_score(query_tokens: list[str], doc_tokens: list[str], doc_lengths: list[int],
-                avg_dl: float, doc_freq: dict[str, int], n_docs: int, k1: float = 1.5,
-                b: float = 0.75) -> float:
+def _bm25_score(
+    query_tokens: list[str],
+    doc_tokens: list[str],
+    doc_lengths: list[int],
+    avg_dl: float,
+    doc_freq: dict[str, int],
+    n_docs: int,
+    k1: float = 1.5,
+    b: float = 0.75,
+) -> float:
     """Standard BM25 for one query against one document (inlined; the catalog is bounded —
     typically < 500 tools — so a dependency is not worth it)."""
     score = 0.0
@@ -127,11 +146,15 @@ def _bm25_score(query_tokens: list[str], doc_tokens: list[str], doc_lengths: lis
         df, tf = doc_freq.get(q, 0), doc_tf.get(q, 0)
         if df and tf:
             idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
-            score += idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1.0)))
+            score += (
+                idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * dl / max(avg_dl, 1.0)))
+            )
     return score
 
 
-_CorpusStats = tuple[list[int], float, dict[str, int], int]  # doc_lengths, avg_dl, df, n_docs
+_CorpusStats = tuple[
+    list[int], float, dict[str, int], int
+]  # doc_lengths, avg_dl, df, n_docs
 
 
 def _corpus_stats(catalog: list[CatalogEntry]) -> _CorpusStats:
@@ -147,9 +170,11 @@ def _gate_token(query_tokens: list[str], doc_freq: dict[str, int], n_docs: int) 
     ``read``, ``create`` sit in dozens of tool documents and separate nothing; ``gmail``,
     ``github``, ``incident`` sit in a few and separate everything. A document without this
     token answered a different question, however many common tokens it shares."""
+
     def _idf(token: str) -> float:
         df = doc_freq.get(token, 0)
         return math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
+
     return max(query_tokens, key=_idf)
 
 
@@ -173,8 +198,13 @@ def _required_term_coverage(answerable_term_count: int) -> int:
     return math.ceil(answerable_term_count * MIN_QUERY_TERM_COVERAGE)
 
 
-def search_catalog(catalog: list[CatalogEntry], query: str, limit: int = 5, *,
-                   corpus_stats: Optional[_CorpusStats] = None) -> list[CatalogEntry]:
+def search_catalog(
+    catalog: list[CatalogEntry],
+    query: str,
+    limit: int = 5,
+    *,
+    corpus_stats: Optional[_CorpusStats] = None,
+) -> list[CatalogEntry]:
     """Top-``limit`` catalog entries for ``query`` by BM25 (exact name match ranks first).
 
     Admission is by the query's rarest token (:func:`_gate_token`), not by ``score > 0``:
@@ -198,12 +228,21 @@ def search_catalog(catalog: list[CatalogEntry], query: str, limit: int = 5, *,
         if entry.name.lower() == exact_name:
             return True
         tokens = set(entry._tokens)
-        return gate in tokens and sum(1 for t in answerable if t in tokens) >= required_terms
+        return (
+            gate in tokens
+            and sum(1 for t in answerable if t in tokens) >= required_terms
+        )
 
     scored = [
-        (float("inf") if entry.name.lower() == exact_name
-         else _bm25_score(query_tokens, entry._tokens, *corpus_stats), entry)
-        for entry in catalog if _admitted(entry)]
+        (
+            float("inf")
+            if entry.name.lower() == exact_name
+            else _bm25_score(query_tokens, entry._tokens, *corpus_stats),
+            entry,
+        )
+        for entry in catalog
+        if _admitted(entry)
+    ]
     scored.sort(key=lambda x: x[0], reverse=True)
     return [e for _, e in scored[:limit]]
 
@@ -218,7 +257,7 @@ def _short_desc(description: str, max_chars: int = 60) -> str:
     search stay linear-time on hostile input."""
     text = " ".join((description or "").split())
     m = _SENTENCE_END_RE.search(text)
-    text = text[:m.end()] if m else text
+    text = text[: m.end()] if m else text
     if len(text) <= max_chars:
         return text
     clipped = text[:max_chars]
@@ -253,12 +292,15 @@ def hidden_declared_sources() -> list[dict[str, Any]]:
         if details is None:
             continue
         _decl, _current, sentence = details
-        rows.append({"name": server_name, "tool_count": len(entries), "unavailable": sentence})
+        rows.append(
+            {"name": server_name, "tool_count": len(entries), "unavailable": sentence}
+        )
     return rows
 
 
 def build_catalog_listing_with_form(
-    deferrable: list[dict[str, Any]], *, max_tokens: int = 4000) -> tuple[Optional[str], str]:
+    deferrable: list[dict[str, Any]], *, max_tokens: int = 4000
+) -> tuple[Optional[str], str]:
     """Render the deferred-catalog manifest: ``- name: short desc`` lines grouped per source.
     Returns ``(text, form)``; form is ``"full"``, ``"names"``, ``"mixed"`` (oversized servers
     collapsed to a name + count line), ``"groups"`` (every server summarized) or ``"none"``
@@ -272,7 +314,9 @@ def build_catalog_listing_with_form(
         if name:
             # _classify_source gives ("other", "") when unregistered; the label of "" is "other".
             label = _listing_group_label(_classify_source(name)[1])
-            groups.setdefault(label, []).append((name, _short_desc(fn.get("description", ""))))
+            groups.setdefault(label, []).append(
+                (name, _short_desc(fn.get("description", "")))
+            )
     unavailable = hidden_declared_sources()
     if not groups and not unavailable:
         return None, "none"
@@ -281,20 +325,28 @@ def build_catalog_listing_with_form(
         """Render one server's block. mode: 'full' | 'names' | 'summary'."""
         tools = sorted(groups[label])
         if mode == "summary":
-            return (f"{label} ({len(tools)} tools — names not listed; "
-                    f"discover via `{TOOL_SEARCH_NAME}`)")
+            return (
+                f"{label} ({len(tools)} tools — names not listed; "
+                f"discover via `{TOOL_SEARCH_NAME}`)"
+            )
         lines = [f"{label} tools ({len(tools)}):"]
         if mode == "full":
-            lines.extend(f"- {name}: {desc}" if desc else f"- {name}" for name, desc in tools)
+            lines.extend(
+                f"- {name}: {desc}" if desc else f"- {name}" for name, desc in tools
+            )
         else:
             lines.append(", ".join(name for name, _ in tools))
         return "\n".join(lines)
 
-    header = ("Deferred tool catalog (call schemas via "
-              f"`{TOOL_DESCRIBE_NAME}`, invoke via `{TOOL_CALL_NAME}`):")
+    header = (
+        "Deferred tool catalog (call schemas via "
+        f"`{TOOL_DESCRIBE_NAME}`, invoke via `{TOOL_CALL_NAME}`):"
+    )
 
     def assemble_if_fits(modes: dict[str, str]) -> Optional[str]:
-        available_blocks = {label: render_group(label, modes[label]) for label in groups}
+        available_blocks = {
+            label: render_group(label, modes[label]) for label in groups
+        }
         unavailable_blocks = {
             row["name"]: (
                 f"{row['name']} ({row['tool_count']} tools unavailable: {row['unavailable']})"
@@ -304,7 +356,9 @@ def build_catalog_listing_with_form(
             for row in unavailable
         }
         blocks = [
-            available_blocks[label] if label in available_blocks else unavailable_blocks[label]
+            available_blocks[label]
+            if label in available_blocks
+            else unavailable_blocks[label]
             for label in sorted(available_blocks | unavailable_blocks)
         ]
         text = "\n".join([header] + blocks)
@@ -320,5 +374,7 @@ def build_catalog_listing_with_form(
         modes[lbl] = "summary"
         text = assemble_if_fits(modes)
         if text is not None:
-            return text, "groups" if all(m == "summary" for m in modes.values()) else "mixed"
+            return text, "groups" if all(
+                m == "summary" for m in modes.values()
+            ) else "mixed"
     return None, "none"

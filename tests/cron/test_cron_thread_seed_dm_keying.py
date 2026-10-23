@@ -17,7 +17,10 @@ not on SessionSource field shapes — pins the end-to-end contract.
 
 from unittest.mock import MagicMock, patch
 
-from cron.scheduler_delivery import _seed_cron_channel_session, _seed_cron_thread_session
+from cron.scheduler_delivery import (
+    _seed_cron_channel_session,
+    _seed_cron_thread_session,
+)
 from gateway.config import Platform
 from gateway.session import SessionSource, build_session_key
 
@@ -36,9 +39,14 @@ def test_dm_thread_seed_key_matches_dm_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j1", "name": "digest"}, adapter, "slack",
-            "D0BJTDCSR7C", "1787188136.448949", "Three bullets",
-            chat_name=None, is_dm=True,
+            {"id": "j1", "name": "digest"},
+            adapter,
+            "slack",
+            "D0BJTDCSR7C",
+            "1787188136.448949",
+            "Three bullets",
+            chat_name=None,
+            is_dm=True,
         )
 
     reply_source = SessionSource(
@@ -66,9 +74,14 @@ def test_channel_thread_seed_key_matches_thread_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j2", "name": "digest"}, adapter, "slack",
-            "C0AAAAAAAA", "1787188000.000100", "Three bullets",
-            chat_name="ops", is_dm=False,
+            {"id": "j2", "name": "digest"},
+            adapter,
+            "slack",
+            "C0AAAAAAAA",
+            "1787188000.000100",
+            "Three bullets",
+            chat_name="ops",
+            is_dm=False,
         )
 
     reply_source = SessionSource(
@@ -78,9 +91,7 @@ def test_channel_thread_seed_key_matches_thread_reply_key():
         user_id="U0B5F8EEYAD",
         thread_id="1787188000.000100",
     )
-    assert build_session_key(_seeded_source(store)) == build_session_key(
-        reply_source
-    )
+    assert build_session_key(_seeded_source(store)) == build_session_key(reply_source)
 
 
 def test_matrix_room_thread_seed_key_matches_room_reply_key():
@@ -92,9 +103,14 @@ def test_matrix_room_thread_seed_key_matches_room_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j7", "name": "alert"}, adapter, "matrix",
-            "!ops:example.org", "$seed_event", "Three bullets",
-            chat_name="ops", is_dm=False,
+            {"id": "j7", "name": "alert"},
+            adapter,
+            "matrix",
+            "!ops:example.org",
+            "$seed_event",
+            "Three bullets",
+            chat_name="ops",
+            is_dm=False,
         )
 
     reply_source = SessionSource(
@@ -117,7 +133,12 @@ def test_dm_seed_default_is_backward_compatible():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j3"}, adapter, "discord", "123", "9001", "brief",
+            {"id": "j3"},
+            adapter,
+            "discord",
+            "123",
+            "9001",
+            "brief",
         )
 
     assert _seeded_source(store).chat_type == "thread"
@@ -133,16 +154,28 @@ def test_telegram_forum_topic_seed_key_matches_topic_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j8", "name": "digest"}, adapter, "telegram",
-            "-1001234567", "77", "Three bullets", chat_name="ops", is_dm=False,
+            {"id": "j8", "name": "digest"},
+            adapter,
+            "telegram",
+            "-1001234567",
+            "77",
+            "Three bullets",
+            chat_name="ops",
+            is_dm=False,
         )
 
     reply_source = SessionSource(
-        platform=Platform.TELEGRAM, chat_id="-1001234567", chat_type="group", user_id="42",
+        platform=Platform.TELEGRAM,
+        chat_id="-1001234567",
+        chat_type="group",
+        user_id="42",
         thread_id="77",
     )
     assert build_session_key(_seeded_source(store)) == build_session_key(reply_source)
-    assert build_session_key(_seeded_source(store)) == "agent:main:telegram:group:-1001234567:77"
+    assert (
+        build_session_key(_seeded_source(store))
+        == "agent:main:telegram:group:-1001234567:77"
+    )
 
 
 def test_scoped_dm_thread_seed_key_matches_scoped_reply_key():
@@ -157,9 +190,15 @@ def test_scoped_dm_thread_seed_key_matches_scoped_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j4", "name": "digest"}, adapter, "slack",
-            "D0BJTDCSR7C", "1787188136.448949", "Three bullets",
-            chat_name=None, is_dm=True, scope_id="T0AAAA111",
+            {"id": "j4", "name": "digest"},
+            adapter,
+            "slack",
+            "D0BJTDCSR7C",
+            "1787188136.448949",
+            "Three bullets",
+            chat_name=None,
+            is_dm=True,
+            scope_id="T0AAAA111",
         )
 
     reply_source = SessionSource(
@@ -185,9 +224,15 @@ def test_scoped_channel_thread_seed_key_matches_scoped_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_thread_session(
-            {"id": "j5", "name": "digest"}, adapter, "slack",
-            "C0AAAAAAAA", "1787188000.000100", "Three bullets",
-            chat_name="ops", is_dm=False, scope_id="T0AAAA111",
+            {"id": "j5", "name": "digest"},
+            adapter,
+            "slack",
+            "C0AAAAAAAA",
+            "1787188000.000100",
+            "Three bullets",
+            chat_name="ops",
+            is_dm=False,
+            scope_id="T0AAAA111",
         )
 
     reply_source = SessionSource(
@@ -198,9 +243,7 @@ def test_scoped_channel_thread_seed_key_matches_scoped_reply_key():
         thread_id="1787188000.000100",
         scope_id="T0AAAA111",
     )
-    assert build_session_key(_seeded_source(store)) == build_session_key(
-        reply_source
-    )
+    assert build_session_key(_seeded_source(store)) == build_session_key(reply_source)
 
 
 def test_scoped_flat_channel_seed_key_matches_scoped_reply_key():
@@ -211,9 +254,15 @@ def test_scoped_flat_channel_seed_key_matches_scoped_reply_key():
 
     with patch("gateway.mirror.mirror_to_session", return_value=True):
         _seed_cron_channel_session(
-            {"id": "j6", "name": "digest"}, adapter, "slack",
-            "C0AAAAAAAA", "Three bullets", is_dm=False,
-            user_id="U0B5F8EEYAD", chat_name="ops", scope_id="T0AAAA111",
+            {"id": "j6", "name": "digest"},
+            adapter,
+            "slack",
+            "C0AAAAAAAA",
+            "Three bullets",
+            is_dm=False,
+            user_id="U0B5F8EEYAD",
+            chat_name="ops",
+            scope_id="T0AAAA111",
         )
 
     reply_source = SessionSource(
@@ -224,9 +273,7 @@ def test_scoped_flat_channel_seed_key_matches_scoped_reply_key():
         thread_id=None,
         scope_id="T0AAAA111",
     )
-    assert build_session_key(_seeded_source(store)) == build_session_key(
-        reply_source
-    )
+    assert build_session_key(_seeded_source(store)) == build_session_key(reply_source)
 
 
 def test_seeds_do_not_collide_across_workspaces():
@@ -240,9 +287,14 @@ def test_seeds_do_not_collide_across_workspaces():
         adapter._session_store = store
         with patch("gateway.mirror.mirror_to_session", return_value=True):
             _seed_cron_channel_session(
-                {"id": f"j-{team}"}, adapter, "slack",
-                "C0AAAAAAAA", "brief", is_dm=False,
-                user_id="U0B5F8EEYAD", scope_id=team,
+                {"id": f"j-{team}"},
+                adapter,
+                "slack",
+                "C0AAAAAAAA",
+                "brief",
+                is_dm=False,
+                user_id="U0B5F8EEYAD",
+                scope_id=team,
             )
         keys.append(build_session_key(_seeded_source(store)))
     assert keys[0] != keys[1], (

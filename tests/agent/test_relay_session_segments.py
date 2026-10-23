@@ -293,8 +293,10 @@ class TestCwdProjection:
         fake = _FakeRelay()
         runtime = _make_runtime(fake)
         lease = _acquire(
-            coordinator, runtime,
-            session_cwd="/workspace/session", turn_cwd="/workspace/task",
+            coordinator,
+            runtime,
+            session_cwd="/workspace/session",
+            turn_cwd="/workspace/task",
         )
 
         turn = coordinator.begin_turn(lease, turn_id="t1", task_id="task1")
@@ -304,8 +306,10 @@ class TestCwdProjection:
         coordinator.end_turn(turn, outcome="success")
 
         lease = _acquire(
-            coordinator, runtime,
-            session_cwd="/workspace/moved", turn_cwd="/workspace/next-task",
+            coordinator,
+            runtime,
+            session_cwd="/workspace/moved",
+            turn_cwd="/workspace/next-task",
         )
         runtime.rotate_session_scope(lease.session, reason="compaction")
         turn = coordinator.begin_turn(lease, turn_id="t2", task_id="task2")
@@ -347,7 +351,9 @@ class TestCompactionRotation:
         assert any(p.seq == 1 for p in fake.scope.pops), "old segment scope popped"
         assert lease.session.handle is not original_handle
         # The turn scope parents to the NEW segment handle.
-        turn_push = [p for p in fake.scope.pushes if p["name"] == relay_runtime.TURN_SCOPE][-1]
+        turn_push = [
+            p for p in fake.scope.pushes if p["name"] == relay_runtime.TURN_SCOPE
+        ][-1]
         assert turn_push["parent"] is lease.session.handle
         coordinator.end_turn(turn, outcome="success")
 
@@ -460,7 +466,9 @@ class TestMaxTurnsRotation:
         # segment 1; rotation before turn 4.
         sessions = _session_pushes(fake)
         assert len(sessions) == 3, "cap of 2 over 5 turns => 2 rotations"
-        assert sessions[-1]["metadata"].get("clawk.session.segment_reason") == "max_turns"
+        assert (
+            sessions[-1]["metadata"].get("clawk.session.segment_reason") == "max_turns"
+        )
 
     def test_zero_cap_means_unlimited(self, coordinator, monkeypatch):
         _set_segments(monkeypatch, max_turns=0)
@@ -508,9 +516,7 @@ class TestRotationSafety:
         result: list[Any] = []
 
         def _begin():
-            result.append(
-                coordinator.begin_turn(lease, turn_id="t1", task_id="task1")
-            )
+            result.append(coordinator.begin_turn(lease, turn_id="t1", task_id="task1"))
 
         worker = threading.Thread(target=_begin, daemon=True)
         worker.start()
@@ -542,8 +548,7 @@ class TestRotationSafety:
         child_push = [
             p
             for p in fake.scope.pushes
-            if p["name"] == relay_runtime.SESSION_SCOPE
-            and p["parent"] is not None
+            if p["name"] == relay_runtime.SESSION_SCOPE and p["parent"] is not None
         ][-1]
         assert child_push["parent"] is new_handle, (
             "post-rotation children must parent to the new segment handle"

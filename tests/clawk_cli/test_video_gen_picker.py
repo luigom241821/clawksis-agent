@@ -123,16 +123,18 @@ class TestPluginVideoProvidersRow:
     def test_post_setup_propagated_when_declared(self, monkeypatch):
         from clawk_cli import tools_config
 
-        video_gen_registry.register_provider(_FakeVideoProvider(
-            "xai_video",
-            schema={
-                "name": "xAI Grok Imagine",
-                "badge": "paid",
-                "tag": "grok video",
-                "env_vars": [],
-                "post_setup": "xai_grok",
-            },
-        ))
+        video_gen_registry.register_provider(
+            _FakeVideoProvider(
+                "xai_video",
+                schema={
+                    "name": "xAI Grok Imagine",
+                    "badge": "paid",
+                    "tag": "grok video",
+                    "env_vars": [],
+                    "post_setup": "xai_grok",
+                },
+            )
+        )
 
         rows = tools_config._plugin_video_gen_providers()
         match = next(r for r in rows if r.get("video_gen_plugin_name") == "xai_video")
@@ -149,7 +151,6 @@ class TestVideoPluginProviderActive:
         row = {"name": "xAI Grok Imagine", "video_gen_plugin_name": "xai"}
 
         assert tools_config._is_provider_active(row, config) is True
-
 
     def test_detect_active_index_picks_video_plugin_match(self, monkeypatch):
         """When xAI is the configured video_gen provider, the picker should
@@ -173,7 +174,11 @@ class TestVideoPluginProviderActive:
 
         config = {"video_gen": {"provider": "xai"}}
         providers = [
-            {"name": "xAI Grok Imagine", "env_vars": [], "video_gen_plugin_name": "xai"},
+            {
+                "name": "xAI Grok Imagine",
+                "env_vars": [],
+                "video_gen_plugin_name": "xai",
+            },
             {
                 "name": "FAL.ai",
                 "env_vars": [{"key": "FAL_KEY", "prompt": "FAL"}],

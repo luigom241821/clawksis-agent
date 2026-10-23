@@ -54,8 +54,11 @@ def require_tmux() -> None:
     if shutil.which("tmux") is not None:
         return
     if os.environ.get("CI") and os.environ.get("CLAWK_E2E_REQUIRE_TUI") == "1":
-        pytest.fail("tmux missing in the CI e2e lane (CLAWK_E2E_REQUIRE_TUI=1): install it in the e2e job")
+        pytest.fail(
+            "tmux missing in the CI e2e lane (CLAWK_E2E_REQUIRE_TUI=1): install it in the e2e job"
+        )
     pytest.skip("needs tmux")
+
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 COLS, ROWS = 160, 50
@@ -89,7 +92,9 @@ def home_pids(clawk_home: Path) -> set[int]:
     return found
 
 
-def kill_home_processes(clawk_home: Path, stop: Callable[[], object] | None = None) -> None:
+def kill_home_processes(
+    clawk_home: Path, stop: Callable[[], object] | None = None
+) -> None:
     """Graceful stop, then SIGTERM/SIGKILL whatever still runs against *clawk_home*.
 
     The signal sweep runs in ``finally``: a ``stop`` that times out or raises still leaves no
@@ -108,6 +113,7 @@ def kill_home_processes(clawk_home: Path, stop: Callable[[], object] | None = No
             end = time.monotonic() + grace
             while home_pids(clawk_home) and time.monotonic() < end:
                 time.sleep(0.2)
+
 
 BASE_CONFIG = f"""model:
   provider: custom
@@ -164,21 +170,33 @@ class ClassicHome:
     def write(self, base_url: str, extra_config: str = "") -> ClassicHome:
         self.clawk_home.mkdir(parents=True, exist_ok=True)
         self.work.mkdir(parents=True, exist_ok=True)
-        (self.clawk_home / "config.yaml").write_text(BASE_CONFIG.format(base_url=base_url) + extra_config,
-                                                      encoding="utf-8")
-        (self.clawk_home / ".env").write_text("OPENAI_API_KEY=sk-fake-e2e\n", encoding="utf-8")
+        (self.clawk_home / "config.yaml").write_text(
+            BASE_CONFIG.format(base_url=base_url) + extra_config, encoding="utf-8"
+        )
+        (self.clawk_home / ".env").write_text(
+            "OPENAI_API_KEY=sk-fake-e2e\n", encoding="utf-8"
+        )
         return self
 
     def env(self) -> dict[str, str]:
         """Allowlisted child env: no inherited CLAWK_*, provider keys, display or TMUX variables."""
         keep = ("PATH", "LANG", "USER", "LOGNAME", "SHELL", "TMPDIR")
         env = {k: os.environ[k] for k in keep if k in os.environ}
-        env.update({
-            "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8", "TERM": "xterm-256color", "TZ": "UTC",
-            "HOME": str(self.home), "CLAWK_HOME": str(self.clawk_home), "PYTHONPATH": str(REPO_ROOT),
-            # The child's state.db IS this tmp home's db; the live-DB guard would refuse it under pytest.
-            "CLAWK_STATE_DB_GUARD_BYPASS": "1", "PYTHONFAULTHANDLER": "1", "NO_GCE_CHECK": "True",
-        })
+        env.update(
+            {
+                "LC_ALL": "C.UTF-8",
+                "LANG": "C.UTF-8",
+                "TERM": "xterm-256color",
+                "TZ": "UTC",
+                "HOME": str(self.home),
+                "CLAWK_HOME": str(self.clawk_home),
+                "PYTHONPATH": str(REPO_ROOT),
+                # The child's state.db IS this tmp home's db; the live-DB guard would refuse it under pytest.
+                "CLAWK_STATE_DB_GUARD_BYPASS": "1",
+                "PYTHONFAULTHANDLER": "1",
+                "NO_GCE_CHECK": "True",
+            }
+        )
         env.update(self.extra_env)
         return env
 
@@ -188,8 +206,15 @@ class ClassicHome:
     def run(self, *args: str, timeout: float = 180.0) -> subprocess.CompletedProcess:
         """A non-TTY run (stdout piped): ``chat -q`` one-shots, ``gateway stop``."""
         argv = self.argv(*args)
-        with subprocess.Popen(argv, cwd=self.work, env=self.env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              stdin=subprocess.DEVNULL, text=True) as proc:
+        with subprocess.Popen(
+            argv,
+            cwd=self.work,
+            env=self.env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+        ) as proc:
             self.spawned.append((proc.pid, " ".join(args)))
             try:
                 out, err = proc.communicate(timeout=timeout)
@@ -205,8 +230,11 @@ class ClassicHome:
     def diagnostics(self, limit: int = 3000) -> str:
         """The CLI's stderr and the gateway log tails: why a pane died, for a failure message."""
         parts = []
-        for label, path in (("cli stderr", self.stderr_log), ("gateway log", self.clawk_home / "logs" / "gateway.log"),
-                            ("agent log", self.clawk_home / "logs" / "agent.log")):
+        for label, path in (
+            ("cli stderr", self.stderr_log),
+            ("gateway log", self.clawk_home / "logs" / "gateway.log"),
+            ("agent log", self.clawk_home / "logs" / "agent.log"),
+        ):
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
@@ -218,7 +246,9 @@ class ClassicHome:
     def reap(self) -> None:
         """Operator stop for the profile's gateway, then SIGTERM/SIGKILL whatever this home still runs
         (even when the stop times out)."""
-        kill_home_processes(self.clawk_home, lambda: self.run("gateway", "stop", timeout=60))
+        kill_home_processes(
+            self.clawk_home, lambda: self.run("gateway", "stop", timeout=60)
+        )
 
 
 class Pane:
@@ -232,24 +262,58 @@ class Pane:
 
     def tmux(self, *args: str) -> str:
         env = {k: v for k, v in os.environ.items() if not k.startswith("TMUX")}
-        return subprocess.run(["tmux", "-L", self.sock, *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=30, check=False, env=env).stdout
+        return subprocess.run(
+            ["tmux", "-L", self.sock, *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+            env=env,
+        ).stdout
 
     def launch(self, *args: str) -> None:
         self.tmux("kill-server")
         env = self.ch.env()
         envs = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
-        cmd = (f"exec env -i {envs} {' '.join(shlex.quote(a) for a in self.ch.argv(*args))} "
-               f"2>>{shlex.quote(str(self.ch.stderr_log))}")
-        subprocess.run(["tmux", "-L", self.sock, "-f", os.devnull, "new-session", "-d", "-s", "p", "-x", str(COLS),
-                        "-y", str(ROWS), "-c", str(self.ch.work), "sh", "-c", cmd], check=True, timeout=30,
-                       env={k: v for k, v in os.environ.items() if not k.startswith("TMUX")})
+        cmd = (
+            f"exec env -i {envs} {' '.join(shlex.quote(a) for a in self.ch.argv(*args))} "
+            f"2>>{shlex.quote(str(self.ch.stderr_log))}"
+        )
+        subprocess.run(
+            [
+                "tmux",
+                "-L",
+                self.sock,
+                "-f",
+                os.devnull,
+                "new-session",
+                "-d",
+                "-s",
+                "p",
+                "-x",
+                str(COLS),
+                "-y",
+                str(ROWS),
+                "-c",
+                str(self.ch.work),
+                "sh",
+                "-c",
+                cmd,
+            ],
+            check=True,
+            timeout=30,
+            env={k: v for k, v in os.environ.items() if not k.startswith("TMUX")},
+        )
         self.tmux("set", "-g", "remain-on-exit", "on")
         self.tmux("set", "-g", "history-limit", "50000")
         # `sh -c "exec env -i ... python"` keeps the pane's pid: this IS the CLI process.
         pid = self.tmux("display-message", "-p", "-t", "p", "#{pane_pid}").strip()
         if pid.isdigit():
-            self.ch.spawned.append((int(pid), " ".join(("chat", *args)) if args else "chat"))
+            self.ch.spawned.append(
+                (int(pid), " ".join(("chat", *args)) if args else "chat")
+            )
         self.baseline = ""  # a fresh tmux server: everything on it is new
 
     def screen(self) -> str:
@@ -259,13 +323,17 @@ class Pane:
         return self.tmux("capture-pane", "-p", "-J", "-t", "p", "-S", "-", "-E", "-")
 
     def dead(self) -> bool:
-        return self.tmux("display-message", "-p", "-t", "p", "#{pane_dead}").strip() == "1"
+        return (
+            self.tmux("display-message", "-p", "-t", "p", "#{pane_dead}").strip() == "1"
+        )
 
     def keys(self, *k: str) -> None:
         self.baseline = self.scrollback()
         self.tmux("send-keys", "-t", "p", *k)
 
-    def wait(self, needles: list[str], timeout: float = 60.0, *, since: str | None = None) -> str | None:
+    def wait(
+        self, needles: list[str], timeout: float = 60.0, *, since: str | None = None
+    ) -> str | None:
         """The first needle that appeared after the latest input (or after *since*), None on timeout/exit."""
         before = self.baseline if since is None else since
         end = time.monotonic() + timeout
@@ -292,7 +360,9 @@ class Pane:
     def paste_gap(self) -> None:
         """Keep the next key out of the input batch the app is still reading: prompt_toolkit takes an
         Enter that lands within 50 ms of the last buffer change for a pasted newline."""
-        time.sleep(1.2)  # health: allow HX013 -- the gap IS the behaviour: the CLI's paste detection is time-based
+        time.sleep(
+            1.2
+        )  # health: allow HX013 -- the gap IS the behaviour: the CLI's paste detection is time-based
 
     def submit(self, text: str) -> None:
         self.baseline = self.scrollback()
@@ -318,14 +388,18 @@ class Pane:
 
 
 def assert_no_traceback(text: str, where: str) -> None:
-    assert _TRACEBACK not in text, f"{where}: a traceback reached the terminal:\n{text[-4000:]}"
+    assert _TRACEBACK not in text, (
+        f"{where}: a traceback reached the terminal:\n{text[-4000:]}"
+    )
 
 
 def text_of(content) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
-        return " ".join(str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content)
+        return " ".join(
+            str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content
+        )
     return json.dumps(content)
 
 

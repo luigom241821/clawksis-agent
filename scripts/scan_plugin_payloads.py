@@ -20,6 +20,7 @@ Usage:
     scan_plugin_payloads.py <plugin-dir>
 Exit 0 = clean, 1 = a payload was found (lines on stdout), 2 = bad usage.
 """
+
 from __future__ import annotations
 
 import bz2
@@ -36,28 +37,118 @@ from pathlib import Path
 # Source extensions whose archives stay reviewable. Anything else inside an
 # archive (a nested archive, a binary, an unknown blob) fails the whole archive.
 _ARCHIVE_SOURCE_SUFFIXES = {
-    ".py", ".pyi", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".jsx", ".json", ".jsonc", ".jsonl",
-    ".md", ".txt", ".rst", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".csv", ".tsv",
-    ".html", ".htm", ".css", ".scss", ".svg", ".sh", ".ps1", ".bat", ".sql", ".proto",
-    ".c", ".h", ".cpp", ".hpp", ".cc", ".rs", ".go", ".java", ".kt", ".rb", ".lua",
-    ".patch", ".diff", ".lock", ".gitignore", ".gitattributes", ".env", ".service",
-    ".xml", ".properties", ".gradle", ".cmake", ".mk", ".conf", ".d.ts", ".map",
+    ".py",
+    ".pyi",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".jsx",
+    ".json",
+    ".jsonc",
+    ".jsonl",
+    ".md",
+    ".txt",
+    ".rst",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".csv",
+    ".tsv",
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".svg",
+    ".sh",
+    ".ps1",
+    ".bat",
+    ".sql",
+    ".proto",
+    ".c",
+    ".h",
+    ".cpp",
+    ".hpp",
+    ".cc",
+    ".rs",
+    ".go",
+    ".java",
+    ".kt",
+    ".rb",
+    ".lua",
+    ".patch",
+    ".diff",
+    ".lock",
+    ".gitignore",
+    ".gitattributes",
+    ".env",
+    ".service",
+    ".xml",
+    ".properties",
+    ".gradle",
+    ".cmake",
+    ".mk",
+    ".conf",
+    ".d.ts",
+    ".map",
 }
 # Inert, non-executable asset types that may ride along inside a source bundle:
 # fonts and images carry no code the scanner needs to read. An unknown binary
 # blob is NOT inert and still fails the archive.
 _ARCHIVE_ASSET_SUFFIXES = {
-    ".ttf", ".otf", ".woff", ".woff2", ".eot",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".avif",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".eot",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".bmp",
+    ".avif",
 }
 # Extensionless filenames that are conventionally plain-text source/config.
 _SOURCE_BASENAMES = {
-    "dockerfile", "makefile", "license", "licence", "notice", "readme", "copying",
-    "authors", "contributors", "changelog", "codeowners", "procfile", ".gitignore",
-    ".gitattributes", ".dockerignore", ".npmignore", ".editorconfig",
+    "dockerfile",
+    "makefile",
+    "license",
+    "licence",
+    "notice",
+    "readme",
+    "copying",
+    "authors",
+    "contributors",
+    "changelog",
+    "codeowners",
+    "procfile",
+    ".gitignore",
+    ".gitattributes",
+    ".dockerignore",
+    ".npmignore",
+    ".editorconfig",
 }
-_ARCHIVE_SUFFIXES = {".zip", ".jar", ".whl", ".egg", ".apk", ".war",
-                     ".tar", ".tgz", ".gz", ".bz2", ".xz", ".zst", ".7z", ".rar"}
+_ARCHIVE_SUFFIXES = {
+    ".zip",
+    ".jar",
+    ".whl",
+    ".egg",
+    ".apk",
+    ".war",
+    ".tar",
+    ".tgz",
+    ".gz",
+    ".bz2",
+    ".xz",
+    ".zst",
+    ".7z",
+    ".rar",
+}
 _BYTECODE_SUFFIXES = {".pyc", ".pyo"}
 
 
@@ -65,8 +156,16 @@ def _magic_kind(head: bytes) -> str | None:
     """Name the compiled-binary format a byte header indicates, else None."""
     if head.startswith(b"\x7fELF"):
         return "ELF executable/library"
-    if head.startswith((b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe",
-                        b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf")):
+    if head.startswith(
+        (
+            b"\xcf\xfa\xed\xfe",
+            b"\xce\xfa\xed\xfe",
+            b"\xca\xfe\xba\xbe",
+            b"\xbe\xba\xfe\xca",
+            b"\xfe\xed\xfa\xce",
+            b"\xfe\xed\xfa\xcf",
+        )
+    ):
         return "Mach-O binary"
     if head.startswith(b"MZ"):
         return "PE (Windows) executable/DLL"
@@ -92,7 +191,9 @@ def _archive_problem(path: Path, data: bytes) -> str | None:
         if zipfile.is_zipfile(io.BytesIO(data)):
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
                 bad = [n for n in zf.namelist() if not _is_source_member(n)]
-                return f"archive member not reviewable source: {bad[0]}" if bad else None
+                return (
+                    f"archive member not reviewable source: {bad[0]}" if bad else None
+                )
         bio = io.BytesIO(data)
         with tarfile.open(fileobj=bio) as tf:  # autodetects gzip/bz2/xz
             for member in tf.getmembers():
@@ -120,7 +221,9 @@ def _archive_problem(path: Path, data: bytes) -> str | None:
 _SINGLE_STREAM = {".gz": gzip.open, ".bz2": bz2.open, ".xz": lzma.open}
 # Only plain data may ship compressed. Code compressed out of sight would skip every
 # text gate (self-updater, credential reads, reviewer greps), so it must be committed as-is.
-_COMPRESSED_DATA_SUFFIXES = frozenset({".txt", ".tsv", ".csv", ".json", ".jsonl", ".ndjson"})
+_COMPRESSED_DATA_SUFFIXES = frozenset(
+    {".txt", ".tsv", ".csv", ".json", ".jsonl", ".ndjson"}
+)
 _COMPRESSED_TEXT_CAP = 64 * 1024 * 1024
 
 
@@ -175,8 +278,12 @@ def _shipped_files(plugin_dir: Path) -> list[Path]:
     catalog gate runs `clawk plugins validate` (which imports the plugin) before this
     scan, so untracked `__pycache__/*.pyc` it wrote must not read as committed bytecode."""
     try:
-        out = subprocess.run(["git", "-C", str(plugin_dir), "ls-files", "-z"],
-                             capture_output=True, check=True, timeout=120).stdout
+        out = subprocess.run(
+            ["git", "-C", str(plugin_dir), "ls-files", "-z"],
+            capture_output=True,
+            check=True,
+            timeout=120,
+        ).stdout
     except (OSError, subprocess.SubprocessError):
         out = b""
     tracked = [plugin_dir / os.fsdecode(p) for p in out.split(b"\0") if p]

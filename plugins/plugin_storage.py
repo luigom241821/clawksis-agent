@@ -28,6 +28,7 @@ def plugin_data_dir(name: str) -> Path:
     """Return (and create) ``<clawk home>/plugin-data/<name>/``; resolves ``get_clawk_home()`` on
     every call so it follows the active profile — don't cache across profile switches."""
     from clawk_constants import get_clawk_home
+
     root = get_clawk_home() / "plugin-data" / _validate_name(name)
     root.mkdir(parents=True, exist_ok=True)
     return root
@@ -42,5 +43,10 @@ def plugin_db(name: str, filename: str = "data.db") -> sqlite3.Connection:
 
     # WAL via the shared fallback helper: network filesystems degrade to DELETE and WAL-reset-bug
     # builds never enable it, instead of every plugin DB bypassing those rules with a raw PRAGMA.
-    return open_db(plugin_data_dir(name) / filename, db_label=f"plugin-data/{name}/{filename}",
-                   foreign_keys=True, row_factory=None, check_same_thread=False)
+    return open_db(
+        plugin_data_dir(name) / filename,
+        db_label=f"plugin-data/{name}/{filename}",
+        foreign_keys=True,
+        row_factory=None,
+        check_same_thread=False,
+    )

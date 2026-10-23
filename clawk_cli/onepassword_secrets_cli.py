@@ -54,33 +54,83 @@ def _references(op_cfg: dict) -> dict:
     return env if isinstance(env, dict) else {}
 
 
-
 def register_cli(parent_parser: argparse.ArgumentParser) -> None:
     """Attach the ``onepassword`` subcommand tree to a parent parser."""
-    register_subcommands(parent_parser, "secrets_op_command", (
-        ("setup", "Verify the op CLI, set account / token env var, and enable", cmd_setup, (
-            arg("--account", "1Password account shorthand or sign-in address (op --account)"),
-            arg("--token-env", f"Env var holding a service-account token (default {_DEFAULT_TOKEN_ENV})"),
-            arg("--token", "Service-account token to store in .env non-interactively"),
-            arg("--binary-path", "Absolute path to the op binary (skips PATH lookup)"),
-        )),
-        ("status", "Show config + op binary + references", cmd_status, ()),
-        ("token", "Rotate the service-account token: validate and store it in .env", cmd_token, (
-            arg("--token", "Provide the new token non-interactively (default: masked prompt)"),
-            flag("--no-verify", "Store without probing 1Password first (not recommended)"),
-        )),
-        ("set", "Map an env var to an op:// reference", cmd_set, (
-            arg("env_var", "Environment variable name, e.g. OPENAI_API_KEY"),
-            arg("reference", "1Password reference, e.g. op://Private/OpenAI/api key"),
-        )),
-        ("remove", "Remove an env-var → reference mapping", cmd_remove, (
-            arg("env_var", "Environment variable name to unmap"),
-        )),
-        ("sync", "Resolve references now and report what changed", cmd_sync, (
-            flag("--apply", "Actually export resolved values into the current shell (default: dry-run)"),
-        )),
-        ("disable", "Turn off the 1Password integration", cmd_disable, ()),
-    ))
+    register_subcommands(
+        parent_parser,
+        "secrets_op_command",
+        (
+            (
+                "setup",
+                "Verify the op CLI, set account / token env var, and enable",
+                cmd_setup,
+                (
+                    arg(
+                        "--account",
+                        "1Password account shorthand or sign-in address (op --account)",
+                    ),
+                    arg(
+                        "--token-env",
+                        f"Env var holding a service-account token (default {_DEFAULT_TOKEN_ENV})",
+                    ),
+                    arg(
+                        "--token",
+                        "Service-account token to store in .env non-interactively",
+                    ),
+                    arg(
+                        "--binary-path",
+                        "Absolute path to the op binary (skips PATH lookup)",
+                    ),
+                ),
+            ),
+            ("status", "Show config + op binary + references", cmd_status, ()),
+            (
+                "token",
+                "Rotate the service-account token: validate and store it in .env",
+                cmd_token,
+                (
+                    arg(
+                        "--token",
+                        "Provide the new token non-interactively (default: masked prompt)",
+                    ),
+                    flag(
+                        "--no-verify",
+                        "Store without probing 1Password first (not recommended)",
+                    ),
+                ),
+            ),
+            (
+                "set",
+                "Map an env var to an op:// reference",
+                cmd_set,
+                (
+                    arg("env_var", "Environment variable name, e.g. OPENAI_API_KEY"),
+                    arg(
+                        "reference",
+                        "1Password reference, e.g. op://Private/OpenAI/api key",
+                    ),
+                ),
+            ),
+            (
+                "remove",
+                "Remove an env-var → reference mapping",
+                cmd_remove,
+                (arg("env_var", "Environment variable name to unmap"),),
+            ),
+            (
+                "sync",
+                "Resolve references now and report what changed",
+                cmd_sync,
+                (
+                    flag(
+                        "--apply",
+                        "Actually export resolved values into the current shell (default: dry-run)",
+                    ),
+                ),
+            ),
+            ("disable", "Turn off the 1Password integration", cmd_disable, ()),
+        ),
+    )
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
@@ -120,16 +170,22 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     console.print()
     console.print("[bold]Step 2[/bold]  Authentication")
-    token_env = (args.token_env or op_cfg.get("service_account_token_env") or _DEFAULT_TOKEN_ENV).strip()
+    token_env = (
+        args.token_env or op_cfg.get("service_account_token_env") or _DEFAULT_TOKEN_ENV
+    ).strip()
     op_cfg["service_account_token_env"] = token_env
 
     token = (args.token or "").strip()
     if token:
         save_env_value(token_env, token)
         os.environ[token_env] = token
-        console.print(f"  [green]✓[/green] service-account token stored in {get_env_path()} as {token_env}")
+        console.print(
+            f"  [green]✓[/green] service-account token stored in {get_env_path()} as {token_env}"
+        )
     elif os.environ.get(token_env):
-        console.print(f"  [green]✓[/green] using service-account token from {token_env}")
+        console.print(
+            f"  [green]✓[/green] using service-account token from {token_env}"
+        )
     else:
         who = _op_whoami(binary, op_cfg.get("account", ""))
         if who:
@@ -152,7 +208,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     console.print("[green]✓ 1Password secret source is enabled.[/green]")
     console.print(
         "  Map credentials:  [cyan]clawk secrets onepassword set OPENAI_API_KEY "
-        "\"op://Private/OpenAI/api key\"[/cyan]\n"
+        '"op://Private/OpenAI/api key"[/cyan]\n'
         "  Preview:          [cyan]clawk secrets onepassword sync[/cyan]\n"
         "  Status:           [cyan]clawk secrets onepassword status[/cyan]"
     )
@@ -172,20 +228,32 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     binary = op_src.find_op(binary_path)
 
-    print_status_panel(console, "1Password secret source", (
-        ("Enabled", yn(enabled)),
-        ("Account", account or "[dim]default[/dim]"),
-        ("Token env var", token_env),
-        ("Token in env", yn(token_set)),
-        ("Override existing", yn(bool(op_cfg.get("override_existing", True)))),
-        ("Cache TTL (s)", str(op_cfg.get("cache_ttl_seconds", 300))),
-        ("op binary", f"{binary} ({_op_version(binary)})" if binary else "[yellow]not found[/yellow]"),
-        ("References", str(len(references))),
-    ))
+    print_status_panel(
+        console,
+        "1Password secret source",
+        (
+            ("Enabled", yn(enabled)),
+            ("Account", account or "[dim]default[/dim]"),
+            ("Token env var", token_env),
+            ("Token in env", yn(token_set)),
+            ("Override existing", yn(bool(op_cfg.get("override_existing", True)))),
+            ("Cache TTL (s)", str(op_cfg.get("cache_ttl_seconds", 300))),
+            (
+                "op binary",
+                f"{binary} ({_op_version(binary)})"
+                if binary
+                else "[yellow]not found[/yellow]",
+            ),
+            ("References", str(len(references))),
+        ),
+    )
 
     if references:
-        print_table(console, (("Env var", {"style": "cyan"}), "Reference"),
-                    ((name, str(references[name])) for name in sorted(references)))
+        print_table(
+            console,
+            (("Env var", {"style": "cyan"}), "Reference"),
+            ((name, str(references[name])) for name in sorted(references)),
+        )
 
     if not enabled:
         console.print("\n  Run [cyan]clawk secrets onepassword setup[/cyan] to enable.")
@@ -202,7 +270,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     if not references:
         console.print(
             "\n  [yellow]No references mapped yet.[/yellow]  Add one: "
-            "[cyan]clawk secrets onepassword set ENV_VAR \"op://…\"[/cyan]"
+            '[cyan]clawk secrets onepassword set ENV_VAR "op://…"[/cyan]'
         )
     return 0
 
@@ -222,7 +290,9 @@ def cmd_set(args: argparse.Namespace) -> int:
         op_cfg["env"] = {}
     op_cfg["env"][args.env_var] = valid[args.env_var]
     save_config(cfg)
-    console.print(f"[green]✓[/green] mapped [cyan]{args.env_var}[/cyan] → {valid[args.env_var]}")
+    console.print(
+        f"[green]✓[/green] mapped [cyan]{args.env_var}[/cyan] → {valid[args.env_var]}"
+    )
     if not op_cfg.get("enabled"):
         console.print(
             "  [yellow]Note: the integration is disabled — run "
@@ -265,13 +335,17 @@ def cmd_token(args: argparse.Namespace) -> int:
         console.print("Verifying with `op whoami`…")
         who = _op_whoami(binary, account, token_value=token)
         if who is None:
-            console.print("[red]✗ New token was rejected by op — nothing was changed.[/red]")
+            console.print(
+                "[red]✗ New token was rejected by op — nothing was changed.[/red]"
+            )
             return False
         console.print(f"[green]✓ Token accepted[/green] ({who}).")
         return True
 
     return rotate_token(
-        console, args.token, token_env,
+        console,
+        args.token,
+        token_env,
         flag="--token",
         intro=(
             "Create a new service-account token at "
@@ -279,8 +353,12 @@ def cmd_token(args: argparse.Namespace) -> int:
         ),
         prompt=f"Paste new token ({token_env}): ",
         verify=None if args.no_verify else verify,
-        save=save_env_value, env_path=get_env_path, clear_caches=op_src.clear_caches,
-        disabled_note=None if op_cfg.get("enabled") else (
+        save=save_env_value,
+        env_path=get_env_path,
+        clear_caches=op_src.clear_caches,
+        disabled_note=None
+        if op_cfg.get("enabled")
+        else (
             "[yellow]Note: the 1Password integration is currently disabled — "
             "run `clawk secrets onepassword setup` to turn it on.[/yellow]"
         ),
@@ -297,7 +375,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     if not references:
         console.print(
             "[yellow]No op:// references configured.  Add one with "
-            "`clawk secrets onepassword set ENV_VAR \"op://…\"`.[/yellow]"
+            '`clawk secrets onepassword set ENV_VAR "op://…"`.[/yellow]'
         )
         return 0
 
@@ -320,12 +398,18 @@ def cmd_sync(args: argparse.Namespace) -> int:
             console.print(f"[red]{result.error}[/red]")
             return 1
         print_table(
-            console, (("Env var", {"style": "cyan"}), "Action"),
+            console,
+            (("Env var", {"style": "cyan"}), "Action"),
             [(name, "[green]exported[/green]") for name in sorted(result.applied)]
-            + [(name, "[dim]skipped (already set / token var)[/dim]") for name in sorted(result.skipped)],
+            + [
+                (name, "[dim]skipped (already set / token var)[/dim]")
+                for name in sorted(result.skipped)
+            ],
             result.warnings,
         )
-        console.print(f"\n  [green]Exported {len(result.applied)} secret(s) into current process.[/green]")
+        console.print(
+            f"\n  [green]Exported {len(result.applied)} secret(s) into current process.[/green]"
+        )
         return 0
 
     # Dry-run: resolve fresh (no cache) and preview, mutating nothing.
@@ -353,8 +437,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
             return "[dim]skip (already set)[/dim]"
         return "[green]would export[/green]" + (" (overrides)" if already else "")
 
-    print_table(console, (("Env var", {"style": "cyan"}), "Action"),
-                ((name, action(name)) for name in sorted(references)), warnings)
+    print_table(
+        console,
+        (("Env var", {"style": "cyan"}), "Action"),
+        ((name, action(name)) for name in sorted(references)),
+        warnings,
+    )
     console.print(
         "\n  This was a dry-run — references resolve automatically on the next "
         "[cyan]clawk[/cyan] invocation.  Re-run with [cyan]--apply[/cyan] to export "
@@ -385,8 +473,13 @@ def _op_whoami(binary: Path, account: str, *, token_value: str = "") -> Optional
         env["OP_SERVICE_ACCOUNT_TOKEN"] = token_value
     try:
         res = subprocess.run(
-            cmd, env=env, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=10,
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):

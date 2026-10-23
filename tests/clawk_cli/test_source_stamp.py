@@ -8,7 +8,11 @@ import subprocess
 
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", *args], cwd=repo, text=True, capture_output=True, check=True,
+        ["git", *args],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
         env={"HOME": str(repo.parent), "PATH": os.environ["PATH"]},
     )
     return result.stdout.strip()

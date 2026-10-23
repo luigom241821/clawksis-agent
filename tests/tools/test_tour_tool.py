@@ -11,19 +11,22 @@ def _run(**kwargs):
     return json.loads(tt.tour_tool(**kwargs))
 
 
-
-
-
-
 def test_requires_callback():
     """Outside the desktop GUI there is no bridge — a clear error, no crash."""
-    assert "desktop" in json.loads(tt.tour_tool(action="targets", callback=None))["error"]
+    assert (
+        "desktop" in json.loads(tt.tour_tool(action="targets", callback=None))["error"]
+    )
 
 
 def test_rejects_unknown_action_and_surface():
     assert "action must be one of" in _run(action="dance")["error"]
-    assert "surface must be one of" in _run(action="targets", surface="hologram")["error"]
-    assert "side must be one of" in _run(action="show", selector="#a", side="diagonal")["error"]
+    assert (
+        "surface must be one of" in _run(action="targets", surface="hologram")["error"]
+    )
+    assert (
+        "side must be one of"
+        in _run(action="show", selector="#a", side="diagonal")["error"]
+    )
 
 
 def test_show_needs_something_to_point_at_or_say():
@@ -36,8 +39,14 @@ def test_start_validates_its_steps():
     assert "error" not in _run(action="start")
     assert "surface='app'" in _run(action="start", surface="preview")["error"]
     assert "non-empty steps" in _run(action="start", steps=[])["error"]
-    assert "steps[1] must be an object" in _run(action="start", steps=[{"selector": "#a"}, "nope"])["error"]
-    assert "steps[1] needs" in _run(action="start", steps=[{"selector": "#a"}, {}])["error"]
+    assert (
+        "steps[1] must be an object"
+        in _run(action="start", steps=[{"selector": "#a"}, "nope"])["error"]
+    )
+    assert (
+        "steps[1] needs"
+        in _run(action="start", steps=[{"selector": "#a"}, {}])["error"]
+    )
 
 
 def test_preset_is_validated_and_reaches_the_request_through_the_handler():
@@ -50,12 +59,26 @@ def test_preset_is_validated_and_reaches_the_request_through_the_handler():
     entry = registry.get_entry("gui_tour")
     assert entry is not None
     handler = entry.handler
-    assert "preset must be one of" in json.loads(handler({"action": "start", "preset": "medium"}, callback=cb))["error"]
+    assert (
+        "preset must be one of"
+        in json.loads(handler({"action": "start", "preset": "medium"}, callback=cb))[
+            "error"
+        ]
+    )
     assert not seen
-    assert "not both" in json.loads(
-        handler({"action": "start", "preset": "quick", "steps": [{"text": "hi"}]}, callback=cb))["error"]
+    assert (
+        "not both"
+        in json.loads(
+            handler(
+                {"action": "start", "preset": "quick", "steps": [{"text": "hi"}]},
+                callback=cb,
+            )
+        )["error"]
+    )
     assert not seen
-    assert "error" not in json.loads(handler({"action": "start", "preset": "quick"}, callback=cb))
+    assert "error" not in json.loads(
+        handler({"action": "start", "preset": "quick"}, callback=cb)
+    )
     assert seen == {"action": "start", "surface": "app", "preset": "quick"}
 
 

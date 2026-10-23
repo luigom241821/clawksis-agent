@@ -20,7 +20,10 @@ def _runner_with_pending_once():
     runner._evict_cached_agent = lambda session_key: None
     state = runner._session_state(KEY)
     state.conversation.model_override = {"provider": "moa", "model": "default"}
-    state.conversation.one_turn_restore = {"had_override": True, "override": dict(PRIOR)}
+    state.conversation.one_turn_restore = {
+        "had_override": True,
+        "override": dict(PRIOR),
+    }
     return runner, state
 
 

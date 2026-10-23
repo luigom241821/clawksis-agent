@@ -82,7 +82,9 @@ def _unseen_terminal_events(tid):
         conn.close()
 
 
-def test_kanban_notifier_replays_telegram_dm_topic_delivery_metadata(tmp_path, monkeypatch):
+def test_kanban_notifier_replays_telegram_dm_topic_delivery_metadata(
+    tmp_path, monkeypatch
+):
     db_path = tmp_path / "dm-topic-metadata.db"
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(db_path))
     kb.init_db()
@@ -170,7 +172,8 @@ def test_active_named_profile_subscription_is_delivered(tmp_path, monkeypatch):
 
 
 def test_non_dispatch_gateway_claims_only_its_profile_subscriptions(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """A profile gateway delivers its events while another gateway dispatches."""
     db_path = tmp_path / "cross-profile-notifier.db"
@@ -179,7 +182,9 @@ def test_non_dispatch_gateway_claims_only_its_profile_subscriptions(
     conn = kbc.connect()
     try:
         foreign_tid = kb.create_task(
-            conn, title="default-owned", assignee="worker",
+            conn,
+            title="default-owned",
+            assignee="worker",
         )
         kbn.add_notify_sub(
             conn,
@@ -191,7 +196,9 @@ def test_non_dispatch_gateway_claims_only_its_profile_subscriptions(
         kb.complete_task(conn, foreign_tid, summary="default done")
 
         owned_tid = kb.create_task(
-            conn, title="writer-owned", assignee="worker",
+            conn,
+            title="writer-owned",
+            assignee="worker",
         )
         kbn.add_notify_sub(
             conn,
@@ -217,7 +224,8 @@ def test_non_dispatch_gateway_claims_only_its_profile_subscriptions(
 
 
 def test_legacy_subscription_requires_confirmed_dispatcher_lock_owner(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Startup and lock-losing gateways cannot claim legacy notifications."""
     db_path = tmp_path / "legacy-lock-owner.db"
@@ -290,6 +298,7 @@ class ReportedFailureAdapter:
     async def send(self, chat_id, text, metadata=None):
         self.attempts += 1
         from gateway.platforms.base import SendResult
+
         return SendResult(success=False, error="Not connected")
 
 
@@ -356,7 +365,8 @@ def test_notifier_redelivers_same_kind_on_dispatch_cycle(tmp_path, monkeypatch):
 
 
 def test_notifier_subscription_survives_done_reopen_until_archive(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Done is reversible; archive alone ends notification ownership."""
     db_path = tmp_path / "done-reopen-archive.db"
@@ -538,11 +548,15 @@ def test_kanban_notifier_isolates_per_subscription_failure(tmp_path, monkeypatch
     conn = kbc.connect()
     try:
         tid_bad = kb.create_task(conn, title="bad task", assignee="worker")
-        kbn.add_notify_sub(conn, task_id=tid_bad, platform="telegram", chat_id="chat-bad")
+        kbn.add_notify_sub(
+            conn, task_id=tid_bad, platform="telegram", chat_id="chat-bad"
+        )
         kb.complete_task(conn, tid_bad, summary="done")
 
         tid_good = kb.create_task(conn, title="good task", assignee="worker")
-        kbn.add_notify_sub(conn, task_id=tid_good, platform="telegram", chat_id="chat-good")
+        kbn.add_notify_sub(
+            conn, task_id=tid_good, platform="telegram", chat_id="chat-good"
+        )
         kb.complete_task(conn, tid_good, summary="done")
     finally:
         conn.close()
@@ -596,9 +610,15 @@ def test_notifier_delivers_block_loop_detected_triage_ping(tmp_path, monkeypatch
         tid = kb.create_task(conn, title="loops forever", assignee="worker")
         kbn.add_notify_sub(conn, task_id=tid, platform="telegram", chat_id="chat-1")
         kb._append_event(
-            conn, tid, "block_loop_detected",
-            {"reason": "needs credentials", "kind": "needs_input",
-             "recurrences": 2, "limit": kb.BLOCK_RECURRENCE_LIMIT},
+            conn,
+            tid,
+            "block_loop_detected",
+            {
+                "reason": "needs credentials",
+                "kind": "needs_input",
+                "recurrences": 2,
+                "limit": kb.BLOCK_RECURRENCE_LIMIT,
+            },
         )
     finally:
         conn.close()
@@ -616,7 +636,10 @@ def test_notifier_delivers_block_loop_detected_triage_ping(tmp_path, monkeypatch
     conn = kbc.connect()
     try:
         _, remaining = kbn.unseen_events_for_sub(
-            conn, task_id=tid, platform="telegram", chat_id="chat-1",
+            conn,
+            task_id=tid,
+            platform="telegram",
+            chat_id="chat-1",
             kinds=["block_loop_detected"],
         )
     finally:
@@ -644,7 +667,9 @@ class _StubNotif:
 def _fmt_block_loop(payload):
     from gateway.kanban_watchers_notifier import _EVENT_FORMATTERS
 
-    msg, _, _ = _EVENT_FORMATTERS["block_loop_detected"](_StubEvent(payload), _StubNotif())
+    msg, _, _ = _EVENT_FORMATTERS["block_loop_detected"](
+        _StubEvent(payload), _StubNotif()
+    )
     return msg
 
 
@@ -715,9 +740,15 @@ def _review_handoff_task(
         )
         kb.claim_task(conn, tid)
         run_id = kb.get_task(conn, tid).current_run_id
-        assert kb.request_review(
-            conn, tid, summary=summary, expected_run_id=run_id,
-        ) is True
+        assert (
+            kb.request_review(
+                conn,
+                tid,
+                summary=summary,
+                expected_run_id=run_id,
+            )
+            is True
+        )
         return tid
     finally:
         conn.close()
@@ -765,9 +796,15 @@ def test_block_loop_detected_wakes_the_origin_session(tmp_path, monkeypatch):
             delivery_mode="notify+wake",
         )
         kb._append_event(
-            conn, tid, "block_loop_detected",
-            {"reason": "needs credentials", "kind": "needs_input",
-             "recurrences": 2, "limit": kb.BLOCK_RECURRENCE_LIMIT},
+            conn,
+            tid,
+            "block_loop_detected",
+            {
+                "reason": "needs credentials",
+                "kind": "needs_input",
+                "recurrences": 2,
+                "limit": kb.BLOCK_RECURRENCE_LIMIT,
+            },
         )
     finally:
         conn.close()
@@ -781,7 +818,8 @@ def test_block_loop_detected_wakes_the_origin_session(tmp_path, monkeypatch):
 
 
 def test_review_requested_does_not_wake_a_notify_only_subscription(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """delivery_mode still decides whether a wake-worthy kind wakes at all."""
     monkeypatch.setenv("CLAWK_KANBAN_DB", str(tmp_path / "review-notify.db"))

@@ -20,7 +20,11 @@ logger = logging.getLogger("tools.browser_supervisor")
 FRAME_TREE_MAX_ENTRIES = 30
 FRAME_TREE_MAX_OOPIF_DEPTH = 2
 
-_AUTO_ATTACH_PARAMS = {"autoAttach": True, "waitForDebuggerOnStart": False, "flatten": True}
+_AUTO_ATTACH_PARAMS = {
+    "autoAttach": True,
+    "waitForDebuggerOnStart": False,
+    "flatten": True,
+}
 
 
 @dataclass
@@ -38,8 +42,17 @@ class FrameInfo:
     name: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        d = {"frame_id": self.frame_id, "url": self.url, "origin": self.origin, "is_oopif": self.is_oopif}
-        optional = (("session_id", self.cdp_session_id), ("parent_frame_id", self.parent_frame_id), ("name", self.name))
+        d = {
+            "frame_id": self.frame_id,
+            "url": self.url,
+            "origin": self.origin,
+            "is_oopif": self.is_oopif,
+        }
+        optional = (
+            ("session_id", self.cdp_session_id),
+            ("parent_frame_id", self.parent_frame_id),
+            ("name", self.name),
+        )
         d.update({k: v for k, v in optional if v})
         return d
 
@@ -47,37 +60,63 @@ class FrameInfo:
 class FrameTrackingMixin:
     """Frame-tree bookkeeping for ``CDPSupervisor`` (event handlers run on its loop)."""
 
-    async def _enable_page_domains(self, session_id: Optional[str], *, timeout: float) -> None:
+    async def _enable_page_domains(
+        self, session_id: Optional[str], *, timeout: float
+    ) -> None:
         """Page.enable + Runtime.enable + nested auto-attach on one session."""
         await self._cdp("Page.enable", session_id=session_id, timeout=timeout)
         await self._cdp("Runtime.enable", session_id=session_id, timeout=timeout)
-        await self._cdp("Target.setAutoAttach", _AUTO_ATTACH_PARAMS, session_id=session_id, timeout=timeout)
+        await self._cdp(
+            "Target.setAutoAttach",
+            _AUTO_ATTACH_PARAMS,
+            session_id=session_id,
+            timeout=timeout,
+        )
 
-    def _on_frame_attached(self, params: dict[str, Any], session_id: Optional[str]) -> None:
+    def _on_frame_attached(
+        self, params: dict[str, Any], session_id: Optional[str]
+    ) -> None:
         frame_id = params.get("frameId")
         if frame_id:
-            self._set_frame(FrameInfo(frame_id=frame_id, url="", origin="", parent_frame_id=params.get("parentFrameId"),
-                                      is_oopif=False, cdp_session_id=session_id))
+            self._set_frame(
+                FrameInfo(
+                    frame_id=frame_id,
+                    url="",
+                    origin="",
+                    parent_frame_id=params.get("parentFrameId"),
+                    is_oopif=False,
+                    cdp_session_id=session_id,
+                )
+            )
 
     def _set_frame(self, frame: FrameInfo) -> None:
         with self._state_lock:
             self._frames[frame.frame_id] = frame
 
-    def _on_frame_navigated(self, params: dict[str, Any], session_id: Optional[str]) -> None:
+    def _on_frame_navigated(
+        self, params: dict[str, Any], session_id: Optional[str]
+    ) -> None:
         frame = params.get("frame") or {}
         frame_id = frame.get("id")
         if not frame_id:
             return
         with self._state_lock:
-            old = self._frames.get(frame_id) or FrameInfo(frame_id, "", "", None, False, session_id)
+            old = self._frames.get(frame_id) or FrameInfo(
+                frame_id, "", "", None, False, session_id
+            )
             self._frames[frame_id] = FrameInfo(
-                frame_id=frame_id, url=str(frame.get("url") or ""),
+                frame_id=frame_id,
+                url=str(frame.get("url") or ""),
                 origin=str(frame.get("securityOrigin") or frame.get("origin") or ""),
-                parent_frame_id=frame.get("parentId") or old.parent_frame_id, is_oopif=old.is_oopif,
-                cdp_session_id=old.cdp_session_id, name=str(frame.get("name") or old.name),
+                parent_frame_id=frame.get("parentId") or old.parent_frame_id,
+                is_oopif=old.is_oopif,
+                cdp_session_id=old.cdp_session_id,
+                name=str(frame.get("name") or old.name),
             )
 
-    def _on_frame_detached(self, params: dict[str, Any], session_id: Optional[str]) -> None:
+    def _on_frame_detached(
+        self, params: dict[str, Any], session_id: Optional[str]
+    ) -> None:
         """Drop a frame only when it's truly gone. ``reason="swap"`` = migrating processes
         (e.g. promoted to an OOPIF) — dropping would hide the iframe. Even with ``remove``
         the parent only knows the child left ITS process; a live child session means it's
@@ -90,7 +129,9 @@ class FrameTrackingMixin:
             if not (old and old.is_oopif and old.cdp_session_id):
                 self._frames.pop(frame_id, None)
 
-    async def _on_target_attached(self, params: dict[str, Any], session_id: Optional[str] = None) -> None:
+    async def _on_target_attached(
+        self, params: dict[str, Any], session_id: Optional[str] = None
+    ) -> None:
         info = params.get("targetInfo") or {}
         sid = params.get("sessionId")
         target_type = info.get("type")
@@ -103,8 +144,13 @@ class FrameTrackingMixin:
             with self._state_lock:
                 old = self._frames.get(target_id)
                 self._frames[target_id] = FrameInfo(
-                    frame_id=target_id, url=str(info.get("url") or ""), origin="", is_oopif=True, cdp_session_id=sid,
-                    parent_frame_id=old.parent_frame_id if old else None, name=str(info.get("title") or (old.name if old else "")),
+                    frame_id=target_id,
+                    url=str(info.get("url") or ""),
+                    origin="",
+                    is_oopif=True,
+                    cdp_session_id=sid,
+                    parent_frame_id=old.parent_frame_id if old else None,
+                    name=str(info.get("title") or (old.name if old else "")),
                 )
         # Enable child domains off-loop: awaiting the replies here would deadlock
         # because only the reader can resolve those Futures.
@@ -118,7 +164,9 @@ class FrameTrackingMixin:
             logger.debug("child session %s setup failed: %s", sid[:16], e)
         await self._install_dialog_bridge(sid)
 
-    def _on_target_detached(self, params: dict[str, Any], session_id: Optional[str] = None) -> None:
+    def _on_target_detached(
+        self, params: dict[str, Any], session_id: Optional[str] = None
+    ) -> None:
         """Clear the session binding of frames on a detached child session. Frames are
         deliberately NOT dropped: Browserbase fires transient detaches during page transitions
         while the iframe is still visible; ``Page.frameDetached`` cleans up if it truly goes away."""
@@ -126,8 +174,13 @@ class FrameTrackingMixin:
         if not sid:
             return
         with self._state_lock:
-            self._frames.update({fid: replace(f, cdp_session_id=None) for fid, f in self._frames.items()
-                                 if f.cdp_session_id == sid})
+            self._frames.update(
+                {
+                    fid: replace(f, cdp_session_id=None)
+                    for fid, f in self._frames.items()
+                    if f.cdp_session_id == sid
+                }
+            )
 
     def _build_frame_tree_locked(self) -> dict[str, Any]:
         """Capped frame_tree payload (must hold state lock). Top frame = one with
@@ -141,7 +194,9 @@ class FrameTrackingMixin:
 
         children: list[dict[str, Any]] = []
         truncated = False
-        queue: list[tuple[FrameInfo, int]] = [(f, 1) for f in frames.values() if f.parent_frame_id == top.frame_id]
+        queue: list[tuple[FrameInfo, int]] = [
+            (f, 1) for f in frames.values() if f.parent_frame_id == top.frame_id
+        ]
         visited = {top.frame_id}
         while queue and len(children) < FRAME_TREE_MAX_ENTRIES:
             frame, depth = queue.pop(0)
@@ -152,9 +207,16 @@ class FrameTrackingMixin:
                 truncated = True
                 continue
             children.append(frame.to_dict())
-            queue.extend((f, depth + 1) for f in frames.values()
-                         if f.parent_frame_id == frame.frame_id and f.frame_id not in visited)
-        return {"top": top.to_dict(), "children": children, "truncated": truncated or bool(queue)}
+            queue.extend(
+                (f, depth + 1)
+                for f in frames.values()
+                if f.parent_frame_id == frame.frame_id and f.frame_id not in visited
+            )
+        return {
+            "top": top.to_dict(),
+            "children": children,
+            "truncated": truncated or bool(queue),
+        }
 
     # CDP event → handler(self, params, session_id); merged into CDPSupervisor._EVENT_HANDLERS.
     EVENT_HANDLERS: dict[str, Callable[..., Any]] = {

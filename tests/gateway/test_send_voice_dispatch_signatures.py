@@ -9,7 +9,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_media_dispatch_delivers_audio_through_mattermost_send_voice(tmp_path) -> None:
+async def test_media_dispatch_delivers_audio_through_mattermost_send_voice(
+    tmp_path,
+) -> None:
     """Behavioural pin for the ``**kwargs`` class fix (line/mattermost/weixin): drive the real
     base dispatch, which calls ``send_voice(..., is_voice=False)`` for an audio-ext MEDIA
     attachment. Before the fix the call raised ``TypeError`` inside ``_send_one`` and the
@@ -22,17 +24,31 @@ async def test_media_dispatch_delivers_audio_through_mattermost_send_voice(tmp_p
     from gateway.session import Platform, SessionSource
     from plugins.platforms.mattermost.adapter import MattermostAdapter
 
-    adapter = MattermostAdapter(PlatformConfig(enabled=True, token="mm-token", extra={"url": "https://mm.example"}))
-    adapter._send_local_file = AsyncMock(return_value=SendResult(success=True, message_id="post-1"))
+    adapter = MattermostAdapter(
+        PlatformConfig(
+            enabled=True, token="mm-token", extra={"url": "https://mm.example"}
+        )
+    )
+    adapter._send_local_file = AsyncMock(
+        return_value=SendResult(success=True, message_id="post-1")
+    )
     adapter._notify_media_delivery_failure = AsyncMock()
     clip = tmp_path / "clip.mp3"
     clip.write_bytes(b"ID3")
-    event = MessageEvent(text="", source=SessionSource(platform=Platform.MATTERMOST, chat_id="chan-1"))
+    event = MessageEvent(
+        text="", source=SessionSource(platform=Platform.MATTERMOST, chat_id="chan-1")
+    )
     results = []
 
     await adapter._deliver_media_attachments(
-        event, [(str(clip), False)], [], force_document_attachments=False, human_delay=0,
-        metadata={}, record_delivery=results.append)
+        event,
+        [(str(clip), False)],
+        [],
+        force_document_attachments=False,
+        human_delay=0,
+        metadata={},
+        record_delivery=results.append,
+    )
 
     assert [r.success for r in results] == [True]
     adapter._notify_media_delivery_failure.assert_not_awaited()

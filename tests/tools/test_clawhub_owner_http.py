@@ -37,7 +37,11 @@ def registry(*, fallback=False, mismatch=False):
                         archive.writestr("SKILL.md", "# Alice fixture")
                     payload = buf.getvalue()
             elif url.path.endswith("/versions"):
-                payload = {"items": [{"version": "1.0"}]} if fallback else [{"version": "1.0"}]
+                payload = (
+                    {"items": [{"version": "1.0"}]}
+                    if fallback
+                    else [{"version": "1.0"}]
+                )
             elif url.path.endswith("/versions/1.0"):
                 payload = {"files": {"SKILL.md": "# Alice fixture"}}
             else:
@@ -45,7 +49,9 @@ def registry(*, fallback=False, mismatch=False):
                 payload = {"skill": {"slug": "collision"}}
                 if mismatch:
                     payload["owner"] = {"handle": "bob"}
-            body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+            body = (
+                payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+            )
             self.send_response(status)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -76,7 +82,11 @@ def registry(*, fallback=False, mismatch=False):
 def test_qualified_owner_survives_metadata_versions_and_download():
     for fallback in (False, True):
         with registry(fallback=fallback) as (source, requests):
-            for identifier in ("@alice/collision", "clawhub/@alice/collision", "alice/skills/collision"):
+            for identifier in (
+                "@alice/collision",
+                "clawhub/@alice/collision",
+                "alice/skills/collision",
+            ):
                 meta = source.inspect(identifier)
                 assert meta is not None
                 assert meta.identifier == "@alice/collision"

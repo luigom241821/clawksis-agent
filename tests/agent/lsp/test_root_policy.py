@@ -3,6 +3,7 @@ without disabling the server fleet-wide, and ``lsp.warmup_timeout`` gives a cold
 instead of the steady-state budget.  Both are driven through ``create_from_config`` and the production
 pre-write / post-write entry points, never through the helpers.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,17 +48,29 @@ def test_exclude_roots_skips_matching_root_only(tmp_path, monkeypatch, caplog):
     big = _git_repo(tmp_path, "big")
     small = _git_repo(tmp_path, "small")
     monkeypatch.chdir(str(tmp_path))
-    svc = _service_from({"wait_timeout": 1.0, "install_strategy": "manual",
-                         "exclude_roots": [str(tmp_path / "bi*")]})
+    svc = _service_from(
+        {
+            "wait_timeout": 1.0,
+            "install_strategy": "manual",
+            "exclude_roots": [str(tmp_path / "bi*")],
+        }
+    )
     try:
+
         async def must_not_run(*_a, **_k):
             raise AssertionError("excluded root reached the server")
 
-        with patch.object(svc, "_snapshot_async", must_not_run), caplog.at_level("INFO", logger=eventlog.event_log.name):
+        with (
+            patch.object(svc, "_snapshot_async", must_not_run),
+            caplog.at_level("INFO", logger=eventlog.event_log.name),
+        ):
             svc.snapshot_baseline(str(big / "x.py"))
         assert svc.enabled_for(str(big / "x.py")) is False
         assert svc.enabled_for(str(small / "x.py")) is True
-        assert any("exclude_roots" in r.getMessage() and str(big) in r.getMessage() for r in caplog.records)
+        assert any(
+            "exclude_roots" in r.getMessage() and str(big) in r.getMessage()
+            for r in caplog.records
+        )
     finally:
         svc.shutdown()
 
@@ -65,8 +78,16 @@ def test_exclude_roots_skips_matching_root_only(tmp_path, monkeypatch, caplog):
         bad = _service_from({"install_strategy": "manual", "exclude_roots": str(big)})
     try:
         assert bad.enabled_for(str(small / "x.py")) is False
-        warned = [r for r in caplog.records if r.levelno >= 30 and "exclude_roots" in r.getMessage()]
-        assert warned and "list" in warned[0].getMessage() and "str" in warned[0].getMessage()
+        warned = [
+            r
+            for r in caplog.records
+            if r.levelno >= 30 and "exclude_roots" in r.getMessage()
+        ]
+        assert (
+            warned
+            and "list" in warned[0].getMessage()
+            and "str" in warned[0].getMessage()
+        )
     finally:
         bad.shutdown()
 
@@ -78,7 +99,9 @@ def test_warmup_timeout_applies_to_cold_root_only(tmp_path, monkeypatch):
     repo = _git_repo(tmp_path, "repo")
     src = repo / "x.py"
     monkeypatch.chdir(str(repo))
-    svc = _service_from({"wait_timeout": 1.0, "warmup_timeout": 30.0, "install_strategy": "manual"})
+    svc = _service_from(
+        {"wait_timeout": 1.0, "warmup_timeout": 30.0, "install_strategy": "manual"}
+    )
     budgets: list = []
 
     class FakeClient:
@@ -111,8 +134,12 @@ def test_warmup_timeout_applies_to_cold_root_only(tmp_path, monkeypatch):
 
     try:
         with patch.object(svc, "_get_or_spawn", spawn):
-            svc.snapshot_baseline(str(src))  # cold: no client registered for the root yet
-            key = _client_key(find_server_for_file(str(src)), str(repo), svc._trusted(str(repo)))
+            svc.snapshot_baseline(
+                str(src)
+            )  # cold: no client registered for the root yet
+            key = _client_key(
+                find_server_for_file(str(src)), str(repo), svc._trusted(str(repo))
+            )
             with svc._state_lock:
                 svc._clients[key] = fake
             assert svc.get_diagnostics_sync(str(src)) == []  # warm

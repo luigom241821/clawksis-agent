@@ -14,7 +14,11 @@ from pathlib import Path
 import pytest
 
 from tui_gateway import server
-from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+from agent.secret_scope import (
+    build_profile_secret_scope,
+    reset_secret_scope,
+    set_secret_scope,
+)
 from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
 
@@ -47,9 +51,15 @@ def _enabled_under_own_scope(home: Path) -> set:
     from clawk_cli.tools_config import _get_platform_tools
 
     home_token = set_clawk_home_override(str(home))
-    secret_token = set_secret_scope(build_profile_secret_scope(home), profile_home=str(home))
+    secret_token = set_secret_scope(
+        build_profile_secret_scope(home), profile_home=str(home)
+    )
     try:
-        return set(_get_platform_tools(load_config() or {}, "cli", include_default_mcp_servers=False))
+        return set(
+            _get_platform_tools(
+                load_config() or {}, "cli", include_default_mcp_servers=False
+            )
+        )
     finally:
         reset_secret_scope(secret_token)
         reset_clawk_home_override(home_token)
@@ -68,7 +78,9 @@ def test_describe_reports_each_profiles_own_enabled_toolsets_under_multiplex(hos
     for name, home in (("default", launch), ("bot", bot)):
         described = _described(name)
         expected = _enabled_under_own_scope(home)
-        assert expected, "the platform default must enable something for the comparison to mean anything"
+        assert expected, (
+            "the platform default must enable something for the comparison to mean anything"
+        )
         assert {ts for ts, on in described.items() if on} == expected & set(described)
 
     # The secondary's own key resolves (x_search auto-enables on xAI creds); the launch profile's does not.

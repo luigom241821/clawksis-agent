@@ -23,19 +23,21 @@ def setup_function():
     _reset_version_info_cache()
 
 
-
-
-
-@pytest.mark.parametrize('sha,timestamp,expected,date', [
-    ('cafef00d' * 5, 1718662620, 'cafef00d', '2024-06-17'),
-    (None, None, '(unknown)', ''),
-])
-def test_dump_uses_running_install_fallback_only(tmp_path, monkeypatch, sha, timestamp, expected, date):
+@pytest.mark.parametrize(
+    "sha,timestamp,expected,date",
+    [
+        ("cafef00d" * 5, 1718662620, "cafef00d", "2024-06-17"),
+        (None, None, "(unknown)", ""),
+    ],
+)
+def test_dump_uses_running_install_fallback_only(
+    tmp_path, monkeypatch, sha, timestamp, expected, date
+):
     from clawk_cli import dump
 
-    monkeypatch.setattr(dump, 'get_project_root', lambda: tmp_path)
-    info = VersionInfo('1.0', '1.0', None, sha, None, 'docker', False, timestamp)
-    monkeypatch.setattr('clawk_cli.version_info.get_version_info', lambda: info)
+    monkeypatch.setattr(dump, "get_project_root", lambda: tmp_path)
+    info = VersionInfo("1.0", "1.0", None, sha, None, "docker", False, timestamp)
+    monkeypatch.setattr("clawk_cli.version_info.get_version_info", lambda: info)
     assert dump._get_git_commit(tmp_path) == expected
     assert dump._get_git_commit_date(tmp_path) == date
 
@@ -85,12 +87,25 @@ def test_get_git_commit_authoritative_for_real_temp_repo(tmp_path):
     for args in (
         ["init", "-b", "main"],
         ["-c", "user.email=t@example.com", "-c", "user.name=t", "add", "."],
-        ["-c", "user.email=t@example.com", "-c", "user.name=t",
-         "commit", "-m", "scratch", "--no-gpg-sign"],
+        [
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-m",
+            "scratch",
+            "--no-gpg-sign",
+        ],
     ):
         _run(["git", *args], cwd=repo_dir, capture_output=True, check=True)
-    expected = _run(["git", "rev-parse", "--short=8", "HEAD"], cwd=repo_dir,
-                    capture_output=True, text=True, check=True).stdout.strip()
+    expected = _run(
+        ["git", "rev-parse", "--short=8", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
 
     commit = dump._get_git_commit(repo_dir)
     assert commit == expected

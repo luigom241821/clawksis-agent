@@ -8,6 +8,7 @@ calling session. The creation flags (request_json), the model route and a commit
 pick stay; a session with a turn running or queued keeps the policy that turn was admitted under. A Bot Chat an
 earlier build committed frozen follows its profile from the open on (``follow_bot_chat``).
 """
+
 import asyncio
 import json
 import logging
@@ -33,6 +34,7 @@ def refreshed_policy(policy, live, terminal, *, picked=(), mcp_only=False):
     nothing moved; a rotated private value alone (its redacted tree unchanged) moves it."""
     from gateway.session_policy import _extract_config_secrets, present_sections
     from gateway.session_policy_credentials import secrets_moved
+
     old, config = json.loads(policy.config_json), json.loads(policy.config_json)
     live, secrets, replaced = present_sections(live), {}, set()
     if mcp_only:
@@ -43,49 +45,78 @@ def refreshed_policy(policy, live, terminal, *, picked=(), mcp_only=False):
         _extract_config_secrets(terminal, secrets, (None,))
         replaced.add(None)
     toolsets = _mcp_servers(policy, config, live, toolsets, secrets, replaced)
-    if (config == old and toolsets == policy.toolsets and terminal == json.loads(policy.terminal_json)
-            and not secrets_moved(policy.config_secret_ref, secrets, replaced)):
+    if (
+        config == old
+        and toolsets == policy.toolsets
+        and terminal == json.loads(policy.terminal_json)
+        and not secrets_moved(policy.config_secret_ref, secrets, replaced)
+    ):
         return policy, {}, set()
-    policy = replace(policy, toolsets=toolsets, config_json=json.dumps(config), terminal_json=json.dumps(terminal))
+    policy = replace(
+        policy,
+        toolsets=toolsets,
+        config_json=json.dumps(config),
+        terminal_json=json.dumps(terminal),
+    )
     return policy, secrets, replaced
 
 
 def _settings(policy, config, live, picked):
     """Follow the config-derived settings into *config*; the toolsets they select."""
     from gateway.session_policy import _resolve_toolsets, session_pinned
+
     request = json.loads(policy.request_json)
-    live_agent = live.get('agent') or {}
-    agent = dict(config.get('agent') or {})
-    keys = [] if 'max_turns' in request else ['max_turns']
+    live_agent = live.get("agent") or {}
+    agent = dict(config.get("agent") or {})
+    keys = [] if "max_turns" in request else ["max_turns"]
     # The session's own record (a pick, or a reset back to the profile) wins over the receipt history.
-    chosen = session_pinned(config, 'reasoning', 'reasoning' in request or 'reasoning' in picked)
-    keys += [] if chosen else ['reasoning_effort', 'reasoning_overrides']
+    chosen = session_pinned(
+        config, "reasoning", "reasoning" in request or "reasoning" in picked
+    )
+    keys += [] if chosen else ["reasoning_effort", "reasoning_overrides"]
     toolsets = policy.toolsets
-    if 'toolsets' not in request and policy.editor_mcp_json is None:
-        keys.append('disabled_toolsets')
-        _follow(config, live, 'platform_toolsets')
-        toolsets = tuple(sorted(_resolve_toolsets({}, live, policy.source, policy.safe_mode, policy.coding_posture)))
+    if "toolsets" not in request and policy.editor_mcp_json is None:
+        keys.append("disabled_toolsets")
+        _follow(config, live, "platform_toolsets")
+        toolsets = tuple(
+            sorted(
+                _resolve_toolsets(
+                    {}, live, policy.source, policy.safe_mode, policy.coding_posture
+                )
+            )
+        )
     for key in keys:
         _follow(agent, live_agent, key)
-    if agent or 'agent' in config:
-        config['agent'] = agent
-    if 'max_turns' not in request:
-        _follow(config, live, 'max_turns')
-    _follow(config, live, 'checkpoints')
-    if request.get('checkpoints') is True:
-        section = config.get('checkpoints')
-        section = dict(section) if isinstance(section, dict) else {'enabled': bool(section)} if section else {}
-        config['checkpoints'] = {**section, 'enabled': True}
+    if agent or "agent" in config:
+        config["agent"] = agent
+    if "max_turns" not in request:
+        _follow(config, live, "max_turns")
+    _follow(config, live, "checkpoints")
+    if request.get("checkpoints") is True:
+        section = config.get("checkpoints")
+        section = (
+            dict(section)
+            if isinstance(section, dict)
+            else {"enabled": bool(section)}
+            if section
+            else {}
+        )
+        config["checkpoints"] = {**section, "enabled": True}
     return toolsets
 
 
 def _terminal(policy, terminal, picked):
     from gateway.session_policy import terminal_uses_host_cwd
+
     terminal, request = dict(terminal), json.loads(policy.request_json)
     # The session's own folder, where it now is, under build_policy's rule; a committed Move to project is
     # the user's pick on every backend (it rewrote the policy, never the launch request).
-    if request.get('cwd_explicit') is True or 'workspace' in picked or terminal_uses_host_cwd(terminal):
-        terminal['TERMINAL_CWD'] = policy.cwd
+    if (
+        request.get("cwd_explicit") is True
+        or "workspace" in picked
+        or terminal_uses_host_cwd(terminal)
+    ):
+        terminal["TERMINAL_CWD"] = policy.cwd
     return terminal
 
 
@@ -97,11 +128,19 @@ def _mcp_servers(policy, config, live, toolsets, secrets, replaced):
     from gateway.session_policy import _extract_config_secrets, _resolve_toolsets
     from clawk_cli.tools_config import enabled_mcp_server_names
     from clawk_state_runtime import RuntimeStoreError
+
     if policy.editor_mcp_json is not None:
         return toolsets
     request = json.loads(policy.request_json)
-    sections = [section if isinstance(section, dict) else {} for section in (config.get('mcp_servers'), live.get('mcp_servers'))]
-    pick, picked, enabled = request.get('toolsets'), set(), enabled_mcp_server_names(live)
+    sections = [
+        section if isinstance(section, dict) else {}
+        for section in (config.get("mcp_servers"), live.get("mcp_servers"))
+    ]
+    pick, picked, enabled = (
+        request.get("toolsets"),
+        set(),
+        enabled_mcp_server_names(live),
+    )
     if pick is not None:
         # The launch pick's servers are an allowlist: each stays only while config enables it, and once all
         # are gone the chat has none, never every enabled server. A server that is now disabled or removed
@@ -109,29 +148,46 @@ def _mcp_servers(policy, config, live, toolsets, secrets, replaced):
         # definitions would start the server the user turned off).
         known = set(sections[0]) | set(sections[1])
         server = partial(_server_name, known)
-        picked = {server(name) for name in pick if isinstance(name, str) and server(name) in known}
-        pick = [name for name in pick if not isinstance(name, str) or server(name) not in picked - enabled]
+        picked = {
+            server(name)
+            for name in pick
+            if isinstance(name, str) and server(name) in known
+        }
+        pick = [
+            name
+            for name in pick
+            if not isinstance(name, str) or server(name) not in picked - enabled
+        ]
     try:
-        selected = _resolve_toolsets({} if pick is None else {'toolsets': pick},
-                                     json.loads(json.dumps(live)), policy.source, policy.safe_mode, policy.coding_posture)
+        selected = _resolve_toolsets(
+            {} if pick is None else {"toolsets": pick},
+            json.loads(json.dumps(live)),
+            policy.source,
+            policy.safe_mode,
+            policy.coding_posture,
+        )
     except RuntimeStoreError:
         return toolsets  # the rest of the launch pick no longer validates against the profile: keep the frozen servers
     # A picked server config removed keeps a disabled stub in the stored section, so every later refresh
     # (after an owner restart too) still knows that name as one of the pick's servers, not an unknown toolset.
-    stubs = {name: {'enabled': False} for name in picked - set(sections[1])}
-    if 'mcp_servers' in live or stubs:
-        config['mcp_servers'] = json.loads(json.dumps({**sections[1], **stubs} if stubs else live['mcp_servers']))
-        _extract_config_secrets(config['mcp_servers'], secrets, ('mcp_servers',))
+    stubs = {name: {"enabled": False} for name in picked - set(sections[1])}
+    if "mcp_servers" in live or stubs:
+        config["mcp_servers"] = json.loads(
+            json.dumps({**sections[1], **stubs} if stubs else live["mcp_servers"])
+        )
+        _extract_config_secrets(config["mcp_servers"], secrets, ("mcp_servers",))
     else:
-        config.pop('mcp_servers', None)
-    replaced.add('mcp_servers')
+        config.pop("mcp_servers", None)
+    replaced.add("mcp_servers")
     servers = selected & enabled & picked if picked else selected & enabled
-    return tuple(sorted((set(toolsets) - set(sections[0]) - set(sections[1])) | servers))
+    return tuple(
+        sorted((set(toolsets) - set(sections[0]) - set(sections[1])) | servers)
+    )
 
 
 def _server_name(servers, name):
     """The server a pick name selects: ``mcp-<server>`` is its bare alias unless a server has that name."""
-    return name[4:] if name.startswith('mcp-') and name not in servers else name
+    return name[4:] if name.startswith("mcp-") and name not in servers else name
 
 
 def _prepare(authority, session_id, mcp_only=False, adopt_only=False):
@@ -143,24 +199,33 @@ def _prepare(authority, session_id, mcp_only=False, adopt_only=False):
     from clawk_state_local import local_receipt
     from clawk_state_mutation_prepared import policy_picks
     from tools.terminal_scope import build_profile_terminal_scope
-    generation = authority.db.get_session(session_id)['runtime_generation']
-    stored = local_receipt(authority.db, session_id)['policy']
+
+    generation = authority.db.get_session(session_id)["runtime_generation"]
+    stored = local_receipt(authority.db, session_id)["policy"]
     old = restore_policy(stored)
     # A bypass launch never reads the profile; cron, Kanban and room routes are not resumed CLI sessions.
     if old.ignore_user_config or old.source not in SURFACES:
         return None
     home = Path(authority.db.db_path).resolve().parent
     terminal = {} if mcp_only or adopt_only else build_profile_terminal_scope(home)
-    live, picked = _load_gateway_config(home / 'config.yaml'), policy_picks(authority.db, session_id)
+    live, picked = (
+        _load_gateway_config(home / "config.yaml"),
+        policy_picks(authority.db, session_id),
+    )
     base = old
     if not mcp_only:
         # Opening a Bot Chat an earlier build froze adopts it: it follows its profile from now on.
         from gateway.session_local_migration import follow_bot_chat
+
         base = follow_bot_chat(authority, session_id, old, live, picked)
     if adopt_only:
         return None if base is old else (stored, old, base, {}, set(), generation)
-    policy, secrets, replaced = refreshed_policy(base, live, terminal, picked=picked, mcp_only=mcp_only)
-    return None if policy is old else (stored, old, policy, secrets, replaced, generation)
+    policy, secrets, replaced = refreshed_policy(
+        base, live, terminal, picked=picked, mcp_only=mcp_only
+    )
+    return (
+        None if policy is old else (stored, old, policy, secrets, replaced, generation)
+    )
 
 
 def _rebind(authority, session_id, old, policy, fresh, replaced):
@@ -170,23 +235,32 @@ def _rebind(authority, session_id, old, policy, fresh, replaced):
     that follows its profile from this open on keeps none of its followed sections' frozen values."""
     from gateway.session_policy import FOLLOW_SECTIONS, bind_launch_key, launch_key
     from gateway.session_policy_credentials import recover_config_secrets
+
     skip = (*(FOLLOW_SECTIONS if policy.follows_profile else ()), *replaced)
-    secrets = recover_config_secrets(authority, old, skip) if old.config_secret_ref else {}
+    secrets = (
+        recover_config_secrets(authority, old, skip) if old.config_secret_ref else {}
+    )
     secrets.update(fresh)
-    return bind_launch_key(authority, session_id, policy, launch_key(authority, old), config_secrets=secrets)
+    return bind_launch_key(
+        authority,
+        session_id,
+        policy,
+        launch_key(authority, old),
+        config_secrets=secrets,
+    )
 
 
 def _pending_adoptions(authority):
     """Frozen Bot Chats an open found to adopt but could not commit (a turn running or queued, a concurrent
     edit): the next open retries, whether or not that client is already attached."""
-    found = getattr(authority, '_pending_adoptions', None)
+    found = getattr(authority, "_pending_adoptions", None)
     if found is None:
         found = authority._pending_adoptions = set()
     return found
 
 
 def _in_flight(authority):
-    found = getattr(authority, '_policy_refreshes', None)
+    found = getattr(authority, "_policy_refreshes", None)
     if found is None:
         found = authority._policy_refreshes = {}
     return found
@@ -198,8 +272,10 @@ async def refresh_settled(authority, session_id):
     of the live one, which restore_local_session refuses."""
     refreshes = _in_flight(authority)
     while (running := refreshes.get(session_id)) is not None and not running.done():
-        logger.debug('Session %s waits for its policy refresh to publish', session_id)
-        await asyncio.wait({running})  # its outcome is its caller's; a cancelled waiter leaves it running
+        logger.debug("Session %s waits for its policy refresh to publish", session_id)
+        await asyncio.wait(
+            {running}
+        )  # its outcome is its caller's; a cancelled waiter leaves it running
 
 
 async def commit_refresh(authority, ref, *, mcp_only=False, adopt_only=False):
@@ -208,18 +284,29 @@ async def commit_refresh(authority, ref, *, mcp_only=False, adopt_only=False):
     One refresh per session at a time, run to its publication even when the caller is cancelled: a second
     waits for the first, then usually finds nothing moved."""
     from gateway.session_runtime_workers import track_mutation
+
     await refresh_settled(authority, ref.session_id)
     refreshes = _in_flight(authority)
-    task = refreshes[ref.session_id] = track_mutation(authority, _commit_refresh(authority, ref, mcp_only, adopt_only))
-    task.add_done_callback(lambda done: refreshes.pop(ref.session_id, None) if refreshes.get(ref.session_id)
-                           is done else None)
+    task = refreshes[ref.session_id] = track_mutation(
+        authority, _commit_refresh(authority, ref, mcp_only, adopt_only)
+    )
+    task.add_done_callback(
+        lambda done: (
+            refreshes.pop(ref.session_id, None)
+            if refreshes.get(ref.session_id) is done
+            else None
+        )
+    )
     return await asyncio.shield(task)
 
 
 async def _commit_refresh(authority, ref, mcp_only, adopt_only=False):
     from gateway.session_runtime_workers import tracked_write
     from clawk_state_mutation_prepared import commit_refreshed_policy
-    prepared = await asyncio.to_thread(_prepare, authority, ref.session_id, mcp_only, adopt_only)
+
+    prepared = await asyncio.to_thread(
+        _prepare, authority, ref.session_id, mcp_only, adopt_only
+    )
     # An MCP-only refresh never runs follow_bot_chat: it neither settles nor commits an adoption, so it
     # leaves a pending one for the next open.
     pending = _pending_adoptions(authority) if not mcp_only else set()
@@ -234,10 +321,19 @@ async def _commit_refresh(authority, ref, mcp_only, adopt_only=False):
     # Compare-and-swap against the receipt as stored (JSON lists), not its restored tuple form. The
     # publication is the commit's own shielded follow-up: a caller cancelled mid-commit cannot leave the
     # stored policy ahead of the live one (restore_local_session refuses that pair).
-    await tracked_write(authority, partial(commit_refreshed_policy, authority.db, epoch=authority.epoch,
-                                           session_id=ref.session_id, old=stored, new=asdict(policy),
-                                           generation=generation),
-                        then=lambda _generation: _publish(authority, ref, moved))
+    await tracked_write(
+        authority,
+        partial(
+            commit_refreshed_policy,
+            authority.db,
+            epoch=authority.epoch,
+            session_id=ref.session_id,
+            old=stored,
+            new=asdict(policy),
+            generation=generation,
+        ),
+        then=lambda _generation: _publish(authority, ref, moved),
+    )
     pending.discard(ref.session_id)
     return True
 
@@ -252,12 +348,20 @@ async def refresh_resumed_policy(authority, ref, *, attached=False):
     if attached and ref.session_id not in _pending_adoptions(authority):
         return
     try:
-        await (commit_refresh(authority, ref, adopt_only=True) if attached else commit_refresh(authority, ref))
+        await (
+            commit_refresh(authority, ref, adopt_only=True)
+            if attached
+            else commit_refresh(authority, ref)
+        )
     except Exception as exc:  # health: allow BLE001 -- a refresh is best-effort; the resume itself must proceed
-        reason = getattr(exc, 'reason', None) or type(exc).__name__
-        busy = reason in {'session_busy', 'unknown_execution', 'revision_conflict'}
-        logger.log(logging.INFO if busy else logging.WARNING, 'Session %s keeps its stored policy on resume: %s',
-                   ref.session_id, reason)
+        reason = getattr(exc, "reason", None) or type(exc).__name__
+        busy = reason in {"session_busy", "unknown_execution", "revision_conflict"}
+        logger.log(
+            logging.INFO if busy else logging.WARNING,
+            "Session %s keeps its stored policy on resume: %s",
+            ref.session_id,
+            reason,
+        )
 
 
 def drop_session_terminal(authority, ref):
@@ -268,11 +372,16 @@ def drop_session_terminal(authority, ref):
     from clawk_state_local import local_receipt
     from tools.terminal_tool import _qualify_task_key, clear_session_cwd
     from tools.terminal_tool_lifecycle import cleanup_vm
-    ids = {ref.session_id, local_receipt(authority.db, ref.session_id)['entry']['session_id']}
+
+    ids = {
+        ref.session_id,
+        local_receipt(authority.db, ref.session_id)["entry"]["session_id"],
+    }
     route = authority.sessions[ref.session_id].route
     from gateway.session_policy import unbind_turn_workspace
+
     with owner_scope(authority):
-        keys = {_qualify_task_key(key) for key in (f'session:{route}', *ids)}
+        keys = {_qualify_task_key(key) for key in (f"session:{route}", *ids)}
         for key in (route, *ids):
             # The turn's workspace binding goes with them: it wins over the new binding's cwd too.
             unbind_turn_workspace(key)
@@ -283,7 +392,10 @@ def drop_session_terminal(authority, ref):
 
 async def _publish(authority, ref, moved=False):
     from gateway.session_local import local_session_info, publish_local_policy
-    if moved:  # before the drain can run a turn on the new binding with the old environment
+
+    if (
+        moved
+    ):  # before the drain can run a turn on the new binding with the old environment
         await asyncio.to_thread(drop_session_terminal, authority, ref)
     publish_local_policy(authority, ref.session_id)
     # A drain that ran during the off-loop commit saw the new stored policy beside the old live one and
@@ -293,4 +405,5 @@ async def _publish(authority, ref, moved=False):
     # refused as stale) and repaints from the refreshed policy, as a reasoning/workspace edit publishes.
     authority._publish_pending(ref)
     authority.sessions[ref.session_id].event_stream.publish(
-        ref.session_id, local_session_info(authority, ref), event_type='session.info')
+        ref.session_id, local_session_info(authority, ref), event_type="session.info"
+    )

@@ -24,6 +24,7 @@ from. LOCAL rows (cron, CLI, TUI) restore from their private receipt and API row
 ``_publish_route``: a row that ended for a recoverable reason (``agent_close``, ``ws_orphan_reap``,
 ...) is mounted live too, as the lane's next message would reopen it.
 """
+
 import json
 from datetime import datetime
 
@@ -45,8 +46,12 @@ def _routed_entry(authority, sid, route):
     store = authority.runner.session_store
     with store._lock:
         entry = store._entry_locked(route)
-    if (entry is None or entry.origin is None or entry.session_key != route
-            or authority.logical_owner(entry.session_id) != sid):
+    if (
+        entry is None
+        or entry.origin is None
+        or entry.session_key != route
+        or authority.logical_owner(entry.session_id) != sid
+    ):
         return None
     return entry
 
@@ -54,16 +59,21 @@ def _routed_entry(authority, sid, route):
 def _row_source(row, platform, profile):
     """The row's persisted origin, else its columns (``channel_directory`` reads rows the same way)."""
     from gateway.session import SessionSource
+
     try:
-        return SessionSource.from_dict(json.loads(row['origin_json']))
+        return SessionSource.from_dict(json.loads(row["origin_json"]))
     except (TypeError, ValueError, KeyError):
         pass
-    if row.get('chat_id') is None:
+    if row.get("chat_id") is None:
         return None
     source = SessionSource(
-        platform=platform, chat_id=str(row['chat_id']), user_id=row.get('user_id'),
-        chat_type=row.get('chat_type') or 'dm', thread_id=row.get('thread_id'),
-        chat_name=row.get('display_name'))
+        platform=platform,
+        chat_id=str(row["chat_id"]),
+        user_id=row.get("user_id"),
+        chat_type=row.get("chat_type") or "dm",
+        thread_id=row.get("thread_id"),
+        chat_name=row.get("display_name"),
+    )
     if profile is not None:
         source.profile = profile
     return source
@@ -80,25 +90,37 @@ def _names_another_conversation(authority, sid, route):
 def _row_entry(row, platform, route, profile):
     """A routing entry rebuilt from the row alone (the route no longer vouches for it)."""
     from gateway.session import SessionEntry
+
     source = _row_source(row, platform, profile)
     if source is None or source.platform != platform:
         return None
-    started = datetime.fromtimestamp(row['started_at']) if row.get('started_at') else datetime.now()
-    return SessionEntry(session_key=route, session_id=row['id'], created_at=started, updated_at=started,
-                        origin=source, platform=platform, chat_type=source.chat_type,
-                        transport_profile=row.get('transport_profile'))
+    started = (
+        datetime.fromtimestamp(row["started_at"])
+        if row.get("started_at")
+        else datetime.now()
+    )
+    return SessionEntry(
+        session_key=route,
+        session_id=row["id"],
+        created_at=started,
+        updated_at=started,
+        origin=source,
+        platform=platform,
+        chat_type=source.chat_type,
+        transport_profile=row.get("transport_profile"),
+    )
 
 
 def _mount_plan(authority, sid):
     """``(route, entry, routed)`` for a row a route or a messaging-platform row can stand for, else
     None. Reads only: ``restore_routed_session`` mounts it, the stored picker lists it."""
     row = authority.db.get_session(sid)
-    route = row.get('session_key') if row is not None else None
-    platform = _messaging_platform(row['source']) if route else None
+    route = row.get("session_key") if row is not None else None
+    platform = _messaging_platform(row["source"]) if route else None
     if platform is None or authority.logical_owner(sid) != sid:
         return None  # a compression continuation: its lineage root is the mount (session.resume maps it)
     store = authority.runner.session_store
-    registry = getattr(authority.runner, 'session_authorities', None)
+    registry = getattr(authority.runner, "session_authorities", None)
     profile = store._named_profile_for_key(route)
     if profile != (registry.profile_name(authority) if registry is not None else None):
         return None
@@ -112,6 +134,7 @@ def restore_routed_session(authority, sid):
     messaging-platform row can stand for."""
     from gateway.session_authority import LiveSession
     from gateway.session_contract import SessionRef
+
     plan = _mount_plan(authority, sid)
     if plan is None:
         return None
@@ -121,7 +144,9 @@ def restore_routed_session(authority, sid):
     # Re-pin the persisted receiving bot so delivery after a restart goes through it or nowhere,
     # never the default bot by heuristic (gateway/AGENTS.md § Identity survives the process).
     source = authority.runner._restored_source(entry)
-    authority.sessions.setdefault(sid, LiveSession(source, route, superseded=superseded, history_mount=True))
+    authority.sessions.setdefault(
+        sid, LiveSession(source, route, superseded=superseded, history_mount=True)
+    )
     return SessionRef(authority.profile_id, sid)
 
 
@@ -134,8 +159,13 @@ def messaging_owner_ref(authority, ref):
     """The mount a messaging row resumes on: its compression lineage root, where the lane's turns
     publish their events (``logical_owner``). Any other row keeps *ref*."""
     row = authority.db.get_session(ref.session_id)
-    if row is None or not row.get('session_key') or _messaging_platform(row['source']) is None:
+    if (
+        row is None
+        or not row.get("session_key")
+        or _messaging_platform(row["source"]) is None
+    ):
         return ref
     from gateway.session_contract import SessionRef
+
     owner = authority.logical_owner(ref.session_id)
     return ref if owner == ref.session_id else SessionRef(ref.profile_id, owner)

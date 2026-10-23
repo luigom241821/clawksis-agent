@@ -62,8 +62,17 @@ sys.exit(int(os.environ.get('HANDOFF_EXIT', '0')))
 
 
 def _ct(pid: int) -> str:
-    rest = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8-sig").rsplit(") ", 1)[1].split()
-    btime = next(int(l.split()[1]) for l in Path("/proc/stat").read_text(encoding="utf-8-sig").splitlines() if l.startswith("btime "))
+    rest = (
+        Path(f"/proc/{pid}/stat")
+        .read_text(encoding="utf-8-sig")
+        .rsplit(") ", 1)[1]
+        .split()
+    )
+    btime = next(
+        int(l.split()[1])
+        for l in Path("/proc/stat").read_text(encoding="utf-8-sig").splitlines()
+        if l.startswith("btime ")
+    )
     return f"{btime + int(rest[19]) / os.sysconf('SC_CLK_TCK'):.3f}"
 
 
@@ -94,7 +103,10 @@ def _install(tmp_path: Path, *, legacy: bool = False) -> tuple[Path, Path]:
         bin_dir.mkdir(parents=True)
         (bin_dir / "python3").symlink_to(sys.executable)
         clawk = bin_dir / "clawk"
-        clawk.write_text(f'#!/usr/bin/env bash\nexec {shlex.quote(sys.executable)} -m clawk_cli.main "$@"\n', encoding="utf-8")
+        clawk.write_text(
+            f'#!/usr/bin/env bash\nexec {shlex.quote(sys.executable)} -m clawk_cli.main "$@"\n',
+            encoding="utf-8",
+        )
         clawk.chmod(0o755)
     else:
         (install / "pm").mkdir()
@@ -102,24 +114,54 @@ def _install(tmp_path: Path, *, legacy: bool = False) -> tuple[Path, Path]:
     return home, install
 
 
-def _run(tmp_path: Path, home: Path, install: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
-    full_env = {**os.environ, "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "CLAWK_HOME": str(home),
-                "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"), "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
-                "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0", **env}
+def _run(
+    tmp_path: Path, home: Path, install: Path, *args: str, **env: str
+) -> subprocess.CompletedProcess:
+    full_env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "CLAWK_HOME": str(home),
+        "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"),
+        "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
+        "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0",
+        **env,
+    }
     for key in ("PYTHONPATH", "PYTHONHOME", "CLAWK_UPDATE_STARTED_AT"):
         full_env.pop(key, None)
     full_env.update(env)
-    return subprocess.run(["bash", str(POSIX), "--daemonized", "--no-ui", "--install-root", str(install), *args],
-                          env=full_env, cwd=tmp_path, capture_output=True, text=True, timeout=120, check=False)
+    return subprocess.run(
+        [
+            "bash",
+            str(POSIX),
+            "--daemonized",
+            "--no-ui",
+            "--install-root",
+            str(install),
+            *args,
+        ],
+        env=full_env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
 
 
 def _calls(tmp_path: Path) -> list[str]:
     capture = tmp_path / "calls.txt"
-    return capture.read_text(encoding="utf-8-sig").splitlines() if capture.exists() else []
+    return (
+        capture.read_text(encoding="utf-8-sig").splitlines() if capture.exists() else []
+    )
 
 
-@pytest.mark.parametrize("delegate", [False, True], ids=["live-owner-past-20min", "dead-owner-live-delegate"])
-def test_live_marker_is_never_reclaimed_and_refuses_the_handoff(tmp_path, sleeper, delegate):
+@pytest.mark.parametrize(
+    "delegate", [False, True], ids=["live-owner-past-20min", "dead-owner-live-delegate"]
+)
+def test_live_marker_is_never_reclaimed_and_refuses_the_handoff(
+    tmp_path, sleeper, delegate
+):
     home, install = _install(tmp_path)
     live = sleeper()
     if delegate:
@@ -147,19 +189,36 @@ def _now() -> int:
 # Contract A1/A2/A3 marker bodies, judged by the real posix.sh against a real live process; every
 # other reader (Python, Electron, PowerShell, Rust) must give the same verdict.
 _MATRIX = {
-    "crlf-v2-matching-ct": (lambda pid, ct: f"{pid}\r\n{_now()}\r\nct:{ct}\r\n", "live"),
+    "crlf-v2-matching-ct": (
+        lambda pid, ct: f"{pid}\r\n{_now()}\r\nct:{ct}\r\n",
+        "live",
+    ),
     "bom-v2-matching-ct": (lambda pid, ct: f"\ufeff{pid}\n{_now()}\nct:{ct}\n", "live"),
     "fractional-started-at": (lambda pid, ct: f"{pid}\n{_now()}.5\nct:{ct}\n", "dead"),
     "missing-line-2": (lambda pid, ct: f"{pid}\n", "dead"),
-    "garbled-ct-is-v1-fresh": (lambda pid, ct: f"{pid}\n{_now()}\nct:garbage\n", "live"),
-    "garbled-ct-is-v1-past-20min": (lambda pid, ct: f"{pid}\n{_now() - 1300}\nct:garbage\n", "dead"),
-    "delegate-without-ct-is-ignored": (lambda pid, ct: f"999999\n{_now()}\nct:1.000\ndelegate:{pid}\n", "dead"),
-    "delegate-with-ct": (lambda pid, ct: f"999999\n{_now()}\nct:1.000\ndelegate:{pid} ct:{ct}\n", "live"),
+    "garbled-ct-is-v1-fresh": (
+        lambda pid, ct: f"{pid}\n{_now()}\nct:garbage\n",
+        "live",
+    ),
+    "garbled-ct-is-v1-past-20min": (
+        lambda pid, ct: f"{pid}\n{_now() - 1300}\nct:garbage\n",
+        "dead",
+    ),
+    "delegate-without-ct-is-ignored": (
+        lambda pid, ct: f"999999\n{_now()}\nct:1.000\ndelegate:{pid}\n",
+        "dead",
+    ),
+    "delegate-with-ct": (
+        lambda pid, ct: f"999999\n{_now()}\nct:1.000\ndelegate:{pid} ct:{ct}\n",
+        "live",
+    ),
 }
 
 
 @pytest.mark.parametrize("case", sorted(_MATRIX))
-def test_marker_bodies_are_parsed_positionally_like_every_other_reader(tmp_path, sleeper, case):
+def test_marker_bodies_are_parsed_positionally_like_every_other_reader(
+    tmp_path, sleeper, case
+):
     home, install = _install(tmp_path)
     live = sleeper()
     make, verdict = _MATRIX[case]
@@ -216,9 +275,13 @@ def test_desktop_bridge_marker_is_adopted_with_its_started_at(tmp_path, sleeper)
     desktop = sleeper()
     started = int(time.time()) - 30
     marker = home / ".clawk-update-in-progress"
-    marker.write_text(f"{desktop.pid}\n{started}\nct:{_ct(desktop.pid)}\n", encoding="utf-8")
+    marker.write_text(
+        f"{desktop.pid}\n{started}\nct:{_ct(desktop.pid)}\n", encoding="utf-8"
+    )
 
-    result = _run(tmp_path, home, install, "--desktop-pid", str(desktop.pid), "--self-test-marker")
+    result = _run(
+        tmp_path, home, install, "--desktop-pid", str(desktop.pid), "--self-test-marker"
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     pid, started_at, ct, *tags = marker.read_text(encoding="utf-8-sig").splitlines()
@@ -234,7 +297,9 @@ def test_committed_update_with_failed_followup_is_ok_with_warnings(tmp_path):
     result = _run(tmp_path, home, install, HANDOFF_OUTPUT="Desktop build failed")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    receipt = json.loads((home / ".clawk-update-result.json").read_text(encoding="utf-8-sig"))
+    receipt = json.loads(
+        (home / ".clawk-update-result.json").read_text(encoding="utf-8-sig")
+    )
     assert receipt["ok"] is True and receipt["manual"] is True
     assert receipt["warnings"] and receipt["warnings"][0].startswith("desktop-rebuild:")
     assert "previous version" not in receipt["message"]
@@ -242,8 +307,12 @@ def test_committed_update_with_failed_followup_is_ok_with_warnings(tmp_path):
     assert not (home / ".clawk-update-in-progress").exists()
 
 
-@pytest.mark.parametrize(("outcome", "code"), [("interrupted", "130"), ("partial", "1"), ("success", "1")])
-def test_nonzero_exit_after_the_commit_point_is_installed_with_a_followup(tmp_path, outcome, code):
+@pytest.mark.parametrize(
+    ("outcome", "code"), [("interrupted", "130"), ("partial", "1"), ("success", "1")]
+)
+def test_nonzero_exit_after_the_commit_point_is_installed_with_a_followup(
+    tmp_path, outcome, code
+):
     """Contract C3: `clawk update` exits 130 (Ctrl-C after the code moved) or 1 (a parked
     autostash) AFTER its commit point. Its own receipt says so; the result must report the
     update installed with an owed follow-up, never ok:false / "still on the previous version"."""
@@ -252,30 +321,53 @@ def test_nonzero_exit_after_the_commit_point_is_installed_with_a_followup(tmp_pa
     result = _run(tmp_path, home, install, HANDOFF_EXIT=code, HANDOFF_RECEIPT=outcome)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    receipt = json.loads((home / ".clawk-update-result.json").read_text(encoding="utf-8-sig"))
-    assert (receipt["ok"], receipt["exit_code"], receipt["manual"]) == (True, 0, True), receipt
+    receipt = json.loads(
+        (home / ".clawk-update-result.json").read_text(encoding="utf-8-sig")
+    )
+    assert (receipt["ok"], receipt["exit_code"], receipt["manual"]) == (
+        True,
+        0,
+        True,
+    ), receipt
     assert receipt["message"].startswith("Clawksis was updated, but"), receipt
     assert [w.split(":")[0] for w in receipt["warnings"]] == ["update"], receipt
     assert f"exited {code} after the commit point" in receipt["warnings"][0]
 
 
-def test_handoff_interrupted_while_a_committed_update_finishes_is_still_installed(tmp_path):
+def test_handoff_interrupted_while_a_committed_update_finishes_is_still_installed(
+    tmp_path,
+):
     """Ctrl-C reaches the hand-off too: it waits for the update child, whose receipt says it
     passed the commit point. The hand-off's own interruption is then an owed follow-up."""
     home, install = _install(tmp_path)
     hold = tmp_path / "release-update"
-    env = {**os.environ, "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "CLAWK_HOME": str(home),
-           "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"), "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
-           "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0", "HANDOFF_HOLD": str(hold), "HANDOFF_EXIT": "130",
-           "HANDOFF_RECEIPT": "interrupted"}
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "CLAWK_HOME": str(home),
+        "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"),
+        "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
+        "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0",
+        "HANDOFF_HOLD": str(hold),
+        "HANDOFF_EXIT": "130",
+        "HANDOFF_RECEIPT": "interrupted",
+    }
     for key in ("PYTHONPATH", "PYTHONHOME", "CLAWK_UPDATE_STARTED_AT"):
         env.pop(key, None)
-    script = subprocess.Popen(["bash", str(POSIX), "--daemonized", "--no-ui", "--install-root", str(install)],
-                              env=env, cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    script = subprocess.Popen(
+        ["bash", str(POSIX), "--daemonized", "--no-ui", "--install-root", str(install)],
+        env=env,
+        cwd=tmp_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     try:
         deadline = time.monotonic() + 60
         while not Path(str(hold) + ".pid").exists():
-            assert time.monotonic() < deadline and script.poll() is None, "update child never started"
+            assert time.monotonic() < deadline and script.poll() is None, (
+                "update child never started"
+            )
             time.sleep(0.01)
         script.send_signal(2)  # SIGINT, deferred while the update child runs
         time.sleep(0.3)
@@ -284,21 +376,37 @@ def test_handoff_interrupted_while_a_committed_update_finishes_is_still_installe
     finally:
         hold.touch()
         if script.poll() is None:
-            script.kill(); script.wait()
-    outcome = json.loads((home / ".clawk-update-result.json").read_text(encoding="utf-8-sig"))
-    assert (outcome["ok"], outcome["exit_code"], outcome["manual"]) == (True, 0, True), outcome
-    assert any(w.startswith("handoff: interrupted by INT") for w in outcome["warnings"]), outcome
+            script.kill()
+            script.wait()
+    outcome = json.loads(
+        (home / ".clawk-update-result.json").read_text(encoding="utf-8-sig")
+    )
+    assert (outcome["ok"], outcome["exit_code"], outcome["manual"]) == (
+        True,
+        0,
+        True,
+    ), outcome
+    assert any(
+        w.startswith("handoff: interrupted by INT") for w in outcome["warnings"]
+    ), outcome
 
 
-@pytest.mark.parametrize("receipt", ["", "failed", "interrupted,another-run", "interrupted,,unfinished"],
-                         ids=["no-receipt", "failed", "another-runs-receipt", "reconciled-not-finalized"])
-def test_nonzero_exit_without_this_runs_committed_receipt_still_fails(tmp_path, receipt):
+@pytest.mark.parametrize(
+    "receipt",
+    ["", "failed", "interrupted,another-run", "interrupted,,unfinished"],
+    ids=["no-receipt", "failed", "another-runs-receipt", "reconciled-not-finalized"],
+)
+def test_nonzero_exit_without_this_runs_committed_receipt_still_fails(
+    tmp_path, receipt
+):
     home, install = _install(tmp_path)
 
     result = _run(tmp_path, home, install, HANDOFF_EXIT="130", HANDOFF_RECEIPT=receipt)
 
     assert result.returncode == 130, result.stdout + result.stderr
-    outcome = json.loads((home / ".clawk-update-result.json").read_text(encoding="utf-8-sig"))
+    outcome = json.loads(
+        (home / ".clawk-update-result.json").read_text(encoding="utf-8-sig")
+    )
     assert (outcome["ok"], outcome["exit_code"]) == (False, 130), outcome
 
 
@@ -308,12 +416,16 @@ def test_interrupted_app_swap_is_rolled_back_at_the_next_run(tmp_path):
     previous = app.with_name("Clawksis.app.old")
     (previous / "Contents").mkdir(parents=True)
     (previous / "Contents" / "Info.plist").write_text("previous", encoding="utf-8")
-    (app.with_name("Clawksis.app.new") / "Contents").mkdir(parents=True)  # partial staged copy
+    (app.with_name("Clawksis.app.new") / "Contents").mkdir(
+        parents=True
+    )  # partial staged copy
 
     result = _run(tmp_path, home, install, "--relaunch-target", str(app))
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (app / "Contents" / "Info.plist").read_text(encoding="utf-8-sig") == "previous"
+    assert (app / "Contents" / "Info.plist").read_text(
+        encoding="utf-8-sig"
+    ) == "previous"
     assert not previous.exists() and not app.with_name("Clawksis.app.new").exists()
 
 
@@ -321,7 +433,10 @@ def _custodian(home: Path) -> str:
     """The pid posix.sh names on line 1 before any update work starts: its custodian, which
     outlives the hand-off so an old Desktop never reads a dead owner."""
     log = home / "logs" / "desktop-update-handoff.log"
-    found = re.search(r"names its custodian pid (\d+)", log.read_text(encoding="utf-8-sig") if log.exists() else "")
+    found = re.search(
+        r"names its custodian pid (\d+)",
+        log.read_text(encoding="utf-8-sig") if log.exists() else "",
+    )
     return found.group(1) if found else ""
 
 
@@ -329,7 +444,12 @@ def _ancestry(pid: int) -> list[int]:
     chain = []
     while pid > 1:
         chain.append(pid)
-        pid = int(Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[1].split()[1])
+        pid = int(
+            Path(f"/proc/{pid}/stat")
+            .read_text(encoding="utf-8")
+            .rsplit(") ", 1)[1]
+            .split()[1]
+        )
     return chain
 
 
@@ -340,24 +460,39 @@ def test_script_killed_right_after_spawning_the_update_leaves_a_live_marker(tmp_
     home, install = _install(tmp_path)
     hold = tmp_path / "release-update"
     marker = home / ".clawk-update-in-progress"
-    env = {**os.environ, "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "CLAWK_HOME": str(home),
-           "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"), "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
-           "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0", "HANDOFF_HOLD": str(hold)}
+    env = {
+        **os.environ,
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "CLAWK_HOME": str(home),
+        "HANDOFF_CAPTURE": str(tmp_path / "calls.txt"),
+        "CLAWK_RUNTIME_DIR": str(tmp_path / "store"),
+        "CLAWK_UPDATE_SHIM_GRACE_SECONDS": "0",
+        "HANDOFF_HOLD": str(hold),
+    }
     for key in ("PYTHONPATH", "PYTHONHOME", "CLAWK_UPDATE_STARTED_AT"):
         env.pop(key, None)
-    script = subprocess.Popen(["bash", str(POSIX), "--daemonized", "--no-ui", "--install-root", str(install)],
-                              env=env, cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                              start_new_session=True)
+    script = subprocess.Popen(
+        ["bash", str(POSIX), "--daemonized", "--no-ui", "--install-root", str(install)],
+        env=env,
+        cwd=tmp_path,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     child_pid_file = Path(str(hold) + ".pid")
     try:
         deadline = time.monotonic() + 60
         while not child_pid_file.exists():
-            assert time.monotonic() < deadline and script.poll() is None, "update child never started"
+            assert time.monotonic() < deadline and script.poll() is None, (
+                "update child never started"
+            )
             time.sleep(0.01)
         # Kill the script the moment the delegate line is there (at most 3 s after the spawn).
         settle = time.monotonic() + 3
         while time.monotonic() < settle and not any(
-            line.startswith("delegate:") for line in marker.read_text(encoding="utf-8-sig").splitlines()
+            line.startswith("delegate:")
+            for line in marker.read_text(encoding="utf-8-sig").splitlines()
         ):
             time.sleep(0.005)
         script.kill()
@@ -367,18 +502,28 @@ def test_script_killed_right_after_spawning_the_update_leaves_a_live_marker(tmp_
         assert lines[0] == _custodian(home)  # never the killed hand-off
         assert lines[3].startswith("delegate:"), lines
         delegate = int(lines[3].split()[0].split(":")[1])
-        assert delegate in _ancestry(child)  # the update process (or its exec-ing launcher)
+        assert delegate in _ancestry(
+            child
+        )  # the update process (or its exec-ing launcher)
         assert lines[3] == f"delegate:{delegate} ct:{_ct(delegate)}"
 
         # A real reader (the script itself) sees an update in progress and refuses.
-        refused = _run(tmp_path, home, install, "--self-test-marker", "--no-marker-cleanup")
+        refused = _run(
+            tmp_path, home, install, "--self-test-marker", "--no-marker-cleanup"
+        )
         assert refused.returncode == 2, refused.stdout + refused.stderr
 
         hold.touch()
         deadline = time.monotonic() + 30
-        while (Path(f"/proc/{delegate}").exists() or marker.exists()) and time.monotonic() < deadline:
-            time.sleep(0.05)  # the custodian releases the marker once the delegate is gone
-        reclaimed = _run(tmp_path, home, install, "--self-test-marker", "--no-marker-cleanup")
+        while (
+            Path(f"/proc/{delegate}").exists() or marker.exists()
+        ) and time.monotonic() < deadline:
+            time.sleep(
+                0.05
+            )  # the custodian releases the marker once the delegate is gone
+        reclaimed = _run(
+            tmp_path, home, install, "--self-test-marker", "--no-marker-cleanup"
+        )
         assert reclaimed.returncode == 0, reclaimed.stdout + reclaimed.stderr
     finally:
         hold.touch()
@@ -389,16 +534,27 @@ def test_script_killed_right_after_spawning_the_update_leaves_a_live_marker(tmp_
 
 def _write_bridge(home: Path, desktop_pid: int) -> None:
     marker = home / ".clawk-update-in-progress"
-    marker.write_text(f"{desktop_pid}\n{int(time.time())}\nct:{_ct(desktop_pid)}\n", encoding="utf-8")
+    marker.write_text(
+        f"{desktop_pid}\n{int(time.time())}\nct:{_ct(desktop_pid)}\n", encoding="utf-8"
+    )
 
 
-def test_desktop_still_alive_at_the_exit_ceiling_refuses_without_updating(tmp_path, sleeper):
+def test_desktop_still_alive_at_the_exit_ceiling_refuses_without_updating(
+    tmp_path, sleeper
+):
     home, install = _install(tmp_path, legacy=True)
     desktop = sleeper()
     _write_bridge(home, desktop.pid)
     started = time.monotonic()
 
-    result = _run(tmp_path, home, install, "--desktop-pid", str(desktop.pid), CLAWK_UPDATE_DESKTOP_EXIT_SECONDS="2")
+    result = _run(
+        tmp_path,
+        home,
+        install,
+        "--desktop-pid",
+        str(desktop.pid),
+        CLAWK_UPDATE_DESKTOP_EXIT_SECONDS="2",
+    )
 
     assert result.returncode == 4, result.stdout + result.stderr
     assert time.monotonic() - started < 30
@@ -410,7 +566,14 @@ def test_desktop_that_exits_inside_the_ceiling_lets_the_update_run(tmp_path):
     desktop = subprocess.Popen(["sleep", "3"])
     _write_bridge(home, desktop.pid)
 
-    result = _run(tmp_path, home, install, "--desktop-pid", str(desktop.pid), CLAWK_UPDATE_DESKTOP_EXIT_SECONDS="20")
+    result = _run(
+        tmp_path,
+        home,
+        install,
+        "--desktop-pid",
+        str(desktop.pid),
+        CLAWK_UPDATE_DESKTOP_EXIT_SECONDS="20",
+    )
     desktop.wait()
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -436,5 +599,16 @@ judge "$(cat {shlex.quote(str(tmp_path / "gc"))})" grandchild
 judge 1 unrelated
 kill $child $sub $(cat {shlex.quote(str(tmp_path / "gc"))}) 2>/dev/null
 """
-    out = subprocess.run(["/bin/bash", "-c", script], capture_output=True, text=True, timeout=30, check=True).stdout
-    assert out.split() == ["custodian=yes", "daemon=yes", "grandchild=no", "unrelated=no"], out
+    out = subprocess.run(
+        ["/bin/bash", "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    ).stdout
+    assert out.split() == [
+        "custodian=yes",
+        "daemon=yes",
+        "grandchild=no",
+        "unrelated=no",
+    ], out

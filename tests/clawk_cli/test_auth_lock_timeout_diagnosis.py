@@ -25,7 +25,9 @@ def test_lock_timeout_names_the_lock_file_and_a_live_holder(tmp_path, monkeypatc
     from clawk_cli import auth
 
     monkeypatch.setattr(auth, "_kernel_lock", _busy_kernel_lock)
-    holder_pid = os.getppid()  # the test runner's parent: a live foreign process by construction
+    holder_pid = (
+        os.getppid()
+    )  # the test runner's parent: a live foreign process by construction
     auth_path = tmp_path / "profiles" / "coder" / "auth.json"
     auth_path.parent.mkdir(parents=True, exist_ok=True)
     auth_path.with_suffix(".lock").write_text(f"{holder_pid}\n", encoding="utf-8")
@@ -37,7 +39,9 @@ def test_lock_timeout_names_the_lock_file_and_a_live_holder(tmp_path, monkeypatc
     message = str(excinfo.value)
     assert "Timed out waiting for auth store lock" in message
     assert str(auth_path.with_suffix(".lock")) in message  # which file is contended
-    assert f"pid {holder_pid}" in message  # and who is holding it — detected, not assumed
+    assert (
+        f"pid {holder_pid}" in message
+    )  # and who is holding it — detected, not assumed
 
 
 def test_lock_timeout_without_a_holder_stays_silent_about_one(tmp_path, monkeypatch):
@@ -55,12 +59,16 @@ def test_lock_timeout_without_a_holder_stays_silent_about_one(tmp_path, monkeypa
     assert "another clawk process" not in message  # no holder detected: no one to blame
 
 
-@pytest.mark.skipif(os.name != "posix", reason="holder liveness probe is POSIX-only (os.kill sig 0)")
+@pytest.mark.skipif(
+    os.name != "posix", reason="holder liveness probe is POSIX-only (os.kill sig 0)"
+)
 def test_lock_timeout_ignores_a_stale_pid_from_a_dead_holder(tmp_path, monkeypatch):
     from clawk_cli import auth
 
     monkeypatch.setattr(auth, "_kernel_lock", _busy_kernel_lock)
-    stale_pid = 2 ** 22  # far beyond any pid namespace: probe must report "no such process"
+    stale_pid = (
+        2**22
+    )  # far beyond any pid namespace: probe must report "no such process"
     real_kill = os.kill
 
     def _no_such_process(pid, sig):
@@ -80,7 +88,9 @@ def test_lock_timeout_ignores_a_stale_pid_from_a_dead_holder(tmp_path, monkeypat
     assert f"pid {stale_pid}" not in str(excinfo.value)
 
 
-def test_permanent_lock_failure_propagates_instead_of_burning_the_deadline(tmp_path, monkeypatch):
+def test_permanent_lock_failure_propagates_instead_of_burning_the_deadline(
+    tmp_path, monkeypatch
+):
     from clawk_cli import auth
 
     def _unsupported(*args, **kwargs):
@@ -93,7 +103,9 @@ def test_permanent_lock_failure_propagates_instead_of_burning_the_deadline(tmp_p
         with auth._auth_store_lock(timeout_seconds=0.01, target_path=auth_path):
             pass
 
-    assert excinfo.value.errno == errno.ENOSYS  # the original error, not a lock-holder blame
+    assert (
+        excinfo.value.errno == errno.ENOSYS
+    )  # the original error, not a lock-holder blame
 
 
 def test_lock_timeout_message_still_matches_the_documented_prefix():

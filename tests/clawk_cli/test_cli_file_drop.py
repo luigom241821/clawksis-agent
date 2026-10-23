@@ -1,7 +1,6 @@
 """Tests for _detect_file_drop — file path detection that prevents
 dragged/pasted absolute paths from being mistaken for slash commands."""
 
-
 import pytest
 
 from cli import _detect_file_drop
@@ -10,6 +9,7 @@ from cli import _detect_file_drop
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def tmp_image(tmp_path):
@@ -39,20 +39,16 @@ def tmp_image_with_spaces(tmp_path):
 # Tests: returns None for non-file inputs
 # ---------------------------------------------------------------------------
 
+
 class TestNonFileInputs:
     def test_regular_slash_command(self):
         assert _detect_file_drop("/help") is None
 
-
-
     def test_empty_string(self):
         assert _detect_file_drop("") is None
 
-
-
     def test_nonexistent_path(self):
         assert _detect_file_drop("/nonexistent/path/to/file.png") is None
-
 
     def test_long_slash_command_does_not_raise(self):
         """Regression: long pasted slash commands like `/goal <long prose>`
@@ -71,18 +67,22 @@ class TestNonFileInputs:
         # 430-char `/goal` payload — well above NAME_MAX (255 bytes) on
         # all common filesystems.
         long_goal = (
-            "/goal " + ("Drive the board: triage triage-status items, "
-                        "unblock spillover tasks where work is shipped, "
-                        "advance P1 items by decomposing where needed. ") * 4
+            "/goal "
+            + (
+                "Drive the board: triage triage-status items, "
+                "unblock spillover tasks where work is shipped, "
+                "advance P1 items by decomposing where needed. "
+            )
+            * 4
         )
         assert len(long_goal) > 255  # confirms it would have triggered ENAMETOOLONG
         assert _detect_file_drop(long_goal) is None
 
 
-
 # ---------------------------------------------------------------------------
 # Tests: image file detection
 # ---------------------------------------------------------------------------
+
 
 class TestImageFileDrop:
     def test_simple_image_path(self, tmp_image):
@@ -92,9 +92,21 @@ class TestImageFileDrop:
         assert result["is_image"] is True
         assert result["remainder"] == ""
 
-
-    @pytest.mark.parametrize("ext", [".png", ".jpg", ".jpeg", ".gif", ".webp",
-                                      ".bmp", ".tiff", ".tif", ".svg", ".ico"])
+    @pytest.mark.parametrize(
+        "ext",
+        [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".svg",
+            ".ico",
+        ],
+    )
     def test_all_image_extensions(self, tmp_path, ext):
         img = tmp_path / f"test{ext}"
         img.write_bytes(b"fake")
@@ -103,10 +115,10 @@ class TestImageFileDrop:
         assert result["is_image"] is True
 
 
-
 # ---------------------------------------------------------------------------
 # Tests: non-image file detection
 # ---------------------------------------------------------------------------
+
 
 class TestNonImageFileDrop:
     def test_python_file(self, tmp_text):
@@ -117,20 +129,19 @@ class TestNonImageFileDrop:
         assert result["remainder"] == ""
 
 
-
 # ---------------------------------------------------------------------------
 # Tests: backslash-escaped spaces (macOS drag-and-drop)
 # ---------------------------------------------------------------------------
 
+
 class TestEscapedSpaces:
     def test_escaped_spaces_in_path(self, tmp_image_with_spaces):
         r"""macOS drags produce paths like /path/to/my\ file.png"""
-        escaped = str(tmp_image_with_spaces).replace(' ', '\\ ')
+        escaped = str(tmp_image_with_spaces).replace(" ", "\\ ")
         result = _detect_file_drop(escaped)
         assert result is not None
         assert result["path"] == tmp_image_with_spaces
         assert result["is_image"] is True
-
 
     def test_unquoted_spaces_in_path(self, tmp_image_with_spaces):
         result = _detect_file_drop(str(tmp_image_with_spaces))
@@ -139,17 +150,20 @@ class TestEscapedSpaces:
         assert result["is_image"] is True
         assert result["remainder"] == ""
 
-
     def test_mixed_escaped_and_literal_spaces_in_path(self, tmp_path):
         img = tmp_path / "Screenshot 2026-04-21 at 1.04.43 PM.png"
         img.write_bytes(b"\x89PNG\r\n\x1a\n")
-        mixed = str(img).replace("Screenshot ", "Screenshot\\ ").replace("2026-04-21 ", "2026-04-21\\ ").replace("at ", "at\\ ")
+        mixed = (
+            str(img)
+            .replace("Screenshot ", "Screenshot\\ ")
+            .replace("2026-04-21 ", "2026-04-21\\ ")
+            .replace("at ", "at\\ ")
+        )
         result = _detect_file_drop(mixed)
         assert result is not None
         assert result["path"] == img
         assert result["is_image"] is True
         assert result["remainder"] == ""
-
 
     def test_tilde_prefixed_path(self, tmp_path, monkeypatch):
         home = tmp_path / "home"
@@ -166,7 +180,6 @@ class TestEscapedSpaces:
         assert result["path"] == img
         assert result["is_image"] is True
         assert result["remainder"] == "what is this?"
-
 
     # ``platforms("windows")`` rather than ``skipif(os.name != "nt")``: the Windows CI
     # job selects ``-m platforms("windows")``, so a bare skipif would leave this
@@ -188,6 +201,7 @@ class TestEscapedSpaces:
 # Tests: edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_path_with_no_extension(self, tmp_path):
         f = tmp_path / "Makefile"
@@ -203,4 +217,3 @@ class TestEdgeCases:
         result = _detect_file_drop(str(f))
         assert result is not None
         assert result["is_image"] is False
-

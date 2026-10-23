@@ -12,6 +12,16 @@ from clawk_platform.resolver.core import (
 )
 
 __all__ = [
-    "ABSENT", "Candidate", "CheckState", "Effort", "Inspection", "LookupContext",
-    "Observation", "Probe", "Probeable", "Resolution", "Resolver", "locate_command",
+    "ABSENT",
+    "Candidate",
+    "CheckState",
+    "Effort",
+    "Inspection",
+    "LookupContext",
+    "Observation",
+    "Probe",
+    "Probeable",
+    "Resolution",
+    "Resolver",
+    "locate_command",
 ]

@@ -17,8 +17,13 @@ def _clean_state():
 
 def _persisted(delegation_id: str, *, delivered: bool = True) -> None:
     event = {
-        "type": "async_delegation", "delegation_id": delegation_id, "session_key": "agent:main:telegram:dm:1",
-        "parent_session_id": "parent", "dispatched_at": 1.0, "status": "completed", "summary": "done",
+        "type": "async_delegation",
+        "delegation_id": delegation_id,
+        "session_key": "agent:main:telegram:dm:1",
+        "parent_session_id": "parent",
+        "dispatched_at": 1.0,
+        "status": "completed",
+        "summary": "done",
     }
     ad._persist_dispatch(event)
     ad._persist_completion(event, {"status": "completed", "summary": "done"})
@@ -29,12 +34,18 @@ def _persisted(delegation_id: str, *, delivered: bool = True) -> None:
 
 def _column(delegation_id: str, column: str):
     with ad._DB_LOCK, ad._transaction() as conn:
-        return conn.execute(f"SELECT {column} FROM async_delegations WHERE delegation_id=?", (delegation_id,)).fetchone()[0]
+        return conn.execute(
+            f"SELECT {column} FROM async_delegations WHERE delegation_id=?",
+            (delegation_id,),
+        ).fetchone()[0]
 
 
 def _set(delegation_id: str, column: str, value) -> None:
     with ad._DB_LOCK, ad._transaction() as conn:
-        conn.execute(f"UPDATE async_delegations SET {column}=? WHERE delegation_id=?", (value, delegation_id))
+        conn.execute(
+            f"UPDATE async_delegations SET {column}=? WHERE delegation_id=?",
+            (value, delegation_id),
+        )
 
 
 def test_requeue_returns_an_acknowledged_completion_to_pending_and_offers_it():

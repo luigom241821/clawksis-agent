@@ -33,6 +33,7 @@ from clawk_cli.approvals_suggest import (
 # Fixture helpers: synthetic session DB
 # ---------------------------------------------------------------------------
 
+
 def _make_db(path):
     con = sqlite3.connect(path)
     con.executescript(
@@ -119,6 +120,7 @@ def isolated_allowlist(monkeypatch):
 # Scan
 # ---------------------------------------------------------------------------
 
+
 class TestScan:
     def test_scan_finds_approved_dangerous_commands(self, db_path):
         path, con = db_path
@@ -130,7 +132,6 @@ class TestScan:
         commands = [c for c, _ in records]
         assert len(commands) == 3
         assert all("git push" in c for c in commands)
-
 
     def test_days_window_filters_old_history(self, db_path):
         path, con = db_path
@@ -145,6 +146,7 @@ class TestScan:
 # Normalize / glob derivation
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeAndGlob:
     def test_normalize_folds_home_prefix(self):
         import os
@@ -158,7 +160,6 @@ class TestNormalizeAndGlob:
         assert derive_glob("git push --force origin main") == "git push *"
         assert derive_glob("docker restart web") == "docker restart *"
 
-
     def test_derive_glob_never_anchors_unsafe_binaries(self):
         assert derive_glob("rm -rf ./build") is None
         assert derive_glob("sudo apt install foo") is None
@@ -169,6 +170,7 @@ class TestNormalizeAndGlob:
 # ---------------------------------------------------------------------------
 # Ranking + safety exclusion
 # ---------------------------------------------------------------------------
+
 
 class TestRankingAndSafety:
     def test_ranking_orders_by_frequency(self, db_path):
@@ -194,6 +196,7 @@ class TestRankingAndSafety:
 # ---------------------------------------------------------------------------
 # Credential masking in rendered proposals
 # ---------------------------------------------------------------------------
+
 
 class TestProposalRedaction:
     """Mined commands can embed credentials; patterns and examples must mask them."""
@@ -230,36 +233,46 @@ class TestProposalRedaction:
             assert pat not in p["pattern"]
             assert all(pat not in ex for ex in p["examples"])
 
-    def test_credential_in_glob_tokens_falls_back_to_class_key(self, isolated_allowlist):
+    def test_credential_in_glob_tokens_falls_back_to_class_key(
+        self, isolated_allowlist
+    ):
         """Redaction must never reach a persisted glob: `KEY=*** git *` would be three
         fnmatch wildcards pre-approving any `KEY=… git …` command."""
         from tools.approval_floors import _command_matches_permanent_allowlist
 
         cmd = "GITHUB_TOKEN=ghp_16C7e42F292c6912E7710c838347Ae178B4a git push --force origin main"
         proposals = build_proposals([(cmd, "git push --force")] * 3, min_count=1)
-        assert [(p.pattern, p.kind) for p in proposals] == [("git push --force", "class")]
+        assert [(p.pattern, p.kind) for p in proposals] == [
+            ("git push --force", "class")
+        ]
         assert "ghp_" not in proposals[0].examples[0]
         added = apply_proposals(proposals, [0])
         assert "*" not in "".join(added)
         approval_module.load_permanent(set(approval_module.load_permanent_allowlist()))
-        assert not _command_matches_permanent_allowlist("GITHUB_TOKEN=x sudo git push --force origin main")
+        assert not _command_matches_permanent_allowlist(
+            "GITHUB_TOKEN=x sudo git push --force origin main"
+        )
 
 
 # ---------------------------------------------------------------------------
 # --apply / dry-run
 # ---------------------------------------------------------------------------
 
+
 def _args(db, **kw):
     base = dict(
-        db=str(db), days=0, min_count=1, limit=20,
-        apply_indices=None, json=False,
+        db=str(db),
+        days=0,
+        min_count=1,
+        limit=20,
+        apply_indices=None,
+        json=False,
     )
     base.update(kw)
     return Namespace(**base)
 
 
 class TestApply:
-
     def test_apply_merges_and_persists(self, isolated_allowlist):
         isolated_allowlist["patterns"] = {"podman *"}
         proposals = [
@@ -304,6 +317,7 @@ class TestJsonOutput:
 # Parser wiring
 # ---------------------------------------------------------------------------
 
+
 class TestParserWiring:
     def test_build_approvals_parser_wires_suggest(self):
         import argparse
@@ -316,8 +330,19 @@ class TestParserWiring:
         build_approvals_parser(subparsers, cmd_approvals=lambda a: sentinel)
 
         args = parser.parse_args(
-            ["approvals", "suggest", "--apply", "1,3", "--json",
-             "--days", "30", "--min-count", "5", "--limit", "10"]
+            [
+                "approvals",
+                "suggest",
+                "--apply",
+                "1,3",
+                "--json",
+                "--days",
+                "30",
+                "--min-count",
+                "5",
+                "--limit",
+                "10",
+            ]
         )
         assert args.approvals_command == "suggest"
         assert args.apply_indices == "1,3"

@@ -63,11 +63,15 @@ class TestSetupLoggingProfileScope:
         clawk_logging.flush_log_queue()
 
         log_b = home_b / "logs" / "agent.log"
-        assert log_b.is_file(), "the profile-scoped agent's records must reach its own logs/"
+        assert log_b.is_file(), (
+            "the profile-scoped agent's records must reach its own logs/"
+        )
         assert "scoped-witness-b" in log_b.read_text(encoding="utf-8-sig")
         log_a = home_a / "logs" / "agent.log"
         text_a = log_a.read_text(encoding="utf-8-sig") if log_a.is_file() else ""
-        assert "scoped-witness-b" not in text_a, "record must not leak into the launch home"
+        assert "scoped-witness-b" not in text_a, (
+            "record must not leak into the launch home"
+        )
 
     def test_under_routing_adds_no_bare_handler(self, tmp_path: Path) -> None:
         """L3 guard: with routing already live, a scoped _setup_logging adds no bare handler.
@@ -95,13 +99,14 @@ class TestSetupLoggingProfileScope:
         clawk_logging.flush_log_queue()
 
         bare = [
-            h for h in clawk_logging._queued_file_handlers
+            h
+            for h in clawk_logging._queued_file_handlers
             if isinstance(h, RotatingFileHandler)
         ]
         assert not bare, f"bare file handlers must not ride beside the routers: {bare}"
-        assert "routing-guard-witness-b" in (
-            home_b / "logs" / "agent.log"
-        ).read_text(encoding="utf-8-sig")
+        assert "routing-guard-witness-b" in (home_b / "logs" / "agent.log").read_text(
+            encoding="utf-8-sig"
+        )
         # And the routers themselves must still be routing, not replaced.
         assert any(
             isinstance(h, _ProfileRoutingFileHandler)

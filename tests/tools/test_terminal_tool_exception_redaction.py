@@ -16,11 +16,14 @@ SECRET = "sk-proj-AbCdEf1234567890SecretValue999"
 def _force_exception(monkeypatch, exc):
     def boom():
         raise exc
+
     monkeypatch.setattr(terminal_tool, "_get_env_config", boom)
 
 
 def test_generic_exception_result_redacts_error_and_traceback(monkeypatch):
-    _force_exception(monkeypatch, RuntimeError(f"connect failed OPENAI_API_KEY={SECRET}"))
+    _force_exception(
+        monkeypatch, RuntimeError(f"connect failed OPENAI_API_KEY={SECRET}")
+    )
     result = json.loads(terminal_tool.terminal_tool("echo hi"))
     assert result["status"] == "error"
     assert SECRET not in result["error"]

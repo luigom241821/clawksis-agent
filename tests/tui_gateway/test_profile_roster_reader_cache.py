@@ -1,6 +1,7 @@
 """The canonical gateway's roster memo (``cached_reader_session_fields``, #139227) keys on the reader
 as well as the store: one principal's answer is never served to another, and ``invalidate`` drops it
 like the other memos."""
+
 from __future__ import annotations
 
 import pytest
@@ -25,11 +26,16 @@ def test_each_reader_gets_its_own_answer_until_the_store_moves(store):
         def compute():
             computed.append(reader)
             return {"canonical_session": {"reader": reader}}
-        return cache.cached_reader_session_fields(store, reader, compute)["canonical_session"]
+
+        return cache.cached_reader_session_fields(store, reader, compute)[
+            "canonical_session"
+        ]
 
     owner, other = ("uid:desk", True), ("uid:other", False)
     assert read(owner) == {"reader": owner}
-    assert read(other) == {"reader": other}, "another reader was served the owner's answer"
+    assert read(other) == {"reader": other}, (
+        "another reader was served the owner's answer"
+    )
     assert read(owner) == {"reader": owner}
     assert computed == [owner, other], "an unchanged store was read again"
 

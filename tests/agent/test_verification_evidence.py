@@ -14,11 +14,11 @@ from agent.verification_evidence import (
     verification_status,
 )
 
+
 @pytest.fixture(autouse=True)
 def _ledger_on(monkeypatch):
     """The ledger is inert unless verify-on-stop is enabled; these tests exercise the ledger."""
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "1")
-
 
 
 def _node_project(root: Path) -> None:
@@ -33,12 +33,6 @@ def _node_project(root: Path) -> None:
 
 def _python_project(root: Path) -> None:
     (root / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
-
-
-
-
-
-
 
 
 def test_lint_and_typecheck_are_not_reported_as_full_tests(tmp_path, monkeypatch):
@@ -64,8 +58,6 @@ def test_lint_and_typecheck_are_not_reported_as_full_tests(tmp_path, monkeypatch
     assert test is not None
     assert test.kind == "test"
     assert test.scope == "targeted"
-
-
 
 
 def test_shell_wrappers_match_but_echo_does_not(tmp_path, monkeypatch):
@@ -168,7 +160,9 @@ def test_quoted_shell_operator_remains_a_verifier_argument(tmp_path, monkeypatch
 
 
 @pytest.mark.parametrize("redirect", ["2>&1", "&> test.log"])
-def test_shell_redirection_does_not_hide_simple_verifier(tmp_path, monkeypatch, redirect):
+def test_shell_redirection_does_not_hide_simple_verifier(
+    tmp_path, monkeypatch, redirect
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _python_project(tmp_path)
 
@@ -229,9 +223,9 @@ def test_masked_verifier_does_not_clear_edited_ledger_state(tmp_path, monkeypatc
     assert verification_status(session_id="s1", cwd=tmp_path)["status"] == "stale"
 
 
-
-
-def test_temp_script_records_ad_hoc_evidence_without_canonical_suite(tmp_path, monkeypatch):
+def test_temp_script_records_ad_hoc_evidence_without_canonical_suite(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     script = Path(tempfile.gettempdir()) / f"clawk-ad-hoc-{tmp_path.name}.py"
@@ -264,7 +258,9 @@ def test_temp_script_records_ad_hoc_evidence_without_canonical_suite(tmp_path, m
         "/usr/bin/env python3 {script}",
     ],
 )
-def test_versioned_or_absolute_interpreter_records_ad_hoc_evidence(tmp_path, monkeypatch, invocation):
+def test_versioned_or_absolute_interpreter_records_ad_hoc_evidence(
+    tmp_path, monkeypatch, invocation
+):
     """A versioned, absolute or `env`-prefixed interpreter names the same interpreter as a bare
     `python3`. Matching only the bare token left the ad-hoc branch blind to the invocation shapes
     the verify-on-stop nudge itself hands the agent, so a passing run recorded no evidence and
@@ -290,7 +286,9 @@ def test_versioned_or_absolute_interpreter_records_ad_hoc_evidence(tmp_path, mon
     assert evidence.status == "passed"
 
 
-def test_non_interpreter_command_touching_the_temp_script_is_not_evidence(tmp_path, monkeypatch):
+def test_non_interpreter_command_touching_the_temp_script_is_not_evidence(
+    tmp_path, monkeypatch
+):
     """The nudge also tells the agent to clean the temp script up. A command that merely names
     the script — `rm`, `chmod`, `cat` — runs no verification and must not satisfy the gate.
     """
@@ -298,22 +296,22 @@ def test_non_interpreter_command_touching_the_temp_script_is_not_evidence(tmp_pa
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
     script = Path(tempfile.gettempdir()) / f"clawk-verify-{tmp_path.name}.py"
 
-    for command in (f"rm -f {script}", f"/usr/bin/chmod +x {script}", f"/usr/bin/cat {script}"):
-        evidence = classify_verification_command(command, cwd=tmp_path, session_id="s1", exit_code=0)
-        assert evidence is None, f"{command!r} must not be recorded as verification evidence"
+    for command in (
+        f"rm -f {script}",
+        f"/usr/bin/chmod +x {script}",
+        f"/usr/bin/cat {script}",
+    ):
+        evidence = classify_verification_command(
+            command, cwd=tmp_path, session_id="s1", exit_code=0
+        )
+        assert evidence is None, (
+            f"{command!r} must not be recorded as verification evidence"
+        )
 
 
-
-
-
-
-
-
-
-
-
-
-def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(tmp_path, monkeypatch):
+def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _node_project(tmp_path)
     target = tmp_path / "src" / "app.ts"
@@ -339,12 +337,13 @@ def test_file_tool_stales_evidence_by_session_id_for_absolute_edit(tmp_path, mon
     )
 
     assert result["files_modified"] == [str(target.resolve())]
-    assert verification_status(session_id="conversation", cwd=tmp_path)["status"] == "stale"
-    assert verification_status(session_id="turn", cwd=tmp_path)["status"] == "unverified"
-
-
-
-
+    assert (
+        verification_status(session_id="conversation", cwd=tmp_path)["status"]
+        == "stale"
+    )
+    assert (
+        verification_status(session_id="turn", cwd=tmp_path)["status"] == "unverified"
+    )
 
 
 def test_workspace_verify_clears_stale_on_other_session(tmp_path, monkeypatch):
@@ -354,9 +353,13 @@ def test_workspace_verify_clears_stale_on_other_session(tmp_path, monkeypatch):
     _python_project(tmp_path)
     changed = str(tmp_path / "changed.py")
     mark_workspace_edited(session_id="s-edit", cwd=tmp_path, paths=[changed])
-    assert verification_status(session_id="s-edit", cwd=tmp_path)["status"] == "unverified"
+    assert (
+        verification_status(session_id="s-edit", cwd=tmp_path)["status"] == "unverified"
+    )
 
-    event = record_verify_run(root=tmp_path, session_id="default", ok=True, output="all green")
+    event = record_verify_run(
+        root=tmp_path, session_id="default", ok=True, output="all green"
+    )
     assert event is not None
     status = verification_status(session_id="s-edit", cwd=tmp_path)
     assert status["status"] == "passed"
@@ -367,7 +370,9 @@ def test_targeted_partial_verify_does_not_clear_other_session(tmp_path, monkeypa
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk"))
     _python_project(tmp_path)
     record_verify_run(root=tmp_path, session_id="s-edit", ok=True)
-    mark_workspace_edited(session_id="s-edit", cwd=tmp_path, paths=[str(tmp_path / "a.py")])
+    mark_workspace_edited(
+        session_id="s-edit", cwd=tmp_path, paths=[str(tmp_path / "a.py")]
+    )
     assert verification_status(session_id="s-edit", cwd=tmp_path)["status"] == "stale"
 
     record_verify_run(root=tmp_path, session_id=None, ok=True, scope="targeted")
@@ -380,13 +385,19 @@ def test_failed_verify_does_not_erase_other_session_edit_record(tmp_path, monkey
     home = tmp_path / ".clawk"
     monkeypatch.setenv("CLAWK_HOME", str(home))
     _python_project(tmp_path)
-    mark_workspace_edited(session_id="s-edit", cwd=tmp_path, paths=[str(tmp_path / "a.py")])
+    mark_workspace_edited(
+        session_id="s-edit", cwd=tmp_path, paths=[str(tmp_path / "a.py")]
+    )
 
     record_verify_run(root=tmp_path, session_id=None, ok=False)
 
-    row = sqlite3.connect(home / "verification_evidence.db").execute(
-        "SELECT last_edit_at, changed_paths_json FROM verification_state WHERE session_id='s-edit'"
-    ).fetchone()
+    row = (
+        sqlite3.connect(home / "verification_evidence.db")
+        .execute(
+            "SELECT last_edit_at, changed_paths_json FROM verification_state WHERE session_id='s-edit'"
+        )
+        .fetchone()
+    )
     assert row is not None
     assert row[0] is not None
     assert verification_status(session_id="s-edit", cwd=tmp_path)["status"] != "passed"
@@ -401,7 +412,9 @@ def test_older_workspace_verify_does_not_clear_later_edit(tmp_path, monkeypatch)
         cwd=tmp_path,
         paths=[str(tmp_path / "changed.py")],
     )
-    assert verification_status(session_id="s-edit", cwd=tmp_path)["status"] == "unverified"
+    assert (
+        verification_status(session_id="s-edit", cwd=tmp_path)["status"] == "unverified"
+    )
 
 
 def test_recording_expires_old_edit_only_state(tmp_path, monkeypatch):
@@ -436,7 +449,9 @@ def test_recording_expires_old_edit_only_state(tmp_path, monkeypatch):
     "interpreter",
     [r"C:\Users\me\venv\Scripts\python.exe", "python.EXE", "py -3"],
 )
-def test_windows_exe_interpreter_records_ad_hoc_evidence(tmp_path, monkeypatch, interpreter):
+def test_windows_exe_interpreter_records_ad_hoc_evidence(
+    tmp_path, monkeypatch, interpreter
+):
     """A venv's absolute ``Scripts\\python.exe`` (or the ``py`` launcher) is the interpreter shape
     Windows hands the agent; ``.exe`` must not hide it from the ad-hoc branch (review follow-up)."""
     from agent.verification_evidence import _find_ad_hoc_match

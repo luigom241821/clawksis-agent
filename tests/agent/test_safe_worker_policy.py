@@ -1,4 +1,5 @@
 """Fresh exec probes for the private managed safe-worker bootstrap contract."""
+
 import json
 import os
 from pathlib import Path
@@ -18,11 +19,19 @@ def run_worker(tmp_path, body, mode="safe"):
         env.pop(key, None)
     root = Path(__file__).resolve().parents[2]
     script = home / "worker_probe.py"
-    script.write_text(f"import sys; sys.path.insert(0, {str(root)!r})\n" + textwrap.dedent(body), encoding="utf-8")
+    script.write_text(
+        f"import sys; sys.path.insert(0, {str(root)!r})\n" + textwrap.dedent(body),
+        encoding="utf-8",
+    )
     result = subprocess.run(
-        [sys.executable, str(script)], env=env,
-        cwd=root, stdin=subprocess.DEVNULL,
-        capture_output=True, text=True, timeout=45, check=False
+        [sys.executable, str(script)],
+        env=env,
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=45,
+        check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout.strip().splitlines()[-1])
@@ -30,7 +39,9 @@ def run_worker(tmp_path, body, mode="safe"):
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_worker_config_is_frozen_before_any_profile_read(tmp_path, mode):
-    result = run_worker(tmp_path, '''
+    result = run_worker(
+        tmp_path,
+        """
         import json, os, sys, threading
         from pathlib import Path
         mode = os.environ["PROBE_MODE"]
@@ -64,16 +75,25 @@ def test_worker_config_is_frozen_before_any_profile_read(tmp_path, mode):
                 results.append(loader()["agent"]["max_turns"])
         t = threading.Thread(target=check); t.start(); t.join()
         print(json.dumps({"first": first, "values": results, "reads": reads, "callbacks": callbacks}))
-    ''', mode)
+    """,
+        mode,
+    )
     if mode == "ordinary":
         assert result["first"] == 17 and result["reads"]
         assert result["callbacks"] == ["secrets", "managed", "terminal"]
     else:
-        assert result == {"first": 3, "values": [3, 3, 3, 3], "reads": [], "callbacks": []}
+        assert result == {
+            "first": 3,
+            "values": [3, 3, 3, 3],
+            "reads": [],
+            "callbacks": [],
+        }
 
 
 def test_private_worker_binding_is_one_shot_typed_and_not_env_selected(tmp_path):
-    result = run_worker(tmp_path, '''
+    result = run_worker(
+        tmp_path,
+        """
         import json, os
         from dataclasses import FrozenInstanceError
         from agent.safe_worker_policy import _bind_safe_worker_policy, safe_worker_enabled, worker_config_snapshot
@@ -102,13 +122,16 @@ def test_private_worker_binding_is_one_shot_typed_and_not_env_selected(tmp_path)
             raise AssertionError("rebound policy")
         assert worker_config_snapshot() == {}
         print(json.dumps({"bound": safe_worker_enabled()}))
-    ''')
+    """,
+    )
     assert result == {"bound": True}
 
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_safe_worker_never_discovers_or_invokes_customizations(tmp_path, mode):
-    result = run_worker(tmp_path, r"""
+    result = run_worker(
+        tmp_path,
+        r"""
         import json, os, sys
         from pathlib import Path
         mode = os.environ["PROBE_MODE"]
@@ -156,17 +179,32 @@ def test_safe_worker_never_discovers_or_invokes_customizations(tmp_path, mode):
         outbound_webhooks._make_callback("on_session_start", outbound_webhooks.WebhookTarget(url="http://127.0.0.1/inert", events=["on_session_start"]))()
         if mode == "safe": assert not reads
         print(json.dumps({"events": events.read_text().splitlines() if events.exists() else [], "reads": reads, "injected": injected is not None}))
-    """, mode)
+    """,
+        mode,
+    )
     if mode == "safe":
         assert result == {"events": [], "reads": [], "injected": False}
     else:
-        assert {"plugin-import", "plugin-register", "plugin-hook", "model-providers/nested", "flat", "direct-hook", "middleware", "observer", "shell", "outbound"} <= set(result["events"])
+        assert {
+            "plugin-import",
+            "plugin-register",
+            "plugin-hook",
+            "model-providers/nested",
+            "flat",
+            "direct-hook",
+            "middleware",
+            "observer",
+            "shell",
+            "outbound",
+        } <= set(result["events"])
         assert result["reads"] and result["injected"]
 
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_safe_worker_bypasses_rule_readers_even_without_cli_flags(tmp_path, mode):
-    result = run_worker(tmp_path, r"""
+    result = run_worker(
+        tmp_path,
+        r"""
         import json, os, sys
         from pathlib import Path
         mode = os.environ["PROBE_MODE"]
@@ -209,13 +247,29 @@ def test_safe_worker_bypasses_rule_readers_even_without_cli_flags(tmp_path, mode
         print(json.dumps({"context": context, "soul": soul, "skills": skills,
             "preloaded": preloaded, "hints": hints, "reads": reads, "engines": engines,
             "memory": agent._memory_store is not None}))
-    """, mode)
+    """,
+        mode,
+    )
     if mode == "safe":
-        assert result == {"context": "", "soul": None, "skills": "", "preloaded": ["", [], ["probe"]],
-                          "hints": None, "reads": [], "engines": [], "memory": False}
+        assert result == {
+            "context": "",
+            "soul": None,
+            "skills": "",
+            "preloaded": ["", [], ["probe"]],
+            "hints": None,
+            "reads": [],
+            "engines": [],
+            "memory": False,
+        }
     else:
-        assert "PROJECT_SENTINEL" in result["context"] and "SOUL_SENTINEL" in result["soul"]
-        assert "SKILL_SENTINEL" in result["skills"] and "SKILL_SENTINEL" in result["preloaded"][0]
+        assert (
+            "PROJECT_SENTINEL" in result["context"]
+            and "SOUL_SENTINEL" in result["soul"]
+        )
+        assert (
+            "SKILL_SENTINEL" in result["skills"]
+            and "SKILL_SENTINEL" in result["preloaded"][0]
+        )
         assert "SUB_SENTINEL" in result["hints"]
         assert {"AGENTS.md", "SOUL.md", "SKILL.md", "MEMORY.md"} <= set(result["reads"])
         assert result["engines"] == ["sentinel"] and result["memory"]
@@ -223,7 +277,9 @@ def test_safe_worker_bypasses_rule_readers_even_without_cli_flags(tmp_path, mode
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_bare_agent_constructor_cannot_restore_safe_customizations(tmp_path, mode):
-    result = run_worker(tmp_path, r"""
+    result = run_worker(
+        tmp_path,
+        r"""
         import json, os, sys
         from pathlib import Path
         mode = os.environ["PROBE_MODE"]
@@ -252,9 +308,16 @@ def test_bare_agent_constructor_cannot_restore_safe_customizations(tmp_path, mod
         flags = [agent.skip_context_files, agent.load_soul_identity, agent.skip_background_review]
         print(json.dumps({"flags": flags, "prefill": agent.prefill_messages,
                           "review": load_background_review_settings()[0], "reads": reads}))
-    """, mode)
+    """,
+        mode,
+    )
     if mode == "safe":
-        assert result == {"flags": [True, False, True], "prefill": [], "review": False, "reads": []}
+        assert result == {
+            "flags": [True, False, True],
+            "prefill": [],
+            "review": False,
+            "reads": [],
+        }
     else:
         assert result["flags"] == [False, True, False]
         assert result["prefill"] and result["review"]
@@ -266,7 +329,9 @@ def test_bare_agent_constructor_cannot_restore_safe_customizations(tmp_path, mod
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_direct_secret_hydration_cannot_read_bypassed_yaml(tmp_path, mode):
-    result = run_worker(tmp_path, r"""
+    result = run_worker(
+        tmp_path,
+        r"""
         import json, os, sys
         from pathlib import Path
         mode = os.environ["PROBE_MODE"]
@@ -285,13 +350,17 @@ def test_direct_secret_hydration_cannot_read_bypassed_yaml(tmp_path, mode):
         (other / "config.yaml").write_text("agent: {}")
         assert hydrate_profile_secret_sources(other) == {}
         print(json.dumps({"reads": reads}))
-    """, mode)
+    """,
+        mode,
+    )
     assert bool(result["reads"]) == (mode == "ordinary")
 
 
 @pytest.mark.platforms("linux")
 def test_private_policy_refuses_late_binding_and_fork_inheritance(tmp_path):
-    late = run_worker(tmp_path, r"""
+    late = run_worker(
+        tmp_path,
+        r"""
         import json
         import clawk_cli.config
         from agent.safe_worker_policy import _bind_safe_worker_policy
@@ -302,9 +371,13 @@ def test_private_policy_refuses_late_binding_and_fork_inheritance(tmp_path):
         else:
             raise AssertionError("late binding accepted")
         print(json.dumps({"refused": True}))
-    """, "late")
+    """,
+        "late",
+    )
     assert late == {"refused": True}
-    fork = run_worker(tmp_path, r"""
+    fork = run_worker(
+        tmp_path,
+        r"""
         import json, os
         from agent.safe_worker_policy import _bind_safe_worker_policy, safe_worker_enabled
         _bind_safe_worker_policy(safe_mode=True, ignore_user_config=True, config={})
@@ -319,5 +392,7 @@ def test_private_policy_refuses_late_binding_and_fork_inheritance(tmp_path):
         assert os.waitstatus_to_exitcode(status) == 0
         assert safe_worker_enabled()
         print(json.dumps({"refused": True}))
-    """, "fork")
+    """,
+        "fork",
+    )
     assert fork == {"refused": True}

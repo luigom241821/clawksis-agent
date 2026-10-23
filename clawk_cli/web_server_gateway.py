@@ -13,7 +13,10 @@ import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from clawk_cli._subprocess_compat import windows_detach_flags, windows_detach_flags_without_breakaway
+from clawk_cli._subprocess_compat import (
+    windows_detach_flags,
+    windows_detach_flags_without_breakaway,
+)
 from clawk_cli.config import get_clawk_home
 
 # Same logger the code used before extraction (record parity).
@@ -44,6 +47,7 @@ def _probe_gateway_health() -> tuple[bool, dict | None]:
     explicit ``/health`` / ``/health/detailed`` path; tries ``/health/detailed`` first.
     """
     from clawk_cli.web_server import _GATEWAY_HEALTH_TIMEOUT, _GATEWAY_HEALTH_URL
+
     if not _GATEWAY_HEALTH_URL:
         return False, None
     base = re.sub(r"/health(/detailed)?$", "", _GATEWAY_HEALTH_URL.rstrip("/"))
@@ -68,9 +72,15 @@ def _probe_gateway_health() -> tuple[bool, dict | None]:
 # Mirrors PORT_BINDING_PLATFORM_VALUES (gateway/config.py) and each adapter's DEFAULT_PORT /
 # DEFAULT_WEBHOOK_PORT. Display-only data for the topology readout, not a bind source.
 _PORT_BINDING_PLATFORM_PORTS: dict[str, tuple[str, int]] = {
-    "webhook": ("port", 8644), "api_server": ("port", 8642), "msgraph_webhook": ("port", 8646),
-    "feishu": ("webhook_port", 8765), "wecom_callback": ("port", 8645), "bluebubbles": ("webhook_port", 8645),
-    "sms": ("webhook_port", 8080), "whatsapp_cloud": ("webhook_port", 8090), "line": ("port", 8646),
+    "webhook": ("port", 8644),
+    "api_server": ("port", 8642),
+    "msgraph_webhook": ("port", 8646),
+    "feishu": ("webhook_port", 8765),
+    "wecom_callback": ("port", 8645),
+    "bluebubbles": ("webhook_port", 8645),
+    "sms": ("webhook_port", 8080),
+    "whatsapp_cloud": ("webhook_port", 8090),
+    "line": ("port", 8646),
     "teams": ("port", 3978),
 }
 
@@ -78,7 +88,9 @@ _PORT_BINDING_PLATFORM_PORTS: dict[str, tuple[str, int]] = {
 _PLATFORM_DEAD_STATES = frozenset({"fatal", "disconnected", "stopped"})
 
 
-def _profile_platform_ports(profile_home: Path, runtime: Optional[dict]) -> dict[str, int]:
+def _profile_platform_ports(
+    profile_home: Path, runtime: Optional[dict]
+) -> dict[str, int]:
     """Best-effort ``platform -> host TCP port`` for one profile's live gateway.
 
     Ports come from the profile's own config.yaml (``gateway.platforms`` then top-level
@@ -87,10 +99,12 @@ def _profile_platform_ports(profile_home: Path, runtime: Optional[dict]) -> dict
     """
     platforms = (runtime or {}).get("platforms") or {}
     active = [
-        name for name, state in platforms.items()
+        name
+        for name, state in platforms.items()
         if name in _PORT_BINDING_PLATFORM_PORTS
         and isinstance(state, dict)
-        and state.get("state") not in _PLATFORM_DEAD_STATES]
+        and state.get("state") not in _PLATFORM_DEAD_STATES
+    ]
     if not active:
         return {}
 
@@ -98,6 +112,7 @@ def _profile_platform_ports(profile_home: Path, runtime: Optional[dict]) -> dict
     try:
         # load_config() targets the ACTIVE profile's home; read the probed profile's file raw.
         from clawk_cli.config import read_user_config_raw
+
         cfg = read_user_config_raw(profile_home / "config.yaml")
         gateway_cfg = cfg.get("gateway") if isinstance(cfg.get("gateway"), dict) else {}
         for src in ((gateway_cfg or {}).get("platforms"), cfg.get("platforms")):
@@ -122,14 +137,20 @@ def _profile_platform_ports(profile_home: Path, runtime: Optional[dict]) -> dict
     return ports
 
 
-def _profile_gateway_writer_identity(profile_home: Path, runtime: Optional[dict]) -> Optional[tuple]:
+def _profile_gateway_writer_identity(
+    profile_home: Path, runtime: Optional[dict]
+) -> Optional[tuple]:
     """``(pid, start_time)`` of the profile's LIVE gateway, or None.
 
     Uses the same validated-liveness helper and the same ``_get_process_start_time`` that stamped
     the record, so equality is exact (no unit/clock-source mismatch).
     """
     try:
-        from gateway.status import _get_process_start_time, get_runtime_status_running_pid
+        from gateway.status import (
+            _get_process_start_time,
+            get_runtime_status_running_pid,
+        )
+
         pid = get_runtime_status_running_pid(runtime, expected_home=profile_home)
         if pid is None:
             return None
@@ -152,10 +173,12 @@ def _owned_profile_platforms(writer_identity: Optional[tuple], platforms: dict) 
         return {}
     live_pid, live_start = writer_identity
     return {
-        key: value for key, value in platforms.items()
+        key: value
+        for key, value in platforms.items()
         if isinstance(value, dict)
         and value.get("writer_pid") == live_pid
-        and value.get("writer_start_time") == live_start}
+        and value.get("writer_start_time") == live_start
+    }
 
 
 def _collect_profile_gateway_topology() -> dict[str, Any]:
@@ -168,12 +191,22 @@ def _collect_profile_gateway_topology() -> dict[str, Any]:
     platform maps per live gateway, an internal aggregation input never exposed directly.
     """
     try:
-        from clawk_cli.profiles import _check_gateway_running, profiles_to_serve, profile_is_parked
+        from clawk_cli.profiles import (
+            _check_gateway_running,
+            profiles_to_serve,
+            profile_is_parked,
+        )
         from gateway.status import read_runtime_status
+
         homes = profiles_to_serve(True, include_standalone=True, include_parked=True)
     except Exception:
         _log.debug("profile/gateway topology enumeration failed", exc_info=True)
-        return {"profiles": [], "gateway_mode": "unknown", "gateways": [], "profile_platforms": {}}
+        return {
+            "profiles": [],
+            "gateway_mode": "unknown",
+            "gateways": [],
+            "profile_platforms": {},
+        }
 
     gateways: list[dict[str, Any]] = []
     profile_platforms: dict[str, dict] = {}
@@ -183,7 +216,11 @@ def _collect_profile_gateway_topology() -> dict[str, Any]:
         try:
             # A served profile's liveness is the multiplexer's: listing it here showed one phantom
             # gateway per served profile beside the host.
-            if not (_check_gateway_running(home) if name == "default" else _has_own_gateway(home)):
+            if not (
+                _check_gateway_running(home)
+                if name == "default"
+                else _has_own_gateway(home)
+            ):
                 continue
         except Exception:
             continue
@@ -199,12 +236,17 @@ def _collect_profile_gateway_topology() -> dict[str, Any]:
         plats = (runtime or {}).get("platforms")
         owned: dict = {}
         if isinstance(plats, dict) and plats:
-            owned = _owned_profile_platforms(_profile_gateway_writer_identity(home, runtime), plats)
+            owned = _owned_profile_platforms(
+                _profile_gateway_writer_identity(home, runtime), plats
+            )
             if owned:
                 profile_platforms[name] = owned
         # Ports from the OWNED entries too: a platform entry a previous process left "connected"
         # reported a port the live gateway does not bind.
-        entry: dict[str, Any] = {"profile": name, "ports": _profile_platform_ports(home, {"platforms": owned})}
+        entry: dict[str, Any] = {
+            "profile": name,
+            "ports": _profile_platform_ports(home, {"platforms": owned}),
+        }
         if served:
             entry["served_profiles"] = served
         gateways.append(entry)
@@ -216,15 +258,21 @@ def _collect_profile_gateway_topology() -> dict[str, Any]:
     # A guard refusal on a multi-profile host is what the dashboard banner shows; a single-profile
     # install has nothing unserved and gets no banner.
     from clawk_cli.gateway_multiplex_mode import SINGLE_PROFILE_REASON
+
     if standalone_reason == SINGLE_PROFILE_REASON or len(homes) < 2:
         standalone_reason = None
     return {
         "profiles": [name for name, _home in homes],
-        "parked_profiles": [name for name, home in homes if name != "default" and profile_is_parked(home)],
+        "parked_profiles": [
+            name
+            for name, home in homes
+            if name != "default" and profile_is_parked(home)
+        ],
         "gateway_mode": mode,
         "multiplex_standalone_reason": standalone_reason,
         "gateways": gateways,
-        "profile_platforms": profile_platforms}
+        "profile_platforms": profile_platforms,
+    }
 
 
 # /api/status is polled ~1/s by the desktop app while it waits for the backend. Each uncached
@@ -263,7 +311,10 @@ def _load_configured_gateway_platforms() -> set[str]:
     platform discovery and can outlast Desktop's WS connect timeout on Windows, so ``get_status``
     runs this in Starlette's worker pool."""
     from gateway.config import load_gateway_config
-    return {platform.value for platform in load_gateway_config().get_connected_platforms()}
+
+    return {
+        platform.value for platform in load_gateway_config().get_connected_platforms()
+    }
 
 
 _WINDOWS_11_MIN_BUILD = 22000
@@ -278,14 +329,23 @@ def _windows_build_number(version: str, platform_label: str) -> Optional[int]:
     return None
 
 
-def _display_system_platform(*, system: str, release: str, version: str, platform_label: str) -> dict[str, str]:
+def _display_system_platform(
+    *, system: str, release: str, version: str, platform_label: str
+) -> dict[str, str]:
     """Host OS fields for display; Windows 10 builds >= 22000 are relabelled Windows 11."""
     if system == "Windows" and release == "10":
         build = _windows_build_number(version, platform_label)
         if build is not None and build >= _WINDOWS_11_MIN_BUILD:
-            platform_label = re.sub(r"^Windows-10(?=-)", "Windows-11", platform_label, count=1)
+            platform_label = re.sub(
+                r"^Windows-10(?=-)", "Windows-11", platform_label, count=1
+            )
             release = "11"
-    return {"os": system, "os_release": release, "os_version": version, "platform": platform_label}
+    return {
+        "os": system,
+        "os_release": release,
+        "os_version": version,
+        "platform": platform_label,
+    }
 
 
 # Gateway + update actions (invoked from the Status page). Spawned detached so the request
@@ -301,11 +361,24 @@ _ACTION_LOG_FILES: dict[str, str] = {
     "gateway-stop": "gateway-stop.log",
     "gateway-migrate": "gateway-migrate.log",
     "clawk-update": "clawk-update.log",
-    **{name: f"action-{name}.log" for name in (
-        "doctor", "security-audit", "backup", "import", "checkpoints-prune", "skills-install",
-        "skills-uninstall", "skills-update", "curator-run", "prompt-size", "dump", "config-migrate",
-        "tools-post-setup",
-    )},
+    **{
+        name: f"action-{name}.log"
+        for name in (
+            "doctor",
+            "security-audit",
+            "backup",
+            "import",
+            "checkpoints-prune",
+            "skills-install",
+            "skills-uninstall",
+            "skills-update",
+            "curator-run",
+            "prompt-size",
+            "dump",
+            "config-migrate",
+            "tools-post-setup",
+        )
+    },
 }
 
 # ``name`` → most recent Popen handle / argv / action id, so ``status`` needs no ``ps``.
@@ -360,7 +433,8 @@ def _is_host_gateway_spawn(subcommand: list[str]) -> bool:
 
 
 def _profile_action_environment(
-    subcommand: list[str], env_overrides: Optional[dict[str, str]] = None,
+    subcommand: list[str],
+    env_overrides: Optional[dict[str, str]] = None,
 ) -> dict[str, str]:
     """Environment for a detached ``clawk <subcommand>`` action.
 
@@ -381,16 +455,22 @@ def _profile_action_environment(
     profile = _named_profile_from_action(subcommand)
     if _is_host_gateway_spawn(subcommand):
         from tools.environments.local import host_gateway_child_env
+
         action_env = host_gateway_child_env()
     elif profile is None:
         action_env = dict(os.environ)
     else:
         from clawk_cli.env_loader import (
-            _PROFILE_MANAGED_ENV_KEYS, _env_keys_defined_in_dotenv, get_secret_source_values,
+            _PROFILE_MANAGED_ENV_KEYS,
+            _env_keys_defined_in_dotenv,
+            get_secret_source_values,
         )
         from clawk_cli.web_server_profiles import _resolve_profile_dir
         from clawk_constants import apply_subprocess_home_env, get_default_clawk_root
-        from tools.environments.local import build_subprocess_env, strip_launch_profile_env
+        from tools.environments.local import (
+            build_subprocess_env,
+            strip_launch_profile_env,
+        )
 
         target_home = _resolve_profile_dir(profile)
         action_env = build_subprocess_env(base=os.environ, scrub_secrets=True)
@@ -421,6 +501,7 @@ def _profile_action_environment(
     # A config.yaml allow_all_users grant bridged into os.environ must not outlive the config that
     # produced it: drop it so the restarted child re-derives the posture from its own config.yaml.
     from gateway.config_loader import drop_bridged_env
+
     drop_bridged_env(action_env)
     # The dashboard runs inside the gateway process, so os.environ carries _CLAWK_GATEWAY=1;
     # inheriting it trips the child's in-process restart-loop guard (exit 1). Drop it, like
@@ -465,6 +546,7 @@ def _action_targets_system_gateway(subcommand: list[str]) -> bool:
     # against the TARGET profile's home (``-p default gateway restart`` from a pooled named
     # dashboard asks about the default unit, not about its own).
     from clawk_cli.web_server_profiles import _resolve_profile_dir
+
     token = set_clawk_home_override(_resolve_profile_dir(profile))
     try:
         return _select_systemd_scope(False)
@@ -477,20 +559,23 @@ def _spawn_clawk_action(
 ) -> subprocess.Popen:
     """Spawn ``clawk <subcommand>`` detached (via ``clawk_cli.main``) and record the handle."""
     from clawk_cli.web_server import PROJECT_ROOT
+
     _ACTION_LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_file = open(_ACTION_LOG_DIR / _ACTION_LOG_FILES[name], "ab", buffering=0)
     # The header carries the action id durably: the update's completion marker lands in the ROOT
     # update.log every profile shares, and only this id ties one to the action THIS log started.
     action_id = (env_overrides or {}).get("CLAWK_ACTION_ID")
-    stamp = time.strftime('%Y-%m-%d %H:%M:%S') + (f" {action_id}" if action_id else "")
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S") + (f" {action_id}" if action_id else "")
     log_file.write(f"\n=== {name} started {stamp} ===\n".encode())
     if action_id:
         # ...and a sidecar keeps it once build output pushes the header past the status route's
         # bounded tail, or the log rotates: a restarted dashboard still knows which action it ran.
         from clawk_cli.runtime_state import _atomic_bytes
+
         _atomic_bytes(_ACTION_LOG_DIR / f"{name}.action_id", action_id.encode("ascii"))
 
     from clawk_cli._launchers import runtime_command
+
     cmd = runtime_command(PROJECT_ROOT, subcommand)
     if _action_targets_system_gateway(subcommand):
         # A system-scope lifecycle verb spawned as the dashboard's own user can only ever write
@@ -519,8 +604,13 @@ def _spawn_clawk_action(
 
     def _popen(**detach: Any) -> subprocess.Popen:
         return subprocess.Popen(
-            cmd, cwd=str(PROJECT_ROOT), stdin=subprocess.DEVNULL, stdout=log_file, stderr=subprocess.STDOUT,
-            env=action_env, **detach,
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=action_env,
+            **detach,
         )
 
     try:
@@ -568,6 +658,7 @@ def _own_profile_selector(profile: Optional[str]) -> Optional[str]:
     if requested:
         return requested
     from clawk_constants import get_process_clawk_home, profile_name_for_home
+
     return profile_name_for_home(get_process_clawk_home()) or None
 
 
@@ -581,9 +672,14 @@ def _gateway_subcommand(profile: Optional[str], verb: str) -> list[str]:
     selector is explicit for the default home too: a bare child re-reads the sticky ``active_profile``
     and would restart another profile's gateway."""
     from clawk_cli.web_server_profiles import _profile_cli_args
+
     profile = _own_profile_selector(profile)
     args = _profile_cli_args(profile)
-    if profile and verb == "restart" and multiplexed_profile_refusal(profile, verb) is not None:
+    if (
+        profile
+        and verb == "restart"
+        and multiplexed_profile_refusal(profile, verb) is not None
+    ):
         # A served profile's restart targets the multiplexer, addressed as ``-p default``.
         args = ["-p", "default"]
     return args + ["gateway", verb]
@@ -591,6 +687,7 @@ def _gateway_subcommand(profile: Optional[str], verb: str) -> list[str]:
 
 def _profile_is_multiplexed(profile: str) -> bool:
     from clawk_cli.gateway import named_profile_served_by_running_multiplexer
+
     return named_profile_served_by_running_multiplexer(profile)
 
 
@@ -599,16 +696,23 @@ def _has_own_gateway(profile_dir: Path) -> bool:
     serves it. Gateway liveness reports a served profile as running on the multiplexer's PID (#97120),
     so reading liveness alone made every served profile look self-hosted and the refusal below never
     fired while a multiplexer was live, which is the only time it is needed."""
-    from gateway.status import get_running_pid, multiplexer_liveness_for_profile, resolve_gateway_liveness
+    from gateway.status import (
+        get_running_pid,
+        multiplexer_liveness_for_profile,
+        resolve_gateway_liveness,
+    )
     from clawk_cli.profiles import _check_gateway_running
+
     if not _check_gateway_running(profile_dir):
         return False
     served = multiplexer_liveness_for_profile(profile_dir)
     if served is None:
         return True
     liveness = resolve_gateway_liveness(
-        profile_dir=profile_dir, use_cache=False,
-        pid_probe=lambda path: get_running_pid(path, cleanup_stale=False))
+        profile_dir=profile_dir,
+        use_cache=False,
+        pid_probe=lambda path: get_running_pid(path, cleanup_stale=False),
+    )
     return liveness.running and liveness.pid != served[0]
 
 
@@ -626,6 +730,7 @@ def multiplexed_profile_refusal(profile: Optional[str], verb: str) -> Optional[s
     served = _profile_is_multiplexed(requested)
     from clawk_cli.profiles import profile_is_parked, profile_is_standalone
     from clawk_cli.web_server_profiles import _resolve_profile_dir
+
     profile_dir = _resolve_profile_dir(requested)
     standalone = profile_is_standalone(profile_dir)
     if standalone:
@@ -634,9 +739,11 @@ def multiplexed_profile_refusal(profile: Optional[str], verb: str) -> Optional[s
         if not served:
             return None
         from gateway.host_attach import standalone_rescan_message
+
         return standalone_rescan_message(requested)
     if verb == "start" and profile_is_parked(profile_dir):
         from gateway.host_attach import host_gateway
+
         if host_gateway() is not None:
             return None  # a live host unparks it; with no host the refusal below still applies
     if not served and verb != "start":
@@ -646,15 +753,20 @@ def multiplexed_profile_refusal(profile: Optional[str], verb: str) -> Optional[s
     if served:
         if verb == "stop":
             return None  # parks the profile inside the host
-        return (f"The default gateway already serves profile '{requested}' as a multiplexer; "
-                f"{verb} it from the default profile instead of a separate gateway for this profile.")
+        return (
+            f"The default gateway already serves profile '{requested}' as a multiplexer; "
+            f"{verb} it from the default profile instead of a separate gateway for this profile."
+        )
     from clawk_cli.gateway_migrate import _installed_services
+
     if _installed_services(profile_dir):
         return None  # a --force-installed fleet member is not NEW; its own service is started normally
-    return (f"Profile '{requested}' does not get a gateway of its own: one host gateway serves every "
-            f"profile. Install or start it from the default profile (clawk gateway install), or fold an "
-            f"existing per-profile fleet with `clawk gateway migrate --multiplex`; "
-            f"`clawk -p {requested} gateway install --force` starts a separate one anyway.")
+    return (
+        f"Profile '{requested}' does not get a gateway of its own: one host gateway serves every "
+        f"profile. Install or start it from the default profile (clawk gateway install), or fold an "
+        f"existing per-profile fleet with `clawk gateway migrate --multiplex`; "
+        f"`clawk -p {requested} gateway install --force` starts a separate one anyway."
+    )
 
 
 def live_session_refusal(profile: Optional[str], verb: str) -> Optional[str]:
@@ -662,20 +774,27 @@ def live_session_refusal(profile: Optional[str], verb: str) -> Optional[str]:
     spawning: the child refuses the same way, but into an action log the UI never reads."""
     from clawk_cli.gateway_lifecycle_guards import refusal_lines
     from clawk_cli.web_server_profiles import _resolve_profile_dir
+
     homes = [_resolve_profile_dir(_own_profile_selector(profile) or "default")]
     from gateway.host_attach import host_gateway
+
     owner = host_gateway()
     if owner is not None:
         homes.append(Path(owner.home))
-    lines = refusal_lines(verb, homes, flag_hint=f"POST /api/gateway/{verb}?interrupt=true")
+    lines = refusal_lines(
+        verb, homes, flag_hint=f"POST /api/gateway/{verb}?interrupt=true"
+    )
     return "\n".join(lines) or None
 
 
-def _restart_gateway_after(profile: Optional[str], *, what: str, label: str) -> dict[str, Any]:
+def _restart_gateway_after(
+    profile: Optional[str], *, what: str, label: str
+) -> dict[str, Any]:
     """Best-effort gateway restart after a config change. The save stays authoritative: a failed
     spawn is reported (``restart_started: False`` + ``restart_error``) so the UI can fall back to
     its manual restart banner instead of failing the request. Live sessions refuse it the same way."""
     from clawk_cli.web_server import _spawn_gateway_restart
+
     refusal = live_session_refusal(profile, "restart")
     if refusal:
         return {"restart_started": False, "restart_error": refusal}
@@ -686,7 +805,11 @@ def _restart_gateway_after(profile: Optional[str], *, what: str, label: str) -> 
         return {"restart_started": False, "restart_error": str(exc)}
     if reused:
         _log.info("%s: reusing in-flight gateway restart (pid %s)", label, proc.pid)
-    return {"restart_started": True, "restart_action": "gateway-restart", "restart_pid": proc.pid}
+    return {
+        "restart_started": True,
+        "restart_action": "gateway-restart",
+        "restart_pid": proc.pid,
+    }
 
 
 def _split_text_for_speak_stream(text: str, cap: int) -> list:
@@ -696,6 +819,7 @@ def _split_text_for_speak_stream(text: str, cap: int) -> list:
     reflows whitespace (sentences re-joined with single spaces) and has no fence semantics.
     """
     from tools.tts_streaming import SENTENCE_BOUNDARY_RE as _SENTENCE_BOUNDARY_RE
+
     cap = cap if cap and cap > 0 else 4000
     pieces, buf = [], ""
     for sentence in filter(str.strip, _SENTENCE_BOUNDARY_RE.split(text)):

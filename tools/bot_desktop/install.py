@@ -48,6 +48,7 @@ class InstallBusy(RuntimeError):
 def _try_flock(path: Path):
     """Open + non-blocking exclusive flock; None when another process holds it."""
     import fcntl  # windows-footgun: ok — Linux-only runtime (is_supported_host)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     fh = open(path, "a+", encoding="utf-8")
     try:
@@ -64,7 +65,9 @@ def assert_not_running() -> None:
             raise InstallBusy("an install is already running for this profile")
     fh = _try_flock(runtime.state_dir() / "install.lock")
     if fh is None:
-        raise InstallBusy("an install is already running for this profile (another process)")
+        raise InstallBusy(
+            "an install is already running for this profile (another process)"
+        )
     fh.close()
 
 
@@ -79,7 +82,9 @@ def claim() -> str:
             raise InstallBusy("an install is already running for this profile")
         fh = _try_flock(runtime.state_dir() / "install.lock")
         if fh is None:
-            raise InstallBusy("an install is already running for this profile (another process)")
+            raise InstallBusy(
+                "an install is already running for this profile (another process)"
+            )
         _running.add(key)
         _slot_files[key] = fh
     return key
@@ -93,8 +98,13 @@ def release(key: str) -> None:
         fh.close()  # closing drops the flock
 
 
-def install_packages(*, ask_password: Callable[[], str], on_line: Callable[[str], None],
-                     timeout_seconds: float = 900.0, claimed: bool = False) -> int:
+def install_packages(
+    *,
+    ask_password: Callable[[], str],
+    on_line: Callable[[str], None],
+    timeout_seconds: float = 900.0,
+    claimed: bool = False,
+) -> int:
     """Run the package install; returns the process exit code (0 = success, ``-1`` = cancelled,
     :data:`NO_SUDO` = unprivileged host without sudo — the command to run by hand was streamed).
     ``claimed=True``: the caller already holds the slot via :func:`claim`; it is released here either way."""
@@ -104,10 +114,17 @@ def install_packages(*, ask_password: Callable[[], str], on_line: Callable[[str]
             raise RuntimeError("Bot Desktop runs on Linux gateway hosts only")
         cmd = runtime.install_command()
         if cmd is None:
-            raise RuntimeError("no supported package manager (apt-get, dnf, pacman) found on this host")
+            raise RuntimeError(
+                "no supported package manager (apt-get, dnf, pacman) found on this host"
+            )
         if key is None:
             key = claim()
-        return _run(cmd, ask_password=ask_password, on_line=on_line, timeout_seconds=timeout_seconds)
+        return _run(
+            cmd,
+            ask_password=ask_password,
+            on_line=on_line,
+            timeout_seconds=timeout_seconds,
+        )
     finally:
         if key is not None:
             release(key)
@@ -115,21 +132,36 @@ def install_packages(*, ask_password: Callable[[], str], on_line: Callable[[str]
 
 def _sudo_nopasswd() -> bool:
     try:
-        return subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=3,
-                              stdin=subprocess.DEVNULL, check=False).returncode == 0
+        return (
+            subprocess.run(
+                ["sudo", "-n", "true"],
+                capture_output=True,
+                timeout=3,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            ).returncode
+            == 0
+        )
     except Exception:
         return False
 
 
-def _run(cmd: str, *, ask_password: Callable[[], str], on_line: Callable[[str], None],
-         timeout_seconds: float) -> int:
+def _run(
+    cmd: str,
+    *,
+    ask_password: Callable[[], str],
+    on_line: Callable[[str], None],
+    timeout_seconds: float,
+) -> int:
     argv = shlex.split(cmd)
     stdin_payload: Optional[str] = None
     if argv[0] == "sudo":
         if shutil.which("sudo") is None:
             # Minimal containers ship no sudo: a password card would be a dead end. Hand the human the
             # exact command for the host instead.
-            on_line(f"install needs root and this host has no sudo; run on the host as root: {cmd[len('sudo '):]}")
+            on_line(
+                f"install needs root and this host has no sudo; run on the host as root: {cmd[len('sudo ') :]}"
+            )
             return NO_SUDO
         if not _sudo_nopasswd():
             password = ask_password() or ""
@@ -142,8 +174,13 @@ def _run(cmd: str, *, ask_password: Callable[[], str], on_line: Callable[[str], 
     on_line(f"$ {cmd}")
     env = {"DEBIAN_FRONTEND": "noninteractive", "LC_ALL": "C.UTF-8"}
     proc = subprocess.Popen(  # windows-footgun: ok — Linux-only (is_supported_host)
-        argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        env={**os.environ, **env}, start_new_session=True)
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env={**os.environ, **env},
+        start_new_session=True,
+    )
     try:
         if stdin_payload is not None:
             proc.stdin.write(stdin_payload.encode("utf-8"))  # type: ignore[union-attr]
@@ -154,18 +191,24 @@ def _run(cmd: str, *, ask_password: Callable[[], str], on_line: Callable[[str], 
         if _drain_until(proc, on_line, time.monotonic() + timeout_seconds):
             return proc.wait()
         _kill_group(proc)
-        on_line(f"install timed out after {timeout_seconds:.0f}s; the package manager may still be running as root")
+        on_line(
+            f"install timed out after {timeout_seconds:.0f}s; the package manager may still be running as root"
+        )
         return proc.returncode if proc.returncode is not None else -9
     finally:
         proc.stdout.close()  # type: ignore[union-attr]
-        if proc.poll() is None:  # the drain raised (a failing on_line sink): the slot is released, so no orphan
+        if (
+            proc.poll() is None
+        ):  # the drain raised (a failing on_line sink): the slot is released, so no orphan
             _kill_group(proc)
 
 
 _TERM_GRACE_SECONDS = 5.0
 
 
-def _drain_until(proc: subprocess.Popen, on_line: Callable[[str], None], deadline: float) -> bool:
+def _drain_until(
+    proc: subprocess.Popen, on_line: Callable[[str], None], deadline: float
+) -> bool:
     """Stream ``proc.stdout`` lines to ``on_line`` until EOF (``True``) or ``deadline`` (``False``).
 
     Readiness-polled rather than a blocking ``for line in proc.stdout``: from an unprivileged Clawksis no
@@ -197,18 +240,26 @@ def _kill_group(proc: subprocess.Popen) -> None:
     apt/dnf running as root with the dpkg lock while the slot is released, so the whole group goes: TERM
     first so dpkg can finish its transaction, KILL after the grace. Best effort — as non-root neither
     signal reaches a root-owned child, which is why the caller never waits on EOF."""
+
     def _group_gone() -> bool:
         try:
-            os.killpg(proc.pid, 0)  # windows-footgun: ok — Linux-only (is_supported_host)
+            os.killpg(
+                proc.pid, 0
+            )  # windows-footgun: ok — Linux-only (is_supported_host)
         except ProcessLookupError:
             return True
         except PermissionError:
             return False  # a root-owned child is still there
         return False
 
-    for sig, grace in ((signal.SIGTERM, _TERM_GRACE_SECONDS), (signal.SIGKILL, 1.0)):  # windows-footgun: ok — Linux-only (is_supported_host)
+    for sig, grace in (
+        (signal.SIGTERM, _TERM_GRACE_SECONDS),
+        (signal.SIGKILL, 1.0),
+    ):  # windows-footgun: ok — Linux-only (is_supported_host)
         with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(proc.pid, sig)  # windows-footgun: ok — Linux-only (is_supported_host)
+            os.killpg(
+                proc.pid, sig
+            )  # windows-footgun: ok — Linux-only (is_supported_host)
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=grace)
         # The leader (sudo / the package manager) going away is not the end: wait for the whole group so a

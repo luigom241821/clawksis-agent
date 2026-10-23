@@ -61,5 +61,3 @@ async def test_commands_sanitizes_slash_command_mentions_for_telegram(monkeypatc
 
     assert "`/linear`" in result
     assert "`/Linear`" not in result
-
-

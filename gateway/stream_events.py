@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional, Union
 @dataclass(frozen=True)
 class MessageChunk:
     """A delta of streamed assistant text (think-block content is filtered upstream)."""
+
     text: str
 
 
@@ -22,18 +23,21 @@ class MessageChunk:
 class MessageStop:
     """Assistant text segment complete.  ``final`` only for the turn's terminal stop; an
     intermediate stop (text → tool → text) starts a fresh segment below tool chrome."""
+
     final: bool = False
 
 
 @dataclass(frozen=True)
 class Commentary:
     """A complete interim assistant message between tool iterations (not a delta)."""
+
     text: str
 
 
 @dataclass(frozen=True)
 class ToolCallChunk:
     """A tool invocation started. Raw facts only; the adapter decides presentation."""
+
     tool_name: str
     preview: Optional[str] = None
     args: Optional[dict[str, Any]] = None
@@ -44,9 +48,10 @@ class ToolCallChunk:
 class ToolCallFinished:
     """A tool invocation completed (drives bubble settling + LongToolHint).  Tool *output*
     never travels here — it is history."""
+
     tool_name: str
     duration: float = 0.0  # wall-clock seconds
-    ok: bool = True        # returned without raising
+    ok: bool = True  # returned without raising
     index: int = 0
 
 
@@ -54,6 +59,7 @@ class ToolCallFinished:
 class LongToolHint:
     """One-shot onboarding nudge for a long tool run; the gateway gates it on platform
     capability (/verbose usable) and first-time use."""
+
     tool_name: str = ""
     duration: float = 0.0
 
@@ -62,6 +68,7 @@ class LongToolHint:
 class GatewayNotice:
     """Gateway-originated control message; ``kind`` is a stable string adapters switch on
     (``"restart"`` / ``"online"`` / ``"long_run"`` / …), ``text`` the default rendering."""
+
     kind: str
     text: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
@@ -69,7 +76,15 @@ class GatewayNotice:
 
 # Explicit union (not a marker base class) so a missing ``case`` in an
 # exhaustive match is a visible type error rather than a silent fall-through.
-StreamEvent = MessageChunk | MessageStop | Commentary | ToolCallChunk | ToolCallFinished | LongToolHint | GatewayNotice
+StreamEvent = (
+    MessageChunk
+    | MessageStop
+    | Commentary
+    | ToolCallChunk
+    | ToolCallFinished
+    | LongToolHint
+    | GatewayNotice
+)
 
 __all__ = [
     "Commentary",

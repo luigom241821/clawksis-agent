@@ -3,6 +3,7 @@
 Run with httpx and google-genai==1.47.0 installed:
     python evals/gemini_type_array_probe.py --base origin/main
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +46,8 @@ def wire_translate(adapter, tools):
         ) as client:
             try:
                 client.chat.completions.create(
-                    model="gemini-2.5-flash", tools=tools,
+                    model="gemini-2.5-flash",
+                    tools=tools,
                     messages=[{"role": "user", "content": "Schema validation probe"}],
                 )
             except adapter.GeminiAPIError as exc:
@@ -65,9 +67,19 @@ def probe(label, translate):
         "nullable_enum": {"type": ["integer", "null"], "enum": [1, 2]},
         "union_enum": {"type": ["string", "integer"], "enum": ["one", 2]},
         "nested_items": {"type": "array", "items": {"type": ["string", "null"]}},
-        "nested_anyof": {"anyOf": [{"type": ["string", "integer"]}, {"type": "boolean"}]},
-        "constrained_union": {"type": ["string", "integer"], "anyOf": [{"enum": ["one"]}, {"enum": ["two"]}]},
-        "structural_union": {"type": ["array", "object", "string"], "items": {"type": "integer"}, "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        "nested_anyof": {
+            "anyOf": [{"type": ["string", "integer"]}, {"type": "boolean"}]
+        },
+        "constrained_union": {
+            "type": ["string", "integer"],
+            "anyOf": [{"enum": ["one"]}, {"enum": ["two"]}],
+        },
+        "structural_union": {
+            "type": ["array", "object", "string"],
+            "items": {"type": "integer"},
+            "properties": {"name": {"type": "string"}},
+            "required": ["name"],
+        },
         "scalar_control": {"type": "number"},
     }
     results = {}
@@ -75,7 +87,14 @@ def probe(label, translate):
         parameters = {"type": "object", "properties": {"value": node}}
         original = copy.deepcopy(parameters)
         try:
-            wire = translate([{"type": "function", "function": {"name": "probe", "parameters": parameters}}])
+            wire = translate(
+                [
+                    {
+                        "type": "function",
+                        "function": {"name": "probe", "parameters": parameters},
+                    }
+                ]
+            )
             declaration = wire[0]["functionDeclarations"][0]
             # Validate the actual adapter declaration, not a reconstructed schema.
             FunctionDeclaration.model_validate(json.loads(json.dumps(declaration)))
@@ -101,19 +120,34 @@ def main():
         adapter = importlib.import_module("agent.gemini_native_adapter")
         baseline = types.ModuleType("baseline_gemini_schema")
         source = subprocess.check_output(
-            ["git", "show", f"{args.base}:agent/gemini_schema.py"], cwd=root, text=True,
+            ["git", "show", f"{args.base}:agent/gemini_schema.py"],
+            cwd=root,
+            text=True,
         )
-        exec(compile(source, f"{args.base}:agent/gemini_schema.py", "exec"), baseline.__dict__)
+        exec(
+            compile(source, f"{args.base}:agent/gemini_schema.py", "exec"),
+            baseline.__dict__,
+        )
         fixed = adapter.sanitize_gemini_tool_parameters
-        adapter.sanitize_gemini_tool_parameters = baseline.sanitize_gemini_tool_parameters
+        adapter.sanitize_gemini_tool_parameters = (
+            baseline.sanitize_gemini_tool_parameters
+        )
         before = probe(args.base, lambda tools: wire_translate(adapter, tools))
         adapter.sanitize_gemini_tool_parameters = fixed
         after = probe("worktree", lambda tools: wire_translate(adapter, tools))
         assert before["scalar_control"] == "accepted"
-        assert all(result != "accepted" for name, result in before.items() if name != "scalar_control")
+        assert all(
+            result != "accepted"
+            for name, result in before.items()
+            if name != "scalar_control"
+        )
         assert all(result == "accepted" for result in after.values())
-        print(f"PASS: {len(before) - 1} failing base cases repaired; scalar control and inputs preserved.")
-        print("LOCAL SDK VALIDATION ONLY: no Google API call or Windows Desktop exercise.")
+        print(
+            f"PASS: {len(before) - 1} failing base cases repaired; scalar control and inputs preserved."
+        )
+        print(
+            "LOCAL SDK VALIDATION ONLY: no Google API call or Windows Desktop exercise."
+        )
 
 
 if __name__ == "__main__":

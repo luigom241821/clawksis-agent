@@ -764,14 +764,19 @@ def test_dangling_symlink_does_not_break_directory_listing(forced_files_client):
     )
 
 
-def test_relative_path_resolves_under_default_path_without_locked_root(local_files_client):
+def test_relative_path_resolves_under_default_path_without_locked_root(
+    local_files_client,
+):
     """No locked root: a relative path (the chat upload's ``chat-uploads/<name>``) lands under
     the default path instead of a 400; ``..`` is still refused."""
     client, home = local_files_client
 
     created = client.post(
         "/api/files/upload",
-        json={"path": "chat-uploads/pasted.txt", "data_url": "data:text/plain;base64,aGVsbG8="},
+        json={
+            "path": "chat-uploads/pasted.txt",
+            "data_url": "data:text/plain;base64,aGVsbG8=",
+        },
     )
     escaped = client.post(
         "/api/files/upload",

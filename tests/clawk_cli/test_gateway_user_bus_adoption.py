@@ -15,9 +15,11 @@ def _fake_user_bus(monkeypatch, *, present: bool) -> str:
     """Fake the on-disk state ``loginctl enable-linger`` leaves behind (or its absence)."""
     runtime_dir = f"/run/user/{os.getuid()}"
     monkeypatch.setattr(
-        gw, "_runtime_dir_is_ours", lambda d: present and str(d) == runtime_dir)
+        gw, "_runtime_dir_is_ours", lambda d: present and str(d) == runtime_dir
+    )
     monkeypatch.setattr(
-        gw, "_path_exists_safe", lambda p: present and str(p) == f"{runtime_dir}/bus")
+        gw, "_path_exists_safe", lambda p: present and str(p) == f"{runtime_dir}/bus"
+    )
     return runtime_dir
 
 

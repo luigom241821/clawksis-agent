@@ -5,6 +5,7 @@ leaves PM must carry the ordinary spelling: the same folder spelled two ways has
 compares differently, and child tools (cmd.exe, gpg, installers) may refuse the prefix.
 The roots below are plain text, so both invariants hold on every OS.
 """
+
 import subprocess
 from pathlib import Path
 
@@ -22,20 +23,38 @@ ROOT = Path(VERBATIM + r"C:\Program Files\WindowsApps\Clawksis\agent-payload\too
 def test_identity_does_not_depend_on_the_root_spelling(tmp_path):
     for name in ("pyproject.toml", "uv.lock"):
         (tmp_path / name).write_text(name, encoding="utf-8")
-    plain = Path(r"C:\Program Files\WindowsApps\Clawksis\agent-payload\tools\python-3.12\python.exe")
+    plain = Path(
+        r"C:\Program Files\WindowsApps\Clawksis\agent-payload\tools\python-3.12\python.exe"
+    )
 
     assert _inputs(tmp_path, Path(VERBATIM + str(plain))) == _inputs(tmp_path, plain)
 
 
-def test_no_verbatim_spelling_leaves_through_records_environment_or_uv(tmp_path, monkeypatch):
+def test_no_verbatim_spelling_leaves_through_records_environment_or_uv(
+    tmp_path, monkeypatch
+):
     store = Store(ROOT)
     facts = Facts(tmp_path / "facts.json")
-    facts.record("git", "1", "git-1", {"PATH": [str(store.entry("git-1") / "cmd")]}, store.root)
-    facts.record("chromium", "1", "chromium-1",
-                 {"AGENT_BROWSER_EXECUTABLE_PATH": str(store.entry("chromium-1") / "chrome.exe")}, store.root)
+    facts.record(
+        "git", "1", "git-1", {"PATH": [str(store.entry("git-1") / "cmd")]}, store.root
+    )
+    facts.record(
+        "chromium",
+        "1",
+        "chromium-1",
+        {
+            "AGENT_BROWSER_EXECUTABLE_PATH": str(
+                store.entry("chromium-1") / "chrome.exe"
+            )
+        },
+        store.root,
+    )
     record = (tmp_path / "facts.json").read_text(encoding="utf-8")
 
-    env = compose_env([facts.env_for("git", store.root), facts.env_for("chromium", store.root)], base={})
+    env = compose_env(
+        [facts.env_for("git", store.root), facts.env_for("chromium", store.root)],
+        base={},
+    )
 
     calls = []
 
@@ -44,10 +63,14 @@ def test_no_verbatim_spelling_leaves_through_records_environment_or_uv(tmp_path,
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(environment_module.subprocess, "run", run)
-    PythonEnvironment(uv=store.entry("uv-1") / "uv.exe", python=store.entry("python-1") / "python.exe",
-                      destination=tmp_path / "venv", cache=tmp_path / "cache",
-                      env={}).sync(store.entry("source"))
-    (command, kwargs), = calls
+    PythonEnvironment(
+        uv=store.entry("uv-1") / "uv.exe",
+        python=store.entry("python-1") / "python.exe",
+        destination=tmp_path / "venv",
+        cache=tmp_path / "cache",
+        env={},
+    ).sync(store.entry("source"))
+    ((command, kwargs),) = calls
 
     leaving = [record, *env.values(), *command, kwargs["cwd"], *kwargs["env"].values()]
     assert [text for text in leaving if VERBATIM in text] == []

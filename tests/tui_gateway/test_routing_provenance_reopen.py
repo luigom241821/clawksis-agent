@@ -49,19 +49,35 @@ class _Agent:
     def clear_interrupt(self):
         return None
 
-    def run_conversation(self, prompt, conversation_history=None, stream_callback=None, **_kwargs):
+    def run_conversation(
+        self, prompt, conversation_history=None, stream_callback=None, **_kwargs
+    ):
         # What admit_durable_turn_lease does at the top of the real run_conversation.
-        self._db.try_acquire_session_turn_lease(self.session_id, TURN, ttl_seconds=300.0)
-        self.stamp_seen_by_turn.append(self._db.get_session(self.session_id)["end_reason"])
+        self._db.try_acquire_session_turn_lease(
+            self.session_id, TURN, ttl_seconds=300.0
+        )
+        self.stamp_seen_by_turn.append(
+            self._db.get_session(self.session_id)["end_reason"]
+        )
         self.turns.append(prompt)
         return {"final_response": "", "messages": []}
 
 
 def _session(agent: _Agent) -> dict:
     return {
-        "agent": agent, "session_key": agent.session_id, "history": [], "history_lock": threading.Lock(),
-        "history_version": 0, "running": True, "attached_images": [], "image_counter": 0, "cols": 80,
-        "slash_worker": None, "show_reasoning": False, "tool_progress_mode": "all", "inflight_turn": None,
+        "agent": agent,
+        "session_key": agent.session_id,
+        "history": [],
+        "history_lock": threading.Lock(),
+        "history_version": 0,
+        "running": True,
+        "attached_images": [],
+        "image_counter": 0,
+        "cols": 80,
+        "slash_worker": None,
+        "show_reasoning": False,
+        "tool_progress_mode": "all",
+        "inflight_turn": None,
     }
 
 
@@ -78,13 +94,21 @@ def db(tmp_path: Path):
 def turn_env(monkeypatch, tmp_path, db):
     """The immediate-prompt harness of tests/tui_gateway/test_tui_gateway_server.py, with a real SessionDB."""
     for name, stub in {
-        "_emit": lambda *_a, **_k: None, "make_stream_renderer": lambda _cols: None,
-        "render_message": lambda _raw, _cols: None, "_wire_callbacks": lambda _sid: None,
-        "_sync_agent_model_with_config": lambda *_a: None, "_session_cwd": lambda _session: str(tmp_path),
-        "_register_session_cwd": lambda _session: None, "_set_session_context": lambda *_a, **_k: [],
-        "_clear_session_context": lambda _tokens: None, "_session_info": lambda *_a: {},
-        "_get_usage": lambda _agent: {}, "_sync_session_key_after_compress": lambda *_a, **_k: None,
-        "_drain_queued_prompt": lambda *_a: False, "_voice_tts_enabled": lambda: False, "_get_db": lambda: db,
+        "_emit": lambda *_a, **_k: None,
+        "make_stream_renderer": lambda _cols: None,
+        "render_message": lambda _raw, _cols: None,
+        "_wire_callbacks": lambda _sid: None,
+        "_sync_agent_model_with_config": lambda *_a: None,
+        "_session_cwd": lambda _session: str(tmp_path),
+        "_register_session_cwd": lambda _session: None,
+        "_set_session_context": lambda *_a, **_k: [],
+        "_clear_session_context": lambda _tokens: None,
+        "_session_info": lambda *_a: {},
+        "_get_usage": lambda _agent: {},
+        "_sync_session_key_after_compress": lambda *_a, **_k: None,
+        "_drain_queued_prompt": lambda *_a: False,
+        "_voice_tts_enabled": lambda: False,
+        "_get_db": lambda: db,
     }.items():
         monkeypatch.setattr(server, name, stub)
     monkeypatch.setattr(server.threading, "Thread", _ImmediateThread)
@@ -95,10 +119,14 @@ def turn_env(monkeypatch, tmp_path, db):
 
 def _stamp(db: SessionDB, row_id: str, reason: str) -> None:
     db.end_session(row_id, reason)
-    db._write_sql("UPDATE sessions SET ended_at = ? WHERE id = ?", (time.time() - 60.0, row_id))
+    db._write_sql(
+        "UPDATE sessions SET ended_at = ? WHERE id = ?", (time.time() - 60.0, row_id)
+    )
 
 
-def test_a_registered_stale_close_is_cleared_before_the_turn_and_rotation_publishes(turn_env, db):
+def test_a_registered_stale_close_is_cleared_before_the_turn_and_rotation_publishes(
+    turn_env, db
+):
     """The field shape: the TUI keeps accepting prompts on a row stamped ``tui_close`` an hour ago.
     The row is clear when the worker runs, and the rotation that follows publishes instead of wedging."""
     db.create_session("row-1", source="tui")
@@ -109,19 +137,34 @@ def test_a_registered_stale_close_is_cleared_before_the_turn_and_rotation_publis
     assert server._run_prompt_submit("rid", "ui-106459-1", session, "go") is True
 
     assert agent.turns == ["go"]
-    assert agent.stamp_seen_by_turn == [None], "the stamp must be cleared before the worker starts"
+    assert agent.stamp_seen_by_turn == [None], (
+        "the stamp must be cleared before the worker starts"
+    )
     assert db.try_acquire_compression_lock("row-1", "holder")
     db.publish_compression_child(
-        parent_session_id="row-1", child_session_id="row-1-child", source="tui",
-        messages=[{"role": "user", "content": "go"}], model="m", compression_lock_holder="holder")
+        parent_session_id="row-1",
+        child_session_id="row-1-child",
+        source="tui",
+        messages=[{"role": "user", "content": "go"}],
+        model="m",
+        compression_lock_holder="holder",
+    )
     assert db.get_session("row-1")["end_reason"] == "compression"
 
 
-@pytest.mark.parametrize("reason, claimed_for_teardown", [
-    ("session_reset", False), ("new_session", False), ("compression", False), ("ws_disconnect", False),
-    ("tui_close", True),
-])
-def test_only_an_explicit_close_on_a_still_registered_session_is_cleared(turn_env, db, reason, claimed_for_teardown):
+@pytest.mark.parametrize(
+    "reason, claimed_for_teardown",
+    [
+        ("session_reset", False),
+        ("new_session", False),
+        ("compression", False),
+        ("ws_disconnect", False),
+        ("tui_close", True),
+    ],
+)
+def test_only_an_explicit_close_on_a_still_registered_session_is_cleared(
+    turn_env, db, reason, claimed_for_teardown
+):
     """Boundaries, compression and automatic stamps own lineage elsewhere; a session ``session.close``
     already claimed under ``_sessions_lock`` is refused a turn and its deliberate close survives."""
     db.create_session("row-2", source="tui")

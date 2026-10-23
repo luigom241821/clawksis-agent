@@ -31,10 +31,18 @@ def owning_install_root(project_root: Path) -> Path | None:
     root = Path(project_root).resolve()
     if venv.name not in ("venv", ".venv"):
         return None
-    owner = venv.parent if (venv.parent / "clawk_cli" / "main.py").is_file() else _pm_environment_owner(venv)
+    owner = (
+        venv.parent
+        if (venv.parent / "clawk_cli" / "main.py").is_file()
+        else _pm_environment_owner(venv)
+    )
     if owner is None or owner == root:
         return None
-    chosen = (Path(p).resolve() for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p)
+    chosen = (
+        Path(p).resolve()
+        for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+        if p
+    )
     if root in chosen:
         return None
     return owner
@@ -54,10 +62,15 @@ def _pm_environment_owner(venv: Path) -> Path | None:
         return None
     try:
         # pm.environments.record_activation_inputs writes it on every full install.
-        owner = Path((state / "inputs" / ".project-root").read_text(encoding="utf-8-sig").strip())
+        owner = Path(
+            (state / "inputs" / ".project-root").read_text(encoding="utf-8-sig").strip()
+        )
     except OSError:
         return None
-    if install_key(owner) != state.name or not (owner / "clawk_cli" / "main.py").is_file():
+    if (
+        install_key(owner) != state.name
+        or not (owner / "clawk_cli" / "main.py").is_file()
+    ):
         return None
     return owner
 
@@ -67,11 +80,17 @@ def retarget_to_owning_install(project_root: Path) -> None:
     owner = owning_install_root(project_root)
     if owner is None:
         return
-    print(f"⚠ {owner / Path(sys.prefix).name} is running the checkout at {project_root}, not its own code.")
-    print(f"→ Updating {owner} with its own updater; this also points its venv back at it.")
+    print(
+        f"⚠ {owner / Path(sys.prefix).name} is running the checkout at {project_root}, not its own code."
+    )
+    print(
+        f"→ Updating {owner} with its own updater; this also points its venv back at it."
+    )
     sys.stdout.flush()
     # PYTHONPATH entries resolve before the editable finder on sys.meta_path, so the
     # owner's clawk_cli wins; in the child, project_root == owner and this is a no-op.
     env = dict(os.environ, PYTHONPATH=str(owner))
-    code = subprocess.call([sys.executable, "-m", "clawk_cli.main", *sys.argv[1:]], cwd=owner, env=env)
+    code = subprocess.call(
+        [sys.executable, "-m", "clawk_cli.main", *sys.argv[1:]], cwd=owner, env=env
+    )
     raise SystemExit(code)

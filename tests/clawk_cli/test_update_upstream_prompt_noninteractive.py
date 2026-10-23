@@ -19,15 +19,15 @@ from clawk_cli import update_cmd
 
 @pytest.fixture
 def fork_without_upstream(tmp_path):
-    with patch.object(
-        update_cmd, "_has_upstream_remote", return_value=False
-    ), patch.object(
-        update_cmd, "_should_skip_upstream_prompt", return_value=False
-    ), patch.object(
-        update_cmd, "_add_upstream_remote", return_value=True
-    ) as add_remote, patch.object(
-        update_cmd, "_mark_skip_upstream_prompt"
-    ) as mark_skip, patch("builtins.input") as stdin_input:
+    with (
+        patch.object(update_cmd, "_has_upstream_remote", return_value=False),
+        patch.object(update_cmd, "_should_skip_upstream_prompt", return_value=False),
+        patch.object(
+            update_cmd, "_add_upstream_remote", return_value=True
+        ) as add_remote,
+        patch.object(update_cmd, "_mark_skip_upstream_prompt") as mark_skip,
+        patch("builtins.input") as stdin_input,
+    ):
         yield SimpleNamespace(
             cwd=tmp_path,
             add_remote=add_remote,
@@ -97,9 +97,7 @@ class TestUpstreamPromptNonInteractive:
         fork_without_upstream.stdin_input.return_value = "n"
         p_in, p_out = _tty(True, True)
         with p_in, p_out:
-            update_cmd._sync_with_upstream_if_needed(
-                ["git"], fork_without_upstream.cwd
-            )
+            update_cmd._sync_with_upstream_if_needed(["git"], fork_without_upstream.cwd)
 
         fork_without_upstream.stdin_input.assert_called_once()
         fork_without_upstream.add_remote.assert_not_called()
@@ -107,9 +105,10 @@ class TestUpstreamPromptNonInteractive:
 
     def test_interactive_accept_adds_upstream(self, fork_without_upstream):
         fork_without_upstream.stdin_input.return_value = "y"
-        with patch.object(
-            update_cmd, "_count_commits_between", return_value=-1
-        ), patch.object(update_cmd.subprocess, "run"):
+        with (
+            patch.object(update_cmd, "_count_commits_between", return_value=-1),
+            patch.object(update_cmd.subprocess, "run"),
+        ):
             p_in, p_out = _tty(True, True)
             with p_in, p_out:
                 update_cmd._sync_with_upstream_if_needed(

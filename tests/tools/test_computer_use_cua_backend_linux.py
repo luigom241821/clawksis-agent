@@ -82,7 +82,7 @@ def test_parse_xprop_net_active_window_standard_output():
     from tools.computer_use.cua_backend_parse import _parse_xprop_net_active_window
 
     raw = "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x503000b\n"
-    assert _parse_xprop_net_active_window(raw) == 0x503000b
+    assert _parse_xprop_net_active_window(raw) == 0x503000B
 
 
 @pytest.mark.platforms("linux")

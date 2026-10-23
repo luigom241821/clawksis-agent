@@ -22,7 +22,9 @@ def _reset_memo():
 class TestPersonalityCompletionsMemo:
     def test_config_edit_on_disk_refreshes_completions(self, tmp_path):
         cfg_path = tmp_path / "config.yaml"
-        cfg_path.write_text("agent:\n  personalities:\n    zzfirst: v1\n", encoding="utf-8")
+        cfg_path.write_text(
+            "agent:\n  personalities:\n    zzfirst: v1\n", encoding="utf-8"
+        )
         # Pin mtimes so the edit below is a guaranteed signature change
         # regardless of filesystem timestamp granularity.
         os.utime(cfg_path, (1_700_000_000, 1_700_000_000))
@@ -31,13 +33,22 @@ class TestPersonalityCompletionsMemo:
             return yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
 
         def names():
-            return {c.text for c in commands_mod.SlashCommandCompleter._personality_completions("zz", "zz")}
+            return {
+                c.text
+                for c in commands_mod.SlashCommandCompleter._personality_completions(
+                    "zz", "zz"
+                )
+            }
 
-        with patch("cli.load_cli_config", load_cli_config_from_disk), \
-             patch("clawk_cli.config.get_config_path", lambda: cfg_path):
+        with (
+            patch("cli.load_cli_config", load_cli_config_from_disk),
+            patch("clawk_cli.config.get_config_path", lambda: cfg_path),
+        ):
             assert "zzfirst" in names()
 
-            cfg_path.write_text("agent:\n  personalities:\n    zzsecond: v2\n", encoding="utf-8")
+            cfg_path.write_text(
+                "agent:\n  personalities:\n    zzsecond: v2\n", encoding="utf-8"
+            )
             os.utime(cfg_path, (1_800_000_000, 1_800_000_000))
             after = names()
             assert "zzsecond" in after

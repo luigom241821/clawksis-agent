@@ -20,8 +20,13 @@ from clawk_cli import worktree_ops
 
 
 def _git(args, cwd):
-    result = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=str(cwd),
-                            capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 0, f"git {args}: {result.stderr}"
     return result.stdout.strip()
 
@@ -72,38 +77,50 @@ def _archives(repo):
 
 
 def _digest(path):
-    return {str(f.relative_to(path)): hashlib.sha256(f.read_bytes()).hexdigest()
-            for f in sorted(path.rglob("*")) if f.is_file() and ".git" not in f.parts and "node_modules" not in f.parts}
+    return {
+        str(f.relative_to(path)): hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in sorted(path.rglob("*"))
+        if f.is_file() and ".git" not in f.parts and "node_modules" not in f.parts
+    }
 
 
 def _set_worktrees_config(text):
     from clawk_constants import get_clawk_home
+
     home = get_clawk_home()
     home.mkdir(parents=True, exist_ok=True)
     (home / "config.yaml").write_text(text, encoding="utf-8")
 
 
-def test_removed_dirty_tree_restores_byte_for_byte_and_archiving_never_touches_the_tree(repo):
+def test_removed_dirty_tree_restores_byte_for_byte_and_archiving_never_touches_the_tree(
+    repo,
+):
     """I1 + I4: HEAD, staged, unstaged (CRLF) and untracked bytes survive delete -> restore,
     even under eol rules from info/attributes and core.attributesFile (which ``--attr-source``
     does not replace); the archive step leaves the real index and every working file untouched."""
     from clawk_cli.worktree_archive import restore_archive, snapshot_worktree
 
     (repo / ".git" / "info").mkdir(exist_ok=True)
-    (repo / ".git" / "info" / "attributes").write_text("*.md text eol=crlf\n", encoding="utf-8")
+    (repo / ".git" / "info" / "attributes").write_text(
+        "*.md text eol=crlf\n", encoding="utf-8"
+    )
     (repo / "attrs").write_text("*.cfg text eol=lf\n", encoding="utf-8")
     _git(["config", "core.attributesFile", str(repo / "attrs")], repo)
     wt = _tree(repo, "lane-roundtrip", unpushed=True)
-    (wt / "lf.md").write_bytes(b"lf only\n")                 # restore must not add CR
-    (wt / "crlf.cfg").write_bytes(b"keep\r\nthe CR\r\n")     # archive must not strip CR
+    (wt / "lf.md").write_bytes(b"lf only\n")  # restore must not add CR
+    (wt / "crlf.cfg").write_bytes(b"keep\r\nthe CR\r\n")  # archive must not strip CR
     (wt / "b.py").write_text("x = 2\n", encoding="utf-8")
     _git(["add", "b.py"], wt)
-    (wt / "b.py").write_text("x = 3\n", encoding="utf-8")               # unstaged on top of a staged change
-    (wt / "a.txt").write_bytes(b"one\r\nTWO\r\n")     # raw CRLF bytes under eol=crlf
+    (wt / "b.py").write_text(
+        "x = 3\n", encoding="utf-8"
+    )  # unstaged on top of a staged change
+    (wt / "a.txt").write_bytes(b"one\r\nTWO\r\n")  # raw CRLF bytes under eol=crlf
     (wt / "new dir").mkdir()
     (wt / "new dir" / "blob.bin").write_bytes(os.urandom(4096))
     (wt / "node_modules").mkdir()
-    (wt / "node_modules" / "dep.js").write_text("ignored, never archived\n", encoding="utf-8")
+    (wt / "node_modules" / "dep.js").write_text(
+        "ignored, never archived\n", encoding="utf-8"
+    )
     (wt / "big.dat").write_bytes(b"\0" * (2 * 1024 * 1024))
     git_dir = Path(_git(["rev-parse", "--absolute-git-dir"], wt))
     index_before, files_before = (git_dir / "index").read_bytes(), _digest(wt)
@@ -113,7 +130,9 @@ def test_removed_dirty_tree_restores_byte_for_byte_and_archiving_never_touches_t
     assert (git_dir / "index").read_bytes() == index_before
     assert _digest(wt) == files_before
     assert [s["path"] for s in arc.meta["skipped_untracked"]] == ["big.dat"]
-    assert "node_modules/dep.js" not in _git(["ls-tree", "-r", "--name-only", arc.sha], repo)
+    assert "node_modules/dep.js" not in _git(
+        ["ls-tree", "-r", "--name-only", arc.sha], repo
+    )
 
     _git(["worktree", "remove", "--force", str(wt)], repo)
     _git(["branch", "-D", "wt/lane-roundtrip"], repo)
@@ -131,7 +150,10 @@ def test_sweep_archives_idle_work_and_never_touches_live_kanban_or_young_trees(r
     unpushed = _tree(repo, "clawk-unpushed", unpushed=True)
     live_cwd = _tree(repo, "lane-live-cwd", dirty=True)
     live_lock = _tree(repo, "clawk-live-lock", dirty=True)
-    _git(["worktree", "lock", "--reason", f"clawk pid={os.getpid()}", str(live_lock)], repo)
+    _git(
+        ["worktree", "lock", "--reason", f"clawk pid={os.getpid()}", str(live_lock)],
+        repo,
+    )
     kanban = _tree(repo, "t_0abc12", dirty=True)
     young = _tree(repo, "lane-young", dirty=True)
     unarchivable = _tree(repo, "lane-embedded", dirty=True)
@@ -144,11 +166,22 @@ def test_sweep_archives_idle_work_and_never_touches_live_kanban_or_young_trees(r
     (deleted / "sub" / "y.py").write_text("y\n", encoding="utf-8")
     _git(["add", "sub"], deleted)
     _git(["commit", "-qm", "sub"], deleted)
-    for tree in (clean, dirty, unpushed, live_cwd, live_lock, kanban, unarchivable, deleted):
+    for tree in (
+        clean,
+        dirty,
+        unpushed,
+        live_cwd,
+        live_lock,
+        kanban,
+        unarchivable,
+        deleted,
+    ):
         _idle(tree)
-    _idle(subagent, hours=30)                   # past the 24h clawk-made tier, inside 72h
-    (deleted / "sub" / "x.py").unlink()         # the newest work: a deletion in a subdir
-    sleeper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"], cwd=str(live_cwd))
+    _idle(subagent, hours=30)  # past the 24h clawk-made tier, inside 72h
+    (deleted / "sub" / "x.py").unlink()  # the newest work: a deletion in a subdir
+    sleeper = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(120)"], cwd=str(live_cwd)
+    )
     try:
         worktree_ops._prune_stale_worktrees(str(repo))
     finally:
@@ -161,10 +194,17 @@ def test_sweep_archives_idle_work_and_never_touches_live_kanban_or_young_trees(r
     assert not subagent.exists(), "subagent-* trees age on the 24h tier"
     archived = {ref.rsplit("/", 1)[-1] for ref in _archives(repo)}
     assert archived == {"lane-dirty", "clawk-unpushed", "subagent-done"}
-    assert (deleted / "sub" / "y.py").exists(), "a fresh deletion is activity: the tree is not idle"
-    assert _git(["show", "refs/clawk/archive/lane-dirty:notes.md"], repo) == "uncommitted"
+    assert (deleted / "sub" / "y.py").exists(), (
+        "a fresh deletion is activity: the tree is not idle"
+    )
+    assert (
+        _git(["show", "refs/clawk/archive/lane-dirty:notes.md"], repo) == "uncommitted"
+    )
     for kept in (live_cwd, live_lock, kanban, young, unarchivable):
-        assert kept.exists() and (kept / "notes.md").read_text(encoding="utf-8-sig") == "uncommitted\n", kept.name
+        assert (
+            kept.exists()
+            and (kept / "notes.md").read_text(encoding="utf-8-sig") == "uncommitted\n"
+        ), kept.name
 
 
 def test_a_tree_resumed_mid_sweep_is_never_removed(repo, monkeypatch, capsys):
@@ -179,32 +219,64 @@ def test_a_tree_resumed_mid_sweep_is_never_removed(repo, monkeypatch, capsys):
     for tree in (first, second, staged):
         _idle(tree)
     real_snapshot, sleepers = worktree_archive.snapshot_worktree, []
-    patch = ("--- a/b.py\n+++ b/b.py\n@@ -1 +1 @@\n-x = 1\n+NEW STAGED CONTENT\n")
+    patch = "--- a/b.py\n+++ b/b.py\n@@ -1 +1 @@\n-x = 1\n+NEW STAGED CONTENT\n"
 
     def snapshot_then_user_returns(repo_root, wt_path, **kw):
         arc = real_snapshot(repo_root, wt_path, **kw)
         if Path(wt_path).name == "lane-staged":
-            subprocess.run(["git", "apply", "--cached", "-"], cwd=str(wt_path), input=patch.encode(), check=True)
-            subprocess.run(["git", "status", "--porcelain"], cwd=str(wt_path), capture_output=True, check=True)
+            subprocess.run(
+                ["git", "apply", "--cached", "-"],
+                cwd=str(wt_path),
+                input=patch.encode(),
+                check=True,
+            )
+            subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(wt_path),
+                capture_output=True,
+                check=True,
+            )
             return arc
-        (Path(wt_path) / "notes.md").write_text("edited during the snapshot\n", encoding="utf-8")
-        sleepers.append(subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], cwd=str(second)))
+        (Path(wt_path) / "notes.md").write_text(
+            "edited during the snapshot\n", encoding="utf-8"
+        )
+        sleepers.append(
+            subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(60)"], cwd=str(second)
+            )
+        )
         return arc
 
-    monkeypatch.setattr(worktree_archive, "snapshot_worktree", snapshot_then_user_returns)
+    monkeypatch.setattr(
+        worktree_archive, "snapshot_worktree", snapshot_then_user_returns
+    )
     try:
         plan, actions = worktree_cmd._sweep(str(repo), dry_run=False)
     finally:
         for proc in sleepers:
             proc.kill()
             proc.wait()
-    assert {d.name for d in plan if d.action == "archive-remove"} == {"lane-a", "lane-b", "lane-staged"}
-    assert (first / "notes.md").read_text(encoding="utf-8-sig") == "edited during the snapshot\n"
-    assert second.exists() and (second / "notes.md").read_text(encoding="utf-8-sig") == "uncommitted\n"
+    assert {d.name for d in plan if d.action == "archive-remove"} == {
+        "lane-a",
+        "lane-b",
+        "lane-staged",
+    }
+    assert (first / "notes.md").read_text(
+        encoding="utf-8-sig"
+    ) == "edited during the snapshot\n"
+    assert (
+        second.exists()
+        and (second / "notes.md").read_text(encoding="utf-8-sig") == "uncommitted\n"
+    )
     assert staged.exists() and _git(["show", ":b.py"], staged) == "NEW STAGED CONTENT"
-    assert sorted(ref.rsplit("/", 1)[-1] for ref in _archives(repo)) == ["lane-a", "lane-staged"]
-    assert sorted(actions) == ["archived, kept (changed 0s ago) → refs/clawk/archive/lane-a",
-                               "archived, kept (staged changes since the snapshot) → refs/clawk/archive/lane-staged"]
+    assert sorted(ref.rsplit("/", 1)[-1] for ref in _archives(repo)) == [
+        "lane-a",
+        "lane-staged",
+    ]
+    assert sorted(actions) == [
+        "archived, kept (changed 0s ago) → refs/clawk/archive/lane-a",
+        "archived, kept (staged changes since the snapshot) → refs/clawk/archive/lane-staged",
+    ]
 
 
 def test_dirty_submodule_work_is_never_archived_away(repo, tmp_path, monkeypatch):
@@ -223,12 +295,26 @@ def test_dirty_submodule_work_is_never_archived_away(repo, tmp_path, monkeypatch
     _git(["add", "-A"], sub_work)
     _git(["commit", "-qm", "sub"], sub_work)
     _git(["push", "-q", str(sub_origin), "main"], sub_work)
-    _git(["-c", "protocol.file.allow=always", "submodule", "add", "-q", str(sub_origin), "sub"], repo)
+    _git(
+        [
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            "-q",
+            str(sub_origin),
+            "sub",
+        ],
+        repo,
+    )
     _git(["commit", "-qm", "add submodule"], repo)
     trees = {}
     for name in ("lane-subdirty", "lane-deinit", "lane-late"):
         trees[name] = _tree(repo, name, dirty=True)
-        _git(["-c", "protocol.file.allow=always", "submodule", "update", "-q", "--init"], trees[name])
+        _git(
+            ["-c", "protocol.file.allow=always", "submodule", "update", "-q", "--init"],
+            trees[name],
+        )
     dirty_file = trees["lane-subdirty"] / "sub" / "file.txt"
     dirty_file.write_bytes(b"base\nUNCOMMITTED SUBMODULE EDIT\r\n")
     deinit_sub = trees["lane-deinit"] / "sub"
@@ -252,14 +338,24 @@ def test_dirty_submodule_work_is_never_archived_away(repo, tmp_path, monkeypatch
                 late_bytes.append(b"LATE SUBMODULE EDIT\n")
                 late_file.write_bytes(late_bytes[-1])
 
-    monkeypatch.setattr(worktree_archive, "snapshot_worktree", snapshot_then_submodule_edit)
-    plan = {d.name: d.action for d in worktree_sweep.plan_sweep(str(repo), settings=worktree_sweep.sweep_settings())}
+    monkeypatch.setattr(
+        worktree_archive, "snapshot_worktree", snapshot_then_submodule_edit
+    )
+    plan = {
+        d.name: d.action
+        for d in worktree_sweep.plan_sweep(
+            str(repo), settings=worktree_sweep.sweep_settings()
+        )
+    }
     assert set(plan.values()) == {"keep-submodule-work"}
 
     worktree_ops._prune_stale_worktrees(str(repo))
 
     assert dirty_file.read_bytes() == b"base\nUNCOMMITTED SUBMODULE EDIT\r\n"
-    assert _git(["--git-dir", str(module_repo), "rev-parse", "private-work"], repo) == private
+    assert (
+        _git(["--git-dir", str(module_repo), "rev-parse", "private-work"], repo)
+        == private
+    )
     assert late_file.read_bytes() == late_bytes[-1]
     assert _archives(repo) == []
     for tree in trees.values():
@@ -322,9 +418,20 @@ def _mkdirs(path):
 
 
 @pytest.mark.parametrize("mode", ["archive", "classic"])
-@pytest.mark.parametrize("setup", [_case_large, _case_ignored_repo, _case_untracked_hidden,
-                                   _case_skip_worktree, _case_worktree_ref], ids=lambda f: f.__name__[6:])
-def test_the_pruner_removes_a_tree_only_when_everything_irreproducible_is_archived(repo, mode, setup):
+@pytest.mark.parametrize(
+    "setup",
+    [
+        _case_large,
+        _case_ignored_repo,
+        _case_untracked_hidden,
+        _case_skip_worktree,
+        _case_worktree_ref,
+    ],
+    ids=lambda f: f.__name__[6:],
+)
+def test_the_pruner_removes_a_tree_only_when_everything_irreproducible_is_archived(
+    repo, mode, setup
+):
     """R2: through the real pruner, every byte and commit that git cannot regenerate survives,
     in the tree or in its archive: an untracked file over the size cap, a gitignored embedded
     repository, untracked files hidden by ``status.showUntrackedFiles=no``, skip-worktree /
@@ -335,19 +442,26 @@ def test_the_pruner_removes_a_tree_only_when_everything_irreproducible_is_archiv
     else:
         _set_worktrees_config("worktrees:\n  archive_max_file_mb: 1\n")
     (repo / ".git" / "info").mkdir(exist_ok=True)
-    (repo / ".git" / "info" / "exclude").write_text("build/\n*.secret\n.env\n__pycache__/\ntest_durations.json\n",
-                                                   encoding="utf-8")
+    (repo / ".git" / "info" / "exclude").write_text(
+        "build/\n*.secret\n.env\n__pycache__/\ntest_durations.json\n", encoding="utf-8"
+    )
     (repo / ".env").write_text("SHARED=1\n", encoding="utf-8")
     wt, regen = _tree(repo, "lane-case"), _tree(repo, "lane-regen", dirty=True)
     for tree in (wt, regen):
-        shutil.copy2(repo / ".env", tree / ".env")                    # what .worktreeinclude copies
-        (_mkdirs(tree / "node_modules" / "dep") / "index.js").write_text("x\n", encoding="utf-8")
+        shutil.copy2(repo / ".env", tree / ".env")  # what .worktreeinclude copies
+        (_mkdirs(tree / "node_modules" / "dep") / "index.js").write_text(
+            "x\n", encoding="utf-8"
+        )
         (_mkdirs(tree / "pkg" / "__pycache__") / "m.pyc").write_bytes(b"\0")
-    (regen / ".env").write_text("LOCAL EDIT=1\n", encoding="utf-8")  # ignored, differs from main
+    (regen / ".env").write_text(
+        "LOCAL EDIT=1\n", encoding="utf-8"
+    )  # ignored, differs from main
     (regen / "test_durations.json").write_text("{}\n", encoding="utf-8")
     (regen / "notes.secret").write_text("scratch\n", encoding="utf-8")
     precious, commit = setup(repo, wt)
-    sizes = {rel: (wt / rel).read_bytes() for rel, data in precious.items() if data is None}
+    sizes = {
+        rel: (wt / rel).read_bytes() for rel, data in precious.items() if data is None
+    }
     precious = {**precious, **sizes}
     for tree in (wt, regen):
         _idle(tree)
@@ -357,9 +471,17 @@ def test_the_pruner_removes_a_tree_only_when_everything_irreproducible_is_archiv
     archives = _archives(repo)
     for rel, data in precious.items():
         in_tree = (wt / rel).is_file() and (wt / rel).read_bytes() == data
-        in_archive = any(subprocess.run(["git", "cat-file", "blob", f"{ref}:{rel}"], cwd=repo, capture_output=True,
-                                        check=False)
-                         .stdout == data for ref in archives if ref.endswith("/lane-case"))
+        in_archive = any(
+            subprocess.run(
+                ["git", "cat-file", "blob", f"{ref}:{rel}"],
+                cwd=repo,
+                capture_output=True,
+                check=False,
+            ).stdout
+            == data
+            for ref in archives
+            if ref.endswith("/lane-case")
+        )
         assert in_tree or in_archive, f"{rel} lost"
     if commit:
         where, sha = commit
@@ -367,8 +489,12 @@ def test_the_pruner_removes_a_tree_only_when_everything_irreproducible_is_archiv
         if where == repo:
             assert wt.exists()
     if mode == "archive":
-        assert not regen.exists(), "ignored files are disposable and must not hold a tree back"
-        assert any(ref.endswith("/lane-regen") for ref in archives), "the dirty tree is archived first"
+        assert not regen.exists(), (
+            "ignored files are disposable and must not hold a tree back"
+        )
+        assert any(ref.endswith("/lane-regen") for ref in archives), (
+            "the dirty tree is archived first"
+        )
 
 
 def test_prune_older_than_bounds_what_the_sweep_removes(repo, capsys):
@@ -379,9 +505,16 @@ def test_prune_older_than_bounds_what_the_sweep_removes(repo, capsys):
 
     dirty, clean = _tree(repo, "clawk-dirty", dirty=True), _tree(repo, "clawk-clean")
     for tree in (dirty, clean):
-        _idle(tree)                                   # ~4 days idle: past every tier
-    args = argparse.Namespace(repo=str(repo), worktree_action="prune", dry_run=False, json=True,
-                              older_than=30, trees_only=True, branches_only=False)
+        _idle(tree)  # ~4 days idle: past every tier
+    args = argparse.Namespace(
+        repo=str(repo),
+        worktree_action="prune",
+        dry_run=False,
+        json=True,
+        older_than=30,
+        trees_only=True,
+        branches_only=False,
+    )
     assert cmd_worktree(args) == 0
     assert dirty.exists() and clean.exists()
     assert _archives(repo) == []
@@ -401,7 +534,9 @@ def test_archive_dirty_false_keeps_the_classic_never_delete_dirty_pruner(repo):
     assert _archives(repo) == []
 
 
-def test_cron_sweep_visits_only_the_active_profiles_registered_repos(repo, tmp_path, monkeypatch):
+def test_cron_sweep_visits_only_the_active_profiles_registered_repos(
+    repo, tmp_path, monkeypatch
+):
     """I7: a worktree made under profile A registers its repo for A's sweep only, and a
     registered repo that was deleted drops out."""
     import cron.scheduler as sched
@@ -413,13 +548,20 @@ def test_cron_sweep_visits_only_the_active_profiles_registered_repos(repo, tmp_p
     monkeypatch.setattr("cron.jobs.load_jobs", list)
     token = set_clawk_home_override(str(home_a))
     try:
-        assert worktree_ops._setup_worktree(repo_root=str(repo), sync_base=False, name="reg") is not None
+        assert (
+            worktree_ops._setup_worktree(
+                repo_root=str(repo), sync_base=False, name="reg"
+            )
+            is not None
+        )
         gone = tmp_path / "gone"
         _git(["init", "-q", str(gone)], tmp_path)
         (gone / ".worktrees").mkdir()
         from clawk_cli.worktree_registry import record_worktree_repo
+
         record_worktree_repo(gone)
         import shutil
+
         shutil.rmtree(gone)
         repos_a = sched._worktree_maintenance_repos()
     finally:
@@ -439,8 +581,11 @@ def test_exit_question_never_prompts_without_a_tty(repo, monkeypatch):
     from clawk_cli import curses_ui, worktree_exit
 
     wt = _tree(repo, "clawk-exit", dirty=True)
-    monkeypatch.setattr(curses_ui, "curses_radiolist",
-                        lambda *a, **k: pytest.fail("non-interactive exit must never prompt"))
+    monkeypatch.setattr(
+        curses_ui,
+        "curses_radiolist",
+        lambda *a, **k: pytest.fail("non-interactive exit must never prompt"),
+    )
     info = {"path": str(wt), "repo_root": str(repo), "branch": "wt/clawk-exit"}
     assert worktree_exit.ask_exit_choice(info) == worktree_exit.KEEP
     assert "exit_choice" not in info and wt.exists()

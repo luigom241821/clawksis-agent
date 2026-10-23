@@ -12,7 +12,10 @@ from urllib.parse import urlparse
 
 from utils import base_url_host_matches, base_url_hostname
 
-_MINIMAX_ANTHROPIC_PREFIXES = ("https://api.minimax.io/anthropic", "https://api.minimaxi.com/anthropic")
+_MINIMAX_ANTHROPIC_PREFIXES = (
+    "https://api.minimax.io/anthropic",
+    "https://api.minimaxi.com/anthropic",
+)
 
 
 def _normalize_base_url_text(base_url) -> str:
@@ -46,7 +49,18 @@ def _is_opencode_endpoint(base_url: str | None) -> bool:
 # ``moonshot-v1-8k``) and release lines (``k1.5-…``, ``k2-thinking``, ``k25-…``, ``k3.x``/``k3-…``).
 # Matched case-insensitively after stripping any ``vendor/`` prefix.
 _KIMI_FAMILY_MODEL_PREFIXES = (
-    "kimi-", "kimi_", "moonshot-", "moonshot_", "k1.", "k1-", "k2.", "k2-", "k25", "k2.5", "k3.", "k3-",
+    "kimi-",
+    "kimi_",
+    "moonshot-",
+    "moonshot_",
+    "k1.",
+    "k1-",
+    "k2.",
+    "k2-",
+    "k25",
+    "k2.5",
+    "k3.",
+    "k3-",
 )
 # Bare release slugs with no separator suffix (Kimi Coding Plan serves K3 as exactly ``k3``);
 # exact-match so unrelated names sharing the prefix don't match.
@@ -56,8 +70,12 @@ _KIMI_FAMILY_EXACT_SLUGS = frozenset({"k3"})
 def _model_name_is_kimi_family(model: str | None) -> bool:
     if not isinstance(model, str):
         return False
-    m = model.strip().lower().rsplit("/", 1)[-1]  # ``moonshotai/kimi-k2.5`` -> ``kimi-k2.5``
-    return bool(m) and (m in _KIMI_FAMILY_EXACT_SLUGS or m.startswith(_KIMI_FAMILY_MODEL_PREFIXES))
+    m = (
+        model.strip().lower().rsplit("/", 1)[-1]
+    )  # ``moonshotai/kimi-k2.5`` -> ``kimi-k2.5``
+    return bool(m) and (
+        m in _KIMI_FAMILY_EXACT_SLUGS or m.startswith(_KIMI_FAMILY_MODEL_PREFIXES)
+    )
 
 
 def _is_kimi_family_endpoint(base_url: str | None, model: str | None = None) -> bool:
@@ -67,15 +85,22 @@ def _is_kimi_family_endpoint(base_url: str | None, model: str | None = None) -> 
     Decides whether unsigned reasoning_content-derived thinking blocks are preserved on replay."""
     return (
         _is_kimi_coding_endpoint(base_url)
-        or any(base_url_host_matches(base_url or "", d) for d in ("api.kimi.com", "moonshot.ai", "moonshot.cn"))
+        or any(
+            base_url_host_matches(base_url or "", d)
+            for d in ("api.kimi.com", "moonshot.ai", "moonshot.cn")
+        )
         or _model_name_is_kimi_family(model)
     )
 
 
-
 _DEEPSEEK_THINKING_MODEL_PREFIXES = (
-    "deepseek-r", "deepseek-v4", "deepseek_v4", "deepseek-pro",
-    "deepseek_pro", "deepseek-flash", "deepseek_flash",
+    "deepseek-r",
+    "deepseek-v4",
+    "deepseek_v4",
+    "deepseek-pro",
+    "deepseek_pro",
+    "deepseek-flash",
+    "deepseek_flash",
 )
 
 
@@ -101,7 +126,9 @@ def _is_deepseek_anthropic_endpoint(base_url: str | None) -> bool:
     signature, no ``redacted_thinking`` support), so this endpoint is handled with the same strip-signed /
     keep-unsigned policy used for Kimi's ``/coding`` endpoint. See clawksis-agent#16748.
     """
-    return base_url_host_matches(base_url or "", "api.deepseek.com") and "/anthropic" in _normalized_lower(base_url)
+    return base_url_host_matches(
+        base_url or "", "api.deepseek.com"
+    ) and "/anthropic" in _normalized_lower(base_url)
 
 
 def _is_nous_portal_endpoint(base_url: str | None) -> bool:
@@ -113,6 +140,7 @@ def _is_nous_portal_endpoint(base_url: str | None) -> bool:
         return True
     try:
         from clawk_cli.auth import _nous_inference_env_override
+
         override = _nous_inference_env_override()
     except Exception:
         return False
@@ -155,7 +183,9 @@ def _is_azure_anthropic_endpoint(base_url: str | None) -> bool:
         return False
     parsed = urlparse(normalized)
     host_padded = f".{(parsed.hostname or '').lower().rstrip('.')}."
-    is_azure_host = ".services.ai.azure." in host_padded or ".openai.azure." in host_padded
+    is_azure_host = (
+        ".services.ai.azure." in host_padded or ".openai.azure." in host_padded
+    )
     return is_azure_host and "/anthropic" in (parsed.path or "").lower()
 
 
@@ -164,14 +194,17 @@ def _is_bedrock_runtime_endpoint(base_url: str | None) -> bool:
     endpoint names carrying the same label), which the AnthropicBedrock SDK path binds as its base URL."""
     host = base_url_hostname(base_url or "")
     return any(label.startswith("bedrock-runtime") for label in host.split(".")) and (
-        base_url_host_matches(host, "amazonaws.com") or base_url_host_matches(host, "amazonaws.com.cn")
+        base_url_host_matches(host, "amazonaws.com")
+        or base_url_host_matches(host, "amazonaws.com.cn")
     )
 
 
 def _is_vertex_ai_endpoint(base_url: str | None) -> bool:
     """Vertex AI hosts: global ``aiplatform.googleapis.com`` and regional ``<region>-aiplatform.googleapis.com``."""
     host = base_url_hostname(base_url or "")
-    return host == "aiplatform.googleapis.com" or host.endswith("-aiplatform.googleapis.com")
+    return host == "aiplatform.googleapis.com" or host.endswith(
+        "-aiplatform.googleapis.com"
+    )
 
 
 def _is_claude_platform_endpoint(base_url: str | None) -> bool:

@@ -78,10 +78,6 @@ def _read_single_trace(trace_dir, session_id):
     return json.loads(lines[0])
 
 
-
-
-
-
 def test_streamed_without_fallback_points_to_session_db(tmp_path, monkeypatch):
     """Streaming turn with no resolvable text falls back to the state.db pointer."""
     trace_dir = _enable_traces(tmp_path, monkeypatch)
@@ -108,5 +104,3 @@ def test_pending_trace_cleared_after_flush(tmp_path, monkeypatch):
     path = trace_dir / "sess_once.jsonl"
     lines = path.read_text().strip().split("\n")
     assert len(lines) == 1
-
-

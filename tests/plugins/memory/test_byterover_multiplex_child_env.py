@@ -20,9 +20,13 @@ def two_profiles(tmp_path, monkeypatch):
     root = tmp_path / ".clawk"
     prof_b = root / "profiles" / "b"
     prof_b.mkdir(parents=True)
-    (root / ".env").write_text("BRV_API_KEY=DEFAULT-PROFILE-KEY\nCLAWK_MODEL=default-model\n", encoding="utf-8")
+    (root / ".env").write_text(
+        "BRV_API_KEY=DEFAULT-PROFILE-KEY\nCLAWK_MODEL=default-model\n", encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_HOME", str(root))
-    monkeypatch.setenv("BRV_API_KEY", "DEFAULT-PROFILE-KEY")  # the gateway loaded default's .env at boot
+    monkeypatch.setenv(
+        "BRV_API_KEY", "DEFAULT-PROFILE-KEY"
+    )  # the gateway loaded default's .env at boot
     monkeypatch.setenv("CLAWK_MODEL", "default-model")
     monkeypatch.setattr(byterover, "_resolve_brv_path", lambda: "/opt/brv/bin/brv")
     captured = {}

@@ -1,4 +1,5 @@
 """PM's resolver must not depend on the application it is repairing."""
+
 import hashlib
 import json
 import os
@@ -10,7 +11,9 @@ import sys
 import pytest
 
 
-def test_pm_runtime_discovers_plugins_without_application_dependencies(tmp_path, monkeypatch):
+def test_pm_runtime_discovers_plugins_without_application_dependencies(
+    tmp_path, monkeypatch
+):
     from pm.runtime import prepare_runtime
 
     uv = shutil.which("uv")
@@ -39,18 +42,37 @@ assert importlib.util.find_spec("openai") is None
 assert importlib.util.find_spec("yaml") is None
 print(json.dumps({{"prefix": sys.prefix, "yaml": importlib.util.find_spec("ruamel.yaml").origin}}))
 """
-    result = subprocess.run([str(python), "-I", "-B", "-c", code], env=env,
-                            capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        [str(python), "-I", "-B", "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
     assert Path(report["yaml"]).is_relative_to(Path(report["prefix"]))
-    assert prepare_runtime(Path(uv), Path(sys.executable), tmp_path / "runtime", offline=True) == python
+    assert (
+        prepare_runtime(
+            Path(uv), Path(sys.executable), tmp_path / "runtime", offline=True
+        )
+        == python
+    )
     # Repair PM itself from its own lock, without trusting an existing marker.
     (Path(report["yaml"]).parent / "main.py").unlink()
-    repaired = prepare_runtime(Path(uv), Path(sys.executable), tmp_path / "runtime", offline=True)
+    repaired = prepare_runtime(
+        Path(uv), Path(sys.executable), tmp_path / "runtime", offline=True
+    )
     assert repaired != python
-    checked = subprocess.run([str(repaired), "-I", "-B", "-c", code], env=env,
-                             capture_output=True, text=True, timeout=30, check=False)
+    checked = subprocess.run(
+        [str(repaired), "-I", "-B", "-c", code],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
@@ -97,7 +119,9 @@ def test_cold_worker_bootstrap_reuses_the_requests_cache(tmp_path, monkeypatch):
     before = dict(os.environ)
     pm.prune_cache(cache)
     assert cache.is_dir()
-    assert not (get_default_clawk_root() / "cache/uv").exists(), "bootstrap created an unshared private cache"
+    assert not (get_default_clawk_root() / "cache/uv").exists(), (
+        "bootstrap created an unshared private cache"
+    )
     assert dict(os.environ) == before
 
 
@@ -123,19 +147,30 @@ def test_sealed_worker_command_uses_only_its_recorded_site(tmp_path, monkeypatch
         (base / "bin").mkdir(parents=True)
         python = base / "bin" / "python"
         shutil.copy2(Path(sys._base_executable).resolve(), python)
-        (base / "lib").symlink_to(Path(sys.base_prefix) / "lib", target_is_directory=True)
-    (runtime / "pm-runtime.json").write_text(json.dumps({
-        "python": os.path.relpath(python, runtime), "sitePackages": "site",
-    }))
+        (base / "lib").symlink_to(
+            Path(sys.base_prefix) / "lib", target_is_directory=True
+        )
+    (runtime / "pm-runtime.json").write_text(
+        json.dumps(
+            {
+                "python": os.path.relpath(python, runtime),
+                "sitePackages": "site",
+            }
+        )
+    )
     script = repo / "probe.py"
     script.write_text("import sys,json; print(json.dumps(sys.path))")
     monkeypatch.setattr(paths, "repo_root", lambda: repo)
     command = runtime_command(script)
-    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False)
+    result = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, timeout=30, check=False
+    )
     assert result.returncode == 0, result.stderr
     entries = json.loads(result.stdout)
     assert str(site) in entries
-    assert not any(Path(entry).name in {"site-packages", "dist-packages"} for entry in entries)
+    assert not any(
+        Path(entry).name in {"site-packages", "dist-packages"} for entry in entries
+    )
 
 
 def test_one_store_through_symlinked_homes_keeps_one_pm_runtime(tmp_path, monkeypatch):
@@ -153,14 +188,18 @@ def test_one_store_through_symlinked_homes_keeps_one_pm_runtime(tmp_path, monkey
     (real / "python" / "bin" / "python3.14").touch()
     home, task = tmp_path / "home", tmp_path / "task"
     try:
-        (real / "python" / "bin" / "python3").symlink_to("python3.14")  # as the pinned CPython ships
+        (real / "python" / "bin" / "python3").symlink_to(
+            "python3.14"
+        )  # as the pinned CPython ships
         for linked in (home, task):
             linked.mkdir()
             (linked / "tools").symlink_to(real, target_is_directory=True)
     except OSError as exc:
         pytest.skip(f"symlinks unavailable: {exc}")
 
-    def pre_fix_identity(python: Path) -> str:  # the selected.json format earlier releases wrote
+    def pre_fix_identity(
+        python: Path,
+    ) -> str:  # the selected.json format earlier releases wrote
         digest = hashlib.sha256()
         for name in ("pyproject.toml", "uv.lock"):
             digest.update((project / name).read_bytes() + b"\0")
@@ -181,15 +220,30 @@ def test_one_store_through_symlinked_homes_keeps_one_pm_runtime(tmp_path, monkey
     old = root / "generations" / "old"
     old.mkdir(parents=True)
     (old / "pm-runtime.json").write_text("{}")
-    (root / "selected.json").write_text(json.dumps(
-        {"inputs": pre_fix_identity(home / "tools" / "python" / "bin" / "python3"), "generation": "generations/old"}))
+    (root / "selected.json").write_text(
+        json.dumps(
+            {
+                "inputs": pre_fix_identity(
+                    home / "tools" / "python" / "bin" / "python3"
+                ),
+                "generation": "generations/old",
+            }
+        )
+    )
 
     def launch(tools: Path, bootstrap: bool = False) -> Path:
-        return runtime.prepare_runtime(tools / "uv", tools / "python" / "bin" / "python3", root,
-                                       project=project, bootstrap=bootstrap)
+        return runtime.prepare_runtime(
+            tools / "uv",
+            tools / "python" / "bin" / "python3",
+            root,
+            project=project,
+            bootstrap=bootstrap,
+        )
 
     assert launch(home / "tools") == runtime._python(old)
-    current = launch(task / "tools", bootstrap=True)  # a per-task home that was already churning re-stages once
+    current = launch(
+        task / "tools", bootstrap=True
+    )  # a per-task home that was already churning re-stages once
     for tools in (home / "tools", task / "tools", real, home / "tools"):
         assert launch(tools) == current
     assert len(staged) == 1

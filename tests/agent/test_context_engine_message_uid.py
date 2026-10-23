@@ -47,7 +47,10 @@ class _CapturingEngine(ContextEngine):
 
     def compress(self, messages, current_tokens=None, focus_topic=None, force=False):
         self.compress_input = [dict(m) for m in messages]
-        summary = {"role": "user", "content": "[CONTEXT COMPACTION] summary of prior turns"}
+        summary = {
+            "role": "user",
+            "content": "[CONTEXT COMPACTION] summary of prior turns",
+        }
         return [summary] + [dict(m) for m in messages[-2:]]
 
     def on_turn_complete(self, messages, usage=None, **kwargs):
@@ -62,8 +65,14 @@ def _make_agent(session_db, session_id):
         from run_agent import AIAgent
 
         agent = AIAgent(
-            api_key="test-key", base_url="https://openrouter.ai/api/v1", model="test/model", quiet_mode=True,
-            session_db=session_db, session_id=session_id, skip_context_files=True, skip_memory=True,
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            quiet_mode=True,
+            session_db=session_db,
+            session_id=session_id,
+            skip_context_files=True,
+            skip_memory=True,
         )
     agent.compression_in_place = True
     agent.context_compressor = _CapturingEngine()
@@ -73,10 +82,18 @@ def _make_agent(session_db, session_id):
 def _seed(db, sid, n=6):
     db.create_session(sid, "cli", model="test/model")
     for i in range(n):
-        db.append_message(session_id=sid, role="user" if i % 2 == 0 else "assistant", content=f"seed msg {i}")
-    return [dict(r) for r in db._conn.execute(
-        "SELECT id, content, message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id",
-        (sid,)).fetchall()]
+        db.append_message(
+            session_id=sid,
+            role="user" if i % 2 == 0 else "assistant",
+            content=f"seed msg {i}",
+        )
+    return [
+        dict(r)
+        for r in db._conn.execute(
+            "SELECT id, content, message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id",
+            (sid,),
+        ).fetchall()
+    ]
 
 
 @pytest.fixture()
@@ -97,19 +114,36 @@ def test_compress_input_after_a_cold_restore_carries_every_rows_uid(db):
     agent._session_db_created = True
     agent._last_flushed_db_idx = len(restored)
 
-    compressed, _sp = compress_context(agent, restored, approx_tokens=100_000, system_message="sys")
+    compressed, _sp = compress_context(
+        agent, restored, approx_tokens=100_000, system_message="sys"
+    )
 
     engine = agent.context_compressor
-    assert [m.get("message_uid") for m in engine.compress_input] == [r["message_uid"] for r in stored]
+    assert [m.get("message_uid") for m in engine.compress_input] == [
+        r["message_uid"] for r in stored
+    ]
     # The committed generation: the copied tail keeps its uids, the summary got a fresh one.
-    active = [dict(r) for r in db._conn.execute(
-        "SELECT content, message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id", (sid,))]
+    active = [
+        dict(r)
+        for r in db._conn.execute(
+            "SELECT content, message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id",
+            (sid,),
+        )
+    ]
     assert [r["content"] for r in active] == [
-        "[CONTEXT COMPACTION] summary of prior turns", "seed msg 4", "seed msg 5"]
-    assert [r["message_uid"] for r in active[1:]] == [stored[4]["message_uid"], stored[5]["message_uid"]]
+        "[CONTEXT COMPACTION] summary of prior turns",
+        "seed msg 4",
+        "seed msg 5",
+    ]
+    assert [r["message_uid"] for r in active[1:]] == [
+        stored[4]["message_uid"],
+        stored[5]["message_uid"],
+    ]
     assert len(active[0]["message_uid"]) == UID_LEN
     # And the live list the caller keeps carries the same uids (what the next compress()/post_llm_call sees).
-    assert [m.get("message_uid") for m in compressed] == [r["message_uid"] for r in active]
+    assert [m.get("message_uid") for m in compressed] == [
+        r["message_uid"] for r in active
+    ]
 
 
 @pytest.mark.parametrize("in_place", [True, False], ids=["in_place", "rotation"])
@@ -119,9 +153,14 @@ def test_an_engine_authored_uid_survives_the_commit(db, in_place):
     from agent.conversation_compression import compress_context
 
     class _PreStamping(_CapturingEngine):
-        def compress(self, messages, current_tokens=None, focus_topic=None, force=False):
-            summary = {"role": "user", "content": "[CONTEXT COMPACTION] summary of prior turns",
-                       "message_uid": "e" * UID_LEN}
+        def compress(
+            self, messages, current_tokens=None, focus_topic=None, force=False
+        ):
+            summary = {
+                "role": "user",
+                "content": "[CONTEXT COMPACTION] summary of prior turns",
+                "message_uid": "e" * UID_LEN,
+            }
             return [summary] + [dict(m) for m in messages[-2:]]
 
     sid = f"20260928_120050_{'inplace' if in_place else 'rotate'}"
@@ -133,16 +172,25 @@ def test_an_engine_authored_uid_survives_the_commit(db, in_place):
     agent._session_db_created = True
     agent._last_flushed_db_idx = len(restored)
 
-    compressed, _sp = compress_context(agent, restored, approx_tokens=100_000, system_message="sys")
+    compressed, _sp = compress_context(
+        agent, restored, approx_tokens=100_000, system_message="sys"
+    )
 
     committed_sid = agent.session_id
     if not in_place:
         assert committed_sid != sid  # rotation published a child session
     active = db.get_messages_as_conversation(committed_sid)
-    assert [m["content"] for m in active][:1] == ["[CONTEXT COMPACTION] summary of prior turns"]
+    assert [m["content"] for m in active][:1] == [
+        "[CONTEXT COMPACTION] summary of prior turns"
+    ]
     assert active[0]["message_uid"] == "e" * UID_LEN
-    assert [m["message_uid"] for m in active[1:3]] == [stored[4]["message_uid"], stored[5]["message_uid"]]
-    assert [m.get("message_uid") for m in compressed[:3]] == [m["message_uid"] for m in active[:3]]
+    assert [m["message_uid"] for m in active[1:3]] == [
+        stored[4]["message_uid"],
+        stored[5]["message_uid"],
+    ]
+    assert [m.get("message_uid") for m in compressed[:3]] == [
+        m["message_uid"] for m in active[:3]
+    ]
 
 
 def test_turn_flush_stamps_uids_on_the_live_dicts_post_llm_call_hands_over(db):
@@ -152,14 +200,22 @@ def test_turn_flush_stamps_uids_on_the_live_dicts_post_llm_call_hands_over(db):
     db.create_session(sid, "cli", model="test/model")
     agent = _make_agent(db, sid)
     agent._session_db_created = True
-    messages = [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "hi"}]
+    messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "hi"},
+    ]
     agent._persist_user_message_idx = 0
 
     agent._persist_session(messages, conversation_history=None)
 
     assert all(len(m.get("message_uid", "")) == UID_LEN for m in messages)
-    stored = [r[0] for r in db._conn.execute(
-        "SELECT message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id", (sid,))]
+    stored = [
+        r[0]
+        for r in db._conn.execute(
+            "SELECT message_uid FROM messages WHERE session_id = ? AND active = 1 ORDER BY id",
+            (sid,),
+        )
+    ]
     assert [m["message_uid"] for m in messages] == stored
 
 
@@ -180,7 +236,9 @@ def test_persist_override_keeps_the_uid(db):
     assert messages[0]["content"] == "what the user typed"
     assert messages[0]["message_uid"] == uid
     row = db._conn.execute(
-        "SELECT content, message_uid FROM messages WHERE session_id = ? AND active = 1", (sid,)).fetchone()
+        "SELECT content, message_uid FROM messages WHERE session_id = ? AND active = 1",
+        (sid,),
+    ).fetchone()
     assert (row[0], row[1]) == ("what the user typed", uid)
 
 
@@ -206,17 +264,24 @@ def test_restart_after_a_merge_still_sees_the_composites_constituents(db):
     restored survivor names the absorbed row by uid instead of leaving the engine to parse ``\\n\\n``."""
     sid = "20260928_120300_witness"
     db.create_session(sid, "cli", model="test/model")
-    db.append_message(session_id=sid, role="user", content="unanswered before the crash")
+    db.append_message(
+        session_id=sid, role="user", content="unanswered before the crash"
+    )
     dangling_uid = db.get_messages_as_conversation(sid)[0]["message_uid"]
     # Restart: the ACP/gateway restore shape, then the next prompt lands and the pre-request repair merges.
-    history = db.get_messages_as_conversation(sid, repair_alternation=True, include_row_ids=True)
+    history = db.get_messages_as_conversation(
+        sid, repair_alternation=True, include_row_ids=True
+    )
     agent = _make_agent(db, sid)
     agent._session_db_created = True
     prompt = {"role": "user", "content": "next prompt"}
     messages = history + [prompt]
     agent._persist_user_message_idx = 1
-    agent._persist_session(messages, conversation_history=history)  # the turn-start flush of the prompt
+    agent._persist_session(
+        messages, conversation_history=history
+    )  # the turn-start flush of the prompt
     from agent.agent_runtime_helpers import repair_message_sequence
+
     repair_message_sequence(agent, messages)
     assert len(messages) == 1 and messages[0]["message_uid"] == dangling_uid
     assert messages[0]["_absorbed_message_uids"] == [prompt["message_uid"]]
@@ -235,18 +300,34 @@ def test_tool_result_flushed_after_its_call_pairs_through_the_live_list(db):
     db.create_session(sid, "cli", model="test/model")
     agent = _make_agent(db, sid)
     agent._session_db_created = True
-    assistant = {"role": "assistant", "content": "",
-                 "tool_calls": [{"id": "call_x", "type": "function", "function": {"name": "t", "arguments": "{}"}}]}
+    assistant = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_x",
+                "type": "function",
+                "function": {"name": "t", "arguments": "{}"},
+            }
+        ],
+    }
     messages = [{"role": "user", "content": "q"}, assistant]
     agent._persist_user_message_idx = 0
     agent._persist_session(messages, conversation_history=None)
     uid = assistant["_tool_call_uids"]["call_x"]
-    result = {"role": "tool", "content": "r", "tool_call_id": "call_x", "tool_name": "t"}
+    result = {
+        "role": "tool",
+        "content": "r",
+        "tool_call_id": "call_x",
+        "tool_name": "t",
+    }
     messages.append(result)
     agent._persist_session(messages, conversation_history=None)
     assert result["_tool_call_uid"] == uid
     stored = db._conn.execute(
-        "SELECT tool_call_uid FROM messages WHERE session_id = ? AND role = 'tool'", (sid,)).fetchone()[0]
+        "SELECT tool_call_uid FROM messages WHERE session_id = ? AND role = 'tool'",
+        (sid,),
+    ).fetchone()[0]
     assert stored == uid
 
 
@@ -254,19 +335,41 @@ def test_the_live_list_walk_binds_a_result_to_the_nearest_call_that_names_it():
     from agent.message_metadata import tool_call_uid_from_history
 
     def call(uid=None):
-        msg = {"role": "assistant", "content": "",
-               "tool_calls": [{"id": "call_x", "type": "function", "function": {"name": "t", "arguments": "{}"}}]}
+        msg = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call_x",
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }
+            ],
+        }
         if uid:
             msg["_tool_call_uids"] = {"call_x": uid}
         return msg
 
     result = {"role": "tool", "content": "r", "tool_call_id": "call_x"}
     # Nearest call wins over an older one with the same provider id.
-    assert tool_call_uid_from_history([call("1" * UID_LEN), result, call("2" * UID_LEN), result], 3, {}) == "2" * UID_LEN
+    assert (
+        tool_call_uid_from_history(
+            [call("1" * UID_LEN), result, call("2" * UID_LEN), result], 3, {}
+        )
+        == "2" * UID_LEN
+    )
     # A nearer call without a map (legacy) owns the result: no uid, never the older occurrence's.
-    assert tool_call_uid_from_history([call("1" * UID_LEN), result, call(), result], 3, {}) is None
+    assert (
+        tool_call_uid_from_history([call("1" * UID_LEN), result, call(), result], 3, {})
+        is None
+    )
     # Never across a user turn.
-    assert tool_call_uid_from_history([call("1" * UID_LEN), {"role": "user", "content": "q"}, result], 2, {}) is None
+    assert (
+        tool_call_uid_from_history(
+            [call("1" * UID_LEN), {"role": "user", "content": "q"}, result], 2, {}
+        )
+        is None
+    )
 
 
 def test_a_superseded_verification_candidate_is_not_a_witness_constituent():
@@ -274,9 +377,18 @@ def test_a_superseded_verification_candidate_is_not_a_witness_constituent():
     row is retired like an absorbed row, but its uid is not a constituent of anything."""
     from agent.agent_runtime_helpers import _merge_consecutive_assistants
 
-    candidate = {"role": "assistant", "content": "provisional", "finish_reason": "verification_required",
-                 "message_uid": "p" * UID_LEN, "_row_id": 7}
-    final = {"role": "assistant", "content": "verified answer", "message_uid": "f" * UID_LEN}
+    candidate = {
+        "role": "assistant",
+        "content": "provisional",
+        "finish_reason": "verification_required",
+        "message_uid": "p" * UID_LEN,
+        "_row_id": 7,
+    }
+    final = {
+        "role": "assistant",
+        "content": "verified answer",
+        "message_uid": "f" * UID_LEN,
+    }
 
     merged, repairs = _merge_consecutive_assistants([candidate, final])
 
@@ -289,20 +401,50 @@ def test_a_superseded_verification_candidate_is_not_a_witness_constituent():
 def test_assistant_merge_keeps_the_absorbed_turns_tool_call_uids():
     from agent.agent_runtime_helpers import _merge_consecutive_assistants
 
-    first = {"role": "assistant", "content": "a",
-             "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "t", "arguments": "{}"}}],
-             "_tool_call_uids": {"call_1": "1" * UID_LEN}}
-    second = {"role": "assistant", "content": "b",
-              "tool_calls": [{"id": "call_2", "type": "function", "function": {"name": "t", "arguments": "{}"}}],
-              "_tool_call_uids": {"call_2": "2" * UID_LEN}}
+    first = {
+        "role": "assistant",
+        "content": "a",
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "t", "arguments": "{}"},
+            }
+        ],
+        "_tool_call_uids": {"call_1": "1" * UID_LEN},
+    }
+    second = {
+        "role": "assistant",
+        "content": "b",
+        "tool_calls": [
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "t", "arguments": "{}"},
+            }
+        ],
+        "_tool_call_uids": {"call_2": "2" * UID_LEN},
+    }
     merged, repairs = _merge_consecutive_assistants([first, second])
     assert repairs == 1 and merged == [first]
-    assert first["_tool_call_uids"] == {"call_1": "1" * UID_LEN, "call_2": "2" * UID_LEN}
+    assert first["_tool_call_uids"] == {
+        "call_1": "1" * UID_LEN,
+        "call_2": "2" * UID_LEN,
+    }
 
 
 def _reused_call(content, occurrence_uid=None):
-    msg = {"role": "assistant", "content": content,
-           "tool_calls": [{"id": "call_x", "type": "function", "function": {"name": "t", "arguments": "{}"}}]}
+    msg = {
+        "role": "assistant",
+        "content": content,
+        "tool_calls": [
+            {
+                "id": "call_x",
+                "type": "function",
+                "function": {"name": "t", "arguments": "{}"},
+            }
+        ],
+    }
     if occurrence_uid:
         msg["_tool_call_uids"] = {"call_x": occurrence_uid}
     return msg
@@ -334,11 +476,19 @@ def test_a_reused_id_merge_survives_rewrite_and_restore(db):
     agent = _make_agent(db, sid)
     agent._session_db_created = True
     first, second = _reused_call("checking"), _reused_call("")
-    result = {"role": "tool", "content": "r", "tool_call_id": "call_x", "tool_name": "t"}
+    result = {
+        "role": "tool",
+        "content": "r",
+        "tool_call_id": "call_x",
+        "tool_name": "t",
+    }
     messages = [{"role": "user", "content": "q"}, first, second, result]
     agent._persist_user_message_idx = 0
     agent._persist_session(messages, conversation_history=None)
-    occurrences = [first["_tool_call_uids"]["call_x"], second["_tool_call_uids"]["call_x"]]
+    occurrences = [
+        first["_tool_call_uids"]["call_x"],
+        second["_tool_call_uids"]["call_x"],
+    ]
     assert len(set(occurrences)) == 2 and result["_tool_call_uid"] == occurrences[1]
 
     repair_message_sequence(agent, messages)
@@ -348,21 +498,35 @@ def test_a_reused_id_merge_survives_rewrite_and_restore(db):
     again = db.get_messages_as_conversation(sid, repair_alternation=False)
     stored = next(m for m in again if m["role"] == "assistant" and m.get("tool_calls"))
     assert stored["_tool_call_uids"] == {"call_x": occurrences}
-    assert next(m for m in again if m["role"] == "tool")["_tool_call_uid"] == occurrences[1]
+    assert (
+        next(m for m in again if m["role"] == "tool")["_tool_call_uid"]
+        == occurrences[1]
+    )
 
 
-@pytest.mark.parametrize("kept, dropped", [
-    ([{"type": "text", "text": "kept"}], "UNIQUE-DROPPED-TEXT"),
-    ("kept", [{"type": "text", "text": "UNIQUE-DROPPED-PART"}]),
-    ([{"type": "text", "text": "kept"}], [{"type": "text", "text": "UNIQUE-DROPPED-PART"}]),
-])
+@pytest.mark.parametrize(
+    "kept, dropped",
+    [
+        ([{"type": "text", "text": "kept"}], "UNIQUE-DROPPED-TEXT"),
+        ("kept", [{"type": "text", "text": "UNIQUE-DROPPED-PART"}]),
+        (
+            [{"type": "text", "text": "kept"}],
+            [{"type": "text", "text": "UNIQUE-DROPPED-PART"}],
+        ),
+    ],
+)
 def test_an_assistant_fold_that_discards_the_later_text_is_no_witness(kept, dropped):
     """Multimodal content is never joined: the later turn's row is retired, but its uid must not be
     claimed as a constituent of text it does not contain."""
     from agent.agent_runtime_helpers import _merge_consecutive_assistants
 
     survivor = {"role": "assistant", "content": kept, "message_uid": "a" * UID_LEN}
-    later = {"role": "assistant", "content": dropped, "message_uid": "b" * UID_LEN, "_row_id": 9}
+    later = {
+        "role": "assistant",
+        "content": dropped,
+        "message_uid": "b" * UID_LEN,
+        "_row_id": 9,
+    }
     merged, repairs = _merge_consecutive_assistants([survivor, later])
     assert repairs == 1 and merged == [survivor] and survivor["content"] == kept
     assert "_absorbed_message_uids" not in survivor
@@ -374,9 +538,18 @@ def test_a_fold_ignores_a_non_dict_uid_map_on_either_turn():
     from agent.agent_runtime_helpers import _merge_assistant_into
 
     def turn(call_id, uids):
-        return {"role": "assistant", "content": "",
-                "tool_calls": [{"id": call_id, "type": "function", "function": {"name": "t", "arguments": "{}"}}],
-                "_tool_call_uids": uids}
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }
+            ],
+            "_tool_call_uids": uids,
+        }
 
     prev, new = turn("X", "junk"), turn("Y", {"Y": "b" * 32})
     _merge_assistant_into(prev, new)
@@ -393,7 +566,13 @@ def test_a_select_context_selection_is_stripped_before_the_provider():
     from agent.message_metadata import PERSISTENCE_ONLY_MESSAGE_FIELDS
 
     class _Selecting(_CapturingEngine):
-        def select_context(self, api_messages, conversation_messages=None, incoming_message=None, budget_tokens=0):
+        def select_context(
+            self,
+            api_messages,
+            conversation_messages=None,
+            incoming_message=None,
+            budget_tokens=0,
+        ):
             return list(conversation_messages)
 
     class _Agent:
@@ -401,17 +580,45 @@ def test_a_select_context_selection_is_stripped_before_the_provider():
         session_id = "s"
 
     history = [
-        {"role": "user", "content": "q", "message_uid": "a" * UID_LEN, "timestamp": 1.0, "_row_id": 1,
-         "_absorbed_message_uids": ["b" * UID_LEN]},
-        {"role": "assistant", "content": "", "message_uid": "c" * UID_LEN, "timestamp": 2.0,
-         "tool_calls": [{"id": "call_x", "type": "function", "function": {"name": "t", "arguments": "{}"}}],
-         "_tool_call_uids": {"call_x": "d" * UID_LEN}},
-        {"role": "tool", "content": "r", "tool_call_id": "call_x", "message_uid": "e" * UID_LEN, "timestamp": 3.0,
-         "_tool_call_uid": "d" * UID_LEN},
+        {
+            "role": "user",
+            "content": "q",
+            "message_uid": "a" * UID_LEN,
+            "timestamp": 1.0,
+            "_row_id": 1,
+            "_absorbed_message_uids": ["b" * UID_LEN],
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "message_uid": "c" * UID_LEN,
+            "timestamp": 2.0,
+            "tool_calls": [
+                {
+                    "id": "call_x",
+                    "type": "function",
+                    "function": {"name": "t", "arguments": "{}"},
+                }
+            ],
+            "_tool_call_uids": {"call_x": "d" * UID_LEN},
+        },
+        {
+            "role": "tool",
+            "content": "r",
+            "tool_call_id": "call_x",
+            "message_uid": "e" * UID_LEN,
+            "timestamp": 3.0,
+            "_tool_call_uid": "d" * UID_LEN,
+        },
     ]
-    api = [{k: v for k, v in m.items() if k not in PERSISTENCE_ONLY_MESSAGE_FIELDS} for m in history]
+    api = [
+        {k: v for k, v in m.items() if k not in PERSISTENCE_ONLY_MESSAGE_FIELDS}
+        for m in history
+    ]
 
-    out = _apply_context_engine_selection(_Agent(), api, history, history[0], logger=logging.getLogger("t"))
+    out = _apply_context_engine_selection(
+        _Agent(), api, history, history[0], logger=logging.getLogger("t")
+    )
 
     assert [m["content"] for m in out] == ["q", "", "r"]
     assert out[1]["tool_calls"][0]["id"] == "call_x"
@@ -421,15 +628,26 @@ def test_a_select_context_selection_is_stripped_before_the_provider():
 
 def test_the_inflight_task_restated_onto_the_carrier_records_its_uid():
     from agent.context_compressor import (
-        COMPRESSED_SUMMARY_METADATA_KEY, SUMMARY_PREFIX, _INFLIGHT_TASK_REPLAY_HEADER, _SUMMARY_END_MARKER,
+        COMPRESSED_SUMMARY_METADATA_KEY,
+        SUMMARY_PREFIX,
+        _INFLIGHT_TASK_REPLAY_HEADER,
+        _SUMMARY_END_MARKER,
         ContextCompressor,
     )
 
     compressor = object.__new__(ContextCompressor)
     compressor.quiet_mode = True
-    carrier = {"role": "user", "content": f"{SUMMARY_PREFIX}\n\nwhat happened\n\n{_SUMMARY_END_MARKER}",
-               COMPRESSED_SUMMARY_METADATA_KEY: True, "message_uid": "s" * UID_LEN}
-    inflight = {"role": "user", "content": "finish the task", "message_uid": "a" * UID_LEN}
+    carrier = {
+        "role": "user",
+        "content": f"{SUMMARY_PREFIX}\n\nwhat happened\n\n{_SUMMARY_END_MARKER}",
+        COMPRESSED_SUMMARY_METADATA_KEY: True,
+        "message_uid": "s" * UID_LEN,
+    }
+    inflight = {
+        "role": "user",
+        "content": "finish the task",
+        "message_uid": "a" * UID_LEN,
+    }
 
     out = compressor._reappend_inflight_user_task([carrier], inflight)
 
@@ -440,20 +658,37 @@ def test_the_inflight_task_restated_onto_the_carrier_records_its_uid():
 
 def test_the_real_user_anchor_folded_into_scaffolding_keeps_the_anchors_uid():
     """The anchor's text leads the composite, so its uid is the composite's; the scaffolding row's is absorbed."""
-    from agent.conversation_compression import _insert_real_user_anchor, _merge_anchor_into_user_message
+    from agent.conversation_compression import (
+        _insert_real_user_anchor,
+        _merge_anchor_into_user_message,
+    )
 
-    target = {"role": "user", "content": "[todo snapshot]", "message_uid": "t" * UID_LEN}
-    anchor = {"role": "user", "content": "the real ask", "message_uid": "a" * UID_LEN,
-              "_absorbed_message_uids": ["b" * UID_LEN]}
+    target = {
+        "role": "user",
+        "content": "[todo snapshot]",
+        "message_uid": "t" * UID_LEN,
+    }
+    anchor = {
+        "role": "user",
+        "content": "the real ask",
+        "message_uid": "a" * UID_LEN,
+        "_absorbed_message_uids": ["b" * UID_LEN],
+    }
     _merge_anchor_into_user_message(target, anchor)
     assert target["content"] == "the real ask\n\n[todo snapshot]"
     assert target["message_uid"] == "a" * UID_LEN
     assert target["_absorbed_message_uids"] == ["b" * UID_LEN, "t" * UID_LEN]
 
     # Never-persisted scaffolding (no uid) absorbs nothing but still takes the anchor's identity.
-    compressed = [{"role": "user", "content": "earlier"}, {"role": "assistant", "content": "ok"},
-                  {"role": "user", "content": "[todo snapshot]"}]
-    assert _insert_real_user_anchor(compressed, dict(anchor, _absorbed_message_uids=[])) == "merged"
+    compressed = [
+        {"role": "user", "content": "earlier"},
+        {"role": "assistant", "content": "ok"},
+        {"role": "user", "content": "[todo snapshot]"},
+    ]
+    assert (
+        _insert_real_user_anchor(compressed, dict(anchor, _absorbed_message_uids=[]))
+        == "merged"
+    )
     assert compressed[-1]["message_uid"] == "a" * UID_LEN
     assert "_absorbed_message_uids" not in compressed[-1]
 
@@ -465,7 +700,9 @@ def test_micro_compactions_adjacent_user_merge_records_the_witness():
 
     first = {"role": "user", "content": "one", "message_uid": "1" * UID_LEN}
     second = {"role": "user", "content": "two", "message_uid": "2" * UID_LEN}
-    merged = MicroCompactionMixin._merge_adjacent_user_turns(SimpleNamespace(), [first, second])
+    merged = MicroCompactionMixin._merge_adjacent_user_turns(
+        SimpleNamespace(), [first, second]
+    )
 
     assert merged == [first] and first["content"] == "one\n\ntwo"
     assert first["message_uid"] == "1" * UID_LEN
@@ -482,22 +719,52 @@ def test_an_assistant_merge_rewrite_persists_the_unioned_tool_call_uids(db):
     agent = _make_agent(db, sid)
     agent._session_db_created = True
     survivor = {"role": "assistant", "content": "let me check"}
-    caller = {"role": "assistant", "content": "",
-              "tool_calls": [{"id": "call_2", "type": "function", "function": {"name": "t", "arguments": "{}"}}]}
-    result = {"role": "tool", "content": "r", "tool_call_id": "call_2", "tool_name": "t"}
+    caller = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "t", "arguments": "{}"},
+            }
+        ],
+    }
+    result = {
+        "role": "tool",
+        "content": "r",
+        "tool_call_id": "call_2",
+        "tool_name": "t",
+    }
     messages = [{"role": "user", "content": "q"}, survivor, caller, result]
     agent._persist_user_message_idx = 0
-    agent._persist_session(messages, conversation_history=None)  # both assistants flushed with a digest
+    agent._persist_session(
+        messages, conversation_history=None
+    )  # both assistants flushed with a digest
     uids = dict(caller["_tool_call_uids"])
-    assert set(uids) == {"call_2"} and "_tool_call_uids" not in survivor and result["_tool_call_uid"] == uids["call_2"]
+    assert (
+        set(uids) == {"call_2"}
+        and "_tool_call_uids" not in survivor
+        and result["_tool_call_uid"] == uids["call_2"]
+    )
 
     repair_message_sequence(agent, messages)
-    assert messages == [messages[0], survivor, result] and survivor["_tool_call_uids"] == uids
+    assert (
+        messages == [messages[0], survivor, result]
+        and survivor["_tool_call_uids"] == uids
+    )
     agent._persist_session(messages, conversation_history=None)
 
     assert survivor["_tool_call_uids"] == uids
     again = db.get_messages_as_conversation(sid, repair_alternation=False)
-    stored = next(m for m in again if m["role"] == "assistant" and m["content"].startswith("let me check"))
+    stored = next(
+        m
+        for m in again
+        if m["role"] == "assistant" and m["content"].startswith("let me check")
+    )
     assert [tc["id"] for tc in stored["tool_calls"]] == ["call_2"]
     assert stored["_tool_call_uids"] == uids
-    assert next(m for m in again if m["role"] == "tool")["_tool_call_uid"] == uids["call_2"]
+    assert (
+        next(m for m in again if m["role"] == "tool")["_tool_call_uid"]
+        == uids["call_2"]
+    )

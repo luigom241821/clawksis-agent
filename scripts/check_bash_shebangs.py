@@ -4,6 +4,7 @@
 Nix and other non-FHS environments need not provide Bash at a fixed bin path.
 Scan tracked text, including extensionless scripts and embedded shell payloads.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,7 +18,10 @@ FIXED_BASH = re.compile(rb"#![ \t]*/(?:usr/)?bin/bash\b")
 
 def check(root: Path) -> list[str]:
     tracked = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, check=True, capture_output=True,
+        ["git", "ls-files", "-z"],
+        cwd=root,
+        check=True,
+        capture_output=True,
     ).stdout
     findings = []
     for name in tracked.split(b"\0"):
@@ -38,7 +42,9 @@ def check(root: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument(
+        "--root", type=Path, default=Path(__file__).resolve().parents[1]
+    )
     args = parser.parse_args()
     findings = check(args.root)
     for finding in findings:

@@ -116,7 +116,8 @@ class TestStartupSweepRespectsOtherLiveBackends:
         """
         stale = time.time() - 8 * 3600
         _make_session(
-            db, "truly-dead",
+            db,
+            "truly-dead",
             source="tui",
             started_at=stale,
             message_at=stale,
@@ -134,7 +135,8 @@ class TestStartupSweepRespectsOtherLiveBackends:
         now = time.time()
         session_started = now - 8 * 3600
         _make_session(
-            db, "long-dead",
+            db,
+            "long-dead",
             source="tui",
             started_at=session_started,
             message_at=session_started,
@@ -170,17 +172,28 @@ class TestStartupSweepRespectsOtherLiveBackends:
         a_age = now - 5 * 3600  # A has been alive for 5h
         a_session_at = now - 4 * 3600  # a-row opened 4h ago (A was alive)
         b_session_at = now - 30 * 3600  # b-row opened 30h ago, before A existed
-        _make_session(db, "a-row", source="tui", started_at=a_session_at, message_at=a_session_at)
-        _make_session(db, "b-row", source="tui", started_at=b_session_at, message_at=b_session_at)
+        _make_session(
+            db, "a-row", source="tui", started_at=a_session_at, message_at=a_session_at
+        )
+        _make_session(
+            db, "b-row", source="tui", started_at=b_session_at, message_at=b_session_at
+        )
 
         db.register_backend_heartbeat(
-            backend_id="A", pid=100, started_at=a_age,
-            last_heartbeat=now, profile="p", host="h",
+            backend_id="A",
+            pid=100,
+            started_at=a_age,
+            last_heartbeat=now,
+            profile="p",
+            host="h",
         )
         db.register_backend_heartbeat(
-            backend_id="B", pid=200, started_at=now - 24 * 3600,
+            backend_id="B",
+            pid=200,
+            started_at=now - 24 * 3600,
             last_heartbeat=now - (HEARTBEAT_STALENESS_S + 600),
-            profile="p", host="h",
+            profile="p",
+            host="h",
         )
 
         # grace=0 enforces strict ownership: a backend owns a session only
@@ -218,8 +231,12 @@ class TestStartupSweepRespectsOtherLiveBackends:
         _make_session(db, "no-msg", source="tui", started_at=stale)
 
         db.register_backend_heartbeat(
-            backend_id="B", pid=1, started_at=stale - 60,
-            last_heartbeat=time.time(), profile="p", host="h",
+            backend_id="B",
+            pid=1,
+            started_at=stale - 60,
+            last_heartbeat=time.time(),
+            profile="p",
+            host="h",
         )
         assert db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S) == []
         assert db.get_session("no-msg")["ended_at"] is None
@@ -234,12 +251,20 @@ class TestBackendHeartbeatAPI:
     def test_register_then_refresh_overwrites_in_place(self, db):
         now = time.time()
         db.register_backend_heartbeat(
-            backend_id="B", pid=1, started_at=now - 60,
-            last_heartbeat=now, profile="p", host="h",
+            backend_id="B",
+            pid=1,
+            started_at=now - 60,
+            last_heartbeat=now,
+            profile="p",
+            host="h",
         )
         db.register_backend_heartbeat(
-            backend_id="B", pid=1, started_at=now - 60,
-            last_heartbeat=now + 5, profile="p", host="h",
+            backend_id="B",
+            pid=1,
+            started_at=now - 60,
+            last_heartbeat=now + 5,
+            profile="p",
+            host="h",
         )
         rows = db.list_backend_heartbeats()
         assert len(rows) == 1
@@ -248,12 +273,20 @@ class TestBackendHeartbeatAPI:
 
     def test_clear_backend_heartbeat_removes_only_self(self, db):
         db.register_backend_heartbeat(
-            backend_id="A", pid=1, started_at=time.time(),
-            last_heartbeat=time.time(), profile="p", host="h",
+            backend_id="A",
+            pid=1,
+            started_at=time.time(),
+            last_heartbeat=time.time(),
+            profile="p",
+            host="h",
         )
         db.register_backend_heartbeat(
-            backend_id="B", pid=2, started_at=time.time(),
-            last_heartbeat=time.time(), profile="p", host="h",
+            backend_id="B",
+            pid=2,
+            started_at=time.time(),
+            last_heartbeat=time.time(),
+            profile="p",
+            host="h",
         )
         db.clear_backend_heartbeat("A")
         ids = sorted(r["backend_id"] for r in db.list_backend_heartbeats())
@@ -262,13 +295,20 @@ class TestBackendHeartbeatAPI:
     def test_prune_stale_heartbeats_drops_only_expired(self, db):
         now = time.time()
         db.register_backend_heartbeat(
-            backend_id="alive", pid=1, started_at=now,
-            last_heartbeat=now, profile="p", host="h",
+            backend_id="alive",
+            pid=1,
+            started_at=now,
+            last_heartbeat=now,
+            profile="p",
+            host="h",
         )
         db.register_backend_heartbeat(
-            backend_id="dead", pid=2, started_at=now - 24 * 3600,
+            backend_id="dead",
+            pid=2,
+            started_at=now - 24 * 3600,
             last_heartbeat=now - (HEARTBEAT_STALENESS_S + 600),
-            profile="p", host="h",
+            profile="p",
+            host="h",
         )
 
         pruned = db.prune_stale_heartbeats(max_age_seconds=HEARTBEAT_STALENESS_S)
@@ -287,16 +327,22 @@ class TestBackendHeartbeatAPI:
         stale = time.time() - 8 * 3600
         _make_session(db, "racy", source="tui", started_at=stale, message_at=stale)
         db.register_backend_heartbeat(
-            backend_id="B", pid=1, started_at=time.time(),
-            last_heartbeat=time.time(), profile="p", host="h",
+            backend_id="B",
+            pid=1,
+            started_at=time.time(),
+            last_heartbeat=time.time(),
+            profile="p",
+            host="h",
         )
         # Same session under stress: 100x in a thread.
         results = []
+
         def _hit():
             try:
                 results.append(db.sweep_orphaned_sessions(max_idle_seconds=IDLE_S))
             except Exception as e:  # pragma: no cover
                 results.append(e)
+
         t = threading.Thread(target=_hit)
         t.start()
         t.join(timeout=10)

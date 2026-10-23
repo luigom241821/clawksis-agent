@@ -1,4 +1,5 @@
 """Tests for clawk_logging — centralized logging setup."""
+
 import importlib.util
 import io
 import logging
@@ -12,6 +13,7 @@ from unittest.mock import patch
 import pytest
 
 import clawk_logging
+
 # Use whatever RotatingFileHandler class clawk_logging actually resolved so
 # the autouse fixture's isinstance checks (which strip rotating handlers
 # between tests) match the real handlers on every platform. clawk_logging
@@ -79,33 +81,68 @@ def liveness_clock(monkeypatch):
     return advance
 
 
-@pytest.mark.parametrize("mode,component", [("cli", None), ("gateway", "gateway.log"), ("gui", "gui.log")])
-@pytest.mark.parametrize("configured,explicit,minimum", [(None, None, logging.INFO), ("DEBUG", "WARNING", logging.WARNING), ("DEBUG", None, logging.DEBUG)])
-def test_repeated_setup_routes_records_once(clawk_home, mode, component, configured, explicit, minimum):
+@pytest.mark.parametrize(
+    "mode,component", [("cli", None), ("gateway", "gateway.log"), ("gui", "gui.log")]
+)
+@pytest.mark.parametrize(
+    "configured,explicit,minimum",
+    [
+        (None, None, logging.INFO),
+        ("DEBUG", "WARNING", logging.WARNING),
+        ("DEBUG", None, logging.DEBUG),
+    ],
+)
+def test_repeated_setup_routes_records_once(
+    clawk_home, mode, component, configured, explicit, minimum
+):
     if configured:
-        (clawk_home / "config.yaml").write_text(f"logging:\n  level: {configured}\n", encoding="utf-8")
+        (clawk_home / "config.yaml").write_text(
+            f"logging:\n  level: {configured}\n", encoding="utf-8"
+        )
     for _ in range(2):
-        assert clawk_logging.setup_logging(clawk_home=clawk_home, mode=mode, log_level=explicit) == clawk_home / "logs"
+        assert (
+            clawk_logging.setup_logging(
+                clawk_home=clawk_home, mode=mode, log_level=explicit
+            )
+            == clawk_home / "logs"
+        )
     clawk_logging.set_session_context("routing-session")
-    sources = ["tools.terminal_tool", "agent.context_compressor", "gateway.run",
-               "plugins.platforms.telegram.adapter", "clawk_cli.web_server", "tui_gateway.ws"]
+    sources = [
+        "tools.terminal_tool",
+        "agent.context_compressor",
+        "gateway.run",
+        "plugins.platforms.telegram.adapter",
+        "clawk_cli.web_server",
+        "tui_gateway.ws",
+    ]
     for index, source in enumerate(sources):
         for level in (logging.DEBUG, logging.INFO, logging.WARNING):
             logging.getLogger(source).log(level, "routing-witness-%s-%s", index, level)
     clawk_logging.flush_log_queue()
-    outputs = {path.name: path.read_text(encoding="utf-8-sig") for path in (clawk_home / "logs").glob("*.log")}
-    assert set(outputs) == {"agent.log", "errors.log"} | ({component} if component else set())
+    outputs = {
+        path.name: path.read_text(encoding="utf-8-sig")
+        for path in (clawk_home / "logs").glob("*.log")
+    }
+    assert set(outputs) == {"agent.log", "errors.log"} | (
+        {component} if component else set()
+    )
     for filename, content in outputs.items():
         for index, source in enumerate(sources):
             for level in (logging.DEBUG, logging.INFO, logging.WARNING):
                 accepted = {
                     "agent.log": level >= minimum,
                     "errors.log": level >= logging.WARNING,
-                    "gateway.log": index in (2, 3) and level >= max(logging.INFO, minimum),
+                    "gateway.log": index in (2, 3)
+                    and level >= max(logging.INFO, minimum),
                     "gui.log": index in (4, 5) and level >= max(logging.INFO, minimum),
                 }[filename]
                 witness = f"routing-witness-{index}-{level}"
-                assert content.count(witness) == int(accepted), (mode, filename, witness, content)
+                assert content.count(witness) == int(accepted), (
+                    mode,
+                    filename,
+                    witness,
+                    content,
+                )
         assert "[routing-session]" in content
 
 
@@ -117,9 +154,9 @@ class TestSetupLogging:
         profile_home = tmp_path / "profile-b"
         profile_home.mkdir()
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing(
-            [clawk_home, profile_home]
-        ) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        )
 
         logger = logging.getLogger("cron.scheduler.profile-routing-test")
         token = set_clawk_home_override(profile_home)
@@ -133,14 +170,29 @@ class TestSetupLogging:
             profile_home / "logs" / "agent.log"
         ).read_text(encoding="utf-8-sig")
         default_log = clawk_home / "logs" / "agent.log"
-        assert not default_log.exists() or "profile-routed cron record" not in default_log.read_text(encoding="utf-8-sig")
+        assert (
+            not default_log.exists()
+            or "profile-routed cron record"
+            not in default_log.read_text(encoding="utf-8-sig")
+        )
 
-    @pytest.mark.parametrize("launch_redacts, routed_opt_out, routed_redacted", [
-        (False, None, True),      # the launch profile opted out, the routed one did not
-        (True, "env", False),     # the routed profile opted out in its own .env
-    ], ids=["launch-opt-out", "routed-env-opt-out"])
+    @pytest.mark.parametrize(
+        "launch_redacts, routed_opt_out, routed_redacted",
+        [
+            (False, None, True),  # the launch profile opted out, the routed one did not
+            (True, "env", False),  # the routed profile opted out in its own .env
+        ],
+        ids=["launch-opt-out", "routed-env-opt-out"],
+    )
     def test_routed_records_follow_their_own_profiles_redaction_policy(
-            self, clawk_home, tmp_path, monkeypatch, launch_redacts, routed_opt_out, routed_redacted):
+        self,
+        clawk_home,
+        tmp_path,
+        monkeypatch,
+        launch_redacts,
+        routed_opt_out,
+        routed_redacted,
+    ):
         """The listener thread formats every record after its profile scope is gone, so a routed profile's own
         agent.log was redacted by the LAUNCH profile's policy: raw credentials if only the launch opted out."""
         from agent import redact
@@ -151,9 +203,13 @@ class TestSetupLogging:
         routed = tmp_path / "profile-b"
         routed.mkdir()
         if routed_opt_out == "config":
-            (routed / "config.yaml").write_text("security:\n  redact_secrets: false\n", encoding="utf-8")
+            (routed / "config.yaml").write_text(
+                "security:\n  redact_secrets: false\n", encoding="utf-8"
+            )
         elif routed_opt_out == "env":
-            (routed / ".env").write_text("CLAWK_REDACT_SECRETS=false\n", encoding="utf-8")
+            (routed / ".env").write_text(
+                "CLAWK_REDACT_SECRETS=false\n", encoding="utf-8"
+            )
         clawk_logging.setup_logging(clawk_home=clawk_home)
         assert clawk_logging.enable_profile_log_routing([clawk_home, routed]) is True
         routed_secret = "sk-proj-ROUTEDPROFILE" + "b" * 24
@@ -168,10 +224,16 @@ class TestSetupLogging:
         logger.warning("launch key %s", launch_secret)
         clawk_logging.flush_log_queue()
 
-        assert (routed_secret not in (routed / "logs" / "agent.log").read_text()) is routed_redacted
-        assert (launch_secret not in (clawk_home / "logs" / "agent.log").read_text()) is launch_redacts
+        assert (
+            routed_secret not in (routed / "logs" / "agent.log").read_text()
+        ) is routed_redacted
+        assert (
+            launch_secret not in (clawk_home / "logs" / "agent.log").read_text()
+        ) is launch_redacts
 
-    def test_release_profile_log_handlers_closes_only_deleted_profile(self, clawk_home, tmp_path):
+    def test_release_profile_log_handlers_closes_only_deleted_profile(
+        self, clawk_home, tmp_path
+    ):
         """Profile deletion releases its routed log files without disturbing another profile."""
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
@@ -180,9 +242,12 @@ class TestSetupLogging:
         deleted_home.mkdir()
         other_home.mkdir()
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing(
-            [clawk_home, deleted_home, other_home]
-        ) is True
+        assert (
+            clawk_logging.enable_profile_log_routing(
+                [clawk_home, deleted_home, other_home]
+            )
+            is True
+        )
 
         logger = logging.getLogger("agent.profile-delete-log-release")
         token = set_clawk_home_override(deleted_home)
@@ -198,22 +263,42 @@ class TestSetupLogging:
         clawk_logging.flush_log_queue()
 
         routers = [
-            handler for handler in clawk_logging._queued_file_handlers
+            handler
+            for handler in clawk_logging._queued_file_handlers
             if isinstance(handler, clawk_logging._ProfileRoutingFileHandler)
         ]
         assert len(routers) == 2  # agent.log and errors.log
-        assert all(deleted_home.resolve() in handler._profile_handlers for handler in routers)
-        assert all(other_home.resolve() in handler._profile_handlers for handler in routers)
+        assert all(
+            deleted_home.resolve() in handler._profile_handlers for handler in routers
+        )
+        assert all(
+            other_home.resolve() in handler._profile_handlers for handler in routers
+        )
 
         assert clawk_logging.release_profile_log_handlers(deleted_home) == 2
 
-        assert all(deleted_home.resolve() not in handler._profile_handlers for handler in routers)
-        assert all(deleted_home.resolve() not in handler._profile_homes for handler in routers)
-        assert all(other_home.resolve() in handler._profile_handlers for handler in routers)
-        assert "other profile log handles" in (other_home / "logs" / "agent.log").read_text()
-        assert "other profile log handles" in (other_home / "logs" / "errors.log").read_text()
+        assert all(
+            deleted_home.resolve() not in handler._profile_handlers
+            for handler in routers
+        )
+        assert all(
+            deleted_home.resolve() not in handler._profile_homes for handler in routers
+        )
+        assert all(
+            other_home.resolve() in handler._profile_handlers for handler in routers
+        )
+        assert (
+            "other profile log handles"
+            in (other_home / "logs" / "agent.log").read_text()
+        )
+        assert (
+            "other profile log handles"
+            in (other_home / "logs" / "errors.log").read_text()
+        )
 
-    def test_a_second_home_routes_instead_of_stacking_an_unfiltered_handler(self, clawk_home, tmp_path):
+    def test_a_second_home_routes_instead_of_stacking_an_unfiltered_handler(
+        self, clawk_home, tmp_path
+    ):
         """A dashboard or serve backend builds agents for several profiles in ONE process, and each
         one calls setup_logging for its own home. The second home must get a router — a bare file
         handler beside the first home's would receive every profile's records."""
@@ -226,8 +311,11 @@ class TestSetupLogging:
         clawk_logging.setup_logging(clawk_home=clawk_home)
         clawk_logging.setup_logging(clawk_home=profile_home)
 
-        assert not [h for h in clawk_logging._queued_file_handlers if isinstance(h, RotatingFileHandler)], (
-            "the second home must not add an unfiltered file handler")
+        assert not [
+            h
+            for h in clawk_logging._queued_file_handlers
+            if isinstance(h, RotatingFileHandler)
+        ], "the second home must not add an unfiltered file handler"
 
         logger = logging.getLogger("agent.conversation_loop.second-home-test")
         token = set_clawk_home_override(profile_home)
@@ -241,9 +329,14 @@ class TestSetupLogging:
         a_log = (clawk_home / "logs" / "agent.log").read_text()
         b_log = (profile_home / "logs" / "agent.log").read_text()
         assert "turn of profile b" in b_log and "turn of profile b" not in a_log
-        assert "turn of the launch profile" in a_log and "turn of the launch profile" not in b_log
+        assert (
+            "turn of the launch profile" in a_log
+            and "turn of the launch profile" not in b_log
+        )
 
-    def test_setup_for_an_already_routed_home_adds_no_duplicate_writer(self, clawk_home, tmp_path):
+    def test_setup_for_an_already_routed_home_adds_no_duplicate_writer(
+        self, clawk_home, tmp_path
+    ):
         """Routing already on (multiplexed gateway, Desktop cron ticker): a profile's agent starting
         up must not add a second writer for its home on top of the router."""
         from logging.handlers import RotatingFileHandler
@@ -253,21 +346,33 @@ class TestSetupLogging:
         profile_home = tmp_path / "profile-b"
         profile_home.mkdir()
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        )
         clawk_logging.setup_logging(clawk_home=profile_home)
 
-        assert not [h for h in clawk_logging._queued_file_handlers if isinstance(h, RotatingFileHandler)]
+        assert not [
+            h
+            for h in clawk_logging._queued_file_handlers
+            if isinstance(h, RotatingFileHandler)
+        ]
         token = set_clawk_home_override(profile_home)
         try:
-            logging.getLogger("agent.conversation_loop.routed-home-test").info("once please")
+            logging.getLogger("agent.conversation_loop.routed-home-test").info(
+                "once please"
+            )
         finally:
             reset_clawk_home_override(token)
         clawk_logging.flush_log_queue()
 
-        assert (profile_home / "logs" / "agent.log").read_text().count("once please") == 1
+        assert (profile_home / "logs" / "agent.log").read_text().count(
+            "once please"
+        ) == 1
         assert "once please" not in (clawk_home / "logs" / "agent.log").read_text()
 
-    def test_a_component_log_added_after_routing_is_routed_too(self, clawk_home, tmp_path):
+    def test_a_component_log_added_after_routing_is_routed_too(
+        self, clawk_home, tmp_path
+    ):
         """setup_logging(mode="gateway") for an already-known home AFTER a second home turned
         routing on: gateway.log must be a routed writer, not a bare handler taking every home."""
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
@@ -307,9 +412,9 @@ class TestSetupLogging:
         profile_home = tmp_path / "profile-deleted"
         profile_home.mkdir()
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing(
-            [clawk_home, profile_home]
-        ) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        )
 
         logger = logging.getLogger("cron.scheduler.profile-routing-deleted-test")
         # The default home's agent.log must exist before the fallback assertion
@@ -325,9 +430,10 @@ class TestSetupLogging:
         finally:
             reset_clawk_home_override(token)
         clawk_logging.flush_log_queue()
-        assert "record before deletion" in (
-            profile_home / "logs" / "agent.log"
-        ).read_text()
+        assert (
+            "record before deletion"
+            in (profile_home / "logs" / "agent.log").read_text()
+        )
 
         # `clawk profile delete` removes the home while the dashboard process
         # (and its static routing snapshot) keeps running.
@@ -359,13 +465,17 @@ class TestSetupLogging:
         import shutil
 
         from clawk_constants import (
-            mark_named_profile_deleted, reset_clawk_home_override, set_clawk_home_override,
+            mark_named_profile_deleted,
+            reset_clawk_home_override,
+            set_clawk_home_override,
         )
 
         profile_home = (clawk_home / "profiles" / "worker").resolve()
         profile_home.mkdir(parents=True)
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        )
         logger = logging.getLogger("cron.scheduler.out-of-band-delete-test")
 
         def emit(message):
@@ -377,14 +487,19 @@ class TestSetupLogging:
             clawk_logging.flush_log_queue()
 
         emit("before delete")
-        routed = [h._profile_handlers[profile_home] for h in clawk_logging._queued_file_handlers
-                  if isinstance(h, clawk_logging._ProfileRoutingFileHandler)]
+        routed = [
+            h._profile_handlers[profile_home]
+            for h in clawk_logging._queued_file_handlers
+            if isinstance(h, clawk_logging._ProfileRoutingFileHandler)
+        ]
         assert routed
         if removal == "tombstone":
             mark_named_profile_deleted(profile_home)
             liveness_clock()  # a tombstone alone is seen on the next interval check
         elif removal == "rmtree":
-            shutil.rmtree(profile_home)  # caught by the write itself, inside the interval
+            shutil.rmtree(
+                profile_home
+            )  # caught by the write itself, inside the interval
         else:
             shutil.rmtree(profile_home / "logs")
         capsys.readouterr()
@@ -392,13 +507,23 @@ class TestSetupLogging:
             emit(f"after delete {i}")
 
         assert "Logging error" not in capsys.readouterr().err
-        assert all(h.stream is None or h.stream.closed for h in routed), "stale profile log fd kept open"
-        default_log = (clawk_home / "logs" / "agent.log").read_text(encoding="utf-8-sig")
+        assert all(h.stream is None or h.stream.closed for h in routed), (
+            "stale profile log fd kept open"
+        )
+        default_log = (clawk_home / "logs" / "agent.log").read_text(
+            encoding="utf-8-sig"
+        )
         assert all(f"after delete {i}" in default_log for i in range(3))
         profile_log = profile_home / "logs" / "agent.log"
-        assert not profile_log.exists() or "after delete" not in profile_log.read_text(encoding="utf-8-sig")
+        assert not profile_log.exists() or "after delete" not in profile_log.read_text(
+            encoding="utf-8-sig"
+        )
 
-    @pytest.mark.parametrize("stream_closed_after_write", [False, True], ids=["kept-open", "closed-per-write"])
+    @pytest.mark.parametrize(
+        "stream_closed_after_write",
+        [False, True],
+        ids=["kept-open", "closed-per-write"],
+    )
     def test_live_profile_liveness_checked_at_most_once_per_interval(
         self, clawk_home, liveness_clock, monkeypatch, stream_closed_after_write
     ):
@@ -418,12 +543,16 @@ class TestSetupLogging:
                     handler.stream.close()
                     handler.stream = None
 
-            monkeypatch.setattr(clawk_logging._ManagedRotatingFileHandler, "emit", emit_then_close)
+            monkeypatch.setattr(
+                clawk_logging._ManagedRotatingFileHandler, "emit", emit_then_close
+            )
 
         profile_home = (clawk_home / "profiles" / "worker").resolve()
         profile_home.mkdir(parents=True)
         clawk_logging.setup_logging(clawk_home=clawk_home)
-        assert clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        assert (
+            clawk_logging.enable_profile_log_routing([clawk_home, profile_home]) is True
+        )
         logger = logging.getLogger("cron.scheduler.liveness-rate-limit-test")
         calls = []
         real = clawk_logging.named_profile_is_deleted
@@ -446,29 +575,34 @@ class TestSetupLogging:
             first = len(calls)
             liveness_clock()
             emit_many(5)
-        routers = sum(isinstance(h, clawk_logging._ProfileRoutingFileHandler)
-                      for h in clawk_logging._queued_file_handlers)
-        assert routers and first == routers, "first sighting checks once per router, then rate-limits"
+        routers = sum(
+            isinstance(h, clawk_logging._ProfileRoutingFileHandler)
+            for h in clawk_logging._queued_file_handlers
+        )
+        assert routers and first == routers, (
+            "first sighting checks once per router, then rate-limits"
+        )
         assert len(calls) == 2 * routers
-        assert "live 4" in (profile_home / "logs" / "agent.log").read_text(encoding="utf-8-sig")
+        assert "live 4" in (profile_home / "logs" / "agent.log").read_text(
+            encoding="utf-8-sig"
+        )
 
     def test_explicit_params_override_config(self, clawk_home):
         """Explicit function params take precedence over config.yaml."""
         import clawk_yaml as yaml
+
         config = {"logging": {"level": "DEBUG"}}
         (clawk_home / "config.yaml").write_text(yaml.safe_dump(config))
 
         clawk_logging.setup_logging(clawk_home=clawk_home, log_level="WARNING")
 
         agent_handlers = [
-            h for h in clawk_logging._queued_file_handlers
+            h
+            for h in clawk_logging._queued_file_handlers
             if isinstance(h, RotatingFileHandler)
             and "agent.log" in getattr(h, "baseFilename", "")
         ]
         assert agent_handlers[0].level == logging.WARNING
-
-
-
 
 
 class TestSetupVerboseLogging:
@@ -480,7 +614,8 @@ class TestSetupVerboseLogging:
 
         root = logging.getLogger()
         verbose_handlers = [
-            h for h in root.handlers
+            h
+            for h in root.handlers
             if isinstance(h, logging.StreamHandler)
             and not isinstance(h, RotatingFileHandler)
             and getattr(h, "_clawk_verbose", False)
@@ -489,10 +624,8 @@ class TestSetupVerboseLogging:
         assert verbose_handlers[0].level == logging.DEBUG
 
 
-
 class TestAddRotatingHandler:
     """_add_rotating_handler() is idempotent and creates the directory."""
-
 
     def test_no_duplicate_for_same_path(self, tmp_path):
         log_path = tmp_path / "test.log"
@@ -500,22 +633,26 @@ class TestAddRotatingHandler:
 
         clawk_logging._add_rotating_handler(
             log_path,
-            level=logging.INFO, max_bytes=1024, backup_count=1,
+            level=logging.INFO,
+            max_bytes=1024,
+            backup_count=1,
             formatter=formatter,
         )
         clawk_logging._add_rotating_handler(
             log_path,
-            level=logging.INFO, max_bytes=1024, backup_count=1,
+            level=logging.INFO,
+            max_bytes=1024,
+            backup_count=1,
             formatter=formatter,
         )
 
         rotating_handlers = [
-            h for h in clawk_logging._queued_file_handlers
+            h
+            for h in clawk_logging._queued_file_handlers
             if isinstance(h, RotatingFileHandler)
         ]
         assert len(rotating_handlers) == 1
         # Clean up
-
 
     @pytest.mark.platforms("linux")
     def test_managed_mode_initial_open_sets_group_writable(self, tmp_path):
@@ -527,7 +664,9 @@ class TestAddRotatingHandler:
             with patch("clawk_cli.config.is_managed", return_value=True):
                 clawk_logging._add_rotating_handler(
                     log_path,
-                    level=logging.INFO, max_bytes=1024, backup_count=1,
+                    level=logging.INFO,
+                    max_bytes=1024,
+                    backup_count=1,
                     formatter=formatter,
                 )
         finally:
@@ -535,7 +674,6 @@ class TestAddRotatingHandler:
 
         assert log_path.exists()
         assert stat.S_IMODE(log_path.stat().st_mode) == 0o660
-
 
 
 class TestWindowsConcurrentLogLockTimeout:
@@ -548,7 +686,10 @@ class TestWindowsConcurrentLogLockTimeout:
         logger.setLevel(logging.INFO)
 
         handler = clawk_logging._ManagedRotatingFileHandler(
-            str(log_path), maxBytes=1, backupCount=1, encoding="utf-8",
+            str(log_path),
+            maxBytes=1,
+            backupCount=1,
+            encoding="utf-8",
         )
         handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(handler)
@@ -591,7 +732,13 @@ class TestWindowsConcurrentLogLockTimeout:
         branch without the handler that raises."""
         logger, handler = self._make_logger_and_handler(tmp_path / "agent.log")
         record = logger.makeRecord(
-            logger.name, logging.INFO, __file__, 0, "force rollover", (), None,
+            logger.name,
+            logging.INFO,
+            __file__,
+            0,
+            "force rollover",
+            (),
+            None,
         )
         captured_warnings: list[logging.LogRecord] = []
 
@@ -647,16 +794,20 @@ class TestWindowsConcurrentLogLockTimeout:
     def fresh_logging(self):
         def load():
             spec = importlib.util.spec_from_file_location(
-                "_clawk_logging_import_test", clawk_logging.__file__,
+                "_clawk_logging_import_test",
+                clawk_logging.__file__,
             )
             assert spec is not None and spec.loader is not None
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             return module
+
         return load
 
     @pytest.mark.platforms("windows")
-    def test_fresh_import_selects_working_concurrent_handler(self, tmp_path, fresh_logging):
+    def test_fresh_import_selects_working_concurrent_handler(
+        self, tmp_path, fresh_logging
+    ):
         """Native locking must work at import, before the handler class is defined."""
         from concurrent_log_handler import ConcurrentRotatingFileHandler
 
@@ -667,21 +818,33 @@ class TestWindowsConcurrentLogLockTimeout:
 
         log_path = tmp_path / "agent.log"
         handler = module._new_file_handler(
-            log_path, level=logging.INFO, max_bytes=1, backup_count=1,
+            log_path,
+            level=logging.INFO,
+            max_bytes=1,
+            backup_count=1,
             formatter=logging.Formatter("%(message)s"),
         )
         try:
             for message in ("before rollover", "after rollover"):
-                handler.handle(logging.LogRecord("test", logging.INFO, "", 0, message, (), None))
+                handler.handle(
+                    logging.LogRecord("test", logging.INFO, "", 0, message, (), None)
+                )
             handler.flush()
-            assert log_path.read_text(encoding="utf-8-sig").splitlines() == ["after rollover"]
-            assert (tmp_path / "agent.log.1").read_text(encoding="utf-8-sig").splitlines() == ["before rollover"]
+            assert log_path.read_text(encoding="utf-8-sig").splitlines() == [
+                "after rollover"
+            ]
+            assert (tmp_path / "agent.log.1").read_text(
+                encoding="utf-8-sig"
+            ).splitlines() == ["before rollover"]
         finally:
             handler.close()
 
     @pytest.mark.platforms("windows")
     def test_fresh_import_retains_lock_failure_and_writes_without_rollover(
-        self, tmp_path, monkeypatch, fresh_logging,
+        self,
+        tmp_path,
+        monkeypatch,
+        fresh_logging,
     ):
         """A post-import platform fake misses both handler selection and fallback resets."""
         import portalocker
@@ -700,20 +863,27 @@ class TestWindowsConcurrentLogLockTimeout:
 
         log_path = tmp_path / "agent.log"
         handler = module._new_file_handler(
-            log_path, level=logging.INFO, max_bytes=1, backup_count=1,
+            log_path,
+            level=logging.INFO,
+            max_bytes=1,
+            backup_count=1,
             formatter=logging.Formatter("%(message)s"),
         )
         try:
             assert handler.maxBytes == 0
             assert handler.backupCount == 0
             for message in ("first message", "second message"):
-                handler.handle(logging.LogRecord("test", logging.INFO, "", 0, message, (), None))
+                handler.handle(
+                    logging.LogRecord("test", logging.INFO, "", 0, message, (), None)
+                )
             handler.flush()
-            assert log_path.read_text(encoding="utf-8-sig").splitlines() == ["first message", "second message"]
+            assert log_path.read_text(encoding="utf-8-sig").splitlines() == [
+                "first message",
+                "second message",
+            ]
             assert not list(tmp_path.glob("agent.log.*"))
         finally:
             handler.close()
-
 
 
 class TestReadLoggingConfig:
@@ -727,14 +897,16 @@ class TestReadLoggingConfig:
 
     def test_reads_logging_section(self, clawk_home):
         import clawk_yaml as yaml
+
         config = {"logging": {"level": "DEBUG", "max_size_mb": 10, "backup_count": 5}}
-        (clawk_home / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+        (clawk_home / "config.yaml").write_text(
+            yaml.safe_dump(config), encoding="utf-8"
+        )
 
         level, max_size, backup = clawk_logging._read_logging_config()
         assert level == "DEBUG"
         assert max_size == 10
         assert backup == 5
-
 
 
 class TestExternalRotationRecovery:
@@ -748,9 +920,13 @@ class TestExternalRotationRecovery:
     instead of the file the operator expects to read.
     """
 
-    def _make_handler(self, log_path: Path) -> clawk_logging._ManagedRotatingFileHandler:
+    def _make_handler(
+        self, log_path: Path
+    ) -> clawk_logging._ManagedRotatingFileHandler:
         handler = clawk_logging._ManagedRotatingFileHandler(
-            str(log_path), maxBytes=10 * 1024 * 1024, backupCount=3,
+            str(log_path),
+            maxBytes=10 * 1024 * 1024,
+            backupCount=3,
             encoding="utf-8",
         )
         handler.setLevel(logging.INFO)
@@ -759,8 +935,13 @@ class TestExternalRotationRecovery:
 
     def _emit(self, handler: logging.Handler, msg: str) -> None:
         record = logging.LogRecord(
-            name="gateway.run", level=logging.INFO, pathname="", lineno=0,
-            msg=msg, args=(), exc_info=None,
+            name="gateway.run",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
         )
         # Match the record factory that clawk_logging installs at import time.
         record.session_tag = ""
@@ -795,7 +976,6 @@ class TestExternalRotationRecovery:
         finally:
             handler.close()
 
-
     def test_external_truncate_does_not_force_reopen(self, tmp_path):
         """``: > gateway.log`` keeps the same inode — no reopen needed.
 
@@ -820,9 +1000,9 @@ class TestExternalRotationRecovery:
         finally:
             handler.close()
 
-
     def test_gateway_log_attached_after_external_rotation_then_re_setup(
-        self, clawk_home,
+        self,
+        clawk_home,
     ):
         """End-to-end Allen-reproduction: gateway.log gets externally rotated,
         ``setup_logging(mode='gateway')`` is re-called, the handler keeps
@@ -875,20 +1055,27 @@ def test_eio_from_file_handler_names_the_path_once_then_recovers(tmp_path, capsy
 
     path = tmp_path / "agent.log"
     handler = clawk_logging._ManagedRotatingFileHandler(
-        str(path), maxBytes=1024, backupCount=1, encoding="utf-8",
+        str(path),
+        maxBytes=1024,
+        backupCount=1,
+        encoding="utf-8",
     )
     handler.setFormatter(logging.Formatter("%(message)s"))
     try:
         handler.stream.close()
         handler.stream = _SickStream()
         for i in range(5):
-            handler.handle(logging.LogRecord("t", logging.INFO, __file__, 0, f"sick {i}", (), None))
+            handler.handle(
+                logging.LogRecord("t", logging.INFO, __file__, 0, f"sick {i}", (), None)
+            )
         err = capsys.readouterr().err
         assert "--- Logging error ---" not in err
         assert err.count(str(path)) == 1 and "Input/output error" in err
 
         # Stream dropped, so the next emit reopens the real file and logging resumes.
-        handler.handle(logging.LogRecord("t", logging.INFO, __file__, 0, "recovered", (), None))
+        handler.handle(
+            logging.LogRecord("t", logging.INFO, __file__, 0, "recovered", (), None)
+        )
         assert "recovered" in path.read_text(encoding="utf-8")
     finally:
         handler.close()
@@ -909,7 +1096,10 @@ def test_eio_after_successful_reopen_still_names_the_path_once(tmp_path, capsys)
 
     path = tmp_path / "agent.log"
     handler = clawk_logging._ManagedRotatingFileHandler(
-        str(path), maxBytes=1024, backupCount=1, encoding="utf-8",
+        str(path),
+        maxBytes=1024,
+        backupCount=1,
+        encoding="utf-8",
     )
     handler.setFormatter(logging.Formatter("%(message)s"))
     try:
@@ -917,7 +1107,9 @@ def test_eio_after_successful_reopen_still_names_the_path_once(tmp_path, capsys)
         handler.stream.close()
         handler.stream = _SickStream()
         for i in range(25):
-            handler.handle(logging.LogRecord("t", logging.INFO, __file__, 0, f"sick {i}", (), None))
+            handler.handle(
+                logging.LogRecord("t", logging.INFO, __file__, 0, f"sick {i}", (), None)
+            )
         err = capsys.readouterr().err
         assert "--- Logging error ---" not in err
         assert err.count(str(path)) == 1
@@ -928,13 +1120,13 @@ def test_eio_after_successful_reopen_still_names_the_path_once(tmp_path, capsys)
 class TestSafeStderr:
     """Tests for _safe_stderr() — Unicode tolerance on Windows console."""
 
-
     def test_wraps_non_utf8_stderr(self, monkeypatch):
         """On non-UTF-8 systems (e.g. Windows cp949), wraps stderr with UTF-8."""
         import io
 
         class FakeStderr:
             """Simulates a Windows stderr with legacy encoding."""
+
             encoding = "cp949"
             buffer = io.BytesIO()
 
@@ -952,10 +1144,13 @@ class TestSafeStderr:
         assert result.encoding == "utf-8"
         assert result.errors == "replace"
         handler = logging.StreamHandler(result)
-        handler.handle(logging.LogRecord("unicode", logging.INFO, "", 0, "Session — 日本", (), None))
+        handler.handle(
+            logging.LogRecord(
+                "unicode", logging.INFO, "", 0, "Session — 日本", (), None
+            )
+        )
         handler.flush()
         assert fake.buffer.getvalue() == "Session — 日本\n".encode()
-
 
 
 class TestLineBufferPipedStdout:
@@ -1002,18 +1197,23 @@ class TestRolloverPreservesLogOwnership:
         log_path.write_text("seed\n", encoding="utf-8")
         os.chmod(log_path, 0o640)
         handler = clawk_logging._ManagedRotatingFileHandler(
-            str(log_path), maxBytes=1, backupCount=1, encoding="utf-8")
+            str(log_path), maxBytes=1, backupCount=1, encoding="utf-8"
+        )
         try:
             handler.doRollover()
         finally:
             handler.close()
 
     @pytest.mark.platforms("linux", "macos")
-    def test_rollover_hands_the_new_file_back_to_the_previous_owner(self, tmp_path, monkeypatch):
+    def test_rollover_hands_the_new_file_back_to_the_previous_owner(
+        self, tmp_path, monkeypatch
+    ):
         log_path = tmp_path / "agent.log"
         chowned = []
         monkeypatch.setattr(os, "geteuid", lambda: 0)
-        monkeypatch.setattr(os, "chown", lambda path, uid, gid: chowned.append((path, uid, gid)))
+        monkeypatch.setattr(
+            os, "chown", lambda path, uid, gid: chowned.append((path, uid, gid))
+        )
         # The owner handed back is whatever the PREVIOUS file carried, which on macOS/BSD
         # inherits the directory's group (tmp dirs are gid 0 there), not the process gid.
         log_path.write_text("seed\n", encoding="utf-8")
@@ -1030,12 +1230,15 @@ class TestRolloverPreservesLogOwnership:
 
         def _refuse(*_args):
             raise OSError("operation not permitted")
+
         monkeypatch.setattr(os, "chown", _refuse)
         self._rolled_handler(log_path)
         assert log_path.exists()
 
 
-def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_lock(clawk_home, monkeypatch):
+def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_lock(
+    clawk_home, monkeypatch
+):
     """T23: uvicorn's ``dictConfig`` holds ``logging._lock`` and, in ``logging.shutdown``, waits on
     every handler's lock. The QueueListener thread routing a record to a not-yet-opened profile
     home built that home's file handler (``Handler.__init__`` takes ``logging._lock``) while
@@ -1045,7 +1248,9 @@ def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_loc
     profile = clawk_home / "profiles" / "t23"
     (profile / "logs").mkdir(parents=True)
     clawk_home.joinpath("logs").mkdir(exist_ok=True)
-    existing = RotatingFileHandler(str(clawk_home / "logs" / "agent.log"), encoding="utf-8")
+    existing = RotatingFileHandler(
+        str(clawk_home / "logs" / "agent.log"), encoding="utf-8"
+    )
     router = clawk_logging._ProfileRoutingFileHandler(existing, [profile])
     existing.close()
     building, real_new = threading.Event(), clawk_logging._new_file_handler
@@ -1058,7 +1263,9 @@ def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_loc
     record = logging.LogRecord("t23", logging.ERROR, __file__, 1, "routed", None, None)
     record.clawk_home = str(profile)
     listener = threading.Thread(target=router.handle, args=(record,), daemon=True)
-    with logging._lock:  # dictConfig's configure() holds this across _clearExistingHandlers()
+    with (
+        logging._lock
+    ):  # dictConfig's configure() holds this across _clearExistingHandlers()
         listener.start()
         assert building.wait(5)
         # logging.shutdown -> h.acquire(): must not wait on a listener blocked on our module lock.
@@ -1067,7 +1274,9 @@ def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_loc
             router.lock.release()
     listener.join(5)
     try:
-        assert acquired, "router held its lock while waiting on logging._lock (dictConfig deadlock)"
+        assert acquired, (
+            "router held its lock while waiting on logging._lock (dictConfig deadlock)"
+        )
         assert not listener.is_alive()
         assert "routed" in (profile / "logs" / "agent.log").read_text(encoding="utf-8")
     finally:
@@ -1075,7 +1284,9 @@ def test_profile_router_never_holds_its_lock_while_taking_the_logging_module_loc
 
 
 @pytest.mark.parametrize("closed_at", ["after_pick", "before_publish"])
-def test_profile_router_close_is_never_undone_by_a_record_in_flight(clawk_home, monkeypatch, closed_at):
+def test_profile_router_close_is_never_undone_by_a_record_in_flight(
+    clawk_home, monkeypatch, closed_at
+):
     """T23 follow-up: with no router lock across ``emit``, ``logging.shutdown`` (uvicorn's
     ``dictConfig``) can close the router and its per-home handler while a routed record is in
     flight. ``after_pick``: the record picked the per-home handler, then it was closed; a
@@ -1086,13 +1297,17 @@ def test_profile_router_close_is_never_undone_by_a_record_in_flight(clawk_home, 
     profile = clawk_home / "profiles" / "t23b"
     (profile / "logs").mkdir(parents=True)
     clawk_home.joinpath("logs").mkdir(exist_ok=True)
-    existing = RotatingFileHandler(str(clawk_home / "logs" / "agent.log"), encoding="utf-8")
+    existing = RotatingFileHandler(
+        str(clawk_home / "logs" / "agent.log"), encoding="utf-8"
+    )
     router = clawk_logging._ProfileRoutingFileHandler(existing, [profile])
     existing.close()
     profile_log = profile / "logs" / "agent.log"
     built = []
     if closed_at == "after_pick":
-        router._handler_for_home(profile)  # the home's handler is open before the record arrives
+        router._handler_for_home(
+            profile
+        )  # the home's handler is open before the record arrives
         real_pick = router._handler_for_home
 
         def pick_then_shutdown(home):
@@ -1108,28 +1323,38 @@ def test_profile_router_close_is_never_undone_by_a_record_in_flight(clawk_home, 
         def build_then_shutdown(*args, **kwargs):
             handler = real_new(*args, **kwargs)
             built.append(handler)
-            if len(built) == 1:  # the routed home's build; a later default-home build is not raced
+            if (
+                len(built) == 1
+            ):  # the routed home's build; a later default-home build is not raced
                 router.close()  # logging.shutdown runs between the build and the publish
                 profile_log.unlink()
             return handler
 
         monkeypatch.setattr(clawk_logging, "_new_file_handler", build_then_shutdown)
-    record = logging.LogRecord("t23", logging.ERROR, __file__, 1, "in flight", None, None)
+    record = logging.LogRecord(
+        "t23", logging.ERROR, __file__, 1, "in flight", None, None
+    )
     record.clawk_home = str(profile)
     router.handle(record)
     assert not profile_log.exists(), "a closed per-home log file was reopened"
     assert router._profile_handlers == {}
-    assert all(handler.stream is None for handler in built), "a handler built after close leaked its fd"
+    assert all(handler.stream is None for handler in built), (
+        "a handler built after close leaked its fd"
+    )
 
 
-def test_router_never_builds_a_child_handler_under_a_lock_logging_shutdown_takes(clawk_home, monkeypatch):
+def test_router_never_builds_a_child_handler_under_a_lock_logging_shutdown_takes(
+    clawk_home, monkeypatch
+):
     """CI run 39131422357 hung: the listener thread held the router's handler lock while building a
     child handler (which takes ``logging._lock``), while dictConfig held ``logging._lock`` inside
     ``logging.shutdown`` and waited on the router's lock. Both sides must finish."""
     profile_home = (clawk_home / "profiles" / "lockorder").resolve()
     (profile_home / "logs").mkdir(parents=True)
     (clawk_home / "logs").mkdir(exist_ok=True)
-    existing = RotatingFileHandler(str(clawk_home / "logs" / "agent.log"), encoding="utf-8")
+    existing = RotatingFileHandler(
+        str(clawk_home / "logs" / "agent.log"), encoding="utf-8"
+    )
     router = clawk_logging._ProfileRoutingFileHandler(existing, [profile_home])
     existing.close()
 
@@ -1139,10 +1364,14 @@ def test_router_never_builds_a_child_handler_under_a_lock_logging_shutdown_takes
     def paused_new_file_handler(*args, **kwargs):
         building.set()
         go.wait(5)
-        return real_new_file_handler(*args, **kwargs)  # Handler.__init__ takes logging._lock
+        return real_new_file_handler(
+            *args, **kwargs
+        )  # Handler.__init__ takes logging._lock
 
     monkeypatch.setattr(clawk_logging, "_new_file_handler", paused_new_file_handler)
-    record = logging.LogRecord("lockorder", logging.WARNING, __file__, 1, "routed", None, None)
+    record = logging.LogRecord(
+        "lockorder", logging.WARNING, __file__, 1, "routed", None, None
+    )
     record.clawk_home = str(profile_home)
     holding_module_lock, emitter_released = threading.Event(), threading.Event()
     shutdown_got_router_lock = []
@@ -1178,4 +1407,5 @@ def test_router_never_builds_a_child_handler_under_a_lock_logging_shutdown_takes
     assert not clearer.is_alive() and not emitter.is_alive()
     assert shutdown_got_router_lock == [True], (
         "lock-order inversion: logging.shutdown (under logging._lock) could not take the router's "
-        "lock while the router built a child handler (which needs logging._lock)")
+        "lock while the router built a child handler (which needs logging._lock)"
+    )

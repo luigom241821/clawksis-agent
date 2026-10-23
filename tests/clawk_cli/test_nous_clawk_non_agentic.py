@@ -41,5 +41,3 @@ def test_matches_real_nous_clawk_chat_models(model_name: str) -> None:
         f"expected {model_name!r} to be flagged as Nous Hermes 3/4"
     )
     assert _check_clawk_model_warning(model_name) == _CLAWK_MODEL_WARNING
-
-

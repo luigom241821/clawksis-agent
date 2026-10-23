@@ -31,7 +31,11 @@ def _mcp_server_count(config: dict[str, Any]) -> int:
     servers = _sub(config, "mcp_servers")
     if not isinstance(servers, dict):
         return 0
-    return sum(1 for spec in servers.values() if not (isinstance(spec, dict) and spec.get("enabled") is False))
+    return sum(
+        1
+        for spec in servers.values()
+        if not (isinstance(spec, dict) and spec.get("enabled") is False)
+    )
 
 
 def _plugin_count(config: dict[str, Any]) -> int:
@@ -42,7 +46,9 @@ def _plugin_count(config: dict[str, Any]) -> int:
 def _cron_job_count() -> int:
     try:
         # utf-8-sig: same dialect as cron/jobs.load_jobs (Windows editors may leave a BOM).
-        with open(get_clawk_home() / "cron" / "jobs.json", encoding="utf-8-sig") as handle:
+        with open(
+            get_clawk_home() / "cron" / "jobs.json", encoding="utf-8-sig"
+        ) as handle:
             jobs = json.load(handle).get("jobs", [])
     except (OSError, ValueError, AttributeError):
         return 0
@@ -55,7 +61,9 @@ def _skill_count() -> int:
     skills_dir = get_clawk_home() / "skills"
     if not skills_dir.is_dir():
         return 0
-    return sum(1 for _ in islice(iter_skill_index_files(skills_dir, "SKILL.md"), _COUNT_CAP))
+    return sum(
+        1 for _ in islice(iter_skill_index_files(skills_dir, "SKILL.md"), _COUNT_CAP)
+    )
 
 
 def _profile_count() -> int:
@@ -128,16 +136,19 @@ def collect_install_snapshot(config: dict[str, Any]) -> dict[str, str]:
         language = _display_language()
     from .shared_metrics_install import install_v4_snapshot_fields
 
-    return {**contract.install_snapshot_fields(
-        memory_provider=_sub(_sub(config, "memory"), "provider"),
-        mcp_servers=_mcp_server_count(config),
-        plugins=_plugin_count(config),
-        skills=_skill_count(),
-        cron_jobs=_cron_job_count(),
-        profiles=_profile_count(),
-        messaging_platforms=_safe_count(_messaging_platform_count),
-        install_age_bucket=install_age_bucket(),
-        main_provider=_sub(model, "provider") if isinstance(model, dict) else None,
-        terminal_backend=_sub(_sub(config, "terminal"), "backend"),
-        display_language=language,
-    ), **install_v4_snapshot_fields(config)}
+    return {
+        **contract.install_snapshot_fields(
+            memory_provider=_sub(_sub(config, "memory"), "provider"),
+            mcp_servers=_mcp_server_count(config),
+            plugins=_plugin_count(config),
+            skills=_skill_count(),
+            cron_jobs=_cron_job_count(),
+            profiles=_profile_count(),
+            messaging_platforms=_safe_count(_messaging_platform_count),
+            install_age_bucket=install_age_bucket(),
+            main_provider=_sub(model, "provider") if isinstance(model, dict) else None,
+            terminal_backend=_sub(_sub(config, "terminal"), "backend"),
+            display_language=language,
+        ),
+        **install_v4_snapshot_fields(config),
+    }

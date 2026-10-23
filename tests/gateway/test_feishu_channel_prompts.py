@@ -47,17 +47,17 @@ def _run_inbound(adapter, chat_id="oc_chat"):
     )
     asyncio.run(
         adapter._process_inbound_message(
-            data=message, message=message, sender_id=None, chat_type="group", message_id="m",
+            data=message,
+            message=message,
+            sender_id=None,
+            chat_type="group",
+            message_id="m",
         )
     )
     return adapter._dispatch_inbound_event.call_args.args[0]
-
-
 
 
 def test_inbound_event_carries_channel_prompt():
     adapter = _build_adapter({"channel_prompts": {"oc_chat": "Feishu role prompt."}})
     event = _run_inbound(adapter, chat_id="oc_chat")
     assert event.channel_prompt == "Feishu role prompt."
-
-

@@ -59,7 +59,9 @@ class CreditsState:
     remaining_usd: str = ""
     subscription_micros: int = 0  # SIGNED — the ONLY field allowed negative (debt)
     subscription_usd: str = ""
-    subscription_limit_micros: Optional[int] = None  # PAIRED + OPTIONAL (only when subscription_cap)
+    subscription_limit_micros: Optional[int] = (
+        None  # PAIRED + OPTIONAL (only when subscription_cap)
+    )
     subscription_limit_usd: Optional[str] = None
     rollover_micros: int = 0
     purchased_micros: int = 0
@@ -74,12 +76,18 @@ class CreditsState:
     from_header: bool = False  # True only when populated by parse_credits_headers()
     # ── usage_window only (empty / defaults otherwise): the server's allowances, in display order.
     gauges: tuple[WindowGauge, ...] = ()
-    spend_source: Optional[str] = None  # "included" | "payg" — which wallet the LAST request drew on
+    spend_source: Optional[str] = (
+        None  # "included" | "payg" — which wallet the LAST request drew on
+    )
     # An admitted reply the server did not meter (no spend source: a skipped guard). A full gauge on it is no
     # refusal, so it raises no limit stop; the next metered reply or 402 decides.
     unmetered: bool = False
-    paused_reason: Optional[str] = None  # e.g. "payment_past_due": the window is withheld, not spent
-    auto_top_up_enabled: bool = False  # seed-only today (the header set does not carry it)
+    paused_reason: Optional[str] = (
+        None  # e.g. "payment_past_due": the window is withheld, not spent
+    )
+    auto_top_up_enabled: bool = (
+        False  # seed-only today (the header set does not carry it)
+    )
     # The account setting "Keep going on credits". False = a used-up
     # allowance stops (402) even with a balance; None = a server that predates it (top-up is spent).
     keep_going_on_credits: Optional[bool] = None
@@ -159,11 +167,17 @@ class CreditsState:
 
 # ── Credits policy constants. Switching notices sticky→TTL later also needs a
 # paired *_TTL_MS per notice kind (AgentNotice has the field; not plumbed yet).
-CREDITS_NOTICE_KIND = "sticky"      # v1: credits notices are sticky
-CREDITS_RESTORED_TTL_MS = 8000     # the only TTL notice in v1 (depletion-recovery confirmation)
+CREDITS_NOTICE_KIND = "sticky"  # v1: credits notices are sticky
+CREDITS_RESTORED_TTL_MS = (
+    8000  # the only TTL notice in v1 (depletion-recovery confirmation)
+)
 # Usage-gauge bands (ascending): (threshold_fraction, level, label_pct). One
 # escalating line shows the HIGHEST band reached; climbing replaces it, recovery steps down.
-CREDITS_USAGE_BANDS: tuple[tuple[float, str, int], ...] = ((0.50, "info", 50), (0.75, "warn", 75), (0.90, "warn", 90))
+CREDITS_USAGE_BANDS: tuple[tuple[float, str, int], ...] = (
+    (0.50, "info", 50),
+    (0.75, "warn", 75),
+    (0.90, "warn", 90),
+)
 CREDITS_USAGE_KEY = "credits.usage"
 # Min subscription balance counting as "grant not yet spent" for the grant_spent
 # gate. 1¢: portal-seeded states (float dollars → micros) can carry sub-cent residue
@@ -192,10 +206,18 @@ _AUTO_TOP_UP_SUFFIX = " · auto top-up is on"
 
 def new_credits_latch() -> dict:
     """Fresh notice latch for :func:`evaluate_credits_notices`; every producer builds it here so a new gate key lands everywhere."""
-    return {"active": set(), "seen_below_90": False, "usage_band": None, "seen_grant_unspent": False, "texts": {}}
+    return {
+        "active": set(),
+        "seen_below_90": False,
+        "usage_band": None,
+        "seen_grant_unspent": False,
+        "texts": {},
+    }
 
 
-def format_window_reset(resets_at_ms: Optional[int], now_ms: Optional[int] = None) -> str:
+def format_window_reset(
+    resets_at_ms: Optional[int], now_ms: Optional[int] = None
+) -> str:
     """Local-time reset for notices: ``HH:MM`` within 24h, ``Tue HH:MM`` within a week, ``Nov 3`` beyond (the
     monthly large-model allowance), ``shortly`` once passed (the server rolls the clock on the next request, so a stale
     stamp is never contradicted)."""
@@ -216,7 +238,11 @@ def format_window_reset(resets_at_ms: Optional[int], now_ms: Optional[int] = Non
 
 def _resets(resets_at_ms: Optional[int]) -> str:
     """`` · resets 15:56``; empty when the instant is unknown."""
-    return f" · resets {format_window_reset(resets_at_ms)}" if isinstance(resets_at_ms, int) and resets_at_ms > 0 else ""
+    return (
+        f" · resets {format_window_reset(resets_at_ms)}"
+        if isinstance(resets_at_ms, int) and resets_at_ms > 0
+        else ""
+    )
 
 
 def _spent_window(state: CreditsState) -> tuple[str, Optional[int]]:
@@ -243,7 +269,9 @@ def _window_approach_text(g: WindowGauge) -> str:
     return f"⚠ {pct}% of your {gauge_limit_name(g)} limit used{_resets(g.resets_at_ms)}"
 
 
-def _stop_gauge(state: CreditsState, *, model_is_top_tier: Optional[bool]) -> Optional[WindowGauge]:
+def _stop_gauge(
+    state: CreditsState, *, model_is_top_tier: Optional[bool]
+) -> Optional[WindowGauge]:
     """The full allowance behind the limit line, by :func:`agent.plan_limits.blocking_gauge` (the rule
     ``limit_hit`` reads, so the line, the retry time and the card agree). A full top-tier allowance counts only on
     a refusal: the API stamps ``spend-source`` on every admitted request and never on a 402, so header-sourced
@@ -254,14 +282,25 @@ def _stop_gauge(state: CreditsState, *, model_is_top_tier: Optional[bool]) -> Op
     if not state.is_usage_window:
         return None
     from agent.plan_limits import blocking_gauge
+
     refused = state.from_header and state.spend_source is None
-    g = blocking_gauge("", state.gauges, free=False, top_tier=refused and model_is_top_tier is not False)
+    g = blocking_gauge(
+        "",
+        state.gauges,
+        free=False,
+        top_tier=refused and model_is_top_tier is not False,
+    )
     if g is None and refused and state.top_tier_exhausted:
         return state.top_tier_gauge
     return g
 
 
-def _window_hard_stop(state: CreditsState, *, model_is_free: bool, model_is_top_tier: Optional[bool] = False) -> Optional[str]:
+def _window_hard_stop(
+    state: CreditsState,
+    *,
+    model_is_free: bool,
+    model_is_top_tier: Optional[bool] = False,
+) -> Optional[str]:
     """Blocking copy for a usage-window account, or None. ``paid_access`` is the portal's word (dunning);
     then: payment paused with no credits (credits keep a paused plan going whatever the setting says; a
     card update restores included usage), the large-model allowance used with no pay path, the window used with no
@@ -269,7 +308,11 @@ def _window_hard_stop(state: CreditsState, *, model_is_free: bool, model_is_top_
     The credits step comes from :func:`agent.plan_limits.credits_action`, the rule every limit surface reads."""
     purchased = state.purchased_micros
     if state.paused_reason and purchased <= 0:
-        return _PAUSED_TEXT if paused_for_payment(state.paused_reason) else _PAUSED_OTHER_TEXT
+        return (
+            _PAUSED_TEXT
+            if paused_for_payment(state.paused_reason)
+            else _PAUSED_OTHER_TEXT
+        )
     if not state.paid_access:
         return None if model_is_free else _DEPLETED_TEXT
     if model_is_free or state.credits_pay:
@@ -277,17 +320,24 @@ def _window_hard_stop(state: CreditsState, *, model_is_free: bool, model_is_top_
     if state.unmetered:
         return None
     from agent.plan_limits import credits_action
+
     action = _CREDITS_STEP[credits_action(state.keep_going_on_credits, purchased)]
     g = _stop_gauge(state, model_is_top_tier=model_is_top_tier)
     if g is None:
         return None
     if g.scope == SCOPE_TOP_TIER:
-        auto = _AUTO_TOP_UP_SUFFIX if state.auto_top_up_enabled and action == _ADD_CREDITS_ACTION else ""
+        auto = (
+            _AUTO_TOP_UP_SUFFIX
+            if state.auto_top_up_enabled and action == _ADD_CREDITS_ACTION
+            else ""
+        )
         return f"✕ {_TOP_TIER_LIMIT}{_resets(g.resets_at_ms)} · {action}{auto}"
     return f"✕ You've hit your {gauge_limit_name(g)} limit{_resets(g.resets_at_ms)} · {action}"
 
 
-def window_stop_resets_at_ms(state: CreditsState, *, model_is_top_tier: Optional[bool] = False) -> Optional[int]:
+def window_stop_resets_at_ms(
+    state: CreditsState, *, model_is_top_tier: Optional[bool] = False
+) -> Optional[int]:
     """When the allowance behind :func:`_window_hard_stop`'s limit line frees up (the same gauge)."""
     if state.unmetered:
         return None
@@ -318,7 +368,14 @@ def _window_payg_text(state: CreditsState) -> Optional[str]:
     return text + (_AUTO_TOP_UP_SUFFIX if state.auto_top_up_enabled else "")
 
 
-def _reconcile_sticky(key: str, text: Optional[str], level: str, latch: dict, to_show: list, to_clear: list) -> None:
+def _reconcile_sticky(
+    key: str,
+    text: Optional[str],
+    level: str,
+    latch: dict,
+    to_show: list,
+    to_clear: list,
+) -> None:
     """Show / replace / clear one sticky line by key: a text change re-emits (clear first), None clears."""
     active, texts = latch["active"], latch.setdefault("texts", {})
     if text is not None and (key not in active or texts.get(key) != text):
@@ -333,8 +390,13 @@ def _reconcile_sticky(key: str, text: Optional[str], level: str, latch: dict, to
         texts.pop(key, None)
 
 
-def _evaluate_window_notices(state: CreditsState, latch: dict, *, model_is_free: bool,
-                             model_is_top_tier: bool = False) -> tuple[list, list]:
+def _evaluate_window_notices(
+    state: CreditsState,
+    latch: dict,
+    *,
+    model_is_free: bool,
+    model_is_top_tier: bool = False,
+) -> tuple[list, list]:
     """Notice policy for a usage-window account (see :func:`evaluate_credits_notices` for the contract).
 
     Approach: each allowance warns once at 90% per reset (``credits.window.<id>``, a TTL heads-up; the
@@ -345,32 +407,80 @@ def _evaluate_window_notices(state: CreditsState, latch: dict, *, model_is_free:
     to_clear: list = []
     active = latch["active"]
     warned: dict = latch.setdefault("window_warned", {})
-    if CREDITS_USAGE_KEY in active:  # the credit-grant band does not apply to a window plan
+    if (
+        CREDITS_USAGE_KEY in active
+    ):  # the credit-grant band does not apply to a window plan
         _reconcile_sticky(CREDITS_USAGE_KEY, None, "info", latch, to_show, to_clear)
         latch["usage_band"] = None
     for g in state.gauges:
-        relevant = not model_is_free and (g.scope != SCOPE_TOP_TIER or model_is_top_tier)
-        if relevant and not g.full and g.used_fraction >= WINDOW_APPROACH_FRACTION \
-                and warned.get(g.id) != g.resets_at_ms:
+        relevant = not model_is_free and (
+            g.scope != SCOPE_TOP_TIER or model_is_top_tier
+        )
+        if (
+            relevant
+            and not g.full
+            and g.used_fraction >= WINDOW_APPROACH_FRACTION
+            and warned.get(g.id) != g.resets_at_ms
+        ):
             # A heads-up, not a state: shown once (TTL) and never re-shown for the same reset.
             warned[g.id] = g.resets_at_ms
             key = window_approach_key(g.id)
-            to_show.append(AgentNotice(text=_window_approach_text(g), level="warn", kind="ttl",
-                                       ttl_ms=WINDOW_APPROACH_TTL_MS, key=key, id=key))
-    if CREDITS_GRANT_SPENT_KEY in active:  # a plan flip mid-session: the grant line has no meaning here
+            to_show.append(
+                AgentNotice(
+                    text=_window_approach_text(g),
+                    level="warn",
+                    kind="ttl",
+                    ttl_ms=WINDOW_APPROACH_TTL_MS,
+                    key=key,
+                    id=key,
+                )
+            )
+    if (
+        CREDITS_GRANT_SPENT_KEY in active
+    ):  # a plan flip mid-session: the grant line has no meaning here
         to_clear.append(CREDITS_GRANT_SPENT_KEY)
         active.discard(CREDITS_GRANT_SPENT_KEY)
 
-    stop = _window_hard_stop(state, model_is_free=model_is_free, model_is_top_tier=model_is_top_tier)
-    limit = stop is not None and stop not in (_PAUSED_TEXT, _PAUSED_OTHER_TEXT, _DEPLETED_TEXT)
+    stop = _window_hard_stop(
+        state, model_is_free=model_is_free, model_is_top_tier=model_is_top_tier
+    )
+    limit = stop is not None and stop not in (
+        _PAUSED_TEXT,
+        _PAUSED_OTHER_TEXT,
+        _DEPLETED_TEXT,
+    )
     was_stopped = CREDITS_DEPLETED_KEY in active or CREDITS_WINDOW_LIMIT_KEY in active
-    _reconcile_sticky(CREDITS_WINDOW_LIMIT_KEY, stop if limit else None, "error", latch, to_show, to_clear)
-    _reconcile_sticky(CREDITS_DEPLETED_KEY, None if limit else stop, "error", latch, to_show, to_clear)
+    _reconcile_sticky(
+        CREDITS_WINDOW_LIMIT_KEY,
+        stop if limit else None,
+        "error",
+        latch,
+        to_show,
+        to_clear,
+    )
+    _reconcile_sticky(
+        CREDITS_DEPLETED_KEY, None if limit else stop, "error", latch, to_show, to_clear
+    )
     if was_stopped and stop is None and state.paid_access and not model_is_free:
         # Genuine recovery (a reset, a top-up, a paid renewal) — a free-model switch is not "restored".
-        to_show.append(AgentNotice(text="✓ Credit access restored", level="success", kind="ttl",
-                                   ttl_ms=CREDITS_RESTORED_TTL_MS, key=CREDITS_RESTORED_KEY, id=CREDITS_RESTORED_KEY))
-    _reconcile_sticky(CREDITS_WINDOW_PAYG_KEY, None if stop else _window_payg_text(state), "warn", latch, to_show, to_clear)
+        to_show.append(
+            AgentNotice(
+                text="✓ Credit access restored",
+                level="success",
+                kind="ttl",
+                ttl_ms=CREDITS_RESTORED_TTL_MS,
+                key=CREDITS_RESTORED_KEY,
+                id=CREDITS_RESTORED_KEY,
+            )
+        )
+    _reconcile_sticky(
+        CREDITS_WINDOW_PAYG_KEY,
+        None if stop else _window_payg_text(state),
+        "warn",
+        latch,
+        to_show,
+        to_clear,
+    )
     return (to_show, to_clear)
 
 
@@ -380,15 +490,17 @@ class AgentNotice:
     renders its own way. ``kind``/``ttl_ms`` stay expressive so a future config can switch v1's sticky notices to TTL."""
 
     text: str
-    level: str = "info"            # info | warn | error | success
-    kind: str = "sticky"           # sticky | ttl
-    ttl_ms: Optional[int] = None   # honored only when kind == "ttl"
-    key: Optional[str] = None      # dedupe / fired-once-latch / clear key
+    level: str = "info"  # info | warn | error | success
+    kind: str = "sticky"  # sticky | ttl
+    ttl_ms: Optional[int] = None  # honored only when kind == "ttl"
+    key: Optional[str] = None  # dedupe / fired-once-latch / clear key
     id: Optional[str] = None
 
 
 def _sticky_notice(text: str, level: str, key: str) -> AgentNotice:
-    return AgentNotice(text=text, level=level, kind=CREDITS_NOTICE_KIND, key=key, id=key)
+    return AgentNotice(
+        text=text, level=level, kind=CREDITS_NOTICE_KIND, key=key, id=key
+    )
 
 
 def _is_nous_welcome_route(base_url: str) -> bool:
@@ -423,27 +535,40 @@ def is_free_tier_model(model: str, base_url: str = "") -> bool:
         from clawk_cli.models import _is_model_free
         from clawk_cli.models_pricing import peek_cached_pricing
 
-        pricing = peek_cached_pricing(base_url)  # owns the /v1-suffix and auth-state key details
+        pricing = peek_cached_pricing(
+            base_url
+        )  # owns the /v1-suffix and auth-state key details
         return bool(pricing) and _is_model_free(model, pricing)
     except Exception:
         return False
 
 
-def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free: bool = False,
-                             model_is_top_tier: bool = False) -> tuple[list[AgentNotice], list[str]]:
+def evaluate_credits_notices(
+    state: CreditsState,
+    latch: dict,
+    *,
+    model_is_free: bool = False,
+    model_is_top_tier: bool = False,
+) -> tuple[list[AgentNotice], list[str]]:
     """Reconcile credits notices against the latch (see :func:`new_credits_latch`); mutates ``latch`` IN
     PLACE. Pure — no I/O, no agent/run_agent imports. ``model_is_free`` suppresses ``credits.depleted`` (a
     depleted account on a free model keeps inferencing) WITHOUT emitting "restored" — that fires only on a
     genuine ``paid_access`` flip back to True. Returns ``(to_show, to_clear)``; caller emits to_clear FIRST.
     A usage-window state (day/week percents, no grant) takes the window policy; everything else is unchanged."""
     if state.is_usage_window:
-        return _evaluate_window_notices(state, latch, model_is_free=model_is_free,
-                                        model_is_top_tier=model_is_top_tier)
+        return _evaluate_window_notices(
+            state,
+            latch,
+            model_is_free=model_is_free,
+            model_is_top_tier=model_is_top_tier,
+        )
     to_show: list[AgentNotice] = []
     to_clear: list[str] = []
     uf, active = state.used_fraction, latch["active"]
     for window_key in (CREDITS_WINDOW_PAYG_KEY, CREDITS_WINDOW_LIMIT_KEY):
-        if window_key in active:  # only ever set by the window policy; a stale line after a plan change
+        if (
+            window_key in active
+        ):  # only ever set by the window policy; a stale line after a plan change
             to_clear.append(window_key)
             active.discard(window_key)
             latch.get("texts", {}).pop(window_key, None)
@@ -455,7 +580,11 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
     # Grant-spent gate: fires only after this session OBSERVED the grant unspent
     # (≥1¢). Opening at grant-spent is a steady STATE (/usage carries it), not an
     # event. Unlike seen_below_90, seeds must NOT prime this gate.
-    if uf is not None and uf < 1.0 and state.subscription_micros >= GRANT_UNSPENT_MIN_MICROS:
+    if (
+        uf is not None
+        and uf < 1.0
+        and state.subscription_micros >= GRANT_UNSPENT_MIN_MICROS
+    ):
         latch["seen_grant_unspent"] = True
 
     # Highest band reached (ascending → last match wins); None below all. Top-up
@@ -465,7 +594,9 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
     # mid-session top-up flips current_band → None so the clear path removes the line.
     current_band: Optional[tuple[float, str, int]] = None
     if uf is not None and state.purchased_micros <= 0:
-        current_band = next((b for b in reversed(CREDITS_USAGE_BANDS) if uf >= b[0]), None)
+        current_band = next(
+            (b for b in reversed(CREDITS_USAGE_BANDS) if uf >= b[0]), None
+        )
 
     # ── usage gauge: highest crossed band only; replace on band change (climb or
     # step-down); clear below the lowest band or when the denominator vanishes.
@@ -479,7 +610,11 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
             # clamped [0, cap]; "$?" if a producer set the limit without its *_usd. Re-emits on band change only.
             level = current_band[1]  # type: ignore[index]  (current_band set when target_band set)
             lim = state.subscription_limit_micros or 0
-            used_usd = f"{max(0, min(lim, lim - state.subscription_micros)) / 1_000_000:.2f}" if lim else "?"
+            used_usd = (
+                f"{max(0, min(lim, lim - state.subscription_micros)) / 1_000_000:.2f}"
+                if lim
+                else "?"
+            )
             text = f"{'⚠' if level == 'warn' else '•'} You've used ${used_usd} of your ${state.subscription_limit_usd or '?'} cap"
             to_show.append(_sticky_notice(text, level, CREDITS_USAGE_KEY))
             active.add(CREDITS_USAGE_KEY)
@@ -490,10 +625,23 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
     # line but cannot re-announce; only a renewal re-opening the gate (fresh ≥1¢
     # observation) arms the next. .get(): default closed for hand-built latches.
     grant_cond = (
-        state.denominator_kind == "subscription_cap" and uf is not None and uf >= 1.0 and state.purchased_micros > 0
+        state.denominator_kind == "subscription_cap"
+        and uf is not None
+        and uf >= 1.0
+        and state.purchased_micros > 0
     )
-    if grant_cond and "credits.grant_spent" not in active and latch.get("seen_grant_unspent", False):
-        to_show.append(_sticky_notice(f"• Grant spent · ${state.purchased_usd} top-up left", "info", "credits.grant_spent"))
+    if (
+        grant_cond
+        and "credits.grant_spent" not in active
+        and latch.get("seen_grant_unspent", False)
+    ):
+        to_show.append(
+            _sticky_notice(
+                f"• Grant spent · ${state.purchased_usd} top-up left",
+                "info",
+                "credits.grant_spent",
+            )
+        )
         active.add("credits.grant_spent")
         latch["seen_grant_unspent"] = False
     elif "credits.grant_spent" in active and not grant_cond:
@@ -504,16 +652,28 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
     depleted_cond = not state.paid_access
     show_depleted = depleted_cond and not model_is_free
     if show_depleted and "credits.depleted" not in active:
-        to_show.append(_sticky_notice("✕ Credit access paused · run /topup to top up", "error", "credits.depleted"))
+        to_show.append(
+            _sticky_notice(
+                "✕ Credit access paused · run /topup to top up",
+                "error",
+                "credits.depleted",
+            )
+        )
         active.add("credits.depleted")
     elif "credits.depleted" in active and not show_depleted:
         to_clear.append("credits.depleted")
         active.discard("credits.depleted")
         if not depleted_cond:  # genuine recovery only — a free-model switch while depleted is NOT "restored"
-            to_show.append(AgentNotice(
-                text="✓ Credit access restored", level="success", kind="ttl",
-                ttl_ms=CREDITS_RESTORED_TTL_MS, key="credits.restored", id="credits.restored",
-            ))
+            to_show.append(
+                AgentNotice(
+                    text="✓ Credit access restored",
+                    level="success",
+                    kind="ttl",
+                    ttl_ms=CREDITS_RESTORED_TTL_MS,
+                    key="credits.restored",
+                    id="credits.restored",
+                )
+            )
     return (to_show, to_clear)
 
 
@@ -523,18 +683,31 @@ def evaluate_credits_notices(state: CreditsState, latch: dict, *, model_is_free:
 # (never re-parsed); bool: "true"/"false" STRING. Handled inline: subscription-limit-* (PAIRED/optional),
 # denominator-kind ("subscription_cap" | "none"), disabled-reason (omitted when null).
 _HEADER_FIELDS: tuple[tuple, ...] = (
-    ("remaining_micros", "micros"), ("subscription_micros", "signed"), ("rollover_micros", "micros"),
-    ("purchased_micros", "micros"), ("as_of_ms", "micros"), ("tool_pool_micros", "micros", 0),
-    ("remaining_usd", "usd"), ("subscription_usd", "usd"), ("purchased_usd", "usd"),
+    ("remaining_micros", "micros"),
+    ("subscription_micros", "signed"),
+    ("rollover_micros", "micros"),
+    ("purchased_micros", "micros"),
+    ("as_of_ms", "micros"),
+    ("tool_pool_micros", "micros", 0),
+    ("remaining_usd", "usd"),
+    ("subscription_usd", "usd"),
+    ("purchased_usd", "usd"),
     ("paid_access", "bool", True),  # absent → fail-open (assume access)
     ("tool_pool_gated_off", "bool", False),
 )
 # Credit-grant plan fields. Required on a credit note; a usage_window note may omit them (the server can
 # retire them with legacy plans). Malformed is still a miss. The top-up balance (purchased_*) is optional on a
 # window note too: a refused (402) request carries only the window headers; the capture keeps the last balance.
-_GRANT_ONLY_FIELDS = frozenset({
-    "remaining_micros", "remaining_usd", "subscription_micros", "subscription_usd", "rollover_micros", "as_of_ms",
-})
+_GRANT_ONLY_FIELDS = frozenset(
+    {
+        "remaining_micros",
+        "remaining_usd",
+        "subscription_micros",
+        "subscription_usd",
+        "rollover_micros",
+        "as_of_ms",
+    }
+)
 _WINDOW_OPTIONAL_FIELDS = _GRANT_ONLY_FIELDS | {"purchased_micros", "purchased_usd"}
 
 
@@ -545,7 +718,11 @@ _GAUGES_HEADER = "x-nous-credits-window-gauges"
 
 
 def _header_name(field: str) -> str:
-    return "x-nous-" + ("" if field.startswith("tool_pool_") else "credits-") + field.replace("_", "-")
+    return (
+        "x-nous-"
+        + ("" if field.startswith("tool_pool_") else "credits-")
+        + field.replace("_", "-")
+    )
 
 
 def _parse_window_fields(lowered: Mapping[str, str]) -> Optional[dict[str, Any]]:
@@ -558,9 +735,15 @@ def _parse_window_fields(lowered: Mapping[str, str]) -> Optional[dict[str, Any]]
     source = lowered.get("x-nous-credits-spend-source")
     out["spend_source"] = source if source in _VALID_SPEND_SOURCES else None
     paused = lowered.get("x-nous-credits-window-paused-reason")
-    out["paused_reason"] = paused.strip() if isinstance(paused, str) and paused.strip() else None
-    keep_going = (lowered.get("x-nous-credits-keep-going-on-credits") or "").strip().lower()
-    out["keep_going_on_credits"] = {"on": True, "off": False}.get(keep_going)  # anything else: unknown (older server)
+    out["paused_reason"] = (
+        paused.strip() if isinstance(paused, str) and paused.strip() else None
+    )
+    keep_going = (
+        (lowered.get("x-nous-credits-keep-going-on-credits") or "").strip().lower()
+    )
+    out["keep_going_on_credits"] = {"on": True, "off": False}.get(
+        keep_going
+    )  # anything else: unknown (older server)
     return out
 
 
@@ -580,7 +763,9 @@ def _parse_field(kind: str, raw: Optional[str], default: Any = _SENTINEL) -> Any
     return _SENTINEL if flag not in ("true", "false") else flag == "true"
 
 
-def parse_credits_headers(headers: Mapping[str, str], provider: str = "") -> Optional[CreditsState]:
+def parse_credits_headers(
+    headers: Mapping[str, str], provider: str = ""
+) -> Optional[CreditsState]:
     """Parse x-nous-credits-* (and x-nous-tool-pool-*) headers into a CreditsState.
     None (miss) on ANY of: no version header; version != 1 (> 1 also warns once);
     a required field violating ``_HEADER_FIELDS``; unknown ``denominator_kind``;
@@ -599,7 +784,10 @@ def parse_credits_headers(headers: Mapping[str, str], provider: str = "") -> Opt
         if version_val != 1:
             if version_val > 1 and not _version_warning_emitted:
                 _version_warning_emitted = True
-                logger.warning("credits header version %d unsupported, ignoring — update Clawksis", version_val)
+                logger.warning(
+                    "credits header version %d unsupported, ignoring — update Clawksis",
+                    version_val,
+                )
             return None
         denominator_kind = lowered.get("x-nous-credits-denominator-kind", "none")
         window_note = denominator_kind == "usage_window"
@@ -614,18 +802,31 @@ def parse_credits_headers(headers: Mapping[str, str], provider: str = "") -> Opt
         if lim_micros_raw is not None and lim_usd_raw is not None:
             fields["subscription_limit_micros"] = _parse_field("micros", lim_micros_raw)
             fields["subscription_limit_usd"] = _parse_field("usd", lim_usd_raw)
-        if _SENTINEL in fields.values() or denominator_kind not in _VALID_DENOMINATOR_KINDS:
+        if (
+            _SENTINEL in fields.values()
+            or denominator_kind not in _VALID_DENOMINATOR_KINDS
+        ):
             return None
         if window_note:
             window = _parse_window_fields(lowered)
             if window is None:
                 return None
             fields.update(window)
-        disabled_reason = lowered.get("x-nous-credits-disabled-reason")  # None if absent (omitted when null)
-        return CreditsState(version=version_val, denominator_kind=denominator_kind, disabled_reason=disabled_reason,
-                            captured_at=time.time(), from_header=True, **fields)
+        disabled_reason = lowered.get(
+            "x-nous-credits-disabled-reason"
+        )  # None if absent (omitted when null)
+        return CreditsState(
+            version=version_val,
+            denominator_kind=denominator_kind,
+            disabled_reason=disabled_reason,
+            captured_at=time.time(),
+            from_header=True,
+            **fields,
+        )
     except Exception:  # fail-open → miss; the breadcrumb distinguishes a parser regression from a no-headers response
-        logger.debug("credits ▸ parse_credits_headers raised (fail-open miss)", exc_info=True)
+        logger.debug(
+            "credits ▸ parse_credits_headers raised (fail-open miss)", exc_info=True
+        )
         return None
 
 
@@ -634,7 +835,11 @@ def response_is_usage_window(http_response: Any) -> bool:
     test as ``CreditsState.is_usage_window``). Lets the window-only header captures leave every other
     account untouched. Never raises."""
     try:
-        headers = getattr(http_response, "headers", None) if http_response is not None else None
+        headers = (
+            getattr(http_response, "headers", None)
+            if http_response is not None
+            else None
+        )
         if not headers:
             return False
         state = parse_credits_headers(headers)
@@ -647,11 +852,23 @@ def response_is_usage_window(http_response: Any) -> bool:
 # ── Dev fixtures (CLAWK_DEV_CREDITS_FIXTURE): throwaway scaffolding to trigger any notice state
 # without real spend. Value is a state NAME or a FILE PATH whose contents are a name (re-read every
 # turn → `echo depleted > /tmp/cf` flips live). Drives per-turn notices, the cold-start seed, and /usage.
-def _fixture(remaining: str, subscription: str, limit: Optional[str] = None, purchased: Optional[str] = None,
-             *, paid: bool = True, reason: Optional[str] = None) -> dict:
+def _fixture(
+    remaining: str,
+    subscription: str,
+    limit: Optional[str] = None,
+    purchased: Optional[str] = None,
+    *,
+    paid: bool = True,
+    reason: Optional[str] = None,
+) -> dict:
     """Fixture spec from *_usd strings; micros derived exactly (Decimal)."""
     d: dict = {}
-    for field, usd in (("remaining", remaining), ("subscription", subscription), ("subscription_limit", limit), ("purchased", purchased)):
+    for field, usd in (
+        ("remaining", remaining),
+        ("subscription", subscription),
+        ("subscription_limit", limit),
+        ("purchased", purchased),
+    ):
         if usd is not None:
             d[f"{field}_micros"], d[f"{field}_usd"] = int(Decimal(usd) * 1_000_000), usd
     if limit is not None:
@@ -661,16 +878,28 @@ def _fixture(remaining: str, subscription: str, limit: Optional[str] = None, pur
 
 
 _DEV_FIXTURES: dict[str, dict] = {
-    "healthy": _fixture("30.34", "18.00", "20.00", "12.34"),  # used_fraction ~0.1, paid → no notice (recovery target)
-    "sub_50pct": _fixture("10.00", "10.00", "20.00"),  # used_fraction == 0.5 → credits.usage band 50 (info)
-    "sub_75pct": _fixture("5.00", "5.00", "20.00"),  # used_fraction == 0.75 → band 75 (warn)
-    "sub_90pct": _fixture("2.00", "2.00", "20.00"),  # used_fraction == 0.9 → band 90 (warn)
+    "healthy": _fixture(
+        "30.34", "18.00", "20.00", "12.34"
+    ),  # used_fraction ~0.1, paid → no notice (recovery target)
+    "sub_50pct": _fixture(
+        "10.00", "10.00", "20.00"
+    ),  # used_fraction == 0.5 → credits.usage band 50 (info)
+    "sub_75pct": _fixture(
+        "5.00", "5.00", "20.00"
+    ),  # used_fraction == 0.75 → band 75 (warn)
+    "sub_90pct": _fixture(
+        "2.00", "2.00", "20.00"
+    ),  # used_fraction == 0.9 → band 90 (warn)
     # uf == 1.0 + purchased>0 → SILENT at open (crossing-gated); flip healthy →
     # grant_exhausted via the fixture-file path to see credits.grant_spent
     "grant_exhausted": _fixture("12.34", "0.00", "20.00", "12.34"),
-    "depleted": _fixture("0.00", "0.00", None, "0.00", paid=False, reason="out_of_credits"),  # → credits.depleted
+    "depleted": _fixture(
+        "0.00", "0.00", None, "0.00", paid=False, reason="out_of_credits"
+    ),  # → credits.depleted
     # subscription in debt (negative, the only signed field) → depleted
-    "debt": _fixture("0.00", "-5.00", "20.00", "0.00", paid=False, reason="out_of_credits"),
+    "debt": _fixture(
+        "0.00", "-5.00", "20.00", "0.00", paid=False, reason="out_of_credits"
+    ),
 }
 
 
@@ -680,7 +909,9 @@ def dev_fixture_credits_state() -> Optional[CreditsState]:
     name = os.environ.get("CLAWK_DEV_CREDITS_FIXTURE", "").strip()
     if not name or not is_truthy_value(os.environ.get("CLAWK_DEV_CREDITS")):
         return None
-    if os.path.sep in name or "/" in name:  # looks like a path → read the name from the file
+    if (
+        os.path.sep in name or "/" in name
+    ):  # looks like a path → read the name from the file
         try:
             with open(name, "r", encoding="utf-8-sig") as fh:
                 name = fh.read().strip()
@@ -690,7 +921,11 @@ def dev_fixture_credits_state() -> Optional[CreditsState]:
         return None
     # Stamp what the REAL parser always guarantees so a fixture is field-identical to a
     # parse_credits_headers() result: version 1 and a valid purchased_usd (zero top-up = "0.00").
-    return CreditsState(**{"version": 1, "purchased_usd": "0.00", **spec}, from_header=True, captured_at=time.time())
+    return CreditsState(
+        **{"version": 1, "purchased_usd": "0.00", **spec},
+        from_header=True,
+        captured_at=time.time(),
+    )
 
 
 def _credits_state_from_account(info) -> Optional[CreditsState]:
@@ -700,14 +935,30 @@ def _credits_state_from_account(info) -> Optional[CreditsState]:
         acc = getattr(info, "paid_service_access_info", None)
         sub = getattr(info, "subscription", None)
 
-        def _money(dollars) -> tuple[int, str]:  # (micros, display usd); (0, "") when absent
-            return (round(dollars * 1_000_000), f"{dollars:.2f}") if isinstance(dollars, (int, float)) else (0, "")
+        def _money(
+            dollars,
+        ) -> tuple[int, str]:  # (micros, display usd); (0, "") when absent
+            return (
+                (round(dollars * 1_000_000), f"{dollars:.2f}")
+                if isinstance(dollars, (int, float))
+                else (0, "")
+            )
+
         fields: dict[str, Any] = {}
-        for prefix, attr in (("remaining", "total_usable_credits"), ("subscription", "subscription_credits_remaining"),
-                             ("purchased", "purchased_credits_remaining")):
-            fields[f"{prefix}_micros"], fields[f"{prefix}_usd"] = _money(getattr(acc, attr, None))
+        for prefix, attr in (
+            ("remaining", "total_usable_credits"),
+            ("subscription", "subscription_credits_remaining"),
+            ("purchased", "purchased_credits_remaining"),
+        ):
+            fields[f"{prefix}_micros"], fields[f"{prefix}_usd"] = _money(
+                getattr(acc, attr, None)
+            )
         monthly = getattr(sub, "monthly_credits", None)
-        cap = _money(monthly) if isinstance(monthly, (int, float)) and monthly > 0 else (None, None)
+        cap = (
+            _money(monthly)
+            if isinstance(monthly, (int, float)) and monthly > 0
+            else (None, None)
+        )
         paid = getattr(info, "paid_service_access", None)
         window = _window_seed_fields(getattr(info, "usage_window", None))
         if window is not None:
@@ -715,9 +966,16 @@ def _credits_state_from_account(info) -> Optional[CreditsState]:
             fields["subscription_micros"], fields["subscription_usd"] = 0, "0.00"
             cap = (None, None)
         return CreditsState(
-            **fields, subscription_limit_micros=cap[0], subscription_limit_usd=cap[1], from_header=False, captured_at=time.time(),
-            rollover_micros=_money(getattr(sub, "rollover_credits", None))[0], paid_access=paid if isinstance(paid, bool) else True,
-            denominator_kind="usage_window" if window is not None else ("subscription_cap" if cap[0] is not None else "none"),
+            **fields,
+            subscription_limit_micros=cap[0],
+            subscription_limit_usd=cap[1],
+            from_header=False,
+            captured_at=time.time(),
+            rollover_micros=_money(getattr(sub, "rollover_credits", None))[0],
+            paid_access=paid if isinstance(paid, bool) else True,
+            denominator_kind="usage_window"
+            if window is not None
+            else ("subscription_cap" if cap[0] is not None else "none"),
             **(window or {}),
         )
     except Exception:
@@ -769,7 +1027,11 @@ def _remember_shown_band(session_id, band) -> None:
 
 # Window plans: the same per-session memory for the window notices (limit / now-using-credits / paused lines
 # and the 90% heads-ups), so a rebuilt agent does not re-show a line this session already showed.
-_WINDOW_NOTICE_KEYS = (CREDITS_WINDOW_PAYG_KEY, CREDITS_WINDOW_LIMIT_KEY, CREDITS_DEPLETED_KEY)
+_WINDOW_NOTICE_KEYS = (
+    CREDITS_WINDOW_PAYG_KEY,
+    CREDITS_WINDOW_LIMIT_KEY,
+    CREDITS_DEPLETED_KEY,
+)
 _seen_window_notices: dict = {}
 
 
@@ -798,6 +1060,7 @@ def apply_keep_going_change(agent, enabled: bool) -> None:
     The account snapshot the pickers read is refreshed in the background. Never raises."""
     try:
         from dataclasses import replace
+
         state = getattr(agent, "_credits_state", None)
         if state is None or not state.is_usage_window:
             return
@@ -805,7 +1068,11 @@ def apply_keep_going_change(agent, enabled: bool) -> None:
         _rerun_notice_policy(agent)
         from agent.memory_provider import spawn_context_thread
         from clawk_cli.nous_account import get_nous_portal_account_info
-        spawn_context_thread(lambda: get_nous_portal_account_info(force_fresh=True), name="keep-going-refresh").start()
+
+        spawn_context_thread(
+            lambda: get_nous_portal_account_info(force_fresh=True),
+            name="keep-going-refresh",
+        ).start()
     except Exception:
         logger.debug("keep going ▸ local refresh failed", exc_info=True)
 
@@ -821,8 +1088,14 @@ def remember_window_notices(session_id, latch: dict) -> None:
         if not session_id:
             return
         texts = latch.get("texts", {})
-        entry = {"texts": {k: texts[k] for k in _WINDOW_NOTICE_KEYS if k in latch["active"] and k in texts},
-                 "warned": dict(latch.get("window_warned", {}))}
+        entry = {
+            "texts": {
+                k: texts[k]
+                for k in _WINDOW_NOTICE_KEYS
+                if k in latch["active"] and k in texts
+            },
+            "warned": dict(latch.get("window_warned", {})),
+        }
         _seen_window_notices.pop(session_id, None)
         _seen_window_notices[session_id] = entry
         if len(_seen_window_notices) > _SEEN_USAGE_BANDS_MAX:
@@ -839,7 +1112,9 @@ def _hydrate_seed_state(agent, state) -> None:
         agent._credits_session_start_micros = state.remaining_micros
     latch = getattr(agent, "_credits_latch", None)
     if isinstance(latch, dict) and state.used_fraction is not None:
-        latch["seen_below_90"] = True  # ONLY this gate — priming seen_grant_unspent would revive the steady-state nag
+        latch["seen_below_90"] = (
+            True  # ONLY this gate — priming seen_grant_unspent would revive the steady-state nag
+        )
         # Restore the band this logical session already showed (desktop reap/resume rebuilds the
         # agent object but keeps session_id) so an unchanged band is not re-announced per message.
         prior_band = _seen_usage_bands.get(getattr(agent, "session_id", None))
@@ -893,7 +1168,9 @@ def rewarm_pricing_before_depleted_notice(agent) -> bool:
 
     from agent.memory_provider import spawn_context_thread
 
-    agent._credits_pricing_warm = spawn_context_thread(_warm_then_rerun, name="credits-pricing-warm")
+    agent._credits_pricing_warm = spawn_context_thread(
+        _warm_then_rerun, name="credits-pricing-warm"
+    )
     agent._credits_pricing_warm.start()
     return True
 
@@ -903,19 +1180,27 @@ def seed_credits_at_session_start(agent) -> bool:
     warnings show at session OPEN (TUI/desktop "ready" and plain-CLI first-turn setup). Idempotent once a seed
     or real header populated _credits_state. Returns True iff it seeded this call. Never raises."""
     try:
-        if getattr(agent, "provider", "") != "nous" or getattr(agent, "_credits_state", None) is not None:
+        if (
+            getattr(agent, "provider", "") != "nous"
+            or getattr(agent, "_credits_state", None) is not None
+        ):
             return False
         try:
             fixture = dev_fixture_credits_state()
         except Exception:
             fixture = None
-        if fixture is not None:  # synchronous: instant, and tests rely on state + notice landing before return
+        if (
+            fixture is not None
+        ):  # synchronous: instant, and tests rely on state + notice landing before return
             _hydrate_seed_state(agent, fixture)
             return True
 
-        def _bg_seed() -> None:  # FIRE-AND-FORGET: a slow portal must never delay "ready"
+        def _bg_seed() -> (
+            None
+        ):  # FIRE-AND-FORGET: a slow portal must never delay "ready"
             try:
                 from clawk_cli.nous_account import get_nous_portal_account_info
+
                 # BEFORE the policy runs (either branch below): the free-model gate only PEEKS the
                 # pricing cache, and this thread is the first thing a chat session runs that can
                 # afford to fill it.
@@ -930,11 +1215,18 @@ def seed_credits_at_session_start(agent) -> bool:
                 if (state := _credits_state_from_account(info)) is not None:
                     _hydrate_seed_state(agent, state)
             except Exception:
-                logger.debug("credits ▸ session-start seed (background) failed", exc_info=True)
+                logger.debug(
+                    "credits ▸ session-start seed (background) failed", exc_info=True
+                )
+
         from agent.memory_provider import spawn_context_thread
 
-        spawn_context_thread(_bg_seed, name="credits-seed").start()  # the warm reads the profile's auth store
+        spawn_context_thread(
+            _bg_seed, name="credits-seed"
+        ).start()  # the warm reads the profile's auth store
         return True
     except Exception:
-        logger.debug("credits ▸ session-start seed failed (fail-open)", exc_info=True)  # innermost log: diagnosable dead seed
+        logger.debug(
+            "credits ▸ session-start seed failed (fail-open)", exc_info=True
+        )  # innermost log: diagnosable dead seed
         return False

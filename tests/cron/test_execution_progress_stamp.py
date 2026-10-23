@@ -19,7 +19,9 @@ from cron.executions import _transaction, create_execution, mark_execution_runni
 
 @pytest.fixture(autouse=True)
 def _ledger(monkeypatch, tmp_path):
-    monkeypatch.setattr(executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db")
+    monkeypatch.setattr(
+        executions_mod, "EXECUTIONS_FILE", tmp_path / "cron" / "executions.db"
+    )
 
 
 def _progress_at(execution_id: str):
@@ -36,8 +38,11 @@ def test_active_run_stamps_progress_and_idle_run_does_not(monkeypatch):
     # The monitor polls concurrent.futures.wait(timeout=_POLL_INTERVAL); shorten the local
     # constant so the stamp cadence is observable within the test.
     monkeypatch.setattr(
-        scheduler.concurrent.futures, "wait",
-        lambda fs, timeout=None: scheduler.concurrent.futures._base.wait(fs, timeout=0.01),
+        scheduler.concurrent.futures,
+        "wait",
+        lambda fs, timeout=None: scheduler.concurrent.futures._base.wait(
+            fs, timeout=0.01
+        ),
     )
 
     finish = threading.Event()
@@ -60,12 +65,23 @@ def test_active_run_stamps_progress_and_idle_run_does_not(monkeypatch):
         finish.clear()
         execution = create_execution("job-progress", source="cron")
         mark_execution_running(execution["id"])
-        job = {"id": "job-progress", "execution_id": execution["id"], "schedule": {"kind": "every"}}
+        job = {
+            "id": "job-progress",
+            "execution_id": execution["id"],
+            "schedule": {"kind": "every"},
+        }
         timer = threading.Timer(0.4, finish.set)
         timer.start()
         try:
             scheduler._run_agent_with_watchdog(
-                Agent(idle_seconds), "probe", job, "job-progress", "job-progress", "task", None)
+                Agent(idle_seconds),
+                "probe",
+                job,
+                "job-progress",
+                "job-progress",
+                "task",
+                None,
+            )
         finally:
             timer.cancel()
         return _progress_at(execution["id"])

@@ -1,5 +1,4 @@
-"""Dashboard config schema and model-assignment logic: CONFIG_SCHEMA construction, dynamic provider options, web<->config normalisation, main/aux model assignment.
-"""
+"""Dashboard config schema and model-assignment logic: CONFIG_SCHEMA construction, dynamic provider options, web<->config normalisation, main/aux model assignment."""
 
 import logging
 import os
@@ -29,6 +28,7 @@ _log = logging.getLogger("clawk_cli.web_server")
 # Config schema — auto-generated from DEFAULT_CONFIG
 # ---------------------------------------------------------------------------
 
+
 def _memory_provider_options() -> list[str]:
     """Discovered memory providers for the ``memory.provider`` select.
 
@@ -53,20 +53,28 @@ def _timezone_options() -> list[str]:
     """Return sorted IANA timezone identifiers, cached at import time."""
     try:
         import zoneinfo
+
         return sorted(zoneinfo.available_timezones()) or ["UTC"]
     except Exception:  # pragma: no cover
         return ["UTC"]
 
 
 def _select(description: str, *options: str, **extra: Any) -> dict[str, Any]:
-    return {"type": "select", "description": description, "options": list(options), **extra}
+    return {
+        "type": "select",
+        "description": description,
+        "options": list(options),
+        **extra,
+    }
 
 
 # Manual overrides for fields that need select options or custom types.
 _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
     "timezone": _select(
         "IANA timezone (e.g. America/New_York). Blank uses the system timezone.",
-        *_timezone_options(), searchable=True, clearable=True,
+        *_timezone_options(),
+        searchable=True,
+        clearable=True,
     ),
     "memory.provider": _select("Memory provider plugin", *_memory_provider_options()),
     "model": {
@@ -81,7 +89,12 @@ _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "terminal.backend": _select(
         "Terminal execution backend",
-        "local", "docker", "ssh", "modal", "daytona", "vercel_sandbox",
+        "local",
+        "docker",
+        "ssh",
+        "modal",
+        "daytona",
+        "vercel_sandbox",
     ),
     # sync with _SUPPORTED_VERCEL_RUNTIMES in terminal_tool.py
     "terminal.vercel_image": {
@@ -90,7 +103,11 @@ _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "terminal.vercel_runtime": _select(
         "Legacy Vercel Sandbox runtime (deprecated by Vercel; a pinned runtime overrides the image; clear to use the image)",
-        "node24", "node22", "python3.13", clearable=True),
+        "node24",
+        "node22",
+        "python3.13",
+        clearable=True,
+    ),
     "terminal.modal_mode": _select("Modal sandbox mode", "sandbox", "function"),
     "proxy.enabled": {
         "type": "boolean",
@@ -101,7 +118,10 @@ _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
         "category": "security",
     },
     "proxy.credential_source": _select(
-        "Where iron-proxy loads real upstream secrets at start time", "env", "bitwarden", category="security"
+        "Where iron-proxy loads real upstream secrets at start time",
+        "env",
+        "bitwarden",
+        category="security",
     ),
     "proxy.enforce_on_docker": {
         "type": "boolean",
@@ -118,46 +138,105 @@ _SCHEMA_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "wake_word.provider": _select(
         "Wake engine. Auto selects a platform-supported engine; Porcupine requires PORCUPINE_ACCESS_KEY.",
-        "auto", *_PROVIDER_PREFERENCE,
+        "auto",
+        *_PROVIDER_PREFERENCE,
     ),
     "tts.provider": _select(
         "Text-to-speech provider",
-        "edge", "elevenlabs", "openai", "xai", "minimax", "mistral", "gemini", "neutts", "kittentts", "piper",
+        "edge",
+        "elevenlabs",
+        "openai",
+        "xai",
+        "minimax",
+        "mistral",
+        "gemini",
+        "neutts",
+        "kittentts",
+        "piper",
     ),
     "stt.provider": _select(
-        "Speech-to-text provider", "local", "groq", "openai", "mistral", "xai", "elevenlabs", "deepinfra"),
-    "stt.local.model": _select("Local faster-whisper model size", *STT_MODEL_CATALOG["local"]),
+        "Speech-to-text provider",
+        "local",
+        "groq",
+        "openai",
+        "mistral",
+        "xai",
+        "elevenlabs",
+        "deepinfra",
+    ),
+    "stt.local.model": _select(
+        "Local faster-whisper model size", *STT_MODEL_CATALOG["local"]
+    ),
     "stt.groq.model": _select("Groq Whisper model", *STT_MODEL_CATALOG["groq"]),
-    "stt.openai.model": _select("OpenAI transcription model", *STT_MODEL_CATALOG["openai"]),
-    "stt.openai.streaming_model": _select("OpenAI live transcription model (stt.streaming)", "gpt-live-transcribe",
-                                          "gpt-transcribe", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"),
-    "stt.mistral.model": _select("Mistral Voxtral transcription model", *STT_MODEL_CATALOG["mistral"]),
+    "stt.openai.model": _select(
+        "OpenAI transcription model", *STT_MODEL_CATALOG["openai"]
+    ),
+    "stt.openai.streaming_model": _select(
+        "OpenAI live transcription model (stt.streaming)",
+        "gpt-live-transcribe",
+        "gpt-transcribe",
+        "gpt-4o-transcribe",
+        "gpt-4o-mini-transcribe",
+    ),
+    "stt.mistral.model": _select(
+        "Mistral Voxtral transcription model", *STT_MODEL_CATALOG["mistral"]
+    ),
     "stt.xai.model": _select("xAI transcription model", *STT_MODEL_CATALOG["xai"]),
-    "stt.elevenlabs.model_id": _select("ElevenLabs Scribe model", *STT_MODEL_CATALOG["elevenlabs"]),
+    "stt.elevenlabs.model_id": _select(
+        "ElevenLabs Scribe model", *STT_MODEL_CATALOG["elevenlabs"]
+    ),
     "display.skin": _select("CLI visual theme", "default", "ares", "mono", "slate"),
     "dashboard.theme": _select(
-        "Web dashboard visual theme", "default", "midnight", "ember", "mono", "cyberpunk", "rose"
+        "Web dashboard visual theme",
+        "default",
+        "midnight",
+        "ember",
+        "mono",
+        "cyberpunk",
+        "rose",
     ),
-    "display.resume_display": _select("How resumed sessions display history", "minimal", "full", "off"),
-    "display.busy_input_mode": _select("Input behavior while agent is running", "interrupt", "queue", "steer"),
-    "approvals.mode": _select("Dangerous command approval mode", "manual", "smart", "off"),
+    "display.resume_display": _select(
+        "How resumed sessions display history", "minimal", "full", "off"
+    ),
+    "display.busy_input_mode": _select(
+        "Input behavior while agent is running", "interrupt", "queue", "steer"
+    ),
+    "approvals.mode": _select(
+        "Dangerous command approval mode", "manual", "smart", "off"
+    ),
     "context.engine": _select("Context management engine", "default", "custom"),
-    "human_delay.mode": _select("Simulated typing delay mode", "off", "typing", "fixed"),
-    "logging.level": _select("Log level for agent.log", "DEBUG", "INFO", "WARNING", "ERROR"),
+    "human_delay.mode": _select(
+        "Simulated typing delay mode", "off", "typing", "fixed"
+    ),
+    "logging.level": _select(
+        "Log level for agent.log", "DEBUG", "INFO", "WARNING", "ERROR"
+    ),
     "agent.service_tier": _select(
         "Fast mode: fast = always, auto = first N seconds of each turn, cold = first turn only",
-        "", "normal", "fast", "auto", "cold",
+        "",
+        "normal",
+        "fast",
+        "auto",
+        "cold",
     ),
     "delegation.reasoning_effort": _select(
         "Reasoning effort for delegated subagents",
-        "", "minimal", "low", "medium", "high", "xhigh", "max", "ultra",
+        "",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
     ),
     "updates.non_interactive_local_changes": _select(
         "When the chat app / gateway updates Clawksis (no terminal prompt), "
         "what to do with uncommitted local source edits. 'stash' keeps them "
         "and re-applies them after the update; 'discard' throws them away. "
         "Terminal updates always ask, regardless of this setting.",
-        "stash", "discard",
+        "stash",
+        "discard",
     ),
     "updates.refresh_cua_driver": {
         "type": "boolean",
@@ -229,7 +308,13 @@ _CATEGORY_MERGE: dict[str, str] = {
 }
 
 
-_UI_TYPES = ((bool, "boolean"), (int, "number"), (float, "number"), (list, "list"), (dict, "object"))
+_UI_TYPES = (
+    (bool, "boolean"),
+    (int, "number"),
+    (float, "number"),
+    (list, "list"),
+    (dict, "object"),
+)
 
 
 def _infer_type(value: Any) -> str:
@@ -237,7 +322,9 @@ def _infer_type(value: Any) -> str:
     return next((ui for py, ui in _UI_TYPES if isinstance(value, py)), "string")
 
 
-def _build_schema_from_config(config: dict[str, Any], prefix: str = "") -> dict[str, dict[str, Any]]:
+def _build_schema_from_config(
+    config: dict[str, Any], prefix: str = ""
+) -> dict[str, dict[str, Any]]:
     """Walk DEFAULT_CONFIG and produce a flat dot-path → field schema dict."""
     schema: dict[str, dict[str, Any]] = {}
     for key, value in config.items():
@@ -290,7 +377,9 @@ def _is_command_provider_block(value: Any) -> bool:
     return isinstance(command, str) and bool(command.strip())
 
 
-def _custom_provider_options(kind: str, builtin_names: list[str], cfg: dict[str, Any]) -> list[str]:
+def _custom_provider_options(
+    kind: str, builtin_names: list[str], cfg: dict[str, Any]
+) -> list[str]:
     """Merged ``tts``/``stt`` provider options without hard-coding vendor names.
 
     Built-in display names first (original order), then, deduped case-insensitively:
@@ -308,7 +397,9 @@ def _custom_provider_options(kind: str, builtin_names: list[str], cfg: dict[str,
     if kind == "tts":
         from tools.tts_tool import BUILTIN_TTS_PROVIDERS as _runtime_builtins
     else:
-        from tools.transcription_common import BUILTIN_STT_PROVIDERS as _runtime_builtins
+        from tools.transcription_common import (
+            BUILTIN_STT_PROVIDERS as _runtime_builtins,
+        )
 
     def _add(name: Any) -> None:
         stripped = name.strip() if isinstance(name, str) else ""
@@ -320,7 +411,9 @@ def _custom_provider_options(kind: str, builtin_names: list[str], cfg: dict[str,
     if not isinstance(section, dict):
         section = {}
     providers_map = section.get("providers")
-    candidate_blocks: list[Any] = [providers_map] if isinstance(providers_map, dict) else []
+    candidate_blocks: list[Any] = (
+        [providers_map] if isinstance(providers_map, dict) else []
+    )
     candidate_blocks.append({k: v for k, v in section.items() if k != "providers"})
     for block in candidate_blocks:
         for name, value in block.items():
@@ -335,7 +428,9 @@ def _custom_provider_options(kind: str, builtin_names: list[str], cfg: dict[str,
         if kind == "tts":
             from agent.tts_registry import list_providers as _list_voice_providers
         else:
-            from agent.transcription_registry import list_providers as _list_voice_providers
+            from agent.transcription_registry import (
+                list_providers as _list_voice_providers,
+            )
         for _p in _list_voice_providers():
             _add(getattr(_p, "name", None))
     except Exception:  # pragma: no cover - registry import should not break schema
@@ -351,7 +446,9 @@ def _memory_provider_schema_options(cfg: dict[str, Any]) -> list[str]:
     longer discoverable (e.g. plugin removed from disk) never vanishes from the dropdown."""
     options = _memory_provider_options()
     memory = cfg.get("memory")
-    current = _normalize_memory_provider_name(memory.get("provider") if isinstance(memory, dict) else None)
+    current = _normalize_memory_provider_name(
+        memory.get("provider") if isinstance(memory, dict) else None
+    )
     if current and current not in options:
         options = [*options, current]
     return options
@@ -374,6 +471,7 @@ def _schema_with_dynamic_provider_options() -> dict[str, dict[str, Any]]:
     """
     from clawk_cli.web_server_profiles import _plugin_terminal_backend_rows
     from clawk_cli.config import load_config
+
     try:
         cfg = load_config()
     except Exception:  # pragma: no cover - schema must survive config errors
@@ -382,20 +480,28 @@ def _schema_with_dynamic_provider_options() -> dict[str, dict[str, Any]]:
     overlay: dict[str, dict[str, Any]] = {}
 
     def merge(key: str, options: list[str]) -> None:
-        if _schema_select_options(key) is not None and options != CONFIG_SCHEMA[key]["options"]:
+        if (
+            _schema_select_options(key) is not None
+            and options != CONFIG_SCHEMA[key]["options"]
+        ):
             overlay[key] = {**CONFIG_SCHEMA[key], "options": options}
 
     for kind in ("tts", "stt"):
         existing = _schema_select_options(f"{kind}.provider")
         if existing is not None:
-            merge(f"{kind}.provider", _custom_provider_options(kind, list(existing), cfg))
+            merge(
+                f"{kind}.provider", _custom_provider_options(kind, list(existing), cfg)
+            )
 
     merge("memory.provider", _memory_provider_schema_options(cfg))
 
     tb_options = _schema_select_options("terminal.backend")
     if tb_options is not None:
         try:
-            plugin_names = sorted({row["name"] for row in _plugin_terminal_backend_rows()} - set(tb_options))
+            plugin_names = sorted(
+                {row["name"] for row in _plugin_terminal_backend_rows()}
+                - set(tb_options)
+            )
         except Exception:
             plugin_names = []
         if plugin_names:
@@ -425,7 +531,11 @@ def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, st
     """
     from clawk_cli.config import load_config
     from clawk_cli.config import get_compatible_custom_providers
-    from clawk_cli.models import _AGGREGATOR_PROVIDERS, _KNOWN_PROVIDER_NAMES, normalize_provider
+    from clawk_cli.models import (
+        _AGGREGATOR_PROVIDERS,
+        _KNOWN_PROVIDER_NAMES,
+        normalize_provider,
+    )
     from clawk_cli.model_normalize import normalize_model_for_provider
     from clawk_cli.providers import resolve_custom_provider, resolve_user_provider
 
@@ -447,11 +557,17 @@ def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, st
         return declared.id, model_in
 
     is_custom_provider_slug = canonical == "custom" or canonical.startswith("custom:")
-    if canonical not in _KNOWN_PROVIDER_NAMES and not is_custom_provider_slug and "/" in model_in:
+    if (
+        canonical not in _KNOWN_PROVIDER_NAMES
+        and not is_custom_provider_slug
+        and "/" in model_in
+    ):
         try:
             cur_cfg = cfg.get("model", {})
             cur_provider = (
-                str(cur_cfg.get("provider", "") or "").strip().lower() if isinstance(cur_cfg, dict) else ""
+                str(cur_cfg.get("provider", "") or "").strip().lower()
+                if isinstance(cur_cfg, dict)
+                else ""
             )
         except Exception:
             cur_provider = ""
@@ -470,7 +586,9 @@ def _normalize_main_model_assignment(provider: str, model: str) -> tuple[str, st
         try:
             model_in = normalize_model_for_provider(model_in, canonical) or model_in
         except Exception:
-            _log.debug("model normalization failed for %s/%s", prov_in, model_in, exc_info=True)
+            _log.debug(
+                "model normalization failed for %s/%s", prov_in, model_in, exc_info=True
+            )
 
     return prov_in, model_in
 
@@ -488,14 +606,24 @@ def _validated_main_model_selection(
     model_cfg = cfg.get("model") if isinstance(cfg.get("model"), dict) else {}
     is_bare_custom = provider.strip().lower() in {"custom", "local"}
     result = switch_model(
-        raw_input=model, explicit_provider=provider, is_global=True,
-        current_provider=str(model_cfg.get("provider") or ""), current_model=str(model_cfg.get("default") or ""),
-        current_base_url=base_url if is_bare_custom else str(model_cfg.get("base_url") or ""),
+        raw_input=model,
+        explicit_provider=provider,
+        is_global=True,
+        current_provider=str(model_cfg.get("provider") or ""),
+        current_model=str(model_cfg.get("default") or ""),
+        current_base_url=base_url
+        if is_bare_custom
+        else str(model_cfg.get("base_url") or ""),
         current_api_key=api_key if is_bare_custom else "",
-        user_providers=cfg.get("providers") if isinstance(cfg.get("providers"), dict) else {},
-        custom_providers=get_compatible_custom_providers(cfg))
+        user_providers=cfg.get("providers")
+        if isinstance(cfg.get("providers"), dict)
+        else {},
+        custom_providers=get_compatible_custom_providers(cfg),
+    )
     if not result.success:
-        raise HTTPException(status_code=400, detail=result.error_message or "model switch rejected")
+        raise HTTPException(
+            status_code=400, detail=result.error_message or "model switch rejected"
+        )
     if is_bare_custom and base_url.strip():
         # The submitted endpoint IS the route this pick asked for; the credential step may have
         # re-resolved the bare target onto an env/config endpoint (CUSTOM_BASE_URL, a stale
@@ -504,13 +632,19 @@ def _validated_main_model_selection(
         # together, so a mode derived from the displaced host would route the submitted endpoint
         # over the wrong wire.
         from clawk_cli.providers import determine_api_mode
+
         url = base_url.strip()
-        result = replace(result, base_url=url,
-                         api_mode=determine_api_mode(result.target_provider, url))
+        result = replace(
+            result,
+            base_url=url,
+            api_mode=determine_api_mode(result.target_provider, url),
+        )
     return result
 
 
-def _apply_main_model_assignment(model_cfg: Any, result: "ModelSwitchResult", api_key: str = "") -> dict:
+def _apply_main_model_assignment(
+    model_cfg: Any, result: "ModelSwitchResult", api_key: str = ""
+) -> dict:
     """Apply a main-slot selection to a ``model`` config dict via the canonical /model shape
     (``clawk_cli.model_switch.apply_model_selection``). An explicit key for a custom endpoint is
     the one inline credential the runtime reads (``model.api_key``); the legacy ``api`` alias is
@@ -549,8 +683,18 @@ def _normalize_config_for_web(config: dict[str, Any]) -> dict[str, Any]:
 # Canonical auxiliary task slots. Keep in sync with DEFAULT_CONFIG["auxiliary"]
 # in clawk_cli/config.py — listed here for deterministic ordering in the UI.
 _AUX_TASK_SLOTS: tuple[str, ...] = (
-    "vision", "compression", "skills_hub", "approval", "mcp", "title_generation", "review", "voice_chat",
-    "triage_specifier", "kanban_decomposer", "profile_describer", "curator",
+    "vision",
+    "compression",
+    "skills_hub",
+    "approval",
+    "mcp",
+    "title_generation",
+    "review",
+    "voice_chat",
+    "triage_specifier",
+    "kanban_decomposer",
+    "profile_describer",
+    "curator",
 )
 
 
@@ -565,9 +709,15 @@ def _plugin_aux_tasks() -> list[dict[str, Any]]:
     """
     try:
         from clawk_cli.plugins import get_plugin_auxiliary_tasks
-        return [dict(entry) for entry in get_plugin_auxiliary_tasks()
-                if entry.get("key") and entry["key"] not in _AUX_TASK_SLOTS]
-    except Exception:  # health: allow BLE001 -- plugin discovery must never break the built-in slots
+
+        return [
+            dict(entry)
+            for entry in get_plugin_auxiliary_tasks()
+            if entry.get("key") and entry["key"] not in _AUX_TASK_SLOTS
+        ]
+    except (
+        Exception
+    ):  # health: allow BLE001 -- plugin discovery must never break the built-in slots
         _log.debug("plugin auxiliary task lookup failed", exc_info=True)
         return []
 
@@ -622,7 +772,9 @@ def _dashboard_skew_restart_hint() -> str:
     )
 
 
-def _resolve_assignment_credentials(model_cfg: dict, provider: str, provider_entry: Any) -> None:
+def _resolve_assignment_credentials(
+    model_cfg: dict, provider: str, provider_entry: Any
+) -> None:
     """Carry the provider's credential POINTER (``key_env`` / raw ``${VAR}``) onto ``model_cfg``.
 
     ``provider_entry`` comes from ``load_config()``, which expands ``${VAR}`` to plaintext;
@@ -631,7 +783,9 @@ def _resolve_assignment_credentials(model_cfg: dict, provider: str, provider_ent
     the raw yaml itself stores the key as a literal (no new exposure).
     """
     try:
-        _stored, raw_entry = find_provider_entry(read_raw_config().get("providers"), provider)
+        _stored, raw_entry = find_provider_entry(
+            read_raw_config().get("providers"), provider
+        )
     except Exception:
         raw_entry = None
     if not isinstance(raw_entry, dict):
@@ -643,7 +797,11 @@ def _resolve_assignment_credentials(model_cfg: dict, provider: str, provider_ent
         model_cfg.pop("api_key", None)
     elif isinstance(provider_entry, dict) and provider_entry.get("api_key"):
         raw_key = str(raw_entry.get("api_key") or "").strip()
-        model_cfg["api_key"] = raw_key if raw_key.startswith("${") and raw_key.endswith("}") else provider_entry["api_key"]
+        model_cfg["api_key"] = (
+            raw_key
+            if raw_key.startswith("${") and raw_key.endswith("}")
+            else provider_entry["api_key"]
+        )
 
 
 def _apply_nous_gateway_defaults(cfg: dict) -> list:
@@ -655,7 +813,9 @@ def _apply_nous_gateway_defaults(cfg: dict) -> list:
         from clawk_cli.tools_config import _get_platform_tools
 
         enabled = _get_platform_tools(cfg, "cli", include_default_mcp_servers=False)
-        return sorted(apply_nous_managed_defaults(cfg, enabled_toolsets=enabled, force_fresh=True))
+        return sorted(
+            apply_nous_managed_defaults(cfg, enabled_toolsets=enabled, force_fresh=True)
+        )
     except Exception:
         _log.debug("apply_nous_managed_defaults skipped", exc_info=True)
         return []
@@ -677,10 +837,15 @@ def _endpoint_known_to_config(cfg: dict, base_url: str) -> bool:
         return True
     for section_key in ("providers", "custom_providers"):
         section = cfg.get(section_key)
-        entries: Any = section if isinstance(section, list) else (
-            list(section.values()) if isinstance(section, dict) else [])
+        entries: Any = (
+            section
+            if isinstance(section, list)
+            else (list(section.values()) if isinstance(section, dict) else [])
+        )
         for entry in entries:
-            if isinstance(entry, dict) and _matches(entry.get("base_url") or entry.get("url") or entry.get("api")):
+            if isinstance(entry, dict) and _matches(
+                entry.get("base_url") or entry.get("url") or entry.get("api")
+            ):
                 return True
     return False
 
@@ -697,9 +862,14 @@ def _register_custom_endpoint(base_url: str, api_key: str, model: str) -> None:
     GENUINELY new endpoint gets a named row.
     """
     try:
-        from clawk_cli.main_provider_setup import _auto_provider_name, _save_custom_provider
+        from clawk_cli.main_provider_setup import (
+            _auto_provider_name,
+            _save_custom_provider,
+        )
 
-        _save_custom_provider(base_url, api_key, model, name=_auto_provider_name(base_url))
+        _save_custom_provider(
+            base_url, api_key, model, name=_auto_provider_name(base_url)
+        )
     except Exception:
         _log.debug("custom_providers registration skipped", exc_info=True)
 
@@ -723,14 +893,22 @@ def _stale_aux_pins(cfg: dict, new_provider: str) -> list:
         slot_provider = str(slot_cfg.get("provider", "") or "").strip()
         # "main" is an alias for the active main provider (auxiliary_client._normalize_aux_provider):
         # it follows the switch and is never a stale pin.
-        if slot_provider and slot_provider.lower() not in {"auto", "", "main"} and slot_provider.lower() != new_provider:
+        if (
+            slot_provider
+            and slot_provider.lower() not in {"auto", "", "main"}
+            and slot_provider.lower() != new_provider
+        ):
             # A pin on a private/LAN endpoint (per-task base_url, e.g. a home Ollama box) never bills
             # a provider, so a main switch does not orphan it.
             if is_local_endpoint(str(slot_cfg.get("base_url", "") or "")):
                 continue
-            stale_aux.append({
-                "task": slot, "provider": slot_provider, "model": str(slot_cfg.get("model", "") or ""),
-            })
+            stale_aux.append(
+                {
+                    "task": slot,
+                    "provider": slot_provider,
+                    "model": str(slot_cfg.get("model", "") or ""),
+                }
+            )
     return stale_aux
 
 
@@ -739,24 +917,43 @@ def _provider_entry(cfg: dict, provider: str) -> Any:
     return providers_cfg.get(provider) if isinstance(providers_cfg, dict) else None
 
 
-def _prepare_main_assignment(cfg: dict, provider: str, model: str, base_url: str, api_key: str) -> "tuple[str, ModelSwitchResult]":
+def _prepare_main_assignment(
+    cfg: dict, provider: str, model: str, base_url: str, api_key: str
+) -> "tuple[str, ModelSwitchResult]":
     """Validation half of a main-slot assignment: ``(effective base_url, switch result)``.
     ``switch_model`` fetches catalogs / probes endpoints, so callers run this BEFORE taking
     ``_CONFIG_MUTATION_LOCK``; it writes nothing."""
     if not provider or not model:
-        raise HTTPException(status_code=400, detail="provider and model required for main")
+        raise HTTPException(
+            status_code=400, detail="provider and model required for main"
+        )
     provider, model = _normalize_main_model_assignment(provider, model)
     provider_entry = _provider_entry(cfg, provider)
-    if not base_url and isinstance(provider_entry, dict) and provider_entry.get("base_url"):
+    if (
+        not base_url
+        and isinstance(provider_entry, dict)
+        and provider_entry.get("base_url")
+    ):
         base_url = str(provider_entry.get("base_url") or "").strip()
-    return base_url, _validated_main_model_selection(cfg, provider, model, base_url, api_key)
+    return base_url, _validated_main_model_selection(
+        cfg, provider, model, base_url, api_key
+    )
 
 
-def _apply_main_assignment_sync(cfg: dict, provider: str, model: str, base_url: str, api_key: str,
-                                prepared: "Optional[tuple[str, ModelSwitchResult]]" = None) -> dict:
+def _apply_main_assignment_sync(
+    cfg: dict,
+    provider: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    prepared: "Optional[tuple[str, ModelSwitchResult]]" = None,
+) -> dict:
     from clawk_cli.config import save_config
     from clawk_cli.free_tier_bootstrap import reconcile_record
-    base_url, result = prepared or _prepare_main_assignment(cfg, provider, model, base_url, api_key)
+
+    base_url, result = prepared or _prepare_main_assignment(
+        cfg, provider, model, base_url, api_key
+    )
     provider, model = result.target_provider, result.new_model
     provider_entry = _provider_entry(cfg, provider)
     # Snapshot BEFORE the new assignment overwrites cfg["model"]: this is the state the user
@@ -765,7 +962,10 @@ def _apply_main_assignment_sync(cfg: dict, provider: str, model: str, base_url: 
     # (keep the existing shape — #76324).
     provider_lc = provider.strip().lower()
     endpoint_already_known = (
-        provider_lc in {"custom", "local"} and bool(base_url) and _endpoint_known_to_config(cfg, base_url))
+        provider_lc in {"custom", "local"}
+        and bool(base_url)
+        and _endpoint_known_to_config(cfg, base_url)
+    )
     model_cfg = _apply_main_model_assignment(cfg.get("model", {}), result, api_key)
     _resolve_assignment_credentials(model_cfg, provider, provider_entry)
     cfg["model"] = model_cfg
@@ -787,7 +987,11 @@ def _apply_main_assignment_sync(cfg: dict, provider: str, model: str, base_url: 
         "gateway_tools": gateway_tools,
         "stale_aux": _stale_aux_pins(cfg, new_provider),
         # Window plans, Large model: the warning (never a confirm). Absent for everyone else.
-        **({"notice": result.usage_notice} if getattr(result, "usage_notice", "") else {}),
+        **(
+            {"notice": result.usage_notice}
+            if getattr(result, "usage_notice", "")
+            else {}
+        ),
     }
 
 
@@ -801,23 +1005,36 @@ def _normalize_aux_reasoning_effort(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     from clawk_constants import parse_reasoning_effort
+
     parsed = parse_reasoning_effort(value)
     if parsed is None:
         from clawk_constants import VALID_REASONING_EFFORTS
-        raise HTTPException(status_code=400,
-                            detail=f"reasoning_effort must be one of: none, {', '.join(VALID_REASONING_EFFORTS)}")
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"reasoning_effort must be one of: none, {', '.join(VALID_REASONING_EFFORTS)}",
+        )
     return "none" if parsed.get("enabled") is False else parsed["effort"]
 
 
 def _aux_default_effort(slot: str) -> str:
     from clawk_cli.config_defaults import DEFAULT_CONFIG
+
     block = (DEFAULT_CONFIG.get("auxiliary") or {}).get(slot)
     return str(block.get("reasoning_effort") or "") if isinstance(block, dict) else ""
 
 
-def _apply_aux_assignment_sync(cfg: dict, provider: str, model: str, task: str, base_url: str, api_key: str,
-                               reasoning_effort: Optional[str] = _UNSET) -> dict:
+def _apply_aux_assignment_sync(
+    cfg: dict,
+    provider: str,
+    model: str,
+    task: str,
+    base_url: str,
+    api_key: str,
+    reasoning_effort: Optional[str] = _UNSET,
+) -> dict:
     from clawk_cli.config import save_config
+
     aux = cfg.get("auxiliary")
     if not isinstance(aux, dict):
         aux = {}
@@ -826,7 +1043,11 @@ def _apply_aux_assignment_sync(cfg: dict, provider: str, model: str, task: str, 
         slot_cfg = aux.get(slot)
         return slot_cfg if isinstance(slot_cfg, dict) else {}
 
-    effort = _normalize_aux_reasoning_effort(reasoning_effort) if reasoning_effort is not _UNSET else _UNSET
+    effort = (
+        _normalize_aux_reasoning_effort(reasoning_effort)
+        if reasoning_effort is not _UNSET
+        else _UNSET
+    )
     slots = _aux_task_slots()
 
     if task == "__reset__":
@@ -850,7 +1071,9 @@ def _apply_aux_assignment_sync(cfg: dict, provider: str, model: str, task: str, 
     new_provider = provider.strip().lower()
     for slot in targets:
         if slot not in slots:
-            raise HTTPException(status_code=400, detail=f"unknown auxiliary task: {slot}")
+            raise HTTPException(
+                status_code=400, detail=f"unknown auxiliary task: {slot}"
+            )
         slot_cfg = _slot(slot)
         prev_provider = str(slot_cfg.get("provider") or "").strip().lower()
         slot_cfg["provider"] = provider
@@ -882,15 +1105,27 @@ def _apply_aux_assignment_sync(cfg: dict, provider: str, model: str, task: str, 
 
     cfg["auxiliary"] = aux
     save_config(cfg)
-    result = {"ok": True, "scope": "auxiliary", "tasks": targets, "provider": provider, "model": model}
+    result = {
+        "ok": True,
+        "scope": "auxiliary",
+        "tasks": targets,
+        "provider": provider,
+        "model": model,
+    }
     if effort is not _UNSET:
         result["reasoning_effort"] = effort
     return result
 
 
 def _apply_model_assignment_sync(
-    scope: str, provider: str, model: str, task: str, base_url: str, api_key: str = "",
-    reasoning_effort: Optional[str] = _UNSET, prepared: "Optional[tuple[str, ModelSwitchResult]]" = None,
+    scope: str,
+    provider: str,
+    model: str,
+    task: str,
+    base_url: str,
+    api_key: str = "",
+    reasoning_effort: Optional[str] = _UNSET,
+    prepared: "Optional[tuple[str, ModelSwitchResult]]" = None,
 ):
     """Synchronous body of POST /api/model/set.
 
@@ -899,13 +1134,20 @@ def _apply_model_assignment_sync(
     ``_prepare_main_assignment`` result computed outside the config lock.
     """
     from clawk_cli.config import load_config
+
     cfg = load_config()
     if scope == "main":
-        return _apply_main_assignment_sync(cfg, provider, model, base_url, api_key, prepared)
-    return _apply_aux_assignment_sync(cfg, provider, model, task, base_url, api_key, reasoning_effort)
+        return _apply_main_assignment_sync(
+            cfg, provider, model, base_url, api_key, prepared
+        )
+    return _apply_aux_assignment_sync(
+        cfg, provider, model, task, base_url, api_key, reasoning_effort
+    )
 
 
-def _infer_provider_on_model_change(model_val: str, prev_provider: str) -> tuple[str, str]:
+def _infer_provider_on_model_change(
+    model_val: str, prev_provider: str
+) -> tuple[str, str]:
     """Infer which provider serves ``model_val`` when the flat Config-page Model field changes.
 
     Returns ``(provider, model)``; ``provider`` is empty when no switch is warranted. Signals,
@@ -918,7 +1160,11 @@ def _infer_provider_on_model_change(model_val: str, prev_provider: str) -> tuple
     if not name:
         return "", name
     try:
-        from clawk_cli.models import _AGGREGATOR_PROVIDERS, detect_provider_for_model, normalize_provider
+        from clawk_cli.models import (
+            _AGGREGATOR_PROVIDERS,
+            detect_provider_for_model,
+            normalize_provider,
+        )
     except Exception:
         return "", name
 
@@ -933,7 +1179,9 @@ def _infer_provider_on_model_change(model_val: str, prev_provider: str) -> tuple
         try:
             from clawk_cli.models_detect import provider_has_credentials
 
-            cur_is_aggregator = normalize_provider(prev_provider) in _AGGREGATOR_PROVIDERS
+            cur_is_aggregator = (
+                normalize_provider(prev_provider) in _AGGREGATOR_PROVIDERS
+            )
             # A vendor slug on a native provider is a guess at an aggregator; never guess one the
             # user has no key for — that silently writes a metered provider into config.yaml.
             if not cur_is_aggregator and provider_has_credentials("openrouter"):
@@ -957,6 +1205,7 @@ def _denormalize_config_from_web(config: dict[str, Any]) -> dict[str, Any]:
     and must leave the on-disk override alone — not be treated as an explicit 0.
     """
     from clawk_cli.config import load_config
+
     config = dict(config)
     config.pop("_model_meta", None)
 
@@ -985,10 +1234,19 @@ def _denormalize_config_from_web(config: dict[str, Any]) -> dict[str, Any]:
             prev_default = str(disk_model.get("default") or "").strip()
             prev_provider = str(disk_model.get("provider") or "").strip()
             if model_val != prev_default and prev_provider:
-                new_provider, resolved_model = _infer_provider_on_model_change(model_val, prev_provider)
-                if new_provider and new_provider.strip().lower() != prev_provider.lower():
-                    norm_provider, norm_model = _normalize_main_model_assignment(new_provider, resolved_model)
-                    result = _validated_main_model_selection(disk_cfg, norm_provider, norm_model)
+                new_provider, resolved_model = _infer_provider_on_model_change(
+                    model_val, prev_provider
+                )
+                if (
+                    new_provider
+                    and new_provider.strip().lower() != prev_provider.lower()
+                ):
+                    norm_provider, norm_model = _normalize_main_model_assignment(
+                        new_provider, resolved_model
+                    )
+                    result = _validated_main_model_selection(
+                        disk_cfg, norm_provider, norm_model
+                    )
                     disk_model = _apply_main_model_assignment(disk_model, result)
                     model_val = result.new_model
             disk_model["default"] = model_val

@@ -11,8 +11,12 @@ from tools import browser_tool_cloud as bt_cloud
 def _isolate_browser_state(monkeypatch):
     monkeypatch.setattr(browser_tool, "_active_sessions", {})
     monkeypatch.setattr(browser_tool, "_session_last_activity", {})
-    monkeypatch.setattr("tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None)
-    monkeypatch.setattr("tools.browser_tool_cdp._ensure_cdp_supervisor", lambda task_id: None)
+    monkeypatch.setattr(
+        "tools.browser_tool_lifecycle._start_browser_cleanup_thread", lambda: None
+    )
+    monkeypatch.setattr(
+        "tools.browser_tool_cdp._ensure_cdp_supervisor", lambda task_id: None
+    )
 
 
 def test_browser_use_preserves_provider_timeout(monkeypatch):
@@ -36,7 +40,9 @@ def test_browser_use_preserves_provider_timeout(monkeypatch):
             "managed_mode": False,
         },
     )
-    monkeypatch.setattr(browser_use_provider.requests, "post", Mock(return_value=response))
+    monkeypatch.setattr(
+        browser_use_provider.requests, "post", Mock(return_value=response)
+    )
 
     session = provider.create_session("task-1")
 

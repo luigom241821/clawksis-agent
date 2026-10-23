@@ -90,8 +90,14 @@ class _CountingAdapter(BasePlatformAdapter):
     (the SQLite db + WAL), and every disconnect() must close them.
     """
 
-    def __init__(self, *, succeed: bool = False, fatal_error: str | None = None,
-                 fatal_retryable: bool = True, raise_during_connect: bool = False):
+    def __init__(
+        self,
+        *,
+        succeed: bool = False,
+        fatal_error: str | None = None,
+        fatal_retryable: bool = True,
+        raise_during_connect: bool = False,
+    ):
         super().__init__(PlatformConfig(enabled=True, token="t"), Platform.TELEGRAM)
         # 2 fds to track: the canonical "ResponseStore" pair. The
         # reconnect watcher should call disconnect() once per
@@ -109,7 +115,9 @@ class _CountingAdapter(BasePlatformAdapter):
             raise RuntimeError("simulated connect exception")
         if self._fatal_error:
             self._set_fatal_error(
-                "test_code", self._fatal_error, retryable=self._fatal_retryable,
+                "test_code",
+                self._fatal_error,
+                retryable=self._fatal_retryable,
             )
             return False
         return self._succeed
@@ -159,11 +167,18 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(
-            succeed=False, fatal_error="bad token", fatal_retryable=False,
+            succeed=False,
+            fatal_error="bad token",
+            fatal_retryable=False,
         )
-        with patch.object(runner, "_create_adapter", return_value=adapter), \
-             patch.object(runner, "_connect_adapter_with_timeout",
-                          new=AsyncMock(return_value=False)):
+        with (
+            patch.object(runner, "_create_adapter", return_value=adapter),
+            patch.object(
+                runner,
+                "_connect_adapter_with_timeout",
+                new=AsyncMock(return_value=False),
+            ),
+        ):
             await _run_watcher_one_iteration(runner)
 
         # The intent of this test is "the watcher calls disconnect()
@@ -197,11 +212,18 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(
-            succeed=False, fatal_error="dns timeout", fatal_retryable=True,
+            succeed=False,
+            fatal_error="dns timeout",
+            fatal_retryable=True,
         )
-        with patch.object(runner, "_create_adapter", return_value=adapter), \
-             patch.object(runner, "_connect_adapter_with_timeout",
-                          new=AsyncMock(return_value=False)):
+        with (
+            patch.object(runner, "_create_adapter", return_value=adapter),
+            patch.object(
+                runner,
+                "_connect_adapter_with_timeout",
+                new=AsyncMock(return_value=False),
+            ),
+        ):
             await _run_watcher_one_iteration(runner)
 
         assert adapter._disconnect_calls >= 1, (
@@ -221,9 +243,14 @@ class TestReconnectFDLeakRegression:
         runner = _make_runner()
         _seed_runner_with_one_failure(runner)
         adapter = _CountingAdapter(raise_during_connect=True)
-        with patch.object(runner, "_create_adapter", return_value=adapter), \
-             patch.object(runner, "_connect_adapter_with_timeout",
-                          new=AsyncMock(side_effect=RuntimeError("boom"))):
+        with (
+            patch.object(runner, "_create_adapter", return_value=adapter),
+            patch.object(
+                runner,
+                "_connect_adapter_with_timeout",
+                new=AsyncMock(side_effect=RuntimeError("boom")),
+            ),
+        ):
             await _run_watcher_one_iteration(runner)
 
         assert adapter._disconnect_calls >= 1, (
@@ -318,4 +345,3 @@ class TestAPIServerDisconnectClosesResponseStore:
         # issues, AttributeError, etc.).
         with pytest.raises(sqlite3.ProgrammingError):
             store._conn.execute("SELECT 1").fetchone()
-

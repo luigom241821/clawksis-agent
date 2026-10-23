@@ -10,6 +10,7 @@ import os
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def _isolated_config_env(monkeypatch, tmp_path):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
@@ -17,10 +18,12 @@ def _isolated_config_env(monkeypatch, tmp_path):
     yield
     os.environ.pop("CLAWK_IGNORE_USER_CONFIG", None)
 
+
 def _write_corrupt_config(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text("model: [unterminated\n", encoding="utf-8")
     return path
+
 
 class TestGatewayGuard:
     def test_gateway_refuses_corrupt_config(self, tmp_path, capsys):
@@ -52,6 +55,7 @@ class TestGatewayGuard:
         monkeypatch.setenv("CLAWK_IGNORE_USER_CONFIG", "1")
         _guard_corrupt_user_config()  # must not raise
 
+
 class TestCronRunJobGuard:
     def _job(self, **overrides):
         job = {"id": "job-test-1", "name": "guard test", "prompt": "hi"}
@@ -73,17 +77,39 @@ class TestCronRunJobGuard:
         db = acquire(tmp_path / "state.db")
         ref = SessionRef("default", "cron-guard")
         db.create_session(ref.session_id, source="cron")
-        owner = SimpleNamespace(db=db, pending_results={}, sessions={
-            ref.session_id: SimpleNamespace(source=SimpleNamespace(user_id="cron-owner"))})
-        admission = {"admission_id": "guard-fire", "request_id": "guard-fire",
-                     "principal_id": "cron-owner", "payload": {"text": ""}}
-        policy = SimpleNamespace(request_json=json.dumps({
-            "cron_job": self._job(), "extra_prompt": None, "request_id": "guard-fire"}))
+        owner = SimpleNamespace(
+            db=db,
+            pending_results={},
+            sessions={
+                ref.session_id: SimpleNamespace(
+                    source=SimpleNamespace(user_id="cron-owner")
+                )
+            },
+        )
+        admission = {
+            "admission_id": "guard-fire",
+            "request_id": "guard-fire",
+            "principal_id": "cron-owner",
+            "payload": {"text": ""},
+        }
+        policy = SimpleNamespace(
+            request_json=json.dumps(
+                {
+                    "cron_job": self._job(),
+                    "extra_prompt": None,
+                    "request_id": "guard-fire",
+                }
+            )
+        )
         previous = current_execution()
         try:
-            with pytest.raises(RuntimeError, match="Clawksis stopped because your settings file"):
+            with pytest.raises(
+                RuntimeError, match="Clawksis stopped because your settings file"
+            ):
                 await execute(owner, ref, admission, policy)
-            success, _output_doc, final_response, error = owner.pending_results["guard-fire"]["result"]["cron_result"]
+            success, _output_doc, final_response, error = owner.pending_results[
+                "guard-fire"
+            ]["result"]["cron_result"]
             assert current_execution() is previous
             assert not owner._cron_cancellations
         finally:
@@ -104,6 +130,7 @@ class TestCronRunJobGuard:
             self._job(no_agent=True, script="true", deliver="none")
         )
         assert "Clawksis stopped because your settings file" not in (error or "")
+
 
 class TestServeGuard:
     def test_serve_headless_refuses_corrupt_config(self, tmp_path, capsys):

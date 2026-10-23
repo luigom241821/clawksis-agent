@@ -24,7 +24,11 @@ def allowlist_file():
     path.parent.mkdir(parents=True, exist_ok=True)
 
     def _write(entries):
-        lines = ["command_allowlist:"] + [f"- '{e}'" for e in entries] if entries else ["command_allowlist: []"]
+        lines = (
+            ["command_allowlist:"] + [f"- '{e}'" for e in entries]
+            if entries
+            else ["command_allowlist: []"]
+        )
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     try:
@@ -41,7 +45,7 @@ def test_entry_removed_by_hand_prompts_again(allowlist_file):
     approval.load_permanent_allowlist()
     assert _command_matches_permanent_allowlist("rm -rf build")
 
-    allowlist_file(["ls *"])                     # operator withdraws the standing approval
+    allowlist_file(["ls *"])  # operator withdraws the standing approval
 
     assert not _command_matches_permanent_allowlist("rm -rf build")
     assert not approval.is_approved("s1", "rm -rf build")
@@ -70,7 +74,9 @@ def test_approval_made_in_process_survives_an_unrelated_hand_edit(allowlist_file
     assert not _command_matches_permanent_allowlist("git status")
 
 
-def test_removal_synced_while_an_always_save_is_pending_is_not_written_back(allowlist_file, monkeypatch):
+def test_removal_synced_while_an_always_save_is_pending_is_not_written_back(
+    allowlist_file, monkeypatch
+):
     """An [a]lways save snapshots the allowlist, drops ``_lock`` and then writes. If another
     thread's check syncs a hand removal in that window, the save must not treat the removed
     entry in its stale snapshot as a new grant and write it back."""
@@ -86,12 +92,16 @@ def test_removal_synced_while_an_always_save_is_pending_is_not_written_back(allo
         return real_load_config(*args, **kwargs)
 
     monkeypatch.setattr(config_module, "load_config", paused_load_config)
-    saver = threading.Thread(target=approval._persist_choice, args=("s1", "always", ["docker *"]))
+    saver = threading.Thread(
+        target=approval._persist_choice, args=("s1", "always", ["docker *"])
+    )
     saver.start()
     try:
         assert save_entered.wait(timeout=10)
-        allowlist_file(["ls *"])                     # operator withdraws the standing approval
-        assert not approval.is_approved("s2", "rm -rf build")   # this check syncs the removal
+        allowlist_file(["ls *"])  # operator withdraws the standing approval
+        assert not approval.is_approved(
+            "s2", "rm -rf build"
+        )  # this check syncs the removal
     finally:
         release_save.set()
         saver.join(timeout=10)

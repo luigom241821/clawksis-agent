@@ -27,7 +27,9 @@ def bundled_skill_texts() -> list[tuple[Path, str]]:
         for path in sorted((REPO_ROOT / root).rglob("*"))
         if path.is_file() and ".hub" not in path.parts
     ]
-    assert texts, "bundled skills tree not found under skills/, optional-skills/ or plugins/"
+    assert texts, (
+        "bundled skills tree not found under skills/, optional-skills/ or plugins/"
+    )
     return texts
 
 
@@ -51,6 +53,8 @@ def test_tool_error_strings_have_no_role_tag():
 
     messages = [
         not_deferrable_error("no_such_tool_xyz"),
-        partition_calls([{"name": "connectors__bad", "arguments": {}}]).errors[0]["error"]["message"],
+        partition_calls([{"name": "connectors__bad", "arguments": {}}]).errors[0][
+            "error"
+        ]["message"],
     ]
     assert [m for m in messages if ROLE_TAG.search(m)] == []

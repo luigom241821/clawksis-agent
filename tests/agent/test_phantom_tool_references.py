@@ -18,33 +18,53 @@ from pathlib import Path
 
 class TestExecutionGuidanceText:
     def test_full_text_when_toolset_has_every_named_tool_or_is_unknown(self):
-        from agent.prompt_builder import OPENAI_MODEL_EXECUTION_GUIDANCE, execution_guidance_text
+        from agent.prompt_builder import (
+            OPENAI_MODEL_EXECUTION_GUIDANCE,
+            execution_guidance_text,
+        )
+
         assert execution_guidance_text(None) == OPENAI_MODEL_EXECUTION_GUIDANCE
-        assert execution_guidance_text(
-            {"terminal", "execute_code", "read_file", "search_files"}
-        ) == OPENAI_MODEL_EXECUTION_GUIDANCE
+        assert (
+            execution_guidance_text(
+                {"terminal", "execute_code", "read_file", "search_files"}
+            )
+            == OPENAI_MODEL_EXECUTION_GUIDANCE
+        )
 
     def test_lean_toolset_is_not_told_to_use_absent_tools(self):
         # #106506: a toolset with none of terminal/execute_code/read_file/search_files must not be told to
         # reach for them (GPT models then refused plain arithmetic as "prohibited mental computation").
         from agent.prompt_builder import execution_guidance_text
+
         text = execution_guidance_text({"memory"})
-        mandatory = text.split("<mandatory_tool_use>")[1].split("</mandatory_tool_use>")[0]
-        for tool in ("terminal", "execute_code", "read_file", "search_files", "Arithmetic"):
+        mandatory = text.split("<mandatory_tool_use>")[1].split(
+            "</mandatory_tool_use>"
+        )[0]
+        for tool in (
+            "terminal",
+            "execute_code",
+            "read_file",
+            "search_files",
+            "Arithmetic",
+        ):
             assert tool not in mandatory
         assert "an appropriate permitted retrieval/search tool" in mandatory
-        assert "run `date`" not in text.split("<act_dont_ask>")[1].split("</act_dont_ask>")[0]
+        assert (
+            "run `date`"
+            not in text.split("<act_dont_ask>")[1].split("</act_dont_ask>")[0]
+        )
 
 
 class TestCodingBriefTodoGating:
     def _brief(self, valid_tool_names):
         from agent.coding_context import CODING_PROFILE, RuntimeMode
+
         mode = RuntimeMode(
-            profile=CODING_PROFILE, surface="cli", cwd=Path.cwd(),
+            profile=CODING_PROFILE,
+            surface="cli",
+            cwd=Path.cwd(),
         )
-        prefix, _ws, _tr = mode.system_prompt_parts(
-            valid_tool_names=valid_tool_names
-        )
+        prefix, _ws, _tr = mode.system_prompt_parts(valid_tool_names=valid_tool_names)
         assert prefix, "coding profile must emit an operating brief"
         return prefix[0]
 
@@ -64,6 +84,7 @@ class TestCodingBriefTodoGating:
 class TestEssentialSkillsUndisableable:
     def test_agent_side_reader_strips_essential(self, monkeypatch, tmp_path):
         import agent.skill_utils as su
+
         cfg = tmp_path / "config.yaml"
         cfg.write_text(
             "skills:\n  disabled:\n    - clawksis-agent\n    - some-other-skill\n",
@@ -77,6 +98,7 @@ class TestEssentialSkillsUndisableable:
 
     def test_cli_side_reader_strips_essential(self):
         from clawk_cli.skills_config import get_disabled_skills
+
         cfg = {"skills": {"disabled": ["clawksis-agent", "other"]}}
         disabled = get_disabled_skills(cfg)
         assert "clawksis-agent" not in disabled
@@ -84,6 +106,7 @@ class TestEssentialSkillsUndisableable:
 
     def test_cli_side_writer_strips_essential(self, monkeypatch):
         import clawk_cli.skills_config as sc
+
         saved = {}
         monkeypatch.setattr(sc, "save_config", lambda cfg: saved.update(cfg))
         cfg = {}
@@ -92,6 +115,7 @@ class TestEssentialSkillsUndisableable:
 
     def test_skill_manage_delete_refused(self):
         from tools.skill_manager_guards import _pinned_guard
+
         msg = _pinned_guard("clawksis-agent")
         assert msg is not None
 
@@ -125,5 +149,7 @@ class TestEssentialOnlySync:
 
         assert result["skipped_opt_out"] is True
         assert result["copied"] == ["clawksis-agent"]
-        assert (home / "skills" / "autonomous-ai-agents" / "clawksis-agent" / "SKILL.md").exists()
+        assert (
+            home / "skills" / "autonomous-ai-agents" / "clawksis-agent" / "SKILL.md"
+        ).exists()
         assert not (home / "skills" / "media").exists()

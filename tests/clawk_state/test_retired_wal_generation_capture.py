@@ -21,14 +21,24 @@ import pytest
 import clawk_state
 from clawk_state import DeletedWalGenerationError, SessionDB
 from clawk_state_dbfile import (
-    RETIRED_GENERATION_MANIFEST, RetiredGenerationCaptureError, capture_retired_wal_generation,
+    RETIRED_GENERATION_MANIFEST,
+    RetiredGenerationCaptureError,
+    capture_retired_wal_generation,
 )
 from tests.clawk_state._wal_generation_harness import (
-    gateway_writer, integrity_ok_conn, lose_sidecars, make_db, pin_wal, require_wal, write_second_generation,
+    gateway_writer,
+    integrity_ok_conn,
+    lose_sidecars,
+    make_db,
+    pin_wal,
+    require_wal,
+    write_second_generation,
 )
 
 FD_DIRECTORY = "/proc/self/fd" if sys.platform.startswith("linux") else "/dev/fd"
-not_windows = pytest.mark.platforms("posix")  # a held sidecar cannot be unlinked on Windows
+not_windows = pytest.mark.platforms(
+    "posix"
+)  # a held sidecar cannot be unlinked on Windows
 
 
 @pytest.fixture
@@ -62,7 +72,9 @@ def _wal_only_sentinel(db: SessionDB, session_id: str) -> str:
 
 
 def _manifest(artifact: Path) -> dict:
-    return json.loads((artifact / RETIRED_GENERATION_MANIFEST).read_text(encoding="utf-8"))
+    return json.loads(
+        (artifact / RETIRED_GENERATION_MANIFEST).read_text(encoding="utf-8")
+    )
 
 
 def _recover(artifact: Path, name: str, workdir: Path) -> sqlite3.Connection:
@@ -74,7 +86,9 @@ def _recover(artifact: Path, name: str, workdir: Path) -> sqlite3.Connection:
 
 
 def _count(conn: sqlite3.Connection, content_like: str) -> int:
-    return conn.execute("SELECT COUNT(*) FROM messages WHERE content LIKE ?", (content_like,)).fetchone()[0]
+    return conn.execute(
+        "SELECT COUNT(*) FROM messages WHERE content LIKE ?", (content_like,)
+    ).fetchone()[0]
 
 
 # ── Capture at the first halt ───────────────────────────────────────────────────────────────────────
@@ -114,7 +128,9 @@ def test_halt_captures_the_exact_retired_generation(tmp_path, force_wal, rename)
 
     db.close()
     assert db._conn is None
-    assert db._retired_generation_capture == artifact  # captured once, not again at close
+    assert (
+        db._retired_generation_capture == artifact
+    )  # captured once, not again at close
 
 
 @not_windows
@@ -151,7 +167,9 @@ def test_close_refuses_to_settle_without_a_capture(tmp_path, force_wal, monkeypa
     monkeypatch.setattr(clawk_state, "capture_retired_wal_generation", refuse)
     with pytest.raises(RetiredGenerationCaptureError, match="no space left"):
         db.close()
-    assert db._conn is not None, "shutdown must not settle while the retired generation is uncaptured"
+    assert db._conn is not None, (
+        "shutdown must not settle while the retired generation is uncaptured"
+    )
     assert db._retired_generation_capture is None
 
     monkeypatch.undo()
@@ -166,7 +184,9 @@ def test_close_refuses_to_settle_without_a_capture(tmp_path, force_wal, monkeypa
 
 
 @not_windows
-def test_failed_capture_still_pins_the_handle_and_surfaces_through_the_registry(tmp_path, force_wal, monkeypatch, caplog):
+def test_failed_capture_still_pins_the_handle_and_surfaces_through_the_registry(
+    tmp_path, force_wal, monkeypatch, caplog
+):
     """Production closes go through clawk_state_registry.release_or_close, which swallows close()
     errors. A failed capture must still (a) log above DEBUG and (b) on runtimes without setconfig take
     the retention pin, so an interpreter exit before the retry cannot checkpoint the stale frames."""
@@ -219,7 +239,9 @@ def test_capture_selects_the_recorded_inode_not_the_pathname(tmp_path, force_wal
         other.execute("CREATE TABLE independent (content TEXT)")
         other.execute("INSERT INTO independent VALUES ('another owner committed this')")
         other.commit()
-        Path(str(tmp_path / "other.db") + "-wal").rename(wal)  # same pathname as our lost WAL
+        Path(str(tmp_path / "other.db") + "-wal").rename(
+            wal
+        )  # same pathname as our lost WAL
         other_identity = (wal.stat().st_dev, wal.stat().st_ino)
         wal.unlink()
         assert other_identity != identity
@@ -249,7 +271,9 @@ def test_capture_refuses_to_guess_by_pathname(tmp_path, force_wal):
         with pytest.raises(RetiredGenerationCaptureError, match="pathname"):
             capture_retired_wal_generation(path, sidecar_identity={}, trigger="test")
         with pytest.raises(RetiredGenerationCaptureError, match="no longer holds"):
-            capture_retired_wal_generation(path, sidecar_identity={"-wal": (1, 1)}, trigger="test")
+            capture_retired_wal_generation(
+                path, sidecar_identity={"-wal": (1, 1)}, trigger="test"
+            )
         assert not list(tmp_path.glob("state.db.retired-wal-*"))
     finally:
         db.close()
@@ -285,8 +309,12 @@ def _assert_retired_rows_recoverable_after_exit(tmp_path, *, rename):
     # The writer is gone and its unlinked WAL inode with it. Recovery must come from the capture alone.
     recovered = _recover(artifact, "state.db", tmp_path / "recovered")
     try:
-        assert _count(recovered, "uncheckpointed %") == 4, "retired WAL-only rows lost across process exit"
-        assert integrity_ok_conn(recovered), "captured image + WAL do not form a consistent database"
+        assert _count(recovered, "uncheckpointed %") == 4, (
+            "retired WAL-only rows lost across process exit"
+        )
+        assert integrity_ok_conn(recovered), (
+            "captured image + WAL do not form a consistent database"
+        )
     finally:
         recovered.close()
 
@@ -294,7 +322,10 @@ def _assert_retired_rows_recoverable_after_exit(tmp_path, *, rename):
     # checkpoint off, or the handle was retired unclosed where it could not be.
     live = sqlite3.connect(str(path))
     try:
-        assert integrity_ok_conn(live) and live.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == expected
+        assert (
+            integrity_ok_conn(live)
+            and live.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == expected
+        )
     finally:
         live.close()
 

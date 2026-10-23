@@ -5,6 +5,7 @@ refresher thread and liveness watchdog (``agent.turn_facade_lease``), relay/acco
 balanced start/finish marks. Extracted from ``run_agent.py``; every method resolves through ``AIAgent``'s
 MRO unchanged.
 """
+
 import logging
 import uuid
 from contextlib import suppress
@@ -20,16 +21,22 @@ class TurnFacadeMixin:
     """run_conversation()/chat() (see module docstring)."""
 
     def run_conversation(
-        self, user_message: Any, system_message: str | None=None,
-        conversation_history: list[dict[str, Any]] | None=None, task_id: str | None=None,
-        stream_callback: Optional[callable]=None, persist_user_message: Optional[Any]=None,
-        persist_user_timestamp: Optional[float]=None, persist_user_display_kind: Optional[str]=None,
-        persist_user_display_metadata: Optional[dict[str, Any]]=None,
-        persist_user_platform_id: Optional[str]=None, moa_config: Optional[dict[str, Any]]=None,
+        self,
+        user_message: Any,
+        system_message: str | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+        task_id: str | None = None,
+        stream_callback: Optional[callable] = None,
+        persist_user_message: Optional[Any] = None,
+        persist_user_timestamp: Optional[float] = None,
+        persist_user_display_kind: Optional[str] = None,
+        persist_user_display_metadata: Optional[dict[str, Any]] = None,
+        persist_user_platform_id: Optional[str] = None,
+        moa_config: Optional[dict[str, Any]] = None,
         turn_author: Optional[dict[str, Any]] = None,
         relay_metadata: Optional[dict[str, Any]] = None,
-        title_user_message: Optional[str]=None,
-        prelude: Optional[Generator]=None,
+        title_user_message: Optional[str] = None,
+        prelude: Optional[Generator] = None,
     ) -> dict[str, Any]:
         """Forwarder — see ``agent.conversation_loop.run_conversation``."""
         # A review shares this session_id for cache parity: fence review startup or interrupt
@@ -41,11 +48,16 @@ class TurnFacadeMixin:
         cancel_background_review_for_live_turn(self)
 
         from agent import relay_runtime
-        from agent.aux_accounting import reset_accounting_context, set_accounting_context
+        from agent.aux_accounting import (
+            reset_accounting_context,
+            set_accounting_context,
+        )
         from agent.auxiliary_client import scoped_runtime_main
         from agent.conversation_loop import run_conversation
         from agent.portal_tags import (
-            reset_affinity_scope, reset_conversation_context, set_affinity_scope,
+            reset_affinity_scope,
+            reset_conversation_context,
+            set_affinity_scope,
             set_conversation_context,
         )
         from agent.prompt_cache_scope import declared_conversation_scope_safe
@@ -53,8 +65,14 @@ class TurnFacadeMixin:
         from agent.review_idle_queue import QUEUE as _review_queue
         from agent.subagent_lifecycle import bind_subagent_parent
         from agent.interrupt_scope import track_in_interrupt_scope
-        from agent.turn_facade_lease import admit_durable_turn_lease, carry_unadmitted_user_message
-        from clawk_cli.observability.relay_shared_metrics import finish_task_run, start_task_run
+        from agent.turn_facade_lease import (
+            admit_durable_turn_lease,
+            carry_unadmitted_user_message,
+        )
+        from clawk_cli.observability.relay_shared_metrics import (
+            finish_task_run,
+            start_task_run,
+        )
 
         effective_task_id = task_id or str(uuid.uuid4())
         session_id = str(getattr(self, "session_id", None) or "")
@@ -63,7 +81,9 @@ class TurnFacadeMixin:
             "task_id": effective_task_id,
             "platform": getattr(self, "platform", None) or "",
         }
-        relay_turn_id = f"{session_id or 'session'}:{effective_task_id}:{uuid.uuid4().hex[:8]}"
+        relay_turn_id = (
+            f"{session_id or 'session'}:{effective_task_id}:{uuid.uuid4().hex[:8]}"
+        )
         self._relay_pending_turn_id = relay_turn_id
         relay_parent_session_id = (
             str(getattr(self, "_parent_session_id", None) or "")
@@ -81,17 +101,26 @@ class TurnFacadeMixin:
             # First statement of the try so the finally's note_turn_finished balances every exit.
             _review_queue.note_turn_started()
             admission = admit_durable_turn_lease(
-                self, session_id=session_id, relay_turn_id=relay_turn_id, task_context=task_context,
+                self,
+                session_id=session_id,
+                relay_turn_id=relay_turn_id,
+                task_context=task_context,
                 conversation_history=conversation_history,
             )
             if admission.early_result is not None:
                 carry_unadmitted_user_message(
-                    admission.early_result, user_message, persist_user_message,
-                    timestamp=persist_user_timestamp, display_kind=persist_user_display_kind,
-                    display_metadata=persist_user_display_metadata, platform_id=persist_user_platform_id,
+                    admission.early_result,
+                    user_message,
+                    persist_user_message,
+                    timestamp=persist_user_timestamp,
+                    display_kind=persist_user_display_kind,
+                    display_metadata=persist_user_display_metadata,
+                    platform_id=persist_user_platform_id,
                 )
                 relay_outcome = (
-                    "cancelled" if admission.early_result.get("interrupted") else "timed_out"
+                    "cancelled"
+                    if admission.early_result.get("interrupted")
+                    else "timed_out"
                 )
                 return admission.early_result
             lease = admission.lease
@@ -105,7 +134,8 @@ class TurnFacadeMixin:
             )
             relay_lease = relay_runtime.SESSION_COORDINATOR.acquire_conversation(
                 profile_key=relay_runtime.current_profile_key(),
-                session_id=task_context["session_id"], platform=task_context["platform"],
+                session_id=task_context["session_id"],
+                platform=task_context["platform"],
                 parent_session_id=relay_parent_session_id,
                 model=str(getattr(self, "model", None) or ""),
                 session_cwd=relay_session_cwd,
@@ -141,17 +171,27 @@ class TurnFacadeMixin:
 
             # Keep the ContextVar scope local (agent tokens may be observed from another thread).
             # A host that owns this thread (Clawksis Console) may cancel the turn cross-thread.
-            with bind_subagent_parent(self), scoped_runtime_main({}), track_in_interrupt_scope(self):
+            with (
+                bind_subagent_parent(self),
+                scoped_runtime_main({}),
+                track_in_interrupt_scope(self),
+            ):
                 try:
                     if lease is not None:
                         lease.start()
                     result = run_conversation(
-                        self, user_message, system_message, conversation_history, effective_task_id,
-                        stream_callback, persist_user_message,
+                        self,
+                        user_message,
+                        system_message,
+                        conversation_history,
+                        effective_task_id,
+                        stream_callback,
+                        persist_user_message,
                         persist_user_timestamp=persist_user_timestamp,
                         persist_user_display_kind=persist_user_display_kind,
                         persist_user_display_metadata=persist_user_display_metadata,
-                        persist_user_platform_id=persist_user_platform_id, moa_config=moa_config,
+                        persist_user_platform_id=persist_user_platform_id,
+                        moa_config=moa_config,
                         turn_author=turn_author,
                         title_user_message=title_user_message,
                         prelude=prelude,
@@ -163,11 +203,15 @@ class TurnFacadeMixin:
                         lease.stop_refresher()
             terminal = result if isinstance(result, dict) else {}
             relay_outcome = (
-                "cancelled" if terminal.get("interrupted") is True
-                else "failed" if terminal.get("failed") is True
+                "cancelled"
+                if terminal.get("interrupted") is True
+                else "failed"
+                if terminal.get("failed") is True
                 else "success"
             )
-            relay_runtime.SESSION_COORDINATOR.finish_logical_calls(relay_turn, outcome=relay_outcome)
+            relay_runtime.SESSION_COORDINATOR.finish_logical_calls(
+                relay_turn, outcome=relay_outcome
+            )
             if task_started:
                 task_finished = True
                 finish_task_run(**task_context, result=result)
@@ -190,11 +234,15 @@ class TurnFacadeMixin:
         finally:
             try:
                 if relay_turn is not None:
-                    relay_runtime.SESSION_COORDINATOR.end_turn(relay_turn, outcome=relay_outcome)
+                    relay_runtime.SESSION_COORDINATOR.end_turn(
+                        relay_turn, outcome=relay_outcome
+                    )
             finally:
                 try:
                     if relay_lease is not None:
-                        relay_runtime.SESSION_COORDINATOR.release_conversation(relay_lease)
+                        relay_runtime.SESSION_COORDINATOR.release_conversation(
+                            relay_lease
+                        )
                 finally:
                     if lease is not None:
                         lease.stop_refresher()
@@ -219,6 +267,10 @@ class TurnFacadeMixin:
 
     def chat(self, message: str, stream_callback: Optional[callable] = None) -> str:
         """Final response string of one turn; ``stream_callback`` receives each text delta."""
-        return self.run_conversation(message, stream_callback=stream_callback)["final_response"]
+        return self.run_conversation(message, stream_callback=stream_callback)[
+            "final_response"
+        ]
 
-    _run_codex_app_server_turn = _forward("agent.codex_runtime", "run_codex_app_server_turn")
+    _run_codex_app_server_turn = _forward(
+        "agent.codex_runtime", "run_codex_app_server_turn"
+    )

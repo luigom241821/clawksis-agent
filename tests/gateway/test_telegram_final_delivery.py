@@ -59,7 +59,10 @@ async def test_turn_final_flood_immediately_delivers_missing_tail():
     await consumer._send_fallback_final(":( The completed answer follows here.")
 
     adapter.send.assert_awaited_once()
-    assert adapter.send.await_args.kwargs["content"] == "The completed answer follows here."
+    assert (
+        adapter.send.await_args.kwargs["content"]
+        == "The completed answer follows here."
+    )
     assert adapter.send.await_args.kwargs["metadata"] == {
         "thread_id": "77",
         "notify": True,
@@ -152,6 +155,7 @@ async def test_complete_preview_survives_long_flood_fallback_failure(monkeypatch
 @pytest.mark.asyncio
 async def test_telegram_long_flood_result_keeps_retry_after():
     """The real adapter contract preserves the server delay for consumers."""
+
     class FloodError(Exception):
         retry_after = 30.0
 
@@ -164,8 +168,6 @@ async def test_telegram_long_flood_result_keeps_retry_after():
     assert result.success is False
     assert result.error == "flood_control:30.0"
     assert result.retry_after == 30.0
-
-
 
 
 @pytest.mark.asyncio
@@ -181,7 +183,9 @@ async def test_empty_fallback_resend_preserves_reply_anchor():
     adapter.send.return_value = SendResult(success=True, message_id="final-1")
 
     consumer = GatewayStreamConsumer(
-        adapter, "chat-1", initial_reply_to_id="111",
+        adapter,
+        "chat-1",
+        initial_reply_to_id="111",
     )
     consumer._message_id = "preview-1"
     consumer._last_sent_text = "Final answer"
@@ -239,7 +243,9 @@ async def test_flood_capped_resend_keeps_single_bubble_reply_first(monkeypatch):
     monkeypatch.setattr("gateway.stream_consumer.asyncio.sleep", sleep)
 
     consumer = GatewayStreamConsumer(
-        adapter, "chat-1", initial_reply_to_id="111",
+        adapter,
+        "chat-1",
+        initial_reply_to_id="111",
     )
     consumer._message_id = "preview-1"
     consumer._last_sent_text = "Final answer"

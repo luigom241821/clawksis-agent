@@ -36,6 +36,9 @@ def test_only_a_non_failed_capped_turn_with_a_summary_is_a_handoff(override, exp
 
 
 def test_cron_delivers_exactly_the_handoffs_the_predicate_accepts():
-    assert _final_response_from_result(dict(_HANDOFF), "j", "job", object) == _HANDOFF["final_response"]
+    assert (
+        _final_response_from_result(dict(_HANDOFF), "j", "job", object)
+        == _HANDOFF["final_response"]
+    )
     with pytest.raises(RuntimeError):
         _final_response_from_result({**_HANDOFF, "failed": True}, "j", "job", object)

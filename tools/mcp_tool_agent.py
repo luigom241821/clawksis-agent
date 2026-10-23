@@ -39,7 +39,10 @@ def _resolve_refresh_toolsets(agent, enabled_override, disabled_override):
         enabled = enabled_override if enabled_override is not None else enabled
         if disabled_override is not None:
             from toolsets import session_disabled_toolsets
-            disabled = session_disabled_toolsets(disabled_override, getattr(agent, "platform", None))
+
+            disabled = session_disabled_toolsets(
+                disabled_override, getattr(agent, "platform", None)
+            )
         agent.enabled_toolsets, agent.disabled_toolsets = enabled, disabled
     return enabled, disabled
 
@@ -48,7 +51,9 @@ def _tool_defs_content_changed(agent, new_defs: list) -> bool:
     """Byte-level diff of the serialized tool arrays (dynamic schemas change CONTENT under
     stable names); False if either side fails to serialize."""
     try:
-        dump = lambda defs: json.dumps(defs, sort_keys=True, separators=(",", ":"), default=str)
+        dump = lambda defs: json.dumps(
+            defs, sort_keys=True, separators=(",", ":"), default=str
+        )
         return dump(_agent_tool_defs(agent)) != dump(new_defs)
     except Exception:
         return False
@@ -56,15 +61,25 @@ def _tool_defs_content_changed(agent, new_defs: list) -> bool:
 
 def _drop_session_tools(agent, new_defs: list, new_names: set) -> tuple:
     from toolsets import agent_tool_drops
+
     drops = agent_tool_drops(agent)
     if not drops:
         return new_defs, new_names
-    return [entry for entry in new_defs if _def_name(entry) not in drops], new_names - drops
+    return [
+        entry for entry in new_defs if _def_name(entry) not in drops
+    ], new_names - drops
 
 
 def _publish_tool_snapshot(
-    agent, new_defs: list, new_names: set, *, snapshot_generation: int,
-    staged_engine_names: set, content_aware: bool, prefix_registered: Optional[set]) -> Optional[set]:
+    agent,
+    new_defs: list,
+    new_names: set,
+    *,
+    snapshot_generation: int,
+    staged_engine_names: set,
+    content_aware: bool,
+    prefix_registered: Optional[set],
+) -> Optional[set]:
     """Single atomic read-diff-publish under ``_agent_tools_lock`` so ``added`` matches what
     was published and a stale (older-generation) rebuild can't overwrite a newer one. Returns
     the added names, or None when nothing was published (unchanged, or a newer snapshot won)."""
@@ -77,13 +92,17 @@ def _publish_tool_snapshot(
         current_defs = _agent_tool_defs(agent)
         current = {_def_name(t) for t in current_defs}
         if prefix_registered is not None:
-            new_defs, new_names = _merge_preserving_prefix(current_defs, new_defs, prefix_registered)
+            new_defs, new_names = _merge_preserving_prefix(
+                current_defs, new_defs, prefix_registered
+            )
         new_defs, new_names = _drop_session_tools(agent, new_defs, new_names)
         # Record the generation even when unchanged so an in-flight older caller can't clobber.
         agent._tool_snapshot_generation = max(published_gen, snapshot_generation)
         # Same name set: nothing to publish, unless the caller is content_aware
         # (explicit reload, compaction) and the serialized schema bytes moved.
-        if new_names == current and not (content_aware and _tool_defs_content_changed(agent, new_defs)):
+        if new_names == current and not (
+            content_aware and _tool_defs_content_changed(agent, new_defs)
+        ):
             return None
         agent.tools = new_defs
         agent.valid_tool_names = new_names
@@ -96,8 +115,14 @@ def _publish_tool_snapshot(
 
 
 def refresh_agent_mcp_tools(
-    agent, *, enabled_override=None, disabled_override=None, quiet_mode: bool = True,
-    content_aware: bool = False, preserve_prefix: bool = False) -> set:
+    agent,
+    *,
+    enabled_override=None,
+    disabled_override=None,
+    quiet_mode: bool = True,
+    content_aware: bool = False,
+    preserve_prefix: bool = False,
+) -> set:
     """Re-derive an already-built agent's tool snapshot from the live registry; returns the
     newly-added tool names (empty when unchanged). The agent snapshots ``agent.tools`` at build
     time, so servers that connect later (slow OAuth, ``/reload-mcp``) are invisible until
@@ -119,11 +144,19 @@ def refresh_agent_mcp_tools(
     accepted the cache break, or nothing has been cached yet."""
     from model_tools import get_tool_definitions
     from tools.registry import registry
-    enabled, disabled = _resolve_refresh_toolsets(agent, enabled_override, disabled_override)
+
+    enabled, disabled = _resolve_refresh_toolsets(
+        agent, enabled_override, disabled_override
+    )
     # Generation captured BEFORE the slow get_tool_definitions call (a slower caller holding an
     # OLDER set must not clobber a newer one); definitions computed OUTSIDE the lock.
     snapshot_generation = registry._generation
-    new_defs = list(get_tool_definitions(enabled_toolsets=enabled, disabled_toolsets=disabled, quiet_mode=quiet_mode) or [])
+    new_defs = list(
+        get_tool_definitions(
+            enabled_toolsets=enabled, disabled_toolsets=disabled, quiet_mode=quiet_mode
+        )
+        or []
+    )
     new_names = {_def_name(t) for t in new_defs}
     # Post-build families re-appended on LOCALS only; live attributes untouched until publish.
     staged_engine_names = _reinject_post_build_tools(agent, new_defs, new_names)
@@ -141,11 +174,19 @@ def refresh_agent_mcp_tools(
         # change has to publish; between-turns refresh keeps preserve_prefix.
         content_aware = True
     added = _publish_tool_snapshot(
-        agent, new_defs, new_names, snapshot_generation=snapshot_generation,
-        staged_engine_names=staged_engine_names, content_aware=content_aware, prefix_registered=prefix_registered)
+        agent,
+        new_defs,
+        new_names,
+        snapshot_generation=snapshot_generation,
+        staged_engine_names=staged_engine_names,
+        content_aware=content_aware,
+        prefix_registered=prefix_registered,
+    )
     if added is None:
         return set()
-    persist_agent_tool_names(agent)  # re-pin so a rebuild after agent-cache eviction restores this order
+    persist_agent_tool_names(
+        agent
+    )  # re-pin so a rebuild after agent-cache eviction restores this order
     return added
 
 
@@ -155,6 +196,7 @@ def reprobe_tool_availability() -> None:
     otherwise replay the stale verdicts)."""
     from model_tools import _clear_tool_defs_cache
     from tools.registry import invalidate_check_fn_cache
+
     invalidate_check_fn_cache()
     _clear_tool_defs_cache()
 
@@ -164,6 +206,7 @@ def tool_pin_version() -> str:
     Cached per process: an updated checkout only reaches a process through a restart."""
     from clawk_cli import __version__
     from clawk_cli.build_info import get_code_identity
+
     identity = get_code_identity()
     return identity.get("sha") or identity.get("version") or __version__
 
@@ -176,7 +219,10 @@ def persist_agent_tool_names(agent) -> None:
     if not db or not session_id:
         return
     try:
-        db.update_session_tool_names(session_id, {"version": tool_pin_version(), "tools": _agent_tool_defs(agent)})
+        db.update_session_tool_names(
+            session_id,
+            {"version": tool_pin_version(), "tools": _agent_tool_defs(agent)},
+        )
     except Exception:
         logger.debug("tool_names persist skipped", exc_info=True)
 
@@ -187,6 +233,7 @@ def _config_permitted_names(agent) -> set:
     here is no config choice); ``disabled_toolsets`` still strips it."""
     from model_tools import _select_tool_names
     from toolsets import CLIENT_SURFACE_TOOLSETS
+
     enabled = getattr(agent, "enabled_toolsets", None)
     if enabled is not None:
         enabled = [*enabled, *CLIENT_SURFACE_TOOLSETS]
@@ -197,29 +244,50 @@ def _drop_gated_carried_tools(merged: list, carried: set) -> list:
     """A carried tool also passes the session-level schema gates the fresh build applied
     (``browser_exec`` needs ``terminal`` in the same array), judged on the merged array."""
     from model_tools import _DYNAMIC_SCHEMA_REWRITERS
+
     available = {_def_name(t) for t in merged}
-    return [t for t in merged if _def_name(t) not in carried or _def_name(t) not in _DYNAMIC_SCHEMA_REWRITERS
-            or _DYNAMIC_SCHEMA_REWRITERS[_def_name(t)](t, available) is not None]
+    return [
+        t
+        for t in merged
+        if _def_name(t) not in carried
+        or _def_name(t) not in _DYNAMIC_SCHEMA_REWRITERS
+        or _DYNAMIC_SCHEMA_REWRITERS[_def_name(t)](t, available) is not None
+    ]
 
 
 def _pinned_tool_defs(saved, fresh, keep_bytes=False) -> tuple:
     """(pinned, same_code, definitions) for a tools[] pin, either shape: a pin from the SAME code keeps
     its bytes; otherwise (``clawk update``, a legacy name list) each tool takes this process's
     definition (``fresh``, else its registry schema)."""
-    pinned, version = (saved.get("tools") or [], saved.get("version")) if isinstance(saved, dict) else (saved, None)
+    pinned, version = (
+        (saved.get("tools") or [], saved.get("version"))
+        if isinstance(saved, dict)
+        else (saved, None)
+    )
     if not isinstance(pinned, list):
         return [], False, []
     from tools.registry import registry
+
     same_code = version is not None and version == tool_pin_version()
 
     def _pinned_def(item):
-        name = item if isinstance(item, str) else _def_name(item) if isinstance(item, dict) else None
+        name = (
+            item
+            if isinstance(item, str)
+            else _def_name(item)
+            if isinstance(item, dict)
+            else None
+        )
         if isinstance(item, dict) and (same_code or keep_bytes):
             return item
         if name in fresh:
             return fresh[name]
         entry = registry.get_entry(name) if name else None
-        return {"type": "function", "function": {**entry.schema, "name": entry.name}} if entry else None
+        return (
+            {"type": "function", "function": {**entry.schema, "name": entry.name}}
+            if entry
+            else None
+        )
 
     return pinned, same_code, [d for d in map(_pinned_def, pinned) if d]
 
@@ -239,16 +307,25 @@ def restore_agent_tool_prefix(agent, saved) -> bool:
     Pinned by other code (``clawk update``, a legacy name list) a tool's contract may have moved,
     so each takes its current definition. A pinned tool this process did not build is carried
     only while its toolset config allows it here; deregistered tools drop, new tools append."""
-    pinned, same_code, pinned_defs = _pinned_tool_defs(saved, {_def_name(t): t for t in _agent_tool_defs(agent)})
+    pinned, same_code, pinned_defs = _pinned_tool_defs(
+        saved, {_def_name(t): t for t in _agent_tool_defs(agent)}
+    )
     if not pinned:
         return False
     from tools.registry import registry
+
     fresh_defs = _agent_tool_defs(agent)
     fresh = {_def_name(t): t for t in fresh_defs}
     registered_names = {entry.name for entry in registry.get_all_entries()}
-    carried = {_def_name(d) for d in pinned_defs if _def_name(d) not in fresh and _def_name(d) in registered_names}
+    carried = {
+        _def_name(d)
+        for d in pinned_defs
+        if _def_name(d) not in fresh and _def_name(d) in registered_names
+    }
     carried &= _config_permitted_names(agent) if carried else set()
-    merged = [d for d in pinned_defs if _def_name(d) in fresh or _def_name(d) in carried]
+    merged = [
+        d for d in pinned_defs if _def_name(d) in fresh or _def_name(d) in carried
+    ]
     pinned_names = {_def_name(d) for d in merged}
     merged.extend(t for t in fresh_defs if _def_name(t) not in pinned_names)
     merged = _drop_gated_carried_tools(merged, carried)
@@ -265,7 +342,9 @@ def restore_agent_tool_prefix(agent, saved) -> bool:
     return changed
 
 
-def _merge_preserving_prefix(current_defs: list, new_defs: list, registered_names: set) -> tuple[list, set]:
+def _merge_preserving_prefix(
+    current_defs: list, new_defs: list, registered_names: set
+) -> tuple[list, set]:
     """Fold a fresh tool snapshot into a live one without moving existing bytes. Ordered by
     ``current_defs`` (the cached request prefix): a name already sent keeps its slot and the
     schema bytes already sent; a name only in the live list is kept if still registered
@@ -284,12 +363,17 @@ def _merge_preserving_prefix(current_defs: list, new_defs: list, registered_name
     snapshot omits them when the deferred set shrinks under the activation threshold: they
     keep their slot regardless (search reads the live catalog at dispatch)."""
     from tools.tool_search_catalog import BRIDGE_TOOL_NAMES
+
     fresh = {_def_name(entry): entry for entry in new_defs if _def_name(entry)}
     merged = []
     for entry in current_defs:
         name = _def_name(entry)
         replacement = fresh.pop(name, None)
-        if replacement is not None or name in BRIDGE_TOOL_NAMES or (name and name in registered_names):
+        if (
+            replacement is not None
+            or name in BRIDGE_TOOL_NAMES
+            or (name and name in registered_names)
+        ):
             merged.append(entry)
     merged.extend(fresh.values())
     return merged, {_def_name(t) for t in merged}
@@ -299,9 +383,15 @@ def _reinject_authorized_dynamic_tools(agent, tools_list: list, name_set: set) -
     """``message_agent`` is injected by an auth gate, never registered, so a registry-derived
     rebuild drops it. Scrub any stale copy from the STAGED pair and re-add it only when the live
     gate re-authorizes, so the publisher exposes a coherent ``(tools, valid_tool_names)``."""
-    from tools.bot_mode_dm import MESSAGE_AGENT_TOOL_NAME, message_agent_authorized, message_agent_tool_schema
+    from tools.bot_mode_dm import (
+        MESSAGE_AGENT_TOOL_NAME,
+        message_agent_authorized,
+        message_agent_tool_schema,
+    )
 
-    tools_list[:] = [entry for entry in tools_list if _def_name(entry) != MESSAGE_AGENT_TOOL_NAME]
+    tools_list[:] = [
+        entry for entry in tools_list if _def_name(entry) != MESSAGE_AGENT_TOOL_NAME
+    ]
     name_set.discard(MESSAGE_AGENT_TOOL_NAME)
     if message_agent_authorized(agent):
         tools_list.append(message_agent_tool_schema())
@@ -313,6 +403,7 @@ def _reinject_post_build_tools(agent, tools_list: list, name_set: set) -> set:
     / ``name_set`` (never the live agent attributes), mirroring ``agent_init``'s post-build
     injection. Idempotent and fail-soft. Returns the context-engine routing names THIS rebuild
     appended: a name already owned by a registry/plugin tool is not claimed, matching agent_init."""
+
     def _add(schema) -> bool:
         name = schema.get("name", "") if isinstance(schema, dict) else ""
         if not name or name in name_set:
@@ -329,9 +420,15 @@ def _reinject_post_build_tools(agent, tools_list: list, name_set: set) -> set:
     try:
         get_mem_schemas = _schema_getter("_memory_manager", "get_all_tool_schemas")
         if get_mem_schemas is not None:
-            from agent.memory_manager_tools import memory_provider_tools_enabled  # same gate inject_memory_provider_tools uses
+            from agent.memory_manager_tools import (
+                memory_provider_tools_enabled,
+            )  # same gate inject_memory_provider_tools uses
+
             if memory_provider_tools_enabled(
-                    enabled, getattr(agent, "disabled_toolsets", None), memory_tool_present="memory" in name_set):
+                enabled,
+                getattr(agent, "disabled_toolsets", None),
+                memory_tool_present="memory" in name_set,
+            ):
                 for schema in get_mem_schemas():
                     _add(schema)
     except Exception:

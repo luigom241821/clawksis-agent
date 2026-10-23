@@ -288,7 +288,9 @@ async def test_reconnect_during_busy_admission_runs_accepted_followup_once(
 
     monkeypatch.setattr(runner, "_send_busy_ack_reply", _ack)
     # Publication syncs voice state; this bare runner has none to sync.
-    monkeypatch.setattr(runner, "_sync_voice_mode_state_to_adapter", lambda _adapter: None)
+    monkeypatch.setattr(
+        runner, "_sync_voice_mode_state_to_adapter", lambda _adapter: None
+    )
     monkeypatch.setattr(runner, "_bind_voice_input_callback", lambda _adapter: None)
     followup = None
     try:
@@ -305,7 +307,9 @@ async def test_reconnect_during_busy_admission_runs_accepted_followup_once(
         held.release()
         await asyncio.wait_for(ack_entered.wait(), timeout=5)
         if swap == "after_enqueue":
-            assert key in adapter._pending_messages  # accepted into the old adapter's slot
+            assert (
+                key in adapter._pending_messages
+            )  # accepted into the old adapter's slot
             runner._publish_primary_adapter(Platform.SIGNAL, replacement)
         else:
             assert key in replacement._pending_messages

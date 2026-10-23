@@ -51,10 +51,13 @@ def _create_desktop_session(transport, tmp_path) -> tuple[dict, str, str]:
     """``session.create`` as the Desktop client sends it; returns (record, sid, stored key)."""
     token = bind_transport(transport)
     try:
-        resp = server.handle_request({
-            "id": "1", "method": "session.create",
-            "params": {"cols": 80, "source": "desktop", "cwd": str(tmp_path)},
-        })
+        resp = server.handle_request(
+            {
+                "id": "1",
+                "method": "session.create",
+                "params": {"cols": 80, "source": "desktop", "cwd": str(tmp_path)},
+            }
+        )
         sid = resp["result"]["session_id"]
         return dict(server._sessions[sid]), sid, resp["result"]["stored_session_id"]
     finally:
@@ -70,8 +73,14 @@ def test_desktop_session_row_records_the_logged_in_user(monkeypatch, tmp_path):
         # What prompt.submit does before the agent exists (the first row write).
         assert server._ensure_session_db_row(record) is True
         # A branch is a Desktop session too — the child row names the same human.
-        server._seed_branch_row(record, "branch-key", key, [{"role": "user", "content": "hi"}],
-                                "desktop", None)
+        server._seed_branch_row(
+            record,
+            "branch-key",
+            key,
+            [{"role": "user", "content": "hi"}],
+            "desktop",
+            None,
+        )
     finally:
         server._sessions.pop(sid, None)
 

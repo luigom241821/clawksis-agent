@@ -24,9 +24,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_ARTIFACT_TTL_SECONDS = 300.0
 DEFAULT_MAX_ARTIFACT_BYTES = 10 * 1024 * 1024
 #: Exact allowlist — parameterized/unknown variants are rejected.
-DEFAULT_ALLOWED_MIME_TYPES = frozenset({
-    "application/json", "application/pdf", "image/gif", "image/jpeg", "image/png", "image/webp", "text/plain",
-})
+DEFAULT_ALLOWED_MIME_TYPES = frozenset(
+    {
+        "application/json",
+        "application/pdf",
+        "image/gif",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "text/plain",
+    }
+)
 _ARTIFACT_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 _TEMP_SUFFIX = ".tmp"
 
@@ -66,6 +74,7 @@ class ArtifactTraversal(ArtifactError):
 @dataclass(frozen=True)
 class ArtifactReceipt:
     """Provenance record returned to the caller of ``store``."""
+
     artifact_id: str
     sha256: str
     size_bytes: int
@@ -79,9 +88,15 @@ class ArtifactReceipt:
     def to_dict(self, *, download_path: str = "") -> dict[str, Any]:
         """Serialize to the wire receipt (never contains file paths)."""
         return {
-            "artifact_id": self.artifact_id, "sha256": self.sha256, "size_bytes": self.size_bytes,
-            "content_type": self.content_type, "filename": self.filename, "created_at": self.created_at,
-            "expires_at": self.expires_at, "ttl_seconds": self.ttl_seconds, "one_shot": True,
+            "artifact_id": self.artifact_id,
+            "sha256": self.sha256,
+            "size_bytes": self.size_bytes,
+            "content_type": self.content_type,
+            "filename": self.filename,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "ttl_seconds": self.ttl_seconds,
+            "one_shot": True,
             **({"download_path": download_path} if download_path else {}),
         }
 
@@ -113,8 +128,16 @@ class _ArtifactEntry:
 
 class ArtifactStore:
     """Thread-safe, TTL-bounded, scope-bound one-shot artifact store."""
-    def __init__(self, root: Path, *, ttl_seconds: float = DEFAULT_ARTIFACT_TTL_SECONDS, max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
-                 allowed_mime_types: frozenset = DEFAULT_ALLOWED_MIME_TYPES, clock: Optional[Callable[[], float]] = None) -> None:
+
+    def __init__(
+        self,
+        root: Path,
+        *,
+        ttl_seconds: float = DEFAULT_ARTIFACT_TTL_SECONDS,
+        max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
+        allowed_mime_types: frozenset = DEFAULT_ALLOWED_MIME_TYPES,
+        clock: Optional[Callable[[], float]] = None,
+    ) -> None:
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._ttl_seconds = max(1.0, float(ttl_seconds))
@@ -138,7 +161,9 @@ class ArtifactStore:
         with self._lock:
             live = set(self._entries)
         for path in candidates:
-            orphan = path.name.endswith(_TEMP_SUFFIX) or (_ARTIFACT_ID_RE.fullmatch(path.name) and path.name not in live)
+            orphan = path.name.endswith(_TEMP_SUFFIX) or (
+                _ARTIFACT_ID_RE.fullmatch(path.name) and path.name not in live
+            )
             if path.is_file() and orphan:
                 with contextlib.suppress(OSError):
                     path.unlink(missing_ok=True)
@@ -158,14 +183,20 @@ class ArtifactStore:
     def allowed_mime_types(self) -> frozenset:
         return self._allowed_mime_types
 
-    def store(self, data: bytes, *, filename: str, content_type: str, scope: Any) -> ArtifactReceipt:
+    def store(
+        self, data: bytes, *, filename: str, content_type: str, scope: Any
+    ) -> ArtifactReceipt:
         """Validate and store one artifact, returning its receipt; size/MIME rejections fire before any disk write."""
         size = len(data)
         if size > self._max_bytes:
-            raise ArtifactTooLarge(f"artifact is {size} bytes; cap is {self._max_bytes}")
+            raise ArtifactTooLarge(
+                f"artifact is {size} bytes; cap is {self._max_bytes}"
+            )
         normalized_type = _normalize_content_type(content_type)
         if normalized_type not in self._allowed_mime_types:
-            raise ArtifactMimeRejected(f"content type {content_type!r} is outside the exact allowlist")
+            raise ArtifactMimeRejected(
+                f"content type {content_type!r} is outside the exact allowlist"
+            )
         scope_key = artifact_scope_key(scope)
         now = self._clock()
         # Mint a fresh id; retry on an astronomically unlikely collision.
@@ -175,11 +206,19 @@ class ArtifactStore:
             with self._lock:
                 if artifact_id not in self._entries and not target.exists():
                     receipt = ArtifactReceipt(
-                        artifact_id=artifact_id, sha256=hashlib.sha256(data).hexdigest(), size_bytes=size,
-                        content_type=normalized_type, filename=_bounded_filename(filename), created_at=now,
-                        expires_at=now + self._ttl_seconds, ttl_seconds=self._ttl_seconds, scope_key=scope_key,
+                        artifact_id=artifact_id,
+                        sha256=hashlib.sha256(data).hexdigest(),
+                        size_bytes=size,
+                        content_type=normalized_type,
+                        filename=_bounded_filename(filename),
+                        created_at=now,
+                        expires_at=now + self._ttl_seconds,
+                        ttl_seconds=self._ttl_seconds,
+                        scope_key=scope_key,
                     )
-                    self._entries[artifact_id] = _ArtifactEntry(receipt=receipt, path=target)
+                    self._entries[artifact_id] = _ArtifactEntry(
+                        receipt=receipt, path=target
+                    )
                     break
         # Temp + atomic rename so readers never observe a partial artifact.
         temp = target.with_name(f"{target.name}{_TEMP_SUFFIX}")
@@ -213,13 +252,17 @@ class ArtifactStore:
             except OSError as exc:
                 raise ArtifactError(f"artifact read failed: {exc}") from exc
             if hashlib.sha256(data).hexdigest() != entry.receipt.sha256:
-                raise ArtifactChecksumMismatch(f"artifact {artifact_id!r} failed SHA-256 validation")
+                raise ArtifactChecksumMismatch(
+                    f"artifact {artifact_id!r} failed SHA-256 validation"
+                )
             # Drop the index entry first so a concurrent load fails closed.
             self._entries.pop(artifact_id, None)
         try:
             entry.path.unlink(missing_ok=True)
         except OSError:
-            logger.warning("artifact %s: file removal failed; TTL sweep will retry", artifact_id)
+            logger.warning(
+                "artifact %s: file removal failed; TTL sweep will retry", artifact_id
+            )
         return data, entry.receipt
 
     def prune_expired(self, now: Optional[float] = None) -> int:
@@ -261,18 +304,26 @@ class ArtifactStore:
                 self._discard_locked(artifact_id, path)
                 raise ArtifactExpired(f"artifact {artifact_id!r} expired")
             if entry.receipt.scope_key != scope_key:
-                raise ArtifactScopeMismatch(f"artifact {artifact_id!r} is bound to a different scope")
+                raise ArtifactScopeMismatch(
+                    f"artifact {artifact_id!r} is bound to a different scope"
+                )
             return entry
 
     def _prune_expired_locked(self, now: float) -> int:
-        expired = [(aid, e.path) for aid, e in self._entries.items() if e.receipt.expires_at <= now]
+        expired = [
+            (aid, e.path)
+            for aid, e in self._entries.items()
+            if e.receipt.expires_at <= now
+        ]
         for artifact_id, path in expired:
             self._discard_locked(artifact_id, path)
         return len(expired)
 
     def _artifact_path(self, artifact_id: str) -> Path:
         """Resolve a minted id strictly inside the controlled root."""
-        if not isinstance(artifact_id, str) or not _ARTIFACT_ID_RE.fullmatch(artifact_id):
+        if not isinstance(artifact_id, str) or not _ARTIFACT_ID_RE.fullmatch(
+            artifact_id
+        ):
             raise ArtifactTraversal(f"invalid artifact id {artifact_id!r}")
         candidate = (self._root / artifact_id).resolve()
         try:
@@ -286,18 +337,31 @@ class ArtifactStore:
 
 def _normalize_content_type(value: str) -> str:
     """Return the canonical MIME type, or ``""`` for malformed input."""
-    return value.strip().split(";", 1)[0].strip().lower() if isinstance(value, str) else ""
+    return (
+        value.strip().split(";", 1)[0].strip().lower() if isinstance(value, str) else ""
+    )
 
 
 def _bounded_filename(value: str, limit: int = 160) -> str:
     """Sanitize a display-only filename; never used as a filesystem path."""
-    cleaned = value.strip().replace("\\", "_").replace("/", "_") if isinstance(value, str) else ""
+    cleaned = (
+        value.strip().replace("\\", "_").replace("/", "_")
+        if isinstance(value, str)
+        else ""
+    )
     return "".join(character for character in cleaned if ord(character) >= 32)[:limit]
 
 
 class ArtifactRateLimiter:
     """Sliding-window per-key limiter; the API server keys it by principal."""
-    def __init__(self, *, window_seconds: float = 60.0, max_requests: int = 30, clock: Optional[Callable[[], float]] = None) -> None:
+
+    def __init__(
+        self,
+        *,
+        window_seconds: float = 60.0,
+        max_requests: int = 30,
+        clock: Optional[Callable[[], float]] = None,
+    ) -> None:
         self._window_seconds = max(1.0, float(window_seconds))
         self._max_requests = max(1, int(max_requests))
         self._clock = clock if clock is not None else time.time
@@ -310,7 +374,11 @@ class ArtifactRateLimiter:
             return False
         now = self._clock()
         with self._lock:
-            hits = [hit for hit in self._hits.get(key, []) if hit > now - self._window_seconds]
+            hits = [
+                hit
+                for hit in self._hits.get(key, [])
+                if hit > now - self._window_seconds
+            ]
             allowed = len(hits) < self._max_requests
             if allowed:
                 hits.append(now)

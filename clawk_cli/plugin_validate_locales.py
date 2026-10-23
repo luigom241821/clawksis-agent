@@ -24,6 +24,7 @@ _KEY_EXPORTS = {"tui": "_keys.tui.json", "desktop": "_keys.desktop.json"}
 
 def _bundled_locales_dir() -> Path:
     from agent.i18n import _locales_dir
+
     return _locales_dir()
 
 
@@ -34,6 +35,7 @@ def reference_keys(surface: str) -> Optional[set[str]]:
     try:
         if surface == CORE_SURFACE:
             from agent.i18n_layers import parse_locale_file
+
             return set(parse_locale_file(locales / "en.yaml"))
         export = locales / _KEY_EXPORTS[surface]
         if not export.is_file():
@@ -48,6 +50,7 @@ def reference_keys(surface: str) -> Optional[set[str]]:
 
 def _load_document(path: Path) -> Any:
     import clawk_yaml as yaml
+
     with path.open("r", encoding="utf-8-sig") as handle:
         return yaml.safe_load(handle)
 
@@ -57,11 +60,17 @@ def check_language_packs(report, manifest: dict, plugin_dir: Path) -> None:
     from clawk_cli.plugins_manifest import parse_provides_locales
 
     raw = manifest.get("provides_locales")
-    declared, _meta = parse_provides_locales(raw, str(manifest.get("name") or plugin_dir.name))
+    declared, _meta = parse_provides_locales(
+        raw, str(manifest.get("name") or plugin_dir.name)
+    )
     if raw is None:
         return
     if not declared:
-        report.add("locales", False, "provides_locales declares no valid language id (expected e.g. pl, pt-br)")
+        report.add(
+            "locales",
+            False,
+            "provides_locales declares no valid language id (expected e.g. pl, pt-br)",
+        )
         return
     locales_dir = plugin_dir / "locales"
     found = scan_locale_dir(locales_dir)
@@ -71,18 +80,28 @@ def check_language_packs(report, manifest: dict, plugin_dir: Path) -> None:
     for lang_id in declared:
         files = by_lang.get(lang_id, [])
         if not any(surface == CORE_SURFACE for surface, _ in files):
-            report.add(f"locale {lang_id}", False, f"provides_locales declares {lang_id!r} but locales/{lang_id}.yaml is missing")
+            report.add(
+                f"locale {lang_id}",
+                False,
+                f"provides_locales declares {lang_id!r} but locales/{lang_id}.yaml is missing",
+            )
             continue
         for surface, path in files:
             _check_locale_file(report, lang_id, surface, path)
     undeclared = sorted(set(by_lang) - set(declared))
     if undeclared:
-        report.warn(f"locales/ ships {', '.join(undeclared)} not listed in provides_locales "
-                    "(loaded anyway; declare them so users can see the pack's languages)")
+        report.warn(
+            f"locales/ ships {', '.join(undeclared)} not listed in provides_locales "
+            "(loaded anyway; declare them so users can see the pack's languages)"
+        )
 
 
 def _check_locale_file(report, lang_id: str, surface: str, path: Path) -> None:
-    label = f"locale {lang_id}" if surface == CORE_SURFACE else f"locale {lang_id}.{surface}"
+    label = (
+        f"locale {lang_id}"
+        if surface == CORE_SURFACE
+        else f"locale {lang_id}.{surface}"
+    )
     try:
         document = _load_document(path)
     except Exception as exc:
@@ -91,22 +110,40 @@ def _check_locale_file(report, lang_id: str, surface: str, path: Path) -> None:
     if document is None:
         document = {}
     if not isinstance(document, dict):
-        report.add(label, False, f"{path.name} must be a mapping, got {type(document).__name__}")
+        report.add(
+            label,
+            False,
+            f"{path.name} must be a mapping, got {type(document).__name__}",
+        )
         return
     bad_leaves = non_text_leaves(document)
     if bad_leaves:
-        report.add(label, False, f"{path.name} has non-text value(s) at: {', '.join(sorted(bad_leaves))}")
+        report.add(
+            label,
+            False,
+            f"{path.name} has non-text value(s) at: {', '.join(sorted(bad_leaves))}",
+        )
         return
     flat = flatten(document)
     reference = reference_keys(surface)
     if reference is None:
-        report.add(label, True, f"{path.name}: {len(flat)} key(s); no {surface} key reference available, key check skipped")
+        report.add(
+            label,
+            True,
+            f"{path.name}: {len(flat)} key(s); no {surface} key reference available, key check skipped",
+        )
         return
     unknown = sorted(set(flat) - reference)
     if unknown:
-        report.warn(f"{path.name}: {len(unknown)} key(s) not in the English {surface} catalog (ignored at runtime): "
-                    + ", ".join(unknown))
-    report.add(label, True, f"{path.name}: {len(flat)} key(s), {len(flat) - len(unknown)} match the English {surface} catalog")
+        report.warn(
+            f"{path.name}: {len(unknown)} key(s) not in the English {surface} catalog (ignored at runtime): "
+            + ", ".join(unknown)
+        )
+    report.add(
+        label,
+        True,
+        f"{path.name}: {len(flat)} key(s), {len(flat) - len(unknown)} match the English {surface} catalog",
+    )
 
 
 __all__ = ["check_language_packs", "reference_keys"]

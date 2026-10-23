@@ -56,7 +56,8 @@ def test_notifier_watcher_polls_without_dispatch_ownership():
         },
     ):
         with patch.object(
-            _kb, "list_boards",
+            _kb,
+            "list_boards",
             side_effect=lambda *a, **kw: past_gate.append(True) or [],
         ):
             with patch("asyncio.sleep", side_effect=fake_sleep):

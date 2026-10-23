@@ -110,12 +110,28 @@ def test_chat_client_never_spawns_mcp_servers_the_gateway_owns(monkeypatch, comm
     them and held the discovery lock the cold-starting gateway waited on before READY."""
     calls = {"background": 0, "inline": 0}
     monkeypatch.setattr(main_mod, "_resolve_use_tui", lambda _args: False)
-    monkeypatch.setattr(mcp_startup, "start_background_mcp_discovery",
-                        lambda **_kwargs: calls.__setitem__("background", calls["background"] + 1))
-    monkeypatch.setitem(sys.modules, "clawk_cli.plugins", types.SimpleNamespace(
-        discover_plugins=lambda: None, start_background_plugin_discovery=lambda: None))
-    monkeypatch.setitem(sys.modules, "tools.mcp_tool_discovery", types.SimpleNamespace(
-        discover_mcp_tools=lambda **_k: calls.__setitem__("inline", calls["inline"] + 1)))
+    monkeypatch.setattr(
+        mcp_startup,
+        "start_background_mcp_discovery",
+        lambda **_kwargs: calls.__setitem__("background", calls["background"] + 1),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "clawk_cli.plugins",
+        types.SimpleNamespace(
+            discover_plugins=lambda: None,
+            start_background_plugin_discovery=lambda: None,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "tools.mcp_tool_discovery",
+        types.SimpleNamespace(
+            discover_mcp_tools=lambda **_k: calls.__setitem__(
+                "inline", calls["inline"] + 1
+            )
+        ),
+    )
     main_mod._prepare_agent_startup(_agent_args(command=command))
     assert calls == {"background": 0, "inline": 0}
 
@@ -187,7 +203,9 @@ def test_background_mcp_discovery_suppresses_interactive_oauth(monkeypatch):
         sys.modules,
         "clawk_cli.config",
         types.SimpleNamespace(
-            read_raw_config=lambda: {"mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}
+            },
         ),
     )
     monkeypatch.setitem(
@@ -217,14 +235,20 @@ def test_background_mcp_discovery_suppresses_interactive_oauth(monkeypatch):
 
 def test_background_mcp_discovery_propagates_profile_secret_scope(monkeypatch):
     """A dashboard-profile discovery thread must retain that profile's secrets."""
-    from agent.secret_scope import current_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        current_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
 
     seen = []
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.config",
         types.SimpleNamespace(
-            read_raw_config=lambda: {"mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}},
+            read_raw_config=lambda: {
+                "mcp_servers": {"demo": {"url": "https://mcp.example.test/mcp"}}
+            },
         ),
     )
     monkeypatch.setitem(
@@ -273,12 +297,6 @@ def test_portable_only_mcp_configuration_opens_startup_gate(monkeypatch):
     assert mcp_startup._has_configured_mcp_servers() is True
 
 
-
-
-
-
-
-
 def _retry_logger():
     return types.SimpleNamespace(
         debug=lambda *_a, **_k: None,
@@ -286,7 +304,9 @@ def _retry_logger():
     )
 
 
-def _install_retry_stubs(monkeypatch, *, connected: bool, calls: dict, status: str = "configured"):
+def _install_retry_stubs(
+    monkeypatch, *, connected: bool, calls: dict, status: str = "configured"
+):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.config",
@@ -304,11 +324,11 @@ def _install_retry_stubs(monkeypatch, *, connected: bool, calls: dict, status: s
         "tools.mcp_tool_discovery",
         types.SimpleNamespace(
             discover_mcp_tools=lambda: calls.__setitem__("mcp", calls["mcp"] + 1),
-            get_mcp_status=lambda: [{"name": "demo", "connected": connected, "status": status}],
+            get_mcp_status=lambda: [
+                {"name": "demo", "connected": connected, "status": status}
+            ],
         ),
     )
-
-
 
 
 # --- -t/--toolsets MCP spawn filter (#19000) --------------------------------
@@ -361,8 +381,12 @@ def test_discover_mcp_tools_spawns_only_allowed_servers(monkeypatch):
 
     monkeypatch.setattr(_mcp_config, "_load_mcp_config", lambda: dict(servers))
     monkeypatch.setattr(mcp_tool, "_ensure_mcp_sdk", _fake_ensure_sdk)
-    monkeypatch.setattr(_mcp_loop, "_try_acquire_mcp_discovery_lock", lambda: mcp_tool._LOCK_UNAVAILABLE)
-    monkeypatch.setattr(mcp_tool, "_release_mcp_discovery_lock", lambda *_a, **_k: None, raising=False)
+    monkeypatch.setattr(
+        _mcp_loop, "_try_acquire_mcp_discovery_lock", lambda: mcp_tool._LOCK_UNAVAILABLE
+    )
+    monkeypatch.setattr(
+        mcp_tool, "_release_mcp_discovery_lock", lambda *_a, **_k: None, raising=False
+    )
 
     def _fake_register(cfgs):
         seen.update(cfgs)
@@ -390,12 +414,18 @@ def test_discover_mcp_tools_spawns_only_allowed_servers(monkeypatch):
     assert sdk_probes["n"] == 0
 
 
-def test_background_discovery_honors_server_filter(monkeypatch, _reset_mcp_server_filter):
+def test_background_discovery_honors_server_filter(
+    monkeypatch, _reset_mcp_server_filter
+):
     calls: list = []
     monkeypatch.setitem(
         sys.modules,
         "tools.mcp_tool_discovery",
-        types.SimpleNamespace(discover_mcp_tools=lambda allowed_mcp_names=None: calls.append(allowed_mcp_names)),
+        types.SimpleNamespace(
+            discover_mcp_tools=lambda allowed_mcp_names=None: calls.append(
+                allowed_mcp_names
+            )
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -407,7 +437,9 @@ def test_background_discovery_honors_server_filter(monkeypatch, _reset_mcp_serve
     assert calls == [["terminal", "code-mcp"]]
 
 
-def test_prepare_agent_startup_installs_server_filter(monkeypatch, _reset_mcp_server_filter):
+def test_prepare_agent_startup_installs_server_filter(
+    monkeypatch, _reset_mcp_server_filter
+):
     monkeypatch.setitem(
         sys.modules,
         "clawk_cli.plugins",
@@ -419,7 +451,9 @@ def test_prepare_agent_startup_installs_server_filter(monkeypatch, _reset_mcp_se
 
 
 @pytest.mark.parametrize(("status", "retried"), [("lazy", False), ("configured", True)])
-def test_lazy_only_discovery_counts_as_usable_at_both_startup_sites(monkeypatch, status, retried):
+def test_lazy_only_discovery_counts_as_usable_at_both_startup_sites(
+    monkeypatch, status, retried
+):
     """A finished run whose servers are all ``lazy`` (registered from the schema cache, spawned
     on first use) left them usable: no zero-connected warning, and the re-entry check must not
     re-spawn discovery (#111717). Control: a run that left them merely ``configured`` still warns
@@ -427,14 +461,20 @@ def test_lazy_only_discovery_counts_as_usable_at_both_startup_sites(monkeypatch,
     calls = {"mcp": 0}
     _install_retry_stubs(monkeypatch, connected=False, calls=calls, status=status)
     warnings: list = []
-    logger = types.SimpleNamespace(debug=lambda *_a, **_k: None,
-                                   warning=lambda msg, *a, **_k: warnings.append(msg % a if a else msg))
+    logger = types.SimpleNamespace(
+        debug=lambda *_a, **_k: None,
+        warning=lambda msg, *a, **_k: warnings.append(msg % a if a else msg),
+    )
 
-    mcp_startup.start_background_mcp_discovery(logger=logger, thread_name="t")  # first run
+    mcp_startup.start_background_mcp_discovery(
+        logger=logger, thread_name="t"
+    )  # first run
     thread = mcp_startup._current_home_thread()
     if thread is not None:
         thread.join(timeout=5.0)
-    mcp_startup.start_background_mcp_discovery(logger=logger, thread_name="t")  # re-entry after it finished
+    mcp_startup.start_background_mcp_discovery(
+        logger=logger, thread_name="t"
+    )  # re-entry after it finished
     thread = mcp_startup._current_home_thread()
     if thread is not None:
         thread.join(timeout=5.0)
@@ -444,7 +484,9 @@ def test_lazy_only_discovery_counts_as_usable_at_both_startup_sites(monkeypatch,
     assert any("retrying discovery thread" in w for w in warnings) is retried
 
 
-def test_server_added_after_discovery_is_connected_by_the_next_agent_build(monkeypatch, tmp_path):
+def test_server_added_after_discovery_is_connected_by_the_next_agent_build(
+    monkeypatch, tmp_path
+):
     """#76954: ``clawk mcp add`` against a running Desktop backend. Discovery already ran and left
     ``github`` live, so the re-entry every agent build makes returned early and the new server's
     tools never reached a new session. It must run discovery again, and only while something
@@ -453,16 +495,25 @@ def test_server_added_after_discovery_is_connected_by_the_next_agent_build(monke
     from tools import mcp_tool_config as _config
 
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
-    (tmp_path / "config.yaml").write_text("mcp_servers:\n  github:\n    url: https://mcp.example.test/gh\n")
+    (tmp_path / "config.yaml").write_text(
+        "mcp_servers:\n  github:\n    url: https://mcp.example.test/gh\n"
+    )
     configured = {"github": {"url": "https://mcp.example.test/gh"}}
     monkeypatch.setattr(_config, "_load_mcp_config", lambda: dict(configured))
     monkeypatch.setitem(mcp_tool._servers, "github", object())
     monkeypatch.setitem(mcp_tool._server_scope_keys, "github", None)
     monkeypatch.setattr(mcp_startup, "_any_mcp_connected", lambda: True)
     runs: list = []
-    monkeypatch.setattr(mcp_startup, "_discover_mcp_tools_without_interactive_oauth", lambda: runs.append(1))
-    logger = types.SimpleNamespace(debug=lambda *_a, **_k: None, info=lambda *_a, **_k: None,
-                                   warning=lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        mcp_startup,
+        "_discover_mcp_tools_without_interactive_oauth",
+        lambda: runs.append(1),
+    )
+    logger = types.SimpleNamespace(
+        debug=lambda *_a, **_k: None,
+        info=lambda *_a, **_k: None,
+        warning=lambda *_a, **_k: None,
+    )
 
     def build_agent():
         mcp_startup.start_background_mcp_discovery(logger=logger, thread_name="t")
@@ -474,6 +525,8 @@ def test_server_added_after_discovery_is_connected_by_the_next_agent_build(monke
     build_agent()  # new session, config unchanged: github is live, nothing to do
     assert len(runs) == 1
 
-    configured["linear"] = {"url": "https://mcp.example.test/linear"}  # clawk mcp add linear
+    configured["linear"] = {
+        "url": "https://mcp.example.test/linear"
+    }  # clawk mcp add linear
     build_agent()
     assert len(runs) == 2

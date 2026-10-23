@@ -32,7 +32,11 @@ _HEARTBEAT_FRESH_TTL_S = 150.0
 
 def _nonneg_int(value: Any) -> Optional[int]:
     """Return *value* if it is a non-negative int (bools rejected), else None."""
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else None
+    )
 
 
 def _mb(kib: Any) -> Optional[int]:
@@ -41,10 +45,16 @@ def _mb(kib: Any) -> Optional[int]:
 
 def _parse_iso(value: Any) -> Optional[datetime]:
     try:
-        parsed = datetime.fromisoformat(value) if isinstance(value, str) and value else None
+        parsed = (
+            datetime.fromisoformat(value) if isinstance(value, str) and value else None
+        )
     except ValueError:
         return None
-    return parsed.replace(tzinfo=UTC) if parsed is not None and parsed.tzinfo is None else parsed
+    return (
+        parsed.replace(tzinfo=UTC)
+        if parsed is not None and parsed.tzinfo is None
+        else parsed
+    )
 
 
 def classify_pressure(available_kib: Any, total_kib: Any) -> str:
@@ -66,7 +76,9 @@ def _read_state_files(home: Optional[Path]) -> tuple:
         from gateway.lifecycle_ledger import _read_json, get_lifecycle_sentinel_path
         from gateway.shutdown_watchdog import get_loop_heartbeat_path
 
-        return _read_json(get_loop_heartbeat_path(home)), _read_json(get_lifecycle_sentinel_path(home))
+        return _read_json(get_loop_heartbeat_path(home)), _read_json(
+            get_lifecycle_sentinel_path(home)
+        )
     except Exception:
         return None, None
 
@@ -81,8 +93,14 @@ def collect_memory_status(
     yield ``pressure="unknown"`` plus whatever fields could be recovered."""
     moment = now or datetime.now(UTC)
     status: dict[str, Any] = {
-        "pressure": "unknown", "gateway_rss_mb": None, "system_total_mb": None, "system_available_mb": None,
-        "swap_used_mb": None, "sampled_at": None, "last_boot_unclean": False, "last_boot_suspected_oom": False,
+        "pressure": "unknown",
+        "gateway_rss_mb": None,
+        "system_total_mb": None,
+        "system_available_mb": None,
+        "swap_used_mb": None,
+        "sampled_at": None,
+        "last_boot_unclean": False,
+        "last_boot_suspected_oom": False,
         # Identity of the CURRENT life (sentinel started_at): the dashboard keys
         # banner dismissal on it so acknowledging one OOM restart does not mute the NEXT.
         "boot_id": None,
@@ -92,8 +110,12 @@ def collect_memory_status(
     if heartbeat:
         sampled_at, mem = _parse_iso(heartbeat.get("updated_at")), heartbeat.get("mem")
         if isinstance(mem, dict):
-            for dst, src in (("gateway_rss_mb", "rss_kib"), ("system_total_mb", "mem_total_kib"),
-                             ("system_available_mb", "mem_available_kib"), ("swap_used_mb", "swap_used_kib")):
+            for dst, src in (
+                ("gateway_rss_mb", "rss_kib"),
+                ("system_total_mb", "mem_total_kib"),
+                ("system_available_mb", "mem_available_kib"),
+                ("swap_used_mb", "swap_used_kib"),
+            ):
                 status[dst] = _mb(mem.get(src))
             if sampled_at is not None:
                 status["sampled_at"] = sampled_at.isoformat()
@@ -101,12 +123,16 @@ def collect_memory_status(
                 # pressure stays "unknown" so a dead gateway's final gasp cannot
                 # render a live "critical" banner forever.
                 if 0 <= (moment - sampled_at).total_seconds() <= _HEARTBEAT_FRESH_TTL_S:
-                    status["pressure"] = classify_pressure(mem.get("mem_available_kib"), mem.get("mem_total_kib"))
+                    status["pressure"] = classify_pressure(
+                        mem.get("mem_available_kib"), mem.get("mem_total_kib")
+                    )
 
     if sentinel:
         status["last_boot_unclean"] = bool(sentinel.get("prior_unclean_exit"))
         status["last_boot_suspected_oom"] = bool(sentinel.get("prior_suspected_oom"))
         started_at = sentinel.get("started_at")
-        status["boot_id"] = started_at if isinstance(started_at, str) and started_at else None
+        status["boot_id"] = (
+            started_at if isinstance(started_at, str) and started_at else None
+        )
 
     return status

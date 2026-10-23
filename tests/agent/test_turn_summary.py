@@ -39,14 +39,6 @@ def test_format_elapsed(seconds, expected):
 # ── format_turn_summary: pure formatter ─────────────────────────────────────
 
 
-
-
-
-
-
-
-
-
 def test_pluralization_singular_and_plural():
     one = TurnTally(verbs={"read": {"files": 1}})
     many = TurnTally(verbs={"read": {"files": 3}})
@@ -60,14 +52,6 @@ def test_pluralization_irregular_nouns():
     assert format_turn_summary(1.0, mem) == "⋯ 1.0s · updated 1 memory"
     times = TurnTally(verbs={"searched the web": {"times": 1}})
     assert format_turn_summary(1.0, times) == "⋯ 1.0s · searched the web 1 time"
-
-
-
-
-
-
-
-
 
 
 def test_long_tallies_truncate_to_more_tail():
@@ -86,17 +70,7 @@ def test_long_tallies_truncate_to_more_tail():
     assert line.count("·") == 5
 
 
-
-
-
-
 # ── collector semantics ────────────────────────────────────────────────────
-
-
-
-
-
-
 
 
 def test_begin_resets_previous_turn():
@@ -108,13 +82,7 @@ def test_begin_resets_previous_turn():
     assert collector.render(0.5) == ""
 
 
-
-
-
-
 # ── spinner token flow (PART B) ────────────────────────────────────────────
-
-
 
 
 def test_format_token_flow_bad_input_is_empty():
@@ -183,26 +151,10 @@ def test_gating_enabled_prints_summary(monkeypatch):
     assert "read 1 file" in printed[0]
 
 
-
-
-
-
-
-
-
-
 def test_spinner_token_flow_appears_when_enabled():
     stub = _make_cli(agent=_StubAgent(session_output_tokens=1200))
     assert stub._spinner_token_flow() == "↓ 1.2k tok"
     assert "↓ 1.2k tok" in stub._render_spinner_text()
-
-
-
-
-
-
-
-
 
 
 def test_content_free_diff_reports_unknown_not_zero_zero():
@@ -225,6 +177,9 @@ def test_content_free_diff_reports_unknown_not_zero_zero():
     real.begin()
     real.record_tool(
         "patch",
-        result={"success": True, "diff": "--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n-old\n+new\n+extra\n"},
+        result={
+            "success": True,
+            "diff": "--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n-old\n+new\n+extra\n",
+        },
     )
     assert "+2 -1" in real.render(1.0)

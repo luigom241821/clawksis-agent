@@ -66,23 +66,41 @@ def test_install_summary_shows_known_issues(monkeypatch):
     """The dashboard install result and capability summary surface the text; install still proceeds."""
     from clawk_cli.plugins_cmd_install import dashboard_install_plugin
 
-    entry = _entry(known_issues=["Local embedded mode is not supported on PM-managed Clawksis."])
-    monkeypatch.setattr("clawk_cli.plugins_cmd_catalog.get_live_catalog_entry", lambda _n: entry)
+    entry = _entry(
+        known_issues=["Local embedded mode is not supported on PM-managed Clawksis."]
+    )
+    monkeypatch.setattr(
+        "clawk_cli.plugins_cmd_catalog.get_live_catalog_entry", lambda _n: entry
+    )
     monkeypatch.setattr(
         "clawk_cli.plugins_cmd._resolve_git_url",
-        lambda _i: ("https://github.com/vectorize-io/hindsight.git", None))
-    monkeypatch.setattr("clawk_cli.plugins_cmd_catalog.raise_if_removed", lambda *a: None)
+        lambda _i: ("https://github.com/vectorize-io/hindsight.git", None),
+    )
+    monkeypatch.setattr(
+        "clawk_cli.plugins_cmd_catalog.raise_if_removed", lambda *a: None
+    )
     monkeypatch.setattr(
         "clawk_cli.plugins_cmd_catalog.install_catalog_entry",
-        lambda *a, **k: (Path("/tmp/hindsight-target"), {"manifest": 1}, "hindsight"))
-    monkeypatch.setattr("clawk_cli.plugins_cmd._python_dependency_summary", lambda _t, w: None)
-    monkeypatch.setattr("clawk_cli.plugins_cmd._set_plugin_enabled", lambda *a, **k: None)
+        lambda *a, **k: (Path("/tmp/hindsight-target"), {"manifest": 1}, "hindsight"),
+    )
+    monkeypatch.setattr(
+        "clawk_cli.plugins_cmd._python_dependency_summary", lambda _t, w: None
+    )
+    monkeypatch.setattr(
+        "clawk_cli.plugins_cmd._set_plugin_enabled", lambda *a, **k: None
+    )
     monkeypatch.setattr("clawk_cli.plugins_cmd._missing_env_specs", lambda _m: [])
-    monkeypatch.setattr("clawk_cli.plugins_activation.activate_plugin_now", lambda _n: {})
+    monkeypatch.setattr(
+        "clawk_cli.plugins_activation.activate_plugin_now", lambda _n: {}
+    )
 
-    result = dashboard_install_plugin("", force=False, enable=False, catalog_name="hindsight")
+    result = dashboard_install_plugin(
+        "", force=False, enable=False, catalog_name="hindsight"
+    )
     assert result["ok"] is True  # informational — the install is not refused
-    assert result["known_issues"] == ["Local embedded mode is not supported on PM-managed Clawksis."]
+    assert result["known_issues"] == [
+        "Local embedded mode is not supported on PM-managed Clawksis."
+    ]
     assert any(w.startswith("Known issue:") for w in result["warnings"])
 
     # The catalog capability summary (shown at install/enable prompts and in the UI) carries the text.

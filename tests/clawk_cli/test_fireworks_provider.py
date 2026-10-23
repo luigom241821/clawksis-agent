@@ -35,7 +35,9 @@ class TestFireworksAliases:
     """Both CLI resolvers must map the aliases — the plugin's aliases= tuple is
     NOT consulted by these static maps, so they need explicit coverage."""
 
-    @pytest.mark.parametrize("alias", ["fireworks", "fireworks-ai", "fw", "FW", " Fireworks-AI "])
+    @pytest.mark.parametrize(
+        "alias", ["fireworks", "fireworks-ai", "fw", "FW", " Fireworks-AI "]
+    )
     def test_models_normalize_provider(self, alias):
         assert normalize_provider(alias) == "fireworks"
 
@@ -44,8 +46,6 @@ class TestFireworksAliases:
         from clawk_cli.providers import normalize_provider as normalize_in_providers
 
         assert normalize_in_providers(alias) == "fireworks"
-
-
 
 
 class TestFireworksConfigRegistry:
@@ -59,11 +59,10 @@ class TestFireworksConfigRegistry:
         assert "FIREWORKS_BASE_URL" not in OPTIONAL_ENV_VARS
 
 
-
-
 class TestFireworksDoctor:
-
-    def test_slash_form_model_is_not_flagged_as_vendor_prefixed(self, monkeypatch, tmp_path):
+    def test_slash_form_model_is_not_flagged_as_vendor_prefixed(
+        self, monkeypatch, tmp_path
+    ):
         """Fireworks' native model IDs are slash-form (accounts/fireworks/...),
         so doctor must NOT warn that provider should be 'openrouter' / the prefix
         dropped — that heuristic is for aggregator vendor slugs only."""
@@ -90,11 +89,16 @@ class TestFireworksDoctor:
         # Keep the run offline and cheap.
         import httpx
 
-        monkeypatch.setattr(httpx, "get", lambda *a, **k: types.SimpleNamespace(status_code=200))
+        monkeypatch.setattr(
+            httpx, "get", lambda *a, **k: types.SimpleNamespace(status_code=200)
+        )
         monkeypatch.setitem(
             sys.modules,
             "model_tools",
-            types.SimpleNamespace(check_tool_availability=lambda *a, **k: ([], []), TOOLSET_REQUIREMENTS={}),
+            types.SimpleNamespace(
+                check_tool_availability=lambda *a, **k: ([], []),
+                TOOLSET_REQUIREMENTS={},
+            ),
         )
         with contextlib.suppress(Exception):
             from clawk_cli import auth as _auth_mod
@@ -118,6 +122,7 @@ class TestFireworksCredentials:
         assert creds["api_key"] == "fw_test_key"
         assert creds["base_url"] == "https://api.fireworks.ai/inference/v1"
 
+
 class TestFireworksAuxiliary:
     """resolve_provider_client wires the BYOK key and PAYG-safe aux model."""
 
@@ -136,7 +141,10 @@ class TestFireworksAuxiliary:
         client, _model, kwargs = self._resolve("fireworks")
         assert client is not None
         headers = kwargs.get("default_headers", {})
-        assert headers["HTTP-Referer"] == "https://github.com/samuelgradientai-sys/clawksis-agent"
+        assert (
+            headers["HTTP-Referer"]
+            == "https://github.com/samuelgradientai-sys/clawksis-agent"
+        )
         assert headers["X-Title"] == "Clawksis"
         assert kwargs["base_url"] == "https://api.fireworks.ai/inference/v1"
 
@@ -153,4 +161,7 @@ class TestFireworksModelMetadata:
     def test_url_infers_fireworks(self):
         from agent.model_metadata import _infer_provider_from_url
 
-        assert _infer_provider_from_url("https://api.fireworks.ai/inference/v1") == "fireworks"
+        assert (
+            _infer_provider_from_url("https://api.fireworks.ai/inference/v1")
+            == "fireworks"
+        )

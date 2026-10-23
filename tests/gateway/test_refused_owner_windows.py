@@ -6,6 +6,7 @@ name), and a session-0 system process seen from an interactive session (``gatewa
 the #140252 shape). Building an elevated owner seen from a filtered client needs a second logon
 token, which a hosted runner cannot mint; that half stays a live retest.
 """
+
 import csv
 import io
 import subprocess
@@ -22,8 +23,11 @@ def test_own_session_and_elevation_are_read_from_the_real_token():
     import os
 
     assert isinstance(native._session_of(os.getpid()), int)
-    assert process_elevation(os.getpid()) is process_elevation() is process_is_elevated()
+    assert (
+        process_elevation(os.getpid()) is process_elevation() is process_is_elevated()
+    )
     from clawk_cli.gateway_windows import _is_running_as_admin
+
     assert _is_running_as_admin() is process_is_elevated()
 
 
@@ -39,8 +43,12 @@ def test_a_same_token_owner_is_not_misnamed():
 
 
 def _session_zero_pid() -> int | None:
-    rows = subprocess.run(["tasklist", "/fo", "csv", "/nh", "/fi", "SESSION eq 0"], capture_output=True,
-                          text=True, check=False).stdout
+    rows = subprocess.run(
+        ["tasklist", "/fo", "csv", "/nh", "/fi", "SESSION eq 0"],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
     for row in csv.reader(io.StringIO(rows)):
         if len(row) > 1 and row[1].isdigit() and int(row[1]) > 4:
             return int(row[1])

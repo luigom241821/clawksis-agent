@@ -37,7 +37,11 @@ from gateway.platforms.base import (
     SendResult,
 )
 from gateway.platforms.event import MessageEvent, MessageType
-from gateway.run import GatewayRunner, _collect_auto_append_media_tags, _collect_history_media_paths
+from gateway.run import (
+    GatewayRunner,
+    _collect_auto_append_media_tags,
+    _collect_history_media_paths,
+)
 from gateway.session import SessionSource, build_session_key
 
 
@@ -66,14 +70,27 @@ class _DummyAdapter(BasePlatformAdapter):
     async def get_chat_info(self, chat_id: str):
         return {"id": chat_id}
 
-    async def send_document(self, chat_id, file_path, caption=None, file_name=None, reply_to=None, metadata=None, **kwargs) -> SendResult:
+    async def send_document(
+        self,
+        chat_id,
+        file_path,
+        caption=None,
+        file_name=None,
+        reply_to=None,
+        metadata=None,
+        **kwargs,
+    ) -> SendResult:
         self.documents.append(str(file_path))
         return SendResult(success=True, message_id="doc-1")
 
-    async def send_multiple_images(self, chat_id, images, metadata=None, human_delay=0.0):
+    async def send_multiple_images(
+        self, chat_id, images, metadata=None, human_delay=0.0
+    ):
         self.images_sent.extend(str(p) for p, _cap in images)
 
-    async def send_image_file(self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kwargs) -> SendResult:
+    async def send_image_file(
+        self, chat_id, image_path, caption=None, reply_to=None, metadata=None, **kwargs
+    ) -> SendResult:
         self.images_sent.append(str(image_path))
         return SendResult(success=True, message_id="img-1")
 
@@ -87,7 +104,9 @@ class _StubStore:
     def __init__(self, paths):
         self._transcript = [{"role": "user", "content": "make files"}]
         for p in paths:
-            self._transcript.append({"role": "assistant", "content": f"Done! MEDIA:{p}"})
+            self._transcript.append(
+                {"role": "assistant", "content": f"Done! MEDIA:{p}"}
+            )
             self._transcript.append({"role": "user", "content": "send it again please"})
         # Current turn's already-persisted assistant reply (excluded by the
         # helper), so all earlier paths stay in the dedup set.
@@ -131,7 +150,9 @@ def _allowed_file(tmp_path, monkeypatch, name: str):
 
 
 @pytest.mark.asyncio
-async def test_explicit_media_resend_is_delivered_despite_history(tmp_path, monkeypatch):
+async def test_explicit_media_resend_is_delivered_despite_history(
+    tmp_path, monkeypatch
+):
     """#73771 core repro: the same MEDIA path was delivered in a prior turn;
     the model re-emits it on an explicit user request — it MUST be sent."""
     pdf = _allowed_file(tmp_path, monkeypatch, "report.pdf")
@@ -155,7 +176,9 @@ async def test_explicit_media_resend_is_delivered_despite_history(tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_first_delivery_not_poisoned_by_current_turn_tool_output(tmp_path, monkeypatch):
+async def test_first_delivery_not_poisoned_by_current_turn_tool_output(
+    tmp_path, monkeypatch
+):
     """A MEDIA path present in the CURRENT turn's tool result used to poison
     the history set and suppress even the first-ever delivery. With the tag
     filter removed this cannot happen regardless of what history contains."""
@@ -167,10 +190,16 @@ async def test_first_delivery_not_poisoned_by_current_turn_tool_output(tmp_path,
         def __init__(self):
             self._transcript = [
                 {"role": "user", "content": "make a docx"},
-                {"role": "assistant", "content": None,
-                 "tool_calls": [{"id": "t1", "function": {"name": "execute_code"}}]},
-                {"role": "tool", "tool_call_id": "t1",
-                 "content": f"wrote MEDIA:{docx}"},
+                {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{"id": "t1", "function": {"name": "execute_code"}}],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": "t1",
+                    "content": f"wrote MEDIA:{docx}",
+                },
                 {"role": "assistant", "content": "current turn reply"},
             ]
 
@@ -189,18 +218,24 @@ async def test_first_delivery_not_poisoned_by_current_turn_tool_output(tmp_path,
 
 
 @pytest.mark.asyncio
-async def test_bare_local_path_history_dedup_survives_and_logs(tmp_path, monkeypatch, caplog):
+async def test_bare_local_path_history_dedup_survives_and_logs(
+    tmp_path, monkeypatch, caplog
+):
     """Bare-path auto-detect (non-explicit) KEEPS the history dedup — and the
     suppression is now observable in the logs instead of silent."""
     png = _allowed_file(tmp_path, monkeypatch, "chart.png")
-    monkeypatch.setattr("gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (png.parent,), raising=False)
+    monkeypatch.setattr(
+        "gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (png.parent,), raising=False
+    )
     adapter = _DummyAdapter()
     adapter._keep_typing = _hold_typing
     adapter.set_session_store(_StubStore([str(png)]))
     # Bypass the local-path safety filter so the test pins ONLY the history
     # dedup behavior, not the safe-root policy.
     monkeypatch.setattr(
-        type(adapter), "filter_local_delivery_paths", staticmethod(lambda paths, session_key="": list(paths))
+        type(adapter),
+        "filter_local_delivery_paths",
+        staticmethod(lambda paths, session_key="": list(paths)),
     )
 
     async def handler(_event):
@@ -210,7 +245,9 @@ async def test_bare_local_path_history_dedup_survives_and_logs(tmp_path, monkeyp
     adapter.set_message_handler(handler)
     event = _make_event()
     with caplog.at_level(logging.INFO, logger="gateway.platforms.base"):
-        await adapter._process_message_background(event, build_session_key(event.source))
+        await adapter._process_message_background(
+            event, build_session_key(event.source)
+        )
 
     assert adapter.images_sent == [] and adapter.documents == [], (
         "bare-path history dedup regressed — stale path re-uploaded"
@@ -276,14 +313,20 @@ async def test_explicit_media_response_does_not_load_transcript(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_bare_path_history_lookup_does_not_block_event_loop(tmp_path, monkeypatch):
+async def test_bare_path_history_lookup_does_not_block_event_loop(
+    tmp_path, monkeypatch
+):
     """A slow transcript read must run outside the platform event loop."""
     pdf = _allowed_file(tmp_path, monkeypatch, "slow-history.pdf")
-    monkeypatch.setattr("gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (pdf.parent,), raising=False)
+    monkeypatch.setattr(
+        "gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (pdf.parent,), raising=False
+    )
     adapter = _DummyAdapter()
     adapter._keep_typing = _hold_typing
     monkeypatch.setattr(
-        type(adapter), "filter_local_delivery_paths", staticmethod(lambda paths, session_key="": list(paths))
+        type(adapter),
+        "filter_local_delivery_paths",
+        staticmethod(lambda paths, session_key="": list(paths)),
     )
 
     class _GatedStore:
@@ -327,12 +370,18 @@ async def test_bare_path_history_lookup_does_not_block_event_loop(tmp_path, monk
 async def test_bare_path_history_lookup_timeout_fails_open(tmp_path, monkeypatch):
     """A wedged transcript read must not hold response delivery indefinitely."""
     pdf = _allowed_file(tmp_path, monkeypatch, "timeout-history.pdf")
-    monkeypatch.setattr("gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (pdf.parent,), raising=False)
-    monkeypatch.setattr("gateway.platforms.base._HISTORY_MEDIA_LOOKUP_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(
+        "gateway.platforms.base.LOCAL_DELIVERY_SAFE_ROOTS", (pdf.parent,), raising=False
+    )
+    monkeypatch.setattr(
+        "gateway.platforms.base._HISTORY_MEDIA_LOOKUP_TIMEOUT_SECONDS", 0.02
+    )
     adapter = _DummyAdapter()
     adapter._keep_typing = _hold_typing
     monkeypatch.setattr(
-        type(adapter), "filter_local_delivery_paths", staticmethod(lambda paths, session_key="": list(paths))
+        type(adapter),
+        "filter_local_delivery_paths",
+        staticmethod(lambda paths, session_key="": list(paths)),
     )
 
     class _WedgedStore:
@@ -365,7 +414,9 @@ async def test_bare_path_history_lookup_timeout_fails_open(tmp_path, monkeypatch
 @pytest.mark.asyncio
 async def test_history_lookup_saturation_fails_open_without_new_worker(monkeypatch):
     """Wedged lookups are bounded and cannot consume unbounded worker threads."""
-    monkeypatch.setattr("gateway.platforms.base._HISTORY_MEDIA_LOOKUP_TIMEOUT_SECONDS", 5.0)
+    monkeypatch.setattr(
+        "gateway.platforms.base._HISTORY_MEDIA_LOOKUP_TIMEOUT_SECONDS", 5.0
+    )
     monkeypatch.setattr(
         "gateway.platforms.base._HISTORY_MEDIA_LOOKUP_ADMISSION",
         threading.BoundedSemaphore(2),
@@ -386,7 +437,9 @@ async def test_history_lookup_saturation_fails_open_without_new_worker(monkeypat
 
     monkeypatch.setattr(adapter, "_history_media_paths_for_session", blocked_lookup)
     first = asyncio.create_task(adapter._bounded_history_media_paths_for_session("one"))
-    second = asyncio.create_task(adapter._bounded_history_media_paths_for_session("two"))
+    second = asyncio.create_task(
+        adapter._bounded_history_media_paths_for_session("two")
+    )
     deadline = time.monotonic() + 5
     while not two_started.is_set() and time.monotonic() < deadline:
         await asyncio.sleep(0.005)
@@ -439,8 +492,7 @@ async def test_history_lookup_worker_start_failure_fails_open_and_releases_slot(
     assert second is None
     assert "capacity exhausted" not in caplog.text
     assert (
-        caplog.text.count("Could not start media-delivery history lookup worker")
-        == 2
+        caplog.text.count("Could not start media-delivery history lookup worker") == 2
     )
     # The permit was returned both times: it is still acquirable.
     assert admission.acquire(blocking=False)
@@ -468,9 +520,13 @@ def _stream_adapter():
         extract_images=BasePlatformAdapter.extract_images,
         send_voice=AsyncMock(return_value=SendResult(success=True, message_id="v")),
         send_document=AsyncMock(return_value=SendResult(success=True, message_id="d")),
-        send_image_file=AsyncMock(return_value=SendResult(success=True, message_id="i")),
+        send_image_file=AsyncMock(
+            return_value=SendResult(success=True, message_id="i")
+        ),
         send_video=AsyncMock(return_value=SendResult(success=True, message_id="vid")),
-        send_multiple_images=AsyncMock(return_value=SendResult(success=True, message_id="ii")),
+        send_multiple_images=AsyncMock(
+            return_value=SendResult(success=True, message_id="ii")
+        ),
     )
 
 
@@ -495,10 +551,10 @@ async def test_streamed_explicit_media_resend_is_delivered(tmp_path, monkeypatch
     )
 
     adapter.send_multiple_images.assert_awaited_once()
-    sent_paths = [p for p, _cap in adapter.send_multiple_images.await_args.kwargs["images"]]
+    sent_paths = [
+        p for p, _cap in adapter.send_multiple_images.await_args.kwargs["images"]
+    ]
     assert str(img) in unquote(sent_paths[0])
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -511,10 +567,15 @@ def test_auto_append_lane_still_dedups_stale_media():
     protection: auto-appended tags from history are still deduped via
     _collect_auto_append_media_tags + _collect_history_media_paths."""
     history = [
-        {"role": "assistant",
-         "tool_calls": [{"id": "c", "function": {"name": "image_generate"}}]},
-        {"role": "tool", "tool_call_id": "c",
-         "content": '{"success": true, "image": "/tmp/gen/dog.png"}'},
+        {
+            "role": "assistant",
+            "tool_calls": [{"id": "c", "function": {"name": "image_generate"}}],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "c",
+            "content": '{"success": true, "image": "/tmp/gen/dog.png"}',
+        },
         {"role": "assistant", "content": "made it! MEDIA:/tmp/gen/dog.png"},
     ]
     paths = _collect_history_media_paths(history)

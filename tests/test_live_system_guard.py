@@ -19,7 +19,9 @@ def test_argv_arguments_are_not_treated_as_executables(tmp_path):
     guard (the path contains "clawk" via the pytest tmp root)."""
     target = tmp_path / "skill"
     target.write_text("just a filename\n")
-    result = subprocess.run(["cat", str(target)], capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["cat", str(target)], capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0
     assert "just a filename" in result.stdout
 
@@ -33,12 +35,17 @@ def test_wrapped_killer_command_is_still_blocked():
     """argv[0]-only scanning must not exempt commands hidden behind a
     shell wrapper."""
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["bash", "-c", "pkill -f clawk-guard-regression-nomatch"], check=False)
+        subprocess.run(
+            ["bash", "-c", "pkill -f clawk-guard-regression-nomatch"], check=False
+        )
 
 
 def test_env_wrapped_killer_command_is_still_blocked():
     with pytest.raises(RuntimeError, match="live-system guard"):
-        subprocess.run(["env", "GUARD_TEST=1", "pkill", "-f", "clawk-guard-regression-nomatch"], check=False)
+        subprocess.run(
+            ["env", "GUARD_TEST=1", "pkill", "-f", "clawk-guard-regression-nomatch"],
+            check=False,
+        )
 
 
 def test_gateway_start_inside_a_container_exec_is_not_blocked():
@@ -65,7 +72,9 @@ def test_gateway_start_inside_a_container_exec_is_not_blocked():
 
 def test_gateway_start_on_the_host_is_still_blocked():
     with pytest.raises(RuntimeError, match="REAL.*gateway runtime"):
-        subprocess.run(["python", "-m", "clawk_cli.main", "gateway", "start"], check=False)
+        subprocess.run(
+            ["python", "-m", "clawk_cli.main", "gateway", "start"], check=False
+        )
 
 
 def test_custom_home_tmpdir_is_relocated_before_pytest_uses_it(tmp_path):
@@ -75,8 +84,15 @@ def test_custom_home_tmpdir_is_relocated_before_pytest_uses_it(tmp_path):
     env = dict(os.environ, CLAWK_HOME=str(home), TMPDIR=str(scratch))
     env.pop("CLAWK_SCRATCH_DIR", None)
     result = subprocess.run(
-        [sys.executable, "-c", "import tempfile, tests.conftest; print(tempfile.gettempdir())"],
-        env=env, capture_output=True, text=True, check=True,
+        [
+            sys.executable,
+            "-c",
+            "import tempfile, tests.conftest; print(tempfile.gettempdir())",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert not result.stdout.strip().startswith(str(home))
 
@@ -90,7 +106,14 @@ def test_default_home_unmarked_tmpdir_is_relocated_before_pytest_uses_it(tmp_pat
     env.pop("CLAWK_HOME", None)
     env.pop("CLAWK_SCRATCH_DIR", None)
     result = subprocess.run(
-        [sys.executable, "-c", "import tempfile, tests.conftest; print(tempfile.gettempdir())"],
-        env=env, capture_output=True, text=True, check=True,
+        [
+            sys.executable,
+            "-c",
+            "import tempfile, tests.conftest; print(tempfile.gettempdir())",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     assert not result.stdout.strip().startswith(str(operator_home / ".clawksis"))

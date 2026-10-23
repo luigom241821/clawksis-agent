@@ -12,10 +12,12 @@ import re
 
 logger = logging.getLogger(__name__)
 
-_FENCE_TAG_RE = re.compile(r'</?\s*memory-context\s*>', re.IGNORECASE)
-_INTERNAL_CONTEXT_RE = re.compile(r'<\s*memory-context\s*>[\s\S]*?</\s*memory-context\s*>', re.IGNORECASE)
+_FENCE_TAG_RE = re.compile(r"</?\s*memory-context\s*>", re.IGNORECASE)
+_INTERNAL_CONTEXT_RE = re.compile(
+    r"<\s*memory-context\s*>[\s\S]*?</\s*memory-context\s*>", re.IGNORECASE
+)
 _INTERNAL_NOTE_RE = re.compile(
-    r'\[System note:\s*The following is recalled memory context,\s*NOT new user input\.\s*Treat as (?:informational background data|authoritative reference data[^\]]*)\.\]\s*',
+    r"\[System note:\s*The following is recalled memory context,\s*NOT new user input\.\s*Treat as (?:informational background data|authoritative reference data[^\]]*)\.\]\s*",
     re.IGNORECASE,
 )
 
@@ -23,7 +25,7 @@ _INTERNAL_NOTE_RE = re.compile(
 def sanitize_context(text: str) -> str:
     """Strip fence tags, injected context blocks, and system notes from provider output."""
     for pattern in (_INTERNAL_CONTEXT_RE, _INTERNAL_NOTE_RE, _FENCE_TAG_RE):
-        text = pattern.sub('', text)
+        text = pattern.sub("", text)
     return text
 
 
@@ -63,7 +65,12 @@ class StreamingContextScrubber:
                 idx = self._find_boundary_open_tag(buf)
                 # A complete boundary tag at the buffer end is held until the next char confirms it.
                 n = len(tag)
-                pending = n if buf.lower().endswith(tag) and self._ends_at_block_boundary(buf[:-n]) else 0
+                pending = (
+                    n
+                    if buf.lower().endswith(tag)
+                    and self._ends_at_block_boundary(buf[:-n])
+                    else 0
+                )
                 held = pending or self._max_partial_suffix(buf, tag)
             if idx == -1:
                 # Hold back the possible partial tag; inside a span the rest is dropped.
@@ -73,7 +80,7 @@ class StreamingContextScrubber:
                 break
             if not self._in_span:
                 self._append_visible(out, buf[:idx])
-            buf = buf[idx + len(tag):]
+            buf = buf[idx + len(tag) :]
             self._in_span = not self._in_span
         return "".join(out)
 
@@ -98,7 +105,11 @@ class StreamingContextScrubber:
         idx = buf_lower.find(self._OPEN_TAG)
         while idx != -1:
             after_idx = idx + tag_len
-            if self._ends_at_block_boundary(buf[:idx]) and after_idx < len(buf) and buf[after_idx] in "\r\n":
+            if (
+                self._ends_at_block_boundary(buf[:idx])
+                and after_idx < len(buf)
+                and buf[after_idx] in "\r\n"
+            ):
                 return idx
             idx = buf_lower.find(self._OPEN_TAG, idx + 1)
         return -1

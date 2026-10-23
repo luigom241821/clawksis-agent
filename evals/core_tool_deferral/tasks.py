@@ -12,6 +12,7 @@ ctx keys: workspace, clawk_home, events (desktop emit records),
 callback_log (agent-callback invocations), tool_counts, messages,
 final_answer, todo_dump.
 """
+
 import json
 import os
 import re
@@ -72,6 +73,7 @@ def _cb(ctx, name):
 # ---------------------------------------------------------------------------
 # graders
 # ---------------------------------------------------------------------------
+
 
 def g_screenshot(ctx):
     score, notes = 0.0, []
@@ -151,7 +153,8 @@ def g_todo_multi(ctx):
     else:
         notes.append("fewer than 3 completed todo items")
     checks = [
-        (_read(ws, "greet.py") or ""), (_read(ws, "notes/summary.md") or ""),
+        (_read(ws, "greet.py") or ""),
+        (_read(ws, "notes/summary.md") or ""),
         (_read(ws, "data/rows.csv") or ""),
     ]
     if "def greet" in checks[0] and "hello" in checks[0].lower():
@@ -188,6 +191,7 @@ def g_cron(ctx):
 
 def g_process(ctx):
     import socket
+
     score, notes = 0.0, []
     used_pm = _called(ctx, "process_manage")
     if used_pm:
@@ -195,7 +199,10 @@ def g_process(ctx):
     else:
         notes.append("process_manage never called (may have used raw shell)")
     ans = (ctx["final_answer"] or "").lower()
-    if any(k in ans for k in ("dead", "killed", "terminated", "stopped", "no longer running")):
+    if any(
+        k in ans
+        for k in ("dead", "killed", "terminated", "stopped", "no longer running")
+    ):
         score += 0.3
     else:
         notes.append("answer does not confirm termination")
@@ -290,8 +297,11 @@ def g_preview(ctx):
 
 def g_project(ctx):
     score, notes = 0.0, []
-    proj_calls = [c for c in ctx["messages_tool_args"].get("desktop_project", [])
-                  if "apollo" in json.dumps(c).lower()]
+    proj_calls = [
+        c
+        for c in ctx["messages_tool_args"].get("desktop_project", [])
+        if "apollo" in json.dumps(c).lower()
+    ]
     if _called(ctx, "desktop_project"):
         score += 0.3
         if proj_calls:
@@ -301,8 +311,11 @@ def g_project(ctx):
     else:
         notes.append("desktop_project never called")
     # MCP install is a manage_connections call with an mcp:true target.
-    mcp_calls = [c for c in ctx["messages_tool_args"].get("manage_connections", [])
-                 if "github" in json.dumps(c).lower() and "mcp" in json.dumps(c).lower()]
+    mcp_calls = [
+        c
+        for c in ctx["messages_tool_args"].get("manage_connections", [])
+        if "github" in json.dumps(c).lower() and "mcp" in json.dumps(c).lower()
+    ]
     if _called(ctx, "manage_connections"):
         score += 0.3
         if mcp_calls:
@@ -329,7 +342,11 @@ def g_longrange(ctx):
         notes.append("backup.sh names repo but no archive command")
     else:
         notes.append("backup.sh missing or wrong repo")
-    if _called(ctx, "cronjob_manage") and (_grep_home(ctx, "0 2 * * *") or _grep_home(ctx, "2am") or _grep_home(ctx, "02:00")):
+    if _called(ctx, "cronjob_manage") and (
+        _grep_home(ctx, "0 2 * * *")
+        or _grep_home(ctx, "2am")
+        or _grep_home(ctx, "02:00")
+    ):
         score += 0.25
     elif _called(ctx, "cronjob_manage"):
         score += 0.1
@@ -378,7 +395,10 @@ def g_distractor(ctx):
         score += 1.0
     else:
         notes.append("retry_limit value not found")
-    bridge = sum(ctx["tool_counts"].get(n, 0) for n in ("tool_search", "tool_describe", "tool_call"))
+    bridge = sum(
+        ctx["tool_counts"].get(n, 0)
+        for n in ("tool_search", "tool_describe", "tool_call")
+    )
     if bridge:
         notes.append(f"bridge_calls={bridge} (false-discovery overhead)")
     return score, notes
@@ -388,8 +408,13 @@ def g_distractor(ctx):
 # fixtures
 # ---------------------------------------------------------------------------
 
+
 def f_clarify(ws):
-    _w(ws, "configs/staging.yaml", "env: staging\nreplicas: 1\n# unused since migration\n")
+    _w(
+        ws,
+        "configs/staging.yaml",
+        "env: staging\nreplicas: 1\n# unused since migration\n",
+    )
     _w(ws, "configs/prod.yaml", "env: prod\nreplicas: 8\n")
 
 
@@ -407,11 +432,14 @@ def f_longrange(ws):
 
 
 def f_control(ws):
-    _w(ws, "src/service.py",
-       "import requests\n\n"
-       "def fetch_a(url):\n    return requests.get(url, timeout=30)\n\n"
-       "def fetch_b(url):\n    return requests.post(url, timeout=30)\n\n"
-       "def fetch_c(url):\n    return requests.head(url, timeout=30)\n")
+    _w(
+        ws,
+        "src/service.py",
+        "import requests\n\n"
+        "def fetch_a(url):\n    return requests.get(url, timeout=30)\n\n"
+        "def fetch_b(url):\n    return requests.post(url, timeout=30)\n\n"
+        "def fetch_c(url):\n    return requests.head(url, timeout=30)\n",
+    )
     _w(ws, "src/util.py", "def helper():\n    return 1\n")
     _w(ws, "CHANGELOG.md", "# Changelog\n\n## 1.0\n- initial\n")
 
@@ -422,82 +450,166 @@ def f_distractor(ws):
 
 
 TASKS = [
-    dict(id="screenshot_ambiguous", timeout=420,
-         prompt=("Something looks off on my machine right now — take a look at my screen "
-                 "and tell me which application window is focused and what it's showing."),
-         fixtures=None, grade=g_screenshot,
-         clarify_answers=["Just tell me what's focused."]),
-    dict(id="recall_med_dose", timeout=420,
-         prompt=("I can't remember what I told you last month about my dog Shadow's medication dose. "
-                 "Look it up — don't guess, I need the exact dose from our past conversation."),
-         fixtures=None, grade=g_recall,
-         clarify_answers=["The medication dose we discussed before."]),
-    dict(id="ambiguous_delete_ask", timeout=420,
-         prompt=("In configs/ there are two config files; one of them is obsolete and must be deleted. "
-                 "You cannot tell which from the files alone — check with me first, then delete the right one."),
-         fixtures=f_clarify, grade=g_clarify,
-         clarify_answers=["staging", "staging.yaml is the obsolete one — delete it."]),
-    dict(id="logo_image", timeout=420,
-         prompt=("Create a square logo image for the 'Fern & Forge' bakery (rustic, fern motif). "
-                 "Then save the resulting image URL into a file named logo.txt in the workspace."),
-         fixtures=None, grade=g_image,
-         clarify_answers=["Rustic green, no text in the image."]),
-    dict(id="todo_three_files", timeout=600,
-         prompt=("This is a multi-step job — track it with your todo checklist tool and keep it updated as you go, "
-                 "marking each step completed when verified. Steps: (1) create greet.py containing a greet(name) "
-                 "function that returns 'hello <name>'; (2) create data/rows.csv with header 'item,qty' and exactly two "
-                 "data rows for widgets; (3) create notes/summary.md stating how many files you created. "
-                 "Finish only when all three are done and checked off."),
-         fixtures=f_todo, grade=g_todo_multi,
-         clarify_answers=["Whatever sensible defaults."]),
-    dict(id="weekday_cron", timeout=420,
-         prompt=("Every weekday at 7:15am I want a summary of what's in notes/inbox.md sent to me. "
-                 "Set that up so it actually happens on schedule."),
-         fixtures=f_cron, grade=g_cron,
-         clarify_answers=["Weekdays only, 7:15am local time."]),
-    dict(id="bg_server_lifecycle", timeout=600,
-         prompt=("Start `python3 -m http.server 8123` as a background process, verify it responds on "
-                 "http://127.0.0.1:8123/, then shut it down and prove to me it is no longer running."),
-         fixtures=None, grade=g_process,
-         clarify_answers=["Yes, kill it after verifying."]),
-    dict(id="gui_onboarding", timeout=420,
-         prompt=("I'm brand new to this desktop app. Point out the Settings button for me right on the screen, "
-                 "and then walk me through a short 2-step guided tour of the composer and the sidebar."),
-         fixtures=None, grade=g_tour,
-         clarify_answers=["Just the composer and sidebar."]),
-    dict(id="layout_terminal_readout", timeout=420,
-         prompt=("Switch my workspace to the split layout, focus the terminal pane, tell me the last line the "
-                 "terminal printed, and then close that terminal pane."),
-         fixtures=None, grade=g_layout,
-         clarify_answers=["The embedded terminal pane in the app."]),
-    dict(id="preview_inspect_chain", timeout=600,
-         prompt=("Open https://example.com/docs in the app's preview pane and click the 'Docs' link. "
-                 "Tell me the page title you end up on. Then draw a highlight around the search box on that page. "
-                 "Finally, check the window right below our chat and tell me what it says."),
-         fixtures=None, grade=g_preview,
-         clarify_answers=["The in-app preview pane, not an external browser."]),
-    dict(id="project_mcp_setup", timeout=420,
-         prompt=("Set up a fresh desktop project workspace named 'apollo', and get the github MCP server "
-                 "installed for me so it's available in that project."),
-         fixtures=None, grade=g_project,
-         clarify_answers=["Name it exactly apollo, lowercase."]),
-    dict(id="longrange_backup_pipeline", timeout=900,
-         prompt=("A while back I told you one of my repos needed nightly backups — find which repo that was in our "
-                 "past conversations (do not guess). Then: write backup.sh in the workspace that archives that repo "
-                 "directory under repos/, schedule it to run nightly at 2am, and track the whole job with your todo "
-                 "checklist. Report back which repo it was and what you set up."),
-         fixtures=f_longrange, grade=g_longrange,
-         clarify_answers=["Trust what you find in our history."]),
-    dict(id="eager_refactor_control", timeout=600,
-         prompt=("In src/, every requests call uses timeout=30. Bump them all to timeout=45, add a CHANGELOG.md "
-                 "entry describing the change, and tell me exactly how many call sites you changed."),
-         fixtures=f_control, grade=g_control,
-         clarify_answers=["All of them."]),
-    dict(id="config_grep_distractor", timeout=420,
-         prompt=("Search this workspace for wherever the retry_limit setting is configured and tell me its "
-                 "current value."),
-         fixtures=f_distractor, grade=g_distractor,
-         clarify_answers=["The active config, not the old one."]),
+    dict(
+        id="screenshot_ambiguous",
+        timeout=420,
+        prompt=(
+            "Something looks off on my machine right now — take a look at my screen "
+            "and tell me which application window is focused and what it's showing."
+        ),
+        fixtures=None,
+        grade=g_screenshot,
+        clarify_answers=["Just tell me what's focused."],
+    ),
+    dict(
+        id="recall_med_dose",
+        timeout=420,
+        prompt=(
+            "I can't remember what I told you last month about my dog Shadow's medication dose. "
+            "Look it up — don't guess, I need the exact dose from our past conversation."
+        ),
+        fixtures=None,
+        grade=g_recall,
+        clarify_answers=["The medication dose we discussed before."],
+    ),
+    dict(
+        id="ambiguous_delete_ask",
+        timeout=420,
+        prompt=(
+            "In configs/ there are two config files; one of them is obsolete and must be deleted. "
+            "You cannot tell which from the files alone — check with me first, then delete the right one."
+        ),
+        fixtures=f_clarify,
+        grade=g_clarify,
+        clarify_answers=["staging", "staging.yaml is the obsolete one — delete it."],
+    ),
+    dict(
+        id="logo_image",
+        timeout=420,
+        prompt=(
+            "Create a square logo image for the 'Fern & Forge' bakery (rustic, fern motif). "
+            "Then save the resulting image URL into a file named logo.txt in the workspace."
+        ),
+        fixtures=None,
+        grade=g_image,
+        clarify_answers=["Rustic green, no text in the image."],
+    ),
+    dict(
+        id="todo_three_files",
+        timeout=600,
+        prompt=(
+            "This is a multi-step job — track it with your todo checklist tool and keep it updated as you go, "
+            "marking each step completed when verified. Steps: (1) create greet.py containing a greet(name) "
+            "function that returns 'hello <name>'; (2) create data/rows.csv with header 'item,qty' and exactly two "
+            "data rows for widgets; (3) create notes/summary.md stating how many files you created. "
+            "Finish only when all three are done and checked off."
+        ),
+        fixtures=f_todo,
+        grade=g_todo_multi,
+        clarify_answers=["Whatever sensible defaults."],
+    ),
+    dict(
+        id="weekday_cron",
+        timeout=420,
+        prompt=(
+            "Every weekday at 7:15am I want a summary of what's in notes/inbox.md sent to me. "
+            "Set that up so it actually happens on schedule."
+        ),
+        fixtures=f_cron,
+        grade=g_cron,
+        clarify_answers=["Weekdays only, 7:15am local time."],
+    ),
+    dict(
+        id="bg_server_lifecycle",
+        timeout=600,
+        prompt=(
+            "Start `python3 -m http.server 8123` as a background process, verify it responds on "
+            "http://127.0.0.1:8123/, then shut it down and prove to me it is no longer running."
+        ),
+        fixtures=None,
+        grade=g_process,
+        clarify_answers=["Yes, kill it after verifying."],
+    ),
+    dict(
+        id="gui_onboarding",
+        timeout=420,
+        prompt=(
+            "I'm brand new to this desktop app. Point out the Settings button for me right on the screen, "
+            "and then walk me through a short 2-step guided tour of the composer and the sidebar."
+        ),
+        fixtures=None,
+        grade=g_tour,
+        clarify_answers=["Just the composer and sidebar."],
+    ),
+    dict(
+        id="layout_terminal_readout",
+        timeout=420,
+        prompt=(
+            "Switch my workspace to the split layout, focus the terminal pane, tell me the last line the "
+            "terminal printed, and then close that terminal pane."
+        ),
+        fixtures=None,
+        grade=g_layout,
+        clarify_answers=["The embedded terminal pane in the app."],
+    ),
+    dict(
+        id="preview_inspect_chain",
+        timeout=600,
+        prompt=(
+            "Open https://example.com/docs in the app's preview pane and click the 'Docs' link. "
+            "Tell me the page title you end up on. Then draw a highlight around the search box on that page. "
+            "Finally, check the window right below our chat and tell me what it says."
+        ),
+        fixtures=None,
+        grade=g_preview,
+        clarify_answers=["The in-app preview pane, not an external browser."],
+    ),
+    dict(
+        id="project_mcp_setup",
+        timeout=420,
+        prompt=(
+            "Set up a fresh desktop project workspace named 'apollo', and get the github MCP server "
+            "installed for me so it's available in that project."
+        ),
+        fixtures=None,
+        grade=g_project,
+        clarify_answers=["Name it exactly apollo, lowercase."],
+    ),
+    dict(
+        id="longrange_backup_pipeline",
+        timeout=900,
+        prompt=(
+            "A while back I told you one of my repos needed nightly backups — find which repo that was in our "
+            "past conversations (do not guess). Then: write backup.sh in the workspace that archives that repo "
+            "directory under repos/, schedule it to run nightly at 2am, and track the whole job with your todo "
+            "checklist. Report back which repo it was and what you set up."
+        ),
+        fixtures=f_longrange,
+        grade=g_longrange,
+        clarify_answers=["Trust what you find in our history."],
+    ),
+    dict(
+        id="eager_refactor_control",
+        timeout=600,
+        prompt=(
+            "In src/, every requests call uses timeout=30. Bump them all to timeout=45, add a CHANGELOG.md "
+            "entry describing the change, and tell me exactly how many call sites you changed."
+        ),
+        fixtures=f_control,
+        grade=g_control,
+        clarify_answers=["All of them."],
+    ),
+    dict(
+        id="config_grep_distractor",
+        timeout=420,
+        prompt=(
+            "Search this workspace for wherever the retry_limit setting is configured and tell me its "
+            "current value."
+        ),
+        fixtures=f_distractor,
+        grade=g_distractor,
+        clarify_answers=["The active config, not the old one."],
+    ),
 ]
 
 TASKS_BY_ID = {t["id"]: t for t in TASKS}

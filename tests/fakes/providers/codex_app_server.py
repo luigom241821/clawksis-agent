@@ -41,18 +41,30 @@ GRANDCHILD_RELEASE = "release-grandchildren"
 # Protocol schema (subset of the codex app-server v2 bundle Clawksis can reach) + serde-style validator
 # ---------------------------------------------------------------------------------------------------
 
+
 class Invalid(Exception):
     """A params/response value the real server's deserializer would reject."""
 
 
 def _kind(value: Any) -> str:
-    table = ((bool, "boolean"), (int, "integer"), (float, "floating point"), (str, "string"),
-             (list, "sequence"), (dict, "map"), (type(None), "null"))
+    table = (
+        (bool, "boolean"),
+        (int, "integer"),
+        (float, "floating point"),
+        (str, "string"),
+        (list, "sequence"),
+        (dict, "map"),
+        (type(None), "null"),
+    )
     return next((name for typ, name in table if isinstance(value, typ)), "value")
 
 
 def _unexpected(value: Any) -> str:
-    return f"{_kind(value)} `{value}`" if isinstance(value, (bool, int, float, str)) else _kind(value)
+    return (
+        f"{_kind(value)} `{value}`"
+        if isinstance(value, (bool, int, float, str))
+        else _kind(value)
+    )
 
 
 @dataclass
@@ -67,10 +79,15 @@ def _scalar(py: tuple, expected: str) -> Spec:
     def check(v: Any, path: str, ignored: list) -> None:
         if not isinstance(v, py) or (bool not in py and isinstance(v, bool)):
             raise Invalid(f"invalid type: {_unexpected(v)}, expected {expected}")
+
     return Spec(check)
 
 
-STR, BOOL, INT = _scalar((str,), "a string"), _scalar((bool,), "a boolean"), _scalar((int,), "i64")
+STR, BOOL, INT = (
+    _scalar((str,), "a string"),
+    _scalar((bool,), "a boolean"),
+    _scalar((int,), "i64"),
+)
 ANY = Spec(lambda v, p, i: None)
 
 
@@ -83,7 +100,10 @@ def enum(*values: str) -> Spec:
         if not isinstance(v, str):
             raise Invalid(f"invalid type: {_unexpected(v)}, expected a string")
         if v not in values:
-            raise Invalid(f"unknown variant `{v}`, expected one of {', '.join(f'`{x}`' for x in values)}")
+            raise Invalid(
+                f"unknown variant `{v}`, expected one of {', '.join(f'`{x}`' for x in values)}"
+            )
+
     return Spec(check)
 
 
@@ -93,10 +113,16 @@ def array(item: Spec) -> Spec:
             raise Invalid(f"invalid type: {_unexpected(v)}, expected a sequence")
         for n, element in enumerate(v):
             item(element, f"{path}[{n}]", ignored)
+
     return Spec(check)
 
 
-def obj(required: Optional[dict] = None, optional: Optional[dict] = None, *, open_map: bool = False) -> Spec:
+def obj(
+    required: Optional[dict] = None,
+    optional: Optional[dict] = None,
+    *,
+    open_map: bool = False,
+) -> Spec:
     required, optional = required or {}, optional or {}
 
     def check(v: Any, path: str, ignored: list) -> None:
@@ -111,20 +137,27 @@ def obj(required: Optional[dict] = None, optional: Optional[dict] = None, *, ope
                 spec(value, f"{path}.{name}", ignored)
             elif not open_map:
                 ignored.append(f"{path}.{name}")
+
     return Spec(check)
 
 
 def tagged(tag: str, variants: dict[str, Spec]) -> Spec:
     """serde internally tagged enum (``{"type": "text", ...}``)."""
+
     def check(v: Any, path: str, ignored: list) -> None:
         if not isinstance(v, dict):
-            raise Invalid(f"invalid type: {_unexpected(v)}, expected internally tagged enum")
+            raise Invalid(
+                f"invalid type: {_unexpected(v)}, expected internally tagged enum"
+            )
         if tag not in v:
             raise Invalid(f"missing field `{tag}`")
         variant = variants.get(v[tag]) if isinstance(v[tag], str) else None
         if variant is None:
-            raise Invalid(f"unknown variant `{v[tag]}`, expected one of {', '.join(f'`{x}`' for x in variants)}")
+            raise Invalid(
+                f"unknown variant `{v[tag]}`, expected one of {', '.join(f'`{x}`' for x in variants)}"
+            )
         variant({k: x for k, x in v.items() if k != tag}, path, ignored)
+
     return Spec(check)
 
 
@@ -137,69 +170,147 @@ def one_of(*specs: Spec) -> Spec:
                 return
             except Invalid as exc:
                 errors.append(str(exc))
-        raise Invalid(f"data did not match any variant of untagged enum ({'; '.join(errors)})")
+        raise Invalid(
+            f"data did not match any variant of untagged enum ({'; '.join(errors)})"
+        )
+
     return Spec(check)
 
 
-_TEXT_ELEMENT = obj({"byteRange": obj({"start": INT, "end": INT})}, {"placeholder": nullable(STR)})
+_TEXT_ELEMENT = obj(
+    {"byteRange": obj({"start": INT, "end": INT})}, {"placeholder": nullable(STR)}
+)
 _IMAGE_DETAIL = nullable(enum("auto", "low", "high", "original"))
-USER_INPUT = tagged("type", {
-    "text": obj({"text": STR}, {"text_elements": array(_TEXT_ELEMENT)}),
-    "image": obj({"url": STR}, {"detail": _IMAGE_DETAIL}),
-    "localImage": obj({"path": STR}, {"detail": _IMAGE_DETAIL}),
-    "audio": obj({"url": STR}), "localAudio": obj({"path": STR}),
-    "skill": obj({"name": STR, "path": STR}), "mention": obj({"name": STR, "path": STR}),
-})
-_ASK_FOR_APPROVAL = nullable(one_of(enum("untrusted", "on-request", "never"), obj({"granular": ANY})))
+USER_INPUT = tagged(
+    "type",
+    {
+        "text": obj({"text": STR}, {"text_elements": array(_TEXT_ELEMENT)}),
+        "image": obj({"url": STR}, {"detail": _IMAGE_DETAIL}),
+        "localImage": obj({"path": STR}, {"detail": _IMAGE_DETAIL}),
+        "audio": obj({"url": STR}),
+        "localAudio": obj({"path": STR}),
+        "skill": obj({"name": STR, "path": STR}),
+        "mention": obj({"name": STR, "path": STR}),
+    },
+)
+_ASK_FOR_APPROVAL = nullable(
+    one_of(enum("untrusted", "on-request", "never"), obj({"granular": ANY}))
+)
 _THREAD_SETTINGS = {
     "approvalPolicy": _ASK_FOR_APPROVAL,
     "approvalsReviewer": nullable(enum("user", "auto_review", "guardian_subagent")),
-    "baseInstructions": nullable(STR), "config": nullable(obj(open_map=True)), "cwd": nullable(STR),
-    "developerInstructions": nullable(STR), "model": nullable(STR), "modelProvider": nullable(STR),
+    "baseInstructions": nullable(STR),
+    "config": nullable(obj(open_map=True)),
+    "cwd": nullable(STR),
+    "developerInstructions": nullable(STR),
+    "model": nullable(STR),
+    "modelProvider": nullable(STR),
     "personality": nullable(enum("none", "friendly", "pragmatic")),
-    "sandbox": nullable(enum("read-only", "workspace-write", "danger-full-access")), "serviceTier": nullable(STR),
+    "sandbox": nullable(enum("read-only", "workspace-write", "danger-full-access")),
+    "serviceTier": nullable(STR),
 }
-_SANDBOX_POLICY = tagged("type", {
-    "dangerFullAccess": obj(), "readOnly": obj(optional={"networkAccess": BOOL}),
-    "externalSandbox": obj(optional={"networkAccess": ANY}),
-    "workspaceWrite": obj(optional={"excludeSlashTmp": BOOL, "excludeTmpdirEnvVar": BOOL, "networkAccess": BOOL,
-                                    "writableRoots": array(STR)}),
-})
+_SANDBOX_POLICY = tagged(
+    "type",
+    {
+        "dangerFullAccess": obj(),
+        "readOnly": obj(optional={"networkAccess": BOOL}),
+        "externalSandbox": obj(optional={"networkAccess": ANY}),
+        "workspaceWrite": obj(
+            optional={
+                "excludeSlashTmp": BOOL,
+                "excludeTmpdirEnvVar": BOOL,
+                "networkAccess": BOOL,
+                "writableRoots": array(STR),
+            }
+        ),
+    },
+)
 
 REQUEST_PARAMS: dict[str, Spec] = {
-    "initialize": obj({"clientInfo": obj({"name": STR, "version": STR}, {"title": nullable(STR)})}, {
-        "capabilities": nullable(obj(optional={
-            "experimentalApi": BOOL, "extensions": nullable(obj(open_map=True)), "mcpServerOpenaiFormElicitation": BOOL,
-            "optOutNotificationMethods": nullable(array(STR)), "requestAttestation": BOOL})),
-    }),
-    "thread/start": obj(optional={**_THREAD_SETTINGS, "ephemeral": nullable(BOOL), "serviceName": nullable(STR),
-                                  "sessionStartSource": nullable(enum("startup", "clear")),
-                                  "threadSource": nullable(STR)}),
+    "initialize": obj(
+        {"clientInfo": obj({"name": STR, "version": STR}, {"title": nullable(STR)})},
+        {
+            "capabilities": nullable(
+                obj(
+                    optional={
+                        "experimentalApi": BOOL,
+                        "extensions": nullable(obj(open_map=True)),
+                        "mcpServerOpenaiFormElicitation": BOOL,
+                        "optOutNotificationMethods": nullable(array(STR)),
+                        "requestAttestation": BOOL,
+                    }
+                )
+            ),
+        },
+    ),
+    "thread/start": obj(
+        optional={
+            **_THREAD_SETTINGS,
+            "ephemeral": nullable(BOOL),
+            "serviceName": nullable(STR),
+            "sessionStartSource": nullable(enum("startup", "clear")),
+            "threadSource": nullable(STR),
+        }
+    ),
     "thread/resume": obj({"threadId": STR}, _THREAD_SETTINGS),
-    "turn/start": obj({"threadId": STR, "input": array(USER_INPUT)}, {
-        "approvalPolicy": _ASK_FOR_APPROVAL, "approvalsReviewer": _THREAD_SETTINGS["approvalsReviewer"],
-        "clientUserMessageId": nullable(STR), "cwd": nullable(STR), "effort": nullable(STR), "model": nullable(STR),
-        "outputSchema": ANY, "personality": _THREAD_SETTINGS["personality"], "sandboxPolicy": nullable(_SANDBOX_POLICY),
-        "serviceTier": nullable(STR), "summary": nullable(enum("auto", "concise", "detailed", "none")),
-    }),
+    "turn/start": obj(
+        {"threadId": STR, "input": array(USER_INPUT)},
+        {
+            "approvalPolicy": _ASK_FOR_APPROVAL,
+            "approvalsReviewer": _THREAD_SETTINGS["approvalsReviewer"],
+            "clientUserMessageId": nullable(STR),
+            "cwd": nullable(STR),
+            "effort": nullable(STR),
+            "model": nullable(STR),
+            "outputSchema": ANY,
+            "personality": _THREAD_SETTINGS["personality"],
+            "sandboxPolicy": nullable(_SANDBOX_POLICY),
+            "serviceTier": nullable(STR),
+            "summary": nullable(enum("auto", "concise", "detailed", "none")),
+        },
+    ),
     "turn/interrupt": obj({"threadId": STR, "turnId": STR}),
-    "turn/steer": obj({"threadId": STR, "input": array(USER_INPUT), "expectedTurnId": STR},
-                      {"clientUserMessageId": nullable(STR)}),
+    "turn/steer": obj(
+        {"threadId": STR, "input": array(USER_INPUT), "expectedTurnId": STR},
+        {"clientUserMessageId": nullable(STR)},
+    ),
     "thread/compact/start": obj({"threadId": STR}),
 }
 
-_EXEC_DECISION = one_of(enum("accept", "acceptForSession", "decline", "cancel"),
-                        obj({"acceptWithExecpolicyAmendment": obj({"execpolicy_amendment": array(STR)})}),
-                        obj({"applyNetworkPolicyAmendment": obj({"network_policy_amendment": obj(
-                            {"action": enum("allow", "deny"), "host": STR})})}))
+_EXEC_DECISION = one_of(
+    enum("accept", "acceptForSession", "decline", "cancel"),
+    obj({"acceptWithExecpolicyAmendment": obj({"execpolicy_amendment": array(STR)})}),
+    obj(
+        {
+            "applyNetworkPolicyAmendment": obj(
+                {
+                    "network_policy_amendment": obj(
+                        {"action": enum("allow", "deny"), "host": STR}
+                    )
+                }
+            )
+        }
+    ),
+)
 SERVER_REQUEST_RESULTS: dict[str, Spec] = {
     "item/commandExecution/requestApproval": obj({"decision": _EXEC_DECISION}),
-    "item/fileChange/requestApproval": obj({"decision": enum("accept", "acceptForSession", "decline", "cancel")}),
-    "item/permissions/requestApproval": obj({"permissions": obj(optional={
-        "fileSystem": nullable(obj(open_map=True)), "network": nullable(obj({}, {"enabled": nullable(BOOL)}))})},
-        {"scope": enum("turn", "session"), "strictAutoReview": nullable(BOOL)}),
-    "mcpServer/elicitation/request": obj({"action": enum("accept", "decline", "cancel")},
-                                         {"content": ANY, "_meta": ANY}),
+    "item/fileChange/requestApproval": obj(
+        {"decision": enum("accept", "acceptForSession", "decline", "cancel")}
+    ),
+    "item/permissions/requestApproval": obj(
+        {
+            "permissions": obj(
+                optional={
+                    "fileSystem": nullable(obj(open_map=True)),
+                    "network": nullable(obj({}, {"enabled": nullable(BOOL)})),
+                }
+            )
+        },
+        {"scope": enum("turn", "session"), "strictAutoReview": nullable(BOOL)},
+    ),
+    "mcpServer/elicitation/request": obj(
+        {"action": enum("accept", "decline", "cancel")}, {"content": ANY, "_meta": ANY}
+    ),
 }
 
 
@@ -216,6 +327,7 @@ def validate(spec: Spec, value: Any) -> tuple[Optional[str], list[str]]:
 # ---------------------------------------------------------------------------------------------------
 # The server
 # ---------------------------------------------------------------------------------------------------
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -245,7 +357,9 @@ class _TurnEnded(Exception):
 class FakeAppServer:
     def __init__(self, state_dir: Path, argv: list[str]) -> None:
         self.state_dir = state_dir
-        self.scenario = json.loads((state_dir / "scenario.json").read_text(encoding="utf-8"))
+        self.scenario = json.loads(
+            (state_dir / "scenario.json").read_text(encoding="utf-8")
+        )
         self.store = _Store(state_dir / "threads.json")
         self.transcript_path = state_dir / "transcript.jsonl"
         self._write_lock = threading.Lock()
@@ -297,16 +411,36 @@ class FakeAppServer:
         method, rid, params = msg.get("method"), msg.get("id"), msg.get("params")
         if rid is None:  # notification
             known = method in {"initialized"}
-            self.record({"dir": "in", "msg": msg, **({} if known else {"violation": f"unknown notification {method}"})})
+            self.record(
+                {
+                    "dir": "in",
+                    "msg": msg,
+                    **(
+                        {} if known else {"violation": f"unknown notification {method}"}
+                    ),
+                }
+            )
             return
         spec = REQUEST_PARAMS.get(method)
         if spec is None:
-            self.record({"dir": "in", "msg": msg, "violation": f"unknown method {method}"})
-            self.error(rid, f"Invalid request: unknown variant `{method}`, expected one of "
-                            + ", ".join(f"`{m}`" for m in REQUEST_PARAMS))
+            self.record(
+                {"dir": "in", "msg": msg, "violation": f"unknown method {method}"}
+            )
+            self.error(
+                rid,
+                f"Invalid request: unknown variant `{method}`, expected one of "
+                + ", ".join(f"`{m}`" for m in REQUEST_PARAMS),
+            )
             return
         err, ignored = validate(spec, params if params is not None else {})
-        self.record({"dir": "in", "msg": msg, "ignored": ignored, **({"violation": err} if err else {})})
+        self.record(
+            {
+                "dir": "in",
+                "msg": msg,
+                "ignored": ignored,
+                **({"violation": err} if err else {}),
+            }
+        )
         if err:
             self.error(rid, f"Invalid request: {err}")
             return
@@ -322,8 +456,16 @@ class FakeAppServer:
         if pending is None:
             entry["violation"] = "response to unknown server request id"
         elif "result" in msg:
-            err, ignored = validate(SERVER_REQUEST_RESULTS[pending["method"]], msg["result"])
-            entry.update({"reply_to": pending["method"], "ignored": ignored, **({"violation": err} if err else {})})
+            err, ignored = validate(
+                SERVER_REQUEST_RESULTS[pending["method"]], msg["result"]
+            )
+            entry.update(
+                {
+                    "reply_to": pending["method"],
+                    "ignored": ignored,
+                    **({"violation": err} if err else {}),
+                }
+            )
         else:
             entry["reply_to"] = pending["method"]
         self.record(entry)
@@ -344,7 +486,13 @@ class FakeAppServer:
             while "reply" not in self._pending[rid]:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    self.record({"event": "server_request_unanswered", "method": method, "id": rid})
+                    self.record(
+                        {
+                            "event": "server_request_unanswered",
+                            "method": method,
+                            "id": rid,
+                        }
+                    )
                     return {}
                 self._pending_cv.wait(remaining)
             return self._pending.pop(rid)["reply"]
@@ -355,30 +503,60 @@ class FakeAppServer:
             self.error(rid, "Already initialized")
             return
         self._initialized = True
-        self.send({"id": rid, "result": {
-            "userAgent": f"{params['clientInfo']['name']}/{CLI_VERSION} (fake)", "codexHome": str(self.state_dir),
-            "platformFamily": "unix", "platformOs": sys.platform}})
+        self.send(
+            {
+                "id": rid,
+                "result": {
+                    "userAgent": f"{params['clientInfo']['name']}/{CLI_VERSION} (fake)",
+                    "codexHome": str(self.state_dir),
+                    "platformFamily": "unix",
+                    "platformOs": sys.platform,
+                },
+            }
+        )
 
     def _thread_payload(self, thread_id: str, data: dict) -> dict:
         info = data["threads"][thread_id]
         return {
-            "id": thread_id, "sessionId": thread_id, "preview": info.get("preview", ""), "ephemeral": False,
-            "modelProvider": "openai", "createdAt": info["createdAt"], "updatedAt": int(time.time()),
-            "status": {"type": "idle"}, "cwd": info["cwd"], "cliVersion": CLI_VERSION, "source": "vscode",
-            "turns": [{"id": t["id"], "items": t["items"], "status": t["status"]} for t in info["turns"]],
+            "id": thread_id,
+            "sessionId": thread_id,
+            "preview": info.get("preview", ""),
+            "ephemeral": False,
+            "modelProvider": "openai",
+            "createdAt": info["createdAt"],
+            "updatedAt": int(time.time()),
+            "status": {"type": "idle"},
+            "cwd": info["cwd"],
+            "cliVersion": CLI_VERSION,
+            "source": "vscode",
+            "turns": [
+                {"id": t["id"], "items": t["items"], "status": t["status"]}
+                for t in info["turns"]
+            ],
         }
 
     def _thread_response(self, thread_id: str, data: dict) -> dict:
         info = data["threads"][thread_id]
-        return {"thread": self._thread_payload(thread_id, data), "model": "gpt-fake", "modelProvider": "openai",
-                "cwd": info["cwd"], "approvalPolicy": "on-request", "approvalsReviewer": "user",
-                "sandbox": {"type": "workspaceWrite"}, "instructionSources": []}
+        return {
+            "thread": self._thread_payload(thread_id, data),
+            "model": "gpt-fake",
+            "modelProvider": "openai",
+            "cwd": info["cwd"],
+            "approvalPolicy": "on-request",
+            "approvalsReviewer": "user",
+            "sandbox": {"type": "workspaceWrite"},
+            "instructionSources": [],
+        }
 
     def _thread_start(self, rid: Any, params: dict) -> None:
         data = self.store.load()
         thread_id = str(uuid.uuid4())
-        data["threads"][thread_id] = {"createdAt": int(time.time()), "cwd": params.get("cwd") or os.getcwd(),
-                                      "turns": [], "developerInstructions": params.get("developerInstructions")}
+        data["threads"][thread_id] = {
+            "createdAt": int(time.time()),
+            "cwd": params.get("cwd") or os.getcwd(),
+            "turns": [],
+            "developerInstructions": params.get("developerInstructions"),
+        }
         self.store.save(data)
         self.thread_id = thread_id
         self.send({"id": rid, "result": self._thread_response(thread_id, data)})
@@ -401,16 +579,30 @@ class FakeAppServer:
             return
         turns = self.scenario.get("turns") or []
         cursor = data.get("turn_cursor", 0)
-        script = turns[cursor] if cursor < len(turns) else {"steps": [{"kind": "message", "text": "(unscripted)"}]}
+        script = (
+            turns[cursor]
+            if cursor < len(turns)
+            else {"steps": [{"kind": "message", "text": "(unscripted)"}]}
+        )
         data["turn_cursor"] = cursor + 1
         self.store.save(data)
         if script.get("start_error"):
             self.error(rid, script["start_error"])
             return
         turn_id = str(uuid.uuid4())
-        self.send({"id": rid, "result": {"turn": {"id": turn_id, "items": [], "status": "inProgress"}}})
-        self._turn_thread = threading.Thread(target=self._play_turn, args=(thread_id, turn_id, params, script),
-                                             daemon=True)
+        self.send(
+            {
+                "id": rid,
+                "result": {
+                    "turn": {"id": turn_id, "items": [], "status": "inProgress"}
+                },
+            }
+        )
+        self._turn_thread = threading.Thread(
+            target=self._play_turn,
+            args=(thread_id, turn_id, params, script),
+            daemon=True,
+        )
         self._turn_thread.start()
 
     def _turn_interrupt(self, rid: Any, params: dict) -> None:
@@ -424,32 +616,57 @@ class FakeAppServer:
         self.send({"id": rid, "result": {}})
         turn_id = str(uuid.uuid4())
         self._turn_thread = threading.Thread(
-            target=self._play_turn, args=(params["threadId"], turn_id, None, {"steps": [{"kind": "compaction"}]}),
-            daemon=True)
+            target=self._play_turn,
+            args=(
+                params["threadId"],
+                turn_id,
+                None,
+                {"steps": [{"kind": "compaction"}]},
+            ),
+            daemon=True,
+        )
         self._turn_thread.start()
 
     _HANDLERS: dict[str, Callable[..., None]] = {
-        "initialize": _initialize, "thread/start": _thread_start, "thread/resume": _thread_resume,
-        "turn/start": _turn_start, "turn/interrupt": _turn_interrupt, "turn/steer": _turn_steer,
+        "initialize": _initialize,
+        "thread/start": _thread_start,
+        "thread/resume": _thread_resume,
+        "turn/start": _turn_start,
+        "turn/interrupt": _turn_interrupt,
+        "turn/steer": _turn_steer,
         "thread/compact/start": _compact_start,
     }
 
     # --- turn playback -----------------------------------------------------------------------------------
-    def _play_turn(self, thread_id: str, turn_id: str, params: Optional[dict], script: dict) -> None:
+    def _play_turn(
+        self, thread_id: str, turn_id: str, params: Optional[dict], script: dict
+    ) -> None:
         ctx = _TurnCtx(self, thread_id, turn_id)
-        self.notify("turn/started", {"threadId": thread_id, "turn": {"id": turn_id, "items": [],
-                                                                      "status": "inProgress"}})
+        self.notify(
+            "turn/started",
+            {
+                "threadId": thread_id,
+                "turn": {"id": turn_id, "items": [], "status": "inProgress"},
+            },
+        )
         if params is not None:  # codex echoes the submitted input as a userMessage item
-            ctx.item({"type": "userMessage", "id": ctx.new_id(), "content": params["input"]})
+            ctx.item(
+                {"type": "userMessage", "id": ctx.new_id(), "content": params["input"]}
+            )
         status, error = "completed", None
         try:
             for step in script.get("steps", []):
                 ctx.check_interrupt()
                 STEPS[step["kind"]](ctx, step)
         except _TurnEnded as ended:
-            status, error = ended.args[0], (ended.args[1] if len(ended.args) > 1 else None)
+            status, error = (
+                ended.args[0],
+                (ended.args[1] if len(ended.args) > 1 else None),
+            )
         data = self.store.load()
-        data["threads"][thread_id]["turns"].append({"id": turn_id, "items": ctx.items, "status": status})
+        data["threads"][thread_id]["turns"].append(
+            {"id": turn_id, "items": ctx.items, "status": status}
+        )
         self.store.save(data)
         turn: dict = {"id": turn_id, "items": [], "status": status}
         if error:
@@ -475,7 +692,9 @@ class _TurnCtx:
 
     def completed(self, item: dict) -> None:
         self.items.append(item)
-        self.server.notify("item/completed", self.scope(item=item, completedAtMs=_now_ms()))
+        self.server.notify(
+            "item/completed", self.scope(item=item, completedAtMs=_now_ms())
+        )
 
     def item(self, item: dict) -> None:
         self.started(item)
@@ -490,30 +709,63 @@ def _step_reasoning(ctx: _TurnCtx, step: dict) -> None:
     item_id = ctx.new_id()
     ctx.started({"type": "reasoning", "id": item_id, "summary": [], "content": []})
     for index, part in enumerate(step.get("summary", [])):
-        for chunk in (part[: len(part) // 2], part[len(part) // 2:]):
-            ctx.server.notify("item/reasoning/summaryTextDelta", ctx.scope(itemId=item_id, delta=chunk,
-                                                                           summaryIndex=index))
-    ctx.completed({"type": "reasoning", "id": item_id, "summary": step.get("summary", []),
-                   "content": step.get("content", [])})
+        for chunk in (part[: len(part) // 2], part[len(part) // 2 :]):
+            ctx.server.notify(
+                "item/reasoning/summaryTextDelta",
+                ctx.scope(itemId=item_id, delta=chunk, summaryIndex=index),
+            )
+    ctx.completed(
+        {
+            "type": "reasoning",
+            "id": item_id,
+            "summary": step.get("summary", []),
+            "content": step.get("content", []),
+        }
+    )
 
 
 def _step_command(ctx: _TurnCtx, step: dict) -> None:
     item_id = ctx.new_id()
     cwd = step.get("cwd") or ctx.server.store.load()["threads"][ctx.thread_id]["cwd"]
-    base = {"type": "commandExecution", "id": item_id, "command": step["command"], "cwd": cwd,
-            "commandActions": [{"type": "unknown", "command": step["command"]}]}
+    base = {
+        "type": "commandExecution",
+        "id": item_id,
+        "command": step["command"],
+        "cwd": cwd,
+        "commandActions": [{"type": "unknown", "command": step["command"]}],
+    }
     ctx.started({**base, "status": "inProgress"})
     decision = "accept"
     if step.get("approval", True):
-        reply = ctx.server.server_request("item/commandExecution/requestApproval", ctx.scope(
-            itemId=item_id, startedAtMs=_now_ms(), command=step["command"], cwd=cwd, reason=step.get("reason")))
+        reply = ctx.server.server_request(
+            "item/commandExecution/requestApproval",
+            ctx.scope(
+                itemId=item_id,
+                startedAtMs=_now_ms(),
+                command=step["command"],
+                cwd=cwd,
+                reason=step.get("reason"),
+            ),
+        )
         decision = (reply.get("result") or {}).get("decision", "decline")
     if decision not in ("accept", "acceptForSession"):
-        ctx.completed({**base, "status": "declined", "aggregatedOutput": None, "exitCode": None})
+        ctx.completed(
+            {**base, "status": "declined", "aggregatedOutput": None, "exitCode": None}
+        )
         return
-    ctx.server.notify("item/commandExecution/outputDelta", ctx.scope(itemId=item_id, delta=step["output"]))
-    ctx.completed({**base, "status": "completed" if step.get("exit_code", 0) == 0 else "failed",
-                   "aggregatedOutput": step["output"], "exitCode": step.get("exit_code", 0), "durationMs": 7})
+    ctx.server.notify(
+        "item/commandExecution/outputDelta",
+        ctx.scope(itemId=item_id, delta=step["output"]),
+    )
+    ctx.completed(
+        {
+            **base,
+            "status": "completed" if step.get("exit_code", 0) == 0 else "failed",
+            "aggregatedOutput": step["output"],
+            "exitCode": step.get("exit_code", 0),
+            "durationMs": 7,
+        }
+    )
 
 
 def _step_message(ctx: _TurnCtx, step: dict) -> None:
@@ -522,7 +774,10 @@ def _step_message(ctx: _TurnCtx, step: dict) -> None:
     size = max(1, len(text) // max(1, step.get("chunks", 3)))
     # ``deltas: False``: the item reaches item/completed with no item/agentMessage/delta before it.
     for start in range(0, len(text), size) if step.get("deltas", True) else ():
-        ctx.server.notify("item/agentMessage/delta", ctx.scope(itemId=item_id, delta=text[start:start + size]))
+        ctx.server.notify(
+            "item/agentMessage/delta",
+            ctx.scope(itemId=item_id, delta=text[start : start + size]),
+        )
     ctx.completed({"type": "agentMessage", "id": item_id, "text": text})
 
 
@@ -530,15 +785,29 @@ def _step_message_partial(ctx: _TurnCtx, step: dict) -> None:
     """An agentMessage that streams deltas but never reaches item/completed (dies mid-item)."""
     item_id = ctx.new_id()
     ctx.started({"type": "agentMessage", "id": item_id, "text": ""})
-    ctx.server.notify("item/agentMessage/delta", ctx.scope(itemId=item_id, delta=step["text"]))
+    ctx.server.notify(
+        "item/agentMessage/delta", ctx.scope(itemId=item_id, delta=step["text"])
+    )
 
 
 def _step_usage(ctx: _TurnCtx, step: dict) -> None:
-    breakdown = {"inputTokens": step["input"], "cachedInputTokens": step.get("cached", 0),
-                 "outputTokens": step.get("output", 10), "reasoningOutputTokens": step.get("reasoning", 0)}
+    breakdown = {
+        "inputTokens": step["input"],
+        "cachedInputTokens": step.get("cached", 0),
+        "outputTokens": step.get("output", 10),
+        "reasoningOutputTokens": step.get("reasoning", 0),
+    }
     breakdown["totalTokens"] = breakdown["inputTokens"] + breakdown["outputTokens"]
-    ctx.server.notify("thread/tokenUsage/updated", ctx.scope(tokenUsage={
-        "last": breakdown, "total": breakdown, "modelContextWindow": step.get("window", 272000)}))
+    ctx.server.notify(
+        "thread/tokenUsage/updated",
+        ctx.scope(
+            tokenUsage={
+                "last": breakdown,
+                "total": breakdown,
+                "modelContextWindow": step.get("window", 272000),
+            }
+        ),
+    )
 
 
 def _step_compaction(ctx: _TurnCtx, step: dict) -> None:
@@ -546,7 +815,12 @@ def _step_compaction(ctx: _TurnCtx, step: dict) -> None:
 
 
 def _step_error_note(ctx: _TurnCtx, step: dict) -> None:
-    ctx.server.notify("error", ctx.scope(error={"message": step["message"]}, willRetry=step.get("will_retry", True)))
+    ctx.server.notify(
+        "error",
+        ctx.scope(
+            error={"message": step["message"]}, willRetry=step.get("will_retry", True)
+        ),
+    )
 
 
 def _step_fail(ctx: _TurnCtx, step: dict) -> None:
@@ -569,39 +843,69 @@ def _step_progress(ctx: _TurnCtx, step: dict) -> None:
     while time.monotonic() < deadline:
         ctx.check_interrupt()
         text += "."
-        ctx.server.notify("item/agentMessage/delta", ctx.scope(itemId=item_id, delta="."))
+        ctx.server.notify(
+            "item/agentMessage/delta", ctx.scope(itemId=item_id, delta=".")
+        )
         time.sleep(step.get("interval", 0.25))
     ctx.check_interrupt()
-    ctx.completed({"type": "agentMessage", "id": item_id, "text": step.get("text", text)})
+    ctx.completed(
+        {"type": "agentMessage", "id": item_id, "text": step.get("text", text)}
+    )
 
 
 def _step_permissions(ctx: _TurnCtx, step: dict) -> None:
-    ctx.server.server_request("item/permissions/requestApproval", ctx.scope(
-        itemId=ctx.new_id(), startedAtMs=_now_ms(), cwd=os.getcwd(), reason=step.get("reason"),
-        permissions={"network": {"enabled": True}}))
+    ctx.server.server_request(
+        "item/permissions/requestApproval",
+        ctx.scope(
+            itemId=ctx.new_id(),
+            startedAtMs=_now_ms(),
+            cwd=os.getcwd(),
+            reason=step.get("reason"),
+            permissions={"network": {"enabled": True}},
+        ),
+    )
 
 
 # The descendant lives until the harness drops the release file (or 600 s pass), so the test side can
 # retire an orphan without signalling a process that is no longer in its own subtree.
-_GRANDCHILD = ("import os, sys, time\n"
-               "deadline = time.monotonic() + 600\n"
-               "while time.monotonic() < deadline and not os.path.exists(sys.argv[1]):\n"
-               "    time.sleep(0.2)\n")
+_GRANDCHILD = (
+    "import os, sys, time\n"
+    "deadline = time.monotonic() + 600\n"
+    "while time.monotonic() < deadline and not os.path.exists(sys.argv[1]):\n"
+    "    time.sleep(0.2)\n"
+)
 
 
 def _step_grandchild(ctx: _TurnCtx, step: dict) -> None:
     """A descendant in its own session (like codex's stdio MCP servers)."""
-    child = subprocess.Popen([sys.executable, "-c", _GRANDCHILD, str(ctx.server.state_dir / GRANDCHILD_RELEASE)],
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                             start_new_session=True)
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            _GRANDCHILD,
+            str(ctx.server.state_dir / GRANDCHILD_RELEASE),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
     ctx.server.record({"event": "grandchild", "child_pid": child.pid})
 
 
 STEPS: dict[str, Callable[[_TurnCtx, dict], None]] = {
-    "reasoning": _step_reasoning, "command": _step_command, "message": _step_message, "usage": _step_usage,
+    "reasoning": _step_reasoning,
+    "command": _step_command,
+    "message": _step_message,
+    "usage": _step_usage,
     "message_partial": _step_message_partial,
-    "compaction": _step_compaction, "error_note": _step_error_note, "fail": _step_fail, "crash": _step_crash,
-    "progress": _step_progress, "permissions": _step_permissions, "grandchild": _step_grandchild,
+    "compaction": _step_compaction,
+    "error_note": _step_error_note,
+    "fail": _step_fail,
+    "crash": _step_crash,
+    "progress": _step_progress,
+    "permissions": _step_permissions,
+    "grandchild": _step_grandchild,
 }
 
 
@@ -629,17 +933,23 @@ def main(argv: list[str]) -> int:
 # Test-side harness
 # ---------------------------------------------------------------------------------------------------
 
+
 class FakeCodex:
     """One fake codex install: wrapper executable + state dir, and readers over the transcript."""
 
     def __init__(self, root: Path, turns: list[dict], **scenario: Any) -> None:
         self.state_dir = root / "fake_codex"
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        (self.state_dir / "scenario.json").write_text(json.dumps({"turns": turns, **scenario}), encoding="utf-8")
+        (self.state_dir / "scenario.json").write_text(
+            json.dumps({"turns": turns, **scenario}), encoding="utf-8"
+        )
         self.bin = root / "bin" / "codex"
         self.bin.parent.mkdir(parents=True, exist_ok=True)
-        self.bin.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{Path(__file__).resolve()}" '
-                            f'--state-dir "{self.state_dir}" "$@"\n', encoding="utf-8")
+        self.bin.write_text(
+            f'#!/bin/sh\nexec "{sys.executable}" "{Path(__file__).resolve()}" '
+            f'--state-dir "{self.state_dir}" "$@"\n',
+            encoding="utf-8",
+        )
         self.bin.chmod(0o755)
 
     def set_scenario(self, **changes: Any) -> None:
@@ -652,12 +962,22 @@ class FakeCodex:
         path = self.state_dir / "transcript.jsonl"
         if not path.exists():
             return []
-        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
 
     def requests(self, method: Optional[str] = None) -> list[dict]:
         """Client requests Clawksis sent (full transcript entries), optionally one method."""
-        return [e for e in self.entries() if e.get("dir") == "in" and "method" in e.get("msg", {})
-                and "id" in e["msg"] and (method is None or e["msg"]["method"] == method)]
+        return [
+            e
+            for e in self.entries()
+            if e.get("dir") == "in"
+            and "method" in e.get("msg", {})
+            and "id" in e["msg"]
+            and (method is None or e["msg"]["method"] == method)
+        ]
 
     def replies_to(self, server_method: str) -> list[dict]:
         return [e for e in self.entries() if e.get("reply_to") == server_method]
@@ -666,14 +986,19 @@ class FakeCodex:
         return [e for e in self.entries() if e.get("violation")]
 
     def ignored_fields(self) -> list[tuple[str, str]]:
-        return [(str(e["msg"].get("method") or e.get("reply_to")), path) for e in self.entries()
-                for path in e.get("ignored") or []]
+        return [
+            (str(e["msg"].get("method") or e.get("reply_to")), path)
+            for e in self.entries()
+            for path in e.get("ignored") or []
+        ]
 
     def spawned_pids(self) -> list[int]:
         return [e["pid"] for e in self.entries() if e.get("event") == "spawn"]
 
     def grandchild_pids(self) -> list[int]:
-        return [e["child_pid"] for e in self.entries() if e.get("event") == "grandchild"]
+        return [
+            e["child_pid"] for e in self.entries() if e.get("event") == "grandchild"
+        ]
 
     def threads(self) -> dict:
         return _Store(self.state_dir / "threads.json").load()["threads"]
@@ -681,12 +1006,15 @@ class FakeCodex:
     def assert_wire_clean(self) -> None:
         """Every request/response Clawksis sent is valid AND carries no field codex would silently drop."""
         assert not self.violations(), f"protocol violations: {self.violations()}"
-        assert not self.ignored_fields(), f"fields codex ignores (intent silently lost): {self.ignored_fields()}"
+        assert not self.ignored_fields(), (
+            f"fields codex ignores (intent silently lost): {self.ignored_fields()}"
+        )
 
 
 @dataclass
 class CodexRun:
     """Outcome of :func:`run_codex_scenario`: the fake, the Clawksis home and one ChatResult per CLI run."""
+
     fake: FakeCodex
     home: Any
     results: list
@@ -702,8 +1030,13 @@ class CodexRun:
         return [e for e in self.fake.entries() if e.get("pid") == pid]
 
     def process_requests(self, index: int, method: str) -> list[dict]:
-        return [e["msg"] for e in self.process_entries(index)
-                if e.get("dir") == "in" and e.get("msg", {}).get("method") == method and "id" in e["msg"]]
+        return [
+            e["msg"]
+            for e in self.process_entries(index)
+            if e.get("dir") == "in"
+            and e.get("msg", {}).get("method") == method
+            and "id" in e["msg"]
+        ]
 
     def cleanup(self) -> None:
         """Retire anything the fake spawned that is still alive (orphan scenarios).
@@ -712,7 +1045,9 @@ class CodexRun:
         outside the test's process subtree, where a live-system guard (rightly) refuses to signal them."""
         (self.fake.state_dir / GRANDCHILD_RELEASE).touch()
         deadline = time.monotonic() + 10
-        while time.monotonic() < deadline and any(pid_alive(p) for p in self.fake.grandchild_pids()):
+        while time.monotonic() < deadline and any(
+            pid_alive(p) for p in self.fake.grandchild_pids()
+        ):
             time.sleep(0.05)
         for pid in self.fake.spawned_pids() + self.fake.grandchild_pids():
             if pid_alive(pid):
@@ -720,29 +1055,55 @@ class CodexRun:
                     os.kill(pid, signal.SIGKILL)
 
 
-def run_codex_scenario(root: Path, turns: list[dict], runs: list[dict], *, config: Optional[dict] = None,
-                       **scenario: Any) -> CodexRun:
+def run_codex_scenario(
+    root: Path,
+    turns: list[dict],
+    runs: list[dict],
+    *,
+    config: Optional[dict] = None,
+    **scenario: Any,
+) -> CodexRun:
     """Real ``clawk chat -q`` runs (``--resume`` after the first) against a fresh fake codex install.
 
     ``runs``: ``{"prompt", "args": [...], "then": {scenario changes applied after this run}}``."""
-    from tests.e2e.core.providers._native_helpers import latest_session, make_home, run_chat
+    from tests.e2e.core.providers._native_helpers import (
+        latest_session,
+        make_home,
+        run_chat,
+    )
 
     fake = FakeCodex(root, turns, **scenario)
-    model = {"provider": "openai", "default": "gpt-5.5", "openai_runtime": "codex_app_server",
-             "codex_bin": str(fake.bin)}
+    model = {
+        "provider": "openai",
+        "default": "gpt-5.5",
+        "openai_runtime": "codex_app_server",
+        "codex_bin": str(fake.bin),
+    }
     # The app-server owns auth; the key only satisfies Clawksis' provider resolution and never leaves.
-    home = make_home(root, model, env_file={"OPENAI_API_KEY": "sk-fake-codex-e2e"}, extra_config=config)
+    home = make_home(
+        root,
+        model,
+        env_file={"OPENAI_API_KEY": "sk-fake-codex-e2e"},
+        extra_config=config,
+    )
     results, session_id = [], None
     for run in runs:
-        result = run_chat(home, run["prompt"], args=tuple(run.get("args", ())), resume=session_id,
-                          timeout=run.get("timeout", 120))
+        result = run_chat(
+            home,
+            run["prompt"],
+            args=tuple(run.get("args", ())),
+            resume=session_id,
+            timeout=run.get("timeout", 120),
+        )
         results.append(result)
         try:
             session_id = latest_session(home)
         except AssertionError as exc:
             # Without the CLI's own output a crashed run reads only as "no session persisted".
-            raise AssertionError(f"{exc}\nrc={result.returncode}\n--- stdout (tail) ---\n{result.stdout[-3000:]}"
-                                 f"\n--- stderr (tail) ---\n{result.stderr[-3000:]}") from None
+            raise AssertionError(
+                f"{exc}\nrc={result.returncode}\n--- stdout (tail) ---\n{result.stdout[-3000:]}"
+                f"\n--- stderr (tail) ---\n{result.stderr[-3000:]}"
+            ) from None
         if run.get("then"):
             fake.set_scenario(**run["then"])
     assert session_id is not None

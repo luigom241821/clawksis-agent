@@ -10,6 +10,7 @@ switch is back as a deprecated alias that folds into ``-NonInteractive``.
 exercises real parameter binding and the whole prologue, then prints the
 resolved-path report and exits 0.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,14 +30,30 @@ def test_skipsetup_still_binds(tmp_path):
     powershell = shutil.which("powershell")
     assert powershell
     result = subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(INSTALLER), "-SkipSetup", "-NonInteractive", "-ShowResolvedPaths",
-         "-ClawkHome", str(tmp_path / "home"), "-InstallDir", str(tmp_path / "install")],
-        capture_output=True, text=True, timeout=120,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(INSTALLER),
+            "-SkipSetup",
+            "-NonInteractive",
+            "-ShowResolvedPaths",
+            "-ClawkHome",
+            str(tmp_path / "home"),
+            "-InstallDir",
+            str(tmp_path / "install"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     assert result.returncode == 0, (
-        "-SkipSetup failed to bind:\n" + result.stderr + result.stdout)
+        "-SkipSetup failed to bind:\n" + result.stderr + result.stdout
+    )
     report = json.loads(result.stdout)
     assert report, "expected the resolved-paths JSON report on stdout"
 
@@ -51,14 +68,31 @@ def test_skipsetup_alone_skips_needs_input_stage(tmp_path):
     powershell = shutil.which("powershell")
     assert powershell
     result = subprocess.run(
-        [powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-         "-File", str(INSTALLER), "-SkipSetup", "-Stage", "setup", "-Json",
-         "-ClawkHome", str(tmp_path / "home"), "-InstallDir", str(tmp_path / "install")],
-        capture_output=True, text=True, timeout=120,
+        [
+            powershell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(INSTALLER),
+            "-SkipSetup",
+            "-Stage",
+            "setup",
+            "-Json",
+            "-ClawkHome",
+            str(tmp_path / "home"),
+            "-InstallDir",
+            str(tmp_path / "install"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
         check=False,
     )
     assert result.returncode == 0, (
-        "-SkipSetup -Stage setup failed:\n" + result.stderr + result.stdout)
+        "-SkipSetup -Stage setup failed:\n" + result.stderr + result.stdout
+    )
     frame = json.loads(result.stdout.strip().splitlines()[-1])
     assert frame["ok"] is True
     assert frame["stage"] == "setup"

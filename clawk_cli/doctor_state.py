@@ -7,7 +7,15 @@ import os
 import subprocess
 from pathlib import Path
 from clawk_cli.doctor_report import (
-    Finding, _fail_and_issue, _section, check_bool, check_info, check_ok, check_warn, doctor_check, ensure_dir,
+    Finding,
+    _fail_and_issue,
+    _section,
+    check_bool,
+    check_info,
+    check_ok,
+    check_warn,
+    doctor_check,
+    ensure_dir,
     warn_on_error,
 )
 from clawk_cli.sizefmt import format_bytes as _human_bytes
@@ -17,9 +25,13 @@ from clawk_state_holders import read_only_db_uri
 def _doctor_memory_config(clawk_home: Path | None = None) -> dict:
     """Return the effective memory section used by doctor diagnostics."""
     from clawk_cli.doctor import CLAWK_HOME
+
     try:
         from clawk_cli.config_effective import load_user_config_effective
-        config_path = (clawk_home if clawk_home is not None else CLAWK_HOME) / "config.yaml"
+
+        config_path = (
+            clawk_home if clawk_home is not None else CLAWK_HOME
+        ) / "config.yaml"
         if not config_path.exists():
             return {}
         section = load_user_config_effective(config_path).get("memory")
@@ -29,7 +41,7 @@ def _doctor_memory_config(clawk_home: Path | None = None) -> dict:
 
 
 # state.db size threshold — advisory only; deliberately a module constant, not config (doctor warnings are guidance, not policy).
-STATE_DB_SIZE_WARN_BYTES = 1 * 1024 * 1024 * 1024   # 1 GiB logical size
+STATE_DB_SIZE_WARN_BYTES = 1 * 1024 * 1024 * 1024  # 1 GiB logical size
 
 
 def _bits(*pairs) -> list:
@@ -44,6 +56,7 @@ def host_gateway_note() -> str:
     every one of them."""
     try:
         from gateway.host_topology import host_gateway_topology
+
         topology = host_gateway_topology()
     except Exception:
         return ""
@@ -58,7 +71,9 @@ def _render_state_db_stats(stats: dict, holders=None, host_note: str = "") -> li
     """
     lines: list = []
     stats = stats or {}
-    logical, wal, freelist = (stats.get(k) for k in ("logical_size_bytes", "wal_size_bytes", "freelist_count"))
+    logical, wal, freelist = (
+        stats.get(k) for k in ("logical_size_bytes", "wal_size_bytes", "freelist_count")
+    )
     size_bits = _bits(
         (logical, lambda: f"logical size {_human_bytes(logical)}"),
         (stats.get("page_count"), lambda: f"{stats['page_count']:,} pages"),
@@ -70,7 +85,10 @@ def _render_state_db_stats(stats: dict, holders=None, host_note: str = "") -> li
     row_bits = _bits(
         (stats.get("messages"), lambda: f"{stats['messages']:,} messages"),
         (stats.get("sessions"), lambda: f"{stats['sessions']:,} sessions"),
-        (stats.get("journal_mode") or None, lambda: f"journal_mode={stats['journal_mode']}"),
+        (
+            stats.get("journal_mode") or None,
+            lambda: f"journal_mode={stats['journal_mode']}",
+        ),
         (holders, lambda: f"{holders} process(es) holding the DB open{host_note}"),
     )
     if row_bits:
@@ -78,35 +96,54 @@ def _render_state_db_stats(stats: dict, holders=None, host_note: str = "") -> li
     fts = stats.get("fts_tables")
     if fts:
         present = [t for t, ok in fts.items() if ok]
-        lines.append(("info", "FTS tables: " + (", ".join(present) if present else "none"), ""))
+        lines.append(
+            ("info", "FTS tables: " + (", ".join(present) if present else "none"), "")
+        )
     deferral = stats.get("fts_rebuild_deferral")
     if isinstance(deferral, dict):
         pids = deferral.get("holder_pids") or "unknown"
         if deferral.get("futile"):
-            lines.append(("warn", f"state.db FTS repair is blocked by the same holder(s) PID(s) {pids} for "
-                          f"{deferral.get('holders_attempts') or '?'} consecutive deferral(s); waiting is futile",
-                          "(stop ONLY the listed process(es) — the host gateway keeps running and its own "
-                          "retry rebuilds within a minute of the holder leaving)"))
+            lines.append(
+                (
+                    "warn",
+                    f"state.db FTS repair is blocked by the same holder(s) PID(s) {pids} for "
+                    f"{deferral.get('holders_attempts') or '?'} consecutive deferral(s); waiting is futile",
+                    "(stop ONLY the listed process(es) — the host gateway keeps running and its own "
+                    "retry rebuilds within a minute of the holder leaving)",
+                )
+            )
         else:
-            lines.append(("warn", f"state.db FTS repair is blocked after {deferral.get('attempts') or '?'} deferral(s) "
-                          f"by PID(s) {pids}",
-                          "(stop the listed processes; the host gateway's own retry then rebuilds, or run "
-                          "'clawk sessions optimize-storage' with every holder stopped)"))
+            lines.append(
+                (
+                    "warn",
+                    f"state.db FTS repair is blocked after {deferral.get('attempts') or '?'} deferral(s) "
+                    f"by PID(s) {pids}",
+                    "(stop the listed processes; the host gateway's own retry then rebuilds, or run "
+                    "'clawk sessions optimize-storage' with every holder stopped)",
+                )
+            )
     # Oversized DB: suggest auto_prune, plus the offline optimize-storage pass when the FTS rebuild is
     # pending, an earlier run stopped before tearing down the old index, or the stored FTS layout is an
     # older release's (not just a lagging marker).
     if logical is not None and logical > STATE_DB_SIZE_WARN_BYTES:
         detail = "consider enabling sessions.auto_prune in config.yaml to bound growth"
         structural_fts_upgrade = bool(stats.get("fts_storage_upgrade_needed"))
-        if stats.get("fts_rebuild_pending") or stats.get("fts_teardown_pending") or structural_fts_upgrade:
+        if (
+            stats.get("fts_rebuild_pending")
+            or stats.get("fts_teardown_pending")
+            or structural_fts_upgrade
+        ):
             detail += "; run 'clawk sessions optimize-storage' offline (with the host gateway stopped) to compact FTS storage"
-        lines.append(("warn", f"state.db is large ({_human_bytes(logical)})", f"({detail})"))
+        lines.append(
+            ("warn", f"state.db is large ({_human_bytes(logical)})", f"({detail})")
+        )
     # WAL runaway is deliberately NOT warned here: _state_db_wal already warns above 50 MB and offers --fix.
     return lines
 
 
 def _memory_store_flags(clawk_home: Path) -> tuple:
     from tools.memory_tool import get_builtin_memory_store_flags
+
     return get_builtin_memory_store_flags({"memory": _doctor_memory_config(clawk_home)})
 
 
@@ -143,7 +180,10 @@ def check_legacy_desktop_checkout() -> None:
         try:
             return subprocess.run(
                 ["git", "-C", str(checkout), *args],
-                capture_output=True, text=True, encoding="utf-8", timeout=10,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=10,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
@@ -156,9 +196,15 @@ def check_legacy_desktop_checkout() -> None:
     # Conservative pristineness: every probe must succeed AND come back
     # clean. Any probe failure counts as "has local work".
     pristine = (
-        status is not None and status.returncode == 0 and status.stdout.strip() == ""
-        and branch is not None and branch.returncode == 0 and branch.stdout.strip() == "main"
-        and stashes is not None and stashes.returncode == 0 and stashes.stdout.strip() == ""
+        status is not None
+        and status.returncode == 0
+        and status.stdout.strip() == ""
+        and branch is not None
+        and branch.returncode == 0
+        and branch.stdout.strip() == "main"
+        and stashes is not None
+        and stashes.returncode == 0
+        and stashes.stdout.strip() == ""
     )
 
     size_note = ""
@@ -173,7 +219,9 @@ def check_legacy_desktop_checkout() -> None:
             f"Unused checkout at {_DHH}/clawksis-agent{size_note}",
             "(the desktop app runs embedded and does not use it; the tree is clean)",
         )
-        print("    Review it and decide whether to keep or remove it — doctor does not delete anything.")
+        print(
+            "    Review it and decide whether to keep or remove it — doctor does not delete anything."
+        )
     else:
         check_info(
             f"A checkout exists at {_DHH}/clawksis-agent but holds local work "
@@ -190,25 +238,48 @@ def _check_directory_structure(should_fix: bool, f: Finding) -> None:
     except Exception:
         pass  # best-effort report; must never break the directory check
     from clawk_cli.doctor import CLAWK_HOME, _DHH
+
     clawk_home = CLAWK_HOME
-    ensure_dir(f, should_fix, clawk_home, f"{_DHH} directory exists", f"Created {_DHH} directory", f"{_DHH} not found")
+    ensure_dir(
+        f,
+        should_fix,
+        clawk_home,
+        f"{_DHH} directory exists",
+        f"Created {_DHH} directory",
+        f"{_DHH} not found",
+    )
     _memory_enabled, _user_profile_enabled = _memory_store_flags(clawk_home)
     memory_on = bool(_memory_enabled or _user_profile_enabled)
     # The built-in file store neither creates nor consumes memories/ when both targets are disabled.
-    for subdir_name in ["cron", "sessions", "logs", "skills"] + (["memories"] if memory_on else []):
-        ensure_dir(f, should_fix, clawk_home / subdir_name, f"{_DHH}/{subdir_name}/ exists",
-                   f"Created {_DHH}/{subdir_name}/", f"{_DHH}/{subdir_name}/ not found")
+    for subdir_name in ["cron", "sessions", "logs", "skills"] + (
+        ["memories"] if memory_on else []
+    ):
+        ensure_dir(
+            f,
+            should_fix,
+            clawk_home / subdir_name,
+            f"{_DHH}/{subdir_name}/ exists",
+            f"Created {_DHH}/{subdir_name}/",
+            f"{_DHH}/{subdir_name}/ not found",
+        )
     _check_scratch_dir(clawk_home, _DHH)
     # SOUL.md persona file
     soul_path = clawk_home / "SOUL.md"
     if soul_path.exists():
         lines = soul_path.read_text(encoding="utf-8-sig").strip().splitlines()
-        if any(l.strip() and not l.strip().startswith(("<!--", "-->", "#")) for l in lines):
+        if any(
+            l.strip() and not l.strip().startswith(("<!--", "-->", "#")) for l in lines
+        ):
             check_ok(f"{_DHH}/SOUL.md exists (persona configured)")
         else:  # template comments only (no real content)
-            check_info(f"{_DHH}/SOUL.md exists but is empty — edit it to customize personality")
+            check_info(
+                f"{_DHH}/SOUL.md exists but is empty — edit it to customize personality"
+            )
     else:
-        check_warn(f"{_DHH}/SOUL.md not found", "(create it to give Clawksis a custom personality)")
+        check_warn(
+            f"{_DHH}/SOUL.md not found",
+            "(create it to give Clawksis a custom personality)",
+        )
         if should_fix:
             soul_path.parent.mkdir(parents=True, exist_ok=True)
             from clawk_cli.default_soul import DEFAULT_SOUL_MD
@@ -222,13 +293,30 @@ def _check_directory_structure(should_fix: bool, f: Finding) -> None:
     if not memory_on:
         return check_info("Built-in memory files disabled by config")
     existed = memories_dir.exists()
-    ensure_dir(f, should_fix, memories_dir, f"{_DHH}/memories/ directory exists", f"Created {_DHH}/memories/",
-               f"{_DHH}/memories/ not found")
-    for fname in [n for on, n in ((_memory_enabled, "MEMORY.md"), (_user_profile_enabled, "USER.md")) if on and existed]:
+    ensure_dir(
+        f,
+        should_fix,
+        memories_dir,
+        f"{_DHH}/memories/ directory exists",
+        f"Created {_DHH}/memories/",
+        f"{_DHH}/memories/ not found",
+    )
+    for fname in [
+        n
+        for on, n in (
+            (_memory_enabled, "MEMORY.md"),
+            (_user_profile_enabled, "USER.md"),
+        )
+        if on and existed
+    ]:
         if (memories_dir / fname).exists():
-            check_ok(f"{fname} exists ({len((memories_dir / fname).read_text(encoding='utf-8-sig').strip())} chars)")
+            check_ok(
+                f"{fname} exists ({len((memories_dir / fname).read_text(encoding='utf-8-sig').strip())} chars)"
+            )
         else:
-            check_info(f"{fname} not created yet (will be created when the agent first writes a memory)")
+            check_info(
+                f"{fname} not created yet (will be created when the agent first writes a memory)"
+            )
 
 
 # Cache-root entries at least this big that no pruner covers get a doctor warning.
@@ -236,7 +324,9 @@ _UNPRUNED_CACHE_WARN_BYTES = 1 << 30
 _PRUNED_CACHE_DIRS = frozenset({"scratch", "terminal"})
 
 
-def unpruned_cache_hogs(clawk_home: Path, min_bytes: int = _UNPRUNED_CACHE_WARN_BYTES) -> list[tuple[str, int]]:
+def unpruned_cache_hogs(
+    clawk_home: Path, min_bytes: int = _UNPRUNED_CACHE_WARN_BYTES
+) -> list[tuple[str, int]]:
     """``(name, bytes)`` for ``cache/`` entries outside the pruned dirs that exceed *min_bytes*.
 
     Finished campaign trees parked at the cache root sat for weeks (95 GB on one host)
@@ -246,7 +336,11 @@ def unpruned_cache_hogs(clawk_home: Path, min_bytes: int = _UNPRUNED_CACHE_WARN_
     cache = clawk_home / "cache"
     hogs: list[tuple[str, int]] = []
     try:
-        entries = [e for e in cache.iterdir() if e.is_dir() and not e.is_symlink() and e.name not in _PRUNED_CACHE_DIRS]
+        entries = [
+            e
+            for e in cache.iterdir()
+            if e.is_dir() and not e.is_symlink() and e.name not in _PRUNED_CACHE_DIRS
+        ]
     except OSError:
         return hogs
     for entry in entries:
@@ -259,13 +353,23 @@ def unpruned_cache_hogs(clawk_home: Path, min_bytes: int = _UNPRUNED_CACHE_WARN_
 def _check_scratch_dir(clawk_home: Path, _DHH: str) -> None:
     """Report the scratch dir (TMPDIR target) and its size; a user-set TMPDIR elsewhere is shown, not judged."""
     from clawk_constants import (
-        SCRATCH_DIR_MARKER_ENV, SCRATCH_MAX_IDLE_HOURS, get_scratch_dir, scratch_dir_usage_bytes)
+        SCRATCH_DIR_MARKER_ENV,
+        SCRATCH_MAX_IDLE_HOURS,
+        get_scratch_dir,
+        scratch_dir_usage_bytes,
+    )
+
     scratch = get_scratch_dir(clawk_home, prune=False)
     size = _human_bytes(scratch_dir_usage_bytes(scratch))
-    check_ok(f"{_DHH}/cache/scratch/ is the scratch dir (TMPDIR; {size}, entries pruned after {SCRATCH_MAX_IDLE_HOURS}h idle)")
+    check_ok(
+        f"{_DHH}/cache/scratch/ is the scratch dir (TMPDIR; {size}, entries pruned after {SCRATCH_MAX_IDLE_HOURS}h idle)"
+    )
     from clawk_constants_scratch_stuck import removal_hint, stuck_entries
+
     for entry in stuck_entries(scratch):
-        check_warn(f"{_DHH}/cache/scratch/{entry.name}/ holds files you may not delete, so the prune skips it — {removal_hint(entry)}")
+        check_warn(
+            f"{_DHH}/cache/scratch/{entry.name}/ holds files you may not delete, so the prune skips it — {removal_hint(entry)}"
+        )
     for name, nbytes in unpruned_cache_hogs(clawk_home):
         check_warn(
             f"{_DHH}/cache/{name}/ is {_human_bytes(nbytes)} and outside every pruner "
@@ -274,11 +378,14 @@ def _check_scratch_dir(clawk_home: Path, _DHH: str) -> None:
         )
     tmpdir = os.environ.get("TMPDIR", "")
     if tmpdir and tmpdir != os.environ.get(SCRATCH_DIR_MARKER_ENV, ""):
-        check_info(f"TMPDIR={tmpdir} is set by you or the OS, so Clawksis leaves it alone")
+        check_info(
+            f"TMPDIR={tmpdir} is set by you or the OS, so Clawksis leaves it alone"
+        )
 
 
 def _session_count(state_db_path: Path):
     import sqlite3
+
     # mode=ro: doctor is a reader; a writable open of a gateway-held WAL DB is the second-writer class (#103339).
     conn = sqlite3.connect(read_only_db_uri(state_db_path), uri=True)
     try:
@@ -296,14 +403,21 @@ def _write_health_reason(state_db_path: Path, *, should_fix: bool):
     that probe is the second-writer class (#103339), so probe a read-only snapshot instead; a quiet
     store is probed in place. Returns the failure reason, or None when healthy or skipped."""
     from clawk_state_repair import _db_opens_cleanly, _live_writer_holds_db
+
     if not _live_writer_holds_db(state_db_path):
         return _db_opens_cleanly(state_db_path)
-    if not should_fix and state_db_path.stat().st_size > _WRITE_PROBE_SNAPSHOT_MAX_BYTES:
-        check_info("state.db write-health probe skipped: store is held by a live writer and larger than 1 GB "
-                   "(run 'clawk doctor --fix' to probe it)")
+    if (
+        not should_fix
+        and state_db_path.stat().st_size > _WRITE_PROBE_SNAPSHOT_MAX_BYTES
+    ):
+        check_info(
+            "state.db write-health probe skipped: store is held by a live writer and larger than 1 GB "
+            "(run 'clawk doctor --fix' to probe it)"
+        )
         return None
     import sqlite3
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         snapshot = Path(tmp) / "state.db"
         src = sqlite3.connect(read_only_db_uri(state_db_path), uri=True, timeout=1.0)
@@ -322,14 +436,18 @@ def _write_health_reason(state_db_path: Path, *, should_fix: bool):
 # ``structural`` has no in-place repair: an FTS rebuild cannot fix a canonical b-tree, and the
 # ``.malformed-backup`` the repair path would leave beside state.db is a copy of the same damage (#88587).
 _STATE_DB_REPAIRS = {
-    "fts": ("Repaired state.db FTS write health",
-            "state.db FTS write-health repair did not recover automatically",
-            "state.db FTS write corruption and auto-repair failed — restore from the backup copy beside state.db",
-            "state.db FTS write corruption — run 'clawk doctor --fix' (or 'clawk sessions repair') to rebuild the FTS index"),
-    "schema": ("Repaired state.db schema ({count} sessions recovered)",
-               "state.db schema repair did not recover automatically",
-               "state.db schema malformed and auto-repair failed — restore from the backup copy beside state.db",
-               "state.db schema malformed — run 'clawk doctor --fix' (or 'clawk sessions repair') to recover hidden sessions"),
+    "fts": (
+        "Repaired state.db FTS write health",
+        "state.db FTS write-health repair did not recover automatically",
+        "state.db FTS write corruption and auto-repair failed — restore from the backup copy beside state.db",
+        "state.db FTS write corruption — run 'clawk doctor --fix' (or 'clawk sessions repair') to rebuild the FTS index",
+    ),
+    "schema": (
+        "Repaired state.db schema ({count} sessions recovered)",
+        "state.db schema repair did not recover automatically",
+        "state.db schema malformed and auto-repair failed — restore from the backup copy beside state.db",
+        "state.db schema malformed — run 'clawk doctor --fix' (or 'clawk sessions repair') to recover hidden sessions",
+    ),
 }
 _STATE_DB_STRUCTURAL_ISSUE = (
     "state.db structural corruption (canonical tables/indexes damaged, not the FTS index) — an FTS rebuild "
@@ -340,55 +458,81 @@ _STATE_DB_STRUCTURAL_ISSUE = (
 )
 
 
-def _repair_state_db(f: Finding, should_fix: bool, state_db_path: Path, kind: str) -> None:
+def _repair_state_db(
+    f: Finding, should_fix: bool, state_db_path: Path, kind: str
+) -> None:
     """Shared --fix path for both state.db corruption classes (FTS write health, malformed schema)."""
     if kind == "structural":
         from clawk_constants import profile_cli_selector
-        return f.manual_issues.append(_STATE_DB_STRUCTURAL_ISSUE.format(
-            profile_arg=profile_cli_selector(), db_path=state_db_path))
+
+        return f.manual_issues.append(
+            _STATE_DB_STRUCTURAL_ISSUE.format(
+                profile_arg=profile_cli_selector(), db_path=state_db_path
+            )
+        )
     ok_label, not_fixed_label, failed_issue, fix_hint = _STATE_DB_REPAIRS[kind]
     if not should_fix:
         return f.issues.append(fix_hint)
     from clawk_state_repair import repair_state_db_schema
+
     report = repair_state_db_schema(state_db_path)
     if not report.get("repaired"):
-        check_warn(not_fixed_label, f"({report.get('error')}; backup: {report.get('backup_path')})")
+        check_warn(
+            not_fixed_label,
+            f"({report.get('error')}; backup: {report.get('backup_path')})",
+        )
         return f.issues.append(failed_issue)
     if "{count}" in ok_label:
         try:
             ok_label = ok_label.format(count=_session_count(state_db_path))
         except Exception:
             ok_label = ok_label.format(count="?")
-    backup_name = Path(report["backup_path"]).name if report.get("backup_path") else "n/a"
+    backup_name = (
+        Path(report["backup_path"]).name if report.get("backup_path") else "n/a"
+    )
     check_ok(ok_label, f"(strategy: {report.get('strategy')}; backup: {backup_name})")
     f.fixed += 1
 
 
-def _report_structural_damage(f: Finding, should_fix: bool, state_db_path: Path, _DHH: str, reason) -> bool:
+def _report_structural_damage(
+    f: Finding, should_fix: bool, state_db_path: Path, _DHH: str, reason
+) -> bool:
     """True (and reported/repaired) when the canonical b-tree, not just the FTS index, is damaged."""
     from clawk_state_repair import state_db_has_structural_damage
+
     if not state_db_has_structural_damage(state_db_path):
         return False
-    check_warn(f"{_DHH}/state.db has structural corruption (canonical tables/indexes damaged, "
-               "not the FTS index)", f"({reason})")
+    check_warn(
+        f"{_DHH}/state.db has structural corruption (canonical tables/indexes damaged, "
+        "not the FTS index)",
+        f"({reason})",
+    )
     _repair_state_db(f, should_fix, state_db_path, "structural")
     return True
 
 
-def _classify_unreadable_state_db(f: Finding, should_fix: bool, state_db_path: Path, _DHH: str, exc: Exception) -> None:
+def _classify_unreadable_state_db(
+    f: Finding, should_fix: bool, state_db_path: Path, _DHH: str, exc: Exception
+) -> None:
     """Structural damage first; only then schema repair. Avoids SessionDB auto-repair side effects."""
     from clawk_state import is_malformed_db_error
+
     if _report_structural_damage(f, should_fix, state_db_path, _DHH, exc):
         return
     if not is_malformed_db_error(exc):
         return check_warn(f"{_DHH}/state.db exists but has issues: {exc}")
     # sqlite_master itself is malformed (e.g. duplicate messages_fts): every statement fails before it runs,
     # so this is NOT a plain FTS rebuild — repair sqlite_master in place (backup first).
-    check_warn(f"{_DHH}/state.db schema is malformed (sessions hidden until repaired)", f"({exc})")
+    check_warn(
+        f"{_DHH}/state.db schema is malformed (sessions hidden until repaired)",
+        f"({exc})",
+    )
     _repair_state_db(f, should_fix, state_db_path, "schema")
 
 
-def _state_db_health(f: Finding, should_fix: bool, state_db_path: Path, _DHH: str) -> None:
+def _state_db_health(
+    f: Finding, should_fix: bool, state_db_path: Path, _DHH: str
+) -> None:
     """Session count + FTS write-health probe; malformed-schema path when even COUNT(*) fails."""
     try:
         check_ok(f"{_DHH}/state.db exists ({_session_count(state_db_path)} sessions)")
@@ -399,25 +543,40 @@ def _state_db_health(f: Finding, should_fix: bool, state_db_path: Path, _DHH: st
     if _write_reason is not None:
         if _report_structural_damage(f, should_fix, state_db_path, _DHH, _write_reason):
             return
-        check_warn(f"{_DHH}/state.db fails a write-health probe (FTS index may be corrupt)", f"({_write_reason})")
+        check_warn(
+            f"{_DHH}/state.db fails a write-health probe (FTS index may be corrupt)",
+            f"({_write_reason})",
+        )
         _repair_state_db(f, should_fix, state_db_path, "fts")
 
 
 def _state_db_stats(issues: list, state_db_path: Path) -> None:
     """Health/stats snapshot: strictly read-only (mode=ro) so it is safe against a live DB held by
     the gateway; any failure degrades to one info line rather than failing doctor."""
-    with warn_on_error("state.db stats unavailable ({e})", "", report=lambda t, _d: check_info(t)):
+    with warn_on_error(
+        "state.db stats unavailable ({e})", "", report=lambda t, _d: check_info(t)
+    ):
         from clawk_state_dbfile import collect_state_db_stats, count_db_holders
-        rows = _render_state_db_stats(collect_state_db_stats(state_db_path), holders=count_db_holders(state_db_path),
-                                      host_note=host_gateway_note())
+
+        rows = _render_state_db_stats(
+            collect_state_db_stats(state_db_path),
+            holders=count_db_holders(state_db_path),
+            host_note=host_gateway_note(),
+        )
         for _kind, _text, _detail in rows:
             if _kind != "warn":
                 check_info(_text + (f" {_detail}" if _detail else ""))
                 continue
             check_warn(_text, _detail)
             if "auto_prune" in _detail:
-                issues.append("state.db is large — enable sessions.auto_prune in config.yaml"
-                              + (" and run 'clawk sessions optimize-storage' offline (gateway stopped)" if "optimize-storage" in _detail else ""))
+                issues.append(
+                    "state.db is large — enable sessions.auto_prune in config.yaml"
+                    + (
+                        " and run 'clawk sessions optimize-storage' offline (gateway stopped)"
+                        if "optimize-storage" in _detail
+                        else ""
+                    )
+                )
 
 
 def _state_db_wal(f: Finding, should_fix: bool, state_db_path: Path) -> None:
@@ -431,32 +590,48 @@ def _state_db_wal(f: Finding, should_fix: bool, state_db_path: Path) -> None:
             # joins the live WAL — under a running gateway that second-writer handling corrupts state.db.
             # Holder scan first (any other process holding the DB, or an unknown, fails closed), then run the
             # checkpoint on the exclusive repair guard so an opener arriving in between is refused, not joined.
-            from clawk_state_repair import _exclusive_repair_db_guard, _live_writer_holds_db
-            title = f"WAL file is large ({size // (1024*1024)} MB)"
-            _SKIP = ("Large WAL file — cannot prove state.db is quiet (stop the profile's gateway first, then "
-                     "run 'clawk doctor --fix' to checkpoint)")
+            from clawk_state_repair import (
+                _exclusive_repair_db_guard,
+                _live_writer_holds_db,
+            )
+
+            title = f"WAL file is large ({size // (1024 * 1024)} MB)"
+            _SKIP = (
+                "Large WAL file — cannot prove state.db is quiet (stop the profile's gateway first, then "
+                "run 'clawk doctor --fix' to checkpoint)"
+            )
             # Honest disjunction (gate C1): a True here means "held OR unprovable" — never assert a live
             # writer as fact.
             if _live_writer_holds_db(state_db_path):
                 # A large WAL is normal while Desktop or the gateway is running; a bare "run --fix" here sent
                 # users straight into the second-writer trap (#110054).
-                check_warn(title, "(normal while Desktop or the gateway is running, or state.db cannot be "
-                                  "inspected — checkpoint only with them stopped)")
+                check_warn(
+                    title,
+                    "(normal while Desktop or the gateway is running, or state.db cannot be "
+                    "inspected — checkpoint only with them stopped)",
+                )
                 return f.issues.append(_SKIP)
             check_warn(title, "(may indicate missed checkpoints)")
             if not should_fix:
                 return f.issues.append(
-                    "Large WAL file — stop the profile's gateway, then run 'clawk doctor --fix' to checkpoint")
+                    "Large WAL file — stop the profile's gateway, then run 'clawk doctor --fix' to checkpoint"
+                )
             with _exclusive_repair_db_guard(state_db_path) as (guard, guard_error):
                 if guard is None:
-                    check_warn("WAL checkpoint skipped: could not take exclusive ownership of state.db",
-                               f"({guard_error}; stop the profile's gateway and re-run 'clawk doctor --fix')")
+                    check_warn(
+                        "WAL checkpoint skipped: could not take exclusive ownership of state.db",
+                        f"({guard_error}; stop the profile's gateway and re-run 'clawk doctor --fix')",
+                    )
                     return f.issues.append(_SKIP)
                 guard.execute("PRAGMA wal_checkpoint(PASSIVE)")
-            check_ok(f"WAL checkpoint performed ({size // 1024}K → {wal_size() // 1024}K)")
+            check_ok(
+                f"WAL checkpoint performed ({size // 1024}K → {wal_size() // 1024}K)"
+            )
             f.fixed += 1
         elif size > 10 * 1024 * 1024:  # 10 MB
-            check_info(f"WAL file is {size // (1024*1024)} MB (normal for active sessions)")
+            check_info(
+                f"WAL file is {size // (1024 * 1024)} MB (normal for active sessions)"
+            )
 
 
 def _retired_wal_holders(f: Finding, state_db_path: Path, _DHH: str) -> bool:
@@ -466,16 +641,25 @@ def _retired_wal_holders(f: Finding, state_db_path: Path, _DHH: str) -> bool:
     from clawk_constants import profile_cli_selector
     from clawk_state_dbfile import iter_deleted_sqlite_sidecar_holders
     from clawk_state_holders import describe_holder_pid
-    pids = list(dict.fromkeys(pid for pid, _ in iter_deleted_sqlite_sidecar_holders(state_db_path)))
+
+    pids = list(
+        dict.fromkeys(
+            pid for pid, _ in iter_deleted_sqlite_sidecar_holders(state_db_path)
+        )
+    )
     if not pids:
         return False
     rendered = ", ".join(describe_holder_pid(pid) for pid in pids)
-    check_warn(f"{_DHH}/state.db: {len(pids)} process(es) still hold a retired WAL generation ({rendered})",
-               "(every new session refuses to open until they exit; health/stats probes skipped)")
-    f.issues.append(f"state.db retired WAL generation held by {rendered}{host_gateway_note()} — stop the host "
-                    f"gateway, dashboard and cron writers among them ('clawk {profile_cli_selector()}gateway "
-                    "stop' stops the ONE host process serving every profile, quit the Desktop app), do not "
-                    "delete the WAL yourself, then rerun 'clawk doctor'")
+    check_warn(
+        f"{_DHH}/state.db: {len(pids)} process(es) still hold a retired WAL generation ({rendered})",
+        "(every new session refuses to open until they exit; health/stats probes skipped)",
+    )
+    f.issues.append(
+        f"state.db retired WAL generation held by {rendered}{host_gateway_note()} — stop the host "
+        f"gateway, dashboard and cron writers among them ('clawk {profile_cli_selector()}gateway "
+        "stop' stops the ONE host process serving every profile, quit the Desktop app), do not "
+        "delete the WAL yourself, then rerun 'clawk doctor'"
+    )
     return True
 
 
@@ -483,6 +667,7 @@ def _retired_wal_holders(f: Finding, state_db_path: Path, _DHH: str) -> bool:
 def _check_state_db(should_fix: bool, f: Finding) -> None:
     """state.db session count, FTS write health, schema repair, stats snapshot, WAL size."""
     from clawk_cli.doctor import CLAWK_HOME, _DHH
+
     state_db_path = CLAWK_HOME / "state.db"
     # A read-only connect on the new generation is itself another opener, so nothing below may run.
     if _retired_wal_holders(f, state_db_path, _DHH):
@@ -491,7 +676,9 @@ def _check_state_db(should_fix: bool, f: Finding) -> None:
         _state_db_health(f, should_fix, state_db_path, _DHH)
         _state_db_stats(f.issues, state_db_path)
     else:
-        check_info(f"{_DHH}/state.db not created yet (will be created on first session)")
+        check_info(
+            f"{_DHH}/state.db not created yet (will be created on first session)"
+        )
     _state_db_wal(f, should_fix, state_db_path)
 
 
@@ -500,13 +687,20 @@ def _check_cron_store(should_fix: bool, f: Finding) -> None:
     """The cron store accepts writes and its filesystem is not nearly full (jobs skip otherwise)."""
     from clawk_cli.doctor import CLAWK_HOME, _DHH
     from cron.store_health import LOW_FREE_BYTES, free_bytes, probe_report
+
     cron_dir = CLAWK_HOME / "cron"
     if (report := probe_report(cron_dir)) is not None:
-        check_warn(f"{_DHH}/cron/ is NOT writable ({report['error']}) — scheduled cron jobs are being skipped")
-        return f.issues.append(f"Cron store {report['store']} is not writable: {report['fix']}")
+        check_warn(
+            f"{_DHH}/cron/ is NOT writable ({report['error']}) — scheduled cron jobs are being skipped"
+        )
+        return f.issues.append(
+            f"Cron store {report['store']} is not writable: {report['fix']}"
+        )
     free = free_bytes(cron_dir) if cron_dir.is_dir() else None
     if free is not None and free < LOW_FREE_BYTES:
-        check_warn(f"{_DHH}/cron/ filesystem has only {_human_bytes(free)} free — cron jobs stop when it fills")
+        check_warn(
+            f"{_DHH}/cron/ filesystem has only {_human_bytes(free)} free — cron jobs stop when it fills"
+        )
         return f.issues.append(f"Free disk space on the filesystem holding {cron_dir}")
     check_ok(f"{_DHH}/cron/ store is writable")
 
@@ -515,6 +709,7 @@ def _check_cron_store(should_fix: bool, f: Finding) -> None:
 def _check_checkpoint_store(should_fix: bool, f: Finding) -> None:
     """/rollback store footprint: warn when checkpoints are on and the store sits above its cap."""
     from tools.checkpoint_maintenance import checkpoint_footprint_notice
+
     notice = checkpoint_footprint_notice()
     if notice:
         check_warn(notice)
@@ -526,7 +721,9 @@ def _plugin_provenance_rows(plugins_dir) -> list:
     from clawk_cli.plugins_updates import check_local_provenance
 
     if plugins_dir is None or not Path(plugins_dir).is_dir():
-        return [("info", "No plugins directory yet (nothing to check provenance for)", "")]
+        return [
+            ("info", "No plugins directory yet (nothing to check provenance for)", "")
+        ]
     try:
         provenances = plugins_provenance(Path(plugins_dir))
     except (OSError, ValueError, RuntimeError) as exc:
@@ -538,11 +735,19 @@ def _plugin_provenance_rows(plugins_dir) -> list:
         if result.needs_fixing or provenance.klass is ProvenanceClass.DRIFT:
             rows.append(("warn", f"Plugin '{provenance.name}': {detail}", ""))
         elif provenance.klass is ProvenanceClass.MANUAL:
-            rows.append(("info", f"Plugin '{provenance.name}' installed manually", detail))
+            rows.append(
+                ("info", f"Plugin '{provenance.name}' installed manually", detail)
+            )
         elif provenance.klass is ProvenanceClass.SELF_CLONED:
             rows.append(("info", f"Plugin '{provenance.name}': self-cloned", detail))
         else:
-            rows.append(("ok", f"Plugin '{provenance.name}': provenance in good standing", detail))
+            rows.append(
+                (
+                    "ok",
+                    f"Plugin '{provenance.name}': provenance in good standing",
+                    detail,
+                )
+            )
     return rows or [("info", "No provenanced plugins found", "")]
 
 
@@ -551,7 +756,11 @@ def _check_update_provenance(should_fix: bool, f: Finding) -> None:
     """Inspect local plugin update provenance without network or writes."""
     from clawk_constants import get_clawk_home
 
-    printers = {"warn": check_warn, "ok": check_ok, "info": lambda text, detail: check_info(f"{text} {detail}".rstrip())}
+    printers = {
+        "warn": check_warn,
+        "ok": check_ok,
+        "info": lambda text, detail: check_info(f"{text} {detail}".rstrip()),
+    }
     for kind, text, detail in _plugin_provenance_rows(get_clawk_home() / "plugins"):
         printers[kind](text, detail)
 
@@ -570,7 +779,9 @@ def _gh_authenticated() -> bool:
     if not _safe_which("gh"):
         return False
     try:
-        result = subprocess.run(["gh", "auth", "status"], capture_output=True, timeout=10, check=False)
+        result = subprocess.run(
+            ["gh", "auth", "status"], capture_output=True, timeout=10, check=False
+        )
         return result.returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -579,24 +790,48 @@ def _gh_authenticated() -> bool:
 @doctor_check()
 def _check_skills_hub(should_fix: bool, f: Finding) -> None:
     from clawk_cli.doctor import CLAWK_HOME, _DHH
+
     hub_dir = CLAWK_HOME / "skills" / ".hub"
-    if check_bool(hub_dir.exists(), "Skills Hub directory exists", ("Skills Hub directory not initialized", "(run: clawk skills list)")):
+    if check_bool(
+        hub_dir.exists(),
+        "Skills Hub directory exists",
+        ("Skills Hub directory not initialized", "(run: clawk skills list)"),
+    ):
         lock_file = hub_dir / "lock.json"
         if lock_file.exists():
             with warn_on_error("Lock file", "(corrupted or unreadable)"):
                 import json
-                count = len(json.loads(lock_file.read_text(encoding="utf-8-sig")).get("installed", {}))
+
+                count = len(
+                    json.loads(lock_file.read_text(encoding="utf-8-sig")).get(
+                        "installed", {}
+                    )
+                )
                 check_ok(f"Lock file OK ({count} hub-installed skill(s))")
         quarantine = hub_dir / "quarantine"
-        q_count = sum(1 for d in quarantine.iterdir() if d.is_dir()) if quarantine.exists() else 0
+        q_count = (
+            sum(1 for d in quarantine.iterdir() if d.is_dir())
+            if quarantine.exists()
+            else 0
+        )
         if q_count > 0:
             check_warn(f"{q_count} skill(s) in quarantine", "(pending review)")
     from clawk_cli.config import get_env_value
+
     if get_env_value("GITHUB_TOKEN") or get_env_value("GH_TOKEN"):
         check_ok("GitHub token configured", "(validity checked under API Connectivity)")
     else:
-        check_bool(_gh_authenticated(), ("GitHub authenticated via gh CLI", "(full API access — no GITHUB_TOKEN needed)"),
-                   ("No GITHUB_TOKEN", f"(60 req/hr rate limit — set in {_DHH}/.env for better rates)"))
+        check_bool(
+            _gh_authenticated(),
+            (
+                "GitHub authenticated via gh CLI",
+                "(full API access — no GITHUB_TOKEN needed)",
+            ),
+            (
+                "No GITHUB_TOKEN",
+                f"(60 req/hr rate limit — set in {_DHH}/.env for better rates)",
+            ),
+        )
 
 
 # provider -> (checker, ImportError row, ImportError issue, label for "check failed"); every provider
@@ -607,6 +842,7 @@ _MEMORY_PROVIDER_CHECKS: dict = {}
 def _memory_provider_generic(name: str) -> None:
     """Generic check for every memory provider (honcho, hindsight, mem0, openviking, ...)."""
     from plugins.memory import load_memory_provider
+
     _provider = load_memory_provider(name)
     if _provider and _provider.is_available():
         check_ok(f"{name} provider active")
@@ -615,7 +851,12 @@ def _memory_provider_generic(name: str) -> None:
     else:
         from plugins.memory import find_provider_dir
         from clawk_cli.memory_provider_migration import catalog_install_hint
-        hint = catalog_install_hint(name, category="memory") if find_provider_dir(name) is None else None
+
+        hint = (
+            catalog_install_hint(name, category="memory")
+            if find_provider_dir(name) is None
+            else None
+        )
         check_warn(f"{name} plugin not found", f"run: {hint or 'clawk memory setup'}")
 
 
@@ -623,11 +864,16 @@ def _memory_provider_generic(name: str) -> None:
 def _check_memory_provider(should_fix: bool, f: Finding) -> None:
     from clawk_cli.doctor import CLAWK_HOME
     from agent.memory_provider import is_core_memory_provider
+
     name = _doctor_memory_config(CLAWK_HOME).get("provider", "")
     if is_core_memory_provider(name):
-        check_ok("Built-in memory active", "(no external provider configured — this is fine)")
+        check_ok(
+            "Built-in memory active", "(no external provider configured — this is fine)"
+        )
         return
-    checker, missing_row, missing_issue, label = _MEMORY_PROVIDER_CHECKS.get(name, (None, None, None, name))
+    checker, missing_row, missing_issue, label = _MEMORY_PROVIDER_CHECKS.get(
+        name, (None, None, None, name)
+    )
     try:
         checker(f.issues) if checker else _memory_provider_generic(name)
     except ImportError as _e:
@@ -642,8 +888,14 @@ def _check_memory_provider(should_fix: bool, f: Finding) -> None:
 @doctor_check("")  # best-effort: profile enumeration must never break doctor
 def _check_profiles(should_fix: bool, f: Finding) -> None:
     from clawk_constants import PROFILE_ID_RE
-    from clawk_cli.profiles import _wrapper_path, list_profiles, _get_wrapper_dir, profile_exists
+    from clawk_cli.profiles import (
+        _wrapper_path,
+        list_profiles,
+        _get_wrapper_dir,
+        profile_exists,
+    )
     import re as _re
+
     named_profiles = [p for p in list_profiles() if not p.is_default]
     if not named_profiles:
         return
@@ -651,10 +903,17 @@ def _check_profiles(should_fix: bool, f: Finding) -> None:
     check_ok(f"{len(named_profiles)} profile(s) found")
     wrapper_dir = _get_wrapper_dir()
     for p in named_profiles:
-        parts = [text for cond, text in (
-            (p.gateway_running, "gateway running"), (p.model, (p.model or "")[:30]),
-            (not (p.path / "config.yaml").exists(), "⚠ missing config"), (not (p.path / ".env").exists(), "no .env"),
-            (p.alias_path is None, "no alias")) if cond]
+        parts = [
+            text
+            for cond, text in (
+                (p.gateway_running, "gateway running"),
+                (p.model, (p.model or "")[:30]),
+                (not (p.path / "config.yaml").exists(), "⚠ missing config"),
+                (not (p.path / ".env").exists(), "no .env"),
+                (p.alias_path is None, "no alias"),
+            )
+            if cond
+        ]
         check_ok(f"  {p.name}: {', '.join(parts) if parts else 'configured'}")
     # Orphan wrappers
     if wrapper_dir.is_dir():
@@ -662,14 +921,28 @@ def _check_profiles(should_fix: bool, f: Finding) -> None:
             if not wrapper.is_file():
                 continue
             with warn_on_error(""):
-                _m = _re.search(r"clawk -p (\S+)", wrapper.read_text(encoding="utf-8-sig"))
+                _m = _re.search(
+                    r"clawk -p (\S+)", wrapper.read_text(encoding="utf-8-sig")
+                )
                 if _m and not profile_exists(_m.group(1)):
-                    alias = wrapper.stem if _wrapper_path(wrapper.stem) == wrapper else wrapper.name
-                    fix = f"clawk profile alias {alias} --remove" if PROFILE_ID_RE.match(alias) else f"delete {wrapper}"
-                    check_warn(f"Orphan alias: {alias} → profile '{_m.group(1)}' no longer exists", f"(remove with: {fix})")
+                    alias = (
+                        wrapper.stem
+                        if _wrapper_path(wrapper.stem) == wrapper
+                        else wrapper.name
+                    )
+                    fix = (
+                        f"clawk profile alias {alias} --remove"
+                        if PROFILE_ID_RE.match(alias)
+                        else f"delete {wrapper}"
+                    )
+                    check_warn(
+                        f"Orphan alias: {alias} → profile '{_m.group(1)}' no longer exists",
+                        f"(remove with: {fix})",
+                    )
     # Same helper as the multiplex migration preflight, so doctor names the duplicates that make
     # `clawk gateway migrate --multiplex` refuse (and made pre-multiplex standalone gateways race).
     from clawk_cli.gateway_migrate import duplicate_credential_findings
+
     for line in duplicate_credential_findings():
         check_warn("Duplicate platform credential across profiles", f"({line})")
         f.manual_issues.append(line)

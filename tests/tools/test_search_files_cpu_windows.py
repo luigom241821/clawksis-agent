@@ -26,7 +26,9 @@ class RemoteEnvironment:
 
 def _operations(env, scan):
     operations = ShellFileOperations(env)
-    operations._resolve_command = lambda command: "/usr/bin/rg" if command == "rg" else None
+    operations._resolve_command = lambda command: (
+        "/usr/bin/rg" if command == "rg" else None
+    )
     operations._search_files_rg = types.MethodType(scan, operations)
     return operations
 
@@ -253,7 +255,9 @@ def test_empty_filename_roots_are_rejected_before_engine_resolution():
     assert _ACTIVE_FILENAME_SEARCH_ROOTS == set()
 
 
-@pytest.mark.parametrize("raised", [Exception, KeyboardInterrupt, SystemExit, BaseException])
+@pytest.mark.parametrize(
+    "raised", [Exception, KeyboardInterrupt, SystemExit, BaseException]
+)
 def test_admission_releases_after_every_base_exception_path(raised):
     attempts = 0
 
@@ -278,7 +282,9 @@ def test_remote_roots_are_normalized_lexically_against_backend_cwd(monkeypatch):
     env = RemoteEnvironment()
     monkeypatch.setattr(
         "tools.file_operations.os.path.abspath",
-        lambda path: (_ for _ in ()).throw(AssertionError("controller resolution used")),
+        lambda path: (_ for _ in ()).throw(
+            AssertionError("controller resolution used")
+        ),
     )
 
     relative = _normalized_filename_search_root(env, "repo/../repo", "/controller")

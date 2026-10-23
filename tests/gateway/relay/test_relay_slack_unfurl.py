@@ -55,7 +55,9 @@ class _CaptureTransport:
 
 def _slack_adapter(extra):
     a = RelayAdapter(
-        PlatformConfig(extra=extra), make_desc(platform="slack"), transport=_CaptureTransport()
+        PlatformConfig(extra=extra),
+        make_desc(platform="slack"),
+        transport=_CaptureTransport(),
     )
     return a
 
@@ -168,7 +170,9 @@ class TestMediaLaneStampsUnfurl:
 
     @pytest.mark.asyncio
     async def test_media_lane_stamps_explicit_bools(self):
-        a = self._media_adapter({"slack": {"unfurl_links": False, "unfurl_media": False}})
+        a = self._media_adapter(
+            {"slack": {"unfurl_links": False, "unfurl_media": False}}
+        )
         _mark_slack_chat(a)
         res = await a.send_image("chan-1", "https://img.example/x.png", caption="cap")
         assert res.success is True
@@ -217,6 +221,7 @@ class TestSendForPlatformStampsUnfurl:
         await a.send_for_platform(P.SLACK, "C123", "brief")
         assert "unfurl_links" not in a._transport.sent["metadata"]
         assert "unfurl_media" not in a._transport.sent["metadata"]
+
 
 class TestUnfurlDisablesDraftStreaming:
     def test_explicit_unfurl_disables_slack_draft_stream(self):
@@ -276,9 +281,7 @@ class TestFreshFinalForForceOnUnfurl:
 
     def test_force_on_with_link_prefers_fresh_final(self):
         a = self._adapter({"unfurl_links": True, "unfurl_media": True})
-        assert (
-            a.prefers_fresh_final_streaming("see https://studiotwin.ai") is True
-        )
+        assert a.prefers_fresh_final_streaming("see https://studiotwin.ai") is True
 
     def test_force_on_string_true_prefers_fresh_final(self):
         # clawk config set / Railway knobs persist YAML strings.
@@ -287,9 +290,7 @@ class TestFreshFinalForForceOnUnfurl:
 
     def test_force_on_mrkdwn_link_prefers_fresh_final(self):
         a = self._adapter({"unfurl_links": True})
-        assert (
-            a.prefers_fresh_final_streaming("see <https://x.dev|x.dev>") is True
-        )
+        assert a.prefers_fresh_final_streaming("see <https://x.dev|x.dev>") is True
 
     def test_force_on_without_link_keeps_edit_lane(self):
         # No URL => nothing to unfurl; a fresh final would only duplicate
@@ -301,15 +302,11 @@ class TestFreshFinalForForceOnUnfurl:
         # Enterprise fail-closed posture: suppression is decided at the
         # placeholder post; the edit lane preserves it. No UX change.
         a = self._adapter({"unfurl_links": False, "unfurl_media": False})
-        assert (
-            a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
-        )
+        assert a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
 
     def test_unconfigured_keeps_edit_lane(self):
         a = self._adapter({})
-        assert (
-            a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
-        )
+        assert a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
 
     def test_non_slack_platform_keeps_edit_lane(self):
         a = RelayAdapter(
@@ -321,9 +318,7 @@ class TestFreshFinalForForceOnUnfurl:
             ),
             transport=_CaptureTransport(),
         )
-        assert (
-            a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
-        )
+        assert a.prefers_fresh_final_streaming("see https://studiotwin.ai") is False
 
 
 class _RecordingTransport(_CaptureTransport):
@@ -355,7 +350,9 @@ class TestConsumerRoutesForceOnFinalAsFreshSend:
 
         transport = _RecordingTransport()
         a = RelayAdapter(
-            PlatformConfig(extra={"slack": {"unfurl_links": True, "unfurl_media": True}}),
+            PlatformConfig(
+                extra={"slack": {"unfurl_links": True, "unfurl_media": True}}
+            ),
             make_desc(platform="slack", supports_edit=True),
             transport=transport,
         )
@@ -368,9 +365,7 @@ class TestConsumerRoutesForceOnFinalAsFreshSend:
         # early-frame shape from the live regression).
         await consumer._send_or_edit("Working on it…")
         # Final: the URL exists only now.
-        await consumer._send_or_edit(
-            "see https://studiotwin.ai", finalize=True
-        )
+        await consumer._send_or_edit("see https://studiotwin.ai", finalize=True)
 
         ops = [x.get("op") for x in transport.actions]
         # Placeholder went out as a send; the FINAL must be a fresh send
@@ -392,7 +387,9 @@ class TestConsumerRoutesForceOnFinalAsFreshSend:
 
         transport = _RecordingTransport()
         a = RelayAdapter(
-            PlatformConfig(extra={"slack": {"unfurl_links": False, "unfurl_media": False}}),
+            PlatformConfig(
+                extra={"slack": {"unfurl_links": False, "unfurl_media": False}}
+            ),
             make_desc(platform="slack", supports_edit=True),
             transport=transport,
         )
@@ -451,7 +448,9 @@ class TestMultiplexPerChatFreshFinalSeam:
         )
 
         return GatewayStreamConsumer(
-            adapter=adapter, chat_id=chat_id, config=StreamConsumerConfig(),
+            adapter=adapter,
+            chat_id=chat_id,
+            config=StreamConsumerConfig(),
         )
 
     @pytest.mark.asyncio
@@ -541,7 +540,9 @@ class TestDeleteOpForFreshFinalCleanup:
 
         transport = _RecordingTransport()
         a = RelayAdapter(
-            PlatformConfig(extra={"slack": {"unfurl_links": True, "unfurl_media": True}}),
+            PlatformConfig(
+                extra={"slack": {"unfurl_links": True, "unfurl_media": True}}
+            ),
             make_desc(
                 platform="slack",
                 supports_edit=True,

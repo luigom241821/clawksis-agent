@@ -20,6 +20,7 @@ fed only by rejections that name the *capability* — not by schema-validation 4
 do implement ``json_schema`` ("Invalid schema for response_format 'json_schema': additionalProperties
 must be false"), which the ladder still retries once but which say nothing about the next schema.
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,8 +34,15 @@ _REJECTED_ROUTES: set[tuple[str, str, str]] = set()
 
 # Rejections that describe the route/model's capability rather than this request's schema.
 _CAPABILITY_REJECTION_MARKERS = (
-    "unavailable", "does not support", "doesn't support", "not supported", "unsupported parameter",
-    "unsupported_parameter", "unknown parameter", "unrecognized request argument", "unrecognized parameter",
+    "unavailable",
+    "does not support",
+    "doesn't support",
+    "not supported",
+    "unsupported parameter",
+    "unsupported_parameter",
+    "unknown parameter",
+    "unrecognized request argument",
+    "unrecognized parameter",
     "extra inputs are not permitted",
 )
 
@@ -42,30 +50,44 @@ _CAPABILITY_REJECTION_MARKERS = (
 def _route_key(provider: Optional[str], base_url: Optional[str]) -> str:
     """Endpoint host:port when known (a base_url override turns a named provider into ``custom``; local
     servers differ by port), else the provider name."""
-    return (urlparse(base_url or "").netloc or "").lower() or str(provider or "").strip().lower()
+    return (urlparse(base_url or "").netloc or "").lower() or str(
+        provider or ""
+    ).strip().lower()
 
 
 def _response_format_type(request_kwargs: dict[str, Any]) -> Optional[str]:
     extra_body = request_kwargs.get("extra_body")
-    response_format = (extra_body or {}).get("response_format") if isinstance(extra_body, dict) else None
+    response_format = (
+        (extra_body or {}).get("response_format")
+        if isinstance(extra_body, dict)
+        else None
+    )
     if response_format is None:
         response_format = request_kwargs.get("response_format")
     return response_format.get("type") if isinstance(response_format, dict) else None
 
 
-def _profile_unsupported_formats(provider: Optional[str], base_url: Optional[str]) -> tuple:
+def _profile_unsupported_formats(
+    provider: Optional[str], base_url: Optional[str]
+) -> tuple:
     """The provider profile's declared unsupported types; a ``custom`` route whose base_url is a profiled
     provider's own host (``api.deepseek.com``) gets that provider's profile."""
     try:
         from providers import get_provider_profile
+
         name = str(provider or "").strip().lower()
         if name == "custom" and base_url:
             from agent.model_metadata import _infer_provider_from_url
+
             name = _infer_provider_from_url(base_url) or name
         profile = get_provider_profile(name)
     except Exception:
         return ()
-    return tuple(getattr(profile, "unsupported_response_formats", ()) or ()) if profile is not None else ()
+    return (
+        tuple(getattr(profile, "unsupported_response_formats", ()) or ())
+        if profile is not None
+        else ()
+    )
 
 
 def is_capability_rejection(error: Optional[BaseException]) -> bool:
@@ -78,35 +100,53 @@ def is_capability_rejection(error: Optional[BaseException]) -> bool:
 
 
 def remember_structured_output_rejection(
-    provider: Optional[str], base_url: Optional[str], rejected_kwargs: dict[str, Any], error: BaseException,
+    provider: Optional[str],
+    base_url: Optional[str],
+    rejected_kwargs: dict[str, Any],
+    error: BaseException,
 ) -> None:
     """Record that this route's ``rejected_kwargs["model"]`` rejected the ``response_format`` type carried
     by *rejected_kwargs* — only when *error* names the capability, never for a schema-validation 400."""
     format_type = _response_format_type(rejected_kwargs)
     if format_type and is_capability_rejection(error):
-        _REJECTED_ROUTES.add((_route_key(provider, base_url), str(rejected_kwargs.get("model") or ""), format_type))
+        _REJECTED_ROUTES.add(
+            (
+                _route_key(provider, base_url),
+                str(rejected_kwargs.get("model") or ""),
+                format_type,
+            )
+        )
 
 
 def without_unsupported_response_format(
-    extra_body: dict[str, Any], provider: Optional[str], base_url: Optional[str], model: Optional[str],
+    extra_body: dict[str, Any],
+    provider: Optional[str],
+    base_url: Optional[str],
+    model: Optional[str],
     task: Optional[str] = None,
 ) -> dict[str, Any]:
     """*extra_body* minus a ``response_format`` whose type this route+model is known to reject; unchanged
     otherwise."""
     response_format = extra_body.get("response_format")
-    format_type = response_format.get("type") if isinstance(response_format, dict) else None
+    format_type = (
+        response_format.get("type") if isinstance(response_format, dict) else None
+    )
     if not format_type:
         return extra_body
     known_unsupported = (
         format_type in _profile_unsupported_formats(provider, base_url)
-        or (_route_key(provider, base_url), str(model or ""), format_type) in _REJECTED_ROUTES
+        or (_route_key(provider, base_url), str(model or ""), format_type)
+        in _REJECTED_ROUTES
     )
     if not known_unsupported:
         return extra_body
     logger.info(
         "Auxiliary %s: %s (%s) does not accept response_format %s; sending without it "
         "(schema enforcement degrades to prompt compliance)",
-        task or "call", _route_key(provider, base_url) or "provider", model or "model", format_type,
+        task or "call",
+        _route_key(provider, base_url) or "provider",
+        model or "model",
+        format_type,
     )
     return {k: v for k, v in extra_body.items() if k != "response_format"}
 

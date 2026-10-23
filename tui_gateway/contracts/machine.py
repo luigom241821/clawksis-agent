@@ -38,5 +38,9 @@ class MachineFactsResult(Result):
     locale: str | None = None
 
 
-method("machine.facts", params=Params, result=MachineFactsResult,
-       doc="Facts about the machine running this backend and its OS account, for the desktop first run.")
+method(
+    "machine.facts",
+    params=Params,
+    result=MachineFactsResult,
+    doc="Facts about the machine running this backend and its OS account, for the desktop first run.",
+)

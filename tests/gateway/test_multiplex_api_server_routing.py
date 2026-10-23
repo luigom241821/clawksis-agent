@@ -4,6 +4,7 @@ Mirrors ``test_multiplex_http_routing.py`` (webhook): the default listener
 owns the port, and secondary profiles are reached via a URL prefix when
 ``gateway.multiplex_profiles`` is on.
 """
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -17,7 +18,9 @@ from gateway.platforms.api_server import (
 
 
 def _make_adapter(multiplex: bool = True) -> APIServerAdapter:
-    cfg = PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "port": 8642, "key": "test-key"})
+    cfg = PlatformConfig(
+        enabled=True, extra={"host": "127.0.0.1", "port": 8642, "key": "test-key"}
+    )
     adapter = APIServerAdapter(cfg)
 
     class _Runner:
@@ -48,15 +51,12 @@ class TestApiServerProfileResolution:
         )
 
         assert (
-            adapter._resolve_request_profile(cast(Any, _FakeReq("worker")))
-            == "worker"
+            adapter._resolve_request_profile(cast(Any, _FakeReq("worker"))) == "worker"
         )
         assert (
             adapter._resolve_request_profile(cast(Any, _FakeReq("restricted")))
             is _PROFILE_REJECTED
         )
-
-
 
 
 class TestApiServerModelsUnderProfile:
@@ -113,7 +113,10 @@ class TestApiServerSessionProfileBinding:
         monkeypatch.delenv("TERMINAL_DOCKER_SHARED_CONTAINER_KEY", raising=False)
 
         tokens = adapter._bind_api_server_session(
-            chat_id="chat", session_key="key", session_id="sess", profile="nm-media",
+            chat_id="chat",
+            session_key="key",
+            session_id="sess",
+            profile="nm-media",
         )
         try:
             assert tt._resolve_container_task_id(None) == "profile:nm-media"

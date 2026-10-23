@@ -1,4 +1,5 @@
 """Live subprocesses, real ledger I/O, and isolated profile homes."""
+
 from __future__ import annotations
 
 import json
@@ -38,7 +39,10 @@ sys.stdin.readline()
 """
     child = subprocess.Popen(
         [sys.executable, "-u", "-c", script, str(install)],
-        env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
     )
     try:
@@ -59,9 +63,18 @@ def test_warning_tracks_live_other_install_in_same_home(homes, tmp_path):
         warning = shared_profile_warning(project_root=current)
         assert warning and "profile" in warning.lower()
         assert shared_profile_warning(project_root=other) == ""
-        entry = next(e for e in process_identity.ledger_entries(project_root=other) if e["pid"] == child.pid)
+        entry = next(
+            e
+            for e in process_identity.ledger_entries(project_root=other)
+            if e["pid"] == child.pid
+        )
         assert entry["clawk_home"] == clawk_home_key(homes)
-        assert shared_profile_warning(home=homes / "profiles" / "work", project_root=current) == ""
+        assert (
+            shared_profile_warning(
+                home=homes / "profiles" / "work", project_root=current
+            )
+            == ""
+        )
     # A stale file is not proof of concurrent use.
     assert process_identity._ledger_path().exists()
     assert shared_profile_warning(project_root=current) == ""
@@ -75,7 +88,12 @@ def test_warning_tracks_live_other_install_in_same_home(homes, tmp_path):
 @contextmanager
 def running_cli(home: Path, install: Path):
     """Run the real CLI constructor and entrypoint; stop at terminal interaction."""
-    env = dict(os.environ, CLAWK_HOME=str(home), HOME=str(home.parent), USERPROFILE=str(home.parent))
+    env = dict(
+        os.environ,
+        CLAWK_HOME=str(home),
+        HOME=str(home.parent),
+        USERPROFILE=str(home.parent),
+    )
     for key in ("CLAWK_SPAWN", "CLAWK_PARENT_PID", "CLAWK_PARENT_START_MARKER"):
         env.pop(key, None)
     script = """
@@ -97,7 +115,10 @@ cli.main(model='test-model', provider='openai', api_key='test-only',
     output = {}
     child = subprocess.Popen(
         [sys.executable, "-u", "-c", script, str(install)],
-        env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env=env,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
     )
     try:
@@ -114,7 +135,9 @@ cli.main(model='test-model', provider='openai', api_key='test-only',
 
 
 @pytest.mark.parametrize("other_surface", ["serve", "cli"])
-def test_cli_entrypoint_registers_and_warns_once_for_live_shared_home(homes, tmp_path, monkeypatch, other_surface):
+def test_cli_entrypoint_registers_and_warns_once_for_live_shared_home(
+    homes, tmp_path, monkeypatch, other_surface
+):
     from clawk_cli.shared_profile_warning import shared_profile_warning
 
     stable = tmp_path / "stable"
@@ -122,7 +145,9 @@ def test_cli_entrypoint_registers_and_warns_once_for_live_shared_home(homes, tmp
     start_other = running_install if other_surface == "serve" else running_cli
     with start_other(homes, stable):
         with running_cli(homes, canary) as (child, output):
-            entries = process_identity.ledger_entries(project_root=canary, verified_only=True)
+            entries = process_identity.ledger_entries(
+                project_root=canary, verified_only=True
+            )
             own = [entry for entry in entries if entry["pid"] == child.pid]
             assert len(own) == 1
             assert own[0]["purpose"] == "cli"
@@ -157,12 +182,16 @@ def test_cli_startup_quarantines_corrupt_ledger(homes, tmp_path, corrupt):
     install = tmp_path / "cli-install"
     with running_cli(homes, install) as (child, _):
         assert ledger.with_suffix(".json.corrupt").read_bytes() == corrupt
-        entries = process_identity.ledger_entries(project_root=install, verified_only=True)
+        entries = process_identity.ledger_entries(
+            project_root=install, verified_only=True
+        )
         assert [entry["pid"] for entry in entries] == [child.pid]
         assert entries[0]["clawk_home"] == clawk_home_key(homes)
 
 
-def test_status_surfaces_live_warning_without_host_details(homes, tmp_path, monkeypatch):
+def test_status_surfaces_live_warning_without_host_details(
+    homes, tmp_path, monkeypatch
+):
     from fastapi.testclient import TestClient
     from clawk_cli import web_server
 
@@ -210,6 +239,7 @@ def test_warning_rejects_reused_or_unverifiable_process_identity(homes, tmp_path
 
         # Even a valid record is not live proof if the process probe is unavailable.
         from unittest.mock import patch
+
         with patch.object(process_identity, "_pid_alive_matches", return_value=None):
             assert shared_profile_warning(project_root=current) == ""
         assert shared_profile_warning(project_root=current)

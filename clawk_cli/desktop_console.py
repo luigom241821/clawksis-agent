@@ -43,7 +43,11 @@ def desktop_console_output(*, source_mode: bool):
                         data = stream.readline(8192)
                     logger.log(level, "[desktop] [oversized line omitted]")
                 else:
-                    logger.log(level, "[desktop] %s", data.decode("utf-8", errors="replace").rstrip())
+                    logger.log(
+                        level,
+                        "[desktop] %s",
+                        data.decode("utf-8", errors="replace").rstrip(),
+                    )
 
     streams = {}
     readers = []
@@ -53,7 +57,10 @@ def desktop_console_output(*, source_mode: bool):
             read_fd, write_fd = os.pipe()
             streams[name] = write_fd
             reader = threading.Thread(
-                target=drain, args=(read_fd, level), name=f"desktop-console-{name}", daemon=True,
+                target=drain,
+                args=(read_fd, level),
+                name=f"desktop-console-{name}",
+                daemon=True,
             )
             try:
                 reader.start()

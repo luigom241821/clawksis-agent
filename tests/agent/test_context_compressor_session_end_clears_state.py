@@ -93,10 +93,6 @@ def _simulate_cron_session_state(c):
     c.awaiting_real_usage_after_compression = True
 
 
-
-
-
-
 def test_ineffective_compression_count_does_not_leak_across_sessions():
     """A cron session that hit ineffective compression limits must not
     suppress compression in a subsequent live session."""

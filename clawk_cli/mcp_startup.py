@@ -57,7 +57,10 @@ def _has_configured_mcp_servers() -> bool:
         from clawk_cli.config import read_raw_config
 
         raw_config = read_raw_config() or {}
-        if isinstance(raw_config.get("mcp_servers"), dict) and raw_config["mcp_servers"]:
+        if (
+            isinstance(raw_config.get("mcp_servers"), dict)
+            and raw_config["mcp_servers"]
+        ):
             return True
         from clawk_cli.agent_plugins import has_enabled_agent_plugin_mcp
 
@@ -74,7 +77,10 @@ def _discovery_registered_servers(status) -> bool:
     the zero-connected warning fired on every startup and the retry path re-ran discovery
     on every later call (#111717).
     """
-    return any(entry.get("connected") or entry.get("status") == "lazy" for entry in (status or []))
+    return any(
+        entry.get("connected") or entry.get("status") == "lazy"
+        for entry in (status or [])
+    )
 
 
 def _any_mcp_connected() -> bool:
@@ -87,7 +93,11 @@ def _servers_awaiting_connect() -> list[str]:
     from tools.mcp_tool_discovery import mcp_servers_awaiting_connect
 
     pending = mcp_servers_awaiting_connect()
-    return pending if _mcp_server_filter is None else [n for n in pending if n in _mcp_server_filter]
+    return (
+        pending
+        if _mcp_server_filter is None
+        else [n for n in pending if n in _mcp_server_filter]
+    )
 
 
 def start_background_mcp_discovery(*, logger, thread_name: str) -> None:
@@ -113,7 +123,10 @@ def start_background_mcp_discovery(*, logger, thread_name: str) -> None:
             if connected and not pending:
                 return
             if connected:
-                logger.info("MCP server(s) %s not connected yet; running discovery", ", ".join(pending))
+                logger.info(
+                    "MCP server(s) %s not connected yet; running discovery",
+                    ", ".join(pending),
+                )
             else:
                 logger.warning(
                     "Background MCP discovery previously exited with no connected "
@@ -137,21 +150,30 @@ def start_background_mcp_discovery(*, logger, thread_name: str) -> None:
                 _discover_mcp_tools_without_interactive_oauth()
                 try:
                     if not _any_mcp_connected():
-                        logger.warning("Background MCP discovery completed with zero connected servers")
+                        logger.warning(
+                            "Background MCP discovery completed with zero connected servers"
+                        )
                 except Exception:
-                    logger.debug("Failed to inspect MCP status after background discovery", exc_info=True)
+                    logger.debug(
+                        "Failed to inspect MCP status after background discovery",
+                        exc_info=True,
+                    )
             except Exception:
                 logger.debug("Background MCP tool discovery failed", exc_info=True)
             finally:
                 with _mcp_discovery_lock:
                     _mcp_discovery_thread.pop(home_key, None)
 
-        thread = threading.Thread(target=copy_context().run, args=(_discover,), name=thread_name, daemon=True)
+        thread = threading.Thread(
+            target=copy_context().run, args=(_discover,), name=thread_name, daemon=True
+        )
         _mcp_discovery_thread[home_key] = thread
         thread.start()
 
 
-def _resolve_discovery_timeout(explicit: float | None, *, single_query: bool = False) -> float:
+def _resolve_discovery_timeout(
+    explicit: float | None, *, single_query: bool = False
+) -> float:
     """Resolve the MCP discovery wait bound: explicit arg > config.yaml > ``DEFAULT_CONFIG``.
 
     Lazy and fail-safe: a missing/invalid value or broken config falls back to a short bound so
@@ -159,7 +181,11 @@ def _resolve_discovery_timeout(explicit: float | None, *, single_query: bool = F
     """
     if explicit is not None:
         return explicit
-    key = "mcp_single_query_discovery_timeout" if single_query else "mcp_discovery_timeout"
+    key = (
+        "mcp_single_query_discovery_timeout"
+        if single_query
+        else "mcp_discovery_timeout"
+    )
     fallback = 15.0 if single_query else 1.5
     try:
         from clawk_cli.config import load_config, DEFAULT_CONFIG
@@ -214,7 +240,9 @@ def _discover_mcp_tools_without_interactive_oauth() -> None:
             discover_mcp_tools(allowed_mcp_names=_mcp_server_filter)
 
 
-def defer_background_mcp_discovery(*, logger, thread_name: str, delay: float | None) -> None:
+def defer_background_mcp_discovery(
+    *, logger, thread_name: str, delay: float | None
+) -> None:
     """Arm ``start_background_mcp_discovery`` to run ``delay`` seconds from now.
 
     Used by the Desktop ``serve`` backend after its socket is announced: the thread's first act is
@@ -227,7 +255,10 @@ def defer_background_mcp_discovery(*, logger, thread_name: str, delay: float | N
     """
     global _mcp_discovery_deferred
     with _mcp_discovery_lock:
-        if clawk_home_key() in _mcp_discovery_started or _mcp_discovery_deferred is not None:
+        if (
+            clawk_home_key() in _mcp_discovery_started
+            or _mcp_discovery_deferred is not None
+        ):
             return
 
         def _fire() -> None:
@@ -249,7 +280,9 @@ def defer_background_mcp_discovery(*, logger, thread_name: str, delay: float | N
 def start_deferred_mcp_discovery_now() -> None:
     """Run an armed deferred start immediately (idempotent, thread-safe)."""
     global _mcp_discovery_deferred
-    with _mcp_discovery_lock:  # take the slot atomically: two racing first clients fire once
+    with (
+        _mcp_discovery_lock
+    ):  # take the slot atomically: two racing first clients fire once
         timer, _mcp_discovery_deferred = _mcp_discovery_deferred, None
     if timer is None:
         return
@@ -257,7 +290,9 @@ def start_deferred_mcp_discovery_now() -> None:
     timer.function()
 
 
-def wait_for_mcp_discovery(timeout: float | None = None, *, single_query: bool = False) -> None:
+def wait_for_mcp_discovery(
+    timeout: float | None = None, *, single_query: bool = False
+) -> None:
     """Wait for background MCP discovery before the first tool snapshot.
 
     ``join`` returns the instant discovery completes, so this only blocks for a still-pending
@@ -305,7 +340,8 @@ def ensure_mcp_discovery_before_agent_build(
     logger,
     timeout: float | None = None,
     single_query: bool = False,
-    thread_name: str = "cli-mcp-discovery") -> None:
+    thread_name: str = "cli-mcp-discovery",
+) -> None:
     """Give configured MCP tools a bounded chance to register before AIAgent.
 
     Non-interactive first turns (``chat -q``, ``clawk -z``) can construct ``AIAgent`` before any
@@ -316,4 +352,6 @@ def ensure_mcp_discovery_before_agent_build(
         start_background_mcp_discovery(logger=logger, thread_name=thread_name)
         wait_for_mcp_discovery(timeout=timeout, single_query=single_query)
     except Exception:
-        logger.debug("MCP discovery readiness check failed before agent build", exc_info=True)
+        logger.debug(
+            "MCP discovery readiness check failed before agent build", exc_info=True
+        )

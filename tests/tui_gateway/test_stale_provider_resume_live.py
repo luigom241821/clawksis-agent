@@ -155,7 +155,11 @@ def _teardown(server, resp) -> None:
     live_sid = (resp.get("result") or {}).get("session_id")
     if live_sid:
         server.handle_request(
-            {"id": "close", "method": "session.close", "params": {"session_id": live_sid}}
+            {
+                "id": "close",
+                "method": "session.close",
+                "params": {"session_id": live_sid},
+            }
         )
 
 
@@ -200,7 +204,9 @@ class TestStaleProviderResumeLive:
         sid = _seed_session_row(home, title="Bot Chat", provider="custom:deadbot")
         resp = _resume(server, sid)
         try:
-            assert "error" not in resp, f"Bot Chat resume failed live: {resp.get('error')}"
+            assert "error" not in resp, (
+                f"Bot Chat resume failed live: {resp.get('error')}"
+            )
             info = (resp.get("result") or {}).get("info") or {}
             assert "deadbot" not in json.dumps(info)
         finally:

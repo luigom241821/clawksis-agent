@@ -36,7 +36,9 @@ def test_filename_and_wheel_tags_rewritten_consistently(wheel: Path) -> None:
 
     assert new_path.name == f"fakedep-1.2.3-py3-none-{ANDROID_TAG}.whl"
     verify_record(new_path)
-    assert not wheel.exists(), "the original wheel must be replaced, not left beside the new one"
+    assert not wheel.exists(), (
+        "the original wheel must be replaced, not left beside the new one"
+    )
 
     with zipfile.ZipFile(new_path) as zf:
         wheel_txt = zf.read("fakedep-1.2.3.dist-info/WHEEL").decode("utf-8")

@@ -13,13 +13,17 @@ router = APIRouter(prefix="/api/memory/providers")
 def _resolve_flow(provider: str):
     """Return a provider's ``oauth_flow`` module (bundled or user-dir copy), or raise 404."""
     if not provider.isidentifier():
-        raise HTTPException(status_code=404, detail=f"unknown memory provider {provider!r}")
+        raise HTTPException(
+            status_code=404, detail=f"unknown memory provider {provider!r}"
+        )
     from plugins.memory import import_provider_module
 
     try:
         return import_provider_module(provider, "oauth_flow")
     except ImportError:
-        raise HTTPException(status_code=404, detail=f"{provider} does not support OAuth connect")
+        raise HTTPException(
+            status_code=404, detail=f"{provider} does not support OAuth connect"
+        )
 
 
 @contextmanager
@@ -39,7 +43,9 @@ def _scope_to_profile(profile: Optional[str]):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not profiles_mod.profile_exists(requested):
-        raise HTTPException(status_code=404, detail=f"Profile '{requested}' does not exist.")
+        raise HTTPException(
+            status_code=404, detail=f"Profile '{requested}' does not exist."
+        )
 
     token = set_clawk_home_override(str(profiles_mod.get_profile_dir(requested)))
     try:
@@ -59,7 +65,9 @@ async def start_memory_oauth(provider: str, profile: Optional[str] = None):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to start {provider} OAuth: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to start {provider} OAuth: {exc}"
+        )
 
 
 @router.get("/{provider}/oauth/status")
@@ -72,4 +80,6 @@ async def memory_oauth_status(provider: str, profile: Optional[str] = None):
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read {provider} OAuth status: {exc}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read {provider} OAuth status: {exc}"
+        )

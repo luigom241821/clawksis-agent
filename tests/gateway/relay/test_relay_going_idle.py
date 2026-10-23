@@ -17,7 +17,9 @@ import pytest_asyncio
 
 from gateway.relay.ws_transport import WebSocketRelayTransport, WEBSOCKETS_AVAILABLE
 
-pytestmark = pytest.mark.skipif(not WEBSOCKETS_AVAILABLE, reason="websockets not installed")
+pytestmark = pytest.mark.skipif(
+    not WEBSOCKETS_AVAILABLE, reason="websockets not installed"
+)
 
 if WEBSOCKETS_AVAILABLE:
     import websockets
@@ -76,7 +78,9 @@ class _IdleAwareServer:
     async def _on_frame(self, ws, frame):
         ftype = frame.get("type")
         if ftype == "hello":
-            await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+            await ws.send(
+                json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n"
+            )
             for f in self._to_push:
                 await ws.send(json.dumps(f) + "\n")
         elif ftype == "going_idle":
@@ -150,16 +154,23 @@ async def test_reconnect_redials_after_unexpected_close():
                     continue
                 frame = json.loads(line)
                 if frame.get("type") == "hello":
-                    await ws.send(json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR}) + "\n")
+                    await ws.send(
+                        json.dumps({"type": "descriptor", "descriptor": DESCRIPTOR})
+                        + "\n"
+                    )
                     if drops["n"] == 0:
                         drops["n"] += 1
-                        await ws.close()  # force an unexpected close on the first connection
+                        await (
+                            ws.close()
+                        )  # force an unexpected close on the first connection
                         return
 
     srv._server = await websockets.serve(handle, "127.0.0.1", 0)
     sock = next(iter(srv._server.sockets))
     srv.url = f"ws://127.0.0.1:{sock.getsockname()[1]}"
-    t = WebSocketRelayTransport(srv.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05)
+    t = WebSocketRelayTransport(
+        srv.url, "discord", "appShared", reconnect=True, reconnect_backoff_s=0.05
+    )
     try:
         await t.connect()
         await t.handshake()
@@ -227,6 +238,7 @@ async def test_go_dormant_redials_on_wake_and_drains(server):
     finally:
         await t.disconnect()
 
+
 def _relay_descriptor():
     """Placeholder descriptor for the adapter tests below."""
     from gateway.relay.descriptor import CONTRACT_VERSION, CapabilityDescriptor
@@ -242,7 +254,6 @@ def _relay_descriptor():
         markdown_dialect="plain",
         len_unit="chars",
     )
-
 
 
 def test_adapter_reports_false_when_the_transport_hold_fails():
@@ -283,8 +294,6 @@ def test_adapter_reports_false_when_the_transport_hold_fails():
     assert working.calls == ["hold"]
 
 
-
-
 @pytest.mark.asyncio
 async def test_go_dormant_leaves_the_socket_open_when_the_ack_is_missed(server):
     """No ack means nothing will suspend us, so closing would only cost a needless disconnect/reconnect cycle while the agent keeps serving."""
@@ -293,6 +302,7 @@ async def test_go_dormant_leaves_the_socket_open_when_the_ack_is_missed(server):
     )
     await t.connect()
     try:
+
         async def no_ack(timeout_s=None):
             return False
 
@@ -326,5 +336,3 @@ async def test_adapter_go_dormant_delegates_to_transport(server):
         assert transport._dormant is True
     finally:
         await adapter.disconnect()
-
-

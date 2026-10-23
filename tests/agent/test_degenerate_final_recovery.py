@@ -25,6 +25,7 @@ from agent.conversation_loop import _DEGENERATE_FINAL_NUDGE
 def loop_agent():
     """AIAgent with a mocked OpenAI client (mirrors test_dropped_tool_call_recovery)."""
     from run_agent import AIAgent
+
     with (
         patch("model_tools.get_tool_definitions", return_value=[]),
         patch("model_tools.check_toolset_requirements", return_value={}),
@@ -61,14 +62,19 @@ def _run(agent, stages):
 
 def _tool_round(call_id):
     from tests.agent.test_run_agent import _mock_response, _mock_tool_call
+
     return _mock_response(
-        content="", finish_reason="tool_calls",
-        tool_calls=[_mock_tool_call(name="web_search", arguments="{}", call_id=call_id)],
+        content="",
+        finish_reason="tool_calls",
+        tool_calls=[
+            _mock_tool_call(name="web_search", arguments="{}", call_id=call_id)
+        ],
     )
 
 
 def _final(text):
     from tests.agent.test_run_agent import _mock_response
+
     return _mock_response(content=text, finish_reason="stop")
 
 
@@ -79,7 +85,10 @@ def _user_rows_sent(agent, call_index):
 
 class TestFragmentAfterToolWork:
     def test_fragment_after_tool_work_reprompts_instead_of_exiting(self, loop_agent):
-        result = _run(loop_agent, [_tool_round("call_1"), _final("пар"), _final("Workbook built: 3 sheets.")])
+        result = _run(
+            loop_agent,
+            [_tool_round("call_1"), _final("пар"), _final("Workbook built: 3 sheets.")],
+        )
 
         assert result["final_response"] == "Workbook built: 3 sheets."
         assert loop_agent.client.chat.completions.create.call_count == 3
@@ -92,7 +101,9 @@ class TestFragmentAfterToolWork:
     def test_persistent_collapse_is_bounded_and_keeps_the_fragment(self, loop_agent):
         """One re-prompt per collapse: the nudge row closes the tool-work window, so a second
         fragment is the answer — today's behaviour, never a loop."""
-        result = _run(loop_agent, [_tool_round("call_1"), _final("пар"), _final("?warming up")])
+        result = _run(
+            loop_agent, [_tool_round("call_1"), _final("пар"), _final("?warming up")]
+        )
 
         assert loop_agent.client.chat.completions.create.call_count == 3
         assert result["final_response"] == "?warming up"
@@ -108,25 +119,71 @@ class TestFragmentAfterToolWork:
 class TestLooksLikeDegenerateFinal:
     EN = "Build the workbook and report back."
 
-    @pytest.mark.parametrize("text", ["пар", "?warming up", ",and", "ошибка", "!warming"])
+    @pytest.mark.parametrize(
+        "text", ["пар", "?warming up", ",and", "ошибка", "!warming"]
+    )
     def test_fragments_in_an_english_conversation(self, text):
         assert looks_like_degenerate_final(text, user_message=self.EN)
 
-    @pytest.mark.parametrize("text", [
-        # Terse legitimate answers that reviewers showed a shape-only guard re-prompting (#111472).
-        "42", "SQLite", "report.csv", "3.14159", "€12.50", "你好。", "Done.", "True", "a51143fbbe",
-        "2026-09-19", "/tmp/out.log", "$5", "#123", "-1", "(a)", ".env", "~/x", "+1", "✅",
-        ":8080", "::1", ":)", ";;", ":=", "}", "N/A", "**Done**", "`ok`", "{}", "null",
-        "Reading is a skill", "The answer is 43.", "x" * 25, "",
-    ])
+    @pytest.mark.parametrize(
+        "text",
+        [
+            # Terse legitimate answers that reviewers showed a shape-only guard re-prompting (#111472).
+            "42",
+            "SQLite",
+            "report.csv",
+            "3.14159",
+            "€12.50",
+            "你好。",
+            "Done.",
+            "True",
+            "a51143fbbe",
+            "2026-09-19",
+            "/tmp/out.log",
+            "$5",
+            "#123",
+            "-1",
+            "(a)",
+            ".env",
+            "~/x",
+            "+1",
+            "✅",
+            ":8080",
+            "::1",
+            ":)",
+            ";;",
+            ":=",
+            "}",
+            "N/A",
+            "**Done**",
+            "`ok`",
+            "{}",
+            "null",
+            "Reading is a skill",
+            "The answer is 43.",
+            "x" * 25,
+            "",
+        ],
+    )
     def test_terse_answers_are_not_fragments(self, text):
         assert not looks_like_degenerate_final(text, user_message=self.EN)
 
-    @pytest.mark.parametrize("prompt, text", [
-        ("把工作簿建好然后告诉我", "是"), ("把工作簿建好然后告诉我", "已完成"),
-        ("Собери таблицу и отчитайся", "Готово"), ("Собери таблицу и отчитайся", "да"),
-        ("ワークブックを作って報告して", "はい"), ("أنشئ المصنف ثم أخبرني", "تم"),
-        ([{"type": "text", "text": "Собери таблицу"}], "нет"),  # multi-part user content
-    ])
-    def test_terse_answers_in_the_users_own_script_are_not_fragments(self, prompt, text):
+    @pytest.mark.parametrize(
+        "prompt, text",
+        [
+            ("把工作簿建好然后告诉我", "是"),
+            ("把工作簿建好然后告诉我", "已完成"),
+            ("Собери таблицу и отчитайся", "Готово"),
+            ("Собери таблицу и отчитайся", "да"),
+            ("ワークブックを作って報告して", "はい"),
+            ("أنشئ المصنف ثم أخبرني", "تم"),
+            (
+                [{"type": "text", "text": "Собери таблицу"}],
+                "нет",
+            ),  # multi-part user content
+        ],
+    )
+    def test_terse_answers_in_the_users_own_script_are_not_fragments(
+        self, prompt, text
+    ):
         assert not looks_like_degenerate_final(text, user_message=prompt)

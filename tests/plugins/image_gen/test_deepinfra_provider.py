@@ -23,18 +23,22 @@ _PNG_HEX = (
     "ae426082"
 )
 
+
 def _b64_png() -> str:
     import base64
 
     return base64.b64encode(bytes.fromhex(_PNG_HEX)).decode()
 
+
 @pytest.fixture(autouse=True)
 def _isolation(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     import clawk_cli.models as _models_mod
+
     monkeypatch.setattr(_models_mod, "_deepinfra_catalog_cache", {})
     monkeypatch.setenv("DEEPINFRA_API_KEY", "test-key")
     yield
+
 
 def test_list_models_filters_by_image_gen_tag(monkeypatch):
     """Plugin-side wiring: list_models() returns only ``image-gen``-tagged
@@ -43,17 +47,28 @@ def test_list_models_filters_by_image_gen_tag(monkeypatch):
     from clawk_cli import models
 
     class _Resp:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
         def read(self):
-            return json.dumps({"data": [
-                {"id": "vendor/chat", "metadata": {"tags": ["chat"]}},
-                {"id": "vendor/img", "metadata": {
-                    "tags": ["image-gen"],
-                    "pricing": {"per_image_unit": 0.005},
-                    "default_width": 1024,
-                }},
-            ]}).encode()
+            return json.dumps(
+                {
+                    "data": [
+                        {"id": "vendor/chat", "metadata": {"tags": ["chat"]}},
+                        {
+                            "id": "vendor/img",
+                            "metadata": {
+                                "tags": ["image-gen"],
+                                "pricing": {"per_image_unit": 0.005},
+                                "default_width": 1024,
+                            },
+                        },
+                    ]
+                }
+            ).encode()
 
     monkeypatch.setattr(
         models, "_urlopen_model_catalog_request", lambda *a, **kw: _Resp()
@@ -64,6 +79,7 @@ def test_list_models_filters_by_image_gen_tag(monkeypatch):
     img = next(row for row in rows if row["id"] == "vendor/img")
     assert "price" in img and img["default_width"] == 1024
 
+
 def test_generate_calls_openai_sdk_with_deepinfra_base_url(monkeypatch):
     """Happy path: pinned model → openai SDK called with DeepInfra
     base_url + Bearer key → b64 saved to cache."""
@@ -73,7 +89,9 @@ def test_generate_calls_openai_sdk_with_deepinfra_base_url(monkeypatch):
     class _FakeImages:
         def generate(self, **kwargs):
             captured["kwargs"] = kwargs
-            return SimpleNamespace(data=[SimpleNamespace(b64_json=_b64_png(), url=None)])
+            return SimpleNamespace(
+                data=[SimpleNamespace(b64_json=_b64_png(), url=None)]
+            )
 
     class _FakeClient:
         def __init__(self, api_key=None, base_url=None):
@@ -85,7 +103,8 @@ def test_generate_calls_openai_sdk_with_deepinfra_base_url(monkeypatch):
     fake_openai.OpenAI = _FakeClient
     with patch.dict("sys.modules", {"openai": fake_openai}):
         result = deepinfra_plugin.DeepInfraImageGenProvider().generate(
-            prompt="a cat", aspect_ratio="square",
+            prompt="a cat",
+            aspect_ratio="square",
         )
 
     assert result["success"] is True

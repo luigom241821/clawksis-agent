@@ -1,4 +1,5 @@
 """Unit tests for clawk_cli.session_recap."""
+
 from __future__ import annotations
 
 import json
@@ -30,22 +31,12 @@ def _tool_result(content="ok"):
     return {"role": "tool", "content": content}
 
 
-
-
-
-
-
-
-
-
 def test_tool_preview_length_truncates_long_user_prompt():
     long = "x " * 500
     out = build_recap([_user(long)])
     ask_line = next(l for l in out.splitlines() if "Last ask" in l)
     assert len(ask_line) < 300  # truncated with ellipsis
     assert "…" in ask_line
-
-
 
 
 def test_escape_sequences_sanitized_in_previews():

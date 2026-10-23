@@ -24,7 +24,6 @@ class TestResolvePersistBehavior:
         with _config({"model": {"persist_switch_by_default": True}}):
             assert resolve_persist_behavior(False, True) is False
 
-
     def test_no_provider_uses_config_default(self):
         # No --provider → respects config default (True).
         with _config({"model": {"persist_switch_by_default": True}}):
@@ -35,22 +34,56 @@ class TestResolvePersistBehavior:
         # selects a tenant/account on the same backend. Scoping it to the session by
         # default silently serves the next chat with the other twin's key, so the
         # user's persist opt-in must cover provider picks too.
-        cfg = {"model": {"default": "agnes-3.0-flash", "provider": "custom:family-snowflake",
-                         "persist_switch_by_default": True}}
+        cfg = {
+            "model": {
+                "default": "agnes-3.0-flash",
+                "provider": "custom:family-snowflake",
+                "persist_switch_by_default": True,
+            }
+        }
         with _config(cfg):
-            assert resolve_persist_behavior(False, False, explicit_provider="custom:family-xizhao") is True
+            assert (
+                resolve_persist_behavior(
+                    False, False, explicit_provider="custom:family-xizhao"
+                )
+                is True
+            )
             # --session / --once remain the explicit opt-outs.
-            assert resolve_persist_behavior(False, True, explicit_provider="custom:family-xizhao") is False
-            assert resolve_persist_behavior(False, False, is_once=True,
-                                            explicit_provider="custom:family-xizhao") is False
+            assert (
+                resolve_persist_behavior(
+                    False, True, explicit_provider="custom:family-xizhao"
+                )
+                is False
+            )
+            assert (
+                resolve_persist_behavior(
+                    False, False, is_once=True, explicit_provider="custom:family-xizhao"
+                )
+                is False
+            )
             # --global still persists.
-            assert resolve_persist_behavior(True, False, explicit_provider="custom:family-xizhao") is True
+            assert (
+                resolve_persist_behavior(
+                    True, False, explicit_provider="custom:family-xizhao"
+                )
+                is True
+            )
 
     def test_provider_pick_stays_exploratory_without_the_flag(self):
         # The exploratory default is unchanged unless the user opts in.
-        cfg = {"model": {"default": "agnes-3.0-flash", "provider": "custom:family-snowflake"}}
+        cfg = {
+            "model": {
+                "default": "agnes-3.0-flash",
+                "provider": "custom:family-snowflake",
+            }
+        }
         with _config(cfg):
-            assert resolve_persist_behavior(False, False, explicit_provider="custom:family-xizhao") is False
+            assert (
+                resolve_persist_behavior(
+                    False, False, explicit_provider="custom:family-xizhao"
+                )
+                is False
+            )
             assert resolve_persist_behavior(False, False, explicit_provider="") is False
 
     def test_first_pick_persists_then_session_only(self):
@@ -61,13 +94,22 @@ class TestResolvePersistBehavior:
         # env key on restart. Once a default exists, a plain pick is
         # session-only unless --global / persist_switch_by_default.
         with _config({"model": {}}):
-            assert resolve_persist_behavior(False, False, explicit_provider="anthropic") is True
+            assert (
+                resolve_persist_behavior(False, False, explicit_provider="anthropic")
+                is True
+            )
         with _config({"model": ""}):
             assert resolve_persist_behavior(False, False) is True
         with _config({"model": {"default": "gpt-5.6", "provider": "openai-codex"}}):
-            assert resolve_persist_behavior(False, False, explicit_provider="openai-api") is False
+            assert (
+                resolve_persist_behavior(False, False, explicit_provider="openai-api")
+                is False
+            )
             assert resolve_persist_behavior(False, False) is False
-            assert resolve_persist_behavior(True, False, explicit_provider="openai-api") is True
+            assert (
+                resolve_persist_behavior(True, False, explicit_provider="openai-api")
+                is True
+            )
         with _config({"model": "gpt-5.6"}):
             assert resolve_persist_behavior(False, False) is False
 

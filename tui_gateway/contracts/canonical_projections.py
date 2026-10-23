@@ -1,4 +1,5 @@
 """Canonical projections with demonstrated differences from standalone wire."""
+
 from typing import Literal
 
 from pydantic import model_validator
@@ -7,9 +8,19 @@ from .base import JsonValue, Params, Result
 from .common import ProfileParams
 from .canonical_sessions import CanonicalSessionParams
 from .config_free_tier_control import ConfigGetParams, ConfigGetResult, ConfigSetResult
-from .groups_bot_relay import GroupsApproveResult, GroupsCreateResult, GroupsRetryResult, RoomMemberInput, RoomParams
+from .groups_bot_relay import (
+    GroupsApproveResult,
+    GroupsCreateResult,
+    GroupsRetryResult,
+    RoomMemberInput,
+    RoomParams,
+)
 from .prompt_voice import AttachedImageResult, ImageAttachBytesParams
-from .profiles_vault_complete_foreign_subagents import ProfileCanonicalSession, ProfileRow, ProfilesListResult
+from .profiles_vault_complete_foreign_subagents import (
+    ProfileCanonicalSession,
+    ProfileRow,
+    ProfilesListResult,
+)
 from .registry import canonical_method
 
 
@@ -30,7 +41,7 @@ class CanonicalConfigSetParams(ProfileParams):
     value: JsonValue = None
     confirm_expensive_model: bool | None = None
     # ``reasoning`` (``global`` = ``/reasoning --global``) and ``yolo`` (``global`` = approvals.mode).
-    scope: Literal['session', 'global'] | None = None
+    scope: Literal["session", "global"] | None = None
 
 
 class CanonicalAttachedImageResult(AttachedImageResult):
@@ -61,7 +72,7 @@ class CanonicalRoomAttemptParams(RoomParams):
 
 
 class CanonicalRoomApproveParams(CanonicalRoomAttemptParams):
-    choice: Literal['once', 'deny']
+    choice: Literal["once", "deny"]
     request_id: str
 
 
@@ -91,24 +102,28 @@ class CanonicalBotDeliverResult(Result):
     error: str | None = None
     reason: str | None = None
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _admitted_or_refused(self):
-        if (self.admission_id is None) != (self.refused is True) or (self.refused and self.status != 'failed'):
-            raise ValueError('a deliver result names its admission, or is a refused failed receipt without one')
+        if (self.admission_id is None) != (self.refused is True) or (
+            self.refused and self.status != "failed"
+        ):
+            raise ValueError(
+                "a deliver result names its admission, or is a refused failed receipt without one"
+            )
         return self
 
 
 for _name, _params, _result in (
-    ('config.get', ConfigGetParams, CanonicalConfigGetResult),
-    ('config.set', CanonicalConfigSetParams, ConfigSetResult),
-    ('profiles.list', CanonicalProfilesParams, CanonicalProfilesResult),
-    ('image.attach_bytes', ImageAttachBytesParams, CanonicalAttachedImageResult),
-    ('groups.retry', CanonicalRoomAttemptParams, GroupsRetryResult),
-    ('groups.create', CanonicalRoomCreateParams, GroupsCreateResult),
-    ('groups.approve', CanonicalRoomApproveParams, GroupsApproveResult),
-    ('bot_relay.deliver', CanonicalBotDeliverParams, CanonicalBotDeliverResult),
+    ("config.get", ConfigGetParams, CanonicalConfigGetResult),
+    ("config.set", CanonicalConfigSetParams, ConfigSetResult),
+    ("profiles.list", CanonicalProfilesParams, CanonicalProfilesResult),
+    ("image.attach_bytes", ImageAttachBytesParams, CanonicalAttachedImageResult),
+    ("groups.retry", CanonicalRoomAttemptParams, GroupsRetryResult),
+    ("groups.create", CanonicalRoomCreateParams, GroupsCreateResult),
+    ("groups.approve", CanonicalRoomApproveParams, GroupsApproveResult),
+    ("bot_relay.deliver", CanonicalBotDeliverParams, CanonicalBotDeliverResult),
     # The sender's finalize of a refusal marked ``admitted: false``: the same identity, answered
     # with the id's terminal not-sent receipt or its existing admission (``gateway/session_bot.py``).
-    ('bot_relay.settle', CanonicalBotDeliverParams, CanonicalBotDeliverResult),
+    ("bot_relay.settle", CanonicalBotDeliverParams, CanonicalBotDeliverResult),
 ):
     canonical_method(_name, params=_params, result=_result)

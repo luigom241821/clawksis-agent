@@ -17,24 +17,51 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from agent.conversation_compression import COMPRESSION_RETRY_CONTEXT_REDUCED_STATUS_TEMPLATE
+from agent.conversation_compression import (
+    COMPRESSION_RETRY_CONTEXT_REDUCED_STATUS_TEMPLATE,
+)
 from agent.fast_mode import fast_mode_unprovisioned, mark_fast_mode_unavailable
-from agent.model_metadata import is_output_cap_error, parse_available_output_tokens_from_error
-from agent.retry_utils import is_zai_coding_overload_error, zai_coding_overload_retry_ceiling
+from agent.model_metadata import (
+    is_output_cap_error,
+    parse_available_output_tokens_from_error,
+)
+from agent.retry_utils import (
+    is_zai_coding_overload_error,
+    zai_coding_overload_retry_ceiling,
+)
 from agent.error_classifier import FailoverReason, classify_api_error
 from agent.message_sanitization import (
-    _looks_like_corrupt_image_rejection, _looks_like_image_content_rejection, _sanitize_messages_non_ascii,
-    _sanitize_messages_surrogates, _sanitize_structure_non_ascii, _sanitize_structure_surrogates,
-    _strip_images_from_messages, _strip_non_ascii, close_interrupted_tool_sequence, record_reasoning_field_rejection,
+    _looks_like_corrupt_image_rejection,
+    _looks_like_image_content_rejection,
+    _sanitize_messages_non_ascii,
+    _sanitize_messages_surrogates,
+    _sanitize_structure_non_ascii,
+    _sanitize_structure_surrogates,
+    _strip_images_from_messages,
+    _strip_non_ascii,
+    close_interrupted_tool_sequence,
+    record_reasoning_field_rejection,
 )
-from agent.thinking_timeout_guidance import build_thinking_timeout_guidance, is_thinking_timeout
+from agent.thinking_timeout_guidance import (
+    build_thinking_timeout_guidance,
+    is_thinking_timeout,
+)
 from agent.vision_message_prep import _provider_model_key
 from agent.turn_failure_copy import (
-    CONTENT_POLICY_NEXT_STEPS, content_policy_copy, exhausted_copy, limit_reset_copy, nonretryable_copy,
-    provider_label_for, site_copy, stamp_failure,
+    CONTENT_POLICY_NEXT_STEPS,
+    content_policy_copy,
+    exhausted_copy,
+    limit_reset_copy,
+    nonretryable_copy,
+    provider_label_for,
+    site_copy,
+    stamp_failure,
 )
 from agent.turn_retry_state import TurnRetryState
-from agent.turn_recovery_codex import _is_codex_token_expired, _recover_stale_codex_reasoning
+from agent.turn_recovery_codex import (
+    _is_codex_token_expired,
+    _recover_stale_codex_reasoning,
+)
 from clawk_constants import display_clawk_home
 from utils import base_url_host_matches
 
@@ -56,10 +83,14 @@ def _vlines(agent: Any, *lines: str) -> None:
 def _plines(agent: Any, *lines: str) -> None:
     """``print`` each line prefixed with ``agent.log_prefix``."""
     from gateway.warning_notifications import render_notification
+
     render_notification(
         lambda: [print(f"{agent.log_prefix}{line}") for line in lines],
-        platform=getattr(agent, "_notification_platform", getattr(agent, "platform", "cli")),
-        user_config=getattr(agent, "_notification_config", None))
+        platform=getattr(
+            agent, "_notification_platform", getattr(agent, "platform", "cli")
+        ),
+        user_config=getattr(agent, "_notification_config", None),
+    )
 
 
 def _blines(agent: Any, *lines: str) -> None:
@@ -106,7 +137,10 @@ def _try_refresh_nous_paid_entitlement_credentials(agent) -> bool:
     try:
         from clawk_cli.nous_account import get_nous_portal_account_info
 
-        if get_nous_portal_account_info(force_fresh=True).paid_service_access is not True:
+        if (
+            get_nous_portal_account_info(force_fresh=True).paid_service_access
+            is not True
+        ):
             return False
         return agent._try_refresh_nous_client_credentials(force=True)
     except Exception:
@@ -123,8 +157,15 @@ def _repair_transport_credentials(agent: Any) -> bool:
     either the headers or the key were repaired.
     """
     _client_kwargs = getattr(agent, "_client_kwargs", None)
-    _default_headers = _client_kwargs.get("default_headers") if isinstance(_client_kwargs, dict) else None
-    _repaired = bool(isinstance(_default_headers, dict) and _sanitize_structure_non_ascii(_default_headers))
+    _default_headers = (
+        _client_kwargs.get("default_headers")
+        if isinstance(_client_kwargs, dict)
+        else None
+    )
+    _repaired = bool(
+        isinstance(_default_headers, dict)
+        and _sanitize_structure_non_ascii(_default_headers)
+    )
     _raw_key = getattr(agent, "api_key", None) or ""
     if isinstance(_raw_key, str) and _raw_key:
         _clean_key = _strip_non_ascii(_raw_key)
@@ -133,7 +174,9 @@ def _repair_transport_credentials(agent: Any) -> bool:
             if isinstance(_client_kwargs, dict):
                 _client_kwargs["api_key"] = _clean_key
             # The live client reads its own api_key copy on every request.
-            if getattr(agent, "client", None) is not None and hasattr(agent.client, "api_key"):
+            if getattr(agent, "client", None) is not None and hasattr(
+                agent.client, "api_key"
+            ):
                 agent.client.api_key = _clean_key
             _repaired = True
             _vlines(
@@ -145,8 +188,12 @@ def _repair_transport_credentials(agent: Any) -> bool:
 
 
 def _recover_unicode_encode_error(
-    agent: Any, api_error: Exception, messages: list[dict[str, Any]], api_messages: Any,
-    api_kwargs: Any, active_system_prompt: Any,
+    agent: Any,
+    api_error: Exception,
+    messages: list[dict[str, Any]],
+    api_messages: Any,
+    api_kwargs: Any,
+    active_system_prompt: Any,
 ) -> tuple[bool, Any]:
     """UnicodeEncodeError recovery: lone surrogates (clipboard paste) first, then an ASCII
     codec under a non-UTF-8 locale. Sanitizes in place; bounded by the caller's
@@ -154,12 +201,18 @@ def _recover_unicode_encode_error(
     _err_str = str(api_error).lower()
     _is_ascii_codec = "'ascii'" in _err_str or "ascii" in _err_str
     # utf-8 refusing U+D800..U+DFFF ("surrogates not allowed").
-    _is_surrogate_error = "surrogate" in _err_str or ("'utf-8'" in _err_str and not _is_ascii_codec)
+    _is_surrogate_error = "surrogate" in _err_str or (
+        "'utf-8'" in _err_str and not _is_ascii_codec
+    )
     # Sanitize canonical messages for surrogate recovery, but keep ASCII recovery
     # request-local: API copies may carry fields absent from the durable transcript.
     _surrogates_found = _sanitize_messages_surrogates(messages)
-    _surrogates_found |= isinstance(api_messages, list) and _sanitize_messages_surrogates(api_messages)
-    _surrogates_found |= isinstance(api_kwargs, dict) and _sanitize_structure_surrogates(api_kwargs)
+    _surrogates_found |= isinstance(
+        api_messages, list
+    ) and _sanitize_messages_surrogates(api_messages)
+    _surrogates_found |= isinstance(
+        api_kwargs, dict
+    ) and _sanitize_structure_surrogates(api_kwargs)
     # Gate the retry on the error type, not on whether anything was found — a new
     # transformed field could slip through.
     if _surrogates_found or _is_surrogate_error:
@@ -170,8 +223,8 @@ def _recover_unicode_encode_error(
         agent._unicode_sanitization_passes += 1
         agent._buffer_vprint(
             "⚠️  Stripped invalid surrogate characters from messages. Retrying..."
-            if _surrogates_found else
-            "⚠️  Surrogate encoding error — retrying after full-payload sanitization..."
+            if _surrogates_found
+            else "⚠️  Surrogate encoding error — retrying after full-payload sanitization..."
         )
         return True, active_system_prompt
     if not _is_ascii_codec:
@@ -198,7 +251,9 @@ def _recover_unicode_encode_error(
     # failed attempt's api_kwargs is NOT touched: build_api_request rebuilds it from
     # ``agent.tools`` on the next iteration and ``sanitize_outbound_kwargs`` strips the whole
     # payload under ``_force_ascii_payload``. Canonical agent state stays byte-stable.
-    _messages_sanitized = isinstance(api_messages, list) and _sanitize_messages_non_ascii(api_messages)
+    _messages_sanitized = isinstance(
+        api_messages, list
+    ) and _sanitize_messages_non_ascii(api_messages)
 
     _system_sanitized = False
     if isinstance(active_system_prompt, str):
@@ -215,8 +270,8 @@ def _recover_unicode_encode_error(
     _vlines(
         agent,
         "⚠️  System encoding is ASCII — stripped non-ASCII characters from request payload. Retrying..."
-        if (_messages_sanitized or _system_sanitized or _transport_repaired) else
-        "⚠️  System encoding is ASCII — enabling full-payload sanitization for retry...",
+        if (_messages_sanitized or _system_sanitized or _transport_repaired)
+        else "⚠️  System encoding is ASCII — enabling full-payload sanitization for retry...",
     )
     return True, active_system_prompt
 
@@ -227,14 +282,22 @@ def _strip_request_images_and_retry(agent: Any, api_messages: Any) -> bool:
     Shared by the corrupt-image recoveries: a bad payload says nothing about the model, so it
     is stripped for this attempt only and the model is never recorded as image-rejecting."""
     if isinstance(api_messages, list) and _strip_images_from_messages(api_messages):
-        _vlines(agent, "⚠️  Provider rejected a corrupted image — stripped images from the retry payload and retrying...")
+        _vlines(
+            agent,
+            "⚠️  Provider rejected a corrupted image — stripped images from the retry payload and retrying...",
+        )
         return True
     return False
 
 
 def recover_before_classification(
-    agent: Any, api_error: Exception, *, messages: list[dict[str, Any]], api_messages: Any,
-    api_kwargs: Any, active_system_prompt: Any,
+    agent: Any,
+    api_error: Exception,
+    *,
+    messages: list[dict[str, Any]],
+    api_messages: Any,
+    api_kwargs: Any,
+    active_system_prompt: Any,
 ) -> tuple[bool, Any]:
     """Recovery branches that run BEFORE ``classify_api_error``: UnicodeEncodeError
     sanitization, Anthropic fast mode with no capacity (drop ``speed`` for that model),
@@ -244,7 +307,10 @@ def recover_before_classification(
     stripped on the retry), and the Bedrock
     AnthropicBedrock SDK streaming fallback. Returns ``(retry_now, active_system_prompt)``;
     the prompt may be ASCII-sanitized in place."""
-    if isinstance(api_error, UnicodeEncodeError) and getattr(agent, '_unicode_sanitization_passes', 0) < 2:
+    if (
+        isinstance(api_error, UnicodeEncodeError)
+        and getattr(agent, "_unicode_sanitization_passes", 0) < 2
+    ):
         _recovered, active_system_prompt = _recover_unicode_encode_error(
             agent, api_error, messages, api_messages, api_kwargs, active_system_prompt
         )
@@ -254,9 +320,18 @@ def recover_before_classification(
     # Anthropic fast mode with no capacity: a 429 whose fast-mode limit header is 0 can never
     # succeed at fast speed, and it says nothing about the key's standard-speed limits. Stop
     # sending ``speed`` to this model and retry now, before credential rotation benches the key.
-    if fast_mode_unprovisioned(api_error, api_kwargs) and mark_fast_mode_unavailable(agent):
-        _vlines(agent, f"⚠️  Fast mode isn't available for {agent.model} on this Anthropic organization — using standard speed for this session, retrying...")
-        logger.warning("%sFast mode: %s has a fast-mode limit of 0; standard speed for this session", agent.log_prefix, agent.model)
+    if fast_mode_unprovisioned(api_error, api_kwargs) and mark_fast_mode_unavailable(
+        agent
+    ):
+        _vlines(
+            agent,
+            f"⚠️  Fast mode isn't available for {agent.model} on this Anthropic organization — using standard speed for this session, retrying...",
+        )
+        logger.warning(
+            "%sFast mode: %s has a fast-mode limit of 0; standard speed for this session",
+            agent.log_prefix,
+            agent.model,
+        )
         return True, active_system_prompt
 
     # Some providers 4xx on image_url content: record the (provider, model) and retry;
@@ -264,7 +339,11 @@ def recover_before_classification(
     # match; extend it.
     _err_body = ""
     try:
-        _err_body = str(getattr(api_error, "body", None) or getattr(api_error, "message", None) or str(api_error))
+        _err_body = str(
+            getattr(api_error, "body", None)
+            or getattr(api_error, "message", None)
+            or str(api_error)
+        )
     except Exception:
         pass
     _err_status = getattr(api_error, "status_code", None)
@@ -275,7 +354,13 @@ def recover_before_classification(
     _model_key = _provider_model_key(agent)
     _rejected = agent._image_rejecting_models
     _corrupt = _looks_like_corrupt_image_rejection(_err_body)
-    if _status_ok and (_corrupt or (_model_key not in _rejected and _looks_like_image_content_rejection(_err_body))):
+    if _status_ok and (
+        _corrupt
+        or (
+            _model_key not in _rejected
+            and _looks_like_image_content_rejection(_err_body)
+        )
+    ):
         # Send-path only. A rejection says what THIS model accepts, not what the conversation
         # holds: stripping ``messages`` (canonical history) and forcing a flush deleted every
         # image — and every image-only message — from state.db for good, so a later switch to a
@@ -302,8 +387,15 @@ def recover_before_classification(
     # and retry once; build_api_request re-shapes api_messages without it. An unnamed upstream error
     # never counts, and a key already recorded falls through to normal handling (no loop).
     _sent = api_kwargs.get("messages") if isinstance(api_kwargs, dict) else None
-    if _status_ok and (_new := record_reasoning_field_rejection(agent, _err_body, _sent or api_messages)):
-        _vlines(agent, f"⚠️  {agent.model} rejected replayed {', '.join(sorted(_new))} — retrying without it for this model.")
+    if _status_ok and (
+        _new := record_reasoning_field_rejection(
+            agent, _err_body, _sent or api_messages
+        )
+    ):
+        _vlines(
+            agent,
+            f"⚠️  {agent.model} rejected replayed {', '.join(sorted(_new))} — retrying without it for this model.",
+        )
         return True, active_system_prompt
 
     # AnthropicBedrock SDK raises "Unexpected event order" when Bedrock errors before
@@ -320,7 +412,10 @@ def recover_before_classification(
         agent._bedrock_region = getattr(agent, "_bedrock_region", None) or "us-east-1"
         agent.client = None  # Drop the AnthropicBedrock client
         agent._client_kwargs = {}
-        _vlines(agent, "⚠️  AnthropicBedrock SDK streaming failed — falling back to native Converse API for this session.")
+        _vlines(
+            agent,
+            "⚠️  AnthropicBedrock SDK streaming failed — falling back to native Converse API for this session.",
+        )
         return True, active_system_prompt
     return False, active_system_prompt
 
@@ -330,6 +425,7 @@ def _print_nous_401_diagnostics(agent: Any, api_error: Exception) -> None:
     no credits, or agent key blocked."""
     from agent.conversation_loop import _print_nous_entitlement_guidance
     from clawk_constants import display_clawk_home
+
     _body_text = ""
     try:
         _body = getattr(api_error, "body", None) or getattr(api_error, "response", None)
@@ -342,16 +438,23 @@ def _print_nous_401_diagnostics(agent: Any, api_error: Exception) -> None:
         _plines(agent, f"   Response: {_body_text}")
     try:
         from clawk_cli.anon_auth import is_anonymous_agent
+
         if is_anonymous_agent(agent):
             # The free tier has no credits, no agent key and no auth.json to inspect: its session
             # ended and could not be replaced. The two doors are a sign-in or another provider.
-            _plines(agent, "   Your session ended and Clawksis couldn't start a new one.",
-                    "   Sign in with a Nous account (it's free), or switch providers with /model.")
+            _plines(
+                agent,
+                "   Your session ended and Clawksis couldn't start a new one.",
+                "   Sign in with a Nous account (it's free), or switch providers with /model.",
+            )
             return
     except Exception:
         pass
     if not _print_nous_entitlement_guidance(agent, "Nous model access"):
-        _plines(agent, "   Most likely: Portal OAuth expired, account out of credits, or agent key revoked.")
+        _plines(
+            agent,
+            "   Most likely: Portal OAuth expired, account out of credits, or agent key revoked.",
+        )
     _plines(
         agent,
         "   Troubleshooting:",
@@ -367,6 +470,7 @@ def _print_anthropic_401_diagnostics(agent: Any, key: Any) -> None:
     from agent.anthropic_credentials import _is_oauth_token
     from agent.azure_identity_adapter import is_token_provider
     from clawk_constants import display_clawk_home
+
     _plines(agent, "🔐 Anthropic 401 — authentication failed.")
     if is_token_provider(key):
         # Azure Foundry Entra ID: JWT minted per-request by an httpx hook; 401 = Azure
@@ -378,11 +482,17 @@ def _print_anthropic_401_diagnostics(agent: Any, key: Any) -> None:
             "   `az login` if your developer session expired.",
         )
     else:
-        auth_method = "Bearer (OAuth/setup-token)" if _is_oauth_token(key) else "x-api-key (API key)"
+        auth_method = (
+            "Bearer (OAuth/setup-token)"
+            if _is_oauth_token(key)
+            else "x-api-key (API key)"
+        )
         _plines(
             agent,
             f"   Auth method: {auth_method}",
-            f"   Token prefix: {key[:12]}..." if isinstance(key, str) and len(key) > 12 else "   Token: (empty or short)",
+            f"   Token prefix: {key[:12]}..."
+            if isinstance(key, str) and len(key) > 12
+            else "   Token: (empty or short)",
         )
     _dhh = display_clawk_home()
     _plines(
@@ -393,8 +503,8 @@ def _print_anthropic_401_diagnostics(agent: Any, key: Any) -> None:
         "     • For API keys: verify at https://platform.claude.com/settings/keys",
         "     • Clawksis login (OAuth): run 'clawk auth add anthropic' to sign in again, then retry",
         "     • Inspect what Clawksis holds: clawk auth list anthropic",
-        "     • Legacy cleanup: clawk config set ANTHROPIC_TOKEN \"\"",
-        "     • Clear stale keys: clawk config set ANTHROPIC_API_KEY \"\"",
+        '     • Legacy cleanup: clawk config set ANTHROPIC_TOKEN ""',
+        '     • Clear stale keys: clawk config set ANTHROPIC_API_KEY ""',
     )
 
 
@@ -416,12 +526,20 @@ def _refresh_credentials_after_401(
         _retry.codex_auth_retry_attempted = True
         if agent._try_refresh_codex_client_credentials(force=True):
             _label = "xAI OAuth" if agent.provider == "xai-oauth" else "Codex"
-            agent._buffer_vprint(f"🔐 {_label} auth refreshed after 401. Retrying request...")
+            agent._buffer_vprint(
+                f"🔐 {_label} auth refreshed after 401. Retrying request..."
+            )
             return True
-    if agent.api_mode == "chat_completions" and agent.provider == "vertex" and not _retry.vertex_auth_retry_attempted:
+    if (
+        agent.api_mode == "chat_completions"
+        and agent.provider == "vertex"
+        and not _retry.vertex_auth_retry_attempted
+    ):
         _retry.vertex_auth_retry_attempted = True
         if agent._try_refresh_vertex_client_credentials():
-            agent._buffer_vprint("🔐 Vertex AI token refreshed after 401. Retrying request...")
+            agent._buffer_vprint(
+                "🔐 Vertex AI token refreshed after 401. Retrying request..."
+            )
             return True
     if (
         agent.api_mode in ("chat_completions", "anthropic_messages")
@@ -430,30 +548,41 @@ def _refresh_credentials_after_401(
     ):
         _retry.nous_auth_retry_attempted = True
         if agent._try_refresh_nous_client_credentials(force=True):
-            agent._buffer_vprint("🔐 Nous agent key refreshed after 401. Retrying request...")
+            agent._buffer_vprint(
+                "🔐 Nous agent key refreshed after 401. Retrying request..."
+            )
             return True
         _print_nous_401_diagnostics(agent, api_error)
     if _is_copilot_provider(agent) and not _retry.copilot_auth_retry_attempted:
         _retry.copilot_auth_retry_attempted = True
         if agent._try_refresh_copilot_client_credentials():
-            agent._buffer_vprint("🔐 Copilot credentials refreshed after 401. Retrying request...")
+            agent._buffer_vprint(
+                "🔐 Copilot credentials refreshed after 401. Retrying request..."
+            )
             return True
     if (
         agent.api_mode == "anthropic_messages"
-        and hasattr(agent, '_anthropic_api_key')
+        and hasattr(agent, "_anthropic_api_key")
         and not _retry.anthropic_auth_retry_attempted
     ):
         _retry.anthropic_auth_retry_attempted = True
         if agent._try_refresh_anthropic_client_credentials():
-            _plines(agent, "🔐 Anthropic credentials refreshed after 401. Retrying request...")
+            _plines(
+                agent,
+                "🔐 Anthropic credentials refreshed after 401. Retrying request...",
+            )
             return True
         _print_anthropic_401_diagnostics(agent, agent._anthropic_api_key)
     return False
 
 
 def _recover_format_errors(
-    agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState,
-    messages: list[dict[str, Any]], api_messages: Any,
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    _retry: TurnRetryState,
+    messages: list[dict[str, Any]],
+    api_messages: Any,
 ) -> bool:
     """One-shot format-recovery strips: thinking-signature → invalid-encrypted-content
     replay disable → native-compaction reject → llama.cpp grammar strip. Returns True when
@@ -462,9 +591,15 @@ def _recover_format_errors(
     # carriers and preserved historical blocks, so suppress the rejected opaque blocks across all
     # carriers and persist that suppression. Other transports keep their established one-request
     # repair: drop reasoning_details only.
-    if classified.reason == FailoverReason.thinking_signature and not _retry.thinking_sig_retry_attempted:
+    if (
+        classified.reason == FailoverReason.thinking_signature
+        and not _retry.thinking_sig_retry_attempted
+    ):
         _retry.thinking_sig_retry_attempted = True
-        from agent.anthropic_thinking_replay import remember_rejected_thinking, tracks_rejected_thinking
+        from agent.anthropic_thinking_replay import (
+            remember_rejected_thinking,
+            tracks_rejected_thinking,
+        )
 
         if tracks_rejected_thinking(agent):
             removed = remember_rejected_thinking(agent, api_messages)
@@ -480,14 +615,17 @@ def _recover_format_errors(
         logger.warning(
             "%sThinking block signature recovery: %s from %d carrier/message(s) "
             "(canonical messages unchanged)",
-            agent.log_prefix, detail, removed,
+            agent.log_prefix,
+            detail,
+            removed,
         )
         return True
 
     # 400 ``invalid_encrypted_content`` on a stale ``codex_reasoning_items`` blob (the 401
     # ``token_expired`` twin is taken ahead of the credential pool in the caller).
-    if classified.reason == FailoverReason.invalid_encrypted_content and _recover_stale_codex_reasoning(
-        agent, _retry, messages, api_messages
+    if (
+        classified.reason == FailoverReason.invalid_encrypted_content
+        and _recover_stale_codex_reasoning(agent, _retry, messages, api_messages)
     ):
         return True
 
@@ -499,7 +637,10 @@ def _recover_format_errors(
         and bool(getattr(agent, "codex_responses_native_compaction", False))
     ):
         from agent.native_compaction import is_native_compaction_rejection
-        if is_native_compaction_rejection(api_error, getattr(api_error, "status_code", None)):
+
+        if is_native_compaction_rejection(
+            api_error, getattr(api_error, "status_code", None)
+        ):
             _retry.native_compaction_reject_retry_attempted = True
             agent.codex_responses_native_compaction = False
             _vlines(
@@ -516,20 +657,32 @@ def _recover_format_errors(
 
     # llama.cpp ``json-schema-to-grammar`` rejects regex escapes and most ``format``
     # values: strip ``pattern``/``format`` from ``agent.tools``, retry once.
-    if classified.reason == FailoverReason.llama_cpp_grammar_pattern and not _retry.llama_cpp_grammar_retry_attempted:
+    if (
+        classified.reason == FailoverReason.llama_cpp_grammar_pattern
+        and not _retry.llama_cpp_grammar_retry_attempted
+    ):
         _retry.llama_cpp_grammar_retry_attempted = True
         try:
             from tools.schema_sanitizer import strip_pattern_and_format
+
             _, _stripped = strip_pattern_and_format(agent.tools)
         except Exception as _strip_exc:  # pragma: no cover — defensive
-            logger.warning("%sllama.cpp grammar recovery: strip helper failed: %s", agent.log_prefix, _strip_exc)
+            logger.warning(
+                "%sllama.cpp grammar recovery: strip helper failed: %s",
+                agent.log_prefix,
+                _strip_exc,
+            )
             _stripped = 0
         if _stripped:
-            _vlines(agent, f"⚠️  llama.cpp rejected tool schema grammar — stripped {_stripped} pattern/format keyword(s), retrying...")
+            _vlines(
+                agent,
+                f"⚠️  llama.cpp rejected tool schema grammar — stripped {_stripped} pattern/format keyword(s), retrying...",
+            )
             logger.warning(
                 "%sllama.cpp grammar recovery: stripped %d "
                 "pattern/format keyword(s) from tool schemas",
-                agent.log_prefix, _stripped,
+                agent.log_prefix,
+                _stripped,
             )
             return True
         # Nothing to strip — fall through to normal retry rather than loop on the same error.
@@ -564,9 +717,15 @@ def _recover_welcome_tier(agent: Any, classified: Any, _retry: TurnRetryState) -
     (``extract_api_error_context``) never carries them."""
     ctx = getattr(classified, "error_context", None) or {}
     refusal = ctx.get("welcome_refusal") if isinstance(ctx, dict) else None
-    if isinstance(refusal, dict) and refusal.get("reason") == "model_not_free" and not _retry.welcome_model_switch_attempted:
+    if (
+        isinstance(refusal, dict)
+        and refusal.get("reason") == "model_not_free"
+        and not _retry.welcome_model_switch_attempted
+    ):
         _retry.welcome_model_switch_attempted = True
-        alternates = [a for a in (refusal.get("alternates") or []) if isinstance(a, str) and a]
+        alternates = [
+            a for a in (refusal.get("alternates") or []) if isinstance(a, str) and a
+        ]
         requested = str(getattr(agent, "model", "") or "")
         target = alternates[0] if alternates else None
         if target and target != requested:
@@ -575,8 +734,16 @@ def _recover_welcome_tier(agent: Any, classified: Any, _retry: TurnRetryState) -
                 agent._nous_model_switch = (requested, target)
             except Exception:
                 return False
-            _vlines(agent, f"↪️  {requested} isn't available without signing in; using {target} for now. Retrying...")
-            logger.info("%sNous free tier: moved %s -> %s after model_not_free", agent.log_prefix, requested, target)
+            _vlines(
+                agent,
+                f"↪️  {requested} isn't available without signing in; using {target} for now. Retrying...",
+            )
+            logger.info(
+                "%sNous free tier: moved %s -> %s after model_not_free",
+                agent.log_prefix,
+                requested,
+                target,
+            )
             return True
     route = ctx.get("welcome_route") if isinstance(ctx, dict) else None
     if route in _WELCOME_ROUTE_HEAL_COPY and not _retry.welcome_route_heal_attempted:
@@ -591,14 +758,19 @@ def _recover_welcome_tier(agent: Any, classified: Any, _retry: TurnRetryState) -
     return False
 
 
-def _clamp_to_affordable_budget(agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState) -> bool:
+def _clamp_to_affordable_budget(
+    agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState
+) -> bool:
     """A credit-limited 402 (OpenRouter: "...requested up to 65536 tokens, but can only afford
     56272") means the account has credit and the output cap was too large: retry ONCE with the
     cap lowered to the affordable budget instead of abandoning the provider as billing (#49769).
     Same budget parse as the auxiliary client's retry. The 402 itself says the request's cap
     exceeded the budget (which may be a boosted continuation cap above ``agent.max_tokens``),
     so a second credit-limited 402 on this call is genuine exhaustion."""
-    if classified.reason != FailoverReason.billing or _retry.affordable_402_clamp_attempted:
+    if (
+        classified.reason != FailoverReason.billing
+        or _retry.affordable_402_clamp_attempted
+    ):
         return False
     from agent.auxiliary_client import _affordable_max_tokens_from_error
 
@@ -607,8 +779,15 @@ def _clamp_to_affordable_budget(agent: Any, api_error: Exception, classified: An
         return False
     _retry.affordable_402_clamp_attempted = True
     agent._ephemeral_max_output_tokens = affordable
-    _vlines(agent, f"💳 Credit balance covers fewer output tokens — retrying with max_tokens={affordable:,}...")
-    logger.info("%sCredit-limited 402: retrying once with max_tokens=%d", agent.log_prefix, affordable)
+    _vlines(
+        agent,
+        f"💳 Credit balance covers fewer output tokens — retrying with max_tokens={affordable:,}...",
+    )
+    logger.info(
+        "%sCredit-limited 402: retrying once with max_tokens=%d",
+        agent.log_prefix,
+        affordable,
+    )
     return True
 
 
@@ -622,8 +801,11 @@ def _pool_error_context(agent, classified: Any, error_context: Any) -> Any:
     credential, until its reset; every other failure passes the error context through unchanged."""
     if not (getattr(classified, "error_context", None) or {}).get("usage_window"):
         return error_context
-    return {**(error_context if isinstance(error_context, dict) else {}), "usage_window": True,
-            **_usage_window_reset_context(agent)}
+    return {
+        **(error_context if isinstance(error_context, dict) else {}),
+        "usage_window": True,
+        **_usage_window_reset_context(agent),
+    }
 
 
 def _usage_window_reset_context(agent) -> dict[str, float]:
@@ -633,18 +815,34 @@ def _usage_window_reset_context(agent) -> dict[str, float]:
     try:
         from agent.credits_tracker import window_stop_resets_at_ms
         from agent.plan_limits import current_model_is_top_tier
+
         state = getattr(agent, "_credits_state", None)
-        resets_ms = (window_stop_resets_at_ms(state, model_is_top_tier=current_model_is_top_tier(agent))
-                     if state is not None else None)
+        resets_ms = (
+            window_stop_resets_at_ms(
+                state, model_is_top_tier=current_model_is_top_tier(agent)
+            )
+            if state is not None
+            else None
+        )
     except Exception:
         logger.debug("usage-window reset unavailable for the pool", exc_info=True)
         return {}
-    return {"reset_at": resets_ms / 1000} if isinstance(resets_ms, (int, float)) and resets_ms > 0 else {}
+    return (
+        {"reset_at": resets_ms / 1000}
+        if isinstance(resets_ms, (int, float)) and resets_ms > 0
+        else {}
+    )
 
 
 def recover_after_classification(
-    agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState, *,
-    status_code: Optional[int], error_context: Any, messages: list[dict[str, Any]],
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    _retry: TurnRetryState,
+    *,
+    status_code: Optional[int],
+    error_context: Any,
+    messages: list[dict[str, Any]],
     api_messages: Any,
 ) -> tuple[bool, bool]:
     """One-shot recovery chain that runs AFTER ``classify_api_error`` and before the
@@ -659,9 +857,11 @@ def recover_after_classification(
     # The credit-limited 402 clamp runs before pool rotation, which would bench a credential
     # that still has credit. A ``reasoning.context`` 400 is classified reasoning_mandatory, whose rung
     # would drop the whole reasoning config; omit only the all_turns opt-in, ahead of it.
-    if _recover_welcome_tier(agent, classified, _retry) or _clamp_to_affordable_budget(
-        agent, api_error, classified, _retry
-    ) or (agent.api_mode == "codex_responses" and _reject_all_turns(agent, api_error)):
+    if (
+        _recover_welcome_tier(agent, classified, _retry)
+        or _clamp_to_affordable_budget(agent, api_error, classified, _retry)
+        or (agent.api_mode == "codex_responses" and _reject_all_turns(agent, api_error))
+    ):
         return True, False
 
     # 401 ``token_expired`` while the transcript still carries ``codex_reasoning_items`` is a
@@ -684,24 +884,35 @@ def recover_after_classification(
     ):
         _retry.nous_paid_entitlement_refresh_attempted = True
         if _try_refresh_nous_paid_entitlement_credentials(agent):
-            _vlines(agent, "🔐 Nous paid access verified — refreshed runtime credentials and retrying request...")
+            _vlines(
+                agent,
+                "🔐 Nous paid access verified — refreshed runtime credentials and retrying request...",
+            )
             return True, False
 
     recovered_with_pool, _retry.has_retried_429 = agent._recover_with_credential_pool(
-        status_code=status_code, has_retried_429=_retry.has_retried_429,
-        classified_reason=classified.reason, error_context=_pool_error_context(agent, classified, error_context),
+        status_code=status_code,
+        has_retried_429=_retry.has_retried_429,
+        classified_reason=classified.reason,
+        error_context=_pool_error_context(agent, classified, error_context),
         billing_unverified=classified.billing_unverified,
     )
     if recovered_with_pool:
         return True, recovered_with_pool
 
     # Shrink oversized native image parts in-place and retry once.
-    if classified.reason == FailoverReason.image_too_large and not _retry.image_shrink_retry_attempted:
+    if (
+        classified.reason == FailoverReason.image_too_large
+        and not _retry.image_shrink_retry_attempted
+    ):
         _retry.image_shrink_retry_attempted = True
         if agent._try_shrink_image_parts_in_messages(
             api_messages, max_dimension=_image_error_max_dimension(api_error) or 8000
         ):
-            _vlines(agent, "📐 Image(s) exceeded provider size limit — shrank and retrying...")
+            _vlines(
+                agent,
+                "📐 Image(s) exceeded provider size limit — shrank and retrying...",
+            )
             return True, recovered_with_pool
         logger.info(
             "image-shrink recovery: no data-URL image parts found "
@@ -716,7 +927,10 @@ def recover_after_classification(
     ):
         _retry.multimodal_tool_content_retry_attempted = True
         if agent._try_strip_image_parts_from_tool_messages(api_messages):
-            _vlines(agent, "📐 Provider rejected list-type tool content — downgraded screenshots to text and retrying...")
+            _vlines(
+                agent,
+                "📐 Provider rejected list-type tool content — downgraded screenshots to text and retrying...",
+            )
             return True, recovered_with_pool
         logger.info(
             "multimodal-tool-content recovery: no list-type tool "
@@ -736,13 +950,24 @@ def recover_after_classification(
     ):
         _retry.reasoning_mandatory_retry_attempted = True
         sent = getattr(agent, "_wire_reasoning_config", None)
-        if isinstance(sent, dict) and sent.get("enabled") is not False and sent.get("effort") not in (None, "none"):
+        if (
+            isinstance(sent, dict)
+            and sent.get("enabled") is not False
+            and sent.get("effort") not in (None, "none")
+        ):
             # The rejected request carried an ENABLED config: the route refuses that reasoning
             # level (#100536: ``reasoning.effort: max`` on a Responses relay). Dropping a disable
             # would resend the identical request; omit the reasoning fields instead (route default).
             agent._reasoning_effort_rejected = True
-            _vlines(agent, f"⚠️  {agent.model} rejects reasoning effort {sent['effort']} — using the route's default for this session, retrying...")
-            logger.warning("%sReasoning-effort recovery: dropping reasoning config for %s", agent.log_prefix, agent.model)
+            _vlines(
+                agent,
+                f"⚠️  {agent.model} rejects reasoning effort {sent['effort']} — using the route's default for this session, retrying...",
+            )
+            logger.warning(
+                "%sReasoning-effort recovery: dropping reasoning config for %s",
+                agent.log_prefix,
+                agent.model,
+            )
             return True, recovered_with_pool
         agent._reasoning_disable_rejected = True
         # "Reasoning is mandatory ... cannot be disabled" understands the field and refuses only the
@@ -750,20 +975,39 @@ def recover_after_classification(
         # rather than the route default. A relay that does not know the field at all keeps the
         # drop (a floor would 400 the same way).
         from agent.error_classifier import is_reasoning_required_rejection
-        agent._reasoning_floor_required = is_reasoning_required_rejection(str(api_error))
+
+        agent._reasoning_floor_required = is_reasoning_required_rejection(
+            str(api_error)
+        )
         try:
             from clawk_cli.models_reasoning_caps import refresh_reasoning_caps_async
+
             refresh_reasoning_caps_async(agent.provider)
         except Exception:
             pass
         if agent._reasoning_floor_required:
             from agent.auxiliary_reasoning_floor import REASONING_FLOOR_EFFORT
-            _vlines(agent, f"⚠️  {agent.model} cannot disable reasoning — using effort={REASONING_FLOOR_EFFORT} for this session, retrying...")
-            logger.warning("%sReasoning-disable recovery: stepping reasoning up to %s for %s",
-                           agent.log_prefix, REASONING_FLOOR_EFFORT, agent.model)
+
+            _vlines(
+                agent,
+                f"⚠️  {agent.model} cannot disable reasoning — using effort={REASONING_FLOOR_EFFORT} for this session, retrying...",
+            )
+            logger.warning(
+                "%sReasoning-disable recovery: stepping reasoning up to %s for %s",
+                agent.log_prefix,
+                REASONING_FLOOR_EFFORT,
+                agent.model,
+            )
         else:
-            _vlines(agent, f"⚠️  {agent.model} rejects disabling reasoning — using the route's default for this session, retrying...")
-            logger.warning("%sReasoning-disable recovery: dropping reasoning disable for %s", agent.log_prefix, agent.model)
+            _vlines(
+                agent,
+                f"⚠️  {agent.model} rejects disabling reasoning — using the route's default for this session, retrying...",
+            )
+            logger.warning(
+                "%sReasoning-disable recovery: dropping reasoning disable for %s",
+                agent.log_prefix,
+                agent.model,
+            )
         return True, recovered_with_pool
 
     # Provider rejected the image bytes; shrinking can't help, so strip image parts.
@@ -772,7 +1016,9 @@ def recover_after_classification(
     if classified.reason == FailoverReason.image_corrupt:
         if _strip_request_images_and_retry(agent, api_messages):
             return True, recovered_with_pool
-        logger.info("image-corrupt recovery: no image parts found to strip; surfacing original error.")
+        logger.info(
+            "image-corrupt recovery: no image parts found to strip; surfacing original error."
+        )
 
     # Anthropic OAuth subscription rejected the 1M-context beta: disable it for this
     # session, rebuild the client, retry once. Reactive so capable subscriptions keep 1M.
@@ -792,26 +1038,39 @@ def recover_after_classification(
             except Exception:
                 pass
             agent._rebuild_anthropic_client()
-            _vlines(agent, "🔕 OAuth subscription doesn't support the 1M-context beta — disabled for this session and retrying...")
+            _vlines(
+                agent,
+                "🔕 OAuth subscription doesn't support the 1M-context beta — disabled for this session and retrying...",
+            )
             return True, recovered_with_pool
 
     if _refresh_credentials_after_401(agent, api_error, _retry, status_code):
         return True, recovered_with_pool
 
-    if _recover_format_errors(agent, api_error, classified, _retry, messages, api_messages):
+    if _recover_format_errors(
+        agent, api_error, classified, _retry, messages, api_messages
+    ):
         return True, recovered_with_pool
     return False, recovered_with_pool
 
 
-def _failed_turn_result(final_response: str, messages: Any, api_call_count: int, error: str) -> dict[str, Any]:
+def _failed_turn_result(
+    final_response: str, messages: Any, api_call_count: int, error: str
+) -> dict[str, Any]:
     """Base failed-turn result dict shared by the two terminal paths."""
     return {
-        "final_response": final_response, "messages": messages, "api_calls": api_call_count,
-        "completed": False, "failed": True, "error": error,
+        "final_response": final_response,
+        "messages": messages,
+        "api_calls": api_call_count,
+        "completed": False,
+        "failed": True,
+        "error": error,
     }
 
 
-def settle_delivered_partial(agent: Any, messages: Any, current_turn_user_idx: Any) -> str:
+def settle_delivered_partial(
+    agent: Any, messages: Any, current_turn_user_idx: Any
+) -> str:
     """Visible text already delivered this turn ("" when none), collapsing any continuation
     trail first so the terminal persist never keeps a dangling synthetic nudge (#119001).
 
@@ -820,17 +1079,24 @@ def settle_delivered_partial(agent: Any, messages: Any, current_turn_user_idx: A
     fragment rows (now collapsed into one assistant row) are the only record.
     """
     from agent.turn_truncation import collapse_continuation_trail
+
     collapsed = collapse_continuation_trail(
-        agent, messages, current_turn_user_idx, finish_reason="error",
+        agent,
+        messages,
+        current_turn_user_idx,
+        finish_reason="error",
     )
     live = getattr(agent, "_current_streamed_assistant_text", "")
     if isinstance(live, str) and live.strip():
         from agent.agent_runtime_helpers import strip_think_blocks
+
         return strip_think_blocks(agent, live).strip() or collapsed
     return collapsed
 
 
-def _with_delivered_partial(final_response: str, error_summary: str, delivered: str) -> tuple:
+def _with_delivered_partial(
+    final_response: str, error_summary: str, delivered: str
+) -> tuple:
     """Prepend delivered partial text to a terminal error body ("" unchanged).
 
     Returns ``(final_response, keep_partial)``; callers set ``result["partial"]``
@@ -850,16 +1116,26 @@ def limit_reset_epoch(agent: Any, api_error: Exception) -> Optional[float]:
     from agent.credential_pool import _parse_absolute_timestamp
 
     try:
-        return _parse_absolute_timestamp(agent._extract_api_error_context(api_error).get("reset_at"))
+        return _parse_absolute_timestamp(
+            agent._extract_api_error_context(api_error).get("reset_at")
+        )
     except Exception:  # advisory only — never break the error path
         return None
 
 
 # Responses for other failures can still carry rate-limit headers; a reset time only explains a limit.
-_LIMIT_REASONS = frozenset({FailoverReason.rate_limit, FailoverReason.upstream_rate_limit, FailoverReason.billing})
+_LIMIT_REASONS = frozenset(
+    {
+        FailoverReason.rate_limit,
+        FailoverReason.upstream_rate_limit,
+        FailoverReason.billing,
+    }
+)
 
 
-def _stamp_limit_reset(result: dict[str, Any], agent: Any, api_error: Exception, classified: Any) -> None:
+def _stamp_limit_reset(
+    result: dict[str, Any], agent: Any, api_error: Exception, classified: Any
+) -> None:
     """``failure_resets_at`` for structured clients (Desktop card: "Limit resets at HH:mm") and the
     same sentence appended to the chat text every plain surface (CLI/TUI/gateway) renders (#98852)."""
     if classified.reason not in _LIMIT_REASONS:
@@ -873,19 +1149,37 @@ def _stamp_limit_reset(result: dict[str, Any], agent: Any, api_error: Exception,
 
 
 def _print_nonretryable_auth_guidance(
-    agent: Any, classified: Any, *, status_code: Optional[int], provider: Any, base_url: Any, model: Any,
+    agent: Any,
+    classified: Any,
+    *,
+    status_code: Optional[int],
+    provider: Any,
+    base_url: Any,
+    model: Any,
 ) -> None:
     """Actionable guidance for a terminal auth / billing error."""
     if (getattr(classified, "error_context", None) or {}).get("usage_window"):
         return  # a plan limit's refusal line and limit panel are its guidance: no second copy, no portal fetch
-    from agent.conversation_loop import _print_billing_or_entitlement_guidance, _print_nous_entitlement_guidance
+    from agent.conversation_loop import (
+        _print_billing_or_entitlement_guidance,
+        _print_nous_entitlement_guidance,
+    )
 
-    if classified.reason == FailoverReason.billing and _print_billing_or_entitlement_guidance(
-        agent, capability="model access", provider=provider, base_url=str(base_url),
-        model=model, unverified=classified.billing_unverified,
+    if (
+        classified.reason == FailoverReason.billing
+        and _print_billing_or_entitlement_guidance(
+            agent,
+            capability="model access",
+            provider=provider,
+            base_url=str(base_url),
+            model=model,
+            unverified=classified.billing_unverified,
+        )
     ):
         return
-    if provider == "nous" and _print_nous_entitlement_guidance(agent, "Nous model access"):
+    if provider == "nous" and _print_nous_entitlement_guidance(
+        agent, "Nous model access"
+    ):
         return
     if provider in {"openai-codex", "xai-oauth", "nous"} and status_code == 401:
         if provider == "openai-codex":
@@ -922,10 +1216,15 @@ def _print_nonretryable_auth_guidance(
                 )
         return
     from clawk_cli.auth_plugin_providers import plugin_refresh_hook
+
     if status_code == 401 and plugin_refresh_hook(str(provider or "")) is not None:
         # A plugin OAuth grant the pool could not refresh: the fix is a fresh sign-in, not a key.
         from agent.turn_failure_copy import oauth_relogin_command
-        _vlines(agent, f"   💡 {provider} sign-in was rejected (HTTP 401). Sign in again: `{oauth_relogin_command(provider)}`")
+
+        _vlines(
+            agent,
+            f"   💡 {provider} sign-in was rejected (HTTP 401). Sign in again: `{oauth_relogin_command(provider)}`",
+        )
         return
     _vlines(
         agent,
@@ -937,7 +1236,9 @@ def _print_nonretryable_auth_guidance(
         _vlines(agent, "      • Check credits: https://openrouter.ai/settings/credits")
 
 
-def _welcome_tier_guidance(classified: Any, *, model: Any, in_chat: bool, door: bool = True) -> str:
+def _welcome_tier_guidance(
+    classified: Any, *, model: Any, in_chat: bool, door: bool = True
+) -> str:
     """Copy for a Nous free-tier refusal the classifier parsed (``welcome_refusal`` /
     ``welcome_route`` in ``error_context``); empty for every other error."""
     ctx = getattr(classified, "error_context", None) or {}
@@ -945,16 +1246,22 @@ def _welcome_tier_guidance(classified: Any, *, model: Any, in_chat: bool, door: 
     if not refusal and not route:
         return ""
     from clawk_cli.anon_auth import welcome_refusal_copy, welcome_route_refusal_copy
+
     if refusal:
-        return welcome_refusal_copy(refusal, model=str(model or ""), in_chat=in_chat, door=door)
+        return welcome_refusal_copy(
+            refusal, model=str(model or ""), in_chat=in_chat, door=door
+        )
     return welcome_route_refusal_copy(str(route), in_chat=in_chat, door=door)
 
 
 # Closed table: every card kind the desktop has copy for. An unknown gateway reason lands on
 # "refused" (generic card, sentence kept) rather than a code the desktop cannot key on.
 _WELCOME_SURFACE_KINDS = {
-    "rate_limited": "rate_limited", "at_capacity": "at_capacity", "admission_closed": "at_capacity",
-    "model_not_free": "model_not_free", "feature_not_free": "model_not_free",
+    "rate_limited": "rate_limited",
+    "at_capacity": "at_capacity",
+    "admission_closed": "at_capacity",
+    "model_not_free": "model_not_free",
+    "feature_not_free": "model_not_free",
 }
 
 
@@ -989,10 +1296,14 @@ def _welcome_outage_copy(agent: Any, base_url: Any, classified: Any) -> str:
     plain sentence (the free model is having trouble) rather than the technical summary. Empty
     for every other route and for rate limits / billing, which have their own copy."""
     from clawk_cli.anon_auth import FREE_TIER_OUTAGE_COPY, on_free_model
+
     # Not ``unknown``: that is the classifier's catch-all for status-less local failures, which
     # are not the free model's trouble.
     if on_free_model(agent, base_url) and classified.reason in (
-            FailoverReason.timeout, FailoverReason.overloaded, FailoverReason.server_error):
+        FailoverReason.timeout,
+        FailoverReason.overloaded,
+        FailoverReason.server_error,
+    ):
         return FREE_TIER_OUTAGE_COPY
     return ""
 
@@ -1007,7 +1318,9 @@ _NONRETRYABLE_LABELS = {
 }
 
 
-def _missing_vendor_prefix_suggestion(api_error: Exception, provider: Any, model: Any) -> Optional[str]:
+def _missing_vendor_prefix_suggestion(
+    api_error: Exception, provider: Any, model: Any
+) -> Optional[str]:
     """Prefixed catalogue id when a bare 404 most likely means ``vendor/model`` lost its prefix."""
     if getattr(api_error, "status_code", None) != 404:
         return None
@@ -1020,9 +1333,20 @@ def _missing_vendor_prefix_suggestion(api_error: Exception, provider: Any, model
 
 
 def nonretryable_client_error_result(
-    agent: Any, api_error: Exception, classified: Any, *, status_code: Optional[int],
-    api_kwargs: Any, api_messages: Any, messages: list[dict[str, Any]], conversation_history: Any,
-    api_call_count: int, approx_tokens: int, provider: Any, base_url: Any, model: Any,
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    *,
+    status_code: Optional[int],
+    api_kwargs: Any,
+    api_messages: Any,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    api_call_count: int,
+    approx_tokens: int,
+    provider: Any,
+    base_url: Any,
+    model: Any,
     delivered: str = "",
 ) -> dict[str, Any]:
     """Terminal path for a non-retryable 4xx once fallback is exhausted: debug dump, flush
@@ -1030,18 +1354,24 @@ def nonretryable_client_error_result(
     for likely context-overflow 400s so the failure does not grow the session), build result."""
     # Result/guidance helpers stay in the loop module (tests import + patch them there).
     from agent.conversation_loop import (
-        _billing_failure_result, _content_policy_blocked_result, _usage_window_refusal,
+        _billing_failure_result,
+        _content_policy_blocked_result,
+        _usage_window_refusal,
     )
 
     if api_kwargs is not None:
-        agent._dump_api_request_debug(api_kwargs, reason="non_retryable_client_error", error=api_error)
+        agent._dump_api_request_debug(
+            api_kwargs, reason="non_retryable_client_error", error=api_error
+        )
     # Terminal — flush buffered context so the user sees what was tried before the abort.
     agent._flush_status_buffer()
     # Summarize once: Cloudflare/proxy HTML pages and raw provider bodies must be
     # collapsed here or they leak verbatim via the ``error`` field.
     _nonretryable_summary = agent._summarize_api_error(api_error)
     _plabel = provider_label_for(provider)
-    _label = _NONRETRYABLE_LABELS.get(classified.reason, f"{_plabel} rejected the request and retrying won't help")
+    _label = _NONRETRYABLE_LABELS.get(
+        classified.reason, f"{_plabel} rejected the request and retrying won't help"
+    )
     agent._emit_diagnostic_status(f"❌ {_label}: {_nonretryable_summary}")
     # The endpoint/status trace is developer detail: verbose only (the log has it always).
     if getattr(agent, "verbose_logging", False):
@@ -1058,14 +1388,28 @@ def nonretryable_client_error_result(
         _vlines(agent, f"   💡 {_welcome_hint}")
     elif classified.is_auth or classified.reason == FailoverReason.billing:
         _print_nonretryable_auth_guidance(
-            agent, classified, status_code=status_code, provider=provider, base_url=base_url, model=model
+            agent,
+            classified,
+            status_code=status_code,
+            provider=provider,
+            base_url=base_url,
+            model=model,
         )
     elif classified.reason == FailoverReason.model_not_found:
-        _vlines(agent, f"   💡 Model '{model}' isn't available on {_plabel}. Pick another with /model.")
+        _vlines(
+            agent,
+            f"   💡 Model '{model}' isn't available on {_plabel}. Pick another with /model.",
+        )
         if _prefix_suggestion:
-            _vlines(agent, f"      Did you mean '{_prefix_suggestion}'? It looks like the vendor prefix is missing.")
+            _vlines(
+                agent,
+                f"      Did you mean '{_prefix_suggestion}'? It looks like the vendor prefix is missing.",
+            )
     elif classified.reason not in _NONRETRYABLE_LABELS:
-        _vlines(agent, f"   💡 Fix: pick another model (/model), or check `{display_clawk_home()}/logs/agent.log`.")
+        _vlines(
+            agent,
+            f"   💡 Fix: pick another model (/model), or check `{display_clawk_home()}/logs/agent.log`.",
+        )
     # A WAF/CDN block (#53099, #70566): the key never reached the provider; the usual cause
     # is the SDK User-Agent, which the per-provider extra_headers override.
     if classified.reason == FailoverReason.upstream_blocked:
@@ -1103,21 +1447,31 @@ def nonretryable_client_error_result(
     # Persisting the failed user message would make the session even larger, causing the same failure on the
     # next attempt. (#1630)
     if status_code == 400 and (approx_tokens > 50000 or len(api_messages) > 80):
-        _vlines(agent, "⚠️  Skipping session persistence for large failed session to prevent growth loop.")
+        _vlines(
+            agent,
+            "⚠️  Skipping session persistence for large failed session to prevent growth loop.",
+        )
     else:
         agent._persist_session(messages, conversation_history)
     if classified.reason == FailoverReason.content_policy_blocked:
         return _content_policy_blocked_result(
-            messages, api_call_count,
-            final_response="⚠️ " + content_policy_copy(label=_plabel, summary=_nonretryable_summary),
+            messages,
+            api_call_count,
+            final_response="⚠️ "
+            + content_policy_copy(label=_plabel, summary=_nonretryable_summary),
             error_detail=_nonretryable_summary,
         )
     # Billing walls get the same structured recovery descriptor as the max-retries path
     # so every surface renders one consistent signal.
     if classified.reason == FailoverReason.billing:
         return _billing_failure_result(
-            classified=classified, summary=_nonretryable_summary, messages=messages,
-            api_call_count=api_call_count, provider=provider, base_url=base_url, model=model,
+            classified=classified,
+            summary=_nonretryable_summary,
+            messages=messages,
+            api_call_count=api_call_count,
+            provider=provider,
+            base_url=base_url,
+            model=model,
             usage_window=_usage_window_refusal(agent, classified, api_messages),
         )
     if _welcome_hint:
@@ -1127,41 +1481,70 @@ def nonretryable_client_error_result(
     else:
         # Every surface reads final_response; the CLI hint lines above never reach chat.
         _final_response = nonretryable_copy(
-            classified, provider=provider, model=model, summary=_nonretryable_summary,
+            classified,
+            provider=provider,
+            model=model,
+            summary=_nonretryable_summary,
             prefix_suggestion=_prefix_suggestion,
         )
     # Same verdict fields as the max-retries path: without them the UI descriptor
     # (agent/error_surface.py) reads a rejected OAuth token as a retryable
     # "Provider error" and offers Retry instead of a re-login.
     _final_response, _keep_partial = _with_delivered_partial(
-        _final_response, _nonretryable_summary, delivered,
+        _final_response,
+        _nonretryable_summary,
+        delivered,
     )
-    result = _failed_turn_result(_final_response, messages, api_call_count, _nonretryable_summary)
-    result.update({
-        "failure_reason": classified.reason.value,
-        "failure_retryable": bool(classified.retryable),
-    })
+    result = _failed_turn_result(
+        _final_response, messages, api_call_count, _nonretryable_summary
+    )
+    result.update(
+        {
+            "failure_reason": classified.reason.value,
+            "failure_retryable": bool(classified.retryable),
+        }
+    )
     if _keep_partial:
         result["partial"] = True
     _stamp_limit_reset(result, agent, api_error, classified)
     if _welcome_hint and (_kind := _welcome_surface_kind(classified)):
         # The card form: the desktop renders the sign-in as a button, so no "To sign in" tail.
-        _stamp_free_tier(result, _kind,
-                         _welcome_tier_guidance(classified, model=model, in_chat=True, door=False))
+        _stamp_free_tier(
+            result,
+            _kind,
+            _welcome_tier_guidance(classified, model=model, in_chat=True, door=False),
+        )
     return result
 
 
 _STREAM_DROP_MARKERS = (
-    "connection lost", "connection reset", "connection closed", "network connection",
-    "network error", "terminated",
+    "connection lost",
+    "connection reset",
+    "connection closed",
+    "network connection",
+    "network error",
+    "terminated",
 )
 
 
 def max_retries_exhausted_result(
-    agent: Any, api_error: Exception, classified: Any, *, attempts: int, is_rate_limited: bool,
-    error_msg: str, api_kwargs: Any, api_messages: Any, messages: list[dict[str, Any]],
-    conversation_history: Any, api_call_count: int, approx_tokens: int, provider: Any,
-    base_url: Any, model: Any, delivered: str = "",
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    *,
+    attempts: int,
+    is_rate_limited: bool,
+    error_msg: str,
+    api_kwargs: Any,
+    api_messages: Any,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    api_call_count: int,
+    approx_tokens: int,
+    provider: Any,
+    base_url: Any,
+    model: Any,
+    delivered: str = "",
 ) -> dict[str, Any]:
     """Terminal path once retries, transport recovery and fallback all failed: flush the
     trace, emit the billing / rate-limit / generic status, print stream-drop or thinking-timeout
@@ -1169,7 +1552,10 @@ def max_retries_exhausted_result(
     ``failure_retryable`` / ``billing_block``."""
     # Result/guidance helpers stay in the loop module (tests import + patch them there).
     from agent.conversation_loop import (
-        _billing_block_dict, _billing_headline, _billing_or_entitlement_message, _billing_terminal_label,
+        _billing_block_dict,
+        _billing_headline,
+        _billing_or_entitlement_message,
+        _billing_terminal_label,
         _print_billing_or_entitlement_guidance,
     )
 
@@ -1185,9 +1571,14 @@ def max_retries_exhausted_result(
                 f"(unverified — may be a content-filter rejection) — {_final_summary}"
             )
         else:
-            agent._emit_diagnostic_status(f"❌ {_billing_headline(classified.message)} — {_final_summary}")
+            agent._emit_diagnostic_status(
+                f"❌ {_billing_headline(classified.message)} — {_final_summary}"
+            )
         _billing_kw = dict(
-            capability="model access", provider=provider, base_url=str(base_url), model=model,
+            capability="model access",
+            provider=provider,
+            base_url=str(base_url),
+            model=model,
             unverified=classified.billing_unverified,
         )
         # A plan limit (usage-window 402) carries its own refusal line: no portal fetch, no second copy.
@@ -1201,7 +1592,9 @@ def max_retries_exhausted_result(
             f"{f' (resets in {_reset})' if _reset else ''}"
         )
     else:
-        agent._emit_diagnostic_status(f"❌ API failed after {attempts} retries — {_final_summary}")
+        agent._emit_diagnostic_status(
+            f"❌ API failed after {attempts} retries — {_final_summary}"
+        )
     _vlines(agent, f"   💀 Final error: {_final_summary}")
     _welcome_hint = _welcome_tier_guidance(classified, model=model, in_chat=False)
     if _welcome_hint:
@@ -1209,9 +1602,8 @@ def max_retries_exhausted_result(
 
     # SSE stream-drop (e.g. "Network connection lost"): usually a proxy/CDN cutting a very
     # large tool call mid-response.
-    _is_stream_drop = (
-        not getattr(api_error, "status_code", None)
-        and any(p in error_msg for p in _STREAM_DROP_MARKERS)
+    _is_stream_drop = not getattr(api_error, "status_code", None) and any(
+        p in error_msg for p in _STREAM_DROP_MARKERS
     )
     if _is_stream_drop:
         _vlines(
@@ -1226,15 +1618,25 @@ def max_retries_exhausted_result(
     # Distinct from _is_stream_drop; detection lives in agent.thinking_timeout_guidance.
     _is_thinking_timeout = is_thinking_timeout(classified, model, error_msg)
     if _is_thinking_timeout:
-        _vlines(agent, f"   💡 {build_thinking_timeout_guidance(provider=provider, model=model).strip()}")
+        _vlines(
+            agent,
+            f"   💡 {build_thinking_timeout_guidance(provider=provider, model=model).strip()}",
+        )
 
     logger.error(
         "%sAPI call failed after %s retries. %s | provider=%s model=%s msgs=%s tokens=~%s",
-        agent.log_prefix, attempts, _final_summary,
-        provider, model, len(api_messages), f"{approx_tokens:,}",
+        agent.log_prefix,
+        attempts,
+        _final_summary,
+        provider,
+        model,
+        len(api_messages),
+        f"{approx_tokens:,}",
     )
     if api_kwargs is not None:
-        agent._dump_api_request_debug(api_kwargs, reason="max_retries_exhausted", error=api_error)
+        agent._dump_api_request_debug(
+            api_kwargs, reason="max_retries_exhausted", error=api_error
+        )
     agent._persist_session(messages, conversation_history)
     _billing_block = None
     _billing_unverified = False
@@ -1253,56 +1655,84 @@ def max_retries_exhausted_result(
         # text carries the plain what-happened + next step itself.
         _reset_at = classified.error_context.get("reset_at")
         _final_response = exhausted_copy(
-            classified.reason.value, label=provider_label_for(provider), attempts=attempts,
-            summary=_final_summary, reset_seconds=_reset_at - time.time() if _reset_at else None,
+            classified.reason.value,
+            label=provider_label_for(provider),
+            attempts=attempts,
+            summary=_final_summary,
+            reset_seconds=_reset_at - time.time() if _reset_at else None,
         )
         if _welcome_hint:
-            _final_response = _welcome_tier_guidance(classified, model=model, in_chat=True)
+            _final_response = _welcome_tier_guidance(
+                classified, model=model, in_chat=True
+            )
             _free_tier_kind = _welcome_surface_kind(classified)
         elif _outage := _welcome_outage_copy(agent, base_url, classified):
             _final_response, _free_tier_kind = _outage, "outage"
     if _is_thinking_timeout:
         # Thinking-timeout guidance overrides stream-drop guidance, which would wrongly
         # suggest splitting large file writes.
-        _final_response += "\n\n" + build_thinking_timeout_guidance(provider=provider, model=model)
+        _final_response += "\n\n" + build_thinking_timeout_guidance(
+            provider=provider, model=model
+        )
     elif _is_stream_drop:
         _final_response += (
             "\n\nThe connection kept dropping while the model was writing — this often "
             "happens when it writes a very large file in one go. Ask me to write the file in "
             "smaller sections (or via execute_code with Python's open())."
         )
-    result = _failed_turn_result(_final_response, messages, api_call_count, _final_summary)
-    result.update({
-        # Classified reason so callers (kanban worker in cli.py) can tell a quota wall
-        # (``rate_limit`` / ``billing``) from a task failure.
-        "failure_reason": classified.reason.value,
-        # The classifier's own retry verdict — UI surfaces use this, not the reason string.
-        "failure_retryable": bool(classified.retryable),
-        # True when the billing verdict rests on an ambiguous body.
-        "billing_unverified": _billing_unverified,
-        # Present only for billing walls: (provider, billing_url, is_nous, message).
-        "billing_block": _billing_block,
-    })
+    result = _failed_turn_result(
+        _final_response, messages, api_call_count, _final_summary
+    )
+    result.update(
+        {
+            # Classified reason so callers (kanban worker in cli.py) can tell a quota wall
+            # (``rate_limit`` / ``billing``) from a task failure.
+            "failure_reason": classified.reason.value,
+            # The classifier's own retry verdict — UI surfaces use this, not the reason string.
+            "failure_retryable": bool(classified.retryable),
+            # True when the billing verdict rests on an ambiguous body.
+            "billing_unverified": _billing_unverified,
+            # Present only for billing walls: (provider, billing_url, is_nous, message).
+            "billing_block": _billing_block,
+        }
+    )
     # Retry-exhaustion after partial delivery (#119001): the text was already
     # shown, so keep it as the reply (marked failed) instead of an error-only
     # turn — the gateway flags ``partial`` and surfaces retain the bubble.
     _final_response, _keep_partial = _with_delivered_partial(
-        _final_response, _final_summary, delivered,
+        _final_response,
+        _final_summary,
+        delivered,
     )
     if _keep_partial:
         result["final_response"] = _final_response
         result["partial"] = True
     _stamp_limit_reset(result, agent, api_error, classified)
     if _free_tier_kind:
-        _stamp_free_tier(result, _free_tier_kind, (
-            _welcome_tier_guidance(classified, model=model, in_chat=True, door=False)
-            if _welcome_hint else _final_response))
+        _stamp_free_tier(
+            result,
+            _free_tier_kind,
+            (
+                _welcome_tier_guidance(
+                    classified, model=model, in_chat=True, door=False
+                )
+                if _welcome_hint
+                else _final_response
+            ),
+        )
     return result
 
 
 def log_api_error_attempt(
-    agent: Any, api_error: Exception, *, retry_count: int, max_retries: int,
-    status_code: Optional[int], elapsed_time: float, api_messages: Any, approx_tokens: int,
+    agent: Any,
+    api_error: Exception,
+    *,
+    retry_count: int,
+    max_retries: int,
+    status_code: Optional[int],
+    elapsed_time: float,
+    api_messages: Any,
+    approx_tokens: int,
     retryable: bool = True,
 ) -> tuple[str, str, Any, Any, Any]:
     """Log one failed API attempt (warning + buffered retry trace, OpenRouter "no tool
@@ -1315,10 +1745,15 @@ def log_api_error_attempt(
     error_type = type(api_error).__name__
     error_msg = str(api_error).lower()
     _error_summary = agent._summarize_api_error(api_error)
-    _attempt = f"attempt {retry_count}/{max_retries}" + ("" if retryable else ", not retryable")
+    _attempt = f"attempt {retry_count}/{max_retries}" + (
+        "" if retryable else ", not retryable"
+    )
     logger.warning(
         "API call failed (%s) error_type=%s %s summary=%s",
-        _attempt, error_type, agent._client_log_context(), _error_summary,
+        _attempt,
+        error_type,
+        agent._client_log_context(),
+        _error_summary,
     )
 
     _provider = getattr(agent, "provider", "unknown")
@@ -1338,18 +1773,28 @@ def log_api_error_attempt(
             _err_body_str = str(_err_body)[:300] if _err_body else None
             if _err_body_str:
                 _blines(agent, f"   📋 Details: {_err_body_str}")
-        _blines(agent, f"   ⏱️  Elapsed: {elapsed_time:.2f}s  Context: {len(api_messages)} msgs, ~{approx_tokens:,} tokens")
+        _blines(
+            agent,
+            f"   ⏱️  Elapsed: {elapsed_time:.2f}s  Context: {len(api_messages)} msgs, ~{approx_tokens:,} tokens",
+        )
 
     if agent._is_openrouter_url() and "support tool use" in error_msg:
-        _blines(agent, f"   💡 No OpenRouter providers for {_model} support tool calling with your current settings.")
+        _blines(
+            agent,
+            f"   💡 No OpenRouter providers for {_model} support tool calling with your current settings.",
+        )
         from agent.chat_completion_helpers import _provider_preferences_for_agent
+
         if _provider_preferences_for_agent(agent).get("only"):
             _blines(
                 agent,
                 "      Your provider_routing.only restriction is filtering out tool-capable providers.",
                 "      Try removing the restriction or adding providers that support tools for this model.",
             )
-        _blines(agent, f"      Check which providers support tools: https://openrouter.ai/models/{_model}")
+        _blines(
+            agent,
+            f"      Check which providers support tools: https://openrouter.ai/models/{_model}",
+        )
 
     # Bare 404 on a ``vendor/model`` catalogue usually means the id lost its prefix; the
     # provider never names the model, so we do.
@@ -1364,8 +1809,13 @@ def log_api_error_attempt(
 
 
 def abort_turn_on_interrupt(
-    agent: Any, messages: list[dict[str, Any]], conversation_history: Any, api_call_count: int, *,
-    abort_message: str, interrupt_text: str,
+    agent: Any,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    api_call_count: int,
+    *,
+    abort_message: str,
+    interrupt_text: str,
 ) -> dict[str, Any]:
     """Announce ``abort_message``, close any open tool sequence with ``interrupt_text``,
     persist, clear the interrupt and return the ``interrupted`` result dict."""
@@ -1380,15 +1830,25 @@ def abort_turn_on_interrupt(
     # tool iteration, which will no longer happen — drop it (hard-cancel semantics).
     agent.clear_interrupt(hard_cancel=True)
     return {
-        "final_response": interrupt_text, "messages": messages, "api_calls": api_call_count,
-        "completed": False, "interrupted": True,
+        "final_response": interrupt_text,
+        "messages": messages,
+        "api_calls": api_call_count,
+        "completed": False,
+        "interrupted": True,
     }
 
 
 def interruptible_backoff_sleep(
-    agent: Any, wait_time: float, _retry: Optional[TurnRetryState], *,
-    messages: list[dict[str, Any]], conversation_history: Any, api_call_count: int,
-    abort_message: str, interrupt_text: str, activity_label: str,
+    agent: Any,
+    wait_time: float,
+    _retry: Optional[TurnRetryState],
+    *,
+    messages: list[dict[str, Any]],
+    conversation_history: Any,
+    api_call_count: int,
+    abort_message: str,
+    interrupt_text: str,
+    activity_label: str,
 ) -> Optional[dict[str, Any]]:
     """Sleep ``wait_time`` in 200 ms slices so interrupts are honoured promptly, touching
     activity every ~30 s so the gateway's inactivity monitor knows we are alive.
@@ -1404,13 +1864,19 @@ def interruptible_backoff_sleep(
                 _retry.restart_with_redirected_messages = True
                 return None
             return abort_turn_on_interrupt(
-                agent, messages, conversation_history, api_call_count,
-                abort_message=abort_message, interrupt_text=interrupt_text,
+                agent,
+                messages,
+                conversation_history,
+                api_call_count,
+                abort_message=abort_message,
+                interrupt_text=interrupt_text,
             )
         time.sleep(0.2)
         _touch_counter += 1
         if _touch_counter % 150 == 0:  # 150 × 0.2s = 30s
-            agent._touch_activity(f"{activity_label}, {int(sleep_end - time.time())}s remaining")
+            agent._touch_activity(
+                f"{activity_label}, {int(sleep_end - time.time())}s remaining"
+            )
     # A long wait can outlive a short-lived credential (the free tier's JWT lives 15 minutes), and
     # the per-iteration pre-expiry adoption does not run between retries.
     agent._adopt_nous_key_before_expiry()
@@ -1431,6 +1897,7 @@ def reset_hint(api_error: Exception) -> str:
     from agent.agent_runtime_helpers import extract_api_error_context
     from agent.credential_pool import _parse_absolute_timestamp
     from agent.usage_pricing import format_duration_compact
+
     reset_at = extract_api_error_context(api_error).get("reset_at")
     if reset_at is None:
         return ""
@@ -1439,8 +1906,15 @@ def reset_hint(api_error: Exception) -> str:
 
 
 def compute_error_backoff(
-    agent: Any, api_error: Exception, *, retry_count: int, max_retries: int, is_rate_limited: bool,
-    is_zai_coding_overload: bool, base_url: Any, model: Any,
+    agent: Any,
+    api_error: Exception,
+    *,
+    retry_count: int,
+    max_retries: int,
+    is_rate_limited: bool,
+    is_zai_coding_overload: bool,
+    base_url: Any,
+    model: Any,
 ) -> float:
     """Pick the wait before the next API retry and announce it. Retry-After wins for
     rate limits and any other retryable error (capped at ``RETRY_AFTER_CAP_S``); otherwise
@@ -1450,7 +1924,10 @@ def compute_error_backoff(
     # Imported lazily so tests that patch ``agent.retry_utils.jittered_backoff`` /
     # ``adaptive_rate_limit_backoff`` (incl. the run_agent conftest fast-backoff fixture) intercept.
     from agent.retry_utils import (
-        LIVE_RETRY_WAIT_CAP_S, RETRY_AFTER_CAP_S, adaptive_rate_limit_backoff, jittered_backoff,
+        LIVE_RETRY_WAIT_CAP_S,
+        RETRY_AFTER_CAP_S,
+        adaptive_rate_limit_backoff,
+        jittered_backoff,
         provider_retry_after_seconds,
     )
     from clawk_cli.anon_auth import on_free_model
@@ -1462,26 +1939,45 @@ def compute_error_backoff(
     _retry_after = provider_retry_after_seconds(api_error)
     if _retry_after is not None:
         _retry_after = min(_retry_after, RETRY_AFTER_CAP_S)
-    wait_time = _retry_after if _retry_after is not None else jittered_backoff(retry_count, base_delay=2.0, max_delay=60.0)
+    wait_time = (
+        _retry_after
+        if _retry_after is not None
+        else jittered_backoff(retry_count, base_delay=2.0, max_delay=60.0)
+    )
     _backoff_policy = None
     _adaptive = is_rate_limited or is_zai_coding_overload
     if _adaptive and _retry_after is None:
         wait_time, _backoff_policy = adaptive_rate_limit_backoff(
-            retry_count, base_url=str(base_url), model=model, error=api_error, default_wait=wait_time,
+            retry_count,
+            base_url=str(base_url),
+            model=model,
+            error=api_error,
+            default_wait=wait_time,
         )
     _reset = reset_hint(api_error) if _adaptive else ""
     _free_busy = is_rate_limited and on_free_model(agent, base_url)
-    _wait_reason = ("The free model is busy" if _free_busy
-                    else "Provider overloaded" if is_zai_coding_overload and not is_rate_limited else "Rate limited")
+    _wait_reason = (
+        "The free model is busy"
+        if _free_busy
+        else "Provider overloaded"
+        if is_zai_coding_overload and not is_rate_limited
+        else "Rate limited"
+    )
     if _adaptive:
         _policy_note = _ZAI_POLICY_NOTES.get(_backoff_policy or "", "")
-        _status = (f"⏱️ {_wait_reason}.{f' Resets in {_reset}.' if _reset else ''} Waiting {wait_time:.1f}s "
-                   f"(attempt {retry_count + 1}/{max_retries}){_policy_note}...")
+        _status = (
+            f"⏱️ {_wait_reason}.{f' Resets in {_reset}.' if _reset else ''} Waiting {wait_time:.1f}s "
+            f"(attempt {retry_count + 1}/{max_retries}){_policy_note}..."
+        )
         _announce_now = _backoff_policy == "zai_coding_overload_long"
     else:
-        _status = f"⏳ Retrying in {wait_time:.1f}s (attempt {retry_count}/{max_retries})..."
+        _status = (
+            f"⏳ Retrying in {wait_time:.1f}s (attempt {retry_count}/{max_retries})..."
+        )
         # A 5xx Retry-After can reach the cap; buffering it would leave the user silent for minutes.
-        _announce_now = _retry_after is not None and _retry_after > LIVE_RETRY_WAIT_CAP_S
+        _announce_now = (
+            _retry_after is not None and _retry_after > LIVE_RETRY_WAIT_CAP_S
+        )
     if _announce_now:
         agent._emit_diagnostic_status(_status)
     else:
@@ -1493,19 +1989,27 @@ def compute_error_backoff(
     if _reset:
         _live_reason = f"{_wait_reason.lower()} — resets in {_reset},"
     else:
-        _live_reason = "the free model is busy —" if _free_busy else "waiting on provider —"
+        _live_reason = (
+            "the free model is busy —" if _free_busy else "waiting on provider —"
+        )
     agent._emit_diagnostic_wait(
         f"⏳ {_live_reason} retrying in {wait_time:.0f}s (attempt {retry_count}/{max_retries})"
     )
     logger.warning(
         "Retrying API call in %ss (attempt %s/%s) %s policy=%s error=%s",
-        wait_time, retry_count, max_retries, agent._client_log_context(),
-        _backoff_policy or "default", api_error,
+        wait_time,
+        retry_count,
+        max_retries,
+        agent._client_log_context(),
+        _backoff_policy or "default",
+        api_error,
     )
     return wait_time
 
 
-def free_tier_cooldown_ends_turn(agent: Any, api_error: Exception, base_url: Any) -> bool:
+def free_tier_cooldown_ends_turn(
+    agent: Any, api_error: Exception, base_url: Any
+) -> bool:
     """True when an attended session on the free model meets a cooldown longer than a person
     sits through. The free tier's pause is service-wide: a 600 s retry met a second 429 while its
     1069 s window ran, so the caller ends the attempt cycle now (fallback, or the reset time and
@@ -1515,6 +2019,7 @@ def free_tier_cooldown_ends_turn(agent: Any, api_error: Exception, base_url: Any
     from agent.retry_utils import LIVE_RETRY_WAIT_CAP_S, provider_retry_after_seconds
     from agent.session_source import is_attended
     from clawk_cli.anon_auth import on_free_model
+
     if not (on_free_model(agent, base_url) and is_attended(agent)):
         return False
     cooldown = provider_retry_after_seconds(api_error)
@@ -1530,7 +2035,10 @@ def _codex_soft_failure_error(response: Any) -> dict[str, Any]:
     if isinstance(error_obj, dict):
         fields = error_obj
     elif hasattr(error_obj, "code") or hasattr(error_obj, "message"):
-        fields = {"code": getattr(error_obj, "code", None), "message": getattr(error_obj, "message", None)}
+        fields = {
+            "code": getattr(error_obj, "code", None),
+            "message": getattr(error_obj, "message", None),
+        }
     else:
         fields = {"message": str(error_obj)}
     return {k: v for k, v in fields.items() if isinstance(v, str) and v.strip()}
@@ -1545,18 +2053,26 @@ class _CodexSoftFailure(Exception):
         self.body = {"error": error}
 
 
-def classify_codex_soft_failure(agent: Any, response: Any) -> tuple[Any, dict[str, Any]]:
+def classify_codex_soft_failure(
+    agent: Any, response: Any
+) -> tuple[Any, dict[str, Any]]:
     """``(classified, error_context)`` for a Codex ``failed``/``cancelled`` Response, or
     ``(None, {})`` when it is not one. The SDK never raises on these HTTP-200 soft failures,
     so this is the only place their quota/billing/auth semantics reach the credential pool."""
     if agent.api_mode != "codex_responses":
         return None, {}
-    if str(getattr(response, "status", "") or "").strip().lower() not in {"failed", "cancelled"}:
+    if str(getattr(response, "status", "") or "").strip().lower() not in {
+        "failed",
+        "cancelled",
+    }:
         return None, {}
     exc = _CodexSoftFailure(_codex_soft_failure_error(response))
     classified = classify_api_error(
-        exc, provider=getattr(agent, "provider", "") or "", model=getattr(agent, "model", "") or "",
-        base_url=str(getattr(agent, "base_url", "") or ""), api_key=getattr(agent, "api_key", None),
+        exc,
+        provider=getattr(agent, "provider", "") or "",
+        model=getattr(agent, "model", "") or "",
+        base_url=str(getattr(agent, "base_url", "") or ""),
+        api_key=getattr(agent, "api_key", None),
     )
     return classified, agent._extract_api_error_context(exc)
 
@@ -1579,7 +2095,9 @@ def validate_response_shape(agent: Any, response: Any) -> tuple[bool, list[str]]
             )
             logger.warning(
                 "Codex response status='%s' (error=%s). Routing to fallback. %s",
-                _codex_resp_status, _codex_error_msg, agent._client_log_context(),
+                _codex_resp_status,
+                _codex_error_msg,
+                agent._client_log_context(),
             )
             return True, [f"response.status={_codex_resp_status}: {_codex_error_msg}"]
         # Stream backfill may have failed but normalize can still recover from output_text.
@@ -1595,7 +2113,8 @@ def validate_response_shape(agent: Any, response: Any) -> tuple[bool, list[str]]
         logger.warning(
             "Codex response.output is empty after stream backfill "
             "(status=%s, incomplete_details=%s, model=%s). %s",
-            getattr(response, "status", None), getattr(response, "incomplete_details", None),
+            getattr(response, "status", None),
+            getattr(response, "incomplete_details", None),
             getattr(response, "model", None),
             f"api_mode={agent.api_mode} provider={agent.provider}",
         )
@@ -1604,7 +2123,7 @@ def validate_response_shape(agent: Any, response: Any) -> tuple[bool, list[str]]
         detail = "response.content invalid (not a non-empty list)"
     elif agent.api_mode == "bedrock_converse":
         detail = "Bedrock response invalid (no output or choices)"
-    elif not hasattr(response, 'choices'):
+    elif not hasattr(response, "choices"):
         detail = "response has no 'choices' attribute"
     elif response.choices is None:
         detail = "response.choices is None"
@@ -1613,35 +2132,46 @@ def validate_response_shape(agent: Any, response: Any) -> tuple[bool, list[str]]
     return True, [detail]
 
 
-def describe_invalid_response(agent: Any, response: Any, api_duration: float) -> tuple[str, str, str]:
+def describe_invalid_response(
+    agent: Any, response: Any, api_duration: float
+) -> tuple[str, str, str]:
     """Diagnostics for an empty/malformed response: ``(error_msg, provider_name,
     failure_hint)``. The hint is derived from the provider error code (524/504/429/
     5xx) and the response time, instead of always assuming rate limiting."""
     error_msg = "Unknown"
     provider_name = "Unknown"
-    _has_error = bool(response and hasattr(response, 'error') and response.error)
+    _has_error = bool(response and hasattr(response, "error") and response.error)
     if _has_error:
         # A typed ``ResponseError`` stringifies as its repr; show the provider's message.
-        error_msg = _codex_soft_failure_error(response).get("message") or str(response.error)
-        if hasattr(response.error, 'metadata') and response.error.metadata:
-            provider_name = response.error.metadata.get('provider_name', 'Unknown')
-    elif response and hasattr(response, 'message') and response.message:
+        error_msg = _codex_soft_failure_error(response).get("message") or str(
+            response.error
+        )
+        if hasattr(response.error, "metadata") and response.error.metadata:
+            provider_name = response.error.metadata.get("provider_name", "Unknown")
+    elif response and hasattr(response, "message") and response.message:
         error_msg = str(response.message)
 
     # OpenRouter often returns the actual model used.
-    if provider_name == "Unknown" and response and hasattr(response, 'model') and response.model:
+    if (
+        provider_name == "Unknown"
+        and response
+        and hasattr(response, "model")
+        and response.model
+    ):
         provider_name = f"model={response.model}"
 
     if provider_name == "Unknown" and response:
-        resp_attrs = {k: str(v)[:100] for k, v in vars(response).items() if not k.startswith('_')}
+        resp_attrs = {
+            k: str(v)[:100] for k, v in vars(response).items() if not k.startswith("_")
+        }
         if agent.verbose_logging:
             logging.debug(f"Response attributes for invalid response: {resp_attrs}")
 
     _resp_error_code = None
     if _has_error:
-        _code_raw = getattr(response.error, 'code', None)
+        _code_raw = getattr(response.error, "code", None)
         if _code_raw is None and isinstance(response.error, dict):
-            _code_raw = response.error.get('code')
+            _code_raw = response.error.get("code")
         if _code_raw is not None:
             try:
                 _resp_error_code = int(_code_raw)
@@ -1694,13 +2224,23 @@ class ClassifiedErrorVerdict:
     is_zai_coding_overload: bool
 
 
-_OVERFLOW_REASONS = frozenset({
-    FailoverReason.long_context_tier, FailoverReason.payload_too_large, FailoverReason.context_overflow,
-})
-_RATE_LIMIT_REASONS = frozenset({
-    FailoverReason.rate_limit, FailoverReason.billing, FailoverReason.upstream_rate_limit,
-})
-_TRANSPORT_FAILURE_REASONS = frozenset({FailoverReason.timeout, FailoverReason.overloaded})
+_OVERFLOW_REASONS = frozenset(
+    {
+        FailoverReason.long_context_tier,
+        FailoverReason.payload_too_large,
+        FailoverReason.context_overflow,
+    }
+)
+_RATE_LIMIT_REASONS = frozenset(
+    {
+        FailoverReason.rate_limit,
+        FailoverReason.billing,
+        FailoverReason.upstream_rate_limit,
+    }
+)
+_TRANSPORT_FAILURE_REASONS = frozenset(
+    {FailoverReason.timeout, FailoverReason.overloaded}
+)
 
 
 _LONG_CONTEXT_TIER_CAP = 200000
@@ -1713,8 +2253,12 @@ def _cap_long_context_tier(agent: Any) -> int:
     old_ctx = compressor.context_length
     if old_ctx > _LONG_CONTEXT_TIER_CAP:
         compressor.update_model(
-            model=agent.model, context_length=_LONG_CONTEXT_TIER_CAP, base_url=agent.base_url,
-            api_key=getattr(agent, "api_key", ""), provider=agent.provider, api_mode=agent.api_mode,
+            model=agent.model,
+            context_length=_LONG_CONTEXT_TIER_CAP,
+            base_url=agent.base_url,
+            api_key=getattr(agent, "api_key", ""),
+            provider=agent.provider,
+            api_mode=agent.api_mode,
         )
         # Context probing flags exist only on the built-in compressor (plugin engines
         # manage their own). Don't persist — a tier limit, not a model capability;
@@ -1730,11 +2274,17 @@ def _cap_long_context_tier(agent: Any) -> int:
     return old_ctx
 
 
-def _eager_fallback_status(classified: Any, is_upstream: bool, is_transport_failure: bool) -> str:
+def _eager_fallback_status(
+    classified: Any, is_upstream: bool, is_transport_failure: bool
+) -> str:
     """Status line announcing an eager fallback switch."""
     if is_upstream:
-        _upstream_name = (classified.error_context or {}).get("upstream_provider", "aggregator")
-        return f"⚠️ Upstream {_upstream_name} rate-limited — switching to fallback model..."
+        _upstream_name = (classified.error_context or {}).get(
+            "upstream_provider", "aggregator"
+        )
+        return (
+            f"⚠️ Upstream {_upstream_name} rate-limited — switching to fallback model..."
+        )
     if classified.reason == FailoverReason.billing:
         if classified.billing_unverified:
             # Ambiguous body — don't assert billing.
@@ -1760,16 +2310,23 @@ def activate_codex_app_server_fallback(agent: Any, result: dict[str, Any]) -> bo
     if not error or result.get("interrupted") or not agent._has_pending_fallback():
         return False
     classified = classify_api_error(
-        RuntimeError(str(error)), provider=getattr(agent, "provider", "") or "", model=getattr(agent, "model", "") or "",
+        RuntimeError(str(error)),
+        provider=getattr(agent, "provider", "") or "",
+        model=getattr(agent, "model", "") or "",
     )
     if classified.reason not in _RATE_LIMIT_REASONS:
         return False
     agent._buffer_diagnostic_status(
-        _eager_fallback_status(classified, classified.reason == FailoverReason.upstream_rate_limit, False))
+        _eager_fallback_status(
+            classified, classified.reason == FailoverReason.upstream_rate_limit, False
+        )
+    )
     return bool(agent._try_activate_fallback(reason=classified.reason))
 
 
-def _is_genuine_nous_rate_limit(agent: Any, api_error: Exception, error_context: Any, classified: Any = None) -> bool:
+def _is_genuine_nous_rate_limit(
+    agent: Any, api_error: Exception, error_context: Any, classified: Any = None
+) -> bool:
     """Record a genuine account-level Nous 429 to the cross-session breaker; upstream
     capacity 429s (no exhausted bucket in headers or last-known state) are left alone.
 
@@ -1780,20 +2337,32 @@ def _is_genuine_nous_rate_limit(agent: Any, api_error: Exception, error_context:
     _genuine = False
     try:
         from agent.nous_rate_guard import (
-            is_genuine_nous_rate_limit, is_long_welcome_rate_limit, record_nous_rate_limit)
+            is_genuine_nous_rate_limit,
+            is_long_welcome_rate_limit,
+            record_nous_rate_limit,
+        )
+
         _err_resp = getattr(api_error, "response", None)
         _err_hdrs = getattr(_err_resp, "headers", None) if _err_resp else None
         from clawk_cli.anon_auth import is_anonymous_agent
+
         anonymous = is_anonymous_agent(agent)
         _classified_ctx = getattr(classified, "error_context", None) or {}
         # Only an anonymous request's fairshare body is an allowance verdict; named
         # requests keep the exhausted-bucket rule, whatever their host or body says.
         _genuine = (
-            (anonymous and is_long_welcome_rate_limit(_classified_ctx))
-            or is_genuine_nous_rate_limit(headers=_err_hdrs, last_known_state=agent._rate_limit_state))
+            anonymous and is_long_welcome_rate_limit(_classified_ctx)
+        ) or is_genuine_nous_rate_limit(
+            headers=_err_hdrs, last_known_state=agent._rate_limit_state
+        )
         if _genuine:
-            _merged = {**(error_context if isinstance(error_context, dict) else {}), **_classified_ctx}
-            record_nous_rate_limit(headers=_err_hdrs, error_context=_merged, anonymous=anonymous)
+            _merged = {
+                **(error_context if isinstance(error_context, dict) else {}),
+                **_classified_ctx,
+            }
+            record_nous_rate_limit(
+                headers=_err_hdrs, error_context=_merged, anonymous=anonymous
+            )
         else:
             logger.info(
                 "Nous 429 looks like upstream capacity "
@@ -1807,11 +2376,26 @@ def _is_genuine_nous_rate_limit(agent: Any, api_error: Exception, error_context:
 
 
 def route_classified_error(
-    agent: Any, api_error: Exception, classified: Any, _retry: TurnRetryState, *, error_msg: str,
-    error_context: Any, recovered_with_pool: bool, base_url: Any, model: Any,
-    messages: list[dict[str, Any]], api_messages: Any, system_message: Any,
-    active_system_prompt: Any, conversation_history: Any, retry_count: int, max_retries: int,
-    compression_attempts: int, max_compression_attempts: int, api_call_count: int,
+    agent: Any,
+    api_error: Exception,
+    classified: Any,
+    _retry: TurnRetryState,
+    *,
+    error_msg: str,
+    error_context: Any,
+    recovered_with_pool: bool,
+    base_url: Any,
+    model: Any,
+    messages: list[dict[str, Any]],
+    api_messages: Any,
+    system_message: Any,
+    active_system_prompt: Any,
+    conversation_history: Any,
+    retry_count: int,
+    max_retries: int,
+    compression_attempts: int,
+    max_compression_attempts: int,
+    api_call_count: int,
     effective_task_id: Any,
 ) -> ClassifiedErrorVerdict:
     """Ordered (load-bearing) recovery steps between classification and overflow handling:
@@ -1830,20 +2414,30 @@ def route_classified_error(
     _is_zai_coding_overload = False
     status_code = getattr(api_error, "status_code", None)
 
-    def _verdict(action: str, result: Optional[dict[str, Any]] = None) -> ClassifiedErrorVerdict:
+    def _verdict(
+        action: str, result: Optional[dict[str, Any]] = None
+    ) -> ClassifiedErrorVerdict:
         return ClassifiedErrorVerdict(
-            action=action, result=result, status_code=status_code, messages=messages,
-            active_system_prompt=active_system_prompt, conversation_history=conversation_history,
-            retry_count=retry_count, max_retries=max_retries,
+            action=action,
+            result=result,
+            status_code=status_code,
+            messages=messages,
+            active_system_prompt=active_system_prompt,
+            conversation_history=conversation_history,
+            retry_count=retry_count,
+            max_retries=max_retries,
             compression_attempts=compression_attempts,
             provider_overflow_recovery_pending=_provider_overflow_recovery_pending,
-            is_rate_limited=is_rate_limited, wrapped_output_cap_budget=_wrapped_output_cap_budget,
+            is_rate_limited=is_rate_limited,
+            wrapped_output_cap_budget=_wrapped_output_cap_budget,
             is_zai_coding_overload=_is_zai_coding_overload,
         )
 
     def _fallback_break() -> ClassifiedErrorVerdict:
         nonlocal active_system_prompt, retry_count, compression_attempts
-        active_system_prompt = _arm_fallback_restart(agent, api_messages, active_system_prompt, _retry)
+        active_system_prompt = _arm_fallback_restart(
+            agent, api_messages, active_system_prompt, _retry
+        )
         retry_count = 0
         compression_attempts = 0
         return _verdict("break")
@@ -1851,7 +2445,8 @@ def route_classified_error(
     # ``compression.enabled: false`` forbids every automatic trigger, incl. these
     # overflow recovery paths; error out. Output-cap errors exempt.
     _is_output_cap_error = (
-        is_output_cap_error(error_msg) or parse_available_output_tokens_from_error(error_msg) is not None
+        is_output_cap_error(error_msg)
+        or parse_available_output_tokens_from_error(error_msg) is not None
     )
     if (
         classified.reason in _OVERFLOW_REASONS
@@ -1871,11 +2466,23 @@ def route_classified_error(
         )
         agent._persist_session(messages, conversation_history)
         _final_response = site_copy("compression_disabled", model=agent.model)
-        return _verdict("return", stamp_failure({
-            "final_response": _final_response, "messages": messages, "completed": False,
-            "api_calls": api_call_count, "error": _final_response, "partial": True, "failed": True,
-            "compaction_disabled": True,
-        }, "context_overflow", False))
+        return _verdict(
+            "return",
+            stamp_failure(
+                {
+                    "final_response": _final_response,
+                    "messages": messages,
+                    "completed": False,
+                    "api_calls": api_call_count,
+                    "error": _final_response,
+                    "partial": True,
+                    "failed": True,
+                    "compaction_disabled": True,
+                },
+                "context_overflow",
+                False,
+            ),
+        )
 
     # Anthropic 429 "Extra usage is required for long context requests" is a
     # subscription-tier limit, not transient: cap at 200k and compress.
@@ -1890,11 +2497,18 @@ def route_classified_error(
                 # Route the overhead-aware _real_tokens (computed above) into compression, not the bare
                 # last_prompt_tokens — which is 0 in the no-usage fallback, hiding the true request size
                 # from the engine's overflow guard (upstream PR #77169 review).
-                messages, system_message,
-                approx_tokens=estimate_request_tokens_rough(api_messages, tools=agent.tools or None),
-                task_id=effective_task_id, trigger="overflow", overflow_reason=classified.reason.value,
+                messages,
+                system_message,
+                approx_tokens=estimate_request_tokens_rough(
+                    api_messages, tools=agent.tools or None
+                ),
+                task_id=effective_task_id,
+                trigger="overflow",
+                overflow_reason=classified.reason.value,
             )
-            conversation_history = conversation_history_after_compression(agent, messages, conversation_history)
+            conversation_history = conversation_history_after_compression(
+                agent, messages, conversation_history
+            )
             if len(messages) < original_len or old_ctx > _LONG_CONTEXT_TIER_CAP:
                 agent._buffer_diagnostic_status(
                     COMPRESSION_RETRY_CONTEXT_REDUCED_STATUS_TEMPLATE.format(
@@ -1922,30 +2536,45 @@ def route_classified_error(
     # as available_out inside the handler.
     _wrapped_output_cap_budget = (
         parse_available_output_tokens_from_error(error_msg)
-        if classified.reason == FailoverReason.rate_limit else None
+        if classified.reason == FailoverReason.rate_limit
+        else None
     )
     _is_transport_failure = classified.reason in _TRANSPORT_FAILURE_REASONS
     # Z.AI overload 429s classify `overloaded`, which `is_rate_limited` excludes. Detect
     # directly so the long backoff runs, and raise the ceiling to reach it.
-    _is_zai_coding_overload = is_zai_coding_overload_error(base_url=str(base_url), model=model, error=api_error)
+    _is_zai_coding_overload = is_zai_coding_overload_error(
+        base_url=str(base_url), model=model, error=api_error
+    )
     if _is_zai_coding_overload:
         max_retries = max(max_retries, zai_coding_overload_retry_ceiling())
     _should_fallback = (
         (is_rate_limited and _wrapped_output_cap_budget is None)
         or (_is_transport_failure and retry_count >= 2)
-    ) and not (getattr(classified, "error_context", None) or {}).get("usage_window")  # never switch models on a plan limit
+    ) and not (getattr(classified, "error_context", None) or {}).get(
+        "usage_window"
+    )  # never switch models on a plan limit
     if _should_fallback and agent._fallback_index < len(agent._fallback_chain):
         # No eager fallback while credential pool rotation may recover. Exception: an
         # upstream-aggregator 429 — the pool can't help, always fall back.
         # Fixes #11314.
         _is_upstream = classified.reason == FailoverReason.upstream_rate_limit
         pool_may_recover = (
-            False if _is_upstream else _ra()._pool_may_recover_from_rate_limit(agent._credential_pool)
+            False
+            if _is_upstream
+            else _ra()._pool_may_recover_from_rate_limit(agent._credential_pool)
         )
         if not pool_may_recover:
-            agent._buffer_diagnostic_status(_eager_fallback_status(classified, _is_upstream, _is_transport_failure))
-            reset_at = error_context.get("reset_at") if isinstance(error_context, dict) else None
-            if agent._try_activate_fallback(reason=classified.reason, reset_at=reset_at):
+            agent._buffer_diagnostic_status(
+                _eager_fallback_status(classified, _is_upstream, _is_transport_failure)
+            )
+            reset_at = (
+                error_context.get("reset_at")
+                if isinstance(error_context, dict)
+                else None
+            )
+            if agent._try_activate_fallback(
+                reason=classified.reason, reset_at=reset_at
+            ):
                 return _fallback_break()
 
     # A 401/403 surviving credential refresh means a broken credential or endpoint:

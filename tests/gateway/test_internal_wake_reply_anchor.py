@@ -15,10 +15,19 @@ PRODUCER_IDENTITY = '["completion","proc_0123456789ab",1760000000.0]'
 
 
 def _telegram_dm_topic_event(*, internal):
-    source = SessionSource(platform=Platform.TELEGRAM, chat_id="42", user_id="u1", chat_type="dm",
-                           thread_id="7")
-    return MessageEvent(text="[process completed]", source=source, message_id=PRODUCER_IDENTITY,
-                        internal=internal)
+    source = SessionSource(
+        platform=Platform.TELEGRAM,
+        chat_id="42",
+        user_id="u1",
+        chat_type="dm",
+        thread_id="7",
+    )
+    return MessageEvent(
+        text="[process completed]",
+        source=source,
+        message_id=PRODUCER_IDENTITY,
+        internal=internal,
+    )
 
 
 def test_internal_wake_on_telegram_dm_topic_has_no_reply_anchor():
@@ -26,7 +35,10 @@ def test_internal_wake_on_telegram_dm_topic_has_no_reply_anchor():
 
 
 def test_user_message_on_telegram_dm_topic_still_anchors_to_its_message_id():
-    assert _reply_anchor_for_event(_telegram_dm_topic_event(internal=False)) == PRODUCER_IDENTITY
+    assert (
+        _reply_anchor_for_event(_telegram_dm_topic_event(internal=False))
+        == PRODUCER_IDENTITY
+    )
 
 
 def test_redirect_override_still_wins_on_an_internal_wake():

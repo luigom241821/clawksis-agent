@@ -49,7 +49,7 @@ def _host_header_hostname(host_header: str) -> str:
     malformed IPv6 brackets, and URL syntax so validation always fails closed.
     """
     value = (host_header or "").strip()
-    if not value or "://" in value or any(c in value for c in '"\'<> \n\r\t/?#@'):
+    if not value or "://" in value or any(c in value for c in "\"'<> \n\r\t/?#@"):
         return ""
 
     if value.startswith("["):
@@ -60,7 +60,7 @@ def _host_header_hostname(host_header: str) -> str:
         # Bracket notation is reserved for IPv6 literals.
         if ":" not in hostname:
             return ""
-        suffix = value[close + 1:]
+        suffix = value[close + 1 :]
         if suffix and not re.fullmatch(r":\d+", suffix):
             return ""
         return hostname.lower()
@@ -136,7 +136,11 @@ def _desktop_loopback_auth_exempt(
     return (
         host in _LOOPBACK_HOST_VALUES
         and os.environ.get("CLAWK_DESKTOP") == "1"
-        and bool(os.environ.get("CLAWK_DASHBOARD_SESSION_TOKEN") or ssh_session_token or ssh_owner_nonce)
+        and bool(
+            os.environ.get("CLAWK_DASHBOARD_SESSION_TOKEN")
+            or ssh_session_token
+            or ssh_owner_nonce
+        )
     )
 
 
@@ -157,12 +161,15 @@ def _gateway_ws_ticket_from_subprotocol(ws) -> tuple[str, str]:
     raw = str(ws.headers.get("sec-websocket-protocol", "") or "")
     protocols = [value.strip() for value in raw.split(",") if value.strip()]
     ticket_protocols = [
-        value for value in protocols if value.startswith(_GATEWAY_WS_TICKET_PROTOCOL_PREFIX)]
+        value
+        for value in protocols
+        if value.startswith(_GATEWAY_WS_TICKET_PROTOCOL_PREFIX)
+    ]
     if not ticket_protocols:
         return "", "none"
     if _GATEWAY_WS_PROTOCOL not in protocols or len(ticket_protocols) != 1:
         return "", "invalid"
-    ticket = ticket_protocols[0][len(_GATEWAY_WS_TICKET_PROTOCOL_PREFIX):]
+    ticket = ticket_protocols[0][len(_GATEWAY_WS_TICKET_PROTOCOL_PREFIX) :]
     return (ticket, "ok") if ticket else ("", "invalid")
 
 
@@ -213,6 +220,10 @@ def ws_host_origin_reason(ws, state) -> Optional[str]:
         parsed = None
     if parsed is not None and parsed.scheme not in {"http", "https"}:
         return None
-    if parsed is None or not parsed.netloc or not _is_accepted_host(parsed.netloc, bound_host, trusted_public_hosts):
+    if (
+        parsed is None
+        or not parsed.netloc
+        or not _is_accepted_host(parsed.netloc, bound_host, trusted_public_hosts)
+    ):
         return f"origin_mismatch origin={origin} bound={bound_host}"
     return None

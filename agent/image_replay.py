@@ -40,13 +40,19 @@ _IMAGE_PART_TYPES = {"image", "image_url", "input_image"}
 def resolve_replay_recent_images(cfg: dict) -> int:
     """``vision.replay_recent_images`` as an int >= 0; an unusable value warns and disables replay."""
     vision = (cfg or {}).get("vision")
-    raw = (vision if isinstance(vision, dict) else {}).get("replay_recent_images", DEFAULT_REPLAY_RECENT_IMAGES)
+    raw = (vision if isinstance(vision, dict) else {}).get(
+        "replay_recent_images", DEFAULT_REPLAY_RECENT_IMAGES
+    )
     if raw is None:
         return DEFAULT_REPLAY_RECENT_IMAGES
     if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0:
         return raw
-    logger.warning("vision.replay_recent_images=%r is not a non-negative integer (0 = off, default %d); "
-                   "not replaying earlier images", raw, DEFAULT_REPLAY_RECENT_IMAGES)
+    logger.warning(
+        "vision.replay_recent_images=%r is not a non-negative integer (0 = off, default %d); "
+        "not replaying earlier images",
+        raw,
+        DEFAULT_REPLAY_RECENT_IMAGES,
+    )
     return 0
 
 
@@ -56,7 +62,11 @@ def _split_rebuilt_row(content: str) -> Optional[list[tuple[str, Any]]]:
     with the row's ``[Image attached…]`` hints wherever the image sat (API callers put it first;
     turn-time memory/hook context follows it). ``None`` when the counts disagree (a typed marker)."""
     lines = content.split("\n")
-    markers = [(i, m.group("detail")) for i, line in enumerate(lines) if (m := _MARKER_RE.match(line))]
+    markers = [
+        (i, m.group("detail"))
+        for i, line in enumerate(lines)
+        if (m := _MARKER_RE.match(line))
+    ]
     hints = [m for line in lines if (m := _HINT_RE.match(line))]
     if not markers or len(hints) != len(markers):
         return None
@@ -65,7 +75,12 @@ def _split_rebuilt_row(content: str) -> Optional[list[tuple[str, Any]]]:
     for (i, detail), hint in zip(markers, hints):
         if i > start:
             parts.append(("text", "\n".join(lines[start:i])))
-        parts.append(("image", (hint.group("ref") if hint.group("local") else "", detail, lines[i])))
+        parts.append(
+            (
+                "image",
+                (hint.group("ref") if hint.group("local") else "", detail, lines[i]),
+            )
+        )
         start = i + 1
     if start < len(lines):
         parts.append(("text", "\n".join(lines[start:])))
@@ -81,7 +96,11 @@ def _retained_data_url(ref: str) -> Optional[str]:
 
     path = Path(ref)
     try:
-        if path.parent.parent != native_inputs_root() or path.is_symlink() or not path.is_file():
+        if (
+            path.parent.parent != native_inputs_root()
+            or path.is_symlink()
+            or not path.is_file()
+        ):
             return None
         if hashlib.sha256(path.read_bytes()).hexdigest() != path.parent.name:
             return None
@@ -112,7 +131,11 @@ def replay_recent_images(api_messages: list[dict[str, Any]], keep: int) -> int:
             continue
         content = msg.get("content")
         if isinstance(content, list):
-            slots += sum(1 for p in content if isinstance(p, dict) and p.get("type") in _IMAGE_PART_TYPES)
+            slots += sum(
+                1
+                for p in content
+                if isinstance(p, dict) and p.get("type") in _IMAGE_PART_TYPES
+            )
             continue
         parts = _split_rebuilt_row(content) if isinstance(content, str) else None
         if parts is None:
@@ -131,7 +154,15 @@ def replay_recent_images(api_messages: list[dict[str, Any]], keep: int) -> int:
             url = _retained_data_url(value[0]) if slot >= frontier else None
             slot += 1
             if url:
-                rebuilt.append({"type": "image_url", "image_url": {"url": url, **({"detail": value[1]} if value[1] else {})}})
+                rebuilt.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": url,
+                            **({"detail": value[1]} if value[1] else {}),
+                        },
+                    }
+                )
                 urls += 1
             else:
                 rebuilt.append({"type": "text", "text": value[2]})
@@ -163,10 +194,16 @@ def _turn_replay_window(agent: Any) -> int:
 
 def replay_for_agent(agent: Any, api_messages: list[dict[str, Any]]) -> None:
     """``build_api_messages`` hook: replay only when this turn's model takes images natively."""
-    if not any(m.get("role") == "user" and isinstance(m.get("content"), str)
-               and "[screenshot" in m["content"] for m in api_messages):
+    if not any(
+        m.get("role") == "user"
+        and isinstance(m.get("content"), str)
+        and "[screenshot" in m["content"]
+        for m in api_messages
+    ):
         return
     if (keep := _turn_replay_window(agent)) <= 0:
         return
     if attached := replay_recent_images(api_messages, keep):
-        logger.info("image_replay: re-attached %d earlier image(s) to the request", attached)
+        logger.info(
+            "image_replay: re-attached %d earlier image(s) to the request", attached
+        )

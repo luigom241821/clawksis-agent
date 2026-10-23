@@ -17,8 +17,7 @@ from clawk_cli import auth_codex
 from clawk_cli.auth import AuthError
 
 
-_SSL_EOF_MESSAGE = (
-    "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)")
+_SSL_EOF_MESSAGE = "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1016)"
 
 
 class _ScriptedClient:
@@ -60,18 +59,25 @@ def _install(monkeypatch, client):
 def _login_post():
     return auth_codex._codex_login_post(
         "https://auth.openai.com/api/accounts/deviceauth/usercode",
-        failure=("Failed to request device code", "device_code_request_failed"))
+        failure=("Failed to request device code", "device_code_request_failed"),
+    )
 
 
 def _poll():
     return auth_codex._codex_poll_authorization_code(
-        "https://auth.openai.com", device_auth_id="da", user_code="uc", poll_interval=0)
+        "https://auth.openai.com", device_auth_id="da", user_code="uc", poll_interval=0
+    )
 
 
 def test_poll_survives_transport_blips_but_not_other_errors(monkeypatch):
     approval = _Response(200, {"authorization_code": "ac", "code_verifier": "cv"})
-    client = _ScriptedClient([
-        ssl.SSLEOFError(8, _SSL_EOF_MESSAGE), httpx.ConnectError("connection reset"), approval])
+    client = _ScriptedClient(
+        [
+            ssl.SSLEOFError(8, _SSL_EOF_MESSAGE),
+            httpx.ConnectError("connection reset"),
+            approval,
+        ]
+    )
     _install(monkeypatch, client)
 
     assert _poll() == {"authorization_code": "ac", "code_verifier": "cv"}
@@ -88,7 +94,8 @@ def test_poll_survives_transport_blips_but_not_other_errors(monkeypatch):
 
 def test_login_post_retries_bounded_and_keeps_typed_failure(monkeypatch):
     client = _ScriptedClient(
-        [ssl.SSLEOFError(8, _SSL_EOF_MESSAGE), _Response(200, {"user_code": "uc"})])
+        [ssl.SSLEOFError(8, _SSL_EOF_MESSAGE), _Response(200, {"user_code": "uc"})]
+    )
     _install(monkeypatch, client)
 
     assert _login_post().status_code == 200

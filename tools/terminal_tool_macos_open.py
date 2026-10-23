@@ -75,7 +75,7 @@ def _build_macos_open_raise_ladder(app: str | None, file: str) -> str:
         # open (the app that actually received the document).
         app_assign = (
             '_H_APP="$(osascript -e \'tell application "System Events" to get '
-            'name of first application process whose frontmost is true\' '
+            "name of first application process whose frontmost is true' "
             '2>/dev/null)"'
         )
     file_q = shlex.quote(file)
@@ -90,11 +90,11 @@ def _build_macos_open_raise_ladder(app: str | None, file: str) -> str:
     )
     # lsappinfo is a different subsystem and works even when AppleEvents are
     # swallowed. `find` returns the app's ASN; `setfront` raises it.
-    asn = 'lsappinfo find "$_H_APP" 2>/dev/null | awk \'{print $1}\''
+    asn = "lsappinfo find \"$_H_APP\" 2>/dev/null | awk '{print $1}'"
     setfront = '[ -n "$_H_ASN" ] && lsappinfo setfront "$_H_ASN" 2>/dev/null'
     # Re-issuing `open -a <App> <file>` on the already-open document is treated
     # by macOS as pure activation.
-    reopen = f"open -a \"$_H_APP\" {file_q} 2>/dev/null"
+    reopen = f'open -a "$_H_APP" {file_q} 2>/dev/null'
 
     # Outcome reporting from the FINAL observed frontmost state. The two
     # branches are deliberately distinct so a focus race can never read as
@@ -103,13 +103,13 @@ def _build_macos_open_raise_ladder(app: str | None, file: str) -> str:
     # application holds focus. ``file_q`` is a self-contained quoted token, so
     # the messages survive paths with spaces or shell metacharacters.
     frontmost_name = (
-        "osascript -e 'tell application \"System Events\" to get name of "
+        'osascript -e \'tell application "System Events" to get name of '
         "first application process whose frontmost is true' 2>/dev/null"
     )
     report = (
-        f'if {frontmost}; then echo open: {file_q} is now frontmost; '
-        f'else _H_FOCUS=$({frontmost_name}); '
-        f'echo open: {file_q} opened but another application holds focus; '
+        f"if {frontmost}; then echo open: {file_q} is now frontmost; "
+        f"else _H_FOCUS=$({frontmost_name}); "
+        f"echo open: {file_q} opened but another application holds focus; "
         f'echo "frontmost: $_H_FOCUS"; fi'
     )
 
@@ -130,7 +130,9 @@ def _build_macos_open_raise_ladder(app: str | None, file: str) -> str:
     )
 
 
-def _transform_macos_open_command(command: str | None, system: str | None = None) -> str | None:
+def _transform_macos_open_command(
+    command: str | None, system: str | None = None
+) -> str | None:
     """Append a frontmost raise-ladder to a macOS ``open`` command.
 
     On macOS, ``open <file>`` / ``open -a <App> <file>`` returns exit 0 and
@@ -190,5 +192,3 @@ def _transform_macos_open_command(command: str | None, system: str | None = None
 
     ladder = _build_macos_open_raise_ladder(app, file)
     return f"{command}; {ladder}"
-
-

@@ -14,21 +14,27 @@ from tools.computer_use.backend import ActionResult, UIElement
 
 # Linux/X11 surfaces GNOME Shell / desktop backdrop windows ahead of real app windows with no useful z-order; they
 # are targetable but capture as empty, so default capture skips them.
-_NON_APP_WINDOW_TITLE_PREFIXES = ("@!", "Desktop", "gnome-shell", "GNOME Shell")  # "@!" = GNOME helpers
+_NON_APP_WINDOW_TITLE_PREFIXES = (
+    "@!",
+    "Desktop",
+    "gnome-shell",
+    "GNOME Shell",
+)  # "@!" = GNOME helpers
 
 _ELEMENT_LINE_RE = re.compile(
-    r'^\s*(?:-\s+)?\[(\d+)\]\s+(\w+)'
-    r'(?:'
-      r'\s*=\s*"([^"]*)"'              # = "value"
-      r'|\s+"([^"]*)"'                 # "value"
-      r'|\s+\((?!\d+\))([^)]*)\)'      # (value) but not a pure-digit (order) number
-    r')?'
-    r'(?:\s+(?:\(\d+\)\s+)?id=([^\s\[\]]+))?',  # optional id=value (after an optional (order))
+    r"^\s*(?:-\s+)?\[(\d+)\]\s+(\w+)"
+    r"(?:"
+    r'\s*=\s*"([^"]*)"'  # = "value"
+    r'|\s+"([^"]*)"'  # "value"
+    r"|\s+\((?!\d+\))([^)]*)\)"  # (value) but not a pure-digit (order) number
+    r")?"
+    r"(?:\s+(?:\(\d+\)\s+)?id=([^\s\[\]]+))?",  # optional id=value (after an optional (order))
     re.MULTILINE,
 )
 """get_window_state AX-tree markdown line: ``[N] AXRole`` + label in one of four forms (``= "value"``, ``"quoted"``,
 ``(paren)``, ``id=Label`` optionally after an ``(order)`` number). A parenthesised pure-digit group is an ORDER
 index, not a label, and is excluded so the id= label wins. Group 1 index, group 2 role, groups 3-6 the label."""
+
 
 def _mcp_field(obj, snake: str, camel: str, default=None):
     """Read an MCP model field across the 1.x -> 2.x rename: mcp 2.0 exposes snake_case attributes and keeps
@@ -37,8 +43,16 @@ def _mcp_field(obj, snake: str, camel: str, default=None):
     never loads the much larger config-driven MCP client module."""
     return getattr(obj, snake, getattr(obj, camel, default))
 
-def _action_result_from(name: str, ok: bool, message: str, meta: dict[str, Any],
-                        structured: dict[str, Any], *, requested_delivery: Optional[str] = None) -> ActionResult:
+
+def _action_result_from(
+    name: str,
+    ok: bool,
+    message: str,
+    meta: dict[str, Any],
+    structured: dict[str, Any],
+    *,
+    requested_delivery: Optional[str] = None,
+) -> ActionResult:
     """Build an ActionResult, lifting cua-driver's structured verdict. structuredContent is canonical, the flattened
     ``meta`` copy the fallback. Every structured field is additive: a driver that omits one leaves the attribute
     ``None`` so old drivers see unchanged behavior.
@@ -54,9 +68,14 @@ def _action_result_from(name: str, ok: bool, message: str, meta: dict[str, Any],
         return value if isinstance(value, typ) else None
 
     return ActionResult(
-        ok=ok, action=name, message=message, meta=meta,
-        verified=_typed(_raw("verified"), bool), effect=_typed(_raw("effect"), str),
-        escalation=_typed(_raw("escalation"), dict), path=_typed(_raw("path"), str),
+        ok=ok,
+        action=name,
+        message=message,
+        meta=meta,
+        verified=_typed(_raw("verified"), bool),
+        effect=_typed(_raw("effect"), str),
+        escalation=_typed(_raw("escalation"), dict),
+        path=_typed(_raw("path"), str),
         degraded=_typed(_raw("degraded"), bool),
         # What we asked for; the driver's `path` records the rung that ran.
         delivery_mode=_typed(requested_delivery, str),
@@ -64,21 +83,30 @@ def _action_result_from(name: str, ok: bool, message: str, meta: dict[str, Any],
         code=_typed(_raw("code") or _raw("reason_code"), str),
     )
 
+
 def _z_index_uninformative(windows: list[dict[str, Any]]) -> bool:
     """True when every window shares the same z_index (common on Linux/X11)."""
     return len({w.get("z_index", 0) for w in windows}) <= 1
+
 
 def _parse_xprop_net_active_window(stdout: str) -> Optional[int]:
     """Parse ``xprop -root _NET_ACTIVE_WINDOW`` stdout into a window id: the ``window id # 0x...`` form, falling
     back to the first hex token."""
     text = stdout or ""
-    match = re.search(r"window id # (0x[0-9a-fA-F]+)", text) or re.search(r"(0x[0-9a-fA-F]+)", text)
+    match = re.search(r"window id # (0x[0-9a-fA-F]+)", text) or re.search(
+        r"(0x[0-9a-fA-F]+)", text
+    )
     return int(match.group(1), 16) if match else None
+
 
 def _is_real_app_window(w: dict[str, Any]) -> bool:
     """Return False for desktop/shell helper windows that capture as empty."""
     title = w.get("title", "")
-    return not any(title.startswith(p) or title.lower().startswith(p.lower()) for p in _NON_APP_WINDOW_TITLE_PREFIXES)
+    return not any(
+        title.startswith(p) or title.lower().startswith(p.lower())
+        for p in _NON_APP_WINDOW_TITLE_PREFIXES
+    )
+
 
 def _parse_elements_from_tree(markdown: str) -> list[UIElement]:
     """Parse UIElements from get_window_state AX-tree markdown — last-resort fallback for drivers without
@@ -90,12 +118,19 @@ def _parse_elements_from_tree(markdown: str) -> list[UIElement]:
     """
     return [
         # groups 3-6: value / quoted / paren / id= label (first non-None wins)
-        UIElement(index=int(m.group(1)), role=m.group(2),
-                  label=m.group(3) or m.group(4) or m.group(5) or m.group(6) or "", bounds=(0, 0, 0, 0))
+        UIElement(
+            index=int(m.group(1)),
+            role=m.group(2),
+            label=m.group(3) or m.group(4) or m.group(5) or m.group(6) or "",
+            bounds=(0, 0, 0, 0),
+        )
         for m in _ELEMENT_LINE_RE.finditer(markdown)
     ]
 
-def _parse_elements_from_structured(raw_elements: list[dict[str, Any]]) -> list[UIElement]:
+
+def _parse_elements_from_structured(
+    raw_elements: list[dict[str, Any]],
+) -> list[UIElement]:
     """Read the canonical ``structuredContent.elements`` array: ``element_index``, ``role``, ``label`` and, when
     AT-SPI / AXFrame returned usable bounds, ``frame`` ``{x, y, w, h}`` — so real pixel bounds survive (the
     markdown path loses them). Malformed entries are skipped.
@@ -108,37 +143,49 @@ def _parse_elements_from_structured(raw_elements: list[dict[str, Any]]) -> list[
         idx = raw.get("element_index") if isinstance(raw, dict) else None
         if not isinstance(idx, int):
             continue
-        role, label, frame, token = (raw.get(k) for k in ("role", "label", "frame", "element_token"))
+        role, label, frame, token = (
+            raw.get(k) for k in ("role", "label", "frame", "element_token")
+        )
         bounds: tuple[int, int, int, int] = (0, 0, 0, 0)
         with contextlib.suppress(TypeError, ValueError):
             if isinstance(frame, dict) and frame:
                 bounds = tuple(int(frame.get(k, 0)) for k in ("x", "y", "w", "h"))  # type: ignore[assignment]
-        elements.append(UIElement(
-            index=idx, role=role if isinstance(role, str) else "", label=label if isinstance(label, str) else "",
-            bounds=bounds,
-            # Opaque `s{snapshot_hex}:{index}` token — the driver owns parse + LRU semantics.
-            element_token=token if isinstance(token, str) and token else None,
-        ))
+        elements.append(
+            UIElement(
+                index=idx,
+                role=role if isinstance(role, str) else "",
+                label=label if isinstance(label, str) else "",
+                bounds=bounds,
+                # Opaque `s{snapshot_hex}:{index}` token — the driver owns parse + LRU semantics.
+                element_token=token if isinstance(token, str) and token else None,
+            )
+        )
     return elements
+
 
 def _image_dimensions_from_bytes(raw: bytes) -> tuple[int, int]:
     """Best-effort PNG/JPEG dimension sniff; ``(0, 0)`` when unreadable or non-positive."""
     dims = image_dimensions_from_bytes(raw)
     return dims if dims and dims[0] > 0 and dims[1] > 0 else (0, 0)
 
+
 def _split_tree_text(full_text: str) -> tuple[str, str]:
     """Split get_window_state text into (summary_line, tree_markdown)."""
     summary, _, tree = full_text.partition("\n")
     return summary, tree
 
-_MODIFIER_NAMES = frozenset({"cmd", "command", "shift", "option", "alt", "ctrl", "control", "fn"})
+
+_MODIFIER_NAMES = frozenset(
+    {"cmd", "command", "shift", "option", "alt", "ctrl", "control", "fn"}
+)
 _KEY_ALIASES = {"command": "cmd", "alt": "option", "control": "ctrl"}
+
 
 def _parse_key_combo(keys: str) -> tuple[Optional[str], list[str]]:
     """Parse 'cmd+s' / 'ctrl-alt-t' into (key, modifiers); last non-modifier wins."""
     modifiers: list[str] = []
     key = None
-    for part in (p.strip().lower() for p in re.split(r'[+\-]', keys) if p.strip()):
+    for part in (p.strip().lower() for p in re.split(r"[+\-]", keys) if p.strip()):
         normalized = _KEY_ALIASES.get(part, part)
         if normalized in _MODIFIER_NAMES:
             modifiers.append(normalized)
@@ -146,8 +193,14 @@ def _parse_key_combo(keys: str) -> tuple[Optional[str], list[str]]:
             key = part
     return key, modifiers
 
-def _tool_envelope(data: Any, images: list[str], structured: Any, is_error: bool,
-                   image_mime_types: Optional[list[str]] = None) -> dict[str, Any]:
+
+def _tool_envelope(
+    data: Any,
+    images: list[str],
+    structured: Any,
+    is_error: bool,
+    image_mime_types: Optional[list[str]] = None,
+) -> dict[str, Any]:
     """The normalised tool-result dict every transport emits: ``{data, images, [image_mime_types,] structuredContent,
     isError}``. ``image_mime_types`` is only present when the transport can report it (MCP image parts)."""
     out: dict[str, Any] = {"data": data, "images": images}
@@ -155,6 +208,7 @@ def _tool_envelope(data: Any, images: list[str], structured: Any, is_error: bool
         out["image_mime_types"] = image_mime_types
     out["structuredContent"], out["isError"] = structured, is_error
     return out
+
 
 def _extract_tool_result(mcp_result: Any) -> dict[str, Any]:
     """Flatten an mcp CallToolResult into ``{data, images, image_mime_types, structuredContent, isError}``. ``data``
@@ -180,13 +234,20 @@ def _extract_tool_result(mcp_result: Any) -> dict[str, Any]:
     if text_chunks:
         joined = "\n".join(t for t in text_chunks if t)
         try:
-            data = json.loads(joined) if joined.strip().startswith(("{", "[")) else joined
+            data = (
+                json.loads(joined) if joined.strip().startswith(("{", "[")) else joined
+            )
         except json.JSONDecodeError:
             data = joined
     return _tool_envelope(
-        data, images, _mcp_field(mcp_result, "structured_content", "structuredContent") or None,
+        data,
+        images,
+        _mcp_field(mcp_result, "structured_content", "structuredContent") or None,
         # Identity, not truthiness: mocks/proxies synthesize truthy attributes.
-        _mcp_field(mcp_result, "is_error", "isError", False) is True, image_mime_types)
+        _mcp_field(mcp_result, "is_error", "isError", False) is True,
+        image_mime_types,
+    )
+
 
 def _image_from_tool_result(out: dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
     """Pull ``(b64, mime_type)`` out of a flattened tool result. cua-driver delivers screenshots as an MCP ``image``
@@ -199,8 +260,13 @@ def _image_from_tool_result(out: dict[str, Any]) -> tuple[Optional[str], Optiona
     structured = out.get("structuredContent") or {}
     b64 = structured.get("screenshot_png_b64") or structured.get("png_b64")
     if b64:
-        return b64, (structured.get("screenshot_mime_type") or structured.get("mime_type") or None)
+        return b64, (
+            structured.get("screenshot_mime_type")
+            or structured.get("mime_type")
+            or None
+        )
     return None, None
+
 
 def _int_or_none(value: Any) -> Optional[int]:
     """``int(value)`` for int/numeric-str inputs; None for bools, other types and malformed strings."""
@@ -211,10 +277,12 @@ def _int_or_none(value: Any) -> Optional[int]:
     except ValueError:
         return None
 
+
 def _positive_int(value: Any) -> Optional[int]:
     """Return a positive integer, rejecting booleans and malformed values."""
     parsed = _int_or_none(value)
     return parsed if parsed is not None and parsed > 0 else None
+
 
 def _is_placeholder_id(value: Any) -> bool:
     """True when *value* is a schema-filler id (``0`` / negative) rather than a target: some providers zero-fill
@@ -222,6 +290,7 @@ def _is_placeholder_id(value: Any) -> bool:
     are NOT placeholders — they still reach validation."""
     parsed = _int_or_none(value)
     return parsed is not None and parsed <= 0
+
 
 def _ingest_windows(raw_windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Normalise cua-driver ``list_windows`` entries, dropping unusable ones. Every downstream call needs integer
@@ -232,27 +301,41 @@ def _ingest_windows(raw_windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for w in raw_windows:
         if not isinstance(w, dict):  # untrusted compatibility envelopes
             continue
-        pid_int, window_id_int = _positive_int(w.get("pid")), _positive_int(w.get("window_id"))
+        pid_int, window_id_int = (
+            _positive_int(w.get("pid")),
+            _positive_int(w.get("window_id")),
+        )
         if pid_int is None or window_id_int is None:
             continue
-        z_raw, app_name, title = w.get("z_index"), w.get("app_name", ""), w.get("title", "")
-        windows.append({
-            "app_name": app_name if isinstance(app_name, str) else "",
-            "pid": pid_int,
-            "window_id": window_id_int,
-            # Only explicit False means off-screen; null (Linux 0.6.x) means unknown.
-            "off_screen": w.get("is_on_screen") is False,
-            "title": title if isinstance(title, str) else "",
-            "z_index": z_raw if isinstance(z_raw, (int, float)) and not isinstance(z_raw, bool) else 0,
-        })
+        z_raw, app_name, title = (
+            w.get("z_index"),
+            w.get("app_name", ""),
+            w.get("title", ""),
+        )
+        windows.append(
+            {
+                "app_name": app_name if isinstance(app_name, str) else "",
+                "pid": pid_int,
+                "window_id": window_id_int,
+                # Only explicit False means off-screen; null (Linux 0.6.x) means unknown.
+                "off_screen": w.get("is_on_screen") is False,
+                "title": title if isinstance(title, str) else "",
+                "z_index": z_raw
+                if isinstance(z_raw, (int, float)) and not isinstance(z_raw, bool)
+                else 0,
+            }
+        )
     return windows
+
 
 def _windows_from_tool_result(out: dict[str, Any]) -> list[dict[str, Any]]:
     """Return list_windows payloads across cua-driver result shapes: structuredContent.windows, then ``windows`` /
     ``_legacy_windows`` in the text payload, then on the envelope itself."""
-    candidates = ((out.get("structuredContent"), ("windows",)),
-                  (out.get("data"), ("windows", "_legacy_windows")),
-                  (out, ("windows", "_legacy_windows")))
+    candidates = (
+        (out.get("structuredContent"), ("windows",)),
+        (out.get("data"), ("windows", "_legacy_windows")),
+        (out, ("windows", "_legacy_windows")),
+    )
     for container, keys in candidates:
         if isinstance(container, dict):
             for key in keys:
@@ -260,6 +343,7 @@ def _windows_from_tool_result(out: dict[str, Any]) -> list[dict[str, Any]]:
                 if isinstance(value, list) and value:
                     return value
     return []
+
 
 def _apps_from_windows(windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     apps: list[dict[str, Any]] = []

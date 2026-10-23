@@ -45,8 +45,6 @@ def _compressor(
     )
 
 
-
-
 def test_merge_appends_to_existing_warning(monkeypatch):
     monkeypatch.setattr(
         "clawk_cli.context_switch_guard._estimate_tokens",
@@ -212,7 +210,9 @@ def test_lifetime_prompt_counter_is_not_a_size_estimate():
     """``session_prompt_tokens`` sums every call; without a measured size the guard stays silent (#126343)."""
     from clawk_cli.context_switch_guard import _estimate_tokens
 
-    agent = SimpleNamespace(context_compressor=SimpleNamespace(last_prompt_tokens=0),
-                            session_prompt_tokens=16_282_033)
+    agent = SimpleNamespace(
+        context_compressor=SimpleNamespace(last_prompt_tokens=0),
+        session_prompt_tokens=16_282_033,
+    )
 
     assert _estimate_tokens(agent, None) is None

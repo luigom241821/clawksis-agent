@@ -40,8 +40,12 @@ def source_built_gui_artifacts(clawk_home: Path) -> list[Path]:
     workspaces, so only the desktop workspace's own dependencies belong to GUI removal."""
     agent_root = clawk_home / "clawksis-agent"
     desktop_dir = agent_root / "apps" / "desktop"
-    return [desktop_dir / "dist", desktop_dir / "release", desktop_dir / "node_modules",
-            clawk_home / "desktop-build-stamp.json"]
+    return [
+        desktop_dir / "dist",
+        desktop_dir / "release",
+        desktop_dir / "node_modules",
+        clawk_home / "desktop-build-stamp.json",
+    ]
 
 
 def desktop_install_record() -> Path:
@@ -49,6 +53,7 @@ def desktop_install_record() -> Path:
     are machine-wide, so the record sits under the default root whichever profile runs; deleting it
     is what stops an uninstalled app from being put back by the next update."""
     from clawk_constants import get_default_clawk_root
+
     return get_default_clawk_root() / "desktop-installed-apps.json"
 
 
@@ -58,39 +63,66 @@ def packaged_gui_app_paths() -> list[Path]:
     electron-builder output locations for the "Clawksis" product."""
     home = Path.home()
     if sys.platform == "darwin":
-        return [Path("/Applications/Clawksis.app"), home / "Applications" / "Clawksis.app"]
+        return [
+            Path("/Applications/Clawksis.app"),
+            home / "Applications" / "Clawksis.app",
+        ]
     if sys.platform == "win32":
         local_base = _env_dir("LOCALAPPDATA", home / "AppData" / "Local")
         # NSIS per-user install (perMachine=false), an older/alternate layout, NSIS per-machine (needs admin).
         program_files = os.environ.get("ProgramFiles")
         return [local_base / "Programs" / "Clawksis", local_base / "clawk-desktop"] + (
-            [Path(program_files) / "Clawksis"] if program_files else [])
+            [Path(program_files) / "Clawksis"] if program_files else []
+        )
     # Linux: an AppImage lives wherever the user put it and deb/rpm files belong to the package manager
     # (see the hint in ``uninstall_gui``), so only the desktop entry + hicolor icons are cleaned here.
-    from clawk_cli.linux_desktop_entry import LEGACY_DESKTOP_ENTRY_NAME, desktop_entry_path
+    from clawk_cli.linux_desktop_entry import (
+        LEGACY_DESKTOP_ENTRY_NAME,
+        desktop_entry_path,
+    )
+
     data_base = _env_dir("XDG_DATA_HOME", home / ".local" / "share")
     icons = data_base / "icons" / "hicolor"
     # "scalable" plus every fixed-size dir the installer may have written (panel sizes + older native copies).
     # The legacy entry is a hidden alias of the app-id entry since #124492 — remove it with the real one.
-    return [desktop_entry_path(),
-            data_base / "applications" / LEGACY_DESKTOP_ENTRY_NAME,
-            data_base / "applications" / "Clawksis.desktop"] + [
+    return [
+        desktop_entry_path(),
+        data_base / "applications" / LEGACY_DESKTOP_ENTRY_NAME,
+        data_base / "applications" / "Clawksis.desktop",
+    ] + [
         icons / size / "apps" / "clawk.png"
-        for size in ("scalable", "24x24", "32x32", "48x48", "256x256", "512x512", "1024x1024")]
+        for size in (
+            "scalable",
+            "24x24",
+            "32x32",
+            "48x48",
+            "256x256",
+            "512x512",
+            "1024x1024",
+        )
+    ]
 
 
 def agent_is_installed(clawk_home: Path) -> bool:
     """True when a usable Python agent install exists under CLAWK_HOME (gates the desktop UI's options).
     Package source or a venv alone is enough — a source checkout without a venv is still "the agent is here"."""
-    return any((clawk_home / "clawksis-agent" / sub).is_dir() for sub in ("clawk_cli", "venv", ".venv"))
+    return any(
+        (clawk_home / "clawksis-agent" / sub).is_dir()
+        for sub in ("clawk_cli", "venv", ".venv")
+    )
 
 
 def gui_is_installed(clawk_home: Path) -> bool:
     """Return True when any desktop GUI artifact or install record exists."""
-    return any(p.exists() for p in (
-        *source_built_gui_artifacts(clawk_home), *packaged_gui_app_paths(),
-        desktop_userdata_dir(), desktop_install_record(),
-    ))
+    return any(
+        p.exists()
+        for p in (
+            *source_built_gui_artifacts(clawk_home),
+            *packaged_gui_app_paths(),
+            desktop_userdata_dir(),
+            desktop_install_record(),
+        )
+    )
 
 
 def gui_install_summary(clawk_home: Path | None = None) -> dict:
@@ -102,13 +134,17 @@ def gui_install_summary(clawk_home: Path | None = None) -> dict:
     # removed; sealed trees (nix / desktop-app / docker) get data-only.
     from clawk_cli import steward as steward_mod
 
-    steward, code_removal_allowed = steward_mod.classify_install(home / "clawksis-agent")
+    steward, code_removal_allowed = steward_mod.classify_install(
+        home / "clawksis-agent"
+    )
 
     return {
         "clawk_home": str(home),
         "agent_installed": agent_is_installed(home),
         "gui_installed": gui_is_installed(home),
-        "source_built_artifacts": [str(p) for p in source_built_gui_artifacts(home) if p.exists()],
+        "source_built_artifacts": [
+            str(p) for p in source_built_gui_artifacts(home) if p.exists()
+        ],
         "packaged_app_paths": [str(p) for p in packaged_gui_app_paths() if p.exists()],
         "userdata_dir": str(userdata),
         "userdata_exists": userdata.exists(),
@@ -133,7 +169,9 @@ def _remove_path(path: Path) -> bool:
         return False
 
 
-def uninstall_gui(clawk_home: Path | None = None, *, remove_userdata: bool = True) -> list[Path]:
+def uninstall_gui(
+    clawk_home: Path | None = None, *, remove_userdata: bool = True
+) -> list[Path]:
     """Remove the desktop GUI's artifacts, leaving the agent + user data intact."""
     home: Path = clawk_home if clawk_home is not None else get_clawk_home()
     removed: list[Path] = []
@@ -147,6 +185,7 @@ def uninstall_gui(clawk_home: Path | None = None, *, remove_userdata: bool = Tru
                 log_success(f"Removed {path}")
                 removed.append(path)
         return found
+
     log_info("Removing built GUI artifacts (renderer, release, node_modules)...")
     _remove_existing([*source_built_gui_artifacts(home), desktop_install_record()])
     log_info("Removing installed desktop app...")
@@ -161,14 +200,20 @@ def uninstall_gui(clawk_home: Path | None = None, *, remove_userdata: bool = Tru
         # The desktop entry was removed above but the menu caches still list it; reindex so Clawksis
         # disappears from the launcher.
         try:
-            from clawk_cli.linux_desktop_entry import desktop_entry_path, refresh_desktop_databases
+            from clawk_cli.linux_desktop_entry import (
+                desktop_entry_path,
+                refresh_desktop_databases,
+            )
+
             entry = desktop_entry_path()
             if entry in removed:
                 for tool in refresh_desktop_databases(entry.parent):
                     log_success(f"Refreshed the application menu cache ({tool})")
         except Exception as e:
             log_warn(f"Could not refresh the application menu cache: {e}")
-        log_info("If you installed the desktop via a .deb / .rpm package, remove it with your package manager "
-                 "(e.g. 'sudo apt remove clawk' or 'sudo dnf remove clawk'). AppImage builds are a single "
-                 "file you can delete from wherever you saved it.")
+        log_info(
+            "If you installed the desktop via a .deb / .rpm package, remove it with your package manager "
+            "(e.g. 'sudo apt remove clawk' or 'sudo dnf remove clawk'). AppImage builds are a single "
+            "file you can delete from wherever you saved it."
+        )
     return removed

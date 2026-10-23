@@ -28,7 +28,9 @@ SEND_COLUMNS = {
 def _columns(db_path):
     connection = sqlite3.connect(db_path)
     try:
-        return {row[1] for row in connection.execute("PRAGMA table_info(package_outbox)")}
+        return {
+            row[1] for row in connection.execute("PRAGMA table_info(package_outbox)")
+        }
     finally:
         connection.close()
 
@@ -53,8 +55,6 @@ def store(tmp_path):
 
 
 class TestFreshDatabase:
-
-
     def test_send_attempts_defaults_to_zero(self, store):
         connection = sqlite3.connect(store.database_path)
         try:
@@ -136,11 +136,11 @@ class TestUpgradeFromPreSendDatabase:
                     """,
                     (
                         f"pkg-{i}",
-                        f'2026-08-2{i:d}',
-                        f'2026-08-2{i + 1:d}',
+                        f"2026-08-2{i:d}",
+                        f"2026-08-2{i + 1:d}",
                         json.dumps({"package_id": f"pkg-{i}"}),
-                        f'2026-08-2{i:d}T00:00:00Z',
-                        f'2026-08-2{i:d}T01:00:00Z',
+                        f"2026-08-2{i:d}T00:00:00Z",
+                        f"2026-08-2{i:d}T01:00:00Z",
                     ),
                 )
             connection.commit()
@@ -154,7 +154,9 @@ class TestUpgradeFromPreSendDatabase:
         )
         connection = sqlite3.connect(legacy_db)
         try:
-            count = connection.execute("SELECT COUNT(*) FROM package_outbox").fetchone()[0]
+            count = connection.execute(
+                "SELECT COUNT(*) FROM package_outbox"
+            ).fetchone()[0]
             payloads = connection.execute(
                 "SELECT package_id, payload_json FROM package_outbox ORDER BY package_id"
             ).fetchall()

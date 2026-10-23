@@ -39,7 +39,9 @@ from pm.network import retry_network
 
 # The context holds no data outside a resolve/pin call, including failed calls.
 # Keep the Package hooks unchanged while sharing their nested index requests.
-_index_responses: ContextVar[dict | None] = ContextVar("pm_index_responses", default=None)
+_index_responses: ContextVar[dict | None] = ContextVar(
+    "pm_index_responses", default=None
+)
 
 
 @contextmanager
@@ -86,7 +88,9 @@ def best_in_minor(versions: list[str], minor: tuple[int, int]) -> Optional[str]:
     """The highest version in `versions` whose major.minor == `minor`."""
     best = None
     for v in versions:
-        if minor_of(v) == minor and (best is None or version_key(v) > version_key(best)):
+        if minor_of(v) == minor and (
+            best is None or version_key(v) > version_key(best)
+        ):
             best = v
     return best
 
@@ -115,7 +119,9 @@ class Resolved:
         if self.locked is None:
             return True
         if self.style == "minor":
-            return bool(self.artifact_updates) or minor_of(self.version) != minor_of(self.locked)
+            return bool(self.artifact_updates) or minor_of(self.version) != minor_of(
+                self.locked
+            )
         return version_key(self.version) > version_key(self.locked)
 
 
@@ -137,14 +143,16 @@ def resolve_best(
 
     if style == "minor":
         # Highest major.minor every target has; per-target exact patch.
-        minor_sets = [set(minor_of(v) for v in vs if minor_of(v)) for vs in present.values()]
-        common = set.intersection(*minor_sets) if len(minor_sets) > 1 else set(minor_sets[0])
+        minor_sets = [
+            set(minor_of(v) for v in vs if minor_of(v)) for vs in present.values()
+        ]
+        common = (
+            set.intersection(*minor_sets) if len(minor_sets) > 1 else set(minor_sets[0])
+        )
         if not common:
             return Resolved(name, locked, style, reason="no shared minor")
         shared_minor = max(common)
-        per_target = {
-            t: best_in_minor(vs, shared_minor) for t, vs in present.items()
-        }
+        per_target = {t: best_in_minor(vs, shared_minor) for t, vs in present.items()}
         return Resolved(
             name,
             locked,
@@ -159,18 +167,23 @@ def resolve_best(
     if not common:
         return Resolved(name, locked, style, reason="no shared version")
     version = max(common, key=version_key)
-    return Resolved(name, locked, style, version=version, per_target={t: version for t in present})
+    return Resolved(
+        name, locked, style, version=version, per_target={t: version for t in present}
+    )
 
 
 @reuse_index_responses()
-def resolve_package(package, targets: list[str], locked: Optional[str], *, artifacts: dict | None = None) -> Resolved:
+def resolve_package(
+    package, targets: list[str], locked: Optional[str], *, artifacts: dict | None = None
+) -> Resolved:
     """Resolve versions and detect new artifacts within a shared minor."""
-    latest = {
-        t: list(package.latest_versions(t, locked=locked) or [])
-        for t in targets
-    }
+    latest = {t: list(package.latest_versions(t, locked=locked) or []) for t in targets}
     decision = resolve_best(package.name, latest, locked, package.version_style)
-    if decision.style == "minor" and decision.version is not None and artifacts is not None:
+    if (
+        decision.style == "minor"
+        and decision.version is not None
+        and artifacts is not None
+    ):
         for target, version in decision.per_target.items():
             current = artifacts.get(target, artifacts.get("any", []))
             current = current if isinstance(current, list) else [current]
@@ -333,7 +346,9 @@ def github_release_tags(repo: str, *, strip_prefix: str = "") -> list[str]:
     never appear as update candidates."""
     tags = []
     for page in range(1, 4):  # up to 90 releases — far beyond any cadence
-        data = _get_json(f"https://api.github.com/repos/{repo}/releases?per_page=30&page={page}")
+        data = _get_json(
+            f"https://api.github.com/repos/{repo}/releases?per_page=30&page={page}"
+        )
         if not data:
             break
         for release in data:
@@ -343,7 +358,7 @@ def github_release_tags(repo: str, *, strip_prefix: str = "") -> list[str]:
             if tag == "latest":
                 continue
             if strip_prefix and tag.startswith(strip_prefix):
-                tag = tag[len(strip_prefix):]
+                tag = tag[len(strip_prefix) :]
             if not tag or not tag[0].isdigit():
                 continue
             tags.append(tag)
@@ -419,7 +434,9 @@ def btbn_index() -> dict[str, dict[str, tuple[str, str]]]:
     """
     releases: list[dict] = []
     for page in range(1, 4):
-        data = _get_json(f"https://api.github.com/repos/BtbN/FFmpeg-Builds/releases?per_page=30&page={page}")
+        data = _get_json(
+            f"https://api.github.com/repos/BtbN/FFmpeg-Builds/releases?per_page=30&page={page}"
+        )
         if not data:
             break
         releases.extend(data)
@@ -467,7 +484,9 @@ def btbn_versions(target: str) -> list[str]:
 def pbs_versions(minor: str, triple: str) -> list[str]:
     """Return the exact interpreter identity advertised by the newest matching release."""
     for page in range(1, 3):
-        data = _get_json(f"https://api.github.com/repos/astral-sh/python-build-standalone/releases?per_page=30&page={page}")
+        data = _get_json(
+            f"https://api.github.com/repos/astral-sh/python-build-standalone/releases?per_page=30&page={page}"
+        )
         if not data:
             break
         for release in data:

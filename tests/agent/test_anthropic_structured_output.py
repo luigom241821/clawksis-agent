@@ -8,8 +8,11 @@ from unittest.mock import MagicMock, patch
 
 
 def _capture_anthropic_kwargs(
-    extra_body: dict | None, *, model: str = "claude-sonnet-4-6",
-    async_call: bool = False, top_level_kwargs: dict | None = None,
+    extra_body: dict | None,
+    *,
+    model: str = "claude-sonnet-4-6",
+    async_call: bool = False,
+    top_level_kwargs: dict | None = None,
 ) -> dict:
     from agent.auxiliary_client import (
         _AnthropicCompletionsAdapter,
@@ -18,12 +21,12 @@ def _capture_anthropic_kwargs(
 
     captured = {}
     sync_adapter = _AnthropicCompletionsAdapter(
-        MagicMock(name="anthropic_client"), model, is_oauth=False,
+        MagicMock(name="anthropic_client"),
+        model,
+        is_oauth=False,
     )
     adapter = (
-        _AsyncAnthropicCompletionsAdapter(sync_adapter)
-        if async_call
-        else sync_adapter
+        _AsyncAnthropicCompletionsAdapter(sync_adapter) if async_call else sync_adapter
     )
 
     def _fake_create(_client, api_kwargs, **_kwargs):
@@ -39,10 +42,13 @@ def _capture_anthropic_kwargs(
     call_kwargs = dict(top_level_kwargs or {})
     if extra_body is not None:
         call_kwargs["extra_body"] = extra_body
-    with patch(
-        "agent.anthropic_adapter.create_anthropic_message",
-        side_effect=_fake_create,
-    ), patch("agent.transports.get_transport") as mock_get_transport:
+    with (
+        patch(
+            "agent.anthropic_adapter.create_anthropic_message",
+            side_effect=_fake_create,
+        ),
+        patch("agent.transports.get_transport") as mock_get_transport,
+    ):
         mock_get_transport.return_value.normalize_response.return_value = normalized
         call = adapter.create(
             model=model,
@@ -67,16 +73,18 @@ def test_json_schema_response_format_uses_native_output_config():
         "properties": {"title": {"type": "string"}},
         "required": ["title"],
     }
-    api_kwargs = _capture_anthropic_kwargs({
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "thread_title",
-                "schema": schema,
-                "strict": False,
+    api_kwargs = _capture_anthropic_kwargs(
+        {
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "thread_title",
+                    "schema": schema,
+                    "strict": False,
+                },
             },
-        },
-    })
+        }
+    )
 
     assert api_kwargs["output_config"]["format"] == {
         "type": "json_schema",
@@ -86,9 +94,11 @@ def test_json_schema_response_format_uses_native_output_config():
 
 
 def test_json_object_response_format_uses_permissive_object_schema():
-    api_kwargs = _capture_anthropic_kwargs({
-        "response_format": {"type": "json_object"},
-    })
+    api_kwargs = _capture_anthropic_kwargs(
+        {
+            "response_format": {"type": "json_object"},
+        }
+    )
 
     assert api_kwargs["output_config"]["format"] == {
         "type": "json_schema",
@@ -99,13 +109,15 @@ def test_json_object_response_format_uses_permissive_object_schema():
 
 def test_response_format_merges_with_adaptive_thinking_effort():
     schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
-    api_kwargs = _capture_anthropic_kwargs({
-        "reasoning": {"enabled": True, "effort": "high"},
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {"schema": schema},
-        },
-    })
+    api_kwargs = _capture_anthropic_kwargs(
+        {
+            "reasoning": {"enabled": True, "effort": "high"},
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"schema": schema},
+            },
+        }
+    )
 
     assert api_kwargs["output_config"] == {
         "effort": "high",
@@ -119,11 +131,13 @@ def test_response_format_merges_with_adaptive_thinking_effort():
 
 
 def test_unrelated_extra_body_keys_still_pass_through():
-    api_kwargs = _capture_anthropic_kwargs({
-        "response_format": {"type": "json_object"},
-        "metadata": {"user_id": "thread-autotitle"},
-        "vendor_option": True,
-    })
+    api_kwargs = _capture_anthropic_kwargs(
+        {
+            "response_format": {"type": "json_object"},
+            "metadata": {"user_id": "thread-autotitle"},
+            "vendor_option": True,
+        }
+    )
 
     assert api_kwargs["extra_body"] == {
         "metadata": {"user_id": "thread-autotitle"},

@@ -1,5 +1,6 @@
 """#111105: the profile re-scan watcher must rebuild adapters after a config.yaml replacement
 that keeps mtime and size (``cp -p``, ``rsync -t``, a timestamp-pinning writer)."""
+
 import os
 import shutil
 

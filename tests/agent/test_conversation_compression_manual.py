@@ -14,21 +14,39 @@ from agent.conversation_compression_manual import compress_now, parse_compress_a
 
 def _history():
     return [
-        {"role": "user", "content": "one"}, {"role": "assistant", "content": "two"},
-        {"role": "user", "content": "three"}, {"role": "assistant", "content": "four"},
-        {"role": "user", "content": "five"}, {"role": "assistant", "content": "six"},
+        {"role": "user", "content": "one"},
+        {"role": "assistant", "content": "two"},
+        {"role": "user", "content": "three"},
+        {"role": "assistant", "content": "four"},
+        {"role": "user", "content": "five"},
+        {"role": "assistant", "content": "six"},
     ]
 
 
 def _agent():
     agent = MagicMock()
-    agent._cached_system_prompt, agent.tools, agent.context_compressor = "sys", None, None
+    agent._cached_system_prompt, agent.tools, agent.context_compressor = (
+        "sys",
+        None,
+        None,
+    )
     agent._compression_skipped_due_to_lock = None
-    agent._compress_context.return_value = ([{"role": "assistant", "content": "summary"}], "")
+    agent._compress_context.return_value = (
+        [{"role": "assistant", "content": "summary"}],
+        "",
+    )
     return agent
 
 
-@pytest.mark.parametrize("raw", ["--preview", "here 1 --preview", "--dry-run keep the tests", "--aggressive --preview"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "--preview",
+        "here 1 --preview",
+        "--dry-run keep the tests",
+        "--aggressive --preview",
+    ],
+)
 def test_preview_leaves_history_and_agent_byte_identical(raw):
     agent, history = _agent(), _history()
     frozen = copy.deepcopy(history)
@@ -56,6 +74,7 @@ def test_every_surface_honours_preview_without_compressing(surface, monkeypatch)
     frozen = copy.deepcopy(history)
     if surface == "cli":
         from clawk_cli.cli_session_mixin import CLISessionMixin
+
         cli = CLISessionMixin.__new__(CLISessionMixin)
         cli.agent, cli.conversation_history = agent, history
         cli._manual_compress("/compress --preview")
@@ -63,22 +82,36 @@ def test_every_surface_honours_preview_without_compressing(surface, monkeypatch)
     elif surface == "gateway":
         import asyncio
         from gateway.run import GatewayRunner
+
         gw = GatewayRunner.__new__(GatewayRunner)
         gw.session_store = MagicMock()
         entry = MagicMock(session_id="sid")
         gw._async_session_store = MagicMock(
-            _store=gw.session_store, get_or_create_session=_coro(entry), load_transcript=_coro(history))
-        gw._run_manual_compression = MagicMock(side_effect=AssertionError("must not compress"))
-        event = MagicMock(); event.get_command_args.return_value = "--preview"
+            _store=gw.session_store,
+            get_or_create_session=_coro(entry),
+            load_transcript=_coro(history),
+        )
+        gw._run_manual_compression = MagicMock(
+            side_effect=AssertionError("must not compress")
+        )
+        event = MagicMock()
+        event.get_command_args.return_value = "--preview"
         reply = asyncio.run(gw._handle_compress_command_inner(event))
         assert "Preview" in reply
     elif surface == "tui":
         from tui_gateway.server import _compress_session_history
-        session = {"agent": agent, "history": history, "history_lock": threading.Lock(), "history_version": 3}
+
+        session = {
+            "agent": agent,
+            "history": history,
+            "history_lock": threading.Lock(),
+            "history_version": 3,
+        }
         assert _compress_session_history(session, "--preview")[0] == 0
         assert session["history"] == frozen and session["history_version"] == 3
     else:
         from acp_adapter.commands import SlashCommandsMixin
+
         acp = SlashCommandsMixin.__new__(SlashCommandsMixin)
         acp.session_manager = MagicMock()
         state = MagicMock(history=history, agent=agent, session_id="acp-sid")
@@ -95,14 +128,23 @@ def test_windowless_gate_is_gateway_only_so_in_process_surfaces_still_reach_comp
     agent, history = _agent(), _history()
     agent.context_compressor = MagicMock()
     agent.context_compressor.has_content_to_compress.return_value = False
-    agent._compress_context.return_value = (history[:-1], "")  # e.g. a pruned tool result, no summary
+    agent._compress_context.return_value = (
+        history[:-1],
+        "",
+    )  # e.g. a pruned tool result, no summary
 
     default = compress_now(agent, history, parse_compress_args(""))
     assert default.status == "compressed" and default.removed == 1
     agent._compress_context.assert_called_once()
 
     agent._compress_context.reset_mock()
-    gateway = compress_now(agent, history, parse_compress_args(""), system_message="", skip_without_window=True)
+    gateway = compress_now(
+        agent,
+        history,
+        parse_compress_args(""),
+        system_message="",
+        skip_without_window=True,
+    )
     assert gateway.status == "nothing_to_do" and gateway.after_messages == history
     agent._compress_context.assert_not_called()
 
@@ -110,12 +152,14 @@ def test_windowless_gate_is_gateway_only_so_in_process_surfaces_still_reach_comp
 def _coro(value):
     async def _inner(*_a, **_k):
         return value
+
     return _inner
 
 
 @pytest.fixture
 def session_db(tmp_path):
     from clawk_state import SessionDB
+
     db = SessionDB(db_path=tmp_path / "state.db")
     yield db
     db.close()
@@ -124,9 +168,19 @@ def session_db(tmp_path):
 def _exchanges(n, *, unanswered=()):
     history = []
     for i in range(n):
-        history.append({"role": "user", "content": f"question {i} about fruit{i} " + " ".join(["filler"] * 40)})
+        history.append(
+            {
+                "role": "user",
+                "content": f"question {i} about fruit{i} " + " ".join(["filler"] * 40),
+            }
+        )
         if i not in unanswered:
-            history.append({"role": "assistant", "content": f"answer {i} " + " ".join(["lorem"] * 400)})
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": f"answer {i} " + " ".join(["lorem"] * 400),
+                }
+            )
     return history
 
 
@@ -138,8 +192,17 @@ def _stored_agent(db, history, *, create=True):
         db.append_message("sid", message["role"], message["content"])
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
         from run_agent import AIAgent
-        agent = AIAgent(api_key="test-key", base_url="https://openrouter.ai/api/v1", model="test/model",
-                        quiet_mode=True, session_db=db, session_id="sid", skip_context_files=True, skip_memory=True)
+
+        agent = AIAgent(
+            api_key="test-key",
+            base_url="https://openrouter.ai/api/v1",
+            model="test/model",
+            quiet_mode=True,
+            session_db=db,
+            session_id="sid",
+            skip_context_files=True,
+            skip_memory=True,
+        )
     agent._compression_feasibility_checked = True
     return agent, db.get_messages_as_conversation("sid")
 
@@ -151,15 +214,27 @@ def _compress_here(agent, history, keep):
 def _compress(agent, history, raw):
     response = MagicMock()
     response.choices = [MagicMock()]
-    response.choices[0].message.content = "## Goal\nNumbered fruit questions.\n## Progress\nEarly ones answered."
+    response.choices[
+        0
+    ].message.content = (
+        "## Goal\nNumbered fruit questions.\n## Progress\nEarly ones answered."
+    )
     with patch("agent.context_compressor.call_llm", lambda **_kw: response):
-        return compress_now(agent, history, parse_compress_args(raw), system_message="", skip_without_window=True)
+        return compress_now(
+            agent,
+            history,
+            parse_compress_args(raw),
+            system_message="",
+            skip_without_window=True,
+        )
 
 
 def _flags(db, content):
     """``(active, compacted)`` of every stored row with this exact content."""
-    rows = db._conn.execute("SELECT active, compacted FROM messages WHERE session_id = 'sid' AND content = ?",
-                            (content,)).fetchall()
+    rows = db._conn.execute(
+        "SELECT active, compacted FROM messages WHERE session_id = 'sid' AND content = ?",
+        (content,),
+    ).fetchall()
     return sorted(tuple(row) for row in rows)
 
 
@@ -187,15 +262,20 @@ def test_in_place_here_n_stores_the_kept_exchanges(session_db):
         assert [m["content"] for m in model_history].count(kept["content"]) == 1
     # compress() carries its own recent rows after the summary, then comes the kept tail: each has one live
     # row, and its original is a superseded duplicate, not a turn summarized away that resume shows again.
-    summary_at = next(i for i, m in enumerate(durable) if "Numbered fruit questions" in m["content"])
-    carried = [m["content"] for m in durable[summary_at + 1:]]
+    summary_at = next(
+        i for i, m in enumerate(durable) if "Numbered fruit questions" in m["content"]
+    )
+    carried = [m["content"] for m in durable[summary_at + 1 :]]
     assert len(carried) > 4
     for content in carried:
         assert [m["content"] for m in display_history].count(content) == 1
         assert _flags(session_db, content) == [(0, 0), (1, 0)]
 
     # The kept rows are stamped as stored, so the next persist appends only the new turn.
-    next_turn = [*result.after_messages, {"role": "user", "content": "question 10 about fruit10"}]
+    next_turn = [
+        *result.after_messages,
+        {"role": "user", "content": "question 10 about fruit10"},
+    ]
     agent._flush_messages_to_session_db(next_turn, None)
     assert _live(session_db.get_messages_as_conversation("sid")) == _live(next_turn)
 
@@ -224,11 +304,16 @@ def test_in_place_here_n_folds_the_seam_once(session_db):
 
     durable = session_db.get_messages_as_conversation("sid")
     assert _live(durable) == _live(result.after_messages)
-    assert f"{history[-5]['content']}\n\n{history[-4]['content']}" in [m["content"] for m in durable]
+    assert f"{history[-5]['content']}\n\n{history[-4]['content']}" in [
+        m["content"] for m in durable
+    ]
     assert _live(durable[-3:]) == _live(history[-3:])
 
 
-FOREIGN_TURN = [("user", "[from Telegram] the vault code is 7741"), ("assistant", "Noted: the vault code is 7741.")]
+FOREIGN_TURN = [
+    ("user", "[from Telegram] the vault code is 7741"),
+    ("assistant", "Noted: the vault code is 7741."),
+]
 
 
 @pytest.mark.parametrize("raw", ["", "here 2"])
@@ -238,7 +323,9 @@ def test_in_place_compress_keeps_turns_the_caller_never_held(session_db, raw):
     the caller's newest row it takes those turns away unseen: the summarizer never read them, and they leave every
     surface's history and search."""
     agent, _ = _stored_agent(session_db, _exchanges(10))
-    held = session_db.get_resume_conversations("sid")[0]  # what a resume restores: row ids included
+    held = session_db.get_resume_conversations("sid")[
+        0
+    ]  # what a resume restores: row ids included
     for role, content in FOREIGN_TURN:
         session_db.append_message("sid", role, content)
 
@@ -246,7 +333,9 @@ def test_in_place_compress_keeps_turns_the_caller_never_held(session_db, raw):
 
     durable = session_db.get_messages_as_conversation("sid")
     assert _live(durable[-2:]) == FOREIGN_TURN
-    assert len({m["content"] for m in durable}) == len(durable)  # kept (`here 2`) and carried rows once each
+    assert len({m["content"] for m in durable}) == len(
+        durable
+    )  # kept (`here 2`) and carried rows once each
     model_history, display_history = session_db.get_resume_conversations("sid")
     for _role, content in FOREIGN_TURN:
         assert [m["content"] for m in model_history].count(content) == 1
@@ -254,7 +343,14 @@ def test_in_place_compress_keeps_turns_the_caller_never_held(session_db, raw):
     assert session_db.search_messages("vault 7741")
 
 
-@pytest.mark.parametrize("stale", ["compacted elsewhere", "newest rows without ids", "trailing row without any stamp"])
+@pytest.mark.parametrize(
+    "stale",
+    [
+        "compacted elsewhere",
+        "newest rows without ids",
+        "trailing row without any stamp",
+    ],
+)
 def test_in_place_compress_never_leaves_two_live_copies_of_a_row(session_db, stale):
     """Stopping the archive at the caller's newest row is only exact while the held history is a live prefix of the
     session. After another surface compacted it, every live row is newer than the held (now archived) ones; a
@@ -266,7 +362,10 @@ def test_in_place_compress_never_leaves_two_live_copies_of_a_row(session_db, sta
     held = session_db.get_resume_conversations("sid")[0]
     if stale == "compacted elsewhere":
         other, _ = _stored_agent(session_db, [], create=False)
-        assert _compress(other, session_db.get_messages_as_conversation("sid"), "").status == "compressed"
+        assert (
+            _compress(other, session_db.get_messages_as_conversation("sid"), "").status
+            == "compressed"
+        )
     elif stale == "trailing row without any stamp":
         marker = "[Model switched to test/other.]"
         held.append({"role": "user", "content": marker, "display_kind": "model_switch"})
@@ -293,8 +392,13 @@ def test_in_place_compress_never_clones_a_row_a_merge_already_carried(session_db
     agent, _ = _stored_agent(session_db, _exchanges(10))
     session_db.append_message("sid", "user", "first half of a split prompt")
     session_db.append_message("sid", "user", "second half 9931")
-    held = session_db.get_resume_conversations("sid")[0]  # the resume path merges the two user rows
-    assert "second half 9931" in held[-1]["content"] and held[-1]["content"] != "second half 9931"
+    held = session_db.get_resume_conversations("sid")[
+        0
+    ]  # the resume path merges the two user rows
+    assert (
+        "second half 9931" in held[-1]["content"]
+        and held[-1]["content"] != "second half 9931"
+    )
 
     assert _compress(agent, held, raw).status == "compressed"
 
@@ -313,10 +417,14 @@ def test_in_place_compress_keeps_a_gap_below_the_newest_held_row(session_db):
     for role, content in FOREIGN_TURN:
         session_db.append_message("sid", role, content)
     own_id = session_db.append_message("sid", "user", "continued on this surface")
-    held.append({
-        "role": "user", "content": "continued on this surface",
-        "_row_id": own_id, _DB_PERSISTED_MARKER: True,
-    })
+    held.append(
+        {
+            "role": "user",
+            "content": "continued on this surface",
+            "_row_id": own_id,
+            _DB_PERSISTED_MARKER: True,
+        }
+    )
 
     assert _compress(agent, held, "").status == "compressed"
 

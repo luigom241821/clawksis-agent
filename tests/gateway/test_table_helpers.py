@@ -5,10 +5,7 @@ from gateway.platforms.helpers import (
 )
 
 
-
-
 class TestConvertTableToBullets:
-
     def test_basic_table(self):
         text = (
             "| Player | Score |\n"
@@ -24,11 +21,7 @@ class TestConvertTableToBullets:
         assert "• Player: Alice" not in out
 
     def test_three_column_table(self):
-        text = (
-            "| Name | Age | City |\n"
-            "|:-----|----:|:----:|\n"
-            "| Ada  |  30 | NYC  |"
-        )
+        text = "| Name | Age | City |\n|:-----|----:|:----:|\n| Ada  |  30 | NYC  |"
         out = convert_table_to_bullets(text)
         assert "**Ada**" in out
         assert "• Name: Ada" not in out
@@ -55,5 +48,3 @@ class TestConvertTableToBullets:
         assert "**a**" in out
         assert "• head1: a" not in out
         assert "• head2: b" in out
-
-

@@ -16,7 +16,9 @@ try:
 except ImportError:
     from ffmpeg_utils import resolve_ffmpeg_executable
 
-if TYPE_CHECKING:  # numpy is an optional ("voice" extra) dep — never import at runtime top-level
+if (
+    TYPE_CHECKING
+):  # numpy is an optional ("voice" extra) dep — never import at runtime top-level
     import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -26,12 +28,14 @@ def _require_numpy():
     """Lazy numpy import: the adapter imports this module unconditionally, so a missing
     ``voice`` extra must fail at mix time, not at import time."""
     import numpy as np
+
     return np
+
 
 # Discord-native frame geometry (matches discord.opus.Encoder): 48 kHz, stereo, s16, 20 ms frames.
 SAMPLE_RATE, CHANNELS, SAMPLE_WIDTH, FRAME_LENGTH_MS = 48000, 2, 2, 20
-SAMPLES_PER_FRAME = SAMPLE_RATE * FRAME_LENGTH_MS // 1000   # 960
-FRAME_SIZE = SAMPLES_PER_FRAME * CHANNELS * SAMPLE_WIDTH    # 3840 bytes
+SAMPLES_PER_FRAME = SAMPLE_RATE * FRAME_LENGTH_MS // 1000  # 960
+FRAME_SIZE = SAMPLES_PER_FRAME * CHANNELS * SAMPLE_WIDTH  # 3840 bytes
 BYTES_PER_MS = SAMPLE_RATE * CHANNELS * SAMPLE_WIDTH // 1000  # 192
 SILENCE_FRAME = b"\x00" * FRAME_SIZE
 
@@ -40,9 +44,19 @@ class MixerChild:
     """One 48 kHz / stereo / s16le PCM stream feeding :class:`VoiceMixer`; ``read_frame``
     yields 20 ms frames, optionally looping, with per-child gain and linear fade-in."""
 
-    __slots__ = ("_fade_done", "_finished", "_pcm", "_pos", "fade_frames", "gain", "loop")
+    __slots__ = (
+        "_fade_done",
+        "_finished",
+        "_pcm",
+        "_pos",
+        "fade_frames",
+        "gain",
+        "loop",
+    )
 
-    def __init__(self, pcm: bytes, *, loop: bool = False, gain: float = 1.0, fade_in_ms: int = 0):
+    def __init__(
+        self, pcm: bytes, *, loop: bool = False, gain: float = 1.0, fade_in_ms: int = 0
+    ):
         # Pad to whole frames so looping is seamless and the final partial frame doesn't click.
         self._pcm = pcm + b"\x00" * (-len(pcm) % FRAME_SIZE)
         self._pos = self._fade_done = 0
@@ -61,7 +75,7 @@ class MixerChild:
                 self._finished = True
                 return None
         np = _require_numpy()
-        chunk = self._pcm[self._pos:self._pos + FRAME_SIZE]
+        chunk = self._pcm[self._pos : self._pos + FRAME_SIZE]
         self._pos += FRAME_SIZE
         if len(chunk) < FRAME_SIZE:
             chunk = chunk + b"\x00" * (FRAME_SIZE - len(chunk))
@@ -83,18 +97,30 @@ class VoiceMixer(discord.AudioSource):
     def is_opus(self) -> bool:  # pragma: no cover - trivial
         return False
 
-    def __init__(self, *, ambient_gain: float = 0.18, duck_gain: float = 0.06, speech_gain: float = 1.0,
-                 duck_release_ms: int = 400):
+    def __init__(
+        self,
+        *,
+        ambient_gain: float = 0.18,
+        duck_gain: float = 0.06,
+        speech_gain: float = 1.0,
+        duck_release_ms: int = 400,
+    ):
         self._lock = threading.Lock()
         self._ambient: Optional[MixerChild] = None
         self._speech: list[MixerChild] = []
-        self._ambient_gain, self._duck_gain, self._speech_gain = float(ambient_gain), float(duck_gain), float(speech_gain)
+        self._ambient_gain, self._duck_gain, self._speech_gain = (
+            float(ambient_gain),
+            float(duck_gain),
+            float(speech_gain),
+        )
         # When speech ends, ramp the ambient back up over this many frames instead of jumping.
         self._duck_release_frames = max(1, duck_release_ms // FRAME_LENGTH_MS)
         self._duck_release_left = 0
         self._closed = self._speech_active = False
 
-    def set_ambient(self, pcm: Optional[bytes], *, gain: Optional[float] = None) -> None:
+    def set_ambient(
+        self, pcm: Optional[bytes], *, gain: Optional[float] = None
+    ) -> None:
         """Install (or clear, with ``pcm=None``) the looping ambient bed."""
         with self._lock:
             if gain is not None:
@@ -105,14 +131,20 @@ class VoiceMixer(discord.AudioSource):
             gain_now = self._duck_gain if self._speech_active else self._ambient_gain
             self._ambient = MixerChild(pcm, loop=True, gain=gain_now, fade_in_ms=200)
 
-    def play_speech(self, pcm: bytes, *, gain: Optional[float] = None, fade_in_ms: int = 40) -> None:
+    def play_speech(
+        self, pcm: bytes, *, gain: Optional[float] = None, fade_in_ms: int = 40
+    ) -> None:
         """Layer a one-shot speech clip over the ambient bed (ducks ambient)."""
         if not pcm:
             return
         with self._lock:
-            self._speech.append(MixerChild(
-                pcm, gain=self._speech_gain if gain is None else float(gain), fade_in_ms=fade_in_ms,
-            ))
+            self._speech.append(
+                MixerChild(
+                    pcm,
+                    gain=self._speech_gain if gain is None else float(gain),
+                    fade_in_ms=fade_in_ms,
+                )
+            )
             self._speech_active = True
             self._duck_release_left = 0
             if self._ambient is not None:
@@ -158,7 +190,9 @@ class VoiceMixer(discord.AudioSource):
                 if self._duck_release_left > 0 and not self._speech_active:
                     self._duck_release_left -= 1
                     frac = 1.0 - (self._duck_release_left / self._duck_release_frames)
-                    self._ambient.gain = self._duck_gain + (self._ambient_gain - self._duck_gain) * frac
+                    self._ambient.gain = (
+                        self._duck_gain + (self._ambient_gain - self._duck_gain) * frac
+                    )
                 elif not self._speech_active and self._duck_release_left == 0:
                     self._ambient.gain = self._ambient_gain
                 amb = self._ambient.read_frame()
@@ -179,19 +213,39 @@ class VoiceMixer(discord.AudioSource):
 def decode_to_pcm(path: str, *, timeout: float = 30.0) -> Optional[bytes]:
     """Decode any audio file to 48 kHz / stereo / s16le PCM via ffmpeg; None on failure."""
     import subprocess
+
     try:
         proc = subprocess.run(
-            [resolve_ffmpeg_executable(), "-y", "-loglevel", "error", "-i", path, "-f", "s16le",
-             "-ar", str(SAMPLE_RATE), "-ac", str(CHANNELS), "pipe:1"],
-            capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+            [
+                resolve_ffmpeg_executable(),
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                path,
+                "-f",
+                "s16le",
+                "-ar",
+                str(SAMPLE_RATE),
+                "-ac",
+                str(CHANNELS),
+                "pipe:1",
+            ],
+            capture_output=True,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
             check=False,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
         logger.warning("decode_to_pcm failed for %s: %s", path, e)
         return None
     if proc.returncode != 0:
-        logger.warning("ffmpeg decode failed for %s (rc=%d): %s",
-                       path, proc.returncode, (proc.stderr or b"").decode("utf-8", "replace")[:200])
+        logger.warning(
+            "ffmpeg decode failed for %s (rc=%d): %s",
+            path,
+            proc.returncode,
+            (proc.stderr or b"").decode("utf-8", "replace")[:200],
+        )
         return None
     return proc.stdout or None
 
@@ -206,10 +260,11 @@ def synth_ambient_pcm(seconds: float = 4.0) -> bytes:
     def _whole_cycle_freq(target: float) -> float:
         cycles = max(1, round(target * seconds))
         return cycles / seconds
+
     f1 = _whole_cycle_freq(110.0)
     f2 = _whole_cycle_freq(110.5)
-    trem = _whole_cycle_freq(0.5)   # ~0.5 Hz tremolo
-    pad = (0.55 * np.sin(2 * np.pi * f1 * t) + 0.45 * np.sin(2 * np.pi * f2 * t))
+    trem = _whole_cycle_freq(0.5)  # ~0.5 Hz tremolo
+    pad = 0.55 * np.sin(2 * np.pi * f1 * t) + 0.45 * np.sin(2 * np.pi * f2 * t)
     tremolo = 0.6 + 0.4 * (0.5 * (1 + np.sin(2 * np.pi * trem * t)))
     signal = pad * tremolo
     rng = np.random.default_rng(7)

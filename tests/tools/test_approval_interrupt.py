@@ -21,6 +21,7 @@ import time
 def _clear_approval_state():
     """Reset all module-level approval state between tests."""
     from tools import approval as mod
+
     mod._gateway_queues.clear()
     mod._gateway_notify_cbs.clear()
     mod._session_approved.clear()
@@ -44,8 +45,7 @@ class TestApprovalInterrupt:
         set_interrupt(False)
         self._saved_env = {
             k: os.environ.get(k)
-            for k in ("CLAWK_GATEWAY_SESSION", "CLAWK_YOLO_MODE",
-                      "CLAWK_SESSION_KEY")
+            for k in ("CLAWK_GATEWAY_SESSION", "CLAWK_YOLO_MODE", "CLAWK_SESSION_KEY")
         }
         os.environ.pop("CLAWK_YOLO_MODE", None)
         os.environ["CLAWK_GATEWAY_SESSION"] = "1"
@@ -74,7 +74,9 @@ class TestApprovalInterrupt:
 
         # Force a long timeout so a *passing* test can only happen via the
         # interrupt path, never by the deadline elapsing.
-        monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"timeout": 300})
+        monkeypatch.setattr(
+            approval_context, "_get_approval_config", lambda: {"timeout": 300}
+        )
 
         approval_data = {
             "command": "rm -rf /tmp/whatever",
@@ -115,7 +117,11 @@ class TestApprovalInterrupt:
 
         assert not t.is_alive(), "approval wait did not return after interrupt"
         result = result_holder["result"]
-        assert (result["resolved"], result["choice"], result["reason"]) == (True, "deny", None)
+        assert (result["resolved"], result["choice"], result["reason"]) == (
+            True,
+            "deny",
+            None,
+        )
         # A bare interrupt bit (no cause published) is still reported as a withdrawn prompt.
         assert result["cancelled"] == "turn interrupted"
         # Must be far below the 300s timeout — the interrupt, not the deadline,
@@ -133,7 +139,9 @@ class TestApprovalInterrupt:
 
         # Short timeout so the test finishes fast via the deadline, proving the
         # foreign interrupt did not short-circuit the wait.
-        monkeypatch.setattr(approval_context, "_get_approval_config", lambda: {"timeout": 1})
+        monkeypatch.setattr(
+            approval_context, "_get_approval_config", lambda: {"timeout": 1}
+        )
 
         approval_data = {
             "command": "rm -rf /tmp/whatever",
@@ -162,4 +170,8 @@ class TestApprovalInterrupt:
         t.join(timeout=10)
         assert not t.is_alive()
         # Timed out (no resolution) because the foreign interrupt was ignored.
-        assert result_holder["result"] == {"resolved": False, "choice": None, "reason": None}
+        assert result_holder["result"] == {
+            "resolved": False,
+            "choice": None,
+            "reason": None,
+        }

@@ -17,13 +17,17 @@ class _Args:
 class TestSourceUpdateChannel:
     def test_explicit_branch_always_wins(self):
         """--branch means main-style behavior regardless of channel config."""
-        assert _source_update_channel(_Args(branch="bb/gui", channel="stable")) == "main"
+        assert (
+            _source_update_channel(_Args(branch="bb/gui", channel="stable")) == "main"
+        )
         assert _source_update_channel(channel="canary", branch_explicit=True) == "main"
 
     def test_transient_channel_flag_wins(self):
         """--channel is the per-invocation override (--set-channel persists);
         no config read happens when it is present."""
-        with patch("clawk_cli.config.require_readable_config_before_write") as load_config:
+        with patch(
+            "clawk_cli.config.require_readable_config_before_write"
+        ) as load_config:
             for channel in ("stable", "main", "canary"):
                 assert _source_update_channel(_Args(channel=channel)) == channel
                 assert _source_update_channel(channel=channel) == channel
@@ -38,7 +42,9 @@ class TestSourceUpdateChannel:
             '{"schemaVersion": 2, "updateMechanism": "self"}'
         )
         config = {
-            "update": {"installs": {install_id(root): {"path": str(root), "channel": "stable"}}}
+            "update": {
+                "installs": {install_id(root): {"path": str(root), "channel": "stable"}}
+            }
         }
         from clawk_cli import update_cmd
 

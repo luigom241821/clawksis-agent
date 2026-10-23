@@ -1,16 +1,23 @@
 """gateway.trust_env — one config key controls aiohttp proxy-env honoring at every adapter site (#48820)."""
+
 import pytest
 
 from gateway.platforms import base as gw_base
+
 
 def _write_config(tmp_path, monkeypatch, body: str) -> None:
     # load_config caches on (path, mtime) — a fresh tmp CLAWK_HOME per test is a fresh cache key.
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path))
     (tmp_path / "config.yaml").write_text(body)
 
+
 @pytest.mark.parametrize(
     "yaml_body, expected",
-    [("gateway:\n  trust_env: false\n", False), ("gateway:\n  trust_env: true\n", True), ("{}\n", True)],
+    [
+        ("gateway:\n  trust_env: false\n", False),
+        ("gateway:\n  trust_env: true\n", True),
+        ("{}\n", True),
+    ],
 )
 def test_gateway_trust_env_reads_config(tmp_path, monkeypatch, yaml_body, expected):
     """gateway.trust_env in config.yaml drives the shared helper; absent → True (default)."""
@@ -24,6 +31,7 @@ def test_gateway_trust_env_reads_config(tmp_path, monkeypatch, yaml_body, expect
     monkeypatch.setenv("X_PLATFORM_PROXY", "http://127.0.0.1:1080")
     assert gw_base.resolve_proxy_url("X_PLATFORM_PROXY") == "http://127.0.0.1:1080"
 
+
 class TestResolveProxyUrlMultiplexScope:
     """A secondary multiplex profile's own TELEGRAM_PROXY/DISCORD_PROXY/etc. must gate its
     adapter, not the default profile's YAML-to-env bridge output sitting in the shared
@@ -31,22 +39,37 @@ class TestResolveProxyUrlMultiplexScope:
     Telegram, Discord, Mattermost, Matrix, SMS, and Slack)."""
 
     def test_scoped_profile_uses_its_own_value(self, monkeypatch):
-        from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+        from agent.secret_scope import (
+            reset_secret_scope,
+            set_multiplex_active,
+            set_secret_scope,
+        )
 
         monkeypatch.setenv("DISCORD_PROXY", "http://default-profile-proxy:8080")
         monkeypatch.delenv("NO_PROXY", raising=False)
         monkeypatch.delenv("no_proxy", raising=False)
 
         set_multiplex_active(True)
-        token = set_secret_scope({"DISCORD_PROXY": "http://secondary-profile-proxy:9090"})
+        token = set_secret_scope(
+            {"DISCORD_PROXY": "http://secondary-profile-proxy:9090"}
+        )
         try:
-            assert gw_base.resolve_proxy_url("DISCORD_PROXY") == "http://secondary-profile-proxy:9090"
+            assert (
+                gw_base.resolve_proxy_url("DISCORD_PROXY")
+                == "http://secondary-profile-proxy:9090"
+            )
         finally:
             reset_secret_scope(token)
             set_multiplex_active(False)
 
-    def test_scoped_profile_without_own_value_does_not_borrow_default(self, monkeypatch):
-        from agent.secret_scope import reset_secret_scope, set_multiplex_active, set_secret_scope
+    def test_scoped_profile_without_own_value_does_not_borrow_default(
+        self, monkeypatch
+    ):
+        from agent.secret_scope import (
+            reset_secret_scope,
+            set_multiplex_active,
+            set_secret_scope,
+        )
 
         monkeypatch.setenv("DISCORD_PROXY", "http://default-profile-proxy:8080")
         monkeypatch.delenv("NO_PROXY", raising=False)
@@ -66,4 +89,7 @@ class TestResolveProxyUrlMultiplexScope:
         monkeypatch.setenv("DISCORD_PROXY", "http://default-profile-proxy:8080")
         monkeypatch.delenv("NO_PROXY", raising=False)
         monkeypatch.delenv("no_proxy", raising=False)
-        assert gw_base.resolve_proxy_url("DISCORD_PROXY") == "http://default-profile-proxy:8080"
+        assert (
+            gw_base.resolve_proxy_url("DISCORD_PROXY")
+            == "http://default-profile-proxy:8080"
+        )

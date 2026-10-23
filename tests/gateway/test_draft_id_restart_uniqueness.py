@@ -46,7 +46,9 @@ class TestDraftIdRestartUniqueness:
         for _ in range(2):
             out = subprocess.run(
                 [sys.executable, "-c", code],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             seeds.add(int(out.stdout.strip()))
         assert len(seeds) == 2, (

@@ -3,6 +3,7 @@ setup (device login + project + user + sidecar), status, install-sidecar (npm in
 the sidecar dir), telemetry [on|off]. Device login is the first step of ``setup`` (no
 standalone ``login`` verb); inbound is the gRPC stream, so there are no webhook subcommands.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,28 +25,49 @@ import contextlib
 def register_cli(parser: argparse.ArgumentParser) -> None:
     """Wire up `clawk photon ...` subcommands."""
     subs = parser.add_subparsers(dest="photon_command", required=False)
-    p_setup = subs.add_parser("setup", help="First-time setup (device login + project + user + sidecar)")
-    p_setup.add_argument("--project-name", default=None, help="Project name (default: 'Clawksis')")
-    p_setup.add_argument("--phone", default=None, help="Your E.164 phone number (e.g. +15551234567)")
+    p_setup = subs.add_parser(
+        "setup", help="First-time setup (device login + project + user + sidecar)"
+    )
+    p_setup.add_argument(
+        "--project-name", default=None, help="Project name (default: 'Clawksis')"
+    )
+    p_setup.add_argument(
+        "--phone", default=None, help="Your E.164 phone number (e.g. +15551234567)"
+    )
     p_setup.add_argument("--first-name", default=None)
     p_setup.add_argument("--last-name", default=None)
     p_setup.add_argument("--email", default=None)
-    p_setup.add_argument("--no-browser", action="store_true",
-                         help="Don't try to open a browser for device login; print the URL only")
-    p_setup.add_argument("--skip-sidecar-install", action="store_true",
-                         help="Skip `npm install` inside the sidecar directory")
+    p_setup.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Don't try to open a browser for device login; print the URL only",
+    )
+    p_setup.add_argument(
+        "--skip-sidecar-install",
+        action="store_true",
+        help="Skip `npm install` inside the sidecar directory",
+    )
     subs.add_parser("status", help="Show login + project + sidecar dep state")
-    subs.add_parser("install-sidecar", help="Run npm install inside the sidecar directory")
-    p_telemetry = subs.add_parser("telemetry", help="Show or toggle Spectrum SDK telemetry (on/off)")
+    subs.add_parser(
+        "install-sidecar", help="Run npm install inside the sidecar directory"
+    )
+    p_telemetry = subs.add_parser(
+        "telemetry", help="Show or toggle Spectrum SDK telemetry (on/off)"
+    )
     p_telemetry.add_argument(
-        "state", nargs="?", choices=("on", "off"),
-        help="Turn telemetry on or off (omit to show the current state)")
+        "state",
+        nargs="?",
+        choices=("on", "off"),
+        help="Turn telemetry on or off (omit to show the current state)",
+    )
     parser.set_defaults(func=dispatch)
 
 
 def dispatch(args: argparse.Namespace) -> int:
     sub = getattr(args, "photon_command", None)
-    handler = _cmd_status if sub is None else _COMMANDS.get(sub)  # no subcommand — status by default
+    handler = (
+        _cmd_status if sub is None else _COMMANDS.get(sub)
+    )  # no subcommand — status by default
     if handler is None:
         print(f"unknown subcommand: {sub}", file=sys.stderr)
         return 2
@@ -54,16 +76,23 @@ def dispatch(args: argparse.Namespace) -> int:
 
 # -- Subcommand handlers -------------------------------------------------------------
 
+
 def _run_device_login(args: argparse.Namespace) -> int:
     """Run the RFC 8628 device-code login flow and persist the token (first step of ``setup``)."""
+
     def _print_code(code):
-        print("\n┌─ Photon device login ────────────────────────────────────────\n"
-              f"│  Open this URL:  {code.verification_uri_complete or code.verification_uri}\n"
-              f"│  Enter the code: {code.user_code}\n"
-              "│  (waiting for approval — Ctrl-C to cancel)\n"
-              "└──────────────────────────────────────────────────────────────\n")
+        print(
+            "\n┌─ Photon device login ────────────────────────────────────────\n"
+            f"│  Open this URL:  {code.verification_uri_complete or code.verification_uri}\n"
+            f"│  Enter the code: {code.user_code}\n"
+            "│  (waiting for approval — Ctrl-C to cancel)\n"
+            "└──────────────────────────────────────────────────────────────\n"
+        )
+
     try:
-        photon_auth.login_device_flow(open_browser=not args.no_browser, on_user_code=_print_code)
+        photon_auth.login_device_flow(
+            open_browser=not args.no_browser, on_user_code=_print_code
+        )
     except Exception as e:
         print(f"login failed: {e}", file=sys.stderr)
         return 1
@@ -100,7 +129,9 @@ def _setup_project(token: str, name: str) -> Optional[str]:
     try:
         if dashboard_id:
             print("[2/5] Reusing configured Photon project")
-        elif (existing := photon_auth.find_project_by_name(token, name)) and existing.get("id"):
+        elif (
+            existing := photon_auth.find_project_by_name(token, name)
+        ) and existing.get("id"):
             dashboard_id = existing["id"]
             print(f"[2/5] Found existing project '{name}'")
         else:
@@ -130,21 +161,33 @@ def _setup_credentials(token: str, dashboard_id: str, name: str) -> Optional[str
         existing_id, existing_secret = photon_auth.load_project_credentials()
         secret: str = ""
         if existing_id and existing_secret:
-            with contextlib.suppress(Exception):  # failure => fall through to regeneration
-                photon_auth.list_users(existing_id, existing_secret)  # lightweight validation
+            with contextlib.suppress(
+                Exception
+            ):  # failure => fall through to regeneration
+                photon_auth.list_users(
+                    existing_id, existing_secret
+                )  # lightweight validation
                 secret = existing_secret
         reused = bool(secret)
         if not secret:
             secret = photon_auth.regenerate_project_secret(token, dashboard_id)
         photon_auth.store_project_credentials(
-            spectrum_project_id=dashboard_id, project_secret=secret, dashboard_project_id=dashboard_id, name=name)
+            spectrum_project_id=dashboard_id,
+            project_secret=secret,
+            dashboard_project_id=dashboard_id,
+            name=name,
+        )
         if reused:
-            print(f"  ✓ Spectrum ready (project id {dashboard_id}) — existing credentials valid")
+            print(
+                f"  ✓ Spectrum ready (project id {dashboard_id}) — existing credentials valid"
+            )
         else:
             print(f"  ✓ Spectrum ready (project id {dashboard_id}) — new secret saved")
-            print("  ⚠ Project secret was regenerated. If the gateway is running, "
-                  "restart it so the sidecar picks up the new secret:\n"
-                  "      clawk gateway restart")
+            print(
+                "  ⚠ Project secret was regenerated. If the gateway is running, "
+                "restart it so the sidecar picks up the new secret:\n"
+                "      clawk gateway restart"
+            )
     except Exception as e:
         print(f"spectrum provisioning failed: {e}", file=sys.stderr)
         return None
@@ -159,15 +202,26 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     if not secret:
         return 1
     # 4. Register the operator's phone number as a Spectrum user (idempotent).
-    phone = args.phone or _prompt(color("[4/5] Your iMessage phone number (E.164, e.g. +15551234567): ", Colors.CYAN))
+    phone = args.phone or _prompt(
+        color(
+            "[4/5] Your iMessage phone number (E.164, e.g. +15551234567): ", Colors.CYAN
+        )
+    )
     agent_number = registered_phone = registered_user_id = None
     if not phone:
-        print("      Skipped user registration (no phone given). Re-run with --phone later.")
+        print(
+            "      Skipped user registration (no phone given). Re-run with --phone later."
+        )
     else:
         try:  # name/email are optional and never prompted for (--first-name / --email)
             user, created = photon_auth.register_user_if_absent(
-                dashboard_id, secret, phone_number=phone, first_name=args.first_name,
-                last_name=args.last_name, email=args.email)
+                dashboard_id,
+                secret,
+                phone_number=phone,
+                first_name=args.first_name,
+                last_name=args.last_name,
+                email=args.email,
+            )
         except ValueError as e:
             print(f"      invalid phone number: {e}", file=sys.stderr)
             return 1
@@ -191,20 +245,41 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         except Exception as e:
             print(f"      (could not fetch the assigned line: {e})", file=sys.stderr)
     if agent_number:
-        print("\n" + "\n".join((
-            color("┌─ Your agent's iMessage number ───────────────────────────────", Colors.GREEN),
-            color("│  📱 ", Colors.GREEN) + color(str(agent_number), Colors.GREEN, Colors.BOLD),
-            color("│  Text this number from your phone to talk to your agent.", Colors.GREEN),
-            color("└──────────────────────────────────────────────────────────────", Colors.GREEN))))
+        print(
+            "\n"
+            + "\n".join(
+                (
+                    color(
+                        "┌─ Your agent's iMessage number ───────────────────────────────",
+                        Colors.GREEN,
+                    ),
+                    color("│  📱 ", Colors.GREEN)
+                    + color(str(agent_number), Colors.GREEN, Colors.BOLD),
+                    color(
+                        "│  Text this number from your phone to talk to your agent.",
+                        Colors.GREEN,
+                    ),
+                    color(
+                        "└──────────────────────────────────────────────────────────────",
+                        Colors.GREEN,
+                    ),
+                )
+            )
+        )
     else:
         print("      No iMessage line assigned yet — check the Photon dashboard.")
     if registered_phone:
         try:
             photon_auth.store_user_numbers(
-                phone_number=registered_phone, assigned_phone_number=agent_number,
-                user_id=str(registered_user_id) if registered_user_id else None, dashboard_project_id=dashboard_id)
+                phone_number=registered_phone,
+                assigned_phone_number=agent_number,
+                user_id=str(registered_user_id) if registered_user_id else None,
+                dashboard_project_id=dashboard_id,
+            )
         except Exception as e:
-            print(f"      (could not save Photon status metadata: {e})", file=sys.stderr)
+            print(
+                f"      (could not save Photon status metadata: {e})", file=sys.stderr
+            )
     # 6. Sidecar deps (spectrum-ts).
     if args.skip_sidecar_install:
         print("[5/5] Skipping sidecar npm install (--skip-sidecar-install)")
@@ -216,6 +291,7 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     # 7. Enable the platform in config.yaml, or the channel silently stays offline.
     try:
         from clawk_cli.config import write_platform_config_field
+
         write_platform_config_field("photon", "enabled", True, raw=True)
         print("  ✓ photon platform enabled in config.yaml")
     except Exception as e:
@@ -231,8 +307,10 @@ def _autoconfigure_access(phone: str) -> None:
         from clawk_cli.config import get_env_value, save_env_value
     except ImportError:
         return
-    for key, label in (("PHOTON_ALLOWED_USERS", "allowlisted your number"),
-                       ("PHOTON_HOME_CHANNEL", "set your DM as the cron home channel")):
+    for key, label in (
+        ("PHOTON_ALLOWED_USERS", "allowlisted your number"),
+        ("PHOTON_HOME_CHANNEL", "set your DM as the cron home channel"),
+    ):
         try:
             if get_env_value(key):
                 print(f"      {key} already set — leaving it as-is.")
@@ -251,14 +329,21 @@ def _cmd_status(_args: argparse.Namespace) -> int:
             try:
                 photon_auth.refresh_user_numbers(spectrum_id, project_secret)
             except Exception as e:
-                print(f"      (could not refresh Photon user numbers: {e})", file=sys.stderr)
+                print(
+                    f"      (could not refresh Photon user numbers: {e})",
+                    file=sys.stderr,
+                )
     # auth.print_credential_summary's emit callback is the only sink that sees
     # credential-derived strings (keeps cli.py taint-free for CodeQL).
     photon_auth.print_credential_summary(print)
     node_bin = find_node_executable("node")
     print(f"  node binary         : {node_bin or '✗ missing (install Node 18+)'}")
-    print(f"  sidecar deps        : {'✓ installed' if sidecar_deps_installed() else '✗ run `clawk photon install-sidecar`'}")
-    print(f"  telemetry           : {'on' if _telemetry_enabled() else 'off'} (`clawk photon telemetry on|off`)")
+    print(
+        f"  sidecar deps        : {'✓ installed' if sidecar_deps_installed() else '✗ run `clawk photon install-sidecar`'}"
+    )
+    print(
+        f"  telemetry           : {'on' if _telemetry_enabled() else 'off'} (`clawk photon telemetry on|off`)"
+    )
     return 0
 
 
@@ -266,6 +351,7 @@ def _telemetry_enabled() -> bool:
     """PHOTON_TELEMETRY from env / ~/.clawksis/.env; truthy set mirrors the sidecar's."""
     try:
         from clawk_cli.config import get_env_value
+
         raw = get_env_value("PHOTON_TELEMETRY")
     except ImportError:
         raw = os.getenv("PHOTON_TELEMETRY")
@@ -276,10 +362,13 @@ def _cmd_telemetry(args: argparse.Namespace) -> int:
     state = getattr(args, "state", None)
     if state is None:
         print(f"Photon telemetry: {'on' if _telemetry_enabled() else 'off'}")
-        print("  Toggle with `clawk photon telemetry on` / `clawk photon telemetry off`.")
+        print(
+            "  Toggle with `clawk photon telemetry on` / `clawk photon telemetry off`."
+        )
         return 0
     try:
         from clawk_cli.config import save_env_value
+
         save_env_value("PHOTON_TELEMETRY", "true" if state == "on" else "false")
     except Exception as e:
         print(f"could not save PHOTON_TELEMETRY: {e}", file=sys.stderr)
@@ -299,7 +388,9 @@ def _install_sidecar() -> int:
             env = pm.ensure("npm", explicit=True).env
             installed = pm.installed_package("npm")
             if installed is None or installed.binary is None:
-                raise pm.InstallError("npm", "ensured but no selected binary was recorded")
+                raise pm.InstallError(
+                    "npm", "ensured but no selected binary was recorded"
+                )
             npm = str(installed.binary)
     except pm.InstallError as exc:
         print(f"Could not prepare Photon dependencies: {exc}", file=sys.stderr)
@@ -313,15 +404,25 @@ def _install_sidecar() -> int:
         # stdout streams to the terminal; stderr is captured so the failure reason can be
         # persisted for check_requirements() to surface later.
         proc = subprocess.run(
-            [npm, verb], stdin=subprocess.DEVNULL, cwd=str(_sidecar_dir()), check=False, stderr=subprocess.PIPE, text=True, env=env)
+            [npm, verb],
+            stdin=subprocess.DEVNULL,
+            cwd=str(_sidecar_dir()),
+            check=False,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
         if proc.stderr:
             print(proc.stderr, end="", file=sys.stderr)
         return proc
+
     proc = _run("ci")
     if proc.returncode != 0:
         print(f"  npm ci failed — falling back to:  {npm} install")
         proc = _run("install")
-    error = (proc.stderr or "").strip()[:_NPM_ERROR_LOG_MAX_CHARS]  # bounded to what check_requirements surfaces
+    error = (proc.stderr or "").strip()[
+        :_NPM_ERROR_LOG_MAX_CHARS
+    ]  # bounded to what check_requirements surfaces
     if proc.returncode != 0:
         print("npm install failed", file=sys.stderr)
     with contextlib.suppress(OSError):
@@ -333,16 +434,28 @@ def _install_sidecar() -> int:
 
 
 _COMMANDS = {
-    "setup": _cmd_setup, "status": _cmd_status, "install-sidecar": lambda _args: _install_sidecar(),
-    "telemetry": _cmd_telemetry}
+    "setup": _cmd_setup,
+    "status": _cmd_status,
+    "install-sidecar": lambda _args: _install_sidecar(),
+    "telemetry": _cmd_telemetry,
+}
 
 
 def gateway_setup() -> None:
     """Run Photon first-time setup from the unified `clawk gateway setup` wizard (same flow
     as ``clawk photon setup``; phone is prompted when stdin is a TTY)."""
-    _cmd_setup(argparse.Namespace(
-        photon_command="setup", project_name=None, phone=None, first_name=None, last_name=None,
-        email=None, no_browser=False, skip_sidecar_install=False))
+    _cmd_setup(
+        argparse.Namespace(
+            photon_command="setup",
+            project_name=None,
+            phone=None,
+            first_name=None,
+            last_name=None,
+            email=None,
+            no_browser=False,
+            skip_sidecar_install=False,
+        )
+    )
 
 
 def _prompt(prompt: str, *, secret: bool = False) -> str:

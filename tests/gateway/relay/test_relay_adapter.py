@@ -32,23 +32,15 @@ def _adapter(**desc_kw) -> RelayAdapter:
     return RelayAdapter(PlatformConfig(), make_desc(**desc_kw))
 
 
-
-
 def test_advertises_descriptor_max_length():
     a = _adapter(max_message_length=2000)
     assert a.MAX_MESSAGE_LENGTH == 2000
-
-
 
 
 def test_len_fn_utf16_counts_code_units():
     a = _adapter(len_unit="utf16")
     # An astral-plane emoji is two UTF-16 code units.
     assert a.message_len_fn("\U0001f600") == 2
-
-
-
-
 
 
 class _CaptureTransport:
@@ -282,7 +274,9 @@ async def test_disconnect_tears_down_transport_when_go_idle_is_cancelled():
     cannot outlive the adapter.
     """
     transport = _HangOnIdleTransport()
-    adapter = RelayAdapter(PlatformConfig(), make_desc(platform="discord"), transport=transport)
+    adapter = RelayAdapter(
+        PlatformConfig(), make_desc(platform="discord"), transport=transport
+    )
 
     task = asyncio.create_task(adapter.disconnect())
     await asyncio.wait_for(transport.go_idle_started.wait(), timeout=1.0)

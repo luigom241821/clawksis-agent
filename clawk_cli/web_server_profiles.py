@@ -39,6 +39,7 @@ def _clawk_home_scope(path) -> Any:
     """Scope ``load_config``/``save_config`` (anything resolving ``get_clawk_home()`` at call
     time) to ``path`` for the block via the context-local CLAWK_HOME override."""
     from clawk_constants import set_clawk_home_override, reset_clawk_home_override
+
     token = set_clawk_home_override(str(path))
     try:
         yield
@@ -59,11 +60,16 @@ def serving_profile_name() -> str:
     risking a wrong-profile write.
     """
     from clawk_cli import profiles as profiles_mod
+
     try:
         name = (profiles_mod.get_active_profile_name() or "").strip()
         if not name or name == "custom":
             return ""
-        return name if profiles_mod.profile_matches_home(name, get_process_clawk_home()) else ""
+        return (
+            name
+            if profiles_mod.profile_matches_home(name, get_process_clawk_home())
+            else ""
+        )
     except Exception:
         return ""
 
@@ -85,9 +91,14 @@ def _approval_mode_of(config: dict[str, Any]) -> str:
     a save can serve the pre-save document when the replacement file collides on the
     (mtime_ns, size) cache key, suppressing the broadcast exactly when the mode changed."""
     from tools.approval_context import _normalize_approval_mode
+
     approvals = config.get("approvals")
     default_mode = (DEFAULT_CONFIG.get("approvals") or {}).get("mode", "manual")
-    mode = approvals.get("mode", default_mode) if isinstance(approvals, dict) else default_mode
+    mode = (
+        approvals.get("mode", default_mode)
+        if isinstance(approvals, dict)
+        else default_mode
+    )
     return _normalize_approval_mode(mode)
 
 
@@ -124,7 +135,9 @@ def _parse_model_entries(resp: Any) -> list[dict[str, str]]:
         return []
     entries: list[dict[str, str]] = []
     for item in data:
-        model_id = str((item.get("id") if isinstance(item, dict) else item) or "").strip()
+        model_id = str(
+            (item.get("id") if isinstance(item, dict) else item) or ""
+        ).strip()
         if not model_id:
             continue
         entry = {"id": model_id}
@@ -142,30 +155,54 @@ def _parse_model_ids(resp: Any) -> list[str]:
     return [entry["id"] for entry in _parse_model_entries(resp)]
 
 
-def _fallback_profile_entry(profiles_mod, name: str, home: Path, *, is_default: bool,
-                            has_env: bool, gateway_running: Callable[[], bool]) -> dict[str, Any]:
+def _fallback_profile_entry(
+    profiles_mod,
+    name: str,
+    home: Path,
+    *,
+    is_default: bool,
+    has_env: bool,
+    gateway_running: Callable[[], bool],
+) -> dict[str, Any]:
     model, provider = _safe(lambda: profiles_mod._read_config_model(home), (None, None))
     meta = lambda key, default: _safe(
-        lambda: profiles_mod.read_profile_meta(home).get(key, default), default)
+        lambda: profiles_mod.read_profile_meta(home).get(key, default), default
+    )
     return {
-        "name": name, "path": str(home), "is_default": is_default, "model": model,
-        "provider": provider, "has_env": has_env,
+        "name": name,
+        "path": str(home),
+        "is_default": is_default,
+        "model": model,
+        "provider": provider,
+        "has_env": has_env,
         "skill_count": _safe(lambda: profiles_mod._cached_skill_count(home), 0),
         "gateway_running": _safe(gateway_running, False),
-        "description": meta("description", ""), "description_auto": meta("description_auto", False),
+        "description": meta("description", ""),
+        "description_auto": meta("description_auto", False),
         "bot_title": meta("bot_title", ""),
-        "distribution_name": None, "distribution_version": None, "distribution_source": None,
-        "has_alias": False}
+        "distribution_name": None,
+        "distribution_version": None,
+        "distribution_source": None,
+        "has_alias": False,
+    }
 
 
 def _fallback_profile_dicts(profiles_mod) -> list[dict[str, Any]]:
     profiles: list[dict[str, Any]] = []
     default_home = profiles_mod._get_default_clawk_home()
     if default_home.is_dir():
-        profiles.append(_fallback_profile_entry(
-            profiles_mod, "default", default_home, is_default=True,
-            has_env=(default_home / ".env").exists(),
-            gateway_running=lambda: profiles_mod._check_gateway_running(default_home)))
+        profiles.append(
+            _fallback_profile_entry(
+                profiles_mod,
+                "default",
+                default_home,
+                is_default=True,
+                has_env=(default_home / ".env").exists(),
+                gateway_running=lambda: profiles_mod._check_gateway_running(
+                    default_home
+                ),
+            )
+        )
 
     profiles_root = profiles_mod._get_profiles_root()
     if profiles_root.is_dir():
@@ -178,18 +215,26 @@ def _fallback_profile_dicts(profiles_mod) -> list[dict[str, Any]]:
             home = Path(entry.path)
             if not entry.is_dir() or not profiles_mod._PROFILE_ID_RE.match(entry.name):
                 continue
-            profiles.append(_fallback_profile_entry(
-                profiles_mod, entry.name, home, is_default=False,
-                has_env=_safe(lambda: (home / ".env").exists(), False),
-                gateway_running=lambda home=home, name=entry.name: (
-                    profiles_mod._check_gateway_running(home)
-                    or profiles_mod._served_by_running_multiplexer(name))))
+            profiles.append(
+                _fallback_profile_entry(
+                    profiles_mod,
+                    entry.name,
+                    home,
+                    is_default=False,
+                    has_env=_safe(lambda: (home / ".env").exists(), False),
+                    gateway_running=lambda home=home, name=entry.name: (
+                        profiles_mod._check_gateway_running(home)
+                        or profiles_mod._served_by_running_multiplexer(name)
+                    ),
+                )
+            )
     return profiles
 
 
 def _resolve_profile_dir(name: str) -> Path:
     """Validate ``name`` and resolve to its directory or raise an HTTPException."""
     from clawk_cli import profiles as profiles_mod
+
     try:
         profiles_mod.validate_profile_name(name)
     except ValueError as e:
@@ -199,7 +244,9 @@ def _resolve_profile_dir(name: str) -> Path:
     return profiles_mod.get_profile_dir(name)
 
 
-def _write_profile_mcp_servers(profile_dir: Path, servers: list[MCPServerCreate]) -> int:
+def _write_profile_mcp_servers(
+    profile_dir: Path, servers: list[MCPServerCreate]
+) -> int:
     """Write MCP server entries into ``profile_dir``'s config.yaml (CLAWK_HOME-scoped).
 
     Mirrors the per-server shape ``POST /api/mcp/servers`` builds, batched so the whole
@@ -207,6 +254,7 @@ def _write_profile_mcp_servers(profile_dir: Path, servers: list[MCPServerCreate]
     """
     from clawk_cli.config import load_config, save_config
     from clawk_cli.mcp_config import _save_bearer_auth_token
+
     written = 0
     with _clawk_home_scope(profile_dir):
         cfg = load_config()
@@ -216,7 +264,9 @@ def _write_profile_mcp_servers(profile_dir: Path, servers: list[MCPServerCreate]
                 name, entry, bearer_token = _normalize_mcp_server_create(server)
             except ValueError as exc:
                 display_name = (server.name or "").strip() or "<unnamed>"
-                _log.warning("Profile-create: skipping MCP server '%s': %s", display_name, exc)
+                _log.warning(
+                    "Profile-create: skipping MCP server '%s': %s", display_name, exc
+                )
                 continue
             if bearer_token is not None:
                 entry["headers"] = _save_bearer_auth_token(name, bearer_token)
@@ -259,6 +309,7 @@ def _profile_scope(profile: Optional[str]):
     from clawk_constants import get_clawk_home
     from tools import skills_tool as _skills_tool
     from tools import skill_manager_tool as _skill_mgr
+
     with _config_profile_scope(profile) as scoped:
         profile_dir = get_clawk_home() if scoped is None else scoped
         modules = (_skills_tool, _skill_mgr)
@@ -294,20 +345,33 @@ def _config_profile_scope(profile: Optional[str]):
     profile's native ticket, ``native_profile_scope``) is that profile, so it gets that profile's
     secret scope rather than the launch profile's.
     """
-    from agent.secret_scope import build_profile_secret_scope, reset_secret_scope, set_secret_scope
+    from agent.secret_scope import (
+        build_profile_secret_scope,
+        reset_secret_scope,
+        set_secret_scope,
+    )
     from clawk_cli.env_loader import hydrate_profile_secret_sources
     from clawk_constants import get_clawk_home, get_clawk_home_override
-    from tui_gateway.launch_profile_policy import activate_multi_profile_hosting, launch_secret_scope
+    from tui_gateway.launch_profile_policy import (
+        activate_multi_profile_hosting,
+        launch_secret_scope,
+    )
 
     process_home = get_process_clawk_home()
     if _is_current_profile(profile):
         profile_dir = get_clawk_home() if get_clawk_home_override() else None
     else:
         profile_dir = _resolve_profile_dir(profile.strip())
-    scoped = None if profile_dir is None or profile_dir.resolve() == process_home.resolve() else profile_dir
+    scoped = (
+        None
+        if profile_dir is None or profile_dir.resolve() == process_home.resolve()
+        else profile_dir
+    )
     if scoped is not None:
         activate_multi_profile_hosting()
-        hydrate_profile_secret_sources(scoped)  # first call may block on the source's fetch
+        hydrate_profile_secret_sources(
+            scoped
+        )  # first call may block on the source's fetch
         secrets = build_profile_secret_scope(scoped)
     else:
         # The dashboard's own profile: its launch-env scope (live env + .env while single-profile, so
@@ -316,7 +380,7 @@ def _config_profile_scope(profile: Optional[str]):
         # concurrent first ``?profile=B`` request flips ``get_secret`` to fail closed mid-request,
         # and an unscoped launch request would then raise ``UnscopedSecretError`` on its next read.
         secrets = launch_secret_scope(process_home)
-    with (_clawk_home_scope(profile_dir) if profile_dir is not None else nullcontext()):
+    with _clawk_home_scope(profile_dir) if profile_dir is not None else nullcontext():
         token = set_secret_scope(secrets, profile_home=str(profile_dir or process_home))
         try:
             yield scoped
@@ -334,13 +398,19 @@ def _config_profile_scope(profile: Optional[str]):
 # #63783). Probes must never raise — a probe failure renders as a status, not a 500.
 # ---------------------------------------------------------------------------
 _TERMINAL_BACKENDS: list[dict[str, str]] = [
-    dict(zip(("name", "label", "description"), row)) for row in (
+    dict(zip(("name", "label", "description"), row))
+    for row in (
         ("local", "Local", "Run commands directly on this machine. No isolation."),
-        ("docker", "Docker / Podman",
-         "Run commands in an isolated Docker or Podman container with a persistent workspace."),
+        (
+            "docker",
+            "Docker / Podman",
+            "Run commands in an isolated Docker or Podman container with a persistent workspace.",
+        ),
         ("modal", "Modal", "Run commands in a Modal cloud sandbox."),
         ("daytona", "Daytona", "Run commands in a Daytona cloud sandbox."),
-        ("ssh", "SSH", "Run commands on a remote host over SSH."))]
+        ("ssh", "SSH", "Run commands on a remote host over SSH."),
+    )
+]
 
 
 def _plugin_terminal_backend_rows() -> list[dict[str, str]]:
@@ -348,15 +418,22 @@ def _plugin_terminal_backend_rows() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     try:
         from clawk_cli.plugins import discover_plugins
+
         discover_plugins()  # idempotent — plugin state may not be loaded yet
     except Exception:
         pass
     try:
         from agent.terminal_env_registry import list_providers
+
         for provider in list_providers():
             try:
-                rows.append({"name": provider.name.strip().lower(), "label": provider.display_name,
-                             "description": provider.description})
+                rows.append(
+                    {
+                        "name": provider.name.strip().lower(),
+                        "label": provider.display_name,
+                        "description": provider.description,
+                    }
+                )
             except Exception:
                 continue
     except Exception:
@@ -380,7 +457,8 @@ def _aux_usage_rows(db, cutoff: float) -> list[dict[str, Any]]:
     See #23270.
     """
     try:
-        cur = db._conn.execute("""
+        cur = db._conn.execute(
+            """
             SELECT u.model,
                    u.task,
                    u.billing_provider,
@@ -397,28 +475,46 @@ def _aux_usage_rows(db, cutoff: float) -> list[dict[str, Any]]:
             WHERE s.started_at > ? AND u.task != ''
             GROUP BY u.model, u.task, u.billing_provider
             ORDER BY SUM(u.input_tokens) + SUM(u.output_tokens) DESC
-        """, (cutoff,))
+        """,
+            (cutoff,),
+        )
         return [dict(r) for r in cur.fetchall()]
     except Exception:
         return []
 
 
 def _merge_aux_into_by_model(
-    by_model: list[dict[str, Any]], aux_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_model: list[dict[str, Any]], aux_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Fold aux usage rows into the sessions-derived per-model list. Aux usage lives only in
     session_model_usage (never in the sessions counters), so this cannot double-count;
     models that ONLY appear via aux calls (e.g. a vision model) get their own entry."""
     if not aux_rows:
         return by_model
-    merged: dict[str, dict[str, Any]] = {row.get("model") or "unknown": row for row in by_model}
+    merged: dict[str, dict[str, Any]] = {
+        row.get("model") or "unknown": row for row in by_model
+    }
     for aux in aux_rows:
         model = aux.get("model") or "unknown"
-        target = merged.setdefault(model, {"model": model, "input_tokens": 0, "output_tokens": 0,
-                                           "estimated_cost": 0, "sessions": 0, "api_calls": 0})
+        target = merged.setdefault(
+            model,
+            {
+                "model": model,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "estimated_cost": 0,
+                "sessions": 0,
+                "api_calls": 0,
+            },
+        )
         for key in _AUX_COUNTERS:
             target[key] = (target.get(key) or 0) + (aux.get(key) or 0)
         target.setdefault("aux_tasks", []).append(
-            {"task": aux.get("task") or "", **{key: aux.get(key) or 0 for key in _AUX_COUNTERS}})
+            {
+                "task": aux.get("task") or "",
+                **{key: aux.get(key) or 0 for key in _AUX_COUNTERS},
+            }
+        )
     return sorted(merged.values(), key=_token_volume, reverse=True)
 
 
@@ -427,8 +523,17 @@ def _aux_task_summary(aux_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_task: dict[str, dict[str, Any]] = {}
     for aux in aux_rows:
         task = aux.get("task") or ""
-        d = by_task.setdefault(task, {"task": task, "input_tokens": 0, "output_tokens": 0,
-                                      "estimated_cost": 0, "api_calls": 0, "models": []})
+        d = by_task.setdefault(
+            task,
+            {
+                "task": task,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "estimated_cost": 0,
+                "api_calls": 0,
+                "models": [],
+            },
+        )
         for key in _AUX_COUNTERS:
             d[key] += aux.get(key) or 0
         model = aux.get("model") or "unknown"
@@ -448,6 +553,7 @@ def _profile_cli_args(profile: Optional[str]) -> list[str]:
     if not requested or requested.lower() == "current":
         return []
     from clawk_cli import profiles as profiles_mod
+
     _resolve_profile_dir(requested)
     return ["-p", profiles_mod.normalize_profile_name(requested)]
 
@@ -469,14 +575,18 @@ def _installed_hub_identifiers(profile: Optional[str] = None) -> dict:
     explicit path, sidestepping the import-time LOCK_FILE binding. {} when unreadable."""
     try:
         from tools.skills_hub import HubLockFile
+
         if _is_current_profile(profile):
             lock = HubLockFile()
         else:
             profile_dir = _resolve_profile_dir(profile.strip())
             lock = HubLockFile(profile_dir / "skills" / ".hub" / "lock.json")
         keys = ("name", "trust_level", "scan_verdict")
-        return {entry["identifier"]: {k: entry.get(k) for k in keys}
-                for entry in lock.list_installed() if entry.get("identifier")}
+        return {
+            entry["identifier"]: {k: entry.get(k) for k in keys}
+            for entry in lock.list_installed()
+            if entry.get("identifier")
+        }
     except HTTPException:
         raise  # an unknown profile is the scope's 404, not an unreadable lock file
     except Exception:

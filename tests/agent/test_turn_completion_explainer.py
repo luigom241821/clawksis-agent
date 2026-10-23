@@ -77,20 +77,10 @@ def test_explanation_quiet_for_empty_reason():
     assert AIAgent._format_turn_completion_explanation("guardrail_halt") == ""
 
 
-
-
-
-
 def test_explanation_for_max_iterations_reached_prefix_match():
     """``max_iterations_reached(...)`` carries a parenthetical suffix."""
-    out = AIAgent._format_turn_completion_explanation(
-        "max_iterations_reached(10/10)"
-    )
+    out = AIAgent._format_turn_completion_explanation("max_iterations_reached(10/10)")
     assert "iteration" in out.lower()
-
-
-
-
 
 
 # --------------------------------------------------------------------------
@@ -152,7 +142,9 @@ def test_explanation_persistence_corrupt_cause_never_says_free_space():
     assert "full disk" not in lower
 
 
-def test_explanation_persistence_corrupt_backups_dir_follows_clawk_home(monkeypatch, tmp_path):
+def test_explanation_persistence_corrupt_backups_dir_follows_clawk_home(
+    monkeypatch, tmp_path
+):
     """Step 3 must name the backups dir under the ACTIVE home, not ~/.clawksis (#104250).
 
     Pre-update backups live at ``<clawk_root>/backups`` (``clawk_cli/backup.py``), so a
@@ -209,13 +201,22 @@ def test_deleted_wal_cause_is_plain_first_steps_not_a_forensic_runbook():
     ).lower()
     assert "deleted_wal" in PERSISTENCE_ERROR_CAUSES
     assert "clawk gateway stop" in out and "clawk doctor" in out
-    for jargon in ("manifest", "state.db-wal", "sidecar", "header_only", "--inspect-only", "generation"):
+    for jargon in (
+        "manifest",
+        "state.db-wal",
+        "sidecar",
+        "header_only",
+        "--inspect-only",
+        "generation",
+    ):
         assert jargon not in out, jargon
     assert "~/.clawksis" not in out  # display_clawk_home(), never a hardcoded path
 
 
 @pytest.mark.parametrize("cause", ["replaced", "deleted_wal", "unknown"])
-def test_persistence_commands_are_pinned_to_the_failing_profile(monkeypatch, tmp_path, cause):
+def test_persistence_commands_are_pinned_to_the_failing_profile(
+    monkeypatch, tmp_path, cause
+):
     """Every copy-pasteable ``clawk`` command in a persistence explanation names the profile
     whose store failed — a multi-profile backend serves sessions whose state.db is not the
     process default, and a bare ``clawk`` follows the sticky active_profile (#105887). The
@@ -225,7 +226,9 @@ def test_persistence_commands_are_pinned_to_the_failing_profile(monkeypatch, tmp
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / ".clawk" / "profiles" / "research"))
     selector = profile_cli_selector()
     assert selector.strip(), "fixture must resolve to a named profile"
-    out = AIAgent._format_turn_completion_explanation("session_persistence_failed", cause)
+    out = AIAgent._format_turn_completion_explanation(
+        "session_persistence_failed", cause
+    )
     assert "{profile_arg}" not in out
     assert f"`clawk {selector}doctor" in out
     assert "`clawk doctor" not in out and "`clawk gateway" not in out
@@ -274,13 +277,15 @@ def test_classify_persistence_error_categories():
 
     from clawk_state import classify_persistence_error
 
-    assert classify_persistence_error(
-        sqlite3.OperationalError("database is locked")
-    ) == "locked"
+    assert (
+        classify_persistence_error(sqlite3.OperationalError("database is locked"))
+        == "locked"
+    )
     assert classify_persistence_error("SQLITE_BUSY: busy") == "locked"
-    assert classify_persistence_error(
-        sqlite3.OperationalError("database or disk is full")
-    ) == "disk"
+    assert (
+        classify_persistence_error(sqlite3.OperationalError("database or disk is full"))
+        == "disk"
+    )
     assert classify_persistence_error("attempt to write a readonly database") == "disk"
     assert classify_persistence_error("read-only file system") == "disk"
     assert classify_persistence_error("no space left on device") == "disk"
@@ -299,15 +304,17 @@ def test_classify_persistence_error_corruption_beats_disk_bucket():
 
     from clawk_state import classify_persistence_error
 
-    assert classify_persistence_error(
-        sqlite3.DatabaseError("database disk image is malformed")
-    ) == "corrupt"
-    assert classify_persistence_error(
-        "database disk image is malformed"
-    ) == "corrupt"
-    assert classify_persistence_error(
-        sqlite3.DatabaseError("file is not a database")
-    ) == "corrupt"
+    assert (
+        classify_persistence_error(
+            sqlite3.DatabaseError("database disk image is malformed")
+        )
+        == "corrupt"
+    )
+    assert classify_persistence_error("database disk image is malformed") == "corrupt"
+    assert (
+        classify_persistence_error(sqlite3.DatabaseError("file is not a database"))
+        == "corrupt"
+    )
     assert classify_persistence_error("malformed database schema") == "corrupt"
     # Genuine disk-space failures must keep classifying as 'disk'.
     assert classify_persistence_error("database or disk is full") == "disk"
@@ -323,12 +330,11 @@ def test_classify_persistence_error_reuses_disk_full_markers():
     from clawk_state import classify_persistence_error
 
     assert classify_persistence_error("ENOSPC writing state.db") == "disk"
-    assert classify_persistence_error(
-        "There is not enough space on the disk"
-    ) == "disk"
-    assert classify_persistence_error(
-        OSError(errno.ENOSPC, "No space left on device")
-    ) == "disk"
+    assert classify_persistence_error("There is not enough space on the disk") == "disk"
+    assert (
+        classify_persistence_error(OSError(errno.ENOSPC, "No space left on device"))
+        == "disk"
+    )
 
 
 def test_classify_persistence_error_compression_busy_is_distinct():
@@ -340,35 +346,53 @@ def test_classify_persistence_error_compression_busy_is_distinct():
     from clawk_state_errors import CompressionSessionBusyError
     from clawk_state import classify_persistence_error
 
-    assert classify_persistence_error(
-        SessionCompressionInProgressError(
+    assert (
+        classify_persistence_error(
+            SessionCompressionInProgressError(
+                "Session 'abc' is being compressed by another writer"
+            )
+        )
+        == "compression"
+    )
+    assert (
+        classify_persistence_error(
+            CompressionSessionBusyError(
+                "Compression lease lost before publication: abc"
+            )
+        )
+        == "compression"
+    )
+    # RPC-wrapped string forms (exception type lost in transit).
+    assert (
+        classify_persistence_error(
             "Session 'abc' is being compressed by another writer"
         )
-    ) == "compression"
-    assert classify_persistence_error(
-        CompressionSessionBusyError("Compression lease lost before publication: abc")
-    ) == "compression"
-    # RPC-wrapped string forms (exception type lost in transit).
-    assert classify_persistence_error(
-        "Session 'abc' is being compressed by another writer"
-    ) == "compression"
-    assert classify_persistence_error(
-        "Compression lease lost before publication: abc"
-    ) == "compression"
+        == "compression"
+    )
+    assert (
+        classify_persistence_error("Compression lease lost before publication: abc")
+        == "compression"
+    )
 
 
 def test_classify_persistence_error_turn_lease_lost_is_distinct():
     from clawk_state import classify_persistence_error
     from clawk_state_errors import SessionTurnLeaseLostError
 
-    assert classify_persistence_error(
-        SessionTurnLeaseLostError(
+    assert (
+        classify_persistence_error(
+            SessionTurnLeaseLostError(
+                "Session turn lease lost; refusing transcript write for 'abc'"
+            )
+        )
+        == "turn_lease"
+    )
+    assert (
+        classify_persistence_error(
             "Session turn lease lost; refusing transcript write for 'abc'"
         )
-    ) == "turn_lease"
-    assert classify_persistence_error(
-        "Session turn lease lost; refusing transcript write for 'abc'"
-    ) == "turn_lease"
+        == "turn_lease"
+    )
 
 
 def test_persistence_error_causes_tuple_matches_classifier():
@@ -412,13 +436,21 @@ def test_classify_persistence_error_fts_provenance_order():
     # generic text older SQLite builds emit; bare SQLITE_CORRUPT / SQLITE_NOTADB are unscoped.
     vtab = _err("database disk image is malformed", SQLITE_CORRUPT_VTAB)
     assert classify_persistence_error(vtab) == "fts_index"
-    assert SessionDB._is_fts_write_corruption_error(vtab)  # same verdict as the write gate
-    assert classify_persistence_error(
-        _err("database disk image is malformed", sqlite3.SQLITE_CORRUPT)
-    ) == "corrupt"
-    assert classify_persistence_error(
-        _err("file is not a database", sqlite3.SQLITE_NOTADB)
-    ) == "corrupt"
+    assert SessionDB._is_fts_write_corruption_error(
+        vtab
+    )  # same verdict as the write gate
+    assert (
+        classify_persistence_error(
+            _err("database disk image is malformed", sqlite3.SQLITE_CORRUPT)
+        )
+        == "corrupt"
+    )
+    assert (
+        classify_persistence_error(
+            _err("file is not a database", sqlite3.SQLITE_NOTADB)
+        )
+        == "corrupt"
+    )
     # A contradictory known code outranks FTS-looking prose (the #96038 regression shape).
     contradictory = _err(
         'fts5: corrupt structure record for table "messages_fts"',
@@ -431,18 +463,30 @@ def test_classify_persistence_error_fts_provenance_order():
 
     # Tier 2 — no code (Python < 3.11, RPC-wrapped strings): the report must name a
     # messages_fts* object. Both shapes from #97794's evidence logs qualify.
-    assert classify_persistence_error(
-        _err('fts5: corrupt structure record for table "messages_fts"')
-    ) == "fts_index"
-    assert classify_persistence_error(
-        'fts5: corruption found reading blob 2061584302081 from table "messages_fts"'
-    ) == "fts_index"
-    assert classify_persistence_error(
-        'fts5: corrupt structure record for table "messages_fts_trigram"'
-    ) == "fts_index"
-    assert classify_persistence_error(
-        "malformed inverted index for FTS5 table main.messages_fts"
-    ) == "fts_index"
+    assert (
+        classify_persistence_error(
+            _err('fts5: corrupt structure record for table "messages_fts"')
+        )
+        == "fts_index"
+    )
+    assert (
+        classify_persistence_error(
+            'fts5: corruption found reading blob 2061584302081 from table "messages_fts"'
+        )
+        == "fts_index"
+    )
+    assert (
+        classify_persistence_error(
+            'fts5: corrupt structure record for table "messages_fts_trigram"'
+        )
+        == "fts_index"
+    )
+    assert (
+        classify_persistence_error(
+            "malformed inverted index for FTS5 table main.messages_fts"
+        )
+        == "fts_index"
+    )
     # Generic markers without provenance stay conservative; fts5 text without corruption,
     # or an FTS name without a corruption marker, is not corruption at all.
     assert classify_persistence_error("database disk image is malformed") == "corrupt"
@@ -463,14 +507,8 @@ def test_explainer_enabled_by_default():
 
 def test_explainer_disabled_via_env():
     agent = _make_agent()
-    with patch.dict(
-        os.environ, {"CLAWK_TURN_COMPLETION_EXPLAINER": "0"}, clear=False
-    ):
+    with patch.dict(os.environ, {"CLAWK_TURN_COMPLETION_EXPLAINER": "0"}, clear=False):
         assert agent._turn_completion_explainer_enabled() is False
-
-
-
-
 
 
 # --------------------------------------------------------------------------

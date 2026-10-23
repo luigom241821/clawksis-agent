@@ -25,7 +25,11 @@ def _managed_local_netloc() -> str:
         raw = state_path().read_text(encoding="utf-8-sig")
         base = str((json.loads(raw) or {}).get("base_url", ""))
         netloc = urlparse(base).netloc.lower()
-    except (OSError, ValueError, AttributeError):  # no state file, bad JSON, or not an object
+    except (
+        OSError,
+        ValueError,
+        AttributeError,
+    ):  # no state file, bad JSON, or not an object
         netloc = ""
     _managed_local_cache = (now, netloc)
     return netloc

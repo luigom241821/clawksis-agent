@@ -29,6 +29,7 @@ async def _send_matrix(token, extra, chat_id, message):
     pconfig = SimpleNamespace(token=token, extra=extra or {})
     return await _matrix_standalone_send(pconfig, chat_id, message)
 
+
 # ``_send_mattermost`` moved into the mattermost plugin
 # (``plugins/platforms/mattermost/adapter.py::_standalone_send``).  Keep a
 # thin ``(token, extra, chat_id, message)``-shaped wrapper so existing test
@@ -86,25 +87,41 @@ class TestSendMattermost:
         resp = _make_aiohttp_resp(201, json_data={"id": "post123"})
         session_ctx, session = _make_aiohttp_session(resp)
 
-        with patch("aiohttp.ClientSession", return_value=session_ctx), \
-             patch.dict(os.environ, {"MATTERMOST_URL": "", "MATTERMOST_TOKEN": ""}, clear=False):
+        with (
+            patch("aiohttp.ClientSession", return_value=session_ctx),
+            patch.dict(
+                os.environ, {"MATTERMOST_URL": "", "MATTERMOST_TOKEN": ""}, clear=False
+            ),
+        ):
             extra = {"url": "https://mm.example.com"}
-            result = asyncio.run(_send_mattermost("tok-abc", extra, "channel1", "hello"))
+            result = asyncio.run(
+                _send_mattermost("tok-abc", extra, "channel1", "hello")
+            )
 
-        assert result == {"success": True, "platform": "mattermost", "chat_id": "channel1", "message_id": "post123"}
+        assert result == {
+            "success": True,
+            "platform": "mattermost",
+            "chat_id": "channel1",
+            "message_id": "post123",
+        }
         session.post.assert_called_once()
         call_kwargs = session.post.call_args
         assert call_kwargs[0][0] == "https://mm.example.com/api/v4/posts"
         assert call_kwargs[1]["headers"]["Authorization"] == "Bearer tok-abc"
         assert call_kwargs[1]["json"] == {"channel_id": "channel1", "message": "hello"}
 
-
     def test_env_var_fallback(self):
         resp = _make_aiohttp_resp(200, json_data={"id": "p99"})
         session_ctx, session = _make_aiohttp_session(resp)
 
-        with patch("aiohttp.ClientSession", return_value=session_ctx), \
-             patch.dict(os.environ, {"MATTERMOST_URL": "https://mm.env.com", "MATTERMOST_TOKEN": "env-tok"}, clear=False):
+        with (
+            patch("aiohttp.ClientSession", return_value=session_ctx),
+            patch.dict(
+                os.environ,
+                {"MATTERMOST_URL": "https://mm.env.com", "MATTERMOST_TOKEN": "env-tok"},
+                clear=False,
+            ),
+        ):
             result = asyncio.run(_send_mattermost("", {}, "ch", "hi"))
 
         assert result["success"] is True
@@ -123,10 +140,18 @@ class TestSendMatrix:
         resp = _make_aiohttp_resp(200, json_data={"event_id": "$abc123"})
         session_ctx, session = _make_aiohttp_session(resp)
 
-        with patch("aiohttp.ClientSession", return_value=session_ctx), \
-             patch.dict(os.environ, {"MATRIX_HOMESERVER": "", "MATRIX_ACCESS_TOKEN": ""}, clear=False):
+        with (
+            patch("aiohttp.ClientSession", return_value=session_ctx),
+            patch.dict(
+                os.environ,
+                {"MATRIX_HOMESERVER": "", "MATRIX_ACCESS_TOKEN": ""},
+                clear=False,
+            ),
+        ):
             extra = {"homeserver": "https://matrix.example.com"}
-            result = asyncio.run(_send_matrix("syt_tok", extra, "!room:example.com", "hello matrix"))
+            result = asyncio.run(
+                _send_matrix("syt_tok", extra, "!room:example.com", "hello matrix")
+            )
 
         assert result == {
             "success": True,
@@ -137,12 +162,13 @@ class TestSendMatrix:
         session.put.assert_called_once()
         call_kwargs = session.put.call_args
         url = call_kwargs[0][0]
-        assert url.startswith("https://matrix.example.com/_matrix/client/v3/rooms/%21room%3Aexample.com/send/m.room.message/")
+        assert url.startswith(
+            "https://matrix.example.com/_matrix/client/v3/rooms/%21room%3Aexample.com/send/m.room.message/"
+        )
         assert call_kwargs[1]["headers"]["Authorization"] == "Bearer syt_tok"
         payload = call_kwargs[1]["json"]
         assert payload["msgtype"] == "m.text"
         assert payload["body"] == "hello matrix"
-
 
     def test_txn_id_is_unique_across_calls(self):
         """Each call should generate a distinct transaction ID in the URL."""
@@ -152,7 +178,9 @@ class TestSendMatrix:
             url = args[0]
             txn_ids.append(url.rsplit("/", 1)[-1])
             ctx = MagicMock()
-            ctx.__aenter__ = AsyncMock(return_value=_make_aiohttp_resp(200, json_data={"event_id": "$x"}))
+            ctx.__aenter__ = AsyncMock(
+                return_value=_make_aiohttp_resp(200, json_data={"event_id": "$x"})
+            )
             ctx.__aexit__ = AsyncMock(return_value=False)
             return ctx
 
@@ -165,6 +193,7 @@ class TestSendMatrix:
         extra = {"homeserver": "https://matrix.example.com"}
 
         import time
+
         with patch("aiohttp.ClientSession", return_value=session_ctx):
             asyncio.run(_send_matrix("tok", extra, "!r:example.com", "first"))
         time.sleep(0.002)
@@ -201,15 +230,21 @@ class TestSendDingtalk:
         client_ctx, client = self._make_httpx_client(resp)
 
         with patch("httpx.AsyncClient", return_value=client_ctx):
-            extra = {"webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=abc"}
+            extra = {
+                "webhook_url": "https://oapi.dingtalk.com/robot/send?access_token=abc"
+            }
             result = asyncio.run(_send_dingtalk(extra, "ignored", "hello dingtalk"))
 
         assert result == {"success": True, "platform": "dingtalk", "chat_id": "ignored"}
         client.post.assert_awaited_once()
         call_kwargs = client.post.await_args
-        assert call_kwargs[0][0] == "https://oapi.dingtalk.com/robot/send?access_token=abc"
-        assert call_kwargs[1]["json"] == {"msgtype": "text", "text": {"content": "hello dingtalk"}}
-
+        assert (
+            call_kwargs[0][0] == "https://oapi.dingtalk.com/robot/send?access_token=abc"
+        )
+        assert call_kwargs[1]["json"] == {
+            "msgtype": "text",
+            "text": {"content": "hello dingtalk"},
+        }
 
     def test_http_error_redacts_access_token_in_exception_text(self):
         token = "supersecret-access-token-123456789"
@@ -224,7 +259,9 @@ class TestSendDingtalk:
         with patch("httpx.AsyncClient", return_value=client_ctx):
             result = asyncio.run(
                 _send_dingtalk(
-                    {"webhook_url": f"https://oapi.dingtalk.com/robot/send?access_token={token}"},
+                    {
+                        "webhook_url": f"https://oapi.dingtalk.com/robot/send?access_token={token}"
+                    },
                     "ch",
                     "hi",
                 )
@@ -234,13 +271,20 @@ class TestSendDingtalk:
         assert token not in result["error"]
         assert "access_token=***" in result["error"]
 
-
     def test_env_var_fallback(self):
         resp = self._make_httpx_resp(json_data={"errcode": 0, "errmsg": "ok"})
         client_ctx, client = self._make_httpx_client(resp)
 
-        with patch("httpx.AsyncClient", return_value=client_ctx), \
-             patch.dict(os.environ, {"DINGTALK_WEBHOOK_URL": "https://oapi.dingtalk.com/robot/send?access_token=env"}, clear=False):
+        with (
+            patch("httpx.AsyncClient", return_value=client_ctx),
+            patch.dict(
+                os.environ,
+                {
+                    "DINGTALK_WEBHOOK_URL": "https://oapi.dingtalk.com/robot/send?access_token=env"
+                },
+                clear=False,
+            ),
+        ):
             result = asyncio.run(_send_dingtalk({}, "ch", "hi"))
 
         assert result["success"] is True

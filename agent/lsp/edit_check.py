@@ -18,6 +18,7 @@ once would satisfy each other's waits).  A newer check by the SAME session takes
 so a superseded edit's errors are still caught unless the newer edit fixed them; a check by another
 session only queues behind it, so each session hears about its own edits only.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,16 +46,22 @@ logger = logging.getLogger("agent.lsp.edit_check")
 WRITE_BUDGET = 0.08
 INLINE_GRACE = 0.08
 _VERDICT_CAP = 256  # per-file last verdicts kept for baseline reuse
-_SPAWN_CEILING = 60.0  # outer bound on one check beyond its two waits (cold spawn + initialize)
+_SPAWN_CEILING = (
+    60.0  # outer bound on one check beyond its two waits (cold spawn + initialize)
+)
 
 _Diags = list[dict[str, Any]]
 
 
 @dataclass
 class CheckResult:
-    diagnostics: Optional[_Diags]  # introduced by the edit (baseline removed); [] = clean; None = no verdict
+    diagnostics: Optional[
+        _Diags
+    ]  # introduced by the edit (baseline removed); [] = clean; None = no verdict
     baseline_text: Optional[str]  # the pre-edit text this result was diffed against
-    superseded: bool = False  # a newer check of the file by the same session took this one over
+    superseded: bool = (
+        False  # a newer check of the file by the same session took this one over
+    )
     # Undelivered older notes this check took over and did not settle (no verdict): the caller queues
     # them again.  Empty whenever there is a verdict (it was diffed against the oldest baseline).
     carry: tuple = ()
@@ -101,17 +108,27 @@ def inline_wait(started: Optional[float]) -> float:
 
 
 def _digest(text: str) -> str:
-    return hashlib.sha256(as_disk_read(text).encode("utf-8", "surrogateescape")).hexdigest()
+    return hashlib.sha256(
+        as_disk_read(text).encode("utf-8", "surrogateescape")
+    ).hexdigest()
 
 
-def start(svc: LSPService, path: str, *, pre_text: Optional[str], post_text: Optional[str] = None,
-          owner: Optional[str] = None, carry: tuple = ()) -> Optional[concurrent.futures.Future]:
+def start(
+    svc: LSPService,
+    path: str,
+    *,
+    pre_text: Optional[str],
+    post_text: Optional[str] = None,
+    owner: Optional[str] = None,
+    carry: tuple = (),
+) -> Optional[concurrent.futures.Future]:
     """Schedule the check of ``path`` (already written) on the service loop; the Future resolves to a
     :class:`CheckResult`.  ``pre_text`` None = the file is new; ``post_text`` = the content this edit
     wrote (None: read the file when the check runs).  ``owner`` = the editing session (None:
     no later delivery, nothing to take over); ``carry`` = that session's undelivered notes for this
     file (``agent.lsp.deferred``) this edit supersedes: the oldest one's baseline becomes ours."""
     from agent.async_utils import safe_schedule_threadsafe
+
     loop = svc._loop._loop
     if loop is None:
         return None
@@ -122,11 +139,18 @@ def start(svc: LSPService, path: str, *, pre_text: Optional[str], post_text: Opt
     else:
         checks.newest.pop(abs_path, None)
     return safe_schedule_threadsafe(
-        _serialized(svc, abs_path, pre_text, post_text, owner, tuple(carry)), loop)
+        _serialized(svc, abs_path, pre_text, post_text, owner, tuple(carry)), loop
+    )
 
 
-async def _serialized(svc: LSPService, abs_path: str, pre_text: Optional[str], post_text: Optional[str],
-                      owner: Optional[str], carry: tuple) -> CheckResult:
+async def _serialized(
+    svc: LSPService,
+    abs_path: str,
+    pre_text: Optional[str],
+    post_text: Optional[str],
+    owner: Optional[str],
+    carry: tuple,
+) -> CheckResult:
     """Run after any unfinished check of the same file; take over the same session's unfinished check:
     its baseline and carried notes become ours, and its result is ours to report when we get no
     verdict.  Never cancelled: cancelling mid-spawn would restart a cold server on every rapid edit."""
@@ -151,22 +175,33 @@ async def _serialized(svc: LSPService, abs_path: str, pre_text: Optional[str], p
         waits = {t.task for t in (prev, tail) if t is not None}
         if waits:
             await asyncio.wait(waits)
-        if prev is not None and not prev.task.cancelled() and prev.task.exception() is None:
+        if (
+            prev is not None
+            and not prev.task.cancelled()
+            and prev.task.exception() is None
+        ):
             prev_result = prev.task.result()
             if prev_result.diagnostics is None:
                 prev_result = None
         if me.superseded:
             # A newer edit by this session queued behind us: it checks the newest bytes against our
             # baseline and owns our carried notes, so our own round trip would only delay it.
-            return CheckResult(prev_result.diagnostics if prev_result else None,
-                               prev_result.baseline_text if prev_result else baseline_text, True)
+            return CheckResult(
+                prev_result.diagnostics if prev_result else None,
+                prev_result.baseline_text if prev_result else baseline_text,
+                True,
+            )
         budget = svc._wait_budget(abs_path)
         try:
-            diags = await asyncio.wait_for(_check(svc, abs_path, baseline_text, post_text, budget),
-                                           timeout=2 * budget + _SPAWN_CEILING)
+            diags = await asyncio.wait_for(
+                _check(svc, abs_path, baseline_text, post_text, budget),
+                timeout=2 * budget + _SPAWN_CEILING,
+            )
         except asyncio.CancelledError:
             raise
-        except Exception as e:  # timeout / dead server: same treatment as the old blocking path
+        except (
+            Exception
+        ) as e:  # timeout / dead server: same treatment as the old blocking path
             logger.debug("LSP edit check failed for %s", abs_path, exc_info=True)
             await svc._mark_broken_for_file_async(abs_path, e)
             diags = None
@@ -184,13 +219,20 @@ async def _serialized(svc: LSPService, abs_path: str, pre_text: Optional[str], p
         if checks.tail.get(abs_path) is me:
             del checks.tail[abs_path]
             if post_text is not None and checks.newest.get(abs_path) is post_text:
-                del checks.newest[abs_path]  # no newer edit scheduled: the server holds these bytes
+                del checks.newest[
+                    abs_path
+                ]  # no newer edit scheduled: the server holds these bytes
         if owner and checks.inflight.get((owner, abs_path)) is me:
             del checks.inflight[(owner, abs_path)]
 
 
-async def _check(svc: LSPService, abs_path: str, baseline_text: Optional[str], post_text: Optional[str],
-                 budget: float) -> Optional[_Diags]:
+async def _check(
+    svc: LSPService,
+    abs_path: str,
+    baseline_text: Optional[str],
+    post_text: Optional[str],
+    budget: float,
+) -> Optional[_Diags]:
     """Verdict on ``post_text`` (the bytes this edit wrote) first; only when it has diagnostics, the
     verdict on ``baseline_text`` (cached from an earlier check when that text was checked before) to drop
     the pre-existing ones.  The server is left holding the file's current disk content afterwards.
@@ -204,13 +246,24 @@ async def _check(svc: LSPService, abs_path: str, baseline_text: Optional[str], p
     language_id = language_id_for(abs_path, srv)
     checks: EditChecks = svc._edit_checks
     use_sync = sync_diagnostics.supported(client)
-    if client.seeds_first_push and client.document_text(abs_path) is None and not use_sync:
+    if (
+        client.seeds_first_push
+        and client.document_text(abs_path) is None
+        and not use_sync
+    ):
         # First sync of this document on a seeding server: its first push is a verdict on the didOpen
         # text that never counts as fresh.  Open the pre-edit text so that push becomes the baseline;
         # a new file is opened as written, so the seed is the verdict itself.
-        seed = await client.wait_for_seed(abs_path, budget) if await client.open_file(
-            abs_path, language_id=language_id, text=post_text if baseline_text is None else baseline_text
-        ) == 0 else None
+        seed = (
+            await client.wait_for_seed(abs_path, budget)
+            if await client.open_file(
+                abs_path,
+                language_id=language_id,
+                text=post_text if baseline_text is None else baseline_text,
+            )
+            == 0
+            else None
+        )
         if baseline_text is None:
             await _resync_disk(svc, client, abs_path, language_id)
             svc._touch(client)
@@ -233,21 +286,31 @@ async def _check(svc: LSPService, abs_path: str, baseline_text: Optional[str], p
         baseline = checks.recall(abs_path, baseline_text)
         if baseline is None:
             baseline = []
-            base_version = await client.open_file(abs_path, language_id=language_id, text=baseline_text)
+            base_version = await client.open_file(
+                abs_path, language_id=language_id, text=baseline_text
+            )
             # No verdict on the pre-edit text -> empty baseline: the filter removes less, never more.
             base = await _verdict(svc, client, abs_path, base_version, budget, use_sync)
             if base is not None:
                 baseline = base
         from agent.lsp.range_shift import build_line_shift, shift_baseline
-        seen = {_diagnostic_key(d) for d in shift_baseline(baseline, build_line_shift(baseline_text, synced))}
+
+        seen = {
+            _diagnostic_key(d)
+            for d in shift_baseline(baseline, build_line_shift(baseline_text, synced))
+        }
         diags = [d for d in diags if _diagnostic_key(d) not in seen]
     if synced is not None:
-        checks.remember(abs_path, synced, verdict)  # the next edit's baseline is these bytes
+        checks.remember(
+            abs_path, synced, verdict
+        )  # the next edit's baseline is these bytes
     await _resync_disk(svc, client, abs_path, language_id)
     return _report(server_id, abs_path, diags)
 
 
-async def _resync_disk(svc: LSPService, client: Any, abs_path: str, language_id: str) -> None:
+async def _resync_disk(
+    svc: LSPService, client: Any, abs_path: str, language_id: str
+) -> None:
     """Leave the server holding the newest content written to the file (a newer edit, or this check's
     baseline sync, may differ from the snapshot just diagnosed); no-op when it already does.  Unknown
     newest content (a caller without a snapshot) re-reads the file, as every sync used to."""
@@ -255,14 +318,22 @@ async def _resync_disk(svc: LSPService, client: Any, abs_path: str, language_id:
     if newest is None:
         try:
             await client.open_file(abs_path, language_id=language_id)
-        except Exception:  # the file vanished: the next check syncs whatever is there then
+        except (
+            Exception
+        ):  # the file vanished: the next check syncs whatever is there then
             logger.debug("LSP resync of %s failed", abs_path, exc_info=True)
     elif as_disk_read(newest) != client.document_text(abs_path):
         await client.open_file(abs_path, language_id=language_id, text=newest)
 
 
-async def _verdict(svc: LSPService, client: Any, abs_path: str, version: int, budget: float,
-                   use_sync: bool) -> Optional[_Diags]:
+async def _verdict(
+    svc: LSPService,
+    client: Any,
+    abs_path: str,
+    version: int,
+    budget: float,
+    use_sync: bool,
+) -> Optional[_Diags]:
     """Diagnostics on the text synced at ``version``: a synchronous request where the server has one
     (``agent.lsp.sync_diagnostics``, ~10ms, so the write can report it inline), else the push/pull
     wait.  None = no verdict within ``budget``."""
@@ -273,7 +344,9 @@ async def _verdict(svc: LSPService, client: Any, abs_path: str, version: int, bu
             return None
         if diags is not None:
             return diags
-    if not await client.wait_for_diagnostics(abs_path, version, mode=svc._wait_mode, timeout=budget):
+    if not await client.wait_for_diagnostics(
+        abs_path, version, mode=svc._wait_mode, timeout=budget
+    ):
         return None
     return list(client.diagnostics_for(abs_path, fresh_only=True))
 
@@ -288,4 +361,11 @@ def _report(server_id: str, abs_path: str, diags: Optional[_Diags]) -> Optional[
     return diags
 
 
-__all__ = ["INLINE_GRACE", "WRITE_BUDGET", "CheckResult", "EditChecks", "inline_wait", "start"]
+__all__ = [
+    "INLINE_GRACE",
+    "WRITE_BUDGET",
+    "CheckResult",
+    "EditChecks",
+    "inline_wait",
+    "start",
+]

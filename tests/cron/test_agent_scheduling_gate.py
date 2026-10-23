@@ -29,11 +29,10 @@ ALWAYS_DISABLED = ["messaging", "clarify"]
 class TestGateOffDefault:
     def test_empty_config_denies_cronjob(self):
         assert _resolve_cron_disabled_toolsets({}) == [
-            "cronjob", "messaging", "clarify",
+            "cronjob",
+            "messaging",
+            "clarify",
         ]
-
-
-
 
     @pytest.mark.parametrize("falsy", [False, None, "", 0])
     def test_falsy_values_keep_gate_off(self, falsy):
@@ -87,7 +86,6 @@ class TestUserLayerUnchanged:
         assert "browser" in disabled
         # No duplicate when the user names an already-denied toolset.
         assert disabled.count("cronjob") == 1
-
 
     def test_blank_and_whitespace_entries_ignored(self):
         cfg = {

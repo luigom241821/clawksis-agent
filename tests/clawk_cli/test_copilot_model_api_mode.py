@@ -13,7 +13,9 @@ def test_copilot_claude_stays_on_chat_completions_even_if_catalog_lists_messages
         }
     ]
 
-    assert copilot_model_api_mode("claude-opus-4.8", catalog=catalog) == "chat_completions"
+    assert (
+        copilot_model_api_mode("claude-opus-4.8", catalog=catalog) == "chat_completions"
+    )
 
 
 def test_copilot_gpt5_still_uses_responses_api():

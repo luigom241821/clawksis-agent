@@ -14,8 +14,8 @@ routes only — no ``cjk_unicode61`` tokenizer toolchain is required.
 
 from clawk_state import SessionDB
 
-TWO_CHAR = "秃发"          # 2 CJK chars — below the trigram threshold, LIKE route
-FOUR_CHAR = "秃发应对"      # 4 CJK chars — trigram-eligible
+TWO_CHAR = "秃发"  # 2 CJK chars — below the trigram threshold, LIKE route
+FOUR_CHAR = "秃发应对"  # 4 CJK chars — trigram-eligible
 
 
 def make_db(tmp_path):
@@ -28,7 +28,9 @@ def make_db(tmp_path):
 
 
 def hits(database, query):
-    return database.search_messages(query=query, limit=10, fields=("session_id", "snippet"))
+    return database.search_messages(
+        query=query, limit=10, fields=("session_id", "snippet")
+    )
 
 
 def test_trailing_star_matches_the_bare_query(tmp_path):

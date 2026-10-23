@@ -10,7 +10,11 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 import httpx
 
 from agent.anthropic_credentials import _is_oauth_token, resolve_anthropic_token
-from clawk_cli.auth import AuthError, _read_codex_tokens, resolve_codex_runtime_credentials
+from clawk_cli.auth import (
+    AuthError,
+    _read_codex_tokens,
+    resolve_codex_runtime_credentials,
+)
 from clawk_cli.auth_codex import _codex_pool_route_base_url
 from clawk_cli.runtime_provider import resolve_runtime_provider
 from clawk_time import safe_strftime
@@ -25,8 +29,10 @@ logger = logging.getLogger(__name__)
 _DEPLETED_LINE = "Status: access depleted — top up to restore"
 # Usage-window plans: allowances are shown as percent used.
 _WINDOW_TOP_TIER_USED_UP = "Monthly large-model usage is used up."
-_WINDOW_PAUSED_LINE = ("Status: included usage paused. Your subscription payment failed. Update your card to restore it. "
-                       "Until then, Clawksis uses your credits.")
+_WINDOW_PAUSED_LINE = (
+    "Status: included usage paused. Your subscription payment failed. Update your card to restore it. "
+    "Until then, Clawksis uses your credits."
+)
 _WINDOW_PAUSED_OTHER_LINE = "Status: included usage paused. See Billing in the Portal. Until then, Clawksis uses your credits."
 
 
@@ -72,8 +78,17 @@ class AccountUsageSnapshot:
         return bool(self.windows or self.details) and not self.unavailable_reason
 
 
-def _snapshot(provider: str, source: str, windows: list, details: list, **kw: Any) -> AccountUsageSnapshot:
-    return AccountUsageSnapshot(provider=provider, source=source, fetched_at=_utc_now(), windows=tuple(windows), details=tuple(details), **kw)
+def _snapshot(
+    provider: str, source: str, windows: list, details: list, **kw: Any
+) -> AccountUsageSnapshot:
+    return AccountUsageSnapshot(
+        provider=provider,
+        source=source,
+        fetched_at=_utc_now(),
+        windows=tuple(windows),
+        details=tuple(details),
+        **kw,
+    )
 
 
 def _title_case_slug(value: Optional[str]) -> Optional[str]:
@@ -117,13 +132,16 @@ def _reset_phrase(dt: Optional[datetime]) -> str:
         return "resets soon"
     try:
         from clawk_cli.model_picker_usage import format_resets_in
+
         return format_resets_in(int(dt.timestamp() * 1000))
     except Exception:
         logger.debug("Reset phrase formatting failed", exc_info=True)
         return f"resets {_format_reset(dt)}"
 
 
-def render_account_usage_lines(snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False) -> list[str]:
+def render_account_usage_lines(
+    snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False
+) -> list[str]:
     if not snapshot:
         return []
     if snapshot.usage_window:
@@ -164,6 +182,7 @@ def _render_usage_window_lines(snapshot: AccountUsageSnapshot) -> list[str]:
             used = max(0.0, min(100.0, float(window.used_percent))) / 100.0
             try:
                 from clawk_cli.model_picker_usage import format_percent_used, render_bar
+
                 bar, pct = render_bar(used), format_percent_used(used)
             except Exception:
                 logger.debug("Usage bar rendering failed", exc_info=True)
@@ -193,15 +212,32 @@ def _is_finite_num(v: Any) -> TypeGuard[float]:
     return _is_num(v) and not isinstance(v, bool) and math.isfinite(v)
 
 
-def _nous_snapshot(windows: list, details: list, tail: list, *, source: str, plan: Optional[str] = None,
-                   usage_window: bool = False) -> Optional[AccountUsageSnapshot]:
+def _nous_snapshot(
+    windows: list,
+    details: list,
+    tail: list,
+    *,
+    source: str,
+    plan: Optional[str] = None,
+    usage_window: bool = False,
+) -> Optional[AccountUsageSnapshot]:
     """Nous snapshot with *tail* lines appended, or None when there is nothing to show."""
     if not windows and not details:
         return None
-    return _snapshot("nous", source, windows, details + tail, title="Nous credits", plan=plan, usage_window=usage_window)
+    return _snapshot(
+        "nous",
+        source,
+        windows,
+        details + tail,
+        title="Nous credits",
+        plan=plan,
+        usage_window=usage_window,
+    )
 
 
-def _bp_window(label: str, used_bp: Any, resets_at_ms: Any) -> Optional[AccountUsageWindow]:
+def _bp_window(
+    label: str, used_bp: Any, resets_at_ms: Any
+) -> Optional[AccountUsageWindow]:
     """One usage-window gauge row from basis points + an epoch-ms reset (already bounded by
     ``usage_gauges.parse_gauges``); None when the percent is not an int. An unknown reset keeps the row,
     shown without a reset."""
@@ -209,31 +245,46 @@ def _bp_window(label: str, used_bp: Any, resets_at_ms: Any) -> Optional[AccountU
         return None
     known = isinstance(resets_at_ms, int) and not isinstance(resets_at_ms, bool)
     reset_at = datetime.fromtimestamp(resets_at_ms / 1000, tz=UTC) if known else None
-    return AccountUsageWindow(label=label, used_percent=max(0.0, min(100.0, used_bp / BP_FULL * 100.0)),
-                              reset_at=reset_at)
+    return AccountUsageWindow(
+        label=label,
+        used_percent=max(0.0, min(100.0, used_bp / BP_FULL * 100.0)),
+        reset_at=reset_at,
+    )
 
 
-def _window_top_tier_line(reset_at: Optional[datetime], keep_going_on_credits: Any = None) -> str:
+def _window_top_tier_line(
+    reset_at: Optional[datetime], keep_going_on_credits: Any = None
+) -> str:
     """``Monthly large-model usage is used up. Resets Nov 3. Past this, large models use your credits.`` (local
     date). With Keep going on credits off, credits don't unlock it, so the line points at the other included models."""
     resets = ""
     if isinstance(reset_at, datetime):
         local = reset_at.astimezone()
         resets = f" Resets {local:%b} {local.day}."
-    tail = " Your other included usage is still available." if keep_going_on_credits is False else " Past this, large models use your credits."
+    tail = (
+        " Your other included usage is still available."
+        if keep_going_on_credits is False
+        else " Past this, large models use your credits."
+    )
     return f"{_WINDOW_TOP_TIER_USED_UP}{resets}{tail}"
 
 
-_WINDOW_KEEP_GOING_OFF_LINE = "Keep going on credits: off. Clawksis waits for the reset (turn on in /topup)."
-_WINDOW_KEEP_GOING_ON_LINE = "Keep going on credits: on. Uses your credits when included usage runs out."
+_WINDOW_KEEP_GOING_OFF_LINE = (
+    "Keep going on credits: off. Clawksis waits for the reset (turn on in /topup)."
+)
+_WINDOW_KEEP_GOING_ON_LINE = (
+    "Keep going on credits: on. Uses your credits when included usage runs out."
+)
 
 
-def _usage_window_rows(gauges: Any, *, paused_reason: Any,
-                       keep_going_on_credits: Any = None) -> tuple[list[AccountUsageWindow], list[str]]:
+def _usage_window_rows(
+    gauges: Any, *, paused_reason: Any, keep_going_on_credits: Any = None
+) -> tuple[list[AccountUsageWindow], list[str]]:
     """One row per server allowance, in the server's order, plus the top-tier, payment-paused and top-up-off
     lines. Empty unless the list has an allowance that stops every model. ``keep_going_on_credits``: the
     account setting (None: an older server)."""
     from agent.usage_gauges import SCOPE_TOP_TIER, all_scope, gauge_title, parse_gauges
+
     parsed = parse_gauges(gauges)
     if not parsed or not all_scope(parsed):
         return [], []
@@ -249,10 +300,19 @@ def _usage_window_rows(gauges: Any, *, paused_reason: Any,
             top_row, top_full = row, g.full
     lines: list[str] = []
     if top_full:
-        lines.append(_window_top_tier_line(top_row.reset_at if top_row else None, keep_going_on_credits))
+        lines.append(
+            _window_top_tier_line(
+                top_row.reset_at if top_row else None, keep_going_on_credits
+            )
+        )
     if isinstance(paused_reason, str) and paused_reason:
         from agent.usage_gauges import paused_for_payment
-        lines.append(_WINDOW_PAUSED_LINE if paused_for_payment(paused_reason) else _WINDOW_PAUSED_OTHER_LINE)
+
+        lines.append(
+            _WINDOW_PAUSED_LINE
+            if paused_for_payment(paused_reason)
+            else _WINDOW_PAUSED_OTHER_LINE
+        )
     elif keep_going_on_credits is False:
         lines.append(_WINDOW_KEEP_GOING_OFF_LINE)
     elif keep_going_on_credits is True:
@@ -266,6 +326,7 @@ def build_nous_credits_snapshot(account_info) -> Optional[AccountUsageSnapshot]:
     its allowances as percent used, the large-model line and its top-up balance instead. Fail-open → None."""
     try:
         from clawk_cli.nous_account import nous_portal_topup_url
+
         if account_info is None or not getattr(account_info, "logged_in", False):
             return None
         access = getattr(account_info, "paid_service_access_info", None)
@@ -275,35 +336,65 @@ def build_nous_credits_snapshot(account_info) -> Optional[AccountUsageSnapshot]:
         uw = getattr(account_info, "usage_window", None)
         if uw is not None:
             windows, window_lines = _usage_window_rows(
-                getattr(uw, "gauges", None), paused_reason=getattr(uw, "paused_reason", None),
+                getattr(uw, "gauges", None),
+                paused_reason=getattr(uw, "paused_reason", None),
                 keep_going_on_credits=getattr(uw, "keep_going_on_credits", None),
             )
         if windows:  # usage-window account: percents, plus the top-up balance
             details.extend(window_lines)
-            topup = getattr(access, "purchased_credits_remaining", None) if access is not None else None
+            topup = (
+                getattr(access, "purchased_credits_remaining", None)
+                if access is not None
+                else None
+            )
             if _is_finite_num(topup):
                 details.append(f"Top-up credits: {_fmt_usd(topup)}")
-            if getattr(account_info, "paid_service_access", None) is False and not window_lines:
+            if (
+                getattr(account_info, "paid_service_access", None) is False
+                and not window_lines
+            ):
                 details.append(_DEPLETED_LINE)
-            if sub is not None and (period_end := getattr(sub, "current_period_end", None)):
+            if sub is not None and (
+                period_end := getattr(sub, "current_period_end", None)
+            ):
                 from agent.billing_usage import format_renews
+
                 details.append(f"Renews: {format_renews(period_end) or period_end}")
-            return _nous_snapshot(windows, details, ["Top up via /topup"], source="portal-account",
-                                  plan=getattr(sub, "plan", None) if sub is not None else None, usage_window=True)
+            return _nous_snapshot(
+                windows,
+                details,
+                ["Top up via /topup"],
+                source="portal-account",
+                plan=getattr(sub, "plan", None) if sub is not None else None,
+                usage_window=True,
+            )
         # Gauge needs a positive cap AND a finite remaining <= cap (numeric fields, NOT a server *_usd); used =
         # cap - remaining clamped [0,100] so debt reads 100%. NaN/Inf (json.loads accepts bare NaN → "$nan") and
         # remaining > cap (rollover makes the cap a meaningless denominator) fall back to the magnitudes lines.
         if sub is not None:
             cap = getattr(sub, "monthly_credits", None)
             sub_remaining = getattr(sub, "credits_remaining", None)
-            if _is_finite_num(cap) and cap > 0 and _is_finite_num(sub_remaining) and sub_remaining <= cap:
-                windows.append(AccountUsageWindow(
-                    label="Subscription", used_percent=max(0.0, min(100.0, (cap - sub_remaining) / cap * 100.0)),
-                    detail=f"{_fmt_usd(sub_remaining)} of {_fmt_usd(cap)} left",
-                ))
+            if (
+                _is_finite_num(cap)
+                and cap > 0
+                and _is_finite_num(sub_remaining)
+                and sub_remaining <= cap
+            ):
+                windows.append(
+                    AccountUsageWindow(
+                        label="Subscription",
+                        used_percent=max(
+                            0.0, min(100.0, (cap - sub_remaining) / cap * 100.0)
+                        ),
+                        detail=f"{_fmt_usd(sub_remaining)} of {_fmt_usd(cap)} left",
+                    )
+                )
         if access is not None:
-            for attr, label in (("subscription_credits_remaining", "Subscription credits"),
-                                ("purchased_credits_remaining", "Top-up credits"), ("total_usable_credits", "Total usable")):
+            for attr, label in (
+                ("subscription_credits_remaining", "Subscription credits"),
+                ("purchased_credits_remaining", "Top-up credits"),
+                ("total_usable_credits", "Total usable"),
+            ):
                 value = getattr(access, attr, None)
                 if _is_finite_num(value):
                     details.append(f"{label}: {_fmt_usd(value)}")
@@ -316,8 +407,13 @@ def build_nous_credits_snapshot(account_info) -> Optional[AccountUsageSnapshot]:
                 details.append(f"Renews: {period_end}")
         if getattr(account_info, "paid_service_access", None) is False:
             details.append(_DEPLETED_LINE)
-        return _nous_snapshot(windows, details, [f"Top up: {nous_portal_topup_url(account_info)}", "(or run /topup)"],
-                              source="portal-account", plan=getattr(sub, "plan", None) if sub is not None else None)
+        return _nous_snapshot(
+            windows,
+            details,
+            [f"Top up: {nous_portal_topup_url(account_info)}", "(or run /topup)"],
+            source="portal-account",
+            plan=getattr(sub, "plan", None) if sub is not None else None,
+        )
     except (AttributeError, TypeError):
         return None
 
@@ -326,6 +422,7 @@ def _nous_logged_in() -> bool:
     """Cheap local auth-state check: a Nous access token is present. Fail-open False."""
     try:
         from clawk_cli.auth import get_provider_auth_state
+
         tok = (get_provider_auth_state("nous") or {}).get("access_token")
         return isinstance(tok, str) and bool(tok.strip())
     except Exception:
@@ -363,25 +460,37 @@ def _header_gauge_percent(bp: Any) -> Optional[float]:
     return max(0.0, min(100.0, bp / BP_FULL * 100.0))
 
 
-def apply_header_gauge(snapshot: Optional[AccountUsageSnapshot], credits_state: Any) -> Optional[AccountUsageSnapshot]:
+def apply_header_gauge(
+    snapshot: Optional[AccountUsageSnapshot], credits_state: Any
+) -> Optional[AccountUsageSnapshot]:
     """Raise window percents to the last response headers when those are ahead of the portal.
 
     The portal counter waits on spend-log ingestion. The headers already include finished included
     calls, and a large-model call that drew top-up reports that allowance full."""
     if snapshot is None or not snapshot.usage_window or credits_state is None:
         return snapshot
-    if not getattr(credits_state, "from_header", False) or not getattr(credits_state, "is_usage_window", False):
+    if not getattr(credits_state, "from_header", False) or not getattr(
+        credits_state, "is_usage_window", False
+    ):
         return snapshot
     # Row title → (header used bp, that gauge's reset). A header from before its gauge reset describes the
     # old window: the portal's fresh number stands.
     from agent.usage_gauges import gauge_title
-    mapping = {gauge_title(g): (g.used_bp, g.resets_at_ms) for g in getattr(credits_state, "gauges", ()) or ()}
+
+    mapping = {
+        gauge_title(g): (g.used_bp, g.resets_at_ms)
+        for g in getattr(credits_state, "gauges", ()) or ()
+    }
     now_ms = int(time.time() * 1000)
     windows: list[AccountUsageWindow] = []
     changed = False
     for window in snapshot.windows:
         bp, resets_at_ms = mapping.get(window.label, (None, None))
-        stale = isinstance(resets_at_ms, int) and not isinstance(resets_at_ms, bool) and now_ms >= resets_at_ms
+        stale = (
+            isinstance(resets_at_ms, int)
+            and not isinstance(resets_at_ms, bool)
+            and now_ms >= resets_at_ms
+        )
         header = None if stale else _header_gauge_percent(bp)
         current = window.used_percent
         if header is None or current is None or header <= float(current):
@@ -393,43 +502,68 @@ def apply_header_gauge(snapshot: Optional[AccountUsageSnapshot], credits_state: 
         return snapshot
     details = snapshot.details
     top_gauge = getattr(credits_state, "top_tier_gauge", None)
-    top = next((w for w in windows if top_gauge is not None and w.label == gauge_title(top_gauge)), None)
+    top = next(
+        (
+            w
+            for w in windows
+            if top_gauge is not None and w.label == gauge_title(top_gauge)
+        ),
+        None,
+    )
     if top is not None and (top.used_percent or 0) >= 100:
         if not any(line.startswith(_WINDOW_TOP_TIER_USED_UP) for line in details):
-            details = details + (_window_top_tier_line(top.reset_at, getattr(credits_state, "keep_going_on_credits", None)),)
+            details = details + (
+                _window_top_tier_line(
+                    top.reset_at, getattr(credits_state, "keep_going_on_credits", None)
+                ),
+            )
     return replace(snapshot, windows=tuple(windows), details=details)
 
 
-def nous_credits_lines(*, markdown: bool = False, timeout: float = 10.0, credits_state: Any = None) -> list[str]:
+def nous_credits_lines(
+    *, markdown: bool = False, timeout: float = 10.0, credits_state: Any = None
+) -> list[str]:
     """Rendered Nous-credits /usage lines, or [] when there's nothing to show. Independent of any live agent
     (logged-in gate, then a bounded portal fetch); shared by CLI ``_show_usage`` and the TUI ``session.usage`` RPC.
     Fail-open: any hiccup or timeout → []. CLAWK_DEV_CREDITS_FIXTURE renders from the fixture instead of the portal.
     ``credits_state`` is the last response's header gauge; when it is ahead of the portal, the bars use it."""
-    return nous_credits_view(markdown=markdown, timeout=timeout, credits_state=credits_state)[0]
+    return nous_credits_view(
+        markdown=markdown, timeout=timeout, credits_state=credits_state
+    )[0]
 
 
-def nous_credits_view(*, markdown: bool = False, timeout: float = 10.0, credits_state: Any = None) -> tuple[list[str], bool]:
+def nous_credits_view(
+    *, markdown: bool = False, timeout: float = 10.0, credits_state: Any = None
+) -> tuple[list[str], bool]:
     """``nous_credits_lines`` plus whether they are the usage-window layout (callers keep today's
     presentation for everyone else). Fail-open → ``([], False)``."""
     try:
         from agent.credits_tracker import dev_fixture_credits_state
+
         fixture = dev_fixture_credits_state()
     except Exception:
         logger.debug("Dev credits fixture unavailable", exc_info=True)
         fixture = None
     if fixture is not None:
         snapshot = _snapshot_from_credits_state(fixture)
-        return render_account_usage_lines(snapshot, markdown=markdown), bool(snapshot and snapshot.usage_window)
+        return render_account_usage_lines(snapshot, markdown=markdown), bool(
+            snapshot and snapshot.usage_window
+        )
     if not _nous_logged_in():
         return [], False
     try:
         snapshot = apply_header_gauge(
-            build_nous_credits_snapshot(_fetch_portal_account(timeout)), credits_state,
+            build_nous_credits_snapshot(_fetch_portal_account(timeout)),
+            credits_state,
         )
-        return render_account_usage_lines(snapshot, markdown=markdown), bool(snapshot and snapshot.usage_window)
+        return render_account_usage_lines(snapshot, markdown=markdown), bool(
+            snapshot and snapshot.usage_window
+        )
     except Exception:
         # Fail-open; breadcrumb so a dead /usage credits block is diagnosable.
-        logger.debug("credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True)
+        logger.debug(
+            "credits ▸ /usage portal fetch/render failed (fail-open)", exc_info=True
+        )
         return [], False
 
 
@@ -437,11 +571,20 @@ def nous_credits_usage_fields(agent: Any = None) -> dict[str, Any]:
     """The ``session.usage`` fields for the Nous credits block: ``credits_lines`` (when there are any) and
     ``credits_usage_window`` for the usage-window layout. Reads *agent*'s live credits headers. Never raises."""
     try:
-        lines, is_window = nous_credits_view(credits_state=getattr(agent, "_credits_state", None) if agent else None)
+        lines, is_window = nous_credits_view(
+            credits_state=getattr(agent, "_credits_state", None) if agent else None
+        )
     except Exception:
         logger.debug("credits ▸ /usage fields unavailable", exc_info=True)
         return {}
-    return ({"credits_lines": lines} | ({"credits_usage_window": True} if is_window else {})) if lines else {}
+    return (
+        (
+            {"credits_lines": lines}
+            | ({"credits_usage_window": True} if is_window else {})
+        )
+        if lines
+        else {}
+    )
 
 
 def _snapshot_from_credits_state(state) -> Optional[AccountUsageSnapshot]:
@@ -454,7 +597,8 @@ def _snapshot_from_credits_state(state) -> Optional[AccountUsageSnapshot]:
         details: list[str] = []
         if getattr(state, "is_usage_window", False):
             windows, window_lines = _usage_window_rows(
-                state.gauges, paused_reason=state.paused_reason,
+                state.gauges,
+                paused_reason=state.paused_reason,
                 keep_going_on_credits=getattr(state, "keep_going_on_credits", None),
             )
             details.extend(window_lines)
@@ -462,23 +606,41 @@ def _snapshot_from_credits_state(state) -> Optional[AccountUsageSnapshot]:
                 details.append(f"Top-up credits: ${state.purchased_usd}")
             if getattr(state, "paid_access", True) is False and not window_lines:
                 details.append(_DEPLETED_LINE)
-            return _nous_snapshot(windows, details, ["(dev fixture — CLAWK_DEV_CREDITS_FIXTURE)"], source="dev-fixture",
-                                  usage_window=True)
+            return _nous_snapshot(
+                windows,
+                details,
+                ["(dev fixture — CLAWK_DEV_CREDITS_FIXTURE)"],
+                source="dev-fixture",
+                usage_window=True,
+            )
         uf = getattr(state, "used_fraction", None)
         sub_usd = getattr(state, "subscription_usd", None)
         cap_usd = getattr(state, "subscription_limit_usd", None)
         if _is_num(uf) and math.isfinite(uf):
-            windows.append(AccountUsageWindow(
-                label="Subscription", used_percent=max(0.0, min(100.0, uf * 100.0)),
-                detail=f"${sub_usd} of ${cap_usd} left" if sub_usd and cap_usd else None,
-            ))
-        for value, label in ((sub_usd, "Subscription credits"), (getattr(state, "purchased_usd", None), "Top-up credits"),
-                             (getattr(state, "remaining_usd", None), "Total usable")):
+            windows.append(
+                AccountUsageWindow(
+                    label="Subscription",
+                    used_percent=max(0.0, min(100.0, uf * 100.0)),
+                    detail=f"${sub_usd} of ${cap_usd} left"
+                    if sub_usd and cap_usd
+                    else None,
+                )
+            )
+        for value, label in (
+            (sub_usd, "Subscription credits"),
+            (getattr(state, "purchased_usd", None), "Top-up credits"),
+            (getattr(state, "remaining_usd", None), "Total usable"),
+        ):
             if value:
                 details.append(f"{label}: ${value}")
         if getattr(state, "paid_access", True) is False:
             details.append(_DEPLETED_LINE)
-        return _nous_snapshot(windows, details, ["(dev fixture — CLAWK_DEV_CREDITS_FIXTURE)"], source="dev-fixture")
+        return _nous_snapshot(
+            windows,
+            details,
+            ["(dev fixture — CLAWK_DEV_CREDITS_FIXTURE)"],
+            source="dev-fixture",
+        )
     except (AttributeError, TypeError):
         return None
 
@@ -510,9 +672,12 @@ def build_credits_view(*, markdown: bool = False, timeout: float = 10.0) -> Cred
     if account is None or not getattr(account, "logged_in", False):
         return not_logged_in
     from clawk_cli.nous_account import nous_portal_topup_url
+
     balance_lines = [
         line
-        for line in render_account_usage_lines(build_nous_credits_snapshot(account), markdown=markdown)
+        for line in render_account_usage_lines(
+            build_nous_credits_snapshot(account), markdown=markdown
+        )
         if not line.lstrip().startswith(("Top up:", "Top up via", "(or run"))
     ]
     who = [str(v) for v in (getattr(account, "email", None),) if v]
@@ -520,8 +685,10 @@ def build_credits_view(*, markdown: bool = False, timeout: float = 10.0) -> Cred
     if org_name:
         who.append(f"org {org_name}")
     return CreditsView(
-        logged_in=True, balance_lines=tuple(balance_lines),
-        identity_line=("Topping up as " + " / ".join(who)) if who else None, topup_url=nous_portal_topup_url(account),
+        logged_in=True,
+        balance_lines=tuple(balance_lines),
+        identity_line=("Topping up as " + " / ".join(who)) if who else None,
+        topup_url=nous_portal_topup_url(account),
         depleted=getattr(account, "paid_service_access", None) is False,
     )
 
@@ -529,14 +696,23 @@ def build_credits_view(*, markdown: bool = False, timeout: float = 10.0) -> Cred
 def _codex_backend_urls(base_url: str) -> tuple[str, str, str]:
     """Codex backend endpoints (usage, reset-credits list, consume). Mirrors the Codex CLI's PathStyle
     split: ``/backend-api`` bases use the ChatGPT ``/wham/`` paths; everything else ``/api/codex/``."""
-    normalized = (base_url or "").strip().rstrip("/") or "https://chatgpt.com/backend-api/codex"
+    normalized = (base_url or "").strip().rstrip(
+        "/"
+    ) or "https://chatgpt.com/backend-api/codex"
     normalized = normalized.removesuffix("/codex")
     prefix = normalized + ("/wham" if "/backend-api" in normalized else "/api/codex")
-    return (prefix + "/usage", prefix + "/rate-limit-reset-credits", prefix + "/rate-limit-reset-credits/consume")
+    return (
+        prefix + "/usage",
+        prefix + "/rate-limit-reset-credits",
+        prefix + "/rate-limit-reset-credits/consume",
+    )
 
 
 def _resolve_codex_usage_credentials(
-    base_url: Optional[str], api_key: Optional[str], *, force_refresh: bool = False,
+    base_url: Optional[str],
+    api_key: Optional[str],
+    *,
+    force_refresh: bool = False,
 ) -> tuple[str, str, Optional[str]]:
     """Codex quota credentials: explicit live-agent creds → native runtime resolver (itself pool-aware) → direct
     pool select. Native OAuth stores device-code logins in the pool, so the singleton store alone is not enough."""
@@ -547,15 +723,26 @@ def _resolve_codex_usage_credentials(
         # Forced retry for a live agent's own credential: refresh THAT credential (singleton or the
         # pool entry that issued it), never re-resolve — that would render another pool account's usage.
         try:
-            singleton_key = str((_read_codex_tokens().get("tokens") or {}).get("access_token", "") or "").strip()
+            singleton_key = str(
+                (_read_codex_tokens().get("tokens") or {}).get("access_token", "") or ""
+            ).strip()
         except AuthError:
             singleton_key = ""
         if singleton_key != explicit_key:
             from agent.credential_pool import load_pool
-            entry = load_pool("openai-codex").try_refresh_matching(api_key_hint=explicit_key)
+
+            entry = load_pool("openai-codex").try_refresh_matching(
+                api_key_hint=explicit_key
+            )
             if entry is None:
-                raise RuntimeError("Could not refresh the Codex credential this session runs on")
-            return entry.runtime_api_key, _codex_pool_route_base_url(entry.runtime_base_url or base_url), None
+                raise RuntimeError(
+                    "Could not refresh the Codex credential this session runs on"
+                )
+            return (
+                entry.runtime_api_key,
+                _codex_pool_route_base_url(entry.runtime_base_url or base_url),
+                None,
+            )
     # Only AuthError is caught so tier 3 can run: a broad except would mask a transient refresh/network failure
     # and hand back a DIFFERENT pool account's usage; such errors must propagate to the fail-open outer guard.
     # account_id is best-effort: a partial singleton store must not sink a usable credential.
@@ -575,17 +762,31 @@ def _resolve_codex_usage_credentials(
             account_id = str(tokens.get("account_id", "") or "").strip() or None
         except AuthError:
             # Pool-only creds carry no singleton account_id; header is optional.
-            logger.debug("codex ▸ /usage account_id read failed (best-effort)", exc_info=True)
-        return creds["api_key"], str(creds.get("base_url", "") or "").strip(), account_id
+            logger.debug(
+                "codex ▸ /usage account_id read failed (best-effort)", exc_info=True
+            )
+        return (
+            creds["api_key"],
+            str(creds.get("base_url", "") or "").strip(),
+            account_id,
+        )
     except AuthError:
-        logger.debug("codex ▸ /usage runtime resolver returned no creds; trying pool", exc_info=True)
+        logger.debug(
+            "codex ▸ /usage runtime resolver returned no creds; trying pool",
+            exc_info=True,
+        )
     # Tier 3: pool credentials have no account_id concept → header omitted.
     from agent.credential_pool import load_pool
+
     entry = load_pool("openai-codex").select()
     if entry is None:
         raise RuntimeError("No available openai-codex credential in credential pool")
     # Pool rows keep the canonical URL; a gateway key must go to its route host, not chatgpt.com (#121486).
-    return entry.runtime_api_key, _codex_pool_route_base_url(entry.runtime_base_url or base_url), None
+    return (
+        entry.runtime_api_key,
+        _codex_pool_route_base_url(entry.runtime_base_url or base_url),
+        None,
+    )
 
 
 def _codex_banked_resets(payload: dict) -> int:
@@ -596,8 +797,14 @@ def _codex_banked_resets(payload: dict) -> int:
 def _codex_headers(token: str, account_id: Optional[str]) -> dict[str, str]:
     """auth.json's ``account_id`` wins over the JWT claim; the JWT still supplies the residency header."""
     from agent.codex_headers import codex_account_headers
-    return {"Authorization": f"Bearer {token}", "Accept": "application/json", "User-Agent": "codex-cli",
-            **codex_account_headers(token), **({"ChatGPT-Account-ID": account_id} if account_id else {})}
+
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "User-Agent": "codex-cli",
+        **codex_account_headers(token),
+        **({"ChatGPT-Account-ID": account_id} if account_id else {}),
+    }
 
 
 def _get_json(url: str, headers: dict[str, str], *, timeout: float) -> dict:
@@ -608,7 +815,12 @@ def _get_json(url: str, headers: dict[str, str], *, timeout: float) -> dict:
 
 
 def _usage_windows(
-    source: dict, mapping: tuple[tuple[str, str], ...], used_key: str, reset_key: str, *, fraction: bool = False,
+    source: dict,
+    mapping: tuple[tuple[str, str], ...],
+    used_key: str,
+    reset_key: str,
+    *,
+    fraction: bool = False,
     model_scoped: frozenset[str] | set[str] = frozenset(),
 ) -> list[AccountUsageWindow]:
     """Build windows from ``source[key][used_key]``; ``fraction`` scales values <= 1 to percent.
@@ -622,16 +834,23 @@ def _usage_windows(
         used = float(used)
         if fraction and used <= 1:
             used *= 100
-        windows.append(AccountUsageWindow(
-            label=label, used_percent=used, reset_at=_parse_dt(window.get(reset_key)),
-            scope="model" if key in model_scoped else "account",
-        ))
+        windows.append(
+            AccountUsageWindow(
+                label=label,
+                used_percent=used,
+                reset_at=_parse_dt(window.get(reset_key)),
+                scope="model" if key in model_scoped else "account",
+            )
+        )
     return windows
 
 
 # Published Codex quota windows by ``limit_window_seconds``: 5h session and 7-day weekly.
 _CODEX_WINDOW_LABELS_BY_SECONDS = {18000: "Session", 604800: "Weekly"}
-_CODEX_WINDOW_POSITIONAL_LABELS = (("primary_window", "Session"), ("secondary_window", "Weekly"))
+_CODEX_WINDOW_POSITIONAL_LABELS = (
+    ("primary_window", "Session"),
+    ("secondary_window", "Weekly"),
+)
 
 
 def _codex_window_labels(rate_limit: dict) -> tuple[tuple[str, str], ...]:
@@ -645,8 +864,14 @@ def _codex_window_labels(rate_limit: dict) -> tuple[tuple[str, str], ...]:
     labels = []
     for key, fallback in _CODEX_WINDOW_POSITIONAL_LABELS:
         window = rate_limit.get(key) or {}
-        seconds = window.get("limit_window_seconds") if isinstance(window, dict) else None
-        label = _CODEX_WINDOW_LABELS_BY_SECONDS.get(int(seconds), fallback) if _is_num(seconds) else fallback
+        seconds = (
+            window.get("limit_window_seconds") if isinstance(window, dict) else None
+        )
+        label = (
+            _CODEX_WINDOW_LABELS_BY_SECONDS.get(int(seconds), fallback)
+            if _is_num(seconds)
+            else fallback
+        )
         labels.append((key, label))
     return tuple(labels)
 
@@ -656,13 +881,15 @@ def _plural(count: int) -> str:
 
 
 def _fetch_codex_account_usage(
-    base_url: Optional[str] = None, api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> Optional[AccountUsageSnapshot]:
     return _fetch_codex_account_usage_impl(base_url, api_key, read_only=False)
 
 
 def _fetch_codex_account_usage_read_only(
-    base_url: Optional[str] = None, api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> Optional[AccountUsageSnapshot]:
     """Picker-cache variant: a 401 is reported, never repaired. The live-agent path
     (``_fetch_codex_account_usage``) retries via a forced credential refresh because the
@@ -672,12 +899,19 @@ def _fetch_codex_account_usage_read_only(
 
 
 def _fetch_codex_account_usage_impl(
-    base_url: Optional[str] = None, api_key: Optional[str] = None, *, read_only: bool = False,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    *,
+    read_only: bool = False,
 ) -> Optional[AccountUsageSnapshot]:
-    token, resolved_base_url, account_id = _resolve_codex_usage_credentials(base_url, api_key)
+    token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
+        base_url, api_key
+    )
     try:
         payload = _get_json(
-            _codex_backend_urls(resolved_base_url)[0], _codex_headers(token, account_id), timeout=15.0,
+            _codex_backend_urls(resolved_base_url)[0],
+            _codex_headers(token, account_id),
+            timeout=15.0,
         )
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code != 401:
@@ -686,24 +920,42 @@ def _fetch_codex_account_usage_impl(
             # Never refresh/rotate on the picker's read-only path — surface the failure.
             raise
         token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
-            base_url, api_key, force_refresh=True,
+            base_url,
+            api_key,
+            force_refresh=True,
         )
         payload = _get_json(
-            _codex_backend_urls(resolved_base_url)[0], _codex_headers(token, account_id), timeout=15.0,
+            _codex_backend_urls(resolved_base_url)[0],
+            _codex_headers(token, account_id),
+            timeout=15.0,
         )
     rate_limit = payload.get("rate_limit") or {}
-    windows = _usage_windows(rate_limit, _codex_window_labels(rate_limit), "used_percent", "reset_at")
+    windows = _usage_windows(
+        rate_limit, _codex_window_labels(rate_limit), "used_percent", "reset_at"
+    )
     details: list[str] = []
     count = _codex_banked_resets(payload)
     if count > 0:
-        details.append(f"You have {count} reset{_plural(count)} banked - use /usage reset to activate")
-    credits, balance = payload.get("credits") or {}, (payload.get("credits") or {}).get("balance")
+        details.append(
+            f"You have {count} reset{_plural(count)} banked - use /usage reset to activate"
+        )
+    credits, balance = (
+        payload.get("credits") or {},
+        (payload.get("credits") or {}).get("balance"),
+    )
     if credits.get("has_credits") and _is_num(balance):
         details.append(f"Credits balance: ${float(balance):.2f}")
     elif credits.get("has_credits") and credits.get("unlimited"):
         details.append("Credits balance: unlimited")
-    return _snapshot("openai-codex", "usage_api", windows, details, plan=_title_case_slug(payload.get("plan_type")),
-                     identity=_codex_snapshot_identity(token), raw=payload)
+    return _snapshot(
+        "openai-codex",
+        "usage_api",
+        windows,
+        details,
+        plan=_title_case_slug(payload.get("plan_type")),
+        identity=_codex_snapshot_identity(token),
+        raw=payload,
+    )
 
 
 def _codex_snapshot_identity(token: str) -> Optional[str]:
@@ -739,23 +991,42 @@ def _unavailable(message: str) -> CodexResetRedeemResult:
     return CodexResetRedeemResult(status="unavailable", message=message)
 
 
-def _codex_reset_guard(payload: dict, available: int, force: bool) -> Optional[CodexResetRedeemResult]:
+def _codex_reset_guard(
+    payload: dict, available: int, force: bool
+) -> Optional[CodexResetRedeemResult]:
     """Refuse a redemption that would be wasted (no banked credits, or no window fully used and not ``force``)."""
     if available <= 0:
-        return CodexResetRedeemResult(status="no_credits_banked", message="No banked reset credits on this account — nothing to redeem.")
+        return CodexResetRedeemResult(
+            status="no_credits_banked",
+            message="No banked reset credits on this account — nothing to redeem.",
+        )
     rate_limit = payload.get("rate_limit") or {}
-    used_pcts = [float(u) for u in ((rate_limit.get(k) or {}).get("used_percent") for k in ("primary_window", "secondary_window"))
-                 if _is_num(u)]
+    used_pcts = [
+        float(u)
+        for u in (
+            (rate_limit.get(k) or {}).get("used_percent")
+            for k in ("primary_window", "secondary_window")
+        )
+        if _is_num(u)
+    ]
     worst_used: Optional[float] = max(0.0, *used_pcts) if used_pcts else None
-    if force or (worst_used is not None and worst_used >= _CODEX_WINDOW_EXHAUSTED_PERCENT):
+    if force or (
+        worst_used is not None and worst_used >= _CODEX_WINDOW_EXHAUSTED_PERCENT
+    ):
         return None
-    usage_note = (f"your busiest window is only {worst_used:.0f}% used" if worst_used is not None
-                  else "your current usage could not be confirmed as exhausted")
+    usage_note = (
+        f"your busiest window is only {worst_used:.0f}% used"
+        if worst_used is not None
+        else "your current usage could not be confirmed as exhausted"
+    )
     return CodexResetRedeemResult(
-        status="not_exhausted", available_count=available,
-        message=(f"⚠️ Not redeeming: {usage_note}. A banked reset restores your FULL 5h + weekly limits, so spending it "
-                 f"now would waste most of it. You have {available} reset{_plural(available)} banked. "
-                 f"Use `/usage reset --force` to redeem anyway."),
+        status="not_exhausted",
+        available_count=available,
+        message=(
+            f"⚠️ Not redeeming: {usage_note}. A banked reset restores your FULL 5h + weekly limits, so spending it "
+            f"now would waste most of it. You have {available} reset{_plural(available)} banked. "
+            f"Use `/usage reset --force` to redeem anyway."
+        ),
     )
 
 
@@ -764,11 +1035,19 @@ def _codex_reset_outcome(body: dict, available: int) -> CodexResetRedeemResult:
     code = str(body.get("code", "") or "").strip().lower()
     remaining = max(0, available - 1)
     outcomes: dict[str, tuple[str, int]] = {
-        "reset": (f"✅ Reset redeemed — your usage limits have been reset. {remaining} banked reset{_plural(remaining)} remaining.",
-                  remaining),
-        "nothing_to_reset": ("Backend reports nothing to reset — your limits aren't exhausted. The credit was NOT spent.", available),
+        "reset": (
+            f"✅ Reset redeemed — your usage limits have been reset. {remaining} banked reset{_plural(remaining)} remaining.",
+            remaining,
+        ),
+        "nothing_to_reset": (
+            "Backend reports nothing to reset — your limits aren't exhausted. The credit was NOT spent.",
+            available,
+        ),
         "no_credit": ("Backend reports no available reset credit on this account.", 0),
-        "already_redeemed": ("This redemption was already processed — no additional credit was spent.", remaining),
+        "already_redeemed": (
+            "This redemption was already processed — no additional credit was spent.",
+            remaining,
+        ),
     }
     if code not in outcomes:
         return _unavailable(f"Unexpected response from the Codex backend: {body!r}")
@@ -778,31 +1057,47 @@ def _codex_reset_outcome(body: dict, available: int) -> CodexResetRedeemResult:
         # stale ``last_error_reset_at``.
         try:
             from clawk_cli.auth import clear_codex_pool_quota_cooldowns
+
             clear_codex_pool_quota_cooldowns()
         except Exception:
-            logger.debug("Failed to clear Codex pool cooldowns after reset redemption", exc_info=True)
+            logger.debug(
+                "Failed to clear Codex pool cooldowns after reset redemption",
+                exc_info=True,
+            )
         raw = body.get("windows_reset")
         windows_reset = int(raw) if _is_num(raw) else 0
     message, count = outcomes[code]
-    return CodexResetRedeemResult(status=code, message=message, available_count=count, windows_reset=windows_reset)
+    return CodexResetRedeemResult(
+        status=code, message=message, available_count=count, windows_reset=windows_reset
+    )
 
 
 def redeem_codex_reset_credit(
-    *, base_url: Optional[str] = None, api_key: Optional[str] = None, force: bool = False,
+    *,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    force: bool = False,
 ) -> CodexResetRedeemResult:
     """Redeem one banked Codex rate-limit reset credit (`/usage reset`), mirroring the Codex CLI picker: GET usage →
     guard (a reset restores the WHOLE 5h + weekly allowance, and the backend's own ``nothing_to_reset`` guard is
     less clear) → POST consume with a fresh UUID ``redeem_request_id`` and no ``credit_id`` (the backend picks the
     next credit). Never raises: every failure returns a result."""
     import uuid
+
     try:
-        token, resolved_base_url, account_id = _resolve_codex_usage_credentials(base_url, api_key)
+        token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
+            base_url, api_key
+        )
     except Exception:
-        return _unavailable("No Codex credentials available. Run `clawk auth` to sign in with your ChatGPT account.")
+        return _unavailable(
+            "No Codex credentials available. Run `clawk auth` to sign in with your ChatGPT account."
+        )
     redeem_request_id = str(uuid.uuid4())
     try:
         for attempt in range(2):
-            usage_url, _credits_url, consume_url = _codex_backend_urls(resolved_base_url)
+            usage_url, _credits_url, consume_url = _codex_backend_urls(
+                resolved_base_url
+            )
             headers = _codex_headers(token, account_id)
             try:
                 with httpx.Client(timeout=15.0) as client:
@@ -814,7 +1109,8 @@ def redeem_codex_reset_credit(
                     if refused is not None:
                         return refused
                     consume_resp = client.post(
-                        consume_url, headers={**headers, "Content-Type": "application/json"},
+                        consume_url,
+                        headers={**headers, "Content-Type": "application/json"},
                         json={"redeem_request_id": redeem_request_id},
                     )
                     consume_resp.raise_for_status()
@@ -824,8 +1120,12 @@ def redeem_codex_reset_credit(
                 if exc.response.status_code != 401 or attempt > 0:
                     raise
                 try:
-                    token, resolved_base_url, account_id = _resolve_codex_usage_credentials(
-                        base_url, api_key, force_refresh=True,
+                    token, resolved_base_url, account_id = (
+                        _resolve_codex_usage_credentials(
+                            base_url,
+                            api_key,
+                            force_refresh=True,
+                        )
                     )
                 except Exception:
                     # Refresh token dead too: the 401 hint (re-login) is the actionable message.
@@ -833,8 +1133,10 @@ def redeem_codex_reset_credit(
     except httpx.HTTPStatusError as exc:
         code = exc.response.status_code
         if code in (401, 403):
-            return _unavailable(f"Codex backend rejected the request (HTTP {code}). Reset credits require ChatGPT-account "
-                                "(OAuth) auth — run `clawk auth` and sign in with your ChatGPT account.")
+            return _unavailable(
+                f"Codex backend rejected the request (HTTP {code}). Reset credits require ChatGPT-account "
+                "(OAuth) auth — run `clawk auth` and sign in with your ChatGPT account."
+            )
         return _unavailable(f"Codex backend error (HTTP {code}) — try again shortly.")
     except Exception as exc:
         return _unavailable(f"Could not reach the Codex backend: {exc}")
@@ -853,54 +1155,105 @@ def _fetch_anthropic_account_usage(
     if not token:
         return None
     if not _is_oauth_token(token):
-        return _snapshot("anthropic", "oauth_usage_api", [], [],
-                         unavailable_reason="Anthropic account limits are only available for OAuth-backed Claude accounts.")
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json", "Content-Type": "application/json",
-               "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-code/2.1.0"}
-    payload = _get_json("https://api.anthropic.com/api/oauth/usage", headers, timeout=15.0)
+        return _snapshot(
+            "anthropic",
+            "oauth_usage_api",
+            [],
+            [],
+            unavailable_reason="Anthropic account limits are only available for OAuth-backed Claude accounts.",
+        )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "anthropic-beta": "oauth-2025-04-20",
+        "User-Agent": "claude-code/2.1.0",
+    }
+    payload = _get_json(
+        "https://api.anthropic.com/api/oauth/usage", headers, timeout=15.0
+    )
     windows = _usage_windows(
-        payload, (("five_hour", "Current session"), ("seven_day", "Current week"), ("seven_day_opus", "Opus week"),
-                  ("seven_day_sonnet", "Sonnet week")), "utilization", "resets_at", fraction=True,
+        payload,
+        (
+            ("five_hour", "Current session"),
+            ("seven_day", "Current week"),
+            ("seven_day_opus", "Opus week"),
+            ("seven_day_sonnet", "Sonnet week"),
+        ),
+        "utilization",
+        "resets_at",
+        fraction=True,
         model_scoped={"seven_day_opus", "seven_day_sonnet"},
     )
     details: list[str] = []
     extra = payload.get("extra_usage") or {}
     used_credits, monthly_limit = extra.get("used_credits"), extra.get("monthly_limit")
     if extra.get("is_enabled") and _is_num(used_credits) and _is_num(monthly_limit):
-        details.append(f"Extra usage: {used_credits:.2f} / {monthly_limit:.2f} {extra.get('currency') or 'USD'}")
+        details.append(
+            f"Extra usage: {used_credits:.2f} / {monthly_limit:.2f} {extra.get('currency') or 'USD'}"
+        )
     return _snapshot("anthropic", "oauth_usage_api", windows, details)
 
 
-def _fetch_openrouter_account_usage(base_url: Optional[str], api_key: Optional[str]) -> Optional[AccountUsageSnapshot]:
-    runtime = resolve_runtime_provider(requested="openrouter", explicit_base_url=base_url, explicit_api_key=api_key)
+def _fetch_openrouter_account_usage(
+    base_url: Optional[str], api_key: Optional[str]
+) -> Optional[AccountUsageSnapshot]:
+    runtime = resolve_runtime_provider(
+        requested="openrouter", explicit_base_url=base_url, explicit_api_key=api_key
+    )
     token = str(runtime.get("api_key", "") or "").strip()
     if not token:
         return None
     normalized = str(runtime.get("base_url", "") or "").rstrip("/")
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     with httpx.Client(timeout=10.0) as client:
+
         def _data(path: str) -> dict:
             resp = client.get(f"{normalized}/{path}", headers=headers)
             resp.raise_for_status()
             return (resp.json() or {}).get("data") or {}
+
         credits = _data("credits")
         try:
             key_data = _data("key")
         except Exception:
             key_data = {}
-    balance = float(credits.get("total_credits") or 0.0) - float(credits.get("total_usage") or 0.0)
+    balance = float(credits.get("total_credits") or 0.0) - float(
+        credits.get("total_usage") or 0.0
+    )
     details = [f"Credits balance: ${max(0.0, balance):.2f}"]
     windows: list[AccountUsageWindow] = []
-    limit, limit_remaining, usage = key_data.get("limit"), key_data.get("limit_remaining"), key_data.get("usage")
+    limit, limit_remaining, usage = (
+        key_data.get("limit"),
+        key_data.get("limit_remaining"),
+        key_data.get("usage"),
+    )
     limit_reset = str(key_data.get("limit_reset") or "").strip()
-    if _is_num(limit) and float(limit) > 0 and _is_num(limit_remaining) and 0 <= float(limit_remaining) <= float(limit):
+    if (
+        _is_num(limit)
+        and float(limit) > 0
+        and _is_num(limit_remaining)
+        and 0 <= float(limit_remaining) <= float(limit)
+    ):
         limit_value, remaining_value = float(limit), float(limit_remaining)
-        detail_parts = [f"${remaining_value:.2f} of ${limit_value:.2f} remaining", *([f"resets {limit_reset}"] if limit_reset else [])]
-        windows.append(AccountUsageWindow(label="API key quota", used_percent=((limit_value - remaining_value) / limit_value) * 100,
-                                          detail=" • ".join(detail_parts)))
+        detail_parts = [
+            f"${remaining_value:.2f} of ${limit_value:.2f} remaining",
+            *([f"resets {limit_reset}"] if limit_reset else []),
+        ]
+        windows.append(
+            AccountUsageWindow(
+                label="API key quota",
+                used_percent=((limit_value - remaining_value) / limit_value) * 100,
+                detail=" • ".join(detail_parts),
+            )
+        )
     if _is_num(usage):
         usage_parts = [f"API key usage: ${float(usage):.2f} total"]
-        for key, label in (("usage_daily", "today"), ("usage_weekly", "this week"), ("usage_monthly", "this month")):
+        for key, label in (
+            ("usage_daily", "today"),
+            ("usage_weekly", "this week"),
+            ("usage_monthly", "this month"),
+        ):
             value = key_data.get(key)
             if _is_num(value) and float(value) > 0:
                 usage_parts.append(f"${float(value):.2f} {label}")
@@ -908,14 +1261,19 @@ def _fetch_openrouter_account_usage(base_url: Optional[str], api_key: Optional[s
     return _snapshot("openrouter", "credits_api", windows, details)
 
 
-_USAGE_FETCHERS: dict[str, Callable[[Optional[str], Optional[str]], Optional[AccountUsageSnapshot]]] = {
-    "openai-codex": _fetch_codex_account_usage, "anthropic": _fetch_anthropic_account_usage,
+_USAGE_FETCHERS: dict[
+    str, Callable[[Optional[str], Optional[str]], Optional[AccountUsageSnapshot]]
+] = {
+    "openai-codex": _fetch_codex_account_usage,
+    "anthropic": _fetch_anthropic_account_usage,
     "openrouter": _fetch_openrouter_account_usage,
 }
 
 # Picker per-credential variants: same parsers/fetch shape, but a failure is never repaired by
 # rotating/refreshing a credential (see ``fetch_account_usage(read_only=True)``).
-_READ_ONLY_USAGE_FETCHERS: dict[str, Callable[[Optional[str], Optional[str]], Optional[AccountUsageSnapshot]]] = {
+_READ_ONLY_USAGE_FETCHERS: dict[
+    str, Callable[[Optional[str], Optional[str]], Optional[AccountUsageSnapshot]]
+] = {
     "openai-codex": _fetch_codex_account_usage_read_only,
 }
 
@@ -927,7 +1285,9 @@ _READ_ONLY_USAGE_FETCHERS: dict[str, Callable[[Optional[str], Optional[str]], Op
 PLUGIN_USAGE_HOOK_DEADLINE_S = 10.0
 
 
-def _call_plugin_usage_hook(profile, base_url: Optional[str], api_key: Optional[str]) -> Optional[AccountUsageSnapshot]:
+def _call_plugin_usage_hook(
+    profile, base_url: Optional[str], api_key: Optional[str]
+) -> Optional[AccountUsageSnapshot]:
     """Run the profile hook under the shared deadline; past it → None. Exceptions re-raise in the
     caller so ``fetch_account_usage`` fails open without a worker-thread traceback on ``/usage``."""
     from agent.deadline import run_bounded_sync
@@ -937,13 +1297,19 @@ def _call_plugin_usage_hook(profile, base_url: Optional[str], api_key: Optional[
         return None  # base no-op: no thread to spawn
     bounded = run_bounded_sync(
         lambda: profile.fetch_account_usage(base_url=base_url, api_key=api_key),
-        PLUGIN_USAGE_HOOK_DEADLINE_S, label="plugin-account-usage")
+        PLUGIN_USAGE_HOOK_DEADLINE_S,
+        label="plugin-account-usage",
+    )
     return None if bounded.timed_out else bounded.value
 
 
 def fetch_account_usage(
-    provider: Optional[str], *, base_url: Optional[str] = None, api_key: Optional[str] = None,
-    read_only: bool = False, identity_id: Optional[str] = None,
+    provider: Optional[str],
+    *,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    read_only: bool = False,
+    identity_id: Optional[str] = None,
 ) -> Optional[AccountUsageSnapshot]:
     from agent.account_usage_cache import remember_account_usage
 
@@ -963,13 +1329,20 @@ def fetch_account_usage(
             from providers import get_provider_profile
 
             profile = get_provider_profile(slug)
-            snapshot = _call_plugin_usage_hook(profile, base_url, api_key) if profile else None
+            snapshot = (
+                _call_plugin_usage_hook(profile, base_url, api_key) if profile else None
+            )
     except Exception:
         return None
     # Every fetch (``/usage``, the per-turn ``session.usage``) keeps the picker's cache current.
     # A per-credential fetch is remembered under its account slot only; the provider-wide fetch
     # keeps both the legacy gauge slot and (when the fetcher identifies the account) that
     # account's slot current.
-    remember_account_usage(provider, snapshot, identity_id=identity_id, base_url=base_url,
-                           started_monotonic=started)
+    remember_account_usage(
+        provider,
+        snapshot,
+        identity_id=identity_id,
+        base_url=base_url,
+        started_monotonic=started,
+    )
     return snapshot

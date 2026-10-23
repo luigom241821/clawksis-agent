@@ -28,8 +28,11 @@ def test_login_probe_window_follows_oauth_timeout(monkeypatch, tmp_path):
     with contextlib.redirect_stdout(io.StringIO()):
         mc._reauth_oauth_server(
             "traveler",
-            {"url": "https://mcp.example.test/mcp", "auth": "oauth",
-             "oauth": {"timeout": 3600, "redirect_port": 27891}},
+            {
+                "url": "https://mcp.example.test/mcp",
+                "auth": "oauth",
+                "oauth": {"timeout": 3600, "redirect_port": 27891},
+            },
         )
     assert seen["connect_timeout"] == 3615.0
 
@@ -44,7 +47,9 @@ def test_probe_timeout_names_server_and_knobs(monkeypatch):
 
     monkeypatch.setattr("tools.mcp_tool_discovery._connect_server", _hang)
     with pytest.raises(TimeoutError) as info:
-        mc._probe_single_server("hangsrv", {"url": "https://mcp.example.test/mcp"}, connect_timeout=0.2)
+        mc._probe_single_server(
+            "hangsrv", {"url": "https://mcp.example.test/mcp"}, connect_timeout=0.2
+        )
     message = str(info.value)
     assert "hangsrv" in message and "timed out" in message
     assert "connect_timeout" in message and "oauth.timeout" in message

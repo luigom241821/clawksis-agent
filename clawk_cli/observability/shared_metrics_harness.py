@@ -57,7 +57,10 @@ def _background_tool_call() -> bool:
 
 def _user_agent(agent: Any) -> bool:
     """The review/curator forks tag themselves with the background write origin."""
-    return agent is not None and getattr(agent, "_memory_write_origin", None) != _BACKGROUND_ORIGIN
+    return (
+        agent is not None
+        and getattr(agent, "_memory_write_origin", None) != _BACKGROUND_ORIGIN
+    )
 
 
 def _route(agent: Any) -> dict[str, str]:
@@ -68,6 +71,7 @@ def _route(agent: Any) -> dict[str, str]:
 
 # ---- file edits ------------------------------------------------------------------------------
 
+
 @dataclass
 class _EditProbe:
     """What the fuzzy matcher saw during one edit tool call (several hunks for V4A)."""
@@ -77,7 +81,8 @@ class _EditProbe:
 
 
 _EDIT_PROBE: contextvars.ContextVar[_EditProbe | None] = contextvars.ContextVar(
-    "shared_metrics_edit_probe", default=None,
+    "shared_metrics_edit_probe",
+    default=None,
 )
 
 
@@ -103,12 +108,16 @@ def _strategy_rank() -> dict[str, int]:
 _EDIT_MODES = {"replace": "replace", "patch": "v4a", "whole_file": "whole_file"}
 
 
-def file_edit_fields(*, tool: str, mode: Any, result: Any, probe: _EditProbe) -> dict[str, str]:
+def file_edit_fields(
+    *, tool: str, mode: Any, result: Any, probe: _EditProbe
+) -> dict[str, str]:
     from .shared_metrics_contract import FILE_EDIT_MODES, FILE_EDIT_STRATEGIES
 
     data = _parsed(result)
     # patch results carry ``success``; write_file reports bytes written, or an ``error``.
-    if data.get("success") is True or (data and "success" not in data and not data.get("error")):
+    if data.get("success") is True or (
+        data and "success" not in data and not data.get("error")
+    ):
         outcome = "already_applied" if data.get("no_change") is True else "applied"
     elif "ambiguous" in probe.misses:
         outcome = "ambiguous"
@@ -143,7 +152,10 @@ def record_file_edit(tool: str, mode: str, call: Callable[[], str]) -> str:
     finally:
         _EDIT_PROBE.reset(token)
     try:
-        _record("FILE_EDIT_MARK", file_edit_fields(tool=tool, mode=mode, result=result, probe=probe))
+        _record(
+            "FILE_EDIT_MARK",
+            file_edit_fields(tool=tool, mode=mode, result=result, probe=probe),
+        )
     except Exception:
         logger.debug("Shared-metrics file edit not recorded", exc_info=True)
     return result
@@ -161,6 +173,7 @@ def _parsed(result: Any) -> dict[str, Any]:
 
 # ---- terminal command outcomes ---------------------------------------------------------------
 
+
 def _kinds(kind: str, *names: str) -> dict[str, str]:
     return dict.fromkeys(names, kind)
 
@@ -168,45 +181,207 @@ def _kinds(kind: str, *names: str) -> dict[str, str]:
 _COMMAND_KINDS: dict[str, str] = {
     **_kinds("git", "git", "gh", "hub", "git-lfs", "tig"),
     **_kinds(
-        "package_manager", "pip", "pip3", "uv", "uvx", "poetry", "pipx", "conda", "mamba", "micromamba",
-        "npm", "pnpm", "yarn", "apt", "apt-get", "brew", "dnf", "yum", "pacman", "apk", "gem", "bundle",
-        "composer", "nix", "snap", "choco", "winget", "port",
+        "package_manager",
+        "pip",
+        "pip3",
+        "uv",
+        "uvx",
+        "poetry",
+        "pipx",
+        "conda",
+        "mamba",
+        "micromamba",
+        "npm",
+        "pnpm",
+        "yarn",
+        "apt",
+        "apt-get",
+        "brew",
+        "dnf",
+        "yum",
+        "pacman",
+        "apk",
+        "gem",
+        "bundle",
+        "composer",
+        "nix",
+        "snap",
+        "choco",
+        "winget",
+        "port",
     ),
     **_kinds(
-        "build", "make", "cmake", "ninja", "cargo", "go", "gradle", "gradlew", "mvn", "bazel", "meson",
-        "gcc", "g++", "cc", "clang", "clang++", "rustc", "javac", "tsc", "dotnet", "msbuild", "scons",
-        "swift", "xcodebuild", "zig",
+        "build",
+        "make",
+        "cmake",
+        "ninja",
+        "cargo",
+        "go",
+        "gradle",
+        "gradlew",
+        "mvn",
+        "bazel",
+        "meson",
+        "gcc",
+        "g++",
+        "cc",
+        "clang",
+        "clang++",
+        "rustc",
+        "javac",
+        "tsc",
+        "dotnet",
+        "msbuild",
+        "scons",
+        "swift",
+        "xcodebuild",
+        "zig",
     ),
     **_kinds(
-        "test_runner", "pytest", "py.test", "tox", "nox", "jest", "vitest", "mocha", "rspec", "phpunit",
-        "ctest", "playwright",
+        "test_runner",
+        "pytest",
+        "py.test",
+        "tox",
+        "nox",
+        "jest",
+        "vitest",
+        "mocha",
+        "rspec",
+        "phpunit",
+        "ctest",
+        "playwright",
     ),
     **_kinds("python", "python", "python3", "ipython", "pypy", "pypy3"),
     **_kinds("node", "node", "npx", "deno", "bun", "ts-node", "tsx", "nodejs"),
     **_kinds(
-        "shell_builtin", "cd", "echo", "export", "source", ".", "set", "unset", "pwd", "printf", "test",
-        "[", "[[", "true", "false", "exit", "alias", "read", "eval", "type", "hash", "ulimit", "umask",
-        "wait", "pushd", "popd", "shopt", "trap", "declare", "local", "if", "for", "while", "case", "{",
+        "shell_builtin",
+        "cd",
+        "echo",
+        "export",
+        "source",
+        ".",
+        "set",
+        "unset",
+        "pwd",
+        "printf",
+        "test",
+        "[",
+        "[[",
+        "true",
+        "false",
+        "exit",
+        "alias",
+        "read",
+        "eval",
+        "type",
+        "hash",
+        "ulimit",
+        "umask",
+        "wait",
+        "pushd",
+        "popd",
+        "shopt",
+        "trap",
+        "declare",
+        "local",
+        "if",
+        "for",
+        "while",
+        "case",
+        "{",
     ),
-    **_kinds("shell", "bash", "sh", "zsh", "dash", "fish", "ksh", "pwsh", "powershell", "cmd"),
     **_kinds(
-        "file_ops", "ls", "cat", "head", "tail", "cp", "mv", "rm", "mkdir", "rmdir", "touch", "find",
-        "grep", "egrep", "rg", "sed", "awk", "chmod", "chown", "ln", "du", "df", "tree", "wc", "sort",
-        "uniq", "diff", "tar", "zip", "unzip", "gzip", "gunzip", "fd", "stat", "file", "less", "more",
-        "realpath", "readlink", "basename", "dirname", "cut", "tr", "xargs", "tee", "jq", "patch",
-        "md5sum", "sha256sum", "truncate", "which",
+        "shell", "bash", "sh", "zsh", "dash", "fish", "ksh", "pwsh", "powershell", "cmd"
     ),
     **_kinds(
-        "network", "curl", "wget", "ssh", "scp", "rsync", "ping", "nc", "dig", "nslookup", "http", "telnet",
-        "sftp", "ftp", "traceroute",
+        "file_ops",
+        "ls",
+        "cat",
+        "head",
+        "tail",
+        "cp",
+        "mv",
+        "rm",
+        "mkdir",
+        "rmdir",
+        "touch",
+        "find",
+        "grep",
+        "egrep",
+        "rg",
+        "sed",
+        "awk",
+        "chmod",
+        "chown",
+        "ln",
+        "du",
+        "df",
+        "tree",
+        "wc",
+        "sort",
+        "uniq",
+        "diff",
+        "tar",
+        "zip",
+        "unzip",
+        "gzip",
+        "gunzip",
+        "fd",
+        "stat",
+        "file",
+        "less",
+        "more",
+        "realpath",
+        "readlink",
+        "basename",
+        "dirname",
+        "cut",
+        "tr",
+        "xargs",
+        "tee",
+        "jq",
+        "patch",
+        "md5sum",
+        "sha256sum",
+        "truncate",
+        "which",
     ),
     **_kinds(
-        "container", "docker", "podman", "kubectl", "docker-compose", "helm", "nerdctl", "minikube", "kind",
-        "k9s", "apptainer", "singularity",
+        "network",
+        "curl",
+        "wget",
+        "ssh",
+        "scp",
+        "rsync",
+        "ping",
+        "nc",
+        "dig",
+        "nslookup",
+        "http",
+        "telnet",
+        "sftp",
+        "ftp",
+        "traceroute",
+    ),
+    **_kinds(
+        "container",
+        "docker",
+        "podman",
+        "kubectl",
+        "docker-compose",
+        "helm",
+        "nerdctl",
+        "minikube",
+        "kind",
+        "k9s",
+        "apptainer",
+        "singularity",
     ),
 }
 # Prefixes that only change how the real program runs; the program after them is the kind.
-_COMMAND_WRAPPERS = frozenset({"sudo", "env", "time", "nohup", "exec", "command", "builtin", "nice", "stdbuf"})
+_COMMAND_WRAPPERS = frozenset(
+    {"sudo", "env", "time", "nohup", "exec", "command", "builtin", "nice", "stdbuf"}
+)
 _TOKEN_RE = re.compile(r"\s*([^\s;|&()<>]+)")
 _ASSIGNMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 _PYTHON_RE = re.compile(r"python\d+(\.\d+)?")
@@ -226,7 +401,11 @@ def command_kind(command: Any) -> str:
             return "other"
         position = match.end()
         word = match.group(1).strip("'\"")
-        if _ASSIGNMENT_RE.match(word) or word.lower() in _COMMAND_WRAPPERS or word.startswith("-"):
+        if (
+            _ASSIGNMENT_RE.match(word)
+            or word.lower() in _COMMAND_WRAPPERS
+            or word.startswith("-")
+        ):
             continue  # env assignments, wrappers and their flags (``sudo -E``)
         name = word.rsplit("/", 1)[-1].lower()
         if name in _COMMAND_KINDS:
@@ -257,7 +436,9 @@ def terminal_outcome(result: Any) -> str | None:
     return "killed" if code < 0 or code in _KILLED_STATUSES else "nonzero"
 
 
-def terminal_outcome_fields(*, command: Any, backend: Any, outcome: str) -> dict[str, str]:
+def terminal_outcome_fields(
+    *, command: Any, backend: Any, outcome: str
+) -> dict[str, str]:
     from .shared_metrics_contract import TERMINAL_BACKENDS
 
     backend_value = str(backend or "").strip().lower()
@@ -268,7 +449,9 @@ def terminal_outcome_fields(*, command: Any, backend: Any, outcome: str) -> dict
     }
 
 
-def record_terminal_outcome(command: Any, backend: Any, result: Any = None, *, outcome: str | None = None) -> None:
+def record_terminal_outcome(
+    command: Any, backend: Any, result: Any = None, *, outcome: str | None = None
+) -> None:
     """Count one foreground terminal command that reached an exit status (or Clawksis' deadline).
     Commands handed to the background, refused by a guard, or whose backend failed never ran to
     an exit status and are not counted here (``clawk.execution_backend.count`` covers them)."""
@@ -282,12 +465,16 @@ def record_terminal_outcome(command: Any, backend: Any, result: Any = None, *, o
         resolved = outcome or terminal_outcome(result)
         if resolved is None:
             return
-        _record("TERMINAL_OUTCOME_MARK", terminal_outcome_fields(command=command, backend=backend, outcome=resolved))
+        _record(
+            "TERMINAL_OUTCOME_MARK",
+            terminal_outcome_fields(command=command, backend=backend, outcome=resolved),
+        )
     except Exception:
         logger.debug("Shared-metrics terminal outcome not recorded", exc_info=True)
 
 
 # ---- per-turn agent state (loop guards, recovery) -----------------------------------------------
+
 
 @dataclass
 class _TurnState:
@@ -313,12 +500,23 @@ def _active(agent: Any) -> bool:
 # ---- loop guards -----------------------------------------------------------------------------
 
 _GUARD_DETECTORS = {
-    **dict.fromkeys(("repeated_exact_failure_block", "repeated_exact_failure_warning"), "exact_failure"),
-    **dict.fromkeys(("idempotent_no_progress_block", "idempotent_no_progress_warning"), "idempotent_no_progress"),
-    **dict.fromkeys(("same_tool_failure_halt", "same_tool_failure_warning"), "same_tool_failure"),
-    "identical_call_streak_halt": "identical_call_streak", "identical_call_streak": "identical_call_streak",
-    "identical_cycle_halt": "identical_cycle", "identical_cycle": "identical_cycle",
-    "loop_web_search_cap": "web_search_cap", "loop_subagent_cap": "subagent_cap",
+    **dict.fromkeys(
+        ("repeated_exact_failure_block", "repeated_exact_failure_warning"),
+        "exact_failure",
+    ),
+    **dict.fromkeys(
+        ("idempotent_no_progress_block", "idempotent_no_progress_warning"),
+        "idempotent_no_progress",
+    ),
+    **dict.fromkeys(
+        ("same_tool_failure_halt", "same_tool_failure_warning"), "same_tool_failure"
+    ),
+    "identical_call_streak_halt": "identical_call_streak",
+    "identical_call_streak": "identical_call_streak",
+    "identical_cycle_halt": "identical_cycle",
+    "identical_cycle": "identical_cycle",
+    "loop_web_search_cap": "web_search_cap",
+    "loop_subagent_cap": "subagent_cap",
 }
 
 
@@ -327,7 +525,9 @@ def _record_guard(agent: Any, signal: str, detector: str) -> None:
     if (signal, detector) in state.guard_signals:
         return  # a detector that keeps firing is one stuck turn, not N
     state.guard_signals.add((signal, detector))
-    _record("LOOP_GUARD_MARK", {**_route(agent), "detector": detector, "signal": signal})
+    _record(
+        "LOOP_GUARD_MARK", {**_route(agent), "detector": detector, "signal": signal}
+    )
 
 
 def record_guardrail_decision(agent: Any, action: Any, code: Any) -> None:
@@ -336,7 +536,11 @@ def record_guardrail_decision(agent: Any, action: Any, code: Any) -> None:
     Once per turn per detector and signal."""
     try:
         detector = _GUARD_DETECTORS.get(str(code or ""))
-        signal = {"warn": "repeated_tool_call", "block": "loop_detected", "halt": "loop_detected"}.get(str(action or ""))
+        signal = {
+            "warn": "repeated_tool_call",
+            "block": "loop_detected",
+            "halt": "loop_detected",
+        }.get(str(action or ""))
         if detector is None or signal is None or not _active(agent):
             return
         _record_guard(agent, signal, detector)
@@ -344,7 +548,9 @@ def record_guardrail_decision(agent: Any, action: Any, code: Any) -> None:
         logger.debug("Shared-metrics loop guard not recorded", exc_info=True)
 
 
-def record_guardrail_warnings(agent: Any, decision: Any, stall_kind: str | None) -> None:
+def record_guardrail_warnings(
+    agent: Any, decision: Any, stall_kind: str | None
+) -> None:
     """The warnings one tool result carried: a guardrail ``warn`` verdict and/or an identical-call
     stall notice (``stall_kind`` names its detector)."""
     if getattr(decision, "action", None) == "warn":
@@ -358,6 +564,7 @@ _BUDGET_EXIT_PREFIXES = ("budget_exhausted", "max_iterations_reached(")
 
 # ---- recovery after a tool error -------------------------------------------------------------
 
+
 def _tool_name(name: Any) -> str:
     from .shared_metrics_contract import tool_metric_name
 
@@ -368,15 +575,25 @@ def observe_tool_outcome(agent: Any, tool_name: Any, is_error: bool) -> None:
     """Every committed tool result of the current round, in the model's emission order."""
     try:
         if _active(agent):
-            _turn_state(agent).round_outcomes.append((str(tool_name or ""), bool(is_error)))
+            _turn_state(agent).round_outcomes.append(
+                (str(tool_name or ""), bool(is_error))
+            )
     except Exception:
         logger.debug("Shared-metrics tool outcome not observed", exc_info=True)
 
 
-def _record_recovery(agent: Any, route: dict[str, str], tool: str, next_tool: str, next_outcome: str) -> None:
-    _record("TOOL_RECOVERY_MARK", {
-        **route, "next_outcome": next_outcome, "next_tool": next_tool, "tool": _tool_name(tool),
-    })
+def _record_recovery(
+    agent: Any, route: dict[str, str], tool: str, next_tool: str, next_outcome: str
+) -> None:
+    _record(
+        "TOOL_RECOVERY_MARK",
+        {
+            **route,
+            "next_outcome": next_outcome,
+            "next_tool": next_tool,
+            "tool": _tool_name(tool),
+        },
+    )
 
 
 def finish_tool_round(agent: Any) -> None:
@@ -396,14 +613,25 @@ def finish_tool_round(agent: Any) -> None:
                 same = next((failed for name, failed in outcomes if name == tool), None)
                 failed = outcomes[0][1] if same is None else same
                 _record_recovery(
-                    agent, route, tool, "different" if same is None else "same", "error" if failed else "success",
+                    agent,
+                    route,
+                    tool,
+                    "different" if same is None else "same",
+                    "error" if failed else "success",
                 )
         state.pending_errors = [name for name, failed in outcomes if failed]
     except Exception:
         logger.debug("Shared-metrics tool recovery not recorded", exc_info=True)
 
 
-def finish_turn(agent: Any, turn_exit_reason: Any, final_response: Any, *, interrupted: Any, failed: Any) -> None:
+def finish_turn(
+    agent: Any,
+    turn_exit_reason: Any,
+    final_response: Any,
+    *,
+    interrupted: Any,
+    failed: Any,
+) -> None:
     """Turn end: the iteration cap, and failed calls the model never followed with another
     call — ``no_tool_call`` when it answered in text, ``gave_up`` when the turn ended without a
     reply from it (halted, budget spent, interrupted, errored)."""
@@ -418,18 +646,27 @@ def finish_turn(agent: Any, turn_exit_reason: Any, final_response: Any, *, inter
         if not pending:
             return
         answered = (
-            reason.startswith("text_response(") and bool(final_response) and not interrupted and not failed
+            reason.startswith("text_response(")
+            and bool(final_response)
+            and not interrupted
+            and not failed
         )
         route = _route(agent)
         for tool in pending:
-            _record_recovery(agent, route, tool, "none", "no_tool_call" if answered else "gave_up")
+            _record_recovery(
+                agent, route, tool, "none", "no_tool_call" if answered else "gave_up"
+            )
     except Exception:
         logger.debug("Shared-metrics turn end not recorded", exc_info=True)
 
 
 # ---- model reply issues ------------------------------------------------------------------------
 
-_FINISH_ISSUES = {"content_filter": "refusal", "length": "truncated_length", "incomplete": "truncated_length"}
+_FINISH_ISSUES = {
+    "content_filter": "refusal",
+    "length": "truncated_length",
+    "incomplete": "truncated_length",
+}
 
 
 def record_reply_finish(agent: Any, response: Any, finish_reason: Any) -> None:
@@ -451,7 +688,11 @@ def reply_content_issue(agent: Any, assistant_message: Any) -> str:
     if getattr(assistant_message, "tool_calls", None):
         return "none"
     content = getattr(assistant_message, "content", None)
-    if isinstance(content, str) and content.strip() and agent._has_content_after_think_block(content):
+    if (
+        isinstance(content, str)
+        and content.strip()
+        and agent._has_content_after_think_block(content)
+    ):
         return "none"
     return "reasoning_only" if agent._extract_reasoning(assistant_message) else "empty"
 
@@ -466,6 +707,9 @@ def record_reply_content(agent: Any, response: Any, assistant_message: Any) -> N
         if getattr(agent, "_harness_metrics_reply", None) is response:
             agent._harness_metrics_reply = None  # already counted at the finish reason
             return
-        _record("MODEL_REPLY_ISSUE_MARK", {**_route(agent), "issue": reply_content_issue(agent, assistant_message)})
+        _record(
+            "MODEL_REPLY_ISSUE_MARK",
+            {**_route(agent), "issue": reply_content_issue(agent, assistant_message)},
+        )
     except Exception:
         logger.debug("Shared-metrics reply content not recorded", exc_info=True)

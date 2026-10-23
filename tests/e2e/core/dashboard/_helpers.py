@@ -36,21 +36,51 @@ from . import _reaper
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 TOKEN_HEADER = "X-Clawksis-Session-Token"
-PROVIDER_KEY_ENV = "DASH_PROVIDER_KEY"  # same NAME in every profile's .env, distinct VALUE
+PROVIDER_KEY_ENV = (
+    "DASH_PROVIDER_KEY"  # same NAME in every profile's .env, distinct VALUE
+)
 
-_STRIP_SUFFIXES = ("_API_KEY", "_TOKEN", "_BASE_URL", "_SECRET", "_ACCESS_KEY", "_KEY_ID", "_KEY")
-_STRIP_PREFIXES = ("CLAWK_", "OPENAI", "ANTHROPIC", "OPENROUTER", "AWS_", "AZURE_", "GOOGLE_", "GEMINI",
-                   "PYTEST_", "NOUS_", "XAI_", "LLM_", "CUSTOM_", "TERMINAL_", "DASH_")
+_STRIP_SUFFIXES = (
+    "_API_KEY",
+    "_TOKEN",
+    "_BASE_URL",
+    "_SECRET",
+    "_ACCESS_KEY",
+    "_KEY_ID",
+    "_KEY",
+)
+_STRIP_PREFIXES = (
+    "CLAWK_",
+    "OPENAI",
+    "ANTHROPIC",
+    "OPENROUTER",
+    "AWS_",
+    "AZURE_",
+    "GOOGLE_",
+    "GEMINI",
+    "PYTEST_",
+    "NOUS_",
+    "XAI_",
+    "LLM_",
+    "CUSTOM_",
+    "TERMINAL_",
+    "DASH_",
+)
 _TOKEN_RE = re.compile(r'__CLAWK_SESSION_TOKEN__\s*=\s*"([^"]+)"')
 _READY_RE = re.compile(r"CLAWK_DASHBOARD_READY port=(\d+)")
 
 
 def real_user_home() -> Path:
     import pwd
-    return Path(pwd.getpwuid(os.getuid()).pw_dir).resolve()  # windows-footgun: ok — Linux-only suite, never reached on Windows
+
+    return Path(
+        pwd.getpwuid(os.getuid()).pw_dir
+    ).resolve()  # windows-footgun: ok — Linux-only suite, never reached on Windows
 
 
-def poll(pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05) -> Any:
+def poll(
+    pred: Callable[[], Any], timeout: float, what: str, interval: float = 0.05
+) -> Any:
     deadline = time.monotonic() + timeout
     while True:
         got = pred()
@@ -70,12 +100,28 @@ def free_port() -> int:
 def hermetic_env(home: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
     """Child env: fake HOME (profile-root anchor) + CLAWK_HOME under it, nothing credential-shaped."""
     home = home.resolve()
-    assert home != real_user_home() and not str(home).startswith(str(real_user_home() / ".clawk" / "profiles")), home
-    env = {k: v for k, v in os.environ.items()
-           if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))}
-    for var in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy",
-                "XDG_STATE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
-                "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"):
+    assert home != real_user_home() and not str(home).startswith(
+        str(real_user_home() / ".clawk" / "profiles")
+    ), home
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not (k.endswith(_STRIP_SUFFIXES) or k.startswith(_STRIP_PREFIXES))
+    }
+    for var in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "XDG_STATE_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_RUNTIME_DIR",
+    ):
         env.pop(var, None)
     env.update(
         HOME=str(home),
@@ -123,10 +169,17 @@ class Profile:
         return self.home / "state.db"
 
     def canaries(self) -> dict[str, str]:
-        return {"provider_key": self.provider_key, "model": self.model, "marker": self.marker}
+        return {
+            "provider_key": self.provider_key,
+            "model": self.model,
+            "marker": self.marker,
+        }
 
     def config(self) -> dict[str, Any]:
-        return yaml.safe_load((self.home / "config.yaml").read_text(encoding="utf-8")) or {}
+        return (
+            yaml.safe_load((self.home / "config.yaml").read_text(encoding="utf-8"))
+            or {}
+        )
 
 
 @dataclass
@@ -163,19 +216,28 @@ class Sandbox:
                 self._released = True
                 _reaper.release_orphans()
         if leaks:
-            raise SandboxLeak(f"{len(leaks)} sandbox process(es) outlived the test by "
-                              f"{_reaper.REAP_TIMEOUT:.0f}s and were killed:\n  " + "\n  ".join(leaks))
-
+            raise SandboxLeak(
+                f"{len(leaks)} sandbox process(es) outlived the test by "
+                f"{_reaper.REAP_TIMEOUT:.0f}s and were killed:\n  " + "\n  ".join(leaks)
+            )
 
     def _stop_gateways(self) -> None:
         """Under the attach model a TUI starts the gateway daemon (setsid, outside the dashboard's
         process group), which outlives its viewer by design: stop it the way a user would."""
-        for home in (self.clawk_home, *sorted((self.clawk_home / "profiles").glob("*"))):
+        for home in (
+            self.clawk_home,
+            *sorted((self.clawk_home / "profiles").glob("*")),
+        ):
             if (home / "gateway.pid").exists():
                 with contextlib.suppress(Exception):
-                    subprocess.run([sys.executable, "-m", "clawk_cli.main", "gateway", "stop"],
-                                   env=self.env({"CLAWK_HOME": str(home)}), cwd=str(self.home),
-                                   capture_output=True, timeout=60, check=False)
+                    subprocess.run(
+                        [sys.executable, "-m", "clawk_cli.main", "gateway", "stop"],
+                        env=self.env({"CLAWK_HOME": str(home)}),
+                        cwd=str(self.home),
+                        capture_output=True,
+                        timeout=60,
+                        check=False,
+                    )
 
 
 class SandboxLeak(AssertionError):
@@ -186,16 +248,25 @@ def write_profile_home(p: Profile, extra_config: dict[str, Any] | None = None) -
     assert p.srv is not None
     p.home.mkdir(parents=True, exist_ok=True)
     cfg: dict[str, Any] = {
-        "model": {"provider": "custom", "base_url": p.srv.base_url, "default": p.model,
-                  "key_env": PROVIDER_KEY_ENV, "context_length": 128000},
+        "model": {
+            "provider": "custom",
+            "base_url": p.srv.base_url,
+            "default": p.model,
+            "key_env": PROVIDER_KEY_ENV,
+            "context_length": 128000,
+        },
         "agent": {"api_max_retries": 1},
         "compression": {"enabled": False},
         "updates": {"check": False},
         "dash_canary": {"marker": p.marker},
     }
     cfg.update(extra_config or {})
-    (p.home / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
-    (p.home / ".env").write_text(f"{PROVIDER_KEY_ENV}={p.provider_key}\n", encoding="utf-8")
+    (p.home / "config.yaml").write_text(
+        yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8"
+    )
+    (p.home / ".env").write_text(
+        f"{PROVIDER_KEY_ENV}={p.provider_key}\n", encoding="utf-8"
+    )
 
 
 def _select_test_dependencies(sb: Sandbox) -> None:
@@ -204,8 +275,11 @@ def _select_test_dependencies(sb: Sandbox) -> None:
     select_test_dependencies(sb.clawk_home, REPO_ROOT)
 
 
-def make_sandbox(root: Path, names: tuple[str, ...] = ("default",),
-                 responder: Callable[[Profile], Any] | None = None) -> Sandbox:
+def make_sandbox(
+    root: Path,
+    names: tuple[str, ...] = ("default",),
+    responder: Callable[[Profile], Any] | None = None,
+) -> Sandbox:
     """Launch profile at HOME/.clawk, the rest under profiles/<name>; each owns a started provider
     that accepts only its own key, so every recorded request proves WHO sent it."""
     clawk_home = root / "home" / ".clawk"
@@ -215,7 +289,9 @@ def make_sandbox(root: Path, names: tuple[str, ...] = ("default",),
         home = clawk_home if name == "default" else clawk_home / "profiles" / name
         p = Profile(name=name, home=home)
         script = responder(p) if responder else None
-        p.srv = FakeLLMServer(script, default_text=f"reply-from-{p.name}-{p.tag}", api_key=p.provider_key)
+        p.srv = FakeLLMServer(
+            script, default_text=f"reply-from-{p.name}-{p.tag}", api_key=p.provider_key
+        )
         p.srv.start()
         write_profile_home(p)
         profiles[name] = p
@@ -225,20 +301,32 @@ def make_sandbox(root: Path, names: tuple[str, ...] = ("default",),
     (root / "web_dist").mkdir(exist_ok=True)
     (root / "web_dist" / "index.html").write_text(
         "<!doctype html><html><head><title>clawk</title></head><body><div id=root></div></body></html>",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     return sb
 
 
 def _assert_profiles_root_under(sb: Sandbox) -> None:
     """The profile root is HOME-anchored: prove it resolves inside the sandbox before any write."""
     probe = subprocess.run(
-        [sys.executable, "-c", "from clawk_cli.profiles import _get_profiles_root as r; print(r())"],
-        env=sb.env(), cwd=str(sb.home), capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+        [
+            sys.executable,
+            "-c",
+            "from clawk_cli.profiles import _get_profiles_root as r; print(r())",
+        ],
+        env=sb.env(),
+        cwd=str(sb.home),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        stdin=subprocess.DEVNULL,
         check=False,
     )
     assert probe.returncode == 0, probe.stderr[-2000:]
     got = Path(probe.stdout.strip().splitlines()[-1]).resolve()
-    assert str(got).startswith(str(sb.root.resolve())), f"profiles root escaped the sandbox: {got}"
+    assert str(got).startswith(str(sb.root.resolve())), (
+        f"profiles root escaped the sandbox: {got}"
+    )
 
 
 # The dashboard process -----------------------------------------------------------------------------
@@ -246,7 +334,9 @@ def _assert_profiles_root_under(sb: Sandbox) -> None:
 
 def kill_group(proc: subprocess.Popen, sig: int | None = None) -> None:
     try:
-        os.killpg(proc.pid, signal.SIGKILL if sig is None else sig)  # windows-footgun: ok — Linux-only suite, never reached on Windows
+        os.killpg(
+            proc.pid, signal.SIGKILL if sig is None else sig
+        )  # windows-footgun: ok — Linux-only suite, never reached on Windows
     except (ProcessLookupError, PermissionError):
         pass
 
@@ -254,17 +344,39 @@ def kill_group(proc: subprocess.Popen, sig: int | None = None) -> None:
 class Dashboard:
     """``clawk dashboard`` bound to 127.0.0.1:<ephemeral>, token scraped from index.html."""
 
-    def __init__(self, sb: Sandbox, log_path: Path, extra_env: dict[str, str] | None = None,
-                 argv: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        sb: Sandbox,
+        log_path: Path,
+        extra_env: dict[str, str] | None = None,
+        argv: tuple[str, ...] = (),
+    ) -> None:
         self.sb = sb
         self.log_path = log_path
         self._log = open(log_path, "a", encoding="utf-8")
         env = sb.env({"CLAWK_WEB_DIST": str(sb.root / "web_dist"), **(extra_env or {})})
         self.proc = subprocess.Popen(
-            [sys.executable, "-m", "clawk_cli.main", "dashboard", "--no-open", "--skip-build",
-             "--host", "127.0.0.1", "--port", "0", *argv],
-            cwd=str(sb.home), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True,
+            [
+                sys.executable,
+                "-m",
+                "clawk_cli.main",
+                "dashboard",
+                "--no-open",
+                "--skip-build",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "0",
+                *argv,
+            ],
+            cwd=str(sb.home),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            start_new_session=True,
         )
         port_box: list[int] = []
 
@@ -276,15 +388,23 @@ class Dashboard:
                 m = _READY_RE.search(line)
                 if m and not port_box:
                     port_box.append(int(m.group(1)))
+
         threading.Thread(target=pump, daemon=True, name="dash-stdout").start()
-        self.port = poll(lambda: port_box[0] if port_box else (self.proc.poll() is not None and -1), 120,
-                         "clawk dashboard to report its port")
-        assert self.port > 0, f"clawk dashboard exited rc={self.proc.returncode}:\n{self.log_tail()}"
+        self.port = poll(
+            lambda: port_box[0] if port_box else (self.proc.poll() is not None and -1),
+            120,
+            "clawk dashboard to report its port",
+        )
+        assert self.port > 0, (
+            f"clawk dashboard exited rc={self.proc.returncode}:\n{self.log_tail()}"
+        )
         self.base = f"http://127.0.0.1:{self.port}"
         self.http = httpx.Client(base_url=self.base, timeout=60.0, trust_env=False)
         index = self.http.get("/")
         m = _TOKEN_RE.search(index.text)
-        assert index.status_code == 200 and m, f"index.html carried no session token: {index.status_code}"
+        assert index.status_code == 200 and m, (
+            f"index.html carried no session token: {index.status_code}"
+        )
         self.token = m.group(1)
 
     def log_tail(self, n: int = 4000) -> str:
@@ -294,7 +414,9 @@ class Dashboard:
             return ""
 
     # REST with the SPA's credential
-    def request(self, method: str, path: str, profile: str | None = None, **kw: Any) -> httpx.Response:
+    def request(
+        self, method: str, path: str, profile: str | None = None, **kw: Any
+    ) -> httpx.Response:
         params = dict(kw.pop("params", None) or {})
         if profile is not None:
             params["profile"] = profile
@@ -303,11 +425,14 @@ class Dashboard:
 
     def ok(self, method: str, path: str, profile: str | None = None, **kw: Any) -> Any:
         r = self.request(method, path, profile, **kw)
-        assert r.status_code == 200, f"{method} {path} profile={profile}: {r.status_code} {r.text[:600]}"
+        assert r.status_code == 200, (
+            f"{method} {path} profile={profile}: {r.status_code} {r.text[:600]}"
+        )
         return r.json()
 
     def ws_url(self, path: str, **query: str | None) -> str:
         from urllib.parse import urlencode
+
         q = urlencode({k: v for k, v in query.items() if v is not None})
         return f"ws://127.0.0.1:{self.port}{path}{'?' + q if q else ''}"
 
@@ -328,8 +453,11 @@ class Dashboard:
 
 def group_members(pgid: int) -> dict[_reaper.Identity, str]:
     """Live members of a process group (the dashboard runs as its own group leader), by identity."""
-    return {(pid, int(fields[19])): _reaper.cmdline(pid)
-            for pid, fields in _reaper.all_stats().items() if int(fields[2]) == pgid}
+    return {
+        (pid, int(fields[19])): _reaper.cmdline(pid)
+        for pid, fields in _reaper.all_stats().items()
+        if int(fields[2]) == pgid
+    }
 
 
 # State readers -------------------------------------------------------------------------------------
@@ -343,11 +471,24 @@ def db_rows(db: Path, sql: str, args: tuple = ()) -> list[tuple]:
         conn.close()
 
 
-def run_py(sb: Sandbox, code: str, *args: str, clawk_home: Path | None = None,
-           timeout: float = 120.0) -> subprocess.CompletedProcess:
+def run_py(
+    sb: Sandbox,
+    code: str,
+    *args: str,
+    clawk_home: Path | None = None,
+    timeout: float = 120.0,
+) -> subprocess.CompletedProcess:
     extra = {"CLAWK_HOME": str(clawk_home)} if clawk_home else None
-    return subprocess.run([sys.executable, "-c", code, *args], env=sb.env(extra), cwd=str(sb.home),
-                          capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL, check=False)
+    return subprocess.run(
+        [sys.executable, "-c", code, *args],
+        env=sb.env(extra),
+        cwd=str(sb.home),
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
 
 
 SEED_SESSIONS = """

@@ -98,14 +98,6 @@ def _build(agent, **overrides):
     return build_turn_context(**kwargs)
 
 
-
-
-
-
-
-
-
-
 def test_true_engine_noop_does_not_defeat_retry_loop_blocking():
     """#64382 interplay: an engine pass that no-ops must not touch the
 
@@ -132,12 +124,6 @@ def test_true_engine_noop_does_not_defeat_retry_loop_blocking():
     assert ctx.conversation_history is history
 
 
-
-
-
-
-
-
 def test_builtin_compressor_default_sub_threshold_path_unchanged(tmp_path):
     """Byte-identical-default pin against the REAL ContextCompressor.
 
@@ -150,9 +136,10 @@ def test_builtin_compressor_default_sub_threshold_path_unchanged(tmp_path):
     from agent.context_engine import ContextEngine
 
     # The default really is False (the dead-code premise of #20316).
-    assert ContextEngine.should_compress_preflight(
-        object.__new__(ContextCompressor), []
-    ) is False
+    assert (
+        ContextEngine.should_compress_preflight(object.__new__(ContextCompressor), [])
+        is False
+    )
 
     with patch(
         "agent.context_compressor.get_model_context_length", return_value=1_000_000

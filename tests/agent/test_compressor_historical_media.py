@@ -38,16 +38,7 @@ TEXT = {"type": "text", "text": "hi"}
 INPUT_TEXT = {"type": "input_text", "text": "hi"}
 
 
-
-
-
-
 class TestStripImagesFromContent:
-
-
-
-
-
     def test_handles_all_three_shapes(self):
         parts = [IMG_URL, INPUT_IMG, ANTHROPIC_IMG, TEXT]
         out = _strip_images_from_content(parts)
@@ -56,15 +47,6 @@ class TestStripImagesFromContent:
 
 
 class TestStripHistoricalMedia:
-
-
-
-
-
-
-
-
-
     def test_strips_stale_tool_result_images_when_no_user_image_exists(self):
         """#89938: vision_analyze results are the only images in the session.
 
@@ -128,7 +110,12 @@ class TestStripHistoricalMedia:
         }
         msgs = [
             {"role": "user", "content": "look"},
-            {"role": "tool", "tool_call_id": "a", "content": dict(env), "api_content": "stale"},
+            {
+                "role": "tool",
+                "tool_call_id": "a",
+                "content": dict(env),
+                "api_content": "stale",
+            },
             {"role": "tool", "tool_call_id": "b", "content": dict(env)},
         ]
         out = _strip_historical_media(msgs)
@@ -210,7 +197,6 @@ class TestStripHistoricalMedia:
         ]
         assert _strip_historical_media(msgs) is msgs
 
-
     def test_stripped_tool_message_drops_its_api_content_sidecar(self):
         """Replaying the sidecar would resend the bytes the strip removed."""
         msgs = [
@@ -246,7 +232,9 @@ class TestCompressIntegration:
 
     @pytest.fixture
     def compressor(self):
-        with patch("agent.context_compressor.get_model_context_length", return_value=100_000):
+        with patch(
+            "agent.context_compressor.get_model_context_length", return_value=100_000
+        ):
             c = ContextCompressor(
                 model="test/model",
                 threshold_percent=0.50,
@@ -261,13 +249,16 @@ class TestCompressIntegration:
         # protect_last_n=2 + a middle window of at least 3 with a summary.
         msgs = [
             {"role": "system", "content": "sys"},
-            {"role": "user", "content": [TEXT, IMG_URL]},           # old image-bearing user
+            {"role": "user", "content": [TEXT, IMG_URL]},  # old image-bearing user
             {"role": "assistant", "content": "looked at it"},
             {"role": "user", "content": "follow-up"},
             {"role": "assistant", "content": "ack"},
             {"role": "user", "content": "more"},
             {"role": "assistant", "content": "ok"},
-            {"role": "user", "content": [TEXT, IMG_URL]},           # newest image-bearing user (tail)
+            {
+                "role": "user",
+                "content": [TEXT, IMG_URL],
+            },  # newest image-bearing user (tail)
             {"role": "assistant", "content": "done"},
         ]
         # Bypass the real LLM summary — return a stub so compress() proceeds.
@@ -275,7 +266,11 @@ class TestCompressIntegration:
             out = compressor.compress(msgs, current_tokens=60_000)
 
         # Newest user turn with image should still have it (it's in the tail).
-        user_imgs = [m for m in out if m.get("role") == "user" and _content_has_images(m.get("content"))]
+        user_imgs = [
+            m
+            for m in out
+            if m.get("role") == "user" and _content_has_images(m.get("content"))
+        ]
         assert len(user_imgs) == 1, (
             "Expected exactly one user message with images after compression "
             f"(the newest one); got {len(user_imgs)}"
@@ -325,13 +320,18 @@ class TestCompressIntegration:
         with patch.object(compressor, "_generate_summary", return_value="SUMMARY TEXT"):
             out = compressor.compress(msgs, current_tokens=60_000)
 
-        with_images = [m for m in out if isinstance(m, dict) and _content_has_images(m.get("content"))]
+        with_images = [
+            m
+            for m in out
+            if isinstance(m, dict) and _content_has_images(m.get("content"))
+        ]
         # Exactly one survivor: the newest vision result. The opening
         # attachment is protect_first_n material and may or may not survive
         # the summary window, so assert on what must NOT be there instead.
         assert len(with_images) <= 2
         stale_tool_images = [
-            m for m in out
+            m
+            for m in out
             if isinstance(m, dict)
             and m.get("role") == "tool"
             and _content_has_images(m.get("content"))

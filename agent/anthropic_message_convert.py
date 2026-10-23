@@ -10,8 +10,14 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from agent.image_eviction_policy import images_all_within_many_image_limit, outbound_image_retire_count
-from agent.anthropic_thinking_policy import anthropic_thinking_route, route_replays_prior_thinking
+from agent.image_eviction_policy import (
+    images_all_within_many_image_limit,
+    outbound_image_retire_count,
+)
+from agent.anthropic_thinking_policy import (
+    anthropic_thinking_route,
+    route_replays_prior_thinking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +25,19 @@ _THINKING_TYPES = frozenset(("thinking", "redacted_thinking"))
 _CACHEABLE_TYPES = frozenset(("text", "tool_use"))
 _EMPTY_TEXT_PLACEHOLDER = "(empty)"
 _EMPTY_SCHEMA = {"type": "object", "properties": {}}
-_BEDROCK_REGION_PREFIXES = ("global.", "us.", "eu.", "apac.", "ap.", "au.", "jp.", "ca.", "sa.", "me.", "af.")
+_BEDROCK_REGION_PREFIXES = (
+    "global.",
+    "us.",
+    "eu.",
+    "apac.",
+    "ap.",
+    "au.",
+    "jp.",
+    "ca.",
+    "sa.",
+    "me.",
+    "af.",
+)
 
 
 def _block_type(b: Any) -> Any:
@@ -34,7 +52,9 @@ def _has_block_type(blocks: list[Any], types) -> bool:
 def _is_blank_text_block(b: Any) -> bool:
     """A text block whose ``text`` is not a non-whitespace string (None/int/blank all count) —
     Anthropic 400s on them ("text content blocks must contain non-whitespace text")."""
-    return _block_type(b) == "text" and not (isinstance(b.get("text"), str) and b["text"].strip())
+    return _block_type(b) == "text" and not (
+        isinstance(b.get("text"), str) and b["text"].strip()
+    )
 
 
 def _cache_control_of(b: Any) -> Optional[dict[str, Any]]:
@@ -72,10 +92,16 @@ def _block_ids(blocks: list[Any], btype: str, key: str) -> set:
 
 def _assistant_block_lists(result: list[dict[str, Any]]):
     """``(index, message)`` for every assistant message whose content is a block list."""
-    return ((i, m) for i, m in enumerate(result) if m.get("role") == "assistant" and isinstance(m.get("content"), list))
+    return (
+        (i, m)
+        for i, m in enumerate(result)
+        if m.get("role") == "assistant" and isinstance(m.get("content"), list)
+    )
 
 
-def _carry_cache_control(out: dict[str, Any], b: Any, *, copy: bool = False) -> dict[str, Any]:
+def _carry_cache_control(
+    out: dict[str, Any], b: Any, *, copy: bool = False
+) -> dict[str, Any]:
     """Carry a dict-valued ``cache_control`` marker from ``b`` onto ``out`` (returned); ``copy``
     shallow-copies it so the caller's dict is never shared with the wire payload."""
     cc = _cache_control_of(b)
@@ -89,7 +115,9 @@ def _split_blank_text_blocks(blocks: list[Any]) -> tuple[list[Any], Any, list[in
     the cache_control of the last one dropped so the caller can relocate the breakpoint."""
     dropped = [i for i, blk in enumerate(blocks) if _is_blank_text_block(blk)]
     kept = [blk for i, blk in enumerate(blocks) if i not in dropped]
-    relocated = [cc for i in dropped if (cc := _cache_control_of(blocks[i])) is not None]
+    relocated = [
+        cc for i in dropped if (cc := _cache_control_of(blocks[i])) is not None
+    ]
     return kept, relocated[-1] if relocated else None, dropped
 
 
@@ -105,8 +133,12 @@ def normalize_model_name(model: str, preserve_dots: bool = False) -> str:
     -> ``claude-opus-4-6``). Bedrock ids keep their namespace dots; non-Anthropic names
     (``gpt-5.4``) keep dots as part of their canonical form."""
     if model.lower().startswith("anthropic/"):
-        model = model[len("anthropic/"):]
-    if not preserve_dots and not _is_bedrock_model_id(model) and model.lower().startswith(("claude-", "anthropic/")):
+        model = model[len("anthropic/") :]
+    if (
+        not preserve_dots
+        and not _is_bedrock_model_id(model)
+        and model.lower().startswith(("claude-", "anthropic/"))
+    ):
         # Only convert dots to hyphens for Anthropic/Claude models. See issue #17171.
         model = model.replace(".", "-")
     return model
@@ -118,7 +150,12 @@ def _sanitize_tool_id(tool_id: str) -> str:
 
 
 def _tool_use_block(tool_id: Any, name: Any, tool_input: Any) -> dict[str, Any]:
-    return {"type": "tool_use", "id": _sanitize_tool_id(tool_id), "name": name, "input": tool_input}
+    return {
+        "type": "tool_use",
+        "id": _sanitize_tool_id(tool_id),
+        "name": name,
+        "input": tool_input,
+    }
 
 
 def _normalize_tool_input_schema(schema: Any) -> dict[str, Any]:
@@ -129,14 +166,18 @@ def _normalize_tool_input_schema(schema: Any) -> dict[str, Any]:
     generic 400, so they are dropped in favour of a plain object."""
     from tools.schema_sanitizer import strip_nullable_unions
 
-    normalized = strip_nullable_unions(schema, keep_nullable_hint=False) if schema else None
+    normalized = (
+        strip_nullable_unions(schema, keep_nullable_hint=False) if schema else None
+    )
     if not isinstance(normalized, dict):
         return dict(_EMPTY_SCHEMA)
     banned = {"oneOf", "allOf", "anyOf"}
     if banned & normalized.keys():
         normalized = {k: v for k, v in normalized.items() if k not in banned}
         normalized.setdefault("type", "object")
-    if normalized.get("type") == "object" and not isinstance(normalized.get("properties"), dict):
+    if normalized.get("type") == "object" and not isinstance(
+        normalized.get("properties"), dict
+    ):
         normalized = {**normalized, "properties": {}}
     return normalized
 
@@ -152,12 +193,16 @@ def convert_tools_to_anthropic(tools: list[dict]) -> list[dict]:
         # Defensive dedup: Anthropic rejects requests with duplicate tool names. Upstream injection paths
         # already dedup, but this guard converts a hard API failure into a warning. See: #18478
         if name and name in seen_names:
-            logger.warning("convert_tools_to_anthropic: duplicate tool name '%s' — dropping second occurrence", name)
+            logger.warning(
+                "convert_tools_to_anthropic: duplicate tool name '%s' — dropping second occurrence",
+                name,
+            )
             continue
         if name:
             seen_names.add(name)
         anthropic_tool: dict[str, Any] = {
-            "name": name, "description": fn.get("description", ""),
+            "name": name,
+            "description": fn.get("description", ""),
             "input_schema": _normalize_tool_input_schema(fn.get("parameters") or {}),
         }
         result.append(_carry_cache_control(anthropic_tool, t, copy=True))
@@ -168,20 +213,32 @@ def _image_block_from_openai_url(url: str) -> dict[str, Any]:
     """OpenAI image URL / data URL -> Anthropic ``image`` block. An inline subtype the API rejects
     (svg+xml, bmp, tiff) 400s every replay once in history: an SVG is rasterized to PNG when a
     rasterizer is installed, anything else unsupported becomes a text placeholder."""
-    from tools.vision_tools_image_prep import rasterize_svg_data_url, unsupported_inline_image_media_type
+    from tools.vision_tools_image_prep import (
+        rasterize_svg_data_url,
+        unsupported_inline_image_media_type,
+    )
+
     url = str(url or "").strip()
     if not url.startswith("data:"):
         return {"type": "image", "source": {"type": "url", "url": url}}
     unsupported = unsupported_inline_image_media_type(url)
-    if unsupported == "image/svg+xml" and (png_url := rasterize_svg_data_url(url)) is not None:
+    if (
+        unsupported == "image/svg+xml"
+        and (png_url := rasterize_svg_data_url(url)) is not None
+    ):
         url, unsupported = png_url, None
     if unsupported is not None:
-        return _text_block(f"[image omitted: {unsupported} is not a supported image format]")
+        return _text_block(
+            f"[image omitted: {unsupported} is not a supported image format]"
+        )
     header, _, data = url.partition(",")
-    mime_part = header[len("data:"):].split(";", 1)[0].strip()
+    mime_part = header[len("data:") :].split(";", 1)[0].strip()
     media_type = mime_part if mime_part.startswith("image/") else "image/jpeg"
     media_type = "image/jpeg" if media_type.lower() == "image/jpg" else media_type
-    return {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}}
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": data},
+    }
 
 
 def _convert_content_part_to_anthropic(part: Any) -> Optional[dict[str, Any]]:
@@ -194,10 +251,16 @@ def _convert_content_part_to_anthropic(part: Any) -> Optional[dict[str, Any]]:
     if ptype in ("input_text", "text"):
         # Rebuild from whitelisted fields only: stored SDK text blocks carry output-only siblings
         # (parsed_output, citations=None) that the INPUT schema rejects with 400.
-        block = _text_block_with_citations(part.get("text", ""), part.get("citations") if ptype == "text" else None)
+        block = _text_block_with_citations(
+            part.get("text", ""), part.get("citations") if ptype == "text" else None
+        )
     elif ptype in {"image_url", "input_image"}:
         image_value = part.get("image_url", {})
-        url = image_value.get("url", "") if isinstance(image_value, dict) else str(image_value or "")
+        url = (
+            image_value.get("url", "")
+            if isinstance(image_value, dict)
+            else str(image_value or "")
+        )
         block = _image_block_from_openai_url(url)
     else:
         block = dict(part)
@@ -247,7 +310,8 @@ def _extract_preserved_thinking_blocks(message: dict[str, Any]) -> list[dict[str
     return [
         copy.deepcopy(d)
         for d in raw_details
-        if isinstance(d, dict) and str(d.get("type", "") or "").strip().lower() in _THINKING_TYPES
+        if isinstance(d, dict)
+        and str(d.get("type", "") or "").strip().lower() in _THINKING_TYPES
     ]
 
 
@@ -255,14 +319,18 @@ def _convert_content_to_anthropic(content: Any) -> Any:
     """Convert an OpenAI multimodal content list to Anthropic blocks (non-lists pass through)."""
     if not isinstance(content, list):
         return content
-    return [b for b in map(_convert_content_part_to_anthropic, content) if b is not None]
+    return [
+        b for b in map(_convert_content_part_to_anthropic, content) if b is not None
+    ]
 
 
 def _content_parts_to_anthropic_blocks(parts: Any) -> list[dict[str, Any]]:
     """Tool-message content parts -> tool_result inner blocks (text + image only, the types
     Anthropic accepts there). Used for multimodal tool results."""
     out: list[dict[str, Any]] = []
-    for block in map(_convert_content_part_to_anthropic, parts if isinstance(parts, list) else []):
+    for block in map(
+        _convert_content_part_to_anthropic, parts if isinstance(parts, list) else []
+    ):
         if not block:
             continue
         btype, text_val, src = block.get("type"), block.get("text"), block.get("source")
@@ -287,7 +355,9 @@ def _replay_text(b: dict[str, Any]) -> Optional[dict[str, Any]]:
     # model-visible noise next to real blocks.
     if _is_blank_text_block(b):
         return None
-    return _carry_cache_control(_text_block_with_citations(b["text"], b.get("citations")), b)
+    return _carry_cache_control(
+        _text_block_with_citations(b["text"], b.get("citations")), b
+    )
 
 
 def _replay_thinking(b: dict[str, Any]) -> dict[str, Any]:
@@ -300,7 +370,9 @@ def _replay_redacted_thinking(b: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 def _replay_tool_use(b: dict[str, Any]) -> dict[str, Any]:
-    return _carry_cache_control(_tool_use_block(b.get("id", ""), b.get("name", ""), b.get("input", {})), b)
+    return _carry_cache_control(
+        _tool_use_block(b.get("id", ""), b.get("name", ""), b.get("input", {})), b
+    )
 
 
 def _replay_image(b: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -309,8 +381,11 @@ def _replay_image(b: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 _REPLAY_SANITIZERS = {
-    "text": _replay_text, "thinking": _replay_thinking, "redacted_thinking": _replay_redacted_thinking,
-    "tool_use": _replay_tool_use, "image": _replay_image,
+    "text": _replay_text,
+    "thinking": _replay_thinking,
+    "redacted_thinking": _replay_redacted_thinking,
+    "tool_use": _replay_tool_use,
+    "image": _replay_image,
 }
 
 
@@ -326,7 +401,9 @@ def _sanitize_replay_block(b: dict[str, Any]) -> Optional[dict[str, Any]]:
     return sanitizer(b) if sanitizer else None
 
 
-def _apply_assistant_cache_control_to_last_cacheable_block(blocks: list[dict[str, Any]], cache_control: Any) -> None:
+def _apply_assistant_cache_control_to_last_cacheable_block(
+    blocks: list[dict[str, Any]], cache_control: Any
+) -> None:
     if not isinstance(cache_control, dict):
         return
     for block in reversed(blocks):
@@ -335,14 +412,18 @@ def _apply_assistant_cache_control_to_last_cacheable_block(blocks: list[dict[str
             break
 
 
-def _replay_ordered_blocks(m: dict[str, Any], ordered_blocks: list[Any]) -> Optional[list[dict[str, Any]]]:
+def _replay_ordered_blocks(
+    m: dict[str, Any], ordered_blocks: list[Any]
+) -> Optional[list[dict[str, Any]]]:
     """Interleaved-thinking replay: rebuild the assistant turn from the verbatim block list
     normalize_response stored (only for turns interleaving SIGNED thinking with tool_use).
     Preserves block ORDER; returns None if nothing survives. tool_use ``input`` is re-sourced from
     ``tool_calls`` (redacted at storage time) rather than the captured block (raw API response, NOT
     redacted), so a secret the model inlined into a tool call never goes back on the wire."""
     redacted_input_by_id = {
-        _sanitize_tool_id(tc.get("id", "")): _parse_tool_args((tc.get("function", {}) or {}).get("arguments", "{}"))
+        _sanitize_tool_id(tc.get("id", "")): _parse_tool_args(
+            (tc.get("function", {}) or {}).get("arguments", "{}")
+        )
         for tc in m.get("tool_calls", []) or []
         if isinstance(tc, dict)
     }
@@ -353,26 +434,37 @@ def _replay_ordered_blocks(m: dict[str, Any], ordered_blocks: list[Any]) -> Opti
         clean = _sanitize_replay_block(b)
         if clean is None:
             dropped_blank_text = dropped_blank_text or _block_type(b) == "text"
-            if (cc := _cache_control_of(b)) is not None:  # relocate a dropped block's breakpoint
+            if (
+                cc := _cache_control_of(b)
+            ) is not None:  # relocate a dropped block's breakpoint
                 relocated_cc = cc
             continue
-        if clean.get("type") == "tool_use" and (redacted := redacted_input_by_id.get(clean.get("id", ""))) is not None:
+        if (
+            clean.get("type") == "tool_use"
+            and (redacted := redacted_input_by_id.get(clean.get("id", ""))) is not None
+        ):
             clean["input"] = redacted
         replayed.append(clean)
     # Nothing cacheable survived (e.g. signed thinking + blank text): emit the placeholder so the
     # turn stays schema-valid and a relocated marker has a carrier.
-    if not _has_block_type(replayed, _CACHEABLE_TYPES) and (dropped_blank_text or relocated_cc is not None):
+    if not _has_block_type(replayed, _CACHEABLE_TYPES) and (
+        dropped_blank_text or relocated_cc is not None
+    ):
         replayed.append(_text_block(_EMPTY_TEXT_PLACEHOLDER))
     if not replayed:
         return None
     _apply_assistant_cache_control_to_last_cacheable_block(replayed, relocated_cc)
-    _apply_assistant_cache_control_to_last_cacheable_block(replayed, m.get("cache_control"))
+    _apply_assistant_cache_control_to_last_cacheable_block(
+        replayed, m.get("cache_control")
+    )
     # prompt_caching marks an assistant turn with text by writing cache_control INTO ``content``
     # (not top-level). This path never reads ``content``, so carry that marker over or the
     # breakpoint is burned rather than relocated.
     msg_content = m.get("content")
     if isinstance(msg_content, list):
-        inline_cc = next((cc for cc in map(_cache_control_of, msg_content) if cc is not None), None)
+        inline_cc = next(
+            (cc for cc in map(_cache_control_of, msg_content) if cc is not None), None
+        )
         _apply_assistant_cache_control_to_last_cacheable_block(replayed, inline_cc)
     return replayed
 
@@ -407,7 +499,9 @@ def _convert_assistant_message(m: dict[str, Any]) -> dict[str, Any]:
     # exactly the blank block).
     relocated_cc = None
     if isinstance(content, list):
-        kept, relocated_cc, _ = _split_blank_text_blocks(_convert_content_to_anthropic(content))
+        kept, relocated_cc, _ = _split_blank_text_blocks(
+            _convert_content_to_anthropic(content)
+        )
         blocks.extend(kept)
     elif content and str(content).strip():
         blocks.append(_text_block(str(content)))
@@ -415,7 +509,13 @@ def _convert_assistant_message(m: dict[str, Any]) -> dict[str, Any]:
         if not tc or not isinstance(tc, dict):
             continue
         fn = tc.get("function", {})
-        blocks.append(_tool_use_block(tc.get("id", ""), fn.get("name", ""), _parse_tool_args(fn.get("arguments", "{}"))))
+        blocks.append(
+            _tool_use_block(
+                tc.get("id", ""),
+                fn.get("name", ""),
+                _parse_tool_args(fn.get("arguments", "{}")),
+            )
+        )
     # Kimi's /coding endpoint requires reasoning_content on replayed tool-call turns — even ""
     # (injected as a fallback upstream). Prepend, since thinking must precede text/tool_use. Skip
     # when reasoning_details already supplied (signed) thinking blocks: a duplicate unsigned one
@@ -423,14 +523,18 @@ def _convert_assistant_message(m: dict[str, Any]) -> dict[str, Any]:
     # See clawksis-agent#13848. Accept empty string "" — _copy_reasoning_content_for_api() injects "" as a
     # tier-3 fallback for Kimi tool-call messages that had no reasoning.
     reasoning_content = m.get("reasoning_content")
-    if isinstance(reasoning_content, str) and not _has_block_type(blocks, _THINKING_TYPES):
+    if isinstance(reasoning_content, str) and not _has_block_type(
+        blocks, _THINKING_TYPES
+    ):
         blocks.insert(0, {"type": "thinking", "thinking": reasoning_content})
     # Empty assistant content is rejected. Fall back ONLY to the placeholder, never to raw
     # ``content`` — that is the unfiltered blank payload just removed. Markers are applied after
     # the fallback so one from a sole dropped blank block lands on the placeholder.
     effective = blocks or [_text_block(_EMPTY_TEXT_PLACEHOLDER)]
     _apply_assistant_cache_control_to_last_cacheable_block(effective, relocated_cc)
-    _apply_assistant_cache_control_to_last_cacheable_block(effective, m.get("cache_control"))
+    _apply_assistant_cache_control_to_last_cacheable_block(
+        effective, m.get("cache_control")
+    )
     return {"role": "assistant", "content": effective}
 
 
@@ -439,7 +543,9 @@ def _tool_result_content(m: dict[str, Any]) -> Any:
     content = m.get("content", "")
     multimodal_blocks: Optional[list[dict[str, Any]]] = None
     if isinstance(content, dict) and content.get("_multimodal"):
-        multimodal_blocks = _content_parts_to_anthropic_blocks(content.get("content") or [])
+        multimodal_blocks = _content_parts_to_anthropic_blocks(
+            content.get("content") or []
+        )
         if not multimodal_blocks and content.get("text_summary"):
             multimodal_blocks = [_text_block(str(content["text_summary"]))]
     elif isinstance(content, list):
@@ -449,24 +555,37 @@ def _tool_result_content(m: dict[str, Any]) -> Any:
     if multimodal_blocks is None:  # back-compat: blocks stashed under a private key
         stashed = m.get("_anthropic_content_blocks")
         if isinstance(stashed, list) and stashed:
-            text_content = content if isinstance(content, str) and content.strip() else None
-            multimodal_blocks = [_text_block(text_content)] + stashed if text_content else list(stashed)
+            text_content = (
+                content if isinstance(content, str) and content.strip() else None
+            )
+            multimodal_blocks = (
+                [_text_block(text_content)] + stashed if text_content else list(stashed)
+            )
     if multimodal_blocks:
         return multimodal_blocks
-    return (content if isinstance(content, str) else json.dumps(content) if content else "") or "(no output)"
+    return (
+        content if isinstance(content, str) else json.dumps(content) if content else ""
+    ) or "(no output)"
 
 
-def _convert_tool_message_to_result(result: list[dict[str, Any]], m: dict[str, Any]) -> None:
+def _convert_tool_message_to_result(
+    result: list[dict[str, Any]], m: dict[str, Any]
+) -> None:
     """Append a tool_result to ``result``, merging into a trailing tool_result user message when
     there is one. Mutates ``result`` in place."""
     tool_result = {
-        "type": "tool_result", "tool_use_id": _sanitize_tool_id(m.get("tool_call_id", "")),
+        "type": "tool_result",
+        "tool_use_id": _sanitize_tool_id(m.get("tool_call_id", "")),
         "content": _tool_result_content(m),
     }
     _carry_cache_control(tool_result, m, copy=True)
     last = result[-1] if result else {}
     last_content = last.get("content") if last.get("role") == "user" else None
-    if isinstance(last_content, list) and last_content and last_content[0].get("type") == "tool_result":
+    if (
+        isinstance(last_content, list)
+        and last_content
+        and last_content[0].get("type") == "tool_result"
+    ):
         last_content.append(tool_result)
     else:
         result.append({"role": "user", "content": [tool_result]})
@@ -476,8 +595,11 @@ def _convert_user_message(content: Any) -> dict[str, Any]:
     """Validate and convert a user message to Anthropic format."""
     if isinstance(content, list):
         content = _fix_blank_text_blocks_in_list(
-            _convert_content_to_anthropic(content), placeholder_text="(empty message)",
-            msg_index=-1, role="user", location="_convert_user_message",
+            _convert_content_to_anthropic(content),
+            placeholder_text="(empty message)",
+            msg_index=-1,
+            role="user",
+            location="_convert_user_message",
         )
     elif not content or (isinstance(content, str) and not content.strip()):
         content = "(empty message)"
@@ -498,15 +620,23 @@ def _strip_orphaned_tool_blocks(result: list[dict[str, Any]]) -> None:
         if i + 1 < len(result):
             nxt = result[i + 1]
             if nxt.get("role") == "user" and isinstance(nxt.get("content"), list):
-                adjacent_result_ids = _block_ids(nxt["content"], "tool_result", "tool_use_id")
+                adjacent_result_ids = _block_ids(
+                    nxt["content"], "tool_result", "tool_use_id"
+                )
         orphaned = tool_use_ids_in_turn - adjacent_result_ids
         if not orphaned:
             continue
-        kept = [b for b in m["content"] if not (_block_type(b) == "tool_use" and b.get("id") in orphaned)]
+        kept = [
+            b
+            for b in m["content"]
+            if not (_block_type(b) == "tool_use" and b.get("id") in orphaned)
+        ]
         # A signed thinking block on this turn was signed against the ORIGINAL content and is now
         # dead (400 "thinking blocks in the latest assistant message cannot be modified"). Flag so
         # _manage_thinking_signatures demotes it.
-        if len(kept) != len(m["content"]) and _has_block_type(m["content"], _THINKING_TYPES):
+        if len(kept) != len(m["content"]) and _has_block_type(
+            m["content"], _THINKING_TYPES
+        ):
             m["_thinking_signature_invalidated"] = True
         m["content"] = kept if kept else [_text_block("(tool call removed)")]
     # Pass 2: tool_result whose tool_use no longer exists anywhere.
@@ -517,10 +647,15 @@ def _strip_orphaned_tool_blocks(result: list[dict[str, Any]]) -> None:
         if m.get("role") != "user" or not isinstance(m.get("content"), list):
             continue
         new_content = [
-            b for b in m["content"] if _block_type(b) != "tool_result" or b.get("tool_use_id") in surviving_tool_use_ids
+            b
+            for b in m["content"]
+            if _block_type(b) != "tool_result"
+            or b.get("tool_use_id") in surviving_tool_use_ids
         ]
         if len(new_content) != len(m["content"]):
-            m["content"] = new_content if new_content else [_text_block("(tool result removed)")]
+            m["content"] = (
+                new_content if new_content else [_text_block("(tool result removed)")]
+            )
 
 
 def _concat_content(prev: Any, curr: Any) -> list[Any]:
@@ -562,11 +697,15 @@ def _keep_valid_thinking(content: list[Any], signature_dead: bool) -> list[Any]:
             new_content.append(b)
             continue
         is_redacted = b.get("type") == "redacted_thinking"
-        signed = b.get("data") if is_redacted else b.get("signature")  # redacted 'data' IS the signature
+        signed = (
+            b.get("data") if is_redacted else b.get("signature")
+        )  # redacted 'data' IS the signature
         if signed and not signature_dead:
             new_content.append(b)
         elif (signature_dead or not is_redacted) and b.get("thinking"):
-            new_content.append(_text_block(b["thinking"]))  # demote to plain text; dataless redacted dropped
+            new_content.append(
+                _text_block(b["thinking"])
+            )  # demote to plain text; dataless redacted dropped
     return new_content
 
 
@@ -579,12 +718,17 @@ def _current_tool_loop_start(result: list[dict[str, Any]]) -> int:
         if m.get("role") != "user":
             continue
         content = m.get("content")
-        if not (isinstance(content, list) and any(_block_type(b) == "tool_result" for b in content)):
+        if not (
+            isinstance(content, list)
+            and any(_block_type(b) == "tool_result" for b in content)
+        ):
             return i + 1
     return 0
 
 
-def _manage_thinking_signatures(result: list[dict[str, Any]], base_url: str | None, model: str | None) -> None:
+def _manage_thinking_signatures(
+    result: list[dict[str, Any]], base_url: str | None, model: str | None
+) -> None:
     """Strip or preserve thinking blocks per endpoint. Mutates ``result`` in place.
 
     Anthropic signs thinking blocks against the full turn; any upstream mutation invalidates them
@@ -597,8 +741,17 @@ def _manage_thinking_signatures(result: list[dict[str, Any]], base_url: str | No
     """
     route = anthropic_thinking_route(base_url, model)
     # The latest assistant turn always keeps its thinking, even once a new user message closes its loop.
-    loop_start = min(_current_tool_loop_start(result),
-                     next((i for i in range(len(result) - 1, -1, -1) if result[i].get("role") == "assistant"), len(result)))
+    loop_start = min(
+        _current_tool_loop_start(result),
+        next(
+            (
+                i
+                for i in range(len(result) - 1, -1, -1)
+                if result[i].get("role") == "assistant"
+            ),
+            len(result),
+        ),
+    )
     preserve_prior = route_replays_prior_thinking(route, model)
     for idx, m in _assistant_block_lists(result):
         if route == "kimi":
@@ -606,20 +759,28 @@ def _manage_thinking_signatures(result: list[dict[str, Any]], base_url: str | No
         elif route == "deepseek":
             # Strip signed (or redacted-with-data), keep unsigned.
             new_content = [
-                b for b in m["content"]
-                if _block_type(b) not in _THINKING_TYPES or not (b.get("signature") or b.get("data"))
+                b
+                for b in m["content"]
+                if _block_type(b) not in _THINKING_TYPES
+                or not (b.get("signature") or b.get("data"))
             ]
             m["content"] = new_content or [_text_block("(empty)")]
         elif route == "third_party" or (idx < loop_start and not preserve_prior):
-            m["content"] = _strip_thinking(m["content"]) or [_text_block("(thinking elided)")]
+            m["content"] = _strip_thinking(m["content"]) or [
+                _text_block("(thinking elided)")
+            ]
         else:
-            new_content = _keep_valid_thinking(m["content"], bool(m.get("_thinking_signature_invalidated")))
+            new_content = _keep_valid_thinking(
+                m["content"], bool(m.get("_thinking_signature_invalidated"))
+            )
             m["content"] = new_content or [_text_block("(empty)")]
         # cache_control on thinking blocks interferes with signature validation.
         for b in m["content"]:
             if _block_type(b) in _THINKING_TYPES:
                 b.pop("cache_control", None)
-        m.pop("_thinking_signature_invalidated", None)  # internal flag, never on the wire
+        m.pop(
+            "_thinking_signature_invalidated", None
+        )  # internal flag, never on the wire
 
 
 def _image_source_data(block: Any) -> Optional[str]:
@@ -644,16 +805,27 @@ def _evict_old_screenshots(result: list[dict[str, Any]]) -> None:
     reserved = [
         (block, _image_source_data(block))
         for msg in result
-        for block in (msg.get("content") if isinstance(msg.get("content"), list) else [])
+        for block in (
+            msg.get("content") if isinstance(msg.get("content"), list) else []
+        )
         if _block_type(block) == "image"
     ]
     # Parallel tool calls land as sibling tool_result blocks inside ONE user message
     # (oldest first), so the inner walk must also run newest -> oldest or a batch that
     # ends mid-message retires the newest frames instead of the oldest (#103217).
     carriers = [
-        (block, [(b, _image_source_data(b)) for b in block["content"] if _block_type(b) == "image"])
+        (
+            block,
+            [
+                (b, _image_source_data(b))
+                for b in block["content"]
+                if _block_type(b) == "image"
+            ],
+        )
         for msg in reversed(result)
-        for block in reversed(msg.get("content") if isinstance(msg.get("content"), list) else [])
+        for block in reversed(
+            msg.get("content") if isinstance(msg.get("content"), list) else []
+        )
         if _block_type(block) == "tool_result"
         and isinstance(block.get("content"), list)
         and _has_block_type(block["content"], {"image"})
@@ -673,7 +845,7 @@ def _evict_old_screenshots(result: list[dict[str, Any]]) -> None:
         reserved_bytes=sum(len(data) for _, data in reserved if data),
         many_image_safe=many_image_safe,
     )
-    for block, _ in carriers[len(carriers) - retire:]:
+    for block, _ in carriers[len(carriers) - retire :]:
         placeholder = _text_block("[screenshot removed to save context]")
         block["content"] = [
             placeholder if _block_type(b) == "image" else b for b in block["content"]
@@ -692,11 +864,18 @@ def _ensure_leading_user_turn(result: list[dict[str, Any]]) -> None:
     placeholder as every other synthesized filler block in this module for consistency.
     """
     if result and result[0].get("role") != "user":
-        result.insert(0, {"role": "user", "content": [_text_block(_EMPTY_TEXT_PLACEHOLDER)]})
+        result.insert(
+            0, {"role": "user", "content": [_text_block(_EMPTY_TEXT_PLACEHOLDER)]}
+        )
 
 
 def _fix_blank_text_blocks_in_list(
-    blocks: list[Any], *, placeholder_text: str, msg_index: int, role: Any, location: str
+    blocks: list[Any],
+    *,
+    placeholder_text: str,
+    msg_index: int,
+    role: Any,
+    location: str,
 ) -> list[Any]:
     """Drop blank text blocks; relocate any cache_control they carried onto the last surviving
     cacheable block; if nothing survives, substitute one placeholder block (carrying the relocated
@@ -706,10 +885,15 @@ def _fix_blank_text_blocks_in_list(
         logger.warning(
             "Pre-call sanitizer: dropped blank text content block "
             "(message_index=%d role=%s location=%s block_index=%d block_type=text)",
-            msg_index, role, location, block_index,
+            msg_index,
+            role,
+            location,
+            block_index,
         )
     kept = kept or [_text_block(placeholder_text)]
-    _apply_assistant_cache_control_to_last_cacheable_block(kept, relocated_cache_control)
+    _apply_assistant_cache_control_to_last_cacheable_block(
+        kept, relocated_cache_control
+    )
     return kept
 
 
@@ -725,14 +909,23 @@ def _scrub_blank_text_blocks(result: list[dict[str, Any]]) -> None:
         if not isinstance(content, list) or not content:
             continue
         msg["content"] = _fix_blank_text_blocks_in_list(
-            content, placeholder_text=_EMPTY_TEXT_PLACEHOLDER if role == "assistant" else "(empty message)",
-            msg_index=msg_index, role=role, location="content",
+            content,
+            placeholder_text=_EMPTY_TEXT_PLACEHOLDER
+            if role == "assistant"
+            else "(empty message)",
+            msg_index=msg_index,
+            role=role,
+            location="content",
         )
         for blk in msg["content"]:
             inner = blk.get("content") if _block_type(blk) == "tool_result" else None
             if isinstance(inner, list) and inner:
                 blk["content"] = _fix_blank_text_blocks_in_list(
-                    inner, placeholder_text="(no output)", msg_index=msg_index, role=role, location="tool_result",
+                    inner,
+                    placeholder_text="(no output)",
+                    msg_index=msg_index,
+                    role=role,
+                    location="tool_result",
                 )
 
 
@@ -746,7 +939,9 @@ def _convert_system_content(content: Any) -> Any:
     if not any(p.get("cache_control") for p in content if isinstance(p, dict)):
         return "\n".join(p["text"] for p in content if p.get("type") == "text")
     return [
-        {**p, "text": _EMPTY_TEXT_PLACEHOLDER} if _is_blank_text_block(p) and isinstance(p.get("text"), str) else p
+        {**p, "text": _EMPTY_TEXT_PLACEHOLDER}
+        if _is_blank_text_block(p) and isinstance(p.get("text"), str)
+        else p
         for p in content
         if isinstance(p, dict)
     ]

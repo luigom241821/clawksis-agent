@@ -16,6 +16,7 @@ is set. We patch `cron.scheduler.tick` (both tickers import it locally as
 `cron_tick`, so the module-attribute patch is observed) and assert the loop
 drives it and stops promptly.
 """
+
 import threading
 import time
 from unittest.mock import patch
@@ -92,7 +93,9 @@ def test_desktop_ticker_calls_tick_then_stops():
             daemon=True,
         )
         t.start()
-        assert _wait_until(lambda: len(calls) >= 1), "desktop ticker never called tick()"
+        assert _wait_until(lambda: len(calls) >= 1), (
+            "desktop ticker never called tick()"
+        )
         stop.set()
         t.join(timeout=5)
 
@@ -102,8 +105,6 @@ def test_desktop_ticker_calls_tick_then_stops():
 
 
 # ── Phase 1: CronScheduler ABC + InProcessCronScheduler ──────────────────────
-
-
 
 
 def test_abc_growth_stays_additive():
@@ -186,12 +187,6 @@ def test_inprocess_provider_ticks_and_stops():
 # ── Phase 2: config key, discovery, resolver ─────────────────────────────────
 
 
-
-
-
-
-
-
 def test_cron_provider_package_does_not_shadow_core_cron_package(monkeypatch):
     """Putting plugins/ first on sys.path must not hide the core cron package."""
     from importlib.machinery import PathFinder
@@ -236,7 +231,9 @@ def test_resolve_unknown_provider_falls_back_to_builtin(monkeypatch):
     import clawk_cli.config as cfg
     from cron import scheduler_provider as sp
 
-    monkeypatch.setattr(cfg, "load_config", lambda: {"cron": {"provider": "nope-not-real"}})
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"cron": {"provider": "nope-not-real"}}
+    )
     prov = sp.resolve_cron_scheduler()
     assert prov.name == "builtin"
 
@@ -259,7 +256,9 @@ def test_resolve_unavailable_provider_falls_back(monkeypatch):
         def start(self, stop_event, **kw):
             pass
 
-    monkeypatch.setattr(cfg, "load_config", lambda: {"cron": {"provider": "unavailable"}})
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"cron": {"provider": "unavailable"}}
+    )
     monkeypatch.setattr(pc, "load_cron_scheduler", lambda n: Unavailable())
     prov = sp.resolve_cron_scheduler()
     assert prov.name == "builtin"
@@ -316,10 +315,6 @@ def test_external_provider_falls_back_to_builtin_under_multiplex():
 # ── Phase 4B: additive hooks (on_jobs_changed / fire_due / reconcile) ────────
 
 
-
-
-
-
 def test_fire_due_default_claims_then_runs(monkeypatch):
     """The default fire_due runs the exact owner-bearing CAS snapshot."""
     from cron import jobs
@@ -331,8 +326,10 @@ def test_fire_due_default_claims_then_runs(monkeypatch):
     monkeypatch.setattr(
         jobs,
         "claim_job_for_fire",
-        lambda jid, **kw: claims.append((jid, kw))
-        or {"id": jid, "name": "t", "fire_claim": {"by": "exact-owner"}},
+        lambda jid, **kw: (
+            claims.append((jid, kw))
+            or {"id": jid, "name": "t", "fire_claim": {"by": "exact-owner"}}
+        ),
         raising=False,
     )
     monkeypatch.setattr(
@@ -356,14 +353,16 @@ def test_claim_fire_persists_attempt_before_fire_claimed(monkeypatch):
     monkeypatch.setattr(
         jobs,
         "claim_job_for_fire",
-        lambda jid, **kwargs: events.append("claim")
-        or {"id": jid, "fire_claim": {"by": "owner"}},
+        lambda jid, **kwargs: (
+            events.append("claim") or {"id": jid, "fire_claim": {"by": "owner"}}
+        ),
     )
     monkeypatch.setattr(
         executions,
         "create_execution",
-        lambda jid, source, _create=executions.create_execution:
-        events.append("ledger") or _create(jid, source=source),
+        lambda jid, source, _create=executions.create_execution: (
+            events.append("ledger") or _create(jid, source=source)
+        ),
     )
     monkeypatch.setattr(
         sched,
@@ -390,8 +389,10 @@ def test_fire_due_forwards_manual_force_to_store_claim(monkeypatch):
     monkeypatch.setattr(
         jobs,
         "claim_job_for_fire",
-        lambda jid, **kw: claims.append((jid, kw))
-        or {"id": jid, "name": "t", "fire_claim": {"by": "manual-owner"}},
+        lambda jid, **kw: (
+            claims.append((jid, kw))
+            or {"id": jid, "name": "t", "fire_claim": {"by": "manual-owner"}}
+        ),
     )
     monkeypatch.setattr(sched, "run_one_job", lambda job, **kw: True)
 
@@ -417,12 +418,12 @@ def test_fire_due_lost_claim_does_not_run(monkeypatch):
         lambda jid, **kw: False,
         raising=False,
     )
-    monkeypatch.setattr(sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True)
+    monkeypatch.setattr(
+        sched, "run_one_job", lambda job, **kw: ran.append(job["id"]) or True
+    )
 
     assert InProcessCronScheduler().fire_due("j1") is False
     assert ran == []
-
-
 
 
 # ── F2a: ticker liveness — survival, heartbeat, honest status (#32612, #32895) ──
@@ -436,10 +437,16 @@ def test_failing_tick_records_liveness_but_not_success():
     beats = []
     stop = threading.Event()
     prov = InProcessCronScheduler()
-    with patch("cron.scheduler.tick", side_effect=RuntimeError("every tick fails")), \
-         patch("cron.jobs.record_ticker_heartbeat",
-               side_effect=lambda success=False: beats.append(success)):
-        t = threading.Thread(target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True)
+    with (
+        patch("cron.scheduler.tick", side_effect=RuntimeError("every tick fails")),
+        patch(
+            "cron.jobs.record_ticker_heartbeat",
+            side_effect=lambda success=False: beats.append(success),
+        ),
+    ):
+        t = threading.Thread(
+            target=prov.start, args=(stop,), kwargs={"interval": 0}, daemon=True
+        )
         t.start()
         # Wait for the pre-loop beat + at least one post-tick beat (was flaky
         # with a fixed 0.2s sleep under loaded CI).
@@ -449,7 +456,9 @@ def test_failing_tick_records_liveness_but_not_success():
 
     # every post-tick beat must be success=False (ticks always failed)
     assert len(beats) >= 2
-    assert all(b is False for b in beats), "a failing tick wrongly bumped the success marker"
+    assert all(b is False for b in beats), (
+        "a failing tick wrongly bumped the success marker"
+    )
 
 
 def test_heartbeat_roundtrip_and_age(tmp_path, monkeypatch):
@@ -492,24 +501,31 @@ class TestGuardJobCredentialExfil:
         import pytest
         from cron.scheduler import _guard_job_credential_exfil
 
-        job = {"id": "j1", "provider": "anthropic",
-               "base_url": "https://evil.example/v1"}
+        job = {
+            "id": "j1",
+            "provider": "anthropic",
+            "base_url": "https://evil.example/v1",
+        }
         with pytest.raises(RuntimeError) as exc:
             _guard_job_credential_exfil(job)
         assert "blocked for safety" in str(exc.value)
 
-
     def test_bare_custom_is_allowed(self):
         from cron.scheduler import _guard_job_credential_exfil
 
-        job = {"id": "j4", "provider": "custom",
-               "base_url": "https://anything.example/v1"}
+        job = {
+            "id": "j4",
+            "provider": "custom",
+            "base_url": "https://anything.example/v1",
+        }
         assert _guard_job_credential_exfil(job) is None
 
     def test_no_base_url_is_allowed(self):
         from cron.scheduler import _guard_job_credential_exfil
 
-        assert _guard_job_credential_exfil({"id": "j5", "provider": "anthropic"}) is None
+        assert (
+            _guard_job_credential_exfil({"id": "j5", "provider": "anthropic"}) is None
+        )
         assert _guard_job_credential_exfil({"id": "j6"}) is None
 
     def test_validator_exception_with_base_url_fails_closed(self, monkeypatch):
@@ -525,8 +541,11 @@ class TestGuardJobCredentialExfil:
             raise RuntimeError("validator blew up")
 
         monkeypatch.setattr(ct, "_validate_cron_base_url", _boom)
-        job = {"id": "j7", "provider": "custom:legit",
-               "base_url": "https://evil.example/v1"}
+        job = {
+            "id": "j7",
+            "provider": "custom:legit",
+            "base_url": "https://evil.example/v1",
+        }
         with pytest.raises(RuntimeError) as exc:
             _guard_job_credential_exfil(job)
         assert "blocked for safety" in str(exc.value)
@@ -559,8 +578,10 @@ def test_multiplex_ticker_ticks_each_profile_once(tmp_path, monkeypatch):
     stop = threading.Event()
     prov = InProcessCronScheduler()
 
-    with patch("cron.scheduler.tick", side_effect=_tracking_tick), \
-         patch("cron.jobs.record_ticker_heartbeat", lambda **kw: None):
+    with (
+        patch("cron.scheduler.tick", side_effect=_tracking_tick),
+        patch("cron.jobs.record_ticker_heartbeat", lambda **kw: None),
+    ):
         t = threading.Thread(
             target=prov.start,
             args=(stop,),
@@ -582,8 +603,9 @@ def test_multiplex_ticker_ticks_each_profile_once(tmp_path, monkeypatch):
     assert not t.is_alive()
     # The ticker called tick() at least once per profile per iteration.
     # With 2 profiles and multiple iterations, we should have seen at least 2 calls.
-    assert len(tick_count) >= len(profile_homes), \
+    assert len(tick_count) >= len(profile_homes), (
         f"Expected >= {len(profile_homes)} tick calls, got {len(tick_count)}"
+    )
 
 
 def test_multiplex_ticker_skips_deleted_profile_from_startup_snapshot(tmp_path):
@@ -659,8 +681,10 @@ def _run_multiplex_capture(tmp_path, *, profile_adapters, shared_adapters):
 
     stop = threading.Event()
     prov = InProcessCronScheduler()
-    with patch("cron.scheduler.tick", side_effect=_capturing_tick), \
-         patch("cron.jobs.record_ticker_heartbeat", lambda **kw: None):
+    with (
+        patch("cron.scheduler.tick", side_effect=_capturing_tick),
+        patch("cron.jobs.record_ticker_heartbeat", lambda **kw: None),
+    ):
         t = threading.Thread(
             target=prov.start,
             args=(stop,),
@@ -690,7 +714,8 @@ def test_multiplex_default_profile_uses_shared_adapters(tmp_path):
     (which belongs to the default profile)."""
     shared = {"kind": "shared"}
     default_ad, _ = _run_multiplex_capture(
-        tmp_path, profile_adapters={"home-ops": {"kind": "secondary"}},
+        tmp_path,
+        profile_adapters={"home-ops": {"kind": "secondary"}},
         shared_adapters=shared,
     )
     assert default_ad is shared
@@ -702,7 +727,9 @@ def test_multiplex_connected_secondary_uses_its_own_adapters(tmp_path):
     shared = {"kind": "shared"}
     sec = {"kind": "secondary"}
     default_ad, sec_ad = _run_multiplex_capture(
-        tmp_path, profile_adapters={"home-ops": sec}, shared_adapters=shared,
+        tmp_path,
+        profile_adapters={"home-ops": sec},
+        shared_adapters=shared,
     )
     assert default_ad is shared
     assert sec_ad is sec
@@ -715,7 +742,9 @@ def test_multiplex_empty_secondary_does_not_fall_back_to_shared(tmp_path):
     empty adapter set and simply does not deliver this tick."""
     shared = {"kind": "shared"}
     default_ad, sec_ad = _run_multiplex_capture(
-        tmp_path, profile_adapters={"home-ops": {}}, shared_adapters=shared,
+        tmp_path,
+        profile_adapters={"home-ops": {}},
+        shared_adapters=shared,
     )
     assert default_ad is shared
     assert sec_ad is not shared
@@ -727,7 +756,9 @@ def test_multiplex_missing_secondary_does_not_fall_back_to_shared(tmp_path):
     not been created yet) also must not fall back to the shared adapters."""
     shared = {"kind": "shared"}
     default_ad, sec_ad = _run_multiplex_capture(
-        tmp_path, profile_adapters={}, shared_adapters=shared,
+        tmp_path,
+        profile_adapters={},
+        shared_adapters=shared,
     )
     assert default_ad is shared
     assert sec_ad is not shared
@@ -867,8 +898,10 @@ def test_multiplex_ticker_reenumerates_profiles_each_cycle(tmp_path):
     provider = InProcessCronScheduler()
     with patch("cron.scheduler.tick", side_effect=_tick):
         thread = threading.Thread(
-            target=provider.start, args=(stop,),
-            kwargs={"interval": 0, "profile_homes": lambda: list(homes)}, daemon=True,
+            target=provider.start,
+            args=(stop,),
+            kwargs={"interval": 0, "profile_homes": lambda: list(homes)},
+            daemon=True,
         )
         thread.start()
         thread.join(timeout=5)

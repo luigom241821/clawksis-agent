@@ -1,4 +1,5 @@
 """Real artifacts and isolated PM workers shared by lifecycle tests."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -20,7 +21,9 @@ import zipfile
 import pytest
 
 
-def _wheel(directory: Path, name: str, version: str = "1.0", requirements=(), extra=None) -> Path:
+def _wheel(
+    directory: Path, name: str, version: str = "1.0", requirements=(), extra=None
+) -> Path:
     """Build a wheel whose bytes depend only on its arguments.
 
     A name/version on a real index is one immutable artifact, and uv keeps a seeded lock's hash
@@ -46,7 +49,9 @@ def _wheel(directory: Path, name: str, version: str = "1.0", requirements=(), ex
     return wheel
 
 
-def installing_member(plugin: Path, name: str, wheels: Path, *, requires_python: str = ">=3.11") -> None:
+def installing_member(
+    plugin: Path, name: str, wheels: Path, *, requires_python: str = ">=3.11"
+) -> None:
     """Give *plugin* a pyproject that installs one real package, resolvable offline.
 
     Only a plugin that installs something is a dependency-workspace member: ``dependencies = []``
@@ -58,7 +63,9 @@ def installing_member(plugin: Path, name: str, wheels: Path, *, requires_python:
     (plugin / "pyproject.toml").write_text(
         f'[project]\nname="{name}"\nversion="1"\nrequires-python="{requires_python}"\n'
         'dependencies=["member-dep==1.0"]\n[tool.uv]\npackage=false\n'
-        f'[tool.uv.sources]\nmember-dep = {{ path = {json.dumps(wheel.as_posix())} }}\n', encoding="utf-8")
+        f"[tool.uv.sources]\nmember-dep = {{ path = {json.dumps(wheel.as_posix())} }}\n",
+        encoding="utf-8",
+    )
 
 
 def stage_host_python(python: Path) -> Path:
@@ -73,16 +80,31 @@ def stage_host_python(python: Path) -> Path:
     python.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(sys._base_executable).resolve(), python)
     host_lib = Path(sys.base_prefix) / "lib"
-    stdlib = next((d for d in host_lib.glob("python3.*") if (d / "os.py").is_file()), None)
+    stdlib = next(
+        (d for d in host_lib.glob("python3.*") if (d / "os.py").is_file()), None
+    )
     if stdlib is not None and not (python.parent.parent / "lib" / stdlib.name).exists():
-        shutil.copytree(stdlib, python.parent.parent / "lib" / stdlib.name,
-                        ignore=shutil.ignore_patterns("site-packages", "test", "__pycache__", "idlelib", "tkinter"),
-                        symlinks=True)
+        shutil.copytree(
+            stdlib,
+            python.parent.parent / "lib" / stdlib.name,
+            ignore=shutil.ignore_patterns(
+                "site-packages", "test", "__pycache__", "idlelib", "tkinter"
+            ),
+            symlinks=True,
+        )
     return python
 
 
 def _run(command, *, cwd: Path, env: dict) -> str:
-    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, timeout=60, check=False)
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
@@ -99,7 +121,6 @@ def _ar_member(name: str, data: bytes) -> bytes:
     )
     pad = b"\n" if len(data) % 2 else b""
     return hdr + data + pad
-
 
 
 def make_tar(docroot: Path, name: str, files: dict[str, str]) -> tuple[str, str]:
@@ -146,8 +167,16 @@ def isolated_python(tmp_path_factory):
     uv = shutil.which("uv")
     assert uv, "the worker contract requires real uv"
     python = stage_runtime(Path(uv), Path(sys.executable), root)
-    _run([str(python), "-I", "-c", "import importlib.util; assert importlib.util.find_spec('yaml') is None"],
-         cwd=root, env=dict(os.environ))
+    _run(
+        [
+            str(python),
+            "-I",
+            "-c",
+            "import importlib.util; assert importlib.util.find_spec('yaml') is None",
+        ],
+        cwd=root,
+        env=dict(os.environ),
+    )
     return python
 
 
@@ -173,10 +202,14 @@ def worker_toolchain(client, monkeypatch, isolated_python, injection=""):
         f"sys.path.insert(0, {str(worker.parent.parent)!r}); "
         "import pm._uv; "
         f"pm._uv._toolchain = lambda **kwargs: (Path({uv!r}), Path({sys.executable!r}));\n"
-        + injection + f"\nrunpy.run_path({str(worker)!r}, run_name='__main__')"
+        + injection
+        + f"\nrunpy.run_path({str(worker)!r}, run_name='__main__')"
     )
-    monkeypatch.setattr(client, "runtime_command", lambda path, **kwargs: [str(isolated_python), "-I", "-B", "-c", script])
-
+    monkeypatch.setattr(
+        client,
+        "runtime_command",
+        lambda path, **kwargs: [str(isolated_python), "-I", "-B", "-c", script],
+    )
 
 
 @pytest.fixture
@@ -190,7 +223,11 @@ def build_worker(client, isolated_python, monkeypatch):
 
     for module, names in {
         "pm.operations": ("build_environment", "lock_project"),
-        "pm.build_operations": ("build_requirements_environment", "export_requirements", "check_project_lock"),
+        "pm.build_operations": (
+            "build_requirements_environment",
+            "export_requirements",
+            "check_project_lock",
+        ),
     }.items():
         for name in names:
             monkeypatch.setattr(importlib.import_module(module), name, caller_engine)

@@ -14,16 +14,23 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from agent.provider_registry import ProviderRegistry, configured_provider_name, is_available_safe
+from agent.provider_registry import (
+    ProviderRegistry,
+    configured_provider_name,
+    is_available_safe,
+)
 from agent.video_gen_provider import VideoGenProvider
 
 logger = logging.getLogger(__name__)
 
 
 _registry: ProviderRegistry[VideoGenProvider] = ProviderRegistry(
-    label="Video gen", provider_cls=VideoGenProvider, logger=logger,
+    label="Video gen",
+    provider_cls=VideoGenProvider,
+    logger=logger,
 )
 _registry.export(globals())
+
 
 def get_active_provider() -> Optional[VideoGenProvider]:
     """Resolve the currently-active provider (see module docstring)."""
@@ -34,12 +41,16 @@ def get_active_provider() -> Optional[VideoGenProvider]:
         provider = snapshot.get(configured)
         if provider is None:
             logger.debug(
-                "video_gen.provider='%s' configured but not registered; failing closed", configured
+                "video_gen.provider='%s' configured but not registered; failing closed",
+                configured,
             )
         return provider
 
     available = [
-        p for p in snapshot.values()
-        if is_available_safe(p, logger, "video_gen provider %s.is_available() raised %s")
+        p
+        for p in snapshot.values()
+        if is_available_safe(
+            p, logger, "video_gen provider %s.is_available() raised %s"
+        )
     ]
     return available[0] if len(available) == 1 else None

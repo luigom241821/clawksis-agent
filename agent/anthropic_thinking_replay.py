@@ -28,7 +28,11 @@ logger = logging.getLogger(__name__)
 
 _MODEL_CONFIG_KEY = "_anthropic_rejected_thinking"
 _THINKING_TYPES = frozenset({"thinking", "redacted_thinking"})
-_CARRIERS = ("reasoning_details", "anthropic_content_blocks", "_anthropic_content_blocks")
+_CARRIERS = (
+    "reasoning_details",
+    "anthropic_content_blocks",
+    "_anthropic_content_blocks",
+)
 
 
 def _fingerprint(block: Any) -> str | None:
@@ -45,11 +49,18 @@ def _fingerprint(block: Any) -> str | None:
 def tracks_rejected_thinking(agent: Any) -> bool:
     """Signed-replay routes only (Anthropic and its cloud platforms, MiniMax): Kimi, DeepSeek and
     third-party routes keep their own replay contract and the one-request ``reasoning_details`` repair."""
-    from agent.anthropic_thinking_policy import SIGNED_REPLAY_ROUTES, anthropic_thinking_route
+    from agent.anthropic_thinking_policy import (
+        SIGNED_REPLAY_ROUTES,
+        anthropic_thinking_route,
+    )
 
-    return getattr(agent, "api_mode", None) == "anthropic_messages" and anthropic_thinking_route(
-        getattr(agent, "base_url", None), getattr(agent, "model", None)
-    ) in SIGNED_REPLAY_ROUTES
+    return (
+        getattr(agent, "api_mode", None) == "anthropic_messages"
+        and anthropic_thinking_route(
+            getattr(agent, "base_url", None), getattr(agent, "model", None)
+        )
+        in SIGNED_REPLAY_ROUTES
+    )
 
 
 def rejected_thinking_fingerprints(session_db: Any, session_id: Any) -> set[str]:
@@ -62,10 +73,16 @@ def rejected_thinking_fingerprints(session_db: Any, session_id: Any) -> set[str]
     except Exception:
         logger.debug("Anthropic thinking suppression restore failed", exc_info=True)
         return set()
-    return {value for value in raw if isinstance(value, str) and value} if isinstance(raw, list) else set()
+    return (
+        {value for value in raw if isinstance(value, str) and value}
+        if isinstance(raw, list)
+        else set()
+    )
 
 
-def session_rejected_thinking(holder: Any, session_db: Any, session_id: Any) -> set[str]:
+def session_rejected_thinking(
+    holder: Any, session_db: Any, session_id: Any
+) -> set[str]:
     """``holder``'s in-memory fingerprints for ``session_id``, else the persisted ones. The in-memory
     set is authoritative: it outlives a failed or disabled persist."""
     cached = getattr(holder, "_anthropic_rejected_thinking", None)
@@ -86,7 +103,9 @@ def _bind(agent: Any, session_id: Any, rejected: set[str]) -> None:
 def _rejected(agent: Any) -> set[str]:
     # Keyed by session: /new, /resume, /branch and compression rotate ``session_id`` on a live agent.
     session_id = getattr(agent, "session_id", None)
-    rejected = session_rejected_thinking(agent, getattr(agent, "_session_db", None), session_id)
+    rejected = session_rejected_thinking(
+        agent, getattr(agent, "_session_db", None), session_id
+    )
     _bind(agent, session_id, rejected)
     return rejected
 
@@ -94,7 +113,9 @@ def _rejected(agent: Any) -> set[str]:
 def _persist(agent: Any, rejected: set[str]) -> None:
     if getattr(agent, "_persist_disabled", False):
         return
-    patcher = getattr(getattr(agent, "_session_db", None), "patch_session_model_config", None)
+    patcher = getattr(
+        getattr(agent, "_session_db", None), "patch_session_model_config", None
+    )
     session_id = getattr(agent, "session_id", None)
     if not session_id or not callable(patcher):
         return
@@ -111,7 +132,9 @@ def _mirrored_readable_thinking(message: dict) -> str | None:
     readable = [
         block["thinking"]
         for block in carrier
-        if block.get("type") == "thinking" and isinstance(block.get("thinking"), str) and block["thinking"]
+        if block.get("type") == "thinking"
+        and isinstance(block.get("thinking"), str)
+        and block["thinking"]
     ]
     return "\n\n".join(readable) if readable else None
 
@@ -122,7 +145,11 @@ def strip_rejected_thinking(message: Any, rejected: set[str] | None) -> int:
     if not isinstance(message, dict):
         return 0
 
-    mirror = _mirrored_readable_thinking(message) if message.get("role") == "assistant" else None
+    mirror = (
+        _mirrored_readable_thinking(message)
+        if message.get("role") == "assistant"
+        else None
+    )
     removed = 0
     for key in _CARRIERS:
         blocks = message.get(key)
@@ -134,7 +161,10 @@ def strip_rejected_thinking(message: Any, rejected: set[str] | None) -> int:
             if (
                 isinstance(block, dict)
                 and block.get("type") in _THINKING_TYPES
-                and (rejected is None or (fingerprint is not None and fingerprint in rejected))
+                and (
+                    rejected is None
+                    or (fingerprint is not None and fingerprint in rejected)
+                )
             ):
                 removed += 1
             else:
@@ -198,7 +228,9 @@ def carry_rejected_thinking_to_session(agent: Any, old_session_id: str) -> None:
     if isinstance(cached, tuple) and cached[0] == old_session_id:
         rejected = set(cached[1])
     else:
-        rejected = rejected_thinking_fingerprints(getattr(agent, "_session_db", None), old_session_id)
+        rejected = rejected_thinking_fingerprints(
+            getattr(agent, "_session_db", None), old_session_id
+        )
     if not rejected:
         return
     rejected |= _rejected(agent)

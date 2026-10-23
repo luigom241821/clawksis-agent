@@ -42,8 +42,13 @@ def _install_backend(cu_tool):
             from tools.computer_use.backend import CaptureResult
 
             return CaptureResult(
-                mode=mode, width=1, height=1, png_b64=None, elements=[],
-                app="X", window_title="",
+                mode=mode,
+                width=1,
+                height=1,
+                png_b64=None,
+                elements=[],
+                app="X",
+                window_title="",
             )
 
     backend = _RecordingBackend()
@@ -57,7 +62,12 @@ def _nobody_to_ask(monkeypatch):
     """No interactive CLI, no gateway, no per-thread terminal callback, yolo off."""
     from tools import approval
 
-    for name in ("CLAWK_INTERACTIVE", "CLAWK_GATEWAY_SESSION", "CLAWK_EXEC_ASK", "CLAWK_YOLO_MODE"):
+    for name in (
+        "CLAWK_INTERACTIVE",
+        "CLAWK_GATEWAY_SESSION",
+        "CLAWK_EXEC_ASK",
+        "CLAWK_YOLO_MODE",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(approval, "_YOLO_MODE_FROZEN", False)
     monkeypatch.setattr("tools.terminal_tool._get_approval_callback", lambda: None)
@@ -84,14 +94,19 @@ def test_always_grant_lands_in_the_shared_store(monkeypatch):
     """One grant store: an "always" answered through computer_use is what ``tools.approval.is_approved`` reports
     for the same session and ``cua:<action>:<mode>`` key, and the next call is served from that store."""
     from tools import approval
-    from tools.approval_context import reset_current_session_key, set_current_session_key
+    from tools.approval_context import (
+        reset_current_session_key,
+        set_current_session_key,
+    )
     from tools.computer_use import tool as cu_tool
 
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
     monkeypatch.setattr(approval, "_YOLO_MODE_FROZEN", False)
     monkeypatch.setattr(approval, "save_permanent_allowlist", lambda patterns: None)
     prompts = []
-    cu_tool.set_approval_callback(lambda command, description, **kw: prompts.append(command) or "always")
+    cu_tool.set_approval_callback(
+        lambda command, description, **kw: prompts.append(command) or "always"
+    )
     token = set_current_session_key("cua-grant-session")
     try:
         assert not approval.is_approved("cua-grant-session", "cua:click:background")
@@ -124,7 +139,12 @@ def test_b_still_dispatches_after_the_polluter(monkeypatch):
     from tools.computer_use import tool as cu_tool
 
     monkeypatch.setenv("CLAWK_INTERACTIVE", "1")
-    monkeypatch.setattr("tools.terminal_tool._get_approval_callback", lambda: lambda command, description, **kw: "once")
+    monkeypatch.setattr(
+        "tools.terminal_tool._get_approval_callback",
+        lambda: lambda command, description, **kw: "once",
+    )
     backend = _install_backend(cu_tool)
     result = cu_tool.handle_computer_use({"action": "click", "element": 3})
-    assert [name for name, _ in backend.calls] == ["click"], f"leaked approval callback poisoned this test: {result!r}"
+    assert [name for name, _ in backend.calls] == ["click"], (
+        f"leaked approval callback poisoned this test: {result!r}"
+    )

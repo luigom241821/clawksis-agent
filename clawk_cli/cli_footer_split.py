@@ -10,6 +10,7 @@ exceed the budget by one and stock ``HSplit`` replaces the WHOLE footer with its
 pane. Clawksis's throttled ``_invalidate`` can then drop the healing repaint for the length of a
 tool call, so the placeholder sits there looking like a geometry error.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application import get_app

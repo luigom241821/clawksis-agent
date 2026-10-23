@@ -19,7 +19,9 @@ _PROBE = (
 
 
 def test_processes_import_runs_no_other_local_runtime_module():
-    out = subprocess.run([sys.executable, "-c", _PROBE], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(
+        [sys.executable, "-c", _PROBE], capture_output=True, text=True, check=True
+    ).stdout
     assert out.split() == ["clawk_cli.local_runtime.processes"]
 
 

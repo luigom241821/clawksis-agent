@@ -139,9 +139,7 @@ def restore_ambient_pythonpath(env: Mapping[str, str]) -> dict:
     ambient = os.environ.get("PYTHONPATH")
     if ambient:
         existing = merged.get("PYTHONPATH", "")
-        merged["PYTHONPATH"] = (
-            ambient + os.pathsep + existing if existing else ambient
-        )
+        merged["PYTHONPATH"] = ambient + os.pathsep + existing if existing else ambient
     return merged
 
 
@@ -220,7 +218,6 @@ def windows_hide_flags() -> int:
     return _CREATE_NO_WINDOW if IS_WINDOWS else 0
 
 
-
 def no_prompt_git_kwargs() -> dict:
     """``subprocess.run`` kwargs for the updater's network git calls.
 
@@ -238,7 +235,12 @@ def no_prompt_git_kwargs() -> dict:
     env["GCM_INTERACTIVE"] = "Never"
     # Every network git spawn (fetch/pull/shallow heal) runs under a console-less
     # desktop backend on Windows; hide the per-spawn console (#117781).
-    return {"stdin": subprocess.DEVNULL, "env": env, "creationflags": windows_hide_flags()}
+    return {
+        "stdin": subprocess.DEVNULL,
+        "env": env,
+        "creationflags": windows_hide_flags(),
+    }
+
 
 def suppress_platform_ver_console() -> None:
     """Stub ``platform._syscmd_ver`` on Windows so it never flashes a console. No-op elsewhere.
@@ -254,8 +256,13 @@ def suppress_platform_ver_console() -> None:
         import platform
 
         if hasattr(platform, "_syscmd_ver"):
-            def _quiet_syscmd_ver(system="", release="", version="",
-                                  supported_platforms=("win32", "win16", "dos")):
+
+            def _quiet_syscmd_ver(
+                system="",
+                release="",
+                version="",
+                supported_platforms=("win32", "win16", "dos"),
+            ):
                 return system, release, version
 
             platform._syscmd_ver = _quiet_syscmd_ver
@@ -320,8 +327,13 @@ def _safe_directory_cache_key(env: Mapping[str, str]) -> tuple:
         except OSError:
             stamps.append(None)
     return (
-        env.get("GIT_CONFIG_GLOBAL"), env.get("GIT_CONFIG_SYSTEM"), env.get("GIT_CONFIG_NOSYSTEM"),
-        home, env.get("XDG_CONFIG_HOME"), env.get("PATH"), *stamps,
+        env.get("GIT_CONFIG_GLOBAL"),
+        env.get("GIT_CONFIG_SYSTEM"),
+        env.get("GIT_CONFIG_NOSYSTEM"),
+        home,
+        env.get("XDG_CONFIG_HOME"),
+        env.get("PATH"),
+        *stamps,
     )
 
 
@@ -354,7 +366,9 @@ def _user_safe_directories(base_env: Mapping[str, str]) -> list[str]:
     env = dict(base_env)
     # --get-all itself must not be derailed by ambient injection or an interactive prompt.
     for key in list(env):
-        if key == "GIT_CONFIG_PARAMETERS" or key.startswith(_GIT_CONFIG_INJECT_PREFIXES):
+        if key == "GIT_CONFIG_PARAMETERS" or key.startswith(
+            _GIT_CONFIG_INJECT_PREFIXES
+        ):
             env.pop(key, None)
     env.pop("GIT_CONFIG_COUNT", None)
     env["GIT_TERMINAL_PROMPT"] = "0"
@@ -363,8 +377,14 @@ def _user_safe_directories(base_env: Mapping[str, str]) -> list[str]:
         try:
             proc = subprocess.run(
                 ["git", "config", scope, "-z", "--get-all", "safe.directory"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=5, stdin=subprocess.DEVNULL, env=env, check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+                stdin=subprocess.DEVNULL,
+                env=env,
+                check=False,
                 creationflags=windows_hide_flags(),
             )
         except (OSError, subprocess.SubprocessError):
@@ -460,7 +480,9 @@ def noninteractive_git_env(base: Mapping[str, str] | None = None) -> dict[str, s
     # Drop caller-supplied config injection; the GIT_CONFIG_COUNT block is rebuilt below so
     # ambient -c values cannot re-enable pagers, hooks, fsmonitor, editors or credential prompts.
     for key in list(env):
-        if key == "GIT_CONFIG_PARAMETERS" or key.startswith(_GIT_CONFIG_INJECT_PREFIXES):
+        if key == "GIT_CONFIG_PARAMETERS" or key.startswith(
+            _GIT_CONFIG_INJECT_PREFIXES
+        ):
             env.pop(key, None)
     env.pop("GIT_CONFIG_COUNT", None)
     env["GIT_CONFIG_GLOBAL"] = os.devnull
@@ -489,7 +511,9 @@ def noninteractive_git_env(base: Mapping[str, str] | None = None) -> dict[str, s
     return env
 
 
-_FILTER_COMMAND_KEY = re.compile(r"^filter\..+\.(?:clean|smudge|process)$", re.IGNORECASE)
+_FILTER_COMMAND_KEY = re.compile(
+    r"^filter\..+\.(?:clean|smudge|process)$", re.IGNORECASE
+)
 # ``includeIf`` is evaluated against the CURRENT checkout: ``onbranch:`` against the current branch,
 # ``gitdir:`` against the current git dir (``.git/worktrees/<name>`` during ``worktree add``), so
 # the spawned git can load an include this discovery's ``--includes`` skipped. Every include target
@@ -499,7 +523,9 @@ _INCLUDE_IF_KEY = re.compile(r"^includeif\..*\.path$", re.IGNORECASE)
 # Any include (conditional or not) inside an include target: discovery does not walk it twice.
 _INCLUDE_KEY = re.compile(r"^include(?:if\..*)?\.path$", re.IGNORECASE)
 # `git config --get-regexp` pattern for the keys discovery reads (filter commands and includes).
-_DISCOVERY_KEYS_REGEXP = r"^(filter\..*\.(clean|smudge|process)|include\.path|includeif\..*\.path)$"
+_DISCOVERY_KEYS_REGEXP = (
+    r"^(filter\..*\.(clean|smudge|process)|include\.path|includeif\..*\.path)$"
+)
 # Each include target costs one bounded spawn on every hardened git call; refuse past this many.
 _MAX_INCLUDE_TARGETS = 16
 # Each discovered key costs two env entries; a repo with tens of thousands of filters would make
@@ -528,9 +554,19 @@ def noninteractive_repo_git_env(
     # One probe lists the filter keys and the include paths with their origin file: -z --show-origin
     # yields "file:<origin>", "<key>\n<value>" pairs.
     proc = bounded_probe_run(
-        ["git", "-C", str(cwd), "config", "--includes", "--show-origin", "-z", "--get-regexp",
-         _DISCOVERY_KEYS_REGEXP],
-        timeout=2, env=env,
+        [
+            "git",
+            "-C",
+            str(cwd),
+            "config",
+            "--includes",
+            "--show-origin",
+            "-z",
+            "--get-regexp",
+            _DISCOVERY_KEYS_REGEXP,
+        ],
+        timeout=2,
+        env=env,
     )
     if proc is None or proc.returncode not in (0, 1):
         return None
@@ -545,18 +581,23 @@ def noninteractive_repo_git_env(
             continue
         if not origin.startswith("file:"):
             return None
-        origin_path = Path(origin[len("file:"):])
+        origin_path = Path(origin[len("file:") :])
         if not origin_path.is_absolute():
             # git prints repo-local origins relative to the worktree top level, not to *cwd*; with a
             # caller-set GIT_DIR/GIT_WORK_TREE they are relative to something else, so refuse.
             if env.get("GIT_DIR") or env.get("GIT_WORK_TREE"):
                 return None
             if toplevel is None:
-                top = bounded_probe_run(["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
-                                        timeout=2, env=env)
+                top = bounded_probe_run(
+                    ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+                    timeout=2,
+                    env=env,
+                )
                 if top is None or top.returncode != 0:
                     return None
-                toplevel = Path(top.stdout.rstrip("\r\n"))  # a checkout path may end in a space
+                toplevel = Path(
+                    top.stdout.rstrip("\r\n")
+                )  # a checkout path may end in a space
             origin_path = toplevel / origin_path
         # A relative include path resolves against the directory of the config file naming it.
         target = (origin_path.parent / os.path.expanduser(value)).resolve()
@@ -566,8 +607,18 @@ def noninteractive_repo_git_env(
             return None  # a FIFO/device/directory, or too many targets to read on every call
         targets.add(target)
         probe = bounded_probe_run(
-            ["git", "config", "--file", str(target), "--name-only", "-z", "--get-regexp", _DISCOVERY_KEYS_REGEXP],
-            timeout=2, env=env,
+            [
+                "git",
+                "config",
+                "--file",
+                str(target),
+                "--name-only",
+                "-z",
+                "--get-regexp",
+                _DISCOVERY_KEYS_REGEXP,
+            ],
+            timeout=2,
+            env=env,
         )
         if probe is None or probe.returncode not in (0, 1):
             return None
@@ -614,7 +665,11 @@ def posix_is_zombie(pid: int) -> bool:
         try:
             r = subprocess.run(
                 ["ps", "-o", "state=", "-p", str(pid)],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
                 check=False,
             )
             return r.returncode == 0 and r.stdout.strip().startswith("Z")
@@ -629,14 +684,20 @@ def win32_pid_exists(pid: int) -> bool:
     """psutil-free Windows liveness probe via OpenProcess/WaitForSingleObject."""
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
         # Pin restypes: default c_int mangles WAIT_* DWORDs into negatives.
         kernel32.OpenProcess.restype = ctypes.c_void_p
         kernel32.WaitForSingleObject.restype = ctypes.c_uint
         kernel32.GetLastError.restype = ctypes.c_uint
-        PROCESS_QUERY_LIMITED_INFORMATION, SYNCHRONIZE = 0x1000, 0x100000  # SYNCHRONIZE: for Wait*
+        PROCESS_QUERY_LIMITED_INFORMATION, SYNCHRONIZE = (
+            0x1000,
+            0x100000,
+        )  # SYNCHRONIZE: for Wait*
         WAIT_TIMEOUT, ERROR_ACCESS_DENIED = 0x00000102, 5
-        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid)
+        handle = kernel32.OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid
+        )
         if not handle:
             # ERROR_INVALID_PARAMETER (87): PID definitely gone. ACCESS_DENIED: exists
             # but owned by another user/session. Any other error: conservative False.
@@ -664,7 +725,9 @@ def pid_exists_stdlib(pid: int) -> bool:
     if posix_is_zombie(pid):  # a zombie still answers os.kill(pid, 0)
         return False
     try:
-        os.kill(pid, 0)  # windows-footgun: ok — POSIX-only branch (Windows returned above)
+        os.kill(
+            pid, 0
+        )  # windows-footgun: ok — POSIX-only branch (Windows returned above)
     except PermissionError:
         return True  # Exists but we can't signal it.
     except OSError:  # ProcessLookupError included
@@ -688,8 +751,10 @@ def _text_names_clawk(text: str) -> bool:
     A bare ``"clawk" in text`` substring test would also match unrelated processes whose paths
     merely contain the letters (``...\sclawka\...``) — the false-positive class this prevents.
     """
-    return any(token.startswith(("clawk", ".clawk"))
-               for token in re.split(r"[\\/\s=,;\"']+", text.lower()))
+    return any(
+        token.startswith(("clawk", ".clawk"))
+        for token in re.split(r"[\\/\s=,;\"']+", text.lower())
+    )
 
 
 def _process_command_is_clawk(pid: int) -> bool:
@@ -776,7 +841,9 @@ def _legacy_kill_process_tree(proc: subprocess.Popen) -> None:
 
             pgid = os.getpgid(proc.pid)
             if pgid == proc.pid:
-                os.killpg(pgid, _signal.SIGKILL)  # windows-footgun: ok — inside `if not IS_WINDOWS` gate
+                os.killpg(
+                    pgid, _signal.SIGKILL
+                )  # windows-footgun: ok — inside `if not IS_WINDOWS` gate
         except Exception:
             pass
     try:
@@ -787,18 +854,28 @@ def _legacy_kill_process_tree(proc: subprocess.Popen) -> None:
         # No identity guard on purpose: *proc* is our own retained Popen handle, so the PID cannot
         # be recycled while we hold it. The fail-closed ``pid_is_clawk`` guard is for BARE pids.
         try:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                           stdin=subprocess.DEVNULL, timeout=2, check=False,
-                           creationflags=windows_hide_flags())
+            subprocess.run(
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                timeout=2,
+                check=False,
+                creationflags=windows_hide_flags(),
+            )
         except Exception:
             pass
 
 
 def bounded_probe_run(
-    argv: Sequence[str], *, timeout: float, errors: str = "replace",
-    env: Mapping[str, str] | None = None, cwd: str | os.PathLike[str] | None = None,
-    raise_on_spawn_failure: bool = False, input: str | None = None,
+    argv: Sequence[str],
+    *,
+    timeout: float,
+    errors: str = "replace",
+    env: Mapping[str, str] | None = None,
+    cwd: str | os.PathLike[str] | None = None,
+    raise_on_spawn_failure: bool = False,
+    input: str | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
     """Deadlock-safe ``subprocess.run(argv, capture_output=True, timeout=…)`` for fail-open probes.
 
@@ -816,7 +893,9 @@ def bounded_probe_run(
     ``Get-CimInstance Win32_Process`` gateway scan hit exactly this during ``clawk update`` on slow-WMI
     machines (#87134); the git probes hit it first (#68609 / #66037).
     """
-    _popen_kwargs: dict = {"creationflags": windows_hide_flags()} if IS_WINDOWS else {"process_group": 0}
+    _popen_kwargs: dict = (
+        {"creationflags": windows_hide_flags()} if IS_WINDOWS else {"process_group": 0}
+    )
     job = None
     try:
         # Windows: contain the probe in a Job Object. `taskkill /T` walks LIVE parent pids, and a
@@ -826,10 +905,17 @@ def bounded_probe_run(
         from clawk_cli.local_runtime.processes import spawn_server
 
         proc, job = spawn_server(
-            list(argv), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            list(argv),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
-            text=True, encoding="utf-8", errors=errors,
-            env=dict(env) if env is not None else None, cwd=cwd, **_popen_kwargs)
+            text=True,
+            encoding="utf-8",
+            errors=errors,
+            env=dict(env) if env is not None else None,
+            cwd=cwd,
+            **_popen_kwargs,
+        )
     except Exception:
         if raise_on_spawn_failure:
             raise
@@ -869,7 +955,9 @@ def _close_job(job) -> None:
         pass
 
 
-def bounded_git_probe(argv: Sequence[str], *, timeout: float, env: Mapping[str, str] | None = None) -> str:
+def bounded_git_probe(
+    argv: Sequence[str], *, timeout: float, env: Mapping[str, str] | None = None
+) -> str:
     """Run a short ``git`` probe and return stripped stdout, or ``""`` on ANY failure.
 
     On Windows ``run()``'s post-timeout cleanup calls an unbounded ``communicate()``; a suspended
@@ -895,7 +983,11 @@ def bounded_git_probe(argv: Sequence[str], *, timeout: float, env: Mapping[str, 
     openai/codex#36793). ``process_group`` only changes which group the child belongs to; it does not detach
     the terminal or alter the fast path.
     """
-    result = bounded_probe_run(argv, timeout=timeout, env={**(env or noninteractive_git_env()), **NO_LAZY_FETCH_ENV})
+    result = bounded_probe_run(
+        argv,
+        timeout=timeout,
+        env={**(env or noninteractive_git_env()), **NO_LAZY_FETCH_ENV},
+    )
     if result is None or result.returncode != 0:
         return ""
     return (result.stdout or "").strip()

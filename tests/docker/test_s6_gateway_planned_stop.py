@@ -9,6 +9,7 @@ real ``s6-svstat`` shipped in the image can.
 
 Every ``docker exec`` runs as ``clawk`` per the conftest module docstring.
 """
+
 from __future__ import annotations
 
 import json
@@ -43,7 +44,9 @@ def _agent_log(container: str) -> str:
     return docker_exec_sh(container, "cat /opt/data/logs/agent.log 2>/dev/null").stdout
 
 
-def _wait(predicate, what: str, deadline_s: float = 90.0, interval_s: float = 0.5) -> None:
+def _wait(
+    predicate, what: str, deadline_s: float = 90.0, interval_s: float = 0.5
+) -> None:
     end = time.monotonic() + deadline_s
     while time.monotonic() < end:
         if predicate():
@@ -52,7 +55,9 @@ def _wait(predicate, what: str, deadline_s: float = 90.0, interval_s: float = 0.
     raise AssertionError(f"timed out after {deadline_s}s waiting for {what}")
 
 
-def test_gateway_stop_under_s6_is_planned(built_image: str, container_name: str) -> None:
+def test_gateway_stop_under_s6_is_planned(
+    built_image: str, container_name: str
+) -> None:
     start_container(built_image, container_name, cmd="gateway run")
     wait_for_docker_logs(container_name, "s6 supervision", deadline_s=60.0)
 
@@ -64,24 +69,38 @@ def test_gateway_stop_under_s6_is_planned(built_image: str, container_name: str)
     supervised_pid = _svstat_field(container_name, "pid")
     assert supervised_pid.isdigit() and int(supervised_pid) > 0, supervised_pid
     _wait(
-        lambda: str(_state(container_name).get("pid")) == supervised_pid
-        and _gateway_state(container_name) == "running",
+        lambda: (
+            str(_state(container_name).get("pid")) == supervised_pid
+            and _gateway_state(container_name) == "running"
+        ),
         "supervised gateway's own gateway_state=running write",
     )
-    _wait(lambda: "Press Ctrl+C to stop" in _agent_log(container_name), "gateway startup done")
+    _wait(
+        lambda: "Press Ctrl+C to stop" in _agent_log(container_name),
+        "gateway startup done",
+    )
 
     r = docker_exec_sh(container_name, "clawk gateway stop", timeout=90)
-    assert r.returncode == 0, f"gateway stop failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert r.returncode == 0, (
+        f"gateway stop failed: stdout={r.stdout!r} stderr={r.stderr!r}"
+    )
 
-    _wait(lambda: _svstat_field(container_name, "up") == "false", "gateway-default down")
+    _wait(
+        lambda: _svstat_field(container_name, "up") == "false", "gateway-default down"
+    )
     logs = docker_exec_sh(
-        container_name, "cat /opt/data/logs/agent.log /opt/data/logs/gateway.log 2>/dev/null"
+        container_name,
+        "cat /opt/data/logs/agent.log /opt/data/logs/gateway.log 2>/dev/null",
     ).stdout
 
     assert _svstat_field(container_name, "exitcode") == "0", (
         f"supervised gateway exit: {_svstat_field(container_name, 'exitcode')!r}\n"
         f"svstat: {docker_exec_sh(container_name, f'/command/s6-svstat {SLOT}').stdout!r}\n{logs[-4000:]}"
     )
-    _wait(lambda: _gateway_state(container_name) == "stopped", "gateway_state=stopped", deadline_s=15.0)
+    _wait(
+        lambda: _gateway_state(container_name) == "stopped",
+        "gateway_state=stopped",
+        deadline_s=15.0,
+    )
     assert "as a planned gateway stop" in logs, logs[-4000:]
     assert "unexpected signal" not in logs, logs[-4000:]

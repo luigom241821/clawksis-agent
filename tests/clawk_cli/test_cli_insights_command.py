@@ -33,8 +33,10 @@ def _run_show_insights(command: str):
     cli_obj = ClawksisCLI.__new__(ClawksisCLI)
     db = MagicMock()
     _InsightsEngineStub.calls = []
-    with patch("clawk_state.SessionDB", return_value=db), \
-         patch("agent.insights.InsightsEngine", _InsightsEngineStub):
+    with (
+        patch("clawk_state.SessionDB", return_value=db),
+        patch("agent.insights.InsightsEngine", _InsightsEngineStub),
+    ):
         cli_obj._show_insights(command)
     return _InsightsEngineStub.calls, db
 
@@ -58,8 +60,10 @@ def test_cli_insights_keeps_days_flag_and_source(capsys):
 def test_insights_skips_open_when_store_missing(capsys, existing_store):
     # Fresh install: no state.db yet → no open at all (a read-only open needs an existing file).
     existing_store.unlink()
-    for run in (lambda: ClawksisCLI.__new__(ClawksisCLI)._show_insights("/insights 7"),
-                lambda: cmd_insights(SimpleNamespace(days=30, source=None))):
+    for run in (
+        lambda: ClawksisCLI.__new__(ClawksisCLI)._show_insights("/insights 7"),
+        lambda: cmd_insights(SimpleNamespace(days=30, source=None)),
+    ):
         with patch("clawk_state.SessionDB") as ctor:
             run()
         ctor.assert_not_called()
@@ -69,8 +73,10 @@ def test_insights_skips_open_when_store_missing(capsys, existing_store):
 def test_show_insights_opens_read_only(existing_store):
     cli_obj = ClawksisCLI.__new__(ClawksisCLI)
     db = MagicMock()
-    with patch("clawk_state.SessionDB", return_value=db) as ctor, \
-         patch("agent.insights.InsightsEngine", _InsightsEngineStub):
+    with (
+        patch("clawk_state.SessionDB", return_value=db) as ctor,
+        patch("agent.insights.InsightsEngine", _InsightsEngineStub),
+    ):
         _InsightsEngineStub.calls = []
         cli_obj._show_insights("/insights 7")
     ctor.assert_called_once_with(db_path=existing_store, read_only=True)
@@ -79,8 +85,10 @@ def test_show_insights_opens_read_only(existing_store):
 
 def test_subcommand_insights_opens_read_only(existing_store):
     db = MagicMock()
-    with patch("clawk_state.SessionDB", return_value=db) as ctor, \
-         patch("agent.insights.InsightsEngine", _InsightsEngineStub):
+    with (
+        patch("clawk_state.SessionDB", return_value=db) as ctor,
+        patch("agent.insights.InsightsEngine", _InsightsEngineStub),
+    ):
         cmd_insights(SimpleNamespace(days=30, source=None))
     ctor.assert_called_once_with(db_path=existing_store, read_only=True)
     db.close.assert_called_once()
@@ -88,8 +96,10 @@ def test_subcommand_insights_opens_read_only(existing_store):
 
 def test_subcommand_insights_closes_database_when_generation_fails(capsys):
     db = MagicMock()
-    with patch("clawk_state.SessionDB", return_value=db), \
-         patch("agent.insights.InsightsEngine", side_effect=RuntimeError("boom")):
+    with (
+        patch("clawk_state.SessionDB", return_value=db),
+        patch("agent.insights.InsightsEngine", side_effect=RuntimeError("boom")),
+    ):
         cmd_insights(SimpleNamespace(days=30, source=None))
 
     db.close.assert_called_once()

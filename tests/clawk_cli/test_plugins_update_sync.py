@@ -1,4 +1,5 @@
 """Every update surface validates staged code before changing an active plugin."""
+
 from __future__ import annotations
 
 import subprocess
@@ -34,7 +35,9 @@ def test_cli_update_scan_refusal_keeps_the_installed_tree(installed, monkeypatch
 
 
 @pytest.mark.parametrize("installed", ["catalog", "custom"], indirect=True)
-def test_disabled_update_does_not_change_dependencies_or_enablement(installed, monkeypatch):
+def test_disabled_update_does_not_change_dependencies_or_enablement(
+    installed, monkeypatch
+):
     from clawk_cli import plugins_cmd as pc
     from pm import paths
 
@@ -43,24 +46,39 @@ def test_disabled_update_does_not_change_dependencies_or_enablement(installed, m
     config = (home / "config.yaml").read_bytes()
     facts = paths.runtime_facts_path().read_bytes()
     state["sha"] = _version(repo, "2.0.0")
-    monkeypatch.setattr("pm.packages.Venv.apply",
-                        lambda *args, **kwargs: pytest.fail("disabled plugin changed the dependency selection"))
+    monkeypatch.setattr(
+        "pm.packages.Venv.apply",
+        lambda *args, **kwargs: pytest.fail(
+            "disabled plugin changed the dependency selection"
+        ),
+    )
     result = pc.dashboard_update_user_plugin("transactional")
     assert result["ok"], result
-    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=target, text=True).strip() == state["sha"]
+    assert (
+        subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=target, text=True
+        ).strip()
+        == state["sha"]
+    )
     assert (home / "config.yaml").read_bytes() == config
     assert paths.runtime_facts_path().read_bytes() == facts
 
 
 @pytest.mark.parametrize("installed", ["catalog", "custom"], indirect=True)
-def test_enablement_before_lock_acquisition_cannot_skip_validation(installed, monkeypatch):
+def test_enablement_before_lock_acquisition_cannot_skip_validation(
+    installed, monkeypatch
+):
     from contextlib import contextmanager
     from clawk_cli import plugins_cmd as pc, runtime_state
     from pm import paths
 
     _, home, repo, target, state = installed
     pc._set_plugin_enabled("transactional", enable=False)
-    watched = [target / "__init__.py", target / "pyproject.toml", home / "plugins/.install-metadata.json"]
+    watched = [
+        target / "__init__.py",
+        target / "pyproject.toml",
+        home / "plugins/.install-metadata.json",
+    ]
     before = {path: path.read_bytes() for path in watched}
     state["sha"] = _version(repo, "2.0.0", broken=True)
     lock = runtime_state.runtime_lock
@@ -75,7 +93,9 @@ def test_enablement_before_lock_acquisition_cannot_skip_validation(installed, mo
             enabled["begun"] = True
             monkeypatch.setattr(runtime_state, "runtime_lock", lock)
             pc._set_plugin_enabled("transactional", enable=True)
-            monkeypatch.setattr(runtime_state, "runtime_lock", enable_before_acquiring_lock)
+            monkeypatch.setattr(
+                runtime_state, "runtime_lock", enable_before_acquiring_lock
+            )
             enabled["config"] = (home / "config.yaml").read_bytes()
             enabled["facts"] = paths.runtime_facts_path().read_bytes()
         with lock(project, **kwargs):

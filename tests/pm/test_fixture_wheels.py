@@ -1,4 +1,5 @@
 """The shared wheel fixture models an index: one name/version is one artifact."""
+
 from __future__ import annotations
 
 import time

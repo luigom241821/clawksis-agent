@@ -10,6 +10,7 @@ Remaining risks documented here (still open — separate issues):
   Risk 3 – _install_sidecar() subprocess.run calls carry no capture_output /
             stdout / stderr — npm error output is unrecoverable after the run
 """
+
 from __future__ import annotations
 
 import logging
@@ -82,7 +83,9 @@ def test_risk2_fix_empty_node_modules_no_longer_passes_guard(
     so a partial/empty node_modules/ correctly returns False."""
     monkeypatch.setattr(adapter_mod, "HTTPX_AVAILABLE", True)
     monkeypatch.setattr(sidecar_paths, "_SIDECAR_DIR", tmp_path)
-    monkeypatch.setattr(sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log")
+    monkeypatch.setattr(
+        sidecar_paths, "_NPM_ERROR_LOG", tmp_path / ".photon-npm-error.log"
+    )
     # NS-606: disable the connect-time self-heal branch so the guard itself
     # (empty node_modules must not read as installed) is what's under test.
     monkeypatch.setattr(adapter_mod, "_dir_writable", lambda _p: False)
@@ -102,13 +105,9 @@ def test_risk2_fix_empty_node_modules_no_longer_passes_guard(
 # ---------------------------------------------------------------------------
 
 
-
-
 def test_sidecar_deps_installed_false_on_empty_node_modules(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(sidecar_paths, "_SIDECAR_DIR", tmp_path)
     (tmp_path / "node_modules").mkdir()  # empty — spectrum-ts absent
     assert adapter_mod.sidecar_deps_installed() is False
-
-

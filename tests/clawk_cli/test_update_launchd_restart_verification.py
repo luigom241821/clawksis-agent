@@ -32,6 +32,7 @@ LABEL = "ai.clawk.gateway"
 # Captured at import so a test can re-install the real verifier over a fixture's stub.
 _REAL_WAIT_FOR_SUPERVISION = gateway_cli.wait_for_launchd_gateway_supervision
 
+
 class _FakeClock:
     """Monotonic clock that only advances when the code under test sleeps.
 
@@ -51,6 +52,7 @@ class _FakeClock:
         self.slept.append(seconds)
         self.now += seconds
 
+
 @pytest.fixture
 def clock(monkeypatch):
     fake = _FakeClock()
@@ -58,12 +60,14 @@ def clock(monkeypatch):
     monkeypatch.setattr(gateway_cli.time, "sleep", fake.sleep)
     return fake
 
+
 @pytest.fixture(autouse=True)
 def _no_detached_fallback(monkeypatch):
     """Default every test to "launchd can manage this domain"."""
     monkeypatch.setattr(
         gateway_cli, "_launchd_unsupported_marker_exists", lambda: False
     )
+
 
 def _supervision_returning(*results):
     """Fake ``_launchctl_supervised_pid`` yielding ``results`` in order.
@@ -81,6 +85,7 @@ def _supervision_returning(*results):
 
     probe.calls = calls
     return probe
+
 
 class TestWaitForLaunchdGatewaySupervision:
     def test_returns_true_when_already_supervised(self, monkeypatch, clock):
@@ -105,9 +110,7 @@ class TestWaitForLaunchdGatewaySupervision:
         """
         # 0.5s poll interval: 20 misses is ~10s of throttle, then the pid lands.
         probe = _supervision_returning(*([False] * 20 + [True]))
-        monkeypatch.setattr(
-            gateway_cli, "_launchctl_supervised_pid", probe
-        )
+        monkeypatch.setattr(gateway_cli, "_launchctl_supervised_pid", probe)
 
         assert gateway_cli.wait_for_launchd_gateway_supervision(label=LABEL) is True
         assert sum(clock.slept) == pytest.approx(10.0)
@@ -115,14 +118,10 @@ class TestWaitForLaunchdGatewaySupervision:
     def test_gives_up_at_the_deadline(self, monkeypatch, clock):
         """A job that never comes back must fail, and must fail bounded."""
         probe = _supervision_returning(False)
-        monkeypatch.setattr(
-            gateway_cli, "_launchctl_supervised_pid", probe
-        )
+        monkeypatch.setattr(gateway_cli, "_launchctl_supervised_pid", probe)
 
         assert (
-            gateway_cli.wait_for_launchd_gateway_supervision(
-                label=LABEL, timeout=20.0
-            )
+            gateway_cli.wait_for_launchd_gateway_supervision(label=LABEL, timeout=20.0)
             is False
         )
         assert sum(clock.slept) <= 20.0
@@ -139,12 +138,11 @@ class TestWaitForLaunchdGatewaySupervision:
             gateway_cli, "_launchd_unsupported_marker_exists", lambda: True
         )
         probe = _supervision_returning(False)
-        monkeypatch.setattr(
-            gateway_cli, "_launchctl_supervised_pid", probe
-        )
+        monkeypatch.setattr(gateway_cli, "_launchctl_supervised_pid", probe)
 
         assert gateway_cli.wait_for_launchd_gateway_supervision(label=LABEL) is True
         assert probe.calls == []
+
 
 def _patch_launchd_env(
     monkeypatch,
@@ -193,10 +191,9 @@ def _patch_launchd_env(
         calls["label"] = label
         return supervised
 
-    monkeypatch.setattr(
-        gateway_cli, "wait_for_launchd_gateway_supervision", _verify
-    )
+    monkeypatch.setattr(gateway_cli, "wait_for_launchd_gateway_supervision", _verify)
     return calls
+
 
 def _run_fleet_restart():
     """Run the real update-path helper and return its two accounting lists."""
@@ -205,14 +202,13 @@ def _run_fleet_restart():
     update_cmd._restart_macos_launchd_gateways(restarted, failed_or_stale, 5.0)
     return restarted, failed_or_stale
 
+
 class TestInvokingProfileIsVerifiedLikeItsSiblings:
     """The sibling loop already polls for a fresh supervised pid before
     counting a label as restarted.  The invoking profile did not, so the two
     halves of the same function disagreed about what "restarted" means."""
 
-    def test_reports_restarted_only_after_supervision_is_confirmed(
-        self, monkeypatch
-    ):
+    def test_reports_restarted_only_after_supervision_is_confirmed(self, monkeypatch):
         calls = _patch_launchd_env(monkeypatch, supervised=True)
 
         restarted, failed_or_stale = _run_fleet_restart()
@@ -223,9 +219,7 @@ class TestInvokingProfileIsVerifiedLikeItsSiblings:
         assert calls["verify"] == 1
         assert calls["label"] == LABEL
 
-    def test_unverified_restart_is_not_reported_as_restarted(
-        self, monkeypatch, capsys
-    ):
+    def test_unverified_restart_is_not_reported_as_restarted(self, monkeypatch, capsys):
         """THE regression (#88848).
 
         ``launchd_restart()`` returns normally - that is the reported failure's
@@ -273,7 +267,9 @@ class TestInvokingProfileIsVerifiedLikeItsSiblings:
         def fake_launchctl(argv, **kwargs):
             assert argv[:2] == ["launchctl", "list"]
             listings.append(argv)
-            return subprocess.CompletedProcess(argv, 0, stdout='\t"PID" = 4242;\n', stderr="")
+            return subprocess.CompletedProcess(
+                argv, 0, stdout='\t"PID" = 4242;\n', stderr=""
+            )
 
         monkeypatch.setattr(gateway_cli.subprocess, "run", fake_launchctl)
 

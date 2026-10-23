@@ -58,8 +58,6 @@ def test_reason_and_timestamp_stored(clawk_home):
     assert raw["reason"] == "runaway cron fan-out"
 
 
-
-
 def test_corrupt_sentinel_still_engages(clawk_home):
     """A hand-touched/corrupt ESTOP file must still pause (fail safe)."""
     (clawk_home / "ESTOP").write_text("not json", encoding="utf-8")
@@ -72,8 +70,6 @@ def test_corrupt_sentinel_still_engages(clawk_home):
 # ── paused notice for new gateway turns ─────────────────────────────────────
 
 
-
-
 def test_paused_reply_surfaces_reason_and_resume_hint(clawk_home):
     estop.engage(reason="deploy window")
     notice = estop.paused_reply()
@@ -82,11 +78,7 @@ def test_paused_reply_surfaces_reason_and_resume_hint(clawk_home):
     assert "deploy window" in notice
 
 
-
-
 # ── check_paused: cheap gate + log-once ─────────────────────────────────────
-
-
 
 
 # ── cron scheduler integration ──────────────────────────────────────────────
@@ -227,10 +219,6 @@ def test_cli_resume_disengages(clawk_home, capsys):
     assert "resumed" in capsys.readouterr().out.lower()
 
 
-
-
-
-
 # ── clawk status surfacing ─────────────────────────────────────────────────
 
 
@@ -254,6 +242,7 @@ def test_is_engaged_fails_safe_on_stat_error(clawk_home, monkeypatch):
     """A stat failure must report ENGAGED (fail safe) — the pause has to
     hold even when CLAWK_HOME is misbehaving, matching the module's
     corrupt-sentinel doctrine."""
+
     class _BoomPath:
         def exists(self):
             raise OSError("permission denied")
@@ -352,7 +341,7 @@ def test_profile_gateway_honors_canonical_root_estop(tmp_path, monkeypatch):
     estop._logged_components.clear()
 
     assert estop.is_engaged() is False
-    (root / "ESTOP").write_text("{\"reason\": \"thundering herd\"}\n", encoding="utf-8")
+    (root / "ESTOP").write_text('{"reason": "thundering herd"}\n', encoding="utf-8")
     assert estop.is_engaged() is True
     assert estop.paused_reply() is not None
     assert "paused" in estop.paused_reply().lower()

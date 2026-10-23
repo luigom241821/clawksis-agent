@@ -1,4 +1,5 @@
 """#108031: the startup state.db warning must not be broadcast once the store has healed."""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,15 +30,19 @@ def _runner_with_startup_failure(monkeypatch, clock: _Clock, *, heals: bool):
     runner._session_db_handles = {}
     runner._session_db_handles_lock = threading.Lock()
     cache = RecoverableHandleCache(
-        handles=runner._session_db_handles, lock=runner._session_db_handles_lock,
-        clock=clock, initial_retry_delay=1,
+        handles=runner._session_db_handles,
+        lock=runner._session_db_handles_lock,
+        clock=clock,
+        initial_retry_delay=1,
     )
     runner._session_db_handle_cache = cache
     calls: list[str] = []
 
     def acquire(db_path=None):
         calls.append("open")
-        if len(calls) == 1 or not heals:  # the priming open always fails: that is the startup lock
+        if (
+            len(calls) == 1 or not heals
+        ):  # the priming open always fails: that is the startup lock
             raise RuntimeError("database is locked")
         return object()
 
@@ -49,7 +54,9 @@ def _runner_with_startup_failure(monkeypatch, clock: _Clock, *, heals: bool):
         runner._open_session_db_for_active_scope(raise_on_error=True)
     clock.now = 5.0  # past the backoff: the pre-broadcast re-check is allowed to open
     sent: list[str] = []
-    monkeypatch.setattr(runner, "_home_channel_transports", lambda: [("telegram", {}, "home", object())])
+    monkeypatch.setattr(
+        runner, "_home_channel_transports", lambda: [("telegram", {}, "home", object())]
+    )
 
     async def _capture(_platform, _home, _transport, message, _fmt):
         sent.append(message)
@@ -59,8 +66,12 @@ def _runner_with_startup_failure(monkeypatch, clock: _Clock, *, heals: bool):
 
 
 @pytest.mark.parametrize("warning_notifications", [True, False])
-def test_lock_that_cleared_before_connect_is_not_broadcast(monkeypatch, tmp_path, warning_notifications):
-    (tmp_path / "config.yaml").write_text(f"display: {{suppress_warning_notifications: {str(not warning_notifications).lower()}}}")
+def test_lock_that_cleared_before_connect_is_not_broadcast(
+    monkeypatch, tmp_path, warning_notifications
+):
+    (tmp_path / "config.yaml").write_text(
+        f"display: {{suppress_warning_notifications: {str(not warning_notifications).lower()}}}"
+    )
     monkeypatch.setattr(gateway_run, "_clawk_home", tmp_path)
     clock = _Clock()
     runner, sent = _runner_with_startup_failure(monkeypatch, clock, heals=True)

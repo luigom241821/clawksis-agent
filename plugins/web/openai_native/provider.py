@@ -55,7 +55,8 @@ def has_codex_credentials() -> bool:
             return True
         entries = _dget(_dget(store, "credential_pool"), "openai-codex")
         return isinstance(entries, list) and any(
-            isinstance(e, dict) and str(e.get("access_token", "") or "").strip() for e in entries
+            isinstance(e, dict) and str(e.get("access_token", "") or "").strip()
+            for e in entries
         )
     except Exception:
         return False

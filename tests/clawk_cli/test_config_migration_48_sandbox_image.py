@@ -17,25 +17,47 @@ def _run(tmp_path, config):
 
     (tmp_path / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
-        run_migrations(46, {"env_added": [], "config_added": [], "warnings": []}, quiet=True)
-    return yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))["terminal"]
+        run_migrations(
+            46, {"env_added": [], "config_added": [], "warnings": []}, quiet=True
+        )
+    return yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))[
+        "terminal"
+    ]
 
 
 def test_stale_default_is_dropped_and_a_user_pin_survives(tmp_path):
     from clawk_cli.config import load_config
-    from clawk_cli.config_defaults import DEFAULT_SANDBOX_IMAGE, LEGACY_SANDBOX_IMAGE, LEGACY_SANDBOX_IMAGES
+    from clawk_cli.config_defaults import (
+        DEFAULT_SANDBOX_IMAGE,
+        LEGACY_SANDBOX_IMAGE,
+        LEGACY_SANDBOX_IMAGES,
+    )
 
-    terminal = _run(tmp_path, {"_config_version": 46, "terminal": {
-        "backend": "docker",
-        "docker_image": LEGACY_SANDBOX_IMAGE,
-        "daytona_image": LEGACY_SANDBOX_IMAGES[1],  # the 3.14 pin that shipped between the two, unmigrated
-        "singularity_image": f"docker://{LEGACY_SANDBOX_IMAGE}",
-        "modal_image": "ghcr.io/me/custom:1",
-    }})
-    assert "docker_image" not in terminal, "the old default is the template copied, not a pin: drop it"
+    terminal = _run(
+        tmp_path,
+        {
+            "_config_version": 46,
+            "terminal": {
+                "backend": "docker",
+                "docker_image": LEGACY_SANDBOX_IMAGE,
+                "daytona_image": LEGACY_SANDBOX_IMAGES[
+                    1
+                ],  # the 3.14 pin that shipped between the two, unmigrated
+                "singularity_image": f"docker://{LEGACY_SANDBOX_IMAGE}",
+                "modal_image": "ghcr.io/me/custom:1",
+            },
+        },
+    )
+    assert "docker_image" not in terminal, (
+        "the old default is the template copied, not a pin: drop it"
+    )
     assert "singularity_image" not in terminal
     assert "daytona_image" not in terminal, "both plain defaults are template copies"
-    assert terminal["modal_image"] == "ghcr.io/me/custom:1", "a user's own image must never be rewritten"
+    assert terminal["modal_image"] == "ghcr.io/me/custom:1", (
+        "a user's own image must never be rewritten"
+    )
     with patch.dict(os.environ, {"CLAWK_HOME": str(tmp_path)}):
         merged = load_config()["terminal"]
-    assert merged["docker_image"] == DEFAULT_SANDBOX_IMAGE, "the dropped key follows the new default"
+    assert merged["docker_image"] == DEFAULT_SANDBOX_IMAGE, (
+        "the dropped key follows the new default"
+    )

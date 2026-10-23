@@ -13,11 +13,11 @@ import pytest
 
 from agent import verification_evidence as ve
 
+
 @pytest.fixture(autouse=True)
 def _ledger_on(monkeypatch):
     """The ledger is inert unless verify-on-stop is enabled; these tests exercise the ledger."""
     monkeypatch.setenv("CLAWK_VERIFY_ON_STOP", "1")
-
 
 
 class _TrackingConnection:
@@ -81,7 +81,10 @@ def test_ledger_operations_close_every_connection(monkeypatch, tmp_path):
 
     ve.record_terminal_result(
         command="python -m pytest tests/test_calc.py::test_even -q",
-        cwd=tmp_path, session_id="s1", exit_code=0, output="1 passed",
+        cwd=tmp_path,
+        session_id="s1",
+        exit_code=0,
+        output="1 passed",
     )
     ve.verification_status(session_id="s1", cwd=tmp_path)
     ve.mark_workspace_edited(session_id="s1", cwd=tmp_path, paths=["mod.py"])

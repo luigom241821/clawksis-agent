@@ -42,6 +42,7 @@ class _FakeApiError(Exception):
 def _make_agent(provider: str = "xiaomi", model: str = "mimo-v2.5"):
     """Build a bare AIAgent for method-level testing, no provider setup."""
     from run_agent import AIAgent
+
     agent = object.__new__(AIAgent)
     agent.provider = provider
     agent.model = model
@@ -52,8 +53,6 @@ def _make_agent(provider: str = "xiaomi", model: str = "mimo-v2.5"):
 
 
 class TestStripImagePartsHelper:
-
-
     def test_tool_message_with_string_content_unchanged(self):
         agent = _make_agent()
         msgs = [
@@ -67,21 +66,30 @@ class TestStripImagePartsHelper:
         the original error if this turns out to also be rejected."""
         agent = _make_agent()
         msgs = [
-            {"role": "tool", "tool_call_id": "x", "content": [
-                {"type": "text", "text": "hello"},
-            ]},
+            {
+                "role": "tool",
+                "tool_call_id": "x",
+                "content": [
+                    {"type": "text", "text": "hello"},
+                ],
+            },
         ]
         assert agent._try_strip_image_parts_from_tool_messages(msgs) is False
-
-
 
     def test_records_provider_model_in_session_cache(self):
         agent = _make_agent(provider="xiaomi", model="mimo-v2.5")
         msgs = [
-            {"role": "tool", "tool_call_id": "x", "content": [
-                {"type": "text", "text": "summary"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,X"}},
-            ]},
+            {
+                "role": "tool",
+                "tool_call_id": "x",
+                "content": [
+                    {"type": "text", "text": "summary"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,X"},
+                    },
+                ],
+            },
         ]
         agent._try_strip_image_parts_from_tool_messages(msgs)
         assert ("xiaomi", "mimo-v2.5") in agent._no_list_tool_content_models
@@ -91,14 +99,27 @@ class TestStripImagePartsHelper:
         scope — they're handled by the existing image-routing path."""
         agent = _make_agent()
         msgs = [
-            {"role": "user", "content": [
-                {"type": "text", "text": "describe"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,X"}},
-            ]},
-            {"role": "tool", "tool_call_id": "x", "content": [
-                {"type": "text", "text": "summary"},
-                {"type": "image_url", "image_url": {"url": "data:image/png;base64,Y"}},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,X"},
+                    },
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "x",
+                "content": [
+                    {"type": "text", "text": "summary"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,Y"},
+                    },
+                ],
+            },
         ]
         agent._try_strip_image_parts_from_tool_messages(msgs)
         # User message untouched.
@@ -107,7 +128,6 @@ class TestStripImagePartsHelper:
         # Tool message downgraded.
         assert isinstance(msgs[1]["content"], str)
         assert "summary" in msgs[1]["content"]
-
 
 
 # ─── Short-circuit on cached models ──────────────────────────────────────────
@@ -124,12 +144,19 @@ class TestToolResultContentShortCircuit:
             "_multimodal": True,
             "content": [
                 {"type": "text", "text": "capture mode=som 800x600 app=Safari"},
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/png;base64,{png_b64}"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{png_b64}"},
+                },
             ],
             "text_summary": "capture mode=som 800x600 app=Safari",
-            "meta": {"mode": "som", "width": 800, "height": 600, "elements": 5,
-                     "png_bytes": 1024},
+            "meta": {
+                "mode": "som",
+                "width": 800,
+                "height": 600,
+                "elements": 5,
+                "png_bytes": 1024,
+            },
         }
 
     def test_returns_text_summary_for_xiaomi_proactively(self, monkeypatch):
@@ -146,9 +173,6 @@ class TestToolResultContentShortCircuit:
         assert isinstance(out, str)
         assert "data:image" not in out
         assert "image_url" not in out
-
-
-
 
 
 # ─── Classifier ──────────────────────────────────────────────────────────────
@@ -190,7 +214,9 @@ class TestRecoveryEndToEndClassification:
                 "Upstream request failed: [invalid_request_error] Input should be a valid string'}}"
             ),
         )
-        result = classify_api_error(err, provider="opencode-go", model="deepseek-v4-flash-vision-exp")
+        result = classify_api_error(
+            err, provider="opencode-go", model="deepseek-v4-flash-vision-exp"
+        )
         assert result.reason == FailoverReason.multimodal_tool_content_unsupported
         assert result.retryable is True
 
@@ -223,13 +249,17 @@ class TestRecoveryEndToEndClassification:
         result = classify_api_error(err, provider="nvidia", model="moonshotai/kimi-k3")
         assert result.reason != FailoverReason.multimodal_tool_content_unsupported
 
+
 class TestOpenCodeGoProactiveToolResultDowngrade:
     def _multimodal_result(self, png_b64: str = "iVBORw0KGgoAAAA"):
         return {
             "_multimodal": True,
             "content": [
                 {"type": "text", "text": "detected 2 objects"},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png_b64}"}},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{png_b64}"},
+                },
             ],
             "text_summary": "detected 2 objects",
             "meta": {"png_bytes": 1024},
@@ -238,10 +268,14 @@ class TestOpenCodeGoProactiveToolResultDowngrade:
     def test_returns_text_summary_for_opencode_go_proactively(self, monkeypatch):
         """OpenCode Go rejects list-type tool content, so _tool_result_content_for_active_model
         should proactively downgrade to a text summary (#104731)."""
-        agent = _make_agent(provider="opencode-go", model="deepseek-v4-flash-vision-exp")
+        agent = _make_agent(
+            provider="opencode-go", model="deepseek-v4-flash-vision-exp"
+        )
         agent._no_list_tool_content_models = set()
         monkeypatch.setattr(agent, "_model_supports_vision", lambda: True)
-        out = agent._tool_result_content_for_active_model("vision_analyze", self._multimodal_result())
+        out = agent._tool_result_content_for_active_model(
+            "vision_analyze", self._multimodal_result()
+        )
         assert isinstance(out, str)
         assert "data:image" not in out
         assert "image_url" not in out

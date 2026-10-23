@@ -14,6 +14,7 @@ delegation dispatcher already read (``CLAWK_SINGLE_QUERY_SESSION``), so interact
   system prompt and re-explore the repo, and the observed spawns were mostly "independent review of my own
   work" rather than parallel work.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
@@ -39,6 +40,7 @@ def is_single_query_session() -> bool:
         from gateway.session_context import get_session_env
     except Exception:
         import os
+
         get_session_env = os.environ.get
     return str(get_session_env("CLAWK_SINGLE_QUERY_SESSION", "") or "") == "1"
 
@@ -48,7 +50,11 @@ def prune_oneshot_tools(tools: Iterable[dict[str, Any]]) -> list[dict[str, Any]]
     tools = list(tools)
     if not is_single_query_session():
         return tools
-    return [t for t in tools if (t.get("function") or {}).get("name") not in ONESHOT_HIDDEN_TOOLS]
+    return [
+        t
+        for t in tools
+        if (t.get("function") or {}).get("name") not in ONESHOT_HIDDEN_TOOLS
+    ]
 
 
 ONESHOT_SKILLS_LOAD_GUIDANCE = (

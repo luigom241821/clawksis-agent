@@ -37,9 +37,12 @@ def stamp_profile(projects: list[dict], profile: str) -> None:
     """Stamp every session row with the request-scope profile (authoritative even for legacy
     rows whose ``profile_name`` is NULL) for cross-profile routing."""
     for project in projects:
-        lanes = [g for repo in project.get("repos") or [] for g in repo.get("groups") or []]
+        lanes = [
+            g for repo in project.get("repos") or [] for g in repo.get("groups") or []
+        ]
         for session in (project.get("previewSessions") or []) + [
-                s for g in lanes for s in g.get("sessions") or []]:
+            s for g in lanes for s in g.get("sessions") or []
+        ]:
             session["profile"] = profile
 
 
@@ -105,7 +108,9 @@ def kanban_worktree_dir(path: str) -> Optional[str]:
 
 def _with_base_name(path: str, name: str = "") -> str:
     """Swap the last segment for ``name`` (``""`` -> the parent dir, ``""`` past the root)."""
-    return re.sub(r"[^/\\]+$", name, (path or "").rstrip("/\\")).rstrip("" if name else "/\\")
+    return re.sub(r"[^/\\]+$", name, (path or "").rstrip("/\\")).rstrip(
+        "" if name else "/\\"
+    )
 
 
 def _field(row: dict, key: str) -> str:
@@ -121,23 +126,38 @@ def _last_active(sessions: list[dict]) -> float:
 
 
 def _placement(
-    repo_root: str, lane_key: str, lane_label: str, lane_path: str, is_main: bool, is_kanban: bool,
+    repo_root: str,
+    lane_key: str,
+    lane_label: str,
+    lane_path: str,
+    is_main: bool,
+    is_kanban: bool,
     is_git: bool = True,
 ) -> dict:
     return {
-        "repo_key": repo_root, "repo_label": base_name(repo_root) or repo_root,
-        "lane_key": lane_key, "lane_label": lane_label, "lane_path": lane_path,
-        "is_main": is_main, "is_kanban": is_kanban, "is_git": is_git}
+        "repo_key": repo_root,
+        "repo_label": base_name(repo_root) or repo_root,
+        "lane_key": lane_key,
+        "lane_label": lane_label,
+        "lane_path": lane_path,
+        "is_main": is_main,
+        "is_kanban": is_kanban,
+        "is_git": is_git,
+    }
 
 
 def _trunk_placement(repo_root: str, branch: str) -> dict:
     # An unrecorded branch folds into the trunk lane so a repo never shows two "main" lanes.
     b = (branch or "").strip() or DEFAULT_BRANCH_LABEL
-    return _placement(repo_root, _branch_lane_id(repo_root, b), b, repo_root, True, False)
+    return _placement(
+        repo_root, _branch_lane_id(repo_root, b), b, repo_root, True, False
+    )
 
 
 def _kanban_placement(repo_root: str, kanban_dir: str) -> dict:
-    return _placement(repo_root, _kanban_lane_id(repo_root), "kanban", kanban_dir, False, True)
+    return _placement(
+        repo_root, _kanban_lane_id(repo_root), "kanban", kanban_dir, False, True
+    )
 
 
 def _probe_sibling_worktree(cwd: str, resolve: Resolve) -> str:
@@ -169,14 +189,25 @@ def _place_by_heuristic(path: str) -> Optional[dict]:
         return _kanban_placement(_with_base_name(kanban_dir), kanban_dir)
     m = re.match(r"^(.+)-wt-(.+)$", base)
     if m:
-        return _placement(_with_base_name(path, m.group(1)), path, m.group(2), path, False, False)
+        return _placement(
+            _with_base_name(path, m.group(1)), path, m.group(2), path, False, False
+        )
     # No git knowledge at all: the lane is the folder itself, not a branch —
     # is_git=False tells the renderer never to `git switch` it (#61362).
-    return _placement(path, _branch_lane_id(path, DEFAULT_BRANCH_LABEL), base, path, True, False, is_git=False)
+    return _placement(
+        path,
+        _branch_lane_id(path, DEFAULT_BRANCH_LABEL),
+        base,
+        path,
+        True,
+        False,
+        is_git=False,
+    )
 
 
 def _place(
-        cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: str) -> Optional[dict]:
+    cwd: str, branch: str, resolve: Optional[Resolve], persisted_root: str
+) -> Optional[dict]:
     info = resolve(cwd) if resolve else None
     if info and info.get("repo_root") and info.get("worktree_root"):
         repo_root, worktree_root = info["repo_root"], info["worktree_root"]
@@ -225,8 +256,12 @@ def _session_repo_root(session: dict, resolve: Optional[Resolve]) -> str:
 def _lane_sort_key(group: dict) -> tuple:
     # Trunk pins to the top, the kanban aggregate to the bottom; the rest by recency, then label.
     is_trunk = bool(group.get("isMain")) and group["label"].lower() in _TRUNK_BRANCHES
-    return (0 if is_trunk else 1, 1 if group.get("isKanban") else 0,
-            -_last_active(group.get("sessions") or []), group["label"].lower())
+    return (
+        0 if is_trunk else 1,
+        1 if group.get("isKanban") else 0,
+        -_last_active(group.get("sessions") or []),
+        group["label"].lower(),
+    )
 
 
 def _disambiguate_labels(items: list[dict]) -> None:
@@ -250,14 +285,23 @@ def _disambiguate_labels(items: list[dict]) -> None:
 
 # Lane group wire fields <- placement keys (same order).
 _LANE_FIELDS = ("id", "label", "path", "isMain", "isKanban", "isGit")
-_PLACEMENT_LANE_KEYS = ("lane_key", "lane_label", "lane_path", "is_main", "is_kanban", "is_git")
+_PLACEMENT_LANE_KEYS = (
+    "lane_key",
+    "lane_label",
+    "lane_path",
+    "is_main",
+    "is_kanban",
+    "is_git",
+)
 
 
 def _repo_node(root: str, label: str) -> dict:
     return {"id": root, "label": label, "path": root, "groups": [], "sessionCount": 0}
 
 
-def _build_repos(sessions: list[dict], resolve: Optional[Resolve], hydrate: bool) -> list[dict]:
+def _build_repos(
+    sessions: list[dict], resolve: Optional[Resolve], hydrate: bool
+) -> list[dict]:
     """Build the ``repo -> lane -> sessions`` subtree for a set of sessions."""
     lanes: dict[str, tuple[dict, dict]] = {}  # lane identity -> (group, placement)
     for session in sessions:
@@ -266,7 +310,9 @@ def _build_repos(sessions: list[dict], resolve: Optional[Resolve], hydrate: bool
             continue
         lane_identity = _lane_key(placement["lane_key"])
         if lane_identity not in lanes:
-            group = dict(zip(_LANE_FIELDS, (placement[k] for k in _PLACEMENT_LANE_KEYS)))
+            group = dict(
+                zip(_LANE_FIELDS, (placement[k] for k in _PLACEMENT_LANE_KEYS))
+            )
             group["sessions"] = []
             lanes[lane_identity] = (group, placement)
         lanes[lane_identity][0]["sessions"].append(session)
@@ -274,7 +320,9 @@ def _build_repos(sessions: list[dict], resolve: Optional[Resolve], hydrate: bool
     for group, placement in lanes.values():
         group["sessions"].sort(key=_session_time, reverse=True)
         repo_key = placement["repo_key"]
-        repo = repos.setdefault(_path_key(repo_key), _repo_node(repo_key, placement["repo_label"]))
+        repo = repos.setdefault(
+            _path_key(repo_key), _repo_node(repo_key, placement["repo_label"])
+        )
         repo["groups"].append(group)
         repo["sessionCount"] += len(group["sessions"])
     repo_list = list(repos.values())
@@ -290,10 +338,13 @@ def _build_repos(sessions: list[dict], resolve: Optional[Resolve], hydrate: bool
 
 
 def _seed_folder_repos(
-        repos: list[dict], folders: list[dict], resolve: Optional[Resolve]) -> list[dict]:
+    repos: list[dict], folders: list[dict], resolve: Optional[Resolve]
+) -> list[dict]:
     """Ensure every declared project folder shows as a repo, even with 0 sessions (else the
     entered-project view renders blank); folders covered by a session-derived repo are untouched."""
-    seen = {_path_key(v) for repo in repos for v in (repo.get("id"), repo.get("path")) if v}
+    seen = {
+        _path_key(v) for repo in repos for v in (repo.get("id"), repo.get("path")) if v
+    }
     seeded = list(repos)
     for folder in folders or []:
         raw = _field(folder, "path")
@@ -320,7 +371,10 @@ class _FolderIndex:
             for folder in project.get("folders") or []:
                 segs = _comparison_segments(folder.get("path") or "")
                 # Deepest folder wins; ties keep the first project (scan order).
-                if segs and len(segs) > self._by_path.get("/".join(segs), (None, -1))[1]:
+                if (
+                    segs
+                    and len(segs) > self._by_path.get("/".join(segs), (None, -1))[1]
+                ):
                     self._by_path["/".join(segs)] = (project, len(segs))
 
     def match(self, target: str) -> tuple[Optional[dict], int]:
@@ -334,7 +388,8 @@ class _FolderIndex:
 
 
 def _project_for_session(
-        session: dict, index: _FolderIndex, resolve: Optional[Resolve]) -> Optional[dict]:
+    session: dict, index: _FolderIndex, resolve: Optional[Resolve]
+) -> Optional[dict]:
     cwd = _field(session, "cwd")
     repo_root = _session_repo_root(session, resolve)
     # A root-only row (empty cwd) still belongs to the project owning its root.
@@ -346,32 +401,54 @@ def _project_for_session(
 
 
 def _project_node(
-    pid: str, label: str, path: Optional[str], repos: list[dict], session_count: int,
-    last_active: float, preview_sessions: list[dict], sessions: Optional[list[dict]] = None,
-    **flags: Any) -> dict:
+    pid: str,
+    label: str,
+    path: Optional[str],
+    repos: list[dict],
+    session_count: int,
+    last_active: float,
+    preview_sessions: list[dict],
+    sessions: Optional[list[dict]] = None,
+    **flags: Any,
+) -> dict:
     """``flags`` overrides ``color``/``icon``/``isAuto``/``isNoProject``; key order = wire shape."""
     rows = sessions or []
     node = {
-        "id": pid, "label": label, "path": path, "color": None, "icon": None,
-        "isAuto": False, "isNoProject": False,
-        "sessionCount": session_count, "lastActive": last_active,
+        "id": pid,
+        "label": label,
+        "path": path,
+        "color": None,
+        "icon": None,
+        "isAuto": False,
+        "isNoProject": False,
+        "sessionCount": session_count,
+        "lastActive": last_active,
         # Totals over the same sessions `sessionCount` counts (billed cost, else estimated).
         "totalTokens": sum(
-            (s.get("input_tokens") or 0) + (s.get("output_tokens") or 0) for s in rows),
+            (s.get("input_tokens") or 0) + (s.get("output_tokens") or 0) for s in rows
+        ),
         "totalCostUsd": sum(
-            float(s.get("actual_cost_usd") or s.get("estimated_cost_usd") or 0) for s in rows),
-        "repos": repos, "previewSessions": preview_sessions,
+            float(s.get("actual_cost_usd") or s.get("estimated_cost_usd") or 0)
+            for s in rows
+        ),
+        "repos": repos,
+        "previewSessions": preview_sessions,
         # Every claimed row, not just the preview window: the renderer's live overlay
         # uses this as the ONE owner (a sibling worktree row with git_repo_root NULL
         # re-classifies to an ancestor project by cwd alone).
-        "sessionIds": [s["id"] for s in rows if s.get("id")]}
+        "sessionIds": [s["id"] for s in rows if s.get("id")],
+    }
     node.update(flags)
     return node
 
 
 def _auto_buckets(
-    unowned: list[dict], resolve: Optional[Resolve], junk: Callable, junk_cwd: Callable,
-    exists: Callable) -> tuple[dict[str, dict], list[dict]]:
+    unowned: list[dict],
+    resolve: Optional[Resolve],
+    junk: Callable,
+    junk_cwd: Callable,
+    exists: Callable,
+) -> tuple[dict[str, dict], list[dict]]:
     """Group leftover sessions by auto-project root (common git root, else the session cwd
     for non-git workspaces); the rest go to the Home bucket."""
     by_auto_root: dict[str, dict] = {}
@@ -391,7 +468,9 @@ def _auto_buckets(
                 root = placement["repo_key"]
         key = _path_key(root) if root else ""
         if key:
-            by_auto_root.setdefault(key, {"root": root, "sessions": []})["sessions"].append(session)
+            by_auto_root.setdefault(key, {"root": root, "sessions": []})[
+                "sessions"
+            ].append(session)
         else:
             homeless.append(session)
     return by_auto_root, homeless
@@ -400,21 +479,45 @@ def _auto_buckets(
 def _home_project(homeless: list[dict], hydrate: bool, previews: list[dict]) -> dict:
     """The synthetic Home bucket: no folder => no repo/lane structure, one lane carries the rows."""
     lane = {
-        "id": NO_PROJECT_ID, "label": NO_PROJECT_LABEL, "path": None, "isMain": False,
-        "isKanban": False, "sessions": homeless if hydrate else []}
+        "id": NO_PROJECT_ID,
+        "label": NO_PROJECT_LABEL,
+        "path": None,
+        "isMain": False,
+        "isKanban": False,
+        "sessions": homeless if hydrate else [],
+    }
     home_repo = {
-        "id": NO_PROJECT_ID, "label": NO_PROJECT_LABEL, "path": None, "groups": [lane],
-        "sessionCount": len(homeless)}
+        "id": NO_PROJECT_ID,
+        "label": NO_PROJECT_LABEL,
+        "path": None,
+        "groups": [lane],
+        "sessionCount": len(homeless),
+    }
     return _project_node(
-        NO_PROJECT_ID, NO_PROJECT_LABEL, None, [home_repo], len(homeless), _last_active(homeless),
-        previews, homeless, isNoProject=True)
+        NO_PROJECT_ID,
+        NO_PROJECT_LABEL,
+        None,
+        [home_repo],
+        len(homeless),
+        _last_active(homeless),
+        previews,
+        homeless,
+        isNoProject=True,
+    )
 
 
 def build_tree(
-    projects: list[dict], sessions: list[dict], discovered_repos: list[dict],
-    resolve: Optional[Resolve] = None, *, preview_limit: int = 3, hydrate: bool = False,
+    projects: list[dict],
+    sessions: list[dict],
+    discovered_repos: list[dict],
+    resolve: Optional[Resolve] = None,
+    *,
+    preview_limit: int = 3,
+    hydrate: bool = False,
     is_junk_root: Optional[Callable[[str], bool]] = None,
-    is_junk_cwd: Optional[Callable[[str], bool]] = None, exists: Optional[Exists] = None) -> dict:
+    is_junk_cwd: Optional[Callable[[str], bool]] = None,
+    exists: Optional[Exists] = None,
+) -> dict:
     """Build the authoritative project tree -> ``{"projects", "scoped_session_ids"}``.
 
     ``is_junk_root`` flags git roots that must never become an AUTO project; ``is_junk_cwd``
@@ -443,16 +546,27 @@ def build_tree(
 
     def _scope(project_sessions: list[dict]) -> None:
         scoped_ids.extend(s["id"] for s in project_sessions if s.get("id"))
+
     # Tier 1: explicit, user-created projects (always shown, even with 0 sessions).
     for project in active_projects:
         psessions = by_project.get(project["id"], [])
         _scope(psessions)
         repos = _build_repos(psessions, resolve, hydrate)
         repos = _seed_folder_repos(repos, project.get("folders") or [], resolve)
-        result.append(_project_node(
-            project["id"], project.get("name") or project["id"], project.get("primary_path"), repos,
-            len(psessions), _last_active(psessions), _previews(psessions), psessions,
-            color=project.get("color"), icon=project.get("icon")))
+        result.append(
+            _project_node(
+                project["id"],
+                project.get("name") or project["id"],
+                project.get("primary_path"),
+                repos,
+                len(psessions),
+                _last_active(psessions),
+                _previews(psessions),
+                psessions,
+                color=project.get("color"),
+                icon=project.get("icon"),
+            )
+        )
 
     # Tier 2: auto projects from leftover sessions.
     by_auto_root, homeless = _auto_buckets(unowned, resolve, _junk, _junk_cwd, _exists)
@@ -462,16 +576,31 @@ def build_tree(
         auto_key = _path_key(auto_root)
         repos = _build_repos(auto_sessions, resolve, hydrate)
         repo_node = next(
-            (r for r in repos if _path_key(r.get("id") or r.get("path") or "") == auto_key), None)
+            (
+                r
+                for r in repos
+                if _path_key(r.get("id") or r.get("path") or "") == auto_key
+            ),
+            None,
+        )
         if repo_node is None:
             homeless.extend(auto_sessions)
             continue
         seen.add(auto_key)
         _scope(auto_sessions)
-        result.append(_project_node(
-            auto_root, base_name(auto_root) or auto_root, auto_root, repos,
-            repo_node["sessionCount"], _last_active(auto_sessions), _previews(auto_sessions),
-            auto_sessions, isAuto=True))
+        result.append(
+            _project_node(
+                auto_root,
+                base_name(auto_root) or auto_root,
+                auto_root,
+                repos,
+                repo_node["sessionCount"],
+                _last_active(auto_sessions),
+                _previews(auto_sessions),
+                auto_sessions,
+                isAuto=True,
+            )
+        )
 
     # Tier 3: discovered repos with no loaded sessions, folded to their common root.
     for repo in discovered_repos or []:
@@ -485,9 +614,18 @@ def build_tree(
             continue
         seen.add(root_key)
         label = repo.get("label") or base_name(root) or root
-        result.append(_project_node(
-            root, label, root, [_repo_node(root, label)], int(repo.get("sessions") or 0),
-            float(repo.get("last_active") or 0), [], isAuto=True))
+        result.append(
+            _project_node(
+                root,
+                label,
+                root,
+                [_repo_node(root, label)],
+                int(repo.get("sessions") or 0),
+                float(repo.get("last_active") or 0),
+                [],
+                isAuto=True,
+            )
+        )
 
     # Auto-project basename labels can collide; explicit projects keep their user-chosen names.
     _disambiguate_labels([p for p in result if p.get("isAuto")])

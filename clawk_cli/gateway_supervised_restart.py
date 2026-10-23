@@ -39,7 +39,10 @@ def gateway_declares_external_supervisor(pid: int, home: Path | None = None) -> 
     home = home or _get_process_clawk_home()
     identity = identify_gateway(home) or {}
     # Not ``identity["supervisor"]``: the runtime protocol reports a manual gateway as "none".
-    if identity.get("pid") == pid and launch_supervisor(identity) not in (None, "manual"):
+    if identity.get("pid") == pid and launch_supervisor(identity) not in (
+        None,
+        "manual",
+    ):
         return True
     argv = _capture_gateway_argv(pid)
     if argv is None:
@@ -81,11 +84,17 @@ def restart_externally_supervised_gateway(supervised_pid: int) -> None:
     wedge (#110637). A broken/unloaded supervisor surfaces as exit 1, not a success printed over
     a dead gateway (the contract ``launchd_restart`` enforces via ``_wait_for_launchd_service_pid``).
     """
-    from clawk_cli.gateway import _get_restart_exit_wait_budget, _graceful_restart_via_sigusr1, _print_lines
+    from clawk_cli.gateway import (
+        _get_restart_exit_wait_budget,
+        _graceful_restart_via_sigusr1,
+        _print_lines,
+    )
 
     wait_budget = _get_restart_exit_wait_budget()
-    print(f"→ Restarting externally-supervised gateway (PID {supervised_pid}) — "
-          f"draining in-flight runs (up to {wait_budget:.0f}s)...")
+    print(
+        f"→ Restarting externally-supervised gateway (PID {supervised_pid}) — "
+        f"draining in-flight runs (up to {wait_budget:.0f}s)..."
+    )
     if _graceful_restart_via_sigusr1(supervised_pid, wait_budget):
         replacement_pid = _wait_for_supervised_gateway_replacement(supervised_pid)
         if replacement_pid is not None:
@@ -94,7 +103,9 @@ def restart_externally_supervised_gateway(supervised_pid: int) -> None:
             return
         print("⚠ Supervisor did not relaunch the gateway after its graceful exit")
     else:
-        print(f"⚠ Gateway did not exit within {wait_budget:.0f}s of SIGUSR1 (or the signal could not be sent)")
+        print(
+            f"⚠ Gateway did not exit within {wait_budget:.0f}s of SIGUSR1 (or the signal could not be sent)"
+        )
     _print_lines(
         "",
         "✗ Not stopping or foreground-running a supervisor-owned gateway.",
@@ -123,6 +134,7 @@ def refuse_restart_of_service_managed_gateway(pid: int | None) -> None:
     unit, scope = owner
     cmds = _dash._systemd_restart_commands(unit, scope)
     from clawk_cli.gateway import _print_lines
+
     _print_lines(
         "",
         f"✗ Gateway (PID {pid}) is managed by systemd unit {unit}.",
@@ -145,7 +157,9 @@ def start_restart_replacement(args, *, force: bool) -> None:
     gateway it only meant to restart: a child its own timeout killed, holding the app's quit open.
     """
     from clawk_cli import gateway as gw
+
     if getattr(args, "detach", False):
         from clawk_cli.gateway_runtime_start import start_detached_replacement
+
         sys.exit(start_detached_replacement(gw.get_clawk_home(), force=force))
     gw.run_gateway(verbose=0, force=force)

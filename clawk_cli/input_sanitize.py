@@ -51,4 +51,6 @@ def sanitize_user_prompt_text(text: str) -> str:
     """Normalize user-authored prompt text before persistence or model input."""
     if not isinstance(text, str) or not text:
         return text
-    return collapse_repeated_input_artifacts(strip_leaked_bracketed_paste_wrappers(text))
+    return collapse_repeated_input_artifacts(
+        strip_leaked_bracketed_paste_wrappers(text)
+    )

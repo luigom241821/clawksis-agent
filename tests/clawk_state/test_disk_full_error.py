@@ -13,7 +13,9 @@ def test_enospc_oserror():
 
 
 def test_sqlite_full_operational_error():
-    assert is_disk_full_error(sqlite3.OperationalError("database or disk is full")) is True
+    assert (
+        is_disk_full_error(sqlite3.OperationalError("database or disk is full")) is True
+    )
 
 
 def test_string_markers():
@@ -27,4 +29,7 @@ def test_unrelated_errors():
     assert is_disk_full_error(OSError(errno.EACCES, "Permission denied")) is False
     assert is_disk_full_error(RuntimeError("network timeout")) is False
     assert is_disk_full_error("session not found") is False
-    assert is_disk_full_error("session storage could not be written: permission denied") is False
+    assert (
+        is_disk_full_error("session storage could not be written: permission denied")
+        is False
+    )

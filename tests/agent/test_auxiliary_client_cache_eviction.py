@@ -19,11 +19,15 @@ def test_evict_cached_clients_matches_provider_after_profile_home_key(monkeypatc
     sync_key = aux._client_cache_key("anthropic", async_mode=False)
     async_key = aux._client_cache_key("anthropic", async_mode=True)
     other_key = aux._client_cache_key("openai-codex", async_mode=False)
-    monkeypatch.setattr(aux, "_client_cache", {
-        sync_key: anthropic_sync,
-        async_key: anthropic_async,
-        other_key: other_provider,
-    })
+    monkeypatch.setattr(
+        aux,
+        "_client_cache",
+        {
+            sync_key: anthropic_sync,
+            async_key: anthropic_async,
+            other_key: other_provider,
+        },
+    )
 
     aux._evict_cached_clients("anthropic")
 
@@ -42,7 +46,9 @@ def test_evict_cached_clients_is_scoped_to_the_calling_profile(monkeypatch, tmp_
     finally:
         reset_clawk_home_override(token)
     assert key_a[0] != key_b[0]
-    monkeypatch.setattr(aux, "_client_cache", {key_a: _cache_entry(), key_b: _cache_entry()})
+    monkeypatch.setattr(
+        aux, "_client_cache", {key_a: _cache_entry(), key_b: _cache_entry()}
+    )
 
     aux._evict_cached_clients("anthropic")
 
@@ -71,12 +77,19 @@ def test_pool_rotation_evicts_client_built_with_revoked_credential(monkeypatch):
     pool = MagicMock()
     pool.has_credentials.return_value = True
     pool.try_refresh_current.return_value = None
-    pool.mark_exhausted_and_rotate.return_value = SimpleNamespace(id="fresh-oauth-entry")
+    pool.mark_exhausted_and_rotate.return_value = SimpleNamespace(
+        id="fresh-oauth-entry"
+    )
     auth_error = Exception("revoked OAuth token")
     auth_error.status_code = 401
 
     with patch("agent.auxiliary_client.load_pool", return_value=pool):
-        assert aux._recover_provider_pool("anthropic", auth_error, failed_api_key="revoked-token") is True
+        assert (
+            aux._recover_provider_pool(
+                "anthropic", auth_error, failed_api_key="revoked-token"
+            )
+            is True
+        )
 
     assert stale_key not in aux._client_cache
     pool.mark_exhausted_and_rotate.assert_called_once()

@@ -438,7 +438,9 @@ def test_direct_runtime_records_without_enabling_a_plugin(direct_runtime, tmp_pa
         "clawk.tool_call.latency",
     }
     assert metrics["clawk.tool.usage.count"]["dimensions"] == {
-        "error_class": "none", "outcome": "success", "tool_name": "terminal",
+        "error_class": "none",
+        "outcome": "success",
+        "tool_name": "terminal",
     }
     assert metrics["clawk.install.snapshot"]["value"] == 1
     assert metrics["clawk.client.active"] == {
@@ -468,7 +470,9 @@ def test_direct_runtime_records_without_enabling_a_plugin(direct_runtime, tmp_pa
         "value": 1,
     }
     assert metrics["clawk.tool_call.latency"]["dimensions"] == {
-        "latency_bucket": "250ms_to_500ms", "retry_count_bucket": "0", "tool_category": "terminal",
+        "latency_bucket": "250ms_to_500ms",
+        "retry_count_bucket": "0",
+        "tool_category": "terminal",
     }
     assert metrics["clawk.tool_approval.count"] == {
         "name": "clawk.tool_approval.count",
@@ -507,8 +511,12 @@ def test_direct_runtime_records_without_enabling_a_plugin(direct_runtime, tmp_pa
         "2m_to_10m",
         "gte_10m",
     }
-    assert {key: value for key, value in duration.items() if key != "duration_bucket"} == {
-        "execution_surface": "cli", "outcome": "success", "retry_count_bucket": "1",
+    assert {
+        key: value for key, value in duration.items() if key != "duration_bucket"
+    } == {
+        "execution_surface": "cli",
+        "outcome": "success",
+        "retry_count_bucket": "1",
     }
     # Per-task call counts ride on the task cost row now.
     assert metrics["clawk.task_cost.count"]["dimensions"]["api_calls_bucket"] == "1"
@@ -691,7 +699,9 @@ def test_real_binding_drives_lifecycle_aggregation_export_and_snapshot(
     assert set(route_by_outcome) == {"success", "failed", "cancelled"}
     for outcome, error_class in (
         # The success call recovered from an unclassified error; the failed one never did.
-        ("success", "unknown"), ("failed", "unknown"), ("cancelled", "none")
+        ("success", "unknown"),
+        ("failed", "unknown"),
+        ("cancelled", "none"),
     ):
         assert route_by_outcome[outcome]["dimensions"] == {
             "call_role": "primary",
@@ -704,7 +714,11 @@ def test_real_binding_drives_lifecycle_aggregation_export_and_snapshot(
         }
         assert route_by_outcome[outcome]["value"] == 1
     assert {
-        (c["dimensions"]["tool_name"], c["dimensions"]["outcome"], c["dimensions"]["error_class"])
+        (
+            c["dimensions"]["tool_name"],
+            c["dimensions"]["outcome"],
+            c["dimensions"]["error_class"],
+        )
         for c in by_metric["clawk.tool.usage.count"]
     } == {
         ("terminal", "success", "none"),
@@ -735,7 +749,10 @@ def test_real_binding_drives_lifecycle_aggregation_export_and_snapshot(
         "tool_category": "browser",
     }
     assert {
-        tuple(counter["dimensions"][f] for f in ("tool_category", "latency_bucket", "retry_count_bucket"))
+        tuple(
+            counter["dimensions"][f]
+            for f in ("tool_category", "latency_bucket", "retry_count_bucket")
+        )
         for counter in by_metric["clawk.tool_call.latency"]
     } == {
         ("terminal", "100ms_to_250ms", "0"),
@@ -791,10 +808,12 @@ def test_real_binding_drives_lifecycle_aggregation_export_and_snapshot(
             package_values[key] = package_values.get(key, 0) + metric["value"]
     assert package_values == snapshot_values
 
-    serialized_analytics = json.dumps({
-        "snapshot": snapshot,
-        "packages": package_payloads,
-    })
+    serialized_analytics = json.dumps(
+        {
+            "snapshot": snapshot,
+            "packages": package_payloads,
+        }
+    )
     for canary in (
         model_canary,
         prompt_canary,
@@ -840,12 +859,18 @@ def test_real_binding_correlates_plugin_approval_denial_to_tool_metric(
     monkeypatch.setattr(approval, "is_current_session_yolo_enabled", lambda: False)
     monkeypatch.setattr(approval, "is_approved", lambda *args: False)
     monkeypatch.setattr(approval, "get_current_session_key", lambda: "session-key")
-    monkeypatch.setattr(approval_context, "get_current_session_key", lambda: "session-key")
+    monkeypatch.setattr(
+        approval_context, "get_current_session_key", lambda: "session-key"
+    )
     monkeypatch.setattr(approval, "_is_interactive_cli", lambda: True)
     monkeypatch.setattr(approval, "_is_gateway_approval_context", lambda: False)
     monkeypatch.setattr(approval_context, "_is_gateway_approval_context", lambda: False)
-    monkeypatch.setattr(approval, "prompt_dangerous_approval", lambda *args, **kwargs: "deny")
-    monkeypatch.setattr(approval_prompt, "prompt_dangerous_approval", lambda *args, **kwargs: "deny")
+    monkeypatch.setattr(
+        approval, "prompt_dangerous_approval", lambda *args, **kwargs: "deny"
+    )
+    monkeypatch.setattr(
+        approval_prompt, "prompt_dangerous_approval", lambda *args, **kwargs: "deny"
+    )
 
     lifecycle.invoke_hook("on_session_start", **base)
     lifecycle.invoke_hook("pre_llm_call", **base, messages=["sensitive-prompt"])
@@ -897,8 +922,16 @@ def test_real_binding_correlates_plugin_approval_denial_to_tool_metric(
         "tool_category": "file",
     }
     assert [
-        counter["dimensions"] for counter in snapshot if counter["metric_name"] == "clawk.tool_call.latency"
-    ] == [{"latency_bucket": "lt_100ms", "retry_count_bucket": "unknown", "tool_category": "file"}]
+        counter["dimensions"]
+        for counter in snapshot
+        if counter["metric_name"] == "clawk.tool_call.latency"
+    ] == [
+        {
+            "latency_bucket": "lt_100ms",
+            "retry_count_bucket": "unknown",
+            "tool_category": "file",
+        }
+    ]
     approval_metrics = [
         counter
         for counter in snapshot
@@ -978,8 +1011,16 @@ def test_real_binding_aggregates_tool_and_approval_timeouts(
         "tool_category": "terminal",
     }
     assert [
-        counter["dimensions"] for counter in snapshot if counter["metric_name"] == "clawk.tool_call.latency"
-    ] == [{"latency_bucket": "gte_30s", "retry_count_bucket": "unknown", "tool_category": "terminal"}]
+        counter["dimensions"]
+        for counter in snapshot
+        if counter["metric_name"] == "clawk.tool_call.latency"
+    ] == [
+        {
+            "latency_bucket": "gte_30s",
+            "retry_count_bucket": "unknown",
+            "tool_category": "terminal",
+        }
+    ]
     [approval_metric] = [
         counter
         for counter in snapshot
@@ -990,8 +1031,6 @@ def test_real_binding_aggregates_tool_and_approval_timeouts(
         "outcome": "timed_out",
     }
     assert "timeout-sensitive" not in json.dumps(snapshot)
-
-
 
 
 def test_execution_adapters_do_not_create_relay_host_without_a_consumer(
@@ -1033,10 +1072,6 @@ def test_execution_adapters_do_not_create_relay_host_without_a_consumer(
     assert observed_args is tool_args
     assert relay_runtime.HOST_REGISTRY.for_profile(create=False) is None
     assert imports == []
-
-
-
-
 
 
 def test_core_runtime_is_fail_open_without_a_published_binding(monkeypatch, caplog):
@@ -1202,14 +1237,6 @@ def test_skipped_turn_does_not_finish_another_sessions_matching_task(
     )
 
 
-
-
-
-
-
-
-
-
 @pytest.mark.parametrize(
     ("profile_enabled", "managed_enabled"),
     ((None, True), (False, True), (True, False)),
@@ -1239,9 +1266,7 @@ def test_managed_config_cannot_override_shared_metrics_consent(
         )
     (profile / "config.yaml").write_text(profile_config, encoding="utf-8")
     (managed / "config.yaml").write_text(
-        "telemetry:\n"
-        "  shared_metrics:\n"
-        f"    enabled: {str(managed_enabled).lower()}\n",
+        f"telemetry:\n  shared_metrics:\n    enabled: {str(managed_enabled).lower()}\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
@@ -1261,8 +1286,6 @@ def test_managed_config_cannot_override_shared_metrics_consent(
         relay_shared_metrics._reset_for_tests()
         relay_runtime._reset_for_tests()
         managed_scope.invalidate_managed_cache()
-
-
 
 
 def test_disabling_shared_metrics_stops_collection_and_shutdown_export(
@@ -1309,11 +1332,13 @@ def test_disabling_shared_metrics_stops_collection_and_shutdown_export(
     )
     assert runtime.subscriber.store.counter_snapshot() == counters_before_stale_event
     assert (
-        runtime.start_task({
-            "session_id": "session",
-            "task_id": "stale-runtime-task",
-            "platform": "cli",
-        })
+        runtime.start_task(
+            {
+                "session_id": "session",
+                "task_id": "stale-runtime-task",
+                "platform": "cli",
+            }
+        )
         is None
     )
     relay_shared_metrics.finish_task_run(
@@ -1330,16 +1355,10 @@ def test_disabling_shared_metrics_stops_collection_and_shutdown_export(
         "clawk.client.active",
         "clawk.install.milestone",
         "clawk.install.snapshot",
-        "clawk.task_run.started"
+        "clawk.task_run.started",
     ]
     assert list((root / "outbox").glob("*.json")) == []
     relay_runtime._reset_for_tests()
-
-
-
-
-
-
 
 
 def test_sync_session_runner_releases_lock_before_callback(direct_runtime):
@@ -1368,8 +1387,6 @@ def test_sync_session_runner_releases_lock_before_callback(direct_runtime):
 
     assert result == session.handle
     assert contender.is_alive() is False
-
-
 
 
 def test_close_session_drains_orphaned_scopes_before_session_pop(direct_runtime):
@@ -1496,9 +1513,7 @@ def test_concurrent_turn_skips_relay_before_scope_stack_can_interleave(
     ]
     assert len(turn_closes) == 1
     assert not [
-        event
-        for event in direct_runtime.events
-        if event[0] == "scope.pop.rejected"
+        event for event in direct_runtime.events if event[0] == "scope.pop.rejected"
     ]
 
 
@@ -1593,12 +1608,6 @@ def test_skipped_turn_stays_gated_after_instrumented_turn_ends(direct_runtime):
     coordinator.release_conversation(lease)
 
 
-
-
-
-
-
-
 @pytest.mark.parametrize(
     "terminal",
     ["return", "exception", "cancelled", "timeout"],
@@ -1690,28 +1699,6 @@ def test_subagent_agent_boundary_closes_its_own_scope(
         profile_key=profile_key,
         session_id="parent",
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_terminal_model_error_retains_the_failed_route(direct_runtime):
@@ -2095,11 +2082,13 @@ def test_late_tool_result_does_not_attach_to_reused_task_id(direct_runtime):
     second = {**first, "turn_id": "turn-2"}
     runtime = relay_shared_metrics._get_runtime()
     assert runtime is not None
-    assert runtime.start_task({
-        "session_id": second["session_id"],
-        "task_id": second["task_id"],
-        "platform": second["platform"],
-    })
+    assert runtime.start_task(
+        {
+            "session_id": second["session_id"],
+            "task_id": second["task_id"],
+            "platform": second["platform"],
+        }
+    )
     lifecycle.invoke_hook(
         "post_tool_call",
         **first,
@@ -2146,9 +2135,10 @@ def test_late_tool_result_does_not_attach_to_reused_task_id(direct_runtime):
         for event in direct_runtime.events
         if event[0] == "scope.pop" and event[1][1] == "clawk.task_run"
     ]
-    assert [
-        event[2]["output"]["tool_call_count_bucket"] for event in task_ends
-    ] == ["1", "1"]
+    assert [event[2]["output"]["tool_call_count_bucket"] for event in task_ends] == [
+        "1",
+        "1",
+    ]
 
 
 def test_pending_tool_is_closed_and_counted_when_task_is_interrupted(direct_runtime):
@@ -2396,6 +2386,8 @@ def test_tool_category_comes_from_runtime_registry_metadata(
         event for event in direct_runtime.events if event[0] == "tool.call_end"
     ]
     assert tool_end[2]["tool_category"] == "terminal"
+
+
 def test_task_retry_count_survives_provider_fallback_ordinal_reset(direct_runtime):
     base = {
         "session_id": "s1",
@@ -2521,8 +2513,11 @@ def _finish_desktop_task(session_id: str, task_id: str) -> None:
     hook = dict(session_id=session_id, task_id=task_id, platform="desktop")
     lifecycle.invoke_hook("pre_llm_call", **hook)
     lifecycle.invoke_hook(
-        "on_session_end", **hook,
-        completed=True, failed=False, interrupted=False,
+        "on_session_end",
+        **hook,
+        completed=True,
+        failed=False,
+        interrupted=False,
         turn_exit_reason="text_response(stop)",
     )
 
@@ -2534,7 +2529,9 @@ def parked_flush(direct_runtime, monkeypatch):
         "clawk_cli.observability.shared_metrics._utc_now",
         lambda: datetime(2026, 7, 28, 9, tzinfo=UTC),
     )
-    state = SimpleNamespace(attempts=0, entered=threading.Event(), release=threading.Event())
+    state = SimpleNamespace(
+        attempts=0, entered=threading.Event(), release=threading.Event()
+    )
 
     def parked() -> None:
         state.attempts += 1
@@ -2547,7 +2544,9 @@ def parked_flush(direct_runtime, monkeypatch):
     _join_export_workers()
 
 
-def test_task_ends_do_not_wait_on_the_process_wide_flush_barrier(parked_flush, tmp_path):
+def test_task_ends_do_not_wait_on_the_process_wide_flush_barrier(
+    parked_flush, tmp_path
+):
     _finish_desktop_task("s1", "t1")
 
     # The turn thread is back while the barrier is still parked, so nothing is exported yet.
@@ -2567,7 +2566,11 @@ def test_task_ends_do_not_wait_on_the_process_wide_flush_barrier(parked_flush, t
 def test_background_flush_runs_under_the_finishing_turns_profile(
     direct_runtime, tmp_path, monkeypatch
 ):
-    from clawk_constants import get_clawk_home, reset_clawk_home_override, set_clawk_home_override
+    from clawk_constants import (
+        get_clawk_home,
+        reset_clawk_home_override,
+        set_clawk_home_override,
+    )
 
     seen: list[Any] = []
     monkeypatch.setattr(
@@ -2644,11 +2647,13 @@ def test_skill_lifecycle_flows_through_relay_to_a_privacy_safe_package(
 def test_skill_lifecycle_with_only_task_id_uses_unique_task_scope(direct_runtime):
     runtime = relay_shared_metrics._get_runtime()
     assert runtime is not None
-    task = runtime.start_task({
-        "session_id": "session-1",
-        "task_id": "task-1",
-        "platform": "cli",
-    })
+    task = runtime.start_task(
+        {
+            "session_id": "session-1",
+            "task_id": "task-1",
+            "platform": "cli",
+        }
+    )
     assert task is not None
 
     lifecycle.invoke_hook(
@@ -2671,11 +2676,16 @@ def test_skill_task_only_correlation_does_not_guess_across_sessions(direct_runti
     runtime = relay_shared_metrics._get_runtime()
     assert runtime is not None
     for session_id in ("session-1", "session-2"):
-        assert runtime.start_task({
-            "session_id": session_id,
-            "task_id": "shared-task",
-            "platform": "cli",
-        }) is not None
+        assert (
+            runtime.start_task(
+                {
+                    "session_id": session_id,
+                    "task_id": "shared-task",
+                    "platform": "cli",
+                }
+            )
+            is not None
+        )
 
     lifecycle.invoke_hook(
         "on_skill_lifecycle",
@@ -2733,11 +2743,16 @@ def test_skill_lifecycle_does_not_fallback_across_an_explicit_session(
 ):
     runtime = relay_shared_metrics._get_runtime()
     assert runtime is not None
-    assert runtime.start_task({
-        "session_id": "session-1",
-        "task_id": "task-1",
-        "platform": "cli",
-    }) is not None
+    assert (
+        runtime.start_task(
+            {
+                "session_id": "session-1",
+                "task_id": "task-1",
+                "platform": "cli",
+            }
+        )
+        is not None
+    )
 
     lifecycle.invoke_hook(
         "on_skill_lifecycle",
@@ -2756,16 +2771,26 @@ def test_skill_lifecycle_does_not_fallback_across_an_explicit_session(
 
 
 def test_real_binding_concurrent_task_close_skips_pop_under_sibling_scope(
-    real_binding_runtime, caplog,
+    real_binding_runtime,
+    caplog,
 ):
     """Two concurrent turns in one session open two task scopes on the same physical
     stack; finishing the LOWER one first must not raise "scope handle is not at the top
     of the stack" (#115471) nor pop the sibling's live scope. The orphan is reclaimed by
     the session-close drain, so both scopes are gone after the session ends."""
-    event = {"session_id": "shared-session", "task_id": "task-A", "turn_id": "turn-A", "platform": "cli"}
+    event = {
+        "session_id": "shared-session",
+        "task_id": "task-A",
+        "turn_id": "turn-A",
+        "platform": "cli",
+    }
     lifecycle.invoke_hook("on_session_start", **event)
-    relay_shared_metrics.start_task_run(session_id="shared-session", task_id="task-A", platform="cli")
-    relay_shared_metrics.start_task_run(session_id="shared-session", task_id="task-B", platform="cli")
+    relay_shared_metrics.start_task_run(
+        session_id="shared-session", task_id="task-A", platform="cli"
+    )
+    relay_shared_metrics.start_task_run(
+        session_id="shared-session", task_id="task-B", platform="cli"
+    )
     runtime = relay_shared_metrics._get_runtime()
     assert runtime is not None
     session = runtime._session(event)
@@ -2773,16 +2798,26 @@ def test_real_binding_concurrent_task_close_skips_pop_under_sibling_scope(
 
     with caplog.at_level("WARNING"):
         relay_shared_metrics.finish_task_run(
-            session_id="shared-session", task_id="task-A", platform="cli", result={"ok": True},
+            session_id="shared-session",
+            task_id="task-A",
+            platform="cli",
+            result={"ok": True},
         )
 
-    assert not [r for r in caplog.records if "task close failed" in r.getMessage()], caplog.text
+    assert not [r for r in caplog.records if "task close failed" in r.getMessage()], (
+        caplog.text
+    )
     # Task B's live scope is still the top of its context's stack: the sibling was not popped through.
-    top = runtime._run_in_task(session.tasks["task-B"], relay_runtime._current_top, runtime.relay)
+    top = runtime._run_in_task(
+        session.tasks["task-B"], relay_runtime._current_top, runtime.relay
+    )
     assert relay_runtime._same_handle(top, task_b_handle)
 
     relay_shared_metrics.finish_task_run(
-        session_id="shared-session", task_id="task-B", platform="cli", result={"ok": True},
+        session_id="shared-session",
+        task_id="task-B",
+        platform="cli",
+        result={"ok": True},
     )
     lifecycle.invoke_hook("on_session_end", **event)
     assert "task close failed" not in caplog.text
@@ -2793,56 +2828,90 @@ def _stored_counters(tmp_path) -> dict[str, list[dict[str, Any]]]:
 
     root = tmp_path / "clawk-home" / "telemetry" / "shared_metrics"
     by_metric: dict[str, list[dict[str, Any]]] = {}
-    for counter in SharedMetricsStore(root / "metrics.sqlite3", root / "outbox").counter_snapshot():
+    for counter in SharedMetricsStore(
+        root / "metrics.sqlite3", root / "outbox"
+    ).counter_snapshot():
         by_metric.setdefault(counter["metric_name"], []).append(counter["dimensions"])
     return by_metric
 
 
-def test_v3_failure_dimensions_never_export_third_party_identifiers(direct_runtime, tmp_path):
+def test_v3_failure_dimensions_never_export_third_party_identifiers(
+    direct_runtime, tmp_path
+):
     """Plugin tool names, exception class names, plugin platforms and raw exit reasons collapse
     to closed classes, while Clawksis's own vocabularies pass through."""
     base = {
-        "session_id": "s1", "task_id": "t1", "api_request_id": "r1", "platform": "telegram",
-        "provider": "anthropic", "model": "claude-sonnet",
+        "session_id": "s1",
+        "task_id": "t1",
+        "api_request_id": "r1",
+        "platform": "telegram",
+        "provider": "anthropic",
+        "model": "claude-sonnet",
     }
     lifecycle.invoke_hook("pre_llm_call", **base)
     lifecycle.invoke_hook("pre_api_request", **base)
-    lifecycle.invoke_hook("api_request_error", **base, retryable=True, reason="rate_limit")
+    lifecycle.invoke_hook(
+        "api_request_error", **base, retryable=True, reason="rate_limit"
+    )
     for call_id, tool, error_type in (
-        ("c1", "acme_private_tool", "AcmePrivateError"), ("c2", "terminal", "tool_timeout"),
+        ("c1", "acme_private_tool", "AcmePrivateError"),
+        ("c2", "terminal", "tool_timeout"),
     ):
-        lifecycle.invoke_hook("pre_tool_call", **base, tool_call_id=call_id, tool_name=tool)
         lifecycle.invoke_hook(
-            "post_tool_call", **base, tool_call_id=call_id, tool_name=tool, status="error",
-            error_type=error_type, duration_ms=10,
+            "pre_tool_call", **base, tool_call_id=call_id, tool_name=tool
+        )
+        lifecycle.invoke_hook(
+            "post_tool_call",
+            **base,
+            tool_call_id=call_id,
+            tool_name=tool,
+            status="error",
+            error_type=error_type,
+            duration_ms=10,
         )
     relay_shared_metrics.finish_task_run(
-        session_id="s1", task_id="t1", platform="telegram",
-        result={"failed": True, "failure_reason": "rate_limit",
-                "turn_exit_reason": "acme private exit reason"},
+        session_id="s1",
+        task_id="t1",
+        platform="telegram",
+        result={
+            "failed": True,
+            "failure_reason": "rate_limit",
+            "turn_exit_reason": "acme private exit reason",
+        },
     )
     lifecycle.finalize_session(session_id="s1")
 
     counters = _stored_counters(tmp_path)
     assert "acme" not in json.dumps(counters).lower()
-    assert {(d["tool_name"], d["error_class"]) for d in counters["clawk.tool.usage.count"]} == {
-        ("plugin", "exception"), ("terminal", "timeout"),
+    assert {
+        (d["tool_name"], d["error_class"]) for d in counters["clawk.tool.usage.count"]
+    } == {
+        ("plugin", "exception"),
+        ("terminal", "timeout"),
     }
     [route] = counters["clawk.model_route.count"]
     assert (route["outcome"], route["error_class"]) == ("failed", "rate_limit")
     [finished] = counters["clawk.task_run.finished"]
-    assert (finished["platform"], finished["failure_class"]) == ("telegram", "rate_limit")
+    assert (finished["platform"], finished["failure_class"]) == (
+        "telegram",
+        "rate_limit",
+    )
 
 
 def test_install_snapshot_is_daily_and_carries_only_bucketed_counts(
-    direct_runtime, tmp_path, monkeypatch,
+    direct_runtime,
+    tmp_path,
+    monkeypatch,
 ):
     monkeypatch.setattr(
         "clawk_cli.config.read_raw_config_readonly",
         lambda: {
             "telemetry": {"shared_metrics": {"enabled": True}},
             "memory": {"provider": "acme-private-memory"},
-            "mcp_servers": {"acme-private-server": {"command": "x"}, "off": {"enabled": False}},
+            "mcp_servers": {
+                "acme-private-server": {"command": "x"},
+                "off": {"enabled": False},
+            },
             "plugins": {"enabled": ["acme-private-plugin", "b", "c"]},
         },
     )
@@ -2859,12 +2928,28 @@ def test_install_snapshot_is_daily_and_carries_only_bucketed_counts(
 
     [snapshot] = _stored_counters(tmp_path)["clawk.install.snapshot"]
     assert snapshot == {
-        "cron_job_count_bucket": "0", "display_language": "en", "install_age_bucket": snapshot["install_age_bucket"],
-        "main_provider": "none", "mcp_server_count_bucket": "1", "memory_provider": "plugin",
-        "messaging_platform_count_bucket": "0", "plugin_count_bucket": "3_to_5",
-        "profile_count_bucket": snapshot["profile_count_bucket"], "skill_count_bucket": "0",
-        "terminal_backend": "local", "local_model_provider_used": "no",
-        **{k: snapshot[k] for k in ("behind_bucket", "gpu_class", "ram_bucket", "release_channel", "version_age_bucket")},
+        "cron_job_count_bucket": "0",
+        "display_language": "en",
+        "install_age_bucket": snapshot["install_age_bucket"],
+        "main_provider": "none",
+        "mcp_server_count_bucket": "1",
+        "memory_provider": "plugin",
+        "messaging_platform_count_bucket": "0",
+        "plugin_count_bucket": "3_to_5",
+        "profile_count_bucket": snapshot["profile_count_bucket"],
+        "skill_count_bucket": "0",
+        "terminal_backend": "local",
+        "local_model_provider_used": "no",
+        **{
+            k: snapshot[k]
+            for k in (
+                "behind_bucket",
+                "gpu_class",
+                "ram_bucket",
+                "release_channel",
+                "version_age_bucket",
+            )
+        },
     }
 
 
@@ -2874,28 +2959,43 @@ def _stored_values(tmp_path, metric: str) -> list[tuple[dict[str, Any], int]]:
     root = tmp_path / "clawk-home" / "telemetry" / "shared_metrics"
     return [
         (counter["dimensions"], counter["value"])
-        for counter in SharedMetricsStore(root / "metrics.sqlite3", root / "outbox").counter_snapshot()
+        for counter in SharedMetricsStore(
+            root / "metrics.sqlite3", root / "outbox"
+        ).counter_snapshot()
         if counter["metric_name"] == metric
     ]
 
 
-def test_sessions_summarize_on_close_and_milestones_latch_once_per_install(direct_runtime, tmp_path):
+def test_sessions_summarize_on_close_and_milestones_latch_once_per_install(
+    direct_runtime, tmp_path
+):
     """Each closed session yields one bucketed summary; delegated children do not; an install
     milestone is recorded the first time only, however many sessions reach it."""
     for session_id, turns in (("s1", 3), ("s2", 1)):
         for turn in range(turns):
             task = f"{session_id}-t{turn}"
-            lifecycle.invoke_hook("pre_llm_call", session_id=session_id, task_id=task, platform="cli")
+            lifecycle.invoke_hook(
+                "pre_llm_call", session_id=session_id, task_id=task, platform="cli"
+            )
             relay_shared_metrics.finish_task_run(
-                session_id=session_id, task_id=task, platform="cli", result={"completed": True},
+                session_id=session_id,
+                task_id=task,
+                platform="cli",
+                result={"completed": True},
             )
         lifecycle.finalize_session(session_id=session_id)
 
     sessions = _stored_values(tmp_path, "clawk.session.count")
-    assert sorted((d["turn_count_bucket"], d["last_outcome"], v) for d, v in sessions) == [
-        ("1", "success", 1), ("3_to_5", "success", 1),
+    assert sorted(
+        (d["turn_count_bucket"], d["last_outcome"], v) for d, v in sessions
+    ) == [
+        ("1", "success", 1),
+        ("3_to_5", "success", 1),
     ]
-    milestones = {d["milestone"]: v for d, v in _stored_values(tmp_path, "clawk.install.milestone")}
+    milestones = {
+        d["milestone"]: v
+        for d, v in _stored_values(tmp_path, "clawk.install.milestone")
+    }
     assert milestones["first_task_started"] == 1
     assert milestones["first_task_success"] == 1
 
@@ -2907,32 +3007,58 @@ def test_user_named_providers_and_models_never_reach_counters(direct_runtime, tm
     from clawk_cli.observability.shared_metrics import SharedMetricsStore
 
     events.record_setup_completed(surface="cli", provider="custom:acme-secret-llm")
-    events.record_model_switch(from_provider="custom:acme-secret-llm", to_provider="lmstudio", surface="cli")
-    events.record_fallback(from_provider="acme-unknown", to_provider="openrouter", reason="rate_limit")
+    events.record_model_switch(
+        from_provider="custom:acme-secret-llm", to_provider="lmstudio", surface="cli"
+    )
+    events.record_fallback(
+        from_provider="acme-unknown", to_provider="openrouter", reason="rate_limit"
+    )
     runtime = relay_shared_metrics._get_runtime(retry_failed=True)
-    for provider, model in (("custom:acme-secret-llm", "acme-internal"), ("lmstudio", "bob-finetune"),
-                            ("openrouter", "c:/users/bob/model.gguf"), ("openrouter", "anthropic/claude-sonnet")):
-        runtime.record_auxiliary_tokens({
-            "usage": {"input_tokens": 5}, "aux_task": "compression", "provider": provider, "model": model,
-        })
+    for provider, model in (
+        ("custom:acme-secret-llm", "acme-internal"),
+        ("lmstudio", "bob-finetune"),
+        ("openrouter", "c:/users/bob/model.gguf"),
+        ("openrouter", "anthropic/claude-sonnet"),
+    ):
+        runtime.record_auxiliary_tokens(
+            {
+                "usage": {"input_tokens": 5},
+                "aux_task": "compression",
+                "provider": provider,
+                "model": model,
+            }
+        )
     runtime.relay.subscribers.flush()
 
     root = tmp_path / "clawk-home" / "telemetry" / "shared_metrics"
-    stored = json.dumps(SharedMetricsStore(root / "metrics.sqlite3", root / "outbox").counter_snapshot())
+    stored = json.dumps(
+        SharedMetricsStore(root / "metrics.sqlite3", root / "outbox").counter_snapshot()
+    )
     assert not any(leak in stored for leak in ("acme", "bob", "users"))
-    tokens = {(d["provider"], d["model"]) for d, _ in _stored_values(tmp_path, "clawk.model_tokens.sum")}
-    assert tokens == {("custom", "custom"), ("lmstudio", "custom"), ("openrouter", "custom"),
-                      ("openrouter", "anthropic/claude-sonnet")}
+    tokens = {
+        (d["provider"], d["model"])
+        for d, _ in _stored_values(tmp_path, "clawk.model_tokens.sum")
+    }
+    assert tokens == {
+        ("custom", "custom"),
+        ("lmstudio", "custom"),
+        ("openrouter", "custom"),
+        ("openrouter", "anthropic/claude-sonnet"),
+    }
 
 
-def test_milestone_install_age_is_the_subscriber_profile_not_the_relay_thread(tmp_path, monkeypatch):
+def test_milestone_install_age_is_the_subscriber_profile_not_the_relay_thread(
+    tmp_path, monkeypatch
+):
     """Under multiplex the Relay thread carries no profile binding: a milestone reached in
     profile B must carry B's install age, not the launch profile's."""
     import sqlite3 as _sqlite3
     import time
 
     from clawk_cli.observability.shared_metrics import SharedMetricsStore
-    from clawk_cli.observability.shared_metrics_subscriber import SharedMetricsSubscriber
+    from clawk_cli.observability.shared_metrics_subscriber import (
+        SharedMetricsSubscriber,
+    )
     from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
     launch, other = tmp_path / "A", tmp_path / "B"
@@ -2940,34 +3066,54 @@ def test_milestone_install_age_is_the_subscriber_profile_not_the_relay_thread(tm
         home.mkdir()
     with _sqlite3.connect(other / "state.db") as con:
         con.execute("CREATE TABLE sessions (id TEXT, started_at REAL)")
-        con.execute("INSERT INTO sessions VALUES ('s1', ?)", (time.time() - 120 * 86400,))
+        con.execute(
+            "INSERT INTO sessions VALUES ('s1', ?)", (time.time() - 120 * 86400,)
+        )
     monkeypatch.setenv("CLAWK_HOME", str(launch))
     token = set_clawk_home_override(str(other))
     try:
         subscriber = SharedMetricsSubscriber(SharedMetricsStore(), "1.0")
     finally:
         reset_clawk_home_override(token)
-    subscriber._record_milestones("clawk.setup.completed", {"provider": "nous", "surface": "cli"})
-    ages = [c["dimensions"]["install_age_bucket"] for c in subscriber.store.counter_snapshot()
-            if c["metric_name"] == "clawk.install.milestone"]
+    subscriber._record_milestones(
+        "clawk.setup.completed", {"provider": "nous", "surface": "cli"}
+    )
+    ages = [
+        c["dimensions"]["install_age_bucket"]
+        for c in subscriber.store.counter_snapshot()
+        if c["metric_name"] == "clawk.install.milestone"
+    ]
     assert ages == ["gte_90d"]
 
 
 def test_token_usage_is_summed_per_model_and_auxiliary_task(direct_runtime, tmp_path):
-    base = {"session_id": "s1", "task_id": "t1", "provider": "anthropic", "model": "claude-sonnet"}
+    base = {
+        "session_id": "s1",
+        "task_id": "t1",
+        "provider": "anthropic",
+        "model": "claude-sonnet",
+    }
     for request_id in ("r1", "r2"):
         lifecycle.invoke_hook("pre_api_request", **base, api_request_id=request_id)
         lifecycle.invoke_hook(
-            "post_api_request", **base, api_request_id=request_id,
+            "post_api_request",
+            **base,
+            api_request_id=request_id,
             usage={"input_tokens": 100, "output_tokens": 10, "cache_read_tokens": 40},
         )
     for aux_task in ("compression", "acme-private-task"):
         lifecycle.invoke_hook(
-            "post_auxiliary_call", aux_task=aux_task, provider="openrouter", model="small/model",
+            "post_auxiliary_call",
+            aux_task=aux_task,
+            provider="openrouter",
+            model="small/model",
             usage={"input_tokens": 7, "output_tokens": 3},
         )
     relay_shared_metrics.finish_task_run(
-        session_id="s1", task_id="t1", platform="cli", result={"completed": True},
+        session_id="s1",
+        task_id="t1",
+        platform="cli",
+        result={"completed": True},
     )
     lifecycle.finalize_session(session_id="s1")
 
@@ -2976,17 +3122,25 @@ def test_token_usage_is_summed_per_model_and_auxiliary_task(direct_runtime, tmp_
         for d, v in _stored_values(tmp_path, "clawk.model_tokens.sum")
     }
     assert sums == {
-        ("primary", "none", "input"): 200, ("primary", "none", "output"): 20,
+        ("primary", "none", "input"): 200,
+        ("primary", "none", "output"): 20,
         ("primary", "none", "cache_read"): 80,
-        ("auxiliary", "compression", "input"): 7, ("auxiliary", "compression", "output"): 3,
-        ("auxiliary", "other", "input"): 7, ("auxiliary", "other", "output"): 3,
+        ("auxiliary", "compression", "input"): 7,
+        ("auxiliary", "compression", "output"): 3,
+        ("auxiliary", "other", "input"): 7,
+        ("auxiliary", "other", "output"): 3,
     }
 
 
-def test_recovered_rows_report_saved_only_once_the_store_holds_them(real_binding_runtime, monkeypatch):
+def test_recovered_rows_report_saved_only_once_the_store_holds_them(
+    real_binding_runtime, monkeypatch
+):
     from clawk_cli.observability.shared_metrics import SharedMetricsStore
 
-    row = ("clawk.process.exit", {"crash_class": "none", "exit_kind": "killed", "process_kind": "gateway"})
+    row = (
+        "clawk.process.exit",
+        {"crash_class": "none", "exit_kind": "killed", "process_kind": "gateway"},
+    )
     real_store_write = SharedMetricsStore.record_counter
 
     def locked(*args, **kwargs):
@@ -2996,7 +3150,10 @@ def test_recovered_rows_report_saved_only_once_the_store_holds_them(real_binding
     assert relay_shared_metrics.record_process_marks_saved([row]) == 0
     monkeypatch.setattr(SharedMetricsStore, "record_counter", real_store_write)
     assert relay_shared_metrics.record_process_marks_saved([row]) == 1
-    saved = [(r["metric_name"], r["dimensions"], r["value"]) for r in SharedMetricsStore().counter_snapshot()]
+    saved = [
+        (r["metric_name"], r["dimensions"], r["value"])
+        for r in SharedMetricsStore().counter_snapshot()
+    ]
     assert saved == [("clawk.process.exit", row[1], 1)]
 
 
@@ -3006,7 +3163,9 @@ def _cli_turn(session_id: str, parent_session_id: str = "") -> None:
     relay_shared_metrics.finish_task_run(**hook, result={"completed": True})
 
 
-def test_finite_cli_runs_report_their_own_entrypoint(direct_runtime, tmp_path, monkeypatch):
+def test_finite_cli_runs_report_their_own_entrypoint(
+    direct_runtime, tmp_path, monkeypatch
+):
     """`clawk -z` / `chat -q` / `-Q` runs (CLAWK_SINGLE_QUERY_SESSION) report `one_shot`, a
     dispatcher-spawned one (kanban worker, A2A forward) `background`; the REPL stays `interactive`,
     and a delegated child or a non-CLI surface keeps its own entrypoint inside a finite run."""
@@ -3023,24 +3182,37 @@ def test_finite_cli_runs_report_their_own_entrypoint(direct_runtime, tmp_path, m
         lifecycle.finalize_session(session_id=session_id)
     _join_export_workers()
 
-    started = sorted((d["entrypoint"], d["execution_surface"], v)
-                     for d, v in _stored_values(tmp_path, "clawk.task_run.started"))
+    started = sorted(
+        (d["entrypoint"], d["execution_surface"], v)
+        for d, v in _stored_values(tmp_path, "clawk.task_run.started")
+    )
     assert started == [
-        ("background", "cli", 1), ("delegated", "cli", 1), ("interactive", "cli", 1),
-        ("interactive", "desktop", 1), ("one_shot", "cli", 1),
+        ("background", "cli", 1),
+        ("delegated", "cli", 1),
+        ("interactive", "cli", 1),
+        ("interactive", "desktop", 1),
+        ("one_shot", "cli", 1),
     ]
-    finished = {d["entrypoint"] for d, _ in _stored_values(tmp_path, "clawk.task_run.finished")}
+    finished = {
+        d["entrypoint"] for d, _ in _stored_values(tmp_path, "clawk.task_run.finished")
+    }
     assert finished == {"background", "delegated", "interactive", "one_shot"}
     # Delegated children are not sessions of their own.
-    sessions = sorted((d["entrypoint"], d["execution_surface"], d["turn_count_bucket"])
-                      for d, _ in _stored_values(tmp_path, "clawk.session.count"))
+    sessions = sorted(
+        (d["entrypoint"], d["execution_surface"], d["turn_count_bucket"])
+        for d, _ in _stored_values(tmp_path, "clawk.session.count")
+    )
     assert sessions == [
-        ("background", "cli", "1"), ("interactive", "cli", "1"), ("interactive", "desktop", "1"),
+        ("background", "cli", "1"),
+        ("interactive", "cli", "1"),
+        ("interactive", "desktop", "1"),
         ("one_shot", "cli", "1"),
     ]
 
 
-def test_oneshot_hard_exit_cleanup_records_the_session_summary(direct_runtime, tmp_path, monkeypatch):
+def test_oneshot_hard_exit_cleanup_records_the_session_summary(
+    direct_runtime, tmp_path, monkeypatch
+):
     """`clawk -z` leaves through os._exit, past the atexit hook that closes the metrics session; its
     pre-exit cleanup must write the run's session.count itself."""
     from clawk_cli import main as clawk_main
@@ -3052,4 +3224,6 @@ def test_oneshot_hard_exit_cleanup_records_the_session_summary(direct_runtime, t
     _join_export_workers()
 
     sessions = _stored_values(tmp_path, "clawk.session.count")
-    assert [(d["entrypoint"], d["turn_count_bucket"], v) for d, v in sessions] == [("one_shot", "1", 1)]
+    assert [(d["entrypoint"], d["turn_count_bucket"], v) for d, v in sessions] == [
+        ("one_shot", "1", 1)
+    ]

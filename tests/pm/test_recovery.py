@@ -1,4 +1,5 @@
 """PM repair replays the selected dependency graph without broken app imports."""
+
 from __future__ import annotations
 
 import importlib
@@ -14,8 +15,6 @@ import pytest
 from pm.lock import Facts
 from pm.runtime import runtime_environment
 from tests.pm._fixtures import _wheel
-
-
 
 
 @pytest.mark.parametrize("failure", [None, "missing_distribution", "broken_module"])
@@ -37,15 +36,24 @@ def test_startup_validation_checks_real_ruamel_dependency(tmp_path, failure):
     # Copy the real parser and distribution metadata into an isolated candidate.
     # A fake YAML class would not detect a broken install or missing dependency.
     ignored = ["__pycache__"] + (["main.py"] if failure == "broken_module" else [])
-    shutil.copytree(Path(ruamel.yaml.__file__).parent, package, ignore=shutil.ignore_patterns(*ignored))
+    shutil.copytree(
+        Path(ruamel.yaml.__file__).parent,
+        package,
+        ignore=shutil.ignore_patterns(*ignored),
+    )
     installed = distribution("ruamel.yaml")
     assert installed.files
-    metadata = next(Path(installed.locate_file(path)).parent for path in installed.files if path.name == "METADATA")
+    metadata = next(
+        Path(installed.locate_file(path)).parent
+        for path in installed.files
+        if path.name == "METADATA"
+    )
     if failure != "missing_distribution":
         shutil.copytree(metadata, target / metadata.name)
 
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname="yaml-recovery"\ndependencies=["ruamel.yaml"]\n', encoding="utf-8",
+        '[project]\nname="yaml-recovery"\ndependencies=["ruamel.yaml"]\n',
+        encoding="utf-8",
     )
 
     if failure:
@@ -66,20 +74,35 @@ def recovery_graph(tmp_path):
     (core / "pyproject.toml").write_text(
         '[project]\nname="repair-core"\nversion="1"\nrequires-python=">=3.11"\n'
         'dependencies=["core-dep==1.0"]\n[project.optional-dependencies]\nall=[]\n'
-        '[tool.uv]\npackage=false\nno-index=true\n'
-        f'find-links=[{json.dumps(wheels.as_posix())}]\n', encoding="utf-8",
+        "[tool.uv]\npackage=false\nno-index=true\n"
+        f"find-links=[{json.dumps(wheels.as_posix())}]\n",
+        encoding="utf-8",
     )
     plugin = tmp_path / "plugin"
     plugin.mkdir()
     (plugin / "pyproject.toml").write_text(
         '[project]\nname="repair-plugin"\nversion="1"\nrequires-python=">=3.11"\n'
-        'dependencies=["plugin-dep==1.0"]\n[tool.uv]\npackage=false\n', encoding="utf-8",
+        'dependencies=["plugin-dep==1.0"]\n[tool.uv]\npackage=false\n',
+        encoding="utf-8",
     )
     return core, plugin
 
 
-@pytest.mark.parametrize("failure", [None, "missing_lock", "corrupt_facts", "empty_environment", "missing_extras", "validation", "publication"])
-def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, monkeypatch, recovery_graph, failure):
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        "missing_lock",
+        "corrupt_facts",
+        "empty_environment",
+        "missing_extras",
+        "validation",
+        "publication",
+    ],
+)
+def test_repair_restores_recorded_plugin_dependencies_without_config(
+    tmp_path, monkeypatch, recovery_graph, failure
+):
     from pm import paths
     from pm import workspace
     from pm.environments import selected_venv, site_packages
@@ -90,13 +113,17 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
     core, plugin = recovery_graph
     monkeypatch.setattr(paths, "repo_root", lambda: core)
     monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable)))
+    monkeypatch.setattr(
+        "pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable))
+    )
     monkeypatch.setattr(engine, "lazy_installs_allowed", lambda: True)
     monkeypatch.setattr(workspace, "enabled_member_dirs", lambda: [plugin])
     # The committed core lock is independent of the plugin union.
     env = {**runtime_environment(), "UV_PYTHON": sys.executable, "UV_OFFLINE": "1"}
     env.pop("UV_NO_CONFIG", None)
-    subprocess.run([uv, "lock"], cwd=core, env=env, capture_output=True, check=True, timeout=60)
+    subprocess.run(
+        [uv, "lock"], cwd=core, env=env, capture_output=True, check=True, timeout=60
+    )
     engine.sync_venv([], explicit=True)
     old = selected_venv(core)
     old_fact = Facts(paths.runtime_facts_path()).get("venv")
@@ -109,6 +136,7 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
 
     def broken_config(*args, **kwargs):
         raise AssertionError("repair must use the recorded graph, not parse config")
+
     monkeypatch.setattr(engine, "lazy_installs_allowed", broken_config)
     monkeypatch.setattr(workspace, "enabled_member_dirs", broken_config)
     if failure:
@@ -116,7 +144,9 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
         from pm.package import InstallError
 
         if failure == "corrupt_facts":
-            paths.runtime_facts_path().write_text("invalid recorded state", encoding="utf-8")
+            paths.runtime_facts_path().write_text(
+                "invalid recorded state", encoding="utf-8"
+            )
         elif failure in {"empty_environment", "missing_extras"}:
             data = json.loads(paths.runtime_facts_path().read_text(encoding="utf-8"))
             recorded = data["packages"]["venv"]
@@ -126,8 +156,10 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
                 recorded.pop("extras")
             paths.runtime_facts_path().write_text(json.dumps(data), encoding="utf-8")
         old_facts = paths.runtime_facts_path().read_bytes()
+
         def fail(*args, **kwargs):
             raise InstallError("venv", "injected validation or publication failure")
+
         if failure == "missing_lock":
             Path(old_fact["resolved_lock"]).unlink()
         elif failure == "validation":
@@ -148,8 +180,17 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
     assert restored != old
     python = restored / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     result = subprocess.run(
-        [str(python), "-I", "-c", "import core_dep, plugin_dep; print(core_dep.__version__, plugin_dep.__version__)"],
-        cwd=tmp_path, capture_output=True, text=True, check=True, timeout=30,
+        [
+            str(python),
+            "-I",
+            "-c",
+            "import core_dep, plugin_dep; print(core_dep.__version__, plugin_dep.__version__)",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
     )
     assert result.stdout.strip() == "1.0 1.0"
     new_fact = Facts(paths.runtime_facts_path()).get("venv")
@@ -159,7 +200,9 @@ def test_repair_restores_recorded_plugin_dependencies_without_config(tmp_path, m
     assert config.read_bytes() == config_before
 
 
-def test_uncertain_profile_selection_skips_sync_but_not_admission_or_recorded_repair(tmp_path, monkeypatch, recovery_graph, caplog):
+def test_uncertain_profile_selection_skips_sync_but_not_admission_or_recorded_repair(
+    tmp_path, monkeypatch, recovery_graph, caplog
+):
     from pm import paths
     from clawk_cli.plugins_admission import AdmissionRefused, admit_plugin_set_change
     from pm.environments import install_state_dir, selected_venv, site_packages
@@ -181,17 +224,23 @@ def test_uncertain_profile_selection_skips_sync_but_not_admission_or_recorded_re
     sibling_config.write_text("plugins:\n  enabled: [worker-deps]\n", encoding="utf-8")
     monkeypatch.setenv("CLAWK_HOME", str(home))
     monkeypatch.setattr(paths, "repo_root", lambda: core)
-    monkeypatch.setattr("pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable)))
+    monkeypatch.setattr(
+        "pm._uv._toolchain", lambda **kwargs: (Path(uv), Path(sys.executable))
+    )
     monkeypatch.setattr(engine, "lazy_installs_allowed", lambda: True)
     env = {**runtime_environment(), "UV_PYTHON": sys.executable, "UV_OFFLINE": "1"}
     env.pop("UV_NO_CONFIG", None)
-    subprocess.run([uv, "lock"], cwd=core, env=env, check=True, capture_output=True, timeout=60)
+    subprocess.run(
+        [uv, "lock"], cwd=core, env=env, check=True, capture_output=True, timeout=60
+    )
     engine.sync_venv([], explicit=True)
     old = selected_venv(core)
     before_facts = paths.runtime_facts_path().read_bytes()
     before_config = active_config.read_bytes()
     before_generations = set((install_state_dir(core) / "environments").iterdir())
-    old_lock = Path(Facts(paths.runtime_facts_path()).get("venv")["resolved_lock"]).read_bytes()
+    old_lock = Path(
+        Facts(paths.runtime_facts_path()).get("venv")["resolved_lock"]
+    ).read_bytes()
     sibling_config.write_text("plugins:\n  enabled: [unclosed\n", encoding="utf-8")
     damaged_config = sibling_config.read_bytes()
 
@@ -200,7 +249,9 @@ def test_uncertain_profile_selection_skips_sync_but_not_admission_or_recorded_re
     assert paths.runtime_facts_path().read_bytes() == before_facts
     assert active_config.read_bytes() == before_config
     assert selected_venv(core) == old
-    assert set((install_state_dir(core) / "environments").iterdir()) == before_generations
+    assert (
+        set((install_state_dir(core) / "environments").iterdir()) == before_generations
+    )
 
     shutil.rmtree(site_packages(old) / "plugin_dep")
     engine.sync_venv(repair=True)
@@ -209,18 +260,35 @@ def test_uncertain_profile_selection_skips_sync_but_not_admission_or_recorded_re
     python = repaired / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     result = subprocess.run(
         [str(python), "-I", "-c", "import plugin_dep; print(plugin_dep.__version__)"],
-        cwd=tmp_path, capture_output=True, text=True, check=True, timeout=30,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
     )
     assert result.stdout.strip() == "1.0"
-    assert Path(Facts(paths.runtime_facts_path()).get("venv")["resolved_lock"]).read_bytes() == old_lock
+    assert (
+        Path(
+            Facts(paths.runtime_facts_path()).get("venv")["resolved_lock"]
+        ).read_bytes()
+        == old_lock
+    )
     with pytest.raises(ValueError, match="config.yaml"):
         engine.sync_venv(explicit=True)
     assert str(sibling_config) in caplog.text
     assert selected_venv(core) == repaired
     result = subprocess.run(
-        [str(repaired / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
-         "-I", "-c", "import core_dep; print(core_dep.__version__)"],
-        cwd=tmp_path, capture_output=True, text=True, check=True, timeout=30,
+        [
+            str(repaired / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
+            "-I",
+            "-c",
+            "import core_dep; print(core_dep.__version__)",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
     )
     assert result.stdout.strip() == "1.0"
     assert active_config.read_bytes() == before_config

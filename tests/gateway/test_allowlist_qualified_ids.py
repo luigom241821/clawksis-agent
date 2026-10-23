@@ -36,7 +36,10 @@ def _make_runner():
 # allowlist unset GATEWAY_ALLOWED_USERS is the only enforcement on that path.
 @pytest.mark.parametrize(
     ("platform", "env_var"),
-    [(Platform.EMAIL, "EMAIL_ALLOWED_USERS"), (Platform.BLUEBUBBLES, "GATEWAY_ALLOWED_USERS")],
+    [
+        (Platform.EMAIL, "EMAIL_ALLOWED_USERS"),
+        (Platform.BLUEBUBBLES, "GATEWAY_ALLOWED_USERS"),
+    ],
 )
 def test_bare_localpart_entry_admits_no_foreign_domain(monkeypatch, platform, env_var):
     # conftest's hermetic env blanks the EMAIL_/GATEWAY_ vars but not BlueBubbles' own.
@@ -60,4 +63,9 @@ def test_bare_localpart_entry_admits_no_foreign_domain(monkeypatch, platform, en
     ],
 )
 def test_whatsapp_bare_phone_entry_still_matches_jid(platform, user_id):
-    assert _principal_matches_allowlist(_source(platform, user_id), user_id, {"15550000001"}) is True
+    assert (
+        _principal_matches_allowlist(
+            _source(platform, user_id), user_id, {"15550000001"}
+        )
+        is True
+    )

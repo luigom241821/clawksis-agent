@@ -46,6 +46,7 @@ def isolate(tmp_path, monkeypatch):
 # DeadTargetRegistry unit contract
 # --------------------------------------------------------------------------
 
+
 class TestDeadTargetRegistry:
     def test_mark_is_dead_clear_roundtrip(self, isolate):
         reg = DeadTargetRegistry()
@@ -68,6 +69,7 @@ class TestDeadTargetRegistry:
 # --------------------------------------------------------------------------
 # DeliveryRouter end-to-end lifecycle
 # --------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_forbidden_marks_target_dead_then_short_circuits(isolate):
@@ -109,6 +111,7 @@ async def test_shared_registry_is_used_when_injected(isolate):
 # not_found blast radius: chat-level kills the chat, thread/message-level must not
 # --------------------------------------------------------------------------
 
+
 class RaisingAdapter:
     """Raises a fixed error message on every send."""
 
@@ -131,7 +134,6 @@ _SUBCHAT_NOT_FOUND_MESSAGES = [
 
 
 class TestNotFoundBlastRadius:
-
     @pytest.mark.parametrize("message", _SUBCHAT_NOT_FOUND_MESSAGES)
     def test_is_chat_level_not_found_subchat(self, message):
         from gateway.platforms.base import is_chat_level_not_found
@@ -142,6 +144,9 @@ class TestNotFoundBlastRadius:
         from gateway.platforms.base import is_chat_level_not_found
 
         # Conservative: if a sub-chat marker is present, never kill the whole chat.
-        assert is_chat_level_not_found(error_text="chat not found; message thread not found") is False
-
-
+        assert (
+            is_chat_level_not_found(
+                error_text="chat not found; message thread not found"
+            )
+            is False
+        )

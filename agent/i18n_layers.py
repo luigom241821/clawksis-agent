@@ -33,12 +33,16 @@ SURFACES: tuple[str, ...] = (CORE_SURFACE, "tui", "desktop")
 # ``en``, ``zh-hant``, ``pt-br``, ``sr-latn-rs``: lowercase language subtag + optional region/script parts.
 _LANGUAGE_ID_RE = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})*$")
 # ``pl.yaml`` -> (pl, core); ``pl.tui.yaml`` -> (pl, tui). Anything else in a locales dir is ignored.
-_LOCALE_FILE_RE = re.compile(r"^(?P<lang>[a-z]{2,3}(?:-[a-z0-9]{2,8})*)(?:\.(?P<surface>[a-z]+))?\.ya?ml$")
+_LOCALE_FILE_RE = re.compile(
+    r"^(?P<lang>[a-z]{2,3}(?:-[a-z0-9]{2,8})*)(?:\.(?P<surface>[a-z]+))?\.ya?ml$"
+)
 
 
 def normalize_language_id(value: Any) -> str:
     """Canonical spelling of a language id: lowercase, ``_`` -> ``-``, surrounding whitespace dropped."""
-    return str(value).strip().lower().replace("_", "-") if isinstance(value, str) else ""
+    return (
+        str(value).strip().lower().replace("_", "-") if isinstance(value, str) else ""
+    )
 
 
 def is_language_id(value: Any) -> bool:
@@ -48,7 +52,9 @@ def is_language_id(value: Any) -> bool:
 # ── parsing ───────────────────────────────────────────────────────────────────────────────────
 
 
-def flatten(node: Any, prefix: str = "", out: dict[str, str] | None = None) -> dict[str, str]:
+def flatten(
+    node: Any, prefix: str = "", out: dict[str, str] | None = None
+) -> dict[str, str]:
     """Nested mapping -> ``{dotted.key: text}``. Non-string, non-mapping leaves are dropped (catalogs are
     text-only); :func:`non_text_leaves` reports them for the validator."""
     flat: dict[str, str] = {} if out is None else out
@@ -65,7 +71,9 @@ def non_text_leaves(node: Any, prefix: str = "") -> list[str]:
     if isinstance(node, Mapping):
         found: list[str] = []
         for key, value in node.items():
-            found.extend(non_text_leaves(value, f"{prefix}.{key}" if prefix else str(key)))
+            found.extend(
+                non_text_leaves(value, f"{prefix}.{key}" if prefix else str(key))
+            )
         return found
     return [] if isinstance(node, str) else [prefix or "<root>"]
 
@@ -74,12 +82,15 @@ def parse_locale_file(path: Path) -> dict[str, str]:
     """Parse one locale YAML into a flat catalog. Raises on unreadable/unparseable input or a non-mapping
     document — the strict form for registration and validation."""
     import clawk_yaml as yaml
+
     with Path(path).open("r", encoding="utf-8-sig") as handle:
         data = yaml.safe_load(handle)
     if data is None:
         return {}
     if not isinstance(data, Mapping):
-        raise ValueError(f"{path}: top level must be a mapping, got {type(data).__name__}")
+        raise ValueError(
+            f"{path}: top level must be a mapping, got {type(data).__name__}"
+        )
     return flatten(data)
 
 
@@ -90,7 +101,9 @@ def load_locale_source(source: Any) -> dict[str, str]:
         return flatten(source)
     if isinstance(source, (str, Path)):
         return parse_locale_file(Path(source))
-    raise TypeError(f"locale source must be a mapping or a path to a YAML file, got {type(source).__name__}")
+    raise TypeError(
+        f"locale source must be a mapping or a path to a YAML file, got {type(source).__name__}"
+    )
 
 
 def scan_locale_dir(directory: Path) -> list[tuple[str, str, Path]]:
@@ -106,8 +119,12 @@ def scan_locale_dir(directory: Path) -> list[tuple[str, str, Path]]:
             continue
         surface = match.group("surface") or CORE_SURFACE
         if surface not in SURFACES:
-            logger.warning("Ignoring locale file %s: unknown surface %r (expected one of %s)",
-                           path, surface, ", ".join(SURFACES))
+            logger.warning(
+                "Ignoring locale file %s: unknown surface %r (expected one of %s)",
+                path,
+                surface,
+                ", ".join(SURFACES),
+            )
             continue
         found.append((match.group("lang"), surface, path))
     return found
@@ -139,22 +156,48 @@ _overlay_languages_cache: dict[str, frozenset[str]] = {}
 
 def _reset_facade() -> None:
     from agent.i18n import reset_language_cache  # lazy: the facade imports this module
+
     reset_language_cache()
 
 
-def register_pack(lang: str, surface: str, messages: Mapping[str, str], *, source: str,
-                  endonym: str | None = None, rtl: bool = False) -> PackEntry:
+def register_pack(
+    lang: str,
+    surface: str,
+    messages: Mapping[str, str],
+    *,
+    source: str,
+    endonym: str | None = None,
+    rtl: bool = False,
+) -> PackEntry:
     """Add a pack layer for ``(lang, surface)``; later registrations shadow earlier ones key by key."""
     lang_id = normalize_language_id(lang)
     if not is_language_id(lang_id):
-        raise ValueError(f"invalid language id {lang!r} (expected e.g. 'pl', 'pt-br', 'zh-hant')")
+        raise ValueError(
+            f"invalid language id {lang!r} (expected e.g. 'pl', 'pt-br', 'zh-hant')"
+        )
     if surface not in SURFACES:
-        raise ValueError(f"unknown locale surface {surface!r} (expected one of {', '.join(SURFACES)})")
-    entry = PackEntry(lang_id, surface, dict(messages), source, endonym or None, bool(rtl), next(_tokens))
+        raise ValueError(
+            f"unknown locale surface {surface!r} (expected one of {', '.join(SURFACES)})"
+        )
+    entry = PackEntry(
+        lang_id,
+        surface,
+        dict(messages),
+        source,
+        endonym or None,
+        bool(rtl),
+        next(_tokens),
+    )
     with _lock:
         _packs.append(entry)
     _reset_facade()
-    logger.debug("i18n pack registered: %s/%s from %s (%d keys)", lang_id, surface, source, len(entry.messages))
+    logger.debug(
+        "i18n pack registered: %s/%s from %s (%d keys)",
+        lang_id,
+        surface,
+        source,
+        len(entry.messages),
+    )
     return entry
 
 
@@ -196,8 +239,13 @@ def pack_info(lang: str) -> dict[str, Any] | None:
         entries = [entry for entry in _packs if entry.lang == lang]
     if not entries:
         return None
-    endonym = next((entry.endonym for entry in reversed(entries) if entry.endonym), None)
-    rtl = next((entry.rtl for entry in reversed(entries) if entry.endonym is not None), entries[-1].rtl)
+    endonym = next(
+        (entry.endonym for entry in reversed(entries) if entry.endonym), None
+    )
+    rtl = next(
+        (entry.rtl for entry in reversed(entries) if entry.endonym is not None),
+        entries[-1].rtl,
+    )
     return {"endonym": endonym, "rtl": rtl, "source": entries[-1].source}
 
 
@@ -208,7 +256,9 @@ def overlay_dir(home: Path | str) -> Path:
     return Path(home) / "locales"
 
 
-def overlay_layer(home: Path | str, lang: str, surface: str = CORE_SURFACE) -> dict[str, str]:
+def overlay_layer(
+    home: Path | str, lang: str, surface: str = CORE_SURFACE
+) -> dict[str, str]:
     """``<home>/locales/<lang>[.<surface>].yaml`` flattened; ``{}`` (logged) when missing or broken. Cached
     per home so a multiplexed process serving profile A then B then A never mixes overlays."""
     key = (str(home), lang, surface)
@@ -237,13 +287,17 @@ def overlay_languages(home: Path | str) -> frozenset[str]:
         cached = _overlay_languages_cache.get(key)
         if cached is not None:
             return cached
-    langs = frozenset(lang for lang, _surface, _path in scan_locale_dir(overlay_dir(home)))
+    langs = frozenset(
+        lang for lang, _surface, _path in scan_locale_dir(overlay_dir(home))
+    )
     with _lock:
         _overlay_languages_cache[key] = langs
     return langs
 
 
-def surface_catalog(home: Path | str, lang: str, surface: str = CORE_SURFACE) -> dict[str, str]:
+def surface_catalog(
+    home: Path | str, lang: str, surface: str = CORE_SURFACE
+) -> dict[str, str]:
     """Overlay + packs (packs win) for one surface — the layer ``i18n.catalog`` ships to a renderer, which
     merges it over its own bundled catalog. Bundled Python locales are NOT included."""
     merged = dict(overlay_layer(home, lang, surface))

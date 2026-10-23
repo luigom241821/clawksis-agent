@@ -10,8 +10,6 @@ _RESPONSES_IMAGE_PART = {"type": "input_image", "image_url": _IMAGE_URL}
 _CHECKPOINT = {"type": "compaction", "encrypted_content": "blob_cp"}
 
 
-
-
 def test_image_only_user_message_survives_pre_checkpoint_pruning_verbatim():
     image_only = {"role": "user", "content": [_RESPONSES_IMAGE_PART]}
     items = [

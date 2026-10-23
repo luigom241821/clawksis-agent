@@ -17,13 +17,13 @@ from agent.provider_base import ProviderBase
 class UIElement:
     """One interactable element on the current screen."""
 
-    index: int                       # 1-based SOM index
-    role: str                        # AX role (AXButton, AXTextField, ...)
-    label: str = ""                  # AXTitle / AXDescription / AXValue snippet
+    index: int  # 1-based SOM index
+    role: str  # AX role (AXButton, AXTextField, ...)
+    label: str = ""  # AXTitle / AXDescription / AXValue snippet
     bounds: tuple[int, int, int, int] = (0, 0, 0, 0)  # x, y, w, h (logical px)
-    app: str = ""                    # owning bundle ID or app name
-    pid: int = 0                     # owning process PID
-    window_id: int = 0               # SkyLight / CG window ID
+    app: str = ""  # owning bundle ID or app name
+    pid: int = 0  # owning process PID
+    window_id: int = 0  # SkyLight / CG window ID
     attributes: dict[str, Any] = field(default_factory=dict)
     # Opaque per-snapshot handle from cua-driver, passed alongside `index` for explicit stale-detection: a
     # stale token errors instead of silently re-resolving to a different element. None on older drivers.
@@ -38,13 +38,13 @@ class CaptureResult:
     the backend and `elements` holds the matching index → element mapping."""
 
     mode: str
-    width: int                      # screenshot width (logical px, pre-Anthropic-scale)
+    width: int  # screenshot width (logical px, pre-Anthropic-scale)
     height: int
     png_b64: Optional[str] = None
     elements: list[UIElement] = field(default_factory=list)
-    app: str = ""                   # target app/window the elements were captured for
+    app: str = ""  # target app/window the elements were captured for
     window_title: str = ""
-    png_bytes_len: int = 0          # raw bytes sent to Anthropic, for token estimation
+    png_bytes_len: int = 0  # raw bytes sent to Anthropic, for token estimation
     # MIME type of `png_b64` when the backend supplied it (cua-driver-rs emits `mimeType` on every image
     # part). None → consumers fall back to base64-prefix sniffing (older drivers).
     # See #1961, #47072.
@@ -71,17 +71,29 @@ class ActionResult:
 
     ok: bool
     action: str
-    message: str = ""                # human-readable summary
-    capture: Optional[CaptureResult] = None  # trailing screenshot, when requested / always-on
+    message: str = ""  # human-readable summary
+    capture: Optional[CaptureResult] = (
+        None  # trailing screenshot, when requested / always-on
+    )
     meta: dict[str, Any] = field(default_factory=dict)  # debugging / telemetry extras
-    verified: Optional[bool] = None  # AX read-back: True confirmed, False unconfirmed, None n/a
-    effect: Optional[str] = None     # "confirmed" | "unverifiable" | "suspected_noop"
+    verified: Optional[bool] = (
+        None  # AX read-back: True confirmed, False unconfirmed, None n/a
+    )
+    effect: Optional[str] = None  # "confirmed" | "unverifiable" | "suspected_noop"
     # {"recommended": "px"|"foreground"|"page", "reason": str} — only when driver recommends climbing
     escalation: Optional[dict[str, Any]] = None
-    path: Optional[str] = None       # delivery rung that ran (e.g. "ax", "x11_pixel", "cgevent_fg")
-    degraded: Optional[bool] = None  # AX walk found no actionable elements (act by px instead)
-    delivery_mode: Optional[str] = None  # the delivery_mode the caller requested, echoed back
-    code: Optional[str] = None       # refusal code, e.g. "background_unavailable", "desktop_scope_disabled"
+    path: Optional[str] = (
+        None  # delivery rung that ran (e.g. "ax", "x11_pixel", "cgevent_fg")
+    )
+    degraded: Optional[bool] = (
+        None  # AX walk found no actionable elements (act by px instead)
+    )
+    delivery_mode: Optional[str] = (
+        None  # the delivery_mode the caller requested, echoed back
+    )
+    code: Optional[str] = (
+        None  # refusal code, e.g. "background_unavailable", "desktop_scope_disabled"
+    )
 
 
 class ComputerUseBackend(ABC):
@@ -98,37 +110,83 @@ class ComputerUseBackend(ABC):
     def stop(self) -> None: ...
 
     @abstractmethod
-    def is_available(self) -> bool: ...  # usable on this host right now (check_fn gating, setup wizard)
+    def is_available(
+        self,
+    ) -> bool: ...  # usable on this host right now (check_fn gating, setup wizard)
 
     @abstractmethod
-    def capture(self, mode: str = "som", app: Optional[str] = None, pid: Optional[int] = None,
-                window_id: Optional[int] = None) -> CaptureResult: ...
+    def capture(
+        self,
+        mode: str = "som",
+        app: Optional[str] = None,
+        pid: Optional[int] = None,
+        window_id: Optional[int] = None,
+    ) -> CaptureResult: ...
 
     @abstractmethod
-    def click(self, *, element: Optional[int] = None, x: Optional[int] = None, y: Optional[int] = None,
-              button: str = "left", click_count: int = 1, modifiers: Optional[list[str]] = None,
-              delivery_mode: Optional[str] = None, bring_to_front: bool = False) -> ActionResult: ...
+    def click(
+        self,
+        *,
+        element: Optional[int] = None,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+        button: str = "left",
+        click_count: int = 1,
+        modifiers: Optional[list[str]] = None,
+        delivery_mode: Optional[str] = None,
+        bring_to_front: bool = False,
+    ) -> ActionResult: ...
 
     @abstractmethod
-    def drag(self, *, from_element: Optional[int] = None, to_element: Optional[int] = None,
-             from_xy: Optional[tuple[int, int]] = None, to_xy: Optional[tuple[int, int]] = None,
-             button: str = "left", modifiers: Optional[list[str]] = None,
-             delivery_mode: Optional[str] = None, bring_to_front: bool = False) -> ActionResult: ...
+    def drag(
+        self,
+        *,
+        from_element: Optional[int] = None,
+        to_element: Optional[int] = None,
+        from_xy: Optional[tuple[int, int]] = None,
+        to_xy: Optional[tuple[int, int]] = None,
+        button: str = "left",
+        modifiers: Optional[list[str]] = None,
+        delivery_mode: Optional[str] = None,
+        bring_to_front: bool = False,
+    ) -> ActionResult: ...
 
     @abstractmethod
-    def scroll(self, *, direction: str, amount: int = 3, element: Optional[int] = None,
-               x: Optional[int] = None, y: Optional[int] = None, modifiers: Optional[list[str]] = None,
-               delivery_mode: Optional[str] = None, bring_to_front: bool = False) -> ActionResult: ...
+    def scroll(
+        self,
+        *,
+        direction: str,
+        amount: int = 3,
+        element: Optional[int] = None,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+        modifiers: Optional[list[str]] = None,
+        delivery_mode: Optional[str] = None,
+        bring_to_front: bool = False,
+    ) -> ActionResult: ...
 
     @abstractmethod
-    def type_text(self, text: str, *, delivery_mode: Optional[str] = None,
-                  bring_to_front: bool = False) -> ActionResult: ...
+    def type_text(
+        self,
+        text: str,
+        *,
+        delivery_mode: Optional[str] = None,
+        bring_to_front: bool = False,
+    ) -> ActionResult: ...
 
     @abstractmethod
-    def key(self, keys: str, *, delivery_mode: Optional[str] = None, bring_to_front: bool = False) -> ActionResult: ...
+    def key(
+        self,
+        keys: str,
+        *,
+        delivery_mode: Optional[str] = None,
+        bring_to_front: bool = False,
+    ) -> ActionResult: ...
 
     @abstractmethod
-    def list_apps(self) -> list[dict[str, Any]]: ...  # running apps with bundle IDs, PIDs, window counts
+    def list_apps(
+        self,
+    ) -> list[dict[str, Any]]: ...  # running apps with bundle IDs, PIDs, window counts
 
     def list_windows(self) -> list[dict[str, Any]]:
         """Visible native windows with PID and window identifiers. Optional compatibility hook: backends that
@@ -136,10 +194,14 @@ class ComputerUseBackend(ABC):
         return []
 
     @abstractmethod
-    def focus_app(self, app: str, raise_window: bool = False) -> ActionResult: ...  # route input to `app` (name / bundle ID)
+    def focus_app(
+        self, app: str, raise_window: bool = False
+    ) -> ActionResult: ...  # route input to `app` (name / bundle ID)
 
     @abstractmethod
-    def set_value(self, value: str, element: Optional[int] = None) -> ActionResult: ...  # e.g. AXPopUpButton selection
+    def set_value(
+        self, value: str, element: Optional[int] = None
+    ) -> ActionResult: ...  # e.g. AXPopUpButton selection
 
     def wait(self, seconds: float) -> ActionResult:  # default implementation
         time.sleep(max(0.0, min(seconds, 30.0)))

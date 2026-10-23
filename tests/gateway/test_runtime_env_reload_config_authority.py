@@ -15,7 +15,9 @@ import clawk_yaml as yaml
 from gateway import run as gateway_run
 
 
-def test_reload_runtime_env_preserves_config_max_turns(tmp_path: Path, monkeypatch) -> None:
+def test_reload_runtime_env_preserves_config_max_turns(
+    tmp_path: Path, monkeypatch
+) -> None:
     clawk_home = tmp_path / ".clawk"
     clawk_home.mkdir()
     (clawk_home / "config.yaml").write_text(
@@ -65,5 +67,3 @@ def test_reload_runtime_env_preserves_config_terminal_backend(
     gateway_run._reload_runtime_env_preserving_config_authority()
 
     assert os.environ["TERMINAL_ENV"] == "local"
-
-

@@ -41,7 +41,10 @@ def test_focus_topic_injected_into_summary_prompt():
     compressor = _make_compressor()
     turns = [
         {"role": "user", "content": "Tell me about the database schema"},
-        {"role": "assistant", "content": "The schema has tables: users, orders, products."},
+        {
+            "role": "assistant",
+            "content": "The schema has tables: users, orders, products.",
+        },
     ]
 
     captured_prompt = {}
@@ -83,9 +86,3 @@ def test_no_focus_topic_no_injection():
 
     prompt_text = captured_prompt["messages"][0]["content"]
     assert "FOCUS TOPIC" not in prompt_text
-
-
-
-
-
-

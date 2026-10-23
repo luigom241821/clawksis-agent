@@ -62,12 +62,14 @@ class TestPrepareAnthropicMessages:
 
     def test_non_vision_replaces_images_with_text(self):
         agent = _make_agent()
-        with patch.object(agent, "_model_supports_vision", return_value=False), \
-             patch.object(
-                 agent,
-                 "_describe_image_for_anthropic_fallback",
-                 return_value="[Image description: a cat]",
-             ):
+        with (
+            patch.object(agent, "_model_supports_vision", return_value=False),
+            patch.object(
+                agent,
+                "_describe_image_for_anthropic_fallback",
+                return_value="[Image description: a cat]",
+            ),
+        ):
             out = agent._prepare_anthropic_messages_for_api([IMG_PARTS_USER_MSG])
         # Content collapsed to a string containing the description + user text.
         content = out[0]["content"]
@@ -101,12 +103,14 @@ class TestPrepareMessagesForNonVision:
         agent = _make_agent()
         agent.provider = "openrouter"
         agent.model = "qwen/qwen3-235b-a22b"
-        with patch.object(agent, "_model_supports_vision", return_value=False), \
-             patch.object(
-                 agent,
-                 "_describe_image_for_anthropic_fallback",
-                 return_value="[Image description: a dog]",
-             ):
+        with (
+            patch.object(agent, "_model_supports_vision", return_value=False),
+            patch.object(
+                agent,
+                "_describe_image_for_anthropic_fallback",
+                return_value="[Image description: a dog]",
+            ),
+        ):
             out = agent._prepare_messages_for_non_vision_model([IMG_PARTS_USER_MSG])
         content = out[0]["content"]
         assert isinstance(content, str)
@@ -121,12 +125,14 @@ class TestPrepareMessagesForNonVision:
             {"role": "assistant", "content": "ack"},
             IMG_PARTS_USER_MSG,
         ]
-        with patch.object(agent, "_model_supports_vision", return_value=False), \
-             patch.object(
-                 agent,
-                 "_describe_image_for_anthropic_fallback",
-                 return_value="[Image: thing]",
-             ):
+        with (
+            patch.object(agent, "_model_supports_vision", return_value=False),
+            patch.object(
+                agent,
+                "_describe_image_for_anthropic_fallback",
+                return_value="[Image: thing]",
+            ),
+        ):
             out = agent._prepare_messages_for_non_vision_model(msgs)
         # First two messages unchanged (no images), third stripped.
         assert out[0]["content"] == "first turn"
@@ -148,21 +154,23 @@ class TestModelSupportsVision:
         agent.model = ""
         assert agent._model_supports_vision() is False
 
-
     def test_none_caps_returns_false(self):
         agent = _make_agent()
         with patch("agent.models_dev.get_model_capabilities", return_value=None):
             assert agent._model_supports_vision() is False
 
-
     def test_top_level_model_override_wins(self):
         agent = _make_agent()
         agent.provider = "custom"
         agent.model = "my-llava"
-        with patch("clawk_cli.config.load_config", return_value={"model": {"supports_vision": True}}), \
-             patch("agent.models_dev.get_model_capabilities", return_value=None):
+        with (
+            patch(
+                "clawk_cli.config.load_config",
+                return_value={"model": {"supports_vision": True}},
+            ),
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+        ):
             assert agent._model_supports_vision() is True
-
 
     def test_named_custom_provider_resolved_via_config_provider(self):
         # Named custom providers get runtime self.provider rewritten to
@@ -173,9 +181,12 @@ class TestModelSupportsVision:
         agent.model = "my-llava"
         cfg = {
             "model": {"provider": "my-vllm", "default": "my-llava"},
-            "providers": {"my-vllm": {"models": {"my-llava": {"supports_vision": True}}}},
+            "providers": {
+                "my-vllm": {"models": {"my-llava": {"supports_vision": True}}}
+            },
         }
-        with patch("clawk_cli.config.load_config", return_value=cfg), \
-             patch("agent.models_dev.get_model_capabilities", return_value=None):
+        with (
+            patch("clawk_cli.config.load_config", return_value=cfg),
+            patch("agent.models_dev.get_model_capabilities", return_value=None),
+        ):
             assert agent._model_supports_vision() is True
-

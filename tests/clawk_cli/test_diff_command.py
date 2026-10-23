@@ -17,9 +17,7 @@ import pytest
 
 from clawk_cli.cli_commands_mixin import CLICommandsMixin
 
-requires_git = pytest.mark.skipif(
-    shutil.which("git") is None, reason="git required"
-)
+requires_git = pytest.mark.skipif(shutil.which("git") is None, reason="git required")
 
 
 class _Console:
@@ -63,11 +61,20 @@ def _run(stub, command):
 
 
 def _git(repo, *args):
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True,
-                   env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-                        "HOME": str(repo),
-                        "PATH": __import__("os").environ["PATH"]})
+    subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        env={
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+            "HOME": str(repo),
+            "PATH": __import__("os").environ["PATH"],
+        },
+    )
 
 
 @pytest.fixture()
@@ -86,6 +93,7 @@ def repo(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # Default (working-tree) mode — real git
 # ---------------------------------------------------------------------------
+
 
 @requires_git
 def test_diff_clean_repo_reports_no_changes(repo):
@@ -112,5 +120,3 @@ def test_diff_session_empty_reports_no_changes(tmp_path, monkeypatch):
     mgr = _Mgr({"success": True, "stat": "", "diff": "", "empty": True})
     out = _run(_Stub(_Agent(mgr)), "/diff session")
     assert "No changes" in out
-
-

@@ -11,7 +11,7 @@ import pytest
 from clawk_cli import plugins as plugins_mod
 from clawk_cli.plugins import PluginManager
 
-PROBE_PLUGIN = '''
+PROBE_PLUGIN = """
 import json, os
 from agent.image_gen_provider import ImageGenProvider
 
@@ -36,12 +36,12 @@ def register(ctx):
         handler=lambda args, **kw: os._exit(3))
     ctx.register_hook("post_tool_call", lambda tool_name=None, **kw: SEEN.append(tool_name))
     ctx.register_image_gen_provider(Painter())
-'''
+"""
 
-PLATFORM_PLUGIN = '''
+PLATFORM_PLUGIN = """
 def register(ctx):
     ctx.register_platform("x", "X", adapter_factory=lambda cfg: None, check_fn=lambda: True)
-'''
+"""
 
 
 def _home_with_plugins(tmp_path, monkeypatch, plugins: dict, isolation="host"):
@@ -50,10 +50,14 @@ def _home_with_plugins(tmp_path, monkeypatch, plugins: dict, isolation="host"):
     for name, body in plugins.items():
         plugin_dir = home / "plugins" / name
         plugin_dir.mkdir(parents=True)
-        (plugin_dir / "plugin.yaml").write_text(yaml.safe_dump({"name": name, "version": "1.0"}), encoding="utf-8")
+        (plugin_dir / "plugin.yaml").write_text(
+            yaml.safe_dump({"name": name, "version": "1.0"}), encoding="utf-8"
+        )
         (plugin_dir / "__init__.py").write_text(body, encoding="utf-8")
-    (home / "config.yaml").write_text(yaml.safe_dump(
-        {"plugins": {"enabled": list(plugins), "isolation": isolation}}), encoding="utf-8")
+    (home / "config.yaml").write_text(
+        yaml.safe_dump({"plugins": {"enabled": list(plugins), "isolation": isolation}}),
+        encoding="utf-8",
+    )
     empty_bundled = tmp_path / "bundled"
     empty_bundled.mkdir()
     monkeypatch.setenv("HOME", str(tmp_path / "os-home"))
@@ -63,27 +67,44 @@ def _home_with_plugins(tmp_path, monkeypatch, plugins: dict, isolation="host"):
 
 
 @pytest.mark.platforms("posix")  # os._exit / SIGKILL process semantics
-def test_plugin_runs_out_of_process_with_ctx_round_trips_and_survives_host_crash(tmp_path, monkeypatch):
+def test_plugin_runs_out_of_process_with_ctx_round_trips_and_survives_host_crash(
+    tmp_path, monkeypatch
+):
     from agent import image_gen_registry
     from agent.image_gen_provider import ImageGenProvider
     from tools.registry import registry
 
-    _home_with_plugins(tmp_path, monkeypatch, {"hostprobe": PROBE_PLUGIN, "platformprobe": PLATFORM_PLUGIN})
+    _home_with_plugins(
+        tmp_path,
+        monkeypatch,
+        {"hostprobe": PROBE_PLUGIN, "platformprobe": PLATFORM_PLUGIN},
+    )
     manager = PluginManager()
     manager.discover_and_load()
     try:
         # The plugin's code never entered this interpreter, yet its registrations are ordinary.
         assert not any("hostprobe" in name for name in sys.modules)
         assert manager._plugins["hostprobe"].error is None
-        first = json.loads(registry.dispatch("hostprobe_pid", {"x": 1}, scope=manager.scope_key))
+        first = json.loads(
+            registry.dispatch("hostprobe_pid", {"x": 1}, scope=manager.scope_key)
+        )
         host_pid = first["pid"]
         assert host_pid != os.getpid()
         # A handler calling back into Clawksis while Clawksis waits on it (nested ctx.dispatch_tool).
-        nested = json.loads(registry.dispatch("hostprobe_nested", {}, scope=manager.scope_key))
+        nested = json.loads(
+            registry.dispatch("hostprobe_nested", {}, scope=manager.scope_key)
+        )
         assert nested["pid"] == host_pid and nested["x"] == "nested"
         # Hooks fire in the host; provider objects arrive as instances of the ABC Clawksis checks.
-        manager.invoke_hook("post_tool_call", tool_name="read_file", args={}, result="ok")
-        assert "read_file" in json.loads(registry.dispatch("hostprobe_pid", {}, scope=manager.scope_key))["seen"]
+        manager.invoke_hook(
+            "post_tool_call", tool_name="read_file", args={}, result="ok"
+        )
+        assert (
+            "read_file"
+            in json.loads(
+                registry.dispatch("hostprobe_pid", {}, scope=manager.scope_key)
+            )["seen"]
+        )
         painter = image_gen_registry.get_provider("hostpainter")
         assert isinstance(painter, ImageGenProvider)
         assert painter.generate("cat") == {"success": True, "image": f"cat@{host_pid}"}
@@ -105,18 +126,32 @@ def test_plugin_runs_out_of_process_with_ctx_round_trips_and_survives_host_crash
         manager._plugin_host().shutdown()
 
 
-@pytest.mark.platforms("any")  # the host is a child process: its env/home resolution is per-OS
-def test_isolation_host_keeps_every_user_import_path_out_of_process(tmp_path, monkeypatch):
+@pytest.mark.platforms(
+    "any"
+)  # the host is a child process: its env/home resolution is per-OS
+def test_isolation_host_keeps_every_user_import_path_out_of_process(
+    tmp_path, monkeypatch
+):
     from clawk_cli.plugin_isolation_audit import audit_plugin_dir
     from plugins import plugin_loader
 
-    home = _home_with_plugins(tmp_path, monkeypatch, {"platformprobe": PLATFORM_PLUGIN, "fine": PROBE_PLUGIN})
+    home = _home_with_plugins(
+        tmp_path, monkeypatch, {"platformprobe": PLATFORM_PLUGIN, "fine": PROBE_PLUGIN}
+    )
     # Category loaders' in-process import refuses user code under host isolation (the backstop
     # behind the memory / context-engine / cron host routes).
     import logging
-    assert plugin_loader.load_plugin_module(
-        "_clawk_user_x.fine", home / "plugins" / "fine", parents=("_clawk_user_x",),
-        logger=logging.getLogger("t"), synthetic_namespace="_clawk_user_x") is None
+
+    assert (
+        plugin_loader.load_plugin_module(
+            "_clawk_user_x.fine",
+            home / "plugins" / "fine",
+            parents=("_clawk_user_x",),
+            logger=logging.getLogger("t"),
+            synthetic_namespace="_clawk_user_x",
+        )
+        is None
+    )
     assert "_clawk_user_x.fine" not in sys.modules
     # The static audit reads the same boundary table the host enforces.
     assert audit_plugin_dir(home / "plugins" / "fine").verdict == "host"
@@ -124,24 +159,31 @@ def test_isolation_host_keeps_every_user_import_path_out_of_process(tmp_path, mo
     assert blocked.verdict == "in_process" and "register_platform" in blocked.reasons[0]
 
 
-
-def test_managed_scope_pins_host_isolation_over_the_profiles_own_config(tmp_path, monkeypatch):
+def test_managed_scope_pins_host_isolation_over_the_profiles_own_config(
+    tmp_path, monkeypatch
+):
     """The isolated party must not be able to opt out: an operator pin in the managed scope
     (/etc/clawk/config.yaml) wins over a profile config that says in_process."""
     from clawk_cli import managed_scope
     from tools.registry import registry
 
-    _home_with_plugins(tmp_path, monkeypatch, {"hostprobe": PROBE_PLUGIN}, isolation="in_process")
+    _home_with_plugins(
+        tmp_path, monkeypatch, {"hostprobe": PROBE_PLUGIN}, isolation="in_process"
+    )
     managed = tmp_path / "managed"
     managed.mkdir()
-    (managed / "config.yaml").write_text(yaml.safe_dump({"plugins": {"isolation": "host"}}), encoding="utf-8")
+    (managed / "config.yaml").write_text(
+        yaml.safe_dump({"plugins": {"isolation": "host"}}), encoding="utf-8"
+    )
     monkeypatch.setenv("CLAWK_MANAGED_DIR", str(managed))
     managed_scope.invalidate_managed_cache()
     manager = PluginManager()
     manager.discover_and_load()
     try:
         assert not any("hostprobe" in name for name in sys.modules)
-        result = json.loads(registry.dispatch("hostprobe_pid", {}, scope=manager.scope_key))
+        result = json.loads(
+            registry.dispatch("hostprobe_pid", {}, scope=manager.scope_key)
+        )
         assert result["pid"] != os.getpid()
     finally:
         host = getattr(manager, "_plugin_host_instance", None)
@@ -149,7 +191,8 @@ def test_managed_scope_pins_host_isolation_over_the_profiles_own_config(tmp_path
             host.shutdown()
         managed_scope.invalidate_managed_cache()
 
-MODEL_PROVIDER_PLUGIN = '''
+
+MODEL_PROVIDER_PLUGIN = """
 import os
 from providers import register_provider
 from providers.base import ProviderProfile
@@ -159,24 +202,36 @@ class HostModel(ProviderProfile):
         return {"pid": os.getpid(), "session_id": session_id}
 
 register_provider(HostModel(name="hostmodel", base_url="https://hostmodel.example/v1", env_vars=("HOSTMODEL_KEY",)))
-'''
+"""
 
 
-@pytest.mark.platforms("any")  # the host is a child process: its env/home resolution is per-OS
-def test_model_provider_profile_data_is_local_and_overrides_run_in_the_host(tmp_path, monkeypatch):
+@pytest.mark.platforms(
+    "any"
+)  # the host is a child process: its env/home resolution is per-OS
+def test_model_provider_profile_data_is_local_and_overrides_run_in_the_host(
+    tmp_path, monkeypatch
+):
     import providers
 
     home = _home_with_plugins(tmp_path, monkeypatch, {})
     plugin_dir = home / "plugins" / "model-providers" / "hostmodel"
     plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.yaml").write_text("name: hostmodel\nkind: model-provider\n", encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        "name: hostmodel\nkind: model-provider\n", encoding="utf-8"
+    )
     (plugin_dir / "__init__.py").write_text(MODEL_PROVIDER_PLUGIN, encoding="utf-8")
     profile = providers.get_provider_profile("hostmodel")
     try:
         assert isinstance(profile, providers.ProviderProfile)
         # Discovery never started a host: data came from the cached, credential-free extraction.
-        assert profile.base_url == "https://hostmodel.example/v1" and tuple(profile.env_vars) == ("HOSTMODEL_KEY",)
-        assert list((home / "cache" / "plugin_host" / "model-providers").glob("hostmodel-*.json"))
+        assert profile.base_url == "https://hostmodel.example/v1" and tuple(
+            profile.env_vars
+        ) == ("HOSTMODEL_KEY",)
+        assert list(
+            (home / "cache" / "plugin_host" / "model-providers").glob(
+                "hostmodel-*.json"
+            )
+        )
         assert not any("hostmodel" in name for name in sys.modules)
         body = profile.build_extra_body(session_id="s1")
         assert body["session_id"] == "s1" and body["pid"] != os.getpid()
@@ -186,7 +241,7 @@ def test_model_provider_profile_data_is_local_and_overrides_run_in_the_host(tmp_
             host.shutdown()
 
 
-ASYNC_PLUGIN = '''
+ASYNC_PLUGIN = """
 import asyncio, json
 S = {"type": "object", "properties": {}}
 
@@ -196,30 +251,48 @@ def register(ctx):
                            "acomplete_awaitable": asyncio.iscoroutinefunction(ctx.llm.acomplete)})
     ctx.register_tool(name="async_whoami", toolset="asyncprobe", schema={"name": "async_whoami",
         "description": "d", "parameters": S}, handler=whoami, is_async=True)
-'''
+"""
 
 
-@pytest.mark.platforms("any")  # the host is a child process: its env/home resolution is per-OS
+@pytest.mark.platforms(
+    "any"
+)  # the host is a child process: its env/home resolution is per-OS
 def test_async_plugin_code_calls_back_in_the_callers_session(tmp_path, monkeypatch):
     import contextvars
     from tools.registry import registry
 
     session = contextvars.ContextVar("session", default="<unset>")
-    session.set("host-creator")  # whoever first touches the host must not leak into later calls
-    registry.register(name="session_probe", toolset="asyncprobe", schema={"name": "session_probe",
-                      "description": "d", "parameters": {"type": "object", "properties": {}}},
-                      handler=lambda args, **kw: json.dumps({"session": session.get()}))
+    session.set(
+        "host-creator"
+    )  # whoever first touches the host must not leak into later calls
+    registry.register(
+        name="session_probe",
+        toolset="asyncprobe",
+        schema={
+            "name": "session_probe",
+            "description": "d",
+            "parameters": {"type": "object", "properties": {}},
+        },
+        handler=lambda args, **kw: json.dumps({"session": session.get()}),
+    )
     _home_with_plugins(tmp_path, monkeypatch, {"asyncprobe": ASYNC_PLUGIN})
     manager = PluginManager()
     manager.discover_and_load()
     try:
+
         def call_as(name):
             def run():
                 session.set(name)
-                return json.loads(registry.dispatch("async_whoami", {}, scope=manager.scope_key))
+                return json.loads(
+                    registry.dispatch("async_whoami", {}, scope=manager.scope_key)
+                )
+
             return contextvars.copy_context().run(run)
 
-        assert call_as("session-B") == {"inner": {"session": "session-B"}, "acomplete_awaitable": True}
+        assert call_as("session-B") == {
+            "inner": {"session": "session-B"},
+            "acomplete_awaitable": True,
+        }
         assert call_as("session-C")["inner"] == {"session": "session-C"}
     finally:
         registry.deregister("session_probe")
@@ -227,7 +300,7 @@ def test_async_plugin_code_calls_back_in_the_callers_session(tmp_path, monkeypat
         manager._plugin_host().shutdown()
 
 
-MEMORY_PLUGIN = '''
+MEMORY_PLUGIN = """
 import os
 from agent.memory_provider import MemoryProvider
 
@@ -244,7 +317,7 @@ class Probe(MemoryProvider):
 
 def register(ctx):
     ctx.register_memory_provider(Probe())
-'''
+"""
 
 
 @pytest.mark.platforms("posix")  # SIGKILL
@@ -260,18 +333,23 @@ def test_hosted_memory_provider_stays_live_across_a_host_crash(tmp_path, monkeyp
     marker = tmp_path / "schema_pid"
     (provider_dir / "config_schema.py").write_text(
         f"import os, pathlib\npathlib.Path({str(marker)!r}).write_text(str(os.getpid()))\nCONFIG_SCHEMA = None\n",
-        encoding="utf-8")
+        encoding="utf-8",
+    )
     host = plugins_mod.get_plugin_manager()._plugin_host()
     try:
         provider = load_memory_provider("memprobe")
         first_pid = provider.whoami()
         assert first_pid == host.pid != os.getpid()
-        assert provider.level == 1  # read live from the plugin's object, not the class default
+        assert (
+            provider.level == 1
+        )  # read live from the plugin's object, not the class default
         # The provider's schema file is user code too: it runs in the host, never here.
         get_provider_config_schema("memprobe")
         assert int(marker.read_text(encoding="utf-8-sig")) == host.pid
 
-        os.kill(first_pid, signal.SIGKILL)  # windows-footgun: ok — posix-only test (platforms marker)
+        os.kill(
+            first_pid, signal.SIGKILL
+        )  # windows-footgun: ok — posix-only test (platforms marker)
         deadline = time.monotonic() + 10
         while host.alive and time.monotonic() < deadline:
             time.sleep(0.1)
@@ -289,7 +367,7 @@ def test_host_plugin_can_launch_status_and_steer_subagent(tmp_path, monkeypatch)
     from tools.delegate_tool_registry import _register_subagent, _unregister_subagent
     from tools.registry import registry
 
-    body = '''
+    body = """
 import json, os
 from agent.subagent_lifecycle import SubagentLaunchRequest
 def register(ctx):
@@ -301,10 +379,14 @@ def register(ctx):
     ctx.register_tool(name="host_lifecycle", toolset="hostlife",
         schema={"name": "host_lifecycle", "description": "d",
                 "parameters": {"type": "object", "properties": {}}}, handler=run)
-'''
+"""
     finish, steering = threading.Event(), []
-    child = SimpleNamespace(_subagent_id="sa-host-lifecycle", provider="test", model="test-model",
-                            steer=lambda text: steering.append(text) is None)
+    child = SimpleNamespace(
+        _subagent_id="sa-host-lifecycle",
+        provider="test",
+        model="test-model",
+        steer=lambda text: steering.append(text) is None,
+    )
     parent = SimpleNamespace(session_id="parent-host-lifecycle")
 
     def build(**kwargs):
@@ -326,7 +408,9 @@ def register(ctx):
     result = None
     try:
         with bind_subagent_parent(parent):
-            result = json.loads(registry.dispatch("host_lifecycle", {}, scope=manager.scope_key))
+            result = json.loads(
+                registry.dispatch("host_lifecycle", {}, scope=manager.scope_key)
+            )
         assert result["pid"] != os.getpid()
         assert result["state"] in {"PENDING", "RUNNING"}
         assert result["accepted"] is True
@@ -334,6 +418,7 @@ def register(ctx):
     finally:
         finish.set()
         from agent.subagent_lifecycle import _REGISTRY
+
         record = _REGISTRY.records.get(child._subagent_id)
         if record is not None:
             record.future.result(timeout=5)

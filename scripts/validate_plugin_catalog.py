@@ -46,7 +46,17 @@ except ImportError:  # pragma: no cover - dependency guidance only
 NAME_RE = re.compile(r"^[a-z0-9_-]{1,64}\Z")
 SHA_RE = re.compile(r"^[0-9a-f]{40}\Z")
 TIERS = ("official", "verified", "community")
-CATEGORIES = ("desktop", "memory", "platform", "web", "tools", "voice", "automation", "models", "general")
+CATEGORIES = (
+    "desktop",
+    "memory",
+    "platform",
+    "web",
+    "tools",
+    "voice",
+    "automation",
+    "models",
+    "general",
+)
 PLATFORMS = ("linux", "macos", "windows")
 CAPABILITY_KEYS = (
     "provides_tools",
@@ -97,7 +107,11 @@ _COMPARATOR_RE = re.compile(r"^(>=|<=|==|!=|>|<)\s*\d+(\.\d+)*\Z")
 def _is_allowed_image_url(url: str) -> bool:
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
-    return parts.scheme == "https" and bool(host) and (host in IMAGE_HOSTS or host.endswith(IMAGE_HOST_SUFFIX))
+    return (
+        parts.scheme == "https"
+        and bool(host)
+        and (host in IMAGE_HOSTS or host.endswith(IMAGE_HOST_SUFFIX))
+    )
 
 
 def _is_nonempty_str(value: object) -> bool:
@@ -112,18 +126,24 @@ def _check_page_fields(data: dict, errors: list[str]) -> None:
     """``screenshots`` and ``readme`` feed the entry's page at /docs/plugins/<name>; both optional (README on by default)."""
     shots = data.get("screenshots")
     if shots is not None:
-        if not isinstance(shots, list) or not all(isinstance(s, str) and _is_allowed_image_url(s) for s in shots):
+        if not isinstance(shots, list) or not all(
+            isinstance(s, str) and _is_allowed_image_url(s) for s in shots
+        ):
             errors.append(
                 f"screenshots must be a list of https URLs on {list(IMAGE_HOSTS)} or *{IMAGE_HOST_SUFFIX}"
             )
         elif len(shots) > MAX_SCREENSHOTS:
-            errors.append(f"screenshots lists {len(shots)} URLs; at most {MAX_SCREENSHOTS} are shown")
+            errors.append(
+                f"screenshots lists {len(shots)} URLs; at most {MAX_SCREENSHOTS} are shown"
+            )
     readme = data.get("readme")
     if readme is not None:
         if not isinstance(readme, bool):
             errors.append(f"readme must be true or false, got {readme!r}")
         elif readme and _repo_host(data.get("repo")) not in README_REPO_HOSTS:
-            errors.append(f"readme: true needs a repo on {list(README_REPO_HOSTS)} (the site fetches it from the pinned commit); omit it for other forges")
+            errors.append(
+                f"readme: true needs a repo on {list(README_REPO_HOSTS)} (the site fetches it from the pinned commit); omit it for other forges"
+            )
 
 
 def _check_requires_clawk(spec: object, errors: list[str]) -> None:
@@ -201,12 +221,20 @@ def validate_entry(data: object) -> tuple[list[str], list[str]]:
         _check_requires_clawk(data["requires_clawk"], errors)
 
     version = data.get("version")
-    if version is not None and (not isinstance(version, str) or not VERSION_RE.match(version)):
-        errors.append(f"version {version!r} must be 1-32 chars of [A-Za-z0-9._+-] (quote it in YAML)")
+    if version is not None and (
+        not isinstance(version, str) or not VERSION_RE.match(version)
+    ):
+        errors.append(
+            f"version {version!r} must be 1-32 chars of [A-Za-z0-9._+-] (quote it in YAML)"
+        )
 
     image = data.get("image")
-    if image is not None and (not isinstance(image, str) or not _is_allowed_image_url(image)):
-        errors.append(f"image {image!r} must be an https URL on {list(IMAGE_HOSTS)} or *{IMAGE_HOST_SUFFIX}")
+    if image is not None and (
+        not isinstance(image, str) or not _is_allowed_image_url(image)
+    ):
+        errors.append(
+            f"image {image!r} must be an https URL on {list(IMAGE_HOSTS)} or *{IMAGE_HOST_SUFFIX}"
+        )
 
     _check_page_fields(data, errors)
 

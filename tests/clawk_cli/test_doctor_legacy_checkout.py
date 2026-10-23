@@ -12,7 +12,9 @@ from clawk_cli.doctor_state import check_legacy_desktop_checkout
 def _git(cwd, *args):
     result = subprocess.run(
         ["git", "-C", str(cwd), *args],
-        capture_output=True, text=True, encoding="utf-8",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
         check=False,
     )
     assert result.returncode == 0, f"git {args} failed: {result.stderr}"
@@ -26,7 +28,13 @@ def embedded_context(tmp_path, monkeypatch):
     bundle.mkdir(parents=True)
     # The code-scoped stamp (pm.paths.install_stamp_path).
     (bundle / "install-stamp.json").write_text(
-        json.dumps({"commit": "a" * 40, "distribution": "desktop-app", "updateMechanism": "electron-updater"})
+        json.dumps(
+            {
+                "commit": "a" * 40,
+                "distribution": "desktop-app",
+                "updateMechanism": "electron-updater",
+            }
+        )
     )
     import clawk_cli.main as clawk_main
 
@@ -46,7 +54,9 @@ def embedded_context(tmp_path, monkeypatch):
 
 
 class TestLegacyDesktopCheckout:
-    def test_pristine_checkout_gets_report_without_deletion_command(self, embedded_context, capsys):
+    def test_pristine_checkout_gets_report_without_deletion_command(
+        self, embedded_context, capsys
+    ):
         check_legacy_desktop_checkout()
         out = capsys.readouterr().out
         assert "Unused checkout" in out
@@ -79,7 +89,9 @@ class TestLegacyDesktopCheckout:
         assert "holds local work" in out
         assert "rm -rf" not in out
 
-    def test_silent_without_a_checkout(self, embedded_context, tmp_path, monkeypatch, capsys):
+    def test_silent_without_a_checkout(
+        self, embedded_context, tmp_path, monkeypatch, capsys
+    ):
         import shutil
         import stat
 
@@ -94,7 +106,9 @@ class TestLegacyDesktopCheckout:
         check_legacy_desktop_checkout()
         assert capsys.readouterr().out == ""
 
-    def test_silent_when_running_from_a_git_checkout(self, embedded_context, monkeypatch, capsys):
+    def test_silent_when_running_from_a_git_checkout(
+        self, embedded_context, monkeypatch, capsys
+    ):
         # A git-managed install (dev tree or ejected) is not embedded; the
         # checkout at the managed root might BE the running tree.
         import clawk_cli.main as clawk_main

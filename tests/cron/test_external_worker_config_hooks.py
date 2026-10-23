@@ -9,6 +9,7 @@ registrations must run under the payload's home override so a multiplexed worker
 OWNING profile's hooks, and consent must resolve non-interactively (``hooks_auto_accept`` /
 allowlist / env — this process has no TTY).
 """
+
 from __future__ import annotations
 
 import json
@@ -30,7 +31,7 @@ def homes(tmp_path, monkeypatch):
     (profile / "config.yaml").write_text(
         "hooks:\n"
         "  on_session_start:\n"
-        f"    - command: \"{HOOK_CMD}\"\n"
+        f'    - command: "{HOOK_CMD}"\n'
         "  outbound:\n"
         f"    - url: {OUTBOUND_URL}\n"
         "      events: [on_session_end]\n"
@@ -60,8 +61,13 @@ def test_worker_registers_owning_profile_config_hooks(homes, tmp_path, monkeypat
 
     payload = tmp_path / "payload.json"
     payload.write_text(
-        json.dumps({"job": {"id": "job-1", "execution_id": "exec-1"},
-                    "profile_home": str(profile), "multiplex_active": True}),
+        json.dumps(
+            {
+                "job": {"id": "job-1", "execution_id": "exec-1"},
+                "profile_home": str(profile),
+                "multiplex_active": True,
+            }
+        ),
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -70,10 +76,17 @@ def test_worker_registers_owning_profile_config_hooks(homes, tmp_path, monkeypat
     )
     monkeypatch.setattr(scheduler, "run_one_job", lambda *a, **k: True)
 
-    assert scheduler._run_external_worker_payload(payload, tmp_path / "exec-1.ready") is True
+    assert (
+        scheduler._run_external_worker_payload(payload, tmp_path / "exec-1.ready")
+        is True
+    )
     # Registered under the OWNING profile's home key, not the launch home's.
     profile_key = clawk_home_key(profile)
-    assert any(home == profile_key and event == "on_session_start" and command == HOOK_CMD
-               for home, event, _matcher, command in shell_hooks._registered)
-    assert any(home == profile_key and event == "on_session_end" and url == OUTBOUND_URL
-               for home, event, url in outbound_webhooks._registered)
+    assert any(
+        home == profile_key and event == "on_session_start" and command == HOOK_CMD
+        for home, event, _matcher, command in shell_hooks._registered
+    )
+    assert any(
+        home == profile_key and event == "on_session_end" and url == OUTBOUND_URL
+        for home, event, url in outbound_webhooks._registered
+    )

@@ -14,10 +14,20 @@ from typing import Any, Callable, Collection, Dict, List, Optional, Tuple
 from agent.skill_commands import describe_skill_invocation
 from clawk_state_errors import is_malformed_db_error
 from clawk_state_common import (
-    FTS_CJK_STALE_KEY, FTS_SQL, FTS_STALE_KEY, FTS_STORAGE_VERSION, FTS_TOOL_CONTENT_PREFIX_CHARS,
-    FTS_TRIGRAM_EXCLUDED_SOURCES, FTS_TRIGRAM_SQL,
-    MAX_FTS5_QUERY_CHARS, SCHEMA_VERSION, _FTS_CJK_TRIGGERS,
-    escape_like as _escape_like, fts_rebuild_admission, fts_trigram_session_sql, routed_sessions_setting,
+    FTS_CJK_STALE_KEY,
+    FTS_SQL,
+    FTS_STALE_KEY,
+    FTS_STORAGE_VERSION,
+    FTS_TOOL_CONTENT_PREFIX_CHARS,
+    FTS_TRIGRAM_EXCLUDED_SOURCES,
+    FTS_TRIGRAM_SQL,
+    MAX_FTS5_QUERY_CHARS,
+    SCHEMA_VERSION,
+    _FTS_CJK_TRIGGERS,
+    escape_like as _escape_like,
+    fts_rebuild_admission,
+    fts_trigram_session_sql,
+    routed_sessions_setting,
 )
 from clawk_state_fts import fts_layout_current, fts_layout_drift
 
@@ -33,10 +43,11 @@ def _search_slow_ms() -> float:
     except (TypeError, ValueError):
         return 1000.0
 
+
 # Characters FTS5's query grammar rejects outside a quoted phrase (anything missing
 # reaches MATCH raw and raises -> zero results). ``%`` is deliberately excluded: the
 # CJK LIKE fallback needs it literal (that path escapes wildcards itself).
-_FTS5_SPECIAL_CHARS = '+{}():"^@/#&|~[]<>,;!?$=\\\''
+_FTS5_SPECIAL_CHARS = "+{}():\"^@/#&|~[]<>,;!?$=\\'"
 _FTS5_SPECIAL_RE = re.compile(f"[{re.escape(_FTS5_SPECIAL_CHARS)}]")
 
 _FTS_OPERATORS = frozenset({"AND", "OR", "NOT"})
@@ -45,18 +56,23 @@ _LIKE_TOKEN_RE = re.compile(r'"[^"]+"|\S+')
 _QUOTED_PHRASE_RE = re.compile(r'"[^"]*"')
 
 # Column list shared by every search route (snippet + metadata, never content).
-_SEARCH_SELECT_TAIL = "m.timestamp, m.tool_name, s.source, s.model, s.started_at AS session_started"
-_LIKE_SNIPPET_SQL = "substr(m.content, max(1, instr(m.content, ?) - 40), 120) AS snippet"
-_LIKE_ANY_COLUMN_SQL = (
-    "(m.content LIKE ? ESCAPE '\\' OR m.tool_name LIKE ? ESCAPE '\\' OR m.tool_calls LIKE ? ESCAPE '\\')"
+_SEARCH_SELECT_TAIL = (
+    "m.timestamp, m.tool_name, s.source, s.model, s.started_at AS session_started"
 )
+_LIKE_SNIPPET_SQL = (
+    "substr(m.content, max(1, instr(m.content, ?) - 40), 120) AS snippet"
+)
+_LIKE_ANY_COLUMN_SQL = "(m.content LIKE ? ESCAPE '\\' OR m.tool_name LIKE ? ESCAPE '\\' OR m.tool_calls LIKE ? ESCAPE '\\')"
 _LIKE_COALESCED_COLUMN_SQL = (
     "(COALESCE(m.content, '') LIKE ? ESCAPE '\\' OR "
     "COALESCE(m.tool_name, '') LIKE ? ESCAPE '\\' OR "
     "COALESCE(m.tool_calls, '') LIKE ? ESCAPE '\\')"
 )
 # ``sort`` -> ORDER BY for the FTS routes; unknown values are rank-only (user input passes through).
-_FTS_ORDER_BY = {"newest": "ORDER BY m.timestamp DESC, rank", "oldest": "ORDER BY m.timestamp ASC, rank"}
+_FTS_ORDER_BY = {
+    "newest": "ORDER BY m.timestamp DESC, rank",
+    "oldest": "ORDER BY m.timestamp ASC, rank",
+}
 # Indexed neighbor seeks avoid scanning whole sessions for a sparse set of hits.
 _CONTEXT_WINDOW_SQL = """WITH target AS (
     SELECT session_id, timestamp, id FROM messages WHERE id IN ({ids})
@@ -74,8 +90,13 @@ FROM target t JOIN messages m ON m.id IN (
 ORDER BY t.id, m.timestamp, m.id"""
 # Unified Ideographs, Extension A, Extension B, CJK Symbols, Hiragana, Katakana, Hangul Syllables.
 _CJK_RANGES = (
-    (0x4E00, 0x9FFF), (0x3400, 0x4DBF), (0x20000, 0x2A6DF), (0x3000, 0x303F), (0x3040, 0x309F),
-    (0x30A0, 0x30FF), (0xAC00, 0xD7AF),
+    (0x4E00, 0x9FFF),
+    (0x3400, 0x4DBF),
+    (0x20000, 0x2A6DF),
+    (0x3000, 0x303F),
+    (0x3040, 0x309F),
+    (0x30A0, 0x30FF),
+    (0xAC00, 0xD7AF),
 )
 
 
@@ -85,7 +106,9 @@ def _meta_row(conn, key: str) -> Optional[sqlite3.Row]:
 
 
 def _delete_meta(conn, *keys: str) -> None:
-    conn.execute(f"DELETE FROM state_meta WHERE key IN ({','.join('?' for _ in keys)})", keys)
+    conn.execute(
+        f"DELETE FROM state_meta WHERE key IN ({','.join('?' for _ in keys)})", keys
+    )
 
 
 def _is_cjk(cp: int) -> bool:
@@ -99,7 +122,8 @@ def _non_operator_tokens(raw_query: str) -> list[str]:
 def _quote_fts_tokens(raw_query: str) -> str:
     """Quote each non-operator token (neutralising FTS5 special characters), keeping AND/OR/NOT."""
     return " ".join(
-        tok if tok.upper() in _FTS_OPERATORS else '"' + tok.replace('"', '""') + '"' for tok in raw_query.split()
+        tok if tok.upper() in _FTS_OPERATORS else '"' + tok.replace('"', '""') + '"'
+        for tok in raw_query.split()
     )
 
 
@@ -135,7 +159,11 @@ def _strip_cjk_wildcards(raw_query: str) -> str:
 def _flatten_text(decoded: Any) -> str:
     """Multimodal part list -> joined text (or the placeholder); str passes through; else ''."""
     if isinstance(decoded, list):
-        parts = [p.get("text", "") for p in decoded if isinstance(p, dict) and p.get("type") == "text"]
+        parts = [
+            p.get("text", "")
+            for p in decoded
+            if isinstance(p, dict) and p.get("type") == "text"
+        ]
         return " ".join(t for t in parts if t).strip() or "[multimodal content]"
     return decoded if isinstance(decoded, str) else ""
 
@@ -147,7 +175,9 @@ def _positive_int(name: str, value: Any) -> None:
         raise ValueError(f"{name} must be greater than zero")
 
 
-def _search_select_sql(snippet_sql: str, from_sql: str, where: list[str], order_by: str, limit_sql: str) -> str:
+def _search_select_sql(
+    snippet_sql: str, from_sql: str, where: list[str], order_by: str, limit_sql: str
+) -> str:
     """Result-row SELECT shared by the FTS and LIKE routes (SQL text is pinned)."""
     return f"""
             SELECT m.id, m.session_id, m.role,
@@ -155,16 +185,23 @@ def _search_select_sql(snippet_sql: str, from_sql: str, where: list[str], order_
                    {_SEARCH_SELECT_TAIL}
             FROM {from_sql}
             JOIN sessions s ON s.id = m.session_id
-            WHERE {' AND '.join(where)}
+            WHERE {" AND ".join(where)}
             {order_by}
             {limit_sql}
         """
 
 
 def _search_filter_clauses(
-    where: list[str], params: list, *, include_inactive: bool, source_filter: Optional[list[str]],
-    exclude_sources: Optional[list[str]], role_filter: Optional[list[str]],
-    after_ts: Optional[int] = None, before_ts: Optional[int] = None) -> None:
+    where: list[str],
+    params: list,
+    *,
+    include_inactive: bool,
+    source_filter: Optional[list[str]],
+    exclude_sources: Optional[list[str]],
+    role_filter: Optional[list[str]],
+    after_ts: Optional[int] = None,
+    before_ts: Optional[int] = None,
+) -> None:
     """Append the visibility/source/role/session-start predicates every search route shares. Live
     rows (active=1) AND compaction-archived rows (compacted=1) are discoverable; only
     rewind/undo rows (active=0, compacted=0) are hidden. ``after_ts``/``before_ts`` bound
@@ -195,21 +232,38 @@ class SessionSearchMixin:
     """See module docstring — mixin for SessionDB (Search cluster)."""
 
     _SEARCH_MESSAGE_RESULT_FIELDS = (
-        "id", "session_id", "role", "snippet", "timestamp", "tool_name", "source", "model", "session_started", "context"
+        "id",
+        "session_id",
+        "role",
+        "snippet",
+        "timestamp",
+        "tool_name",
+        "source",
+        "model",
+        "session_started",
+        "context",
     )
 
     @classmethod
-    def _search_message_fields(cls, fields: Optional[Collection[str]]) -> Optional[tuple[str, ...]]:
+    def _search_message_fields(
+        cls, fields: Optional[Collection[str]]
+    ) -> Optional[tuple[str, ...]]:
         """Validate and canonically order an optional result projection."""
         if fields is None:
             return None
         if isinstance(fields, str):
-            raise TypeError("search fields must be a collection of field names, not a string")
+            raise TypeError(
+                "search fields must be a collection of field names, not a string"
+            )
         requested = set(fields)
         unknown = requested.difference(cls._SEARCH_MESSAGE_RESULT_FIELDS)
         if unknown:
-            raise ValueError(f"unknown search result field(s): {', '.join(sorted(unknown))}")
-        return tuple(field for field in cls._SEARCH_MESSAGE_RESULT_FIELDS if field in requested)
+            raise ValueError(
+                f"unknown search result field(s): {', '.join(sorted(unknown))}"
+            )
+        return tuple(
+            field for field in cls._SEARCH_MESSAGE_RESULT_FIELDS if field in requested
+        )
 
     def _try_incremental_merge_fts(self) -> None:
         """One bounded FTS5 merge pass that never fails the already-committed write (a caller
@@ -238,14 +292,21 @@ class SessionSearchMixin:
         return self._rebuild_status("fts_cjk_rebuild")
 
     def _rebuild_status(self, prefix: str) -> Optional[dict[str, Any]]:
-        rows = self._read_all("SELECT key, value FROM state_meta WHERE key IN (?, ?)",
-                              (f"{prefix}_high_water", f"{prefix}_progress"))
+        rows = self._read_all(
+            "SELECT key, value FROM state_meta WHERE key IN (?, ?)",
+            (f"{prefix}_high_water", f"{prefix}_progress"),
+        )
         meta = {r["key"]: r["value"] for r in rows}
         high_water = meta.get(f"{prefix}_high_water")
         if high_water is None or int(high_water) <= 0:
             return None
         total, progress = int(high_water), int(meta.get(f"{prefix}_progress") or 0)
-        return {"pending": True, "total": total, "indexed": progress, "percent": min(100, int(100 * progress / total))}
+        return {
+            "pending": True,
+            "total": total,
+            "indexed": progress,
+            "percent": min(100, int(100 * progress / total)),
+        }
 
     # Re-index rows in an id window the index is missing. docsize has one row
     # per indexed doc, so the anti-join is exact. Params: (lo, hi).
@@ -297,7 +358,9 @@ class SessionSearchMixin:
 
     def _fts_cjk_rebuild_finish(self) -> None:
         """Boundary sweep + clear the cjk markers; index becomes servable."""
-        sweep = self._BOUNDARY_SWEEP_SQL.format(table="messages_fts_cjk", extra="AND m.role <> 'tool' ")
+        sweep = self._BOUNDARY_SWEEP_SQL.format(
+            table="messages_fts_cjk", extra="AND m.role <> 'tool' "
+        )
         self._rebuild_finish("fts_cjk_rebuild", [(sweep, False)])
         self._fts_cjk_available = True
         logger.info("CJK FTS index backfill complete — serving CJK search.")
@@ -305,6 +368,7 @@ class SessionSearchMixin:
     def _rebuild_finish(self, prefix: str, sweep_sqls: list[tuple[str, bool]]) -> None:
         """Sweep a generous window around the high-water boundary, then clear the markers.
         ``(sql, bounded)``: a bounded sweep takes the tool-content prefix_chars param first."""
+
         def _do(conn):
             hw_row = _meta_row(conn, f"{prefix}_high_water")
             if hw_row is not None:
@@ -313,6 +377,7 @@ class SessionSearchMixin:
                     params = (FTS_TOOL_CONTENT_PREFIX_CHARS,) if bounded else ()
                     conn.execute(sql, (*params, hw - 1000, hw + 1000))
             _delete_meta(conn, f"{prefix}_high_water", f"{prefix}_progress")
+
         self._execute_write(_do)
 
     def fts_rebuild_step(self) -> bool:
@@ -324,19 +389,37 @@ class SessionSearchMixin:
         inserts = [self._CHUNK_INSERT_SQL.format(table="messages_fts", extra="")]
         if self._trigram_available:
             inserts.append(self._TRIGRAM_CHUNK_INSERT_SQL)
-        return self._rebuild_step("fts_rebuild", inserts, fail_msg="FTS rebuild chunk failed (will retry): %s",
-                                  finish=self._fts_rebuild_finish, finish_when_empty=True)
+        return self._rebuild_step(
+            "fts_rebuild",
+            inserts,
+            fail_msg="FTS rebuild chunk failed (will retry): %s",
+            finish=self._fts_rebuild_finish,
+            finish_when_empty=True,
+        )
 
     def fts_cjk_rebuild_step(self) -> bool:
         """Backfill one chunk of the CJK index. True while work remains."""
         if not self._fts_enabled or not self._fts_cjk_loaded:
             return False
-        insert = self._CHUNK_INSERT_SQL.format(table="messages_fts_cjk", extra=" AND role <> 'tool'")
-        return self._rebuild_step("fts_cjk_rebuild", [insert], finish=self._fts_cjk_rebuild_finish,
-                                  fail_msg="CJK FTS rebuild chunk failed (will retry): %s")
+        insert = self._CHUNK_INSERT_SQL.format(
+            table="messages_fts_cjk", extra=" AND role <> 'tool'"
+        )
+        return self._rebuild_step(
+            "fts_cjk_rebuild",
+            [insert],
+            finish=self._fts_cjk_rebuild_finish,
+            fail_msg="CJK FTS rebuild chunk failed (will retry): %s",
+        )
 
-    def _rebuild_step(self, prefix: str, insert_sqls: list[str], *, fail_msg: str, finish,
-                      finish_when_empty: bool = False) -> bool:
+    def _rebuild_step(
+        self,
+        prefix: str,
+        insert_sqls: list[str],
+        *,
+        fail_msg: str,
+        finish,
+        finish_when_empty: bool = False,
+    ) -> bool:
         """Shared chunk engine for the base and CJK deferred backfills. ``finish_when_empty``
         finalizes a high_water <= 0 marker (empty messages table) instead of leaving it pending."""
         high_water_raw = self.get_meta(f"{prefix}_high_water")
@@ -359,7 +442,10 @@ class SessionSearchMixin:
             for sql in insert_sqls:
                 conn.execute(sql, (progress, upper))
             # Progress lands in the same transaction as its rows (crash-atomic).
-            conn.execute("UPDATE state_meta SET value = ? WHERE key = ?", (str(upper), f"{prefix}_progress"))
+            conn.execute(
+                "UPDATE state_meta SET value = ? WHERE key = ?",
+                (str(upper), f"{prefix}_progress"),
+            )
             return upper < high_water
 
         try:
@@ -388,16 +474,23 @@ class SessionSearchMixin:
         start of the table every chunk (O(n²) total on large trash tables, #79324).
         """
         with self._read_ctx() as conn:
-            trash = [r[0] for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ? ESCAPE '\\'",
-                (self._FTS_TRASH_PREFIX.replace("_", "\\_") + "%",),
-            ).fetchall()]
+            trash = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE ? ESCAPE '\\'",
+                    (self._FTS_TRASH_PREFIX.replace("_", "\\_") + "%",),
+                ).fetchall()
+            ]
         if not trash:
             return False
         tbl = trash[0]
 
         def _do(conn):
-            pk_info = [(r[1], (r[2] or "").upper()) for r in conn.execute(f"PRAGMA table_info({tbl})") if r[5] > 0]
+            pk_info = [
+                (r[1], (r[2] or "").upper())
+                for r in conn.execute(f"PRAGMA table_info({tbl})")
+                if r[5] > 0
+            ]
             key = ", ".join(name for name, _typ in pk_info) if pk_info else "rowid"
             if len(pk_info) == 1 and pk_info[0][1] == "INTEGER":
                 # High-water drain; marker read/written in the same BEGIN IMMEDIATE as the
@@ -414,7 +507,10 @@ class SessionSearchMixin:
                 if not upper_rows:
                     return _drop(conn, marker_key)
                 upper = upper_rows[-1][0]
-                cur = conn.execute(f"DELETE FROM {tbl} WHERE {key} > ? AND {key} <= ?", (high_water, upper))
+                cur = conn.execute(
+                    f"DELETE FROM {tbl} WHERE {key} > ? AND {key} <= ?",
+                    (high_water, upper),
+                )
                 if cur.rowcount > 0:
                     self.set_meta(marker_key, str(upper), cursor=conn)
                 return True
@@ -424,7 +520,9 @@ class SessionSearchMixin:
             cur = conn.execute(
                 f"DELETE FROM {tbl} WHERE ({key}) IN (SELECT {key} FROM {tbl} LIMIT {self._FTS_REBUILD_CHUNK_ROWS})"
             )
-            return _drop(conn) if cur.rowcount == 0 else True  # True: more trash tables / chunks may remain
+            return (
+                _drop(conn) if cur.rowcount == 0 else True
+            )  # True: more trash tables / chunks may remain
 
         def _drop(conn, marker_key: Optional[str] = None) -> bool:
             """Drained — the DROP is cheap now. True: re-check for more trash."""
@@ -453,8 +551,14 @@ class SessionSearchMixin:
                 conn.execute(f"DROP TRIGGER IF EXISTS {trig}")
             conn.execute("DROP TABLE IF EXISTS messages_fts_cjk")
             conn.execute("DROP VIEW IF EXISTS messages_fts_cjk_src")
-            _delete_meta(conn, FTS_CJK_STALE_KEY, "fts_cjk_rebuild_high_water", "fts_cjk_rebuild_progress")
+            _delete_meta(
+                conn,
+                FTS_CJK_STALE_KEY,
+                "fts_cjk_rebuild_high_water",
+                "fts_cjk_rebuild_progress",
+            )
             return True
+
         if self._execute_write(_do):
             # Recreate OUTSIDE the write transaction: executescript() implicitly commits.
             self._ensure_cjk_schema_committed()
@@ -471,9 +575,13 @@ class SessionSearchMixin:
         try:
             if not conn.execute("SELECT EXISTS(SELECT 1 FROM messages)").fetchone()[0]:
                 return False
-            return not conn.execute("SELECT EXISTS(SELECT 1 FROM messages_fts_docsize)").fetchone()[0]
+            return not conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM messages_fts_docsize)"
+            ).fetchone()[0]
         except sqlite3.OperationalError:
-            return False  # table absent / FTS disabled mid-init — not this failure class
+            return (
+                False  # table absent / FTS disabled mid-init — not this failure class
+            )
 
     def _reseed_missing_progress(self, conn) -> None:
         """high_water without progress: fts_rebuild_step reads missing progress as "done by
@@ -491,7 +599,14 @@ class SessionSearchMixin:
     def _fts_index_known_empty(conn) -> bool:
         """True when the base external-content index holds no rows (a missing table counts as empty)."""
         try:
-            return int(conn.execute("SELECT COUNT(*) FROM messages_fts_docsize").fetchone()[0]) == 0
+            return (
+                int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM messages_fts_docsize"
+                    ).fetchone()[0]
+                )
+                == 0
+            )
         except sqlite3.OperationalError:
             return True
 
@@ -500,7 +615,9 @@ class SessionSearchMixin:
         """Truncate the v23 external-content tables via FTS5 ``'delete-all'`` (O(1); a plain DELETE is
         O(rows) and corrupts the index when indexed rows diverged from ``messages``)."""
         for tbl in ("messages_fts", "messages_fts_trigram"):
-            with contextlib.suppress(sqlite3.OperationalError):  # table absent — already an empty surface
+            with contextlib.suppress(
+                sqlite3.OperationalError
+            ):  # table absent — already an empty surface
                 conn.execute(f"INSERT INTO {tbl}({tbl}) VALUES('delete-all')")
 
     def _seed_fts_rebuild_markers(self, conn, *, force: bool = False) -> int:
@@ -524,6 +641,7 @@ class SessionSearchMixin:
 
         Covers two post-#65798 failure classes:
         """
+
         def _do(conn):
             if _meta_row(conn, "fts_rebuild_high_water") is not None:
                 self._reseed_missing_progress(conn)
@@ -533,6 +651,7 @@ class SessionSearchMixin:
             if self._fts_external_index_empty_with_messages(conn):
                 _delete_meta(conn, "fts_storage_version")
                 self._seed_fts_rebuild_markers(conn, force=True)
+
         self._execute_write(_do)
 
     def fts_optimize_available(self) -> bool:
@@ -545,12 +664,16 @@ class SessionSearchMixin:
         with self._read_ctx() as conn:
             return (
                 self._db_needs_fts_storage_upgrade(conn)
-                or _meta_row(conn, "fts_rebuild_high_water") is not None  # interrupted optimize
+                or _meta_row(conn, "fts_rebuild_high_water")
+                is not None  # interrupted optimize
                 # CJK work is only offerable when THIS process can tokenize.
-                or (self._fts_cjk_loaded and (
-                    _meta_row(conn, "fts_cjk_rebuild_high_water") is not None
-                    or _meta_row(conn, FTS_CJK_STALE_KEY) is not None
-                ))
+                or (
+                    self._fts_cjk_loaded
+                    and (
+                        _meta_row(conn, "fts_cjk_rebuild_high_water") is not None
+                        or _meta_row(conn, FTS_CJK_STALE_KEY) is not None
+                    )
+                )
                 or self._has_fts_trash(conn)
                 or self._fts_external_index_empty_with_messages(conn)
             )
@@ -561,6 +684,7 @@ class SessionSearchMixin:
         — the heavy delete is deferred. Markers land in the same BEGIN IMMEDIATE, BEFORE
         the empty v23 schema is created (``executescript`` implicitly COMMITs), closing
         the crash window where trash + empty v23 tables exist with no backfill claim."""
+
         def _stage(conn):
             self._drop_fts_triggers(conn)
             conn.execute("DROP VIEW IF EXISTS messages_fts_trigram_src")
@@ -585,7 +709,9 @@ class SessionSearchMixin:
                     # the vtable constructor — into the trash family (#103647).
                     "AND name NOT LIKE 'messages\\_fts\\_cjk%' ESCAPE '\\'"
                 ).fetchall():
-                    conn.execute(f"ALTER TABLE {row[0]} RENAME TO fts_v22_trash_{row[0]}")
+                    conn.execute(
+                        f"ALTER TABLE {row[0]} RENAME TO fts_v22_trash_{row[0]}"
+                    )
             # Claim the backfill BEFORE the empty v23 tables exist so a crash before
             # schema ensure resumes instead of stamping an empty index.
             hw = self._seed_fts_rebuild_markers(conn, force=True)
@@ -594,7 +720,9 @@ class SessionSearchMixin:
 
         hw = int(self._execute_write(_stage))
         # Outside the write transaction (executescript commits); markers are durable.
-        self._ensure_v23_fts_tables("failed to create v23 messages_fts during optimize-storage demote")
+        self._ensure_v23_fts_tables(
+            "failed to create v23 messages_fts during optimize-storage demote"
+        )
         return hw
 
     def _ensure_v23_fts_tables(self, failure_message: str) -> None:
@@ -602,7 +730,9 @@ class SessionSearchMixin:
         *failure_message* without the base table (the backfill loop would retry forever)."""
         with self._lock:
             base_ok = self._ensure_fts_schema(self._conn, "messages_fts", FTS_SQL)
-            trigram_ok = self._ensure_fts_schema(self._conn, "messages_fts_trigram", FTS_TRIGRAM_SQL)
+            trigram_ok = self._ensure_fts_schema(
+                self._conn, "messages_fts_trigram", FTS_TRIGRAM_SQL
+            )
             self._trigram_available = bool(trigram_ok)
             if not base_ok:
                 raise sqlite3.OperationalError(failure_message)
@@ -629,7 +759,9 @@ class SessionSearchMixin:
                 # #45383.
                 self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
         except Exception as exc:
-            logger.debug("WAL checkpoint (PASSIVE) after optimize VACUUM failed: %s", exc)
+            logger.debug(
+                "WAL checkpoint (PASSIVE) after optimize VACUUM failed: %s", exc
+            )
         return vacuum_ok
 
     def _optimize_settle(self, conn) -> Optional[str]:
@@ -652,11 +784,17 @@ class SessionSearchMixin:
         if current:
             self.set_meta("fts_storage_version", str(FTS_STORAGE_VERSION), cursor=conn)
         _delete_meta(conn, "fts_optimize_available")
-        conn.execute("UPDATE schema_version SET version = ? WHERE version < ?", (SCHEMA_VERSION, SCHEMA_VERSION))
+        conn.execute(
+            "UPDATE schema_version SET version = ? WHERE version < ?",
+            (SCHEMA_VERSION, SCHEMA_VERSION),
+        )
         return None
 
     def optimize_fts_storage(
-        self, *, progress_cb: Optional[Callable[[dict[str, Any]], None]] = None, vacuum: bool = True
+        self,
+        *,
+        progress_cb: Optional[Callable[[dict[str, Any]], None]] = None,
+        vacuum: bool = True,
     ) -> dict[str, Any]:
         """Repair an older FTS layout into the current v23 shape, foreground and to completion:
         legacy-v22 inline -> external-content, or a v23 ``messages_fts_trigram`` that still stores
@@ -677,7 +815,9 @@ class SessionSearchMixin:
         elif pending and not needs_storage_upgrade:
             # Resume mid-demote: the process may have died between the staged demote
             # commit and schema ensure.
-            self._ensure_v23_fts_tables("failed to re-create v23 messages_fts on optimize-storage resume")
+            self._ensure_v23_fts_tables(
+                "failed to re-create v23 messages_fts on optimize-storage resume"
+            )
 
         # A stale CJK index can only be recovered from scratch; then ensure table +
         # markers exist (a v23 DB gaining the cjk index for the first time).
@@ -689,8 +829,14 @@ class SessionSearchMixin:
             if progress_cb is None:
                 return
             st = self.fts_rebuild_status() or self.fts_cjk_rebuild_status()
-            progress_cb({"phase": phase, "percent": st["percent"] if st else 100,
-                         "indexed": st["indexed"] if st else 0, "total": st["total"] if st else 0})
+            progress_cb(
+                {
+                    "phase": phase,
+                    "percent": st["percent"] if st else 100,
+                    "indexed": st["indexed"] if st else 0,
+                    "total": st["total"] if st else 0,
+                }
+            )
 
         def _drive(phase: str, step) -> None:
             """Run *step* to completion; the inter-chunk sleep is the single place the duty
@@ -701,7 +847,12 @@ class SessionSearchMixin:
                 if not step():
                     break
                 _emit(phase)
-                time.sleep(max(self._FTS_REBUILD_MIN_PAUSE, (time.monotonic() - _t0) * self._FTS_REBUILD_DUTY_FACTOR))
+                time.sleep(
+                    max(
+                        self._FTS_REBUILD_MIN_PAUSE,
+                        (time.monotonic() - _t0) * self._FTS_REBUILD_DUTY_FACTOR,
+                    )
+                )
 
         # Phase 1: base backfill; 1b: CJK-bigram backfill (own marker pair).
         _emit("backfill")
@@ -716,9 +867,18 @@ class SessionSearchMixin:
             still_trash = self._has_fts_trash(conn)
             empty_index = self._fts_external_index_empty_with_messages(conn)
         if still_pending or still_trash or empty_index:
-            reason = "backfill_incomplete" if still_pending or empty_index else "teardown_incomplete"
-            logger.warning("FTS storage optimization did not settle (%s): pending=%s trash=%s empty_index=%s",
-                           reason, still_pending, still_trash, empty_index)
+            reason = (
+                "backfill_incomplete"
+                if still_pending or empty_index
+                else "teardown_incomplete"
+            )
+            logger.warning(
+                "FTS storage optimization did not settle (%s): pending=%s trash=%s empty_index=%s",
+                reason,
+                still_pending,
+                still_trash,
+                empty_index,
+            )
             return {"ok": False, "reason": reason, "vacuumed": None}
 
         vacuum_ok = None
@@ -731,14 +891,21 @@ class SessionSearchMixin:
             logger.warning("FTS storage optimization settle refused (%s)", refusal)
             return {"ok": False, "reason": refusal, "vacuumed": vacuum_ok}
         _emit("done")
-        logger.info("FTS storage optimization complete (layout v%d).", FTS_STORAGE_VERSION)
+        logger.info(
+            "FTS storage optimization complete (layout v%d).", FTS_STORAGE_VERSION
+        )
         return {"ok": True, "vacuumed": vacuum_ok}
 
     # ── Read views ─────────────────────────────────────────────────────────
 
     def get_anchored_view(
-        self, session_id: str, around_message_id: int, window: int = 5, bookend: int = 3,
-        keep_roles: Optional[tuple[str, ...]] = ("user", "assistant")) -> dict[str, Any]:
+        self,
+        session_id: str,
+        around_message_id: int,
+        window: int = 5,
+        bookend: int = 3,
+        keep_roles: Optional[tuple[str, ...]] = ("user", "assistant"),
+    ) -> dict[str, Any]:
         """Anchored window (``get_messages_around``) plus session bookends, so one call yields the
         goal and the resolution of a long session. ``window`` is filtered to ``keep_roles``
         (None disables) EXCEPT the anchor; ``bookend_start`` / ``bookend_end`` are the
@@ -746,21 +913,38 @@ class SessionSearchMixin:
         window (empty when it overlaps the head/tail). Empty result when the anchor isn't
         in the session."""
         bookend = max(bookend, 0)
-        primitive = self.get_messages_around(session_id, around_message_id, window=window)
+        primitive = self.get_messages_around(
+            session_id, around_message_id, window=window
+        )
         window_rows = primitive["window"]
         if not window_rows:
-            return {"window": [], "messages_before": 0, "messages_after": 0, "bookend_start": [], "bookend_end": []}
+            return {
+                "window": [],
+                "messages_before": 0,
+                "messages_after": 0,
+                "bookend_start": [],
+                "bookend_end": [],
+            }
 
         filtered_window = window_rows
         if keep_roles is not None:
             keep_set = set(keep_roles)
-            filtered_window = [m for m in window_rows if m.get("id") == around_message_id or m.get("role") in keep_set]
+            filtered_window = [
+                m
+                for m in window_rows
+                if m.get("id") == around_message_id or m.get("role") in keep_set
+            ]
         bookend_start_rows: list[Any] = []
         bookend_end_rows: list[Any] = []
         if bookend > 0:
-            role_clause = "" if keep_roles is None else f" AND role IN ({','.join('?' for _ in keep_roles)})"
+            role_clause = (
+                ""
+                if keep_roles is None
+                else f" AND role IN ({','.join('?' for _ in keep_roles)})"
+            )
             role_params = [] if keep_roles is None else list(keep_roles)
             with self._read_ctx() as conn:
+
                 def _bookend(op: str, boundary_id: int, order: str):
                     return conn.execute(
                         f"SELECT * FROM messages "
@@ -769,21 +953,29 @@ class SessionSearchMixin:
                         f"ORDER BY id {order} LIMIT ?",
                         (session_id, boundary_id, *role_params, bookend),
                     ).fetchall()
+
                 bookend_start_rows = _bookend("<", window_rows[0]["id"], "ASC")
                 # End rows come back DESC for the LIMIT cap; flip to ASC.
-                bookend_end_rows = list(reversed(_bookend(">", window_rows[-1]["id"], "DESC")))
+                bookend_end_rows = list(
+                    reversed(_bookend(">", window_rows[-1]["id"], "DESC"))
+                )
 
         def _hydrate(row) -> dict[str, Any]:
-            return self._row_to_message_dict(row, warn_context="get_anchored_view", summary_flag=False)
+            return self._row_to_message_dict(
+                row, warn_context="get_anchored_view", summary_flag=False
+            )
+
         return {
-            "window": filtered_window, "messages_before": primitive["messages_before"],
+            "window": filtered_window,
+            "messages_before": primitive["messages_before"],
             "messages_after": primitive["messages_after"],
             "bookend_start": [_hydrate(r) for r in bookend_start_rows],
             "bookend_end": [_hydrate(r) for r in bookend_end_rows],
         }
 
     def list_recent_user_messages(
-        self, session_id: str, limit: int = 20, include_inactive: bool = False) -> list[dict[str, Any]]:
+        self, session_id: str, limit: int = 20, include_inactive: bool = False
+    ) -> list[dict[str, Any]]:
         """The *limit* most-recent real user turns, newest first, as ``{id, timestamp, preview}``
         (80 chars, whitespace collapsed); used by /rewind and ``/undo [N]``. Bookkeeping rows
         (``display_kind`` set) are excluded. Legacy compaction handoffs are role='user' rows
@@ -793,7 +985,9 @@ class SessionSearchMixin:
         active_clause = "" if include_inactive else " AND active = 1"
         # A /steer row is typed for the renderer but is human input: keep it so the DB pick agrees
         # with the in-memory user_originated_turn_view count.
-        display_clause = " AND (display_kind IS NULL OR display_kind = '' OR display_kind = 'steer')"
+        display_clause = (
+            " AND (display_kind IS NULL OR display_kind = '' OR display_kind = 'steer')"
+        )
         with self._read_ctx() as conn:
             rows = conn.execute(
                 "SELECT id, timestamp, content FROM messages WHERE session_id = ? AND role = 'user'"
@@ -802,6 +996,7 @@ class SessionSearchMixin:
                 (session_id, int(limit) * 2 + 5),
             ).fetchall()
         from agent.context_compressor import ContextCompressor
+
         result: list[dict[str, Any]] = []
         for row in rows:
             if len(result) >= int(limit):
@@ -809,14 +1004,18 @@ class SessionSearchMixin:
             decoded = self._decode_content(row["content"])
             if ContextCompressor._is_context_summary_content(decoded):
                 continue  # compaction handoff — never a user-originated turn
-            if isinstance(decoded, str):  # a /skill turn embeds the whole skill body; show what was typed
+            if isinstance(
+                decoded, str
+            ):  # a /skill turn embeds the whole skill body; show what was typed
                 preview = describe_skill_invocation(decoded) or decoded
             else:
                 preview = _flatten_text(decoded)
             preview = " ".join(preview.split())
             if len(preview) > 80:
                 preview = preview[:77] + "..."
-            result.append({"id": row["id"], "timestamp": row["timestamp"], "preview": preview})
+            result.append(
+                {"id": row["id"], "timestamp": row["timestamp"], "preview": preview}
+            )
         return result
 
     # ── Query analysis ─────────────────────────────────────────────────────
@@ -906,13 +1105,20 @@ class SessionSearchMixin:
     def _has_short_cjk_token(cls, raw_query: str) -> bool:
         """True when any non-operator CJK token has fewer than 3 CJK chars — the trigram
         tokenizer needs >=3 per token, so such a query must take the LIKE route."""
-        return any(cls._count_cjk(t) < 3 for t in _non_operator_tokens(raw_query) if cls._contains_cjk(t))
+        return any(
+            cls._count_cjk(t) < 3
+            for t in _non_operator_tokens(raw_query)
+            if cls._contains_cjk(t)
+        )
 
     def _trigram_route_ok(self, raw_query: str) -> bool:
         """Per-token CJK length gate for the trigram index: ``广西 OR 桂林 OR 漓江`` has 6
         CJK chars total but 2 per token, so trigram returns 0."""
-        return (self._count_cjk(raw_query) >= 3 and not self._has_short_cjk_token(raw_query)
-                and self._trigram_available)
+        return (
+            self._count_cjk(raw_query) >= 3
+            and not self._has_short_cjk_token(raw_query)
+            and self._trigram_available
+        )
 
     def _describe_search_path(self, query: str) -> str:
         """Best-effort name of the routing path a query takes (log-only)."""
@@ -934,8 +1140,15 @@ class SessionSearchMixin:
     # ── Query builders / runners ───────────────────────────────────────────
 
     @staticmethod
-    def _fts_match_sql(table: str, match_query: str, order_by_sql: str, *, limit: int, offset: int,
-                       **filters) -> tuple[str, list]:
+    def _fts_match_sql(
+        table: str,
+        match_query: str,
+        order_by_sql: str,
+        *,
+        limit: int,
+        offset: int,
+        **filters,
+    ) -> tuple[str, list]:
         """MATCH query + params against one FTS5 index joined to messages/sessions."""
         where = [f"{table} MATCH ?"]
         params: list = [match_query]
@@ -943,12 +1156,23 @@ class SessionSearchMixin:
         params.extend([limit, offset])
         sql = _search_select_sql(
             f"snippet({table}, -1, '>>>', '<<<', '...', 40) AS snippet",
-            f"{table}\n            JOIN messages m ON m.id = {table}.rowid", where, order_by_sql, "LIMIT ? OFFSET ?",
+            f"{table}\n            JOIN messages m ON m.id = {table}.rowid",
+            where,
+            order_by_sql,
+            "LIMIT ? OFFSET ?",
         )
         return sql, params
 
-    def _match_rows(self, table: str, match_query: str, order_by_sql: str, *, fail_open: Optional[str] = None,
-                    operational_debug: Optional[str] = None, **kwargs) -> Optional[list[dict[str, Any]]]:
+    def _match_rows(
+        self,
+        table: str,
+        match_query: str,
+        order_by_sql: str,
+        *,
+        fail_open: Optional[str] = None,
+        operational_debug: Optional[str] = None,
+        **kwargs,
+    ) -> Optional[list[dict[str, Any]]]:
         """Run one MATCH against *table*; ``None`` when the query cannot execute (tokenizer /
         syntax) so the caller falls back. *fail_open* names the index for the
         substring-capable routes: a corruption-class ``DatabaseError`` there detaches the
@@ -966,12 +1190,18 @@ class SessionSearchMixin:
                 raise
             logger.warning(
                 "%s FTS search hit a corruption error (%s); detached FTS and falling back to canonical LIKE.",
-                fail_open, exc)
+                fail_open,
+                exc,
+            )
             return None
 
-    def _like_rows(self, where: list[str], params: list, *, order_by: str, limit_sql: str) -> list[dict[str, Any]]:
+    def _like_rows(
+        self, where: list[str], params: list, *, order_by: str, limit_sql: str
+    ) -> list[dict[str, Any]]:
         """Canonical-table LIKE scan; ``params[0]`` is the snippet anchor term."""
-        sql = _search_select_sql(_LIKE_SNIPPET_SQL, "messages m", where, order_by, limit_sql)
+        sql = _search_select_sql(
+            _LIKE_SNIPPET_SQL, "messages m", where, order_by, limit_sql
+        )
         return [dict(row) for row in self._read_all(sql, params)]
 
     @staticmethod
@@ -1005,7 +1235,11 @@ class SessionSearchMixin:
                 continue
             clauses: list[str] = []
             for term, negated in group:
-                clauses.append(f"NOT {_LIKE_COALESCED_COLUMN_SQL}" if negated else _LIKE_COALESCED_COLUMN_SQL)
+                clauses.append(
+                    f"NOT {_LIKE_COALESCED_COLUMN_SQL}"
+                    if negated
+                    else _LIKE_COALESCED_COLUMN_SQL
+                )
                 params.extend(_like_params(term))
                 if snippet_term is None and not negated:
                     snippet_term = term
@@ -1013,38 +1247,56 @@ class SessionSearchMixin:
         return " OR ".join(compiled_groups), params, snippet_term
 
     def _search_messages_like_fallback(
-        self, query: str, *, limit: int, offset: int, sort: Optional[str], **filters) -> list[dict[str, Any]]:
+        self, query: str, *, limit: int, offset: int, sort: Optional[str], **filters
+    ) -> list[dict[str, Any]]:
         """Search canonical messages while derived FTS state is stale."""
         predicate, params, snippet_term = self._compile_like_boolean_query(query)
         if not predicate or snippet_term is None:
             return []
         where = [f"({predicate})"]
         _search_filter_clauses(where, params, **filters)
-        order = "ASC" if isinstance(sort, str) and sort.strip().lower() == "oldest" else "DESC"
-        return self._like_rows(where, [snippet_term, *params, limit, offset],
-                               order_by=f"ORDER BY m.timestamp {order}, m.id {order}", limit_sql="LIMIT ? OFFSET ?")
+        order = (
+            "ASC"
+            if isinstance(sort, str) and sort.strip().lower() == "oldest"
+            else "DESC"
+        )
+        return self._like_rows(
+            where,
+            [snippet_term, *params, limit, offset],
+            order_by=f"ORDER BY m.timestamp {order}, m.id {order}",
+            limit_sql="LIMIT ? OFFSET ?",
+        )
 
     def _refresh_fts_stale_state(self) -> None:
         """Observe fail-open initiated by another process sharing state.db."""
         if self._fts_stale or not self._fts_enabled:
             return
         try:
-            stale = self._read_one("SELECT 1 FROM state_meta WHERE key = ? LIMIT 1", (FTS_STALE_KEY,))
+            stale = self._read_one(
+                "SELECT 1 FROM state_meta WHERE key = ? LIMIT 1", (FTS_STALE_KEY,)
+            )
         except sqlite3.Error:
             return
         if stale is not None:
             self._fts_stale = True
-            self._fts_enabled = self._trigram_available = self._fts_cjk_available = False
+            self._fts_enabled = self._trigram_available = self._fts_cjk_available = (
+                False
+            )
 
     def _finalize_search_matches(
-        self, matches: list[dict[str, Any]], result_fields: Optional[Collection[str]] = None) -> list[dict[str, Any]]:
+        self,
+        matches: list[dict[str, Any]],
+        result_fields: Optional[Collection[str]] = None,
+    ) -> list[dict[str, Any]]:
         """Attach neighboring messages in bounded batches, only when context is requested."""
         if result_fields is None or "context" in result_fields:
             for start in range(0, len(matches), 500):
-                batch = matches[start:start + 500]
+                batch = matches[start : start + 500]
                 contexts = {match["id"]: [] for match in batch}
                 try:
-                    sql = _CONTEXT_WINDOW_SQL.format(ids=",".join("?" for _ in contexts))
+                    sql = _CONTEXT_WINDOW_SQL.format(
+                        ids=",".join("?" for _ in contexts)
+                    )
                     with self._read_ctx() as conn:
                         rows = conn.execute(sql, list(contexts)).fetchall()
                     for row in rows:
@@ -1054,24 +1306,41 @@ class SessionSearchMixin:
                 for match in batch:
                     try:
                         match["context"] = [
-                            {"role": row["role"], "content": _flatten_text(self._decode_content(row["content"]))[:200]}
-                            for row in contexts.get(match["id"], [])]
+                            {
+                                "role": row["role"],
+                                "content": _flatten_text(
+                                    self._decode_content(row["content"])
+                                )[:200],
+                            }
+                            for row in contexts.get(match["id"], [])
+                        ]
                     except Exception:
                         match["context"] = []
         # No route selects full content; the pop guards any future one that does.
         for match in matches:
             match.pop("content", None)
         if result_fields is not None:
-            matches = [{field: match[field] for field in result_fields if field in match} for match in matches]
+            matches = [
+                {field: match[field] for field in result_fields if field in match}
+                for match in matches
+            ]
         return matches
 
     # ── search_messages ────────────────────────────────────────────────────
 
     def search_messages(
-        self, query: str, source_filter: list[str] | None = None, exclude_sources: list[str] | None = None,
-        role_filter: list[str] | None = None, limit: int = 20, offset: int = 0, sort: str | None = None,
-        include_inactive: bool = False, fields: Optional[Collection[str]] = None,
-        after_ts: Optional[int] = None, before_ts: Optional[int] = None,
+        self,
+        query: str,
+        source_filter: list[str] | None = None,
+        exclude_sources: list[str] | None = None,
+        role_filter: list[str] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        sort: str | None = None,
+        include_inactive: bool = False,
+        fields: Optional[Collection[str]] = None,
+        after_ts: Optional[int] = None,
+        before_ts: Optional[int] = None,
     ) -> list[dict[str, Any]]:
         """:meth:`_search_messages_impl` plus one log line per slow search with the routing
         path taken. Threshold CLAWK_SEARCH_SLOW_MS (default 1000; 0 logs every call)."""
@@ -1079,22 +1348,43 @@ class SessionSearchMixin:
         rows = None
         try:
             rows = self._search_messages_impl(
-                query, source_filter=source_filter, exclude_sources=exclude_sources, role_filter=role_filter,
-                limit=limit, offset=offset, sort=sort, include_inactive=include_inactive, fields=fields,
-                after_ts=after_ts, before_ts=before_ts)
+                query,
+                source_filter=source_filter,
+                exclude_sources=exclude_sources,
+                role_filter=role_filter,
+                limit=limit,
+                offset=offset,
+                sort=sort,
+                include_inactive=include_inactive,
+                fields=fields,
+                after_ts=after_ts,
+                before_ts=before_ts,
+            )
             return rows
         finally:
             elapsed_ms = (time.time() - started) * 1000.0
             if elapsed_ms >= _search_slow_ms():
-                logger.info("slow session search: path=%s elapsed=%.0fms rows=%s query=%r",
-                            self._describe_search_path(query), elapsed_ms, len(rows) if rows is not None else "err",
-                            query[: 200])
+                logger.info(
+                    "slow session search: path=%s elapsed=%.0fms rows=%s query=%r",
+                    self._describe_search_path(query),
+                    elapsed_ms,
+                    len(rows) if rows is not None else "err",
+                    query[:200],
+                )
 
     def _search_messages_impl(
-        self, query: str, source_filter: list[str] | None = None, exclude_sources: list[str] | None = None,
-        role_filter: list[str] | None = None, limit: int = 20, offset: int = 0, sort: str | None = None,
-        include_inactive: bool = False, fields: Optional[Collection[str]] = None,
-        after_ts: Optional[int] = None, before_ts: Optional[int] = None,
+        self,
+        query: str,
+        source_filter: list[str] | None = None,
+        exclude_sources: list[str] | None = None,
+        role_filter: list[str] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        sort: str | None = None,
+        include_inactive: bool = False,
+        fields: Optional[Collection[str]] = None,
+        after_ts: Optional[int] = None,
+        before_ts: Optional[int] = None,
     ) -> list[dict[str, Any]]:
         """FTS5 search across session messages (keywords, ``"phrases"``, AND/OR/NOT, ``prefix*``).
         Returns snippet + session metadata + 1-message context per hit; ``fields`` selects a
@@ -1109,27 +1399,40 @@ class SessionSearchMixin:
         query = self._sanitize_fts5_query(query)
         if not query:
             return []
-        filters = dict(include_inactive=include_inactive, source_filter=source_filter,
-                       exclude_sources=exclude_sources, role_filter=role_filter,
-                       after_ts=after_ts, before_ts=before_ts)
+        filters = dict(
+            include_inactive=include_inactive,
+            source_filter=source_filter,
+            exclude_sources=exclude_sources,
+            role_filter=role_filter,
+            after_ts=after_ts,
+            before_ts=before_ts,
+        )
         # New oversized tool results index only a bounded prefix; an explicit tool-role search is the
         # opt-in full-body path and scans canonical rows via LIKE.
         if role_filter and "tool" in role_filter:
-            matches = self._search_messages_like_fallback(query, limit=limit, offset=offset, sort=sort, **filters)
+            matches = self._search_messages_like_fallback(
+                query, limit=limit, offset=offset, sort=sort, **filters
+            )
             return self._finalize_search_matches(matches, result_fields=result_fields)
         self._refresh_fts_stale_state()
         if self._fts_stale:
-            matches = self._search_messages_like_fallback(query, limit=limit, offset=offset, sort=sort, **filters)
+            matches = self._search_messages_like_fallback(
+                query, limit=limit, offset=offset, sort=sort, **filters
+            )
             return self._finalize_search_matches(matches, result_fields=result_fields)
         if not self._fts_enabled:
             return []
 
-        order_by_sql = _FTS_ORDER_BY.get(sort.strip().lower() if isinstance(sort, str) else None, "ORDER BY rank")
+        order_by_sql = _FTS_ORDER_BY.get(
+            sort.strip().lower() if isinstance(sort, str) else None, "ORDER BY rank"
+        )
         route = dict(order_by_sql=order_by_sql, limit=limit, offset=offset, **filters)
         # Tool rows and FTS_TRIGRAM_EXCLUDED_SOURCES sessions are excluded from the trigram/cjk
         # indexes (see FTS_TRIGRAM_SQL); an explicit filter for them must scan the base table.
         wants_unindexed_rows = (bool(role_filter) and "tool" in role_filter) or (
-            bool(source_filter) and any(src in FTS_TRIGRAM_EXCLUDED_SOURCES for src in source_filter))
+            bool(source_filter)
+            and any(src in FTS_TRIGRAM_EXCLUDED_SOURCES for src in source_filter)
+        )
         is_cjk = self._contains_cjk(query)
         if is_cjk:
             matches = self._search_cjk(query, wants_unindexed_rows, route)
@@ -1148,14 +1451,18 @@ class SessionSearchMixin:
                 # stale-open/repair paths retain rebuild ownership.
                 if not self._enter_fts_fail_open(exc):
                     raise
-                matches = self._search_messages_like_fallback(query, limit=limit, offset=offset, sort=sort, **filters)
+                matches = self._search_messages_like_fallback(
+                    query, limit=limit, offset=offset, sort=sort, **filters
+                )
 
         # Deferred-rebuild supplement: while the backfill is pending the FTS indexes miss
         # the (progress, high_water] gap; top up with a bounded LIKE scan so old messages
         # never vanish mid-rebuild. Cost decays to zero as the backfill advances.
         if self.fts_rebuild_status() is not None and len(matches) < limit:
             try:
-                gap_matches = self._search_unindexed_gap(query, limit - len(matches), **filters)
+                gap_matches = self._search_unindexed_gap(
+                    query, limit - len(matches), **filters
+                )
                 seen_ids = {m["id"] for m in matches}
                 matches.extend(m for m in gap_matches if m["id"] not in seen_ids)
             except sqlite3.OperationalError as exc:
@@ -1166,7 +1473,11 @@ class SessionSearchMixin:
         # substring-capable indexes: cjk first (exact ranked match), then trigram (>=3-char
         # tokens). Gated on a miss so hits keep their ranking ("cat" may then match
         # "concatenate"). Skipped for role='tool' (both indexes exclude tool rows).
-        if not matches and not is_cjk and not (bool(role_filter) and "tool" in role_filter):
+        if (
+            not matches
+            and not is_cjk
+            and not (bool(role_filter) and "tool" in role_filter)
+        ):
             fb_query = _quote_fts_tokens(query.strip('"').strip())
             # ── CJK-bigram route (messages_fts_cjk, cjk_unicode61) ────── When the bigram index is
             # available it serves EVERY CJK query shape the legacy code split between trigram (>=3
@@ -1176,9 +1487,18 @@ class SessionSearchMixin:
             # stores bigrams for runs >=2, so a single-char term can only match isolated chars — LIKE
             # substring semantics are broader.
             if self._fts_cjk_available:
-                matches = self._match_rows("messages_fts_cjk", fb_query, **route) or matches
-            if not matches and self._trigram_available and self._trigram_eligible_tokens(query):
-                matches = self._match_rows("messages_fts_trigram", fb_query, **route) or matches
+                matches = (
+                    self._match_rows("messages_fts_cjk", fb_query, **route) or matches
+                )
+            if (
+                not matches
+                and self._trigram_available
+                and self._trigram_eligible_tokens(query)
+            ):
+                matches = (
+                    self._match_rows("messages_fts_trigram", fb_query, **route)
+                    or matches
+                )
 
         # OR-relaxed retry: the implicit AND between terms means a paraphrased multi-word query
         # misses a stored sentence that lacks even ONE word ("when does Sarah like her standup
@@ -1191,12 +1511,21 @@ class SessionSearchMixin:
         if not matches and not is_cjk and not self._fts_stale:
             relaxed = self._or_relaxed_query(query)
             if relaxed is not None:
-                matches = self._match_rows("messages_fts", relaxed, fail_open="OR-relaxed",
-                                           operational_debug="OR-relaxed FTS retry failed; keeping empty result",
-                                           **route) or matches
+                matches = (
+                    self._match_rows(
+                        "messages_fts",
+                        relaxed,
+                        fail_open="OR-relaxed",
+                        operational_debug="OR-relaxed FTS retry failed; keeping empty result",
+                        **route,
+                    )
+                    or matches
+                )
         return self._finalize_search_matches(matches, result_fields=result_fields)
 
-    def _search_cjk(self, query: str, wants_unindexed_rows: bool, route: dict[str, Any]) -> list[dict[str, Any]]:
+    def _search_cjk(
+        self, query: str, wants_unindexed_rows: bool, route: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """CJK routing: the unicode61 table splits CJK into single characters (false positives,
         missed phrases). cjk-bigram serves every shape except queries wanting rows the
         substring indexes exclude (role='tool', cron/subagent sources) and LONE
@@ -1205,46 +1534,91 @@ class SessionSearchMixin:
         non-operator token so "广西 OR 桂林 OR 漓江" matches each term."""
         raw_query = _strip_cjk_wildcards(query).strip('"').strip()
         match_query = _quote_fts_tokens(raw_query)
-        if self._fts_cjk_available and not wants_unindexed_rows and not self._has_lone_cjk_run(raw_query):
+        if (
+            self._fts_cjk_available
+            and not wants_unindexed_rows
+            and not self._has_lone_cjk_run(raw_query)
+        ):
             matches = self._match_rows(
-                "messages_fts_cjk", match_query, fail_open="CJK-bigram",
-                operational_debug="messages_fts_cjk query failed; falling back to trigram/LIKE", **route)
+                "messages_fts_cjk",
+                match_query,
+                fail_open="CJK-bigram",
+                operational_debug="messages_fts_cjk query failed; falling back to trigram/LIKE",
+                **route,
+            )
             if matches is not None:
                 return matches
         if self._trigram_route_ok(raw_query) and not wants_unindexed_rows:
-            matches = self._match_rows("messages_fts_trigram", match_query, fail_open="Trigram", **route)
+            matches = self._match_rows(
+                "messages_fts_trigram", match_query, fail_open="Trigram", **route
+            )
             if matches is not None:
                 return matches
         non_op_tokens = _non_operator_tokens(raw_query) or [raw_query]
         like_params: list = [p for tok in non_op_tokens for p in _like_params(tok)]
         like_where = [f"({' OR '.join([_LIKE_ANY_COLUMN_SQL] * len(non_op_tokens))})"]
-        filters = {k: route[k] for k in ("include_inactive", "source_filter", "exclude_sources", "role_filter",
-                                         "after_ts", "before_ts")}
+        filters = {
+            k: route[k]
+            for k in (
+                "include_inactive",
+                "source_filter",
+                "exclude_sources",
+                "role_filter",
+                "after_ts",
+                "before_ts",
+            )
+        }
         _search_filter_clauses(like_where, like_params, **filters)
         # instr() for the snippet uses the first search token.
-        return self._like_rows(like_where, [non_op_tokens[0], *like_params, route["limit"], route["offset"]],
-                               order_by="ORDER BY m.timestamp DESC", limit_sql="LIMIT ? OFFSET ?")
+        return self._like_rows(
+            like_where,
+            [non_op_tokens[0], *like_params, route["limit"], route["offset"]],
+            order_by="ORDER BY m.timestamp DESC",
+            limit_sql="LIMIT ? OFFSET ?",
+        )
 
-    def _search_unindexed_gap(self, fts_query: str, limit: int, **filters) -> list[dict[str, Any]]:
+    def _search_unindexed_gap(
+        self, fts_query: str, limit: int, **filters
+    ) -> list[dict[str, Any]]:
         """LIKE-scan ids in (fts_rebuild_progress, fts_rebuild_high_water] — rows the deferred
         rebuild hasn't indexed yet. The FTS query degrades to AND-joined substring terms
         (quoted phrases kept whole): recall-over-precision mid-rebuild."""
         status = self.fts_rebuild_status()
         if status is None or limit <= 0:
             return []
-        terms = [tok for tok in (t.strip('"').strip("*").strip() for t in _LIKE_TOKEN_RE.findall(fts_query))
-                 if tok and tok.upper() not in _LIKE_SKIP_TOKENS]
+        terms = [
+            tok
+            for tok in (
+                t.strip('"').strip("*").strip()
+                for t in _LIKE_TOKEN_RE.findall(fts_query)
+            )
+            if tok and tok.upper() not in _LIKE_SKIP_TOKENS
+        ]
         if not terms:
             return []
         where = ["m.id > ? AND m.id <= ?", *([_LIKE_ANY_COLUMN_SQL] * len(terms))]
-        params: list = [status["indexed"], status["total"], *(p for term in terms for p in _like_params(term))]
+        params: list = [
+            status["indexed"],
+            status["total"],
+            *(p for term in terms for p in _like_params(term)),
+        ]
         _search_filter_clauses(where, params, **filters)
-        return self._like_rows(where, [terms[0], *params, limit], order_by="ORDER BY m.timestamp DESC",
-                               limit_sql="LIMIT ?")
+        return self._like_rows(
+            where,
+            [terms[0], *params, limit],
+            order_by="ORDER BY m.timestamp DESC",
+            limit_sql="LIMIT ?",
+        )
 
     def search_sessions_by_id(
-        self, query: str, limit: int = 20, include_archived: bool = True, source: str | None = None,
-        sources: list[str] | None = None, exclude_sources: list[str] | None = None) -> list[dict[str, Any]]:
+        self,
+        query: str,
+        limit: int = 20,
+        include_archived: bool = True,
+        source: str | None = None,
+        sources: list[str] | None = None,
+        exclude_sources: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Search surfaced sessions by exact/prefix/substring session id. Also matches
         ``_lineage_root_id`` so an old compression root id resolves to the live continuation."""
         needle = (query or "").strip().lower()
@@ -1253,15 +1627,32 @@ class SessionSearchMixin:
         # list_sessions_rich pushes the id LIKE filter (own id + forward compression
         # chain) into SQL; over-fetch so the in-Python ranking has candidates.
         candidates = self.list_sessions_rich(
-            source=source, sources=sources, exclude_sources=exclude_sources, limit=max(limit * 4, limit),
-            offset=0, include_archived=include_archived, order_by_last_active=True, id_query=needle)
+            source=source,
+            sources=sources,
+            exclude_sources=exclude_sources,
+            limit=max(limit * 4, limit),
+            offset=0,
+            include_archived=include_archived,
+            order_by_last_active=True,
+            id_query=needle,
+        )
 
         def score(row: dict[str, Any]) -> int:
-            normalized = [v.lower() for v in (str(row.get("id") or ""), str(row.get("_lineage_root_id") or "")) if v]
+            normalized = [
+                v.lower()
+                for v in (
+                    str(row.get("id") or ""),
+                    str(row.get("_lineage_root_id") or ""),
+                )
+                if v
+            ]
             if any(value == needle for value in normalized):
                 return 0
             return 1 if any(value.startswith(needle) for value in normalized) else 2
-        ranked = sorted(enumerate(candidates), key=lambda item: (score(item[1]), item[0]))
+
+        ranked = sorted(
+            enumerate(candidates), key=lambda item: (score(item[1]), item[0])
+        )
         return [row for _, row in ranked[:limit]]
 
     # ── FTS maintenance commands ───────────────────────────────────────────
@@ -1295,7 +1686,9 @@ class SessionSearchMixin:
                 try:
                     self._conn.execute(f"INSERT INTO {tbl}({tbl}) VALUES('optimize')")
                     optimized += 1
-                except sqlite3.DatabaseError as exc:  # SQLITE_CORRUPT is not an OperationalError
+                except (
+                    sqlite3.DatabaseError
+                ) as exc:  # SQLITE_CORRUPT is not an OperationalError
                     logger.warning("FTS optimize failed for %s: %s", tbl, exc)
         return optimized
 
@@ -1323,7 +1716,8 @@ class SessionSearchMixin:
         with fts_rebuild_admission(self.db_path) as admitted:
             if not admitted:
                 logger.warning(
-                    "Deferred in-place FTS rebuild: another process holds the rebuild authority for this state.db.")
+                    "Deferred in-place FTS rebuild: another process holds the rebuild authority for this state.db."
+                )
                 return 0
             with self._lock:
                 self._raise_if_db_replaced()
@@ -1331,21 +1725,29 @@ class SessionSearchMixin:
                     self._reopen_after_close_locked(context="write")
                 for tbl in self._present_fts_tables():
                     try:
-                        self._conn.execute(f"INSERT INTO {tbl}({tbl}) VALUES('rebuild')")
+                        self._conn.execute(
+                            f"INSERT INTO {tbl}({tbl}) VALUES('rebuild')"
+                        )
                         self._conn.commit()
                         rebuilt += 1
-                    except sqlite3.DatabaseError as exc:  # SQLITE_CORRUPT is not an OperationalError (#133375)
+                    except (
+                        sqlite3.DatabaseError
+                    ) as exc:  # SQLITE_CORRUPT is not an OperationalError (#133375)
                         self._conn.rollback()
                         if is_malformed_db_error(exc):
                             logger.error(
                                 "FTS rebuild failed with a corruption-class error for %s: %s; "
                                 "run 'clawk sessions repair' (or 'clawk doctor --fix') to rebuild the index offline",
-                                tbl, exc)
+                                tbl,
+                                exc,
+                            )
                         else:
                             logger.warning("FTS rebuild failed for %s: %s", tbl, exc)
         return rebuilt
 
-    def _merge_fts_incrementally(self, *, max_pages: int, max_commands: Optional[int] = None) -> int:
+    def _merge_fts_incrementally(
+        self, *, max_pages: int, max_commands: Optional[int] = None
+    ) -> int:
         """Run bounded FTS5 ``'merge'`` commands against each present index. A positive merge rank
         stops after ~that many output pages, so each command holds the write lock for
         milliseconds regardless of index size (``'optimize'`` takes 9-18 s per index on a
@@ -1364,10 +1766,15 @@ class SessionSearchMixin:
         with self._lock:
             for tbl in self._present_fts_tables():
                 if not self._fts_usermerge_floor_applied:
-                    self._conn.execute(f"INSERT INTO {tbl}({tbl}, rank) VALUES('usermerge', 2)")
+                    self._conn.execute(
+                        f"INSERT INTO {tbl}({tbl}, rank) VALUES('usermerge', 2)"
+                    )
                 for _ in range(max_commands):
                     before = self._conn.total_changes
-                    self._conn.execute(f"INSERT INTO {tbl}({tbl}, rank) VALUES('merge', ?)", (max_pages,))
+                    self._conn.execute(
+                        f"INSERT INTO {tbl}({tbl}, rank) VALUES('merge', ?)",
+                        (max_pages,),
+                    )
                     executed += 1
                     if self._conn.total_changes - before < 2:
                         break

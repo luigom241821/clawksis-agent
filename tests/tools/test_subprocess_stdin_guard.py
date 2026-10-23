@@ -36,8 +36,6 @@ def test_all_tui_subprocess_calls_have_stdin():
     )
 
 
-
-
 def test_inline_noqa_marker_exempts_a_call():
     """The guard honors an inline 'noqa: subprocess-stdin' exemption marker."""
     guard = _load_guard()
@@ -51,7 +49,6 @@ def test_inline_noqa_marker_exempts_a_call():
         "x.py",
     )
     assert exempt == [], "inline marker should exempt the call"
-
 
 
 def test_splatted_kwargs_helper_counts_only_when_it_sets_stdin():
@@ -86,7 +83,9 @@ def test_splatted_kwargs_helper_counts_only_when_it_sets_stdin():
     assert guard.find_subprocess_calls(safe_fn, "x.py") == []
     assert len(guard.find_subprocess_calls(unsafe_const, "x.py")) == 1
     assert len(guard.find_subprocess_calls(undefined, "x.py")) == 1
-    assert [v["line"] for v in guard.find_subprocess_calls(unrelated_later, "x.py")] == [3]
+    assert [
+        v["line"] for v in guard.find_subprocess_calls(unrelated_later, "x.py")
+    ] == [3]
 
 
 def test_call_with_arguments_on_the_next_line_is_checked():

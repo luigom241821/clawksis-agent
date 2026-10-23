@@ -1,4 +1,5 @@
 """Tests for plugin secret-source first-process re-pull (#64177)."""
+
 from __future__ import annotations
 
 import os
@@ -112,9 +113,7 @@ def test_refresh_respects_custom_is_enabled(monkeypatch):
 
     import agent.secret_sources.registry as reg
 
-    monkeypatch.setattr(
-        reg, "list_plugin_sources", lambda: [_CustomActivationSource()]
-    )
+    monkeypatch.setattr(reg, "list_plugin_sources", lambda: [_CustomActivationSource()])
     # No `enabled` key at all — only the source's custom contract decides.
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
@@ -139,9 +138,7 @@ def test_refresh_skips_custom_source_when_not_activated(monkeypatch):
 
     import agent.secret_sources.registry as reg
 
-    monkeypatch.setattr(
-        reg, "list_plugin_sources", lambda: [_CustomActivationSource()]
-    )
+    monkeypatch.setattr(reg, "list_plugin_sources", lambda: [_CustomActivationSource()])
     # `enabled: true` but the custom contract ignores it and requires vault_id.
     monkeypatch.setattr(
         "clawk_cli.config.load_config",
@@ -186,8 +183,6 @@ def test_refresh_skips_source_whose_is_enabled_raises(monkeypatch):
 
     mgr._refresh_secret_sources_after_discovery()
     assert called == {"reset": 0, "load": 0}
-
-
 
 
 def test_real_plugin_source_discovery_applies_dotenv(monkeypatch, tmp_path):
@@ -238,9 +233,7 @@ def test_real_plugin_source_discovery_applies_dotenv(monkeypatch, tmp_path):
         PluginManager().discover_and_load()
 
         assert os.environ["CLAWK_TEST_PLUGIN_BOOTSTRAP"] == "from-plugin"
-        assert [source.name for source in reg.list_plugin_sources()] == [
-            "fixturevault"
-        ]
+        assert [source.name for source in reg.list_plugin_sources()] == ["fixturevault"]
     finally:
         os.environ.pop("CLAWK_TEST_PLUGIN_BOOTSTRAP", None)
         reg._reset_registry_for_tests()
@@ -267,16 +260,23 @@ _FIXTURE_PLUGIN = (
 def _write_plugin_home(home: Path, *, plugin_enabled: bool) -> None:
     plugin_dir = home / "plugins" / "fixture-secret-source"
     plugin_dir.mkdir(parents=True, exist_ok=True)
-    (plugin_dir / "plugin.yaml").write_text("name: fixture-secret-source\nversion: 0.1.0\n", encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        "name: fixture-secret-source\nversion: 0.1.0\n", encoding="utf-8"
+    )
     (plugin_dir / "__init__.py").write_text(_FIXTURE_PLUGIN, encoding="utf-8")
     enabled = "[fixture-secret-source]" if plugin_enabled else "[]"
     (home / "config.yaml").write_text(
-        f"plugins:\n  enabled: {enabled}\nsecrets:\n  fixturevault:\n    enabled: true\n", encoding="utf-8")
+        f"plugins:\n  enabled: {enabled}\nsecrets:\n  fixturevault:\n    enabled: true\n",
+        encoding="utf-8",
+    )
 
 
-@pytest.mark.parametrize("replaced_by_other_owner", [False, True], ids=["revoked", "other-owner-kept"])
+@pytest.mark.parametrize(
+    "replaced_by_other_owner", [False, True], ids=["revoked", "other-owner-kept"]
+)
 def test_removing_the_last_plugin_source_revokes_its_process_env_value(
-        monkeypatch, tmp_path, replaced_by_other_owner):
+    monkeypatch, tmp_path, replaced_by_other_owner
+):
     """Disabling/removing a plugin secret source takes its value back out of ``os.environ`` (#126982
     review): the per-home snapshot was already rebuilt, but the process env kept the injected value and
     single-profile ``get_secret()`` served it through its ``os.environ`` fallback until restart. A value

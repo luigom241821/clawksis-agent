@@ -1,4 +1,5 @@
 """Fresh-interpreter proof of the safe worker's reviewed tool import closure."""
+
 import json
 import os
 from pathlib import Path
@@ -13,21 +14,40 @@ def run_worker(tmp_path, body, mode="safe"):
     home = tmp_path / mode
     home.mkdir(exist_ok=True)
     root = Path(__file__).resolve().parents[2]
-    env = dict(os.environ, CLAWK_HOME=str(home), HOME=str(home), PROBE_MODE=mode,
-               TERMINAL_ENV="local", TERMINAL_CWD=str(home))
+    env = dict(
+        os.environ,
+        CLAWK_HOME=str(home),
+        HOME=str(home),
+        PROBE_MODE=mode,
+        TERMINAL_ENV="local",
+        TERMINAL_CWD=str(home),
+    )
     for key in ("CLAWK_SAFE_MODE", "CLAWK_IGNORE_USER_CONFIG", "CLAWK_IGNORE_RULES"):
         env.pop(key, None)
     script = home / "probe.py"
-    script.write_text(f"import sys; sys.path.insert(0, {str(root)!r})\n" + textwrap.dedent(body), encoding="utf-8")
-    result = subprocess.run([sys.executable, str(script)], cwd=root, env=env,
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=90, check=False)
+    script.write_text(
+        f"import sys; sys.path.insert(0, {str(root)!r})\n" + textwrap.dedent(body),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=root,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=90,
+        check=False,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 @pytest.mark.parametrize("mode", ["safe", "config", "ordinary"])
 def test_actual_agent_tool_round_never_loads_plugins_in_safe_worker(tmp_path, mode):
-    result = run_worker(tmp_path, r'''
+    result = run_worker(
+        tmp_path,
+        r"""
         import json, os, sys, threading
         from pathlib import Path
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -118,7 +138,9 @@ def test_actual_agent_tool_round_never_loads_plugins_in_safe_worker(tmp_path, mo
                 'helper_modules': imported}))
         finally:
             server.shutdown(); server.server_close(); thread.join()
-    ''', mode)
-    assert 'CORE_EXECUTED' in result['tool_result']
-    if mode == 'safe':
-        assert result['plugin_reads'] == result['plugin_execs'] == 0
+    """,
+        mode,
+    )
+    assert "CORE_EXECUTED" in result["tool_result"]
+    if mode == "safe":
+        assert result["plugin_reads"] == result["plugin_execs"] == 0

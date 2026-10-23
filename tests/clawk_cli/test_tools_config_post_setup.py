@@ -13,46 +13,69 @@ import pytest
 from clawk_cli.tools_config_post_setup import _run_post_setup
 
 
-@pytest.mark.platforms('linux')
-@pytest.mark.parametrize('provider,docker,playwright', [
-    ('browserbase', False, False), ('agent_browser', False, True),
-    ('agent_browser', False, False), ('agent_browser', True, False),
-    ('browser_use_cli', False, False),
-])
-def test_browser_setup_respects_provider_and_native_owner(monkeypatch, capsys, provider, docker, playwright):
+@pytest.mark.platforms("linux")
+@pytest.mark.parametrize(
+    "provider,docker,playwright",
+    [
+        ("browserbase", False, False),
+        ("agent_browser", False, True),
+        ("agent_browser", False, False),
+        ("agent_browser", True, False),
+        ("browser_use_cli", False, False),
+    ],
+)
+def test_browser_setup_respects_provider_and_native_owner(
+    monkeypatch, capsys, provider, docker, playwright
+):
     with (
-        patch('tools.browser_use_cli._find_cli', return_value=['harness']) as install,
-        patch('tools.browser_tool_install._running_in_docker', return_value=docker),
-        patch('tools.browser_tool_install._find_agent_browser', return_value='/image/agent-browser'),
-        patch('tools.browser_tool_install._chromium_installed', return_value=False) as chromium,
-        patch('importlib.util.find_spec', return_value=object() if playwright else None),
-        patch('shutil.which', return_value='/usr/bin/apt-get'),
-        patch('pm.ensure') as ensure, patch('subprocess.run') as run,
+        patch("tools.browser_use_cli._find_cli", return_value=["harness"]) as install,
+        patch("tools.browser_tool_install._running_in_docker", return_value=docker),
+        patch(
+            "tools.browser_tool_install._find_agent_browser",
+            return_value="/image/agent-browser",
+        ),
+        patch(
+            "tools.browser_tool_install._chromium_installed", return_value=False
+        ) as chromium,
+        patch(
+            "importlib.util.find_spec", return_value=object() if playwright else None
+        ),
+        patch("shutil.which", return_value="/usr/bin/apt-get"),
+        patch("pm.ensure") as ensure,
+        patch("subprocess.run") as run,
     ):
         before = dict(os.environ)
         _run_post_setup(provider)
         assert dict(os.environ) == before
     install.assert_called_once()
     run.assert_not_called()
-    if provider == 'browserbase':
+    if provider == "browserbase":
         chromium.assert_not_called()
-    if provider == 'browser_use_cli' or docker:
+    if provider == "browser_use_cli" or docker:
         ensure.assert_not_called()
     else:
-        ensure.assert_called_once_with('agent-browser', explicit=True)
+        ensure.assert_called_once_with("agent-browser", explicit=True)
     output = capsys.readouterr().out
     if docker:
-        assert 'Docker' in output
-    elif provider == 'agent_browser':
-        assert 'system' in output and 'npx' not in output
+        assert "Docker" in output
+    elif provider == "agent_browser":
+        assert "system" in output and "npx" not in output
         if playwright:
-            assert sys.executable in output and '-m playwright install-deps chromium' in output
+            assert (
+                sys.executable in output
+                and "-m playwright install-deps chromium" in output
+            )
         else:
-            assert 'https://playwright.dev/python/docs/browsers#install-system-dependencies' in output
+            assert (
+                "https://playwright.dev/python/docs/browsers#install-system-dependencies"
+                in output
+            )
 
 
 @pytest.mark.parametrize("status", [200, 503])
-def test_camofox_setup_leaves_external_server_and_config_owned_by_user(monkeypatch, capsys, status):
+def test_camofox_setup_leaves_external_server_and_config_owned_by_user(
+    monkeypatch, capsys, status
+):
     from clawk_cli.config import get_clawk_home
     from clawk_cli.tools_config_post_setup import _POST_SETUP_READY
 
@@ -75,7 +98,9 @@ def test_camofox_setup_leaves_external_server_and_config_owned_by_user(monkeypat
         monkeypatch.setenv("CAMOFOX_URL", f"http://127.0.0.1:{server.server_port}")
         try:
             with (
-                patch("clawk_constants.find_node_executable", return_value="/external/npm"),
+                patch(
+                    "clawk_constants.find_node_executable", return_value="/external/npm"
+                ),
                 patch("subprocess.run") as run,
                 patch("pm.ensure") as ensure,
             ):
@@ -93,12 +118,19 @@ def test_camofox_setup_leaves_external_server_and_config_owned_by_user(monkeypat
     assert ("reachable" if status == 200 else "not reachable") in output
 
 
-@pytest.mark.parametrize("key,extra", [
-    ("ddgs", "ddgs"), ("faster_whisper", "stt-whisper"),
-    ("kittentts", "kittentts"), ("piper", "piper"),
-])
+@pytest.mark.parametrize(
+    "key,extra",
+    [
+        ("ddgs", "ddgs"),
+        ("faster_whisper", "stt-whisper"),
+        ("kittentts", "kittentts"),
+        ("piper", "piper"),
+    ],
+)
 @pytest.mark.parametrize("refused", [False, True])
-def test_importable_sdk_does_not_bypass_pm_constraints(monkeypatch, capsys, key, extra, refused):
+def test_importable_sdk_does_not_bypass_pm_constraints(
+    monkeypatch, capsys, key, extra, refused
+):
     sdk = ModuleType(key)
     sdk.__version__ = "0.0.0"
     monkeypatch.setitem(sys.modules, key, sdk)

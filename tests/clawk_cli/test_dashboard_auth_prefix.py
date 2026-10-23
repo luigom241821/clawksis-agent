@@ -28,6 +28,7 @@ honour it too:
 These tests document the wire-level contract so a regression in any of
 those rules surfaces before a Mission Control deploy.
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,8 +44,7 @@ from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
 
 
 HA_INGRESS_DASHBOARD_PREFIX = (
-    "/api/hassio_ingress/8AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEf"
-    "/dashboard"
+    "/api/hassio_ingress/8AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEf/dashboard"
 )
 
 
@@ -107,9 +107,7 @@ def gated_app_direct():
 
 
 class TestForwardedPrefixNormalisation:
-    def test_home_assistant_ingress_prefix_with_subpath_is_accepted(
-        self, caplog
-    ):
+    def test_home_assistant_ingress_prefix_with_subpath_is_accepted(self, caplog):
         """Home Assistant Supervisor ingress prefixes are 63 chars before
         add-ons append their own mount path. They must survive validation so
         the SPA receives the correct __CLAWK_BASE_PATH__ and asset prefix."""
@@ -121,14 +119,12 @@ class TestForwardedPrefixNormalisation:
 
         assert result == HA_INGRESS_DASHBOARD_PREFIX
         assert not [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING
-            and "X-Forwarded-Prefix" in r.getMessage()
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "X-Forwarded-Prefix" in r.getMessage()
         ]
 
-    def test_overlong_prefix_is_rejected_with_deduplicated_warning(
-        self, caplog
-    ):
+    def test_overlong_prefix_is_rejected_with_deduplicated_warning(self, caplog):
         """Keep a bounded header budget, but make rejected non-empty
         prefixes diagnosable instead of silently producing root-relative
         dashboard URLs."""
@@ -140,9 +136,9 @@ class TestForwardedPrefixNormalisation:
                 assert prefix_mod.normalise_prefix(too_long) == ""
 
         warnings = [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING
-            and "X-Forwarded-Prefix" in r.getMessage()
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and "X-Forwarded-Prefix" in r.getMessage()
         ]
         assert len(warnings) == 1
         assert "longer than 256 characters" in warnings[0].getMessage()
@@ -185,7 +181,6 @@ class TestGateRedirectsCarryPrefix:
             f"401 envelope login_url lost prefix: {body['login_url']!r}"
         )
 
-
     def test_malformed_prefix_header_is_ignored(self, gated_app_proxied):
         """A hostile proxy injects ``X-Forwarded-Prefix: <script>``;
         the normaliser rejects it and the gate falls back to unprefixed
@@ -207,9 +202,7 @@ class TestGateRedirectsCarryPrefix:
 
 
 class TestOAuthRedirectUriRespectsPrefix:
-    def test_redirect_uri_includes_prefix_in_authorize_url(
-        self, gated_app_proxied
-    ):
+    def test_redirect_uri_includes_prefix_in_authorize_url(self, gated_app_proxied):
         """The IDP returns the user to the redirect_uri we sent. If we
         don't include the prefix, the IDP redirects to
         ``https://mission-control.tilos.com/auth/callback`` instead of
@@ -227,6 +220,7 @@ class TestOAuthRedirectUriRespectsPrefix:
         # real IDP would consume it and later use it to redirect the
         # user, so the byte-exact value MUST include the prefix.
         from urllib.parse import urlparse
+
         # Stub returns ``{redirect_uri}?code=stub_code&state=...`` — so
         # we read up to the first ``?``.
         redirect_uri = location.split("?", 1)[0]
@@ -238,15 +232,12 @@ class TestOAuthRedirectUriRespectsPrefix:
             f"redirect_uri dropped prefix: {redirect_uri!r}"
         )
 
-    def test_redirect_uri_no_prefix_when_direct_deploy(
-        self, gated_app_direct
-    ):
-        r = gated_app_direct.get(
-            "/auth/login?provider=stub", follow_redirects=False
-        )
+    def test_redirect_uri_no_prefix_when_direct_deploy(self, gated_app_direct):
+        r = gated_app_direct.get("/auth/login?provider=stub", follow_redirects=False)
         assert r.status_code == 302
         redirect_uri = r.headers["location"].split("?", 1)[0]
         from urllib.parse import urlparse
+
         parsed = urlparse(redirect_uri)
         assert parsed.netloc == "fly-app.fly.dev"
         assert parsed.path == "/auth/callback"
@@ -291,9 +282,7 @@ class TestPublicUrlOverride:
             cfg = {}
             if public_url is not None:
                 cfg = {"dashboard": {"public_url": public_url}}
-            monkeypatch.setattr(
-                "clawk_cli.config.load_config", lambda: cfg
-            )
+            monkeypatch.setattr("clawk_cli.config.load_config", lambda: cfg)
 
         return _set
 
@@ -309,15 +298,14 @@ class TestPublicUrlOverride:
         # Location header (`{redirect_uri}?code=stub_code&state=…`).
         return r.headers["location"].split("?", 1)[0]
 
-
-
     def test_env_overrides_config_public_url(
         self, gated_app_direct, patch_config, monkeypatch
     ):
         """Precedence pin — env wins over config.yaml. Fly.io / CI
         secret injection depends on this ordering."""
         monkeypatch.setenv(
-            "CLAWK_DASHBOARD_PUBLIC_URL", "https://from-env.example",
+            "CLAWK_DASHBOARD_PUBLIC_URL",
+            "https://from-env.example",
         )
         patch_config("https://from-config.example")
         redirect_uri = self._redirect_uri(gated_app_direct)
@@ -325,9 +313,6 @@ class TestPublicUrlOverride:
             "env var must override config.yaml — Fly secret injection "
             "depends on this precedence"
         )
-
-
-
 
     def test_malformed_public_url_falls_through_to_reconstruction(
         self, gated_app_direct, patch_config, monkeypatch
@@ -342,9 +327,9 @@ class TestPublicUrlOverride:
         for bad in [
             "javascript:alert(1)",
             "ftp://example.com",
-            "example.com",                          # missing scheme
-            "https://",                             # missing host
-            'https://example.com/"injected',       # quote char
+            "example.com",  # missing scheme
+            "https://",  # missing host
+            'https://example.com/"injected',  # quote char
             "https://example.com/\nhttps://evil",  # CRLF injection
         ]:
             monkeypatch.setenv("CLAWK_DASHBOARD_PUBLIC_URL", bad)
@@ -357,7 +342,6 @@ class TestPublicUrlOverride:
                 f"{redirect_uri!r}"
             )
             assert parsed.path == "/auth/callback"
-
 
     def test_scheme_less_public_url_env_warns_operator(
         self, patch_config, monkeypatch, caplog
@@ -381,9 +365,7 @@ class TestPublicUrlOverride:
 
         assert result == ""  # scheme-less value is still rejected
         warnings = [
-            r.getMessage()
-            for r in caplog.records
-            if r.levelno == logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any(
             "CLAWK_DASHBOARD_PUBLIC_URL" in m
@@ -391,8 +373,6 @@ class TestPublicUrlOverride:
             and "scheme" in m
             for m in warnings
         ), f"expected a scheme warning, got: {warnings!r}"
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -414,10 +394,7 @@ class TestCookiePathRespectsPrefix:
     the cookie to the exact host (no Domain attribute) and requires Secure.
     """
 
-
-    def test_pkce_cookie_uses_secure_prefix_when_proxied(
-        self, gated_app_proxied
-    ):
+    def test_pkce_cookie_uses_secure_prefix_when_proxied(self, gated_app_proxied):
         """Behind a proxy with Path != /, ``__Host-`` is disallowed
         (the spec requires Path=/). Fall back to ``__Secure-``, which
         carries the same Secure-required guarantee but allows any Path.
@@ -430,13 +407,9 @@ class TestCookiePathRespectsPrefix:
         cookies = r.headers.get_list("set-cookie")
         # The PKCE cookie name carries the __Secure- prefix.
         pkce_candidates = [
-            c for c in cookies
-            if c.startswith("__Secure-clawk_session_pkce=")
+            c for c in cookies if c.startswith("__Secure-clawk_session_pkce=")
         ]
-        assert pkce_candidates, (
-            f"PKCE cookie missing __Secure- prefix: {cookies!r}"
-        )
-
+        assert pkce_candidates, f"PKCE cookie missing __Secure- prefix: {cookies!r}"
 
     def test_loopback_cookies_unprefixed(self):
         """Loopback HTTP dev: no Secure, no __Host- / __Secure-.
@@ -463,13 +436,10 @@ class TestCookiePathRespectsPrefix:
         )
         # And no __Host- / __Secure- variant accidentally emitted.
         assert not any(
-            c.startswith("__Host-") or c.startswith("__Secure-")
-            for c in cookies
+            c.startswith("__Host-") or c.startswith("__Secure-") for c in cookies
         )
 
-    def test_cookies_read_back_round_trip_through_prefix(
-        self, gated_app_proxied
-    ):
+    def test_cookies_read_back_round_trip_through_prefix(self, gated_app_proxied):
         """The end-to-end property: after a successful OAuth round
         trip via the proxy, the session-AT cookie carries the
         __Secure- prefix AND Path=/clawk, so the next request under
@@ -495,8 +465,7 @@ class TestCookiePathRespectsPrefix:
             follow_redirects=False,
         )
         pkce_set = next(
-            c for c in r1.headers.get_list("set-cookie")
-            if "clawk_session_pkce" in c
+            c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c
         )
         # Parse "__Secure-clawk_session_pkce=...; HttpOnly; ...".
         pkce_kv = pkce_set.split(";", 1)[0]  # "__Secure-clawk_session_pkce=value"
@@ -515,13 +484,8 @@ class TestCookiePathRespectsPrefix:
         )
         assert r2.status_code == 302, r2.text
         cookies = r2.headers.get_list("set-cookie")
-        at_cookies = [
-            c for c in cookies
-            if c.startswith("__Secure-clawk_session_at=")
-        ]
-        assert at_cookies, (
-            f"session_at missing __Secure- prefix: {cookies!r}"
-        )
+        at_cookies = [c for c in cookies if c.startswith("__Secure-clawk_session_at=")]
+        assert at_cookies, f"session_at missing __Secure- prefix: {cookies!r}"
         assert "Path=/clawk" in at_cookies[0]
         assert "Secure" in at_cookies[0]
         assert "HttpOnly" in at_cookies[0]
@@ -584,9 +548,7 @@ class TestExternalizePostLoginTarget:
 class TestPostLoginLandingPrefix:
     """Integration: callback and password-login landing URLs carry prefix."""
 
-    def test_callback_redirect_location_carries_prefix(
-        self, gated_app_proxied
-    ):
+    def test_callback_redirect_location_carries_prefix(self, gated_app_proxied):
         """After OAuth callback with prefix, the 302 Location must be
         ``/clawk/`` not bare ``/``."""
         r1 = gated_app_proxied.get(
@@ -595,8 +557,7 @@ class TestPostLoginLandingPrefix:
             follow_redirects=False,
         )
         pkce_set = next(
-            c for c in r1.headers.get_list("set-cookie")
-            if "clawk_session_pkce" in c
+            c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c
         )
         pkce_kv = pkce_set.split(";", 1)[0]
         state = r1.headers["location"].split("state=")[1]
@@ -615,17 +576,14 @@ class TestPostLoginLandingPrefix:
             f"callback redirect should carry prefix, got {location!r}"
         )
 
-    def test_callback_redirect_no_prefix_direct_deploy(
-        self, gated_app_direct
-    ):
+    def test_callback_redirect_no_prefix_direct_deploy(self, gated_app_direct):
         """Without prefix, callback redirects to bare ``/``."""
         r1 = gated_app_direct.get(
             "/auth/login?provider=stub",
             follow_redirects=False,
         )
         pkce_set = next(
-            c for c in r1.headers.get_list("set-cookie")
-            if "clawk_session_pkce" in c
+            c for c in r1.headers.get_list("set-cookie") if "clawk_session_pkce" in c
         )
         pkce_kv = pkce_set.split(";", 1)[0]
         state = r1.headers["location"].split("state=")[1]
@@ -637,9 +595,7 @@ class TestPostLoginLandingPrefix:
         )
         assert r2.status_code == 302, r2.text
         location = r2.headers["location"]
-        assert location == "/", (
-            f"direct deploy should redirect to /, got {location!r}"
-        )
+        assert location == "/", f"direct deploy should redirect to /, got {location!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -654,8 +610,7 @@ class TestLoginPageWholeClassPrefix:
     byte-identical to today's output."""
 
     def test_login_page_fonts_prefixed_behind_proxy(self, gated_app_proxied):
-        r = gated_app_proxied.get(
-            "/login", headers={"X-Forwarded-Prefix": "/clawk"})
+        r = gated_app_proxied.get("/login", headers={"X-Forwarded-Prefix": "/clawk"})
         assert r.status_code == 200
         assert "url('/fonts/" not in r.text
         assert "url('/clawk/fonts/" in r.text
@@ -675,14 +630,14 @@ class TestLoginPageWholeClassPrefix:
         (the PKCE cookie Path matches the mount, so a root-absolute POST
         would silently drop the cookie and break native login)."""
         from clawk_cli.dashboard_auth import clear_providers, register_provider
-        from tests.clawk_cli.test_dashboard_auth_password_login import (
-            PasswordProvider)
+        from tests.clawk_cli.test_dashboard_auth_password_login import PasswordProvider
 
         clear_providers()
         register_provider(PasswordProvider())
         try:
             r = gated_app_proxied.get(
-                "/login", headers={"X-Forwarded-Prefix": "/clawk"})
+                "/login", headers={"X-Forwarded-Prefix": "/clawk"}
+            )
             assert r.status_code == 200
             html = r.text
             assert "getAttribute('data-prefix')" in html
@@ -696,7 +651,8 @@ class TestLoginPageWholeClassPrefix:
         than one interactive provider is registered)."""
         from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
         from clawk_cli.dashboard_auth.login_page import (
-            render_native_provider_choice_html)
+            render_native_provider_choice_html,
+        )
 
         class _SecondStub(StubAuthProvider):
             name = "stub2"
@@ -719,7 +675,8 @@ class TestLoginPageWholeClassPrefix:
     def test_native_chooser_bare_root_without_prefix(self):
         from tests.clawk_cli.conftest_dashboard_auth import StubAuthProvider
         from clawk_cli.dashboard_auth.login_page import (
-            render_native_provider_choice_html)
+            render_native_provider_choice_html,
+        )
 
         class _SecondStub(StubAuthProvider):
             name = "stub2"

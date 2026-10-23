@@ -21,13 +21,24 @@ from tools.environments.base import BaseEnvironment
 from tools.environments.base_output import _pipe_stdin
 from clawk_cli._subprocess_compat import windows_hide_flags
 from tools.environments.local_env_policy import (
-    _ALWAYS_STRIP_FOLDED, _ALWAYS_STRIP_KEYS, _CLAWK_PROVIDER_ENV_BLOCKLIST, _CLAWK_PROVIDER_ENV_FORCE_PREFIX,
-    _is_clawk_internal_secret, _is_provider_env_blocklisted, _is_terminal_first_party_env,
-    _home_adapter_secret_env, _matches_terminal_first_party_prefix, _plugin_terminal_env_strip_keys,
-    _registered_adapter_secret_env, _registry_adapter_secret_env,
-    strip_profile_gate_env)
+    _ALWAYS_STRIP_FOLDED,
+    _ALWAYS_STRIP_KEYS,
+    _CLAWK_PROVIDER_ENV_BLOCKLIST,
+    _CLAWK_PROVIDER_ENV_FORCE_PREFIX,
+    _is_clawk_internal_secret,
+    _is_provider_env_blocklisted,
+    _is_terminal_first_party_env,
+    _home_adapter_secret_env,
+    _matches_terminal_first_party_prefix,
+    _plugin_terminal_env_strip_keys,
+    _registered_adapter_secret_env,
+    _registry_adapter_secret_env,
+    strip_profile_gate_env,
+)
 from tools.environments.local_pythonpath import (
-    _build_clawk_repo_root_aliases, _strip_clawk_owned_pythonpath_and_runtime_markers)
+    _build_clawk_repo_root_aliases,
+    _strip_clawk_owned_pythonpath_and_runtime_markers,
+)
 
 
 _IS_WINDOWS = platform.system() == "Windows"
@@ -52,12 +63,15 @@ def _default_terminal_temp_dir() -> Path | None:
     """Return CLAWK_HOME/cache/terminal, or None if unresolvable."""
     try:
         from clawk_constants import get_clawk_home
+
         return get_clawk_home() / "cache" / "terminal"
     except Exception:
         return None
 
 
-def cleanup_terminal_temp_cache(max_age_hours: float = TERMINAL_TEMP_MAX_IDLE_HOURS) -> int:
+def cleanup_terminal_temp_cache(
+    max_age_hours: float = TERMINAL_TEMP_MAX_IDLE_HOURS,
+) -> int:
     """Delete session temp artifacts idle for *max_age_hours* (no write anywhere in a
     directory's subtree; the kwarg name is the ``cleanup_*_cache`` signature the gateway
     housekeeping loop calls every entry with); return count.
@@ -137,10 +151,14 @@ def _msys_to_windows_path(cwd: str) -> str:
     """``/c/Users/x`` / ``/cygdrive/c/..`` / ``/mnt/c/..`` -> native ``C:\\Users\\x`` so
     ``isdir``/``Popen(cwd=)`` find it. No-op off Windows, for empty input and for
     multi-segment POSIX paths like ``/home/x``; idempotent on native paths."""
-    m = _IS_WINDOWS and cwd and re.match(r'^/(?:(?:cygdrive|mnt)/)?([a-zA-Z])(/.*)?$', cwd)
+    m = (
+        _IS_WINDOWS
+        and cwd
+        and re.match(r"^/(?:(?:cygdrive|mnt)/)?([a-zA-Z])(/.*)?$", cwd)
+    )
     if not m:
         return cwd
-    tail = (m.group(2) or "").replace('/', '\\')
+    tail = (m.group(2) or "").replace("/", "\\")
     return f"{m.group(1).upper()}:{tail or chr(92)}"  # chr(92) = backslash
 
 
@@ -162,7 +180,7 @@ def _resolve_local_initial_cwd(cwd: str) -> str:
     # Relative name matching the tail of the current dir: use the current dir.
     if not os.path.isdir(candidate):
         wanted, have = Path(expanded).parts, Path(current).parts
-        if wanted and len(wanted) <= len(have) and have[-len(wanted):] == wanted:
+        if wanted and len(wanted) <= len(have) and have[-len(wanted) :] == wanted:
             return current
     return candidate
 
@@ -170,10 +188,10 @@ def _resolve_local_initial_cwd(cwd: str) -> str:
 def _windows_to_msys_path(cwd: str) -> str:
     """Native ``C:\\Users\\x`` -> Git Bash ``/c/Users/x`` so ``builtin cd`` resolves
     it. No-op off Windows / for non-drive paths."""
-    m = _IS_WINDOWS and cwd and re.match(r'^([a-zA-Z]):[\\/]*(.*)$', cwd)
+    m = _IS_WINDOWS and cwd and re.match(r"^([a-zA-Z]):[\\/]*(.*)$", cwd)
     if not m:
         return cwd
-    tail = (m.group(2) or "").replace('\\', '/').lstrip('/')
+    tail = (m.group(2) or "").replace("\\", "/").lstrip("/")
     return f"/{m.group(1).lower()}/{tail}"
 
 
@@ -181,12 +199,15 @@ def _bash_safe_path(path: str) -> str:
     """*path* safe to embed in a Git Bash script: ``C:\\Users\\x`` / ``C:/Users/x``
     become ``/c/Users/x`` (MSYS argument conversion mangles ``C:/`` forms) and
     leftover backslashes are normalized so bash does not eat ``\\U``. No-op off Windows."""
-    return _windows_to_msys_path(path).replace("\\", "/") if _IS_WINDOWS and path else path
+    return (
+        _windows_to_msys_path(path).replace("\\", "/") if _IS_WINDOWS and path else path
+    )
 
 
 def _quote_bash_path(path: str) -> str:
     """Quote *path* for safe interpolation into a Git Bash script on Windows."""
     import shlex
+
     return shlex.quote(_bash_safe_path(path))
 
 
@@ -218,7 +239,9 @@ def _resolve_safe_cwd(cwd: str) -> str:
             "directory. If this is a gateway/cron process, check for "
             "root-owned paths leaking into terminal.cwd / TERMINAL_CWD "
             "(#65583).",
-            cwd, getattr(os, "getuid", lambda: "?")())
+            cwd,
+            getattr(os, "getuid", lambda: "?")(),
+        )
     parent = os.path.dirname(cwd) if cwd else ""
     while parent and not _cwd_usable(parent):
         next_parent = os.path.dirname(parent)
@@ -232,6 +255,7 @@ def _resolve_safe_cwd(cwd: str) -> str:
 def _apply_profile_home(env: dict) -> None:
     """Bridge the context-local CLAWK_HOME override, then the subprocess HOME contract."""
     from clawk_constants import apply_subprocess_home_env, get_clawk_home_override
+
     try:
         if value := get_clawk_home_override():
             env["CLAWK_HOME"] = value
@@ -260,8 +284,12 @@ def _inject_session_context_env(env: dict) -> None:
 
 
 def _filter_secret_env(
-    items: Mapping[str, str], out: dict, *, unwrap_force: bool,
-    plugin_strip: frozenset = frozenset()) -> None:
+    items: Mapping[str, str],
+    out: dict,
+    *,
+    unwrap_force: bool,
+    plugin_strip: frozenset = frozenset(),
+) -> None:
     """Copy *items* into *out*, dropping Clawksis-managed secrets. ``_CLAWK_FORCE_<NAME>``
     unwraps to ``NAME`` when ``unwrap_force`` (caller extras / terminal env), else is
     dropped. Blocklisted names survive only via env_passthrough registration or as
@@ -270,14 +298,17 @@ def _filter_secret_env(
     try:
         from tools.env_passthrough import is_env_passthrough, resolve_passthrough_value
     except Exception:
-        is_env_passthrough, resolve_passthrough_value = (lambda _: False), (lambda _n, fb: fb)
+        is_env_passthrough, resolve_passthrough_value = (
+            (lambda _: False),
+            (lambda _n, fb: fb),
+        )
     plugin_strip_folded = frozenset(k.upper() for k in plugin_strip)
     registered = _registered_adapter_secret_env()
     for key, value in items.items():
         if key.startswith(_CLAWK_PROVIDER_ENV_FORCE_PREFIX):
             if not unwrap_force:
                 continue
-            key = key[len(_CLAWK_PROVIDER_ENV_FORCE_PREFIX):]
+            key = key[len(_CLAWK_PROVIDER_ENV_FORCE_PREFIX) :]
             if not _is_clawk_internal_secret(key):
                 out[key] = value
             continue
@@ -285,7 +316,9 @@ def _filter_secret_env(
             continue
         first_party = _is_terminal_first_party_env(key)
         passthrough = is_env_passthrough(key)
-        if _is_provider_env_blocklisted(key, registered) and not (passthrough or first_party):
+        if _is_provider_env_blocklisted(key, registered) and not (
+            passthrough or first_party
+        ):
             continue
         if passthrough and not first_party:
             value = resolve_passthrough_value(key, value)
@@ -302,6 +335,7 @@ def _finalize_child_env(env: dict) -> dict:
     _strip_clawk_owned_pythonpath_and_runtime_markers(env)
     _apply_windows_msys_bash_env_defaults(env)
     from agent.delegation_context import delegated_child_subprocess_env
+
     return delegated_child_subprocess_env(env)
 
 
@@ -311,13 +345,20 @@ def _scrubbed_env(parts, plugin_strip: frozenset, fix_path) -> dict:
     for children of a systemd/cron-launched gateway), then apply the shared guards."""
     out: dict[str, str] = {}
     for items, unwrap_force in parts:
-        _filter_secret_env(items, out, unwrap_force=unwrap_force, plugin_strip=plugin_strip)
+        _filter_secret_env(
+            items, out, unwrap_force=unwrap_force, plugin_strip=plugin_strip
+        )
     # Declared names the bound profile scope holds but the process env never did (a routed
     # profile's own .env / sources) — the filter above can only see names already present.
     # Unguarded on purpose: a scope/config failure here must be loud, not silently drop the
     # declared secret again (#114209); _scrub_child_env calls it the same way.
     from tools.env_passthrough import scoped_passthrough_additions
-    out.update((k, v) for k, v in scoped_passthrough_additions(out).items() if k not in plugin_strip)
+
+    out.update(
+        (k, v)
+        for k, v in scoped_passthrough_additions(out).items()
+        if k not in plugin_strip
+    )
     path_key = _path_env_key(out)
     # Keep bare ``clawk`` invocations available to child jobs even when the gateway was launched by a
     # service manager or cron without the console script's directory on PATH. The terminal environment
@@ -327,11 +368,16 @@ def _scrubbed_env(parts, plugin_strip: frozenset, fix_path) -> dict:
     return _finalize_child_env(out)
 
 
-def _sanitize_subprocess_env(base_env: dict | None, extra_env: dict | None = None) -> dict:
+def _sanitize_subprocess_env(
+    base_env: dict | None, extra_env: dict | None = None
+) -> dict:
     """Filter Clawksis-managed secrets from a subprocess environment (background/PTY
     spawn path, search workers, computer-use driver, user-script runners)."""
-    return _scrubbed_env([(base_env or {}, False), (extra_env or {}, True)],
-                         _plugin_terminal_env_strip_keys(), lambda p: p)
+    return _scrubbed_env(
+        [(base_env or {}, False), (extra_env or {}, True)],
+        _plugin_terminal_env_strip_keys(),
+        lambda p: p,
+    )
 
 
 def _terminal_env(env: dict) -> dict:
@@ -364,21 +410,34 @@ def _scrub_credentials(env: dict, *, inherit_credentials: bool) -> dict:
     # Credential names fold to uppercase for membership: on Windows the env block
     # itself is case-insensitive, so a lowercase-stored ``gh_token`` IS GH_TOKEN.
     home_secrets = _home_adapter_secret_env()  # one manifest stamp per scrub
-    strip_folded = _ALWAYS_STRIP_FOLDED | {k.upper() for k in _plugin_terminal_env_strip_keys()} | home_secrets
+    strip_folded = (
+        _ALWAYS_STRIP_FOLDED
+        | {k.upper() for k in _plugin_terminal_env_strip_keys()}
+        | home_secrets
+    )
     registered = _registry_adapter_secret_env()  # home_secrets already strip above
     for key in list(env):
-        if (key.upper() in strip_folded
-                or (not inherit_credentials and _is_provider_env_blocklisted(key, registered))
-                or key.startswith(_CLAWK_PROVIDER_ENV_FORCE_PREFIX)
-                or _is_clawk_internal_secret(key)):
+        if (
+            key.upper() in strip_folded
+            or (
+                not inherit_credentials
+                and _is_provider_env_blocklisted(key, registered)
+            )
+            or key.startswith(_CLAWK_PROVIDER_ENV_FORCE_PREFIX)
+            or _is_clawk_internal_secret(key)
+        ):
             del env[key]
     return env
 
 
 def build_subprocess_env(
-    base: Mapping[str, str] | None = None, *, inherit_profile_home: bool = True,
-    scrub_secrets: bool = True, extra: Mapping[str, str] | None = None,
-    strip_launch_profile: bool = False) -> dict[str, str]:
+    base: Mapping[str, str] | None = None,
+    *,
+    inherit_profile_home: bool = True,
+    scrub_secrets: bool = True,
+    extra: Mapping[str, str] | None = None,
+    strip_launch_profile: bool = False,
+) -> dict[str, str]:
     """Single factory for child-process envs. ``base=None`` snapshots ``os.environ``.
     ``scrub_secrets=True`` -> :func:`_sanitize_subprocess_env` (profile home inherent,
     ``inherit_profile_home`` ignored). ``scrub_secrets=False`` keeps the base
@@ -394,6 +453,7 @@ def build_subprocess_env(
     if strip_launch_profile:
         strip_launch_profile_env(env)
         from agent.secret_scope import current_secret_scope, is_multiplex_active
+
         if is_multiplex_active():
             # Single-profile: the scope IS os.environ, so overlaying it would only re-sanitize
             # values the child already inherits byte-identical.
@@ -408,11 +468,14 @@ def build_subprocess_env(
     if extra:
         env.update(extra)
     from agent.delegation_context import delegated_child_subprocess_env
+
     return delegated_child_subprocess_env(env)
 
 
 def served_profile_child_env(
-    base: Mapping[str, str] | None = None, *, target_home: str | Path | None = None,
+    base: Mapping[str, str] | None = None,
+    *,
+    target_home: str | Path | None = None,
     inherit_credentials: bool = False,
 ) -> dict[str, str]:
     """Child env for a process that acts FOR the active (possibly served) profile: ``clawk -p X``
@@ -431,9 +494,18 @@ def served_profile_child_env(
     ``get_secret``. ``target_home`` defaults to the active override; ``base`` replaces the
     ``clawk_subprocess_env`` snapshot."""
     from agent.secret_scope import (
-        UnscopedSecretError, build_profile_secret_scope, current_secret_scope, is_multiplex_active)
+        UnscopedSecretError,
+        build_profile_secret_scope,
+        current_secret_scope,
+        is_multiplex_active,
+    )
     from clawk_constants import apply_scratch_tmp_env, get_clawk_home_override
-    env = dict(base) if base is not None else clawk_subprocess_env(inherit_credentials=inherit_credentials)
+
+    env = (
+        dict(base)
+        if base is not None
+        else clawk_subprocess_env(inherit_credentials=inherit_credentials)
+    )
     target = str(target_home or get_clawk_home_override() or "")
     if target:
         env["CLAWK_HOME"] = target
@@ -448,9 +520,11 @@ def served_profile_child_env(
             secrets = current_secret_scope()
             if secrets is None and is_multiplex_active():
                 raise UnscopedSecretError(
-                    "", "served_profile_child_env(inherit_credentials=True) called with no target home and "
+                    "",
+                    "served_profile_child_env(inherit_credentials=True) called with no target home and "
                     "no profile secret scope bound while multiplexing is on; the child would inherit the "
-                    "launch profile's credentials. Bind the profile scope (or pass target_home) at the spawn site.")
+                    "launch profile's credentials. Bind the profile scope (or pass target_home) at the spawn site.",
+                )
         env.update((k, v) for k, v in (secrets or {}).items() if v is not None)
     return env
 
@@ -465,8 +539,11 @@ def host_gateway_child_env(
     multiplexer that owns the primary adapter map.
     """
     from clawk_constants import get_default_clawk_root
+
     return served_profile_child_env(
-        base=base, target_home=get_default_clawk_root(), inherit_credentials=True,
+        base=base,
+        target_home=get_default_clawk_root(),
+        inherit_credentials=True,
     )
 
 
@@ -477,6 +554,7 @@ def _is_routed_home(target_home: str | Path) -> bool:
     mirrors the served profile into ``CLAWK_HOME``, the live env var names the served home and the
     launch residue would never be stripped from that profile's child env."""
     from clawk_constants import get_routing_process_clawk_home
+
     try:
         return Path(target_home).resolve() != get_routing_process_clawk_home().resolve()
     except OSError:
@@ -495,11 +573,13 @@ def strip_launch_profile_env(env: dict, target_home: str | Path | None = None) -
     installing a CLAWK_HOME override without that flag."""
     from agent.secret_scope import _is_global_env, load_env_file
     from clawk_constants import get_clawk_home_override, get_routing_process_clawk_home
+
     target = target_home or get_clawk_home_override()
     if not target or not _is_routed_home(target):
         return env
     launch_home = get_routing_process_clawk_home()
     from clawk_cli.config import TERMINAL_CONFIG_ENV_MAP
+
     # Folded strip: on Windows the env block is case-insensitive, so residue
     # stored under a variant casing is the same variable and must go too. The
     # selection folds the same way so a lowercase ``path`` in .env is still
@@ -512,13 +592,21 @@ def strip_launch_profile_env(env: dict, target_home: str | Path | None = None) -
     # overlay puts back exactly the ones the target's own sources supply. The administrator-managed
     # .env is NOT residue: its values are policy for every profile (``_apply_managed_env`` applies
     # it last, with override, so it beats the user's own .env) — leave them in place.
-    from clawk_cli.env_loader import launch_dotenv_keys, managed_dotenv_keys, source_supplied_names
+    from clawk_cli.env_loader import (
+        launch_dotenv_keys,
+        managed_dotenv_keys,
+        source_supplied_names,
+    )
+
     managed_names = {key.upper() for key in managed_dotenv_keys()}
     residue_names = {
-        key.upper() for key in
-        set(load_env_file(launch_home / ".env")) | set(launch_dotenv_keys())
-        | set(TERMINAL_CONFIG_ENV_MAP.values()) | set(source_supplied_names())
-        if not _is_global_env(key.upper()) or key.upper().startswith("TERMINAL_")} - managed_names
+        key.upper()
+        for key in set(load_env_file(launch_home / ".env"))
+        | set(launch_dotenv_keys())
+        | set(TERMINAL_CONFIG_ENV_MAP.values())
+        | set(source_supplied_names())
+        if not _is_global_env(key.upper()) or key.upper().startswith("TERMINAL_")
+    } - managed_names
     for key in [k for k in env if k.upper() in residue_names]:
         del env[key]
     # Authorization gates are the one residue a name list cannot see: a unit-file ``Environment=``
@@ -533,6 +621,7 @@ def restore_managed_env(env: dict) -> dict:
     the launch process; a routed child must see the same precedence, or the routed user's value for a
     managed key (``ORG_POLICY_FLAG=user-value``) silently wins over policy."""
     from clawk_cli.env_loader import managed_dotenv_keys
+
     for key in managed_dotenv_keys():
         if key in os.environ:
             env[key] = os.environ[key]
@@ -574,8 +663,12 @@ def _compute_git_bash_bin_dirs() -> list[str]:
         bash = _find_bash()
     except Exception:
         return []
-    parent = os.path.dirname(os.path.dirname(bash))  # bash in <root>\bin or <root>\usr\bin (MinGit)
-    root = os.path.dirname(parent) if os.path.basename(parent).lower() == "usr" else parent
+    parent = os.path.dirname(
+        os.path.dirname(bash)
+    )  # bash in <root>\bin or <root>\usr\bin (MinGit)
+    root = (
+        os.path.dirname(parent) if os.path.basename(parent).lower() == "usr" else parent
+    )
     subs = ("mingw64/bin", "mingw32/bin", "usr/local/bin", "usr/bin", "bin")
     dirs = (os.path.join(root, *sub.split("/")) for sub in subs)
     return list(dict.fromkeys(d for d in dirs if os.path.isdir(d)))
@@ -616,8 +709,12 @@ def _find_shell() -> str:
     ``-l`` with stdin ``/dev/null`` sources ``~/.bash_profile``, which often
     ``exec /bin/zsh -l`` and drops ``-c`` — the command silently never runs."""
     user_shell = "" if _IS_WINDOWS else os.environ.get("SHELL")
-    if (user_shell and os.path.isfile(user_shell) and os.access(user_shell, os.X_OK)
-            and Path(user_shell).name in _SPAWN_COMPATIBLE_SHELLS):
+    if (
+        user_shell
+        and os.path.isfile(user_shell)
+        and os.access(user_shell, os.X_OK)
+        and Path(user_shell).name in _SPAWN_COMPATIBLE_SHELLS
+    ):
         return user_shell
     return _find_bash()
 
@@ -625,8 +722,10 @@ def _find_shell() -> str:
 # --- PATH completion for the terminal subshell ---
 
 # Standard PATH entries for environments with minimal PATH.
-_SANE_PATH = ("/opt/homebrew/bin:/opt/homebrew/sbin:"
-              "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+_SANE_PATH = (
+    "/opt/homebrew/bin:/opt/homebrew/sbin:"
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+)
 
 # Cached directory containing the ``clawk`` console-script.
 # ``_SENTINEL`` distinguishes "not resolved yet" from a resolved ``None``.
@@ -660,11 +759,16 @@ def _resolve_clawk_bin_dir() -> str | None:
     shim = "clawk.exe" if _IS_WINDOWS else "clawk"
     if which:
         candidate = os.path.dirname(which)
-    elif (os.path.isabs(argv0) and (base == "clawk" or base.startswith("clawk."))
-            and os.path.isfile(argv0)):
+    elif (
+        os.path.isabs(argv0)
+        and (base == "clawk" or base.startswith("clawk."))
+        and os.path.isfile(argv0)
+    ):
         candidate = os.path.dirname(argv0)
     else:
-        candidate = exe_dir if exe_dir and os.path.isfile(os.path.join(exe_dir, shim)) else None
+        candidate = (
+            exe_dir if exe_dir and os.path.isfile(os.path.join(exe_dir, shim)) else None
+        )
     _CLAWK_BIN_DIR = candidate if candidate and os.path.isdir(candidate) else None
     _CLAWK_BIN_DIR_IS_PAYLOAD = False
     return _CLAWK_BIN_DIR
@@ -676,7 +780,11 @@ def _prepend_clawk_bin_dir(existing_path: str) -> str:
     another install's ``clawk`` ahead of it."""
     bin_dir = _resolve_clawk_bin_dir()
     if bin_dir and _CLAWK_BIN_DIR_IS_PAYLOAD:
-        rest = [entry for entry in existing_path.split(os.pathsep) if entry and entry != bin_dir]
+        rest = [
+            entry
+            for entry in existing_path.split(os.pathsep)
+            if entry and entry != bin_dir
+        ]
         return os.pathsep.join([bin_dir, *rest])
     return _prepend_missing_path_entries(existing_path, [bin_dir] if bin_dir else [])
 
@@ -737,8 +845,15 @@ def _append_missing_sane_path_entries(existing_path: str) -> str:
         return existing_path
     # dict preserves first-occurrence order; empty entries dropped.
     ordered = dict.fromkeys(entry for entry in existing_path.split(":") if entry)
-    ordered.update(dict.fromkeys([*_SANE_PATH.split(":"), *_managed_runtime_path_entries(),
-                                  *_user_local_bin_entries()]))
+    ordered.update(
+        dict.fromkeys(
+            [
+                *_SANE_PATH.split(":"),
+                *_managed_runtime_path_entries(),
+                *_user_local_bin_entries(),
+            ]
+        )
+    )
     return ":".join(ordered)
 
 
@@ -763,7 +878,11 @@ def _apply_windows_msys_bash_env_defaults(env: dict) -> None:
 def _path_env_key(run_env: dict) -> str | None:
     """PATH env key to update without altering Windows casing (``Path`` vs ``PATH``);
     None when a Windows env has no PATH key at all."""
-    return next((k for k in run_env if k.upper() == "PATH"), None) if _IS_WINDOWS else "PATH"
+    return (
+        next((k for k in run_env if k.upper() == "PATH"), None)
+        if _IS_WINDOWS
+        else "PATH"
+    )
 
 
 def _make_run_env(env: dict) -> dict:
@@ -774,8 +893,16 @@ def _make_run_env(env: dict) -> dict:
     client toolchain (PATH, venv, nvm/pyenv/conda: ``agent.session_client_env``) replaces the daemon's
     beneath the backend's own ``env``."""
     from agent.session_client_env import toolchain_environ
+
     run_env = _scrubbed_env(
-        [(dict(toolchain_environ(strip_launch_profile_env(os.environ.copy())) | env), True)],
+        [
+            (
+                dict(
+                    toolchain_environ(strip_launch_profile_env(os.environ.copy())) | env
+                ),
+                True,
+            )
+        ],
         frozenset(),
         lambda p: _user_tools_first(_append_missing_sane_path_entries(p)),
     )
@@ -788,12 +915,15 @@ def _make_run_env(env: dict) -> dict:
     # the seat env passes through untouched.
     try:
         from tools.bot_desktop.runtime import published_env
+
         published = published_env()
     except Exception:
         published = {}
     if published:
         run_env.update(published)
-        run_env.pop("WAYLAND_DISPLAY", None)  # X11 desktop; a leaked Wayland socket flips GTK/Chromium backends
+        run_env.pop(
+            "WAYLAND_DISPLAY", None
+        )  # X11 desktop; a leaked Wayland socket flips GTK/Chromium backends
     return run_env
 
 
@@ -805,9 +935,11 @@ def _make_run_env(env: dict) -> dict:
 # configured CLAWK_HOME spelling (possibly a junction to another drive).
 _clawk_repo_root: Path = Path(__file__).resolve().parents[2]
 _clawk_repo_root_aliases: tuple[Path, ...] = _build_clawk_repo_root_aliases(
-    _clawk_repo_root, Path(__file__).absolute().parents[2], get_process_clawk_home())
-_in_venv: bool = (getattr(sys, "base_prefix", sys.prefix) != sys.prefix
-                  or hasattr(sys, "real_prefix"))  # real_prefix: virtualenv<20
+    _clawk_repo_root, Path(__file__).absolute().parents[2], get_process_clawk_home()
+)
+_in_venv: bool = getattr(sys, "base_prefix", sys.prefix) != sys.prefix or hasattr(
+    sys, "real_prefix"
+)  # real_prefix: virtualenv<20
 _clawk_site_packages: list[Path] | None = None  # lazily cached by local_pythonpath
 
 
@@ -817,11 +949,14 @@ def _read_terminal_shell_init_config() -> tuple[list[str], bool]:
     failure so terminal execution never breaks."""
     try:
         from clawk_cli.config import load_config
+
         terminal_cfg = (load_config() or {}).get("terminal") or {}
         files = terminal_cfg.get("shell_init_files") or []
         if not isinstance(files, list):
             files = []
-        return [str(f) for f in files if f], bool(terminal_cfg.get("auto_source_bashrc", True))
+        return [str(f) for f in files if f], bool(
+            terminal_cfg.get("auto_source_bashrc", True)
+        )
     except Exception:
         return [], True
 
@@ -833,8 +968,11 @@ def _resolve_shell_init_files() -> list[str]:
     n/nvm/asdf/pyenv add PATH), ~/.bashrc last (Debian's returns early when
     non-interactive, but guard-less bashrcs keep working)."""
     explicit, auto_bashrc = _read_terminal_shell_init_config()
-    candidates = explicit or (["~/.profile", "~/.bash_profile", "~/.bashrc"]
-                              if auto_bashrc and not _IS_WINDOWS else [])
+    candidates = explicit or (
+        ["~/.profile", "~/.bash_profile", "~/.bashrc"]
+        if auto_bashrc and not _IS_WINDOWS
+        else []
+    )
     resolved: list[str] = []
     for raw in candidates:
         try:
@@ -852,7 +990,10 @@ def _prepend_shell_init(cmd_string: str, files: list[str]) -> str:
     if not files:
         return cmd_string
     safe = [p.replace("'", "'\\''") for p in files]
-    prelude = ["set +e", *(f"[ -r '{p}' ] && . '{p}' 2>/dev/null || true" for p in safe)]
+    prelude = [
+        "set +e",
+        *(f"[ -r '{p}' ] && . '{p}' 2>/dev/null || true" for p in safe),
+    ]
     return "\n".join(prelude) + "\n" + cmd_string
 
 
@@ -911,6 +1052,7 @@ def _leader_is_ours(pgid, expected_start) -> bool:
     if expected_start is None:
         return True
     from gateway.status import get_process_start_time, start_time_fingerprints_match
+
     try:
         current = get_process_start_time(pgid)
     except Exception:
@@ -922,7 +1064,10 @@ def _leader_is_ours(pgid, expected_start) -> bool:
         return True
     try:
         return start_time_fingerprints_match(expected_start, current)
-    except (TypeError, ValueError):  # junk fingerprints: best-effort, never break signalling
+    except (
+        TypeError,
+        ValueError,
+    ):  # junk fingerprints: best-effort, never break signalling
         return True
 
 
@@ -948,6 +1093,7 @@ def _kill_process_group_posix(proc) -> None:
         descendants = []
         try:
             import psutil
+
             descendants = psutil.Process(proc.pid).children(recursive=True)
         except Exception:
             pass
@@ -955,6 +1101,7 @@ def _kill_process_group_posix(proc) -> None:
         return
     try:  # psutil children snapshot; empty on any failure (must never break the kill)
         import psutil
+
         descendants = psutil.Process(proc.pid).children(recursive=True)
     except Exception:
         descendants = []
@@ -964,13 +1111,17 @@ def _kill_process_group_posix(proc) -> None:
         _kill_known_pids(proc, descendants)
     else:
         try:
-            os.killpg(pgid, signal.SIGTERM)  # windows-footgun: ok — POSIX only (see _IS_WINDOWS gate in caller)
+            os.killpg(
+                pgid, signal.SIGTERM
+            )  # windows-footgun: ok — POSIX only (see _IS_WINDOWS gate in caller)
             if not _wait_for_group_exit(proc, pgid, 1.0):
                 if not _leader_is_ours(pgid, expected_start):
                     # Leader exited during the grace window; do not escalate to
                     # SIGKILL on a possibly-recycled PGID.
                     return
-                os.killpg(pgid, signal.SIGKILL)  # windows-footgun: ok — POSIX only (see _IS_WINDOWS gate in caller)
+                os.killpg(
+                    pgid, signal.SIGKILL
+                )  # windows-footgun: ok — POSIX only (see _IS_WINDOWS gate in caller)
                 _wait_for_group_exit(proc, pgid, 2.0)
                 with contextlib.suppress(subprocess.TimeoutExpired, OSError):
                     proc.wait(timeout=0.2)
@@ -997,7 +1148,10 @@ def _kill_process_windows(proc) -> None:
     """Identity-checked terminate (start time guards against PID reuse), else kill."""
     try:
         from gateway.status import get_process_start_time, terminate_pid
-        terminate_pid(proc.pid, force=True, expected_start_time=get_process_start_time(proc.pid))
+
+        terminate_pid(
+            proc.pid, force=True, expected_start_time=get_process_start_time(proc.pid)
+        )
     except Exception:
         proc.kill()
     with contextlib.suppress(subprocess.TimeoutExpired, OSError):
@@ -1022,12 +1176,27 @@ class LocalEnvironment(BaseEnvironment):
         in the snapshot and be sourced by profile B. Prefix-only and monotonic on
         purpose: conservative even when the context-gated carve-out is inactive."""
         merged = dict(os.environ | self.env)
-        return tuple(sorted(
-            name for name in merged
-            if isinstance(name, str) and _matches_terminal_first_party_prefix(name)))
+        return tuple(
+            sorted(
+                name
+                for name in merged
+                if isinstance(name, str) and _matches_terminal_first_party_prefix(name)
+            )
+        )
 
-    def __init__(self, cwd: str = "", timeout: int = 60, env: dict | None = None, persistent: bool = True):
-        super().__init__(cwd=_resolve_local_initial_cwd(cwd), timeout=timeout, env=env, persist_env=persistent)
+    def __init__(
+        self,
+        cwd: str = "",
+        timeout: int = 60,
+        env: dict | None = None,
+        persistent: bool = True,
+    ):
+        super().__init__(
+            cwd=_resolve_local_initial_cwd(cwd),
+            timeout=timeout,
+            env=env,
+            persist_env=persistent,
+        )
         self.init_session()
 
     def get_temp_dir(self) -> str:
@@ -1042,17 +1211,24 @@ class LocalEnvironment(BaseEnvironment):
                 candidate = self.env.get(key) or os.environ.get(key)
                 if candidate and os.path.isabs(candidate) and os.path.isdir(candidate):
                     return Path(candidate).as_posix()
-            cache_dir = (_default_terminal_temp_dir()
-                         or Path(tempfile.gettempdir()) / "clawk_terminal")
+            cache_dir = (
+                _default_terminal_temp_dir()
+                or Path(tempfile.gettempdir()) / "clawk_terminal"
+            )
             cache_dir.mkdir(parents=True, exist_ok=True)
             _prune_terminal_temp_once()
             return str(cache_dir).replace("\\", "/")
+
         def _posix(p: str) -> str:
             return p.rstrip("/") or "/"
+
         for env_var in ("TERMINAL_TEMP_DIR", "TMPDIR", "TMP", "TEMP"):
             candidate = self.env.get(env_var) or os.environ.get(env_var)
-            if candidate and candidate.startswith("/") and (
-                    env_var != "TERMINAL_TEMP_DIR" or os.path.isdir(candidate)):
+            if (
+                candidate
+                and candidate.startswith("/")
+                and (env_var != "TERMINAL_TEMP_DIR" or os.path.isdir(candidate))
+            ):
                 return _posix(candidate)
         try:
             cache_dir = _default_terminal_temp_dir()
@@ -1065,7 +1241,9 @@ class LocalEnvironment(BaseEnvironment):
             pass
         # tempfile's own candidate walk already covers the system temp dir.
         fallback = tempfile.gettempdir()
-        return _posix(fallback if fallback.startswith("/") else os.path.abspath(fallback))
+        return _posix(
+            fallback if fallback.startswith("/") else os.path.abspath(fallback)
+        )
 
     @staticmethod
     def _quote_cwd_for_cd(cwd: str) -> str:
@@ -1093,11 +1271,19 @@ class LocalEnvironment(BaseEnvironment):
             logger.warning(
                 "LocalEnvironment cwd %r is missing on disk; "
                 "falling back to %r so terminal commands keep working.",
-                self.cwd, safe_cwd)
+                self.cwd,
+                safe_cwd,
+            )
         self.cwd = safe_cwd
 
-    def _run_bash(self, cmd_string: str, *, login: bool = False, timeout: int = 120,
-                  stdin_data: str | None = None) -> subprocess.Popen:
+    def _run_bash(
+        self,
+        cmd_string: str,
+        *,
+        login: bool = False,
+        timeout: int = 120,
+        stdin_data: str | None = None,
+    ) -> subprocess.Popen:
         bash = _find_bash()
         # Login invocations (init_session's env snapshot) source the user's rc /
         # custom init files so nvm/asdf/pyenv land on PATH in the snapshot.
@@ -1106,11 +1292,18 @@ class LocalEnvironment(BaseEnvironment):
         args = [bash, *(["-l"] if login else []), "-c", cmd_string]
         self._recover_cwd()
         proc = subprocess.Popen(
-            args, text=True, env=_make_run_env(self.env), encoding="utf-8", errors="replace",
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            args,
+            text=True,
+            env=_make_run_env(self.env),
+            encoding="utf-8",
+            errors="replace",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
-            start_new_session=True, cwd=self.cwd,
-            **({"creationflags": windows_hide_flags()} if _IS_WINDOWS else {}))
+            start_new_session=True,
+            cwd=self.cwd,
+            **({"creationflags": windows_hide_flags()} if _IS_WINDOWS else {}),
+        )
         if not _IS_WINDOWS:
             with contextlib.suppress(ProcessLookupError):
                 proc._clawk_pgid = os.getpgid(proc.pid)
@@ -1119,6 +1312,7 @@ class LocalEnvironment(BaseEnvironment):
                 # psutil fallback in get_process_start_time captures a baseline on every
                 # platform, macOS included.
                 from gateway.status import get_process_start_time
+
                 proc._clawk_pgid_start = get_process_start_time(proc.pid)
         if stdin_data is not None:
             _pipe_stdin(proc, stdin_data)
@@ -1142,8 +1336,12 @@ class LocalEnvironment(BaseEnvironment):
             # no longer matches the spawn-time baseline — the PGID may have been recycled
             # onto an unrelated process group. Comparison is drift-tolerant (#117505);
             # without a baseline keep the legacy best-effort behaviour.
-            if pgid != os.getpgrp() and _leader_is_ours(pgid, getattr(proc, "_clawk_pgid_start", None)):
-                os.killpg(pgid, signal.SIGKILL)  # windows-footgun: ok — POSIX only (_IS_WINDOWS returned above)
+            if pgid != os.getpgrp() and _leader_is_ours(
+                pgid, getattr(proc, "_clawk_pgid_start", None)
+            ):
+                os.killpg(
+                    pgid, signal.SIGKILL
+                )  # windows-footgun: ok — POSIX only (_IS_WINDOWS returned above)
         with contextlib.suppress(OSError):
             proc.kill()
 
@@ -1169,6 +1367,7 @@ class LocalEnvironment(BaseEnvironment):
         (``snap.tmp.<bashpid>``) a failed/interrupted mv could leave behind."""
         # See #38249.
         import glob
+
         try:
             stale = glob.glob(f"{self._snapshot_path}.tmp.*")
         except Exception:

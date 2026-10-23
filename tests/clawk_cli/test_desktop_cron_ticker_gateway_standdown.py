@@ -68,7 +68,9 @@ def test_external_provider_waits_while_gateway_owns_cron(ticker_env, gateway, ca
     assert "live gateway owns cron" in caplog.text
 
 
-def test_external_provider_starts_once_the_gateway_is_gone(ticker_env, gateway, monkeypatch):
+def test_external_provider_starts_once_the_gateway_is_gone(
+    ticker_env, gateway, monkeypatch
+):
     """The deferred start happens once that gateway stops instead of never (#126822), with one
     ownership probe per interval."""
     from clawk_cli import web_server
@@ -133,8 +135,12 @@ def test_gated_ticker_resumes_after_the_gateway_stops(ticker_env, gateway, monke
             started["kwargs"] = kwargs
 
     monkeypatch.setattr(sp, "resolve_cron_scheduler", lambda: _InProcess())
-    monkeypatch.setattr(profiles, "profiles_to_serve", lambda **_kw: [("default", home)])
-    monkeypatch.setattr(clawk_logging, "enable_profile_log_routing", lambda _homes: None)
+    monkeypatch.setattr(
+        profiles, "profiles_to_serve", lambda **_kw: [("default", home)]
+    )
+    monkeypatch.setattr(
+        clawk_logging, "enable_profile_log_routing", lambda _homes: None
+    )
 
     web_server._start_desktop_cron_ticker(threading.Event(), interval=0)
 
@@ -175,7 +181,9 @@ def test_fail_open_ticker_uses_the_same_profile_gate(ticker_env, gateway, monkey
     assert gate(name, own_home) is False  # a returning gateway is not raced
 
 
-def test_fail_open_ticker_yields_to_the_multiplexer_serving_this_profile(tmp_path, monkeypatch):
+def test_fail_open_ticker_yields_to_the_multiplexer_serving_this_profile(
+    tmp_path, monkeypatch
+):
     """A named profile served by the live default multiplexer has no gateway.pid of its own; the
     fail-open gate must still stand down for it, as the multiplex gate does."""
     import cron.scheduler_provider as sp
@@ -198,7 +206,10 @@ def test_fail_open_ticker_yields_to_the_multiplexer_serving_this_profile(tmp_pat
     monkeypatch.setattr(profiles, "profiles_to_serve", _enumeration_fails)
     monkeypatch.setattr(profiles, "_check_gateway_running", lambda _home: False)
     monkeypatch.setattr(
-        profiles, "_served_by_running_multiplexer", lambda name: multiplexer["serves"] and name == "worker")
+        profiles,
+        "_served_by_running_multiplexer",
+        lambda name: multiplexer["serves"] and name == "worker",
+    )
 
     web_server._start_desktop_cron_ticker(threading.Event(), interval=0)
 
@@ -210,7 +221,9 @@ def test_fail_open_ticker_yields_to_the_multiplexer_serving_this_profile(tmp_pat
     assert gate(name, home) is True
 
 
-def test_gated_out_fail_open_tick_leaves_the_gateway_store_status_alone(tmp_path, monkeypatch):
+def test_gated_out_fail_open_tick_leaves_the_gateway_store_status_alone(
+    tmp_path, monkeypatch
+):
     """Through the real built-in loop: while the gateway owns the store, the fail-open ticker
     neither ticks nor records a successful tick or clears the gateway's recorded tick error
     (#32612, #32895)."""
@@ -223,10 +236,14 @@ def test_gated_out_fail_open_tick_leaves_the_gateway_store_status_alone(tmp_path
     monkeypatch.setattr(clawk_constants, "get_clawk_home", lambda: tmp_path)
     monkeypatch.setattr(profiles, "profiles_to_serve", _enumeration_fails)
     monkeypatch.setattr(profiles, "_check_gateway_running", lambda _home: True)
-    monkeypatch.setattr("cron.scheduler_provider.resolve_cron_scheduler", InProcessCronScheduler)
+    monkeypatch.setattr(
+        "cron.scheduler_provider.resolve_cron_scheduler", InProcessCronScheduler
+    )
     ticked, beats, cleared = [], [], []
     monkeypatch.setattr("cron.scheduler.tick", lambda **_kw: ticked.append(True))
-    monkeypatch.setattr(jobs, "record_ticker_heartbeat", lambda success=False: beats.append(success))
+    monkeypatch.setattr(
+        jobs, "record_ticker_heartbeat", lambda success=False: beats.append(success)
+    )
     monkeypatch.setattr(jobs, "clear_ticker_error", lambda: cleared.append(True))
     stop = threading.Event()
     # One real scheduler cycle, with no wall-clock wait.

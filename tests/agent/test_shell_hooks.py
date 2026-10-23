@@ -45,14 +45,29 @@ class TestParseResponse:
         )
         assert r == {"action": "block", "message": "nope"}
 
-    @pytest.mark.parametrize("stdout, expected", [
-        ('{"action": "approve", "message": "  needs a human ", "rule_key": " terminal:rm "}',
-         {"action": "approve", "message": "needs a human", "rule_key": "terminal:rm"}),
-        ('{"action": "approve", "message": "", "rule_key": 7}', {"action": "approve"}),
-        # Claude-Code's ``decision: approve`` means auto-ALLOW, not "ask a human": never mapped.
-        ('{"decision": "approve", "reason": "ok"}', None),
-        ('{"action": "approve", "decision": "block", "reason": "no"}', {"action": "block", "message": "no"}),
-    ])
+    @pytest.mark.parametrize(
+        "stdout, expected",
+        [
+            (
+                '{"action": "approve", "message": "  needs a human ", "rule_key": " terminal:rm "}',
+                {
+                    "action": "approve",
+                    "message": "needs a human",
+                    "rule_key": "terminal:rm",
+                },
+            ),
+            (
+                '{"action": "approve", "message": "", "rule_key": 7}',
+                {"action": "approve"},
+            ),
+            # Claude-Code's ``decision: approve`` means auto-ALLOW, not "ask a human": never mapped.
+            ('{"decision": "approve", "reason": "ok"}', None),
+            (
+                '{"action": "approve", "decision": "block", "reason": "no"}',
+                {"action": "block", "message": "no"},
+            ),
+        ],
+    )
     def test_approve_is_parsed_like_the_plugin_directive(self, stdout, expected):
         """The documented ``approve`` action used to parse to None, so the tool ran with no
         approval prompt (#92553). It now yields the same shape Python plugins return."""
@@ -67,10 +82,10 @@ class TestParseResponse:
 
 
 class TestSerializePayload:
-
     def test_args_not_dict_becomes_null(self):
         raw = shell_hooks._serialize_payload(
-            "pre_tool_call", {"args": ["not", "a", "dict"]},
+            "pre_tool_call",
+            {"args": ["not", "a", "dict"]},
         )
         payload = json.loads(raw)
         assert payload["tool_input"] is None
@@ -80,31 +95,33 @@ class TestSerializePayload:
 
 
 class TestMatcher:
-
-
     def test_alternation_matcher(self):
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command="echo", matcher="terminal|file",
+            event="pre_tool_call",
+            command="echo",
+            matcher="terminal|file",
         )
         assert spec.matches_tool("terminal")
         assert spec.matches_tool("file")
         assert not spec.matches_tool("web")
 
-
     def test_matcher_leading_whitespace_stripped(self):
         """YAML quirks can introduce leading/trailing whitespace — must
         not silently break the matcher."""
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command="echo", matcher=" terminal ",
+            event="pre_tool_call",
+            command="echo",
+            matcher=" terminal ",
         )
         assert spec.matcher == "terminal"
         assert spec.matches_tool("terminal")
 
-
     def test_whitespace_only_matcher_becomes_none(self):
         """A matcher that's pure whitespace is treated as 'no matcher'."""
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command="echo", matcher="   ",
+            event="pre_tool_call",
+            command="echo",
+            matcher="   ",
         )
         assert spec.matcher is None
         assert spec.matches_tool("anything")
@@ -115,8 +132,6 @@ class TestMatcher:
 
 @pytest.mark.platforms("linux")
 class TestCallbackSubprocess:
-
-
     def test_block_aggregation_through_plugin_manager(self, tmp_path, monkeypatch):
         """Registering via register_from_config makes
         get_pre_tool_call_block_message surface the block — the real
@@ -124,7 +139,8 @@ class TestCallbackSubprocess:
         from clawk_cli import plugins
 
         script = _write_script(
-            tmp_path, "block.sh",
+            tmp_path,
+            "block.sh",
             "#!/usr/bin/env bash\n"
             'printf \'{"decision": "block", "reason": "blocked-by-shell"}\\n\'\n',
         )
@@ -151,20 +167,27 @@ class TestCallbackSubprocess:
         )
         assert msg == "blocked-by-shell"
 
-    def test_approve_reaches_the_human_gate_through_plugin_manager(self, tmp_path, monkeypatch):
+    def test_approve_reaches_the_human_gate_through_plugin_manager(
+        self, tmp_path, monkeypatch
+    ):
         """End to end: a shell hook's approve directive escalates to request_tool_approval with its
         message and rule_key, and the gate's denial blocks the tool (#92553)."""
         from clawk_cli import plugins
 
         script = _write_script(
-            tmp_path, "approve.sh",
+            tmp_path,
+            "approve.sh",
             "#!/usr/bin/env bash\n"
             'printf \'{"action": "approve", "message": "risky", "rule_key": "terminal:rm"}\\n\'\n',
         )
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
         monkeypatch.setenv("CLAWK_ACCEPT_HOOKS", "1")
         plugins._plugin_manager = plugins.PluginManager()
-        cfg = {"hooks": {"pre_tool_call": [{"matcher": "terminal", "command": str(script)}]}}
+        cfg = {
+            "hooks": {
+                "pre_tool_call": [{"matcher": "terminal", "command": str(script)}]
+            }
+        }
         assert len(shell_hooks.register_from_config(cfg, accept_hooks=True)) == 1
 
         seen = []
@@ -174,17 +197,19 @@ class TestCallbackSubprocess:
             return {"approved": False, "message": "denied by human"}
 
         monkeypatch.setattr("tools.approval.request_tool_approval", _gate)
-        assert plugins.resolve_pre_tool_block("terminal", {"command": "rm"}) == "denied by human"
+        assert (
+            plugins.resolve_pre_tool_block("terminal", {"command": "rm"})
+            == "denied by human"
+        )
         assert seen == [("terminal", "risky", "terminal:rm")]
 
     def test_matcher_regex_filters_callback(self, tmp_path, monkeypatch):
         """A matcher set to 'terminal' must not fire for 'web_search'."""
         calls = tmp_path / "calls.log"
         script = _write_script(
-            tmp_path, "log.sh",
-            f"#!/usr/bin/env bash\n"
-            f"echo \"$(cat -)\" >> {calls}\n"
-            f"printf '{{}}\\n'\n",
+            tmp_path,
+            "log.sh",
+            f"#!/usr/bin/env bash\necho \"$(cat -)\" >> {calls}\nprintf '{{}}\\n'\n",
         )
         spec = shell_hooks.ShellHookSpec(
             event="pre_tool_call",
@@ -202,11 +227,13 @@ class TestCallbackSubprocess:
     def test_payload_schema_delivered(self, tmp_path):
         capture = tmp_path / "payload.json"
         script = _write_script(
-            tmp_path, "capture.sh",
+            tmp_path,
+            "capture.sh",
             f"#!/usr/bin/env bash\ncat - > {capture}\nprintf '{{}}\\n'\n",
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
+            event="pre_tool_call",
+            command=str(script),
         )
         cb = shell_hooks._make_callback(spec)
         cb(
@@ -223,16 +250,17 @@ class TestCallbackSubprocess:
         assert "cwd" in payload
         assert payload["extra"]["task_id"] == "task-77"
 
-
     def test_modify_canonical_parsing(self, tmp_path):
         """Shell hook returning canonical modify is parsed correctly."""
         script = _write_script(
-            tmp_path, "mod_canon.sh",
+            tmp_path,
+            "mod_canon.sh",
             "#!/usr/bin/env bash\n"
             'printf \'{"action": "modify", "args": {"path": "/safe"}}\\n\'',
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
+            event="pre_tool_call",
+            command=str(script),
         )
         cb = shell_hooks._make_callback(spec)
         result = cb(tool_name="write_file", args={"path": "/unsafe"})
@@ -241,12 +269,14 @@ class TestCallbackSubprocess:
     def test_modify_claude_code_parsing(self, tmp_path):
         """Shell hook returning Claude-Code modify is normalised."""
         script = _write_script(
-            tmp_path, "mod_cc.sh",
+            tmp_path,
+            "mod_cc.sh",
             "#!/usr/bin/env bash\n"
             'printf \'{"decision": "modify", "tool_input": {"content": "safe"}}\\n\'',
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
+            event="pre_tool_call",
+            command=str(script),
         )
         cb = shell_hooks._make_callback(spec)
         result = cb(tool_name="write_file", args={"content": "danger"})
@@ -258,37 +288,41 @@ class TestCallbackSubprocess:
 
 class TestParseHooksBlock:
     def test_valid_entry(self):
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [
-                {"matcher": "terminal", "command": "/tmp/hook.sh", "timeout": 30},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [
+                    {"matcher": "terminal", "command": "/tmp/hook.sh", "timeout": 30},
+                ],
+            }
+        )
         assert len(specs) == 1
         assert specs[0].event == "pre_tool_call"
         assert specs[0].matcher == "terminal"
         assert specs[0].command == "/tmp/hook.sh"
         assert specs[0].timeout == 30
 
-
     def test_python_only_event_refused(self):
         # transform_api_error_classification returns a classification directive that
         # _parse_response has no channel for — a shell registration would
         # be silently ignored, so it must be refused with a warning.
-        specs = shell_hooks._parse_hooks_block({
-            "transform_api_error_classification": [
-                {"command": "/tmp/hook.sh"},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "transform_api_error_classification": [
+                    {"command": "/tmp/hook.sh"},
+                ],
+            }
+        )
         assert specs == []
 
     def test_timeout_clamped_to_max(self):
-        specs = shell_hooks._parse_hooks_block({
-            "post_tool_call": [
-                {"command": "/tmp/slow.sh", "timeout": 9999},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "post_tool_call": [
+                    {"command": "/tmp/slow.sh", "timeout": 9999},
+                ],
+            }
+        )
         assert specs[0].timeout == shell_hooks.MAX_TIMEOUT_SECONDS
-
 
     def test_none_hooks_block(self):
         assert shell_hooks._parse_hooks_block(None) == []
@@ -310,8 +344,9 @@ class TestIdempotentRegistration:
     def test_double_call_registers_once(self, tmp_path, monkeypatch):
         from clawk_cli import plugins
 
-        script = _write_script(tmp_path, "h.sh",
-                               "#!/usr/bin/env bash\nprintf '{}\\n'\n")
+        script = _write_script(
+            tmp_path, "h.sh", "#!/usr/bin/env bash\nprintf '{}\\n'\n"
+        )
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
         monkeypatch.setenv("CLAWK_ACCEPT_HOOKS", "1")
 
@@ -328,14 +363,17 @@ class TestIdempotentRegistration:
         assert len(mgr._hooks.get("on_session_start", [])) == 1
 
     def test_same_command_different_matcher_registers_both(
-        self, tmp_path, monkeypatch,
+        self,
+        tmp_path,
+        monkeypatch,
     ):
         """Same script used for different matchers under one event must
         register both callbacks — dedupe keys on (event, matcher, command)."""
         from clawk_cli import plugins
 
-        script = _write_script(tmp_path, "h.sh",
-                               "#!/usr/bin/env bash\nprintf '{}\\n'\n")
+        script = _write_script(
+            tmp_path, "h.sh", "#!/usr/bin/env bash\nprintf '{}\\n'\n"
+        )
         monkeypatch.setenv("CLAWK_HOME", str(tmp_path / "home"))
         monkeypatch.setenv("CLAWK_ACCEPT_HOOKS", "1")
 
@@ -364,7 +402,6 @@ class TestAllowlistConcurrency:
     _record_approval() calls used to collide on a fixed tmp path and
     silently lose entries under read-modify-write races."""
 
-
     def test_save_allowlist_uses_unique_tmp_paths(self, tmp_path, monkeypatch):
         """Two save_allowlist calls in flight must use distinct tmp files
         so the loser's os.replace does not ENOENT on the winner's sweep."""
@@ -374,6 +411,7 @@ class TestAllowlistConcurrency:
 
         tmp_paths_seen: list = []
         import utils
+
         real_mkstemp = utils.tempfile.mkstemp
 
         def spying_mkstemp(*args, **kwargs):
@@ -395,52 +433,63 @@ class TestAllowlistConcurrency:
 
 class TestFailClosedParsing:
     def test_fail_closed_parsed(self):
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [
-                {"command": "/tmp/h.sh", "fail_closed": True},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [
+                    {"command": "/tmp/h.sh", "fail_closed": True},
+                ],
+            }
+        )
         assert len(specs) == 1
         assert specs[0].fail_closed is True
 
     def test_fail_closed_defaults_false(self):
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [{"command": "/tmp/h.sh"}],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [{"command": "/tmp/h.sh"}],
+            }
+        )
         assert specs[0].fail_closed is False
 
     def test_failclosed_camel_alias(self):
         """Cursor/Claude Code configs spell it failClosed."""
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [
-                {"command": "/tmp/h.sh", "failClosed": True},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [
+                    {"command": "/tmp/h.sh", "failClosed": True},
+                ],
+            }
+        )
         assert specs[0].fail_closed is True
 
     def test_canonical_wins_over_alias(self):
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [
-                {"command": "/tmp/h.sh", "fail_closed": False,
-                 "failClosed": True},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [
+                    {"command": "/tmp/h.sh", "fail_closed": False, "failClosed": True},
+                ],
+            }
+        )
         assert specs[0].fail_closed is False
 
     def test_non_bool_warns_and_defaults_false(self):
-        specs = shell_hooks._parse_hooks_block({
-            "pre_tool_call": [
-                {"command": "/tmp/h.sh", "fail_closed": "yes"},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "pre_tool_call": [
+                    {"command": "/tmp/h.sh", "fail_closed": "yes"},
+                ],
+            }
+        )
         assert specs[0].fail_closed is False
 
     def test_fail_closed_on_non_blocking_event_warns_and_ignores(self):
-        specs = shell_hooks._parse_hooks_block({
-            "on_session_start": [
-                {"command": "/tmp/h.sh", "fail_closed": True},
-            ],
-        })
+        specs = shell_hooks._parse_hooks_block(
+            {
+                "on_session_start": [
+                    {"command": "/tmp/h.sh", "fail_closed": True},
+                ],
+            }
+        )
         assert specs[0].fail_closed is False
 
 
@@ -463,7 +512,9 @@ def _spawn_result(**overrides):
 class TestEvaluateResult:
     def _spec(self, event="pre_tool_call", fail_closed=False):
         return shell_hooks.ShellHookSpec(
-            event=event, command="/tmp/h.sh", fail_closed=fail_closed,
+            event=event,
+            command="/tmp/h.sh",
+            fail_closed=fail_closed,
         )
 
     # -- exit code 2 = block --------------------------------------------
@@ -477,7 +528,8 @@ class TestEvaluateResult:
 
     def test_exit_2_blocks_with_default_message(self):
         r = shell_hooks._evaluate_result(
-            self._spec(), _spawn_result(returncode=2),
+            self._spec(),
+            _spawn_result(returncode=2),
         )
         assert r == {
             "action": "block",
@@ -514,7 +566,8 @@ class TestEvaluateResult:
 
     def test_nonzero_exit_without_directive_is_none(self):
         r = shell_hooks._evaluate_result(
-            self._spec(), _spawn_result(returncode=1, stderr="oops"),
+            self._spec(),
+            _spawn_result(returncode=1, stderr="oops"),
         )
         assert r is None
 
@@ -522,13 +575,15 @@ class TestEvaluateResult:
 
     def test_spawn_error_fails_open_by_default(self):
         r = shell_hooks._evaluate_result(
-            self._spec(), _spawn_result(error="No such file"),
+            self._spec(),
+            _spawn_result(error="No such file"),
         )
         assert r is None
 
     def test_spawn_error_fail_closed_blocks(self):
         r = shell_hooks._evaluate_result(
-            self._spec(fail_closed=True), _spawn_result(error="No such file"),
+            self._spec(fail_closed=True),
+            _spawn_result(error="No such file"),
         )
         assert r["action"] == "block"
         assert "failed closed" in r["message"]
@@ -536,7 +591,8 @@ class TestEvaluateResult:
 
     def test_timeout_fails_open_by_default(self):
         r = shell_hooks._evaluate_result(
-            self._spec(), _spawn_result(timed_out=True),
+            self._spec(),
+            _spawn_result(timed_out=True),
         )
         assert r is None
 
@@ -572,13 +628,15 @@ class TestEvaluateResult:
     def test_valid_noop_json_passes_fail_closed(self):
         """A clean {} no-op must NOT be blocked by fail_closed."""
         r = shell_hooks._evaluate_result(
-            self._spec(fail_closed=True), _spawn_result(stdout="{}"),
+            self._spec(fail_closed=True),
+            _spawn_result(stdout="{}"),
         )
         assert r is None
 
     def test_empty_stdout_passes_fail_closed(self):
         r = shell_hooks._evaluate_result(
-            self._spec(fail_closed=True), _spawn_result(stdout=""),
+            self._spec(fail_closed=True),
+            _spawn_result(stdout=""),
         )
         assert r is None
 
@@ -598,7 +656,9 @@ class TestEvaluateResult:
 class TestFailSemanticsEndToEnd:
     def test_fail_closed_crashed_process_blocks(self, tmp_path):
         script = _write_script(
-            tmp_path, "crash.py", 'raise RuntimeError("hook crashed")\n',
+            tmp_path,
+            "crash.py",
+            'raise RuntimeError("hook crashed")\n',
         )
         spec = shell_hooks.ShellHookSpec(
             event="pre_tool_call",
@@ -613,18 +673,19 @@ class TestFailSemanticsEndToEnd:
     @pytest.mark.platforms("linux")
     def test_exit_2_script_blocks(self, tmp_path):
         script = _write_script(
-            tmp_path, "exit2.sh",
-            "#!/usr/bin/env bash\n"
-            'echo "rm -rf is not permitted" >&2\n'
-            "exit 2\n",
+            tmp_path,
+            "exit2.sh",
+            '#!/usr/bin/env bash\necho "rm -rf is not permitted" >&2\nexit 2\n',
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
+            event="pre_tool_call",
+            command=str(script),
         )
         cb = shell_hooks._make_callback(spec)
         result = cb(tool_name="terminal", args={"command": "rm -rf /"})
         assert result == {
-            "action": "block", "message": "rm -rf is not permitted",
+            "action": "block",
+            "message": "rm -rf is not permitted",
         }
 
     def test_fail_closed_missing_command_blocks(self, tmp_path):
@@ -642,16 +703,17 @@ class TestFailSemanticsEndToEnd:
     def test_run_once_reflects_exit_2_block(self, tmp_path):
         """clawk hooks test must mirror production semantics."""
         script = _write_script(
-            tmp_path, "exit2.sh",
-            "#!/usr/bin/env bash\n"
-            'echo "denied" >&2\n'
-            "exit 2\n",
+            tmp_path,
+            "exit2.sh",
+            '#!/usr/bin/env bash\necho "denied" >&2\nexit 2\n',
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
+            event="pre_tool_call",
+            command=str(script),
         )
         result = shell_hooks.run_once(
-            spec, {"tool_name": "terminal", "args": {"command": "ls"}},
+            spec,
+            {"tool_name": "terminal", "args": {"command": "ls"}},
         )
         assert result["returncode"] == 2
         assert result["parsed"] == {"action": "block", "message": "denied"}
@@ -659,15 +721,19 @@ class TestFailSemanticsEndToEnd:
     @pytest.mark.platforms("linux")
     def test_run_once_reflects_fail_closed_timeout(self, tmp_path):
         script = _write_script(
-            tmp_path, "sleepy.sh",
+            tmp_path,
+            "sleepy.sh",
             "#!/usr/bin/env bash\nsleep 5\n",
         )
         spec = shell_hooks.ShellHookSpec(
-            event="pre_tool_call", command=str(script),
-            timeout=1, fail_closed=True,
+            event="pre_tool_call",
+            command=str(script),
+            timeout=1,
+            fail_closed=True,
         )
         result = shell_hooks.run_once(
-            spec, {"tool_name": "terminal", "args": {"command": "ls"}},
+            spec,
+            {"tool_name": "terminal", "args": {"command": "ls"}},
         )
         assert result["timed_out"] is True
         assert result["parsed"]["action"] == "block"
@@ -679,26 +745,39 @@ class TestFailSemanticsEndToEnd:
 
 class TestRoutedProfileEnv:
     @pytest.mark.platforms("linux")
-    def test_hook_child_sees_routed_profile_home_and_no_default_secrets(self, tmp_path, monkeypatch):
+    def test_hook_child_sees_routed_profile_home_and_no_default_secrets(
+        self, tmp_path, monkeypatch
+    ):
         """Under multiplexing the child gets the ROUTED CLAWK_HOME, the default profile's secrets
         stay out of its env, and the payload names the firing profile."""
         from clawk_constants import reset_clawk_home_override, set_clawk_home_override
 
         launch, routed = tmp_path / "launch", tmp_path / "routed"
-        launch.mkdir(); routed.mkdir()
+        launch.mkdir()
+        routed.mkdir()
         monkeypatch.setenv("CLAWK_HOME", str(launch))
         monkeypatch.setenv("OPENAI_API_KEY", "sk-default-profile")
         monkeypatch.setattr("agent.secret_scope.is_multiplex_active", lambda: True)
         script = _write_script(
-            tmp_path, "env_dump.sh",
+            tmp_path,
+            "env_dump.sh",
             "#!/usr/bin/env bash\ncat > /dev/null\n"
             'printf \'{"home": "%s", "key": "%s"}\\n\' "$CLAWK_HOME" "${OPENAI_API_KEY:-}"\n',
         )
         spec = shell_hooks.ShellHookSpec(event="pre_tool_call", command=str(script))
         token = set_clawk_home_override(str(routed))
         try:
-            result = shell_hooks._spawn(spec, shell_hooks._serialize_payload("pre_tool_call", {"tool_name": "terminal"}))
-            payload = json.loads(shell_hooks._serialize_payload("pre_tool_call", {"tool_name": "terminal"}))
+            result = shell_hooks._spawn(
+                spec,
+                shell_hooks._serialize_payload(
+                    "pre_tool_call", {"tool_name": "terminal"}
+                ),
+            )
+            payload = json.loads(
+                shell_hooks._serialize_payload(
+                    "pre_tool_call", {"tool_name": "terminal"}
+                )
+            )
         finally:
             reset_clawk_home_override(token)
         seen = json.loads(result["stdout"])
@@ -720,14 +799,18 @@ def test_bare_script_hook_path_executes_on_windows(tmp_path):
     kernel's shebang handling; CreateProcess has no equivalent, so the same config failed on
     Windows while working everywhere else. A path that is not a file must still be reported as
     missing rather than laundered through an interpreter."""
-    script = _write_script(tmp_path, "hook.sh", '#!/usr/bin/env bash\necho "ran" >&2\nexit 7\n')
+    script = _write_script(
+        tmp_path, "hook.sh", '#!/usr/bin/env bash\necho "ran" >&2\nexit 7\n'
+    )
 
     def spec(command):
         return shell_hooks.ShellHookSpec(event="pre_tool_call", command=command)
 
     result = shell_hooks._spawn(spec(str(script)), "{}")
     assert result["error"] is None, result["error"]
-    assert result["returncode"] == 7, "the script's own exit code must reach a fail_closed gate"
+    assert result["returncode"] == 7, (
+        "the script's own exit code must reach a fail_closed gate"
+    )
     assert "ran" in result["stderr"]
 
     missing = shell_hooks._spawn(spec(str(tmp_path / "gone.sh")), "{}")

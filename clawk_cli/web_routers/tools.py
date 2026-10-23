@@ -16,11 +16,23 @@ from clawk_cli.web_deps import late
 from clawk_cli.web_server_profiles import _plugin_terminal_backend_rows
 from starlette.concurrency import run_in_threadpool
 from clawk_cli.web_models import (
-    TerminalBackendSelect, ToolsetEnvUpdate, ToolsetModelSelect, ToolsetPostSetup,
-    ToolsetProviderSelect, ToolsetToggle)
+    TerminalBackendSelect,
+    ToolsetEnvUpdate,
+    ToolsetModelSelect,
+    ToolsetPostSetup,
+    ToolsetProviderSelect,
+    ToolsetToggle,
+)
 from clawk_cli.web_routers._common import (
-    _CONFIG_MUTATION_LOCK, _profile_cli_args, _profile_scope, _spawn_clawk_action,
-    config_write_scope, log as _log, scoped_to_thread, spawn_profile_action)
+    _CONFIG_MUTATION_LOCK,
+    _profile_cli_args,
+    _profile_scope,
+    _spawn_clawk_action,
+    config_write_scope,
+    log as _log,
+    scoped_to_thread,
+    spawn_profile_action,
+)
 
 router = APIRouter()
 
@@ -50,6 +62,7 @@ def _terminal_backend_rows() -> list[dict[str, str]]:
     """Built-in picker rows plus plugin-registered backends, computed per request
     so a plugin installed after server start still shows up."""
     from clawk_cli.web_server_profiles import _TERMINAL_BACKENDS
+
     return [*_TERMINAL_BACKENDS, *_plugin_terminal_backend_rows()]
 
 
@@ -61,7 +74,11 @@ def _probe_docker_backend(_cfg) -> tuple:
     because Podman has no ServerVersion field and the agent already probes with
     ``version``.
     """
-    from tools.environments.docker import docker_runtime_name, docker_runtime_start_hint, find_docker
+    from tools.environments.docker import (
+        docker_runtime_name,
+        docker_runtime_start_hint,
+        find_docker,
+    )
     from tools.environments.remote_common import run_capture
 
     docker_exe = find_docker()
@@ -74,7 +91,10 @@ def _probe_docker_backend(_cfg) -> tuple:
     try:
         if run_capture([docker_exe, "version"], timeout=2).returncode == 0:
             return ("ready", "")
-        return ("needs_setup", f"{runtime} not reachable — {docker_runtime_start_hint(docker_exe)}.")
+        return (
+            "needs_setup",
+            f"{runtime} not reachable — {docker_runtime_start_hint(docker_exe)}.",
+        )
     except subprocess.TimeoutExpired:
         return ("needs_setup", f"{runtime} not responding (timed out).")
     except Exception as exc:
@@ -84,7 +104,11 @@ def _probe_docker_backend(_cfg) -> tuple:
 def _probe_ssh_backend(terminal_cfg: dict) -> tuple:
     host = _terminal_cfg_value(terminal_cfg, "ssh_host", "TERMINAL_SSH_HOST")
     user = _terminal_cfg_value(terminal_cfg, "ssh_user", "TERMINAL_SSH_USER")
-    missing = [k for k, v in (("terminal.ssh_host", host), ("terminal.ssh_user", user)) if not v]
+    missing = [
+        k
+        for k, v in (("terminal.ssh_host", host), ("terminal.ssh_user", user))
+        if not v
+    ]
     if missing:
         return (
             "needs_setup",
@@ -156,7 +180,9 @@ def _resolve_toolset_model_plugin(ts_key: str, provider_row: dict) -> Optional[s
     an in-tree image row's ``imagegen_backend`` names its catalog plugin.
     """
     if ts_key == "image_gen":
-        return provider_row.get("image_gen_plugin_name") or provider_row.get("imagegen_backend")
+        return provider_row.get("image_gen_plugin_name") or provider_row.get(
+            "imagegen_backend"
+        )
     if ts_key == "video_gen":
         return provider_row.get("video_gen_plugin_name")
     return None
@@ -165,7 +191,11 @@ def _resolve_toolset_model_plugin(ts_key: str, provider_row: dict) -> Optional[s
 def _toolset_model_catalog(ts_key: str, plugin_name: str, config: dict):
     """Return ``(catalog_dict, default_model)`` for a toolset's plugin backend or, for an image row's
     ``imagegen_backend`` (``fal``), that backend's catalog."""
-    from clawk_cli.tools_config import IMAGEGEN_BACKENDS, _plugin_image_gen_catalog, _plugin_video_gen_catalog
+    from clawk_cli.tools_config import (
+        IMAGEGEN_BACKENDS,
+        _plugin_image_gen_catalog,
+        _plugin_video_gen_catalog,
+    )
 
     if ts_key == "image_gen":
         backend = IMAGEGEN_BACKENDS.get(plugin_name)
@@ -184,14 +214,17 @@ def _category_providers(ts_key: str, config: dict) -> list:
 
 
 def _find_toolset_provider_row(
-    ts_key: str, config: dict, provider: Optional[str]) -> Optional[dict]:
+    ts_key: str, config: dict, provider: Optional[str]
+) -> Optional[dict]:
     """Resolve a provider picker row by name, or the active row when omitted."""
     from clawk_cli.tools_config import _is_provider_active
 
     rows = _category_providers(ts_key, config)
     if provider:
         return next((p for p in rows if p.get("name") == provider), None)
-    return next((p for p in rows if _is_provider_active(p, config, force_fresh=True)), None)
+    return next(
+        (p for p in rows if _is_provider_active(p, config, force_fresh=True)), None
+    )
 
 
 def _require_known_toolset(name: str) -> None:
@@ -217,15 +250,26 @@ def _bad_request(detail: str) -> HTTPException:
 
 
 def _no_models(name: str) -> dict:
-    return {"name": name, "has_models": False, "models": [], "current": None, "default": None}
+    return {
+        "name": name,
+        "has_models": False,
+        "models": [],
+        "current": None,
+        "default": None,
+    }
 
 
 @router.get("/api/tools/toolsets")
 async def get_toolsets(profile: Optional[str] = None):
     from clawk_cli.tools_config import (
-        _CONFIG_ONLY_TOOLSETS, _get_effective_configurable_toolsets, _get_platform_tools,
-        _toolset_configuration_platform, _toolset_has_keys, get_nous_subscription_features,
-        gui_toolset_label)
+        _CONFIG_ONLY_TOOLSETS,
+        _get_effective_configurable_toolsets,
+        _get_platform_tools,
+        _toolset_configuration_platform,
+        _toolset_has_keys,
+        get_nous_subscription_features,
+        gui_toolset_label,
+    )
     from clawk_cli.platforms import platform_label
     from toolsets import resolve_toolset
     from utils import is_truthy_value
@@ -235,17 +279,26 @@ async def get_toolsets(profile: Optional[str] = None):
             config = load_config()
             toolset_rows = _get_effective_configurable_toolsets()
             target_platforms = {
-                _toolset_configuration_platform(name) for name, _, _ in toolset_rows}
+                _toolset_configuration_platform(name) for name, _, _ in toolset_rows
+            }
             enabled_by_platform = {
-                platform: _get_platform_tools(config, platform, include_default_mcp_servers=False)
-                for platform in target_platforms}
+                platform: _get_platform_tools(
+                    config, platform, include_default_mcp_servers=False
+                )
+                for platform in target_platforms
+            }
             features = get_nous_subscription_features(config)
             # Credential presence resolves through the profile's secret scope: outside this block
             # it read the dashboard process env (another profile's keys) or fails closed.
-            configured = {name: _toolset_has_keys(name, config, features=features) for name, _, _ in toolset_rows}
+            configured = {
+                name: _toolset_has_keys(name, config, features=features)
+                for name, _, _ in toolset_rows
+            }
         return config, toolset_rows, enabled_by_platform, configured
 
-    config, toolset_rows, enabled_by_platform, configured = await run_in_threadpool(_read)
+    config, toolset_rows, enabled_by_platform, configured = await run_in_threadpool(
+        _read
+    )
     result = []
     for name, label, desc in toolset_rows:
         try:
@@ -261,12 +314,21 @@ async def get_toolsets(profile: Optional[str] = None):
             is_enabled = is_truthy_value(section.get("enabled", True), default=True)
         else:
             is_enabled = name in enabled_by_platform[target_platform]
-        result.append({
-            "name": name, "label": gui_toolset_label(label), "description": desc,
-            "platform": target_platform,
-            "platform_label": gui_toolset_label(platform_label(target_platform, target_platform)),
-            "enabled": is_enabled, "available": is_enabled,
-            "configured": configured[name], "tools": tools})
+        result.append(
+            {
+                "name": name,
+                "label": gui_toolset_label(label),
+                "description": desc,
+                "platform": target_platform,
+                "platform_label": gui_toolset_label(
+                    platform_label(target_platform, target_platform)
+                ),
+                "enabled": is_enabled,
+                "available": is_enabled,
+                "configured": configured[name],
+                "tools": tools,
+            }
+        )
     return result
 
 
@@ -276,8 +338,11 @@ async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] 
     (``platform_toolsets.cli`` for most; platform-restricted toolsets target
     their own platform) via the same ``_save_platform_tools`` the CLI uses."""
     from clawk_cli.tools_config import (
-        _CONFIG_ONLY_TOOLSETS, _get_platform_tools, _save_platform_tools,
-        _toolset_configuration_platform)
+        _CONFIG_ONLY_TOOLSETS,
+        _get_platform_tools,
+        _save_platform_tools,
+        _toolset_configuration_platform,
+    )
 
     target_platform = _toolset_configuration_platform(name)
     scope_profile = body.profile or profile
@@ -293,7 +358,10 @@ async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] 
                 save_config(config)
                 return
             enabled = set(
-                _get_platform_tools(config, target_platform, include_default_mcp_servers=False))
+                _get_platform_tools(
+                    config, target_platform, include_default_mcp_servers=False
+                )
+            )
             if body.enabled:
                 enabled.add(name)
             else:
@@ -308,31 +376,46 @@ async def toggle_toolset(name: str, body: ToolsetToggle, profile: Optional[str] 
     # never appears.  Best-effort: a spawn failure never fails the toggle.
     post_setup_started: Optional[str] = None
     if body.enabled and name not in _CONFIG_ONLY_TOOLSETS:
+
         def _pending_install_key() -> Optional[str]:
             from clawk_cli.tools_config import (
-                TOOL_CATEGORIES, _post_setup_already_installed, _visible_providers)
+                TOOL_CATEGORIES,
+                _post_setup_already_installed,
+                _visible_providers,
+            )
 
             cat = TOOL_CATEGORIES.get(name)
             if not cat:
                 return None
             with _profile_scope(scope_profile):
                 config = load_config()
-                keys = [prov.get("post_setup") for prov in _visible_providers(cat, config)]
-                return next((k for k in keys if k and not _post_setup_already_installed(k)), None)
+                keys = [
+                    prov.get("post_setup") for prov in _visible_providers(cat, config)
+                ]
+                return next(
+                    (k for k in keys if k and not _post_setup_already_installed(k)),
+                    None,
+                )
 
         try:
             pending_key = await asyncio.to_thread(_pending_install_key)
             if pending_key:
                 _spawn_clawk_action(
-                    _profile_cli_args(scope_profile) + ["tools", "post-setup", pending_key],
-                    "tools-post-setup")
+                    _profile_cli_args(scope_profile)
+                    + ["tools", "post-setup", pending_key],
+                    "tools-post-setup",
+                )
                 post_setup_started = pending_key
         except Exception:
             _log.exception("install-on-enable post-setup spawn failed for %s", name)
 
     return {
-        "ok": True, "name": name, "platform": target_platform, "enabled": body.enabled,
-        "post_setup_started": post_setup_started}
+        "ok": True,
+        "name": name,
+        "platform": target_platform,
+        "enabled": body.enabled,
+        "post_setup_started": post_setup_started,
+    }
 
 
 @router.get("/api/tools/toolsets/{name}/config")
@@ -340,8 +423,12 @@ async def get_toolset_config(name: str, profile: Optional[str] = None):
     """Provider matrix + key status for a toolset's config panel (the CLI picker
     rows, each env var annotated ``is_set``); no category -> ``has_category: false``."""
     from clawk_cli.tools_config import (
-        TOOL_CATEGORIES, _is_provider_active, _visible_providers, provider_readiness_status,
-        web_provider_capabilities)
+        TOOL_CATEGORIES,
+        _is_provider_active,
+        _visible_providers,
+        provider_readiness_status,
+        web_provider_capabilities,
+    )
     from clawk_cli.config import get_env_value
 
     def _read():
@@ -357,10 +444,14 @@ async def get_toolset_config(name: str, profile: Optional[str] = None):
                 for prov in _visible_providers(cat, config, force_fresh=True):
                     env_vars = [
                         {
-                            "key": e["key"], "prompt": e.get("prompt", e["key"]),
-                            "url": e.get("url"), "default": e.get("default"),
-                            "is_set": bool(get_env_value(e["key"]))}
-                        for e in prov.get("env_vars", [])]
+                            "key": e["key"],
+                            "prompt": e.get("prompt", e["key"]),
+                            "url": e.get("url"),
+                            "default": e.get("default"),
+                            "is_set": bool(get_env_value(e["key"])),
+                        }
+                        for e in prov.get("env_vars", [])
+                    ]
                     # Same active-provider determination as the CLI picker, so the
                     # GUI highlights the provider actually written to config.
                     is_active = _is_provider_active(prov, config, force_fresh=True)
@@ -376,25 +467,36 @@ async def get_toolset_config(name: str, profile: Optional[str] = None):
                         # Server-side readiness: zero-env-var rows are NOT
                         # automatically ready (account logins, never-run
                         # post_setup installs).
-                        "status": provider_readiness_status(prov, config, is_active=is_active)}
+                        "status": provider_readiness_status(
+                            prov, config, is_active=is_active
+                        ),
+                    }
                     if name == "web" and prov.get("web_backend"):
                         # web is two capabilities (search/extract); surface each
                         # row's backend key + capabilities for per-capability selection.
                         row["web_backend"] = prov["web_backend"]
-                        row["capabilities"] = web_provider_capabilities(prov["web_backend"])
+                        row["capabilities"] = web_provider_capabilities(
+                            prov["web_backend"]
+                        )
                     if name == "tts" and prov.get("tts_provider"):
                         # Key written to tts.provider; doubles as the config section
                         # (tts.<key>.*) holding the provider's voice/model settings.
                         row["tts_provider"] = prov["tts_provider"]
                     providers.append(row)
             payload = {
-                "name": name, "has_category": cat is not None, "providers": providers,
-                "active_provider": active_provider}
+                "name": name,
+                "has_category": cat is not None,
+                "providers": providers,
+                "active_provider": active_provider,
+            }
             if name == "web":
                 # Resolve active backends exactly as the web_search/web_extract dispatchers do, so badges
                 # reflect what a call would hit now (BYOK: always the user's own key).
                 try:
-                    from tools.web_tools import _get_extract_backend, _get_search_backend
+                    from tools.web_tools import (
+                        _get_extract_backend,
+                        _get_search_backend,
+                    )
 
                     search_backend = _get_search_backend()
                     extract_backend = _get_extract_backend()
@@ -409,7 +511,8 @@ async def get_toolset_config(name: str, profile: Optional[str] = None):
 
 @router.get("/api/tools/toolsets/{name}/models")
 async def get_toolset_models(
-    name: str, provider: Optional[str] = None, profile: Optional[str] = None):
+    name: str, provider: Optional[str] = None, profile: Optional[str] = None
+):
     """Model catalog for a toolset backend (image/video gen) — the GUI
     counterpart of the CLI model picker.  ``provider`` names a picker row
     (default: the active provider); no catalog -> ``has_models: false``."""
@@ -436,20 +539,31 @@ async def get_toolset_models(
                 current = default_model if default_model in catalog else None
         models = [
             {
-                "id": model_id, "display": meta.get("display", model_id),
-                "speed": meta.get("speed", ""), "strengths": meta.get("strengths", ""),
-                "price": meta.get("price", "")}
-            for model_id, meta in catalog.items()]
+                "id": model_id,
+                "display": meta.get("display", model_id),
+                "speed": meta.get("speed", ""),
+                "strengths": meta.get("strengths", ""),
+                "price": meta.get("price", ""),
+            }
+            for model_id, meta in catalog.items()
+        ]
         return {
-            "name": name, "has_models": bool(models), "provider": row.get("name"),
-            "plugin": plugin, "models": models, "current": current, "default": default_model}
+            "name": name,
+            "has_models": bool(models),
+            "provider": row.get("name"),
+            "plugin": plugin,
+            "models": models,
+            "current": current,
+            "default": default_model,
+        }
 
     return await asyncio.to_thread(_read) or _no_models(name)
 
 
 @router.put("/api/tools/toolsets/{name}/model")
 async def select_toolset_model(
-    name: str, body: ToolsetModelSelect, profile: Optional[str] = None):
+    name: str, body: ToolsetModelSelect, profile: Optional[str] = None
+):
     """Persist a backend model selection (``image_gen.model`` /
     ``video_gen.model``), validated against the resolved backend's catalog."""
     section = _MODEL_CATALOG_TOOLSETS.get(name)
@@ -481,7 +595,8 @@ async def select_toolset_model(
 
 @router.put("/api/tools/toolsets/{name}/provider")
 async def select_toolset_provider(
-    name: str, body: ToolsetProviderSelect, profile: Optional[str] = None):
+    name: str, body: ToolsetProviderSelect, profile: Optional[str] = None
+):
     """Persist a provider selection via ``apply_provider_selection`` (shared with
     ``clawk tools``, so both write identical keys).
 
@@ -490,18 +605,30 @@ async def select_toolset_provider(
     omitted -> legacy ``web.backend``.  Clawksis is BYOK: there are no Nous-managed
     rows, so no Portal entitlement handshake follows the write.
     """
-    from clawk_cli.tools_config import apply_provider_selection, web_provider_capabilities
+    from clawk_cli.tools_config import (
+        apply_provider_selection,
+        web_provider_capabilities,
+    )
 
     if body.capability is not None:
         if name != "web":
-            raise _bad_request("capability selection is only supported for the web toolset")
+            raise _bad_request(
+                "capability selection is only supported for the web toolset"
+            )
         if body.capability not in ("search", "extract"):
             raise _bad_request(
-                f"Unknown capability: {body.capability!r} (expected 'search' or 'extract')")
+                f"Unknown capability: {body.capability!r} (expected 'search' or 'extract')"
+            )
 
     def _provider_row(config):
         return next(
-            (p for p in _category_providers(name, config) if p.get("name") == body.provider), None)
+            (
+                p
+                for p in _category_providers(name, config)
+                if p.get("name") == body.provider
+            ),
+            None,
+        )
 
     def _run():
         with _profile_scope(body.profile or profile):
@@ -515,12 +642,17 @@ async def select_toolset_provider(
                     prov = _provider_row(config)
                     if prov is None:
                         raise _bad_request(
-                            f"Unknown provider {body.provider!r} for toolset {name!r}")
+                            f"Unknown provider {body.provider!r} for toolset {name!r}"
+                        )
                     backend = prov.get("web_backend")
                     if not backend:
-                        raise _bad_request(f"Provider {body.provider!r} has no web backend key")
+                        raise _bad_request(
+                            f"Provider {body.provider!r} has no web backend key"
+                        )
                     if body.capability not in web_provider_capabilities(backend):
-                        raise _bad_request(f"{body.provider} does not support {body.capability}")
+                        raise _bad_request(
+                            f"{body.provider} does not support {body.capability}"
+                        )
                     _dict_section(config, "web")[f"{body.capability}_backend"] = backend
                 else:
                     try:
@@ -528,7 +660,11 @@ async def select_toolset_provider(
                     except KeyError as exc:
                         raise _bad_request(str(exc).strip('"'))
                 save_config(config)
-                response: dict[str, Any] = {"ok": True, "name": name, "provider": body.provider}
+                response: dict[str, Any] = {
+                    "ok": True,
+                    "name": name,
+                    "provider": body.provider,
+                }
                 if body.capability is not None:
                     response["capability"] = body.capability
         return response
@@ -537,7 +673,9 @@ async def select_toolset_provider(
 
 
 @router.put("/api/tools/toolsets/{name}/env")
-async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[str] = None):
+async def save_toolset_env(
+    name: str, body: ToolsetEnvUpdate, profile: Optional[str] = None
+):
     """Persist API keys to ``.env`` via ``save_env_value``.  Keys are validated
     against the union of the category's visible-provider ``env_vars`` so this
     can't write arbitrary env vars; a blank value means "leave unchanged"."""
@@ -550,12 +688,14 @@ async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[
             allowed: set[str] = {
                 e["key"]
                 for prov in _category_providers(name, config)
-                for e in prov.get("env_vars", [])}
+                for e in prov.get("env_vars", [])
+            }
 
             unknown = [k for k in body.env if k not in allowed]
             if unknown:
                 raise _bad_request(
-                    f"Unknown env var(s) for toolset {name}: {', '.join(sorted(unknown))}")
+                    f"Unknown env var(s) for toolset {name}: {', '.join(sorted(unknown))}"
+                )
 
             saved: list[str] = []
             skipped: list[str] = []
@@ -573,12 +713,19 @@ async def save_toolset_env(name: str, body: ToolsetEnvUpdate, profile: Optional[
         return saved, skipped, status
 
     saved, skipped, status = await asyncio.to_thread(_run)
-    return {"ok": True, "name": name, "saved": saved, "skipped": skipped, "is_set": status}
+    return {
+        "ok": True,
+        "name": name,
+        "saved": saved,
+        "skipped": skipped,
+        "is_set": status,
+    }
 
 
 @router.post("/api/tools/toolsets/{name}/post-setup")
 async def run_toolset_post_setup(
-    name: str, body: ToolsetPostSetup, profile: Optional[str] = None):
+    name: str, body: ToolsetPostSetup, profile: Optional[str] = None
+):
     """Spawn ``clawk tools post-setup <key>`` (long-running installs) as a
     background action tailed via ``GET /api/actions/tools-post-setup/status``;
     ``profile`` is threaded so hooks see the drawer's CLAWK_HOME."""
@@ -594,8 +741,12 @@ async def run_toolset_post_setup(
 
     await scoped_to_thread(scope_profile, _validate)
     result = spawn_profile_action(
-        scope_profile, ["tools", "post-setup", body.key], "tools-post-setup",
-        log_msg="Failed to spawn tools post-setup", prefix="Failed to run post-setup")
+        scope_profile,
+        ["tools", "post-setup", body.key],
+        "tools-post-setup",
+        log_msg="Failed to spawn tools post-setup",
+        prefix="Failed to run post-setup",
+    )
     result["key"] = body.key
     return result
 
@@ -605,6 +756,7 @@ async def get_terminal_backends(profile: Optional[str] = None):
     """Terminal backend rows with health probes: ``status`` is ``ready`` /
     ``needs_setup`` / ``unavailable``; a probe failure is a status, never an
     error response."""
+
     def _read():
         with _profile_scope(profile):
             config = load_config()
@@ -619,9 +771,16 @@ async def get_terminal_backends(profile: Optional[str] = None):
             backends = []
             for row in rows:
                 status, detail = _probe_terminal_backend(row["name"], terminal_cfg)
-                backends.append({
-                    "name": row["name"], "label": row["label"], "description": row["description"],
-                    "active": row["name"] == active, "status": status, "detail": detail})
+                backends.append(
+                    {
+                        "name": row["name"],
+                        "label": row["label"],
+                        "description": row["description"],
+                        "active": row["name"] == active,
+                        "status": status,
+                        "detail": detail,
+                    }
+                )
         return {"active": active, "backends": backends}
 
     return await asyncio.to_thread(_read)
@@ -629,7 +788,8 @@ async def get_terminal_backends(profile: Optional[str] = None):
 
 @router.put("/api/tools/terminal/backend")
 async def select_terminal_backend(
-    body: TerminalBackendSelect, profile: Optional[str] = None):
+    body: TerminalBackendSelect, profile: Optional[str] = None
+):
     """Persist ``terminal.backend``.  A backend that still needs setup is
     allowed — the picker shows guidance instead of blocking, like the CLI.
     Validated inside the target profile's scope, like the GET: plugin backends
@@ -642,7 +802,8 @@ async def select_terminal_backend(
             if backend not in valid_names:
                 raise _bad_request(
                     f"Unknown terminal backend: {body.backend!r}. "
-                    f"Use one of: {', '.join(sorted(valid_names))}")
+                    f"Use one of: {', '.join(sorted(valid_names))}"
+                )
             config = load_config()
             _dict_section(config, "terminal")["backend"] = backend
             save_config(config)
@@ -668,6 +829,9 @@ async def grant_computer_use_permissions(profile: Optional[str] = None):
     if sys.platform != "darwin":
         raise _bad_request("Computer Use permission grants are a macOS concept.")
     return spawn_profile_action(
-        profile, ["computer-use", "permissions", "grant"], "computer-use-grant",
+        profile,
+        ["computer-use", "permissions", "grant"],
+        "computer-use-grant",
         log_msg="Failed to spawn computer-use permissions grant",
-        prefix="Failed to request permissions")
+        prefix="Failed to request permissions",
+    )

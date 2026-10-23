@@ -71,12 +71,20 @@ _UNIT_SETTLE_ATTEMPTS = 10
 _UNIT_SETTLE_DELAY = 1.0
 
 
-def _run_quiet(run: Callable[..., Any], argv: list[str], *, timeout: int, **extra: Any) -> Any | None:
+def _run_quiet(
+    run: Callable[..., Any], argv: list[str], *, timeout: int, **extra: Any
+) -> Any | None:
     """Run ``argv`` capturing text output; ``None`` when it errors or times out."""
     try:
         return run(
-            argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
-            check=False, timeout=timeout, **extra,
+            argv,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout,
+            **extra,
         )
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -118,11 +126,13 @@ def _child_environment(profile: str | None = None) -> dict[str, str]:
     target = profile if profile is not None else launch
     if target == "default" and launch != "default":
         from tools.environments.local import host_gateway_child_env
+
         env = host_gateway_child_env()
     else:
         env = os.environ.copy()
         if profile is not None and profile != launch:
             from tools.environments.local_env_policy import strip_profile_gate_env
+
             strip_profile_gate_env(env)
     for marker in _GATEWAY_MARKERS:
         env.pop(marker, None)
@@ -132,15 +142,30 @@ def _child_environment(profile: str | None = None) -> dict[str, str]:
 
 def _run_profile_restart(profile: str, *, run: Callable[..., Any]) -> bool:
     """Run one profile restart without inheriting the updater's process state."""
-    kwargs: dict[str, Any] = {"stdin": subprocess.DEVNULL, "env": _child_environment(profile)}
+    kwargs: dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "env": _child_environment(profile),
+    }
     if os.name == "nt":
-        kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        kwargs["creationflags"] = getattr(
+            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+        ) | getattr(subprocess, "DETACHED_PROCESS", 0)
     else:
         kwargs["start_new_session"] = True
     # `--interrupt`: the update owns this restart (drain-first, 31637312899); a live session must not
     # strand the profile on pre-update code the way a refusal would. `--detach`: this bounded call
     # must not itself become a service-less profile's gateway (killed at the timeout below).
-    argv = [sys.executable, "-m", "clawk_cli.main", "-p", profile, "gateway", "restart", "--interrupt", "--detach"]
+    argv = [
+        sys.executable,
+        "-m",
+        "clawk_cli.main",
+        "-p",
+        profile,
+        "gateway",
+        "restart",
+        "--interrupt",
+        "--detach",
+    ]
     return _succeeded(_run_quiet(run, argv, timeout=_PROFILE_RESTART_TIMEOUT, **kwargs))
 
 
@@ -192,7 +217,9 @@ def _pid_is_live(pid: int) -> bool:
     if os.name == "nt":
         return False
     try:
-        os.kill(pid, 0)  # windows-footgun: ok — POSIX-only branch, guarded by os.name above
+        os.kill(
+            pid, 0
+        )  # windows-footgun: ok — POSIX-only branch, guarded by os.name above
     except PermissionError:
         return True
     except OSError:
@@ -209,7 +236,9 @@ def _host_served_profiles() -> set[str]:
     one would skip a profile that really has its own process.
     """
     try:
-        with open(os.path.join(_host_state_dir(), "host-gateway.json"), encoding="utf-8-sig") as handle:
+        with open(
+            os.path.join(_host_state_dir(), "host-gateway.json"), encoding="utf-8-sig"
+        ) as handle:
             record = json.load(handle)
     except (OSError, UnicodeDecodeError, ValueError):
         return set()
@@ -217,13 +246,21 @@ def _host_served_profiles() -> set[str]:
         return set()
     pid = record.get("pid")
     profiles = record.get("profiles")
-    if not isinstance(pid, int) or pid <= 0 or not isinstance(profiles, list) or not _pid_is_live(pid):
+    if (
+        not isinstance(pid, int)
+        or pid <= 0
+        or not isinstance(profiles, list)
+        or not _pid_is_live(pid)
+    ):
         return set()
     return {name for name in profiles if isinstance(name, str) and name}
 
 
 def restart_profiles(
-    profiles: Iterable[str], *, supervisors: Mapping[str, str] | None = None, run: Callable[..., Any] = subprocess.run
+    profiles: Iterable[str],
+    *,
+    supervisors: Mapping[str, str] | None = None,
+    run: Callable[..., Any] = subprocess.run,
 ) -> dict[str, Any]:
     """Restart the supplied profiles (only ones whose inventory identified a service supervisor).
 
@@ -248,7 +285,9 @@ def restart_profiles(
             continue
         if not _run_profile_restart(profile, run=run):
             bucket = "failed"
-        elif supervisors.get(profile) == "systemd" and _systemd_verified_active(profile, run=run):
+        elif supervisors.get(profile) == "systemd" and _systemd_verified_active(
+            profile, run=run
+        ):
             bucket = "verified"
         else:
             bucket = "relaunch_attempted"
@@ -295,14 +334,20 @@ def _listed_serve_units(scope: list[str], *, run: Callable[..., Any]) -> list[st
 
 def _unit_main_pid(scope: list[str], unit: str, *, run: Callable[..., Any]) -> int:
     """The unit's ``MainPID`` via ``systemctl show``; ``0`` when absent or unreadable."""
-    result = _run_quiet(run, scope + ["show", unit, "--property=MainPID", "--value"], timeout=_VERIFY_TIMEOUT)
+    result = _run_quiet(
+        run,
+        scope + ["show", unit, "--property=MainPID", "--value"],
+        timeout=_VERIFY_TIMEOUT,
+    )
     try:
         return int(_stdout(result) or 0) if _succeeded(result) else 0
     except ValueError:
         return 0
 
 
-def _unit_is_active(scope: list[str], unit: str, *, run: Callable[..., Any], require_rc0: bool = False) -> bool:
+def _unit_is_active(
+    scope: list[str], unit: str, *, run: Callable[..., Any], require_rc0: bool = False
+) -> bool:
     result = _run_quiet(run, scope + ["is-active", unit], timeout=_VERIFY_TIMEOUT)
     if result is None or (require_rc0 and not _succeeded(result)):
         return False
@@ -310,7 +355,12 @@ def _unit_is_active(scope: list[str], unit: str, *, run: Callable[..., Any], req
 
 
 def _serve_unit_replaced(
-    scope: list[str], unit: str, previous_pid: int, *, run: Callable[..., Any], sleep: Callable[[float], Any]
+    scope: list[str],
+    unit: str,
+    previous_pid: int,
+    *,
+    run: Callable[..., Any],
+    sleep: Callable[[float], Any],
 ) -> bool:
     """Did the unit come back on a NEW main process?
 
@@ -340,7 +390,9 @@ def _split_skip_entry(entry: Any) -> tuple[str, str]:
     return scope_label, unit.removesuffix(".service")
 
 
-def _normalized_skips(skip_units: Iterable[Any]) -> tuple[set[tuple[str, str]], set[str]]:
+def _normalized_skips(
+    skip_units: Iterable[Any],
+) -> tuple[set[tuple[str, str]], set[str]]:
     """Split already-settled units into scope-qualified and legacy entries (a bare ``"clawk-serve"``
     carries no scope and cannot say WHICH of two same-named processes was settled)."""
     qualified: set[tuple[str, str]] = set()
@@ -348,12 +400,19 @@ def _normalized_skips(skip_units: Iterable[Any]) -> tuple[set[tuple[str, str]], 
     for entry in skip_units or ():
         scope_label, base = _split_skip_entry(entry)
         if base:
-            (qualified.add((scope_label, base)) if scope_label in _SCOPE_LABELS else legacy.add(base))
+            (
+                qualified.add((scope_label, base))
+                if scope_label in _SCOPE_LABELS
+                else legacy.add(base)
+            )
     return qualified, legacy
 
 
 def restart_serve_units(
-    *, skip_units: Iterable[Any] = (), run: Callable[..., Any] = subprocess.run, sleep: Callable[[float], Any] = time.sleep
+    *,
+    skip_units: Iterable[Any] = (),
+    run: Callable[..., Any] = subprocess.run,
+    sleep: Callable[[float], Any] = time.sleep,
 ) -> dict[str, list[str]]:
     """Restart every active ``clawk-serve*``/``clawksis-dashboard*`` systemd unit from this process.
 
@@ -379,13 +438,27 @@ def restart_serve_units(
             # (restarting blind and reporting success is the failure mode this module removes).
             # A failed restart includes the unprivileged system-scope case; no sudo probe —
             # an unverifiable unit must read as failed so the update stays explicitly incomplete.
-            outcomes[target] = previous_pid > 0 and _succeeded(
-                _run_quiet(run, scope + ["--no-ask-password", "restart", unit], timeout=_UNIT_RESTART_TIMEOUT)
-            ) and _serve_unit_replaced(scope, unit, previous_pid, run=run, sleep=sleep)
+            outcomes[target] = (
+                previous_pid > 0
+                and _succeeded(
+                    _run_quiet(
+                        run,
+                        scope + ["--no-ask-password", "restart", unit],
+                        timeout=_UNIT_RESTART_TIMEOUT,
+                    )
+                )
+                and _serve_unit_replaced(
+                    scope, unit, previous_pid, run=run, sleep=sleep
+                )
+            )
     # ``<scope>/<unit>`` is the only identity this module reports for a serve unit.
     return {
-        "verified": sorted(f"{scope}/{base}" for (scope, base), ok in outcomes.items() if ok),
-        "failed": sorted(f"{scope}/{base}" for (scope, base), ok in outcomes.items() if not ok),
+        "verified": sorted(
+            f"{scope}/{base}" for (scope, base), ok in outcomes.items() if ok
+        ),
+        "failed": sorted(
+            f"{scope}/{base}" for (scope, base), ok in outcomes.items() if not ok
+        ),
     }
 
 
@@ -396,7 +469,10 @@ def _parse_payload(stream) -> tuple[list[str], dict[str, str], bool, list[str]]:
     profiles = payload.get("profiles")
     if not isinstance(profiles, list):
         raise ValueError("recovery payload must contain a profiles list")
-    if any(not isinstance(profile, str) or not _PROFILE_ID_RE.fullmatch(profile) for profile in profiles):
+    if any(
+        not isinstance(profile, str) or not _PROFILE_ID_RE.fullmatch(profile)
+        for profile in profiles
+    ):
         raise ValueError("recovery profiles contain an invalid profile id")
     raw_supervisors = payload.get("supervisors")
     supervisors: dict[str, str] = {}
@@ -418,7 +494,9 @@ def _parse_payload(stream) -> tuple[list[str], dict[str, str], bool, list[str]]:
             raise ValueError("recovery serve_units block is invalid")
         recover_serve = bool(raw_serve.get("recover"))
         raw_skip = raw_serve.get("skip") or []
-        if not isinstance(raw_skip, list) or any(not isinstance(entry, (str, dict)) for entry in raw_skip):
+        if not isinstance(raw_skip, list) or any(
+            not isinstance(entry, (str, dict)) for entry in raw_skip
+        ):
             raise ValueError("recovery serve_units skip list is invalid")
         for entry in raw_skip:
             # A skip entry names one already-settled process. The qualified shape carries the systemd
@@ -434,7 +512,9 @@ def _parse_payload(stream) -> tuple[list[str], dict[str, str], bool, list[str]]:
             # Only shapes systemd can produce for this family (a skip is a name filter, never a command
             # argument). An unrecognized scope DROPS the entry rather than raising: a dropped skip costs at
             # most one extra restart-and-verify; honouring an unreadable one could suppress recovery.
-            if (scope_label and scope_label not in _SCOPE_LABELS) or not _UNIT_RE.fullmatch(f"{base}.service"):
+            if (
+                scope_label and scope_label not in _SCOPE_LABELS
+            ) or not _UNIT_RE.fullmatch(f"{base}.service"):
                 continue
             skip_units.append(f"{scope_label}/{base}" if scope_label else base)
     return profiles, supervisors, recover_serve, skip_units
@@ -451,13 +531,22 @@ def main(argv: list[str] | None = None) -> int:
         profiles, supervisors, recover_serve, skip_units = _parse_payload(sys.stdin)
         result = restart_profiles(profiles, supervisors=supervisors)
         result["serve_units"] = (
-            restart_serve_units(skip_units=skip_units) if recover_serve else {"verified": [], "failed": []}
+            restart_serve_units(skip_units=skip_units)
+            if recover_serve
+            else {"verified": [], "failed": []}
         )
     except (ValueError, json.JSONDecodeError) as exc:
-        print(json.dumps({
-            "error": str(exc), "verified": [], "relaunch_attempted": [], "failed": [],
-            "serve_units": {"verified": [], "failed": []},
-        }))
+        print(
+            json.dumps(
+                {
+                    "error": str(exc),
+                    "verified": [],
+                    "relaunch_attempted": [],
+                    "failed": [],
+                    "serve_units": {"verified": [], "failed": []},
+                }
+            )
+        )
         return 2
 
     print(json.dumps(result, sort_keys=True))

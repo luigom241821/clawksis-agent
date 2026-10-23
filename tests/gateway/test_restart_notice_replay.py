@@ -23,7 +23,9 @@ ONLINE_NOTICE = "♻️ Gateway online — Clawksis is back and ready."
 def _adapter():
     return SimpleNamespace(
         send_path_degraded=False,
-        send=AsyncMock(return_value=SendResult(success=True, message_id="unit-test-notice")),
+        send=AsyncMock(
+            return_value=SendResult(success=True, message_id="unit-test-notice")
+        ),
     )
 
 
@@ -39,7 +41,11 @@ def boot_notice(tmp_path, monkeypatch):
             Platform.DISCORD: PlatformConfig(
                 enabled=True,
                 gateway_restart_notification=True,
-                home_channel=HomeChannel(platform=Platform.DISCORD, chat_id="unit-test-home", name="Test home"),
+                home_channel=HomeChannel(
+                    platform=Platform.DISCORD,
+                    chat_id="unit-test-home",
+                    name="Test home",
+                ),
             ),
         },
         sessions_dir=tmp_path / "sessions",
@@ -52,7 +58,9 @@ def boot_notice(tmp_path, monkeypatch):
     runner._update_platform_runtime_status = Mock()
     runner._redeliver_failed_obligations_for_platform = AsyncMock()
     runner._schedule_resume_pending_sessions = Mock()
-    monkeypatch.setattr("gateway.channel_directory.build_channel_directory", AsyncMock())
+    monkeypatch.setattr(
+        "gateway.channel_directory.build_channel_directory", AsyncMock()
+    )
     # Unrelated conversation recovery is isolated.
     runner._claim_pending_obligations = AsyncMock(return_value=[])
     runner._redeliver_claimed_obligations = AsyncMock(return_value=0)
@@ -74,13 +82,17 @@ async def _reconnect(runner, platform, adapter):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("live", [False, True], ids=["offline-at-boot-replayed-on-reconnect", "live-at-boot"])
+@pytest.mark.parametrize(
+    "live", [False, True], ids=["offline-at-boot-replayed-on-reconnect", "live-at-boot"]
+)
 async def test_planned_restart_notice_reaches_home_channel(boot_notice, live):
     runner, marker = boot_notice
     adapter = _adapter()
     if live:
         runner.adapters[Platform.DISCORD] = adapter
-    transport = delivery.resolve_delivery_transport(Platform.DISCORD, runner.config, runner.adapters)
+    transport = delivery.resolve_delivery_transport(
+        Platform.DISCORD, runner.config, runner.adapters
+    )
     assert (transport is not None) is live
 
     await _boot(runner)
@@ -90,7 +102,9 @@ async def test_planned_restart_notice_reaches_home_channel(boot_notice, live):
         adapter.send.assert_not_called()
         assert marker.exists(), "marker must survive a boot with no live transport"
         await _reconnect(runner, Platform.DISCORD, adapter)
-    adapter.send.assert_awaited_once_with("unit-test-home", ONLINE_NOTICE, metadata={"non_conversational": True})
+    adapter.send.assert_awaited_once_with(
+        "unit-test-home", ONLINE_NOTICE, metadata={"non_conversational": True}
+    )
     assert not marker.exists()
 
 
@@ -100,11 +114,19 @@ async def test_partial_delivery_is_persisted_and_not_repeated(boot_notice):
     telegram, discord = _adapter(), _adapter()
     runner.config.platforms[Platform.TELEGRAM] = PlatformConfig(
         enabled=True,
-        home_channel=HomeChannel(platform=Platform.TELEGRAM, chat_id="other-home", thread_id="7", name="Other"),
+        home_channel=HomeChannel(
+            platform=Platform.TELEGRAM,
+            chat_id="other-home",
+            thread_id="7",
+            name="Other",
+        ),
     )
     runner.config.platforms[Platform.SLACK] = PlatformConfig(
-        enabled=True, gateway_restart_notification=False,
-        home_channel=HomeChannel(platform=Platform.SLACK, chat_id="muted-home", name="Muted"),
+        enabled=True,
+        gateway_restart_notification=False,
+        home_channel=HomeChannel(
+            platform=Platform.SLACK, chat_id="muted-home", name="Muted"
+        ),
     )
     runner.adapters[Platform.TELEGRAM] = telegram
 
@@ -112,7 +134,9 @@ async def test_partial_delivery_is_persisted_and_not_repeated(boot_notice):
 
     telegram.send.assert_awaited_once()
     discord.send.assert_not_called()
-    assert json.loads(marker.read_text(encoding="utf-8"))["delivered_targets"] == [["telegram", "other-home", "7"]]
+    assert json.loads(marker.read_text(encoding="utf-8"))["delivered_targets"] == [
+        ["telegram", "other-home", "7"]
+    ]
 
     # A fresh process has no in-memory history: dedupe must come from the marker. The opted-out
     # Slack home is never owed a notice, so Discord's delivery completes the set.

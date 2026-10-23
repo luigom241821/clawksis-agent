@@ -11,6 +11,7 @@ Covers the two halves of the profile-clobber bug cluster:
 Both are implemented ONCE in ``apply_all()`` so every backend — bundled or
 plugin — gets them for free.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -69,8 +70,8 @@ def test_preserve_existing_beats_override():
         cfg_extra={"preserve_existing": ["FEISHU_APP_SECRET"]},
         env={"FEISHU_APP_SECRET": "profile-local", "OPENAI_API_KEY": "stale"},
     )
-    assert env["FEISHU_APP_SECRET"] == "profile-local"   # preserved
-    assert env["OPENAI_API_KEY"] == "fresh"              # override still works
+    assert env["FEISHU_APP_SECRET"] == "profile-local"  # preserved
+    assert env["OPENAI_API_KEY"] == "fresh"  # override still works
     sr = report.sources[0]
     assert "FEISHU_APP_SECRET" in sr.skipped_existing
     assert "OPENAI_API_KEY" in sr.applied
@@ -86,8 +87,6 @@ def test_preserve_existing_only_guards_set_vars():
     assert env["FEISHU_APP_SECRET"] == "shared"
 
 
-
-
 # ---------------------------------------------------------------------------
 # profile aliasing
 # ---------------------------------------------------------------------------
@@ -101,16 +100,6 @@ def test_profile_suffixed_var_hydrates_canonical():
     assert env["TELEGRAM_BOT_TOKEN_MILLA"] == "123:tok"
     assert env["TELEGRAM_BOT_TOKEN"] == "123:tok"
     assert "TELEGRAM_BOT_TOKEN" in report.provenance
-
-
-
-
-
-
-
-
-
-
 
 
 def test_hyphenated_profile_name_matches_underscore_suffix():
@@ -152,7 +141,9 @@ def test_source_fetch_reads_injected_environment_without_global_mutation(
     assert "BOOTSTRAP_TOKEN" not in __import__("os").environ
 
 
-def test_empty_injected_environment_does_not_fall_back_to_process(monkeypatch, tmp_path):
+def test_empty_injected_environment_does_not_fall_back_to_process(
+    monkeypatch, tmp_path
+):
     from agent.secret_sources.base import get_source_environment
 
     class _CanarySource(SecretSource):
@@ -166,10 +157,4 @@ def test_empty_injected_environment_does_not_fall_back_to_process(monkeypatch, t
 
     registry.register_source(_CanarySource())
     monkeypatch.setenv("LEAK_CANARY", "global-secret")
-    registry.apply_all(
-        {"canary": {"enabled": True}}, tmp_path, environ={}
-    )
-
-
-
-
+    registry.apply_all({"canary": {"enabled": True}}, tmp_path, environ={})

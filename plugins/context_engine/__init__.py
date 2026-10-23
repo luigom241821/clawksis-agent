@@ -31,20 +31,31 @@ def _is_context_engine_dir(path: Path) -> bool:
 
 def _iter_engine_dirs() -> list[tuple[str, Path]]:
     """``(name, path)`` for bundled then user engines; bundled wins on collisions."""
-    dirs = [(child.name, child) for child in _loader.iter_plugin_dirs(_CONTEXT_ENGINE_PLUGINS_DIR)]
+    dirs = [
+        (child.name, child)
+        for child in _loader.iter_plugin_dirs(_CONTEXT_ENGINE_PLUGINS_DIR)
+    ]
     seen = {name for name, _ in dirs}
     user_dir = _loader.user_plugins_dir()
     if user_dir:
-        dirs.extend((child.name, child) for child in _loader.iter_plugin_dirs(user_dir)
-                    if child.name not in seen and _is_context_engine_dir(child))
+        dirs.extend(
+            (child.name, child)
+            for child in _loader.iter_plugin_dirs(user_dir)
+            if child.name not in seen and _is_context_engine_dir(child)
+        )
     return dirs
 
 
 def discover_context_engines() -> list[tuple[str, str, bool]]:
     """Return ``[(name, description, is_available), ...]`` for every bundled and user engine."""
-    return [(name, _loader.read_plugin_description(child),
-             _loader.probe_availability(lambda c=child: _load_engine_from_dir(c)))
-            for name, child in _iter_engine_dirs()]
+    return [
+        (
+            name,
+            _loader.read_plugin_description(child),
+            _loader.probe_availability(lambda c=child: _load_engine_from_dir(c)),
+        )
+        for name, child in _iter_engine_dirs()
+    ]
 
 
 def find_engine_dir(name: str) -> Optional[Path]:
@@ -64,27 +75,49 @@ def load_context_engine(name: str) -> Optional[ContextEngine]:
         logger.debug("Context engine '%s' not found in bundled or user plugins", name)
         return None
     return _loader.load_named(
-        name, engine_dir, _load_engine_from_dir, kind="Context engine", noun="engine", logger=logger
+        name,
+        engine_dir,
+        _load_engine_from_dir,
+        kind="Context engine",
+        noun="engine",
+        logger=logger,
     )
 
 
 def _load_engine_from_dir(engine_dir: Path) -> Optional[ContextEngine]:
     """Import an engine module and extract its ContextEngine (register(ctx) or subclass)."""
     from agent.context_engine import ContextEngine
+
     name = engine_dir.name
     is_bundled = engine_dir.parent == _CONTEXT_ENGINE_PLUGINS_DIR
-    module_name = f"plugins.context_engine.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}"
+    module_name = (
+        f"plugins.context_engine.{name}" if is_bundled else f"{_USER_NAMESPACE}.{name}"
+    )
     from clawk_cli.plugin_isolation import user_plugin_host
+
     host = None if is_bundled else user_plugin_host()
     if host is not None:
-        return host.load_instance(engine_dir, module_name=module_name, capture="register_context_engine",
-                                  base_ref="agent.context_engine:ContextEngine")
+        return host.load_instance(
+            engine_dir,
+            module_name=module_name,
+            capture="register_context_engine",
+            base_ref="agent.context_engine:ContextEngine",
+        )
     mod = _loader.load_plugin_module(
-        module_name, engine_dir, parents=("plugins", "plugins.context_engine"), logger=logger,
-        synthetic_namespace=None if is_bundled else _USER_NAMESPACE)
+        module_name,
+        engine_dir,
+        parents=("plugins", "plugins.context_engine"),
+        logger=logger,
+        synthetic_namespace=None if is_bundled else _USER_NAMESPACE,
+    )
     return mod and _loader.instance_from_module(
-        mod, collector=_EngineCollector(engine_name=name), collected_attr="engine",
-        base_cls=ContextEngine, name=name, logger=logger)
+        mod,
+        collector=_EngineCollector(engine_name=name),
+        collected_attr="engine",
+        base_cls=ContextEngine,
+        name=name,
+        logger=logger,
+    )
 
 
 class _EngineCollector(_loader.NoopPluginContext):
@@ -98,29 +131,57 @@ class _EngineCollector(_loader.NoopPluginContext):
     def register_context_engine(self, engine):
         self.engine = engine
 
-    def register_command(self, name: str, handler, description: str = "", args_hint: str = "") -> None:
+    def register_command(
+        self, name: str, handler, description: str = "", args_hint: str = ""
+    ) -> None:
         clean = (name or "").lower().strip().lstrip("/").replace(" ", "-")
         if not clean:
-            logger.warning("Context engine '%s' tried to register a command with an empty name.",
-                           self._engine_name)
+            logger.warning(
+                "Context engine '%s' tried to register a command with an empty name.",
+                self._engine_name,
+            )
             return
-        conflict = "Context engine '%s' tried to register command '/%s' which %s Skipping."
+        conflict = (
+            "Context engine '%s' tried to register command '/%s' which %s Skipping."
+        )
         try:
             from clawk_cli.commands import resolve_command
+
             if resolve_command(clean) is not None:
-                logger.warning(conflict, self._engine_name, clean, "conflicts with a built-in command.")
+                logger.warning(
+                    conflict,
+                    self._engine_name,
+                    clean,
+                    "conflicts with a built-in command.",
+                )
                 return
         except Exception:
             pass
         try:
             from clawk_cli.plugins import get_plugin_manager
+
             manager = get_plugin_manager()
             if clean in manager._plugin_commands:
-                logger.warning(conflict, self._engine_name, clean, "is already registered by a plugin.")
+                logger.warning(
+                    conflict,
+                    self._engine_name,
+                    clean,
+                    "is already registered by a plugin.",
+                )
                 return
             manager._plugin_commands[clean] = {
-                "handler": handler, "description": description or "Context engine command",
-                "plugin": f"context-engine:{self._engine_name}", "args_hint": (args_hint or "").strip()}
-            logger.debug("Context engine '%s' registered command: /%s", self._engine_name, clean)
+                "handler": handler,
+                "description": description or "Context engine command",
+                "plugin": f"context-engine:{self._engine_name}",
+                "args_hint": (args_hint or "").strip(),
+            }
+            logger.debug(
+                "Context engine '%s' registered command: /%s", self._engine_name, clean
+            )
         except Exception as exc:
-            logger.debug("Context engine '%s' could not register /%s: %s", self._engine_name, clean, exc)
+            logger.debug(
+                "Context engine '%s' could not register /%s: %s",
+                self._engine_name,
+                clean,
+                exc,
+            )

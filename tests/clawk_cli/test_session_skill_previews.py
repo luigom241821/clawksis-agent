@@ -59,8 +59,6 @@ def _seed(db, session_id, content, *, title=None, reply="On it."):
 
 
 class TestSkillPreview:
-
-
     def test_skill_preview_shows_the_typed_instruction(self, db, tmp_path, monkeypatch):
         _install_skill(tmp_path, monkeypatch)
         message = skill_commands.build_skill_invocation_message(
@@ -87,9 +85,7 @@ class TestSkillPreview:
         (row,) = db.list_sessions_rich(limit=10)
         assert row["preview"] == "/work"
 
-    def test_rewind_picker_shows_the_typed_instruction(
-        self, db, tmp_path, monkeypatch
-    ):
+    def test_rewind_picker_shows_the_typed_instruction(self, db, tmp_path, monkeypatch):
         _install_skill(tmp_path, monkeypatch)
         message = skill_commands.build_skill_invocation_message(
             "/work", user_instruction="fix the title leak"
@@ -217,7 +213,8 @@ class TestSkillScaffoldedSessionLookup:
         _install_skill(tmp_path, monkeypatch)
         loaded = skill_commands._load_skill_payload("work")
         payload = skill_commands._build_skill_message(
-            loaded[0], loaded[1],
+            loaded[0],
+            loaded[1],
             '[IMPORTANT: The "work" skill is auto-loaded. '
             "Follow its instructions for this session.]",
         )
@@ -229,6 +226,8 @@ class TestSkillScaffoldedSessionLookup:
         assert [row["id"] for row in rows] == ["auto"]
         # The caller re-derives the typed request through the describer.
         from agent.skill_commands import describe_skill_invocation
-        assert describe_skill_invocation(rows[0]["content"]) == "why is my deploy timing out?"
 
-
+        assert (
+            describe_skill_invocation(rows[0]["content"])
+            == "why is my deploy timing out?"
+        )

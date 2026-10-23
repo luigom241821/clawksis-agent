@@ -5,6 +5,7 @@ calls, so lock churn in other processes (a parallel test run) shifts it mid-read
 skips entries — a lock this process still holds reads as cancelled. ``fdinfo`` lists this
 process's locks per open file and is read in one call.
 """
+
 import os
 from pathlib import Path
 
@@ -26,6 +27,9 @@ def own_posix_locks(*paths) -> list[str]:
         except OSError:
             continue
         if (st.st_dev, st.st_ino) in targets:
-            found.update(line.split(": ", 1)[1] for line in info.splitlines()
-                         if line.startswith("lock:") and "POSIX  ADVISORY" in line)
+            found.update(
+                line.split(": ", 1)[1]
+                for line in info.splitlines()
+                if line.startswith("lock:") and "POSIX  ADVISORY" in line
+            )
     return sorted(found)

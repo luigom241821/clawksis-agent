@@ -17,6 +17,7 @@ Gating invariants (from cross-vendor review):
   see deltas after the failed attempt's terminal on_stream_end)
 - user interrupts re-raise; never swallowed
 """
+
 from types import SimpleNamespace
 
 from agent import chat_completion_helpers as h
@@ -25,11 +26,14 @@ from agent import chat_completion_helpers as h
 def _make_call(api_kwargs, *, deltas_sent=False, api_mode="chat_completions"):
     call = h._StreamingCall.__new__(h._StreamingCall)
     call.agent = SimpleNamespace(
-        provider="custom", model="gpt-5.6-sol", api_mode=api_mode,
+        provider="custom",
+        model="gpt-5.6-sol",
+        api_mode=api_mode,
         _interrupt_requested=False,
         _is_provider_stream_parse_error=lambda e: False,
         _buffer_status=lambda text: call.buffered.append(text),
-        _disable_streaming=False, _stream_5xx_probe_ts=None,
+        _disable_streaming=False,
+        _stream_5xx_probe_ts=None,
         _fire_stream_delta=lambda text: call.deltas.append(text),
     )
     call.buffered = []
@@ -64,12 +68,20 @@ def _run_handle_stream_error(call, e):
 
 
 def test_stream_5xx_probe_success_delivers_response_without_latch(monkeypatch):
-    call = _make_call({"model": "m", "stream": True, "stream_options": {"x": 1}, "messages": []})
+    call = _make_call(
+        {"model": "m", "stream": True, "stream_options": {"x": 1}, "messages": []}
+    )
     seen_kwargs = []
 
     def fake_probe(agent, kwargs):
         seen_kwargs.append((kwargs, call._stream_stale_timeout))
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="ok", reasoning_content=None))])
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(content="ok", reasoning_content=None)
+                )
+            ]
+        )
 
     monkeypatch.setattr(h, "interruptible_api_call", fake_probe)
 
@@ -100,5 +112,7 @@ def test_stream_5xx_unmasked_by_probe_4xx(monkeypatch):
     handled = _run_handle_stream_error(call, _StreamErr(500))
 
     assert not handled  # loop stops, error propagates
-    assert call.result["error"] is real  # the REAL validation error replaces the opaque 500
+    assert (
+        call.result["error"] is real
+    )  # the REAL validation error replaces the opaque 500
     assert call.result["response"] is None
